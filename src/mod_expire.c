@@ -105,7 +105,7 @@ static int mod_expire_get_offset(server *srv, plugin_data *p, buffer *expire, in
 		type  = 0;
 		ts   += 7;
 	} else if (0 == strncmp(ts, "modification ", 13)) {
-		type  = 0;
+		type  = 1;
 		ts   += 13;
 	} else {
 		/* invalid type-prefix */
@@ -288,7 +288,7 @@ static int mod_expire_setup_connection(server *srv, connection *con, plugin_data
 }
 #undef PATCH
 
-URIHANDLER_FUNC(mod_expire_uri_handler) {
+URIHANDLER_FUNC(mod_expire_path_handler) {
 	plugin_data *p = p_d;
 	int s_len;
 	size_t k, i;
@@ -316,8 +316,21 @@ URIHANDLER_FUNC(mod_expire_uri_handler) {
 			time_t t;
 			size_t len;
 			
-			mod_expire_get_offset(srv, p, ds->value, &ts);
-			t = (ts += srv->cur_ts);
+			switch(mod_expire_get_offset(srv, p, ds->value, &ts)) {
+			case 0:
+				/* access */
+				t = (ts += srv->cur_ts);
+				break;
+			case 1:
+				/* modification */
+				
+				t = (ts += con->fce->st.st_mtime);
+				break;
+			default:
+				/* -1 is handled at parse-time */
+				break;
+			}
+			
 			
 			if (0 == (len = strftime(p->expire_tstmp->ptr, p->expire_tstmp->size - 1, 
 					   "%a, %d %b %Y %H:%M:%S GMT", gmtime(&(t))))) {
@@ -346,7 +359,7 @@ int mod_expire_plugin_init(plugin *p) {
 	p->name        = buffer_init_string("expire");
 	
 	p->init        = mod_expire_init;
-	p->handle_uri_clean  = mod_expire_uri_handler;
+	p->handle_physical_path = mod_expire_path_handler;
 	p->set_defaults  = mod_expire_set_defaults;
 	p->cleanup     = mod_expire_free;
 	
