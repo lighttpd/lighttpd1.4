@@ -1,3 +1,9 @@
+lighttpd (1.3.11-1) unstable; urgency=low
+
+  * updated to 1.3.11
+
+ -- Jan Kneschke <jan@kneschke.de>  Sun, 20 Feb 2005 17:15:00 +0000
+
 lighttpd (1.3.10-1) unstable; urgency=low
 
   * updated to 1.3.10

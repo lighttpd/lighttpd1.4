@@ -3,6 +3,20 @@
 NEWS
 ====
 
+- 1.3.11 - 2005-02-20
+
+  * added REMOTE_PORT and SERVER_ADDR to CGI-env
+  * relaxed handling of newlines before keep-alive requests
+  * relaxed uri-parser again
+  * fixed PHP_SELF for php 
+  * fixed compilation on MacOS X
+  * fixed handling of EPIPE and ECONNRESET
+  * fixed crash in mod_auth if config-options are missing
+  * fixed handling of missing trailing / in mod_userdir
+  * fixed conditional secdownload.secret
+  * fixed REPORT ME error due to failed reconnects in mod_fastcgi
+  * fixed cmdline handling in mod_fastcgi
+
 - 1.3.10 - 2005-02-06
 
   * added support for full commandline in spawn-fcgi
