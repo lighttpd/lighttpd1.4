@@ -299,7 +299,7 @@ int request_uri_is_valid_char(char c) {
 		/* non RFC */
 	case '[': 
 	case ']':
-	
+	case '|':	
 		return 1;
 	}
 	
