@@ -241,6 +241,7 @@ static void server_free(server *srv) {
 			buffer_free(s->ssl_pemfile);
 			buffer_free(s->ssl_ca_file);
 			buffer_free(s->error_handler);
+			buffer_free(s->dirlist_css);
 			array_free(s->indexfiles);
 			array_free(s->mimetypes);
 			

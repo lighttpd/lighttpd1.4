@@ -72,6 +72,8 @@ static int config_insert(server *srv) {
 		
 		{ "ssl.ca-file",                 NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_SERVER },      /* 38 */
 		
+		{ "dir-listing.hide-dotfiles",   NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION }, /* 39 */
+		{ "dir-listing.external-css",    NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_CONNECTION },  /* 40 */
 		
 		{ "server.host",                 "use server.bind instead", T_CONFIG_DEPRECATED, T_CONFIG_SCOPE_UNSET },
 		{ "server.docroot",              "use server.document-root instead", T_CONFIG_DEPRECATED, T_CONFIG_SCOPE_UNSET },
@@ -115,6 +117,7 @@ static int config_insert(server *srv) {
 		assert(s);
 		s->document_root = buffer_init();
 		s->dir_listing   = 0;
+		s->hide_dotfiles = 1;
 		s->indexfiles    = array_init();
 		s->mimetypes     = array_init();
 		s->server_name   = buffer_init();
@@ -122,6 +125,7 @@ static int config_insert(server *srv) {
 		s->ssl_ca_file   = buffer_init();
 		s->error_handler = buffer_init();
 		s->server_tag    = buffer_init();
+		s->dirlist_css   = buffer_init();
 		s->max_keep_alive_requests = 128;
 		s->max_keep_alive_idle = 30;
 		s->max_read_idle = 60;
@@ -167,6 +171,8 @@ static int config_insert(server *srv) {
 		
 		cv[35].destination = &(s->allow_http11);
 		cv[38].destination = s->ssl_ca_file;
+		cv[39].destination = &(s->hide_dotfiles);
+		cv[40].destination = s->dirlist_css;
 		
 		srv->config_storage[i] = s;
 	
@@ -188,6 +194,8 @@ int config_setup_connection(server *srv, connection *con) {
 	PATCH(mimetypes);
 	PATCH(document_root);
 	PATCH(dir_listing);
+	PATCH(dirlist_css);
+	PATCH(hide_dotfiles);
 	PATCH(indexfiles);
 	PATCH(max_keep_alive_requests);
 	PATCH(max_keep_alive_idle);
@@ -233,6 +241,10 @@ int config_patch_connection(server *srv, connection *con, const char *stage, siz
 				PATCH(document_root);
 			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("server.dir-listing"))) {
 				PATCH(dir_listing);
+			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("dir-listing.hide-dotfiles"))) {
+				PATCH(hide_dotfiles);
+			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("dir-listing.external-css"))) {
+				PATCH(dirlist_css);
 			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("server.error-handler-404"))) {
 				PATCH(error_handler);
 			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("server.indexfiles"))) {
