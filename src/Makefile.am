@@ -28,21 +28,26 @@ config.c: configparser.h
 mod_ssi_expr.c: mod_ssi_exprparser.h
 
 common_src=buffer.c log.c \
-      keyvalue.c response.c request.c chunk.c  \
-      http_chunk.c stream.c fdevent.c connections.c \
+      keyvalue.c chunk.c  \
+      http_chunk.c stream.c fdevent.c \
       file_cache.c plugin.c joblist.c etag.c array.c \
       data_string.c data_count.c data_array.c \
       data_integer.c md5.c data_fastcgi.c \
       fdevent_select.c fdevent_linux_rtsig.c \
       fdevent_poll.c fdevent_linux_sysepoll.c \
       fdevent_solaris_devpoll.c fdevent_freebsd_kqueue.c \
+      data_config.c bitset.c  configparser.c \
+      inet_ntop_cache.c \
+      connections-glue.c \
+      configfile-glue.c \
+      http-header-glue.c
+      
+src = server.c response.c connections.c network.c \
       network_write.c network_linux_sendfile.c \
       network_freebsd_sendfile.c network_writev.c \
       network_solaris_sendfilev.c network_openssl.c \
-      data_config.c bitset.c  configparser.c config.c \
-      inet_ntop_cache.c network.c
-      
-src = server.c 
+      config.c request.c
+
 
 spawn_fcgi_SOURCES=spawn-fcgi.c
 
