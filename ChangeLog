@@ -2,9 +2,6 @@ CVS-Version: $Id: ChangeLog,v 1.18 2004/04/09 22:08:19 weigon Exp $
 
 Feature Requests:
 * complex
-- nested conditionals
-- config file per host
-- compressing dynamic content (filters)
 - limit read-queue to 64k and use traffic-shaping cap
   - if fastcgi/cgi are not ready ignore incoming FDEVENT_IN for a while
   -> reduce memory usage
@@ -15,9 +12,6 @@ Feature Requests:
 
 * moderate
 - errorlog piping 
-- access and auth with host, net
-- fastcgi-spawn
-  - suid spawn
 - gracefull restart
 - mod_accesslog_mysql
 - mod_auth_mysql
@@ -27,16 +21,43 @@ Feature Requests:
 
 * simple
 - file-mapping for alias 
-- add header for broken requests if debug.request-header-on-error
-- IPv6 for FastCGI
 - hostnames for remote-FastCGI
 - fix remote-fastcgi on freebsd + kqueue
   - crash FDEVENT_OUT on FreeBSD
-- EPERM on unlink
 - cgi exec via shell
 - crash in read-post
 - same config option twice -> aaa, aaa
 - remove default port from Host:
+
+06.03.2005 12:22 - 1.3.13
+- mod_accesslog
+
+  fixed NULL dereference on logfile cycling if accesslog is not set
+
+05.03.2005 17:30
+- mod_proxy
+
+  handle delayed connect in the same way as mod_fastcgi
+
+03.03.2005 19:00
+- freebsd
+
+  handle remote-close gracefully
+
+- ssl
+
+  handle remote-close gracefully
+
+- dir-listing
+
+  added dir-listing.hide-dotfiles and added an option to set css files
+
+02.03.2005 19:41
+- fastcgi
+
+  fixed path-info for prefix-patterns
+  
+  fixed path-info for PHP
 
 02.03.2005 14:47 - 1.3.12
 - mod_fastcgi
