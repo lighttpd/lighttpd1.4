@@ -6,6 +6,68 @@
 #include "buffer.h"
 #include "log.h"
 
+/*
+ * This was 'borrowed' from tcpdump.
+ *
+ *
+ * This is fun.
+ *
+ * In older BSD systems, socket addresses were fixed-length, and
+ * "sizeof (struct sockaddr)" gave the size of the structure.
+ * All addresses fit within a "struct sockaddr".
+ *
+ * In newer BSD systems, the socket address is variable-length, and
+ * there's an "sa_len" field giving the length of the structure;
+ * this allows socket addresses to be longer than 2 bytes of family
+ * and 14 bytes of data.
+ *
+ * Some commercial UNIXes use the old BSD scheme, some use the RFC 2553
+ * variant of the old BSD scheme (with "struct sockaddr_storage" rather
+ * than "struct sockaddr"), and some use the new BSD scheme.
+ *
+ * Some versions of GNU libc use neither scheme, but has an "SA_LEN()"
+ * macro that determines the size based on the address family.  Other
+ * versions don't have "SA_LEN()" (as it was in drafts of RFC 2553
+ * but not in the final version).  On the latter systems, we explicitly
+ * check the AF_ type to determine the length; we assume that on
+ * all those systems we have "struct sockaddr_storage".
+ */
+
+#ifdef HAVE_IPV6
+# ifndef SA_LEN
+#  ifdef HAVE_SOCKADDR_SA_LEN
+#   define SA_LEN(addr)   ((addr)->sa_len)
+#  else /* HAVE_SOCKADDR_SA_LEN */
+#   ifdef HAVE_STRUCT_SOCKADDR_STORAGE
+static size_t get_sa_len(const struct sockaddr *addr) {
+	switch (addr->sa_family) {
+		
+#    ifdef AF_INET
+	case AF_INET:
+		return (sizeof (struct sockaddr_in));
+#    endif
+		
+#    ifdef AF_INET6
+	case AF_INET6:
+		return (sizeof (struct sockaddr_in6));
+#    endif
+		
+	default:
+		return (sizeof (struct sockaddr));
+		
+	}
+}
+#    define SA_LEN(addr)   (get_sa_len(addr))
+#   else /* HAVE_SOCKADDR_STORAGE */
+#    define SA_LEN(addr)   (sizeof (struct sockaddr))
+#   endif /* HAVE_SOCKADDR_STORAGE */
+#  endif /* HAVE_SOCKADDR_SA_LEN */
+# endif /* SA_LEN */
+#endif
+
+
+
+
 int response_header_insert(server *srv, connection *con, const char *key, size_t keylen, const char *value, size_t vallen) {
 	data_string *ds;
 	
