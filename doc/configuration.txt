@@ -290,7 +290,7 @@ server.error-handler-404
     
     server.error-handler-404 = "/error-404.php"
 
-server.allow_http11
+server.protocol-http11
   defines if HTTP/1.1 is allowed or not.
   
   Default: enabled
