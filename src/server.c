@@ -952,6 +952,7 @@ int main (int argc, char **argv) {
 				case HANDLER_FINISHED:
 				case HANDLER_GO_ON:
 				case HANDLER_WAIT_FOR_EVENT:
+				case HANDLER_WAIT_FOR_FD:
 					break;
 				case HANDLER_ERROR:
 					/* should never happen */

@@ -323,6 +323,9 @@ typedef struct {
 
 	size_t    path_info_offset; /* start of path_info in uri.path */
 	
+	pid_t     pid;
+	int       got_proc;
+	
 	plugin_config conf;
 	
 	connection *remote_conn;  /* dumb pointer */
@@ -1256,8 +1259,8 @@ void fcgi_connection_cleanup(server *srv, handler_ctx *hctx) {
 
 	if (hctx->host && hctx->proc) {
 		hctx->host->load--;
-		if (hctx->state != FCGI_STATE_INIT &&
-		    hctx->state != FCGI_STATE_CONNECT) {
+		
+		if (hctx->got_proc) {
 			/* after the connect the process gets a load */
 			hctx->proc->load--;
 			
@@ -2246,6 +2249,92 @@ int fcgi_proclist_sort_down(server *srv, fcgi_extension_host *host, fcgi_proc *p
 	return 0;
 }
 
+static int fcgi_restart_dead_procs(server *srv, plugin_data *p, fcgi_extension_host *host) {
+	fcgi_proc *proc;
+	
+	for (proc = host->first; proc; proc = proc->next) {
+		if (p->conf.debug) {
+			log_error_write(srv, __FILE__, __LINE__,  "sbdbdddd", 
+					"proc:", 
+					host->host, proc->port, 
+					proc->socket,
+					proc->state,
+					proc->is_local,
+					proc->load,
+					proc->pid);
+		}
+		
+		if (0 == proc->is_local) {
+			/* 
+			 * external servers might get disabled 
+			 * 
+			 * enable the server again, perhaps it is back again 
+			 */
+			
+			if ((proc->state == PROC_STATE_DISABLED) &&
+			    (srv->cur_ts - proc->disable_ts > FCGI_RETRY_TIMEOUT)) {
+				proc->state = PROC_STATE_RUNNING;
+				host->active_procs++;
+				
+				log_error_write(srv, __FILE__, __LINE__,  "sbdb", 
+						"fcgi-server re-enabled:", 
+						host->host, host->port, 
+						host->unixsocket);
+			}
+		} else {
+			/* the child should not terminate at all */
+			int status;
+			
+			if (proc->state == PROC_STATE_DIED_WAIT_FOR_PID) {
+				switch(waitpid(proc->pid, &status, WNOHANG)) {
+				case 0:
+					/* child is still alive */
+					break;
+				case -1:
+					break;
+				default:
+					if (WIFEXITED(status)) {
+#if 0
+						log_error_write(srv, __FILE__, __LINE__, "sdsd", 
+								"child exited, pid:", proc->pid,
+								"status:", WEXITSTATUS(status));
+#endif
+					} else if (WIFSIGNALED(status)) {
+						log_error_write(srv, __FILE__, __LINE__, "sd", 
+								"child signaled:", 
+								WTERMSIG(status));
+					} else {
+						log_error_write(srv, __FILE__, __LINE__, "sd", 
+								"child died somehow:", 
+								status);
+					}
+					
+					proc->state = PROC_STATE_DIED;
+					break;
+				}
+			}
+			
+			/* 
+			 * local servers might died, but we restart them
+			 * 
+			 */
+			if (proc->state == PROC_STATE_DIED &&
+			    proc->load == 0) {
+				/* restart the child */
+				
+				if (fcgi_spawn_connection(srv, p, host, proc)) {
+					log_error_write(srv, __FILE__, __LINE__, "s",
+							"ERROR: spawning fcgi failed.");
+					return HANDLER_ERROR;
+				}
+				
+				fcgi_proclist_sort_down(srv, host, proc);
+			}
+		}
+	}
+	
+	return 0;
+}
 
 
 static handler_t fcgi_write_request(server *srv, handler_ctx *hctx) {
@@ -2303,12 +2392,17 @@ static handler_t fcgi_write_request(server *srv, handler_ctx *hctx) {
 				return HANDLER_ERROR;
 			}
 			
+			if (hctx->proc->is_local) {
+				hctx->pid = hctx->proc->pid;
+			}
 			
 			switch (fcgi_establish_connection(srv, hctx)) {
 			case 1:
 				fcgi_set_state(srv, hctx, FCGI_STATE_CONNECT);
 				
 				/* connection is in progress, wait for an event and call getsockopt() below */
+				
+				fdevent_event_add(srv->ev, &(hctx->fde_ndx), hctx->fd, FDEVENT_OUT);
 				
 				return HANDLER_WAIT_FOR_EVENT;
 			case -1:
@@ -2334,9 +2428,13 @@ static handler_t fcgi_write_request(server *srv, handler_ctx *hctx) {
 				return HANDLER_ERROR;
 			}
 			if (socket_error != 0) {
-				log_error_write(srv, __FILE__, __LINE__, "ss",
-						"establishing connection failed:", strerror(socket_error), 
-						"port:", hctx->proc->port);
+				if (!hctx->proc->is_local) {
+					/* local procs get restarted */
+					
+					log_error_write(srv, __FILE__, __LINE__, "ss",
+							"establishing connection failed:", strerror(socket_error), 
+							"port:", hctx->proc->port);
+				}
 				
 				return HANDLER_ERROR;
 			}
@@ -2346,6 +2444,7 @@ static handler_t fcgi_write_request(server *srv, handler_ctx *hctx) {
 		
 		hctx->proc->load++;
 		hctx->proc->last_used = srv->cur_ts;
+		hctx->got_proc = 1;
 		
 		if (p->conf.debug) {
 			log_error_write(srv, __FILE__, __LINE__, "sddbdd",
@@ -2377,11 +2476,13 @@ static handler_t fcgi_write_request(server *srv, handler_ctx *hctx) {
 		
 		/* fall through */
 	case FCGI_STATE_WRITE:
-		/* continue with the code after the switch */
-		if (-1 == (r = write(hctx->fd, 
-				     hctx->write_buffer->ptr + hctx->write_offset, 
-				     hctx->write_buffer->used - hctx->write_offset))) {
-			
+		/* why aren't we using the network_ interface here ? */
+		
+		r = write(hctx->fd, 
+			  hctx->write_buffer->ptr + hctx->write_offset, 
+			  hctx->write_buffer->used - hctx->write_offset);
+		
+		if (-1 == r) {
 			if (errno == ENOTCONN) {
 				/* the connection got dropped after accept() 
 				 * 
@@ -2411,8 +2512,6 @@ static handler_t fcgi_write_request(server *srv, handler_ctx *hctx) {
 						"write-offset:", hctx->write_offset,
 						"reconnect attempts:", hctx->reconnects);
 				
-				
-				
 				return HANDLER_ERROR;
 			}
 			
@@ -2424,6 +2523,8 @@ static handler_t fcgi_write_request(server *srv, handler_ctx *hctx) {
 				
 				return HANDLER_ERROR;
 			} else {
+				fdevent_event_add(srv->ev, &(hctx->fde_ndx), hctx->fd, FDEVENT_OUT);
+				
 				return HANDLER_WAIT_FOR_EVENT;
 			}
 		}
@@ -2437,6 +2538,9 @@ static handler_t fcgi_write_request(server *srv, handler_ctx *hctx) {
 		break;
 	case FCGI_STATE_READ:
 		/* waiting for a response */
+		
+		fdevent_event_add(srv->ev, &(hctx->fde_ndx), hctx->fd, FDEVENT_IN);
+		
 		break;
 	default:
 		log_error_write(srv, __FILE__, __LINE__, "s", "(debug) unknown state");
@@ -2444,91 +2548,6 @@ static handler_t fcgi_write_request(server *srv, handler_ctx *hctx) {
 	}
 	
 	return HANDLER_WAIT_FOR_EVENT;
-}
-
-static int fcgi_restart_dead_procs(server *srv, plugin_data *p, fcgi_extension_host *host) {
-	fcgi_proc *proc;
-	
-	for (proc = host->first; proc; proc = proc->next) {
-		if (p->conf.debug) {
-			log_error_write(srv, __FILE__, __LINE__,  "sbdbdddd", 
-					"proc:", 
-					host->host, proc->port, 
-					proc->socket,
-					proc->state,
-					proc->is_local,
-					proc->load,
-					proc->pid);
-		}
-		
-		if (0 == proc->is_local) {
-			/* 
-			 * external servers might get disabled 
-			 * 
-			 * enable the server again, perhaps it is back again 
-			 */
-			
-			if ((proc->state == PROC_STATE_DISABLED) &&
-			    (srv->cur_ts - proc->disable_ts > FCGI_RETRY_TIMEOUT)) {
-				proc->state = PROC_STATE_RUNNING;
-				host->active_procs++;
-				
-				log_error_write(srv, __FILE__, __LINE__,  "sbdb", 
-						"fcgi-server re-enabled:", 
-						host->host, host->port, 
-						host->unixsocket);
-			}
-		} else {
-			/* the child should not terminate at all */
-			int status;
-			
-			if (proc->state == PROC_STATE_DIED_WAIT_FOR_PID) {
-				switch(waitpid(proc->pid, &status, WNOHANG)) {
-				case 0:
-					/* child is still alive */
-					break;
-				case -1:
-					break;
-				default:
-					if (WIFEXITED(status)) {
-						log_error_write(srv, __FILE__, __LINE__, "sdsd", 
-								"child exited, pid:", proc->pid,
-								"status:", WEXITSTATUS(status));
-					} else if (WIFSIGNALED(status)) {
-						log_error_write(srv, __FILE__, __LINE__, "sd", 
-								"child signaled:", 
-								WTERMSIG(status));
-					} else {
-						log_error_write(srv, __FILE__, __LINE__, "sd", 
-								"child died somehow:", 
-								status);
-					}
-					
-					proc->state = PROC_STATE_DIED;
-					break;
-				}
-			}
-			
-			/* 
-			 * local servers might died, but we restart them
-			 * 
-			 */
-			if (proc->state == PROC_STATE_DIED &&
-			    proc->load == 0) {
-				/* restart the child */
-				
-				if (fcgi_spawn_connection(srv, p, host, proc)) {
-					log_error_write(srv, __FILE__, __LINE__, "s",
-							"ERROR: spawning fcgi failed.");
-					return HANDLER_ERROR;
-				}
-				
-				fcgi_proclist_sort_down(srv, host, proc);
-			}
-		}
-	}
-	
-	return 0;
 }
 
 SUBREQUEST_FUNC(mod_fastcgi_handle_subrequest) {
@@ -2571,14 +2590,28 @@ SUBREQUEST_FUNC(mod_fastcgi_handle_subrequest) {
 			 * restart the request-handling 
 			 */
 			if (proc && proc->is_local) {
+#if 0
 				log_error_write(srv, __FILE__, __LINE__,  "sbdb", "connect() to fastcgi failed, restarting the request-handling:", 
 						host->host,
 						proc->port,
 						proc->socket);
 			
-				proc->state = PROC_STATE_DIED_WAIT_FOR_PID;
+#endif
+				/* 
+				 * several hctx might reference the same proc
+				 * 
+				 * Only one of them should mark the proc as dead all the other
+				 * ones should just take a new one.
+				 * 
+				 * If a new proc was started with the old struct this might lead
+				 * the mark a perfect proc as dead otherwise
+				 * 
+				 */
+				if (proc->state == PROC_STATE_RUNNING &&
+				    hctx->pid == proc->pid) {
+					proc->state = PROC_STATE_DIED_WAIT_FOR_PID;
+				}
 			}
-			
 			fcgi_restart_dead_procs(srv, p, host);
 			
 			fcgi_connection_cleanup(srv, hctx);
@@ -2586,15 +2619,12 @@ SUBREQUEST_FUNC(mod_fastcgi_handle_subrequest) {
 			buffer_reset(con->physical.path);
 			con->mode = DIRECT;
 			
-			joblist_append(srv, con);
-			
 			/* mis-using HANDLER_WAIT_FOR_FD to break out of the loop 
 			 * and hope that the childs will be restarted 
 			 * 
 			 */
 			return HANDLER_WAIT_FOR_FD;
 		} else {
-		
 			fcgi_connection_cleanup(srv, hctx);
 			
 			buffer_reset(con->physical.path);
@@ -2682,8 +2712,11 @@ static handler_t fcgi_handle_fdevent(void *s, void *ctx, int revents) {
 			
 			return HANDLER_FINISHED;
 		case -1:
-			if (proc->pid) {
+			if (proc->pid && proc->state != PROC_STATE_DIED) {
 				int status;
+				
+				/* only fetch the zombie if it is not already done */
+				
 				switch(waitpid(proc->pid, &status, WNOHANG)) {
 				case 0:
 					/* child is still alive */

@@ -1242,7 +1242,6 @@ handler_t http_response_prepare(server *srv, connection *con) {
 	switch(r = plugins_call_handle_subrequest(srv, con)) {
 	case HANDLER_GO_ON:
 		/* request was not handled, looks like we are done */
-		
 		return HANDLER_FINISHED;
 	case HANDLER_FINISHED:
 		/* request is finished */
