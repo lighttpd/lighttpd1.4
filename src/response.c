@@ -98,7 +98,7 @@ int http_response_write_basic_header(server *srv, connection *con) {
 	}
 
 	if (buffer_is_empty(con->conf.server_tag)) {
-		BUFFER_APPEND_STRING_CONST(b, "\r\nServer: "PACKAGE"/"VERSION);
+		BUFFER_APPEND_STRING_CONST(b, "\r\nServer: " PACKAGE_NAME "/" PACKAGE_VERSION);
 	} else {
 		BUFFER_APPEND_STRING_CONST(b, "\r\nServer: ");
 		buffer_append_string_buffer(b, con->conf.server_tag);
@@ -232,7 +232,7 @@ int http_response_write_header(server *srv, connection *con,
 	}
 	
 	if (buffer_is_empty(con->conf.server_tag)) {
-		BUFFER_APPEND_STRING_CONST(b, "\r\nServer: "PACKAGE"/"VERSION);
+		BUFFER_APPEND_STRING_CONST(b, "\r\nServer: " PACKAGE_NAME "/" PACKAGE_VERSION);
 	} else {
 		BUFFER_APPEND_STRING_CONST(b, "\r\nServer: ");
 		buffer_append_string_buffer(b, con->conf.server_tag);

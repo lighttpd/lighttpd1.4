@@ -471,7 +471,7 @@ static handler_t mod_status_handle_server_config(server *srv, connection *con, v
 			   "  <title>Status</title>\n"
 			   " </head>\n"
 			   " <body>\n"
-			   "  <h1>"PACKAGE_NAME" "PACKAGE_VERSION"</h1>\n"
+			   "  <h1>" PACKAGE_NAME " " PACKAGE_VERSION "</h1>\n"
 			   "  <table border=\"1\">\n");
 	
 	mod_status_header_append(b, "Server-Features");
