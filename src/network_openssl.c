@@ -61,6 +61,12 @@ int network_write_chunkqueue_openssl(server *srv, connection *con, chunkqueue *c
 				switch ((ssl_r = SSL_get_error(con->ssl, r))) {
 				case SSL_ERROR_WANT_WRITE:
 					break;
+				case SSL_ERROR_SYSCALL:
+					log_error_write(srv, __FILE__, __LINE__, "sddds", "SSL:", 
+							ssl_r, r, errno,
+							strerror(errno));
+					
+					return  -1;
 				case SSL_ERROR_ZERO_RETURN:
 					/* clean shutdown on the remote side */
 					
@@ -129,6 +135,12 @@ int network_write_chunkqueue_openssl(server *srv, connection *con, chunkqueue *c
 				switch ((ssl_r = SSL_get_error(con->ssl, r))) {
 				case SSL_ERROR_WANT_WRITE:
 					break;
+				case SSL_ERROR_SYSCALL:
+					log_error_write(srv, __FILE__, __LINE__, "sddds", "SSL:", 
+							ssl_r, r, errno,
+							strerror(errno));
+					
+					return  -1;
 				case SSL_ERROR_ZERO_RETURN:
 					/* clean shutdown on the remote side */
 					
