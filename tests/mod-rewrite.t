@@ -18,8 +18,8 @@ my $pidoffile = '/tmp/lighttpd/pidof.pid';
 sub pidof {
 	my $prog = $_[0];
 
-	open F, "ps ax  | grep $prog | awk '{ print \$1 }'|" or
-	open F, "ps -ef | grep $prog | awk '{ print \$2 }'|" or
+	open F, "ps ax  | grep $prog | grep -v grep | awk '{ print \$1 }'|" or
+	open F, "ps -ef | grep $prog | grep -v grep | awk '{ print \$2 }'|" or
 	  return -1;
 
 	my $pid = <F>;
