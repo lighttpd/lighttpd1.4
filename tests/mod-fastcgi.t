@@ -2,7 +2,7 @@
 
 use strict;
 use IO::Socket;
-use Test::More tests => 39;
+use Test::More tests => 40;
 
 my $basedir = (defined $ENV{'top_builddir'} ? $ENV{'top_builddir'} : '..');
 my $srcdir = (defined $ENV{'srcdir'} ? $ENV{'srcdir'} : '.');
@@ -201,7 +201,7 @@ sub handle_http {
     
 
 SKIP: {
-	skip "no PHP running on port 1026", 23 if pidof("php") == -1; 
+	skip "no PHP running on port 1026", 24 if pidof("php") == -1; 
 
 	ok(start_proc == 0, "Starting lighttpd") or die();
 
