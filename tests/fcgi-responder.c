@@ -4,9 +4,12 @@
 #include <string.h>
 
 int main () {
-	char* p;
+	int num_requests = 2;
 	
-	while (FCGI_Accept() >= 0) {   
+	while (num_requests > 0 &&
+	       FCGI_Accept() >= 0) {
+		char* p;
+		
 		if (NULL != (p = getenv("QUERY_STRING"))) {
 			if (0 == strcmp(p, "lf")) {
 				printf("Status: 200 OK\n\n");
@@ -20,6 +23,9 @@ int main () {
 				printf("Status: 200 OK\r\n");
 				fflush(stdout);
 				printf("\r\n");
+			} else if (0 == strcmp(p, "die-at-end")) {
+				printf("Status: 200 OK\r\n\r\n");
+				num_requests--;
 			} else {
 				printf("Status: 200 OK\r\n\r\n");
 			}
@@ -27,8 +33,8 @@ int main () {
 			printf("Status: 500 Internal Foo\r\n\r\n");
 		}
 		 
-		printf("test123");  
+		printf("test123");
 	}
-
+	
 	return 0;
 }
