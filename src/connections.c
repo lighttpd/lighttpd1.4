@@ -140,6 +140,7 @@ int connection_close(server *srv, connection *con) {
 	return 0;
 }
 
+#if 0
 static void dump_packet(const unsigned char *data, size_t len) {
 	size_t i, j;
 	
@@ -181,6 +182,7 @@ static void dump_packet(const unsigned char *data, size_t len) {
 		fprintf(stderr, "\n");
 	}
 }
+#endif // #if 0
 
 static int connection_handle_read(server *srv, connection *con) {
 	int len;
