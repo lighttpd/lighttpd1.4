@@ -1,4 +1,4 @@
-dist_man1_MANS=lighttpd.1
+dist_man1_MANS=lighttpd.1 spawn-fcgi.1
 
 
 DOCS=accesslog.txt \
