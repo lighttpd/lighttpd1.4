@@ -175,11 +175,6 @@ static server *server_init(void) {
 
 	srv->split_vals = array_init();
 	
-	
-	srv->dot_stack.ptr = NULL;
-	srv->dot_stack.used = 0;
-	srv->dot_stack.size = 0;
-	
 	srv->config_patches = buffer_array_init();
 	for (i = 0; patches[i]; i++) {
 		buffer *b;
@@ -267,11 +262,6 @@ static void server_free(server *srv) {
 	
 	array_free(srv->srvconf.modules);
 	array_free(srv->split_vals);
-	
-	for (i = 0; i < srv->dot_stack.size; i++) {
-		free(srv->dot_stack.ptr[i]);
-	}
-	free(srv->dot_stack.ptr);
 	
 	free(srv);
 }
@@ -1002,7 +992,7 @@ int main (int argc, char **argv) {
 	if (srv->srvconf.pid_file->used &&
 	    srv->srvconf.changeroot->used == 0) {
 		if (0 != unlink(srv->srvconf.pid_file->ptr)) {
-			if (errno != EPERM) {
+			if (errno != EACCES && errno != EPERM) {
 				log_error_write(srv, __FILE__, __LINE__, "sbds", 
 						"unlink failed for:", 
 						srv->srvconf.pid_file,
