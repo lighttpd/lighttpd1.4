@@ -2,7 +2,7 @@
 
 use strict;
 use IO::Socket;
-use Test::More tests => 120;
+use Test::More tests => 124;
 
 
 my $testname;
@@ -32,7 +32,7 @@ sub stop_proc {
 	close F;
 
 	kill('TERM',$pid) or return -1;
-	select(undef, undef, undef, 0.25);
+	select(undef, undef, undef, 0.01);
 
 	return 0;
 }
@@ -1137,8 +1137,8 @@ ok(handle_http == 0, 'FastCGI + Host');
 
 ok(stop_proc == 0, "Stopping lighttpd");
 
-$configfile = 'fastcgi-11.conf';
-ok(start_proc == 0, "Starting lighttpd with fastcgi-11.conf") or die();
+$configfile = 'fastcgi-auth.conf';
+ok(start_proc == 0, "Starting lighttpd with $configfile") or die();
 @request  = ( <<EOF
 GET /index.html?ok HTTP/1.0
 Host: www.example.org
@@ -1147,10 +1147,6 @@ EOF
 @response = ( { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200 } );
 ok(handle_http == 0, 'FastCGI - Auth');
 
-ok(stop_proc == 0, "Stopping lighttpd");
-
-$configfile = 'fastcgi-12.conf';
-ok(start_proc == 0, "Starting lighttpd with fastcgi-12.conf") or die();
 @request  = ( <<EOF
 GET /index.html?fail HTTP/1.0
 Host: www.example.org
@@ -1198,4 +1194,42 @@ ok(handle_http == 0, 'Bug #12');
 
 ok(stop_proc == 0, "Stopping lighttpd");
 
+$configfile = 'fastcgi-responder.conf';
+ok(start_proc == 0, "Starting lighttpd with $configfile") or die();
+@request  = ( <<EOF
+GET /index.fcgi?lf HTTP/1.0
+Host: www.example.org
+EOF
+ );
+@response = ( { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200, 'HTTP-Content' => 'test123' } );
+ok(handle_http == 0, 'line-ending \n\n');
+
+@request  = ( <<EOF
+GET /index.fcgi?crlf HTTP/1.0
+Host: www.example.org
+EOF
+ );
+@response = ( { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200, 'HTTP-Content' => 'test123' } );
+ok(handle_http == 0, 'line-ending \r\n\r\n');
+
+@request  = ( <<EOF
+GET /index.fcgi?slow-lf HTTP/1.0
+Host: www.example.org
+EOF
+ );
+@response = ( { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200, 'HTTP-Content' => 'test123' } );
+ok(handle_http == 0, 'line-ending \n + \n');
+
+
+
+@request  = ( <<EOF
+GET /index.fcgi?slow-crlf HTTP/1.0
+Host: www.example.org
+EOF
+ );
+@response = ( { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200, 'HTTP-Content' => 'test123' } );
+ok(handle_http == 0, 'line-ending \r\n + \r\n');
+
+
+ok(stop_proc == 0, "Stopping lighttpd");
 
