@@ -770,12 +770,26 @@ static int cgi_create_env(server *srv, connection *con, plugin_data *p, buffer *
 #endif
 			);
 		cgi_env_add(&env, CONST_STR_LEN("SERVER_PORT"), buf);
+		
+		cgi_env_add(&env, CONST_STR_LEN("SERVER_ADDR"), 
+#ifdef HAVE_IPV6
+			    inet_ntop(srv_sock->addr.plain.sa_family, 
+				      srv_sock->addr.plain.sa_family == AF_INET6 ? 
+				      (const void *) &(srv_sock->addr.ipv6.sin6_addr) :
+				      (const void *) &(srv_sock->addr.ipv4.sin_addr),
+				      b2, sizeof(b2)-1)
+#else
+			    inet_ntoa(srv_sock->addr.ipv4.sin_addr)
+#endif
+			    );
+		
 		cgi_env_add(&env, CONST_STR_LEN("REQUEST_METHOD"), get_http_method_name(con->request.http_method));
 		if (con->request.pathinfo->used) {
 			cgi_env_add(&env, CONST_STR_LEN("PATH_INFO"), con->request.pathinfo->ptr);
 		}
 		cgi_env_add(&env, CONST_STR_LEN("REDIRECT_STATUS"), "200");
 		cgi_env_add(&env, CONST_STR_LEN("QUERY_STRING"), con->uri.query->used ? con->uri.query->ptr : "");
+		cgi_env_add(&env, CONST_STR_LEN("REQUEST_URI"), con->request.orig_uri->used ? con->request.orig_uri->ptr : "");
 		
 		
 		cgi_env_add(&env, CONST_STR_LEN("REMOTE_ADDR"), 
@@ -789,6 +803,15 @@ static int cgi_create_env(server *srv, connection *con, plugin_data *p, buffer *
 			    inet_ntoa(con->dst_addr.ipv4.sin_addr)
 #endif
 			    );
+
+		ltostr(buf, 
+#ifdef HAVE_IPV6
+			ntohs(con->dst_addr.plain.sa_family == AF_INET6 ? con->dst_addr.ipv6.sin6_port : con->dst_addr.ipv4.sin_port)
+#else
+			ntohs(con->dst_addr.ipv4.sin_port)
+#endif
+			);
+		cgi_env_add(&env, CONST_STR_LEN("REMOTE_PORT"), buf);
 		
 		if (con->authed_user->used) {
 			cgi_env_add(&env, CONST_STR_LEN("REMOTE_USER"),
