@@ -532,7 +532,7 @@ SIGHUP_FUNC(log_access_cycle) {
 	for (i = 0; i < srv->config_context->used; i++) {
 		plugin_config *s = p->config_storage[i];
 
-		if(s->access_logbuffer->used) {
+		if (s->access_logbuffer->used) {
 			if (s->use_syslog) {
 #ifdef HAVE_SYSLOG_H
 				syslog(LOG_INFO, "%*s", s->access_logbuffer->used - 1, s->access_logbuffer->ptr);
@@ -540,10 +540,12 @@ SIGHUP_FUNC(log_access_cycle) {
 			} else if (s->log_access_fd != -1) {
 				write(s->log_access_fd, s->access_logbuffer->ptr, s->access_logbuffer->used - 1);
 			}
-			s->access_logbuffer->used = 0;
+			
+			buffer_reset(s->access_logbuffer);
 		}
 		
 		if (s->use_syslog == 0 &&
+		    !buffer_is_empty(s->access_logfile) &&
 		    s->access_logfile->ptr[0] != '|') {
 			
 			close(s->log_access_fd);
