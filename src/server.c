@@ -71,6 +71,7 @@ static void sigaction_handler(int sig, siginfo_t *si, void *context) {
 	case SIGTERM: srv_shutdown = 1; break;
 	case SIGALRM: handle_sig_alarm = 1; break;
 	case SIGHUP:  handle_sig_hup = 1; break;
+	case SIGCLD: break;
 	}
 }
 #elif defined(HAVE_SIGNAL) || defined(HAVE_SIGACTION)
@@ -79,6 +80,7 @@ static void signal_handler(int sig) {
 	case SIGTERM: srv_shutdown = 1; break;
 	case SIGALRM: handle_sig_alarm = 1; break;
 	case SIGHUP:  handle_sig_hup = 1; break;
+	case SIGCLD:  break;
 	}
 }
 #endif
@@ -595,6 +597,20 @@ int main (int argc, char **argv) {
 		
 		return -1;
 	}
+
+#ifdef HAVE_FORK	
+	/* network is up, let's deamonize ourself */
+	if (srv->srvconf.dont_daemonize == 0) daemonize();
+#endif
+	
+	/* write pid file */
+	if (pid_fd != -1) {
+		buffer_copy_long(srv->tmp_buf, getpid());
+		buffer_append_string(srv->tmp_buf, "\n");
+		write(pid_fd, srv->tmp_buf->ptr, srv->tmp_buf->used - 1);
+		close(pid_fd);
+		pid_fd = -1;
+	}
 	
 	if (HANDLER_GO_ON != plugins_call_set_defaults(srv)) {
 		log_error_write(srv, __FILE__, __LINE__, "s", "Configuration of plugins failed. Going down.");
@@ -627,19 +643,6 @@ int main (int argc, char **argv) {
 		server_free(srv);
 		
 		return -1;
-	}
-#ifdef HAVE_FORK	
-	/* network is up, let's deamonize ourself */
-	if (srv->srvconf.dont_daemonize == 0) daemonize();
-#endif
-	
-	/* write pid file */
-	if (pid_fd != -1) {
-		buffer_copy_long(srv->tmp_buf, getpid());
-		buffer_append_string(srv->tmp_buf, "\n");
-		write(pid_fd, srv->tmp_buf->ptr, srv->tmp_buf->used - 1);
-		close(pid_fd);
-		pid_fd = -1;
 	}
 	
 	if (-1 == log_error_open(srv)) {
@@ -683,6 +686,7 @@ int main (int argc, char **argv) {
 	sigaction(SIGTERM, &act, NULL);
 	sigaction(SIGHUP,  &act, NULL);
 	sigaction(SIGALRM, &act, NULL);
+	sigaction(SIGCLD, &act, NULL);
 	
 #elif defined(HAVE_SIGNAL)
 	/* ignore the SIGPIPE from sendfile() */
@@ -691,6 +695,7 @@ int main (int argc, char **argv) {
 	signal(SIGALRM, signal_handler);
 	signal(SIGTERM, signal_handler);
 	signal(SIGHUP,  signal_handler);
+	signal(SIGCLD,  signal_handler);
 #endif
 	
 #ifdef USE_ALARM

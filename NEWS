@@ -12,6 +12,8 @@ NEWS
   * fixed segfault in debug-code
   * fixed mod_expire if modification-timestamps are used
   * fixed segfault on duplication Host-headers
+  * fixed endless loop in mod_fastcgi
+  * fixed handling of dead fastcgi-processes
 
 - 1.3.11 - 2005-02-20
 
