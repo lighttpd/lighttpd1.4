@@ -182,7 +182,7 @@ static void dump_packet(const unsigned char *data, size_t len) {
 		fprintf(stderr, "\n");
 	}
 }
-#endif // #if 0
+#endif 
 
 static int connection_handle_read(server *srv, connection *con) {
 	int len;
@@ -1256,12 +1256,15 @@ int connection_state_machine(server *srv, connection *con) {
 				
 				connection_set_state(srv, con, CON_STATE_HANDLE_REQUEST);
 				
+				done = 1; /* is this neccesary ? */
 				break;
 			case HANDLER_COMEBACK:
 				done = -1;
 			case HANDLER_WAIT_FOR_EVENT:
 				/* come back here */
 				connection_set_state(srv, con, CON_STATE_HANDLE_REQUEST);
+				
+				done = 1; /* is this neccesary ? */
 				break;
 			case HANDLER_ERROR:
 				/* something went wrong */
