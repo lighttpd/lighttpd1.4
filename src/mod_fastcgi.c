@@ -208,6 +208,14 @@ typedef struct {
 	 */
 	unsigned short check_local;
 
+	/*
+	 * append PATH_INFO to SCRIPT_FILENAME
+	 * 
+	 * php needs this if cgi.fix_pathinfo is provied
+	 * 
+	 */
+	
+	unsigned short break_scriptfilename_for_php;
 		
 	ssize_t load; /* replace by host->load */
 
@@ -994,6 +1002,8 @@ SETDEFAULTS_FUNC(mod_fastcgi_set_defaults) {
 						{ "bin-environment",   NULL, T_CONFIG_ARRAY, T_CONFIG_SCOPE_CONNECTION },        /* 12 */
 						{ "bin-copy-environment", NULL, T_CONFIG_ARRAY, T_CONFIG_SCOPE_CONNECTION },     /* 13 */
 						
+						{ "broken-scriptfilename", NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION },  /* 14 */
+						
 						{ NULL,                NULL, T_CONFIG_UNSET, T_CONFIG_SCOPE_UNSET }
 					};
 					
@@ -1015,6 +1025,7 @@ SETDEFAULTS_FUNC(mod_fastcgi_set_defaults) {
 					df->idle_timeout = 60;
 					df->mode = FCGI_RESPONDER;
 					df->disable_time = 60;
+					df->break_scriptfilename_for_php = 0;
 					
 					fcv[0].destination = df->host;
 					fcv[1].destination = df->docroot;
@@ -1032,6 +1043,8 @@ SETDEFAULTS_FUNC(mod_fastcgi_set_defaults) {
 					
 					fcv[12].destination = df->bin_env;
 					fcv[13].destination = df->bin_env_copy;
+					fcv[14].destination = &(df->break_scriptfilename_for_php);
+					
 					
 					if (0 != config_insert_values_internal(srv, da_host->value, fcv)) {
 						return HANDLER_ERROR;
@@ -1637,27 +1650,22 @@ static int fcgi_create_env(server *srv, handler_ctx *hctx, size_t request_id) {
 		 * For AUTHORIZER mode these headers should be omitted.
 		 */
 
-		if (hctx->path_info_offset == 0) {  /* no pathinfo */
-			fcgi_env_add(p->fcgi_env, CONST_STR_LEN("SCRIPT_NAME"), CONST_BUF_LEN(con->uri.path));
-			fcgi_env_add(p->fcgi_env, CONST_STR_LEN("PATH_INFO"), CONST_STR_LEN(""));
-		} else {                                /* pathinfo */
-			*(con->uri.path->ptr + hctx->path_info_offset) = '\0'; /* get sctipt_name part */
-			fcgi_env_add(p->fcgi_env, CONST_STR_LEN("SCRIPT_NAME"), CONST_BUF_LEN(con->uri.path));
+		fcgi_env_add(p->fcgi_env, CONST_STR_LEN("SCRIPT_NAME"), CONST_BUF_LEN(con->uri.path));
+		
+		if (!buffer_is_empty(con->request.pathinfo)) {
+			fcgi_env_add(p->fcgi_env, CONST_STR_LEN("PATH_INFO"), CONST_BUF_LEN(con->request.pathinfo));
 			
-			*(con->uri.path->ptr + hctx->path_info_offset) = '/';  /* restore uri.path */
-			fcgi_env_add(p->fcgi_env, CONST_STR_LEN("PATH_INFO"), 
-				     con->uri.path->ptr + hctx->path_info_offset, 
-				     con->uri.path->used - 1 - hctx->path_info_offset);
+			/* PATH_TRANSLATED is only defined if PATH_INFO is set */
 			
-			if (host->docroot->used) {
+			if (!buffer_is_empty(host->docroot)) {
 				buffer_copy_string_buffer(p->path, host->docroot);
-				buffer_append_string(p->path, con->uri.path->ptr + hctx->path_info_offset);
-				fcgi_env_add(p->fcgi_env, CONST_STR_LEN("PATH_TRANSLATED"), CONST_BUF_LEN(p->path));
 			} else {
-				fcgi_env_add(p->fcgi_env, CONST_STR_LEN("PATH_TRANSLATED"), 
-					     con->uri.path->ptr + hctx->path_info_offset, 
-					     con->uri.path->used - 1 - hctx->path_info_offset);
+				buffer_copy_string_buffer(p->path, con->physical.doc_root);
 			}
+			buffer_append_string_buffer(p->path, con->request.pathinfo);
+			fcgi_env_add(p->fcgi_env, CONST_STR_LEN("PATH_TRANSLATED"), CONST_BUF_LEN(p->path));
+		} else {
+			fcgi_env_add(p->fcgi_env, CONST_STR_LEN("PATH_INFO"), CONST_STR_LEN(""));
 		}
 	}
 
@@ -1681,11 +1689,17 @@ static int fcgi_create_env(server *srv, handler_ctx *hctx, size_t request_id) {
 		fcgi_env_add(p->fcgi_env, CONST_STR_LEN("SCRIPT_FILENAME"), CONST_BUF_LEN(p->path));
 		fcgi_env_add(p->fcgi_env, CONST_STR_LEN("DOCUMENT_ROOT"), CONST_BUF_LEN(host->docroot));
 	} else {
-		if (con->request.pathinfo->used) {
-			fcgi_env_add(p->fcgi_env, CONST_STR_LEN("PATH_INFO"), CONST_BUF_LEN(con->request.pathinfo));
+		buffer_copy_string_buffer(p->path, con->physical.path);
+		
+		/* cgi.fix_pathinfo need a broken SCRIPT_FILENAME to find out what PATH_INFO is itself 
+		 * 
+		 * see src/sapi/cgi_main.c, init_request_info()
+		 */
+		if (host->break_scriptfilename_for_php) {
+			buffer_append_string_buffer(p->path, con->request.pathinfo);
 		}
 		
-		fcgi_env_add(p->fcgi_env, CONST_STR_LEN("SCRIPT_FILENAME"), CONST_BUF_LEN(con->physical.path));
+		fcgi_env_add(p->fcgi_env, CONST_STR_LEN("SCRIPT_FILENAME"), CONST_BUF_LEN(p->path));
 		fcgi_env_add(p->fcgi_env, CONST_STR_LEN("DOCUMENT_ROOT"), CONST_BUF_LEN(con->physical.doc_root));
 	}
 	fcgi_env_add(p->fcgi_env, CONST_STR_LEN("REQUEST_URI"), CONST_BUF_LEN(con->request.orig_uri));
@@ -2914,7 +2928,7 @@ static handler_t fcgi_check_extension(server *srv, connection *con, void *p_d, i
 	/* Possibly, we processed already this request */
 	if (con->file_started == 1) return HANDLER_GO_ON;
 	
-	fn = uri_path_handler ? con->uri.path : con->physical.path;
+	fn = con->uri.path;
 
 	if (fn->used == 0) {
 		return HANDLER_ERROR;
