@@ -34,12 +34,28 @@ HTTP Keep-Alive
 Disabling keep-alive might help your server if you suffer from a large
 number of open file-descriptors.
 
-::
+The defaults fo the server is: ::
 
   server.max-keep-alive-requests = 128
   server.max-keep-alive-idle = 30
   server.max-read-idle = 60
   server.max-write-idle = 360
+
+handling 128 keep-alive requests in a row on a single connection, waiting 30 seconds
+before a unused keep-alive connection get dropped by lighttpd.
+
+If you handle several connections at once under a high load (let's assume 500 connections
+in parallel for 24h) you might run into the out-of-fd problem described below. ::
+
+  server.max-keep-alive-requests = 4
+  server.max-keep-alive-idle = 4
+
+would release the connections earlier and would free file-descriptors without a to large 
+performance loss.
+
+Disabling keep-alive completly is the last choice if you are still short in filedescriptors: ::
+
+  server.max-keep-alive-requests = 0
 
 Event Handlers
 --------------
