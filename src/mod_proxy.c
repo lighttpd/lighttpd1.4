@@ -356,7 +356,7 @@ static int proxy_establish_connection(server *srv, handler_ctx *hctx) {
 						"connect delayed:", proxy_fd);
 			}
 			
-			return -proxy_fd;
+			return 1;
 		} else {
 			
 			log_error_write(srv, __FILE__, __LINE__, "sdsd", 
@@ -371,7 +371,7 @@ static int proxy_establish_connection(server *srv, handler_ctx *hctx) {
 		log_error_write(srv, __FILE__, __LINE__, "sd", 
 				"connect succeeded: ", proxy_fd);
 	}
-	return proxy_fd;
+	return 0;
 }
 
 static int proxy_create_env(server *srv, handler_ctx *hctx) {
@@ -661,22 +661,48 @@ static int proxy_write_request(server *srv, handler_ctx *hctx) {
 			return -1;
 		}
 		
-		proxy_set_state(srv, hctx, PROXY_STATE_CONNECT);
 		/* fall through */
 		
 	case PROXY_STATE_CONNECT:
 		/* try to finish the connect() */
-		hctx->fd = proxy_establish_connection(srv, hctx);
-		
-		if (hctx->fd == -1) {
-			hctx->fde_ndx = -1;
-			return -1;
-		}
-		
-		if (hctx->fd < 0) {
-			hctx->fd = -hctx->fd;
-			proxy_set_state(srv, hctx, PROXY_STATE_CONNECT);
-			return 0;
+		if (hctx->state == PROXY_STATE_INIT) {
+			/* first round */
+			switch (proxy_establish_connection(srv, hctx)) {
+			case 1:
+				proxy_set_state(srv, hctx, PROXY_STATE_CONNECT);
+				
+				/* connection is in progress, wait for an event and call getsockopt() below */
+				
+				fdevent_event_add(srv->ev, &(hctx->fde_ndx), hctx->fd, FDEVENT_OUT);
+				
+				return HANDLER_WAIT_FOR_EVENT;
+			case -1:
+				/* if ECONNREFUSED choose another connection -> FIXME */
+				hctx->fde_ndx = -1;
+				
+				return HANDLER_ERROR;
+			default:
+				/* everything is ok, go on */
+				break;
+			}
+		} else {
+			int socket_error;
+			socklen_t socket_error_len = sizeof(socket_error);
+			
+			/* try to finish the connect() */
+			if (0 != getsockopt(hctx->fd, SOL_SOCKET, SO_ERROR, &socket_error, &socket_error_len)) {
+				log_error_write(srv, __FILE__, __LINE__, "ss", 
+						"getsockopt failed:", strerror(errno));
+				
+				return HANDLER_ERROR;
+			}
+			if (socket_error != 0) {
+				log_error_write(srv, __FILE__, __LINE__, "ss",
+						"establishing connection failed:", strerror(socket_error), 
+						"port:", hctx->host->port);
+				
+				return HANDLER_ERROR;
+			}
 		}
 		
 		proxy_set_state(srv, hctx, PROXY_STATE_PREPARE_WRITE);
