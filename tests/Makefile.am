@@ -10,7 +10,7 @@ endif
 
 TESTS=\
 prepare.sh \
-check.pl \
+run-tests.pl \
 bug-03.sh \
 bug-06.sh \
 bug-12.sh \
