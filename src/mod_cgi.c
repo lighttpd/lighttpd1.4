@@ -742,11 +742,7 @@ static int cgi_create_env(server *srv, connection *con, plugin_data *p, buffer *
 		env.size = 0;
 		env.used = 0;
 		
-#ifdef PACKAGE_NAME
 		cgi_env_add(&env, CONST_STR_LEN("SERVER_SOFTWARE"), PACKAGE_NAME"/"PACKAGE_VERSION);
-#else
-		cgi_env_add(&env, CONST_STR_LEN("SERVER_SOFTWARE"), PACKAGE"/"VERSION);
-#endif
 		cgi_env_add(&env, CONST_STR_LEN("SERVER_NAME"), 
 			    con->server_name->used ?
 			    con->server_name->ptr :

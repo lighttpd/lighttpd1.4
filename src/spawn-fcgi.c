@@ -193,7 +193,7 @@ int fcgi_spawn_connection(char *appPath, unsigned short port, const char *unixso
 
 
 void show_version () {
-	char *b = "spawn-fcgi" "-" VERSION \
+	char *b = "spawn-fcgi" "-" PACKAGE_VERSION \
 " - spawns fastcgi processes\n" \
 "Build-Date: " __DATE__ " " __TIME__ "\n";
 ;
@@ -201,7 +201,7 @@ void show_version () {
 }
 
 void show_help () {
-	char *b = "spawn-fcgi" "-" VERSION \
+	char *b = "spawn-fcgi" "-" PACKAGE_VERSION \
 " - spawns fastcgi processes\n" \
 "usage:\n" \
 " -f <fcgiapp> filename of the fcgi-application\n" \

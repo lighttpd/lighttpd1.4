@@ -198,11 +198,7 @@ static int build_ssi_cgi_vars(server *srv, connection *con, plugin_data *p) {
 	
 	array_reset(p->ssi_cgi_env);
 	
-#ifdef PACKAGE_NAME
 	ssi_env_add(p->ssi_cgi_env, CONST_STRING("SERVER_SOFTWARE"), PACKAGE_NAME"/"PACKAGE_VERSION);
-#else
-	ssi_env_add(p->ssi_cgi_env, CONST_STRING("SERVER_SOFTWARE"), PACKAGE"/"VERSION);
-#endif
 	ssi_env_add(p->ssi_cgi_env, CONST_STRING("SERVER_NAME"),
 #ifdef HAVE_IPV6
 		     inet_ntop(srv_sock->addr.plain.sa_family, 
