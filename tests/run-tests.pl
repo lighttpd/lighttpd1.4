@@ -2,7 +2,7 @@
 
 use strict;
 use IO::Socket;
-use Test::More tests => 124;
+use Test::More tests => 126;
 
 
 my $testname;
@@ -1220,8 +1220,6 @@ EOF
 @response = ( { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200, 'HTTP-Content' => 'test123' } );
 ok(handle_http == 0, 'line-ending \n + \n');
 
-
-
 @request  = ( <<EOF
 GET /index.fcgi?slow-crlf HTTP/1.0
 Host: www.example.org
@@ -1229,6 +1227,23 @@ EOF
  );
 @response = ( { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200, 'HTTP-Content' => 'test123' } );
 ok(handle_http == 0, 'line-ending \r\n + \r\n');
+
+@request  = ( <<EOF
+GET /index.fcgi?die-at-end HTTP/1.0
+Host: www.example.org
+EOF
+ );
+@response = ( { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200, 'HTTP-Content' => 'test123' } );
+ok(handle_http == 0, 'killing fastcgi and wait for restart');
+
+@request  = ( <<EOF
+GET /index.fcgi?crlf HTTP/1.0
+Host: www.example.org
+EOF
+ );
+@response = ( { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200, 'HTTP-Content' => 'test123' } );
+ok(handle_http == 0, 'regular response of after restart');
+
 
 
 ok(stop_proc == 0, "Stopping lighttpd");
