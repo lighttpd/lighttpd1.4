@@ -4,12 +4,14 @@ use strict;
 use IO::Socket;
 use Test::More tests => 126;
 
+my $basedir = (defined $ENV{'top_builddir'} ? $ENV{'top_builddir'} : '.');
+my $srcdir = (defined $ENV{'srcdir'} ? $ENV{'srcdir'} : '.');
 
 my $testname;
 my @request;
 my @response;
-my $configfile = 'lighttpd.conf';
-my $lighttpd_path = '../src/lighttpd';
+my $configfile = $srcdir.'/lighttpd.conf';
+my $lighttpd_path = $basedir.'/src/lighttpd';
 my $pidfile = '/tmp/lighttpd/lighttpd.pid';
 my $pidoffile = '/tmp/lighttpd/pidof.pid';
 
@@ -1125,8 +1127,8 @@ ok(stop_proc == 0, "Stopping lighttpd");
 
 print "\nspecial config\n";
 
-$configfile = 'fastcgi-10.conf';
-ok(start_proc == 0, "Starting lighttpd with fastcgi-10.conf") or die();
+$configfile = $srcdir.'/fastcgi-10.conf';
+ok(start_proc == 0, "Starting lighttpd with $configfile") or die();
 @request  = ( <<EOF
 GET /phphost.php HTTP/1.0
 Host: zzz.example.org
@@ -1137,7 +1139,7 @@ ok(handle_http == 0, 'FastCGI + Host');
 
 ok(stop_proc == 0, "Stopping lighttpd");
 
-$configfile = 'fastcgi-auth.conf';
+$configfile = $srcdir.'/fastcgi-auth.conf';
 ok(start_proc == 0, "Starting lighttpd with $configfile") or die();
 @request  = ( <<EOF
 GET /index.html?ok HTTP/1.0
@@ -1157,8 +1159,8 @@ ok(handle_http == 0, 'FastCGI - Auth');
 
 ok(stop_proc == 0, "Stopping lighttpd");
 
-$configfile = 'fastcgi-13.conf';
-ok(start_proc == 0, "Starting lighttpd with fastcgi-13.conf") or die();
+$configfile = $srcdir.'/fastcgi-13.conf';
+ok(start_proc == 0, "Starting lighttpd with $configfile") or die();
 @request  = ( <<EOF
 GET /indexfile/index.php HTTP/1.0
 Host: www.example.org
@@ -1169,8 +1171,8 @@ ok(handle_http == 0, 'FastCGI + local spawning');
 
 ok(stop_proc == 0, "Stopping lighttpd");
 
-$configfile = 'bug-06.conf';
-ok(start_proc == 0, "Starting lighttpd with bug-06.conf") or die();
+$configfile = $srcdir.'/bug-06.conf';
+ok(start_proc == 0, "Starting lighttpd with $configfile") or die();
 @request  = ( <<EOF
 GET /indexfile/ HTTP/1.0
 Host: www.example.org
@@ -1181,7 +1183,7 @@ ok(handle_http == 0, 'Bug #6');
 
 ok(stop_proc == 0, "Stopping lighttpd");
 
-$configfile = 'bug-12.conf';
+$configfile = $srcdir.'/bug-12.conf';
 ok(start_proc == 0, "Starting lighttpd with bug-12.conf") or die();
 @request  = ( <<EOF
 POST /indexfile/abc HTTP/1.0
@@ -1194,7 +1196,7 @@ ok(handle_http == 0, 'Bug #12');
 
 ok(stop_proc == 0, "Stopping lighttpd");
 
-$configfile = 'fastcgi-responder.conf';
+$configfile = $srcdir.'/fastcgi-responder.conf';
 ok(start_proc == 0, "Starting lighttpd with $configfile") or die();
 @request  = ( <<EOF
 GET /index.fcgi?lf HTTP/1.0
