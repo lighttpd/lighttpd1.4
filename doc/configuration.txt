@@ -145,6 +145,12 @@ main sections
 
 server.document-root
   document-root of the webserver
+
+  This variable has the specified as it will be used for all requests
+  without a Host: header and for all with a know hostname which you
+  might have specified with one of the above conditionals.
+
+  Default: no default, required
   
 server.bind
   hostname of the server
