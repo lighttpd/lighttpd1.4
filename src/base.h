@@ -241,6 +241,7 @@ typedef struct {
 	
 	/* server wide */
 	buffer *ssl_pemfile;
+	buffer *ssl_ca_file;
 	unsigned short use_ipv6;
 	unsigned short is_ssl;
 	unsigned short allow_http11;
@@ -424,6 +425,7 @@ typedef struct {
 	int       fde_ndx;
 	
 	buffer *ssl_pemfile;
+	buffer *ssl_ca_file;
 	unsigned short use_ipv6;
 	unsigned short is_ssl;
 	unsigned short max_request_size;
