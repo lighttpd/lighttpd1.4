@@ -216,6 +216,24 @@ static int connection_handle_read(server *srv, connection *con) {
 			switch ((r = SSL_get_error(con->ssl, len))) {
 			case SSL_ERROR_WANT_READ:
 				return 0;
+			case SSL_ERROR_SYSCALL:
+				switch(errno) {
+				default:
+					log_error_write(srv, __FILE__, __LINE__, "sddds", "SSL:", 
+							len, r, errno,
+							strerror(errno));
+					break;
+				}
+				
+				break;
+			case SSL_ERROR_ZERO_RETURN:
+				/* clean shutdown on the remote side */
+				
+				if (r == 0) {
+					/* FIXME: later */
+				}
+				
+				/* fall thourgh */
 			default:
 				log_error_write(srv, __FILE__, __LINE__, "sds", "SSL:", 
 						r, ERR_error_string(ERR_get_error(), NULL));
