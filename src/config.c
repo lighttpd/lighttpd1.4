@@ -200,6 +200,8 @@ static int config_insert(server *srv) {
 		{ "debug.log-request-header-on-error", NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_SERVER }, /* 36 */
 		{ "debug.log-state-handling",    NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_SERVER },     /* 37 */
 		
+		{ "ssl.ca-file",                 NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_SERVER },      /* 38 */
+		
 		
 		{ "server.host",                 "use server.bind instead", T_CONFIG_DEPRECATED, T_CONFIG_SCOPE_UNSET },
 		{ "server.docroot",              "use server.document-root instead", T_CONFIG_DEPRECATED, T_CONFIG_SCOPE_UNSET },
@@ -247,6 +249,7 @@ static int config_insert(server *srv) {
 		s->mimetypes     = array_init();
 		s->server_name   = buffer_init();
 		s->ssl_pemfile   = buffer_init();
+		s->ssl_ca_file   = buffer_init();
 		s->error_handler = buffer_init();
 		s->server_tag    = buffer_init();
 		s->max_keep_alive_requests = 128;
@@ -293,6 +296,7 @@ static int config_insert(server *srv) {
 		cv[34].destination = &(s->log_request_header);
 		
 		cv[35].destination = &(s->allow_http11);
+		cv[38].destination = s->ssl_ca_file;
 		
 		srv->config_storage[i] = s;
 	
@@ -444,6 +448,8 @@ int config_patch_connection(server *srv, connection *con, const char *stage, siz
 				PATCH(use_xattr);
 			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("ssl.pemfile"))) {
 				PATCH(ssl_pemfile);
+			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("ssl.ca-file"))) {
+				PATCH(ssl_ca_file);
 			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("ssl.engine"))) {
 				PATCH(is_ssl);
 			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("server.follow-symlink"))) {
@@ -1005,7 +1011,7 @@ int config_set_defaults(server *srv) {
 	}
 
 	if (s->is_ssl) {
-		if (s->ssl_pemfile->used == 0) {
+		if (buffer_is_empty(s->ssl_pemfile)) {
 			/* PEM file is require */
 			
 			log_error_write(srv, __FILE__, __LINE__, "s", 
