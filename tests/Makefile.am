@@ -11,18 +11,6 @@ endif
 TESTS=\
 prepare.sh \
 run-tests.pl \
-bug-03.sh \
-bug-06.sh \
-bug-12.sh \
-large-header-01.sh \
-compress-01.sh \
-compress-02.sh \
-compress-03.sh \
-compress-04.sh \
-fastcgi-10.sh \
-fastcgi-11.sh \
-fastcgi-12.sh \
-fastcgi-13.sh \
 cleanup.sh
 
 CONFS=fastcgi-10.conf \

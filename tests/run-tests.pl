@@ -2,7 +2,7 @@
 
 use strict;
 use IO::Socket;
-use Test::More tests => 89;
+use Test::More tests => 114;
 
 
 my $testname;
@@ -32,6 +32,7 @@ sub stop_proc {
 	close F;
 
 	kill('TERM',$pid) or return -1;
+	select(undef, undef, undef, 0.25);
 
 	return 0;
 }
@@ -165,7 +166,7 @@ sub handle_http {
 			}
 
 			if (!defined $resp_hdr{$k}) {
-				diag(sprintf("required header '%s' is missing\n", $_));
+				diag(sprintf("required header '%s' is missing\n", $k));
 				return -1;
 			}
 
@@ -746,6 +747,22 @@ EOF
 ok(handle_http == 0, 'GET, Range start out of range');
 
 
+@request  = ( <<EOF
+GET / HTTP/1.0
+Hsgfsdjf: asdfhdf
+hdhd: shdfhfdasd
+hfhr: jfghsdfg
+jfuuehdmn: sfdgjfdg
+jvcbzufdg: sgfdfg
+hrnvcnd: jfjdfg
+jfusfdngmd: gfjgfdusdfg
+nfj: jgfdjdfg
+jfue: jfdfdg
+EOF
+ );
+@response = ( { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200 } );
+ok(handle_http == 0, 'larger headers');
+
 
 
 
@@ -941,6 +958,61 @@ EOF
 ok(handle_http == 0, 'external redirect');
 
 
+
+print "\nmodules - mod_compress\n";
+@request  = ( <<EOF
+GET /index.html HTTP/1.0
+Accept-Encoding: deflate
+EOF
+ );
+@response = ( { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200, '+Vary' => '' } );
+ok(handle_http == 0, 'Vary is set');
+
+@request  = ( <<EOF
+GET /index.html HTTP/1.0
+Accept-Encoding: deflate
+EOF
+ );
+@response = ( { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200, '+Vary' => '', 'Content-Length' => '1288', '+Content-Encoding' => '' } );
+ok(handle_http == 0, 'deflate - Content-Length and Content-Encoding is set');
+
+@request  = ( <<EOF
+GET /index.html HTTP/1.0
+Accept-Encoding: gzip
+EOF
+ );
+@response = ( { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200, '+Vary' => '', '+Content-Encoding' => '' } );
+ok(handle_http == 0, 'gzip - Content-Length and Content-Encoding is set');
+
+@request  = ( <<EOF
+GET /index.txt HTTP/1.0
+Accept-Encoding: gzip, deflate
+EOF
+ );
+@response = ( { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200, '+Vary' => '', '+Content-Encoding' => '' } );
+ok(handle_http == 0, 'gzip, deflate - Content-Length and Content-Encoding is set');
+
+
+print "\nmodules - mod_expire\n";
+@request  = ( <<EOF
+GET /expire/access.txt HTTP/1.0
+EOF
+ );
+@response = ( { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200, '+Expires' => '' } );
+ok(handle_http == 0, 'access');
+
+@request  = ( <<EOF
+GET /expire/modification.txt HTTP/1.0
+EOF
+ );
+@response = ( { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200, '+Expires' => '' } );
+ok(handle_http == 0, 'modification');
+
+
+
+
+
+
 print "\nmodules - mod_userdir\n";
 
 # get current user
@@ -967,12 +1039,82 @@ EOF
 @response = ( { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 301, 'Location' => 'http://www.example.org/~jan/' } );
 ok(handle_http == 0, 'valid user + redirect');
 
-
-
-
-
-
 print "\nclean up\n";
+
+ok(stop_proc == 0, "Stopping lighttpd");
+
+print "\nspecial config\n";
+
+$configfile = 'fastcgi-10.conf';
+ok(start_proc == 0, "Starting lighttpd with fastcgi-10.conf") or die();
+@request  = ( <<EOF
+GET /phphost.php HTTP/1.0
+Host: zzz.example.org
+EOF
+ );
+@response = ( { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200, 'HTTP-Content' => 'zzz.example.org' } );
+ok(handle_http == 0, 'FastCGI + Host');
+
+ok(stop_proc == 0, "Stopping lighttpd");
+
+$configfile = 'fastcgi-11.conf';
+ok(start_proc == 0, "Starting lighttpd with fastcgi-11.conf") or die();
+@request  = ( <<EOF
+GET /index.html?ok HTTP/1.0
+Host: www.example.org
+EOF
+ );
+@response = ( { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200 } );
+ok(handle_http == 0, 'FastCGI - Auth');
+
+ok(stop_proc == 0, "Stopping lighttpd");
+
+$configfile = 'fastcgi-12.conf';
+ok(start_proc == 0, "Starting lighttpd with fastcgi-12.conf") or die();
+@request  = ( <<EOF
+GET /index.html?fail HTTP/1.0
+Host: www.example.org
+EOF
+ );
+@response = ( { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 403 } );
+ok(handle_http == 0, 'FastCGI - Auth');
+
+ok(stop_proc == 0, "Stopping lighttpd");
+
+$configfile = 'fastcgi-13.conf';
+ok(start_proc == 0, "Starting lighttpd with fastcgi-13.conf") or die();
+@request  = ( <<EOF
+GET /indexfile/index.php HTTP/1.0
+Host: www.example.org
+EOF
+ );
+@response = ( { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200 } );
+ok(handle_http == 0, 'FastCGI + local spawning');
+
+ok(stop_proc == 0, "Stopping lighttpd");
+
+$configfile = 'bug-06.conf';
+ok(start_proc == 0, "Starting lighttpd with bug-06.conf") or die();
+@request  = ( <<EOF
+GET /indexfile/ HTTP/1.0
+Host: www.example.org
+EOF
+ );
+@response = ( { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200, 'HTTP-Content' => '/indexfile/index.php' } );
+ok(handle_http == 0, 'Bug #6');
+
+ok(stop_proc == 0, "Stopping lighttpd");
+
+$configfile = 'bug-12.conf';
+ok(start_proc == 0, "Starting lighttpd with bug-12.conf") or die();
+@request  = ( <<EOF
+POST /indexfile/abc HTTP/1.0
+Host: www.example.org
+Content-Length: 0
+EOF
+ );
+@response = ( { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 404, 'HTTP-Content' => '/indexfile/return-404.php' } );
+ok(handle_http == 0, 'Bug #12');
 
 ok(stop_proc == 0, "Stopping lighttpd");
 
