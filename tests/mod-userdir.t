@@ -191,7 +191,7 @@ ok(start_proc == 0, "Starting lighttpd") or die();
 # get current user
 
 @request  = ( <<EOF
-GET /~jan/ HTTP/1.0
+GET /~foobar/ HTTP/1.0
 EOF
  );
 @response = ( { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 404 } );
