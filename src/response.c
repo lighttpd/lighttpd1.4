@@ -769,7 +769,7 @@ handler_t http_response_prepare(server *srv, connection *con) {
 		
 		buffer_copy_string_buffer(srv->tmp_buf, con->uri.path_raw);
 		buffer_urldecode(srv->tmp_buf);
-		buffer_path_simplify(&(srv->dot_stack), con->uri.path, srv->tmp_buf);
+		buffer_path_simplify(con->uri.path, srv->tmp_buf);
 
 		if (con->conf.log_request_handling) {
 			log_error_write(srv, __FILE__, __LINE__,  "s",  "-- sanatising URI");

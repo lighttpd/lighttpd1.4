@@ -33,17 +33,6 @@ typedef struct {
 	size_t size;
 } read_buffer;
 
-typedef struct {
-	const char *start;
-	size_t len;
-} dot;
-
-typedef struct {
-	dot **ptr;
-	size_t used;
-	size_t size;
-} dot_stack;
-
 buffer_array* buffer_array_init(void);
 void buffer_array_free(buffer_array *b);
 buffer *buffer_array_append_get_buffer(buffer_array *b);
@@ -61,8 +50,7 @@ int buffer_copy_string_len(buffer *b, const char *s, size_t s_len);
 int buffer_copy_string_buffer(buffer *b, const buffer *src);
 int buffer_copy_string_hex(buffer *b, const char *in, size_t in_len);
 
-int buffer_copy_long(buffer *b, long l);
-int buffer_copy_off_t(buffer *b, off_t l);
+int buffer_copy_long(buffer *b, long val);
 
 int buffer_copy_memory(buffer *b, const char *s, size_t s_len);
 
@@ -73,8 +61,15 @@ int buffer_append_string_lfill(buffer *b, const char *s, size_t maxlen);
 int buffer_append_string_rfill(buffer *b, const char *s, size_t maxlen);
 
 int buffer_append_hex(buffer *b, unsigned long len);
-int buffer_append_long(buffer *b, long l);
-int buffer_append_off_t(buffer *b, off_t l);
+int buffer_append_long(buffer *b, long val);
+
+#if defined(SIZEOF_LONG) && (SIZEOF_LONG == SIZEOF_OFF_T)
+#define buffer_copy_off_t(x, y)		buffer_copy_long(x, y)
+#define buffer_append_off_t(x, y)	buffer_append_long(x, y)
+#else
+int buffer_copy_off_t(buffer *b, off_t val);
+int buffer_append_off_t(buffer *b, off_t val);
+#endif
 
 int buffer_append_memory(buffer *b, const char *s, size_t s_len);
 
@@ -91,10 +86,10 @@ int buffer_append_string_url_encoded(buffer *b, const char *s);
 int buffer_append_string_html_encoded(buffer *b, const char *s);
 
 int buffer_urldecode(buffer *url);
-int buffer_path_simplify(dot_stack *stack, buffer *out, buffer *in);
+int buffer_path_simplify(buffer *dest, buffer *src);
 
 /** deprecated */
-int ltostr(char *s, long l);
+int ltostr(char *buf, long val);
 char hex2int(unsigned char c);
 char int2hex(char i);
 
