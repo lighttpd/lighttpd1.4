@@ -1165,12 +1165,11 @@ handler_t http_response_prepare(server *srv, connection *con) {
 						/* check if etag + last-modified */
 						if (con->request.http_if_modified_since) {
 							char buf[64];
-							struct tm *tm;
+							struct tm tm;
 							size_t used_len;
 							char *semicolon;
 						
-							tm = gmtime(&(con->fce->st.st_mtime));
-							strftime(buf, sizeof(buf)-1, "%a, %d %b %Y %H:%M:%S GMT", tm);
+							strftime(buf, sizeof(buf)-1, "%a, %d %b %Y %H:%M:%S GMT", gmtime(&(con->fce->st.st_mtime)));
 							
 							if (NULL == (semicolon = strchr(con->request.http_if_modified_since, ';'))) {
 								used_len = strlen(con->request.http_if_modified_since);
@@ -1181,10 +1180,24 @@ handler_t http_response_prepare(server *srv, connection *con) {
 							if (0 == strncmp(con->request.http_if_modified_since, buf, used_len)) {
 								con->http_status = 304;
 							} else {
-								log_error_write(srv, __FILE__, __LINE__, "ss", 
-										con->request.http_if_modified_since, buf);
-								
-								con->http_status = 412;
+								/* convert to timestamp */
+								if (used_len < sizeof(buf) - 1) {
+									time_t t;
+									strncpy(buf, con->request.http_if_modified_since, used_len);
+									buf[used_len] = '\0';
+									
+									strptime(buf, "%a, %d %b %Y %H:%M:%S GMT", &tm);
+									
+									if (-1 != (t = mktime(&tm)) &&
+									    t <= con->fce->st.st_mtime) {
+										con->http_status = 304;
+									}
+								} else {
+									log_error_write(srv, __FILE__, __LINE__, "ss", 
+											con->request.http_if_modified_since, buf);
+									
+									con->http_status = 412;
+								}
 							}
 						} else {
 							con->http_status = 304;
