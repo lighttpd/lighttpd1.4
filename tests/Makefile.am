@@ -38,7 +38,7 @@ CONFS=fastcgi-10.conf \
 
 TESTS_ENVIRONMENT=$(srcdir)/wrapper.sh $(srcdir) $(top_builddir)
 
-EXTRA_DIST=conformance.pl wrapper.sh testbase.sh lighttpd.conf \
+EXTRA_DIST=wrapper.sh lighttpd.conf \
 	lighttpd.user \
 	$(CONFS) \
 	$(TESTS)

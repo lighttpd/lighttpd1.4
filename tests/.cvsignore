@@ -3,3 +3,4 @@ Makefile
 .deps
 .libs
 fcgi-auth
+fcgi-responder
