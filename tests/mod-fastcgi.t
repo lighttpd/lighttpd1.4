@@ -25,7 +25,9 @@ sub pidof {
 	my $pid = <F>;
 	close F;
 
-	return $pid;
+	if (defined $pid) { return $pid; }
+
+	return -1;
 }
 
 sub stop_proc {
@@ -33,8 +35,10 @@ sub stop_proc {
 	my $pid = <F>;
 	close F;
 
-	kill('TERM',$pid) or return -1;
-	select(undef, undef, undef, 0.01);
+	if (defined $pid) {
+		kill('TERM',$pid) or return -1;
+		select(undef, undef, undef, 0.01);
+	}
 
 	return 0;
 }
@@ -195,10 +199,11 @@ sub handle_http {
 	return 0;
 }
     
-ok(start_proc == 0, "Starting lighttpd") or die();
 
 SKIP: {
-	skip "no PHP running on port 1026", 13 if pidof("php") == -1; 
+	skip "no PHP running on port 1026", 23 if pidof("php") == -1; 
+
+	ok(start_proc == 0, "Starting lighttpd") or die();
 
 	@request  = ( <<EOF
 GET /phpinfo.php HTTP/1.0
@@ -301,138 +306,151 @@ EOF
 	@response = ( { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200, 'HTTP-Content' => '/indexfile/index.php' } );
 	ok(handle_http == 0, 'PHP_SELF + Indexfile, Bug #3');
 
+	
+	ok(stop_proc == 0, "Stopping lighttpd");
 
-}
 
-$configfile = 'fastcgi-10.conf';
-ok(start_proc == 0, "Starting lighttpd with $configfile") or die();
-@request  = ( <<EOF
+	$configfile = 'fastcgi-10.conf';
+	ok(start_proc == 0, "Starting lighttpd with $configfile") or die();
+	@request  = ( <<EOF
 GET /phphost.php HTTP/1.0
 Host: zzz.example.org
 EOF
  );
-@response = ( { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200, 'HTTP-Content' => 'zzz.example.org' } );
-ok(handle_http == 0, 'FastCGI + Host');
+	@response = ( { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200, 'HTTP-Content' => 'zzz.example.org' } );
+	ok(handle_http == 0, 'FastCGI + Host');
 
-ok(stop_proc == 0, "Stopping lighttpd");
-
-$configfile = 'fastcgi-auth.conf';
-ok(start_proc == 0, "Starting lighttpd with $configfile") or die();
-@request  = ( <<EOF
-GET /index.html?ok HTTP/1.0
-Host: www.example.org
-EOF
- );
-@response = ( { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200 } );
-ok(handle_http == 0, 'FastCGI - Auth');
-
-@request  = ( <<EOF
-GET /index.html?fail HTTP/1.0
-Host: www.example.org
-EOF
- );
-@response = ( { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 403 } );
-ok(handle_http == 0, 'FastCGI - Auth');
-
-ok(stop_proc == 0, "Stopping lighttpd");
-
-$configfile = 'fastcgi-13.conf';
-ok(start_proc == 0, "Starting lighttpd with $configfile") or die();
-@request  = ( <<EOF
-GET /indexfile/index.php HTTP/1.0
-Host: www.example.org
-EOF
- );
-@response = ( { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200 } );
-ok(handle_http == 0, 'FastCGI + local spawning');
-
-ok(stop_proc == 0, "Stopping lighttpd");
-
-$configfile = 'bug-06.conf';
-ok(start_proc == 0, "Starting lighttpd with $configfile") or die();
-@request  = ( <<EOF
+	ok(stop_proc == 0, "Stopping lighttpd");
+	
+	$configfile = 'bug-06.conf';
+	ok(start_proc == 0, "Starting lighttpd with $configfile") or die();
+	@request  = ( <<EOF
 GET /indexfile/ HTTP/1.0
 Host: www.example.org
 EOF
  );
-@response = ( { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200, 'HTTP-Content' => '/indexfile/index.php' } );
-ok(handle_http == 0, 'Bug #6');
+	@response = ( { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200, 'HTTP-Content' => '/indexfile/index.php' } );
+	ok(handle_http == 0, 'Bug #6');
 
-ok(stop_proc == 0, "Stopping lighttpd");
+	ok(stop_proc == 0, "Stopping lighttpd");
 
-$configfile = 'bug-12.conf';
-ok(start_proc == 0, "Starting lighttpd with bug-12.conf") or die();
-@request  = ( <<EOF
+	$configfile = 'bug-12.conf';
+	ok(start_proc == 0, "Starting lighttpd with bug-12.conf") or die();
+	@request  = ( <<EOF
 POST /indexfile/abc HTTP/1.0
 Host: www.example.org
 Content-Length: 0
 EOF
  );
-@response = ( { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 404, 'HTTP-Content' => '/indexfile/return-404.php' } );
-ok(handle_http == 0, 'Bug #12');
+	@response = ( { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 404, 'HTTP-Content' => '/indexfile/return-404.php' } );
+	ok(handle_http == 0, 'Bug #12');
 
-ok(stop_proc == 0, "Stopping lighttpd");
+	ok(stop_proc == 0, "Stopping lighttpd");
+}
 
-$configfile = 'fastcgi-responder.conf';
-ok(start_proc == 0, "Starting lighttpd with $configfile") or die();
-@request  = ( <<EOF
+SKIP: {
+	skip "no fcgi-auth found", 4 unless -x $basedir."/tests/fcgi-auth"; 
+
+	$configfile = 'fastcgi-auth.conf';
+	ok(start_proc == 0, "Starting lighttpd with $configfile") or die();
+	@request  = ( <<EOF
+GET /index.html?ok HTTP/1.0
+Host: www.example.org
+EOF
+ );
+	@response = ( { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200 } );
+	ok(handle_http == 0, 'FastCGI - Auth');
+
+	@request  = ( <<EOF
+GET /index.html?fail HTTP/1.0
+Host: www.example.org
+EOF
+ );
+	@response = ( { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 403 } );
+	ok(handle_http == 0, 'FastCGI - Auth');
+
+	ok(stop_proc == 0, "Stopping lighttpd");
+}
+
+SKIP: {
+	skip "no fcgi-auth found", 3 unless -x "/home/weigon/Documents/php-4.3.10/sapi/cgi/php"; 
+	$configfile = 'fastcgi-13.conf';
+	ok(start_proc == 0, "Starting lighttpd with $configfile") or die();
+	@request  = ( <<EOF
+GET /indexfile/index.php HTTP/1.0
+Host: www.example.org
+EOF
+ );
+	@response = ( { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200 } );
+	ok(handle_http == 0, 'FastCGI + local spawning');
+
+	ok(stop_proc == 0, "Stopping lighttpd");
+}
+
+
+SKIP: {
+	skip "no fcgi-auth found", 9 unless -x $basedir."/tests/fcgi-responder"; 
+	
+	$configfile = 'fastcgi-responder.conf';
+	ok(start_proc == 0, "Starting lighttpd with $configfile") or die();
+	@request  = ( <<EOF
 GET /index.fcgi?lf HTTP/1.0
 Host: www.example.org
 EOF
  );
-@response = ( { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200, 'HTTP-Content' => 'test123' } );
-ok(handle_http == 0, 'line-ending \n\n');
+	@response = ( { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200, 'HTTP-Content' => 'test123' } );
+	ok(handle_http == 0, 'line-ending \n\n');
 
-@request  = ( <<EOF
+	@request  = ( <<EOF
 GET /index.fcgi?crlf HTTP/1.0
 Host: www.example.org
 EOF
  );
-@response = ( { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200, 'HTTP-Content' => 'test123' } );
-ok(handle_http == 0, 'line-ending \r\n\r\n');
+	@response = ( { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200, 'HTTP-Content' => 'test123' } );
+	ok(handle_http == 0, 'line-ending \r\n\r\n');
 
-@request  = ( <<EOF
+	@request  = ( <<EOF
 GET /index.fcgi?slow-lf HTTP/1.0
 Host: www.example.org
 EOF
  );
-@response = ( { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200, 'HTTP-Content' => 'test123' } );
-ok(handle_http == 0, 'line-ending \n + \n');
+	@response = ( { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200, 'HTTP-Content' => 'test123' } );
+	ok(handle_http == 0, 'line-ending \n + \n');
 
-@request  = ( <<EOF
+	@request  = ( <<EOF
 GET /index.fcgi?slow-crlf HTTP/1.0
 Host: www.example.org
 EOF
  );
-@response = ( { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200, 'HTTP-Content' => 'test123' } );
-ok(handle_http == 0, 'line-ending \r\n + \r\n');
+	@response = ( { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200, 'HTTP-Content' => 'test123' } );
+	ok(handle_http == 0, 'line-ending \r\n + \r\n');
 
-@request  = ( <<EOF
+	@request  = ( <<EOF
 GET /index.fcgi?die-at-end HTTP/1.0
 Host: www.example.org
 EOF
  );
-@response = ( { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200, 'HTTP-Content' => 'test123' } );
-ok(handle_http == 0, 'killing fastcgi and wait for restart');
+	@response = ( { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200, 'HTTP-Content' => 'test123' } );
+	ok(handle_http == 0, 'killing fastcgi and wait for restart');
 
-@request  = ( <<EOF
+	@request  = ( <<EOF
 GET /index.fcgi?die-at-end HTTP/1.0
 Host: www.example.org
 EOF
  );
-@response = ( { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200, 'HTTP-Content' => 'test123' } );
-ok(handle_http == 0, 'killing fastcgi and wait for restart');
+	@response = ( { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200, 'HTTP-Content' => 'test123' } );
+	ok(handle_http == 0, 'killing fastcgi and wait for restart');
 
 
-@request  = ( <<EOF
+	@request  = ( <<EOF
 GET /index.fcgi?crlf HTTP/1.0
 Host: www.example.org
 EOF
  );
-@response = ( { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200, 'HTTP-Content' => 'test123' } );
-ok(handle_http == 0, 'regular response of after restart');
+	@response = ( { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200, 'HTTP-Content' => 'test123' } );
+	ok(handle_http == 0, 'regular response of after restart');
 
 
-
-ok(stop_proc == 0, "Stopping lighttpd");
+	ok(stop_proc == 0, "Stopping lighttpd");
+}
 
