@@ -1256,7 +1256,6 @@ int connection_state_machine(server *srv, connection *con) {
 				
 				connection_set_state(srv, con, CON_STATE_HANDLE_REQUEST);
 				
-				done = 1; /* is this neccesary ? */
 				break;
 			case HANDLER_COMEBACK:
 				done = -1;
@@ -1264,7 +1263,6 @@ int connection_state_machine(server *srv, connection *con) {
 				/* come back here */
 				connection_set_state(srv, con, CON_STATE_HANDLE_REQUEST);
 				
-				done = 1; /* is this neccesary ? */
 				break;
 			case HANDLER_ERROR:
 				/* something went wrong */
