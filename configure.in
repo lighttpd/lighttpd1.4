@@ -353,6 +353,16 @@ AC_MSG_RESULT($enableval)
 
 AM_CONDITIONAL(CROSS_COMPILING, test "x$cross_compiling" = xyes)
 
+dnl check for fastcgi lib, for the tests only
+fastcgi_found=no
+AC_CHECK_LIB(fcgi, FCGI_Accept, [
+ AC_CHECK_HEADERS([fastcgi.h],[
+   fastcgi_found=yes
+ ])
+])
+
+AM_CONDITIONAL(CHECK_WITH_FASTCGI, test "x$fastcgi_found" = xyes)
+
 if test "${GCC}" = "yes"; then
        CFLAGS="${CFLAGS} -Wall -W -Wshadow -pedantic"
 fi
