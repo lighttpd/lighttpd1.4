@@ -36,9 +36,6 @@ Feature Requests:
 - ignore blank lines between requests
   - handle \r\n at start of request
 - cgi exec via shell
-- added REMOTE_PORT, SERVER_ADDR to cgi/fastcgi
-- REQUEST_URI to cgi
-- don't set physical-file on 416-errors
 - crash in read-post
 - same config option twice -> aaa, aaa
 - remove default port from Host:

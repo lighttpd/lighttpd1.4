@@ -1544,6 +1544,9 @@ static int fcgi_create_env(server *srv, handler_ctx *hctx, size_t request_id) {
 	connection *con   = hctx->remote_conn;
 	server_socket *srv_sock = con->srv_socket;
 	
+	sock_addr our_addr;
+	socklen_t our_addr_len;
+	
 	/* send FCGI_BEGIN_REQUEST */
 	
 	fcgi_header(&(beginRecord.header), FCGI_BEGIN_REQUEST, request_id, sizeof(beginRecord.body), 0);
@@ -1586,6 +1589,26 @@ static int fcgi_create_env(server *srv, handler_ctx *hctx, size_t request_id) {
 	       );
 	
 	fcgi_env_add(p->fcgi_env, CONST_STR_LEN("SERVER_PORT"), buf, strlen(buf));
+	
+	/* get the server-side of the connection to the client */
+	our_addr_len = sizeof(our_addr);
+	
+	if (-1 == getsockname(con->fd, &(our_addr.plain), &our_addr_len)) {
+		s = inet_ntop_cache_get_ip(srv, &(srv_sock->addr));
+	} else {
+		s = inet_ntop_cache_get_ip(srv, &(our_addr));
+	}
+	fcgi_env_add(p->fcgi_env, CONST_STR_LEN("SERVER_ADDR"), s, strlen(s));
+	
+	ltostr(buf, 
+#ifdef HAVE_IPV6
+	       ntohs(con->dst_addr.plain.sa_family ? con->dst_addr.ipv6.sin6_port : con->dst_addr.ipv4.sin_port)
+#else
+	       ntohs(con->dst_addr.ipv4.sin_port)
+#endif
+	       );
+	
+	fcgi_env_add(p->fcgi_env, CONST_STR_LEN("REMOTE_PORT"), buf, strlen(buf));
 	
 	s = inet_ntop_cache_get_ip(srv, &(con->dst_addr));
 	fcgi_env_add(p->fcgi_env, CONST_STR_LEN("REMOTE_ADDR"), s, strlen(s));
