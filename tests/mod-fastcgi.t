@@ -2,7 +2,7 @@
 
 use strict;
 use IO::Socket;
-use Test::More tests => 38;
+use Test::More tests => 39;
 
 my $basedir = (defined $ENV{'top_builddir'} ? $ENV{'top_builddir'} : '..');
 my $srcdir = (defined $ENV{'srcdir'} ? $ENV{'srcdir'} : '.');
@@ -44,9 +44,18 @@ sub start_proc {
 	# kill old proc if necessary
 	stop_proc;
 
-	unlink($pidfile);
-	system($lighttpd_path." -f ".$srcdir."/".$configfile);
+	# pre-process configfile if necessary
+	#
 
+	my $pwd = `pwd`;
+	chomp($pwd);
+	unlink("/tmp/cfg.file");
+	system("cat ".$srcdir."/".$configfile.' | perl -pe "s#\@SRCDIR\@#'.$pwd.'/'.$basedir.'/tests/#" > /tmp/cfg.file');
+
+	unlink($pidfile);
+	system($lighttpd_path." -f /tmp/cfg.file");
+
+	unlink("/tmp/cfg.file");
 	if (-e $pidfile) {
 		return 0;
 	} else {
@@ -405,6 +414,15 @@ EOF
  );
 @response = ( { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200, 'HTTP-Content' => 'test123' } );
 ok(handle_http == 0, 'killing fastcgi and wait for restart');
+
+@request  = ( <<EOF
+GET /index.fcgi?die-at-end HTTP/1.0
+Host: www.example.org
+EOF
+ );
+@response = ( { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200, 'HTTP-Content' => 'test123' } );
+ok(handle_http == 0, 'killing fastcgi and wait for restart');
+
 
 @request  = ( <<EOF
 GET /index.fcgi?crlf HTTP/1.0
