@@ -1760,17 +1760,22 @@ static int fcgi_response_parse(server *srv, connection *con, plugin_data *p, buf
 	
 	UNUSED(srv);
 
-	/* \r\n -> \0\0 */
-	
 	buffer_copy_string_buffer(p->parse_response, in);
 	
-	for (s = p->parse_response->ptr; NULL != (ns = strstr(s, "\r\n")); s = ns + 2) {
+	/* search for \n */
+	for (s = p->parse_response->ptr; NULL != (ns = strchr(s, '\n')); s = ns + 1) {
 		char *key, *value;
 		int key_len;
 		data_string *ds;
 		
+		/* a good day. Someone has read the specs and is sending a \r\n to us */
+		
+		if (ns > p->parse_response->ptr &&
+		    *(ns-1) == '\r') {
+			*(ns-1) = '\0';
+		}
+		
 		ns[0] = '\0';
-		ns[1] = '\0';
 		
 		key = s;
 		if (NULL == (value = strchr(s, ':'))) {
@@ -1788,13 +1793,17 @@ static int fcgi_response_parse(server *srv, connection *con, plugin_data *p, buf
 		    !(con->http_status == 0 ||
 		      con->http_status == 200)) {
 			/* authorizers shouldn't affect the response headers sent back to the client */
-			if (NULL == (ds = (data_string *)array_get_unused_element(con->response.headers, TYPE_STRING))) {
-				ds = data_response_init();
-			}
-			buffer_copy_string_len(ds->key, key, key_len);
-			buffer_copy_string(ds->value, value);
 			
-			array_insert_unique(con->response.headers, (data_unset *)ds);
+			/* don't forward Status: */
+			if (0 != strncasecmp(key, "Status", key_len)) {
+				if (NULL == (ds = (data_string *)array_get_unused_element(con->response.headers, TYPE_STRING))) {
+					ds = data_response_init();
+				}
+				buffer_copy_string_len(ds->key, key, key_len);
+				buffer_copy_string(ds->value, value);
+				
+				array_insert_unique(con->response.headers, (data_unset *)ds);
+			}
 		}
 		
 		switch(key_len) {
@@ -1991,20 +2000,46 @@ static int fcgi_demux_response(server *srv, handler_ctx *hctx) {
 				
 				if (0 == con->file_started) {
 					char *c;
+					size_t hlen;
 					
-					/* search for the \r\n\r\n in the string */
-					if (NULL != (c = buffer_search_string_len(hctx->response, "\r\n\r\n", 4))) {
-						size_t hlen = c - hctx->response->ptr + 4;
+					/* search for header terminator 
+					 * 
+					 * if we start with \r\n check if last packet terminated with \r\n
+					 * if we start with \n check if last packet terminated with \n
+					 * search for \r\n\r\n
+					 * search for \n\n
+					 */
+					
+					if (hctx->response->used > 2 &&
+					    hctx->response->ptr[0] == '\r' &&
+					    hctx->response->ptr[1] == '\n' &&
+					    hctx->response_header->used > 3 &&
+					    hctx->response_header->ptr[hctx->response_header->used - 3] == '\r' &&
+					    hctx->response_header->ptr[hctx->response_header->used - 2] == '\n') {
+						hlen = 2;
+						c = hctx->response->ptr + 2;
+					} else if (hctx->response->used > 2 &&
+						   hctx->response->ptr[0] == '\n' &&
+						   hctx->response_header->used > 2 &&
+						   hctx->response_header->ptr[hctx->response_header->used - 2] == '\n') {
+						hlen = 1;
+						c = hctx->response->ptr + 1;
+					} else if (NULL != (c = buffer_search_string_len(hctx->response, "\r\n\r\n", 4))) {
+						hlen = c - hctx->response->ptr + 4;
+					} else if (NULL != (c = buffer_search_string_len(hctx->response, "\n\n", 2))) {
+						hlen = c - hctx->response->ptr + 2;
+					}
+					
+					if (c != NULL) {
 						size_t blen = hctx->response->used - hlen - 1;
 						/* found */
 						
-						buffer_append_string_len(hctx->response_header, hctx->response->ptr, c - hctx->response->ptr + 4);
+						buffer_append_string_len(hctx->response_header, hctx->response->ptr, hlen);
 #if 0
 						log_error_write(srv, __FILE__, __LINE__, "ss", "Header:", hctx->response_header->ptr);
 #endif
 						/* parse the response header */
 						fcgi_response_parse(srv, con, p, hctx->response_header);
-						
 						
 						if (host->mode != FCGI_AUTHORIZER ||
 						    !(con->http_status == 0 ||
