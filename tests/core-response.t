@@ -2,7 +2,7 @@
 
 use strict;
 use IO::Socket;
-use Test::More tests => 8;
+use Test::More tests => 10;
 
 my $basedir = (defined $ENV{'top_builddir'} ? $ENV{'top_builddir'} : '..');
 my $srcdir = (defined $ENV{'srcdir'} ? $ENV{'srcdir'} : '.');
@@ -207,6 +207,7 @@ EOF
 ok(handle_http == 0, 'Host missing');
 
 
+
 ## Low-Level Response-Header Parsing - Content-Length
 
 
@@ -229,8 +230,6 @@ ok(handle_http == 0, 'Content-Length for text/plain');
 
 ## Low-Level Response-Header Parsing - Location
 
-
-
 @request  = ( <<EOF
 GET /dummydir HTTP/1.0
 EOF
@@ -245,7 +244,23 @@ EOF
 @response = ( { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 301, 'Location' => 'http://localhost:2048/dummydir/?foo' } );
 ok(handle_http == 0, 'internal redirect in directory + querystring');
 
+## simple-vhost
 
+@request  = ( <<EOF
+GET /12345.txt HTTP/1.0
+Host: no-simple.example.org
+EOF
+ );
+@response = ( { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200, 'Content-Length' => '6' } );
+ok(handle_http == 0, 'disabling simple-vhost via conditionals');
+
+@request  = ( <<EOF
+GET /12345.txt HTTP/1.0
+Host: simple.example.org
+EOF
+ );
+@response = ( { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 404 } );
+ok(handle_http == 0, 'simple-vhost via conditionals');
 
 ok(stop_proc == 0, "Stopping lighttpd");
 
