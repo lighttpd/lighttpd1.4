@@ -1,9 +1,10 @@
-lemon
-lighttpd
 Makefile.in
 Makefile
 spawn-fcgi
 chunk
+lemon
+lighttpd
+*.exe
 .deps
 .libs
 array
