@@ -21,7 +21,19 @@ CONFS=fastcgi-10.conf \
       fastcgi-responder.conf \
       fastcgi-13.conf \
       bug-06.conf \
-      bug-12.conf
+      bug-12.conf \
+      core-request.t \
+      core-response.t \
+      core.t \
+      mod-access.t \
+      mod-auth.t \
+      mod-cgi.t \
+      mod-compress.t \
+      mod-fastcgi.t \
+      mod-redirect.t \
+      mod-userdir.t \
+      request.t 
+
 
 TESTS_ENVIRONMENT=$(srcdir)/wrapper.sh $(srcdir) $(top_builddir)
 
