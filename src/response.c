@@ -30,6 +30,10 @@
 #include <attr/attributes.h>
 #endif
 
+#ifdef HAVE_SYS_SYSLIMITS_H
+#include <sys/syslimits.h>
+#endif
+
 int http_response_write_basic_header(server *srv, connection *con) {
 	size_t i;
 	buffer *b;

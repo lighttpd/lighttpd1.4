@@ -55,7 +55,7 @@ AC_HEADER_SYS_WAIT
 AC_CHECK_HEADERS([arpa/inet.h fcntl.h netinet/in.h stdlib.h string.h \
 sys/socket.h sys/time.h unistd.h sys/sendfile.h sys/uio.h \
 getopt.h sys/epoll.h sys/select.h poll.h sys/poll.h sys/devpoll.h sys/filio.h \
-sys/mman.h sys/event.h sys/port.h winsock2.h pwd.h \
+sys/mman.h sys/event.h sys/port.h winsock2.h pwd.h sys/syslimits.h \
 sys/resource.h sys/un.h syslog.h])
 
 # Checks for typedefs, structures, and compiler characteristics.
