@@ -62,9 +62,15 @@ int network_write_chunkqueue_openssl(server *srv, connection *con, chunkqueue *c
 				case SSL_ERROR_WANT_WRITE:
 					break;
 				case SSL_ERROR_SYSCALL:
-					log_error_write(srv, __FILE__, __LINE__, "sddds", "SSL:", 
-							ssl_r, r, errno,
-							strerror(errno));
+					switch(errno) {
+					case EPIPE:
+						return -2;
+					default:
+						log_error_write(srv, __FILE__, __LINE__, "sddds", "SSL:", 
+								ssl_r, r, errno,
+								strerror(errno));
+						break;
+					}
 					
 					return  -1;
 				case SSL_ERROR_ZERO_RETURN:
@@ -136,9 +142,15 @@ int network_write_chunkqueue_openssl(server *srv, connection *con, chunkqueue *c
 				case SSL_ERROR_WANT_WRITE:
 					break;
 				case SSL_ERROR_SYSCALL:
-					log_error_write(srv, __FILE__, __LINE__, "sddds", "SSL:", 
-							ssl_r, r, errno,
-							strerror(errno));
+					switch(errno) {
+					case EPIPE:
+						return -2;
+					default:
+						log_error_write(srv, __FILE__, __LINE__, "sddds", "SSL:", 
+								ssl_r, r, errno,
+								strerror(errno));
+						break;
+					}
 					
 					return  -1;
 				case SSL_ERROR_ZERO_RETURN:
