@@ -64,6 +64,8 @@ EXTRA_DIST=lighttpd.conf lighttpd.user \
 	state.ps.gz rrdtool-graph.sh \
 	state.dot fastcgi-state.dot fastcgi-state.ps.gz \
 	spawn-php.sh \
+	newstyle.css \
+	oldstyle.css \
 	$(DOCS)
  
 %.html: %.txt

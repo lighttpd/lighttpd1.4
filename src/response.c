@@ -458,206 +458,372 @@ static int http_response_parse_range(server *srv, connection *con) {
 }
 
 typedef struct {
-	char **ptr;
-	size_t used;
-	size_t size;
-} string_buffer;
+	size_t  namelen;
+	time_t  mtime;
+	off_t   size;
+} dirls_entry_t;
+
+typedef struct {
+	dirls_entry_t **ent;
+	int used;
+	int size;
+} dirls_list_t;
+
+#define DIRLIST_ENT_NAME(ent)	(char*) ent + sizeof(dirls_entry_t)
+#define DIRLIST_BLOB_SIZE		16
+
+/* simple combsort algorithm */
+static void http_dirls_sort(dirls_entry_t **ent, int num) {
+	int gap = num;
+	int i, j;
+	int swapped;
+	dirls_entry_t *tmp;
+
+	do {
+		gap = (gap * 10) / 13;
+		if (gap == 9 || gap == 10)
+			gap = 11;
+		if (gap < 1)
+			gap = 1;
+		swapped = 0;
+
+		for (i = 0; i < num - gap; i++) {
+			j = i + gap;
+			if (strcmp(DIRLIST_ENT_NAME(ent[i]), DIRLIST_ENT_NAME(ent[j])) > 0) {
+				tmp = ent[i];
+				ent[i] = ent[j];
+				ent[j] = tmp;
+				swapped = 1;
+			}
+		}
+
+	} while (gap > 1 || swapped);
+}
+
+/* buffer must be able to hold "999.9K"
+ * conversion is simple but not perfect
+ */
+static int http_list_directory_sizefmt(char *buf, off_t size) {
+	const char unit[] = "KMGTPE";	/* Kilo, Mega, Tera, Peta, Exa */
+	const char *u = unit - 1;		/* u will always increment at least once */
+	int remain;
+	char *out = buf;
+
+	if (size < 100)
+		size += 99;
+	if (size < 100)
+		size = 0;
+
+	while (1) {
+		remain = (int) size & 1023;
+		size >>= 10;
+		u++;
+		if ((size & (~0 ^ 1023)) == 0)
+			break;
+	}
+
+	remain /= 100;
+	if (remain > 9)
+		remain = 9;
+	if (size > 999) {
+		size   = 0;
+		remain = 9;
+		u++;
+	}
+
+	out   += ltostr(out, size);
+	out[0] = '.';
+	out[1] = remain + '0';
+	out[2] = *u;
+	out[3] = '\0';
+
+	return (out + 3 - buf);
+}
+
+static void http_list_directory_header(buffer *out, connection *con) {
+	BUFFER_APPEND_STRING_CONST(out,
+		"<!DOCTYPE html PUBLIC \"-//W3C//DTD XHTML 1.1//EN\" \"http://www.w3.org/TR/xhtml11/DTD/xhtml11.dtd\">\n"
+		"<html xmlns=\"http://www.w3.org/1999/xhtml\" xml:lang=\"en\">\n"
+		"<head>\n"
+		"<title>Index of "
+	);
+	buffer_append_string_html_encoded(out, con->uri.path->ptr);
+	BUFFER_APPEND_STRING_CONST(out, "</title>\n");
+
+	if (con->conf.dirlist_css->used > 1) {
+		BUFFER_APPEND_STRING_CONST(out, "<link rel=\"stylesheet\" type=\"text/css\" href=\"");
+		buffer_append_string_buffer(out, con->conf.dirlist_css);
+		BUFFER_APPEND_STRING_CONST(out, "\" />\n");
+	} else {
+		BUFFER_APPEND_STRING_CONST(out,
+			"<style type=\"text/css\">\n"
+			"a, a:active {text-decoration: none; color: blue;}\n"
+			"a:visited {color: #48468F;}\n"
+			"a:hover, a:focus {text-decoration: underline; color: red;}\n"
+			"body {background-color: #F5F5F5;}\n"
+			"h2 {margin-bottom: 12px;}\n"
+			"table {margin-left: 12px;}\n"
+			"th, td {"
+			" font-family: \"Courier New\", Courier, monospace;"
+			" font-size: 10pt;"
+			" text-align: left;"
+			"}\n"
+			"th {"
+			" font-weight: bold;"
+			" padding-right: 14px;"
+			" padding-bottom: 3px;"
+			"}\n"
+		);
+		BUFFER_APPEND_STRING_CONST(out,
+			"td {padding-right: 14px;}\n"
+			"td.s, th.s {text-align: right;}\n"
+			"div.list {"
+			" background-color: white;"
+			" border-top: 1px solid #646464;"
+			" border-bottom: 1px solid #646464;"
+			" padding-top: 10px;"
+			" padding-bottom: 14px;"
+			"}\n"
+			"div.foot {"
+			" font-family: \"Courier New\", Courier, monospace;"
+			" font-size: 10pt;"
+			" color: #787878;"
+			" padding-top: 4px;"
+			"}\n"
+			"</style>\n"
+		);
+	}
+
+	BUFFER_APPEND_STRING_CONST(out, "</head>\n<body>\n<h2>Index of ");
+	buffer_append_string_html_encoded(out, con->uri.path->ptr);
+	BUFFER_APPEND_STRING_CONST(out,
+		"</h2>\n"
+		"<div class=\"list\">\n"
+		"<table cellpadding=\"0\" cellspacing=\"0\">\n"
+		"<thead>"
+		"<tr>"
+			"<th class=\"n\">Name</th>"
+			"<th class=\"m\">Last Modified</th>"
+			"<th class=\"s\">Size</th>"
+			"<th class=\"t\">Type</th>"
+		"</tr>"
+		"</thead>\n"
+		"<tbody>\n"
+		"<tr>"
+			"<td class=\"n\"><a href=\"../\">Parent Directory</a>/</td>"
+			"<td class=\"m\">&nbsp;</td>"
+			"<td class=\"s\">- &nbsp;</td>"
+			"<td class=\"t\">Directory</td>"
+		"</tr>\n"
+	);
+}
+
+static void http_list_directory_footer(buffer *out, connection *con) {
+	BUFFER_APPEND_STRING_CONST(out,
+		"</tbody>\n"
+		"</table>\n"
+		"</div>\n"
+		"<div class=\"foot\">"
+	);
+
+	if (buffer_is_empty(con->conf.server_tag)) {
+		BUFFER_APPEND_STRING_CONST(out, PACKAGE_NAME "/" PACKAGE_VERSION);
+	} else {
+		buffer_append_string_buffer(out, con->conf.server_tag);
+	}
+
+	BUFFER_APPEND_STRING_CONST(out,
+		"</div>\n"
+		"</body>\n"
+		"</html>\n"
+	);
+}
 
 static int http_list_directory(server *srv, connection *con, buffer *dir) {
-	DIR *d;
+	DIR *dp;
+	buffer *out;
 	struct dirent *dent;
-	buffer *b, *date_buf;
-	string_buffer *sb;
-	size_t i;
+	struct stat st;
+	char *path, *path_file;
+	int i;
+	int hide_dotfiles = con->conf.hide_dotfiles;
+	dirls_list_t dirs, files, *list;
+	dirls_entry_t *tmp;
+	char sizebuf[sizeof("999.9K")];
+	char datebuf[sizeof("2005-Jan-01 22:23:24")];
+	size_t k;
+	const char *content_type;
+#ifdef HAVE_XATTR
+	char attrval[128];
+	int attrlen;
+#endif
+#ifdef HAVE_LOCALTIME_R
+	struct tm tm;
+#endif
 
-	if (NULL == (d = opendir(dir->ptr))) {
+	i = dir->used - 1;
+	if (i <= 0) return -1;
+	
+	path = malloc(i + NAME_MAX + 1);
+	assert(path);
+	strcpy(path, dir->ptr);
+	path_file = path + i;
+
+	if (NULL == (dp = opendir(path))) {
 		log_error_write(srv, __FILE__, __LINE__, "sbs", 
 			"opendir failed:", dir, strerror(errno));
+
+		free(path);
 		return -1;
 	}
-	
-	b = chunkqueue_get_append_buffer(con->write_queue);
-	buffer_copy_string(b, 
-			   "<?xml version=\"1.0\" encoding=\"iso-8859-1\"?>\n"
-			   "<!DOCTYPE html PUBLIC \"-//W3C//DTD XHTML 1.0 Transitional//EN\"\n"
-			   "         \"http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd\">\n"
-			   "<html xmlns=\"http://www.w3.org/1999/xhtml\" xml:lang=\"en\" lang=\"en\">\n"
-			   " <head>\n"
-			   "  <title>Directory Listing for ");
-	buffer_append_string_html_encoded(b, con->uri.path->ptr);
-	
-	BUFFER_APPEND_STRING_CONST(b,
-			    "</title>\n"
-			    "  <style type=\"text/css\">\n");
-	
-	BUFFER_APPEND_STRING_CONST(b,
-			    "th.dirlisting { background-color: black; color: white; }\n"
-			    "table.dirlisting { border: black solid thin; }\n"
-			    "td.dirlisting { background-color: #f0f0f0; }\n"
-			    "td.dirlistingnumber { background-color: #f0f0f0; text-align: right }\n"
-			    );
-	
-	BUFFER_APPEND_STRING_CONST(b,
-			    "  </style>\n"
-			    " </head>\n"
-			    " <body>\n"
-			    "  <h2>Directory Listing for ");
-	buffer_append_string_html_encoded(b, con->uri.path->ptr);
-	BUFFER_APPEND_STRING_CONST(b,"</h2>\n  <table class='dirlisting'>\n");
-	BUFFER_APPEND_STRING_CONST(b,"   <tr class='dirlisting'><th class='dirlisting'>date</th><th class='dirlisting'>size</th><th class='dirlisting'>type</th><th class='dirlisting'>name</th></tr>\n");
-	
-	
-	/* allocate memory */
-	sb = calloc(1, sizeof(*sb));
-	assert(sb);
-	
-	sb->ptr = NULL;
-	sb->used = 0;
-	sb->size = 0;
-	
-	while(NULL != (dent = readdir(d))) {
-		size_t j;
-		if (sb->size == 0) {
-			sb->size = 4;
-			sb->ptr = malloc(sizeof(*sb->ptr) * sb->size);
-			assert(sb->ptr);
-		} else if (sb->used == sb->size) {
-			sb->size += 4;
-			sb->ptr = realloc(sb->ptr, sizeof(*sb->ptr) * sb->size);
-			assert(sb->ptr);
+
+	dirs.ent   = (dirls_entry_t**) malloc(sizeof(dirls_entry_t*) * DIRLIST_BLOB_SIZE);
+	assert(dirs.ent);
+	dirs.size  = DIRLIST_BLOB_SIZE;
+	dirs.used  = 0;
+	files.ent  = (dirls_entry_t**) malloc(sizeof(dirls_entry_t*) * DIRLIST_BLOB_SIZE);
+	assert(files.ent);
+	files.size = DIRLIST_BLOB_SIZE;
+	files.used = 0;
+
+	while ((dent = readdir(dp)) != NULL) {
+		if (dent->d_name[0] == '.') {
+			if (hide_dotfiles)
+				continue;
+			if (dent->d_name[1] == '\0')
+				continue;
+			if (dent->d_name[1] == '.' && dent->d_name[2] == '\0')
+				continue;
 		}
-		
-		for (i = 0; i < sb->used; i++) {
-			if (strcmp(dent->d_name, sb->ptr[i]) < 0) {
-				break;
-			}
-		}
-		
-		/* <left><right> */
-		/* <left>[i]<right> */
-		
-		for (j = sb->used - 1; sb->used && j >= i && (j+1) > 0; j--) {
-			sb->ptr[j + 1] = sb->ptr[j];
-		}
-		sb->ptr[i] = strdup(dent->d_name);
-		
-		sb->used++;
-		
-	}
-	
-	closedir(d);
-	
-	date_buf = buffer_init();
-	buffer_prepare_copy(date_buf, 22);
-	for (i = 0; i < sb->used; i++) {
-		struct stat st;
-		struct tm tm;
-		size_t s_len = strlen(sb->ptr[i]);
-		
-		
-		buffer_copy_string(srv->tmp_buf, dir->ptr);
-		buffer_append_string(srv->tmp_buf, sb->ptr[i]);
-		
-		if (0 != stat(srv->tmp_buf->ptr, &st)) {
-			free(sb->ptr[i]);
+
+		/* NOTE: the manual says, d_name is never more than NAME_MAX
+		 *       so this should actually not be a buffer-overflow-risk
+		 */
+		i = strlen(dent->d_name);
+		if (i > NAME_MAX)
 			continue;
+		memcpy(path_file, dent->d_name, i + 1);
+		if (stat(path, &st) != 0)
+			continue;
+
+		list = &files;
+		if (S_ISDIR(st.st_mode))
+			list = &dirs;
+
+		if (list->used == list->size) {
+			list->size += DIRLIST_BLOB_SIZE;
+			list->ent   = (dirls_entry_t**) realloc(list->ent, sizeof(dirls_entry_t*) * list->size);
+			assert(list->ent);
 		}
-		
-		BUFFER_APPEND_STRING_CONST(b,
-				    "   <tr><td class='dirlisting'>");
-		
+
+		tmp = (dirls_entry_t*) malloc(sizeof(dirls_entry_t) + 1 + i);
+		tmp->mtime = st.st_mtime;
+		tmp->size  = st.st_size;
+		tmp->namelen = i;
+		memcpy(DIRLIST_ENT_NAME(tmp), dent->d_name, i + 1);
+
+		list->ent[list->used++] = tmp;
+	}
+	closedir(dp);
+
+	if (dirs.used) http_dirls_sort(dirs.ent, dirs.used);
+
+	if (files.used) http_dirls_sort(files.ent, files.used);
+
+	out = chunkqueue_get_append_buffer(con->write_queue);
+	BUFFER_COPY_STRING_CONST(out, "<?xml version=\"1.0\" encoding=\"iso-8859-1\"?>\n");
+	http_list_directory_header(out, con);
+
+	/* directories */
+	for (i = 0; i < dirs.used; i++) {
+		tmp = dirs.ent[i];
+
 #ifdef HAVE_LOCALTIME_R
-		/* localtime_r is faster */
-		localtime_r(&(st.st_mtime), &tm);
-		
-		date_buf->used = strftime(date_buf->ptr, date_buf->size - 1, "%Y-%m-%d %H:%M:%S", &tm);
+		localtime_r(&(tmp->mtime), &tm);
+		strftime(datebuf, sizeof(datebuf), "%Y-%b-%d %H:%M:%S", &tm);
 #else
-		date_buf->used = strftime(date_buf->ptr, date_buf->size - 1, "%Y-%m-%d %H:%M:%S", localtime(&(st.st_mtime)));
+		strftime(datebuf, sizeof(datebuf), "%Y-%b-%d %H:%M:%S", localtime(&(tmp->mtime)));
 #endif
-		date_buf->used++;
-		
-		buffer_append_string_buffer(b, date_buf);
-		BUFFER_APPEND_STRING_CONST(b,
-				    "</td><td class='dirlistingnumber'>");
-		
-		buffer_append_off_t(b, st.st_size);
-		
-		/* mime type */
-		BUFFER_APPEND_STRING_CONST(b,
-				    "</td><td class='dirlisting'>");
-		
-		if (S_ISDIR(st.st_mode)) {
-			buffer_append_string_rfill(b, "directory", 28);
-		} else {
-			size_t k;
-			unsigned short have_content_type = 0;
+
+		BUFFER_APPEND_STRING_CONST(out, "<tr><td class=\"n\"><a href=\"");
+		buffer_append_string_url_encoded(out, DIRLIST_ENT_NAME(tmp));
+		BUFFER_APPEND_STRING_CONST(out, "/\">");
+		buffer_append_string_html_encoded(out, DIRLIST_ENT_NAME(tmp));
+		BUFFER_APPEND_STRING_CONST(out, "</a>/</td><td class=\"m\">");
+		buffer_append_string_len(out, datebuf, sizeof(datebuf) - 1);
+		BUFFER_APPEND_STRING_CONST(out, "</td><td class=\"s\">- &nbsp;</td><td class=\"t\">Directory</td></tr>\n");
+
+		free(tmp);
+	}
+
+	/* files */
+	for (i = 0; i < files.used; i++) {
+		tmp = files.ent[i];
 
 #ifdef HAVE_XATTR
-			char attrval[128];
-			int attrlen = sizeof(attrval) - 1;
-			
-			if(con->conf.use_xattr && 0 == attr_get(srv->tmp_buf->ptr, "Content-Type", attrval, &attrlen, 0)) {
-				attrval[attrlen] = 0;
-				buffer_append_string_rfill(b, attrval, 28);
-				have_content_type = 1;
+		content_type = NULL;
+		if (con->conf.use_xattr) {
+			memcpy(path_file, DIRLIST_ENT_NAME(tmp), tmp->namelen + 1);
+			attrlen = sizeof(attrval) - 1;
+			if (attr_get(path, "Content-Type", attrval, &attrlen, 0) == 0) {
+				attrval[attrlen] = '\0';
+				content_type = attrval;
 			}
+		}
+		if (content_type == NULL) {
+#else
+		if (1) {
 #endif
-			
-			if(!have_content_type) {
-				for (k = 0; k < con->conf.mimetypes->used; k++) {
-					data_string *ds = (data_string *)con->conf.mimetypes->data[k];
-					size_t ct_len;
-					
-					if (ds->key->used == 0) continue;
-					
-					ct_len = ds->key->used - 1;
-					
-					if (s_len < ct_len) continue;
-					
-					if (0 == strncmp(sb->ptr[i] + s_len - ct_len, ds->key->ptr, ct_len)) {
-						buffer_append_string_rfill(b, ds->value->ptr, 28);
-						break;
-					}
-				}
-				
-				if (k == con->conf.mimetypes->used) {
-					buffer_append_string_rfill(b, "application/octet-stream", 28);
+			content_type = "application/octet-stream";
+			for (k = 0; k < con->conf.mimetypes->used; k++) {
+				data_string *ds = (data_string *)con->conf.mimetypes->data[k];
+				size_t ct_len;
+
+				if (ds->key->used == 0)
+					continue;
+
+				ct_len = ds->key->used - 1;
+				if (tmp->namelen < ct_len)
+					continue;
+
+				if (0 == strncmp(DIRLIST_ENT_NAME(tmp) + tmp->namelen - ct_len, ds->key->ptr, ct_len)) {
+					content_type = ds->value->ptr;
+					break;
 				}
 			}
 		}
-		
-		/* URL */
-		BUFFER_APPEND_STRING_CONST(b,"</td><td class='dirlisting'><a href=\"");
-		/* URL encode */
-		buffer_append_string_url_encoded(b, sb->ptr[i]);
-		if (S_ISDIR(st.st_mode)) {
-			BUFFER_APPEND_STRING_CONST(b,"/");
-		}
-		BUFFER_APPEND_STRING_CONST(b,"\">");
-		/* HTML encode */
-		buffer_append_string_html_encoded(b, sb->ptr[i]);
-		if (S_ISDIR(st.st_mode)) {
-			BUFFER_APPEND_STRING_CONST(b,"/");
-		}
-		BUFFER_APPEND_STRING_CONST(b,"</a></td></tr>\n");
-			
-		
-		free(sb->ptr[i]);
+
+#ifdef HAVE_LOCALTIME_R
+		localtime_r(&(tmp->mtime), &tm);
+		strftime(datebuf, sizeof(datebuf), "%Y-%b-%d %H:%M:%S", &tm);
+#else
+		strftime(datebuf, sizeof(datebuf), "%Y-%b-%d %H:%M:%S", localtime(&(tmp->mtime)));
+#endif
+		http_list_directory_sizefmt(sizebuf, tmp->size);
+
+		BUFFER_APPEND_STRING_CONST(out, "<tr><td class=\"n\"><a href=\"");
+		buffer_append_string_url_encoded(out, DIRLIST_ENT_NAME(tmp));
+		BUFFER_APPEND_STRING_CONST(out, "\">");
+		buffer_append_string_html_encoded(out, DIRLIST_ENT_NAME(tmp));
+		BUFFER_APPEND_STRING_CONST(out, "</a></td><td class=\"m\">");
+		buffer_append_string_len(out, datebuf, sizeof(datebuf) - 1);
+		BUFFER_APPEND_STRING_CONST(out, "</td><td class=\"s\">");
+		buffer_append_string(out, sizebuf);
+		BUFFER_APPEND_STRING_CONST(out, "</td><td class=\"t\">");
+		buffer_append_string(out, content_type);
+		BUFFER_APPEND_STRING_CONST(out, "</td></tr>\n");
+
+		free(tmp);
 	}
-	
-	buffer_free(date_buf);
-	free(sb->ptr);
-	free(sb);
-	
+
+	free(files.ent);
+	free(dirs.ent);
+	free(path);
+
+	http_list_directory_footer(out, con);
 	response_header_insert(srv, con, CONST_STR_LEN("Content-Type"), CONST_STR_LEN("text/html"));
-	
-	BUFFER_APPEND_STRING_CONST(b,
-			    "  </table>\n" 
-			    " </body>\n"
-			    "</html>\n" );
-	
 	con->file_finished = 1;
-	
+
 	return 0;
 }
 

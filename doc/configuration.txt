@@ -182,6 +182,15 @@ server.dir-listing
   enables virtual directory listings if a directory is requested no
   index-file was found 
 
+dir-listing.hide-dotfiles
+  if enabled, does not list hidden files in directory listings generated
+  by the dir-listing option.
+
+  default: enabled
+
+dir-listing.external-css
+  path to an external css stylesheet for the directory listing
+
 server.follow-symlink
   allow to follow-symlinks
   
