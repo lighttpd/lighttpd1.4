@@ -1423,7 +1423,7 @@ static int fcgi_establish_connection(server *srv, handler_ctx *hctx) {
 #endif
 	} else {
 		fcgi_addr_in.sin_family = AF_INET;
-		if (INADDR_NONE == (fcgi_addr_in.sin_addr.s_addr = inet_addr(host->host->ptr))) {
+		if (0 == inet_aton(host->host->ptr, &(fcgi_addr_in.sin_addr))) {
 			log_error_write(srv, __FILE__, __LINE__, "sb", 
 					"converting IP-adress failed for", host->host, 
 					"\nBe sure to specify an IP address here");
