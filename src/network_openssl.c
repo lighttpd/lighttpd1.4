@@ -61,6 +61,12 @@ int network_write_chunkqueue_openssl(server *srv, connection *con, chunkqueue *c
 				switch ((ssl_r = SSL_get_error(con->ssl, r))) {
 				case SSL_ERROR_WANT_WRITE:
 					break;
+				case SSL_ERROR_ZERO_RETURN:
+					/* clean shutdown on the remote side */
+					
+					if (r == 0) return -2;
+					
+					/* fall thourgh */
 				default:
 					log_error_write(srv, __FILE__, __LINE__, "sdds", "SSL:", 
 							ssl_r, r,
@@ -88,7 +94,6 @@ int network_write_chunkqueue_openssl(server *srv, connection *con, chunkqueue *c
 			char *p;
 # endif
 			
-			WP();
 			if (HANDLER_GO_ON != file_cache_get_entry(srv, con, c->data.file.name, &(con->fce))) {
 				log_error_write(srv, __FILE__, __LINE__, "sb",
 						strerror(errno), c->data.file.name);
@@ -124,6 +129,17 @@ int network_write_chunkqueue_openssl(server *srv, connection *con, chunkqueue *c
 				switch ((ssl_r = SSL_get_error(con->ssl, r))) {
 				case SSL_ERROR_WANT_WRITE:
 					break;
+				case SSL_ERROR_ZERO_RETURN:
+					/* clean shutdown on the remote side */
+					
+					if (r == 0) {
+#if defined USE_MMAP
+						munmap(p, c->data.file.length);
+#endif
+						return -2;
+					}
+					
+					/* fall thourgh */
 				default:
 					log_error_write(srv, __FILE__, __LINE__, "sdds", "SSL:", 
 							ssl_r, r, 
