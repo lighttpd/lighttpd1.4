@@ -103,7 +103,6 @@ FREE_FUNC(mod_compress_free) {
 SETDEFAULTS_FUNC(mod_compress_setdefaults) {
 	plugin_data *p = p_d;
 	size_t i = 0;
-	int ret = HANDLER_GO_ON;
 	
 	config_values_t cv[] = { 
 		{ "compress.cache-dir",             NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_CONNECTION },
@@ -128,13 +127,9 @@ SETDEFAULTS_FUNC(mod_compress_setdefaults) {
 		
 		p->config_storage[i] = s;
 	
-		if (0 != (ret = config_insert_values_global(srv, ((data_config *)srv->config_context->data[i])->value, cv))) {
-			ret = HANDLER_ERROR;
-			
-			break;
+		if (0 != config_insert_values_global(srv, ((data_config *)srv->config_context->data[i])->value, cv)) {
+			return HANDLER_ERROR
 		}
-		
-		ret = HANDLER_GO_ON;
 		
 		if (!buffer_is_empty(s->compress_cache_dir)) {
 			struct stat st;
@@ -147,7 +142,7 @@ SETDEFAULTS_FUNC(mod_compress_setdefaults) {
 		}
 	}
 	
-	return ret;
+	return HANDLER_GO_ON;
 	
 }
 

@@ -462,7 +462,7 @@ SETDEFAULTS_FUNC(log_access_open) {
 			
 			if (pipe(to_log_fds)) {
 				log_error_write(srv, __FILE__, __LINE__, "ss", "pipe failed: ", strerror(errno));
-				return -1;
+				return HANDLER_ERROR;
 			}
 			
 			/* fork, execve */
