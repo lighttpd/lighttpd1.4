@@ -732,6 +732,20 @@ int http_request_parse(server *srv, connection *con) {
 								unsigned long int r;
 								size_t j;
 								
+								if (con_length_set) {
+									con->http_status = 400;
+									con->keep_alive = 0;
+									
+									log_error_write(srv, __FILE__, __LINE__, "s", 
+											"duplicate Content-Length-header -> 400");
+									if (srv->srvconf.log_request_header_on_error) {
+										log_error_write(srv, __FILE__, __LINE__, "Sb",
+												"request-header:\n",
+												con->request.request);
+									}
+									return 0;
+								}
+								
 								if (ds->value->used == 0) SEGFAULT();
 								
 								for (j = 0; j < ds->value->used - 1; j++) {
@@ -764,7 +778,22 @@ int http_request_parse(server *srv, connection *con) {
 									return 0;
 								}
 							} else if (cmp > 0 && 0 == (cmp = buffer_caseless_compare(CONST_BUF_LEN(ds->key), CONST_STR_LEN("Content-Type")))) {
-								con->request.http_content_type = ds->value->ptr;
+								/* if dup, only the first one will survive */
+								if (!con->request.http_content_type) {
+									con->request.http_content_type = ds->value->ptr;
+								} else {
+									con->http_status = 400;
+									con->keep_alive = 0;
+									
+									log_error_write(srv, __FILE__, __LINE__, "s", 
+											"duplicate Content-Type-header -> 400");
+									if (srv->srvconf.log_request_header_on_error) {
+										log_error_write(srv, __FILE__, __LINE__, "Sb",
+												"request-header:\n",
+												con->request.request);
+									}
+									return 0;
+								}
 							} else if (cmp > 0 && 0 == (cmp = buffer_caseless_compare(CONST_BUF_LEN(ds->key), CONST_STR_LEN("Expect")))) {
 								/* HTTP 2616 8.2.3 
 								 * Expect: 100-continue
@@ -781,18 +810,77 @@ int http_request_parse(server *srv, connection *con) {
 								array_insert_unique(con->request.headers, (data_unset *)ds);
 								return 0;
 							} else if (cmp > 0 && 0 == (cmp = buffer_caseless_compare(CONST_BUF_LEN(ds->key), CONST_STR_LEN("Host")))) {
-								con->request.http_host = ds->value;
-							} else if (cmp > 0 && 0 == (cmp = buffer_caseless_compare(CONST_BUF_LEN(ds->key), CONST_STR_LEN("If-Modified-Since")))) {
-								con->request.http_if_modified_since = ds->value->ptr;
-							} else if (cmp > 0 && 0 == (cmp = buffer_caseless_compare(CONST_BUF_LEN(ds->key), CONST_STR_LEN("If-None-Match")))) {
-								con->request.http_if_none_match = ds->value->ptr;
-							} else if (cmp > 0 && 0 == (cmp = buffer_caseless_compare(CONST_BUF_LEN(ds->key), CONST_STR_LEN("Range")))) {
-								/* bytes=.*-.* */
-								
-								if (0 == strncasecmp(ds->value->ptr, "bytes=", 6) &&
-								    NULL != strchr(ds->value->ptr+6, '-')) {
+								if (!con->request.http_host) {
+									con->request.http_host = ds->value;
+								} else {
+									con->http_status = 400;
+									con->keep_alive = 0;
 									
-									con->request.http_range = ds->value->ptr + 6;
+									log_error_write(srv, __FILE__, __LINE__, "s", 
+											"duplicate Host-header -> 400");
+									if (srv->srvconf.log_request_header_on_error) {
+										log_error_write(srv, __FILE__, __LINE__, "Sb",
+												"request-header:\n",
+												con->request.request);
+									}
+									return 0;
+								}
+							} else if (cmp > 0 && 0 == (cmp = buffer_caseless_compare(CONST_BUF_LEN(ds->key), CONST_STR_LEN("If-Modified-Since")))) {
+								/* if dup, only the first one will survive */
+								if (!con->request.http_if_modified_since) {
+									con->request.http_if_modified_since = ds->value->ptr;
+								} else {
+									con->http_status = 400;
+									con->keep_alive = 0;
+									
+									log_error_write(srv, __FILE__, __LINE__, "s", 
+											"duplicate If-Modified-Since header -> 400");
+									if (srv->srvconf.log_request_header_on_error) {
+										log_error_write(srv, __FILE__, __LINE__, "Sb",
+												"request-header:\n",
+												con->request.request);
+									}
+									return 0;
+								}
+							} else if (cmp > 0 && 0 == (cmp = buffer_caseless_compare(CONST_BUF_LEN(ds->key), CONST_STR_LEN("If-None-Match")))) {
+								/* if dup, only the first one will survive */
+								if (!con->request.http_if_none_match) {
+									con->request.http_if_none_match = ds->value->ptr;
+								} else {
+									con->http_status = 400;
+									con->keep_alive = 0;
+									
+									log_error_write(srv, __FILE__, __LINE__, "s", 
+											"duplicate If-None-Match-header -> 400");
+									if (srv->srvconf.log_request_header_on_error) {
+										log_error_write(srv, __FILE__, __LINE__, "Sb",
+												"request-header:\n",
+												con->request.request);
+									}
+									return 0;
+								}
+							} else if (cmp > 0 && 0 == (cmp = buffer_caseless_compare(CONST_BUF_LEN(ds->key), CONST_STR_LEN("Range")))) {
+								if (!con->request.http_range) {
+									/* bytes=.*-.* */
+								
+									if (0 == strncasecmp(ds->value->ptr, "bytes=", 6) &&
+									    NULL != strchr(ds->value->ptr+6, '-')) {
+										
+										/* if dup, only the first one will survive */
+										con->request.http_range = ds->value->ptr + 6;
+									}
+								} else {
+									con->http_status = 400;
+									con->keep_alive = 0;
+									
+									log_error_write(srv, __FILE__, __LINE__, "s", 
+											"duplicate Host-header -> 400");
+									if (srv->srvconf.log_request_header_on_error) {
+										log_error_write(srv, __FILE__, __LINE__, "Sb",
+												"request-header:\n",
+												con->request.request);
+									}
+									return 0;
 								}
 							}
 							

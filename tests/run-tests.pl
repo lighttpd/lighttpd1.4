@@ -2,7 +2,7 @@
 
 use strict;
 use IO::Socket;
-use Test::More tests => 114;
+use Test::More tests => 120;
 
 
 my $testname;
@@ -510,6 +510,12 @@ EOF
 ok(handle_http == 0, 'Host missing');
 
 
+
+
+
+
+
+
 print "\nLow-Level Response-Header Parsing - Content-Length:\n";
 @request  = ( <<EOF
 GET /12345.html HTTP/1.0
@@ -528,6 +534,14 @@ EOF
 ok(handle_http == 0, 'Content-Length for text/plain');
 
 
+
+
+
+
+
+
+
+
 print "\nLow-Level Response-Header Parsing - Location:\n";
 @request  = ( <<EOF
 GET /dummydir HTTP/1.0
@@ -542,6 +556,16 @@ EOF
  );
 @response = ( { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 301, 'Location' => 'http://localhost:2048/dummydir/?foo' } );
 ok(handle_http == 0, 'internal redirect in directory + querystring');
+
+
+
+
+
+
+
+
+
+
 
 
 print "\nBasic Request-Handling\n";
@@ -762,6 +786,62 @@ EOF
  );
 @response = ( { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200 } );
 ok(handle_http == 0, 'larger headers');
+
+
+@request  = ( <<EOF
+GET / HTTP/1.0
+Host: www.example.org
+Host: 123.example.org
+EOF
+ );
+@response = ( { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 400 } );
+ok(handle_http == 0, 'Duplicate Host headers, Bug #25');
+
+
+@request  = ( <<EOF
+GET / HTTP/1.0
+Content-Length: 5
+Content-Length: 4
+EOF
+ );
+@response = ( { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 400 } );
+ok(handle_http == 0, 'Duplicate Content-Length headers');
+
+@request  = ( <<EOF
+GET / HTTP/1.0
+Content-Type: 5
+Content-Type: 4
+EOF
+ );
+@response = ( { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 400 } );
+ok(handle_http == 0, 'Duplicate Content-Type headers');
+
+@request  = ( <<EOF
+GET / HTTP/1.0
+Range: bytes=5-6
+Range: bytes=5-9
+EOF
+ );
+@response = ( { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 400 } );
+ok(handle_http == 0, 'Duplicate Range headers');
+
+@request  = ( <<EOF
+GET / HTTP/1.0
+If-None-Match: 5
+If-None-Match: 4
+EOF
+ );
+@response = ( { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 400 } );
+ok(handle_http == 0, 'Duplicate If-None-Match headers');
+
+@request  = ( <<EOF
+GET / HTTP/1.0
+If-Modified-Since: 5
+If-Modified-Since: 4
+EOF
+ );
+@response = ( { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 400 } );
+ok(handle_http == 0, 'Duplicate If-Modified-Since headers');
 
 
 
