@@ -32,6 +32,7 @@ CONFS=fastcgi-10.conf \
       mod-fastcgi.t \
       mod-redirect.t \
       mod-userdir.t \
+      mod-rewrite.t \
       request.t 
 
 
