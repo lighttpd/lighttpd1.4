@@ -1,0 +1,144 @@
+lighttpd (1.3.10-1) unstable; urgency=low
+
+  * updated to 1.3.10
+
+ -- Jan Kneschke <jan@kneschke.de>  Sun, 06 Feb 2005 15:41:00 +0000
+
+lighttpd (1.3.9-1) unstable; urgency=low
+
+  * updated to 1.3.9
+
+ -- Jan Kneschke <jan@kneschke.de>  Sun, 06 Feb 2005 02:30:00 +0000
+
+lighttpd (1.3.8-1) unstable; urgency=low
+
+  * updated to 1.3.8
+
+ -- Jan Kneschke <jan@kneschke.de>  Sun, 30 Jan 2005 00:49:00 +0000
+
+lighttpd (1.3.7-1) unstable; urgency=low
+
+  * updated to 1.3.7
+  * turned on SSL by default in debian packages
+
+ -- Jan Kneschke <jan@kneschke.de>  Tue, 10 Dec 2004 19:09:15 +0000
+
+lighttpd (1.3.6-1) unstable; urgency=low
+
+  * updated to 1.3.6
+
+ -- Jan Kneschke <jan@kneschke.de>  Tue, 03 Nov 2004 19:09:15 +0000
+
+lighttpd (1.3.5-1) unstable; urgency=low
+
+  * updated to 1.3.5
+  * added mod_alias
+  * added mod_userdir
+  * added the exec command to the SSI handler
+  * added a switch to disable follow-symlinks
+  * added a switch to disable IPv6 at compile-time
+  * fixed compilation on FreeBSD and NetBSD 1.3.x
+  * fixed segfault in pipelining
+  * fixed a segfault in writev() handler if LFS is used
+
+ -- Jan Kneschke <jan@kneschke.de>  Sun, 31 Oct 2004 19:09:15 +0000
+
+lighttpd (1.3.4-1) unstable; urgency=low
+
+  * updated to 1.3.4
+
+ -- Jan Kneschke <jan@kneschke.de>  Sun, 24 Oct 2004 19:09:15 +0000
+
+lighttpd (1.3.1-1) unstable; urgency=low
+
+  * updated to 1.3.1
+
+ -- Jan Kneschke <jan@kneschke.de>  Sat, 30 Sep 2004 19:09:15 +0000
+
+lighttpd (1.2.8-1) unstable; urgency=low
+
+  * updated to 1.2.8
+
+ -- Jan Kneschke <jan@kneschke.de>  Sat, 11 Sep 2004 19:09:15 +0000
+
+lighttpd (1.2.7-1) unstable; urgency=low
+
+  * added mod_rrdtool for internal statistics
+  * added xattr support
+  * added user-controlable timeouts
+  * improved documentation for many plugins
+  * fixed POST requests for mod_proxy
+  * fixed rare hang with CGI
+  * fixed seg-fault if no configfile is specified
+  * fixed rare problem in FastCGI header generation
+
+ -- Jan Kneschke <jan@kneschke.de>  Sat, 04 Sep 2004 19:09:15 +0000
+
+lighttpd (1.2.5-1) unstable; urgency=low
+
+  * added skeleton for solaris 10 port-API
+  * added compression support even if no cachedir is set
+  * added conditional configoptions
+  * fixed compilation on OpenBSD
+  * fixed kqueue support
+  * fixed pipelining bug
+  * fixed parallel build (triggered by Gentoo)
+  * updated debian postinst
+
+ -- Jan Kneschke <jan@kneschke.de>  Sun, 10 Aug 2004 19:09:15 +0000
+
+lighttpd (1.2.4-1) unstable; urgency=low
+
+  * added kqueue support
+  * added server-side includes (mod_ssi)
+  * fixed large post uploads in fastcgi
+  * fixed rt-signals handling of delayed events
+
+ -- Jan Kneschke <jan@kneschke.de>  Sat, 31 Jul 2004 10:09:15 +0000
+
+lighttpd (1.2.3-1) unstable; urgency=low
+
+  * added a proxy module for Java and friends
+  * added support to pass accesslog through an external programm
+  * added mimetypes for text/css and text/javascript
+  * fixed index-files for FastCGI if webserver is in chroot
+  * fixed error messages of CGI process fails to exec()
+  * fixed detection of pcre on IRIX and FreeBSD
+  * fixed timestamps in Last-Modified checks
+  * fixed 64bit builds
+  * fixed mmap-caching of large files
+  * relaxed the HTTP parser on empty headerfields
+
+ -- Jan Kneschke <jan@kneschke.de>  Sat, 10 Jul 2004 20:37:01 +0200
+
+lighttpd (1.2.2-1) unstable; urgency=low
+
+  * added support for unix domain sockets in FastCGI
+  * fixed mmap caching
+  * fixed compile-time check for linux sendfile()
+  * fixed check for pcre.h on Fedora Core 2
+
+ -- Jan Kneschke <jan@kneschke.de>  Tue, 15 Jun 2004 20:37:01 +0100
+
+
+lighttpd (1.1.4-1) unstable; urgency=low
+
+  * New upstream release.
+
+ -- Vincent Wagelaar <vincent@ricardis.tudelft.nl>  Sun, 04 Apr 2004 21:44:58 +0100
+
+
+lighttpd (1.1.3-1) unstable; urgency=low
+
+  * New upstream release.
+
+ -- Vincent Wagelaar <vincent@ricardis.tudelft.nl>  Wed, 24 Mar 2004 08:20:58 +0100
+
+
+
+lighttpd (1.1.2-1) unstable; urgency=low
+
+  * Initial Release.
+
+ -- Vincent Wagelaar <vincent@ricardis.tudelft.nl>  Wed, 24 Mar 2004 08:20:58 +0100
+

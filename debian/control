@@ -1,0 +1,15 @@
+Source: lighttpd
+Section: web
+Priority: optional
+Maintainer: Jan Kneschke <jan@kneschke.de>
+Build-Depends: debhelper (>= 4.0.0), libssl-dev, zlib1g-dev, libbz2-dev, libpcre3-dev
+Standards-Version: 3.6.0
+
+Package: lighttpd
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Provides: httpd, httpd-cgi
+Suggests: openssl, rrdtool
+Description:  A fast webserver with minimal memory footprint
+ lighttpd is intended to be a frontend for ad-servers which have to deliver
+ small files concurrently to many connections. 

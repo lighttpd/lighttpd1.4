@@ -1,0 +1,316 @@
+
+====
+NEWS
+====
+
+- 1.3.10 - 2005-02-06
+
+  * added support for full commandline in spawn-fcgi
+  * fixed missing check for IP-address in mod_fastcgi
+  * fixed compile error with openssl in mod_fastcgi
+  * removed a debug-message from network_freebsd_... 
+
+- 1.3.9 - 2005-02-06
+
+  * added a stricter URI parser
+  * added a check to the CGI spawner if the cgi-handler exists
+  * added documentation for SSL and mod_status
+  * added handling of startup environment to FastCGI
+  * improved performance in FastCGI in buildind the FastCGI header
+  * fixed min-procs and max-procs in FastCGI on PowerPC
+  * fixed crash in setenv.add-response-header
+  * fixed handling of nph-scripts in CGI
+  * fixed accidently sending out physical file in CGI on error 
+  * fixed cygwin support
+  * fixed handling of missing files 
+  * fixed HEAD requests for dynamic requests
+
+- 1.3.8 - 2005-01-30
+
+  * added traffic shaping by remote host and virtual server
+  * added auto-spawning of FastCGI process on demand
+  * added virtual host based on MySQL
+  * added mod_setenv to add envirnoment and http headers on the fly
+  * added support for syslog in mod_accesslog
+  * improved output of mod_status
+  * improved debug output in request handling
+  * fixed build problems on netbsd 1.4.x and 1.5.x
+  * fixed status.url configuration
+  * fixed handling of != and !~ in configutation
+  * fixed special cases in keep-alive handling 
+  * fixed timeout handling in handling POST requests
+  * fixed mode AUTHORIZER in FastCGI 
+  * fixed handling if internal redirects if no Host: is supplied
+  * fixed mod_alias + pathinfo 
+  * fixed directory indexes and permissions
+  * enabled sending errorlog to syslog again
+
+- 1.3.7 - 2004-12-11
+
+  * added retries for a fastcgi connect if a php-childs 
+    dies at startup
+  * update the debian directory
+  * added setgroups() to drop all group-privs
+  * added native port to windows via mingw32
+  * added server.tag = '...' 
+  * added support for ${...} in mod_ssi
+  * ported all plugins to conditional support
+  * fixed multipart handling in cgi
+  * fixed kqueue event-handler
+  * fixed wrap-around in mod_status
+  * fixed crash with SSL + FastCGI
+  * fixed detection of SSL headers
+  * fixed handling of dangling SSL_shutdown
+  * fixed detection of keep-alive of Firefox
+
+- 1.3.6 - 2004-11-03
+
+  * added spawn-fcgi to the distribution
+  * added support in fastcgi module to spawn fastcgi 
+    processes itself
+  * fixed logfile cycling if external logging is used
+  * fixed connection handling in fastcgi if no chunk 
+    encoding is used
+  * fixed internal redirects on directories if a query
+    string is supplied
+  * fixed cgi-module for POST request above 4k
+  * fixed mod_alias and follow-symlink
+
+- 1.3.5 - 2004-10-31
+
+  * added mod_alias 
+  * added mod_userdir
+  * added the exec command to the SSI handler
+  * added a switch to disable follow-symlinks
+  * added a switch to disable IPv6 at compile-time
+  * fixed compilation on FreeBSD and NetBSD 1.3.x
+  * fixed segfault in pipelining
+  * fixed a segfault in writev() handler if LFS is used
+
+- 1.3.4 - 2004-10-24
+
+  * added limiter for open files
+  * added logging of user supplied data to accesslogs
+  * added build target for OpenWRT
+  * added plain backend support for auth-digest
+  * fixed handling the external accesslog processes
+  * fixed SERVER_NAME in CGI and FastCGI 
+
+- 1.3.3 - 2004-10-16
+
+  * added support for NL terminators in CGI-scripts
+  * added support for conditionals in mod_auth, 
+    mod_simple_vhost and mod_evhost
+  * added a error-handler for 404 codes
+  * fixed request counter in the rrdtool module
+  * fixed log-file cycling
+  * fixed seg-fault
+
+- 1.3.2 - 2004-09-30
+
+  * fixed file-cache
+
+- 1.3.1 - 2004-09-30
+
+  * fixed file-cache
+  * fixed parsing of IPv6 adresses
+  * fixed cgi for cygwin
+  * fixed test-suite for FreeBSD and IRIX
+  * fixed handling of shrinked files
+  * fixed handling of REQUEST_URI after rewrite
+
+- 1.3.0 - 2004-09-17
+
+  * added build for MacOS X and Cygwin
+  * added handling of more than one socket
+  * added config-conditions for User-Agent and Referer
+  * added final rewrite-rules
+
+- 1.2.8 - 2004-09-11
+
+  * added a cache for mimetypes
+  * added X-Forwarded-For for mod_proxy
+  * fixed handling of comments in If-Modified-Since
+  * fixed error handling in FastCGI code
+  * fixed expire plugin for second Expire header
+
+- 1.2.7 - 2004-09-04
+
+  * added mod_rrdtool for internal statistics
+  * added xattr support
+  * added user-controlable timeouts
+  * improved documentation for many plugins
+  * fixed POST requests for mod_proxy
+  * fixed rare hang with CGI
+  * fixed seg-fault if no configfile is specified
+  * fixed rare problem in FastCGI header generation
+
+- 1.2.6 - 2004-08-26
+
+  * added apache-like accesslog definition
+  * enabled timestamp cache again
+  * improved performance in the string compare functions
+  * fixed double-free in fastcgi handler
+  * fixed error-handling in cgi handler
+
+- 1.2.5 - 2004-08-10
+
+  * added skeleton for solaris 10 port-API
+  * added compression support even if no cachedir is set
+  * added conditional configoptions
+  * fixed compilation on OpenBSD
+  * fixed kqueue support
+  * fixed pipelining bug
+  * fixed parallel build (triggered by Gentoo)
+  * updated debian postinst
+
+- 1.2.4 - 2004-07-31
+
+  * added kqueue support
+  * added server-side includes (mod_ssi)
+  * fixed large post uploads in fastcgi
+  * fixed rt-signals handling of delayed events
+
+- 1.2.3 - 2004-07-10
+
+  * added a proxy module for Java and friends
+  * added support to pass accesslog through an external programm
+  * added mimetypes for text/css and text/javascript
+  * fixed index-files for FastCGI if webserver is in chroot
+  * fixed error messages of CGI process fails to exec()
+  * fixed detection of pcre on IRIX and FreeBSD
+  * fixed timestamps in Last-Modified checks
+  * fixed 64bit builds
+  * fixed mmap-caching of large files
+  * relaxed the HTTP parser on empty headerfields
+
+- 1.2.2 - 2004-06-15
+
+  * added support for unix domain sockets in FastCGI
+  * fixed mmap caching
+  * fixed compile-time check for linux sendfile()
+  * fixed check for pcre.h on Fedora Core 2
+
+- 1.2.1 - 2004-05-30
+
+  * added experimental support for AIX send_file()
+  * added an mmap cache to the filehandle cache
+  * enabled FreeBSD sendfile support again
+  * added support for calling CGI binaries directly
+  * fixed pipelining for POST requests
+  * fixed some seg-faults if no configfile is used
+
+- 1.2.0 - 2004-05-17
+
+  * added conforming Expect: handling
+  * added a module for secure and fast downloading 
+  * rewrote the event handling interface
+  * fixed array handling which might lead to 'missing header'
+  * fixed pipelining support
+  * fixed build of the localizer extension
+  * fixed cgi handling for headers which are flushed to often
+  * fixed compilation on Solaris 2.5
+
+- 1.1.9 - 2004-04-29
+
+  * added AUTHORIZER mode to the FastCGI module
+  * added 'check-local' option to disable local stat() in the FastCGI module
+  * added prefix-notation for FastCGI module
+  * added 'mod_usertrack'
+  * improved CGI/FastCGI spec conformance
+  * more code cleanup
+  * fixed HTTP/1.1 chunk headers
+  * fixed POST handling
+  * fixed SSL network handler
+  * fixed writev() network handler
+
+- 1.1.8 - 2004-04-16
+
+  * code cleanup
+  * limiting the size of the request-body and the request-header
+  * minor speed improvements
+  * tightend the HTTP-Parser again
+
+- 1.1.7 - 2004-04-12
+
+  * added REMOTE_USER to the Server->FastCGI parameters
+  * added bzip2 compression
+  * improved the error-messages from the new configfile parser
+  * fixed accesslog writing for errornous requests
+  * fixed LFS (64bit filesizes) handling
+  * fixed Content-Length for HEAD requests
+  * fixed some memory leaks in the configfile parser
+
+- 1.1.6 - 2004-04-10
+
+  * tightend the HTTP-Parser
+  * rewrote the configfile parser (based on lemon)
+  * fixed openssl support
+  * fixed mmap+write support
+  * use localtime in accesslog if possible
+
+- 1.1.5 - 2004-04-07
+
+  * added ldap backend to the auth
+  * added a mod_expire
+  * added debian packaging structure
+  * merged redhat and suse spec-file
+  * fixed eventhandler for solaris
+  * fixed 64bit fileoffsets
+  * fixed permissions of the PID-file
+
+- 1.1.4 - 2004-04-04
+
+  * added server.pid-file
+  * added support for solaris /dev/poll and solaris sendfilev()
+  * added support for writev()
+  * added PATHINFO support (again)
+  * fixed CLF logfile writing
+
+- 1.1.3 - 2004-03-25
+
+  * set default event-handler to 'poll'
+  * fixed logcycling in chroot()
+  * fixed hostname detection
+  * added syslog() as fallback for error-logging
+
+- 1.1.2 - 2004-03-22
+
+  * added a "docroot" setting for fastcgi processes
+  * performance improvements
+  * improved configure script
+  * rewrote the fastcgi config parser
+  * added a rc-script for RedHat
+  * added epoll() support for Linux 2.6.x
+
+- 1.1.1 - 2004-03-15
+
+  * added localizer module
+  * performance improvements
+  * code cleanup
+
+- 1.1.0 - 2004-03-06
+
+  * changed some configuration keys for better readability
+  * moved the virtual-host code to mod_simple_vhost
+  * added enhanced virtual host plugin from Christian Kruse
+  * added two new auth-backends (htpasswd, htdigest)
+  * fixed and improved authentification
+  * stricter parsing of the Host: field
+  * added a warning for unused configuration keys
+  * improved FastCGI documentation
+
+- 1.0.3 - 2004-02-13
+
+  * a startup script has been added (LSB compliant)
+  * HEAD requests were submitting the content like a GET request
+  * the virtual directory listing got a face-lifting and fixes
+  * request-headers are now handled case-in-sensitive as required
+    by the standard. this fixes POST requests for w3m and some Proxies.
+
+- 1.0.2 - 2004-02-07
+
+  * rearrangement of the default configfile
+  * some updates in the documentation
+  * a entry in the error-log for a 404
+  * stdout is no longer the default for the accesslog

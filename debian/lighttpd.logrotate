@@ -1,0 +1,18 @@
+/var/log/lighttpd/*.log {
+        daily
+        missingok
+	copytruncate
+        rotate 7
+        compress
+        notifempty
+        sharedscripts
+        postrotate
+           if [ -f /var/run/lighttpd.pid ]; then \
+             if [ -x /usr/sbin/invoke-rc.d ]; then \
+                invoke-rc.d lighttpd reload > /dev/null; \
+             else \
+                /etc/init.d/lighttpd reload > /dev/null; \
+             fi; \
+           fi;
+        endscript
+}

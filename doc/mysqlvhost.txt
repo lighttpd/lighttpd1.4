@@ -1,0 +1,86 @@
+
+====================
+MySQL bases vhosting
+====================
+
+-----------------------
+Module: mod_mysql_vhost
+-----------------------
+
+:Author: ada@riksnet.se
+:Date: $Date: 2004/08/29 09:43:49 $
+:Revision: $Revision: 1.1 $
+
+:abstract:
+  This module provides virtual hosts (vhosts) based on a MySQL table, and
+  (optionally) prepares mod_fastcgi for sub-chroot FastCGI deployment.
+  
+.. meta::
+  :keywords: lighttpd, mysql, vhost
+  
+.. contents:: Table of Contents
+
+Description
+===========
+
+vhost via mysql
+
+Options
+=======
+
+Example: ::
+
+  mysql-vhost.db             = "lighttpd"
+  mysql-vhost.user           = "lighttpd"
+  mysql-vhost.pass           = "secret"
+  mysql-vhost.sock           = "/var/mysql.lighttpd.sock"
+  mysql-vhost.sql            = "SELECT docroot,fcgioffset,fcgiarg FROM domains WHERE domain='?'"
+  
+  
+MySQL setup: ::
+
+  GRANT SELECT ON lighttpd.* TO lighttpd@localhost IDENTIFIED BY 'secret';
+
+  CREATE DATABASE lighttpd;
+
+  USE lighttpd;
+
+  CREATE TABLE domains (
+    domain char(64) not null primary key,
+    docroot char(128) not null,
+    fcgioffset tinyint unsigned not null,
+    fcgiarg smallint unsigned not null
+  );
+
+  INSERT INTO domains VALUES ('host.dom.ain','/http/host.dom.ain/',5,10001);
+
+
+Extra stuff: ::
+
+  fastcgi.server = ( ".php" => ( "php-fcgi" => (
+    "socket" => "../php/socket",
+    "spawn"  => "/php/php-spawn"
+  ))) 
+
+
+The example above will get the docroot for a virtual host from the
+lighttpd.domains table, and also change the docroot for FastCGI to
+be 5 (=fcgioffset) chars below the web docroot (in the example above 
+this means that the web docroot is /http/host.dom.ain/, while the 
+FastCGI docroot will be /host.dom.ain/). 
+
+The fastcgi.server "socket" is (patched to be) relative to docroot,
+and the new "spawn" argument specifies a command to run to dynamically
+create a new FastCGI process in case none is running (as opposed to 
+"bin-path" which does not dynamically create/restart FastCGI processes).
+
+The example above will also add the argument "10001" (=fcgiarg) when 
+invoking the /php/php-spawn (=spawn) FastCGI spawn program. Tf the
+spawn program is setuid this can be used to chroot and setgid/setuid 
+to the right user before exec:ing the actual FastCGI program.
+
+NOTE: both fcgioffset and fcgiarg are optional. Just remove every 
+mention of them in the example above for a pure vhost server.
+You can also use just fcgioffset and not fcgiarg if you like.
+
+

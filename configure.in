@@ -1,0 +1,421 @@
+#                                               -*- Autoconf -*-
+# Process this file with autoconf to produce a configure script.
+AC_PREREQ(2.57)
+AC_INIT(lighttpd, 1.3.11, jan@kneschke.de)
+AC_CONFIG_SRCDIR([src/server.c])
+
+AC_CANONICAL_TARGET
+
+AM_INIT_AUTOMAKE
+
+AM_CONFIG_HEADER([config.h])
+
+AM_MAINTAINER_MODE
+
+# Checks for programs.
+AC_PROG_CC
+AC_PROG_LD
+AC_PROG_INSTALL
+AC_PROG_AWK
+AC_PROG_CPP
+dnl AC_PROG_CXX
+AC_PROG_LN_S
+AC_PROG_MAKE_SET
+
+dnl check environment
+AC_AIX
+AC_ISC_POSIX
+AC_MINIX
+
+dnl AC_CANONICAL_HOST
+case $host_os in
+	*darwin*|*cygwin*|*aix*|*mingw* ) NO_RDYNAMIC=yes;;
+        * ) NO_RDYNAMIC=no;;
+esac
+AM_CONDITIONAL(NO_RDYNAMIC, test x$NO_RDYNAMIC = xyes)
+
+AC_EXEEXT
+
+dnl more automake stuff
+AM_C_PROTOTYPES
+
+dnl libtool
+AC_DISABLE_STATIC	
+AC_ENABLE_SHARED
+
+AC_LIBTOOL_DLOPEN
+AC_PROG_LIBTOOL
+
+dnl for solaris and localtime_r
+CPPFLAGS="${CPPFLAGS} -D_REENTRANT"
+
+# Checks for header files.
+AC_HEADER_STDC
+AC_HEADER_SYS_WAIT
+AC_CHECK_HEADERS([arpa/inet.h fcntl.h netinet/in.h stdlib.h string.h \
+sys/socket.h sys/time.h unistd.h sys/sendfile.h sys/uio.h \
+getopt.h sys/epoll.h sys/select.h poll.h sys/poll.h sys/devpoll.h sys/filio.h \
+sys/mman.h sys/event.h sys/port.h winsock2.h pwd.h \
+sys/resource.h sys/un.h syslog.h])
+
+# Checks for typedefs, structures, and compiler characteristics.
+AC_C_CONST
+AC_C_INLINE
+AC_C_CHAR_UNSIGNED
+AC_TYPE_OFF_T
+AC_TYPE_PID_T
+AC_TYPE_SIZE_T
+
+AC_CHECK_MEMBER(struct tm.tm_gmtoff,AC_DEFINE([HAVE_STRUCT_TM_GMTOFF],[1],[gmtoff in struct tm]),,[#include <time.h>])
+AC_CHECK_TYPES(struct sockaddr_storage,,,[#include <sys/socket.h>])
+AC_CHECK_TYPES(socklen_t,,,[#include <sys/types.h>
+#include <sys/socket.h>])
+
+# Checks for library functions.
+AC_FUNC_FORK
+dnl AC_FUNC_MALLOC
+#AC_FUNC_MMAP
+dnl AC_FUNC_REALLOC
+AC_TYPE_SIGNAL
+AC_FUNC_STAT
+AC_FUNC_STRFTIME
+
+dnl Checks for database.
+MYSQL_INCLUDE=""
+
+AC_PATH_PROG(MYSQLCONFIG, mysql_config)
+AC_MSG_CHECKING(for MySQL support)
+AC_ARG_WITH(mysql,
+    AC_HELP_STRING([--with-mysql@<:@=PATH@:>@],[Include MySQL support. PATH is the path to 'mysql_config']),
+    [
+  if test "$withval" != "no"; then
+    if test "$withval" = "yes"; then
+       withval=$MYSQLCONFIG
+    fi
+
+    if test \! -x $withval; then
+      echo "--with-mysql=path-to-mysql_config"
+    fi
+    MYSQL_INCLUDE="`$withval --cflags | sed s/\'//g`"
+    MYSQL_LIBS="`$withval --libs | sed s/\'//g`"
+
+    AC_MSG_RESULT(yes)
+
+    AC_MSG_CHECKING(for MySQL includes at)
+    AC_MSG_RESULT($MYSQL_INCLUDE)
+
+    AC_MSG_CHECKING(for MySQL libraries at)
+    AC_MSG_RESULT($MYSQL_LIBS)
+  dnl check for errmsg.h, which isn't installed by some versions of 3.21
+    old_CPPFLAGS="$CPPFLAGS"
+    CPPFLAGS="$CPPFLAGS $MYSQL_INCLUDE"
+    AC_CHECK_HEADERS(errmsg.h mysql.h)
+    CPPFLAGS="$old_CPPFLAGS"
+
+    AC_DEFINE([HAVE_MYSQL], [1], [mysql support])
+  else
+    AC_MSG_RESULT(no)
+  fi
+],[AC_MSG_RESULT(no)])
+
+AC_SUBST(MYSQL_LIBS)
+AC_SUBST(MYSQL_INCLUDE)
+
+
+AC_MSG_CHECKING(for LDAP support)
+AC_ARG_WITH(ldap, AC_HELP_STRING([--with-ldap],[enable LDAP support]),
+[AC_MSG_RESULT(yes)
+ AC_CHECK_LIB(ldap, ldap_bind, [
+  AC_CHECK_HEADERS([ldap.h],[
+    LDAP_LIB=-lldap
+    AC_DEFINE([HAVE_LIBLDAP], [1], [libldap])
+    AC_DEFINE([HAVE_LDAP_H], [1])
+  ])
+ ])
+ AC_SUBST(LDAP_LIB)
+ AC_CHECK_LIB(lber, ber_printf, [
+  AC_CHECK_HEADERS([lber.h],[
+    LBER_LIB=-llber
+    AC_DEFINE([HAVE_LIBLBER], [1], [liblber])
+    AC_DEFINE([HAVE_LBER_H], [1])
+  ])
+ ])
+ AC_SUBST(LBER_LIB)
+
+],[AC_MSG_RESULT(no)])
+
+AC_MSG_CHECKING(for extended attributes support)
+AC_ARG_WITH(attr, AC_HELP_STRING([--with-attr],[enable extended attribute support]),
+[AC_MSG_RESULT(yes)
+ AC_CHECK_LIB(attr, attr_get, [
+	AC_CHECK_HEADERS([attr/attributes.h],[
+		ATTR_LIB=-lattr
+		AC_DEFINE([HAVE_XATTR], [1], [libattr])
+		AC_DEFINE([HAVE_ATTR_ATTRIBUTES_H], [1])
+	])
+ ])
+],[AC_MSG_RESULT(no)])
+AC_SUBST(ATTR_LIB)
+
+AC_MSG_CHECKING(for valgrind)
+AC_ARG_WITH(valgrind, AC_HELP_STRING([--with-valgrind],[enable internal
+support for valgrind]),
+[AC_MSG_RESULT(yes)
+ AC_CHECK_HEADERS([valgrind/valgrind.h])
+],[AC_MSG_RESULT(no)])
+
+AC_MSG_CHECKING(for OpenSSL)
+dnl check for openssl
+    AC_ARG_WITH(openssl,
+    AC_HELP_STRING([--with-openssl@<:@=DIR@:>@],[Include openssl support (default no)]),
+[
+    if test "$withval" != "no"; then
+        if test "$withval" != "yes"; then
+            CPPFLAGS="$CPPFLAGS -I$withval/include"
+            LDFLAGS="$LDFLAGS -L$withval/lib"
+	fi
+	
+        use_openssl=yes
+	AC_MSG_RESULT($withval)
+    else
+        use_openssl=no
+        AC_MSG_RESULT(no)
+    fi
+],[
+    use_openssl=no
+    AC_MSG_RESULT(no)
+])
+    
+AC_ARG_WITH(openssl-includes,
+    AC_HELP_STRING([--with-openssl-includes=DIR],[OpenSSL includes]),
+    [ use_openssl=yes CPPFLAGS="$CPPFLAGS -I$withval" ]
+)
+
+AC_ARG_WITH(openssl-libs,
+    AC_HELP_STRING([--with-openssl-libs=DIR],[OpenSSL libraries]),
+    [ use_openssl=yes LDFLAGS="$LDFLAGS -L$withval" ]
+)
+
+if test "x$use_openssl" = "xyes"; then
+    AC_CHECK_HEADERS([openssl/ssl.h])
+    OLDLIBS="$LIBS"
+    AC_CHECK_LIB(crypto, BIO_f_base64, [ 
+      AC_CHECK_LIB(ssl, SSL_new, [ SSL_LIB="-lssl -lcrypto" 
+				 AC_DEFINE(HAVE_LIBSSL, [], [Have libssl]) ], [], [ -lcrypto ])
+    ], [], [])
+    LIBS="$OLDLIBS"
+    AC_SUBST(SSL_LIB)
+fi
+
+if test "x$cross_compiling" = xno; then
+  AC_PATH_PROG(PCRECONFIG, pcre-config)
+
+  if test x"$PCRECONFIG" != x; then 
+    PCRE_LIB=`$PCRECONFIG --libs`
+    CPPFLAGS="$CPPFLAGS `$PCRECONFIG --cflags`"
+    OLDLIBS="$LIBS"
+    LIBS="$LIBS $PCRE_LIB"
+    AC_CHECK_LIB(pcre, pcre_compile, [
+      AC_CHECK_HEADERS([pcre.h], [
+        AC_DEFINE([HAVE_LIBPCRE], [1], [libpcre])
+        AC_DEFINE([HAVE_PCRE_H], [1])
+      ])
+    ])
+    LIBS="$OLDLIBS"
+  fi
+fi
+
+AC_SUBST(PCRE_LIB)
+
+AC_CHECK_LIB(z, deflate, [
+  AC_CHECK_HEADERS([zlib.h],[
+    Z_LIB=-lz
+    AC_DEFINE([HAVE_LIBZ], [1], [libz])
+    AC_DEFINE([HAVE_ZLIB_H], [1])
+  ])
+])
+AC_SUBST(Z_LIB)
+
+AC_CHECK_LIB(bz2, BZ2_bzCompress, [
+  AC_CHECK_HEADERS([bzlib.h],[
+    BZ_LIB=-lbz2
+    AC_DEFINE([HAVE_LIBBZ2], [1], [libbz2])
+    AC_DEFINE([HAVE_BZLIB_H], [1])
+  ])
+])
+AC_SUBST(BZ_LIB)
+
+AC_SEARCH_LIBS(socket,socket)
+AC_SEARCH_LIBS(gethostbyname,nsl socket)
+AC_SEARCH_LIBS(hstrerror,resolv)
+
+save_LIBS=$LIBS
+AC_SEARCH_LIBS(dlopen,dl,[
+  AC_CHECK_HEADERS([dlfcn.h],[
+    if test "$ac_cv_search_dlopen" != no; then
+      test "$ac_cv_search_dlopen" = "none required" || DL_LIB="$ac_cv_search_dlopen"
+    fi
+
+    AC_DEFINE([HAVE_LIBDL], [1], [libdl])
+    AC_DEFINE([HAVE_DLFCN_H], [1])
+  ])
+])
+LIBS=$save_LIBS
+AC_SUBST(DL_LIB)
+
+save_LIBS=$LIBS
+AC_SEARCH_LIBS(crypt,crypt,[
+  AC_CHECK_HEADERS([crypt.h],[
+    AC_DEFINE([HAVE_CRYPT_H], [1])
+  ])
+
+  AC_DEFINE([HAVE_LIBCRYPT], [1], [libcrypt])
+  if test "$ac_cv_search_crypt" != no; then
+    test "$ac_cv_search_crypt" = "none required" || CRYPT_LIB="$ac_cv_search_crypt"
+  fi
+])
+LIBS=$save_LIBS
+AC_SUBST(CRYPT_LIB)
+
+save_LIBS=$LIBS
+AC_SEARCH_LIBS(sendfilev,sendfile,[
+  if test "$ac_cv_search_sendfilev" != no; then
+    test "$ac_cv_search_sendfilev" = "none required" || SENDFILE_LIB="$ac_cv_search_sendfilev"
+    AC_DEFINE([HAVE_SENDFILEV], [1], [solaris sendfilev])
+  fi
+])
+LIBS=$save_LIBS
+AC_SUBST(SENDFILE_LIB)
+
+case $host_os in
+	*mingw* ) LIBS="$LIBS -lwsock32";;
+        * ) ;;
+esac
+
+AC_CHECK_FUNCS([dup2 getcwd inet_ntoa inet_ntop memset mmap munmap strchr \
+		  strdup strerror strstr strtol sendfile  getopt socket \
+		  gethostbyname poll sigtimedwait epoll_ctl getrlimit chroot \
+		  getuid select signal\
+		  writev sigaction sendfile64 send_file kqueue port_create localtime_r])
+
+if test "x$ac_cv_func_sendfile" = xyes; then
+	# check if sendfile works
+        AC_MSG_CHECKING(if sendfile works)
+	if test "x$cross_compiling" = xno; then
+	AC_TRY_RUN([
+		    #include <errno.h>
+		    int main() {
+		      int o = 0;
+		      if (-1 == sendfile(0, 0, &o, 0) && errno == ENOSYS) return -1;
+		      return 0;
+		    } ], 
+		    AC_MSG_RESULT(yes), 
+		    [ AC_MSG_RESULT(no) 
+		    AC_DEFINE([HAVE_SENDFILE_BROKEN], [1], [broken sendfile]) ] )
+	else
+	      AC_MSG_RESULT(no, cross-compiling) 
+	      AC_DEFINE([HAVE_SENDFILE_BROKEN], [1], [broken sendfile]) 
+	fi
+fi
+
+dnl Check for IPv6 support
+
+AC_ARG_ENABLE(ipv6,
+ AC_HELP_STRING([--disable-ipv6],[disable IPv6 support]),
+ [case "${enableval}" in
+   yes) ipv6=true ;;
+    no) ipv6=false ;;
+     *) AC_MSG_ERROR(bad value ${enableval} for --enable-ipv6) ;;
+  esac],[ipv6=true])
+
+if test x$ipv6 = xtrue; then
+  AC_CACHE_CHECK([for IPv6 support], ac_cv_ipv6_support,
+  [AC_TRY_LINK([ #include <sys/types.h>
+#include <sys/socket.h>
+#include <netinet/in.h>], [struct sockaddr_in6 s; struct in6_addr t=in6addr_any; int i=AF_INET6; s; t.s6_addr[0] = 0; ],
+  [ac_cv_ipv6_support=yes], [ac_cv_ipv6_support=no])])
+  
+  if test "$ac_cv_ipv6_support" = yes; then
+    AC_DEFINE(HAVE_IPV6,1,[Whether to enable IPv6 support])
+  fi
+fi
+
+
+AC_MSG_CHECKING(for Large File System support)
+AC_ARG_ENABLE(lfs,
+ AC_HELP_STRING([--enable-lfs],[Turn on Large File System (default)]),
+ [case "${enableval}" in
+   yes) CPPFLAGS="${CPPFLAGS} -D_FILE_OFFSET_BITS=64 -D_LARGEFILE_SOURCE -D_LARGE_FILES" ;;
+    no) ;;
+     *) AC_MSG_ERROR(bad value ${enableval} for --enable-lfs) ;;
+  esac],[CPPFLAGS="${CPPFLAGS} -D_FILE_OFFSET_BITS=64 -D_LARGEFILE_SOURCE -D_LARGE_FILES"])
+AC_MSG_RESULT($enableval)
+
+AM_CONDITIONAL(CROSS_COMPILING, test "x$cross_compiling" = xyes)
+
+if test "${GCC}" = "yes"; then
+       CFLAGS="${CFLAGS} -Wall -W -Wshadow -pedantic"
+fi
+
+dnl build version-id
+LIGHTTPD_VERSION_ID=`echo $PACKAGE_VERSION | $AWK -F '.' '{print "(" $1 " << 16 | " $2 " << 8 | " $3 ")"}'`
+AC_DEFINE_UNQUOTED([LIGHTTPD_VERSION_ID], [$LIGHTTPD_VERSION_ID], [lighttpd-version-id]) 
+
+AC_CONFIG_FILES([Makefile debian/Makefile src/Makefile doc/Makefile tests/Makefile \
+		 tests/docroot/Makefile \
+		 tests/docroot/123/Makefile \
+		 tests/docroot/www/Makefile \
+		 tests/docroot/www/go/Makefile \
+		 tests/docroot/www/indexfile/Makefile \
+		 lighttpd.spec distribute.sh cygwin/Makefile cygwin/lighttpd.README
+		 openwrt/Makefile openwrt/control openwrt/lighttpd.mk])
+AC_OUTPUT
+
+$ECHO
+$ECHO "Plugins:"
+$ECHO
+if test ! "x$PCRE_LIB" = x; then
+  $ECHO "mod_rewrite     : enabled"
+  $ECHO "mod_redirect    : enabled"
+  $ECHO "mod_ssi         : enabled"
+else
+  $ECHO "mod_rewrite     : disabled (libpcre missing)"
+  $ECHO "mod_redirect    : disabled (libpcre missing)"
+  $ECHO "mod_ssi         : disabled (libpcre missing)"
+fi
+
+$ECHO "mod_cgi         : enabled"
+$ECHO "mod_fastcgi     : enabled"
+$ECHO "mod_proxy       : enabled"
+$ECHO "mod_evhost      : enabled"
+$ECHO "mod_simple_vhost: enabled"
+
+if test "x$MYSQL_LIBS" = x; then
+  $ECHO "mod_mysql_vhost : disabled (libmysqlclient missing or mysql support disabled)"
+else
+  $ECHO "mod_mysql_vhost : enabled"
+fi
+
+$ECHO "mod_access      : enabled"
+$ECHO "mod_alias       : enabled"
+$ECHO "mod_setenv      : enabled"
+$ECHO "mod_usertrack   : enabled"
+if test "x$Z_LIB" = x; then
+  $ECHO "mod_compress    : disabled (libz missing)"
+else
+  $ECHO "mod_compress    : enabled"
+fi
+
+# no crypt call
+if test "$ac_cv_search_crypt" = no; then
+  $ECHO "mod_auth        : enabled, crypt() support disabled"
+else
+  $ECHO "mod_auth        : enabled"
+fi
+$ECHO "mod_status      : enabled"
+$ECHO "mod_accesslog   : enabled"
+$ECHO "mod_rrdtool     : enabled"
+$ECHO "mod_secdownload : enabled"
+$ECHO "mod_expire      : enabled"
+
+$ECHO
