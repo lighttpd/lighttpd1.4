@@ -863,8 +863,9 @@ int http_request_parse(server *srv, connection *con) {
 		}
 	}
 	
-	/* check hostname field */
-	if (0 != request_check_hostname(srv, con, con->request.http_host)) {
+	/* check hostname field if it is set */
+	if (NULL != con->request.http_host &&
+	    0 != request_check_hostname(srv, con, con->request.http_host)) {
 		log_error_write(srv, __FILE__, __LINE__, "sbs",
 				"Invalid Hostname:", con->request.http_host, "-> 400");
 		
