@@ -24,4 +24,4 @@ run $ACLOCAL $ACLOCAL_FLAGS
 run $AUTOHEADER
 run $AUTOMAKE $AUTOMAKE_FLAGS
 run $AUTOCONF
-echo "Now type \`make' to compile."
+echo "Now type './configure ...' and 'make' to compile."
