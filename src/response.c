@@ -917,7 +917,12 @@ handler_t http_response_prepare(server *srv, connection *con) {
 			}
 			
 			/* not found, perhaps PATHINFO */
-			buffer_copy_string_buffer(srv->tmp_buf, con->physical.rel_path);
+			
+			if (con->physical.rel_path->ptr[0] == '/') {
+				buffer_copy_string_len(srv->tmp_buf, con->physical.rel_path->ptr + 1, con->physical.rel_path->used - 2);
+			} else {
+				buffer_copy_string_buffer(srv->tmp_buf, con->physical.rel_path);
+			}
 			
 			/*
 			 * 
@@ -987,13 +992,12 @@ handler_t http_response_prepare(server *srv, connection *con) {
 				
 				con->uri.path->used -= strlen(pathinfo);
 				con->uri.path->ptr[con->uri.path->used - 1] = '\0';
-				
-				
 			}
 			
 			if (con->conf.log_request_handling) {
 				log_error_write(srv, __FILE__, __LINE__,  "s",  "-- after pathinfo check");
 				log_error_write(srv, __FILE__, __LINE__,  "sb", "Path         :", con->physical.path);
+				log_error_write(srv, __FILE__, __LINE__,  "sb", "URI          :", con->uri.path);
 				log_error_write(srv, __FILE__, __LINE__,  "sb", "Pathinfo     :", con->request.pathinfo);
 			}
 			
