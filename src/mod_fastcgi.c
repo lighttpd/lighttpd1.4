@@ -2025,9 +2025,12 @@ static int fcgi_demux_response(server *srv, handler_ctx *hctx) {
 						hlen = 1;
 						c = hctx->response->ptr + 1;
 					} else if (NULL != (c = buffer_search_string_len(hctx->response, "\r\n\r\n", 4))) {
-						hlen = c - hctx->response->ptr + 4;
+						c += 4;
+						hlen = c - hctx->response->ptr;
+						
 					} else if (NULL != (c = buffer_search_string_len(hctx->response, "\n\n", 2))) {
-						hlen = c - hctx->response->ptr + 2;
+						c += 2;
+						hlen = c - hctx->response->ptr;
 					}
 					
 					if (c != NULL) {
@@ -2053,7 +2056,7 @@ static int fcgi_demux_response(server *srv, handler_ctx *hctx) {
 							con->file_started = 1;
 						
 							if (blen) {
-								http_chunk_append_mem(srv, con, c + 4, blen + 1);
+								http_chunk_append_mem(srv, con, c, blen + 1);
 								joblist_append(srv, con);
 #if 0
 								log_error_write(srv, __FILE__, __LINE__, "sd", "body-len", blen);

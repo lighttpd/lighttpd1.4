@@ -2,10 +2,13 @@
 testdir=/tmp/lighttpd/
 
 if CHECK_WITH_FASTCGI
-check_PROGRAMS=fcgi-auth
+check_PROGRAMS=fcgi-auth fcgi-responder
 
 fcgi_auth_SOURCES=fcgi-auth.c
 fcgi_auth_LDADD=-lfcgi
+
+fcgi_responder_SOURCES=fcgi-responder.c
+fcgi_responder_LDADD=-lfcgi
 endif
 
 TESTS=\
@@ -14,8 +17,8 @@ run-tests.pl \
 cleanup.sh
 
 CONFS=fastcgi-10.conf \
-      fastcgi-11.conf \
-      fastcgi-12.conf \
+      fastcgi-auth.conf \
+      fastcgi-responder.conf \
       fastcgi-13.conf \
       bug-06.conf \
       bug-12.conf
