@@ -36,7 +36,7 @@ As SSL and named-based virtual hosting can not work together you
 have to use IP-based virtual hosting if you want to run multiple
 SSL-servers with one lighttpd: ::
 
-  SERVER["socket"] == "10.0.0.1:443" {
+  $SERVER["socket"] == "10.0.0.1:443" {
     ssl.engine                  = "enable"
     ssl.pemfile                 = "www.example.org.pem"
     server.name                 = "www.example.org"
