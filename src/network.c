@@ -39,7 +39,7 @@ handler_t network_server_handle_fdevent(void *s, void *context, int revents) {
 				"strange event for server socket",
 				srv_socket->fd,
 				revents);
-		return -1;
+		return HANDLER_ERROR;
 	}
 	
 	while (NULL != (con = connection_accept(srv, srv_socket))) {

@@ -914,22 +914,22 @@ int buffer_path_simplify(buffer *dest, buffer *src)
 	return 0;
 }
 
-inline int light_isdigit(int c) {
+int light_isdigit(int c) {
 	return (c >= '0' && c <= '9');
 }
 
-inline int light_isxdigit(int c) {
+int light_isxdigit(int c) {
 	if (light_isdigit(c)) return 1;
 	
 	c |= 32;
 	return (c >= 'a' && c <= 'f');
 }
 
-inline int light_isalpha(int c) {
+int light_isalpha(int c) {
 	c |= 32;
 	return (c >= 'a' && c <= 'z');
 }
 
-inline int light_isalnum(int c) {
+int light_isalnum(int c) {
 	return light_isdigit(c) || light_isalpha(c);
 }

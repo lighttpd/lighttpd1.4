@@ -661,7 +661,7 @@ static int fcgi_spawn_connection(server *srv,
 		servlen = SUN_LEN(&fcgi_addr_un);
 #else
 		/* stevens says: */
-		servlen = proc->socket - 1 + sizeof(fcgi_addr_un.sun_family);
+		servlen = proc->socket->used - 1 + sizeof(fcgi_addr_un.sun_family);
 #endif
 		socket_type = AF_UNIX;
 		fcgi_addr = (struct sockaddr *) &fcgi_addr_un;
