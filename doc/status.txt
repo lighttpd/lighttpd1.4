@@ -1,0 +1,35 @@
+=============
+Server Status
+=============
+
+------------------
+Module: mod_status
+------------------
+
+:Author: Jan Kneschke
+:Date: $Date: 2004/11/03 22:26:05 $
+:Revision: $Revision: 1.2 $
+
+:abstract:
+  mod_status displays server-status and server-config
+  
+.. meta::
+  :keywords: lighttpd, server status
+  
+.. contents:: Table of Contents
+
+Description
+===========
+
+The server status module generates the ... 
+
+Options
+=======
+
+status.status-url
+
+  Default: unset
+
+status.config-url
+
+  Default: unset

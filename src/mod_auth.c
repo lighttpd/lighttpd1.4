@@ -1,0 +1,565 @@
+#include <sys/types.h>
+#include <sys/stat.h>
+
+#include <stdlib.h>
+#include <string.h>
+#include <errno.h>
+#include <fcntl.h>
+#include <unistd.h>
+
+#include "plugin.h"
+#include "http_auth.h"
+#include "log.h"
+#include "response.h"
+
+
+/**
+ * the basic and digest auth framework
+ * 
+ * - config handling
+ * - protocol handling
+ * 
+ * http_auth.c 
+ * http_auth_digest.c 
+ * 
+ * do the real work
+ */
+
+INIT_FUNC(mod_auth_init) {
+	mod_auth_plugin_data *p;
+	
+	p = calloc(1, sizeof(*p));
+	
+	p->tmp_buf = buffer_init();
+	
+	p->auth_user = buffer_init();
+#ifdef USE_LDAP
+	p->ldap_filter = buffer_init();
+#endif
+	
+	return p;
+}
+
+FREE_FUNC(mod_auth_free) {
+	mod_auth_plugin_data *p = p_d;
+	
+	UNUSED(srv);
+
+	if (!p) return HANDLER_GO_ON;
+	
+	buffer_free(p->tmp_buf);
+	buffer_free(p->auth_user);
+#ifdef USE_LDAP
+	buffer_free(p->ldap_filter);
+#endif
+	
+	if (p->config_storage) {
+		size_t i;
+		for (i = 0; i < srv->config_context->used; i++) {
+			mod_auth_plugin_config *s = p->config_storage[i];
+			
+			array_free(s->auth_require);
+			buffer_free(s->auth_plain_groupfile);
+			buffer_free(s->auth_plain_userfile);
+			buffer_free(s->auth_htdigest_userfile);
+			buffer_free(s->auth_htpasswd_userfile);
+			buffer_free(s->auth_backend_conf);
+			
+			buffer_free(s->auth_ldap_hostname);
+			buffer_free(s->auth_ldap_basedn);
+			buffer_free(s->auth_ldap_filter);
+			
+#ifdef USE_LDAP
+			buffer_free(s->ldap_filter_pre);
+			buffer_free(s->ldap_filter_post);
+			
+			if (s->ldap) ldap_unbind_s(s->ldap);
+#endif
+			
+			free(s);
+		}
+		free(p->config_storage);
+	}
+	
+	free(p);
+	
+	return HANDLER_GO_ON;
+}
+
+#define PATCH(x) \
+	p->conf.x = s->x;
+static int mod_auth_patch_connection(server *srv, connection *con, mod_auth_plugin_data *p, const char *stage, size_t stage_len) {
+	size_t i, j;
+	
+	/* skip the first, the global context */
+	for (i = 1; i < srv->config_context->used; i++) {
+		data_config *dc = (data_config *)srv->config_context->data[i];
+		mod_auth_plugin_config *s = p->config_storage[i];
+		
+		/* not our stage */
+		if (!buffer_is_equal_string(dc->comp_key, stage, stage_len)) continue;
+		
+		/* condition didn't match */
+		if (!config_check_cond(srv, con, dc)) continue;
+		
+		/* merge config */
+		for (j = 0; j < dc->value->used; j++) {
+			data_unset *du = dc->value->data[j];
+			
+			if (buffer_is_equal_string(du->key, CONST_STR_LEN("auth.backend"))) {
+				PATCH(auth_backend);
+			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("auth.backend.plain.groupfile"))) {
+				PATCH(auth_plain_groupfile);
+			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("auth.backend.plain.userfile"))) {
+				PATCH(auth_plain_userfile);
+			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("auth.backend.htdigest.userfile"))) {
+				PATCH(auth_htdigest_userfile);
+			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("auth.backend.htpasswd.userfile"))) {
+				PATCH(auth_htpasswd_userfile);
+			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("auth.require"))) {
+				PATCH(auth_require);
+			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("auth.debug"))) {
+				PATCH(auth_debug);
+			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("auth.backend.ldap.hostname"))) {
+				PATCH(auth_ldap_hostname);
+#ifdef USE_LDAP
+				PATCH(ldap);
+				PATCH(ldap_filter_pre);
+				PATCH(ldap_filter_post);
+#endif
+			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("auth.backend.ldap.base-dn"))) {
+				PATCH(auth_ldap_basedn);
+			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("auth.backend.ldap.filter"))) {
+				PATCH(auth_ldap_filter);
+			}
+		}
+	}
+	
+	return 0;
+}
+
+static int mod_auth_setup_connection(server *srv, connection *con, mod_auth_plugin_data *p) {
+	mod_auth_plugin_config *s = p->config_storage[0];
+	UNUSED(srv);
+	UNUSED(con);
+	
+	PATCH(auth_backend);
+	PATCH(auth_plain_groupfile);
+	PATCH(auth_plain_userfile);
+	PATCH(auth_htdigest_userfile);
+	PATCH(auth_htpasswd_userfile);
+	PATCH(auth_require);
+	PATCH(auth_debug);
+	PATCH(auth_ldap_hostname);
+	PATCH(auth_ldap_basedn);
+	PATCH(auth_ldap_filter);
+#ifdef USE_LDAP
+	PATCH(ldap);
+	PATCH(ldap_filter_pre);
+	PATCH(ldap_filter_post);
+#endif
+	
+	return 0;
+}
+#undef PATCH
+
+static handler_t mod_auth_uri_handler(server *srv, connection *con, void *p_d) {
+	size_t k;
+	int auth_required = 0, auth_satisfied = 0;
+	char *http_authorization = NULL;
+	data_string *ds;
+	mod_auth_plugin_data *p = p_d;
+	array *req;
+	size_t i;
+	
+	/* select the right config */
+	mod_auth_setup_connection(srv, con, p);
+	for (i = 0; i < srv->config_patches->used; i++) {
+		buffer *patch = srv->config_patches->ptr[i];
+		
+		mod_auth_patch_connection(srv, con, p, CONST_BUF_LEN(patch));
+	}
+	
+	if (p->conf.auth_require == NULL) return HANDLER_GO_ON;
+	
+	/*
+	 * AUTH
+	 *  
+	 */
+	
+	/* do we have to ask for auth ? */
+	
+	auth_required = 0;
+	auth_satisfied = 0;
+	
+	/* search auth-directives for path */
+	for (k = 0; k < p->conf.auth_require->used; k++) {
+		if (p->conf.auth_require->data[k]->key->used == 0) continue;
+		
+		if (0 == strncmp(con->uri.path->ptr, p->conf.auth_require->data[k]->key->ptr, p->conf.auth_require->data[k]->key->used - 1)) {
+			auth_required = 1;
+			break;
+		}
+	}
+	
+	/* nothing to do for us */
+	if (auth_required == 0) return HANDLER_GO_ON;
+	
+	req = ((data_array *)(p->conf.auth_require->data[k]))->value;
+	
+	/* try to get Authorization-header */
+		
+	if (NULL != (ds = (data_string *)array_get_element(con->request.headers, "Authorization"))) {
+		http_authorization = ds->value->ptr;
+	}
+	
+	if (ds && ds->value && ds->value->used) {
+		char *auth_realm;
+		data_string *method;
+		
+		method = (data_string *)array_get_element(req, "method");
+		
+		/* parse auth-header */
+		if (NULL != (auth_realm = strchr(http_authorization, ' '))) {
+			int auth_type_len = auth_realm - http_authorization;
+			
+			if ((auth_type_len == 5) &&
+			    (0 == strncmp(http_authorization, "Basic", auth_type_len))) {
+				
+				if (0 == strcmp(method->value->ptr, "basic")) {
+					auth_satisfied = http_auth_basic_check(srv, con, p, req, con->uri.path, auth_realm+1);
+				}
+			} else if ((auth_type_len == 6) &&
+				   (0 == strncmp(http_authorization, "Digest", auth_type_len))) {
+				if (0 == strcmp(method->value->ptr, "digest")) {
+					if (-1 == (auth_satisfied = http_auth_digest_check(srv, con, p, req, con->uri.path, auth_realm+1))) {
+						con->http_status = 400;
+						
+						/* a field was missing */
+						
+						return HANDLER_FINISHED;
+					}
+				}
+			} else {
+				log_error_write(srv, __FILE__, __LINE__, "ss", 
+						"unknown authentification type:",
+						http_authorization);
+			}
+		}
+	}
+	
+	if (!auth_satisfied) {
+		data_string *method, *realm;
+		method = (data_string *)array_get_element(req, "method");
+		realm = (data_string *)array_get_element(req, "realm");
+		
+		con->http_status = 401;
+			
+		if (0 == strcmp(method->value->ptr, "basic")) {
+			buffer_copy_string(p->tmp_buf, "Basic realm=\"");
+			buffer_append_string_buffer(p->tmp_buf, realm->value);
+			buffer_append_string(p->tmp_buf, "\"");
+			
+			response_header_insert(srv, con, CONST_STR_LEN("WWW-Authenticate"), CONST_BUF_LEN(p->tmp_buf));
+		} else if (0 == strcmp(method->value->ptr, "digest")) {
+			char hh[33];
+			http_auth_digest_generate_nonce(srv, p, srv->tmp_buf, hh);
+			
+			buffer_copy_string(p->tmp_buf, "Digest realm=\"");
+			buffer_append_string_buffer(p->tmp_buf, realm->value);
+			buffer_append_string(p->tmp_buf, "\", nonce=\"");
+			buffer_append_string(p->tmp_buf, hh);
+			buffer_append_string(p->tmp_buf, "\", qop=\"auth\"");
+			
+			response_header_insert(srv, con, CONST_STR_LEN("WWW-Authenticate"), CONST_BUF_LEN(p->tmp_buf));
+		} else {
+			/* evil */
+		}
+		return HANDLER_FINISHED;
+	} else {
+		/* the REMOTE_USER header */
+		
+		buffer_copy_string_buffer(con->authed_user, p->auth_user);
+	}
+	
+	return HANDLER_GO_ON;
+}
+
+SETDEFAULTS_FUNC(mod_auth_set_defaults) {
+	mod_auth_plugin_data *p = p_d;
+	size_t i;
+	
+	config_values_t cv[] = { 
+		{ "auth.backend",                   NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_CONNECTION }, /* 0 */
+		{ "auth.backend.plain.groupfile",   NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_CONNECTION },
+		{ "auth.backend.plain.userfile",    NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_CONNECTION },
+		{ "auth.require",                   NULL, T_CONFIG_LOCAL, T_CONFIG_SCOPE_CONNECTION },
+		{ "auth.backend.ldap.hostname",     NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_CONNECTION },
+		{ "auth.backend.ldap.base-dn",      NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_CONNECTION },
+		{ "auth.backend.ldap.filter",       NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_CONNECTION },
+		{ "auth.backend.htdigest.userfile", NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_CONNECTION },
+		{ "auth.backend.htpasswd.userfile", NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_CONNECTION },
+		{ "auth.debug",                     NULL, T_CONFIG_SHORT, T_CONFIG_SCOPE_CONNECTION }, /* 9 */
+		{ NULL,                             NULL, T_CONFIG_UNSET, T_CONFIG_SCOPE_UNSET }
+	};
+	
+	p->config_storage = malloc(srv->config_context->used * sizeof(specific_config *));
+
+	for (i = 0; i < srv->config_context->used; i++) {
+		mod_auth_plugin_config *s;
+		size_t n;
+		data_array *da;
+		array *ca;
+		
+		s = malloc(sizeof(mod_auth_plugin_config));
+		s->auth_plain_groupfile = buffer_init();
+		s->auth_plain_userfile = buffer_init();
+		s->auth_htdigest_userfile = buffer_init();
+		s->auth_htpasswd_userfile = buffer_init();
+		s->auth_backend_conf = buffer_init();
+		
+		s->auth_ldap_hostname = buffer_init();
+		s->auth_ldap_basedn = buffer_init();
+		s->auth_ldap_filter = buffer_init();
+		s->auth_debug = 0;
+		
+		s->auth_require = array_init();
+		
+#ifdef USE_LDAP
+		s->ldap_filter_pre = buffer_init();
+		s->ldap_filter_post = buffer_init();
+		s->ldap = NULL;
+#endif
+	
+		cv[0].destination = s->auth_backend_conf;
+		cv[1].destination = s->auth_plain_groupfile;
+		cv[2].destination = s->auth_plain_userfile;
+		cv[3].destination = s->auth_require;
+		cv[4].destination = s->auth_ldap_hostname;
+		cv[5].destination = s->auth_ldap_basedn;
+		cv[6].destination = s->auth_ldap_filter;
+		cv[7].destination = s->auth_htdigest_userfile;
+		cv[8].destination = s->auth_htpasswd_userfile;
+		cv[9].destination = &(s->auth_debug);
+		
+		p->config_storage[i] = s;
+		ca = ((data_config *)srv->config_context->data[i])->value;
+		
+		if (0 != config_insert_values_global(srv, ca, cv)) {
+			return HANDLER_ERROR;
+		}
+		
+		if (s->auth_backend_conf->used) {
+			if (0 == strcmp(s->auth_backend_conf->ptr, "htpasswd")) {
+				s->auth_backend = AUTH_BACKEND_HTPASSWD;
+			} else if (0 == strcmp(s->auth_backend_conf->ptr, "htdigest")) {
+				s->auth_backend = AUTH_BACKEND_HTDIGEST;
+			} else if (0 == strcmp(s->auth_backend_conf->ptr, "plain")) {
+				s->auth_backend = AUTH_BACKEND_PLAIN;
+			} else if (0 == strcmp(s->auth_backend_conf->ptr, "ldap")) {
+				s->auth_backend = AUTH_BACKEND_LDAP;
+			} else {
+				log_error_write(srv, __FILE__, __LINE__, "sb", "auth.backend not supported:", s->auth_backend_conf);
+				
+				return HANDLER_ERROR;
+			}
+		}
+
+		/* no auth.require for this section */
+		if (NULL == (da = (data_array *)array_get_element(ca, "auth.require"))) continue;
+		
+		if (da->type != TYPE_ARRAY) continue;
+		
+		for (n = 0; n < da->value->used; n++) {
+			size_t m;
+			data_array *da_file = (data_array *)da->value->data[n];
+			const char *method, *realm, *require;
+			
+			if (da->value->data[n]->type != TYPE_ARRAY) {
+				log_error_write(srv, __FILE__, __LINE__, "sssbs", 
+						"unexpected type for key: ", "auth.require", "[", da->value->data[n]->key, "](string)");
+				
+				return HANDLER_ERROR;
+			}
+					
+			method = realm = require = NULL;
+					
+			for (m = 0; m < da_file->value->used; m++) {
+				if (da_file->value->data[m]->type == TYPE_STRING) {
+					if (0 == strcmp(da_file->value->data[m]->key->ptr, "method")) {
+						method = ((data_string *)(da_file->value->data[m]))->value->ptr;
+					} else if (0 == strcmp(da_file->value->data[m]->key->ptr, "realm")) {
+						realm = ((data_string *)(da_file->value->data[m]))->value->ptr;
+					} else if (0 == strcmp(da_file->value->data[m]->key->ptr, "require")) {
+						require = ((data_string *)(da_file->value->data[m]))->value->ptr;
+					} else {
+						log_error_write(srv, __FILE__, __LINE__, "sssbs", "unexpected type for key: ", "auth.require", "[", da_file->value->data[m]->key, "](string)");
+						return HANDLER_ERROR;
+					}
+				} else {
+					log_error_write(srv, __FILE__, __LINE__, "sssbs", "unexpected type for key: ", "auth.require", "[", da_file->value->data[m]->key, "](string)");
+					
+					return HANDLER_ERROR;
+				}
+			}
+					
+			if (method == NULL) {
+				log_error_write(srv, __FILE__, __LINE__, "sssss", "missing entry for key: ", "auth.require", "[", "method", "](string)");
+				return HANDLER_ERROR;
+			}
+			
+			if (realm == NULL) {
+				log_error_write(srv, __FILE__, __LINE__, "sssss", "missing entry for key: ", "auth.require", "[", "realm", "](string)");
+				return HANDLER_ERROR;
+			}
+			
+			if (require == NULL) {
+				log_error_write(srv, __FILE__, __LINE__, "sssss", "missing entry for key: ", "auth.require", "[", "require", "](string)");
+				return HANDLER_ERROR;
+			}
+			
+			if (method && realm && require) {
+				data_string *ds;
+				data_array *a;
+				
+				a = data_array_init();
+				buffer_copy_string_buffer(a->key, da_file->key);
+				
+				ds = data_string_init();
+				
+				buffer_copy_string(ds->key, "method");
+				buffer_copy_string(ds->value, method);
+				
+				array_insert_unique(a->value, (data_unset *)ds);
+				
+				ds = data_string_init();
+				
+				buffer_copy_string(ds->key, "realm");
+				buffer_copy_string(ds->value, realm);
+				
+				array_insert_unique(a->value, (data_unset *)ds);
+				
+				ds = data_string_init();
+				
+				buffer_copy_string(ds->key, "require");
+				buffer_copy_string(ds->value, require);
+				
+				array_insert_unique(a->value, (data_unset *)ds);
+				
+				array_insert_unique(s->auth_require, (data_unset *)a);
+			}
+		}
+	
+		switch(s->auth_backend) {
+		case AUTH_BACKEND_PLAIN:
+			if (s->auth_plain_userfile->used) {
+				int fd;
+				/* try to read */
+				if (-1 == (fd = open(s->auth_plain_userfile->ptr, O_RDONLY))) {
+					log_error_write(srv, __FILE__, __LINE__, "sbss", 
+							"opening auth.backend.plain.userfile:", s->auth_plain_userfile,
+							"failed:", strerror(errno));
+					return HANDLER_ERROR;
+				}
+				close(fd);
+			}
+			break;
+		case AUTH_BACKEND_HTPASSWD:
+			if (s->auth_htpasswd_userfile->used) {
+				int fd;
+				/* try to read */
+				if (-1 == (fd = open(s->auth_htpasswd_userfile->ptr, O_RDONLY))) {
+					log_error_write(srv, __FILE__, __LINE__, "sbss", 
+							"opening auth.backend.htpasswd.userfile:", s->auth_htpasswd_userfile,
+							"failed:", strerror(errno));
+					return HANDLER_ERROR;
+				}
+				close(fd);
+			}
+			break;
+		case AUTH_BACKEND_HTDIGEST:
+			if (s->auth_htdigest_userfile->used) {
+				int fd;
+				/* try to read */
+				if (-1 == (fd = open(s->auth_htdigest_userfile->ptr, O_RDONLY))) {
+					log_error_write(srv, __FILE__, __LINE__, "sbss", 
+							"opening auth.backend.htdigest.userfile:", s->auth_htdigest_userfile,
+							"failed:", strerror(errno));
+					return HANDLER_ERROR;
+				}
+				close(fd);
+			}
+			break;
+		case AUTH_BACKEND_LDAP: 
+#ifdef USE_LDAP
+#if 0			
+			if (s->auth_ldap_basedn->used == 0) {
+				log_error_write(srv, __FILE__, __LINE__, "s", "ldap: auth.backend.ldap.base-dn has to be set");
+				
+				return HANDLER_ERROR;
+			}
+#endif
+			
+			if (s->auth_ldap_filter->used) {
+				char *dollar;
+				
+				/* parse filter */
+			
+				if (NULL == (dollar = strchr(s->auth_ldap_filter->ptr, '$'))) {
+					log_error_write(srv, __FILE__, __LINE__, "s", "ldap: auth.backend.ldap.filter is missing a replace-operator '$'");
+					
+					return HANDLER_ERROR;
+				}
+				
+				buffer_copy_string_len(s->ldap_filter_pre, s->auth_ldap_filter->ptr, dollar - s->auth_ldap_filter->ptr);
+				buffer_copy_string(s->ldap_filter_post, dollar+1);
+			}
+			
+			if (s->auth_ldap_hostname->used) {
+				int ret;
+				if (NULL == (s->ldap = ldap_init(s->auth_ldap_hostname->ptr, LDAP_PORT))) {
+					log_error_write(srv, __FILE__, __LINE__, "ss", "ldap ...", strerror(errno));
+					
+					return HANDLER_ERROR;
+				}
+				
+				ret = LDAP_VERSION3;
+				if (LDAP_OPT_SUCCESS != (ret = ldap_set_option(s->ldap, LDAP_OPT_PROTOCOL_VERSION, &ret))) {
+					log_error_write(srv, __FILE__, __LINE__, "ss", "ldap:", ldap_err2string(ret));
+					
+					return HANDLER_ERROR;
+				}
+				
+				
+				/* 1. */
+				if (LDAP_SUCCESS != (ret = ldap_simple_bind_s(s->ldap, NULL, NULL))) {
+					log_error_write(srv, __FILE__, __LINE__, "ss", "ldap:", ldap_err2string(ret));
+					
+					return HANDLER_ERROR;
+				}
+			}
+#else
+			log_error_write(srv, __FILE__, __LINE__, "s", "no ldap support available");
+			return HANDLER_ERROR;
+#endif
+			break;
+		default:
+			break;
+		}
+	}
+	
+	return HANDLER_GO_ON;
+}
+
+int mod_auth_plugin_init(plugin *p) {
+	p->version     = LIGHTTPD_VERSION_ID;
+	p->name        = buffer_init_string("auth");
+	p->init        = mod_auth_init;
+	p->set_defaults = mod_auth_set_defaults;
+	p->handle_uri_clean = mod_auth_uri_handler;
+	p->cleanup     = mod_auth_free;
+	
+	p->data        = NULL;
+	
+	return 0;
+}

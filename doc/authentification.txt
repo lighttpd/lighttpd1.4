@@ -1,0 +1,191 @@
+======================
+Using Authentification
+======================
+
+----------------
+Module: mod_auth
+----------------
+
+:Author: Jan Kneschke
+:Date: $Date: 2004/11/03 22:26:05 $
+:Revision: $Revision: 1.3 $
+
+:abstract:
+  The auth module provides ...
+  
+.. meta::
+  :keywords: lighttpd, authentification
+  
+.. contents:: Table of Contents
+
+Description
+===========
+
+Supported Methods
+-----------------
+
+lighttpd supportes both authentification method described by 
+RFC 2617: 
+
+basic
+`````
+
+The Basic method transfers the username and the password in 
+cleartext over the network (base64 encoded) and might result 
+in security problems if not used in conjunction with a crypted 
+channel between client and server.
+
+digest
+``````
+
+The Digest method only transfers a hashed value over the 
+network which is performes a lot of work to harden the 
+authentification process in insecure networks.
+
+Backends
+--------
+
+Depending on the method lighttpd provides various way to store 
+the credentials used for the authentification.
+
+for basic auth:
+
+- plain_
+- htpasswd_ (crypt only)
+- htdigest_
+- ldap_
+  
+for digest auth:
+
+- plain_
+- htdigest_
+  
+
+plain
+`````
+
+A file which contains username and the cleartext password 
+seperated by a colon. Each entry is terminated by a single 
+newline.::
+
+  e.g.:
+  agent007:secret
+  
+
+htpasswd
+````````
+
+A file which contains username and the crypt()'ed password 
+seperated by a colon. Each entry is terminated by a single 
+newline. ::
+
+  e.g.:
+  agent007:XWY5JwrAVBXsQ
+
+You can use htpasswd from the apache distribution to manage 
+those files. ::
+  
+  $ htpasswd lighttpd.user.digest agent007
+  
+  
+htdigest
+````````
+
+A file which contains username, realm and the md5()'ed 
+password seperated by a colon. Each entry is terminated 
+by a single newline. ::
+  
+  e.g.:
+  agent007:download area:8364d0044ef57b3defcfa141e8f77b65
+  
+You can use htdigest from the apache distribution to manage 
+those files. ::
+
+  $ htdigest src/lighttpd.user.digest 'download area' agent007
+  
+Using md5sum can also generate the password-hash: ::
+  
+  $ echo -n "agent007:download area:secret" | md5sum -
+  8364d0044ef57b3defcfa141e8f77b65  -
+  
+  
+ldap
+````
+
+the ldap backend is basicly performing the following steps 
+to authenticate a user
+  
+1. connect anonymously  (at plugin init)
+2. get DN for filter = username
+3. auth against ldap server
+4. disconnect
+   
+if step 4 is performs without any error the user is 
+authenticated
+
+Configuration
+=============
+
+::
+
+  ## debugging
+  # 0 for off, 1 for 'auth-ok' messages, 2 for verbose debugging
+  auth.debug                 = 0
+  
+  ## type of backend 
+  # plain, htpasswd, ldap or htdigest
+  auth.backend               = "htpasswd"
+
+  # filename of the password storage for 
+  # plain
+  auth.backend.plain.userfile = "lighttpd-plain.user"
+  
+  ## for htpasswd
+  auth.backend.htpasswd.userfile = "lighttpd-htpasswd.user"
+  
+  ## for htdigest
+  auth.backend.htdigest.userfile = "lighttpd-htdigest.user"
+
+  ## for ldap
+  # the $ in auth.backend.ldap.filter is replaced by the 
+  # 'username' from the login dialog
+  auth.backend.ldap.hostname = "localhost"
+  auth.backend.ldap.base-dn  = "dc=my-domain,dc=com"
+  auth.backend.ldap.filter   = "(uid=$)"
+
+  ## restrictions
+  # set restrictions:
+  #
+  # ( <left-part-of-the-url> =>
+  #   ( "method" => "digest"/"basic",
+  #     "realm" => <realm>,
+  #     "require" => "user=<username>" )
+  # )
+  #
+  # <realm> is a string that is should be display in the dialog 
+  #         presented to the user and is also used for the 
+  #         digest-algorithm and has to match the realm in the 
+  #         htdigest file (if used)
+  #
+
+  auth.require = ( "/download/" => 
+                   ( 
+		     "method"  => "digest",
+		     "realm"   => "download archiv",
+		     "require" => "user=agent007|user=agent008"
+		   ),
+		   "/server-info" => 
+                   ( 
+		     "method"  => "digest",
+		     "realm"   => "download archiv",
+		     "require" => "user=jan"
+		   )
+                 )
+
+Limitiations
+============
+
+- The implementation of digest method is currently not 
+  completely conforming to the standard as it is still allowing 
+  a replay attack.
+

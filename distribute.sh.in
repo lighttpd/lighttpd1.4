@@ -1,0 +1,92 @@
+#!/bin/sh
+PACKAGE=@PACKAGE_TARNAME@
+VERSION=@VERSION@
+NAME=@PACKAGE_TARNAME@-@VERSION@
+
+DISTDIR="/home/weigon/wwwroot/servers/www.lighttpd.net/pages/download/" 
+FILES="content-3 content-4 content-5 \
+	/usr/src/packages/RPMS/i586/${NAME}-1.i586.rpm \
+	/usr/src/packages/SRPMS/${NAME}-1.src.rpm \
+	${NAME}.tar.gz \
+	NEWS.html \
+	ChangeLog \
+	release-news.${VERSION}.txt \
+	${NAME}.tar.gz.sig"
+DLURL="http://www.lighttpd.net/download"
+pack=0
+echo $1
+case "$1" in
+	--pack) pack=1;;
+esac
+
+echo ${nopack}
+
+if test x${pack} = x1; then
+	make distcheck && rpmbuild -ta --nodeps ${NAME}.tar.gz 
+	gpg --detach-sign ${NAME}.tar.gz
+	rpm --addsign /usr/src/packages/RPMS/i586/${NAME}-1.i586.rpm /usr/src/packages/SRPMS/${NAME}-1.src.rpm
+fi
+
+MD5RPM=`md5sum /usr/src/packages/RPMS/i586/${NAME}-1.i586.rpm| cut -b 1-32`
+MD5SRPM=`md5sum /usr/src/packages/SRPMS/${NAME}-1.src.rpm| cut -b 1-32`
+MD5TGZ=`md5sum ${NAME}.tar.gz| cut -b 1-32`
+DATE=`date +'%Y-%m-%d %H:%M'`
+NEWS=`cat NEWS | sed "/^- ${VERSION}/,/^-/p;d" | sed "/^- /d;/^$/d"`
+DLNAME="${DLURL}/${NAME}"
+
+cat > release-news.${VERSION} <<EOF
+!${PACKAGE} ${VERSION} - ${DATE}
+- *Changes*
+++QUOTED++
+<pre>${NEWS}
+</pre><br />
+--QUOTED--
+- *Download*
+- (${NAME}-1.i586.rpm|${NAME}-1.i586.rpm) [built on SuSE 9.0]
+  MD5: ${MD5RPM}
+- (${NAME}-1.src.rpm|${NAME}-1.src.rpm)
+  MD5: ${MD5SRPM}
+- (${NAME}.tar.gz|${NAME}.tar.gz)
+  MD5: ${MD5TGZ} (${NAME}.tar.gz.sig|signature)
+
+EOF
+
+cat > release-news.${VERSION}.txt <<EOF
+${PACKAGE} ${VERSION} - ${DATE}
+
+Changes
+-------
+${NEWS}
+
+Download
+- ${NAME}-1.i586.rpm [built on SuSE 9.0]
+  ${DLNAME}-1.i586.rpm
+  MD5: ${MD5RPM}
+- ${NAME}-1.src.rpm
+  ${DLNAME}-1.src.rpm
+  MD5: ${MD5SRPM}
+- ${NAME}.tar.gz
+  ${DLNAME}.tar.gz
+  MD5: ${MD5TGZ} 
+  Signature: ${DLNAME}.tar.gz.sig
+
+EOF
+
+rst2html.py NEWS > NEWS.html
+
+cat content-4.foot | sed "/^\!${PACKAGE} ${VERSION}/,/^$/d" > content-4.foot.new
+cat release-news.${VERSION} content-4.foot.new > content-4.foot
+rm content-4.foot.new
+cat content-4.head content-4.foot > content-4
+
+for i in ${DISTDIR}; do
+	cp -u ${FILES} $i
+done
+
+curdir=`pwd`
+cd ~/wwwroot/servers/www.lighttpd.net/
+make put
+cd ${curdir}
+
+kmail -s "ANNOUNCE: ${NAME}" --msg `pwd`/release-news.${VERSION}.txt lighttpd-announce@lists.kneschke.de
+

@@ -1,0 +1,72 @@
+===================
+the Proxy Interface
+===================
+
+-----------------
+Module: mod_proxy
+-----------------
+
+:Author: Jan Kneschke
+:Date: $Date: 2004/08/01 07:01:29 $
+:Revision: $Revision: 1.1 $
+
+:abstract:
+  The proxy module a simplest way to connect lighttpd to 
+  java servers which have a HTTP-interface.
+  
+.. meta::
+  :keywords: lighttpd, Proxy
+  
+.. contents:: Table of Contents
+
+Description
+===========
+
+...
+
+Options
+=======
+
+lighttpd provides the Proxy support via the proxy-module 
+(mod_proxy) which provides 2 options in the config-file:
+
+:proxy.debug:
+  a value between 0 and 65535 to set the debug-level in the 
+  Proxy module. Currently only 0 and 1 are used. Use 1 to 
+  enable some debug output, 0 to disable it.
+
+:proxy.server:
+  tell the module where to send Proxy requests to. Every 
+  file-extension can have its own handler. Load-Balancing is 
+  done by specifying multiple handles for the same extension.
+  
+  structure of proxy.server section: ::
+  
+    ( <extension> => 
+      ( <handle> => 
+        ( "host" => <string> ,
+          "port" => <integer>
+	)
+      ), 
+      ( <handle> => ... 
+      )
+    )
+  
+  :<extension>: is the file-extension or prefix 
+                (if started with "/")
+  :<handle>:    is just a unique handle name
+  :"host":      is ip of the proxy server
+  :"port":      is tcp-port on the "host" used by the proxy
+                server
+
+  e.g.: ::
+  
+    proxy.server = ( ".php" =>
+  		       ( "grisu" => 
+		         ( 
+		           "host" => "192.168.0.2",
+		           "port" => 1026
+		         )
+		       )
+		     )
+

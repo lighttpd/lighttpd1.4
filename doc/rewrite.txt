@@ -1,0 +1,42 @@
+============
+URL Rewrites
+============
+
+-------------------
+Module: mod_rewrite
+-------------------
+
+:Author: Jan Kneschke
+:Date: $Date: 2004/11/03 22:26:05 $
+:Revision: $Revision: 1.2 $
+
+:abstract:
+  url rewrite
+  
+.. meta::
+  :keywords: lighttpd, rewrite
+  
+.. contents:: Table of Contents
+
+Description
+===========
+
+internal redirects, url rewrite
+
+Options
+=======
+
+url.rewrite
+  rewrites a set of URLs interally in the webserver BEFORE they are handled.
+  
+  e.g. ::
+  
+    url.rewrite = ( "^/show/([0-9]+)/([0-9]+)$" => "/show.php?isdn=$1&page$2" )
+    
+url.rewrite-final
+  rewrites a set of URLs interally in the webserver BEFORE they are handled
+  and rewrite the urls in the second round
+  
+  e.g. ::
+    
+    url.rewrite-final = ( "^/get/([0-9]+)/([0-9]+)$"  => "/get.php?isdn=$1&page$2" )

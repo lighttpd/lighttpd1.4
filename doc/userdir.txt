@@ -1,0 +1,54 @@
+=======
+userdir
+=======
+
+-------------------
+Module: mod_userdir
+-------------------
+
+:Author: Jan Kneschke
+:Date: $Date: 2004/08/29 09:43:49 $
+:Revision: $Revision: 1.1 $
+
+:abstract:
+  The userdir module ... 
+  
+.. meta::
+  :keywords: lighttpd, userdir
+  
+.. contents:: Table of Contents
+
+Description
+===========
+
+The userdir module provides a simple way to link user-based directories into the global namespace of the webserver.
+
+Requests in the form ``/~user/page.html`` are rewritten to take the file ``page.html`` from the home-directory of the user.
+If userdir.path is set, the path will be appended at the home-directory.
+
+To control which users should be able to use this feature you can set a include- or a exclude list for username.
+
+Options
+=======
+
+userdir.path
+  usually it should set the "public_html" to take ~/public_html/ as the document-root
+    
+  Default: empty (document-root is the home-directory)
+  Example: ::
+
+    userdir.path = "public_html"
+
+userdir.exclude-user
+  list of usernames which should not be able to use this feature
+
+  Default: empty (all users may use it)
+  Example: ::
+
+    userdir.exclude-user = ( "root", "postmaster" )
+
+
+userdir.include-user
+  if set, only users from this list may use the feature
+
+  Default: empty (all user may use it)
