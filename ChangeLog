@@ -38,6 +38,81 @@ Feature Requests:
 - same config option twice -> aaa, aaa
 - remove default port from Host:
 
+01.03.2005 23:59 
+- irix 
+
+  fixed minor compile issues with MIPSpro
+
+01.03.2005 11:57
+- request-handling
+
+  handle most duplicate headers as 400, Bug #25
+
+- mod_fastcgi
+ 
+  added more checks
+
+28.02.2005 18:26
+- mod_expire
+
+  don't ignore 'modification' any more, Bug #39
+  only handles static files
+
+- last-modified
+
+  really compare timestamps, Bug #34
+
+28.02.2005 11:54
+- buffer 
+
+  rewrote int2buffer functions
+
+  simplified path_simplify
+
+- pid-file
+
+  ignore EACCESS on unlink
+
+28.02.2005 10:35
+- mod_fastcgi
+
+  accept \n\n, Bug #32
+
+- cygwin
+
+  moved functions used by plugin and main-program to *-glue.c 
+  
+- lemon
+
+  removed warnings about shadowed variables
+
+28.02.2005 01:00
+- ssl
+
+  added ssl.ca-file, Bug #19
+
+  improved error-messages
+
+27.02.2005 23:48
+- test cases
+
+  rewrote to test-framework to use Perl + Test::More
+  ported more test-cases 
+
+22.02.2005 01:20
+- mod_fastcgi
+
+  replaced inet_addr by inet_aton
+
+- request-handling
+
+  fixed segfault if host is empty
+
+20.02.2005 20:05
+- cgi
+
+  fixed cgi.assign for empty handlers again
+
 20.02.2005 16:54 - 1.3.11
 - request handling
 
