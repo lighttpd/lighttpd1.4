@@ -897,7 +897,6 @@ struct lemon *lemp;
 {
   int i,j;
   struct config *cfp;
-  struct state *stp;
   struct symbol *sp;
   struct rule *rp;
 
@@ -906,6 +905,7 @@ struct lemon *lemp;
   ** a configuration which has its dot at the extreme right.
   */
   for(i=0; i<lemp->nstate; i++){   /* Loop over all states */
+    struct state *stp;
     stp = lemp->sorted[i];
     for(cfp=stp->cfp; cfp; cfp=cfp->next){  /* Loop over all configurations */
       if( cfp->rp->nrhs==cfp->dot ){        /* Is dot at extreme right? */
@@ -2292,7 +2292,7 @@ struct lemon *gp;
   struct pstate ps;
   FILE *fp;
   char *filebuf;
-  int filesize;
+  size_t filesize;
   int lineno;
   int c;
   char *cp, *nextcp;
@@ -3179,10 +3179,10 @@ int mhflag;     /* Output in makeheaders format if true */
   struct rule *rp;
   struct acttab *pActtab;
   int i, j, n;
-  char *name;
   int mnTknOfst, mxTknOfst;
   int mnNtOfst, mxNtOfst;
   struct axset *ax;
+  char *name;
 
   in = tplt_open(lemp);
   if( in==0 ) return;
@@ -3197,7 +3197,7 @@ int mhflag;     /* Output in makeheaders format if true */
   /* Generate the include code, if any */
   tplt_print(out,lemp,lemp->include,lemp->includeln,&lineno);
   if( mhflag ){
-    char *name = file_makename(lemp, ".h");
+    name = file_makename(lemp, ".h");
     fprintf(out,"#include \"%s\"\n", name); lineno++;
     free(name);
   }
@@ -3242,7 +3242,6 @@ int mhflag;     /* Output in makeheaders format if true */
   }
   name = lemp->name ? lemp->name : "Parse";
   if( lemp->arg && lemp->arg[0] ){
-    int i;
     i = strlen(lemp->arg);
     while( i>=1 && isspace(lemp->arg[i-1]) ) i--;
     while( i>=1 && (isalnum(lemp->arg[i-1]) || lemp->arg[i-1]=='_') ) i--;
@@ -3655,25 +3654,25 @@ struct lemon *lemp;
 ** Set manipulation routines for the LEMON parser generator.
 */
 
-static int size = 0;
+static int global_size = 0;
 
 /* Set the set size */
 void SetSize(n)
 int n;
 {
-  size = n+1;
+  global_size = n+1;
 }
 
 /* Allocate a new set */
 char *SetNew(){
   char *s;
   int i;
-  s = (char*)malloc( size );
+  s = (char*)malloc( global_size );
   if( s==0 ){
     extern void memory_error();
     memory_error();
   }
-  for(i=0; i<size; i++) s[i] = 0;
+  for(i=0; i<global_size; i++) s[i] = 0;
   return s;
 }
 
@@ -3703,7 +3702,7 @@ char *s2;
 {
   int i, progress;
   progress = 0;
-  for(i=0; i<size; i++){
+  for(i=0; i<global_size; i++){
     if( s2[i]==0 ) continue;
     if( s1[i]==0 ){
       progress = 1;
