@@ -2,7 +2,7 @@
 
 use strict;
 use IO::Socket;
-use Test::More tests => 87;
+use Test::More tests => 89;
 
 
 my $testname;
@@ -16,11 +16,10 @@ my $pidoffile = '/tmp/lighttpd/pidof.pid';
 sub pidof {
 	my $prog = $_[0];
 
-	system("ps ax  | grep $prog | awk '{ print \$1 }' > $pidoffile") or
-	system("ps -ef | grep $prog | awk '{ print \$1 }' > $pidoffile") or
+	open F, "ps ax  | grep $prog | awk '{ print \$1 }'|" or
+	open F, "ps -ef | grep $prog | awk '{ print \$2 }'|" or
 	  return -1;
 
-	open F, $pidfile or return -1;
 	my $pid = <F>;
 	close F;
 
@@ -826,7 +825,7 @@ ok(handle_http == 0, 'NPH + perl, Bug #14');
 print "\nmodules - mod_fastcgi\n";
 
 SKIP: {
-	skip "no PHP running on port 1026", 11 if pidof("php") == -1; 
+	skip "no PHP running on port 1026", 13 if pidof("php") == -1; 
 
 	@request  = ( <<EOF
 GET /phpinfo.php HTTP/1.0
@@ -905,7 +904,7 @@ GET /phphost.php HTTP/1.0
 Host: zzz.example.org
 EOF
  );
-	@response = ( { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200, 'HTTP-Content' => 'zzz.example.org' } );
+	@response = ( { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200, 'HTTP-Content' => 'www.example.org' } );
 	ok(handle_http == 0, 'SERVER_NAME');
 
 	@request  = ( <<EOF
