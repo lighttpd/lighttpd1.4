@@ -87,7 +87,7 @@ static int request_check_hostname(server *srv, connection *con, buffer *host) {
 	
 	/* scan from the right and skip the \0 */
 	for (i = host_len - 1; i + 1 > 0; i--) {
-		char c = host->ptr[i];
+		const char c = host->ptr[i];
 
 		switch (stage) {
 		case TOPLABEL: 
@@ -850,6 +850,11 @@ int http_request_parse(server *srv, connection *con) {
 			con->keep_alive = 0;
 			
 			log_error_write(srv, __FILE__, __LINE__, "s", "HTTP/1.1 but Host missing -> 400");
+			if (srv->srvconf.log_request_header_on_error) {
+				log_error_write(srv, __FILE__, __LINE__, "Sb",
+						"request-header:\n",
+						con->request.request);
+			}
 			return 0;
 		}
 	} else {
@@ -866,9 +871,15 @@ int http_request_parse(server *srv, connection *con) {
 	/* check hostname field if it is set */
 	if (NULL != con->request.http_host &&
 	    0 != request_check_hostname(srv, con, con->request.http_host)) {
-		log_error_write(srv, __FILE__, __LINE__, "sbs",
-				"Invalid Hostname:", con->request.http_host, "-> 400");
+		log_error_write(srv, __FILE__, __LINE__, "s",
+				"Invalid Hostname -> 400");
 		
+		if (srv->srvconf.log_request_header_on_error) {
+			log_error_write(srv, __FILE__, __LINE__, "Sb",
+					"request-header:\n",
+					con->request.request);
+		}
+
 		con->http_status = 400;
 		con->response.keep_alive = 0;
 		con->keep_alive = 0;
