@@ -513,7 +513,6 @@ typedef struct {
 	
 	file_cache  *file_cache;
 	buffer      *file_cache_etag;
-	dot_stack   dot_stack;
 	
 	buffer_array *config_patches;
 	
