@@ -559,6 +559,8 @@ int main (int argc, char **argv) {
 			setgid(grp->gr_gid);
 			setgroups(0, NULL);
 		}
+		if (srv->srvconf.username->used && srv->srvconf.groupname->used)
+			initgroups(srv->srvconf.username->ptr, grp->gr_gid);
 		if (srv->srvconf.username->used) setuid(pwd->pw_uid);
 #endif
 	} else {
