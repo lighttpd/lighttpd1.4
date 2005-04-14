@@ -5,6 +5,7 @@
 
 %include {
 #include <assert.h>
+#include <stdio.h>
 #include "config.h"
 #include "configfile.h"
 #include "buffer.h"
@@ -31,7 +32,14 @@ metaline ::= EOL.
 
 varline ::= key(A) ASSIGN value(B). {
   buffer_copy_string_buffer(B->key, A);
-  array_insert_unique(ctx->ctx_config, B);
+  if (NULL == array_get_element(ctx->ctx_config, B->key->ptr)) {
+    array_insert_unique(ctx->ctx_config, B);
+  } else {
+    fprintf(stderr, "Duplicate config variable in conditional %s: %s\n", 
+            ctx->ctx_name->ptr, B->key->ptr);
+    ctx->ok = 0;
+    B->free(B);
+  }
   buffer_free(A);
 }
 
@@ -62,7 +70,15 @@ array(A) ::= LPARAN aelements(B) RPARAN. {
 }
 
 aelements(A) ::= aelements(C) COMMA aelement(B). {
-  array_insert_unique(C, B);
+  if (buffer_is_empty(B->key) ||
+      NULL == array_get_element(C, B->key->ptr)) {
+    array_insert_unique(C, B);
+  } else {
+    fprintf(stderr, "Duplicate array-key: %s\n", 
+            B->key->ptr);
+    B->free(B);
+    ctx->ok = 0;
+  }
   
   A = C;
 }
