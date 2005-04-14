@@ -127,7 +127,7 @@ static int mod_setenv_patch_connection(server *srv, connection *con, plugin_data
 				PATCH(request_header);
 			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("setenv.add-response-header"))) {
 				PATCH(response_header);
-			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("setenv.environment"))) {
+			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("setenv.add-environment"))) {
 				PATCH(environment);
 			}
 		}

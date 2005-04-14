@@ -362,8 +362,6 @@ static int proxy_establish_connection(server *srv, handler_ctx *hctx) {
 			log_error_write(srv, __FILE__, __LINE__, "sdsd", 
 					"connect failed:", proxy_fd, strerror(errno), errno);
 			
-			proxy_connection_cleanup(srv, hctx);
-			
 			return -1;
 		}
 	}
@@ -631,7 +629,7 @@ static int proxy_demux_response(server *srv, handler_ctx *hctx) {
 }
 
 
-static int proxy_write_request(server *srv, handler_ctx *hctx) {
+static handler_t proxy_write_request(server *srv, handler_ctx *hctx) {
 	data_proxy *host= hctx->host;
 	
 	int r;
@@ -645,7 +643,7 @@ static int proxy_write_request(server *srv, handler_ctx *hctx) {
 		
 		if (-1 == (hctx->fd = socket(r, SOCK_STREAM, 0))) {
 			log_error_write(srv, __FILE__, __LINE__, "ss", "socket failed: ", strerror(errno));
-			return -1;
+			return HANDLER_ERROR;
 		}
 		hctx->fde_ndx = -1;
 		
@@ -656,9 +654,7 @@ static int proxy_write_request(server *srv, handler_ctx *hctx) {
 		if (-1 == fdevent_fcntl_set(srv->ev, hctx->fd)) {
 			log_error_write(srv, __FILE__, __LINE__, "ss", "fcntl failed: ", strerror(errno));
 			
-			proxy_connection_cleanup(srv, hctx);
-			
-			return -1;
+			return HANDLER_ERROR;
 		}
 		
 		/* fall through */
@@ -740,10 +736,10 @@ static int proxy_write_request(server *srv, handler_ctx *hctx) {
 		break;
 	default:
 		log_error_write(srv, __FILE__, __LINE__, "s", "(debug) unknown state");
-		return -1;
+		return HANDLER_ERROR;
 	}
 	
-	return 0;
+	return HANDLER_GO_ON;
 }
 
 #define PATCH(x) \
@@ -813,7 +809,8 @@ SUBREQUEST_FUNC(mod_proxy_handle_subrequest) {
 	if (con->mode != p->id) return HANDLER_GO_ON;
 	
 	/* ok, create the request */
-	if (-1 == proxy_write_request(srv, hctx)) {
+	switch(proxy_write_request(srv, hctx)) {
+	case HANDLER_ERROR:
 		log_error_write(srv, __FILE__, __LINE__,  "sbdd", "proxy-server disabled:", 
 				host->host,
 				host->port,
@@ -823,9 +820,17 @@ SUBREQUEST_FUNC(mod_proxy_handle_subrequest) {
 		host->usage = -1;
 		host->disable_ts = srv->cur_ts;
 		
+		proxy_connection_cleanup(srv, hctx);
+		
 		con->mode = DIRECT;
 		con->http_status = 503;
 		return HANDLER_FINISHED;
+	case HANDLER_WAIT_FOR_EVENT:
+		return HANDLER_WAIT_FOR_EVENT;
+	case HANDLER_WAIT_FOR_FD:
+		return HANDLER_WAIT_FOR_FD;
+	default:
+		break;
 	}
 	
 	if (con->file_started == 1) {
