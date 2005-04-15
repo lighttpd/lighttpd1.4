@@ -1028,7 +1028,7 @@ static handler_t mod_proxy_check_extension(server *srv, connection *con, void *p
 					host->host, host->port);
 		}
 		
-		if (used == -1 || host->usage < used) {
+		if (host->usage != -1 && (used == -1 || host->usage < used)) {
 			used = host->usage;
 			
 			ndx = k;
