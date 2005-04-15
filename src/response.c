@@ -657,6 +657,7 @@ static int http_list_directory(server *srv, connection *con, buffer *dir) {
 	char datebuf[sizeof("2005-Jan-01 22:23:24")];
 	size_t k;
 	const char *content_type;
+	long name_max;
 #ifdef HAVE_XATTR
 	char attrval[128];
 	int attrlen;
@@ -667,8 +668,14 @@ static int http_list_directory(server *srv, connection *con, buffer *dir) {
 
 	i = dir->used - 1;
 	if (i <= 0) return -1;
+
+#ifdef HAVE_PATHCONF
+	name_max = pathconf(dir->ptr, _PC_NAME_MAX);
+#else
+	name_max = NAME_MAX;
+#endif
 	
-	path = malloc(i + NAME_MAX + 1);
+	path = malloc(i + name_max + 1);
 	assert(path);
 	strcpy(path, dir->ptr);
 	path_file = path + i;
@@ -704,7 +711,7 @@ static int http_list_directory(server *srv, connection *con, buffer *dir) {
 		 *       so this should actually not be a buffer-overflow-risk
 		 */
 		i = strlen(dent->d_name);
-		if (i > NAME_MAX)
+		if (i > name_max)
 			continue;
 		memcpy(path_file, dent->d_name, i + 1);
 		if (stat(path, &st) != 0)
