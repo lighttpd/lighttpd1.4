@@ -295,7 +295,7 @@ esac
 AC_CHECK_FUNCS([dup2 getcwd inet_ntoa inet_ntop memset mmap munmap strchr \
 		  strdup strerror strstr strtol sendfile  getopt socket \
 		  gethostbyname poll sigtimedwait epoll_ctl getrlimit chroot \
-		  getuid select signal\
+		  getuid select signal pathconf\
 		  writev sigaction sendfile64 send_file kqueue port_create localtime_r])
 
 if test "x$ac_cv_func_sendfile" = xyes; then
