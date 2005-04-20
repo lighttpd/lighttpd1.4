@@ -1043,11 +1043,16 @@ handler_t http_response_prepare(server *srv, connection *con) {
 				buffer_append_string_buffer(con->physical.path, con->physical.rel_path);
 			}
 		}
+		/* the docroot plugins might set the servername, if they don't we take http-host */
+		if (buffer_is_empty(con->server_name)) {
+			buffer_copy_string_buffer(con->server_name, con->uri.authority);
+		}
 		if (con->conf.log_request_handling) {
 			log_error_write(srv, __FILE__, __LINE__,  "s",  "-- logical -> physical");
 			log_error_write(srv, __FILE__, __LINE__,  "sb", "Doc-Root     :", con->physical.doc_root);
 			log_error_write(srv, __FILE__, __LINE__,  "sb", "Rel-Path     :", con->physical.rel_path);
 			log_error_write(srv, __FILE__, __LINE__,  "sb", "Path         :", con->physical.path);
+			log_error_write(srv, __FILE__, __LINE__,  "sb", "Server-Name  :", con->server_name);
 		}
 	}
 	
