@@ -534,6 +534,13 @@ static handler_t cgi_connection_close(server *srv, handler_ctx *hctx) {
 			log_error_write(srv, __FILE__, __LINE__, "ss", "waitpid failed: ", strerror(errno));
 			return HANDLER_ERROR;
 		default:
+			/* Send an error if we haven't sent any data yet */
+			if (0 == con->file_started) {
+				connection_set_state(srv, con, CON_STATE_HANDLE_REQUEST);
+				con->http_status = 500;
+				con->mode = DIRECT;
+			}
+				
 			if (WIFEXITED(status)) {
 #if 0
 				log_error_write(srv, __FILE__, __LINE__, "sd", "(debug) cgi exited fine, pid:", pid);
@@ -736,6 +743,11 @@ static int cgi_create_env(server *srv, connection *con, plugin_data *p, buffer *
 		close(to_cgi_fds[0]);
 		/* not needed */
 		close(to_cgi_fds[1]);
+		
+		if (srv->log_error_fd >= 0) {
+			close(STDERR_FILENO);
+			dup2(srv->log_error_fd, STDERR_FILENO);
+		}
 		
 		/* create environment */
 		env.ptr = NULL;
