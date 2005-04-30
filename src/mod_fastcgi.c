@@ -2286,7 +2286,7 @@ static int fcgi_restart_dead_procs(server *srv, plugin_data *p, fcgi_extension_h
 			 */
 			
 			if ((proc->state == PROC_STATE_DISABLED) &&
-			    (srv->cur_ts - proc->disable_ts > FCGI_RETRY_TIMEOUT)) {
+			    (srv->cur_ts - proc->disable_ts > host->disable_time)) {
 				proc->state = PROC_STATE_RUNNING;
 				host->active_procs++;
 				
