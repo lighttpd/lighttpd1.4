@@ -241,21 +241,6 @@ int network_server_init(server *srv, buffer *host_token, specific_config *s) {
 		return -1;
 	}
 	
-#ifdef SO_ACCEPTFILTER
-	/*
-	 * FreeBSD accf_http filter
-	 *
-	 */
-	memset(&afa, 0, sizeof(afa));
-	strcpy(afa.af_name, "httpready");
-	if (setsockopt(srv_socket->fd, SOL_SOCKET, SO_ACCEPTFILTER, &afa, sizeof(afa)) < 0) {
-		if (errno != ENOENT) {
-			log_error_write(srv, __FILE__, __LINE__, "ss", "can't set accept-filter 'httpready': ", strerror(errno));
-		}
-	}
-#endif
-	
-
 	if (s->is_ssl) {
 #ifdef USE_OPENSSL
 		if (srv->ssl_is_init == 0) {
@@ -320,6 +305,20 @@ int network_server_init(server *srv, buffer *host_token, specific_config *s) {
 				"ssl requested but openssl support is not compiled in");
 		
 		return -1;
+#endif
+	} else {
+#ifdef SO_ACCEPTFILTER
+		/*
+		 * FreeBSD accf_http filter
+		 *
+		 */
+		memset(&afa, 0, sizeof(afa));
+		strcpy(afa.af_name, "httpready");
+		if (setsockopt(srv_socket->fd, SOL_SOCKET, SO_ACCEPTFILTER, &afa, sizeof(afa)) < 0) {
+			if (errno != ENOENT) {
+				log_error_write(srv, __FILE__, __LINE__, "ss", "can't set accept-filter 'httpready': ", strerror(errno));
+			}
+		}
 #endif
 	}
 	
