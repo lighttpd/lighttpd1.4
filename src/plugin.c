@@ -150,8 +150,8 @@ int plugins_load(server *srv) {
 		}
 #else	
 		if (NULL == (p->lib = dlopen(srv->tmp_buf->ptr, RTLD_LAZY))) {
-			log_error_write(srv, __FILE__, __LINE__, "ss", "dlopen() failed", 
-					dlerror());
+			log_error_write(srv, __FILE__, __LINE__, "sbs", "dlopen() failed for:", 
+					srv->tmp_buf, dlerror());
 			
 			plugin_free(p);
 			
