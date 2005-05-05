@@ -750,8 +750,11 @@ static int fcgi_spawn_connection(server *srv,
 		
 		/* create socket */
 		if (-1 == bind(fcgi_fd, fcgi_addr, servlen)) {
-			log_error_write(srv, __FILE__, __LINE__, "ss", 
-				"bind failed:", strerror(errno));
+			log_error_write(srv, __FILE__, __LINE__, "sbds", 
+				"bind failed for:", 
+				proc->socket, 
+				proc->port, 
+				strerror(errno));
 			return -1;
 		}
 		
@@ -2360,8 +2363,17 @@ static handler_t fcgi_write_request(server *srv, handler_ctx *hctx) {
 
 	/* sanity check */	
 	if (!host ||
-	    ((!host->host->used || !host->port) && !host->unixsocket->used)) return HANDLER_ERROR;
+	    ((!host->host->used || !host->port) && !host->unixsocket->used)) {
+		log_error_write(srv, __FILE__, __LINE__, "sxddd", 
+				"write-req: error",
+				host,
+				host->host->used,
+				host->port,
+				host->unixsocket->used);
+		return HANDLER_ERROR;
+	}
 	
+
 	switch(hctx->state) {
 	case FCGI_STATE_INIT:
 		r = host->unixsocket->used ? AF_UNIX : AF_INET;
@@ -2546,15 +2558,15 @@ static handler_t fcgi_write_request(server *srv, handler_ctx *hctx) {
 		hctx->write_offset += r;
 		
 		if (hctx->write_offset == hctx->write_buffer->used) {
+			/* we don't need the out event anymore */
+			fdevent_event_del(srv->ev, &(hctx->fde_ndx), hctx->fd);
+			fdevent_event_add(srv->ev, &(hctx->fde_ndx), hctx->fd, FDEVENT_IN);
 			fcgi_set_state(srv, hctx, FCGI_STATE_READ);
 		}
 		
 		break;
 	case FCGI_STATE_READ:
 		/* waiting for a response */
-		
-		fdevent_event_add(srv->ev, &(hctx->fde_ndx), hctx->fd, FDEVENT_IN);
-		
 		break;
 	default:
 		log_error_write(srv, __FILE__, __LINE__, "s", "(debug) unknown state");
@@ -2656,6 +2668,7 @@ SUBREQUEST_FUNC(mod_fastcgi_handle_subrequest) {
 	case HANDLER_WAIT_FOR_FD:
 		return HANDLER_WAIT_FOR_FD;
 	default:
+		log_error_write(srv, __FILE__, __LINE__, "s", "subrequest write-req default");
 		return HANDLER_ERROR;
 	}
 }
@@ -2693,8 +2706,6 @@ static handler_t fcgi_handle_fdevent(void *s, void *ctx, int revents) {
 	fcgi_proc *proc   = hctx->proc;
 	fcgi_extension_host *host= hctx->host;
 
-	joblist_append(srv, con);
-	
 	if ((revents & FDEVENT_IN) &&
 	    hctx->state == FCGI_STATE_READ) {
 		switch (fcgi_demux_response(srv, hctx)) {
@@ -2724,6 +2735,7 @@ static handler_t fcgi_handle_fdevent(void *s, void *ctx, int revents) {
 				fcgi_connection_cleanup(srv, hctx);
 			}
 			
+			joblist_append(srv, con);
 			return HANDLER_FINISHED;
 		case -1:
 			if (proc->pid && proc->state != PROC_STATE_DIED) {
@@ -2805,6 +2817,7 @@ static handler_t fcgi_handle_fdevent(void *s, void *ctx, int revents) {
 			/* */
 			
 			
+			joblist_append(srv, con);
 			return HANDLER_FINISHED;
 		}
 	}
@@ -2858,6 +2871,7 @@ static handler_t fcgi_handle_fdevent(void *s, void *ctx, int revents) {
 			
 			connection_set_state(srv, con, CON_STATE_ERROR);
 			fcgi_connection_close(srv, hctx);
+			joblist_append(srv, con);
 		}
 	} else if (revents & FDEVENT_ERR) {
 		log_error_write(srv, __FILE__, __LINE__, "s", 
@@ -2867,6 +2881,7 @@ static handler_t fcgi_handle_fdevent(void *s, void *ctx, int revents) {
 
 		connection_set_state(srv, con, CON_STATE_ERROR);
 		fcgi_connection_close(srv, hctx);
+		joblist_append(srv, con);
 	}
 	
 	return HANDLER_FINISHED;
