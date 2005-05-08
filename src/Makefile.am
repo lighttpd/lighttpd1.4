@@ -37,7 +37,7 @@ common_src=buffer.c log.c \
       fdevent_poll.c fdevent_linux_sysepoll.c \
       fdevent_solaris_devpoll.c fdevent_freebsd_kqueue.c \
       data_config.c bitset.c  configparser.c \
-      inet_ntop_cache.c \
+      inet_ntop_cache.c crc32.c \
       connections-glue.c \
       configfile-glue.c \
       http-header-glue.c
@@ -149,7 +149,7 @@ mod_access_la_LDFLAGS = -module -export-dynamic -avoid-version -no-undefined
 mod_access_la_LIBADD = $(common_libadd)
 
 lib_LTLIBRARIES += mod_compress.la
-mod_compress_la_SOURCES = mod_compress.c crc32.c
+mod_compress_la_SOURCES = mod_compress.c 
 mod_compress_la_LDFLAGS = -module -export-dynamic -avoid-version -no-undefined
 mod_compress_la_LIBADD = $(Z_LIB) $(BZ_LIB) $(common_libadd)
 
