@@ -45,6 +45,7 @@ data_fastcgi *data_fastcgi_init(void) {
 	ds->key = buffer_init();
 	ds->host = buffer_init();
 	ds->port = 0;
+	ds->is_disabled = 0;
 	
 	ds->free = data_fastcgi_free;
 	ds->reset = data_fastcgi_reset;
