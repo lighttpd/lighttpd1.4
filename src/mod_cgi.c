@@ -595,6 +595,7 @@ static handler_t cgi_handle_fdevent(void *s, void *ctx, int revents) {
 #if 0
 			log_error_write(srv, __FILE__, __LINE__, "ddss", con->fd, hctx->fd, connection_get_state(con->state), "finished");
 #endif
+			cgi_connection_close(srv, hctx);
 			
 			break;
 		case FDEVENT_HANDLED_ERROR:
