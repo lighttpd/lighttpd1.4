@@ -285,7 +285,7 @@ static int http_response_parse_range(server *srv, connection *con) {
 		if (s == minus) {
 			/* -<stop> */
 			
-			le = strtol(s, &err, 10);
+			le = strtoll(s, &err, 10);
 			
 			if (le == 0) {
 				/* RFC 2616 - 14.35.1 */
@@ -311,7 +311,7 @@ static int http_response_parse_range(server *srv, connection *con) {
 		} else if (*(minus+1) == '\0' || *(minus+1) == ',') {
 			/* <start>- */
 			
-			la = strtol(s, &err, 10);
+			la = strtoll(s, &err, 10);
 			
 			if (err == minus) {
 				/* ok */
@@ -338,10 +338,10 @@ static int http_response_parse_range(server *srv, connection *con) {
 		} else {
 			/* <start>-<stop> */
 			
-			la = strtol(s, &err, 10);
+			la = strtoll(s, &err, 10);
 			
 			if (err == minus) {
-				le = strtol(minus+1, &err, 10);
+				le = strtoll(minus+1, &err, 10);
 				
 				/* RFC 2616 - 14.35.1 */
 				if (la > le) {
