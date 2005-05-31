@@ -850,7 +850,7 @@ int http_auth_digest_check(server *srv, connection *con, mod_auth_plugin_data *p
 	MD5_Update(&Md5Ctx, (unsigned char *)m, strlen(m));
 	MD5_Update(&Md5Ctx, (unsigned char *)":", 1);
 	MD5_Update(&Md5Ctx, (unsigned char *)uri, strlen(uri));
-	if (strcasecmp(qop, "auth-int") == 0) {
+	if (qop && strcasecmp(qop, "auth-int") == 0) {
 		MD5_Update(&Md5Ctx, (unsigned char *)":", 1);
 		MD5_Update(&Md5Ctx, (unsigned char *)"", HASHHEXLEN);
 	}
@@ -863,7 +863,7 @@ int http_auth_digest_check(server *srv, connection *con, mod_auth_plugin_data *p
 	MD5_Update(&Md5Ctx, (unsigned char *)":", 1);
 	MD5_Update(&Md5Ctx, (unsigned char *)nonce, strlen(nonce));
 	MD5_Update(&Md5Ctx, (unsigned char *)":", 1);
-	if (*qop) {
+	if (qop && *qop) {
 		MD5_Update(&Md5Ctx, (unsigned char *)nc, strlen(nc));
 		MD5_Update(&Md5Ctx, (unsigned char *)":", 1);
 		MD5_Update(&Md5Ctx, (unsigned char *)cnonce, strlen(cnonce));
