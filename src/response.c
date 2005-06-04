@@ -280,7 +280,7 @@ static int http_response_parse_range(server *srv, connection *con) {
 	for (s = con->request.http_range, error = 0;
 	     !error && *s && NULL != (minus = strchr(s, '-')); ) {
 		char *err;
-		long la, le;
+		off_t la, le;
 		
 		if (s == minus) {
 			/* -<stop> */
