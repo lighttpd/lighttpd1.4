@@ -264,7 +264,7 @@ int request_uri_is_valid_char(char c) {
 	
 	/* alphanum */
 	if (light_isalnum(c)) return 1;
-	
+	if (c < 0) return 1; /* no-ascii chars are ok */
 	
 	switch(c) {
 		/* reserved */
@@ -275,7 +275,7 @@ int request_uri_is_valid_char(char c) {
 	case '@':
 	case '&':
 	case '=':
-	case '+':
+	case '+': /* only in Query part it is rewritten to ' ' (space) */
 	case '$':
 	case ',':
 		

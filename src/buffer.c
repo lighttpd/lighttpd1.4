@@ -784,7 +784,8 @@ int buffer_append_string_html_encoded(buffer *b, const char *s) {
 /* decodes url-special-chars inplace.
  * replaces non-printable characters with '_'
  */
-int buffer_urldecode(buffer *url) {
+
+static int buffer_urldecode_internal(buffer *url, int is_query) {
 	unsigned char high, low;
 	const char *src;
 	char *dst;
@@ -795,12 +796,9 @@ int buffer_urldecode(buffer *url) {
 	dst = (char*) url->ptr;
 
 	while ((*src) != '\0') {
-#if 1
-		if (*src == '+') {
+		if (is_query && *src == '+') {
 			*dst = ' ';
-		} else 
-#endif
-		if (*src == '%') {
+		} else if (*src == '%') {
 			*dst = '%';
 
 			high = hex2int(*(src + 1));
@@ -828,6 +826,14 @@ int buffer_urldecode(buffer *url) {
 	url->used = (dst - url->ptr) + 1;
 
 	return 0;
+}
+
+int buffer_urldecode_path(buffer *url) {
+	return buffer_urldecode_internal(url, 0);
+}
+
+int buffer_urldecode_query(buffer *url) {
+	return buffer_urldecode_internal(url, 1);
 }
 
 /* Remove "/../", "//", "/./" parts from path.
