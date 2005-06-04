@@ -85,7 +85,8 @@ int buffer_append_string_hex(buffer *b, const char *in, size_t in_len);
 int buffer_append_string_url_encoded(buffer *b, const char *s);
 int buffer_append_string_html_encoded(buffer *b, const char *s);
 
-int buffer_urldecode(buffer *url);
+int buffer_urldecode_path(buffer *url);
+int buffer_urldecode_query(buffer *url);
 int buffer_path_simplify(buffer *dest, buffer *src);
 
 /** deprecated */

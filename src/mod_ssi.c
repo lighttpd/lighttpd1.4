@@ -522,7 +522,7 @@ static int process_ssi_stmt(server *srv, connection *con, plugin_data *p,
 				buffer_append_string(p->stat_fn, virt_path);
 			}
 			
-			buffer_urldecode(p->stat_fn);
+			buffer_urldecode_path(p->stat_fn);
 			buffer_path_simplify(srv->tmp_buf, p->stat_fn);
 			
 			/* we have an uri */
