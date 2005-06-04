@@ -474,29 +474,24 @@ static handler_t cgi_connection_close(server *srv, handler_ctx *hctx) {
 
 #ifndef __WIN32
 	
-#if 0
-	log_error_write(srv, __FILE__, __LINE__, "sdd", 
-			"emergency exit: cgi", 
-			con->fd,
-			hctx->fd);
-#endif
-	
 	/* the connection to the browser went away, but we still have a connection
 	 * to the CGI script 
 	 *
 	 * close cgi-connection
 	 */
 	
-	/* close connection to the cgi-script */
-	fdevent_event_del(srv->ev, &(hctx->fde_ndx), hctx->fd);
-	fdevent_unregister(srv->ev, hctx->fd);
-	
-	if (close(hctx->fd)) {
-		log_error_write(srv, __FILE__, __LINE__, "sds", "cgi close failed ", hctx->fd, strerror(errno));
+	if (hctx->fd != -1) {
+		/* close connection to the cgi-script */
+		fdevent_event_del(srv->ev, &(hctx->fde_ndx), hctx->fd);
+		fdevent_unregister(srv->ev, hctx->fd);
+		
+		if (close(hctx->fd)) {
+			log_error_write(srv, __FILE__, __LINE__, "sds", "cgi close failed ", hctx->fd, strerror(errno));
+		}
+		
+		hctx->fd = -1;
+		hctx->fde_ndx = -1;
 	}
-	
-	hctx->fd = -1;
-	hctx->fde_ndx = -1;
 	
 	pid = hctx->pid;
 	
@@ -597,7 +592,8 @@ static handler_t cgi_handle_fdevent(void *s, void *ctx, int revents) {
 #endif
 			cgi_connection_close(srv, hctx);
 			
-			break;
+			/* if we get a IN|HUP and have read everything don't exec the close twice */ 
+			return HANDLER_FINISHED;
 		case FDEVENT_HANDLED_ERROR:
 			connection_set_state(srv, con, CON_STATE_HANDLE_REQUEST);
 			con->http_status = 500;
