@@ -1461,7 +1461,7 @@ static int fcgi_establish_connection(server *srv, handler_ctx *hctx) {
 		    errno == EINTR) {
 			if (hctx->conf.debug) {
 				log_error_write(srv, __FILE__, __LINE__, "sd", 
-						"connect delayed:", fcgi_fd);
+						"connect delayed, will continue later:", fcgi_fd);
 			}
 			
 			return 1;
@@ -2339,6 +2339,14 @@ static int fcgi_restart_dead_procs(server *srv, plugin_data *p, fcgi_extension_h
 			    proc->load == 0) {
 				/* restart the child */
 				
+				if (p->conf.debug) {
+					log_error_write(srv, __FILE__, __LINE__, "ssdsbsdsd",
+							"--- fastcgi spawning",
+							"\n\tport:", host->port,
+							"\n\tsocket", host->unixsocket,
+							"\n\tcurrent:", 1, "/", host->min_procs);
+				}
+				
 				if (fcgi_spawn_connection(srv, p, host, proc)) {
 					log_error_write(srv, __FILE__, __LINE__, "s",
 							"ERROR: spawning fcgi failed.");
@@ -2454,7 +2462,7 @@ static handler_t fcgi_write_request(server *srv, handler_ctx *hctx) {
 				return HANDLER_ERROR;
 			}
 			if (socket_error != 0) {
-				if (!hctx->proc->is_local) {
+				if (!hctx->proc->is_local || p->conf.debug) {
 					/* local procs get restarted */
 					
 					log_error_write(srv, __FILE__, __LINE__, "ss",
@@ -2616,13 +2624,14 @@ SUBREQUEST_FUNC(mod_fastcgi_handle_subrequest) {
 			 * restart the request-handling 
 			 */
 			if (proc && proc->is_local) {
-#if 0
-				log_error_write(srv, __FILE__, __LINE__,  "sbdb", "connect() to fastcgi failed, restarting the request-handling:", 
-						host->host,
-						proc->port,
-						proc->socket);
-			
-#endif
+
+				if (p->conf.debug) {
+					log_error_write(srv, __FILE__, __LINE__,  "sbdb", "connect() to fastcgi failed, restarting the request-handling:", 
+							host->host,
+							proc->port,
+							proc->socket);
+				}
+
 				/* 
 				 * several hctx might reference the same proc
 				 * 
@@ -2644,6 +2653,7 @@ SUBREQUEST_FUNC(mod_fastcgi_handle_subrequest) {
 			
 			buffer_reset(con->physical.path);
 			con->mode = DIRECT;
+			joblist_append(srv, con);
 			
 			/* mis-using HANDLER_WAIT_FOR_FD to break out of the loop 
 			 * and hope that the childs will be restarted 
@@ -2763,6 +2773,14 @@ static handler_t fcgi_handle_fdevent(void *s, void *ctx, int revents) {
 						log_error_write(srv, __FILE__, __LINE__, "sd", 
 								"child died somehow:", 
 								status);
+					}
+					
+					if (p->conf.debug) {
+						log_error_write(srv, __FILE__, __LINE__, "ssdsbsdsd",
+								"--- fastcgi spawning",
+								"\n\tport:", host->port,
+								"\n\tsocket", host->unixsocket,
+								"\n\tcurrent:", 1, "/", host->min_procs);
 					}
 					
 					if (fcgi_spawn_connection(srv, p, host, proc)) {
