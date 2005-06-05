@@ -879,7 +879,7 @@ int http_auth_digest_check(server *srv, connection *con, mod_auth_plugin_data *p
 		/* digest not ok */
 		
 		if (p->conf.auth_debug) {
-			log_error_write(srv, __FILE__, __LINE__, "ssssb", 
+			log_error_write(srv, __FILE__, __LINE__, "sss", 
 				"digest: digest mismatch", a2, respons);
 		}
 		
