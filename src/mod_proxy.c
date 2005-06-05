@@ -293,6 +293,8 @@ SETDEFAULTS_FUNC(mod_proxy_set_defaults) {
 					
 					df = data_proxy_init();
 					
+					df->port = 80;
+					
 					buffer_copy_string_buffer(df->key, da_host->key);
 					
 					pcv[0].destination = df->host;
@@ -311,17 +313,8 @@ SETDEFAULTS_FUNC(mod_proxy_set_defaults) {
 								"host");
 						
 						return HANDLER_ERROR;
-					} else if (df->port == 0) {
-						log_error_write(srv, __FILE__, __LINE__, "sbbbs", 
-								"missing key (short):", 
-								da->key,
-								da_ext->key,
-								da_host->key,
-								"port");
-						return HANDLER_ERROR;
 					}
-
-										
+					
 					/* if extension already exists, take it */
 					
 					if (NULL == (dfa = (data_array *)array_get_element(s->extensions, da_ext->key->ptr))) {
