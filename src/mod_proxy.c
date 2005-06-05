@@ -843,39 +843,6 @@ static int mod_proxy_setup_connection(server *srv, connection *con, plugin_data 
 }
 #undef PATCH
 
-static int proxy_reconnect(server *srv, handler_ctx *hctx) {
-	plugin_data *p    = hctx->plugin_data;
-	
-	/* child died 
-	 * 
-	 * 1. 
-	 * 
-	 * connect was ok, connection was accepted
-	 * but the php accept loop checks after the accept if it should die or not.
-	 * 
-	 * if yes we can only detect it at a write() 
-	 * 
-	 * next step is resetting this attemp and setup a connection again
-	 * 
-	 * if we have more then 5 reconnects for the same request, die
-	 * 
-	 * 2. 
-	 * 
-	 * we have a connection but the child died by some other reason
-	 * 
-	 */
-	
-	fdevent_event_del(srv->ev, &(hctx->fde_ndx), hctx->fd);
-	fdevent_unregister(srv->ev, hctx->fd);
-	close(hctx->fd);
-	srv->cur_fds--;
-	
-	proxy_set_state(srv, hctx, PROXY_STATE_INIT);
-	
-	return 0;
-}
-
-
 SUBREQUEST_FUNC(mod_proxy_handle_subrequest) {
 	plugin_data *p = p_d;
 	
@@ -1120,33 +1087,34 @@ static handler_t mod_proxy_check_extension(server *srv, connection *con, void *p
 		/* hash balancing */
 
 		if (p->conf.debug) {
-			log_error_write(srv, __FILE__, __LINE__,  "s", "proxy - used hash balancing");
+			log_error_write(srv, __FILE__, __LINE__,  "sd", 
+					"proxy - used hash balancing, hosts:", extension->value->used);
 		}
 
 		for (k = 0, ndx = -1, last_max = ~0L; k < extension->value->used; k++) {
 			data_proxy *host = (data_proxy *)extension->value->data[k];
-			unsigned long url_ndx, host_ndx, cur_max;
+			unsigned long cur_max;
 
 			if (host->is_disabled) continue;
 			
-			url_ndx = generate_crc32c(CONST_BUF_LEN(con->uri.path));
-			host_ndx = generate_crc32c(CONST_BUF_LEN(host->host)); /* we can cache this */
+			cur_max = generate_crc32c(CONST_BUF_LEN(con->uri.path)) +
+				generate_crc32c(CONST_BUF_LEN(host->host)) + /* we can cache this */
+				generate_crc32c(CONST_BUF_LEN(con->uri.authority));
+			
+			if (p->conf.debug) {
+				log_error_write(srv, __FILE__, __LINE__,  "sbbbd", 
+						"proxy - election:",
+						con->uri.path,
+						host->host,
+						con->uri.authority,
+						cur_max);
+			}
 
-			cur_max = url_ndx % host_ndx;
-		
 			if ((last_max == ~0L) || /* first round */
 		   	    (cur_max > last_max)) {
 				last_max = cur_max;
 
 				ndx = k;
-			}
-		
-			if (p->conf.debug) {
-				log_error_write(srv, __FILE__, __LINE__,  "sbdbddd", 
-						"proxy - election:",
-						con->uri.path, url_ndx,
-						host->host, host_ndx,
-						last_max, cur_max);
 			}
 		}
 
