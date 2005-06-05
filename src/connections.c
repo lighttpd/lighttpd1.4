@@ -1139,9 +1139,10 @@ connection *connection_accept(server *srv, server_socket *srv_socket) {
 						ERR_error_string(ERR_get_error(), NULL));
 				
 				return NULL;
-			} else {
-				SSL_set_accept_state(con->ssl);
 			}
+			
+			SSL_set_accept_state(con->ssl);
+			con->conf.is_ssl=1;
 			
 			if (1 != (SSL_set_fd(con->ssl, cnt))) {
 				log_error_write(srv, __FILE__, __LINE__, "ss", "SSL:", 
