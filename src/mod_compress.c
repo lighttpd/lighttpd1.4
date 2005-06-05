@@ -147,7 +147,7 @@ SETDEFAULTS_FUNC(mod_compress_setdefaults) {
 }
 
 #ifdef USE_ZLIB
-static int deflate_file_to_buffer_gzip(server *srv, connection *con, plugin_data *p, unsigned char *start, off_t st_size, time_t mtime) {
+static int deflate_file_to_buffer_gzip(server *srv, connection *con, plugin_data *p, char *start, off_t st_size, time_t mtime) {
 	unsigned char *c;
 	unsigned long crc;
 	z_stream z;
@@ -168,7 +168,7 @@ static int deflate_file_to_buffer_gzip(server *srv, connection *con, plugin_data
 		return -1;
 	}
 		
-	z.next_in = start;
+	z.next_in = (unsigned char *)start;
 	z.avail_in = st_size;
 	z.total_in = 0;
 		

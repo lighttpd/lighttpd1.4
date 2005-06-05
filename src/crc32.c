@@ -71,13 +71,13 @@ static const unsigned int crc_c[256] = {
 
 
 unsigned long
-generate_crc32c(unsigned char *buffer, unsigned int length)
+generate_crc32c(char *buffer, size_t length)
 {
   unsigned int i;
   unsigned long crc32 = ~0L;
 
   for (i = 0; i < length; i++){
-      CRC32C(crc32, buffer[i]);
+      CRC32C(crc32, (unsigned char)buffer[i]);
   }
   return ~crc32;
 }
