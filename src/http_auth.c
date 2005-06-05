@@ -457,7 +457,7 @@ static int http_auth_basic_password_compare(server *srv, mod_auth_plugin_data *p
 		pam_handle_t *pamh=NULL;
 		int retval;
 		
-		retval = pam_start("login", username->ptr, &conv, &pamh);
+		retval = pam_start("lighttpd", username->ptr, &conv, &pamh);
 		
 		if (retval == PAM_SUCCESS)
 			retval = pam_authenticate(pamh, 0);    /* is user really user? */
