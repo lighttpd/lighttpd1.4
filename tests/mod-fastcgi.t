@@ -349,7 +349,7 @@ EOF
 }
 
 SKIP: {
-	skip "no fcgi-auth found", 4 unless -x $basedir."/tests/fcgi-auth"; 
+	skip "no fcgi-auth found", 4 unless -x $basedir."/tests/fcgi-auth.exe"; 
 
 	$configfile = 'fastcgi-auth.conf';
 	ok(start_proc == 0, "Starting lighttpd with $configfile") or die();
@@ -373,7 +373,7 @@ EOF
 }
 
 SKIP: {
-	skip "no fcgi-auth found", 3 unless -x "/home/weigon/Documents/php-4.3.10/sapi/cgi/php"; 
+	skip "no php found", 3 unless -x "/home/weigon/Documents/php-4.3.10/sapi/cgi/php"; 
 	$configfile = 'fastcgi-13.conf';
 	ok(start_proc == 0, "Starting lighttpd with $configfile") or die();
 	@request  = ( <<EOF
@@ -389,7 +389,7 @@ EOF
 
 
 SKIP: {
-	skip "no fcgi-auth found", 9 unless -x $basedir."/tests/fcgi-responder"; 
+	skip "no fcgi-responder found", 9 unless -x $basedir."/tests/fcgi-responder.exe"; 
 	
 	$configfile = 'fastcgi-responder.conf';
 	ok(start_proc == 0, "Starting lighttpd with $configfile") or die();

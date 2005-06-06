@@ -34,7 +34,7 @@ Description
 
 there are multiple way to handle secured download mechanisms:
 
-1. use the webserver and the internal HTTP-authentification 
+1. use the webserver and the internal HTTP-authentication 
 2. use the application to authenticate and send the file 
    through the application
      
@@ -44,7 +44,7 @@ webserver:
 
 - ``+`` fast download 
 - ``+`` no additional system load 
-- ``-`` unflexible authentification handling
+- ``-`` unflexible authentication handling
   
 application:
 
