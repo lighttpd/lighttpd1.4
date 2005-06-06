@@ -2,7 +2,7 @@ dist_man1_MANS=lighttpd.1 spawn-fcgi.1
 
 
 DOCS=accesslog.txt \
-authentification.txt \
+authentication.txt \
 cgi.txt \
 compress.txt \
 configuration.txt \
@@ -31,7 +31,7 @@ setenv.txt \
 status.txt
 
 HTMLDOCS=accesslog.html \
-	 authentification.html \
+	 authentication.html \
 	 cgi.html \
 	 compress.html \
 	 configuration.html \
@@ -61,8 +61,8 @@ HTMLDOCS=accesslog.html \
 
 EXTRA_DIST=lighttpd.conf lighttpd.user \
 	rc.lighttpd rc.lighttpd.redhat sysconfig.lighttpd \
-	state.ps.gz rrdtool-graph.sh \
-	state.dot fastcgi-state.dot fastcgi-state.ps.gz \
+	rrdtool-graph.sh \
+	state.dot fastcgi-state.dot \
 	spawn-php.sh \
 	newstyle.css \
 	oldstyle.css \
@@ -74,11 +74,11 @@ EXTRA_DIST=lighttpd.conf lighttpd.user \
 
 html: $(HTMLDOCS)
 
-%.ps.gz: %.ps
-	gzip $^
+#%.ps.gz: %.ps
+#	gzip $^
 	
-%.ps: %.dot
-	dot -Tps -o $@ $^   
+#%.ps: %.dot
+#	dot -Tps -o $@ $^   
 
 clean-local:
 	rm -f *.html
