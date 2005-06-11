@@ -2,7 +2,7 @@
 
 use strict;
 use IO::Socket;
-use Test::More tests => 7;
+use Test::More tests => 6;
 
 my $basedir = (defined $ENV{'top_builddir'} ? $ENV{'top_builddir'} : '..');
 my $srcdir = (defined $ENV{'srcdir'} ? $ENV{'srcdir'} : '.');
@@ -211,26 +211,16 @@ EOF
 @response = ( { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200 } );
 ok(handle_http == 0, 'Basic-Auth: Valid Auth-token');
 
+## this should not crash
 @request  = ( <<EOF
-GET /server-config HTTP/1.0
+GET /server-status HTTP/1.0
 User-Agent: Wget/1.9.1
-Authorization: Digest username="beta", realm="Beta", nonce="9a5428ccc05b086a08d918e73b01fc6f",
-                uri="/server-config", response="ea5f7d9a30b8b762f9610ccb87dea74f"
+Authorization: Digest username="jan", realm="jan", nonce="9a5428ccc05b086a08d918e73b01fc6f",
+                uri="/server-status", response="ea5f7d9a30b8b762f9610ccb87dea74f"
 EOF
  );
-@response = ( { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200 } );
-ok(handle_http == 0, 'Digest-Auth: missing qop');
-
-@request  = ( <<EOF
-GET /server-config HTTP/1.0
-User-Agent: Wget/1.9.1
-Authorization: Digest username="beta", realm="Beta", nonce="9a5428ccc05b086a08d918e73b01fc6f",
-                uri="/server-config", response="ea5f7d9a30b8b762f9610ccb87dea74e"
-EOF
- );
-@response = ( { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200 } );
-ok(handle_http == 0, 'Digest-Auth: broken password');
-
+@response = ( { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 401 } );
+ok(handle_http == 0, 'Digest-Auth: missing qop, no crash');
 
 
 ok(stop_proc == 0, "Stopping lighttpd");
