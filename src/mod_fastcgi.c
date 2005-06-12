@@ -996,7 +996,7 @@ SETDEFAULTS_FUNC(mod_fastcgi_set_defaults) {
 						
 						{ "check-local",       NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION },      /* 5 */
 						{ "port",              NULL, T_CONFIG_SHORT, T_CONFIG_SCOPE_CONNECTION },        /* 6 */
-						{ "min-procs",         NULL, T_CONFIG_SHORT, T_CONFIG_SCOPE_CONNECTION },        /* 7 */
+						{ "min-procs-not-working",         NULL, T_CONFIG_SHORT, T_CONFIG_SCOPE_CONNECTION },        /* 7 this is broken for now */
 						{ "max-procs",         NULL, T_CONFIG_SHORT, T_CONFIG_SCOPE_CONNECTION },        /* 8 */
 						{ "max-load-per-proc", NULL, T_CONFIG_SHORT, T_CONFIG_SCOPE_CONNECTION },        /* 9 */
 						{ "idle-timeout",      NULL, T_CONFIG_SHORT, T_CONFIG_SCOPE_CONNECTION },        /* 10 */
@@ -1096,6 +1096,9 @@ SETDEFAULTS_FUNC(mod_fastcgi_set_defaults) {
 					if (!buffer_is_empty(df->bin_path)) { 
 						/* a local socket + self spawning */
 						size_t pno;
+
+						/* HACK:  just to make sure the adaptive spawing is disabled */
+						df->min_procs = df->max_procs;
 						
 						if (df->min_procs > df->max_procs) df->max_procs = df->min_procs;
 						if (df->max_load_per_proc < 1) df->max_load_per_proc = 0;
