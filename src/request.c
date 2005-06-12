@@ -450,12 +450,25 @@ int http_request_parse(server *srv, connection *con) {
 				/* check uri for invalid characters */
 				for (j = 0; j < con->request.uri->used - 1; j++) {
 					if (!request_uri_is_valid_char(con->request.uri->ptr[j])) {
+						unsigned char buf[2];
 						con->http_status = 400;
 						con->keep_alive = 0;
 						
-						log_error_write(srv, __FILE__, __LINE__, "sd",
-								"invalid character in URI -> 400",
-								con->request.uri->ptr[j]);
+						buf[0] = con->request.uri->ptr[j];
+						buf[1] = '\0';
+					
+						if (con->request.uri->ptr[j] > 32 &&
+						    con->request.uri->ptr[j] != 127) {	
+							/* the character is printable -> print it */
+							log_error_write(srv, __FILE__, __LINE__, "ss",
+									"invalid character in URI -> 400",
+									buf);
+						} else {
+							/* a control-character, print ascii-code */
+							log_error_write(srv, __FILE__, __LINE__, "sd",
+									"invalid character in URI -> 400",
+									con->request.uri->ptr[j]);
+						}
 						
 						if (srv->srvconf.log_request_header_on_error) {
 							log_error_write(srv, __FILE__, __LINE__, "Sb",
