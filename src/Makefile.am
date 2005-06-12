@@ -78,6 +78,12 @@ mod_cgi_la_SOURCES = mod_cgi.c
 mod_cgi_la_LDFLAGS = -module -export-dynamic -avoid-version -no-undefined
 mod_cgi_la_LIBADD = $(common_libadd)
 
+lib_LTLIBRARIES += mod_scgi.la
+mod_scgi_la_SOURCES = mod_scgi.c 
+mod_scgi_la_LDFLAGS = -module -export-dynamic -avoid-version -no-undefined
+mod_scgi_la_LIBADD = $(common_libadd)
+
+
 lib_LTLIBRARIES += mod_setenv.la
 mod_setenv_la_SOURCES = mod_setenv.c 
 mod_setenv_la_LDFLAGS = -module -export-dynamic -avoid-version -no-undefined
