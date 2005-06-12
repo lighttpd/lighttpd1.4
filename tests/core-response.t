@@ -2,7 +2,7 @@
 
 use strict;
 use IO::Socket;
-use Test::More tests => 10;
+use Test::More tests => 12;
 
 my $basedir = (defined $ENV{'top_builddir'} ? $ENV{'top_builddir'} : '..');
 my $srcdir = (defined $ENV{'srcdir'} ? $ENV{'srcdir'} : '.');
@@ -172,10 +172,16 @@ sub handle_http {
 				return -1;
 			}
 
-			if ($no_val == 0 &&
-				$href->{$_} ne $resp_hdr{$k}) {
-				diag(sprintf("response-header failed: expected '%s', got '%s'\n", $href->{$_}, $resp_hdr{$k}));
-				return -1;
+			if ($no_val == 0) {
+				if ($href->{$_} =~ /^\/(.+)\/$/ && $resp_hdr{$k} !~ /$1/) {
+					diag(sprintf("response-header failed: expected '%s', got '%s', regex: %s\n", 
+					     $href->{$_}, $resp_hdr{$k}, $1));
+					return -1;
+				} elsif ($href->{$_} ne $resp_hdr{$k}) {
+					diag(sprintf("response-header failed: expected '%s', got '%s'\n", 
+					     $href->{$_}, $resp_hdr{$k}));
+					return -1;
+				}
 			}
 		}
 	}
@@ -205,6 +211,20 @@ EOF
  );
 @response = ( { 'HTTP-Protocol' => 'HTTP/1.1', 'HTTP-Status' => 400, 'Connection' => 'close' } );
 ok(handle_http == 0, 'Host missing');
+
+@request  = ( <<EOF
+GET / HTTP/1.0
+EOF
+ );
+@response = ( { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200, '+ETag' => '' } );
+ok(handle_http == 0, 'ETag is set');
+
+@request  = ( <<EOF
+GET / HTTP/1.0
+EOF
+ );
+@response = ( { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200, 'ETag' => '/^".+"$/' } );
+ok(handle_http == 0, 'ETag has quotes');
 
 
 
