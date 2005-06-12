@@ -15,8 +15,8 @@ my $lighttpd_path = $basedir.'/src/lighttpd';
 my $pidfile = '/tmp/lighttpd/lighttpd.pid';
 my $pidoffile = '/tmp/lighttpd/pidof.pid';
 
-# proxy is on 2049, real server on 2048
-my $port = 2049;
+# proxy is on 2050, real server on 2048
+my $port = 2050;
 
 sub pidof {
 	my $prog = $_[0];
@@ -61,7 +61,9 @@ sub start_proc {
 
 	unlink($pidfile);
 	system($lighttpd_path." -f /tmp/cfg.file");
+	# system("valgrind --tool=memcheck --show-reachable=yes --leak-check=yes --logfile=foo ".$lighttpd_path." -D -f /tmp/cfg.file &");
 
+	sleep(1);
 	unlink("/tmp/cfg.file");
 	if (-e $pidfile) {
 		return 0;
@@ -196,7 +198,10 @@ sub handle_http {
 	}
 
 	# we should have sucked up everything
-	return -1 if (defined $lines); 
+	if (defined $lines) {
+		diag(sprintf("still have data\n"));
+		return -1;
+	} 
 
 	return 0;
 }
