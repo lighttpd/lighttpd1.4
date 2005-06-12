@@ -9,11 +9,13 @@ int etag_is_equal(buffer *etag, const char *matches) {
 }
 
 int etag_create(buffer *etag, struct stat *st) {
-	buffer_copy_off_t(etag, st->st_ino);
-	buffer_append_string_len(etag, "-", 1);
+	buffer_copy_string_len(etag, CONST_STR_LEN("\""));
+	buffer_append_off_t(etag, st->st_ino);
+	buffer_append_string_len(etag, CONST_STR_LEN("-"));
 	buffer_append_off_t(etag, st->st_size);
-	buffer_append_string_len(etag, "-", 1);
+	buffer_append_string_len(etag, CONST_STR_LEN("-"));
 	buffer_append_long(etag, st->st_mtime);
+	buffer_append_string_len(etag, CONST_STR_LEN("\""));
 	
 	return 0;
 }
