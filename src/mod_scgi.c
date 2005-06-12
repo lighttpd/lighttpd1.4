@@ -43,12 +43,13 @@
 #include <sys/wait.h>
 #endif
 
+enum {EOL_UNSET, EOL_N, EOL_RN};
 
 /*
  * 
  * TODO:
  * 
- * - add timeout for a connect to a non-fastcgi process
+ * - add timeout for a connect to a non-scgi process
  *   (use state_timestamp + state)
  * 
  */
@@ -127,7 +128,7 @@ typedef struct {
 	unsigned short disable_time;
 
 	/*
-	 * same fastcgi processes get a little bit larger
+	 * same scgi processes get a little bit larger
 	 * than wanted. max_requests_per_proc kills a 
 	 * process after a number of handled requests.
 	 *
@@ -160,7 +161,7 @@ typedef struct {
 	 */
 	buffer *unixsocket;
 
-	/* if socket is local we can start the fastcgi 
+	/* if socket is local we can start the scgi 
 	 * process ourself
 	 *
 	 * bin-path is the path to the binary
@@ -194,7 +195,7 @@ typedef struct {
 	 * check_local tell you if the phys file is stat()ed 
 	 * or not. FastCGI doesn't care if the service is
 	 * remote. If the web-server side doesn't contain
-	 * the fastcgi-files we should not stat() for them
+	 * the scgi-files we should not stat() for them
 	 * and say '404 not found'.
 	 */
 	unsigned short check_local;
@@ -223,7 +224,7 @@ typedef struct {
  * ext -> host -> procs
  *    1:n     1:n
  *
- * if the fastcgi process is remote that whole goes down 
+ * if the scgi process is remote that whole goes down 
  * to
  *
  * ext -> host -> procs
@@ -307,7 +308,7 @@ typedef struct {
 	int       delayed;   /* flag to mark that the connect() is delayed */
 	
 	size_t    request_id;
-	int       fd;        /* fd to the fastcgi process */
+	int       fd;        /* fd to the scgi process */
 	int       fde_ndx;   /* index into the fd-event buffer */
 
 	size_t    path_info_offset; /* start of path_info in uri.path */
@@ -368,7 +369,7 @@ static void handler_ctx_free(handler_ctx *hctx) {
 	free(hctx);
 }
 
-scgi_proc *fastcgi_process_init() {
+scgi_proc *scgi_process_init() {
 	scgi_proc *f;
 
 	f = calloc(1, sizeof(*f));
@@ -380,17 +381,17 @@ scgi_proc *fastcgi_process_init() {
 	return f;
 }
 
-void fastcgi_process_free(scgi_proc *f) {
+void scgi_process_free(scgi_proc *f) {
 	if (!f) return;
 	
-	fastcgi_process_free(f->next);
+	scgi_process_free(f->next);
 	
 	buffer_free(f->socket);
 	
 	free(f);
 }
 
-scgi_extension_host *fastcgi_host_init() {
+scgi_extension_host *scgi_host_init() {
 	scgi_extension_host *f;
 
 	f = calloc(1, sizeof(*f));
@@ -405,7 +406,7 @@ scgi_extension_host *fastcgi_host_init() {
 	return f;
 }
 
-void fastcgi_host_free(scgi_extension_host *h) {
+void scgi_host_free(scgi_extension_host *h) {
 	if (!h) return;
 	
 	buffer_free(h->host);
@@ -415,14 +416,14 @@ void fastcgi_host_free(scgi_extension_host *h) {
 	array_free(h->bin_env);
 	array_free(h->bin_env_copy);
 	
-	fastcgi_process_free(h->first);
-	fastcgi_process_free(h->unused_procs);
+	scgi_process_free(h->first);
+	scgi_process_free(h->unused_procs);
 	
 	free(h);
 	
 }
 
-scgi_exts *fastcgi_extensions_init() {
+scgi_exts *scgi_extensions_init() {
 	scgi_exts *f;
 
 	f = calloc(1, sizeof(*f));
@@ -430,7 +431,7 @@ scgi_exts *fastcgi_extensions_init() {
 	return f;
 }
 
-void fastcgi_extensions_free(scgi_exts *f) {
+void scgi_extensions_free(scgi_exts *f) {
 	size_t i;
 	
 	if (!f) return;
@@ -446,7 +447,7 @@ void fastcgi_extensions_free(scgi_exts *f) {
 			
 			h = fe->hosts[j];
 			
-			fastcgi_host_free(h);
+			scgi_host_free(h);
 		}
 		
 		buffer_free(fe->key);
@@ -460,7 +461,7 @@ void fastcgi_extensions_free(scgi_exts *f) {
 	free(f);
 }
 
-int fastcgi_extension_insert(scgi_exts *ext, buffer *key, scgi_extension_host *fh) {
+int scgi_extension_insert(scgi_exts *ext, buffer *key, scgi_extension_host *fh) {
 	scgi_extension *fe;
 	size_t i;
 
@@ -575,7 +576,7 @@ FREE_FUNC(mod_scgi_free) {
 				}
 			}
 			
-			fastcgi_extensions_free(s->exts);
+			scgi_extensions_free(s->exts);
 			
 			free(s);
 		}
@@ -834,7 +835,7 @@ static int scgi_spawn_connection(server *srv,
 				/* the child should not terminate at all */
 				if (WIFEXITED(status)) {
 					log_error_write(srv, __FILE__, __LINE__, "sd", 
-							"child exited (is this a FastCGI binary ?):", 
+							"child exited (is this a SCGI binary ?):", 
 							WEXITSTATUS(status));
 				} else if (WIFSIGNALED(status)) {
 					log_error_write(srv, __FILE__, __LINE__, "sd", 
@@ -882,8 +883,8 @@ SETDEFAULTS_FUNC(mod_scgi_set_defaults) {
 	size_t i = 0;
 	
 	config_values_t cv[] = { 
-		{ "fastcgi.server",              NULL, T_CONFIG_LOCAL, T_CONFIG_SCOPE_CONNECTION },       /* 0 */
-		{ "fastcgi.debug",               NULL, T_CONFIG_SHORT, T_CONFIG_SCOPE_CONNECTION },       /* 1 */
+		{ "scgi.server",              NULL, T_CONFIG_LOCAL, T_CONFIG_SCOPE_CONNECTION },       /* 0 */
+		{ "scgi.debug",               NULL, T_CONFIG_SHORT, T_CONFIG_SCOPE_CONNECTION },       /* 1 */
 		{ NULL,                          NULL, T_CONFIG_UNSET, T_CONFIG_SCOPE_UNSET }
 	};
 	
@@ -894,7 +895,7 @@ SETDEFAULTS_FUNC(mod_scgi_set_defaults) {
 		array *ca;
 		
 		s = malloc(sizeof(plugin_config));
-		s->exts          = fastcgi_extensions_init();
+		s->exts          = scgi_extensions_init();
 		s->debug         = 0;
 		
 		cv[0].destination = s->exts;
@@ -911,20 +912,20 @@ SETDEFAULTS_FUNC(mod_scgi_set_defaults) {
 		 * <key> = ( ... )
 		 */
 		
-		if (NULL != (du = array_get_element(ca, "fastcgi.server"))) {
+		if (NULL != (du = array_get_element(ca, "scgi.server"))) {
 			size_t j;
 			data_array *da = (data_array *)du;
 			
 			if (du->type != TYPE_ARRAY) {
 				log_error_write(srv, __FILE__, __LINE__, "sss", 
-						"unexpected type for key: ", "fastcgi.server", "array of strings");
+						"unexpected type for key: ", "scgi.server", "array of strings");
 				
 				return HANDLER_ERROR;
 			}
 			
 			
 			/* 
-			 * fastcgi.server = ( "<ext>" => ( ... ), 
+			 * scgi.server = ( "<ext>" => ( ... ), 
 			 *                    "<ext>" => ( ... ) )
 			 */
 			
@@ -934,7 +935,7 @@ SETDEFAULTS_FUNC(mod_scgi_set_defaults) {
 				
 				if (da->value->data[j]->type != TYPE_ARRAY) {
 					log_error_write(srv, __FILE__, __LINE__, "sssbs", 
-							"unexpected type for key: ", "fastcgi.server", 
+							"unexpected type for key: ", "scgi.server", 
 							"[", da->value->data[j]->key, "](string)");
 					
 					return HANDLER_ERROR;
@@ -945,7 +946,7 @@ SETDEFAULTS_FUNC(mod_scgi_set_defaults) {
 				 */
 				
 				/* 
-				 * fastcgi.server = ( "<ext>" => 
+				 * scgi.server = ( "<ext>" => 
 				 *                     ( "<host>" => ( ... ), 
 				 *                       "<host>" => ( ... )
 				 *                     ), 
@@ -981,13 +982,13 @@ SETDEFAULTS_FUNC(mod_scgi_set_defaults) {
 					if (da_host->type != TYPE_ARRAY) {
 						log_error_write(srv, __FILE__, __LINE__, "ssSBS", 
 								"unexpected type for key:", 
-								"fastcgi.server", 
+								"scgi.server", 
 								"[", da_host->key, "](string)");
 						
 						return HANDLER_ERROR;
 					}
 					
-					df = fastcgi_host_init();
+					df = scgi_host_init();
 					
 					df->check_local  = 1;
 					df->min_procs    = 4;
@@ -1066,7 +1067,7 @@ SETDEFAULTS_FUNC(mod_scgi_set_defaults) {
 						
 						if (s->debug) {
 							log_error_write(srv, __FILE__, __LINE__, "ssbsdsbsdsd",
-									"--- fastcgi spawning local",
+									"--- scgi spawning local",
 									"\n\tproc:", df->bin_path,
 									"\n\tport:", df->port,
 									"\n\tsocket", df->unixsocket,
@@ -1077,7 +1078,7 @@ SETDEFAULTS_FUNC(mod_scgi_set_defaults) {
 						for (pno = 0; pno < df->min_procs; pno++) {
 							scgi_proc *proc;
 
-							proc = fastcgi_process_init();
+							proc = scgi_process_init();
 							proc->id = df->num_procs++;
 							df->max_id++;
 
@@ -1091,7 +1092,7 @@ SETDEFAULTS_FUNC(mod_scgi_set_defaults) {
 							
 							if (s->debug) {
 								log_error_write(srv, __FILE__, __LINE__, "ssdsbsdsd",
-										"--- fastcgi spawning",
+										"--- scgi spawning",
 										"\n\tport:", df->port,
 										"\n\tsocket", df->unixsocket,
 										"\n\tcurrent:", pno, "/", df->min_procs);
@@ -1111,7 +1112,7 @@ SETDEFAULTS_FUNC(mod_scgi_set_defaults) {
 					} else {
 						scgi_proc *fp;
 						
-						fp = fastcgi_process_init();
+						fp = scgi_process_init();
 						fp->id = df->num_procs++;
 						df->max_id++;
 						df->active_procs++;
@@ -1130,7 +1131,7 @@ SETDEFAULTS_FUNC(mod_scgi_set_defaults) {
 					}
 					
 					/* if extension already exists, take it */
-					fastcgi_extension_insert(s->exts, da_ext->key, df);
+					scgi_extension_insert(s->exts, da_ext->key, df);
 				}
 			}
 		}
@@ -1566,10 +1567,11 @@ static int scgi_create_env(server *srv, handler_ctx *hctx) {
 	
 	scgi_env_add_request_headers(srv, con, p);
 	
-	buffer_append_long(hctx->write_buffer, p->scgi_env->used - 1);
+	buffer_append_long(hctx->write_buffer, p->scgi_env->used);
 	buffer_append_string_len(hctx->write_buffer, CONST_STR_LEN(":"));
-	buffer_append_memory(hctx->write_buffer, (const char *)p->scgi_env->ptr, p->scgi_env->used);
+	buffer_append_string_len(hctx->write_buffer, (const char *)p->scgi_env->ptr, p->scgi_env->used);
 	buffer_append_string_len(hctx->write_buffer, CONST_STR_LEN(","));
+	hctx->write_buffer->used--;
 	
 	/* send FCGI_STDIN */
 	
@@ -1600,91 +1602,97 @@ static int scgi_create_env(server *srv, handler_ctx *hctx) {
 	return 0;
 }
 
-static int scgi_response_parse(server *srv, connection *con, plugin_data *p, buffer *in) {
-	char *s, *ns;
-	
-	handler_ctx *hctx = con->plugin_ctx[p->id];
-	scgi_extension_host *host= hctx->host;
+static int scgi_response_parse(server *srv, connection *con, plugin_data *p, buffer *in, int eol) {
+	char *ns;
+	const char *s;
+	int line = 0;
 	
 	UNUSED(srv);
-
+	
 	buffer_copy_string_buffer(p->parse_response, in);
 	
-	/* search for \n */
-	for (s = p->parse_response->ptr; NULL != (ns = strchr(s, '\n')); s = ns + 1) {
-		char *key, *value;
+	for (s = p->parse_response->ptr; 
+	     NULL != (ns = (eol == EOL_RN ? strstr(s, "\r\n") : strchr(s, '\n'))); 
+	     s = ns + (eol == EOL_RN ? 2 : 1), line++) {
+		const char *key, *value;
 		int key_len;
 		data_string *ds;
 		
-		/* a good day. Someone has read the specs and is sending a \r\n to us */
-		
-		if (ns > p->parse_response->ptr &&
-		    *(ns-1) == '\r') {
-			*(ns-1) = '\0';
-		}
-		
 		ns[0] = '\0';
 		
-		key = s;
-		if (NULL == (value = strchr(s, ':'))) {
-			/* we expect: "<key>: <value>\n" */
-			continue;
-		}
-		
-		key_len = value - key;
-		
-		value++;
-		/* strip WS */
-		while (*value == ' ' || *value == '\t') value++;
-		
-		if (!(con->http_status == 0 ||
-		      con->http_status == 200)) {
+		if (line == 0 && 
+		    0 == strncmp(s, "HTTP/1.", 7)) {
+			/* non-parsed header ... we parse them anyway */
 			
-			/* don't forward Status: */
-			if (0 != strncasecmp(key, "Status", key_len)) {
-				if (NULL == (ds = (data_string *)array_get_unused_element(con->response.headers, TYPE_STRING))) {
-					ds = data_response_init();
+			if ((s[7] == '1' ||
+			     s[7] == '0') &&
+			    s[8] == ' ') {
+				int status;
+				/* after the space should be a status code for us */
+				
+				status = strtol(s+9, NULL, 10);
+				
+				if (con->http_status >= 100 &&
+				    con->http_status < 1000) {
+					/* we expected 3 digits and didn't got them */
+					con->parsed_response |= HTTP_STATUS;
+					con->http_status = status;
 				}
-				buffer_copy_string_len(ds->key, key, key_len);
-				buffer_copy_string(ds->value, value);
-				
-				array_insert_unique(con->response.headers, (data_unset *)ds);
 			}
-		}
+		} else {
 		
-		switch(key_len) {
-		case 4:
-			if (0 == strncasecmp(key, "Date", key_len)) {
-				con->parsed_response |= HTTP_DATE;
+			key = s;
+			if (NULL == (value = strchr(s, ':'))) {
+				/* we expect: "<key>: <value>\r\n" */
+				continue;
 			}
-			break;
-		case 6:
-			if (0 == strncasecmp(key, "Status", key_len)) {
-				con->http_status = strtol(value, NULL, 10);
-				con->parsed_response |= HTTP_STATUS;
+			
+			key_len = value - key;
+			value += 1;
+			
+			/* skip LWS */
+			while (*value == ' ' || *value == '\t') value++;
+			
+			if (NULL == (ds = (data_string *)array_get_unused_element(con->response.headers, TYPE_STRING))) {
+				ds = data_response_init();
 			}
-			break;
-		case 8:
-			if (0 == strncasecmp(key, "Location", key_len)) {
-				con->parsed_response |= HTTP_LOCATION;
+			buffer_copy_string_len(ds->key, key, key_len);
+			buffer_copy_string(ds->value, value);
+			
+			array_insert_unique(con->response.headers, (data_unset *)ds);
+			
+			switch(key_len) {
+			case 4:
+				if (0 == strncasecmp(key, "Date", key_len)) {
+					con->parsed_response |= HTTP_DATE;
+				}
+				break;
+			case 6:
+				if (0 == strncasecmp(key, "Status", key_len)) {
+					con->http_status = strtol(value, NULL, 10);
+					con->parsed_response |= HTTP_STATUS;
+				}
+				break;
+			case 8:
+				if (0 == strncasecmp(key, "Location", key_len)) {
+					con->parsed_response |= HTTP_LOCATION;
+				}
+				break;
+			case 10:
+				if (0 == strncasecmp(key, "Connection", key_len)) {
+					con->response.keep_alive = (0 == strcasecmp(value, "Keep-Alive")) ? 1 : 0;
+					con->parsed_response |= HTTP_CONNECTION;
+				}
+				break;
+			case 14:
+				if (0 == strncasecmp(key, "Content-Length", key_len)) {
+					con->response.content_length = strtol(value, NULL, 10);
+					con->parsed_response |= HTTP_CONTENT_LENGTH;
+				}
+				break;
+			default:
+				break;
 			}
-			break;
-		case 10:
-			if (0 == strncasecmp(key, "Connection", key_len)) {
-				con->response.keep_alive = (0 == strcasecmp(value, "Keep-Alive")) ? 1 : 0;
-				con->parsed_response |= HTTP_CONNECTION;
-			}
-			break;
-		case 14:
-			if (0 == strncasecmp(key, "Content-Length", key_len)) {
-				con->response.content_length = strtol(value, NULL, 10);
-				con->parsed_response |= HTTP_CONTENT_LENGTH;
-				
-				if (con->response.content_length < 0) con->response.content_length = 0;
-			}
-			break;
-		default:
-			break;
 		}
 	}
 	
@@ -1699,176 +1707,144 @@ static int scgi_response_parse(server *srv, connection *con, plugin_data *p, buf
 
 
 static int scgi_demux_response(server *srv, handler_ctx *hctx) {
-	ssize_t len;
-	int fin = 0;
-	int b;
-	ssize_t r;
-	
 	plugin_data *p    = hctx->plugin_data;
-	connection *con   = hctx->remote_conn;
-	int scgi_fd       = hctx->fd;
-	scgi_extension_host *host= hctx->host;
-	scgi_proc *proc   = hctx->proc;
+	connection  *con  = hctx->remote_conn;
 	
-	/* 
-	 * check how much we have to read 
-	 */
-	if (ioctl(hctx->fd, FIONREAD, &b)) {
-		log_error_write(srv, __FILE__, __LINE__, "sd", 
-				"unexpected end-of-file (perhaps the fastcgi process died):",
-				scgi_fd);
-		return -1;
-	}
-	
-	/* init read-buffer */
-	if (hctx->rb == NULL) {
-		hctx->rb = calloc(1, sizeof(*hctx->rb));
-	}
-	
-	if (b > 0) {
-		if (hctx->rb->size == 0) {
-			hctx->rb->size = b;
-			hctx->rb->ptr = malloc(hctx->rb->size * sizeof(*hctx->rb->ptr));
-		} else if (hctx->rb->size < hctx->rb->used + b) {
-			hctx->rb->size += b;
-			hctx->rb->ptr = realloc(hctx->rb->ptr, hctx->rb->size * sizeof(*hctx->rb->ptr));
-		}
+	while(1) {
+		int n;
 		
-		/* append to read-buffer */
-		if (-1 == (r = read(hctx->fd, hctx->rb->ptr + hctx->rb->used, b))) {
-			log_error_write(srv, __FILE__, __LINE__, "sds", 
-					"unexpected end-of-file (perhaps the fastcgi process died):",
-					scgi_fd, strerror(errno));
+		buffer_prepare_copy(hctx->response, 1024);
+		if (-1 == (n = read(hctx->fd, hctx->response->ptr, hctx->response->size - 1))) {
+			if (errno == EAGAIN || errno == EINTR) {
+				/* would block, wait for signal */
+				return 0;
+			}
+			/* error */
+			log_error_write(srv, __FILE__, __LINE__, "sdd", strerror(errno), con->fd, hctx->fd);
 			return -1;
 		}
 		
-		/* this should be catched by the b > 0 above */
-		assert(r);
-		
-		hctx->rb->used += r;
-	} else {
-		/* EOF */
-
+		if (n == 0) {
+			/* read finished */
+			
 			con->file_finished = 1;
 			
-			if (!(con->http_status == 0 ||
-			      con->http_status == 200)) {
-				/* send chunk-end if nesseary */
-				http_chunk_append_mem(srv, con, NULL, 0);
-				joblist_append(srv, con);
+			/* send final chunk */
+			http_chunk_append_mem(srv, con, NULL, 0);
+			joblist_append(srv, con);
+			
+			return 1;
+		}
+		
+		hctx->response->ptr[n] = '\0';
+		hctx->response->used = n+1;
+		
+		/* split header from body */
+		
+		if (con->file_started == 0) {
+			char *c;
+			int in_header = 0;
+			int header_end = 0;
+			int cp, eol = EOL_UNSET;
+			size_t used = 0;
+			
+			buffer_append_string_buffer(hctx->response_header, hctx->response);
+			
+			/* nph (non-parsed headers) */
+			if (0 == strncmp(hctx->response_header->ptr, "HTTP/1.", 7)) in_header = 1;
+			
+			/* search for the \r\n\r\n or \n\n in the string */
+			for (c = hctx->response_header->ptr, cp = 0, used = hctx->response_header->used - 1; used; c++, cp++, used--) {
+				if (*c == ':') in_header = 1;
+				else if (*c == '\n') {
+					if (in_header == 0) {
+						/* got a response without a response header */
+						
+						c = NULL;
+						header_end = 1;
+						break;
+					}
+					
+					if (eol == EOL_UNSET) eol = EOL_N;
+					
+					if (*(c+1) == '\n') {
+						header_end = 1;
+						break;
+					}
+					
+				} else if (used > 1 && *c == '\r' && *(c+1) == '\n') {
+					if (in_header == 0) {
+						/* got a response without a response header */
+						
+						c = NULL;
+						header_end = 1;
+						break;
+					}
+					
+					if (eol == EOL_UNSET) eol = EOL_RN;
+					
+					if (used > 3 &&
+					    *(c+2) == '\r' && 
+					    *(c+3) == '\n') {
+						header_end = 1;
+						break;
+					}
+					
+					/* skip the \n */
+					c++;
+					cp++;
+					used--;
+				}
 			}
 			
-		return 1;
-	}
-	
-	/* parse all fcgi packets 
-	 * 
-	 *   start: hctx->rb->ptr 
-	 *   end  : hctx->rb->ptr + hctx->rb->used
-	 * 
-	 */
-	while (fin == 0) {
-		hctx->response->ptr = hctx->rb->ptr + hctx->rb->offset;
-		
-		
-		if (len) {
-#if 0
-				log_error_write(srv, __FILE__, __LINE__, "sdb", "len", len, hctx->response);
-#endif
-				
-				if (0 == con->got_response) {
-					con->got_response = 1;
-					buffer_prepare_copy(hctx->response_header, 128);
-				}
-				
-				if (0 == con->file_started) {
-					char *c;
-					size_t hlen;
+			if (header_end) {
+				if (c == NULL) {
+					/* no header, but a body */
 					
-					/* search for header terminator 
-					 * 
-					 * if we start with \r\n check if last packet terminated with \r\n
-					 * if we start with \n check if last packet terminated with \n
-					 * search for \r\n\r\n
-					 * search for \n\n
-					 */
-					
-					if (hctx->response->used > 2 &&
-					    hctx->response->ptr[0] == '\r' &&
-					    hctx->response->ptr[1] == '\n' &&
-					    hctx->response_header->used > 3 &&
-					    hctx->response_header->ptr[hctx->response_header->used - 3] == '\r' &&
-					    hctx->response_header->ptr[hctx->response_header->used - 2] == '\n') {
-						hlen = 2;
-						c = hctx->response->ptr + 2;
-					} else if (hctx->response->used > 2 &&
-						   hctx->response->ptr[0] == '\n' &&
-						   hctx->response_header->used > 2 &&
-						   hctx->response_header->ptr[hctx->response_header->used - 2] == '\n') {
-						hlen = 1;
-						c = hctx->response->ptr + 1;
-					} else if (NULL != (c = buffer_search_string_len(hctx->response, "\r\n\r\n", 4))) {
-						c += 4;
-						hlen = c - hctx->response->ptr;
-						
-					} else if (NULL != (c = buffer_search_string_len(hctx->response, "\n\n", 2))) {
-						c += 2;
-						hlen = c - hctx->response->ptr;
+					if (con->request.http_version == HTTP_VERSION_1_1) {
+						con->response.transfer_encoding = HTTP_TRANSFER_ENCODING_CHUNKED;
 					}
 					
-					if (c != NULL) {
-						size_t blen = hctx->response->used - hlen - 1;
-						/* found */
-						
-						buffer_append_string_len(hctx->response_header, hctx->response->ptr, hlen);
-#if 0
-						log_error_write(srv, __FILE__, __LINE__, "ss", "Header:", hctx->response_header->ptr);
-#endif
-						/* parse the response header */
-						scgi_response_parse(srv, con, p, hctx->response_header);
-						
-						if (!(con->http_status == 0 ||
-						      con->http_status == 200)) {
-							/* enable chunked-transfer-encoding */
-							if (con->request.http_version == HTTP_VERSION_1_1 &&
-							    !(con->parsed_response & HTTP_CONTENT_LENGTH)) {
-								con->response.transfer_encoding = HTTP_TRANSFER_ENCODING_CHUNKED;
-							}
-
-							con->file_started = 1;
-						
-							if (blen) {
-								http_chunk_append_mem(srv, con, c, blen + 1);
-								joblist_append(srv, con);
-#if 0
-								log_error_write(srv, __FILE__, __LINE__, "sd", "body-len", blen);
-#endif
-							}
-						}
-					} else {
-						/* copy everything */
-						buffer_append_string_buffer(hctx->response_header, hctx->response);
-					}
+					http_chunk_append_mem(srv, con, hctx->response_header->ptr, hctx->response_header->used);
+					joblist_append(srv, con);
 				} else {
-					if (!(con->http_status == 0 ||
-					      con->http_status == 200)) {
-						http_chunk_append_mem(srv, con, hctx->response->ptr, hctx->response->used);
+					size_t hlen = c - hctx->response_header->ptr + (eol == EOL_RN ? 4 : 2);
+					size_t blen = hctx->response_header->used - hlen - 1;
+				
+					/* a small hack: terminate after at the second \r */
+					hctx->response_header->used = hlen + 1 - (eol == EOL_RN ? 2 : 1);
+					hctx->response_header->ptr[hlen - (eol == EOL_RN ? 2 : 1)] = '\0';
+				
+					/* parse the response header */
+					scgi_response_parse(srv, con, p, hctx->response_header, eol);
+					
+					/* enable chunked-transfer-encoding */
+					if (con->request.http_version == HTTP_VERSION_1_1 &&
+					    !(con->parsed_response & HTTP_CONTENT_LENGTH)) {
+						con->response.transfer_encoding = HTTP_TRANSFER_ENCODING_CHUNKED;
+					}
+					
+					if ((hctx->response->used != hlen) && blen > 0) {
+						http_chunk_append_mem(srv, con, c + (eol == EOL_RN ? 4: 2), blen + 1);
 						joblist_append(srv, con);
 					}
-#if 0
-					log_error_write(srv, __FILE__, __LINE__, "sd", "body-len", hctx->response->used);
-#endif
 				}
-			} else {
-				/* finished */
+				
+				con->file_started = 1;
 			}
-			
+		} else {
+			http_chunk_append_mem(srv, con, hctx->response->ptr, hctx->response->used);
+			joblist_append(srv, con);
+		}
+		
+#if 0		
+		log_error_write(srv, __FILE__, __LINE__, "ddss", con->fd, hctx->fd, connection_get_state(con->state), b->ptr);
+#endif
 	}
 	
-	hctx->response->ptr = NULL;
-
-	return fin;
+	return 0;
 }
+
 
 int scgi_proclist_sort_up(server *srv, scgi_extension_host *host, scgi_proc *proc) {
 	scgi_proc *p;
@@ -1947,7 +1923,7 @@ int scgi_proclist_sort_down(server *srv, scgi_extension_host *host, scgi_proc *p
 	 *
 	 *
 	 * the basic is idea is:
-	 * - the last active fastcgi process should be still 
+	 * - the last active scgi process should be still 
 	 *   in ram and is not swapped out yet
 	 * - processes that are not reused will be killed
 	 *   after some time by the trigger-handler
@@ -2078,7 +2054,7 @@ static int scgi_restart_dead_procs(server *srv, plugin_data *p, scgi_extension_h
 				
 				if (p->conf.debug) {
 					log_error_write(srv, __FILE__, __LINE__, "ssdsbsdsd",
-							"--- fastcgi spawning",
+							"--- scgi spawning",
 							"\n\tport:", host->port,
 							"\n\tsocket", host->unixsocket,
 							"\n\tcurrent:", 1, "/", host->min_procs);
@@ -2356,7 +2332,7 @@ SUBREQUEST_FUNC(mod_scgi_handle_subrequest) {
 			if (proc && proc->is_local) {
 
 				if (p->conf.debug) {
-					log_error_write(srv, __FILE__, __LINE__,  "sbdb", "connect() to fastcgi failed, restarting the request-handling:", 
+					log_error_write(srv, __FILE__, __LINE__,  "sbdb", "connect() to scgi failed, restarting the request-handling:", 
 							host->host,
 							proc->port,
 							proc->socket);
@@ -2425,7 +2401,7 @@ static handler_t scgi_connection_close(server *srv, handler_ctx *hctx) {
 	if (con->mode != p->id) return HANDLER_GO_ON;
 	
 	log_error_write(srv, __FILE__, __LINE__, "ssdsd", 
-			"emergency exit: fastcgi:", 
+			"emergency exit: scgi:", 
 			"connection-fd:", con->fd,
 			"fcgi-fd:", hctx->fd);
 	
@@ -2487,7 +2463,7 @@ static handler_t scgi_handle_fdevent(void *s, void *ctx, int revents) {
 					
 					if (p->conf.debug) {
 						log_error_write(srv, __FILE__, __LINE__, "ssdsbsdsd",
-								"--- fastcgi spawning",
+								"--- scgi spawning",
 								"\n\tport:", host->port,
 								"\n\tsocket", host->unixsocket,
 								"\n\tcurrent:", 1, "/", host->min_procs);
@@ -2588,9 +2564,9 @@ static handler_t scgi_handle_fdevent(void *s, void *ctx, int revents) {
 			 */
 		} else {
 			log_error_write(srv, __FILE__, __LINE__, "sbSBSDSd", 
-					"error: unexpected close of fastcgi connection for", 
+					"error: unexpected close of scgi connection for", 
 					con->uri.path,
-					"(no fastcgi process on host: ", 
+					"(no scgi process on host: ", 
 					host->host,
 					", port: ", 
 					host->port,
@@ -2604,7 +2580,7 @@ static handler_t scgi_handle_fdevent(void *s, void *ctx, int revents) {
 	} else if (revents & FDEVENT_ERR) {
 		log_error_write(srv, __FILE__, __LINE__, "s", 
 				"fcgi: got a FDEVENT_ERR. Don't know why.");
-		/* kill all connections to the fastcgi process */
+		/* kill all connections to the scgi process */
 
 
 		connection_set_state(srv, con, CON_STATE_ERROR);
@@ -2634,9 +2610,9 @@ static int scgi_patch_connection(server *srv, connection *con, plugin_data *p, c
 		for (j = 0; j < dc->value->used; j++) {
 			data_unset *du = dc->value->data[j];
 			
-			if (buffer_is_equal_string(du->key, CONST_STR_LEN("fastcgi.server"))) {
+			if (buffer_is_equal_string(du->key, CONST_STR_LEN("scgi.server"))) {
 				PATCH(exts);
-			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("fastcgi.debug"))) {
+			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("scgi.debug"))) {
 				PATCH(debug);
 			}
 		}
@@ -2676,6 +2652,8 @@ static handler_t scgi_check_extension(server *srv, connection *con, void *p_d, i
 	if (fn->used == 0) {
 		return HANDLER_ERROR;
 	}
+
+	WP();
 	
 	s_len = fn->used - 1;
 	
@@ -2686,6 +2664,8 @@ static handler_t scgi_check_extension(server *srv, connection *con, void *p_d, i
 		
 		scgi_patch_connection(srv, con, p, CONST_BUF_LEN(patch));
 	}
+
+	WP();
 	
 	path_info_offset = 0;
 	
@@ -2716,6 +2696,8 @@ static handler_t scgi_check_extension(server *srv, connection *con, void *p_d, i
 			break;
 		}
 	}
+
+	WP();
 	
 	/* extension doesn't match */
 	if (k == p->conf.exts->used) {
@@ -2735,6 +2717,8 @@ static handler_t scgi_check_extension(server *srv, connection *con, void *p_d, i
 			ndx = k;
 		}
 	}
+
+	WP();
 	
 	/* found a server */
 	if (ndx != -1) {
@@ -2910,7 +2894,7 @@ TRIGGER_FUNC(mod_scgi_handle_trigger) {
 						
 						host->max_id++;
 					} else {
-						fp = fastcgi_process_init();
+						fp = scgi_process_init();
 						fp->id = host->max_id++;
 					}
 					
@@ -3041,7 +3025,7 @@ TRIGGER_FUNC(mod_scgi_handle_trigger) {
 
 int mod_scgi_plugin_init(plugin *p) {
 	p->version     = LIGHTTPD_VERSION_ID;
-	p->name         = buffer_init_string("fastcgi");
+	p->name         = buffer_init_string("scgi");
 
 	p->init         = mod_scgi_init;
 	p->cleanup      = mod_scgi_free;
