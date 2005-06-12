@@ -173,10 +173,12 @@ sub handle_http {
 			}
 
 			if ($no_val == 0) {
-				if ($href->{$_} =~ /^\/(.+)\/$/ && $resp_hdr{$k} !~ /$1/) {
-					diag(sprintf("response-header failed: expected '%s', got '%s', regex: %s\n", 
-					     $href->{$_}, $resp_hdr{$k}, $1));
-					return -1;
+				if ($href->{$_} =~ /^\/(.+)\/$/) {
+					if ($resp_hdr{$k} !~ /$1/) {
+						diag(sprintf("response-header failed: expected '%s', got '%s', regex: %s\n", 
+					             $href->{$_}, $resp_hdr{$k}, $1));
+						return -1;
+					}
 				} elsif ($href->{$_} ne $resp_hdr{$k}) {
 					diag(sprintf("response-header failed: expected '%s', got '%s'\n", 
 					     $href->{$_}, $resp_hdr{$k}));
