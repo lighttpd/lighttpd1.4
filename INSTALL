@@ -12,15 +12,15 @@ Installation
 
 Get the source from 
 
-http://www.incremental.de/products/lighttpd/download/
+http://www.lighttpd.net/download/
 
 unpack it by ::
 
-  $ gzip -cd lighttpd-1.0.0.tar.gz | tar xf -
+  $ gzip -cd lighttpd-1.x.x.tar.gz | tar xf -
 
 compile and install it with ::
 
-  $ cd lighttpd-1.0.0
+  $ cd lighttpd-1.x.x
   $ ./configure
   $ make
   $ su -
