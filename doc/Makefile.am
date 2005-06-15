@@ -28,7 +28,8 @@ mysqlvhost.txt \
 access.txt \
 traffic-shaping.txt \
 setenv.txt \
-status.txt
+status.txt \
+scgi.txt
 
 HTMLDOCS=accesslog.html \
 	 authentication.html \
@@ -57,7 +58,8 @@ HTMLDOCS=accesslog.html \
 	 access.html \
 	 traffic-shaping.html \
 	 setenv.html \
-	 status.html
+	 status.html \
+	 scgi.html
 
 EXTRA_DIST=lighttpd.conf lighttpd.user \
 	rc.lighttpd rc.lighttpd.redhat sysconfig.lighttpd \
