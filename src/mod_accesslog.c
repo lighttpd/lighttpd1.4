@@ -327,6 +327,8 @@ FREE_FUNC(mod_accesslog_free) {
 		
 		for (i = 0; i < srv->config_context->used; i++) {
 			plugin_config *s = p->config_storage[i];
+
+			if (!s) continue;
 			
 			if (s->access_logbuffer->used) {
 				if (s->use_syslog) {
