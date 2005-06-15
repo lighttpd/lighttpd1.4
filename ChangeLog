@@ -26,6 +26,11 @@ Feature Requests:
 - crash in read-post
 - remove default port from Host:
 
+14.06.2005 23:38 
+- documentation
+
+  updated docs for mod_proxy and mod_scgi
+
 12.06.2005 12:55 - pre-release
 - mod_fastcgi
   
