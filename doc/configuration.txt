@@ -206,7 +206,7 @@ server.indexfiles
 server.modules
   modules to load
   
-..note: the order of the modules is somewhat important as the modules are
+.. note:: the order of the modules is somewhat important as the modules are
         handled in the way they are specified. mod_rewrite should always be
         the first module, mod_accesslog always the last.
   

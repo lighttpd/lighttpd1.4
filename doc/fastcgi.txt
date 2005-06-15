@@ -270,6 +270,9 @@ CPUs.
 Adaptive Process Spawning
 =========================
 
+.. note:: This feature is disabled in 1.3.14 again. min-procs is 
+          ignored in that release
+
 Starting with 1.3.8 lighttpd can spawn processes on demand if 
 a bin-path is specified and the FastCGI process runs locally.
 
