@@ -154,7 +154,7 @@ static int mod_status_header_append(buffer *b, const char *key) {
 	return 0;
 }
 
-static handler_t mod_status_handle_server_status(server *srv, connection *con, void *p_d) {
+static handler_t mod_status_handle_server_status_html(server *srv, connection *con, void *p_d) {
 	plugin_data *p = p_d;
 	buffer *b;
 	size_t j;
@@ -166,7 +166,7 @@ static handler_t mod_status_handle_server_status(server *srv, connection *con, v
 	int days, hours, mins, seconds;
 	
 	b = chunkqueue_get_append_buffer(con->write_queue);
-	
+
 	BUFFER_COPY_STRING_CONST(b, 
 				 "<?xml version=\"1.0\" encoding=\"iso-8859-1\"?>\n"
 				 "<!DOCTYPE html PUBLIC \"-//W3C//DTD XHTML 1.0 Transitional//EN\"\n"
@@ -246,14 +246,14 @@ static handler_t mod_status_handle_server_status(server *srv, connection *con, v
 	BUFFER_APPEND_STRING_CONST(b, "<tr><td>Requests</td><td class=\"string\">");
 	avg = p->abs_requests;
 	multiplier = '\0';
-	if (avg > 1000) { avg /= 1000; multiplier = 'k'; }
-	if (avg > 1000) { avg /= 1000; multiplier = 'M'; }
-	if (avg > 1000) { avg /= 1000; multiplier = 'G'; }
-	if (avg > 1000) { avg /= 1000; multiplier = 'T'; }
-	if (avg > 1000) { avg /= 1000; multiplier = 'P'; }
-	if (avg > 1000) { avg /= 1000; multiplier = 'E'; }
-	if (avg > 1000) { avg /= 1000; multiplier = 'Z'; }
-	if (avg > 1000) { avg /= 1000; multiplier = 'Y'; }
+	if (avg > 10000) { avg /= 1000; multiplier = 'k'; }
+	if (avg > 10000) { avg /= 1000; multiplier = 'M'; }
+	if (avg > 10000) { avg /= 1000; multiplier = 'G'; }
+	if (avg > 10000) { avg /= 1000; multiplier = 'T'; }
+	if (avg > 10000) { avg /= 1000; multiplier = 'P'; }
+	if (avg > 10000) { avg /= 1000; multiplier = 'E'; }
+	if (avg > 10000) { avg /= 1000; multiplier = 'Z'; }
+	if (avg > 10000) { avg /= 1000; multiplier = 'Y'; }
 	buffer_append_long(b, avg);
 	BUFFER_APPEND_STRING_CONST(b, " ");
 	if (multiplier)	buffer_append_string_len(b, &multiplier, 1);
@@ -262,16 +262,16 @@ static handler_t mod_status_handle_server_status(server *srv, connection *con, v
 	BUFFER_APPEND_STRING_CONST(b, "<tr><td>Traffic</td><td class=\"string\">");
 	avg = p->abs_traffic_out;
 	multiplier = '\0';
-	
-	if (avg > 1024) { avg /= 1024; multiplier = 'k'; }
-	if (avg > 1024) { avg /= 1024; multiplier = 'M'; }
-	if (avg > 1024) { avg /= 1024; multiplier = 'G'; }
-	if (avg > 1024) { avg /= 1024; multiplier = 'T'; }
-	if (avg > 1024) { avg /= 1024; multiplier = 'P'; }
-	if (avg > 1024) { avg /= 1024; multiplier = 'E'; }
-	if (avg > 1024) { avg /= 1024; multiplier = 'Z'; }
-	if (avg > 1024) { avg /= 1024; multiplier = 'Y'; }
-	
+
+	if (avg > 10240) { avg /= 1024; multiplier = 'k'; }
+	if (avg > 10240) { avg /= 1024; multiplier = 'M'; }
+	if (avg > 10240) { avg /= 1024; multiplier = 'G'; }
+	if (avg > 10240) { avg /= 1024; multiplier = 'T'; }
+	if (avg > 10240) { avg /= 1024; multiplier = 'P'; }
+	if (avg > 10240) { avg /= 1024; multiplier = 'E'; }
+	if (avg > 10240) { avg /= 1024; multiplier = 'Z'; }
+	if (avg > 10240) { avg /= 1024; multiplier = 'Y'; }
+
 	buffer_append_long(b, avg);
 	BUFFER_APPEND_STRING_CONST(b, " ");
 	if (multiplier)	buffer_append_string_len(b, &multiplier, 1);
@@ -287,16 +287,16 @@ static handler_t mod_status_handle_server_status(server *srv, connection *con, v
 	
 	BUFFER_APPEND_STRING_CONST(b, "<tr><td>Requests</td><td class=\"string\">");
 	multiplier = '\0';
-	
-	if (avg > 1024) { avg /= 1024; multiplier = 'k'; }
-	if (avg > 1024) { avg /= 1024; multiplier = 'M'; }
-	if (avg > 1024) { avg /= 1024; multiplier = 'G'; }
-	if (avg > 1024) { avg /= 1024; multiplier = 'T'; }
-	if (avg > 1024) { avg /= 1024; multiplier = 'P'; }
-	if (avg > 1024) { avg /= 1024; multiplier = 'E'; }
-	if (avg > 1024) { avg /= 1024; multiplier = 'Z'; }
-	if (avg > 1024) { avg /= 1024; multiplier = 'Y'; }
-	
+
+	if (avg > 10000) { avg /= 1000; multiplier = 'k'; }
+	if (avg > 10000) { avg /= 1000; multiplier = 'M'; }
+	if (avg > 10000) { avg /= 1000; multiplier = 'G'; }
+	if (avg > 10000) { avg /= 1000; multiplier = 'T'; }
+	if (avg > 10000) { avg /= 1000; multiplier = 'P'; }
+	if (avg > 10000) { avg /= 1000; multiplier = 'E'; }
+	if (avg > 10000) { avg /= 1000; multiplier = 'Z'; }
+	if (avg > 10000) { avg /= 1000; multiplier = 'Y'; }
+
 	buffer_append_long(b, avg);
 	BUFFER_APPEND_STRING_CONST(b, " ");
 	if (multiplier)	buffer_append_string_len(b, &multiplier, 1);
@@ -311,16 +311,16 @@ static handler_t mod_status_handle_server_status(server *srv, connection *con, v
 	
 	BUFFER_APPEND_STRING_CONST(b, "<tr><td>Traffic</td><td class=\"string\">");
 	multiplier = '\0';
-	
-	if (avg > 1024) { avg /= 1024; multiplier = 'k'; }
-	if (avg > 1024) { avg /= 1024; multiplier = 'M'; }
-	if (avg > 1024) { avg /= 1024; multiplier = 'G'; }
-	if (avg > 1024) { avg /= 1024; multiplier = 'T'; }
-	if (avg > 1024) { avg /= 1024; multiplier = 'P'; }
-	if (avg > 1024) { avg /= 1024; multiplier = 'E'; }
-	if (avg > 1024) { avg /= 1024; multiplier = 'Z'; }
-	if (avg > 1024) { avg /= 1024; multiplier = 'Y'; }
-	
+
+	if (avg > 10240) { avg /= 1024; multiplier = 'k'; }
+	if (avg > 10240) { avg /= 1024; multiplier = 'M'; }
+	if (avg > 10240) { avg /= 1024; multiplier = 'G'; }
+	if (avg > 10240) { avg /= 1024; multiplier = 'T'; }
+	if (avg > 10240) { avg /= 1024; multiplier = 'P'; }
+	if (avg > 10240) { avg /= 1024; multiplier = 'E'; }
+	if (avg > 10240) { avg /= 1024; multiplier = 'Z'; }
+	if (avg > 10240) { avg /= 1024; multiplier = 'Y'; }
+
 	buffer_append_long(b, avg);
 	BUFFER_APPEND_STRING_CONST(b, " ");
 	if (multiplier)	buffer_append_string_len(b, &multiplier, 1);
@@ -422,11 +422,49 @@ static handler_t mod_status_handle_server_status(server *srv, connection *con, v
 	
 	response_header_overwrite(srv, con, CONST_STR_LEN("Content-Type"), CONST_STR_LEN("text/html"));
 	
+	return 0;
+}
+
+
+static handler_t mod_status_handle_server_status_text(server *srv, connection *con, void *p_d) {
+	plugin_data *p = p_d;
+	buffer *b;
+	double avg;
+	
+	b = chunkqueue_get_append_buffer(con->write_queue);
+
+	/* output total number of requests */
+	BUFFER_APPEND_STRING_CONST(b, "Total Accesses: ");
+	avg = p->abs_requests;
+	buffer_append_long(b, avg);
+	BUFFER_APPEND_STRING_CONST(b, "\n");
+	
+	/* output total traffic out in kbytes */
+	BUFFER_APPEND_STRING_CONST(b, "Total kBytes: ");
+	avg = p->abs_traffic_out / 1024;
+	buffer_append_long(b, avg);
+	BUFFER_APPEND_STRING_CONST(b, "\n");
+	
+	/* set text/plain output */
+	response_header_overwrite(srv, con, CONST_STR_LEN("Content-Type"), CONST_STR_LEN("text/plain"));
+	
+	return 0;
+}
+
+static handler_t mod_status_handle_server_status(server *srv, connection *con, void *p_d) {
+	
+	if (buffer_is_equal_string(con->uri.query, CONST_STR_LEN("auto"))) {
+		mod_status_handle_server_status_text(srv, con, p_d);
+	} else {
+		mod_status_handle_server_status_html(srv, con, p_d);
+	}
+	
 	con->http_status = 200;
 	con->file_finished = 1;
 	
 	return HANDLER_FINISHED;
 }
+
 
 static handler_t mod_status_handle_server_config(server *srv, connection *con, void *p_d) {
 	plugin_data *p = p_d;
