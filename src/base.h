@@ -223,6 +223,7 @@ typedef struct {
 	buffer *error_handler;
 	buffer *server_tag;
 	buffer *dirlist_css;
+	buffer *dirlist_encoding;
 	
 	unsigned short dir_listing;
 	unsigned short hide_dotfiles;

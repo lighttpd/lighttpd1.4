@@ -742,7 +742,15 @@ static int http_list_directory(server *srv, connection *con, buffer *dir) {
 	if (files.used) http_dirls_sort(files.ent, files.used);
 
 	out = chunkqueue_get_append_buffer(con->write_queue);
-	BUFFER_COPY_STRING_CONST(out, "<?xml version=\"1.0\" encoding=\"iso-8859-1\"?>\n");
+	
+	if (buffer_is_empty(con->conf.dirlist_encoding)) {
+		BUFFER_COPY_STRING_CONST(out, "<?xml version=\"1.0\" encoding=\"iso-8859-1\"?>\n");
+	} else {
+		BUFFER_COPY_STRING_CONST(out, "<?xml version=\"1.0\" encoding=\"");
+		buffer_append_string_buffer(out, con->conf.dirlist_encoding);
+		BUFFER_APPEND_STRING_CONST(out, "\"?>\n");
+	}
+	
 	http_list_directory_header(out, con);
 
 	/* directories */
