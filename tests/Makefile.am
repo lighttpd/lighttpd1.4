@@ -12,9 +12,9 @@ fcgi_responder_LDADD=-lfcgi
 endif
 
 TESTS=\
-prepare.sh \
-run-tests.pl \
-cleanup.sh
+	prepare.sh \
+	run-tests.pl \
+	cleanup.sh
 
 CONFS=fastcgi-10.conf \
       fastcgi-auth.conf \
@@ -33,15 +33,17 @@ CONFS=fastcgi-10.conf \
       mod-redirect.t \
       mod-userdir.t \
       mod-rewrite.t \
-      request.t 
+      request.t \
+      LightyTest.pm
 
 
-TESTS_ENVIRONMENT=$(srcdir)/wrapper.sh $(srcdir) $(top_builddir)
+TESTS_ENVIRONMENT=$(srcdir)/wrapper.sh $(srcdir) $(top_builddir) 
 
 EXTRA_DIST=wrapper.sh lighttpd.conf \
 	lighttpd.user \
 	$(CONFS) \
 	$(TESTS)
+
 SUBDIRS=docroot
 
 leak-check:

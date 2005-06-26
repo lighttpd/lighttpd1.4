@@ -71,8 +71,11 @@ sub start_proc {
 	unlink($self->{LIGHTTPD_PIDFILE});
 	system($self->{LIGHTTPD_PATH}." -f /tmp/cfg.file");
 	# system("valgrind --tool=memcheck --show-reachable=yes --leak-check=yes --logfile=foo ".$lighttpd_path." -D -f /tmp/cfg.file &");
+	#
+	
+	select(undef, undef, undef, 0.1);
 
-	sleep(1);
+	# sleep(1);
 
 	unlink("/tmp/cfg.file");
 
