@@ -1,5 +1,12 @@
 #! /usr/bin/perl -w
 
+BEGIN {
+    # add current source dir to the include-path
+    # we need this for make distcheck
+   (my $srcdir = $0) =~ s#/[^/]+$#/#;
+   unshift @INC, $srcdir;
+}
+
 use strict;
 use IO::Socket;
 use Test::More tests => 15;
