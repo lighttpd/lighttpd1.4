@@ -298,11 +298,24 @@ AC_CHECK_FUNCS([dup2 getcwd inet_ntoa inet_ntop memset mmap munmap strchr \
 		  getuid select signal pathconf\
 		  writev sigaction sendfile64 send_file kqueue port_create localtime_r])
 
+AC_MSG_CHECKING(for Large File System support)
+AC_ARG_ENABLE(lfs,
+ AC_HELP_STRING([--enable-lfs],[Turn on Large File System (default)]),
+ [case "${enableval}" in
+   yes) CPPFLAGS="${CPPFLAGS} -D_FILE_OFFSET_BITS=64 -D_LARGEFILE_SOURCE -D_LARGE_FILES" ;;
+    no) ;;
+     *) AC_MSG_ERROR(bad value ${enableval} for --enable-lfs) ;;
+  esac],[CPPFLAGS="${CPPFLAGS} -D_FILE_OFFSET_BITS=64 -D_LARGEFILE_SOURCE -D_LARGE_FILES"])
+AC_MSG_RESULT($enableval)
+
 if test "x$ac_cv_func_sendfile" = xyes; then
 	# check if sendfile works
         AC_MSG_CHECKING(if sendfile works)
 	if test "x$cross_compiling" = xno; then
 	AC_TRY_RUN([
+		    #ifdef HAVE_SYS_SENDFILE_H
+		    #include <sys/sendfile.h>
+		    #endif /* HAVE_SYS_SENDFILE_H */
 		    #include <errno.h>
 		    int main() {
 		      int o = 0;
@@ -339,20 +352,6 @@ if test x$ipv6 = xtrue; then
     AC_DEFINE(HAVE_IPV6,1,[Whether to enable IPv6 support])
   fi
 fi
-
-
-AC_MSG_CHECKING(for Large File System support)
-AC_ARG_ENABLE(lfs,
- AC_HELP_STRING([--enable-lfs],[Turn on Large File System (default)]),
- [case "${enableval}" in
-   yes) CPPFLAGS="${CPPFLAGS} -D_FILE_OFFSET_BITS=64 -D_LARGEFILE_SOURCE -D_LARGE_FILES" ;;
-    no) ;;
-     *) AC_MSG_ERROR(bad value ${enableval} for --enable-lfs) ;;
-  esac],[CPPFLAGS="${CPPFLAGS} -D_FILE_OFFSET_BITS=64 -D_LARGEFILE_SOURCE -D_LARGE_FILES"])
-AC_MSG_RESULT($enableval)
-
-AC_CHECK_SIZEOF(long)
-AC_CHECK_SIZEOF(off_t)
 
 AM_CONDITIONAL(CROSS_COMPILING, test "x$cross_compiling" = xyes)
 
