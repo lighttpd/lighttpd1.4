@@ -2653,8 +2653,6 @@ static handler_t scgi_check_extension(server *srv, connection *con, void *p_d, i
 		return HANDLER_ERROR;
 	}
 
-	WP();
-	
 	s_len = fn->used - 1;
 	
 	/* select the right config */
@@ -2665,8 +2663,6 @@ static handler_t scgi_check_extension(server *srv, connection *con, void *p_d, i
 		scgi_patch_connection(srv, con, p, CONST_BUF_LEN(patch));
 	}
 
-	WP();
-	
 	path_info_offset = 0;
 	
 	/* check if extension matches */
@@ -2697,8 +2693,6 @@ static handler_t scgi_check_extension(server *srv, connection *con, void *p_d, i
 		}
 	}
 
-	WP();
-	
 	/* extension doesn't match */
 	if (k == p->conf.exts->used) {
 		return HANDLER_GO_ON;
@@ -2718,8 +2712,6 @@ static handler_t scgi_check_extension(server *srv, connection *con, void *p_d, i
 		}
 	}
 
-	WP();
-	
 	/* found a server */
 	if (ndx != -1) {
 		scgi_extension_host *host = extension->hosts[ndx];
