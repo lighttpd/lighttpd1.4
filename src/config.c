@@ -75,6 +75,8 @@ static int config_insert(server *srv) {
 		{ "dir-listing.hide-dotfiles",   NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION }, /* 39 */
 		{ "dir-listing.external-css",    NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_CONNECTION },  /* 40 */
 		
+		{ "dir-listing.encoding",        NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_CONNECTION },  /* 41 */
+		
 		{ "server.host",                 "use server.bind instead", T_CONFIG_DEPRECATED, T_CONFIG_SCOPE_UNSET },
 		{ "server.docroot",              "use server.document-root instead", T_CONFIG_DEPRECATED, T_CONFIG_SCOPE_UNSET },
 		{ "server.virtual-root",         "load mod_simple_vhost and use simple-vhost.server-root instead", T_CONFIG_DEPRECATED, T_CONFIG_SCOPE_UNSET },
@@ -126,6 +128,7 @@ static int config_insert(server *srv) {
 		s->error_handler = buffer_init();
 		s->server_tag    = buffer_init();
 		s->dirlist_css   = buffer_init();
+		s->dirlist_encoding = buffer_init();
 		s->max_keep_alive_requests = 128;
 		s->max_keep_alive_idle = 30;
 		s->max_read_idle = 60;
@@ -173,6 +176,7 @@ static int config_insert(server *srv) {
 		cv[38].destination = s->ssl_ca_file;
 		cv[39].destination = &(s->hide_dotfiles);
 		cv[40].destination = s->dirlist_css;
+		cv[41].destination = s->dirlist_encoding;
 		
 		srv->config_storage[i] = s;
 	
@@ -195,6 +199,7 @@ int config_setup_connection(server *srv, connection *con) {
 	PATCH(document_root);
 	PATCH(dir_listing);
 	PATCH(dirlist_css);
+	PATCH(dirlist_encoding);
 	PATCH(hide_dotfiles);
 	PATCH(indexfiles);
 	PATCH(max_keep_alive_requests);
@@ -245,6 +250,8 @@ int config_patch_connection(server *srv, connection *con, const char *stage, siz
 				PATCH(hide_dotfiles);
 			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("dir-listing.external-css"))) {
 				PATCH(dirlist_css);
+			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("dir-listing.encoding"))) {
+				PATCH(dirlist_encoding);
 			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("server.error-handler-404"))) {
 				PATCH(error_handler);
 			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("server.indexfiles"))) {
