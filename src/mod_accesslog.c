@@ -381,7 +381,7 @@ SETDEFAULTS_FUNC(log_access_open) {
 	
 	if (!p) return HANDLER_ERROR;
 	
-	p->config_storage = malloc(srv->config_context->used * sizeof(specific_config *));
+	p->config_storage = calloc(1, srv->config_context->used * sizeof(specific_config *));
 	
 	for (i = 0; i < srv->config_context->used; i++) {
 		plugin_config *s;
@@ -418,7 +418,10 @@ SETDEFAULTS_FUNC(log_access_open) {
 			s->parsed_format = calloc(1, sizeof(*(s->parsed_format)));
 			
 			if (-1 == accesslog_parse_format(srv, s->parsed_format, s->format)) {
-				log_error_write(srv, __FILE__, __LINE__, "s", "config: ", "failed");
+
+				log_error_write(srv, __FILE__, __LINE__, "sb", 
+						"parsing accesslog-definition failed:", s->format);
+
 				return HANDLER_ERROR;
 			}
 #if 0
@@ -443,7 +446,7 @@ SETDEFAULTS_FUNC(log_access_open) {
 		
 		if (s->use_syslog) {
 			if (srv->log_using_syslog == 0) {
-				log_error_write(srv, __FILE__, __LINE__, "ssbs", 
+				log_error_write(srv, __FILE__, __LINE__, "s", 
 						"accesslog can only be written to syslog if errorlog is also sent to syslog. ABORTING.");
 				
 				return HANDLER_ERROR;
