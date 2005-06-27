@@ -957,7 +957,7 @@ handler_t http_response_prepare(server *srv, connection *con) {
 		buffer_path_simplify(con->uri.path, srv->tmp_buf);
 
 		if (con->conf.log_request_handling) {
-			log_error_write(srv, __FILE__, __LINE__,  "s",  "-- sanatising URI");
+			log_error_write(srv, __FILE__, __LINE__,  "s",  "-- sanitising URI");
 			log_error_write(srv, __FILE__, __LINE__,  "sb", "URI-path     : ", con->uri.path);
 		}
 
