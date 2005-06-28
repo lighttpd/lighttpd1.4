@@ -8,7 +8,7 @@ BEGIN {
 
 use strict;
 use IO::Socket;
-use Test::More tests => 5;
+use Test::More tests => 6;
 use LightyTest;
 
 my $tf_real = LightyTest->new();
@@ -39,6 +39,14 @@ EOF
  );
 $t->{RESPONSE} = ( { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200 } );
 ok($tf_proxy->handle_http($t) == 0, 'valid request');
+
+$t->{REQUEST}  = ( <<EOF
+GET /phpinfo.php HTTP/1.0
+Host: www.example.org
+EOF
+ );
+$t->{RESPONSE} = ( { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200, 'Server' => 'Proxy' } );
+ok($tf_proxy->handle_http($t) == 0, 'drop Server from real server');
 
 ok($tf_proxy->stop_proc == 0, "Stopping lighttpd proxy");
 
