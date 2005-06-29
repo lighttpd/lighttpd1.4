@@ -235,6 +235,9 @@ static void server_free(server *srv) {
 	if (srv->config_storage) {
 		for (i = 0; i < srv->config_context->used; i++) {
 			specific_config *s = srv->config_storage[i];
+
+			if (!s) continue;
+			
 			buffer_free(s->document_root);
 			buffer_free(s->server_name);
 			buffer_free(s->server_tag);
