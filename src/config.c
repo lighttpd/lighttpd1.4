@@ -108,7 +108,7 @@ static int config_insert(server *srv) {
 	cv[36].destination = &(srv->srvconf.log_request_header_on_error);
 	cv[37].destination = &(srv->srvconf.log_state_handling);
 	
-	srv->config_storage = malloc(srv->config_context->used * sizeof(specific_config *));
+	srv->config_storage = calloc(1, srv->config_context->used * sizeof(specific_config *));
 
 	assert(srv->config_storage);
 	
