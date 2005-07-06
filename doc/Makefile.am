@@ -29,7 +29,8 @@ access.txt \
 traffic-shaping.txt \
 setenv.txt \
 status.txt \
-scgi.txt
+scgi.txt \
+cml.txt
 
 HTMLDOCS=accesslog.html \
 	 authentication.html \
@@ -59,7 +60,8 @@ HTMLDOCS=accesslog.html \
 	 traffic-shaping.html \
 	 setenv.html \
 	 status.html \
-	 scgi.html
+	 scgi.html \
+	 cml.html
 
 EXTRA_DIST=lighttpd.conf lighttpd.user \
 	rc.lighttpd rc.lighttpd.redhat sysconfig.lighttpd \
