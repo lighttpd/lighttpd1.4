@@ -18,7 +18,7 @@
 #include "mod_cml.h"
 
 /* init the plugin data */
-INIT_FUNC(mod_cache_init) {
+INIT_FUNC(mod_cml_init) {
 	plugin_data *p;
 	
 	p = calloc(1, sizeof(*p));
@@ -29,7 +29,7 @@ INIT_FUNC(mod_cache_init) {
 }
 
 /* detroy the plugin data */
-FREE_FUNC(mod_cache_free) {
+FREE_FUNC(mod_cml_free) {
 	plugin_data *p = p_d;
 	
 	UNUSED(srv);
@@ -57,7 +57,7 @@ FREE_FUNC(mod_cache_free) {
 
 /* handle plugin config and check values */
 
-SETDEFAULTS_FUNC(mod_cache_set_defaults) {
+SETDEFAULTS_FUNC(mod_cml_set_defaults) {
 	plugin_data *p = p_d;
 	size_t i = 0;
 	
@@ -90,7 +90,7 @@ SETDEFAULTS_FUNC(mod_cache_set_defaults) {
 
 #define PATCH(x) \
 	p->conf.x = s->x;
-static int mod_cache_patch_connection(server *srv, connection *con, plugin_data *p, const char *stage, size_t stage_len) {
+static int mod_cml_patch_connection(server *srv, connection *con, plugin_data *p, const char *stage, size_t stage_len) {
 	size_t i, j;
 	
 	/* skip the first, the global context */
@@ -117,7 +117,7 @@ static int mod_cache_patch_connection(server *srv, connection *con, plugin_data 
 	return 0;
 }
 
-static int mod_cache_setup_connection(server *srv, connection *con, plugin_data *p) {
+static int mod_cml_setup_connection(server *srv, connection *con, plugin_data *p) {
 	plugin_config *s = p->config_storage[0];
 	UNUSED(srv);
 	UNUSED(con);
@@ -252,7 +252,7 @@ int cache_get_session_id(server *srv, connection *con, plugin_data *p) {
 }
 
 
-URIHANDLER_FUNC(mod_cache_is_handled) {
+URIHANDLER_FUNC(mod_cml_is_handled) {
 	int ct_len, s_len;
 	buffer *b;
 	char *c;
@@ -262,11 +262,11 @@ URIHANDLER_FUNC(mod_cache_is_handled) {
 	
 	if (fn->used == 0) return HANDLER_ERROR;
 	
-	mod_cache_setup_connection(srv, con, p);
+	mod_cml_setup_connection(srv, con, p);
 	for (i = 0; i < srv->config_patches->used; i++) {
 		buffer *patch = srv->config_patches->ptr[i];
 		
-		mod_cache_patch_connection(srv, con, p, CONST_BUF_LEN(patch));
+		mod_cml_patch_connection(srv, con, p, CONST_BUF_LEN(patch));
 	}
 	
 	if (buffer_is_empty(p->conf.ext)) return HANDLER_GO_ON;
@@ -313,15 +313,15 @@ URIHANDLER_FUNC(mod_cache_is_handled) {
 	return 0;
 }
 
-int mod_cache_plugin_init(plugin *p) {
+int mod_cml_plugin_init(plugin *p) {
 	p->version     = LIGHTTPD_VERSION_ID;
 	p->name        = buffer_init_string("cache");
 	
-	p->init        = mod_cache_init;
-	p->cleanup     = mod_cache_free;
-	p->set_defaults  = mod_cache_set_defaults;
+	p->init        = mod_cml_init;
+	p->cleanup     = mod_cml_free;
+	p->set_defaults  = mod_cml_set_defaults;
 	
-	p->handle_subrequest_start = mod_cache_is_handled;
+	p->handle_subrequest_start = mod_cml_is_handled;
 	
 	p->data        = NULL;
 	
