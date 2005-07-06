@@ -68,6 +68,11 @@ src += $(common_src)
 common_libadd = 
 endif
 
+lib_LTLIBRARIES += mod_cml.la
+mod_cml_la_SOURCES = mod_cml.c mod_cml_funcs.c mod_cml_logic.c
+mod_cml_la_LDFLAGS = -module -export-dynamic -avoid-version -no-undefined
+mod_cml_la_LIBADD = $(MYSQL_LIBS) $(common_libadd)
+
 lib_LTLIBRARIES += mod_mysql_vhost.la
 mod_mysql_vhost_la_SOURCES = mod_mysql_vhost.c
 mod_mysql_vhost_la_LDFLAGS = -module -export-dynamic -avoid-version -no-undefined
@@ -195,11 +200,7 @@ hdr = server.h buffer.h network.h log.h keyvalue.h \
       network_backends.h configfile.h bitset.h \
       mod_ssi.h mod_ssi_expr.h inet_ntop_cache.h \
       configparser.h mod_ssi_exprparser.h \
-      sys-mmap.h sys-socket.h
-      # license.h
-      
-#hdr += chat.h chat_misc.h chat_endec.h chat_user.h \
-#       chat_channel.h
+      sys-mmap.h sys-socket.h mod_cml.h
 
 DEFS= @DEFS@ -DLIBRARY_DIR="\"$(libdir)\""
 
