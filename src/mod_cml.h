@@ -78,6 +78,10 @@ int cache_parse(server *srv, connection *con, plugin_data *p, buffer *fn);
 int tnode_prepare_long(tnode *t);
 int tnode_prepare_string(tnode *t);
 
+tnode_val_array *tnode_val_array_init();
+void tnode_val_array_free(tnode_val_array *tva);
+void tnode_val_array_reset(tnode_val_array *tva);
+
 #define CACHE_FUNC_PROTO(x) int x(server *srv, connection *con, plugin_data *p, tnode *result)
 
 CACHE_FUNC_PROTO(f_unix_time_now);

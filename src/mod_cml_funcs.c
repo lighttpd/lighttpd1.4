@@ -33,8 +33,9 @@ CACHE_FUNC_PROTO(f_file_mtime) {
 	UNUSED(con);
 	
 	if (p->params->ptr[0]->type != T_NODE_VALUE_STRING) {
-		fprintf(stderr, "%s.%d: f_file_mtime: I need a string: %d\n", 
-			__FILE__, __LINE__, p->params->ptr[0]->type);
+		log_error_write(srv, __FILE__, __LINE__, "sd", 
+				"f_file_mtime: I need a string:", 
+				p->params->ptr[0]->type);
 		
 		return -1;
 	}
@@ -46,7 +47,8 @@ CACHE_FUNC_PROTO(f_file_mtime) {
 	buffer_append_string_buffer(b, p->params->ptr[0]->data.str);
 	
 	if (-1 == stat(b->ptr, &st)) {
-		log_error_write(srv, __FILE__, __LINE__, "sbs", "trigger.if file.mtime():", b, strerror(errno));
+		log_error_write(srv, __FILE__, __LINE__, "sbs", 
+				"trigger.if file.mtime():", b, strerror(errno));
 		
 		buffer_free(b);
 		return -1;
@@ -64,8 +66,9 @@ CACHE_FUNC_PROTO(f_mysql_escape) {
 	UNUSED(con);
 	
 	if (p->params->ptr[0]->type != T_NODE_VALUE_STRING) {
-		fprintf(stderr, "%s.%d: f_mysql_escape: I need a string: %d\n", 
-			__FILE__, __LINE__, p->params->ptr[0]->type);
+		log_error_write(srv, __FILE__, __LINE__, "sd", 
+				"f_mysql_escape: I need a string:", 
+				p->params->ptr[0]->type);
 		
 		return -1;
 	}
@@ -81,8 +84,9 @@ CACHE_FUNC_PROTO(f_mysql_query) {
 	UNUSED(con);
 	
 	if (p->params->ptr[0]->type != T_NODE_VALUE_STRING) {
-		fprintf(stderr, "%s.%d: f_mysql_escape: I need a string: %d\n", 
-			__FILE__, __LINE__, p->params->ptr[0]->type);
+		log_error_write(srv, __FILE__, __LINE__, "sd", 
+				"f_mysql_query: I need a string:", 
+				p->params->ptr[0]->type);
 		return -1;
 	}
 	

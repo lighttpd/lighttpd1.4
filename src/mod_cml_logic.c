@@ -92,6 +92,19 @@ void tnode_val_array_free(tnode_val_array *tva) {
 	free(tva);
 }
 
+void tnode_val_array_reset(tnode_val_array *tva) {
+	size_t i;
+	
+	if (!tva) return;
+	
+	for (i = 0; i < tva->used; i++) {
+		tnode_val_free(tva->ptr[i]);
+	}
+	
+	tva->used = 0;
+}
+
+
 tnode *tnode_init() {
 	tnode *t;
 	
@@ -329,25 +342,25 @@ int cache_trigger_parse(server *srv, connection *con, plugin_data *p, buffer *t 
 					/* parse parameters */
 					
 					if (0 != cache_parse_parameters(srv, con, p, br_open + 1, t->used - slen - 3, p->params)) {
-						fprintf(stderr, "%s.%d: parsing parameters failed\n", 
-							__FILE__, __LINE__
-							);
+						log_error_write(srv, __FILE__, __LINE__, "s", 
+								"parsing parameters failed");
+						
 						return -1;
 					}
 					
 					if (p->params->used != f[i].params) {
-						fprintf(stderr, "%s.%d: wrong param-count for %s: %d, expected %d\n", 
-							__FILE__, __LINE__,
-							f[i].name,
-							p->params->used,
-							f[i].params
-							);
+						log_error_write(srv, __FILE__, __LINE__, "sssdsd", 
+								"wrong param-count for", f[i].name,
+								"got", p->params->used,
+								"expected", f[i].params);
 						return -1;
 					}
 					
 					
 					if (0 != f[i].func(srv, con, p, n)) {
-						fprintf(stderr, "%s.%d: function %s failed\n", __FILE__, __LINE__, f[i].name);
+						log_error_write(srv, __FILE__, __LINE__, "ss", 
+								"calling function failed for", 
+								f[i].name);
 						return -1;
 					}
 					
@@ -362,9 +375,9 @@ int cache_trigger_parse(server *srv, connection *con, plugin_data *p, buffer *t 
 			
 			if (*err != '\0') {
 				/* isn't a int */
-				fprintf(stderr, "%s.%d: can't evaluate: '%s', '%s'\n", 
-					__FILE__, __LINE__,
-					t->ptr, err);
+				log_error_write(srv, __FILE__, __LINE__, "sss", 
+						"can't evaluate:", 
+						t->ptr, err);
 				
 				return -1;
 			}
