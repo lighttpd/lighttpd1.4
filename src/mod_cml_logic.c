@@ -643,7 +643,7 @@ int cache_parse(server *srv, connection *con, plugin_data *p, buffer *fn) {
 			break;
 		case 19:
 			if (0 == strncmp(srv->tmp_buf->ptr, "output.content-type", key_len)) {
-				response_header_insert(srv, con, CONST_STR_LEN("Content-Type"), value, strlen(value));
+				response_header_overwrite(srv, con, CONST_STR_LEN("Content-Type"), value, strlen(value));
 			} else {
 				log_error_write(srv, __FILE__, __LINE__, "db", key_len, srv->tmp_buf);
 			}
