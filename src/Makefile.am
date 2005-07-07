@@ -73,6 +73,11 @@ mod_cml_la_SOURCES = mod_cml.c mod_cml_funcs.c mod_cml_logic.c
 mod_cml_la_LDFLAGS = -module -export-dynamic -avoid-version -no-undefined
 mod_cml_la_LIBADD = $(MYSQL_LIBS) $(common_libadd)
 
+lib_LTLIBRARIES += mod_trigger_b4_dl.la
+mod_trigger_b4_dl_la_SOURCES = mod_trigger_b4_dl.c
+mod_trigger_b4_dl_la_LDFLAGS = -module -export-dynamic -avoid-version -no-undefined
+mod_trigger_b4_dl_la_LIBADD = $(GDBM_LIB) $(MEMCACHE_LIB) $(common_libadd)
+
 lib_LTLIBRARIES += mod_mysql_vhost.la
 mod_mysql_vhost_la_SOURCES = mod_mysql_vhost.c
 mod_mysql_vhost_la_LDFLAGS = -module -export-dynamic -avoid-version -no-undefined
