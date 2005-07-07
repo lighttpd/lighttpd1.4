@@ -35,6 +35,7 @@ typedef struct {
 
 buffer_array* buffer_array_init(void);
 void buffer_array_free(buffer_array *b);
+void buffer_array_reset(buffer_array *b);
 buffer *buffer_array_append_get_buffer(buffer_array *b);
 
 buffer* buffer_init(void);

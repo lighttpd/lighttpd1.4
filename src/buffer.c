@@ -414,6 +414,20 @@ buffer_array* buffer_array_init(void) {
 	return b;
 }
 
+void buffer_array_reset(buffer_array *b) {
+	size_t i;
+	
+	if (!b) return;
+	
+	/* if they are too large, reduce them */
+	for (i = 0; i < b->used; i++) {
+		buffer_reset(b->ptr[i]);
+	}
+	
+	b->used = 0;
+}
+
+
 /**
  * free the buffer_array 
  * 
@@ -432,6 +446,7 @@ void buffer_array_free(buffer_array *b) {
 
 buffer *buffer_array_append_get_buffer(buffer_array *b) {
 	size_t i;
+	
 	if (b->size == 0) {
 		b->size = 16;
 		b->ptr = malloc(sizeof(*b->ptr) * b->size);
