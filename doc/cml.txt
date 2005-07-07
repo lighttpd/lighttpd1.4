@@ -147,7 +147,7 @@ Now we get about 10000 req/s instead of 600 req/s.
 Options
 =======
 
-:cache.extension: 
+:cml.extension: 
   the file extension that is bound to the cml-module
 
 Language

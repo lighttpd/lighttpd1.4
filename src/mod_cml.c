@@ -23,7 +23,13 @@ INIT_FUNC(mod_cml_init) {
 	
 	p = calloc(1, sizeof(*p));
 	
-	p->basedir = buffer_init();
+	p->basedir         = buffer_init();
+	p->session_id      = buffer_init();
+	p->trigger_handler = buffer_init();
+	
+	p->eval            = buffer_array_init();
+	p->trigger_if      = buffer_array_init();
+	p->output_include  = buffer_array_init();
 	
 	return p;
 }
@@ -48,6 +54,12 @@ FREE_FUNC(mod_cml_free) {
 		free(p->config_storage);
 	}
 	
+	buffer_array_free(p->eval);
+	buffer_array_free(p->trigger_if);
+	buffer_array_free(p->output_include);
+	
+	buffer_free(p->trigger_handler);
+	buffer_free(p->session_id);
 	buffer_free(p->basedir);
 	
 	free(p);
@@ -62,7 +74,7 @@ SETDEFAULTS_FUNC(mod_cml_set_defaults) {
 	size_t i = 0;
 	
 	config_values_t cv[] = { 
-		{ "cache.extension",            NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_CONNECTION },       /* 0 */
+		{ "cml.extension",            NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_CONNECTION },       /* 0 */
 		{ NULL,                         NULL, T_CONFIG_UNSET, T_CONFIG_SCOPE_UNSET }
 	};
 	
@@ -108,7 +120,7 @@ static int mod_cml_patch_connection(server *srv, connection *con, plugin_data *p
 		for (j = 0; j < dc->value->used; j++) {
 			data_unset *du = dc->value->data[j];
 			
-			if (buffer_is_equal_string(du->key, CONST_STR_LEN("cache.extension"))) {
+			if (buffer_is_equal_string(du->key, CONST_STR_LEN("cml.extension"))) {
 				PATCH(ext);
 			}
 		}
@@ -268,6 +280,14 @@ URIHANDLER_FUNC(mod_cml_is_handled) {
 		
 		mod_cml_patch_connection(srv, con, p, CONST_BUF_LEN(patch));
 	}
+	
+	buffer_array_reset(p->output_include);
+	buffer_array_reset(p->eval);
+	buffer_array_reset(p->trigger_if);
+	
+	buffer_reset(p->basedir);
+	buffer_reset(p->session_id);
+	buffer_reset(p->trigger_handler);
 	
 	if (buffer_is_empty(p->conf.ext)) return HANDLER_GO_ON;
 	
