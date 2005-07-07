@@ -30,6 +30,7 @@ INIT_FUNC(mod_cml_init) {
 	p->eval            = buffer_array_init();
 	p->trigger_if      = buffer_array_init();
 	p->output_include  = buffer_array_init();
+	p->params          = tnode_val_array_init();
 	
 	return p;
 }
@@ -53,6 +54,8 @@ FREE_FUNC(mod_cml_free) {
 		}
 		free(p->config_storage);
 	}
+	
+	tnode_val_array_free(p->params);
 	
 	buffer_array_free(p->eval);
 	buffer_array_free(p->trigger_if);
@@ -288,6 +291,8 @@ URIHANDLER_FUNC(mod_cml_is_handled) {
 	buffer_reset(p->basedir);
 	buffer_reset(p->session_id);
 	buffer_reset(p->trigger_handler);
+	
+	tnode_val_array_reset(p->params);
 	
 	if (buffer_is_empty(p->conf.ext)) return HANDLER_GO_ON;
 	
