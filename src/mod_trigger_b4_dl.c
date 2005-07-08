@@ -41,6 +41,7 @@ typedef struct {
 	buffer *deny_url;
 	
 	array  *mc_hosts;
+	buffer *mc_namespace;
 #if defined(HAVE_PCRE_H)
 	pcre *trigger_regex;
 	pcre *download_regex;
@@ -59,6 +60,8 @@ typedef struct {
 typedef struct {
 	PLUGIN_DATA;
 	
+	buffer *tmp_buf;
+	
 	plugin_config **config_storage;
 	
 	plugin_config conf; 
@@ -69,6 +72,8 @@ INIT_FUNC(mod_trigger_b4_dl_init) {
 	plugin_data *p;
 	
 	p = calloc(1, sizeof(*p));
+	
+	p->tmp_buf = buffer_init();
 	
 	return p;
 }
@@ -91,6 +96,9 @@ FREE_FUNC(mod_trigger_b4_dl_free) {
 			buffer_free(s->trigger_url);
 			buffer_free(s->deny_url);
 			
+			buffer_free(s->mc_namespace);
+			array_free(s->mc_hosts);
+			
 #if defined(HAVE_PCRE_H)
 			if (s->trigger_regex) pcre_free(s->trigger_regex);
 			if (s->download_regex) pcre_free(s->download_regex);
@@ -111,6 +119,8 @@ FREE_FUNC(mod_trigger_b4_dl_free) {
 		free(p->config_storage);
 	}
 	
+	buffer_free(p->tmp_buf);
+	
 	free(p);
 	
 	return HANDLER_GO_ON;
@@ -130,6 +140,7 @@ SETDEFAULTS_FUNC(mod_trigger_b4_dl_set_defaults) {
 		{ "trigger-before-download.deny-url",        NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_CONNECTION },       /* 3 */
 		{ "trigger-before-download.trigger-timeout", NULL, T_CONFIG_SHORT, T_CONFIG_SCOPE_CONNECTION },        /* 4 */
 		{ "trigger-before-download.memcache-hosts",  NULL, T_CONFIG_ARRAY, T_CONFIG_SCOPE_CONNECTION },        /* 5 */
+		{ "trigger-before-download.memcache-namespace", NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_CONNECTION },    /* 6 */
 		{ NULL,                        NULL, T_CONFIG_UNSET, T_CONFIG_SCOPE_UNSET }
 	};
 	
@@ -158,6 +169,7 @@ SETDEFAULTS_FUNC(mod_trigger_b4_dl_set_defaults) {
 		cv[3].destination = s->deny_url;
 		cv[4].destination = &(s->trigger_timeout);
 		cv[5].destination = s->mc_hosts;
+		cv[6].destination = s->mc_namespace;
 		
 		p->config_storage[i] = s;
 	
@@ -267,6 +279,8 @@ static int mod_trigger_b4_dl_patch_connection(server *srv, connection *con, plug
 				PATCH(trigger_timeout);
 			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("trigger-before-download.deny-url"))) {
 				PATCH(deny_url);
+			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("trigger-before-download.memcache-namespace"))) {
+				PATCH(mc_namespace);
 			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("trigger-before-download.memcache-hosts"))) {
 #if defined(HAVE_MEMCACHE_H)
 				PATCH(mc);
@@ -355,8 +369,11 @@ URIHANDLER_FUNC(mod_trigger_b4_dl_uri_handler) {
 # endif
 		} else if (p->conf.mc) {
 # if defined(HAVE_MEMCACHE_H)
+			buffer_copy_string_buffer(p->tmp_buf, p->conf.mc_namespace);
+			buffer_append_string(p->tmp_buf, remote_ip);
+			
 			if (0 != mc_set(p->conf.mc, 
-					(char *)remote_ip, strlen(remote_ip),
+					CONST_BUF_LEN(p->tmp_buf),
 					(char *)&(srv->cur_ts), sizeof(srv->cur_ts),
 					p->conf.trigger_timeout, 0)) {
 				log_error_write(srv, __FILE__, __LINE__, "s",
@@ -435,6 +452,9 @@ URIHANDLER_FUNC(mod_trigger_b4_dl_uri_handler) {
 # if defined(HAVE_MEMCACHE_H)
 			void *r;
 			
+			buffer_copy_string_buffer(p->tmp_buf, p->conf.mc_namespace);
+			buffer_append_string(p->tmp_buf, remote_ip);
+			
 			/**
 			 * 
 			 * memcached is do expiration for us, as long as we can fetch it every thing is ok
@@ -442,7 +462,8 @@ URIHANDLER_FUNC(mod_trigger_b4_dl_uri_handler) {
 			 * 
 			 */
 			if (NULL == (r = mc_aget(p->conf.mc, 
-						 (char *)remote_ip, strlen(remote_ip)))) {
+						 CONST_BUF_LEN(p->tmp_buf)
+						 ))) {
 				
 				response_header_insert(srv, con, CONST_STR_LEN("Location"), CONST_BUF_LEN(p->conf.deny_url));
 				
@@ -455,7 +476,7 @@ URIHANDLER_FUNC(mod_trigger_b4_dl_uri_handler) {
 			
 			/* set a new timeout */
 			if (0 != mc_set(p->conf.mc, 
-					(char *)remote_ip, strlen(remote_ip),
+					CONST_BUF_LEN(p->tmp_buf),
 					(char *)&(srv->cur_ts), sizeof(srv->cur_ts),
 					p->conf.trigger_timeout, 0)) {
 				log_error_write(srv, __FILE__, __LINE__, "s",
