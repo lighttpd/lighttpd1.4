@@ -86,8 +86,7 @@ void tnode_val_array_reset(tnode_val_array *tva);
 
 CACHE_FUNC_PROTO(f_unix_time_now);
 CACHE_FUNC_PROTO(f_file_mtime);
-CACHE_FUNC_PROTO(f_mysql_escape);
-CACHE_FUNC_PROTO(f_mysql_connect);
-CACHE_FUNC_PROTO(f_mysql_query);
+CACHE_FUNC_PROTO(f_memcache_get);
+CACHE_FUNC_PROTO(f_memcache_exists);
 
 #endif
