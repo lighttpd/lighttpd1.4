@@ -163,11 +163,10 @@ int cache_trigger_parse(server *srv, connection *con, plugin_data *p, buffer *t 
 	 */
 	
 	cache_trigger_functions f[] = {
-		{ "file.mtime",    1, f_file_mtime },
-		{ "unix.time.now", 0, f_unix_time_now },
-		{ "mysql.escape",  1, f_mysql_escape },
-		{ "mysql.connect", 4, f_mysql_connect },
-		{ "mysql.query",   1, f_mysql_query },
+		{ "file.mtime",     1, f_file_mtime },
+		{ "unix.time.now",  0, f_unix_time_now },
+		{ "memcache.exits", 1, f_memcache_exists },
+		{ "memcache.get",   1, f_memcache_get },
 		{ NULL, 0, NULL },
 	};
 	
@@ -340,6 +339,8 @@ int cache_trigger_parse(server *srv, connection *con, plugin_data *p, buffer *t 
 					/* we know the function */
 					
 					/* parse parameters */
+					
+					tnode_val_array_reset(p->params);
 					
 					if (0 != cache_parse_parameters(srv, con, p, br_open + 1, t->used - slen - 3, p->params)) {
 						log_error_write(srv, __FILE__, __LINE__, "s", 

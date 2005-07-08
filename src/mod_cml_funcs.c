@@ -61,15 +61,32 @@ CACHE_FUNC_PROTO(f_file_mtime) {
 	return 0;
 }
 
-CACHE_FUNC_PROTO(f_mysql_escape) {
+CACHE_FUNC_PROTO(f_memcache_exists) {
 	UNUSED(srv);
 	UNUSED(con);
 	
 	if (p->params->ptr[0]->type != T_NODE_VALUE_STRING) {
 		log_error_write(srv, __FILE__, __LINE__, "sd", 
-				"f_mysql_escape: I need a string:", 
+				"f_memcache_exists: I need a string:", 
 				p->params->ptr[0]->type);
 		
+		return -1;
+	}
+	
+	tnode_prepare_long(result);
+	VAL_LONG(result) = 0;
+	
+	return 0;
+}
+
+CACHE_FUNC_PROTO(f_memcache_get) {
+	UNUSED(srv);
+	UNUSED(con);
+	
+	if (p->params->ptr[0]->type != T_NODE_VALUE_STRING) {
+		log_error_write(srv, __FILE__, __LINE__, "sd", 
+				"f_memcache_get: I need a string:", 
+				p->params->ptr[0]->type);
 		return -1;
 	}
 	
@@ -78,36 +95,3 @@ CACHE_FUNC_PROTO(f_mysql_escape) {
 	
 	return 0;
 }
-
-CACHE_FUNC_PROTO(f_mysql_query) {
-	UNUSED(srv);
-	UNUSED(con);
-	
-	if (p->params->ptr[0]->type != T_NODE_VALUE_STRING) {
-		log_error_write(srv, __FILE__, __LINE__, "sd", 
-				"f_mysql_query: I need a string:", 
-				p->params->ptr[0]->type);
-		return -1;
-	}
-	
-	tnode_prepare_long(result);
-	VAL_LONG(result) = 0;
-	
-	return 0;
-}
-
-CACHE_FUNC_PROTO(f_mysql_connect) {
-	UNUSED(srv);
-	UNUSED(con);
-	
-	if (p->params->ptr[0]->type != T_NODE_VALUE_STRING) return -1;
-	if (p->params->ptr[1]->type != T_NODE_VALUE_STRING) return -1;
-	if (p->params->ptr[2]->type != T_NODE_VALUE_STRING) return -1;
-	if (p->params->ptr[3]->type != T_NODE_VALUE_STRING) return -1;
-	
-	tnode_prepare_long(result);
-	VAL_LONG(result) = 0;
-	
-	return 0;
-}
-
