@@ -259,51 +259,12 @@ int http_request_split_value(array *vals, buffer *b) {
 	return 0;
 }
 
-int request_uri_is_valid_char(char c) {
-	/* RFC 2396 - Appendix A */
+int request_uri_is_valid_char(unsigned char c) {
+	if (c <= 32) return 0;
+	if (c == 127) return 0;
+	if (c == 255) return 0;
 	
-	/* alphanum */
-	if (light_isalnum(c)) return 1;
-	if (c < 0) return 1; /* no-ascii chars are ok */
-	
-	switch(c) {
-		/* reserved */
-	case ';':
-	case '/':
-	case '?': 
-	case ':':
-	case '@':
-	case '&':
-	case '=':
-	case '+': /* only in Query part it is rewritten to ' ' (space) */
-	case '$':
-	case ',':
-		
-		/* mark */
-	case '-':
-	case '_':
-	case '.':
-	case '!':
-	case '~':
-	case '*':
-	case '\'':
-	case '(':
-	case ')':
-		
-		/* escaped */
-	case '%':
-		
-		/* fragment, should not be out in the wild $*/
-	case '#': 
-		
-		/* non RFC */
-	case '[': 
-	case ']':
-	case '|':	
-		return 1;
-	}
-	
-	return 0;
+	return 1;
 }
 
 int http_request_parse(server *srv, connection *con) {
