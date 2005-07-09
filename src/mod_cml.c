@@ -50,6 +50,13 @@ FREE_FUNC(mod_cml_free) {
 			
 			buffer_free(s->ext);
 			
+			buffer_free(s->mc_namespace);
+			array_free(s->mc_hosts);
+			
+#if defined(HAVE_MEMCACHE_H)
+			if (s->mc) mc_free(s->mc);
+#endif
+			
 			free(s);
 		}
 		free(p->config_storage);
@@ -77,7 +84,9 @@ SETDEFAULTS_FUNC(mod_cml_set_defaults) {
 	size_t i = 0;
 	
 	config_values_t cv[] = { 
-		{ "cml.extension",            NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_CONNECTION },       /* 0 */
+		{ "cml.extension",              NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_CONNECTION },       /* 0 */
+		{ "cml.memcache-hosts",         NULL, T_CONFIG_ARRAY, T_CONFIG_SCOPE_CONNECTION },        /* 1 */
+		{ "cml.memcache-namespace",     NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_CONNECTION },       /* 2 */
 		{ NULL,                         NULL, T_CONFIG_UNSET, T_CONFIG_SCOPE_UNSET }
 	};
 	
@@ -90,13 +99,40 @@ SETDEFAULTS_FUNC(mod_cml_set_defaults) {
 		
 		s = malloc(sizeof(plugin_config));
 		s->ext    = buffer_init();
+		s->mc_hosts       = array_init();
+		s->mc_namespace   = buffer_init();
 		
 		cv[0].destination = s->ext;
+		cv[1].destination = s->mc_hosts;
+		cv[2].destination = s->mc_namespace;
 		
 		p->config_storage[i] = s;
 	
 		if (0 != config_insert_values_global(srv, ((data_config *)srv->config_context->data[i])->value, cv)) {
 			return HANDLER_ERROR;
+		}
+		
+		if (s->mc_hosts->used) {
+#if defined(HAVE_MEMCACHE_H)
+			size_t k;
+			s->mc = mc_new();
+		
+			for (k = 0; k < s->mc_hosts->used; k++) {
+				data_string *ds = (data_string *)s->mc_hosts->data[k];
+				
+				if (0 != mc_server_add4(s->mc, ds->value->ptr)) {
+					log_error_write(srv, __FILE__, __LINE__, "sb", 
+							"connection to host failed:", 
+							ds->value);
+					
+					return HANDLER_ERROR;
+				}
+			}
+#else
+			log_error_write(srv, __FILE__, __LINE__, "s", 
+					"memcache support is not compiled in but cml.memcache-hosts is set, aborting");
+			return HANDLER_ERROR;
+#endif
 		}
 	}
 	

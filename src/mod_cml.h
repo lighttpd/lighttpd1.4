@@ -7,6 +7,10 @@
 
 #include "stream.h"
 
+#if defined(HAVE_MEMCACHE_H)
+#include <memcache.h>
+#endif
+
 #define plugin_data mod_cache_plugin_data
 
 typedef enum { UNSET, PART, TIMES, MINUS, PLUS, OR, AND, GT, LT, GE, LE, EQ, NE } tnode_op_t;
@@ -45,6 +49,11 @@ typedef struct  {
 typedef struct {
 	buffer *ext;
 	
+	array  *mc_hosts;
+	buffer *mc_namespace;
+#if defined(HAVE_MEMCACHE_H) 
+	struct memcache *mc;
+#endif
 } plugin_config;
 
 typedef struct {
@@ -86,7 +95,8 @@ void tnode_val_array_reset(tnode_val_array *tva);
 
 CACHE_FUNC_PROTO(f_unix_time_now);
 CACHE_FUNC_PROTO(f_file_mtime);
-CACHE_FUNC_PROTO(f_memcache_get);
 CACHE_FUNC_PROTO(f_memcache_exists);
+CACHE_FUNC_PROTO(f_memcache_get_string);
+CACHE_FUNC_PROTO(f_memcache_get_long);
 
 #endif
