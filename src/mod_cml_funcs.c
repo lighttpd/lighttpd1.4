@@ -61,8 +61,10 @@ CACHE_FUNC_PROTO(f_file_mtime) {
 	return 0;
 }
 
+#ifdef HAVE_MEMCACHE_H
 CACHE_FUNC_PROTO(f_memcache_exists) {
-	UNUSED(srv);
+	char *r;
+	
 	UNUSED(con);
 	
 	if (p->params->ptr[0]->type != T_NODE_VALUE_STRING) {
@@ -74,13 +76,24 @@ CACHE_FUNC_PROTO(f_memcache_exists) {
 	}
 	
 	tnode_prepare_long(result);
-	VAL_LONG(result) = 0;
+	
+	if (NULL == (r = mc_aget(p->conf.mc, 
+				 CONST_BUF_LEN(p->params->ptr[0]->data.str)))) {
+				
+		VAL_LONG(result) = 0;
+		return 0;
+	}
+	
+	free(r);
+	
+	VAL_LONG(result) = 1;
 	
 	return 0;
 }
 
-CACHE_FUNC_PROTO(f_memcache_get) {
-	UNUSED(srv);
+CACHE_FUNC_PROTO(f_memcache_get_string) {
+	char *r;
+	
 	UNUSED(con);
 	
 	if (p->params->ptr[0]->type != T_NODE_VALUE_STRING) {
@@ -90,8 +103,52 @@ CACHE_FUNC_PROTO(f_memcache_get) {
 		return -1;
 	}
 	
+	log_error_write(srv, __FILE__, __LINE__, "sb", 
+				"f_memcache_get: couldn't find:", 
+				p->params->ptr[0]->data.str);
+	
+	if (NULL == (r = mc_aget(p->conf.mc, 
+				p->params->ptr[0]->data.str->ptr, p->params->ptr[0]->data.str->used - 1))) {
+		log_error_write(srv, __FILE__, __LINE__, "sb", 
+				"f_memcache_get: couldn't find:", 
+				p->params->ptr[0]->data.str);
+		return -1;
+	}
 	tnode_prepare_string(result);
-	buffer_copy_string_buffer(VAL_STRING(result), p->params->ptr[0]->data.str);
+	buffer_copy_string(VAL_STRING(result), r);
+	
+	free(r);
 	
 	return 0;
 }
+
+CACHE_FUNC_PROTO(f_memcache_get_long) {
+	char *r;
+	
+	UNUSED(con);
+	
+	if (p->params->ptr[0]->type != T_NODE_VALUE_STRING) {
+		log_error_write(srv, __FILE__, __LINE__, "sd", 
+				"f_memcache_get: I need a string:", 
+				p->params->ptr[0]->type);
+		return -1;
+	}
+	
+	
+	
+	if (NULL == (r = mc_aget(p->conf.mc, 
+				 CONST_BUF_LEN(p->params->ptr[0]->data.str)))) {
+		log_error_write(srv, __FILE__, __LINE__, "sb", 
+				"f_memcache_get: couldn't find:", 
+				p->params->ptr[0]->data.str);
+		return -1;
+	}
+	
+	tnode_prepare_long(result);
+	VAL_LONG(result) = strtol(r, NULL, 10);
+	
+	free(r);
+	
+	return 0;
+}
+#endif

@@ -165,8 +165,11 @@ int cache_trigger_parse(server *srv, connection *con, plugin_data *p, buffer *t 
 	cache_trigger_functions f[] = {
 		{ "file.mtime",     1, f_file_mtime },
 		{ "unix.time.now",  0, f_unix_time_now },
+#ifdef HAVE_MEMCACHE_H
 		{ "memcache.exits", 1, f_memcache_exists },
-		{ "memcache.get",   1, f_memcache_get },
+		{ "memcache.get_string",   1, f_memcache_get_string },
+		{ "memcache.get_long",     1, f_memcache_get_long },
+#endif
 		{ NULL, 0, NULL },
 	};
 	
@@ -480,12 +483,13 @@ int cache_trigger_eval(server *srv, connection *con, plugin_data *p, tnode *t) {
 		}
 	} else if (IS_STRING(t->l) && IS_STRING(t->r)) {
 		if (-1 == cache_ops_string(t, t->l, t->r)) {
-			fprintf(stderr, "%s.%d: cache_ops_string failed\n", __FILE__, __LINE__);
+			log_error_write(srv, __FILE__, __LINE__, "s", 
+					"cache_ops_string failed");
 			return -1;
 		}
 	} else {
-		fprintf(stderr, "%s.%d: typemismatch\n",
-			__FILE__, __LINE__);
+		log_error_write(srv, __FILE__, __LINE__, "s", 
+				"typemismatch");
 		
 		return -1;
 	}
@@ -505,7 +509,8 @@ int cache_trigger(server *srv, connection *con, plugin_data *p) {
 		}
 		
 		if (-1 == cache_trigger_eval(srv, con, p, t)) {
-			fprintf(stderr, "%s.%d: cache_trigger_eval failed\n", __FILE__, __LINE__);
+			log_error_write(srv, __FILE__, __LINE__, "s", 
+					"cache_trigger_eval failed");
 			return -1;
 		}
 
