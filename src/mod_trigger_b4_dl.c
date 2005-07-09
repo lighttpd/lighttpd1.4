@@ -104,14 +104,10 @@ FREE_FUNC(mod_trigger_b4_dl_free) {
 			if (s->download_regex) pcre_free(s->download_regex);
 #endif
 #if defined(HAVE_GDBM_H)
-			if (s->db) {
-				gdbm_close(s->db);
-			}
+			if (s->db) gdbm_close(s->db);
 #endif
 #if defined(HAVE_MEMCACHE_H)
-			if (s->mc) {
-				mc_free(s->mc);
-			}
+			if (s->mc) mc_free(s->mc);
 #endif
 			
 			free(s);
@@ -162,6 +158,7 @@ SETDEFAULTS_FUNC(mod_trigger_b4_dl_set_defaults) {
 		s->trigger_url    = buffer_init();
 		s->deny_url       = buffer_init();
 		s->mc_hosts       = array_init();
+		s->mc_namespace   = buffer_init();
 		
 		cv[0].destination = s->db_filename;
 		cv[1].destination = s->trigger_url;
@@ -332,7 +329,22 @@ URIHANDLER_FUNC(mod_trigger_b4_dl_uri_handler) {
 		mod_trigger_b4_dl_patch_connection(srv, con, p, CONST_BUF_LEN(patch));
 	}
 	
-	if (!p->conf.trigger_regex || !p->conf.download_regex || (!p->conf.db && !p->conf.mc)) return HANDLER_GO_ON;
+	if (!p->conf.trigger_regex || !p->conf.download_regex) return HANDLER_GO_ON;
+	
+# if !defined(HAVE_GDBM_H) && !defined(HAVE_MEMCACHE_H)
+	return HANDLER_GO_ON;
+# elif defined(HAVE_GDBM_H) && defined(HAVE_MEMCACHE_H)
+	if (!p->conf.db && !p->conf.mc) return HANDLER_GO_ON;
+	if (p->conf.db && p->conf.mc) {
+		/* can't decide which one */
+		
+		return HANDLER_GO_ON;
+	}
+# elif defined(HAVE_GDBM_H)
+	if (!p->conf.db) return HANDLER_GO;
+# else
+	if (!p->conf.mc) return HANDLER_GO;
+# endif
 	
 	if (NULL != (ds = (data_string *)array_get_element(con->request.headers, "X-Forwarded-For"))) {
 		/* X-Forwarded-For contains the ip behind the proxy */
@@ -351,8 +363,8 @@ URIHANDLER_FUNC(mod_trigger_b4_dl_uri_handler) {
 			return HANDLER_ERROR;
 		}
 	} else {
-		if (p->conf.db) {
 # if defined(HAVE_GDBM_H)
+		if (p->conf.db) {
 			/* the trigger matched */
 			datum key, val;
 			
@@ -366,9 +378,10 @@ URIHANDLER_FUNC(mod_trigger_b4_dl_uri_handler) {
 				log_error_write(srv, __FILE__, __LINE__, "s",
 						"insert failed");
 			}
+		}
 # endif
-		} else if (p->conf.mc) {
-# if defined(HAVE_MEMCACHE_H)
+# if defined(HAVE_MEMCACHE_H)		
+		if (p->conf.mc) {
 			buffer_copy_string_buffer(p->tmp_buf, p->conf.mc_namespace);
 			buffer_append_string(p->tmp_buf, remote_ip);
 			
@@ -379,8 +392,8 @@ URIHANDLER_FUNC(mod_trigger_b4_dl_uri_handler) {
 				log_error_write(srv, __FILE__, __LINE__, "s",
 						"insert failed");
 			}
-# endif
 		}
+# endif
 	}
 		
 	/* check if URL is a download -> check IP in DB, update timestamp */
@@ -392,11 +405,10 @@ URIHANDLER_FUNC(mod_trigger_b4_dl_uri_handler) {
 		}
 	} else {
 		/* the download uri matched */
-		time_t last_hit;
-		
+# if defined(HAVE_GDBM_H)		
 		if (p->conf.db) {
-# if defined(HAVE_GDBM_H)
 			datum key, val;
+			time_t last_hit;
 		
 			key.dptr = (char *)remote_ip;
 			key.dsize = strlen(remote_ip);
@@ -447,9 +459,11 @@ URIHANDLER_FUNC(mod_trigger_b4_dl_uri_handler) {
 				log_error_write(srv, __FILE__, __LINE__, "s",
 						"insert failed");
 			}
+		}
 # endif
-		} else if (p->conf.mc) {
-# if defined(HAVE_MEMCACHE_H)
+		
+# if defined(HAVE_MEMCACHE_H)		
+		if (p->conf.mc) {
 			void *r;
 			
 			buffer_copy_string_buffer(p->tmp_buf, p->conf.mc_namespace);
@@ -482,8 +496,8 @@ URIHANDLER_FUNC(mod_trigger_b4_dl_uri_handler) {
 				log_error_write(srv, __FILE__, __LINE__, "s",
 						"insert failed");
 			}
-# endif
 		}
+# endif
 	}
 	
 #else
