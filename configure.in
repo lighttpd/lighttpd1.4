@@ -259,8 +259,8 @@ AC_ARG_WITH(gdbm, AC_HELP_STRING([--with-gdbm],[gdbm storage for mod_trigger_b4_
 ],[AC_MSG_RESULT(no)])
 AC_SUBST(GDBM_LIB)
 
-AC_MSG_CHECKING(for libmemcache)
-AC_ARG_WITH(gdbm, AC_HELP_STRING([--with-libmemcache],[memcached storage for mod_trigger_b4_dl]),
+AC_MSG_CHECKING(for memcache)
+AC_ARG_WITH(memcache, AC_HELP_STRING([--with-memcache],[memcached storage for mod_trigger_b4_dl]),
 [AC_MSG_RESULT(yes)
  AC_CHECK_LIB(memcache, mc_new, [
          AC_CHECK_HEADERS([memcache.h],[

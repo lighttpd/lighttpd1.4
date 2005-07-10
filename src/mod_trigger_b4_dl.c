@@ -341,9 +341,9 @@ URIHANDLER_FUNC(mod_trigger_b4_dl_uri_handler) {
 		return HANDLER_GO_ON;
 	}
 # elif defined(HAVE_GDBM_H)
-	if (!p->conf.db) return HANDLER_GO;
+	if (!p->conf.db) return HANDLER_GO_ON;
 # else
-	if (!p->conf.mc) return HANDLER_GO;
+	if (!p->conf.mc) return HANDLER_GO_ON;
 # endif
 	
 	if (NULL != (ds = (data_string *)array_get_element(con->request.headers, "X-Forwarded-For"))) {
