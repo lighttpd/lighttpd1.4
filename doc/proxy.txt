@@ -87,7 +87,7 @@ listen on port 80 for requests. ::
 
   $HTTP["host"] == "www.example.org" {
     proxy.balance = "hash"
-    proxy.balance = ( "" => ( ( "host" => "10.0.0.10" ),
+    proxy.server  = ( "" => ( ( "host" => "10.0.0.10" ),
                               ( "host" => "10.0.0.11" ),
                               ( "host" => "10.0.0.12" ),
                               ( "host" => "10.0.0.13" ),
