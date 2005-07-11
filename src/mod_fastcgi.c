@@ -3058,6 +3058,10 @@ static handler_t fcgi_check_extension(server *srv, connection *con, void *p_d, i
 				host->load++;
 				
 				con->mode = p->id;
+				
+				if (con->conf.log_request_handling) {
+					log_error_write(srv, __FILE__, __LINE__, "s", "handling it in mod_fastcgi");
+				}
 			}
 			return HANDLER_GO_ON;
 		} else {
@@ -3078,6 +3082,10 @@ static handler_t fcgi_check_extension(server *srv, connection *con, void *p_d, i
 			host->load++;
 			
 			con->mode = p->id;
+			
+			if (con->conf.log_request_handling) {
+				log_error_write(srv, __FILE__, __LINE__, "s", "handling it in mod_fastcgi");
+			}
 			
 			return HANDLER_FINISHED;
 		}
