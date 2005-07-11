@@ -24,6 +24,7 @@ INIT_FUNC(mod_cml_init) {
 	p = calloc(1, sizeof(*p));
 	
 	p->basedir         = buffer_init();
+	p->baseurl         = buffer_init();
 	p->session_id      = buffer_init();
 	p->trigger_handler = buffer_init();
 	
@@ -71,6 +72,7 @@ FREE_FUNC(mod_cml_free) {
 	buffer_free(p->trigger_handler);
 	buffer_free(p->session_id);
 	buffer_free(p->basedir);
+	buffer_free(p->baseurl);
 	
 	free(p);
 	
@@ -161,6 +163,12 @@ static int mod_cml_patch_connection(server *srv, connection *con, plugin_data *p
 			
 			if (buffer_is_equal_string(du->key, CONST_STR_LEN("cml.extension"))) {
 				PATCH(ext);
+			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("cml.memcache-hosts"))) {
+#if defined(HAVE_MEMCACHE_H)
+				PATCH(mc);
+#endif
+			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("cml.memcache-namespace"))) {
+				PATCH(mc_namespace);
 			}
 		}
 	}
@@ -174,6 +182,10 @@ static int mod_cml_setup_connection(server *srv, connection *con, plugin_data *p
 	UNUSED(con);
 		
 	PATCH(ext);
+#if defined(HAVE_MEMCACHE_H)
+	PATCH(mc);
+#endif
+	PATCH(mc_namespace);
 	
 	return 0;
 }
@@ -325,6 +337,7 @@ URIHANDLER_FUNC(mod_cml_is_handled) {
 	buffer_array_reset(p->trigger_if);
 	
 	buffer_reset(p->basedir);
+	buffer_reset(p->baseurl);
 	buffer_reset(p->session_id);
 	buffer_reset(p->trigger_handler);
 	
@@ -343,6 +356,15 @@ URIHANDLER_FUNC(mod_cml_is_handled) {
 	}
 	
 	/* cleanup basedir */
+	b = p->baseurl;
+	buffer_copy_string_buffer(b, con->uri.path);
+	for (c = b->ptr + b->used - 1; c > b->ptr && *c != '/'; c--);
+	
+	if (*c == '/') {
+		b->used = c - b->ptr + 2;
+		*(c+1) = '\0';
+	}
+	
 	b = p->basedir;
 	buffer_copy_string_buffer(b, fn);
 	for (c = b->ptr + b->used - 1; c > b->ptr && *c != '/'; c--);
@@ -362,12 +384,24 @@ URIHANDLER_FUNC(mod_cml_is_handled) {
 	
 	switch(cache_parse(srv, con, p, fn)) {
 	case -1:
+		/* error */
+		if (con->conf.log_request_handling) {
+			log_error_write(srv, __FILE__, __LINE__, "s", "cache-error");
+		}
 		con->http_status = 500;
 		return HANDLER_COMEBACK;
 	case 0:
+		if (con->conf.log_request_handling) {
+			log_error_write(srv, __FILE__, __LINE__, "s", "cache-hit");
+		}
+		/* cache-hit */
 		buffer_reset(con->physical.path);
 		return HANDLER_FINISHED;
 	case 1:
+		if (con->conf.log_request_handling) {
+			log_error_write(srv, __FILE__, __LINE__, "s", "cache-miss");
+		}
+		/* cache miss */
 		return HANDLER_COMEBACK;
 	}
 	
