@@ -517,15 +517,19 @@ int buffer_is_equal(buffer *a, buffer *b) {
 	if (a->used != b->used) return 0;
 	if (a->used == 0) return 1;
 
-	for (i = a->used - 1; i < a->used && i % (sizeof(size_t)); i --) {
+	/* we are unsigned, if i < 0 it will flip to MAX_SIZE_T and will be > a->used */
+	for (i = a->used - 1; i < a->used && i % (sizeof(size_t)); i--) {
 		if (a->ptr[i] != b->ptr[i]) return 0;
 	}
+	
+	/* compare the single char itself which was kicked us out of the loop */ 
+	if (i < a->used && a->ptr[i] != b->ptr[i]) return 0;
 	
 	for (i -= (sizeof(size_t)); i < a->used; i -= (sizeof(size_t))) {
 		if (*((size_t *)(a->ptr + i)) != 
 		    *((size_t *)(b->ptr + i))) return 0;
 	}
-
+	
 	return 1;
 }
 
