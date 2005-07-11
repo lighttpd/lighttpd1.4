@@ -60,6 +60,7 @@ typedef struct {
 	PLUGIN_DATA;
 	
 	buffer *basedir;
+	buffer *baseurl;
 	
 	buffer *trigger_handler;
 	
@@ -98,5 +99,7 @@ CACHE_FUNC_PROTO(f_file_mtime);
 CACHE_FUNC_PROTO(f_memcache_exists);
 CACHE_FUNC_PROTO(f_memcache_get_string);
 CACHE_FUNC_PROTO(f_memcache_get_long);
+CACHE_FUNC_PROTO(f_http_request_get_param);
+CACHE_FUNC_PROTO(f_crypto_md5);
 
 #endif

@@ -170,6 +170,8 @@ int cache_trigger_parse(server *srv, connection *con, plugin_data *p, buffer *t 
 		{ "memcache.get_string",   1, f_memcache_get_string },
 		{ "memcache.get_long",     1, f_memcache_get_long },
 #endif
+		{ "http.get_parameter",    1, f_http_request_get_param },
+		{ "crypto.md5",            1, f_crypto_md5 },
 		{ NULL, 0, NULL },
 	};
 	
@@ -391,7 +393,7 @@ int cache_trigger_parse(server *srv, connection *con, plugin_data *p, buffer *t 
 	return 0;
 }
 
-int cache_ops_long(tnode *res, tnode *l, tnode *r) {
+int cache_ops_long(server *srv, tnode *res, tnode *l, tnode *r) {
 	if (!IS_LONG(l) || !IS_LONG(r)) {
 		return -1;
 	}
@@ -431,7 +433,7 @@ case x: \
 	return 0;
 }
 
-int cache_ops_string(tnode *res, tnode *l, tnode *r) {
+int cache_ops_string(server *srv, tnode *res, tnode *l, tnode *r) {
 	if (!IS_STRING(l) || !IS_STRING(r)) {
 		return -1;
 	}
@@ -447,9 +449,55 @@ int cache_ops_string(tnode *res, tnode *l, tnode *r) {
 		res->op = UNSET;
 		
 		break;
+	case EQ:
+		tnode_prepare_long(res);
+		
+		VAL_LONG(res) = buffer_is_equal(VAL_STRING(l), VAL_STRING(r));
+		
+		res->value.type = T_NODE_VALUE_LONG;
+		res->op = UNSET;
+		
+		break;
+	case NE:
+		tnode_prepare_long(res);
+		
+		VAL_LONG(res) = !buffer_is_equal(VAL_STRING(l), VAL_STRING(r));
+		
+		res->value.type = T_NODE_VALUE_LONG;
+		res->op = UNSET;
+		
+		break;
 	default:
 		return -1;
 	}
+	
+	return 0;
+}
+
+int cache_print_tree(server *srv, connection *con, plugin_data *p, tnode *t, int indent) {
+	char s[255];
+	size_t i;
+	
+	for (i = 0; i < indent; i++) {
+		s[i] = ' ';
+	}
+	
+	s[i] = '\0';
+	
+	if (IS_LONG(t))   log_error_write(srv, __FILE__, __LINE__, "ssd", s, "l:", VAL_LONG(t)); 
+	if (IS_STRING(t)) log_error_write(srv, __FILE__, __LINE__, "ssb", s, "s:", VAL_STRING(t)); 
+	
+	
+	if (t->l) {
+		log_error_write(srv, __FILE__, __LINE__, "ss", s, "left"); 
+		cache_print_tree(srv, con, p, t->l, indent + 1);
+	}
+	
+	if (t->r) {
+		log_error_write(srv, __FILE__, __LINE__, "ss", s, "right"); 
+		cache_print_tree(srv, con, p, t->r, indent + 1);
+	}
+	
 	
 	return 0;
 }
@@ -477,19 +525,20 @@ int cache_trigger_eval(server *srv, connection *con, plugin_data *p, tnode *t) {
 	
 	/* left and right are simple datatypes now */
 	if (IS_LONG(t->l) && IS_LONG(t->r)) {
-		if (-1 == cache_ops_long(t, t->l, t->r)) {
-			fprintf(stderr, "%s.%d\n", __FILE__, __LINE__);
+		if (-1 == cache_ops_long(srv, t, t->l, t->r)) {
+			log_error_write(srv, __FILE__, __LINE__, "s", 
+					"cache_ops_long failed");
 			return -1;
 		}
 	} else if (IS_STRING(t->l) && IS_STRING(t->r)) {
-		if (-1 == cache_ops_string(t, t->l, t->r)) {
+		if (-1 == cache_ops_string(srv, t, t->l, t->r)) {
 			log_error_write(srv, __FILE__, __LINE__, "s", 
 					"cache_ops_string failed");
 			return -1;
 		}
 	} else {
-		log_error_write(srv, __FILE__, __LINE__, "s", 
-				"typemismatch");
+		log_error_write(srv, __FILE__, __LINE__, "sdd", 
+				"typemismatch", t->l->value.type, t->r->value.type);
 		
 		return -1;
 	}
@@ -515,18 +564,17 @@ int cache_trigger(server *srv, connection *con, plugin_data *p) {
 		}
 
 		if (IS_LONG(t)) {
-#if 0
-			fprintf(stderr, "eval: %s = %ld\n", p->trigger_if->ptr[i]->ptr, VAL_LONG(t));
-#endif
+			log_error_write(srv, __FILE__, __LINE__, "sbd", 
+					"eval:", p->trigger_if->ptr[i], VAL_LONG(t));
 			if (VAL_LONG(t) != 0) {
 				tnode_free(t);
 			
 				return 1;
 			}
 		} else if (IS_STRING(t)) {
-#if 0
-			fprintf(stderr, "eval: %s = '%s'\n", p->trigger_if->ptr[i]->ptr, VAL_STRING(t)->ptr);
-#endif
+			log_error_write(srv, __FILE__, __LINE__, "sbb", 
+					"eval:", p->trigger_if->ptr[i], VAL_STRING(t));
+			
 			if (VAL_STRING(t)->used > 1) {
 				tnode_free(t);
 				
@@ -650,12 +698,7 @@ int cache_parse(server *srv, connection *con, plugin_data *p, buffer *fn) {
 				 * 
 				 */
 				
-				buffer *b;
-				
-				b = p->trigger_handler;
-				
-				buffer_copy_string_buffer(b, p->basedir);
-				buffer_append_string(b, value); 
+				buffer_copy_string(p->trigger_handler, value);
 			} else {
 				log_error_write(srv, __FILE__, __LINE__, "db", key_len, srv->tmp_buf);
 			}
@@ -684,7 +727,11 @@ int cache_parse(server *srv, connection *con, plugin_data *p, buffer *fn) {
 		/* triggering */
 		
 		/* rewrite filename */
-		buffer_copy_string_buffer(con->physical.path, p->trigger_handler);
+		buffer_copy_string_buffer(con->uri.path, p->baseurl);
+		buffer_append_string_buffer(con->uri.path, p->trigger_handler);
+	
+		buffer_copy_string_buffer(con->physical.path, p->basedir);
+		buffer_append_string_buffer(con->physical.path, p->trigger_handler);
 		
 		chunkqueue_reset(con->write_queue);
 		
