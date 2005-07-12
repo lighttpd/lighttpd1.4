@@ -350,6 +350,8 @@ URIHANDLER_FUNC(mod_trigger_b4_dl_uri_handler) {
 		/* X-Forwarded-For contains the ip behind the proxy */
 		
 		remote_ip = ds->value->ptr;
+		
+		/* memcache can't handle spaces */
 	} else {
 		remote_ip = inet_ntop_cache_get_ip(srv, &(con->dst_addr));
 	}
@@ -384,6 +386,10 @@ URIHANDLER_FUNC(mod_trigger_b4_dl_uri_handler) {
 		if (p->conf.mc) {
 			buffer_copy_string_buffer(p->tmp_buf, p->conf.mc_namespace);
 			buffer_append_string(p->tmp_buf, remote_ip);
+			
+			for (i = 0; i < p->tmp_buf->used - 1; i++) {
+				if (p->tmp_buf->ptr[i] == ' ') p->tmp_buf->ptr[i] = '-';
+			}
 			
 			if (0 != mc_set(p->conf.mc, 
 					CONST_BUF_LEN(p->tmp_buf),
@@ -440,13 +446,6 @@ URIHANDLER_FUNC(mod_trigger_b4_dl_uri_handler) {
 						log_error_write(srv, __FILE__, __LINE__, "s",
 								"delete failed");
 					}
-				} else if (p->conf.mc) {
-					if (0 != mc_delete(p->conf.mc, 
-							   (char *)remote_ip, strlen(remote_ip),
-							   0)) {
-						log_error_write(srv, __FILE__, __LINE__, "s",
-								"insert failed");
-					}
 				}
 				
 				return HANDLER_FINISHED;
@@ -468,6 +467,10 @@ URIHANDLER_FUNC(mod_trigger_b4_dl_uri_handler) {
 			
 			buffer_copy_string_buffer(p->tmp_buf, p->conf.mc_namespace);
 			buffer_append_string(p->tmp_buf, remote_ip);
+			
+			for (i = 0; i < p->tmp_buf->used - 1; i++) {
+				if (p->tmp_buf->ptr[i] == ' ') p->tmp_buf->ptr[i] = '-';
+			}
 			
 			/**
 			 * 
