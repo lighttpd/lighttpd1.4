@@ -167,7 +167,7 @@ CACHE_FUNC_PROTO(f_crypto_md5) {
 	
 	if (p->params->ptr[0]->type != T_NODE_VALUE_STRING) {
 		log_error_write(srv, __FILE__, __LINE__, "sd", 
-				"f_http_request_get_param: I need a string:", 
+				"crypto.md5: I need a string:", 
 				p->params->ptr[0]->type);
 		
 		return -1;

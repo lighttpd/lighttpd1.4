@@ -170,7 +170,7 @@ int cache_trigger_parse(server *srv, connection *con, plugin_data *p, buffer *t 
 		{ "memcache.get_string",   1, f_memcache_get_string },
 		{ "memcache.get_long",     1, f_memcache_get_long },
 #endif
-		{ "http.get_parameter",    1, f_http_request_get_param },
+		{ "http.get_param",        1, f_http_request_get_param },
 		{ "crypto.md5",            1, f_crypto_md5 },
 		{ NULL, 0, NULL },
 	};
