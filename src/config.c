@@ -258,7 +258,7 @@ int config_patch_connection(server *srv, connection *con, const char *stage, siz
 				PATCH(dirlist_encoding);
 			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("server.error-handler-404"))) {
 				PATCH(error_handler);
-			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("server.errorfi"))) {
+			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("server.errorfile-prefix"))) {
 				PATCH(errorfile_prefix);
 			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("server.indexfiles"))) {
 				PATCH(indexfiles);
