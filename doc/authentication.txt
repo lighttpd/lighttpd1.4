@@ -1,6 +1,6 @@
-======================
-Using Authentification
-======================
+====================
+Using Authentication
+====================
 
 ----------------
 Module: mod_auth
