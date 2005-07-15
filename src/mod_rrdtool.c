@@ -131,6 +131,12 @@ int mod_rrd_create_pipe(server *srv, plugin_data *p) {
 		/* not needed */
 		close(to_rrdtool_fds[1]);
 		
+		close(STDERR_FILENO);
+		if (srv->log_error_fd != -1) {
+			dup2(srv->log_error_fd, STDERR_FILENO);
+			close(srv->log_error_fd);
+		}
+		
 		/* set up args */
 		argc = 3;
 		args = malloc(sizeof(*args) * argc);
@@ -142,7 +148,7 @@ int mod_rrd_create_pipe(server *srv, plugin_data *p) {
 
 		/* we don't need the client socket */
 		for (i = 3; i < 256; i++) {
-			if (i != srv->log_error_fd) close(i);
+			close(i);
 		}
 		
 		/* exec the cgi */
