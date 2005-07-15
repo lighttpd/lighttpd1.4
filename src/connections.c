@@ -322,8 +322,8 @@ static int connection_handle_write_prepare(server *srv, connection *con) {
 			 */
 			buffer_reset(con->physical.path);
 			
-			if (srv->srvconf.errorfile_prefix->used) {
-				buffer_copy_string_buffer(con->physical.path, srv->srvconf.errorfile_prefix);
+			if (con->conf.errorfile_prefix->used) {
+				buffer_copy_string_buffer(con->physical.path, con->conf.errorfile_prefix);
 				buffer_append_string(con->physical.path, get_http_status_body_name(con->http_status));
 			}
 			

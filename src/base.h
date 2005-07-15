@@ -224,6 +224,7 @@ typedef struct {
 	buffer *server_tag;
 	buffer *dirlist_css;
 	buffer *dirlist_encoding;
+	buffer *errorfile_prefix;
 	
 	unsigned short dir_listing;
 	unsigned short hide_dotfiles;
@@ -407,7 +408,6 @@ typedef struct {
 	buffer *username;
 	buffer *groupname;
 	
-	buffer *errorfile_prefix;
 	buffer *license;
 	buffer *pid_file;
 	

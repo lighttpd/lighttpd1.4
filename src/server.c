@@ -136,7 +136,6 @@ static server *server_init(void) {
 	CLEAN(srvconf.username);
 	CLEAN(srvconf.changeroot);
 	CLEAN(srvconf.bindhost);
-	CLEAN(srvconf.errorfile_prefix);
 	CLEAN(srvconf.license);
 	CLEAN(srvconf.event_handler);
 	CLEAN(srvconf.pid_file);
@@ -216,7 +215,6 @@ static void server_free(server *srv) {
 	CLEAN(srvconf.username);
 	CLEAN(srvconf.changeroot);
 	CLEAN(srvconf.bindhost);
-	CLEAN(srvconf.errorfile_prefix);
 	CLEAN(srvconf.license);
 	CLEAN(srvconf.event_handler);
 	CLEAN(srvconf.pid_file);
