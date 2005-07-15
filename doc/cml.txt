@@ -11,10 +11,10 @@ Module: mod_cml
 :Revision: $Revision: 1.2 $
 
 :abstract:
-  CML is a Meta language to describe the dependencies of a page at one side and building a page from its fragments on the other side
+  CML is a Meta language to describe the dependencies of a page at one side and building a page from its fragments on the other side using LUA.
   
 .. meta::
-  :keywords: lighttpd, cml
+  :keywords: lighttpd, cml, lua
   
 .. contents:: Table of Contents
 
@@ -97,14 +97,22 @@ to start PHP for a cache-hit.
 To transform this example into a CML you need 'index.cml' in the list of indexfiles 
 and the following index.cml file: ::
 
-  output.content-type text/html
+  output_contenttype = "text/html"
 
-  output.include _cache.html
+  b = request["DOCUMENT_ROOT"]
+  cwd = request["CWD"]
 
-  trigger.handler index.php
-  trigger.if  file.mtime("../lib/php/menu.csv") > file.mtime("_cache.html")
-  trigger.if  file.mtime("templates/jk.tmpl") > file.mtime("_cache.html")
-  trigger.if  file.mtime("content.html") > file.mtime("_cache.html")
+  output_include = { b + "_cache.html" }
+
+  trigger_handler = "index.php"
+
+  if file_mtime(b + "../lib/php/menu.csv") > file_mtime(cwd + "_cache.html") or
+     file_mtime(b + "templates/jk.tmpl")   > file.mtime(cwd + "_cache.html")
+     file.mtime(b + "content.html")        > file.mtime(cwd + "_cache.html") then
+     return 1
+  else 
+     return 0
+  end
 
 Numbers again:
 
@@ -132,15 +140,19 @@ Don't forget: Webserver are built to send out static content, that is what they 
 
 The index.cml for this looks like: ::
 
-  output.content-type text/html
+  output_content_type = "text/html"
+  
+  cwd = request["CWD"]
    
-  output.include head.html
-  output.include menu.html
-  output.include spacer.html
-  output.include db-content.html
-  output.include spacer2.html
-  output.include news.html
-  output.include footer.html
+  output_include = { cwd + "head.html", 
+                     cwd + "menu.html",
+                     cwd + "spacer.html",
+                     cwd + "db-content.html",
+                     cwd + "spacer2.html",
+                     cwd + "news.html",
+                     cwd + "footer.html" }
+  
+  return 0
 
 Now we get about 10000 req/s instead of 600 req/s.
 
@@ -149,8 +161,66 @@ Options
 
 :cml.extension: 
   the file extension that is bound to the cml-module
+:cml.memcache-hosts:
+  hosts for the memcache.* functions
+:cml.memcache-namespace:
+  (not used yet)
 
 Language
 ========
 
-... will come later ... 
+The language used for CML is provided by `LUA <http://www.lua.org/>`_. 
+
+Additionally to the functions provided by lua mod_cml provides: ::
+
+  tables:
+
+  request
+    - REQUEST_URI
+    - SCRIPT_NAME
+    - SCRIPT_FILENAME
+    - DOCUMENT_ROOT
+    - PATH_INFO
+    - CWD
+    - BASEURI
+
+  get
+    - parameters from the query-string
+
+  functions:
+  string md5(string)
+  number file_mtime(string)
+  string memcache_get_string(string)
+  number memcache_get_long(string)
+  boolean memcache_exists(string) 
+
+
+What ever your script does, it has to return either 0 or 1 for ``cache-hit`` or ``cache-miss``. 
+It case a error occures check the error-log, the user will get a error 500. If you don't like 
+the standard error-page use ``server.errorfile-prefix``.
+
+Examples
+========
+
+Using the memcache-udf for MySQL we can do: ::
+
+  output_contenttype = "text/html"
+  output_include = { "cache-hit.html" }
+
+  trigger_handler = "generate.php"
+
+  if get["page"] == memcache_get_string("123") then
+    return 0
+  else
+    return 1
+  end
+
+In MySQL you do: ::
+
+  SELECT memcache_set("127.0.0.1:11211", "123", "12");
+
+or to retrieve a value:
+
+   SELECT memcache_get("127.0.0.1:11211", "123");
+
+You can get the mysql udf at `jan's mysql page <http://jan.kneschke.de/projects/mysql/udf/>`_.

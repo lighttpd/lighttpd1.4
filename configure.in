@@ -271,7 +271,20 @@ AC_ARG_WITH(memcache, AC_HELP_STRING([--with-memcache],[memcached storage for mo
  ])
 ],[AC_MSG_RESULT(no)])
 AC_SUBST(MEMCACHE_LIB)
-	 
+
+AC_MSG_CHECKING(for lua)
+AC_ARG_WITH(lua, AC_HELP_STRING([--with-lua],[lua engine for mod_cml]),
+[AC_MSG_RESULT(yes)
+ AC_CHECK_LIB(lua, lua_open, [
+         AC_CHECK_HEADERS([lua.h],[
+	         LUA_LIB="-llua -llualib -lm"
+                 AC_DEFINE([HAVE_LUA], [1], [liblua])
+		 AC_DEFINE([HAVE_LUA_H], [1])
+         ])
+ ])
+],[AC_MSG_RESULT(no)])
+AC_SUBST(LUA_LIB)
+
 
 AC_SEARCH_LIBS(socket,socket)
 AC_SEARCH_LIBS(gethostbyname,nsl socket)

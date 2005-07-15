@@ -69,9 +69,9 @@ common_libadd =
 endif
 
 lib_LTLIBRARIES += mod_cml.la
-mod_cml_la_SOURCES = mod_cml.c mod_cml_funcs.c mod_cml_logic.c
+mod_cml_la_SOURCES = mod_cml.c mod_cml_lua.c mod_cml_funcs.c
 mod_cml_la_LDFLAGS = -module -export-dynamic -avoid-version -no-undefined
-mod_cml_la_LIBADD = $(MEMCACHE_LIB) $(common_libadd)
+mod_cml_la_LIBADD = $(MEMCACHE_LIB) $(common_libadd) $(LUA_LIB)
 
 lib_LTLIBRARIES += mod_trigger_b4_dl.la
 mod_trigger_b4_dl_la_SOURCES = mod_trigger_b4_dl.c

@@ -28,11 +28,6 @@ INIT_FUNC(mod_cml_init) {
 	p->session_id      = buffer_init();
 	p->trigger_handler = buffer_init();
 	
-	p->eval            = buffer_array_init();
-	p->trigger_if      = buffer_array_init();
-	p->output_include  = buffer_array_init();
-	p->params          = tnode_val_array_init();
-	
 	return p;
 }
 
@@ -62,12 +57,6 @@ FREE_FUNC(mod_cml_free) {
 		}
 		free(p->config_storage);
 	}
-	
-	tnode_val_array_free(p->params);
-	
-	buffer_array_free(p->eval);
-	buffer_array_free(p->trigger_if);
-	buffer_array_free(p->output_include);
 	
 	buffer_free(p->trigger_handler);
 	buffer_free(p->session_id);
@@ -103,6 +92,9 @@ SETDEFAULTS_FUNC(mod_cml_set_defaults) {
 		s->ext    = buffer_init();
 		s->mc_hosts       = array_init();
 		s->mc_namespace   = buffer_init();
+#if defined(HAVE_MEMCACHE_H)
+		s->mc = NULL;
+#endif
 		
 		cv[0].destination = s->ext;
 		cv[1].destination = s->mc_hosts;
@@ -322,6 +314,7 @@ URIHANDLER_FUNC(mod_cml_is_handled) {
 	buffer *fn = con->physical.path;
 	plugin_data *p = p_d;
 	size_t i;
+	int ret;
 	
 	if (fn->used == 0) return HANDLER_ERROR;
 	
@@ -332,16 +325,10 @@ URIHANDLER_FUNC(mod_cml_is_handled) {
 		mod_cml_patch_connection(srv, con, p, CONST_BUF_LEN(patch));
 	}
 	
-	buffer_array_reset(p->output_include);
-	buffer_array_reset(p->eval);
-	buffer_array_reset(p->trigger_if);
-	
 	buffer_reset(p->basedir);
 	buffer_reset(p->baseurl);
 	buffer_reset(p->session_id);
 	buffer_reset(p->trigger_handler);
-	
-	tnode_val_array_reset(p->params);
 	
 	if (buffer_is_empty(p->conf.ext)) return HANDLER_GO_ON;
 	
@@ -382,7 +369,9 @@ URIHANDLER_FUNC(mod_cml_is_handled) {
 	
 	cache_get_session_id(srv, con, p);
 	
-	switch(cache_parse(srv, con, p, fn)) {
+	ret = cache_parse_lua(srv, con, p, fn);
+	
+	switch(ret) {
 	case -1:
 		/* error */
 		if (con->conf.log_request_handling) {
