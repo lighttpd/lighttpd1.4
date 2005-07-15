@@ -512,8 +512,8 @@ URIHANDLER_FUNC(mod_trigger_b4_dl_uri_handler) {
 	return HANDLER_GO_ON;
 }
 
-TRIGGER_FUNC(mod_trigger_b4_dl_handle_trigger) {
 #if defined(HAVE_GDBM_H)
+TRIGGER_FUNC(mod_trigger_b4_dl_handle_trigger) {
 	plugin_data *p = p_d;
 	size_t i;
 	
@@ -557,9 +557,9 @@ TRIGGER_FUNC(mod_trigger_b4_dl_handle_trigger) {
 		/* reorg once a day */
 		if ((srv->cur_ts % (60 * 60 * 24) != 0)) gdbm_reorganize(s->db);
 	}
-#endif
 	return HANDLER_GO_ON;
 }
+#endif
 
 /* this function is called at dlopen() time and inits the callbacks */
 
@@ -570,7 +570,9 @@ int mod_trigger_b4_dl_plugin_init(plugin *p) {
 	p->init        = mod_trigger_b4_dl_init;
 	p->handle_uri_clean  = mod_trigger_b4_dl_uri_handler;
 	p->set_defaults  = mod_trigger_b4_dl_set_defaults;
+#if defined(HAVE_GDBM_H)
 	p->handle_trigger  = mod_trigger_b4_dl_handle_trigger;
+#endif
 	p->cleanup     = mod_trigger_b4_dl_free;
 	
 	p->data        = NULL;
