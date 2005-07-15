@@ -219,7 +219,7 @@ In MySQL you do: ::
 
   SELECT memcache_set("127.0.0.1:11211", "123", "12");
 
-or to retrieve a value:
+or to retrieve a value: ::
 
    SELECT memcache_get("127.0.0.1:11211", "123");
 
