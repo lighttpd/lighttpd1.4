@@ -152,11 +152,11 @@ sub handle_http {
 				if ($line =~ /^([^:]+):\s*(.+)$/) {
 					(my $h = $1) =~ tr/[A-Z]/[a-z]/;
 
-					if (defined $resp_hdr{$h}) {
-						diag(sprintf("header %s is duplicated: %s and %s\n",
-						             $h, $resp_hdr{$h}, $2));
-						return -1;	
-					}
+#					if (defined $resp_hdr{$h}) {
+#						diag(sprintf("header %s is duplicated: %s and %s\n",
+#						             $h, $resp_hdr{$h}, $2));
+#						return -1;	
+#					}
 
 					$resp_hdr{$h} = $2;
 				} else {
