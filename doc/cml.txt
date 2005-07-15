@@ -156,6 +156,18 @@ The index.cml for this looks like: ::
 
 Now we get about 10000 req/s instead of 600 req/s.
 
+Installation
+============
+
+You need `lua <http://www.lua.org/>`_ and should install `<libmemcache-1.3.x http://people.freebsd.org/~seanc/libmemcache/>` 
+and have to configure lighttpd with: ::
+
+  ./configure ... --with-lua --with-memcache
+
+To use the plugin you have to load it: ::
+
+   server.modules = ( ..., "mod_cml", ... )
+
 Options
 =======
 
