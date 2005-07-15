@@ -93,7 +93,6 @@ static int config_insert(server *srv) {
 	/* 0 */
 	cv[0].destination = srv->srvconf.bindhost;
 	cv[1].destination = srv->srvconf.error_logfile;
-	cv[2].destination = srv->srvconf.errorfile_prefix;
 	cv[3].destination = srv->srvconf.changeroot;
 	cv[4].destination = srv->srvconf.username;
 	cv[5].destination = srv->srvconf.groupname;
@@ -127,6 +126,7 @@ static int config_insert(server *srv) {
 		s->ssl_ca_file   = buffer_init();
 		s->error_handler = buffer_init();
 		s->server_tag    = buffer_init();
+		s->errorfile_prefix = buffer_init();
 		s->dirlist_css   = buffer_init();
 		s->dirlist_encoding = buffer_init();
 		s->max_keep_alive_requests = 128;
@@ -142,6 +142,8 @@ static int config_insert(server *srv) {
 		s->global_kbytes_per_second = 0;
 		s->global_bytes_per_second_cnt = 0;
 		s->global_bytes_per_second_cnt_ptr = &s->global_bytes_per_second_cnt;
+		
+		cv[2].destination = s->errorfile_prefix;
 		
 		cv[7].destination = s->server_tag;
 		cv[8].destination = &(s->use_ipv6);
@@ -208,11 +210,13 @@ int config_setup_connection(server *srv, connection *con) {
 	PATCH(max_write_idle);
 	PATCH(use_xattr);
 	PATCH(error_handler);
+	PATCH(errorfile_prefix);
 	PATCH(follow_symlink);
 	PATCH(server_tag);
 	PATCH(kbytes_per_second);
 	PATCH(global_kbytes_per_second);
 	PATCH(global_bytes_per_second_cnt);
+	
 	con->conf.global_bytes_per_second_cnt_ptr = &s->global_bytes_per_second_cnt;
 	buffer_copy_string_buffer(con->server_name, s->server_name);
 	
@@ -254,6 +258,8 @@ int config_patch_connection(server *srv, connection *con, const char *stage, siz
 				PATCH(dirlist_encoding);
 			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("server.error-handler-404"))) {
 				PATCH(error_handler);
+			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("server.errorfi"))) {
+				PATCH(errorfile_prefix);
 			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("server.indexfiles"))) {
 				PATCH(indexfiles);
 			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("mimetype.assign"))) {
