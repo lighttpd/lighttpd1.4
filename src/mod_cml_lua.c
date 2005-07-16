@@ -94,8 +94,6 @@ static int lua_to_c_is_table(lua_State *L, const char *varname) {
 }
 
 static int c_to_lua_push(lua_State *L, int tbl, const char *key, size_t key_len, const char *val, size_t val_len) {
-	fprintf(stderr, "%*s -> %*s\n", key_len, key, val_len, val);
-	
 	lua_pushlstring(L, key, key_len);
 	lua_pushlstring(L, val, val_len);
 	lua_settable(L, tbl);
