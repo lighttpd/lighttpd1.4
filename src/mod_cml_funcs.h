@@ -1,0 +1,15 @@
+#ifndef _MOD_CML_FUNCS_H_
+#define _MOD_CML_FUNCS_H_
+
+#include "config.h"
+
+#ifdef HAVE_LUA_H
+#include <lua.h>
+
+int f_crypto_md5(lua_State *L);
+int f_file_mtime(lua_State *L);
+int f_memcache_exists(lua_State *L);
+int f_memcache_get_string(lua_State *L);
+int f_memcache_get_long(lua_State *L);
+#endif
+#endif
