@@ -62,8 +62,7 @@ int http_response_write_basic_header(server *srv, connection *con) {
 		}
 	}
 	
-	if (con->request.http_version == HTTP_VERSION_1_1 &&
-	    (con->parsed_response & HTTP_DATE) == 0) {
+	if ((con->parsed_response & HTTP_DATE) == 0) {
 		/* HTTP/1.1 requires a Date: header */
 		BUFFER_APPEND_STRING_CONST(b, "\r\nDate: ");
 	
