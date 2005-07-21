@@ -9,7 +9,7 @@ BEGIN {
 
 use strict;
 use IO::Socket;
-use Test::More tests => 15;
+use Test::More tests => 16;
 use LightyTest;
 
 my $tf = LightyTest->new();
@@ -115,6 +115,12 @@ EOF
 $t->{RESPONSE} = ( { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 404 } );
 ok($tf->handle_http($t) == 0, 'URL-encoding, %00');
 
+$t->{REQUEST}  = ( <<EOF
+OPTIONS * HTTP/1.0
+EOF
+ );
+$t->{RESPONSE} = ( { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200 } );
+ok($tf->handle_http($t) == 0, 'OPTIONS');
 
 
 ok($tf->stop_proc == 0, "Stopping lighttpd");

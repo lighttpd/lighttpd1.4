@@ -92,7 +92,12 @@ int http_response_write_basic_header(server *srv, connection *con) {
 		ds = (data_string *)con->response.headers->data[i];
 		
 		if (ds->value->used && ds->key->used &&
-		    0 != strncmp(ds->key->ptr, "X-LIGHTTPD-", sizeof("X-LIGHTTPD-") - 1)) {
+		    0 != strncmp(ds->key->ptr, "X-LIGHTTPD-", sizeof("X-LIGHTTPD-") - 1) &&
+		    /* headers we send */
+		    !buffer_is_equal_string(ds->key, CONST_STR_LEN("Server")) &&
+		    !buffer_is_equal_string(ds->key, CONST_STR_LEN("Date")) &&
+		    !buffer_is_equal_string(ds->key, CONST_STR_LEN("Transfer-Encoding")) &&
+		    !buffer_is_equal_string(ds->key, CONST_STR_LEN("Connection"))) {
 			BUFFER_APPEND_STRING_CONST(b, "\r\n");
 			buffer_append_string_buffer(b, ds->key);
 			BUFFER_APPEND_STRING_CONST(b, ": ");
@@ -858,6 +863,13 @@ handler_t http_response_prepare(server *srv, connection *con) {
 			chunkqueue_reset(con->write_queue);
 		}
 		
+		return HANDLER_FINISHED;
+	}
+
+	if (con->request.http_method == HTTP_METHOD_OPTIONS) {
+		con->file_finished = 1;
+		con->file_started = 1;
+
 		return HANDLER_FINISHED;
 	}
 	

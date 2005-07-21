@@ -15,6 +15,7 @@ static keyvalue http_methods[] = {
 	{ HTTP_METHOD_GET,  "GET" },
 	{ HTTP_METHOD_POST, "POST" },
 	{ HTTP_METHOD_HEAD, "HEAD" },
+	{ HTTP_METHOD_OPTIONS, "OPTIONS" },
 	{ HTTP_METHOD_UNSET, NULL }
 };
 
