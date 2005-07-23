@@ -247,7 +247,7 @@ int cache_parse_lua(server *srv, connection *con, plugin_data *p, buffer *fn) {
 		
 		struct stat st;
 		int curelem;
-		time_t last_mtime = 0;
+		time_t mtime = 0;
 		
 		lua_pushstring(L, "output_include");
 		
