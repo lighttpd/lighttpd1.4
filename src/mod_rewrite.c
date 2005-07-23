@@ -19,7 +19,7 @@ typedef struct {
 	
 	buffer *value;
 	
-	int final;
+	int once;
 } rewrite_rule;
 
 typedef struct {
@@ -35,6 +35,7 @@ typedef struct {
 
 typedef struct {
 	enum { REWRITE_STATE_UNSET, REWRITE_STATE_FINISHED} state;
+	int loops;
 } handler_ctx;
 
 typedef struct {
@@ -52,6 +53,7 @@ static handler_ctx * handler_ctx_init() {
 	hctx = calloc(1, sizeof(*hctx));
 	
 	hctx->state = REWRITE_STATE_UNSET;
+	hctx->loops = 0;
 	
 	return hctx;
 }
@@ -68,7 +70,7 @@ rewrite_rule_buffer *rewrite_rule_buffer_init(void) {
 	return kvb;
 }
 
-int rewrite_rule_buffer_append(rewrite_rule_buffer *kvb, buffer *key, buffer *value, int final) {
+int rewrite_rule_buffer_append(rewrite_rule_buffer *kvb, buffer *key, buffer *value, int once) {
 #ifdef HAVE_PCRE_H
 	size_t i;
 	const char *errptr;
@@ -103,7 +105,7 @@ int rewrite_rule_buffer_append(rewrite_rule_buffer *kvb, buffer *key, buffer *va
 	
 	kvb->ptr[kvb->used]->value = buffer_init();
 	buffer_copy_string_buffer(kvb->ptr[kvb->used]->value, value);
-	kvb->ptr[kvb->used]->final = final;
+	kvb->ptr[kvb->used]->once = once;
 	
 	kvb->used++;
 	
@@ -111,7 +113,7 @@ int rewrite_rule_buffer_append(rewrite_rule_buffer *kvb, buffer *key, buffer *va
 #else
 	UNUSED(kvb);
 	UNUSED(value);
-	UNUSED(final);
+	UNUSED(once);
 	UNUSED(key);
 
 	return -1;
@@ -169,15 +171,67 @@ FREE_FUNC(mod_rewrite_free) {
 	return HANDLER_GO_ON;
 }
 
+static int parse_config_entry(server *srv, plugin_config *s, array *ca, const char *option, int once) {
+	data_unset *du;
+	
+	if (NULL != (du = array_get_element(ca, option))) {
+		data_array *da = (data_array *)du;
+		size_t j;
+		
+		if (du->type != TYPE_ARRAY) {
+			log_error_write(srv, __FILE__, __LINE__, "sss", 
+					"unexpected type for key: ", option, "array of strings");
+			
+			return HANDLER_ERROR;
+		}
+		
+		da = (data_array *)du;
+		
+		for (j = 0; j < da->value->used; j++) {
+			if (da->value->data[j]->type != TYPE_STRING) {
+				log_error_write(srv, __FILE__, __LINE__, "sssbs", 
+						"unexpected type for key: ", 
+						option, 
+						"[", da->value->data[j]->key, "](string)");
+				
+				return HANDLER_ERROR;
+			}
+			
+			if (0 != rewrite_rule_buffer_append(s->rewrite, 
+							    ((data_string *)(da->value->data[j]))->key,
+							    ((data_string *)(da->value->data[j]))->value,
+							    once)) {
+#ifdef HAVE_PCRE_H
+				log_error_write(srv, __FILE__, __LINE__, "sb", 
+						"pcre-compile failed for", da->value->data[j]->key);
+#else
+				log_error_write(srv, __FILE__, __LINE__, "s", 
+						"pcre support is missing, please install libpcre and the headers");
+#endif
+			}
+		}
+	}
+	
+	return 0;
+}
+
 SETDEFAULTS_FUNC(mod_rewrite_set_defaults) {
 	plugin_data *p = p_d;
-	data_unset *du;
 	size_t i = 0;
 	
 	config_values_t cv[] = { 
-		{ "url.rewrite",                NULL, T_CONFIG_LOCAL, T_CONFIG_SCOPE_CONNECTION }, /* 0 */
-		{ "url.rewrite-final",          NULL, T_CONFIG_LOCAL, T_CONFIG_SCOPE_CONNECTION }, /* 1 */
-		{ NULL,                         NULL, T_CONFIG_UNSET, T_CONFIG_SCOPE_UNSET }
+		{ "url.rewrite-repeat",        NULL, T_CONFIG_LOCAL, T_CONFIG_SCOPE_CONNECTION }, /* 0 */
+		{ "url.rewrite-once",          NULL, T_CONFIG_LOCAL, T_CONFIG_SCOPE_CONNECTION }, /* 1 */
+		
+		/* old names, still supported 
+		 * 
+		 * url.rewrite remapped to url.rewrite-once
+		 * url.rewrite-final    is url.rewrite-once
+		 * 
+		 */
+		{ "url.rewrite",               NULL, T_CONFIG_LOCAL, T_CONFIG_SCOPE_CONNECTION }, /* 2 */
+		{ "url.rewrite-final",         NULL, T_CONFIG_LOCAL, T_CONFIG_SCOPE_CONNECTION }, /* 3 */
+		{ NULL,                        NULL, T_CONFIG_UNSET, T_CONFIG_SCOPE_UNSET }
 	};
 	
 	if (!p) return HANDLER_ERROR;
@@ -187,15 +241,14 @@ SETDEFAULTS_FUNC(mod_rewrite_set_defaults) {
 	
 	for (i = 0; i < srv->config_context->used; i++) {
 		plugin_config *s;
-		size_t j;
 		array *ca;
-		data_array *da = (data_array *)du;
 		
 		s = malloc(sizeof(plugin_config));
 		s->rewrite   = rewrite_rule_buffer_init();
 		
 		cv[0].destination = s->rewrite;
 		cv[1].destination = s->rewrite;
+		cv[2].destination = s->rewrite;
 		
 		p->config_storage[i] = s;
 		ca = ((data_config *)srv->config_context->data[i])->value;
@@ -204,76 +257,10 @@ SETDEFAULTS_FUNC(mod_rewrite_set_defaults) {
 			return HANDLER_ERROR;
 		}
 		
-		if (NULL != (du = array_get_element(ca, "url.rewrite"))) {
-			if (du->type != TYPE_ARRAY) {
-				log_error_write(srv, __FILE__, __LINE__, "sss", 
-						"unexpected type for key: ", "url.rewrite", "array of strings");
-				
-				return HANDLER_ERROR;
-			}
-		
-			da = (data_array *)du;
-				
-			for (j = 0; j < da->value->used; j++) {
-				if (da->value->data[j]->type != TYPE_STRING) {
-					log_error_write(srv, __FILE__, __LINE__, "sssbs", 
-							"unexpected type for key: ", 
-							"url.rewrite", 
-							"[", da->value->data[j]->key, "](string)");
-					
-					return HANDLER_ERROR;
-				}
-				
-				if (0 != rewrite_rule_buffer_append(s->rewrite, 
-								    ((data_string *)(da->value->data[j]))->key,
-								    ((data_string *)(da->value->data[j]))->value,
-								    0)) {
-#ifdef HAVE_PCRE_H
-					log_error_write(srv, __FILE__, __LINE__, "sb", 
-							"pcre-compile failed for", da->value->data[j]->key);
-#else
-					log_error_write(srv, __FILE__, __LINE__, "s", 
-							"pcre support is missing, please install libpcre and the headers");
-#endif
-				}
-			}
-		}
-		
-		if (NULL != (du = array_get_element(ca, "url.rewrite-final"))) {
-			if (du->type != TYPE_ARRAY) {
-				log_error_write(srv, __FILE__, __LINE__, "sss", 
-						"unexpected type for key: ", "url.rewrite", "array of strings");
-				
-				return HANDLER_ERROR;
-			}
-		
-			da = (data_array *)du;
-				
-			for (j = 0; j < da->value->used; j++) {
-				if (da->value->data[j]->type != TYPE_STRING) {
-					log_error_write(srv, __FILE__, __LINE__, "sssbs", 
-							"unexpected type for key: ", 
-							"url.rewrite", 
-							"[", da->value->data[j]->key, "](string)");
-					
-					return HANDLER_ERROR;
-				}
-				
-				if (0 != rewrite_rule_buffer_append(s->rewrite, 
-								    ((data_string *)(da->value->data[j]))->key,
-								    ((data_string *)(da->value->data[j]))->value, 
-								    1)) {
-					
-#ifdef HAVE_PCRE_H
-					log_error_write(srv, __FILE__, __LINE__, "sb", 
-							"pcre-compile failed for", da->value->data[j]->key);
-#else
-					log_error_write(srv, __FILE__, __LINE__, "s", 
-							"pcre support is missing, please install libpcre and the headers");
-#endif
-				}
-			}
-		}
+		parse_config_entry(srv, s, ca, "url.rewrite-once",   1);
+		parse_config_entry(srv, s, ca, "url.rewrite-final",  1);
+		parse_config_entry(srv, s, ca, "url.rewrite",        1);
+		parse_config_entry(srv, s, ca, "url.rewrite-repeat", 0);
 	}
 	
 	return HANDLER_GO_ON;
@@ -298,6 +285,10 @@ static int mod_rewrite_patch_connection(server *srv, connection *con, plugin_dat
 			data_unset *du = dc->value->data[j];
 			
 			if (buffer_is_equal_string(du->key, CONST_STR_LEN("url.rewrite"))) {
+				p->conf.rewrite = s->rewrite;
+			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("url.rewrite-once"))) {
+				p->conf.rewrite = s->rewrite;
+			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("url.rewrite-repeat"))) {
 				p->conf.rewrite = s->rewrite;
 			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("url.rewrite-final"))) {
 				p->conf.rewrite = s->rewrite;
@@ -347,6 +338,12 @@ URIHANDLER_FUNC(mod_rewrite_uri_handler) {
 	
 	if (con->plugin_ctx[p->id]) {
 		hctx = con->plugin_ctx[p->id];
+		
+		if (hctx->loops++ > 100) {
+			log_error_write(srv, __FILE__, __LINE__,  "s",  "ENDLESS LOOP IN rewrite-rule DETECTED ... aborting request, perhaps you want to use url.rewrite instead of url.rewrite-repeat");
+			
+			return HANDLER_ERROR;
+		}
 		
 		if (hctx->state == REWRITE_STATE_FINISHED) return HANDLER_GO_ON;
 	}
@@ -421,7 +418,7 @@ URIHANDLER_FUNC(mod_rewrite_uri_handler) {
 				
 			con->plugin_ctx[p->id] = hctx;
 			
-			if (rule->final) hctx->state = REWRITE_STATE_FINISHED;
+			if (rule->once) hctx->state = REWRITE_STATE_FINISHED;
 			
 			return HANDLER_COMEBACK;
 		}
