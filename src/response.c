@@ -946,6 +946,14 @@ int http_response_handle_cachable(server *srv, connection *con, time_t mtime) {
 handler_t http_response_prepare(server *srv, connection *con) {
 	handler_t r;
 	
+	if (con->loops_per_request++ > 1000) {
+		/* protect us again endless loops in a single request */
+		
+		log_error_write(srv, __FILE__, __LINE__,  "s",  "ENDLESS LOOP DETECTED ... aborting request");
+		
+		return HANDLER_ERROR;
+	}
+	
 	/* looks like someone has already done a decision */
 	if (con->mode == DIRECT && 
 	    (con->http_status != 0 && con->http_status != 200)) {

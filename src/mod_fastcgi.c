@@ -2657,11 +2657,21 @@ SUBREQUEST_FUNC(mod_fastcgi_handle_subrequest) {
 			buffer_reset(con->physical.path);
 			con->mode = DIRECT;
 			joblist_append(srv, con);
-			
+
 			/* mis-using HANDLER_WAIT_FOR_FD to break out of the loop 
 			 * and hope that the childs will be restarted 
 			 * 
 			 */
+			
+			/* we might get into a LOOP here
+			 * 
+			 * but how to handle this ?
+			 * 
+			 * if we enter a endless loop, we will burn the CPU
+			 * 
+			 * let this handle by the loop-detection
+			 */
+			
 			return HANDLER_WAIT_FOR_FD;
 		} else {
 			fcgi_connection_cleanup(srv, hctx);

@@ -293,6 +293,11 @@ typedef struct {
 	struct timeval start_tv;
 	
 	size_t request_count;        /* number of requests handled in this connection */
+	size_t loops_per_request;    /* to catch endless loops in a single request
+				      * 
+				      * used by mod_rewrite, mod_fastcgi, ... and others
+				      * this is self-protection
+				      */
 	
 	int fd;                      /* the FD for this connection */
 	int fde_ndx;                 /* index for the fdevent-handler */
