@@ -561,7 +561,7 @@ connection *connection_init(server *srv) {
 	con->bytes_written = 0;
 	con->bytes_read = 0;
 	con->bytes_header = 0;
-	
+	con->loops_per_request = 0;
 
 #define CLEAN(x) \
 	con->x = buffer_init();
@@ -675,6 +675,7 @@ int connection_reset(server *srv, connection *con) {
 	con->bytes_written_cur_second = 0;
 	con->bytes_read = 0;
 	con->bytes_header = 0;
+	con->loops_per_request = 0;
 	
 	con->request.http_method = HTTP_METHOD_UNSET;
 	con->request.http_version = HTTP_VERSION_UNSET;
@@ -1184,6 +1185,7 @@ int connection_state_machine(server *srv, connection *con) {
 			con->read_idle_ts = srv->cur_ts;
 			
 			con->request_count++;
+			con->loops_per_request = 0;
 			
 			connection_set_state(srv, con, CON_STATE_READ);
 			
