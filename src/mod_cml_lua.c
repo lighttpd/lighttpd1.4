@@ -247,11 +247,21 @@ int cache_parse_lua(server *srv, connection *con, plugin_data *p, buffer *fn) {
 		
 		struct stat st;
 		int curelem;
+		time_t last_mtime = 0;
 		
 		lua_pushstring(L, "output_include");
 		
 		curelem = lua_gettop(L);
 		lua_gettable(L, LUA_GLOBALSINDEX);
+
+		/* HOW-TO build a etag ?
+		 * as we don't just have one file we have to take the stat() 
+		 * from all base files, merge them and build the etag from
+		 * it later.
+		 * 
+		 * The mtime of the content is the mtime of the freshest base file
+		 * 
+		 * */
 		
 		lua_pushnil(L);  /* first key */
 		while (lua_next(L, curelem) != 0) {
@@ -285,6 +295,7 @@ int cache_parse_lua(server *srv, connection *con, plugin_data *p, buffer *fn) {
 					}
 				} else {
 					chunkqueue_append_file(con->write_queue, b, 0, st.st_size);
+					if (st.st_mtime > mtime) mtime = st.st_mtime;
 				}
 			} else {
 				/* not a string */
@@ -301,6 +312,12 @@ int cache_parse_lua(server *srv, connection *con, plugin_data *p, buffer *fn) {
 		
 		if (ret == 0) {
 			con->file_finished = 1;
+
+			if (http_response_handle_cachable(srv, con, mtime)) {
+				/* ok, the client already has our content, 
+				 * no need to send it again */
+				chunkqueue_reset(con->write_queue);
+			}
 		} else {
 			chunkqueue_reset(con->write_queue);
 		}
