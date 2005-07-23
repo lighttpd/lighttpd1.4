@@ -851,6 +851,97 @@ static int http_list_directory(server *srv, connection *con, buffer *dir) {
 }
 
 
+int http_response_handle_cachable(server *srv, connection *con, time_t mtime) {
+	if (con->http_status != 0) return 0;
+
+	/*
+	 * 14.26 If-None-Match
+	 *    [...]
+	 *    If none of the entity tags match, then the server MAY perform the
+	 *    requested method as if the If-None-Match header field did not exist,
+	 *    but MUST also ignore any If-Modified-Since header field(s) in the
+	 *    request. That is, if no entity tags match, then the server MUST NOT
+	 *    return a 304 (Not Modified) response.
+	 */
+	
+	/* last-modified handling */
+	if (con->request.http_if_none_match) {
+		if (etag_is_equal(con->physical.etag, con->request.http_if_none_match)) {
+			if (con->request.http_method == HTTP_METHOD_GET || 
+			    con->request.http_method == HTTP_METHOD_HEAD) {
+				
+				/* check if etag + last-modified */
+				if (con->request.http_if_modified_since) {
+					char buf[64];
+					struct tm tm;
+					size_t used_len;
+					char *semicolon;
+				
+					strftime(buf, sizeof(buf)-1, "%a, %d %b %Y %H:%M:%S GMT", gmtime(&mtime));
+					
+					if (NULL == (semicolon = strchr(con->request.http_if_modified_since, ';'))) {
+						used_len = strlen(con->request.http_if_modified_since);
+					} else {
+						used_len = semicolon - con->request.http_if_modified_since;
+					}
+					
+					if (0 == strncmp(con->request.http_if_modified_since, buf, used_len)) {
+						con->http_status = 304;
+						return 1;
+					} else {
+						/* convert to timestamp */
+						if (used_len < sizeof(buf) - 1) {
+							time_t t;
+							strncpy(buf, con->request.http_if_modified_since, used_len);
+							buf[used_len] = '\0';
+							
+							strptime(buf, "%a, %d %b %Y %H:%M:%S GMT", &tm);
+							
+							if (-1 != (t = mktime(&tm)) &&
+							    t <= mtime) {
+								con->http_status = 304;
+								return 1;
+							}
+						} else {
+							log_error_write(srv, __FILE__, __LINE__, "ss", 
+									con->request.http_if_modified_since, buf);
+							
+							con->http_status = 412;
+							return 1;
+						}
+					}
+				} else {
+					con->http_status = 304;
+					return 1;
+				}
+			} else {
+				con->http_status = 412;	
+				return 1;
+			}
+		}
+	} else if (con->request.http_if_modified_since) {
+		char buf[64];
+		struct tm *tm;
+		size_t used_len;
+		char *semicolon;
+		
+		tm = gmtime(&(mtime));
+		strftime(buf, sizeof(buf)-1, "%a, %d %b %Y %H:%M:%S GMT", tm);
+		
+		if (NULL == (semicolon = strchr(con->request.http_if_modified_since, ';'))) {
+			used_len = strlen(con->request.http_if_modified_since);
+		} else {
+			used_len = semicolon - con->request.http_if_modified_since;
+		}
+		
+		if (0 == strncmp(con->request.http_if_modified_since, buf, used_len)) {
+			con->http_status = 304;
+			return 1;
+		}
+	}
+
+	return 0;
+}
 
 handler_t http_response_prepare(server *srv, connection *con) {
 	handler_t r;
@@ -1349,88 +1440,9 @@ handler_t http_response_prepare(server *srv, connection *con) {
 			
 			/* generate e-tag */
 			etag_mutate(con->physical.etag, con->fce->etag);
-			
-			/*
-			 * 14.26 If-None-Match
-			 *    [...]
-			 *    If none of the entity tags match, then the server MAY perform the
-			 *    requested method as if the If-None-Match header field did not exist,
-			 *    but MUST also ignore any If-Modified-Since header field(s) in the
-			 *    request. That is, if no entity tags match, then the server MUST NOT
-			 *    return a 304 (Not Modified) response.
-			 */
-			
-			/* last-modified handling */
-			if (con->http_status == 0 && 
-			    con->request.http_if_none_match) {
-				if (etag_is_equal(con->physical.etag, con->request.http_if_none_match)) {
-					if (con->request.http_method == HTTP_METHOD_GET || 
-					    con->request.http_method == HTTP_METHOD_HEAD) {
+
+			http_response_handle_cachable(srv, con, con->fce->st.st_mtime);
 						
-						/* check if etag + last-modified */
-						if (con->request.http_if_modified_since) {
-							char buf[64];
-							struct tm tm;
-							size_t used_len;
-							char *semicolon;
-						
-							strftime(buf, sizeof(buf)-1, "%a, %d %b %Y %H:%M:%S GMT", gmtime(&(con->fce->st.st_mtime)));
-							
-							if (NULL == (semicolon = strchr(con->request.http_if_modified_since, ';'))) {
-								used_len = strlen(con->request.http_if_modified_since);
-							} else {
-								used_len = semicolon - con->request.http_if_modified_since;
-							}
-							
-							if (0 == strncmp(con->request.http_if_modified_since, buf, used_len)) {
-								con->http_status = 304;
-							} else {
-								/* convert to timestamp */
-								if (used_len < sizeof(buf) - 1) {
-									time_t t;
-									strncpy(buf, con->request.http_if_modified_since, used_len);
-									buf[used_len] = '\0';
-									
-									strptime(buf, "%a, %d %b %Y %H:%M:%S GMT", &tm);
-									
-									if (-1 != (t = mktime(&tm)) &&
-									    t <= con->fce->st.st_mtime) {
-										con->http_status = 304;
-									}
-								} else {
-									log_error_write(srv, __FILE__, __LINE__, "ss", 
-											con->request.http_if_modified_since, buf);
-									
-									con->http_status = 412;
-								}
-							}
-						} else {
-							con->http_status = 304;
-						}
-					} else {
-						con->http_status = 412;
-					}
-				}
-			} else if (con->http_status == 0 && con->request.http_if_modified_since) {
-				char buf[64];
-				struct tm *tm;
-				size_t used_len;
-				char *semicolon;
-				
-				tm = gmtime(&(con->fce->st.st_mtime));
-				strftime(buf, sizeof(buf)-1, "%a, %d %b %Y %H:%M:%S GMT", tm);
-				
-				if (NULL == (semicolon = strchr(con->request.http_if_modified_since, ';'))) {
-					used_len = strlen(con->request.http_if_modified_since);
-				} else {
-					used_len = semicolon - con->request.http_if_modified_since;
-				}
-				
-				if (0 == strncmp(con->request.http_if_modified_since, buf, used_len)) {
-					con->http_status = 304;
-				}
-			}
-			
 			if (con->http_status == 0 && con->request.http_range) {
 				http_response_parse_range(srv, con);
 			} else if (con->http_status == 0) {
