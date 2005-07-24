@@ -1,6 +1,7 @@
 #include <assert.h>
 #include <stdio.h>
 #include <errno.h>
+#include <time.h>
 
 #include "mod_cml.h"
 #include "mod_cml_funcs.h"
@@ -164,6 +165,8 @@ int cache_parse_lua(server *srv, connection *con, plugin_data *p, buffer *fn) {
 	/* register functions */
 	lua_register(L, "md5", f_crypto_md5);
 	lua_register(L, "file_mtime", f_file_mtime);
+	lua_register(L, "file_isreg", f_file_isreg);
+	lua_register(L, "dir_files", f_dir_files);
 	
 #ifdef HAVE_MEMCACHE_H
 	lua_pushliteral(L, "memcache_get_long");
@@ -312,7 +315,16 @@ int cache_parse_lua(server *srv, connection *con, plugin_data *p, buffer *fn) {
 		
 		if (ret == 0) {
 			con->file_finished = 1;
-
+			
+			/* no Last-Modified specified */
+			if (mtime && NULL == array_get_element(con->response.headers, "Last-Modified")) {
+				char timebuf[sizeof("Sat, 23 Jul 2005 21:20:01 GMT")];
+		
+				strftime(timebuf, sizeof(timebuf), "%a, %d %b %Y %H:%M:%S GMT", gmtime(&mtime));
+				
+				response_header_overwrite(srv, con, CONST_STR_LEN("Last-Modified"), timebuf, sizeof(timebuf) - 1);
+			}
+			
 			if (http_response_handle_cachable(srv, con, mtime)) {
 				/* ok, the client already has our content, 
 				 * no need to send it again */
