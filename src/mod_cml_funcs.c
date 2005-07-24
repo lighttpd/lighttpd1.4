@@ -5,6 +5,7 @@
 #include <string.h>
 #include <errno.h>
 #include <unistd.h>
+#include <dirent.h>
 #include <stdio.h>
 
 #include "buffer.h"
@@ -74,24 +75,94 @@ int f_file_mtime(lua_State *L) {
 	int n = lua_gettop(L);
 	
 	if (n != 1) {
-		lua_pushstring(L, "expected one argument");
+		lua_pushstring(L, "file_mtime: expected one argument");
 		lua_error(L);
 	}
 	
 	if (!lua_isstring(L, 1)) {
-		lua_pushstring(L, "argument has to be a string");
+		lua_pushstring(L, "file_mtime: argument has to be a string");
 		lua_error(L);
 	}
 	
 	if (-1 == stat(lua_tostring(L, 1), &st)) {
-		lua_pushstring(L, "stat failed");
-		lua_error(L);
+		lua_pushnil(L);
+		return 1;
 	}
 	
 	lua_pushnumber(L, st.st_mtime);
 	
 	return 1;
 }
+
+int f_dir_files_iter(lua_State *L) {
+	DIR *d;
+	struct dirent *de;
+	int n = lua_gettop(L);
+	
+	d = lua_touserdata(L, lua_upvalueindex(1));
+	
+	if (NULL == (de = readdir(d))) {
+		/* EOF */
+		closedir(d);
+		
+		return 0;
+	} else {
+		lua_pushstring(L, de->d_name);
+		return 1;
+	}
+}
+
+int f_dir_files(lua_State *L) {
+	DIR *d;
+	int n = lua_gettop(L);
+	
+	if (n != 1) {
+		lua_pushstring(L, "dir_files: expected one argument");
+		lua_error(L);
+	}
+	
+	if (!lua_isstring(L, 1)) {
+		lua_pushstring(L, "dir_files: argument has to be a string");
+		lua_error(L);
+	}
+	
+	/* check if there is a valid DIR handle on the stack */ 
+	if (NULL == (d = opendir(lua_tostring(L, 1)))) {
+		lua_pushnil(L);
+		return 1;
+	}
+	
+	/* push d into registry */
+	lua_pushlightuserdata(L, d);
+	lua_pushcclosure(L, f_dir_files_iter, 1);
+	
+	return 1;
+}
+
+int f_file_isreg(lua_State *L) {
+	struct stat st;
+	int n = lua_gettop(L);
+	
+	if (n != 1) {
+		lua_pushstring(L, "file_isreg: expected one argument");
+		lua_error(L);
+	}
+	
+	if (!lua_isstring(L, 1)) {
+		lua_pushstring(L, "file_isreg: argument has to be a string");
+		lua_error(L);
+	}
+	
+	if (-1 == stat(lua_tostring(L, 1), &st)) {
+		lua_pushnil(L);
+		return 1;
+	}
+	
+	lua_pushnumber(L, S_ISREG(st.st_mode));
+	
+	return 1;
+}
+
 
 #ifdef HAVE_MEMCACHE_H
 int f_memcache_exists(lua_State *L) {
