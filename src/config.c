@@ -76,6 +76,7 @@ static int config_insert(server *srv) {
 		{ "dir-listing.external-css",    NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_CONNECTION },  /* 40 */
 		
 		{ "dir-listing.encoding",        NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_CONNECTION },  /* 41 */
+		{ "server.errorlog-use-syslog",  NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_SERVER },     /* 42 */
 		
 		{ "server.host",                 "use server.bind instead", T_CONFIG_DEPRECATED, T_CONFIG_SCOPE_UNSET },
 		{ "server.docroot",              "use server.document-root instead", T_CONFIG_DEPRECATED, T_CONFIG_SCOPE_UNSET },
@@ -92,7 +93,7 @@ static int config_insert(server *srv) {
 	
 	/* 0 */
 	cv[0].destination = srv->srvconf.bindhost;
-	cv[1].destination = srv->srvconf.error_logfile;
+	cv[1].destination = srv->srvconf.errorlog_file;
 	cv[3].destination = srv->srvconf.changeroot;
 	cv[4].destination = srv->srvconf.username;
 	cv[5].destination = srv->srvconf.groupname;
@@ -106,6 +107,8 @@ static int config_insert(server *srv) {
 	cv[23].destination = &(srv->srvconf.max_fds);
 	cv[36].destination = &(srv->srvconf.log_request_header_on_error);
 	cv[37].destination = &(srv->srvconf.log_state_handling);
+	
+	cv[42].destination = &(srv->srvconf.errorlog_use_syslog);
 	
 	srv->config_storage = calloc(1, srv->config_context->used * sizeof(specific_config *));
 

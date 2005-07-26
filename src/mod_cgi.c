@@ -741,9 +741,14 @@ static int cgi_create_env(server *srv, connection *con, plugin_data *p, buffer *
 		/* not needed */
 		close(to_cgi_fds[1]);
 		
-		if (srv->log_error_fd >= 0) {
+		/* HACK: 
+		 * this is not nice, but it works
+		 *
+		 * we feed the stderr of the CGI to our errorlog, if possible
+		 */
+		if (srv->errorlog_mode == ERRORLOG_FILE) {
 			close(STDERR_FILENO);
-			dup2(srv->log_error_fd, STDERR_FILENO);
+			dup2(srv->errorlog_fd, STDERR_FILENO);
 		}
 		
 		/* create environment */
@@ -921,7 +926,7 @@ static int cgi_create_env(server *srv, connection *con, plugin_data *p, buffer *
 
 		/* we don't need the client socket */
 		for (i = 3; i < 256; i++) {
-			if (i != srv->log_error_fd) close(i);
+			if (i != srv->errorlog_fd) close(i);
 		}
 		
 		/* exec the cgi */

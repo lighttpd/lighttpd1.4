@@ -132,9 +132,10 @@ int mod_rrd_create_pipe(server *srv, plugin_data *p) {
 		close(to_rrdtool_fds[1]);
 		
 		close(STDERR_FILENO);
-		if (srv->log_error_fd != -1) {
-			dup2(srv->log_error_fd, STDERR_FILENO);
-			close(srv->log_error_fd);
+		
+		if (srv->errorlog_mode == ERRORLOG_FILE) {
+			dup2(srv->errorlog_fd, STDERR_FILENO);
+			close(srv->errorlog_fd);
 		}
 		
 		/* set up args */
