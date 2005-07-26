@@ -49,12 +49,12 @@ int f_crypto_md5(lua_State *L) {
 	b.size = sizeof(hex);
 	
 	if (n != 1) {
-		lua_pushstring(L, "expected one argument");
+		lua_pushstring(L, "md5: expected one argument");
 		lua_error(L);
 	}
 	
 	if (!lua_isstring(L, 1)) {
-		lua_pushstring(L, "argument has to be a string");
+		lua_pushstring(L, "md5: argument has to be a string");
 		lua_error(L);
 	}
 	
