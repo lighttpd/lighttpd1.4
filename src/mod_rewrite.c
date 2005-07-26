@@ -439,7 +439,10 @@ int mod_rewrite_plugin_init(plugin *p) {
 	p->name        = buffer_init_string("rewrite");
 	
 	p->init        = mod_rewrite_init;
-	p->handle_uri_clean = mod_rewrite_uri_handler;
+	/* it has to stay _raw as we are matching on uri + querystring
+	 */
+	
+	p->handle_uri_raw = mod_rewrite_uri_handler;
 	p->set_defaults = mod_rewrite_set_defaults;
 	p->cleanup     = mod_rewrite_free;
 	p->connection_reset = mod_rewrite_con_reset;
