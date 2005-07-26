@@ -122,7 +122,7 @@ static server *server_init(void) {
 	CLEAN(parse_full_path);
 	CLEAN(ts_debug_str);
 	CLEAN(ts_date_str);
-	CLEAN(error_log);
+	CLEAN(errorlog_buf);
 	CLEAN(response_range);
 	CLEAN(tmp_buf);
 	CLEAN(file_cache_etag);
@@ -131,12 +131,11 @@ static server *server_init(void) {
 	
 	buffer_copy_string(srv->empty_string, "");
 	
-	CLEAN(srvconf.error_logfile);
+	CLEAN(srvconf.errorlog_file);
 	CLEAN(srvconf.groupname);
 	CLEAN(srvconf.username);
 	CLEAN(srvconf.changeroot);
 	CLEAN(srvconf.bindhost);
-	CLEAN(srvconf.license);
 	CLEAN(srvconf.event_handler);
 	CLEAN(srvconf.pid_file);
 	
@@ -172,7 +171,8 @@ static server *server_init(void) {
 	srv->srvconf.modules = array_init();
 	
 	/* use syslog */
-	srv->log_error_fd = -1;
+	srv->errorlog_fd = -1;
+	srv->errorlog_mode = ERRORLOG_STDERR;
 
 	srv->split_vals = array_init();
 	
@@ -203,19 +203,18 @@ static void server_free(server *srv) {
 	CLEAN(parse_full_path);
 	CLEAN(ts_debug_str);
 	CLEAN(ts_date_str);
-	CLEAN(error_log);
+	CLEAN(errorlog_buf);
 	CLEAN(response_range);
 	CLEAN(tmp_buf);
 	CLEAN(file_cache_etag);
 	CLEAN(range_buf);
 	CLEAN(empty_string);
 	
-	CLEAN(srvconf.error_logfile);
+	CLEAN(srvconf.errorlog_file);
 	CLEAN(srvconf.groupname);
 	CLEAN(srvconf.username);
 	CLEAN(srvconf.changeroot);
 	CLEAN(srvconf.bindhost);
-	CLEAN(srvconf.license);
 	CLEAN(srvconf.event_handler);
 	CLEAN(srvconf.pid_file);
 	

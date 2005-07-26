@@ -407,13 +407,15 @@ typedef struct {
 typedef struct {
 	unsigned short port;
 	buffer *bindhost;
-	buffer *error_logfile;
+	
+	buffer *errorlog_file;
+	unsigned short errorlog_use_syslog;
+	
 	unsigned short dont_daemonize;
 	buffer *changeroot;
 	buffer *username;
 	buffer *groupname;
 	
-	buffer *license;
 	buffer *pid_file;
 	
 	buffer *event_handler;
@@ -455,13 +457,17 @@ typedef struct {
 typedef struct {
 	server_socket_array srv_sockets;
 	
-	int log_error_fd;
-	int log_using_syslog;
+	/* the errorlog */
+	int errorlog_fd;
+	enum { ERRORLOG_STDERR, ERRORLOG_FILE, ERRORLOG_SYSLOG } errorlog_mode;
+	buffer *errorlog_buf;
+	
 	fdevents *ev, *ev_ins;
 	
 	buffer_plugin plugins;
 	void *plugin_slots;
 	
+	/* counters */
 	int con_opened;
 	int con_read;
 	int con_written;
@@ -477,7 +483,6 @@ typedef struct {
 	/* buffers */
 	buffer *parse_full_path;
 	buffer *response_header;
-	buffer *error_log;
 	buffer *response_range;
 	buffer *tmp_buf;
 	

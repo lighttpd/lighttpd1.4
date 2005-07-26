@@ -445,13 +445,6 @@ SETDEFAULTS_FUNC(log_access_open) {
 		}
 		
 		if (s->use_syslog) {
-			if (srv->log_using_syslog == 0) {
-				log_error_write(srv, __FILE__, __LINE__, "s", 
-						"accesslog can only be written to syslog if errorlog is also sent to syslog. ABORTING.");
-				
-				return HANDLER_ERROR;
-			}
-			
 			/* ignore the next checks */
 			continue;
 		}
