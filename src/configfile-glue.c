@@ -79,12 +79,12 @@ int config_insert_values_internal(server *srv, array *ca, const config_values_t 
 			case TYPE_STRING: {
 				data_string *ds = (data_string *)du;
 					
-				log_error_write(srv, __FILE__, __LINE__, "ssbss", "unexpected type for key: ", cv[i].key, ds->value, "(short)", "0 ... 65535");
+				log_error_write(srv, __FILE__, __LINE__, "ssb", "get a string but expected a short:", cv[i].key, ds->value);
 				
 				return -1;
 			}
 			default:
-				log_error_write(srv, __FILE__, __LINE__, "ssdss", "unexpected type for key: ", cv[i].key, du->type, "(short)", "0 ... 65535");
+				log_error_write(srv, __FILE__, __LINE__, "ssds", "unexpected type for key:", cv[i].key, du->type, "expected a integer, range 0 ... 65535");
 				return -1;
 			}
 			break;
