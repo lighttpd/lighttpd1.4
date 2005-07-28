@@ -77,6 +77,7 @@ static int config_insert(server *srv) {
 		
 		{ "dir-listing.encoding",        NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_CONNECTION },  /* 41 */
 		{ "server.errorlog-use-syslog",  NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_SERVER },     /* 42 */
+		{ "server.range-requests",       NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION }, /* 43 */
 		
 		{ "server.host",                 "use server.bind instead", T_CONFIG_DEPRECATED, T_CONFIG_SCOPE_UNSET },
 		{ "server.docroot",              "use server.document-root instead", T_CONFIG_DEPRECATED, T_CONFIG_SCOPE_UNSET },
@@ -142,6 +143,7 @@ static int config_insert(server *srv) {
 		s->follow_symlink = 1;
 		s->kbytes_per_second = 0;
 		s->allow_http11  = 1;
+		s->range_requests = 1;
 		s->global_kbytes_per_second = 0;
 		s->global_bytes_per_second_cnt = 0;
 		s->global_bytes_per_second_cnt_ptr = &s->global_bytes_per_second_cnt;
@@ -182,6 +184,7 @@ static int config_insert(server *srv) {
 		cv[39].destination = &(s->hide_dotfiles);
 		cv[40].destination = s->dirlist_css;
 		cv[41].destination = s->dirlist_encoding;
+		cv[43].destination = &(s->range_requests);
 		
 		srv->config_storage[i] = s;
 	
@@ -228,6 +231,8 @@ int config_setup_connection(server *srv, connection *con) {
 	PATCH(log_request_handling);
 	PATCH(log_file_not_found);
 	
+	PATCH(range_requests);
+	
 	return 0;
 }
 
@@ -253,6 +258,8 @@ int config_patch_connection(server *srv, connection *con, const char *stage, siz
 				PATCH(document_root);
 			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("server.dir-listing"))) {
 				PATCH(dir_listing);
+			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("server.range-requests"))) {
+				PATCH(range_requests);
 			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("dir-listing.hide-dotfiles"))) {
 				PATCH(hide_dotfiles);
 			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("dir-listing.external-css"))) {

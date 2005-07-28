@@ -234,6 +234,7 @@ typedef struct {
 	unsigned short max_write_idle;
 	unsigned short use_xattr;
 	unsigned short follow_symlink;
+	unsigned short range_requests;
 	
 	/* debug */
 	

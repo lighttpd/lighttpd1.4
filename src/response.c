@@ -1290,7 +1290,7 @@ handler_t http_response_prepare(server *srv, connection *con) {
 				 * shorten uri.path
 				 */
 				
-				con->uri.path->used -= strlen(pathinfo);
+				con->uri.path->used -= con->request.pathinfo->used - 1;
 				con->uri.path->ptr[con->uri.path->used - 1] = '\0';
 			}
 			
@@ -1451,7 +1451,9 @@ handler_t http_response_prepare(server *srv, connection *con) {
 
 			http_response_handle_cachable(srv, con, con->fce->st.st_mtime);
 						
-			if (con->http_status == 0 && con->request.http_range) {
+			if (con->conf.range_requests &&
+			    con->http_status == 0 && 
+			    con->request.http_range) {
 				http_response_parse_range(srv, con);
 			} else if (con->http_status == 0) {
 				switch(r = plugins_call_handle_physical_path(srv, con)) {
