@@ -27,7 +27,7 @@ Options
   secdownload.secret        = <string>
   secdownload.document-root = <string>
   secdownload.uri-prefix    = <string>  (default: /)
-  secdownload.timeout       = <short>   (default: 60s)
+  secdownload.timeout       = <short>   (default: 60 seconds)
 
 Description
 ===========
@@ -109,7 +109,9 @@ Example
 
 Application
 -----------
-::
+
+Your application has to generate the correct URLs. The following sample
+code for PHP should be easily adaptable to any other language: ::
 
   <?php
   
@@ -132,11 +134,14 @@ Application
 
 Webserver
 ---------
-::
+
+The server has to configured in the same way. The uri-prefix and secret have
+to match: ::
 
   server.modules = ( ..., "mod_secdownload", ... )
   
   secdownload.secret          = "verysecret"
   secdownload.document-root   = "/home/www/servers/download-area/"
   secdownload.uri-prefix      = "/dl/"
+  secdownload.timeout         = 120
 
