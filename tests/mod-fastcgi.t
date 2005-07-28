@@ -7,7 +7,7 @@ BEGIN {
 }
 
 use strict;
-use Test::More tests => 40;
+use Test::More tests => 43;
 use LightyTest;
 
 my $tf = LightyTest->new();
@@ -15,7 +15,7 @@ my $tf = LightyTest->new();
 my $t;
 
 SKIP: {
-	skip "no PHP running on port 1026", 24 if $tf->pidof("php") == -1; 
+	skip "no PHP running on port 1026", 27 if $tf->pidof("php") == -1; 
 
 	ok($tf->start_proc == 0, "Starting lighttpd") or die();
 
@@ -119,6 +119,27 @@ EOF
  );
 	$t->{RESPONSE} = ( { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200, 'HTTP-Content' => '/indexfile/index.php' } );
 	ok($tf->handle_http($t) == 0, 'PHP_SELF + Indexfile, Bug #3');
+
+	$t->{REQUEST}  = ( <<EOF
+GET /prefix.fcgi?var=SCRIPT_NAME HTTP/1.0
+EOF
+ );
+	$t->{RESPONSE} = ( { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200, 'HTTP-Content' => '/prefix.fcgi' } );
+	ok($tf->handle_http($t) == 0, 'PATH_INFO, check-local off');
+
+	$t->{REQUEST}  = ( <<EOF
+GET /prefix.fcgi/foo/bar?var=SCRIPT_NAME HTTP/1.0
+EOF
+ );
+	$t->{RESPONSE} = ( { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200, 'HTTP-Content' => '/prefix.fcgi' } );
+	ok($tf->handle_http($t) == 0, 'PATH_INFO, check-local off');
+
+	$t->{REQUEST}  = ( <<EOF
+GET /prefix.fcgi/foo/bar?var=PATH_INFO HTTP/1.0
+EOF
+ );
+	$t->{RESPONSE} = ( { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200, 'HTTP-Content' => '/foo/bar' } );
+	ok($tf->handle_http($t) == 0, 'PATH_INFO, check-local off');
 
 	
 	ok($tf->stop_proc == 0, "Stopping lighttpd");
