@@ -28,14 +28,17 @@
  * /ada@riksnet.se 2004-12-06
  */
 
-typedef struct {
 #ifdef HAVE_MYSQL
+typedef struct {
 	MYSQL 	*mysql;
-#endif
+	
 	buffer  *mydb;
 	buffer  *myuser;
 	buffer  *mypass;
 	buffer  *mysock;
+	
+	buffer  *hostname;
+	unsigned short port;
 	
 	buffer  *mysql_pre;
 	buffer  *mysql_post;
@@ -87,9 +90,9 @@ SERVER_FUNC(mod_mysql_vhost_cleanup) {
 		size_t i;
 		for (i = 0; i < srv->config_context->used; i++) {
 			plugin_config *s = p->config_storage[i];
-#ifdef HAVE_MYSQL
+			
 			mysql_close(s->mysql);
-#endif
+			
 			buffer_free(s->mydb);
 			buffer_free(s->myuser);
 			buffer_free(s->mypass);
@@ -165,11 +168,13 @@ SERVER_FUNC(mod_mysql_vhost_set_defaults) {
 	size_t i = 0;
 
 	config_values_t cv[] = {
-		{ "mysql-vhost.db",	NULL, T_CONFIG_STRING, 	T_CONFIG_SCOPE_SERVER },	
+		{ "mysql-vhost.db",	NULL, T_CONFIG_STRING, 	T_CONFIG_SCOPE_SERVER },
 		{ "mysql-vhost.user",	NULL, T_CONFIG_STRING, 	T_CONFIG_SCOPE_SERVER },
-		{ "mysql-vhost.pass",	NULL, T_CONFIG_STRING, 	T_CONFIG_SCOPE_SERVER },	
-		{ "mysql-vhost.sock",	NULL, T_CONFIG_STRING, 	T_CONFIG_SCOPE_SERVER },	
-		{ "mysql-vhost.sql",	NULL, T_CONFIG_STRING, 	T_CONFIG_SCOPE_SERVER },	
+		{ "mysql-vhost.pass",	NULL, T_CONFIG_STRING, 	T_CONFIG_SCOPE_SERVER },
+		{ "mysql-vhost.sock",	NULL, T_CONFIG_STRING, 	T_CONFIG_SCOPE_SERVER },
+		{ "mysql-vhost.sql",	NULL, T_CONFIG_STRING, 	T_CONFIG_SCOPE_SERVER },
+		{ "mysql-vhost.hostname", NULL, T_CONFIG_STRING,T_CONFIG_SCOPE_SERVER },
+		{ "mysql-vhost.port",   NULL, T_CONFIG_SHORT,   T_CONFIG_SCOPE_SERVER },
                 { NULL,			NULL, T_CONFIG_UNSET,	T_CONFIG_SCOPE_UNSET }
         };
 	
@@ -185,10 +190,10 @@ SERVER_FUNC(mod_mysql_vhost_set_defaults) {
 		s->myuser = buffer_init();
 		s->mypass = buffer_init();
 		s->mysock = buffer_init();
+		s->hostname = buffer_init();
+		s->port   = 0;               /* default port for mysql */
 		sel = buffer_init();
-#ifdef HAVE_MYSQL
 		s->mysql = NULL;
-#endif
 		
 		s->mysql_pre = buffer_init();
 		s->mysql_post = buffer_init();
@@ -198,6 +203,8 @@ SERVER_FUNC(mod_mysql_vhost_set_defaults) {
 		cv[2].destination = s->mypass;
 		cv[3].destination = s->mysock;
 		cv[4].destination = sel;
+		cv[5].destination = s->hostname;
+		cv[6].destination = &(s->port);
 		
 		p->config_storage[i] = s;
 		
@@ -216,12 +223,21 @@ SERVER_FUNC(mod_mysql_vhost_set_defaults) {
 			buffer_copy_string_buffer(s->mysql_pre, sel);
 		}
 		
+		/* required:
+		 * - username
+		 * - database 
+		 * 
+		 * optional:
+		 * - password, default: empty
+		 * - socket, default: mysql default
+		 * - hostname, if set overrides socket
+		 * - port, default: 3306
+		 */
+		
 		/* all have to be set */
 		if (!(buffer_is_empty(s->myuser) ||
-		      buffer_is_empty(s->mypass) ||
-		      buffer_is_empty(s->mydb) ||
-		      buffer_is_empty(s->mysock))) {
-#ifdef HAVE_MYSQL
+		      buffer_is_empty(s->mydb))) {
+
 			int fd;
 		
 			if (NULL == (s->mysql = mysql_init(NULL))) {
@@ -229,14 +245,15 @@ SERVER_FUNC(mod_mysql_vhost_set_defaults) {
 				
 				return HANDLER_ERROR;
 			}
+#define FOO(x) (s->x->used ? s->x->ptr : NULL)
 			
-			if (!mysql_real_connect(s->mysql, NULL, s->myuser->ptr, s->mypass->ptr, 
-						s->mydb->ptr, 0, s->mysock->ptr, 0)) {
+			if (!mysql_real_connect(s->mysql, FOO(hostname), FOO(myuser), FOO(mypass), 
+						FOO(mydb), s->port, FOO(mysock), 0)) {
 				log_error_write(srv, __FILE__, __LINE__, "s", mysql_error(s->mysql));
 				
 				return HANDLER_ERROR;
 			}
-		
+#undef FOO
 			/* set close_on_exec for mysql the hard way */
 			/* Note: this only works as it is done during startup, */
 			/* otherwise we cannot be sure that mysql is fd i-1 */
@@ -244,7 +261,6 @@ SERVER_FUNC(mod_mysql_vhost_set_defaults) {
 				close(fd);
 				fcntl(fd-1, F_SETFD, FD_CLOEXEC); 
 			}
-#endif
 		}
 	}
 	
@@ -279,11 +295,9 @@ static int mod_mysql_vhost_patch_connection(server *srv, connection *con, plugin
 			}
 		}
 		
-#ifdef HAVE_MYSQL
 		if (s->mysql) {
 			PATCH(mysql);
 		}
-#endif
 	}
 	
 	return 0;
@@ -297,9 +311,7 @@ static int mod_mysql_vhost_setup_connection(server *srv, connection *con, plugin
 		
 	PATCH(mysql_pre);
 	PATCH(mysql_post);
-#ifdef HAVE_MYSQL
 	PATCH(mysql);
-#endif
 	
 	return 0;
 }
@@ -308,7 +320,6 @@ static int mod_mysql_vhost_setup_connection(server *srv, connection *con, plugin
 
 /* handle document root request */
 CONNECTION_FUNC(mod_mysql_vhost_handle_docroot) {
-#ifdef HAVE_MYSQL
 	plugin_data *p = p_d;
 	plugin_connection_data *c;
 
@@ -399,13 +410,6 @@ GO_ON:	buffer_copy_string_buffer(con->server_name, c->server_name);
 ERR500:	if (result) mysql_free_result(result);
 	con->http_status = 500; /* Internal Error */
 	return HANDLER_FINISHED;
-#else
-	UNUSED(srv);
-	UNUSED(con);
-	UNUSED(p_d);
-	
-	return HANDLER_ERROR;
-#endif
 }
 
 /* this function is called at dlopen() time and inits the callbacks */
@@ -422,4 +426,12 @@ int mod_mysql_vhost_plugin_init(plugin *p) {
 	
 	return 0;
 }
+#else
+/* we don't have mysql support, this plugin does nothing */
+int mod_mysql_vhost_plugin_init(plugin *p) {
+	p->version     = LIGHTTPD_VERSION_ID;
+	p->name        			= buffer_init_string("mysql_vhost");
 
+	return 0;
+}
+#endif
