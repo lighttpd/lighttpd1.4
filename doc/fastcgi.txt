@@ -380,7 +380,8 @@ It is important that the php.ini contains: ::
 
   cgi.fix_pathinfo = 1
 
-Otherwise PHP_SELF won't be set correctly.
+and that you set ``broken-scriptfilename`` (read below). 
+Otherwise PHP_SELF and PATH_INFO won't be set correctly.
 
 Starting a FastCGI-PHP
 ----------------------

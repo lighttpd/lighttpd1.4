@@ -155,27 +155,39 @@ server.document-root
 server.bind
   hostname of the server
   
+  Default: bind to all interfaces
+  
 server.port
   tcp-port to bind the server to
-  if nothing is specified port 80 is used
+  
   NOTE: port belows 1024 require root-permissions
+  
+  Default: 80 (443 if ssl is enabled)
   
 server.use-ipv6
   bind to the IPv6 socket
   
 server.errorlog
   pathname of the error-log
-  if nothing is specified STDERR is used
+  
+  Default: either STDERR or ``server.errorlog-use-syslog``
+  
+server.errorlog-use-syslog
+  send errorlog to syslog
+  
+  Default: disabled
   
 server.chroot
   root-directory of the server
   
 server.username
   username used to run the server
+  
   NOTE: requires root-permissions
 
 server.groupname
   groupname used to run the server
+  
   NOTE: requires root-permissions
 
 server.dir-listing
@@ -186,7 +198,7 @@ dir-listing.hide-dotfiles
   if enabled, does not list hidden files in directory listings generated
   by the dir-listing option.
 
-  default: enabled
+  Default: enabled
 
 dir-listing.external-css
   path to an external css stylesheet for the directory listing
@@ -194,7 +206,7 @@ dir-listing.external-css
 server.follow-symlink
   allow to follow-symlinks
   
-  default: enabled
+  Default: enabled
 
 server.indexfiles
   list of files to search for if a directory is requested
