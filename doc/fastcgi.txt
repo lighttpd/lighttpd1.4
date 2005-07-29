@@ -100,7 +100,8 @@ fastcgi.server
 	  "min-procs" => <integer>,   # OPTIONAL
 	  "max-procs" => <integer>,   # OPTIONAL
 	  "max-load-per-proc" => <integer>, # OPTIONAL
-	  "idle-timeout" => <integer> # OPTIONAL
+	  "idle-timeout" => <integer>, # OPTIONAL
+	  "broken-scriptfilename" => <boolean> # OPTIONAL
 	)
       ), 
       ( <handle> => ... 
@@ -131,6 +132,8 @@ fastcgi.server
 		and return 404 (Not Found) if no such file.
                 If disabled, the server forward request to 
 		FastCGI interface without this check.
+  :"broken-scriptfilename": breaks SCRIPT_FILENAME in a wat that 
+                PHP can extract PATH_INFO from it (default: disabled)
 
   If bin-path is set:
 
@@ -427,6 +430,31 @@ the necessary environment variables to the FastCGI process. ::
                        )
                      )
                    )
+
+As a last addition you have to make should that both PHP_SELF and 
+PATH_INFO work as expected: ::
+
+  fastcgi.server = ( ".php" =>
+                     ( "localhost" =>
+                       ( "socket" => "/tmp/php-fastcgi.socket",
+                         "bin-path" => "/usr/local/bin/php",
+			 "bin-environment" => ( 
+			   "PHP_FCGI_CHILDREN" => "16",
+			   "PHP_FCGI_MAX_REQUESTS" => "10000"
+                         ),
+			 "bin-copy-environment" => (
+			   "PATH", "SHELL", "USER"
+			 ),
+			 "broken-scriptfilename" => "enable"
+                       )
+                     )
+                   )
+
+Why this ? the ``cgi.fix_pathinfo = 0`` would give you a working ``PATH_INFO`` 
+but no ``PHP_SELF``. If you enable it, it turns around. To fix the
+``PATH_INFO`` php needs a SCRIPT_FILENAME which is against the CGI spec, a
+broken-scriptfilename. With ``cgi.fix_pathinfo = 1`` in php.ini and
+``broken-scriptfilename => "enable"`` you get both.
 
 
 External Spawning

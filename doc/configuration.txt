@@ -295,6 +295,12 @@ server.protocol-http11
   
   Default: enabled
 
+server.range-requests
+  defines if range requests are allowed or not.
+  
+  Default: enabled
+
+
 SSL engine
 ``````````
 
