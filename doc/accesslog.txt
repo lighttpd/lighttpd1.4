@@ -98,7 +98,7 @@ accesslog.format
   
   Default: CLF compatible output
 
-response header
+Response Header
 ---------------
 
 The accesslog module provides a special way to log content from the
