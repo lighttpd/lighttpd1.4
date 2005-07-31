@@ -7,6 +7,7 @@
 #include <unistd.h>
 #include <errno.h>
 #include <time.h>
+#include <stdio.h>
 
 #include "server.h"
 #include "connections.h"
@@ -21,6 +22,7 @@
 typedef struct {
 	buffer *config_url;
 	buffer *status_url;
+	int     sort;
 } plugin_config;
 
 typedef struct {
@@ -102,6 +104,7 @@ SETDEFAULTS_FUNC(mod_status_set_defaults) {
 	config_values_t cv[] = { 
 		{ "status.status-url",           NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_CONNECTION },
 		{ "status.config-url",           NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_CONNECTION },
+        { "status.enable-sort",          NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION },
 		{ NULL,                          NULL, T_CONFIG_UNSET, T_CONFIG_SCOPE_UNSET }
 	};
 	
@@ -115,9 +118,11 @@ SETDEFAULTS_FUNC(mod_status_set_defaults) {
 		s = malloc(sizeof(plugin_config));
 		s->config_url    = buffer_init();
 		s->status_url    = buffer_init();
+		s->sort          = 1;
 		
 		cv[0].destination = s->status_url;
 		cv[1].destination = s->config_url;
+		cv[2].destination = &(s->sort);
 		
 		p->config_storage[i] = s;
 	
@@ -154,6 +159,37 @@ static int mod_status_header_append(buffer *b, const char *key) {
 	return 0;
 }
 
+static int mod_status_header_append_sort(buffer *b, void *p_d, const char* key) {
+	plugin_data *p = p_d;
+	
+	if (p->conf.sort) {
+		BUFFER_APPEND_STRING_CONST(b, "<th class=\"status\"><a href=\"#\" class=\"sortheader\" onclick=\"resort(this);return false;\">");
+		buffer_append_string(b, key);
+		BUFFER_APPEND_STRING_CONST(b, "<span class=\"sortarrow\"></span></a></th>\n");
+	} else {
+		BUFFER_APPEND_STRING_CONST(b, "<th class=\"status\">");
+		buffer_append_string(b, key);
+		BUFFER_APPEND_STRING_CONST(b, "</th>\n");
+	}
+	
+	return 0;
+}
+
+static int mod_status_get_multiplier(double *avg, char *multiplier, int size) {
+	*multiplier = ' ';
+	
+	if (*avg > size) { *avg /= size; *multiplier = 'k'; }
+	if (*avg > size) { *avg /= size; *multiplier = 'M'; }
+	if (*avg > size) { *avg /= size; *multiplier = 'G'; }
+	if (*avg > size) { *avg /= size; *multiplier = 'T'; }
+	if (*avg > size) { *avg /= size; *multiplier = 'P'; }
+	if (*avg > size) { *avg /= size; *multiplier = 'E'; }
+	if (*avg > size) { *avg /= size; *multiplier = 'Z'; }
+	if (*avg > size) { *avg /= size; *multiplier = 'Y'; }
+
+	return 0;
+}
+
 static handler_t mod_status_handle_server_status_html(server *srv, connection *con, void *p_d) {
 	plugin_data *p = p_d;
 	buffer *b;
@@ -177,11 +213,81 @@ static handler_t mod_status_handle_server_status_html(server *srv, connection *c
 	
 	BUFFER_APPEND_STRING_CONST(b,
 				   "  <style type=\"text/css\">\n"
-				   "th.status { background-color: black; color: white; }\n"
-				   "table.status { border: black solid thin; }\n"
-				   "td.int { background-color: #f0f0f0; text-align: right }\n"
-				   "td.string { background-color: #f0f0f0; text-align: left }\n"
+				   "    table { border: black solid thin; }\n"
+				   "    td.int { background-color: #f0f0f0; text-align: right }\n"
+				   "    td.string { background-color: #f0f0f0; text-align: left }\n"
+				   "    th.status { background-color: black; color: white; font-weight: bold; }\n"
+				   "    a.sortheader { background-color: black; color: white; font-weight: bold; text-decoration: none; display: block; }\n"
+				   "    span.sortarrow { color: white; text-decoration: none; }\n"
 				   "  </style>\n");
+	
+	if (p->conf.sort) {
+		BUFFER_APPEND_STRING_CONST(b,
+					   "<script type=\"text/javascript\">\n"
+					   "// <!--\n"
+					   "var sort_column;\n"
+					   "var prev_span = null;\n");
+		
+		BUFFER_APPEND_STRING_CONST(b,
+					   "function get_inner_text(el) {\n"
+					   " if((typeof el == 'string')||(typeof el == 'undefined'))\n"
+					   "  return el;\n"
+					   " if(el.innerText)\n"
+					   "  return el.innerText;\n"
+					   " else {\n"
+					   "  var str = \"\";\n"
+					   "  var cs = el.childNodes;\n"
+					   "  var l = cs.length;\n"
+					   "  for (i=0;i<l;i++) {\n"
+					   "   if (cs[i].nodeType==1) str += get_inner_text(cs[i]);\n"
+					   "   else if (cs[i].nodeType==3) str += cs[i].nodeValue;\n"
+					   "  }\n"
+					   " }\n"
+					   " return str;\n"
+					   "}\n");
+		
+		BUFFER_APPEND_STRING_CONST(b,
+					   "function sortfn(a,b) {\n"
+					   " var at = get_inner_text(a.cells[sort_column]);\n"
+					   " var bt = get_inner_text(b.cells[sort_column]);\n"
+					   " if (a.cells[sort_column].className == 'int') {\n"
+					   "  return parseInt(at)-parseInt(bt);\n"
+					   " } else {\n"
+					   "  aa = at.toLowerCase();\n"
+					   "  bb = bt.toLowerCase();\n"
+					   "  if (aa==bb) return 0;\n"
+					   "  else if (aa<bb) return -1;\n"
+					   "  else return 1;\n"
+					   " }\n"
+					   "}\n");
+		
+		BUFFER_APPEND_STRING_CONST(b,
+					   "function resort(lnk) {\n"
+					   " var span = lnk.childNodes[1];\n"
+					   " var table = lnk.parentNode.parentNode.parentNode.parentNode;\n"
+					   " var rows = new Array();\n"
+					   " for (j=1;j<table.rows.length;j++)\n"
+					   "  rows[j-1] = table.rows[j];\n"
+					   " sort_column = lnk.parentNode.cellIndex;\n"
+					   " rows.sort(sortfn);\n");
+		
+		BUFFER_APPEND_STRING_CONST(b,
+					   " if (prev_span != null) prev_span.innerHTML = '';\n"
+					   " if (span.getAttribute('sortdir')=='down') {\n"
+					   "  span.innerHTML = '&uarr;';\n"
+					   "  span.setAttribute('sortdir','up');\n"
+					   "  rows.reverse();\n"
+					   " } else {\n"
+					   "  span.innerHTML = '&darr;';\n"
+					   "  span.setAttribute('sortdir','down');\n"
+					   " }\n"
+					   " for (i=0;i<rows.length;i++)\n"
+					   "  table.tBodies[0].appendChild(rows[i]);\n"
+					   " prev_span = span;\n"
+					   "}\n"
+					   "// -->\n"
+					   "</script>\n");
+	}
 	
 	BUFFER_APPEND_STRING_CONST(b, 
 				 " </head>\n"
@@ -245,15 +351,9 @@ static handler_t mod_status_handle_server_status_html(server *srv, connection *c
 	
 	BUFFER_APPEND_STRING_CONST(b, "<tr><td>Requests</td><td class=\"string\">");
 	avg = p->abs_requests;
-	multiplier = '\0';
-	if (avg > 10000) { avg /= 1000; multiplier = 'k'; }
-	if (avg > 10000) { avg /= 1000; multiplier = 'M'; }
-	if (avg > 10000) { avg /= 1000; multiplier = 'G'; }
-	if (avg > 10000) { avg /= 1000; multiplier = 'T'; }
-	if (avg > 10000) { avg /= 1000; multiplier = 'P'; }
-	if (avg > 10000) { avg /= 1000; multiplier = 'E'; }
-	if (avg > 10000) { avg /= 1000; multiplier = 'Z'; }
-	if (avg > 10000) { avg /= 1000; multiplier = 'Y'; }
+
+	mod_status_get_multiplier(&avg, &multiplier, 1000);
+	
 	buffer_append_long(b, avg);
 	BUFFER_APPEND_STRING_CONST(b, " ");
 	if (multiplier)	buffer_append_string_len(b, &multiplier, 1);
@@ -261,21 +361,40 @@ static handler_t mod_status_handle_server_status_html(server *srv, connection *c
 	
 	BUFFER_APPEND_STRING_CONST(b, "<tr><td>Traffic</td><td class=\"string\">");
 	avg = p->abs_traffic_out;
-	multiplier = '\0';
 
-	if (avg > 10240) { avg /= 1024; multiplier = 'k'; }
-	if (avg > 10240) { avg /= 1024; multiplier = 'M'; }
-	if (avg > 10240) { avg /= 1024; multiplier = 'G'; }
-	if (avg > 10240) { avg /= 1024; multiplier = 'T'; }
-	if (avg > 10240) { avg /= 1024; multiplier = 'P'; }
-	if (avg > 10240) { avg /= 1024; multiplier = 'E'; }
-	if (avg > 10240) { avg /= 1024; multiplier = 'Z'; }
-	if (avg > 10240) { avg /= 1024; multiplier = 'Y'; }
+	mod_status_get_multiplier(&avg, &multiplier, 1024);
+
+	sprintf(buf, "%.2f", avg);
+	buffer_append_string(b, buf);
+	BUFFER_APPEND_STRING_CONST(b, " ");
+	if (multiplier)	buffer_append_string_len(b, &multiplier, 1);
+	BUFFER_APPEND_STRING_CONST(b, "byte</td></tr>\n");
+
+
+
+	BUFFER_APPEND_STRING_CONST(b, "<tr><th colspan=\"2\">average (since start)</th></tr>\n");
+	
+	BUFFER_APPEND_STRING_CONST(b, "<tr><td>Requests</td><td class=\"string\">");
+	avg = p->abs_requests / (srv->cur_ts - srv->startup_ts);
+
+	mod_status_get_multiplier(&avg, &multiplier, 1000);
 
 	buffer_append_long(b, avg);
 	BUFFER_APPEND_STRING_CONST(b, " ");
 	if (multiplier)	buffer_append_string_len(b, &multiplier, 1);
-	BUFFER_APPEND_STRING_CONST(b, "byte</td></tr>\n");
+	BUFFER_APPEND_STRING_CONST(b, "req/s</td></tr>\n");
+	
+	BUFFER_APPEND_STRING_CONST(b, "<tr><td>Traffic</td><td class=\"string\">");
+	avg = p->abs_traffic_out / (srv->cur_ts - srv->startup_ts);
+
+	mod_status_get_multiplier(&avg, &multiplier, 1024);
+
+	sprintf(buf, "%.2f", avg);
+	buffer_append_string(b, buf);
+	BUFFER_APPEND_STRING_CONST(b, " ");
+	if (multiplier)	buffer_append_string_len(b, &multiplier, 1);
+	BUFFER_APPEND_STRING_CONST(b, "byte/s</td></tr>\n");
+
 	
 	
 	BUFFER_APPEND_STRING_CONST(b, "<tr><th colspan=\"2\">average (5s sliding average)</th></tr>\n");
@@ -286,16 +405,8 @@ static handler_t mod_status_handle_server_status_html(server *srv, connection *c
 	avg /= 5;
 	
 	BUFFER_APPEND_STRING_CONST(b, "<tr><td>Requests</td><td class=\"string\">");
-	multiplier = '\0';
 
-	if (avg > 10000) { avg /= 1000; multiplier = 'k'; }
-	if (avg > 10000) { avg /= 1000; multiplier = 'M'; }
-	if (avg > 10000) { avg /= 1000; multiplier = 'G'; }
-	if (avg > 10000) { avg /= 1000; multiplier = 'T'; }
-	if (avg > 10000) { avg /= 1000; multiplier = 'P'; }
-	if (avg > 10000) { avg /= 1000; multiplier = 'E'; }
-	if (avg > 10000) { avg /= 1000; multiplier = 'Z'; }
-	if (avg > 10000) { avg /= 1000; multiplier = 'Y'; }
+	mod_status_get_multiplier(&avg, &multiplier, 1000);
 
 	buffer_append_long(b, avg);
 	BUFFER_APPEND_STRING_CONST(b, " ");
@@ -310,18 +421,11 @@ static handler_t mod_status_handle_server_status_html(server *srv, connection *c
 	avg /= 5;
 	
 	BUFFER_APPEND_STRING_CONST(b, "<tr><td>Traffic</td><td class=\"string\">");
-	multiplier = '\0';
 
-	if (avg > 10240) { avg /= 1024; multiplier = 'k'; }
-	if (avg > 10240) { avg /= 1024; multiplier = 'M'; }
-	if (avg > 10240) { avg /= 1024; multiplier = 'G'; }
-	if (avg > 10240) { avg /= 1024; multiplier = 'T'; }
-	if (avg > 10240) { avg /= 1024; multiplier = 'P'; }
-	if (avg > 10240) { avg /= 1024; multiplier = 'E'; }
-	if (avg > 10240) { avg /= 1024; multiplier = 'Z'; }
-	if (avg > 10240) { avg /= 1024; multiplier = 'Y'; }
+	mod_status_get_multiplier(&avg, &multiplier, 1024);
 
-	buffer_append_long(b, avg);
+	sprintf(buf, "%.2f", avg);
+	buffer_append_string(b, buf);
 	BUFFER_APPEND_STRING_CONST(b, " ");
 	if (multiplier)	buffer_append_string_len(b, &multiplier, 1);
 	BUFFER_APPEND_STRING_CONST(b, "byte/s</td></tr>\n");
@@ -354,14 +458,14 @@ static handler_t mod_status_handle_server_status_html(server *srv, connection *c
 	
 	BUFFER_APPEND_STRING_CONST(b, "<table class=\"status\">\n");
 	BUFFER_APPEND_STRING_CONST(b, "<tr>");
-	BUFFER_APPEND_STRING_CONST(b, "<th class=\"status\">Client IP</th>");
-	BUFFER_APPEND_STRING_CONST(b, "<th class=\"status\">Read</th>");
-	BUFFER_APPEND_STRING_CONST(b, "<th class=\"status\">Written</th>");
-	BUFFER_APPEND_STRING_CONST(b, "<th class=\"status\">State</th>");
-	BUFFER_APPEND_STRING_CONST(b, "<th class=\"status\">Time</th>");
-	BUFFER_APPEND_STRING_CONST(b, "<th class=\"status\">Host</th>");
-	BUFFER_APPEND_STRING_CONST(b, "<th class=\"status\">URI</th>");
-	BUFFER_APPEND_STRING_CONST(b, "<th class=\"status\">File</th>");
+	mod_status_header_append_sort(b, p_d, "Client IP");
+	mod_status_header_append_sort(b, p_d, "Read");
+	mod_status_header_append_sort(b, p_d, "Written");
+	mod_status_header_append_sort(b, p_d, "State");
+	mod_status_header_append_sort(b, p_d, "Time");
+	mod_status_header_append_sort(b, p_d, "Host");
+	mod_status_header_append_sort(b, p_d, "URI");
+	mod_status_header_append_sort(b, p_d, "File");
 	BUFFER_APPEND_STRING_CONST(b, "</tr>\n");
 	
 	for (j = 0; j < srv->conns->used; j++) {
@@ -589,6 +693,8 @@ static int mod_skeleton_patch_connection(server *srv, connection *con, plugin_da
 				PATCH(status_url);
 			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("status.config-url"))) {
 				PATCH(config_url);
+			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("status.enable-sort"))) {
+				PATCH(sort);
 			} 
 		}
 	}
@@ -603,6 +709,7 @@ static int mod_skeleton_setup_connection(server *srv, connection *con, plugin_da
 
 	PATCH(status_url);
 	PATCH(config_url);
+	PATCH(sort);
 	
 	return 0;
 }
