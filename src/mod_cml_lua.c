@@ -185,11 +185,11 @@ int cache_parse_lua(server *srv, connection *con, plugin_data *p, buffer *fn) {
 	lua_settable(L, LUA_GLOBALSINDEX);
 #endif
 	/* register CGI environment */
-	lua_pushstring(L, "request");
+	lua_pushliteral(L, "request");
 	lua_newtable(L);
 	lua_settable(L, LUA_GLOBALSINDEX);
 	
-	lua_pushstring(L, "request");
+	lua_pushliteral(L, "request");
 	header_tbl = lua_gettop(L);
 	lua_gettable(L, LUA_GLOBALSINDEX);
 	
@@ -205,18 +205,26 @@ int cache_parse_lua(server *srv, connection *con, plugin_data *p, buffer *fn) {
 	c_to_lua_push(L, header_tbl, CONST_STR_LEN("BASEURL"), CONST_BUF_LEN(p->baseurl));
 	
 	/* register GET parameter */
-	lua_pushstring(L, "get");
+	lua_pushliteral(L, "get");
 	lua_newtable(L);
 	lua_settable(L, LUA_GLOBALSINDEX);
 	
-	lua_pushstring(L, "get");
+	lua_pushliteral(L, "get");
 	header_tbl = lua_gettop(L);
 	lua_gettable(L, LUA_GLOBALSINDEX);
+	
 	
 	buffer_copy_string_buffer(b, con->uri.query);
 	split_query_string(L, header_tbl, b);
 	buffer_reset(b);
 	
+	lua_pushliteral(L, "CACHE_HIT");
+	lua_pushnumber(L, 0);
+	lua_settable(L, LUA_GLOBALSINDEX);
+	
+	lua_pushliteral(L, "CACHE_MISS");
+	lua_pushnumber(L, 1);
+	lua_settable(L, LUA_GLOBALSINDEX);
 	
 	/* load lua program */
 	if (lua_load(L, load_file, &rm, fn->ptr) || lua_pcall(L,0,1,0)) {
