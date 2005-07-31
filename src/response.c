@@ -151,6 +151,9 @@ int http_response_write_header(server *srv, connection *con,
 	
 	if (con->response.transfer_encoding & HTTP_TRANSFER_ENCODING_CHUNKED) {
 		BUFFER_APPEND_STRING_CONST(b, "\r\nTransfer-Encoding: chunked");
+	} else if (file_size >= 0 && con->http_status != 304) {
+		BUFFER_APPEND_STRING_CONST(b, "\r\nContent-Length: ");
+		buffer_append_off_t(b, file_size);
 	}
 	
 	/* HTTP/1.1 requires a Date: header */
@@ -206,11 +209,6 @@ int http_response_write_header(server *srv, connection *con,
 		
 		BUFFER_APPEND_STRING_CONST(b, "\r\nLast-Modified: ");
 		buffer_append_string_buffer(b, srv->mtime_cache[i].str);
-	}
-	
-	if (file_size >= 0 && con->http_status != 304) {
-		BUFFER_APPEND_STRING_CONST(b, "\r\nContent-Length: ");
-		buffer_append_off_t(b, file_size);
 	}
 	
 	if (con->physical.path->used && con->physical.etag->used) {
