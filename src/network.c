@@ -420,9 +420,11 @@ int network_register_fdevents(server *srv) {
 }
 
 int network_write_chunkqueue(server *srv, connection *con, chunkqueue *cq) {
-	int ret = -1, i;
+	int ret = -1;
 	off_t written = 0;
-	
+#ifdef TCP_CORK	
+	int corked = 0;
+#endif
 	server_socket *srv_socket = con->srv_socket;
 
 	if (con->conf.global_kbytes_per_second &&
@@ -438,9 +440,13 @@ int network_write_chunkqueue(server *srv, connection *con, chunkqueue *cq) {
 	written = con->bytes_written;
 
 #ifdef TCP_CORK	
-	/* Linux: put a cork into the socket as we want to combine the write() calls */
-	i = 1;
-	setsockopt(con->fd, IPPROTO_TCP, TCP_CORK, &i, sizeof(i));
+	/* Linux: put a cork into the socket as we want to combine the write() calls
+	 * but only if we really have multiple chunks
+	 */
+	if (cq->first && cq->first->next) {
+		corked = 1;
+		setsockopt(con->fd, IPPROTO_TCP, TCP_CORK, &corked, sizeof(corked));
+	}
 #endif
 	
 	if (srv_socket->is_ssl) {
@@ -476,6 +482,7 @@ int network_write_chunkqueue(server *srv, connection *con, chunkqueue *cq) {
 		 */
 		
 		chunk *c, *pc = NULL;
+		int i;
 		
 		for (i = 0, c = cq->first; i < ret; i++, c = c->next) {
 			buffer_reset(c->data.mem);
@@ -506,8 +513,10 @@ int network_write_chunkqueue(server *srv, connection *con, chunkqueue *cq) {
 	}
 	
 #ifdef TCP_CORK
-	i = 0;
-	setsockopt(con->fd, IPPROTO_TCP, TCP_CORK, &i, sizeof(i));
+	if (corked) {
+		corked = 0;
+		setsockopt(con->fd, IPPROTO_TCP, TCP_CORK, &corked, sizeof(corked));
+	}
 #endif
 
 	written = con->bytes_written - written;
