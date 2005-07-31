@@ -80,6 +80,7 @@ $HTTP["url"]
 $SERVER["socket"]
   match on socket.  Value must be on the format "$ip:$port" where $ip is an IP
   address and $port a port number.  Only equal match (==) is supported.
+  It also binds to this socket.
 
 <operator> is one of:
 
