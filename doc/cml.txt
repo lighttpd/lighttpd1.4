@@ -109,9 +109,9 @@ and the following index.cml file: ::
   if file_mtime(b .. "../lib/php/menu.csv") > file_mtime(cwd .. "_cache.html") or
      file_mtime(b .. "templates/jk.tmpl")   > file.mtime(cwd .. "_cache.html")
      file.mtime(b .. "content.html")        > file.mtime(cwd .. "_cache.html") then
-     return 1
+     return CACHE_MISS
   else 
-     return 0
+     return CACHE_HIT
   end
 
 Numbers again:
@@ -152,7 +152,7 @@ The index.cml for this looks like: ::
                      cwd .. "news.html",
                      cwd .. "footer.html" }
   
-  return 0
+  return CACHE_HIT
 
 Now we get about 10000 req/s instead of 600 req/s.
 

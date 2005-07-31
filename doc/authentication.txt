@@ -182,7 +182,7 @@ Configuration
                    ( 
 		     "method"  => "digest",
 		     "realm"   => "download archiv",
-		     "require" => "user=jan"
+		     "require" => "valid-user"
 		   )
                  )
 
