@@ -17,7 +17,7 @@ lighttpd is intented to be a frontend for ad-servers which have to deliver
 small files concurrently to many connections.
 
 Available rpmbuild rebuild options :
---with : ssl mysql
+--with : ssl mysql lua memcache
 
 %prep
 
@@ -27,7 +27,9 @@ Available rpmbuild rebuild options :
 rm -rf %{buildroot}
 %configure \
     %{?_with_mysql:       --with-mysql} \
-    %{?_with_ssl:         --with-openssl} 
+    %{?_with_lua:         --with-lua} \
+    %{?_with_memcache:    --with-memcache} \
+    %{?_with_ssl:         --with-openssl}
 make
 
 %install
