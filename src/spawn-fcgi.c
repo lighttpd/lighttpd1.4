@@ -11,6 +11,7 @@
 
 #include "config.h"
 
+
 #ifdef HAVE_PWD_H
 #include <grp.h>
 #include <pwd.h>
@@ -120,6 +121,7 @@ int fcgi_spawn_connection(char *appPath, unsigned short port, const char *unixso
 		switch ((child = fork())) {
 		case 0: {
 			char cgi_childs[64];
+			char *b;
 			
 			int i = 0;
 			
@@ -141,8 +143,13 @@ int fcgi_spawn_connection(char *appPath, unsigned short port, const char *unixso
 			
 			putenv(cgi_childs);
 			
+			/* fork and replace shell */
+			b = malloc(strlen("exec ") + strlen(appPath) + 1);
+			strcpy(b, "exec ");
+			strcat(b, appPath);
+			
 			/* exec the cgi */
-			execl("/bin/sh", "sh", "-c", appPath, NULL);
+			execl("/bin/sh", "sh", "-c", b, NULL);
 			
 			exit(errno);
 			
@@ -210,8 +217,7 @@ int fcgi_spawn_connection(char *appPath, unsigned short port, const char *unixso
 
 void show_version () {
 	char *b = "spawn-fcgi" "-" PACKAGE_VERSION \
-" - spawns fastcgi processes\n" \
-"Build-Date: " __DATE__ " " __TIME__ "\n";
+" - spawns fastcgi processes\n" 
 ;
 	write(1, b, strlen(b));
 }
