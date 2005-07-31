@@ -991,6 +991,23 @@ static handler_t proxy_handle_fdevent(void *s, void *ctx, int revents) {
 			log_error_write(srv, __FILE__, __LINE__, "sd", 
 					"proxy: fdevent-hup", hctx->state);
 		}
+		
+		if (hctx->state == PROXY_STATE_CONNECT) {
+			/* connect() -> EINPROGRESS -> HUP */
+			
+			/**
+			 * what is proxy is doing if it can't reach the next hop ? 
+			 * 
+			 */
+			
+			proxy_connection_close(srv, hctx);
+			joblist_append(srv, con);
+			
+			con->http_status = 503;
+			con->mode = DIRECT;
+			
+			return HANDLER_FINISHED;
+		}
 
 		con->file_finished = 1;
 
