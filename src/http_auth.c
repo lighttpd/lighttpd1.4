@@ -309,10 +309,15 @@ static int http_auth_match_rules(server *srv, mod_auth_plugin_data *p, const cha
 	if (i == p->conf.auth_require->used) {
 		return -1;
 	}
-	
+
 	req = ((data_array *)(p->conf.auth_require->data[i]))->value;
 
 	require = (data_string *)array_get_element(req, "require");
+	
+	/* if we get here, the user we got a authed user */
+	if (0 == strcmp(require->value->ptr, "valid-user")) {
+		return 0;
+	}
 	
 	/* user=name1|group=name3|host=name4 */
 	
@@ -339,6 +344,11 @@ static int http_auth_match_rules(server *srv, mod_auth_plugin_data *p, const cha
 		}
 		
 		/* from r to r + r_len is a rule */
+		
+		if (0 == strncmp(r, "valid-user", r_len)) {
+			log_error_write(srv, __FILE__, __LINE__, "s", "valid-user cannot be combined with other require rules");
+			return -1;
+		}
 		
 		/* search for = in the rules */
 		if (NULL == (eq = strchr(r, '='))) {
