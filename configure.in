@@ -1,7 +1,7 @@
 #                                               -*- Autoconf -*-
 # Process this file with autoconf to produce a configure script.
 AC_PREREQ(2.57)
-AC_INIT(lighttpd, 1.3.16, jan@kneschke.de)
+AC_INIT(lighttpd, 1.4.0, jan@kneschke.de)
 AC_CONFIG_SRCDIR([src/server.c])
 
 AC_CANONICAL_TARGET
@@ -244,6 +244,17 @@ AC_CHECK_LIB(bz2, BZ2_bzCompress, [
   ])
 ])
 AC_SUBST(BZ_LIB)
+
+AC_MSG_CHECKING(for gamin)
+AC_ARG_WITH(gamin, AC_HELP_STRING([--with-gamin],[gamin for reducing number of stat() calls]),
+[AC_MSG_RESULT(yes)
+ PKG_CHECK_MODULES(FAM, gamin, [
+    AC_DEFINE([HAVE_LIBFAM], [1], [libfam])
+    AC_DEFINE([HAVE_FAM_H], [1], [fam.h])
+ ])
+],[AC_MSG_RESULT(no)])
+AC_SUBST(FAM_LIB)
+
 
 
 AC_MSG_CHECKING(for gdbm)
