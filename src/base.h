@@ -542,8 +542,6 @@ typedef struct {
 	
 	stat_cache  *stat_cache;
 	
-	buffer_array *config_patches;
-	
 	fdevent_handler_t event_handler;
 } server;
 
