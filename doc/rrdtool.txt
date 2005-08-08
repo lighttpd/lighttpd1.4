@@ -66,19 +66,21 @@ Generating Graphs
           CDEF:bin=binraw,-1,* \
           CDEF:binmax=binmaxraw,-1,* \
           CDEF:binmin=binminraw,-1,* \
+          CDEF:binminmax=binmaxraw,binminraw,- \
+          CDEF:boutminmax=boutmax,boutmin,- \
           AREA:binmin#ffffff: \
           STACK:binmax#f00000: \
           LINE1:binmin#a0a0a0: \
           LINE1:binmax#a0a0a0: \
-          LINE2:bin#a00000:incoming \
+          LINE2:bin#a0a735:incoming \
           GPRINT:bin:MIN:%.2lf \
           GPRINT:bin:AVERAGE:%.2lf \
           GPRINT:bin:MAX:%.2lf \
           AREA:boutmin#ffffff: \
-          STACK:boutmax#00f000: \
+          STACK:boutminmax#00f000: \
           LINE1:boutmin#a0a0a0: \
           LINE1:boutmax#a0a0a0: \
-          LINE2:bout#00a000:outgoing \
+          LINE2:bout#a0a735:outgoing \
           GPRINT:bout:MIN:%.2lf \
           GPRINT:bout:AVERAGE:%.2lf \
           GPRINT:bout:MAX:%.2lf \
@@ -95,11 +97,12 @@ Generating Graphs
           DEF:req=$INFILE:Requests:AVERAGE \
           DEF:reqmax=$INFILE:Requests:MAX \
           DEF:reqmin=$INFILE:Requests:MIN \
+          CDEF:reqminmax=reqmax,reqmin,- \
           AREA:reqmin#ffffff: \
-          STACK:reqmax#00f000: \
+          STACK:reqiminmax#0e0e0e: \
           LINE1:reqmin#a0a0a0: \
           LINE1:reqmax#a0a0a0: \
-          LINE2:req#006000:requests"
+          LINE2:req#00a735:requests"
 
 
   $RRDTOOL graph $OUTDIR/$OUTPRE-hour.png -a PNG --start -14400 $DISP
