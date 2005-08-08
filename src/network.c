@@ -386,7 +386,7 @@ int network_init(server *srv) {
 		specific_config *s = srv->config_storage[i];
 		
 		/* not our stage */
-		if (!buffer_is_equal_string(dc->comp_key, CONST_STR_LEN("SERVERsocket"))) continue;
+		if (COMP_SERVER_SOCKET != dc->comp) continue;
 		
 		if (dc->cond != CONFIG_COND_EQ) {
 			log_error_write(srv, __FILE__, __LINE__, "s", "only == is allowed for $SERVER[\"socket\"].");

@@ -653,6 +653,7 @@ void connections_free(server *srv) {
 		CLEAN(error_handler);
 #undef CLEAN
 		free(con->plugin_ctx);
+		free(con->cond_results_cache);
 		
 		free(con);
 	}

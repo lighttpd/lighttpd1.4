@@ -17,6 +17,7 @@ static void configparser_push(config_t *ctx, data_config *dc, int isnew) {
     assert(dc->context_ndx > ctx->current->context_ndx);
     array_insert_unique(ctx->all_configs, (data_unset *)dc);
     dc->parent = ctx->current;
+    array_insert_unique(dc->parent->childs, (data_unset *)dc);
   }
   array_insert_unique(ctx->configs_stack, (data_unset *)ctx->current);
   ctx->current = dc;
@@ -28,30 +29,42 @@ static data_config *configparser_pop(config_t *ctx) {
   return old;
 }
 
-static const data_unset *configparser_get_variable(config_t *ctx, buffer *key) {
-  data_unset *ds, *result;
-  data_config *dc;
+/* return a copied variable */
+static data_unset *configparser_get_variable(config_t *ctx, const buffer *key) {
+  if (strncmp(key->ptr, "env.", sizeof("env.") - 1) == 0) {
+    char *env;
 
-  result = NULL;
-#if 0
-  fprintf(stderr, "get var %s\n", key->ptr);
-#endif
-  for (dc = ctx->current; dc && !result; dc = dc->parent) {
-#if 0
-    fprintf(stderr, "get var on block: %s\n", dc->key->ptr);
-    array_print(dc->value, 0);
-#endif
-    ds = array_get_element(dc->value, key->ptr);
-    if (NULL != ds) {
-      result = ds;
-      break;
+    if (NULL != (env = getenv(key->ptr + 4))) {
+      data_string *ds;
+      ds = data_string_init();
+      buffer_append_string(ds->value, env);
+      return (data_unset *)ds;
     }
-  }
-  if (NULL == result) {
+
+    fprintf(stderr, "Undefined env variable: %s\n", key->ptr + 4);
+    ctx->ok = 0;
+
+    return NULL;
+  } else {
+    data_unset *du;
+    data_config *dc;
+
+#if 0
+    fprintf(stderr, "get var %s\n", key->ptr);
+#endif
+    for (dc = ctx->current; dc; dc = dc->parent) {
+#if 0
+      fprintf(stderr, "get var on block: %s\n", dc->key->ptr);
+      array_print(dc->value, 0);
+#endif
+      if (NULL != (du = array_get_element(dc->value, key->ptr))) {
+        return du->copy(du);
+      }
+    }
     fprintf(stderr, "Undefined config variable: %s\n", key->ptr);
     ctx->ok = 0;
+    return NULL;
   }
-  return result;
 }
 
 /* op1 is to be eat/return by this function, op1->key is not cared
@@ -161,7 +174,6 @@ varline ::= key(A) ASSIGN expression(B). {
 
 varline ::= key(A) APPEND expression(B). {
   array *vars = ctx->current->value;
-  const data_unset *var;
   data_unset *du;
 
   if (NULL != (du = array_get_element(vars, A->ptr))) {
@@ -169,9 +181,8 @@ varline ::= key(A) APPEND expression(B). {
     du = configparser_merge_data(ctx, du, B);
     buffer_copy_string_buffer(du->key, A);
     array_replace(vars, du);
-  } else if (NULL != (var = configparser_get_variable(ctx, A))) {
-    du = var->copy(var);
-    du = configparser_merge_data(ctx, du->copy(du), B);
+  } else if (NULL != (du = configparser_get_variable(ctx, A))) {
+    du = configparser_merge_data(ctx, du, B);
     buffer_copy_string_buffer(du->key, A);
     array_insert_unique(ctx->current->value, du);
   } else {
@@ -210,11 +221,8 @@ expression(A) ::= value(B). {
 }
 
 value(A) ::= key(B). {
-  const data_unset *var = configparser_get_variable(ctx, B);
-  if (var) {
-    A = var->copy(var);
-  }
-  else {
+  A = configparser_get_variable(ctx, B);
+  if (!A) {
     /* make a dummy so it won't crash */
     A = (data_unset *)data_string_init();
   }
@@ -317,11 +325,29 @@ condline(A) ::= context LCURLY metalines RCURLY. {
 
 context ::= DOLLAR SRVVARNAME(B) LBRACKET STRING(C) RBRACKET cond(E) expression(D). {
   data_config *dc;
-  buffer *b, *rvalue;
+  buffer *b, *rvalue, *op;
 
   if (ctx->ok && D->type != TYPE_STRING) {
     fprintf(stderr, "rvalue must be string");
     ctx->ok = 0;
+  }
+
+  switch(E) {
+  case CONFIG_COND_NE:
+    op = buffer_init_string("!=");
+    break;
+  case CONFIG_COND_EQ:
+    op = buffer_init_string("==");
+    break;
+  case CONFIG_COND_NOMATCH:
+    op = buffer_init_string("!~");
+    break;
+  case CONFIG_COND_MATCH:
+    op = buffer_init_string("=~");
+    break;
+  default:
+    assert(0);
+    break;
   }
 
   b = buffer_init();
@@ -329,36 +355,51 @@ context ::= DOLLAR SRVVARNAME(B) LBRACKET STRING(C) RBRACKET cond(E) expression(
   buffer_append_string(b, "/");
   buffer_append_string_buffer(b, B);
   buffer_append_string_buffer(b, C);
-  switch(E) {
-  case CONFIG_COND_NE:
-    buffer_append_string_len(b, CONST_STR_LEN("!="));
-    break;
-  case CONFIG_COND_EQ:
-    buffer_append_string_len(b, CONST_STR_LEN("=="));
-    break;
-  case CONFIG_COND_NOMATCH:
-    buffer_append_string_len(b, CONST_STR_LEN("!~"));
-    break;
-  case CONFIG_COND_MATCH:
-    buffer_append_string_len(b, CONST_STR_LEN("=~"));
-    break;
-  default:
-    buffer_append_string_len(b, CONST_STR_LEN("??"));
-    break;
-  }
+  buffer_append_string_buffer(b, op);
   rvalue = ((data_string*)D)->value;
   buffer_append_string_buffer(b, rvalue);
   
   if (NULL != (dc = (data_config *)array_get_element(ctx->all_configs, b->ptr))) {
     configparser_push(ctx, dc, 0);
   } else {
+    struct {
+      comp_key_t comp;
+      char *comp_key;
+      size_t len;
+    } comps[] = {
+      { COMP_SERVER_SOCKET,      CONST_STR_LEN("SERVER[\"socket\"]"   ) },
+      { COMP_HTTP_URL,           CONST_STR_LEN("HTTP[\"url\"]"        ) },
+      { COMP_HTTP_HOST,          CONST_STR_LEN("HTTP[\"host\"]"       ) },
+      { COMP_HTTP_REFERER,       CONST_STR_LEN("HTTP[\"referer\"]"    ) },
+      { COMP_HTTP_USERAGENT,     CONST_STR_LEN("HTTP[\"useragent\"]"  ) },
+      { COMP_HTTP_COOKIE,        CONST_STR_LEN("HTTP[\"cookie\"]"     ) },
+      { COMP_HTTP_REMOTEIP,      CONST_STR_LEN("HTTP[\"remoteip\"]"   ) },
+      { COMP_UNSET, NULL, 0 },
+    };
+    size_t i;
+
     dc = data_config_init();
     
     buffer_copy_string_buffer(dc->key, b);
+    buffer_copy_string_buffer(dc->op, op);
     buffer_copy_string_buffer(dc->comp_key, B);
+    buffer_append_string_len(dc->comp_key, CONST_STR_LEN("[\""));
     buffer_append_string_buffer(dc->comp_key, C);
+    buffer_append_string_len(dc->comp_key, CONST_STR_LEN("\"]"));
     dc->cond = E;
     
+    for (i = 0; comps[i].comp_key; i ++) {
+      if (buffer_is_equal_string(
+            dc->comp_key, comps[i].comp_key, comps[i].len)) {
+        dc->comp = comps[i].comp;
+        break;
+      }
+    }
+    if (COMP_UNSET == dc->comp) {
+      fprintf(stderr, "error comp_key %s", dc->comp_key->ptr);
+      ctx->ok = 0;
+    }
+
     switch(E) {
     case CONFIG_COND_NE:
     case CONFIG_COND_EQ:
@@ -408,6 +449,7 @@ context ::= DOLLAR SRVVARNAME(B) LBRACKET STRING(C) RBRACKET cond(E) expression(
   }
 
   buffer_free(b);
+  buffer_free(op);
   buffer_free(B);
   B = NULL;
   buffer_free(C);

@@ -174,18 +174,11 @@ static cond_result_t config_check_cond_nocache(server *srv, connection *con, dat
 		}
 	}
 
-	/* 
-	 * OPTIMIZE
-	 * 
-	 * - replace all is_equal be simple == to an enum
-	 * 
-	 */
-
 	/* pass the rules */
 	
 	l = srv->empty_string;
 	
-	if (buffer_is_equal_string(dc->comp_key, CONST_STR_LEN("HTTPhost"))) {
+	if (COMP_HTTP_HOST == dc->comp) {
 		l = con->uri.authority;
 #if 0
 		/* FIXME: get this working again */
@@ -215,7 +208,7 @@ static cond_result_t config_check_cond_nocache(server *srv, connection *con, dat
 				break;
 			}
 		}
-	} else if (buffer_is_equal_string(dc->comp_key, CONST_STR_LEN("HTTPremoteip"))) {
+	} else if (COMP_HTTP_REMOTEIP == dc->comp) {
 		char *nm_slash;
 		/* handle remoteip limitations 
 		 * 
@@ -290,22 +283,22 @@ static cond_result_t config_check_cond_nocache(server *srv, connection *con, dat
 			buffer_copy_string(srv->cond_check_buf, s);
 		}
 #endif
-	} else if (buffer_is_equal_string(dc->comp_key, CONST_STR_LEN("HTTPurl"))) {
+	} else if (COMP_HTTP_URL == dc->comp) {
 		l = con->uri.path;
-	} else if (buffer_is_equal_string(dc->comp_key, CONST_STR_LEN("SERVERsocket"))) {
+	} else if (COMP_SERVER_SOCKET == dc->comp) {
 		l = srv_sock->srv_token;
-	} else if (buffer_is_equal_string(dc->comp_key, CONST_STR_LEN("HTTPreferer"))) {
+	} else if (COMP_HTTP_REFERER == dc->comp) {
 		data_string *ds;
 		
 		if (NULL != (ds = (data_string *)array_get_element(con->request.headers, "Referer"))) {
 			l = ds->value;
 		}
-	} else if (buffer_is_equal_string(dc->comp_key, CONST_STR_LEN("HTTPcookie"))) {
+	} else if (COMP_HTTP_COOKIE == dc->comp) {
 		data_string *ds;
 		if (NULL != (ds = (data_string *)array_get_element(con->request.headers, "Cookie"))) {
 			l = ds->value;
 		}
-	} else if (buffer_is_equal_string(dc->comp_key, CONST_STR_LEN("HTTPuseragent"))) {
+	} else if (COMP_HTTP_USERAGENT == dc->comp) {
 		data_string *ds;
 		if (NULL != (ds = (data_string *)array_get_element(con->request.headers, "User-Agent"))) {
 			l = ds->value;
