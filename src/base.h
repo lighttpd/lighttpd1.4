@@ -22,11 +22,16 @@
 #include "settings.h"
 #include "fdevent.h"
 #include "sys-socket.h"
+#include "splaytree.h"
 
 
 #if defined HAVE_LIBSSL && defined HAVE_OPENSSL_SSL_H
 # define USE_OPENSSL
 # include <openssl/ssl.h> 
+#endif
+
+#ifdef HAVE_FAM_H
+# include <fam.h>
 #endif
 
 #ifndef O_LARGEFILE
@@ -168,26 +173,6 @@ typedef struct {
 } response;
 
 typedef struct {
-	buffer *name;
-	buffer *etag;
-	
-	struct stat st;
-	
-	int    fd;
-	int    fde_ndx;
-	
-	char   *mmap_p;
-	size_t mmap_length;
-	off_t  mmap_offset;
-	
-	size_t in_use;
-	size_t is_dirty;
-	
-	time_t stat_ts;
-	buffer *content_type;
-} file_cache_entry;
-
-typedef struct {
 	buffer *scheme;
 	buffer *authority;
 	buffer *path;
@@ -205,13 +190,32 @@ typedef struct {
 } physical;
 
 typedef struct {
-	file_cache_entry **ptr;
+	buffer *name;
+	buffer *etag;
 	
-	size_t size;
-	size_t used;
+	struct stat st;
 	
-	buffer *dir_name;
-} file_cache;
+	time_t stat_ts;
+	
+#ifdef HAVE_FAM_H
+	int    dir_version;
+	int    dir_ndx;
+#endif
+
+	buffer *content_type;
+} stat_cache_entry;
+
+typedef struct {
+	splay_tree *files; /* the nodes of the tree are stat_cache_entry's */
+	
+	buffer *dir_name; /* for building the dirname from the filename */
+#ifdef HAVE_FAM_H
+	splay_tree *dirs; /* the nodes of the tree are fam_dir_entry */
+
+	FAMConnection *fam;
+	int    fam_fcce_ndx;
+#endif
+} stat_cache;
 
 typedef struct {
 	array *indexfiles;
@@ -348,8 +352,6 @@ typedef struct {
 	
 	connection_type mode;
 	
-	file_cache_entry *fce;       /* filecache entry for the selected file */
-	
 	void **plugin_ctx;           /* plugin connection specific config */
 	
 	specific_config conf;        /* global connection specific config */
@@ -428,6 +430,12 @@ typedef struct {
 	
 	unsigned short log_request_header_on_error;
 	unsigned short log_state_handling;
+	
+	enum { STAT_CACHE_ENGINE_UNSET, 
+			STAT_CACHE_ENGINE_NONE, 
+			STAT_CACHE_ENGINE_SIMPLE, 
+			STAT_CACHE_ENGINE_FAM 
+	} stat_cache_engine;
 } server_config;
 
 typedef struct {
@@ -525,8 +533,7 @@ typedef struct {
 	connections *joblist;
 	connections *fdwaitqueue;
 	
-	file_cache  *file_cache;
-	buffer      *file_cache_etag;
+	stat_cache  *stat_cache;
 	
 	buffer_array *config_patches;
 	

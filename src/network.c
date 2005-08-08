@@ -12,7 +12,6 @@
 #include "network.h"
 #include "fdevent.h"
 #include "log.h"
-#include "file_cache.h"
 #include "connections.h"
 #include "plugin.h"
 #include "joblist.h"

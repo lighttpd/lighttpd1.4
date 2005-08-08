@@ -24,6 +24,7 @@
 static int config_insert(server *srv) {
 	size_t i;
 	int ret = 0;
+	buffer *stat_cache_string;
 	
 	config_values_t cv[] = { 
 		{ "server.bind",                 NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_SERVER },      /* 0 */
@@ -78,6 +79,7 @@ static int config_insert(server *srv) {
 		{ "dir-listing.encoding",        NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_CONNECTION },  /* 41 */
 		{ "server.errorlog-use-syslog",  NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_SERVER },     /* 42 */
 		{ "server.range-requests",       NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION }, /* 43 */
+		{ "server.stat-cache-engine",    NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_CONNECTION },  /* 44 */
 		
 		{ "server.host",                 "use server.bind instead", T_CONFIG_DEPRECATED, T_CONFIG_SCOPE_UNSET },
 		{ "server.docroot",              "use server.document-root instead", T_CONFIG_DEPRECATED, T_CONFIG_SCOPE_UNSET },
@@ -110,6 +112,9 @@ static int config_insert(server *srv) {
 	cv[37].destination = &(srv->srvconf.log_state_handling);
 	
 	cv[42].destination = &(srv->srvconf.errorlog_use_syslog);
+	
+	stat_cache_string = buffer_init();
+	cv[44].destination = stat_cache_string;
 	
 	srv->config_storage = calloc(1, srv->config_context->used * sizeof(specific_config *));
 
@@ -192,6 +197,22 @@ static int config_insert(server *srv) {
 			break;
 		}
 	}
+	
+	if (buffer_is_empty(stat_cache_string)) {
+		srv->srvconf.stat_cache_engine = STAT_CACHE_ENGINE_NONE;
+	} else if (buffer_is_equal_string(stat_cache_string, CONST_STR_LEN("simple"))) {
+		srv->srvconf.stat_cache_engine = STAT_CACHE_ENGINE_SIMPLE;
+	} else if (buffer_is_equal_string(stat_cache_string, CONST_STR_LEN("fam"))) {
+		srv->srvconf.stat_cache_engine = STAT_CACHE_ENGINE_FAM;
+	} else if (buffer_is_equal_string(stat_cache_string, CONST_STR_LEN("disable"))) {
+		srv->srvconf.stat_cache_engine = STAT_CACHE_ENGINE_NONE;
+	} else {
+		log_error_write(srv, __FILE__, __LINE__, "sb", 
+				"server.stat-cache-engine can be one of \"none\", \"simple\", \"fam\", but not:", stat_cache_string);
+		ret = HANDLER_ERROR;
+	}
+	
+	buffer_free(stat_cache_string);
 	
 	return ret;
 								 

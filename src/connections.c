@@ -18,7 +18,7 @@
 #include "response.h"
 #include "network.h"
 #include "http_chunk.h"
-#include "file_cache.h"
+#include "stat_cache.h"
 #include "joblist.h"
 
 #include "plugin.h"
@@ -390,9 +390,10 @@ static int connection_handle_write_prepare(server *srv, connection *con) {
 			
 		case 200: /* class: header + body */
 			if (con->physical.path->used) {
+				stat_cache_entry *sce = NULL;
 				con->file_finished = 1;
 				
-				if (HANDLER_GO_ON != file_cache_get_entry(srv, con, con->physical.path, &(con->fce))) {
+				if (HANDLER_ERROR == stat_cache_get_entry(srv, con, con->physical.path, &sce)) {
 					log_error_write(srv, __FILE__, __LINE__, "sb",
 							strerror(errno), con->physical.path);
 					
@@ -401,13 +402,13 @@ static int connection_handle_write_prepare(server *srv, connection *con) {
 					return -1;
 				}
 				
-				if (S_ISREG(con->fce->st.st_mode)) {
+				if (S_ISREG(sce->st.st_mode)) {
 					if (con->request.http_method == HTTP_METHOD_GET ||
 					    con->request.http_method == HTTP_METHOD_POST) {
-						http_chunk_append_file(srv, con, con->physical.path, 0, con->fce->st.st_size);
+						http_chunk_append_file(srv, con, con->physical.path, 0, sce->st.st_size);
 						con->response.content_length = http_chunkqueue_length(srv, con);
 					} else if (con->request.http_method == HTTP_METHOD_HEAD) {
-						con->response.content_length = con->fce->st.st_size;
+						con->response.content_length = sce->st.st_size;
 					} else {
 						connection_set_state(srv, con, CON_STATE_ERROR);
 						return -1;
@@ -415,7 +416,7 @@ static int connection_handle_write_prepare(server *srv, connection *con) {
 					
 					http_response_write_header(srv, con, 
 								   con->response.content_length, 
-								   con->fce->st.st_mtime);
+								   sce->st.st_mtime);
 					
 					
 				} else {
@@ -737,14 +738,14 @@ int connection_reset(server *srv, connection *con) {
 	array_reset(con->environment);
 	
 	chunkqueue_reset(con->write_queue);
-	
-	if (con->fce) {
-		file_cache_entry_release(srv, con, con->fce);
-		con->fce = NULL;
-	}
-	
+
+	/* the plugins should cleanup themself */	
 	for (i = 0; i < srv->plugins.used; i++) {
-		con->plugin_ctx[0] = NULL;
+		if (con->plugin_ctx[i] != NULL) {
+			log_error_write(srv, __FILE__, __LINE__, "sb", "missing cleanup in", ((plugin **)(srv->plugins.ptr))[i]->name);
+		}
+
+		con->plugin_ctx[i] = NULL;
 	}
 	
 	con->header_len = 0;

@@ -9,10 +9,9 @@
 #include "response.h"
 
 #include "plugin.h"
+#include "stat_cache.h"
 
-#ifdef HAVE_CONFIG_H
 #include "config.h"
-#endif
 
 /**
  * this is a expire module for a lighttpd 
@@ -315,6 +314,9 @@ URIHANDLER_FUNC(mod_expire_path_handler) {
 			int ts;
 			time_t t;
 			size_t len;
+			stat_cache_entry *sce = NULL;
+		
+			stat_cache_get_entry(srv, con, con->physical.path, &sce);
 			
 			switch(mod_expire_get_offset(srv, p, ds->value, &ts)) {
 			case 0:
@@ -324,7 +326,7 @@ URIHANDLER_FUNC(mod_expire_path_handler) {
 			case 1:
 				/* modification */
 				
-				t = (ts += con->fce->st.st_mtime);
+				t = (ts += sce->st.st_mtime);
 				break;
 			default:
 				/* -1 is handled at parse-time */

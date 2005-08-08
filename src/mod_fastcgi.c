@@ -1249,7 +1249,7 @@ static int fcgi_requestid_del(server *srv, plugin_data *p, size_t request_id) {
 	return 0;
 }
 
-void fcgi_connection_cleanup(server *srv, handler_ctx *hctx) {
+void fcgi_connection_close(server *srv, handler_ctx *hctx) {
 	plugin_data *p;
 	connection  *con;
 	
@@ -1348,7 +1348,7 @@ static int fcgi_reconnect(server *srv, handler_ctx *hctx) {
 static handler_t fcgi_connection_reset(server *srv, connection *con, void *p_d) {
 	plugin_data *p = p_d;
 	
-	fcgi_connection_cleanup(srv, con->plugin_ctx[p->id]);
+	fcgi_connection_close(srv, con->plugin_ctx[p->id]);
 	
 	return HANDLER_GO_ON;
 }
@@ -2650,7 +2650,7 @@ SUBREQUEST_FUNC(mod_fastcgi_handle_subrequest) {
 			}
 			fcgi_restart_dead_procs(srv, p, host);
 			
-			fcgi_connection_cleanup(srv, hctx);
+			fcgi_connection_close(srv, hctx);
 			
 			buffer_reset(con->physical.path);
 			con->mode = DIRECT;
@@ -2672,7 +2672,7 @@ SUBREQUEST_FUNC(mod_fastcgi_handle_subrequest) {
 			
 			return HANDLER_WAIT_FOR_FD;
 		} else {
-			fcgi_connection_cleanup(srv, hctx);
+			fcgi_connection_close(srv, hctx);
 			
 			buffer_reset(con->physical.path);
 			con->mode = DIRECT;
@@ -2693,30 +2693,6 @@ SUBREQUEST_FUNC(mod_fastcgi_handle_subrequest) {
 		return HANDLER_ERROR;
 	}
 }
-
-static handler_t fcgi_connection_close(server *srv, handler_ctx *hctx) {
-	plugin_data *p;
-	connection  *con;
-	
-	if (NULL == hctx) return HANDLER_GO_ON;
-	
-	p    = hctx->plugin_data;
-	con  = hctx->remote_conn;
-	
-	if (con->mode != p->id) return HANDLER_GO_ON;
-	
-	log_error_write(srv, __FILE__, __LINE__, "ssdsd", 
-			"emergency exit: fastcgi:", 
-			"connection-fd:", con->fd,
-			"fcgi-fd:", hctx->fd);
-	
-	
-	
-	fcgi_connection_cleanup(srv, hctx);
-	
-	return HANDLER_FINISHED;
-}
-
 
 static handler_t fcgi_handle_fdevent(void *s, void *ctx, int revents) {
 	server      *srv  = (server *)s;
@@ -2747,13 +2723,13 @@ static handler_t fcgi_handle_fdevent(void *s, void *ctx, int revents) {
 				
 				buffer_copy_string_buffer(con->physical.path, host->docroot);
 				buffer_append_string_buffer(con->physical.path, con->uri.path);
-				fcgi_connection_cleanup(srv, hctx);
+				fcgi_connection_close(srv, hctx);
 				
 				con->mode = DIRECT;
 				con->file_started = 1; /* fcgi_extension won't touch the request afterwards */
 			} else {
 				/* we are done */
-				fcgi_connection_cleanup(srv, hctx);
+				fcgi_connection_close(srv, hctx);
 			}
 			
 			joblist_append(srv, con);
@@ -2825,7 +2801,7 @@ static handler_t fcgi_handle_fdevent(void *s, void *ctx, int revents) {
 						"connection-fd:", con->fd,
 						"fcgi-fd:", hctx->fd);
 				
-				fcgi_connection_cleanup(srv, hctx);
+				fcgi_connection_close(srv, hctx);
 				
 				connection_set_state(srv, con, CON_STATE_HANDLE_REQUEST);
 				buffer_reset(con->physical.path);
@@ -2833,7 +2809,7 @@ static handler_t fcgi_handle_fdevent(void *s, void *ctx, int revents) {
 				con->mode = DIRECT;
 			} else {
 				/* response might have been already started, kill the connection */
-				fcgi_connection_cleanup(srv, hctx);
+				fcgi_connection_close(srv, hctx);
 				
 				log_error_write(srv, __FILE__, __LINE__, "ssdsd", 
 						"response already sent out, termination connection",
@@ -3176,7 +3152,9 @@ JOBLIST_FUNC(mod_fastcgi_handle_joblist) {
 static handler_t fcgi_connection_close_callback(server *srv, connection *con, void *p_d) {
 	plugin_data *p = p_d;
 	
-	return fcgi_connection_close(srv, con->plugin_ctx[p->id]);
+	fcgi_connection_close(srv, con->plugin_ctx[p->id]);
+
+	return HANDLER_GO_ON;
 }
 
 TRIGGER_FUNC(mod_fastcgi_handle_trigger) {

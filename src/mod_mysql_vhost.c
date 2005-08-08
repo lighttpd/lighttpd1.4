@@ -8,7 +8,7 @@
 #include "config.h"
 #include "log.h"
 
-#include "file_cache.h"
+#include "stat_cache.h"
 #ifdef HAVE_MYSQL
 #include <mysql/mysql.h>
 #endif
@@ -322,6 +322,7 @@ static int mod_mysql_vhost_setup_connection(server *srv, connection *con, plugin
 CONNECTION_FUNC(mod_mysql_vhost_handle_docroot) {
 	plugin_data *p = p_d;
 	plugin_connection_data *c;
+	stat_cache_entry *sce;
 
 	unsigned  cols;
 	MYSQL_ROW row;
@@ -368,11 +369,12 @@ CONNECTION_FUNC(mod_mysql_vhost_handle_docroot) {
 	/* sanity check that really is a directory */
 	buffer_copy_string(p->tmp_buf, row[0]);
 	BUFFER_APPEND_SLASH(p->tmp_buf);
-	if (file_cache_get_entry(srv, con, p->tmp_buf, &(con->fce)) != HANDLER_GO_ON) {
+
+	if (HANDLER_ERROR == stat_cache_get_entry(srv, con, p->tmp_buf, &sce)) {
 		log_error_write(srv, __FILE__, __LINE__, "sb", strerror(errno), p->tmp_buf);
 		goto ERR500;
 	}
-        if (!S_ISDIR(con->fce->st.st_mode)) {
+        if (!S_ISDIR(sce->st.st_mode)) {
 		log_error_write(srv, __FILE__, __LINE__, "sb", "Not a directory", p->tmp_buf);
 		goto ERR500;
 	}

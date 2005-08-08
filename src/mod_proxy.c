@@ -335,35 +335,25 @@ SETDEFAULTS_FUNC(mod_proxy_set_defaults) {
 	return HANDLER_GO_ON;
 }
 
-void proxy_connection_cleanup(server *srv, handler_ctx *hctx) {
+void proxy_connection_close(server *srv, handler_ctx *hctx) {
 	plugin_data *p;
-	connection  *con;
+	connection *con;
 	
 	if (NULL == hctx) return;
 	
 	p    = hctx->plugin_data;
 	con  = hctx->remote_conn;
 	
-	if (con->mode != p->id) return;
-	
-	fdevent_event_del(srv->ev, &(hctx->fde_ndx), hctx->fd);
-	fdevent_unregister(srv->ev, hctx->fd);
-
 	if (hctx->fd != -1) {
+		fdevent_event_del(srv->ev, &(hctx->fde_ndx), hctx->fd);
+		fdevent_unregister(srv->ev, hctx->fd);
+
 		close(hctx->fd);
 		srv->cur_fds--;
 	}
 	
 	handler_ctx_free(hctx);
 	con->plugin_ctx[p->id] = NULL;	
-}
-
-static handler_t mod_proxy_connection_reset(server *srv, connection *con, void *p_d) {
-	plugin_data *p = p_d;
-	
-	proxy_connection_cleanup(srv, con->plugin_ctx[p->id]);
-	
-	return HANDLER_GO_ON;
 }
 
 static int proxy_establish_connection(server *srv, handler_ctx *hctx) {
@@ -877,7 +867,7 @@ SUBREQUEST_FUNC(mod_proxy_handle_subrequest) {
 		host->is_disabled = 1;
 		host->disable_ts = srv->cur_ts;
 		
-		proxy_connection_cleanup(srv, hctx);
+		proxy_connection_close(srv, hctx);
 	
 		/* reset the enviroment and restart the sub-request */	
 		buffer_reset(con->physical.path);
@@ -906,23 +896,6 @@ SUBREQUEST_FUNC(mod_proxy_handle_subrequest) {
 	}
 }
 
-static handler_t proxy_connection_close(server *srv, handler_ctx *hctx) {
-	plugin_data *p;
-	connection  *con;
-	
-	if (NULL == hctx) return HANDLER_GO_ON;
-	
-	p    = hctx->plugin_data;
-	con  = hctx->remote_conn;
-	
-	if (con->mode != p->id) return HANDLER_GO_ON;
-	
-	proxy_connection_cleanup(srv, hctx);
-	
-	return HANDLER_FINISHED;
-}
-
-
 static handler_t proxy_handle_fdevent(void *s, void *ctx, int revents) {
 	server      *srv  = (server *)s;
 	handler_ctx *hctx = ctx;
@@ -945,7 +918,7 @@ static handler_t proxy_handle_fdevent(void *s, void *ctx, int revents) {
 			hctx->host->usage--;
 			
 			/* we are done */
-			proxy_connection_cleanup(srv, hctx);
+			proxy_connection_close(srv, hctx);
 			
 			joblist_append(srv, con);
 			return HANDLER_FINISHED;
@@ -1016,12 +989,10 @@ static handler_t proxy_handle_fdevent(void *s, void *ctx, int revents) {
 	} else if (revents & FDEVENT_ERR) {
 		/* kill all connections to the proxy process */
 		
-		log_error_write(srv, __FILE__, __LINE__, "s", "proxy-FDEVENT_ERR");
+		log_error_write(srv, __FILE__, __LINE__, "sd", "proxy-FDEVENT_ERR, but no HUP", revents);
 
 		joblist_append(srv, con);
 		proxy_connection_close(srv, hctx);
-
-		return HANDLER_ERROR;
 	}
 	
 	return HANDLER_FINISHED;
@@ -1238,7 +1209,9 @@ static handler_t mod_proxy_check_extension(server *srv, connection *con, void *p
 static handler_t mod_proxy_connection_close_callback(server *srv, connection *con, void *p_d) {
 	plugin_data *p = p_d;
 	
-	return proxy_connection_close(srv, con->plugin_ctx[p->id]);
+	proxy_connection_close(srv, con->plugin_ctx[p->id]);
+
+	return HANDLER_GO_ON;
 }
 
 /**
@@ -1284,17 +1257,17 @@ TRIGGER_FUNC(mod_proxy_trigger) {
 
 
 int mod_proxy_plugin_init(plugin *p) {
-	p->version     = LIGHTTPD_VERSION_ID;
+	p->version      = LIGHTTPD_VERSION_ID;
 	p->name         = buffer_init_string("proxy");
 
 	p->init         = mod_proxy_init;
 	p->cleanup      = mod_proxy_free;
 	p->set_defaults = mod_proxy_set_defaults;
-	p->connection_reset        = mod_proxy_connection_reset;
-	p->handle_connection_close = mod_proxy_connection_close_callback;
+	p->connection_reset        = mod_proxy_connection_close_callback; /* end of req-resp cycle */
+	p->handle_connection_close = mod_proxy_connection_close_callback; /* end of client connection */
 	p->handle_uri_clean        = mod_proxy_check_extension;
 	p->handle_subrequest       = mod_proxy_handle_subrequest;
-	p->handle_trigger       = mod_proxy_trigger;
+	p->handle_trigger          = mod_proxy_trigger;
 	
 	p->data         = NULL;
 	

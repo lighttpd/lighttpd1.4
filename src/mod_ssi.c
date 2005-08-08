@@ -10,6 +10,7 @@
 #include "base.h"
 #include "log.h"
 #include "buffer.h"
+#include "stat_cache.h"
 
 #include "plugin.h"
 #include "stream.h"
@@ -313,6 +314,7 @@ static int process_ssi_stmt(server *srv, connection *con, plugin_data *p,
 		/* echo */
 		int var = 0, enc = 0;
 		const char *var_val = NULL;
+		stat_cache_entry *sce = NULL;
 		
 		struct { 
 			const char *var;
@@ -376,6 +378,8 @@ static int process_ssi_stmt(server *srv, connection *con, plugin_data *p,
 					l[1], "var is missing");
 			break;
 		}
+
+		stat_cache_get_entry(srv, con, con->physical.path, &sce);
 		
 		switch(var) {
 		case SSI_ECHO_USER_NAME: {
@@ -383,18 +387,18 @@ static int process_ssi_stmt(server *srv, connection *con, plugin_data *p,
 			
 			b = chunkqueue_get_append_buffer(con->write_queue);
 #ifdef HAVE_PWD_H
-			if (NULL == (pw = getpwuid(con->fce->st.st_uid))) {
-				buffer_copy_long(b, con->fce->st.st_uid);
+			if (NULL == (pw = getpwuid(sce->st.st_uid))) {
+				buffer_copy_long(b, sce->st.st_uid);
 			} else {
 				buffer_copy_string(b, pw->pw_name);
 			}
 #else
-			buffer_copy_long(b, con->fce->st.st_uid);
+			buffer_copy_long(b, sce->st.st_uid);
 #endif
 			break;
 		}
 		case SSI_ECHO_LAST_MODIFIED:	{
-			time_t t = con->fce->st.st_mtime;
+			time_t t = sce->st.st_mtime;
 			
 			b = chunkqueue_get_append_buffer(con->write_queue);
 			if (0 == strftime(buf, sizeof(buf), p->timefmt->ptr, localtime(&t))) {

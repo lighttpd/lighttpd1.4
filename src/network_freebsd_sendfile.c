@@ -136,26 +136,38 @@ int network_write_chunkqueue_freebsdsendfile(server *srv, connection *con, chunk
 		case FILE_CHUNK: {
 			off_t offset, r;
 			size_t toSend;
+			stat_cache_entry *sce = NULL;
+			int ifd;
 			
-			if (HANDLER_GO_ON != file_cache_get_entry(srv, con, c->data.file.name, &(con->fce))) {
+			if (HANDLER_ERROR == stat_cache_get_entry(srv, con, c->data.file.name, &sce)) {
 				log_error_write(srv, __FILE__, __LINE__, "sb",
 						strerror(errno), c->data.file.name);
 				return -1;
 			}
 			
 			offset = c->data.file.offset + c->offset;
-			toSend = c->data.file.length - c->offset;
-			
-			if (offset > con->fce->st.st_size) {
+			/* limit the toSend to 2^31-1 bytes in a chunk */
+			toSend = c->data.file.length - c->offset > ((1 << 30) - 1) ? 
+				((1 << 30) - 1) : c->data.file.length - c->offset;
+				
+			if (offset > sce->st.st_size) {
 				log_error_write(srv, __FILE__, __LINE__, "sb", "file was shrinked:", c->data.file.name);
 				
 				return -1;
 			}
-
+			
+			if (-1 == (ifd = open(c->data.file.name->ptr, O_RDONLY))) {
+				log_error_write(srv, __FILE__, __LINE__, "ss", "open failed: ", strerror(errno));
+				
+				return -1;
+			}
+			
 			r = 0;
 			
 			/* FreeBSD sendfile() */
-			if (-1 == sendfile(con->fce->fd, fd, offset, toSend, NULL, &r, 0)) {
+			if (-1 == sendfile(ifd, fd, offset, toSend, NULL, &r, 0)) {
+				close(ifd);
+				
 				switch(errno) {
 				case EAGAIN:
 					break;
@@ -163,11 +175,11 @@ int network_write_chunkqueue_freebsdsendfile(server *srv, connection *con, chunk
 					return -2;
 				default:
 					log_error_write(srv, __FILE__, __LINE__, "ssd", "sendfile: ", strerror(errno), errno);
-					
 					return -1;
 				}
 			}
-
+			close(ifd);
+			
 			c->offset += r;
 			con->bytes_written += r;
 			

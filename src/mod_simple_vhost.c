@@ -6,7 +6,7 @@
 #include "base.h"
 #include "log.h"
 #include "buffer.h"
-#include "file_cache.h"
+#include "stat_cache.h"
 
 #include "plugin.h"
 
@@ -119,6 +119,8 @@ SETDEFAULTS_FUNC(mod_simple_vhost_set_defaults) {
 }
 
 static int build_doc_root(server *srv, connection *con, plugin_data *p, buffer *out, buffer *host) {
+	stat_cache_entry *sce = NULL;
+	
 	buffer_prepare_copy(out, 128);
 
 	if (p->conf.server_root->used) {
@@ -151,13 +153,11 @@ static int build_doc_root(server *srv, connection *con, plugin_data *p, buffer *
 		BUFFER_APPEND_SLASH(out);
 	}
 	
-	if (HANDLER_GO_ON != file_cache_get_entry(srv, con, out, &(con->fce))) {
+	if (HANDLER_ERROR != stat_cache_get_entry(srv, con, out, &sce)) {
 		log_error_write(srv, __FILE__, __LINE__, "sb",
 				strerror(errno), out);
 		return -1;
-	}
-	
-	if (!S_ISDIR(con->fce->st.st_mode)) {
+	} else if (!S_ISDIR(sce->st.st_mode)) {
 		return -1;
 	}
 	

@@ -30,7 +30,7 @@ mod_ssi_expr.c: mod_ssi_exprparser.h
 common_src=buffer.c log.c \
       keyvalue.c chunk.c  \
       http_chunk.c stream.c fdevent.c \
-      file_cache.c plugin.c joblist.c etag.c array.c \
+      stat_cache.c plugin.c joblist.c etag.c array.c \
       data_string.c data_count.c data_array.c \
       data_integer.c md5.c data_fastcgi.c \
       fdevent_select.c fdevent_linux_rtsig.c \
@@ -40,7 +40,8 @@ common_src=buffer.c log.c \
       inet_ntop_cache.c crc32.c \
       connections-glue.c \
       configfile-glue.c \
-      http-header-glue.c
+      http-header-glue.c \
+      splaytree.c
       
 src = server.c response.c connections.c network.c \
       network_write.c network_linux_sendfile.c \
@@ -59,9 +60,9 @@ if NO_RDYNAMIC
 # everything
 lib_LTLIBRARIES += liblightcomp.la
 liblightcomp_la_SOURCES=$(common_src)
-liblightcomp_la_CFLAGS=$(AM_CFLAGS)
+liblightcomp_la_CFLAGS=$(AM_CFLAGS) $(FAM_CFLAGS)
 liblightcomp_la_LDFLAGS = -avoid-version -no-undefined
-liblightcomp_la_LIBADD = $(PCRE_LIB) $(SSL_LIB)
+liblightcomp_la_LIBADD = $(PCRE_LIB) $(SSL_LIB) $(FAM_LIBS)
 common_libadd = liblightcomp.la
 else
 src += $(common_src)
@@ -199,20 +200,21 @@ hdr = server.h buffer.h network.h log.h keyvalue.h \
       response.h request.h fastcgi.h chunk.h \
       settings.h http_chunk.h http_auth_digest.h \
       md5.h md5_global.h http_auth.h stream.h \
-      fdevent.h connections.h base.h file_cache.h \
+      fdevent.h connections.h base.h stat_cache.h \
       plugin.h mod_auth.h \
       etag.h joblist.h array.h crc32.h \
       network_backends.h configfile.h bitset.h \
       mod_ssi.h mod_ssi_expr.h inet_ntop_cache.h \
       configparser.h mod_ssi_exprparser.h \
-      sys-mmap.h sys-socket.h mod_cml.h mod_cml_funcs.h
+      sys-mmap.h sys-socket.h mod_cml.h mod_cml_funcs.h \
+      splaytree.h
 
 DEFS= @DEFS@ -DLIBRARY_DIR="\"$(libdir)\""
 
 lighttpd_SOURCES = $(src)
-lighttpd_LDADD = $(PCRE_LIB) $(DL_LIB) $(SENDFILE_LIB) $(ATTR_LIB) $(common_libadd) $(SSL_LIB)
+lighttpd_LDADD = $(PCRE_LIB) $(DL_LIB) $(SENDFILE_LIB) $(ATTR_LIB) $(common_libadd) $(SSL_LIB) $(FAM_LIBS)
 lighttpd_LDFLAGS = -export-dynamic
-lighttpd_CCPFLAGS = $(MYSQL_INCLUDES)
+lighttpd_CCPFLAGS = $(MYSQL_INCLUDES) $(FAM_CFLAGS)
 
 array_SOURCES = array.c buffer.c data_string.c data_count.c
 array_CPPFLAGS= -DDEBUG_ARRAY
