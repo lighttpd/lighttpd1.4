@@ -310,7 +310,7 @@ static handler_t mod_evhost_uri_handler(server *srv, connection *con, void *p_d)
 	
 	array_free(parsed_host);
 	
-	if (HANDLER_ERROR != stat_cache_get_entry(srv, con, p->tmp_buf, &sce)) {
+	if (HANDLER_ERROR == stat_cache_get_entry(srv, con, p->tmp_buf, &sce)) {
 		log_error_write(srv, __FILE__, __LINE__, "sb", strerror(errno), p->tmp_buf);
 		not_good = 1;
 	} else if(!S_ISDIR(sce->st.st_mode)) {

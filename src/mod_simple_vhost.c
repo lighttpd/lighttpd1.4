@@ -153,7 +153,7 @@ static int build_doc_root(server *srv, connection *con, plugin_data *p, buffer *
 		BUFFER_APPEND_SLASH(out);
 	}
 	
-	if (HANDLER_ERROR != stat_cache_get_entry(srv, con, out, &sce)) {
+	if (HANDLER_ERROR == stat_cache_get_entry(srv, con, out, &sce)) {
 		log_error_write(srv, __FILE__, __LINE__, "sb",
 				strerror(errno), out);
 		return -1;
