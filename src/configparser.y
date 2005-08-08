@@ -268,7 +268,7 @@ aelement(A) ::= STRING(B) ARRAY_ASSIGN expression(C). {
 eols ::= EOL.
 eols ::= .
 
-condlines(A) ::= condlines(B) eols OR condline(C). {
+condlines(A) ::= condlines(B) eols ELSE condline(C). {
   assert(B->context_ndx < C->context_ndx);
   C->prev = B;
   B->next = C;
