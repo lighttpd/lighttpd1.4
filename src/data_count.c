@@ -4,7 +4,7 @@
 
 #include "array.h"
 
-static data_unset *data_count_copy(data_unset *s) {
+static data_unset *data_count_copy(const data_unset *s) {
 	data_count *src = (data_count *)s;
 	data_count *ds = data_count_init();
 
@@ -40,7 +40,7 @@ static int data_count_insert_dup(data_unset *dst, data_unset *src) {
 	return 0;
 }
 
-static void data_count_print(data_unset *d, int depth) {
+static void data_count_print(const data_unset *d, int depth) {
 	data_count *ds = (data_count *)d;
 	
 	array_print_indent(depth);

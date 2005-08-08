@@ -4,7 +4,7 @@
 
 #include "array.h"
 
-static data_unset *data_integer_copy(data_unset *s) {
+static data_unset *data_integer_copy(const data_unset *s) {
 	data_integer *src = (data_integer *)s;
 	data_integer *ds = data_integer_init();
 
@@ -37,7 +37,7 @@ static int data_integer_insert_dup(data_unset *dst, data_unset *src) {
 	return 0;
 }
 
-static void data_integer_print(data_unset *d, int depth) {
+static void data_integer_print(const data_unset *d, int depth) {
 	data_integer *ds = (data_integer *)d;
 
 	array_print_indent(depth);

@@ -14,11 +14,11 @@ typedef enum { TYPE_UNSET, TYPE_STRING, TYPE_COUNT, TYPE_ARRAY, TYPE_INTEGER, TY
 #define DATA_UNSET \
 	data_type_t type; \
 	buffer *key; \
-	struct data_unset *(*copy)(struct data_unset *src); \
+	struct data_unset *(*copy)(const struct data_unset *src); \
 	void (* free)(struct data_unset *p); \
 	void (* reset)(struct data_unset *p); \
 	int (*insert_dup)(struct data_unset *dst, struct data_unset *src); \
-	void (*print)(struct data_unset *p, int depth)
+	void (*print)(const struct data_unset *p, int depth)
 
 typedef struct data_unset {
 	DATA_UNSET;
