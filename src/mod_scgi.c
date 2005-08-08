@@ -670,8 +670,8 @@ static int scgi_spawn_connection(server *srv,
 			
 			if (NULL == (he = gethostbyname(host->host->ptr))) {
 				log_error_write(srv, __FILE__, __LINE__, 
-						"ssb", "gethostbyname failed: ", 
-						hstrerror(h_errno), host->host);
+						"sdb", "gethostbyname failed: ", 
+						h_errno, host->host);
 				return -1;
 			}
 			
