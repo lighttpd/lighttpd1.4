@@ -58,9 +58,9 @@ const char *patches[] = { "SERVERsocket", "HTTPurl", "HTTPhost", "HTTPreferer", 
 /* #define USE_ALARM */
 #endif
 
-static sig_atomic_t srv_shutdown = 0;
-static sig_atomic_t handle_sig_alarm = 1;
-static sig_atomic_t handle_sig_hup = 0;
+static volatile sig_atomic_t srv_shutdown = 0;
+static volatile sig_atomic_t handle_sig_alarm = 1;
+static volatile sig_atomic_t handle_sig_hup = 0;
 
 #if defined(HAVE_SIGACTION) && defined(SA_SIGINFO)
 static void sigaction_handler(int sig, siginfo_t *si, void *context) {

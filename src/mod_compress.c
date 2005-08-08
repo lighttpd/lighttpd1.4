@@ -383,7 +383,7 @@ static int deflate_file_to_file(server *srv, connection *con, plugin_data *p, bu
 	
 	buffer_append_string_buffer(p->ofn, sce->etag);
 	
-	if (-1 == (ofd = open(p->ofn->ptr, O_WRONLY | O_CREAT | O_EXCL, 0600))) {
+	if (-1 == (ofd = open(p->ofn->ptr, O_WRONLY | O_CREAT | O_EXCL | O_BINARY, 0600))) {
 		if (errno == EEXIST) {
 			/* cache-entry exists */
 #if 0
@@ -401,7 +401,7 @@ static int deflate_file_to_file(server *srv, connection *con, plugin_data *p, bu
 #if 0
 	log_error_write(srv, __FILE__, __LINE__, "bs", p->ofn, "compress-cache miss");
 #endif	
-	if (-1 == (ifd = open(filename, O_RDONLY))) {
+	if (-1 == (ifd = open(filename, O_RDONLY | O_BINARY))) {
 		log_error_write(srv, __FILE__, __LINE__, "sbss", "opening plain-file", fn, "failed", strerror(errno));
 		
 		close(ofd);
@@ -473,7 +473,7 @@ static int deflate_file_to_buffer(server *srv, connection *con, plugin_data *p, 
 	if (sce->st.st_size > SIZE_MAX) return -1;
 	
 	
-	if (-1 == (ifd = open(fn->ptr, O_RDONLY))) {
+	if (-1 == (ifd = open(fn->ptr, O_RDONLY | O_BINARY))) {
 		log_error_write(srv, __FILE__, __LINE__, "sbss", "opening plain-file", fn, "failed", strerror(errno));
 		
 		return -1;
