@@ -1127,9 +1127,14 @@ handler_t http_response_prepare(server *srv, connection *con) {
 		
 		buffer_reset(con->physical.path);
 		
+		if (con->conf.log_request_handling) {
+			log_error_write(srv, __FILE__, __LINE__,  "s",  "-- before doc_root");
+			log_error_write(srv, __FILE__, __LINE__,  "sb", "Doc-Root     :", con->physical.doc_root);
+			log_error_write(srv, __FILE__, __LINE__,  "sb", "Rel-Path     :", con->physical.rel_path);
+		}
+
 		/* the docroot plugin should set the doc_root and might also set the physical.path
-		 * for us (all vhost-plugins are supposed to set the doc_root, the alias plugin
-		 * sets the path too)
+		 * for us (all vhost-plugins are supposed to set the doc_root)
 		 * */
 		switch(r = plugins_call_handle_docroot(srv, con)) {
 		case HANDLER_GO_ON:
@@ -1159,10 +1164,47 @@ handler_t http_response_prepare(server *srv, connection *con) {
 				buffer_append_string_buffer(con->physical.path, con->physical.rel_path);
 			}
 		}
+
 		/* the docroot plugins might set the servername, if they don't we take http-host */
 		if (buffer_is_empty(con->server_name)) {
 			buffer_copy_string_buffer(con->server_name, con->uri.authority);
 		}
+		
+		/** 
+		 * create physical filename 
+		 * -> physical.path = docroot + rel_path
+		 * 
+		 */
+		
+		buffer_copy_string_buffer(con->physical.path, con->physical.doc_root);
+		BUFFER_APPEND_SLASH(con->physical.path);
+		buffer_copy_string_buffer(con->physical.basedir, con->physical.path);
+		if (con->physical.rel_path->ptr[0] == '/') {
+			buffer_append_string_len(con->physical.path, con->physical.rel_path->ptr + 1, con->physical.rel_path->used - 2);
+		} else {
+			buffer_append_string_buffer(con->physical.path, con->physical.rel_path);
+		}
+
+		if (con->conf.log_request_handling) {
+			log_error_write(srv, __FILE__, __LINE__,  "s",  "-- after doc_root");
+			log_error_write(srv, __FILE__, __LINE__,  "sb", "Doc-Root     :", con->physical.doc_root);
+			log_error_write(srv, __FILE__, __LINE__,  "sb", "Rel-Path     :", con->physical.rel_path);
+			log_error_write(srv, __FILE__, __LINE__,  "sb", "Path         :", con->physical.path);
+		}
+
+		switch(r = plugins_call_handle_physical(srv, con)) {
+		case HANDLER_GO_ON:
+			break;
+		case HANDLER_FINISHED:
+		case HANDLER_COMEBACK:
+		case HANDLER_WAIT_FOR_EVENT:
+		case HANDLER_ERROR:
+			return r;
+		default:
+			log_error_write(srv, __FILE__, __LINE__, "");
+			break;
+		}
+		
 		if (con->conf.log_request_handling) {
 			log_error_write(srv, __FILE__, __LINE__,  "s",  "-- logical -> physical");
 			log_error_write(srv, __FILE__, __LINE__,  "sb", "Doc-Root     :", con->physical.doc_root);
@@ -1214,12 +1256,7 @@ handler_t http_response_prepare(server *srv, connection *con) {
 			}
 			
 			/* not found, perhaps PATHINFO */
-			
-			if (con->physical.rel_path->ptr[0] == '/') {
-				buffer_copy_string_len(srv->tmp_buf, con->physical.rel_path->ptr + 1, con->physical.rel_path->used - 2);
-			} else {
-				buffer_copy_string_buffer(srv->tmp_buf, con->physical.rel_path);
-			}
+			buffer_copy_string_buffer(srv->tmp_buf, con->physical.path);
 			
 			/*
 			 * 
@@ -1236,12 +1273,10 @@ handler_t http_response_prepare(server *srv, connection *con) {
 			do {
 				struct stat st;
 				
-				buffer_copy_string_buffer(con->physical.path, con->physical.doc_root);
-				BUFFER_APPEND_SLASH(con->physical.path);
 				if (slash) {
-					buffer_append_string_len(con->physical.path, srv->tmp_buf->ptr, slash - srv->tmp_buf->ptr);
+					buffer_copy_string_len(con->physical.path, srv->tmp_buf->ptr, slash - srv->tmp_buf->ptr);
 				} else {
-					buffer_append_string_buffer(con->physical.path, srv->tmp_buf);
+					buffer_copy_string_buffer(con->physical.path, srv->tmp_buf);
 				}
 				
 				if (0 == stat(con->physical.path->ptr, &(st)) &&
@@ -1261,7 +1296,7 @@ handler_t http_response_prepare(server *srv, connection *con) {
 				}
 				
 				if (slash) pathinfo = slash;
-			} while ((found == 0) && (slash != NULL) && (slash != srv->tmp_buf->ptr));
+			} while ((found == 0) && (slash != NULL) && (slash - srv->tmp_buf->ptr > con->physical.basedir->used - 2));
 			
 			if (found == 0) {
 				/* no it really doesn't exists */
