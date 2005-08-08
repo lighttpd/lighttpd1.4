@@ -4,7 +4,7 @@
 
 #include "array.h"
 
-static data_unset *data_config_copy(data_unset *s) {
+static data_unset *data_config_copy(const data_unset *s) {
 	data_config *src = (data_config *)s;
 	data_config *ds = data_config_init();
 
@@ -48,7 +48,7 @@ static int data_config_insert_dup(data_unset *dst, data_unset *src) {
 	return 0;
 }
 
-static void data_config_print(data_unset *d, int depth) {
+static void data_config_print(const data_unset *d, int depth) {
 	data_config *ds = (data_config *)d;
 	
 	array_print_indent(depth);

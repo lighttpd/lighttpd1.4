@@ -5,7 +5,7 @@
 #include "array.h"
 #include "fastcgi.h"
 
-static data_unset *data_fastcgi_copy(data_unset *s) {
+static data_unset *data_fastcgi_copy(const data_unset *s) {
 	data_fastcgi *src = (data_fastcgi *)s;
 	data_fastcgi *ds = data_fastcgi_init();
 
@@ -39,7 +39,7 @@ static int data_fastcgi_insert_dup(data_unset *dst, data_unset *src) {
 	return 0;
 }
 
-static void data_fastcgi_print(data_unset *d, int depth) {
+static void data_fastcgi_print(const data_unset *d, int depth) {
 	data_fastcgi *ds = (data_fastcgi *)d;
 	
 	array_print_indent(depth);
