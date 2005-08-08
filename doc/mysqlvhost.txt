@@ -1,6 +1,6 @@
 
 ====================
-MySQL bases vhosting
+MySQL based vhosting
 ====================
 
 -----------------------
