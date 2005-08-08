@@ -42,9 +42,9 @@ static int data_count_insert_dup(data_unset *dst, data_unset *src) {
 
 static void data_count_print(const data_unset *d, int depth) {
 	data_count *ds = (data_count *)d;
+	UNUSED(depth);
 	
-	array_print_indent(depth);
-	printf("{%s: %d}", ds->key->ptr, ds->count);
+	fprintf(stderr, "count(%d)", ds->count);
 }
 
 
