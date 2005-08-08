@@ -583,6 +583,7 @@ connection *connection_init(server *srv) {
 	
 	CLEAN(physical.doc_root);
 	CLEAN(physical.path);
+	CLEAN(physical.basedir);
 	CLEAN(physical.rel_path);
 	CLEAN(physical.etag);
 	CLEAN(parse_request);
@@ -641,6 +642,7 @@ void connections_free(server *srv) {
 		
 		CLEAN(physical.doc_root);
 		CLEAN(physical.path);
+		CLEAN(physical.basedir);
 		CLEAN(physical.etag);
 		CLEAN(physical.rel_path);
 		CLEAN(parse_request);
@@ -709,6 +711,7 @@ int connection_reset(server *srv, connection *con) {
 	
 	CLEAN(physical.doc_root);
 	CLEAN(physical.path);
+	CLEAN(physical.basedir);
 	CLEAN(physical.rel_path);
 	CLEAN(physical.etag);
 	

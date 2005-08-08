@@ -131,12 +131,13 @@ static int mod_alias_setup_connection(server *srv, connection *con, plugin_data 
 }
 #undef PATCH
 
-URIHANDLER_FUNC(mod_alias_docroot_handler) {
+PHYSICALPATH_FUNC(mod_alias_physical_handler) {
 	plugin_data *p = p_d;
-	int uri_len;
+	int uri_len, basedir_len;
+	char *uri_ptr;
 	size_t k, i;
 	
-	if (con->uri.path->used == 0) return HANDLER_GO_ON;
+	if (con->physical.path->used == 0) return HANDLER_GO_ON;
 	
 	mod_alias_setup_connection(srv, con, p);
 	for (i = 0; i < srv->config_patches->used; i++) {
@@ -145,7 +146,10 @@ URIHANDLER_FUNC(mod_alias_docroot_handler) {
 		mod_alias_patch_connection(srv, con, p, CONST_BUF_LEN(patch));
 	}
 	
-	uri_len = con->uri.path->used - 1;
+	/* not to include the tailing slash */
+	basedir_len = (con->physical.basedir->used - 1) - 1;
+	uri_len = con->physical.path->used - 1 - basedir_len;
+	uri_ptr = con->physical.path->ptr + basedir_len;
 	
 	for (k = 0; k < p->conf.alias->used; k++) {
 		data_string *ds = (data_string *)p->conf.alias->data[k];
@@ -154,11 +158,13 @@ URIHANDLER_FUNC(mod_alias_docroot_handler) {
 		if (alias_len > uri_len) continue;
 		if (ds->key->used == 0) continue;
 		
-		if (0 == strncmp(con->uri.path->ptr, ds->key->ptr, alias_len)) {
+		if (0 == strncmp(uri_ptr, ds->key->ptr, alias_len)) {
 			/* matched */
 			
-			buffer_copy_string_buffer(con->physical.doc_root, ds->value);
-			buffer_copy_string(con->physical.rel_path, con->uri.path->ptr + alias_len);
+			buffer_copy_string_buffer(con->physical.basedir, ds->value);
+			buffer_copy_string_buffer(srv->tmp_buf, ds->value);
+			buffer_append_string(srv->tmp_buf, uri_ptr + alias_len);
+			buffer_copy_string_buffer(con->physical.path, srv->tmp_buf);
 			
 			return HANDLER_GO_ON;
 		}
@@ -175,7 +181,7 @@ int mod_alias_plugin_init(plugin *p) {
 	p->name        = buffer_init_string("alias");
 	
 	p->init           = mod_alias_init;
-	p->handle_docroot = mod_alias_docroot_handler;
+	p->handle_physical= mod_alias_physical_handler;
 	p->set_defaults   = mod_alias_set_defaults;
 	p->cleanup        = mod_alias_free;
 	
