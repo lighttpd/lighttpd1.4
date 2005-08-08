@@ -25,7 +25,7 @@
 #include "http_chunk.h"
 #include "fdevent.h"
 #include "connections.h"
-#include "file_cache.h"
+#include "stat_cache.h"
 #include "plugin.h"
 #include "joblist.h"
 
@@ -125,7 +125,6 @@ static server *server_init(void) {
 	CLEAN(errorlog_buf);
 	CLEAN(response_range);
 	CLEAN(tmp_buf);
-	CLEAN(file_cache_etag);
 	CLEAN(range_buf);
 	CLEAN(empty_string);
 	
@@ -165,8 +164,8 @@ static server *server_init(void) {
 	srv->fdwaitqueue = calloc(1, sizeof(*srv->fdwaitqueue));
 	assert(srv->fdwaitqueue);
 	
-	srv->file_cache = file_cache_init();
-	assert(srv->file_cache);
+	srv->stat_cache = stat_cache_init();
+	assert(srv->stat_cache);
 	
 	srv->srvconf.modules = array_init();
 	
@@ -206,7 +205,6 @@ static void server_free(server *srv) {
 	CLEAN(errorlog_buf);
 	CLEAN(response_range);
 	CLEAN(tmp_buf);
-	CLEAN(file_cache_etag);
 	CLEAN(range_buf);
 	CLEAN(empty_string);
 	
@@ -263,7 +261,7 @@ static void server_free(server *srv) {
 	joblist_free(srv, srv->joblist);
 	fdwaitqueue_free(srv, srv->fdwaitqueue);
 	
-	file_cache_free(srv, srv->file_cache);
+	stat_cache_free(srv->stat_cache);
 	
 	array_free(srv->srvconf.modules);
 	array_free(srv->split_vals);
@@ -673,7 +671,6 @@ int main (int argc, char **argv) {
 	srv->cur_fds = open("/dev/null", O_RDONLY);
 	close(srv->cur_fds);
 	
-	
 #ifdef HAVE_SIGACTION
 	memset(&act, 0, sizeof(act));
 	act.sa_handler = SIG_IGN;
@@ -713,6 +710,13 @@ int main (int argc, char **argv) {
 	}
 	
 	getitimer(ITIMER_REAL, &interval);
+#endif
+
+#ifdef HAVE_FAM_H
+	/* setup FAM */
+	srv->stat_cache->fam_fcce_ndx = -1;
+	fdevent_register(srv->ev, FAMCONNECTION_GETFD(srv->stat_cache->fam), stat_cache_handle_fdevent, NULL);
+	fdevent_event_add(srv->ev, &(srv->stat_cache->fam_fcce_ndx), FAMCONNECTION_GETFD(srv->stat_cache->fam), FDEVENT_IN);
 #endif
 
 #ifdef HAVE_FORK	
@@ -801,7 +805,9 @@ int main (int argc, char **argv) {
 				
 				/* trigger waitpid */
 				srv->cur_ts = min_ts;
-				
+			
+				/* cleanup stat-cache */	
+				stat_cache_trigger_cleanup(srv);
 				/**
 				 * check all connections for timeouts 
 				 * 

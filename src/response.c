@@ -17,7 +17,7 @@
 #include "response.h"
 #include "keyvalue.h"
 #include "log.h"
-#include "file_cache.h"
+#include "stat_cache.h"
 #include "etag.h"
 
 #include "connections.h"
@@ -1182,15 +1182,14 @@ handler_t http_response_prepare(server *srv, connection *con) {
 		char *pathinfo = NULL;
 		int found = 0;
 		size_t k;
+		stat_cache_entry *sce = NULL;
 		
 		if (con->conf.log_request_handling) {
 			log_error_write(srv, __FILE__, __LINE__,  "s",  "-- handling physical path");
 			log_error_write(srv, __FILE__, __LINE__,  "sb", "Path         :", con->physical.path);
 		}
 		
-		switch (file_cache_get_entry(srv, con, con->physical.path, &(con->fce))) {
-		case HANDLER_WAIT_FOR_FD:
-			return HANDLER_WAIT_FOR_FD;
+		switch (stat_cache_get_entry(srv, con, con->physical.path, &sce)) {
 		case HANDLER_ERROR:
 			if (errno == EACCES) {
 				con->http_status = 403;
@@ -1300,7 +1299,7 @@ handler_t http_response_prepare(server *srv, connection *con) {
 			}
 			
 			/* setup the right file cache entry (FCE) */
-			switch (file_cache_get_entry(srv, con, con->physical.path, &(con->fce))) {
+			switch (stat_cache_get_entry(srv, con, con->physical.path, &sce)) {
 			case HANDLER_ERROR:
 				con->http_status = 404;
 				
@@ -1311,10 +1310,7 @@ handler_t http_response_prepare(server *srv, connection *con) {
 				}
 				
 				return HANDLER_FINISHED;
-			case HANDLER_WAIT_FOR_FD:
-				return HANDLER_WAIT_FOR_FD;
 			case HANDLER_GO_ON:
-				break;
 			default:
 				break;
 			}
@@ -1326,7 +1322,7 @@ handler_t http_response_prepare(server *srv, connection *con) {
 				log_error_write(srv, __FILE__, __LINE__,  "sb", "Path         :", con->physical.path);
 			}
 			
-			if (S_ISDIR(con->fce->st.st_mode)) {
+			if (S_ISDIR(sce->st.st_mode)) {
 				if (con->physical.path->ptr[con->physical.path->used - 2] != '/') {
 					/* redirect to .../ */
 					
@@ -1343,7 +1339,8 @@ handler_t http_response_prepare(server *srv, connection *con) {
 						buffer_copy_string_buffer(srv->tmp_buf, con->physical.path);
 						buffer_append_string_buffer(srv->tmp_buf, ds->value);
 						
-						switch (file_cache_get_entry(srv, con, srv->tmp_buf, &(con->fce))) {
+						switch (stat_cache_get_entry(srv, con, srv->tmp_buf, &sce)) {
+						case HANDLER_COMEBACK:
 						case HANDLER_GO_ON:
 							/* rewrite uri.path to the real path (/ -> /index.php) */
 							buffer_append_string_buffer(con->uri.path, ds->value);
@@ -1407,13 +1404,13 @@ handler_t http_response_prepare(server *srv, connection *con) {
 			break;
 		}
 		
-		if (!S_ISREG(con->fce->st.st_mode)) {
+		if (!S_ISREG(sce->st.st_mode)) {
 			con->http_status = 404;
 			
 			if (con->conf.log_file_not_found) {
 				log_error_write(srv, __FILE__, __LINE__, "sbsb",
 					"not a regular file:", con->uri.path,
-					"->", con->fce->name);
+					"->", sce->name);
 			}
 			
 			return HANDLER_FINISHED;
@@ -1438,16 +1435,16 @@ handler_t http_response_prepare(server *srv, connection *con) {
 			
 			/* set response content-type */
 
-			if (buffer_is_empty(con->fce->content_type)) {
+			if (buffer_is_empty(sce->content_type)) {
 				response_header_overwrite(srv, con, CONST_STR_LEN("Content-Type"), CONST_STR_LEN("application/octet-stream"));
 			} else {
-				response_header_overwrite(srv, con, CONST_STR_LEN("Content-Type"), CONST_BUF_LEN(con->fce->content_type));
+				response_header_overwrite(srv, con, CONST_STR_LEN("Content-Type"), CONST_BUF_LEN(sce->content_type));
 			}
 			
 			/* generate e-tag */
-			etag_mutate(con->physical.etag, con->fce->etag);
+			etag_mutate(con->physical.etag, sce->etag);
 
-			http_response_handle_cachable(srv, con, con->fce->st.st_mtime);
+			http_response_handle_cachable(srv, con, sce->st.st_mtime);
 						
 			if (con->conf.range_requests &&
 			    con->http_status == 0 && 

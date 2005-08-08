@@ -14,7 +14,7 @@
 #include "network.h"
 #include "fdevent.h"
 #include "log.h"
-#include "file_cache.h"
+#include "stat_cache.h"
 
 #include "sys-socket.h"
 
@@ -71,8 +71,10 @@ int network_write_chunkqueue_write(server *srv, connection *con, chunkqueue *cq)
 			ssize_t r;
 			off_t offset;
 			size_t toSend;
+			stat_cache_entry *sce = NULL;
+			int ifd;
 			
-			if (HANDLER_GO_ON != file_cache_get_entry(srv, con, c->data.file.name, &(con->fce))) {
+			if (HANDLER_ERROR == stat_cache_get_entry(srv, con, c->data.file.name, &sce)) {
 				log_error_write(srv, __FILE__, __LINE__, "sb",
 						strerror(errno), c->data.file.name);
 				return -1;
@@ -81,77 +83,52 @@ int network_write_chunkqueue_write(server *srv, connection *con, chunkqueue *cq)
 			offset = c->data.file.offset + c->offset;
 			toSend = c->data.file.length - c->offset;
 			
-			if (offset > con->fce->st.st_size) {
+			if (offset > sce->st.st_size) {
 				log_error_write(srv, __FILE__, __LINE__, "sb", "file was shrinked:", c->data.file.name);
 				
 				return -1;
 			}
-			
-			if (-1 == con->fce->fd) {
-				log_error_write(srv, __FILE__, __LINE__, "sb", "fd is invalid", c->data.file.name);
+
+			if (-1 == (ifd = open(c->data.file.name->ptr, O_RDONLY))) {
+				log_error_write(srv, __FILE__, __LINE__, "ss", "open failed: ", strerror(errno));
 				
 				return -1;
 			}
 			
 #if defined USE_MMAP
-			/* check if the mapping fits */
-			if (con->fce->mmap_p &&
-			    con->fce->mmap_length != con->fce->st.st_size &&
-			    con->fce->mmap_offset != 0) {
-				munmap(con->fce->mmap_p, con->fce->mmap_length);
+			if (MAP_FAILED == (p = mmap(0, sce->st.st_size, PROT_READ, MAP_SHARED, ifd, 0))) {
+				log_error_write(srv, __FILE__, __LINE__, "ss", "mmap failed: ", strerror(errno));
+
+				close(ifd);
 				
-				con->fce->mmap_p = NULL;
+				return -1;
 			}
-			
-			/* build mapping if neccesary */
-			if (con->fce->mmap_p == NULL) {
-				if (MAP_FAILED == (p = mmap(0, con->fce->st.st_size, PROT_READ, MAP_SHARED, con->fce->fd, 0))) {
-					log_error_write(srv, __FILE__, __LINE__, "ss", "mmap failed: ", strerror(errno));
-					
-					return -1;
-				}
-				con->fce->mmap_p = p;
-				con->fce->mmap_offset = 0;
-				con->fce->mmap_length = con->fce->st.st_size;
-			} else {
-				p = con->fce->mmap_p;
-			}
-			
+			close(ifd);
+							
 			if ((r = write(fd, p + offset, toSend)) <= 0) {
 				log_error_write(srv, __FILE__, __LINE__, "ss", "write failed: ", strerror(errno));
 				
 				return -1;
 			}
 			
-			/* don't cache mmap()ings for files large then 64k */
-			if (con->fce->mmap_length > 64 * 1024) {
-				munmap(con->fce->mmap_p, con->fce->mmap_length);
-				
-				con->fce->mmap_p = NULL;
-			}
-			
+			munmap(p, sce->st.st_size);
 #else
 			buffer_prepare_copy(srv->tmp_buf, toSend);
 			
-			lseek(con->fce->fd, offset, SEEK_SET);
-			if (-1 == (toSend = read(con->fce->fd, srv->tmp_buf->ptr, toSend))) {
+			lseek(ifd, offset, SEEK_SET);
+			if (-1 == (toSend = read(ifd, srv->tmp_buf->ptr, toSend))) {
 				log_error_write(srv, __FILE__, __LINE__, "ss", "read: ", strerror(errno));
+				close(ifd);
 				
 				return -1;
 			}
-#ifdef __WIN32
+			close(ifd);
+
 			if (-1 == (r = send(fd, srv->tmp_buf->ptr, toSend, 0))) {
 				log_error_write(srv, __FILE__, __LINE__, "ss", "write: ", strerror(errno));
 				
 				return -1;
 			}
-#else			
-			if (-1 == (r = write(fd, srv->tmp_buf->ptr, toSend))) {
-				log_error_write(srv, __FILE__, __LINE__, "ss", "write: ", strerror(errno));
-				
-				return -1;
-			}
-#endif
 #endif
 			c->offset += r;
 			con->bytes_written += r;

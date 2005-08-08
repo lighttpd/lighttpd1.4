@@ -5,7 +5,7 @@
 #include "plugin.h"
 #include "log.h"
 #include "response.h"
-#include "file_cache.h"
+#include "stat_cache.h"
 
 typedef struct {
 	/* unparsed pieces */
@@ -267,6 +267,7 @@ static handler_t mod_evhost_uri_handler(server *srv, connection *con, void *p_d)
 	array *parsed_host;
 	register char *ptr;
 	int not_good = 0;
+	stat_cache_entry *sce = NULL;
 	
 	/* not authority set */
 	if (con->uri.authority->used == 0) return HANDLER_GO_ON;
@@ -309,10 +310,10 @@ static handler_t mod_evhost_uri_handler(server *srv, connection *con, void *p_d)
 	
 	array_free(parsed_host);
 	
-	if (HANDLER_GO_ON != file_cache_get_entry(srv, con, p->tmp_buf, &(con->fce))) {
+	if (HANDLER_ERROR != stat_cache_get_entry(srv, con, p->tmp_buf, &sce)) {
 		log_error_write(srv, __FILE__, __LINE__, "sb", strerror(errno), p->tmp_buf);
 		not_good = 1;
-	} else if(!S_ISDIR(con->fce->st.st_mode)) {
+	} else if(!S_ISDIR(sce->st.st_mode)) {
 		log_error_write(srv, __FILE__, __LINE__, "sb", "not a directory:", p->tmp_buf);
 		not_good = 1;
 	}

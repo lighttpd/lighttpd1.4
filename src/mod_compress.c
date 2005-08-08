@@ -13,6 +13,7 @@
 #include "log.h"
 #include "buffer.h"
 #include "response.h"
+#include "stat_cache.h"
 
 #include "plugin.h"
 
@@ -318,7 +319,7 @@ static int deflate_file_to_buffer_bzip2(server *srv, connection *con, plugin_dat
 }
 #endif
 
-static int deflate_file_to_file(server *srv, connection *con, plugin_data *p, buffer *fn, file_cache_entry *fce, int type) {
+static int deflate_file_to_file(server *srv, connection *con, plugin_data *p, buffer *fn, stat_cache_entry *sce, int type) {
 	int ifd, ofd;
 	int ret = -1;
 	void *start;
@@ -326,14 +327,14 @@ static int deflate_file_to_file(server *srv, connection *con, plugin_data *p, bu
 	ssize_t r;
 	
 	/* overflow */
-	if ((off_t)(fce->st.st_size * 1.1) < fce->st.st_size) return -1;
+	if ((off_t)(sce->st.st_size * 1.1) < sce->st.st_size) return -1;
 	
 	/* don't mmap files > size_t 
 	 * 
 	 * we could use a sliding window, but currently there is no need for it
 	 */
 	
-	if (fce->st.st_size > SIZE_MAX) return -1;
+	if (sce->st.st_size > SIZE_MAX) return -1;
 	
 	buffer_reset(p->ofn);
 	buffer_copy_string_buffer(p->ofn, p->conf.compress_cache_dir);
@@ -380,7 +381,7 @@ static int deflate_file_to_file(server *srv, connection *con, plugin_data *p, bu
 		return -1;
 	}
 	
-	buffer_append_string_buffer(p->ofn, fce->etag);
+	buffer_append_string_buffer(p->ofn, sce->etag);
 	
 	if (-1 == (ofd = open(p->ofn->ptr, O_WRONLY | O_CREAT | O_EXCL, 0600))) {
 		if (errno == EEXIST) {
@@ -409,7 +410,7 @@ static int deflate_file_to_file(server *srv, connection *con, plugin_data *p, bu
 	}
 	
 	
-	if (MAP_FAILED == (start = mmap(NULL, fce->st.st_size, PROT_READ, MAP_SHARED, ifd, 0))) {
+	if (MAP_FAILED == (start = mmap(NULL, sce->st.st_size, PROT_READ, MAP_SHARED, ifd, 0))) {
 		log_error_write(srv, __FILE__, __LINE__, "sbss", "mmaping", fn, "failed", strerror(errno));
 		
 		close(ofd);
@@ -420,15 +421,15 @@ static int deflate_file_to_file(server *srv, connection *con, plugin_data *p, bu
 	switch(type) {
 #ifdef USE_ZLIB
 	case HTTP_ACCEPT_ENCODING_GZIP: 
-		ret = deflate_file_to_buffer_gzip(srv, con, p, start, fce->st.st_size, fce->st.st_mtime);
+		ret = deflate_file_to_buffer_gzip(srv, con, p, start, sce->st.st_size, sce->st.st_mtime);
 		break;
 	case HTTP_ACCEPT_ENCODING_DEFLATE: 
-		ret = deflate_file_to_buffer_deflate(srv, con, p, start, fce->st.st_size);
+		ret = deflate_file_to_buffer_deflate(srv, con, p, start, sce->st.st_size);
 		break;
 #endif
 #ifdef USE_BZ2LIB
 	case HTTP_ACCEPT_ENCODING_BZIP2: 
-		ret = deflate_file_to_buffer_bzip2(srv, con, p, start, fce->st.st_size);
+		ret = deflate_file_to_buffer_bzip2(srv, con, p, start, sce->st.st_size);
 		break;
 #endif
 	default:
@@ -444,7 +445,7 @@ static int deflate_file_to_file(server *srv, connection *con, plugin_data *p, bu
 		
 	}
 		
-	munmap(start, fce->st.st_size);
+	munmap(start, sce->st.st_size);
 	close(ofd);
 	close(ifd);
 	
@@ -455,21 +456,21 @@ static int deflate_file_to_file(server *srv, connection *con, plugin_data *p, bu
 	return 0;
 }
 
-static int deflate_file_to_buffer(server *srv, connection *con, plugin_data *p, buffer *fn, file_cache_entry *fce, int type) {
+static int deflate_file_to_buffer(server *srv, connection *con, plugin_data *p, buffer *fn, stat_cache_entry *sce, int type) {
 	int ifd;
 	int ret = -1;
 	void *start;
 	buffer *b;
 	
 	/* overflow */
-	if ((off_t)(fce->st.st_size * 1.1) < fce->st.st_size) return -1;
+	if ((off_t)(sce->st.st_size * 1.1) < sce->st.st_size) return -1;
 	
 	/* don't mmap files > size_t 
 	 * 
 	 * we could use a sliding window, but currently there is no need for it
 	 */
 	
-	if (fce->st.st_size > SIZE_MAX) return -1;
+	if (sce->st.st_size > SIZE_MAX) return -1;
 	
 	
 	if (-1 == (ifd = open(fn->ptr, O_RDONLY))) {
@@ -479,7 +480,7 @@ static int deflate_file_to_buffer(server *srv, connection *con, plugin_data *p, 
 	}
 	
 	
-	if (MAP_FAILED == (start = mmap(NULL, fce->st.st_size, PROT_READ, MAP_SHARED, ifd, 0))) {
+	if (MAP_FAILED == (start = mmap(NULL, sce->st.st_size, PROT_READ, MAP_SHARED, ifd, 0))) {
 		log_error_write(srv, __FILE__, __LINE__, "sbss", "mmaping", fn, "failed", strerror(errno));
 		
 		close(ifd);
@@ -489,15 +490,15 @@ static int deflate_file_to_buffer(server *srv, connection *con, plugin_data *p, 
 	switch(type) {
 #ifdef USE_ZLIB
 	case HTTP_ACCEPT_ENCODING_GZIP: 
-		ret = deflate_file_to_buffer_gzip(srv, con, p, start, fce->st.st_size, fce->st.st_mtime);
+		ret = deflate_file_to_buffer_gzip(srv, con, p, start, sce->st.st_size, sce->st.st_mtime);
 		break;
 	case HTTP_ACCEPT_ENCODING_DEFLATE: 
-		ret = deflate_file_to_buffer_deflate(srv, con, p, start, fce->st.st_size);
+		ret = deflate_file_to_buffer_deflate(srv, con, p, start, sce->st.st_size);
 		break;
 #endif
 #ifdef USE_BZ2LIB
 	case HTTP_ACCEPT_ENCODING_BZIP2: 
-		ret = deflate_file_to_buffer_bzip2(srv, con, p, start, fce->st.st_size);
+		ret = deflate_file_to_buffer_bzip2(srv, con, p, start, sce->st.st_size);
 		break;
 #endif
 	default:
@@ -505,7 +506,7 @@ static int deflate_file_to_buffer(server *srv, connection *con, plugin_data *p, 
 		break;
 	}
 		
-	munmap(start, fce->st.st_size);
+	munmap(start, sce->st.st_size);
 	close(ifd);
 	
 	if (ret != 0) return -1;
@@ -574,6 +575,7 @@ PHYSICALPATH_FUNC(mod_compress_physical) {
 	data_string *content_ds;
 	size_t m, i;
 	off_t max_fsize;
+	stat_cache_entry *sce = NULL;
 	
 	/* only GET and POST can get compressed */
 	if (con->request.http_method != HTTP_METHOD_GET && 
@@ -590,9 +592,11 @@ PHYSICALPATH_FUNC(mod_compress_physical) {
 	
 	
 	max_fsize = p->conf.compress_max_filesize;
+
+	stat_cache_get_entry(srv, con, con->physical.path, &sce);
 	
 	/* don't compress files that are too large as we need to much time to handle them */
-	if (max_fsize && (con->fce->st.st_size >> 10) > max_fsize) return HANDLER_GO_ON;
+	if (max_fsize && (sce->st.st_size >> 10) > max_fsize) return HANDLER_GO_ON;
 	
 	if (NULL == (content_ds = (data_string *)array_get_element(con->response.headers, "Content-Type"))) {
 		log_error_write(srv, __FILE__, __LINE__, "sbb", "Content-Type is not set for", con->physical.path, con->uri.path);
@@ -665,14 +669,14 @@ PHYSICALPATH_FUNC(mod_compress_physical) {
 					/* deflate it */
 					if (p->conf.compress_cache_dir->used) {
 						if (0 == deflate_file_to_file(srv, con, p,
-									      con->physical.path, con->fce, compression_type)) {
+									      con->physical.path, sce, compression_type)) {
 							struct tm *tm;
 							time_t last_mod;
 							
 							response_header_insert(srv, con, CONST_STR_LEN("Content-Encoding"), compression_name, strlen(compression_name));
 							
 							/* Set Last-Modified of ORIGINAL file */
-							last_mod = con->fce->st.st_mtime;
+							last_mod = sce->st.st_mtime;
 							
 							for (i = 0; i < FILE_CACHE_MAX; i++) {
 								if (srv->mtime_cache[i].mtime == last_mod) break;
@@ -709,7 +713,7 @@ PHYSICALPATH_FUNC(mod_compress_physical) {
 							return HANDLER_FINISHED;
 						}
 					} else if (0 == deflate_file_to_buffer(srv, con, p,
-									       con->physical.path, con->fce, compression_type)) {
+									       con->physical.path, sce, compression_type)) {
 							
 						response_header_insert(srv, con, CONST_STR_LEN("Content-Encoding"), compression_name, strlen(compression_name));
 						

@@ -20,7 +20,7 @@
 #include "network.h"
 #include "fdevent.h"
 #include "log.h"
-#include "file_cache.h"
+#include "stat_cache.h"
 
 # include <openssl/ssl.h> 
 # include <openssl/err.h> 
@@ -102,11 +102,11 @@ int network_write_chunkqueue_openssl(server *srv, connection *con, chunkqueue *c
 			ssize_t r;
 			off_t offset;
 			size_t toSend;
-# if defined USE_MMAP
 			char *p;
-# endif
+			stat_cache_entry *sce = NULL;
+			int ifd;
 			
-			if (HANDLER_GO_ON != file_cache_get_entry(srv, con, c->data.file.name, &(con->fce))) {
+			if (HANDLER_ERROR == stat_cache_get_entry(srv, con, c->data.file.name, &sce)) {
 				log_error_write(srv, __FILE__, __LINE__, "sb",
 						strerror(errno), c->data.file.name);
 				return -1;
@@ -115,27 +115,24 @@ int network_write_chunkqueue_openssl(server *srv, connection *con, chunkqueue *c
 			offset = c->data.file.offset + c->offset;
 			toSend = c->data.file.length - c->offset;
 			
+			if (-1 == (ifd = open(c->data.file.name->ptr, O_RDONLY))) {
+				log_error_write(srv, __FILE__, __LINE__, "ss", "open failed: ", strerror(errno));
+				
+				return -1;
+			}
+
 			
-#if defined USE_MMAP
-			if (MAP_FAILED == (p = mmap(0, con->fce->st.st_size, PROT_READ, MAP_SHARED, con->fce->fd, 0))) {
+			if (MAP_FAILED == (p = mmap(0, sce->st.st_size, PROT_READ, MAP_SHARED, ifd, 0))) {
 				log_error_write(srv, __FILE__, __LINE__, "ss", "mmap failed: ", strerror(errno));
+
+				close(ifd);
 				
 				return -1;
 			}
 			
+			close(ifd);
+
 			s = p + offset;
-#else
-			buffer_prepare_copy(srv->tmp_buf, toSend);
-			
-			lseek(con->fce->fd, offset, SEEK_SET);
-			if (-1 == (toSend = read(con->fce->fd, srv->tmp_buf->ptr, toSend))) {
-				log_error_write(srv, __FILE__, __LINE__, "ss", "read failed: ", strerror(errno));
-				
-				return -1;
-			}
-			
-			s = srv->tmp_buf->ptr;
-#endif
 			
 			if ((r = SSL_write(con->ssl, s, toSend)) <= 0) {
 				switch ((ssl_r = SSL_get_error(con->ssl, r))) {
@@ -157,9 +154,7 @@ int network_write_chunkqueue_openssl(server *srv, connection *con, chunkqueue *c
 					/* clean shutdown on the remote side */
 					
 					if (r == 0) {
-#if defined USE_MMAP
 						munmap(p, c->data.file.length);
-#endif
 						return -2;
 					}
 					
@@ -169,9 +164,7 @@ int network_write_chunkqueue_openssl(server *srv, connection *con, chunkqueue *c
 							ssl_r, r, 
 							ERR_error_string(ERR_get_error(), NULL));
 					
-#if defined USE_MMAP
 					munmap(p, c->data.file.length);
-#endif
 					return -1;
 				}
 			} else {
@@ -179,9 +172,7 @@ int network_write_chunkqueue_openssl(server *srv, connection *con, chunkqueue *c
 				con->bytes_written += r;
 			}
 			
-#if defined USE_MMAP
 			munmap(p, c->data.file.length);
-#endif
 			
 			if (c->offset == c->data.file.length) {
 				chunk_finished = 1;
