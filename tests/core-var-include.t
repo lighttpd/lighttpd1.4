@@ -8,7 +8,7 @@ BEGIN {
 
 use strict;
 use IO::Socket;
-use Test::More tests => 16;
+use Test::More tests => 15;
 use LightyTest;
 
 my $tf = LightyTest->new();
@@ -42,9 +42,13 @@ my $tests = {
 };
 foreach my $test (keys %{ $tests }) {
 	my $expect = $tests->{$test};
-	$t->{REQUEST}  = ( "GET /$test HTTP/1.0\r\nHost: $server_name\r\n" );
+	$t->{REQUEST}  = ( <<EOF
+GET /$test HTTP/1.0
+Host: $server_name
+EOF
+ );
 	$t->{RESPONSE} = ( { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 301, 'Location' => $expect } );
-	ok($tf->handle_http == 0, $test);
+	ok($tf->handle_http($t) == 0, $test);
 }
 
 ok($tf->stop_proc == 0, "Stopping lighttpd");
