@@ -8,11 +8,13 @@ BEGIN {
 
 use strict;
 use IO::Socket;
-use Test::More tests => 15;
+use Test::More tests => 16;
 use LightyTest;
 
 my $tf = LightyTest->new();
 my $t;
+
+$ENV{"env_test"} = "good_env";
 
 $tf->{CONFIGFILE} = 'var-include.conf';
 
@@ -34,12 +36,15 @@ my $tests = {
 	"servername3"    => "/good_" . $server_name . "/",
 	"var.myvar"      => "/good_var_myvar" . $myvar,
 	"myvar"          => "/good_myvar" . $myvar,
+	"env"            => "/" . $ENV{"env_test"},
+
 	"number1"        => "/good_number" . "1",
 	"number2"        => "1" . "/good_number",
 	"array_append"   => "/good_array_append",
 	"string_append"  => "/good_" . $mystr,
 	"number_append"  => "/good_" . "2"
 };
+
 foreach my $test (keys %{ $tests }) {
 	my $expect = $tests->{$test};
 	$t->{REQUEST}  = ( <<EOF
@@ -52,3 +57,4 @@ EOF
 }
 
 ok($tf->stop_proc == 0, "Stopping lighttpd");
+

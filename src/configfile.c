@@ -266,7 +266,7 @@ int config_setup_connection(server *srv, connection *con) {
 	return 0;
 }
 
-int config_patch_connection(server *srv, connection *con, const char *stage, size_t stage_len) {
+int config_patch_connection(server *srv, connection *con, comp_key_t comp) {
 	size_t i, j;
 	
 	/* skip the first, the global context */
@@ -275,7 +275,7 @@ int config_patch_connection(server *srv, connection *con, const char *stage, siz
 		specific_config *s = srv->config_storage[i];
 		
 		/* not our stage */
-		if (!buffer_is_equal_string(dc->comp_key, stage, stage_len)) continue;
+		if (comp != dc->comp) continue;
 		
 		/* condition didn't match */
 		if (!config_check_cond(srv, con, dc)) continue;
@@ -739,6 +739,7 @@ static int config_tokenizer(server *srv, tokenizer_t *t, int *token_id, buffer *
 				for (i = 0; t->input[t->offset + i] && 
 				     (isalnum((unsigned char)t->input[t->offset + i]) || 
 				      t->input[t->offset + i] == '.' ||
+				      t->input[t->offset + i] == '_' || /* for env.* */
 				      t->input[t->offset + i] == '-'
 				      ); i++);
 				
@@ -838,19 +839,12 @@ static void context_init(server *srv, config_t *context) {
 	context->srv = srv;
 	context->ok = 1;
 	context->configs_stack = array_init();
+	context->configs_stack->is_weakref = 1;
 	context->basedir = buffer_init();
 }
 
 static void context_free(config_t *context) {
-	size_t i;
-	array *a = context->configs_stack;
-
-	/* don't free elements */
-	for (i = 0; i < a->size; i++) {
-		a->data[i] = NULL;
-	}
-	array_free(a);
-
+	array_free(context->configs_stack);
 	buffer_free(context->basedir);
 }
 
