@@ -24,7 +24,7 @@ mod_ssi_exprparser.c mod_ssi_exprparser.h: mod_ssi_exprparser.y
 	$(LEMON) -q $(srcdir)/mod_ssi_exprparser.y $(srcdir)/lempar.c
 endif
 
-config.c: configparser.h
+configfile.c: configparser.h
 mod_ssi_expr.c: mod_ssi_exprparser.h
 
 common_src=buffer.c log.c \
@@ -47,7 +47,7 @@ src = server.c response.c connections.c network.c \
       network_write.c network_linux_sendfile.c \
       network_freebsd_sendfile.c network_writev.c \
       network_solaris_sendfilev.c network_openssl.c \
-      config.c request.c
+      configfile.c request.c
 
 
 spawn_fcgi_SOURCES=spawn-fcgi.c

@@ -6,9 +6,9 @@
 
 typedef struct {
 	int     ok;
-	array  *config;
-	buffer *ctx_name;
-	array  *ctx_config;
+	array  *all_configs;
+	array  *configs_stack; /* to parse nested block */
+	data_config *current; /* current started with { */
 } config_t;
 
 void *configparserAlloc(void *(*mallocProc)(size_t));

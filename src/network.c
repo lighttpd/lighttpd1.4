@@ -394,7 +394,7 @@ int network_init(server *srv) {
 			return -1;
 		}
 		
-		if (0 != network_server_init(srv, dc->match.string, s)) {
+		if (0 != network_server_init(srv, dc->string, s)) {
 			return -1;
 		}
 	}

@@ -22,6 +22,8 @@ CONFS=fastcgi-10.conf \
       fastcgi-13.conf \
       bug-06.conf \
       bug-12.conf \
+      condition.conf \
+      core-condition.t \
       core-request.t \
       core-response.t \
       core.t \
