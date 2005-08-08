@@ -9,8 +9,8 @@ static data_unset *data_fastcgi_copy(const data_unset *s) {
 	data_fastcgi *src = (data_fastcgi *)s;
 	data_fastcgi *ds = data_fastcgi_init();
 
-	ds->key = buffer_init_buffer(src->key);
-	ds->host = buffer_init_buffer(src->host);
+	buffer_copy_string_buffer(ds->key, src->key);
+	buffer_copy_string_buffer(ds->host, src->host);
 	return (data_unset *)ds;
 }
 

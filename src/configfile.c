@@ -529,7 +529,7 @@ static int config_tokenizer(server *srv, tokenizer_t *t, int *token_id, buffer *
 		case '\r':
 			if (t->in_brace == 0) {
 				int done = 0;
-				while (!done) {
+				while (!done && t->offset < t->size) {
 					switch (t->input[t->offset]) {
 					case '\r':
 					case '\n':
@@ -806,18 +806,16 @@ int config_parse_file(server *srv, config_t *context, const char *fn) {
 		
 		token = buffer_init();
 	}
+	buffer_free(token);
+
 	if (ret != -1 && context->ok) {
 		/* add an EOL at EOF, better than say sorry */
-		buffer_copy_string(token, "(EOL)");
-		configparser(pParser, TK_EOL, token, context);
-		token = buffer_init_string("(END)");
+		configparser(pParser, TK_EOL, buffer_init_string("(EOL)"), context);
 		if (context->ok) {
-			configparser(pParser, 0, token, context);
-			token = buffer_init();
+			configparser(pParser, 0, NULL, context);
 		}
 	}
 	configparserFree(pParser, free);
-	buffer_free(token);
 	
 	if (ret == -1) {
 		log_error_write(srv, __FILE__, __LINE__, "sb", 
@@ -844,7 +842,15 @@ static void context_init(server *srv, config_t *context) {
 }
 
 static void context_free(config_t *context) {
-	array_free(context->configs_stack);
+	size_t i;
+	array *a = context->configs_stack;
+
+	/* don't free elements */
+	for (i = 0; i < a->size; i++) {
+		a->data[i] = NULL;
+	}
+	array_free(a);
+
 	buffer_free(context->basedir);
 }
 
@@ -882,7 +888,8 @@ int config_read(server *srv, const char *fn) {
 	
 	ret = config_parse_file(srv, &context, fn);
 
-	assert(0 != ret || context.configs_stack->used == 0);
+	/* remains nothing if parser is ok */
+	assert(!(0 == ret && context.ok && 0 != context.configs_stack->used));
 	context_free(&context);
 
 	if (0 != ret) {

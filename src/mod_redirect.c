@@ -58,6 +58,17 @@ FREE_FUNC(mod_redirect_free) {
 
 	buffer_free(p->match_buf);
 	buffer_free(p->location);
+
+	if (p->config_storage) {
+		size_t i;
+		for (i = 0; i < srv->config_context->used; i++) {
+			plugin_config *s = p->config_storage[i];
+
+			pcre_keyvalue_buffer_free(s->redirect);
+			free(s);
+		}
+		free(p->config_storage);
+	}
 	
 	free(p);
 	

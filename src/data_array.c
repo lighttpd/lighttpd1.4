@@ -8,7 +8,8 @@ static data_unset *data_array_copy(const data_unset *s) {
 	data_array *src = (data_array *)s;
 	data_array *ds = data_array_init();
 
-	ds->key = buffer_init_buffer(src->key);
+	buffer_copy_string_buffer(ds->key, src->key);
+	array_free(ds->value);
 	ds->value = array_init_array(src->value);
 	return (data_unset *)ds;
 }
