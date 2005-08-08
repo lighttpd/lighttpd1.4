@@ -578,6 +578,16 @@ static int http_auth_basic_password_compare(server *srv, mod_auth_plugin_data *p
 			return -1;
 		}
 		
+		if (p->conf.auth_ldap_starttls == 1) {
+	 		if (LDAP_OPT_SUCCESS != (ret = ldap_start_tls_s(ldap, NULL,  NULL))) {
+	 			log_error_write(srv, __FILE__, __LINE__, "ss", "ldap startTLS failed:", ldap_err2string(ret));
+		
+				ldap_unbind_s(ldap);
+				
+				return -1;
+	 		}
+ 		}
+
 		
 		if (LDAP_SUCCESS != (ret = ldap_simple_bind_s(ldap, dn, pw))) {
 			log_error_write(srv, __FILE__, __LINE__, "ss", "ldap:", ldap_err2string(ret));
