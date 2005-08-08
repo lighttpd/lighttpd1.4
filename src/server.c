@@ -50,9 +50,6 @@
 #include <sys/resource.h>
 #endif
 
-const char *patches[] = { "SERVERsocket", "HTTPurl", "HTTPhost", "HTTPreferer", "HTTPuseragent", "HTTPcookie", NULL };
-
-
 #ifndef __sgi
 /* IRIX doesn't like the alarm based time() optimization */
 /* #define USE_ALARM */
@@ -68,6 +65,7 @@ static void sigaction_handler(int sig, siginfo_t *si, void *context) {
 	UNUSED(context);
 
 	switch (sig) {
+	case SIGINT: srv_shutdown = 1; break;
 	case SIGTERM: srv_shutdown = 1; break;
 	case SIGALRM: handle_sig_alarm = 1; break;
 	case SIGHUP:  handle_sig_hup = 1; break;
@@ -77,6 +75,7 @@ static void sigaction_handler(int sig, siginfo_t *si, void *context) {
 #elif defined(HAVE_SIGNAL) || defined(HAVE_SIGACTION)
 static void signal_handler(int sig) {
 	switch (sig) {
+	case SIGINT: srv_shutdown = 1; break;
 	case SIGTERM: srv_shutdown = 1; break;
 	case SIGALRM: handle_sig_alarm = 1; break;
 	case SIGHUP:  handle_sig_hup = 1; break;
@@ -175,14 +174,6 @@ static server *server_init(void) {
 
 	srv->split_vals = array_init();
 	
-	srv->config_patches = buffer_array_init();
-	for (i = 0; patches[i]; i++) {
-		buffer *b;
-		
-		b = buffer_array_append_get_buffer(srv->config_patches);
-		buffer_copy_string(b, patches[i]);
-	}
-	
 	return srv;
 }
 
@@ -192,8 +183,6 @@ static void server_free(server *srv) {
 	for (i = 0; i < FILE_CACHE_MAX; i++) {
 		buffer_free(srv->mtime_cache[i].str);
 	}
-	
-	buffer_array_free(srv->config_patches);
 	
 #define CLEAN(x) \
 	buffer_free(srv->x);
@@ -298,6 +287,8 @@ static void show_help (void) {
 " - a light and fast webserver\n" \
 "usage:\n" \
 " -f <name>  filename of the config-file\n" \
+" -p         print the parsed config-file in internal form, and exit\n" \
+" -t         test the config-file, and exit\n" \
 " -D         don't go to background (default: go to background)\n" \
 TEXT_IPV6 \
 " -v         show version\n" \
@@ -311,6 +302,8 @@ TEXT_IPV6 \
 
 int main (int argc, char **argv) {
 	server *srv = NULL;
+	int print_config = 0;
+	int test_config = 0;
 	int i_am_root;
 	int o;
 	int num_childs = 0;
@@ -351,7 +344,7 @@ int main (int argc, char **argv) {
 #endif
 	srv->srvconf.dont_daemonize = 0;
 	
-	while(-1 != (o = getopt(argc, argv, "f:hvD"))) {
+	while(-1 != (o = getopt(argc, argv, "f:hvDpt"))) {
 		switch(o) {
 		case 'f': 
 			if (config_read(srv, optarg)) { 
@@ -359,6 +352,8 @@ int main (int argc, char **argv) {
 				return -1;
 			}
 			break;
+		case 'p': print_config = 1; break;
+		case 't': test_config = 1; break;
 		case 'D': srv->srvconf.dont_daemonize = 1; break;
 		case 'v': show_version(); return 0;
 		case 'h': show_help(); return 0;
@@ -375,6 +370,26 @@ int main (int argc, char **argv) {
 		
 		server_free(srv);
 		return -1;
+	}
+	
+	if (print_config) {
+		data_unset *dc = srv->config_context->data[0];
+		if (dc) {
+			dc->print(dc, 0);
+			fprintf(stderr, "\n");
+		} else {
+			/* shouldn't happend */
+			fprintf(stderr, "global config not found\n");
+		}
+	}
+
+	if (test_config) {
+		printf("Syntax OK\n");
+	}
+
+	if (test_config || print_config) {
+		server_free(srv);
+		return 0;
 	}
 	
 	/* close stdin and stdout, as they are not needed */
@@ -690,6 +705,7 @@ int main (int argc, char **argv) {
 	sigemptyset(&act.sa_mask);
 	act.sa_flags = 0;
 # endif
+	sigaction(SIGINT,  &act, NULL);
 	sigaction(SIGTERM, &act, NULL);
 	sigaction(SIGHUP,  &act, NULL);
 	sigaction(SIGALRM, &act, NULL);
@@ -703,6 +719,7 @@ int main (int argc, char **argv) {
 	signal(SIGTERM, signal_handler);
 	signal(SIGHUP,  signal_handler);
 	signal(SIGCHLD,  signal_handler);
+	signal(SIGINT,  signal_handler);
 #endif
 	
 #ifdef USE_ALARM
