@@ -1001,16 +1001,16 @@ static int cgi_create_env(server *srv, connection *con, plugin_data *p, buffer *
 
 #define PATCH(x) \
 	p->conf.x = s->x;
-static int mod_cgi_patch_connection(server *srv, connection *con, plugin_data *p, const char *stage, size_t stage_len) {
+static int mod_cgi_patch_connection(server *srv, connection *con, plugin_data *p) {
 	size_t i, j;
+	plugin_config *s = p->config_storage[0];
+	
+	PATCH(cgi);
 	
 	/* skip the first, the global context */
 	for (i = 1; i < srv->config_context->used; i++) {
 		data_config *dc = (data_config *)srv->config_context->data[i];
-		plugin_config *s = p->config_storage[i];
-		
-		/* not our stage */
-		if (!buffer_is_equal_string(dc->comp_key, stage, stage_len)) continue;
+		s = p->config_storage[i];
 		
 		/* condition didn't match */
 		if (!config_check_cond(srv, con, dc)) continue;
@@ -1027,31 +1027,16 @@ static int mod_cgi_patch_connection(server *srv, connection *con, plugin_data *p
 	
 	return 0;
 }
-
-static int mod_cgi_setup_connection(server *srv, connection *con, plugin_data *p) {
-	plugin_config *s = p->config_storage[0];
-	UNUSED(srv);
-	UNUSED(con);
-		
-	PATCH(cgi);
-	
-	return 0;
-}
 #undef PATCH
 
 URIHANDLER_FUNC(cgi_is_handled) {
-	size_t k, s_len, i;
+	size_t k, s_len;
 	plugin_data *p = p_d;
 	buffer *fn = con->physical.path;
 	
 	if (fn->used == 0) return HANDLER_ERROR;
 	
-	mod_cgi_setup_connection(srv, con, p);
-	for (i = 0; i < srv->config_patches->used; i++) {
-		buffer *patch = srv->config_patches->ptr[i];
-		
-		mod_cgi_patch_connection(srv, con, p, CONST_BUF_LEN(patch));
-	}
+	mod_cgi_patch_connection(srv, con, p);
 	
 	s_len = fn->used - 1;
 	

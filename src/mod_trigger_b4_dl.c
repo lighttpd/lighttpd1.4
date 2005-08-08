@@ -242,16 +242,22 @@ SETDEFAULTS_FUNC(mod_trigger_b4_dl_set_defaults) {
 
 #define PATCH(x) \
 	p->conf.x = s->x;
-static int mod_trigger_b4_dl_patch_connection(server *srv, connection *con, plugin_data *p, const char *stage, size_t stage_len) {
+static int mod_trigger_b4_dl_patch_connection(server *srv, connection *con, plugin_data *p) {
 	size_t i, j;
+	plugin_config *s = p->config_storage[0];
+	
+#if defined(HAVE_GDBM) && defined(HAVE_PCRE_H)		
+	PATCH(db);
+	PATCH(download_regex);
+	PATCH(trigger_regex);
+	PATCH(trigger_timeout);
+	PATCH(deny_url);
+#endif	
 	
 	/* skip the first, the global context */
 	for (i = 1; i < srv->config_context->used; i++) {
 		data_config *dc = (data_config *)srv->config_context->data[i];
-		plugin_config *s = p->config_storage[i];
-		
-		/* not our stage */
-		if (!buffer_is_equal_string(dc->comp_key, stage, stage_len)) continue;
+		s = p->config_storage[i];
 		
 		/* condition didn't match */
 		if (!config_check_cond(srv, con, dc)) continue;
@@ -288,25 +294,6 @@ static int mod_trigger_b4_dl_patch_connection(server *srv, connection *con, plug
 	
 	return 0;
 }
-
-static int mod_trigger_b4_dl_setup_connection(server *srv, connection *con, plugin_data *p) {
-	plugin_config *s = p->config_storage[0];
-	UNUSED(srv);
-	UNUSED(con);
-#if defined(HAVE_GDBM_H)
-	PATCH(db);
-#endif
-#if defined(HAVE_PCRE_H)
-	PATCH(download_regex);
-	PATCH(trigger_regex);
-#endif
-	PATCH(trigger_timeout);
-	PATCH(deny_url);
-#if defined(HAVE_MEMCACHE_H)
-	PATCH(mc);
-#endif	
-	return 0;
-}
 #undef PATCH
 
 URIHANDLER_FUNC(mod_trigger_b4_dl_uri_handler) {
@@ -322,12 +309,7 @@ URIHANDLER_FUNC(mod_trigger_b4_dl_uri_handler) {
 	
 	if (con->uri.path->used == 0) return HANDLER_GO_ON;
 	
-	mod_trigger_b4_dl_setup_connection(srv, con, p);
-	for (i = 0; i < srv->config_patches->used; i++) {
-		buffer *patch = srv->config_patches->ptr[i];
-		
-		mod_trigger_b4_dl_patch_connection(srv, con, p, CONST_BUF_LEN(patch));
-	}
+	mod_trigger_b4_dl_patch_connection(srv, con, p);
 	
 	if (!p->conf.trigger_regex || !p->conf.download_regex) return HANDLER_GO_ON;
 	

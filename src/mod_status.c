@@ -501,7 +501,12 @@ static handler_t mod_status_handle_server_status_html(server *srv, connection *c
 		
 		BUFFER_APPEND_STRING_CONST(b, "</td><td class=\"string\">");
 		
-		buffer_append_string_buffer(b, c->server_name);
+		if (buffer_is_empty(c->server_name)) {
+			buffer_append_string_buffer(b, c->uri.authority);
+		}
+		else {
+			buffer_append_string_buffer(b, c->server_name);
+		}
 		
 		BUFFER_APPEND_STRING_CONST(b, "</td><td class=\"string\">");
 		
@@ -671,16 +676,17 @@ static handler_t mod_status_handle_server_config(server *srv, connection *con, v
 
 #define PATCH(x) \
 	p->conf.x = s->x;
-static int mod_skeleton_patch_connection(server *srv, connection *con, plugin_data *p, const char *stage, size_t stage_len) {
+static int mod_status_patch_connection(server *srv, connection *con, plugin_data *p) {
 	size_t i, j;
+	plugin_config *s = p->config_storage[0];
+	
+	PATCH(status_url);
+	PATCH(config_url);
 	
 	/* skip the first, the global context */
 	for (i = 1; i < srv->config_context->used; i++) {
 		data_config *dc = (data_config *)srv->config_context->data[i];
-		plugin_config *s = p->config_storage[i];
-		
-		/* not our stage */
-		if (!buffer_is_equal_string(dc->comp_key, stage, stage_len)) continue;
+		s = p->config_storage[i];
 		
 		/* condition didn't match */
 		if (!config_check_cond(srv, con, dc)) continue;
@@ -702,29 +708,10 @@ static int mod_skeleton_patch_connection(server *srv, connection *con, plugin_da
 	return 0;
 }
 
-static int mod_skeleton_setup_connection(server *srv, connection *con, plugin_data *p) {
-	plugin_config *s = p->config_storage[0];
-	UNUSED(srv);
-	UNUSED(con);
-
-	PATCH(status_url);
-	PATCH(config_url);
-	PATCH(sort);
-	
-	return 0;
-}
-#undef PATCH
-
 static handler_t mod_status_handler(server *srv, connection *con, void *p_d) {
 	plugin_data *p = p_d;
-	size_t i;
 	
-	mod_skeleton_setup_connection(srv, con, p);
-	for (i = 0; i < srv->config_patches->used; i++) {
-		buffer *patch = srv->config_patches->ptr[i];
-		
-		mod_skeleton_patch_connection(srv, con, p, CONST_BUF_LEN(patch));
-	}
+	mod_status_patch_connection(srv, con, p);
 	
 	if (!buffer_is_empty(p->conf.status_url) && 
 	    buffer_is_equal(p->conf.status_url, con->uri.path)) {

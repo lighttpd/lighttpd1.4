@@ -167,16 +167,22 @@ static int build_doc_root(server *srv, connection *con, plugin_data *p, buffer *
 
 #define PATCH(x) \
 	p->conf.x = s->x;
-static int mod_simple_vhost_patch_connection(server *srv, connection *con, plugin_data *p, const char *stage, size_t stage_len) {
+static int mod_simple_vhost_patch_connection(server *srv, connection *con, plugin_data *p) {
 	size_t i, j;
+	plugin_config *s = p->config_storage[0];
+	
+	PATCH(server_root);
+	PATCH(default_host);
+	PATCH(document_root);
+	
+	PATCH(docroot_cache_key);
+	PATCH(docroot_cache_value);
+	PATCH(docroot_cache_servername);
 	
 	/* skip the first, the global context */
 	for (i = 1; i < srv->config_context->used; i++) {
 		data_config *dc = (data_config *)srv->config_context->data[i];
-		plugin_config *s = p->config_storage[i];
-		
-		/* not our stage */
-		if (!buffer_is_equal_string(dc->comp_key, stage, stage_len)) continue;
+		s = p->config_storage[i];
 		
 		/* condition didn't match */
 		if (!config_check_cond(srv, con, dc)) continue;
@@ -200,27 +206,10 @@ static int mod_simple_vhost_patch_connection(server *srv, connection *con, plugi
 	
 	return 0;
 }
-
-static int mod_simple_vhost_setup_connection(server *srv, connection *con, plugin_data *p) {
-	plugin_config *s = p->config_storage[0];
-	UNUSED(srv);
-	UNUSED(con);
-		
-	PATCH(server_root);
-	PATCH(default_host);
-	PATCH(document_root);
-	
-	PATCH(docroot_cache_key);
-	PATCH(docroot_cache_value);
-	PATCH(docroot_cache_servername);
-	
-	return 0;
-}
 #undef PATCH
 
 static handler_t mod_simple_vhost_docroot(server *srv, connection *con, void *p_data) {
 	plugin_data *p = p_data;
-	size_t i;
 
 	/*
 	 * cache the last successfull translation from hostname (authority) to docroot
@@ -228,12 +217,7 @@ static handler_t mod_simple_vhost_docroot(server *srv, connection *con, void *p_
 	 * 
 	 */
 	
-	mod_simple_vhost_setup_connection(srv, con, p);
-	for (i = 0; i < srv->config_patches->used; i++) {
-		buffer *patch = srv->config_patches->ptr[i];
-		
-		mod_simple_vhost_patch_connection(srv, con, p, CONST_BUF_LEN(patch));
-	}
+	mod_simple_vhost_patch_connection(srv, con, p);
 	
 	if (p->conf.docroot_cache_key->used && 
 	    con->uri.authority->used &&

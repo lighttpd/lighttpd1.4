@@ -563,16 +563,23 @@ SIGHUP_FUNC(log_access_cycle) {
 
 #define PATCH(x) \
 	p->conf.x = s->x;
-static int mod_accesslog_patch_connection(server *srv, connection *con, plugin_data *p, const char *stage, size_t stage_len) {
+static int mod_accesslog_patch_connection(server *srv, connection *con, plugin_data *p) {
 	size_t i, j;
+	plugin_config *s = p->config_storage[0];
+	
+	PATCH(access_logfile);
+	PATCH(format);
+	PATCH(log_access_fd);
+	PATCH(last_generated_accesslog_ts_ptr);
+	PATCH(access_logbuffer);
+	PATCH(ts_accesslog_str);
+	PATCH(parsed_format);
+	PATCH(use_syslog);
 	
 	/* skip the first, the global context */
 	for (i = 1; i < srv->config_context->used; i++) {
 		data_config *dc = (data_config *)srv->config_context->data[i];
-		plugin_config *s = p->config_storage[i];
-		
-		/* not our stage */
-		if (!buffer_is_equal_string(dc->comp_key, stage, stage_len)) continue;
+		s = p->config_storage[i];
 		
 		/* condition didn't match */
 		if (!config_check_cond(srv, con, dc)) continue;
@@ -598,38 +605,16 @@ static int mod_accesslog_patch_connection(server *srv, connection *con, plugin_d
 	
 	return 0;
 }
-
-static int mod_accesslog_setup_connection(server *srv, connection *con, plugin_data *p) {
-	plugin_config *s = p->config_storage[0];
-	UNUSED(srv);
-	UNUSED(con);
-		
-	PATCH(access_logfile);
-	PATCH(format);
-	PATCH(log_access_fd);
-	PATCH(last_generated_accesslog_ts_ptr);
-	PATCH(access_logbuffer);
-	PATCH(ts_accesslog_str);
-	PATCH(parsed_format);
-	PATCH(use_syslog);
-	
-	return 0;
-}
 #undef PATCH
 
 REQUESTDONE_FUNC(log_access_write) {
 	plugin_data *p = p_d;
-	size_t j, i;
+	size_t j;
 	
 	int newts = 0;
 	data_string *ds;
 	
-	mod_accesslog_setup_connection(srv, con, p);
-	for (i = 0; i < srv->config_patches->used; i++) {
-		buffer *patch = srv->config_patches->ptr[i];
-		
-		mod_accesslog_patch_connection(srv, con, p, CONST_BUF_LEN(patch));
-	}
+	mod_accesslog_patch_connection(srv, con, p);
 	
 	if (p->conf.access_logbuffer->used == 0) {
 		buffer_copy_string(p->conf.access_logbuffer, "");
