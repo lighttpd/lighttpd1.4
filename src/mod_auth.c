@@ -58,6 +58,8 @@ FREE_FUNC(mod_auth_free) {
 		for (i = 0; i < srv->config_context->used; i++) {
 			mod_auth_plugin_config *s = p->config_storage[i];
 			
+			if (!s) continue;
+			
 			array_free(s->auth_require);
 			buffer_free(s->auth_plain_groupfile);
 			buffer_free(s->auth_plain_userfile);
@@ -68,6 +70,7 @@ FREE_FUNC(mod_auth_free) {
 			buffer_free(s->auth_ldap_hostname);
 			buffer_free(s->auth_ldap_basedn);
 			buffer_free(s->auth_ldap_filter);
+			buffer_free(s->auth_ldap_cafile);
 			
 #ifdef USE_LDAP
 			buffer_free(s->ldap_filter_pre);
@@ -88,16 +91,32 @@ FREE_FUNC(mod_auth_free) {
 
 #define PATCH(x) \
 	p->conf.x = s->x;
-static int mod_auth_patch_connection(server *srv, connection *con, mod_auth_plugin_data *p, const char *stage, size_t stage_len) {
+static int mod_auth_patch_connection(server *srv, connection *con, mod_auth_plugin_data *p) {
 	size_t i, j;
+	mod_auth_plugin_config *s = p->config_storage[0];
+
+	PATCH(auth_backend);
+	PATCH(auth_plain_groupfile);
+	PATCH(auth_plain_userfile);
+	PATCH(auth_htdigest_userfile);
+	PATCH(auth_htpasswd_userfile);
+	PATCH(auth_require);
+	PATCH(auth_debug);
+	PATCH(auth_ldap_hostname);
+	PATCH(auth_ldap_basedn);
+	PATCH(auth_ldap_filter);
+	PATCH(auth_ldap_cafile);
+	PATCH(auth_ldap_starttls);
+#ifdef USE_LDAP
+	PATCH(ldap);
+	PATCH(ldap_filter_pre);
+	PATCH(ldap_filter_post);
+#endif
 	
 	/* skip the first, the global context */
 	for (i = 1; i < srv->config_context->used; i++) {
 		data_config *dc = (data_config *)srv->config_context->data[i];
-		mod_auth_plugin_config *s = p->config_storage[i];
-		
-		/* not our stage */
-		if (!buffer_is_equal_string(dc->comp_key, stage, stage_len)) continue;
+		s = p->config_storage[i];
 		
 		/* condition didn't match */
 		if (!config_check_cond(srv, con, dc)) continue;
@@ -131,33 +150,13 @@ static int mod_auth_patch_connection(server *srv, connection *con, mod_auth_plug
 				PATCH(auth_ldap_basedn);
 			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("auth.backend.ldap.filter"))) {
 				PATCH(auth_ldap_filter);
+			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("auth.backend.ldap.ca-file"))) {
+				PATCH(auth_ldap_cafile);
+			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("auth.backend.ldap.starttls"))) {
+				PATCH(auth_ldap_starttls);
 			}
 		}
 	}
-	
-	return 0;
-}
-
-static int mod_auth_setup_connection(server *srv, connection *con, mod_auth_plugin_data *p) {
-	mod_auth_plugin_config *s = p->config_storage[0];
-	UNUSED(srv);
-	UNUSED(con);
-	
-	PATCH(auth_backend);
-	PATCH(auth_plain_groupfile);
-	PATCH(auth_plain_userfile);
-	PATCH(auth_htdigest_userfile);
-	PATCH(auth_htpasswd_userfile);
-	PATCH(auth_require);
-	PATCH(auth_debug);
-	PATCH(auth_ldap_hostname);
-	PATCH(auth_ldap_basedn);
-	PATCH(auth_ldap_filter);
-#ifdef USE_LDAP
-	PATCH(ldap);
-	PATCH(ldap_filter_pre);
-	PATCH(ldap_filter_post);
-#endif
 	
 	return 0;
 }
@@ -173,12 +172,7 @@ static handler_t mod_auth_uri_handler(server *srv, connection *con, void *p_d) {
 	size_t i;
 	
 	/* select the right config */
-	mod_auth_setup_connection(srv, con, p);
-	for (i = 0; i < srv->config_patches->used; i++) {
-		buffer *patch = srv->config_patches->ptr[i];
-		
-		mod_auth_patch_connection(srv, con, p, CONST_BUF_LEN(patch));
-	}
+	mod_auth_patch_connection(srv, con, p);
 	
 	if (p->conf.auth_require == NULL) return HANDLER_GO_ON;
 	
@@ -297,9 +291,11 @@ SETDEFAULTS_FUNC(mod_auth_set_defaults) {
 		{ "auth.backend.ldap.hostname",     NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_CONNECTION },
 		{ "auth.backend.ldap.base-dn",      NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_CONNECTION },
 		{ "auth.backend.ldap.filter",       NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_CONNECTION },
+		{ "auth.backend.ldap.ca-file",       NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_CONNECTION },
+		{ "auth.backend.ldap.starttls",     NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION },
 		{ "auth.backend.htdigest.userfile", NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_CONNECTION },
 		{ "auth.backend.htpasswd.userfile", NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_CONNECTION },
-		{ "auth.debug",                     NULL, T_CONFIG_SHORT, T_CONFIG_SCOPE_CONNECTION }, /* 9 */
+		{ "auth.debug",                     NULL, T_CONFIG_SHORT, T_CONFIG_SCOPE_CONNECTION }, /* 11 */
 		{ NULL,                             NULL, T_CONFIG_UNSET, T_CONFIG_SCOPE_UNSET }
 	};
 	
@@ -321,6 +317,8 @@ SETDEFAULTS_FUNC(mod_auth_set_defaults) {
 		s->auth_ldap_hostname = buffer_init();
 		s->auth_ldap_basedn = buffer_init();
 		s->auth_ldap_filter = buffer_init();
+		s->auth_ldap_cafile = buffer_init();
+		s->auth_ldap_starttls = 0;
 		s->auth_debug = 0;
 		
 		s->auth_require = array_init();
@@ -338,9 +336,11 @@ SETDEFAULTS_FUNC(mod_auth_set_defaults) {
 		cv[4].destination = s->auth_ldap_hostname;
 		cv[5].destination = s->auth_ldap_basedn;
 		cv[6].destination = s->auth_ldap_filter;
-		cv[7].destination = s->auth_htdigest_userfile;
-		cv[8].destination = s->auth_htpasswd_userfile;
-		cv[9].destination = &(s->auth_debug);
+		cv[7].destination = s->auth_ldap_cafile;
+		cv[8].destination = &(s->auth_ldap_starttls);
+		cv[9].destination = s->auth_htdigest_userfile;
+		cv[10].destination = s->auth_htpasswd_userfile;
+		cv[11].destination = &(s->auth_debug);
 		
 		p->config_storage[i] = s;
 		ca = ((data_config *)srv->config_context->data[i])->value;
@@ -406,6 +406,12 @@ SETDEFAULTS_FUNC(mod_auth_set_defaults) {
 			if (method == NULL) {
 				log_error_write(srv, __FILE__, __LINE__, "sssss", "missing entry for key: ", "auth.require", "[", "method", "](string)");
 				return HANDLER_ERROR;
+			} else {
+				if (0 != strcmp(method, "basic") &&
+				    0 != strcmp(method, "digest")) {
+					log_error_write(srv, __FILE__, __LINE__, "sssss", "auth.require->method has to be either 'basic' or 'digest'");
+					return HANDLER_ERROR;
+				}
 			}
 			
 			if (realm == NULL) {
@@ -526,8 +532,29 @@ SETDEFAULTS_FUNC(mod_auth_set_defaults) {
 				ret = LDAP_VERSION3;
 				if (LDAP_OPT_SUCCESS != (ret = ldap_set_option(s->ldap, LDAP_OPT_PROTOCOL_VERSION, &ret))) {
 					log_error_write(srv, __FILE__, __LINE__, "ss", "ldap:", ldap_err2string(ret));
-					
+				
 					return HANDLER_ERROR;
+				}
+
+				if (s->auth_ldap_starttls) {
+					if (buffer_is_empty(s->auth_ldap_cafile)) {
+						log_error_write(srv, __FILE__, __LINE__, "s", "CA file has to be set");
+						
+						return HANDLER_ERROR;
+						
+					}
+			
+					if (LDAP_OPT_SUCCESS != (ret = ldap_set_option(NULL, LDAP_OPT_X_TLS_CACERTFILE, s->auth_ldap_cafile->ptr))) {
+						log_error_write(srv, __FILE__, __LINE__, "ss", "Loading CA certificate failed:", ldap_err2string(ret));
+						
+						return HANDLER_ERROR;
+					}
+	
+					if (LDAP_OPT_SUCCESS != (ret = ldap_start_tls_s(s->ldap, NULL,  NULL))) {
+						log_error_write(srv, __FILE__, __LINE__, "ss", "ldap startTLS failed:", ldap_err2string(ret));
+						
+						return HANDLER_ERROR;
+					}
 				}
 				
 				
