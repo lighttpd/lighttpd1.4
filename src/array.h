@@ -35,6 +35,7 @@ typedef struct {
 	size_t unique_ndx;
 	
 	size_t next_power_of_2;
+	int is_weakref; /* data is weakref, don't bother the data */
 } array;
 
 typedef struct {
@@ -65,8 +66,15 @@ data_array *data_array_init(void);
 typedef enum { CONFIG_COND_UNSET, CONFIG_COND_EQ, CONFIG_COND_MATCH, CONFIG_COND_NE, CONFIG_COND_NOMATCH } config_cond_t;
 typedef enum { COND_RESULT_FALSE, COND_RESULT_TRUE, COND_RESULT_UNSET } cond_result_t;
 
+#define PATCHES NULL, "SERVERsocket", "HTTPurl", "HTTPhost", "HTTPreferer", "HTTPuseragent", "HTTPcookie", "HTTPremoteip"
+typedef enum {
+	COMP_UNSET,
+	COMP_SERVER_SOCKET, COMP_HTTP_URL, COMP_HTTP_HOST, COMP_HTTP_REFERER, COMP_HTTP_USERAGENT, COMP_HTTP_COOKIE, COMP_HTTP_REMOTEIP
+} comp_key_t;
+
 /* $HTTP["host"] ==    "incremental.home.kneschke.de" { ... } 
- * comp_key      cond  string/regex
+ * for print:   comp_key      op    string
+ * for compare: comp          cond  string/regex
  */
 
 typedef struct _data_config data_config;
@@ -76,8 +84,11 @@ struct _data_config {
 	array *value;
 	
 	buffer *comp_key;
+	comp_key_t comp;
 	
 	config_cond_t cond;
+	buffer *op;
+	
 	int context_ndx; /* more or less like an id */
 	array *childs;
 	/* nested */

@@ -42,11 +42,8 @@ static int data_array_insert_dup(data_unset *dst, data_unset *src) {
 static void data_array_print(const data_unset *d, int depth) {
 	data_array *ds = (data_array *)d;
 
-	array_print_indent(depth);
-	fprintf(stderr, "{%s:\n", ds->key->ptr);
-	array_print(ds->value, depth + 1);
-	array_print_indent(depth);
-	fprintf(stderr, "}");
+	fprintf(stderr, "array ");
+	array_print(ds->value, depth);
 }
 
 data_array *data_array_init(void) {
