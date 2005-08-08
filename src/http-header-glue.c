@@ -158,8 +158,8 @@ int http_response_redirect_to_directory(server *srv, connection *con) {
 		case AF_INET:
 			if (NULL == (he = gethostbyaddr((char *)&our_addr.ipv4.sin_addr, sizeof(struct in_addr), AF_INET))) {
 				log_error_write(srv, __FILE__, __LINE__,
-						"SSSS", "NOTICE: gethostbyaddr failed: ",
-						hstrerror(h_errno), ", using ip-address instead");
+						"SdSS", "NOTICE: gethostbyaddr failed: ",
+						h_errno, ", using ip-address instead");
 				
 				buffer_append_string(o, inet_ntoa(our_addr.ipv4.sin_addr));
 			} else {

@@ -202,8 +202,8 @@ int network_server_init(server *srv, buffer *host_token, specific_config *s) {
 			struct hostent *he;
 			if (NULL == (he = gethostbyname(host))) {
 				log_error_write(srv, __FILE__, __LINE__, 
-						"sss", "gethostbyname failed: ", 
-						hstrerror(h_errno), host);
+						"sds", "gethostbyname failed: ", 
+						h_errno, host);
 				return -1;
 			}
 			

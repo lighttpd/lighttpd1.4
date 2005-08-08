@@ -690,8 +690,8 @@ static int fcgi_spawn_connection(server *srv,
 			
 			if (NULL == (he = gethostbyname(host->host->ptr))) {
 				log_error_write(srv, __FILE__, __LINE__, 
-						"ssb", "gethostbyname failed: ", 
-						hstrerror(h_errno), host->host);
+						"sdb", "gethostbyname failed: ", 
+						h_errno, host->host);
 				return -1;
 			}
 			
@@ -1512,9 +1512,15 @@ static int fcgi_env_add_request_headers(server *srv, connection *con, plugin_dat
 			
 			buffer_prepare_append(srv->tmp_buf, ds->key->used + 2);
 			for (j = 0; j < ds->key->used - 1; j++) {
-				srv->tmp_buf->ptr[srv->tmp_buf->used++] = 
-					light_isalpha(ds->key->ptr[j]) ? 
-					ds->key->ptr[j] & ~32 : '_';
+				char c = '_';
+				if (light_isalpha(ds->key->ptr[j])) {
+					/* upper-case */
+					c = ds->key->ptr[j] & ~32;
+				} else if (light_isdigit(ds->key->ptr[j])) {
+					/* copy */
+					c = ds->key->ptr[j];
+				}
+				srv->tmp_buf->ptr[srv->tmp_buf->used++] = c;
 			}
 			srv->tmp_buf->ptr[srv->tmp_buf->used++] = '\0';
 			
