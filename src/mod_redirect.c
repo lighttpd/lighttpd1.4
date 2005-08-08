@@ -134,16 +134,16 @@ SETDEFAULTS_FUNC(mod_redirect_set_defaults) {
 	return HANDLER_GO_ON;
 }
 #ifdef HAVE_PCRE_H
-static int mod_redirect_patch_connection(server *srv, connection *con, plugin_data *p, const char *stage, size_t stage_len) {
+static int mod_redirect_patch_connection(server *srv, connection *con, plugin_data *p) {
 	size_t i, j;
+	plugin_config *s = p->config_storage[0];
+	
+	p->conf.redirect = s->redirect;
 	
 	/* skip the first, the global context */
 	for (i = 1; i < srv->config_context->used; i++) {
 		data_config *dc = (data_config *)srv->config_context->data[i];
-		plugin_config *s = p->config_storage[i];
-		
-		/* not our stage */
-		if (!buffer_is_equal_string(dc->comp_key, stage, stage_len)) continue;
+		s = p->config_storage[i];
 		
 		/* condition didn't match */
 		if (!config_check_cond(srv, con, dc)) continue;
@@ -160,17 +160,6 @@ static int mod_redirect_patch_connection(server *srv, connection *con, plugin_da
 	
 	return 0;
 }
-
-static int mod_redirect_setup_connection(server *srv, connection *con, plugin_data *p) {
-	plugin_config *s = p->config_storage[0];
-	
-	UNUSED(srv);
-	UNUSED(con);
-		
-	p->conf.redirect = s->redirect;
-	
-	return 0;
-}
 #endif
 static handler_t mod_redirect_uri_handler(server *srv, connection *con, void *p_data) {
 #ifdef HAVE_PCRE_H
@@ -184,12 +173,7 @@ static handler_t mod_redirect_uri_handler(server *srv, connection *con, void *p_
 	 * 
 	 */
 	
-	mod_redirect_setup_connection(srv, con, p);
-	for (i = 0; i < srv->config_patches->used; i++) {
-		buffer *patch = srv->config_patches->ptr[i];
-		
-		mod_redirect_patch_connection(srv, con, p, CONST_BUF_LEN(patch));
-	}
+	mod_redirect_patch_connection(srv, con, p);
 	
 	buffer_copy_string_buffer(p->match_buf, con->request.uri);
 	

@@ -9,6 +9,9 @@
 
 #include "sys-mmap.h"
 
+#ifndef O_BINARY
+# define O_BINARY 0
+#endif
 
 int stream_open(stream *f, buffer *fn) {
 	struct stat st;
