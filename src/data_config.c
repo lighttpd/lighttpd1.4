@@ -41,12 +41,14 @@ static int data_config_insert_dup(data_unset *dst, data_unset *src) {
 	return 0;
 }
 
-static void data_config_print(data_unset *d) {
+static void data_config_print(data_unset *d, int depth) {
 	data_config *ds = (data_config *)d;
 	
-	printf("{%s:\n", ds->key->ptr);
-	array_print(ds->value);
-	printf("}");
+	array_print_indent(depth);
+	fprintf(stderr, "{%s:\n", ds->key->ptr);
+	array_print(ds->value, depth + 1);
+	array_print_indent(depth);
+	fprintf(stderr, "}");
 }
 
 

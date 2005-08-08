@@ -17,7 +17,7 @@ typedef enum { TYPE_UNSET, TYPE_STRING, TYPE_COUNT, TYPE_ARRAY, TYPE_INTEGER, TY
 	void (* free)(struct data_unset *p); \
 	void (* reset)(struct data_unset *p); \
 	int (*insert_dup)(struct data_unset *dst, struct data_unset *src); \
-	void (*print)(struct data_unset *p)
+	void (*print)(struct data_unset *p, int depth)
 
 typedef struct data_unset {
 	DATA_UNSET;
@@ -115,9 +115,10 @@ array *array_init(void);
 void array_free(array *a);
 void array_reset(array *a);
 int array_insert_unique(array *a, data_unset *str);
-int array_print(array *a);
+int array_print(array *a, int depth);
 data_unset *array_get_unused_element(array *a, data_type_t t);
 data_unset *array_get_element(array *a, const char *key);
 int array_strcasecmp(const char *a, size_t a_len, const char *b, size_t b_len);
+void array_print_indent(int depth);
 
 #endif

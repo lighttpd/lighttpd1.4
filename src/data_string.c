@@ -57,9 +57,10 @@ static int data_response_insert_dup(data_unset *dst, data_unset *src) {
 }
 
 
-static void data_string_print(data_unset *d) {
+static void data_string_print(data_unset *d, int depth) {
 	data_string *ds = (data_string *)d;
-	
+
+	array_print_indent(depth);
 	fprintf(stderr, "{%s: %s}", ds->key->ptr, ds->value->used ? ds->value->ptr : "");
 }
 
