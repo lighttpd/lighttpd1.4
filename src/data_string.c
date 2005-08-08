@@ -9,8 +9,8 @@ static data_unset *data_string_copy(const data_unset *s) {
 	data_string *src = (data_string *)s;
 	data_string *ds = data_string_init();
 
-	ds->key = buffer_init_buffer(src->key);
-	ds->value = buffer_init_buffer(src->value);
+	buffer_copy_string_buffer(ds->key, src->key);
+	buffer_copy_string_buffer(ds->value, src->value);
 	return (data_unset *)ds;
 }
 
