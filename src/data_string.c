@@ -5,6 +5,15 @@
 
 #include "array.h"
 
+static data_unset *data_string_copy(data_unset *s) {
+	data_string *src = (data_string *)s;
+	data_string *ds = data_string_init();
+
+	ds->key = buffer_init_buffer(src->key);
+	ds->value = buffer_init_buffer(src->value);
+	return (data_unset *)ds;
+}
+
 static void data_string_free(data_unset *d) {
 	data_string *ds = (data_string *)d;
 	
@@ -74,6 +83,7 @@ data_string *data_string_init(void) {
 	ds->key = buffer_init();
 	ds->value = buffer_init();
 	
+	ds->copy = data_string_copy;
 	ds->free = data_string_free;
 	ds->reset = data_string_reset;
 	ds->insert_dup = data_string_insert_dup;

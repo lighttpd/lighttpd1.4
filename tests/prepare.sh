@@ -32,6 +32,7 @@ cp $srcdir/docroot/123/*.txt \
    $srcdir/docroot/123/*.php \
    $srcdir/docroot/123/*.bla $tmpdir/servers/123.example.org/pages/
 cp $srcdir/lighttpd.user $tmpdir/
+cp $srcdir/var-include-sub.conf /tmp/
 
 printf "%-40s" "preparing infrastructure"
 

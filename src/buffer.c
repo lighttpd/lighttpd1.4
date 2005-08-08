@@ -29,6 +29,12 @@ buffer* buffer_init(void) {
 	return b;
 }
 
+buffer *buffer_init_buffer(buffer *src) {
+	buffer *b = buffer_init();
+	buffer_copy_string_buffer(b, src);
+	return b;
+}
+
 /**
  * free the buffer 
  * 

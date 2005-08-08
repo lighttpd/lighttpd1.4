@@ -3,16 +3,20 @@
 
 #include "array.h"
 #include "buffer.h"
+#include "server.h"
 
 typedef struct {
+	server *srv;
 	int     ok;
 	array  *all_configs;
 	array  *configs_stack; /* to parse nested block */
 	data_config *current; /* current started with { */
+	buffer *basedir;
 } config_t;
 
 void *configparserAlloc(void *(*mallocProc)(size_t));
 void configparserFree(void *p, void (*freeProc)(void*));
 void configparser(void *yyp, int yymajor, buffer *yyminor, config_t *ctx);
+int config_parse_file(server *srv, config_t *context, const char *fn);
 
 #endif

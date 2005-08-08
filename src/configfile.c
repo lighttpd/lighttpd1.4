@@ -355,7 +355,9 @@ typedef struct {
 	int foo;
 	int bar;
 	
-	char *input;
+	buffer *file;
+	stream s;
+	const char *input;
 	size_t offset;
 	size_t size;
 	
@@ -366,6 +368,42 @@ typedef struct {
 	int in_brace;
 	int in_cond;
 } tokenizer_t;
+
+static int tokenizer_open(server *srv, tokenizer_t *t, buffer *basedir, const char *fn) {
+	if (buffer_is_empty(basedir) &&
+			(fn[0] == '/' || fn[0] == '\\') &&
+			(fn[0] == '.' && (fn[1] == '/' || fn[1] == '\\'))) {
+		t->file = buffer_init_string(fn);
+	} else {
+		t->file = buffer_init_buffer(basedir);
+		buffer_append_string(t->file, fn);
+	}
+
+	if (0 != stream_open(&(t->s), t->file)) {
+		log_error_write(srv, __FILE__, __LINE__, "sbss", 
+				"opening configfile ", t->file, "failed:", strerror(errno));
+		buffer_free(t->file);
+		return -1;
+	}
+
+	t->input = t->s.start;
+	t->offset = 0;
+	t->size = t->s.size;
+	t->line = 1;
+	t->line_pos = 1;
+	
+	t->in_key = 1;
+	t->in_brace = 0;
+	t->in_cond = 0;
+	return 0;
+}
+
+static int tokenizer_close(server *srv, tokenizer_t *t) {
+	UNUSED(srv);
+
+	buffer_free(t->file);
+	return stream_close(&(t->s));
+}
 
 static int config_skip_newline(tokenizer_t *t) {
 	int skipped = 1;
@@ -394,7 +432,7 @@ static int config_tokenizer(server *srv, tokenizer_t *t, int *token_id, buffer *
 	
 	for (tid = 0; tid == 0 && t->offset < t->size && t->input[t->offset] ; ) {
 		char c = t->input[t->offset];
-		char *start = NULL;
+		const char *start = NULL;
 		
 		switch (c) {
 		case '=': 
@@ -406,7 +444,8 @@ static int config_tokenizer(server *srv, tokenizer_t *t, int *token_id, buffer *
 					
 					tid = TK_ARRAY_ASSIGN;
 				} else {
-					log_error_write(srv, __FILE__, __LINE__, "sdsds", 
+					log_error_write(srv, __FILE__, __LINE__, "sbsdsds", 
+							"file:", t->file,
 							"line:", t->line, "pos:", t->line_pos, 
 							"use => for assignments in arrays");
 					return -1;
@@ -425,11 +464,14 @@ static int config_tokenizer(server *srv, tokenizer_t *t, int *token_id, buffer *
 					
 					tid = TK_MATCH;
 				} else {
-					log_error_write(srv, __FILE__, __LINE__, "sdsds", 
+					log_error_write(srv, __FILE__, __LINE__, "sbsdsds", 
+							"file:", t->file,
 							"line:", t->line, "pos:", t->line_pos, 
 							"only =~ and == are allow in the condition");
 					return -1;
 				}
+				t->in_key = 1;
+				t->in_cond = 0;
 			} else if (t->in_key) {
 				tid = TK_ASSIGN;
 				
@@ -437,9 +479,9 @@ static int config_tokenizer(server *srv, tokenizer_t *t, int *token_id, buffer *
 				
 				t->offset++;
 				t->line_pos++;
-				t->in_key = 0;
 			} else {
-				log_error_write(srv, __FILE__, __LINE__, "sdsds", 
+				log_error_write(srv, __FILE__, __LINE__, "sbsdsds", 
+						"file:", t->file,
 						"line:", t->line, "pos:", t->line_pos, 
 						"unexpected equal-sign: =");
 				return -1;
@@ -461,13 +503,17 @@ static int config_tokenizer(server *srv, tokenizer_t *t, int *token_id, buffer *
 					
 					tid = TK_NOMATCH;
 				} else {
-					log_error_write(srv, __FILE__, __LINE__, "sdsds", 
+					log_error_write(srv, __FILE__, __LINE__, "sbsdsds", 
+							"file:", t->file,
 							"line:", t->line, "pos:", t->line_pos, 
 							"only !~ and != are allow in the condition");
 					return -1;
 				}
+				t->in_key = 1;
+				t->in_cond = 0;
 			} else {
-				log_error_write(srv, __FILE__, __LINE__, "sdsds", 
+				log_error_write(srv, __FILE__, __LINE__, "sbsdsds", 
+						"file:", t->file,
 						"line:", t->line, "pos:", t->line_pos, 
 						"unexpected exclamation-marks: !");
 				return -1;
@@ -512,7 +558,7 @@ static int config_tokenizer(server *srv, tokenizer_t *t, int *token_id, buffer *
 			} else {
 				config_skip_newline(t);
 				t->line_pos = 1;
-				t->line++;
+                t->line++;
 			}
 			break;
 		case ',':
@@ -556,7 +602,8 @@ static int config_tokenizer(server *srv, tokenizer_t *t, int *token_id, buffer *
 			if (t->input[t->offset + i] == '\0') {
 				/* ERROR */
 				
-				log_error_write(srv, __FILE__, __LINE__, "sdsds", 
+				log_error_write(srv, __FILE__, __LINE__, "sbsdsds", 
+						"file:", t->file,
 						"line:", t->line, "pos:", t->line_pos, 
 						"missing closing quote");
 				
@@ -593,6 +640,20 @@ static int config_tokenizer(server *srv, tokenizer_t *t, int *token_id, buffer *
 			buffer_copy_string(token, "$");
 			
 			break;
+
+		case '+':
+			if (t->input[t->offset + 1] == '=') {
+				t->offset += 2;
+				buffer_copy_string(token, "+=");
+				tid = TK_APPEND;
+			}
+			else {
+				t->offset++;
+				tid = TK_PLUS;
+				buffer_copy_string(token, "+");
+			}
+			break;
+
 		case '|':
 			t->offset++;
 			tid = TK_OR;
@@ -603,8 +664,6 @@ static int config_tokenizer(server *srv, tokenizer_t *t, int *token_id, buffer *
 			t->offset++;
 				
 			tid = TK_LCURLY;
-			t->in_key = 1;
-			t->in_cond = 0;
 				
 			buffer_copy_string(token, "{");
 			
@@ -641,28 +700,7 @@ static int config_tokenizer(server *srv, tokenizer_t *t, int *token_id, buffer *
 			
 			break;
 		default:
-			if (t->in_key) {
-				/* the key might consist of [-.0-9a-z] */
-				for (i = 0; t->input[t->offset + i] && 
-				     (isalnum((unsigned char)t->input[t->offset + i]) || 
-				      t->input[t->offset + i] == '.' ||
-				      t->input[t->offset + i] == '-'
-				      ); i++);
-				
-				if (i && t->input[t->offset + i]) {
-					tid = TK_LKEY;
-					buffer_copy_string_len(token, t->input + t->offset, i);
-					
-					t->offset += i;
-					t->line_pos += i;
-				} else {
-					/* ERROR */
-					log_error_write(srv, __FILE__, __LINE__, "sdsds", 
-							"line:", t->line, "pos:", t->line_pos, 
-							"invalid character in lvalue");
-					return -1;
-				}
-			} else if (t->in_cond) {
+			if (t->in_cond) {
 				for (i = 0; t->input[t->offset + i] && 
 				     (isalpha((unsigned char)t->input[t->offset + i])
 				      ); i++);
@@ -675,38 +713,58 @@ static int config_tokenizer(server *srv, tokenizer_t *t, int *token_id, buffer *
 					t->line_pos += i;
 				} else {
 					/* ERROR */
-					log_error_write(srv, __FILE__, __LINE__, "sdsds", 
+					log_error_write(srv, __FILE__, __LINE__, "sbsdsds", 
+							"file:", t->file,
 							"line:", t->line, "pos:", t->line_pos, 
 							"invalid character in condition");
 					return -1;
 				}
-			} else {
-				if (isdigit((unsigned char)c)) {
-					/* take all digits */
-					for (i = 0; t->input[t->offset + i] && isdigit((unsigned char)t->input[t->offset + i]);  i++);
+			} else if (isdigit((unsigned char)c)) {
+				/* take all digits */
+				for (i = 0; t->input[t->offset + i] && isdigit((unsigned char)t->input[t->offset + i]);  i++);
+				
+				/* was there it least a digit ? */
+				if (i && t->input[t->offset + i]) {
+					tid = TK_INTEGER;
 					
-					/* was there it least a digit ? */
-					if (i && t->input[t->offset + i]) {
-						tid = TK_INTEGER;
-						
-						buffer_copy_string_len(token, t->input + t->offset, i);
-						
-						t->offset += i;
-						t->line_pos += i;
-					} else {
-						/* ERROR */
-						log_error_write(srv, __FILE__, __LINE__, "sdsds", 
-								"line:", t->line, "pos:", t->line_pos, 
-								"unexpected EOF");
-						
-						return -1;
-					}
+					buffer_copy_string_len(token, t->input + t->offset, i);
+					
+					t->offset += i;
+					t->line_pos += i;
 				} else {
 					/* ERROR */
-					log_error_write(srv, __FILE__, __LINE__, "sdsds", 
+					log_error_write(srv, __FILE__, __LINE__, "sbsdsds", 
+							"file:", t->file,
 							"line:", t->line, "pos:", t->line_pos, 
-							"invalid value field");
+							"unexpected EOF");
 					
+					return -1;
+				}
+			} else {
+				/* the key might consist of [-.0-9a-z] */
+				for (i = 0; t->input[t->offset + i] && 
+				     (isalnum((unsigned char)t->input[t->offset + i]) || 
+				      t->input[t->offset + i] == '.' ||
+				      t->input[t->offset + i] == '-'
+				      ); i++);
+				
+				if (i && t->input[t->offset + i]) {
+					buffer_copy_string_len(token, t->input + t->offset, i);
+					
+					if (strcmp(token->ptr, "include") == 0) {
+						tid = TK_INCLUDE;
+					} else {
+						tid = TK_LKEY;
+					}
+					
+					t->offset += i;
+					t->line_pos += i;
+				} else {
+					/* ERROR */
+					log_error_write(srv, __FILE__, __LINE__, "sbsdsds", 
+							"file:", t->file,
+							"line:", t->line, "pos:", t->line_pos, 
+							"invalid character in variable name");
 					return -1;
 				}
 			}
@@ -716,6 +774,11 @@ static int config_tokenizer(server *srv, tokenizer_t *t, int *token_id, buffer *
 	
 	if (tid) {
 		*token_id = tid;
+#if 0
+		log_error_write(srv, __FILE__, __LINE__, "sbsdsdb", 
+				"file:", t->file,
+				"line:", t->line, "pos:", t->line_pos, token);
+#endif
 		
 		return 1;
 	} else if (t->offset < t->size) {
@@ -726,40 +789,88 @@ static int config_tokenizer(server *srv, tokenizer_t *t, int *token_id, buffer *
 	return 0;
 }
 
-int config_read(server *srv, const char *fn) {
-	stream s;
+int config_parse_file(server *srv, config_t *context, const char *fn) {
 	tokenizer_t t;
 	void *pParser;
 	int token_id;
-	buffer *token;
-	config_t context;
-	data_config *dc;
+	buffer *token, *lasttoken;
 	int ret;
-	buffer *bfn = buffer_init_string(fn);
-	
-	if (0 != stream_open(&s, bfn)) {
-		buffer_free(bfn);
-		
-		log_error_write(srv, __FILE__, __LINE__, "ssss", 
-				"opening configfile ", fn, "failed:", strerror(errno));
+
+	if (tokenizer_open(srv, &t, context->basedir, fn) == -1) {
 		return -1;
 	}
 	
-	buffer_free(bfn);
+	pParser = configparserAlloc( malloc );
+	lasttoken = buffer_init();
+	token = buffer_init();
+	while((1 == (ret = config_tokenizer(srv, &t, &token_id, token))) && context->ok) {
+		buffer_copy_string_buffer(lasttoken, token);
+		configparser(pParser, token_id, token, context);
+		
+		token = buffer_init();
+	}
+	if (ret != -1 && context->ok) {
+		/* add an EOL at EOF, better than say sorry */
+		buffer_copy_string(token, "(EOL)");
+		configparser(pParser, TK_EOL, token, context);
+		token = buffer_init_string("(END)");
+		if (context->ok) {
+			configparser(pParser, 0, token, context);
+			token = buffer_init();
+		}
+	}
+	configparserFree(pParser, free);
+	buffer_free(token);
+	
+	if (ret == -1) {
+		log_error_write(srv, __FILE__, __LINE__, "sb", 
+				"configfile parser failed:", lasttoken);
+	}
+	else if (context->ok == 0) {
+		log_error_write(srv, __FILE__, __LINE__, "sbsdsdsb", 
+				"file:", t.file,
+				"line:", t.line, "pos:", t.line_pos, 
+				"parser failed somehow near here:", lasttoken);
+		ret = -1;
+	}
+	buffer_free(lasttoken);
 
-	t.input = s.start;
-	t.offset = 0;
-	t.size = s.size;
-	t.line = 1;
-	t.line_pos = 1;
-	
-	t.in_key = 1;
-	t.in_brace = 0;
-	t.in_cond = 0;
-	
-	context.ok = 1;
+	tokenizer_close(srv, &t);
+	return ret == -1 ? -1 : 0;
+}
+
+static void context_init(server *srv, config_t *context) {
+	context->srv = srv;
+	context->ok = 1;
+	context->configs_stack = array_init();
+	context->basedir = buffer_init();
+}
+
+static void context_free(config_t *context) {
+	array_free(context->configs_stack);
+	buffer_free(context->basedir);
+}
+
+int config_read(server *srv, const char *fn) {
+	config_t context;
+	data_config *dc;
+	int ret;
+	char *pos;
+
+	context_init(srv, &context);
 	context.all_configs = srv->config_context;
-	context.configs_stack = array_init();
+
+	pos = strrchr(fn,
+#ifdef __WIN32
+			'\\'
+#else
+			'/'
+#endif
+			);
+	if (pos) {
+		buffer_copy_string_len(context.basedir, fn, pos - fn + 1);
+		fn = pos + 1;
+	}
 	
 	dc = data_config_init();
 	buffer_copy_string(dc->key, "global");
@@ -768,39 +879,18 @@ int config_read(server *srv, const char *fn) {
 	dc->context_ndx = context.all_configs->used;
 	array_insert_unique(context.all_configs, (data_unset *)dc);
 	context.current = dc;
-	
+
 	/* default context */
 	srv->config = dc->value;
 	
-	pParser = configparserAlloc( malloc );
-	token = buffer_init();
-	while((1 == (ret = config_tokenizer(srv, &t, &token_id, token))) && context.ok) {
-		configparser(pParser, token_id, token, &context);
-		
-		token = buffer_init();
+	ret = config_parse_file(srv, &context, fn);
+
+	assert(0 != ret || context.configs_stack->used == 0);
+	context_free(&context);
+
+	if (0 != ret) {
+		return ret;
 	}
-	configparser(pParser, 0, token, &context);
-	configparserFree(pParser, free );
-	
-	buffer_free(token);
-	
-	stream_close(&s);
-	
-	if (ret == -1) {
-		log_error_write(srv, __FILE__, __LINE__, "s", 
-				"configfile parser failed");
-		return -1;
-	}
-	
-	if (context.ok == 0) {
-		log_error_write(srv, __FILE__, __LINE__, "sdsds", 
-				"line:", t.line, "pos:", t.line_pos, 
-				"parser failed somehow near here");
-		return -1;
-	}
-	
-	assert(context.configs_stack->used == 0);
-	array_free(context.configs_stack);
 
 	if (0 != config_insert(srv)) {
 		return -1;
