@@ -178,12 +178,20 @@ int array_insert_unique(array *a, data_unset *str) {
 	return 0;
 }
 
-int array_print(array *a) {
+void array_print_indent(int depth) {
+	int i;
+	for (i = 0; i < depth; i ++) {
+		fprintf(stderr, "  ");
+	}
+}
+
+int array_print(array *a, int depth) {
 	size_t i;
 	
 	for (i = 0; i < a->used; i++) {
+		array_print_indent(depth);
 		fprintf(stderr, "%d: ", i);
-		a->data[i]->print(a->data[i]);
+		a->data[i]->print(a->data[i], depth + 1);
 		fprintf(stderr, "\n");
 	}
 	
@@ -229,7 +237,7 @@ int main (int argc, char **argv) {
 	
 	array_insert_unique(a, (data_unset *)dc);
 	
-	array_print(a);
+	array_print(a, 0);
 	
 	array_free(a);
 	

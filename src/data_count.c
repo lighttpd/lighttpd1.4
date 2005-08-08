@@ -31,9 +31,10 @@ static int data_count_insert_dup(data_unset *dst, data_unset *src) {
 	return 0;
 }
 
-static void data_count_print(data_unset *d) {
+static void data_count_print(data_unset *d, int depth) {
 	data_count *ds = (data_count *)d;
 	
+	array_print_indent(depth);
 	printf("{%s: %d}", ds->key->ptr, ds->count);
 }
 

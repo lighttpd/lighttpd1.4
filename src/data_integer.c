@@ -28,9 +28,10 @@ static int data_integer_insert_dup(data_unset *dst, data_unset *src) {
 	return 0;
 }
 
-static void data_integer_print(data_unset *d) {
+static void data_integer_print(data_unset *d, int depth) {
 	data_integer *ds = (data_integer *)d;
-	
+
+	array_print_indent(depth);
 	printf("{%s: %d}", ds->key->ptr, ds->value);	
 }
 
