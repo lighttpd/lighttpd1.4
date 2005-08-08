@@ -96,7 +96,11 @@ AC_ARG_WITH(mysql,
     if test \! -x $withval; then
       echo "--with-mysql=path-to-mysql_config"
     fi
-    MYSQL_INCLUDE="`$withval --cflags | sed s/\'//g`"
+    if $withval | grep -- '--include' ; then
+      MYSQL_INCLUDE="`$withval --include | sed s/\'//g`"
+    else
+      MYSQL_INCLUDE="`$withval --cflags | sed s/\'//g`"
+    fi
     MYSQL_LIBS="`$withval --libs | sed s/\'//g`"
 
     AC_MSG_RESULT(yes)

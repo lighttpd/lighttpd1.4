@@ -20,6 +20,26 @@ array *array_init(void) {
 	return a;
 }
 
+array *array_init_array(array *src) {
+	size_t i;
+	array *a = array_init();
+
+	a->used = src->used;
+	a->size = src->size;
+	a->next_power_of_2 = src->next_power_of_2;
+	a->unique_ndx = src->unique_ndx;
+
+	a->data = malloc(sizeof(*src->data) * src->size);
+	for (i = 0; i < src->size; i++) {
+		if (src->data[i]) a->data[i] = src->data[i]->copy(src->data[i]);
+		else a->data[i] = NULL;
+	}
+
+	a->sorted = malloc(sizeof(*src->sorted)   * src->size);
+	memcpy(a->sorted, src->sorted, sizeof(*src->sorted)   * src->size);
+	return a;
+}
+
 void array_free(array *a) {
 	size_t i;
 	if (!a) return;
@@ -120,6 +140,20 @@ data_unset *array_get_unused_element(array *a, data_type_t t) {
 	}
 	
 	return ds;
+}
+
+/* replace or insert data, return the old one with the same key */
+data_unset *array_replace(array *a, data_unset *du) {
+	int ndx;
+	if (-1 == (ndx = array_get_index(a, du->key->ptr, du->key->used, NULL))) {
+		array_insert_unique(a, du);
+		return NULL;
+	}
+	else {
+		data_unset *old = a->data[ndx];
+		a->data[ndx] = du;
+		return old;
+	}
 }
 
 int array_insert_unique(array *a, data_unset *str) {

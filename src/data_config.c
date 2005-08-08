@@ -4,6 +4,16 @@
 
 #include "array.h"
 
+static data_unset *data_config_copy(data_unset *s) {
+	data_config *src = (data_config *)s;
+	data_config *ds = data_config_init();
+
+	ds->key = buffer_init_buffer(src->key);
+	ds->comp_key = buffer_init_buffer(src->comp_key);
+	ds->value = array_init_array(src->value);
+	return (data_unset *)ds;
+}
+
 static void data_config_free(data_unset *d) {
 	data_config *ds = (data_config *)d;
 	
@@ -58,6 +68,7 @@ data_config *data_config_init(void) {
 	ds->comp_key = buffer_init();
 	ds->value = array_init();
 	
+	ds->copy = data_config_copy;
 	ds->free = data_config_free;
 	ds->reset = data_config_reset;
 	ds->insert_dup = data_config_insert_dup;

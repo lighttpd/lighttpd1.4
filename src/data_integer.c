@@ -4,6 +4,15 @@
 
 #include "array.h"
 
+static data_unset *data_integer_copy(data_unset *s) {
+	data_integer *src = (data_integer *)s;
+	data_integer *ds = data_integer_init();
+
+	ds->key = buffer_init_buffer(src->key);
+	ds->value = src->value;
+	return (data_unset *)ds;
+}
+
 static void data_integer_free(data_unset *d) {
 	data_integer *ds = (data_integer *)d;
 	
@@ -44,6 +53,7 @@ data_integer *data_integer_init(void) {
 	ds->key = buffer_init();
 	ds->value = 0;
 	
+	ds->copy = data_integer_copy;
 	ds->free = data_integer_free;
 	ds->reset = data_integer_reset;
 	ds->insert_dup = data_integer_insert_dup;

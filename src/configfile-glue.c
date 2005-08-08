@@ -153,7 +153,7 @@ static cond_result_t config_check_cond_nocache(server *srv, connection *con, dat
 	buffer *l;
 	server_socket *srv_sock = con->srv_socket;
 	/* check parent first */
-	if (dc->parent) {
+	if (dc->parent && dc->parent->context_ndx) {
 		if (con->conf.log_condition_handling) {
 			log_error_write(srv, __FILE__, __LINE__,  "sb", "go parent", dc->parent->string);
 		}

@@ -39,6 +39,7 @@ void buffer_array_reset(buffer_array *b);
 buffer *buffer_array_append_get_buffer(buffer_array *b);
 
 buffer* buffer_init(void);
+buffer* buffer_init_buffer(buffer *b);
 buffer* buffer_init_string(const char *str);
 void buffer_free(buffer *b);
 void buffer_reset(buffer *b);

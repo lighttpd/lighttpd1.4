@@ -26,13 +26,15 @@ Basic Syntax
 
 A BNF like notation: ::
 
-  option   : NAME = VARIABLE
+  option   : NAME = VALUE
+  merge    : NAME += VALUE
   NAME     : modulename.key
-  VARIABLE : ( <string> | <integer> | <boolean> | <array> )
+  VALUE    : ( <string> | <integer> | <boolean> | <array> | VALUE [ + VALUE ]*)
   <string> : "text"
   <integer>: digit*
   <boolean>: ( "enable" | "disable" )
-  <array>  : "(" [ <string> "=>" ] <variable> [, [ <string> "=>" ] <variable> ]* ")"
+  <array>  : "(" [ <string> "=>" ] <value> [, [ <string> "=>" ] <value> ]* ")"
+  INCLUDE  : "include" VALUE
   
 Example
 -------
@@ -50,7 +52,13 @@ Example
   
   # enable directory listings
   server.dir-listing = "enable"
- 
+
+  # variables, computed when config is read.
+  var.mymodule = "foo"
+  server.modules += ( "mod_" + var.mymodule )
+
+  # include, relative to dirname of main config file
+  include "mime.types.conf"
 
 
 Conditional Configuration
@@ -63,6 +71,12 @@ Most options can be configured conditionally by using the following syntax
 
   <field> <operator> <value> {
     ...
+    <field> <operator> <value> {
+      ... nesting: match only when parent match
+    }
+  }
+  | <field> <operator> <value> {
+    ... else if
   }
 
 where <field> is one of one of the following:
