@@ -29,7 +29,7 @@ static data_config *configparser_pop(config_t *ctx) {
   return old;
 }
 
-data_unset *configparser_get_variable(config_t *ctx, buffer *key) {
+static const data_unset *configparser_get_variable(config_t *ctx, buffer *key) {
   data_unset *ds, *result;
   data_config *dc;
 
@@ -40,6 +40,7 @@ data_unset *configparser_get_variable(config_t *ctx, buffer *key) {
   for (dc = ctx->current; dc && !result; dc = dc->parent) {
 #if 0
     fprintf(stderr, "get var on block: %s\n", dc->key->ptr);
+    array_print(dc->value, 0);
 #endif
     ds = array_get_element(dc->value, key->ptr);
     if (NULL != ds) {
@@ -148,21 +149,23 @@ varline ::= key(A) ASSIGN expression(B). {
 
 varline ::= key(A) APPEND expression(B). {
   array *vars = ctx->current->value;
+  const data_unset *var;
   data_unset *du;
 
-  if (NULL == (du = configparser_get_variable(ctx, A))) {
-    fprintf(stderr, "Undefined config variable in conditional 1 %s: %s\n", 
-            ctx->current->key->ptr, A->ptr);
-    ctx->ok = 0;
-  } else if (NULL != (du = array_get_element(vars, A->ptr))) {
+  if (NULL != (du = array_get_element(vars, A->ptr))) {
     /* exists in current block */
     du = configparser_merge_data(ctx, du, B);
     buffer_copy_string_buffer(du->key, A);
     array_replace(vars, du);
-  } else {
+  } else if (NULL != (var = configparser_get_variable(ctx, A))) {
+    du = var->copy(var);
     du = configparser_merge_data(ctx, du->copy(du), B);
     buffer_copy_string_buffer(du->key, A);
     array_insert_unique(ctx->current->value, du);
+  } else {
+    fprintf(stderr, "Undefined config variable in conditional 1 %s: %s\n", 
+            ctx->current->key->ptr, A->ptr);
+    ctx->ok = 0;
   }
   buffer_free(A);
   A = NULL;
@@ -194,8 +197,11 @@ expression(A) ::= value(B). {
 }
 
 value(A) ::= key(B). {
-  A = configparser_get_variable(ctx, B);
-  if (!A) {
+  const data_unset *var = configparser_get_variable(ctx, B);
+  if (var) {
+    A = var->copy(var);
+  }
+  else {
     /* make a dummy so it won't crash */
     A = (data_unset *)data_string_init();
   }
