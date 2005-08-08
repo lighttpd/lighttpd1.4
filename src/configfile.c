@@ -654,12 +654,6 @@ static int config_tokenizer(server *srv, tokenizer_t *t, int *token_id, buffer *
 			}
 			break;
 
-		case '|':
-			t->offset++;
-			tid = TK_OR;
-			buffer_copy_string(token, "|");
-			break;
-
 		case '{':
 			t->offset++;
 				
@@ -753,6 +747,8 @@ static int config_tokenizer(server *srv, tokenizer_t *t, int *token_id, buffer *
 					
 					if (strcmp(token->ptr, "include") == 0) {
 						tid = TK_INCLUDE;
+					} else if (strcmp(token->ptr, "else") == 0) {
+						tid = TK_ELSE;
 					} else {
 						tid = TK_LKEY;
 					}
@@ -775,9 +771,10 @@ static int config_tokenizer(server *srv, tokenizer_t *t, int *token_id, buffer *
 	if (tid) {
 		*token_id = tid;
 #if 0
-		log_error_write(srv, __FILE__, __LINE__, "sbsdsdb", 
+		log_error_write(srv, __FILE__, __LINE__, "sbsdsdbdd", 
 				"file:", t->file,
-				"line:", t->line, "pos:", t->line_pos, token);
+				"line:", t->line, "pos:", t->line_pos,
+				token, token->used - 1, tid);
 #endif
 		
 		return 1;

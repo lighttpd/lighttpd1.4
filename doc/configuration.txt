@@ -75,8 +75,8 @@ Most options can be configured conditionally by using the following syntax
       ... nesting: match only when parent match
     }
   }
-  | <field> <operator> <value> {
-    ... else if
+  else <field> <operator> <value> {
+    ... the "else if" block
   }
 
 where <field> is one of one of the following:
