@@ -603,6 +603,7 @@ connection *connection_init(server *srv) {
 	
 	con->plugin_ctx = calloc(srv->plugins.used + 1, sizeof(void *));
 	
+	con->cond_results_cache = calloc(srv->config_context->used, sizeof(cond_result_t));
 	config_setup_connection(srv, con);
 	
 	return con;

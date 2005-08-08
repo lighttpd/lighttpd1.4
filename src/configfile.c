@@ -70,7 +70,6 @@ static int config_insert(server *srv) {
 		{ "server.protocol-http11",      NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_SERVER },     /* 35 */
 		{ "debug.log-request-header-on-error", NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_SERVER }, /* 36 */
 		{ "debug.log-state-handling",    NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_SERVER },     /* 37 */
-		
 		{ "ssl.ca-file",                 NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_SERVER },      /* 38 */
 		
 		{ "dir-listing.hide-dotfiles",   NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION }, /* 39 */
@@ -80,6 +79,8 @@ static int config_insert(server *srv) {
 		{ "server.errorlog-use-syslog",  NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_SERVER },     /* 42 */
 		{ "server.range-requests",       NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION }, /* 43 */
 		{ "server.stat-cache-engine",    NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_CONNECTION },  /* 44 */
+		
+		{ "debug.log-condition-handling", NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_SERVER },    /* 45 */
 		
 		{ "server.host",                 "use server.bind instead", T_CONFIG_DEPRECATED, T_CONFIG_SCOPE_UNSET },
 		{ "server.docroot",              "use server.document-root instead", T_CONFIG_DEPRECATED, T_CONFIG_SCOPE_UNSET },
@@ -191,6 +192,8 @@ static int config_insert(server *srv) {
 		cv[41].destination = s->dirlist_encoding;
 		cv[43].destination = &(s->range_requests);
 		
+		cv[45].destination = &(s->log_condition_handling);
+		
 		srv->config_storage[i] = s;
 	
 		if (0 != (ret = config_insert_values_global(srv, ((data_config *)srv->config_context->data[i])->value, cv))) {
@@ -222,6 +225,11 @@ static int config_insert(server *srv) {
 #define PATCH(x) con->conf.x = s->x
 int config_setup_connection(server *srv, connection *con) {
 	specific_config *s = srv->config_storage[0];
+	int i;
+	
+	for (i = srv->config_context->used - 1; i >= 0; i --) {
+		con->cond_results_cache[i] = COND_RESULT_UNSET;
+	}
 	
 	PATCH(allow_http11);
 	PATCH(mimetypes);
@@ -250,6 +258,7 @@ int config_setup_connection(server *srv, connection *con) {
 	PATCH(log_request_header);
 	PATCH(log_response_header);
 	PATCH(log_request_handling);
+	PATCH(log_condition_handling);
 	PATCH(log_file_not_found);
 	
 	PATCH(range_requests);
@@ -325,6 +334,8 @@ int config_patch_connection(server *srv, connection *con, const char *stage, siz
 				PATCH(log_request_header);
 			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("debug.log-response-header"))) {
 				PATCH(log_response_header);
+			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("debug.log-condition-handling"))) {
+				PATCH(log_condition_handling);
 			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("debug.log-file-not-found"))) {
 				PATCH(log_file_not_found);
 			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("server.protocol-http11"))) {
@@ -355,6 +366,27 @@ typedef struct {
 	int in_brace;
 	int in_cond;
 } tokenizer_t;
+
+static int config_skip_newline(tokenizer_t *t) {
+	int skipped = 1;
+	assert(t->input[t->offset] == '\r' || t->input[t->offset] == '\n');
+	if (t->input[t->offset] == '\r' && t->input[t->offset + 1] == '\n') {
+		skipped ++;
+		t->offset ++;
+	}
+	t->offset ++;
+	return skipped;
+}
+
+static int config_skip_comment(tokenizer_t *t) {
+	int i;
+	assert(t->input[t->offset] == '#');
+	for (i = 1; t->input[t->offset + i] && 
+	     (t->input[t->offset + i] != '\n' && t->input[t->offset + i] != '\r');
+	     i++);
+	t->offset += i;
+	return i;
+}
 
 static int config_tokenizer(server *srv, tokenizer_t *t, int *token_id, buffer *token) {
 	int tid = 0;
@@ -447,39 +479,41 @@ static int config_tokenizer(server *srv, tokenizer_t *t, int *token_id, buffer *
 			t->offset++;
 			t->line_pos++;
 			break;
+		case '\n':
 		case '\r':
 			if (t->in_brace == 0) {
-				if (t->input[t->offset + 1] == '\n') {
-					t->in_key = 1;
-					t->offset += 2;
-					
-					tid = TK_EOL;
-					t->line++;
-					t->line_pos = 1;
-					
-					buffer_copy_string(token, "(EOL)");
-				} else {
-					log_error_write(srv, __FILE__, __LINE__, "sdsds", 
-							"line:", t->line, "pos:", t->line_pos, 
-							"CR without LF");
-					return 0;
+				int done = 0;
+				while (!done) {
+					switch (t->input[t->offset]) {
+					case '\r':
+					case '\n':
+						config_skip_newline(t);
+						t->line_pos = 1;
+						t->line++;
+						break;
+
+					case '#':
+						t->line_pos += config_skip_comment(t);
+						break;
+
+					case '\t':
+					case ' ':
+						t->offset++;
+						t->line_pos++;
+						break;
+
+					default:
+						done = 1;
+					}
 				}
-			} else {
-				t->offset++;
-				t->line_pos++;
-			}
-			break;
-		case '\n':
-			if (t->in_brace == 0) {
 				t->in_key = 1;
-				
 				tid = TK_EOL;
-				
 				buffer_copy_string(token, "(EOL)");
+			} else {
+				config_skip_newline(t);
+				t->line_pos = 1;
+				t->line++;
 			}
-			t->line++;
-			t->line_pos = 1;
-			t->offset++;
 			break;
 		case ',':
 			if (t->in_brace > 0) {
@@ -559,6 +593,12 @@ static int config_tokenizer(server *srv, tokenizer_t *t, int *token_id, buffer *
 			buffer_copy_string(token, "$");
 			
 			break;
+		case '|':
+			t->offset++;
+			tid = TK_OR;
+			buffer_copy_string(token, "|");
+			break;
+
 		case '{':
 			t->offset++;
 				
@@ -578,6 +618,7 @@ static int config_tokenizer(server *srv, tokenizer_t *t, int *token_id, buffer *
 			buffer_copy_string(token, "}");
 			
 			break;
+
 		case '[':
 			t->offset++;
 				
@@ -596,11 +637,7 @@ static int config_tokenizer(server *srv, tokenizer_t *t, int *token_id, buffer *
 			
 			break;
 		case '#':
-			for (i = 1; t->input[t->offset + i] && 
-			     (t->input[t->offset + i] != '\n' && t->input[t->offset + i] != '\r');
-			     i++);
-			
-			t->offset += i;
+			t->line_pos += config_skip_comment(t);
 			
 			break;
 		default:
@@ -721,14 +758,16 @@ int config_read(server *srv, const char *fn) {
 	t.in_cond = 0;
 	
 	context.ok = 1;
-	context.config = srv->config_context;
+	context.all_configs = srv->config_context;
+	context.configs_stack = array_init();
 	
 	dc = data_config_init();
 	buffer_copy_string(dc->key, "global");
-	array_insert_unique(srv->config_context, (data_unset *)dc);
-	
-	context.ctx_name = dc->key;
-	context.ctx_config = dc->value;
+
+	assert(context.all_configs->used == 0);
+	dc->context_ndx = context.all_configs->used;
+	array_insert_unique(context.all_configs, (data_unset *)dc);
+	context.current = dc;
 	
 	/* default context */
 	srv->config = dc->value;
@@ -760,6 +799,9 @@ int config_read(server *srv, const char *fn) {
 		return -1;
 	}
 	
+	assert(context.configs_stack->used == 0);
+	array_free(context.configs_stack);
+
 	if (0 != config_insert(srv)) {
 		return -1;
 	}

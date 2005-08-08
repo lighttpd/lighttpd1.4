@@ -10,6 +10,22 @@
 #include "configfile.h"
 #include "buffer.h"
 #include "array.h"
+
+static void configparser_push(config_t *ctx, data_config *dc, int isnew) {
+  if (isnew) {
+    dc->context_ndx = ctx->all_configs->used;
+    array_insert_unique(ctx->all_configs, (data_unset *)dc);
+  }
+  array_insert_unique(ctx->configs_stack, (data_unset *)ctx->current);
+  ctx->current = dc;
+}
+
+static data_config *configparser_pop(config_t *ctx) {
+  data_config *old = ctx->current;
+  ctx->current = (data_config *) array_pop(ctx->configs_stack);
+  return old;
+}
+
 }
 
 %parse_failure {
@@ -20,23 +36,25 @@ input ::= metalines.
 metalines ::= metalines metaline.
 metalines ::= .
 metaline ::= varline.
-metaline ::= condline.
+metaline ::= condlines EOL.
 metaline ::= EOL.
 
 %type value {data_unset *}
 %type aelement {data_unset *}
 %type aelements {array *}
 %type array {array *}
+%type condline {data_config *}
+%type condlines {data_config *}
 %type cond {config_cond_t }
 %token_destructor { buffer_free($$); }
 
 varline ::= key(A) ASSIGN value(B). {
   buffer_copy_string_buffer(B->key, A);
-  if (NULL == array_get_element(ctx->ctx_config, B->key->ptr)) {
-    array_insert_unique(ctx->ctx_config, B);
+  if (NULL == array_get_element(ctx->current->value, B->key->ptr)) {
+    array_insert_unique(ctx->current->value, B);
   } else {
-    fprintf(stderr, "Duplicate config variable in conditional %s: %s\n", 
-            ctx->ctx_name->ptr, B->key->ptr);
+    fprintf(stderr, "Duplicate config variable in conditional 1 %s: %s\n", 
+            ctx->current->key->ptr, B->key->ptr);
     ctx->ok = 0;
     B->free(B);
   }
@@ -103,13 +121,38 @@ aelement(A) ::= STRING(B) ARRAY_ASSIGN value(C). {
   A = C;
   C = NULL;
 }
-condline ::= context LCURLY metalines RCURLY EOL. {
-  data_config *dc;
+
+eols ::= EOL.
+eols ::= .
+
+condlines(A) ::= condlines(B) eols OR condline(C). {
+  assert(B->context_ndx < C->context_ndx);
+  C->prev = B;
+  B->next = C;
+  A = C;
+  B = NULL;
+  C = NULL;
+}
+
+condlines(A) ::= condline(B). {
+  A = B;
+  B = NULL;
+}
+
+condline(A) ::= context LCURLY metalines RCURLY. {
+  data_config *parent, *cur;
   
-  dc = (data_config *)array_get_element(ctx->config, "global");
-  assert(dc);
-  ctx->ctx_name = dc->key;
-  ctx->ctx_config = dc->value;
+  cur = ctx->current;
+  configparser_pop(ctx);
+  parent = ctx->current;
+
+  assert(cur && parent);
+
+  if (0 != parent->context_ndx) { /* not global */
+    assert(cur->context_ndx > parent->context_ndx);
+    cur->parent = parent;
+  }
+  A = cur;
 }
 
 context ::= DOLLAR SRVVARNAME(B) LBRACKET STRING(C) RBRACKET cond(E) STRING(D). {
@@ -117,14 +160,15 @@ context ::= DOLLAR SRVVARNAME(B) LBRACKET STRING(C) RBRACKET cond(E) STRING(D). 
   buffer *b;
   
   b = buffer_init();
-  buffer_copy_string_buffer(b, B);
+  buffer_copy_string_buffer(b, ctx->current->key);
+  buffer_append_string(b, "/");
+  buffer_append_string_buffer(b, B);
   buffer_append_string_buffer(b, C);
   buffer_append_string_buffer(b, D);
   buffer_append_long(b, E);
   
-  if (NULL != (dc = (data_config *)array_get_element(ctx->config, b->ptr))) {
-    ctx->ctx_name = dc->key;
-    ctx->ctx_config = dc->value;
+  if (NULL != (dc = (data_config *)array_get_element(ctx->all_configs, b->ptr))) {
+    configparser_push(ctx, dc, 0);
   } else {
     dc = data_config_init();
     
@@ -136,30 +180,43 @@ context ::= DOLLAR SRVVARNAME(B) LBRACKET STRING(C) RBRACKET cond(E) STRING(D). 
     switch(E) {
     case CONFIG_COND_NE:
     case CONFIG_COND_EQ:
-      dc->match.string = buffer_init_string(D->ptr);
+      dc->string = buffer_init_string(D->ptr);
       break;
-#ifdef HAVE_PCRE_H
     case CONFIG_COND_NOMATCH:
     case CONFIG_COND_MATCH: {
+#ifdef HAVE_PCRE_H
       const char *errptr;
       int erroff;
       
-      if (NULL == (dc->match.regex = 
+      if (NULL == (dc->regex = 
           pcre_compile(D->ptr, 0, &errptr, &erroff, NULL))) {
-	dc->match.string = buffer_init_string(errptr);
+	dc->string = buffer_init_string(errptr);
 	dc->cond = CONFIG_COND_UNSET;
+	
+	ctx->ok = 0;
+      } else if (NULL == (dc->regex_study = pcre_study(dc->regex, 0, &errptr)) &&  
+                 errptr != NULL) {
+        fprintf(stderr, "studying regex failed: %s -> %s\n", 
+          D->ptr, errptr);
+	ctx->ok = 0;
       }
+#else
+      fprintf(stderr, "regex conditionals are not allowed as pcre-support" \
+                      "is missing: $%s[%s]\n", 
+                      B->ptr, C->ptr);
+      ctx->ok = 0;
+#endif
       break;
     }
-#endif
+
     default:
+      fprintf(stderr, "unknown condition for $%s[%s]\n", 
+                      B->ptr, C->ptr);
+      ctx->ok = 0;
       break;
     }
     
-    array_insert_unique(ctx->config, (data_unset *)dc);
-	
-    ctx->ctx_name = dc->key;
-    ctx->ctx_config = dc->value;
+    configparser_push(ctx, dc, 1);
   }
   buffer_free(b);
   buffer_free(B);

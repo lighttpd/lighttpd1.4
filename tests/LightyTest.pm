@@ -69,11 +69,14 @@ sub start_proc {
 	system("cat ".$self->{SRCDIR}."/".$self->{CONFIGFILE}.' | perl -pe "s#\@SRCDIR\@#'.$pwd.'/'.$self->{BASEDIR}.'/tests/#" > /tmp/cfg.file');
 
 	unlink($self->{LIGHTTPD_PIDFILE});
-	system($self->{LIGHTTPD_PATH}." -f /tmp/cfg.file");
-	# system("valgrind --tool=memcheck --show-reachable=yes --leak-check=yes --logfile=foo ".$lighttpd_path." -D -f /tmp/cfg.file &");
-	#
+	if (1) {
+		system($self->{LIGHTTPD_PATH}." -f /tmp/cfg.file");
+		select(undef, undef, undef, 0.1);
+	} else {
+		system("valgrind --tool=memcheck --show-reachable=yes --leak-check=yes --logfile=foo ".$self->{LIGHTTPD_PATH}." -D -f /tmp/cfg.file &");
+		select(undef, undef, undef, 1);
+	}
 	
-	select(undef, undef, undef, 0.1);
 
 	# sleep(1);
 

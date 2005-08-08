@@ -45,6 +45,18 @@ void array_reset(array *a) {
 	a->used = 0;
 }
 
+data_unset *array_pop(array *a) {
+	data_unset *du;
+
+	assert(a->used != 0);
+
+	a->used --;
+	du = a->data[a->used];
+	a->data[a->used] = NULL;
+
+	return du;
+}
+
 static int array_get_index(array *a, const char *key, size_t keylen, int *rndx) {
 	int ndx = -1;
 	int i, pos = 0;

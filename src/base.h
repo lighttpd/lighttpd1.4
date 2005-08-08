@@ -251,6 +251,7 @@ typedef struct {
 	unsigned short log_request_header;
 	unsigned short log_request_handling;
 	unsigned short log_response_header;
+	unsigned short log_condition_handling;
 	
 	
 	/* server wide */
@@ -360,6 +361,7 @@ typedef struct {
 	void **plugin_ctx;           /* plugin connection specific config */
 	
 	specific_config conf;        /* global connection specific config */
+	cond_result_t *cond_results_cache;
 	
 	buffer *server_name;
 	

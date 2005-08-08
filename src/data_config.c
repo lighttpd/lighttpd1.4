@@ -12,14 +12,11 @@ static void data_config_free(data_unset *d) {
 	
 	array_free(ds->value);
 	
-	switch(ds->cond) {
-	case CONFIG_COND_EQ: buffer_free(ds->match.string); break;
+	if (ds->string) buffer_free(ds->string);
 #ifdef HAVE_PCRE_H
-	case CONFIG_COND_MATCH: pcre_free(ds->match.regex); break;
+	if (ds->regex) pcre_free(ds->regex);
+	if (ds->regex_study) pcre_free(ds->regex_study);
 #endif
-	default:
-		break;
-	}
 	
 	free(d);
 }
