@@ -89,5 +89,6 @@ int config_insert_values_internal(server *srv, array *ca, const config_values_t 
 int config_setup_connection(server *srv, connection *con);
 int config_patch_connection(server *srv, connection *con, comp_key_t comp);
 int config_check_cond(server *srv, connection *con, data_config *dc);
+int config_append_cond_match_buffer(connection *con, data_config *dc, buffer *buf, int n);
 
 #endif

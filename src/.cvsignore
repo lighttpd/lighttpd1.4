@@ -9,6 +9,8 @@ lighttpd
 .deps
 .libs
 array
+proc_open
+regex
 mod_ssi_exprparser.c
 mod_ssi_exprparser.h
 configparser.c

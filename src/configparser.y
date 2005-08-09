@@ -131,6 +131,7 @@ metalines ::= .
 metaline ::= varline.
 metaline ::= condlines(A) EOL. { A = NULL; }
 metaline ::= include.
+metaline ::= include_shell.
 metaline ::= EOL.
 
 %type       value                  {data_unset *}
@@ -141,17 +142,17 @@ metaline ::= EOL.
 %type       aelements              {array *}
 %type       array                  {array *}
 %type       key                    {buffer *}
+%type       stringop               {buffer *}
 
 %type       cond                   {config_cond_t }
 
 %destructor value                  { $$->free($$); }
 %destructor expression             { $$->free($$); }
 %destructor aelement               { $$->free($$); }
-%destructor condline               { $$->free((data_unset *)$$); }
-%destructor condlines              { $$->free((data_unset *)$$); }
 %destructor aelements              { array_free($$); }
 %destructor array                  { array_free($$); }
 %destructor key                    { buffer_free($$); }
+%destructor stringop               { buffer_free($$); }
 
 %token_type                        {buffer *}
 %token_destructor                  { buffer_free($$); }
@@ -347,7 +348,7 @@ context ::= DOLLAR SRVVARNAME(B) LBRACKET STRING(C) RBRACKET cond(E) expression(
     break;
   default:
     assert(0);
-    break;
+    return;
   }
 
   b = buffer_init();
@@ -470,18 +471,36 @@ cond(A) ::= NOMATCH. {
   A = CONFIG_COND_NOMATCH;
 }
 
-include ::= INCLUDE expression(A). {
+stringop(A) ::= expression(B). {
+  A = NULL;
   if (ctx->ok) {
-    if (A->type != TYPE_STRING) {
-      fprintf(stderr, "file must be string");
+    if (B->type != TYPE_STRING) {
+      fprintf(stderr, "operand must be string");
       ctx->ok = 0;
     } else {
-      buffer *file = ((data_string*)A)->value;
-      if (0 != config_parse_file(ctx->srv, ctx, file->ptr)) {
-        ctx->ok = 0;
-      }
+      A = buffer_init_buffer(((data_string*)B)->value);
     }
   }
-  A->free(A);
-  A = NULL;
+  B->free(B);
+  B = NULL;
+}
+
+include ::= INCLUDE stringop(A). {
+  if (ctx->ok) {
+    if (0 != config_parse_file(ctx->srv, ctx, A->ptr)) {
+      ctx->ok = 0;
+    }
+    buffer_free(A);
+    A = NULL;
+  }
+}
+
+include_shell ::= INCLUDE_SHELL stringop(A). {
+  if (ctx->ok) {
+    if (0 != config_parse_cmd(ctx->srv, ctx, A->ptr)) {
+      ctx->ok = 0;
+    }
+    buffer_free(A);
+    A = NULL;
+  }
 }

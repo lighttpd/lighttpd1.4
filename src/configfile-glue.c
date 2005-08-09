@@ -147,7 +147,7 @@ int config_insert_values_global(server *srv, array *ca, const config_values_t cv
 	return config_insert_values_internal(srv, ca, cv);
 }
 
-static int config_check_cond_cached(server *srv, connection *con, data_config *dc);
+static cond_result_t config_check_cond_cached(server *srv, connection *con, data_config *dc);
 
 static cond_result_t config_check_cond_nocache(server *srv, connection *con, data_config *dc) {
 	buffer *l;
@@ -155,21 +155,21 @@ static cond_result_t config_check_cond_nocache(server *srv, connection *con, dat
 	/* check parent first */
 	if (dc->parent && dc->parent->context_ndx) {
 		if (con->conf.log_condition_handling) {
-			log_error_write(srv, __FILE__, __LINE__,  "sb", "go parent", dc->parent->string);
+			log_error_write(srv, __FILE__, __LINE__,  "sb", "go parent", dc->parent->key);
 		}
-		if (!config_check_cond_cached(srv, con, dc->parent)) {
+		if (config_check_cond_cached(srv, con, dc->parent) == COND_RESULT_FALSE) {
 			return COND_RESULT_FALSE;
 		}
 	}
 
 	if (dc->prev) {
 		if (con->conf.log_condition_handling) {
-			log_error_write(srv, __FILE__, __LINE__,  "sb", "go prev", dc->prev->string);
+			log_error_write(srv, __FILE__, __LINE__,  "sb", "go prev", dc->prev->key);
 		}
 		/* make sure prev is checked first */
 		config_check_cond_cached(srv, con, dc->prev);
 		/* one of prev set me to FALSE */
-		if (con->cond_results_cache[dc->context_ndx] == COND_RESULT_FALSE) {
+		if (COND_RESULT_FALSE == con->cond_cache[dc->context_ndx].result) {
 			return COND_RESULT_FALSE;
 		}
 	}
@@ -178,7 +178,8 @@ static cond_result_t config_check_cond_nocache(server *srv, connection *con, dat
 	
 	l = srv->empty_string;
 	
-	if (COMP_HTTP_HOST == dc->comp) {
+	switch (dc->comp) {
+	case COMP_HTTP_HOST: {
 		l = con->uri.authority;
 #if 0
 		/* FIXME: get this working again */
@@ -208,7 +209,9 @@ static cond_result_t config_check_cond_nocache(server *srv, connection *con, dat
 				break;
 			}
 		}
-	} else if (COMP_HTTP_REMOTEIP == dc->comp) {
+		break;
+	}
+	case COMP_HTTP_REMOTEIP: {
 		char *nm_slash;
 		/* handle remoteip limitations 
 		 * 
@@ -283,27 +286,40 @@ static cond_result_t config_check_cond_nocache(server *srv, connection *con, dat
 			buffer_copy_string(srv->cond_check_buf, s);
 		}
 #endif
-	} else if (COMP_HTTP_URL == dc->comp) {
+		break;
+	}
+	case COMP_HTTP_URL:
 		l = con->uri.path;
-	} else if (COMP_SERVER_SOCKET == dc->comp) {
+		break;
+
+	case COMP_SERVER_SOCKET:
 		l = srv_sock->srv_token;
-	} else if (COMP_HTTP_REFERER == dc->comp) {
+		break;
+
+	case COMP_HTTP_REFERER: {
 		data_string *ds;
 		
 		if (NULL != (ds = (data_string *)array_get_element(con->request.headers, "Referer"))) {
 			l = ds->value;
 		}
-	} else if (COMP_HTTP_COOKIE == dc->comp) {
+		break;
+	}
+	case COMP_HTTP_COOKIE: {
 		data_string *ds;
 		if (NULL != (ds = (data_string *)array_get_element(con->request.headers, "Cookie"))) {
 			l = ds->value;
 		}
-	} else if (COMP_HTTP_USERAGENT == dc->comp) {
+		break;
+	}
+	case COMP_HTTP_USERAGENT: {
 		data_string *ds;
 		if (NULL != (ds = (data_string *)array_get_element(con->request.headers, "User-Agent"))) {
 			l = ds->value;
 		}
-	} else {
+		break;
+	}
+
+	default:
 		return COND_RESULT_FALSE;
 	}
 	
@@ -322,15 +338,21 @@ static cond_result_t config_check_cond_nocache(server *srv, connection *con, dat
 #ifdef HAVE_PCRE_H
 	case CONFIG_COND_NOMATCH:
 	case CONFIG_COND_MATCH: {
-#define N 10
-		int ovec[N * 3];
+		cond_cache_t *cache = &con->cond_cache[dc->context_ndx];
 		int n;
 		
-		n = pcre_exec(dc->regex, dc->regex_study, l->ptr, l->used - 1, 0, 0, ovec, N * 3);
+#ifndef elementsof
+#define elementsof(x) (sizeof(x) / sizeof(x[0]))
+#endif
+		n = pcre_exec(dc->regex, dc->regex_study, l->ptr, l->used - 1, 0, 0,
+				cache->matches, elementsof(cache->matches));
 		
 		if (n > 0) {
+			cache->patterncount = n;
+			cache->comp_value = l;
 			return (dc->cond == CONFIG_COND_MATCH) ? COND_RESULT_TRUE : COND_RESULT_FALSE;
 		} else {
+			/* cache is already cleared */
 			return (dc->cond == CONFIG_COND_MATCH) ? COND_RESULT_FALSE : COND_RESULT_TRUE;
 		}
 		break;
@@ -344,36 +366,56 @@ static cond_result_t config_check_cond_nocache(server *srv, connection *con, dat
 	return COND_RESULT_FALSE;
 }
 
-static int config_check_cond_cached(server *srv, connection *con, data_config *dc) {
-	cond_result_t *cache = con->cond_results_cache;
+static cond_result_t config_check_cond_cached(server *srv, connection *con, data_config *dc) {
+	cond_cache_t *caches = con->cond_cache;
 
-	if (cache[dc->context_ndx] == COND_RESULT_UNSET) {
-		if (COND_RESULT_TRUE == (cache[dc->context_ndx] = config_check_cond_nocache(srv, con, dc))) {
+	if (COND_RESULT_UNSET == caches[dc->context_ndx].result) {
+		if (COND_RESULT_TRUE == (caches[dc->context_ndx].result = config_check_cond_nocache(srv, con, dc))) {
 			if (dc->next) {
 				data_config *c;
 				if (con->conf.log_condition_handling) {
-					log_error_write(srv, __FILE__, __LINE__, "s", "setting remains of chaining to FALSE");
+					log_error_write(srv, __FILE__, __LINE__, "s",
+							"setting remains of chaining to false");
 				}
 				for (c = dc->next; c; c = c->next) {
-					cache[c->context_ndx] = COND_RESULT_FALSE;
+					caches[c->context_ndx].result = COND_RESULT_FALSE;
 				}
 			}
 		}
 		if (con->conf.log_condition_handling) {
-			log_error_write(srv, __FILE__, __LINE__, "dsd", dc->context_ndx, "(uncached) result:", cache[dc->context_ndx]);
+			log_error_write(srv, __FILE__, __LINE__, "dss", dc->context_ndx,
+					"(uncached) result:",
+					caches[dc->context_ndx].result == COND_RESULT_TRUE ? "true" : "false");
 		}
 	}
 	else {
 		if (con->conf.log_condition_handling) {
-			log_error_write(srv, __FILE__, __LINE__, "dsd", dc->context_ndx, "(cached) result:", cache[dc->context_ndx]);
+			log_error_write(srv, __FILE__, __LINE__, "dss", dc->context_ndx,
+					"(cached) result:",
+					caches[dc->context_ndx].result == COND_RESULT_TRUE ? "true" : "false");
 		}
 	}
-	return cache[dc->context_ndx];
+	return caches[dc->context_ndx].result;
 }
 
 int config_check_cond(server *srv, connection *con, data_config *dc) {
 	if (con->conf.log_condition_handling) {
 		log_error_write(srv, __FILE__, __LINE__,  "s",  "=== start of condition block ===");
 	}
-	return config_check_cond_cached(srv, con, dc);
+	return (config_check_cond_cached(srv, con, dc) == COND_RESULT_TRUE);
 }
+
+int config_append_cond_match_buffer(connection *con, data_config *dc, buffer *buf, int n)
+{
+	cond_cache_t *cache = &con->cond_cache[dc->context_ndx];
+	if (n > cache->patterncount) {
+		return 0;
+	}
+
+	n <<= 1; /* n *= 2 */
+	buffer_append_string_len(buf,
+			cache->comp_value->ptr + cache->matches[n],
+			cache->matches[n + 1] - cache->matches[n]);
+	return 1;
+}
+

@@ -292,6 +292,7 @@ int pcre_keyvalue_buffer_append(pcre_keyvalue_buffer *kvb, const char *key, cons
 	size_t i;
 	const char *errptr;
 	int erroff;
+	pcre_keyvalue *kv;
 #endif
 	
 	if (!key) return -1;
@@ -316,14 +317,20 @@ int pcre_keyvalue_buffer_append(pcre_keyvalue_buffer *kvb, const char *key, cons
 		}
 	}
 	
-	if (NULL == (kvb->kv[kvb->used]->key = pcre_compile(key,
+	kv = kvb->kv[kvb->used];
+	if (NULL == (kv->key = pcre_compile(key,
 					  0, &errptr, &erroff, NULL))) {
 		
 		fprintf(stderr, "%s.%d: rexexp compilation error at %s\n", __FILE__, __LINE__, errptr);
 		return -1;
 	}
+
+	if (NULL == (kv->key_extra = pcre_study(kv->key, 0, &errptr)) &&  
+			errptr != NULL) {
+		return -1;
+	}
 	
-	kvb->kv[kvb->used]->value = strdup(value);
+	kv->value = buffer_init_string(value);
 	
 	kvb->used++;
 	
@@ -339,11 +346,14 @@ int pcre_keyvalue_buffer_append(pcre_keyvalue_buffer *kvb, const char *key, cons
 void pcre_keyvalue_buffer_free(pcre_keyvalue_buffer *kvb) {
 #ifdef HAVE_PCRE_H
 	size_t i;
+	pcre_keyvalue *kv;
 
 	for (i = 0; i < kvb->size; i++) {
-		if (kvb->kv[i]->key) pcre_free(kvb->kv[i]->key);
-		if (kvb->kv[i]->value) free(kvb->kv[i]->value);
-		free(kvb->kv[i]);
+		kv = kvb->kv[i];
+		if (kv->key) pcre_free(kv->key);
+		if (kv->key_extra) pcre_free(kv->key_extra);
+		if (kv->value) buffer_free(kv->value);
+		free(kv);
 	}
 	
 	if (kvb->kv) free(kvb->kv);
