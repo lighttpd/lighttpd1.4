@@ -8,7 +8,7 @@ BEGIN {
 
 use strict;
 use IO::Socket;
-use Test::More tests => 16;
+use Test::More tests => 17;
 use LightyTest;
 
 my $tf = LightyTest->new();
@@ -29,20 +29,22 @@ my $server_name = "test.example.org";
 my $mystr = "string";
 $mystr .= "_append";
 my $tests = {
-	"include"        => "/good_include",
-	"concat"         => "/good_" . "concat",
-	"servername1"    => "/good_" . $server_name,
-	"servername2"    => $server_name . "/good_",
-	"servername3"    => "/good_" . $server_name . "/",
-	"var.myvar"      => "/good_var_myvar" . $myvar,
-	"myvar"          => "/good_myvar" . $myvar,
-	"env"            => "/" . $ENV{"env_test"},
-
-	"number1"        => "/good_number" . "1",
-	"number2"        => "1" . "/good_number",
-	"array_append"   => "/good_array_append",
-	"string_append"  => "/good_" . $mystr,
-	"number_append"  => "/good_" . "2"
+    "include"        => "/good_include",
+      "concat"         => "/good_" . "concat",
+      "servername1"    => "/good_" . $server_name,
+      "servername2"    => $server_name . "/good_",
+      "servername3"    => "/good_" . $server_name . "/",
+      "var.myvar"      => "/good_var_myvar" . $myvar,
+      "myvar"          => "/good_myvar" . $myvar,
+      "env"            => "/" . $ENV{"env_test"},
+      
+    "number1"        => "/good_number" . "1",
+      "number2"        => "1" . "/good_number",
+      "array_append"   => "/good_array_append",
+      "string_append"  => "/good_" . $mystr,
+      "number_append"  => "/good_" . "2",
+      
+    "include_shell"  => "/good_include_shell_" . "456"
 };
 
 foreach my $test (keys %{ $tests }) {
@@ -57,4 +59,3 @@ EOF
 }
 
 ok($tf->stop_proc == 0, "Stopping lighttpd");
-

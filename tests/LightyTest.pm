@@ -110,8 +110,12 @@ sub handle_http {
 	my $remote = 
  	  IO::Socket::INET->new(Proto    => "tcp",
 				PeerAddr => $host,
-				PeerPort => $self->{PORT})
-	  or return -1;
+				PeerPort => $self->{PORT});
+
+	if (not defined $remote) {
+		diag("connect failed: $!");
+	       	return -1;
+	}
 
 	$remote->autoflush(1);
 

@@ -25,9 +25,10 @@ typedef struct {
 typedef struct {
 #ifdef HAVE_PCRE_H
 	pcre *key;
+	pcre_extra *key_extra;
 #endif
 	
-	char *value;
+	buffer *value;
 } pcre_keyvalue;
 
 typedef enum { HTTP_AUTH_BASIC, HTTP_AUTH_DIGEST } httpauth_type;

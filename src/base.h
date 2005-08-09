@@ -290,6 +290,14 @@ typedef struct {
 
 typedef enum { CON_STATE_CONNECT, CON_STATE_REQUEST_START, CON_STATE_READ, CON_STATE_REQUEST_END, CON_STATE_READ_POST, CON_STATE_HANDLE_REQUEST, CON_STATE_RESPONSE_START, CON_STATE_WRITE, CON_STATE_RESPONSE_END, CON_STATE_ERROR, CON_STATE_CLOSE } connection_state_t;
 
+typedef enum { COND_RESULT_UNSET, COND_RESULT_FALSE, COND_RESULT_TRUE } cond_result_t;
+typedef struct {
+	cond_result_t result;
+	int patterncount;
+	int matches[3 * 10];
+	buffer *comp_value; /* just a pointer */
+} cond_cache_t;
+
 typedef struct {
 	connection_state_t state;
 	
@@ -336,6 +344,7 @@ typedef struct {
 	int http_status;
 	
 	sock_addr dst_addr;
+	buffer *dst_addr_buf;
 
 	/* request */
 	buffer *parse_request;
@@ -361,7 +370,7 @@ typedef struct {
 	void **plugin_ctx;           /* plugin connection specific config */
 	
 	specific_config conf;        /* global connection specific config */
-	cond_result_t *cond_results_cache;
+	cond_cache_t *cond_cache;
 	
 	buffer *server_name;
 	

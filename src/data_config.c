@@ -73,10 +73,13 @@ static void data_config_print(const data_unset *d, int depth) {
 		for (i = 0; i < ds->childs->used; i ++) {
 			data_unset *du = ds->childs->data[i];
 
-			fprintf(stderr, "\n");
-			array_print_indent(depth + 1);
-			du->print(du, depth + 1);
-			fprintf(stderr, "\n");
+			/* only the 1st block of chaining */
+			if (NULL == ((data_config *)du)->prev) {
+				fprintf(stderr, "\n");
+				array_print_indent(depth + 1);
+				du->print(du, depth + 1);
+				fprintf(stderr, "\n");
+			}
 		}
 	}
 

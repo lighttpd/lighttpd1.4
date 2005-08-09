@@ -31,6 +31,7 @@ typedef struct {
 
 typedef struct {
 	rewrite_rule_buffer *rewrite;
+	data_config *context; /* to which apply me */
 } plugin_config;
 
 typedef struct {
@@ -377,7 +378,7 @@ URIHANDLER_FUNC(mod_rewrite_uri_handler) {
 			
 			start = 0; end = pattern_len;
 			for (k = 0; k < pattern_len; k++) {
-				if (pattern[k] == '$' &&
+				if ((pattern[k] == '$' || pattern[k] == '%') &&
 				    isdigit((unsigned char)pattern[k + 1])) {
 					/* got one */
 					
@@ -387,9 +388,13 @@ URIHANDLER_FUNC(mod_rewrite_uri_handler) {
 					
 					buffer_append_string_len(con->request.uri, pattern + start, end - start);
 					
-					/* n is always larger than 0 */
-					if (num < (size_t)n) {
-						buffer_append_string(con->request.uri, list[num]);
+					if (pattern[k] == '$') {
+						/* n is always > 0 */
+						if (num < (size_t)n) {
+							buffer_append_string(con->request.uri, list[num]);
+						}
+					} else {
+						config_append_cond_match_buffer(con, p->conf.context, con->request.uri, num);
 					}
 					
 					k++;

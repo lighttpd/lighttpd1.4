@@ -1,6 +1,7 @@
 #include <ctype.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdio.h>
 
 #include "base.h"
 #include "log.h"
@@ -85,6 +86,31 @@ SETDEFAULTS_FUNC(mod_alias_set_defaults) {
 		
 		if (0 != config_insert_values_global(srv, ((data_config *)srv->config_context->data[i])->value, cv)) {
 			return HANDLER_ERROR;
+		}
+		if (s->alias->used >= 2) {
+			const array *a = s->alias;
+			size_t j, k;
+
+			for (j = 0; j < a->used; j ++) {
+				const buffer *prefix = a->data[a->sorted[j]]->key;
+				for (k = j + 1; k < a->used; k ++) {
+					const buffer *key = a->data[a->sorted[k]]->key;
+
+					if (key->used < prefix->used) {
+						break;
+					}
+					if (memcmp(key->ptr, prefix->ptr, prefix->used - 1) != 0) {
+						break;
+					}
+					/* ok, they have same prefix. check position */
+					if (a->sorted[j] < a->sorted[k]) {
+						fprintf(stderr, "url.alias: `%s' will never match as `%s' matched first\n",
+								key->ptr,
+								prefix->ptr);
+						return HANDLER_ERROR;
+					}
+				}
+			}
 		}
 	}
 	

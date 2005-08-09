@@ -7,7 +7,7 @@ BEGIN {
 }
 
 use strict;
-use Test::More tests => 43;
+use Test::More tests => 44;
 use LightyTest;
 
 my $tf = LightyTest->new();
@@ -66,6 +66,14 @@ EOF
  );
 	$t->{RESPONSE} = ( { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200, 'HTTP-Content' => '/phpself.php' } );
 	ok($tf->handle_http($t) == 0, '$_SERVER["PHP_SELF"]');
+
+	$t->{REQUEST}  = ( <<EOF
+GET /pathinfo.php/foo HTTP/1.0
+Host: www.example.org
+EOF
+ );
+	$t->{RESPONSE}  = ( { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200, 'HTTP-Content' => '/foo' } );
+	ok($tf->handle_http($t) == 0, '$_SERVER["PATH_INFO"]');
 
 	$t->{REQUEST}  = ( <<EOF
 GET /phphost.php HTTP/1.0

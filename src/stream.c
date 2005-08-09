@@ -22,6 +22,7 @@ int stream_open(stream *f, buffer *fn) {
 	void *p;
 #endif
 
+	f->start = NULL;
 	
 	if (-1 == stat(fn->ptr, &st)) {
 		return -1;

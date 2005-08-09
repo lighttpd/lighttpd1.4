@@ -62,7 +62,7 @@ static void plugin_free(plugin *p) {
 	int use_dlclose = 1;
 	if (p->name) buffer_free(p->name);
 #ifdef HAVE_VALGRIND_VALGRIND_H
-	if (RUNNING_ON_VALGRIND) use_dlclose = 0;
+	/*if (RUNNING_ON_VALGRIND) use_dlclose = 0;*/
 #endif
 
 	if (use_dlclose && p->lib) {	

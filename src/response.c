@@ -974,8 +974,10 @@ handler_t http_response_prepare(server *srv, connection *con) {
 	if (con->mode == DIRECT && con->physical.path->used == 0) {
 		char *qstr;
 		
+		if (con->conf.log_condition_handling) {
+			log_error_write(srv, __FILE__, __LINE__,  "s",  "run condition");
+		}
 		config_patch_connection(srv, con, COMP_SERVER_SOCKET); /* SERVERsocket */
-		config_patch_connection(srv, con, COMP_HTTP_REMOTEIP); /* Client-IP */
 		
 		/**
 		 * prepare strings
@@ -1003,6 +1005,7 @@ handler_t http_response_prepare(server *srv, connection *con) {
 		buffer_copy_string_buffer(con->uri.authority, con->request.http_host);
 		
 		config_patch_connection(srv, con, COMP_HTTP_HOST);      /* Host:        */
+		config_patch_connection(srv, con, COMP_HTTP_REMOTEIP);  /* Client-IP */
 		config_patch_connection(srv, con, COMP_HTTP_REFERER);   /* Referer:     */
 		config_patch_connection(srv, con, COMP_HTTP_USERAGENT); /* User-Agent:  */
 		config_patch_connection(srv, con, COMP_HTTP_COOKIE);    /* Cookie:  */
