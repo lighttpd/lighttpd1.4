@@ -27,6 +27,8 @@ typedef struct {
 	
 	buffer *auth_ldap_hostname;
 	buffer *auth_ldap_basedn;
+	buffer *auth_ldap_binddn;
+	buffer *auth_ldap_bindpw;
 	buffer *auth_ldap_filter;
 	buffer *auth_ldap_cafile;
 	unsigned short auth_ldap_starttls;

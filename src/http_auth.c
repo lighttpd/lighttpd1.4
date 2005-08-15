@@ -693,10 +693,6 @@ int http_auth_digest_check(server *srv, connection *con, mod_auth_plugin_data *p
 	char *nc;
 	char *respons;
 	
-	const char *method_get = "GET";
-	const char *method_post = "POST";
-	const char *method_head = "HEAD";
-	
 	char *e, *c;
 	const char *m = NULL;
 	int i;
@@ -806,13 +802,8 @@ int http_auth_digest_check(server *srv, connection *con, mod_auth_plugin_data *p
 				"digest: missing field");
 		return -1;
 	}
-	
-	switch(con->request.http_method) {
-	case HTTP_METHOD_GET: m = method_get; break;
-	case HTTP_METHOD_POST: m = method_post; break;
-	case HTTP_METHOD_HEAD: m = method_head; break;
-	case HTTP_METHOD_UNSET: break;
-	}
+
+	m = get_http_method_name(con->request.http_method);	
 
 	/* password-string == HA1 */
 	password = buffer_init();
