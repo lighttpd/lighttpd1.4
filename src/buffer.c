@@ -750,7 +750,7 @@ int buffer_append_string_url_encoded(buffer *b, const char *s, size_t s_len) {
 
 int buffer_append_string_html_encoded(buffer *b, const char *s, size_t s_len) {
 	unsigned char *ds, *d;
-	size_t d_len;
+	size_t d_len, i;
 	
 	if (!s || !b) return -1;
 	
@@ -762,17 +762,21 @@ int buffer_append_string_html_encoded(buffer *b, const char *s, size_t s_len) {
 	if (s_len == 0) return 0;
 	
 	/* count to-be-encoded-characters */
-	for (ds = (unsigned char *)s, d_len = 0; *ds; ds++) {
+	for (ds = (unsigned char *)s, d_len = 0, i = 0; i < s_len && *ds; ds++, i++) {
 		d_len++;
-		if (*ds == '<' || *ds == '>')
+		if (*ds == '<' || *ds == '>') {
 			d_len += 4 - 1;
-		else if (*ds == '&')
+		} else if (*ds == '&') {
 			d_len += 5 - 1;
+		}
 	}
 
 	buffer_prepare_append(b, d_len);
 	
-	for (ds = (unsigned char *)s, d = (unsigned char *)b->ptr + b->used - 1, d_len = 0; *ds; ds++) {
+	for (ds = (unsigned char *)s, 
+	     d = (unsigned char *)b->ptr + b->used - 1, 
+	     d_len = 0,
+	     i = 0; i < s_len && *ds; ds++, i++) {
 		switch (*ds) {
 		case '>':
 			d[d_len++] = '&';
