@@ -147,6 +147,14 @@ int config_insert_values_global(server *srv, array *ca, const config_values_t cv
 	return config_insert_values_internal(srv, ca, cv);
 }
 
+unsigned short sock_addr_get_port(sock_addr *addr) {
+#ifdef HAVE_IPV6
+	return ntohs(addr->plain.sa_family ? addr->ipv6.sin6_port : addr->ipv4.sin_port);
+#else
+	return ntohs(addr->ipv4.sin_port);
+#endif
+}
+
 static cond_result_t config_check_cond_cached(server *srv, connection *con, data_config *dc);
 
 static cond_result_t config_check_cond_nocache(server *srv, connection *con, data_config *dc) {
@@ -176,13 +184,8 @@ static cond_result_t config_check_cond_nocache(server *srv, connection *con, dat
 
 	/* pass the rules */
 	
-	l = srv->empty_string;
-	
 	switch (dc->comp) {
 	case COMP_HTTP_HOST: {
-		l = con->uri.authority;
-#if 0
-		/* FIXME: get this working again */
 		char *ck_colon = NULL, *val_colon = NULL;
 		
 		if (!buffer_is_empty(con->uri.authority)) {
@@ -191,23 +194,35 @@ static cond_result_t config_check_cond_nocache(server *srv, connection *con, dat
 			 * append server-port to the HTTP_POST if necessary
 			 */
 			
-			buffer_copy_string_buffer(srv->cond_check_buf, con->uri.authority);
+			l = con->uri.authority;
 			
 			switch(dc->cond) {
 			case CONFIG_COND_NE:
 			case CONFIG_COND_EQ:
 				ck_colon = strchr(dc->string->ptr, ':');
-				val_colon = strchr(con->uri.authority->ptr, ':');
+				val_colon = strchr(l->ptr, ':');
 				
-				if (ck_colon && !val_colon) {
-					/* colon found */
+				if (ck_colon == val_colon) {
+					/* nothing to do with it */
+					break;
+				}
+				if (ck_colon) {
+					/* condition "host:port" but client send "host" */
+					buffer_copy_string_buffer(srv->cond_check_buf, l);
 					BUFFER_APPEND_STRING_CONST(srv->cond_check_buf, ":");
 					buffer_append_long(srv->cond_check_buf, sock_addr_get_port(&(srv_sock->addr)));
+					l = srv->cond_check_buf;
+				} else if (!ck_colon) {
+					/* condition "host" but client send "host:port" */
+					buffer_copy_string_len(srv->cond_check_buf, l->ptr, val_colon - l->ptr);
+					l = srv->cond_check_buf;
 				}
 				break;
 			default:
 				break;
 			}
+		} else {
+			l = NULL;
 		}
 		break;
 	}
@@ -271,21 +286,8 @@ static cond_result_t config_check_cond_nocache(server *srv, connection *con, dat
 				return (dc->cond == CONFIG_COND_EQ) ? COND_RESULT_FALSE : COND_RESULT_TRUE;
 			}
 		} else {
-			const char *s;
-#ifdef HAVE_IPV6
-			char b2[INET6_ADDRSTRLEN + 1];
-			
-			s = inet_ntop(con->dst_addr.plain.sa_family, 
-				      con->dst_addr.plain.sa_family == AF_INET6 ? 
-				      (const void *) &(con->dst_addr.ipv6.sin6_addr) :
-				      (const void *) &(con->dst_addr.ipv4.sin_addr),
-				      b2, sizeof(b2)-1);
-#else
-			s = inet_ntoa(con->dst_addr.ipv4.sin_addr);
-#endif
-			buffer_copy_string(srv->cond_check_buf, s);
+			l = con->dst_addr_buf;
 		}
-#endif
 		break;
 	}
 	case COMP_HTTP_URL:
@@ -301,6 +303,8 @@ static cond_result_t config_check_cond_nocache(server *srv, connection *con, dat
 		
 		if (NULL != (ds = (data_string *)array_get_element(con->request.headers, "Referer"))) {
 			l = ds->value;
+		} else {
+			l = NULL;
 		}
 		break;
 	}
@@ -308,6 +312,8 @@ static cond_result_t config_check_cond_nocache(server *srv, connection *con, dat
 		data_string *ds;
 		if (NULL != (ds = (data_string *)array_get_element(con->request.headers, "Cookie"))) {
 			l = ds->value;
+		} else {
+			l = NULL;
 		}
 		break;
 	}
@@ -315,6 +321,8 @@ static cond_result_t config_check_cond_nocache(server *srv, connection *con, dat
 		data_string *ds;
 		if (NULL != (ds = (data_string *)array_get_element(con->request.headers, "User-Agent"))) {
 			l = ds->value;
+		} else {
+			l = NULL;
 		}
 		break;
 	}
@@ -323,8 +331,17 @@ static cond_result_t config_check_cond_nocache(server *srv, connection *con, dat
 		return COND_RESULT_FALSE;
 	}
 	
+	if (NULL == l) {
+		if (con->conf.log_condition_handling) {
+			log_error_write(srv, __FILE__, __LINE__,  "bsbs", dc->comp_key,
+					"(", l, ") compare to NULL");
+		}
+		return COND_RESULT_FALSE;
+	}
+	
 	if (con->conf.log_condition_handling) {
-		log_error_write(srv, __FILE__, __LINE__,  "bsbsb", dc->comp_key, "(", l, ") compare to ", dc->string);
+		log_error_write(srv, __FILE__, __LINE__,  "bsbsb", dc->comp_key,
+				"(", l, ") compare to ", dc->string);
 	}
 	switch(dc->cond) {
 	case CONFIG_COND_NE:
@@ -387,8 +404,7 @@ static cond_result_t config_check_cond_cached(server *srv, connection *con, data
 					"(uncached) result:",
 					caches[dc->context_ndx].result == COND_RESULT_TRUE ? "true" : "false");
 		}
-	}
-	else {
+	} else {
 		if (con->conf.log_condition_handling) {
 			log_error_write(srv, __FILE__, __LINE__, "dss", dc->context_ndx,
 					"(cached) result:",

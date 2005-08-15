@@ -950,7 +950,13 @@ int http_request_parse(server *srv, connection *con) {
 	}
 	
 	/* check if we have read post data */
-	if (con->request.http_method == HTTP_METHOD_POST) {
+	if (con->request.http_method == HTTP_METHOD_POST
+         || (con->request.http_method != HTTP_METHOD_GET
+            && con->request.http_method != HTTP_METHOD_HEAD
+            && con->request.http_method != HTTP_METHOD_OPTIONS
+            && con_length_set))
+   {
+
 		server_socket *srv_socket = con->srv_socket;
 		if (con->request.http_content_type == NULL) {
 			log_error_write(srv, __FILE__, __LINE__, "s", 
