@@ -112,12 +112,12 @@ SETDEFAULTS_FUNC(mod_compress_setdefaults) {
 		{ NULL,                             NULL, T_CONFIG_UNSET, T_CONFIG_SCOPE_UNSET }
 	};
 	
-	p->config_storage = malloc(srv->config_context->used * sizeof(specific_config *));
+	p->config_storage = calloc(1, srv->config_context->used * sizeof(specific_config *));
 	
 	for (i = 0; i < srv->config_context->used; i++) {
 		plugin_config *s;
 		
-		s = malloc(sizeof(plugin_config));
+		s = calloc(1, sizeof(plugin_config));
 		s->compress_cache_dir = buffer_init();
 		s->compress = array_init();
 		s->compress_max_filesize = 0;
@@ -562,10 +562,10 @@ static int mod_compress_patch_connection(server *srv, connection *con, plugin_da
 
 PHYSICALPATH_FUNC(mod_compress_physical) {
 	plugin_data *p = p_d;
-	data_string *content_ds;
 	size_t m, i;
 	off_t max_fsize;
 	stat_cache_entry *sce = NULL;
+	buffer *content_type;
 	
 	/* only GET and POST can get compressed */
 	if (con->request.http_method != HTTP_METHOD_GET && 
@@ -578,15 +578,9 @@ PHYSICALPATH_FUNC(mod_compress_physical) {
 	max_fsize = p->conf.compress_max_filesize;
 
 	stat_cache_get_entry(srv, con, con->physical.path, &sce);
-	
+
 	/* don't compress files that are too large as we need to much time to handle them */
 	if (max_fsize && (sce->st.st_size >> 10) > max_fsize) return HANDLER_GO_ON;
-	
-	if (NULL == (content_ds = (data_string *)array_get_element(con->response.headers, "Content-Type"))) {
-		log_error_write(srv, __FILE__, __LINE__, "sbb", "Content-Type is not set for", con->physical.path, con->uri.path);
-		
-		return HANDLER_GO_ON;
-	}
 		
 	/* check if mimetype is in compress-config */
 	for (m = 0; m < p->conf.compress->used; m++) {
@@ -598,7 +592,7 @@ PHYSICALPATH_FUNC(mod_compress_physical) {
 			return HANDLER_GO_ON;
 		}
 		
-		if (buffer_is_equal(compress_ds->value, content_ds->value)) {
+		if (buffer_is_equal(compress_ds->value, sce->content_type)) {
 			/* mimetype found */
 			data_string *ds;
 				
@@ -694,14 +688,14 @@ PHYSICALPATH_FUNC(mod_compress_physical) {
 							
 							response_header_insert(srv, con, CONST_STR_LEN("Last-Modified"), CONST_BUF_LEN(srv->mtime_cache[i].str));
 							
-							return HANDLER_FINISHED;
+							return HANDLER_GO_ON;
 						}
 					} else if (0 == deflate_file_to_buffer(srv, con, p,
 									       con->physical.path, sce, compression_type)) {
 							
 						response_header_insert(srv, con, CONST_STR_LEN("Content-Encoding"), compression_name, strlen(compression_name));
 						
-						return HANDLER_FINISHED;
+						return HANDLER_GO_ON;
 					}
 					break;
 				}
