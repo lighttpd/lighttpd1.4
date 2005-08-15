@@ -331,7 +331,8 @@ URIHANDLER_FUNC(mod_rewrite_uri_handler) {
 		hctx = con->plugin_ctx[p->id];
 		
 		if (hctx->loops++ > 100) {
-			log_error_write(srv, __FILE__, __LINE__,  "s",  "ENDLESS LOOP IN rewrite-rule DETECTED ... aborting request, perhaps you want to use url.rewrite instead of url.rewrite-repeat");
+			log_error_write(srv, __FILE__, __LINE__,  "s",  
+					"ENDLESS LOOP IN rewrite-rule DETECTED ... aborting request, perhaps you want to use url.rewrite-once instead of url.rewrite-repeat");
 			
 			return HANDLER_ERROR;
 		}
