@@ -84,12 +84,15 @@ int buffer_is_equal_string(buffer *a, const char *s, size_t b_len);
 int buffer_caseless_compare(const char *a, size_t a_len, const char *b, size_t b_len);
 
 int buffer_append_string_hex(buffer *b, const char *in, size_t in_len);
-int buffer_append_string_url_encoded(buffer *b, const char *s);
-int buffer_append_string_html_encoded(buffer *b, const char *s);
+int buffer_append_string_url_encoded(buffer *b, const char *s, size_t s_len);
+int buffer_append_string_html_encoded(buffer *b, const char *s, size_t s_len);
 
 int buffer_urldecode_path(buffer *url);
 int buffer_urldecode_query(buffer *url);
 int buffer_path_simplify(buffer *dest, buffer *src);
+
+int buffer_to_lower(buffer *b);
+int buffer_to_upper(buffer *b);
 
 /** deprecated */
 int ltostr(char *buf, long val);
