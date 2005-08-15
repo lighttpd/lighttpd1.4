@@ -149,11 +149,11 @@ data_unset *array_get_unused_element(array *a, data_type_t t) {
 /* replace or insert data, return the old one with the same key */
 data_unset *array_replace(array *a, data_unset *du) {
 	int ndx;
+	
 	if (-1 == (ndx = array_get_index(a, du->key->ptr, du->key->used, NULL))) {
 		array_insert_unique(a, du);
 		return NULL;
-	}
-	else {
+	} else {
 		data_unset *old = a->data[ndx];
 		a->data[ndx] = du;
 		return old;
