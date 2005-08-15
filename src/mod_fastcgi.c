@@ -1473,11 +1473,10 @@ static int fcgi_establish_connection(server *srv, handler_ctx *hctx) {
 					proc->port, proc->socket);
 
 			if (errno == EAGAIN) {
-				/* this is Linux only */
-				
-				log_error_write(srv, __FILE__, __LINE__, "s", 
-						"If this happend on Linux: You have been run out of local ports. "
-						"Check the manual, section Performance how to handle this.");
+				log_error_write(srv, __FILE__, __LINE__, "sd", 
+						"This means that the you have more incoming requests than your fastcgi-backend can handle in parallel. "
+						"Perhaps it helps to spawn more fastcgi backend or php-children, if not decrease server.max-connections."
+						"The load for this fastcgi backend is:", proc->load);
 			} 
 			
 			return -1;
@@ -3083,7 +3082,7 @@ static handler_t fcgi_check_extension(server *srv, connection *con, void *p_d, i
 				log_error_write(srv, __FILE__, __LINE__, "s", "handling it in mod_fastcgi");
 			}
 			
-			return HANDLER_FINISHED;
+			return HANDLER_GO_ON;
 		}
 	} else {
 		/* no handler found */
