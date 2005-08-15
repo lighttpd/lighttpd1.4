@@ -36,7 +36,7 @@ common_src=buffer.c log.c \
       fdevent_select.c fdevent_linux_rtsig.c \
       fdevent_poll.c fdevent_linux_sysepoll.c \
       fdevent_solaris_devpoll.c fdevent_freebsd_kqueue.c \
-      data_config.c bitset.c  configparser.c \
+      data_config.c bitset.c \
       inet_ntop_cache.c crc32.c \
       connections-glue.c \
       configfile-glue.c \
@@ -47,7 +47,7 @@ src = server.c response.c connections.c network.c \
       network_write.c network_linux_sendfile.c \
       network_freebsd_sendfile.c network_writev.c \
       network_solaris_sendfilev.c network_openssl.c \
-      configfile.c request.c proc_open.c
+      configfile.c configparser.c request.c proc_open.c
 
 spawn_fcgi_SOURCES=spawn-fcgi.c
 
@@ -82,7 +82,7 @@ lib_LTLIBRARIES += mod_mysql_vhost.la
 mod_mysql_vhost_la_SOURCES = mod_mysql_vhost.c
 mod_mysql_vhost_la_LDFLAGS = -module -export-dynamic -avoid-version -no-undefined
 mod_mysql_vhost_la_LIBADD = $(MYSQL_LIBS) $(common_libadd)
-mod_mysql_vhost_la_CPPFLAGS = $(MYSQL_INCLUDES) 
+mod_mysql_vhost_la_CPPFLAGS = $(MYSQL_INCLUDE)
 
 lib_LTLIBRARIES += mod_cgi.la
 mod_cgi_la_SOURCES = mod_cgi.c 
