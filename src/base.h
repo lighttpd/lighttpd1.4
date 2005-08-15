@@ -223,7 +223,6 @@ typedef struct {
 } stat_cache;
 
 typedef struct {
-	array *indexfiles;
 	array *mimetypes;
 	
 	/* virtual-servers */
@@ -231,12 +230,9 @@ typedef struct {
 	buffer *server_name;
 	buffer *error_handler;
 	buffer *server_tag;
-	buffer *dirlist_css;
 	buffer *dirlist_encoding;
 	buffer *errorfile_prefix;
 	
-	unsigned short dir_listing;
-	unsigned short hide_dotfiles;
 	unsigned short max_keep_alive_requests;
 	unsigned short max_keep_alive_idle;
 	unsigned short max_read_idle;
@@ -260,6 +256,7 @@ typedef struct {
 	unsigned short use_ipv6;
 	unsigned short is_ssl;
 	unsigned short allow_http11;
+	unsigned short force_lower_case; /* if the FS is case-insensitive, force all files to lower-case */
 	unsigned short max_request_size;
 
 	unsigned short kbytes_per_second; /* connection kb/s limit */
@@ -513,9 +510,7 @@ typedef struct {
 	
 	buffer *tmp_chunk_len;
 	
-	buffer *range_buf;
-	
-	buffer *empty_string; /* is necessary for cond_match */
+	buffer *cond_check_buf;
 	
 	/* caches */
 #ifdef HAVE_IPV6

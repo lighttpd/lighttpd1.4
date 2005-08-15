@@ -26,6 +26,7 @@ static int config_insert(server *srv) {
 	size_t i;
 	int ret = 0;
 	buffer *stat_cache_string;
+	data_string *ds;
 	
 	config_values_t cv[] = { 
 		{ "server.bind",                 NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_SERVER },      /* 0 */
@@ -44,8 +45,8 @@ static int config_insert(server *srv) {
 		{ "server.max-request-size",     NULL, T_CONFIG_SHORT, T_CONFIG_SCOPE_CONNECTION },   /* 12 */
 		{ "server.max-worker",           NULL, T_CONFIG_SHORT, T_CONFIG_SCOPE_SERVER },       /* 13 */
 		{ "server.document-root",        NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_CONNECTION },  /* 14 */
-		{ "server.dir-listing",          NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION }, /* 15 */
-		{ "server.indexfiles",           NULL, T_CONFIG_ARRAY, T_CONFIG_SCOPE_CONNECTION },   /* 16 */
+		{ "server.force-lower-case-files", NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_SERVER },   /* 15 */
+		{ "debug.log-condition-handling", NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_SERVER },    /* 16 */
 		{ "server.max-keep-alive-requests", NULL, T_CONFIG_SHORT, T_CONFIG_SCOPE_CONNECTION }, /* 17 */
 		{ "server.name",                 NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_CONNECTION },  /* 18 */
 		{ "server.max-keep-alive-idle",  NULL, T_CONFIG_SHORT, T_CONFIG_SCOPE_CONNECTION },   /* 19 */
@@ -73,15 +74,9 @@ static int config_insert(server *srv) {
 		{ "debug.log-state-handling",    NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_SERVER },     /* 37 */
 		{ "ssl.ca-file",                 NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_SERVER },      /* 38 */
 		
-		{ "dir-listing.hide-dotfiles",   NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION }, /* 39 */
-		{ "dir-listing.external-css",    NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_CONNECTION },  /* 40 */
-		
-		{ "dir-listing.encoding",        NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_CONNECTION },  /* 41 */
-		{ "server.errorlog-use-syslog",  NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_SERVER },     /* 42 */
-		{ "server.range-requests",       NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION }, /* 43 */
-		{ "server.stat-cache-engine",    NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_CONNECTION },  /* 44 */
-		
-		{ "debug.log-condition-handling", NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_SERVER },    /* 45 */
+		{ "server.errorlog-use-syslog",  NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_SERVER },     /* 39 */
+		{ "server.range-requests",       NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION }, /* 40 */
+		{ "server.stat-cache-engine",    NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_CONNECTION },  /* 41 */
 		
 		{ "server.host",                 "use server.bind instead", T_CONFIG_DEPRECATED, T_CONFIG_SCOPE_UNSET },
 		{ "server.docroot",              "use server.document-root instead", T_CONFIG_DEPRECATED, T_CONFIG_SCOPE_UNSET },
@@ -113,10 +108,10 @@ static int config_insert(server *srv) {
 	cv[36].destination = &(srv->srvconf.log_request_header_on_error);
 	cv[37].destination = &(srv->srvconf.log_state_handling);
 	
-	cv[42].destination = &(srv->srvconf.errorlog_use_syslog);
+	cv[39].destination = &(srv->srvconf.errorlog_use_syslog);
 	
 	stat_cache_string = buffer_init();
-	cv[44].destination = stat_cache_string;
+	cv[41].destination = stat_cache_string;
 	
 	srv->config_storage = calloc(1, srv->config_context->used * sizeof(specific_config *));
 
@@ -128,9 +123,6 @@ static int config_insert(server *srv) {
 		s = calloc(1, sizeof(specific_config));
 		assert(s);
 		s->document_root = buffer_init();
-		s->dir_listing   = 0;
-		s->hide_dotfiles = 1;
-		s->indexfiles    = array_init();
 		s->mimetypes     = array_init();
 		s->server_name   = buffer_init();
 		s->ssl_pemfile   = buffer_init();
@@ -138,8 +130,6 @@ static int config_insert(server *srv) {
 		s->error_handler = buffer_init();
 		s->server_tag    = buffer_init();
 		s->errorfile_prefix = buffer_init();
-		s->dirlist_css   = buffer_init();
-		s->dirlist_encoding = buffer_init();
 		s->max_keep_alive_requests = 128;
 		s->max_keep_alive_idle = 30;
 		s->max_read_idle = 60;
@@ -151,6 +141,7 @@ static int config_insert(server *srv) {
 		s->kbytes_per_second = 0;
 		s->allow_http11  = 1;
 		s->range_requests = 1;
+		s->force_lower_case = 0;
 		s->global_kbytes_per_second = 0;
 		s->global_bytes_per_second_cnt = 0;
 		s->global_bytes_per_second_cnt_ptr = &s->global_bytes_per_second_cnt;
@@ -164,8 +155,8 @@ static int config_insert(server *srv) {
 		cv[12].destination = &(s->max_request_size);
 		/* 13 max-worker */
 		cv[14].destination = s->document_root;
-		cv[15].destination = &(s->dir_listing);
-		cv[16].destination = s->indexfiles;
+		cv[15].destination = &(s->force_lower_case);
+		cv[16].destination = &(s->log_condition_handling);
 		cv[17].destination = &(s->max_keep_alive_requests);
 		cv[18].destination = s->server_name;
 		cv[19].destination = &(s->max_keep_alive_idle);
@@ -188,12 +179,7 @@ static int config_insert(server *srv) {
 		
 		cv[35].destination = &(s->allow_http11);
 		cv[38].destination = s->ssl_ca_file;
-		cv[39].destination = &(s->hide_dotfiles);
-		cv[40].destination = s->dirlist_css;
-		cv[41].destination = s->dirlist_encoding;
-		cv[43].destination = &(s->range_requests);
-		
-		cv[45].destination = &(s->log_condition_handling);
+		cv[39].destination = &(s->range_requests);
 		
 		srv->config_storage[i] = s;
 	
@@ -218,6 +204,27 @@ static int config_insert(server *srv) {
 	
 	buffer_free(stat_cache_string);
 	
+	srv->srvconf.modules->unique_ndx = srv->srvconf.modules->used;
+	
+	/* append default modules */
+	if (NULL == array_get_element(srv->srvconf.modules, "mod_indexfile")) {
+		ds = data_string_init();
+		buffer_copy_string(ds->value, "mod_indexfile");
+		array_insert_unique(srv->srvconf.modules, (data_unset *)ds);
+	}
+	
+	if (NULL == array_get_element(srv->srvconf.modules, "mod_dirlisting")) {
+		ds = data_string_init();
+		buffer_copy_string(ds->value, "mod_dirlisting");
+		array_insert_unique(srv->srvconf.modules, (data_unset *)ds);
+	}
+	
+	if (NULL == array_get_element(srv->srvconf.modules, "mod_staticfile")) {
+		ds = data_string_init();
+		buffer_copy_string(ds->value, "mod_staticfile");
+		array_insert_unique(srv->srvconf.modules, (data_unset *)ds);
+	}
+	
 	return ret;
 								 
 }
@@ -230,11 +237,6 @@ int config_setup_connection(server *srv, connection *con) {
 	PATCH(allow_http11);
 	PATCH(mimetypes);
 	PATCH(document_root);
-	PATCH(dir_listing);
-	PATCH(dirlist_css);
-	PATCH(dirlist_encoding);
-	PATCH(hide_dotfiles);
-	PATCH(indexfiles);
 	PATCH(max_keep_alive_requests);
 	PATCH(max_keep_alive_idle);
 	PATCH(max_read_idle);
@@ -258,6 +260,7 @@ int config_setup_connection(server *srv, connection *con) {
 	PATCH(log_file_not_found);
 	
 	PATCH(range_requests);
+	PATCH(force_lower_case);
 	
 	return 0;
 }
@@ -282,22 +285,12 @@ int config_patch_connection(server *srv, connection *con, comp_key_t comp) {
 			
 			if (buffer_is_equal_string(du->key, CONST_STR_LEN("server.document-root"))) {
 				PATCH(document_root);
-			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("server.dir-listing"))) {
-				PATCH(dir_listing);
 			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("server.range-requests"))) {
 				PATCH(range_requests);
-			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("dir-listing.hide-dotfiles"))) {
-				PATCH(hide_dotfiles);
-			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("dir-listing.external-css"))) {
-				PATCH(dirlist_css);
-			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("dir-listing.encoding"))) {
-				PATCH(dirlist_encoding);
 			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("server.error-handler-404"))) {
 				PATCH(error_handler);
 			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("server.errorfile-prefix"))) {
 				PATCH(errorfile_prefix);
-			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("server.indexfiles"))) {
-				PATCH(indexfiles);
 			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("mimetype.assign"))) {
 				PATCH(mimetypes);
 			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("server.max-keep-alive-requests"))) {
@@ -336,6 +329,8 @@ int config_patch_connection(server *srv, connection *con, comp_key_t comp) {
 				PATCH(log_file_not_found);
 			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("server.protocol-http11"))) {
 				PATCH(allow_http11);
+			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("server.force-lower-case-files"))) {  
+				PATCH(force_lower_case);
 			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("server.kbytes-per-second"))) {
 				PATCH(global_kbytes_per_second);
 				PATCH(global_bytes_per_second_cnt);
@@ -977,6 +972,7 @@ int config_read(server *srv, const char *fn) {
 int config_set_defaults(server *srv) {
 	size_t i;
 	specific_config *s = srv->config_storage[0];
+	struct stat st1, st2;
 	
 	struct ev_map { fdevent_handler_t et; const char *name; } event_handlers[] = 
 	{ 
@@ -1005,32 +1001,45 @@ int config_set_defaults(server *srv) {
 		{ FDEVENT_HANDLER_UNSET,          NULL }
 	};
 	
-#ifdef USE_LICENSE
-	license_t *l;
-	
-	if (srv->srvconf.license->used == 0) {
-		/* license is missing */
+	if (buffer_is_empty(s->document_root)) {  
+		log_error_write(srv, __FILE__, __LINE__, "s",  
+				"a default document-root has to be set");  
+		
+		return -1;  
+	}  
+	if (-1 == stat(s->document_root->ptr, &st1)) {  
+		log_error_write(srv, __FILE__, __LINE__, "sb",  
+				"base-docroot doesn't exist:",
+				s->document_root);  
 		return -1;
 	}
+	
+	buffer_copy_string_buffer(srv->tmp_buf, s->document_root);  
 
-	l = license_init();
+	buffer_to_lower(srv->tmp_buf);  
+
+	if (0 == stat(srv->tmp_buf->ptr, &st1)) {  
+
+		/* lower-case existed, check upper-case */  
+
+		buffer_copy_string_buffer(srv->tmp_buf, s->document_root);  
+
+		buffer_to_upper(srv->tmp_buf);  
+		
+		if (0 == stat(srv->tmp_buf->ptr, &st2)) {  
+
+			/* upper case exists too, doesn't the FS handle this ? */  
+			
+			/* upper and lower have the same inode -> case-insensitve FS */  
+			
+			if (st1.st_ino == st2.st_ino) {  
+				/* upper and lower have the same inode -> case-insensitve FS */  
+				
+				s->force_lower_case = 1;  
+			}  
+		}  
+	}  
 	
-	if (0 != license_parse(l, srv->srvconf.license)) {
-		log_error_write(srv, __FILE__, __LINE__, "sb", 
-				"parsing license information failed", srv->srvconf.license);
-		
-		license_free(l);
-		return -1;
-	}
-	if (!license_is_valid(l)) {
-		log_error_write(srv, __FILE__, __LINE__, "s", 
-				"license is not valid");
-		
-		license_free(l);
-		return -1;
-	}
-	license_free(l);
-#endif	
 	if (srv->srvconf.port == 0) {
 		srv->srvconf.port = s->is_ssl ? 443 : 80;
 	}
