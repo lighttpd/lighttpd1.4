@@ -1054,7 +1054,7 @@ int mod_ssi_plugin_init(plugin *p) {
 	p->name        = buffer_init_string("ssi");
 	
 	p->init        = mod_ssi_init;
-	p->handle_physical_path = mod_ssi_physical_path;
+	p->handle_subrequest_start = mod_ssi_physical_path;
 	p->set_defaults  = mod_ssi_set_defaults;
 	p->cleanup     = mod_ssi_free;
 	

@@ -346,7 +346,7 @@ int mod_expire_plugin_init(plugin *p) {
 	p->name        = buffer_init_string("expire");
 	
 	p->init        = mod_expire_init;
-	p->handle_physical_path = mod_expire_path_handler;
+	p->handle_subrequest_start = mod_expire_path_handler;
 	p->set_defaults  = mod_expire_set_defaults;
 	p->cleanup     = mod_expire_free;
 	
