@@ -89,34 +89,35 @@ AC_ARG_WITH(mysql,
     AC_HELP_STRING([--with-mysql@<:@=PATH@:>@],[Include MySQL support. PATH is the path to 'mysql_config']),
     [
   if test "$withval" != "no"; then
-    if test "$withval" = "yes"; then
+    if test "$withval" != "yes"; then
        withval=$MYSQLCONFIG
     fi
 
-    if test \! -x $withval; then
-      echo "--with-mysql=path-to-mysql_config"
-    fi
-    if $withval | grep -- '--include' > /dev/null ; then
-      MYSQL_INCLUDE="`$withval --include | sed s/\'//g`"
+    if test -e $withval; then
+      if $withval | grep -- '--include' > /dev/null ; then
+        MYSQL_INCLUDE="`$withval --include | sed s/\'//g`"
+      else
+        MYSQL_INCLUDE="`$withval --cflags | sed s/\'//g`"
+      fi
+      MYSQL_LIBS="`$withval --libs | sed s/\'//g`"
+
+      AC_MSG_RESULT(yes)
+
+      AC_MSG_CHECKING(for MySQL includes at)
+      AC_MSG_RESULT($MYSQL_INCLUDE)
+
+      AC_MSG_CHECKING(for MySQL libraries at)
+      AC_MSG_RESULT($MYSQL_LIBS)
+      dnl check for errmsg.h, which isn't installed by some versions of 3.21
+      old_CPPFLAGS="$CPPFLAGS"
+      CPPFLAGS="$CPPFLAGS $MYSQL_INCLUDE"
+      AC_CHECK_HEADERS(errmsg.h mysql.h)
+      CPPFLAGS="$old_CPPFLAGS"
+
+      AC_DEFINE([HAVE_MYSQL], [1], [mysql support])
     else
-      MYSQL_INCLUDE="`$withval --cflags | sed s/\'//g`"
+      AC_MSG_RESULT(no)
     fi
-    MYSQL_LIBS="`$withval --libs | sed s/\'//g`"
-
-    AC_MSG_RESULT(yes)
-
-    AC_MSG_CHECKING(for MySQL includes at)
-    AC_MSG_RESULT($MYSQL_INCLUDE)
-
-    AC_MSG_CHECKING(for MySQL libraries at)
-    AC_MSG_RESULT($MYSQL_LIBS)
-  dnl check for errmsg.h, which isn't installed by some versions of 3.21
-    old_CPPFLAGS="$CPPFLAGS"
-    CPPFLAGS="$CPPFLAGS $MYSQL_INCLUDE"
-    AC_CHECK_HEADERS(errmsg.h mysql.h)
-    CPPFLAGS="$old_CPPFLAGS"
-
-    AC_DEFINE([HAVE_MYSQL], [1], [mysql support])
   else
     AC_MSG_RESULT(no)
   fi
