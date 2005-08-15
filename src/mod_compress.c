@@ -152,7 +152,7 @@ static int deflate_file_to_buffer_gzip(server *srv, connection *con, plugin_data
 	unsigned char *c;
 	unsigned long crc;
 	z_stream z;
-		
+	
 	UNUSED(srv);
 	UNUSED(con);
 
@@ -575,7 +575,6 @@ PHYSICALPATH_FUNC(mod_compress_physical) {
 	
 	mod_compress_patch_connection(srv, con, p);
 	
-	
 	max_fsize = p->conf.compress_max_filesize;
 
 	stat_cache_get_entry(srv, con, con->physical.path, &sce);
@@ -719,7 +718,7 @@ int mod_compress_plugin_init(plugin *p) {
 	
 	p->init        = mod_compress_init;
 	p->set_defaults = mod_compress_setdefaults;
-	p->handle_physical_path  = mod_compress_physical;
+	p->handle_subrequest_start  = mod_compress_physical;
 	p->cleanup     = mod_compress_free;
 	
 	p->data        = NULL;
