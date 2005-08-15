@@ -90,6 +90,8 @@ FREE_FUNC(mod_trigger_b4_dl_free) {
 		size_t i;
 		for (i = 0; i < srv->config_context->used; i++) {
 			plugin_config *s = p->config_storage[i];
+
+			if (!s) continue;
 			
 			buffer_free(s->db_filename);
 			buffer_free(s->download_url);
