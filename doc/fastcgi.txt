@@ -360,7 +360,6 @@ next three switches to compile PHP with FastCGI support::
 
   $ ./configure \
     --enable-fastcgi \
-    --enable-discard-path \
     --enable-force-cgi-redirect \
     ...
   
@@ -372,16 +371,6 @@ binary contains FastCGI support by calling: ::
 
 The important part is the (cgi-fcgi).
 
-
-Configuring PHP
----------------
-
-It is important that the php.ini contains: ::
-
-  cgi.fix_pathinfo = 1
-
-and that you set ``broken-scriptfilename`` (read below). 
-Otherwise PHP_SELF and PATH_INFO won't be set correctly.
 
 Starting a FastCGI-PHP
 ----------------------
@@ -431,9 +420,20 @@ the necessary environment variables to the FastCGI process. ::
                        )
                      )
                    )
+Configuring PHP
+---------------
 
-As a last addition you have to make should that both PHP_SELF and 
-PATH_INFO work as expected: ::
+.. note:: If and ONLY if your php was compiled with `--enable-discard-path` you
+          have to apply these changes. In case this option is disable, skip
+          this section.
+
+The php.ini needs the option: ::
+
+  cgi.fix_pathinfo = 1
+
+and to break the CGI variable SCRIPT_FILENAME in the way
+`--enable-discard-path` needs it you have to add the option
+`broken-scriptfilename` to you fastcgi.server configuration: ::
 
   fastcgi.server = ( ".php" =>
                      ( "localhost" =>
@@ -453,9 +453,9 @@ PATH_INFO work as expected: ::
 
 Why this ? the ``cgi.fix_pathinfo = 0`` would give you a working ``PATH_INFO`` 
 but no ``PHP_SELF``. If you enable it, it turns around. To fix the
-``PATH_INFO`` php needs a SCRIPT_FILENAME which is against the CGI spec, a
+``PATH_INFO`` `--enable-discard-path` needs a SCRIPT_FILENAME which is against the CGI spec, a
 broken-scriptfilename. With ``cgi.fix_pathinfo = 1`` in php.ini and
-``broken-scriptfilename => "enable"`` you get both.
+``broken-scriptfilename => "enable"`` you get both. 
 
 
 External Spawning
