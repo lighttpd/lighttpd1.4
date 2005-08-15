@@ -510,7 +510,7 @@ static handler_t mod_status_handle_server_status_html(server *srv, connection *c
 		
 		BUFFER_APPEND_STRING_CONST(b, "</td><td class=\"string\">");
 		
-		buffer_append_string_html_encoded(b, c->uri.path->ptr);
+		buffer_append_string_html_encoded(b, CONST_BUF_LEN(c->uri.path));
 		
 		BUFFER_APPEND_STRING_CONST(b, "</td><td class=\"string\">");
 		
@@ -642,7 +642,6 @@ static handler_t mod_status_handle_server_config(server *srv, connection *con, v
 	}
 	
 	mod_status_header_append(b, "Config-File-Settings");
-	mod_status_row_append(b, "Directory Listings", con->conf.dir_listing ? "enabled" : "disabled");
 	
 	for (i = 0; i < srv->plugins.used; i++) {
 		plugin **ps = srv->plugins.ptr;
