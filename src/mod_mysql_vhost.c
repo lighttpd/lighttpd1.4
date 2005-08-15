@@ -10,7 +10,7 @@
 
 #include "stat_cache.h"
 #ifdef HAVE_MYSQL
-#include <mysql/mysql.h>
+#include <mysql.h>
 #endif
 #ifdef DEBUG_MOD_MYSQL_VHOST
 #define DEBUG
