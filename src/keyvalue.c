@@ -15,13 +15,18 @@ static keyvalue http_methods[] = {
 	{ HTTP_METHOD_GET,  "GET" },
 	{ HTTP_METHOD_POST, "POST" },
 	{ HTTP_METHOD_HEAD, "HEAD" },
+	{ HTTP_METHOD_PROPFIND, "PROPFIND" },
 	{ HTTP_METHOD_OPTIONS, "OPTIONS" },
+	{ HTTP_METHOD_MKCOL, "MKCOL" },
+	{ HTTP_METHOD_PUT, "PUT" },
+	{ HTTP_METHOD_DELETE, "DELETE" },
 	{ HTTP_METHOD_UNSET, NULL }
 };
 
 static keyvalue http_status[] = {
 	{ 100, "Continue" },
 	{ 101, "Switching Protocols" },
+	{ 102, "Processing" }, /* WebDAV */
 	{ 200, "OK" },
 	{ 201, "Created" },
 	{ 202, "Accepted" },
@@ -29,6 +34,7 @@ static keyvalue http_status[] = {
 	{ 204, "No Content" },
 	{ 205, "Reset Content" },
 	{ 206, "Partial Content" },
+	{ 207, "Multi-status" }, /* WebDAV */
 	{ 300, "Multiple Choices" },
 	{ 301, "Moved Permanently" },
 	{ 302, "Found" },
@@ -55,13 +61,17 @@ static keyvalue http_status[] = {
 	{ 415, "Unsupported Media Type" },
 	{ 416, "Requested Range Not Satisfiable" },
 	{ 417, "Expectation Failed" },
-	{ 426, "Upgrade Required" },
+	{ 422, "Unprocessable Entity" }, /* WebDAV */
+	{ 423, "Locked" }, /* WebDAV */
+	{ 424, "Failed Dependency" }, /* WebDAV */
+	{ 426, "Upgrade Required" }, /* TLS */
 	{ 500, "Internal Server Error" },
 	{ 501, "Not Implemented" },
 	{ 502, "Bad Gateway" },
 	{ 503, "Service Not Available" },
 	{ 504, "Gateway Timeout" },
 	{ 505, "HTTP Version Not Supported" },
+	{ 507, "Insufficient Storage" }, /* WebDAV */
 	
 	{ -1, NULL }
 };
