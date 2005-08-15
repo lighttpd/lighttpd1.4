@@ -409,19 +409,8 @@ static int proxy_create_env(server *srv, handler_ctx *hctx) {
 	buffer_reset(hctx->write_buffer);
 	
 	/* request line */
-	switch(con->request.http_method) {
-	case HTTP_METHOD_GET:
-		BUFFER_COPY_STRING_CONST(hctx->write_buffer, "GET ");
-		break;
-	case HTTP_METHOD_POST:
-		BUFFER_COPY_STRING_CONST(hctx->write_buffer, "POST ");
-		break;
-	case HTTP_METHOD_HEAD:
-		BUFFER_COPY_STRING_CONST(hctx->write_buffer, "HEAD ");
-		break;
-	default:
-		return -1;
-	}
+	buffer_copy_string(hctx->write_buffer, get_http_method_name(con->request.http_method));
+	BUFFER_APPEND_STRING_CONST(hctx->write_buffer, " ");
 	
 	buffer_append_string_buffer(hctx->write_buffer, con->request.uri);
 	BUFFER_APPEND_STRING_CONST(hctx->write_buffer, " HTTP/1.0\r\n");
