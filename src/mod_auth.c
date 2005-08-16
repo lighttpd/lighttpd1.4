@@ -305,7 +305,7 @@ SETDEFAULTS_FUNC(mod_auth_set_defaults) {
 		{ NULL,                             NULL, T_CONFIG_UNSET, T_CONFIG_SCOPE_UNSET }
 	};
 	
-	p->config_storage = malloc(srv->config_context->used * sizeof(specific_config *));
+	p->config_storage = calloc(1, srv->config_context->used * sizeof(specific_config *));
 
 	for (i = 0; i < srv->config_context->used; i++) {
 		mod_auth_plugin_config *s;
@@ -313,7 +313,7 @@ SETDEFAULTS_FUNC(mod_auth_set_defaults) {
 		data_array *da;
 		array *ca;
 		
-		s = malloc(sizeof(mod_auth_plugin_config));
+		s = calloc(1, sizeof(mod_auth_plugin_config));
 		s->auth_plain_groupfile = buffer_init();
 		s->auth_plain_userfile = buffer_init();
 		s->auth_htdigest_userfile = buffer_init();

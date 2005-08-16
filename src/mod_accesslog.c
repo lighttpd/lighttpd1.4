@@ -330,6 +330,8 @@ FREE_FUNC(mod_accesslog_free) {
 
 			if (!s) continue;
 			
+			if (!s) continue;
+			
 			if (s->access_logbuffer->used) {
 				if (s->use_syslog) {
 # ifdef HAVE_SYSLOG_H

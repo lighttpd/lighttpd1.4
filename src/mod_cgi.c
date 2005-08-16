@@ -147,12 +147,12 @@ SETDEFAULTS_FUNC(mod_fastcgi_set_defaults) {
 
 	if (!p) return HANDLER_ERROR;
 	
-	p->config_storage = malloc(srv->config_context->used * sizeof(specific_config *));
+	p->config_storage = calloc(1, srv->config_context->used * sizeof(specific_config *));
 	
 	for (i = 0; i < srv->config_context->used; i++) {
 		plugin_config *s;
 		
-		s = malloc(sizeof(plugin_config));
+		s = calloc(1, sizeof(plugin_config));
 		assert(s);
 		
 		s->cgi    = array_init();

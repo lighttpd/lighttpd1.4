@@ -78,7 +78,7 @@ SETDEFAULTS_FUNC(mod_redirect_set_defaults) {
 	if (!p) return HANDLER_ERROR;
 	
 	/* 0 */
-	p->config_storage = malloc(srv->config_context->used * sizeof(specific_config *));
+	p->config_storage = calloc(1, srv->config_context->used * sizeof(specific_config *));
 	
 	for (i = 0; i < srv->config_context->used; i++) {
 		plugin_config *s;
@@ -86,7 +86,7 @@ SETDEFAULTS_FUNC(mod_redirect_set_defaults) {
 		array *ca;
 		data_array *da = (data_array *)du;
 		
-		s = malloc(sizeof(plugin_config));
+		s = calloc(1, sizeof(plugin_config));
 		s->redirect   = pcre_keyvalue_buffer_init();
 		
 		cv[0].destination = s->redirect;
