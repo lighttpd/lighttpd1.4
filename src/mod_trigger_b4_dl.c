@@ -55,6 +55,7 @@ typedef struct {
 #endif
 	
 	unsigned short trigger_timeout;
+	unsigned short debug;
 } plugin_config;
 
 typedef struct {
@@ -139,6 +140,7 @@ SETDEFAULTS_FUNC(mod_trigger_b4_dl_set_defaults) {
 		{ "trigger-before-download.trigger-timeout", NULL, T_CONFIG_SHORT, T_CONFIG_SCOPE_CONNECTION },        /* 4 */
 		{ "trigger-before-download.memcache-hosts",  NULL, T_CONFIG_ARRAY, T_CONFIG_SCOPE_CONNECTION },        /* 5 */
 		{ "trigger-before-download.memcache-namespace", NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_CONNECTION },    /* 6 */
+		{ "trigger-before-download.debug",           NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION },      /* 7 */
 		{ NULL,                        NULL, T_CONFIG_UNSET, T_CONFIG_SCOPE_UNSET }
 	};
 	
@@ -148,7 +150,6 @@ SETDEFAULTS_FUNC(mod_trigger_b4_dl_set_defaults) {
 	
 	for (i = 0; i < srv->config_context->used; i++) {
 		plugin_config *s;
-		size_t k;
 #if defined(HAVE_PCRE_H)
 		const char *errptr;
 		int erroff;
@@ -169,6 +170,7 @@ SETDEFAULTS_FUNC(mod_trigger_b4_dl_set_defaults) {
 		cv[4].destination = &(s->trigger_timeout);
 		cv[5].destination = s->mc_hosts;
 		cv[6].destination = s->mc_namespace;
+		cv[7].destination = &(s->debug);
 		
 		p->config_storage[i] = s;
 	
@@ -211,6 +213,7 @@ SETDEFAULTS_FUNC(mod_trigger_b4_dl_set_defaults) {
 
 		if (s->mc_hosts->used) {
 #if defined(HAVE_MEMCACHE_H)
+			size_t k;
 			s->mc = mc_new();
 		
 			for (k = 0; k < s->mc_hosts->used; k++) {
@@ -248,13 +251,20 @@ static int mod_trigger_b4_dl_patch_connection(server *srv, connection *con, plug
 	size_t i, j;
 	plugin_config *s = p->config_storage[0];
 	
-#if defined(HAVE_GDBM) && defined(HAVE_PCRE_H)		
+#if defined(HAVE_GDBM)
 	PATCH(db);
+#endif	
+#if defined(HAVE_PCRE_H)
 	PATCH(download_regex);
 	PATCH(trigger_regex);
+#endif	
 	PATCH(trigger_timeout);
 	PATCH(deny_url);
-#endif	
+	PATCH(mc_namespace);
+	PATCH(debug);
+#if defined(HAVE_MEMCACHE_H)
+	PATCH(mc);
+#endif
 	
 	/* skip the first, the global context */
 	for (i = 1; i < srv->config_context->used; i++) {
@@ -283,6 +293,8 @@ static int mod_trigger_b4_dl_patch_connection(server *srv, connection *con, plug
 #endif
 			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("trigger-before-download.trigger-timeout"))) {
 				PATCH(trigger_timeout);
+			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("trigger-before-download.debug"))) {
+				PATCH(debug);
 			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("trigger-before-download.deny-url"))) {
 				PATCH(deny_url);
 			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("trigger-before-download.memcache-namespace"))) {
@@ -302,7 +314,6 @@ static int mod_trigger_b4_dl_patch_connection(server *srv, connection *con, plug
 
 URIHANDLER_FUNC(mod_trigger_b4_dl_uri_handler) {
 	plugin_data *p = p_d;
-	size_t i;
 	const char *remote_ip;
 	data_string *ds;
 
@@ -341,7 +352,11 @@ URIHANDLER_FUNC(mod_trigger_b4_dl_uri_handler) {
 	} else {
 		remote_ip = inet_ntop_cache_get_ip(srv, &(con->dst_addr));
 	}
-	
+
+	if (p->conf.debug) {
+		log_error_write(srv, __FILE__, __LINE__, "ss", "(debug) remote-ip:", remote_ip);
+	}
+		
 	/* check if URL is a trigger -> insert IP into DB */
 	if ((n = pcre_exec(p->conf.trigger_regex, NULL, con->uri.path->ptr, con->uri.path->used - 1, 0, 0, ovec, 3 * N)) < 0) {
 		if (n != PCRE_ERROR_NOMATCH) {
@@ -370,6 +385,7 @@ URIHANDLER_FUNC(mod_trigger_b4_dl_uri_handler) {
 # endif
 # if defined(HAVE_MEMCACHE_H)		
 		if (p->conf.mc) {
+			size_t i;
 			buffer_copy_string_buffer(p->tmp_buf, p->conf.mc_namespace);
 			buffer_append_string(p->tmp_buf, remote_ip);
 			
@@ -377,6 +393,10 @@ URIHANDLER_FUNC(mod_trigger_b4_dl_uri_handler) {
 				if (p->tmp_buf->ptr[i] == ' ') p->tmp_buf->ptr[i] = '-';
 			}
 			
+			if (p->conf.debug) {
+				log_error_write(srv, __FILE__, __LINE__, "sb", "(debug) triggered IP:", p->tmp_buf);
+			}
+
 			if (0 != mc_set(p->conf.mc, 
 					CONST_BUF_LEN(p->tmp_buf),
 					(char *)&(srv->cur_ts), sizeof(srv->cur_ts),
@@ -450,6 +470,7 @@ URIHANDLER_FUNC(mod_trigger_b4_dl_uri_handler) {
 # if defined(HAVE_MEMCACHE_H)		
 		if (p->conf.mc) {
 			void *r;
+			size_t i;
 			
 			buffer_copy_string_buffer(p->tmp_buf, p->conf.mc_namespace);
 			buffer_append_string(p->tmp_buf, remote_ip);
@@ -458,6 +479,10 @@ URIHANDLER_FUNC(mod_trigger_b4_dl_uri_handler) {
 				if (p->tmp_buf->ptr[i] == ' ') p->tmp_buf->ptr[i] = '-';
 			}
 			
+			if (p->conf.debug) {
+				log_error_write(srv, __FILE__, __LINE__, "sb", "(debug) checking IP:", p->tmp_buf);
+			}
+
 			/**
 			 * 
 			 * memcached is do expiration for us, as long as we can fetch it every thing is ok
