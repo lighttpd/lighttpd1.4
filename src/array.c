@@ -235,18 +235,91 @@ void array_print_indent(int depth) {
 	}
 }
 
+size_t array_get_max_key_length(array *a) {
+	size_t maxlen, i;
+
+	maxlen = 0;
+	for (i = 0; i < a->used; i ++) {
+		data_unset *du = a->data[i];
+		size_t len = strlen(du->key->ptr);
+
+		if (len > maxlen) {
+			maxlen = len;
+		}
+	}
+	return maxlen;
+}
+
+static inline int str_int_equal(const char *str, int i) {
+	char buf[16];
+	snprintf(buf, sizeof(buf), "%d", i);
+	return strcmp(str, buf) == 0;
+}
+
 int array_print(array *a, int depth) {
 	size_t i;
+	size_t maxlen;
+	int oneline = 1;
 	
-	fprintf(stderr, "{\n");
+	if (a->used > 5) {
+		oneline = 0;
+	}
+	for (i = 0; i < a->used && oneline; i++) {
+		data_unset *du = a->data[i];
+		if (!str_int_equal(du->key->ptr, i)) {
+			oneline = 0;
+			break;
+		}
+		switch (du->type) {
+			case TYPE_INTEGER:
+			case TYPE_STRING:
+			case TYPE_COUNT:
+				break;
+			default:
+				oneline = 0;
+				break;
+		}
+	}
+	if (oneline) {
+		fprintf(stderr, "(");
+		for (i = 0; i < a->used; i++) {
+			data_unset *du = a->data[i];
+			if (i != 0) {
+				fprintf(stderr, ", ");
+			}
+			du->print(du, depth + 1);
+		}
+		fprintf(stderr, ")");
+		return 0;
+	}
+
+	maxlen = array_get_max_key_length(a);
+	fprintf(stderr, "(\n");
 	for (i = 0; i < a->used; i++) {
+		data_unset *du = a->data[i];
 		array_print_indent(depth + 1);
-		fprintf(stderr, "%d:%s: ", i, a->data[i]->key->ptr);
-		a->data[i]->print(a->data[i], depth + 1);
-		fprintf(stderr, "\n");
+		if (!str_int_equal(du->key->ptr, i)) {
+			int j;
+
+			if (i && (i % 5) == 0) {
+				fprintf(stderr, "# %d\n", i);
+				array_print_indent(depth + 1);
+			}
+			fprintf(stderr, "\"%s\"", du->key->ptr);
+			for (j = maxlen - strlen(du->key->ptr); j > 0; j --) {
+				fprintf(stderr, " ");
+			}
+			fprintf(stderr, " => ");
+		}
+		du->print(du, depth + 1);
+		fprintf(stderr, ",\n");
+	}
+	if (!(i && (i - 1 % 5) == 0)) {
+		array_print_indent(depth + 1);
+		fprintf(stderr, "# %d\n", i);
 	}
 	array_print_indent(depth);
-	fprintf(stderr, "}");
+	fprintf(stderr, ")");
 	
 	return 0;
 }

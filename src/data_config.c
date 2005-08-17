@@ -53,7 +53,9 @@ static int data_config_insert_dup(data_unset *dst, data_unset *src) {
 
 static void data_config_print(const data_unset *d, int depth) {
 	data_config *ds = (data_config *)d;
+	array *a = (array *)ds->value;
 	size_t i;
+	size_t maxlen;
 	
 	if (0 == ds->context_ndx) {
 		fprintf(stderr, "config {\n");
@@ -61,30 +63,49 @@ static void data_config_print(const data_unset *d, int depth) {
 	else {
 		fprintf(stderr, "$%s %s \"%s\" {\n",
 				ds->comp_key->ptr, ds->op->ptr, ds->string->ptr);
+		array_print_indent(depth + 1);
+		fprintf(stderr, "# block %d\n", ds->context_ndx);
 	}
-	array_print_indent(depth + 1);
-	fprintf(stderr, "context_ndx: %d\n", ds->context_ndx);
-	array_print_indent(depth + 1);
-	fprintf(stderr, "context: ");
-	array_print(ds->value, depth + 1);
-	fprintf(stderr, "\n");
+	depth ++;
+
+	maxlen = array_get_max_key_length(a);
+	for (i = 0; i < a->used; i ++) {
+		data_unset *du = a->data[i];
+		size_t len = strlen(du->key->ptr);
+		size_t j;
+
+		array_print_indent(depth);
+		fprintf(stderr, "%s", du->key->ptr);
+		for (j = maxlen - len; j > 0; j --) {
+			fprintf(stderr, " ");
+		}
+		fprintf(stderr, " = ");
+		du->print(du, depth);
+		fprintf(stderr, "\n");
+	}
 
 	if (ds->childs) {
+		fprintf(stderr, "\n");
 		for (i = 0; i < ds->childs->used; i ++) {
 			data_unset *du = ds->childs->data[i];
 
 			/* only the 1st block of chaining */
 			if (NULL == ((data_config *)du)->prev) {
 				fprintf(stderr, "\n");
-				array_print_indent(depth + 1);
-				du->print(du, depth + 1);
+				array_print_indent(depth);
+				du->print(du, depth);
 				fprintf(stderr, "\n");
 			}
 		}
 	}
 
+	depth --;
 	array_print_indent(depth);
 	fprintf(stderr, "}");
+	if (0 != ds->context_ndx) {
+		fprintf(stderr, " # end of $%s %s \"%s\"",
+				ds->comp_key->ptr, ds->op->ptr, ds->string->ptr);
+	}
 
 	if (ds->next) {
 		fprintf(stderr, "\n");
