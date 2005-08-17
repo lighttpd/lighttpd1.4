@@ -186,7 +186,7 @@ static int config_insert(server *srv) {
 		
 		cv[35].destination = &(s->allow_http11);
 		cv[38].destination = s->ssl_ca_file;
-		cv[39].destination = &(s->range_requests);
+		cv[40].destination = &(s->range_requests);
 		
 		srv->config_storage[i] = s;
 	
