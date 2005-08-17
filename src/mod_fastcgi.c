@@ -861,8 +861,13 @@ static int fcgi_spawn_connection(server *srv,
 				/* the child should not terminate at all */
 				if (WIFEXITED(status)) {
 					log_error_write(srv, __FILE__, __LINE__, "sd", 
-							"child exited (is this a FastCGI binary ?):", 
+							"child exited:", 
 							WEXITSTATUS(status));
+					log_error_write(srv, __FILE__, __LINE__, "s", 
+							"if you try do run PHP as FastCGI backend make sure you use the FastCGI enabled version.\n"
+							"You can find out if it is the right one by executing 'php -v' and it should display '(cgi-fcgi)' "
+							"in the output, NOT (cgi) NOR (cli)\n"
+							"For more information check http://www.lighttpd.net/documentation/fastcgi.html#preparing-php-as-a-fastcgi-program");
 				} else if (WIFSIGNALED(status)) {
 					log_error_write(srv, __FILE__, __LINE__, "sd", 
 							"child signaled:", 
