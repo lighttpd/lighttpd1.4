@@ -3,6 +3,14 @@
 NEWS
 ====
 
+- 1.4.0 - 2005-08-17 
+
+  * added nested conditionals
+  * added remote-ip to $HTTP
+  * added support for stat-cache via FAM
+  * fixed cleanup in mod_proxy and mod_fastcgi
+  * fixed handling of filenames on case-insensitive filesystems
+
 - 1.3.16 - 2005-07-31
 
   * added Date: headers to dynamic HTTP/1.0 requests
