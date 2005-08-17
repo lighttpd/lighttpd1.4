@@ -117,6 +117,13 @@ static int config_insert(server *srv) {
 
 	assert(srv->config_storage);
 	
+	/* prepend default modules */
+	if (NULL == array_get_element(srv->srvconf.modules, "mod_indexfile")) {
+		ds = data_string_init();
+		buffer_copy_string(ds->value, "mod_indexfile");
+		array_insert_unique(srv->srvconf.modules, (data_unset *)ds);
+	}
+	
 	for (i = 0; i < srv->config_context->used; i++) {
 		specific_config *s;
 		
@@ -207,12 +214,6 @@ static int config_insert(server *srv) {
 	srv->srvconf.modules->unique_ndx = srv->srvconf.modules->used;
 	
 	/* append default modules */
-	if (NULL == array_get_element(srv->srvconf.modules, "mod_indexfile")) {
-		ds = data_string_init();
-		buffer_copy_string(ds->value, "mod_indexfile");
-		array_insert_unique(srv->srvconf.modules, (data_unset *)ds);
-	}
-	
 	if (NULL == array_get_element(srv->srvconf.modules, "mod_dirlisting")) {
 		ds = data_string_init();
 		buffer_copy_string(ds->value, "mod_dirlisting");

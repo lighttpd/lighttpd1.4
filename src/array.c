@@ -28,6 +28,7 @@ array *array_init_array(array *src) {
 	a->size = src->size;
 	a->next_power_of_2 = src->next_power_of_2;
 	a->unique_ndx = src->unique_ndx;
+	a->is_array = src->is_array;
 
 	a->data = malloc(sizeof(*src->data) * src->size);
 	for (i = 0; i < src->size; i++) {
@@ -168,10 +169,10 @@ int array_insert_unique(array *a, data_unset *str) {
 	/* generate unique index if neccesary */
 	if (str->key->used == 0) {
 		buffer_copy_long(str->key, a->unique_ndx++);
+		a->is_array = 1;
 	}
 	
 	/* try to find the string */
-	
 	if (-1 != (ndx = array_get_index(a, str->key->ptr, str->key->used, &pos))) {
 		/* found, leave here */
 		if (a->data[ndx]->type == str->type) {
