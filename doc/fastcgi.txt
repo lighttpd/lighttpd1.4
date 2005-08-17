@@ -423,17 +423,12 @@ the necessary environment variables to the FastCGI process. ::
 Configuring PHP
 ---------------
 
-.. note:: If and ONLY if your php was compiled with `--enable-discard-path` you
-          have to apply these changes. In case this option is disable, skip
-          this section.
-
-The php.ini needs the option: ::
+If you want to use PATH_INFO and PHP_SELF in you PHP scripts you have to
+configure php and lighttpd. The php.ini needs the option: ::
 
   cgi.fix_pathinfo = 1
 
-and to break the CGI variable SCRIPT_FILENAME in the way
-`--enable-discard-path` needs it you have to add the option
-`broken-scriptfilename` to you fastcgi.server configuration: ::
+and the option ``broken-scriptfilename`` in your fastcgi.server config: ::
 
   fastcgi.server = ( ".php" =>
                      ( "localhost" =>
