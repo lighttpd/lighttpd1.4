@@ -195,6 +195,7 @@ sub handle_http {
 		}
 
 		if (defined $href->{'HTTP-Content'}) {
+			$resp_body = "" unless defined $resp_body;
 			if ($href->{'HTTP-Content'} ne $resp_body) {
 				diag(sprintf("body failed: expected '%s', got '%s'\n", $href->{'HTTP-Content'}, $resp_body));
 				return -1;

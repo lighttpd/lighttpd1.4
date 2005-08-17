@@ -33,7 +33,7 @@ ok($tf_real->start_proc == 0, "Starting lighttpd") or die();
 ok($tf_proxy->start_proc == 0, "Starting lighttpd as proxy") or die();
 
 $t->{REQUEST}  = ( <<EOF
-GET /phpinfo.php HTTP/1.0
+GET /index.html HTTP/1.0
 Host: www.example.org
 EOF
  );
@@ -41,7 +41,7 @@ $t->{RESPONSE} = ( { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200 } );
 ok($tf_proxy->handle_http($t) == 0, 'valid request');
 
 $t->{REQUEST}  = ( <<EOF
-GET /phpinfo.php HTTP/1.0
+GET /index.html HTTP/1.0
 Host: www.example.org
 EOF
  );
