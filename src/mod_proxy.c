@@ -784,6 +784,7 @@ static int mod_proxy_patch_connection(server *srv, connection *con, plugin_data 
 	
 	PATCH(extensions);
 	PATCH(debug);
+	PATCH(balance);
 	
 	/* skip the first, the global context */
 	for (i = 1; i < srv->config_context->used; i++) {
