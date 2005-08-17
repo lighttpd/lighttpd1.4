@@ -216,7 +216,7 @@ EOF
 }
 
 SKIP: {
-	skip "no php found", 3 unless -x "/home/weigon/Documents/php-4.3.10/sapi/cgi/php"; 
+	skip "no php found", 3 unless -x "/home/jan/Documents/php-5.1.0b3/sapi/cgi/php"; 
 	$tf->{CONFIGFILE} = 'fastcgi-13.conf';
 	ok($tf->start_proc == 0, "Starting lighttpd with $tf->{CONFIGFILE}") or die();
 	$t->{REQUEST}  = ( <<EOF
