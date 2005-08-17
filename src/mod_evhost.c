@@ -45,10 +45,13 @@ FREE_FUNC(mod_evhost_free) {
 		size_t i;
 		for (i = 0; i < srv->config_context->used; i++) {
 			plugin_config *s = p->config_storage[i];
+
+			if (!s) continue;
 			
 			if(s->path_pieces) {
-				for (i = 0; i < s->len; i++) {
-					buffer_free(s->path_pieces[i]);
+				size_t j;
+				for (j = 0; j < s->len; j++) {
+					buffer_free(s->path_pieces[j]);
 				}
 				
 				free(s->path_pieces);
@@ -264,6 +267,11 @@ static handler_t mod_evhost_uri_handler(server *srv, connection *con, void *p_d)
 	
 	mod_evhost_patch_connection(srv, con, p);
 	
+	/* missing even default(global) conf */
+	if (0 == p->conf.len) {
+		return HANDLER_GO_ON;
+	}
+
 	parsed_host = array_init();
 	
 	mod_evhost_parse_host(con, parsed_host);
