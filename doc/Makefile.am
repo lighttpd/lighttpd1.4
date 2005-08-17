@@ -75,7 +75,7 @@ EXTRA_DIST=lighttpd.conf lighttpd.user \
 	$(DOCS)
  
 %.html: %.txt
-	rst2html.py $^ > $@
+	rst2html $^ > $@
 
 
 html: $(HTMLDOCS)
