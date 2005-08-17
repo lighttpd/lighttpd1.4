@@ -794,8 +794,11 @@ REQUESTDONE_FUNC(log_access_write) {
 	}
 	
 	BUFFER_APPEND_STRING_CONST(p->conf.access_logbuffer, "\n");
-	
-	if (newts || p->conf.access_logbuffer->used > BUFFER_MAX_REUSE_SIZE) {
+
+	if (p->conf.use_syslog ||  /* syslog doesn't cache */
+	    (p->conf.access_logfile->ptr[0] != '|') || /* pipes don't cache */
+	    newts ||
+	    p->conf.access_logbuffer->used > BUFFER_MAX_REUSE_SIZE) {
 		if (p->conf.use_syslog) {
 #ifdef HAVE_SYSLOG_H
 			syslog(LOG_INFO, "%*s", p->conf.access_logbuffer->used - 1, p->conf.access_logbuffer->ptr);
