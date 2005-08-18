@@ -18,6 +18,7 @@
 #include "plugin.h"
 
 #include "crc32.h"
+#include "etag.h"
 
 #include "config.h"
 
@@ -564,10 +565,9 @@ static int mod_compress_patch_connection(server *srv, connection *con, plugin_da
 
 PHYSICALPATH_FUNC(mod_compress_physical) {
 	plugin_data *p = p_d;
-	size_t m, i;
+	size_t m;
 	off_t max_fsize;
 	stat_cache_entry *sce = NULL;
-	buffer *content_type;
 	
 	/* only GET and POST can get compressed */
 	if (con->request.http_method != HTTP_METHOD_GET && 
@@ -650,52 +650,25 @@ PHYSICALPATH_FUNC(mod_compress_physical) {
 					if (p->conf.compress_cache_dir->used) {
 						if (0 == deflate_file_to_file(srv, con, p,
 									      con->physical.path, sce, compression_type)) {
-							struct tm *tm;
-							time_t last_mod;
+							buffer *mtime;
 							
-							response_header_insert(srv, con, CONST_STR_LEN("Content-Encoding"), compression_name, strlen(compression_name));
+							response_header_overwrite(srv, con, CONST_STR_LEN("Content-Encoding"), compression_name, strlen(compression_name));
 							
-							/* Set Last-Modified of ORIGINAL file */
-							last_mod = sce->st.st_mtime;
-							
-							for (i = 0; i < FILE_CACHE_MAX; i++) {
-								if (srv->mtime_cache[i].mtime == last_mod) break;
-								
-								if (srv->mtime_cache[i].mtime == 0) {
-									srv->mtime_cache[i].mtime = last_mod;
-									
-									buffer_prepare_copy(srv->mtime_cache[i].str, 1024);
-									
-									tm = gmtime(&(srv->mtime_cache[i].mtime));
-									srv->mtime_cache[i].str->used = strftime(srv->mtime_cache[i].str->ptr, 
-														 srv->mtime_cache[i].str->size - 1,
-														 "%a, %d %b %Y %H:%M:%S GMT", tm);
-								
-									srv->mtime_cache[i].str->used++;
-									break;
-								}
-							}
-							
-							if (i == FILE_CACHE_MAX) {
-								i = 0;
-								
-								srv->mtime_cache[i].mtime = last_mod;
-								buffer_prepare_copy(srv->mtime_cache[i].str, 1024);
-								tm = gmtime(&(srv->mtime_cache[i].mtime));
-								srv->mtime_cache[i].str->used = strftime(srv->mtime_cache[i].str->ptr, 
-													 srv->mtime_cache[i].str->size - 1,
-													 "%a, %d %b %Y %H:%M:%S GMT", tm);
-								srv->mtime_cache[i].str->used++;
-							}
-							
-							response_header_insert(srv, con, CONST_STR_LEN("Last-Modified"), CONST_BUF_LEN(srv->mtime_cache[i].str));
+							mtime = strftime_cache_get(srv, sce->st.st_mtime);
+							response_header_overwrite(srv, con, CONST_STR_LEN("Last-Modified"), CONST_BUF_LEN(mtime));
+
+							etag_mutate(con->physical.etag, sce->etag);
+							response_header_overwrite(srv, con, CONST_STR_LEN("ETag"), CONST_BUF_LEN(con->physical.etag));
+
+							response_header_overwrite(srv, con, CONST_STR_LEN("Content-Type"), CONST_BUF_LEN(sce->content_type));
 							
 							return HANDLER_GO_ON;
 						}
 					} else if (0 == deflate_file_to_buffer(srv, con, p,
 									       con->physical.path, sce, compression_type)) {
 							
-						response_header_insert(srv, con, CONST_STR_LEN("Content-Encoding"), compression_name, strlen(compression_name));
+						response_header_overwrite(srv, con, CONST_STR_LEN("Content-Encoding"), compression_name, strlen(compression_name));
+						response_header_overwrite(srv, con, CONST_STR_LEN("Content-Type"), CONST_BUF_LEN(sce->content_type));
 						
 						return HANDLER_GO_ON;
 					}

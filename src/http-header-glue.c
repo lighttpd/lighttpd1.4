@@ -1,5 +1,6 @@
 #include <string.h>
 #include <errno.h>
+#include <time.h>
 
 #include "base.h"
 #include "array.h"
@@ -195,4 +196,32 @@ int http_response_redirect_to_directory(server *srv, connection *con) {
 	
 	return 0;
 }
+
+buffer * strftime_cache_get(server *srv, time_t last_mod) {
+	struct tm *tm;
+	size_t i;
+		
+	for (i = 0; i < FILE_CACHE_MAX; i++) {
+		/* found cache-entry */
+		if (srv->mtime_cache[i].mtime == last_mod) return srv->mtime_cache[i].str;
+				
+		/* found empty slot */
+		if (srv->mtime_cache[i].mtime == 0) break;
+	}
+	
+	if (i == FILE_CACHE_MAX) {
+		i = 0;
+	}
+		
+	srv->mtime_cache[i].mtime = last_mod;
+	buffer_prepare_copy(srv->mtime_cache[i].str, 1024);
+	tm = gmtime(&(srv->mtime_cache[i].mtime));
+	srv->mtime_cache[i].str->used = strftime(srv->mtime_cache[i].str->ptr, 
+						 srv->mtime_cache[i].str->size - 1,
+						 "%a, %d %b %Y %H:%M:%S GMT", tm);
+	srv->mtime_cache[i].str->used++;
+	
+	return srv->mtime_cache[i].str;
+}
+
 
