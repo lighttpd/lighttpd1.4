@@ -173,7 +173,6 @@ static handler_t mod_auth_uri_handler(server *srv, connection *con, void *p_d) {
 	data_string *ds;
 	mod_auth_plugin_data *p = p_d;
 	array *req;
-	size_t i;
 	
 	/* select the right config */
 	mod_auth_patch_connection(srv, con, p);
