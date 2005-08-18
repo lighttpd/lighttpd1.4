@@ -340,39 +340,13 @@ static int http_response_parse_range(server *srv, connection *con, plugin_data *
 	return 0;
 }
 
-static buffer * strftime_cache_get(server *srv, time_t last_mod) {
-	struct tm *tm;
-	size_t i;
-		
-	for (i = 0; i < FILE_CACHE_MAX; i++) {
-		/* found cache-entry */
-		if (srv->mtime_cache[i].mtime == last_mod) return srv->mtime_cache[i].str;
-				
-		/* found empty slot */
-		if (srv->mtime_cache[i].mtime == 0) break;
-	}
-	
-	if (i == FILE_CACHE_MAX) {
-		i = 0;
-	}
-		
-	srv->mtime_cache[i].mtime = last_mod;
-	buffer_prepare_copy(srv->mtime_cache[i].str, 1024);
-	tm = gmtime(&(srv->mtime_cache[i].mtime));
-	srv->mtime_cache[i].str->used = strftime(srv->mtime_cache[i].str->ptr, 
-						 srv->mtime_cache[i].str->size - 1,
-						 "%a, %d %b %Y %H:%M:%S GMT", tm);
-	srv->mtime_cache[i].str->used++;
-	
-	return srv->mtime_cache[i].str;
-}
-
 URIHANDLER_FUNC(mod_staticfile_subrequest) {
 	plugin_data *p = p_d;
 	size_t k;
 	int s_len;
-	buffer *mtime;
 	stat_cache_entry *sce = NULL;
+	buffer *mtime;
+	data_string *ds;
 	
 	/* someone else has done a decision for us */
 	if (con->http_status != 0) return HANDLER_GO_ON;
@@ -398,8 +372,11 @@ URIHANDLER_FUNC(mod_staticfile_subrequest) {
 	
 	/* ignore certain extensions */
 	for (k = 0; k < p->conf.exclude_ext->used; k++) {
-		data_string *ds = (data_string *)p->conf.exclude_ext->data[k];
-		int ct_len = ds->value->used - 1;
+		int ct_len;
+
+		ds = (data_string *)p->conf.exclude_ext->data[k]; 
+
+		ct_len = ds->value->used - 1;
 		
 		if (ct_len > s_len) continue;
 		
@@ -437,24 +414,34 @@ URIHANDLER_FUNC(mod_staticfile_subrequest) {
 		
 		return HANDLER_FINISHED;
 	}
+
+	/* mod_compress might set several data directly, don't overwrite them */
 	
-	/* set response content-type */
-	
-	if (buffer_is_empty(sce->content_type)) {
-		response_header_overwrite(srv, con, CONST_STR_LEN("Content-Type"), CONST_STR_LEN("application/octet-stream"));
-	} else {
-		response_header_overwrite(srv, con, CONST_STR_LEN("Content-Type"), CONST_BUF_LEN(sce->content_type));
+	/* set response content-type, if not set already */
+
+	if (NULL == array_get_element(con->response.headers, "Content-Type")) {
+		if (buffer_is_empty(sce->content_type)) {
+			response_header_overwrite(srv, con, CONST_STR_LEN("Content-Type"), CONST_STR_LEN("application/octet-stream"));
+		} else {
+			response_header_overwrite(srv, con, CONST_STR_LEN("Content-Type"), CONST_BUF_LEN(sce->content_type));
+		}
 	}
 	
-	/* generate e-tag */
-	etag_mutate(con->physical.etag, sce->etag);
+	if (NULL == array_get_element(con->response.headers, "ETag")) {
+		/* generate e-tag */
+		etag_mutate(con->physical.etag, sce->etag);
 	
-	response_header_overwrite(srv, con, CONST_STR_LEN("ETag"), CONST_BUF_LEN(con->physical.etag));
+		response_header_overwrite(srv, con, CONST_STR_LEN("ETag"), CONST_BUF_LEN(con->physical.etag));
+	}
 	response_header_overwrite(srv, con, CONST_STR_LEN("Accept-Ranges"), CONST_STR_LEN("bytes"));
 	
 	/* prepare header */
-	mtime = strftime_cache_get(srv, sce->st.st_mtime);
-	response_header_overwrite(srv, con, CONST_STR_LEN("Last-Modified"), CONST_BUF_LEN(mtime));
+	if (NULL == (ds = (data_string *)array_get_element(con->response.headers, "Last-Modified"))) {
+		mtime = strftime_cache_get(srv, sce->st.st_mtime);
+		response_header_overwrite(srv, con, CONST_STR_LEN("Last-Modified"), CONST_BUF_LEN(mtime));
+	} else {
+		mtime = ds->value;
+	}
 	
 	/*
 	 * 14.26 If-None-Match
