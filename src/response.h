@@ -1,6 +1,8 @@
 #ifndef _RESPONSE_H_
 #define _RESPONSE_H_
 
+#include <time.h>
+
 #include "server.h"
 
 int http_response_parse(server *srv, connection *con);
@@ -13,4 +15,5 @@ handler_t http_response_prepare(server *srv, connection *con);
 int http_response_redirect_to_directory(server *srv, connection *con);
 int http_response_handle_cachable(server *srv, connection *con, time_t mtime);
 
+buffer * strftime_cache_get(server *srv, time_t last_mod);
 #endif
