@@ -262,7 +262,10 @@ int config_setup_connection(server *srv, connection *con) {
 	
 	PATCH(range_requests);
 	PATCH(force_lower_case);
+	PATCH(is_ssl);
 	
+	PATCH(ssl_pemfile);
+	PATCH(ssl_ca_file);
 	return 0;
 }
 
