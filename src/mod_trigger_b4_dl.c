@@ -276,7 +276,6 @@ static int mod_trigger_b4_dl_patch_connection(server *srv, connection *con, plug
 		
 		/* merge config */
 		for (j = 0; j < dc->value->used; j++) {
-#if defined(HAVE_GDBM) && defined(HAVE_PCRE_H)
 			data_unset *du = dc->value->data[j];
 
 			if (buffer_is_equal_string(du->key, CONST_STR_LEN("trigger-before-download.download-url"))) {
@@ -304,7 +303,6 @@ static int mod_trigger_b4_dl_patch_connection(server *srv, connection *con, plug
 				PATCH(mc);
 #endif
 			}
-#endif
 		}
 	}
 	
