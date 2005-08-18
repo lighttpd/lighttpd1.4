@@ -8,7 +8,7 @@ BEGIN {
 
 use strict;
 use IO::Socket;
-use Test::More tests => 6;
+use Test::More tests => 7;
 use LightyTest;
 
 my $tf = LightyTest->new();
@@ -47,5 +47,14 @@ EOF
  );
 $t->{RESPONSE} = ( { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200, '+Vary' => '', '+Content-Encoding' => '' } );
 ok($tf->handle_http($t) == 0, 'gzip, deflate - Content-Length and Content-Encoding is set');
+
+$t->{REQUEST}  = ( <<EOF
+GET /index.txt HTTP/1.0
+Accept-Encoding: gzip, deflate
+EOF
+ );
+$t->{RESPONSE} = ( { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200, '+Vary' => '', '+Content-Encoding' => '', 'Content-Type' => "text/plain" } );
+ok($tf->handle_http($t) == 0, 'Content-Type is from the original file');
+
 
 ok($tf->stop_proc == 0, "Stopping lighttpd");
