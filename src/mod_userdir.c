@@ -202,7 +202,8 @@ URIHANDLER_FUNC(mod_userdir_docroot_handler) {
 		
 		if (!found_user) return HANDLER_GO_ON;
 	}
-	 
+	
+	/* we build the physical path */	
 	buffer_copy_string(con->physical.path, pwd->pw_dir);
 	BUFFER_APPEND_SLASH(con->physical.path);
 	buffer_append_string_buffer(con->physical.path, p->conf.path); /* skip the / */
@@ -222,7 +223,7 @@ int mod_userdir_plugin_init(plugin *p) {
 	p->name        = buffer_init_string("userdir");
 	
 	p->init           = mod_userdir_init;
-	p->handle_docroot = mod_userdir_docroot_handler;
+	p->handle_physical = mod_userdir_docroot_handler;
 	p->set_defaults   = mod_userdir_set_defaults;
 	p->cleanup        = mod_userdir_free;
 	
