@@ -160,7 +160,19 @@ failed'. This is very rare and might only occur in test-setups.
 Increasing the ``server.max-fds`` limit will reduce the propability of this
 problem.
 
+stat() cache
+============
 
+A stat(2) can be expensive, caching it saves time adn context-switches..
+
+Instead of stat() for the existence of the file you can stat() it once and
+monitor the directory the file is in for modifications. As long as the 
+directiry doesn't change, the files in it are all the same. 
+
+With the help of FAM or gamin you can use kernel events to assure that
+your stat-cache is up to date. ::
+
+  server.stat-cache-engine = "fam"   # either fam, simple or off
 
 
 Plattform Specific Notes
