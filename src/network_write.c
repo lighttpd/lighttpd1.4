@@ -1,10 +1,6 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <sys/time.h>
-#ifdef HAVE_SYS_RESOURCE_H
-#include <sys/resource.h>
-#endif
-
 #include <errno.h>
 #include <fcntl.h>
 #include <unistd.h>
@@ -19,6 +15,14 @@
 #include "sys-socket.h"
 
 #include "network_backends.h"
+
+#ifdef HAVE_SYS_FILIO_H
+# include <sys/filio.h>
+#endif
+
+#ifdef HAVE_SYS_RESOURCE_H
+#include <sys/resource.h>
+#endif
 
 int network_write_chunkqueue_write(server *srv, connection *con, chunkqueue *cq) {
 	const int fd = con->fd;
