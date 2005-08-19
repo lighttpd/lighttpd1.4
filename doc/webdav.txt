@@ -30,11 +30,12 @@ So far we have
  * OPTIONS
  * MKCOL
  * DELETE
+ * PUT
 
 and the usual GET, POST, HEAD from HTTP/1.1. 
 
 So far mounting a webdav resource into Windows XP works and the basic litmus
-tests are passed (excluding PUT as it is not implemented).
+tests are passed.
 
 Options
 =======
