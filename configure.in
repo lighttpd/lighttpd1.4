@@ -256,10 +256,14 @@ AC_CHECK_LIB(bz2, BZ2_bzCompress, [
 ])
 AC_SUBST(BZ_LIB)
 
+if test -z "$PKG_CONFIG"; then
+  AC_PATH_PROG(PKG_CONFIG, pkg-config, no)
+fi
+
 AC_MSG_CHECKING(for gamin)
 AC_ARG_WITH(gamin, AC_HELP_STRING([--with-gamin],[gamin for reducing number of stat() calls]),
 [AC_MSG_RESULT(yes)
- PKG_CHECK_MODULES(FAM, gamin, [
+ PKG_CHECK_MODULES(FAM, gamin >= 0.1.0, [
     AC_DEFINE([HAVE_LIBFAM], [1], [libfam])
     AC_DEFINE([HAVE_FAM_H], [1], [fam.h])
  ])
@@ -368,7 +372,8 @@ AC_ARG_ENABLE(lfs,
    yes) CPPFLAGS="${CPPFLAGS} -D_FILE_OFFSET_BITS=64 -D_LARGEFILE_SOURCE -D_LARGE_FILES" ;;
     no) ;;
      *) AC_MSG_ERROR(bad value ${enableval} for --enable-lfs) ;;
-  esac],[CPPFLAGS="${CPPFLAGS} -D_FILE_OFFSET_BITS=64 -D_LARGEFILE_SOURCE -D_LARGE_FILES"])
+  esac],[CPPFLAGS="${CPPFLAGS} -D_FILE_OFFSET_BITS=64 -D_LARGEFILE_SOURCE -D_LARGE_FILES"
+	 enable_lfs=yes])
 AC_MSG_RESULT($enableval)
 
 AC_CHECK_SIZEOF(long)
@@ -452,9 +457,9 @@ AC_CONFIG_FILES([Makefile debian/Makefile src/Makefile doc/Makefile tests/Makefi
 AC_OUTPUT
 
 
-do_build="mod_cgi mod_fastcgi mod_proxy mod_evhost mod_simple_vhost mod_access mod_alias mod_setenv mod_usertrack mod_auth mod_status mod_accesslog mod_rrdtool mod_secdownload mod_expire mod_compress mod_dirlisting mod_indexfiles mod_userdir" 
+do_build="mod_cgi mod_fastcgi mod_proxy mod_evhost mod_simple_vhost mod_access mod_alias mod_setenv mod_usertrack mod_auth mod_status mod_accesslog mod_rrdtool mod_secdownload mod_expire mod_compress mod_dirlisting mod_indexfiles mod_userdir mod_webdav mod_staticfile mod_scgi" 
 
-plugins="mod_rewrite mod_redirect mod_ssi"
+plugins="mod_rewrite mod_redirect mod_ssi mod_trigger_b4_dl"
 features="regex-conditionals"
 if test ! "x$PCRE_LIB" = x; then
 	do_build="$do_build $plugins"
@@ -471,13 +476,26 @@ else
 	no_build="$no_build $plugins"
 fi
 
-plugins="mod_trigger_b4_dl"
-if test ! "x$GDBM_LIB" = x; then
+plugins="mod_cml"
+if test ! "x$LUA_LIB" = x; then
 	do_build="$do_build $plugins"
 else
 	no_build="$no_build $plugins"
 fi
 
+features="storage-gdbm"
+if test ! "x$GDBM_LIB" = x; then
+	enable_feature="$enable_feature $features"
+else
+	enable_feature="$enable_feature $features"
+fi
+
+features="storage-memcache"
+if test ! "x$MEMCACHE_LIB" = x; then
+	enable_feature="$enable_feature $features"
+else
+	enable_feature="$enable_feature $features"
+fi
 
 features="compress-gzip compress-deflate"
 if test ! "x$Z_LIB" = x; then
