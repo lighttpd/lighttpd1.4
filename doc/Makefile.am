@@ -31,7 +31,8 @@ setenv.txt \
 status.txt \
 scgi.txt \
 cml.txt \
-trigger_b4_dl.txt
+trigger_b4_dl.txt \
+webdav.txt
 
 HTMLDOCS=accesslog.html \
 	 authentication.html \
@@ -63,7 +64,8 @@ HTMLDOCS=accesslog.html \
 	 status.html \
 	 scgi.html \
 	 cml.html \
-	 trigger_b4_dl.html
+	 trigger_b4_dl.html \
+	 webdav.html
 
 EXTRA_DIST=lighttpd.conf lighttpd.user \
 	rc.lighttpd rc.lighttpd.redhat sysconfig.lighttpd \

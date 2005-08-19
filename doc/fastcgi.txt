@@ -420,6 +420,7 @@ the necessary environment variables to the FastCGI process. ::
                        )
                      )
                    )
+
 Configuring PHP
 ---------------
 
