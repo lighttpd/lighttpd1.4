@@ -310,6 +310,7 @@ static int connection_handle_write_prepare(server *srv, connection *con) {
 			switch(con->http_status) {
 			case 400: /* bad request */
 			case 505: /* unknown protocol */
+			case 207: /* this was webdav */
 				break;
 			default:
 				con->http_status = 501;
@@ -392,6 +393,7 @@ static int connection_handle_write_prepare(server *srv, connection *con) {
 			response_header_overwrite(srv, con, CONST_STR_LEN("Content-Type"), CONST_STR_LEN("text/html"));
 		}
 		/* fall through */
+	case 207:
 	case 200: /* class: header + body */
 		                break;
 		

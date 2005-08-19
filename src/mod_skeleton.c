@@ -77,8 +77,11 @@ FREE_FUNC(mod_skeleton_free) {
 	
 	if (p->config_storage) {
 		size_t i;
+
 		for (i = 0; i < srv->config_context->used; i++) {
 			plugin_config *s = p->config_storage[i];
+
+			if (!s) continue;
 			
 			array_free(s->match);
 			
