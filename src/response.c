@@ -121,14 +121,6 @@ handler_t http_response_prepare(server *srv, connection *con) {
 		return HANDLER_FINISHED;
 	}
 	
-	if (con->request.http_method == HTTP_METHOD_OPTIONS) {
-		/* option requests are handled directly without checking of the path */
-		con->http_status = 200;
-		con->file_finished = 1;
-
-		return HANDLER_FINISHED;
-	}
-
 	/* no decision yet, build conf->filename */
 	if (con->mode == DIRECT && con->physical.path->used == 0) {
 		char *qstr;
@@ -256,6 +248,18 @@ handler_t http_response_prepare(server *srv, connection *con) {
 			break;
 		}
 		
+		if (con->request.http_method == HTTP_METHOD_OPTIONS &&
+		    con->uri.path->ptr[0] == '*') {
+			/* option requests are handled directly without checking of the path */
+		
+			response_header_insert(srv, con, CONST_STR_LEN("Allow"), CONST_STR_LEN("OPTIONS, GET, HEAD, POST"));
+
+			con->http_status = 200;
+			con->file_finished = 1;
+
+			return HANDLER_FINISHED;
+		}
+
 		/***
 		 * 
 		 * border 
