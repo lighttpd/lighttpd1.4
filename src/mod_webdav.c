@@ -6,6 +6,7 @@
 #include <dirent.h>
 #include <errno.h>
 #include <unistd.h>
+#include <fcntl.h>
 
 #include "base.h"
 #include "log.h"
@@ -426,7 +427,10 @@ URIHANDLER_FUNC(mod_webdav_subrequest_handler) {
 
 		return HANDLER_FINISHED;
 	case HTTP_METHOD_MKCOL:
-		if (p->conf.is_readonly) break;
+		if (p->conf.is_readonly) {
+			con->http_status = 403;
+			return HANDLER_FINISHED;
+		}
 
 		if (con->request.content_length != 0) {
 			/* we don't support MKCOL with a body */
@@ -457,8 +461,11 @@ URIHANDLER_FUNC(mod_webdav_subrequest_handler) {
 
 		return HANDLER_FINISHED;
 	case HTTP_METHOD_DELETE:
-		if (p->conf.is_readonly) break;
-
+		if (p->conf.is_readonly) {
+			con->http_status = 403;
+			return HANDLER_FINISHED;
+		}
+		
 		/* stat and unlink afterwards */
 		if (-1 == stat(con->physical.path->ptr, &st)) {
 			/* don't about it yet, unlink will fail too */
@@ -523,6 +530,36 @@ URIHANDLER_FUNC(mod_webdav_subrequest_handler) {
 			con->http_status = 204;
 		}
 		return HANDLER_FINISHED;
+	case HTTP_METHOD_PUT: {
+		int fd;
+
+		if (p->conf.is_readonly) {
+			con->http_status = 403;
+			return HANDLER_FINISHED;
+		}
+		
+		/* taken what we have in the request-body and write it to a file */
+		if (-1 == (fd = open(con->physical.path->ptr, O_WRONLY|O_CREAT|O_TRUNC, 0600))) {
+			/* we can't open the file */
+			con->http_status = 403;
+		} else {
+			con->http_status = 201; /* created */
+
+			if (-1 == (write(fd, con->request.content->ptr, con->request.content->used - 1))) {
+				switch(errno) {
+				case ENOSPC:
+					con->http_status = 507;
+
+					break;
+				default:
+					con->http_status = 403;
+					break;
+				}
+			}
+			close(fd);
+		}
+		return HANDLER_FINISHED;
+	}
 	default:
 		break;
 	}
