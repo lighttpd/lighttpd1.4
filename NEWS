@@ -8,6 +8,7 @@ NEWS
   * added nested conditionals
   * added remote-ip to $HTTP
   * added support for stat-cache via FAM
+  * added a read-only WebDAV module
   * fixed cleanup in mod_proxy and mod_fastcgi
   * fixed handling of filenames on case-insensitive filesystems
 
