@@ -547,6 +547,14 @@ else
 	disable_feature="$disable_feature $features"
 fi
 
+features="stat-cache-fam"
+if test ! "x$FAM_LIB" = x; then
+	enable_feature="$enable_feature $features"
+else
+	disable_feature="$disable_feature $features"
+fi
+
+
 ## post processing
 do_build=`echo $do_build | sed 's/ /\n/g' | sort`
 no_build=`echo $no_build | sed 's/ /\n/g' | sort`
