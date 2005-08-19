@@ -408,7 +408,9 @@ URIHANDLER_FUNC(mod_webdav_subrequest_handler) {
 
 				while(NULL != (de = readdir(dir))) {
 					if (de->d_name[0] == '.' && de->d_name[1] == '\0') {
-						/* ignore the currrent dir */
+						/* ignore the current dir */
+					} else if (de->d_name[0] == '.' && de->d_name[1] == '.' && de->d_name[2] == '\0') {
+						/* ignore the parent dir */
 					} else {
 						get_response_entry(srv, con, p, b, de->d_name);
 					}
