@@ -303,8 +303,17 @@ static int connection_handle_write_prepare(server *srv, connection *con) {
 		case HTTP_METHOD_GET:
 		case HTTP_METHOD_POST:
 		case HTTP_METHOD_HEAD:
-		case HTTP_METHOD_OPTIONS:
 		case HTTP_METHOD_PUT:
+			break;
+		case HTTP_METHOD_OPTIONS:
+			if (con->uri.path->ptr[0] != '*') {
+				response_header_insert(srv, con, CONST_STR_LEN("Allow"), CONST_STR_LEN("OPTIONS, GET, HEAD, POST"));
+
+				con->http_status = 200;
+				con->file_finished = 1;
+
+				chunkqueue_reset(con->write_queue);
+			}
 			break;
 		default:
 			switch(con->http_status) {
@@ -395,7 +404,7 @@ static int connection_handle_write_prepare(server *srv, connection *con) {
 		/* fall through */
 	case 207:
 	case 200: /* class: header + body */
-		                break;
+		break;
 		
 	case 206: /* write_queue is already prepared */
 	case 302:
@@ -452,7 +461,7 @@ static int connection_handle_write_prepare(server *srv, connection *con) {
 	if (con->request.http_method == HTTP_METHOD_HEAD) {
 		chunkqueue_reset(con->write_queue);
 	}
-	
+
 	http_response_write_header(srv, con);
 		
 	return 0;
