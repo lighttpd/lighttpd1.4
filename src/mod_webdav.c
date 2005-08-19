@@ -27,7 +27,7 @@
 /* plugin config for all request/connections */
 
 typedef struct {
-	array *match;
+	unsigned short *enabled;
 } plugin_config;
 
 typedef struct {
@@ -63,8 +63,8 @@ FREE_FUNC(mod_webdav_free) {
 		size_t i;
 		for (i = 0; i < srv->config_context->used; i++) {
 			plugin_config *s = p->config_storage[i];
-			
-			array_free(s->match);
+
+			if (!s) continue;
 			
 			free(s);
 		}
@@ -85,7 +85,7 @@ SETDEFAULTS_FUNC(mod_webdav_set_defaults) {
 	size_t i = 0;
 	
 	config_values_t cv[] = { 
-		{ "webdav.array",             NULL, T_CONFIG_ARRAY, T_CONFIG_SCOPE_CONNECTION },       /* 0 */
+		{ "webdav.activate",            NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION },       /* 0 */
 		{ NULL,                         NULL, T_CONFIG_UNSET, T_CONFIG_SCOPE_UNSET }
 	};
 	
@@ -97,9 +97,8 @@ SETDEFAULTS_FUNC(mod_webdav_set_defaults) {
 		plugin_config *s;
 		
 		s = calloc(1, sizeof(plugin_config));
-		s->match    = array_init();
 		
-		cv[0].destination = s->match;
+		cv[0].destination = &(s->enabled);
 		
 		p->config_storage[i] = s;
 	
@@ -117,7 +116,7 @@ static int mod_webdav_patch_connection(server *srv, connection *con, plugin_data
 	size_t i, j;
 	plugin_config *s = p->config_storage[0];
 	
-	PATCH(match);
+	PATCH(enabled);
 	
 	/* skip the first, the global context */
 	for (i = 1; i < srv->config_context->used; i++) {
@@ -131,8 +130,8 @@ static int mod_webdav_patch_connection(server *srv, connection *con, plugin_data
 		for (j = 0; j < dc->value->used; j++) {
 			data_unset *du = dc->value->data[j];
 			
-			if (buffer_is_equal_string(du->key, CONST_STR_LEN("webdav.array"))) {
-				PATCH(match);
+			if (buffer_is_equal_string(du->key, CONST_STR_LEN("webdav.activate"))) {
+				PATCH(enabled);
 			}
 		}
 	}
@@ -150,8 +149,11 @@ URIHANDLER_FUNC(mod_webdav_uri_handler) {
 	
 	mod_webdav_patch_connection(srv, con, p);
 
+	if (!p->conf.enabled) return HANDLER_GO_ON;
+
 	switch (con->request.http_method) {
 	case HTTP_METHOD_OPTIONS:
+		/* we fake a little bit but it makes MS W2k happy and it let's us mount the volume */
 		response_header_overwrite(srv, con, CONST_STR_LEN("DAV"), CONST_STR_LEN("1,2"));
 		response_header_overwrite(srv, con, CONST_STR_LEN("MS-Author-Via"), CONST_STR_LEN("DAV"));
 		response_header_insert(srv, con, CONST_STR_LEN("Allow"), CONST_STR_LEN("PROPFIND"));
@@ -246,6 +248,7 @@ URIHANDLER_FUNC(mod_webdav_subrequest_handler) {
 	
 	UNUSED(srv);
 
+	if (!p->conf.enabled) return HANDLER_GO_ON;
 	/* physical path is setup */
 	if (con->physical.path->used == 0) return HANDLER_GO_ON;
 	
