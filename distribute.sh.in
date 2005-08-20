@@ -3,7 +3,7 @@ PACKAGE=@PACKAGE_TARNAME@
 VERSION=@VERSION@
 NAME=@PACKAGE_TARNAME@-@VERSION@
 
-DISTDIR="/home/weigon/wwwroot/servers/www.lighttpd.net/pages/download/" 
+DISTDIR="/home/jan/wwwroot/servers/www.lighttpd.net/pages/download/" 
 FILES="/usr/src/packages/RPMS/i586/${NAME}-1.i586.rpm \
 	/usr/src/packages/SRPMS/${NAME}-1.src.rpm \
 	${NAME}.tar.gz \
@@ -41,7 +41,7 @@ Changes
 ${NEWS}
 
 Download
-- ${NAME}-1.i586.rpm [built on SuSE 9.0]
+- ${NAME}-1.i586.rpm [built on Fedora Core 4]
   ${DLNAME}-1.i586.rpm
   MD5: ${MD5RPM}
 - ${NAME}-1.src.rpm
@@ -63,7 +63,7 @@ ${NEWS}
 
 EOF
 
-rst2html.py NEWS > NEWS.html
+rst2html NEWS > NEWS.html
 
 for i in ${DISTDIR}; do
 	cp -u ${FILES} $i
@@ -74,5 +74,4 @@ cd ~/wwwroot/servers/www.lighttpd.net/
 make put
 cd ${curdir}
 
-kmail -s "ANNOUNCE: ${NAME}" --msg `pwd`/release-news.${VERSION}-mail.txt lighttpd-announce@lists.kneschke.de
 
