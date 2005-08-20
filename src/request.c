@@ -958,10 +958,12 @@ int http_request_parse(server *srv, connection *con) {
    {
 
 		server_socket *srv_socket = con->srv_socket;
+#if 0	
 		if (con->request.http_content_type == NULL) {
 			log_error_write(srv, __FILE__, __LINE__, "s", 
-					"POST request, but content-type not set");
+					"Content-Length request, but content-type not set");
 		}
+#endif
 		
 		if (con_length_set == 0) {
 			/* content-length is missing */
