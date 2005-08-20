@@ -165,7 +165,8 @@ static int mod_dirlisting_patch_connection(server *srv, connection *con, plugin_
 		for (j = 0; j < dc->value->used; j++) {
 			data_unset *du = dc->value->data[j];
 			
-			if (buffer_is_equal_string(du->key, CONST_STR_LEN("dir-listing.activate"))) {
+			if (buffer_is_equal_string(du->key, CONST_STR_LEN("dir-listing.activate")) ||
+			    buffer_is_equal_string(du->key, CONST_STR_LEN("server.dir-listing"))) {
 				PATCH(dir_listing);
 			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("dir-listing.hide-dotfiles"))) {
 				PATCH(hide_dot_files);
