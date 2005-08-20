@@ -181,7 +181,7 @@ void stat_cache_free(stat_cache *fc) {
 }
 
 #ifdef HAVE_XATTR
-static int stat_cache_entry_attr_get(buffer *buf, char *name) {
+static int stat_cache_attr_get(buffer *buf, char *name) {
 	int attrlen;
 	int ret;
 	
