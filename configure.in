@@ -268,9 +268,20 @@ AC_ARG_WITH(gamin, AC_HELP_STRING([--with-gamin],[gamin for reducing number of s
     AC_DEFINE([HAVE_FAM_H], [1], [fam.h])
  ])
 ],[AC_MSG_RESULT(no)])
-AC_SUBST(FAM_LIB)
 
+AC_MSG_CHECKING(for properties in mod_webdav)
+AC_ARG_WITH(webdav-props, AC_HELP_STRING([--with-webdav-props],[properties in mod_webdav]),
+[AC_MSG_RESULT(yes)
+ PKG_CHECK_MODULES(XML, libxml-2.0, [
+    AC_DEFINE([HAVE_LIBXML2], [1], [libxml2])
+    AC_DEFINE([HAVE_LIBXML_H], [1], [libxml.h])
+ ])
+ PKG_CHECK_MODULES(SQLITE, sqlite3, [
+    AC_DEFINE([HAVE_SQLITE3], [1], [libsqlite3])
+    AC_DEFINE([HAVE_SQLITE3_H], [1], [sqlite3.h])
+ ])
 
+],[AC_MSG_RESULT(no)])
 
 AC_MSG_CHECKING(for gdbm)
 AC_ARG_WITH(gdbm, AC_HELP_STRING([--with-gdbm],[gdbm storage for mod_trigger_b4_dl]),
@@ -292,7 +303,7 @@ AC_ARG_WITH(memcache, AC_HELP_STRING([--with-memcache],[memcached storage for mo
          AC_CHECK_HEADERS([memcache.h],[
                  MEMCACHE_LIB=-lmemcache
                  AC_DEFINE([HAVE_MEMCACHE], [1], [libmemcache])
-		 AC_DEFINE([HAVE_MEMCACHE_H], [1])
+		 AC_DEFINE([HAVE_MEMCACHE_H], [1], [memcache.h])
          ])
  ])
 ],[AC_MSG_RESULT(no)])
@@ -301,14 +312,22 @@ AC_SUBST(MEMCACHE_LIB)
 AC_MSG_CHECKING(for lua)
 AC_ARG_WITH(lua, AC_HELP_STRING([--with-lua],[lua engine for mod_cml]),
 [AC_MSG_RESULT(yes)
- AC_CHECK_LIB(lua, lua_open, [
+ AC_PATH_PROG(LUACONFIG, lua-config)
+ if test x"$LUACONFIG" != x; then
+   LUA_CFLAGS=`$LUACONFIG --include`
+   LUA_LIB=`$LUACONFIG --libs --extralibs`
+ else
+   AC_CHECK_LIB(lua, lua_open, [
          AC_CHECK_HEADERS([lua.h],[
-	         LUA_LIB="-llua -llualib -lm"
+                 LUA_LIB=-llua 
                  AC_DEFINE([HAVE_LUA], [1], [liblua])
-		 AC_DEFINE([HAVE_LUA_H], [1])
+		 AC_DEFINE([HAVE_LUA_H], [1], [lua.h])
          ])
- ])
+   ])
+  fi
+
 ],[AC_MSG_RESULT(no)])
+AC_SUBST(LUA_CFLAGS)
 AC_SUBST(LUA_LIB)
 
 
@@ -548,12 +567,18 @@ else
 fi
 
 features="stat-cache-fam"
-if test ! "x$FAM_LIB" = x; then
+if test ! "x$FAM_LIBS" = x; then
 	enable_feature="$enable_feature $features"
 else
 	disable_feature="$disable_feature $features"
 fi
 
+features="webdav-properties"
+if test "x$XML_LIBS" \!= x -a "x$SQLITE_LIBS" \!= x; then
+	enable_feature="$enable_feature $features"
+else
+	disable_feature="$disable_feature $features"
+fi
 
 ## post processing
 do_build=`echo $do_build | sed 's/ /\n/g' | sort`

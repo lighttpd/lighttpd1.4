@@ -70,11 +70,13 @@ endif
 
 lib_LTLIBRARIES += mod_webdav.la
 mod_webdav_la_SOURCES = mod_webdav.c
+mod_webdav_la_CFLAGS = $(XML_CFLAGS)
 mod_webdav_la_LDFLAGS = -module -export-dynamic -avoid-version -no-undefined
-mod_webdav_la_LIBADD = $(common_libadd)
+mod_webdav_la_LIBADD = $(common_libadd) $(XML_LIBS) $(SQLITE_LIBS)
 
 lib_LTLIBRARIES += mod_cml.la
 mod_cml_la_SOURCES = mod_cml.c mod_cml_lua.c mod_cml_funcs.c
+mod_cml_la_CFLAGS = $(AM_CFLAGS) $(LUA_CFLAGS)
 mod_cml_la_LDFLAGS = -module -export-dynamic -avoid-version -no-undefined
 mod_cml_la_LIBADD = $(MEMCACHE_LIB) $(common_libadd) $(LUA_LIB)
 

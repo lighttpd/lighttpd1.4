@@ -306,6 +306,10 @@ static int connection_handle_write_prepare(server *srv, connection *con) {
 		case HTTP_METHOD_PUT:
 		case HTTP_METHOD_MKCOL:
 		case HTTP_METHOD_DELETE:
+		case HTTP_METHOD_COPY:
+		case HTTP_METHOD_MOVE:
+		case HTTP_METHOD_PROPFIND:
+		case HTTP_METHOD_PROPPATCH:
 			break;
 		case HTTP_METHOD_OPTIONS:
 			if (con->uri.path->ptr[0] != '*') {
