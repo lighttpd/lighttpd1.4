@@ -22,7 +22,7 @@
 #include "network.h"
 #include "fdevent.h"
 #include "log.h"
-#include "file_cache.h"
+#include "stat_cache.h"
 
 #ifndef UIO_MAXIOV
 #define UIO_MAXIOV IOV_MAX
@@ -147,23 +147,31 @@ int network_write_chunkqueue_solarissendfilev(server *srv, connection *con, chun
 			off_t offset;
 			size_t toSend, written;
 			sendfilevec_t fvec;
+			stat_cache_entry *sce = NULL;
+			int ifd;
 			
-			if (HANDLER_GO_ON != file_cache_get_entry(srv, con, c->data.file.name, &(con->fce))) {
+			if (HANDLER_ERROR == stat_cache_get_entry(srv, con, c->data.file.name, &sce)) {
 				log_error_write(srv, __FILE__, __LINE__, "sb",
 						strerror(errno), c->data.file.name);
 				return -1;
 			}
-			
+					
 			offset = c->data.file.offset + c->offset;
 			toSend = c->data.file.length - c->offset;
 			
-			if (offset > con->fce->st.st_size) {
+			if (offset > sce->st.st_size) {
 				log_error_write(srv, __FILE__, __LINE__, "sb", "file was shrinked:", c->data.file.name);
 				
 				return -1;
 			}
-			
-			fvec.sfv_fd = con->fce->fd;
+
+			if (-1 == (ifd = open(c->data.file.name->ptr, O_RDONLY))) {
+				log_error_write(srv, __FILE__, __LINE__, "ss", "open failed: ", strerror(errno));
+				
+				return -1;
+			}
+
+			fvec.sfv_fd = ifd;
 			fvec.sfv_flag = 0;
 			fvec.sfv_off = offset;
 			fvec.sfv_len = toSend;
@@ -173,12 +181,14 @@ int network_write_chunkqueue_solarissendfilev(server *srv, connection *con, chun
 				if (errno != EAGAIN) {
 					log_error_write(srv, __FILE__, __LINE__, "ssd", "sendfile: ", strerror(errno), errno);
 					
+					close(ifd);
 					return -1;
 				}
 				
 				r = 0;
 			}
 			
+			close(ifd);
 			c->offset += written;
 			con->bytes_written += written;
 			
