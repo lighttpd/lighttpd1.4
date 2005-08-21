@@ -717,7 +717,7 @@ static int webdav_get_live_property(server *srv, connection *con, plugin_data *p
 		
 					if (ds->key->used == 0) continue;
 				
-					if (buffer_is_equal_right_len(p->tmp_buf, ds->key, ds->key->used - 1)) {
+					if (buffer_is_equal_right_len(dst->path, ds->key, ds->key->used - 1)) {
 						buffer_append_string(b,"<D:getcontenttype>");
 						buffer_append_string_buffer(b, ds->value);
 						buffer_append_string(b, "</D:getcontenttype>");
