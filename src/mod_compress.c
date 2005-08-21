@@ -574,6 +574,10 @@ PHYSICALPATH_FUNC(mod_compress_physical) {
 	    con->request.http_method != HTTP_METHOD_POST) {
 		return HANDLER_GO_ON;
 	}
+
+	if (buffer_is_empty(con->physical.path)) {
+		return HANDLER_GO_ON;
+	}
 	
 	mod_compress_patch_connection(srv, con, p);
 	
