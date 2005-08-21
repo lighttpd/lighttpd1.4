@@ -417,7 +417,13 @@ static int http_list_directory(server *srv, connection *con, plugin_data *p, buf
 	i = dir->used - 1;
 
 #ifdef HAVE_PATHCONF
-	name_max = pathconf(dir->ptr, _PC_NAME_MAX);
+	if (-1 == (name_max = pathconf(dir->ptr, _PC_NAME_MAX))) {
+#ifdef NAME_MAX
+		name_max = NAME_MAX;
+#else
+		name_max = 256; /* stupid default */
+#endif
+	}
 #elif defined __WIN32
 	name_max = FILENAME_MAX;
 #else
