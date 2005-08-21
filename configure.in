@@ -84,17 +84,13 @@ dnl Checks for database.
 MYSQL_INCLUDE=""
 MYSQL_LIBS=""
 
-WITH_MYSQL=no
-
 AC_MSG_CHECKING(for MySQL support)
 AC_ARG_WITH(mysql,
     AC_HELP_STRING([--with-mysql@<:@=PATH@:>@],[Include MySQL support. PATH is the path to 'mysql_config']),
-    [
-    WITH_MYSQL=$withval
-    AC_MSG_RESULT(yes)
-],[AC_MSG_RESULT(no)])
+    [WITH_MYSQL=$withval],[WITH_MYSQL=no])
 
 if test "$WITH_MYSQL" != "no"; then
+  AC_MSG_RESULT(yes)  
   if test "$WITH_MYSQL" = "yes"; then
     AC_PATH_PROG(MYSQL_CONFIG, mysql_config)
   else
@@ -108,7 +104,7 @@ if test "$WITH_MYSQL" != "no"; then
     AC_MSG_ERROR(mysql_config not exists or not executable, use --with-mysql=path-to-mysql_config)
   fi
 
-  if $MYSQL_CONFIG | grep -- '--include' ; then
+  if $MYSQL_CONFIG | grep -- '--include' > /dev/null ; then
     MYSQL_INCLUDE="`$MYSQL_CONFIG --include | sed s/\'//g`"
   else
     MYSQL_INCLUDE="`$MYSQL_CONFIG --cflags | sed s/\'//g`"
@@ -127,15 +123,19 @@ dnl check for errmsg.h, which isn't installed by some versions of 3.21
   CPPFLAGS="$old_CPPFLAGS"
 
   AC_DEFINE([HAVE_MYSQL], [1], [mysql support])
+else
+  AC_MSG_RESULT(no)
 fi
 
 AC_SUBST(MYSQL_LIBS)
 AC_SUBST(MYSQL_INCLUDE)
 
-
+dnl Check for LDAP
 AC_MSG_CHECKING(for LDAP support)
 AC_ARG_WITH(ldap, AC_HELP_STRING([--with-ldap],[enable LDAP support]),
-[AC_MSG_RESULT(yes)
+[WITH_LDAP=$withval], [WITH_LDAP=no])
+AC_MSG_RESULT([$withval])
+if test "$WITH_LDAP" != "no"; then
  AC_CHECK_LIB(ldap, ldap_bind, [
   AC_CHECK_HEADERS([ldap.h],[
     LDAP_LIB=-lldap
@@ -152,12 +152,14 @@ AC_ARG_WITH(ldap, AC_HELP_STRING([--with-ldap],[enable LDAP support]),
   ])
  ])
  AC_SUBST(LBER_LIB)
+fi
 
-],[AC_MSG_RESULT(no)])
-
+dnl Check for xattr
 AC_MSG_CHECKING(for extended attributes support)
 AC_ARG_WITH(attr, AC_HELP_STRING([--with-attr],[enable extended attribute support]),
-[AC_MSG_RESULT(yes)
+[WITH_ATTR=$withval],[WITH_ATTR=no])
+AC_MSG_RESULT($withval)
+if test "$WITH_ATTR" != "no"; then
  AC_CHECK_LIB(attr, attr_get, [
 	AC_CHECK_HEADERS([attr/attributes.h],[
 		ATTR_LIB=-lattr
@@ -165,38 +167,35 @@ AC_ARG_WITH(attr, AC_HELP_STRING([--with-attr],[enable extended attribute suppor
 		AC_DEFINE([HAVE_ATTR_ATTRIBUTES_H], [1])
 	])
  ])
-],[AC_MSG_RESULT(no)])
-AC_SUBST(ATTR_LIB)
+ AC_SUBST(ATTR_LIB)
+fi
 
+dnl Check for valgrind
 AC_MSG_CHECKING(for valgrind)
-AC_ARG_WITH(valgrind, AC_HELP_STRING([--with-valgrind],[enable internal
-support for valgrind]),
-[AC_MSG_RESULT(yes)
+AC_ARG_WITH(valgrind, AC_HELP_STRING([--with-valgrind],[enable internal support for valgrind]),
+[WITH_VALGRIND=$withval],[WITH_VALGRIND=no])
+AC_MSG_RESULT([$WITH_VALGRIND])
+if test "$WITH_VALGRIND" != "no"; then
  AC_CHECK_HEADERS([valgrind/valgrind.h])
-],[AC_MSG_RESULT(no)])
+fi
 
+dnl Check for openssl
 AC_MSG_CHECKING(for OpenSSL)
-dnl check for openssl
-    AC_ARG_WITH(openssl,
+AC_ARG_WITH(openssl,
     AC_HELP_STRING([--with-openssl@<:@=DIR@:>@],[Include openssl support (default no)]),
-[
-    if test "$withval" != "no"; then
-        if test "$withval" != "yes"; then
-            CPPFLAGS="$CPPFLAGS -I$withval/include"
-            LDFLAGS="$LDFLAGS -L$withval/lib"
-	fi
-	
-        use_openssl=yes
-	AC_MSG_RESULT($withval)
-    else
-        use_openssl=no
-        AC_MSG_RESULT(no)
+    [WITH_OPENSSL=$withval],[WITH_OPENSSL=no])
+
+if test "$WITH_OPENSSL" != "no"; then
+    use_openssl=yes
+    if test "$WITH_OPENSSL" != "yes"; then
+	CPPFLAGS="$CPPFLAGS -I$WITH_OPENSSL/include"
+	LDFLAGS="$LDFLAGS -L$WITH_OPENSSL/lib"
     fi
-],[
+else
     use_openssl=no
-    AC_MSG_RESULT(no)
-])
-    
+fi
+AC_MSG_RESULT([$use_openssl])
+
 AC_ARG_WITH(openssl-includes,
     AC_HELP_STRING([--with-openssl-includes=DIR],[OpenSSL includes]),
     [ use_openssl=yes CPPFLAGS="$CPPFLAGS -I$withval" ]
@@ -260,14 +259,17 @@ if test -z "$PKG_CONFIG"; then
   AC_PATH_PROG(PKG_CONFIG, pkg-config, no)
 fi
 
+dnl Check for gamin
 AC_MSG_CHECKING(for gamin)
 AC_ARG_WITH(gamin, AC_HELP_STRING([--with-gamin],[gamin for reducing number of stat() calls]),
-[AC_MSG_RESULT(yes)
- PKG_CHECK_MODULES(FAM, gamin >= 0.1.0, [
-    AC_DEFINE([HAVE_LIBFAM], [1], [libfam])
-    AC_DEFINE([HAVE_FAM_H], [1], [fam.h])
- ])
-],[AC_MSG_RESULT(no)])
+[WITH_GAMIN=$withval],[WITH_GAMIN=no])
+AC_MSG_RESULT([$WITH_GAMIN])
+if test "$WITH_GAMIN" != "no"; then
+   PKG_CHECK_MODULES(FAM, gamin >= 0.1.0, [
+      AC_DEFINE([HAVE_LIBFAM], [1], [libfam])
+      AC_DEFINE([HAVE_FAM_H], [1], [fam.h])
+   ])
+fi
 
 AC_MSG_CHECKING(for properties in mod_webdav)
 AC_ARG_WITH(webdav-props, AC_HELP_STRING([--with-webdav-props],[properties in mod_webdav]),
@@ -283,9 +285,13 @@ AC_ARG_WITH(webdav-props, AC_HELP_STRING([--with-webdav-props],[properties in mo
 
 ],[AC_MSG_RESULT(no)])
 
+dnl Check for gdbm
 AC_MSG_CHECKING(for gdbm)
 AC_ARG_WITH(gdbm, AC_HELP_STRING([--with-gdbm],[gdbm storage for mod_trigger_b4_dl]),
-[AC_MSG_RESULT(yes)
+[WITH_GDBM=$withval],[WITH_GDBM=no])
+AC_MSG_RESULT([$WITH_GDBM])
+
+if test "$WITH_GDBM" != "no"; then
  AC_CHECK_LIB(gdbm, gdbm_open, [
          AC_CHECK_HEADERS([gdbm.h],[
                  GDBM_LIB=-lgdbm
@@ -293,12 +299,15 @@ AC_ARG_WITH(gdbm, AC_HELP_STRING([--with-gdbm],[gdbm storage for mod_trigger_b4_
 		 AC_DEFINE([HAVE_GDBM_H], [1])
          ])
  ])
-],[AC_MSG_RESULT(no)])
-AC_SUBST(GDBM_LIB)
+ AC_SUBST(GDBM_LIB)
+fi
 
+dnl Check for memcache
 AC_MSG_CHECKING(for memcache)
 AC_ARG_WITH(memcache, AC_HELP_STRING([--with-memcache],[memcached storage for mod_trigger_b4_dl]),
-[AC_MSG_RESULT(yes)
+[WITH_MEMCACHE=$withval],[WITH_MEMCACHE=no])
+AC_MSG_RESULT([$WITH_MEMCACHE])
+if test "$WITH_MEMCACHE" != "no"; then
  AC_CHECK_LIB(memcache, mc_new, [
          AC_CHECK_HEADERS([memcache.h],[
                  MEMCACHE_LIB=-lmemcache
@@ -306,12 +315,16 @@ AC_ARG_WITH(memcache, AC_HELP_STRING([--with-memcache],[memcached storage for mo
 		 AC_DEFINE([HAVE_MEMCACHE_H], [1], [memcache.h])
          ])
  ])
-],[AC_MSG_RESULT(no)])
-AC_SUBST(MEMCACHE_LIB)
-
+ AC_SUBST(MEMCACHE_LIB)
+fi
+  
+dnl Check for lua
 AC_MSG_CHECKING(for lua)
 AC_ARG_WITH(lua, AC_HELP_STRING([--with-lua],[lua engine for mod_cml]),
-[AC_MSG_RESULT(yes)
+[WITH_LUA=$withval],[WITH_LUA=no])
+
+AC_MSG_RESULT($WITH_LUA)
+if test "$WITH_LUA" != "no"; then
  AC_PATH_PROG(LUACONFIG, lua-config)
  if test x"$LUACONFIG" != x; then
    LUA_CFLAGS=`$LUACONFIG --include`
@@ -324,11 +337,10 @@ AC_ARG_WITH(lua, AC_HELP_STRING([--with-lua],[lua engine for mod_cml]),
 		 AC_DEFINE([HAVE_LUA_H], [1], [lua.h])
          ])
    ])
-  fi
-
-],[AC_MSG_RESULT(no)])
-AC_SUBST(LUA_CFLAGS)
-AC_SUBST(LUA_LIB)
+ fi
+ AC_SUBST(LUA_CFLAGS)
+ AC_SUBST(LUA_LIB)
+fi
 
 
 AC_SEARCH_LIBS(socket,socket)
@@ -506,14 +518,14 @@ features="storage-gdbm"
 if test ! "x$GDBM_LIB" = x; then
 	enable_feature="$enable_feature $features"
 else
-	enable_feature="$enable_feature $features"
+	disable_feature="$disable_feature $features"
 fi
 
 features="storage-memcache"
 if test ! "x$MEMCACHE_LIB" = x; then
 	enable_feature="$enable_feature $features"
 else
-	enable_feature="$enable_feature $features"
+	disable_feature="$disable_feature $features"
 fi
 
 features="compress-gzip compress-deflate"
