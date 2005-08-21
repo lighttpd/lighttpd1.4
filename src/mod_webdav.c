@@ -9,11 +9,6 @@
 #include <fcntl.h>
 #include <stdio.h>
 
-#include <libxml/tree.h>
-#include <libxml/parser.h>
-
-#include <sqlite3.h>
-
 #include "base.h"
 #include "log.h"
 #include "buffer.h"
@@ -24,6 +19,15 @@
 #include "config.h"
 #include "stream.h"
 #include "stat_cache.h"
+
+#if defined(HAVE_LIBXML_H) && defined(HAVE_SQLITE3_H)
+#define USE_PROPPATCH
+#include <libxml/tree.h>
+#include <libxml/parser.h>
+
+#include <sqlite3.h>
+#endif
+
 
 /**
  * this is a webdav for a lighttpd plugin
@@ -42,7 +46,7 @@ typedef struct {
 	unsigned short is_readonly;
 
 	buffer *sqlite_db_name;
-
+#ifdef USE_PROPPATCH
 	sqlite3 *sql;
 	sqlite3_stmt *stmt_update_prop;
 	sqlite3_stmt *stmt_delete_prop;
@@ -52,6 +56,7 @@ typedef struct {
 	sqlite3_stmt *stmt_delete_uri;
 	sqlite3_stmt *stmt_move_uri;
 	sqlite3_stmt *stmt_copy_uri;
+#endif
 } plugin_config;
 
 typedef struct {
@@ -102,6 +107,7 @@ FREE_FUNC(mod_webdav_free) {
 
 			if (!s) continue;
 	
+#ifdef USE_PROPPATCH
 			if (s->sql) {	
 				sqlite3_finalize(s->stmt_delete_prop);
 				sqlite3_finalize(s->stmt_delete_uri);
@@ -110,7 +116,7 @@ FREE_FUNC(mod_webdav_free) {
 				sqlite3_finalize(s->stmt_select_propnames);
 				sqlite3_close(s->sql);
 			}
-	
+#endif	
 			free(s);
 		}
 		free(p->config_storage);
@@ -157,6 +163,7 @@ SETDEFAULTS_FUNC(mod_webdav_set_defaults) {
 		}
 
 		if (!buffer_is_empty(s->sqlite_db_name)) {
+#ifdef USE_PROPPATCH
 			const char *next_stmt;
 			char *err;
 
@@ -244,6 +251,10 @@ SETDEFAULTS_FUNC(mod_webdav_set_defaults) {
 
 				return HANDLER_ERROR;
 			}
+#else
+			log_error_write(srv, __FILE__, __LINE__, "s", "Sorry, no sqlite3 and libxml2 support include, compile with --with-webdav-props");
+			return HANDLER_ERROR;
+#endif
 		}
 	}
 	
@@ -259,6 +270,7 @@ static int mod_webdav_patch_connection(server *srv, connection *con, plugin_data
 	PATCH(enabled);
 	PATCH(is_readonly);
 	
+#ifdef USE_PROPPATCH
 	PATCH(sql);
 	PATCH(stmt_update_prop);
 	PATCH(stmt_delete_prop);
@@ -268,7 +280,7 @@ static int mod_webdav_patch_connection(server *srv, connection *con, plugin_data
 	PATCH(stmt_delete_uri);
 	PATCH(stmt_move_uri);
 	PATCH(stmt_copy_uri);
-
+#endif
 	/* skip the first, the global context */
 	for (i = 1; i < srv->config_context->used; i++) {
 		data_config *dc = (data_config *)srv->config_context->data[i];
@@ -286,6 +298,7 @@ static int mod_webdav_patch_connection(server *srv, connection *con, plugin_data
 			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("webdav.is-readonly"))) {
 				PATCH(is_readonly);
 			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("webdav.sqlite-db-name"))) {
+#ifdef USE_PROPPATCH
 				PATCH(sql);
 				PATCH(stmt_update_prop);
 				PATCH(stmt_delete_prop);
@@ -295,7 +308,7 @@ static int mod_webdav_patch_connection(server *srv, connection *con, plugin_data
 				PATCH(stmt_delete_uri);
 				PATCH(stmt_move_uri);
 				PATCH(stmt_copy_uri);
-
+#endif
 			}
 		}
 	}
@@ -335,10 +348,13 @@ URIHANDLER_FUNC(mod_webdav_uri_handler) {
 	return HANDLER_GO_ON;
 }
 static int webdav_gen_prop_tag(server *srv, connection *con, 
-		xmlChar *prop_name, 
-		xmlChar *prop_ns, 
+		char *prop_name, 
+		char *prop_ns, 
 		const char *value, 
 		buffer *b) {
+
+	UNUSED(srv);
+	UNUSED(con);
 
 	if (value) {
 		buffer_append_string(b,"<");
@@ -365,6 +381,8 @@ static int webdav_gen_prop_tag(server *srv, connection *con,
 
 
 static int webdav_gen_response_status_tag(server *srv, connection *con, physical *dst, int status, buffer *b) {
+	UNUSED(srv);
+
 	buffer_append_string(b,"<D:response xmlns:ns0=\"urn:uuid:c2f41010-65b3-11d1-a29f-00aa00c14882/\">\n");
 
 	buffer_append_string(b,"<D:href>\n");
@@ -404,6 +422,7 @@ static int webdav_delete_file(server *srv, connection *con, plugin_data *p, phys
 		}
 		webdav_gen_response_status_tag(srv, con, dst, status, b);
 	} else {
+#ifdef USE_PROPPATCH
 		sqlite3_stmt *stmt = p->conf.stmt_delete_uri;
 
 		sqlite3_reset(stmt);
@@ -419,6 +438,7 @@ static int webdav_delete_file(server *srv, connection *con, plugin_data *p, phys
 			/* */
 			WP();
 		}
+#endif
 	}
 
 	return (status != 0);
@@ -475,6 +495,7 @@ static int webdav_delete_dir(server *srv, connection *con, plugin_data *p, physi
 
 					webdav_gen_response_status_tag(srv, con, &d, status, b);
 				} else {
+#ifdef USE_PROPPATCH
 					sqlite3_stmt *stmt = p->conf.stmt_delete_uri;
 
 					status = 0;
@@ -492,6 +513,7 @@ static int webdav_delete_dir(server *srv, connection *con, plugin_data *p, physi
 						/* */
 						WP();
 					}
+#endif
 				}
 			} else {
 				have_multi_status = webdav_delete_file(srv, con, p, &d, b);
@@ -549,6 +571,7 @@ static int webdav_copy_file(server *srv, connection *con, plugin_data *p, physic
 	stream_close(&s);
 	close(ofd);
 
+#ifdef USE_PROPPATCH
 	if (0 == status) {
 		/* copy worked fine, copy connected properties */
 		sqlite3_stmt *stmt = p->conf.stmt_copy_uri;
@@ -571,7 +594,7 @@ static int webdav_copy_file(server *srv, connection *con, plugin_data *p, physic
 			WP();
 		}
 	}
-
+#endif
 	return status;
 }
 
@@ -621,6 +644,7 @@ static int webdav_copy_dir(server *srv, connection *con, plugin_data *p, physica
 				    errno != EEXIST) {
 					/* WTH ? */
 				} else {
+#ifdef USE_PROPPATCH
 					sqlite3_stmt *stmt = p->conf.stmt_copy_uri;
 
 					if (0 != (status = webdav_copy_dir(srv, con, p, &s, &d, overwrite))) {
@@ -645,6 +669,7 @@ static int webdav_copy_dir(server *srv, connection *con, plugin_data *p, physica
 						/* */
 						WP();
 					}
+#endif
 				}
 			} else if (S_ISREG(st.st_mode)) {
 				/* a plain file */
@@ -665,7 +690,7 @@ static int webdav_copy_dir(server *srv, connection *con, plugin_data *p, physica
 	return status;
 }
 
-static int webdav_get_live_property(server *srv, connection *con, plugin_data *p, physical *dst, xmlChar *prop_name, buffer *b) {
+static int webdav_get_live_property(server *srv, connection *con, plugin_data *p, physical *dst, char *prop_name, buffer *b) {
 	stat_cache_entry *sce = NULL;
 	int found = 0;
 
@@ -674,12 +699,12 @@ static int webdav_get_live_property(server *srv, connection *con, plugin_data *p
 		char mtime_buf[] = "Thu, 18 Aug 2005 07:27:16 GMT";
 		size_t k;
 
-		if (0 == xmlStrcmp(prop_name, BAD_CAST "resourcetype")) {
+		if (0 == strcmp(prop_name, "resourcetype")) {
 			if (S_ISDIR(sce->st.st_mode)) {
 				buffer_append_string(b, "<D:resourcetype><D:collection/></D:resourcetype>");
 				found = 1;
 			}
-		} else if (0 == xmlStrcmp(prop_name, BAD_CAST "getcontenttype")) {
+		} else if (0 == strcmp(prop_name, "getcontenttype")) {
 			if (S_ISDIR(sce->st.st_mode)) {
 				buffer_append_string(b, "<D:getcontenttype>httpd/unix-directory</D:getcontenttype>");
 				found = 1;
@@ -699,24 +724,24 @@ static int webdav_get_live_property(server *srv, connection *con, plugin_data *p
 					}
 				}
 			}
-		} else if (0 == xmlStrcmp(prop_name, BAD_CAST "creationdate")) {
+		} else if (0 == strcmp(prop_name, "creationdate")) {
 			buffer_append_string(b, "<D:creationdate ns0:dt=\"dateTime.tz\">");
 			strftime(ctime_buf, sizeof(ctime_buf), "%Y-%m-%dT%H:%M:%SZ", gmtime(&(sce->st.st_ctime)));
 			buffer_append_string(b, ctime_buf);
 			buffer_append_string(b, "</D:creationdate>");
 			found = 1;
-		} else if (0 == xmlStrcmp(prop_name, BAD_CAST "getlastmodified")) {
+		} else if (0 == strcmp(prop_name, "getlastmodified")) {
 			buffer_append_string(b,"<D:getlastmodified ns0:dt=\"dateTime.rfc1123\">");
 			strftime(mtime_buf, sizeof(mtime_buf), "%a, %d %b %Y %H:%M:%S GMT", gmtime(&(sce->st.st_mtime)));
 			buffer_append_string(b, mtime_buf);
 			buffer_append_string(b, "</D:getlastmodified>");
 			found = 1;
-		} else if (0 == xmlStrcmp(prop_name, BAD_CAST "getcontentlength")) {
+		} else if (0 == strcmp(prop_name, "getcontentlength")) {
 			buffer_append_string(b,"<D:getcontentlength>");
 			buffer_append_off_t(b, sce->st.st_size);
 			buffer_append_string(b, "</D:getcontentlength>");
 			found = 1;
-		} else if (0 == xmlStrcmp(prop_name, BAD_CAST "getcontentlanguage")) {
+		} else if (0 == strcmp(prop_name, "getcontentlanguage")) {
 			buffer_append_string(b,"<D:getcontentlanguage>");
 			buffer_append_string(b, "en");
 			buffer_append_string(b, "</D:getcontentlanguage>");
@@ -727,12 +752,13 @@ static int webdav_get_live_property(server *srv, connection *con, plugin_data *p
 	return found ? 0 : -1;
 }
 
-static int webdav_get_property(server *srv, connection *con, plugin_data *p, physical *dst, xmlChar *prop_name, xmlChar *prop_ns, buffer *b) {
-	if (0 == xmlStrcmp(prop_ns, BAD_CAST "DAV:")) {
+static int webdav_get_property(server *srv, connection *con, plugin_data *p, physical *dst, char *prop_name, char *prop_ns, buffer *b) {
+	if (0 == strcmp(prop_ns, "DAV:")) {
 		/* a local 'live' property */
 		return webdav_get_live_property(srv, con, p, dst, prop_name, b);
 	} else {
 		int found = 0;
+#ifdef USE_PROPPATCH
 		/* perhaps it is in sqlite3 */
 		sqlite3_reset(p->conf.stmt_select_prop);
 
@@ -757,6 +783,7 @@ static int webdav_get_property(server *srv, connection *con, plugin_data *p, phy
 			webdav_gen_prop_tag(srv, con, prop_name, prop_ns, sqlite3_column_text(p->conf.stmt_select_prop, 0), b);
 			found = 1;
 		}
+#endif
 		return found ? 0 : -1;
 	}
 
@@ -845,6 +872,7 @@ URIHANDLER_FUNC(mod_webdav_subrequest_handler) {
 
 		/* is there a content-body ? */
 	
+#ifdef USE_PROPPATCH
 		/* any special requests or just allprop ? */
 		if (con->request.content_length) {
 			xmlDocPtr xml;
@@ -929,7 +957,7 @@ URIHANDLER_FUNC(mod_webdav_subrequest_handler) {
 				return HANDLER_FINISHED;
 			}
 		}
-
+#endif
 		con->http_status = 207;
 
 		response_header_overwrite(srv, con, CONST_STR_LEN("Content-Type"), CONST_STR_LEN("text/xml; charset=\"utf-8\""));
@@ -1382,6 +1410,7 @@ URIHANDLER_FUNC(mod_webdav_subrequest_handler) {
 				/* try a rename */
 
 				if (0 == rename(con->physical.path->ptr, p->physical.path->ptr)) {
+#ifdef USE_PROPPATCH
 					sqlite3_stmt *stmt = p->conf.stmt_move_uri;
 
 					sqlite3_reset(stmt);
@@ -1400,6 +1429,7 @@ URIHANDLER_FUNC(mod_webdav_subrequest_handler) {
 					if (SQLITE_DONE != sqlite3_step(stmt)) {
 						log_error_write(srv, __FILE__, __LINE__, "ss", "sql-move failed:", sqlite3_errmsg(p->conf.sql));
 					}
+#endif
 					return HANDLER_FINISHED;
 				}
 
@@ -1423,6 +1453,7 @@ URIHANDLER_FUNC(mod_webdav_subrequest_handler) {
 	}
 	case HTTP_METHOD_PROPPATCH: {
 
+#ifdef USE_PROPPATCH
 		if (con->request.content_length) {
 			xmlDocPtr xml;
 			buffer *xmldoc = con->request.content;
@@ -1544,7 +1575,7 @@ propmatch_cleanup:
 				return HANDLER_FINISHED;
 			}
 		}
-
+#endif
 		con->http_status = 501;
 		return HANDLER_FINISHED;
 	}
