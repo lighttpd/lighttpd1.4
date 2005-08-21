@@ -117,7 +117,7 @@ int light_isalnum(int c);
 #define CONST_BUF_LEN(x) x->ptr, x->used - 1
 
 
-#define SEGFAULT() abort()
+#define SEGFAULT() do { fprintf(stderr, "%s.%d: aborted\n", __FILE__, __LINE__); abort(); } while(0)
 #define UNUSED(x) ( (void)(x) )
 
 #endif
