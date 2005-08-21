@@ -431,11 +431,13 @@ static int connection_handle_write_prepare(server *srv, connection *con) {
 	
 
 	if (con->file_finished) {
-		 /* content-len */
+		/* we have all the content and chunked encoding is not used, set a content-length */ 
 		
-		buffer_copy_off_t(srv->tmp_buf, chunkqueue_length(con->write_queue));
+		if ((con->response.transfer_encoding & HTTP_TRANSFER_ENCODING_CHUNKED) == 0) {
+			buffer_copy_off_t(srv->tmp_buf, chunkqueue_length(con->write_queue));
 		
-		response_header_overwrite(srv, con, CONST_STR_LEN("Content-Length"), CONST_BUF_LEN(srv->tmp_buf));
+			response_header_overwrite(srv, con, CONST_STR_LEN("Content-Length"), CONST_BUF_LEN(srv->tmp_buf));
+		}
 	} else {
 		/* disable keep-alive if size-info for the body is missing */
 		if ((con->parsed_response & HTTP_CONTENT_LENGTH) &&
