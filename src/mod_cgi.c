@@ -1062,9 +1062,8 @@ URIHANDLER_FUNC(cgi_is_handled) {
 				con->http_status = 500;
 				
 				buffer_reset(con->physical.path);
+				return HANDLER_FINISHED;
 			}
-			
-			return HANDLER_FINISHED;
 		}
 	}
 	
