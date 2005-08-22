@@ -12,6 +12,7 @@ NEWS
   * fixed compilation on Solaris and FreeBSD
   * fixed conditional options in mod_dirlisting
   * fixed segfault in mod_dirlisting for NFS directories
+  * fixed check for docroot in change-root environments
 
 - 1.4.0 - 2005-08-17 
 
