@@ -1011,11 +1011,26 @@ int config_set_defaults(server *srv) {
 		
 		return -1;  
 	}  
-	if (-1 == stat(s->document_root->ptr, &st1)) {  
-		log_error_write(srv, __FILE__, __LINE__, "sb",  
-				"base-docroot doesn't exist:",
-				s->document_root);  
-		return -1;
+	
+	if (buffer_is_empty(srv->srvconf.changeroot)) {
+		if (-1 == stat(s->document_root->ptr, &st1)) {  
+			log_error_write(srv, __FILE__, __LINE__, "sb",  
+					"base-docroot doesn't exist:",
+					s->document_root);  
+			return -1;
+		}
+
+	} else {
+		buffer_copy_string_buffer(srv->tmp_buf, srv->srvconf.changeroot);
+		buffer_append_string_buffer(srv->tmp_buf, s->document_root);
+
+		if (-1 == stat(srv->tmp_buf->ptr, &st1)) {  
+			log_error_write(srv, __FILE__, __LINE__, "sb",  
+					"base-docroot doesn't exist:",
+					srv->tmp_buf);  
+			return -1;
+		}
+		
 	}
 	
 	buffer_copy_string_buffer(srv->tmp_buf, s->document_root);  
