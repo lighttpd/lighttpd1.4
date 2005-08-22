@@ -222,6 +222,10 @@ dir-listing.hide-dotfiles
 dir-listing.external-css
   path to an external css stylesheet for the directory listing
 
+dir-listing.exclude
+  list of regular expressions.  Files that match any of the specified regular
+  expressions will be excluded from directory listings.
+
 server.follow-symlink
   allow to follow-symlinks
   
