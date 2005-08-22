@@ -3,6 +3,16 @@
 NEWS
 ====
 
+- 1.4.1 - 2005-08-22
+
+  * added a complete Class 1 complient mod_webdav
+  * fixed ssl support (especially on OpenBSD)
+  * fixed response header in body problem in mod_cgi
+  * fixed numbers before body problem 
+  * fixed compilation on Solaris and FreeBSD
+  * fixed conditional options in mod_dirlisting
+  * fixed segfault in mod_dirlisting for NFS directories
+
 - 1.4.0 - 2005-08-17 
 
   * added nested conditionals
