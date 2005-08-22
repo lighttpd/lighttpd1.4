@@ -92,6 +92,7 @@ int fcgi_spawn_connection(char *appPath, unsigned short port, const char *unixso
 	if (-1 == connect(fcgi_fd, fcgi_addr, servlen)) {
 		/* server is not up, spawn in  */
 		pid_t child;
+		int val;
 		
 		if (unixsocket) unlink(unixsocket);
 		
@@ -103,7 +104,14 @@ int fcgi_spawn_connection(char *appPath, unsigned short port, const char *unixso
 				__FILE__, __LINE__);
 			return -1;
 		}
-		
+
+		val = 1;
+		if (setsockopt(fcgi_fd, SOL_SOCKET, SO_REUSEADDR, &val, sizeof(val)) < 0) {
+			fprintf(stderr, "%s.%d\n", 
+				__FILE__, __LINE__);
+			return -1;
+		}
+
 		/* create socket */
 		if (-1 == bind(fcgi_fd, fcgi_addr, servlen)) {
 			fprintf(stderr, "%s.%d: bind failed: %s\n", 
