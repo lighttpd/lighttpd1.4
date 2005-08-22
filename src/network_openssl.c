@@ -16,6 +16,7 @@
 #include <netdb.h>
 #include <string.h>
 #include <stdlib.h>
+#include <assert.h>
 
 #include "network.h"
 #include "fdevent.h"
@@ -29,7 +30,25 @@ int network_write_chunkqueue_openssl(server *srv, connection *con, chunkqueue *c
 	int ssl_r;
 	chunk *c;
 	size_t chunks_written = 0;
-	
+
+	/* this is a 64k sendbuffer
+	 *
+	 * it has to stay at the same location all the time to satisfy the needs 
+	 * of SSL_write to pass the SAME parameter in case of a _WANT_WRITE
+	 *
+	 * the buffer is allocated once, is NOT realloced and is NOT freed at shutdown
+	 * -> we expect a 64k block to 'leak' in valgrind
+	 *
+	 *
+	 * In reality we would like to use mmap() but we don't have a guarantee that
+	 * we get the same mmap() address for each call. On openbsd the mmap() address
+	 * even randomized.
+	 *   That means either we keep the mmap() open or we do a read() into a 
+	 * constant buffer 
+	 * */
+#define LOCAL_SEND_BUFSIZE (64 * 1024)
+	static char *local_send_buffer = NULL;
+
 	for(c = cq->first; c; c = c->next) {
 		int chunk_finished = 0;
 		
@@ -102,7 +121,6 @@ int network_write_chunkqueue_openssl(server *srv, connection *con, chunkqueue *c
 			ssize_t r;
 			off_t offset;
 			size_t toSend;
-			char *p;
 			stat_cache_entry *sce = NULL;
 			int ifd;
 			
@@ -111,72 +129,74 @@ int network_write_chunkqueue_openssl(server *srv, connection *con, chunkqueue *c
 						strerror(errno), c->data.file.name);
 				return -1;
 			}
-			
-			offset = c->data.file.offset + c->offset;
-			toSend = c->data.file.length - c->offset;
-			
-			if (-1 == (ifd = open(c->data.file.name->ptr, O_RDONLY))) {
-				log_error_write(srv, __FILE__, __LINE__, "ss", "open failed: ", strerror(errno));
-				
-				return -1;
+
+			if (NULL == local_send_buffer) {
+				local_send_buffer = malloc(LOCAL_SEND_BUFSIZE);
+				assert(local_send_buffer);
 			}
 
+			do {
 			
-			if (MAP_FAILED == (p = mmap(0, sce->st.st_size, PROT_READ, MAP_SHARED, ifd, 0))) {
-				log_error_write(srv, __FILE__, __LINE__, "ss", "mmap failed: ", strerror(errno));
+				offset = c->data.file.offset + c->offset;
+				toSend = c->data.file.length - c->offset;
 
-				close(ifd);
+				if (toSend > LOCAL_SEND_BUFSIZE) toSend = LOCAL_SEND_BUFSIZE;
+			
+				if (-1 == (ifd = open(c->data.file.name->ptr, O_RDONLY))) {
+					log_error_write(srv, __FILE__, __LINE__, "ss", "open failed: ", strerror(errno));
 				
-				return -1;
-			}
-			
-			close(ifd);
-
-			s = p + offset;
-			
-			if ((r = SSL_write(con->ssl, s, toSend)) <= 0) {
-				switch ((ssl_r = SSL_get_error(con->ssl, r))) {
-				case SSL_ERROR_WANT_WRITE:
-					break;
-				case SSL_ERROR_SYSCALL:
-					switch(errno) {
-					case EPIPE:
-						return -2;
-					default:
-						log_error_write(srv, __FILE__, __LINE__, "sddds", "SSL:", 
-								ssl_r, r, errno,
-								strerror(errno));
-						break;
-					}
-					
-					return  -1;
-				case SSL_ERROR_ZERO_RETURN:
-					/* clean shutdown on the remote side */
-					
-					if (r == 0) {
-						munmap(p, c->data.file.length);
-						return -2;
-					}
-					
-					/* fall thourgh */
-				default:
-					log_error_write(srv, __FILE__, __LINE__, "sdds", "SSL:", 
-							ssl_r, r, 
-							ERR_error_string(ERR_get_error(), NULL));
-					
-					munmap(p, c->data.file.length);
 					return -1;
 				}
-			} else {
-				c->offset += r;
-				con->bytes_written += r;
-			}
+
+
+				lseek(ifd, offset, SEEK_SET);
+				if (-1 == (toSend = read(ifd, local_send_buffer, toSend))) {
+					log_error_write(srv, __FILE__, __LINE__, "ss", "read failed: ", strerror(errno));
+					return -1;
+				}
+
+				s = local_send_buffer;
 			
-			munmap(p, c->data.file.length);
+				close(ifd);
 			
-			if (c->offset == c->data.file.length) {
-				chunk_finished = 1;
-			}
+				if ((r = SSL_write(con->ssl, s, toSend)) <= 0) {
+					switch ((ssl_r = SSL_get_error(con->ssl, r))) {
+					case SSL_ERROR_WANT_WRITE:
+						break;
+					case SSL_ERROR_SYSCALL:
+						switch(errno) {
+						case EPIPE:
+							return -2;
+						default:
+							log_error_write(srv, __FILE__, __LINE__, "sddds", "SSL:", 
+									ssl_r, r, errno,
+									strerror(errno));
+							break;
+						}
+					
+						return  -1;
+					case SSL_ERROR_ZERO_RETURN:
+						/* clean shutdown on the remote side */
+					
+						if (r == 0)  return -2;
+					
+						/* fall thourgh */
+					default:
+						log_error_write(srv, __FILE__, __LINE__, "sdds", "SSL:", 
+								ssl_r, r, 
+								ERR_error_string(ERR_get_error(), NULL));
+					
+						return -1;
+					}
+				} else {
+					c->offset += r;
+					con->bytes_written += r;
+				}
+			
+				if (c->offset == c->data.file.length) {
+					chunk_finished = 1;
+				}
+			} while(!chunk_finished);
 			
 			break;
 		}
