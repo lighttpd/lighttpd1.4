@@ -35,10 +35,26 @@
 /* plugin config for all request/connections */
 
 typedef struct {
+#ifdef HAVE_PCRE_H
+	pcre *regex;
+#endif
+	buffer *string;
+} excludes;
+
+typedef struct {
+	excludes **ptr;
+
+	size_t used;
+	size_t size;
+} excludes_buffer;
+
+typedef struct {
 	unsigned short dir_listing;
 	unsigned short hide_dot_files;
 	unsigned short show_readme;
 	
+	excludes_buffer *excludes;
+
 	buffer *external_css;
 	buffer *encoding;
 } plugin_config;
@@ -52,6 +68,78 @@ typedef struct {
 	
 	plugin_config conf; 
 } plugin_data;
+
+excludes_buffer *excludes_buffer_init(void) {
+	excludes_buffer *exb;
+
+	exb = calloc(1, sizeof(*exb));
+
+	return exb;
+}
+
+int excludes_buffer_append(excludes_buffer *exb, buffer *string) {
+#ifdef HAVE_PCRE_H
+	size_t i;
+	const char *errptr;
+	int erroff;
+
+	if (!string) return -1;
+
+	if (exb->size == 0) {
+		exb->size = 4;
+		exb->used = 0;
+
+		exb->ptr = malloc(exb->size * sizeof(*exb->ptr));
+
+		for(i = 0; i < exb->size ; i++) {
+			exb->ptr[i] = calloc(1, sizeof(**exb->ptr));
+		}
+	} else if (exb->used == exb->size) {
+		exb->size += 4;
+
+		exb->ptr = realloc(exb->ptr, exb->size * sizeof(*exb->ptr));
+
+		for(i = exb->used; i < exb->size; i++) {
+			exb->ptr[i] = calloc(1, sizeof(**exb->ptr));
+		}
+	}
+
+
+	if (NULL == (exb->ptr[exb->used]->regex = pcre_compile(string->ptr, 0,
+						    &errptr, &erroff, NULL))) {
+		return -1;
+	}
+
+	exb->ptr[exb->used]->string = buffer_init();
+	buffer_copy_string_buffer(exb->ptr[exb->used]->string, string);
+
+	exb->used++;
+
+	return 0;
+#else
+	UNUSED(exb);
+	UNUSED(string);
+	UNUSED(regex);
+
+	return -1;
+#endif
+}
+
+void excludes_buffer_free(excludes_buffer *exb) {
+#ifdef HAVE_PCRE_H
+	size_t i;
+
+	for (i = 0; i < exb->size; i++) {
+		if (exb->ptr[i]->regex) pcre_free(exb->ptr[i]->regex);
+		if (exb->ptr[i]->string) buffer_free(exb->ptr[i]->string);
+		free(exb->ptr[i]);
+	}
+
+	if (exb->ptr) free(exb->ptr);
+#endif
+
+	free(exb);
+}
 
 /* init the plugin data */
 INIT_FUNC(mod_dirlisting_init) {
@@ -78,6 +166,7 @@ FREE_FUNC(mod_dirlisting_free) {
 			
 			if (!s) continue;
 			
+			excludes_buffer_free(s->excludes);
 			buffer_free(s->external_css);
 			buffer_free(s->encoding);
 			
@@ -93,6 +182,47 @@ FREE_FUNC(mod_dirlisting_free) {
 	return HANDLER_GO_ON;
 }
 
+static int parse_config_entry(server *srv, plugin_config *s, array *ca, const char *option) {
+	data_unset *du;
+
+	if (NULL != (du = array_get_element(ca, option))) {
+		data_array *da = (data_array *)du;
+		size_t j;
+
+		if (du->type != TYPE_ARRAY) {
+			log_error_write(srv, __FILE__, __LINE__, "sss",
+				"unexpected type for key: ", option, "array of strings");
+
+			return HANDLER_ERROR;
+		}
+
+		da = (data_array *)du;
+
+		for (j = 0; j < da->value->used; j++) {
+			if (da->value->data[j]->type != TYPE_STRING) {
+				log_error_write(srv, __FILE__, __LINE__, "sssbs",
+					"unexpected type for key: ", option, "[",
+					da->value->data[j]->key, "](string)");
+
+				return HANDLER_ERROR;
+			}
+
+			if (0 != excludes_buffer_append(s->excludes,
+				    ((data_string *)(da->value->data[j]))->value)) {
+#ifdef HAVE_PCRE_H
+				log_error_write(srv, __FILE__, __LINE__, "sb", 
+						"pcre-compile failed for", ((data_string *)(da->value->data[j]))->value);
+#else
+				log_error_write(srv, __FILE__, __LINE__, "s", 
+						"pcre support is missing, please install libpcre and the headers");
+#endif
+			}
+		}
+	}
+
+	return 0;
+}
+
 /* handle plugin config and check values */
 
 SETDEFAULTS_FUNC(mod_dirlisting_set_defaults) {
@@ -100,12 +230,13 @@ SETDEFAULTS_FUNC(mod_dirlisting_set_defaults) {
 	size_t i = 0;
 	
 	config_values_t cv[] = { 
-		{ "dir-listing.activate",        NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION }, /* 0 */
-		{ "dir-listing.hide-dotfiles",   NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION }, /* 1 */
-		{ "dir-listing.external-css",    NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_CONNECTION },  /* 2 */
-		{ "dir-listing.encoding",        NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_CONNECTION },  /* 3 */
-		{ "dir-listing.show-readme",     NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION }, /* 4 */
-		{ "server.dir-listing",          NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION }, /* 5 */
+		{ "dir-listing.exclude",	 NULL, T_CONFIG_LOCAL, T_CONFIG_SCOPE_CONNECTION },   /* 0 */
+		{ "dir-listing.activate",        NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION }, /* 1 */
+		{ "dir-listing.hide-dotfiles",   NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION }, /* 2 */
+		{ "dir-listing.external-css",    NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_CONNECTION },  /* 3 */
+		{ "dir-listing.encoding",        NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_CONNECTION },  /* 4 */
+		{ "dir-listing.show-readme",     NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION }, /* 5 */
+		{ "server.dir-listing",          NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION }, /* 6 */
 		
 		{ NULL,                          NULL, T_CONFIG_UNSET, T_CONFIG_SCOPE_UNSET }
 	};
@@ -116,28 +247,34 @@ SETDEFAULTS_FUNC(mod_dirlisting_set_defaults) {
 	
 	for (i = 0; i < srv->config_context->used; i++) {
 		plugin_config *s;
+		array *ca;
 		
 		s = calloc(1, sizeof(plugin_config));
+		s->excludes = excludes_buffer_init();
 		s->dir_listing = 0;
 		s->external_css = buffer_init();
 		s->hide_dot_files = 0;
 		s->show_readme = 0;
 		s->encoding = buffer_init();
 		
-		cv[0].destination = &(s->dir_listing);
-		cv[1].destination = &(s->hide_dot_files);
-		cv[2].destination = s->external_css;
-		cv[3].destination = s->encoding;
-		cv[4].destination = &(s->show_readme);
-		cv[5].destination = &(s->dir_listing); /* old name */
-		
+		cv[0].destination = s->excludes;
+		cv[1].destination = &(s->dir_listing);
+		cv[2].destination = &(s->hide_dot_files);
+		cv[3].destination = s->external_css;
+		cv[4].destination = s->encoding;
+		cv[5].destination = &(s->show_readme);
+		cv[6].destination = &(s->dir_listing); /* old name */
+
 		p->config_storage[i] = s;
-	
-		if (0 != config_insert_values_global(srv, ((data_config *)srv->config_context->data[i])->value, cv)) {
+		ca = ((data_config *)srv->config_context->data[i])->value;
+
+		if (0 != config_insert_values_global(srv, ca, cv)) {
 			return HANDLER_ERROR;
 		}
+
+		parse_config_entry(srv, s, ca, "dir-listing.exclude");
 	}
-	
+
 	return HANDLER_GO_ON;
 }
 
@@ -152,6 +289,7 @@ static int mod_dirlisting_patch_connection(server *srv, connection *con, plugin_
 	PATCH(hide_dot_files);
 	PATCH(encoding);
 	PATCH(show_readme);
+	PATCH(excludes);
 	
 	/* skip the first, the global context */
 	for (i = 1; i < srv->config_context->used; i++) {
@@ -176,6 +314,8 @@ static int mod_dirlisting_patch_connection(server *srv, connection *con, plugin_
 				PATCH(encoding);
 			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("dir-listing.show-readme"))) {
 				PATCH(show_readme);
+			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("dir-listing.excludes"))) {
+				PATCH(excludes);
 			}
 		}
 	}
@@ -453,6 +593,8 @@ static int http_list_directory(server *srv, connection *con, plugin_data *p, buf
 	files.used = 0;
 	
 	while ((dent = readdir(dp)) != NULL) {
+		unsigned short exclude_match = 0;
+
 		if (dent->d_name[0] == '.') {
 			if (hide_dotfiles)
 				continue;
@@ -462,7 +604,36 @@ static int http_list_directory(server *srv, connection *con, plugin_data *p, buf
 				continue;
 		}
 
-		
+		/* compare d_name against excludes array
+		 * elements, skipping any that match.
+		 */
+#ifdef HAVE_PCRE_H
+		for(i = 0; i < p->conf.excludes->used; i++) {
+			int n;
+#define N 10
+			int ovec[N * 3];
+			pcre *regex = p->conf.excludes->ptr[i]->regex;
+
+			if ((n = pcre_exec(regex, NULL, dent->d_name,
+				    strlen(dent->d_name), 0, 0, ovec, 3 * N)) < 0) {
+				if (n != PCRE_ERROR_NOMATCH) {
+					log_error_write(srv, __FILE__, __LINE__, "sd",
+						"execution error while matching:", n);
+
+					return -1;
+				}
+			}
+			else {
+				exclude_match = 1;
+				break;
+			}
+		}
+
+		if (exclude_match) {
+			continue;
+		}
+#endif
+
 		i = strlen(dent->d_name);
 		
 		/* NOTE: the manual says, d_name is never more than NAME_MAX
