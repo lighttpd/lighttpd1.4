@@ -1127,12 +1127,7 @@ SUBREQUEST_FUNC(mod_cgi_handle_subrequest) {
 #ifndef __WIN32	
 	switch(waitpid(hctx->pid, &status, WNOHANG)) {
 	case 0:
-		/* not finished yet */
-		if (con->file_started) {
-			return HANDLER_GO_ON;
-		} else {
-			return HANDLER_WAIT_FOR_EVENT;
-		}
+		return HANDLER_WAIT_FOR_EVENT;
 	case -1:
 		if (errno == EINTR) return HANDLER_WAIT_FOR_EVENT;
 		
