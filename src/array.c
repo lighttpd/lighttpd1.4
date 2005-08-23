@@ -28,7 +28,6 @@ array *array_init_array(array *src) {
 	a->size = src->size;
 	a->next_power_of_2 = src->next_power_of_2;
 	a->unique_ndx = src->unique_ndx;
-	a->is_array = src->is_array;
 
 	a->data = malloc(sizeof(*src->data) * src->size);
 	for (i = 0; i < src->size; i++) {
@@ -167,9 +166,9 @@ int array_insert_unique(array *a, data_unset *str) {
 	size_t j;
 	
 	/* generate unique index if neccesary */
-	if (str->key->used == 0) {
+	if (str->key->used == 0 || str->is_index_key) {
 		buffer_copy_long(str->key, a->unique_ndx++);
-		a->is_array = 1;
+		str->is_index_key = 1;
 	}
 	
 	/* try to find the string */
@@ -251,12 +250,6 @@ size_t array_get_max_key_length(array *a) {
 	return maxlen;
 }
 
-static inline int str_int_equal(const char *str, int i) {
-	char buf[16];
-	snprintf(buf, sizeof(buf), "%d", i);
-	return strcmp(str, buf) == 0;
-}
-
 int array_print(array *a, int depth) {
 	size_t i;
 	size_t maxlen;
@@ -267,7 +260,7 @@ int array_print(array *a, int depth) {
 	}
 	for (i = 0; i < a->used && oneline; i++) {
 		data_unset *du = a->data[i];
-		if (!str_int_equal(du->key->ptr, i)) {
+		if (!du->is_index_key) {
 			oneline = 0;
 			break;
 		}
@@ -299,7 +292,7 @@ int array_print(array *a, int depth) {
 	for (i = 0; i < a->used; i++) {
 		data_unset *du = a->data[i];
 		array_print_indent(depth + 1);
-		if (!str_int_equal(du->key->ptr, i)) {
+		if (!du->is_index_key) {
 			int j;
 
 			if (i && (i % 5) == 0) {

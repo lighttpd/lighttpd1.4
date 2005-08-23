@@ -11,6 +11,7 @@ static data_unset *data_fastcgi_copy(const data_unset *s) {
 
 	buffer_copy_string_buffer(ds->key, src->key);
 	buffer_copy_string_buffer(ds->host, src->host);
+	ds->is_index_key = src->is_index_key;
 	return (data_unset *)ds;
 }
 

@@ -10,6 +10,7 @@ static data_unset *data_count_copy(const data_unset *s) {
 
 	buffer_copy_string_buffer(ds->key, src->key);
 	ds->count = src->count;
+	ds->is_index_key = src->is_index_key;
 	return (data_unset *)ds;
 }
 

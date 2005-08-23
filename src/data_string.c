@@ -11,6 +11,7 @@ static data_unset *data_string_copy(const data_unset *s) {
 
 	buffer_copy_string_buffer(ds->key, src->key);
 	buffer_copy_string_buffer(ds->value, src->value);
+	ds->is_index_key = src->is_index_key;
 	return (data_unset *)ds;
 }
 
