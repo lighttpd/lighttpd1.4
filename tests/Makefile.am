@@ -39,6 +39,7 @@ CONFS=fastcgi-10.conf \
       mod-userdir.t \
       mod-rewrite.t \
       request.t \
+      mod-ssi.t \
       LightyTest.pm
 
 
