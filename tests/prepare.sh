@@ -23,6 +23,7 @@ cp $srcdir/docroot/www/*.html \
    $srcdir/docroot/www/*.php \
    $srcdir/docroot/www/*.pl \
    $srcdir/docroot/www/*.fcgi \
+   $srcdir/docroot/www/*.shtml \
    $srcdir/docroot/www/*.txt $tmpdir/servers/www.example.org/pages/
 cp $srcdir/docroot/www/go/*.php $tmpdir/servers/www.example.org/pages/go/
 cp $srcdir/docroot/www/expire/*.txt $tmpdir/servers/www.example.org/pages/expire/
