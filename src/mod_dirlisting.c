@@ -119,7 +119,6 @@ int excludes_buffer_append(excludes_buffer *exb, buffer *string) {
 #else
 	UNUSED(exb);
 	UNUSED(string);
-	UNUSED(regex);
 
 	return -1;
 #endif
