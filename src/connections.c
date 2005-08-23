@@ -703,7 +703,7 @@ int connection_reset(server *srv, connection *con) {
 
 	/* the plugins should cleanup themself */	
 	for (i = 0; i < srv->plugins.used; i++) {
-		if (con->plugin_ctx[i] != NULL) {
+		if (con->plugin_ctx[i + 1] != NULL) {
 			log_error_write(srv, __FILE__, __LINE__, "sb", "missing cleanup in", ((plugin **)(srv->plugins.ptr))[i]->name);
 		}
 
