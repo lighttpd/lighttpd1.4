@@ -19,5 +19,6 @@ void configparserFree(void *p, void (*freeProc)(void*));
 void configparser(void *yyp, int yymajor, buffer *yyminor, config_t *ctx);
 int config_parse_file(server *srv, config_t *context, const char *fn);
 int config_parse_cmd(server *srv, config_t *context, const char *cmd);
+data_unset *configparser_merge_data(data_unset *op1, const data_unset *op2);
 
 #endif

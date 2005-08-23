@@ -11,6 +11,7 @@ static data_unset *data_array_copy(const data_unset *s) {
 	buffer_copy_string_buffer(ds->key, src->key);
 	array_free(ds->value);
 	ds->value = array_init_array(src->value);
+	ds->is_index_key = src->is_index_key;
 	return (data_unset *)ds;
 }
 

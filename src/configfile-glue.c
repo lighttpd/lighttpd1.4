@@ -42,7 +42,7 @@ int config_insert_values_internal(server *srv, array *ca, const config_values_t 
 						data_string *ds = data_string_init();
 						
 						buffer_copy_string_buffer(ds->value, ((data_string *)(da->value->data[j]))->value);
-						if (!da->value->is_array) {
+						if (!da->is_index_key) {
 							/* the id's were generated automaticly, as we copy now we might have to renumber them
 							 * this is used to prepend server.modules by mod_indexfiles as it has to be loaded 
 							 * before mod_fastcgi and friends */

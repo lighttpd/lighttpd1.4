@@ -70,7 +70,7 @@ static data_unset *configparser_get_variable(config_t *ctx, const buffer *key) {
 /* op1 is to be eat/return by this function, op1->key is not cared
    op2 is left untouch, unreferenced
  */
-data_unset *configparser_merge_data(config_t *ctx, data_unset *op1, const data_unset *op2) {
+data_unset *configparser_merge_data(data_unset *op1, const data_unset *op2) {
   /* type mismatch */
   if (op1->type != op2->type) {
     if (op1->type == TYPE_STRING && op2->type == TYPE_INTEGER) {
@@ -85,7 +85,6 @@ data_unset *configparser_merge_data(config_t *ctx, data_unset *op1, const data_u
       return (data_unset *)ds;
     } else {
       fprintf(stderr, "data type mismatch, cannot be merge\n");
-      ctx->ok = 0;
       op1->free(op1);
       return NULL;
     }
@@ -179,13 +178,23 @@ varline ::= key(A) APPEND expression(B). {
 
   if (NULL != (du = array_get_element(vars, A->ptr))) {
     /* exists in current block */
-    du = configparser_merge_data(ctx, du, B);
-    buffer_copy_string_buffer(du->key, A);
-    array_replace(vars, du);
+    du = configparser_merge_data(du, B);
+    if (NULL == du) {
+      ctx->ok = 0;
+    }
+    else {
+      buffer_copy_string_buffer(du->key, A);
+      array_replace(vars, du);
+    }
   } else if (NULL != (du = configparser_get_variable(ctx, A))) {
-    du = configparser_merge_data(ctx, du, B);
-    buffer_copy_string_buffer(du->key, A);
-    array_insert_unique(ctx->current->value, du);
+    du = configparser_merge_data(du, B);
+    if (NULL == du) {
+      ctx->ok = 0;
+    }
+    else {
+      buffer_copy_string_buffer(du->key, A);
+      array_insert_unique(ctx->current->value, du);
+    }
   } else {
     fprintf(stderr, "Undefined config variable in conditional 1 %s: %s\n", 
             ctx->current->key->ptr, A->ptr);
@@ -210,7 +219,10 @@ key(A) ::= LKEY(B). {
 }
 
 expression(A) ::= expression(B) PLUS value(C). {
-  A = configparser_merge_data(ctx, B, C);
+  A = configparser_merge_data(B, C);
+  if (NULL == A) {
+    ctx->ok = 0;
+  }
   B = NULL;
   C->free(C);
   C = NULL;
