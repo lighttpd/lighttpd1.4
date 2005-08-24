@@ -8,7 +8,7 @@ BEGIN {
 
 use strict;
 use IO::Socket;
-use Test::More tests => 6;
+use Test::More tests => 11;
 use LightyTest;
 
 my $tf = LightyTest->new();
@@ -48,6 +48,37 @@ EOF
  );
 $t->{RESPONSE} = ( { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 301, 'Location' => "/match_5" } );
 ok($tf->handle_http($t) == 0, 'nesting');
+
+ok($tf->stop_proc == 0, "Stopping lighttpd");
+
+$tf->{CONFIGFILE} = 'lighttpd.conf';
+ok($tf->start_proc == 0, "Starting lighttpd") or die();
+
+$t->{REQUEST}  = ( <<EOF
+GET /nofile.png HTTP/1.0
+Host: www.example.org
+EOF
+ );
+$t->{RESPONSE} = ( { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 404 } );
+ok($tf->handle_http($t) == 0, 'condition: Referer - no referer');
+
+$t->{REQUEST}  = ( <<EOF
+GET /nofile.png HTTP/1.0
+Host: www.example.org
+Referer: http://www.example.org/
+EOF
+ );
+$t->{RESPONSE} = ( { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 404 } );
+ok($tf->handle_http($t) == 0, 'condition: Referer - referer matches regex');
+
+$t->{REQUEST}  = ( <<EOF
+GET /nofile.png HTTP/1.0
+Host: www.example.org
+Referer: http://123.example.org/
+EOF
+ );
+$t->{RESPONSE} = ( { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 403 } );
+ok($tf->handle_http($t) == 0, 'condition: Referer - referer doesn\'t match');
 
 ok($tf->stop_proc == 0, "Stopping lighttpd");
 
