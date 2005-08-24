@@ -100,8 +100,14 @@ static int fdevent_freebsd_kqueue_poll(fdevents *ev, int timeout_ms) {
 		     &ts);
 
 	if (ret == -1) {
-		fprintf(stderr, "%s.%d: kqueue failed polling: %s\n",
-			__FILE__, __LINE__, strerror(errno));
+		switch(errno) {
+		case EINTR:
+			/* we got interrupted, perhaps just a SIGCHLD of a CGI script */
+			return 0;
+		default:
+			fprintf(stderr, "%s.%d: kqueue failed polling: %s\n",
+				__FILE__, __LINE__, strerror(errno));
+			break;
 	}
 
 	return ret;
