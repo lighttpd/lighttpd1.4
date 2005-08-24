@@ -1064,6 +1064,8 @@ URIHANDLER_FUNC(cgi_is_handled) {
 				buffer_reset(con->physical.path);
 				return HANDLER_FINISHED;
 			}
+			/* one handler is enough for the request */
+			break;
 		}
 	}
 	
