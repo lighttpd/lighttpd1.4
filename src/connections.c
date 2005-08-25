@@ -213,7 +213,7 @@ static int connection_handle_read(server *srv, connection *con) {
 		
 #ifdef USE_OPENSSL
 		if (srv_sock->is_ssl) {
-			int r;
+			int r, ssl_err;
 			
 			switch ((r = SSL_get_error(con->ssl, len))) {
 			case SSL_ERROR_WANT_READ:
@@ -237,8 +237,15 @@ static int connection_handle_read(server *srv, connection *con) {
 				
 				/* fall thourgh */
 			default:
-				log_error_write(srv, __FILE__, __LINE__, "sds", "SSL:", 
-						r, ERR_error_string(ERR_get_error(), NULL));
+				ssl_err = ERR_get_error();
+				switch(ssl_err) {
+				case SSL_F_SSL23_GET_CLIENT_HELLO:
+					/* a unencrypted HTTP request on a HTTPS socket. Do a redirect to the right location */
+				default:
+					log_error_write(srv, __FILE__, __LINE__, "sds", "SSL:", 
+							r, ERR_error_string(ERR_get_error(), NULL));
+					break;
+				}
 				break;
 			}
 		} else {

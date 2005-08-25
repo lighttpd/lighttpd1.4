@@ -357,7 +357,7 @@ static int deflate_file_to_file(server *srv, connection *con, plugin_data *p, bu
 			
 			if (-1 == mkdir(p->b->ptr, 0700)) {
 				if (errno != EEXIST) {
-					log_error_write(srv, __FILE__, __LINE__, "ssss", "creating cache-directory", p->b->ptr, "failed", strerror(errno));
+					log_error_write(srv, __FILE__, __LINE__, "sbss", "creating cache-directory", p->b, "failed", strerror(errno));
 					
 					return -1;
 				}
