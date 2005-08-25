@@ -74,7 +74,7 @@ sub start_proc {
 		select(undef, undef, undef, 0.1);
 	} else {
 		system("valgrind --tool=memcheck --show-reachable=yes --leak-check=yes --logfile=foo ".$self->{LIGHTTPD_PATH}." -D -f /tmp/cfg.file &");
-		select(undef, undef, undef, 1);
+		select(undef, undef, undef, 2);
 	}
 	
 
