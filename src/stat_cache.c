@@ -98,8 +98,9 @@ stat_cache *stat_cache_init(void) {
 	if (0 != FAMOpen2(fc->fam, "lighttpd")) {
 		return NULL;
 	}
-
+#ifdef HAVE_FAMNOEXISTS
 	FAMNoExists(fc->fam);
+#endif
 #endif
 
 	return fc;
@@ -173,9 +174,11 @@ void stat_cache_free(stat_cache *fc) {
 
 #ifdef HAVE_FAM_H
 	splaytree_delete_tree(fc->dirs, fam_dir_entry_free);
-	
-	FAMClose(fc->fam);
-	free(fc->fam);
+
+	if (fc->fam) {
+		FAMClose(fc->fam);
+		free(fc->fam);
+	}
 #endif
 	free(fc);
 }
@@ -217,45 +220,62 @@ handler_t stat_cache_handle_fdevent(void *_srv, void *_fce, int revent) {
 	UNUSED(revent);
 	/* */
 
-	events = FAMPending(sc->fam);
+	if ((revent & FDEVENT_IN) &&
+	    sc->fam) {
+
+		events = FAMPending(sc->fam);
 	
-	for (i = 0; i < events; i++) {
-		FAMEvent fe;
-		fam_dir_entry *fam_dir;
-		splay_tree *node;
-		int ndx;
+		for (i = 0; i < events; i++) {
+			FAMEvent fe;
+			fam_dir_entry *fam_dir;
+			splay_tree *node;
+			int ndx;
 		
-		FAMNextEvent(sc->fam, &fe);
+			FAMNextEvent(sc->fam, &fe);
 	
-		/* handle event */
+			/* handle event */
 
-		switch(fe.code) {
-		case FAMChanged:
-		case FAMDeleted:
-		case FAMMoved:
-			/* if the filename is a directory remove the entry */
+			switch(fe.code) {
+			case FAMChanged:
+			case FAMDeleted:
+			case FAMMoved:
+				/* if the filename is a directory remove the entry */
 
-			fam_dir = fe.userdata;
-			fam_dir->version++;
+				fam_dir = fe.userdata;
+				fam_dir->version++;
 
-			/* file/dir is still here */
-			if (fe.code == FAMChanged) break;
+				/* file/dir is still here */
+				if (fe.code == FAMChanged) break;
 
-			buffer_copy_string(sc->dir_name, fe.filename);
+				buffer_copy_string(sc->dir_name, fe.filename);
 
-			ndx = hashme(sc->dir_name);
+				ndx = hashme(sc->dir_name);
 
-			sc->dirs = splaytree_splay(sc->dirs, ndx);
-			node = sc->dirs;
+				sc->dirs = splaytree_splay(sc->dirs, ndx);
+				node = sc->dirs;
 			
-			if (node && (node->key == ndx)) {
-				fam_dir_entry_free(node->data);
-				sc->dirs = splaytree_delete(sc->dirs, ndx);
+				if (node && (node->key == ndx)) {
+					fam_dir_entry_free(node->data);
+					sc->dirs = splaytree_delete(sc->dirs, ndx);
+				}
+				break;
+			default:
+				break;
 			}
-			break;
-		default:
-			break;
 		}
+	}
+
+	if (revent & FDEVENT_HUP) {
+		/* fam closed the connection */
+		srv->stat_cache->fam_fcce_ndx = -1;
+
+		fdevent_event_del(srv->ev, &(sc->fam_fcce_ndx), FAMCONNECTION_GETFD(sc->fam));
+		fdevent_unregister(srv->ev, FAMCONNECTION_GETFD(sc->fam));
+
+		FAMClose(sc->fam);
+		free(sc->fam);
+
+		sc->fam = NULL;
 	}
 	
 	return HANDLER_GO_ON;
@@ -397,7 +417,8 @@ handler_t stat_cache_get_entry(server *srv, connection *con, buffer *name, stat_
 		}
 		
 #ifdef HAVE_FAM_H
-		if (srv->srvconf.stat_cache_engine == STAT_CACHE_ENGINE_FAM) {
+		if (sc->fam &&
+		    (srv->srvconf.stat_cache_engine == STAT_CACHE_ENGINE_FAM)) {
 			/* is this directory already registered ? */
 			if (!dir_node) {
 				fam_dir = fam_dir_entry_init();
