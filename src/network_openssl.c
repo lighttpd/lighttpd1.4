@@ -123,6 +123,7 @@ int network_write_chunkqueue_openssl(server *srv, connection *con, chunkqueue *c
 			size_t toSend;
 			stat_cache_entry *sce = NULL;
 			int ifd;
+			int write_wait = 0;
 			
 			if (HANDLER_ERROR == stat_cache_get_entry(srv, con, c->data.file.name, &sce)) {
 				log_error_write(srv, __FILE__, __LINE__, "sb",
@@ -162,6 +163,7 @@ int network_write_chunkqueue_openssl(server *srv, connection *con, chunkqueue *c
 				if ((r = SSL_write(con->ssl, s, toSend)) <= 0) {
 					switch ((ssl_r = SSL_get_error(con->ssl, r))) {
 					case SSL_ERROR_WANT_WRITE:
+						write_wait = 1;
 						break;
 					case SSL_ERROR_SYSCALL:
 						switch(errno) {
@@ -196,7 +198,7 @@ int network_write_chunkqueue_openssl(server *srv, connection *con, chunkqueue *c
 				if (c->offset == c->data.file.length) {
 					chunk_finished = 1;
 				}
-			} while(!chunk_finished);
+			} while(!chunk_finished && !write_wait);
 			
 			break;
 		}
