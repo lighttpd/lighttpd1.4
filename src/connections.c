@@ -554,6 +554,7 @@ connection *connection_init(server *srv) {
 	CLEAN(authed_user);
 	CLEAN(server_name);
 	CLEAN(error_handler);
+	CLEAN(dst_addr_buf);
 	
 #undef CLEAN
 	con->write_queue = chunkqueue_init();
@@ -567,7 +568,6 @@ connection *connection_init(server *srv) {
 	con->plugin_ctx = calloc(srv->plugins.used + 1, sizeof(void *));
 	
 	con->cond_cache = calloc(srv->config_context->used, sizeof(cond_cache_t));
-	con->dst_addr_buf = buffer_init();
 	config_setup_connection(srv, con);
 	
 	return con;
@@ -615,6 +615,7 @@ void connections_free(server *srv) {
 		CLEAN(authed_user);
 		CLEAN(server_name);
 		CLEAN(error_handler);
+		CLEAN(dst_addr_buf);
 #undef CLEAN
 		free(con->plugin_ctx);
 		free(con->cond_cache);
@@ -686,6 +687,7 @@ int connection_reset(server *srv, connection *con) {
 	CLEAN(authed_user);
 	CLEAN(server_name);
 	CLEAN(error_handler);
+	CLEAN(dst_addr_buf);
 #undef CLEAN	
 	
 #define CLEAN(x) \
