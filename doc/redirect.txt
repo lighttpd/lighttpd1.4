@@ -34,3 +34,6 @@ url.redirect
     url.redirect = ( "^/show/([0-9]+)/([0-9]+)$" => "http://www.example.org/show.php?isdn=$1&page$2",
                      "^/get/([0-9]+)/([0-9]+)$"  => "http://www.example.org/get.php?isdn=$1&page$2" )
 
+    $HTTP["host"] =~ "^www\.(.*)" {
+      url.redirect = ( "^/(.*)" => "http://%1/$1" )
+    }
