@@ -51,3 +51,7 @@ query-string.::
 
   url.rewrite-once = ( "^/id/([0-9]+)$" => "/index.php?id=$1",
                        "^/link/([a-zA-Z]+)" => "/index.php?link=$1" )
+
+  $HTTP["host"] =~ "^([^.]+)\.(this-is-mass-vhost\.com)" {
+    url.rewrite-once = ( "^/(.*)" => "/%2/%1/$1" )
+  }
