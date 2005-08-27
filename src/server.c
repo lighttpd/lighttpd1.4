@@ -160,9 +160,6 @@ static server *server_init(void) {
 	srv->fdwaitqueue = calloc(1, sizeof(*srv->fdwaitqueue));
 	assert(srv->fdwaitqueue);
 	
-	srv->stat_cache = stat_cache_init();
-	assert(srv->stat_cache);
-	
 	srv->srvconf.modules = array_init();
 	
 	/* use syslog */
@@ -243,8 +240,10 @@ static void server_free(server *srv) {
 	joblist_free(srv, srv->joblist);
 	fdwaitqueue_free(srv, srv->fdwaitqueue);
 	
-	stat_cache_free(srv->stat_cache);
-	
+	if (srv->stat_cache) {
+		stat_cache_free(srv->stat_cache);
+	}
+
 	array_free(srv->srvconf.modules);
 	array_free(srv->split_vals);
 	
@@ -271,11 +270,6 @@ static void show_help (void) {
 #else
 # define TEXT_SSL
 #endif
-#ifdef HAVE_IPV6
-# define TEXT_IPV6 " -6         use IPv6\n"
-#else
-# define TEXT_IPV6
-#endif
 	char *b = PACKAGE_NAME "-" PACKAGE_VERSION TEXT_SSL " ("__DATE__ " " __TIME__ ")" \
 " - a light and fast webserver\n" \
 "usage:\n" \
@@ -283,7 +277,6 @@ static void show_help (void) {
 " -p         print the parsed config-file in internal form, and exit\n" \
 " -t         test the config-file, and exit\n" \
 " -D         don't go to background (default: go to background)\n" \
-TEXT_IPV6 \
 " -v         show version\n" \
 " -h         show this help\n" \
 "\n"
@@ -720,12 +713,23 @@ int main (int argc, char **argv) {
 	
 	/* setup periodic timer (1 second) */
 	if (setitimer(ITIMER_REAL, &interval, NULL)) {
-		log_error_write(srv, __FILE__, __LINE__, "setting timer failed");
+		log_error_write(srv, __FILE__, __LINE__, "s", "setting timer failed");
 		return -1;
 	}
 	
 	getitimer(ITIMER_REAL, &interval);
 #endif
+
+	/* might fail if user is using fam (not gamin) and famd isn't running */
+	if (NULL == (srv->stat_cache = stat_cache_init())) {
+#if defined(HAVE_FAM_H) && !defined(HAVE_FAMNOEXISTS)
+		log_error_write(srv, __FILE__, __LINE__, "s",
+			"FAMOpen2() failed.  Is famd running?");
+		return -1;
+#else
+		SEGFAULT();
+#endif
+	}
 
 #ifdef HAVE_FAM_H
 	/* setup FAM */
