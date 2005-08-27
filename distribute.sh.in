@@ -4,9 +4,9 @@ VERSION=@VERSION@
 NAME=@PACKAGE_TARNAME@-@VERSION@
 
 DISTDIR="/home/jan/wwwroot/servers/www.lighttpd.net/pages/download/" 
-FILES="/usr/src/packages/RPMS/i586/${NAME}-1.i586.rpm \
-	/usr/src/packages/SRPMS/${NAME}-1.src.rpm \
-	${NAME}.tar.gz \
+RPMS="/home/jan/rpmbuild/RPMS/i386/${NAME}-1.i386.rpm \
+	/home/jan/rpmbuild/SRPMS/${NAME}-1.src.rpm"
+FILES="${RPMS}	${NAME}.tar.gz \
 	NEWS.html \
 	ChangeLog \
 	release-news.${VERSION}.txt \
@@ -23,11 +23,11 @@ echo ${nopack}
 if test x${pack} = x1; then
 	make distcheck && rpmbuild -ta --nodeps ${NAME}.tar.gz 
 	gpg --detach-sign ${NAME}.tar.gz
-	rpm --addsign /usr/src/packages/RPMS/i586/${NAME}-1.i586.rpm /usr/src/packages/SRPMS/${NAME}-1.src.rpm
+	rpm --addsign ${RPMS}
 fi
 
-MD5RPM=`md5sum /usr/src/packages/RPMS/i586/${NAME}-1.i586.rpm| cut -b 1-32`
-MD5SRPM=`md5sum /usr/src/packages/SRPMS/${NAME}-1.src.rpm| cut -b 1-32`
+MD5RPM=`md5sum /home/jan/rpmbuild/RPMS/i386/${NAME}-1.i386.rpm| cut -b 1-32`
+MD5SRPM=`md5sum /home/jan/rpmbuild/SRPMS/${NAME}-1.src.rpm| cut -b 1-32`
 MD5TGZ=`md5sum ${NAME}.tar.gz| cut -b 1-32`
 DATE=`date +'%Y-%m-%d %H:%M'`
 NEWS=`cat NEWS | sed "/^- ${VERSION}/,/^-/p;d" | sed "/^- /d;/^$/d"`
@@ -41,8 +41,8 @@ Changes
 ${NEWS}
 
 Download
-- ${NAME}-1.i586.rpm [built on Fedora Core 4]
-  ${DLNAME}-1.i586.rpm
+- ${NAME}-1.i386.rpm [built on Fedora Core 4]
+  ${DLNAME}-1.i386.rpm
   MD5: ${MD5RPM}
 - ${NAME}-1.src.rpm
   ${DLNAME}-1.src.rpm
@@ -60,6 +60,14 @@ ${PACKAGE} ${VERSION} - ${DATE}
 Changes
 -------
 ${NEWS}
+
+Checksums
+- ${NAME}-1.i386.rpm [built on Fedora Core 4]
+  MD5: ${MD5RPM}
+- ${NAME}-1.src.rpm
+  MD5: ${MD5SRPM}
+- ${NAME}.tar.gz
+  MD5: ${MD5TGZ} 
 
 EOF
 
