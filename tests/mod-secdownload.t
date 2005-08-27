@@ -8,7 +8,7 @@ BEGIN {
 
 use strict;
 use IO::Socket;
-use Test::More tests => 3;
+use Test::More tests => 5;
 use LightyTest;
 use Digest::MD5 qw(md5_hex);
 
