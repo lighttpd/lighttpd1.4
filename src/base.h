@@ -436,6 +436,7 @@ typedef struct {
 	
 	buffer *event_handler;
 	
+	buffer *modules_dir;
 	array *modules;
 	
 	unsigned short max_worker;
