@@ -112,6 +112,8 @@ FREE_FUNC(mod_webdav_free) {
 			if (s->sql) {	
 				sqlite3_finalize(s->stmt_delete_prop);
 				sqlite3_finalize(s->stmt_delete_uri);
+				sqlite3_finalize(s->stmt_copy_uri);
+				sqlite3_finalize(s->stmt_move_uri);
 				sqlite3_finalize(s->stmt_update_prop);
 				sqlite3_finalize(s->stmt_select_prop);
 				sqlite3_finalize(s->stmt_select_propnames);
@@ -206,6 +208,7 @@ SETDEFAULTS_FUNC(mod_webdav_set_defaults) {
 
 					return HANDLER_ERROR;
 				}
+				sqlite3_free(err);
 			}
 	
 			if (SQLITE_OK != sqlite3_prepare(s->sql, 
