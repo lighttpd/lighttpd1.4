@@ -3,6 +3,10 @@
 NEWS
 ====
 
+- 1.4.2 - 
+
+  * fixed mimetype detection on uppercase extensions
+
 - 1.4.1 - 2005-08-22
 
   * added a complete Class 1 complient mod_webdav

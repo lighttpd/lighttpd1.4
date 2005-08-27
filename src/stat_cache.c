@@ -400,10 +400,14 @@ handler_t stat_cache_get_entry(server *srv, connection *con, buffer *name, stat_
 		
 			for (k = 0; k < con->conf.mimetypes->used; k++) {
 				data_string *ds = (data_string *)con->conf.mimetypes->data[k];
+				buffer *type = ds->key;
 			
-				if (ds->key->used == 0) continue;
-					
-				if (buffer_is_equal_right_len(name, ds->key, ds->key->used - 1)) {
+				if (type->used == 0) continue;
+
+				/* check if the right side is the same */
+				if (type->used > name->used) continue;
+
+				if (0 == strncasecmp(name->ptr + name->used - type->used, type->ptr, type->used - 1)) {
 					buffer_copy_string_buffer(sce->content_type, ds->value);
 					break;
 				}

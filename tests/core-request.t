@@ -8,7 +8,7 @@ BEGIN {
 
 use strict;
 use IO::Socket;
-use Test::More tests => 28;
+use Test::More tests => 31;
 use LightyTest;
 
 my $tf = LightyTest->new();
@@ -236,6 +236,29 @@ EOF
  );
 $t->{RESPONSE} = ( { 'HTTP-Protocol' => 'HTTP/1.1', 'HTTP-Status' => 400 } );
 ok($tf->handle_http($t) == 0, 'Host missing');
+
+print "\nContent-Type\n";
+$t->{REQUEST}  = ( <<EOF
+GET /image.jpg HTTP/1.0
+EOF
+ );
+$t->{RESPONSE} = ( { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200, 'Content-Type' => 'image/jpeg' } );
+ok($tf->handle_http($t) == 0, 'Content-Type - image/jpeg');
+
+$t->{REQUEST}  = ( <<EOF
+GET /image.JPG HTTP/1.0
+EOF
+ );
+$t->{RESPONSE} = ( { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200, 'Content-Type' => 'image/jpeg' } );
+ok($tf->handle_http($t) == 0, 'Content-Type - image/jpeg');
+
+$t->{REQUEST}  = ( <<EOF
+GET /a HTTP/1.0
+EOF
+ );
+$t->{RESPONSE} = ( { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200, 'Content-Type' => 'application/octet-stream' } );
+ok($tf->handle_http($t) == 0, 'Content-Type - unknown');
+
 
 ok($tf->stop_proc == 0, "Stopping lighttpd");
 
