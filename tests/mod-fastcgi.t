@@ -15,7 +15,7 @@ my $tf = LightyTest->new();
 my $t;
 
 SKIP: {
-	skip "no PHP running on port 1026", 27 if $tf->pidof("php") == -1; 
+	skip "no PHP running on port 1026", 28 if $tf->pidof("php") == -1; 
 
 	ok($tf->start_proc == 0, "Starting lighttpd") or die();
 
