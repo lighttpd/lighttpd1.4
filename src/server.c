@@ -161,6 +161,7 @@ static server *server_init(void) {
 	assert(srv->fdwaitqueue);
 	
 	srv->srvconf.modules = array_init();
+	srv->srvconf.modules_dir = buffer_init_string(LIBRARY_DIR);
 	
 	/* use syslog */
 	srv->errorlog_fd = -1;
@@ -197,6 +198,7 @@ static void server_free(server *srv) {
 	CLEAN(srvconf.bindhost);
 	CLEAN(srvconf.event_handler);
 	CLEAN(srvconf.pid_file);
+	CLEAN(srvconf.modules_dir);
 	
 	CLEAN(tmp_chunk_len);
 #undef CLEAN
@@ -274,6 +276,7 @@ static void show_help (void) {
 " - a light and fast webserver\n" \
 "usage:\n" \
 " -f <name>  filename of the config-file\n" \
+" -m <name>  module directory (default: "LIBRARY_DIR")\n" \
 " -p         print the parsed config-file in internal form, and exit\n" \
 " -t         test the config-file, and exit\n" \
 " -D         don't go to background (default: go to background)\n" \
@@ -330,13 +333,16 @@ int main (int argc, char **argv) {
 #endif
 	srv->srvconf.dont_daemonize = 0;
 	
-	while(-1 != (o = getopt(argc, argv, "f:hvDpt"))) {
+	while(-1 != (o = getopt(argc, argv, "f:m:hvDpt"))) {
 		switch(o) {
 		case 'f': 
 			if (config_read(srv, optarg)) { 
 				server_free(srv);
 				return -1;
 			}
+			break;
+		case 'm':
+			buffer_copy_string(srv->srvconf.modules_dir, optarg);
 			break;
 		case 'p': print_config = 1; break;
 		case 't': test_config = 1; break;
