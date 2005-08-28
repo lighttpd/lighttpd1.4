@@ -213,7 +213,7 @@ static handler_t mod_status_handle_server_status_html(server *srv, connection *c
 	
 	BUFFER_APPEND_STRING_CONST(b,
 				   "  <style type=\"text/css\">\n"
-				   "    table { border: black solid thin; }\n"
+				   "    table.status { border: black solid thin; }\n"
 				   "    td.int { background-color: #f0f0f0; text-align: right }\n"
 				   "    td.string { background-color: #f0f0f0; text-align: left }\n"
 				   "    th.status { background-color: black; color: white; font-weight: bold; }\n"
