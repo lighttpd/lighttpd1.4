@@ -166,15 +166,15 @@ int network_write_chunkqueue_freebsdsendfile(server *srv, connection *con, chunk
 			
 			/* FreeBSD sendfile() */
 			if (-1 == sendfile(ifd, fd, offset, toSend, NULL, &r, 0)) {
-				close(ifd);
-				
 				switch(errno) {
 				case EAGAIN:
 					break;
 				case ENOTCONN:
+					close(ifd);
 					return -2;
 				default:
 					log_error_write(srv, __FILE__, __LINE__, "ssd", "sendfile: ", strerror(errno), errno);
+					close(ifd);
 					return -1;
 				}
 			}
