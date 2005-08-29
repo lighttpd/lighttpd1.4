@@ -84,14 +84,14 @@ sub start_proc {
 	unlink($self->{LIGHTTPD_PIDFILE});
 	if (1) {
 		system($self->{LIGHTTPD_PATH}." -f ".$self->{TESTDIR}."/tmp/cfg.file -m ".$self->{BASEDIR}."/src/.libs");
-		select(undef, undef, undef, 0.1);
 	} else {
 		system("valgrind --tool=memcheck --show-reachable=yes --leak-check=yes --logfile=foo ".$self->{LIGHTTPD_PATH}." -D -f ".$self->{TESTDIR}."/tmp/cfg.file -m ".$self->{BASEDIR}."/src/.libs &");
-		select(undef, undef, undef, 2);
 	}
-	
 
-	# sleep(1);
+	select(undef, undef, undef, 0.1);
+	if (not -e $self->{LIGHTTPD_PIDFILE} or 0 == kill 0, `cat $self->{LIGHTTPD_PIDFILE}`) {
+		select(undef, undef, undef, 2);	
+	}
 
 	unlink($self->{TESTDIR}."/tmp/cfg.file");
 
