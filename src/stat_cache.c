@@ -9,6 +9,7 @@
 #include <unistd.h>
 #include <stdio.h>
 #include <fcntl.h>
+#include <assert.h>
 
 #include "log.h"
 #include "stat_cache.h"
@@ -156,24 +157,38 @@ static void fam_dir_entry_free(void *data) {
 
 void stat_cache_free(stat_cache *sc) {
 	while (sc->files) {
+		int osize;
 		splay_tree *node = sc->files;
+
+		osize = sc->files->size;
 			
 		stat_cache_entry_free(node->data);
 		sc->files = splaytree_delete(sc->files, node->key);
 
-		free(node);
+		if (osize == 1) {
+			assert(NULL == sc->files);
+		} else {
+			assert(osize == (sc->files->size + 1));
+		}
 	}
 
 	buffer_free(sc->dir_name);
 
 #ifdef HAVE_FAM_H
 	while (sc->dirs) {
+		int osize;
 		splay_tree *node = sc->dirs;
-			
+		
+		osize = sc->dirs->size;
+
 		fam_dir_entry_free(node->data);
 		sc->dirs = splaytree_delete(sc->dirs, node->key);
 		
-		free(node);
+		if (osize == 1) {
+			assert(NULL == sc->dirs);
+		} else {
+			assert(osize == (sc->dirs->size + 1));
+		}
 	}
 
 	if (sc->fam) {
@@ -256,11 +271,16 @@ handler_t stat_cache_handle_fdevent(void *_srv, void *_fce, int revent) {
 				node = sc->dirs;
 			
 				if (node && (node->key == ndx)) {
-					fam_dir_entry_free(node->data);
+					int osize = sc->dirs->size;
 
+					fam_dir_entry_free(node->data);
 					sc->dirs = splaytree_delete(sc->dirs, ndx);
 
-					free(node);
+					if (osize == 1) {
+						assert(NULL == sc->dirs);
+					} else {
+						assert(osize == (sc->dirs->size + 1));
+					}
 				}
 				break;
 			default:
@@ -342,11 +362,27 @@ handler_t stat_cache_get_entry(server *srv, connection *con, buffer *name, stat_
 		
 		sce = file_node->data;
 
-		if (srv->srvconf.stat_cache_engine == STAT_CACHE_ENGINE_SIMPLE) {
-			if (sce->stat_ts == srv->cur_ts) {
-				*ret_sce = sce; 
-				return HANDLER_GO_ON;
+		/* check if the name is the same, we might have a collision */
+
+		if (buffer_is_equal(name, sce->name)) {
+			if (srv->srvconf.stat_cache_engine == STAT_CACHE_ENGINE_SIMPLE) {
+				if (sce->stat_ts == srv->cur_ts) {
+					*ret_sce = sce; 
+					return HANDLER_GO_ON;
+				}
 			}
+		} else {
+			/* oops, a collision,
+			 *
+			 * file_node is used by the FAM check below to see if we know this file
+			 * and if we can save a stat().
+			 *
+			 * BUT, the sce is not reset here as the entry into the cache is ok, we 
+			 * it is just not pointing to our requested file.
+			 * 
+			 *  */
+
+			file_node = NULL;
 		}
 	}
 
@@ -389,10 +425,19 @@ handler_t stat_cache_get_entry(server *srv, connection *con, buffer *name, stat_
 		size_t k;
 	
 		if (NULL == sce) {
+			int osize = 0;
+		       
+			if (sc->files) {
+				osize = sc->files->size;
+			}
+
 			sce = stat_cache_entry_init();
 			buffer_copy_string_buffer(sce->name, name);
 			
 			sc->files = splaytree_insert(sc->files, file_ndx, sce); 
+
+			assert(sc->files);
+			assert(osize == (sc->files->size - 1));
 		}
 
 		sce->st = st;
@@ -448,7 +493,15 @@ handler_t stat_cache_get_entry(server *srv, connection *con, buffer *name, stat_
 					
 					fam_dir_entry_free(fam_dir);
 				} else {
+					int osize = 0;
+
+				       	if (sc->dirs) {
+						osize = sc->dirs->size;
+					}
+
 					sc->dirs = splaytree_insert(sc->dirs, dir_ndx, fam_dir); 
+					assert(sc->dirs);
+					assert(osize == (sc->dirs->size - 1));
 				}
 			} else {
 				fam_dir = dir_node->data;
@@ -516,10 +569,16 @@ int stat_cache_trigger_cleanup(server *srv) {
 		node = sc->files;
 		
 		if (node && (node->key == ndx)) {
+			int osize = sc->files->size;
+
 			stat_cache_entry_free(node->data);
 			sc->files = splaytree_delete(sc->files, ndx);
 
-			free(node);
+			if (osize == 1) {
+				assert(NULL == sc->files);
+			} else {
+				assert(osize == (sc->files->size + 1));
+			}
 		}
 	}
 
