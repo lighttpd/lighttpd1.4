@@ -108,6 +108,7 @@ FREE_FUNC(mod_webdav_free) {
 
 			if (!s) continue;
 	
+			buffer_free(s->sqlite_db_name);
 #ifdef USE_PROPPATCH
 			if (s->sql) {	
 				sqlite3_finalize(s->stmt_delete_prop);
@@ -124,6 +125,16 @@ FREE_FUNC(mod_webdav_free) {
 		}
 		free(p->config_storage);
 	}
+
+	buffer_free(p->uri.scheme);
+	buffer_free(p->uri.path_raw);
+	buffer_free(p->uri.path);
+	buffer_free(p->uri.authority);
+	
+	buffer_free(p->physical.path);
+	buffer_free(p->physical.rel_path);
+	buffer_free(p->physical.doc_root);
+	buffer_free(p->physical.basedir);
 	
 	buffer_free(p->tmp_buf);
 	
