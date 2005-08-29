@@ -33,8 +33,7 @@ Requirements
 ------------
 
  * libpcre
- * libgdbm
- * libmemcache
+ * libgdbm or libmemcache
 
 Options
 =======

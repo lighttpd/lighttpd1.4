@@ -99,7 +99,7 @@ Generating Graphs
           DEF:reqmin=$INFILE:Requests:MIN \
           CDEF:reqminmax=reqmax,reqmin,- \
           AREA:reqmin#ffffff: \
-          STACK:reqiminmax#0e0e0e: \
+          STACK:reqminmax#0e0e0e: \
           LINE1:reqmin#a0a0a0: \
           LINE1:reqmax#a0a0a0: \
           LINE2:req#00a735:requests"
