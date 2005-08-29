@@ -108,18 +108,9 @@ int plugins_load(server *srv) {
 	for (i = 0; i < srv->srvconf.modules->used; i++) {
 		data_string *d = (data_string *)srv->srvconf.modules->data[i];
 		char *modules = d->value->ptr;
-		char *inst;
 	
-		buffer_reset(srv->tmp_buf);
-		/* for make distcheck */
-		if (NULL != (inst = strstr(srv->srvconf.modules_dir->ptr, "/_inst/lib"))) {
-			buffer_copy_string_len(srv->tmp_buf, srv->srvconf.modules_dir->ptr,
-				strlen(srv->srvconf.modules_dir->ptr) - strlen(inst));
-			buffer_append_string(srv->tmp_buf, "/_build/src/.libs");
-			buffer_append_string(srv->tmp_buf, inst + strlen("/_inst/lib") );
-		} else {
-			buffer_copy_string_buffer(srv->tmp_buf, srv->srvconf.modules_dir);
-		}
+		buffer_copy_string_buffer(srv->tmp_buf, srv->srvconf.modules_dir);
+
 		buffer_append_string(srv->tmp_buf, "/");
 		buffer_append_string(srv->tmp_buf, modules);
 #if defined(__WIN32) || defined(__CYGWIN__)
