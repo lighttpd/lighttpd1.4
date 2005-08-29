@@ -3,9 +3,15 @@
 NEWS
 ====
 
-- 1.4.2 - 
+- 1.4.2 - 2005-08-29
 
   * fixed mimetype detection on uppercase extensions
+  * fixed memleak in stat-cache
+  * fixed infinite loop in mod_cgi
+  * fixed alignment crashes on sparc64 and alpha64
+  * fixed test system for gentoo ebuild
+  * fixed infinite loop in SSL
+  * fixed range request for files > 2Gb
 
 - 1.4.1 - 2005-08-22
 
