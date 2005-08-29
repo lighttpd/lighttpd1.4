@@ -1,7 +1,7 @@
 #                                               -*- Autoconf -*-
 # Process this file with autoconf to produce a configure script.
 AC_PREREQ(2.57)
-AC_INIT(lighttpd, 1.4.1, jan@kneschke.de)
+AC_INIT(lighttpd, 1.4.2, jan@kneschke.de)
 AC_CONFIG_SRCDIR([src/server.c])
 
 AC_CANONICAL_TARGET
@@ -217,7 +217,12 @@ if test "x$use_openssl" = "xyes"; then
     AC_SUBST(SSL_LIB)
 fi
 
-if test "x$cross_compiling" = xno; then
+AC_MSG_CHECKING(for perl regular expressions support)
+AC_ARG_WITH(pcre, AC_HELP_STRING([--with-pcre],[Enable pcre support (default yes)]),
+    [WITH_PCRE=$withval],[WITH_PCRE=yes])
+AC_MSG_RESULT([$WITH_PCRE])
+
+if test "x$cross_compiling" = xno -a "$WITH_PCRE" != "no"; then
   AC_PATH_PROG(PCRECONFIG, pcre-config)
 
   if test x"$PCRECONFIG" != x; then 
@@ -246,13 +251,20 @@ AC_CHECK_LIB(z, deflate, [
 ])
 AC_SUBST(Z_LIB)
 
-AC_CHECK_LIB(bz2, BZ2_bzCompress, [
-  AC_CHECK_HEADERS([bzlib.h],[
-    BZ_LIB=-lbz2
-    AC_DEFINE([HAVE_LIBBZ2], [1], [libbz2])
-    AC_DEFINE([HAVE_BZLIB_H], [1])
+AC_MSG_CHECKING(for bzip2 support)
+AC_ARG_WITH(bzip2, AC_HELP_STRING([--with-bzip2],[Enable bzip2 support for mod_compress]),
+    [WITH_BZIP2=$withval],[WITH_BZIP2=yes])
+AC_MSG_RESULT([$WITH_BZIP2])
+
+if test "$WITH_BZIP2" != "no"; then
+  AC_CHECK_LIB(bz2, BZ2_bzCompress, [
+    AC_CHECK_HEADERS([bzlib.h],[
+      BZ_LIB=-lbz2
+      AC_DEFINE([HAVE_LIBBZ2], [1], [libbz2])
+      AC_DEFINE([HAVE_BZLIB_H], [1])
+    ])
   ])
-])
+fi
 AC_SUBST(BZ_LIB)
 
 if test -z "$PKG_CONFIG"; then
