@@ -1,10 +1,10 @@
 #!/bin/sh
 
-tmpdir=/tmp/lighttpd
-
 if test x$srcdir = x; then
 	srcdir=.
 fi
+
+tmpdir=$srcdir/tmp/lighttpd
 
 # create test-framework
 # rm -rf $tmpdir
