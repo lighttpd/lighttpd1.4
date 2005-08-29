@@ -115,13 +115,7 @@ SETDEFAULTS_FUNC(mod_secdownload_set_defaults) {
 		s->secret        = buffer_init();
 		s->doc_root      = buffer_init();
 		s->uri_prefix    = buffer_init();
-		s->timeout = 0;
-		
-		/* set global default */
-		if (i == 0) {
-			s->timeout = 60;
-			buffer_copy_string(s->uri_prefix, "/");
-		}
+		s->timeout       = 60;
 		
 		cv[0].destination = s->secret;
 		cv[1].destination = s->doc_root;
@@ -214,6 +208,8 @@ URIHANDLER_FUNC(mod_secdownload_uri_handler) {
 	if (con->uri.path->used == 0) return HANDLER_GO_ON;
 	
 	mod_secdownload_patch_connection(srv, con, p);
+
+	if (buffer_is_empty(p->conf.uri_prefix)) return HANDLER_GO_ON;
 	
 	if (buffer_is_empty(p->conf.secret)) {
 		log_error_write(srv, __FILE__, __LINE__, "s",

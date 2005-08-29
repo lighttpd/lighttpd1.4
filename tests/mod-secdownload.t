@@ -8,7 +8,7 @@ BEGIN {
 
 use strict;
 use IO::Socket;
-use Test::More tests => 5;
+use Test::More tests => 7;
 use LightyTest;
 use Digest::MD5 qw(md5_hex);
 
@@ -22,10 +22,9 @@ my $f = "/index.html";
 my $thex = sprintf("%08x", time);
 my $m = md5_hex($secret.$f.$thex);
 
-# mod-cgi
-#
 $t->{REQUEST}  = ( <<EOF
 GET /sec/$m/$thex$f HTTP/1.0
+Host: vvv.example.org
 EOF
  );
 $t->{RESPONSE} = ( { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200 } );
@@ -35,24 +34,41 @@ ok($tf->handle_http($t) == 0, 'secdownload');
 $thex = sprintf("%08x", time - 1800);
 $m = md5_hex($secret.$f.$thex);
 
-# mod-cgi
-#
 $t->{REQUEST}  = ( <<EOF
 GET /sec/$m/$thex$f HTTP/1.0
+Host: vvv.example.org
 EOF
  );
 $t->{RESPONSE} = ( { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 408 } );
 
 ok($tf->handle_http($t) == 0, 'secdownload - timeout');
 
+$t->{REQUEST}  = ( <<EOF
+GET /sec$f HTTP/1.0
+Host: vvv.example.org
+EOF
+ );
+$t->{RESPONSE} = ( { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 404 } );
+
+ok($tf->handle_http($t) == 0, 'secdownload - direct access');
+
+$t->{REQUEST}  = ( <<EOF
+GET $f HTTP/1.0
+Host: www.example.org
+EOF
+ );
+$t->{RESPONSE} = ( { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200 } );
+
+ok($tf->handle_http($t) == 0, 'secdownload - conditional access');
+
+
 $f = "/noexists";
 $thex = sprintf("%08x", time);
 $m = md5_hex($secret.$f.$thex);
 
-# mod-cgi
-#
 $t->{REQUEST}  = ( <<EOF
 GET /sec/$m/$thex$f HTTP/1.0
+Host: vvv.example.org
 EOF
  );
 $t->{RESPONSE} = ( { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 404 } );
