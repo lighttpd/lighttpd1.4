@@ -510,33 +510,15 @@ int buffer_is_empty(buffer *b) {
 /**
  * check if two buffer contain the same data
  * 
- * this is a optimized 32/64bit compare function.
- * 
- * it is assumed that the leftmost byte have the most equality. 
- * That why the comparision is done right to left
- * 
+ * HISTORY: this function was pretty much optimized, but didn't handled
+ * alignment properly.
  */
 
 int buffer_is_equal(buffer *a, buffer *b) {
-	size_t i;
-	
 	if (a->used != b->used) return 0;
 	if (a->used == 0) return 1;
 
-	/* we are unsigned, if i < 0 it will flip to MAX_SIZE_T and will be > a->used */
-	for (i = a->used - 1; i < a->used && i % (sizeof(size_t)); i--) {
-		if (a->ptr[i] != b->ptr[i]) return 0;
-	}
-	
-	/* compare the single char itself which was kicked us out of the loop */ 
-	if (i < a->used && a->ptr[i] != b->ptr[i]) return 0;
-	
-	for (i -= (sizeof(size_t)); i < a->used; i -= (sizeof(size_t))) {
-		if (*((size_t *)(a->ptr + i)) != 
-		    *((size_t *)(b->ptr + i))) return 0;
-	}
-	
-	return 1;
+	return (0 == strcmp(a->ptr, b->ptr));
 }
 
 int buffer_is_equal_string(buffer *a, const char *s, size_t b_len) {
