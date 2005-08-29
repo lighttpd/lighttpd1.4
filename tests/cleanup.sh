@@ -4,10 +4,10 @@ if test x$srcdir = x; then
 	srcdir=.
 fi
 
-tmpdir=$srcdir/tmp/lighttpd
+tmpdir=$top_builddir/tests/tmp/
 
-# create test-framework
-# rm -rf $tmpdir
+# remove test-framework
+rm -rf $tmpdir
 
 printf "%-40s" "cleaning up"
 

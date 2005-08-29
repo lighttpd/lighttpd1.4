@@ -4,7 +4,7 @@ if test x$srcdir = x; then
 	srcdir=.
 fi
 
-tmpdir=$srcdir/tmp/lighttpd
+tmpdir=$top_builddir/tests/tmp/lighttpd
 
 # create test-framework
 rm -rf $tmpdir
@@ -33,7 +33,7 @@ cp $srcdir/docroot/123/*.txt \
    $srcdir/docroot/123/*.php \
    $srcdir/docroot/123/*.bla $tmpdir/servers/123.example.org/pages/
 cp $srcdir/lighttpd.user $tmpdir/
-cp $srcdir/var-include-sub.conf $srcdir/tmp
+cp $srcdir/var-include-sub.conf $tmpdir/../
 touch $tmpdir/servers/www.example.org/pages/image.jpg \
       $tmpdir/servers/www.example.org/pages/image.JPG \
       $tmpdir/servers/www.example.org/pages/a
