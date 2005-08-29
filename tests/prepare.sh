@@ -24,9 +24,6 @@ cp $srcdir/docroot/www/*.html \
    $srcdir/docroot/www/*.pl \
    $srcdir/docroot/www/*.fcgi \
    $srcdir/docroot/www/*.shtml \
-   $srcdir/docroot/www/*.jpg \
-   $srcdir/docroot/www/*.JPG \
-   $srcdir/docroot/www/a \
    $srcdir/docroot/www/*.txt $tmpdir/servers/www.example.org/pages/
 cp $srcdir/docroot/www/go/*.php $tmpdir/servers/www.example.org/pages/go/
 cp $srcdir/docroot/www/expire/*.txt $tmpdir/servers/www.example.org/pages/expire/
@@ -37,6 +34,9 @@ cp $srcdir/docroot/123/*.txt \
    $srcdir/docroot/123/*.bla $tmpdir/servers/123.example.org/pages/
 cp $srcdir/lighttpd.user $tmpdir/
 cp $srcdir/var-include-sub.conf $srcdir/tmp
+touch $tmpdir/servers/www.example.org/pages/image.jpg \
+      $tmpdir/servers/www.example.org/pages/image.JPG \
+      $tmpdir/servers/www.example.org/pages/a
 
 printf "%-40s" "preparing infrastructure"
 
