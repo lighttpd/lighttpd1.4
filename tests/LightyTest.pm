@@ -8,14 +8,23 @@ use Test::More;
 sub new {
 	my $class = shift;
 	my $self = {};
+	my $lpath;
 
 	$self->{CONFIGFILE} = 'lighttpd.conf';
-	$self->{BASEDIR} = (defined $ENV{'top_builddir'} ? $ENV{'top_builddir'} : '..');
-	$self->{SRCDIR}  = (defined $ENV{'srcdir'} ? $ENV{'srcdir'} : '.');
+
+	$lpath = (defined $ENV{'top_builddir'} ? $ENV{'top_builddir'} : '..');
+	$lpath = `readlink -f '$lpath'`;
+	chomp $lpath;
+	$self->{BASEDIR} = $lpath;
+
+	$lpath = (defined $ENV{'srcdir'} ? $ENV{'srcdir'} : '.');
+#	$lpath = `readlink -f '$lpath'`;
+#	chomp $lpath;
+	$self->{SRCDIR} = $lpath;
 
 	$self->{LIGHTTPD_PATH} = $self->{BASEDIR}.'/src/lighttpd';
-	$self->{LIGHTTPD_PIDFILE} = '/tmp/lighttpd/lighttpd.pid';
-	$self->{PIDOF_PIDFILE} = '/tmp/lighttpd/pidof.pid';
+	$self->{LIGHTTPD_PIDFILE} = $self->{SRCDIR}.'/tmp/lighttpd/lighttpd.pid';
+	$self->{PIDOF_PIDFILE} = $self->{SRCDIR}.'/tmp/lighttpd/pidof.pid';
 	$self->{PORT} = 2048;
 	
 	bless($self, $class);
@@ -63,24 +72,22 @@ sub start_proc {
 	# pre-process configfile if necessary
 	#
 
-	my $pwd = `pwd`;
-	chomp($pwd);
-	unlink("/tmp/cfg.file");
-	system("cat ".$self->{SRCDIR}."/".$self->{CONFIGFILE}.' | perl -pe "s#\@SRCDIR\@#'.$pwd.'/'.$self->{BASEDIR}.'/tests/#" > /tmp/cfg.file');
+	unlink($self->{SRCDIR}."/tmp/cfg.file");
+	system("cat ".$self->{SRCDIR}."/".$self->{CONFIGFILE}.' | perl -pe "s#\@SRCDIR\@#'.$self->{BASEDIR}.'/tests/#" > '.$self->{SRCDIR}.'/tmp/cfg.file');
 
 	unlink($self->{LIGHTTPD_PIDFILE});
 	if (1) {
-		system($self->{LIGHTTPD_PATH}." -f /tmp/cfg.file");
+		system($self->{LIGHTTPD_PATH}." -f ".$self->{SRCDIR}."/tmp/cfg.file -m ".$self->{BASEDIR}."/src/.libs");
 		select(undef, undef, undef, 0.1);
 	} else {
-		system("valgrind --tool=memcheck --show-reachable=yes --leak-check=yes --logfile=foo ".$self->{LIGHTTPD_PATH}." -D -f /tmp/cfg.file &");
+		system("valgrind --tool=memcheck --show-reachable=yes --leak-check=yes --logfile=foo ".$self->{LIGHTTPD_PATH}." -D -f ".$self->{SRCDIR}."/tmp/cfg.file -m ".$self->{BASEDIR}."/src/.libs &");
 		select(undef, undef, undef, 2);
 	}
 	
 
 	# sleep(1);
 
-	unlink("/tmp/cfg.file");
+	unlink($self->{SRCDIR}."/tmp/cfg.file");
 
 	# no pidfile, we failed
 	if (not -e $self->{LIGHTTPD_PIDFILE}) {
