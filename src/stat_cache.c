@@ -129,19 +129,6 @@ static void stat_cache_entry_free(void *data) {
 	free(sce);
 }
 
-static void splaytree_delete_tree(splay_tree *t, void (*data_free)(void *)) {
-	if (!t) return;
-
-	splaytree_delete_tree(t->left, data_free);
-	splaytree_delete_tree(t->right, data_free);
-
-	if (data_free) {
-		data_free(t->data);
-	}
-
-	free(t);
-}
-
 #ifdef HAVE_FAM_H
 static fam_dir_entry * fam_dir_entry_init(void) {
 	fam_dir_entry *fam_dir = NULL;
@@ -167,20 +154,34 @@ static void fam_dir_entry_free(void *data) {
 }
 #endif
 
-void stat_cache_free(stat_cache *fc) {
-	splaytree_delete_tree(fc->files, stat_cache_entry_free);
-	
-	buffer_free(fc->dir_name);
+void stat_cache_free(stat_cache *sc) {
+	while (sc->files) {
+		splay_tree *node = sc->files;
+			
+		stat_cache_entry_free(node->data);
+		sc->files = splaytree_delete(sc->files, node->key);
+
+		free(node);
+	}
+
+	buffer_free(sc->dir_name);
 
 #ifdef HAVE_FAM_H
-	splaytree_delete_tree(fc->dirs, fam_dir_entry_free);
+	while (sc->dirs) {
+		splay_tree *node = sc->dirs;
+			
+		fam_dir_entry_free(node->data);
+		sc->dirs = splaytree_delete(sc->dirs, node->key);
+		
+		free(node);
+	}
 
-	if (fc->fam) {
-		FAMClose(fc->fam);
-		free(fc->fam);
+	if (sc->fam) {
+		FAMClose(sc->fam);
+		free(sc->fam);
 	}
 #endif
-	free(fc);
+	free(sc);
 }
 
 #ifdef HAVE_XATTR
@@ -256,7 +257,10 @@ handler_t stat_cache_handle_fdevent(void *_srv, void *_fce, int revent) {
 			
 				if (node && (node->key == ndx)) {
 					fam_dir_entry_free(node->data);
+
 					sc->dirs = splaytree_delete(sc->dirs, ndx);
+
+					free(node);
 				}
 				break;
 			default:
@@ -514,6 +518,8 @@ int stat_cache_trigger_cleanup(server *srv) {
 		if (node && (node->key == ndx)) {
 			stat_cache_entry_free(node->data);
 			sc->files = splaytree_delete(sc->files, ndx);
+
+			free(node);
 		}
 	}
 
