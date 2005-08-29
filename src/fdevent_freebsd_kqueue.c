@@ -108,6 +108,7 @@ static int fdevent_freebsd_kqueue_poll(fdevents *ev, int timeout_ms) {
 			fprintf(stderr, "%s.%d: kqueue failed polling: %s\n",
 				__FILE__, __LINE__, strerror(errno));
 			break;
+		}
 	}
 
 	return ret;

@@ -621,10 +621,10 @@ else
 fi
 
 ## post processing
-do_build=`echo $do_build | sed 's/ /\n/g' | sort`
-no_build=`echo $no_build | sed 's/ /\n/g' | sort`
-enable_feature=`echo $enable_feature | sed 's/ /\n/g' | sort`
-disable_feature=`echo $disable_feature | sed 's/ /\n/g' | sort`
+do_build=`for i in $do_build; do echo $i; done | sort`
+no_build=`for i in $no_build; do echo $i; done | sort`
+enable_feature=`for i in $enable_feature; do echo $i; done | sort`
+disable_feature=`for i in $disable_feature; do echo $i; done | sort`
 
 ## output
 
