@@ -406,7 +406,9 @@ int network_init(server *srv) {
 int network_register_fdevents(server *srv) {
 	size_t i;
 	
-	fdevent_reset(srv->ev);
+	if (-1 == fdevent_reset(srv->ev)) {
+		return -1;
+	}
 	
 	/* register fdevents after reset */
 	for (i = 0; i < srv->srv_sockets.used; i++) {

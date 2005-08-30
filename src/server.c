@@ -670,7 +670,11 @@ int main (int argc, char **argv) {
 		return -1;
 	}
 	
-	/* kqueue needs a reset AFTER daemonize() */
+	/* 
+	 * kqueue() is called here, select resets its internals, 
+	 * all server sockets get their handlers
+	 *
+	 * */
 	if (0 != network_register_fdevents(srv)) {
 		plugins_free(srv);
 		network_close(srv);
