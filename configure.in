@@ -1,7 +1,7 @@
 #                                               -*- Autoconf -*-
 # Process this file with autoconf to produce a configure script.
 AC_PREREQ(2.57)
-AC_INIT(lighttpd, 1.4.2, jan@kneschke.de)
+AC_INIT(lighttpd, 1.4.3, jan@kneschke.de)
 AC_CONFIG_SRCDIR([src/server.c])
 
 AC_CANONICAL_TARGET
@@ -620,12 +620,6 @@ else
 	disable_feature="$disable_feature $features"
 fi
 
-## post processing
-do_build=`for i in $do_build; do echo $i; done | sort`
-no_build=`for i in $no_build; do echo $i; done | sort`
-enable_feature=`for i in $enable_feature; do echo $i; done | sort`
-disable_feature=`for i in $disable_feature; do echo $i; done | sort`
-
 ## output
 
 $ECHO
@@ -633,30 +627,27 @@ $ECHO "Plugins:"
 $ECHO
 
 $ECHO "enabled: "
-i=0
 for p in $do_build; do
 	$ECHO "  $p"
-done
+done | sort
 
 $ECHO "disabled: "
 for p in $no_build; do
 	$ECHO "  $p"
-done
+done | sort
 
 $ECHO
 $ECHO "Features:"
 $ECHO
 
 $ECHO "enabled: "
-i=0
-p=""
 for p in $enable_feature; do
 	$ECHO "  $p"
-done
+done | sort
 
 $ECHO "disabled: "
 for p in $disable_feature; do
 	$ECHO "  $p"
-done
+done | sort
 
 $ECHO
