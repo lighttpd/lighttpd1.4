@@ -149,8 +149,6 @@ static int fdevent_freebsd_kqueue_event_next_fdndx(fdevents *ev, int ndx) {
 }
 
 static int fdevent_freebsd_kqueue_reset(fdevents *ev) {
-	close(ev->kq_fd);
-	
 	if (-1 == (ev->kq_fd = kqueue())) {
 		fprintf(stderr, "%s.%d: kqueue failed (%s), try to set server.event-handler = \"poll\" or \"select\"\n",
 			__FILE__, __LINE__, strerror(errno));
@@ -178,12 +176,8 @@ int fdevent_freebsd_kqueue_init(fdevents *ev) {
 	SET(event_get_fd);
 	SET(event_get_revent);
 
-	if (-1 == (ev->kq_fd = kqueue())) {
-		fprintf(stderr, "%s.%d: kqueue failed (%s), try to set server.event-handler = \"poll\" or \"select\"\n",
-			__FILE__, __LINE__, strerror(errno));
-		
-		return -1;
-	}
+	ev->kq_fd = -1;
+
 	ev->kq_results = calloc(ev->maxfds, sizeof(*ev->kq_results));
 	ev->kq_bevents = bitset_init(ev->maxfds);
 

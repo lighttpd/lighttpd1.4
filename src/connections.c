@@ -1064,7 +1064,6 @@ handler_t connection_handle_fdevent(void *s, void *context, int revents) {
 
 
 connection *connection_accept(server *srv, server_socket *srv_socket) {
-	int accepted_requests = 0;
 	/* accept everything */
 
 	/* search an empty place */
@@ -1078,7 +1077,7 @@ connection *connection_accept(server *srv, server_socket *srv_socket) {
 	if (-1 == (cnt = accept(srv_socket->fd, (struct sockaddr *) &cnt_addr, &cnt_len))) {
 		if ((errno != EAGAIN) &&
 		    (errno != EINTR)) {
-			log_error_write(srv, __FILE__, __LINE__, "ss", "accept failed: ", strerror(errno));
+			log_error_write(srv, __FILE__, __LINE__, "ssd", "accept failed:", strerror(errno), errno);
 		}
 		return NULL;
 	} else {
@@ -1086,7 +1085,6 @@ connection *connection_accept(server *srv, server_socket *srv_socket) {
 		
 		srv->cur_fds++;
 		
-		accepted_requests++;
 		/* ok, we have the connection, register it */
 #if 0
 		log_error_write(srv, __FILE__, __LINE__, "sd",
