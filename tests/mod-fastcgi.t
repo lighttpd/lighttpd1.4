@@ -7,7 +7,7 @@ BEGIN {
 }
 
 use strict;
-use Test::More tests => 44;
+use Test::More tests => 45;
 use LightyTest;
 
 my $tf = LightyTest->new();
@@ -52,7 +52,7 @@ EOF
 	ok($tf->handle_http($t) == 0, 'Status + Location via FastCGI');
 
 	$t->{REQUEST}  = ( <<EOF
-GET /phpself.php HTTP/1.0
+GET /get-server-env.php?env=PHP_SELF HTTP/1.0
 Host: www.example.org
 EOF
  );
@@ -60,15 +60,15 @@ EOF
 	ok($tf->handle_http($t) == 0, '$_SERVER["PHP_SELF"]');
 
 	$t->{REQUEST}  = ( <<EOF
-GET /phpself.php/foo HTTP/1.0
+GET /get-server-env.php/foo?env=PHP_SELF HTTP/1.0
 Host: www.example.org
 EOF
  );
-	$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200, 'HTTP-Content' => '/phpself.php' } ];
+	$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200, 'HTTP-Content' => '/get-server-env.php' } ];
 	ok($tf->handle_http($t) == 0, '$_SERVER["PHP_SELF"]');
 
 	$t->{REQUEST}  = ( <<EOF
-GET /pathinfo.php/foo HTTP/1.0
+GET /get-server-env.php/foo?env=PATH_INFO HTTP/1.0
 Host: www.example.org
 EOF
  );
@@ -76,7 +76,7 @@ EOF
 	ok($tf->handle_http($t) == 0, '$_SERVER["PATH_INFO"]');
 
 	$t->{REQUEST}  = ( <<EOF
-GET /phphost.php HTTP/1.0
+GET /get-server-env.php?env=SERVER_NAME HTTP/1.0
 Host: www.example.org
 EOF
  );
@@ -84,7 +84,7 @@ EOF
 	ok($tf->handle_http($t) == 0, 'SERVER_NAME');
 
 	$t->{REQUEST}  = ( <<EOF
-GET /phphost.php HTTP/1.0
+GET /get-server-env.php?env=SERVER_NAME HTTP/1.0
 Host: foo.example.org
 EOF
  );
@@ -92,7 +92,7 @@ EOF
 	ok($tf->handle_http($t) == 0, 'SERVER_NAME');
 
 	$t->{REQUEST}  = ( <<EOF
-GET /phphost.php HTTP/1.0
+GET /get-server-env.php?env=SERVER_NAME HTTP/1.0
 Host: vvv.example.org
 EOF
  );
@@ -100,7 +100,7 @@ EOF
 	ok($tf->handle_http($t) == 0, 'SERVER_NAME');
 
 	$t->{REQUEST}  = ( <<EOF
-GET /phphost.php HTTP/1.0
+GET /get-server-env.php?env=SERVER_NAME HTTP/1.0
 Host: zzz.example.org
 EOF
  );
@@ -156,7 +156,7 @@ EOF
 	$tf->{CONFIGFILE} = 'fastcgi-10.conf';
 	ok($tf->start_proc == 0, "Starting lighttpd with $tf->{CONFIGFILE}") or die();
 	$t->{REQUEST}  = ( <<EOF
-GET /phphost.php HTTP/1.0
+GET /get-server-env.php?env=SERVER_NAME HTTP/1.0
 Host: zzz.example.org
 EOF
  );
@@ -216,7 +216,7 @@ EOF
 }
 
 SKIP: {
-	skip "no php found", 3 unless -x "/home/jan/Documents/php-5.1.0b3/sapi/cgi/php"; 
+	skip "no php found", 4 unless -x "/home/jan/Documents/php-5.1.0b3/sapi/cgi/php"; 
 	$tf->{CONFIGFILE} = 'fastcgi-13.conf';
 	ok($tf->start_proc == 0, "Starting lighttpd with $tf->{CONFIGFILE}") or die();
 	$t->{REQUEST}  = ( <<EOF
@@ -226,6 +226,16 @@ EOF
  );
 	$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200 } ];
 	ok($tf->handle_http($t) == 0, 'FastCGI + local spawning');
+
+	$t->{REQUEST}  = ( <<EOF
+GET /get-env.php?env=MAIL HTTP/1.0
+Host: www.example.org
+EOF
+ );
+	$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200 , 'HTTP-Content' => '' } ];
+	ok($tf->handle_http($t) == 0, 'FastCGI + bin-copy-environment');
+
+
 
 	ok($tf->stop_proc == 0, "Stopping lighttpd");
 }
