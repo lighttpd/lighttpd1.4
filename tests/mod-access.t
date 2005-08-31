@@ -20,7 +20,7 @@ $t->{REQUEST}  = ( <<EOF
 GET /index.html~ HTTP/1.0
 EOF
  );
-$t->{RESPONSE} = ( { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 403 } );
+$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 403 } ];
 ok($tf->handle_http($t) == 0, 'forbid access to ...~');
 
 ok($tf->stop_proc == 0, "Stopping lighttpd");

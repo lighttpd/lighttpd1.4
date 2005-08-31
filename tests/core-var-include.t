@@ -21,7 +21,7 @@ $tf->{CONFIGFILE} = 'var-include.conf';
 ok($tf->start_proc == 0, "Starting lighttpd") or die();
 
 $t->{REQUEST}  = ( "GET /index.html HTTP/1.0\r\nHost: www.example.org\r\n" );
-$t->{RESPONSE} = ( { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 301, 'Location' => "/redirect" } );
+$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 301, 'Location' => "/redirect" } ];
 ok($tf->handle_http($t) == 0, 'basic test');
 
 my $myvar = "good";
@@ -54,7 +54,7 @@ GET /$test HTTP/1.0
 Host: $server_name
 EOF
  );
-	$t->{RESPONSE} = ( { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 301, 'Location' => $expect } );
+	$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 301, 'Location' => $expect } ];
 	ok($tf->handle_http($t) == 0, $test);
 }
 

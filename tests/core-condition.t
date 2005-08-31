@@ -22,7 +22,7 @@ GET /index.html HTTP/1.0
 Host: www.example.org
 EOF
  );
-$t->{RESPONSE} = ( { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 301, 'Location' => "/match_1" } );
+$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 301, 'Location' => "/match_1" } ];
 ok($tf->handle_http($t) == 0, 'config deny');
 
 $t->{REQUEST}  = ( <<EOF
@@ -30,7 +30,7 @@ GET /index.html HTTP/1.0
 Host: test1.example.org
 EOF
  );
-$t->{RESPONSE} = ( { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 301, 'Location' => "/match_2" } );
+$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 301, 'Location' => "/match_2" } ];
 ok($tf->handle_http($t) == 0, '2nd child of chaining');
 
 $t->{REQUEST}  = ( <<EOF
@@ -38,7 +38,7 @@ GET /index.html HTTP/1.0
 Host: test2.example.org
 EOF
  );
-$t->{RESPONSE} = ( { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 301, 'Location' => "/match_3" } );
+$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 301, 'Location' => "/match_3" } ];
 ok($tf->handle_http($t) == 0, '3rd child of chaining');
 
 $t->{REQUEST}  = ( <<EOF
@@ -46,7 +46,7 @@ GET /index.html HTTP/1.0
 Host: test3.example.org
 EOF
  );
-$t->{RESPONSE} = ( { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 301, 'Location' => "/match_5" } );
+$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 301, 'Location' => "/match_5" } ];
 ok($tf->handle_http($t) == 0, 'nesting');
 
 ok($tf->stop_proc == 0, "Stopping lighttpd");
@@ -59,7 +59,7 @@ GET /nofile.png HTTP/1.0
 Host: www.example.org
 EOF
  );
-$t->{RESPONSE} = ( { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 404 } );
+$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 404 } ];
 ok($tf->handle_http($t) == 0, 'condition: Referer - no referer');
 
 $t->{REQUEST}  = ( <<EOF
@@ -68,7 +68,7 @@ Host: www.example.org
 Referer: http://www.example.org/
 EOF
  );
-$t->{RESPONSE} = ( { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 404 } );
+$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 404 } ];
 ok($tf->handle_http($t) == 0, 'condition: Referer - referer matches regex');
 
 $t->{REQUEST}  = ( <<EOF
@@ -77,7 +77,7 @@ Host: www.example.org
 Referer: http://123.example.org/
 EOF
  );
-$t->{RESPONSE} = ( { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 403 } );
+$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 403 } ];
 ok($tf->handle_http($t) == 0, 'condition: Referer - referer doesn\'t match');
 
 ok($tf->stop_proc == 0, "Stopping lighttpd");

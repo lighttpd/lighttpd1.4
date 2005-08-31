@@ -29,6 +29,7 @@ CONFS=fastcgi-10.conf \
       core-condition.t \
       core-request.t \
       core-response.t \
+      core-keepalive.t \
       core.t \
       mod-access.t \
       mod-auth.t \
@@ -40,7 +41,8 @@ CONFS=fastcgi-10.conf \
       mod-rewrite.t \
       request.t \
       mod-ssi.t \
-      LightyTest.pm
+      LightyTest.pm \
+      mod-setenv.t 
 
 
 TESTS_ENVIRONMENT=$(srcdir)/wrapper.sh $(srcdir) $(top_builddir) 
