@@ -20,7 +20,7 @@ $t->{REQUEST}  = ( <<EOF
 GET /server-status HTTP/1.0
 EOF
  );
-$t->{RESPONSE} = ( { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 401 } );
+$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 401 } ];
 ok($tf->handle_http($t) == 0, 'Missing Auth-token');
 
 $t->{REQUEST}  = ( <<EOF
@@ -28,7 +28,7 @@ GET /server-status HTTP/1.0
 Authorization: Basic amFuOmphb
 EOF
  );
-$t->{RESPONSE} = ( { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 401 } );
+$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 401 } ];
 ok($tf->handle_http($t) == 0, 'Basic-Auth: Wrong Auth-token');
 
 $t->{REQUEST}  = ( <<EOF
@@ -36,7 +36,7 @@ GET /server-config HTTP/1.0
 Authorization: Basic amFuOmphbg==
 EOF
  );
-$t->{RESPONSE} = ( { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200 } );
+$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200 } ];
 ok($tf->handle_http($t) == 0, 'Basic-Auth: Valid Auth-token');
 
 ## this should not crash
@@ -47,7 +47,7 @@ Authorization: Digest username="jan", realm="jan", nonce="9a5428ccc05b086a08d918
                 uri="/server-status", response="ea5f7d9a30b8b762f9610ccb87dea74f"
 EOF
  );
-$t->{RESPONSE} = ( { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 401 } );
+$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 401 } ];
 ok($tf->handle_http($t) == 0, 'Digest-Auth: missing qop, no crash');
 
 

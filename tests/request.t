@@ -22,14 +22,14 @@ $t->{REQUEST}  = ( <<EOF
 GET /foobar HTTP/1.0
 EOF
  );
-$t->{RESPONSE} = ( { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 404 } );
+$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 404 } ];
 ok($tf->handle_http($t) == 0, 'file not found');
 
 $t->{REQUEST}  = ( <<EOF
 GET /foobar?foobar HTTP/1.0
 EOF
  );
-$t->{RESPONSE} = ( { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 404 } );
+$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 404 } ];
 ok($tf->handle_http($t) == 0, 'file not found + querystring');
 
 $t->{REQUEST}  = ( <<EOF
@@ -37,7 +37,7 @@ GET /12345.txt HTTP/1.0
 Host: 123.example.org
 EOF
  );
-$t->{RESPONSE} = ( { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200, 'HTTP-Content' => '12345'."\n", 'Content-Type' => 'text/plain' } );
+$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200, 'HTTP-Content' => '12345'."\n", 'Content-Type' => 'text/plain' } ];
 ok($tf->handle_http($t) == 0, 'GET, content == 12345, mimetype text/plain');
 
 $t->{REQUEST}  = ( <<EOF
@@ -45,7 +45,7 @@ GET /12345.html HTTP/1.0
 Host: 123.example.org
 EOF
  );
-$t->{RESPONSE} = ( { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200, 'HTTP-Content' => '12345'."\n", 'Content-Type' => 'text/html' } );
+$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200, 'HTTP-Content' => '12345'."\n", 'Content-Type' => 'text/html' } ];
 ok($tf->handle_http($t) == 0, 'GET, content == 12345, mimetype text/html');
 
 $t->{REQUEST}  = ( <<EOF
@@ -53,14 +53,14 @@ GET /dummyfile.bla HTTP/1.0
 Host: 123.example.org
 EOF
  );
-$t->{RESPONSE} = ( { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200, 'HTTP-Content' => '12345'."\n", 'Content-Type' => 'application/octet-stream' } );
+$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200, 'HTTP-Content' => '12345'."\n", 'Content-Type' => 'application/octet-stream' } ];
 ok($tf->handle_http($t) == 0, 'GET, content == 12345, mimetype application/octet-stream');
 
 $t->{REQUEST}  = ( <<EOF
 POST / HTTP/1.0
 EOF
  );
-$t->{RESPONSE} = ( { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 411 } );
+$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 411 } ];
 ok($tf->handle_http($t) == 0, 'POST request, no Content-Length');
 
 
@@ -70,14 +70,14 @@ Content-type: application/x-www-form-urlencoded
 Content-length: 0
 EOF
  );
-$t->{RESPONSE} = ( { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200 } );
+$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200 } ];
 ok($tf->handle_http($t) == 0, 'POST request, empty request-body');
 
 $t->{REQUEST}  = ( <<EOF
 HEAD / HTTP/1.0
 EOF
  );
-$t->{RESPONSE} = ( { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200, '-HTTP-Content' => ''} );
+$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200, '-HTTP-Content' => ''} ];
 ok($tf->handle_http($t) == 0, 'HEAD request, no content');
 
 $t->{REQUEST}  = ( <<EOF
@@ -85,14 +85,14 @@ HEAD /12345.html HTTP/1.0
 Host: 123.example.org
 EOF
  );
-$t->{RESPONSE} = ( { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200, '-HTTP-Content' => '', 'Content-Type' => 'text/html', 'Content-Length' => '6'} );
+$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200, '-HTTP-Content' => '', 'Content-Type' => 'text/html', 'Content-Length' => '6'} ];
 ok($tf->handle_http($t) == 0, 'HEAD request, mimetype text/html, content-length');
 
 $t->{REQUEST}  = ( <<EOF
 HEAD /foobar?foobar HTTP/1.0
 EOF
  );
-$t->{RESPONSE} = ( { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 404, '-HTTP-Content' => '' } );
+$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 404, '-HTTP-Content' => '' } ];
 ok($tf->handle_http($t) == 0, 'HEAD request, file-not-found, query-string');
 
 $t->{REQUEST}  = ( <<EOF
@@ -101,7 +101,7 @@ Connection: close
 Expect: 100-continue
 EOF
  );
-$t->{RESPONSE} = ( { 'HTTP-Protocol' => 'HTTP/1.1', 'HTTP-Status' => 417, '-HTTP-Content' => ''} );
+$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.1', 'HTTP-Status' => 417, '-HTTP-Content' => ''} ];
 ok($tf->handle_http($t) == 0, 'Continue, Expect');
 
 ## ranges
@@ -112,7 +112,7 @@ Host: 123.example.org
 Range: bytes=0-3
 EOF
  );
-$t->{RESPONSE} = ( { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 206, 'HTTP-Content' => '1234' } );
+$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 206, 'HTTP-Content' => '1234' } ];
 ok($tf->handle_http($t) == 0, 'GET, Range 0-3');
 
 $t->{REQUEST}  = ( <<EOF
@@ -121,7 +121,7 @@ Host: 123.example.org
 Range: bytes=-3
 EOF
  );
-$t->{RESPONSE} = ( { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 206, 'HTTP-Content' => '45'."\n" } );
+$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 206, 'HTTP-Content' => '45'."\n" } ];
 ok($tf->handle_http($t) == 0, 'GET, Range -3');
 
 $t->{REQUEST}  = ( <<EOF
@@ -130,7 +130,7 @@ Host: 123.example.org
 Range: bytes=3-
 EOF
  );
-$t->{RESPONSE} = ( { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 206, 'HTTP-Content' => '45'."\n" } );
+$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 206, 'HTTP-Content' => '45'."\n" } ];
 ok($tf->handle_http($t) == 0, 'GET, Range 3-');
 
 $t->{REQUEST}  = ( <<EOF
@@ -139,7 +139,7 @@ Host: 123.example.org
 Range: bytes=0-1,3-4
 EOF
  );
-$t->{RESPONSE} = ( { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 206, 'HTTP-Content' => <<EOF
+$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 206, 'HTTP-Content' => <<EOF
 \r
 --fkj49sn38dcn3\r
 Content-Range: bytes 0-1/6\r
@@ -153,7 +153,7 @@ Content-Type: text/plain\r
 45\r
 --fkj49sn38dcn3--\r
 EOF
- } );
+ } ];
 ok($tf->handle_http($t) == 0, 'GET, Range 0-1,3-4');
 
 $t->{REQUEST}  = ( <<EOF
@@ -162,7 +162,7 @@ Host: 123.example.org
 Range: bytes=0--
 EOF
  );
-$t->{RESPONSE} = ( { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200 } );
+$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200 } ];
 ok($tf->handle_http($t) == 0, 'GET, Range 0--');
 
 $t->{REQUEST}  = ( <<EOF
@@ -171,7 +171,7 @@ Host: 123.example.org
 Range: bytes=-2-3
 EOF
  );
-$t->{RESPONSE} = ( { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200 } );
+$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200 } ];
 ok($tf->handle_http($t) == 0, 'GET, Range -2-3');
 
 $t->{REQUEST}  = ( <<EOF
@@ -180,7 +180,7 @@ Host: 123.example.org
 Range: bytes=-0
 EOF
  );
-$t->{RESPONSE} = ( { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 416, 'HTTP-Content' => <<EOF
+$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 416, 'HTTP-Content' => <<EOF
 <?xml version="1.0" encoding="iso-8859-1"?>
 <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
          "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
@@ -193,7 +193,7 @@ $t->{RESPONSE} = ( { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 416, 'HTTP-
  </body>
 </html>
 EOF
- } );
+ } ];
 ok($tf->handle_http($t) == 0, 'GET, Range -0');
 
 $t->{REQUEST}  = ( <<EOF
@@ -202,7 +202,7 @@ Host: 123.example.org
 Range: bytes=25-
 EOF
  );
-$t->{RESPONSE} = ( { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 416, 'HTTP-Content' => <<EOF
+$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 416, 'HTTP-Content' => <<EOF
 <?xml version="1.0" encoding="iso-8859-1"?>
 <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
          "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
@@ -215,7 +215,7 @@ $t->{RESPONSE} = ( { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 416, 'HTTP-
  </body>
 </html>
 EOF
- } );
+ } ];
 
 ok($tf->handle_http($t) == 0, 'GET, Range start out of range');
 
@@ -233,7 +233,7 @@ nfj: jgfdjdfg
 jfue: jfdfdg
 EOF
  );
-$t->{RESPONSE} = ( { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200 } );
+$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200 } ];
 ok($tf->handle_http($t) == 0, 'larger headers');
 
 
@@ -243,7 +243,7 @@ Host: www.example.org
 Host: 123.example.org
 EOF
  );
-$t->{RESPONSE} = ( { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 400 } );
+$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 400 } ];
 ok($tf->handle_http($t) == 0, 'Duplicate Host headers, Bug #25');
 
 
@@ -253,7 +253,7 @@ Content-Length: 5
 Content-Length: 4
 EOF
  );
-$t->{RESPONSE} = ( { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 400 } );
+$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 400 } ];
 ok($tf->handle_http($t) == 0, 'Duplicate Content-Length headers');
 
 $t->{REQUEST}  = ( <<EOF
@@ -262,7 +262,7 @@ Content-Type: 5
 Content-Type: 4
 EOF
  );
-$t->{RESPONSE} = ( { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 400 } );
+$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 400 } ];
 ok($tf->handle_http($t) == 0, 'Duplicate Content-Type headers');
 
 $t->{REQUEST}  = ( <<EOF
@@ -271,7 +271,7 @@ Range: bytes=5-6
 Range: bytes=5-9
 EOF
  );
-$t->{RESPONSE} = ( { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 400 } );
+$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 400 } ];
 ok($tf->handle_http($t) == 0, 'Duplicate Range headers');
 
 $t->{REQUEST}  = ( <<EOF
@@ -280,7 +280,7 @@ If-None-Match: 5
 If-None-Match: 4
 EOF
  );
-$t->{RESPONSE} = ( { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 400 } );
+$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 400 } ];
 ok($tf->handle_http($t) == 0, 'Duplicate If-None-Match headers');
 
 $t->{REQUEST}  = ( <<EOF
@@ -289,7 +289,7 @@ If-Modified-Since: 5
 If-Modified-Since: 4
 EOF
  );
-$t->{RESPONSE} = ( { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 400 } );
+$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 400 } ];
 ok($tf->handle_http($t) == 0, 'Duplicate If-Modified-Since headers');
 
 

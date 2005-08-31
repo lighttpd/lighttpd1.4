@@ -25,28 +25,28 @@ Host: www.example.org
 Connection: close
 EOF
  );
-$t->{RESPONSE} = ( { 'HTTP-Protocol' => 'HTTP/1.1', 'HTTP-Status' => 200, '+Date' => '' } );
+$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.1', 'HTTP-Status' => 200, '+Date' => '' } ];
 ok($tf->handle_http($t) == 0, 'Date header');
 
 $t->{REQUEST}  = ( <<EOF
 GET / HTTP/1.1
 EOF
  );
-$t->{RESPONSE} = ( { 'HTTP-Protocol' => 'HTTP/1.1', 'HTTP-Status' => 400, 'Connection' => 'close' } );
+$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.1', 'HTTP-Status' => 400, 'Connection' => 'close' } ];
 ok($tf->handle_http($t) == 0, 'Host missing');
 
 $t->{REQUEST}  = ( <<EOF
 GET / HTTP/1.0
 EOF
  );
-$t->{RESPONSE} = ( { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200, '+ETag' => '' } );
+$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200, '+ETag' => '' } ];
 ok($tf->handle_http($t) == 0, 'ETag is set');
 
 $t->{REQUEST}  = ( <<EOF
 GET / HTTP/1.0
 EOF
  );
-$t->{RESPONSE} = ( { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200, 'ETag' => '/^".+"$/' } );
+$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200, 'ETag' => '/^".+"$/' } ];
 ok($tf->handle_http($t) == 0, 'ETag has quotes');
 
 
@@ -59,7 +59,7 @@ GET /12345.html HTTP/1.0
 Host: 123.example.org
 EOF
  );
-$t->{RESPONSE} = ( { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200, 'Content-Length' => '6' } );
+$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200, 'Content-Length' => '6' } ];
 ok($tf->handle_http($t) == 0, 'Content-Length for text/html');
 
 $t->{REQUEST}  = ( <<EOF
@@ -67,7 +67,7 @@ GET /12345.txt HTTP/1.0
 Host: 123.example.org
 EOF
  );
-$t->{RESPONSE} = ( { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200, 'Content-Length' => '6' } );
+$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200, 'Content-Length' => '6' } ];
 ok($tf->handle_http($t) == 0, 'Content-Length for text/plain');
 
 
@@ -77,14 +77,14 @@ $t->{REQUEST}  = ( <<EOF
 GET /dummydir HTTP/1.0
 EOF
  );
-$t->{RESPONSE} = ( { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 301, 'Location' => 'http://localhost:2048/dummydir/' } );
+$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 301, 'Location' => 'http://localhost:2048/dummydir/' } ];
 ok($tf->handle_http($t) == 0, 'internal redirect in directory');
 
 $t->{REQUEST}  = ( <<EOF
 GET /dummydir?foo HTTP/1.0
 EOF
  );
-$t->{RESPONSE} = ( { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 301, 'Location' => 'http://localhost:2048/dummydir/?foo' } );
+$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 301, 'Location' => 'http://localhost:2048/dummydir/?foo' } ];
 ok($tf->handle_http($t) == 0, 'internal redirect in directory + querystring');
 
 ## simple-vhost
@@ -94,7 +94,7 @@ GET /12345.txt HTTP/1.0
 Host: no-simple.example.org
 EOF
  );
-$t->{RESPONSE} = ( { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200, 'Content-Length' => '6' } );
+$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200, 'Content-Length' => '6' } ];
 ok($tf->handle_http($t) == 0, 'disabling simple-vhost via conditionals');
 
 $t->{REQUEST}  = ( <<EOF
@@ -102,7 +102,7 @@ GET /12345.txt HTTP/1.0
 Host: simple.example.org
 EOF
  );
-$t->{RESPONSE} = ( { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 404 } );
+$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 404 } ];
 ok($tf->handle_http($t) == 0, 'simple-vhost via conditionals');
 
 ok($tf->stop_proc == 0, "Stopping lighttpd");

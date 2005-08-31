@@ -21,7 +21,7 @@ GET /redirect/ HTTP/1.0
 Host: vvv.example.org
 EOF
  );
-$t->{RESPONSE} = ( { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 301, 'Location' => 'http://localhost:2048/' } );
+$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 301, 'Location' => 'http://localhost:2048/' } ];
 ok($tf->handle_http($t) == 0, 'external redirect');
 
 $t->{REQUEST} = ( <<EOF
@@ -29,7 +29,7 @@ GET /redirect/ HTTP/1.0
 Host: zzz.example.org
 EOF
  );
-$t->{RESPONSE} = ( { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 301, 'Location' => 'http://localhost:2048/zzz' } );
+$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 301, 'Location' => 'http://localhost:2048/zzz' } ];
 ok($tf->handle_http($t) == 0, 'external redirect with cond regsub');
 
 $t->{REQUEST} = ( <<EOF
@@ -37,7 +37,7 @@ GET /redirect/ HTTP/1.0
 Host: remoteip.example.org
 EOF
  );
-$t->{RESPONSE} = ( { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 301, 'Location' => 'http://localhost:2048/127.0.0.1' } );
+$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 301, 'Location' => 'http://localhost:2048/127.0.0.1' } ];
 ok($tf->handle_http($t) == 0, 'external redirect with cond regsub on remoteip');
 
 $t->{REQUEST} = ( <<EOF
@@ -45,7 +45,7 @@ GET /redirect/ HTTP/1.0
 Host: remoteip2.example.org
 EOF
  );
-$t->{RESPONSE} = ( { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 301, 'Location' => 'http://localhost:2048/remoteip2' } );
+$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 301, 'Location' => 'http://localhost:2048/remoteip2' } ];
 ok($tf->handle_http($t) == 0, 'external redirect with cond regsub on remoteip2');
 
 ok($tf->stop_proc == 0, "Stopping lighttpd");

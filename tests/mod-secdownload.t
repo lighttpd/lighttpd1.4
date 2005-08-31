@@ -27,7 +27,7 @@ GET /sec/$m/$thex$f HTTP/1.0
 Host: vvv.example.org
 EOF
  );
-$t->{RESPONSE} = ( { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200 } );
+$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200 } ];
 
 ok($tf->handle_http($t) == 0, 'secdownload');
 
@@ -39,7 +39,7 @@ GET /sec/$m/$thex$f HTTP/1.0
 Host: vvv.example.org
 EOF
  );
-$t->{RESPONSE} = ( { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 408 } );
+$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 408 } ];
 
 ok($tf->handle_http($t) == 0, 'secdownload - timeout');
 
@@ -48,7 +48,7 @@ GET /sec$f HTTP/1.0
 Host: vvv.example.org
 EOF
  );
-$t->{RESPONSE} = ( { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 404 } );
+$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 404 } ];
 
 ok($tf->handle_http($t) == 0, 'secdownload - direct access');
 
@@ -57,7 +57,7 @@ GET $f HTTP/1.0
 Host: www.example.org
 EOF
  );
-$t->{RESPONSE} = ( { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200 } );
+$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200 } ];
 
 ok($tf->handle_http($t) == 0, 'secdownload - conditional access');
 
@@ -71,7 +71,7 @@ GET /sec/$m/$thex$f HTTP/1.0
 Host: vvv.example.org
 EOF
  );
-$t->{RESPONSE} = ( { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 404 } );
+$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 404 } ];
 
 ok($tf->handle_http($t) == 0, 'secdownload - timeout');
 

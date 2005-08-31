@@ -22,7 +22,7 @@ $t->{REQUEST}  = ( <<EOF
 GET /ssi.shtml HTTP/1.0
 EOF
  );
-$t->{RESPONSE} = ( { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200, 'HTTP-Content' => "/ssi.shtml\n" } );
+$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200, 'HTTP-Content' => "/ssi.shtml\n" } ];
 ok($tf->handle_http($t) == 0, 'ssi - echo ');
 
 ok($tf->stop_proc == 0, "Stopping lighttpd");

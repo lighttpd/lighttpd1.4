@@ -24,7 +24,7 @@ GET /phpinfo.php HTTP/1.0
 Host: www.example.org
 EOF
  );
-	$t->{RESPONSE} = ( { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200 } );
+	$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200 } ];
 	ok($tf->handle_http($t) == 0, 'valid request');
 
 	$t->{REQUEST}  = ( <<EOF
@@ -32,7 +32,7 @@ GET /phpinfofoobar.php HTTP/1.0
 Host: www.example.org
 EOF
  );
-	$t->{RESPONSE} = ( { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 404 } );
+	$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 404 } ];
 	ok($tf->handle_http($t) == 0, 'file not found');
 
 	$t->{REQUEST}  = ( <<EOF
@@ -40,7 +40,7 @@ GET /go/ HTTP/1.0
 Host: www.example.org
 EOF
  );
-	$t->{RESPONSE} = ( { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200 } );
+	$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200 } ];
 	ok($tf->handle_http($t) == 0, 'index-file handling');
 
 	$t->{REQUEST}  = ( <<EOF
@@ -48,7 +48,7 @@ GET /redirect.php HTTP/1.0
 Host: www.example.org
 EOF
  );
-	$t->{RESPONSE} = ( { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 302, 'Location' => 'http://www.example.org:2048/' } );
+	$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 302, 'Location' => 'http://www.example.org:2048/' } ];
 	ok($tf->handle_http($t) == 0, 'Status + Location via FastCGI');
 
 	$t->{REQUEST}  = ( <<EOF
@@ -56,7 +56,7 @@ GET /phpself.php HTTP/1.0
 Host: www.example.org
 EOF
  );
-	$t->{RESPONSE} = ( { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200 } );
+	$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200 } ];
 	ok($tf->handle_http($t) == 0, '$_SERVER["PHP_SELF"]');
 
 	$t->{REQUEST}  = ( <<EOF
@@ -64,7 +64,7 @@ GET /phpself.php/foo HTTP/1.0
 Host: www.example.org
 EOF
  );
-	$t->{RESPONSE} = ( { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200, 'HTTP-Content' => '/phpself.php' } );
+	$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200, 'HTTP-Content' => '/phpself.php' } ];
 	ok($tf->handle_http($t) == 0, '$_SERVER["PHP_SELF"]');
 
 	$t->{REQUEST}  = ( <<EOF
@@ -72,7 +72,7 @@ GET /pathinfo.php/foo HTTP/1.0
 Host: www.example.org
 EOF
  );
-	$t->{RESPONSE}  = ( { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200, 'HTTP-Content' => '/foo' } );
+	$t->{RESPONSE}  = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200, 'HTTP-Content' => '/foo' } ];
 	ok($tf->handle_http($t) == 0, '$_SERVER["PATH_INFO"]');
 
 	$t->{REQUEST}  = ( <<EOF
@@ -80,7 +80,7 @@ GET /phphost.php HTTP/1.0
 Host: www.example.org
 EOF
  );
-	$t->{RESPONSE} = ( { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200, 'HTTP-Content' => 'www.example.org' } );
+	$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200, 'HTTP-Content' => 'www.example.org' } ];
 	ok($tf->handle_http($t) == 0, 'SERVER_NAME');
 
 	$t->{REQUEST}  = ( <<EOF
@@ -88,7 +88,7 @@ GET /phphost.php HTTP/1.0
 Host: foo.example.org
 EOF
  );
-	$t->{RESPONSE} = ( { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200, 'HTTP-Content' => 'www.example.org' } );
+	$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200, 'HTTP-Content' => 'www.example.org' } ];
 	ok($tf->handle_http($t) == 0, 'SERVER_NAME');
 
 	$t->{REQUEST}  = ( <<EOF
@@ -96,7 +96,7 @@ GET /phphost.php HTTP/1.0
 Host: vvv.example.org
 EOF
  );
-	$t->{RESPONSE} = ( { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200, 'HTTP-Content' => 'www.example.org' } );
+	$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200, 'HTTP-Content' => 'www.example.org' } ];
 	ok($tf->handle_http($t) == 0, 'SERVER_NAME');
 
 	$t->{REQUEST}  = ( <<EOF
@@ -104,49 +104,49 @@ GET /phphost.php HTTP/1.0
 Host: zzz.example.org
 EOF
  );
-	$t->{RESPONSE} = ( { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200, 'HTTP-Content' => 'www.example.org' } );
+	$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200, 'HTTP-Content' => 'www.example.org' } ];
 	ok($tf->handle_http($t) == 0, 'SERVER_NAME');
 
 	$t->{REQUEST}  = ( <<EOF
 GET /cgi.php/abc HTTP/1.0
 EOF
  );
-	$t->{RESPONSE} = ( { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200 } );
+	$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200 } ];
 	ok($tf->handle_http($t) == 0, 'PATHINFO');
 
 	$t->{REQUEST}  = ( <<EOF
 GET /www/abc/def HTTP/1.0
 EOF
  );
-	$t->{RESPONSE} = ( { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 404 } );
+	$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 404 } ];
 	ok($tf->handle_http($t) == 0, 'PATHINFO on a directory');
 
 	$t->{REQUEST}  = ( <<EOF
 GET /indexfile/ HTTP/1.0
 EOF
  );
-	$t->{RESPONSE} = ( { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200, 'HTTP-Content' => '/indexfile/index.php' } );
+	$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200, 'HTTP-Content' => '/indexfile/index.php' } ];
 	ok($tf->handle_http($t) == 0, 'PHP_SELF + Indexfile, Bug #3');
 
 	$t->{REQUEST}  = ( <<EOF
 GET /prefix.fcgi?var=SCRIPT_NAME HTTP/1.0
 EOF
  );
-	$t->{RESPONSE} = ( { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200, 'HTTP-Content' => '/prefix.fcgi' } );
+	$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200, 'HTTP-Content' => '/prefix.fcgi' } ];
 	ok($tf->handle_http($t) == 0, 'PATH_INFO, check-local off');
 
 	$t->{REQUEST}  = ( <<EOF
 GET /prefix.fcgi/foo/bar?var=SCRIPT_NAME HTTP/1.0
 EOF
  );
-	$t->{RESPONSE} = ( { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200, 'HTTP-Content' => '/prefix.fcgi' } );
+	$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200, 'HTTP-Content' => '/prefix.fcgi' } ];
 	ok($tf->handle_http($t) == 0, 'PATH_INFO, check-local off');
 
 	$t->{REQUEST}  = ( <<EOF
 GET /prefix.fcgi/foo/bar?var=PATH_INFO HTTP/1.0
 EOF
  );
-	$t->{RESPONSE} = ( { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200, 'HTTP-Content' => '/foo/bar' } );
+	$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200, 'HTTP-Content' => '/foo/bar' } ];
 	ok($tf->handle_http($t) == 0, 'PATH_INFO, check-local off');
 
 	
@@ -160,7 +160,7 @@ GET /phphost.php HTTP/1.0
 Host: zzz.example.org
 EOF
  );
-	$t->{RESPONSE} = ( { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200, 'HTTP-Content' => 'zzz.example.org' } );
+	$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200, 'HTTP-Content' => 'zzz.example.org' } ];
 	ok($tf->handle_http($t) == 0, 'FastCGI + Host');
 
 	ok($tf->stop_proc == 0, "Stopping lighttpd");
@@ -172,7 +172,7 @@ GET /indexfile/ HTTP/1.0
 Host: www.example.org
 EOF
  );
-	$t->{RESPONSE} = ( { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200, 'HTTP-Content' => '/indexfile/index.php' } );
+	$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200, 'HTTP-Content' => '/indexfile/index.php' } ];
 	ok($tf->handle_http($t) == 0, 'Bug #6');
 
 	ok($tf->stop_proc == 0, "Stopping lighttpd");
@@ -185,7 +185,7 @@ Host: www.example.org
 Content-Length: 0
 EOF
  );
-	$t->{RESPONSE} = ( { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 404, 'HTTP-Content' => '/indexfile/return-404.php' } );
+	$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 404, 'HTTP-Content' => '/indexfile/return-404.php' } ];
 	ok($tf->handle_http($t) == 0, 'Bug #12');
 
 	ok($tf->stop_proc == 0, "Stopping lighttpd");
@@ -201,7 +201,7 @@ GET /index.html?ok HTTP/1.0
 Host: www.example.org
 EOF
  );
-	$t->{RESPONSE} = ( { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200 } );
+	$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200 } ];
 	ok($tf->handle_http($t) == 0, 'FastCGI - Auth');
 
 	$t->{REQUEST}  = ( <<EOF
@@ -209,7 +209,7 @@ GET /index.html?fail HTTP/1.0
 Host: www.example.org
 EOF
  );
-	$t->{RESPONSE} = ( { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 403 } );
+	$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 403 } ];
 	ok($tf->handle_http($t) == 0, 'FastCGI - Auth');
 
 	ok($tf->stop_proc == 0, "Stopping lighttpd");
@@ -224,7 +224,7 @@ GET /indexfile/index.php HTTP/1.0
 Host: www.example.org
 EOF
  );
-	$t->{RESPONSE} = ( { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200 } );
+	$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200 } ];
 	ok($tf->handle_http($t) == 0, 'FastCGI + local spawning');
 
 	ok($tf->stop_proc == 0, "Stopping lighttpd");
@@ -241,7 +241,7 @@ GET /index.fcgi?lf HTTP/1.0
 Host: www.example.org
 EOF
  );
-	$t->{RESPONSE} = ( { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200, 'HTTP-Content' => 'test123' } );
+	$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200, 'HTTP-Content' => 'test123' } ];
 	ok($tf->handle_http($t) == 0, 'line-ending \n\n');
 
 	$t->{REQUEST}  = ( <<EOF
@@ -249,7 +249,7 @@ GET /index.fcgi?crlf HTTP/1.0
 Host: www.example.org
 EOF
  );
-	$t->{RESPONSE} = ( { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200, 'HTTP-Content' => 'test123' } );
+	$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200, 'HTTP-Content' => 'test123' } ];
 	ok($tf->handle_http($t) == 0, 'line-ending \r\n\r\n');
 
 	$t->{REQUEST}  = ( <<EOF
@@ -257,7 +257,7 @@ GET /index.fcgi?slow-lf HTTP/1.0
 Host: www.example.org
 EOF
  );
-	$t->{RESPONSE} = ( { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200, 'HTTP-Content' => 'test123' } );
+	$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200, 'HTTP-Content' => 'test123' } ];
 	ok($tf->handle_http($t) == 0, 'line-ending \n + \n');
 
 	$t->{REQUEST}  = ( <<EOF
@@ -265,7 +265,7 @@ GET /index.fcgi?slow-crlf HTTP/1.0
 Host: www.example.org
 EOF
  );
-	$t->{RESPONSE} = ( { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200, 'HTTP-Content' => 'test123' } );
+	$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200, 'HTTP-Content' => 'test123' } ];
 	ok($tf->handle_http($t) == 0, 'line-ending \r\n + \r\n');
 
 	$t->{REQUEST}  = ( <<EOF
@@ -273,7 +273,7 @@ GET /index.fcgi?die-at-end HTTP/1.0
 Host: www.example.org
 EOF
  );
-	$t->{RESPONSE} = ( { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200, 'HTTP-Content' => 'test123' } );
+	$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200, 'HTTP-Content' => 'test123' } ];
 	ok($tf->handle_http($t) == 0, 'killing fastcgi and wait for restart');
 
 	$t->{REQUEST}  = ( <<EOF
@@ -281,7 +281,7 @@ GET /index.fcgi?die-at-end HTTP/1.0
 Host: www.example.org
 EOF
  );
-	$t->{RESPONSE} = ( { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200, 'HTTP-Content' => 'test123' } );
+	$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200, 'HTTP-Content' => 'test123' } ];
 	ok($tf->handle_http($t) == 0, 'killing fastcgi and wait for restart');
 
 
@@ -290,7 +290,7 @@ GET /index.fcgi?crlf HTTP/1.0
 Host: www.example.org
 EOF
  );
-	$t->{RESPONSE} = ( { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200, 'HTTP-Content' => 'test123' } );
+	$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200, 'HTTP-Content' => 'test123' } ];
 	ok($tf->handle_http($t) == 0, 'regular response of after restart');
 
 

@@ -25,7 +25,7 @@ GET /rewrite/foo HTTP/1.0
 Host: www.example.org
 EOF
  );
-	$t->{RESPONSE} = ( { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200, 'HTTP-Content' => '' } );
+	$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200, 'HTTP-Content' => '' } ];
 	ok($tf->handle_http($t) == 0, 'valid request');
     
 	$t->{REQUEST}  = ( <<EOF
@@ -33,7 +33,7 @@ GET /rewrite/foo?a=b HTTP/1.0
 Host: www.example.org
 EOF
  );
-	$t->{RESPONSE} = ( { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200, 'HTTP-Content' => 'a=b' } );
+	$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200, 'HTTP-Content' => 'a=b' } ];
 	ok($tf->handle_http($t) == 0, 'valid request');
 
 	$t->{REQUEST}  = ( <<EOF
@@ -41,7 +41,7 @@ GET /rewrite/bar?a=b HTTP/1.0
 Host: www.example.org
 EOF
  );
-	$t->{RESPONSE} = ( { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200, 'HTTP-Content' => 'bar&a=b' } );
+	$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200, 'HTTP-Content' => 'bar&a=b' } ];
 	ok($tf->handle_http($t) == 0, 'valid request');
 
 	ok($tf->stop_proc == 0, "Stopping lighttpd");

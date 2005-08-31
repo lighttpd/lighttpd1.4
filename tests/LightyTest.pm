@@ -150,7 +150,7 @@ sub handle_http {
 	close $remote;
 
 	my $href;
-	foreach $href (@response) {
+	foreach $href ( @{ $t->{RESPONSE} }) {
 		# first line is always response header
 		my %resp_hdr;
 		my $resp_body;
@@ -187,7 +187,13 @@ sub handle_http {
 
 		# check length
 		if (defined $resp_hdr{"content-length"}) {
-			($resp_body, $lines) = split("^.".$resp_hdr{"content-length"}, $lines, 2);
+			$resp_body = substr($lines, 0, $resp_hdr{"content-length"});
+			if (length($lines) < $resp_hdr{"content-length"}) {
+				$lines = "";
+			} else {
+				$lines = substr($lines, $resp_hdr{"content-length"});
+			}
+			undef $lines if (length($lines) == 0);
 		} else {
 			$resp_body = $lines;
 			undef $lines;
