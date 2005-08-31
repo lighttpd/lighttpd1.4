@@ -7,6 +7,7 @@
 #include <errno.h>
 #include <signal.h>
 #include <fcntl.h>
+#include <assert.h>
 
 #include "fdevent.h"
 #include "settings.h"
@@ -35,6 +36,9 @@ static int fdevent_select_event_del(fdevents *ev, int fde_ndx, int fd) {
 
 static int fdevent_select_event_add(fdevents *ev, int fde_ndx, int fd, int events) {
 	UNUSED(fde_ndx);
+
+	/* we should be protected by max-fds, but you never know */
+	assert(fd < FD_SETSIZE);
 
 	if (events & FDEVENT_IN) {
 		FD_SET(fd, &(ev->select_set_read));

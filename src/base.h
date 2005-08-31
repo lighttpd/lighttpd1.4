@@ -441,6 +441,7 @@ typedef struct {
 	
 	unsigned short max_worker;
 	unsigned short max_fds;
+	unsigned short max_conns;
 	
 	unsigned short log_request_header_on_error;
 	unsigned short log_state_handling;
@@ -503,6 +504,8 @@ typedef struct {
 	int want_fds;   /* waiting fds */
 	int sockets_disabled;
 	
+	int max_conns;
+
 	/* buffers */
 	buffer *parse_full_path;
 	buffer *response_header;

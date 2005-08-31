@@ -56,6 +56,7 @@
 #endif
 
 static volatile sig_atomic_t srv_shutdown = 0;
+static volatile sig_atomic_t gracefull_shutdown = 0;
 static volatile sig_atomic_t handle_sig_alarm = 1;
 static volatile sig_atomic_t handle_sig_hup = 0;
 
@@ -65,8 +66,8 @@ static void sigaction_handler(int sig, siginfo_t *si, void *context) {
 	UNUSED(context);
 
 	switch (sig) {
-	case SIGINT: srv_shutdown = 1; break;
 	case SIGTERM: srv_shutdown = 1; break;
+	case SIGINT: gracefull_shutdown = 1; break;
 	case SIGALRM: handle_sig_alarm = 1; break;
 	case SIGHUP:  handle_sig_hup = 1; break;
 	case SIGCHLD: break;
@@ -75,8 +76,8 @@ static void sigaction_handler(int sig, siginfo_t *si, void *context) {
 #elif defined(HAVE_SIGNAL) || defined(HAVE_SIGACTION)
 static void signal_handler(int sig) {
 	switch (sig) {
-	case SIGINT: srv_shutdown = 1; break;
 	case SIGTERM: srv_shutdown = 1; break;
+	case SIGINT: gracefull_shutdown = 1; break;
 	case SIGALRM: handle_sig_alarm = 1; break;
 	case SIGHUP:  handle_sig_hup = 1; break;
 	case SIGCHLD:  break;
@@ -631,6 +632,18 @@ int main (int argc, char **argv) {
 			return -1;
 		}
 	}
+
+	/* set max-conns */
+	if (srv->srvconf.max_conns > srv->max_fds) {
+		/* we can't have more connections than max-fds */
+		srv->max_conns = srv->max_fds;
+	} else if (srv->srvconf.max_conns) {
+		/* otherwise respect thw wishes of the user */
+		srv->max_conns = srv->srvconf.max_conns;
+	} else {
+		/* or use the default */
+		srv->max_conns = srv->max_fds;
+	}
 	
 	if (HANDLER_GO_ON != plugins_call_init(srv)) {
 		log_error_write(srv, __FILE__, __LINE__, "s", "Initialization of plugins failed. Going down.");
@@ -960,31 +973,63 @@ int main (int argc, char **argv) {
 			}
 		}
 
-		/* handle out of fd condition */
-		if (!srv->sockets_disabled &&
-		    srv->cur_fds + srv->want_fds > srv->max_fds * 0.9) {
+		if (srv->sockets_disabled) {
+			/* our server sockets are disabled, why ? */
+
+			if ((srv->cur_fds + srv->want_fds < srv->max_fds * 0.8) && /* we have enough unused fds */
+			    (srv->conns->used < srv->max_conns * 0.9) &&
+			    (0 == gracefull_shutdown)) {
+				for (i = 0; i < srv->srv_sockets.used; i++) {
+					server_socket *srv_socket = srv->srv_sockets.ptr[i];
+					fdevent_event_add(srv->ev, &(srv_socket->fde_ndx), srv_socket->fd, FDEVENT_IN);
+				}
 			
-			/* disable server-fds */
+				log_error_write(srv, __FILE__, __LINE__, "s", "[note] sockets enabled again");
 			
-			for (i = 0; i < srv->srv_sockets.used; i++) {
-				server_socket *srv_socket = srv->srv_sockets.ptr[i];
-				fdevent_event_del(srv->ev, &(srv_socket->fde_ndx), srv_socket->fd);
+				srv->sockets_disabled = 0;
 			}
+		} else {
+			if ((srv->cur_fds + srv->want_fds > srv->max_fds * 0.9) || /* out of fds */
+			    (srv->conns->used > srv->max_conns) || /* out of connections */
+			    (gracefull_shutdown)) { /* gracefull_shutdown */ 
+
+				/* disable server-fds */
 			
-			log_error_write(srv, __FILE__, __LINE__, "s", "[note] sockets disabled, out-of-fds");
+				for (i = 0; i < srv->srv_sockets.used; i++) {
+					server_socket *srv_socket = srv->srv_sockets.ptr[i];
+					fdevent_event_del(srv->ev, &(srv_socket->fde_ndx), srv_socket->fd);
+
+					if (gracefull_shutdown) {
+						/* we don't want this socket anymore,
+						 *
+						 * closing it right away will make it possible for
+						 * the next lighttpd to take over (gracefull restart)
+						 *  */
+
+						fdevent_unregister(srv->ev, srv_socket->fd);
+						close(srv_socket->fd);
+						srv_socket->fd = -1;
+
+						/* network_close() will cleanup after us */
+					}
+				}
+		
+				if (gracefull_shutdown) {
+					log_error_write(srv, __FILE__, __LINE__, "s", "[note] gracefull shutdown started");
+				} else if (srv->conns->used > srv->max_conns) {
+					log_error_write(srv, __FILE__, __LINE__, "s", "[note] sockets disabled, connection limit reached");
+				} else {
+					log_error_write(srv, __FILE__, __LINE__, "s", "[note] sockets disabled, out-of-fds");
+				}
 			
-			srv->sockets_disabled = 1;
-		} else if (srv->sockets_disabled &&
-			   srv->cur_fds + srv->want_fds < srv->max_fds * 0.8) {
-			
-			for (i = 0; i < srv->srv_sockets.used; i++) {
-				server_socket *srv_socket = srv->srv_sockets.ptr[i];
-				fdevent_event_add(srv->ev, &(srv_socket->fde_ndx), srv_socket->fd, FDEVENT_IN);
+				srv->sockets_disabled = 1;
 			}
-			
-			log_error_write(srv, __FILE__, __LINE__, "s", "[note] sockets enabled, out-of-fds");
-			
-			srv->sockets_disabled = 0;
+		}
+
+		if (gracefull_shutdown && srv->conns->used == 0) {
+			/* we are in gracefull shutdown phase and all connections are closed
+			 * we are ready to terminate without harming anyone */
+			srv_shutdown = 1;
 		}
 		
 		/* we still have some fds to share */
