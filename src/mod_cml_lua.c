@@ -322,18 +322,32 @@ int cache_parse_lua(server *srv, connection *con, plugin_data *p, buffer *fn) {
 		lua_settop(L, curelem - 1);
 		
 		if (ret == 0) {
+			data_string *ds;
+			char timebuf[sizeof("Sat, 23 Jul 2005 21:20:01 GMT")];
+			buffer tbuf;
+
 			con->file_finished = 1;
-			
+
+			ds = (data_string *)array_get_element(con->response.headers, "Last-Modified");
+
 			/* no Last-Modified specified */
-			if (mtime && NULL == array_get_element(con->response.headers, "Last-Modified")) {
-				char timebuf[sizeof("Sat, 23 Jul 2005 21:20:01 GMT")];
+			if ((mtime) && (NULL == ds)) {
 		
 				strftime(timebuf, sizeof(timebuf), "%a, %d %b %Y %H:%M:%S GMT", gmtime(&mtime));
 				
 				response_header_overwrite(srv, con, CONST_STR_LEN("Last-Modified"), timebuf, sizeof(timebuf) - 1);
+
+
+				tbuf.ptr = timebuf;
+				tbuf.used = sizeof(timebuf);
+				tbuf.size = sizeof(timebuf);
+			} else if (ds) {
+				tbuf.ptr = ds->value->ptr;
+				tbuf.used = ds->value->used;
+				tbuf.size = ds->value->size;
 			}
 			
-			if (http_response_handle_cachable(srv, con, mtime)) {
+			if (http_response_handle_cachable(srv, con, &tbuf)) {
 				/* ok, the client already has our content, 
 				 * no need to send it again */
 				chunkqueue_reset(con->write_queue);
