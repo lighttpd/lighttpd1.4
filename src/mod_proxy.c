@@ -973,7 +973,7 @@ static handler_t proxy_handle_fdevent(void *s, void *ctx, int revents) {
 static handler_t mod_proxy_check_extension(server *srv, connection *con, void *p_d) {
 	plugin_data *p = p_d;
 	size_t s_len;
-	unsigned long last_max = ~0L;
+	unsigned long last_max = ULONG_MAX;
 	int ndx = -1;
 	size_t k;
 	buffer *fn;
