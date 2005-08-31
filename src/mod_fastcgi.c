@@ -622,13 +622,69 @@ static int env_add(char_array *env, const char *key, size_t key_len, const char 
 	if (env->size == 0) {
 		env->size = 16;
 		env->ptr = malloc(env->size * sizeof(*env->ptr));
-	} else if (env->size == env->used) {
+	} else if (env->size == env->used + 1) {
 		env->size += 16;
 		env->ptr = realloc(env->ptr, env->size * sizeof(*env->ptr));
 	}
 	
 	env->ptr[env->used++] = dst;
 	
+	return 0;
+}
+
+static int parse_binpath(char_array *env, buffer *b) {
+	char *start;
+	size_t i;
+	/* search for spaces */
+
+	start = b->ptr;
+	for (i = 0; i < b->used - 1; i++) {
+		switch(b->ptr[i]) {
+		case ' ':
+		case '\t':
+			/* a WS, stop here and copy the argument */
+
+			if (env->size == 0) {
+				env->size = 16;
+				env->ptr = malloc(env->size * sizeof(*env->ptr));
+			} else if (env->size == env->used) { 
+				env->size += 16;
+				env->ptr = realloc(env->ptr, env->size * sizeof(*env->ptr));
+			}
+			
+			b->ptr[i] = '\0';
+
+			env->ptr[env->used++] = start;
+			
+			start = b->ptr + i + 1;
+			break;
+		default:
+			break;
+		}
+	}
+
+	if (env->size == 0) {
+		env->size = 16;
+		env->ptr = malloc(env->size * sizeof(*env->ptr));
+	} else if (env->size == env->used) { /* we need one extra for the terminating NULL */
+		env->size += 16;
+		env->ptr = realloc(env->ptr, env->size * sizeof(*env->ptr));
+	}
+
+	/* the rest */
+	env->ptr[env->used++] = start;
+
+	if (env->size == 0) {
+		env->size = 16;
+		env->ptr = malloc(env->size * sizeof(*env->ptr));
+	} else if (env->size == env->used) { /* we need one extra for the terminating NULL */
+		env->size += 16;
+		env->ptr = realloc(env->ptr, env->size * sizeof(*env->ptr));
+	}
+
+	/* terminate */
+	env->ptr[env->used++] = NULL;
+
 	return 0;
 }
 
@@ -765,16 +821,19 @@ static int fcgi_spawn_connection(server *srv,
 #ifdef HAVE_FORK	
 		switch ((child = fork())) {
 		case 0: {
-			buffer *b;
 			size_t i = 0;
 			char_array env;
-			
+			char_array arg;
 			
 			/* create environment */
 			env.ptr = NULL;
 			env.size = 0;
 			env.used = 0;
 			
+			arg.ptr = NULL;
+			arg.size = 0;
+			arg.used = 0;
+
 			if(fcgi_fd != FCGI_LISTENSOCK_FILENO) {
 				close(FCGI_LISTENSOCK_FILENO);
 				dup2(fcgi_fd, FCGI_LISTENSOCK_FILENO);
@@ -824,16 +883,14 @@ static int fcgi_spawn_connection(server *srv,
 			}
 			
 			env.ptr[env.used] = NULL;
-			
-			b = buffer_init();
-			buffer_copy_string(b, "exec ");
-			buffer_append_string_buffer(b, host->bin_path);
+
+			parse_binpath(&arg, host->bin_path);
 			
 			/* exec the cgi */
-			execle("/bin/sh", "sh", "-c", b->ptr, NULL, env.ptr);
+			execve(arg.ptr[0], arg.ptr, env.ptr);
 			
 			log_error_write(srv, __FILE__, __LINE__, "sbs", 
-					"execl failed for:", host->bin_path, strerror(errno));
+					"execve failed for:", host->bin_path, strerror(errno));
 			
 			exit(errno);
 			
