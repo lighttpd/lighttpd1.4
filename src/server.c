@@ -467,7 +467,17 @@ int main (int argc, char **argv) {
 			}
 		}
 	}
-	
+
+	if (srv->event_handler == FDEVENT_HANDLER_SELECT) {
+		/* select limits itself
+		 *
+		 * as it is a hard limit and will lead to a segfault we add some safety
+		 * */
+		srv->max_fds = FD_SETSIZE - 200;
+	} else {
+		srv->max_fds = 4096;
+	}
+
 	if (i_am_root) {
 		struct group *grp = NULL;
 		struct passwd *pwd = NULL;
@@ -498,12 +508,23 @@ int main (int argc, char **argv) {
 				return -1;
 			}
 		}
-		
-		srv->max_fds = rlim.rlim_cur;
-#else
-		srv->max_fds = 4096;
+
+		if (srv->event_handler == FDEVENT_HANDLER_SELECT) {
+			srv->max_fds = rlim.rlim_cur < FD_SETSIZE - 200 ? rlim.rlim_cur : FD_SETSIZE - 200;
+		} else {
+			srv->max_fds = rlim.rlim_cur;
+		}
 #endif
-		
+		if (srv->event_handler == FDEVENT_HANDLER_SELECT) {
+			/* don't raise the limit above FD_SET_SIZE */
+			if (srv->max_fds > FD_SETSIZE - 200) {
+				log_error_write(srv, __FILE__, __LINE__, "sd", 
+						"can't raise max filedescriptors above",  FD_SETSIZE - 200,
+						"if event-handler is 'select'. Use 'poll' or something else or reduce server.max-fds.");
+				return -1;
+			}
+		}
+
 		if (NULL == (srv->ev = fdevent_init(srv->max_fds + 1, srv->event_handler))) {
 			log_error_write(srv, __FILE__, __LINE__,
 					"s", "fdevent_init failed");
@@ -571,6 +592,7 @@ int main (int argc, char **argv) {
 		if (srv->srvconf.username->used) setuid(pwd->pw_uid);
 #endif
 	} else {
+
 #ifdef HAVE_GETRLIMIT
 		if (0 != getrlimit(RLIMIT_NOFILE, &rlim)) {
 			log_error_write(srv, __FILE__, __LINE__,
@@ -578,12 +600,24 @@ int main (int argc, char **argv) {
 					strerror(errno));
 			return -1;
 		}
-		
-		srv->max_fds = rlim.rlim_cur;
-#else
-		srv->max_fds = 4096;
+
+		if (srv->event_handler == FDEVENT_HANDLER_SELECT) {
+			srv->max_fds = rlim.rlim_cur < FD_SETSIZE - 200 ? rlim.rlim_cur : FD_SETSIZE - 200;
+		} else {
+			srv->max_fds = rlim.rlim_cur;
+		}
 #endif
-		
+		if (srv->event_handler == FDEVENT_HANDLER_SELECT) {
+			/* don't raise the limit above FD_SET_SIZE */
+			if (srv->max_fds > FD_SETSIZE - 200) {
+				log_error_write(srv, __FILE__, __LINE__, "sd", 
+						"can't raise max filedescriptors above",  FD_SETSIZE - 200,
+						"if event-handler is 'select'. Use 'poll' or something else or reduce server.max-fds.");
+				return -1;
+			}
+		}
+
+	
 		if (NULL == (srv->ev = fdevent_init(srv->max_fds + 1, srv->event_handler))) {
 			log_error_write(srv, __FILE__, __LINE__,
 					"s", "fdevent_init failed");
