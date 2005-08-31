@@ -415,13 +415,23 @@ handler_t http_response_prepare(server *srv, connection *con) {
 			switch (errno) {
 			case EACCES:
 				con->http_status = 403;
+	
+				if (con->conf.log_request_handling) {
+					log_error_write(srv, __FILE__, __LINE__,  "s",  "-- access denied");
+					log_error_write(srv, __FILE__, __LINE__,  "sb", "Path         :", con->physical.path);
+				}
+			
 				buffer_reset(con->physical.path);
-				
 				return HANDLER_FINISHED;
 			case ENOENT:
 				con->http_status = 404;
-				buffer_reset(con->physical.path);
 
+				if (con->conf.log_request_handling) {
+					log_error_write(srv, __FILE__, __LINE__,  "s",  "-- file not found");
+					log_error_write(srv, __FILE__, __LINE__,  "sb", "Path         :", con->physical.path);
+				}
+
+				buffer_reset(con->physical.path);
 				return HANDLER_FINISHED;
 			case ENOTDIR:
 				/* PATH_INFO ! :) */
