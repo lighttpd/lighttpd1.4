@@ -199,7 +199,7 @@ static int config_insert(server *srv) {
 		srv->srvconf.stat_cache_engine = STAT_CACHE_ENGINE_NONE;
 	} else {
 		log_error_write(srv, __FILE__, __LINE__, "sb", 
-				"server.stat-cache-engine can be one of \"none\", \"simple\", \"fam\", but not:", stat_cache_string);
+				"server.stat-cache-engine can be one of \"disable\", \"simple\", \"fam\", but not:", stat_cache_string);
 		ret = HANDLER_ERROR;
 	}
 	
