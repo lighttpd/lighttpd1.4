@@ -9,6 +9,7 @@
 int f_crypto_md5(lua_State *L);
 int f_file_mtime(lua_State *L);
 int f_file_isreg(lua_State *L);
+int f_file_isdir(lua_State *L);
 int f_dir_files(lua_State *L);
 
 int f_memcache_exists(lua_State *L);

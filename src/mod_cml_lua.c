@@ -166,6 +166,7 @@ int cache_parse_lua(server *srv, connection *con, plugin_data *p, buffer *fn) {
 	lua_register(L, "md5", f_crypto_md5);
 	lua_register(L, "file_mtime", f_file_mtime);
 	lua_register(L, "file_isreg", f_file_isreg);
+	lua_register(L, "file_isdir", f_file_isreg);
 	lua_register(L, "dir_files", f_dir_files);
 	
 #ifdef HAVE_MEMCACHE_H

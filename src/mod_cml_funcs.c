@@ -162,6 +162,31 @@ int f_file_isreg(lua_State *L) {
 	return 1;
 }
 
+int f_file_isdir(lua_State *L) {
+	struct stat st;
+	int n = lua_gettop(L);
+	
+	if (n != 1) {
+		lua_pushstring(L, "file_isreg: expected one argument");
+		lua_error(L);
+	}
+	
+	if (!lua_isstring(L, 1)) {
+		lua_pushstring(L, "file_isreg: argument has to be a string");
+		lua_error(L);
+	}
+	
+	if (-1 == stat(lua_tostring(L, 1), &st)) {
+		lua_pushnil(L);
+		return 1;
+	}
+	
+	lua_pushnumber(L, S_ISDIR(st.st_mode));
+	
+	return 1;
+}
+
+
 
 #ifdef HAVE_MEMCACHE_H
 int f_memcache_exists(lua_State *L) {
