@@ -360,7 +360,7 @@ if test "$WITH_LUA" != "no"; then
  else
    AC_CHECK_LIB(lua, lua_open, [
          AC_CHECK_HEADERS([lua.h],[
-                 LUA_LIB=-llua 
+                 LUA_LIB=-llua -llualib
                  AC_DEFINE([HAVE_LUA], [1], [liblua])
 		 AC_DEFINE([HAVE_LUA_H], [1], [lua.h])
          ])
