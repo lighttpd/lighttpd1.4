@@ -345,7 +345,7 @@ int network_close(server *srv) {
 	for (i = 0; i < srv->srv_sockets.used; i++) {
 		server_socket *srv_socket = srv->srv_sockets.ptr[i];
 		
-		if (srv_socket->fd) {
+		if (srv_socket->fd != -1) {
 			/* check if server fd are already registered */
 			if (srv_socket->fde_ndx != -1) {
 				fdevent_event_del(srv->ev, &(srv_socket->fde_ndx), srv_socket->fd);

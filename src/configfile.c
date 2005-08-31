@@ -76,6 +76,7 @@ static int config_insert(server *srv) {
 		{ "server.errorlog-use-syslog",  NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_SERVER },     /* 39 */
 		{ "server.range-requests",       NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION }, /* 40 */
 		{ "server.stat-cache-engine",    NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_CONNECTION },  /* 41 */
+		{ "server.max-connections",      NULL, T_CONFIG_SHORT, T_CONFIG_SCOPE_SERVER },       /* 42 */
 		
 		{ "server.host",                 "use server.bind instead", T_CONFIG_DEPRECATED, T_CONFIG_SCOPE_UNSET },
 		{ "server.docroot",              "use server.document-root instead", T_CONFIG_DEPRECATED, T_CONFIG_SCOPE_UNSET },
@@ -112,6 +113,7 @@ static int config_insert(server *srv) {
 	stat_cache_string = buffer_init();
 	cv[41].destination = stat_cache_string;
 	
+	cv[42].destination = &(srv->srvconf.max_conns);
 	srv->config_storage = calloc(1, srv->config_context->used * sizeof(specific_config *));
 
 	assert(srv->config_storage);
@@ -1018,6 +1020,7 @@ int config_set_defaults(server *srv) {
 #endif
 #ifdef USE_FREEBSD_KQUEUE
 		{ FDEVENT_HANDLER_FREEBSD_KQUEUE, "freebsd-kqueue" },
+		{ FDEVENT_HANDLER_FREEBSD_KQUEUE, "kqueue" },
 #endif
 		{ FDEVENT_HANDLER_UNSET,          NULL }
 	};
