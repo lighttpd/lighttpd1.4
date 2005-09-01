@@ -1,4 +1,4 @@
-#! /usr/bin/perl -w
+#!/usr/bin/env perl
 BEGIN {
     # add current source dir to the include-path
     # we need this for make distcheck
