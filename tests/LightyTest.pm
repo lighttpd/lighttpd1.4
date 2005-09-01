@@ -38,20 +38,17 @@ sub new {
 	return $self;
 }
 
-sub pidof {
+sub listening_on {
 	my $self = shift;
 	my $prog = shift;
 
-	open F, "ps ax  | grep $prog | grep -v grep | awk '{ print \$1 }'|" or
-	open F, "ps -ef | grep $prog | grep -v grep | awk '{ print \$2 }'|" or
-	  return -1;
+	open F, "netstat -an | grep :1026|" or return 0;
 
-	my $pid = <F>;
+	my $foo = <F>;
+
 	close F;
 
-	if (defined $pid) { return $pid; }
-
-	return -1;
+	return (defined $foo ? 1 : 0);
 }
 
 sub stop_proc {
