@@ -181,6 +181,18 @@ int fdevent_freebsd_kqueue_init(fdevents *ev) {
 	ev->kq_results = calloc(ev->maxfds, sizeof(*ev->kq_results));
 	ev->kq_bevents = bitset_init(ev->maxfds);
 
+	/* check that kqueue works */
+
+	if (-1 == (ev->kq_fd = kqueue())) {
+		fprintf(stderr, "%s.%d: kqueue failed (%s), try to set server.event-handler = \"poll\" or \"select\"\n",
+			__FILE__, __LINE__, strerror(errno));
+		
+		return -1;
+	}
+
+	close(ev->kq_fd);
+	ev->kq_fd = -1;
+
 	return 0;
 }
 #else

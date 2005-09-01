@@ -93,6 +93,26 @@ static int fdevent_solaris_devpoll_event_next_fdndx(fdevents *ev, int last_ndx) 
 	return i;
 }
 
+int fdevent_solaris_devpoll_reset(fdevents *ev) {
+	/* a forked process does only inherit the filedescriptor,
+	 * but every operation on the device will lead to a EACCES */
+	if ((ev->devpoll_fd = open("/dev/poll", O_RDWR)) < 0) {
+		fprintf(stderr, "%s.%d: opening /dev/poll failed (%s), try to set server.event-handler = \"poll\" or \"select\"\n",
+			__FILE__, __LINE__, strerror(errno));
+
+		return -1;
+	}
+
+	if (fcntl(ev->devpoll_fd, F_SETFD, FD_CLOEXEC) < 0) {
+		fprintf(stderr, "%s.%d: opening /dev/poll failed (%s), try to set server.event-handler = \"poll\" or \"select\"\n",
+			__FILE__, __LINE__, strerror(errno));
+
+		close(ev->devpoll_fd);
+
+		return -1;
+	}
+	return 0;
+}
 int fdevent_solaris_devpoll_init(fdevents *ev) {
 	ev->type = FDEVENT_HANDLER_SOLARIS_DEVPOLL;
 #define SET(x) \
@@ -100,6 +120,7 @@ int fdevent_solaris_devpoll_init(fdevents *ev) {
 	
 	SET(free);
 	SET(poll);
+	SET(reset);
 	
 	SET(event_del);
 	SET(event_add);
@@ -116,15 +137,11 @@ int fdevent_solaris_devpoll_init(fdevents *ev) {
 
 		return -1;
 	}
-	
-	if (fcntl(ev->devpoll_fd, F_SETFD, FD_CLOEXEC) < 0) {
-		fprintf(stderr, "%s.%d: opening /dev/poll failed (%s), try to set server.event-handler = \"poll\" or \"select\"\n",
-			__FILE__, __LINE__, strerror(errno));
 
-		close(ev->devpoll_fd);
+	/* we just wanted to check if it works */
+	close(ev->devpoll_fd);
 
-		return -1;
-	}
+	ev->devpoll_fd = -1;
 
 	return 0;
 }
