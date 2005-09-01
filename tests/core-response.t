@@ -77,14 +77,14 @@ $t->{REQUEST}  = ( <<EOF
 GET /dummydir HTTP/1.0
 EOF
  );
-$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 301, 'Location' => 'http://localhost:2048/dummydir/' } ];
+$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 301, 'Location' => 'http://'.$tf->{HOSTNAME}.':'.$tf->{PORT}.'/dummydir/' } ];
 ok($tf->handle_http($t) == 0, 'internal redirect in directory');
 
 $t->{REQUEST}  = ( <<EOF
 GET /dummydir?foo HTTP/1.0
 EOF
  );
-$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 301, 'Location' => 'http://localhost:2048/dummydir/?foo' } ];
+$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 301, 'Location' => 'http://'.$tf->{HOSTNAME}.':'.$tf->{PORT}.'/dummydir/?foo' } ];
 ok($tf->handle_http($t) == 0, 'internal redirect in directory + querystring');
 
 ## simple-vhost

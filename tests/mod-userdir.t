@@ -29,7 +29,7 @@ $t->{REQUEST}  = ( <<EOF
 GET /~jan HTTP/1.0
 EOF
  );
-$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 301, 'Location' => 'http://localhost:2048/~jan/' } ];
+$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 301, 'Location' => 'http://'.$tf->{HOSTNAME}.':'.$tf->{PORT}.'/~jan/' } ];
 ok($tf->handle_http($t) == 0, 'valid user + redirect');
 
 $t->{REQUEST}  = ( <<EOF
