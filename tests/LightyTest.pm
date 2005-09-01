@@ -4,6 +4,7 @@ package LightyTest;
 use strict;
 use IO::Socket;
 use Test::More;
+use Cwd 'abs_path';
 
 sub new {
 	my $class = shift;
@@ -13,19 +14,13 @@ sub new {
 	$self->{CONFIGFILE} = 'lighttpd.conf';
 
 	$lpath = (defined $ENV{'top_builddir'} ? $ENV{'top_builddir'} : '..');
-	$lpath = `readlink -f '$lpath'`;
-	chomp $lpath;
-	$self->{BASEDIR} = $lpath;
+	$self->{BASEDIR} = abs_path($lpath);
 
 	$lpath = (defined $ENV{'top_builddir'} ? $ENV{'top_builddir'}."/tests/" : '.');
-	$lpath = `readlink -f '$lpath'`;
-	chomp $lpath;
-	$self->{TESTDIR} = $lpath;
+	$self->{TESTDIR} = abs_path($lpath);
 
 	$lpath = (defined $ENV{'srcdir'} ? $ENV{'srcdir'} : '.');
-	$lpath = `readlink -f '$lpath'`;
-	chomp $lpath;
-	$self->{SRCDIR} = $lpath;
+	$self->{SRCDIR} = abs_path($lpath);
 
 
 	$self->{LIGHTTPD_PATH} = $self->{BASEDIR}.'/src/lighttpd';

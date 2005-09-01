@@ -133,9 +133,6 @@ int network_write_chunkqueue_solarissendfilev(server *srv, connection *con, chun
 					con->bytes_written += r;
 					chunk_finished = 0;
 					
-					log_error_write(srv, __FILE__, __LINE__, "sdd", 
-						"partially write: ", r, fd);
-					
 					break;
 				}
 			}
