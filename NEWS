@@ -3,6 +3,17 @@
 NEWS
 ====
 
+- 1.4.3 - 
+
+  * added gracefull shutdown
+  * added server.max-connections 
+  * fixed compilation on all BSD platforms
+  * fixed init of kqueue and /dev/poll after daemonize
+  * fixed segfault if select() is event-handler and more than FD_SETSIZE 
+    fds are opened
+  * fixed compilation of mod_cml
+  * fixed bin-copy-env in mod_fastcgi
+
 - 1.4.2 - 2005-08-29
 
   * fixed mimetype detection on uppercase extensions
