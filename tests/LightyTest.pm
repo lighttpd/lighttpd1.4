@@ -4,6 +4,7 @@ package LightyTest;
 use strict;
 use IO::Socket;
 use Test::More;
+use Socket;
 use Cwd 'abs_path';
 
 sub new {
@@ -27,7 +28,11 @@ sub new {
 	$self->{LIGHTTPD_PIDFILE} = $self->{TESTDIR}.'/tmp/lighttpd/lighttpd.pid';
 	$self->{PIDOF_PIDFILE} = $self->{TESTDIR}.'/tmp/lighttpd/pidof.pid';
 	$self->{PORT} = 2048;
-	
+
+	my ($name, $aliases, $addrtype, $net) = gethostbyaddr(inet_aton("127.0.0.1"), AF_INET);
+
+	$self->{HOSTNAME} = $name;
+
 	bless($self, $class);
 
 	return $self;
