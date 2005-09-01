@@ -40,15 +40,16 @@ sub new {
 
 sub listening_on {
 	my $self = shift;
-	my $prog = shift;
+	my $port = shift;
 
-	open F, "netstat -an | grep :1026|" or return 0;
+	my $remote = 
+ 	  IO::Socket::INET->new(Proto    => "tcp",
+				PeerAddr => "127.0.0.1",
+				PeerPort => $port) or return 0;
 
-	my $foo = <F>;
+	close $remote;
 
-	close F;
-
-	return (defined $foo ? 1 : 0);
+	return 1;
 }
 
 sub stop_proc {
