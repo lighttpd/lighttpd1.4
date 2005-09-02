@@ -225,3 +225,91 @@ buffer * strftime_cache_get(server *srv, time_t last_mod) {
 }
 
 
+int http_response_handle_cachable(server *srv, connection *con, buffer *mtime) {
+	/*
+	 * 14.26 If-None-Match
+	 *    [...]
+	 *    If none of the entity tags match, then the server MAY perform the
+	 *    requested method as if the If-None-Match header field did not exist,
+	 *    but MUST also ignore any If-Modified-Since header field(s) in the
+	 *    request. That is, if no entity tags match, then the server MUST NOT
+	 *    return a 304 (Not Modified) response.
+	 */
+	
+	/* last-modified handling */
+	if (con->request.http_if_none_match) {
+		if (etag_is_equal(con->physical.etag, con->request.http_if_none_match)) {
+			if (con->request.http_method == HTTP_METHOD_GET || 
+			    con->request.http_method == HTTP_METHOD_HEAD) {
+				
+				/* check if etag + last-modified */
+				if (con->request.http_if_modified_since) {
+					
+					size_t used_len;
+					char *semicolon;
+					
+					if (NULL == (semicolon = strchr(con->request.http_if_modified_since, ';'))) {
+						used_len = strlen(con->request.http_if_modified_since);
+					} else {
+						used_len = semicolon - con->request.http_if_modified_since;
+					}
+					
+					if (0 == strncmp(con->request.http_if_modified_since, mtime->ptr, used_len)) {
+						con->http_status = 304;
+						return HANDLER_FINISHED;
+					} else {
+						char buf[sizeof("Sat, 23 Jul 2005 21:20:01 GMT")];
+
+						/* convert to timestamp */
+						if (used_len < sizeof(buf) - 1) {
+							time_t t_header, t_file;
+							struct tm tm;
+							
+							strncpy(buf, con->request.http_if_modified_since, used_len);
+							buf[used_len] = '\0';
+							
+							strptime(buf, "%a, %d %b %Y %H:%M:%S GMT", &tm);
+							t_header = mktime(&tm);
+							
+							strptime(mtime->ptr, "%a, %d %b %Y %H:%M:%S GMT", &tm);
+							t_file = mktime(&tm);
+
+							if (t_file > t_header) {
+								con->http_status = 304;
+								return HANDLER_FINISHED;
+							}
+						} else {
+							log_error_write(srv, __FILE__, __LINE__, "ss", 
+									con->request.http_if_modified_since, buf);
+							
+							con->http_status = 412;
+							return HANDLER_FINISHED;
+						}
+					}
+				} else {
+					con->http_status = 304;
+					return HANDLER_FINISHED;
+				}
+			} else {
+				con->http_status = 412;
+				return HANDLER_FINISHED;
+			}
+		}
+	} else if (con->request.http_if_modified_since) {
+		size_t used_len;
+		char *semicolon;
+		
+		if (NULL == (semicolon = strchr(con->request.http_if_modified_since, ';'))) {
+			used_len = strlen(con->request.http_if_modified_since);
+		} else {
+			used_len = semicolon - con->request.http_if_modified_since;
+		}
+		
+		if (0 == strncmp(con->request.http_if_modified_since, mtime->ptr, used_len)) {
+			con->http_status = 304;
+			return HANDLER_FINISHED;
+		}
+	}
+
+	return HANDLER_GO_ON;
+}
