@@ -55,6 +55,7 @@ typedef struct {
 			FORMAT_TIME_USED,
 			FORMAT_URL,
 			FORMAT_SERVER_NAME,
+			FORMAT_HTTP_HOST,
 			FORMAT_CONNECTION_STATUS,
 			FORMAT_BYTES_IN,
 			FORMAT_BYTES_OUT,
@@ -98,7 +99,7 @@ const format_mapping fmap[] =
 	{ 'T', FORMAT_TIME_USED },
 	{ 'U', FORMAT_URL }, /* w/o querystring */
 	{ 'v', FORMAT_SERVER_NAME },
-	{ 'V', FORMAT_UNSUPPORTED },
+	{ 'V', FORMAT_HTTP_HOST },
 	{ 'X', FORMAT_CONNECTION_STATUS },
 	{ 'I', FORMAT_BYTES_IN },
 	{ 'O', FORMAT_BYTES_OUT },
@@ -409,7 +410,7 @@ SETDEFAULTS_FUNC(log_access_open) {
 		if (i == 0 && buffer_is_empty(s->format)) {
 			/* set a default logfile string */
 			
-			buffer_copy_string(s->format, "%h %l %u %t \"%r\" %>s %b \"%{Referer}i\" \"%{User-Agent}i\"");
+			buffer_copy_string(s->format, "%h %V %u %t \"%r\" %>s %b \"%{Referer}i\" \"%{User-Agent}i\"");
 		}
 		
 		/* parse */
@@ -609,6 +610,7 @@ static int mod_accesslog_patch_connection(server *srv, connection *con, plugin_d
 
 REQUESTDONE_FUNC(log_access_write) {
 	plugin_data *p = p_d;
+	buffer *b;
 	size_t j;
 	
 	int newts = 0;
@@ -616,14 +618,15 @@ REQUESTDONE_FUNC(log_access_write) {
 	
 	mod_accesslog_patch_connection(srv, con, p);
 	
-	if (p->conf.access_logbuffer->used == 0) {
-		buffer_copy_string(p->conf.access_logbuffer, "");
+	b = p->conf.access_logbuffer;
+	if (b->used == 0) {
+		buffer_copy_string(b, "");
 	}
 	
 	for (j = 0; j < p->conf.parsed_format->used; j++) {
 		switch(p->conf.parsed_format->ptr[j]->type) {
 		case FIELD_STRING:
-			buffer_append_string_buffer(p->conf.access_logbuffer, p->conf.parsed_format->ptr[j]->string);
+			buffer_append_string_buffer(b, p->conf.parsed_format->ptr[j]->string);
 			break;
 		case FIELD_FORMAT:
 			switch(p->conf.parsed_format->ptr[j]->field) {
@@ -673,103 +676,109 @@ REQUESTDONE_FUNC(log_access_write) {
 					newts = 1;
 				}
 				
-				buffer_append_string_buffer(p->conf.access_logbuffer, p->conf.ts_accesslog_str);
+				buffer_append_string_buffer(b, p->conf.ts_accesslog_str);
 				
 				break;
 			case FORMAT_REMOTE_HOST:
 	
 				/* handle inet_ntop cache */
 	
-				buffer_append_string(p->conf.access_logbuffer, inet_ntop_cache_get_ip(srv, &(con->dst_addr)));
+				buffer_append_string(b, inet_ntop_cache_get_ip(srv, &(con->dst_addr)));
 				
 				break;
 			case FORMAT_REMOTE_IDENT:
 				/* ident */
-				BUFFER_APPEND_STRING_CONST(p->conf.access_logbuffer, "-");
+				BUFFER_APPEND_STRING_CONST(b, "-");
 				break;
 			case FORMAT_REMOTE_USER:
 				if (con->authed_user->used > 1) {
-					buffer_append_string_buffer(p->conf.access_logbuffer, con->authed_user);
+					buffer_append_string_buffer(b, con->authed_user);
 				} else {
-					BUFFER_APPEND_STRING_CONST(p->conf.access_logbuffer, "-");
+					BUFFER_APPEND_STRING_CONST(b, "-");
 				}
 				break;
 			case FORMAT_REQUEST_LINE:
 				if (con->request.request_line->used) {
-					buffer_append_string_buffer(p->conf.access_logbuffer, con->request.request_line);
+					buffer_append_string_buffer(b, con->request.request_line);
 				}
 				break;
 			case FORMAT_STATUS:
-				buffer_append_long(p->conf.access_logbuffer, con->http_status);
+				buffer_append_long(b, con->http_status);
 				break;
 	
 			case FORMAT_BYTES_OUT_NO_HEADER:
 				if (con->bytes_written > 0) {
-					buffer_append_off_t(p->conf.access_logbuffer, 
+					buffer_append_off_t(b, 
 							    con->bytes_written - con->bytes_header <= 0 ? 0 : con->bytes_written - con->bytes_header);
 				} else {
-					BUFFER_APPEND_STRING_CONST(p->conf.access_logbuffer, "-");
+					BUFFER_APPEND_STRING_CONST(b, "-");
 				}
 				break;
 			case FORMAT_HEADER:
 				if (NULL != (ds = (data_string *)array_get_element(con->request.headers, p->conf.parsed_format->ptr[j]->string->ptr))) {
-					buffer_append_string_buffer(p->conf.access_logbuffer, ds->value);
+					buffer_append_string_buffer(b, ds->value);
 				} else {
-					BUFFER_APPEND_STRING_CONST(p->conf.access_logbuffer, "-");
+					BUFFER_APPEND_STRING_CONST(b, "-");
 				}
 				break;
 			case FORMAT_RESPONSE_HEADER:
 				if (NULL != (ds = (data_string *)array_get_element(con->response.headers, p->conf.parsed_format->ptr[j]->string->ptr))) {
-					buffer_append_string_buffer(p->conf.access_logbuffer, ds->value);
+					buffer_append_string_buffer(b, ds->value);
 				} else {
-					BUFFER_APPEND_STRING_CONST(p->conf.access_logbuffer, "-");
+					BUFFER_APPEND_STRING_CONST(b, "-");
 				}
 				break;
 			case FORMAT_FILENAME:
 				if (con->physical.path->used > 1) {
-					buffer_append_string_buffer(p->conf.access_logbuffer, con->physical.path);
+					buffer_append_string_buffer(b, con->physical.path);
 				} else {
-					BUFFER_APPEND_STRING_CONST(p->conf.access_logbuffer, "-");
+					BUFFER_APPEND_STRING_CONST(b, "-");
 				}
 				break;
 			case FORMAT_BYTES_OUT:
 				if (con->bytes_written > 0) {
-					buffer_append_off_t(p->conf.access_logbuffer, con->bytes_written);
+					buffer_append_off_t(b, con->bytes_written);
 				} else {
-					BUFFER_APPEND_STRING_CONST(p->conf.access_logbuffer, "-");
+					BUFFER_APPEND_STRING_CONST(b, "-");
 				}
 				break;
 			case FORMAT_TIME_USED:
-				buffer_append_long(p->conf.access_logbuffer, srv->cur_ts - con->request_start);
+				buffer_append_long(b, srv->cur_ts - con->request_start);
 				break;
 			case FORMAT_SERVER_NAME:
-				buffer_append_string_buffer(p->conf.access_logbuffer, con->server_name);
+				if (con->server_name->used > 1) {
+					buffer_append_string_buffer(b, con->server_name);
+				} else {
+					buffer_append_string_buffer(b, "-");
+				}
+				break;
+			case FORMAT_HTTP_HOST:
+				if (con->uri.authority->used > 1) {
+					buffer_append_string_buffer(b, con->uri.authority);
+				} else {
+					buffer_append_string_buffer(b, "-");
+				}
 				break;
 			case FORMAT_REQUEST_PROTOCOL:
-				buffer_append_string(p->conf.access_logbuffer, 
+				buffer_append_string(b, 
 						     con->request.http_version == HTTP_VERSION_1_1 ? "HTTP/1.1" : "HTTP/1.0");
 				break;
 			case FORMAT_REQUEST_METHOD:
-				switch(con->request.http_method) {
-				case HTTP_METHOD_GET: buffer_append_string(p->conf.access_logbuffer, "GET"); break;
-				case HTTP_METHOD_POST: buffer_append_string(p->conf.access_logbuffer, "POST"); break;
-				case HTTP_METHOD_HEAD: buffer_append_string(p->conf.access_logbuffer, "HEAD"); break;
-				default: break;
-				}
+				buffer_append_string(b, get_http_method_name(con->request.http_method));
 				break;
 			case FORMAT_SERVER_PORT:
-				buffer_append_long(p->conf.access_logbuffer, srv->srvconf.port);
+				buffer_append_long(b, srv->srvconf.port);
 				break;
 			case FORMAT_QUERY_STRING:
-				buffer_append_string_buffer(p->conf.access_logbuffer, con->uri.query);
+				buffer_append_string_buffer(b, con->uri.query);
 				break;
 			case FORMAT_URL:
-				buffer_append_string_buffer(p->conf.access_logbuffer, con->uri.path_raw);
+				buffer_append_string_buffer(b, con->uri.path_raw);
 				break;
 			case FORMAT_CONNECTION_STATUS:
 				switch(con->keep_alive) {
-				case 0: buffer_append_string(p->conf.access_logbuffer, "-"); break;
-				default: buffer_append_string(p->conf.access_logbuffer, "+"); break;
+				case 0: buffer_append_string(b, "-"); break;
+				default: buffer_append_string(b, "+"); break;
 				}
 				break;
 			default:
@@ -791,20 +800,20 @@ REQUESTDONE_FUNC(log_access_write) {
 		}
 	}
 	
-	BUFFER_APPEND_STRING_CONST(p->conf.access_logbuffer, "\n");
+	BUFFER_APPEND_STRING_CONST(b, "\n");
 
 	if (p->conf.use_syslog ||  /* syslog doesn't cache */
 	    (p->conf.access_logfile->used && p->conf.access_logfile->ptr[0] != '|') || /* pipes don't cache */
 	    newts ||
-	    p->conf.access_logbuffer->used > BUFFER_MAX_REUSE_SIZE) {
+	    b->used > BUFFER_MAX_REUSE_SIZE) {
 		if (p->conf.use_syslog) {
 #ifdef HAVE_SYSLOG_H
-			syslog(LOG_INFO, "%*s", p->conf.access_logbuffer->used - 1, p->conf.access_logbuffer->ptr);
+			syslog(LOG_INFO, "%*s", b->used - 1, b->ptr);
 #endif
 		} else if (p->conf.log_access_fd != -1) {
-			write(p->conf.log_access_fd, p->conf.access_logbuffer->ptr, p->conf.access_logbuffer->used - 1);
+			write(p->conf.log_access_fd, b->ptr, b->used - 1);
 		}
-		buffer_reset(p->conf.access_logbuffer);
+		buffer_reset(b);
 	}
 	
 	return HANDLER_GO_ON;
