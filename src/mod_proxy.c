@@ -439,8 +439,7 @@ static int proxy_create_env(server *srv, handler_ctx *hctx) {
 	
 	/* body */
 	
-	if (con->request.http_method == HTTP_METHOD_POST &&
-	    con->request.content_length) {
+	if (con->request.content_length) {
 		/* the buffer-string functions add an extra \0 at the end the memory-function don't */
 		hctx->write_buffer->used--;
 		buffer_append_memory(hctx->write_buffer, con->request.content->ptr, con->request.content_length);
