@@ -414,24 +414,6 @@ handler_t http_response_prepare(server *srv, connection *con) {
 
 
 			}
-
-			/* can we read the file ? */
-			if (!(sce->st.st_mode & S_IROTH) &&
-			    !(srv->gid == sce->st.st_gid && 
-			      sce->st.st_mode & S_IRGRP) &&
-			    !(srv->uid == sce->st.st_uid &&
-			      sce->st.st_mode & S_IRUSR)) {
-
-				con->http_status = 403;
-	
-				if (con->conf.log_request_handling) {
-					log_error_write(srv, __FILE__, __LINE__,  "s",  "-- access denied");
-					log_error_write(srv, __FILE__, __LINE__,  "sb", "Path         :", con->physical.path);
-				}
-			
-				buffer_reset(con->physical.path);
-				return HANDLER_FINISHED;
-			}	
 		} else {
 			switch (errno) {
 			case EACCES:
