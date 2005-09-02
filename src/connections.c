@@ -36,6 +36,10 @@
 
 #include "sys-socket.h"
 
+typedef struct {
+	        PLUGIN_DATA;
+} plugin_data;
+
 static connection *connections_get_new_connection(server *srv) {
 	connections *conns = srv->conns;
 	size_t i;
@@ -712,11 +716,14 @@ int connection_reset(server *srv, connection *con) {
 
 	/* the plugins should cleanup themself */	
 	for (i = 0; i < srv->plugins.used; i++) {
-		if (con->plugin_ctx[i + 1] != NULL) {
-			log_error_write(srv, __FILE__, __LINE__, "sb", "missing cleanup in", ((plugin **)(srv->plugins.ptr))[i]->name);
+		plugin *p = ((plugin **)(srv->plugins.ptr))[i];
+		plugin_data *pd = p->data;
+
+		if (con->plugin_ctx[pd->id] != NULL) {
+			log_error_write(srv, __FILE__, __LINE__, "sb", "missing cleanup in", p->name);
 		}
 
-		con->plugin_ctx[i] = NULL;
+		con->plugin_ctx[pd->id] = NULL;
 	}
 	
 #if COND_RESULT_UNSET
