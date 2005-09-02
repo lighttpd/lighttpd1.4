@@ -551,6 +551,9 @@ typedef struct {
 	stat_cache  *stat_cache;
 	
 	fdevent_handler_t event_handler;
+
+	uid_t uid;
+	gid_t gid;
 } server;
 
 

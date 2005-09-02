@@ -659,6 +659,9 @@ int main (int argc, char **argv) {
 	/* network is up, let's deamonize ourself */
 	if (srv->srvconf.dont_daemonize == 0) daemonize();
 #endif
+
+	srv->gid = getgid();
+	srv->uid = getuid();
 	
 	/* write pid file */
 	if (pid_fd != -1) {
