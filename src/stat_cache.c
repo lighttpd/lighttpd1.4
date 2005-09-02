@@ -420,10 +420,20 @@ handler_t stat_cache_get_entry(server *srv, connection *con, buffer *name, stat_
 		/* stat() failed, ENOENT, ... and so on */
 		return HANDLER_ERROR;
 	}
+
 	
 	if (S_ISREG(st.st_mode) || S_ISDIR(st.st_mode)) {
 		size_t k;
-	
+
+		if (S_ISREG(st.st_mode)) {
+			int fd;
+			/* see if we can open the file for reading */
+			if (-1 == (fd = open(name->ptr, O_RDONLY))) {
+				return HANDLER_ERROR;
+			}
+			close(fd);
+		}
+
 		if (NULL == sce) {
 			int osize = 0;
 		       
