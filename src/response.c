@@ -18,7 +18,6 @@
 #include "log.h"
 #include "stat_cache.h"
 #include "chunk.h"
-#include "etag.h"
 
 #include "connections.h"
 
