@@ -6,6 +6,7 @@
 #include "array.h"
 #include "buffer.h"
 #include "log.h"
+#include "etag.h"
 
 /*
  * This was 'borrowed' from tcpdump.
