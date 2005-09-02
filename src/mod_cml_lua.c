@@ -8,6 +8,8 @@
 #include "log.h"
 #include "stream.h"
 
+#include "stat_cache.h"
+
 #ifdef USE_OPENSSL
 # include <openssl/md5.h>
 #else
@@ -257,7 +259,6 @@ int cache_parse_lua(server *srv, connection *con, plugin_data *p, buffer *fn) {
 	if (ret == 0) {
 		/* up to now it is a cache-hit, check if all files exist */
 		
-		struct stat st;
 		int curelem;
 		time_t mtime = 0;
 		
@@ -277,16 +278,25 @@ int cache_parse_lua(server *srv, connection *con, plugin_data *p, buffer *fn) {
 		
 		lua_pushnil(L);  /* first key */
 		while (lua_next(L, curelem) != 0) {
+			stat_cache_entry *sce = NULL;
 			/* key' is at index -2 and value' at index -1 */
 			
 			if (lua_isstring(L, -1)) {
-				buffer_copy_string_buffer(b, p->basedir);
-				buffer_append_string(b, lua_tostring(L, -1));
-				
-				if (0 != stat(b->ptr, &st)) {
+				char *s = lua_tostring(L, -1);
+
+				/* the file is relative, make it absolute */
+				if (s[0] != '/') {
+					buffer_copy_string_buffer(b, p->basedir);
+					buffer_append_string(b, lua_tostring(L, -1));
+				} else {
+					buffer_copy_string(b, lua_tostring(L, -1));
+				}
+
+				if (HANDLER_ERROR == stat_cache_get_entry(srv, con, b, &sce)) {
 					/* stat failed */
-					
-					if (errno == ENOENT) {
+
+					switch(errno) {
+					case ENOENT:
 						/* a file is missing, call the handler to generate it */
 						if (!buffer_is_empty(p->trigger_handler)) {
 							ret = 1; /* cache-miss */
@@ -304,10 +314,13 @@ int cache_parse_lua(server *srv, connection *con, plugin_data *p, buffer *fn) {
 							
 							break;
 						}
+						break;
+					default:
+						break;
 					}
 				} else {
-					chunkqueue_append_file(con->write_queue, b, 0, st.st_size);
-					if (st.st_mtime > mtime) mtime = st.st_mtime;
+					chunkqueue_append_file(con->write_queue, b, 0, sce->st.st_size);
+					if (sce->st.st_mtime > mtime) mtime = sce->st.st_mtime;
 				}
 			} else {
 				/* not a string */
@@ -346,12 +359,18 @@ int cache_parse_lua(server *srv, connection *con, plugin_data *p, buffer *fn) {
 				tbuf.ptr = ds->value->ptr;
 				tbuf.used = ds->value->used;
 				tbuf.size = ds->value->size;
+			} else {
+				tbuf.size = 0;
+				tbuf.used = 0;
+				tbuf.ptr = NULL;
 			}
 			
-			if (http_response_handle_cachable(srv, con, &tbuf)) {
+			if (HANDLER_FINISHED == http_response_handle_cachable(srv, con, &tbuf)) {
 				/* ok, the client already has our content, 
 				 * no need to send it again */
+
 				chunkqueue_reset(con->write_queue);
+				ret = 0; /* cache-hit */
 			}
 		} else {
 			chunkqueue_reset(con->write_queue);
