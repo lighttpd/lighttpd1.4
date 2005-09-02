@@ -243,7 +243,7 @@ static int connection_handle_read(server *srv, connection *con) {
 					/* a unencrypted HTTP request on a HTTPS socket. Do a redirect to the right location */
 				default:
 					log_error_write(srv, __FILE__, __LINE__, "sds", "SSL:", 
-							r, ERR_error_string(ERR_get_error(), NULL));
+							r, ERR_error_string(ssl_err, NULL));
 					break;
 				}
 				break;
