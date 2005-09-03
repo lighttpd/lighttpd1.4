@@ -112,28 +112,15 @@ case "$1" in
 	rc_status
 	;;
     force-reload)
-	## Signal the daemon to reload its config. Most daemons
-	## do this on signal 1 (SIGHUP).
-	## If it does not support it, restart.
-
-	echo -n "Reload service LIGHTTPD"
-	## if it supports it:
-	killproc -HUP $LIGHTTPD_BIN
-	#touch /var/run/LIGHTTPD.pid
-	rc_status -v
-
-	## Otherwise:
-	#$0 stop  &&  $0 start
-	#rc_status
-	;;
     reload)
 	## Like force-reload, but if daemon does not support
 	## signalling, do nothing (!)
 
 	# If it supports signalling:
 	echo -n "Reload service LIGHTTPD"
-	killproc -HUP $LIGHTTPD_BIN
-	#touch /var/run/LIGHTTPD.pid
+	killproc -INT $LIGHTTPD_BIN
+	$0 start
+	touch /var/run/lighttpd.pid
 	rc_status -v
 	
 	## Otherwise if it does not support reload:
