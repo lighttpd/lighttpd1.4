@@ -749,14 +749,14 @@ REQUESTDONE_FUNC(log_access_write) {
 				if (con->server_name->used > 1) {
 					buffer_append_string_buffer(b, con->server_name);
 				} else {
-					buffer_append_string_buffer(b, "-");
+					BUFFER_APPEND_STRING_CONST(b, "-");
 				}
 				break;
 			case FORMAT_HTTP_HOST:
 				if (con->uri.authority->used > 1) {
 					buffer_append_string_buffer(b, con->uri.authority);
 				} else {
-					buffer_append_string_buffer(b, "-");
+					BUFFER_APPEND_STRING_CONST(b, "-");
 				}
 				break;
 			case FORMAT_REQUEST_PROTOCOL:
