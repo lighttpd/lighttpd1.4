@@ -422,4 +422,5 @@ void plugins_free(server *srv) {
 	
 	free(srv->plugins.ptr);
 	srv->plugins.ptr = NULL;
+	srv->plugins.used = 0;
 }
