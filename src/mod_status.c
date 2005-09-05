@@ -681,6 +681,7 @@ static int mod_status_patch_connection(server *srv, connection *con, plugin_data
 	
 	PATCH(status_url);
 	PATCH(config_url);
+	PATCH(sort);
 	
 	/* skip the first, the global context */
 	for (i = 1; i < srv->config_context->used; i++) {
