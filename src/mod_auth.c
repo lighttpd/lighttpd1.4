@@ -418,7 +418,7 @@ SETDEFAULTS_FUNC(mod_auth_set_defaults) {
 			} else {
 				if (0 != strcmp(method, "basic") &&
 				    0 != strcmp(method, "digest")) {
-					log_error_write(srv, __FILE__, __LINE__, "sssss", "auth.require->method has to be either 'basic' or 'digest'");
+					log_error_write(srv, __FILE__, __LINE__, "s", "auth.require->method has to be either 'basic' or 'digest'");
 					return HANDLER_ERROR;
 				}
 			}
