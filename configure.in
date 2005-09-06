@@ -354,20 +354,32 @@ AC_ARG_WITH(lua, AC_HELP_STRING([--with-lua],[lua engine for mod_cml]),
 AC_MSG_RESULT($WITH_LUA)
 if test "$WITH_LUA" != "no"; then
  AC_PATH_PROG(LUACONFIG, lua-config)
+
  if test x"$LUACONFIG" != x; then
    LUA_CFLAGS=`$LUACONFIG --include`
-   LUA_LIB=`$LUACONFIG --libs --extralibs`
+   LUA_LIBS=`$LUACONFIG --libs --extralibs`
+   AC_DEFINE([HAVE_LUA], [1], [liblua])
+   AC_DEFINE([HAVE_LUA_H], [1], [lua.h])
  else
    AC_CHECK_LIB(lua, lua_open, [
-         AC_CHECK_HEADERS([lua.h],[
-                 LUA_LIB="-llua -llualib"
-                 AC_DEFINE([HAVE_LUA], [1], [liblua])
-		 AC_DEFINE([HAVE_LUA_H], [1], [lua.h])
-         ])
+     AC_CHECK_HEADERS([lua.h],[
+       LUA_LIBS="-llua -llualib"
+       AC_DEFINE([HAVE_LUA], [1], [liblua])
+       AC_DEFINE([HAVE_LUA_H], [1], [lua.h])
+     ])
    ])
  fi
+
+ if test x"$LUA_LIBS" = x; then
+   # try pkgconfig
+   PKG_CHECK_MODULES(LUA, lua, [
+     AC_DEFINE([HAVE_LUA], [1], [liblua])
+     AC_DEFINE([HAVE_LUA_H], [1], [lua.h])
+   ])
+ fi
+
  AC_SUBST(LUA_CFLAGS)
- AC_SUBST(LUA_LIB)
+ AC_SUBST(LUA_LIBS)
 fi
 
 
@@ -536,7 +548,7 @@ else
 fi
 
 plugins="mod_cml"
-if test ! "x$LUA_LIB" = x; then
+if test ! "x$LUA_LIBS" = x; then
 	do_build="$do_build $plugins"
 else
 	no_build="$no_build $plugins"
