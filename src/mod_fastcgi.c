@@ -2135,15 +2135,16 @@ static int fcgi_demux_response(server *srv, handler_ctx *hctx) {
 						if (host->mode != FCGI_AUTHORIZER ||
 						    !(con->http_status == 0 ||
 						      con->http_status == 200)) {
-							/* enable chunked-transfer-encoding */
-							if (con->request.http_version == HTTP_VERSION_1_1 &&
-							    !(con->parsed_response & HTTP_CONTENT_LENGTH)) {
-								con->response.transfer_encoding = HTTP_TRANSFER_ENCODING_CHUNKED;
-							}
-
+							
 							con->file_started = 1;
 						
 							if (blen) {
+								/* enable chunked-transfer-encoding */
+								if (con->request.http_version == HTTP_VERSION_1_1 &&
+								    !(con->parsed_response & HTTP_CONTENT_LENGTH)) {
+									con->response.transfer_encoding = HTTP_TRANSFER_ENCODING_CHUNKED;
+								}
+
 								http_chunk_append_mem(srv, con, c, blen + 1);
 								joblist_append(srv, con);
 #if 0
@@ -2159,6 +2160,12 @@ static int fcgi_demux_response(server *srv, handler_ctx *hctx) {
 					if (host->mode != FCGI_AUTHORIZER ||
 					    !(con->http_status == 0 ||
 					      con->http_status == 200)) {
+						/* enable chunked-transfer-encoding */
+						if (con->request.http_version == HTTP_VERSION_1_1 &&
+						    !(con->parsed_response & HTTP_CONTENT_LENGTH)) {
+							con->response.transfer_encoding = HTTP_TRANSFER_ENCODING_CHUNKED;
+						}
+
 						http_chunk_append_mem(srv, con, hctx->response->ptr, hctx->response->used);
 						joblist_append(srv, con);
 					}
