@@ -107,8 +107,8 @@ and the following index.cml file: ::
   trigger_handler = "index.php"
 
   if file_mtime(b .. "../lib/php/menu.csv") > file_mtime(cwd .. "_cache.html") or
-     file_mtime(b .. "templates/jk.tmpl")   > file.mtime(cwd .. "_cache.html")
-     file.mtime(b .. "content.html")        > file.mtime(cwd .. "_cache.html") then
+     file_mtime(b .. "templates/jk.tmpl")   > file_mtime(cwd .. "_cache.html") or
+     file_mtime(b .. "content.html")        > file_mtime(cwd .. "_cache.html") then
      return CACHE_MISS
   else 
      return CACHE_HIT
