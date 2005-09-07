@@ -155,7 +155,7 @@ Configuration
   # if enabled, startTLS needs a valid (base64-encoded) CA 
   # certificate
   auth.backend.ldap.starttls   = "enable"
-  auth.backend.ldap.cafile   = "/etc/CAcertificate.pem"
+  auth.backend.ldap.ca-file   = "/etc/CAcertificate.pem"
 
   ## restrictions
   # set restrictions:
