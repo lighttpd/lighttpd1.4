@@ -302,12 +302,6 @@ typedef enum { FCGI_STATE_INIT, FCGI_STATE_CONNECT, FCGI_STATE_PREPARE_WRITE,
 } fcgi_connection_state_t;
 
 typedef struct {
-	buffer  *response; 
-	size_t   response_len;
-	int      response_type;
-	int      response_padding;
-	size_t   response_request_id;
-	
 	fcgi_proc *proc;
 	fcgi_extension_host *host;
 	
@@ -319,7 +313,7 @@ typedef struct {
 	buffer   *write_buffer;
 	size_t    write_offset;
 	
-	read_buffer *rb;
+	chunkqueue *rb;
 	
 	buffer   *response_header;
 	
@@ -354,7 +348,6 @@ static handler_ctx * handler_ctx_init() {
 	
 	hctx->fde_ndx = -1;
 	
-	hctx->response = buffer_init();
 	hctx->response_header = buffer_init();
 	hctx->write_buffer = buffer_init();
 	
@@ -362,27 +355,21 @@ static handler_ctx * handler_ctx_init() {
 	hctx->state = FCGI_STATE_INIT;
 	hctx->proc = NULL;
 	
-	hctx->response_len = 0;
-	hctx->response_type = 0;
-	hctx->response_padding = 0;
-	hctx->response_request_id = 0;
 	hctx->fd = -1;
 	
 	hctx->reconnects = 0;
+
+	hctx->rb = chunkqueue_init();
 	
 	return hctx;
 }
 
 static void handler_ctx_free(handler_ctx *hctx) {
-	buffer_free(hctx->response);
 	buffer_free(hctx->response_header);
 	buffer_free(hctx->write_buffer);
-	
-	if (hctx->rb) {
-		if (hctx->rb->ptr) free(hctx->rb->ptr);
-		free(hctx->rb);
-	}
-	
+
+	chunkqueue_free(hctx->rb);
+
 	free(hctx);
 }
 
@@ -1939,11 +1926,108 @@ static int fcgi_response_parse(server *srv, connection *con, plugin_data *p, buf
 	return 0;
 }
 
+typedef struct {
+	buffer  *b; 
+	size_t   len;
+	int      type;
+	int      padding;
+	size_t   request_id;
+} fastcgi_response_packet;
+
+static int fastcgi_get_packet(server *srv, handler_ctx *hctx, fastcgi_response_packet *packet) {
+	chunk *	c;
+	size_t offset = 0;
+	size_t toread = 0;
+	FCGI_Header *header;
+
+	if (!hctx->rb->first) return -1;
+
+	packet->b = buffer_init();
+	packet->len = 0;
+	packet->type = 0;
+	packet->padding = 0;
+	packet->request_id = 0;
+
+	/* get at least the FastCGI header */
+	for (c = hctx->rb->first; c; c = c->next) {
+		if (packet->b->used == 0) {
+			buffer_copy_string_len(packet->b, c->data.mem->ptr + c->offset, c->data.mem->used - c->offset - 1);
+		} else {
+			buffer_append_string_len(packet->b, c->data.mem->ptr + c->offset, c->data.mem->used - c->offset - 1);
+		}
+
+		if (packet->b->used >= sizeof(*header) + 1) break;
+	}
+
+	if ((packet->b->used == 0) ||
+	    (packet->b->used - 1 < sizeof(FCGI_Header))) {
+		/* no header */
+		buffer_free(packet->b);
+
+		log_error_write(srv, __FILE__, __LINE__, "s", "FastCGI: header to small");
+		return -1;
+	}
+
+	/* we have at least a header, now check how much me have to fetch */ 
+	header = (FCGI_Header *)(packet->b->ptr);
+			
+	packet->len = (header->contentLengthB0 | (header->contentLengthB1 << 8)) + header->paddingLength;
+	packet->request_id = (header->requestIdB0 | (header->requestIdB1 << 8));
+	packet->type = header->type;
+	packet->padding = header->paddingLength;
+
+	/* the first bytes in packet->b are the header */
+	offset = sizeof(*header);
+
+	log_error_write(srv, __FILE__, __LINE__, "sddd", "FastCGI: got header:", packet->len, packet->request_id, packet->type);
+
+	/* ->b should only be the content */
+	buffer_reset(packet->b);
+
+	if (packet->len) {
+		/* copy the content */
+		for (; c && (packet->b->used < packet->len + 1); c = c->next) {
+			toread = c->data.mem->used - c->offset - offset - 1 > packet->len ? packet->len : c->data.mem->used - c->offset - offset - 1;
+			
+			log_error_write(srv, __FILE__, __LINE__, "sdd", "FastCGI: reading content:", packet->b->used, toread);
+
+			buffer_append_string_len(packet->b, c->data.mem->ptr + c->offset + offset, toread);
+			offset = 0;
+		}
+
+		if (packet->b->used < packet->len + 1) {
+			/* we didn't got the full packet */
+			log_error_write(srv, __FILE__, __LINE__, "sdd", "FastCGI: not the full packet", packet->b->used, packet->len);
+
+			buffer_free(packet->b);
+			return -1;
+		}
+
+		packet->b->used -= packet->padding;
+		packet->b->ptr[packet->b->used - 1] = '\0';
+	}
+
+	/* tag the chunks as read */
+	toread = packet->len + sizeof(FCGI_Header);
+	for (c = hctx->rb->first; c && toread; c = c->next) {
+		if (c->data.mem->used - c->offset - 1 <= toread) {
+			/* we read this whole buffer, move it to unused */
+			toread -= c->data.mem->used - c->offset - 1;
+			c->offset = c->data.mem->used - 1; /* everthing has been written */
+		} else {
+			c->offset += toread;
+			toread = 0;
+		}
+	}
+
+	chunkqueue_remove_finished_chunks(hctx->rb);
+	
+	return 0;
+}
 
 static int fcgi_demux_response(server *srv, handler_ctx *hctx) {
-	ssize_t len;
 	int fin = 0;
-	int b;
+	int toread;
 	ssize_t r;
 	
 	plugin_data *p    = hctx->plugin_data;
@@ -1955,7 +2039,7 @@ static int fcgi_demux_response(server *srv, handler_ctx *hctx) {
 	/* 
 	 * check how much we have to read 
 	 */
-	if (ioctl(hctx->fd, FIONREAD, &b)) {
+	if (ioctl(hctx->fd, FIONREAD, &toread)) {
 		log_error_write(srv, __FILE__, __LINE__, "sd", 
 				"unexpected end-of-file (perhaps the fastcgi process died):",
 				fcgi_fd);
@@ -1963,21 +2047,15 @@ static int fcgi_demux_response(server *srv, handler_ctx *hctx) {
 	}
 	
 	/* init read-buffer */
-	if (hctx->rb == NULL) {
-		hctx->rb = calloc(1, sizeof(*hctx->rb));
-	}
 	
-	if (b > 0) {
-		if (hctx->rb->size == 0) {
-			hctx->rb->size = b;
-			hctx->rb->ptr = malloc(hctx->rb->size * sizeof(*hctx->rb->ptr));
-		} else if (hctx->rb->size < hctx->rb->used + b) {
-			hctx->rb->size += b;
-			hctx->rb->ptr = realloc(hctx->rb->ptr, hctx->rb->size * sizeof(*hctx->rb->ptr));
-		}
-		
+	if (toread > 0) {
+		buffer *b;
+
+		b = chunkqueue_get_append_buffer(hctx->rb);
+		buffer_prepare_copy(b, toread + 1);
+
 		/* append to read-buffer */
-		if (-1 == (r = read(hctx->fd, hctx->rb->ptr + hctx->rb->used, b))) {
+		if (-1 == (r = read(hctx->fd, b->ptr, toread))) {
 			log_error_write(srv, __FILE__, __LINE__, "sds", 
 					"unexpected end-of-file (perhaps the fastcgi process died):",
 					fcgi_fd, strerror(errno));
@@ -1986,8 +2064,9 @@ static int fcgi_demux_response(server *srv, handler_ctx *hctx) {
 		
 		/* this should be catched by the b > 0 above */
 		assert(r);
-		
-		hctx->rb->used += r;
+
+		b->used = r + 1; /* one extra for the fake \0 */
+		b->ptr[b->used - 1] = '\0';
 	} else {
 		log_error_write(srv, __FILE__, __LINE__, "ssdsdsd", 
 				"unexpected end-of-file (perhaps the fastcgi process died):",
@@ -1997,190 +2076,97 @@ static int fcgi_demux_response(server *srv, handler_ctx *hctx) {
 		
 		return -1;
 	}
-	
-	/* parse all fcgi packets 
-	 * 
-	 *   start: hctx->rb->ptr 
-	 *   end  : hctx->rb->ptr + hctx->rb->used
-	 * 
-	 */
-	while (fin == 0) {
-		size_t request_id;
-		
-		if (hctx->response_len == 0) {
-			FCGI_Header *header;
-			
-			if (hctx->rb->used - hctx->rb->offset < sizeof(*header)) {
-				/* didn't get the full header packet (most often 0),
-				 * but didn't recieved the final packet either
-				 * 
-				 * we will come back later and finish everything
-				 * 
-				 */
-				
-				hctx->delayed = 1;
-#if 0
-				log_error_write(srv, __FILE__, __LINE__, "sddd", "didn't get the full header: ",
-						hctx->rb->used - hctx->rb->offset, sizeof(*header),
-						fcgi_fd
-						);
-#endif
-				break;
-			}
-#if 0
-			fprintf(stderr, "fcgi-version: %02x\n", hctx->rb->ptr[hctx->rb->offset]);
-#endif
-			
-			header = (FCGI_Header *)(hctx->rb->ptr + hctx->rb->offset);
-			hctx->rb->offset += sizeof(*header);
-			
-			len = (header->contentLengthB0 | (header->contentLengthB1 << 8)) + header->paddingLength;
-			request_id = (header->requestIdB0 | (header->requestIdB1 << 8));
 
-			hctx->response_len = len;
-			hctx->response_request_id = request_id;
-			hctx->response_type = header->type;
-			hctx->response_padding = header->paddingLength;
-			
-#if 0
-			log_error_write(srv, __FILE__, __LINE__, "sddd", "offset: ",
-					fcgi_fd, hctx->rb->offset, header->type
-					);
-#endif
-			
-		} else {
-			len = hctx->response_len;
-		}
-		
-		if (hctx->rb->used - hctx->rb->offset < hctx->response_len) {
-			/* we are not finished yet */
+	/*
+	 * parse the fastcgi packets and forward the content to the write-queue
+	 *
+	 */	
+	while (fin == 0) {
+		fastcgi_response_packet packet;
+
+		/* check if we have at least one packet */
+		if (0 != fastcgi_get_packet(srv, hctx, &packet)) {
+			/* no full packet */
+
+			hctx->delayed = 1;
+
 			break;
 		}
-		
-		hctx->response->ptr = hctx->rb->ptr + hctx->rb->offset;
-		hctx->rb->offset += hctx->response_len;
-#if 0
-		log_error_write(srv, __FILE__, __LINE__, "sdd", "offset: ",
-				fcgi_fd, hctx->rb->offset
-				);
-#endif
-		
-		/* remove padding */
-#if 0
-		hctx->response->ptr[hctx->response_len - hctx->response_padding] = '\0';
-#endif
-		hctx->response->used = hctx->response_len - hctx->response_padding + 1;
-		
-		/* mark the fast-cgi packet as finished */
-		hctx->response_len = 0;
-		
-		switch(hctx->response_type) {
-		case FCGI_STDOUT:
-			if (len) {
-#if 0
-				log_error_write(srv, __FILE__, __LINE__, "sdb", "len", len, hctx->response);
-#endif
-				
-				if (0 == con->got_response) {
-					con->got_response = 1;
-					buffer_prepare_copy(hctx->response_header, 128);
-				}
-				
-				if (0 == con->file_started) {
-					char *c;
-					size_t hlen;
-					
-					/* search for header terminator 
-					 * 
-					 * if we start with \r\n check if last packet terminated with \r\n
-					 * if we start with \n check if last packet terminated with \n
-					 * search for \r\n\r\n
-					 * search for \n\n
-					 */
-					
-					if (hctx->response->used > 2 &&
-					    hctx->response->ptr[0] == '\r' &&
-					    hctx->response->ptr[1] == '\n' &&
-					    hctx->response_header->used > 3 &&
-					    hctx->response_header->ptr[hctx->response_header->used - 3] == '\r' &&
-					    hctx->response_header->ptr[hctx->response_header->used - 2] == '\n') {
-						hlen = 2;
-						c = hctx->response->ptr + 2;
-					} else if (hctx->response->used > 2 &&
-						   hctx->response->ptr[0] == '\n' &&
-						   hctx->response_header->used > 2 &&
-						   hctx->response_header->ptr[hctx->response_header->used - 2] == '\n') {
-						hlen = 1;
-						c = hctx->response->ptr + 1;
-					} else if (NULL != (c = buffer_search_string_len(hctx->response, "\r\n\r\n", 4))) {
-						c += 4;
-						hlen = c - hctx->response->ptr;
-						
-					} else if (NULL != (c = buffer_search_string_len(hctx->response, "\n\n", 2))) {
-						c += 2;
-						hlen = c - hctx->response->ptr;
-					}
-					
-					if (c != NULL) {
-						size_t blen = hctx->response->used - hlen - 1;
-						/* found */
-						
-						buffer_append_string_len(hctx->response_header, hctx->response->ptr, hlen);
-#if 0
-						log_error_write(srv, __FILE__, __LINE__, "ss", "Header:", hctx->response_header->ptr);
-#endif
-						/* parse the response header */
-						fcgi_response_parse(srv, con, p, hctx->response_header);
-						
-						if (host->mode != FCGI_AUTHORIZER ||
-						    !(con->http_status == 0 ||
-						      con->http_status == 200)) {
-							
-							con->file_started = 1;
-						
-							if (blen) {
-								/* enable chunked-transfer-encoding */
-								if (con->request.http_version == HTTP_VERSION_1_1 &&
-								    !(con->parsed_response & HTTP_CONTENT_LENGTH)) {
-									con->response.transfer_encoding = HTTP_TRANSFER_ENCODING_CHUNKED;
-								}
 
-								http_chunk_append_mem(srv, con, c, blen + 1);
-								joblist_append(srv, con);
-#if 0
-								log_error_write(srv, __FILE__, __LINE__, "sd", "body-len", blen);
-#endif
-							}
-						}
-					} else {
-						/* copy everything */
-						buffer_append_string_buffer(hctx->response_header, hctx->response);
-					}
+		switch(packet.type) {
+		case FCGI_STDOUT:
+			if (packet.len == 0) break;
+
+			/* is the header already finished */
+			if (0 == con->file_started) {
+				char *c;
+				size_t blen;
+					
+				/* search for header terminator 
+				 * 
+				 * if we start with \r\n check if last packet terminated with \r\n
+				 * if we start with \n check if last packet terminated with \n
+				 * search for \r\n\r\n
+				 * search for \n\n
+				 */
+
+				if (hctx->response_header->used == 0) {
+					buffer_copy_string_buffer(hctx->response_header, packet.b);
 				} else {
-					if (host->mode != FCGI_AUTHORIZER ||
-					    !(con->http_status == 0 ||
-					      con->http_status == 200)) {
+					buffer_append_string_buffer(hctx->response_header, packet.b);
+				}
+
+				if (NULL != (c = buffer_search_string_len(hctx->response_header, CONST_STR_LEN("\r\n\r\n")))) {
+					blen = hctx->response_header->used - (c - hctx->response_header->ptr) - 4;
+					hctx->response_header->used = c - hctx->response_header->ptr;
+					c += 4; /* point the the start of the response */
+				} else if (NULL != (c = buffer_search_string_len(hctx->response_header, CONST_STR_LEN("\n\n")))) {
+					blen = hctx->response_header->used - (c - hctx->response_header->ptr) - 2;
+					hctx->response_header->used = c - hctx->response_header->ptr;
+					c += 2; /* point the the start of the response */
+				} else {
+					/* no luck, no header found */
+					break;
+				}
+
+				/* parse the response header */
+				fcgi_response_parse(srv, con, p, hctx->response_header);
+						
+				if (host->mode != FCGI_AUTHORIZER ||
+				    !(con->http_status == 0 ||
+				      con->http_status == 200)) {
+							
+					con->file_started = 1;
+						
+					if (blen > 1) {
 						/* enable chunked-transfer-encoding */
 						if (con->request.http_version == HTTP_VERSION_1_1 &&
 						    !(con->parsed_response & HTTP_CONTENT_LENGTH)) {
 							con->response.transfer_encoding = HTTP_TRANSFER_ENCODING_CHUNKED;
 						}
 
-						http_chunk_append_mem(srv, con, hctx->response->ptr, hctx->response->used);
+						http_chunk_append_mem(srv, con, c, blen);
 						joblist_append(srv, con);
-					}
-#if 0
-					log_error_write(srv, __FILE__, __LINE__, "sd", "body-len", hctx->response->used);
-#endif
+ 					}
 				}
-			} else {
-				/* finished */
+			} else if (packet.b->used > 1) {
+				if (host->mode != FCGI_AUTHORIZER ||
+				    !(con->http_status == 0 ||
+				      con->http_status == 200)) {
+					/* enable chunked-transfer-encoding */
+					if (con->request.http_version == HTTP_VERSION_1_1 &&
+					    !(con->parsed_response & HTTP_CONTENT_LENGTH)) {
+						con->response.transfer_encoding = HTTP_TRANSFER_ENCODING_CHUNKED;
+					}
+
+					http_chunk_append_mem(srv, con, packet.b->ptr, packet.b->used);
+					joblist_append(srv, con);
+				}
 			}
-			
 			break;
 		case FCGI_STDERR:
 			log_error_write(srv, __FILE__, __LINE__, "sb", 
-					"FastCGI-stderr:", hctx->response);
+					"FastCGI-stderr:", packet.b);
 			
 			break;
 		case FCGI_END_REQUEST:
@@ -2198,13 +2184,12 @@ static int fcgi_demux_response(server *srv, handler_ctx *hctx) {
 			break;
 		default:
 			log_error_write(srv, __FILE__, __LINE__, "sd", 
-					"FastCGI: header.type not handled: ", hctx->response_type);
+					"FastCGI: header.type not handled: ", packet.type);
 			break;
 		}
+		buffer_free(packet.b);
 	}
 	
-	hctx->response->ptr = NULL;
-
 	return fin;
 }
 

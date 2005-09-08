@@ -470,47 +470,8 @@ int network_write_chunkqueue(server *srv, connection *con, chunkqueue *cq) {
 	}
 	
 	if (ret >= 0) {
-		/*
-		 * map the return code
-		 * 
-		 * -1 -> -1
-		 * >0 -> (everything written) 0
-		 *       (not finished yet)   1
-		 * 
-		 * ret means:
-		 * - <ret> chunks are unused now
-		 * 
-		 */
-		
-		chunk *c, *pc = NULL;
-		int i;
-		
-		for (i = 0, c = cq->first; i < ret; i++, c = c->next) {
-			buffer_reset(c->data.mem);
-			
-			if (i == ret - 1) pc = c;
-		}
-		
-		if (c) {
-			/* there is still something to write */
-			
-			if (c != cq->first) {
-				/* move the first few buffers to unused */
-				
-				assert(pc);
-				
-				pc->next = cq->unused;
-				cq->unused = cq->first;
-				cq->first = c;
-			}
-			
-			ret = 1;
-		} else {
-			/* everything is written */
-			chunkqueue_reset(cq);
-			
-			ret = 0;
-		}
+		chunkqueue_remove_finished_chunks(cq);
+		ret = chunkqueue_is_empty(cq) ? 0 : 1;
 	}
 	
 #ifdef TCP_CORK
