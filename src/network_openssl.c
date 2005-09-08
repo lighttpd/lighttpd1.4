@@ -77,18 +77,33 @@ int network_write_chunkqueue_openssl(server *srv, connection *con, chunkqueue *c
 			 */
 			
 			if ((r = SSL_write(con->ssl, offset, toSend)) <= 0) {
+				unsigned long err;
+
 				switch ((ssl_r = SSL_get_error(con->ssl, r))) {
 				case SSL_ERROR_WANT_WRITE:
 					break;
 				case SSL_ERROR_SYSCALL:
-					switch(errno) {
-					case EPIPE:
-						return -2;
-					default:
-						log_error_write(srv, __FILE__, __LINE__, "sddds", "SSL:", 
+					/* perhaps we have error waiting in our error-queue */
+					if (0 != (err = ERR_get_error())) {
+						log_error_write(srv, __FILE__, __LINE__, "sdds", "SSL:", 
+								ssl_r, r,
+								ERR_error_string(err, NULL));
+					} else if (r == -1) {
+						/* no, but we have errno */
+						switch(errno) {
+						case EPIPE:
+							return -2;
+						default:
+							log_error_write(srv, __FILE__, __LINE__, "sddds", "SSL:", 
+									ssl_r, r, errno,
+									strerror(errno));
+							break;
+						}
+					} else {
+						/* neither error-queue nor errno ? */
+						log_error_write(srv, __FILE__, __LINE__, "sddds", "SSL (error):", 
 								ssl_r, r, errno,
 								strerror(errno));
-						break;
 					}
 					
 					return  -1;
