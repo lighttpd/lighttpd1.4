@@ -55,6 +55,18 @@ static void chunk_free(chunk *c) {
 	free(c);
 }
 
+static void chunk_reset(chunk *c) {
+	if (!c) return;
+	
+	/* c->data.mem overlaps with c->data.file.name */
+	switch (c->type) {
+	case MEM_CHUNK: buffer_reset(c->data.mem); break;
+	case FILE_CHUNK: buffer_reset(c->data.file.name); break;
+	default: break;	
+	}
+}
+
+
 void chunkqueue_free(chunkqueue *cq) {
 	chunk *c, *pc;
 	
@@ -86,6 +98,7 @@ static chunk *chunkqueue_get_unused_chunk(chunkqueue *cq) {
 		c = cq->unused;
 		cq->unused = c->next;
 		c->next = NULL;
+		cq->unused_chunks--;
 	}
 	
 	return c;
@@ -116,15 +129,24 @@ static int chunkqueue_append_chunk(chunkqueue *cq, chunk *c) {
 }
 
 void chunkqueue_reset(chunkqueue *cq) {
+	chunk *c;
 	/* move everything to the unused queue */
 	
-	if (cq->last == NULL) return;
-	
-	cq->last->next = cq->unused;
-	cq->unused = cq->first;
-	
-	/* disconnect active chain */
-	cq->first = cq->last = NULL;
+	/* mark all read written */ 
+	for (c = cq->first; c; c = c->next) {
+		switch(c->type) {
+		case MEM_CHUNK:
+			c->offset = c->data.mem->used - 1;
+			break;
+		case FILE_CHUNK:
+			c->offset = c->data.file.length;
+			break;
+		default: 
+			break;
+		}
+	}
+
+	chunkqueue_remove_finished_chunks(cq);
 }
 
 int chunkqueue_append_file(chunkqueue *cq, buffer *fn, off_t offset, off_t len) {
@@ -261,52 +283,39 @@ int chunkqueue_is_empty(chunkqueue *cq) {
 	return cq->first ? 0 : 1;
 }
 
-#ifdef DEBUG_CHUNK
+int chunkqueue_remove_finished_chunks(chunkqueue *cq) {
+	chunk *c;
 
-static int write_chunkqueue(int fd, chunkqueue *c) {
-	UNUSED(fd);
-	UNUSED(c);
+	for (c = cq->first; c; c = cq->first) {
+		int is_finished = 0;
+
+		switch (c->type) {
+		case MEM_CHUNK:
+			if (c->offset == (off_t)c->data.mem->used - 1) is_finished = 1;
+			break;
+		case FILE_CHUNK:
+			if (c->offset == c->data.file.length) is_finished = 1; 
+			break;
+		default: 
+			break;
+		}
+
+		if (!is_finished) break;
+
+		chunk_reset(c);
+
+		cq->first = c->next;
+		if (c == cq->last) cq->last = NULL;
+
+		/* keep at max 4 chunks in the 'unused'-cache */
+		if (cq->unused_chunks > 4) {
+			chunk_free(c);
+		} else {
+			c->next = cq->unused;
+			cq->unused = c;
+			cq->unused_chunks++;
+		}
+	}
 
 	return 0;
 }
-
-int main(int argc, char **argv) {
-	chunkqueue *c;
-	buffer *b, *fn;
-	
-	UNUSED(argc);
-	UNUSED(argv);
-
-	c = chunkqueue_init();
-	
-	fn = buffer_init_string("server.c");
-	
-	chunkqueue_append_file(c, fn, 0, 10);
-	chunkqueue_append_file(c, fn, 10, 10);
-	chunkqueue_append_file(c, fn, 20, 10);
-	
-	write_chunkqueue(STDERR_FILENO, c);
-	chunkqueue_reset(c);
-	
-	b = buffer_init();
-	buffer_copy_string(b, "\ntest string mit vielen Zeichen\n");
-	chunkqueue_append_buffer(c, b);
-	
-	write_chunkqueue(STDERR_FILENO, c);
-	chunkqueue_reset(c);
-	
-	chunkqueue_append_file(c, fn, 0, 10);
-	buffer_copy_string(b, "\ntest string mit vielen Zeichen\n");
-	chunkqueue_append_buffer(c, b);
-	chunkqueue_append_file(c, fn, 10, 10);
-	chunkqueue_append_file(c, fn, 20, 10);
-	chunkqueue_append_file(c, fn, 50, 40);
-	
-	write_chunkqueue(STDERR_FILENO, c);
-	chunkqueue_reset(c);
-	
-	chunkqueue_free(c);
-	
-	return 0;
-}
-#endif

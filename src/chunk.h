@@ -35,6 +35,7 @@ typedef struct {
 	chunk *last;
 	
 	chunk *unused;
+	size_t unused_chunks;
 } chunkqueue;
 
 chunkqueue *chunkqueue_init(void);
@@ -45,6 +46,8 @@ int chunkqueue_prepend_buffer(chunkqueue *c, buffer *mem);
 
 buffer * chunkqueue_get_append_buffer(chunkqueue *c);
 buffer * chunkqueue_get_prepend_buffer(chunkqueue *c);
+
+int chunkqueue_remove_finished_chunks(chunkqueue *cq);
 
 off_t chunkqueue_length(chunkqueue *c);
 off_t chunkqueue_written(chunkqueue *c);
