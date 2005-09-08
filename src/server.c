@@ -209,7 +209,6 @@ static void server_free(server *srv) {
 #endif
 	fdevent_free(srv->ev);
 	
-	connections_free(srv);
 	free(srv->conns);
 	
 	if (srv->config_storage) {
@@ -1133,6 +1132,7 @@ int main (int argc, char **argv) {
 	/* clean-up */
 	log_error_close(srv);
 	network_close(srv);
+	connections_free(srv);
 	plugins_free(srv);
 	server_free(srv);
 	
