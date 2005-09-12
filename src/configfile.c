@@ -900,6 +900,7 @@ static void context_free(config_t *context) {
 int config_read(server *srv, const char *fn) {
 	config_t context;
 	data_config *dc;
+	data_integer *dpid;
 	int ret;
 	char *pos;
 	data_array *modules;
@@ -929,6 +930,10 @@ int config_read(server *srv, const char *fn) {
 
 	/* default context */
 	srv->config = dc->value;
+	dpid = data_integer_init();
+	dpid->value = getpid();
+	buffer_copy_string(dpid->key, "var.PID");
+	array_insert_unique(srv->config, (data_unset *)dpid);
 	
 	ret = config_parse_file(srv, &context, fn);
 
