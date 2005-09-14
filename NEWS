@@ -3,7 +3,19 @@
 NEWS
 ====
 
-- 1.4.3 - 
+- 1.4.4 - 2005-09-14
+  * added support for %V in mod_accesslog
+  * added a option for a FastCGI responser to send static files
+  * fixed METHOD in mod_accesslog of WebDAV methods
+  * fixed check for permission before files in sent
+  * fixed mod-proxy and content for non-POST requests
+  * fixed compilation of mod_cml on MacOS X
+  * fixed SSL errmsg after accept()
+  * fixed memleak in stat-cache
+  * fixed aborted connections if file was moved while in transfer
+  * fixed mem-usage for large FastCGI transfers
+
+- 1.4.3 - 2005-09-01
 
   * added gracefull shutdown
   * added server.max-connections 
