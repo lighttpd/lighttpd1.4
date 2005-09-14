@@ -101,7 +101,9 @@ fastcgi.server
 	  "max-procs" => <integer>,   # OPTIONAL
 	  "max-load-per-proc" => <integer>, # OPTIONAL
 	  "idle-timeout" => <integer>, # OPTIONAL
-	  "broken-scriptfilename" => <boolean> # OPTIONAL
+	  "broken-scriptfilename" => <boolean>, # OPTIONAL
+          "disable-time" => <integer>, # optional
+          "allow-x-send-file" => <boolean> # optional
 	)
       ), 
       ( <handle> => ... 
@@ -134,6 +136,10 @@ fastcgi.server
 		FastCGI interface without this check.
   :"broken-scriptfilename": breaks SCRIPT_FILENAME in a wat that 
                 PHP can extract PATH_INFO from it (default: disabled)
+  :"disable-time": time to wait before a disabled backend is checked
+                again
+  :"allow-x-send-file": controls if X-LIGHTTPD-send-file headers
+                are allowed
 
   If bin-path is set:
 
@@ -175,13 +181,13 @@ Examples
 
   Example with prefix: ::
   
-    fastcgi.server = ( "/remote_scripts" =>
+    fastcgi.server = ( "/remote_scripts/" =>
  		       ( "fcg" =>
 		         (
 		           "host" => "192.168.0.3",
 		           "port" => 9000,
-                         "check-local" => "disable",
-                         "docroot" => "/" # remote server may use 
+                           "check-local" => "disable",
+                           "docroot" => "/" # remote server may use 
 			                    # it's own docroot
 		         )
 		       )
@@ -194,10 +200,14 @@ Examples
   document root. The handling of index files si also the 
   resposibility of remote server for this case.
 
+  In the case that the prefix is not terminated with a slash 
+  the prefix will be handled as file and /test.cgi would become
+  a PATH_INFO instead of part of SCRIPT_NAME.
+
 
   Example for "authorizer" mode: ::
   
-    fastcgi.server = ( "/remote_scripts" =>
+    fastcgi.server = ( "/remote_scripts/" =>
  		       ( "auth" =>
 		         (
 		           "host" => "10.0.0.2",
