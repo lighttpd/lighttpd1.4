@@ -22,6 +22,7 @@
 #include "plugin.h"
 
 #include "inet_ntop_cache.h"
+#include "stat_cache.h"
 
 #include <fastcgi.h>
 #include <stdio.h>
@@ -216,6 +217,13 @@ typedef struct {
 	 */
 	
 	unsigned short break_scriptfilename_for_php;
+
+	/*
+	 * If the backend includes X-LIGHTTPD-send-file in the response
+	 * we use the value as filename and ignore the content.
+	 *
+	 */
+	unsigned short allow_xsendfile;
 		
 	ssize_t load; /* replace by host->load */
 
@@ -325,6 +333,8 @@ typedef struct {
 
 	pid_t     pid;
 	int       got_proc;
+
+	int       send_content_body;
 	
 	plugin_config conf;
 	
@@ -358,6 +368,7 @@ static handler_ctx * handler_ctx_init() {
 	hctx->fd = -1;
 	
 	hctx->reconnects = 0;
+	hctx->send_content_body = 1;
 
 	hctx->rb = chunkqueue_init();
 	
@@ -1053,6 +1064,7 @@ SETDEFAULTS_FUNC(mod_fastcgi_set_defaults) {
 						{ "bin-copy-environment", NULL, T_CONFIG_ARRAY, T_CONFIG_SCOPE_CONNECTION },     /* 13 */
 						
 						{ "broken-scriptfilename", NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION },  /* 14 */
+						{ "allow-x-send-file", NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION },  /* 15 */
 						
 						{ NULL,                NULL, T_CONFIG_UNSET, T_CONFIG_SCOPE_UNSET }
 					};
@@ -1076,6 +1088,7 @@ SETDEFAULTS_FUNC(mod_fastcgi_set_defaults) {
 					df->mode = FCGI_RESPONDER;
 					df->disable_time = 60;
 					df->break_scriptfilename_for_php = 0;
+					df->allow_xsendfile = 0; /* handle X-LIGHTTPD-send-file */
 					
 					fcv[0].destination = df->host;
 					fcv[1].destination = df->docroot;
@@ -1094,6 +1107,7 @@ SETDEFAULTS_FUNC(mod_fastcgi_set_defaults) {
 					fcv[12].destination = df->bin_env;
 					fcv[13].destination = df->bin_env_copy;
 					fcv[14].destination = &(df->break_scriptfilename_for_php);
+					fcv[15].destination = &(df->allow_xsendfile);
 					
 					
 					if (0 != config_insert_values_internal(srv, da_host->value, fcv)) {
@@ -2096,6 +2110,7 @@ static int fcgi_demux_response(server *srv, handler_ctx *hctx) {
 			if (0 == con->file_started) {
 				char *c;
 				size_t blen;
+				data_string *ds;
 					
 				/* search for header terminator 
 				 * 
@@ -2113,11 +2128,11 @@ static int fcgi_demux_response(server *srv, handler_ctx *hctx) {
 
 				if (NULL != (c = buffer_search_string_len(hctx->response_header, CONST_STR_LEN("\r\n\r\n")))) {
 					blen = hctx->response_header->used - (c - hctx->response_header->ptr) - 4;
-					hctx->response_header->used = c - hctx->response_header->ptr;
+					hctx->response_header->used = (c - hctx->response_header->ptr) + 3;
 					c += 4; /* point the the start of the response */
 				} else if (NULL != (c = buffer_search_string_len(hctx->response_header, CONST_STR_LEN("\n\n")))) {
 					blen = hctx->response_header->used - (c - hctx->response_header->ptr) - 2;
-					hctx->response_header->used = c - hctx->response_header->ptr;
+					hctx->response_header->used = c - hctx->response_header->ptr + 2;
 					c += 2; /* point the the start of the response */
 				} else {
 					/* no luck, no header found */
@@ -2126,37 +2141,49 @@ static int fcgi_demux_response(server *srv, handler_ctx *hctx) {
 
 				/* parse the response header */
 				fcgi_response_parse(srv, con, p, hctx->response_header);
-						
-				if (host->mode != FCGI_AUTHORIZER ||
-				    !(con->http_status == 0 ||
-				      con->http_status == 200)) {
-							
-					con->file_started = 1;
-						
-					if (blen > 1) {
-						/* enable chunked-transfer-encoding */
-						if (con->request.http_version == HTTP_VERSION_1_1 &&
-						    !(con->parsed_response & HTTP_CONTENT_LENGTH)) {
-							con->response.transfer_encoding = HTTP_TRANSFER_ENCODING_CHUNKED;
-						}
 
-						http_chunk_append_mem(srv, con, c, blen);
-						joblist_append(srv, con);
- 					}
+				con->file_started = 1;
+
+				if (host->mode == FCGI_AUTHORIZER &&
+				    (con->http_status == 0 ||
+				     con->http_status == 200)) {
+					/* a authorizer with approved the static request, ignore the content here */
+					hctx->send_content_body = 0;
 				}
-			} else if (packet.b->used > 1) {
-				if (host->mode != FCGI_AUTHORIZER ||
-				    !(con->http_status == 0 ||
-				      con->http_status == 200)) {
+
+				if (host->allow_xsendfile &&
+				    NULL != (ds = (data_string *) array_get_element(con->response.headers, "X-LIGHTTPD-send-file"))) {
+					stat_cache_entry *sce;
+
+					if (HANDLER_ERROR != stat_cache_get_entry(srv, con, ds->value, &sce)) {
+						/* found */
+
+						http_chunk_append_file(srv, con, ds->value, 0, sce->st.st_size);
+						hctx->send_content_body = 0; /* ignore the content */
+						joblist_append(srv, con);
+					}
+				}
+
+						
+				if (hctx->send_content_body && blen > 1) {						
 					/* enable chunked-transfer-encoding */
 					if (con->request.http_version == HTTP_VERSION_1_1 &&
 					    !(con->parsed_response & HTTP_CONTENT_LENGTH)) {
 						con->response.transfer_encoding = HTTP_TRANSFER_ENCODING_CHUNKED;
 					}
 
-					http_chunk_append_mem(srv, con, packet.b->ptr, packet.b->used);
+					http_chunk_append_mem(srv, con, c, blen);
 					joblist_append(srv, con);
 				}
+			} else if (hctx->send_content_body && packet.b->used > 1) {
+				if (con->request.http_version == HTTP_VERSION_1_1 &&
+				    !(con->parsed_response & HTTP_CONTENT_LENGTH)) {
+					/* enable chunked-transfer-encoding */
+					con->response.transfer_encoding = HTTP_TRANSFER_ENCODING_CHUNKED;
+				}
+
+				http_chunk_append_mem(srv, con, packet.b->ptr, packet.b->used);
+				joblist_append(srv, con);
 			}
 			break;
 		case FCGI_STDERR:
