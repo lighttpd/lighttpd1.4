@@ -311,8 +311,6 @@ typedef struct {
 	int       fd;        /* fd to the scgi process */
 	int       fde_ndx;   /* index into the fd-event buffer */
 
-	size_t    path_info_offset; /* start of path_info in uri.path */
-	
 	pid_t     pid;
 	int       got_proc;
 	
@@ -2632,7 +2630,6 @@ static handler_t scgi_check_extension(server *srv, connection *con, void *p_d, i
 	size_t k;
 	buffer *fn;
 	scgi_extension *extension = NULL;
-	size_t path_info_offset;
 	
 	/* Possibly, we processed already this request */
 	if (con->file_started == 1) return HANDLER_GO_ON;
@@ -2645,11 +2642,8 @@ static handler_t scgi_check_extension(server *srv, connection *con, void *p_d, i
 
 	s_len = fn->used - 1;
 	
-	/* select the right config */
 	scgi_patch_connection(srv, con, p);
 
-	path_info_offset = 0;
-	
 	/* check if extension matches */
 	for (k = 0; k < p->conf.exts->used; k++) {
 		size_t ct_len;
@@ -2664,13 +2658,6 @@ static handler_t scgi_check_extension(server *srv, connection *con, void *p_d, i
 		
 		/* check extension in the form "/scgi_pattern" */
 		if (*(extension->key->ptr) == '/' && strncmp(fn->ptr, extension->key->ptr, ct_len) == 0) {
-			if (s_len > ct_len + 1) {
-				char *pi_offset;
-				
-				if (0 != (pi_offset = strchr(fn->ptr + ct_len + 1, '/'))) {
-					path_info_offset = pi_offset - fn->ptr;
-				}
-			}
 			break;
 		} else if (0 == strncmp(fn->ptr + s_len - ct_len, extension->key->ptr, ct_len)) {
 			/* check extension in the form ".fcg" */
@@ -2710,9 +2697,10 @@ static handler_t scgi_check_extension(server *srv, connection *con, void *p_d, i
 		if (uri_path_handler) {
 			if (host->check_local == 0) {
 				handler_ctx *hctx;
+				char *pathinfo;
+
 				hctx = handler_ctx_init();
 				
-				hctx->path_info_offset = path_info_offset;
 				hctx->remote_conn      = con;
 				hctx->plugin_data      = p;
 				hctx->host             = host;
@@ -2726,13 +2714,48 @@ static handler_t scgi_check_extension(server *srv, connection *con, void *p_d, i
 				host->load++;
 				
 				con->mode = p->id;
+
+				if (con->conf.log_request_handling) {
+					log_error_write(srv, __FILE__, __LINE__, "s", "handling it in mod_scgi");
+				}
+
+				/* the prefix is the SCRIPT_NAME, 
+				 * everthing from start to the next slash
+				 * this is important for check-local = "disable"
+				 * 
+				 * if prefix = /admin.fcgi
+				 * 
+				 * /admin.fcgi/foo/bar
+				 * 
+				 * SCRIPT_NAME = /admin.fcgi
+				 * PATH_INFO   = /foo/bar
+				 * 
+				 * if prefix = /fcgi-bin/
+				 * 
+				 * /fcgi-bin/foo/bar
+				 * 
+				 * SCRIPT_NAME = /fcgi-bin/foo
+				 * PATH_INFO   = /bar
+				 * 
+				 */
+				
+				/* the rewrite is only done for /prefix/? matches */
+				if (extension->key->ptr[0] == '/' &&
+				    con->uri.path->used > extension->key->used &&
+				    NULL != (pathinfo = strchr(con->uri.path->ptr + extension->key->used - 1, '/'))) {
+					/* rewrite uri.path and pathinfo */ 
+					
+					buffer_copy_string(con->request.pathinfo, pathinfo);
+					
+					con->uri.path->used -= con->request.pathinfo->used - 1;
+					con->uri.path->ptr[con->uri.path->used - 1] = '\0';
+				}
 			}
 			return HANDLER_GO_ON;
 		} else {
 			handler_ctx *hctx;
 			hctx = handler_ctx_init();
 			
-			hctx->path_info_offset = path_info_offset;
 			hctx->remote_conn      = con;
 			hctx->plugin_data      = p;
 			hctx->host             = host;
@@ -2747,7 +2770,11 @@ static handler_t scgi_check_extension(server *srv, connection *con, void *p_d, i
 			
 			con->mode = p->id;
 			
-			return HANDLER_FINISHED;
+			if (con->conf.log_request_handling) {
+				log_error_write(srv, __FILE__, __LINE__, "s", "handling it in mod_fastcgi");
+			}
+
+			return HANDLER_GO_ON;
 		}
 	} else {
 		/* no handler found */
