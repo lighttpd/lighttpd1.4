@@ -4,6 +4,10 @@ if test x$srcdir = x; then
 	srcdir=.
 fi
 
+if test x$top_builddir = x; then
+	top_builddir=..
+fi
+
 tmpdir=$top_builddir/tests/tmp/lighttpd
 
 # create test-framework
