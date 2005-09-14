@@ -58,13 +58,13 @@ int network_write_chunkqueue_openssl(server *srv, connection *con, chunkqueue *c
 			size_t toSend;
 			ssize_t r;
 			
-			if (c->data.mem->used == 0) {
+			if (c->mem->used == 0) {
 				chunk_finished = 1;
 				break;
 			}
 			
-			offset = c->data.mem->ptr + c->offset;
-			toSend = c->data.mem->used - 1 - c->offset;
+			offset = c->mem->ptr + c->offset;
+			toSend = c->mem->used - 1 - c->offset;
 			
 			/**
 			 * SSL_write man-page
@@ -125,7 +125,7 @@ int network_write_chunkqueue_openssl(server *srv, connection *con, chunkqueue *c
 				con->bytes_written += r;
 			}
 			
-			if (c->offset == (off_t)c->data.mem->used - 1) {
+			if (c->offset == (off_t)c->mem->used - 1) {
 				chunk_finished = 1;
 			}
 			
@@ -140,9 +140,9 @@ int network_write_chunkqueue_openssl(server *srv, connection *con, chunkqueue *c
 			int ifd;
 			int write_wait = 0;
 			
-			if (HANDLER_ERROR == stat_cache_get_entry(srv, con, c->data.file.name, &sce)) {
+			if (HANDLER_ERROR == stat_cache_get_entry(srv, con, c->file.name, &sce)) {
 				log_error_write(srv, __FILE__, __LINE__, "sb",
-						strerror(errno), c->data.file.name);
+						strerror(errno), c->file.name);
 				return -1;
 			}
 
@@ -153,12 +153,12 @@ int network_write_chunkqueue_openssl(server *srv, connection *con, chunkqueue *c
 
 			do {
 			
-				offset = c->data.file.offset + c->offset;
-				toSend = c->data.file.length - c->offset;
+				offset = c->file.offset + c->offset;
+				toSend = c->file.length - c->offset;
 
 				if (toSend > LOCAL_SEND_BUFSIZE) toSend = LOCAL_SEND_BUFSIZE;
 			
-				if (-1 == (ifd = open(c->data.file.name->ptr, O_RDONLY))) {
+				if (-1 == (ifd = open(c->file.name->ptr, O_RDONLY))) {
 					log_error_write(srv, __FILE__, __LINE__, "ss", "open failed: ", strerror(errno));
 				
 					return -1;
@@ -210,7 +210,7 @@ int network_write_chunkqueue_openssl(server *srv, connection *con, chunkqueue *c
 					con->bytes_written += r;
 				}
 			
-				if (c->offset == c->data.file.length) {
+				if (c->offset == c->file.length) {
 					chunk_finished = 1;
 				}
 			} while(!chunk_finished && !write_wait);
