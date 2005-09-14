@@ -267,21 +267,21 @@ int network_server_init(server *srv, buffer *host_token, specific_config *s) {
 		
 		if (!buffer_is_empty(s->ssl_ca_file)) {
 			if (1 != SSL_CTX_load_verify_locations(s->ssl_ctx, s->ssl_ca_file->ptr, NULL)) {
-				log_error_write(srv, __FILE__, __LINE__, "ss", "SSL:", 
-						ERR_error_string(ERR_get_error(), NULL));
+				log_error_write(srv, __FILE__, __LINE__, "ssb", "SSL:", 
+						ERR_error_string(ERR_get_error(), NULL), s->ssl_ca_file);
 				return -1;
 			}
 		}
 		
 		if (SSL_CTX_use_certificate_file(s->ssl_ctx, s->ssl_pemfile->ptr, SSL_FILETYPE_PEM) < 0) {
-			log_error_write(srv, __FILE__, __LINE__, "ss", "SSL:", 
-					ERR_error_string(ERR_get_error(), NULL));
+			log_error_write(srv, __FILE__, __LINE__, "ssb", "SSL:", 
+					ERR_error_string(ERR_get_error(), NULL), s->ssl_pemfile);
 			return -1;
 		}
 		
 		if (SSL_CTX_use_PrivateKey_file (s->ssl_ctx, s->ssl_pemfile->ptr, SSL_FILETYPE_PEM) < 0) {
-			log_error_write(srv, __FILE__, __LINE__, "ss", "SSL:", 
-					ERR_error_string(ERR_get_error(), NULL));
+			log_error_write(srv, __FILE__, __LINE__, "ssb", "SSL:", 
+					ERR_error_string(ERR_get_error(), NULL), s->ssl_pemfile);
 			return -1;
 		}
 		
