@@ -805,7 +805,7 @@ int connection_handle_read_state(server *srv, connection *con)  {
 	for (c = cq->first; c; c = cq->first) {
 		assert(c != c->next);
 		
-		if (c->data.mem->used == 0) {
+		if (c->mem->used == 0) {
 			cq->first = c->next;
 			c->next = cq->unused;
 			cq->unused = c;
@@ -830,8 +830,8 @@ int connection_handle_read_state(server *srv, connection *con)  {
 		if (con->request.request->used == 0) {
 			buffer b;
 			
-			b.ptr = c->data.mem->ptr + c->offset;
-			b.used = c->data.mem->used - c->offset;
+			b.ptr = c->mem->ptr + c->offset;
+			b.used = c->mem->used - c->offset;
 			
 			if (NULL != (h_term = buffer_search_rnrn(&b))) {
 				/* \r\n\r\n found
@@ -846,8 +846,8 @@ int connection_handle_read_state(server *srv, connection *con)  {
 				c->offset += h_term - b.ptr + 4;
 			} else {
 				/* not found, copy everything */
-				buffer_copy_string_len(con->request.request, c->data.mem->ptr + c->offset, c->data.mem->used - c->offset - 1);
-				c->offset = c->data.mem->used - 1;
+				buffer_copy_string_len(con->request.request, c->mem->ptr + c->offset, c->mem->used - c->offset - 1);
+				c->offset = c->mem->used - 1;
 			}
 		} else {
 			/* have to take care of overlapping header terminators */
@@ -856,36 +856,36 @@ int connection_handle_read_state(server *srv, connection *con)  {
 			char *s  = con->request.request->ptr;
 			buffer b;
 			
-			b.ptr = c->data.mem->ptr + c->offset;
-			b.used = c->data.mem->used - c->offset;
+			b.ptr = c->mem->ptr + c->offset;
+			b.used = c->mem->used - c->offset;
 			
 			if (con->request.request->used - 1 > 3 &&
-			    c->data.mem->used > 1 &&
+			    c->mem->used > 1 &&
 			    s[l-2] == '\r' &&
 			    s[l-1] == '\n' &&
 			    s[l-0] == '\r' &&
-			    c->data.mem->ptr[0] == '\n') {
-				buffer_append_string_len(con->request.request, c->data.mem->ptr + c->offset, 1);
+			    c->mem->ptr[0] == '\n') {
+				buffer_append_string_len(con->request.request, c->mem->ptr + c->offset, 1);
 				c->offset += 1;
 				
 				h_term = con->request.request->ptr;
 			} else if (con->request.request->used - 1 > 2 &&
-				   c->data.mem->used > 2 &&
+				   c->mem->used > 2 &&
 				   s[l-1] == '\r' &&
 				   s[l-0] == '\n' &&
-				   c->data.mem->ptr[0] == '\r' &&
-				   c->data.mem->ptr[1] == '\n') {
-				buffer_append_string_len(con->request.request, c->data.mem->ptr + c->offset, 2);
+				   c->mem->ptr[0] == '\r' &&
+				   c->mem->ptr[1] == '\n') {
+				buffer_append_string_len(con->request.request, c->mem->ptr + c->offset, 2);
 				c->offset += 2;
 				
 				h_term = con->request.request->ptr;
 			} else if (con->request.request->used - 1 > 1 &&
-				   c->data.mem->used > 3 &&
+				   c->mem->used > 3 &&
 				   s[l-0] == '\r' &&
-				   c->data.mem->ptr[0] == '\n' &&
-				   c->data.mem->ptr[1] == '\r' &&
-				   c->data.mem->ptr[2] == '\n') {
-				buffer_append_string_len(con->request.request, c->data.mem->ptr + c->offset, 3);
+				   c->mem->ptr[0] == '\n' &&
+				   c->mem->ptr[1] == '\r' &&
+				   c->mem->ptr[2] == '\n') {
+				buffer_append_string_len(con->request.request, c->mem->ptr + c->offset, 3);
 				c->offset += 3;
 				
 				h_term = con->request.request->ptr;
@@ -895,19 +895,19 @@ int connection_handle_read_state(server *srv, connection *con)  {
 				 */
 				
 				buffer_append_string_len(con->request.request, 
-						       c->data.mem->ptr + c->offset, 
+						       c->mem->ptr + c->offset, 
 						       c->offset + h_term - b.ptr + 4);
 				
 				/* the buffer has been read up to the terminator */
 				c->offset += h_term - b.ptr + 4;
 			} else {
 				/* not found, copy everything */
-				buffer_append_string_len(con->request.request, c->data.mem->ptr + c->offset, c->data.mem->used - c->offset - 1);
-				c->offset = c->data.mem->used - 1;
+				buffer_append_string_len(con->request.request, c->mem->ptr + c->offset, c->mem->used - c->offset - 1);
+				c->offset = c->mem->used - 1;
 			}
 		}
 		
-		if (c->offset + 1 == c->data.mem->used) {
+		if (c->offset + 1 == c->mem->used) {
 			/* chunk is empty, move it to unused */
 			cq->first = c->next;
 			c->next = cq->unused;
@@ -933,17 +933,17 @@ int connection_handle_read_state(server *srv, connection *con)  {
 			weWant = con->request.content_length - (con->request.content->used ? con->request.content->used - 1 : 0);
 			/* without the terminating \0 */
 			
-			assert(c->data.mem->used);
+			assert(c->mem->used);
 			
-			weHave = c->data.mem->used - c->offset - 1;
+			weHave = c->mem->used - c->offset - 1;
 				
 			toRead = weHave > weWant ? weWant : weHave;
 			
-			buffer_append_string_len(con->request.content, c->data.mem->ptr + c->offset, toRead);
+			buffer_append_string_len(con->request.content, c->mem->ptr + c->offset, toRead);
 			
 			c->offset += toRead;
 			
-			if (c->offset + 1 >= c->data.mem->used) {
+			if (c->offset + 1 >= c->mem->used) {
 				/* chunk is empty, move it to unused */
 				
 				cq->first = c->next;

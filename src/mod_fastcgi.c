@@ -1951,9 +1951,9 @@ static int fastcgi_get_packet(server *srv, handler_ctx *hctx, fastcgi_response_p
 	/* get at least the FastCGI header */
 	for (c = hctx->rb->first; c; c = c->next) {
 		if (packet->b->used == 0) {
-			buffer_copy_string_len(packet->b, c->data.mem->ptr + c->offset, c->data.mem->used - c->offset - 1);
+			buffer_copy_string_len(packet->b, c->mem->ptr + c->offset, c->mem->used - c->offset - 1);
 		} else {
-			buffer_append_string_len(packet->b, c->data.mem->ptr + c->offset, c->data.mem->used - c->offset - 1);
+			buffer_append_string_len(packet->b, c->mem->ptr + c->offset, c->mem->used - c->offset - 1);
 		}
 
 		if (packet->b->used >= sizeof(*header) + 1) break;
@@ -1979,25 +1979,20 @@ static int fastcgi_get_packet(server *srv, handler_ctx *hctx, fastcgi_response_p
 	/* the first bytes in packet->b are the header */
 	offset = sizeof(*header);
 
-	log_error_write(srv, __FILE__, __LINE__, "sddd", "FastCGI: got header:", packet->len, packet->request_id, packet->type);
-
 	/* ->b should only be the content */
 	buffer_reset(packet->b);
 
 	if (packet->len) {
 		/* copy the content */
 		for (; c && (packet->b->used < packet->len + 1); c = c->next) {
-			toread = c->data.mem->used - c->offset - offset - 1 > packet->len ? packet->len : c->data.mem->used - c->offset - offset - 1;
+			toread = c->mem->used - c->offset - offset - 1 > packet->len ? packet->len : c->mem->used - c->offset - offset - 1;
 			
-			log_error_write(srv, __FILE__, __LINE__, "sdd", "FastCGI: reading content:", packet->b->used, toread);
-
-			buffer_append_string_len(packet->b, c->data.mem->ptr + c->offset + offset, toread);
+			buffer_append_string_len(packet->b, c->mem->ptr + c->offset + offset, toread);
 			offset = 0;
 		}
 
 		if (packet->b->used < packet->len + 1) {
 			/* we didn't got the full packet */
-			log_error_write(srv, __FILE__, __LINE__, "sdd", "FastCGI: not the full packet", packet->b->used, packet->len);
 
 			buffer_free(packet->b);
 			return -1;
@@ -2010,10 +2005,10 @@ static int fastcgi_get_packet(server *srv, handler_ctx *hctx, fastcgi_response_p
 	/* tag the chunks as read */
 	toread = packet->len + sizeof(FCGI_Header);
 	for (c = hctx->rb->first; c && toread; c = c->next) {
-		if (c->data.mem->used - c->offset - 1 <= toread) {
+		if (c->mem->used - c->offset - 1 <= toread) {
 			/* we read this whole buffer, move it to unused */
-			toread -= c->data.mem->used - c->offset - 1;
-			c->offset = c->data.mem->used - 1; /* everthing has been written */
+			toread -= c->mem->used - c->offset - 1;
+			c->offset = c->mem->used - 1; /* everthing has been written */
 		} else {
 			c->offset += toread;
 			toread = 0;

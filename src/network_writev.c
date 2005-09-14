@@ -75,12 +75,12 @@ int network_write_chunkqueue_writev(server *srv, connection *con, chunkqueue *cq
 			for(num_chunks = 0, tc = c; tc && tc->type == MEM_CHUNK && num_chunks < UIO_MAXIOV; num_chunks++, tc = tc->next);
 			
 			for(tc = c, i = 0; i < num_chunks; tc = tc->next, i++) {
-				if (tc->data.mem->used == 0) {
-					chunks[i].iov_base = tc->data.mem->ptr;
+				if (tc->mem->used == 0) {
+					chunks[i].iov_base = tc->mem->ptr;
 					chunks[i].iov_len  = 0;
 				} else {
-					offset = tc->data.mem->ptr + tc->offset;
-					toSend = tc->data.mem->used - 1 - tc->offset;
+					offset = tc->mem->ptr + tc->offset;
+					toSend = tc->mem->used - 1 - tc->offset;
 				
 					chunks[i].iov_base = offset;
 					
@@ -123,7 +123,6 @@ int network_write_chunkqueue_writev(server *srv, connection *con, chunkqueue *cq
 					/* written */
 					r -= chunks[i].iov_len;
 					tc->offset += chunks[i].iov_len;
-					con->bytes_written += chunks[i].iov_len;
 					
 					if (chunk_finished) {
 						/* skip the chunks from further touches */
@@ -137,89 +136,82 @@ int network_write_chunkqueue_writev(server *srv, connection *con, chunkqueue *cq
 					/* partially written */
 					
 					tc->offset += r;
-					con->bytes_written += r;
 					chunk_finished = 0;
-#if 0					
-					log_error_write(srv, __FILE__, __LINE__, "sdd", 
-						"(debug) partially write: ", r, fd);
-#endif
+
 					break;
 				}
 			}
 			
+			cq->bytes_out += r;
+			con->bytes_written += r;
+
 			break;
 		}
 		case FILE_CHUNK: {
-#ifdef USE_MMAP
-			char *p = NULL;
-#endif
 			ssize_t r;
 			off_t offset;
 			size_t toSend;
 			stat_cache_entry *sce = NULL;
-			int ifd;
 			
-			switch (stat_cache_get_entry(srv, con, c->data.file.name, &sce)) {
-			case HANDLER_COMEBACK:
-			case HANDLER_GO_ON:
-				offset = c->data.file.offset + c->offset;
-				toSend = c->data.file.length - c->offset;
+			if (HANDLER_ERROR == stat_cache_get_entry(srv, con, c->file.name, &sce)) {
+				log_error_write(srv, __FILE__, __LINE__, "sb",
+						strerror(errno), c->file.name);
+				return -1;
+			}
+
+			offset = c->file.offset + c->offset;
+			toSend = c->file.length - c->offset;
 			
-				if (offset > sce->st.st_size) {
-					log_error_write(srv, __FILE__, __LINE__, "sb", 
-							"file was shrinked:", c->data.file.name);
-					
-					return -1;
-				}
-	
-				if (-1 == (ifd = open(c->data.file.name->ptr, O_RDONLY))) {
+			if (offset > sce->st.st_size) {
+				log_error_write(srv, __FILE__, __LINE__, "sb", 
+						"file was shrinked:", c->file.name);
+				
+				return -1;
+			}
+
+			if (c->file.mmap.start == MAP_FAILED) {
+				if (-1 == c->file.fd &&  /* open the file if not already open */
+				    -1 == (c->file.fd = open(c->file.name->ptr, O_RDONLY))) {
 					log_error_write(srv, __FILE__, __LINE__, "ss", "open failed: ", strerror(errno));
 				
 					return -1;
 				}
-
 			
-				if (MAP_FAILED == (p = mmap(0, sce->st.st_size, PROT_READ, MAP_SHARED, ifd, 0))) {
+				if (MAP_FAILED == (c->file.mmap.start = mmap(0, sce->st.st_size, PROT_READ, MAP_SHARED, c->file.fd, 0))) {
 					log_error_write(srv, __FILE__, __LINE__, "ssbd", "mmap failed: ", 
-							strerror(errno), c->data.file.name, ifd);
+							strerror(errno), c->file.name,  c->file.fd);
 
-					close(ifd);
-					
 					return -1;
 				}
 
-				close(ifd);
-			
-				if ((r = write(fd, p + offset, toSend)) <= 0) {
-					switch (errno) {
-					case EAGAIN:
-					case EINTR:
-						r = 0;
-						break;
-					case EPIPE:
-					case ECONNRESET:
-						return -2;
-					default:
-						log_error_write(srv, __FILE__, __LINE__, "ssd", 
-								"write failed:", strerror(errno), fd);
-						
-						return -1;
-					}
-				}
-				
-				munmap(p, sce->st.st_size);
-				
-				break;
-			default:
-				log_error_write(srv, __FILE__, __LINE__, "sb",
-						strerror(errno), c->data.file.name);
-				return -1;
+				close(c->file.fd);
+				c->file.fd = -1;
+
+				/* chunk_reset() or chunk_free() will cleanup for us */
 			}
 
+			if ((r = write(fd, c->file.mmap.start + offset, toSend)) < 0) {
+				switch (errno) {
+				case EAGAIN:
+				case EINTR:
+					r = 0;
+					break;
+				case EPIPE:
+				case ECONNRESET:
+					return -2;
+				default:
+					log_error_write(srv, __FILE__, __LINE__, "ssd", 
+							"write failed:", strerror(errno), fd);
+					
+					return -1;
+				}
+			}
+			
 			c->offset += r;
 			con->bytes_written += r;
+			cq->bytes_out += r;
 			
-			if (c->offset == c->data.file.length) {
+			if (c->offset == c->file.length) {
 				chunk_finished = 1;
 			}
 			
