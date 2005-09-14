@@ -39,6 +39,11 @@
 #define lstat stat
 #endif
 
+#if 0
+/* enables debug code for testing if all nodes in the stat-cache as accessable */
+#define DEBUG_STAT_CACHE
+#endif
+
 /*
  * stat-cache
  *
@@ -87,6 +92,17 @@ typedef struct {
  * - if we don't have a stat-cache entry for a directory, release it from the monitor
  */ 
 
+#ifdef DEBUG_STAT_CACHE	
+typedef struct {
+	int *ptr;
+
+	size_t used;
+	size_t size;
+} fake_keys;
+
+static fake_keys ctrl;
+#endif
+
 stat_cache *stat_cache_init(void) {
 	stat_cache *fc = NULL;
 	
@@ -102,6 +118,10 @@ stat_cache *stat_cache_init(void) {
 #ifdef HAVE_FAMNOEXISTS
 	FAMNoExists(fc->fam);
 #endif
+#endif
+
+#ifdef DEBUG_STAT_CACHE	
+	ctrl.size = 0;
 #endif
 
 	return fc;
@@ -159,17 +179,14 @@ void stat_cache_free(stat_cache *sc) {
 	while (sc->files) {
 		int osize;
 		splay_tree *node = sc->files;
+		stat_cache_entry *sce = node->data;
 
 		osize = sc->files->size;
 			
 		stat_cache_entry_free(node->data);
 		sc->files = splaytree_delete(sc->files, node->key);
 
-		if (osize == 1) {
-			assert(NULL == sc->files);
-		} else {
-			assert(osize == (sc->files->size + 1));
-		}
+		assert(osize - 1 == splaytree_size(sc->files));
 	}
 
 	buffer_free(sc->dir_name);
@@ -215,12 +232,15 @@ static int stat_cache_attr_get(buffer *buf, char *name) {
 }
 #endif
 
-static int hashme(buffer *str) {
-	int hash = 0;
+/* the famous DJB hash function for strings */
+static uint32_t hashme(buffer *str) {
+	uint32_t hash = 5381;
 	const char *s;
 	for (s = str->ptr; *s; s++) {
-		hash = hash * 53 + *s;
+		hash = ((hash << 5) + hash) + *s;
 	}
+
+	hash &= ~(1 << 31); /* strip the highest bit */
 
 	return hash;
 }
@@ -271,16 +291,12 @@ handler_t stat_cache_handle_fdevent(void *_srv, void *_fce, int revent) {
 				node = sc->dirs;
 			
 				if (node && (node->key == ndx)) {
-					int osize = sc->dirs->size;
+					int osize = splaytree_size(sc->dirs);
 
 					fam_dir_entry_free(node->data);
 					sc->dirs = splaytree_delete(sc->dirs, ndx);
 
-					if (osize == 1) {
-						assert(NULL == sc->dirs);
-					} else {
-						assert(osize == (sc->dirs->size + 1));
-					}
+					assert(osize - 1 == splaytree_size(sc->dirs));
 				}
 				break;
 			default:
@@ -339,6 +355,7 @@ handler_t stat_cache_get_entry(server *srv, connection *con, buffer *name, stat_
 	stat_cache_entry *sce = NULL;
 	stat_cache *sc;
 	struct stat st;
+	size_t i;
 
 	int file_ndx;
 	splay_tree *file_node = NULL;
@@ -354,7 +371,18 @@ handler_t stat_cache_get_entry(server *srv, connection *con, buffer *name, stat_
 	file_ndx = hashme(name);
 	sc->files = splaytree_splay(sc->files, file_ndx);
 
+#ifdef DEBUG_STAT_CACHE	
+	for (i = 0; i < ctrl.used; i++) {
+		if (ctrl.ptr[i] == file_ndx) break;
+	}
+#endif
+
 	if (sc->files && (sc->files->key == file_ndx)) {
+#ifdef DEBUG_STAT_CACHE	
+		/* it was in the cache */
+		assert(i < ctrl.used);
+#endif
+		
 		/* we have seen this file already and 
 		 * don't stat() it again in the same second */
 
@@ -384,6 +412,13 @@ handler_t stat_cache_get_entry(server *srv, connection *con, buffer *name, stat_
 
 			file_node = NULL;
 		}
+	} else {
+#ifdef DEBUG_STAT_CACHE	
+		if (i != ctrl.used) {
+			fprintf(stderr, "%s.%d: %08x was already inserted but not found in cache, %s\n", __FILE__, __LINE__, file_ndx, name->ptr);
+		}
+		assert(i == ctrl.used);
+#endif
 	}
 
 #ifdef HAVE_FAM_H
@@ -445,9 +480,22 @@ handler_t stat_cache_get_entry(server *srv, connection *con, buffer *name, stat_
 			buffer_copy_string_buffer(sce->name, name);
 			
 			sc->files = splaytree_insert(sc->files, file_ndx, sce); 
+#ifdef DEBUG_STAT_CACHE	
+			if (ctrl.size == 0) {
+				ctrl.size = 16;
+				ctrl.used = 0;
+				ctrl.ptr = malloc(ctrl.size * sizeof(*ctrl.ptr));
+			} else if (ctrl.size == ctrl.used) {
+				ctrl.size += 16;
+				ctrl.ptr = realloc(ctrl.ptr, ctrl.size * sizeof(*ctrl.ptr));
+			}
+
+			ctrl.ptr[ctrl.used++] = file_ndx;
 
 			assert(sc->files);
-			assert(osize == (sc->files->size - 1));
+			assert(sc->files->data == sce);
+			assert(osize + 1 == splaytree_size(sc->files));
+#endif
 		}
 
 		sce->st = st;
@@ -486,7 +534,7 @@ handler_t stat_cache_get_entry(server *srv, connection *con, buffer *name, stat_
 			if (!dir_node) {
 				fam_dir = fam_dir_entry_init();
 				fam_dir->fc = sc->fam;
-				
+
 				buffer_copy_string_buffer(fam_dir->name, sc->dir_name);
 				
 				fam_dir->version = 1;
@@ -511,6 +559,7 @@ handler_t stat_cache_get_entry(server *srv, connection *con, buffer *name, stat_
 
 					sc->dirs = splaytree_insert(sc->dirs, dir_ndx, fam_dir); 
 					assert(sc->dirs);
+					assert(sc->dirs->data == fam_dir);
 					assert(osize == (sc->dirs->size - 1));
 				}
 			} else {
@@ -550,7 +599,7 @@ static int stat_cache_tag_old_entries(server *srv, splay_tree *t, int *keys, siz
 
 	sce = t->data;
 
-	if (srv->cur_ts - sce->stat_ts > 10) {
+	if (srv->cur_ts - sce->stat_ts > 2) {
 		keys[(*ndx)++] = t->key;
 	}
 
@@ -559,7 +608,7 @@ static int stat_cache_tag_old_entries(server *srv, splay_tree *t, int *keys, siz
 
 int stat_cache_trigger_cleanup(server *srv) {
 	stat_cache *sc;
-	size_t max_ndx = 0, i;
+	size_t max_ndx = 0, i, j;
 	int *keys;
 
 	sc = srv->stat_cache;
@@ -579,16 +628,22 @@ int stat_cache_trigger_cleanup(server *srv) {
 		node = sc->files;
 		
 		if (node && (node->key == ndx)) {
-			int osize = sc->files->size;
+			int osize = splaytree_size(sc->files);
+			stat_cache_entry *sce = node->data;
 
 			stat_cache_entry_free(node->data);
 			sc->files = splaytree_delete(sc->files, ndx);
 
-			if (osize == 1) {
-				assert(NULL == sc->files);
-			} else {
-				assert(osize == (sc->files->size + 1));
+#ifdef DEBUG_STAT_CACHE	
+			for (j = 0; j < ctrl.used; j++) {
+				if (ctrl.ptr[j] == ndx) {
+					ctrl.ptr[j] = ctrl.ptr[--ctrl.used];
+					break;
+				}
 			}
+
+			assert(osize - 1 == splaytree_size(sc->files));
+#endif
 		}
 	}
 
