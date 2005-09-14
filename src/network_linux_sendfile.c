@@ -53,12 +53,12 @@ int network_write_chunkqueue_linuxsendfile(server *srv, connection *con, chunkqu
 			     tc = tc->next, num_chunks++);
 			
 			for (tc = c, i = 0; i < num_chunks; tc = tc->next, i++) {
-				if (tc->data.mem->used == 0) {
-					chunks[i].iov_base = tc->data.mem->ptr;
+				if (tc->mem->used == 0) {
+					chunks[i].iov_base = tc->mem->ptr;
 					chunks[i].iov_len  = 0;
 				} else {
-					offset = tc->data.mem->ptr + tc->offset;
-					toSend = tc->data.mem->used - 1 - tc->offset;
+					offset = tc->mem->ptr + tc->offset;
+					toSend = tc->mem->used - 1 - tc->offset;
 				
 					chunks[i].iov_base = offset;
 					
@@ -101,7 +101,6 @@ int network_write_chunkqueue_linuxsendfile(server *srv, connection *con, chunkqu
 					/* written */
 					r -= chunks[i].iov_len;
 					tc->offset += chunks[i].iov_len;
-					con->bytes_written += chunks[i].iov_len;
 					
 					if (chunk_finished) {
 						/* skip the chunks from further touches */
@@ -115,12 +114,13 @@ int network_write_chunkqueue_linuxsendfile(server *srv, connection *con, chunkqu
 					/* partially written */
 					
 					tc->offset += r;
-					con->bytes_written += r;
 					chunk_finished = 0;
 					
 					break;
 				}
 			}
+			cq->bytes_out += r;
+			con->bytes_written += r;
 			
 			break;
 		}
@@ -129,33 +129,34 @@ int network_write_chunkqueue_linuxsendfile(server *srv, connection *con, chunkqu
 			off_t offset;
 			size_t toSend;
 			stat_cache_entry *sce = NULL;
-			int ifd;
 			
-			if (HANDLER_ERROR == stat_cache_get_entry(srv, con, c->data.file.name, &sce)) {
+			if (HANDLER_ERROR == stat_cache_get_entry(srv, con, c->file.name, &sce)) {
 				log_error_write(srv, __FILE__, __LINE__, "sb",
-						strerror(errno), c->data.file.name);
+						strerror(errno), c->file.name);
 				return -1;
 			}
 			
-			offset = c->data.file.offset + c->offset;
+			offset = c->file.offset + c->offset;
 			/* limit the toSend to 2^31-1 bytes in a chunk */
-			toSend = c->data.file.length - c->offset > ((1 << 30) - 1) ? 
-				((1 << 30) - 1) : c->data.file.length - c->offset;
+			toSend = c->file.length - c->offset > ((1 << 30) - 1) ? 
+				((1 << 30) - 1) : c->file.length - c->offset;
 				
 			if (offset > sce->st.st_size) {
-				log_error_write(srv, __FILE__, __LINE__, "sb", "file was shrinked:", c->data.file.name);
+				log_error_write(srv, __FILE__, __LINE__, "sb", "file was shrinked:", c->file.name);
 				
 				return -1;
 			}
-			
-			if (-1 == (ifd = open(c->data.file.name->ptr, O_RDONLY))) {
+		
+			/* open file if not already opened */	
+			if (-1 == c->file.fd &&
+			    -1 == (c->file.fd = open(c->file.name->ptr, O_RDONLY))) {
 				log_error_write(srv, __FILE__, __LINE__, "ss", "open failed: ", strerror(errno));
 				
 				return -1;
 			}
 			
 			/* Linux sendfile() */
-			if (-1 == (r = sendfile(fd, ifd, &offset, toSend))) {
+			if (-1 == (r = sendfile(fd, c->file.fd, &offset, toSend))) {
 				switch (errno) {
 				case EAGAIN:
 				case EINTR:
@@ -163,21 +164,19 @@ int network_write_chunkqueue_linuxsendfile(server *srv, connection *con, chunkqu
 					break;
 				case EPIPE:
 				case ECONNRESET:
-					close(ifd);
 					return -2;
 				default:
 					log_error_write(srv, __FILE__, __LINE__, "ssd", 
 							"sendfile failed:", strerror(errno), fd);
-					close(ifd);
 					return -1;
 				}
 			}
-			close(ifd);
 			
 			c->offset += r;
 			con->bytes_written += r;
+			cq->bytes_out += r;
 			
-			if (c->offset == c->data.file.length) {
+			if (c->offset == c->file.length) {
 				chunk_finished = 1;
 			}
 			

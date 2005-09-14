@@ -4,8 +4,7 @@
 #include "buffer.h"
 
 typedef struct chunk {
-	/* ok, this one is tricky:
-	 * 
+	/* 
 	 * MEM_CHUNK
 	 *   b: the chunk it self
 	 * FILE_CHUNK
@@ -14,18 +13,25 @@ typedef struct chunk {
 	
 	enum { UNUSED_CHUNK, MEM_CHUNK, FILE_CHUNK } type;
 	
-	union {
-		buffer *mem;
-		struct {
-			buffer *name;
-			off_t  offset;
-			off_t  length;
-		} file;
-	} data;
+	/* memchunk */
+	buffer *mem; /* it might be large */
+
+	struct {
+		/* filechunk */
+		buffer *name;
+		off_t  offset;
+		off_t  length;
+
+		int    fd;
+		struct { 
+			char   *start;
+			size_t length;
+		} mmap;
+	} file;
 	
 	/* how many bytes are already handled */
 	
-	off_t offset;
+	off_t  offset;
 	
 	struct chunk *next;
 } chunk;
@@ -36,6 +42,8 @@ typedef struct {
 	
 	chunk *unused;
 	size_t unused_chunks;
+
+	off_t  bytes_in, bytes_out;
 } chunkqueue;
 
 chunkqueue *chunkqueue_init(void);

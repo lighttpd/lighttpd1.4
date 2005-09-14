@@ -6,6 +6,7 @@
 
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <sys/mman.h>
 
 #include <stdlib.h>
 #include <fcntl.h>
@@ -35,8 +36,10 @@ static chunk *chunk_init(void) {
 	
 	c = calloc(1, sizeof(*c));
 	
-	/* c->mem overlaps with c->data.file.name */
-	c->data.mem = buffer_init();
+	c->mem = buffer_init();
+	c->file.name = buffer_init();
+	c->file.fd = -1;
+	c->file.mmap.start = MAP_FAILED;
 	c->next = NULL;
 	
 	return c;
@@ -45,24 +48,25 @@ static chunk *chunk_init(void) {
 static void chunk_free(chunk *c) {
 	if (!c) return;
 	
-	/* c->data.mem overlaps with c->data.file.name */
-	switch (c->type) {
-	case MEM_CHUNK: buffer_free(c->data.mem); break;
-	case FILE_CHUNK: buffer_free(c->data.file.name); break;
-	default: break;	
-	}
-	
+	buffer_free(c->mem);
+	buffer_free(c->file.name);
+
 	free(c);
 }
 
 static void chunk_reset(chunk *c) {
 	if (!c) return;
 	
-	/* c->data.mem overlaps with c->data.file.name */
-	switch (c->type) {
-	case MEM_CHUNK: buffer_reset(c->data.mem); break;
-	case FILE_CHUNK: buffer_reset(c->data.file.name); break;
-	default: break;	
+	buffer_reset(c->mem);
+	buffer_reset(c->file.name);
+
+	if (c->file.fd != -1) {
+		close(c->file.fd);
+		c->file.fd = -1;
+	}
+	if (MAP_FAILED != c->file.mmap.start) {
+		munmap(c->file.mmap.start, c->file.mmap.length);
+		c->file.mmap.start = MAP_FAILED;
 	}
 }
 
@@ -136,10 +140,10 @@ void chunkqueue_reset(chunkqueue *cq) {
 	for (c = cq->first; c; c = c->next) {
 		switch(c->type) {
 		case MEM_CHUNK:
-			c->offset = c->data.mem->used - 1;
+			c->offset = c->mem->used - 1;
 			break;
 		case FILE_CHUNK:
-			c->offset = c->data.file.length;
+			c->offset = c->file.length;
 			break;
 		default: 
 			break;
@@ -147,6 +151,8 @@ void chunkqueue_reset(chunkqueue *cq) {
 	}
 
 	chunkqueue_remove_finished_chunks(cq);
+	cq->bytes_in = 0;
+	cq->bytes_out = 0;
 }
 
 int chunkqueue_append_file(chunkqueue *cq, buffer *fn, off_t offset, off_t len) {
@@ -158,9 +164,9 @@ int chunkqueue_append_file(chunkqueue *cq, buffer *fn, off_t offset, off_t len) 
 	
 	c->type = FILE_CHUNK;
 	
-	buffer_copy_string_buffer(c->data.file.name, fn);
-	c->data.file.offset = offset;
-	c->data.file.length = len;
+	buffer_copy_string_buffer(c->file.name, fn);
+	c->file.offset = offset;
+	c->file.length = len;
 	c->offset = 0;
 	
 	chunkqueue_append_chunk(cq, c);
@@ -176,7 +182,7 @@ int chunkqueue_append_buffer(chunkqueue *cq, buffer *mem) {
 	c = chunkqueue_get_unused_chunk(cq);
 	c->type = MEM_CHUNK;
 	c->offset = 0;
-	buffer_copy_string_buffer(c->data.mem, mem);
+	buffer_copy_string_buffer(c->mem, mem);
 	
 	chunkqueue_append_chunk(cq, c);
 	
@@ -191,7 +197,7 @@ int chunkqueue_prepend_buffer(chunkqueue *cq, buffer *mem) {
 	c = chunkqueue_get_unused_chunk(cq);
 	c->type = MEM_CHUNK;
 	c->offset = 0;
-	buffer_copy_string_buffer(c->data.mem, mem);
+	buffer_copy_string_buffer(c->mem, mem);
 	
 	chunkqueue_prepend_chunk(cq, c);
 	
@@ -206,7 +212,7 @@ int chunkqueue_append_mem(chunkqueue *cq, const char * mem, size_t len) {
 	c = chunkqueue_get_unused_chunk(cq);
 	c->type = MEM_CHUNK;
 	c->offset = 0;
-	buffer_copy_string_len(c->data.mem, mem, len - 1);
+	buffer_copy_string_len(c->mem, mem, len - 1);
 	
 	chunkqueue_append_chunk(cq, c);
 	
@@ -220,11 +226,11 @@ buffer * chunkqueue_get_prepend_buffer(chunkqueue *cq) {
 	
 	c->type = MEM_CHUNK;
 	c->offset = 0;
-	buffer_reset(c->data.mem);
+	buffer_reset(c->mem);
 	
 	chunkqueue_prepend_chunk(cq, c);
 	
-	return c->data.mem;
+	return c->mem;
 }
 
 buffer *chunkqueue_get_append_buffer(chunkqueue *cq) {
@@ -234,11 +240,11 @@ buffer *chunkqueue_get_append_buffer(chunkqueue *cq) {
 	
 	c->type = MEM_CHUNK;
 	c->offset = 0;
-	buffer_reset(c->data.mem);
+	buffer_reset(c->mem);
 	
 	chunkqueue_append_chunk(cq, c);
 	
-	return c->data.mem;
+	return c->mem;
 }
 
 off_t chunkqueue_length(chunkqueue *cq) {
@@ -248,10 +254,10 @@ off_t chunkqueue_length(chunkqueue *cq) {
 	for (c = cq->first; c; c = c->next) {
 		switch (c->type) {
 		case MEM_CHUNK:
-			len += c->data.mem->used ? c->data.mem->used - 1 : 0;
+			len += c->mem->used ? c->mem->used - 1 : 0;
 			break;
 		case FILE_CHUNK:
-			len += c->data.file.length;
+			len += c->file.length;
 			break;
 		default:
 			break;
@@ -291,10 +297,10 @@ int chunkqueue_remove_finished_chunks(chunkqueue *cq) {
 
 		switch (c->type) {
 		case MEM_CHUNK:
-			if (c->offset == (off_t)c->data.mem->used - 1) is_finished = 1;
+			if (c->offset == (off_t)c->mem->used - 1) is_finished = 1;
 			break;
 		case FILE_CHUNK:
-			if (c->offset == c->data.file.length) is_finished = 1; 
+			if (c->offset == c->file.length) is_finished = 1; 
 			break;
 		default: 
 			break;
