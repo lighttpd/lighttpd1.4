@@ -281,10 +281,12 @@ URIHANDLER_FUNC(mod_secdownload_uri_handler) {
 	/* starting with the last / we should have relative-path to the docroot
 	 */
 	
-	buffer_copy_string_buffer(con->physical.path, p->conf.doc_root);
-	buffer_append_string(con->physical.path, rel_uri);
+	buffer_copy_string_buffer(con->physical.doc_root, p->conf.doc_root);
+	buffer_copy_string(con->physical.rel_path, rel_uri);
+	buffer_copy_string_buffer(con->physical.path, con->physical.doc_root);
+	buffer_append_string_buffer(con->physical.path, con->physical.rel_path);
 	
-	return HANDLER_COMEBACK;
+	return HANDLER_GO_ON;
 }
 
 /* this function is called at dlopen() time and inits the callbacks */
@@ -294,7 +296,7 @@ int mod_secdownload_plugin_init(plugin *p) {
 	p->name        = buffer_init_string("secdownload");
 	
 	p->init        = mod_secdownload_init;
-	p->handle_uri_clean  = mod_secdownload_uri_handler;
+	p->handle_physical  = mod_secdownload_uri_handler;
 	p->set_defaults  = mod_secdownload_set_defaults;
 	p->cleanup     = mod_secdownload_free;
 	
