@@ -68,12 +68,12 @@ int network_write_chunkqueue_solarissendfilev(server *srv, connection *con, chun
 			for(num_chunks = 0, tc = c; tc && tc->type == MEM_CHUNK && num_chunks < UIO_MAXIOV; num_chunks++, tc = tc->next);
 			
 			for(tc = c, i = 0; i < num_chunks; tc = tc->next, i++) {
-				if (tc->data.mem->used == 0) {
-					chunks[i].iov_base = tc->data.mem->ptr;
+				if (tc->mem->used == 0) {
+					chunks[i].iov_base = tc->mem->ptr;
 					chunks[i].iov_len  = 0;
 				} else {
-					offset = tc->data.mem->ptr + tc->offset;
-					toSend = tc->data.mem->used - 1 - tc->offset;
+					offset = tc->mem->ptr + tc->offset;
+					toSend = tc->mem->used - 1 - tc->offset;
 				
 					chunks[i].iov_base = offset;
 					
@@ -147,22 +147,22 @@ int network_write_chunkqueue_solarissendfilev(server *srv, connection *con, chun
 			stat_cache_entry *sce = NULL;
 			int ifd;
 			
-			if (HANDLER_ERROR == stat_cache_get_entry(srv, con, c->data.file.name, &sce)) {
+			if (HANDLER_ERROR == stat_cache_get_entry(srv, con, c->file.name, &sce)) {
 				log_error_write(srv, __FILE__, __LINE__, "sb",
-						strerror(errno), c->data.file.name);
+						strerror(errno), c->file.name);
 				return -1;
 			}
 					
-			offset = c->data.file.offset + c->offset;
-			toSend = c->data.file.length - c->offset;
+			offset = c->file.offset + c->offset;
+			toSend = c->file.length - c->offset;
 			
 			if (offset > sce->st.st_size) {
-				log_error_write(srv, __FILE__, __LINE__, "sb", "file was shrinked:", c->data.file.name);
+				log_error_write(srv, __FILE__, __LINE__, "sb", "file was shrinked:", c->file.name);
 				
 				return -1;
 			}
 
-			if (-1 == (ifd = open(c->data.file.name->ptr, O_RDONLY))) {
+			if (-1 == (ifd = open(c->file.name->ptr, O_RDONLY))) {
 				log_error_write(srv, __FILE__, __LINE__, "ss", "open failed: ", strerror(errno));
 				
 				return -1;
@@ -189,7 +189,7 @@ int network_write_chunkqueue_solarissendfilev(server *srv, connection *con, chun
 			c->offset += written;
 			con->bytes_written += written;
 			
-			if (c->offset == c->data.file.length) {
+			if (c->offset == c->file.length) {
 				chunk_finished = 1;
 			}
 			
