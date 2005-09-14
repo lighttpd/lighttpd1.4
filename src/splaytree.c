@@ -53,12 +53,9 @@
 #define compare(i,j) ((i)-(j))
 /* This is the comparison.                                       */
 /* Returns <0 if i<j, =0 if i=j, and >0 if i>j                   */
- 
-#define node_size(x) (((x)==NULL) ? 0 : ((x)->size))
-/* This macro returns the size of a node.  Unlike "x->size",     */
-/* it works even if x=NULL.  The test could be avoided by using  */
-/* a special version of NULL which was a real node with size 0.  */
- 
+
+#define node_size splaytree_size
+
 /* Splay using the key i (which may or may not be in the tree.) 
  * The starting root is t, and the tree used is defined by rat 
  * size fields are maintained */
