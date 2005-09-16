@@ -3,9 +3,10 @@
 NEWS
 ====
 
-- 1.4.4 - 2005-09-14
+- 1.4.4 - 2005-09-16
   * added support for %V in mod_accesslog
   * added a option for a FastCGI responser to send static files
+  * added md5 and blowfish hashes to htpasswd
   * fixed METHOD in mod_accesslog of WebDAV methods
   * fixed check for permission before files in sent
   * fixed mod-proxy and content for non-POST requests
