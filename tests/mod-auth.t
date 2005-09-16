@@ -8,7 +8,7 @@ BEGIN {
 
 use strict;
 use IO::Socket;
-use Test::More tests => 6;
+use Test::More tests => 9;
 use LightyTest;
 
 my $tf = LightyTest->new();
@@ -37,6 +37,32 @@ Authorization: Basic amFuOmphbg==
 EOF
  );
 $t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200 } ];
+ok($tf->handle_http($t) == 0, 'Basic-Auth: Valid Auth-token - plain');
+
+$t->{REQUEST}  = ( <<EOF
+GET /server-config HTTP/1.0
+Host: auth-htpasswd.example.org
+Authorization: Basic ZGVzOmRlcw==
+EOF
+ );
+$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200 } ];
+ok($tf->handle_http($t) == 0, 'Basic-Auth: Valid Auth-token - htpasswd (des)');
+
+$t->{REQUEST}  = ( <<EOF
+GET /server-config HTTP/1.0
+Host: auth-htpasswd.example.org
+Authorization: Basic bWQ1Om1kNQ==
+EOF
+ );
+$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200 } ];
+ok($tf->handle_http($t) == 0, 'Basic-Auth: Valid Auth-token - htpasswd (md5)');
+
+$t->{REQUEST}  = ( <<EOF
+GET /server-config HTTP/1.0
+Authorization: Basic bWQ1Om1kNA==
+EOF
+ );
+$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 401 } ];
 ok($tf->handle_http($t) == 0, 'Basic-Auth: Valid Auth-token');
 
 ## this should not crash
