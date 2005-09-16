@@ -51,7 +51,7 @@ the credentials used for the authentication.
 for basic auth:
 
 - plain_
-- htpasswd_ (crypt only)
+- htpasswd_ 
 - htdigest_
 - ldap_
   
