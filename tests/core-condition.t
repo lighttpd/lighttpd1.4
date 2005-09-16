@@ -8,7 +8,7 @@ BEGIN {
 
 use strict;
 use IO::Socket;
-use Test::More tests => 11;
+use Test::More tests => 14;
 use LightyTest;
 
 my $tf = LightyTest->new();
@@ -56,7 +56,7 @@ ok($tf->start_proc == 0, "Starting lighttpd") or die();
 
 $t->{REQUEST}  = ( <<EOF
 GET /nofile.png HTTP/1.0
-Host: www.example.org
+Host: referer.example.org
 EOF
  );
 $t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 404 } ];
@@ -64,21 +64,51 @@ ok($tf->handle_http($t) == 0, 'condition: Referer - no referer');
 
 $t->{REQUEST}  = ( <<EOF
 GET /nofile.png HTTP/1.0
-Host: www.example.org
-Referer: http://www.example.org/
+Host: referer.example.org
+Referer: http://referer.example.org/
 EOF
  );
 $t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 404 } ];
 ok($tf->handle_http($t) == 0, 'condition: Referer - referer matches regex');
 
-$t->{REQUEST}  = ( <<EOF
+TODO: {
+  local $TODO = "referer matching in conditionals";
+  $t->{REQUEST}  = ( <<EOF
 GET /nofile.png HTTP/1.0
+Host: referer.example.org
+Referer: http://evil-referer.example.org/
+EOF
+ );
+  $t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 403 } ];
+  ok($tf->handle_http($t) == 0, 'condition: Referer - referer doesn\'t match');
+}
+
+$t->{REQUEST}  = ( <<EOF
+GET /image.jpg HTTP/1.0
 Host: www.example.org
-Referer: http://123.example.org/
+EOF
+ );
+$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200 } ];
+ok($tf->handle_http($t) == 0, 'condition: Referer - no referer');
+
+$t->{REQUEST}  = ( <<EOF
+GET /image.jpg HTTP/1.0
+Host: www.example.org
+Referer: http://referer.example.org/
+EOF
+ );
+$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200 } ];
+ok($tf->handle_http($t) == 0, 'condition: Referer - referer matches regex');
+
+$t->{REQUEST}  = ( <<EOF
+GET /image.jpg HTTP/1.0
+Host: www.example.org
+Referer: http://evil-referer.example.org/
 EOF
  );
 $t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 403 } ];
 ok($tf->handle_http($t) == 0, 'condition: Referer - referer doesn\'t match');
+
 
 ok($tf->stop_proc == 0, "Stopping lighttpd");
 

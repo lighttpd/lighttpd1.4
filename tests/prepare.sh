@@ -37,6 +37,7 @@ cp $srcdir/docroot/123/*.txt \
    $srcdir/docroot/123/*.php \
    $srcdir/docroot/123/*.bla $tmpdir/servers/123.example.org/pages/
 cp $srcdir/lighttpd.user $tmpdir/
+cp $srcdir/lighttpd.htpasswd $tmpdir/
 cp $srcdir/var-include-sub.conf $tmpdir/../
 touch $tmpdir/servers/www.example.org/pages/image.jpg \
       $tmpdir/servers/www.example.org/pages/image.JPG \
