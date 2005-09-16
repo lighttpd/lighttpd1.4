@@ -442,22 +442,59 @@ static int http_auth_basic_password_compare(server *srv, mod_auth_plugin_data *p
 		}
 	} else if (p->conf.auth_backend == AUTH_BACKEND_HTPASSWD) { 
 #ifdef HAVE_CRYPT	
-		char salt[3];
+		char salt[32];
 		char *crypted;
+		size_t salt_len = 0;
 		/* 
 		 * htpasswd format
 		 * 
 		 * user:crypted password
 		 */
+
+		/* 
+		 *  Algorithm      Salt
+		 *  CRYPT_STD_DES   2-character (Default)
+		 *  CRYPT_EXT_DES   9-character
+		 *  CRYPT_MD5       12-character beginning with $1$
+		 *  CRYPT_BLOWFISH  16-character beginning with $2$
+		 */
+
+		if (password->used < 13 + 1) {
+			fprintf(stderr, "%s.%d\n", __FILE__, __LINE__);
+			return -1;
+		}
+
+		if (password->used == 13 + 1) {
+			/* a simple DES password is 2 + 11 characters */
+			salt_len = 2;
+		} else if (password->ptr[0] == '$' && password->ptr[2] == '$') {
+			char *dollar = NULL;
 		
-		salt[0] = password->ptr[0];
-		salt[1] = password->ptr[1];
-		salt[2] = '\0';
+			if (NULL == (dollar = strchr(password->ptr + 3, '$'))) {
+				fprintf(stderr, "%s.%d\n", __FILE__, __LINE__);
+				return -1;
+			}
+
+			salt_len = dollar - password->ptr;
+		}
+
+		if (salt_len - 1 > sizeof(salt)) {
+			fprintf(stderr, "%s.%d\n", __FILE__, __LINE__);
+			return -1;
+		}
+
+		strncpy(salt, password->ptr, salt_len);
+
+		salt[salt_len] = '\0';
+		
 		crypted = crypt(pw, salt);
 
 		if (0 == strcmp(password->ptr, crypted)) {
 			return 0;
+		} else {
+			fprintf(stderr, "%s.%d\n", __FILE__, __LINE__);
 		}
+	
 #endif	
 	} else if (p->conf.auth_backend == AUTH_BACKEND_PLAIN) { 
 		if (0 == strcmp(password->ptr, pw)) {
@@ -647,7 +684,7 @@ int http_auth_basic_check(server *srv, connection *con, mod_auth_plugin_data *p,
 	
 	/* password doesn't match */
 	if (http_auth_basic_password_compare(srv, p, req, username, realm->value, password, pw)) {
-		log_error_write(srv, __FILE__, __LINE__, "sbb", "password doesn't match", con->uri.path, username);
+		log_error_write(srv, __FILE__, __LINE__, "sbb", "password doesn't match for", con->uri.path, username);
 		
 		buffer_free(username);
 		buffer_free(password);
