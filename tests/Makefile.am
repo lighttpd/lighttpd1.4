@@ -49,6 +49,7 @@ TESTS_ENVIRONMENT=$(srcdir)/wrapper.sh $(srcdir) $(top_builddir)
 
 EXTRA_DIST=wrapper.sh lighttpd.conf \
 	lighttpd.user \
+	lighttpd.htpasswd \
 	$(CONFS) \
 	$(TESTS)
 
