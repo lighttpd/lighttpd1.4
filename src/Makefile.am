@@ -109,7 +109,7 @@ mod_staticfile_la_LIBADD = $(common_libadd)
 lib_LTLIBRARIES += mod_dirlisting.la
 mod_dirlisting_la_SOURCES = mod_dirlisting.c 
 mod_dirlisting_la_LDFLAGS = -module -export-dynamic -avoid-version -no-undefined
-mod_dirlisting_la_LIBADD = $(common_libadd)
+mod_dirlisting_la_LIBADD = $(common_libadd) $(PCRE_LIB)
 
 lib_LTLIBRARIES += mod_indexfile.la
 mod_indexfile_la_SOURCES = mod_indexfile.c 
