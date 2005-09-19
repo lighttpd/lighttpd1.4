@@ -13,7 +13,7 @@ Module: mod_fastcgi
 :abstract:
   The FastCGI interface is the fastest and most secure way
   to interface external process-handlers like Perl, PHP and 
-  you self-written applications. 
+  your self-written applications. 
   
 .. meta::
   :keywords: lighttpd, FastCGI
