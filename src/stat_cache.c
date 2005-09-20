@@ -179,7 +179,6 @@ void stat_cache_free(stat_cache *sc) {
 	while (sc->files) {
 		int osize;
 		splay_tree *node = sc->files;
-		stat_cache_entry *sce = node->data;
 
 		osize = sc->files->size;
 			
@@ -252,8 +251,7 @@ handler_t stat_cache_handle_fdevent(void *_srv, void *_fce, int revent) {
 	stat_cache *sc = srv->stat_cache;
 	size_t events;
 
-
-	UNUSED(revent);
+	UNUSED(_fce);
 	/* */
 
 	if ((revent & FDEVENT_IN) &&
@@ -355,7 +353,9 @@ handler_t stat_cache_get_entry(server *srv, connection *con, buffer *name, stat_
 	stat_cache_entry *sce = NULL;
 	stat_cache *sc;
 	struct stat st;
+#ifdef DEBUG_STAT_CACHE	
 	size_t i;
+#endif
 
 	int file_ndx;
 	splay_tree *file_node = NULL;
@@ -608,7 +608,7 @@ static int stat_cache_tag_old_entries(server *srv, splay_tree *t, int *keys, siz
 
 int stat_cache_trigger_cleanup(server *srv) {
 	stat_cache *sc;
-	size_t max_ndx = 0, i, j;
+	size_t max_ndx = 0, i;
 	int *keys;
 
 	sc = srv->stat_cache;
@@ -628,9 +628,11 @@ int stat_cache_trigger_cleanup(server *srv) {
 		node = sc->files;
 		
 		if (node && (node->key == ndx)) {
+#ifdef DEBUG_STAT_CACHE	
+			size_t j;
 			int osize = splaytree_size(sc->files);
 			stat_cache_entry *sce = node->data;
-
+#endif
 			stat_cache_entry_free(node->data);
 			sc->files = splaytree_delete(sc->files, ndx);
 
