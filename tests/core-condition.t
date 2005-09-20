@@ -71,18 +71,6 @@ EOF
 $t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 404 } ];
 ok($tf->handle_http($t) == 0, 'condition: Referer - referer matches regex');
 
-TODO: {
-  local $TODO = "referer matching in conditionals";
-  $t->{REQUEST}  = ( <<EOF
-GET /nofile.png HTTP/1.0
-Host: referer.example.org
-Referer: http://evil-referer.example.org/
-EOF
- );
-  $t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 403 } ];
-  ok($tf->handle_http($t) == 0, 'condition: Referer - referer doesn\'t match');
-}
-
 $t->{REQUEST}  = ( <<EOF
 GET /image.jpg HTTP/1.0
 Host: www.example.org
@@ -109,6 +97,17 @@ EOF
 $t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 403 } ];
 ok($tf->handle_http($t) == 0, 'condition: Referer - referer doesn\'t match');
 
+$t->{REQUEST} = ( <<EOF
+GET /nofile HTTP/1.1
+Host: bug255.example.org
+
+GET /nofile HTTP/1.1
+Host: bug255.example.org
+Connection: close
+EOF
+ );
+$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.1', 'HTTP-Status' => 403 },  { 'HTTP-Protocol' => 'HTTP/1.1', 'HTTP-Status' => 403 } ];
+ok($tf->handle_http($t) == 0, 'remote ip cache (#255)');
 
 ok($tf->stop_proc == 0, "Stopping lighttpd");
 
