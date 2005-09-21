@@ -421,10 +421,10 @@ static int connection_handle_write_prepare(server *srv, connection *con) {
 		/* fall through */
 	case 207:
 	case 200: /* class: header + body */
+	case 302:
 		break;
 		
 	case 206: /* write_queue is already prepared */
-	case 302:
 		con->file_finished = 1;
 		
 		break;
