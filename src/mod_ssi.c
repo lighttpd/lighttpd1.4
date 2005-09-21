@@ -722,15 +722,31 @@ static int process_ssi_stmt(server *srv, connection *con, plugin_data *p,
 			if (-1 == waitpid(pid, &status, 0)) {
 				log_error_write(srv, __FILE__, __LINE__, "ss", "waitpid failed:", strerror(errno));
 			} else if (WIFEXITED(status)) {
-			
+				int toread;
 				/* read everything from client and paste it into the output */
-			
-				for (b = chunkqueue_get_append_buffer(con->write_queue), buffer_prepare_copy(b, 4096); 
-				     (r = read(from_exec_fds[0], b->ptr, b->size - 1)) > 0; 
-				     b = chunkqueue_get_append_buffer(con->write_queue), buffer_prepare_copy(b, 4096)) {
-					
-					b->used = r;
-					b->ptr[b->used++] = '\0';
+
+				while(1) {
+					if (ioctl(from_exec_fds[0], FIONREAD, &toread)) {
+						log_error_write(srv, __FILE__, __LINE__, "s", 
+							"unexpected end-of-file (perhaps the ssi-exec process died)");
+						return -1;
+					}
+
+					if (toread > 0) {
+						b = chunkqueue_get_append_buffer(con->write_queue);
+
+						buffer_prepare_copy(b, toread + 1); 
+
+						if ((r = read(from_exec_fds[0], b->ptr, b->size - 1)) < 0) {
+							/* read failed */ 
+							break;
+						} else {
+							b->used = r;
+							b->ptr[b->used++] = '\0';
+						}
+					} else {
+						break;
+					}
 				}
 			} else {
 				log_error_write(srv, __FILE__, __LINE__, "s", "process exited abnormally");
