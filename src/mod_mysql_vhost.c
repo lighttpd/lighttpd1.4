@@ -90,6 +90,8 @@ SERVER_FUNC(mod_mysql_vhost_cleanup) {
 		size_t i;
 		for (i = 0; i < srv->config_context->used; i++) {
 			plugin_config *s = p->config_storage[i];
+
+			if (!s) continue;
 			
 			mysql_close(s->mysql);
 			
@@ -318,10 +320,11 @@ CONNECTION_FUNC(mod_mysql_vhost_handle_docroot) {
 	unsigned  cols;
 	MYSQL_ROW row;
 	MYSQL_RES *result = NULL;
-	size_t i;
 
 	/* no host specified? */
 	if (!con->uri.authority->used) return HANDLER_GO_ON;
+
+	if (!p->conf.mysql) return HANDLER_GO_ON;
 	
 	mod_mysql_vhost_patch_connection(srv, con, p);
 
