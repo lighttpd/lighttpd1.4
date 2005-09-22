@@ -85,7 +85,7 @@ fastcgi.server
   structure of fastcgi.server section: ::
   
     ( <extension> => 
-      ( <handle> => 
+      (  
         ( "host" => <string> ,
           "port" => <integer> ,
 	  "socket" => <string>,       # either socket
@@ -104,15 +104,14 @@ fastcgi.server
 	  "broken-scriptfilename" => <boolean>, # OPTIONAL
           "disable-time" => <integer>, # optional
           "allow-x-send-file" => <boolean> # optional
-	)
-      ), 
-      ( <handle> => ... 
+	),
+        ( "host" => ... 
+        ) 
       )
     )
   
   :<extension>: is the file-extension or prefix 
                 (if started with "/")
-  :<handle>:    is just a unique handle name
   :"host":      is hostname/ip of the FastCGI process
   :"port":      is tcp-port on the "host" used by the FastCGI
                 process
