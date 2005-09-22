@@ -61,6 +61,7 @@ int network_write_chunkqueue_write(server *srv, connection *con, chunkqueue *cq)
 			
 			c->offset += r;
 			con->bytes_written += r;
+			cq->bytes_out += r;
 			
 			if (c->offset == (off_t)c->mem->used - 1) {
 				chunk_finished = 1;
@@ -136,6 +137,7 @@ int network_write_chunkqueue_write(server *srv, connection *con, chunkqueue *cq)
 #endif
 			c->offset += r;
 			con->bytes_written += r;
+			cq->bytes_out += r;
 			
 			if (c->offset == c->file.length) {
 				chunk_finished = 1;

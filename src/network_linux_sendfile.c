@@ -95,7 +95,9 @@ int network_write_chunkqueue_linuxsendfile(server *srv, connection *con, chunkqu
 			}
 			
 			/* check which chunks have been written */
-			
+			cq->bytes_out += r;
+			con->bytes_written += r;
+
 			for(i = 0, tc = c; i < num_chunks; i++, tc = tc->next) {
 				if (r >= (ssize_t)chunks[i].iov_len) {
 					/* written */
@@ -119,8 +121,6 @@ int network_write_chunkqueue_linuxsendfile(server *srv, connection *con, chunkqu
 					break;
 				}
 			}
-			cq->bytes_out += r;
-			con->bytes_written += r;
 			
 			break;
 		}
