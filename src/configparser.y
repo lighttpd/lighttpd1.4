@@ -162,7 +162,8 @@ varline ::= key(A) ASSIGN expression(B). {
     array_insert_unique(ctx->current->value, B);
     B = NULL;
   } else {
-    fprintf(stderr, "Duplicate config variable in conditional 1 %s: %s\n", 
+    fprintf(stderr, "Duplicate config variable in conditional %d %s: %s\n", 
+            ctx->current->context_ndx,
             ctx->current->key->ptr, B->key->ptr);
     ctx->ok = 0;
     B->free(B);
@@ -196,7 +197,8 @@ varline ::= key(A) APPEND expression(B). {
       array_insert_unique(ctx->current->value, du);
     }
   } else {
-    fprintf(stderr, "Undefined config variable in conditional 1 %s: %s\n", 
+    fprintf(stderr, "Undefined config variable in conditional %d %s: %s\n", 
+            ctx->current->context_ndx,
             ctx->current->key->ptr, A->ptr);
     ctx->ok = 0;
   }
