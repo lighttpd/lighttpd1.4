@@ -353,6 +353,7 @@ handler_t stat_cache_get_entry(server *srv, connection *con, buffer *name, stat_
 	stat_cache_entry *sce = NULL;
 	stat_cache *sc;
 	struct stat st;
+	size_t k;
 #ifdef DEBUG_STAT_CACHE	
 	size_t i;
 #endif
@@ -456,125 +457,121 @@ handler_t stat_cache_get_entry(server *srv, connection *con, buffer *name, stat_
 		return HANDLER_ERROR;
 	}
 
-	
-	if (S_ISREG(st.st_mode) || S_ISDIR(st.st_mode)) {
-		size_t k;
-
-		if (S_ISREG(st.st_mode)) {
-			int fd;
-			/* see if we can open the file for reading */
-			if (-1 == (fd = open(name->ptr, O_RDONLY))) {
-				return HANDLER_ERROR;
-			}
-			close(fd);
+	if (S_ISREG(st.st_mode)) {
+		int fd;
+		/* see if we can open the file for reading */
+		if (-1 == (fd = open(name->ptr, O_RDONLY))) {
+			return HANDLER_ERROR;
 		}
+		close(fd);
+	}
 
-		if (NULL == sce) {
-			int osize = 0;
+	if (NULL == sce) {
+		int osize = 0;
 		       
-			if (sc->files) {
-				osize = sc->files->size;
-			}
+		if (sc->files) {
+			osize = sc->files->size;
+		}
 
-			sce = stat_cache_entry_init();
-			buffer_copy_string_buffer(sce->name, name);
-			
-			sc->files = splaytree_insert(sc->files, file_ndx, sce); 
+		sce = stat_cache_entry_init();
+		buffer_copy_string_buffer(sce->name, name);
+		
+		sc->files = splaytree_insert(sc->files, file_ndx, sce); 
 #ifdef DEBUG_STAT_CACHE	
-			if (ctrl.size == 0) {
-				ctrl.size = 16;
-				ctrl.used = 0;
-				ctrl.ptr = malloc(ctrl.size * sizeof(*ctrl.ptr));
-			} else if (ctrl.size == ctrl.used) {
-				ctrl.size += 16;
-				ctrl.ptr = realloc(ctrl.ptr, ctrl.size * sizeof(*ctrl.ptr));
-			}
-
-			ctrl.ptr[ctrl.used++] = file_ndx;
-
-			assert(sc->files);
-			assert(sc->files->data == sce);
-			assert(osize + 1 == splaytree_size(sc->files));
-#endif
+		if (ctrl.size == 0) {
+			ctrl.size = 16;
+			ctrl.used = 0;
+			ctrl.ptr = malloc(ctrl.size * sizeof(*ctrl.ptr));
+		} else if (ctrl.size == ctrl.used) {
+			ctrl.size += 16;
+			ctrl.ptr = realloc(ctrl.ptr, ctrl.size * sizeof(*ctrl.ptr));
 		}
 
-		sce->st = st;
-		sce->stat_ts = srv->cur_ts;
+		ctrl.ptr[ctrl.used++] = file_ndx;
 
-		if (S_ISREG(st.st_mode)) {	
-			/* determine mimetype */
-			buffer_reset(sce->content_type);
+		assert(sc->files);
+		assert(sc->files->data == sce);
+		assert(osize + 1 == splaytree_size(sc->files));
+#endif
+	}
+
+	sce->st = st;
+	sce->stat_ts = srv->cur_ts;
+
+	if (S_ISREG(st.st_mode)) {	
+		/* determine mimetype */
+		buffer_reset(sce->content_type);
 		
-			for (k = 0; k < con->conf.mimetypes->used; k++) {
-				data_string *ds = (data_string *)con->conf.mimetypes->data[k];
-				buffer *type = ds->key;
-			
-				if (type->used == 0) continue;
+		for (k = 0; k < con->conf.mimetypes->used; k++) {
+			data_string *ds = (data_string *)con->conf.mimetypes->data[k];
+			buffer *type = ds->key;
+		
+			if (type->used == 0) continue;
 
-				/* check if the right side is the same */
-				if (type->used > name->used) continue;
+			/* check if the right side is the same */
+			if (type->used > name->used) continue;
 
-				if (0 == strncasecmp(name->ptr + name->used - type->used, type->ptr, type->used - 1)) {
-					buffer_copy_string_buffer(sce->content_type, ds->value);
-					break;
-				}
+			if (0 == strncasecmp(name->ptr + name->used - type->used, type->ptr, type->used - 1)) {
+				buffer_copy_string_buffer(sce->content_type, ds->value);
+				break;
 			}
-			etag_create(sce->etag, &(sce->st));
+		}
+		etag_create(sce->etag, &(sce->st));
 #ifdef HAVE_XATTR
-			if (buffer_is_empty(sce->content_type)) {
-				stat_cache_attr_get(sce->content_type, name->ptr);
-			}
-#endif
-		}
-		
-#ifdef HAVE_FAM_H
-		if (sc->fam &&
-		    (srv->srvconf.stat_cache_engine == STAT_CACHE_ENGINE_FAM)) {
-			/* is this directory already registered ? */
-			if (!dir_node) {
-				fam_dir = fam_dir_entry_init();
-				fam_dir->fc = sc->fam;
-
-				buffer_copy_string_buffer(fam_dir->name, sc->dir_name);
-				
-				fam_dir->version = 1;
-				
-				fam_dir->req = calloc(1, sizeof(FAMRequest));
-				
-				if (0 != FAMMonitorDirectory(sc->fam, fam_dir->name->ptr, 
-							     fam_dir->req, fam_dir)) {
-					
-					log_error_write(srv, __FILE__, __LINE__, "sbs", 
-							"monitoring dir failed:", 
-							fam_dir->name, 
-							FamErrlist[FAMErrno]);
-					
-					fam_dir_entry_free(fam_dir);
-				} else {
-					int osize = 0;
-
-				       	if (sc->dirs) {
-						osize = sc->dirs->size;
-					}
-
-					sc->dirs = splaytree_insert(sc->dirs, dir_ndx, fam_dir); 
-					assert(sc->dirs);
-					assert(sc->dirs->data == fam_dir);
-					assert(osize == (sc->dirs->size - 1));
-				}
-			} else {
-				fam_dir = dir_node->data;
-			}
-			
-			/* bind the fam_fc to the stat() cache entry */
-			
-			if (fam_dir) {
-				sce->dir_version = fam_dir->version;
-				sce->dir_ndx     = dir_ndx;
-			}
+		if (buffer_is_empty(sce->content_type)) {
+			stat_cache_attr_get(sce->content_type, name->ptr);
 		}
 #endif
 	}
+		
+#ifdef HAVE_FAM_H
+	if (sc->fam &&
+	    (srv->srvconf.stat_cache_engine == STAT_CACHE_ENGINE_FAM)) {
+		/* is this directory already registered ? */
+		if (!dir_node) {
+			fam_dir = fam_dir_entry_init();
+			fam_dir->fc = sc->fam;
+
+			buffer_copy_string_buffer(fam_dir->name, sc->dir_name);
+			
+			fam_dir->version = 1;
+			
+			fam_dir->req = calloc(1, sizeof(FAMRequest));
+			
+			if (0 != FAMMonitorDirectory(sc->fam, fam_dir->name->ptr, 
+						     fam_dir->req, fam_dir)) {
+				
+				log_error_write(srv, __FILE__, __LINE__, "sbs", 
+						"monitoring dir failed:", 
+						fam_dir->name, 
+						FamErrlist[FAMErrno]);
+				
+				fam_dir_entry_free(fam_dir);
+			} else {
+				int osize = 0;
+
+			       	if (sc->dirs) {
+					osize = sc->dirs->size;
+				}
+
+				sc->dirs = splaytree_insert(sc->dirs, dir_ndx, fam_dir); 
+				assert(sc->dirs);
+				assert(sc->dirs->data == fam_dir);
+				assert(osize == (sc->dirs->size - 1));
+			}
+		} else {
+			fam_dir = dir_node->data;
+		}
+		
+		/* bind the fam_fc to the stat() cache entry */
+			
+		if (fam_dir) {
+			sce->dir_version = fam_dir->version;
+			sce->dir_ndx     = dir_ndx;
+		}
+	}
+#endif
+
 	*ret_sce = sce;
 
 	return HANDLER_GO_ON;
