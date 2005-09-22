@@ -104,13 +104,14 @@ int network_write_chunkqueue_freebsdsendfile(server *srv, connection *con, chunk
 			}
 			
 			/* check which chunks have been written */
+			cq->bytes_out += r;
+			con->bytes_written += r;
 			
 			for(i = 0, tc = c; i < num_chunks; i++, tc = tc->next) {
 				if (r >= (ssize_t)chunks[i].iov_len) {
 					/* written */
 					r -= chunks[i].iov_len;
 					tc->offset += chunks[i].iov_len;
-					con->bytes_written += chunks[i].iov_len;
 					
 					if (chunk_finished) {
 						/* skip the chunks from further touches */
@@ -124,7 +125,6 @@ int network_write_chunkqueue_freebsdsendfile(server *srv, connection *con, chunk
 					/* partially written */
 					
 					tc->offset += r;
-					con->bytes_written += r;
 					chunk_finished = 0;
 					
 					break;
@@ -182,6 +182,7 @@ int network_write_chunkqueue_freebsdsendfile(server *srv, connection *con, chunk
 			
 			c->offset += r;
 			con->bytes_written += r;
+			cq->bytes_out += r;
 			
 			if (c->offset == c->file.length) {
 				chunk_finished = 1;

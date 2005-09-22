@@ -123,6 +123,7 @@ int network_write_chunkqueue_openssl(server *srv, connection *con, chunkqueue *c
 			} else {
 				c->offset += r;
 				con->bytes_written += r;
+				cq->bytes_out += r;
 			}
 			
 			if (c->offset == (off_t)c->mem->used - 1) {
@@ -208,6 +209,7 @@ int network_write_chunkqueue_openssl(server *srv, connection *con, chunkqueue *c
 				} else {
 					c->offset += r;
 					con->bytes_written += r;
+					cq->bytes_out += r;
 				}
 			
 				if (c->offset == c->file.length) {

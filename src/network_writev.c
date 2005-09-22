@@ -116,6 +116,9 @@ int network_write_chunkqueue_writev(server *srv, connection *con, chunkqueue *cq
 				}
 			}
 			
+			cq->bytes_out += r;
+			con->bytes_written += r;
+
 			/* check which chunks have been written */
 			
 			for(i = 0, tc = c; i < num_chunks; i++, tc = tc->next) {
@@ -142,9 +145,6 @@ int network_write_chunkqueue_writev(server *srv, connection *con, chunkqueue *cq
 				}
 			}
 			
-			cq->bytes_out += r;
-			con->bytes_written += r;
-
 			break;
 		}
 		case FILE_CHUNK: {
