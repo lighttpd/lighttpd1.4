@@ -301,7 +301,7 @@ aelement(A) ::= expression(B). {
   A = B;
   B = NULL;
 }
-aelement(A) ::= STRING(B) ARRAY_ASSIGN expression(C). {
+aelement(A) ::= stringop(B) ARRAY_ASSIGN expression(C). {
   buffer_copy_string_buffer(C->key, B);
   buffer_free(B);
   B = NULL;
@@ -338,7 +338,7 @@ condline(A) ::= context LCURLY metalines RCURLY. {
   A = cur;
 }
 
-context ::= DOLLAR SRVVARNAME(B) LBRACKET STRING(C) RBRACKET cond(E) expression(D). {
+context ::= DOLLAR SRVVARNAME(B) LBRACKET stringop(C) RBRACKET cond(E) expression(D). {
   data_config *dc;
   buffer *b, *rvalue, *op;
 
@@ -488,11 +488,14 @@ cond(A) ::= NOMATCH. {
 stringop(A) ::= expression(B). {
   A = NULL;
   if (ctx->ok) {
-    if (B->type != TYPE_STRING) {
+    if (B->type == TYPE_STRING) {
+      A = buffer_init_buffer(((data_string*)B)->value);
+    } else if (B->type == TYPE_INTEGER) {
+      A = buffer_init();
+      buffer_copy_long(A, ((data_integer *)B)->value);
+    } else {
       fprintf(stderr, "operand must be string");
       ctx->ok = 0;
-    } else {
-      A = buffer_init_buffer(((data_string*)B)->value);
     }
   }
   B->free(B);
