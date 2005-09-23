@@ -30,6 +30,7 @@ handler_t network_server_handle_fdevent(void *s, void *context, int revents) {
 	server     *srv = (server *)s;
 	server_socket *srv_socket = (server_socket *)context;
 	connection *con;
+	int loops = 0;
 	
 	UNUSED(context);
 	
@@ -40,8 +41,11 @@ handler_t network_server_handle_fdevent(void *s, void *context, int revents) {
 				revents);
 		return HANDLER_ERROR;
 	}
-	
-	while (NULL != (con = connection_accept(srv, srv_socket))) {
+
+	/* accept()s at most 100 connections directly
+	 *
+	 * we jump out after 100 to give the waiting connections a chance */	
+	for (loops = 0; loops < 100 && NULL != (con = connection_accept(srv, srv_socket)); loops++) {
 		handler_t r;
 		
 		connection_state_machine(srv, con);
