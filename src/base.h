@@ -5,7 +5,9 @@
 #include <sys/time.h>
 #include <sys/stat.h>
 
+#ifdef HAVE_CONFIG_H
 #include "config.h"
+#endif
 
 #include <limits.h>
 #ifdef HAVE_STDINT_H

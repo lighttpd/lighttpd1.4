@@ -5,7 +5,9 @@
 
 #include "plugin.h"
 #include "log.h"
+#ifdef HAVE_CONFIG_H
 #include "config.h"
+#endif
 
 #ifdef HAVE_VALGRIND_VALGRIND_H
 #include <valgrind/valgrind.h>

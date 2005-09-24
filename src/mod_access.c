@@ -8,8 +8,6 @@
 
 #include "plugin.h"
 
-#include "config.h"
-
 typedef struct {
 	array *access_deny;
 } plugin_config;

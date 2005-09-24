@@ -14,7 +14,6 @@
 
 #include "plugin.h"
 
-#include "config.h"
 #include "response.h"
 #include "stat_cache.h"
 #include "stream.h"

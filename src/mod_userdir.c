@@ -11,8 +11,6 @@
 
 #include "plugin.h"
 
-#include "config.h"
-
 #ifdef HAVE_PWD_H
 #include <pwd.h>
 #endif

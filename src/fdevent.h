@@ -1,7 +1,9 @@
 #ifndef _FDEVENT_H_
 #define _FDEVENT_H_
 
+#ifdef HAVE_CONFIG_H
 #include "config.h"
+#endif
 #include "settings.h"
 #include "bitset.h"
 

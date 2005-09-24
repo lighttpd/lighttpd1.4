@@ -1,7 +1,9 @@
 #ifndef _DIGCALC_H_
 #define _DIGCALC_H_
 
+#ifdef HAVE_CONFIG_H
 #include "config.h"
+#endif
 
 #define HASHLEN 16
 typedef unsigned char HASH[HASHLEN];

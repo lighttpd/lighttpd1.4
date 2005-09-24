@@ -12,8 +12,6 @@
 
 #include "stat_cache.h"
 
-#include "config.h"
-
 /* plugin config for all request/connections */
 
 typedef struct {

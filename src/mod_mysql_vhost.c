@@ -5,7 +5,6 @@
 #include <strings.h>
 
 #include "plugin.h"
-#include "config.h"
 #include "log.h"
 
 #include "stat_cache.h"

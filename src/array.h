@@ -2,7 +2,9 @@
 #define ARRAY_H
 
 #include <stdlib.h>
+#ifdef HAVE_CONFIG_H
 #include "config.h"
+#endif
 #ifdef HAVE_PCRE_H
 # include <pcre.h>
 #endif
