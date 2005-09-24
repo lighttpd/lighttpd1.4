@@ -20,8 +20,6 @@
 #include "crc32.h"
 #include "etag.h"
 
-#include "config.h"
-
 #if defined HAVE_ZLIB_H && defined HAVE_LIBZ
 # define USE_ZLIB
 # include <zlib.h>

@@ -6,7 +6,9 @@
 #include <assert.h>
 #include <stdio.h>
 #include <string.h>
+#ifdef HAVE_CONFIG_H
 #include "config.h"
+#endif
 #include "configfile.h"
 #include "buffer.h"
 #include "array.h"

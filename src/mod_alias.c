@@ -9,9 +9,6 @@
 
 #include "plugin.h"
 
-#include "config.h"
-
-
 /* plugin config for all request/connections */
 typedef struct {
 	array *alias;

@@ -5,7 +5,9 @@
 #include <fcntl.h>
 
 #include "stream.h"
+#ifdef HAVE_CONFIG_H
 #include "config.h"
+#endif
 
 #include "sys-mmap.h"
 

@@ -7,8 +7,6 @@
 
 #include "plugin.h"
 
-#include "config.h"
-
 #include "response.h"
 
 /* plugin config for all request/connections */

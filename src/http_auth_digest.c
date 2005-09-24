@@ -1,7 +1,6 @@
 #include <string.h>
 #include "http_auth_digest.h"
 
-#include "config.h"
 #include "buffer.h"
 
 #ifndef USE_OPENSSL

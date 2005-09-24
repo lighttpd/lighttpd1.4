@@ -2,8 +2,6 @@
 #include <stdlib.h>
 #include <string.h>
 
-
-
 #include "base.h"
 #include "log.h"
 #include "buffer.h"
@@ -11,8 +9,6 @@
 #include "plugin.h"
 #include "response.h"
 #include "inet_ntop_cache.h"
-
-#include "config.h"
 
 #if defined(HAVE_GDBM_H)
 #include <gdbm.h>

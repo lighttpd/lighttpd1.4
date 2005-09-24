@@ -11,8 +11,6 @@
 #include "plugin.h"
 #include "stat_cache.h"
 
-#include "config.h"
-
 /**
  * this is a expire module for a lighttpd 
  * 
