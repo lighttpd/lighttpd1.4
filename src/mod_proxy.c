@@ -402,7 +402,7 @@ static int proxy_create_env(server *srv, handler_ctx *hctx) {
 	
 	connection *con   = hctx->remote_conn;
 	buffer *b;
-	UNUSED(srv);
+	data_string *ds_dst;
 	
 	/* build header */
 
@@ -414,6 +414,15 @@ static int proxy_create_env(server *srv, handler_ctx *hctx) {
 	
 	buffer_append_string_buffer(b, con->request.uri);
 	BUFFER_APPEND_STRING_CONST(b, " HTTP/1.0\r\n");
+
+	if (NULL == (ds_dst = (data_string *)array_get_unused_element(con->request.headers, TYPE_STRING))) {
+		ds_dst = data_string_init();
+	}
+		
+	BUFFER_COPY_STRING_CONST(ds_dst->key, "X-Forwarded-For");
+	buffer_append_string(ds_dst->value, inet_ntop_cache_get_ip(srv, &(con->dst_addr)));
+		
+	array_insert_unique(con->request.headers, (data_unset *)ds_dst);
 	
 	/* request header */
 	for (i = 0; i < con->request.headers->used; i++) {
@@ -430,10 +439,6 @@ static int proxy_create_env(server *srv, handler_ctx *hctx) {
 			BUFFER_APPEND_STRING_CONST(b, "\r\n");
 		}
 	}
-	
-	BUFFER_APPEND_STRING_CONST(b, "X-Forwarded-For: ");
-	buffer_append_string(b, inet_ntop_cache_get_ip(srv, &(con->dst_addr)));
-	BUFFER_APPEND_STRING_CONST(b, "\r\n");
 	
 	BUFFER_APPEND_STRING_CONST(b, "\r\n");
 	
