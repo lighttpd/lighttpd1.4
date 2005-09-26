@@ -9,7 +9,7 @@
 #include "plugin.h"
 
 #include "response.h"
-#include "file_cache_funcs.h"
+#include "stat_cache.h"
 
 /**
  * this is a uploadprogress for a lighttpd plugin
@@ -283,10 +283,12 @@ URIHANDLER_FUNC(mod_uploadprogress_uri_handler) {
 	mod_uploadprogress_patch_connection(srv, con, p);
 	
 	/* check if this is a POST request */
-	switch(con->request.http_method_id) {
+	switch(con->request.http_method) {
 	case HTTP_METHOD_POST:
 		/* the request has to contain a 32byte ID */
 		
+		log_error_write(srv, __FILE__, __LINE__, "s", "POST:");
+
 		if (NULL == (ds = (data_string *)array_get_element(con->request.headers, "X-Progress-ID"))) {
 			if (!buffer_is_empty(con->uri.query)) {
 				/* perhaps the POST request is using the querystring to pass the X-Progress-ID */ 
@@ -298,6 +300,8 @@ URIHANDLER_FUNC(mod_uploadprogress_uri_handler) {
 			b = ds->value;
 		}
 		
+		log_error_write(srv, __FILE__, __LINE__, "sb", "Progress-ID:", b);
+
 		if (b->used != 32 + 1) {
 			log_error_write(srv, __FILE__, __LINE__, "sd",
 					"len of progress-id != 32:", b->used - 1);
@@ -318,6 +322,8 @@ URIHANDLER_FUNC(mod_uploadprogress_uri_handler) {
 		
 		return HANDLER_GO_ON;
 	case HTTP_METHOD_GET:
+		log_error_write(srv, __FILE__, __LINE__, "s", "GET:");
+
 		if (!buffer_is_equal(con->uri.path, p->conf.progress_url)) {
 			return HANDLER_GO_ON;
 		}
@@ -333,6 +339,8 @@ URIHANDLER_FUNC(mod_uploadprogress_uri_handler) {
 			b = ds->value;
 		}
 		
+		log_error_write(srv, __FILE__, __LINE__, "sb", "Progress-ID:", b);
+
 		if (b->used != 32 + 1) {
 			log_error_write(srv, __FILE__, __LINE__, "sd",
 					"len of progress-id != 32:", b->used - 1);
@@ -349,18 +357,24 @@ URIHANDLER_FUNC(mod_uploadprogress_uri_handler) {
 			}
 		}
 		
-		/* get the connection */
-		if (NULL == (post_con = connection_map_get_connection(p->con_map, b))) {
-			con->http_status = 404;
-			
-			return HANDLER_FINISHED;
-		}
-		
-		file_cache_release_entry(srv, file_cache_get_entry(srv, con->physical.path));
 		buffer_reset(con->physical.path);
-		
+
 		con->file_started = 1;
 		con->file_finished = 1;
+
+		con->http_status = 200;
+
+		/* get the connection */
+		if (NULL == (post_con = connection_map_get_connection(p->con_map, b))) {
+			log_error_write(srv, __FILE__, __LINE__, "sb",
+					"ID no known:", b);
+
+			b = chunkqueue_get_append_buffer(con->write_queue);
+			
+			BUFFER_APPEND_STRING_CONST(b, "starting");
+
+			return HANDLER_FINISHED;
+		}
 		
 		response_header_overwrite(srv, con, CONST_STR_LEN("Content-Type"), CONST_STR_LEN("text/xml"));
 		
@@ -378,10 +392,12 @@ URIHANDLER_FUNC(mod_uploadprogress_uri_handler) {
 		buffer_append_off_t(b, post_con->request.content_length);
 		BUFFER_APPEND_STRING_CONST(b, "</size>");
 		BUFFER_APPEND_STRING_CONST(b, "<received>");
-		buffer_append_off_t(b, post_con->post_data_fetched);
+		buffer_append_off_t(b, post_con->request_content_queue->bytes_in);
 		BUFFER_APPEND_STRING_CONST(b, "</received>");
 		BUFFER_APPEND_STRING_CONST(b, "</upload>");
 		
+		log_error_write(srv, __FILE__, __LINE__, "sb", "...", b);
+
 		return HANDLER_FINISHED;
 	default:
 		break;
