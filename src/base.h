@@ -444,6 +444,7 @@ typedef struct {
 	unsigned short max_worker;
 	unsigned short max_fds;
 	unsigned short max_conns;
+	unsigned short max_request_size;
 	
 	unsigned short log_request_header_on_error;
 	unsigned short log_state_handling;
@@ -464,7 +465,6 @@ typedef struct {
 	buffer *ssl_ca_file;
 	unsigned short use_ipv6;
 	unsigned short is_ssl;
-	unsigned short max_request_size;
 	
 	buffer *srv_token;
 	

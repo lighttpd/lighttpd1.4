@@ -114,6 +114,7 @@ static int config_insert(server *srv) {
 	cv[41].destination = stat_cache_string;
 	
 	cv[42].destination = &(srv->srvconf.max_conns);
+	cv[12].destination = &(srv->srvconf.max_request_size);
 	srv->config_storage = calloc(1, srv->config_context->used * sizeof(specific_config *));
 
 	assert(srv->config_storage);
@@ -131,8 +132,8 @@ static int config_insert(server *srv) {
 		s->error_handler = buffer_init();
 		s->server_tag    = buffer_init();
 		s->errorfile_prefix = buffer_init();
-		s->max_keep_alive_requests = 128;
-		s->max_keep_alive_idle = 30;
+		s->max_keep_alive_requests = 16;
+		s->max_keep_alive_idle = 5;
 		s->max_read_idle = 60;
 		s->max_write_idle = 360;
 		s->use_xattr     = 0;
@@ -153,7 +154,6 @@ static int config_insert(server *srv) {
 		cv[8].destination = &(s->use_ipv6);
 		
 		
-		cv[12].destination = &(s->max_request_size);
 		/* 13 max-worker */
 		cv[14].destination = s->document_root;
 		cv[15].destination = &(s->force_lower_case);
