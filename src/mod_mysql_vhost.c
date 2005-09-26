@@ -4,13 +4,18 @@
 #include <fcntl.h>
 #include <strings.h>
 
+#ifdef HAVE_CONFIG_H
+#include "config.h"
+#endif
+
+#ifdef HAVE_MYSQL
+#include <mysql.h>
+#endif
+
 #include "plugin.h"
 #include "log.h"
 
 #include "stat_cache.h"
-#ifdef HAVE_MYSQL
-#include <mysql.h>
-#endif
 #ifdef DEBUG_MOD_MYSQL_VHOST
 #define DEBUG
 #endif
