@@ -58,6 +58,7 @@ instlib += env.SharedLibrary('mod_webdav', [ 'mod_webdav.c' ], LIBS= [ env['LIBX
 instlib += env.SharedLibrary('mod_mysql_vhost', [ 'mod_mysql_vhost.c' ], LIBS= [ env['LIBMYSQL'] ])
 instlib += env.SharedLibrary('mod_trigger_b4_dl', [ 'mod_trigger_b4_dl.c' ], LIBS= [ env['LIBPCRE'] ])
 instlib += env.SharedLibrary('mod_cml', [ 'mod_cml.c' ], LIBS= [ env['LIBPCRE'] ])
+instlib += env.SharedLibrary('mod_uploadprogress', [ 'mod_uploadprogress.c' ], LIBS='')
 
 inst = []
 inst += env.Install('${bindir}', instbin)
