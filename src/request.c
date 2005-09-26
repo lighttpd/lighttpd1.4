@@ -969,6 +969,7 @@ int http_request_parse(server *srv, connection *con) {
 			/* content-length is missing */
 			log_error_write(srv, __FILE__, __LINE__, "s", 
 					"POST-request, but content-length missing -> 411");
+			con->keep_alive = 0;
 			
 			con->http_status = 411;
 			return 0;
@@ -977,20 +978,22 @@ int http_request_parse(server *srv, connection *con) {
 		/* don't handle more the SSIZE_MAX bytes in content-length */
 		if (con->request.content_length > SSIZE_MAX) {
 			con->http_status = 413; 
+			con->keep_alive = 0;
 
 			log_error_write(srv, __FILE__, __LINE__, "sds", 
 					"request-size too long:", con->request.content_length, "-> 413");
 			return 0;
 		}
-		
+
 		/* divide by 1024 as srvconf.max_request_size is in kBytes */
-		if (srv_socket->max_request_size != 0 &&
-		    (con->request.content_length >> 10) > srv_socket->max_request_size) {
+		if (srv->srvconf.max_request_size != 0 &&
+		    (con->request.content_length >> 10) > srv->srvconf.max_request_size) {
 			/* the request body itself is larger then 
 			 * our our max_request_size
 			 */
 		
 			con->http_status = 413;
+			con->keep_alive = 0;
 		
 			log_error_write(srv, __FILE__, __LINE__, "sds", 
 					"request-size too long:", con->request.content_length, "-> 413");
