@@ -27,6 +27,8 @@ typedef struct chunk {
 			char   *start;
 			size_t length;
 		} mmap;
+
+		int is_temp;
 	} file;
 	
 	/* how many bytes are already handled */
@@ -54,6 +56,7 @@ int chunkqueue_prepend_buffer(chunkqueue *c, buffer *mem);
 
 buffer * chunkqueue_get_append_buffer(chunkqueue *c);
 buffer * chunkqueue_get_prepend_buffer(chunkqueue *c);
+chunk * chunkqueue_get_append_tempfile(chunkqueue *cq);
 
 int chunkqueue_remove_finished_chunks(chunkqueue *cq);
 
