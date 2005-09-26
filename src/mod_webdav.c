@@ -8,8 +8,13 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <stdio.h>
+#include <assert.h>
+#include <sys/mman.h>
 
+#ifdef HAVE_CONFIG_H
 #include "config.h"
+#endif
+
 #if defined(HAVE_LIBXML_H) && defined(HAVE_SQLITE3_H)
 #define USE_PROPPATCH
 #include <libxml/tree.h>
@@ -17,7 +22,6 @@
 
 #include <sqlite3.h>
 #endif
-
 
 #include "base.h"
 #include "log.h"
@@ -1224,31 +1228,91 @@ URIHANDLER_FUNC(mod_webdav_subrequest_handler) {
 		return HANDLER_FINISHED;
 	case HTTP_METHOD_PUT: {
 		int fd;
+		chunkqueue *cq = con->request_content_queue;
 
 		if (p->conf.is_readonly) {
 			con->http_status = 403;
 			return HANDLER_FINISHED;
 		}
-		
+
+		assert(chunkqueue_length(cq) == con->request.content_length);
+
 		/* taken what we have in the request-body and write it to a file */
 		if (-1 == (fd = open(con->physical.path->ptr, O_WRONLY|O_CREAT|O_TRUNC, 0600))) {
 			/* we can't open the file */
 			con->http_status = 403;
 		} else {
+			chunk *c;
+
 			con->http_status = 201; /* created */
 
-			if (-1 == (write(fd, con->request.content->ptr, con->request.content->used - 1))) {
-				switch(errno) {
-				case ENOSPC:
-					con->http_status = 507;
+			for (c = cq->first; c; c = cq->first) {
+				int r = 0; 
 
+				/* copy all chunks */
+				switch(c->type) {
+				case FILE_CHUNK:
+
+					if (c->file.mmap.start == MAP_FAILED) {
+						if (-1 == c->file.fd &&  /* open the file if not already open */
+						    -1 == (c->file.fd = open(c->file.name->ptr, O_RDONLY))) {
+							log_error_write(srv, __FILE__, __LINE__, "ss", "open failed: ", strerror(errno));
+					
+							return -1;
+						}
+				
+						if (MAP_FAILED == (c->file.mmap.start = mmap(0, c->file.length, PROT_READ, MAP_SHARED, c->file.fd, 0))) {
+							log_error_write(srv, __FILE__, __LINE__, "ssbd", "mmap failed: ", 
+									strerror(errno), c->file.name,  c->file.fd);
+
+							return -1;
+						}
+
+						c->file.mmap.length = c->file.length;
+
+						close(c->file.fd);
+						c->file.fd = -1;
+	
+						/* chunk_reset() or chunk_free() will cleanup for us */
+					}
+
+					if ((r = write(fd, c->file.mmap.start + c->offset, c->file.length - c->offset)) < 0) {
+						switch(errno) {
+						case ENOSPC:
+							con->http_status = 507;
+		
+							break;
+						default:
+							con->http_status = 403;
+							break;
+						}
+					}
 					break;
-				default:
-					con->http_status = 403;
+				case MEM_CHUNK:
+					if ((r = write(fd, c->mem->ptr + c->offset, c->mem->used - c->offset - 1)) < 0) {
+						switch(errno) {
+						case ENOSPC:
+							con->http_status = 507;
+		
+							break;
+						default:
+							con->http_status = 403;
+							break;
+						}
+					}
 					break;
 				}
+
+				if (r > 0) {
+					c->offset += r;
+					cq->bytes_out += r;
+				} else {
+					break;
+				}
+				chunkqueue_remove_finished_chunks(cq);
 			}
 			close(fd);
+
 		}
 		return HANDLER_FINISHED;
 	}

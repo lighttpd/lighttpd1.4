@@ -4,6 +4,8 @@
 #else
 #include <sys/socket.h>
 #include <sys/wait.h>
+#include <sys/mman.h>
+#include <sys/fcntl.h>
 
 #include <netinet/in.h>
 
@@ -956,8 +958,78 @@ static int cgi_create_env(server *srv, connection *con, plugin_data *p, buffer *
 		handler_ctx *hctx;
 		/* father */
 		
-		if (con->request.content->used) {
-			write(to_cgi_fds[1], con->request.content->ptr, con->request.content_length);
+		if (con->request.content_length) {
+			chunkqueue *cq = con->request_content_queue;
+			chunk *c;
+		
+			assert(chunkqueue_length(cq) == con->request.content_length);
+
+			/* there is content to send */
+			for (c = cq->first; c; c = cq->first) {
+				int r = 0;
+
+				/* copy all chunks */
+				switch(c->type) {
+				case FILE_CHUNK:
+
+					if (c->file.mmap.start == MAP_FAILED) {
+						if (-1 == c->file.fd &&  /* open the file if not already open */
+						    -1 == (c->file.fd = open(c->file.name->ptr, O_RDONLY))) {
+							log_error_write(srv, __FILE__, __LINE__, "ss", "open failed: ", strerror(errno));
+					
+							return -1;
+						}
+
+						c->file.mmap.length = c->file.length;
+				
+						if (MAP_FAILED == (c->file.mmap.start = mmap(0,  c->file.mmap.length, PROT_READ, MAP_SHARED, c->file.fd, 0))) {
+							log_error_write(srv, __FILE__, __LINE__, "ssbd", "mmap failed: ", 
+									strerror(errno), c->file.name,  c->file.fd);
+
+							return -1;
+						}
+
+						close(c->file.fd);
+						c->file.fd = -1;
+	
+						/* chunk_reset() or chunk_free() will cleanup for us */
+					}
+
+					if ((r = write(to_cgi_fds[1], c->file.mmap.start + c->offset, c->file.length - c->offset)) < 0) {
+						switch(errno) {
+						case ENOSPC:
+							con->http_status = 507;
+		
+							break;
+						default:
+							con->http_status = 403;
+							break;
+						}
+					}
+					break;
+				case MEM_CHUNK:
+					if ((r = write(to_cgi_fds[1], c->mem->ptr + c->offset, c->mem->used - c->offset - 1)) < 0) {
+						switch(errno) {
+						case ENOSPC:
+							con->http_status = 507;
+		
+							break;
+						default:
+							con->http_status = 403;
+							break;
+						}
+					}
+					break;
+				}
+
+				if (r > 0) {
+					c->offset += r;
+					cq->bytes_out += r;
+				} else {
+					break;
+				}
+				chunkqueue_remove_finished_chunks(cq);
+			}
 		}
 		
 		close(from_cgi_fds[1]);

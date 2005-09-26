@@ -23,6 +23,7 @@
 
 #include "inet_ntop_cache.h"
 #include "stat_cache.h"
+#include "network_backends.h"
 
 #include <fastcgi.h>
 #include <stdio.h>
@@ -318,10 +319,8 @@ typedef struct {
 	
 	int      reconnects; /* number of reconnect attempts */
 	
-	buffer   *write_buffer;
-	size_t    write_offset;
-	
-	chunkqueue *rb;
+	chunkqueue *rb; /* read queue */
+	chunkqueue *wb; /* write queue */
 	
 	buffer   *response_header;
 	
@@ -359,7 +358,6 @@ static handler_ctx * handler_ctx_init() {
 	hctx->fde_ndx = -1;
 	
 	hctx->response_header = buffer_init();
-	hctx->write_buffer = buffer_init();
 	
 	hctx->request_id = 0;
 	hctx->state = FCGI_STATE_INIT;
@@ -371,15 +369,16 @@ static handler_ctx * handler_ctx_init() {
 	hctx->send_content_body = 1;
 
 	hctx->rb = chunkqueue_init();
+	hctx->wb = chunkqueue_init();
 	
 	return hctx;
 }
 
 static void handler_ctx_free(handler_ctx *hctx) {
 	buffer_free(hctx->response_header);
-	buffer_free(hctx->write_buffer);
 
 	chunkqueue_free(hctx->rb);
+	chunkqueue_free(hctx->wb);
 
 	free(hctx);
 }
@@ -1618,9 +1617,9 @@ static int fcgi_env_add_request_headers(server *srv, connection *con, plugin_dat
 static int fcgi_create_env(server *srv, handler_ctx *hctx, size_t request_id) {
 	FCGI_BeginRequestRecord beginRecord;
 	FCGI_Header header;
+	buffer *b;
 	
 	char buf[32];
-	size_t offset;
 	const char *s;
 #ifdef HAVE_IPV6
 	char b2[INET6_ADDRSTRLEN + 1];
@@ -1642,8 +1641,10 @@ static int fcgi_create_env(server *srv, handler_ctx *hctx, size_t request_id) {
 	beginRecord.body.roleB1 = 0;
 	beginRecord.body.flags = 0;
 	memset(beginRecord.body.reserved, 0, sizeof(beginRecord.body.reserved));
+
+	b = chunkqueue_get_append_buffer(hctx->wb);
 	
-	buffer_copy_memory(hctx->write_buffer, (const char *)&beginRecord, sizeof(beginRecord));
+	buffer_copy_memory(b, (const char *)&beginRecord, sizeof(beginRecord));
 	
 	/* send FCGI_PARAMS */
 	buffer_prepare_copy(p->fcgi_env, 1024);
@@ -1800,29 +1801,139 @@ static int fcgi_create_env(server *srv, handler_ctx *hctx, size_t request_id) {
 	fcgi_env_add_request_headers(srv, con, p);
 	
 	fcgi_header(&(header), FCGI_PARAMS, request_id, p->fcgi_env->used, 0);
-	buffer_append_memory(hctx->write_buffer, (const char *)&header, sizeof(header));
-	buffer_append_memory(hctx->write_buffer, (const char *)p->fcgi_env->ptr, p->fcgi_env->used);
+	buffer_append_memory(b, (const char *)&header, sizeof(header));
+	buffer_append_memory(b, (const char *)p->fcgi_env->ptr, p->fcgi_env->used);
 	
 	fcgi_header(&(header), FCGI_PARAMS, request_id, 0, 0);
-	buffer_append_memory(hctx->write_buffer, (const char *)&header, sizeof(header));
-	
-	/* send FCGI_STDIN */
-	
-	/* something to send ? */
-	for (offset = 0; offset != con->request.content_length; ) {
-		/* send chunks of 1024 bytes */
-		size_t toWrite = con->request.content_length - offset > 4096 ? 4096 : con->request.content_length - offset;
-		
-		fcgi_header(&(header), FCGI_STDIN, request_id, toWrite, 0);
-		buffer_append_memory(hctx->write_buffer, (const char *)&header, sizeof(header));
-		buffer_append_memory(hctx->write_buffer, (const char *)(con->request.content->ptr + offset), toWrite);
-		
-		offset += toWrite;
+	buffer_append_memory(b, (const char *)&header, sizeof(header));
+
+	b->used++; /* add virtual \0 */
+	hctx->wb->bytes_in += b->used - 1;
+
+	if (con->request.content_length) {
+		chunkqueue *req_cq = con->request_content_queue;
+		chunk *req_c;
+		size_t offset;
+
+		/* something to send ? */
+		for (offset = 0, req_c = req_cq->first; offset != req_cq->bytes_in; ) {
+			size_t weWant = req_cq->bytes_in - offset > FCGI_MAX_LENGTH ? FCGI_MAX_LENGTH : req_cq->bytes_in - offset;
+			size_t written = 0;
+			size_t weHave = 0;
+
+			/* we announce toWrite octects
+			 * now take all the request_content chunk that we need to fill this request
+			 * */	
+
+			b = chunkqueue_get_append_buffer(hctx->wb);
+			fcgi_header(&(header), FCGI_STDIN, request_id, weWant, 0);
+			buffer_copy_memory(b, (const char *)&header, sizeof(header));
+			hctx->wb->bytes_in += sizeof(header);
+
+			if (p->conf.debug > 10) {
+				fprintf(stderr, "%s.%d: tosend: %d / %Ld\n", __FILE__, __LINE__, offset, req_cq->bytes_in);
+			}
+
+			for (written = 0; written != weWant; ) {
+				if (p->conf.debug > 10) {
+					fprintf(stderr, "%s.%d: chunk: %d / %d\n", __FILE__, __LINE__, written, weWant);
+				}
+
+				switch (req_c->type) {
+				case FILE_CHUNK:
+					weHave = req_c->file.length - req_c->offset;
+
+					if (weHave > weWant - written) weHave = weWant - written;
+
+					if (p->conf.debug > 10) {
+						fprintf(stderr, "%s.%d: sending %d bytes from (%Ld / %Ld) %s\n", 
+								__FILE__, __LINE__, 
+								weHave, 
+								req_c->offset, 
+								req_c->file.length, 
+								req_c->file.name->ptr);
+					}
+
+					assert(weHave != 0);
+					
+					chunkqueue_append_file(hctx->wb, req_c->file.name, req_c->offset, weHave);
+
+					req_c->offset += weHave;
+					req_cq->bytes_out += weHave;
+					written += weHave;
+
+					hctx->wb->bytes_in += weHave;
+
+					/* steal the tempfile
+					 *
+					 * This is tricky:
+					 * - we reference the tempfile from the request-content-queue several times
+					 *   if the req_c is larger than FCGI_MAX_LENGTH
+					 * - we can't simply cleanup the request-content-queue as soon as possible
+					 *   as it would remove the tempfiles 
+					 * - the idea is to 'steal' the tempfiles and attach the is_temp flag to the last
+					 *   referencing chunk of the fastcgi-write-queue
+					 *
+					 *  */
+
+					if (req_c->offset == req_c->file.length) {
+						chunk *c;
+
+						if (p->conf.debug > 10) {
+							fprintf(stderr, "%s.%d: next chunk\n", __FILE__, __LINE__);
+						}
+						c = hctx->wb->last;
+
+						assert(c->type == FILE_CHUNK);
+						assert(req_c->file.is_temp == 1);
+
+						c->file.is_temp = 1;
+						req_c->file.is_temp = 0;
+
+						chunkqueue_remove_finished_chunks(req_cq);
+
+						req_c = req_cq->first;
+					}
+
+					break;
+				case MEM_CHUNK:
+					/* append to the buffer */
+					weHave = req_c->mem->used - 1 - req_c->offset;
+
+					if (weHave > weWant - written) weHave = weWant - written;
+
+					buffer_append_memory(b, req_c->mem->ptr + req_c->offset, weHave);
+
+					req_c->offset += weHave;
+					req_cq->bytes_out += weHave;
+					written += weHave;
+					
+					hctx->wb->bytes_in += weHave;
+
+					if (req_c->offset == req_c->mem->used - 1) {
+						chunkqueue_remove_finished_chunks(req_cq);
+
+						req_c = req_cq->first;
+					}
+
+					break;
+				default:
+					break;
+				}
+			}
+			
+			b->used++; /* add virtual \0 */
+			offset += weWant;
+		}
 	}
 	
+	b = chunkqueue_get_append_buffer(hctx->wb);
 	/* terminate STDIN */
 	fcgi_header(&(header), FCGI_STDIN, request_id, 0, 0);
-	buffer_append_memory(hctx->write_buffer, (const char *)&header, sizeof(header));
+	buffer_copy_memory(b, (const char *)&header, sizeof(header));
+	b->used++; /* add virtual \0 */
+
+	hctx->wb->bytes_in += sizeof(header);
 
 #if 0
 	for (i = 0; i < hctx->write_buffer->used; i++) {
@@ -2449,7 +2560,7 @@ static handler_t fcgi_write_request(server *srv, handler_ctx *hctx) {
 	fcgi_extension_host *host= hctx->host;
 	connection *con   = hctx->remote_conn;
 	
-	int r;
+	int ret;
 
 	/* sanity check */	
 	if (!host ||
@@ -2466,9 +2577,9 @@ static handler_t fcgi_write_request(server *srv, handler_ctx *hctx) {
 
 	switch(hctx->state) {
 	case FCGI_STATE_INIT:
-		r = host->unixsocket->used ? AF_UNIX : AF_INET;
+		ret = host->unixsocket->used ? AF_UNIX : AF_INET;
 		
-		if (-1 == (hctx->fd = socket(r, SOCK_STREAM, 0))) {
+		if (-1 == (hctx->fd = socket(ret, SOCK_STREAM, 0))) {
 			if (errno == EMFILE ||
 			    errno == EINTR) {
 				log_error_write(srv, __FILE__, __LINE__, "sd", 
@@ -2588,25 +2699,34 @@ static handler_t fcgi_write_request(server *srv, handler_ctx *hctx) {
 		fcgi_create_env(srv, hctx, hctx->request_id);
 		
 		fcgi_set_state(srv, hctx, FCGI_STATE_WRITE);
-		hctx->write_offset = 0;
 		
 		/* fall through */
 	case FCGI_STATE_WRITE:
-		/* why aren't we using the network_ interface here ? */
+
+#if defined USE_LINUX_SENDFILE
+		ret = network_write_chunkqueue_linuxsendfile(srv, con, hctx->fd, hctx->wb); 
+#elif defined USE_FREEBSD_SENDFILE
+		ret = network_write_chunkqueue_freebsdsendfile(srv, con, hctx->fd, hctx->wb); 
+#elif defined USE_SOLARIS_SENDFILEV
+		ret = network_write_chunkqueue_solarissendfilev(srv, con, hctx->fd, hctx->wb); 
+#elif defined USE_WRITEV
+		ret = network_write_chunkqueue_writev(srv, con, hctx->fd, hctx->wb);
+#else
+		ret = network_write_chunkqueue_write(srv, con, hctx->fd, hctx->wb);
+#endif
+
+		chunkqueue_remove_finished_chunks(hctx->wb);
 		
-		r = write(hctx->fd, 
-			  hctx->write_buffer->ptr + hctx->write_offset, 
-			  hctx->write_buffer->used - hctx->write_offset);
-		
-		if (-1 == r) {
-			if (errno == ENOTCONN) {
+		if (ret < 0) {
+			switch(errno) {
+			case ENOTCONN:
 				/* the connection got dropped after accept() 
 				 * 
 				 * this is most of the time a PHP which dies 
 				 * after PHP_FCGI_MAX_REQUESTS
 				 * 
 				 */ 
-				if (hctx->write_offset == 0 &&
+				if (hctx->wb->bytes_out == 0 &&
 				    hctx->reconnects < 5) {
 					usleep(10000); /* take away the load of the webserver 
 							* to let the php a chance to restart 
@@ -2625,35 +2745,34 @@ static handler_t fcgi_write_request(server *srv, handler_ctx *hctx) {
 				
 				log_error_write(srv, __FILE__, __LINE__, "ssdsd", 
 						"[REPORT ME] connection was dropped after accept(). reconnect() denied:",
-						"write-offset:", hctx->write_offset,
+						"write-offset:", hctx->wb->bytes_out,
 						"reconnect attempts:", hctx->reconnects);
 				
 				return HANDLER_ERROR;
-			}
-			
-			if ((errno != EAGAIN) &&
-			    (errno != EINTR)) {
+			case EAGAIN:
+			case EINTR:
+				fdevent_event_add(srv->ev, &(hctx->fde_ndx), hctx->fd, FDEVENT_OUT);
 				
+				return HANDLER_WAIT_FOR_EVENT;
+			default:
 				log_error_write(srv, __FILE__, __LINE__, "ssd", 
 						"write failed:", strerror(errno), errno);
 				
 				return HANDLER_ERROR;
-			} else {
-				fdevent_event_add(srv->ev, &(hctx->fde_ndx), hctx->fd, FDEVENT_OUT);
-				
-				return HANDLER_WAIT_FOR_EVENT;
 			}
 		}
-		
-		hctx->write_offset += r;
-		
-		if (hctx->write_offset == hctx->write_buffer->used) {
+
+		if (hctx->wb->bytes_out == hctx->wb->bytes_in) {
 			/* we don't need the out event anymore */
 			fdevent_event_del(srv->ev, &(hctx->fde_ndx), hctx->fd);
 			fdevent_event_add(srv->ev, &(hctx->fde_ndx), hctx->fd, FDEVENT_IN);
 			fcgi_set_state(srv, hctx, FCGI_STATE_READ);
+		} else {
+			fdevent_event_add(srv->ev, &(hctx->fde_ndx), hctx->fd, FDEVENT_OUT);
+				
+			return HANDLER_WAIT_FOR_EVENT;
 		}
-		
+
 		break;
 	case FCGI_STATE_READ:
 		/* waiting for a response */
@@ -2735,7 +2854,7 @@ SUBREQUEST_FUNC(mod_fastcgi_handle_subrequest) {
 			
 			buffer_reset(con->physical.path);
 			con->mode = DIRECT;
-			joblist_append(srv, con);
+			joblist_append(srv, con); /* really ? */
 
 			/* mis-using HANDLER_WAIT_FOR_FD to break out of the loop 
 			 * and hope that the childs will be restarted 
@@ -2758,6 +2877,7 @@ SUBREQUEST_FUNC(mod_fastcgi_handle_subrequest) {
 			buffer_reset(con->physical.path);
 			con->mode = DIRECT;
 			con->http_status = 503;
+			joblist_append(srv, con); /* really ? */
 			
 			return HANDLER_FINISHED;
 		}
@@ -2865,11 +2985,11 @@ static handler_t fcgi_handle_fdevent(void *s, void *ctx, int revents) {
 			if (con->file_started == 0) {
 				/* nothing has been send out yet, try to use another child */
 				
-				if (hctx->write_offset == 0 &&
+				if (hctx->wb->bytes_out == 0 &&
 				    hctx->reconnects < 5) {
 					fcgi_reconnect(srv, hctx);
 					
-					log_error_write(srv, __FILE__, __LINE__, "sdsdsd", 
+					log_error_write(srv, __FILE__, __LINE__, "ssdsd", 
 						"response not sent, request not sent, reconnection.",
 						"connection-fd:", con->fd,
 						"fcgi-fd:", hctx->fd);
@@ -2877,8 +2997,8 @@ static handler_t fcgi_handle_fdevent(void *s, void *ctx, int revents) {
 					return HANDLER_WAIT_FOR_FD;
 				}
 				
-				log_error_write(srv, __FILE__, __LINE__, "sdsdsd", 
-						"response not sent, request sent:", hctx->write_offset,
+				log_error_write(srv, __FILE__, __LINE__, "sosdsd", 
+						"response not sent, request sent:", hctx->wb->bytes_out,
 						"connection-fd:", con->fd,
 						"fcgi-fd:", hctx->fd);
 				

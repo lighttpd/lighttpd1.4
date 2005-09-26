@@ -157,7 +157,6 @@ typedef struct {
 	array  *headers;
 	
 	/* CONTENT */
-	buffer *content;
 	size_t content_length; /* returned by strtoul() */
 	
 	/* internal representation */
@@ -330,8 +329,9 @@ typedef struct {
 	int file_started;
 	int file_finished;
 	
-	chunkqueue *write_queue;
-	chunkqueue *read_queue;
+	chunkqueue *write_queue;      /* a large queue for low-level write ( HTTP response ) [ file, mem ] */
+	chunkqueue *read_queue;       /* a small queue for low-level read ( HTTP request ) [ mem ] */
+	chunkqueue *request_content_queue; /* takes request-content into tempfile if necessary [ tempfile, mem ]*/
 	
 	int traffic_limit_reached;
 	
