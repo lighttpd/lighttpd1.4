@@ -46,11 +46,13 @@
 #include "base.h"
 
 
-int network_write_chunkqueue_write(server *srv, connection *con, chunkqueue *cq);
-int network_write_chunkqueue_writev(server *srv, connection *con, chunkqueue *cq);
-int network_write_chunkqueue_linuxsendfile(server *srv, connection *con, chunkqueue *cq);
-int network_write_chunkqueue_freebsdsendfile(server *srv, connection *con, chunkqueue *cq);
-int network_write_chunkqueue_solarissendfilev(server *srv, connection *con, chunkqueue *cq);
-int network_write_chunkqueue_openssl(server *srv, connection *con, chunkqueue *cq);
+int network_write_chunkqueue_write(server *srv, connection *con, int fd, chunkqueue *cq);
+int network_write_chunkqueue_writev(server *srv, connection *con, int fd, chunkqueue *cq);
+int network_write_chunkqueue_linuxsendfile(server *srv, connection *con, int fd, chunkqueue *cq);
+int network_write_chunkqueue_freebsdsendfile(server *srv, connection *con, int fd, chunkqueue *cq);
+int network_write_chunkqueue_solarissendfilev(server *srv, connection *con, int fd, chunkqueue *cq);
+#ifdef USE_OPENSSL
+int network_write_chunkqueue_openssl(server *srv, connection *con, SSL *ssl, chunkqueue *cq);
+#endif
 
 #endif

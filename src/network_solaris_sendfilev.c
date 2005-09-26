@@ -38,8 +38,7 @@
  */
 
 
-int network_write_chunkqueue_solarissendfilev(server *srv, connection *con, chunkqueue *cq) {
-	const int fd = con->fd;
+int network_write_chunkqueue_solarissendfilev(server *srv, connection *con, int fd, chunkqueue *cq) {
 	chunk *c;
 	size_t chunks_written = 0;
 	
@@ -110,13 +109,13 @@ int network_write_chunkqueue_solarissendfilev(server *srv, connection *con, chun
 			}
 			
 			/* check which chunks have been written */
+			cq->bytes_out += r;
 			
 			for(i = 0, tc = c; i < num_chunks; i++, tc = tc->next) {
 				if (r >= (ssize_t)chunks[i].iov_len) {
 					/* written */
 					r -= chunks[i].iov_len;
 					tc->offset += chunks[i].iov_len;
-					con->bytes_written += chunks[i].iov_len;
 					
 					if (chunk_finished) {
 						/* skip the chunks from further touches */
@@ -130,7 +129,6 @@ int network_write_chunkqueue_solarissendfilev(server *srv, connection *con, chun
 					/* partially written */
 					
 					tc->offset += r;
-					con->bytes_written += r;
 					chunk_finished = 0;
 					
 					break;
@@ -187,7 +185,7 @@ int network_write_chunkqueue_solarissendfilev(server *srv, connection *con, chun
 			
 			close(ifd);
 			c->offset += written;
-			con->bytes_written += written;
+			cq->bytes_out += written;
 			
 			if (c->offset == c->file.length) {
 				chunk_finished = 1;

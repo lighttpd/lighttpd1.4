@@ -24,8 +24,7 @@
 #include <sys/resource.h>
 #endif
 
-int network_write_chunkqueue_write(server *srv, connection *con, chunkqueue *cq) {
-	const int fd = con->fd;
+int network_write_chunkqueue_write(server *srv, connection *con, int fd, chunkqueue *cq) {
 	chunk *c;
 	size_t chunks_written = 0;
 	
@@ -60,7 +59,6 @@ int network_write_chunkqueue_write(server *srv, connection *con, chunkqueue *cq)
 #endif
 			
 			c->offset += r;
-			con->bytes_written += r;
 			cq->bytes_out += r;
 			
 			if (c->offset == (off_t)c->mem->used - 1) {
@@ -109,7 +107,7 @@ int network_write_chunkqueue_write(server *srv, connection *con, chunkqueue *cq)
 				return -1;
 			}
 			close(ifd);
-							
+
 			if ((r = write(fd, p + offset, toSend)) <= 0) {
 				log_error_write(srv, __FILE__, __LINE__, "ss", "write failed: ", strerror(errno));
 				
@@ -136,7 +134,6 @@ int network_write_chunkqueue_write(server *srv, connection *con, chunkqueue *cq)
 			}
 #endif
 			c->offset += r;
-			con->bytes_written += r;
 			cq->bytes_out += r;
 			
 			if (c->offset == c->file.length) {

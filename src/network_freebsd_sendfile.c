@@ -31,8 +31,7 @@
 # endif
 #endif
 
-int network_write_chunkqueue_freebsdsendfile(server *srv, connection *con, chunkqueue *cq) {
-	const int fd = con->fd;
+int network_write_chunkqueue_freebsdsendfile(server *srv, connection *con, int fd, chunkqueue *cq) {
 	chunk *c;
 	size_t chunks_written = 0;
 	
@@ -105,7 +104,6 @@ int network_write_chunkqueue_freebsdsendfile(server *srv, connection *con, chunk
 			
 			/* check which chunks have been written */
 			cq->bytes_out += r;
-			con->bytes_written += r;
 			
 			for(i = 0, tc = c; i < num_chunks; i++, tc = tc->next) {
 				if (r >= (ssize_t)chunks[i].iov_len) {
@@ -181,7 +179,6 @@ int network_write_chunkqueue_freebsdsendfile(server *srv, connection *con, chunk
 			close(ifd);
 			
 			c->offset += r;
-			con->bytes_written += r;
 			cq->bytes_out += r;
 			
 			if (c->offset == c->file.length) {
