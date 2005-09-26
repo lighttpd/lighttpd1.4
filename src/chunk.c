@@ -58,6 +58,11 @@ static void chunk_reset(chunk *c) {
 	if (!c) return;
 	
 	buffer_reset(c->mem);
+
+	if (c->file.is_temp && !buffer_is_empty(c->file.name)) {
+		unlink(c->file.name->ptr);
+	}
+	
 	buffer_reset(c->file.name);
 
 	if (c->file.fd != -1) {
@@ -246,6 +251,25 @@ buffer *chunkqueue_get_append_buffer(chunkqueue *cq) {
 	
 	return c->mem;
 }
+
+chunk *chunkqueue_get_append_tempfile(chunkqueue *cq) {
+	chunk *c;
+	char template[] = "/var/tmp/lighttpd-upload-XXXXXX";
+	
+	c = chunkqueue_get_unused_chunk(cq);
+
+	c->type = FILE_CHUNK;
+	c->file.is_temp = 1;
+	c->offset = 0;
+	c->file.fd = mkstemp(template);
+	c->file.length = 0;
+	buffer_copy_string(c->file.name, template);
+
+	chunkqueue_append_chunk(cq, c);
+	
+	return c;
+}
+
 
 off_t chunkqueue_length(chunkqueue *cq) {
 	off_t len = 0;
