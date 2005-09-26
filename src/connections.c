@@ -193,10 +193,11 @@ static void dump_packet(const unsigned char *data, size_t len) {
 static int connection_handle_read(server *srv, connection *con) {
 	int len;
 	buffer *b;
+	int toread;
 #ifdef USE_OPENSSL
 	server_socket *srv_sock = con->srv_socket;
 #endif
-	
+
 	b = chunkqueue_get_append_buffer(con->read_queue);
 	buffer_prepare_copy(b, 4096);
 
@@ -204,11 +205,27 @@ static int connection_handle_read(server *srv, connection *con) {
 	if (srv_sock->is_ssl) {
 		len = SSL_read(con->ssl, b->ptr, b->size - 1);
 	} else {
+		if (ioctl(con->fd, FIONREAD, &toread)) {
+			log_error_write(srv, __FILE__, __LINE__, "sd", 
+					"unexpected end-of-file:",
+					con->fd);
+			return -1;
+		}
+		buffer_prepare_copy(b, toread);
+
 		len = read(con->fd, b->ptr, b->size - 1);
 	}
 #elif defined(__WIN32)
 	len = recv(con->fd, b->ptr, b->size - 1, 0);
 #else
+	if (ioctl(con->fd, FIONREAD, &toread)) {
+		log_error_write(srv, __FILE__, __LINE__, "sd", 
+				"unexpected end-of-file:",
+				con->fd);
+		return -1;
+	}
+	buffer_prepare_copy(b, toread);
+
 	len = read(con->fd, b->ptr, b->size - 1);
 #endif
 	
@@ -538,7 +555,6 @@ connection *connection_init(server *srv) {
 	CLEAN(request.request_line);
 	CLEAN(request.request);
 	CLEAN(request.pathinfo);
-	CLEAN(request.content);
 	
 	CLEAN(request.orig_uri);
 	
@@ -563,6 +579,7 @@ connection *connection_init(server *srv) {
 #undef CLEAN
 	con->write_queue = chunkqueue_init();
 	con->read_queue = chunkqueue_init();
+	con->request_content_queue = chunkqueue_init();
 	con->request.headers      = array_init();
 	con->response.headers     = array_init();
 	con->environment     = array_init();
@@ -588,6 +605,7 @@ void connections_free(server *srv) {
 		
 		chunkqueue_free(con->write_queue);
 		chunkqueue_free(con->read_queue);
+		chunkqueue_free(con->request_content_queue);
 		array_free(con->request.headers);
 		array_free(con->response.headers);
 		array_free(con->environment);
@@ -599,7 +617,6 @@ void connections_free(server *srv) {
 		CLEAN(request.request_line);
 		CLEAN(request.request);
 		CLEAN(request.pathinfo);
-		CLEAN(request.content);
 		
 		CLEAN(request.orig_uri);
 		
@@ -669,7 +686,6 @@ int connection_reset(server *srv, connection *con) {
 	CLEAN(request.uri);
 	CLEAN(request.request_line);
 	CLEAN(request.pathinfo);
-	CLEAN(request.content);
 	CLEAN(request.request);
 	
 	CLEAN(request.orig_uri);
@@ -712,6 +728,7 @@ int connection_reset(server *srv, connection *con) {
 	array_reset(con->environment);
 	
 	chunkqueue_reset(con->write_queue);
+	chunkqueue_reset(con->request_content_queue);
 
 	/* the plugins should cleanup themself */	
 	for (i = 0; i < srv->plugins.used; i++) {
@@ -791,6 +808,8 @@ int connection_handle_read_state(server *srv, connection *con)  {
 	char *h_term = NULL;
 	chunk *c;
 	chunkqueue *cq = con->read_queue;
+	chunkqueue *dst_cq = con->request_content_queue;
+	size_t memusage;
 	
 	if (con->is_readable) {
 		con->read_idle_ts = srv->cur_ts;
@@ -905,66 +924,86 @@ int connection_handle_read_state(server *srv, connection *con)  {
 				c->offset = c->mem->used - 1;
 			}
 		}
-		
-		if (c->offset + 1 == c->mem->used) {
-			/* chunk is empty, move it to unused */
-			cq->first = c->next;
-			c->next = cq->unused;
-			cq->unused = c;
-			
-			if (cq->first == NULL) cq->last = NULL;
-			
-			assert(c != c->next);
-		}
-		
+
 		/* con->request.request is setup up */
 		if (h_term) {
 			connection_set_state(srv, con, CON_STATE_REQUEST_END);
-		} else if (chunkqueue_length(cq) > 64 * 1024) {
+		} else if (con->request.request->used > 64 * 1024) {
 			log_error_write(srv, __FILE__, __LINE__, "sd", "http-header larger then 64k -> disconnected", chunkqueue_length(cq));
 			connection_set_state(srv, con, CON_STATE_ERROR);
 		}
 		break;
 	case CON_STATE_READ_POST: 
-		for (c = cq->first; c && (con->request.content->used != con->request.content_length + 1); c = cq->first) {
+		for (c = cq->first; c && (dst_cq->bytes_in != con->request.content_length); c = c->next) {
 			off_t weWant, weHave, toRead;
+			int buffer_to_file = 0;
 			
-			weWant = con->request.content_length - (con->request.content->used ? con->request.content->used - 1 : 0);
-			/* without the terminating \0 */
+			weWant = con->request.content_length - dst_cq->bytes_in;
 			
 			assert(c->mem->used);
 			
 			weHave = c->mem->used - c->offset - 1;
 				
 			toRead = weHave > weWant ? weWant : weHave;
-			
-			buffer_append_string_len(con->request.content, c->mem->ptr + c->offset, toRead);
+
+			/* the new way, copy everything into a chunkqueue whcih might use tempfiles */
+			if (con->request.content_length > 64 * 1024) {
+				chunk *dst_c = NULL;
+				/* copy everything to max 1Mb sized tempfiles */
+
+				/*
+				 * if the last chunk is 
+				 * - smaller than 1Mb (size < 1Mb)
+				 * - not read yet (offset == 0)
+				 * -> append to it
+				 * otherwise
+				 * -> create a new chunk 
+				 * 
+				 * */
+
+				if (dst_cq->last &&
+				    dst_cq->last->type == FILE_CHUNK &&
+				    dst_cq->last->file.is_temp &&
+				    dst_cq->last->offset == 0 &&
+				    dst_cq->last->file.length < 1 * 1024 * 1024) {
+					/* ok, take the last chunk for our job */
+					dst_c = dst_cq->last;
+					dst_c->file.fd = open(dst_c->file.name->ptr, O_WRONLY | O_APPEND);
+				} else {
+					dst_c = chunkqueue_get_append_tempfile(dst_cq);
+				}
+
+				/* we have a chunk, let's write to it */
+
+				assert(dst_c->file.fd != -1);
+
+				assert(toRead == write(dst_c->file.fd, c->mem->ptr + c->offset, toRead));
+
+				dst_c->file.length += toRead;
+					
+				close(dst_c->file.fd);
+				dst_c->file.fd = -1;
+			} else {
+				buffer *b;
+
+				b = chunkqueue_get_append_buffer(dst_cq);
+				buffer_copy_string_len(b, c->mem->ptr + c->offset, toRead);
+			}
 			
 			c->offset += toRead;
-			
-			if (c->offset + 1 >= c->mem->used) {
-				/* chunk is empty, move it to unused */
-				
-				cq->first = c->next;
-				c->next = cq->unused;
-				cq->unused = c;
-				
-				if (cq->first == NULL) cq->last = NULL;
-				
-				assert(c != c->next);
-			} else {
-				assert(toRead);
-			}
+			dst_cq->bytes_in += toRead;
 		}
-		
+
 		/* Content is ready */
-		if (con->request.content->used == con->request.content_length + 1) {
+		if (dst_cq->bytes_in == con->request.content_length) {
 			connection_set_state(srv, con, CON_STATE_HANDLE_REQUEST);
 		}
 			
 		break;
 	}
-	
+
+	chunkqueue_remove_finished_chunks(cq);
+
 	return 0;
 }
 

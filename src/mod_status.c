@@ -478,7 +478,7 @@ static handler_t mod_status_handle_server_status_html(server *srv, connection *c
 		BUFFER_APPEND_STRING_CONST(b, "</td><td class=\"int\">");
 		
 		if (con->request.content_length) {
-			buffer_append_long(b, c->request.content->used);
+			buffer_append_long(b, c->request_content_queue->bytes_in);
 			BUFFER_APPEND_STRING_CONST(b, "/");
 			buffer_append_long(b, c->request.content_length);
 		} else {

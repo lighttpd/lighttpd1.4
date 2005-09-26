@@ -22,6 +22,7 @@
 #include "plugin.h"
 
 #include "inet_ntop_cache.h"
+#include "network_backends.h"
 
 #include <stdio.h>
 
@@ -298,10 +299,8 @@ typedef struct {
 	
 	int      reconnects; /* number of reconnect attempts */
 	
-	buffer   *write_buffer;
-	size_t    write_offset;
-	
 	read_buffer *rb;
+	chunkqueue *wb;
 	
 	buffer   *response_header;
 	
@@ -338,7 +337,6 @@ static handler_ctx * handler_ctx_init() {
 	
 	hctx->response = buffer_init();
 	hctx->response_header = buffer_init();
-	hctx->write_buffer = buffer_init();
 	
 	hctx->request_id = 0;
 	hctx->state = FCGI_STATE_INIT;
@@ -350,6 +348,8 @@ static handler_ctx * handler_ctx_init() {
 	hctx->fd = -1;
 	
 	hctx->reconnects = 0;
+
+	hctx->wb = chunkqueue_init();
 	
 	return hctx;
 }
@@ -357,7 +357,8 @@ static handler_ctx * handler_ctx_init() {
 static void handler_ctx_free(handler_ctx *hctx) {
 	buffer_free(hctx->response);
 	buffer_free(hctx->response_header);
-	buffer_free(hctx->write_buffer);
+
+	chunkqueue_free(hctx->wb);
 	
 	if (hctx->rb) {
 		if (hctx->rb->ptr) free(hctx->rb->ptr);
@@ -1409,11 +1410,11 @@ static int scgi_env_add_request_headers(server *srv, connection *con, plugin_dat
 
 static int scgi_create_env(server *srv, handler_ctx *hctx) {
 	char buf[32];
-	size_t offset;
 	const char *s;
 #ifdef HAVE_IPV6
 	char b2[INET6_ADDRSTRLEN + 1];
 #endif
+	buffer *b;
 	
 	plugin_data *p    = hctx->plugin_data;
 	scgi_extension_host *host= hctx->host;
@@ -1564,23 +1565,66 @@ static int scgi_create_env(server *srv, handler_ctx *hctx) {
 #endif
 	
 	scgi_env_add_request_headers(srv, con, p);
+
+	b = chunkqueue_get_append_buffer(hctx->wb);
 	
-	buffer_append_long(hctx->write_buffer, p->scgi_env->used);
-	buffer_append_string_len(hctx->write_buffer, CONST_STR_LEN(":"));
-	buffer_append_string_len(hctx->write_buffer, (const char *)p->scgi_env->ptr, p->scgi_env->used);
-	buffer_append_string_len(hctx->write_buffer, CONST_STR_LEN(","));
-	hctx->write_buffer->used--;
+	buffer_append_long(b, p->scgi_env->used);
+	buffer_append_string_len(b, CONST_STR_LEN(":"));
+	buffer_append_string_len(b, (const char *)p->scgi_env->ptr, p->scgi_env->used);
+	buffer_append_string_len(b, CONST_STR_LEN(","));
+
+	hctx->wb->bytes_in += b->used - 1;
 	
-	/* send FCGI_STDIN */
-	
-	/* something to send ? */
-	for (offset = 0; offset != con->request.content_length; ) {
-		/* send chunks of 1024 bytes */
-		size_t toWrite = con->request.content_length - offset > 4096 ? 4096 : con->request.content_length - offset;
-		
-		buffer_append_memory(hctx->write_buffer, (const char *)(con->request.content->ptr + offset), toWrite);
-		
-		offset += toWrite;
+	if (con->request.content_length) {
+		chunkqueue *req_cq = con->request_content_queue;
+		chunk *req_c;
+		size_t offset;
+
+		/* something to send ? */
+		for (offset = 0, req_c = req_cq->first; offset != req_cq->bytes_in; req_c = req_c->next) {
+			size_t weWant = req_cq->bytes_in - offset;
+			size_t weHave = 0;
+
+			/* we announce toWrite octects
+			 * now take all the request_content chunk that we need to fill this request
+			 * */	
+
+			switch (req_c->type) {
+			case FILE_CHUNK:
+				weHave = req_c->file.length - req_c->offset;
+
+				if (weHave > weWant) weHave = weWant;
+
+				chunkqueue_append_file(hctx->wb, req_c->file.name, req_c->offset, weHave);
+
+				req_c->offset += weHave;
+				req_cq->bytes_out += weHave;
+
+				hctx->wb->bytes_in += weHave;
+
+				break;
+			case MEM_CHUNK:
+				/* append to the buffer */
+				weHave = req_c->mem->used - 1 - req_c->offset;
+
+				if (weHave > weWant) weHave = weWant;
+
+				b = chunkqueue_get_append_buffer(hctx->wb);
+				buffer_append_memory(b, req_c->mem->ptr + req_c->offset, weHave);
+				b->used++; /* add virtual \0 */
+
+				req_c->offset += weHave;
+				req_cq->bytes_out += weHave;
+				
+				hctx->wb->bytes_in += weHave;
+
+				break;
+			default:
+				break;
+			}
+			
+			offset += weHave;
+		}
 	}
 	
 #if 0
@@ -2078,7 +2122,7 @@ static handler_t scgi_write_request(server *srv, handler_ctx *hctx) {
 	scgi_extension_host *host= hctx->host;
 	connection *con   = hctx->remote_conn;
 	
-	int r;
+	int ret;
 
 	/* sanity check */	
 	if (!host ||
@@ -2095,9 +2139,9 @@ static handler_t scgi_write_request(server *srv, handler_ctx *hctx) {
 
 	switch(hctx->state) {
 	case FCGI_STATE_INIT:
-		r = host->unixsocket->used ? AF_UNIX : AF_INET;
+		ret = host->unixsocket->used ? AF_UNIX : AF_INET;
 		
-		if (-1 == (hctx->fd = socket(r, SOCK_STREAM, 0))) {
+		if (-1 == (hctx->fd = socket(ret, SOCK_STREAM, 0))) {
 			if (errno == EMFILE ||
 			    errno == EINTR) {
 				log_error_write(srv, __FILE__, __LINE__, "sd", 
@@ -2210,17 +2254,25 @@ static handler_t scgi_write_request(server *srv, handler_ctx *hctx) {
 		scgi_create_env(srv, hctx);
 		
 		scgi_set_state(srv, hctx, FCGI_STATE_WRITE);
-		hctx->write_offset = 0;
 		
 		/* fall through */
 	case FCGI_STATE_WRITE:
 		/* why aren't we using the network_ interface here ? */
-		
-		r = write(hctx->fd, 
-			  hctx->write_buffer->ptr + hctx->write_offset, 
-			  hctx->write_buffer->used - hctx->write_offset);
-		
-		if (-1 == r) {
+#if defined USE_LINUX_SENDFILE
+		ret = network_write_chunkqueue_linuxsendfile(srv, con, hctx->fd, hctx->wb); 
+#elif defined USE_FREEBSD_SENDFILE
+		ret = network_write_chunkqueue_freebsdsendfile(srv, con, hctx->fd, hctx->wb); 
+#elif defined USE_SOLARIS_SENDFILEV
+		ret = network_write_chunkqueue_solarissendfilev(srv, con, hctx->fd, hctx->wb); 
+#elif defined USE_WRITEV
+		ret = network_write_chunkqueue_writev(srv, con, hctx->fd, hctx->wb);
+#else
+		ret = network_write_chunkqueue_write(srv, con, hctx->fd, hctx->wb);
+#endif
+
+		chunkqueue_remove_finished_chunks(hctx->wb);
+	
+		if (-1 == ret) {
 			if (errno == ENOTCONN) {
 				/* the connection got dropped after accept() 
 				 * 
@@ -2228,7 +2280,7 @@ static handler_t scgi_write_request(server *srv, handler_ctx *hctx) {
 				 * after PHP_FCGI_MAX_REQUESTS
 				 * 
 				 */ 
-				if (hctx->write_offset == 0 &&
+				if (hctx->wb->bytes_out == 0 &&
 				    hctx->reconnects < 5) {
 					usleep(10000); /* take away the load of the webserver 
 							* to let the php a chance to restart 
@@ -2247,7 +2299,7 @@ static handler_t scgi_write_request(server *srv, handler_ctx *hctx) {
 				
 				log_error_write(srv, __FILE__, __LINE__, "ssdsd", 
 						"[REPORT ME] connection was dropped after accept(). reconnect() denied:",
-						"write-offset:", hctx->write_offset,
+						"write-offset:", hctx->wb->bytes_out,
 						"reconnect attempts:", hctx->reconnects);
 				
 				return HANDLER_ERROR;
@@ -2267,13 +2319,15 @@ static handler_t scgi_write_request(server *srv, handler_ctx *hctx) {
 			}
 		}
 		
-		hctx->write_offset += r;
-		
-		if (hctx->write_offset == hctx->write_buffer->used) {
+		if (hctx->wb->bytes_out == hctx->wb->bytes_in) {
 			/* we don't need the out event anymore */
 			fdevent_event_del(srv->ev, &(hctx->fde_ndx), hctx->fd);
 			fdevent_event_add(srv->ev, &(hctx->fde_ndx), hctx->fd, FDEVENT_IN);
 			scgi_set_state(srv, hctx, FCGI_STATE_READ);
+		} else {
+			fdevent_event_add(srv->ev, &(hctx->fde_ndx), hctx->fd, FDEVENT_OUT);
+			
+			return HANDLER_WAIT_FOR_EVENT;
 		}
 		
 		break;
@@ -2481,7 +2535,7 @@ static handler_t scgi_handle_fdevent(void *s, void *ctx, int revents) {
 			if (con->file_started == 0) {
 				/* nothing has been send out yet, try to use another child */
 				
-				if (hctx->write_offset == 0 &&
+				if (hctx->wb->bytes_out == 0 &&
 				    hctx->reconnects < 5) {
 					scgi_reconnect(srv, hctx);
 					
@@ -2494,7 +2548,7 @@ static handler_t scgi_handle_fdevent(void *s, void *ctx, int revents) {
 				}
 				
 				log_error_write(srv, __FILE__, __LINE__, "sdsdsd", 
-						"response not sent, request sent:", hctx->write_offset,
+						"response not sent, request sent:", hctx->wb->bytes_out,
 						"connection-fd:", con->fd,
 						"fcgi-fd:", hctx->fd);
 				

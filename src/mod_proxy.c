@@ -23,6 +23,7 @@
 
 #include "inet_ntop_cache.h"
 #include "crc32.h"
+#include "network_backends.h"
 
 #include <stdio.h>
 
@@ -98,11 +99,9 @@ typedef struct {
 	
 	buffer *response;
 	buffer *response_header;
-	
-	buffer *write_buffer;
-	size_t  write_offset;
-	
 
+	chunkqueue *wb;
+	
 	int fd; /* fd to the proxy process */
 	int fde_ndx; /* index into the fd-event buffer */
 
@@ -128,7 +127,7 @@ static handler_ctx * handler_ctx_init() {
 	hctx->response = buffer_init();
 	hctx->response_header = buffer_init();
 
-	hctx->write_buffer = buffer_init();
+	hctx->wb = chunkqueue_init();
 
 	hctx->fd = -1;
 	hctx->fde_ndx = -1;
@@ -139,7 +138,7 @@ static handler_ctx * handler_ctx_init() {
 static void handler_ctx_free(handler_ctx *hctx) {
 	buffer_free(hctx->response);
 	buffer_free(hctx->response_header);
-	buffer_free(hctx->write_buffer);
+	chunkqueue_free(hctx->wb);
 	
 	free(hctx);
 }
@@ -402,18 +401,19 @@ static int proxy_create_env(server *srv, handler_ctx *hctx) {
 	size_t i;
 	
 	connection *con   = hctx->remote_conn;
+	buffer *b;
 	UNUSED(srv);
 	
 	/* build header */
-	
-	buffer_reset(hctx->write_buffer);
+
+	b = chunkqueue_get_append_buffer(hctx->wb);
 	
 	/* request line */
-	buffer_copy_string(hctx->write_buffer, get_http_method_name(con->request.http_method));
-	BUFFER_APPEND_STRING_CONST(hctx->write_buffer, " ");
+	buffer_copy_string(b, get_http_method_name(con->request.http_method));
+	BUFFER_APPEND_STRING_CONST(b, " ");
 	
-	buffer_append_string_buffer(hctx->write_buffer, con->request.uri);
-	BUFFER_APPEND_STRING_CONST(hctx->write_buffer, " HTTP/1.0\r\n");
+	buffer_append_string_buffer(b, con->request.uri);
+	BUFFER_APPEND_STRING_CONST(b, " HTTP/1.0\r\n");
 	
 	/* request header */
 	for (i = 0; i < con->request.headers->used; i++) {
@@ -424,25 +424,73 @@ static int proxy_create_env(server *srv, handler_ctx *hctx) {
 		if (ds->value->used && ds->key->used) {
 			if (0 == strcmp(ds->key->ptr, "Connection")) continue;
 			
-			buffer_append_string_buffer(hctx->write_buffer, ds->key);
-			BUFFER_APPEND_STRING_CONST(hctx->write_buffer, ": ");
-			buffer_append_string_buffer(hctx->write_buffer, ds->value);
-			BUFFER_APPEND_STRING_CONST(hctx->write_buffer, "\r\n");
+			buffer_append_string_buffer(b, ds->key);
+			BUFFER_APPEND_STRING_CONST(b, ": ");
+			buffer_append_string_buffer(b, ds->value);
+			BUFFER_APPEND_STRING_CONST(b, "\r\n");
 		}
 	}
 	
-	BUFFER_APPEND_STRING_CONST(hctx->write_buffer, "X-Forwarded-For: ");
-	buffer_append_string(hctx->write_buffer, inet_ntop_cache_get_ip(srv, &(con->dst_addr)));
-	BUFFER_APPEND_STRING_CONST(hctx->write_buffer, "\r\n");
+	BUFFER_APPEND_STRING_CONST(b, "X-Forwarded-For: ");
+	buffer_append_string(b, inet_ntop_cache_get_ip(srv, &(con->dst_addr)));
+	BUFFER_APPEND_STRING_CONST(b, "\r\n");
 	
-	BUFFER_APPEND_STRING_CONST(hctx->write_buffer, "\r\n");
+	BUFFER_APPEND_STRING_CONST(b, "\r\n");
 	
+	hctx->wb->bytes_in += b->used - 1;
 	/* body */
 	
 	if (con->request.content_length) {
-		/* the buffer-string functions add an extra \0 at the end the memory-function don't */
-		hctx->write_buffer->used--;
-		buffer_append_memory(hctx->write_buffer, con->request.content->ptr, con->request.content_length);
+		chunkqueue *req_cq = con->request_content_queue;
+		chunk *req_c;
+		size_t offset;
+
+		/* something to send ? */
+		for (offset = 0, req_c = req_cq->first; offset != req_cq->bytes_in; req_c = req_c->next) {
+			size_t weWant = req_cq->bytes_in - offset;
+			size_t weHave = 0;
+
+			/* we announce toWrite octects
+			 * now take all the request_content chunk that we need to fill this request
+			 * */	
+
+			switch (req_c->type) {
+			case FILE_CHUNK:
+				weHave = req_c->file.length - req_c->offset;
+
+				if (weHave > weWant) weHave = weWant;
+
+				chunkqueue_append_file(hctx->wb, req_c->file.name, req_c->offset, weHave);
+
+				req_c->offset += weHave;
+				req_cq->bytes_out += weHave;
+
+				hctx->wb->bytes_in += weHave;
+
+				break;
+			case MEM_CHUNK:
+				/* append to the buffer */
+				weHave = req_c->mem->used - 1 - req_c->offset;
+
+				if (weHave > weWant) weHave = weWant;
+
+				b = chunkqueue_get_append_buffer(hctx->wb);
+				buffer_append_memory(b, req_c->mem->ptr + req_c->offset, weHave);
+				b->used++; /* add virtual \0 */
+
+				req_c->offset += weHave;
+				req_cq->bytes_out += weHave;
+				
+				hctx->wb->bytes_in += weHave;
+
+				break;
+			default:
+				break;
+			}
+			
+			offset += weHave;
+		}
+
 	}
 	
 	return 0;
@@ -652,17 +700,16 @@ static int proxy_demux_response(server *srv, handler_ctx *hctx) {
 static handler_t proxy_write_request(server *srv, handler_ctx *hctx) {
 	data_proxy *host= hctx->host;
 	plugin_data *p    = hctx->plugin_data;
+	connection *con   = hctx->remote_conn;
 	
-	int r;
+	int ret;
 	
 	if (!host || 
 	    (!host->host->used || !host->port)) return -1;
 	
 	switch(hctx->state) {
 	case PROXY_STATE_INIT:
-		r = AF_INET;
-		
-		if (-1 == (hctx->fd = socket(r, SOCK_STREAM, 0))) {
+		if (-1 == (hctx->fd = socket(AF_INET, SOCK_STREAM, 0))) {
 			log_error_write(srv, __FILE__, __LINE__, "ss", "socket failed: ", strerror(errno));
 			return HANDLER_ERROR;
 		}
@@ -734,33 +781,45 @@ static handler_t proxy_write_request(server *srv, handler_ctx *hctx) {
 		proxy_create_env(srv, hctx);
 		
 		proxy_set_state(srv, hctx, PROXY_STATE_WRITE);
-		hctx->write_offset = 0;
 		
-		fdevent_event_add(srv->ev, &(hctx->fde_ndx), hctx->fd, FDEVENT_OUT);
-
 		/* fall through */
-	case PROXY_STATE_WRITE:
-		/* continue with the code after the switch */
-		if (-1 == (r = write(hctx->fd, 
-				     hctx->write_buffer->ptr + hctx->write_offset, 
-				     hctx->write_buffer->used - hctx->write_offset))) {
+	case PROXY_STATE_WRITE:;
+#if defined USE_LINUX_SENDFILE
+		ret = network_write_chunkqueue_linuxsendfile(srv, con, hctx->fd, hctx->wb); 
+#elif defined USE_FREEBSD_SENDFILE
+		ret = network_write_chunkqueue_freebsdsendfile(srv, con, hctx->fd, hctx->wb); 
+#elif defined USE_SOLARIS_SENDFILEV
+		ret = network_write_chunkqueue_solarissendfilev(srv, con, hctx->fd, hctx->wb); 
+#elif defined USE_WRITEV
+		ret = network_write_chunkqueue_writev(srv, con, hctx->fd, hctx->wb);
+#else
+		ret = network_write_chunkqueue_write(srv, con, hctx->fd, hctx->wb);
+#endif
+
+		chunkqueue_remove_finished_chunks(hctx->wb);
+
+		if (-1 == ret) {
 			if (errno != EAGAIN &&
 			    errno != EINTR) {
-				log_error_write(srv, __FILE__, __LINE__, "ssd", "write failed:", strerror(errno), r);
+				log_error_write(srv, __FILE__, __LINE__, "ssd", "write failed:", strerror(errno), errno);
 				
 				return HANDLER_ERROR;
 			} else {
+				fdevent_event_add(srv->ev, &(hctx->fde_ndx), hctx->fd, FDEVENT_OUT);
+
 				return HANDLER_WAIT_FOR_EVENT;
 			}
 		}
-		
-		hctx->write_offset += r;
-		
-		if (hctx->write_offset == hctx->write_buffer->used) {
+
+		if (hctx->wb->bytes_out == hctx->wb->bytes_in) {
 			proxy_set_state(srv, hctx, PROXY_STATE_READ);
 
 			fdevent_event_del(srv->ev, &(hctx->fde_ndx), hctx->fd);
 			fdevent_event_add(srv->ev, &(hctx->fde_ndx), hctx->fd, FDEVENT_IN);
+		} else {
+			fdevent_event_add(srv->ev, &(hctx->fde_ndx), hctx->fd, FDEVENT_OUT);
+				
+			return HANDLER_WAIT_FOR_EVENT;
 		}
 		
 		return HANDLER_WAIT_FOR_EVENT;
