@@ -2,7 +2,8 @@
 #define __crc32cr_table_h__
 
 #include <sys/types.h>
+#include <stdint.h>
 
-unsigned long generate_crc32c(char *string, size_t length);
+uint32_t generate_crc32c(char *string, size_t length);
 
 #endif
