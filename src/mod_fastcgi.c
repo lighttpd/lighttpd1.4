@@ -914,9 +914,9 @@ static int fcgi_spawn_connection(server *srv,
 			default:
 				/* the child should not terminate at all */
 				if (WIFEXITED(status)) {
-					log_error_write(srv, __FILE__, __LINE__, "sd", 
-							"child exited:", 
-							WEXITSTATUS(status));
+					log_error_write(srv, __FILE__, __LINE__, "sdb", 
+							"child exited with status", 
+							WEXITSTATUS(status), host->bin_path);
 					log_error_write(srv, __FILE__, __LINE__, "s", 
 							"if you try do run PHP as FastCGI backend make sure you use the FastCGI enabled version.\n"
 							"You can find out if it is the right one by executing 'php -v' and it should display '(cgi-fcgi)' "
@@ -1831,7 +1831,7 @@ static int fcgi_create_env(server *srv, handler_ctx *hctx, size_t request_id) {
 			hctx->wb->bytes_in += sizeof(header);
 
 			if (p->conf.debug > 10) {
-				fprintf(stderr, "%s.%d: tosend: %d / %Ld\n", __FILE__, __LINE__, offset, req_cq->bytes_in);
+				fprintf(stderr, "%s.%d: tosend: %d / %lld\n", __FILE__, __LINE__, offset, req_cq->bytes_in);
 			}
 
 			for (written = 0; written != weWant; ) {
@@ -1846,7 +1846,7 @@ static int fcgi_create_env(server *srv, handler_ctx *hctx, size_t request_id) {
 					if (weHave > weWant - written) weHave = weWant - written;
 
 					if (p->conf.debug > 10) {
-						fprintf(stderr, "%s.%d: sending %d bytes from (%Ld / %Ld) %s\n", 
+						fprintf(stderr, "%s.%d: sending %d bytes from (%lld / %lld) %s\n", 
 								__FILE__, __LINE__, 
 								weHave, 
 								req_c->offset, 
