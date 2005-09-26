@@ -287,8 +287,6 @@ URIHANDLER_FUNC(mod_uploadprogress_uri_handler) {
 	case HTTP_METHOD_POST:
 		/* the request has to contain a 32byte ID */
 		
-		log_error_write(srv, __FILE__, __LINE__, "s", "POST:");
-
 		if (NULL == (ds = (data_string *)array_get_element(con->request.headers, "X-Progress-ID"))) {
 			if (!buffer_is_empty(con->uri.query)) {
 				/* perhaps the POST request is using the querystring to pass the X-Progress-ID */ 
@@ -300,8 +298,6 @@ URIHANDLER_FUNC(mod_uploadprogress_uri_handler) {
 			b = ds->value;
 		}
 		
-		log_error_write(srv, __FILE__, __LINE__, "sb", "Progress-ID:", b);
-
 		if (b->used != 32 + 1) {
 			log_error_write(srv, __FILE__, __LINE__, "sd",
 					"len of progress-id != 32:", b->used - 1);
@@ -322,8 +318,6 @@ URIHANDLER_FUNC(mod_uploadprogress_uri_handler) {
 		
 		return HANDLER_GO_ON;
 	case HTTP_METHOD_GET:
-		log_error_write(srv, __FILE__, __LINE__, "s", "GET:");
-
 		if (!buffer_is_equal(con->uri.path, p->conf.progress_url)) {
 			return HANDLER_GO_ON;
 		}
@@ -339,8 +333,6 @@ URIHANDLER_FUNC(mod_uploadprogress_uri_handler) {
 			b = ds->value;
 		}
 		
-		log_error_write(srv, __FILE__, __LINE__, "sb", "Progress-ID:", b);
-
 		if (b->used != 32 + 1) {
 			log_error_write(srv, __FILE__, __LINE__, "sd",
 					"len of progress-id != 32:", b->used - 1);
