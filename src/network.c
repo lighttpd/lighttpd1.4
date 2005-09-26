@@ -456,20 +456,20 @@ int network_write_chunkqueue(server *srv, connection *con, chunkqueue *cq) {
 	
 	if (srv_socket->is_ssl) {
 #ifdef USE_OPENSSL
-		ret = network_write_chunkqueue_openssl(srv, con, cq);
+		ret = network_write_chunkqueue_openssl(srv, con, con->ssl, cq);
 #endif
 	} else {
 		/* dispatch call */
 #if defined USE_LINUX_SENDFILE
-		ret = network_write_chunkqueue_linuxsendfile(srv, con, cq); 
+		ret = network_write_chunkqueue_linuxsendfile(srv, con, con->fd, cq); 
 #elif defined USE_FREEBSD_SENDFILE
-		ret = network_write_chunkqueue_freebsdsendfile(srv, con, cq); 
+		ret = network_write_chunkqueue_freebsdsendfile(srv, con, con->fd, cq); 
 #elif defined USE_SOLARIS_SENDFILEV
-		ret = network_write_chunkqueue_solarissendfilev(srv, con, cq); 
+		ret = network_write_chunkqueue_solarissendfilev(srv, con, con->fd, cq); 
 #elif defined USE_WRITEV
-		ret = network_write_chunkqueue_writev(srv, con, cq);
+		ret = network_write_chunkqueue_writev(srv, con, con->fd, cq);
 #else
-		ret = network_write_chunkqueue_write(srv, con, cq);
+		ret = network_write_chunkqueue_write(srv, con, con->fd, cq);
 #endif
 	}
 	

@@ -26,7 +26,7 @@
 # include <openssl/ssl.h> 
 # include <openssl/err.h> 
 
-int network_write_chunkqueue_openssl(server *srv, connection *con, chunkqueue *cq) {
+int network_write_chunkqueue_openssl(server *srv, connection *con, SSL *ssl, chunkqueue *cq) {
 	int ssl_r;
 	chunk *c;
 	size_t chunks_written = 0;
@@ -76,10 +76,10 @@ int network_write_chunkqueue_openssl(server *srv, connection *con, chunkqueue *c
 			 * 
 			 */
 			
-			if ((r = SSL_write(con->ssl, offset, toSend)) <= 0) {
+			if ((r = SSL_write(ssl, offset, toSend)) <= 0) {
 				unsigned long err;
 
-				switch ((ssl_r = SSL_get_error(con->ssl, r))) {
+				switch ((ssl_r = SSL_get_error(ssl, r))) {
 				case SSL_ERROR_WANT_WRITE:
 					break;
 				case SSL_ERROR_SYSCALL:
@@ -122,7 +122,6 @@ int network_write_chunkqueue_openssl(server *srv, connection *con, chunkqueue *c
 				}
 			} else {
 				c->offset += r;
-				con->bytes_written += r;
 				cq->bytes_out += r;
 			}
 			
@@ -176,8 +175,8 @@ int network_write_chunkqueue_openssl(server *srv, connection *con, chunkqueue *c
 			
 				close(ifd);
 			
-				if ((r = SSL_write(con->ssl, s, toSend)) <= 0) {
-					switch ((ssl_r = SSL_get_error(con->ssl, r))) {
+				if ((r = SSL_write(ssl, s, toSend)) <= 0) {
+					switch ((ssl_r = SSL_get_error(ssl, r))) {
 					case SSL_ERROR_WANT_WRITE:
 						write_wait = 1;
 						break;
@@ -208,7 +207,6 @@ int network_write_chunkqueue_openssl(server *srv, connection *con, chunkqueue *c
 					}
 				} else {
 					c->offset += r;
-					con->bytes_written += r;
 					cq->bytes_out += r;
 				}
 			

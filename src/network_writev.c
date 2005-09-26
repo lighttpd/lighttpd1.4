@@ -46,8 +46,7 @@
 # endif
 #endif
 
-int network_write_chunkqueue_writev(server *srv, connection *con, chunkqueue *cq) {
-	const int fd = con->fd;
+int network_write_chunkqueue_writev(server *srv, connection *con, int fd, chunkqueue *cq) {
 	chunk *c;
 	size_t chunks_written = 0;
 	
@@ -117,7 +116,6 @@ int network_write_chunkqueue_writev(server *srv, connection *con, chunkqueue *cq
 			}
 			
 			cq->bytes_out += r;
-			con->bytes_written += r;
 
 			/* check which chunks have been written */
 			
@@ -187,6 +185,8 @@ int network_write_chunkqueue_writev(server *srv, connection *con, chunkqueue *cq
 				close(c->file.fd);
 				c->file.fd = -1;
 
+				c->file.mmap.length = sce->st.st_size;
+
 				/* chunk_reset() or chunk_free() will cleanup for us */
 			}
 
@@ -208,11 +208,16 @@ int network_write_chunkqueue_writev(server *srv, connection *con, chunkqueue *cq
 			}
 			
 			c->offset += r;
-			con->bytes_written += r;
 			cq->bytes_out += r;
 			
 			if (c->offset == c->file.length) {
 				chunk_finished = 1;
+
+				/* we don't need the mmaping anymore */
+				if (c->file.mmap.start != MAP_FAILED) {
+					munmap(c->file.mmap.start, c->file.mmap.length);
+					c->file.mmap.start = MAP_FAILED;
+				}
 			}
 			
 			break;

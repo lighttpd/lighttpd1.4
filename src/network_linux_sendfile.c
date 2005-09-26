@@ -22,8 +22,7 @@
 #include "log.h"
 #include "stat_cache.h"
 
-int network_write_chunkqueue_linuxsendfile(server *srv, connection *con, chunkqueue *cq) {
-	const int fd = con->fd;
+int network_write_chunkqueue_linuxsendfile(server *srv, connection *con, int fd, chunkqueue *cq) {
 	chunk *c;
 	size_t chunks_written = 0;
 	
@@ -96,7 +95,6 @@ int network_write_chunkqueue_linuxsendfile(server *srv, connection *con, chunkqu
 			
 			/* check which chunks have been written */
 			cq->bytes_out += r;
-			con->bytes_written += r;
 
 			for(i = 0, tc = c; i < num_chunks; i++, tc = tc->next) {
 				if (r >= (ssize_t)chunks[i].iov_len) {
@@ -173,11 +171,17 @@ int network_write_chunkqueue_linuxsendfile(server *srv, connection *con, chunkqu
 			}
 			
 			c->offset += r;
-			con->bytes_written += r;
 			cq->bytes_out += r;
 			
 			if (c->offset == c->file.length) {
 				chunk_finished = 1;
+
+				/* chunk_free() / chunk_reset() will cleanup for us but it is a ok to be faster :) */
+
+				if (c->file.fd != -1) {
+					close(c->file.fd);
+					c->file.fd = -1;
+				}
 			}
 			
 			break;
