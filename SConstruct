@@ -136,7 +136,7 @@ env.Append(CPPFLAGS = [
 		'-DPACKAGE_NAME=\\"' + package + '\\"',
 		'-DPACKAGE_VERSION=\\"' + version + '\\"',
 		'-DLIBRARY_DIR="\\"${libdir}\\""',
-		'-D_FILE_OFFSET_BITS=64 -D_LARGEFILE_SOURCE -D_LARGE_FILES'
+		'-D_FILE_OFFSET_BITS=64', '-D_LARGEFILE_SOURCE', '-D_LARGE_FILES'
 		] )
 
 SConscript( 'src/SConscript', 'env', build_dir = 'build', duplicate = 0)
