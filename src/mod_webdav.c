@@ -942,7 +942,7 @@ static int webdav_parse_chunkqueue(server *srv, connection *con, chunkqueue *cq,
 	}
 
 
-	if (XML_ERR_OK != (err = xmlParseChunk(ctxt, 0, 0, 1))) {
+	if (XML_ERR_DOCUMENT_END != (err = xmlParseChunk(ctxt, 0, 0, 1))) {
 		log_error_write(srv, __FILE__, __LINE__, "sd", "xmlParseChunk failed at final packet:", err);
 	}
 
