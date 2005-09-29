@@ -7,6 +7,11 @@ use Test::More;
 use Socket;
 use Cwd 'abs_path';
 
+sub mtime {
+	my $file = shift;
+	my @stat = stat $file;
+	return @stat ? $stat[9] : 0;
+}
 sub new {
 	my $class = shift;
 	my $self = {};
@@ -24,7 +29,13 @@ sub new {
 	$self->{SRCDIR} = abs_path($lpath);
 
 
-	$self->{LIGHTTPD_PATH} = $self->{BASEDIR}.'/src/lighttpd';
+	if (mtime($self->{BASEDIR}.'/src/lighttpd') > mtime($self->{BASEDIR}.'/build/lighttpd')) {
+		$self->{LIGHTTPD_PATH} = $self->{BASEDIR}.'/src/lighttpd';
+		$self->{MODULES_PATH} = $self->{BASEDIR}.'/src/.libs';
+	} else {
+		$self->{LIGHTTPD_PATH} = $self->{BASEDIR}.'/build/lighttpd';
+		$self->{MODULES_PATH} = $self->{BASEDIR}.'/build';
+	}
 	$self->{LIGHTTPD_PIDFILE} = $self->{TESTDIR}.'/tmp/lighttpd/lighttpd.pid';
 	$self->{PIDOF_PIDFILE} = $self->{TESTDIR}.'/tmp/lighttpd/pidof.pid';
 	$self->{PORT} = 2048;
@@ -81,9 +92,9 @@ sub start_proc {
 
 	unlink($self->{LIGHTTPD_PIDFILE});
 	if (1) {
-		system($self->{LIGHTTPD_PATH}." -f ".$self->{TESTDIR}."/tmp/cfg.file -m ".$self->{BASEDIR}."/src/.libs");
+		system($self->{LIGHTTPD_PATH}." -f ".$self->{TESTDIR}."/tmp/cfg.file -m ".$self->{MODULES_PATH});
 	} else {
-		system("valgrind --tool=memcheck --show-reachable=yes --leak-check=yes --logfile=foo ".$self->{LIGHTTPD_PATH}." -D -f ".$self->{TESTDIR}."/tmp/cfg.file -m ".$self->{BASEDIR}."/src/.libs &");
+		system("valgrind --tool=memcheck --show-reachable=yes --leak-check=yes --logfile=foo ".$self->{LIGHTTPD_PATH}." -D -f ".$self->{TESTDIR}."/tmp/cfg.file -m ".$self->{MODULES_PATH}." &");
 	}
 
 	select(undef, undef, undef, 0.1);
