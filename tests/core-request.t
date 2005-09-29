@@ -250,7 +250,7 @@ GET /image.JPG HTTP/1.0
 EOF
  );
 $t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200, 'Content-Type' => 'image/jpeg' } ];
-ok($tf->handle_http($t) == 0, 'Content-Type - image/jpeg');
+ok($tf->handle_http($t) == 0, 'Content-Type - image/jpeg (upper case)');
 
 $t->{REQUEST}  = ( <<EOF
 GET /a HTTP/1.0
