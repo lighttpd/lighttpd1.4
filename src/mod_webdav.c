@@ -870,6 +870,7 @@ static int webdav_get_props(server *srv, connection *con, plugin_data *p, physic
 	return 0;
 }
 
+#ifdef USE_PROPPATCH
 static int webdav_parse_chunkqueue(server *srv, connection *con, chunkqueue *cq, xmlDoc **ret_xml) {
 	xmlParserCtxtPtr ctxt;
 	xmlDoc *xml;
@@ -958,6 +959,7 @@ static int webdav_parse_chunkqueue(server *srv, connection *con, chunkqueue *cq,
 
 	return res;
 }
+#endif
 
 URIHANDLER_FUNC(mod_webdav_subrequest_handler) {
 	plugin_data *p = p_d;
