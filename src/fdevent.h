@@ -108,17 +108,13 @@ typedef struct {
  * 
  */
 
-typedef struct fdnode {
+typedef struct _fdnode {
 	fdevent_handler handler;
 	void *ctx;
 	int fd;
 	
-	struct fdnode *prev, *next;
+	struct _fdnode *prev, *next;
 } fdnode;
-
-typedef struct {
-	fdnode *first, *last;
-} fdlist;
 
 typedef struct {
 	int *ptr;
@@ -134,7 +130,6 @@ typedef struct {
 typedef struct fdevents {
 	fdevent_handler_t type;
 	
-	fdlist fdlist;
 	fdnode **fdarray;
 	size_t maxfds;
 	
