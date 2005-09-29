@@ -8,7 +8,7 @@ BEGIN {
 
 use strict;
 use IO::Socket;
-use Test::More tests => 14;
+use Test::More tests => 17;
 use LightyTest;
 
 my $tf = LightyTest->new();
@@ -108,6 +108,29 @@ EOF
  );
 $t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.1', 'HTTP-Status' => 403 },  { 'HTTP-Protocol' => 'HTTP/1.1', 'HTTP-Status' => 403 } ];
 ok($tf->handle_http($t) == 0, 'remote ip cache (#255)');
+
+$t->{REQUEST}  = ( <<EOF
+GET /empty-ref.jpg HTTP/1.0
+EOF
+ );
+$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 403 } ];
+ok($tf->handle_http($t) == 0, 'condition: $HTTP["referer"] == "" and Referer: is no set');
+
+$t->{REQUEST}  = ( <<EOF
+GET /empty-ref.jpg HTTP/1.0
+Referer:
+EOF
+ );
+$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 403 } ];
+ok($tf->handle_http($t) == 0, 'condition: $HTTP["referer"] == "" and Referer: is no set');
+
+$t->{REQUEST}  = ( <<EOF
+GET /empty-ref.jpg HTTP/1.0
+Referer: foobar
+EOF
+ );
+$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 404 } ];
+ok($tf->handle_http($t) == 0, 'condition: $HTTP["referer"] == "" and Referer: is no set');
 
 ok($tf->stop_proc == 0, "Stopping lighttpd");
 
