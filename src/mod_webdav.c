@@ -444,18 +444,24 @@ static int webdav_delete_file(server *srv, connection *con, plugin_data *p, phys
 #ifdef USE_PROPPATCH
 		sqlite3_stmt *stmt = p->conf.stmt_delete_uri;
 
-		sqlite3_reset(stmt);
+		if (!stmt) {
+			status = 403;
+			webdav_gen_response_status_tag(srv, con, dst, status, b);
 
-		/* bind the values to the insert */
+		} else {
+			sqlite3_reset(stmt);
 
-		sqlite3_bind_text(stmt, 1, 
-				  dst->rel_path->ptr, 
-				  dst->rel_path->used - 1,
-				  SQLITE_TRANSIENT);
+			/* bind the values to the insert */
+
+			sqlite3_bind_text(stmt, 1, 
+					  dst->rel_path->ptr, 
+					  dst->rel_path->used - 1,
+					  SQLITE_TRANSIENT);
 									
-		if (SQLITE_DONE != sqlite3_step(stmt)) {
-			/* */
-			WP();
+			if (SQLITE_DONE != sqlite3_step(stmt)) {
+				/* */
+				WP();
+			}
 		}
 #endif
 	}
@@ -864,6 +870,95 @@ static int webdav_get_props(server *srv, connection *con, plugin_data *p, physic
 	return 0;
 }
 
+static int webdav_parse_chunkqueue(server *srv, connection *con, chunkqueue *cq, xmlDoc **ret_xml) {
+	xmlParserCtxtPtr ctxt;
+	xmlDoc *xml;
+	int res;
+	int err;
+
+	chunk *c;
+
+	/* read the chunks in to the XML document */
+	ctxt = xmlCreatePushParserCtxt(NULL, NULL, NULL, 0, NULL);
+
+	for (c = cq->first; cq->bytes_out != cq->bytes_in; c = cq->first) {
+		size_t weWant = cq->bytes_out - cq->bytes_in;
+		size_t weHave;
+
+		switch(c->type) {
+		case FILE_CHUNK:
+			weHave = c->file.length - c->offset;
+
+			if (weHave > weWant) weHave = weWant;
+
+			/* xml chunks are always memory, mmap() is our friend */
+			if (c->file.mmap.start == MAP_FAILED) {
+				if (-1 == c->file.fd &&  /* open the file if not already open */
+				    -1 == (c->file.fd = open(c->file.name->ptr, O_RDONLY))) {
+					log_error_write(srv, __FILE__, __LINE__, "ss", "open failed: ", strerror(errno));
+		
+					return -1;
+				}
+	
+				if (MAP_FAILED == (c->file.mmap.start = mmap(0, c->file.length, PROT_READ, MAP_SHARED, c->file.fd, 0))) {
+					log_error_write(srv, __FILE__, __LINE__, "ssbd", "mmap failed: ", 
+							strerror(errno), c->file.name,  c->file.fd);
+
+					return -1;
+				}
+
+				close(c->file.fd);
+				c->file.fd = -1;
+
+				c->file.mmap.length = c->file.length;
+
+				/* chunk_reset() or chunk_free() will cleanup for us */
+			}
+
+			if (XML_ERR_OK != (err = xmlParseChunk(ctxt, c->file.mmap.start + c->offset, weHave, 0))) {
+				log_error_write(srv, __FILE__, __LINE__, "sddd", "xmlParseChunk failed at:", cq->bytes_out, weHave, err);
+			}
+			
+			c->offset += weHave;
+			cq->bytes_out += weHave;
+
+			break;
+		case MEM_CHUNK:
+			/* append to the buffer */
+			weHave = c->mem->used - 1 - c->offset;
+
+			if (weHave > weWant) weHave = weWant;
+
+			if (XML_ERR_OK != (err = xmlParseChunk(ctxt, c->mem->ptr + c->offset, weHave, 0))) {
+				log_error_write(srv, __FILE__, __LINE__, "sddd", "xmlParseChunk failed at:", cq->bytes_out, weHave, err);
+			}
+			
+			c->offset += weHave;
+			cq->bytes_out += weHave;
+
+			break;
+		}
+		chunkqueue_remove_finished_chunks(cq);
+	}
+
+
+	if (XML_ERR_OK != (err = xmlParseChunk(ctxt, 0, 0, 1))) {
+		log_error_write(srv, __FILE__, __LINE__, "sd", "xmlParseChunk failed at final packet:", err);
+	}
+
+	xml = ctxt->myDoc;
+	res = ctxt->wellFormed;
+	xmlFreeParserCtxt(ctxt);
+
+	if (res == 0) {
+		xmlFreeDoc(xml);
+	} else {
+		*ret_xml = xml;
+	}
+
+	return res;
+}
+
 URIHANDLER_FUNC(mod_webdav_subrequest_handler) {
 	plugin_data *p = p_d;
 	buffer *b;
@@ -897,10 +992,11 @@ URIHANDLER_FUNC(mod_webdav_subrequest_handler) {
 		/* any special requests or just allprop ? */
 		if (con->request.content_length) {
 			xmlDocPtr xml;
-			buffer *xmldoc = con->request.content;
 
-			if (NULL != (xml = xmlReadMemory(xmldoc->ptr, xmldoc->used - 1, "DAV", NULL, 0))) {
+			if (1 == webdav_parse_chunkqueue(srv, con, con->request_content_queue, &xml)) {
 				xmlNode *rootnode = xmlDocGetRootElement(xml);
+
+				assert(rootnode);
 
 				if (0 == xmlStrcmp(rootnode->name, BAD_CAST "propfind")) {
 					xmlNode *cmd;
@@ -1555,9 +1651,8 @@ URIHANDLER_FUNC(mod_webdav_subrequest_handler) {
 #ifdef USE_PROPPATCH
 		if (con->request.content_length) {
 			xmlDocPtr xml;
-			buffer *xmldoc = con->request.content;
 
-			if (NULL != (xml = xmlReadMemory(xmldoc->ptr, xmldoc->used - 1, "DAV", NULL, 0))) {
+			if (1 == webdav_parse_chunkqueue(srv, con, con->request_content_queue, &xml)) {
 				xmlNode *rootnode = xmlDocGetRootElement(xml);
 
 				if (0 == xmlStrcmp(rootnode->name, BAD_CAST "propertyupdate")) {
