@@ -684,19 +684,24 @@ int main (int argc, char **argv) {
 	}
 	
 	/* dump unused config-keys */
-	for (i = 0; srv->config && i < srv->config->used; i++) {
-		data_unset *du = srv->config->data[i];
-		
-		/* all var.* is known as user defined variable */
-		if (strncmp(du->key->ptr, "var.", sizeof("var.") - 1) == 0) {
-			continue;
-		}
+	for (i = 0; i < srv->config_context->used; i++) {
+		array *config = ((data_config *)srv->config_context->data[i])->value;
+		size_t j;
 
-		if (NULL == array_get_element(srv->config_touched, du->key->ptr)) {
-			log_error_write(srv, __FILE__, __LINE__, "sbs", 
-					"WARNING: unknown config-key:",
-					du->key,
-					"(ignored)");
+		for (j = 0; config && j < config->used; j++) {
+			data_unset *du = config->data[j];
+			
+			/* all var.* is known as user defined variable */
+			if (strncmp(du->key->ptr, "var.", sizeof("var.") - 1) == 0) {
+				continue;
+			}
+
+			if (NULL == array_get_element(srv->config_touched, du->key->ptr)) {
+				log_error_write(srv, __FILE__, __LINE__, "sbs", 
+						"WARNING: unknown config-key:",
+						du->key,
+						"(ignored)");
+			}
 		}
 	}
 	
