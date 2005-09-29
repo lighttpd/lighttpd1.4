@@ -154,7 +154,13 @@ URIHANDLER_FUNC(mod_indexfile_subrequest) {
 	for (k = 0; k < p->conf.indexfiles->used; k++) {
 		data_string *ds = (data_string *)p->conf.indexfiles->data[k];
 		
-		buffer_copy_string_buffer(p->tmp_buf, con->physical.path);
+		if (ds->value && ds->value->ptr[0] == '/') {
+			/* if the index-file starts with a prefix as use this file as 
+			 * index-generator */
+			buffer_copy_string_buffer(p->tmp_buf, con->physical.doc_root);
+		} else {
+			buffer_copy_string_buffer(p->tmp_buf, con->physical.path);
+		}
 		buffer_append_string_buffer(p->tmp_buf, ds->value);
 		
 		if (HANDLER_ERROR == stat_cache_get_entry(srv, con, p->tmp_buf, &sce)) {

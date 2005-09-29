@@ -210,7 +210,7 @@ server.groupname
   
   NOTE: requires root-permissions
 
-server.dir-listing
+dir-listing.activate
   enables virtual directory listings if a directory is requested no
   index-file was found 
 
@@ -232,12 +232,15 @@ server.follow-symlink
   
   Default: enabled
 
-server.indexfiles
+index-file.names
   list of files to search for if a directory is requested
   e.g.: ::
 
-    server.indexfiles         = ( "index.php", "index.html", 
+    index-file.names          = ( "index.php", "index.html", 
                                   "index.htm", "default.htm" )
+
+  if a name starts with slash this file will be used a index generator
+  for all directories.
 
 server.modules
   modules to load
