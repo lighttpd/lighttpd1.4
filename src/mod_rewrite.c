@@ -288,12 +288,16 @@ static int mod_rewrite_patch_connection(server *srv, connection *con, plugin_dat
 			
 			if (buffer_is_equal_string(du->key, CONST_STR_LEN("url.rewrite"))) {
 				p->conf.rewrite = s->rewrite;
+				p->conf.context = dc;
 			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("url.rewrite-once"))) {
 				p->conf.rewrite = s->rewrite;
+				p->conf.context = dc;
 			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("url.rewrite-repeat"))) {
 				p->conf.rewrite = s->rewrite;
+				p->conf.context = dc;
 			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("url.rewrite-final"))) {
 				p->conf.rewrite = s->rewrite;
+				p->conf.context = dc;
 			}
 		}
 	}
