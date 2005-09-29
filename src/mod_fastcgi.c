@@ -2105,14 +2105,19 @@ static int fastcgi_get_packet(server *srv, handler_ctx *hctx, fastcgi_response_p
 	offset = sizeof(*header);
 
 	/* ->b should only be the content */
-	buffer_reset(packet->b);
+	buffer_copy_string(packet->b, ""); /* used == 1 */
 
 	if (packet->len) {
 		/* copy the content */
 		for (; c && (packet->b->used < packet->len + 1); c = c->next) {
-			toread = c->mem->used - c->offset - offset - 1 > packet->len ? packet->len : c->mem->used - c->offset - offset - 1;
-			
-			buffer_append_string_len(packet->b, c->mem->ptr + c->offset + offset, toread);
+			size_t weWant = packet->len - (packet->b->used - 1);
+			size_t weHave = c->mem->used - c->offset - offset - 1;
+
+			if (weHave > weWant) weHave = weWant;
+						
+			buffer_append_string_len(packet->b, c->mem->ptr + c->offset + offset, weHave);
+
+			/* we only skipped the first 8 bytes as they are the fcgi header */
 			offset = 0;
 		}
 
