@@ -442,7 +442,7 @@ int network_write_chunkqueue(server *srv, connection *con, chunkqueue *cq) {
 		return 1;
 	}  
 
-	written = con->bytes_written;
+	written = cq->bytes_out;
 
 #ifdef TCP_CORK	
 	/* Linux: put a cork into the socket as we want to combine the write() calls
@@ -485,7 +485,8 @@ int network_write_chunkqueue(server *srv, connection *con, chunkqueue *cq) {
 	}
 #endif
 
-	written = con->bytes_written - written;
+	written = cq->bytes_out - written;
+	con->bytes_written += written;
 	con->bytes_written_cur_second += written;
 
 	*(con->conf.global_bytes_per_second_cnt_ptr) += written;
