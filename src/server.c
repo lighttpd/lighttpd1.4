@@ -125,6 +125,7 @@ static server *server_init(void) {
 	CLEAN(errorlog_buf);
 	CLEAN(response_range);
 	CLEAN(tmp_buf);
+	srv->empty_string = buffer_init_string("");
 	CLEAN(cond_check_buf);
 	
 	CLEAN(srvconf.errorlog_file);
@@ -190,6 +191,7 @@ static void server_free(server *srv) {
 	CLEAN(errorlog_buf);
 	CLEAN(response_range);
 	CLEAN(tmp_buf);
+	CLEAN(empty_string);
 	CLEAN(cond_check_buf);
 	
 	CLEAN(srvconf.errorlog_file);

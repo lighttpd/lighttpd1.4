@@ -110,27 +110,30 @@ $t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.1', 'HTTP-Status' => 403 },  { '
 ok($tf->handle_http($t) == 0, 'remote ip cache (#255)');
 
 $t->{REQUEST}  = ( <<EOF
-GET /empty-ref.jpg HTTP/1.0
+GET /empty-ref.noref HTTP/1.0
+Cookie: empty-ref
 EOF
  );
 $t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 403 } ];
-ok($tf->handle_http($t) == 0, 'condition: $HTTP["referer"] == "" and Referer: is no set');
+ok($tf->handle_http($t) == 0, 'condition: $HTTP["referer"] == "" and Referer is no set');
 
 $t->{REQUEST}  = ( <<EOF
-GET /empty-ref.jpg HTTP/1.0
+GET /empty-ref.noref HTTP/1.0
+Cookie: empty-ref
 Referer:
 EOF
  );
 $t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 403 } ];
-ok($tf->handle_http($t) == 0, 'condition: $HTTP["referer"] == "" and Referer: is no set');
+ok($tf->handle_http($t) == 0, 'condition: $HTTP["referer"] == "" and Referer is empty');
 
 $t->{REQUEST}  = ( <<EOF
-GET /empty-ref.jpg HTTP/1.0
+GET /empty-ref.noref HTTP/1.0
+Cookie: empty-ref
 Referer: foobar
 EOF
  );
 $t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 404 } ];
-ok($tf->handle_http($t) == 0, 'condition: $HTTP["referer"] == "" and Referer: is no set');
+ok($tf->handle_http($t) == 0, 'condition: $HTTP["referer"] == "" and Referer: foobar');
 
 ok($tf->stop_proc == 0, "Stopping lighttpd");
 
