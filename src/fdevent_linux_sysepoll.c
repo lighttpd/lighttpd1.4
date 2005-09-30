@@ -52,8 +52,16 @@ static int fdevent_linux_sysepoll_event_add(fdevents *ev, int fde_ndx, int fd, i
 	
 	if (events & FDEVENT_IN)  ep.events |= EPOLLIN;
 	if (events & FDEVENT_OUT) ep.events |= EPOLLOUT;
+
+	/**
+	 *
+	 * with EPOLLET we don't get a FDEVENT_HUP
+	 * if the close is delay after everything has
+	 * sent.
+	 *
+	 */
 	
-	ep.events |= EPOLLERR | EPOLLHUP | EPOLLET;
+	ep.events |= EPOLLERR | EPOLLHUP /* | EPOLLET */;
 	
 	ep.data.ptr = NULL;
 	ep.data.fd = fd;
