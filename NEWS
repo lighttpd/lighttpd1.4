@@ -3,6 +3,25 @@
 NEWS
 ====
 
+- 1.4.5 - 
+
+  * added all DeltaV methods as known methods
+  * added buffer-to-disk of request content
+  * added warning for unused variables in conditionals
+  * added global index-generators to mod_indexfile
+  * fixed caching for remote-ip conditionals with keep-alive
+  * fixed redirects with content
+  * fixed infinite loop in exec-cmd in mod_ssi
+  * fixed segfault in config handling for mod_mysql_vhost
+  * fixed segfault on FIFOs/Sockets
+  * fixed possible crash on uninit memory if If-Modified-Since was too long
+  * fixed accounting of mem-chunks
+  * fixed starving of connections on high load
+  * fixed crc errors in mod_compress on 64bit platforms
+  * fixed handling of overlapping fastcgi packets (bug added in 1.4.4)
+  * fixed logic of conditionals if a header was not set
+  * fixed a segfault in mod_rewrite if %1 references were used
+
 - 1.4.4 - 2005-09-16
   * added support for %V in mod_accesslog
   * added a option for a FastCGI responser to send static files
