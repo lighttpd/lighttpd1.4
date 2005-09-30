@@ -312,7 +312,7 @@ static cond_result_t config_check_cond_nocache(server *srv, connection *con, dat
 		if (NULL != (ds = (data_string *)array_get_element(con->request.headers, "Referer"))) {
 			l = ds->value;
 		} else {
-			l = NULL;
+			l = srv->empty_string;
 		}
 		break;
 	}
@@ -321,7 +321,7 @@ static cond_result_t config_check_cond_nocache(server *srv, connection *con, dat
 		if (NULL != (ds = (data_string *)array_get_element(con->request.headers, "Cookie"))) {
 			l = ds->value;
 		} else {
-			l = NULL;
+			l = srv->empty_string;
 		}
 		break;
 	}
@@ -330,7 +330,7 @@ static cond_result_t config_check_cond_nocache(server *srv, connection *con, dat
 		if (NULL != (ds = (data_string *)array_get_element(con->request.headers, "User-Agent"))) {
 			l = ds->value;
 		} else {
-			l = NULL;
+			l = srv->empty_string;
 		}
 		break;
 	}
