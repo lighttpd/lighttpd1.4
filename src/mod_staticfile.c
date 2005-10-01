@@ -2,9 +2,6 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
-#define _XOPEN_SOURCE /* glibc 2.0 */
-#define __USE_XOPEN /* glibc 2.3 */
-#include <time.h>
 
 #include "base.h"
 #include "log.h"
