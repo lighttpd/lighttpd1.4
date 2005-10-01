@@ -49,7 +49,7 @@ $t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200 } ];
 ok($tf->handle_http($t) == 0, 'Basic-Auth: Valid Auth-token - htpasswd (des)');
 
 SKIP: {
-	skip "no md5 for crypt under cygwin", 1 if $^O == 'cygwin';
+	skip "no md5 for crypt under cygwin", 1 if $^O eq 'cygwin';
 $t->{REQUEST}  = ( <<EOF
 GET /server-config HTTP/1.0
 Host: auth-htpasswd.example.org
