@@ -8,7 +8,9 @@
 
 #include "plugin.h"
 
+#ifdef HAVE_CONFIG_H
 #include "config.h"
+#endif
 
 /**
  * this is a skeleton for a lighttpd plugin
