@@ -1,6 +1,6 @@
 Import('env')
 
-src = Split("buffer.c log.c \
+common_src = Split("buffer.c log.c \
       keyvalue.c chunk.c  \
       http_chunk.c stream.c fdevent.c \
       stat_cache.c plugin.c joblist.c etag.c array.c \
@@ -14,54 +14,80 @@ src = Split("buffer.c log.c \
       connections-glue.c \
       configfile-glue.c \
       http-header-glue.c \
-      splaytree.c server.c response.c connections.c network.c \
+      splaytree.c network_writev.c")
+      
+src = Split("server.c response.c connections.c network.c \
       network_write.c network_linux_sendfile.c \
-      network_freebsd_sendfile.c network_writev.c \
+      network_freebsd_sendfile.c \
       network_solaris_sendfilev.c network_openssl.c \
       configfile.c configparser.c request.c proc_open.c")
 
 lemon = env.Program('lemon', 'lemon.c')
 
-configparser = env.Command('configparser.c', 'configparser.y', '(cd build; ../' + lemon[0].path + ' -q ../$SOURCE ../src/lempar.c; cd ..)')
+configparser = env.Command(['configparser.c', 'configparser.h'], 'configparser.y', '(cd build; ../' + lemon[0].path + ' -q ../$SOURCE ../src/lempar.c; cd ..)')
 env.Depends(configparser, lemon)
 
-instbin = env.Program('lighttpd', src, LINKFLAGS = [ '-Wl,--export-dynamic' ])
+mod_ssi_exprparser = env.Command(['mod_ssi_exprparser.c', 'mod_ssi_exprparser.h'], 'mod_ssi_exprparser.y', '(cd build; ../' + lemon[0].path + ' -q ../$SOURCE ../src/lempar.c; cd ..)')
+env.Depends(mod_ssi_exprparser, lemon)
+
+implib = 'lighttpd.exe.a'
+bin_targets = ['lighttpd']
+bin_linkflags = [ env['LINKFLAGS'] ]
+if env['COMMON_LIB'] == 'lib':
+	common_lib = env.SharedLibrary('liblighttpd', common_src, LINKFLAGS = [ env['LINKFLAGS'], '-Wl,--export-dynamic' ])
+else:
+	src += common_src
+	common_lib = []
+	if env['COMMON_LIB'] == 'bin':
+		bin_linkflags += [ '-Wl,--export-all-symbols', '-Wl,--out-implib=build/' + implib ]
+		bin_targets += [ implib ]
+	else:
+		bin_linkflags += [ '-Wl,--export-dynamic' ]
+
+instbin = env.Program(bin_targets, src, LINKFLAGS = bin_linkflags, LIBS= [ env['LIBS'], common_lib ])
+env.Depends(instbin, configparser)
+
+if env['COMMON_LIB'] == 'bin':
+	common_lib = instbin[1]
 
 env['SHLIBPREFIX'] = ''
 instlib = []
-instlib += env.SharedLibrary('mod_access', [ 'mod_access.c' ], LIBS='')
-instlib += env.SharedLibrary('mod_alias', [ 'mod_alias.c' ], LIBS='')
-instlib += env.SharedLibrary('mod_cgi', [ 'mod_cgi.c' ], LIBS='')
-instlib += env.SharedLibrary('mod_fastcgi', [ 'mod_fastcgi.c' ], LIBS='')
-instlib += env.SharedLibrary('mod_scgi', [ 'mod_scgi.c' ], LIBS='')
-instlib += env.SharedLibrary('mod_staticfile', [ 'mod_staticfile.c' ], LIBS='')
-instlib += env.SharedLibrary('mod_dirlisting', [ 'mod_dirlisting.c' ], LIBS= [ env['LIBPCRE'] ])
-instlib += env.SharedLibrary('mod_indexfile', [ 'mod_indexfile.c' ], LIBS='')
-instlib += env.SharedLibrary('mod_setenv', [ 'mod_setenv.c' ], LIBS='')
-instlib += env.SharedLibrary('mod_rrdtool', [ 'mod_rrdtool.c' ], LIBS='')
-instlib += env.SharedLibrary('mod_usertrack', [ 'mod_usertrack.c' ], LIBS='')
-instlib += env.SharedLibrary('mod_proxy', [ 'mod_proxy.c' ], LIBS='')
-instlib += env.SharedLibrary('mod_userdir', [ 'mod_userdir.c' ], LIBS='')
-instlib += env.SharedLibrary('mod_ssi', [ 'mod_ssi.c' ], LIBS='')
-instlib += env.SharedLibrary('mod_secdownload', [ 'mod_secure_download.c' ], LIBS='')
-instlib += env.SharedLibrary('mod_access', [ 'mod_access.c' ], LIBS='')
-instlib += env.SharedLibrary('mod_accesslog', [ 'mod_accesslog.c' ], LIBS='')
-instlib += env.SharedLibrary('mod_simple_vhost', [ 'mod_simple_vhost.c' ], LIBS='')
-instlib += env.SharedLibrary('mod_evhost', [ 'mod_evhost.c' ], LIBS='')
-instlib += env.SharedLibrary('mod_expire', [ 'mod_expire.c' ], LIBS='')
-instlib += env.SharedLibrary('mod_status', [ 'mod_status.c' ], LIBS='')
-instlib += env.SharedLibrary('mod_compress', [ 'mod_compress.c' ], LIBS= [ env['LIBZ'], env['LIBBZ2'] ] )
-instlib += env.SharedLibrary('mod_redirect', [ 'mod_redirect.c' ], LIBS = [ env['LIBPCRE'] ] )
-instlib += env.SharedLibrary('mod_rewrite', [ 'mod_rewrite.c' ], LIBS= [ env['LIBPCRE'] ])
-instlib += env.SharedLibrary('mod_auth', [ Split('mod_auth.c http_auth_digest.c http_auth.c') ], LIBS= [ env['LIBCRYPT'] ])
-instlib += env.SharedLibrary('mod_webdav', [ 'mod_webdav.c' ], LIBS= [ env['LIBXML2'], env['LIBSQLITE3'] ])
-instlib += env.SharedLibrary('mod_mysql_vhost', [ 'mod_mysql_vhost.c' ], LIBS= [ env['LIBMYSQL'] ])
-instlib += env.SharedLibrary('mod_trigger_b4_dl', [ 'mod_trigger_b4_dl.c' ], LIBS= [ env['LIBPCRE'] ])
-instlib += env.SharedLibrary('mod_cml', [ 'mod_cml.c' ], LIBS= [ env['LIBPCRE'] ])
-instlib += env.SharedLibrary('mod_uploadprogress', [ 'mod_uploadprogress.c' ], LIBS='')
+instlib += env.SharedLibrary('mod_access', [ 'mod_access.c' ], LIBS= [ common_lib ])
+instlib += env.SharedLibrary('mod_alias', [ 'mod_alias.c' ], LIBS= [ common_lib ])
+instlib += env.SharedLibrary('mod_cgi', [ 'mod_cgi.c' ], LIBS= [ common_lib ])
+instlib += env.SharedLibrary('mod_fastcgi', [ 'mod_fastcgi.c' ], LIBS= [ common_lib ])
+instlib += env.SharedLibrary('mod_scgi', [ 'mod_scgi.c' ], LIBS= [ common_lib ])
+instlib += env.SharedLibrary('mod_staticfile', [ 'mod_staticfile.c' ], LIBS= [ common_lib ])
+instlib += env.SharedLibrary('mod_dirlisting', [ 'mod_dirlisting.c' ], LIBS= [ common_lib, env['LIBPCRE'] ])
+instlib += env.SharedLibrary('mod_indexfile', [ 'mod_indexfile.c' ], LIBS= [ common_lib ])
+instlib += env.SharedLibrary('mod_setenv', [ 'mod_setenv.c' ], LIBS= [ common_lib ])
+instlib += env.SharedLibrary('mod_rrdtool', [ 'mod_rrdtool.c' ], LIBS= [ common_lib ])
+instlib += env.SharedLibrary('mod_usertrack', [ 'mod_usertrack.c' ], LIBS= [ common_lib ])
+instlib += env.SharedLibrary('mod_proxy', [ 'mod_proxy.c' ], LIBS= [ common_lib ])
+instlib += env.SharedLibrary('mod_userdir', [ 'mod_userdir.c' ], LIBS= [ common_lib ])
+mod_ssi = env.SharedLibrary('mod_ssi', [ 'mod_ssi_exprparser.c', 'mod_ssi_expr.c', 'mod_ssi.c' ], LIBS= [ common_lib, env['LIBPCRE'] ])
+env.Depends(mod_ssi, mod_ssi_exprparser)
+instlib += mod_ssi
+instlib += env.SharedLibrary('mod_secdownload', [ 'mod_secure_download.c' ], LIBS= [ common_lib ])
+instlib += env.SharedLibrary('mod_accesslog', [ 'mod_accesslog.c' ], LIBS= [ common_lib ])
+instlib += env.SharedLibrary('mod_simple_vhost', [ 'mod_simple_vhost.c' ], LIBS= [ common_lib ])
+instlib += env.SharedLibrary('mod_evhost', [ 'mod_evhost.c' ], LIBS= [ common_lib ])
+instlib += env.SharedLibrary('mod_expire', [ 'mod_expire.c' ], LIBS= [ common_lib ])
+instlib += env.SharedLibrary('mod_status', [ 'mod_status.c' ], LIBS= [ common_lib ])
+instlib += env.SharedLibrary('mod_compress', [ 'mod_compress.c' ], LIBS= [ common_lib, env['LIBZ'], env['LIBBZ2'] ] )
+instlib += env.SharedLibrary('mod_redirect', [ 'mod_redirect.c' ], LIBS = [ common_lib, env['LIBPCRE'] ] )
+instlib += env.SharedLibrary('mod_rewrite', [ 'mod_rewrite.c' ], LIBS= [ common_lib, env['LIBPCRE'] ])
+instlib += env.SharedLibrary('mod_auth', [ Split('mod_auth.c http_auth_digest.c http_auth.c') ], LIBS= [ common_lib, env['LIBCRYPT'] ])
+instlib += env.SharedLibrary('mod_webdav', [ 'mod_webdav.c' ], LIBS= [ common_lib, env['LIBXML2'], env['LIBSQLITE3'] ])
+instlib += env.SharedLibrary('mod_mysql_vhost', [ 'mod_mysql_vhost.c' ], LIBS= [ common_lib, env['LIBMYSQL'] ])
+instlib += env.SharedLibrary('mod_trigger_b4_dl', [ 'mod_trigger_b4_dl.c' ], LIBS= [ common_lib, env['LIBPCRE'] ])
+instlib += env.SharedLibrary('mod_cml', [ 'mod_cml_lua.c', 'mod_cml.c' ], LIBS= [ common_lib, env['LIBPCRE'] ])
+instlib += env.SharedLibrary('mod_uploadprogress', [ 'mod_uploadprogress.c' ], LIBS= [ common_lib ])
 
 inst = []
 inst += env.Install('${bindir}', instbin)
+if env['COMMON_LIB'] == 'lib':
+	inst += env.Install('${bindir}', common_lib)
 inst += env.Install('${libdir}', instlib)
 
 env.Alias('install', inst)

@@ -36,4 +36,10 @@ t  = env.Command('foo1', 'prepare.sh', '(cd ./tests/; ./prepare.sh; cd ..)')
 t += env.Command('foo2', 'run-tests.pl', '( cd ./tests/; SHELL=/bin/sh ./run-tests.pl; cd ..)')
 t += env.Command('foo3', 'cleanup.sh', '(cd ./tests/; ./cleanup.sh; cd ..)')
 
+if env['LIBFCGI']:
+	fcgis = []
+	fcgis += env.Program("fcgi-auth", "fcgi-auth.c", LIBS=env['LIBFCGI'])
+	fcgis += env.Program("fcgi-responder", "fcgi-responder.c", LIBS=env['LIBFCGI'])
+	env.Depends(t, fcgis)
+
 env.Alias('check', t )

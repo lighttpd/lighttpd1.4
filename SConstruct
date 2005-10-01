@@ -1,9 +1,11 @@
 import os
+import sys
 import re
+import string
+from stat import *
 
 package = 'lighttpd'
-version = '1.4.4'
-
+version = '1.4.5'
 
 def checkCHeaders(autoconf, hdrs):
 	p = re.compile('[^A-Z0-9]')
@@ -23,6 +25,31 @@ def checkTypes(autoconf, types):
 		if autoconf.CheckType(type, '#include <sys/types.h>'):
 			autoconf.env.Append(CPPFLAGS = [ '-DHAVE_' + p.sub('_', type.upper()) ])
 
+def checkProgram(env, withname, progname):
+	withname = 'with_' + withname
+	binpath = None
+
+	if env[withname] != 1:
+		binpath = env[withname]
+	else:
+		prog = env.Detect(progname)
+		if prog:
+			binpath = env.WhereIs(prog)
+
+	if binpath:
+		mode = os.stat(binpath)[ST_MODE]
+		if S_ISDIR(mode):
+			print >> sys.stderr, "* error: path `%s' is a directory" % (binpath)
+			env.Exit(-1)
+		if not S_ISREG(mode):
+			print >> sys.stderr, "* error: path `%s' is not a file or not exists" % (binpath)
+			env.Exit(-1)
+
+	if not binpath:
+		print >> sys.stderr, "* error: can't find program `%s'" % (progname)
+		env.Exit(-1)
+
+	return binpath
 
 BuildDir('build', 'src', duplicate = 0)
 
@@ -44,8 +71,9 @@ opts.AddOptions(
 env = Environment(
 	env = os.environ,
 	options = opts,
-	CCFLAGS = Split('-Wall -O2 -g -pedantic -Wunused -Wshadow -Isrc/'),
-	LIBS = [ 'dl' ]
+	CCFLAGS = Split('-Wall -O2 -g -pedantic -Wunused -Wshadow'),
+	CPPPATH = Split('#/build'),
+	# LIBS = [ 'dl' ]
 )
 
 env['package'] = package
@@ -68,7 +96,7 @@ if 1:
 
 	checkTypes(autoconf, Split('pid_t size_t off_t'))
 
-	autoconf.env.Append( LIBSQLITE3 = '', LIBXML2 = '', LIBMYSQL = '')
+	autoconf.env.Append( LIBSQLITE3 = '', LIBXML2 = '', LIBMYSQL = '', LIBZ = '', LIBBZ2 = '', LIBCRYPT = '', LIBMEMCACHE = '', LIBFCGI = '')
 
 	if env['with_fam']:
 		if autoconf.CheckLibWithHeader('fam', 'fam.h', 'C'):
@@ -97,6 +125,9 @@ if 1:
 		if autoconf.CheckLibWithHeader('sqlite3', 'sqlite3.h', 'C'):
 			autoconf.env.Append(CPPFLAGS = [ '-DHAVE_SQLITE3_H', '-DHAVE_LIBSQLITE3' ], LIBSQLITE3 = 'sqlite3')
 
+	if autoconf.CheckLibWithHeader('fcgi', 'fastcgi.h', 'C'):
+		autoconf.env.Append(LIBFCGI = 'fcgi')
+
 	if autoconf.CheckType('socklen_t', '#include <unistd.h>\n#include <sys/socket.h>\n#include <sys/types.h>'):
 		autoconf.env.Append(CPPFLAGS = [ '-DHAVE_SOCKLEN_T' ])
 
@@ -107,32 +138,36 @@ if 1:
 	env = autoconf.Finish()
 
 if env['with_pcre']:
-	if env['with_pcre'] != 1:
-		pcre_config = env['with_pcre']
-	elif env.Detect('pcre-config'):
-		pcre_config = env.WhereIs('pcre-config')
+	pcre_config = checkProgram(env, 'pcre', 'pcre-config')
 	env.ParseConfig(pcre_config + ' --cflags --libs')
 	env.Append(CPPFLAGS = [ '-DHAVE_PCRE_H', '-DHAVE_LIBPCRE' ], LIBPCRE = 'pcre')
 
 if env['with_xml']:
-	if env['with_xml'] != 1:
-		xml2_config = env['with_xml']
-	elif env.Detect('xml2-config'):
-		xml2_config = env.WhereIs('xml2-config')
+	xml2_config = checkProgram(env, 'xml', 'xml2-config')
 	env.ParseConfig(xml2_config + ' --cflags --libs')
 	env.Append(CPPFLAGS = [ '-DHAVE_LIBXML_H', '-DHAVE_LIBXML2' ], LIBXML2 = 'xml2')
 
 if env['with_mysql']:
-	if env['with_mysql'] != 1:
-		mysql_config = env['with_mysql']
-	else:
-		mysql_config = env.WhereIs('mysql_config')
-	
+	mysql_config = checkProgram(env, 'mysql', 'mysql_config')
 	env.ParseConfig(mysql_config + ' --cflags --libs')
 	env.Append(CPPFLAGS = [ '-DHAVE_MYSQL' ], LIBMYSQL = 'mysqlclient')
 
+if re.compile("cygwin|mingw").search(env['PLATFORM']):
+	env.Append(COMMON_LIB = 'bin')
+elif re.compile("darwin|aix").search(env['PLATFORM']):
+	env.Append(COMMON_LIB = 'lib')
+else:
+	env.Append(COMMON_LIB = False)
+
+# how to make mod_compress.dll works for tests?
+if re.compile("cygwin").search(env['PLATFORM']):
+	# env.Append(LINKFLAGS = "-Wl,--image-base=0x20000000")
+	env.Append(LINKFLAGS = "-Wl,--enable-auto-image-base")
+
+versions = string.split(version, '.')
+version_id = int(versions[0]) << 16 | int(versions[1]) << 8 | int(versions[2])
 env.Append(CPPFLAGS = [ 
-		'-DLIGHTTPD_VERSION_ID=' + str(1 << 16 | 4 << 8 | 4),
+		'-DLIGHTTPD_VERSION_ID=' + str(version_id),
 		'-DPACKAGE_NAME=\\"' + package + '\\"',
 		'-DPACKAGE_VERSION=\\"' + version + '\\"',
 		'-DLIBRARY_DIR="\\"${libdir}\\""',
