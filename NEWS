@@ -3,7 +3,7 @@
 NEWS
 ====
 
-- 1.4.5 - 
+- 1.4.5 - 2005-10-02
 
   * added all DeltaV methods as known methods
   * added buffer-to-disk of request content
@@ -21,6 +21,7 @@ NEWS
   * fixed handling of overlapping fastcgi packets (bug added in 1.4.4)
   * fixed logic of conditionals if a header was not set
   * fixed a segfault in mod_rewrite if %1 references were used
+  * fixed handling of empty request URIs in HTTP requests
 
 - 1.4.4 - 2005-09-16
   * added support for %V in mod_accesslog
