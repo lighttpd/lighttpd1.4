@@ -8,7 +8,7 @@ BEGIN {
 
 use strict;
 use IO::Socket;
-use Test::More tests => 31;
+use Test::More tests => 33;
 use LightyTest;
 
 my $tf = LightyTest->new();
@@ -258,6 +258,20 @@ EOF
  );
 $t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200, 'Content-Type' => 'application/octet-stream' } ];
 ok($tf->handle_http($t) == 0, 'Content-Type - unknown');
+
+$t->{REQUEST}  = ( <<EOF
+GET  HTTP/1.0
+EOF
+ );
+$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 400 } ];
+ok($tf->handle_http($t) == 0, 'empty request-URI');
+
+$t->{REQUEST}  = ( <<EOF
+GET /Foo.txt HTTP/1.0
+EOF
+ );
+$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200 } ];
+ok($tf->handle_http($t) == 0, 'uppercase filenames');
 
 
 ok($tf->stop_proc == 0, "Stopping lighttpd");

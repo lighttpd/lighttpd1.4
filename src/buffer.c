@@ -893,6 +893,11 @@ int buffer_path_simplify(buffer *dest, buffer *src)
 	}
 	*(out++) = pre1;
 
+	if (pre1 == '\0') {
+		dest->used = (out - start) + 1;
+		return 0;
+	}
+
 	while (1) {
 		if (c == '/' || c == '\0') {
 			toklen = out - slash;
