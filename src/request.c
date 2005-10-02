@@ -483,6 +483,21 @@ int http_request_parse(server *srv, connection *con) {
 	}
 	
 	in_folding = 0;
+
+	if (con->request.uri->used == 1) {
+		con->http_status = 400;
+		con->response.keep_alive = 0;
+		con->keep_alive = 0;
+
+		log_error_write(srv, __FILE__, __LINE__, "s", "no uri specified -> 400");
+		if (srv->srvconf.log_request_header_on_error) {
+			log_error_write(srv, __FILE__, __LINE__, "Sb",
+							"request-header:\n",
+							con->request.request);
+		}
+		return 0;
+	}
+
 	
 	for (; i < con->parse_request->used && !done; i++) {
 		char *cur = con->parse_request->ptr + i;
