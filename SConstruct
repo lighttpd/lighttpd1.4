@@ -159,11 +159,6 @@ elif re.compile("darwin|aix").search(env['PLATFORM']):
 else:
 	env.Append(COMMON_LIB = False)
 
-# how to make mod_compress.dll works for tests?
-if re.compile("cygwin").search(env['PLATFORM']):
-	# env.Append(LINKFLAGS = "-Wl,--image-base=0x20000000")
-	env.Append(LINKFLAGS = "-Wl,--enable-auto-image-base")
-
 versions = string.split(version, '.')
 version_id = int(versions[0]) << 16 | int(versions[1]) << 8 | int(versions[2])
 env.Append(CPPFLAGS = [ 
