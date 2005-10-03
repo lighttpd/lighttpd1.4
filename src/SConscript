@@ -47,6 +47,8 @@ else:
 instbin = env.Program(bin_targets, src, LINKFLAGS = bin_linkflags, LIBS= [ env['LIBS'], common_lib ])
 env.Depends(instbin, configparser)
 
+spawn_fcgi = env.Program("spawn-fcgi", "spawn-fcgi.c")
+
 if env['COMMON_LIB'] == 'bin':
 	common_lib = instbin[1]
 
@@ -85,7 +87,8 @@ instlib += env.SharedLibrary('mod_cml', [ 'mod_cml_lua.c', 'mod_cml.c' ], LIBS= 
 instlib += env.SharedLibrary('mod_uploadprogress', [ 'mod_uploadprogress.c' ], LIBS= [ common_lib ])
 
 inst = []
-inst += env.Install('${bindir}', instbin)
+inst += env.Install('${bindir}', instbin[0])
+inst += env.Install('${bindir}', spawn_fcgi)
 if env['COMMON_LIB'] == 'lib':
 	inst += env.Install('${bindir}', common_lib)
 inst += env.Install('${libdir}', instlib)
