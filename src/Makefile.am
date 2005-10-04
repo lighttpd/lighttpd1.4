@@ -44,7 +44,7 @@ common_src=buffer.c log.c \
       network_write.c network_linux_sendfile.c \
       network_freebsd_sendfile.c network_writev.c \
       network_solaris_sendfilev.c network_openssl.c \
-      splaytree.c \
+      splaytree.c 
       
 src = server.c response.c connections.c network.c \
       configfile.c configparser.c request.c proc_open.c
