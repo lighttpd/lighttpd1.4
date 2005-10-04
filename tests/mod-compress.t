@@ -8,7 +8,7 @@ BEGIN {
 
 use strict;
 use IO::Socket;
-use Test::More tests => 7;
+use Test::More tests => 9;
 use LightyTest;
 
 my $tf = LightyTest->new();
@@ -27,6 +27,16 @@ ok($tf->handle_http($t) == 0, 'Vary is set');
 $t->{REQUEST}  = ( <<EOF
 GET /index.html HTTP/1.0
 Accept-Encoding: deflate
+Host: no-cache.example.org
+EOF
+ );
+$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200, '+Vary' => '', 'Content-Length' => '1288', '+Content-Encoding' => '' } ];
+ok($tf->handle_http($t) == 0, 'deflate - Content-Length and Content-Encoding is set');
+
+$t->{REQUEST}  = ( <<EOF
+GET /index.html HTTP/1.0
+Accept-Encoding: deflate
+Host: cache.example.org
 EOF
  );
 $t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200, '+Vary' => '', 'Content-Length' => '1288', '+Content-Encoding' => '' } ];
@@ -35,10 +45,21 @@ ok($tf->handle_http($t) == 0, 'deflate - Content-Length and Content-Encoding is 
 $t->{REQUEST}  = ( <<EOF
 GET /index.html HTTP/1.0
 Accept-Encoding: gzip
+Host: no-cache.example.org
 EOF
  );
-$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200, '+Vary' => '', '+Content-Encoding' => '' } ];
+$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200, '+Vary' => '', 'Content-Length' => '1306', '+Content-Encoding' => '' } ];
 ok($tf->handle_http($t) == 0, 'gzip - Content-Length and Content-Encoding is set');
+
+$t->{REQUEST}  = ( <<EOF
+GET /index.html HTTP/1.0
+Accept-Encoding: gzip
+Host: cache.example.org
+EOF
+ );
+$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200, '+Vary' => '', 'Content-Length' => '1306', '+Content-Encoding' => '' } ];
+ok($tf->handle_http($t) == 0, 'gzip - Content-Length and Content-Encoding is set');
+
 
 $t->{REQUEST}  = ( <<EOF
 GET /index.txt HTTP/1.0
@@ -55,6 +76,5 @@ EOF
  );
 $t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200, '+Vary' => '', '+Content-Encoding' => '', 'Content-Type' => "text/plain" } ];
 ok($tf->handle_http($t) == 0, 'Content-Type is from the original file');
-
 
 ok($tf->stop_proc == 0, "Stopping lighttpd");
