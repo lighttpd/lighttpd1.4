@@ -514,7 +514,7 @@ static int deflate_file_to_buffer(server *srv, connection *con, plugin_data *p, 
 	
 	chunkqueue_reset(con->write_queue);
 	b = chunkqueue_get_append_buffer(con->write_queue);
-	buffer_copy_memory(b, p->b->ptr, p->b->used);
+	buffer_copy_memory(b, p->b->ptr, p->b->used + 1);
 	
 	buffer_reset(con->physical.path);
 	
@@ -663,7 +663,7 @@ PHYSICALPATH_FUNC(mod_compress_physical) {
 							response_header_overwrite(srv, con, CONST_STR_LEN("ETag"), CONST_BUF_LEN(con->physical.etag));
 
 							response_header_overwrite(srv, con, CONST_STR_LEN("Content-Type"), CONST_BUF_LEN(sce->content_type));
-							
+
 							return HANDLER_GO_ON;
 						}
 					} else if (0 == deflate_file_to_buffer(srv, con, p,
@@ -672,7 +672,7 @@ PHYSICALPATH_FUNC(mod_compress_physical) {
 						response_header_overwrite(srv, con, CONST_STR_LEN("Content-Encoding"), compression_name, strlen(compression_name));
 						response_header_overwrite(srv, con, CONST_STR_LEN("Content-Type"), CONST_BUF_LEN(sce->content_type));
 						
-						return HANDLER_GO_ON;
+						return HANDLER_FINISHED;
 					}
 					break;
 				}
