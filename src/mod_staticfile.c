@@ -445,7 +445,7 @@ URIHANDLER_FUNC(mod_staticfile_subrequest) {
 
 	if (HANDLER_FINISHED == http_response_handle_cachable(srv, con, mtime)) {
 		return HANDLER_FINISHED;
-	} else if (con->request.http_range) {
+	} else if (con->request.http_range && con->conf.range_requests) {
 		/* content prepared, I'm done */
 		con->file_finished = 1;
 		

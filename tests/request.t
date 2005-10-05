@@ -8,7 +8,7 @@ BEGIN {
 
 use strict;
 use IO::Socket;
-use Test::More tests => 28;
+use Test::More tests => 29;
 use LightyTest;
 
 my $tf = LightyTest->new();
@@ -291,6 +291,14 @@ EOF
  );
 $t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 400 } ];
 ok($tf->handle_http($t) == 0, 'Duplicate If-Modified-Since headers');
+
+$t->{REQUEST}  = ( <<EOF
+GET /range.pdf HTTP/1.0
+Range: bytes=0-
+EOF
+ );
+$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200 } ];
+ok($tf->handle_http($t) == 0, 'GET, Range with range-requests-disabled');
 
 
 
