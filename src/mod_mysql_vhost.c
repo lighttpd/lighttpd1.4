@@ -328,9 +328,9 @@ CONNECTION_FUNC(mod_mysql_vhost_handle_docroot) {
 	/* no host specified? */
 	if (!con->uri.authority->used) return HANDLER_GO_ON;
 
-	if (!p->conf.mysql) return HANDLER_GO_ON;
-	
 	mod_mysql_vhost_patch_connection(srv, con, p);
+
+	if (!p->conf.mysql) return HANDLER_GO_ON;
 
 	/* sets up connection data if not done yet */
 	c = mod_mysql_vhost_connection_data(srv, con, p_d);
