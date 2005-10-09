@@ -1062,15 +1062,26 @@ int config_set_defaults(server *srv) {
 
 	buffer_to_lower(srv->tmp_buf);  
 
-	if (0 == stat(srv->tmp_buf->ptr, &st1)) {  
+	if (0 == stat(srv->tmp_buf->ptr, &st1)) {
+		int is_lower = 0;
 
-		/* lower-case existed, check upper-case */  
+		is_lower = buffer_is_equal(srv->tmp_buf, s->document_root);
 
+		/* lower-case existed, check upper-case */
 		buffer_copy_string_buffer(srv->tmp_buf, s->document_root);  
 
 		buffer_to_upper(srv->tmp_buf);  
-		
-		if (0 == stat(srv->tmp_buf->ptr, &st2)) {  
+
+		/* we have to handle the special case that upper and lower-casing results in the same filename
+		 * as in server.document-root = "/" or "/12345/" */
+
+		if (is_lower && buffer_is_equal(srv->tmp_buf, s->document_root)) {
+			/* lower-casing and upper-casing didn't result in  
+			 * an other filename, no need to stat(), 
+			 * just assume it is case-sensitive. */
+
+			s->force_lower_case = 0;
+		} else if (0 == stat(srv->tmp_buf->ptr, &st2)) {  
 
 			/* upper case exists too, doesn't the FS handle this ? */  
 			
