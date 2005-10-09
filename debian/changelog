@@ -1,3 +1,9 @@
+lighttpd (1.4.6-1) unstable; urgency=low
+
+  * updated to 1.4.6
+
+ -- Jan Kneschke <jan@kneschke.de>  Sun, 09 Oct 2005 22:48:00 +0200
+
 lighttpd (1.4.5-1) unstable; urgency=low
 
   * updated to 1.4.5

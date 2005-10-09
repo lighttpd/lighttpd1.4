@@ -3,6 +3,14 @@
 NEWS
 ====
 
+- 1.4.6 - 2005-10-09
+
+  * fixed compilation on MacOS X and cygwin
+  * fixed compressed output if caching was disabled (seen in IE and Opera)
+  * fixed range-request option
+  * fixed mysql-vhost module (was broken in 1.4.5)
+  * fixed false positive in the detection of case-insensitive FS
+
 - 1.4.5 - 2005-10-02
 
   * added all DeltaV methods as known methods
