@@ -56,7 +56,7 @@
 #endif
 
 static volatile sig_atomic_t srv_shutdown = 0;
-static volatile sig_atomic_t gracefull_shutdown = 0;
+static volatile sig_atomic_t graceful_shutdown = 0;
 static volatile sig_atomic_t handle_sig_alarm = 1;
 static volatile sig_atomic_t handle_sig_hup = 0;
 
@@ -67,7 +67,7 @@ static void sigaction_handler(int sig, siginfo_t *si, void *context) {
 
 	switch (sig) {
 	case SIGTERM: srv_shutdown = 1; break;
-	case SIGINT: gracefull_shutdown = 1; break;
+	case SIGINT: graceful_shutdown = 1; break;
 	case SIGALRM: handle_sig_alarm = 1; break;
 	case SIGHUP:  handle_sig_hup = 1; break;
 	case SIGCHLD: break;
@@ -77,7 +77,7 @@ static void sigaction_handler(int sig, siginfo_t *si, void *context) {
 static void signal_handler(int sig) {
 	switch (sig) {
 	case SIGTERM: srv_shutdown = 1; break;
-	case SIGINT: gracefull_shutdown = 1; break;
+	case SIGINT: graceful_shutdown = 1; break;
 	case SIGALRM: handle_sig_alarm = 1; break;
 	case SIGHUP:  handle_sig_hup = 1; break;
 	case SIGCHLD:  break;
@@ -987,7 +987,7 @@ int main (int argc, char **argv) {
 
 			if ((srv->cur_fds + srv->want_fds < srv->max_fds * 0.8) && /* we have enough unused fds */
 			    (srv->conns->used < srv->max_conns * 0.9) &&
-			    (0 == gracefull_shutdown)) {
+			    (0 == graceful_shutdown)) {
 				for (i = 0; i < srv->srv_sockets.used; i++) {
 					server_socket *srv_socket = srv->srv_sockets.ptr[i];
 					fdevent_event_add(srv->ev, &(srv_socket->fde_ndx), srv_socket->fd, FDEVENT_IN);
@@ -1000,7 +1000,7 @@ int main (int argc, char **argv) {
 		} else {
 			if ((srv->cur_fds + srv->want_fds > srv->max_fds * 0.9) || /* out of fds */
 			    (srv->conns->used > srv->max_conns) || /* out of connections */
-			    (gracefull_shutdown)) { /* gracefull_shutdown */ 
+			    (graceful_shutdown)) { /* graceful_shutdown */ 
 
 				/* disable server-fds */
 			
@@ -1008,11 +1008,11 @@ int main (int argc, char **argv) {
 					server_socket *srv_socket = srv->srv_sockets.ptr[i];
 					fdevent_event_del(srv->ev, &(srv_socket->fde_ndx), srv_socket->fd);
 
-					if (gracefull_shutdown) {
+					if (graceful_shutdown) {
 						/* we don't want this socket anymore,
 						 *
 						 * closing it right away will make it possible for
-						 * the next lighttpd to take over (gracefull restart)
+						 * the next lighttpd to take over (graceful restart)
 						 *  */
 
 						fdevent_unregister(srv->ev, srv_socket->fd);
@@ -1023,8 +1023,8 @@ int main (int argc, char **argv) {
 					}
 				}
 		
-				if (gracefull_shutdown) {
-					log_error_write(srv, __FILE__, __LINE__, "s", "[note] gracefull shutdown started");
+				if (graceful_shutdown) {
+					log_error_write(srv, __FILE__, __LINE__, "s", "[note] graceful shutdown started");
 				} else if (srv->conns->used > srv->max_conns) {
 					log_error_write(srv, __FILE__, __LINE__, "s", "[note] sockets disabled, connection limit reached");
 				} else {
@@ -1035,8 +1035,8 @@ int main (int argc, char **argv) {
 			}
 		}
 
-		if (gracefull_shutdown && srv->conns->used == 0) {
-			/* we are in gracefull shutdown phase and all connections are closed
+		if (graceful_shutdown && srv->conns->used == 0) {
+			/* we are in graceful shutdown phase and all connections are closed
 			 * we are ready to terminate without harming anyone */
 			srv_shutdown = 1;
 		}
