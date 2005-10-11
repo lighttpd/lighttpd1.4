@@ -41,7 +41,7 @@ typedef int socklen_t;
 #endif
 
 #ifdef HAVE_SYS_UN_H
-int fcgi_spawn_connection(char *appPath, unsigned short port, const char *unixsocket, int child_count, int pid_fd) {
+int fcgi_spawn_connection(char *appPath, unsigned short port, const char *unixsocket, int child_count, int pid_fd, int nofork) {
 	int fcgi_fd;
 	int socket_type, status;
 	struct timeval tv = { 0, 100 * 1000 };
@@ -127,8 +127,14 @@ int fcgi_spawn_connection(char *appPath, unsigned short port, const char *unixso
 				__FILE__, __LINE__);
 			return -1;
 		}
+
+		if (!nofork) {
+			child = fork();
+		} else {
+			child = 0;
+		}
 		
-		switch ((child = fork())) {
+		switch (child) {
 		case 0: {
 			char cgi_childs[64];
 			char *b;
@@ -241,6 +247,7 @@ void show_help () {
 " -s <path>    bind to unix-domain socket\n" \
 " -C <childs>  (PHP only) numbers of childs to spawn (default 5)\n" \
 " -P <path>    name of PID-file for spawed process\n" \
+" -n           no fork (for daemontools)\n" \
 " -v           show version\n" \
 " -h           show this help\n" \
 "(root only)\n" \
@@ -259,10 +266,11 @@ int main(int argc, char **argv) {
 	int child_count = 5;
 	int i_am_root, o;
 	int pid_fd = -1;
+	int nofork = 0;
 	
 	i_am_root = (getuid() == 0);
 	
-	while(-1 != (o = getopt(argc, argv, "c:f:g:hp:u:vC:s:P:"))) {
+	while(-1 != (o = getopt(argc, argv, "c:f:g:hnp:u:vC:s:P:"))) {
 		switch(o) {
 		case 'f': fcgi_app = optarg; break;
 		case 'p': port = strtol(optarg, NULL, 10);/* port */ break;
@@ -271,6 +279,7 @@ int main(int argc, char **argv) {
 		case 'c': if (i_am_root) { changeroot = optarg; }/* chroot() */ break;
 		case 'u': if (i_am_root) { username = optarg; } /* set user */ break;
 		case 'g': if (i_am_root) { groupname = optarg; } /* set group */ break;
+		case 'n': nofork = 1; break;
 		case 'P': pid_file = optarg; /* PID file */ break;
 		case 'v': show_version(); return 0;
 		case 'h': show_help(); return 0;
@@ -413,7 +422,7 @@ int main(int argc, char **argv) {
 		if (username) setuid(pwd->pw_uid);
 	}
 	
-	return fcgi_spawn_connection(fcgi_app, port, unixsocket, child_count, pid_fd);
+	return fcgi_spawn_connection(fcgi_app, port, unixsocket, child_count, pid_fd, nofork);
 }
 #else
 int main() {
