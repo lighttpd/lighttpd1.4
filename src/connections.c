@@ -240,6 +240,24 @@ static int connection_handle_read(server *srv, connection *con) {
 			case SSL_ERROR_WANT_READ:
 				return 0;
 			case SSL_ERROR_SYSCALL:
+				/**
+				 * man SSL_get_error()
+				 * 
+				 * SSL_ERROR_SYSCALL
+				 *   Some I/O error occurred.  The OpenSSL error queue may contain more 
+				 *   information on the error.  If the error queue is empty (i.e.
+				 *   ERR_get_error() returns 0), ret can be used to find out more about 
+				 *   the error: If ret == 0, an EOF was observed that violates the
+				 *   protocol.  If ret == -1, the underlying BIO reported an I/O error 
+				 *   (for socket I/O on Unix systems, consult errno for details).
+				 *
+				 */
+				while((ssl_err = ERR_get_error())) {
+					/* get all errors from the error-queue */
+					log_error_write(srv, __FILE__, __LINE__, "sds", "SSL:", 
+							r, ERR_error_string(ssl_err, NULL));
+				}
+
 				switch(errno) {
 				default:
 					log_error_write(srv, __FILE__, __LINE__, "sddds", "SSL:", 
@@ -258,14 +276,10 @@ static int connection_handle_read(server *srv, connection *con) {
 				
 				/* fall thourgh */
 			default:
-				ssl_err = ERR_get_error();
-				switch(ssl_err) {
-				case SSL_F_SSL23_GET_CLIENT_HELLO:
-					/* a unencrypted HTTP request on a HTTPS socket. Do a redirect to the right location */
-				default:
+				while((ssl_err = ERR_get_error())) {
+					/* get all errors from the error-queue */
 					log_error_write(srv, __FILE__, __LINE__, "sds", "SSL:", 
 							r, ERR_error_string(ssl_err, NULL));
-					break;
 				}
 				break;
 			}

@@ -85,9 +85,11 @@ int network_write_chunkqueue_openssl(server *srv, connection *con, SSL *ssl, chu
 				case SSL_ERROR_SYSCALL:
 					/* perhaps we have error waiting in our error-queue */
 					if (0 != (err = ERR_get_error())) {
-						log_error_write(srv, __FILE__, __LINE__, "sdds", "SSL:", 
-								ssl_r, r,
-								ERR_error_string(err, NULL));
+						do {
+							log_error_write(srv, __FILE__, __LINE__, "sdds", "SSL:", 
+									ssl_r, r,
+									ERR_error_string(err, NULL));
+						} while((err = ERR_get_error()));
 					} else if (r == -1) {
 						/* no, but we have errno */
 						switch(errno) {
@@ -114,9 +116,11 @@ int network_write_chunkqueue_openssl(server *srv, connection *con, SSL *ssl, chu
 					
 					/* fall thourgh */
 				default:
-					log_error_write(srv, __FILE__, __LINE__, "sdds", "SSL:", 
-							ssl_r, r,
-							ERR_error_string(ERR_get_error(), NULL));
+					while((err = ERR_get_error())) {
+						log_error_write(srv, __FILE__, __LINE__, "sdds", "SSL:", 
+								ssl_r, r,
+								ERR_error_string(err, NULL));
+					}
 					
 					return  -1;
 				}
