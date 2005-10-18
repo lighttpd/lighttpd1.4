@@ -10,8 +10,11 @@ version = '1.4.6'
 def checkCHeaders(autoconf, hdrs):
 	p = re.compile('[^A-Z0-9]')
 	for hdr in hdrs:
-		if autoconf.CheckCHeader(hdr):
-			autoconf.env.Append(CPPFLAGS = [ '-DHAVE_' + p.sub('_', hdr.upper()) ])
+		if not hdr: 
+			continue
+		_hdr = Split(hdr)
+ 		if autoconf.CheckCHeader(_hdr):
+ 			autoconf.env.Append(CPPFLAGS = [ '-DHAVE_' + p.sub('_', _hdr[-1].upper()) ])
 
 def checkFuncs(autoconf, funcs):
 	p = re.compile('[^A-Z0-9]')
@@ -82,11 +85,44 @@ env['version'] = version
 # cache configure checks
 if 1:
 	autoconf = Configure(env)
-	checkCHeaders(autoconf, Split('arpa/inet.h fcntl.h netinet/in.h stdlib.h string.h \
-			sys/socket.h sys/time.h unistd.h sys/sendfile.h sys/uio.h \
-			getopt.h sys/epoll.h sys/select.h poll.h sys/poll.h sys/devpoll.h sys/filio.h \
-			sys/mman.h sys/event.h sys/port.h winsock2.h pwd.h sys/syslimits.h \
-			sys/resource.h sys/un.h syslog.h stdint.h inttypes.h sys/wait.h'))
+	checkCHeaders(autoconf, string.split("""
+			arpa/inet.h 
+			fcntl.h 
+			netinet/in.h 
+			sys/types.h netinet/in.h 
+			stdlib.h 
+			string.h
+			sys/socket.h
+			sys/types.h sys/socket.h
+		 	sys/time.h 
+			unistd.h 
+			sys/sendfile.h 
+			sys/uio.h 
+			sys/types.h sys/uio.h 
+			getopt.h 
+			sys/epoll.h 
+			sys/select.h 
+			sys/types.h sys/select.h 
+			poll.h 
+			sys/poll.h
+			sys/devpoll.h 
+			sys/filio.h
+			sys/mman.h
+			sys/types.h sys/mman.h
+			sys/event.h
+			sys/types.h sys/event.h
+			sys/port.h
+			winsock2.h
+			pwd.h
+			sys/syslimits.h
+			sys/resource.h
+			sys/time.h sys/types.h sys/resource.h
+			sys/un.h 
+			sys/types.h sys/un.h 
+			syslog.h 
+			stdint.h 
+			inttypes.h 
+			sys/wait.h""", "\n"))
 
 	checkFuncs(autoconf, Split('fork stat lstat strftime dup2 getcwd inet_ntoa inet_ntop memset mmap munmap strchr \
 			strdup strerror strstr strtol sendfile  getopt socket \
