@@ -31,6 +31,11 @@
 #ifdef HAVE_FORK
 #include <sys/wait.h>
 #endif
+
+#ifdef HAVE_SYS_FILIO_H
+#include <sys/filio.h>
+#endif
+
 /* init the plugin data */
 INIT_FUNC(mod_ssi_init) {
 	plugin_data *p;
