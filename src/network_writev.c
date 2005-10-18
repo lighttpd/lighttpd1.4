@@ -174,6 +174,27 @@ int network_write_chunkqueue_writev(server *srv, connection *con, int fd, chunkq
 				
 					return -1;
 				}
+
+				/* Optimizations for the future:
+				 *
+				 * adaptive mem-mapping
+				 *   the problem:
+				 *     we mmap() the whole file. If someone has alot large files and 32bit
+				 *     machine the virtual address area will be unrun and we will have a failing 
+				 *     mmap() call.
+				 *   solution:
+				 *     only mmap 16M in one chunk and move the window as soon as we have finished
+				 *     the first 8M
+				 *
+				 * read-ahead buffering
+				 *   the problem:
+				 *     sending out several large files in parallel trashes the read-ahead of the
+				 *     kernel leading to long wait-for-seek times.
+				 *   solutions: (increasing complexity)
+				 *     1. use madvise
+				 *     2. use a internal read-ahead buffer in the chunk-structure
+				 *     3. use non-blocking IO for file-transfers
+				 *   */
 			
 				if (MAP_FAILED == (c->file.mmap.start = mmap(0, sce->st.st_size, PROT_READ, MAP_SHARED, c->file.fd, 0))) {
 					log_error_write(srv, __FILE__, __LINE__, "ssbd", "mmap failed: ", 
@@ -181,6 +202,16 @@ int network_write_chunkqueue_writev(server *srv, connection *con, int fd, chunkq
 
 					return -1;
 				}
+#ifdef USE_MADVISE
+				/* we should use a sliding window here and only advise on the mmaped range and not
+				 * on the full file (waiting for adaptive mem-mapping) */
+				if (0 != madvise(c->file.mmap.start, sce->st.st_size, MADV_SEQUENTIAL)) {
+					log_error_write(srv, __FILE__, __LINE__, "ssbd", "madvise failed: ", 
+							strerror(errno), c->file.name,  c->file.fd);
+
+					return -1;
+				}
+#endif
 
 				close(c->file.fd);
 				c->file.fd = -1;
