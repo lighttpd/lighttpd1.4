@@ -52,6 +52,29 @@ query-string.::
   url.rewrite-once = ( "^/id/([0-9]+)$" => "/index.php?id=$1",
                        "^/link/([a-zA-Z]+)" => "/index.php?link=$1" )
 
-  $HTTP["host"] =~ "^([^.]+)\.(this-is-mass-vhost\.com)" {
+
+  # request:       http://www.domain.com/url/ 
+  # or request:    http://any.domain.com/url/ 
+  # before write:  /www/htdocs/url/
+  # after rewrite: /www/htdocs/domain.com/url/
+  # document-root=/www/htdocs/ %0=www.domain.com $1=url/
+  server.document-root = "/www/htdocs/"
+  $HTTP["host"] =~ "^.*\.([^.]+\.com)$" {
+    url.rewrite-once = ( "^/(.*)" => "/%0/$1" )
+  }
+
+
+  # request:        http://abc.mass-serve-subdomain.com/url/
+  # before rewrite: /www/htdocs/url/
+  # after rewrite:  /www/htdocs/mass-serve-subdomain.com/abc/url/
+  $HTTP["host"] =~ "^([^.]+)\.mass-subdomain\.com" {
+    server.document-root = "/www/htdocs/mass-subdomain.com"
+    url.rewrite-once = ( "^/(.*)" => "/%1/$1" )
+  }
+
+
+  # similar effect as above, except that you have multiply mass-subdomain now
+  server.document-root = "/www/htdocs/"
+  $HTTP["host"] =~ "^([^.]+)\.(mass-subdomain\.com|mass-subdomain\.net)" {
     url.rewrite-once = ( "^/(.*)" => "/%2/%1/$1" )
   }
