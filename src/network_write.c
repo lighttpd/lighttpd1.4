@@ -110,7 +110,7 @@ int network_write_chunkqueue_write(server *srv, connection *con, int fd, chunkqu
 
 			if ((r = write(fd, p + offset, toSend)) <= 0) {
 				log_error_write(srv, __FILE__, __LINE__, "ss", "write failed: ", strerror(errno));
-				
+				munmap(p, sce->st.st_size);
 				return -1;
 			}
 			
