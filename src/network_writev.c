@@ -196,7 +196,11 @@ int network_write_chunkqueue_writev(server *srv, connection *con, int fd, chunkq
 				 *     3. use non-blocking IO for file-transfers
 				 *   */
 			
+
 				if (MAP_FAILED == (c->file.mmap.start = mmap(0, sce->st.st_size, PROT_READ, MAP_SHARED, c->file.fd, 0))) {
+					/* close it here, otherwise we'd have to set FD_CLOEXEC */
+					close(c->file.fd);
+					c->file.fd = -1;
 					log_error_write(srv, __FILE__, __LINE__, "ssbd", "mmap failed: ", 
 							strerror(errno), c->file.name,  c->file.fd);
 

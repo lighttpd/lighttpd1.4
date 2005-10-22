@@ -146,11 +146,15 @@ int network_write_chunkqueue_linuxsendfile(server *srv, connection *con, int fd,
 			}
 		
 			/* open file if not already opened */	
-			if (-1 == c->file.fd &&
-			    -1 == (c->file.fd = open(c->file.name->ptr, O_RDONLY))) {
-				log_error_write(srv, __FILE__, __LINE__, "ss", "open failed: ", strerror(errno));
+			if (-1 == c->file.fd) {
+				if (-1 == (c->file.fd = open(c->file.name->ptr, O_RDONLY))) {
+					log_error_write(srv, __FILE__, __LINE__, "ss", "open failed: ", strerror(errno));
 				
-				return -1;
+					return -1;
+				}
+#ifdef FD_CLOEXEC
+				fcntl(c->file.fd, F_SETFD, FD_CLOEXEC);
+#endif
 			}
 			
 			/* Linux sendfile() */

@@ -439,6 +439,9 @@ static int deflate_file_to_file(server *srv, connection *con, plugin_data *p, bu
 	}
 	
 	if (-1 == (r = write(ofd, p->b->ptr, p->b->used))) {
+		munmap(start, sce->st.st_size);	
+		close(ofd);
+		close(ifd);
 		return -1;
 	}
 	

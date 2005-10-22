@@ -171,6 +171,7 @@ int network_write_chunkqueue_openssl(server *srv, connection *con, SSL *ssl, chu
 
 				lseek(ifd, offset, SEEK_SET);
 				if (-1 == (toSend = read(ifd, local_send_buffer, toSend))) {
+					close(ifd);
 					log_error_write(srv, __FILE__, __LINE__, "ss", "read failed: ", strerror(errno));
 					return -1;
 				}
