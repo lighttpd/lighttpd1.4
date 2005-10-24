@@ -4,36 +4,31 @@
 #include "buffer.h"
 
 typedef struct chunk {
-	/* 
-	 * MEM_CHUNK
-	 *   b: the chunk it self
-	 * FILE_CHUNK
-	 *   b: a buffer for the filename
-	 */
-	
 	enum { UNUSED_CHUNK, MEM_CHUNK, FILE_CHUNK } type;
 	
-	/* memchunk */
-	buffer *mem; /* it might be large */
+	buffer *mem; /* either the storage of the mem-chunk or the read-ahead buffer */
 
 	struct {
 		/* filechunk */
-		buffer *name;
-		off_t  offset;
-		off_t  length;
+		buffer *name; /* name of the file */
+		off_t  start; /* starting offset in the file */
+		off_t  length; /* octets to send from the starting offset */
 
 		int    fd;
 		struct { 
-			char   *start;
-			size_t length;
+			char   *start; /* the start pointer of the mmap'ed area */
+			size_t length; /* size of the mmap'ed area */
+			off_t  offset; /* start is <n> octet away from the start of the file */
 		} mmap;
 
-		int is_temp;
+		int is_temp; /* file is temporary and will be deleted if on cleanup */
 	} file;
 	
-	/* how many bytes are already handled */
-	
-	off_t  offset;
+	off_t  offset; /* octets sent from this chunk 
+			  the size of the chunk is either 
+			  - mem-chunk: mem->used - 1
+			  - file-chunk: file.length
+			*/
 	
 	struct chunk *next;
 } chunk;

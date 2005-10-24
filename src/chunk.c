@@ -170,7 +170,7 @@ int chunkqueue_append_file(chunkqueue *cq, buffer *fn, off_t offset, off_t len) 
 	c->type = FILE_CHUNK;
 	
 	buffer_copy_string_buffer(c->file.name, fn);
-	c->file.offset = offset;
+	c->file.start = offset;
 	c->file.length = len;
 	c->offset = 0;
 	

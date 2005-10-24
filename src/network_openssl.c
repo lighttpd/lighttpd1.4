@@ -157,7 +157,7 @@ int network_write_chunkqueue_openssl(server *srv, connection *con, SSL *ssl, chu
 
 			do {
 			
-				offset = c->file.offset + c->offset;
+				offset = c->file.start + c->offset;
 				toSend = c->file.length - c->offset;
 
 				if (toSend > LOCAL_SEND_BUFSIZE) toSend = LOCAL_SEND_BUFSIZE;
