@@ -83,7 +83,7 @@ int network_write_chunkqueue_write(server *srv, connection *con, int fd, chunkqu
 				return -1;
 			}
 			
-			offset = c->file.offset + c->offset;
+			offset = c->file.start + c->offset;
 			toSend = c->file.length - c->offset;
 			
 			if (offset > sce->st.st_size) {

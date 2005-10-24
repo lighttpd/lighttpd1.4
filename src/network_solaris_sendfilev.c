@@ -151,7 +151,7 @@ int network_write_chunkqueue_solarissendfilev(server *srv, connection *con, int 
 				return -1;
 			}
 					
-			offset = c->file.offset + c->offset;
+			offset = c->file.start + c->offset;
 			toSend = c->file.length - c->offset;
 			
 			if (offset > sce->st.st_size) {

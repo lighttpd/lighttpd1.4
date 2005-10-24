@@ -134,7 +134,7 @@ int network_write_chunkqueue_linuxsendfile(server *srv, connection *con, int fd,
 				return -1;
 			}
 			
-			offset = c->file.offset + c->offset;
+			offset = c->file.start + c->offset;
 			/* limit the toSend to 2^31-1 bytes in a chunk */
 			toSend = c->file.length - c->offset > ((1 << 30) - 1) ? 
 				((1 << 30) - 1) : c->file.length - c->offset;
