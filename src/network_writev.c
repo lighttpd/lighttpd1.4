@@ -19,6 +19,7 @@
 #include <stdlib.h>
 #include <limits.h>
 #include <stdio.h>
+#include <assert.h>
 
 #include "network.h"
 #include "fdevent.h"
@@ -44,6 +45,10 @@
 # else
 #  error UIO_MAXIOV nor IOV_MAX are defined
 # endif
+#endif
+
+#if 0
+#define LOCAL_BUFFERING 1
 #endif
 
 int network_write_chunkqueue_writev(server *srv, connection *con, int fd, chunkqueue *cq) {
@@ -148,17 +153,23 @@ int network_write_chunkqueue_writev(server *srv, connection *con, int fd, chunkq
 		case FILE_CHUNK: {
 			ssize_t r;
 			off_t offset;
-			size_t toSend;
+			off_t toSend;
 			stat_cache_entry *sce = NULL;
-			
+
+#define KByte * 1024
+#define MByte * 1024 KByte
+#define GByte * 1024 MByte
+			const off_t we_want_to_mmap = 512 KByte; 
+			off_t we_want_to_send = c->file.length - c->offset;
+			char *start = NULL;
+
 			if (HANDLER_ERROR == stat_cache_get_entry(srv, con, c->file.name, &sce)) {
 				log_error_write(srv, __FILE__, __LINE__, "sb",
 						strerror(errno), c->file.name);
 				return -1;
 			}
 
-			offset = c->file.offset + c->offset;
-			toSend = c->file.length - c->offset;
+			offset = c->file.start + c->offset;
 			
 			if (offset > sce->st.st_size) {
 				log_error_write(srv, __FILE__, __LINE__, "sb", 
@@ -167,13 +178,11 @@ int network_write_chunkqueue_writev(server *srv, connection *con, int fd, chunkq
 				return -1;
 			}
 
-			if (c->file.mmap.start == MAP_FAILED) {
-				if (-1 == c->file.fd &&  /* open the file if not already open */
-				    -1 == (c->file.fd = open(c->file.name->ptr, O_RDONLY))) {
-					log_error_write(srv, __FILE__, __LINE__, "ss", "open failed: ", strerror(errno));
-				
-					return -1;
-				}
+			/* mmap the buffer 
+			 * - first mmap 
+			 * - new mmap as the we are at the end of the last one */
+			if (c->file.mmap.start == MAP_FAILED ||
+			    offset == c->file.mmap.offset + c->file.mmap.length) {
 
 				/* Optimizations for the future:
 				 *
@@ -195,37 +204,64 @@ int network_write_chunkqueue_writev(server *srv, connection *con, int fd, chunkq
 				 *     2. use a internal read-ahead buffer in the chunk-structure
 				 *     3. use non-blocking IO for file-transfers
 				 *   */
-			
 
-				if (MAP_FAILED == (c->file.mmap.start = mmap(0, sce->st.st_size, PROT_READ, MAP_SHARED, c->file.fd, 0))) {
+				/* all mmap()ed areas are 16Mbyte expect the last which might be smaller */
+				size_t to_mmap = (we_want_to_send < we_want_to_mmap) ? we_want_to_send : we_want_to_mmap;
+
+				/* this is a remap, move the mmap-offset */
+				if (c->file.mmap.start != MAP_FAILED) {
+					munmap(c->file.mmap.start, c->file.mmap.length);
+					c->file.mmap.offset += we_want_to_mmap;
+				} else {
+					/* in case the range-offset is after the first mmap()ed area we skip the area */
+					c->file.mmap.offset = 0;
+
+					while (c->file.mmap.offset + we_want_to_mmap < c->file.start) {
+						c->file.mmap.offset += we_want_to_mmap;
+					}
+				}
+
+				if (-1 == c->file.fd) {  /* open the file if not already open */
+					if (-1 == (c->file.fd = open(c->file.name->ptr, O_RDONLY))) {
+						log_error_write(srv, __FILE__, __LINE__, "sbs", "open failed for:", c->file.name, strerror(errno));
+				
+						return -1;
+					}
+#ifdef FD_CLOEXEC
+					fcntl(c->file.fd, F_SETFD, FD_CLOEXEC);
+#endif
+				}
+
+				if (MAP_FAILED == (c->file.mmap.start = mmap(0, to_mmap, PROT_READ, MAP_SHARED, c->file.fd, c->file.mmap.offset))) {
 					/* close it here, otherwise we'd have to set FD_CLOEXEC */
-					close(c->file.fd);
-					c->file.fd = -1;
-					log_error_write(srv, __FILE__, __LINE__, "ssbd", "mmap failed: ", 
-							strerror(errno), c->file.name,  c->file.fd);
+
+					log_error_write(srv, __FILE__, __LINE__, "ssbd", "mmap failed:", 
+							strerror(errno), c->file.name, c->file.fd);
 
 					return -1;
 				}
-#ifdef USE_MADVISE
-				/* we should use a sliding window here and only advise on the mmaped range and not
-				 * on the full file (waiting for adaptive mem-mapping) */
-				if (0 != madvise(c->file.mmap.start, sce->st.st_size, MADV_SEQUENTIAL)) {
-					log_error_write(srv, __FILE__, __LINE__, "ssbd", "madvise failed: ", 
-							strerror(errno), c->file.name,  c->file.fd);
 
-					return -1;
+				c->file.mmap.length = to_mmap;
+#ifdef LOCAL_BUFFERING
+				buffer_copy_string_len(c->mem, c->file.mmap.start, c->file.mmap.length);
+#else
+				if (0 != madvise(c->file.mmap.start, c->file.mmap.length, MADV_WILLNEED)) {
+					log_error_write(srv, __FILE__, __LINE__, "ssbd", "madvise failed:", 
+							strerror(errno), c->file.name, c->file.fd);
 				}
 #endif
 
-				close(c->file.fd);
-				c->file.fd = -1;
-
-				c->file.mmap.length = sce->st.st_size;
-
 				/* chunk_reset() or chunk_free() will cleanup for us */
 			}
+			toSend = c->file.mmap.length - (offset - c->file.mmap.offset);
 
-			if ((r = write(fd, c->file.mmap.start + offset, toSend)) < 0) {
+#ifdef LOCAL_BUFFERING
+			start = c->mem->ptr;
+#else
+			start = c->file.mmap.start;
+#endif
+
+			if ((r = write(fd, start + (offset - c->file.mmap.offset), toSend)) < 0) {
 				switch (errno) {
 				case EAGAIN:
 				case EINTR:
