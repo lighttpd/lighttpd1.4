@@ -14,12 +14,13 @@ common_src = Split("buffer.c log.c \
       connections-glue.c \
       configfile-glue.c \
       http-header-glue.c \
-      splaytree.c network_writev.c")
+      splaytree.c network_writev.c \
+      network_write.c network_linux_sendfile.c \
+      network_freebsd_sendfile.c  \
+      network_solaris_sendfilev.c network_openssl.c \
+")
       
 src = Split("server.c response.c connections.c network.c \
-      network_write.c network_linux_sendfile.c \
-      network_freebsd_sendfile.c \
-      network_solaris_sendfilev.c network_openssl.c \
       configfile.c configparser.c request.c proc_open.c")
 
 lemon = env.Program('lemon', 'lemon.c')
