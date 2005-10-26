@@ -5,7 +5,7 @@ import string
 from stat import *
 
 package = 'lighttpd'
-version = '1.4.6'
+version = '1.4.7'
 
 def checkCHeaders(autoconf, hdrs):
 	p = re.compile('[^A-Z0-9]')
@@ -54,6 +54,22 @@ def checkProgram(env, withname, progname):
 
 	return binpath
 
+def checkStructMember(context):
+	struct_member = """
+#include <time.h>
+int main() {
+	struct tm a;
+	a.tm_gmtoff = 0;
+	return 0;
+}
+"""
+	context.Message('Checking for tm_gmtoff in struct tm...')
+	result = context.TryLink(struct_member, '.c')
+	context.Result(result)
+
+	return result
+
+
 BuildDir('build', 'src', duplicate = 0)
 
 opts = Options('config.py')
@@ -84,7 +100,8 @@ env['version'] = version
 
 # cache configure checks
 if 1:
-	autoconf = Configure(env)
+	autoconf = Configure(env, custom_tests = {'CheckStructMember': checkStructMember })
+	autoconf.headerfile = "foo.h"
 	checkCHeaders(autoconf, string.split("""
 			arpa/inet.h 
 			fcntl.h 
@@ -170,6 +187,8 @@ if 1:
 	if autoconf.CheckType('struct sockaddr_storage', '#include <sys/socket.h>\n'):
 		autoconf.env.Append(CPPFLAGS = [ '-DHAVE_STRUCT_SOCKADDR_STORAGE' ])
 
+	if autoconf.CheckStructMember():
+		autoconf.env.Append(CPPFLAGS = [ '-DHAVE_STRUCT_TM_GMTOFF' ])
 
 	env = autoconf.Finish()
 
