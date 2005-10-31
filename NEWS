@@ -3,6 +3,24 @@
 NEWS
 ====
 
+- 1.4.7 - 2005-10-..
+
+  * added FD_CLOEXEC to fds which are kept open for a longer time
+  * added smaller, moving mmaped windows to network_writev
+  * added madvise() to instruct the kernel the do proper read-ahead in network_writev
+  * added support for %I in mod_accesslog
+  * added better compat to Apache for ?auto in mod_status
+  * added support for userdirs without a entry in /etc/passwd in mod_userdir
+  * workaround missing client-bug by assuming we received a close-notify on 
+    non-keep-alive requests in SSL request
+  * disabled kerberos5 support by default to fix compilation on RHEL
+  * fixed order of library checks to fix compilation on Solaris 9
+  * fixed open file-descriptors on read-error
+  * fixed crash if /var/tmp is not writable
+  * TODO: added startup-time selectable network-backend
+  * TODO: export location of upload-files to config as array
+  * TODO: add debugging to mod_webdav
+
 - 1.4.6 - 2005-10-09
 
   * fixed compilation on MacOS X and cygwin
