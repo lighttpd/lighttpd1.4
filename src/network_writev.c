@@ -245,10 +245,12 @@ int network_write_chunkqueue_writev(server *srv, connection *con, int fd, chunkq
 #ifdef LOCAL_BUFFERING
 				buffer_copy_string_len(c->mem, c->file.mmap.start, c->file.mmap.length);
 #else
+#ifdef HAVE_MADVISE
 				if (0 != madvise(c->file.mmap.start, c->file.mmap.length, MADV_WILLNEED)) {
 					log_error_write(srv, __FILE__, __LINE__, "ssbd", "madvise failed:", 
 							strerror(errno), c->file.name, c->file.fd);
 				}
+#endif
 #endif
 
 				/* chunk_reset() or chunk_free() will cleanup for us */
