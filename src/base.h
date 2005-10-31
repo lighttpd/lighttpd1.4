@@ -439,6 +439,7 @@ typedef struct {
 	buffer *event_handler;
 	
 	buffer *modules_dir;
+	buffer *network_backend;
 	array *modules;
 	
 	unsigned short max_worker;
@@ -480,7 +481,7 @@ typedef struct {
 	size_t used;
 } server_socket_array;
 
-typedef struct {
+typedef struct server {
 	server_socket_array srv_sockets;
 	
 	/* the errorlog */
@@ -555,6 +556,13 @@ typedef struct {
 	stat_cache  *stat_cache;
 	
 	fdevent_handler_t event_handler;
+
+	int (* network_backend_write)(struct server *srv, connection *con, int fd, chunkqueue *cq);
+	int (* network_backend_read)(struct server *srv, connection *con, int fd, chunkqueue *cq);
+#ifdef USE_OPENSSL
+	int (* network_ssl_backend_write)(struct server *srv, connection *con, SSL *ssl, chunkqueue *cq);
+	int (* network_ssl_backend_read)(struct server *srv, connection *con, SSL *ssl, chunkqueue *cq);
+#endif
 
 	uid_t uid;
 	gid_t gid;

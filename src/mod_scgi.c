@@ -22,7 +22,6 @@
 #include "plugin.h"
 
 #include "inet_ntop_cache.h"
-#include "network_backends.h"
 
 #include <stdio.h>
 
@@ -2257,18 +2256,7 @@ static handler_t scgi_write_request(server *srv, handler_ctx *hctx) {
 		
 		/* fall through */
 	case FCGI_STATE_WRITE:
-		/* why aren't we using the network_ interface here ? */
-#if defined USE_LINUX_SENDFILE
-		ret = network_write_chunkqueue_linuxsendfile(srv, con, hctx->fd, hctx->wb); 
-#elif defined USE_FREEBSD_SENDFILE
-		ret = network_write_chunkqueue_freebsdsendfile(srv, con, hctx->fd, hctx->wb); 
-#elif defined USE_SOLARIS_SENDFILEV
-		ret = network_write_chunkqueue_solarissendfilev(srv, con, hctx->fd, hctx->wb); 
-#elif defined USE_WRITEV
-		ret = network_write_chunkqueue_writev(srv, con, hctx->fd, hctx->wb);
-#else
-		ret = network_write_chunkqueue_write(srv, con, hctx->fd, hctx->wb);
-#endif
+		ret = srv->network_backend_write(srv, con, hctx->fd, hctx->wb); 
 
 		chunkqueue_remove_finished_chunks(hctx->wb);
 	
