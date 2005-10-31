@@ -944,7 +944,10 @@ int connection_handle_read_state(server *srv, connection *con)  {
 			connection_set_state(srv, con, CON_STATE_REQUEST_END);
 		} else if (con->request.request->used > 64 * 1024) {
 			log_error_write(srv, __FILE__, __LINE__, "sd", "http-header larger then 64k -> disconnected", chunkqueue_length(cq));
-			connection_set_state(srv, con, CON_STATE_ERROR);
+
+			con->http_status = 414; /* Request-URI too large */
+			con->keep_alive = 0;
+			connection_set_state(srv, con, CON_STATE_REQUEST_END);
 		}
 		break;
 	case CON_STATE_READ_POST: 
@@ -989,9 +992,39 @@ int connection_handle_read_state(server *srv, connection *con)  {
 
 				/* we have a chunk, let's write to it */
 
-				assert(dst_c->file.fd != -1);
+				if (dst_c->file.fd == -1) {
+					/* we don't have file to write to, 
+					 * EACCES might be one reason.
+					 *
+					 * Instead of sending 500 we send 413 and say the request is too large
+					 *  */
 
-				assert(toRead == write(dst_c->file.fd, c->mem->ptr + c->offset, toRead));
+					log_error_write(srv, __FILE__, __LINE__, "sbs",
+							"denying upload as opening to temp-file for upload failed:", 
+							dst_c->file.name, strerror(errno));
+
+					con->http_status = 413; /* Request-Entity too large */
+					con->keep_alive = 0;
+					connection_set_state(srv, con, CON_STATE_HANDLE_REQUEST);
+
+					break;
+				}
+
+				if (toRead != write(dst_c->file.fd, c->mem->ptr + c->offset, toRead)) {
+					/* write failed for some reason ... disk full ? */ 
+					log_error_write(srv, __FILE__, __LINE__, "sbs",
+							"denying upload as writing to file failed:", 
+							dst_c->file.name, strerror(errno));
+					
+					con->http_status = 413; /* Request-Entity too large */
+					con->keep_alive = 0;
+					connection_set_state(srv, con, CON_STATE_HANDLE_REQUEST);
+				
+					close(dst_c->file.fd);
+					dst_c->file.fd = -1;
+
+					break;
+				}
 
 				dst_c->file.length += toRead;
 					
