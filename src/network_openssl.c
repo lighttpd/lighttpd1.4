@@ -49,6 +49,15 @@ int network_write_chunkqueue_openssl(server *srv, connection *con, SSL *ssl, chu
 #define LOCAL_SEND_BUFSIZE (64 * 1024)
 	static char *local_send_buffer = NULL;
 
+	/* the remote side closed the connection before without shutdown request
+	 * - IE 
+	 * - wget
+	 * if keep-alive is disabled */
+
+	if (con->keep_alive == 0) {
+		SSL_set_shutdown(ssl, SSL_RECEIVED_SHUTDOWN);
+	}
+
 	for(c = cq->first; c; c = c->next) {
 		int chunk_finished = 0;
 		
@@ -114,7 +123,7 @@ int network_write_chunkqueue_openssl(server *srv, connection *con, SSL *ssl, chu
 					
 					if (r == 0) return -2;
 					
-					/* fall thourgh */
+					/* fall through */
 				default:
 					while((err = ERR_get_error())) {
 						log_error_write(srv, __FILE__, __LINE__, "sdds", "SSL:", 
@@ -156,7 +165,6 @@ int network_write_chunkqueue_openssl(server *srv, connection *con, SSL *ssl, chu
 			}
 
 			do {
-			
 				offset = c->file.start + c->offset;
 				toSend = c->file.length - c->offset;
 
@@ -181,19 +189,36 @@ int network_write_chunkqueue_openssl(server *srv, connection *con, SSL *ssl, chu
 				close(ifd);
 			
 				if ((r = SSL_write(ssl, s, toSend)) <= 0) {
+					unsigned long err;
+
 					switch ((ssl_r = SSL_get_error(ssl, r))) {
 					case SSL_ERROR_WANT_WRITE:
 						write_wait = 1;
 						break;
 					case SSL_ERROR_SYSCALL:
-						switch(errno) {
-						case EPIPE:
-							return -2;
-						default:
-							log_error_write(srv, __FILE__, __LINE__, "sddds", "SSL:", 
+						/* perhaps we have error waiting in our error-queue */
+						if (0 != (err = ERR_get_error())) {
+							do {
+								log_error_write(srv, __FILE__, __LINE__, "sdds", "SSL:", 
+										ssl_r, r,
+										ERR_error_string(err, NULL));
+							} while((err = ERR_get_error()));
+						} else if (r == -1) {
+							/* no, but we have errno */
+							switch(errno) {
+							case EPIPE:
+								return -2;
+							default:
+								log_error_write(srv, __FILE__, __LINE__, "sddds", "SSL:", 
+										ssl_r, r, errno,
+										strerror(errno));
+								break;
+							}
+						} else {
+							/* neither error-queue nor errno ? */
+							log_error_write(srv, __FILE__, __LINE__, "sddds", "SSL (error):", 
 									ssl_r, r, errno,
 									strerror(errno));
-							break;
 						}
 					
 						return  -1;
@@ -204,9 +229,11 @@ int network_write_chunkqueue_openssl(server *srv, connection *con, SSL *ssl, chu
 					
 						/* fall thourgh */
 					default:
-						log_error_write(srv, __FILE__, __LINE__, "sdds", "SSL:", 
-								ssl_r, r, 
-								ERR_error_string(ERR_get_error(), NULL));
+						while((err = ERR_get_error())) {
+							log_error_write(srv, __FILE__, __LINE__, "sdds", "SSL:", 
+									ssl_r, r,
+									ERR_error_string(err, NULL));
+						}
 					
 						return -1;
 					}
@@ -235,9 +262,8 @@ int network_write_chunkqueue_openssl(server *srv, connection *con, SSL *ssl, chu
 		}
 			
 		chunks_written++;
-		
 	}
-	
+
 	return chunks_written;
 }
 #endif
