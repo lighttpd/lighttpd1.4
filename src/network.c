@@ -369,9 +369,40 @@ int network_close(server *srv) {
 	return 0;
 }
 
+typedef enum {
+	NETWORK_BACKEND_UNSET,
+	NETWORK_BACKEND_WRITE,
+	NETWORK_BACKEND_WRITEV,
+	NETWORK_BACKEND_LINUX_SENDFILE,
+	NETWORK_BACKEND_FREEBSD_SENDFILE,
+	NETWORK_BACKEND_SOLARIS_SENDFILEV
+} network_backend_t;
+
 int network_init(server *srv) {
 	buffer *b;
 	size_t i;
+	network_backend_t backend;
+	
+	struct nb_map { 
+		network_backend_t nb; 
+		const char *name; 
+	} network_backends[] = { 
+		/* lowest id wins */
+#if defined USE_LINUX_SENDFILE
+		{ NETWORK_BACKEND_LINUX_SENDFILE,       "linux-sendfile" },
+#endif
+#if defined USE_FREEBSD_SENDFILE
+		{ NETWORK_BACKEND_FREEBSD_SENDFILE,     "freebsd-sendfile" },
+#endif
+#if defined USE_SOLARIS_SENDFILEV
+		{ NETWORK_BACKEND_SOLARIS_SENDFILEV,	"solaris-sendfilev" },
+#endif
+#if defined USE_WRITEV
+		{ NETWORK_BACKEND_WRITEV,		"writev" },
+#endif
+		{ NETWORK_BACKEND_WRITE,		"write" },
+		{ NETWORK_BACKEND_UNSET,        	NULL }
+	};
 	
 	b = buffer_init();
 		
@@ -384,6 +415,61 @@ int network_init(server *srv) {
 	}
 	buffer_free(b);
 		
+#ifdef USE_OPENSSL
+	srv->network_ssl_backend_write = network_write_chunkqueue_openssl;
+#endif
+
+	/* get a usefull default */
+	backend = network_backends[0].nb;
+
+	/* match name against known types */
+	if (!buffer_is_empty(srv->srvconf.network_backend)) {
+		for (i = 0; network_backends[i].name; i++) {
+			/**/
+			if (buffer_is_equal_string(srv->srvconf.network_backend, network_backends[i].name, strlen(network_backends[i].name))) {
+				backend = network_backends[i].nb;
+				break;
+			}
+		}
+		if (NULL == network_backends[i].name) {
+			/* we don't know it */
+
+			log_error_write(srv, __FILE__, __LINE__, "sb", 
+					"server.network-backend has a unknown value:", 
+					srv->srvconf.network_backend);
+
+			return -1;
+		}
+	}
+
+	switch(backend) {
+	case NETWORK_BACKEND_WRITE:
+		srv->network_backend_write = network_write_chunkqueue_write;
+		break;
+#ifdef USE_WRITEV
+	case NETWORK_BACKEND_WRITEV:
+		srv->network_backend_write = network_write_chunkqueue_writev;
+		break;
+#endif
+#ifdef USE_LINUX_SENDFILE
+	case NETWORK_BACKEND_LINUX_SENDFILE:
+		srv->network_backend_write = network_write_chunkqueue_linuxsendfile; 
+		break;
+#endif
+#ifdef USE_FREEBSD_SENDFILE
+	case NETWORK_BACKEND_FREEBSD_SENDFILE:
+		srv->network_backend_write = network_write_chunkqueue_freebsdsendfile; 
+		break;
+#endif
+#ifdef USE_SOLARIS_SENDFILEV
+	case NETWORK_BACKEND_SOLARIS_SENDFILEV:
+		srv->network_backend_write = network_write_chunkqueue_solarissendfilev; 
+		break;
+#endif
+	default:
+		return -1;
+	}
+
 	/* check for $SERVER["socket"] */
 	for (i = 1; i < srv->config_context->used; i++) {
 		data_config *dc = (data_config *)srv->config_context->data[i];
@@ -455,22 +541,9 @@ int network_write_chunkqueue(server *srv, connection *con, chunkqueue *cq) {
 #endif
 	
 	if (srv_socket->is_ssl) {
-#ifdef USE_OPENSSL
-		ret = network_write_chunkqueue_openssl(srv, con, con->ssl, cq);
-#endif
+		ret = srv->network_ssl_backend_write(srv, con, con->ssl, cq);
 	} else {
-		/* dispatch call */
-#if defined USE_LINUX_SENDFILE
-		ret = network_write_chunkqueue_linuxsendfile(srv, con, con->fd, cq); 
-#elif defined USE_FREEBSD_SENDFILE
-		ret = network_write_chunkqueue_freebsdsendfile(srv, con, con->fd, cq); 
-#elif defined USE_SOLARIS_SENDFILEV
-		ret = network_write_chunkqueue_solarissendfilev(srv, con, con->fd, cq); 
-#elif defined USE_WRITEV
-		ret = network_write_chunkqueue_writev(srv, con, con->fd, cq);
-#else
-		ret = network_write_chunkqueue_write(srv, con, con->fd, cq);
-#endif
+		ret = srv->network_backend_write(srv, con, con->fd, cq);
 	}
 	
 	if (ret >= 0) {

@@ -641,11 +641,6 @@ static handler_t mod_status_handle_server_config(server *srv, connection *con, v
 #else
 	mod_status_row_append(b, "Rewrite Engine", "disabled - pcre missing");
 #endif
-#ifdef HAVE_ZLIB_H
-	mod_status_row_append(b, "On-the-Fly Output Compression", "enabled");
-#else
-	mod_status_row_append(b, "On-the-Fly Output Compression", "disabled - zlib missing");
-#endif
 	mod_status_header_append(b, "Network Engine");
 	
 	for (i = 0; event_handlers[i].name; i++) {

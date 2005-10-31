@@ -77,6 +77,7 @@ static int config_insert(server *srv) {
 		{ "server.range-requests",       NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION }, /* 40 */
 		{ "server.stat-cache-engine",    NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_CONNECTION },  /* 41 */
 		{ "server.max-connections",      NULL, T_CONFIG_SHORT, T_CONFIG_SCOPE_SERVER },       /* 42 */
+		{ "server.network-backend",      NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_CONNECTION },  /* 43 */
 		
 		{ "server.host",                 "use server.bind instead", T_CONFIG_DEPRECATED, T_CONFIG_SCOPE_UNSET },
 		{ "server.docroot",              "use server.document-root instead", T_CONFIG_DEPRECATED, T_CONFIG_SCOPE_UNSET },
@@ -112,6 +113,7 @@ static int config_insert(server *srv) {
 	
 	stat_cache_string = buffer_init();
 	cv[41].destination = stat_cache_string;
+	cv[43].destination = srv->srvconf.network_backend;
 	
 	cv[42].destination = &(srv->srvconf.max_conns);
 	cv[12].destination = &(srv->srvconf.max_request_size);
@@ -1030,6 +1032,7 @@ int config_set_defaults(server *srv) {
 		{ FDEVENT_HANDLER_UNSET,          NULL }
 	};
 	
+
 	if (buffer_is_empty(s->document_root)) {  
 		log_error_write(srv, __FILE__, __LINE__, "s",  
 				"a default document-root has to be set");  

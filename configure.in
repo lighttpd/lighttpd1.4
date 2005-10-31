@@ -470,7 +470,7 @@ if test "x$ac_cv_func_sendfile" = xyes; then
 		    #include <errno.h>
 		    int main() {
 		      int o = 0;
-		      if (-1 == sendfile(0, 0, &o, 0) && errno == ENOSYS) return -1;
+		      if (-1 == sendfile(-1, 0, &o, 0) && errno == ENOSYS) return -1;
 		      return 0;
 		    } ], 
 		    AC_MSG_RESULT(yes), 
