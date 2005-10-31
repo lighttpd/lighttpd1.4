@@ -144,7 +144,7 @@ if 1:
 	checkFuncs(autoconf, Split('fork stat lstat strftime dup2 getcwd inet_ntoa inet_ntop memset mmap munmap strchr \
 			strdup strerror strstr strtol sendfile  getopt socket \
 			gethostbyname poll sigtimedwait epoll_ctl getrlimit chroot \
-			getuid select signal pathconf\
+			getuid select signal pathconf madvise\
 			writev sigaction sendfile64 send_file kqueue port_create localtime_r'))
 
 	checkTypes(autoconf, Split('pid_t size_t off_t'))
