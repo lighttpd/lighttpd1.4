@@ -259,11 +259,14 @@ chunk *chunkqueue_get_append_tempfile(chunkqueue *cq) {
 	c = chunkqueue_get_unused_chunk(cq);
 
 	c->type = FILE_CHUNK;
-	c->file.is_temp = 1;
 	c->offset = 0;
-	c->file.fd = mkstemp(template);
-	c->file.length = 0;
+	if (-1 != (c->file.fd = mkstemp(template))) {
+		/* only trigger the unlink if we created the temp-file successfully */
+		c->file.is_temp = 1;
+	}
+
 	buffer_copy_string(c->file.name, template);
+	c->file.length = 0;
 
 	chunkqueue_append_chunk(cq, c);
 	
