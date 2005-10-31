@@ -20,12 +20,14 @@ typedef struct {
 	array *exclude_user;
 	array *include_user;
 	buffer *path;
+	buffer *basepath;
 } plugin_config;
 
 typedef struct {
 	PLUGIN_DATA;
 	
 	buffer *username;
+	buffer *temp_path;
 	
 	plugin_config **config_storage;
 	
@@ -39,6 +41,7 @@ INIT_FUNC(mod_userdir_init) {
 	p = calloc(1, sizeof(*p));
 	
 	p->username = buffer_init();
+	p->temp_path = buffer_init();
 	
 	return p;
 }
@@ -58,6 +61,7 @@ FREE_FUNC(mod_userdir_free) {
 			array_free(s->include_user);
 			array_free(s->exclude_user);
 			buffer_free(s->path);
+			buffer_free(s->basepath);
 			
 			free(s);
 		}
@@ -65,6 +69,7 @@ FREE_FUNC(mod_userdir_free) {
 	}
 	
 	buffer_free(p->username);
+	buffer_free(p->temp_path);
 	
 	free(p);
 	
@@ -79,9 +84,10 @@ SETDEFAULTS_FUNC(mod_userdir_set_defaults) {
 	
 	config_values_t cv[] = { 
 		{ "userdir.path",               NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_CONNECTION },       /* 0 */
-		{ "userdir.exclude-user",       NULL, T_CONFIG_ARRAY, T_CONFIG_SCOPE_CONNECTION },       /* 1 */
-		{ "userdir.include-user",       NULL, T_CONFIG_ARRAY, T_CONFIG_SCOPE_CONNECTION },       /* 2 */
-		{ NULL,                         NULL, T_CONFIG_UNSET, T_CONFIG_SCOPE_UNSET }
+		{ "userdir.exclude-user",       NULL, T_CONFIG_ARRAY,  T_CONFIG_SCOPE_CONNECTION },       /* 1 */
+		{ "userdir.include-user",       NULL, T_CONFIG_ARRAY,  T_CONFIG_SCOPE_CONNECTION },       /* 2 */
+		{ "userdir.basepath",           NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_CONNECTION },       /* 3 */
+		{ NULL,                         NULL, T_CONFIG_UNSET,  T_CONFIG_SCOPE_UNSET }
 	};
 	
 	if (!p) return HANDLER_ERROR;
@@ -95,10 +101,12 @@ SETDEFAULTS_FUNC(mod_userdir_set_defaults) {
 		s->exclude_user = array_init();
 		s->include_user = array_init();
 		s->path = buffer_init();
+		s->basepath = buffer_init();
 	
 		cv[0].destination = s->path;
 		cv[1].destination = s->exclude_user;
 		cv[2].destination = s->include_user;
+		cv[3].destination = s->basepath;
 		
 		p->config_storage[i] = s;
 	
@@ -119,6 +127,7 @@ static int mod_userdir_patch_connection(server *srv, connection *con, plugin_dat
 	PATCH(path);
 	PATCH(exclude_user);
 	PATCH(include_user);
+	PATCH(basepath);
 	
 	/* skip the first, the global context */
 	for (i = 1; i < srv->config_context->used; i++) {
@@ -138,6 +147,8 @@ static int mod_userdir_patch_connection(server *srv, connection *con, plugin_dat
 				PATCH(exclude_user);
 			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("userdir.include-user"))) {
 				PATCH(include_user);
+			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("userdir.basepath"))) {
+				PATCH(basepath);
 			}
 		}
 	}
@@ -151,10 +162,12 @@ URIHANDLER_FUNC(mod_userdir_docroot_handler) {
 	int uri_len;
 	size_t k;
 	char *rel_url;
-	struct passwd *pwd;
-	
+#ifdef HAVE_PWD_H
+	struct passwd *pwd = NULL;
+#endif
+
 	if (con->uri.path->used == 0) return HANDLER_GO_ON;
-#ifdef HAVE_PWD_H	
+
 	mod_userdir_patch_connection(srv, con, p);
 	
 	uri_len = con->uri.path->used - 1;
@@ -170,12 +183,23 @@ URIHANDLER_FUNC(mod_userdir_docroot_handler) {
 		
 		return HANDLER_FINISHED;
 	}
+
+	/* /~/ is a empty username, catch it directly */
+	if (0 == rel_url - (con->uri.path->ptr + 2)) {
+		return HANDLER_GO_ON;
+	}
+	
 	buffer_copy_string_len(p->username, con->uri.path->ptr + 2, rel_url - (con->uri.path->ptr + 2));
 	
-	if (NULL == (pwd = getpwnam(p->username->ptr))) {
+	if (buffer_is_empty(p->conf.basepath) 
+#ifdef HAVE_PWD_H
+	    && NULL == (pwd = getpwnam(p->username->ptr))
+#endif
+	    ) {
 		/* user not found */
 		return HANDLER_GO_ON;
 	}
+
 	
 	for (k = 0; k < p->conf.exclude_user->used; k++) {
 		data_string *ds = (data_string *)p->conf.exclude_user->data[k];
@@ -192,7 +216,7 @@ URIHANDLER_FUNC(mod_userdir_docroot_handler) {
 			data_string *ds = (data_string *)p->conf.include_user->data[k];
 			
 			if (buffer_is_equal(ds->value, p->username)) {
-				/* user in exclude list */
+				/* user in include list */
 				found_user = 1;
 				break;
 			}
@@ -201,17 +225,56 @@ URIHANDLER_FUNC(mod_userdir_docroot_handler) {
 		if (!found_user) return HANDLER_GO_ON;
 	}
 	
-	/* we build the physical path */	
-	buffer_copy_string(con->physical.path, pwd->pw_dir);
-	BUFFER_APPEND_SLASH(con->physical.path);
-	buffer_append_string_buffer(con->physical.path, p->conf.path); /* skip the / */
-	BUFFER_APPEND_SLASH(con->physical.path);
-	buffer_append_string(con->physical.path, rel_url + 1); /* skip the / */
-	
-	return HANDLER_GO_ON;
-#else
-	return HANDLER_ERROR;
+	/* we build the physical path */
+
+	if (buffer_is_empty(p->conf.basepath)) {
+#ifdef HAVE_PWD_H
+		buffer_copy_string(p->temp_path, pwd->pw_dir);
 #endif
+	} else {
+		char *cp;
+		/* check if the username is valid
+		 * a request for /~../ should lead to a directory traversal
+		 * limiting to [-_a-z0-9.] should fix it */
+
+		for (cp = p->username->ptr; *cp; cp++) {
+			char c = *cp;
+
+			if (!(c == '-' ||
+			      c == '_' ||
+			      c == '.' ||
+			      (c >= 'a' && c <= 'z') ||
+			      (c >= 'A' && c <= 'Z') ||
+			      (c >= '0' && c <= '9'))) {
+
+				return HANDLER_GO_ON;
+			}
+		}
+
+		buffer_copy_string_buffer(p->temp_path, p->conf.basepath);
+		BUFFER_APPEND_SLASH(p->temp_path);
+		buffer_append_string_buffer(p->temp_path, p->username);
+	}
+	BUFFER_APPEND_SLASH(p->temp_path);
+	buffer_append_string_buffer(p->temp_path, p->conf.path); 
+
+	if (buffer_is_empty(p->conf.basepath)) {
+		struct stat st;
+		int ret;
+		
+		ret = stat(p->temp_path->ptr, &st);
+		if (ret < 0 || S_ISDIR(st.st_mode) != 1) {
+			return HANDLER_GO_ON;
+		} 
+	}
+
+	BUFFER_APPEND_SLASH(p->temp_path);
+	buffer_append_string(p->temp_path, rel_url + 1); /* skip the / */
+	buffer_copy_string_buffer(con->physical.path, p->temp_path);
+
+	buffer_reset(p->temp_path);
+
+	return HANDLER_GO_ON;
 }
 
 /* this function is called at dlopen() time and inits the callbacks */
