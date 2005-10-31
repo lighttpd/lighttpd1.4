@@ -539,6 +539,8 @@ static handler_t mod_status_handle_server_status_text(server *srv, connection *c
 	plugin_data *p = p_d;
 	buffer *b;
 	double avg;
+	size_t j;
+	time_t ts;
 	
 	b = chunkqueue_get_append_buffer(con->write_queue);
 
@@ -554,7 +556,19 @@ static handler_t mod_status_handle_server_status_text(server *srv, connection *c
 	buffer_append_long(b, avg);
 	BUFFER_APPEND_STRING_CONST(b, "\n");
 	
+	/* output uptime */
+	BUFFER_APPEND_STRING_CONST(b, "Uptime: ");
+	ts = srv->cur_ts - srv->startup_ts;
+	buffer_append_long(b, ts);
+	BUFFER_APPEND_STRING_CONST(b, "\n");
+	
+	/* output busy servers */
+	BUFFER_APPEND_STRING_CONST(b, "BusyServers: ");
+	buffer_append_long(b, srv->conns->used);
+	BUFFER_APPEND_STRING_CONST(b, "\n");
+
 	/* set text/plain output */
+
 	response_header_overwrite(srv, con, CONST_STR_LEN("Content-Type"), CONST_STR_LEN("text/plain"));
 	
 	return 0;
