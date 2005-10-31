@@ -26,7 +26,7 @@ Description
 lighttpd provides an interface to a external programs that 
 support the FastCGI interface. The FastCGI Interface is 
 defined by http://www.fastcgi.com/ and is a 
-platform-indepentant and server independant interface between
+platform-independent and server independent interface between
 a web-application and a webserver.
 
 This means that FastCGI programs that run with the Apache 
