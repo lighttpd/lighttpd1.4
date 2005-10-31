@@ -742,6 +742,13 @@ REQUESTDONE_FUNC(log_access_write) {
 					BUFFER_APPEND_STRING_CONST(b, "-");
 				}
 				break;
+			case FORMAT_BYTES_IN:
+				if (con->bytes_read > 0) {
+					buffer_append_off_t(b, con->bytes_read);
+				} else {
+					BUFFER_APPEND_STRING_CONST(b, "-");
+				}
+				break;
 			case FORMAT_TIME_USED:
 				buffer_append_long(b, srv->cur_ts - con->request_start);
 				break;
@@ -788,8 +795,6 @@ REQUESTDONE_FUNC(log_access_write) {
 				 { 'C', FORMAT_COOKIE },
 				 { 'D', FORMAT_TIME_USED_MS },
 				 { 'e', FORMAT_ENV },
-				 { 'I', FORMAT_BYTES_IN },
-				 { 'O', FORMAT_BYTES_OUT },
 				 */
 				
 				break;
