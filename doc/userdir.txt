@@ -24,9 +24,24 @@ Description
 The userdir module provides a simple way to link user-based directories into the global namespace of the webserver.
 
 Requests in the form ``/~user/page.html`` are rewritten to take the file ``page.html`` from the home-directory of the user.
-If userdir.path is set, the path will be appended at the home-directory.
+If ``userdir.path`` is set, the path will be appended at the home-directory
+building the classic mapping of: ::
+
+  userdir.path = "public_html"
+
+  URL: http://www.example.org/~jan/index.html 
+  Path: /home/jan/public_html/
 
 To control which users should be able to use this feature you can set a include- or a exclude list for username.
+
+In case you mapping is independent of /etc/passwd you can use
+``userdir.basepath``: ::
+
+  userdir.path = "htdocs"
+  userdir.basepath = "/var/www/users/"
+
+  URL: http://www.example.org/~jan/index.html
+  Path: /var/www/users/jan/htdocs/index.html
 
 Options
 =======
@@ -52,3 +67,6 @@ userdir.include-user
   if set, only users from this list may use the feature
 
   Default: empty (all user may use it)
+
+userdir.basepath
+  if set, don't check /etc/passwd for homedir
