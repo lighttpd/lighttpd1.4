@@ -1,7 +1,7 @@
 #                                               -*- Autoconf -*-
 # Process this file with autoconf to produce a configure script.
 AC_PREREQ(2.57)
-AC_INIT(lighttpd, 1.4.6, jan@kneschke.de)
+AC_INIT(lighttpd, 1.4.7, jan@kneschke.de)
 AC_CONFIG_SRCDIR([src/server.c])
 
 AC_CANONICAL_TARGET
@@ -170,6 +170,25 @@ if test "$WITH_ATTR" != "no"; then
  AC_SUBST(ATTR_LIB)
 fi
 
+## openssl on solaris needs -lsocket -lnsl
+AC_SEARCH_LIBS(socket,socket)
+AC_SEARCH_LIBS(gethostbyname,nsl socket)
+AC_SEARCH_LIBS(hstrerror,resolv)
+
+save_LIBS=$LIBS
+AC_SEARCH_LIBS(dlopen,dl,[
+  AC_CHECK_HEADERS([dlfcn.h],[
+    if test "$ac_cv_search_dlopen" != no; then
+      test "$ac_cv_search_dlopen" = "none required" || DL_LIB="$ac_cv_search_dlopen"
+    fi
+
+    AC_DEFINE([HAVE_LIBDL], [1], [libdl])
+    AC_DEFINE([HAVE_DLFCN_H], [1])
+  ])
+])
+LIBS=$save_LIBS
+AC_SUBST(DL_LIB)
+
 dnl Check for valgrind
 AC_MSG_CHECKING(for valgrind)
 AC_ARG_WITH(valgrind, AC_HELP_STRING([--with-valgrind],[enable internal support for valgrind]),
@@ -206,12 +225,21 @@ AC_ARG_WITH(openssl-libs,
     [ use_openssl=yes LDFLAGS="$LDFLAGS -L$withval" ]
 )
 
+AC_ARG_WITH(kerberos5,
+    AC_HELP_STRING([--with-berberos5],[use Kerberos5 support with OpenSSL]),
+    [ use_kerberos=yes ], [use_kerberos=no]
+)
+
 if test "x$use_openssl" = "xyes"; then
+    if test "x$use_kerberos" != "xyes"; then
+        CPPFLAGS="$CPPFLAGS -DOPENSSL_NO_KRB5"
+    fi
+
     AC_CHECK_HEADERS([openssl/ssl.h])
     OLDLIBS="$LIBS"
     AC_CHECK_LIB(crypto, BIO_f_base64, [ 
       AC_CHECK_LIB(ssl, SSL_new, [ SSL_LIB="-lssl -lcrypto" 
-				 AC_DEFINE(HAVE_LIBSSL, [], [Have libssl]) ], [], [ -lcrypto ])
+				 AC_DEFINE(HAVE_LIBSSL, [], [Have libssl]) ], [], [ -lcrypto "$DL_LIB" ])
     ], [], [])
     LIBS="$OLDLIBS"
     AC_SUBST(SSL_LIB)
@@ -381,25 +409,6 @@ if test "$WITH_LUA" != "no"; then
  AC_SUBST(LUA_CFLAGS)
  AC_SUBST(LUA_LIBS)
 fi
-
-
-AC_SEARCH_LIBS(socket,socket)
-AC_SEARCH_LIBS(gethostbyname,nsl socket)
-AC_SEARCH_LIBS(hstrerror,resolv)
-
-save_LIBS=$LIBS
-AC_SEARCH_LIBS(dlopen,dl,[
-  AC_CHECK_HEADERS([dlfcn.h],[
-    if test "$ac_cv_search_dlopen" != no; then
-      test "$ac_cv_search_dlopen" = "none required" || DL_LIB="$ac_cv_search_dlopen"
-    fi
-
-    AC_DEFINE([HAVE_LIBDL], [1], [libdl])
-    AC_DEFINE([HAVE_DLFCN_H], [1])
-  ])
-])
-LIBS=$save_LIBS
-AC_SUBST(DL_LIB)
 
 save_LIBS=$LIBS
 AC_SEARCH_LIBS(crypt,crypt,[
