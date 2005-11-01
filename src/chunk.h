@@ -2,6 +2,7 @@
 #define _CHUNK_H_
 
 #include "buffer.h"
+#include "array.h"
 
 typedef struct chunk {
 	enum { UNUSED_CHUNK, MEM_CHUNK, FILE_CHUNK } type;
@@ -40,10 +41,13 @@ typedef struct {
 	chunk *unused;
 	size_t unused_chunks;
 
+	array *tempdirs;
+
 	off_t  bytes_in, bytes_out;
 } chunkqueue;
 
 chunkqueue *chunkqueue_init(void);
+int chunkqueue_set_tempdirs(chunkqueue *c, array *tempdirs);
 int chunkqueue_append_file(chunkqueue *c, buffer *fn, off_t offset, off_t len);
 int chunkqueue_append_mem(chunkqueue *c, const char *mem, size_t len);
 int chunkqueue_append_buffer(chunkqueue *c, buffer *mem);

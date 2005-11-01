@@ -165,6 +165,7 @@ static server *server_init(void) {
 	srv->srvconf.modules = array_init();
 	srv->srvconf.modules_dir = buffer_init_string(LIBRARY_DIR);
 	srv->srvconf.network_backend = buffer_init();
+	srv->srvconf.upload_tempdirs = array_init();
 	
 	/* use syslog */
 	srv->errorlog_fd = -1;
