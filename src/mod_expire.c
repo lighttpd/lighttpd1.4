@@ -326,8 +326,15 @@ URIHANDLER_FUNC(mod_expire_path_handler) {
 			}
 			    
 			p->expire_tstmp->used = len + 1;
-			
+		
+			/* HTTP/1.0 */	
 			response_header_overwrite(srv, con, CONST_STR_LEN("Expires"), CONST_BUF_LEN(p->expire_tstmp));
+
+			/* HTTP/1.1 */	
+			buffer_copy_string(p->expire_tstmp, "max-age=");
+			buffer_append_long(p->expire_tstmp, ts);
+			
+			response_header_overwrite(srv, con, CONST_STR_LEN("Cache-Control"), CONST_BUF_LEN(p->expire_tstmp));
 			
 			return HANDLER_GO_ON;
 		}
