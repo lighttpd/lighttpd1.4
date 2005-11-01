@@ -541,7 +541,9 @@ int network_write_chunkqueue(server *srv, connection *con, chunkqueue *cq) {
 #endif
 	
 	if (srv_socket->is_ssl) {
+#ifdef USE_OPENSSL
 		ret = srv->network_ssl_backend_write(srv, con, con->ssl, cq);
+#endif
 	} else {
 		ret = srv->network_backend_write(srv, con, con->fd, cq);
 	}
