@@ -49,6 +49,7 @@
 typedef struct {
 	unsigned short enabled;
 	unsigned short is_readonly;
+	unsigned short log_xml;
 
 	buffer *sqlite_db_name;
 #ifdef USE_PROPPATCH
@@ -157,6 +158,7 @@ SETDEFAULTS_FUNC(mod_webdav_set_defaults) {
 		{ "webdav.activate",            NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION },       /* 0 */
 		{ "webdav.is-readonly",         NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION },       /* 1 */
 		{ "webdav.sqlite-db-name",      NULL, T_CONFIG_STRING,  T_CONFIG_SCOPE_CONNECTION },       /* 2 */
+		{ "webdav.log-xml",             NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION },       /* 3 */
 		{ NULL,                         NULL, T_CONFIG_UNSET, T_CONFIG_SCOPE_UNSET }
 	};
 	
@@ -173,6 +175,7 @@ SETDEFAULTS_FUNC(mod_webdav_set_defaults) {
 		cv[0].destination = &(s->enabled);
 		cv[1].destination = &(s->is_readonly);
 		cv[2].destination = s->sqlite_db_name;
+		cv[3].destination = &(s->log_xml);
 		
 		p->config_storage[i] = s;
 	
@@ -316,6 +319,8 @@ static int mod_webdav_patch_connection(server *srv, connection *con, plugin_data
 				PATCH(enabled);
 			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("webdav.is-readonly"))) {
 				PATCH(is_readonly);
+			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("webdav.log-xml"))) {
+				PATCH(log_xml);
 			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("webdav.sqlite-db-name"))) {
 #ifdef USE_PROPPATCH
 				PATCH(sql);
@@ -871,7 +876,7 @@ static int webdav_get_props(server *srv, connection *con, plugin_data *p, physic
 }
 
 #ifdef USE_PROPPATCH
-static int webdav_parse_chunkqueue(server *srv, connection *con, chunkqueue *cq, xmlDoc **ret_xml) {
+static int webdav_parse_chunkqueue(server *srv, connection *con, plugin_data *p, chunkqueue *cq, xmlDoc **ret_xml) {
 	xmlParserCtxtPtr ctxt;
 	xmlDoc *xml;
 	int res;
@@ -929,6 +934,10 @@ static int webdav_parse_chunkqueue(server *srv, connection *con, chunkqueue *cq,
 			weHave = c->mem->used - 1 - c->offset;
 
 			if (weHave > weWant) weHave = weWant;
+
+			if (p->conf.log_xml) {
+				log_error_write(srv, __FILE__, __LINE__, "ss", "XML-request-body:", c->mem->ptr + c->offset);
+			}
 
 			if (XML_ERR_OK != (err = xmlParseChunk(ctxt, c->mem->ptr + c->offset, weHave, 0))) {
 				log_error_write(srv, __FILE__, __LINE__, "sddd", "xmlParseChunk failed at:", cq->bytes_out, weHave, err);
@@ -995,7 +1004,7 @@ URIHANDLER_FUNC(mod_webdav_subrequest_handler) {
 		if (con->request.content_length) {
 			xmlDocPtr xml;
 
-			if (1 == webdav_parse_chunkqueue(srv, con, con->request_content_queue, &xml)) {
+			if (1 == webdav_parse_chunkqueue(srv, con, p, con->request_content_queue, &xml)) {
 				xmlNode *rootnode = xmlDocGetRootElement(xml);
 
 				assert(rootnode);
@@ -1217,6 +1226,9 @@ URIHANDLER_FUNC(mod_webdav_subrequest_handler) {
 
 		buffer_append_string(b,"</D:multistatus>\n");
 
+		if (p->conf.log_xml) {
+			log_error_write(srv, __FILE__, __LINE__, "sb", "XML-response-body:", b);
+		}
 		con->file_finished = 1;
 
 		return HANDLER_FINISHED;
@@ -1288,6 +1300,10 @@ URIHANDLER_FUNC(mod_webdav_subrequest_handler) {
 
 				buffer_append_string(b,"</D:multistatus>\n");
 			
+				if (p->conf.log_xml) {
+					log_error_write(srv, __FILE__, __LINE__, "sb", "XML-response-body:", b);
+				}
+
 				con->http_status = 207;
 				con->file_finished = 1;
 			} else {
@@ -1654,7 +1670,7 @@ URIHANDLER_FUNC(mod_webdav_subrequest_handler) {
 		if (con->request.content_length) {
 			xmlDocPtr xml;
 
-			if (1 == webdav_parse_chunkqueue(srv, con, con->request_content_queue, &xml)) {
+			if (1 == webdav_parse_chunkqueue(srv, con, p, con->request_content_queue, &xml)) {
 				xmlNode *rootnode = xmlDocGetRootElement(xml);
 
 				if (0 == xmlStrcmp(rootnode->name, BAD_CAST "propertyupdate")) {
