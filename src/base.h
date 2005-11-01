@@ -441,6 +441,7 @@ typedef struct {
 	buffer *modules_dir;
 	buffer *network_backend;
 	array *modules;
+	array *upload_tempdirs;
 	
 	unsigned short max_worker;
 	unsigned short max_fds;

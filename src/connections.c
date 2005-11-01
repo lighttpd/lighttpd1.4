@@ -594,6 +594,8 @@ connection *connection_init(server *srv) {
 	con->write_queue = chunkqueue_init();
 	con->read_queue = chunkqueue_init();
 	con->request_content_queue = chunkqueue_init();
+	chunkqueue_set_tempdirs(con->request_content_queue, srv->srvconf.upload_tempdirs);
+
 	con->request.headers      = array_init();
 	con->response.headers     = array_init();
 	con->environment     = array_init();

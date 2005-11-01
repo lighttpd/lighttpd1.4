@@ -252,23 +252,54 @@ buffer *chunkqueue_get_append_buffer(chunkqueue *cq) {
 	return c->mem;
 }
 
+int chunkqueue_set_tempdirs(chunkqueue *cq, array *tempdirs) {
+	if (!cq) return -1;
+
+	cq->tempdirs = tempdirs;
+
+	return 0;
+}
+
 chunk *chunkqueue_get_append_tempfile(chunkqueue *cq) {
 	chunk *c;
-	char template[] = "/var/tmp/lighttpd-upload-XXXXXX";
+	buffer *template = buffer_init_string("/var/tmp/lighttpd-upload-XXXXXX");
 	
 	c = chunkqueue_get_unused_chunk(cq);
 
 	c->type = FILE_CHUNK;
 	c->offset = 0;
-	if (-1 != (c->file.fd = mkstemp(template))) {
-		/* only trigger the unlink if we created the temp-file successfully */
-		c->file.is_temp = 1;
+
+	if (cq->tempdirs) {
+		size_t i;
+
+		/* we have several tempdirs, only if all of them fail we jump out */
+		
+		for (i = 0; i < cq->tempdirs->used; i++) {
+			data_string *ds = (data_string *)cq->tempdirs->data[i];
+
+			buffer_copy_string_buffer(template, ds->value);
+			BUFFER_APPEND_SLASH(template);
+			BUFFER_APPEND_STRING_CONST(template, "lighttpd-upload-XXXXXX");
+
+			if (-1 != (c->file.fd = mkstemp(template->ptr))) {
+				/* only trigger the unlink if we created the temp-file successfully */
+				c->file.is_temp = 1;
+				break;
+			}
+		}
+	} else {
+		if (-1 != (c->file.fd = mkstemp(template->ptr))) {
+			/* only trigger the unlink if we created the temp-file successfully */
+			c->file.is_temp = 1;
+		}
 	}
 
-	buffer_copy_string(c->file.name, template);
+	buffer_copy_string_buffer(c->file.name, template);
 	c->file.length = 0;
 
 	chunkqueue_append_chunk(cq, c);
+
+	buffer_free(template);
 	
 	return c;
 }
