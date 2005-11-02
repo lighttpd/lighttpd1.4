@@ -269,7 +269,7 @@ chunk *chunkqueue_get_append_tempfile(chunkqueue *cq) {
 	c->type = FILE_CHUNK;
 	c->offset = 0;
 
-	if (cq->tempdirs) {
+	if (cq->tempdirs && cq->tempdirs->used) {
 		size_t i;
 
 		/* we have several tempdirs, only if all of them fail we jump out */
