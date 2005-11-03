@@ -304,12 +304,12 @@ URIHANDLER_FUNC(mod_expire_path_handler) {
 			switch(mod_expire_get_offset(srv, p, ds->value, &ts)) {
 			case 0:
 				/* access */
-				t = (ts += srv->cur_ts);
+				t = (ts + srv->cur_ts);
 				break;
 			case 1:
 				/* modification */
 				
-				t = (ts += sce->st.st_mtime);
+				t = (ts + sce->st.st_mtime);
 				break;
 			default:
 				/* -1 is handled at parse-time */
