@@ -235,7 +235,7 @@ URIHANDLER_FUNC(mod_usertrack_uri_handler) {
 	
 	MD5_Final(h, &Md5Ctx);
 	
-	buffer_append_string_hex(ds->value, (char *)h, 16);
+	buffer_append_string_encoded(ds->value, (char *)h, 16, ENCODING_HEX);
 	buffer_append_string(ds->value, "\"; Path=\"/\"");
 	buffer_append_string(ds->value, "; Version=\"1\"");
 	

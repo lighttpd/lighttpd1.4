@@ -210,7 +210,7 @@ int log_error_write(server *srv, const char *filename, unsigned int line, const 
 		case 'x':           /* int (hex) */
 			d = va_arg(ap, int);
 			BUFFER_APPEND_STRING_CONST(srv->errorlog_buf, "0x");
-			buffer_append_hex(srv->errorlog_buf, d);
+			buffer_append_long_hex(srv->errorlog_buf, d);
 			BUFFER_APPEND_STRING_CONST(srv->errorlog_buf, " ");
 			break;
 		case 'S':           /* string */

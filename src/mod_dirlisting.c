@@ -414,7 +414,7 @@ static void http_list_directory_header(server *srv, connection *con, plugin_data
 		"<head>\n"
 		"<title>Index of "
 	);
-	buffer_append_string_html_encoded(out, CONST_BUF_LEN(con->uri.path));
+	buffer_append_string_encoded(out, CONST_BUF_LEN(con->uri.path), ENCODING_HTML);
 	BUFFER_APPEND_STRING_CONST(out, "</title>\n");
 
 	if (p->conf.external_css->used > 1) {
@@ -462,7 +462,7 @@ static void http_list_directory_header(server *srv, connection *con, plugin_data
 	}
 
 	BUFFER_APPEND_STRING_CONST(out, "</head>\n<body>\n<h2>Index of ");
-	buffer_append_string_html_encoded(out, CONST_BUF_LEN(con->uri.path));
+	buffer_append_string_encoded(out, CONST_BUF_LEN(con->uri.path), ENCODING_HTML);
 	BUFFER_APPEND_STRING_CONST(out,
 		"</h2>\n"
 		"<div class=\"list\">\n"
@@ -504,7 +504,7 @@ static void http_list_directory_footer(server *srv, connection *con, plugin_data
 		
 		if (-1 != stream_open(&s, p->tmp_buf)) {
 			BUFFER_APPEND_STRING_CONST(out, "<pre class=\"readme\">");
-			buffer_append_string_html_encoded(out, s.start, s.size);
+			buffer_append_string_encoded(out, s.start, s.size, ENCODING_HTML);
 			BUFFER_APPEND_STRING_CONST(out, "</pre>");
 		}
 		stream_close(&s);
@@ -689,9 +689,9 @@ static int http_list_directory(server *srv, connection *con, plugin_data *p, buf
 #endif
 		
 		BUFFER_APPEND_STRING_CONST(out, "<tr><td class=\"n\"><a href=\"");
-		buffer_append_string_url_encoded(out, DIRLIST_ENT_NAME(tmp), tmp->namelen);
+		buffer_append_string_encoded(out, DIRLIST_ENT_NAME(tmp), tmp->namelen, ENCODING_REL_URI_PART);
 		BUFFER_APPEND_STRING_CONST(out, "/\">");
-		buffer_append_string_html_encoded(out, DIRLIST_ENT_NAME(tmp), tmp->namelen);
+		buffer_append_string_encoded(out, DIRLIST_ENT_NAME(tmp), tmp->namelen, ENCODING_HTML);
 		BUFFER_APPEND_STRING_CONST(out, "</a>/</td><td class=\"m\">");
 		buffer_append_string_len(out, datebuf, sizeof(datebuf) - 1);
 		BUFFER_APPEND_STRING_CONST(out, "</td><td class=\"s\">- &nbsp;</td><td class=\"t\">Directory</td></tr>\n");
@@ -745,9 +745,9 @@ static int http_list_directory(server *srv, connection *con, plugin_data *p, buf
 		http_list_directory_sizefmt(sizebuf, tmp->size);
 
 		BUFFER_APPEND_STRING_CONST(out, "<tr><td class=\"n\"><a href=\"");
-		buffer_append_string_url_encoded(out, DIRLIST_ENT_NAME(tmp), tmp->namelen);
+		buffer_append_string_encoded(out, DIRLIST_ENT_NAME(tmp), tmp->namelen, ENCODING_REL_URI_PART);
 		BUFFER_APPEND_STRING_CONST(out, "\">");
-		buffer_append_string_html_encoded(out, DIRLIST_ENT_NAME(tmp), tmp->namelen);
+		buffer_append_string_encoded(out, DIRLIST_ENT_NAME(tmp), tmp->namelen, ENCODING_HTML);
 		BUFFER_APPEND_STRING_CONST(out, "</a></td><td class=\"m\">");
 		buffer_append_string_len(out, datebuf, sizeof(datebuf) - 1);
 		BUFFER_APPEND_STRING_CONST(out, "</td><td class=\"s\">");
