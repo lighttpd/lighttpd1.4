@@ -3,7 +3,13 @@
 NEWS
 ====
 
-- 1.4.7 - 2005-11-01
+- 1.4.8 - 2005-..-..
+
+  * added auto-reconnect to ldap-server in mod_auth
+  * removed debian/ dir from source package on request by packager
+  * fixed max-age timestamps in mod_expire
+
+- 1.4.7 - 2005-11-02
 
   * added FD_CLOEXEC to fds which are kept open for a longer time
   * added smaller, moving mmaped windows to network_writev
@@ -14,6 +20,7 @@ NEWS
   * added startup-time selectable network-backend
   * added location of upload-files to config as array
   * added webdav.log-xml for logging xml-content in mod_webdav
+  * added Cache-Control: max-age to mod_expire
   * workaround missing client-bug by assuming we received a close-notify on 
     non-keep-alive requests in SSL request
   * disabled kerberos5 support by default to fix compilation on RHEL
