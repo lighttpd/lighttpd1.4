@@ -251,7 +251,7 @@ int buffer_copy_memory(buffer *b, const char *s, size_t s_len) {
 	return buffer_append_memory(b, s, s_len);
 }
 
-int buffer_append_hex(buffer *b, unsigned long value) {
+int buffer_append_long_hex(buffer *b, unsigned long value) {
 	char *buf;
 	int shift = 0;
 	unsigned long copy = value;
@@ -280,7 +280,6 @@ int buffer_append_hex(buffer *b, unsigned long value) {
 
 	return 0;
 }
-
 
 int ltostr(char *buf, long val) {
 	char swap;
@@ -620,31 +619,99 @@ int buffer_copy_string_hex(buffer *b, const char *in, size_t in_len) {
 	return 0;
 }
 
+const char encoded_chars_rel_uri_part[] = {
+	/*
+	0  1  2  3  4  5  6  7  8  9  A  B  C  D  E  F
+	*/
+	1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,  /*  00 -  0F control chars */
+	1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,  /*  10 -  1F */ 
+	1, 0, 1, 1, 1, 1, 1, 1, 0, 0, 0, 1, 1, 0, 0, 1,  /*  20 -  2F space " # $ % & ' + , / */
+	0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1,  /*  30 -  3F : ; = ? @ < > */
+	0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,  /*  40 -  4F */
+	0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,  /*  50 -  5F */
+	0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,  /*  60 -  6F */
+	0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1,  /*  70 -  7F DEL */
+	1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,  /*  80 -  8F */
+	1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,  /*  90 -  9F */
+	1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,  /*  A0 -  AF */
+	1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,  /*  B0 -  BF */
+	1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,  /*  C0 -  CF */
+	1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,  /*  D0 -  DF */
+	1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,  /*  E0 -  EF */
+	1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,  /*  F0 -  FF */
+};
 
-int buffer_append_string_hex(buffer *b, const char *in, size_t in_len) {
-	size_t i;
-	
-	/* BO protection */
-	if (in_len * 2 < in_len) return -1;
-	
-	if (b->used > 0 && b->ptr[b->used - 1] == '\0') {
-		b->used--;
-	}
-	
-	buffer_prepare_append(b, in_len * 2 + 1);
-	
-	for (i = 0; i < in_len; i++) {
-		b->ptr[b->used++] = hex_chars[(in[i] >> 4) & 0x0F];
-		b->ptr[b->used++] = hex_chars[in[i] & 0x0F];
-	}
-	b->ptr[b->used++] = '\0';
-	
-	return 0;
-}
+const char encoded_chars_rel_uri[] = {
+	/*
+	0  1  2  3  4  5  6  7  8  9  A  B  C  D  E  F
+	*/
+	1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,  /*  00 -  0F control chars */
+	1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,  /*  10 -  1F */ 
+	1, 0, 1, 1, 1, 1, 1, 1, 0, 0, 0, 1, 1, 0, 0, 0,  /*  20 -  2F space " # $ % & ' + , / */
+	0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1,  /*  30 -  3F : ; = ? @ < > */
+	0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,  /*  40 -  4F */
+	0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,  /*  50 -  5F */
+	0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,  /*  60 -  6F */
+	0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1,  /*  70 -  7F DEL */
+	1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,  /*  80 -  8F */
+	1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,  /*  90 -  9F */
+	1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,  /*  A0 -  AF */
+	1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,  /*  B0 -  BF */
+	1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,  /*  C0 -  CF */
+	1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,  /*  D0 -  DF */
+	1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,  /*  E0 -  EF */
+	1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,  /*  F0 -  FF */
+};
 
-int buffer_append_string_url_encoded(buffer *b, const char *s, size_t s_len) {
+const char encoded_chars_html[] = {
+	/*
+	0  1  2  3  4  5  6  7  8  9  A  B  C  D  E  F
+	*/
+	1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,  /*  00 -  0F control chars */
+	1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,  /*  10 -  1F */ 
+	0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0,  /*  20 -  2F & */
+	0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 0,  /*  30 -  3F < > */
+	0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,  /*  40 -  4F */
+	0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,  /*  50 -  5F */
+	0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,  /*  60 -  6F */
+	0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1,  /*  70 -  7F DEL */
+	1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,  /*  80 -  8F */
+	1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,  /*  90 -  9F */
+	1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,  /*  A0 -  AF */
+	1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,  /*  B0 -  BF */
+	1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,  /*  C0 -  CF */
+	1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,  /*  D0 -  DF */
+	1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,  /*  E0 -  EF */
+	1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,  /*  F0 -  FF */
+};
+
+const char encoded_chars_hex[] = {
+	/*
+	0  1  2  3  4  5  6  7  8  9  A  B  C  D  E  F
+	*/
+	1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,  /*  00 -  0F control chars */
+	1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,  /*  10 -  1F */ 
+	1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,  /*  20 -  2F */ 
+	1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,  /*  30 -  3F */ 
+	1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,  /*  40 -  4F */ 
+	1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,  /*  50 -  5F */ 
+	1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,  /*  60 -  6F */ 
+	1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,  /*  70 -  7F */
+	1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,  /*  80 -  8F */
+	1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,  /*  90 -  9F */
+	1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,  /*  A0 -  AF */
+	1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,  /*  B0 -  BF */
+	1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,  /*  C0 -  CF */
+	1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,  /*  D0 -  DF */
+	1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,  /*  E0 -  EF */
+	1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,  /*  F0 -  FF */
+};
+
+
+int buffer_append_string_encoded(buffer *b, const char *s, size_t s_len, buffer_encoding_t encoding) {
 	unsigned char *ds, *d;
 	size_t d_len;
+	const char *map = NULL;
 	
 	if (!s || !b) return -1;
 	
@@ -653,147 +720,88 @@ int buffer_append_string_url_encoded(buffer *b, const char *s, size_t s_len) {
 	}
 	
 	if (s_len == 0) return 0;
+
+	switch(encoding) {
+	case ENCODING_REL_URI:
+		map = encoded_chars_rel_uri;
+		break;
+	case ENCODING_REL_URI_PART:
+		map = encoded_chars_rel_uri_part;
+		break;
+	case ENCODING_HTML:
+		map = encoded_chars_html;
+		break;
+	case ENCODING_HEX:
+		map = encoded_chars_hex;
+		break;
+	case ENCODING_UNSET:
+		break;
+	}
+
+	assert(map != NULL);
 	
 	/* count to-be-encoded-characters */
 	for (ds = (unsigned char *)s, d_len = 0; *ds; ds++) {
-		if (*ds < 32 || *ds > 126) {
-			d_len += 3;
-		} else {
-			switch (*ds) {
-			case '$':
-			case '&':
-			case '+':
-			case ',':
-			case '/':
-			case ':':
-			case ';':
-			case '=':
-			case '?':
-			case '@':
-			case ' ':
-			case '#':
-			case '%':
-			case '<':
-			case '>':
-			case '"':
-			case '\'':
+		if (map[*ds]) {
+			switch(encoding) {
+			case ENCODING_REL_URI:
+			case ENCODING_REL_URI_PART:
 				d_len += 3;
 				break;
-			default:
-				d_len ++;
+			case ENCODING_HTML:
+				d_len += 6;
+				break;
+			case ENCODING_HEX:
+				d_len += 2;
+				break;
+			case ENCODING_UNSET:
 				break;
 			}
+		} else {
+			d_len ++;
 		}
 	}
 	
 	buffer_prepare_append(b, d_len);
 	
 	for (ds = (unsigned char *)s, d = (unsigned char *)b->ptr + b->used - 1, d_len = 0; *ds; ds++) {
-		if (*ds < 32 || *ds > 126) {
-			d[d_len++] = '%';
-			d[d_len++] = hex_chars[((*ds) >> 4) & 0x0F];
-			d[d_len++] = hex_chars[(*ds) & 0x0F];
-		} else {
-			switch (*ds) {
-			case '$':
-			case '&':
-			case '+':
-			case ',':
-			case '/':
-			case ':':
-			case ';':
-			case '=':
-			case '?':
-			case '@':
-			case ' ':
-			case '#':
-			case '%':
-			case '<':
-			case '>':
-			case '"':
-			case '\'':
+		if (map[*ds]) {
+			switch(encoding) {
+			case ENCODING_REL_URI:
+			case ENCODING_REL_URI_PART:
 				d[d_len++] = '%';
 				d[d_len++] = hex_chars[((*ds) >> 4) & 0x0F];
 				d[d_len++] = hex_chars[(*ds) & 0x0F];
 				break;
-			default:
-				d[d_len++] = *ds;
+			case ENCODING_HTML:
+				d[d_len++] = '&';
+				d[d_len++] = '#';
+				d[d_len++] = 'x';
+				d[d_len++] = hex_chars[((*ds) >> 4) & 0x0F];
+				d[d_len++] = hex_chars[(*ds) & 0x0F];
+				d[d_len++] = ';';
+				break;
+			case ENCODING_HEX:
+				d[d_len++] = hex_chars[((*ds) >> 4) & 0x0F];
+				d[d_len++] = hex_chars[(*ds) & 0x0F];
+				break;
+			case ENCODING_UNSET:
 				break;
 			}
-		}
-	}
-	
-	b->ptr[b->used + d_len - 1] = '\0';
-	
-	b->used += d_len;
-	
-	return 0;
-}
-
-int buffer_append_string_html_encoded(buffer *b, const char *s, size_t s_len) {
-	unsigned char *ds, *d;
-	size_t d_len, i;
-	
-	if (!s || !b) return -1;
-	
-	if (b->ptr[b->used - 1] != '\0') {
-		SEGFAULT();
-	}
-	
-	/* nothing to append */
-	if (s_len == 0) return 0;
-	
-	/* count to-be-encoded-characters */
-	for (ds = (unsigned char *)s, d_len = 0, i = 0; i < s_len && *ds; ds++, i++) {
-		d_len++;
-		if (*ds == '<' || *ds == '>') {
-			d_len += 4 - 1;
-		} else if (*ds == '&') {
-			d_len += 5 - 1;
-		}
-	}
-
-	buffer_prepare_append(b, d_len);
-	
-	for (ds = (unsigned char *)s, 
-	     d = (unsigned char *)b->ptr + b->used - 1, 
-	     d_len = 0,
-	     i = 0; i < s_len && *ds; ds++, i++) {
-		switch (*ds) {
-		case '>':
-			d[d_len++] = '&';
-			d[d_len++] = 'g';
-			d[d_len++] = 't';
-			d[d_len++] = ';';
-			
-			break;
-		case '<':
-			d[d_len++] = '&';
-			d[d_len++] = 'l';
-			d[d_len++] = 't';
-			d[d_len++] = ';';
-			
-			break;
-		case '&':
-			d[d_len++] = '&';
-			d[d_len++] = 'a';
-			d[d_len++] = 'm';
-			d[d_len++] = 'p';
-			d[d_len++] = ';';
-			
-			break;
-				
-		default:
+		} else {
 			d[d_len++] = *ds;
 			break;
 		}
 	}
-	
+
+	/* terminate buffer and calculate new length */ 
 	b->ptr[b->used + d_len - 1] = '\0';
+	
 	b->used += d_len;
 	
 	return 0;
 }
+
 
 /* decodes url-special-chars inplace.
  * replaces non-printable characters with '_'

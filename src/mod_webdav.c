@@ -947,6 +947,8 @@ static int webdav_parse_chunkqueue(server *srv, connection *con, plugin_data *p,
 			cq->bytes_out += weHave;
 
 			break;
+		case UNUSED_CHUNK:
+			break;
 		}
 		chunkqueue_remove_finished_chunks(cq);
 	}
@@ -1111,7 +1113,7 @@ URIHANDLER_FUNC(mod_webdav_subrequest_handler) {
 			buffer_append_string_buffer(b, con->uri.scheme);
 			buffer_append_string(b,"://");
 			buffer_append_string_buffer(b, con->uri.authority);
-			buffer_append_string_buffer(b, con->uri.path);
+			buffer_append_string_encoded(b, CONST_BUF_LEN(con->uri.path), ENCODING_REL_URI);
 			buffer_append_string(b,"</D:href>\n");
 
 			if (!buffer_is_empty(prop_200)) {
@@ -1176,7 +1178,7 @@ URIHANDLER_FUNC(mod_webdav_subrequest_handler) {
 					buffer_append_string_buffer(b, con->uri.scheme);
 					buffer_append_string(b,"://");
 					buffer_append_string_buffer(b, con->uri.authority);
-					buffer_append_string_buffer(b, d.rel_path);
+					buffer_append_string_encoded(b, CONST_BUF_LEN(d.rel_path), ENCODING_REL_URI);
 					buffer_append_string(b,"</D:href>\n");
 
 					if (!buffer_is_empty(prop_200)) {
@@ -1414,6 +1416,8 @@ URIHANDLER_FUNC(mod_webdav_subrequest_handler) {
 							break;
 						}
 					}
+					break;
+				case UNUSED_CHUNK:
 					break;
 				}
 

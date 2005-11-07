@@ -62,7 +62,7 @@ int buffer_append_string_buffer(buffer *b, const buffer *src);
 int buffer_append_string_lfill(buffer *b, const char *s, size_t maxlen);
 int buffer_append_string_rfill(buffer *b, const char *s, size_t maxlen);
 
-int buffer_append_hex(buffer *b, unsigned long len);
+int buffer_append_long_hex(buffer *b, unsigned long len);
 int buffer_append_long(buffer *b, long val);
 
 #if defined(SIZEOF_LONG) && (SIZEOF_LONG == SIZEOF_OFF_T)
@@ -83,9 +83,15 @@ int buffer_is_equal_right_len(buffer *a, buffer *b, size_t len);
 int buffer_is_equal_string(buffer *a, const char *s, size_t b_len);
 int buffer_caseless_compare(const char *a, size_t a_len, const char *b, size_t b_len);
 
-int buffer_append_string_hex(buffer *b, const char *in, size_t in_len);
-int buffer_append_string_url_encoded(buffer *b, const char *s, size_t s_len);
-int buffer_append_string_html_encoded(buffer *b, const char *s, size_t s_len);
+typedef enum {
+	ENCODING_UNSET,
+	ENCODING_REL_URI, /* for coding a rel-uri (/with space/and%percent) nicely as part of a href */
+	ENCODING_REL_URI_PART, /* same as ENC_REL_URL plus coding / too as %2F */
+	ENCODING_HTML,    /* & becomes &amp; and so on */
+	ENCODING_HEX      /* encode string as hex */
+} buffer_encoding_t;
+
+int buffer_append_string_encoded(buffer *b, const char *s, size_t s_len, buffer_encoding_t encoding);
 
 int buffer_urldecode_path(buffer *url);
 int buffer_urldecode_query(buffer *url);
