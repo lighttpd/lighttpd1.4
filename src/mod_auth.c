@@ -12,6 +12,8 @@
 #include "log.h"
 #include "response.h"
 
+handler_t auth_ldap_init(server *srv, mod_auth_plugin_config *s);
+
 
 /**
  * the basic and digest auth framework
@@ -505,8 +507,25 @@ SETDEFAULTS_FUNC(mod_auth_set_defaults) {
 				close(fd);
 			}
 			break;
-		case AUTH_BACKEND_LDAP: 
+		case AUTH_BACKEND_LDAP: {
+			handler_t ret = auth_ldap_init(srv, s);
+			if (ret == HANDLER_ERROR)
+				return (ret);
+                        break;
+		}
+                default:
+                        break;
+                }
+        }
+
+        return HANDLER_GO_ON;
+}
+
+handler_t
+auth_ldap_init(server *srv, mod_auth_plugin_config *s)
+{
 #ifdef USE_LDAP
+			int ret;
 #if 0			
 			if (s->auth_ldap_basedn->used == 0) {
 				log_error_write(srv, __FILE__, __LINE__, "s", "ldap: auth.backend.ldap.base-dn has to be set");
@@ -586,13 +605,7 @@ SETDEFAULTS_FUNC(mod_auth_set_defaults) {
 			log_error_write(srv, __FILE__, __LINE__, "s", "no ldap support available");
 			return HANDLER_ERROR;
 #endif
-			break;
-		default:
-			break;
-		}
-	}
-	
-	return HANDLER_GO_ON;
+		return HANDLER_GO_ON;
 }
 
 int mod_auth_plugin_init(plugin *p) {

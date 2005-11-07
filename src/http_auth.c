@@ -49,6 +49,8 @@ static struct pam_conv conv = {
 };
 #endif
 
+handler_t auth_ldap_init(server *srv, mod_auth_plugin_config *s);
+
 static const char base64_pad = '=';
 
 static const short base64_reverse_table[256] = {
@@ -577,11 +579,17 @@ static int http_auth_basic_password_compare(server *srv, mod_auth_plugin_data *p
 		
 		
 		/* 2. */
-		if (LDAP_SUCCESS != (ret = ldap_search_s(p->conf.ldap, p->conf.auth_ldap_basedn->ptr, LDAP_SCOPE_SUBTREE, p->ldap_filter->ptr, attrs, 0, &lm))) {
+		if (p->conf.ldap == NULL ||
+		    LDAP_SUCCESS != (ret = ldap_search_s(p->conf.ldap, p->conf.auth_ldap_basedn->ptr, LDAP_SCOPE_SUBTREE, p->ldap_filter->ptr, attrs, 0, &lm))) {
+			if (auth_ldap_init(srv, &p->conf) != HANDLER_GO_ON)
+				return -1;
+			if (LDAP_SUCCESS != (ret = ldap_search_s(p->conf.ldap, p->conf.auth_ldap_basedn->ptr, LDAP_SCOPE_SUBTREE, p->ldap_filter->ptr, attrs, 0, &lm))) {
+
 			log_error_write(srv, __FILE__, __LINE__, "sssb", 
 					"ldap:", ldap_err2string(ret), "filter:", p->ldap_filter);
 			
 			return -1;
+			}
 		}
 		
 		if (NULL == (first = ldap_first_entry(p->conf.ldap, lm))) {
