@@ -1,7 +1,7 @@
 #                                               -*- Autoconf -*-
 # Process this file with autoconf to produce a configure script.
 AC_PREREQ(2.57)
-AC_INIT(lighttpd, 1.4.7, jan@kneschke.de)
+AC_INIT(lighttpd, 1.4.8, jan@kneschke.de)
 AC_CONFIG_SRCDIR([src/server.c])
 
 AC_CANONICAL_TARGET
@@ -226,7 +226,7 @@ AC_ARG_WITH(openssl-libs,
 )
 
 AC_ARG_WITH(kerberos5,
-    AC_HELP_STRING([--with-berberos5],[use Kerberos5 support with OpenSSL]),
+    AC_HELP_STRING([--with-kerberos5],[use Kerberos5 support with OpenSSL]),
     [ use_kerberos=yes ], [use_kerberos=no]
 )
 
