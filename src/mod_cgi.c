@@ -1020,6 +1020,8 @@ static int cgi_create_env(server *srv, connection *con, plugin_data *p, buffer *
 						}
 					}
 					break;
+				case UNUSED_CHUNK:
+					break;
 				}
 
 				if (r > 0) {

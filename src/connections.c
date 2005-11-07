@@ -825,7 +825,6 @@ int connection_handle_read_state(server *srv, connection *con)  {
 	chunk *c;
 	chunkqueue *cq = con->read_queue;
 	chunkqueue *dst_cq = con->request_content_queue;
-	size_t memusage;
 	
 	if (con->is_readable) {
 		con->read_idle_ts = srv->cur_ts;
@@ -955,7 +954,6 @@ int connection_handle_read_state(server *srv, connection *con)  {
 	case CON_STATE_READ_POST: 
 		for (c = cq->first; c && (dst_cq->bytes_in != con->request.content_length); c = c->next) {
 			off_t weWant, weHave, toRead;
-			int buffer_to_file = 0;
 			
 			weWant = con->request.content_length - dst_cq->bytes_in;
 			

@@ -139,7 +139,7 @@ static int mod_setenv_patch_connection(server *srv, connection *con, plugin_data
 
 URIHANDLER_FUNC(mod_setenv_uri_handler) {
 	plugin_data *p = p_d;
-	size_t k, i;
+	size_t k;
 	
 	mod_setenv_patch_connection(srv, con, p);
 
