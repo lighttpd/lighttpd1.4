@@ -51,9 +51,6 @@ Example
   # selecting modules
   server.modules = ( "mod_access", "mod_rewrite" )
   
-  # enable directory listings
-  server.dir-listing = "enable"
-
   # variables, computed when config is read.
   var.mymodule = "foo"
   server.modules += ( "mod_" + var.mymodule )
@@ -96,6 +93,8 @@ $HTTP["referer"]
   match on referer
 $HTTP["url"]
   match on url
+$HTTP["remoteip"]
+  match on the remote IP or a remote Network
 $SERVER["socket"]
   match on socket.  Value must be on the format "$ip:$port" where $ip is an IP
   address and $port a port number.  Only equal match (==) is supported.
@@ -121,9 +120,9 @@ Example
 ::
 
   # disable directory-listings for /download/*
-  server.dir-listing = "enable"
+  dir-listing.activate = "enable"
   $HTTP["url"] =~ "^/download/" {
-    server.dir-listing = "disable"
+    dir-listing.activate = "disable"
   }
   
   # handish virtual hosting
@@ -154,6 +153,14 @@ Example
     url.access-deny = ( ".jpg", ".jpeg", ".png" )
   }
 
+  # deny the access to www.example.org to all user which 
+  # are not in the 10.0.0.0/8 network
+  $HTTP["host"] == "www.example.org" {
+    $HTTP["remoteip"] != "10.0.0.0/8" {
+     url.access-deny = ""
+    }
+  }  
+
 Options
 =======
 
@@ -180,7 +187,7 @@ server.bind
 server.port
   tcp-port to bind the server to
   
-  NOTE: port belows 1024 require root-permissions
+.. note:: port belows 1024 require root-permissions
   
   Default: 80 (443 if ssl is enabled)
   
@@ -270,6 +277,12 @@ server.modules
 				"mod_secdownload",
  				"mod_rrdtool",
 				"mod_accesslog" )
+
+  Starting with lighttpd 1.4.0 three default modules are loaded automaticly:
+
+  - mod_indexfiles
+  - mod_dirlisting
+  - mod_staticfile
 
 server.event-handler
   set the event handler 
@@ -365,12 +378,24 @@ mimetype.assign
   
   e.g.: ::
   
-    mimetype.assign           = ( ".png"  => "image/png", 
-                                  ".jpg"  => "image/jpeg",
-                                  ".jpeg" => "image/jpeg",
-				  ".html" => "text/html",
-  				  ".txt"  => "text/plain" )
+    mimetype.assign   = ( ".png"  => "image/png", 
+                          ".jpg"  => "image/jpeg",
+                          ".jpeg" => "image/jpeg",
+			  ".html" => "text/html",
+  			  ".txt"  => "text/plain" )
 
+  The list is compared top down and the first match is taken. This is 
+  important if you have matches like: ::
+
+                          ".tar.gz" => "application/x-tgz",
+			  ".gz" => "application/x-gzip", 
+
+  If you want to set another default mimetype use: ::
+
+                          ...,
+                          "" => "text/plain" )
+
+  as the last entry in the list.
 
 mimetype.use-xattr
   If available, use the XFS-style extended attribute interface to
