@@ -452,7 +452,6 @@ static int webdav_delete_file(server *srv, connection *con, plugin_data *p, phys
 		if (!stmt) {
 			status = 403;
 			webdav_gen_response_status_tag(srv, con, dst, status, b);
-
 		} else {
 			sqlite3_reset(stmt);
 
@@ -530,18 +529,20 @@ static int webdav_delete_dir(server *srv, connection *con, plugin_data *p, physi
 
 					status = 0;
 
-					sqlite3_reset(stmt);
+					if (stmt) {
+						sqlite3_reset(stmt);
 
-					/* bind the values to the insert */
+						/* bind the values to the insert */
 
-					sqlite3_bind_text(stmt, 1, 
-							  d.rel_path->ptr, 
-							  d.rel_path->used - 1,
-							  SQLITE_TRANSIENT);
+						sqlite3_bind_text(stmt, 1, 
+								  d.rel_path->ptr, 
+								  d.rel_path->used - 1,
+								  SQLITE_TRANSIENT);
 													
-					if (SQLITE_DONE != sqlite3_step(stmt)) {
-						/* */
-						WP();
+						if (SQLITE_DONE != sqlite3_step(stmt)) {
+							/* */
+							WP();
+						}
 					}
 #endif
 				}
@@ -608,22 +609,24 @@ static int webdav_copy_file(server *srv, connection *con, plugin_data *p, physic
 		/* copy worked fine, copy connected properties */
 		sqlite3_stmt *stmt = p->conf.stmt_copy_uri;
 
-		sqlite3_reset(stmt);
+		if (stmt) {
+			sqlite3_reset(stmt);
 
-		/* bind the values to the insert */
-		sqlite3_bind_text(stmt, 1, 
-				  dst->rel_path->ptr, 
-				  dst->rel_path->used - 1,
-				  SQLITE_TRANSIENT);
+			/* bind the values to the insert */
+			sqlite3_bind_text(stmt, 1, 
+					  dst->rel_path->ptr, 
+					  dst->rel_path->used - 1,
+					  SQLITE_TRANSIENT);
 
-		sqlite3_bind_text(stmt, 2, 
-				  src->rel_path->ptr, 
-				  src->rel_path->used - 1,
-				  SQLITE_TRANSIENT);
+			sqlite3_bind_text(stmt, 2, 
+					  src->rel_path->ptr, 
+					  src->rel_path->used - 1,
+					  SQLITE_TRANSIENT);
 													
-		if (SQLITE_DONE != sqlite3_step(stmt)) {
-			/* */
-			WP();
+			if (SQLITE_DONE != sqlite3_step(stmt)) {
+				/* */
+				WP();
+			}
 		}
 	}
 #endif
@@ -683,23 +686,25 @@ static int webdav_copy_dir(server *srv, connection *con, plugin_data *p, physica
 						break;
 					}
 					/* directory is copied, copy the properties too */
-				
-					sqlite3_reset(stmt);
 
-					/* bind the values to the insert */
-					sqlite3_bind_text(stmt, 1, 
-						  dst->rel_path->ptr, 
-						  dst->rel_path->used - 1,
-						  SQLITE_TRANSIENT);
+					if (stmt) {
+						sqlite3_reset(stmt);
 
-					sqlite3_bind_text(stmt, 2, 
-						  src->rel_path->ptr, 
-						  src->rel_path->used - 1,
-						  SQLITE_TRANSIENT);
+						/* bind the values to the insert */
+						sqlite3_bind_text(stmt, 1, 
+							  dst->rel_path->ptr, 
+							  dst->rel_path->used - 1,
+							  SQLITE_TRANSIENT);
+
+						sqlite3_bind_text(stmt, 2, 
+							  src->rel_path->ptr, 
+							  src->rel_path->used - 1,
+							  SQLITE_TRANSIENT);
 													
-					if (SQLITE_DONE != sqlite3_step(stmt)) {
-						/* */
-						WP();
+						if (SQLITE_DONE != sqlite3_step(stmt)) {
+							/* */
+							WP();
+						}
 					}
 #endif
 				}
@@ -791,29 +796,33 @@ static int webdav_get_property(server *srv, connection *con, plugin_data *p, phy
 	} else {
 		int found = 0;
 #ifdef USE_PROPPATCH
-		/* perhaps it is in sqlite3 */
-		sqlite3_reset(p->conf.stmt_select_prop);
+		sqlite3_stmt *stmt = p->conf.stmt_select_prop;
 
-		/* bind the values to the insert */
+		if (stmt) {
+			/* perhaps it is in sqlite3 */
+			sqlite3_reset(stmt);
 
-		sqlite3_bind_text(p->conf.stmt_select_prop, 1, 
-				  dst->rel_path->ptr, 
-				  dst->rel_path->used - 1,
-				  SQLITE_TRANSIENT);
-		sqlite3_bind_text(p->conf.stmt_select_prop, 2, 
-				  prop_name,
-				  strlen(prop_name),
-				  SQLITE_TRANSIENT);
-		sqlite3_bind_text(p->conf.stmt_select_prop, 3, 
-				  prop_ns,
-				  strlen(prop_ns),
-				  SQLITE_TRANSIENT);
+			/* bind the values to the insert */
 
-		/* it is the PK */
-		while (SQLITE_ROW == sqlite3_step(p->conf.stmt_select_prop)) {
-			/* there is a row for us, we only expect a single col 'value' */
-			webdav_gen_prop_tag(srv, con, prop_name, prop_ns, (char *)sqlite3_column_text(p->conf.stmt_select_prop, 0), b);
-			found = 1;
+			sqlite3_bind_text(stmt, 1, 
+					  dst->rel_path->ptr, 
+					  dst->rel_path->used - 1,
+					  SQLITE_TRANSIENT);
+			sqlite3_bind_text(stmt, 2, 
+					  prop_name,
+					  strlen(prop_name),
+					  SQLITE_TRANSIENT);
+			sqlite3_bind_text(stmt, 3, 
+					  prop_ns,
+					  strlen(prop_ns),
+					  SQLITE_TRANSIENT);
+
+			/* it is the PK */
+			while (SQLITE_ROW == sqlite3_step(p->conf.stmt_select_prop)) {
+				/* there is a row for us, we only expect a single col 'value' */
+				webdav_gen_prop_tag(srv, con, prop_name, prop_ns, (char *)sqlite3_column_text(p->conf.stmt_select_prop, 0), b);
+				found = 1;
+			}
 		}
 #endif
 		return found ? 0 : -1;
@@ -1067,19 +1076,22 @@ URIHANDLER_FUNC(mod_webdav_subrequest_handler) {
 								req_props->used++;
 							}
 						} else if (0 == xmlStrcmp(cmd->name, BAD_CAST "propname")) {
-							/* get all property names (EMPTY) */
-							sqlite3_reset(p->conf.stmt_select_propnames);
-							/* bind the values to the insert */
+							sqlite3_stmt *stmt = p->conf.stmt_select_propnames;
 
-							sqlite3_bind_text(p->conf.stmt_select_propnames, 1, 
-									  con->uri.path->ptr, 
-									  con->uri.path->used - 1,
-									  SQLITE_TRANSIENT);
+							if (stmt) {
+								/* get all property names (EMPTY) */
+								sqlite3_reset(stmt);
+								/* bind the values to the insert */
+	
+								sqlite3_bind_text(stmt, 1, 
+										  con->uri.path->ptr, 
+										  con->uri.path->used - 1,
+										  SQLITE_TRANSIENT);
 						
-							if (SQLITE_DONE != sqlite3_step(p->conf.stmt_select_propnames)) {
-								WP();
+								if (SQLITE_DONE != sqlite3_step(stmt)) {
+									WP();
+								}
 							}
-
 						} else if (0 == xmlStrcmp(cmd->name, BAD_CAST "allprop")) {
 							/* get all properties (EMPTY) */
 						}
@@ -1622,21 +1634,24 @@ URIHANDLER_FUNC(mod_webdav_subrequest_handler) {
 #ifdef USE_PROPPATCH
 					sqlite3_stmt *stmt = p->conf.stmt_move_uri;
 
-					sqlite3_reset(stmt);
+					if (stmt) {
 
-					/* bind the values to the insert */
-					sqlite3_bind_text(stmt, 1, 
-							  p->uri.path->ptr, 
-							  p->uri.path->used - 1,
-							  SQLITE_TRANSIENT);
+						sqlite3_reset(stmt);
 
-					sqlite3_bind_text(stmt, 2, 
-							  con->uri.path->ptr, 
-							  con->uri.path->used - 1,
-							  SQLITE_TRANSIENT);
-					
-					if (SQLITE_DONE != sqlite3_step(stmt)) {
-						log_error_write(srv, __FILE__, __LINE__, "ss", "sql-move failed:", sqlite3_errmsg(p->conf.sql));
+						/* bind the values to the insert */
+						sqlite3_bind_text(stmt, 1, 
+								  p->uri.path->ptr, 
+								  p->uri.path->used - 1,
+								  SQLITE_TRANSIENT);
+
+						sqlite3_bind_text(stmt, 2, 
+								  con->uri.path->ptr, 
+								  con->uri.path->used - 1,
+								  SQLITE_TRANSIENT);
+						
+						if (SQLITE_DONE != sqlite3_step(stmt)) {
+							log_error_write(srv, __FILE__, __LINE__, "ss", "sql-move failed:", sqlite3_errmsg(p->conf.sql));
+						}
 					}
 #endif
 					return HANDLER_FINISHED;
