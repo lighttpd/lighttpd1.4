@@ -96,15 +96,15 @@ static void daemonize(void) {
 #ifdef SIGTSTP
 	signal(SIGTSTP, SIG_IGN);
 #endif
-	if (fork() != 0) exit(0);
+	if (0 != fork()) exit(0);
 	
-	if (setsid() == -1) exit(0);
+	if (-1 == setsid()) exit(0);
 
 	signal(SIGHUP, SIG_IGN);
 
-	if (fork() != 0) exit(0);
+	if (0 != fork()) exit(0);
 	
-	chdir("/");
+	if (0 != chdir("/")) exit(0);
 	
 	umask(0);
 }
@@ -828,6 +828,9 @@ int main (int argc, char **argv) {
 				wait(&status);
 				num_childs++;
 			}
+		}
+		if (srv_shutdown) {
+			kill(0, SIGTERM);
 		}
 		if (!child) return 0;
 	}
