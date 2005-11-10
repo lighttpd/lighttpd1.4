@@ -160,7 +160,6 @@ int network_write_chunkqueue_writev(server *srv, connection *con, int fd, chunkq
 #define MByte * 1024 KByte
 #define GByte * 1024 MByte
 			const off_t we_want_to_mmap = 512 KByte; 
-			off_t we_want_to_send = c->file.length - c->offset;
 			char *start = NULL;
 
 			if (HANDLER_ERROR == stat_cache_get_entry(srv, con, c->file.name, &sce)) {
@@ -206,6 +205,8 @@ int network_write_chunkqueue_writev(server *srv, connection *con, int fd, chunkq
 				 *   */
 
 				/* all mmap()ed areas are 16Mbyte expect the last which might be smaller */
+				off_t we_want_to_send = c->file.length - c->offset + c->file.start;
+
 				size_t to_mmap = (we_want_to_send < we_want_to_mmap) ? we_want_to_send : we_want_to_mmap;
 
 				/* this is a remap, move the mmap-offset */
@@ -246,7 +247,9 @@ int network_write_chunkqueue_writev(server *srv, connection *con, int fd, chunkq
 				buffer_copy_string_len(c->mem, c->file.mmap.start, c->file.mmap.length);
 #else
 #ifdef HAVE_MADVISE
-				if (0 != madvise(c->file.mmap.start, c->file.mmap.length, MADV_WILLNEED)) {
+				/* don't advise files < 64Kb */
+				if (c->file.mmap.length > (64 KByte) && 
+				    0 != madvise(c->file.mmap.start, c->file.mmap.length, MADV_WILLNEED)) {
 					log_error_write(srv, __FILE__, __LINE__, "ssbd", "madvise failed:", 
 							strerror(errno), c->file.name, c->file.fd);
 				}
@@ -256,6 +259,16 @@ int network_write_chunkqueue_writev(server *srv, connection *con, int fd, chunkq
 				/* chunk_reset() or chunk_free() will cleanup for us */
 			}
 			toSend = c->file.mmap.length - (offset - c->file.mmap.offset);
+
+			if (toSend < 0) {
+				log_error_write(srv, __FILE__, __LINE__, "soooo", 
+						"toSend is negative:",
+						toSend,
+						c->file.mmap.length,
+						offset,
+						c->file.mmap.offset); 
+				assert(toSend < 0);
+			}
 
 #ifdef LOCAL_BUFFERING
 			start = c->mem->ptr;
