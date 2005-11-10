@@ -911,6 +911,8 @@ static int fcgi_spawn_connection(server *srv,
 						"pid not found:", strerror(errno));
 				return -1;
 			default:
+				log_error_write(srv, __FILE__, __LINE__, "sbs",
+						"the fastcgi-backend", host->bin_path, "failed to start:");
 				/* the child should not terminate at all */
 				if (WIFEXITED(status)) {
 					log_error_write(srv, __FILE__, __LINE__, "sdb", 
@@ -921,10 +923,19 @@ static int fcgi_spawn_connection(server *srv,
 							"You can find out if it is the right one by executing 'php -v' and it should display '(cgi-fcgi)' "
 							"in the output, NOT (cgi) NOR (cli)\n"
 							"For more information check http://www.lighttpd.net/documentation/fastcgi.html#preparing-php-as-a-fastcgi-program");
+					log_error_write(srv, __FILE__, __LINE__, "s",
+							"If this is PHP on Gentoo add fastcgi to the USE flags");
 				} else if (WIFSIGNALED(status)) {
 					log_error_write(srv, __FILE__, __LINE__, "sd", 
-							"child signaled:", 
+							"terminated by signal:", 
 							WTERMSIG(status));
+
+					if (WTERMSIG(status) == 11) {
+						log_error_write(srv, __FILE__, __LINE__, "ss",
+								"to be exact: it seg-fault, crashed, died, ... you get the idea." );
+						log_error_write(srv, __FILE__, __LINE__, "s",
+								"If this is PHP try to remove the byte-code caches for now and try again.");
+					}
 				} else {
 					log_error_write(srv, __FILE__, __LINE__, "sd", 
 							"child died somehow:", 
