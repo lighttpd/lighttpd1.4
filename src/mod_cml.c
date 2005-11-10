@@ -228,11 +228,6 @@ int cache_get_cookie_session_id(server *srv, connection *con, plugin_data *p) {
 				break;
 			}
 		}
-		
-		if (!buffer_is_empty(p->session_id)) {
-			log_error_write(srv, __FILE__, __LINE__, "sb", 
-				"Session-ID", p->session_id);
-		}
 	}
 	
 	return !buffer_is_empty(p->session_id);
@@ -280,12 +275,7 @@ int cache_get_url_session_id(server *srv, connection *con, plugin_data *p) {
 			break;
 		}
 	}
-	
-	if (!buffer_is_empty(p->session_id)) {
-		log_error_write(srv, __FILE__, __LINE__, "sb", 
-				"Session-ID", p->session_id);
-	}
-	
+
 	return !buffer_is_empty(p->session_id);
 }
 
