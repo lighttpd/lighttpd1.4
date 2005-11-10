@@ -710,7 +710,7 @@ const char encoded_chars_hex[] = {
 
 int buffer_append_string_encoded(buffer *b, const char *s, size_t s_len, buffer_encoding_t encoding) {
 	unsigned char *ds, *d;
-	size_t d_len;
+	size_t d_len, ndx;
 	const char *map = NULL;
 	
 	if (!s || !b) return -1;
@@ -741,7 +741,7 @@ int buffer_append_string_encoded(buffer *b, const char *s, size_t s_len, buffer_
 	assert(map != NULL);
 	
 	/* count to-be-encoded-characters */
-	for (ds = (unsigned char *)s, d_len = 0; *ds; ds++) {
+	for (ds = (unsigned char *)s, d_len = 0, ndx = 0; ndx < s_len; ds++, ndx++) {
 		if (map[*ds]) {
 			switch(encoding) {
 			case ENCODING_REL_URI:
@@ -764,7 +764,7 @@ int buffer_append_string_encoded(buffer *b, const char *s, size_t s_len, buffer_
 	
 	buffer_prepare_append(b, d_len);
 	
-	for (ds = (unsigned char *)s, d = (unsigned char *)b->ptr + b->used - 1, d_len = 0; *ds; ds++) {
+	for (ds = (unsigned char *)s, d = (unsigned char *)b->ptr + b->used - 1, d_len = 0, ndx = 0; ndx < s_len; ds++, ndx++) {
 		if (map[*ds]) {
 			switch(encoding) {
 			case ENCODING_REL_URI:
@@ -790,7 +790,6 @@ int buffer_append_string_encoded(buffer *b, const char *s, size_t s_len, buffer_
 			}
 		} else {
 			d[d_len++] = *ds;
-			break;
 		}
 	}
 
@@ -798,7 +797,7 @@ int buffer_append_string_encoded(buffer *b, const char *s, size_t s_len, buffer_
 	b->ptr[b->used + d_len - 1] = '\0';
 	
 	b->used += d_len;
-	
+
 	return 0;
 }
 
