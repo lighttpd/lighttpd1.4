@@ -247,7 +247,6 @@ int http_response_handle_cachable(server *srv, connection *con, buffer *mtime) {
 				
 				/* check if etag + last-modified */
 				if (con->request.http_if_modified_since) {
-					
 					size_t used_len;
 					char *semicolon;
 					
@@ -282,9 +281,9 @@ int http_response_handle_cachable(server *srv, connection *con, buffer *mtime) {
 								return HANDLER_FINISHED;
 							}
 						} else {
-							log_error_write(srv, __FILE__, __LINE__, "ss", 
+							log_error_write(srv, __FILE__, __LINE__, "ssdd", 
 									"DEBUG: Last-Modified check failed as the received timestamp was too long:", 
-									con->request.http_if_modified_since);
+									con->request.http_if_modified_since, used_len, sizeof(buf) - 1);
 							
 							con->http_status = 412;
 							return HANDLER_FINISHED;
