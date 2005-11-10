@@ -232,6 +232,8 @@ typedef struct {
 	
 	only if a process is killed max_id waits for the process itself
 	to die and decrements its afterwards */
+
+	buffer *strip_request_uri;
 } fcgi_extension_host;
 
 /*
@@ -364,6 +366,8 @@ static handler_ctx * handler_ctx_init() {
 	
 	hctx->fd = -1;
 	
+	hctx->delayed = 0;
+
 	hctx->reconnects = 0;
 	hctx->send_content_body = 1;
 
@@ -415,6 +419,7 @@ fcgi_extension_host *fastcgi_host_init() {
 	f->bin_path = buffer_init();
 	f->bin_env = array_init();
 	f->bin_env_copy = array_init();
+	f->strip_request_uri = buffer_init();
 	
 	return f;
 }
@@ -426,6 +431,7 @@ void fastcgi_host_free(fcgi_extension_host *h) {
 	buffer_free(h->unixsocket);
 	buffer_free(h->docroot);
 	buffer_free(h->bin_path);
+	buffer_free(h->strip_request_uri);
 	array_free(h->bin_env);
 	array_free(h->bin_env_copy);
 	
@@ -1073,7 +1079,8 @@ SETDEFAULTS_FUNC(mod_fastcgi_set_defaults) {
 						{ "bin-copy-environment", NULL, T_CONFIG_ARRAY, T_CONFIG_SCOPE_CONNECTION },     /* 13 */
 						
 						{ "broken-scriptfilename", NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION },  /* 14 */
-						{ "allow-x-send-file", NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION },  /* 15 */
+						{ "allow-x-send-file", NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION },      /* 15 */
+						{ "strip-request-uri",  NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_CONNECTION },      /* 16 */
 						
 						{ NULL,                NULL, T_CONFIG_UNSET, T_CONFIG_SCOPE_UNSET }
 					};
@@ -1117,7 +1124,7 @@ SETDEFAULTS_FUNC(mod_fastcgi_set_defaults) {
 					fcv[13].destination = df->bin_env_copy;
 					fcv[14].destination = &(df->break_scriptfilename_for_php);
 					fcv[15].destination = &(df->allow_xsendfile);
-					
+					fcv[16].destination = df->strip_request_uri;
 					
 					if (0 != config_insert_values_internal(srv, da_host->value, fcv)) {
 						return HANDLER_ERROR;
@@ -1538,29 +1545,51 @@ static int fcgi_establish_connection(server *srv, handler_ctx *hctx) {
 			}
 			
 			return 1;
+		} else if (errno == EAGAIN) {
+#if 0
+			if(hctx->delayed == 0) {
+				log_error_write(srv, __FILE__, __LINE__, "sdsdsdb", 
+						"need reconnect, will continue later:", fcgi_fd,
+						"reconnects:", hctx->reconnects,
+						"load:", host->load,
+						host->unixsocket);
+			}
+#endif
+			hctx->reconnects++;
+			return -1;
 		} else {
 			log_error_write(srv, __FILE__, __LINE__, "sdsddb", 
 					"connect failed:", fcgi_fd, 
 					strerror(errno), errno,
 					proc->port, proc->socket);
 
+#if 0
 			if (errno == EAGAIN) {
 				log_error_write(srv, __FILE__, __LINE__, "sd", 
 						"This means that the you have more incoming requests than your fastcgi-backend can handle in parallel. "
 						"Perhaps it helps to spawn more fastcgi backend or php-children, if not decrease server.max-connections."
 						"The load for this fastcgi backend is:", proc->load);
 			} 
+#endif
 			
 			return -1;
 		}
 	}
+#if 0
+	if(hctx->delayed == 1) {
+		log_error_write(srv, __FILE__, __LINE__, "sdsdsdb", 
+				"reconnected:", fcgi_fd,
+				"reconnects:", hctx->reconnects,
+				"load:", host->load,
+				host->unixsocket);
+	}
+#endif
+	hctx->reconnects = 0;
 	if (hctx->conf.debug > 1) {
 		log_error_write(srv, __FILE__, __LINE__, "sd", 
 				"connect succeeded: ", fcgi_fd);
 	}
 
-
-	
 	return 0;
 }
 
@@ -1785,7 +1814,35 @@ static int fcgi_create_env(server *srv, handler_ctx *hctx, size_t request_id) {
 		fcgi_env_add(p->fcgi_env, CONST_STR_LEN("SCRIPT_FILENAME"), CONST_BUF_LEN(p->path));
 		fcgi_env_add(p->fcgi_env, CONST_STR_LEN("DOCUMENT_ROOT"), CONST_BUF_LEN(con->physical.doc_root));
 	}
-	fcgi_env_add(p->fcgi_env, CONST_STR_LEN("REQUEST_URI"), CONST_BUF_LEN(con->request.orig_uri));
+
+	if (host->strip_request_uri->used > 1) {
+		/* we need at least one char to strip off */
+		/**
+		 * /app1/index/list
+		 *
+		 * stripping /app1 or /app1/ should lead to 
+		 *
+		 * /index/list
+		 *
+		 */
+		if ('/' != host->strip_request_uri->ptr[host->strip_request_uri->used - 2]) {
+			/* fix the user-input to have / as last char */
+			buffer_append_string(host->strip_request_uri, "/");
+		}
+
+		if (con->request.orig_uri->used > host->strip_request_uri->used &&
+		    0 == strncmp(con->request.orig_uri->ptr, host->strip_request_uri->ptr, host->strip_request_uri->used - 1)) {
+			/* the left is the same */
+
+			fcgi_env_add(p->fcgi_env, CONST_STR_LEN("REQUEST_URI"), 
+					con->request.orig_uri->ptr + (host->strip_request_uri->used - 2),
+					con->request.orig_uri->used - (host->strip_request_uri->used - 2));
+		} else {
+			fcgi_env_add(p->fcgi_env, CONST_STR_LEN("REQUEST_URI"), CONST_BUF_LEN(con->request.orig_uri));
+		}
+	} else {
+		fcgi_env_add(p->fcgi_env, CONST_STR_LEN("REQUEST_URI"), CONST_BUF_LEN(con->request.orig_uri));
+	}
 	if (!buffer_is_equal(con->request.uri, con->request.orig_uri)) {
 		fcgi_env_add(p->fcgi_env, CONST_STR_LEN("REDIRECT_URI"), CONST_BUF_LEN(con->request.uri));
 	}
@@ -2622,7 +2679,7 @@ static handler_t fcgi_write_request(server *srv, handler_ctx *hctx) {
 		
 		/* fall through */
 	case FCGI_STATE_CONNECT:
-		if (hctx->state == FCGI_STATE_INIT) {
+		if (hctx->state == FCGI_STATE_INIT || hctx->delayed == 1) {
 			for (hctx->proc = hctx->host->first; 
 			     hctx->proc && hctx->proc->state != PROC_STATE_RUNNING; 
 			     hctx->proc = hctx->proc->next);
@@ -2646,18 +2703,19 @@ static handler_t fcgi_write_request(server *srv, handler_ctx *hctx) {
 				
 				fdevent_event_add(srv->ev, &(hctx->fde_ndx), hctx->fd, FDEVENT_OUT);
 				
+				hctx->delayed = 0;
 				return HANDLER_WAIT_FOR_EVENT;
 			case -1:
-				/* if ECONNREFUSED choose another connection -> FIXME */
-				hctx->fde_ndx = -1;
+				/* if ECONNREFUSED/EAGAIN re-try connect() */
 				
-				return HANDLER_ERROR;
+				fcgi_set_state(srv, hctx, FCGI_STATE_CONNECT);
+				hctx->delayed = 1;
+				return HANDLER_WAIT_FOR_EVENT;
 			default:
 				/* everything is ok, go on */
 				break;
 			}
 
-			
 		} else {
 			int socket_error;
 			socklen_t socket_error_len = sizeof(socket_error);
@@ -2807,6 +2865,7 @@ SUBREQUEST_FUNC(mod_fastcgi_handle_subrequest) {
 		proc = hctx->proc;
 		host = hctx->host;
 		
+#if 0
 		if (proc && 
 		    0 == proc->is_local &&
 		    proc->state != PROC_STATE_DISABLED) {
@@ -2822,6 +2881,7 @@ SUBREQUEST_FUNC(mod_fastcgi_handle_subrequest) {
 			proc->state = PROC_STATE_DISABLED;
 			host->active_procs--;
 		}
+#endif
 		
 		if (hctx->state == FCGI_STATE_INIT ||
 		    hctx->state == FCGI_STATE_CONNECT) {
