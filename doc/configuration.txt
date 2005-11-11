@@ -1,6 +1,6 @@
-=================
-Configuation File
-=================
+==================
+Configuration File
+==================
 
 ------------
 Module: core
@@ -157,7 +157,7 @@ Example
   # are not in the 10.0.0.0/8 network
   $HTTP["host"] == "www.example.org" {
     $HTTP["remoteip"] != "10.0.0.0/8" {
-     url.access-deny = ""
+     url.access-deny = ( "" )
     }
   }  
 
@@ -431,6 +431,6 @@ debug.log-file-not-found
 
   default: disabled 
 
-debug.log-request-handler
+debug.log-request-handling
 
   default: disabled 
