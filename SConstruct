@@ -90,7 +90,7 @@ opts.AddOptions(
 env = Environment(
 	env = os.environ,
 	options = opts,
-	CCFLAGS = Split('-Wall -O2 -g -pedantic -Wunused -Wshadow'),
+	CCFLAGS = Split('-Wall -O2 -g -W -pedantic -Wunused -Wshadow'),
 	CPPPATH = Split('#/build'),
 	# LIBS = [ 'dl' ]
 )
