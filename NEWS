@@ -6,8 +6,17 @@ NEWS
 - 1.4.8 - 2005-..-..
 
   * added auto-reconnect to ldap-server in mod_auth
+  * added strip_request_uri in mod_fastcgi
+  * changed default stat-cache-engine to 'simple'
   * removed debian/ dir from source package on request by packager
   * fixed max-age timestamps in mod_expire
+  * fixed encoding the filenames in PROPFIND in mod_webdav
+  * fixed range request handling in network_writev
+  * fixed retry on connect error in mod_fastcgi
+  * fixed possible crash in mod_webdav if sqlite3 support 
+    is available but not use
+  * TODO: streaming CGI
+  * TODO: missing cleanup in mysql_vhost
 
 - 1.4.7 - 2005-11-02
 
@@ -16,7 +25,8 @@ NEWS
   * added madvise() to instruct the kernel the do proper read-ahead in network_writev
   * added support for %I in mod_accesslog
   * added better compat to Apache for ?auto in mod_status
-  * added support for userdirs without a entry in /etc/passwd in mod_userdir
+  * added support for userdirs without a entry in /etc/passwd in mod_userdir 
+    (rob@inversepath.com)
   * added startup-time selectable network-backend
   * added location of upload-files to config as array
   * added webdav.log-xml for logging xml-content in mod_webdav
