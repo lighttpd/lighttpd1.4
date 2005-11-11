@@ -981,11 +981,26 @@ int connection_handle_read_state(server *srv, connection *con)  {
 				if (dst_cq->last &&
 				    dst_cq->last->type == FILE_CHUNK &&
 				    dst_cq->last->file.is_temp &&
-				    dst_cq->last->offset == 0 &&
-				    dst_cq->last->file.length < 1 * 1024 * 1024) {
+				    dst_cq->last->offset == 0) {
 					/* ok, take the last chunk for our job */
-					dst_c = dst_cq->last;
-					dst_c->file.fd = open(dst_c->file.name->ptr, O_WRONLY | O_APPEND);
+
+			 		if (dst_cq->last->file.length < 1 * 1024 * 1024) {
+						dst_c = dst_cq->last;
+
+						if (dst_c->file.fd == -1) {
+							/* this should not happen as we cache the fd, but you never know */
+							dst_c->file.fd = open(dst_c->file.name->ptr, O_WRONLY | O_APPEND);
+						}
+					} else {
+						/* the chunk is too large now, close it */
+						dst_c = dst_cq->last;
+
+						if (dst_c->file.fd != -1) {
+							close(dst_c->file.fd);
+							dst_c->file.fd = -1;
+						}
+						dst_c = chunkqueue_get_append_tempfile(dst_cq);
+					}
 				} else {
 					dst_c = chunkqueue_get_append_tempfile(dst_cq);
 				}
@@ -1028,8 +1043,11 @@ int connection_handle_read_state(server *srv, connection *con)  {
 
 				dst_c->file.length += toRead;
 					
-				close(dst_c->file.fd);
-				dst_c->file.fd = -1;
+				if (dst_cq->bytes_in + toRead == con->request.content_length) {
+					/* we read everything, close the chunk */
+					close(dst_c->file.fd);
+					dst_c->file.fd = -1;
+				}
 			} else {
 				buffer *b;
 
