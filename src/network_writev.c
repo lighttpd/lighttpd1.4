@@ -204,10 +204,9 @@ int network_write_chunkqueue_writev(server *srv, connection *con, int fd, chunkq
 				 *     3. use non-blocking IO for file-transfers
 				 *   */
 
-				/* all mmap()ed areas are 16Mbyte expect the last which might be smaller */
-				off_t we_want_to_send = c->file.length - c->offset + c->file.start;
-
-				size_t to_mmap = (we_want_to_send < we_want_to_mmap) ? we_want_to_send : we_want_to_mmap;
+				/* all mmap()ed areas are 512kb expect the last which might be smaller */
+				off_t we_want_to_send;
+				size_t to_mmap;
 
 				/* this is a remap, move the mmap-offset */
 				if (c->file.mmap.start != MAP_FAILED) {
@@ -221,6 +220,9 @@ int network_write_chunkqueue_writev(server *srv, connection *con, int fd, chunkq
 						c->file.mmap.offset += we_want_to_mmap;
 					}
 				}
+
+				we_want_to_send = c->file.length - c->offset + c->file.start - c->file.mmap.offset;
+				to_mmap = (we_want_to_send < we_want_to_mmap) ? we_want_to_send : we_want_to_mmap;
 
 				if (-1 == c->file.fd) {  /* open the file if not already open */
 					if (-1 == (c->file.fd = open(c->file.name->ptr, O_RDONLY))) {
