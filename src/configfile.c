@@ -194,7 +194,7 @@ static int config_insert(server *srv) {
 	}
 	
 	if (buffer_is_empty(stat_cache_string)) {
-		srv->srvconf.stat_cache_engine = STAT_CACHE_ENGINE_NONE;
+		srv->srvconf.stat_cache_engine = STAT_CACHE_ENGINE_SIMPLE;
 	} else if (buffer_is_equal_string(stat_cache_string, CONST_STR_LEN("simple"))) {
 		srv->srvconf.stat_cache_engine = STAT_CACHE_ENGINE_SIMPLE;
 	} else if (buffer_is_equal_string(stat_cache_string, CONST_STR_LEN("fam"))) {
