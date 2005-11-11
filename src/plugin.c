@@ -178,7 +178,11 @@ int plugins_load(server *srv) {
 		}
 
 #else
+#if 1
+		init = (int (*)(plugin *))dlsym(p->lib, srv->tmp_buf->ptr);
+#else
 		*(void **)(&init) = dlsym(p->lib, srv->tmp_buf->ptr);
+#endif
 		if ((error = dlerror()) != NULL)  {
 			log_error_write(srv, __FILE__, __LINE__, "s", error);
 			
