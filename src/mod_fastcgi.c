@@ -1830,7 +1830,7 @@ static int fcgi_create_env(server *srv, handler_ctx *hctx, size_t request_id) {
 			buffer_append_string(host->strip_request_uri, "/");
 		}
 
-		if (con->request.orig_uri->used > host->strip_request_uri->used &&
+		if (con->request.orig_uri->used >= host->strip_request_uri->used &&
 		    0 == strncmp(con->request.orig_uri->ptr, host->strip_request_uri->ptr, host->strip_request_uri->used - 1)) {
 			/* the left is the same */
 
