@@ -172,7 +172,7 @@ directiry doesn't change, the files in it are all the same.
 With the help of FAM or gamin you can use kernel events to assure that
 your stat-cache is up to date. ::
 
-  server.stat-cache-engine = "fam"   # either fam, simple or off
+  server.stat-cache-engine = "fam"   # either fam, simple or disabled
 
 
 Plattform Specific Notes
