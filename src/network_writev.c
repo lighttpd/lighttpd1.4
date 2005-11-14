@@ -152,7 +152,7 @@ int network_write_chunkqueue_writev(server *srv, connection *con, int fd, chunkq
 		}
 		case FILE_CHUNK: {
 			ssize_t r;
-			off_t offset;
+			off_t abs_offset;
 			off_t toSend;
 			stat_cache_entry *sce = NULL;
 
@@ -168,9 +168,9 @@ int network_write_chunkqueue_writev(server *srv, connection *con, int fd, chunkq
 				return -1;
 			}
 
-			offset = c->file.start + c->offset;
+			abs_offset = c->file.start + c->offset;
 			
-			if (offset > sce->st.st_size) {
+			if (abs_offset > sce->st.st_size) {
 				log_error_write(srv, __FILE__, __LINE__, "sb", 
 						"file was shrinked:", c->file.name);
 				
@@ -181,7 +181,7 @@ int network_write_chunkqueue_writev(server *srv, connection *con, int fd, chunkq
 			 * - first mmap 
 			 * - new mmap as the we are at the end of the last one */
 			if (c->file.mmap.start == MAP_FAILED ||
-			    offset == c->file.mmap.offset + c->file.mmap.length) {
+			    abs_offset == c->file.mmap.offset + c->file.mmap.length) {
 
 				/* Optimizations for the future:
 				 *
@@ -221,8 +221,15 @@ int network_write_chunkqueue_writev(server *srv, connection *con, int fd, chunkq
 					}
 				}
 
-				we_want_to_send = c->file.length - c->offset + c->file.start - c->file.mmap.offset;
-				to_mmap = (we_want_to_send < we_want_to_mmap) ? we_want_to_send : we_want_to_mmap;
+				/* length is rel, c->offset too, assume there is no limit at the mmap-boundaries */
+				we_want_to_send = c->file.length - c->offset;
+				to_mmap = (c->file.start + c->file.length) - c->file.mmap.offset;
+
+				/* we have more to send than we can mmap() at once */
+				if (abs_offset + we_want_to_send > c->file.mmap.offset + we_want_to_mmap) {
+					we_want_to_send = (c->file.mmap.offset + we_want_to_mmap) - abs_offset;
+					to_mmap = we_want_to_mmap;
+				}
 
 				if (-1 == c->file.fd) {  /* open the file if not already open */
 					if (-1 == (c->file.fd = open(c->file.name->ptr, O_RDONLY))) {
@@ -260,14 +267,16 @@ int network_write_chunkqueue_writev(server *srv, connection *con, int fd, chunkq
 
 				/* chunk_reset() or chunk_free() will cleanup for us */
 			}
-			toSend = c->file.mmap.length - (offset - c->file.mmap.offset);
+
+			/* to_send = abs_mmap_end - abs_offset */
+			toSend = (c->file.mmap.offset + c->file.mmap.length) - (abs_offset);
 
 			if (toSend < 0) {
 				log_error_write(srv, __FILE__, __LINE__, "soooo", 
 						"toSend is negative:",
 						toSend,
 						c->file.mmap.length,
-						offset,
+						abs_offset,
 						c->file.mmap.offset); 
 				assert(toSend < 0);
 			}
@@ -278,7 +287,7 @@ int network_write_chunkqueue_writev(server *srv, connection *con, int fd, chunkq
 			start = c->file.mmap.start;
 #endif
 
-			if ((r = write(fd, start + (offset - c->file.mmap.offset), toSend)) < 0) {
+			if ((r = write(fd, start + (abs_offset - c->file.mmap.offset), toSend)) < 0) {
 				switch (errno) {
 				case EAGAIN:
 				case EINTR:
