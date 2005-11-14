@@ -263,7 +263,7 @@ int http_response_handle_cachable(server *srv, connection *con, buffer *mtime) {
 						char buf[sizeof("Sat, 23 Jul 2005 21:20:01 GMT")];
 
 						/* convert to timestamp */
-						if (used_len < sizeof(buf) - 1) {
+						if (used_len < sizeof(buf)) {
 							time_t t_header, t_file;
 							struct tm tm;
 							
