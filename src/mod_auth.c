@@ -521,9 +521,7 @@ SETDEFAULTS_FUNC(mod_auth_set_defaults) {
         return HANDLER_GO_ON;
 }
 
-handler_t
-auth_ldap_init(server *srv, mod_auth_plugin_config *s)
-{
+handler_t auth_ldap_init(server *srv, mod_auth_plugin_config *s) {
 #ifdef USE_LDAP
 			int ret;
 #if 0			
@@ -550,7 +548,6 @@ auth_ldap_init(server *srv, mod_auth_plugin_config *s)
 			}
 			
 			if (s->auth_ldap_hostname->used) {
-				int ret;
 				if (NULL == (s->ldap = ldap_init(s->auth_ldap_hostname->ptr, LDAP_PORT))) {
 					log_error_write(srv, __FILE__, __LINE__, "ss", "ldap ...", strerror(errno));
 					
@@ -565,17 +562,16 @@ auth_ldap_init(server *srv, mod_auth_plugin_config *s)
 				}
 
 				if (s->auth_ldap_starttls) {
-					if (buffer_is_empty(s->auth_ldap_cafile)) {
-						log_error_write(srv, __FILE__, __LINE__, "s", "CA file has to be set");
+					/* if no CA file is given, it is ok, as we will use encryption 
+					 * if the server requires a CAfile it will tell us */
+					if (!buffer_is_empty(s->auth_ldap_cafile)) {
+						if (LDAP_OPT_SUCCESS != (ret = ldap_set_option(NULL, LDAP_OPT_X_TLS_CACERTFILE, 
+										s->auth_ldap_cafile->ptr))) {
+							log_error_write(srv, __FILE__, __LINE__, "ss", 
+									"Loading CA certificate failed:", ldap_err2string(ret));
 						
-						return HANDLER_ERROR;
-						
-					}
-			
-					if (LDAP_OPT_SUCCESS != (ret = ldap_set_option(NULL, LDAP_OPT_X_TLS_CACERTFILE, s->auth_ldap_cafile->ptr))) {
-						log_error_write(srv, __FILE__, __LINE__, "ss", "Loading CA certificate failed:", ldap_err2string(ret));
-						
-						return HANDLER_ERROR;
+							return HANDLER_ERROR;
+						}
 					}
 	
 					if (LDAP_OPT_SUCCESS != (ret = ldap_start_tls_s(s->ldap, NULL,  NULL))) {
