@@ -185,7 +185,7 @@ int fdevent_fcntl_set(fdevents *ev, int fd) {
 	/* close fd on exec (cgi) */
 	fcntl(fd, F_SETFD, FD_CLOEXEC);
 #endif
-	if (ev->fcntl_set) return ev->fcntl_set(ev, fd);
+	if ((ev) && (ev->fcntl_set)) return ev->fcntl_set(ev, fd);
 #ifdef O_NONBLOCK	
 	return fcntl(fd, F_SETFL, O_NONBLOCK | O_RDWR);
 #else

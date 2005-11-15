@@ -529,11 +529,6 @@ int main (int argc, char **argv) {
 			}
 		}
 
-		if (NULL == (srv->ev = fdevent_init(srv->max_fds + 1, srv->event_handler))) {
-			log_error_write(srv, __FILE__, __LINE__,
-					"s", "fdevent_init failed");
-			return -1;
-		}
 		
 #ifdef HAVE_PWD_H
 		/* set user and group */
@@ -619,13 +614,6 @@ int main (int argc, char **argv) {
 						"if event-handler is 'select'. Use 'poll' or something else or reduce server.max-fds.");
 				return -1;
 			}
-		}
-
-	
-		if (NULL == (srv->ev = fdevent_init(srv->max_fds + 1, srv->event_handler))) {
-			log_error_write(srv, __FILE__, __LINE__,
-					"s", "fdevent_init failed");
-			return -1;
 		}
 		
 		if (0 != network_init(srv)) {
@@ -728,22 +716,6 @@ int main (int argc, char **argv) {
 		return -1;
 	}
 	
-	/* 
-	 * kqueue() is called here, select resets its internals, 
-	 * all server sockets get their handlers
-	 *
-	 * */
-	if (0 != network_register_fdevents(srv)) {
-		plugins_free(srv);
-		network_close(srv);
-		server_free(srv);
-		
-		return -1;
-	}
-	
-	/* get the current number of FDs */
-	srv->cur_fds = open("/dev/null", O_RDONLY);
-	close(srv->cur_fds);
 	
 #ifdef HAVE_SIGACTION
 	memset(&act, 0, sizeof(act));
@@ -835,6 +807,36 @@ int main (int argc, char **argv) {
 		if (!child) return 0;
 	}
 #endif
+
+	if (NULL == (srv->ev = fdevent_init(srv->max_fds + 1, srv->event_handler))) {
+		log_error_write(srv, __FILE__, __LINE__,
+				"s", "fdevent_init failed");
+		return -1;
+	}
+	/* 
+	 * kqueue() is called here, select resets its internals, 
+	 * all server sockets get their handlers
+	 *
+	 * */
+	if (0 != network_register_fdevents(srv)) {
+		plugins_free(srv);
+		network_close(srv);
+		server_free(srv);
+		
+		return -1;
+	}
+	
+	/* get the current number of FDs */
+	srv->cur_fds = open("/dev/null", O_RDONLY);
+	close(srv->cur_fds);
+
+	for (i = 0; i < srv->srv_sockets.used; i++) {
+		server_socket *srv_socket = srv->srv_sockets.ptr[i];
+		if (-1 == fdevent_fcntl_set(srv->ev, srv_socket->fd)) {
+			log_error_write(srv, __FILE__, __LINE__, "ss", "fcntl failed:", strerror(errno));
+			return -1;
+		}
+	}
 
 	/* main-loop */
 	while (!srv_shutdown) {

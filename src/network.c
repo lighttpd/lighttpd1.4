@@ -159,11 +159,6 @@ int network_server_init(server *srv, buffer *host_token, specific_config *s) {
 		return -1;
 	}
 	
-	if (-1 == fdevent_fcntl_set(srv->ev, srv_socket->fd)) {
-		log_error_write(srv, __FILE__, __LINE__, "ss", "fcntl failed:", strerror(errno));
-		return -1;
-	}
-	
 	switch(srv_socket->addr.plain.sa_family) {
 #ifdef HAVE_IPV6
 	case AF_INET6:
