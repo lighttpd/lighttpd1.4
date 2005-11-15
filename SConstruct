@@ -85,7 +85,8 @@ opts.AddOptions(
 	BoolOption('with_fam', 'enable FAM/gamin support', 'no'),
 	BoolOption('with_openssl', 'enable memcache support', 'no'),
 	BoolOption('with_gzip', 'enable gzip compression', 'no'),
-	BoolOption('with_bzip2', 'enable bzip2 compression', 'no'))
+	BoolOption('with_bzip2', 'enable bzip2 compression', 'no'),
+	PackageOption('with_ldap', 'enable ldap auth support', 'no'))
 
 env = Environment(
 	env = os.environ,
@@ -149,7 +150,9 @@ if 1:
 
 	checkTypes(autoconf, Split('pid_t size_t off_t'))
 
-	autoconf.env.Append( LIBSQLITE3 = '', LIBXML2 = '', LIBMYSQL = '', LIBZ = '', LIBBZ2 = '', LIBCRYPT = '', LIBMEMCACHE = '', LIBFCGI = '')
+	autoconf.env.Append( LIBSQLITE3 = '', LIBXML2 = '', LIBMYSQL = '', LIBZ = '', 
+		LIBBZ2 = '', LIBCRYPT = '', LIBMEMCACHE = '', LIBFCGI = '',
+		LIBLDAP = '', LIBLBER = '')
 
 	if env['with_fam']:
 		if autoconf.CheckLibWithHeader('fam', 'fam.h', 'C'):
@@ -165,6 +168,12 @@ if 1:
 	if env['with_gzip']:
 		if autoconf.CheckLibWithHeader('z', 'zlib.h', 'C'):
 			autoconf.env.Append(CPPFLAGS = [ '-DHAVE_ZLIB_H', '-DHAVE_LIBZ' ], LIBZ = 'z')
+
+	if env['with_ldap']:
+		if autoconf.CheckLibWithHeader('ldap', 'ldap.h', 'C'):
+			autoconf.env.Append(CPPFLAGS = [ '-DHAVE_LDAP_H', '-DHAVE_LIBLDAP' ], LIBLDAP = 'ldap')
+		if autoconf.CheckLibWithHeader('lber', 'lber.h', 'C'):
+			autoconf.env.Append(CPPFLAGS = [ '-DHAVE_LBER_H', '-DHAVE_LIBLBER' ], LIBLBER = 'lber')
 
 	if env['with_bzip2']:
 		if autoconf.CheckLibWithHeader('bz2', 'bzlib.h', 'C'):
@@ -201,11 +210,6 @@ if env['with_xml']:
 	xml2_config = checkProgram(env, 'xml', 'xml2-config')
 	env.ParseConfig(xml2_config + ' --cflags --libs')
 	env.Append(CPPFLAGS = [ '-DHAVE_LIBXML_H', '-DHAVE_LIBXML2' ], LIBXML2 = 'xml2')
-
-if env['with_mysql']:
-	mysql_config = checkProgram(env, 'mysql', 'mysql_config')
-	env.ParseConfig(mysql_config + ' --cflags --libs')
-	env.Append(CPPFLAGS = [ '-DHAVE_MYSQL' ], LIBMYSQL = 'mysqlclient')
 
 if re.compile("cygwin|mingw").search(env['PLATFORM']):
 	env.Append(COMMON_LIB = 'bin')
