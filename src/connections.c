@@ -1343,8 +1343,12 @@ int connection_state_machine(server *srv, connection *con) {
 						/* error-handler is a 404 */
 						
 						/* continue as normal, status is the same */
-						log_error_write(srv, __FILE__, __LINE__, "sb", "error-handler not found:", con->conf.error_handler);
-						
+						log_error_write(srv, __FILE__, __LINE__, "sb", 
+								"Warning: Either the error-handler returned status 404 or the error-handler itself was not found:", con->request.uri);
+						log_error_write(srv, __FILE__, __LINE__, "sd", 
+								"returning the original status", con->error_handler_saved_status);
+						log_error_write(srv, __FILE__, __LINE__, "s", 
+								"If this is a rails app: check your production.log");
 						con->http_status = con->error_handler_saved_status;
 					}
 				} else if (con->in_error_handler) {
