@@ -80,7 +80,7 @@ instlib += env.SharedLibrary('mod_status', [ 'mod_status.c' ], LIBS= [ common_li
 instlib += env.SharedLibrary('mod_compress', [ 'mod_compress.c' ], LIBS= [ common_lib, env['LIBZ'], env['LIBBZ2'] ] )
 instlib += env.SharedLibrary('mod_redirect', [ 'mod_redirect.c' ], LIBS = [ common_lib, env['LIBPCRE'] ] )
 instlib += env.SharedLibrary('mod_rewrite', [ 'mod_rewrite.c' ], LIBS= [ common_lib, env['LIBPCRE'] ])
-instlib += env.SharedLibrary('mod_auth', [ Split('mod_auth.c http_auth_digest.c http_auth.c') ], LIBS= [ common_lib, env['LIBCRYPT'] ])
+instlib += env.SharedLibrary('mod_auth', [ Split('mod_auth.c http_auth_digest.c http_auth.c') ], LIBS= [ common_lib, env['LIBCRYPT'], env['LIBLDAP'], env['LIBLBER'] ])
 instlib += env.SharedLibrary('mod_webdav', [ 'mod_webdav.c' ], LIBS= [ common_lib, env['LIBXML2'], env['LIBSQLITE3'] ])
 instlib += env.SharedLibrary('mod_mysql_vhost', [ 'mod_mysql_vhost.c' ], LIBS= [ common_lib, env['LIBMYSQL'] ])
 instlib += env.SharedLibrary('mod_trigger_b4_dl', [ 'mod_trigger_b4_dl.c' ], LIBS= [ common_lib, env['LIBPCRE'] ])
