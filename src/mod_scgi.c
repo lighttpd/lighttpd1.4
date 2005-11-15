@@ -745,6 +745,7 @@ static int scgi_spawn_connection(server *srv,
 		case 0: {
 			buffer *b;
 			size_t i = 0;
+			int fd = 0;
 			char_array env;
 			
 			
@@ -754,8 +755,8 @@ static int scgi_spawn_connection(server *srv,
 			env.used = 0;
 			
 			/* we don't need the client socket */
-			for (i = 3; i < 256; i++) {
-				if (i != 2 && i != scgi_fd) close(i);
+			for (fd = 3; fd < 256; fd++) {
+				if (fd != 2 && fd != scgi_fd) close(fd);
 			}
 			
 			/* build clean environment */
