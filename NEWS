@@ -6,6 +6,7 @@ NEWS
 - 1.4.8 - 2005-..-..
 
   * added auto-reconnect to ldap-server in mod_auth
+    (joerg@netbsd.org)
   * added strip_request_uri in mod_fastcgi
   * changed default stat-cache-engine to 'simple'
   * removed debian/ dir from source package on request by packager
@@ -13,8 +14,11 @@ NEWS
   * fixed encoding the filenames in PROPFIND in mod_webdav
   * fixed range request handling in network_writev
   * fixed retry on connect error in mod_fastcgi
+    (Robert G. Jakabosky <bobby@alphatrade.com>)
   * fixed possible crash in mod_webdav if sqlite3 support 
     is available but not use
+  * fixed fdvent-handler init if server.max-worker was used
+    (Siddharth Vijayakrishnan <mail@bluefireworks.net>)
   * TODO: streaming CGI
   * TODO: missing cleanup in mysql_vhost
 
