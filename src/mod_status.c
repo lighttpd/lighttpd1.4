@@ -510,7 +510,9 @@ static handler_t mod_status_handle_server_status_html(server *srv, connection *c
 		
 		BUFFER_APPEND_STRING_CONST(b, "</td><td class=\"string\">");
 		
-		buffer_append_string_encoded(b, CONST_BUF_LEN(c->uri.path), ENCODING_HTML);
+		if (!buffer_is_empty(c->uri.path)) {
+			buffer_append_string_encoded(b, CONST_BUF_LEN(c->uri.path), ENCODING_HTML);
+		}
 		
 		BUFFER_APPEND_STRING_CONST(b, "</td><td class=\"string\">");
 		
