@@ -7,6 +7,8 @@ NEWS
 
   * added auto-reconnect to ldap-server in mod_auth
     (joerg@netbsd.org)
+  * changed auth.ldap-cafile to be optional 
+    (joerg@netbsd.org)
   * added strip_request_uri in mod_fastcgi
   * changed default stat-cache-engine to 'simple'
   * removed debian/ dir from source package on request by packager
@@ -19,8 +21,10 @@ NEWS
     is available but not use
   * fixed fdvent-handler init if server.max-worker was used
     (Siddharth Vijayakrishnan <mail@bluefireworks.net>)
+  * fixed missing cleanup in mysql_vhost
+  * fixed assert() in connections.c:962: connection_handle_read_state: Assertion 'c->mem->used' failed.
+  * fixed 64bit issue in md5
   * TODO: streaming CGI
-  * TODO: missing cleanup in mysql_vhost
 
 - 1.4.7 - 2005-11-02
 
