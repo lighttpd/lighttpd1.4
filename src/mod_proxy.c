@@ -1097,7 +1097,7 @@ static handler_t mod_proxy_check_extension(server *srv, connection *con, void *p
 					"proxy - used hash balancing, hosts:", extension->value->used);
 		}
 
-		for (k = 0, ndx = -1, last_max = ~0L; k < extension->value->used; k++) {
+		for (k = 0, ndx = -1, last_max = ULONG_MAX; k < extension->value->used; k++) {
 			data_proxy *host = (data_proxy *)extension->value->data[k];
 			unsigned long cur_max;
 
@@ -1116,7 +1116,7 @@ static handler_t mod_proxy_check_extension(server *srv, connection *con, void *p
 						cur_max);
 			}
 
-			if ((last_max == ~0L) || /* first round */
+			if ((last_max == ULONG_MAX) || /* first round */
 		   	    (cur_max > last_max)) {
 				last_max = cur_max;
 
@@ -1132,12 +1132,12 @@ static handler_t mod_proxy_check_extension(server *srv, connection *con, void *p
 					"proxy - used fair balancing");
 		}
 
-		for (k = 0, ndx = -1, last_max = ~0L; k < extension->value->used; k++) {
+		for (k = 0, ndx = -1, last_max = ULONG_MAX; k < extension->value->used; k++) {
 			data_proxy *host = (data_proxy *)extension->value->data[k];
 		
 			if (host->is_disabled) continue;
 
-			if (host->usage < last_max) {
+			if (host->usage < (int)last_max) {
 				last_max = host->usage;
 			
 				ndx = k;
@@ -1151,18 +1151,18 @@ static handler_t mod_proxy_check_extension(server *srv, connection *con, void *p
 			log_error_write(srv, __FILE__, __LINE__,  "s", 
 					"proxy - used round-robin balancing");
 		}
-		for (k = 0, ndx = -1, last_max = ~0L; k < extension->value->used; k++) {
+		for (k = 0, ndx = -1, last_max = ULONG_MAX; k < extension->value->used; k++) {
 			data_proxy *host = (data_proxy *)extension->value->data[k];
 		
 			if (host->is_disabled) continue;
 
 			/* first usable ndx */
-			if (last_max == ~0L) {
+			if (last_max == ULONG_MAX) {
 				last_max = k;
 			}
 
 			/* get next ndx */
-			if (k > host->last_used_ndx) {
+			if ((int)k > host->last_used_ndx) {
 				ndx = k;
 				host->last_used_ndx = k;
 
@@ -1171,7 +1171,7 @@ static handler_t mod_proxy_check_extension(server *srv, connection *con, void *p
 		}
 		
 		/* didn't found a higher id, wrap to the start */
-		if (ndx != -1 && last_max != ~0L) {
+		if (ndx != -1 && last_max != ULONG_MAX) {
 			ndx = last_max;
 		}
 

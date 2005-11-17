@@ -508,7 +508,7 @@ typedef struct server {
 	int want_fds;   /* waiting fds */
 	int sockets_disabled;
 	
-	int max_conns;
+	size_t max_conns;
 
 	/* buffers */
 	buffer *parse_full_path;
