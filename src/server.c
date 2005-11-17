@@ -632,7 +632,7 @@ int main (int argc, char **argv) {
 		/* we can't have more connections than max-fds */
 		srv->max_conns = srv->max_fds;
 	} else if (srv->srvconf.max_conns) {
-		/* otherwise respect thw wishes of the user */
+		/* otherwise respect the wishes of the user */
 		srv->max_conns = srv->srvconf.max_conns;
 	} else {
 		/* or use the default */

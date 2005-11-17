@@ -637,7 +637,7 @@ static int http_list_directory(server *srv, connection *con, plugin_data *p, buf
 		/* NOTE: the manual says, d_name is never more than NAME_MAX
 		 *       so this should actually not be a buffer-overflow-risk
 		 */
-		if (i > name_max) continue;
+		if (i > (size_t)name_max) continue;
 		
 		memcpy(path_file, dent->d_name, i + 1);
 		if (stat(path, &st) != 0)
