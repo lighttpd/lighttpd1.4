@@ -147,8 +147,6 @@ int network_write_chunkqueue_openssl(server *srv, connection *con, SSL *ssl, chu
 		case FILE_CHUNK: {
 			char *s;
 			ssize_t r;
-			off_t offset;
-			size_t toSend;
 			stat_cache_entry *sce = NULL;
 			int ifd;
 			int write_wait = 0;
@@ -165,13 +163,13 @@ int network_write_chunkqueue_openssl(server *srv, connection *con, SSL *ssl, chu
 			}
 
 			do {
-				offset = c->file.start + c->offset;
-				toSend = c->file.length - c->offset;
+				off_t offset = c->file.start + c->offset;
+				off_t toSend = c->file.length - c->offset; 
 
 				if (toSend > LOCAL_SEND_BUFSIZE) toSend = LOCAL_SEND_BUFSIZE;
 			
 				if (-1 == (ifd = open(c->file.name->ptr, O_RDONLY))) {
-					log_error_write(srv, __FILE__, __LINE__, "ss", "open failed: ", strerror(errno));
+					log_error_write(srv, __FILE__, __LINE__, "ss", "open failed:", strerror(errno));
 				
 					return -1;
 				}
@@ -180,7 +178,7 @@ int network_write_chunkqueue_openssl(server *srv, connection *con, SSL *ssl, chu
 				lseek(ifd, offset, SEEK_SET);
 				if (-1 == (toSend = read(ifd, local_send_buffer, toSend))) {
 					close(ifd);
-					log_error_write(srv, __FILE__, __LINE__, "ss", "read failed: ", strerror(errno));
+					log_error_write(srv, __FILE__, __LINE__, "ss", "read failed:", strerror(errno));
 					return -1;
 				}
 
