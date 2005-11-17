@@ -315,12 +315,10 @@ static int connection_handle_read(server *srv, connection *con) {
 	} else if (len == 0) {
 		con->is_readable = 0;
 		/* the other end close the connection -> KEEP-ALIVE */
-#if 0
-		log_error_write(srv, __FILE__, __LINE__, "s",
-				"connection closed: remote site closed unexpectedly");
-#endif 
-		connection_set_state(srv, con, CON_STATE_ERROR);
-		return -1;
+
+		/* pipelining */
+
+		return -2;
 	} else if ((size_t)len < b->size - 1) {
 		/* we got less then expected, wait for the next fd-event */
 		
@@ -602,7 +600,7 @@ connection *connection_init(server *srv) {
 	
 	/* init plugin specific connection structures */
 	
-	con->plugin_ctx = calloc(srv->plugins.used + 1, sizeof(void *));
+	con->plugin_ctx = calloc(1, (srv->plugins.used + 1) * sizeof(void *));
 	
 	con->cond_cache = calloc(srv->config_context->used, sizeof(cond_cache_t));
 	config_setup_connection(srv, con);
@@ -751,6 +749,8 @@ int connection_reset(server *srv, connection *con) {
 		plugin *p = ((plugin **)(srv->plugins.ptr))[i];
 		plugin_data *pd = p->data;
 
+		if (!pd) continue;
+
 		if (con->plugin_ctx[pd->id] != NULL) {
 			log_error_write(srv, __FILE__, __LINE__, "sb", "missing cleanup in", p->name);
 		}
@@ -818,7 +818,11 @@ char *buffer_search_rnrn(buffer *b) {
 	
 	return NULL;
 }
-
+/**
+ * handle all header and content read
+ *
+ * we get called by the state-engine and by the fdevent-handler
+ */
 int connection_handle_read_state(server *srv, connection *con)  {
 	int ostate = con->state;
 	char *h_term = NULL;
@@ -829,25 +833,56 @@ int connection_handle_read_state(server *srv, connection *con)  {
 	if (con->is_readable) {
 		con->read_idle_ts = srv->cur_ts;
 	
-		if (0 != connection_handle_read(srv, con)) {
+		switch(connection_handle_read(srv, con)) {
+		case -1:
 			return -1;
+		case -2:
+			/* remote side closed the connection
+			 * if we still have content, handle it, if not leave here */
+
+			if (cq->first == cq->last &&
+			    cq->first->mem->used == 0) {
+
+				/* conn-closed, leave here */
+				connection_set_state(srv, con, CON_STATE_ERROR);
+			}
+		default:
+			break;
 		}
 	}
 
-	/* move the empty chunks out of the way */
-	for (c = cq->first; c; c = cq->first) {
-		assert(c != c->next);
-		
-		if (c->mem->used == 0) {
+	/* the last chunk might be empty */
+	for (c = cq->first; c;) {
+		if (cq->first == c && c->mem->used == 0) {
+			/* the first node is empty */
+			/* ... and it is empty, move it to unused */
+
 			cq->first = c->next;
+			if (cq->first == NULL) cq->last = NULL;
+
 			c->next = cq->unused;
 			cq->unused = c;
-			
-			if (cq->first == NULL) cq->last = NULL;
-			
+
 			c = cq->first;
+		} else if (c->next && c->next->mem->used == 0) {
+			chunk *fc;
+			/* next node is the last one */
+			/* ... and it is empty, move it to unused */
+
+			fc = c->next;
+			c->next = fc->next;
+
+			fc->next = cq->unused;
+			cq->unused = fc;
+
+			/* the last node was empty */
+			if (c->next == NULL) {
+				cq->last = c;
+			} 
+
+			c = c->next;
 		} else {
-			break;
+			c = c->next;
 		}
 	}
 	
