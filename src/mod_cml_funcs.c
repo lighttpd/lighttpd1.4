@@ -20,7 +20,6 @@
 #ifdef USE_OPENSSL
 # include <openssl/md5.h>
 #else
-# include "md5_global.h"
 # include "md5.h"
 #endif
 

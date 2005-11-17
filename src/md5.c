@@ -30,7 +30,6 @@ documentation and/or software.
 #ifndef USE_OPENSSL
 #include <string.h>
 
-#include "md5_global.h"
 #include "md5.h"
 
 /* Constants for MD5Transform routine.
@@ -53,21 +52,19 @@ documentation and/or software.
 #define S43 15
 #define S44 21
 
-static void MD5Transform PROTO_LIST ((UINT4 [4], unsigned char [64]));
-static void Encode PROTO_LIST
-  ((unsigned char *, UINT4 *, unsigned int));
-static void Decode PROTO_LIST
-  ((UINT4 *, unsigned char *, unsigned int));
+static void MD5Transform (UINT4 [4], unsigned char [64]);
+static void Encode (unsigned char *, UINT4 *, unsigned int);
+static void Decode (UINT4 *, unsigned char *, unsigned int);
 
 #ifdef HAVE_MEMCPY
 #define MD5_memcpy(output, input, len) memcpy((output), (input), (len))
 #else
-static void MD5_memcpy PROTO_LIST ((POINTER, POINTER, unsigned int));
+static void MD5_memcpy (POINTER, POINTER, unsigned int);
 #endif
 #ifdef HAVE_MEMSET
 #define MD5_memset(output, value, len) memset((output), (value), (len))
 #else
-static void MD5_memset PROTO_LIST ((POINTER, int, unsigned int));
+static void MD5_memset (POINTER, int, unsigned int);
 #endif
 
 static unsigned char PADDING[64] = {

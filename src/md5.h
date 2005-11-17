@@ -22,6 +22,17 @@ without express or implied warranty of any kind.
 These notices must be retained in any copies of any part of this
 documentation and/or software.
  */
+#include <limits.h>
+#ifdef HAVE_STDINT_H
+# include <stdint.h>
+#endif
+#ifdef HAVE_INTTYPES_H
+# include <inttypes.h>
+#endif
+
+#define UINT4 uint32_t
+#define UINT2 uint16_t
+#define POINTER unsigned char *
 
 /* MD5 context. */
 typedef struct {
@@ -30,8 +41,7 @@ typedef struct {
   unsigned char buffer[64];                         /* input buffer */
 } MD5_CTX;
 
-void MD5_Init PROTO_LIST ((MD5_CTX *));
-void MD5_Update PROTO_LIST
-  ((MD5_CTX *, unsigned char *, unsigned int));
-void MD5_Final PROTO_LIST ((unsigned char [16], MD5_CTX *));
+void MD5_Init (MD5_CTX *);
+void MD5_Update (MD5_CTX *, unsigned char *, unsigned int);
+void MD5_Final (unsigned char [16], MD5_CTX *);
 
