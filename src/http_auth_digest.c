@@ -4,7 +4,6 @@
 #include "buffer.h"
 
 #ifndef USE_OPENSSL
-# include "md5_global.h"
 # include "md5.h"
 #endif
 
