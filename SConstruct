@@ -86,7 +86,8 @@ opts.AddOptions(
 	BoolOption('with_openssl', 'enable memcache support', 'no'),
 	BoolOption('with_gzip', 'enable gzip compression', 'no'),
 	BoolOption('with_bzip2', 'enable bzip2 compression', 'no'),
-	PackageOption('with_ldap', 'enable ldap auth support', 'no'))
+	BoolOption('with_lua', 'enable lua support for mod_cml', 'no'),
+	BoolOption('with_ldap', 'enable ldap auth support', 'no'))
 
 env = Environment(
 	env = os.environ,
@@ -152,7 +153,7 @@ if 1:
 
 	autoconf.env.Append( LIBSQLITE3 = '', LIBXML2 = '', LIBMYSQL = '', LIBZ = '', 
 		LIBBZ2 = '', LIBCRYPT = '', LIBMEMCACHE = '', LIBFCGI = '',
-		LIBLDAP = '', LIBLBER = '')
+		LIBLDAP = '', LIBLBER = '', LIBLUA = '')
 
 	if env['with_fam']:
 		if autoconf.CheckLibWithHeader('fam', 'fam.h', 'C'):
@@ -187,6 +188,10 @@ if 1:
 		if autoconf.CheckLibWithHeader('sqlite3', 'sqlite3.h', 'C'):
 			autoconf.env.Append(CPPFLAGS = [ '-DHAVE_SQLITE3_H', '-DHAVE_LIBSQLITE3' ], LIBSQLITE3 = 'sqlite3')
 
+	if env['with_lua']:
+		if autoconf.CheckLibWithHeader('lua', 'lua.h', 'C'):
+			autoconf.env.Append(CPPFLAGS = [ '-DHAVE_LUA_H', '-DHAVE_LIBLUA' ], LIBLUA = 'lua')
+
 	if autoconf.CheckLibWithHeader('fcgi', 'fastcgi.h', 'C'):
 		autoconf.env.Append(LIBFCGI = 'fcgi')
 
@@ -210,6 +215,11 @@ if env['with_xml']:
 	xml2_config = checkProgram(env, 'xml', 'xml2-config')
 	env.ParseConfig(xml2_config + ' --cflags --libs')
 	env.Append(CPPFLAGS = [ '-DHAVE_LIBXML_H', '-DHAVE_LIBXML2' ], LIBXML2 = 'xml2')
+
+if env['with_mysql']:
+	mysql_config = checkProgram(env, 'mysql', 'mysql_config')
+	env.ParseConfig(mysql_config + ' --cflags --libs')
+	env.Append(CPPFLAGS = [ '-DHAVE_MYSQL_H', '-DHAVE_LIBMYSQL' ], LIBMYSQL = 'mysqlclient')
 
 if re.compile("cygwin|mingw").search(env['PLATFORM']):
 	env.Append(COMMON_LIB = 'bin')
