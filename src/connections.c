@@ -987,7 +987,7 @@ int connection_handle_read_state(server *srv, connection *con)  {
 		}
 		break;
 	case CON_STATE_READ_POST: 
-		for (c = cq->first; c && (dst_cq->bytes_in != con->request.content_length); c = c->next) {
+		for (c = cq->first; c && (dst_cq->bytes_in != (off_t)con->request.content_length); c = c->next) {
 			off_t weWant, weHave, toRead;
 			
 			weWant = con->request.content_length - dst_cq->bytes_in;
@@ -1078,7 +1078,7 @@ int connection_handle_read_state(server *srv, connection *con)  {
 
 				dst_c->file.length += toRead;
 					
-				if (dst_cq->bytes_in + toRead == con->request.content_length) {
+				if (dst_cq->bytes_in + toRead == (off_t)con->request.content_length) {
 					/* we read everything, close the chunk */
 					close(dst_c->file.fd);
 					dst_c->file.fd = -1;
@@ -1095,7 +1095,7 @@ int connection_handle_read_state(server *srv, connection *con)  {
 		}
 
 		/* Content is ready */
-		if (dst_cq->bytes_in == con->request.content_length) {
+		if (dst_cq->bytes_in == (off_t)con->request.content_length) {
 			connection_set_state(srv, con, CON_STATE_HANDLE_REQUEST);
 		}
 			

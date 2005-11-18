@@ -962,7 +962,7 @@ static int cgi_create_env(server *srv, connection *con, plugin_data *p, buffer *
 			chunkqueue *cq = con->request_content_queue;
 			chunk *c;
 		
-			assert(chunkqueue_length(cq) == con->request.content_length);
+			assert(chunkqueue_length(cq) == (off_t)con->request.content_length);
 
 			/* there is content to send */
 			for (c = cq->first; c; c = cq->first) {

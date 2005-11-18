@@ -731,6 +731,7 @@ static int webdav_get_live_property(server *srv, connection *con, plugin_data *p
 	stat_cache_entry *sce = NULL;
 	int found = 0;
 
+	USUSED(p);
 	if (HANDLER_ERROR != (stat_cache_get_entry(srv, con, dst->path, &sce))) {
 		char ctime_buf[] = "2005-08-18T07:27:16Z";
 		char mtime_buf[] = "Thu, 18 Aug 2005 07:27:16 GMT";
@@ -892,6 +893,8 @@ static int webdav_parse_chunkqueue(server *srv, connection *con, plugin_data *p,
 	int err;
 
 	chunk *c;
+
+	UNUSED(con);
 
 	/* read the chunks in to the XML document */
 	ctxt = xmlCreatePushParserCtxt(NULL, NULL, NULL, 0, NULL);
@@ -1368,7 +1371,7 @@ URIHANDLER_FUNC(mod_webdav_subrequest_handler) {
 			return HANDLER_FINISHED;
 		}
 
-		assert(chunkqueue_length(cq) == con->request.content_length);
+		assert(chunkqueue_length(cq) == (off_t)con->request.content_length);
 
 		/* taken what we have in the request-body and write it to a file */
 		if (-1 == (fd = open(con->physical.path->ptr, O_WRONLY|O_CREAT|O_TRUNC, 0600))) {

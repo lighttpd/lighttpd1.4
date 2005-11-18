@@ -176,6 +176,8 @@ static int mod_cml_patch_connection(server *srv, connection *con, plugin_data *p
 
 int cache_get_cookie_session_id(server *srv, connection *con, plugin_data *p) {
 	data_unset *d;
+
+	UNUSED(srv);
 	
 	if (NULL != (d = array_get_element(con->request.headers, "Cookie"))) {
 		data_string *ds = (data_string *)d;
@@ -238,6 +240,7 @@ int cache_get_url_session_id(server *srv, connection *con, plugin_data *p) {
 	size_t is_key = 1, is_sid = 0;
 	size_t i;
 	
+	UNUSED(srv);
 	buffer_reset(p->session_id);
 	for (i = 0; i < con->uri.query->used; i++) {
 		switch(con->uri.query->ptr[i]) {

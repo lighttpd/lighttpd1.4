@@ -447,12 +447,12 @@ static int proxy_create_env(server *srv, handler_ctx *hctx) {
 	if (con->request.content_length) {
 		chunkqueue *req_cq = con->request_content_queue;
 		chunk *req_c;
-		size_t offset;
+		off_t offset;
 
 		/* something to send ? */
 		for (offset = 0, req_c = req_cq->first; offset != req_cq->bytes_in; req_c = req_c->next) {
-			size_t weWant = req_cq->bytes_in - offset;
-			size_t weHave = 0;
+			off_t weWant = req_cq->bytes_in - offset;
+			off_t weHave = 0;
 
 			/* we announce toWrite octects
 			 * now take all the request_content chunk that we need to fill this request

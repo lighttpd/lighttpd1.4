@@ -1880,13 +1880,13 @@ static int fcgi_create_env(server *srv, handler_ctx *hctx, size_t request_id) {
 	if (con->request.content_length) {
 		chunkqueue *req_cq = con->request_content_queue;
 		chunk *req_c;
-		size_t offset;
+		off_t offset;
 
 		/* something to send ? */
 		for (offset = 0, req_c = req_cq->first; offset != req_cq->bytes_in; ) {
-			size_t weWant = req_cq->bytes_in - offset > FCGI_MAX_LENGTH ? FCGI_MAX_LENGTH : req_cq->bytes_in - offset;
-			size_t written = 0;
-			size_t weHave = 0;
+			off_t weWant = req_cq->bytes_in - offset > FCGI_MAX_LENGTH ? FCGI_MAX_LENGTH : req_cq->bytes_in - offset;
+			off_t written = 0;
+			off_t weHave = 0;
 
 			/* we announce toWrite octects
 			 * now take all the request_content chunk that we need to fill this request
@@ -1898,12 +1898,12 @@ static int fcgi_create_env(server *srv, handler_ctx *hctx, size_t request_id) {
 			hctx->wb->bytes_in += sizeof(header);
 
 			if (p->conf.debug > 10) {
-				fprintf(stderr, "%s.%d: tosend: %d / %lld\n", __FILE__, __LINE__, offset, req_cq->bytes_in);
+				fprintf(stderr, "%s.%d: tosend: %lld / %lld\n", __FILE__, __LINE__, offset, req_cq->bytes_in);
 			}
 
 			for (written = 0; written != weWant; ) {
 				if (p->conf.debug > 10) {
-					fprintf(stderr, "%s.%d: chunk: %d / %d\n", __FILE__, __LINE__, written, weWant);
+					fprintf(stderr, "%s.%d: chunk: %lld / %lld\n", __FILE__, __LINE__, written, weWant);
 				}
 
 				switch (req_c->type) {
@@ -1913,7 +1913,7 @@ static int fcgi_create_env(server *srv, handler_ctx *hctx, size_t request_id) {
 					if (weHave > weWant - written) weHave = weWant - written;
 
 					if (p->conf.debug > 10) {
-						fprintf(stderr, "%s.%d: sending %d bytes from (%lld / %lld) %s\n", 
+						fprintf(stderr, "%s.%d: sending %lld bytes from (%lld / %lld) %s\n", 
 								__FILE__, __LINE__, 
 								weHave, 
 								req_c->offset, 

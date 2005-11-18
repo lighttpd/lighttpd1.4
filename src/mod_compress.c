@@ -330,12 +330,12 @@ static int deflate_file_to_file(server *srv, connection *con, plugin_data *p, bu
 	/* overflow */
 	if ((off_t)(sce->st.st_size * 1.1) < sce->st.st_size) return -1;
 	
-	/* don't mmap files > size_t 
+	/* don't mmap files > 128Mb 
 	 * 
 	 * we could use a sliding window, but currently there is no need for it
 	 */
 	
-	if (sce->st.st_size > SIZE_MAX) return -1;
+	if (sce->st.st_size > 128 * 1024 * 1024) return -1;
 	
 	buffer_reset(p->ofn);
 	buffer_copy_string_buffer(p->ofn, p->conf.compress_cache_dir);
@@ -469,12 +469,12 @@ static int deflate_file_to_buffer(server *srv, connection *con, plugin_data *p, 
 	/* overflow */
 	if ((off_t)(sce->st.st_size * 1.1) < sce->st.st_size) return -1;
 	
-	/* don't mmap files > size_t 
+	/* don't mmap files > 128M
 	 * 
 	 * we could use a sliding window, but currently there is no need for it
 	 */
 	
-	if (sce->st.st_size > SIZE_MAX) return -1;
+	if (sce->st.st_size > 128 * 1024 * 1024) return -1;
 	
 	
 	if (-1 == (ifd = open(fn->ptr, O_RDONLY | O_BINARY))) {
