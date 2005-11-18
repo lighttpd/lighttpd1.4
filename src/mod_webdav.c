@@ -731,7 +731,8 @@ static int webdav_get_live_property(server *srv, connection *con, plugin_data *p
 	stat_cache_entry *sce = NULL;
 	int found = 0;
 
-	USUSED(p);
+	UNUSED(p);
+
 	if (HANDLER_ERROR != (stat_cache_get_entry(srv, con, dst->path, &sce))) {
 		char ctime_buf[] = "2005-08-18T07:27:16Z";
 		char mtime_buf[] = "Thu, 18 Aug 2005 07:27:16 GMT";
