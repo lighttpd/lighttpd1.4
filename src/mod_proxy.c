@@ -1026,6 +1026,7 @@ static handler_t mod_proxy_check_extension(server *srv, connection *con, void *p
 	plugin_data *p = p_d;
 	size_t s_len;
 	unsigned long last_max = ULONG_MAX;
+	int max_usage = INT_MAX;
 	int ndx = -1;
 	size_t k;
 	buffer *fn;
@@ -1132,13 +1133,13 @@ static handler_t mod_proxy_check_extension(server *srv, connection *con, void *p
 					"proxy - used fair balancing");
 		}
 
-		for (k = 0, ndx = -1, last_max = ULONG_MAX; k < extension->value->used; k++) {
+		for (k = 0, ndx = -1, max_usage = INT_MAX; k < extension->value->used; k++) {
 			data_proxy *host = (data_proxy *)extension->value->data[k];
 		
 			if (host->is_disabled) continue;
 
-			if (host->usage < (int)last_max) {
-				last_max = host->usage;
+			if (host->usage < max_usage) {
+				max_usage = host->usage;
 			
 				ndx = k;
 			}
@@ -1151,14 +1152,18 @@ static handler_t mod_proxy_check_extension(server *srv, connection *con, void *p
 			log_error_write(srv, __FILE__, __LINE__,  "s", 
 					"proxy - used round-robin balancing");
 		}
-		for (k = 0, ndx = -1, last_max = ULONG_MAX; k < extension->value->used; k++) {
+
+		/* just to be sure */
+		assert(extension->value->used < INT_MAX);
+		
+		for (k = 0, ndx = -1, max_usage = INT_MAX; k < extension->value->used; k++) {
 			data_proxy *host = (data_proxy *)extension->value->data[k];
 		
 			if (host->is_disabled) continue;
 
 			/* first usable ndx */
-			if (last_max == ULONG_MAX) {
-				last_max = k;
+			if (max_usage == INT_MAX) {
+				max_usage = k;
 			}
 
 			/* get next ndx */
@@ -1171,8 +1176,8 @@ static handler_t mod_proxy_check_extension(server *srv, connection *con, void *p
 		}
 		
 		/* didn't found a higher id, wrap to the start */
-		if (ndx != -1 && last_max != ULONG_MAX) {
-			ndx = last_max;
+		if (ndx != -1 && max_usage != INT_MAX) {
+			ndx = max_usage;
 		}
 
 		break;
