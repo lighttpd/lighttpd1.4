@@ -22,6 +22,8 @@ typedef struct {
 	buffer *docroot_cache_key;
 	buffer *docroot_cache_value;
 	buffer *docroot_cache_servername;
+
+	unsigned short debug;
 } plugin_config;
 
 typedef struct {
@@ -84,6 +86,7 @@ SETDEFAULTS_FUNC(mod_simple_vhost_set_defaults) {
 		{ "simple-vhost.server-root",       NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_CONNECTION },
 		{ "simple-vhost.default-host",      NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_CONNECTION },
 		{ "simple-vhost.document-root",     NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_CONNECTION },
+		{ "simple-vhost.debug",             NULL, T_CONFIG_SHORT, T_CONFIG_SCOPE_CONNECTION },
 		{ NULL,                             NULL, T_CONFIG_UNSET, T_CONFIG_SCOPE_UNSET }
 	};
 	
@@ -103,10 +106,14 @@ SETDEFAULTS_FUNC(mod_simple_vhost_set_defaults) {
 		s->docroot_cache_key = buffer_init();
 		s->docroot_cache_value = buffer_init();
 		s->docroot_cache_servername = buffer_init();
+
+		s->debug = 0;
 		
 		cv[0].destination = s->server_root;
 		cv[1].destination = s->default_host;
 		cv[2].destination = s->document_root;
+		cv[3].destination = &(s->debug);
+		
 		
 		p->config_storage[i] = s;
 		
@@ -154,8 +161,10 @@ static int build_doc_root(server *srv, connection *con, plugin_data *p, buffer *
 	}
 	
 	if (HANDLER_ERROR == stat_cache_get_entry(srv, con, out, &sce)) {
-		log_error_write(srv, __FILE__, __LINE__, "sb",
-				strerror(errno), out);
+		if (p->conf.debug) {
+			log_error_write(srv, __FILE__, __LINE__, "sb",
+					strerror(errno), out);
+		}
 		return -1;
 	} else if (!S_ISDIR(sce->st.st_mode)) {
 		return -1;
@@ -178,6 +187,8 @@ static int mod_simple_vhost_patch_connection(server *srv, connection *con, plugi
 	PATCH(docroot_cache_key);
 	PATCH(docroot_cache_value);
 	PATCH(docroot_cache_servername);
+
+	PATCH(debug);
 	
 	/* skip the first, the global context */
 	for (i = 1; i < srv->config_context->used; i++) {
@@ -200,6 +211,8 @@ static int mod_simple_vhost_patch_connection(server *srv, connection *con, plugi
 				PATCH(default_host);
 			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("simple-vhost.document-root"))) {
 				PATCH(document_root);
+			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("simple-vhost.debug"))) {
+				PATCH(debug);
 			}
 		}
 	}
