@@ -10,6 +10,11 @@ NEWS
   * changed auth.ldap-cafile to be optional 
     (joerg@netbsd.org)
   * added strip_request_uri in mod_fastcgi
+  * added more X-* headers to mod_proxy
+    (Ben Grimm <bengrimm@gmail.com>)
+  * added 'debug' to simple-vhost to suppress the 
+    (mod_simple_vhost.c.157) No such file or directory /servers/ww.lighttpd.net/pages/
+    messages by default
   * changed default stat-cache-engine to 'simple'
   * removed debian/ dir from source package on request by packager
   * fixed max-age timestamps in mod_expire
@@ -24,6 +29,10 @@ NEWS
   * fixed missing cleanup in mysql_vhost
   * fixed assert() in connections.c:962: connection_handle_read_state: Assertion 'c->mem->used' failed.
   * fixed 64bit issue in md5
+  * fixed crash in mod_status
+  * fixed duplicate headers in mod_proxy
+  * fixed Content-Length in HEAD request in mod_proxy
+  * fixed unsigned/signed comparisions
   * TODO: streaming CGI
 
 - 1.4.7 - 2005-11-02
