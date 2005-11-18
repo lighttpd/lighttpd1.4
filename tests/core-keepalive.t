@@ -9,7 +9,7 @@ BEGIN {
 
 use strict;
 use IO::Socket;
-use Test::More tests => 6;
+use Test::More tests => 7;
 use LightyTest;
 
 my $tf = LightyTest->new();
@@ -25,6 +25,22 @@ Host: 123.example.org
 GET /12345.txt HTTP/1.0
 Host: 123.example.org
 Connection: close
+EOF
+ );
+$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200 } , { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200 } ];
+
+ok($tf->handle_http($t) == 0, 'Explicit HTTP/1.0 Keep-Alive');
+
+undef $t->{RESPONSE};
+
+$t->{REQUEST} = ( <<EOF
+GET /12345.txt HTTP/1.0
+Connection: keep-alive
+Host: 123.example.org
+
+GET /12345.txt HTTP/1.0
+Host: 123.example.org
+Connection: keep-alive
 EOF
  );
 $t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200 } , { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200 } ];
