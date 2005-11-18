@@ -281,7 +281,7 @@ int cache_parse_lua(server *srv, connection *con, plugin_data *p, buffer *fn) {
 			/* key' is at index -2 and value' at index -1 */
 			
 			if (lua_isstring(L, -1)) {
-				char *s = lua_tostring(L, -1);
+				const char *s = lua_tostring(L, -1);
 
 				/* the file is relative, make it absolute */
 				if (s[0] != '/') {

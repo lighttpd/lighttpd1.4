@@ -22,7 +22,7 @@ static int fdevent_poll_event_del(fdevents *ev, int fde_ndx, int fd) {
 	if (fde_ndx < 0) return -1;
 	
 	if ((size_t)fde_ndx >= ev->used) {
-		fprintf(stderr, "%s.%d: del! out of range %d %u\n", __FILE__, __LINE__, fde_ndx, ev->used);
+		fprintf(stderr, "%s.%d: del! out of range %d %zd\n", __FILE__, __LINE__, fde_ndx, ev->used);
 		SEGFAULT();
 	}
 	
@@ -108,7 +108,7 @@ static int fdevent_poll_poll(fdevents *ev, int timeout_ms) {
 static int fdevent_poll_event_get_revent(fdevents *ev, size_t ndx) {
 	int r, poll_r;
 	if (ndx >= ev->used) {
-		fprintf(stderr, "%s.%d: dying because: event: %u >= %u\n", __FILE__, __LINE__, ndx, ev->used);
+		fprintf(stderr, "%s.%d: dying because: event: %zd >= %zd\n", __FILE__, __LINE__, ndx, ev->used);
 		
 		SEGFAULT();
 		
