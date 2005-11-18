@@ -181,7 +181,7 @@ int network_write_chunkqueue_writev(server *srv, connection *con, int fd, chunkq
 			 * - first mmap 
 			 * - new mmap as the we are at the end of the last one */
 			if (c->file.mmap.start == MAP_FAILED ||
-			    abs_offset == c->file.mmap.offset + c->file.mmap.length) {
+			    abs_offset == (off_t)(c->file.mmap.offset + c->file.mmap.length)) {
 
 				/* Optimizations for the future:
 				 *
