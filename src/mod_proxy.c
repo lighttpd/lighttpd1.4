@@ -396,12 +396,36 @@ static int proxy_establish_connection(server *srv, handler_ctx *hctx) {
 	return 0;
 }
 
+void proxy_set_header(connection *con, const char *key, const char *value) {
+    data_string *ds_dst;
+
+    if (NULL == (ds_dst = (data_string *)array_get_unused_element(con->request.headers, TYPE_STRING))) {
+          ds_dst = data_string_init();
+    }
+
+    buffer_copy_string(ds_dst->key, key);
+    buffer_copy_string(ds_dst->value, value);
+    array_insert_unique(con->request.headers, (data_unset *)ds_dst);
+}
+
+void proxy_append_header(connection *con, const char *key, const char *value) {
+    data_string *ds_dst;
+
+    if (NULL == (ds_dst = (data_string *)array_get_unused_element(con->request.headers, TYPE_STRING))) {
+          ds_dst = data_string_init();
+    }
+
+    buffer_copy_string(ds_dst->key, key);
+    buffer_append_string(ds_dst->value, value);
+    array_insert_unique(con->request.headers, (data_unset *)ds_dst);
+}
+
+
 static int proxy_create_env(server *srv, handler_ctx *hctx) {
 	size_t i;
 	
 	connection *con   = hctx->remote_conn;
 	buffer *b;
-	data_string *ds_dst;
 	
 	/* build header */
 
@@ -414,15 +438,10 @@ static int proxy_create_env(server *srv, handler_ctx *hctx) {
 	buffer_append_string_buffer(b, con->request.uri);
 	BUFFER_APPEND_STRING_CONST(b, " HTTP/1.0\r\n");
 
-	if (NULL == (ds_dst = (data_string *)array_get_unused_element(con->request.headers, TYPE_STRING))) {
-		ds_dst = data_string_init();
-	}
-		
-	BUFFER_COPY_STRING_CONST(ds_dst->key, "X-Forwarded-For");
-	buffer_append_string(ds_dst->value, inet_ntop_cache_get_ip(srv, &(con->dst_addr)));
-		
-	array_insert_unique(con->request.headers, (data_unset *)ds_dst);
-	
+	proxy_append_header(con, "X-Forwarded-For", (char *)inet_ntop_cache_get_ip(srv, &(con->dst_addr)));
+	proxy_set_header(con, "X-Host", con->request.http_host->ptr);
+	proxy_set_header(con, "X-Forwarded-Proto", con->conf.is_ssl ? "https" : "http");
+
 	/* request header */
 	for (i = 0; i < con->request.headers->used; i++) {
 		data_string *ds;
@@ -430,7 +449,7 @@ static int proxy_create_env(server *srv, handler_ctx *hctx) {
 		ds = (data_string *)con->request.headers->data[i];
 		
 		if (ds->value->used && ds->key->used) {
-			if (0 == strcmp(ds->key->ptr, "Connection")) continue;
+			if (buffer_is_equal_string(ds->key, CONST_STR_LEN("Connection"))) continue;
 			
 			buffer_append_string_buffer(b, ds->key);
 			BUFFER_APPEND_STRING_CONST(b, ": ");
@@ -522,6 +541,7 @@ static int proxy_response_parse(server *srv, connection *con, plugin_data *p, bu
 		char *key, *value;
 		int key_len;
 		data_string *ds;
+		int copy_header;
 		
 		ns[0] = '\0';
 		ns[1] = '\0';
@@ -556,14 +576,7 @@ static int proxy_response_parse(server *srv, connection *con, plugin_data *p, bu
 		/* strip WS */
 		while (*value == ' ' || *value == '\t') value++;
 		
-		
-		if (NULL == (ds = (data_string *)array_get_unused_element(con->response.headers, TYPE_STRING))) {
-			ds = data_response_init();
-		}
-		buffer_copy_string_len(ds->key, key, key_len);
-		buffer_copy_string(ds->value, value);
-			
-		array_insert_unique(con->response.headers, (data_unset *)ds);
+		copy_header = 1;
 		
 		switch(key_len) {
 		case 4:
@@ -578,8 +591,7 @@ static int proxy_response_parse(server *srv, connection *con, plugin_data *p, bu
 			break;
 		case 10:
 			if (0 == strncasecmp(key, "Connection", key_len)) {
-				con->response.keep_alive = (0 == strcasecmp(value, "Keep-Alive")) ? 1 : 0;
-				con->parsed_response |= HTTP_CONNECTION;
+				copy_header = 0;
 			}
 			break;
 		case 14:
@@ -590,6 +602,16 @@ static int proxy_response_parse(server *srv, connection *con, plugin_data *p, bu
 			break;
 		default:
 			break;
+		}
+
+		if (copy_header) {
+			if (NULL == (ds = (data_string *)array_get_unused_element(con->response.headers, TYPE_STRING))) {
+				ds = data_response_init();
+			}
+			buffer_copy_string_len(ds->key, key, key_len);
+			buffer_copy_string(ds->value, value);
+			
+			array_insert_unique(con->response.headers, (data_unset *)ds);
 		}
 	}
 	

@@ -28,6 +28,8 @@
 int http_response_write_header(server *srv, connection *con) {
 	buffer *b;
 	size_t i;
+	int have_date = 0;
+	int have_server = 0;
 	
 	b = chunkqueue_get_prepend_buffer(con->write_queue);
 	
@@ -49,22 +51,6 @@ int http_response_write_header(server *srv, connection *con) {
 		BUFFER_APPEND_STRING_CONST(b, "\r\nTransfer-Encoding: chunked");
 	}
 	
-	/* HTTP/1.1 requires a Date: header */
-	BUFFER_APPEND_STRING_CONST(b, "\r\nDate: ");
-	
-	/* cache the generated timestamp */
-	if (srv->cur_ts != srv->last_generated_date_ts) {
-		buffer_prepare_copy(srv->ts_date_str, 255);
-		
-		strftime(srv->ts_date_str->ptr, srv->ts_date_str->size - 1, 
-			 "%a, %d %b %Y %H:%M:%S GMT", gmtime(&(srv->cur_ts)));
-			 
-		srv->ts_date_str->used = strlen(srv->ts_date_str->ptr) + 1;
-		
-		srv->last_generated_date_ts = srv->cur_ts;
-	}
-	
-	buffer_append_string_buffer(b, srv->ts_date_str);
 	
 	/* add all headers */
 	for (i = 0; i < con->response.headers->used; i++) {
@@ -74,6 +60,9 @@ int http_response_write_header(server *srv, connection *con) {
 		
 		if (ds->value->used && ds->key->used &&
 		    0 != strncmp(ds->key->ptr, "X-LIGHTTPD-", sizeof("X-LIGHTTPD-") - 1)) {
+			if (buffer_is_equal_string(ds->key, CONST_STR_LEN("Date"))) have_date = 1;
+			if (buffer_is_equal_string(ds->key, CONST_STR_LEN("Server"))) have_server = 1;
+
 			BUFFER_APPEND_STRING_CONST(b, "\r\n");
 			buffer_append_string_buffer(b, ds->key);
 			BUFFER_APPEND_STRING_CONST(b, ": ");
@@ -85,11 +74,32 @@ int http_response_write_header(server *srv, connection *con) {
 		}
 	}
 	
-	if (buffer_is_empty(con->conf.server_tag)) {
-		BUFFER_APPEND_STRING_CONST(b, "\r\nServer: " PACKAGE_NAME "/" PACKAGE_VERSION);
-	} else {
-		BUFFER_APPEND_STRING_CONST(b, "\r\nServer: ");
-		buffer_append_string_buffer(b, con->conf.server_tag);
+	if (!have_date) {
+		/* HTTP/1.1 requires a Date: header */
+		BUFFER_APPEND_STRING_CONST(b, "\r\nDate: ");
+	
+		/* cache the generated timestamp */
+		if (srv->cur_ts != srv->last_generated_date_ts) {
+			buffer_prepare_copy(srv->ts_date_str, 255);
+		
+			strftime(srv->ts_date_str->ptr, srv->ts_date_str->size - 1, 
+				 "%a, %d %b %Y %H:%M:%S GMT", gmtime(&(srv->cur_ts)));
+			 
+			srv->ts_date_str->used = strlen(srv->ts_date_str->ptr) + 1;
+		
+			srv->last_generated_date_ts = srv->cur_ts;
+		}
+	
+		buffer_append_string_buffer(b, srv->ts_date_str);
+	}
+
+	if (!have_server) {
+		if (buffer_is_empty(con->conf.server_tag)) {
+			BUFFER_APPEND_STRING_CONST(b, "\r\nServer: " PACKAGE_NAME "/" PACKAGE_VERSION);
+		} else {
+			BUFFER_APPEND_STRING_CONST(b, "\r\nServer: ");
+			buffer_append_string_buffer(b, con->conf.server_tag);
+		}
 	}
 	
 	BUFFER_APPEND_STRING_CONST(b, "\r\n\r\n");

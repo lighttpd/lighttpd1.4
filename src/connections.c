@@ -473,7 +473,8 @@ static int connection_handle_write_prepare(server *srv, connection *con) {
 	if (con->file_finished) {
 		/* we have all the content and chunked encoding is not used, set a content-length */ 
 		
-		if ((con->response.transfer_encoding & HTTP_TRANSFER_ENCODING_CHUNKED) == 0) {
+		if ((!(con->parsed_response & HTTP_CONTENT_LENGTH)) && 
+		    (con->response.transfer_encoding & HTTP_TRANSFER_ENCODING_CHUNKED) == 0) {
 			buffer_copy_off_t(srv->tmp_buf, chunkqueue_length(con->write_queue));
 		
 			response_header_overwrite(srv, con, CONST_STR_LEN("Content-Length"), CONST_BUF_LEN(srv->tmp_buf));
