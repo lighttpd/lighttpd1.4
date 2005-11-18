@@ -92,13 +92,13 @@ opts.AddOptions(
 env = Environment(
 	env = os.environ,
 	options = opts,
-	CCFLAGS = Split('-Wall -O2 -g -W -pedantic -Wunused -Wshadow'),
-	CPPPATH = Split('#/build'),
-	# LIBS = [ 'dl' ]
+	CPPPATH = Split('#/build')
 )
 
 env['package'] = package
 env['version'] = version
+if env['CC'] == 'gcc':
+	env.Append(CCFLAGS = Split('-Wall -O2 -g -W -pedantic -Wunused -Wshadow -std=gnu99'))
 
 # cache configure checks
 if 1:
@@ -153,7 +153,7 @@ if 1:
 
 	autoconf.env.Append( LIBSQLITE3 = '', LIBXML2 = '', LIBMYSQL = '', LIBZ = '', 
 		LIBBZ2 = '', LIBCRYPT = '', LIBMEMCACHE = '', LIBFCGI = '',
-		LIBLDAP = '', LIBLBER = '', LIBLUA = '')
+		LIBLDAP = '', LIBLBER = '', LIBLUA = '', LIBDL = '')
 
 	if env['with_fam']:
 		if autoconf.CheckLibWithHeader('fam', 'fam.h', 'C'):
@@ -194,6 +194,9 @@ if 1:
 
 	if autoconf.CheckLibWithHeader('fcgi', 'fastcgi.h', 'C'):
 		autoconf.env.Append(LIBFCGI = 'fcgi')
+
+	if autoconf.CheckLibWithHeader('dl', 'dlfcn.h', 'C'):
+		autoconf.env.Append(LIBDL = 'dl')
 
 	if autoconf.CheckType('socklen_t', '#include <unistd.h>\n#include <sys/socket.h>\n#include <sys/types.h>'):
 		autoconf.env.Append(CPPFLAGS = [ '-DHAVE_SOCKLEN_T' ])
