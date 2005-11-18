@@ -84,7 +84,7 @@ instlib += env.SharedLibrary('mod_auth', [ Split('mod_auth.c http_auth_digest.c 
 instlib += env.SharedLibrary('mod_webdav', [ 'mod_webdav.c' ], LIBS= [ common_lib, env['LIBXML2'], env['LIBSQLITE3'] ])
 instlib += env.SharedLibrary('mod_mysql_vhost', [ 'mod_mysql_vhost.c' ], LIBS= [ common_lib, env['LIBMYSQL'] ])
 instlib += env.SharedLibrary('mod_trigger_b4_dl', [ 'mod_trigger_b4_dl.c' ], LIBS= [ common_lib, env['LIBPCRE'] ])
-instlib += env.SharedLibrary('mod_cml', [ 'mod_cml_lua.c', 'mod_cml.c' ], LIBS= [ common_lib, env['LIBPCRE'], env['LIBMEMCACHE'], env['LIBLUA'] ])
+instlib += env.SharedLibrary('mod_cml', [ 'mod_cml_lua.c', 'mod_cml.c', 'mod_cml_funcs.c' ], LIBS= [ common_lib, env['LIBPCRE'], env['LIBMEMCACHE'], env['LIBLUA'] ])
 instlib += env.SharedLibrary('mod_uploadprogress', [ 'mod_uploadprogress.c' ], LIBS= [ common_lib ])
 
 inst = []
