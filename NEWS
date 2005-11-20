@@ -33,7 +33,8 @@ NEWS
   * fixed duplicate headers in mod_proxy
   * fixed Content-Length in HEAD request in mod_proxy
   * fixed unsigned/signed comparisions
-  * TODO: streaming CGI
+  * fixed streaming in mod_cgi
+  * TODO: listen on UNIX-socket 
 
 - 1.4.7 - 2005-11-02
 
