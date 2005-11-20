@@ -1203,6 +1203,10 @@ SUBREQUEST_FUNC(mod_cgi_handle_subrequest) {
 #ifndef __WIN32	
 	switch(waitpid(hctx->pid, &status, WNOHANG)) {
 	case 0:
+		/* we only have for events here if we don't have the header yet,
+		 * otherwise the event-handler will send us the incoming data */
+		if (con->file_started) return HANDLER_FINISHED;
+
 		return HANDLER_WAIT_FOR_EVENT;
 	case -1:
 		if (errno == EINTR) return HANDLER_WAIT_FOR_EVENT;
