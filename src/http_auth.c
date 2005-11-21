@@ -481,7 +481,7 @@ static int http_auth_basic_password_compare(server *srv, mod_auth_plugin_data *p
 			salt_len = dollar - password->ptr;
 		}
 
-		if (salt_len - 1 > sizeof(salt)) {
+		if (salt_len > sizeof(salt) - 1) {
 			fprintf(stderr, "%s.%d\n", __FILE__, __LINE__);
 			return -1;
 		}
