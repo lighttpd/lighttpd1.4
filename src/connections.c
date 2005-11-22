@@ -408,6 +408,7 @@ static int connection_handle_write_prepare(server *srv, connection *con) {
 				con->file_finished = 1;
 				
 				http_chunk_append_file(srv, con, con->physical.path, 0, sce->st.st_size);
+				response_header_overwrite(srv, con, CONST_STR_LEN("Content-Type"), CONST_BUF_LEN(sce->content_type));
 			}
 		}
 		
