@@ -446,17 +446,26 @@ handler_t stat_cache_get_entry(server *srv, connection *con, buffer *name, stat_
 		}
 	}
 #endif
-	/* try to open the file */
-	if (-1 == (fd = open(name->ptr, O_RDONLY))) {
+
+	/*
+	 * *lol* 
+	 * - open() + fstat() on a named-pipe results in a (intended) hang.
+	 * - stat() if regualar file + open() to see if we can read from it is better
+	 *
+	 * */
+
+	if (-1 == stat(name->ptr, &st)) {
 		return HANDLER_ERROR;
 	}
 
-	if (-1 == fstat(fd, &st)) {
+
+	if (S_ISREG(st.st_mode)) {
+		/* try to open the file to check if we can read it */
+		if (-1 == (fd = open(name->ptr, O_RDONLY))) {
+			return HANDLER_ERROR;
+		}
 		close(fd);
-		return HANDLER_ERROR;
 	}
-
-	close(fd);
 
 	if (NULL == sce) {
 		int osize = 0;
