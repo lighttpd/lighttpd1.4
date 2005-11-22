@@ -28,7 +28,7 @@ static int fdevent_linux_rtsig_event_del(fdevents *ev, int fde_ndx, int fd) {
 	if (fde_ndx < 0) return -1;
 	
 	if ((size_t)fde_ndx >= ev->used) {
-		fprintf(stderr, "%s.%d: del! out of range %d %u\n", __FILE__, __LINE__, fde_ndx, ev->used);
+		fprintf(stderr, "%s.%d: del! out of range %d %zu\n", __FILE__, __LINE__, fde_ndx, ev->used);
 		SEGFAULT();
 	}
 	
@@ -171,7 +171,7 @@ static int fdevent_linux_rtsig_event_get_revent(fdevents *ev, size_t ndx) {
 		return ev->siginfo.si_band & 0x3f;
 	} else {
 		if (ndx >= ev->used) {
-			fprintf(stderr, "%s.%d: event: %u %u\n", __FILE__, __LINE__, ndx, ev->used);
+			fprintf(stderr, "%s.%d: event: %zu %zu\n", __FILE__, __LINE__, ndx, ev->used);
 			return 0;
 		}
 		return ev->pollfds[ndx].revents;
