@@ -111,13 +111,6 @@ stat_cache *stat_cache_init(void) {
 	fc->dir_name = buffer_init();
 #ifdef HAVE_FAM_H
 	fc->fam = calloc(1, sizeof(*fc->fam));
-
-	if (0 != FAMOpen2(fc->fam, "lighttpd")) {
-		return NULL;
-	}
-#ifdef HAVE_FAMNOEXISTS
-	FAMNoExists(fc->fam);
-#endif
 #endif
 
 #ifdef DEBUG_STAT_CACHE	
@@ -354,6 +347,7 @@ handler_t stat_cache_get_entry(server *srv, connection *con, buffer *name, stat_
 	stat_cache *sc;
 	struct stat st;
 	size_t k;
+	int fd;
 #ifdef DEBUG_STAT_CACHE	
 	size_t i;
 #endif
@@ -452,19 +446,17 @@ handler_t stat_cache_get_entry(server *srv, connection *con, buffer *name, stat_
 		}
 	}
 #endif
-	if (-1 == (con->conf.follow_symlink ? stat(name->ptr, &st) : lstat(name->ptr, &st))) {
-		/* stat() failed, ENOENT, ... and so on */
+	/* try to open the file */
+	if (-1 == (fd = open(name->ptr, O_RDONLY))) {
 		return HANDLER_ERROR;
 	}
 
-	if (S_ISREG(st.st_mode)) {
-		int fd;
-		/* see if we can open the file for reading */
-		if (-1 == (fd = open(name->ptr, O_RDONLY))) {
-			return HANDLER_ERROR;
-		}
+	if (-1 == fstat(fd, &st)) {
 		close(fd);
+		return HANDLER_ERROR;
 	}
+
+	close(fd);
 
 	if (NULL == sce) {
 		int osize = 0;
@@ -497,6 +489,21 @@ handler_t stat_cache_get_entry(server *srv, connection *con, buffer *name, stat_
 
 	sce->st = st;
 	sce->stat_ts = srv->cur_ts;
+
+	/* catch the obvious symlinks 
+	 *
+	 * this is not a secure check as we still have a race-condition between
+	 * the stat() and the open. We can only solve this by 
+	 * 1. open() the file
+	 * 2. fstat() the fd
+	 *
+	 * and keeping the file open for the rest of the time. But this can
+	 * only be done at network level.
+	 * 
+	 * */
+	if (S_ISLNK(st.st_mode) && !con->conf.follow_symlink) {
+		return HANDLER_ERROR;
+	}
 
 	if (S_ISREG(st.st_mode)) {	
 		/* determine mimetype */
