@@ -763,24 +763,6 @@ int main (int argc, char **argv) {
 	getitimer(ITIMER_REAL, &interval);
 #endif
 
-	/* might fail if user is using fam (not gamin) and famd isn't running */
-	if (NULL == (srv->stat_cache = stat_cache_init())) {
-#if defined(HAVE_FAM_H) && !defined(HAVE_FAMNOEXISTS)
-		log_error_write(srv, __FILE__, __LINE__, "s",
-			"FAMOpen2() failed.  Is famd running?");
-		return -1;
-#else
-		SEGFAULT();
-#endif
-	}
-
-#ifdef HAVE_FAM_H
-	/* setup FAM */
-	srv->stat_cache->fam_fcce_ndx = -1;
-	fdevent_register(srv->ev, FAMCONNECTION_GETFD(srv->stat_cache->fam), stat_cache_handle_fdevent, NULL);
-	fdevent_event_add(srv->ev, &(srv->stat_cache->fam_fcce_ndx), FAMCONNECTION_GETFD(srv->stat_cache->fam), FDEVENT_IN);
-#endif
-
 #ifdef HAVE_FORK	
 	/* start watcher and workers */
 	num_childs = srv->srvconf.max_worker;
@@ -828,7 +810,31 @@ int main (int argc, char **argv) {
 		
 		return -1;
 	}
-	
+
+	/* might fail if user is using fam (not gamin) and famd isn't running */
+	if (NULL == (srv->stat_cache = stat_cache_init())) {
+		log_error_write(srv, __FILE__, __LINE__, "s",
+			"stat-cache could not be setup, dieing.");
+		return -1;
+	}
+
+#ifdef HAVE_FAM_H
+	/* setup FAM */
+	if (srv->srvconf.stat_cache_engine == STAT_CACHE_ENGINE_FAM) {
+		if (0 != FAMOpen2(srv->stat_cache->fam, "lighttpd")) {
+			return -1;
+		}
+#ifdef HAVE_FAMNOEXISTS
+		FAMNoExists(srv->stat_cache->fam);
+#endif
+
+		srv->stat_cache->fam_fcce_ndx = -1;
+		fdevent_register(srv->ev, FAMCONNECTION_GETFD(srv->stat_cache->fam), stat_cache_handle_fdevent, NULL);
+		fdevent_event_add(srv->ev, &(srv->stat_cache->fam_fcce_ndx), FAMCONNECTION_GETFD(srv->stat_cache->fam), FDEVENT_IN);
+	}
+#endif
+
+
 	/* get the current number of FDs */
 	srv->cur_fds = open("/dev/null", O_RDONLY);
 	close(srv->cur_fds);
