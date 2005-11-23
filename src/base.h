@@ -124,6 +124,9 @@ typedef union {
 	struct sockaddr_in6 ipv6;
 #endif
 	struct sockaddr_in ipv4;
+#ifdef HAVE_SYS_UN_H
+	struct sockaddr_un un;
+#endif
 	struct sockaddr plain;
 } sock_addr;
 
