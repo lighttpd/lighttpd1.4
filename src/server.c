@@ -974,7 +974,8 @@ int main (int argc, char **argv) {
 					if (0 == (t_diff = srv->cur_ts - con->connection_start)) t_diff = 1;
 	
 					if (con->traffic_limit_reached && 
-					    ((con->bytes_written / t_diff) < con->conf.kbytes_per_second * 1024)) {
+					    (con->conf.kbytes_per_second == 0 || 
+					     ((con->bytes_written / t_diff) < con->conf.kbytes_per_second * 1024))) {
 						/* enable connection again */
 						con->traffic_limit_reached = 0;
 						
