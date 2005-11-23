@@ -70,6 +70,7 @@ int network_server_init(server *srv, buffer *host_token, specific_config *s) {
 	unsigned int port = 0;
 	const char *host;
 	buffer *b;
+	int is_unix_domain_socket = 0;
 	
 #ifdef SO_ACCEPTFILTER
 	struct accept_filter_arg afa;
@@ -121,15 +122,34 @@ int network_server_init(server *srv, buffer *host_token, specific_config *s) {
 	*(sp++) = '\0';
 	
 	port = strtol(sp, NULL, 10);
-	
-	if (port == 0 || port > 65535) {
+
+	if (host[0] == '/') {
+		/* host is a unix-domain-socket */
+		is_unix_domain_socket = 1;
+	} else if (port == 0 || port > 65535) {
 		log_error_write(srv, __FILE__, __LINE__, "sd", "port out of range:", port);
 	
 		return -1;
 	}
 	
 	if (*host == '\0') host = NULL;
-	
+
+	if (is_unix_domain_socket) {
+#ifdef HAVE_SYS_UN_H
+
+		srv_socket->addr.plain.sa_family = AF_UNIX;
+		
+		if (-1 == (srv_socket->fd = socket(srv_socket->addr.plain.sa_family, SOCK_STREAM, 0))) {
+			log_error_write(srv, __FILE__, __LINE__, "ss", "socket failed:", strerror(errno));
+			return -1;
+		}
+#else
+		log_error_write(srv, __FILE__, __LINE__, "s",
+				"ERROR: Unix Domain sockets are not supported.");
+		return -1;
+#endif
+	}
+
 #ifdef HAVE_IPV6
 	if (s->use_ipv6) {
 		srv_socket->addr.plain.sa_family = AF_INET6;
@@ -222,6 +242,18 @@ int network_server_init(server *srv, buffer *host_token, specific_config *s) {
 		
 		addr_len = sizeof(struct sockaddr_in);
 		
+		break;
+	case AF_UNIX:
+		srv_socket->addr.un.sun_family = AF_UNIX;
+		strcpy(srv_socket->addr.un.sun_path, host);
+		
+#ifdef SUN_LEN
+		addr_len = SUN_LEN(&srv_socket->addr.un);
+#else
+		/* stevens says: */
+		addr_len = strlen(host) + sizeof(srv_socket->addr.un.sun_family);
+#endif
+
 		break;
 	default:
 		addr_len = 0;
