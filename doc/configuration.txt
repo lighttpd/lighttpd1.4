@@ -126,8 +126,8 @@ Example
   }
   
   # handish virtual hosting
-  # map all subdomains to a single document-root
-  $HTTP["host"] =~ "\.example\.org$" {
+  # map all domains of a top-level-domain to a single document-root
+  $HTTP["host"] =~ "(^|\.)example\.org$" {
     server.document-root = "/var/www/htdocs/example.org/pages/"
   }
   
