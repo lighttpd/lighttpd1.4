@@ -350,19 +350,25 @@ static int http_auth_match_rules(server *srv, mod_auth_plugin_data *p, const cha
 		/* from r to r + r_len is a rule */
 		
 		if (0 == strncmp(r, "valid-user", r_len)) {
-			log_error_write(srv, __FILE__, __LINE__, "s", "valid-user cannot be combined with other require rules");
+			log_error_write(srv, __FILE__, __LINE__, "sb", 
+					"parsing the 'require' section in 'auth.require' failed: valid-user cannot be combined with other require rules",
+					require->value);
 			return -1;
 		}
 		
 		/* search for = in the rules */
 		if (NULL == (eq = strchr(r, '='))) {
-			log_error_write(srv, __FILE__, __LINE__, "s", "= is missing");
+			log_error_write(srv, __FILE__, __LINE__, "sb", 
+					"parsing the 'require' section in 'auth.require' failed: a = is missing", 
+					require->value);
 			return -1;
 		}
 		
 		/* = out of range */
 		if (eq > r + r_len) {
-			log_error_write(srv, __FILE__, __LINE__, "s", "= out of range");
+			log_error_write(srv, __FILE__, __LINE__, "sb", 
+					"parsing the 'require' section in 'auth.require' failed: = out of range",
+					require->value);
 			
 			return -1;
 		}
