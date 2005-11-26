@@ -1531,7 +1531,7 @@ URIHANDLER_FUNC(mod_webdav_subrequest_handler) {
 		buffer_path_simplify(p->uri.path, p->tmp_buf);
 
 		/* we now have a URI which is clean. transform it into a physical path */
-		buffer_copy_string_buffer(p->physical.doc_root, con->conf.document_root);
+		buffer_copy_string_buffer(p->physical.doc_root, con->physical.doc_root);
 		buffer_copy_string_buffer(p->physical.rel_path, p->uri.path);
 
 		if (con->conf.force_lower_case) {
