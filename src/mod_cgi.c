@@ -1278,7 +1278,7 @@ int mod_cgi_plugin_init(plugin *p) {
 	p->version     = LIGHTTPD_VERSION_ID;
 	p->name        = buffer_init_string("cgi");
 
-	p->handle_connection_reset = cgi_connection_close_callback;
+	p->connection_reset = cgi_connection_close_callback;
 	p->handle_subrequest_start = cgi_is_handled;
 	p->handle_subrequest = mod_cgi_handle_subrequest;
 #if 0
