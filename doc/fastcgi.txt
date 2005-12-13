@@ -162,41 +162,32 @@ Examples
   Multiple extensions for the same host ::
   
     fastcgi.server = ( ".php" =>
-  		       ( "grisu" => 
-		         ( 
-		           "host" => "127.0.0.1",
-		           "port" => 1026,
-			   "bin-path" => "/usr/local/bin/php"
-		         )
-		       ),
-		      ".php4" =>
-  		       ( "grisu" => 
-		         ( 
-		           "host" => "127.0.0.1",
-		           "port" => 1026
-		         )
-		       )
-		     )
+      (( "host" => "127.0.0.1", 
+         "port" => 1026,
+	 "bin-path" => "/usr/local/bin/php"
+      )),
+      ".php4" =>
+      (( "host" => "127.0.0.1",
+	 "port" => 1026
+      ))
+    )
 
   Example with prefix: ::
   
     fastcgi.server = ( "/remote_scripts/" =>
- 		       ( "fcg" =>
-		         (
-		           "host" => "192.168.0.3",
-		           "port" => 9000,
-                           "check-local" => "disable",
-                           "docroot" => "/" # remote server may use 
-			                    # it's own docroot
-		         )
-		       )
-		     )
+      (( "host" => "192.168.0.3",
+	 "port" => 9000,
+         "check-local" => "disable",
+         "docroot" => "/" # remote server may use 
+	                  # it's own docroot
+      ))
+    )
 		     
   The request `http://my.host.com/remote_scripts/test.cgi` will
   be forwarded to fastcgi server at 192.168.0.3 and the value
   "/remote_scripts/test.cgi" will be used for the SCRIPT_NAME
   variable. Remote server may prepend it with its own 
-  document root. The handling of index files si also the 
+  document root. The handling of index files is also the 
   resposibility of remote server for this case.
 
   In the case that the prefix is not terminated with a slash 
@@ -207,15 +198,12 @@ Examples
   Example for "authorizer" mode: ::
   
     fastcgi.server = ( "/remote_scripts/" =>
- 		       ( "auth" =>
-		         (
-		           "host" => "10.0.0.2",
-		           "port" => 9000,
-                           "docroot" => "/path_to_private_docs",
-                           "mode" => "authorizer"
-		         )
-		       )
-		     )
+      (( "host" => "10.0.0.2",
+	 "port" => 9000,
+         "docroot" => "/path_to_private_docs",
+         "mode" => "authorizer"
+      ))
+    )
 
   Note that if "docroot" is specified then its value will be 
   used in DOCUMENT_ROOT and SCRIPT_FILENAME variables passed
@@ -228,16 +216,9 @@ The FastCGI plugin provides automaticly a load-balancing between
 multiple FastCGI servers. ::
 
   fastcgi.server = ( ".php" => 
-                     ( "server1" => 
-                       ( "host" => "10.0.0.3",
-                         "port" => 1030 ),
-                       "server2" =>
-                       ( "host" => "10.0.0.3",
-                         "port" => 1030 )
-                     )
-                   )
-                    
-                         
+     (( "host" => "10.0.0.2", "port" => 1030 ),
+      ( "host" => "10.0.0.3", "port" => 1030 ))
+    )
 
 
 To understand how the load-balancing works you can enable the 
@@ -268,11 +249,11 @@ The output shows:
 
 As you can see the list is always sorted by the load field. 
 
-When ever a new connection is requested, the first entry (the one 
-with the lowest load) is selected, the load is increase (got proc: ...) 
+Whenever a new connection is requested, the first entry (the one 
+with the lowest load) is selected, the load is increased (got proc: ...) 
 and the list is sorted again.
 
-If a FastCGI request is done or the connection is drop, the load on the 
+If a FastCGI request is done or the connection is dropped, the load on the 
 FastCGI proc decreases and the list is sorted again (release proc: ...)
 
 This behaviour is very light-weight in code and still very efficient 
@@ -303,14 +284,15 @@ Example
 -------
 ::
 
-  fastcgi.server = ( ".php" => ( "localhost" => 
-                     ( "socket" => "/tmp/php.socket",
-                       "bin-path" => "/usr/local/bin/php",
-                       "min-procs" => 1,
-                       "max-procs" => 32,
-                       "max-load-per-proc" => 4,
-                       "idle-timeout" => 20 ) 
-                     ) )
+  fastcgi.server = ( ".php" => 
+    (( "socket" => "/tmp/php.socket",
+       "bin-path" => "/usr/local/bin/php",
+       "min-procs" => 1,
+       "max-procs" => 32,
+       "max-load-per-proc" => 4,
+       "idle-timeout" => 20 
+    ))
+   )
 
 Disabling Adaptive Spawning
 ---------------------------
@@ -328,14 +310,15 @@ is done:
    
      $ PHP_FCGI_CHILDREN=384 ./lighttpd -f ./lighttpd.conf
      
-     fastcgi.server = ( ".php" => ( "localhost" =>
-  		        ( "socket" => "/tmp/php.socket",
-                          "bin-path" => "/usr/local/bin/php",
-                          "min-procs" => 1,
-		  	  "max-procs" => 1,
-                          "max-load-per-proc" => 4,
-                          "idle-timeout" => 20 )
-		      ) )
+     fastcgi.server = ( ".php" => 
+  	(( "socket" => "/tmp/php.socket",
+           "bin-path" => "/usr/local/bin/php",
+           "min-procs" => 1,
+	   "max-procs" => 1,
+           "max-load-per-proc" => 4,
+           "idle-timeout" => 20 
+        ))
+      )
    
    It will create one socket and let's PHP create the 384 processes itself.
 
@@ -388,12 +371,10 @@ Starting with version 1.3.6 lighttpd can spawn the FastCGI
 processes locally itself if necessary: ::
 
   fastcgi.server = ( ".php" =>
-                     ( "localhost" =>
-                       ( "socket" => "/tmp/php-fastcgi.socket",
-                         "bin-path" => "/usr/local/bin/php"
-                       )
-                     )
-                   )
+    (( "socket" => "/tmp/php-fastcgi.socket",
+       "bin-path" => "/usr/local/bin/php"
+    ))
+  )
 
 PHP provides 2 special environment variables which control the number of
 spawned workes under the control of a single watching process
@@ -401,34 +382,28 @@ spawned workes under the control of a single watching process
 handles before it kills itself. ::
 
   fastcgi.server = ( ".php" =>
-                     ( "localhost" =>
-                       ( "socket" => "/tmp/php-fastcgi.socket",
-                         "bin-path" => "/usr/local/bin/php",
-			 "bin-environment" => ( 
-			   "PHP_FCGI_CHILDREN" => "16",
-			   "PHP_FCGI_MAX_REQUESTS" => "10000"
-                         )
-                       )
-                     )
-                   )
+     (( "socket" => "/tmp/php-fastcgi.socket",
+        "bin-path" => "/usr/local/bin/php",
+        "bin-environment" => ( 
+          "PHP_FCGI_CHILDREN" => "16",
+          "PHP_FCGI_MAX_REQUESTS" => "10000"
+        )
+     ))
+   )
 
 To increase the security of the started process you should only pass 
 the necessary environment variables to the FastCGI process. ::
 
   fastcgi.server = ( ".php" =>
-                     ( "localhost" =>
-                       ( "socket" => "/tmp/php-fastcgi.socket",
-                         "bin-path" => "/usr/local/bin/php",
-			 "bin-environment" => ( 
-			   "PHP_FCGI_CHILDREN" => "16",
-			   "PHP_FCGI_MAX_REQUESTS" => "10000"
-                         ),
-			 "bin-copy-environment" => (
-			   "PATH", "SHELL", "USER"
-			 )
-                       )
-                     )
-                   )
+     (( "socket" => "/tmp/php-fastcgi.socket",
+        "bin-path" => "/usr/local/bin/php",
+        "bin-environment" => ( 
+           "PHP_FCGI_CHILDREN" => "16",
+           "PHP_FCGI_MAX_REQUESTS" => "10000" ),
+        "bin-copy-environment" => (
+	   "PATH", "SHELL", "USER" )
+     ))
+   )
 
 Configuring PHP
 ---------------
@@ -441,20 +416,16 @@ configure php and lighttpd. The php.ini needs the option: ::
 and the option ``broken-scriptfilename`` in your fastcgi.server config: ::
 
   fastcgi.server = ( ".php" =>
-                     ( "localhost" =>
-                       ( "socket" => "/tmp/php-fastcgi.socket",
-                         "bin-path" => "/usr/local/bin/php",
-			 "bin-environment" => ( 
-			   "PHP_FCGI_CHILDREN" => "16",
-			   "PHP_FCGI_MAX_REQUESTS" => "10000"
-                         ),
-			 "bin-copy-environment" => (
-			   "PATH", "SHELL", "USER"
-			 ),
-			 "broken-scriptfilename" => "enable"
-                       )
-                     )
-                   )
+     (( "socket" => "/tmp/php-fastcgi.socket",
+        "bin-path" => "/usr/local/bin/php",
+        "bin-environment" => ( 
+          "PHP_FCGI_CHILDREN" => "16",
+          "PHP_FCGI_MAX_REQUESTS" => "10000" ),
+        "bin-copy-environment" => (
+          "PATH", "SHELL", "USER" ),
+        "broken-scriptfilename" => "enable"
+     ))
+   )
 
 Why this ? the ``cgi.fix_pathinfo = 0`` would give you a working ``PATH_INFO`` 
 but no ``PHP_SELF``. If you enable it, it turns around. To fix the

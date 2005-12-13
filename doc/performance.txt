@@ -24,9 +24,9 @@ Description
 Performance Issues
 ------------------
 
-lighttpd is optimized into various directions. The most important is
-performance. The operation system has two major facalities to help lighttpd
-a deliver it best performance.
+lighttpd is optimized into varying directions. The most important direction is
+performance. The operation system has two major facilities to help lighttpd
+a deliver its best performance.
 
 HTTP Keep-Alive
 ---------------
