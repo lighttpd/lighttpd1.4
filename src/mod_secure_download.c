@@ -37,7 +37,7 @@ typedef struct {
 	buffer *secret;
 	buffer *uri_prefix;
 	
-	time_t timeout;
+	unsigned short timeout;
 } plugin_config;
 
 typedef struct {
