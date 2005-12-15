@@ -79,6 +79,7 @@ static int config_insert(server *srv) {
 		{ "server.max-connections",      NULL, T_CONFIG_SHORT, T_CONFIG_SCOPE_SERVER },       /* 42 */
 		{ "server.network-backend",      NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_CONNECTION },  /* 43 */
 		{ "server.upload-dirs",          NULL, T_CONFIG_ARRAY, T_CONFIG_SCOPE_CONNECTION },   /* 44 */
+		{ "server.core-files",           NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION }, /* 45 */
 		
 		{ "server.host",                 "use server.bind instead", T_CONFIG_DEPRECATED, T_CONFIG_SCOPE_UNSET },
 		{ "server.docroot",              "use server.document-root instead", T_CONFIG_DEPRECATED, T_CONFIG_SCOPE_UNSET },
@@ -116,6 +117,7 @@ static int config_insert(server *srv) {
 	cv[41].destination = stat_cache_string;
 	cv[43].destination = srv->srvconf.network_backend;
 	cv[44].destination = srv->srvconf.upload_tempdirs;
+	cv[45].destination = &(srv->srvconf.enable_cores);
 	
 	cv[42].destination = &(srv->srvconf.max_conns);
 	cv[12].destination = &(srv->srvconf.max_request_size);

@@ -459,6 +459,7 @@ typedef struct {
 			STAT_CACHE_ENGINE_SIMPLE, 
 			STAT_CACHE_ENGINE_FAM 
 	} stat_cache_engine;
+	unsigned short enable_cores;
 } server_config;
 
 typedef struct {

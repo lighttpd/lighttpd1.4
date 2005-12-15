@@ -3,7 +3,13 @@
 NEWS
 ====
 
-- 1.4.8 - 2005-..-..
+- 1.4.9 - 2005-..-..
+
+  * added server.core-files option (sandy <sandy@meebo.com>)
+  * fixed 100% cpu loops in mod_cgi ("sandy" <sjen@cs.stanford.edu>)
+  * fixed handling for secure-download.timeout (jamis@37signals.com)
+
+- 1.4.8 - 2005-11-23
 
   * added auto-reconnect to ldap-server in mod_auth
     (joerg@netbsd.org)
@@ -15,6 +21,7 @@ NEWS
   * added 'debug' to simple-vhost to suppress the 
     (mod_simple_vhost.c.157) No such file or directory /servers/ww.lighttpd.net/pages/
     messages by default
+  * added support to let the server listen on UNIX-socket 
   * changed default stat-cache-engine to 'simple'
   * removed debian/ dir from source package on request by packager
   * fixed max-age timestamps in mod_expire
@@ -27,14 +34,17 @@ NEWS
   * fixed fdvent-handler init if server.max-worker was used
     (Siddharth Vijayakrishnan <mail@bluefireworks.net>)
   * fixed missing cleanup in mysql_vhost
-  * fixed assert() in connections.c:962: connection_handle_read_state: Assertion 'c->mem->used' failed.
+  * fixed assert() in "connections.c:962: 
+      connection_handle_read_state: Assertion 'c->mem->used' failed."
   * fixed 64bit issue in md5
   * fixed crash in mod_status
   * fixed duplicate headers in mod_proxy
   * fixed Content-Length in HEAD request in mod_proxy
   * fixed unsigned/signed comparisions
   * fixed streaming in mod_cgi
-  * TODO: listen on UNIX-socket 
+  * fixed possible overflow in password-salt handling
+    (reported on slashdot by james-web@and.org)
+  * fixed server-traffic-limit if connection limit is not set
 
 - 1.4.7 - 2005-11-02
 

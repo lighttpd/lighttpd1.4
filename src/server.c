@@ -50,6 +50,10 @@
 #include <sys/resource.h>
 #endif
 
+#ifdef HAVE_SYS_PRCTL_H
+#include <sys/prctl.h>
+#endif
+
 #ifndef __sgi
 /* IRIX doesn't like the alarm based time() optimization */
 /* #define USE_ALARM */
@@ -323,7 +327,7 @@ int main (int argc, char **argv) {
 	setlocale(LC_TIME, "C");
 	
 	if (NULL == (srv = server_init())) {
-		fprintf(stderr, "did this really happend ?\n");
+		fprintf(stderr, "did this really happen?\n");
 		return -1;
 	}
 	
@@ -521,6 +525,12 @@ int main (int argc, char **argv) {
 		} else {
 			srv->max_fds = rlim.rlim_cur;
 		}
+
+		/* set core file rlimit, if enable_cores is set */
+		if (use_rlimit && srv->srvconf.enable_cores && getrlimit(RLIMIT_CORE, &rlim) == 0) {
+			rlim.rlim_cur = rlim.rlim_max;
+			setrlimit(RLIMIT_CORE, &rlim);
+		}
 #endif
 		if (srv->event_handler == FDEVENT_HANDLER_SELECT) {
 			/* don't raise the limit above FD_SET_SIZE */
@@ -593,6 +603,11 @@ int main (int argc, char **argv) {
 			initgroups(srv->srvconf.username->ptr, grp->gr_gid);
 		if (srv->srvconf.username->used) setuid(pwd->pw_uid);
 #endif
+#ifdef HAVE_PRCTL
+		if (srv->srvconf.enable_cores) {
+			prctl(PR_SET_DUMPABLE, 1, 0, 0, 0);
+		}
+#endif
 	} else {
 
 #ifdef HAVE_GETRLIMIT
@@ -608,6 +623,13 @@ int main (int argc, char **argv) {
 		} else {
 			srv->max_fds = rlim.rlim_cur;
 		}
+
+		/* set core file rlimit, if enable_cores is set */
+		if (srv->srvconf.enable_cores && getrlimit(RLIMIT_CORE, &rlim) == 0) {
+			rlim.rlim_cur = rlim.rlim_max;
+			setrlimit(RLIMIT_CORE, &rlim);
+		}
+
 #endif
 		if (srv->event_handler == FDEVENT_HANDLER_SELECT) {
 			/* don't raise the limit above FD_SET_SIZE */
