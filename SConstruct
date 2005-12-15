@@ -5,7 +5,7 @@ import string
 from stat import *
 
 package = 'lighttpd'
-version = '1.4.7'
+version = '1.4.9'
 
 def checkCHeaders(autoconf, hdrs):
 	p = re.compile('[^A-Z0-9]')
@@ -141,12 +141,13 @@ if 1:
 			syslog.h 
 			stdint.h 
 			inttypes.h 
+			sys/prctl.h
 			sys/wait.h""", "\n"))
 
 	checkFuncs(autoconf, Split('fork stat lstat strftime dup2 getcwd inet_ntoa inet_ntop memset mmap munmap strchr \
 			strdup strerror strstr strtol sendfile  getopt socket \
 			gethostbyname poll sigtimedwait epoll_ctl getrlimit chroot \
-			getuid select signal pathconf madvise\
+			getuid select signal pathconf madvise prctl\
 			writev sigaction sendfile64 send_file kqueue port_create localtime_r'))
 
 	checkTypes(autoconf, Split('pid_t size_t off_t'))
@@ -158,6 +159,8 @@ if 1:
 	if env['with_fam']:
 		if autoconf.CheckLibWithHeader('fam', 'fam.h', 'C'):
 			autoconf.env.Append(CPPFLAGS = [ '-DHAVE_FAM_H', '-DHAVE_LIBFAM' ], LIBS = 'fam')
+			checkFuncs(autoconf, ['FAMNoExists']);
+
 
 	if autoconf.CheckLibWithHeader('crypt', 'crypt.h', 'C'):
 		autoconf.env.Append(CPPFLAGS = [ '-DHAVE_CRYPT_H', '-DHAVE_LIBCRYPT' ], LIBCRYPT = 'crypt')
