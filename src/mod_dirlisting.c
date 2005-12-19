@@ -62,6 +62,7 @@ typedef struct {
 	PLUGIN_DATA;
 	
 	buffer *tmp_buf;
+	buffer *content_charset;
 	
 	plugin_config **config_storage;
 	
@@ -144,7 +145,9 @@ INIT_FUNC(mod_dirlisting_init) {
 	plugin_data *p;
 	
 	p = calloc(1, sizeof(*p));
+
 	p->tmp_buf = buffer_init();
+	p->content_charset = buffer_init();
 	
 	return p;
 }
@@ -174,6 +177,7 @@ FREE_FUNC(mod_dirlisting_free) {
 	}
 	
 	buffer_free(p->tmp_buf);
+	buffer_free(p->content_charset);
 	
 	free(p);
 	
@@ -764,7 +768,16 @@ static int http_list_directory(server *srv, connection *con, plugin_data *p, buf
 	free(path);
 
 	http_list_directory_footer(srv, con, p, out);
-	response_header_insert(srv, con, CONST_STR_LEN("Content-Type"), CONST_STR_LEN("text/html"));
+
+	/* Insert possible charset to Content-Type */
+	if (buffer_is_empty(p->conf.encoding)) {
+		response_header_insert(srv, con, CONST_STR_LEN("Content-Type"), CONST_STR_LEN("text/html"));
+	} else {
+		buffer_copy_string(p->content_charset, "text/html; charset=");
+		buffer_append_string_buffer(p->content_charset, p->conf.encoding);
+		response_header_insert(srv, con, CONST_STR_LEN("Content-Type"), CONST_BUF_LEN(p->content_charset));
+	}
+
 	con->file_finished = 1;
 
 	return 0;
