@@ -864,6 +864,7 @@ int connection_handle_read_state(server *srv, connection *con)  {
 
 			c->next = cq->unused;
 			cq->unused = c;
+			cq->unused_chunks++;
 
 			c = cq->first;
 		} else if (c->next && c->next->mem->used == 0) {
@@ -876,6 +877,7 @@ int connection_handle_read_state(server *srv, connection *con)  {
 
 			fc->next = cq->unused;
 			cq->unused = fc;
+			cq->unused_chunks++;
 
 			/* the last node was empty */
 			if (c->next == NULL) {
