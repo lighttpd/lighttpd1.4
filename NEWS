@@ -6,8 +6,11 @@ NEWS
 - 1.4.9 - 2005-..-..
 
   * added server.core-files option (sandy <sandy@meebo.com>)
+  * added docs for mod_status
   * fixed 100% cpu loops in mod_cgi ("sandy" <sjen@cs.stanford.edu>)
   * fixed handling for secure-download.timeout (jamis@37signals.com)
+  * fixed IE bug in content-charset in the output of mod_dirlisting (sniper@php.net)
+  * fixed typos and language in the docs (ryan-2005@ryandesign.com)
 
 - 1.4.8 - 2005-11-23
 

@@ -23,17 +23,17 @@ Description
 
 Simple assumption:
 
-Every virtual host is in a direction below a base directory in a path that
-is the same as the name of the vhost. Below this vhost-path might be a
-extra directory which is the document-root of the vhost.
+Every virtual host is in a directory below a base directory in a path that
+is the same as the name of the vhost. Below this vhost path might be an
+extra directory which is the document root of the vhost.
 
-The document-root for each vhost is build from three values:
+The document root for each vhost is built from three values:
 
 - server-root
 - hostname
 - document-root
 
-Either the absolute documentroot is build by ::
+The complete document root is constructed either by ::
 
   server-root + hostname + document-root
   
@@ -41,7 +41,7 @@ or if this path does not exist by ::
 
   server-root + default-host + document-root
   
-A small example should make this thinking clean: ::
+A small example should make this idea clear: ::
 
   /var/www/
   /var/www/logs/
@@ -62,7 +62,8 @@ You can use symbolic links to map several hostnames to the same directory.
 Conditionals vs. simple-vhost
 -----------------------------
 
-You have to keep in mind that conditionals and simple-vhost interfere. ::
+You have to keep in mind that conditionals and simple-vhost interfere
+with one another. ::
 
   simple-vhost.server-root = "/var/www/servers/"
   simple-vhost.default-host = "www.example.org"
@@ -72,14 +73,15 @@ You have to keep in mind that conditionals and simple-vhost interfere. ::
     server.document-root = "/var/www/servers/news2.example.org/pages/"
   } 
 
-Even if the ``server.document-root`` will be set to ``/var/www/servers/news2.example.org/pages/`` 
-if ``news.example.org`` is requested simple-vhost will overwrite ``server.document-root`` shortly
-afterwards.
+When ``news.example.org`` is requested, the ``server.document-root``
+will be set to ``/var/www/servers/news2.example.org/pages/``, but
+simple-vhost will overwrite it shortly afterwards.
 
-If ``/var/www/servers/news.example.org/pages/`` exists it will be taken, if not 
-``/var/www/servers/www.example.org/pages/`` will be taken as it is the default.
+If ``/var/www/servers/news.example.org/pages/`` exists, that will be
+used. If not, ``/var/www/servers/www.example.org/pages/`` will be taken
+because it is the default.
 
-To get them working in parallel you should use: ::
+To use conditionals together with simple-vhost, you should do this: ::
 
   $HTTP["host"] !~ "^(news\.example\.org)$" {
     simple-vhost.server-root = "/var/www/servers/"
@@ -91,17 +93,17 @@ To get them working in parallel you should use: ::
     server.document-root = "/var/www/servers/news2.example.org/pages/"
   } 
 
-It will enable simple-vhosting for all host with are not named ``news.example.org``. 
+It will enable simple vhosting for all hosts other than ``news.example.org``.
 
 Options
 =======
 
 simple-vhost.server-root
-  root of the virtual hosting
+  root of the virtual host
   
 simple-vhost.default-host
-  use this hostname if the 
+  use this hostname if the requested hostname does not have its own directory
   
 simple-vhost.document-root
-  path below the vhost-directory
-  
+  path below the vhost directory
+

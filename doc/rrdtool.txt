@@ -12,17 +12,17 @@ Module: mod_rrdtool
 
 :abstract:
   mod_rrdtool is used to monitor the traffic and load on the webserver
-  
+
 .. meta::
   :keywords: lighttpd, skeleton
-  
+
 .. contents:: Table of Contents
 
 Description
 ===========
 
 RRD_ is a system to store and display time-series data (i.e. network
-bandwidth, machine-room temperature, server load average). 
+bandwidth, machine-room temperature, server load average).
 
 .. _RRD: http://people.ee.ethz.ch/~oetiker/webtools/rrdtool/
 
@@ -33,17 +33,17 @@ rrdtool.binary
   path to the rrdtool binary
 
   e.g.: ::
-  
+
     rrdtool.binary = "/usr/bin/rrdtool"
 
 rrdtool.db-name
-  filename of the rrd-database. Make sure that <rrdtool.db-name> doesn't exists
-  before the first run as lighttpd has to create the DB for you.
+  filename of the rrd-database. Make sure that <rrdtool.db-name> doesn't exist
+  before the first run, as lighttpd has to create the DB for you.
 
   e.g.: ::
-  
+
     rrdtool.db-name = "/var/www/lighttpd.rrd"
-  
+
 Generating Graphs
 =================
 

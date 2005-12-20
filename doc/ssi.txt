@@ -11,8 +11,8 @@ Module: mod_ssi
 :Revision: $Revision: 1.2 $
 
 :abstract:
-  The module for server-side includes provides a compat layer for
-  NSCA/Apache SSI.
+  The module for server-side includes provides a compatability
+  layer for NSCA/Apache SSI.
   
 .. meta::
   :keywords: lighttpd, ssi, Server-Side Includes
@@ -60,7 +60,7 @@ Every ''expr'' is interpreted:
 Flow Control
 ------------
 
-if, elif, else and endif can be used the insert content only under special
+if, elif, else and endif can only be used to insert content under special
 conditions.
 
 Unsupported Features
