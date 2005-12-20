@@ -51,6 +51,9 @@ typedef struct {
 	unsigned short dir_listing;
 	unsigned short hide_dot_files;
 	unsigned short show_readme;
+	unsigned short hide_readme_file;
+	unsigned short show_header;
+	unsigned short hide_header_file;
 	
 	excludes_buffer *excludes;
 
@@ -232,13 +235,16 @@ SETDEFAULTS_FUNC(mod_dirlisting_set_defaults) {
 	size_t i = 0;
 	
 	config_values_t cv[] = { 
-		{ "dir-listing.exclude",	 NULL, T_CONFIG_LOCAL, T_CONFIG_SCOPE_CONNECTION },   /* 0 */
-		{ "dir-listing.activate",        NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION }, /* 1 */
-		{ "dir-listing.hide-dotfiles",   NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION }, /* 2 */
-		{ "dir-listing.external-css",    NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_CONNECTION },  /* 3 */
-		{ "dir-listing.encoding",        NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_CONNECTION },  /* 4 */
-		{ "dir-listing.show-readme",     NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION }, /* 5 */
-		{ "server.dir-listing",          NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION }, /* 6 */
+		{ "dir-listing.exclude",	  NULL, T_CONFIG_LOCAL, T_CONFIG_SCOPE_CONNECTION },   /* 0 */
+		{ "dir-listing.activate",         NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION }, /* 1 */
+		{ "dir-listing.hide-dotfiles",    NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION }, /* 2 */
+		{ "dir-listing.external-css",     NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_CONNECTION },  /* 3 */
+		{ "dir-listing.encoding",         NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_CONNECTION },  /* 4 */
+		{ "dir-listing.show-readme",      NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION }, /* 5 */
+		{ "dir-listing.hide-readme-file", NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION }, /* 6 */
+		{ "dir-listing.show-header",      NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION }, /* 7 */
+		{ "dir-listing.hide-header-file", NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION }, /* 8 */
+		{ "server.dir-listing",           NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION }, /* 9 */
 		
 		{ NULL,                          NULL, T_CONFIG_UNSET, T_CONFIG_SCOPE_UNSET }
 	};
@@ -257,6 +263,9 @@ SETDEFAULTS_FUNC(mod_dirlisting_set_defaults) {
 		s->external_css = buffer_init();
 		s->hide_dot_files = 0;
 		s->show_readme = 0;
+		s->hide_readme_file = 0;
+		s->show_header = 0;
+		s->hide_header_file = 0;
 		s->encoding = buffer_init();
 		
 		cv[0].destination = s->excludes;
@@ -265,7 +274,10 @@ SETDEFAULTS_FUNC(mod_dirlisting_set_defaults) {
 		cv[3].destination = s->external_css;
 		cv[4].destination = s->encoding;
 		cv[5].destination = &(s->show_readme);
-		cv[6].destination = &(s->dir_listing); /* old name */
+		cv[6].destination = &(s->hide_readme_file);
+		cv[7].destination = &(s->show_header);
+		cv[8].destination = &(s->hide_header_file);
+		cv[9].destination = &(s->dir_listing); /* old name */
 
 		p->config_storage[i] = s;
 		ca = ((data_config *)srv->config_context->data[i])->value;
@@ -291,6 +303,9 @@ static int mod_dirlisting_patch_connection(server *srv, connection *con, plugin_
 	PATCH(hide_dot_files);
 	PATCH(encoding);
 	PATCH(show_readme);
+	PATCH(hide_readme_file);
+	PATCH(show_header);
+	PATCH(hide_header_file);
 	PATCH(excludes);
 	
 	/* skip the first, the global context */
@@ -316,6 +331,12 @@ static int mod_dirlisting_patch_connection(server *srv, connection *con, plugin_
 				PATCH(encoding);
 			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("dir-listing.show-readme"))) {
 				PATCH(show_readme);
+			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("dir-listing.hide-readme-file"))) {
+				PATCH(hide_readme_file);
+			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("dir-listing.show-header"))) {
+				PATCH(show_header);
+			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("dir-listing.hide-header-file"))) {
+				PATCH(hide_header_file);
 			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("dir-listing.excludes"))) {
 				PATCH(excludes);
 			}
@@ -465,7 +486,26 @@ static void http_list_directory_header(server *srv, connection *con, plugin_data
 		);
 	}
 
-	BUFFER_APPEND_STRING_CONST(out, "</head>\n<body>\n<h2>Index of ");
+	BUFFER_APPEND_STRING_CONST(out, "</head>\n<body>\n");
+
+	/* HEADER.txt */
+	if (p->conf.show_header) {
+		stream s;
+		/* if we have a HEADER file, display it in <pre class="header"></pre> */
+		
+		buffer_copy_string_buffer(p->tmp_buf, con->physical.path);
+		BUFFER_APPEND_SLASH(p->tmp_buf);
+		BUFFER_APPEND_STRING_CONST(p->tmp_buf, "HEADER.txt");
+		
+		if (-1 != stream_open(&s, p->tmp_buf)) {
+			BUFFER_APPEND_STRING_CONST(out, "<pre class=\"header\">");
+			buffer_append_string_encoded(out, s.start, s.size, ENCODING_HTML);
+			BUFFER_APPEND_STRING_CONST(out, "</pre>");
+		}
+		stream_close(&s);
+	}
+
+	BUFFER_APPEND_STRING_CONST(out, "<h2>Index of ");
 	buffer_append_string_encoded(out, CONST_BUF_LEN(con->uri.path), ENCODING_HTML);
 	BUFFER_APPEND_STRING_CONST(out,
 		"</h2>\n"
@@ -603,6 +643,15 @@ static int http_list_directory(server *srv, connection *con, plugin_data *p, buf
 			if (dent->d_name[1] == '\0')
 				continue;
 			if (dent->d_name[1] == '.' && dent->d_name[2] == '\0')
+				continue;
+		}
+
+		if (p->conf.hide_readme_file) {
+			if (strcmp(dent->d_name, "README.txt") == 0)
+				continue;
+		}
+		if (p->conf.hide_header_file) {
+			if (strcmp(dent->d_name, "HEADER.txt") == 0)
 				continue;
 		}
 
