@@ -33,7 +33,7 @@ Limiting POST requests
 System Security
 ---------------
 
-Running daemons as root will full privileges is a bad idea in general.
+Running daemons as root with full privileges is a bad idea in general.
 lighttpd runs best without any extra privileges and runs perfectly in chroot.
 
 Change Root
@@ -41,7 +41,7 @@ Change Root
 
 server.chroot = "..."
 
-Drop root-privileges
+Drop root privileges
 ````````````````````
 
 server.username = "..."

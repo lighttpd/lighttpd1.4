@@ -31,7 +31,7 @@ setenv.add-environment
 
 
 setenv.add-response-header
-  add a header to the HTTP-response sent to the client
+  adds a header to the HTTP response sent to the client
 
 setenv.add-request-header
-  add a header to the HTTP-request that was received by the client
+  adds a header to the HTTP request that was received from the client

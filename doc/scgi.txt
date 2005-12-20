@@ -25,7 +25,7 @@ Description
 The SCGI module is heavily based on the FastCGI when it comes
 to configuration. Only the internal protocol between server
 and client has been replaced. Please check the documentation 
-of the fastcgi module for more information.
+of the FastCGI module for more information.
 
 History
 =======
