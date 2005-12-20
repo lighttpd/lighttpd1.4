@@ -447,8 +447,8 @@ context ::= DOLLAR SRVVARNAME(B) LBRACKET stringop(C) RBRACKET cond(E) expressio
         dc->string = buffer_init_buffer(rvalue);
       }
 #else
-      fprintf(stderr, "regex conditionals are not allowed as pcre-support" \
-                      "is missing: $%s[%s]\n", 
+      fprintf(stderr, "can't handle '$%s[%s] =~ ...' as you compiled without pcre support. \n"
+		      "(perhaps just a missing pcre-devel package ?) \n", 
                       B->ptr, C->ptr);
       ctx->ok = 0;
 #endif
