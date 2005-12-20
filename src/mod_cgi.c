@@ -5,7 +5,6 @@
 #include <sys/socket.h>
 #include <sys/wait.h>
 #include <sys/mman.h>
-#include <sys/fcntl.h>
 
 #include <netinet/in.h>
 
@@ -22,6 +21,7 @@
 #include <assert.h>
 
 #include <stdio.h>
+#include <fcntl.h>
 
 #include "server.h"
 #include "keyvalue.h"
