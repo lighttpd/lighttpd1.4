@@ -22,6 +22,7 @@ typedef struct {
 #if defined(HAVE_MEMCACHE_H) 
 	struct memcache *mc;
 #endif
+	buffer *power_magnet;
 } plugin_config;
 
 typedef struct {
