@@ -47,6 +47,7 @@ FREE_FUNC(mod_cml_free) {
 			buffer_free(s->ext);
 			
 			buffer_free(s->mc_namespace);
+			buffer_free(s->power_magnet);
 			array_free(s->mc_hosts);
 			
 #if defined(HAVE_MEMCACHE_H)
@@ -78,6 +79,7 @@ SETDEFAULTS_FUNC(mod_cml_set_defaults) {
 		{ "cml.extension",              NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_CONNECTION },       /* 0 */
 		{ "cml.memcache-hosts",         NULL, T_CONFIG_ARRAY, T_CONFIG_SCOPE_CONNECTION },        /* 1 */
 		{ "cml.memcache-namespace",     NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_CONNECTION },       /* 2 */
+		{ "cml.power-magnet",           NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_CONNECTION },       /* 3 */
 		{ NULL,                         NULL, T_CONFIG_UNSET, T_CONFIG_SCOPE_UNSET }
 	};
 	
@@ -92,6 +94,7 @@ SETDEFAULTS_FUNC(mod_cml_set_defaults) {
 		s->ext    = buffer_init();
 		s->mc_hosts       = array_init();
 		s->mc_namespace   = buffer_init();
+		s->power_magnet   = buffer_init();
 #if defined(HAVE_MEMCACHE_H)
 		s->mc = NULL;
 #endif
@@ -99,6 +102,7 @@ SETDEFAULTS_FUNC(mod_cml_set_defaults) {
 		cv[0].destination = s->ext;
 		cv[1].destination = s->mc_hosts;
 		cv[2].destination = s->mc_namespace;
+		cv[3].destination = s->power_magnet;
 		
 		p->config_storage[i] = s;
 	
@@ -144,6 +148,7 @@ static int mod_cml_patch_connection(server *srv, connection *con, plugin_data *p
 	PATCH(mc);
 #endif
 	PATCH(mc_namespace);
+	PATCH(power_magnet);
 	
 	/* skip the first, the global context */
 	for (i = 1; i < srv->config_context->used; i++) {
@@ -165,6 +170,8 @@ static int mod_cml_patch_connection(server *srv, connection *con, plugin_data *p
 #endif
 			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("cml.memcache-namespace"))) {
 				PATCH(mc_namespace);
+			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("cml.power-magnet"))) {
+				PATCH(power_magnet);
 			}
 		}
 	}
@@ -289,36 +296,11 @@ int cache_get_session_id(server *srv, connection *con, plugin_data *p) {
 	
 }
 
-
-URIHANDLER_FUNC(mod_cml_is_handled) {
-	int ct_len, s_len;
+int cache_call_lua(server *srv, connection *con, plugin_data *p, buffer *cml_file) {
 	buffer *b;
 	char *c;
-	buffer *fn = con->physical.path;
-	plugin_data *p = p_d;
 	int ret;
-	
-	if (fn->used == 0) return HANDLER_ERROR;
-	
-	mod_cml_patch_connection(srv, con, p);
-	
-	buffer_reset(p->basedir);
-	buffer_reset(p->baseurl);
-	buffer_reset(p->session_id);
-	buffer_reset(p->trigger_handler);
-	
-	if (buffer_is_empty(p->conf.ext)) return HANDLER_GO_ON;
-	
-	ct_len = p->conf.ext->used - 1;
-	s_len = fn->used - 1;
-	
-	if (s_len < ct_len) return HANDLER_GO_ON;
-	
-	if (0 != strncmp(fn->ptr + s_len - ct_len, p->conf.ext->ptr, ct_len)) {
-		/* not my job */
-		return HANDLER_GO_ON;
-	}
-	
+
 	/* cleanup basedir */
 	b = p->baseurl;
 	buffer_copy_string_buffer(b, con->uri.path);
@@ -330,7 +312,7 @@ URIHANDLER_FUNC(mod_cml_is_handled) {
 	}
 	
 	b = p->basedir;
-	buffer_copy_string_buffer(b, fn);
+	buffer_copy_string_buffer(b, con->physical.path);
 	for (c = b->ptr + b->used - 1; c > b->ptr && *c != '/'; c--);
 	
 	if (*c == '/') {
@@ -338,6 +320,7 @@ URIHANDLER_FUNC(mod_cml_is_handled) {
 		*(c+1) = '\0';
 	}
 	
+
 	/* prepare variables
 	 * - session-id
 	 *   - cookie-based
@@ -346,9 +329,82 @@ URIHANDLER_FUNC(mod_cml_is_handled) {
 	
 	cache_get_session_id(srv, con, p);
 	
-	ret = cache_parse_lua(srv, con, p, fn);
+	return cache_parse_lua(srv, con, p, cml_file);
 	
-	switch(ret) {
+}
+
+URIHANDLER_FUNC(mod_cml_power_magnet) {
+	plugin_data *p = p_d;
+	
+	mod_cml_patch_connection(srv, con, p);
+	
+	buffer_reset(p->basedir);
+	buffer_reset(p->baseurl);
+	buffer_reset(p->session_id);
+	buffer_reset(p->trigger_handler);
+
+	if (buffer_is_empty(p->conf.power_magnet)) return HANDLER_GO_ON;
+	
+	/* 
+	 * power-magnet:
+	 * cml.power-magnet = server.docroot + "/rewrite.cml"
+	 *
+	 * is called on EACH request, take the original REQUEST_URI and modifies the
+	 * request header as neccesary. 
+	 *
+	 * First use:
+	 * if file_exists("/maintainance.html") {
+	 *   output_include = ( "/maintainance.html" )
+	 *   return CACHE_HIT 
+	 * }
+	 *
+	 * as we only want to rewrite HTML like requests we should cover it in a conditional
+	 * 
+	 * */
+
+	switch(cache_call_lua(srv, con, p, p->conf.power_magnet)) {
+	case -1:
+		/* error */
+		if (con->conf.log_request_handling) {
+			log_error_write(srv, __FILE__, __LINE__, "s", "cache-error");
+		}
+		con->http_status = 500;
+		return HANDLER_COMEBACK;
+	case 0:
+		if (con->conf.log_request_handling) {
+			log_error_write(srv, __FILE__, __LINE__, "s", "cache-hit");
+		}
+		/* cache-hit */
+		buffer_reset(con->physical.path);
+		return HANDLER_FINISHED;
+	case 1:
+		/* cache miss */
+		return HANDLER_GO_ON;
+	default:
+		con->http_status = 500;
+		return HANDLER_COMEBACK;
+	}
+}
+
+URIHANDLER_FUNC(mod_cml_is_handled) {
+	plugin_data *p = p_d;
+	
+	if (buffer_is_empty(con->physical.path)) return HANDLER_ERROR;
+	
+	mod_cml_patch_connection(srv, con, p);
+	
+	buffer_reset(p->basedir);
+	buffer_reset(p->baseurl);
+	buffer_reset(p->session_id);
+	buffer_reset(p->trigger_handler);
+
+	if (buffer_is_empty(p->conf.ext)) return HANDLER_GO_ON;
+	
+	if (!buffer_is_equal_right_len(con->physical.path, p->conf.ext, p->conf.ext->used - 1)) {
+		return HANDLER_GO_ON;
+	} 
+
+	switch(cache_call_lua(srv, con, p, con->physical.path)) {
 	case -1:
 		/* error */
 		if (con->conf.log_request_handling) {
@@ -369,9 +425,10 @@ URIHANDLER_FUNC(mod_cml_is_handled) {
 		}
 		/* cache miss */
 		return HANDLER_COMEBACK;
+	default:
+		con->http_status = 500;
+		return HANDLER_COMEBACK;
 	}
-	
-	return 0;
 }
 
 int mod_cml_plugin_init(plugin *p) {
@@ -383,6 +440,7 @@ int mod_cml_plugin_init(plugin *p) {
 	p->set_defaults  = mod_cml_set_defaults;
 	
 	p->handle_subrequest_start = mod_cml_is_handled;
+	p->handle_physical         = mod_cml_power_magnet;
 	
 	p->data        = NULL;
 	

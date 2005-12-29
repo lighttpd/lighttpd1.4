@@ -247,19 +247,19 @@ int cache_parse_lua(server *srv, connection *con, plugin_data *p, buffer *fn) {
 		response_header_overwrite(srv, con, CONST_STR_LEN("Content-Type"), CONST_BUF_LEN(b));
 	}
 	
-	if (!lua_to_c_is_table(L, "output_include")) {
-		log_error_write(srv, __FILE__, __LINE__, "s",
-				"output_include is missing or not a table");
-		ret = -1;
-		
-		goto error;
-	}
-	
 	if (ret == 0) {
 		/* up to now it is a cache-hit, check if all files exist */
 		
 		int curelem;
 		time_t mtime = 0;
+	
+		if (!lua_to_c_is_table(L, "output_include")) {
+			log_error_write(srv, __FILE__, __LINE__, "s",
+				"output_include is missing or not a table");
+			ret = -1;
+		
+			goto error;
+		}
 		
 		lua_pushstring(L, "output_include");
 		
@@ -376,13 +376,7 @@ int cache_parse_lua(server *srv, connection *con, plugin_data *p, buffer *fn) {
 		}
 	}
 	
-	if (ret == 1 && buffer_is_empty(p->trigger_handler)) {
-		log_error_write(srv, __FILE__, __LINE__, "s",
-				"cache-miss, but not trigger_handler set");
-		ret = -1;
-	}
-	
-	if (ret == 1) {
+	if (ret == 1 && !buffer_is_empty(p->trigger_handler)) {
 		/* cache-miss */
 		buffer_copy_string_buffer(con->uri.path, p->baseurl);
 		buffer_append_string_buffer(con->uri.path, p->trigger_handler);
