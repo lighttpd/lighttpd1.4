@@ -26,7 +26,7 @@
  */
 
 typedef struct {
-	int max_conns;
+	unsigned short max_conns;
 } plugin_config;
 
 typedef struct {
