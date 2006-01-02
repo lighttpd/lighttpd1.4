@@ -148,6 +148,7 @@ static server *server_init(void) {
 	
 	CLEAN(config_context);
 	CLEAN(config_touched);
+	CLEAN(status);
 #undef CLEAN
 	
 	for (i = 0; i < FILE_CACHE_MAX; i++) {
@@ -245,6 +246,7 @@ static void server_free(server *srv) {
 	
 	CLEAN(config_context);
 	CLEAN(config_touched);
+	CLEAN(status);
 #undef CLEAN
 	
 	joblist_free(srv, srv->joblist);
