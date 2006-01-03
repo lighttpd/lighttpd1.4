@@ -6,22 +6,22 @@ SPAWNFCGI="/home/weigon/projects/spawn-fcgi/src/spawn-fcgi"
 ## ABSOLUTE path to the PHP binary
 FCGIPROGRAM="/usr/local/bin/php"
 
-## bind to tcp-port on localhost
+## TCP port to which to bind on localhost
 FCGIPORT="1026"
 
-## number of PHP childs to spawn
+## number of PHP children to spawn
 PHP_FCGI_CHILDREN=10
 
-## number of request server by a single php-process until is will be restarted
+## maximum number of requests a single PHP process can serve before it is restarted
 PHP_FCGI_MAX_REQUESTS=1000
 
-## IP adresses where PHP should access server connections from
+## IP addresses from which PHP should access server connections
 FCGI_WEB_SERVER_ADDRS="127.0.0.1,192.168.2.10"
 
-# allowed environment variables sperated by spaces
+# allowed environment variables, separated by spaces
 ALLOWED_ENV="ORACLE_HOME PATH USER"
 
-## if this script is run as root switch to the following user
+## if this script is run as root, switch to the following user
 USERID=wwwrun
 GROUPID=wwwrun
 
@@ -50,5 +50,5 @@ for i in $ALLOWED_ENV; do
   E="$E $i=${!i}"
 done
   
-# clean environment and set up a new one
+# clean the environment and set up a new one
 env - $E $EX
