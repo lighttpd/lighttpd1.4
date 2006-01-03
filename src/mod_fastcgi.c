@@ -1579,6 +1579,13 @@ static connection_result_t fcgi_establish_connection(server *srv, handler_ctx *h
 			
 			return CONNECTION_DELAYED;
 		} else if (errno == EAGAIN) {
+			if (hctx->conf.debug) {
+				log_error_write(srv, __FILE__, __LINE__, "sd", 
+					"This means that the you have more incoming requests than your fastcgi-backend can handle in parallel. "
+					"Perhaps it helps to spawn more fastcgi backend or php-children, if not decrease server.max-connections."
+					"The load for this fastcgi backend is:", proc->load);
+			}
+
 			return CONNECTION_OVERLOADED;
 		} else {
 			log_error_write(srv, __FILE__, __LINE__, "ssdb", 
@@ -1586,15 +1593,6 @@ static connection_result_t fcgi_establish_connection(server *srv, handler_ctx *h
 					strerror(errno),
 					proc->port, proc->socket);
 
-#if 0
-			if (errno == EAGAIN) {
-				log_error_write(srv, __FILE__, __LINE__, "sd", 
-						"This means that the you have more incoming requests than your fastcgi-backend can handle in parallel. "
-						"Perhaps it helps to spawn more fastcgi backend or php-children, if not decrease server.max-connections."
-						"The load for this fastcgi backend is:", proc->load);
-			} 
-#endif
-			
 			return CONNECTION_DEAD;
 		}
 	}
@@ -2659,6 +2657,7 @@ static handler_t fcgi_write_request(server *srv, handler_ctx *hctx) {
 		return HANDLER_ERROR;
 	}
 
+	/* we can't handle this in the switch as we have to fall through in it */
 	if (hctx->state == FCGI_STATE_CONNECT_DELAYED) {
 		int socket_error;
 		socklen_t socket_error_len = sizeof(socket_error);
@@ -2679,12 +2678,9 @@ static handler_t fcgi_write_request(server *srv, handler_ctx *hctx) {
 						"port:", hctx->proc->port);
 			}
 	
-			hctx->proc->state = PROC_STATE_DISABLED;
 			hctx->proc->disabled_until = srv->cur_ts + 10;
-			host->active_procs--;
 		
 			status_counter_inc(srv, CONST_STR_LEN("fastcgi.backend.<hostid>.died"));
-			status_counter_set(srv, CONST_STR_LEN("fastcgi.backend.<hostid>.disable"), 1);
 		
 			return HANDLER_ERROR;
 		}
@@ -2762,11 +2758,9 @@ static handler_t fcgi_write_request(server *srv, handler_ctx *hctx) {
 				host->unixsocket);
 
 
-			hctx->proc->state = PROC_STATE_DISABLED;
 			hctx->proc->disabled_until = srv->cur_ts + 2;
-			host->active_procs--;
+
 			status_counter_inc(srv, CONST_STR_LEN("fastcgi.backend.<hostid>.overloaded"));
-			status_counter_set(srv, CONST_STR_LEN("fastcgi.backend.<hostid>.disable"), 1);
 			
 			return HANDLER_ERROR;
 		case CONNECTION_DEAD:
@@ -2777,12 +2771,9 @@ static handler_t fcgi_write_request(server *srv, handler_ctx *hctx) {
 			 * for check if the host is back in 10 seconds
 			 *  */
 			
-			hctx->proc->state = PROC_STATE_DISABLED;
 			hctx->proc->disabled_until = srv->cur_ts + 10;
-			host->active_procs--;
 		
 			status_counter_inc(srv, CONST_STR_LEN("fastcgi.backend.<hostid>.died"));
-			status_counter_set(srv, CONST_STR_LEN("fastcgi.backend.<hostid>.disable"), 1);
 
 			return HANDLER_ERROR;
 		case CONNECTION_OK:
@@ -2979,30 +2970,38 @@ SUBREQUEST_FUNC(mod_fastcgi_handle_subrequest) {
 			/* connect() or getsockopt() failed, 
 			 * restart the request-handling 
 			 */
-			if (proc && proc->is_local) {
+			if (proc) {
+			       	if (proc->is_local) {
 
-				if (p->conf.debug) {
-					log_error_write(srv, __FILE__, __LINE__,  "sbdb", "connect() to fastcgi failed, restarting the request-handling:", 
+					if (p->conf.debug) {
+						log_error_write(srv, __FILE__, __LINE__,  "sbdb", 
+							"connect() to fastcgi failed, restarting the request-handling:", 
 							host->host,
 							proc->port,
 							proc->socket);
-				}
+					}
 
-				/* 
-				 * several hctx might reference the same proc
-				 * 
-				 * Only one of them should mark the proc as dead all the other
-				 * ones should just take a new one.
-				 * 
-				 * If a new proc was started with the old struct this might lead
-				 * the mark a perfect proc as dead otherwise
-				 * 
-				 */
-				if (proc->state == PROC_STATE_RUNNING &&
-				    hctx->pid == proc->pid) {
-					proc->state = PROC_STATE_DIED_WAIT_FOR_PID;
+					/* 
+					 * several hctx might reference the same proc
+					 * 
+					 * Only one of them should mark the proc as dead all the other
+					 * ones should just take a new one.
+					 * 
+					 * If a new proc was started with the old struct this might lead
+					 * the mark a perfect proc as dead otherwise
+					 * 
+					 */
+					if (proc->state == PROC_STATE_RUNNING &&
+					    hctx->pid == proc->pid) {
+						proc->state = PROC_STATE_DIED_WAIT_FOR_PID;
+					}
+				} else {
+					proc->state = PROC_STATE_DISABLED;
 				}
+				host->active_procs--;
+				status_counter_set(srv, CONST_STR_LEN("fastcgi.backend.<hostid>.disable"), 1);
 			}
+
 			fcgi_restart_dead_procs(srv, p, host);
 
 			/* cleanup this request and let the request handler start this request again */
