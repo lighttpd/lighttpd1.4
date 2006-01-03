@@ -2273,11 +2273,12 @@ static int fcgi_demux_response(server *srv, handler_ctx *hctx) {
 		b->used = r + 1; /* one extra for the fake \0 */
 		b->ptr[b->used - 1] = '\0';
 	} else {
-		log_error_write(srv, __FILE__, __LINE__, "ssdsdsd", 
+		log_error_write(srv, __FILE__, __LINE__, "ssdsbsbsd", 
 				"unexpected end-of-file (perhaps the fastcgi process died):",
 				"pid:", proc->pid,
-				"fcgi-fd:", fcgi_fd, 
-				"remote-fd:", con->fd);
+				"socket:", proc->socket,
+				"host:", host->host,
+				"port:", proc->port);
 		
 		return -1;
 	}
