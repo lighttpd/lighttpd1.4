@@ -8,7 +8,7 @@ BEGIN {
 
 use strict;
 use IO::Socket;
-use Test::More tests => 29;
+use Test::More tests => 33;
 use LightyTest;
 
 my $tf = LightyTest->new();
@@ -300,7 +300,45 @@ EOF
 $t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200 } ];
 ok($tf->handle_http($t) == 0, 'GET, Range with range-requests-disabled');
 
+$t->{REQUEST}  = ( <<EOF
+GET / HTTP/1.0
+Content-Length: 4
 
+1234
+EOF
+ );
+$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 400 } ];
+ok($tf->handle_http($t) == 0, 'GET with Content-Length');
+
+$t->{REQUEST}  = ( <<EOF
+OPTIONS / HTTP/1.0
+Content-Length: 4
+
+1234
+EOF
+ );
+$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 400 } ];
+ok($tf->handle_http($t) == 0, 'OPTIONS with Content-Length');
+
+$t->{REQUEST}  = ( <<EOF
+HEAD / HTTP/1.0
+Content-Length: 4
+
+1234
+EOF
+ );
+$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 400 } ];
+ok($tf->handle_http($t) == 0, 'HEAD with Content-Length');
+
+
+$t->{REQUEST}  = ( <<EOF
+GET / HTTP/1.0
+If-Modified-Since: Sun, 1970 Jan 01 00:00:01 GMT
+If-Modified-Since: Sun, 1970 Jan 01 00:00:01 GMT
+EOF
+ );
+$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200 } ];
+ok($tf->handle_http($t) == 0, 'Duplicate If-Mod-Since, with equal timestamps');
 
 ok($tf->stop_proc == 0, "Stopping lighttpd");
 
