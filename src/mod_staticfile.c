@@ -446,13 +446,27 @@ URIHANDLER_FUNC(mod_staticfile_subrequest) {
 	if (HANDLER_FINISHED == http_response_handle_cachable(srv, con, mtime)) {
 		return HANDLER_FINISHED;
 	} else if (con->request.http_range && con->conf.range_requests) {
-		/* content prepared, I'm done */
-		con->file_finished = 1;
-		
-		if (0 == http_response_parse_range(srv, con, p)) {
-			con->http_status = 206;
+		int do_range_request = 1;
+		/* check if we have a conditional GET */
+
+		if (NULL != (ds = array_get_element(con->request.headers, "If-Range"))) {
+			/* if the value is the same as our ETag, we do a Range-request, 
+			 * otherwise a full 200 */
+
+			if (!buffer_is_equal(ds->value, con->physical.etag)) {
+				do_range_request = 0;
+			}
 		}
-		return HANDLER_FINISHED;
+	
+		if (do_range_request) {
+			/* content prepared, I'm done */
+			con->file_finished = 1;
+		
+			if (0 == http_response_parse_range(srv, con, p)) {
+				con->http_status = 206;
+			}
+			return HANDLER_FINISHED;
+		}
 	}
 	
 	/* if we are still here, prepare body */
