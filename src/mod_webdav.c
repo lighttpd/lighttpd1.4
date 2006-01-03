@@ -1176,19 +1176,23 @@ URIHANDLER_FUNC(mod_webdav_subrequest_handler) {
 				d.rel_path = buffer_init();
 
 				while(NULL != (de = readdir(dir))) {
-					if ((de->d_name[0] == '.' && de->d_name[1] == '\0')  ||
-					    (de->d_name[0] == '.' && de->d_name[1] == '.' && de->d_name[2] == '\0')) {
+					if (de->d_name[0] == '.' && de->d_name[1] == '.' && de->d_name[2] == '\0') {
 						continue;
 						/* ignore the parent dir */
 					} 
 
 					buffer_copy_string_buffer(d.path, dst->path);
 					BUFFER_APPEND_SLASH(d.path);
-					buffer_append_string(d.path, de->d_name);
-			
+
 					buffer_copy_string_buffer(d.rel_path, dst->rel_path);
 					BUFFER_APPEND_SLASH(d.rel_path);
-					buffer_append_string(d.rel_path, de->d_name);
+
+					if (de->d_name[0] == '.' && de->d_name[1] == '\0') {
+						/* don't append the . */ 
+					} else {
+						buffer_append_string(d.path, de->d_name);
+						buffer_append_string(d.rel_path, de->d_name);
+					}
 
 					buffer_reset(prop_200);
 					buffer_reset(prop_404);
