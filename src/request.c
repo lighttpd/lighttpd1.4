@@ -974,7 +974,7 @@ int http_request_parse(server *srv, connection *con) {
 	case HTTP_METHOD_HEAD:
 	case HTTP_METHOD_OPTIONS:
 		/* content-length is forbidden for those */
-		if (con_length_set) {
+		if (con_length_set && con->request.content_length != 0) {
 			/* content-length is missing */
 			log_error_write(srv, __FILE__, __LINE__, "s", 
 					"GET/HEAD/OPTIONS with content-length -> 400");
