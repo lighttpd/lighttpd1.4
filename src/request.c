@@ -815,9 +815,14 @@ int http_request_parse(server *srv, connection *con) {
 									return 0;
 								}
 							} else if (cmp > 0 && 0 == (cmp = buffer_caseless_compare(CONST_BUF_LEN(ds->key), CONST_STR_LEN("If-Modified-Since")))) {
-								/* if dup, only the first one will survive */
+								/* Proxies sometimes send dup headers
+								 * if they are the same we ignore the second
+								 * if not, we raise an error */
 								if (!con->request.http_if_modified_since) {
 									con->request.http_if_modified_since = ds->value->ptr;
+								} else if (0 == strcasecmp(con->request.http_if_modified_since,
+											ds->value->ptr)) {
+									/* ignore it if they are the same */
 								} else {
 									con->http_status = 400;
 									con->keep_alive = 0;
@@ -963,22 +968,25 @@ int http_request_parse(server *srv, connection *con) {
 		
 		return 0;
 	}
-	
-	/* check if we have read post data */
-	if (con->request.http_method == HTTP_METHOD_POST
-         || (con->request.http_method != HTTP_METHOD_GET
-            && con->request.http_method != HTTP_METHOD_HEAD
-            && con->request.http_method != HTTP_METHOD_OPTIONS
-            && con_length_set)) {
 
-#if 0	
-		if (con->request.http_content_type == NULL) {
+	switch(con->request.http_method) {
+	case HTTP_METHOD_GET:
+	case HTTP_METHOD_HEAD:
+	case HTTP_METHOD_OPTIONS:
+		/* content-length is forbidden for those */
+		if (con_length_set) {
+			/* content-length is missing */
 			log_error_write(srv, __FILE__, __LINE__, "s", 
-					"Content-Length request, but content-type not set");
+					"GET/HEAD/OPTIONS with content-length -> 400");
+			con->keep_alive = 0;
+			
+			con->http_status = 400;
+			return 0;
 		}
-#endif
-		
-		if (con_length_set == 0) {
+		break;
+	case HTTP_METHOD_POST:
+		/* content-length is required for them */
+		if (!con_length_set) {
 			/* content-length is missing */
 			log_error_write(srv, __FILE__, __LINE__, "s", 
 					"POST-request, but content-length missing -> 411");
@@ -986,8 +994,17 @@ int http_request_parse(server *srv, connection *con) {
 			
 			con->http_status = 411;
 			return 0;
+
 		}
-		
+		break;
+	default:
+		/* the may have a content-length */
+		break;
+	}
+			
+	
+	/* check if we have read post data */
+	if (con_length_set) {
 		/* don't handle more the SSIZE_MAX bytes in content-length */
 		if (con->request.content_length > SSIZE_MAX) {
 			con->http_status = 413; 

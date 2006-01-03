@@ -352,7 +352,13 @@ static int connection_handle_write_prepare(server *srv, connection *con) {
 		case HTTP_METHOD_PROPPATCH:
 			break;
 		case HTTP_METHOD_OPTIONS:
-			if (con->uri.path->ptr[0] != '*') {
+			/*
+			 * 400 is coming from the request-parser BEFORE uri.path is set
+			 * 403 is from the response handler when noone else catched it 
+			 * 
+			 * */
+			if (con->uri.path->used &&
+			    con->uri.path->ptr[0] != '*') {
 				response_header_insert(srv, con, CONST_STR_LEN("Allow"), CONST_STR_LEN("OPTIONS, GET, HEAD, POST"));
 
 				con->http_status = 200;

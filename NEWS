@@ -7,10 +7,15 @@ NEWS
 
   * added server.core-files option (sandy <sandy@meebo.com>)
   * added docs for mod_status
+  * added mod_evasive to limit the number of connections by IP (<w1zzard@techpowerup.com>)
+  * added the power-magnet to mod_cml
+  * added framework for internal statistics
   * fixed 100% cpu loops in mod_cgi ("sandy" <sjen@cs.stanford.edu>)
   * fixed handling for secure-download.timeout (jamis@37signals.com)
   * fixed IE bug in content-charset in the output of mod_dirlisting (sniper@php.net)
   * fixed typos and language in the docs (ryan-2005@ryandesign.com)
+  * fixed assertion in mod_cgi on HEAD request is Content-Length (<sandy@meebo.com>)
+  * fixed handling if equal but duplicate If-Modified-Since request headers
 
 - 1.4.8 - 2005-11-23
 
