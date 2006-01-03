@@ -66,6 +66,7 @@ static void plugin_free(plugin *p) {
 	/*if (RUNNING_ON_VALGRIND) use_dlclose = 0;*/
 #endif
 
+#ifndef LIGHTTPD_STATIC
 	if (use_dlclose && p->lib) {	
 #ifdef __WIN32
 		FreeLibrary(p->lib);
@@ -73,6 +74,7 @@ static void plugin_free(plugin *p) {
 		dlclose(p->lib);
 #endif
 	}
+#endif
 		
 	free(p);
 }
@@ -100,7 +102,23 @@ static int plugins_register(server *srv, plugin *p) {
  * 
  */
 
+#ifdef LIGHTTPD_STATIC
+int plugins_load(server *srv) {
+	plugin *p;
+#define PLUGIN_INIT(x)\
+	p = plugin_init(); \
+	if (x ## _plugin_init(p)) { \
+		log_error_write(srv, __FILE__, __LINE__, "ss", #x, "plugin init failed" ); \
+		plugin_free(p); \
+		return -1;\
+	}\
+	plugins_register(srv, p);
 
+	PLUGIN_INIT(mod_access);
+
+	return 0;
+}
+#else
 int plugins_load(server *srv) {
 	plugin *p;
 	int (*init)(plugin *pl);
@@ -205,6 +223,7 @@ int plugins_load(server *srv) {
 	
 	return 0;
 }
+#endif
 
 #define PLUGIN_TO_SLOT(x, y) \
 	handler_t plugins_call_##y(server *srv, connection *con) {\
