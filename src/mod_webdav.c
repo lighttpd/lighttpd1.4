@@ -291,6 +291,7 @@ static int mod_webdav_patch_connection(server *srv, connection *con, plugin_data
 	
 	PATCH(enabled);
 	PATCH(is_readonly);
+	PATCH(log_xml);
 	
 #ifdef USE_PROPPATCH
 	PATCH(sql);
