@@ -31,6 +31,16 @@ env.Depends(configparser, lemon)
 mod_ssi_exprparser = env.Command(['mod_ssi_exprparser.c', 'mod_ssi_exprparser.h'], 'mod_ssi_exprparser.y', '(cd build; ../' + lemon[0].path + ' -q ../$SOURCE ../src/lempar.c; cd ..)')
 env.Depends(mod_ssi_exprparser, lemon)
 
+staticenv = env.Copy(CPPFLAGS=[ env['CPPFLAGS'], '-DLIGHTTPD_STATIC', '-DOPENSSL_NO_KRB5'])
+## turn all src-files into objects
+staticsrc = src + common_src +  [ 'mod_access.c' ]
+staticobj = []
+for cfile in staticsrc:
+	staticobj += [ staticenv.Object('static-' + cfile.replace('.c', ''), cfile) ]
+
+staticbin = staticenv.Program('lighttpd-static', staticobj, LIBS = [ 'pthread', 'fam', 'pthread', 'krb5', 'crypto', 'ssl', 'crypto', 'ssl', 'krb5', 'k5crypto', 'krb5support', 'com_err', 'resolv', 'pcre' ], LINKFLAGS= ['-static'] )
+Alias('static', staticbin)
+
 implib = 'lighttpd.exe.a'
 bin_targets = ['lighttpd']
 bin_linkflags = [ env['LINKFLAGS'] ]
@@ -49,6 +59,7 @@ instbin = env.Program(bin_targets, src, LINKFLAGS = bin_linkflags, LIBS= [ env['
 env.Depends(instbin, configparser)
 
 spawn_fcgi = env.Program("spawn-fcgi", "spawn-fcgi.c")
+
 
 if env['COMMON_LIB'] == 'bin':
 	common_lib = instbin[1]
