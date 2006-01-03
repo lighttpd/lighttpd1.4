@@ -156,6 +156,53 @@ The index.cml for this looks like: ::
 
 Now we get about 10000 req/s instead of 600 req/s.
 
+Power Magnet
+------------
+
+Next to all the features about Cache Decisions CML can do more. Starting
+with lighttpd 1.4.9 a power-magnet was added which attracts each request
+and allows you to manipulate the request for your needs.  
+
+We want to display a maintainance page by putting a file in a specified
+place:
+
+We enable the power magnet: ::
+
+  cml.power-magnet  = "/home/www/power-magnet.cml"
+
+and create /home/www/power-magnet.cml with: ::
+
+  dr = request["DOCUMENT_ROOT"]
+
+  if file_isreg(dr .. 'maintainance.html') then
+    output_include = { 'maintainance.html' }
+    return CACHE_HIT
+  end
+
+  return CACHE_MISS
+
+For each requested file the /home/www/power-magnet.cml is executed which
+checks if maintainance.html exists in the docroot and displays it
+instead of handling the usual request. 
+
+Another example, create thumbnail for requested image and serve it instead
+of sending the big image: ::
+
+  ## image-url is /album/baltic_winter_2005.jpg
+  ## no params -> 640x480 is served
+  ## /album/baltic_winter_2005.jpg/orig for full size
+  ## /album/baltic_winter_2005.jpg/thumb for thumbnail
+
+  dr = request["DOCUMENT_ROOT"]
+  sn = request["SCRIPT_NAME"]
+
+  ## to be continued :) ... 
+
+  trigger_handler = '/gen_image.php'
+
+  return CACHE_MISS
+
+
 Installation
 ============
 
@@ -176,6 +223,8 @@ Options
   hosts for the memcache.* functions
 :cml.memcache-namespace:
   (not used yet)
+:cml.power-magnet:
+  a cml file that is executed for each request
 
 Language
 ========
@@ -206,7 +255,7 @@ Additionally to the functions provided by lua mod_cml provides: ::
   boolean memcache_exists(string) 
 
 
-What ever your script does, it has to return either 0 or 1 for ``cache-hit`` or ``cache-miss``. 
+What ever your script does, it has to return either CACHE_HIT or CACHE_MISS. 
 It case a error occures check the error-log, the user will get a error 500. If you don't like 
 the standard error-page use ``server.errorfile-prefix``.
 
