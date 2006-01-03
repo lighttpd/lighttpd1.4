@@ -71,7 +71,11 @@ static void sigaction_handler(int sig, siginfo_t *si, void *context) {
 
 	switch (sig) {
 	case SIGTERM: srv_shutdown = 1; break;
-	case SIGINT: graceful_shutdown = 1; break;
+	case SIGINT: 
+	     if (graceful_shutdown) srv_shutdown = 1;
+	     else graceful_shutdown = 1; 
+
+	     break;
 	case SIGALRM: handle_sig_alarm = 1; break;
 	case SIGHUP:  handle_sig_hup = 1; break;
 	case SIGCHLD: break;
@@ -81,7 +85,11 @@ static void sigaction_handler(int sig, siginfo_t *si, void *context) {
 static void signal_handler(int sig) {
 	switch (sig) {
 	case SIGTERM: srv_shutdown = 1; break;
-	case SIGINT: graceful_shutdown = 1; break;
+	case SIGINT: 
+	     if (graceful_shutdown) srv_shutdown = 1;
+	     else graceful_shutdown = 1; 
+
+	     break;
 	case SIGALRM: handle_sig_alarm = 1; break;
 	case SIGHUP:  handle_sig_hup = 1; break;
 	case SIGCHLD:  break;
