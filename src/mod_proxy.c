@@ -439,7 +439,10 @@ static int proxy_create_env(server *srv, handler_ctx *hctx) {
 	BUFFER_APPEND_STRING_CONST(b, " HTTP/1.0\r\n");
 
 	proxy_append_header(con, "X-Forwarded-For", (char *)inet_ntop_cache_get_ip(srv, &(con->dst_addr)));
-	if (!buffer_is_empty(con->request.http_host)) {
+	/* http_host is NOT is just a pointer to a buffer 
+	 * which is NULL if it is not set */
+	if (con->request.http_host && 
+	    !buffer_is_empty(con->request.http_host)) {
 		proxy_set_header(con, "X-Host", con->request.http_host->ptr);
 	}
 	proxy_set_header(con, "X-Forwarded-Proto", con->conf.is_ssl ? "https" : "http");
