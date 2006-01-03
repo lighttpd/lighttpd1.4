@@ -154,7 +154,7 @@ if 1:
 
 	autoconf.env.Append( LIBSQLITE3 = '', LIBXML2 = '', LIBMYSQL = '', LIBZ = '', 
 		LIBBZ2 = '', LIBCRYPT = '', LIBMEMCACHE = '', LIBFCGI = '',
-		LIBLDAP = '', LIBLBER = '', LIBLUA = '', LIBDL = '')
+		LIBLDAP = '', LIBLBER = '', LIBLUA = '', LIBLUALIB = '', LIBDL = '')
 
 	if env['with_fam']:
 		if autoconf.CheckLibWithHeader('fam', 'fam.h', 'C'):
@@ -193,7 +193,7 @@ if 1:
 
 	if env['with_lua']:
 		if autoconf.CheckLibWithHeader('lua', 'lua.h', 'C'):
-			autoconf.env.Append(CPPFLAGS = [ '-DHAVE_LUA_H', '-DHAVE_LIBLUA' ], LIBLUA = 'lua')
+			autoconf.env.Append(CPPFLAGS = [ '-DHAVE_LUA_H', '-DHAVE_LIBLUA' ], LIBLUA = 'lua', LIBLUALIB = 'lualib')
 
 	if autoconf.CheckLibWithHeader('fcgi', 'fastcgi.h', 'C'):
 		autoconf.env.Append(LIBFCGI = 'fcgi')
