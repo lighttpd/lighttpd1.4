@@ -586,6 +586,14 @@ static handler_t mod_status_handle_server_statistics(server *srv, connection *co
 	buffer *b, *m = p->module_list;
 	size_t i;
 	array *st = srv->status;
+
+	if (0 == st->used) {
+		/* we have nothing to send */
+		con->http_status = 204;
+		con->file_finished = 1;
+	
+		return HANDLER_FINISHED;
+	}
 	
 	b = chunkqueue_get_append_buffer(con->write_queue);
 
