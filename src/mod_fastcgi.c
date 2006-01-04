@@ -1726,9 +1726,15 @@ static int fcgi_env_add_request_headers(server *srv, connection *con, plugin_dat
 			
 			buffer_prepare_append(srv->tmp_buf, ds->key->used + 2);
 			for (j = 0; j < ds->key->used - 1; j++) {
-				srv->tmp_buf->ptr[srv->tmp_buf->used++] = 
-					isalpha((unsigned char)ds->key->ptr[j]) ? 
-					toupper((unsigned char)ds->key->ptr[j]) : '_';
+				char c = '_';
+				if (light_isalpha(ds->key->ptr[j])) {
+					/* upper-case */
+					c = ds->key->ptr[j] & ~32;
+				} else if (light_isdigit(ds->key->ptr[j])) {
+					/* copy */
+					c = ds->key->ptr[j];
+				}
+				srv->tmp_buf->ptr[srv->tmp_buf->used++] = c;
 			}
 			srv->tmp_buf->ptr[srv->tmp_buf->used++] = '\0';
 			
