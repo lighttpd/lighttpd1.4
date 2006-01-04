@@ -791,6 +791,12 @@ int http_request_parse(server *srv, connection *con) {
 								 *   -> (10.4.18) 417 (close)
 								 * 
 								 * (not handled at all yet, we always send 417 here)
+								 *
+								 * What has to be added ?
+								 * 1. handling of chunked request body
+								 * 2. out-of-order sending from the HTTP/1.1 100 Continue
+								 *    header
+								 *
 								 */
 								
 								con->http_status = 417;
