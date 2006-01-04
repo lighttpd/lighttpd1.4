@@ -175,7 +175,7 @@ if 1:
 
 	if env['with_ldap']:
 		if autoconf.CheckLibWithHeader('ldap', 'ldap.h', 'C'):
-			autoconf.env.Append(CPPFLAGS = [ '-DHAVE_LDAP_H', '-DHAVE_LIBLDAP' ], LIBLDAP = 'ldap')
+			autoconf.env.Append(CPPFLAGS = [ '-DHAVE_LDAP_H', '-DHAVE_LIBLDAP' ], LIBLDAP = [ 'ldap', 'sasl2', 'gssapi_krb5', 'ssl', 'crypto', 'krb5', 'krb5support', 'k5crypto' ])
 		if autoconf.CheckLibWithHeader('lber', 'lber.h', 'C'):
 			autoconf.env.Append(CPPFLAGS = [ '-DHAVE_LBER_H', '-DHAVE_LIBLBER' ], LIBLBER = 'lber')
 
@@ -219,13 +219,19 @@ if env['with_pcre']:
 
 if env['with_xml']:
 	xml2_config = checkProgram(env, 'xml', 'xml2-config')
+	oldlib = env['LIBS']
+	env['LIBS'] = [] 
 	env.ParseConfig(xml2_config + ' --cflags --libs')
-	env.Append(CPPFLAGS = [ '-DHAVE_LIBXML_H', '-DHAVE_LIBXML2' ], LIBXML2 = 'xml2')
+	env.Append(CPPFLAGS = [ '-DHAVE_LIBXML_H', '-DHAVE_LIBXML2' ], LIBXML2 = env['LIBS'])
+	env['LIBS'] = oldlib
 
 if env['with_mysql']:
 	mysql_config = checkProgram(env, 'mysql', 'mysql_config')
+	oldlib = env['LIBS']
+	env['LIBS'] = [] 
 	env.ParseConfig(mysql_config + ' --cflags --libs')
 	env.Append(CPPFLAGS = [ '-DHAVE_MYSQL_H', '-DHAVE_LIBMYSQL' ], LIBMYSQL = 'mysqlclient')
+	env['LIBS'] = oldlib
 
 if re.compile("cygwin|mingw").search(env['PLATFORM']):
 	env.Append(COMMON_LIB = 'bin')

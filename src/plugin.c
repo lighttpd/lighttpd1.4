@@ -114,7 +114,7 @@ int plugins_load(server *srv) {
 	}\
 	plugins_register(srv, p);
 
-	PLUGIN_INIT(mod_access);
+#include "plugin-static.h"
 
 	return 0;
 }
