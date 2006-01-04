@@ -289,7 +289,21 @@ typedef struct {
 #endif
 } specific_config;
 
-typedef enum { CON_STATE_CONNECT, CON_STATE_REQUEST_START, CON_STATE_READ, CON_STATE_REQUEST_END, CON_STATE_READ_POST, CON_STATE_HANDLE_REQUEST, CON_STATE_RESPONSE_START, CON_STATE_WRITE, CON_STATE_RESPONSE_END, CON_STATE_ERROR, CON_STATE_CLOSE } connection_state_t;
+/* the order of the items should be the same as they are processed
+ * read before write as we use this later */
+typedef enum { 
+	CON_STATE_CONNECT, 
+	CON_STATE_REQUEST_START, 
+	CON_STATE_READ, 
+	CON_STATE_REQUEST_END, 
+	CON_STATE_READ_POST, 
+	CON_STATE_HANDLE_REQUEST, 
+	CON_STATE_RESPONSE_START, 
+	CON_STATE_WRITE, 
+	CON_STATE_RESPONSE_END, 
+	CON_STATE_ERROR, 
+	CON_STATE_CLOSE 
+} connection_state_t;
 
 typedef enum { COND_RESULT_UNSET, COND_RESULT_FALSE, COND_RESULT_TRUE } cond_result_t;
 typedef struct {
