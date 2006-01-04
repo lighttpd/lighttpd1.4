@@ -22,6 +22,8 @@
 typedef struct {
 	buffer *config_url;
 	buffer *status_url;
+	buffer *statistics_url;
+
 	int     sort;
 } plugin_config;
 
@@ -84,6 +86,7 @@ FREE_FUNC(mod_status_free) {
 			plugin_config *s = p->config_storage[i];
 			
 			buffer_free(s->status_url);
+			buffer_free(s->statistics_url);
 			buffer_free(s->config_url);
 			
 			free(s);
@@ -104,7 +107,8 @@ SETDEFAULTS_FUNC(mod_status_set_defaults) {
 	config_values_t cv[] = { 
 		{ "status.status-url",           NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_CONNECTION },
 		{ "status.config-url",           NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_CONNECTION },
-        { "status.enable-sort",          NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION },
+		{ "status.enable-sort",          NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION },
+		{ "status.statistics-url",       NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_CONNECTION },
 		{ NULL,                          NULL, T_CONFIG_UNSET, T_CONFIG_SCOPE_UNSET }
 	};
 	
@@ -119,10 +123,12 @@ SETDEFAULTS_FUNC(mod_status_set_defaults) {
 		s->config_url    = buffer_init();
 		s->status_url    = buffer_init();
 		s->sort          = 1;
+		s->statistics_url    = buffer_init();
 		
 		cv[0].destination = s->status_url;
 		cv[1].destination = s->config_url;
 		cv[2].destination = &(s->sort);
+		cv[3].destination = s->statistics_url;
 		
 		p->config_storage[i] = s;
 	
@@ -575,6 +581,32 @@ static handler_t mod_status_handle_server_status_text(server *srv, connection *c
 	return 0;
 }
 
+static handler_t mod_status_handle_server_statistics(server *srv, connection *con, void *p_d) {
+	plugin_data *p = p_d;
+	buffer *b, *m = p->module_list;
+	size_t i;
+	array *st = srv->status;
+	
+	b = chunkqueue_get_append_buffer(con->write_queue);
+
+	for (i = 0; i < st->used; i++) {
+		size_t ndx = st->sorted[i];
+
+		buffer_append_string_buffer(b, st->data[ndx]->key);
+		buffer_append_string(b, ": ");
+		buffer_append_long(b, ((data_integer *)(st->data[ndx]))->value);
+		buffer_append_string(b, "\n");
+	}
+	
+	response_header_overwrite(srv, con, CONST_STR_LEN("Content-Type"), CONST_STR_LEN("text/plain"));
+	
+	con->http_status = 200;
+	con->file_finished = 1;
+	
+	return HANDLER_FINISHED;
+}
+
+
 static handler_t mod_status_handle_server_status(server *srv, connection *con, void *p_d) {
 	
 	if (buffer_is_equal_string(con->uri.query, CONST_STR_LEN("auto"))) {
@@ -692,6 +724,7 @@ static int mod_status_patch_connection(server *srv, connection *con, plugin_data
 	PATCH(status_url);
 	PATCH(config_url);
 	PATCH(sort);
+	PATCH(statistics_url);
 	
 	/* skip the first, the global context */
 	for (i = 1; i < srv->config_context->used; i++) {
@@ -711,6 +744,8 @@ static int mod_status_patch_connection(server *srv, connection *con, plugin_data
 				PATCH(config_url);
 			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("status.enable-sort"))) {
 				PATCH(sort);
+			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("status.statistics-url"))) {
+				PATCH(statistics_url);
 			} 
 		}
 	}
@@ -729,6 +764,9 @@ static handler_t mod_status_handler(server *srv, connection *con, void *p_d) {
 	} else if (!buffer_is_empty(p->conf.config_url) && 
 	    buffer_is_equal(p->conf.config_url, con->uri.path)) {
 		return mod_status_handle_server_config(srv, con, p_d);
+	} else if (!buffer_is_empty(p->conf.statistics_url) && 
+	    buffer_is_equal(p->conf.statistics_url, con->uri.path)) {
+		return mod_status_handle_server_statistics(srv, con, p_d);
 	}
 	
 	return HANDLER_GO_ON;
