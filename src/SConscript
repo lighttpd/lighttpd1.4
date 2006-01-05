@@ -74,12 +74,7 @@ staticenv = env.Copy(CPPFLAGS=[ env['CPPFLAGS'], '-DLIGHTTPD_STATIC', '-DOPENSSL
 ## all the core-sources + the modules
 staticsrc = src + common_src
 
-# if openssl is used with kerberos5 
-libssl = [ 'ssl', 'crypto' ]
-libpcre = [ 'pcre' ]
-libfam = [ 'fam' ]
-
-staticlib = libssl + libpcre + libfam
+staticlib = env['LIBS'] 
 staticinit = ''
 for module in modules.keys():
 	staticsrc += modules[module]['src']
@@ -94,13 +89,22 @@ staticobj = []
 for cfile in staticsrc:
 	staticobj += [ staticenv.Object('static-' + cfile.replace('.c', ''), cfile) ]
 
-staticbin = staticenv.Program('lighttpd-static', 
+staticbin = staticenv.Program('lighttpd-semi-static', 
 	staticobj, 
-	LIBS = staticlib, 
-	# LINKFLAGS= ['-static'] 
+	LIBS = staticlib
+	)
+
+## you might have to adjust the list of libs and the order for your setup
+## this is tricky, be warned
+fullstaticlib = staticlib + [ 'sasl2', 'gssapi_krb5', 'ssl', 'crypto', 'crypt', 'krb5', 'k5crypto', 'krb5support', 'com_err', 'resolv' ] 
+fullstaticbin = staticenv.Program('lighttpd-static', 
+	staticobj, 
+	LIBS = fullstaticlib, 
+	LINKFLAGS= ['-static'] 
 	)
 
 Alias('static', staticbin)
+Alias('fullstatic', fullstaticbin)
 
 implib = 'lighttpd.exe.a'
 bin_targets = ['lighttpd']
@@ -139,6 +143,7 @@ if env['COMMON_LIB'] == 'lib':
 	inst += env.Install('${bindir}', common_lib)
 inst += env.Install('${libdir}', instlib)
 
+env.Alias('dynamic', instbin)
 env.Alias('install', inst)
 
 pkgdir = '.'
