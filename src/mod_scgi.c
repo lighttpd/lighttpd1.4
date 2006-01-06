@@ -2677,7 +2677,7 @@ static handler_t scgi_check_extension(server *srv, connection *con, void *p_d, i
 	/* Possibly, we processed already this request */
 	if (con->file_started == 1) return HANDLER_GO_ON;
 	
-	fn = con->uri.path;
+	fn = uri_path_handler ? con->uri.path : con->physical.rel_path;
 
 	if (fn->used == 0) {
 		return HANDLER_ERROR;
