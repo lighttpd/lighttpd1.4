@@ -372,17 +372,11 @@ URIHANDLER_FUNC(mod_staticfile_subrequest) {
 	
 	/* ignore certain extensions */
 	for (k = 0; k < p->conf.exclude_ext->used; k++) {
-		int ct_len;
-
 		ds = (data_string *)p->conf.exclude_ext->data[k]; 
-
-		ct_len = ds->value->used - 1;
-		
-		if (ct_len > s_len) continue;
 		
 		if (ds->value->used == 0) continue;
-		
-		if (0 == strncmp(con->physical.rel_path->ptr + s_len - ct_len, ds->value->ptr, ct_len)) {
+
+		if (buffer_is_equal_right_len(con->physical.path, ds->value, ds->value->used - 1)) {
 			return HANDLER_GO_ON;
 		}
 	}
