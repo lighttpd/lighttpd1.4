@@ -382,7 +382,7 @@ URIHANDLER_FUNC(mod_staticfile_subrequest) {
 		
 		if (ds->value->used == 0) continue;
 		
-		if (0 == strncmp(con->uri.path->ptr + s_len - ct_len, ds->value->ptr, ct_len)) {
+		if (0 == strncmp(con->physical.rel_path->ptr + s_len - ct_len, ds->value->ptr, ct_len)) {
 			return HANDLER_GO_ON;
 		}
 	}
