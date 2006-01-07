@@ -904,6 +904,7 @@ static int fcgi_spawn_connection(server *srv,
 		switch ((child = fork())) {
 		case 0: {
 			size_t i = 0;
+			char *c;
 			char_array env;
 			char_array arg;
 			
@@ -965,6 +966,18 @@ static int fcgi_spawn_connection(server *srv,
 			}
 			
 			env.ptr[env.used] = NULL;
+
+			/* chdir into the base of the bin-path,
+			 * search for the last / */
+			if (NULL != (c = strrchr(host->bin_path->ptr, '/'))) {
+				*c = '\0';
+			
+				/* change to the physical directory */
+				if (-1 == chdir(host->bin_path->ptr)) {
+					log_error_write(srv, __FILE__, __LINE__, "ssb", "chdir failed:", strerror(errno), host->bin_path);
+				}
+				*c = '/';
+			}
 
 			parse_binpath(&arg, host->bin_path);
 			
