@@ -137,13 +137,28 @@ for module in modules.keys():
 	instlib += env.SharedLibrary(module, modules[module]['src'], LIBS= [ libs ])
 
 inst = []
-inst += env.Install('${bindir}', instbin[0])
+
+Default(spawn_fcgi)
 inst += env.Install('${bindir}', spawn_fcgi)
-if env['COMMON_LIB'] == 'lib':
-	inst += env.Install('${bindir}', common_lib)
-inst += env.Install('${libdir}', instlib)
+
+if env['build_dynamic']:
+	Default(instbin[0], instlib)
+	inst += env.Install('${sbindir}', instbin[0])
+	inst += env.Install('${libdir}', instlib)
+	if env['COMMON_LIB'] == 'lib':
+		Default(common_lib)
+		inst += env.Install('${bindir}', common_lib)
+
+if env['build_static']:
+	Default(staticbin)
+	inst += env.Install('${sbindir}', staticbin)
+
+if env['build_fullstatic']:
+	Default(fullstaticbin)
+	inst += env.Install('${sbindir}', fullstaticbin)
 
 env.Alias('dynamic', instbin)
+# default all to be installed
 env.Alias('install', inst)
 
 pkgdir = '.'
