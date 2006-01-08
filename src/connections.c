@@ -370,6 +370,7 @@ static int connection_handle_write_prepare(server *srv, connection *con) {
 		default:
 			switch(con->http_status) {
 			case 400: /* bad request */
+			case 414: /* overload request header */
 			case 505: /* unknown protocol */
 			case 207: /* this was webdav */
 				break;
@@ -989,11 +990,11 @@ int connection_handle_read_state(server *srv, connection *con)  {
 		if (h_term) {
 			connection_set_state(srv, con, CON_STATE_REQUEST_END);
 		} else if (con->request.request->used > 64 * 1024) {
-			log_error_write(srv, __FILE__, __LINE__, "sd", "http-header larger then 64k -> disconnected", chunkqueue_length(cq));
+			log_error_write(srv, __FILE__, __LINE__, "s", "oversized request-header -> sending Status 414");
 
 			con->http_status = 414; /* Request-URI too large */
 			con->keep_alive = 0;
-			connection_set_state(srv, con, CON_STATE_REQUEST_END);
+			connection_set_state(srv, con, CON_STATE_HANDLE_REQUEST);
 		}
 		break;
 	case CON_STATE_READ_POST: 
