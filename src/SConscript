@@ -1,3 +1,7 @@
+import os
+import re
+import types
+
 Import('env')
 
 common_src = Split("buffer.c log.c \
@@ -96,7 +100,29 @@ staticbin = staticenv.Program('lighttpd-semi-static',
 
 ## you might have to adjust the list of libs and the order for your setup
 ## this is tricky, be warned
-fullstaticlib = staticlib + [ 'sasl2', 'gssapi_krb5', 'ssl', 'crypto', 'crypt', 'krb5', 'k5crypto', 'krb5support', 'com_err', 'resolv' ] 
+fullstaticlib = []
+
+## try to calculate the libs for fullstatic with ldd
+## 1. find the lib
+## 2. check the deps
+## 3. add them to the libs
+searchlibs = os.pathsep.join([ '/lib/', '/usr/lib/', '/usr/local/lib/' ])
+lddre = re.compile(r'^\s+lib([^=-]+)(?:-[\.0-9]+)?\.so\.[0-9]+ =>', re.MULTILINE)
+for libs in staticlib:
+	if type(libs) is types.StringType: libs = [ libs ]
+	for lib in libs:
+		fullstaticlib += [ lib ]
+		solibpath = env.WhereIs('lib' + lib + '.so', searchlibs)
+		fullstaticlib += [ lib ]
+		if solibpath is None:
+			continue
+
+		f = os.popen('ldd ' + solibpath, 'r')
+		for aword in lddre.findall(f.read()):
+			fullstaticlib += [ aword ]
+		f.close
+
+
 fullstaticbin = staticenv.Program('lighttpd-static', 
 	staticobj, 
 	LIBS = fullstaticlib, 
