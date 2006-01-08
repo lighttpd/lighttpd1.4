@@ -157,7 +157,7 @@ if 1:
 	checkTypes(autoconf, Split('pid_t size_t off_t'))
 
 	autoconf.env.Append( LIBSQLITE3 = '', LIBXML2 = '', LIBMYSQL = '', LIBZ = '', 
-		LIBBZ2 = '', LIBCRYPT = '', LIBMEMCACHE = '', LIBFCGI = '',
+		LIBBZ2 = '', LIBCRYPT = '', LIBMEMCACHE = '', LIBFCGI = '', LIBPCRE = '',
 		LIBLDAP = '', LIBLBER = '', LIBLUA = '', LIBLUALIB = '', LIBDL = '')
 
 	if env['with_fam']:
@@ -179,7 +179,7 @@ if 1:
 
 	if env['with_ldap']:
 		if autoconf.CheckLibWithHeader('ldap', 'ldap.h', 'C'):
-			autoconf.env.Append(CPPFLAGS = [ '-DHAVE_LDAP_H', '-DHAVE_LIBLDAP' ], LIBLDAP = [ 'ldap' ])
+			autoconf.env.Append(CPPFLAGS = [ '-DHAVE_LDAP_H', '-DHAVE_LIBLDAP' ], LIBLDAP = 'ldap')
 		if autoconf.CheckLibWithHeader('lber', 'lber.h', 'C'):
 			autoconf.env.Append(CPPFLAGS = [ '-DHAVE_LBER_H', '-DHAVE_LIBLBER' ], LIBLBER = 'lber')
 
@@ -198,12 +198,16 @@ if 1:
 	if env['with_lua']:
 		if autoconf.CheckLibWithHeader('lua', 'lua.h', 'C'):
 			autoconf.env.Append(CPPFLAGS = [ '-DHAVE_LUA_H', '-DHAVE_LIBLUA' ], LIBLUA = 'lua', LIBLUALIB = 'lualib')
-
+	
+	ol = env['LIBS']
 	if autoconf.CheckLibWithHeader('fcgi', 'fastcgi.h', 'C'):
 		autoconf.env.Append(LIBFCGI = 'fcgi')
+	env['LIBS'] = ol
 
+	ol = env['LIBS']
 	if autoconf.CheckLibWithHeader('dl', 'dlfcn.h', 'C'):
 		autoconf.env.Append(LIBDL = 'dl')
+	env['LIBS'] = ol
 
 	if autoconf.CheckType('socklen_t', '#include <unistd.h>\n#include <sys/socket.h>\n#include <sys/types.h>'):
 		autoconf.env.Append(CPPFLAGS = [ '-DHAVE_SOCKLEN_T' ])
