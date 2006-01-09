@@ -173,6 +173,11 @@ int network_write_chunkqueue_linuxsendfile(server *srv, connection *con, int fd,
 					return -1;
 				}
 			}
+
+			if (r == 0) {
+				/* we got a event to write put we couldn't. remote side closed ? */
+				return -2;
+			}
 			
 			c->offset += r;
 			cq->bytes_out += r;
