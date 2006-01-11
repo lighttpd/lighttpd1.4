@@ -61,7 +61,7 @@ Event Handlers
 --------------
 
 The first one is the Event Handler which takes care of notifying the server
-that one of the connections is ready to send or recieve. As you can see,
+that one of the connections is ready to send or receive. As you can see,
 every OS has at least the select() call which has some limitations.
 
 ============ ========== ===============
