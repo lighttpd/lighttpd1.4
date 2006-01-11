@@ -1252,6 +1252,9 @@ URIHANDLER_FUNC(mod_webdav_subrequest_handler) {
 			free(req_props);
 		}
 
+		buffer_free(prop_200);
+		buffer_free(prop_404);
+
 		buffer_append_string(b,"</D:multistatus>\n");
 
 		if (p->conf.log_xml) {
