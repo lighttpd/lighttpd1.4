@@ -2262,7 +2262,7 @@ static int fastcgi_get_packet(server *srv, handler_ctx *hctx, fastcgi_response_p
 		/* no header */
 		buffer_free(packet->b);
 
-		log_error_write(srv, __FILE__, __LINE__, "s", "FastCGI: header to small");
+		log_error_write(srv, __FILE__, __LINE__, "s", "FastCGI: header too small");
 		return -1;
 	}
 
@@ -3256,7 +3256,7 @@ static handler_t fcgi_handle_fdevent(void *s, void *ctx, int revents) {
 					fcgi_reconnect(srv, hctx);
 					
 					log_error_write(srv, __FILE__, __LINE__, "ssdsd", 
-						"response not sent, request not sent, reconnection.",
+						"response not received, request not sent, reconnecting.",
 						"connection-fd:", con->fd,
 						"fcgi-fd:", hctx->fd);
 					
@@ -3264,7 +3264,7 @@ static handler_t fcgi_handle_fdevent(void *s, void *ctx, int revents) {
 				}
 				
 				log_error_write(srv, __FILE__, __LINE__, "sosdsd", 
-						"response not sent, request sent:", hctx->wb->bytes_out,
+						"response not received, request sent:", hctx->wb->bytes_out,
 						"connection-fd:", con->fd,
 						"fcgi-fd:", hctx->fd);
 				
