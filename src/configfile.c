@@ -44,7 +44,7 @@ static int config_insert(server *srv) {
 		{ "server.max-request-size",     NULL, T_CONFIG_SHORT, T_CONFIG_SCOPE_CONNECTION },   /* 12 */
 		{ "server.max-worker",           NULL, T_CONFIG_SHORT, T_CONFIG_SCOPE_SERVER },       /* 13 */
 		{ "server.document-root",        NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_CONNECTION },  /* 14 */
-		{ "server.force-lower-case-files", NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_SERVER },   /* 15 */
+		{ "server.force-lowercase-filenames", NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_SERVER },   /* 15 */
 		{ "debug.log-condition-handling", NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_SERVER },    /* 16 */
 		{ "server.max-keep-alive-requests", NULL, T_CONFIG_SHORT, T_CONFIG_SCOPE_CONNECTION }, /* 17 */
 		{ "server.name",                 NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_CONNECTION },  /* 18 */
@@ -89,6 +89,7 @@ static int config_insert(server *srv) {
 		{ "server.userid",               "use server.username instead", T_CONFIG_DEPRECATED, T_CONFIG_SCOPE_UNSET },
 		{ "server.groupid",              "use server.groupname instead", T_CONFIG_DEPRECATED, T_CONFIG_SCOPE_UNSET },
 		{ "server.use-keep-alive",       "use server.max-keep-alive-requests = 0 instead", T_CONFIG_DEPRECATED, T_CONFIG_SCOPE_UNSET },
+		{ "server.force-lower-case-files",       "use server.force-lowercase-filenames instead", T_CONFIG_DEPRECATED, T_CONFIG_SCOPE_UNSET },
 		
 		{ NULL,                          NULL, T_CONFIG_UNSET, T_CONFIG_SCOPE_UNSET }
 	};
@@ -149,7 +150,7 @@ static int config_insert(server *srv) {
 		s->kbytes_per_second = 0;
 		s->allow_http11  = 1;
 		s->range_requests = 1;
-		s->force_lower_case = 0;
+		s->force_lowercase_filenames = 0;
 		s->global_kbytes_per_second = 0;
 		s->global_bytes_per_second_cnt = 0;
 		s->global_bytes_per_second_cnt_ptr = &s->global_bytes_per_second_cnt;
@@ -162,7 +163,7 @@ static int config_insert(server *srv) {
 		
 		/* 13 max-worker */
 		cv[14].destination = s->document_root;
-		cv[15].destination = &(s->force_lower_case);
+		cv[15].destination = &(s->force_lowercase_filenames);
 		cv[16].destination = &(s->log_condition_handling);
 		cv[17].destination = &(s->max_keep_alive_requests);
 		cv[18].destination = s->server_name;
@@ -246,7 +247,7 @@ int config_setup_connection(server *srv, connection *con) {
 	PATCH(log_file_not_found);
 	
 	PATCH(range_requests);
-	PATCH(force_lower_case);
+	PATCH(force_lowercase_filenames);
 	PATCH(is_ssl);
 	
 	PATCH(ssl_pemfile);
@@ -318,8 +319,8 @@ int config_patch_connection(server *srv, connection *con, comp_key_t comp) {
 				PATCH(log_file_not_found);
 			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("server.protocol-http11"))) {
 				PATCH(allow_http11);
-			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("server.force-lower-case-files"))) {  
-				PATCH(force_lower_case);
+			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("server.force-lowercase-filenames"))) {  
+				PATCH(force_lowercase_filenames);
 			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("server.kbytes-per-second"))) {
 				PATCH(global_kbytes_per_second);
 				PATCH(global_bytes_per_second_cnt);
@@ -1087,7 +1088,7 @@ int config_set_defaults(server *srv) {
 			 * an other filename, no need to stat(), 
 			 * just assume it is case-sensitive. */
 
-			s->force_lower_case = 0;
+			s->force_lowercase_filenames = 0;
 		} else if (0 == stat(srv->tmp_buf->ptr, &st2)) {  
 
 			/* upper case exists too, doesn't the FS handle this ? */  
@@ -1097,7 +1098,7 @@ int config_set_defaults(server *srv) {
 			if (st1.st_ino == st2.st_ino) {  
 				/* upper and lower have the same inode -> case-insensitve FS */  
 				
-				s->force_lower_case = 1;  
+				s->force_lowercase_filenames = 1;  
 			}  
 		}  
 	}  

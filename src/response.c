@@ -334,7 +334,7 @@ handler_t http_response_prepare(server *srv, connection *con) {
 		 * 
 		 * convert to lower-case
 		 */
-		if (con->conf.force_lower_case) {
+		if (con->conf.force_lowercase_filenames) {
 			buffer_to_lower(con->physical.rel_path);
 		}
 
