@@ -967,20 +967,22 @@ static int fcgi_spawn_connection(server *srv,
 			
 			env.ptr[env.used] = NULL;
 
+			parse_binpath(&arg, host->bin_path);
+			
 			/* chdir into the base of the bin-path,
 			 * search for the last / */
-			if (NULL != (c = strrchr(host->bin_path->ptr, '/'))) {
+			if (NULL != (c = strrchr(arg.ptr[0], '/'))) {
 				*c = '\0';
 			
 				/* change to the physical directory */
-				if (-1 == chdir(host->bin_path->ptr)) {
-					log_error_write(srv, __FILE__, __LINE__, "ssb", "chdir failed:", strerror(errno), host->bin_path);
+				if (-1 == chdir(arg.ptr[0])) {
+					*c = '/';
+					log_error_write(srv, __FILE__, __LINE__, "sss", "chdir failed:", strerror(errno), arg.ptr[0]);
 				}
 				*c = '/';
 			}
 
-			parse_binpath(&arg, host->bin_path);
-			
+
 			/* exec the cgi */
 			execve(arg.ptr[0], arg.ptr, env.ptr);
 			
