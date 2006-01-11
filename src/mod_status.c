@@ -678,9 +678,9 @@ static handler_t mod_status_handle_server_config(server *srv, connection *con, v
 	
 	mod_status_header_append(b, "Server-Features");
 #ifdef HAVE_PCRE_H
-	mod_status_row_append(b, "Rewrite Engine", "enabled");
+	mod_status_row_append(b, "RegEx Conditionals", "enabled");
 #else
-	mod_status_row_append(b, "Rewrite Engine", "disabled - pcre missing");
+	mod_status_row_append(b, "RegEx Conditionals", "disabled - pcre missing");
 #endif
 	mod_status_header_append(b, "Network Engine");
 	
