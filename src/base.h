@@ -260,7 +260,7 @@ typedef struct {
 	unsigned short use_ipv6;
 	unsigned short is_ssl;
 	unsigned short allow_http11;
-	unsigned short force_lower_case; /* if the FS is case-insensitive, force all files to lower-case */
+	unsigned short force_lowercase_filenames; /* if the FS is case-insensitive, force all files to lower-case */
 	unsigned short max_request_size;
 
 	unsigned short kbytes_per_second; /* connection kb/s limit */

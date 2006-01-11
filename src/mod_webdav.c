@@ -1542,7 +1542,7 @@ URIHANDLER_FUNC(mod_webdav_subrequest_handler) {
 		buffer_copy_string_buffer(p->physical.doc_root, con->physical.doc_root);
 		buffer_copy_string_buffer(p->physical.rel_path, p->uri.path);
 
-		if (con->conf.force_lower_case) {
+		if (con->conf.force_lowercase_filenames) {
 			buffer_to_lower(p->physical.rel_path);
 		}
 
