@@ -48,8 +48,8 @@ install -m 644 doc/sysconfig.lighttpd %{buildroot}%{_sysconfdir}/sysconfig/light
 rm -rf %{buildroot}
 
 %post
-
-if test "$1" = "0"; then
+## read http://www.fedora.us/docs/spec.html next time :)
+if test "$1" = "1"; then
   # real install, not upgrade
   /sbin/chkconfig --add lighttpd
 fi
