@@ -96,9 +96,10 @@ $HTTP["url"]
 $HTTP["remoteip"]
   match on the remote IP or a remote Network
 $SERVER["socket"]
-  match on socket.  Value must be on the format "$ip:$port" where $ip is an IP
-  address and $port a port number.  Only equal match (==) is supported.
-  It also binds to this socket.
+  match on socket. Value must be on the format "ip:port" where ip is an IP
+  address and port a port number. Only equal match (==) is supported.
+  It also binds the daemon to this socket. Use this if you want to do IP/port-
+  based virtual hosts.
 
 <operator> is one of:
 
@@ -221,6 +222,8 @@ dir-listing.activate
   enables virtual directory listings if a directory is requested no
   index-file was found 
 
+  Default: disabled
+
 dir-listing.hide-dotfiles
   if enabled, does not list hidden files in directory listings generated
   by the dir-listing option.
@@ -291,17 +294,20 @@ server.event-handler
 
 server.pid-file
   set the name of the .pid-file where the PID of the server should be placed. 
-  This option is used in combination with a start-script and the deamon mode
+  This option is used in combination with a start-script and the daemon mode
   
   Default: not set
   
 server.max-request-size
-  maximum size in kbytes of the request (header + body) 
+  maximum size in kbytes of the request (header + body). Only applies to POST
+  requests.
   
-  Default: 2Gb
+  Default: 2097152 (2GB)
 
 server.max-worker
-  number of worker processes to spawn (works but has no benefit)
+  number of worker processes to spawn. This is usually only needed on servers
+  which are fairly loaded and the network handler calls delay often (e.g. new
+  requests are not handled instantaneously).
   
   Default: 0
   
