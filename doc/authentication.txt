@@ -85,7 +85,7 @@ newline. ::
 You can use htpasswd from the apache distribution to manage 
 those files. ::
   
-  $ htpasswd lighttpd.user.digest agent007
+  $ htpasswd lighttpd.user.htpasswd agent007
   
   
 htdigest
@@ -101,12 +101,24 @@ by a single newline. ::
 You can use htdigest from the apache distribution to manage 
 those files. ::
 
-  $ htdigest src/lighttpd.user.digest 'download area' agent007
+  $ htdigest lighttpd.user.htdigest 'download area' agent007
   
 Using md5sum can also generate the password-hash: ::
+
+  #!/bin/sh
+  user=$1
+  realm=$2
+  pass=$3
+
+  hash=`echo -n "$user:$realm:$pass" | md5sum | cut -b -32`
+
+  echo "$user:$realm:$hash"
+
+To use it:
+
+  $ htdigest.sh 'agent007' 'download area' 'secret'
+  agent007:download area:8364d0044ef57b3defcfa141e8f77b65
   
-  $ echo -n "agent007:download area:secret" | md5sum -
-  8364d0044ef57b3defcfa141e8f77b65  -
   
   
 ldap
