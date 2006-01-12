@@ -685,6 +685,28 @@ const char encoded_chars_html[] = {
 	1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,  /*  F0 -  FF */
 };
 
+const char encoded_chars_minimal_xml[] = {
+	/*
+	0  1  2  3  4  5  6  7  8  9  A  B  C  D  E  F
+	*/
+	1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,  /*  00 -  0F control chars */
+	1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,  /*  10 -  1F */ 
+	0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0,  /*  20 -  2F & */
+	0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 0,  /*  30 -  3F < > */
+	0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,  /*  40 -  4F */
+	0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,  /*  50 -  5F */
+	0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,  /*  60 -  6F */
+	0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1,  /*  70 -  7F DEL */
+	0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,  /*  80 -  8F */
+	0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,  /*  90 -  9F */
+	0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,  /*  A0 -  AF */
+	0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,  /*  B0 -  BF */
+	0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,  /*  C0 -  CF */
+	0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,  /*  D0 -  DF */
+	0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,  /*  E0 -  EF */
+	0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,  /*  F0 -  FF */
+};
+
 const char encoded_chars_hex[] = {
 	/*
 	0  1  2  3  4  5  6  7  8  9  A  B  C  D  E  F
@@ -731,6 +753,9 @@ int buffer_append_string_encoded(buffer *b, const char *s, size_t s_len, buffer_
 	case ENCODING_HTML:
 		map = encoded_chars_html;
 		break;
+	case ENCODING_MINIMAL_XML:
+		map = encoded_chars_minimal_xml;
+		break;
 	case ENCODING_HEX:
 		map = encoded_chars_hex;
 		break;
@@ -749,6 +774,7 @@ int buffer_append_string_encoded(buffer *b, const char *s, size_t s_len, buffer_
 				d_len += 3;
 				break;
 			case ENCODING_HTML:
+			case ENCODING_MINIMAL_XML:
 				d_len += 6;
 				break;
 			case ENCODING_HEX:
@@ -774,6 +800,7 @@ int buffer_append_string_encoded(buffer *b, const char *s, size_t s_len, buffer_
 				d[d_len++] = hex_chars[(*ds) & 0x0F];
 				break;
 			case ENCODING_HTML:
+			case ENCODING_MINIMAL_XML:
 				d[d_len++] = '&';
 				d[d_len++] = '#';
 				d[d_len++] = 'x';
