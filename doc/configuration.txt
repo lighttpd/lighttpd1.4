@@ -181,9 +181,16 @@ server.document-root
   Default: no default, required
   
 server.bind
-  hostname of the server
+  IP address, hostname or absolute path to the unix-domain socket the server
+  listen on.
   
   Default: bind to all interfaces
+
+  Example: ::
+
+    server.bind = "127.0.0.1"
+    server.bind = "www.example.org"
+    server.bind = "/tmp/lighttpd.socket"
   
 server.port
   tcp-port to bind the server to
