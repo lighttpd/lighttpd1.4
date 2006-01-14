@@ -88,6 +88,7 @@ typedef enum {
 	ENCODING_REL_URI, /* for coding a rel-uri (/with space/and%percent) nicely as part of a href */
 	ENCODING_REL_URI_PART, /* same as ENC_REL_URL plus coding / too as %2F */
 	ENCODING_HTML,    /* & becomes &amp; and so on */
+	ENCODING_MINIMAL_XML, /* minimal encoding for xml */
 	ENCODING_HEX      /* encode string as hex */
 } buffer_encoding_t;
 
