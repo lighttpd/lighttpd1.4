@@ -71,6 +71,7 @@ int network_server_init(server *srv, buffer *host_token, specific_config *s) {
 	const char *host;
 	buffer *b;
 	int is_unix_domain_socket = 0;
+	int fd;
 	
 #ifdef SO_ACCEPTFILTER
 	struct accept_filter_arg afa;
@@ -254,6 +255,33 @@ int network_server_init(server *srv, buffer *host_token, specific_config *s) {
 		addr_len = strlen(host) + sizeof(srv_socket->addr.un.sun_family);
 #endif
 
+		/* check if the socket exists and try to connect to it. */
+		if (-1 != (fd = connect(srv_socket->fd, (struct sockaddr *) &(srv_socket->addr), addr_len))) {
+			close(fd);
+
+			log_error_write(srv, __FILE__, __LINE__, "ss", 
+				"server socket is still in use:", 
+				host);
+
+
+			return -1;
+		}
+
+		/* connect failed */
+		switch(errno) {
+		case ECONNREFUSED:
+			unlink(host);
+			break;
+		case ENOENT:
+			break;
+		default:
+			log_error_write(srv, __FILE__, __LINE__, "sds", 
+				"testing socket failed:", 
+				host, strerror(errno));
+
+			return -1;
+		}
+
 		break;
 	default:
 		addr_len = 0;
@@ -262,7 +290,18 @@ int network_server_init(server *srv, buffer *host_token, specific_config *s) {
 	}
 	
 	if (0 != bind(srv_socket->fd, (struct sockaddr *) &(srv_socket->addr), addr_len)) {
-		log_error_write(srv, __FILE__, __LINE__, "sds", "can't bind to port", port, strerror(errno));
+		switch(srv_socket->addr.plain.sa_family) {
+		case AF_UNIX:
+			log_error_write(srv, __FILE__, __LINE__, "sds", 
+					"can't bind to socket:", 
+					host, strerror(errno));
+			break;
+		default:
+			log_error_write(srv, __FILE__, __LINE__, "ssds", 
+					"can't bind to port:", 
+					host, port, strerror(errno));
+			break;
+		}
 		return -1;
 	}
 	
