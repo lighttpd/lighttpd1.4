@@ -413,7 +413,7 @@ int mod_mysql_vhost_plugin_init(plugin *p) {
 
 	p->init        			= mod_mysql_vhost_init;
 	p->cleanup     			= mod_mysql_vhost_cleanup;
-	p->handle_connection_close 	= mod_mysql_vhost_handle_connection_close;
+	p->handle_request_done	 	= mod_mysql_vhost_handle_connection_close;
 
 	p->set_defaults			= mod_mysql_vhost_set_defaults;
 	p->handle_docroot  		= mod_mysql_vhost_handle_docroot;
