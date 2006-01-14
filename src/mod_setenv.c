@@ -12,6 +12,10 @@
 /* plugin config for all request/connections */
 
 typedef struct {
+	int handled; /* make sure that we only apply the headers once */
+} handler_ctx;
+
+typedef struct {
 	array *request_header;
 	array *response_header;
 	
@@ -25,6 +29,21 @@ typedef struct {
 	
 	plugin_config conf; 
 } plugin_data;
+
+static handler_ctx * handler_ctx_init() {
+	handler_ctx * hctx;
+	
+	hctx = calloc(1, sizeof(*hctx));
+	
+	hctx->handled = 0;
+	
+	return hctx;
+}
+
+static void handler_ctx_free(handler_ctx *hctx) {
+	free(hctx);
+}
+
 
 /* init the plugin data */
 INIT_FUNC(mod_setenv_init) {
@@ -140,7 +159,22 @@ static int mod_setenv_patch_connection(server *srv, connection *con, plugin_data
 URIHANDLER_FUNC(mod_setenv_uri_handler) {
 	plugin_data *p = p_d;
 	size_t k;
+	handler_ctx *hctx;
 	
+	if (con->plugin_ctx[p->id]) {
+		hctx = con->plugin_ctx[p->id];
+	} else {
+		hctx = handler_ctx_init();
+				
+		con->plugin_ctx[p->id] = hctx;
+	}
+
+	if (hctx->handled) {
+		return HANDLER_GO_ON;
+	}
+
+	hctx->handled = 1;
+
 	mod_setenv_patch_connection(srv, con, p);
 
 	for (k = 0; k < p->conf.request_header->used; k++) {
@@ -181,6 +215,19 @@ URIHANDLER_FUNC(mod_setenv_uri_handler) {
 	return HANDLER_GO_ON;
 }
 
+REQUESTDONE_FUNC(mod_setenv_reset) {
+	plugin_data *p = p_d;
+	
+	UNUSED(srv);
+	
+	if (con->plugin_ctx[p->id]) {
+		handler_ctx_free(con->plugin_ctx[p->id]);
+		con->plugin_ctx[p->id] = NULL;
+	}
+
+	return HANDLER_GO_ON;	
+}
+
 /* this function is called at dlopen() time and inits the callbacks */
 
 int mod_setenv_plugin_init(plugin *p) {
@@ -192,6 +239,8 @@ int mod_setenv_plugin_init(plugin *p) {
 	p->set_defaults  = mod_setenv_set_defaults;
 	p->cleanup     = mod_setenv_free;
 	
+	p->handle_request_done  = mod_setenv_reset;
+
 	p->data        = NULL;
 	
 	return 0;
