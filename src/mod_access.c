@@ -129,11 +129,21 @@ URIHANDLER_FUNC(mod_access_uri_handler) {
 		if (ct_len > s_len) continue;
 		
 		if (ds->value->used == 0) continue;
-		
-		if (0 == strncmp(con->uri.path->ptr + s_len - ct_len, ds->value->ptr, ct_len)) {
-			con->http_status = 403;
+
+		/* if we have a case-insensitive FS we have to lower-case the URI here too */
+
+		if (con->conf.force_lowercase_filenames) {
+			if (0 == strncasecmp(con->uri.path->ptr + s_len - ct_len, ds->value->ptr, ct_len)) {
+				con->http_status = 403;
 			
-			return HANDLER_FINISHED;
+				return HANDLER_FINISHED;
+			}
+		} else {
+			if (0 == strncmp(con->uri.path->ptr + s_len - ct_len, ds->value->ptr, ct_len)) {
+				con->http_status = 403;
+			
+				return HANDLER_FINISHED;
+			}
 		}
 	}
 	
