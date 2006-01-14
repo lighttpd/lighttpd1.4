@@ -3,7 +3,7 @@
 NEWS
 ====
 
-- 1.4.9 - 2005-..-..
+- 1.4.9 - 2006-01-14
 
   * added server.core-files option (sandy <sandy@meebo.com>)
   * added docs for mod_status
@@ -21,6 +21,10 @@ NEWS
   * fixed handling if equal but duplicate If-Modified-Since request headers
   * fixed endless loops in mod_fastcgi if backend is dead
   * fixed Depth: 1 handling in PROPFIND requests on empty dirs
+  * fixed encoding of UTF8 encoded dirlistings (Jani Taskinen <sniper@iki.fi>)
+  * fixed initial bind to a unix-domain socket through server.bind
+  * fixed handling of lowercase filesystems
+  * fixed duplicate request headers cause by mod_setenv
 
 - 1.4.8 - 2005-11-23
 
