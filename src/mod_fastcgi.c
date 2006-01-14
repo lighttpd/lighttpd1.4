@@ -2853,7 +2853,7 @@ static handler_t fcgi_write_request(server *srv, handler_ctx *hctx) {
 			/* cool down the backend, it is overloaded
 			 * -> EAGAIN */
 
-			log_error_write(srv, __FILE__, __LINE__, "sdsdsdb", 
+			log_error_write(srv, __FILE__, __LINE__, "ssdsdb", 
 				"backend is overloaded, we disable it for a 2 seconds and send the request to another backend instead:"
 				"reconnects:", hctx->reconnects,
 				"load:", host->load,
