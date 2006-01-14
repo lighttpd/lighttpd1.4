@@ -133,6 +133,18 @@ handler_t http_response_prepare(server *srv, connection *con) {
 	/* no decision yet, build conf->filename */
 	if (con->mode == DIRECT && con->physical.path->used == 0) {
 		char *qstr;
+
+		/* we only come here when we have the parse the full request again
+		 * 
+		 * a HANDLER_COMEBACK from mod_rewrite and mod_fastcgi might be a 
+		 * problem here as mod_setenv might get called multiple times
+		 *
+		 * fastcgi-auth might lead to a COMEBACK too
+		 * fastcgi again dead server too
+		 *
+		 * mod_compress might add headers twice too
+		 * 
+		 *  */
 		
 		if (con->conf.log_condition_handling) {
 			log_error_write(srv, __FILE__, __LINE__,  "s",  "run condition");
