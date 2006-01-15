@@ -89,7 +89,7 @@ status.config-url
 
   Default: unset
 
-  Example: status.status-url = "/server-config"
+  Example: status.config-url = "/server-config"
 
 status.statistics-url
 
@@ -97,5 +97,5 @@ status.statistics-url
 
   Default: unset
 
-  Example: status.status-url = "/server-stats"
+  Example: status.statistics-url = "/server-stats"
 
