@@ -130,6 +130,7 @@ input ::= metalines.
 metalines ::= metalines metaline.
 metalines ::= .
 metaline ::= varline.
+metaline ::= global.
 metaline ::= condlines(A) EOL. { A = NULL; }
 metaline ::= include.
 metaline ::= include_shell.
@@ -314,6 +315,24 @@ aelement(A) ::= stringop(B) ARRAY_ASSIGN expression(C). {
 
 eols ::= EOL.
 eols ::= .
+
+globalstart ::= GLOBAL. {
+  data_config *dc;
+  dc = (data_config *)array_get_element(ctx->srv->config_context, "global");
+  assert(dc);
+  configparser_push(ctx, dc, 0);
+}
+
+global(A) ::= globalstart LCURLY metalines RCURLY. {
+  data_config *cur;
+  
+  cur = ctx->current;
+  configparser_pop(ctx);
+
+  assert(cur && ctx->current);
+
+  A = cur;
+}
 
 condlines(A) ::= condlines(B) eols ELSE condline(C). {
   assert(B->context_ndx < C->context_ndx);
