@@ -162,6 +162,37 @@ Example
     }
   }  
 
+Global context
+=========================
+
+::
+
+  global {
+    ...
+  }
+
+You don't need it in the main configuration file. But you might have
+difficulty setting server wide configuration inside a included-file from
+conditionals.
+
+Example
+-------
+
+::
+
+  in lighttpd.conf:
+  server.modules = ()
+  $HTTP["host"] == "www.example.org" {
+    include "incl-php.conf"
+  }
+
+  in incl-php.conf:
+  global {
+    server.modules += ("mod_fastcgi")
+    static-file.exclude-extensions += (".php")
+  }
+  fastcgi.server = "..."
+
 Options
 =======
 

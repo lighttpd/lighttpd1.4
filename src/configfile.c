@@ -731,6 +731,8 @@ static int config_tokenizer(server *srv, tokenizer_t *t, int *token_id, buffer *
 						tid = TK_INCLUDE;
 					} else if (strcmp(token->ptr, "include_shell") == 0) {
 						tid = TK_INCLUDE_SHELL;
+					} else if (strcmp(token->ptr, "global") == 0) {
+						tid = TK_GLOBAL;
 					} else if (strcmp(token->ptr, "else") == 0) {
 						tid = TK_ELSE;
 					} else {
