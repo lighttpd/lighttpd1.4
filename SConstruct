@@ -81,6 +81,7 @@ opts.AddOptions(
 	PackageOption('with_mysql', 'enable mysql support', 'no'),
 	PackageOption('with_xml', 'enable xml support', 'no'),
 	PackageOption('with_pcre', 'enable pcre support', 'yes'),
+	PathOption('CC', 'path to the c-compiler', None),
 	BoolOption('build_dynamic', 'enable dynamic build', 'yes'),
 	BoolOption('build_static', 'enable static build', 'no'),
 	BoolOption('build_fullstatic', 'enable fullstatic build', 'no'),
@@ -98,6 +99,11 @@ env = Environment(
 	options = opts,
 	CPPPATH = Split('#/build')
 )
+
+env.Help(opts.GenerateHelpText(env))
+
+if env.subst('${CC}') is not '':
+	env['CC'] = env.subst('${CC}')
 
 env['package'] = package
 env['version'] = version
