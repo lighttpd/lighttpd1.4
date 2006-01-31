@@ -449,7 +449,7 @@ static int config_tokenizer(server *srv, tokenizer_t *t, int *token_id, buffer *
 					log_error_write(srv, __FILE__, __LINE__, "sbsdsds", 
 							"source:", t->source,
 							"line:", t->line, "pos:", t->line_pos, 
-							"only =~ and == are allow in the condition");
+							"only =~ and == are allowed in the condition");
 					return -1;
 				}
 				t->in_key = 1;
@@ -488,7 +488,7 @@ static int config_tokenizer(server *srv, tokenizer_t *t, int *token_id, buffer *
 					log_error_write(srv, __FILE__, __LINE__, "sbsdsds", 
 							"source:", t->source,
 							"line:", t->line, "pos:", t->line_pos, 
-							"only !~ and != are allow in the condition");
+							"only !~ and != are allowed in the condition");
 					return -1;
 				}
 				t->in_key = 1;
