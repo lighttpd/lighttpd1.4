@@ -257,10 +257,12 @@ int network_write_chunkqueue_writev(server *srv, connection *con, int fd, chunkq
 #else
 #ifdef HAVE_MADVISE
 				/* don't advise files < 64Kb */
-				if (c->file.mmap.length > (64 KByte) && 
-				    0 != madvise(c->file.mmap.start, c->file.mmap.length, MADV_WILLNEED)) {
-					log_error_write(srv, __FILE__, __LINE__, "ssbd", "madvise failed:", 
-							strerror(errno), c->file.name, c->file.fd);
+				if (c->file.mmap.length > (64 KByte)) {
+					/* darwin 7 is returning EINVAL all the time and I don't know how to 
+					 * detect this at runtime.i
+					 *
+					 * ignore the return value for now */
+					posix_madvise(c->file.mmap.start, c->file.mmap.length, POSIX_MADV_WILLNEED);
 				}
 #endif
 #endif
