@@ -16,6 +16,7 @@
 #include <netdb.h>
 #include <string.h>
 #include <stdlib.h>
+#include <fcntl.h>
 
 #include "network.h"
 #include "fdevent.h"
@@ -155,7 +156,15 @@ int network_write_chunkqueue_linuxsendfile(server *srv, connection *con, int fd,
 #ifdef FD_CLOEXEC
 				fcntl(c->file.fd, F_SETFD, FD_CLOEXEC);
 #endif
+#ifdef HAVE_POSIX_FADVISE
+				/* tell the kernel that we want to stream the file */
+				if (-1 == posix_fadvise(c->file.fd, 0, 0, POSIX_FADV_SEQUENTIAL)) {
+					log_error_write(srv, __FILE__, __LINE__, "ssd", 
+						"posix_fadvise failed:", strerror(errno), c->file.fd);
+				}
+#endif
 			}
+
 			
 			/* Linux sendfile() */
 			if (-1 == (r = sendfile(fd, c->file.fd, &offset, toSend))) {
@@ -178,6 +187,22 @@ int network_write_chunkqueue_linuxsendfile(server *srv, connection *con, int fd,
 				/* we got a event to write put we couldn't. remote side closed ? */
 				return -2;
 			}
+
+#ifdef HAVE_POSIX_FADVISE
+#if 0
+#define K * 1024
+#define M * 1024 K	
+#define READ_AHEAD 4 M
+			/* check if we need a new chunk */
+			if ((c->offset & ~(READ_AHEAD - 1)) != ((c->offset + r) & ~(READ_AHEAD - 1))) {
+				/* tell the kernel that we want to stream the file */
+				if (-1 == posix_fadvise(c->file.fd, (c->offset + r) & ~(READ_AHEAD - 1), READ_AHEAD, POSIX_FADV_NOREUSE)) {
+					log_error_write(srv, __FILE__, __LINE__, "ssd", 
+						"posix_fadvise failed:", strerror(errno), c->file.fd);
+				}
+			}
+#endif
+#endif
 			
 			c->offset += r;
 			cq->bytes_out += r;
