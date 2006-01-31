@@ -77,6 +77,13 @@ fastcgi.debug
   FastCGI module. Currently only 0 and 1 are used. Use 1 to 
   enable some debug output, 0 to disable it.
 
+fastcgi.max-extensions 
+  map multiple extensions to the same fastcgi server
+
+  Example: ::
+
+    fastcgi.map-extensions = ( ".php3" => ".php" )
+
 fastcgi.server
   tell the module where to send FastCGI requests to. Every 
   file-extension can have it own handler. Load-Balancing is 
@@ -138,7 +145,7 @@ fastcgi.server
   :"disable-time": time to wait before a disabled backend is checked
                 again
   :"allow-x-send-file": controls if X-LIGHTTPD-send-file headers
-                are allowed
+                are allowed 
 
   If bin-path is set:
 
@@ -523,19 +530,10 @@ the external environement variables that should be available
 to the php-process.
 
 
-
-
 Perl
 ----
 
 For Perl you have to install the FCGI module from CPAN.
-
-TCL
----
-
-For TCL ...
-
-
 
 Skeleton for remote authorizer
 ==============================

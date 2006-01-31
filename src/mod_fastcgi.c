@@ -278,6 +278,8 @@ typedef struct {
 
 typedef struct {
 	fcgi_exts *exts; 
+
+	array *ext_mapping;
 	
 	int debug;
 } plugin_config;
@@ -679,6 +681,7 @@ FREE_FUNC(mod_fastcgi_free) {
 			}
 			
 			fastcgi_extensions_free(s->exts);
+			array_free(s->ext_mapping);
 			
 			free(s);
 		}
@@ -1082,6 +1085,7 @@ SETDEFAULTS_FUNC(mod_fastcgi_set_defaults) {
 	config_values_t cv[] = { 
 		{ "fastcgi.server",              NULL, T_CONFIG_LOCAL, T_CONFIG_SCOPE_CONNECTION },       /* 0 */
 		{ "fastcgi.debug",               NULL, T_CONFIG_SHORT, T_CONFIG_SCOPE_CONNECTION },       /* 1 */
+		{ "fastcgi.map-extensions",      NULL, T_CONFIG_ARRAY, T_CONFIG_SCOPE_CONNECTION },       /* 2 */
 		{ NULL,                          NULL, T_CONFIG_UNSET, T_CONFIG_SCOPE_UNSET }
 	};
 	
@@ -1094,9 +1098,11 @@ SETDEFAULTS_FUNC(mod_fastcgi_set_defaults) {
 		s = malloc(sizeof(plugin_config));
 		s->exts          = fastcgi_extensions_init();
 		s->debug         = 0;
+		s->ext_mapping   = array_init();
 		
 		cv[0].destination = s->exts;
 		cv[1].destination = &(s->debug);
+		cv[2].destination = s->ext_mapping;
 		
 		p->config_storage[i] = s;
 		ca = ((data_config *)srv->config_context->data[i])->value;
@@ -1529,6 +1535,7 @@ static int fcgi_reconnect(server *srv, handler_ctx *hctx) {
 	if (hctx->proc) {	
 		hctx->proc->load--;
 		fcgi_proclist_sort_down(srv, hctx->host, hctx->proc);
+		hctx->host->load--;
 	}
 
 	/* perhaps another host gives us more luck */
@@ -2898,6 +2905,7 @@ static handler_t fcgi_write_request(server *srv, handler_ctx *hctx) {
 		/* ok, we have the connection */
 		
 		hctx->proc->load++;
+		hctx->host->load++;
 		hctx->proc->last_used = srv->cur_ts;
 		hctx->got_proc = 1;
 	
@@ -3039,7 +3047,7 @@ SUBREQUEST_FUNC(mod_fastcgi_handle_subrequest) {
 		for (k = 0, ndx = -1; k < hctx->ext->used; k++) {
 			host = hctx->ext->hosts[k];
 		
-			/* we should have at least one proc that can do somthing */
+			/* we should have at least one proc that can do something */
 			if (host->active_procs == 0) continue;
 
 			if (used == -1 || host->load < used) {
@@ -3368,6 +3376,7 @@ static int fcgi_patch_connection(server *srv, connection *con, plugin_data *p) {
 	
 	PATCH(exts);
 	PATCH(debug);
+	PATCH(ext_mapping);
 	
 	/* skip the first, the global context */
 	for (i = 1; i < srv->config_context->used; i++) {
@@ -3385,6 +3394,8 @@ static int fcgi_patch_connection(server *srv, connection *con, plugin_data *p) {
 				PATCH(exts);
 			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("fastcgi.debug"))) {
 				PATCH(debug);
+			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("fastcgi.map-extensions"))) {
+				PATCH(ext_mapping);
 			}
 		}
 	}
@@ -3414,34 +3425,75 @@ static handler_t fcgi_check_extension(server *srv, connection *con, void *p_d, i
 	s_len = fn->used - 1;
 	
 	fcgi_patch_connection(srv, con, p);
-	
-	/* check if extension matches */
-	for (k = 0; k < p->conf.exts->used; k++) {
+
+	/* fastcgi.map-extensions maps extensions to existing fastcgi.server entries
+	 *
+	 * fastcgi.map-extensions = ( ".php3" => ".php" )
+	 *
+	 * fastcgi.server = ( ".php" => ... )
+	 * 
+	 * */
+
+	/* check if extension-mapping matches */
+	for (k = 0; k < p->conf.ext_mapping->used; k++) {
+		data_string *ds = (data_string *)p->conf.ext_mapping->data[k];
 		size_t ct_len; /* length of the config entry */
 		
-		extension = p->conf.exts->exts[k];
+		if (ds->key->used == 0) continue;
 		
-		if (extension->key->used == 0) continue;
-		
-		ct_len = extension->key->used - 1;
+		ct_len = ds->key->used - 1;
 		
 		if (s_len < ct_len) continue;
 		
-		/* check extension in the form "/fcgi_pattern" */
-		if (*(extension->key->ptr) == '/' && strncmp(fn->ptr, extension->key->ptr, ct_len) == 0) {
-			break;
-		} else if (0 == strncmp(fn->ptr + s_len - ct_len, extension->key->ptr, ct_len)) {
-			/* check extension in the form ".fcg" */
+		/* found a mapping */
+		if (0 == strncmp(fn->ptr + s_len - ct_len, ds->key->ptr, ct_len)) {
+			/* check if we know the extension */
+			
+			/* we can reuse k here */
+			for (k = 0; k < p->conf.exts->used; k++) {
+				extension = p->conf.exts->exts[k];
+
+				if (buffer_is_equal(ds->value, extension->key)) {
+					break;
+				}
+			}
+
+			if (k == p->conf.exts->used) {
+				/* found nothign */
+				extension = NULL;
+			}
 			break;
 		}
 	}
-	
-	/* extension doesn't match */
-	if (k == p->conf.exts->used) {
-		return HANDLER_GO_ON;
+
+	if (extension == NULL) {
+		/* check if extension matches */
+		for (k = 0; k < p->conf.exts->used; k++) {
+			size_t ct_len; /* length of the config entry */
+		
+			extension = p->conf.exts->exts[k];
+		
+			if (extension->key->used == 0) continue;
+		
+			ct_len = extension->key->used - 1;
+		
+			if (s_len < ct_len) continue;
+		
+			/* check extension in the form "/fcgi_pattern" */
+			if (*(extension->key->ptr) == '/' && strncmp(fn->ptr, extension->key->ptr, ct_len) == 0) {
+				break;
+			} else if (0 == strncmp(fn->ptr + s_len - ct_len, extension->key->ptr, ct_len)) {
+				/* check extension in the form ".fcg" */
+				break;
+			}
+		}
+		/* extension doesn't match */
+		if (k == p->conf.exts->used) {
+			return HANDLER_GO_ON;
+		}
 	}
 
-	/* get best server */
+	/* check if we have at least one server for this extension up and running */
 	for (k = 0; k < extension->used; k++) {
 		host = extension->hosts[k];
 
