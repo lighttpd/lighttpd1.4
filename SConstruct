@@ -97,7 +97,7 @@ opts.AddOptions(
 env = Environment(
 	env = os.environ,
 	options = opts,
-	CPPPATH = Split('#/build')
+	CPPPATH = Split('#build')
 )
 
 env.Help(opts.GenerateHelpText(env))
@@ -108,7 +108,8 @@ if env.subst('${CC}') is not '':
 env['package'] = package
 env['version'] = version
 if env['CC'] == 'gcc':
-	env.Append(CCFLAGS = Split('-Wall -O2 -g -W -pedantic -Wunused -Wshadow -std=gnu99'))
+	## we need x-open 6 and bsd 4.3 features
+	env.Append(CCFLAGS = Split('-Wall -O2 -g -W -pedantic -Wunused -Wshadow -std=gnu99 -D_XOPEN_SOURCE=600 -D_BSD_SOURCE'))
 
 # cache configure checks
 if 1:
@@ -158,7 +159,7 @@ if 1:
 			strdup strerror strstr strtol sendfile  getopt socket \
 			gethostbyname poll sigtimedwait epoll_ctl getrlimit chroot \
 			getuid select signal pathconf madvise prctl\
-			writev sigaction sendfile64 send_file kqueue port_create localtime_r'))
+			writev sigaction sendfile64 send_file kqueue port_create localtime_r posix_fadvise'))
 
 	checkTypes(autoconf, Split('pid_t size_t off_t'))
 
