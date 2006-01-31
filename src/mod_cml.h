@@ -33,8 +33,6 @@ typedef struct {
 	
 	buffer *trigger_handler;
 	
-	buffer *session_id;
-	
 	plugin_config **config_storage;
 	
 	plugin_config conf; 
