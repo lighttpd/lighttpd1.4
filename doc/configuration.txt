@@ -54,7 +54,7 @@ Example
   # variables, computed when config is read.
   var.mymodule = "foo"
   server.modules += ( "mod_" + var.mymodule )
-  var.PID is initized to the pid of lighttpd before config is parsed
+  # var.PID is initialised to the pid of lighttpd before config is parsed
 
   # include, relative to dirname of main config file
   include "mime.types.conf"
@@ -232,6 +232,11 @@ server.port
   
 server.use-ipv6
   bind to the IPv6 socket
+
+server.tag
+  set the string returned by the Server: response header
+
+  Default: lighttpd <current-version>
   
 server.errorlog
   pathname of the error-log
@@ -245,6 +250,8 @@ server.errorlog-use-syslog
   
 server.chroot
   root-directory of the server
+  
+  NOTE: requires root-permissions
   
 server.username
   username used to run the server
@@ -321,7 +328,7 @@ server.modules
 
   Starting with lighttpd 1.4.0 three default modules are loaded automaticly:
 
-  - mod_indexfiles
+  - mod_indexfile
   - mod_dirlisting
   - mod_staticfile
 
