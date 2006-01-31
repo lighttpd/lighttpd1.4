@@ -104,7 +104,7 @@ static int c_to_lua_push(lua_State *L, int tbl, const char *key, size_t key_len,
 }
 
 
-int split_query_string(lua_State *L, int tbl, buffer *qrystr) {
+int cache_export_get_params(lua_State *L, int tbl, buffer *qrystr) {
 	size_t is_key = 1;
 	size_t i;
 	char *key = NULL, *val = NULL;
@@ -128,6 +128,9 @@ int split_query_string(lua_State *L, int tbl, buffer *qrystr) {
 		case '\0': /* fin symbol */
 			if (!is_key) {
 				/* we need at least a = since the last & */
+
+				/* terminate the value */
+				qrystr->ptr[i] = '\0';
 				
 				c_to_lua_push(L, tbl, 
 					      key, strlen(key),
@@ -143,6 +146,68 @@ int split_query_string(lua_State *L, int tbl, buffer *qrystr) {
 	
 	return 0;
 }
+#if 0
+int cache_export_cookie_params(server *srv, connection *con, plugin_data *p) {
+	data_unset *d;
+
+	UNUSED(srv);
+	
+	if (NULL != (d = array_get_element(con->request.headers, "Cookie"))) {
+		data_string *ds = (data_string *)d;
+		size_t key = 0, value = 0;
+		size_t is_key = 1, is_sid = 0;
+		size_t i;
+		
+		/* found COOKIE */
+		if (!DATA_IS_STRING(d)) return -1;
+		if (ds->value->used == 0) return -1;
+			
+		if (ds->value->ptr[0] == '\0' ||
+		    ds->value->ptr[0] == '=' ||
+		    ds->value->ptr[0] == ';') return -1;
+		
+		buffer_reset(p->session_id);
+		for (i = 0; i < ds->value->used; i++) {
+			switch(ds->value->ptr[i]) {
+			case '=':
+				if (is_key) {
+					if (0 == strncmp(ds->value->ptr + key, "PHPSESSID", i - key)) {
+						/* found PHP-session-id-key */
+						is_sid = 1;
+					}
+					value = i + 1;
+				
+					is_key = 0;
+				}
+				
+				break;
+			case ';':
+				if (is_sid) {
+					buffer_copy_string_len(p->session_id, ds->value->ptr + value, i - value);
+				}
+				
+				is_sid = 0;
+				key = i + 1;
+				value = 0;
+				is_key = 1;
+				break;
+			case ' ':
+				if (is_key == 1 && key == i) key = i + 1;
+				if (is_key == 0 && value == i) value = i + 1;
+				break;
+			case '\0':
+				if (is_sid) {
+					buffer_copy_string_len(p->session_id, ds->value->ptr + value, i - value);
+				}
+				/* fin */
+				break;
+			}
+		}
+	}
+	
+	return 0;
+}
+#endif
 
 int cache_parse_lua(server *srv, connection *con, plugin_data *p, buffer *fn) {
 	lua_State *L; 
@@ -215,17 +280,17 @@ int cache_parse_lua(server *srv, connection *con, plugin_data *p, buffer *fn) {
 	header_tbl = lua_gettop(L);
 	lua_gettable(L, LUA_GLOBALSINDEX);
 	
-	
 	buffer_copy_string_buffer(b, con->uri.query);
-	split_query_string(L, header_tbl, b);
+	cache_export_get_params(L, header_tbl, b);
 	buffer_reset(b);
-	
+
+	/* 2 default constants */	
 	lua_pushliteral(L, "CACHE_HIT");
-	lua_pushnumber(L, 0);
+	lua_pushboolean(L, 0);
 	lua_settable(L, LUA_GLOBALSINDEX);
 	
 	lua_pushliteral(L, "CACHE_MISS");
-	lua_pushnumber(L, 1);
+	lua_pushboolean(L, 1);
 	lua_settable(L, LUA_GLOBALSINDEX);
 	
 	/* load lua program */

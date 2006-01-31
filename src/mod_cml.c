@@ -25,7 +25,6 @@ INIT_FUNC(mod_cml_init) {
 	
 	p->basedir         = buffer_init();
 	p->baseurl         = buffer_init();
-	p->session_id      = buffer_init();
 	p->trigger_handler = buffer_init();
 	
 	return p;
@@ -60,7 +59,6 @@ FREE_FUNC(mod_cml_free) {
 	}
 	
 	buffer_free(p->trigger_handler);
-	buffer_free(p->session_id);
 	buffer_free(p->basedir);
 	buffer_free(p->baseurl);
 	
@@ -180,122 +178,6 @@ static int mod_cml_patch_connection(server *srv, connection *con, plugin_data *p
 }
 #undef PATCH
 
-
-int cache_get_cookie_session_id(server *srv, connection *con, plugin_data *p) {
-	data_unset *d;
-
-	UNUSED(srv);
-	
-	if (NULL != (d = array_get_element(con->request.headers, "Cookie"))) {
-		data_string *ds = (data_string *)d;
-		size_t key = 0, value = 0;
-		size_t is_key = 1, is_sid = 0;
-		size_t i;
-		
-		/* found COOKIE */
-		if (!DATA_IS_STRING(d)) return -1;
-		if (ds->value->used == 0) return -1;
-			
-		if (ds->value->ptr[0] == '\0' ||
-		    ds->value->ptr[0] == '=' ||
-		    ds->value->ptr[0] == ';') return -1;
-		
-		buffer_reset(p->session_id);
-		for (i = 0; i < ds->value->used; i++) {
-			switch(ds->value->ptr[i]) {
-			case '=':
-				if (is_key) {
-					if (0 == strncmp(ds->value->ptr + key, "PHPSESSID", i - key)) {
-						/* found PHP-session-id-key */
-						is_sid = 1;
-					}
-					value = i + 1;
-				
-					is_key = 0;
-				}
-				
-				break;
-			case ';':
-				if (is_sid) {
-					buffer_copy_string_len(p->session_id, ds->value->ptr + value, i - value);
-				}
-				
-				is_sid = 0;
-				key = i + 1;
-				value = 0;
-				is_key = 1;
-				break;
-			case ' ':
-				if (is_key == 1 && key == i) key = i + 1;
-				if (is_key == 0 && value == i) value = i + 1;
-				break;
-			case '\0':
-				if (is_sid) {
-					buffer_copy_string_len(p->session_id, ds->value->ptr + value, i - value);
-				}
-				/* fin */
-				break;
-			}
-		}
-	}
-	
-	return !buffer_is_empty(p->session_id);
-}
-
-int cache_get_url_session_id(server *srv, connection *con, plugin_data *p) {
-	size_t key = 0, value = 0;
-	size_t is_key = 1, is_sid = 0;
-	size_t i;
-	
-	UNUSED(srv);
-	buffer_reset(p->session_id);
-	for (i = 0; i < con->uri.query->used; i++) {
-		switch(con->uri.query->ptr[i]) {
-		case '=':
-			if (is_key) {
-				if (0 == strncmp(con->uri.query->ptr + key, "PHPSESSID", i - key)) {
-					/* found PHP-session-id-key */
-						is_sid = 1;
-				}
-				value = i + 1;
-				
-				is_key = 0;
-			}
-			
-			break;
-		case '&':
-			if (is_sid) {
-				buffer_copy_string_len(p->session_id, con->uri.query->ptr + value, i - value);
-			}
-			
-			is_sid = 0;
-			key = i + 1;
-			value = 0;
-			is_key = 1;
-			break;
-		case ' ':
-			if (is_key == 1 && key == i) key = i + 1;
-			if (is_key == 0 && value == i) value = i + 1;
-			break;
-		case '\0':
-			if (is_sid) {
-				buffer_copy_string_len(p->session_id, con->uri.query->ptr + value, i - value);
-			}
-			/* fin */
-			break;
-		}
-	}
-
-	return !buffer_is_empty(p->session_id);
-}
-
-int cache_get_session_id(server *srv, connection *con, plugin_data *p) {
-	
-	return cache_get_cookie_session_id(srv, con, p) || 
-		cache_get_url_session_id(srv, con, p);
-	
-}
-
 int cache_call_lua(server *srv, connection *con, plugin_data *p, buffer *cml_file) {
 	buffer *b;
 	char *c;
@@ -322,12 +204,9 @@ int cache_call_lua(server *srv, connection *con, plugin_data *p, buffer *cml_fil
 	
 
 	/* prepare variables
-	 * - session-id
 	 *   - cookie-based
 	 *   - get-param-based
 	 */
-	
-	cache_get_session_id(srv, con, p);
 	
 	return cache_parse_lua(srv, con, p, cml_file);
 	
@@ -340,7 +219,6 @@ URIHANDLER_FUNC(mod_cml_power_magnet) {
 	
 	buffer_reset(p->basedir);
 	buffer_reset(p->baseurl);
-	buffer_reset(p->session_id);
 	buffer_reset(p->trigger_handler);
 
 	if (buffer_is_empty(p->conf.power_magnet)) return HANDLER_GO_ON;
@@ -395,7 +273,6 @@ URIHANDLER_FUNC(mod_cml_is_handled) {
 	
 	buffer_reset(p->basedir);
 	buffer_reset(p->baseurl);
-	buffer_reset(p->session_id);
 	buffer_reset(p->trigger_handler);
 
 	if (buffer_is_empty(p->conf.ext)) return HANDLER_GO_ON;
