@@ -854,6 +854,8 @@ int main (int argc, char **argv) {
 	/* setup FAM */
 	if (srv->srvconf.stat_cache_engine == STAT_CACHE_ENGINE_FAM) {
 		if (0 != FAMOpen2(srv->stat_cache->fam, "lighttpd")) {
+			log_error_write(srv, __FILE__, __LINE__, "s", 
+					 "could not open a fam connection, dieing.");
 			return -1;
 		}
 #ifdef HAVE_FAMNOEXISTS
