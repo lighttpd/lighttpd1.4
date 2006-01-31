@@ -276,7 +276,6 @@ SETDEFAULTS_FUNC(mod_proxy_set_defaults) {
 					config_values_t pcv[] = { 
 						{ "host",              NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_CONNECTION },      /* 0 */
 						{ "port",              NULL, T_CONFIG_SHORT, T_CONFIG_SCOPE_CONNECTION },       /* 1 */
-						{ "balance",              NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_CONNECTION },   /* 2 */
 						{ NULL,                NULL, T_CONFIG_UNSET, T_CONFIG_SCOPE_UNSET }
 					};
 					
