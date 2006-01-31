@@ -910,6 +910,7 @@ int config_read(server *srv, const char *fn) {
 	config_t context;
 	data_config *dc;
 	data_integer *dpid;
+	data_string *dcwd;
 	int ret;
 	char *pos;
 	data_array *modules;
@@ -944,6 +945,14 @@ int config_read(server *srv, const char *fn) {
 	buffer_copy_string(dpid->key, "var.PID");
 	array_insert_unique(srv->config, (data_unset *)dpid);
 	
+	dcwd = data_string_init();
+	buffer_prepare_copy(dcwd->value, 1024);
+	if (NULL != getcwd(dcwd->value->ptr, dcwd->value->size - 1)) {
+		dcwd->value->used = strlen(dcwd->value->ptr) + 1;
+		buffer_copy_string(dcwd->key, "var.CWD");
+		array_insert_unique(srv->config, (data_unset *)dcwd);
+	}
+
 	ret = config_parse_file(srv, &context, fn);
 
 	/* remains nothing if parser is ok */
