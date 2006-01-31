@@ -216,7 +216,7 @@ URIHANDLER_FUNC(mod_usertrack_uri_handler) {
 	}
 	buffer_copy_string(ds->key, "Set-Cookie");
 	buffer_copy_string_buffer(ds->value, p->conf.cookie_name);
-	buffer_append_string(ds->value, "=\"");
+	buffer_append_string(ds->value, "=");
 	
 
 	/* taken from mod_auth.c */
@@ -235,13 +235,12 @@ URIHANDLER_FUNC(mod_usertrack_uri_handler) {
 	MD5_Final(h, &Md5Ctx);
 	
 	buffer_append_string_encoded(ds->value, (char *)h, 16, ENCODING_HEX);
-	buffer_append_string(ds->value, "\"; Path=\"/\"");
-	buffer_append_string(ds->value, "; Version=\"1\"");
+	buffer_append_string(ds->value, "; Path=/");
+	buffer_append_string(ds->value, "; Version=1");
 	
 	if (!buffer_is_empty(p->conf.cookie_domain)) {
-		buffer_append_string(ds->value, "; Domain=\"");
-		buffer_append_string_buffer(ds->value, p->conf.cookie_domain);
-		buffer_append_string(ds->value, "\"");
+		buffer_append_string(ds->value, "; Domain=");
+		buffer_append_string_encoded(ds->value, CONST_BUF_LEN(p->conf.cookie_domain), ENCODING_REL_URI);
 	}
 	
 	if (p->conf.cookie_max_age) {
