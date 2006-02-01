@@ -40,13 +40,13 @@ It is used to see what is still missing and what is already done. ::
   
 Constantly improving. ::
   
-  The configuration syntax is overly complex, like Apache.  There no .htaccess
+  The configuration syntax is overly complex, like Apache.  There is no .htaccess
   support.
 
 .htaccess support is not planed yet. ::
 
   There is only one server.  You cannot have a separate configuration for each
-  virtual server.  This would seem to be especially problamatic when doing
+  virtual server.  This would seem to be especially problematic when doing
   SSL.
 
 Works since 1.3.0. ::
