@@ -455,6 +455,11 @@ static handler_ctx * handler_ctx_init() {
 }
 
 static void handler_ctx_free(handler_ctx *hctx) {
+	if (hctx->host) {
+		hctx->host->load--;
+		hctx->host = NULL;
+	}
+	
 	buffer_free(hctx->response_header);
 
 	chunkqueue_free(hctx->rb);
@@ -1460,8 +1465,6 @@ void fcgi_connection_close(server *srv, handler_ctx *hctx) {
 	}
 
 	if (hctx->host && hctx->proc) {
-		hctx->host->load--;
-		
 		if (hctx->got_proc) {
 			/* after the connect the process gets a load */
 			hctx->proc->load--;
@@ -1535,10 +1538,10 @@ static int fcgi_reconnect(server *srv, handler_ctx *hctx) {
 	if (hctx->proc) {	
 		hctx->proc->load--;
 		fcgi_proclist_sort_down(srv, hctx->host, hctx->proc);
-		hctx->host->load--;
 	}
 
 	/* perhaps another host gives us more luck */
+	hctx->host->load--;
 	hctx->host = NULL;
 	
 	return 0;
@@ -2905,7 +2908,6 @@ static handler_t fcgi_write_request(server *srv, handler_ctx *hctx) {
 		/* ok, we have the connection */
 		
 		hctx->proc->load++;
-		hctx->host->load++;
 		hctx->proc->last_used = srv->cur_ts;
 		hctx->got_proc = 1;
 	
@@ -3078,6 +3080,11 @@ SUBREQUEST_FUNC(mod_fastcgi_handle_subrequest) {
 		
 		/* init handler-context */
 		hctx->host = host;
+
+		/* we put a connection on this host, move the other new connections to other hosts 
+		 *
+		 * as soon as hctx->host is unassigned, decrease the load again */
+		hctx->host->load++;
 		hctx->proc = NULL;
 	} else {
 		host = hctx->host;
