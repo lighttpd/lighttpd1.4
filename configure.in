@@ -1,7 +1,7 @@
 #                                               -*- Autoconf -*-
 # Process this file with autoconf to produce a configure script.
 AC_PREREQ(2.57)
-AC_INIT(lighttpd, 1.4.9, jan@kneschke.de)
+AC_INIT(lighttpd, 1.4.10, jan@kneschke.de)
 AC_CONFIG_SRCDIR([src/server.c])
 
 AC_CANONICAL_TARGET
@@ -516,6 +516,8 @@ AC_CHECK_LIB(fcgi, FCGI_Accept, [
 ])
 
 AM_CONDITIONAL(CHECK_WITH_FASTCGI, test "x$fastcgi_found" = xyes)
+
+CFLAGS="${CFLAGS} -D_XOPEN_SOURCE=600 -D_BSD_SOURCE"
 
 if test "${GCC}" = "yes"; then
        CFLAGS="${CFLAGS} -Wall -W -Wshadow -pedantic"

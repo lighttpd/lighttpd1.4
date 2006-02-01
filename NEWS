@@ -3,6 +3,14 @@
 NEWS
 ====
 
+- 1.4.10 - ...
+
+  * added fastcgi.map-extensions to mod_fastcgi
+  * fixed load balancing for mod_fastcgi 
+  * fixed extra newline for syslog() in mod_accesslog
+  * fixed user-track cookie for IE in mod_usertrack
+  * fixed crash in digest handling in mod_auth 
+
 - 1.4.9 - 2006-01-14
 
   * added server.core-files option (sandy <sandy@meebo.com>)
