@@ -806,6 +806,10 @@ int http_auth_digest_check(server *srv, connection *con, mod_auth_plugin_data *p
 	
 	/* parse credentials from client */
 	for (c = b->ptr; *c; c++) {
+		/* skip whitespaces */
+		while (*c == ' ' || *c == '\t') c++;
+		if (!c) break;
+
 		for (i = 0; dkv[i].key; i++) {
 			if ((0 == strncmp(c, dkv[i].key, dkv[i].key_len))) {
 				if ((c[dkv[i].key_len] == '"') && 
@@ -847,7 +851,7 @@ int http_auth_digest_check(server *srv, connection *con, mod_auth_plugin_data *p
 	    !realm ||
 	    !nonce ||
 	    !uri ||
-	    (qop && !nc && !cnonce) ||
+	    (qop && (!nc || !cnonce)) ||
 	    !respons ) {
 		/* missing field */
 		
