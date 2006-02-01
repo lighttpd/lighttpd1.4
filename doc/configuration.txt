@@ -263,25 +263,6 @@ server.groupname
   
   NOTE: requires root-permissions
 
-dir-listing.activate
-  enables virtual directory listings if a directory is requested no
-  index-file was found 
-
-  Default: disabled
-
-dir-listing.hide-dotfiles
-  if enabled, does not list hidden files in directory listings generated
-  by the dir-listing option.
-
-  Default: enabled
-
-dir-listing.external-css
-  path to an external css stylesheet for the directory listing
-
-dir-listing.exclude
-  list of regular expressions.  Files that match any of the specified regular
-  expressions will be excluded from directory listings.
-
 server.follow-symlink
   allow to follow-symlinks
   
@@ -471,17 +452,13 @@ debugging
 `````````
 
 debug.log-request-header
-
   default: disabled 
   
 debug.log-response-header
-
   default: disabled 
 
 debug.log-file-not-found
-
   default: disabled 
 
 debug.log-request-handling
-
   default: disabled 
