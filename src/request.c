@@ -359,11 +359,11 @@ int http_request_parse(server *srv, connection *con) {
 					
 					log_error_write(srv, __FILE__, __LINE__, "s", "unknown http-method -> 501");
 					if (srv->srvconf.log_request_header_on_error) {
-							log_error_write(srv, __FILE__, __LINE__, "Sb",
-									"request-header:\n",
-									con->request.request);
-						}
-					
+						log_error_write(srv, __FILE__, __LINE__, "Sb",
+								"request-header:\n",
+								con->request.request);
+					}
+				
 					return 0;
 				}
 				
@@ -391,10 +391,10 @@ int http_request_parse(server *srv, connection *con) {
 
 					log_error_write(srv, __FILE__, __LINE__, "s", "unknown protocol -> 400");
 					if (srv->srvconf.log_request_header_on_error) {
-							log_error_write(srv, __FILE__, __LINE__, "Sb",
-									"request-header:\n",
-									con->request.request);
-						}
+						log_error_write(srv, __FILE__, __LINE__, "Sb",
+								"request-header:\n",
+								con->request.request);
+					}
 					return 0;
 				}
 				
