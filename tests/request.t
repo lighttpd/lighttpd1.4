@@ -8,7 +8,7 @@ BEGIN {
 
 use strict;
 use IO::Socket;
-use Test::More tests => 33;
+use Test::More tests => 34;
 use LightyTest;
 
 my $tf = LightyTest->new();
@@ -319,6 +319,14 @@ EOF
  );
 $t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 400 } ];
 ok($tf->handle_http($t) == 0, 'OPTIONS with Content-Length');
+
+$t->{REQUEST}  = ( <<EOF
+OPTIONS rtsp://221.192.134.146:80 RTSP/1.1
+Host: 221.192.134.146:80
+EOF
+ );
+$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 400 } ];
+ok($tf->handle_http($t) == 0, 'OPTIONS for RTSP');
 
 $t->{REQUEST}  = ( <<EOF
 HEAD / HTTP/1.0
