@@ -29,6 +29,11 @@ information covers:
 - current throughput
 - active connections and their state
 
+
+We need to load the module first. ::
+
+  server.modules = ( ..., "mod_ssi", ... )
+
 By default the status page is disabled to hide internal information from
 unauthorized users. ::
 
@@ -45,6 +50,11 @@ Or require authorization: ::
   
   auth.require = ( "/server-status" => 
     ( "realm" ... ) )
+
+
+Please note that when using the server.max-worker directive, the stati of the
+childs are not combined yet, so you're going to see different stats with each
+request.
 
 
 Output Format
@@ -97,5 +107,5 @@ status.statistics-url
 
   Default: unset
 
-  Example: status.statistics-url = "/server-stats"
+  Example: status.statistics-url = "/server-statistics"
 
