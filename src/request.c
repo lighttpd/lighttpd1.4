@@ -337,8 +337,8 @@ int http_request_parse(server *srv, connection *con) {
 					con->response.keep_alive = 0;
 					con->keep_alive = 0;
 					
-					log_error_write(srv, __FILE__, __LINE__, "s", "incomplete request line -> 400");
 					if (srv->srvconf.log_request_header_on_error) {
+						log_error_write(srv, __FILE__, __LINE__, "s", "incomplete request line -> 400");
 						log_error_write(srv, __FILE__, __LINE__, "Sb",
 								"request-header:\n",
 								con->request.request);
@@ -357,8 +357,8 @@ int http_request_parse(server *srv, connection *con) {
 					con->response.keep_alive = 0;
 					con->keep_alive = 0;
 					
-					log_error_write(srv, __FILE__, __LINE__, "s", "unknown http-method -> 501");
 					if (srv->srvconf.log_request_header_on_error) {
+						log_error_write(srv, __FILE__, __LINE__, "s", "unknown http-method -> 501");
 						log_error_write(srv, __FILE__, __LINE__, "Sb",
 								"request-header:\n",
 								con->request.request);
@@ -377,8 +377,8 @@ int http_request_parse(server *srv, connection *con) {
 					} else { 
 						con->http_status = 505;
 
-						log_error_write(srv, __FILE__, __LINE__, "s", "unknown HTTP version -> 505");
 						if (srv->srvconf.log_request_header_on_error) {
+							log_error_write(srv, __FILE__, __LINE__, "s", "unknown HTTP version -> 505");
 							log_error_write(srv, __FILE__, __LINE__, "Sb",
 									"request-header:\n",
 									con->request.request);
@@ -389,8 +389,8 @@ int http_request_parse(server *srv, connection *con) {
 					con->http_status = 400;
 					con->keep_alive = 0;
 
-					log_error_write(srv, __FILE__, __LINE__, "s", "unknown protocol -> 400");
 					if (srv->srvconf.log_request_header_on_error) {
+						log_error_write(srv, __FILE__, __LINE__, "s", "unknown protocol -> 400");
 						log_error_write(srv, __FILE__, __LINE__, "Sb",
 								"request-header:\n",
 								con->request.request);
@@ -415,23 +415,23 @@ int http_request_parse(server *srv, connection *con) {
 						con->http_status = 400;
 						con->keep_alive = 0;
 						
-						buf[0] = con->request.uri->ptr[j];
-						buf[1] = '\0';
-					
-						if (con->request.uri->ptr[j] > 32 &&
-						    con->request.uri->ptr[j] != 127) {	
-							/* the character is printable -> print it */
-							log_error_write(srv, __FILE__, __LINE__, "ss",
-									"invalid character in URI -> 400",
-									buf);
-						} else {
-							/* a control-character, print ascii-code */
-							log_error_write(srv, __FILE__, __LINE__, "sd",
-									"invalid character in URI -> 400",
-									con->request.uri->ptr[j]);
-						}
-						
 						if (srv->srvconf.log_request_header_on_error) {
+							buf[0] = con->request.uri->ptr[j];
+							buf[1] = '\0';
+					
+							if (con->request.uri->ptr[j] > 32 &&
+							    con->request.uri->ptr[j] != 127) {	
+								/* the character is printable -> print it */
+								log_error_write(srv, __FILE__, __LINE__, "ss",
+										"invalid character in URI -> 400",
+										buf);
+							} else {
+								/* a control-character, print ascii-code */
+								log_error_write(srv, __FILE__, __LINE__, "sd",
+										"invalid character in URI -> 400",
+										con->request.uri->ptr[j]);
+							}
+						
 							log_error_write(srv, __FILE__, __LINE__, "Sb",
 									"request-header:\n",
 									con->request.request);
@@ -468,8 +468,8 @@ int http_request_parse(server *srv, connection *con) {
 				con->response.keep_alive = 0;
 				con->keep_alive = 0;
 				
-				log_error_write(srv, __FILE__, __LINE__, "s", "overlong request line -> 400");
 				if (srv->srvconf.log_request_header_on_error) {
+					log_error_write(srv, __FILE__, __LINE__, "s", "overlong request line -> 400");
 					log_error_write(srv, __FILE__, __LINE__, "Sb",
 							"request-header:\n",
 							con->request.request);
@@ -576,7 +576,12 @@ int http_request_parse(server *srv, connection *con) {
 					default:
 						/* error */
 						
-						log_error_write(srv, __FILE__, __LINE__, "s", "WS character in key -> 400");
+						if (srv->srvconf.log_request_header_on_error) {
+							log_error_write(srv, __FILE__, __LINE__, "s", "WS character in key -> 400");
+							log_error_write(srv, __FILE__, __LINE__, "Sb",
+								"request-header:\n",
+								con->request.request);
+						}
 					
 						con->http_status = 400;
 						con->response.keep_alive = 0;
@@ -599,7 +604,12 @@ int http_request_parse(server *srv, connection *con) {
 					
 					break;
 				} else {
-					log_error_write(srv, __FILE__, __LINE__, "s", "CR without LF -> 400");
+					if (srv->srvconf.log_request_header_on_error) {
+						log_error_write(srv, __FILE__, __LINE__, "s", "CR without LF -> 400");
+						log_error_write(srv, __FILE__, __LINE__, "Sb",
+							"request-header:\n",
+							con->request.request);
+					}
 					
 					con->http_status = 400;
 					con->keep_alive = 0;
@@ -642,8 +652,14 @@ int http_request_parse(server *srv, connection *con) {
 				con->keep_alive = 0;
 				con->response.keep_alive = 0;
 				
-				log_error_write(srv, __FILE__, __LINE__, "sbsds", 
+				if (srv->srvconf.log_request_header_on_error) {
+					log_error_write(srv, __FILE__, __LINE__, "sbsds", 
 						"CTL character in key", con->request.request, cur, *cur, "-> 400");
+
+					log_error_write(srv, __FILE__, __LINE__, "Sb",
+						"request-header:\n",
+						con->request.request);
+				}
 				
 				return 0;
 			default:
@@ -662,7 +678,14 @@ int http_request_parse(server *srv, connection *con) {
 						if (!ds) {
 							/* 400 */
 					
-							log_error_write(srv, __FILE__, __LINE__, "s", "WS at the start of first line -> 400");
+							if (srv->srvconf.log_request_header_on_error) {
+								log_error_write(srv, __FILE__, __LINE__, "s", "WS at the start of first line -> 400");
+							
+								log_error_write(srv, __FILE__, __LINE__, "Sb",
+									"request-header:\n",
+									con->request.request);
+							}
+
 					
 							con->http_status = 400;
 							con->keep_alive = 0;
@@ -725,9 +748,9 @@ int http_request_parse(server *srv, connection *con) {
 									con->http_status = 400;
 									con->keep_alive = 0;
 									
-									log_error_write(srv, __FILE__, __LINE__, "s", 
-											"duplicate Content-Length-header -> 400");
 									if (srv->srvconf.log_request_header_on_error) {
+										log_error_write(srv, __FILE__, __LINE__, "s", 
+												"duplicate Content-Length-header -> 400");
 										log_error_write(srv, __FILE__, __LINE__, "Sb",
 												"request-header:\n",
 												con->request.request);
@@ -774,9 +797,9 @@ int http_request_parse(server *srv, connection *con) {
 									con->http_status = 400;
 									con->keep_alive = 0;
 									
-									log_error_write(srv, __FILE__, __LINE__, "s", 
-											"duplicate Content-Type-header -> 400");
 									if (srv->srvconf.log_request_header_on_error) {
+										log_error_write(srv, __FILE__, __LINE__, "s", 
+												"duplicate Content-Type-header -> 400");
 										log_error_write(srv, __FILE__, __LINE__, "Sb",
 												"request-header:\n",
 												con->request.request);
@@ -811,9 +834,9 @@ int http_request_parse(server *srv, connection *con) {
 									con->http_status = 400;
 									con->keep_alive = 0;
 									
-									log_error_write(srv, __FILE__, __LINE__, "s", 
-											"duplicate Host-header -> 400");
 									if (srv->srvconf.log_request_header_on_error) {
+										log_error_write(srv, __FILE__, __LINE__, "s", 
+												"duplicate Host-header -> 400");
 										log_error_write(srv, __FILE__, __LINE__, "Sb",
 												"request-header:\n",
 												con->request.request);
@@ -833,9 +856,9 @@ int http_request_parse(server *srv, connection *con) {
 									con->http_status = 400;
 									con->keep_alive = 0;
 									
-									log_error_write(srv, __FILE__, __LINE__, "s", 
-											"duplicate If-Modified-Since header -> 400");
 									if (srv->srvconf.log_request_header_on_error) {
+										log_error_write(srv, __FILE__, __LINE__, "s", 
+												"duplicate If-Modified-Since header -> 400");
 										log_error_write(srv, __FILE__, __LINE__, "Sb",
 												"request-header:\n",
 												con->request.request);
@@ -850,9 +873,9 @@ int http_request_parse(server *srv, connection *con) {
 									con->http_status = 400;
 									con->keep_alive = 0;
 									
-									log_error_write(srv, __FILE__, __LINE__, "s", 
-											"duplicate If-None-Match-header -> 400");
 									if (srv->srvconf.log_request_header_on_error) {
+										log_error_write(srv, __FILE__, __LINE__, "s", 
+												"duplicate If-None-Match-header -> 400");
 										log_error_write(srv, __FILE__, __LINE__, "Sb",
 												"request-header:\n",
 												con->request.request);
@@ -873,9 +896,9 @@ int http_request_parse(server *srv, connection *con) {
 									con->http_status = 400;
 									con->keep_alive = 0;
 									
-									log_error_write(srv, __FILE__, __LINE__, "s", 
-											"duplicate Host-header -> 400");
 									if (srv->srvconf.log_request_header_on_error) {
+										log_error_write(srv, __FILE__, __LINE__, "s", 
+												"duplicate Range-header -> 400");
 										log_error_write(srv, __FILE__, __LINE__, "Sb",
 												"request-header:\n",
 												con->request.request);
@@ -897,8 +920,10 @@ int http_request_parse(server *srv, connection *con) {
 					key_len = 0;
 					in_folding = 0;
 				} else {
-					log_error_write(srv, __FILE__, __LINE__, "sbs", 
-							"CR without LF", con->request.request, "-> 400");
+					if (srv->srvconf.log_request_header_on_error) {
+						log_error_write(srv, __FILE__, __LINE__, "sbs", 
+								"CR without LF", con->request.request, "-> 400");
+					}
 					
 					con->http_status = 400;
 					con->keep_alive = 0;
@@ -937,8 +962,8 @@ int http_request_parse(server *srv, connection *con) {
 			con->response.keep_alive = 0;
 			con->keep_alive = 0;
 			
-			log_error_write(srv, __FILE__, __LINE__, "s", "HTTP/1.1 but Host missing -> 400");
 			if (srv->srvconf.log_request_header_on_error) {
+				log_error_write(srv, __FILE__, __LINE__, "s", "HTTP/1.1 but Host missing -> 400");
 				log_error_write(srv, __FILE__, __LINE__, "Sb",
 						"request-header:\n",
 						con->request.request);
@@ -959,10 +984,10 @@ int http_request_parse(server *srv, connection *con) {
 	/* check hostname field if it is set */
 	if (NULL != con->request.http_host &&
 	    0 != request_check_hostname(srv, con, con->request.http_host)) {
-		log_error_write(srv, __FILE__, __LINE__, "s",
-				"Invalid Hostname -> 400");
 		
 		if (srv->srvconf.log_request_header_on_error) {
+			log_error_write(srv, __FILE__, __LINE__, "s",
+					"Invalid Hostname -> 400");
 			log_error_write(srv, __FILE__, __LINE__, "Sb",
 					"request-header:\n",
 					con->request.request);
@@ -984,8 +1009,8 @@ int http_request_parse(server *srv, connection *con) {
 			/* content-length is missing */
 			log_error_write(srv, __FILE__, __LINE__, "s", 
 					"GET/HEAD/OPTIONS with content-length -> 400");
+
 			con->keep_alive = 0;
-			
 			con->http_status = 400;
 			return 0;
 		}
@@ -996,8 +1021,8 @@ int http_request_parse(server *srv, connection *con) {
 			/* content-length is missing */
 			log_error_write(srv, __FILE__, __LINE__, "s", 
 					"POST-request, but content-length missing -> 411");
+
 			con->keep_alive = 0;
-			
 			con->http_status = 411;
 			return 0;
 
