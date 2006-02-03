@@ -28,6 +28,7 @@
 #include "stat_cache.h"
 #include "plugin.h"
 #include "joblist.h"
+#include "network_backends.h"
 
 #ifdef HAVE_GETOPT_H
 #include <getopt.h>
@@ -284,6 +285,135 @@ static void show_version (void) {
 	write(STDOUT_FILENO, b, strlen(b));
 }
 
+static void show_features (void) {
+  show_version();
+  printf("\nEvent Handlers:\n\n%s",
+
+#ifdef USE_SELECT
+      "\t+ select (generic)\n"
+#else
+      "\t- select (generic)\n"
+#endif
+#ifdef USE_POLL
+      "\t+ poll (Unix)\n"
+#else
+      "\t- poll (Unix)\n"
+#endif
+#ifdef USE_LINUX_SIGIO
+      "\t+ rt-signals (Linux 2.4+)\n"
+#else
+      "\t- rt-signals (Linux 2.4+)\n"
+#endif
+#ifdef USE_LINUX_EPOLL
+      "\t+ epoll (Linux 2.6)\n"
+#else
+      "\t- epoll (Linux 2.6)\n"
+#endif
+#ifdef USE_SOLARIS_DEVPOLL
+      "\t+ /dev/poll (Solaris)\n"
+#else
+      "\t- /dev/poll (Solaris)\n"
+#endif
+#ifdef USE_FREEBSD_KQUEUE
+      "\t+ kqueue (FreeBSD)\n"
+#else
+      "\t- kqueue (FreeBSD)\n"
+#endif
+      "\nNetwork handler:\n\n"
+#if defined(USE_LINUX_SENDFILE) || defined(USE_FREEBSD_SENDFILE) || defined(USE_SOLARIS_SENDFILEV) || defined(USE_AIX_SENDFILE)
+      "\t+ sendfile\n"
+#else
+  #ifdef USE_WRITEV
+      "\t+ writev\n"
+  #else
+      "\t+ write\n"
+  #endif
+  #ifdef USE_MMAP
+      "\t+ mmap support\n"
+  #else
+      "\t- mmap support\n"
+  #endif
+#endif
+      "\nFeatures:\n\n"
+#ifdef HAVE_IPV6
+      "\t+ IPv6 support\n"
+#else
+      "\t- IPv6 support\n"
+#endif
+#if defined HAVE_ZLIB_H && defined HAVE_LIBZ
+      "\t+ zlib support\n"
+#else
+      "\t- zlib support\n"
+#endif
+#if defined HAVE_BZLIB_H && defined HAVE_LIBBZ2
+      "\t+ bzip2 support\n"
+#else
+      "\t- bzip2 support\n"
+#endif
+#ifdef HAVE_LIBCRYPT
+      "\t+ crypt support\n"
+#else
+      "\t- crypt support\n"
+#endif
+#ifdef USE_PAM
+      "\t+ PAM support\n"
+#else
+      "\t- PAM support\n"
+#endif
+#ifdef USE_OPENSSL
+      "\t+ SSL Support\n"
+#else
+      "\t- SSL Support\n"
+#endif
+#ifdef HAVE_LIBPCRE
+      "\t+ PCRE support\n"
+#else
+      "\t- PCRE support\n"
+#endif
+#ifdef HAVE_MYSQL
+      "\t+ mySQL support\n"
+#else
+      "\t- mySQL support\n"
+#endif
+#if defined(HAVE_LDAP_H) && defined(HAVE_LBER_H) && defined(HAVE_LIBLDAP) && defined(HAVE_LIBLBER)
+      "\t+ LDAP support\n"
+#else
+      "\t- LDAP support\n"
+#endif
+#ifdef HAVE_MEMCACHE_H
+      "\t+ memcached support\n"
+#else
+      "\t- memcached support\n"
+#endif
+#ifdef HAVE_FAM_H
+      "\t+ FAM support\n"
+#else
+      "\t- FAM support\n"
+#endif
+#ifdef HAVE_LUA_H
+      "\t+ LUA support\n"
+#else
+      "\t- LUA support\n"
+#endif
+#ifdef HAVE_LIBXML_H
+      "\t+ xml support\n"
+#else
+      "\t- xml support\n"
+#endif
+#ifdef HAVE_SQLITE3_H
+      "\t+ SQLite support\n"
+#else
+      "\t- SQLite support\n"
+#endif
+#ifdef HAVE_GDBM_H
+      "\t+ GDBM support\n"
+#else
+      "\t- GDBM support\n"
+#endif
+      "\n"
+      );
+}
+
 static void show_help (void) {
 #ifdef USE_OPENSSL
 # define TEXT_SSL " (ssl)"
@@ -299,6 +429,7 @@ static void show_help (void) {
 " -t         test the config-file, and exit\n" \
 " -D         don't go to background (default: go to background)\n" \
 " -v         show version\n" \
+" -V         show compile-time features\n" \
 " -h         show this help\n" \
 "\n"
 ;
@@ -351,7 +482,7 @@ int main (int argc, char **argv) {
 #endif
 	srv->srvconf.dont_daemonize = 0;
 	
-	while(-1 != (o = getopt(argc, argv, "f:m:hvDpt"))) {
+	while(-1 != (o = getopt(argc, argv, "f:m:hvVDpt"))) {
 		switch(o) {
 		case 'f': 
 			if (config_read(srv, optarg)) { 
@@ -366,6 +497,7 @@ int main (int argc, char **argv) {
 		case 't': test_config = 1; break;
 		case 'D': srv->srvconf.dont_daemonize = 1; break;
 		case 'v': show_version(); return 0;
+		case 'V': show_features(); return 0;          
 		case 'h': show_help(); return 0;
 		default: 
 			show_help();
