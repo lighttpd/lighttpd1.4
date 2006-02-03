@@ -5,6 +5,7 @@ NEWS
 
 - 1.4.10 - ...
 
+  * added docs for mod_dirlisting
   * added fastcgi.map-extensions to mod_fastcgi
   * fixed load balancing for mod_fastcgi 
   * fixed extra newline for syslog() in mod_accesslog
