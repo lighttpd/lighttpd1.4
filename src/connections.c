@@ -458,6 +458,7 @@ static int connection_handle_write_prepare(server *srv, connection *con) {
 		/* fall through */
 	case 207:
 	case 200: /* class: header + body */
+	case 301:
 	case 302:
 		break;
 		
@@ -466,7 +467,6 @@ static int connection_handle_write_prepare(server *srv, connection *con) {
 		
 		break;
 	case 205: /* class: header only */
-	case 301:
 	case 304:
 	default:
 		/* disable chunked encoding again as we have no body */
