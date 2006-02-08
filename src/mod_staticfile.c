@@ -443,7 +443,7 @@ URIHANDLER_FUNC(mod_staticfile_subrequest) {
 		int do_range_request = 1;
 		/* check if we have a conditional GET */
 
-		if (NULL != (ds = array_get_element(con->request.headers, "If-Range"))) {
+		if (NULL != (ds = (data_string *)array_get_element(con->request.headers, "If-Range"))) {
 			/* if the value is the same as our ETag, we do a Range-request, 
 			 * otherwise a full 200 */
 
