@@ -3,7 +3,7 @@
 NEWS
 ====
 
-- 1.4.10 - ...
+- 1.4.10 - 2005-02-08
 
   * added docs for mod_dirlisting
   * added fastcgi.map-extensions to mod_fastcgi
@@ -11,6 +11,9 @@ NEWS
   * fixed extra newline for syslog() in mod_accesslog
   * fixed user-track cookie for IE in mod_usertrack
   * fixed crash in digest handling in mod_auth 
+  * fixed handling of 301 response-bodies from a mod_proxy backend
+  * fixed loading of base modules if server.modules is not set
+  * fixed broken cgi if mod_scgi is loaded
 
 - 1.4.9 - 2006-01-14
 
