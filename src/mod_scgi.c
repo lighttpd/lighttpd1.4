@@ -2679,9 +2679,7 @@ static handler_t scgi_check_extension(server *srv, connection *con, void *p_d, i
 	
 	fn = uri_path_handler ? con->uri.path : con->physical.path;
 
-	if (fn->used == 0) {
-		return HANDLER_ERROR;
-	}
+	if (buffer_is_empty(fn)) return HANDLER_GO_ON;
 
 	s_len = fn->used - 1;
 	

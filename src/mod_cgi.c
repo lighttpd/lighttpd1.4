@@ -530,7 +530,7 @@ static handler_t cgi_connection_close(server *srv, handler_ctx *hctx) {
 			 * -> we get here with waitpid == ECHILD
 			 * 
 			 */
-			if (errno == ECHILD) return HANDLER_FINISHED;
+			if (errno == ECHILD) return HANDLER_GO_ON;
 			
 			log_error_write(srv, __FILE__, __LINE__, "ss", "waitpid failed: ", strerror(errno));
 			return HANDLER_ERROR;
@@ -548,11 +548,11 @@ static handler_t cgi_connection_close(server *srv, handler_ctx *hctx) {
 #endif
 				pid = 0;
 				
-				return HANDLER_FINISHED;
+				return HANDLER_GO_ON;
 			} else {
 				log_error_write(srv, __FILE__, __LINE__, "sd", "cgi died, pid:", pid);
 				pid = 0;
-				return HANDLER_FINISHED;
+				return HANDLER_GO_ON;
 			}
 		}
 		
@@ -563,7 +563,7 @@ static handler_t cgi_connection_close(server *srv, handler_ctx *hctx) {
 		cgi_pid_add(srv, p, pid);
 	}
 #endif	
-	return HANDLER_FINISHED;
+	return HANDLER_GO_ON;
 }
 
 static handler_t cgi_connection_close_callback(server *srv, connection *con, void *p_d) {
