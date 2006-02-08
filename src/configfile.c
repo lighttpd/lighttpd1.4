@@ -1005,6 +1005,26 @@ int config_read(server *srv, const char *fn) {
 			buffer_copy_string(ds->value, "mod_staticfile");
 			array_insert_unique(modules->value, (data_unset *)ds);
 		}
+	} else {
+		data_string *ds;
+
+		modules = data_array_init();
+
+		/* server.modules is not set */
+		ds = data_string_init();
+		buffer_copy_string(ds->value, "mod_indexfile");
+		array_insert_unique(modules->value, (data_unset *)ds);
+
+		ds = data_string_init();
+		buffer_copy_string(ds->value, "mod_dirlisting");
+		array_insert_unique(modules->value, (data_unset *)ds);
+
+		ds = data_string_init();
+		buffer_copy_string(ds->value, "mod_staticfile");
+		array_insert_unique(modules->value, (data_unset *)ds);
+
+		buffer_copy_string(modules->key, "server.modules");
+		array_insert_unique(srv->config, (data_unset *)modules);
 	}
 	
 
