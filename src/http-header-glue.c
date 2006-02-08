@@ -194,6 +194,7 @@ int http_response_redirect_to_directory(server *srv, connection *con) {
 	response_header_insert(srv, con, CONST_STR_LEN("Location"), CONST_BUF_LEN(o));
 	
 	con->http_status = 301;
+	con->file_finished = 1;
 	
 	buffer_free(o);
 	

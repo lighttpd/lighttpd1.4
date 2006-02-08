@@ -245,6 +245,7 @@ static handler_t mod_redirect_uri_handler(server *srv, connection *con, void *p_
 			response_header_insert(srv, con, CONST_STR_LEN("Location"), CONST_BUF_LEN(p->location));
 			
 			con->http_status = 301;
+			con->file_finished = 1;
 			
 			return HANDLER_FINISHED;
 		}
