@@ -159,8 +159,10 @@ int network_write_chunkqueue_linuxsendfile(server *srv, connection *con, int fd,
 #ifdef HAVE_POSIX_FADVISE
 				/* tell the kernel that we want to stream the file */
 				if (-1 == posix_fadvise(c->file.fd, 0, 0, POSIX_FADV_SEQUENTIAL)) {
-					log_error_write(srv, __FILE__, __LINE__, "ssd", 
-						"posix_fadvise failed:", strerror(errno), c->file.fd);
+					if (ENOSYS != errno) {
+						log_error_write(srv, __FILE__, __LINE__, "ssd", 
+							"posix_fadvise failed:", strerror(errno), c->file.fd);
+					}
 				}
 #endif
 			}
