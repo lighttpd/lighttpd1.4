@@ -23,6 +23,9 @@
 #include "log.h"
 #include "stat_cache.h"
 
+/* on linux 2.4.29 + debian/ubuntu we have crashes if this is enabled */
+#undef HAVE_POSIX_FADVISE
+
 int network_write_chunkqueue_linuxsendfile(server *srv, connection *con, int fd, chunkqueue *cq) {
 	chunk *c;
 	size_t chunks_written = 0;
