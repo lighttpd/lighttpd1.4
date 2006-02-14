@@ -3,7 +3,7 @@
 NEWS
 ====
 
-- 1.4.10 - 2005-02-08
+- 1.4.10 - 2006-02-08
 
   * added docs for mod_dirlisting
   * added fastcgi.map-extensions to mod_fastcgi
