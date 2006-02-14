@@ -439,9 +439,6 @@ case $host_os in
         * ) ;;
 esac
 
-dnl posix_* needs _XOPEN_SOURCE=600
-CFLAGS="${CFLAGS} -D_XOPEN_SOURCE=600 -D_BSD_SOURCE"
-
 AC_CHECK_FUNCS([dup2 getcwd inet_ntoa inet_ntop memset mmap munmap strchr \
 		  strdup strerror strstr strtol sendfile  getopt socket \
 		  gethostbyname poll sigtimedwait epoll_ctl getrlimit chroot \
