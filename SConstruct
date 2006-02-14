@@ -109,7 +109,7 @@ env['package'] = package
 env['version'] = version
 if env['CC'] == 'gcc':
 	## we need x-open 6 and bsd 4.3 features
-	env.Append(CCFLAGS = Split('-Wall -O2 -g -W -pedantic -Wunused -Wshadow -std=gnu99 -D_XOPEN_SOURCE=600 -D_BSD_SOURCE'))
+	env.Append(CCFLAGS = Split('-Wall -O2 -g -W -pedantic -Wunused -Wshadow -std=gnu99'))
 
 # cache configure checks
 if 1:
