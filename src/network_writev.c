@@ -255,14 +255,14 @@ int network_write_chunkqueue_writev(server *srv, connection *con, int fd, chunkq
 #ifdef LOCAL_BUFFERING
 				buffer_copy_string_len(c->mem, c->file.mmap.start, c->file.mmap.length);
 #else
-#ifdef HAVE_POSIX_MADVISE
+#ifdef HAVE_MADVISE
 				/* don't advise files < 64Kb */
 				if (c->file.mmap.length > (64 KByte)) {
 					/* darwin 7 is returning EINVAL all the time and I don't know how to 
 					 * detect this at runtime.i
 					 *
 					 * ignore the return value for now */
-					posix_madvise(c->file.mmap.start, c->file.mmap.length, POSIX_MADV_WILLNEED);
+					madvise(c->file.mmap.start, c->file.mmap.length, MADV_WILLNEED);
 				}
 #endif
 #endif
