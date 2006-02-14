@@ -33,7 +33,8 @@ scgi.txt \
 cml.txt \
 trigger_b4_dl.txt \
 webdav.txt \
-expire.txt
+expire.txt \
+dirlisting.txt
 
 HTMLDOCS=accesslog.html \
 	 authentication.html \
@@ -67,7 +68,8 @@ HTMLDOCS=accesslog.html \
 	 cml.html \
 	 trigger_b4_dl.html \
 	 webdav.html \
-	 expire.html
+	 expire.html \
+	 dirlisting.html
 
 EXTRA_DIST=lighttpd.conf lighttpd.user \
 	rc.lighttpd rc.lighttpd.redhat sysconfig.lighttpd \
