@@ -406,8 +406,10 @@ int status_counter_set(server *srv, const char *s, size_t len, int val) {
 int fastcgi_status_copy_procname(buffer *b, fcgi_extension_host *host, fcgi_proc *proc) {
 	buffer_copy_string(b, "fastcgi.backend.");
 	buffer_append_string_buffer(b, host->id);
-	buffer_append_string(b, ".");
-	buffer_append_long(b, proc->id);
+	if (proc) {
+		buffer_append_string(b, ".");
+		buffer_append_long(b, proc->id);
+	}
 
 	return 0;
 }
@@ -422,6 +424,15 @@ int fastcgi_status_init(server *srv, buffer *b, fcgi_extension_host *host, fcgi_
 	CLEAN(".died");
 	CLEAN(".overloaded");
 	CLEAN(".connected");
+	CLEAN(".load");
+
+#undef CLEAN	
+
+#define CLEAN(x) \
+	fastcgi_status_copy_procname(b, host, NULL); \
+	buffer_append_string(b, x); \
+	status_counter_set(srv, CONST_BUF_LEN(b), 0);
+
 	CLEAN(".load");
 
 #undef CLEAN	
@@ -872,7 +883,8 @@ static int fcgi_spawn_connection(server *srv,
 		pid_t child;
 		int val;
 		
-		if (!buffer_is_empty(proc->socket)) {
+		if (errno != ENOENT && 
+		    !buffer_is_empty(proc->socket)) {
 			unlink(proc->socket->ptr);
 		}
 		
@@ -1535,7 +1547,7 @@ static int fcgi_reconnect(server *srv, handler_ctx *hctx) {
 				hctx->proc->pid, hctx->proc->socket);
 	}
 
-	if (hctx->proc) {	
+	if (hctx->proc && hctx->got_proc) {	
 		hctx->proc->load--;
 		fcgi_proclist_sort_down(srv, hctx->host, hctx->proc);
 	}
@@ -2919,10 +2931,17 @@ static handler_t fcgi_write_request(server *srv, handler_ctx *hctx) {
 
 		status_counter_inc(srv, CONST_BUF_LEN(p->statuskey));
 
+		/* the proc-load */
 		fastcgi_status_copy_procname(p->statuskey, hctx->host, hctx->proc);
 		buffer_append_string(p->statuskey, ".load");
 
 		status_counter_set(srv, CONST_BUF_LEN(p->statuskey), hctx->proc->load);
+
+		/* the host-load */
+		fastcgi_status_copy_procname(p->statuskey, hctx->host, NULL);
+		buffer_append_string(p->statuskey, ".load");
+
+		status_counter_set(srv, CONST_BUF_LEN(p->statuskey), hctx->host->load);
 
 		if (p->conf.debug) {
 			log_error_write(srv, __FILE__, __LINE__, "sddbdd",
