@@ -399,9 +399,10 @@ SETDEFAULTS_FUNC(mod_auth_set_defaults) {
 			const char *method, *realm, *require;
 			
 			if (da->value->data[n]->type != TYPE_ARRAY) {
-				log_error_write(srv, __FILE__, __LINE__, "sssbs", 
-						"unexpected type for key: ", "auth.require", "[", da->value->data[n]->key, "](string)");
-				
+				log_error_write(srv, __FILE__, __LINE__, "ss", 
+						"auth.require should contain an array as in:", 
+						"auth.require = ( \"...\" => ( ..., ...) )");
+
 				return HANDLER_ERROR;
 			}
 					
@@ -416,34 +417,51 @@ SETDEFAULTS_FUNC(mod_auth_set_defaults) {
 					} else if (0 == strcmp(da_file->value->data[m]->key->ptr, "require")) {
 						require = ((data_string *)(da_file->value->data[m]))->value->ptr;
 					} else {
-						log_error_write(srv, __FILE__, __LINE__, "sssbs", "unexpected type for key: ", "auth.require", "[", da_file->value->data[m]->key, "](string)");
+						log_error_write(srv, __FILE__, __LINE__, "ssbs", 
+							"the field is unknown in:", 
+							"auth.require = ( \"...\" => ( ..., -> \"",
+							da_file->value->data[m]->key,
+							"\" <- => \"...\" ) )");
+
 						return HANDLER_ERROR;
 					}
 				} else {
-					log_error_write(srv, __FILE__, __LINE__, "sssbs", "unexpected type for key: ", "auth.require", "[", da_file->value->data[m]->key, "](string)");
+					log_error_write(srv, __FILE__, __LINE__, "ssbs", 
+						"a string was expected for:", 
+						"auth.require = ( \"...\" => ( ..., -> \"",
+						da_file->value->data[m]->key,
+						"\" <- => \"...\" ) )");
 					
 					return HANDLER_ERROR;
 				}
 			}
 					
 			if (method == NULL) {
-				log_error_write(srv, __FILE__, __LINE__, "sssss", "missing entry for key: ", "auth.require", "[", "method", "](string)");
+				log_error_write(srv, __FILE__, __LINE__, "ss", 
+						"the require field is missing in:", 
+						"auth.require = ( \"...\" => ( ..., \"method\" => \"...\" ) )");
 				return HANDLER_ERROR;
 			} else {
 				if (0 != strcmp(method, "basic") &&
 				    0 != strcmp(method, "digest")) {
-					log_error_write(srv, __FILE__, __LINE__, "s", "auth.require->method has to be either 'basic' or 'digest'");
+					log_error_write(srv, __FILE__, __LINE__, "ss",
+							"method has to be either \"basic\" or \"digest\" in",
+							"auth.require = ( \"...\" => ( ..., \"method\" => \"...\") )");
 					return HANDLER_ERROR;
 				}
 			}
 			
 			if (realm == NULL) {
-				log_error_write(srv, __FILE__, __LINE__, "sssss", "missing entry for key: ", "auth.require", "[", "realm", "](string)");
+				log_error_write(srv, __FILE__, __LINE__, "ss", 
+						"the require field is missing in:", 
+						"auth.require = ( \"...\" => ( ..., \"realm\" => \"...\" ) )");
 				return HANDLER_ERROR;
 			}
 			
 			if (require == NULL) {
-				log_error_write(srv, __FILE__, __LINE__, "sssss", "missing entry for key: ", "auth.require", "[", "require", "](string)");
+				log_error_write(srv, __FILE__, __LINE__, "ss", 
+						"the require field is missing in:", 
+						"auth.require = ( \"...\" => ( ..., \"require\" => \"...\" ) )");
 				return HANDLER_ERROR;
 			}
 			
