@@ -1128,7 +1128,7 @@ URIHANDLER_FUNC(cgi_is_handled) {
 	plugin_data *p = p_d;
 	buffer *fn = con->physical.path;
 	
-	if (fn->used == 0) return HANDLER_ERROR;
+	if (fn->used == 0) return HANDLER_GO_ON;
 	
 	mod_cgi_patch_connection(srv, con, p);
 	
