@@ -132,23 +132,11 @@ int network_write_chunkqueue_linuxsendfile(server *srv, connection *con, int fd,
 			size_t toSend;
 			stat_cache_entry *sce = NULL;
 			
-			if (HANDLER_ERROR == stat_cache_get_entry(srv, con, c->file.name, &sce)) {
-				log_error_write(srv, __FILE__, __LINE__, "sb",
-						strerror(errno), c->file.name);
-				return -1;
-			}
-			
 			offset = c->file.start + c->offset;
 			/* limit the toSend to 2^31-1 bytes in a chunk */
 			toSend = c->file.length - c->offset > ((1 << 30) - 1) ? 
 				((1 << 30) - 1) : c->file.length - c->offset;
 				
-			if (offset > sce->st.st_size) {
-				log_error_write(srv, __FILE__, __LINE__, "sb", "file was shrinked:", c->file.name);
-				
-				return -1;
-			}
-		
 			/* open file if not already opened */	
 			if (-1 == c->file.fd) {
 				if (-1 == (c->file.fd = open(c->file.name->ptr, O_RDONLY))) {
@@ -170,8 +158,6 @@ int network_write_chunkqueue_linuxsendfile(server *srv, connection *con, int fd,
 #endif
 			}
 
-			
-			/* Linux sendfile() */
 			if (-1 == (r = sendfile(fd, c->file.fd, &offset, toSend))) {
 				switch (errno) {
 				case EAGAIN:
@@ -189,7 +175,21 @@ int network_write_chunkqueue_linuxsendfile(server *srv, connection *con, int fd,
 			}
 
 			if (r == 0) {
-				/* we got a event to write put we couldn't. remote side closed ? */
+				/* We got an event to write but we wrote nothing
+				 *
+				 * - the file shrinked -> error
+				 * - the remote side closed inbetween -> remote-close */
+	
+				if (HANDLER_ERROR == stat_cache_get_entry(srv, con, c->file.name, &sce)) {
+					/* file is gone ? */
+					return -1;
+				}
+
+				if (abs_offset > sce->st.st_size) {
+					/* file shrinked, close the connection */
+					return -1;
+				}
+
 				return -2;
 			}
 
