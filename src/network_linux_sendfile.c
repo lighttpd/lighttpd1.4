@@ -185,7 +185,7 @@ int network_write_chunkqueue_linuxsendfile(server *srv, connection *con, int fd,
 					return -1;
 				}
 
-				if (abs_offset > sce->st.st_size) {
+				if (offset > sce->st.st_size) {
 					/* file shrinked, close the connection */
 					return -1;
 				}
