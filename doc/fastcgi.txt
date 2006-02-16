@@ -77,7 +77,7 @@ fastcgi.debug
   FastCGI module. Currently only 0 and 1 are used. Use 1 to 
   enable some debug output, 0 to disable it.
 
-fastcgi.max-extensions 
+fastcgi.map-extensions 
   map multiple extensions to the same fastcgi server
 
   Example: ::
