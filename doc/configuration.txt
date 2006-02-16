@@ -162,8 +162,46 @@ Example
     }
   }  
 
+Using variables
+===============
+
+You can set your own variables in the configuration to simplify your config.
+::
+
+  var.basedir = "/home/www/servers/"
+  $HTTP["host"] == "www.example.org" {
+     server.name = "www.example.org"
+     include "incl-base.conf"
+  }
+
+  in incl-base.conf:
+  server.document-root = basedir + server.name + "/pages/"
+  accesslog.filename   = basedir + server.name + "/logs/access.log"
+   
+You can also use environement variables or the default variables var.PID and
+var.CWD: ::
+
+  var.basedir = env.LIGHTTPDBASE
+
+  $HTTP["host"] == "www.example.org" {
+     server.name = "www.example.org"
+     include "incl-base.conf"
+     include "incl-fastcgi.conf"
+  }
+
+  in incl-fastcgi.conf:
+  fastcgi.server = ( ... => ((
+     "socket" => basedir + server.name + "/tmp/fastcgi-" + PID + ".sock"
+  )) )
+
+Or like the lighttpd script for rails does:
+
+  var.basedir = var.CWD
+
+  server.document-root = basedir + "/public/"
+
 Global context
-=========================
+==============
 
 ::
 
