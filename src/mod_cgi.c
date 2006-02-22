@@ -809,8 +809,12 @@ static int cgi_create_env(server *srv, connection *con, plugin_data *p, buffer *
 			cgi_env_add(&env, CONST_STR_LEN("PATH_INFO"), CONST_BUF_LEN(con->request.pathinfo));
 		}
 		cgi_env_add(&env, CONST_STR_LEN("REDIRECT_STATUS"), CONST_STR_LEN("200"));
-		cgi_env_add(&env, CONST_STR_LEN("QUERY_STRING"), CONST_BUF_LEN(con->uri.query));
-		cgi_env_add(&env, CONST_STR_LEN("REQUEST_URI"), CONST_BUF_LEN(con->request.orig_uri));
+		if (!buffer_is_empty(con->uri.query)) {
+			cgi_env_add(&env, CONST_STR_LEN("QUERY_STRING"), CONST_BUF_LEN(con->uri.query));
+		}
+		if (!buffer_is_empty(con->request.orig_uri)) {
+			cgi_env_add(&env, CONST_STR_LEN("REQUEST_URI"), CONST_BUF_LEN(con->request.orig_uri));
+		}
 		
 		
 #ifdef HAVE_IPV6
@@ -967,6 +971,9 @@ static int cgi_create_env(server *srv, connection *con, plugin_data *p, buffer *
 	default: {
 		handler_ctx *hctx;
 		/* father */
+
+		close(from_cgi_fds[1]);
+		close(to_cgi_fds[0]);
 		
 		if (con->request.content_length) {
 			chunkqueue *cq = con->request_content_queue;
@@ -987,6 +994,8 @@ static int cgi_create_env(server *srv, connection *con, plugin_data *p, buffer *
 						    -1 == (c->file.fd = open(c->file.name->ptr, O_RDONLY))) {
 							log_error_write(srv, __FILE__, __LINE__, "ss", "open failed: ", strerror(errno));
 					
+							close(from_cgi_fds[0]);
+							close(to_cgi_fds[1]);
 							return -1;
 						}
 
@@ -996,6 +1005,8 @@ static int cgi_create_env(server *srv, connection *con, plugin_data *p, buffer *
 							log_error_write(srv, __FILE__, __LINE__, "ssbd", "mmap failed: ", 
 									strerror(errno), c->file.name,  c->file.fd);
 
+							close(from_cgi_fds[0]);
+							close(to_cgi_fds[1]);
 							return -1;
 						}
 
@@ -1043,12 +1054,9 @@ static int cgi_create_env(server *srv, connection *con, plugin_data *p, buffer *
 				chunkqueue_remove_finished_chunks(cq);
 			}
 		}
-		
-		close(from_cgi_fds[1]);
-		
-		close(to_cgi_fds[0]);
+
 		close(to_cgi_fds[1]);
-		
+				
 		/* register PID and wait for them asyncronously */
 		con->mode = p->id;
 		buffer_reset(con->physical.path);
