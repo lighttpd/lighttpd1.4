@@ -320,6 +320,36 @@ handler_t http_response_prepare(server *srv, connection *con) {
 		buffer_copy_string_buffer(con->physical.doc_root, con->conf.document_root);
 		buffer_copy_string_buffer(con->physical.rel_path, con->uri.path);
 		
+		/* strip dots from the end and spaces
+		 *
+		 * windows/dos handle those filenames as the same file
+		 *
+		 * foo == foo. == foo..... == "foo...   " == "foo..  ./"
+		 *
+		 * This will affect in some cases PATHINFO
+		 *
+		 * */
+		if (con->physical.rel_path->used > 1) {
+			buffer *b = con->physical.rel_path;
+			size_t i;
+
+			if (b->used > 2 &&
+			    b->ptr[b->used-2] == '/' &&
+			    (b->ptr[b->used-3] == ' ' ||
+			     b->ptr[b->used-3] == '.')) {
+				b->ptr[b->used--] = '\0';
+			}
+
+			for (i = b->used - 2; b->used > 1; i--) {
+				if (b->ptr[i] == ' ' ||
+				    b->ptr[i] == '.') {
+					b->ptr[b->used--] = '\0';
+				} else {
+					break;
+				}
+			}
+		}
+
 		if (con->conf.log_request_handling) {
 			log_error_write(srv, __FILE__, __LINE__,  "s",  "-- before doc_root");
 			log_error_write(srv, __FILE__, __LINE__,  "sb", "Doc-Root     :", con->physical.doc_root);
