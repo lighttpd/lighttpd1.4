@@ -252,7 +252,7 @@ int network_server_init(server *srv, buffer *host_token, specific_config *s) {
 		addr_len = SUN_LEN(&srv_socket->addr.un);
 #else
 		/* stevens says: */
-		addr_len = strlen(host) + sizeof(srv_socket->addr.un.sun_family);
+		addr_len = strlen(host) + 1 + sizeof(srv_socket->addr.un.sun_family);
 #endif
 
 		/* check if the socket exists and try to connect to it. */
