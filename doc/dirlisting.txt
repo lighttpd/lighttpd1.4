@@ -30,12 +30,12 @@ was found in that directory.
 
 To enable directory listings globally: ::
 
-  dir-listing.active = "enable"
+  dir-listing.activate = "enable"
 
 If you need it only for a directory, use conditionals: ::
 
   $HTTP["url"] =~ "^/download($|/)" {
-    dir-listing.active = "enable"
+    dir-listing.activate = "enable"
   }
 
 You can also use a external generator for directory listings if you use
