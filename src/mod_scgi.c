@@ -645,7 +645,7 @@ static int scgi_spawn_connection(server *srv,
 		servlen = SUN_LEN(&scgi_addr_un);
 #else
 		/* stevens says: */
-		servlen = proc->socket->used - 1 + sizeof(scgi_addr_un.sun_family);
+		servlen = proc->socket->used + sizeof(scgi_addr_un.sun_family);
 #endif
 		socket_type = AF_UNIX;
 		scgi_addr = (struct sockaddr *) &scgi_addr_un;
