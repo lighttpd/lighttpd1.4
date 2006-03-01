@@ -167,7 +167,7 @@ PHYSICALPATH_FUNC(mod_alias_physical_handler) {
 		if (ds->key->used == 0) continue;
 		
 		if (0 == (con->conf.force_lowercase_filenames ?
-					strncastcmp(uri_ptr, ds->key->ptr, alias_len) :
+					strncasecmp(uri_ptr, ds->key->ptr, alias_len) :
 					strncmp(uri_ptr, ds->key->ptr, alias_len))) {
 			/* matched */
 			
