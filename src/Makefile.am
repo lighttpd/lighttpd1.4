@@ -1,3 +1,5 @@
+AM_CFLAGS = $(FAM_CFLAGS)
+
 noinst_PROGRAMS=proc_open lemon # simple-fcgi #graphic evalo bench ajp ssl error_test adserver gen-license
 sbin_PROGRAMS=lighttpd 
 bin_PROGRAMS=spawn-fcgi
@@ -59,7 +61,7 @@ if NO_RDYNAMIC
 # everything
 lib_LTLIBRARIES += liblightcomp.la
 liblightcomp_la_SOURCES=$(common_src)
-liblightcomp_la_CFLAGS=$(AM_CFLAGS) $(FAM_CFLAGS)
+liblightcomp_la_CFLAGS=$(AM_CFLAGS)
 liblightcomp_la_LDFLAGS = -avoid-version -no-undefined
 liblightcomp_la_LIBADD = $(PCRE_LIB) $(SSL_LIB) $(FAM_LIBS)
 common_libadd = liblightcomp.la
@@ -76,7 +78,7 @@ mod_evasive_la_LIBADD = $(common_libadd)
 
 lib_LTLIBRARIES += mod_webdav.la
 mod_webdav_la_SOURCES = mod_webdav.c
-mod_webdav_la_CFLAGS = $(XML_CFLAGS)
+mod_webdav_la_CFLAGS = $(AM_CFLAGS) $(XML_CFLAGS) $(SQLITE_CFLAGS)
 mod_webdav_la_LDFLAGS = -module -export-dynamic -avoid-version -no-undefined
 mod_webdav_la_LIBADD = $(common_libadd) $(XML_LIBS) $(SQLITE_LIBS)
 
