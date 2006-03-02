@@ -97,7 +97,7 @@ to start PHP for a cache-hit.
 To transform this example into a CML you need 'index.cml' in the list of indexfiles 
 and the following index.cml file: ::
 
-  output_contenttype = "text/html"
+  output_content_type = "text/html"
 
   b = request["DOCUMENT_ROOT"]
   cwd = request["CWD"]
