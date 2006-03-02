@@ -97,7 +97,7 @@ to start PHP for a cache-hit.
 To transform this example into a CML you need 'index.cml' in the list of indexfiles 
 and the following index.cml file: ::
 
-  output_content_type = "text/html"
+  output_contenttype = "text/html"
 
   b = request["DOCUMENT_ROOT"]
   cwd = request["CWD"]
@@ -140,7 +140,7 @@ Don't forget: Webserver are built to send out static content, that is what they 
 
 The index.cml for this looks like: ::
 
-  output_content_type = "text/html"
+  output_contenttype = "text/html"
   
   cwd = request["CWD"]
    
