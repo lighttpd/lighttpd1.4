@@ -1294,6 +1294,7 @@ URIHANDLER_FUNC(mod_webdav_subrequest_handler) {
 			}
 		} else {
 			con->http_status = 201;
+			con->file_finished = 1;
 		}
 
 		return HANDLER_FINISHED;
@@ -1390,6 +1391,7 @@ URIHANDLER_FUNC(mod_webdav_subrequest_handler) {
 			chunk *c;
 
 			con->http_status = 201; /* created */
+			con->file_finished = 1;
 
 			for (c = cq->first; c; c = cq->first) {
 				int r = 0; 
@@ -1606,6 +1608,7 @@ URIHANDLER_FUNC(mod_webdav_subrequest_handler) {
 				rmdir(con->physical.path->ptr);
 			}
 			con->http_status = 201;
+			con->file_finished = 1;
 		} else {
 			/* it is just a file, good */
 			int r;
@@ -1625,6 +1628,7 @@ URIHANDLER_FUNC(mod_webdav_subrequest_handler) {
 
 			if (-1 == r) {
 				con->http_status = 201; /* we will create a new one */
+				con->file_finished = 1;
 
 				switch(errno) {
 				case ENOTDIR:

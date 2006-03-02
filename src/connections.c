@@ -458,6 +458,7 @@ static int connection_handle_write_prepare(server *srv, connection *con) {
 		/* fall through */
 	case 207:
 	case 200: /* class: header + body */
+	case 201:
 	case 301:
 	case 302:
 		break;
