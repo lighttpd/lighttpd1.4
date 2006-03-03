@@ -372,8 +372,8 @@ static cond_result_t config_check_cond_nocache(server *srv, connection *con, dat
 		n = pcre_exec(dc->regex, dc->regex_study, l->ptr, l->used - 1, 0, 0,
 				cache->matches, elementsof(cache->matches));
 		
+		cache->patterncount = n;
 		if (n > 0) {
-			cache->patterncount = n;
 			cache->comp_value = l;
 			return (dc->cond == CONFIG_COND_MATCH) ? COND_RESULT_TRUE : COND_RESULT_FALSE;
 		} else {
