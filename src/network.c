@@ -540,6 +540,7 @@ int network_init(server *srv) {
 	for (i = 1; i < srv->config_context->used; i++) {
 		data_config *dc = (data_config *)srv->config_context->data[i];
 		specific_config *s = srv->config_storage[i];
+		size_t j;
 		
 		/* not our stage */
 		if (COMP_SERVER_SOCKET != dc->comp) continue;
@@ -549,12 +550,19 @@ int network_init(server *srv) {
 			
 			return -1;
 		}
+
+		/* check if we already know this socket,
+		 * if yes, don't init it */
+		for (j = 0; j < srv->srv_sockets.used; j++) {
+			if (buffer_is_equal(srv->srv_sockets.ptr[j]->srv_token, dc->string)) {
+				break;
+			}
+		}
 		
-		if (0 != network_server_init(srv, dc->string, s)) {
-			return -1;
+		if (j == srv->srv_sockets.used) {
+			if (0 != network_server_init(srv, dc->string, s)) return -1;
 		}
 	}
-	
 	
 	return 0;
 }
