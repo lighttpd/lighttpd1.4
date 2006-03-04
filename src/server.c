@@ -118,8 +118,6 @@ static void daemonize(void) {
 	if (0 != fork()) exit(0);
 	
 	if (0 != chdir("/")) exit(0);
-	
-	umask(0);
 }
 #endif
 
