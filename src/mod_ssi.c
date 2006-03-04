@@ -518,13 +518,11 @@ static int process_ssi_stmt(server *srv, connection *con, plugin_data *p,
 			} else {
 				buffer_copy_string_len(p->stat_fn, con->physical.path->ptr, sl - con->physical.path->ptr + 1);
 			}
-		
-			/* fn */
-			if (NULL == (sl = strrchr(file_path, '/'))) {
-				buffer_append_string(p->stat_fn, file_path);
-			} else {
-				buffer_append_string(p->stat_fn, sl + 1);
-			}
+
+			buffer_copy_string(srv->tmp_buf, file_path); 
+			buffer_urldecode_path(srv->tmp_buf);
+			buffer_path_simplify(srv->tmp_buf, srv->tmp_buf); 
+			buffer_append_string_buffer(p->stat_fn, srv->tmp_buf); 
 		} else {
 			/* virtual */
 			
@@ -974,7 +972,7 @@ static int mod_ssi_handle_request(server *srv, connection *con, plugin_data *p) 
 #ifdef HAVE_PCRE_H	
 	for (i = 0; (n = pcre_exec(p->ssi_regex, NULL, s.start, s.size, i, 0, ovec, N * 3)) > 0; i = ovec[1]) {
 		const char **l;
-		/* take every think from last offset to current match pos */
+		/* take everything from last offset to current match pos */
 		
 		if (!p->if_is_false) chunkqueue_append_file(con->write_queue, con->physical.path, i, ovec[0] - i);
 		
