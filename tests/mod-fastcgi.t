@@ -115,6 +115,13 @@ EOF
 	ok($tf->handle_http($t) == 0, 'PATHINFO');
 
 	$t->{REQUEST}  = ( <<EOF
+GET /cgi.php%20%20%20 HTTP/1.0
+EOF
+ );
+	$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 404 } ];
+	ok($tf->handle_http($t) == 0, 'No source retrieval');
+
+	$t->{REQUEST}  = ( <<EOF
 GET /www/abc/def HTTP/1.0
 EOF
  );
