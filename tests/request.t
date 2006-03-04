@@ -317,7 +317,7 @@ Content-Length: 4
 1234
 EOF
  );
-$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 400 } ];
+$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200 } ];
 ok($tf->handle_http($t) == 0, 'OPTIONS with Content-Length');
 
 $t->{REQUEST}  = ( <<EOF
