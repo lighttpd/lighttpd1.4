@@ -9,7 +9,7 @@ BEGIN {
 
 use strict;
 use IO::Socket;
-use Test::More tests => 17;
+use Test::More tests => 21;
 use LightyTest;
 
 my $tf = LightyTest->new();
@@ -30,6 +30,36 @@ EOF
  );
 $t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 400 } ];
 ok($tf->handle_http($t) == 0, 'missing Protocol');
+
+$t->{REQUEST}  = ( <<EOF
+GET / HTTP/01.01
+Host: foo
+Connection: close
+EOF
+ );
+$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.1', 'HTTP-Status' => 200 } ];
+ok($tf->handle_http($t) == 0, 'zeros in protocol version');
+
+$t->{REQUEST}  = ( <<EOF
+GET / HTTP/.01
+EOF
+ );
+$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 400 } ];
+ok($tf->handle_http($t) == 0, 'missing major version');
+
+$t->{REQUEST}  = ( <<EOF
+GET / HTTP/01.
+EOF
+ );
+$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 400 } ];
+ok($tf->handle_http($t) == 0, 'missing minor version');
+
+$t->{REQUEST}  = ( <<EOF
+GET / HTTP/a.b
+EOF
+ );
+$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 400 } ];
+ok($tf->handle_http($t) == 0, 'strings as version');
 
 $t->{REQUEST}  = ( <<EOF
 BC /
