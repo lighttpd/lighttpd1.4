@@ -1658,7 +1658,7 @@ static connection_result_t fcgi_establish_connection(server *srv, handler_ctx *h
 		servlen = SUN_LEN(&fcgi_addr_un);
 #else
 		/* stevens says: */
-		servlen = proc->socket->used - 1 + sizeof(fcgi_addr_un.sun_family);
+		servlen = proc->socket->used + sizeof(fcgi_addr_un.sun_family);
 #endif
 		fcgi_addr = (struct sockaddr *) &fcgi_addr_un;
 #else
