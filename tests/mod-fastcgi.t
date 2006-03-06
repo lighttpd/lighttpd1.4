@@ -7,7 +7,7 @@ BEGIN {
 }
 
 use strict;
-use Test::More tests => 45;
+use Test::More tests => 46;
 use LightyTest;
 
 my $tf = LightyTest->new();
@@ -249,7 +249,7 @@ EOF
 
 
 SKIP: {
-	skip "no fcgi-responder found", 9 unless -x $tf->{BASEDIR}."/tests/fcgi-responder" || -x $tf->{BASEDIR}."/tests/fcgi-responder.exe"; 
+	skip "no fcgi-responder found", 10 unless -x $tf->{BASEDIR}."/tests/fcgi-responder" || -x $tf->{BASEDIR}."/tests/fcgi-responder.exe"; 
 	
 	$tf->{CONFIGFILE} = 'fastcgi-responder.conf';
 	ok($tf->start_proc == 0, "Starting lighttpd with $tf->{CONFIGFILE}") or die();
