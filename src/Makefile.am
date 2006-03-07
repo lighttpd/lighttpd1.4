@@ -70,11 +70,15 @@ src += $(common_src)
 common_libadd = 
 endif
 
+lib_LTLIBRARIES += mod_flv_streaming.la
+mod_flv_streaming_la_SOURCES = mod_flv_streaming.c 
+mod_flv_streaming_la_LDFLAGS = -module -export-dynamic -avoid-version -no-undefined
+mod_flv_streaming_la_LIBADD = $(common_libadd)
+
 lib_LTLIBRARIES += mod_evasive.la
 mod_evasive_la_SOURCES = mod_evasive.c
 mod_evasive_la_LDFLAGS = -module -export-dynamic -avoid-version -no-undefined
 mod_evasive_la_LIBADD = $(common_libadd)
-
 
 lib_LTLIBRARIES += mod_webdav.la
 mod_webdav_la_SOURCES = mod_webdav.c
