@@ -41,7 +41,7 @@ typedef int socklen_t;
 #endif
 
 #ifdef HAVE_SYS_UN_H
-int fcgi_spawn_connection(char *appPath, unsigned short port, const char *unixsocket, int child_count, int pid_fd, int nofork) {
+int fcgi_spawn_connection(char *appPath, char *addr, unsigned short port, const char *unixsocket, int child_count, int pid_fd, int nofork) {
 	int fcgi_fd;
 	int socket_type, status;
 	struct timeval tv = { 0, 100 * 1000 };
@@ -77,7 +77,11 @@ int fcgi_spawn_connection(char *appPath, unsigned short port, const char *unixso
 		fcgi_addr = (struct sockaddr *) &fcgi_addr_un;
 	} else {
 		fcgi_addr_in.sin_family = AF_INET;
-		fcgi_addr_in.sin_addr.s_addr = htonl(INADDR_ANY);
+                if (addr != NULL) {
+                        fcgi_addr_in.sin_addr.s_addr = inet_addr(addr);
+                } else {
+                        fcgi_addr_in.sin_addr.s_addr = htonl(INADDR_ANY);
+                }
 		fcgi_addr_in.sin_port = htons(port);
 		servlen = sizeof(fcgi_addr_in);
 		
@@ -243,6 +247,7 @@ void show_help () {
 " - spawns fastcgi processes\n" \
 "usage:\n" \
 " -f <fcgiapp> filename of the fcgi-application\n" \
+" -a <addr>    bind to ip address\n" \
 " -p <port>    bind to tcp-port\n" \
 " -s <path>    bind to unix-domain socket\n" \
 " -C <childs>  (PHP only) numbers of childs to spawn (default 5)\n" \
@@ -261,7 +266,8 @@ void show_help () {
 
 int main(int argc, char **argv) {
 	char *fcgi_app = NULL, *changeroot = NULL, *username = NULL, 
-		*groupname = NULL, *unixsocket = NULL, *pid_file = NULL;
+               *groupname = NULL, *unixsocket = NULL, *pid_file = NULL,
+                *addr = NULL;
 	unsigned short port = 0;
 	int child_count = 5;
 	int i_am_root, o;
@@ -270,9 +276,10 @@ int main(int argc, char **argv) {
 	
 	i_am_root = (getuid() == 0);
 	
-	while(-1 != (o = getopt(argc, argv, "c:f:g:hnp:u:vC:s:P:"))) {
+       while(-1 != (o = getopt(argc, argv, "c:f:g:hna:p:u:vC:s:P:"))) {
 		switch(o) {
 		case 'f': fcgi_app = optarg; break;
+               case 'a': addr = optarg;/* ip addr */ break;
 		case 'p': port = strtol(optarg, NULL, 10);/* port */ break;
 		case 'C': child_count = strtol(optarg, NULL, 10);/*  */ break;
 		case 's': unixsocket = optarg; /* unix-domain socket */ break;
@@ -422,7 +429,7 @@ int main(int argc, char **argv) {
 		if (username) setuid(pwd->pw_uid);
 	}
 	
-	return fcgi_spawn_connection(fcgi_app, port, unixsocket, child_count, pid_fd, nofork);
+       return fcgi_spawn_connection(fcgi_app, addr, port, unixsocket, child_count, pid_fd, nofork);
 }
 #else
 int main() {
