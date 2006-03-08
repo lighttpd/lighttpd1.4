@@ -57,8 +57,10 @@
 
 typedef struct fcgi_proc {
 	size_t id; /* id will be between 1 and max_procs */
-	buffer *socket; /* config.socket + "-" + id */
+	buffer *unixsocket; /* config.socket + "-" + id */
 	unsigned port;  /* config.port + pno */
+
+	buffer *connection_name; /* either tcp:<host>:<port> or unix:<socket> for debuggin purposes */
 	
 	pid_t pid;   /* PID of the spawned process (0 if not spawned locally) */
 
@@ -74,12 +76,13 @@ typedef struct fcgi_proc {
 	int is_local;
 
 	enum { 
-		PROC_STATE_UNSET,            /* init-phase */
-		PROC_STATE_RUNNING, /* alive */
-		PROC_STATE_DIED_WAIT_FOR_PID,
-		PROC_STATE_KILLED,  /* was killed as we don't have the load anymore */
-		PROC_STATE_DIED,    /* marked as dead, should be restarted */
-		PROC_STATE_DISABLED /* proc disabled as it resulted in an error */
+		PROC_STATE_UNSET,    /* init-phase */
+		PROC_STATE_RUNNING,  /* alive */
+		PROC_STATE_OVERLOADED, /* listen-queue is full, 
+					  don't send something to this proc for the next 2 seconds */
+		PROC_STATE_DIED_WAIT_FOR_PID, /* */
+		PROC_STATE_DIED,     /* marked as dead, should be restarted */
+		PROC_STATE_KILLED    /* was killed as we don't have the load anymore */
 	} state; 
 } fcgi_proc;
 
@@ -261,6 +264,8 @@ typedef struct {
 
 typedef struct {
 	buffer *key; /* like .php */
+
+	int note_is_sent;
 
 	fcgi_extension_host **hosts;
 	
@@ -483,7 +488,8 @@ fcgi_proc *fastcgi_process_init() {
 	fcgi_proc *f;
 
 	f = calloc(1, sizeof(*f));
-	f->socket = buffer_init();
+	f->unixsocket = buffer_init();
+	f->connection_name = buffer_init();
 	
 	f->prev = NULL;
 	f->next = NULL;
@@ -496,7 +502,8 @@ void fastcgi_process_free(fcgi_proc *f) {
 	
 	fastcgi_process_free(f->next);
 	
-	buffer_free(f->socket);
+	buffer_free(f->unixsocket);
+	buffer_free(f->connection_name);
 	
 	free(f);
 }
@@ -680,8 +687,8 @@ FREE_FUNC(mod_fastcgi_free) {
 						if (proc->pid != 0) kill(proc->pid, SIGTERM);
 						
 						if (proc->is_local && 
-						    !buffer_is_empty(proc->socket)) {
-							unlink(proc->socket->ptr);
+						    !buffer_is_empty(proc->unixsocket)) {
+							unlink(proc->unixsocket->ptr);
 						}
 					}
 					
@@ -689,8 +696,8 @@ FREE_FUNC(mod_fastcgi_free) {
 						if (proc->pid != 0) kill(proc->pid, SIGTERM);
 						
 						if (proc->is_local && 
-						    !buffer_is_empty(proc->socket)) {
-							unlink(proc->socket->ptr);
+						    !buffer_is_empty(proc->unixsocket)) {
+							unlink(proc->unixsocket->ptr);
 						}
 					}
 				}
@@ -810,24 +817,28 @@ static int fcgi_spawn_connection(server *srv,
 	
 	if (p->conf.debug) {
 		log_error_write(srv, __FILE__, __LINE__, "sdb",
-				"new proc, socket:", proc->port, proc->socket);
+				"new proc, socket:", proc->port, proc->unixsocket);
 	}
 		
-	if (!buffer_is_empty(proc->socket)) {
+	if (!buffer_is_empty(proc->unixsocket)) {
 		memset(&fcgi_addr, 0, sizeof(fcgi_addr));
 		
 #ifdef HAVE_SYS_UN_H
 		fcgi_addr_un.sun_family = AF_UNIX;
-		strcpy(fcgi_addr_un.sun_path, proc->socket->ptr);
+		strcpy(fcgi_addr_un.sun_path, proc->unixsocket->ptr);
 		
 #ifdef SUN_LEN
 		servlen = SUN_LEN(&fcgi_addr_un);
 #else
 		/* stevens says: */
-		servlen = proc->socket->used + sizeof(fcgi_addr_un.sun_family);
+		servlen = proc->unixsocket->used + sizeof(fcgi_addr_un.sun_family);
 #endif
 		socket_type = AF_UNIX;
 		fcgi_addr = (struct sockaddr *) &fcgi_addr_un;
+
+		buffer_copy_string(proc->connection_name, "unix:");
+		buffer_append_string_buffer(proc->connection_name, proc->unixsocket);
+
 #else
 		log_error_write(srv, __FILE__, __LINE__, "s",
 				"ERROR: Unix Domain sockets are not supported.");
@@ -870,6 +881,11 @@ static int fcgi_spawn_connection(server *srv,
 		
 		socket_type = AF_INET;
 		fcgi_addr = (struct sockaddr *) &fcgi_addr_in;
+		
+		buffer_copy_string(proc->connection_name, "tcp:");
+		buffer_append_string_buffer(proc->connection_name, host->host);
+		buffer_append_string(proc->connection_name, ":");
+		buffer_append_long(proc->connection_name, proc->port);
 	}
 	
 	if (-1 == (fcgi_fd = socket(socket_type, SOCK_STREAM, 0))) {
@@ -884,8 +900,8 @@ static int fcgi_spawn_connection(server *srv,
 		int val;
 		
 		if (errno != ENOENT && 
-		    !buffer_is_empty(proc->socket)) {
-			unlink(proc->socket->ptr);
+		    !buffer_is_empty(proc->unixsocket)) {
+			unlink(proc->unixsocket->ptr);
 		}
 		
 		close(fcgi_fd);
@@ -906,10 +922,9 @@ static int fcgi_spawn_connection(server *srv,
 		
 		/* create socket */
 		if (-1 == bind(fcgi_fd, fcgi_addr, servlen)) {
-			log_error_write(srv, __FILE__, __LINE__, "sbds", 
+			log_error_write(srv, __FILE__, __LINE__, "sbs", 
 				"bind failed for:", 
-				proc->socket, 
-				proc->port, 
+				proc->connection_name,
 				strerror(errno));
 			return -1;
 		}
@@ -1052,7 +1067,7 @@ static int fcgi_spawn_connection(server *srv,
 							WTERMSIG(status));
 
 					if (WTERMSIG(status) == 11) {
-						log_error_write(srv, __FILE__, __LINE__, "ss",
+						log_error_write(srv, __FILE__, __LINE__, "s",
 								"to be exact: it seg-fault, crashed, died, ... you get the idea." );
 						log_error_write(srv, __FILE__, __LINE__, "s",
 								"If this is PHP try to remove the byte-code caches for now and try again.");
@@ -1080,7 +1095,7 @@ static int fcgi_spawn_connection(server *srv,
 		if (p->conf.debug) {
 			log_error_write(srv, __FILE__, __LINE__, "sb",
 					"(debug) socket is already used, won't spawn:",
-					proc->socket);
+					proc->connection_name);
 		}
 	}
 	
@@ -1252,9 +1267,12 @@ SETDEFAULTS_FUNC(mod_fastcgi_set_defaults) {
 							
 					if ((!buffer_is_empty(host->host) || host->port) && 
 					    !buffer_is_empty(host->unixsocket)) {
-						log_error_write(srv, __FILE__, __LINE__, "s", 
-								"either host+port or socket");
-						
+						log_error_write(srv, __FILE__, __LINE__, "sbsbsbs", 
+								"either host/port or socket have to be set in:",
+								da->key, "= (", 
+								da_ext->key, " => (",
+								da_host->key, " ( ...");
+
 						return HANDLER_ERROR;
 					}
 					
@@ -1262,8 +1280,12 @@ SETDEFAULTS_FUNC(mod_fastcgi_set_defaults) {
 						/* unix domain socket */
 						
 						if (host->unixsocket->used > UNIX_PATH_MAX - 2) {
-							log_error_write(srv, __FILE__, __LINE__, "s", 
-									"path of the unixdomain socket is too large");
+							log_error_write(srv, __FILE__, __LINE__, "sbsbsbs", 
+									"unixsocket is too long in:",
+									da->key, "= (", 
+									da_ext->key, " => (",
+									da_host->key, " ( ...");
+
 							return HANDLER_ERROR;
 						}
 					} else {
@@ -1271,21 +1293,20 @@ SETDEFAULTS_FUNC(mod_fastcgi_set_defaults) {
 						
 						if (buffer_is_empty(host->host) && 
 						    buffer_is_empty(host->bin_path)) {
-							log_error_write(srv, __FILE__, __LINE__, "sbbbs", 
-									"missing key (string):", 
-									da->key,
-									da_ext->key,
-									da_host->key,
-									"host");
+							log_error_write(srv, __FILE__, __LINE__, "sbsbsbs", 
+									"host or binpath have to be set in:",
+									da->key, "= (", 
+									da_ext->key, " => (",
+									da_host->key, " ( ...");
 							
 							return HANDLER_ERROR;
 						} else if (host->port == 0) {
-							log_error_write(srv, __FILE__, __LINE__, "sbbbs", 
-									"missing key (short):", 
-									da->key,
-									da_ext->key,
-									da_host->key,
-									"port");
+							log_error_write(srv, __FILE__, __LINE__, "sbsbsbs", 
+									"port has to be set in:",
+									da->key, "= (", 
+									da_ext->key, " => (",
+									da_host->key, " ( ...");
+
 							return HANDLER_ERROR;
 						}
 					}
@@ -1320,9 +1341,9 @@ SETDEFAULTS_FUNC(mod_fastcgi_set_defaults) {
 							if (buffer_is_empty(host->unixsocket)) {
 								proc->port = host->port + pno;
 							} else {
-								buffer_copy_string_buffer(proc->socket, host->unixsocket);
-								buffer_append_string(proc->socket, "-");
-								buffer_append_long(proc->socket, pno);
+								buffer_copy_string_buffer(proc->unixsocket, host->unixsocket);
+								buffer_append_string(proc->unixsocket, "-");
+								buffer_append_long(proc->unixsocket, pno);
 							}
 							
 							if (s->debug) {
@@ -1358,7 +1379,7 @@ SETDEFAULTS_FUNC(mod_fastcgi_set_defaults) {
 						if (buffer_is_empty(host->unixsocket)) {
 							proc->port = host->port;
 						} else {
-							buffer_copy_string_buffer(proc->socket, host->unixsocket);
+							buffer_copy_string_buffer(proc->unixsocket, host->unixsocket);
 						}
 						
 						fastcgi_status_init(srv, p->statuskey, host, proc);
@@ -1489,10 +1510,11 @@ void fcgi_connection_close(server *srv, handler_ctx *hctx) {
 			status_counter_set(srv, CONST_BUF_LEN(p->statuskey), hctx->proc->load);
 
 			if (p->conf.debug) {
-				log_error_write(srv, __FILE__, __LINE__, "sddb",
-						"release proc:", 
-						hctx->fd,
-						hctx->proc->pid, hctx->proc->socket);
+				log_error_write(srv, __FILE__, __LINE__, "ssdsbsd",
+						"released proc:", 
+						"pid:", hctx->proc->pid, 
+						"socket:", hctx->proc->connection_name, 
+						"load:", hctx->proc->load);
 			}
 		}
 
@@ -1531,6 +1553,7 @@ static int fcgi_reconnect(server *srv, handler_ctx *hctx) {
 		fdevent_unregister(srv->ev, hctx->fd);
 		close(hctx->fd);
 		srv->cur_fds--;
+		hctx->fd = -1;
 	}
 	
 	fcgi_requestid_del(srv, p, hctx->request_id);
@@ -1540,11 +1563,16 @@ static int fcgi_reconnect(server *srv, handler_ctx *hctx) {
 	hctx->request_id = 0;
 	hctx->reconnects++;
 	
-	if (p->conf.debug) {
-		log_error_write(srv, __FILE__, __LINE__, "sddb",
-				"release proc:", 
-				hctx->fd,
-				hctx->proc->pid, hctx->proc->socket);
+	if (p->conf.debug > 2) {
+		if (hctx->proc) {
+			log_error_write(srv, __FILE__, __LINE__, "sdb",
+					"release proc for reconnect:", 
+					hctx->proc->pid, hctx->proc->connection_name);
+		} else {
+			log_error_write(srv, __FILE__, __LINE__, "sb",
+					"release proc for reconnect:", 
+					hctx->host->unixsocket);
+		}
 	}
 
 	if (hctx->proc && hctx->got_proc) {	
@@ -1649,18 +1677,24 @@ static connection_result_t fcgi_establish_connection(server *srv, handler_ctx *h
 	
 	memset(&fcgi_addr, 0, sizeof(fcgi_addr));
 	
-	if (!buffer_is_empty(proc->socket)) {
+	if (!buffer_is_empty(proc->unixsocket)) {
 #ifdef HAVE_SYS_UN_H
 		/* use the unix domain socket */
 		fcgi_addr_un.sun_family = AF_UNIX;
-		strcpy(fcgi_addr_un.sun_path, proc->socket->ptr);
+		strcpy(fcgi_addr_un.sun_path, proc->unixsocket->ptr);
 #ifdef SUN_LEN
 		servlen = SUN_LEN(&fcgi_addr_un);
 #else
 		/* stevens says: */
-		servlen = proc->socket->used + sizeof(fcgi_addr_un.sun_family);
+		servlen = proc->unixsocket->used + sizeof(fcgi_addr_un.sun_family);
 #endif
 		fcgi_addr = (struct sockaddr *) &fcgi_addr_un;
+	
+		if (buffer_is_empty(proc->connection_name)) {
+			/* on remote spawing we have to set the connection-name now */
+			buffer_copy_string(proc->connection_name, "unix:");
+			buffer_append_string_buffer(proc->connection_name, proc->unixsocket);
+		}
 #else
 		return -1;
 #endif
@@ -1677,32 +1711,40 @@ static connection_result_t fcgi_establish_connection(server *srv, handler_ctx *h
 		servlen = sizeof(fcgi_addr_in);
 		
 		fcgi_addr = (struct sockaddr *) &fcgi_addr_in;
+
+		if (buffer_is_empty(proc->connection_name)) {
+			/* on remote spawing we have to set the connection-name now */
+			buffer_copy_string(proc->connection_name, "tcp:");
+			buffer_append_string_buffer(proc->connection_name, host->host);
+			buffer_append_string(proc->connection_name, ":");
+			buffer_append_long(proc->connection_name, proc->port);
+		}
 	}
 	
 	if (-1 == connect(fcgi_fd, fcgi_addr, servlen)) {
 		if (errno == EINPROGRESS || 
 		    errno == EALREADY ||
 		    errno == EINTR) {
-			if (hctx->conf.debug) {
+			if (hctx->conf.debug > 2) {
 				log_error_write(srv, __FILE__, __LINE__, "sb", 
-					"connect delayed, will continue later:", host->host);
+					"connect delayed, will continue later:", proc->connection_name);
 			}
 			
 			return CONNECTION_DELAYED;
 		} else if (errno == EAGAIN) {
 			if (hctx->conf.debug) {
-				log_error_write(srv, __FILE__, __LINE__, "sd", 
+				log_error_write(srv, __FILE__, __LINE__, "sbsd", 
 					"This means that the you have more incoming requests than your fastcgi-backend can handle in parallel. "
 					"Perhaps it helps to spawn more fastcgi backend or php-children, if not decrease server.max-connections."
-					"The load for this fastcgi backend is:", proc->load);
+					"The load for this fastcgi backend", proc->connection_name, "is", proc->load);
 			}
 
 			return CONNECTION_OVERLOADED;
 		} else {
-			log_error_write(srv, __FILE__, __LINE__, "ssdb", 
+			log_error_write(srv, __FILE__, __LINE__, "sssb", 
 					"connect failed:", 
-					strerror(errno),
-					proc->port, proc->socket);
+					strerror(errno), "on",
+					proc->connection_name);
 
 			return CONNECTION_DEAD;
 		}
@@ -2390,12 +2432,10 @@ static int fcgi_demux_response(server *srv, handler_ctx *hctx) {
 		b->used = r + 1; /* one extra for the fake \0 */
 		b->ptr[b->used - 1] = '\0';
 	} else {
-		log_error_write(srv, __FILE__, __LINE__, "ssdsbsbsd", 
+		log_error_write(srv, __FILE__, __LINE__, "ssdsb", 
 				"unexpected end-of-file (perhaps the fastcgi process died):",
 				"pid:", proc->pid,
-				"socket:", proc->socket,
-				"host:", host->host,
-				"port:", proc->port);
+				"socket:", proc->connection_name);
 		
 		return -1;
 	}
@@ -2663,85 +2703,93 @@ static int fcgi_restart_dead_procs(server *srv, plugin_data *p, fcgi_extension_h
 	fcgi_proc *proc;
 	
 	for (proc = host->first; proc; proc = proc->next) {
-		if (p->conf.debug) {
-			log_error_write(srv, __FILE__, __LINE__,  "sbdbdddd", 
+		int status;
+
+		if (p->conf.debug > 2) {
+			log_error_write(srv, __FILE__, __LINE__,  "sbdddd", 
 					"proc:", 
-					host->host, proc->port, 
-					proc->socket,
+					proc->connection_name,
 					proc->state,
 					proc->is_local,
 					proc->load,
 					proc->pid);
 		}
 		
-		if (!proc->is_local) {
-			/* 
-			 * external servers might get disabled 
-			 * 
-			 * enable the server again, perhaps it is back again 
-			 */
+		/* 
+		 * if the remote side is overloaded, we check back after <n> seconds
+		 * 
+		 */
+		switch (proc->state) {
+		case PROC_STATE_KILLED:
+		case PROC_STATE_UNSET:
+			/* this should never happen as long as adaptive spawing is disabled */
+			assert(0);
+
+			break;
+		case PROC_STATE_RUNNING:
+			break;
+		case PROC_STATE_OVERLOADED:
+			if (srv->cur_ts <= proc->disabled_until) break;
 			
-			if ((proc->state == PROC_STATE_DISABLED) &&
-			    (srv->cur_ts > proc->disabled_until)) {
-				proc->state = PROC_STATE_RUNNING;
-				host->active_procs++;
-				
-				fastcgi_status_copy_procname(p->statuskey, host, proc);
-				buffer_append_string(p->statuskey, ".disabled");
+			proc->state = PROC_STATE_RUNNING;
+			host->active_procs++;
+			
+			log_error_write(srv, __FILE__, __LINE__,  "sbdb", 
+					"fcgi-server re-enabled:", 
+					host->host, host->port, 
+					host->unixsocket);
+			break;
+		case PROC_STATE_DIED_WAIT_FOR_PID:
+			/* non-local procs don't have PIDs to wait for */
+			if (!proc->is_local) break;
 
-				status_counter_set(srv, CONST_BUF_LEN(p->statuskey), 0);
-
-				log_error_write(srv, __FILE__, __LINE__,  "sbdb", 
-						"fcgi-server re-enabled:", 
-						host->host, host->port, 
-						host->unixsocket);
-			}
-		} else {
 			/* the child should not terminate at all */
-			int status;
 			
-			if (proc->state == PROC_STATE_DIED_WAIT_FOR_PID) {
-				switch(waitpid(proc->pid, &status, WNOHANG)) {
-				case 0:
-					/* child is still alive */
-					break;
-				case -1:
-					break;
-				default:
-					if (WIFEXITED(status)) {
+			switch(waitpid(proc->pid, &status, WNOHANG)) {
+			case 0:
+				/* child is still alive */
+				break;
+			case -1:
+				break;
+			default:
+				if (WIFEXITED(status)) {
 #if 0
-						log_error_write(srv, __FILE__, __LINE__, "sdsd", 
-								"child exited, pid:", proc->pid,
-								"status:", WEXITSTATUS(status));
+					log_error_write(srv, __FILE__, __LINE__, "sdsd", 
+							"child exited, pid:", proc->pid,
+							"status:", WEXITSTATUS(status));
 #endif
-					} else if (WIFSIGNALED(status)) {
-						log_error_write(srv, __FILE__, __LINE__, "sd", 
-								"child signaled:", 
-								WTERMSIG(status));
-					} else {
-						log_error_write(srv, __FILE__, __LINE__, "sd", 
-								"child died somehow:", 
-								status);
-					}
-					
-					proc->state = PROC_STATE_DIED;
-					break;
+				} else if (WIFSIGNALED(status)) {
+					log_error_write(srv, __FILE__, __LINE__, "sd", 
+							"child signaled:", 
+							WTERMSIG(status));
+				} else {
+					log_error_write(srv, __FILE__, __LINE__, "sd", 
+							"child died somehow:", 
+							status);
 				}
+				
+				proc->state = PROC_STATE_DIED;
+				break;
 			}
+
+			/* fall through if we have a dead proc now */
+			if (proc->state != PROC_STATE_DIED) break;
+
+		case PROC_STATE_DIED:
+			/* local proc get restarted by us, 
+			 * remote ones hopefully by the admin */
 			
-			/* 
-			 * local servers might died, but we restart them
-			 * 
-			 */
-			if (proc->state == PROC_STATE_DIED &&
-			    proc->load == 0) {
+			if (proc->is_local) {
+				/* we still have connections bound to this proc,
+				 * let them terminate first */
+				if (proc->load != 0) break;
+			
 				/* restart the child */
 				
 				if (p->conf.debug) {
-					log_error_write(srv, __FILE__, __LINE__, "ssdsbsdsd",
+					log_error_write(srv, __FILE__, __LINE__, "ssbsdsd",
 							"--- fastcgi spawning",
-							"\n\tport:", host->port,
-							"\n\tsocket", host->unixsocket,
+							"\n\tsocket", proc->connection_name,
 							"\n\tcurrent:", 1, "/", host->min_procs);
 				}
 				
@@ -2752,7 +2800,17 @@ static int fcgi_restart_dead_procs(server *srv, plugin_data *p, fcgi_extension_h
 				}
 				
 				fcgi_proclist_sort_down(srv, host, proc);
+			} else {
+				if (srv->cur_ts <= proc->disabled_until) break;
+			
+				proc->state = PROC_STATE_RUNNING;
+				host->active_procs++;
+			
+				log_error_write(srv, __FILE__, __LINE__,  "sb", 
+						"fcgi-server re-enabled:", 
+						proc->connection_name);
 			}
+			break;
 		}
 	}
 	
@@ -2775,6 +2833,10 @@ static handler_t fcgi_write_request(server *srv, handler_ctx *hctx) {
 				host->host->used,
 				host->port,
 				host->unixsocket->used);
+			
+		hctx->proc->disabled_until = srv->cur_ts + 10;
+		hctx->proc->state = PROC_STATE_DIED;
+
 		return HANDLER_ERROR;
 	}
 
@@ -2788,18 +2850,22 @@ static handler_t fcgi_write_request(server *srv, handler_ctx *hctx) {
 			log_error_write(srv, __FILE__, __LINE__, "ss", 
 					"getsockopt failed:", strerror(errno));
 			
+			hctx->proc->disabled_until = srv->cur_ts + 10;
+			hctx->proc->state = PROC_STATE_DIED;
+
 			return HANDLER_ERROR;
 		}
 		if (socket_error != 0) {
 			if (!hctx->proc->is_local || p->conf.debug) {
 				/* local procs get restarted */
 				
-				log_error_write(srv, __FILE__, __LINE__, "sssd",
+				log_error_write(srv, __FILE__, __LINE__, "sssb",
 						"establishing connection failed:", strerror(socket_error), 
-						"port:", hctx->proc->port);
+						"socket:", hctx->proc->connection_name);
 			}
 	
 			hctx->proc->disabled_until = srv->cur_ts + 10;
+			hctx->proc->state = PROC_STATE_DIED;
 		
 			fastcgi_status_copy_procname(p->statuskey, hctx->host, hctx->proc);
 			buffer_append_string(p->statuskey, ".died");
@@ -2875,14 +2941,14 @@ static handler_t fcgi_write_request(server *srv, handler_ctx *hctx) {
 			/* cool down the backend, it is overloaded
 			 * -> EAGAIN */
 
-			log_error_write(srv, __FILE__, __LINE__, "ssdsdb", 
+			log_error_write(srv, __FILE__, __LINE__, "ssdsd", 
 				"backend is overloaded, we disable it for a 2 seconds and send the request to another backend instead:",
 				"reconnects:", hctx->reconnects,
-				"load:", host->load,
-				host->unixsocket);
+				"load:", host->load);
 
 
 			hctx->proc->disabled_until = srv->cur_ts + 2;
+			hctx->proc->state = PROC_STATE_OVERLOADED;
 
 			fastcgi_status_copy_procname(p->statuskey, hctx->host, hctx->proc);
 			buffer_append_string(p->statuskey, ".overloaded");
@@ -2899,6 +2965,7 @@ static handler_t fcgi_write_request(server *srv, handler_ctx *hctx) {
 			 *  */
 			
 			hctx->proc->disabled_until = srv->cur_ts + 10;
+			hctx->proc->state = PROC_STATE_DIED;
 		
 			fastcgi_status_copy_procname(p->statuskey, hctx->host, hctx->proc);
 			buffer_append_string(p->statuskey, ".died");
@@ -2944,13 +3011,11 @@ static handler_t fcgi_write_request(server *srv, handler_ctx *hctx) {
 		status_counter_set(srv, CONST_BUF_LEN(p->statuskey), hctx->host->load);
 
 		if (p->conf.debug) {
-			log_error_write(srv, __FILE__, __LINE__, "sddbdd",
+			log_error_write(srv, __FILE__, __LINE__, "ssdsbsd",
 					"got proc:", 
-					hctx->fd,
-					hctx->proc->pid, 
-					hctx->proc->socket, 
-					hctx->proc->port,
-					hctx->proc->load);
+					"pid:", hctx->proc->pid, 
+					"socket:", hctx->proc->connection_name, 
+					"load:", hctx->proc->load);
 		}
 
 		/* move the proc-list entry down the list */
@@ -3117,43 +3182,7 @@ SUBREQUEST_FUNC(mod_fastcgi_handle_subrequest) {
 		
 		if (hctx->state == FCGI_STATE_INIT ||
 		    hctx->state == FCGI_STATE_CONNECT_DELAYED) {
-			/* connect() or getsockopt() failed, 
-			 * restart the request-handling 
-			 */
-			if (proc) {
-			       	if (proc->is_local) {
-
-					if (p->conf.debug) {
-						log_error_write(srv, __FILE__, __LINE__,  "sbdb", 
-							"connect() to fastcgi failed, restarting the request-handling:", 
-							host->host,
-							proc->port,
-							proc->socket);
-					}
-
-					/* 
-					 * several hctx might reference the same proc
-					 * 
-					 * Only one of them should mark the proc as dead all the other
-					 * ones should just take a new one.
-					 * 
-					 * If a new proc was started with the old struct this might lead
-					 * the mark a perfect proc as dead otherwise
-					 * 
-					 */
-					if (proc->state == PROC_STATE_RUNNING &&
-					    hctx->pid == proc->pid) {
-						proc->state = PROC_STATE_DIED_WAIT_FOR_PID;
-					}
-				} else {
-					proc->state = PROC_STATE_DISABLED;
-				}
-				host->active_procs--;
-				fastcgi_status_copy_procname(p->statuskey, hctx->host, hctx->proc);
-				buffer_append_string(p->statuskey, ".disabled");
-
-				status_counter_set(srv, CONST_BUF_LEN(p->statuskey), 1);
-			}
+			if (proc) host->active_procs--;
 
 			fcgi_restart_dead_procs(srv, p, host);
 
@@ -3266,16 +3295,19 @@ static handler_t fcgi_handle_fdevent(void *s, void *ctx, int revents) {
 					}
 					
 					if (p->conf.debug) {
-						log_error_write(srv, __FILE__, __LINE__, "ssdsbsdsd",
+						log_error_write(srv, __FILE__, __LINE__, "ssbsdsd",
 								"--- fastcgi spawning",
-								"\n\tport:", host->port,
-								"\n\tsocket", host->unixsocket,
+								"\n\tsocket", proc->connection_name,
 								"\n\tcurrent:", 1, "/", host->min_procs);
 					}
 					
 					if (fcgi_spawn_connection(srv, p, host, proc)) {
-						/* child died */
+						/* respawning failed, retry later */
 						proc->state = PROC_STATE_DIED;
+
+						log_error_write(srv, __FILE__, __LINE__, "s", 
+								"respawning failed, will retry later");
+
 					} else {
 						fcgi_proclist_sort_down(srv, host, proc);
 					}
@@ -3291,18 +3323,18 @@ static handler_t fcgi_handle_fdevent(void *s, void *ctx, int revents) {
 				    hctx->reconnects < 5) {
 					fcgi_reconnect(srv, hctx);
 					
-					log_error_write(srv, __FILE__, __LINE__, "ssdsd", 
-						"response not received, request not sent, reconnecting.",
-						"connection-fd:", con->fd,
-						"fcgi-fd:", hctx->fd);
+					log_error_write(srv, __FILE__, __LINE__, "ssbsbs", 
+						"response not received, request not sent",
+						"on socket:", proc->connection_name, 
+						"for", con->uri.path, ", reconnecting");
 					
 					return HANDLER_WAIT_FOR_FD;
 				}
-				
-				log_error_write(srv, __FILE__, __LINE__, "sosdsd", 
+			
+				log_error_write(srv, __FILE__, __LINE__, "sosbsbs", 
 						"response not received, request sent:", hctx->wb->bytes_out,
-						"connection-fd:", con->fd,
-						"fcgi-fd:", hctx->fd);
+						"on socket:", proc->connection_name, 
+						"for", con->uri.path, ", closing connection");
 				
 				fcgi_connection_close(srv, hctx);
 				
@@ -3314,10 +3346,10 @@ static handler_t fcgi_handle_fdevent(void *s, void *ctx, int revents) {
 				/* response might have been already started, kill the connection */
 				fcgi_connection_close(srv, hctx);
 				
-				log_error_write(srv, __FILE__, __LINE__, "ssdsd", 
-						"response already sent out, termination connection",
-						"connection-fd:", con->fd,
-						"fcgi-fd:", hctx->fd);
+				log_error_write(srv, __FILE__, __LINE__, "ssbsbs", 
+						"response already sent out, but backend returned error",
+						"on socket:", proc->connection_name, 
+						"for", con->uri.path, ", terminating connection");
 				
 				connection_set_state(srv, con, CON_STATE_ERROR);
 			}
@@ -3370,7 +3402,7 @@ static handler_t fcgi_handle_fdevent(void *s, void *ctx, int revents) {
 			log_error_write(srv, __FILE__, __LINE__, "sbSBSDSd", 
 					"error: unexpected close of fastcgi connection for", 
 					con->uri.path,
-					"(no fastcgi process on host: ", 
+					"(no fastcgi process on host:", 
 					host->host,
 					", port: ", 
 					host->port,
@@ -3536,13 +3568,22 @@ static handler_t fcgi_check_extension(server *srv, connection *con, void *p_d, i
 		/* sorry, we don't have a server alive for this ext */
 		buffer_reset(con->physical.path);
 		con->http_status = 500;
-		
-		log_error_write(srv, __FILE__, __LINE__,  "sb", 
-				"no fcgi-handler found for:", 
-				fn);
+
+		/* only send the 'no handler' once */
+		if (!extension->note_is_sent) {
+			extension->note_is_sent = 1;
+
+			log_error_write(srv, __FILE__, __LINE__, "sbsbs",
+					"all handlers for ", con->uri.path,
+					"on", extension->key,
+					"are down.");
+		}
 		
 		return HANDLER_FINISHED;
 	}
+
+	/* a note about no handler is not sent yey */
+	extension->note_is_sent = 0;
 
 	/* 
 	 * if check-local is disabled, use the uri.path handler 
@@ -3725,48 +3766,46 @@ TRIGGER_FUNC(mod_fastcgi_handle_trigger) {
 				    host->num_procs < host->max_procs &&
 				    (sum_load / host->num_procs) > host->max_load_per_proc) {
 					/* overload, spawn new child */
-					fcgi_proc *fp = NULL;
-					
 					if (p->conf.debug) {
 						log_error_write(srv, __FILE__, __LINE__, "s", 
 								"overload detected, spawning a new child");
 					}
 					
-					for (fp = host->unused_procs; fp && fp->pid != 0; fp = fp->next);
+					for (proc = host->unused_procs; proc && proc->pid != 0; proc = proc->next);
 					
-					if (fp) {
-						if (fp == host->unused_procs) host->unused_procs = fp->next;
+					if (proc) {
+						if (proc == host->unused_procs) host->unused_procs = proc->next;
 						
-						if (fp->next) fp->next->prev = NULL;
+						if (proc->next) proc->next->prev = NULL;
 						
 						host->max_id++;
 					} else {
-						fp = fastcgi_process_init();
-						fp->id = host->max_id++;
+						proc = fastcgi_process_init();
+						proc->id = host->max_id++;
 					}
 					
 					host->num_procs++;
 					
 					if (buffer_is_empty(host->unixsocket)) {
-						fp->port = host->port + fp->id;
+						proc->port = host->port + proc->id;
 					} else {
-						buffer_copy_string_buffer(fp->socket, host->unixsocket);
-						buffer_append_string(fp->socket, "-");
-						buffer_append_long(fp->socket, fp->id);
+						buffer_copy_string_buffer(proc->unixsocket, host->unixsocket);
+						buffer_append_string(proc->unixsocket, "-");
+						buffer_append_long(proc->unixsocket, proc->id);
 					}
 					
-					if (fcgi_spawn_connection(srv, p, host, fp)) {
+					if (fcgi_spawn_connection(srv, p, host, proc)) {
 						log_error_write(srv, __FILE__, __LINE__, "s",
 								"ERROR: spawning fcgi failed.");
 						return HANDLER_ERROR;
 					}
 					
-					fp->prev = NULL;
-					fp->next = host->first;
+					proc->prev = NULL;
+					proc->next = host->first;
 					if (host->first) {
-						host->first->prev = fp;
+						host->first->prev = proc;
 					}
-					host->first = fp;
+					host->first = proc;
 				}
 				
 				for (proc = host->first; proc; proc = proc->next) {
@@ -3781,7 +3820,7 @@ TRIGGER_FUNC(mod_fastcgi_handle_trigger) {
 						if (p->conf.debug) {
 							log_error_write(srv, __FILE__, __LINE__, "ssbsd", 
 									"idle-timeout reached, terminating child:", 
-									"socket:", proc->socket, 
+									"socket:", proc->connection_name, 
 									"pid", proc->pid);
 						}
 						
@@ -3803,7 +3842,7 @@ TRIGGER_FUNC(mod_fastcgi_handle_trigger) {
 						
 						log_error_write(srv, __FILE__, __LINE__, "ssbsd", 
 									"killed:", 
-									"socket:", proc->socket, 
+									"socket:", proc->connection_name, 
 									"pid", proc->pid);
 						
 						host->num_procs--;
@@ -3844,7 +3883,7 @@ TRIGGER_FUNC(mod_fastcgi_handle_trigger) {
 							if (proc->state != PROC_STATE_KILLED) {
 								log_error_write(srv, __FILE__, __LINE__, "sdb", 
 										"child exited:", 
-										WEXITSTATUS(status), proc->socket);
+										WEXITSTATUS(status), proc->connection_name);
 							}
 						} else if (WIFSIGNALED(status)) {
 							if (WTERMSIG(status) != SIGTERM) {
