@@ -3,6 +3,19 @@
 NEWS
 ====
 
+- 1.4.11 - 2006-02-..
+
+  * added ability to specify which ip address spawn-fci listens on (agkr@pobox.com)
+  * added mod_flv_streaming to streaming Flash Movies efficiently
+  * fixed error-messages in mod_auth and mod_fastcgi
+  * fixed re-enabling overloaded local fastcgi backends
+  * fixed handling of deleted files in linux-sendfile
+  * fixed compilation on BSD and MacOSX
+  * fixed local source retrieval on windows 
+    (secunia)
+  * fixed hanging cgi if remote side is dieing while reading from the pipe
+    (sandy@meebo.com)
+
 - 1.4.10 - 2006-02-08
 
   * added docs for mod_dirlisting
