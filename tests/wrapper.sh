@@ -2,8 +2,8 @@
 
 ## get some parameters from the makefile
 
-export srcdir=$1
-export top_builddir=$2
-export SHELL
+srcdir=$1
+top_builddir=$2
+export SHELL srcdir top_builddir
 
 $3
