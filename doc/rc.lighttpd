@@ -111,8 +111,7 @@ case "$1" in
 	# Remember status and be quiet
 	rc_status
 	;;
-    force-reload)
-    reload)
+    force-reload|reload)
 	## Like force-reload, but if daemon does not support
 	## signalling, do nothing (!)
 
