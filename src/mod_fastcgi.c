@@ -363,8 +363,6 @@ typedef struct {
 /* ok, we need a prototype */
 static handler_t fcgi_handle_fdevent(void *s, void *ctx, int revents);
 
-int fcgi_proclist_sort_down(server *srv, fcgi_extension_host *host, fcgi_proc *proc);
-
 data_integer *status_counter_get_counter(server *srv, const char *s, size_t len) {
 	data_integer *di;
 
@@ -1517,8 +1515,6 @@ void fcgi_connection_close(server *srv, handler_ctx *hctx) {
 						"load:", hctx->proc->load);
 			}
 		}
-
-		fcgi_proclist_sort_down(srv, hctx->host, hctx->proc);
 	}
 
 	
@@ -1577,7 +1573,6 @@ static int fcgi_reconnect(server *srv, handler_ctx *hctx) {
 
 	if (hctx->proc && hctx->got_proc) {	
 		hctx->proc->load--;
-		fcgi_proclist_sort_down(srv, hctx->host, hctx->proc);
 	}
 
 	/* perhaps another host gives us more luck */
@@ -2566,139 +2561,6 @@ static int fcgi_demux_response(server *srv, handler_ctx *hctx) {
 	return fin;
 }
 
-int fcgi_proclist_sort_up(server *srv, fcgi_extension_host *host, fcgi_proc *proc) {
-	fcgi_proc *p;
-	
-	UNUSED(srv);
-	
-	/* we have been the smallest of the current list 
-	 * and we want to insert the node sorted as soon 
-	 * possible
-	 *
-	 * 1 0 0 0 1 1 1 
-	 * |      ^ 
-	 * |      |
-	 * +------+
-	 * 
-	 */
-
-	/* nothing to sort, only one element */
-	if (host->first == proc && proc->next == NULL) return 0;
-
-	for (p = proc; p->next && p->next->load < proc->load; p = p->next);
-
-	/* no need to move something 
-	 *
-	 * 1 2 2 2 3 3 3 
-	 * ^
-	 * |
-	 * +
-	 *
-	 */
-	if (p == proc) return 0;
-
-	if (host->first == proc) {
-		/* we have been the first elememt */
-
-		host->first = proc->next;
-		host->first->prev = NULL;
-	}
-
-	/* disconnect proc */
-
-	if (proc->prev) proc->prev->next = proc->next;
-	if (proc->next) proc->next->prev = proc->prev;
-	
-	/* proc should be right of p */
-	
-	proc->next = p->next;
-	proc->prev = p;
-	if (p->next) p->next->prev = proc;
-	p->next = proc;
-#if 0
-	for(p = host->first; p; p = p->next) {
-		log_error_write(srv, __FILE__, __LINE__, "dd", 
-				p->pid, p->load);
-	}
-#else
-	UNUSED(srv);
-#endif
-
-	return 0;
-}
-
-int fcgi_proclist_sort_down(server *srv, fcgi_extension_host *host, fcgi_proc *proc) {
-	fcgi_proc *p;
-	
-	UNUSED(srv);
-	
-	/* we have been the smallest of the current list 
-	 * and we want to insert the node sorted as soon 
-	 * possible
-	 *
-	 *  0 0 0 0 1 0 1 
-	 * ^          |
-	 * |          |
-	 * +----------+
-	 *
-	 *
-	 * the basic is idea is:
-	 * - the last active fastcgi process should be still 
-	 *   in ram and is not swapped out yet
-	 * - processes that are not reused will be killed
-	 *   after some time by the trigger-handler
-	 * - remember it as:
-	 *   everything > 0 is hot
-	 *   all unused procs are colder the more right they are
-	 *   ice-cold processes are propably unused since more
-	 *   than 'unused-timeout', are swaped out and won't be
-	 *   reused in the next seconds anyway.
-	 * 
-	 */
-
-	/* nothing to sort, only one element */
-	if (host->first == proc && proc->next == NULL) return 0;
-
-	for (p = host->first; p != proc && p->load < proc->load; p = p->next);
-
-
-	/* no need to move something 
-	 *
-	 * 1 2 2 2 3 3 3 
-	 * ^
-	 * |
-	 * +
-	 *
-	 */
-	if (p == proc) return 0;
-	
-	/* we have to move left. If we are already the first element
-	 * we are done */
-	if (host->first == proc) return 0;
-
-	/* release proc */
-	if (proc->prev) proc->prev->next = proc->next;
-	if (proc->next) proc->next->prev = proc->prev;
-
-	/* proc should be left of p */
-	proc->next = p;
-	proc->prev = p->prev;
-	if (p->prev) p->prev->next = proc;
-	p->prev = proc;
-
-	if (proc->prev == NULL) host->first = proc;
-#if 0	
-	for(p = host->first; p; p = p->next) {
-		log_error_write(srv, __FILE__, __LINE__, "dd", 
-				p->pid, p->load);
-	}
-#else
-	UNUSED(srv);
-#endif
-
-	return 0;
-}
-
 static int fcgi_restart_dead_procs(server *srv, plugin_data *p, fcgi_extension_host *host) {
 	fcgi_proc *proc;
 	
@@ -2798,8 +2660,6 @@ static int fcgi_restart_dead_procs(server *srv, plugin_data *p, fcgi_extension_h
 							"ERROR: spawning fcgi failed.");
 					return HANDLER_ERROR;
 				}
-				
-				fcgi_proclist_sort_down(srv, host, proc);
 			} else {
 				if (srv->cur_ts <= proc->disabled_until) break;
 			
@@ -2821,6 +2681,7 @@ static handler_t fcgi_write_request(server *srv, handler_ctx *hctx) {
 	plugin_data *p    = hctx->plugin_data;
 	fcgi_extension_host *host= hctx->host;
 	connection *con   = hctx->remote_conn;
+	fcgi_proc  *proc;
 	
 	int ret;
 
@@ -2885,16 +2746,25 @@ static handler_t fcgi_write_request(server *srv, handler_ctx *hctx) {
 		break;
 	case FCGI_STATE_INIT:
 		/* do we have a running process for this host (max-procs) ? */
+		hctx->proc = NULL;
 
-		for (hctx->proc = hctx->host->first; 
-		     hctx->proc && hctx->proc->state != PROC_STATE_RUNNING; 
-		     hctx->proc = hctx->proc->next);
+		for (proc = hctx->host->first; 
+		     proc && proc->state != PROC_STATE_RUNNING; 
+		     proc = proc->next);
 			
 		/* all childs are dead */
-		if (hctx->proc == NULL) {
+		if (proc == NULL) {
 			hctx->fde_ndx = -1;
 		
 			return HANDLER_ERROR;
+		}
+
+		hctx->proc = proc;
+
+		/* check the other procs if they have a lower load */
+		for (proc = proc->next; proc; proc = proc->next) {
+			if (proc->state != PROC_STATE_RUNNING) continue;
+			if (proc->load < hctx->proc->load) hctx->proc = proc;
 		}
 
 		ret = host->unixsocket->used ? AF_UNIX : AF_INET;
@@ -3019,8 +2889,6 @@ static handler_t fcgi_write_request(server *srv, handler_ctx *hctx) {
 		}
 
 		/* move the proc-list entry down the list */
-		fcgi_proclist_sort_up(srv, hctx->host, hctx->proc);
-		
 		if (hctx->request_id == 0) {
 			hctx->request_id = fcgi_requestid_new(srv, p);
 		} else {
@@ -3307,9 +3175,6 @@ static handler_t fcgi_handle_fdevent(void *s, void *ctx, int revents) {
 
 						log_error_write(srv, __FILE__, __LINE__, "s", 
 								"respawning failed, will retry later");
-
-					} else {
-						fcgi_proclist_sort_down(srv, host, proc);
 					}
 					
 					break;
