@@ -2725,7 +2725,14 @@ static handler_t fcgi_write_request(server *srv, handler_ctx *hctx) {
 						"socket:", hctx->proc->connection_name);
 			}
 	
-			hctx->proc->disabled_until = srv->cur_ts + 10;
+			hctx->proc->disabled_until = srv->cur_ts + 5;
+
+			if (hctx->proc->is_local) {
+				hctx->proc->state = PROC_STATE_DIED_WAIT_FOR_PID;
+			} else {
+				hctx->proc->state = PROC_STATE_DIED;
+			}
+	
 			hctx->proc->state = PROC_STATE_DIED;
 		
 			fastcgi_status_copy_procname(p->statuskey, hctx->host, hctx->proc);
@@ -2831,12 +2838,21 @@ static handler_t fcgi_write_request(server *srv, handler_ctx *hctx) {
 			 * - ECONNREFUSED for tcp-ip sockets
 			 * - ENOENT for unix-domain-sockets
 			 *
-			 * for check if the host is back in 10 seconds
+			 * for check if the host is back in 5 seconds
 			 *  */
 			
-			hctx->proc->disabled_until = srv->cur_ts + 10;
-			hctx->proc->state = PROC_STATE_DIED;
-		
+			hctx->proc->disabled_until = srv->cur_ts + 5;
+			if (hctx->proc->is_local) {
+				hctx->proc->state = PROC_STATE_DIED_WAIT_FOR_PID;
+			} else {
+				hctx->proc->state = PROC_STATE_DIED;
+			}
+	
+			log_error_write(srv, __FILE__, __LINE__, "ssdsd", 
+				"backend died, we disable it for a 5 seconds and send the request to another backend instead:",
+				"reconnects:", hctx->reconnects,
+				"load:", host->load);
+	
 			fastcgi_status_copy_procname(p->statuskey, hctx->host, hctx->proc);
 			buffer_append_string(p->statuskey, ".died");
 
