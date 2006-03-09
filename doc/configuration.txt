@@ -319,10 +319,21 @@ index-file.names
 server.modules
   modules to load
   
-.. note:: the order of the modules is somewhat important as the modules are
-        handled in the way they are specified. mod_rewrite should always be
-        the first module, mod_accesslog always the last.
-  
+.. note:: the order of the modules is important.
+
+  The modules are executed in the order as they are specified. Loading
+  mod_auth AFTER mod_fastcgi might disable authentication for fastcgi
+  backends (if check-local is disabled). 
+
+  As auth should be done first, move it before all executing modules (like 
+  proxy, fastcgi, scgi and cgi).
+
+  rewrites, redirects and access should be first, followed by auth and 
+  the docroot plugins.
+
+  Afterwards the external handlers like fastcgi, cgi, scgi and proxy and
+  at the bottom the post-processing plugins like mod_accesslog.
+
   e.g.: ::
 
     server.modules          = ( "mod_rewrite", 
@@ -331,17 +342,17 @@ server.modules
 			        "mod_access", 
 				"mod_auth", 
                                 "mod_status", 
-				"mod_fastcgi",
-				"mod_proxy",
 				"mod_simple_vhost",
 				"mod_evhost",
 				"mod_userdir",
+				"mod_secdownload",
+				"mod_fastcgi",
+				"mod_proxy",
 				"mod_cgi",
-				"mod_compress",
                                 "mod_ssi",
+				"mod_compress",
                                 "mod_usertrack",
 				"mod_expire",
-				"mod_secdownload",
  				"mod_rrdtool",
 				"mod_accesslog" )
 
