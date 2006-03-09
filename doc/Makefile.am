@@ -71,7 +71,7 @@ HTMLDOCS=accesslog.html \
 	 webdav.html \
 	 expire.html \
 	 dirlisting.html \
-	 evhost.txt
+	 evhost.html
 
 EXTRA_DIST=lighttpd.conf lighttpd.user \
 	rc.lighttpd rc.lighttpd.redhat sysconfig.lighttpd \
