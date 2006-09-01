@@ -67,7 +67,7 @@ int network_write_chunkqueue_openssl(server *srv, connection *con, SSL *ssl, chu
 			size_t toSend;
 			ssize_t r;
 			
-			if (c->mem->used == 0) {
+			if (c->mem->used == 0 || c->mem->used == 1) {
 				chunk_finished = 1;
 				break;
 			}
