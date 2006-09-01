@@ -8,6 +8,9 @@
 #include <stdio.h>
 #include <assert.h>
 
+#include <unistd.h>
+#include <dirent.h>
+
 #ifdef HAVE_CONFIG_H
 #include "config.h"
 #endif
@@ -35,9 +38,7 @@
 #include "stream.h"
 #include "stat_cache.h"
 
-#include "sys-files.h"
 #include "sys-mmap.h"
-#include "sys-strings.h"
 
 /**
  * this is a webdav for a lighttpd plugin
@@ -371,6 +372,8 @@ SETDEFAULTS_FUNC(mod_webdav_set_defaults) {
 	return HANDLER_GO_ON;
 }
 
+#define PATCH_OPTION(x) \
+	p->conf.x = s->x;
 static int mod_webdav_patch_connection(server *srv, connection *con, plugin_data *p) {
 	size_t i, j;
 	plugin_config *s = p->config_storage[0];
@@ -592,11 +595,11 @@ static int webdav_delete_dir(server *srv, connection *con, plugin_data *p, physi
 			}
 
 			buffer_copy_string_buffer(d.path, dst->path);
-			PATHNAME_APPEND_SLASH(d.path);
+			BUFFER_APPEND_SLASH(d.path);
 			buffer_append_string(d.path, de->d_name);
 
 			buffer_copy_string_buffer(d.rel_path, dst->rel_path);
-			PATHNAME_APPEND_SLASH(d.rel_path);
+			BUFFER_APPEND_SLASH(d.rel_path);
 			buffer_append_string(d.rel_path, de->d_name);
 
 			/* stat and unlink afterwards */
@@ -751,19 +754,19 @@ static int webdav_copy_dir(server *srv, connection *con, plugin_data *p, physica
 			}
 
 			buffer_copy_string_buffer(s.path, src->path);
-			PATHNAME_APPEND_SLASH(s.path);
+			BUFFER_APPEND_SLASH(s.path);
 			buffer_append_string(s.path, de->d_name);
 
 			buffer_copy_string_buffer(d.path, dst->path);
-			PATHNAME_APPEND_SLASH(d.path);
+			BUFFER_APPEND_SLASH(d.path);
 			buffer_append_string(d.path, de->d_name);
 
 			buffer_copy_string_buffer(s.rel_path, src->rel_path);
-			PATHNAME_APPEND_SLASH(s.rel_path);
+			BUFFER_APPEND_SLASH(s.rel_path);
 			buffer_append_string(s.rel_path, de->d_name);
 
 			buffer_copy_string_buffer(d.rel_path, dst->rel_path);
-			PATHNAME_APPEND_SLASH(d.rel_path);
+			BUFFER_APPEND_SLASH(d.rel_path);
 			buffer_append_string(d.rel_path, de->d_name);
 
 			if (-1 == stat(s.path->ptr, &st)) {
@@ -1394,10 +1397,10 @@ URIHANDLER_FUNC(mod_webdav_subrequest_handler) {
 					}
 
 					buffer_copy_string_buffer(d.path, dst->path);
-					PATHNAME_APPEND_SLASH(d.path);
+					BUFFER_APPEND_SLASH(d.path);
 
 					buffer_copy_string_buffer(d.rel_path, dst->rel_path);
-					PATHNAME_APPEND_SLASH(d.rel_path);
+					BUFFER_APPEND_SLASH(d.rel_path);
 
 					if (de->d_name[0] == '.' && de->d_name[1] == '\0') {
 						/* don't append the . */
@@ -1852,7 +1855,7 @@ URIHANDLER_FUNC(mod_webdav_subrequest_handler) {
 		}
 
 		buffer_copy_string_buffer(p->physical.path, p->physical.doc_root);
-		PATHNAME_APPEND_SLASH(p->physical.path);
+		BUFFER_APPEND_SLASH(p->physical.path);
 		buffer_copy_string_buffer(p->physical.basedir, p->physical.path);
 
 		/* don't add a second / */
