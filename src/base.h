@@ -399,6 +399,7 @@ typedef struct {
 	
 #ifdef USE_OPENSSL
 	SSL *ssl;
+	int is_ssl_error_want;
 #endif
 } connection;
 
