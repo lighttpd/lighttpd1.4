@@ -198,12 +198,30 @@ static int connection_handle_read(server *srv, connection *con) {
 	server_socket *srv_sock = con->srv_socket;
 #endif
 
-	b = chunkqueue_get_append_buffer(con->read_queue);
-	buffer_prepare_copy(b, 4096);
-
 #ifdef USE_OPENSSL
 	if (srv_sock->is_ssl) {
+		/* don't resize the buffer if we were in SSL_ERROR_WANT_* */
+		if (!con->is_ssl_error_want) {
+			b = chunkqueue_get_append_buffer(con->read_queue);
+			buffer_prepare_copy(b, SSL_pending(con->ssl) + (16 * 1024)); /* the pending bytes + 16kb */
+		} else {
+			/* we have to get the last buffer */
+			chunk *c;
+
+			for (c = con->read_queue->first; c && c->next; c = c->next);
+
+			if (!c) {
+				b = chunkqueue_get_append_buffer(con->read_queue);
+				buffer_prepare_copy(b, SSL_pending(con->ssl) + (16 * 1024)); /* the pending bytes + 16kb */
+			} else {
+				log_error_write(srv, __FILE__, __LINE__, "s", 
+						"(debug) re-using last buffer after a SSL_ERROR_WANT_READ - good, please report this to jan@kneschke.de");
+
+				b = c->mem;
+			}
+		}
 		len = SSL_read(con->ssl, b->ptr, b->size - 1);
+		con->is_ssl_error_want = 0; /* reset */
 	} else {
 		if (ioctl(con->fd, FIONREAD, &toread)) {
 			log_error_write(srv, __FILE__, __LINE__, "sd", 
@@ -211,11 +229,14 @@ static int connection_handle_read(server *srv, connection *con) {
 					con->fd);
 			return -1;
 		}
+		b = chunkqueue_get_append_buffer(con->read_queue);
 		buffer_prepare_copy(b, toread);
 
 		len = read(con->fd, b->ptr, b->size - 1);
 	}
 #elif defined(__WIN32)
+	b = chunkqueue_get_append_buffer(con->read_queue);
+	buffer_prepare_copy(b, 4 * 1024);
 	len = recv(con->fd, b->ptr, b->size - 1, 0);
 #else
 	if (ioctl(con->fd, FIONREAD, &toread)) {
@@ -224,6 +245,7 @@ static int connection_handle_read(server *srv, connection *con) {
 				con->fd);
 		return -1;
 	}
+	b = chunkqueue_get_append_buffer(con->read_queue);
 	buffer_prepare_copy(b, toread);
 
 	len = read(con->fd, b->ptr, b->size - 1);
@@ -238,6 +260,8 @@ static int connection_handle_read(server *srv, connection *con) {
 			
 			switch ((r = SSL_get_error(con->ssl, len))) {
 			case SSL_ERROR_WANT_READ:
+			case SSL_ERROR_WANT_WRITE:
+				con->is_ssl_error_want = 1;
 				return 0;
 			case SSL_ERROR_SYSCALL:
 				/**
@@ -776,6 +800,10 @@ int connection_reset(server *srv, connection *con) {
 	}
 #else
 	memset(con->cond_cache, 0, sizeof(cond_cache_t) * srv->config_context->used);
+#endif
+
+#ifdef USE_OPENSSL
+	con->is_ssl_error_want = 0;
 #endif
 	
 	con->header_len = 0;
