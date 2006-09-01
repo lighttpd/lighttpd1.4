@@ -914,6 +914,18 @@ int buffer_path_simplify(buffer *dest, buffer *src)
 	start = dest->ptr;
 	out   = dest->ptr;
 	slash = dest->ptr;
+
+
+#if defined(__WIN32) || defined(__CYGWIN__)
+	/* cygwin is treating \ and / the same, so we have to that too
+	 */
+
+	for (walk = src->ptr; *walk; walk++) {
+		if (*walk == '\\') *walk = '/';
+	}
+	walk = src->ptr;
+#endif
+	
 	while (*walk == ' ') {
 		walk++;
 	}
