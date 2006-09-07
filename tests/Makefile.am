@@ -42,7 +42,10 @@ CONFS=fastcgi-10.conf \
       request.t \
       mod-ssi.t \
       LightyTest.pm \
-      mod-setenv.t 
+      mod-setenv.t \
+      lowercase.t \
+      lowercase.conf \
+      cachable.t
 
 
 TESTS_ENVIRONMENT=$(srcdir)/wrapper.sh $(srcdir) $(top_builddir) 
