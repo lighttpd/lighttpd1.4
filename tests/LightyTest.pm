@@ -87,12 +87,11 @@ sub start_proc {
 	# pre-process configfile if necessary
 	#
 
-	unlink($self->{TESTDIR}."/tmp/cfg.file");
-	system("cat ".$self->{SRCDIR}."/".$self->{CONFIGFILE}.' | perl -pe "s#\@SRCDIR\@#'.$self->{BASEDIR}.'/tests/#" > '.$self->{TESTDIR}.'/tmp/cfg.file');
+	$ENV{'SRCDIR'} = $self->{BASEDIR}.'/tests';
 
 	unlink($self->{LIGHTTPD_PIDFILE});
 	if (1) {
-		system($self->{LIGHTTPD_PATH}." -f ".$self->{TESTDIR}."/tmp/cfg.file -m ".$self->{MODULES_PATH});
+		system($self->{LIGHTTPD_PATH}." -f ".$self->{SRCDIR}."/".$self->{CONFIGFILE}." -m ".$self->{MODULES_PATH});
 	} else {
 		system("valgrind --tool=memcheck --show-reachable=yes --leak-check=yes --logfile=foo ".$self->{LIGHTTPD_PATH}." -D -f ".$self->{TESTDIR}."/tmp/cfg.file -m ".$self->{MODULES_PATH}." &");
 	}
