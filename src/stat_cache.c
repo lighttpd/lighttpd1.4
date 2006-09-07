@@ -39,7 +39,7 @@
 #define lstat stat
 #endif
 
-#if 1
+#if 0
 /* enables debug code for testing if all nodes in the stat-cache as accessable */
 #define DEBUG_STAT_CACHE
 #endif
