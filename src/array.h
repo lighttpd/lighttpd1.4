@@ -66,12 +66,30 @@ typedef struct {
 
 data_array *data_array_init(void);
 
-typedef enum { CONFIG_COND_UNSET, CONFIG_COND_EQ, CONFIG_COND_MATCH, CONFIG_COND_NE, CONFIG_COND_NOMATCH } config_cond_t;
+/**
+ * possible compare ops in the configfile parser
+ */
+typedef enum { 
+	CONFIG_COND_UNSET, 
+	CONFIG_COND_EQ,      /** == */
+	CONFIG_COND_MATCH,   /** =~ */
+	CONFIG_COND_NE,      /** != */
+	CONFIG_COND_NOMATCH  /** !~ */
+} config_cond_t;
 
-#define PATCHES NULL, "SERVERsocket", "HTTPurl", "HTTPhost", "HTTPreferer", "HTTPuseragent", "HTTPcookie", "HTTPremoteip"
+/**
+ * possible fields to match against
+ */
 typedef enum {
 	COMP_UNSET,
-	COMP_SERVER_SOCKET, COMP_HTTP_URL, COMP_HTTP_HOST, COMP_HTTP_REFERER, COMP_HTTP_USERAGENT, COMP_HTTP_COOKIE, COMP_HTTP_REMOTEIP
+	COMP_SERVER_SOCKET, 
+	COMP_HTTP_URL, 
+	COMP_HTTP_HOST, 
+	COMP_HTTP_REFERER, 
+	COMP_HTTP_USERAGENT, 
+	COMP_HTTP_COOKIE, 
+	COMP_HTTP_REMOTEIP,
+	COMP_HTTP_QUERYSTRING
 } comp_key_t;
 
 /* $HTTP["host"] ==    "incremental.home.kneschke.de" { ... } 

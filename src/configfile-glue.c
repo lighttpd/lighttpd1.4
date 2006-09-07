@@ -308,6 +308,10 @@ static cond_result_t config_check_cond_nocache(server *srv, connection *con, dat
 		l = con->uri.path;
 		break;
 
+	case COMP_HTTP_QUERYSTRING:
+		l = con->uri.query;
+		break;
+
 	case COMP_SERVER_SOCKET:
 		l = srv_sock->srv_token;
 		break;
@@ -426,6 +430,19 @@ static cond_result_t config_check_cond_cached(server *srv, connection *con, data
 		}
 	}
 	return caches[dc->context_ndx].result;
+}
+
+void config_cond_cache_reset(server *srv, connection *con) {
+#if COND_RESULT_UNSET
+	size_t i;
+
+	for (i = srv->config_context->used - 1; i >= 0; i --) {
+		con->cond_cache[i].result = COND_RESULT_UNSET;
+		con->cond_cache[i].patterncount = 0;
+	}
+#else	
+	memset(con->cond_cache, 0, sizeof(cond_cache_t) * srv->config_context->used);
+#endif
 }
 
 int config_check_cond(server *srv, connection *con, data_config *dc) {
