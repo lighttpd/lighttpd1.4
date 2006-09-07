@@ -195,6 +195,9 @@ sub handle_http {
 			}
 		}
 
+		$t->{etag} = $resp_hdr{'etag'};
+		$t->{date} = $resp_hdr{'date'};
+
 		# check length
 		if (defined $resp_hdr{"content-length"}) {
 			$resp_body = substr($lines, 0, $resp_hdr{"content-length"});

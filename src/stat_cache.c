@@ -595,6 +595,8 @@ handler_t stat_cache_get_entry(server *srv, connection *con, buffer *name, stat_
 			stat_cache_attr_get(sce->content_type, name->ptr);
 		}
 #endif
+	} else if (S_ISDIR(st.st_mode)) {
+		etag_create(sce->etag, &(sce->st));
 	}
 		
 #ifdef HAVE_FAM_H
