@@ -37,17 +37,6 @@
 # include "md5.h"
 #endif
 
-
-#ifdef USE_PAM
-#include <security/pam_appl.h>
-#include <security/pam_misc.h>
-
-static struct pam_conv conv = {
-	misc_conv,
-		NULL
-};
-#endif
-
 handler_t auth_ldap_init(server *srv, mod_auth_plugin_config *s);
 
 static const char base64_pad = '=';
@@ -509,33 +498,6 @@ static int http_auth_basic_password_compare(server *srv, mod_auth_plugin_data *p
 		if (0 == strcmp(password->ptr, pw)) {
 			return 0;
 		}
-	} else if (p->conf.auth_backend == AUTH_BACKEND_PAM) { 
-#ifdef USE_PAM
-		pam_handle_t *pamh=NULL;
-		int retval;
-		
-		retval = pam_start("lighttpd", username->ptr, &conv, &pamh);
-		
-		if (retval == PAM_SUCCESS)
-			retval = pam_authenticate(pamh, 0);    /* is user really user? */
-		
-		if (retval == PAM_SUCCESS)
-			retval = pam_acct_mgmt(pamh, 0);       /* permitted access? */
-		
-		/* This is where we have been authorized or not. */
-		
-		if (pam_end(pamh,retval) != PAM_SUCCESS) {     /* close Linux-PAM */
-			pamh = NULL;
-			log_error_write(srv, __FILE__, __LINE__, "s", "failed to release authenticator");
-		}
-		
-		if (retval == PAM_SUCCESS) {
-			log_error_write(srv, __FILE__, __LINE__, "s", "Authenticated");
-			return 0;
-		} else {
-			log_error_write(srv, __FILE__, __LINE__, "s", "Not Authenticated");
-		}
-#endif
 	} else if (p->conf.auth_backend == AUTH_BACKEND_LDAP) { 
 #ifdef USE_LDAP
 		LDAP *ldap;

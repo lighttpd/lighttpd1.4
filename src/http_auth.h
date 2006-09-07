@@ -9,9 +9,13 @@
 # include <ldap.h>
 #endif
 
-typedef enum { AUTH_BACKEND_UNSET, AUTH_BACKEND_PLAIN, 
-		AUTH_BACKEND_LDAP, AUTH_BACKEND_HTPASSWD, 
-		AUTH_BACKEND_HTDIGEST, AUTH_BACKEND_PAM } auth_backend_t;
+typedef enum {
+	AUTH_BACKEND_UNSET,
+	AUTH_BACKEND_PLAIN,
+	AUTH_BACKEND_LDAP,
+	AUTH_BACKEND_HTPASSWD,
+	AUTH_BACKEND_HTDIGEST
+} auth_backend_t;
 
 typedef struct {
 	/* auth */

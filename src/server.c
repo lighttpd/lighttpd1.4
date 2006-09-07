@@ -355,11 +355,6 @@ static void show_features (void) {
 #else
       "\t- crypt support\n"
 #endif
-#ifdef USE_PAM
-      "\t+ PAM support\n"
-#else
-      "\t- PAM support\n"
-#endif
 #ifdef USE_OPENSSL
       "\t+ SSL Support\n"
 #else
