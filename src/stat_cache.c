@@ -329,12 +329,12 @@ static int buffer_copy_dirname(buffer *dst, buffer *file) {
 #endif
 
 #ifdef HAVE_LSTAT
-static int stat_cache_lstat(server *srv, char *dname, struct stat *lst) {
-	if (lstat(dname, lst) == 0) {
+static int stat_cache_lstat(server *srv, buffer *dname, struct stat *lst) {
+	if (lstat(dname->ptr, lst) == 0) {
 		return S_ISLNK(lst->st_mode) ? 0 : 1;
 	}
 	else {
-		log_error_write(srv, __FILE__, __LINE__, "sss",
+		log_error_write(srv, __FILE__, __LINE__, "sbs",
 				"lstat failed for:",
 				dname, strerror(errno));
 	};
@@ -362,6 +362,7 @@ handler_t stat_cache_get_entry(server *srv, connection *con, buffer *name, stat_
 	struct stat st;
 	size_t k;
 	int fd;
+	struct stat lst;
 #ifdef DEBUG_STAT_CACHE	
 	size_t i;
 #endif
@@ -522,12 +523,11 @@ handler_t stat_cache_get_entry(server *srv, connection *con, buffer *name, stat_
 	 * and keeping the file open for the rest of the time. But this can
 	 * only be done at network level.
 	 * 
-+	 * per default it is not a symlink
+	 * per default it is not a symlink
 	 * */
 #ifdef HAVE_LSTAT
 	sce->is_symlink = 0;
-	struct stat lst;
-	if (stat_cache_lstat(srv, name->ptr, &lst)  == 0) {
+	if (stat_cache_lstat(srv, name, &lst)  == 0) {
 #ifdef DEBUG_STAT_CACHE
 			log_error_write(srv, __FILE__, __LINE__, "sb",
 					"found symlink", name);
@@ -540,31 +540,34 @@ handler_t stat_cache_get_entry(server *srv, connection *con, buffer *name, stat_
 	 * skip the symlink stuff if our path is /
 	 **/
 	else if ((name->used > 2)) {
-		char *dname, *s_cur;
+		buffer *dname;
+		char *s_cur;
 
-		dname = strndup(name->ptr, name->used);
-		while ((s_cur = strrchr(dname,'/'))) {
+		dname = buffer_init();
+		buffer_copy_string_buffer(dname, name);
+
+		while ((s_cur = strrchr(dname->ptr,'/'))) {
 			*s_cur = '\0';
-			if (dname == s_cur) {
+			if (dname->ptr == s_cur) {
 #ifdef DEBUG_STAT_CACHE
 				log_error_write(srv, __FILE__, __LINE__, "s", "reached /");
 #endif
 				break;
 			}
 #ifdef DEBUG_STAT_CACHE
-			log_error_write(srv, __FILE__, __LINE__, "sss",
+			log_error_write(srv, __FILE__, __LINE__, "sbs",
 					"checking if", dname, "is a symlink");
 #endif
 			if (stat_cache_lstat(srv, dname, &lst)  == 0) {
 				sce->is_symlink = 1;
 #ifdef DEBUG_STAT_CACHE
-				log_error_write(srv, __FILE__, __LINE__, "ss",
+				log_error_write(srv, __FILE__, __LINE__, "sb",
 						"found symlink", dname);
 #endif
 				break;
 			};
 		};
-		free(dname);
+		buffer_free(dname);
 	};
 #endif
 
