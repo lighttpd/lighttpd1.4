@@ -54,7 +54,14 @@ static int config_insert(server *srv) {
 		{ "server.max-write-idle",       NULL, T_CONFIG_SHORT, T_CONFIG_SCOPE_CONNECTION },   /* 21 */
 		{ "server.error-handler-404",    NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_CONNECTION },  /* 22 */
 		{ "server.max-fds",              NULL, T_CONFIG_SHORT, T_CONFIG_SCOPE_SERVER },       /* 23 */
+#ifdef HAVE_LSTAT
 		{ "server.follow-symlink",       NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION }, /* 24 */
+#else
+		{ "server.follow-symlink",
+		  "Your system lacks lstat(). We can not differ symlinks from files."
+		  "Please remove server.follow-symlinks from your config.",
+		  T_CONFIG_UNSUPPORTED, T_CONFIG_SCOPE_UNSET }, /* 24 */
+#endif
 		{ "server.kbytes-per-second",    NULL, T_CONFIG_SHORT, T_CONFIG_SCOPE_CONNECTION },   /* 25 */
 		{ "connection.kbytes-per-second", NULL, T_CONFIG_SHORT, T_CONFIG_SCOPE_CONNECTION },  /* 26 */
 		{ "mimetype.use-xattr",          NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION }, /* 27 */
@@ -150,7 +157,9 @@ static int config_insert(server *srv) {
 		s->is_ssl        = 0;
 		s->ssl_use_sslv2 = 1;
 		s->use_ipv6      = 0;
+#ifdef HAVE_LSTAT
 		s->follow_symlink = 1;
+#endif
 		s->kbytes_per_second = 0;
 		s->allow_http11  = 1;
 		s->range_requests = 1;
@@ -175,7 +184,9 @@ static int config_insert(server *srv) {
 		cv[20].destination = &(s->max_read_idle);
 		cv[21].destination = &(s->max_write_idle);
 		cv[22].destination = s->error_handler;
+#ifdef HAVE_LSTAT
 		cv[24].destination = &(s->follow_symlink);
+#endif
 		/* 23 -> max-fds */
 		cv[25].destination = &(s->global_kbytes_per_second);
 		cv[26].destination = &(s->kbytes_per_second);
@@ -238,7 +249,9 @@ int config_setup_connection(server *srv, connection *con) {
 	PATCH(use_xattr);
 	PATCH(error_handler);
 	PATCH(errorfile_prefix);
+#ifdef HAVE_LSTAT
 	PATCH(follow_symlink);
+#endif
 	PATCH(server_tag);
 	PATCH(kbytes_per_second);
 	PATCH(global_kbytes_per_second);
@@ -314,8 +327,10 @@ int config_patch_connection(server *srv, connection *con, comp_key_t comp) {
 				PATCH(ssl_cipher_list);
 			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("ssl.engine"))) {
 				PATCH(is_ssl);
+#ifdef HAVE_LSTAT
 			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("server.follow-symlink"))) {
 				PATCH(follow_symlink);
+#endif
 			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("server.name"))) {
 				buffer_copy_string_buffer(con->server_name, s->server_name);
 			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("server.tag"))) {
