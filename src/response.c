@@ -261,7 +261,13 @@ handler_t http_response_prepare(server *srv, connection *con) {
 		 */
 		
 		config_patch_connection(srv, con, COMP_HTTP_URL); /* HTTPurl */
-		
+		config_patch_connection(srv, con, COMP_HTTP_QUERYSTRING); /* HTTPqs */
+
+		/* do we have to downgrade to 1.0 ? */
+		if (!con->conf.allow_http11) {
+			con->request.http_version = HTTP_VERSION_1_0;
+		}
+
 		switch(r = plugins_call_handle_uri_clean(srv, con)) {
 		case HANDLER_GO_ON:
 			break;
