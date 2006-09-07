@@ -138,7 +138,7 @@ static int mod_flv_streaming_patch_connection(server *srv, connection *con, plug
 }
 #undef PATCH
 
-static int split_get_params(server *srv, connection *con, array *get_params, buffer *qrystr) {
+static int split_get_params(array *get_params, buffer *qrystr) {
 	size_t is_key = 1;
 	size_t i;
 	char *key = NULL, *val = NULL;
@@ -167,7 +167,7 @@ static int split_get_params(server *srv, connection *con, array *get_params, buf
 				/* terminate the value */
 				qrystr->ptr[i] = '\0';
 
-				if (NULL == (ds = (data_string *)array_get_unused_element(con->request.headers, TYPE_STRING))) {
+				if (NULL == (ds = (data_string *)array_get_unused_element(get_params, TYPE_STRING))) {
 					ds = data_string_init();
 				}
 				buffer_copy_string_len(ds->key, key, strlen(key));
@@ -217,7 +217,7 @@ URIHANDLER_FUNC(mod_flv_streaming_path_handler) {
 
 			array_reset(p->get_params);
 			buffer_copy_string_buffer(p->query_str, con->uri.query);
-			split_get_params(srv, con, p->get_params, p->query_str);
+			split_get_params(p->get_params, p->query_str);
 
 			if (NULL == (get_param = (data_string *)array_get_element(p->get_params, "start"))) {
 				return HANDLER_GO_ON;
