@@ -119,6 +119,12 @@ int config_insert_values_internal(server *srv, array *ca, const config_values_t 
 		case T_CONFIG_LOCAL:
 		case T_CONFIG_UNSET:
 			break;
+		case T_CONFIG_UNSUPPORTED:
+			log_error_write(srv, __FILE__, __LINE__, "ssss", "ERROR: found unsupported key:", cv[i].key, "-", (char *)(cv[i].destination));
+			
+			srv->config_unsupported = 1;
+			
+			break;
 		case T_CONFIG_DEPRECATED:
 			log_error_write(srv, __FILE__, __LINE__, "ssss", "ERROR: found deprecated key:", cv[i].key, "-", (char *)(cv[i].destination));
 			

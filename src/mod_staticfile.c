@@ -397,6 +397,19 @@ URIHANDLER_FUNC(mod_staticfile_subrequest) {
 	}
 	
 	/* we only handline regular files */
+#ifdef HAVE_LSTAT
+	if ((sce->is_symlink == 1) && !con->conf.follow_symlink) {
+		con->http_status = 403;
+		
+		if (con->conf.log_request_handling) {
+			log_error_write(srv, __FILE__, __LINE__,  "s",  "-- access denied due symlink restriction");
+			log_error_write(srv, __FILE__, __LINE__,  "sb", "Path         :", con->physical.path);
+		}
+
+		buffer_reset(con->physical.path);
+		return HANDLER_FINISHED;
+	}
+#endif
 	if (!S_ISREG(sce->st.st_mode)) {
 		con->http_status = 404;
 		
