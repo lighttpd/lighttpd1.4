@@ -3,6 +3,24 @@
 NEWS
 ====
 
+- 1.4.12 - 
+
+  * added experimental LOCK support for webdav
+  * added Content-Range support for PUT in webdav
+  * added support for += on empty arrays in config-files
+  * added ssl.cipher-list and ssl.use-sslv2
+  * fixed upload hangs with SSL
+  * fixed connection drops with SSL (aka bad retry)
+  * fixed path traversal with \ on cygwin
+  * fixed mem-leak in mod_flv_streaming
+  * fixed required trailing newline in configfiles (#142)
+  * fixed quoting the autoconf files (#466)
+  * fixed empty Host: + $HTTP["host"] handling (#458)
+  * fixed handling of If-Modified-Since if ETag is not set 
+  * fixed default-shell if SHELL is not set (#441)
+  * fixed appending and assigning of env.* vars
+  * fixed empty FCGI_STDERR packets
+
 - 1.4.11 - 2006-03-09
 
   * added ability to specify which ip address spawn-fci listens on 

@@ -40,7 +40,7 @@ Host: 123.example.org
 
 GET /12345.txt HTTP/1.0
 Host: 123.example.org
-Connection: keep-alive
+Connection: close
 EOF
  );
 $t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200 } , { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200 } ];
