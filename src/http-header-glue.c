@@ -262,26 +262,11 @@ int http_response_handle_cachable(server *srv, connection *con, buffer *mtime) {
 						return HANDLER_FINISHED;
 					} else {
 						char buf[sizeof("Sat, 23 Jul 2005 21:20:01 GMT")];
+						time_t t_header, t_file;
+						struct tm tm;
 
-						/* convert to timestamp */
-						if (used_len < sizeof(buf)) {
-							time_t t_header, t_file;
-							struct tm tm;
-							
-							strncpy(buf, con->request.http_if_modified_since, used_len);
-							buf[used_len] = '\0';
-							
-							strptime(buf, "%a, %d %b %Y %H:%M:%S GMT", &tm);
-							t_header = mktime(&tm);
-							
-							strptime(mtime->ptr, "%a, %d %b %Y %H:%M:%S GMT", &tm);
-							t_file = mktime(&tm);
-
-							if (t_file > t_header) {
-								con->http_status = 304;
-								return HANDLER_FINISHED;
-							}
-						} else {
+						/* check if we can safely copy the string */
+						if (used_len >= sizeof(buf)) {
 							log_error_write(srv, __FILE__, __LINE__, "ssdd", 
 									"DEBUG: Last-Modified check failed as the received timestamp was too long:", 
 									con->request.http_if_modified_since, used_len, sizeof(buf) - 1);
@@ -289,6 +274,21 @@ int http_response_handle_cachable(server *srv, connection *con, buffer *mtime) {
 							con->http_status = 412;
 							return HANDLER_FINISHED;
 						}
+
+							
+						strncpy(buf, con->request.http_if_modified_since, used_len);
+						buf[used_len] = '\0';
+							
+						strptime(buf, "%a, %d %b %Y %H:%M:%S GMT", &tm);
+						t_header = mktime(&tm);
+							
+						strptime(mtime->ptr, "%a, %d %b %Y %H:%M:%S GMT", &tm);
+						t_file = mktime(&tm);
+
+						if (t_file > t_header) return HANDLER_GO_ON;
+	
+						con->http_status = 304;
+						return HANDLER_FINISHED;
 					}
 				} else {
 					con->http_status = 304;
@@ -302,7 +302,7 @@ int http_response_handle_cachable(server *srv, connection *con, buffer *mtime) {
 	} else if (con->request.http_if_modified_since) {
 		size_t used_len;
 		char *semicolon;
-		
+
 		if (NULL == (semicolon = strchr(con->request.http_if_modified_since, ';'))) {
 			used_len = strlen(con->request.http_if_modified_since);
 		} else {
@@ -310,6 +310,27 @@ int http_response_handle_cachable(server *srv, connection *con, buffer *mtime) {
 		}
 		
 		if (0 == strncmp(con->request.http_if_modified_since, mtime->ptr, used_len)) {
+			con->http_status = 304;
+			return HANDLER_FINISHED;
+		} else {
+			char buf[sizeof("Sat, 23 Jul 2005 21:20:01 GMT")];
+			time_t t_header, t_file;
+			struct tm tm;
+
+			/* convert to timestamp */
+			if (used_len >= sizeof(buf)) return HANDLER_GO_ON;
+
+			strncpy(buf, con->request.http_if_modified_since, used_len);
+			buf[used_len] = '\0';
+					
+			strptime(buf, "%a, %d %b %Y %H:%M:%S GMT", &tm);
+			t_header = mktime(&tm);
+							
+			strptime(mtime->ptr, "%a, %d %b %Y %H:%M:%S GMT", &tm);
+			t_file = mktime(&tm);
+
+			if (t_file > t_header) return HANDLER_GO_ON;
+
 			con->http_status = 304;
 			return HANDLER_FINISHED;
 		}

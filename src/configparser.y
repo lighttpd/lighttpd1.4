@@ -33,40 +33,22 @@ static data_config *configparser_pop(config_t *ctx) {
 
 /* return a copied variable */
 static data_unset *configparser_get_variable(config_t *ctx, const buffer *key) {
-  if (strncmp(key->ptr, "env.", sizeof("env.") - 1) == 0) {
-    char *env;
-
-    if (NULL != (env = getenv(key->ptr + 4))) {
-      data_string *ds;
-      ds = data_string_init();
-      buffer_append_string(ds->value, env);
-      return (data_unset *)ds;
-    }
-
-    fprintf(stderr, "Undefined env variable: %s\n", key->ptr + 4);
-    ctx->ok = 0;
-
-    return NULL;
-  } else {
-    data_unset *du;
-    data_config *dc;
+  data_unset *du;
+  data_config *dc;
 
 #if 0
-    fprintf(stderr, "get var %s\n", key->ptr);
+  fprintf(stderr, "get var %s\n", key->ptr);
 #endif
-    for (dc = ctx->current; dc; dc = dc->parent) {
+  for (dc = ctx->current; dc; dc = dc->parent) {
 #if 0
-      fprintf(stderr, "get var on block: %s\n", dc->key->ptr);
-      array_print(dc->value, 0);
+    fprintf(stderr, "get var on block: %s\n", dc->key->ptr);
+    array_print(dc->value, 0);
 #endif
-      if (NULL != (du = array_get_element(dc->value, key->ptr))) {
-        return du->copy(du);
-      }
+    if (NULL != (du = array_get_element(dc->value, key->ptr))) {
+      return du->copy(du);
     }
-    fprintf(stderr, "Undefined config variable: %s\n", key->ptr);
-    ctx->ok = 0;
-    return NULL;
   }
+  return NULL;
 }
 
 /* op1 is to be eat/return by this function, op1->key is not cared
@@ -161,7 +143,12 @@ metaline ::= EOL.
 
 varline ::= key(A) ASSIGN expression(B). {
   buffer_copy_string_buffer(B->key, A);
-  if (NULL == array_get_element(ctx->current->value, B->key->ptr)) {
+  if (strncmp(A->ptr, "env.", sizeof("env.") - 1) == 0) {
+    fprintf(stderr, "Setting env variable is not supported in conditional %d %s: %s\n",
+        ctx->current->context_ndx,
+        ctx->current->key->ptr, A->ptr);
+    ctx->ok = 0;
+  } else if (NULL == array_get_element(ctx->current->value, B->key->ptr)) {
     array_insert_unique(ctx->current->value, B);
     B = NULL;
   } else {
@@ -180,7 +167,12 @@ varline ::= key(A) APPEND expression(B). {
   array *vars = ctx->current->value;
   data_unset *du;
 
-  if (NULL != (du = array_get_element(vars, A->ptr))) {
+  if (strncmp(A->ptr, "env.", sizeof("env.") - 1) == 0) {
+    fprintf(stderr, "Appending env variable is not supported in conditional %d %s: %s\n",
+        ctx->current->context_ndx,
+        ctx->current->key->ptr, A->ptr);
+    ctx->ok = 0;
+  } else if (NULL != (du = array_get_element(vars, A->ptr))) {
     /* exists in current block */
     du = configparser_merge_data(du, B);
     if (NULL == du) {
@@ -190,6 +182,7 @@ varline ::= key(A) APPEND expression(B). {
       buffer_copy_string_buffer(du->key, A);
       array_replace(vars, du);
     }
+    B->free(B);
   } else if (NULL != (du = configparser_get_variable(ctx, A))) {
     du = configparser_merge_data(du, B);
     if (NULL == du) {
@@ -199,15 +192,13 @@ varline ::= key(A) APPEND expression(B). {
       buffer_copy_string_buffer(du->key, A);
       array_insert_unique(ctx->current->value, du);
     }
+    B->free(B);
   } else {
-    fprintf(stderr, "Undefined config variable in conditional %d %s: %s\n", 
-            ctx->current->context_ndx,
-            ctx->current->key->ptr, A->ptr);
-    ctx->ok = 0;
+    buffer_copy_string_buffer(B->key, A);
+    array_insert_unique(ctx->current->value, B);
   }
   buffer_free(A);
   A = NULL;
-  B->free(B);
   B = NULL;
 }
 
@@ -239,7 +230,23 @@ expression(A) ::= value(B). {
 }
 
 value(A) ::= key(B). {
-  A = configparser_get_variable(ctx, B);
+  if (strncmp(B->ptr, "env.", sizeof("env.") - 1) == 0) {
+    char *env;
+
+    if (NULL != (env = getenv(B->ptr + 4))) {
+      data_string *ds;
+      ds = data_string_init();
+      buffer_append_string(ds->value, env);
+      A = (data_unset *)ds;
+    }
+    else {
+      fprintf(stderr, "Undefined env variable: %s\n", B->ptr + 4);
+      ctx->ok = 0;
+    }
+  } else if (NULL == (A = configparser_get_variable(ctx, B))) {
+    fprintf(stderr, "Undefined config variable: %s\n", B->ptr);
+    ctx->ok = 0;
+  }
   if (!A) {
     /* make a dummy so it won't crash */
     A = (data_unset *)data_string_init();

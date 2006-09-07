@@ -230,7 +230,7 @@ static cond_result_t config_check_cond_nocache(server *srv, connection *con, dat
 				break;
 			}
 		} else {
-			l = NULL;
+			l = srv->empty_string;
 		}
 		break;
 	}

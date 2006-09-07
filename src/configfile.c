@@ -80,6 +80,8 @@ static int config_insert(server *srv) {
 		{ "server.network-backend",      NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_CONNECTION },  /* 43 */
 		{ "server.upload-dirs",          NULL, T_CONFIG_ARRAY, T_CONFIG_SCOPE_CONNECTION },   /* 44 */
 		{ "server.core-files",           NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION }, /* 45 */
+		{ "ssl.cipher-list",             NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_SERVER },      /* 46 */
+		{ "ssl.use-sslv2",               NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION }, /* 47 */
 		
 		{ "server.host",                 "use server.bind instead", T_CONFIG_DEPRECATED, T_CONFIG_SCOPE_UNSET },
 		{ "server.docroot",              "use server.document-root instead", T_CONFIG_DEPRECATED, T_CONFIG_SCOPE_UNSET },
@@ -138,6 +140,7 @@ static int config_insert(server *srv) {
 		s->ssl_ca_file   = buffer_init();
 		s->error_handler = buffer_init();
 		s->server_tag    = buffer_init();
+		s->ssl_cipher_list = buffer_init();
 		s->errorfile_prefix = buffer_init();
 		s->max_keep_alive_requests = 16;
 		s->max_keep_alive_idle = 5;
@@ -145,6 +148,7 @@ static int config_insert(server *srv) {
 		s->max_write_idle = 360;
 		s->use_xattr     = 0;
 		s->is_ssl        = 0;
+		s->ssl_use_sslv2 = 1;
 		s->use_ipv6      = 0;
 		s->follow_symlink = 1;
 		s->kbytes_per_second = 0;
@@ -189,6 +193,9 @@ static int config_insert(server *srv) {
 		cv[38].destination = s->ssl_ca_file;
 		cv[40].destination = &(s->range_requests);
 		
+		cv[46].destination = s->ssl_cipher_list;
+		cv[47].destination = &(s->ssl_use_sslv2);
+
 		srv->config_storage[i] = s;
 	
 		if (0 != (ret = config_insert_values_global(srv, ((data_config *)srv->config_context->data[i])->value, cv))) {
@@ -252,6 +259,10 @@ int config_setup_connection(server *srv, connection *con) {
 	
 	PATCH(ssl_pemfile);
 	PATCH(ssl_ca_file);
+	PATCH(ssl_cipher_list);
+	PATCH(ssl_use_sslv2);
+
+
 	return 0;
 }
 
@@ -297,6 +308,10 @@ int config_patch_connection(server *srv, connection *con, comp_key_t comp) {
 				PATCH(ssl_pemfile);
 			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("ssl.ca-file"))) {
 				PATCH(ssl_ca_file);
+			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("ssl.use-sslv2"))) {
+				PATCH(ssl_use_sslv2);
+			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("ssl.cipher-list"))) {
+				PATCH(ssl_cipher_list);
 			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("ssl.engine"))) {
 				PATCH(is_ssl);
 			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("server.follow-symlink"))) {
@@ -540,7 +555,7 @@ static int config_tokenizer(server *srv, tokenizer_t *t, int *token_id, buffer *
 			} else {
 				config_skip_newline(t);
 				t->line_pos = 1;
-                t->line++;
+				t->line++;
 			}
 			break;
 		case ',':
@@ -699,21 +714,13 @@ static int config_tokenizer(server *srv, tokenizer_t *t, int *token_id, buffer *
 				for (i = 0; t->input[t->offset + i] && isdigit((unsigned char)t->input[t->offset + i]);  i++);
 				
 				/* was there it least a digit ? */
-				if (i && t->input[t->offset + i]) {
+				if (i) {
 					tid = TK_INTEGER;
 					
 					buffer_copy_string_len(token, t->input + t->offset, i);
 					
 					t->offset += i;
 					t->line_pos += i;
-				} else {
-					/* ERROR */
-					log_error_write(srv, __FILE__, __LINE__, "sbsdsds", 
-							"source:", t->source,
-							"line:", t->line, "pos:", t->line_pos, 
-							"unexpected EOF");
-					
-					return -1;
 				}
 			} else {
 				/* the key might consist of [-.0-9a-z] */
@@ -800,7 +807,7 @@ static int config_parse(server *srv, config_t *context, tokenizer_t *t) {
 	
 	if (ret == -1) {
 		log_error_write(srv, __FILE__, __LINE__, "sb", 
-				"configfile parser failed:", lasttoken);
+				"configfile parser failed at:", lasttoken);
 	} else if (context->ok == 0) {
 		log_error_write(srv, __FILE__, __LINE__, "sbsdsdsb", 
 				"source:", t->source,

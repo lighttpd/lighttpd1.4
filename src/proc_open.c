@@ -148,11 +148,14 @@ int proc_open(proc_handler_t *proc, const char *command) {
 	STARTUPINFO si;
 	BOOL procok;
 	SECURITY_ATTRIBUTES security;
-	const char *shell;
+	const char *shell = NULL;
+	const char *windir = NULL;
 	buffer *cmdline;
 
-	if (NULL == (shell = getenv(SHELLENV))) {
-		fprintf(stderr, "env %s is required", SHELLENV);
+	if (NULL == (shell = getenv(SHELLENV)) &&
+			NULL == (windir = getenv("SystemRoot")) &&
+			NULL == (windir = getenv("windir"))) {
+		fprintf(stderr, "One of %s,%%SystemRoot,%%windir is required", SHELLENV);
 		return -1;
 	}
 
@@ -177,17 +180,23 @@ int proc_open(proc_handler_t *proc, const char *command) {
 	memset(&pi, 0, sizeof(pi));
 
 	cmdline = buffer_init();
-	buffer_append_string(cmdline, shell);
+	if (shell) {
+		buffer_append_string(cmdline, shell);
+	} else {
+		buffer_append_string(cmdline, windir);
+		buffer_append_string(cmdline, "\\system32\\cmd.exe");
+	}
 	buffer_append_string_len(cmdline, CONST_STR_LEN(" /c "));
 	buffer_append_string(cmdline, command);
 	procok = CreateProcess(NULL, cmdline->ptr, &security, &security, TRUE,
 			NORMAL_PRIORITY_CLASS, NULL, NULL, &si, &pi);
-	buffer_free(cmdline);
 
 	if (FALSE == procok) {
-		fprintf(stderr, "failed to CreateProcess");
+		fprintf(stderr, "failed to CreateProcess: %s", cmdline->ptr);
+		buffer_free(cmdline);
 		return -1;
 	}
+	buffer_free(cmdline);
 
 	proc->child = pi.hProcess;
 	CloseHandle(pi.hThread);
@@ -226,8 +235,7 @@ int proc_open(proc_handler_t *proc, const char *command) {
 	const char *shell;
 
 	if (NULL == (shell = getenv(SHELLENV))) {
-		fprintf(stderr, "env %s is required", SHELLENV);
-		return -1;
+		shell = "/bin/sh";
 	}
 
 	if (proc_open_pipes(proc) != 0) {

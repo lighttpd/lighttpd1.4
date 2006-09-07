@@ -329,6 +329,24 @@ int network_server_init(server *srv, buffer *host_token, specific_config *s) {
 					ERR_error_string(ERR_get_error(), NULL));
 			return -1;
 		}
+
+		if (!s->ssl_use_sslv2) {
+			/* disable SSLv2 */
+			if (SSL_OP_NO_SSLv2 != SSL_CTX_set_options(s->ssl_ctx, SSL_OP_NO_SSLv2)) {
+				log_error_write(srv, __FILE__, __LINE__, "ss", "SSL:",
+						ERR_error_string(ERR_get_error(), NULL));
+				return -1;
+			}
+		}
+
+		if (!buffer_is_empty(s->ssl_cipher_list)) {
+			/* Disable support for low encryption ciphers */
+			if (SSL_CTX_set_cipher_list(s->ssl_ctx, s->ssl_cipher_list->ptr) != 1) {
+				log_error_write(srv, __FILE__, __LINE__, "ss", "SSL:",
+						ERR_error_string(ERR_get_error(), NULL));
+				return -1;
+			}
+		}
 		
 		if (buffer_is_empty(s->ssl_pemfile)) {
 			log_error_write(srv, __FILE__, __LINE__, "s", "ssl.pemfile has to be set");
