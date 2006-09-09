@@ -26,27 +26,6 @@
 #include "log.h"
 #include "stat_cache.h"
 
-#ifndef UIO_MAXIOV
-# if defined(__FreeBSD__) || defined(__APPLE__) || defined(__NetBSD__)
-/* FreeBSD 4.7 defines it in sys/uio.h only if _KERNEL is specified */ 
-#  define UIO_MAXIOV 1024
-# elif defined(__sgi)
-/* IRIX 6.5 has sysconf(_SC_IOV_MAX) which might return 512 or bigger */ 
-#  define UIO_MAXIOV 512
-# elif defined(__sun)
-/* Solaris (and SunOS?) defines IOV_MAX instead */
-#  ifndef IOV_MAX
-#   define UIO_MAXIOV 16
-#  else
-#   define UIO_MAXIOV IOV_MAX
-#  endif
-# elif defined(IOV_MAX)
-#  define UIO_MAXIOV IOV_MAX
-# else
-#  error UIO_MAXIOV nor IOV_MAX are defined
-# endif
-#endif
-
 #if 0
 #define LOCAL_BUFFERING 1
 #endif
@@ -65,18 +44,29 @@ int network_write_chunkqueue_writev(server *srv, connection *con, int fd, chunkq
 			ssize_t r;
 			
 			size_t num_chunks, i;
-			struct iovec chunks[UIO_MAXIOV];
+			struct iovec *chunks;
 			chunk *tc;
 			size_t num_bytes = 0;
-			
+#if defined(_SC_IOV_MAX) /* IRIX, MacOS X, FreeBSD, Solaris, ... */
+			const size_t max_chunks = sysconf(_SC_IOV_MAX);
+#elif defined(IOV_MAX) /* Linux x86 (glibc-2.3.6-3) */
+			const size_t max_chunks = IOV_MAX;
+#elif defined(MAX_IOVEC) /* Linux ia64 (glibc-2.3.3-98.28) */
+			const size_t max_chunks = MAX_IOVEC;
+#else
+#error sysconf() doesn't return _SC_IOV_MAX ... 
+#endif
+
 			/* we can't send more then SSIZE_MAX bytes in one chunk */
 			
 			/* build writev list 
 			 * 
-			 * 1. limit: num_chunks < UIO_MAXIOV
+			 * 1. limit: num_chunks < max_chunks
 			 * 2. limit: num_bytes < SSIZE_MAX
 			 */
-			for(num_chunks = 0, tc = c; tc && tc->type == MEM_CHUNK && num_chunks < UIO_MAXIOV; num_chunks++, tc = tc->next);
+			for (num_chunks = 0, tc = c; tc && tc->type == MEM_CHUNK && num_chunks < max_chunks; num_chunks++, tc = tc->next);
+
+			chunks = calloc(num_chunks, sizeof(*chunks));
 			
 			for(tc = c, i = 0; i < num_chunks; tc = tc->next, i++) {
 				if (tc->mem->used == 0) {
@@ -111,11 +101,13 @@ int network_write_chunkqueue_writev(server *srv, connection *con, int fd, chunkq
 					break;
 				case EPIPE:
 				case ECONNRESET:
+					free(chunks);
 					return -2;
 				default:
 					log_error_write(srv, __FILE__, __LINE__, "ssd", 
 							"writev failed:", strerror(errno), fd);
 				
+					free(chunks);
 					return -1;
 				}
 			}
@@ -147,6 +139,7 @@ int network_write_chunkqueue_writev(server *srv, connection *con, int fd, chunkq
 					break;
 				}
 			}
+			free(chunks);
 			
 			break;
 		}
