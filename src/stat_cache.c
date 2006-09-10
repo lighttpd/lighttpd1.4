@@ -527,47 +527,49 @@ handler_t stat_cache_get_entry(server *srv, connection *con, buffer *name, stat_
 	 * */
 #ifdef HAVE_LSTAT
 	sce->is_symlink = 0;
-	if (stat_cache_lstat(srv, name, &lst)  == 0) {
-#ifdef DEBUG_STAT_CACHE
-			log_error_write(srv, __FILE__, __LINE__, "sb",
-					"found symlink", name);
-#endif
-			sce->is_symlink = 1;
-	}
-
-	/*
-	 * we assume "/" can not be symlink, so
-	 * skip the symlink stuff if our path is /
-	 **/
-	else if ((name->used > 2)) {
-		buffer *dname;
-		char *s_cur;
-
-		dname = buffer_init();
-		buffer_copy_string_buffer(dname, name);
-
-		while ((s_cur = strrchr(dname->ptr,'/'))) {
-			*s_cur = '\0';
-			if (dname->ptr == s_cur) {
-#ifdef DEBUG_STAT_CACHE
-				log_error_write(srv, __FILE__, __LINE__, "s", "reached /");
-#endif
-				break;
-			}
-#ifdef DEBUG_STAT_CACHE
-			log_error_write(srv, __FILE__, __LINE__, "sbs",
-					"checking if", dname, "is a symlink");
-#endif
-			if (stat_cache_lstat(srv, dname, &lst)  == 0) {
-				sce->is_symlink = 1;
+	if (!con->conf.follow_symlink) {
+		if (stat_cache_lstat(srv, name, &lst)  == 0) {
 #ifdef DEBUG_STAT_CACHE
 				log_error_write(srv, __FILE__, __LINE__, "sb",
-						"found symlink", dname);
+						"found symlink", name);
 #endif
-				break;
+				sce->is_symlink = 1;
+		}
+
+		/*
+		 * we assume "/" can not be symlink, so
+		 * skip the symlink stuff if our path is /
+		 **/
+		else if ((name->used > 2)) {
+			buffer *dname;
+			char *s_cur;
+
+			dname = buffer_init();
+			buffer_copy_string_buffer(dname, name);
+
+			while ((s_cur = strrchr(dname->ptr,'/'))) {
+				*s_cur = '\0';
+				if (dname->ptr == s_cur) {
+#ifdef DEBUG_STAT_CACHE
+					log_error_write(srv, __FILE__, __LINE__, "s", "reached /");
+#endif
+					break;
+				}
+#ifdef DEBUG_STAT_CACHE
+				log_error_write(srv, __FILE__, __LINE__, "sbs",
+						"checking if", dname, "is a symlink");
+#endif
+				if (stat_cache_lstat(srv, dname, &lst)  == 0) {
+					sce->is_symlink = 1;
+#ifdef DEBUG_STAT_CACHE
+					log_error_write(srv, __FILE__, __LINE__, "sb",
+							"found symlink", dname);
+#endif
+					break;
+				};
 			};
+			buffer_free(dname);
 		};
-		buffer_free(dname);
 	};
 #endif
 
