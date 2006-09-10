@@ -72,6 +72,7 @@ modules = {
 	'mod_evasive' : { 'src' : [ 'mod_evasive.c' ] },
 	'mod_ssi' : { 'src' : [ 'mod_ssi_exprparser.c', 'mod_ssi_expr.c', 'mod_ssi.c' ], 'lib' : [ env['LIBPCRE'] ] },
 	'mod_flv_streaming' : { 'src' : [ 'mod_flv_streaming.c' ] },
+	'mod_magnet' : { 'src' : [ 'mod_magnet.c', 'mod_magnet_cache.c' ], 'lib' : [ 'lua' ] },
 }
 
 staticenv = env.Copy(CPPFLAGS=[ env['CPPFLAGS'], '-DLIGHTTPD_STATIC', '-DOPENSSL_NO_KRB5'])
