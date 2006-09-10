@@ -722,6 +722,14 @@ static int process_ssi_stmt(server *srv, connection *con, plugin_data *p,
 			close(from_exec_fds[1]);
 			
 			/* wait for the client to end */
+
+			/*
+			 * FIXME: if we get interrupted by a SIGCHILD we count this as error
+			 *
+			 * for now it only happened on OpenBSD.
+			 * 
+			 * that leads to zombies and missing output
+			 */
 			if (-1 == waitpid(pid, &status, 0)) {
 				log_error_write(srv, __FILE__, __LINE__, "ss", "waitpid failed:", strerror(errno));
 			} else if (WIFEXITED(status)) {
