@@ -86,6 +86,12 @@ mod_webdav_la_CFLAGS = $(AM_CFLAGS) $(XML_CFLAGS) $(SQLITE_CFLAGS)
 mod_webdav_la_LDFLAGS = -module -export-dynamic -avoid-version -no-undefined
 mod_webdav_la_LIBADD = $(common_libadd) $(XML_LIBS) $(SQLITE_LIBS)
 
+lib_LTLIBRARIES += mod_magnet.la
+mod_magnet_la_SOURCES = mod_magnet.c mod_magnet_cache.c
+mod_magnet_la_CFLAGS = $(AM_CFLAGS) $(LUA_CFLAGS)
+mod_magnet_la_LDFLAGS = -module -export-dynamic -avoid-version -no-undefined
+mod_magnet_la_LIBADD = $(common_libadd) $(LUA_LIBS) -lm
+
 lib_LTLIBRARIES += mod_cml.la
 mod_cml_la_SOURCES = mod_cml.c mod_cml_lua.c mod_cml_funcs.c
 mod_cml_la_CFLAGS = $(AM_CFLAGS) $(LUA_CFLAGS)
