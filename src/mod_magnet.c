@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <assert.h>
+#include <setjmp.h>
 
 #include <lua.h>
 #include <lauxlib.h>
@@ -21,6 +22,8 @@
 #define MAGNET_CONFIG_PHYSICAL_PATH "magnet.attract-physical-path-to"
 
 /* plugin config for all request/connections */
+
+static jmp_buf exceptionjmp;
 
 typedef struct {
 	buffer *url_raw;
@@ -167,6 +170,50 @@ static int magnet_print(lua_State *L) {
 	return 0;
 }
 
+static int magnet_atpanic(lua_State *L) {
+	const char *s = luaL_checkstring(L, 1);
+	server *srv;
+
+	lua_pushstring(L, "lighty.srv");
+	lua_gettable(L, LUA_REGISTRYINDEX);
+	srv = lua_touserdata(L, -1);
+	lua_pop(L, 1);
+
+	log_error_write(srv, __FILE__, __LINE__, "ss", 
+			"(lua-atpanic)", s);
+	
+	longjmp(exceptionjmp, 1);
+}
+
+static int magnet_reqhdr_get(lua_State *L) {
+	server *srv;
+	connection *con;
+	data_string *ds;
+
+	const char *key = luaL_checkstring(L, 2);
+
+	lua_pushstring(L, "lighty.srv");
+	lua_gettable(L, LUA_REGISTRYINDEX);
+	srv = lua_touserdata(L, -1);
+	lua_pop(L, 1);
+
+	lua_pushstring(L, "lighty.con");
+	lua_gettable(L, LUA_REGISTRYINDEX);
+	con = lua_touserdata(L, -1);
+	lua_pop(L, 1);
+
+	if (NULL != (ds = (data_string *)array_get_element(con->request.headers, key))) {
+		if (ds->value->used) {
+			lua_pushlstring(L, ds->value->ptr, ds->value->used - 1);
+		} else {
+			lua_pushnil(L);
+		}
+	} else {
+		lua_pushnil(L);
+	}
+	return 1;
+}
+
 /**
  * copy all header-vars to the env
  *
@@ -246,8 +293,11 @@ static int magnet_copy_response_header(server *srv, connection *con, plugin_data
 /**
  * walk through the content array 
  *
- * content[0] = { type : "string", string : "foobar" } 
- * content[1] = { type : "file", filename : "...", [ offset : 0 [, length : ...] ] } 
+ * content = { "<pre>", { file = "/content" } , "</pre>" } 
+ *
+ * header["Content-Type"] = "text/html"
+ * 
+ * return 200
  */
 static int magnet_attach_content(server *srv, connection *con, plugin_data *p, lua_State *L) {
 	/**
@@ -262,76 +312,64 @@ static int magnet_attach_content(server *srv, connection *con, plugin_data *p, l
 		int i;
 		/* header is found, and is a table */
 
-		for (i = 0; ; i++) {
+		for (i = 1; ; i++) {
 			lua_rawgeti(L, -1, i);
 
-			/* we don't need the index */
-
 			/* -1 is the value and should be the value ... aka a table */
-			if (lua_istable(L, -1)) {
-				int is_file = -1;
+			if (lua_isstring(L, -1)) {
+				size_t s_len = 0;
+				const char *s = lua_tolstring(L, -1, &s_len);
 
-				lua_getfield(L, -1, "type");
-				if (lua_isstring(L, -1)) {
-					if (0 == strcmp("file", lua_tostring(L, -1))) {
-						is_file = 1;
-					} else if (0 == strcmp("string", lua_tostring(L, -1))) {
-						is_file = 0;
+				chunkqueue_append_mem(con->write_queue, s, s_len + 1);
+			} else if (lua_istable(L, -1)) {
+				lua_getfield(L, -1, "filename");
+				lua_getfield(L, -2, "length");
+				lua_getfield(L, -3, "offset");
+
+				if (lua_isstring(L, -3)) { /* filename has to be a string */
+					buffer *fn = buffer_init();
+					stat_cache_entry *sce;
+					off_t off = 0;
+					off_t len = 0;
+
+					if (lua_isnumber(L, -1)) {
+						off = lua_tonumber(L, -1);
 					}
+
+					if (lua_isnumber(L, -2)) {
+						len = lua_tonumber(L, -2);
+					}
+
+					buffer_copy_string(fn, lua_tostring(L, -3));
+
+					if (HANDLER_GO_ON == stat_cache_get_entry(srv, con, fn, &sce)) {
+						chunkqueue_append_file(con->write_queue, fn, off, sce->st.st_size);
+					}
+
+					buffer_free(fn);
+				} else {
+					lua_pop(L, 3 + 2); /* correct the stack */
+
+					return luaL_error(L, "content[%d] is a table and requires the field \"filename\"", i);
 				}
-				lua_pop(L, 1);
 
-				if (0 == is_file) { /* a string */
-					lua_getfield(L, -1, "string");
-
-					if (lua_isstring(L, -1)) {
-						size_t s_len = 0;
-						const char *s = lua_tolstring(L, -1, &s_len);
-
-						chunkqueue_append_mem(con->write_queue, s, s_len + 1);
-					}
-
-					lua_pop(L, 1);
-				} else if (1 == is_file) { /* a file */
-					lua_getfield(L, -1, "filename");
-					lua_getfield(L, -2, "length");
-					lua_getfield(L, -3, "offset");
-
-					if (lua_isstring(L, -3)) { /* filename has to be a string */
-						buffer *fn = buffer_init();
-						stat_cache_entry *sce;
-						off_t off = 0;
-						off_t len = 0;
-
-						if (lua_isnumber(L, -1)) {
-							off = lua_tonumber(L, -1);
-						}
-
-						if (lua_isnumber(L, -2)) {
-							len = lua_tonumber(L, -2);
-						}
-
-						buffer_copy_string(fn, lua_tostring(L, -3));
-
-						if (HANDLER_GO_ON == stat_cache_get_entry(srv, con, fn, &sce)) {
-							chunkqueue_append_file(con->write_queue, fn, off, sce->st.st_size);
-						}
-
-						buffer_free(fn);
-					}
-
-					lua_pop(L, 3);
-				} /* ignore invalid types */ 
+				lua_pop(L, 3);
 			} else if (lua_isnil(L, -1)) {
 				/* oops, end of list */
 
 				lua_pop(L, 1);
 
 				break;
-			} 
+			} else {
+				lua_pop(L, 3);
+
+				return luaL_error(L, "content[%d] is neither a string nor a table: ", i);
+			}
 
 			lua_pop(L, 1); /* pop the content[...] table */
 		}
+	} else {
+		return luaL_error(L, "content has to be a table");
 	}
 	lua_pop(L, 1); /* pop the header-table */
 	lua_pop(L, 1); /* php the function env */
@@ -368,6 +406,12 @@ static handler_t magnet_attract(server *srv, connection *con, plugin_data *p, bu
 	lua_pushlightuserdata(L, srv);
 	lua_settable(L, LUA_REGISTRYINDEX); /* registery[<id>] = srv */
 
+	lua_pushstring(L, "lighty.con"); 
+	lua_pushlightuserdata(L, con);
+	lua_settable(L, LUA_REGISTRYINDEX); /* registery[<id>] = con */
+
+	lua_atpanic(L, magnet_atpanic);
+
 	/**
 	 * we want to create empty environment for our script 
 	 * 
@@ -385,8 +429,19 @@ static handler_t magnet_attract(server *srv, connection *con, plugin_data *p, bu
 	lua_pushcfunction(L, magnet_print);                       /* (sp += 1) */
 	lua_setfield(L, -2, "print"); /* -1 is the env we want to set(sp -= 1) */
 
+	/**
+	 * lighty.request[] has the HTTP-request headers 
+	 * lighty.content[] is a table of string/file 
+	 * lighty.header[] is a array to set response headers
+	 */
+
+	lua_newtable(L); /* lighty.*                                 (sp += 1) */
+
 	lua_newtable(L); /*  {}                                      (sp += 1) */
-	magnet_add_request_header(srv, con, p, L);
+	lua_newtable(L); /* the meta-table for the request-table     (sp += 1) */
+	lua_pushcfunction(L, magnet_reqhdr_get);                  /* (sp += 1) */
+	lua_setfield(L, -2, "__index");                           /* (sp -= 1) */    
+	lua_setmetatable(L, -2); /* tie the metatable to request     (sp -= 1) */
 	lua_setfield(L, -2, "request"); /* content = {}              (sp -= 1) */
 
 	/* add empty 'content' and 'header' tables */
@@ -395,15 +450,16 @@ static handler_t magnet_attract(server *srv, connection *con, plugin_data *p, bu
 
 	lua_newtable(L); /*  {}                                      (sp += 1) */
 	lua_setfield(L, -2, "header"); /* header = {}                (sp -= 1) */
+
+	lua_setfield(L, -2, "lighty"); /* lighty.*                   (sp -= 1) */
 	
 	lua_newtable(L); /* the meta-table for the new env           (sp += 1) */
 	lua_pushvalue(L, LUA_GLOBALSINDEX);                       /* (sp += 1) */
-	lua_setfield(L, -2, "__index"); /* { __index = _G }          (sp += 1) */
-	lua_setmetatable(L, -2); /* setmetatable({}, {__index = _G}) (sp -= 2) */
+	lua_setfield(L, -2, "__index"); /* { __index = _G }          (sp -= 1) */
+	lua_setmetatable(L, -2); /* setmetatable({}, {__index = _G}) (sp -= 1) */
 	
 
-	lua_setfenv(L, -2); /* on the stack should be a modified env (sp -= 2) */
-
+	lua_setfenv(L, -2); /* on the stack should be a modified env (sp -= 1) */
 
 	if (lua_pcall(L, 0, 1, 0)) {
 		log_error_write(srv, __FILE__, __LINE__, 
@@ -435,8 +491,14 @@ static handler_t magnet_attract(server *srv, connection *con, plugin_data *p, bu
 	if (lua_return_value > 99) {
 		con->http_status = lua_return_value;
 		con->file_finished = 1;
-		
-		magnet_attach_content(srv, con, p, L);
+	
+		/* try { ...*/
+		if (0 == setjmp(exceptionjmp)) {
+			magnet_attach_content(srv, con, p, L);
+		} else {
+			/* } catch () { */
+			con->http_status = 500;
+		}
 	
 		assert(lua_gettop(L) == 1); /* only the function should be on the stack */
 
