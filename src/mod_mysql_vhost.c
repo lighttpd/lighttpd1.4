@@ -105,6 +105,7 @@ SERVER_FUNC(mod_mysql_vhost_cleanup) {
 			buffer_free(s->mysock);
 			buffer_free(s->mysql_pre);
 			buffer_free(s->mysql_post);
+			buffer_free(s->hostname);
 			
 			free(s);
 		}
