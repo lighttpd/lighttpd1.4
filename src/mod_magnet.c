@@ -214,49 +214,99 @@ static int magnet_reqhdr_get(lua_State *L) {
 	return 1;
 }
 
-/**
- * copy all header-vars to the env
- *
- * 
- */
-static int magnet_add_request_header(server *srv, connection *con, plugin_data *p, lua_State *L) {
+typedef struct {
+	const char *name;
+	enum { 
+		MAGNET_ENV_UNSET,
+
+		MAGNET_ENV_PHYICAL_PATH,
+		MAGNET_ENV_PHYICAL_REL_PATH,
+		MAGNET_ENV_PHYICAL_DOC_ROOT,
+
+		MAGNET_ENV_URI_PATH,
+		MAGNET_ENV_URI_PATH_RAW,
+		MAGNET_ENV_URI_SCHEME,
+		MAGNET_ENV_URI_AUTHORITY,
+		MAGNET_ENV_URI_QUERY,
+
+		MAGNET_ENV_REQUEST_METHOD,
+		MAGNET_ENV_REQUEST_URI,
+		MAGNET_ENV_REQUEST_PROTOCOL
+       	} type;
+} magnet_env_t;
+
+static int magnet_env_get(lua_State *L) {
+	server *srv;
+	connection *con;
+
+	magnet_env_t env[] = {
+		{ "physical.path", MAGNET_ENV_PHYICAL_PATH },
+		{ "physical.rel-path", MAGNET_ENV_PHYICAL_REL_PATH },
+		{ "physical.doc-root", MAGNET_ENV_PHYICAL_DOC_ROOT },
+
+		{ "uri.path", MAGNET_ENV_URI_PATH },
+		{ "uri.path-raw", MAGNET_ENV_URI_PATH_RAW },
+		{ "uri.scheme", MAGNET_ENV_URI_SCHEME },
+		{ "uri.authority", MAGNET_ENV_URI_AUTHORITY },
+
+		{ "request.method", MAGNET_ENV_REQUEST_METHOD },
+		{ "request.uri", MAGNET_ENV_REQUEST_URI },
+		{ "request.protocol", MAGNET_ENV_REQUEST_PROTOCOL },
+		
+		{ NULL, MAGNET_ENV_UNSET }
+	};
+
+	const char *key = luaL_checkstring(L, 2);
+	buffer *dest = NULL;
 	size_t i;
 
-	for (i = 0; i < con->request.headers->used; i++) {
-		data_string *ds;
-		
-		ds = (data_string *)con->request.headers->data[i];
 
-		if (ds->value->used && ds->key->used) {
-			size_t j;
-			buffer_reset(p->encode_buf);
-			
-			if (0 != strcasecmp(ds->key->ptr, "CONTENT-TYPE")) {
-				BUFFER_COPY_STRING_CONST(p->encode_buf, "HTTP_");
-				p->encode_buf->used--;
-			}
-			
-			buffer_prepare_append(p->encode_buf, ds->key->used + 2);
-			for (j = 0; j < ds->key->used - 1; j++) {
-				char c = '_';
-				if (light_isalpha(ds->key->ptr[j])) {
-					/* upper-case */
-					c = ds->key->ptr[j] & ~32;
-				} else if (light_isdigit(ds->key->ptr[j])) {
-					/* copy */
-					c = ds->key->ptr[j];
-				}
-				p->encode_buf->ptr[p->encode_buf->used++] = c;
-			}
-			p->encode_buf->ptr[p->encode_buf->used++] = '\0';
-			
-			lua_pushstring(L, ds->value->ptr);     /* -1 <value> */
-			lua_setfield(L, -2, p->encode_buf->ptr);
-		}
+	lua_pushstring(L, "lighty.srv");
+	lua_gettable(L, LUA_REGISTRYINDEX);
+	srv = lua_touserdata(L, -1);
+	lua_pop(L, 1);
+
+	lua_pushstring(L, "lighty.con");
+	lua_gettable(L, LUA_REGISTRYINDEX);
+	con = lua_touserdata(L, -1);
+	lua_pop(L, 1);
+
+	/**
+	 * map all internal variables to lua 
+	 *
+	 */
+
+	for (i = 0; env[i].name; i++) {
+		if (0 == strcmp(key, env[i].name)) break;
 	}
-	
-	return 0;
+
+	switch (env[i].type) {
+	case MAGNET_ENV_PHYICAL_PATH: dest = con->physical.path; break;
+	case MAGNET_ENV_PHYICAL_REL_PATH: dest = con->physical.rel_path; break;
+	case MAGNET_ENV_PHYICAL_DOC_ROOT: dest = con->physical.doc_root; break;
+
+	case MAGNET_ENV_URI_PATH: dest = con->uri.path; break;
+	case MAGNET_ENV_URI_PATH_RAW: dest = con->uri.path_raw; break;
+	case MAGNET_ENV_URI_SCHEME: dest = con->uri.scheme; break;
+	case MAGNET_ENV_URI_AUTHORITY: dest = con->uri.authority; break;
+	case MAGNET_ENV_URI_QUERY: dest = con->uri.query; break;
+
+	case MAGNET_ENV_REQUEST_METHOD:   break;
+	case MAGNET_ENV_REQUEST_URI:      dest = con->request.uri; break;
+	case MAGNET_ENV_REQUEST_PROTOCOL: break;
+
+	case MAGNET_ENV_UNSET: break;
+	}
+
+	if (dest && dest->used) {
+		lua_pushlstring(L, dest->ptr, dest->used - 1);
+	} else {
+		lua_pushnil(L);
+	}
+
+	return 1;
 }
+
 static int magnet_copy_response_header(server *srv, connection *con, plugin_data *p, lua_State *L) {
 	/**
 	 * get the environment of the function
@@ -264,7 +314,12 @@ static int magnet_copy_response_header(server *srv, connection *con, plugin_data
 
 	lua_getfenv(L, -1); /* -1 is the function */
 
-	lua_getfield(L, -1, "header"); /* -1 is now the header table */
+	/* lighty.header */
+
+	lua_getfield(L, -1, "lighty"); /* lighty.* from the env  */
+	assert(lua_istable(L, -1));
+
+	lua_getfield(L, -1, "header"); /* lighty.header */
 	if (lua_istable(L, -1)) {
 		/* header is found, and is a table */
 
@@ -282,9 +337,10 @@ static int magnet_copy_response_header(server *srv, connection *con, plugin_data
 
 			lua_pop(L, 1);
 		}
-	}
+	} 
 
 	lua_pop(L, 1); /* pop the header-table */
+	lua_pop(L, 1); /* pop the lighty-env */
 	lua_pop(L, 1); /* pop the function env */
 
 	return 0;
@@ -307,7 +363,10 @@ static int magnet_attach_content(server *srv, connection *con, plugin_data *p, l
 	assert(lua_isfunction(L, -1));
 	lua_getfenv(L, -1); /* -1 is the function */
 
-	lua_getfield(L, -1, "content"); /* -1 is now the header table */
+	lua_getfield(L, -1, "lighty"); /* lighty.* from the env  */
+	assert(lua_istable(L, -1));
+
+	lua_getfield(L, -1, "content"); /* lighty.content */
 	if (lua_istable(L, -1)) {
 		int i;
 		/* header is found, and is a table */
@@ -361,7 +420,7 @@ static int magnet_attach_content(server *srv, connection *con, plugin_data *p, l
 
 				break;
 			} else {
-				lua_pop(L, 3);
+				lua_pop(L, 4);
 
 				return luaL_error(L, "content[%d] is neither a string nor a table: ", i);
 			}
@@ -369,9 +428,10 @@ static int magnet_attach_content(server *srv, connection *con, plugin_data *p, l
 			lua_pop(L, 1); /* pop the content[...] table */
 		}
 	} else {
-		return luaL_error(L, "content has to be a table");
+		return luaL_error(L, "lighty.content has to be a table");
 	}
 	lua_pop(L, 1); /* pop the header-table */
+	lua_pop(L, 1); /* pop the lighty-table */
 	lua_pop(L, 1); /* php the function env */
 
 	return 0;
@@ -443,6 +503,13 @@ static handler_t magnet_attract(server *srv, connection *con, plugin_data *p, bu
 	lua_setfield(L, -2, "__index");                           /* (sp -= 1) */    
 	lua_setmetatable(L, -2); /* tie the metatable to request     (sp -= 1) */
 	lua_setfield(L, -2, "request"); /* content = {}              (sp -= 1) */
+
+	lua_newtable(L); /*  {}                                      (sp += 1) */
+	lua_newtable(L); /* the meta-table for the request-table     (sp += 1) */
+	lua_pushcfunction(L, magnet_env_get);                     /* (sp += 1) */
+	lua_setfield(L, -2, "__index");                           /* (sp -= 1) */    
+	lua_setmetatable(L, -2); /* tie the metatable to request     (sp -= 1) */
+	lua_setfield(L, -2, "env"); /* content = {}                  (sp -= 1) */
 
 	/* add empty 'content' and 'header' tables */
 	lua_newtable(L); /*  {}                                      (sp += 1) */
