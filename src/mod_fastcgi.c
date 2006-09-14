@@ -23,6 +23,7 @@
 
 #include "inet_ntop_cache.h"
 #include "stat_cache.h"
+#include "status_counter.h"
 
 #include <fastcgi.h>
 #include <stdio.h>
@@ -362,49 +363,6 @@ typedef struct {
 
 /* ok, we need a prototype */
 static handler_t fcgi_handle_fdevent(void *s, void *ctx, int revents);
-
-data_integer *status_counter_get_counter(server *srv, const char *s, size_t len) {
-	data_integer *di;
-
-	if (NULL == (di = (data_integer *)array_get_element(srv->status, s))) {
-		/* not found, create it */
-
-		if (NULL == (di = (data_integer *)array_get_unused_element(srv->status, TYPE_INTEGER))) {
-			di = data_integer_init();
-		}
-		buffer_copy_string_len(di->key, s, len);
-		di->value = 0;
-
-		array_insert_unique(srv->status, (data_unset *)di);
-	}
-	return di;
-}
-
-/* dummies of the statistic framework functions 
- * they will be moved to a statistics.c later */
-int status_counter_inc(server *srv, const char *s, size_t len) {
-	data_integer *di = status_counter_get_counter(srv, s, len);
-
-	di->value++;
-
-	return 0;
-}
-
-int status_counter_dec(server *srv, const char *s, size_t len) {
-	data_integer *di = status_counter_get_counter(srv, s, len);
-
-	if (di->value > 0) di->value--;
-
-	return 0;
-}
-
-int status_counter_set(server *srv, const char *s, size_t len, int val) {
-	data_integer *di = status_counter_get_counter(srv, s, len);
-
-	di->value = val;
-
-	return 0;
-}
 
 int fastcgi_status_copy_procname(buffer *b, fcgi_extension_host *host, fcgi_proc *proc) {
 	buffer_copy_string(b, "fastcgi.backend.");

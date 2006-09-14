@@ -16,6 +16,7 @@
 #include "mod_magnet_cache.h"
 #include "response.h"
 #include "stat_cache.h"
+#include "status_counter.h"
 
 
 #define MAGNET_CONFIG_RAW_URL       "magnet.attract-raw-url-to"
@@ -212,6 +213,42 @@ static int magnet_reqhdr_get(lua_State *L) {
 		lua_pushnil(L);
 	}
 	return 1;
+}
+
+static int magnet_status_get(lua_State *L) {
+	data_integer *di;
+	server *srv;
+	size_t key_len = 0;
+
+	const char *key = luaL_checklstring(L, 2, &key_len);
+
+	lua_pushstring(L, "lighty.srv");
+	lua_gettable(L, LUA_REGISTRYINDEX);
+	srv = lua_touserdata(L, -1);
+	lua_pop(L, 1);
+
+	di = status_counter_get_counter(srv, key, key_len);
+
+	lua_pushnumber(L, (double)di->value);
+
+	return 1;
+}
+
+static int magnet_status_set(lua_State *L) {
+	size_t key_len = 0;
+	server *srv;
+
+	const char *key = luaL_checklstring(L, 2, &key_len);
+	int counter = luaL_checkint(L, 3);
+
+	lua_pushstring(L, "lighty.srv");
+	lua_gettable(L, LUA_REGISTRYINDEX);
+	srv = lua_touserdata(L, -1);
+	lua_pop(L, 1);
+
+	status_counter_set(srv, key, key_len, counter);
+
+	return 0;
 }
 
 typedef struct {
@@ -510,6 +547,15 @@ static handler_t magnet_attract(server *srv, connection *con, plugin_data *p, bu
 	lua_setfield(L, -2, "__index");                           /* (sp -= 1) */    
 	lua_setmetatable(L, -2); /* tie the metatable to request     (sp -= 1) */
 	lua_setfield(L, -2, "env"); /* content = {}                  (sp -= 1) */
+
+	lua_newtable(L); /*  {}                                      (sp += 1) */
+	lua_newtable(L); /* the meta-table for the request-table     (sp += 1) */
+	lua_pushcfunction(L, magnet_status_get);                  /* (sp += 1) */
+	lua_setfield(L, -2, "__index");                           /* (sp -= 1) */    
+	lua_pushcfunction(L, magnet_status_set);                  /* (sp += 1) */
+	lua_setfield(L, -2, "__newindex");                        /* (sp -= 1) */    
+	lua_setmetatable(L, -2); /* tie the metatable to request     (sp -= 1) */
+	lua_setfield(L, -2, "status"); /* content = {}               (sp -= 1) */
 
 	/* add empty 'content' and 'header' tables */
 	lua_newtable(L); /*  {}                                      (sp += 1) */
