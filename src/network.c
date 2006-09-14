@@ -381,7 +381,7 @@ int network_server_init(server *srv, buffer *host_token, specific_config *s) {
 			return -1;
 		}
 		SSL_CTX_set_default_read_ahead(s->ssl_ctx, 1);
-		SSL_CTX_set_mode(s->ssl_ctx, SSL_get_mode(s->ssl_ctx) | SSL_MODE_ACCEPT_MOVING_WRITE_BUFFER);
+		SSL_CTX_set_mode(s->ssl_ctx, SSL_CTX_get_mode(s->ssl_ctx) | SSL_MODE_ACCEPT_MOVING_WRITE_BUFFER);
 
 		srv_socket->ssl_ctx = s->ssl_ctx;
 #else
