@@ -31,6 +31,7 @@ typedef char HASHHEX[HASHHEXLEN+1];
 
 #include <lua.h>
 #include <lualib.h>
+#include <lauxlib.h>
 
 typedef struct {
 	stream st;
