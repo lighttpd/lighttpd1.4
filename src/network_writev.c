@@ -53,8 +53,10 @@ int network_write_chunkqueue_writev(server *srv, connection *con, int fd, chunkq
 			const size_t max_chunks = IOV_MAX;
 #elif defined(MAX_IOVEC) /* Linux ia64 (glibc-2.3.3-98.28) */
 			const size_t max_chunks = MAX_IOVEC;
+#elif defined(UIO_MAXIOV) /* Linux x86 (glibc-2.2.5-233) */
+			const size_t max_chunks = UIO_MAXIOV;
 #else
-#error sysconf() doesn't return _SC_IOV_MAX ... 
+#error "sysconf() doesnt return _SC_IOV_MAX ..., check the output of 'man writev' for the EINVAL error and send the output to jan@kneschke.de"
 #endif
 
 			/* we can't send more then SSIZE_MAX bytes in one chunk */
