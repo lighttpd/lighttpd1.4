@@ -246,7 +246,8 @@ hdr = server.h buffer.h network.h log.h keyvalue.h \
       mod_ssi.h mod_ssi_expr.h inet_ntop_cache.h \
       configparser.h mod_ssi_exprparser.h \
       sys-mmap.h sys-socket.h mod_cml.h mod_cml_funcs.h \
-      splaytree.h proc_open.h status_counter.h
+      splaytree.h proc_open.h status_counter.h \
+      mod_magnet_cache.h
 
 DEFS= @DEFS@ -DLIBRARY_DIR="\"$(libdir)\""
 
