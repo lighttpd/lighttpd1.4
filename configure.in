@@ -375,7 +375,7 @@ if test "$WITH_MEMCACHE" != "no"; then
 fi
   
 dnl Check for lua
-AC_MSG_CHECKING(for lua)
+AC_MSG_CHECKING(if lua-support is requested)
 AC_ARG_WITH(lua, AC_HELP_STRING([--with-lua],[lua engine for mod_cml]),
 [WITH_LUA=$withval],[WITH_LUA=no])
 
@@ -400,7 +400,7 @@ if test "$WITH_LUA" != "no"; then
 
  if test x"$LUA_LIBS" = x; then
    # try pkgconfig
-   PKG_CHECK_MODULES(LUA, lua, [
+   PKG_CHECK_MODULES(LUA, lua >= 5.1, [
      AC_DEFINE([HAVE_LUA], [1], [liblua])
      AC_DEFINE([HAVE_LUA_H], [1], [lua.h])
    ])
@@ -557,7 +557,7 @@ else
 	no_build="$no_build $plugins"
 fi
 
-plugins="mod_cml"
+plugins="mod_cml mod_magnet"
 if test ! "x$LUA_LIBS" = x; then
 	do_build="$do_build $plugins"
 else
