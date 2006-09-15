@@ -221,8 +221,9 @@ int cache_parse_lua(server *srv, connection *con, plugin_data *p, buffer *fn) {
 	stream_open(&rm.st, fn);
 	
 	/* push the lua file to the interpreter and see what happends */
-	L = lua_open();
-	
+	L = luaL_newstate();
+	luaL_openlibs(L);
+
 	luaopen_base(L);
 	luaopen_table(L);
 	luaopen_string(L);
