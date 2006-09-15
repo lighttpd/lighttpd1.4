@@ -4,9 +4,6 @@
 #include <assert.h>
 #include <setjmp.h>
 
-#include <lua.h>
-#include <lauxlib.h>
-
 #include "base.h"
 #include "log.h"
 #include "buffer.h"
@@ -18,6 +15,9 @@
 #include "stat_cache.h"
 #include "status_counter.h"
 
+#ifdef HAVE_LUA_H
+#include <lua.h>
+#include <lauxlib.h>
 
 #define MAGNET_CONFIG_RAW_URL       "magnet.attract-raw-url-to"
 #define MAGNET_CONFIG_PHYSICAL_PATH "magnet.attract-physical-path-to"
@@ -723,3 +723,9 @@ int mod_magnet_plugin_init(plugin *p) {
 	
 	return 0;
 }
+
+#else
+int mod_magnet_plugin_init(plugin *p) {
+	return -1;
+}
+#endif
