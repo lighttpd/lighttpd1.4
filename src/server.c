@@ -948,8 +948,9 @@ int main (int argc, char **argv) {
 				}
 			} else {
 				int status;
-				wait(&status);
-				num_childs++;
+
+				/* ignore EINTR */
+				if (-1 != wait(&status)) num_childs++;
 			}
 		}
 		if (srv_shutdown) {
