@@ -21,6 +21,7 @@
 
 #define MAGNET_CONFIG_RAW_URL       "magnet.attract-raw-url-to"
 #define MAGNET_CONFIG_PHYSICAL_PATH "magnet.attract-physical-path-to"
+#define MAGNET_RESTART_REQUEST      99
 
 /* plugin config for all request/connections */
 
@@ -272,11 +273,11 @@ typedef struct {
        	} type;
 } magnet_env_t;
 
-static int magnet_env_get(lua_State *L) {
-	server *srv;
-	connection *con;
+static buffer *magnet_env_get_buffer(server *srv, connection *con, const char *key) {
+	buffer *dest = NULL;
+	size_t i;
 
-	magnet_env_t env[] = {
+	const magnet_env_t env[] = {
 		{ "physical.path", MAGNET_ENV_PHYICAL_PATH },
 		{ "physical.rel-path", MAGNET_ENV_PHYICAL_REL_PATH },
 		{ "physical.doc-root", MAGNET_ENV_PHYICAL_DOC_ROOT },
@@ -285,28 +286,15 @@ static int magnet_env_get(lua_State *L) {
 		{ "uri.path-raw", MAGNET_ENV_URI_PATH_RAW },
 		{ "uri.scheme", MAGNET_ENV_URI_SCHEME },
 		{ "uri.authority", MAGNET_ENV_URI_AUTHORITY },
+		{ "uri.query", MAGNET_ENV_URI_QUERY },
 
 		{ "request.method", MAGNET_ENV_REQUEST_METHOD },
 		{ "request.uri", MAGNET_ENV_REQUEST_URI },
 		{ "request.protocol", MAGNET_ENV_REQUEST_PROTOCOL },
-		
+	
 		{ NULL, MAGNET_ENV_UNSET }
 	};
 
-	const char *key = luaL_checkstring(L, 2);
-	buffer *dest = NULL;
-	size_t i;
-
-
-	lua_pushstring(L, "lighty.srv");
-	lua_gettable(L, LUA_REGISTRYINDEX);
-	srv = lua_touserdata(L, -1);
-	lua_pop(L, 1);
-
-	lua_pushstring(L, "lighty.con");
-	lua_gettable(L, LUA_REGISTRYINDEX);
-	con = lua_touserdata(L, -1);
-	lua_pop(L, 1);
 
 	/**
 	 * map all internal variables to lua 
@@ -335,6 +323,28 @@ static int magnet_env_get(lua_State *L) {
 	case MAGNET_ENV_UNSET: break;
 	}
 
+	return dest;
+}
+
+static int magnet_env_get(lua_State *L) {
+	server *srv;
+	connection *con;
+
+	const char *key = luaL_checkstring(L, 2);
+	buffer *dest = NULL;
+
+	lua_pushstring(L, "lighty.srv");
+	lua_gettable(L, LUA_REGISTRYINDEX);
+	srv = lua_touserdata(L, -1);
+	lua_pop(L, 1);
+
+	lua_pushstring(L, "lighty.con");
+	lua_gettable(L, LUA_REGISTRYINDEX);
+	con = lua_touserdata(L, -1);
+	lua_pop(L, 1);
+
+	dest = magnet_env_get_buffer(srv, con, key);
+
 	if (dest && dest->used) {
 		lua_pushlstring(L, dest->ptr, dest->used - 1);
 	} else {
@@ -343,6 +353,36 @@ static int magnet_env_get(lua_State *L) {
 
 	return 1;
 }
+
+static int magnet_env_set(lua_State *L) {
+	server *srv;
+	connection *con;
+
+	const char *key = luaL_checkstring(L, 2);
+	const char *val = luaL_checkstring(L, 3);
+	buffer *dest = NULL;
+
+	lua_pushstring(L, "lighty.srv");
+	lua_gettable(L, LUA_REGISTRYINDEX);
+	srv = lua_touserdata(L, -1);
+	lua_pop(L, 1);
+
+	lua_pushstring(L, "lighty.con");
+	lua_gettable(L, LUA_REGISTRYINDEX);
+	con = lua_touserdata(L, -1);
+	lua_pop(L, 1);
+
+	if (NULL != (dest = magnet_env_get_buffer(srv, con, key))) {
+		buffer_copy_string(dest, val);
+	} else {
+		/* couldn't save */
+
+		return luaL_error(L, "couldn't store '%s' in lighty.env[]", key);
+	}
+
+	return 0;
+}
+
 
 static int magnet_copy_response_header(server *srv, connection *con, plugin_data *p, lua_State *L) {
 	/**
@@ -425,21 +465,32 @@ static int magnet_attach_content(server *srv, connection *con, plugin_data *p, l
 				if (lua_isstring(L, -3)) { /* filename has to be a string */
 					buffer *fn = buffer_init();
 					stat_cache_entry *sce;
-					off_t off = 0;
-					off_t len = 0;
-
-					if (lua_isnumber(L, -1)) {
-						off = lua_tonumber(L, -1);
-					}
-
-					if (lua_isnumber(L, -2)) {
-						len = lua_tonumber(L, -2);
-					}
 
 					buffer_copy_string(fn, lua_tostring(L, -3));
 
 					if (HANDLER_GO_ON == stat_cache_get_entry(srv, con, fn, &sce)) {
-						chunkqueue_append_file(con->write_queue, fn, off, sce->st.st_size);
+						off_t off = 0;
+						off_t len = 0;
+
+						if (lua_isnumber(L, -1)) {
+							off = lua_tonumber(L, -1);
+						}
+
+						if (lua_isnumber(L, -2)) {
+							len = lua_tonumber(L, -2);
+						} else {
+							len = sce->st.st_size;
+						}
+
+						if (off < 0) {
+							return luaL_error(L, "offset for '%s' is negative", fn->ptr);
+						}
+
+						if (len < off) {
+							return luaL_error(L, "offset > length for '%s'", fn->ptr);
+						}
+						
+						chunkqueue_append_file(con->write_queue, fn, off, len - off);
 					}
 
 					buffer_free(fn);
@@ -545,6 +596,8 @@ static handler_t magnet_attract(server *srv, connection *con, plugin_data *p, bu
 	lua_newtable(L); /* the meta-table for the request-table     (sp += 1) */
 	lua_pushcfunction(L, magnet_env_get);                     /* (sp += 1) */
 	lua_setfield(L, -2, "__index");                           /* (sp -= 1) */    
+	lua_pushcfunction(L, magnet_env_set);                     /* (sp += 1) */
+	lua_setfield(L, -2, "__newindex");                        /* (sp -= 1) */    
 	lua_setmetatable(L, -2); /* tie the metatable to request     (sp -= 1) */
 	lua_setfield(L, -2, "env"); /* content = {}                  (sp -= 1) */
 
@@ -564,6 +617,9 @@ static handler_t magnet_attract(server *srv, connection *con, plugin_data *p, bu
 	lua_newtable(L); /*  {}                                      (sp += 1) */
 	lua_setfield(L, -2, "header"); /* header = {}                (sp -= 1) */
 
+	lua_pushinteger(L, MAGNET_RESTART_REQUEST);
+	lua_setfield(L, -2, "RESTART_REQUEST");
+
 	lua_setfield(L, -2, "lighty"); /* lighty.*                   (sp -= 1) */
 	
 	lua_newtable(L); /* the meta-table for the new env           (sp += 1) */
@@ -576,10 +632,8 @@ static handler_t magnet_attract(server *srv, connection *con, plugin_data *p, bu
 
 	if (lua_pcall(L, 0, 1, 0)) {
 		log_error_write(srv, __FILE__, __LINE__, 
-			"sbss", 
-			"lua_pcall() failed for",
-			name,
-			"with:",
+			"ss", 
+			"lua_pcall():",
 			lua_tostring(L, -1));
 		lua_pop(L, 1); /* remove the error-msg and the function copy from the stack */
 
@@ -617,11 +671,15 @@ static handler_t magnet_attract(server *srv, connection *con, plugin_data *p, bu
 
 		/* we are finished */
 		return HANDLER_FINISHED;
-	}
+	} else if (MAGNET_RESTART_REQUEST == lua_return_value) {
+		assert(lua_gettop(L) == 1); /* only the function should be on the stack */
 
-	assert(lua_gettop(L) == 1); /* only the function should be on the stack */
+		return HANDLER_COMEBACK;
+	} else {
+		assert(lua_gettop(L) == 1); /* only the function should be on the stack */
 	
-	return HANDLER_GO_ON;
+		return HANDLER_GO_ON;
+	}
 }
 
 URIHANDLER_FUNC(mod_magnet_uri_handler) {
