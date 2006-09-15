@@ -10,6 +10,7 @@ NEWS
   * added support for += on empty arrays in config-files
   * added ssl.cipher-list and ssl.use-sslv2
   * added $HTTP["querystring"] conditional
+  * added mod_magnet as long-term replacement for mod_magnet
   * fixed upload hangs with SSL
   * fixed connection drops with SSL (aka bad retry)
   * fixed path traversal with \ on cygwin
@@ -23,6 +24,7 @@ NEWS
   * fixed empty FCGI_STDERR packets
   * fixed conditional server.allow-http-11 
   * fixed handling of follow-symlink + lstat()
+  * fixed SIGHUP handling if max-workers is used
 
 - 1.4.11 - 2006-03-09
 
