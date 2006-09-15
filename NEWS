@@ -10,7 +10,7 @@ NEWS
   * added support for += on empty arrays in config-files
   * added ssl.cipher-list and ssl.use-sslv2
   * added $HTTP["querystring"] conditional
-  * added mod_magnet as long-term replacement for mod_magnet
+  * added mod_magnet as long-term replacement for mod_cml
   * fixed upload hangs with SSL
   * fixed connection drops with SSL (aka bad retry)
   * fixed path traversal with \ on cygwin
