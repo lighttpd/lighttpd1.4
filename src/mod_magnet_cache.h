@@ -1,16 +1,21 @@
 #ifndef _MOD_MAGNET_CACHE_H_
 #define _MOD_MAGNET_CACHE_H_
 
-#include <lua.h>
-
 #include "buffer.h"
 #include "base.h"
+
+#ifdef HAVE_LUA_H
+#include <lua.h>
+#endif
+
 
 typedef struct {
 	buffer *name;
 	buffer *etag;
 
+#ifdef HAVE_LUA_H
 	lua_State *L;
+#endif
 
 	time_t last_used; /* LRU */
 } script;

@@ -1,11 +1,13 @@
 #include <stdlib.h>
-#include <lualib.h>
-#include <lauxlib.h>
 #include <time.h>
 #include <assert.h>
 
 #include "mod_magnet_cache.h"
 #include "stat_cache.h"
+
+#ifdef HAVE_LUA_H
+#include <lualib.h>
+#include <lauxlib.h>
 
 script *script_init() {
 	script *sc;
@@ -131,3 +133,5 @@ lua_State *script_cache_get_script(server *srv, connection *con, script_cache *c
 
 	return sc->L;
 }
+
+#endif
