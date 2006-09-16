@@ -1261,8 +1261,17 @@ connection *connection_accept(server *srv, server_socket *srv_socket) {
 	cnt_len = sizeof(cnt_addr);
 
 	if (-1 == (cnt = accept(srv_socket->fd, (struct sockaddr *) &cnt_addr, &cnt_len))) {
-		if ((errno != EAGAIN) &&
-		    (errno != EINTR)) {
+		switch (errno) {
+		case EAGAIN:
+#if EWOULDBLOCK != EAGAIN
+		case EWOULDBLOCK:
+#endif
+		case EINTR:
+			/* we were stopped _before_ we had a connection */
+		case ECONNABORTED: /* this is a FreeBSD thingy */
+			/* we were stopped _after_ we had a connection */
+			break;
+		default:
 			log_error_write(srv, __FILE__, __LINE__, "ssd", "accept failed:", strerror(errno), errno);
 		}
 		return NULL;

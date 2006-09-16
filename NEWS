@@ -25,6 +25,7 @@ NEWS
   * fixed conditional server.allow-http-11 
   * fixed handling of follow-symlink + lstat()
   * fixed SIGHUP handling if max-workers is used
+  * fixed "Software caused connection abort" messages on FreeBSD
 
 - 1.4.11 - 2006-03-09
 
