@@ -400,7 +400,7 @@ if test "$WITH_LUA" != "no"; then
 
  if test x"$LUA_LIBS" = x; then
    # try pkgconfig
-   PKG_CHECK_MODULES(LUA, lua >= 5.1, [
+   PKG_CHECK_MODULES(LUA, lua >= 5.0, [
      AC_DEFINE([HAVE_LUA], [1], [liblua])
      AC_DEFINE([HAVE_LUA_H], [1], [lua.h])
    ])
