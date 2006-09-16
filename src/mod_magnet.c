@@ -2,7 +2,6 @@
 #include <stdlib.h>
 #include <string.h>
 #include <assert.h>
-#include <setjmp.h>
 
 #include "base.h"
 #include "log.h"
@@ -24,8 +23,6 @@
 #define MAGNET_RESTART_REQUEST      99
 
 /* plugin config for all request/connections */
-
-static jmp_buf exceptionjmp;
 
 typedef struct {
 	buffer *url_raw;
@@ -170,21 +167,6 @@ static int magnet_print(lua_State *L) {
 			"(lua-print)", s);
 
 	return 0;
-}
-
-static int magnet_atpanic(lua_State *L) {
-	const char *s = luaL_checkstring(L, 1);
-	server *srv;
-
-	lua_pushstring(L, "lighty.srv");
-	lua_gettable(L, LUA_REGISTRYINDEX);
-	srv = lua_touserdata(L, -1);
-	lua_pop(L, 1);
-
-	log_error_write(srv, __FILE__, __LINE__, "ss", 
-			"(lua-atpanic)", s);
-	
-	longjmp(exceptionjmp, 1);
 }
 
 static int magnet_reqhdr_get(lua_State *L) {
@@ -432,95 +414,98 @@ static int magnet_copy_response_header(server *srv, connection *con, plugin_data
  * 
  * return 200
  */
-static int magnet_attach_content(server *srv, connection *con, plugin_data *p, lua_State *L) {
+static int magnet_attach_content(lua_State *L) {
 	/**
 	 * get the environment of the function
 	 */
+	server *srv;
+	connection *con;
+	int i;
 
-	assert(lua_isfunction(L, -1));
-	lua_getfenv(L, -1); /* -1 is the function */
+	lua_pushstring(L, "lighty.srv");
+	lua_gettable(L, LUA_REGISTRYINDEX);
+	srv = lua_touserdata(L, -1);
+	lua_pop(L, 1);
+
+	lua_pushstring(L, "lighty.con");
+	lua_gettable(L, LUA_REGISTRYINDEX);
+	con = lua_touserdata(L, -1);
+	lua_pop(L, 1);
+
+	assert(lua_isfunction(L, -1)); /* this would be error in lighty */
+	lua_getfenv(L, -1); /* get the script-env */
 
 	lua_getfield(L, -1, "lighty"); /* lighty.* from the env  */
-	assert(lua_istable(L, -1));
+	if (!lua_istable(L, -1)) {
+		return luaL_error(L, "lighty.* was a table and get overwritten in your script");
+	}
 
 	lua_getfield(L, -1, "content"); /* lighty.content */
-	if (lua_istable(L, -1)) {
-		int i;
+	if (!lua_istable(L, -1)) {
+		return luaL_error(L, "lighty.content was a table and get overwritten in your script");
+	}
 		/* header is found, and is a table */
 
-		for (i = 1; ; i++) {
-			lua_rawgeti(L, -1, i);
+	for (i = 1; ; i++) {
+		lua_rawgeti(L, -1, i);
 
-			/* -1 is the value and should be the value ... aka a table */
-			if (lua_isstring(L, -1)) {
-				size_t s_len = 0;
-				const char *s = lua_tolstring(L, -1, &s_len);
+		/* -1 is the value and should be the value ... aka a table */
+		if (lua_isstring(L, -1)) {
+			size_t s_len = 0;
+			const char *s = lua_tolstring(L, -1, &s_len);
 
-				chunkqueue_append_mem(con->write_queue, s, s_len + 1);
-			} else if (lua_istable(L, -1)) {
-				lua_getfield(L, -1, "filename");
-				lua_getfield(L, -2, "length");
-				lua_getfield(L, -3, "offset");
+			chunkqueue_append_mem(con->write_queue, s, s_len + 1);
+		} else if (lua_istable(L, -1)) {
+			stat_cache_entry *sce;
+			buffer *fn;
 
-				if (lua_isstring(L, -3)) { /* filename has to be a string */
-					buffer *fn = buffer_init();
-					stat_cache_entry *sce;
+			lua_getfield(L, -1, "filename");
+			lua_getfield(L, -2, "length");
+			lua_getfield(L, -3, "offset");
 
-					buffer_copy_string(fn, lua_tostring(L, -3));
+			if (!lua_isstring(L, -3)) { /* filename has to be a string */
+				return luaL_error(L, "lighty.content[%d] is a table and requires the field \"filename\"", i);
+			}
+			fn = buffer_init();
 
-					if (HANDLER_GO_ON == stat_cache_get_entry(srv, con, fn, &sce)) {
-						off_t off = 0;
-						off_t len = 0;
+			buffer_copy_string(fn, lua_tostring(L, -3));
 
-						if (lua_isnumber(L, -1)) {
-							off = lua_tonumber(L, -1);
-						}
+			if (HANDLER_GO_ON == stat_cache_get_entry(srv, con, fn, &sce)) {
+				off_t off = 0;
+				off_t len = 0;
 
-						if (lua_isnumber(L, -2)) {
-							len = lua_tonumber(L, -2);
-						} else {
-							len = sce->st.st_size;
-						}
-
-						if (off < 0) {
-							return luaL_error(L, "offset for '%s' is negative", fn->ptr);
-						}
-
-						if (len < off) {
-							return luaL_error(L, "offset > length for '%s'", fn->ptr);
-						}
-						
-						chunkqueue_append_file(con->write_queue, fn, off, len - off);
-					}
-
-					buffer_free(fn);
-				} else {
-					lua_pop(L, 3 + 2); /* correct the stack */
-
-					return luaL_error(L, "content[%d] is a table and requires the field \"filename\"", i);
+				if (lua_isnumber(L, -1)) {
+					off = lua_tonumber(L, -1);
 				}
 
-				lua_pop(L, 3);
-			} else if (lua_isnil(L, -1)) {
-				/* oops, end of list */
+				if (lua_isnumber(L, -2)) {
+					len = lua_tonumber(L, -2);
+				} else {
+					len = sce->st.st_size;
+				}
 
-				lua_pop(L, 1);
+				if (off < 0) {
+					/* fn leaks mem */
+					return luaL_error(L, "offset for '%s' is negative", fn->ptr);
+				}
 
-				break;
-			} else {
-				lua_pop(L, 4);
-
-				return luaL_error(L, "content[%d] is neither a string nor a table: ", i);
+				if (len < off) {
+					/* fn leaks mem */
+					return luaL_error(L, "offset > length for '%s'", fn->ptr);
+				}
+				
+				chunkqueue_append_file(con->write_queue, fn, off, len - off);
 			}
 
-			lua_pop(L, 1); /* pop the content[...] table */
+			buffer_free(fn);
+		} else if (lua_isnil(L, -1)) {
+			/* oops, end of list */
+
+			break;
+		} else {
+			return luaL_error(L, "lighty.content[%d] is neither a string nor a table: ", i);
 		}
-	} else {
-		return luaL_error(L, "lighty.content has to be a table");
 	}
-	lua_pop(L, 1); /* pop the header-table */
-	lua_pop(L, 1); /* pop the lighty-table */
-	lua_pop(L, 1); /* php the function env */
 
 	return 0;
 }
@@ -557,8 +542,6 @@ static handler_t magnet_attract(server *srv, connection *con, plugin_data *p, bu
 	lua_pushstring(L, "lighty.con"); 
 	lua_pushlightuserdata(L, con);
 	lua_settable(L, LUA_REGISTRYINDEX); /* registery[<id>] = con */
-
-	lua_atpanic(L, magnet_atpanic);
 
 	/**
 	 * we want to create empty environment for our script 
@@ -655,18 +638,23 @@ static handler_t magnet_attract(server *srv, connection *con, plugin_data *p, bu
 
 	magnet_copy_response_header(srv, con, p, L);
 
-	if (lua_return_value > 99) {
+	/* everything 3-digit number is a status-code */
+	if (lua_return_value > 99 && lua_return_value < 1000) {
 		con->http_status = lua_return_value;
 		con->file_finished = 1;
-	
-		/* try { ...*/
-		if (0 == setjmp(exceptionjmp)) {
-			magnet_attach_content(srv, con, p, L);
-		} else {
-			/* } catch () { */
+
+		/* use the lua-system to call a lua-c-function
+		 * that way I can use luaL_error() without problems 
+		 */	
+		if (lua_cpcall(L, magnet_attach_content, NULL)) {
+			log_error_write(srv, __FILE__, __LINE__, 
+				"ss", 
+				"magnet_attach_content():",
+				lua_tostring(L, -1));
+
 			con->http_status = 500;
 		}
-	
+
 		assert(lua_gettop(L) == 1); /* only the function should be on the stack */
 
 		/* we are finished */
