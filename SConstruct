@@ -202,10 +202,6 @@ if 1:
 		if autoconf.CheckLibWithHeader('sqlite3', 'sqlite3.h', 'C'):
 			autoconf.env.Append(CPPFLAGS = [ '-DHAVE_SQLITE3_H', '-DHAVE_LIBSQLITE3' ], LIBSQLITE3 = 'sqlite3')
 
-	if env['with_lua']:
-		if autoconf.CheckLibWithHeader('lua', 'lua.h', 'C'):
-			autoconf.env.Append(CPPFLAGS = [ '-DHAVE_LUA_H', '-DHAVE_LIBLUA' ], LIBLUA = 'lua', LIBLUALIB = 'lualib')
-	
 	ol = env['LIBS']
 	if autoconf.CheckLibWithHeader('fcgi', 'fastcgi.h', 'C'):
 		autoconf.env.Append(LIBFCGI = 'fcgi')
@@ -226,6 +222,15 @@ if 1:
 		autoconf.env.Append(CPPFLAGS = [ '-DHAVE_STRUCT_TM_GMTOFF' ])
 
 	env = autoconf.Finish()
+
+	if env['with_lua']:
+		oldlibs = env['LIBS']
+		env.ParseConfig("pkg-config 'lua >= 5.0' --cflags --libs")
+		lualibs = env['LIBS'][len(oldlibs):]
+		env.Append(LIBLUA = lualibs)
+		env.Append(CPPFLAGS = [ '-DHAVE_LUA_H' ])
+		env['LIBS'] = oldlibs
+	
 
 if env['with_pcre']:
 	pcre_config = checkProgram(env, 'pcre', 'pcre-config')
