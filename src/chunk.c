@@ -355,7 +355,7 @@ int chunkqueue_remove_finished_chunks(chunkqueue *cq) {
 
 		switch (c->type) {
 		case MEM_CHUNK:
-			if (c->offset == (off_t)c->mem->used - 1) is_finished = 1;
+			if (c->mem->used == 0 || (c->offset == (off_t)c->mem->used - 1)) is_finished = 1;
 			break;
 		case FILE_CHUNK:
 			if (c->offset == c->file.length) is_finished = 1; 

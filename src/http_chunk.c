@@ -100,8 +100,7 @@ int http_chunk_append_mem(server *srv, connection *con, const char * mem, size_t
 	
 	if (len == 0) {
 		if (con->response.transfer_encoding & HTTP_TRANSFER_ENCODING_CHUNKED) {
-			http_chunk_append_len(srv, con, 0);
-			chunkqueue_append_mem(cq, "\r\n", 2 + 1);
+			chunkqueue_append_mem(cq, "0\r\n\r\n", 5 + 1);
 		} else {
 			chunkqueue_append_mem(cq, "", 1);
 		}
