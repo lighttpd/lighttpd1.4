@@ -89,6 +89,7 @@ int network_write_chunkqueue_freebsdsendfile(server *srv, connection *con, int f
 				case EINTR:
 					r = 0;
 					break;
+				case ENOTCONN:
 				case EPIPE:
 				case ECONNRESET:
 					return -2;
