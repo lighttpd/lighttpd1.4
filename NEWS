@@ -11,6 +11,8 @@ NEWS
   * added ssl.cipher-list and ssl.use-sslv2
   * added $HTTP["querystring"] conditional
   * added mod_magnet as long-term replacement for mod_cml
+  * added work-around for a Opera Bug with SSL + Chunked-Encoding
+  * changed --print-config to print to stdout instead of stderr
   * fixed upload hangs with SSL
   * fixed connection drops with SSL (aka bad retry)
   * fixed path traversal with \ on cygwin
