@@ -269,7 +269,7 @@ static cond_result_t config_check_cond_nocache(server *srv, connection *con, dat
 			nm_bits = strtol(nm_slash + 1, &err, 10);
 			
 			if (*err) {
-				log_error_write(srv, __FILE__, __LINE__, "sbs", "ERROR: non-digit found in netmask:", dc->string, *err);
+				log_error_write(srv, __FILE__, __LINE__, "sbs", "ERROR: non-digit found in netmask:", dc->string, err);
 				
 				return COND_RESULT_FALSE;
 			}
