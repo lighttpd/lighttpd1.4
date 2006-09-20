@@ -190,17 +190,17 @@ static void dump_packet(const unsigned char *data, size_t len) {
 }
 #endif 
 
-static int connection_handle_read(server *srv, connection *con) {
-	int len;
-	buffer *b;
-	int toread;
+static int connection_handle_read_ssl(server *srv, connection *con) {
 #ifdef USE_OPENSSL
-	server_socket *srv_sock = con->srv_socket;
-#endif
+	int r, ssl_err, len;
 
-#ifdef USE_OPENSSL
-	if (srv_sock->is_ssl) {
-		/* don't resize the buffer if we were in SSL_ERROR_WANT_* */
+	if (!con->conf.is_ssl) return -1;
+
+	/* don't resize the buffer if we were in SSL_ERROR_WANT_* */
+
+	do {
+		buffer *b;
+
 		if (!con->is_ssl_error_want) {
 			b = chunkqueue_get_append_buffer(con->read_queue);
 			buffer_prepare_copy(b, SSL_pending(con->ssl) + (16 * 1024)); /* the pending bytes + 16kb */
@@ -220,21 +220,99 @@ static int connection_handle_read(server *srv, connection *con) {
 				b = c->mem;
 			}
 		}
+
 		len = SSL_read(con->ssl, b->ptr, b->size - 1);
 		con->is_ssl_error_want = 0; /* reset */
-	} else {
-		if (ioctl(con->fd, FIONREAD, &toread)) {
-			log_error_write(srv, __FILE__, __LINE__, "sd", 
-					"unexpected end-of-file:",
-					con->fd);
-			return -1;
-		}
-		b = chunkqueue_get_append_buffer(con->read_queue);
-		buffer_prepare_copy(b, toread);
 
-		len = read(con->fd, b->ptr, b->size - 1);
+		if (len > 0) {
+			b->used = len;
+			b->ptr[b->used++] = '\0';
+		
+			con->bytes_read += len;
+		}
+	} while (len > 0);
+
+
+	if (len < 0) {
+		switch ((r = SSL_get_error(con->ssl, len))) {
+		case SSL_ERROR_WANT_READ:
+		case SSL_ERROR_WANT_WRITE:
+			con->is_readable = 0;
+			con->is_ssl_error_want = 1;
+			return 0;
+		case SSL_ERROR_SYSCALL:
+			/**
+			 * man SSL_get_error()
+			 * 
+			 * SSL_ERROR_SYSCALL
+			 *   Some I/O error occurred.  The OpenSSL error queue may contain more 
+			 *   information on the error.  If the error queue is empty (i.e.
+			 *   ERR_get_error() returns 0), ret can be used to find out more about 
+			 *   the error: If ret == 0, an EOF was observed that violates the
+			 *   protocol.  If ret == -1, the underlying BIO reported an I/O error 
+			 *   (for socket I/O on Unix systems, consult errno for details).
+			 *
+			 */
+			while((ssl_err = ERR_get_error())) {
+				/* get all errors from the error-queue */
+				log_error_write(srv, __FILE__, __LINE__, "sds", "SSL:", 
+						r, ERR_error_string(ssl_err, NULL));
+			}
+
+			switch(errno) {
+			default:
+				log_error_write(srv, __FILE__, __LINE__, "sddds", "SSL:", 
+						len, r, errno,
+						strerror(errno));
+				break;
+			}
+			
+			break;
+		case SSL_ERROR_ZERO_RETURN:
+			/* clean shutdown on the remote side */
+			
+			if (r == 0) {
+				/* FIXME: later */
+			}
+			
+			/* fall thourgh */
+		default:
+			while((ssl_err = ERR_get_error())) {
+				/* get all errors from the error-queue */
+				log_error_write(srv, __FILE__, __LINE__, "sds", "SSL:", 
+						r, ERR_error_string(ssl_err, NULL));
+			}
+			break;
+		}
+		
+		connection_set_state(srv, con, CON_STATE_ERROR);
+		
+		return -1;
+	} else if (len == 0) {
+		con->is_readable = 0;
+		/* the other end close the connection -> KEEP-ALIVE */
+
+		/* pipelining */
+
+		return -2;
 	}
-#elif defined(__WIN32)
+
+	return 0;
+#else
+	return -1;
+#endif
+}
+
+static int connection_handle_read(server *srv, connection *con) {
+	int len;
+	buffer *b;
+	int toread;
+
+	if (con->conf.is_ssl) {
+		return connection_handle_read_ssl(srv, con);
+	}
+
+#if defined(__WIN32)
 	b = chunkqueue_get_append_buffer(con->read_queue);
 	buffer_prepare_copy(b, 4 * 1024);
 	len = recv(con->fd, b->ptr, b->size - 1, 0);
@@ -254,73 +332,6 @@ static int connection_handle_read(server *srv, connection *con) {
 	if (len < 0) {
 		con->is_readable = 0;
 		
-#ifdef USE_OPENSSL
-		if (srv_sock->is_ssl) {
-			int r, ssl_err;
-			
-			switch ((r = SSL_get_error(con->ssl, len))) {
-			case SSL_ERROR_WANT_READ:
-			case SSL_ERROR_WANT_WRITE:
-				con->is_ssl_error_want = 1;
-				return 0;
-			case SSL_ERROR_SYSCALL:
-				/**
-				 * man SSL_get_error()
-				 * 
-				 * SSL_ERROR_SYSCALL
-				 *   Some I/O error occurred.  The OpenSSL error queue may contain more 
-				 *   information on the error.  If the error queue is empty (i.e.
-				 *   ERR_get_error() returns 0), ret can be used to find out more about 
-				 *   the error: If ret == 0, an EOF was observed that violates the
-				 *   protocol.  If ret == -1, the underlying BIO reported an I/O error 
-				 *   (for socket I/O on Unix systems, consult errno for details).
-				 *
-				 */
-				while((ssl_err = ERR_get_error())) {
-					/* get all errors from the error-queue */
-					log_error_write(srv, __FILE__, __LINE__, "sds", "SSL:", 
-							r, ERR_error_string(ssl_err, NULL));
-				}
-
-				switch(errno) {
-				default:
-					log_error_write(srv, __FILE__, __LINE__, "sddds", "SSL:", 
-							len, r, errno,
-							strerror(errno));
-					break;
-				}
-				
-				break;
-			case SSL_ERROR_ZERO_RETURN:
-				/* clean shutdown on the remote side */
-				
-				if (r == 0) {
-					/* FIXME: later */
-				}
-				
-				/* fall thourgh */
-			default:
-				while((ssl_err = ERR_get_error())) {
-					/* get all errors from the error-queue */
-					log_error_write(srv, __FILE__, __LINE__, "sds", "SSL:", 
-							r, ERR_error_string(ssl_err, NULL));
-				}
-				break;
-			}
-		} else {
-			if (errno == EAGAIN) return 0;
-			if (errno == EINTR) {
-				/* we have been interrupted before we could read */
-				con->is_readable = 1;
-				return 0;
-			}
-		
-			if (errno != ECONNRESET) {
-				/* expected for keep-alive */
-				log_error_write(srv, __FILE__, __LINE__, "ssd", "connection closed - read failed: ", strerror(errno), errno);
-			}
-		}
-#else
 		if (errno == EAGAIN) return 0;
 		if (errno == EINTR) {
 			/* we have been interrupted before we could read */
@@ -332,7 +343,7 @@ static int connection_handle_read(server *srv, connection *con) {
 			/* expected for keep-alive */
 			log_error_write(srv, __FILE__, __LINE__, "ssd", "connection closed - read failed: ", strerror(errno), errno);
 		}
-#endif
+
 		connection_set_state(srv, con, CON_STATE_ERROR);
 		
 		return -1;
@@ -815,57 +826,14 @@ int connection_reset(server *srv, connection *con) {
 }
 
 /**
- * 
- * search for \r\n\r\n 
- * 
- * this is a special 32bit version which is using a sliding window for
- * the comparisions 
- * 
- * how it works:
- * 
- * b:      'abcdefg'
- * rnrn:   'cdef'
- * 
- * cmpbuf: abcd != cdef
- * cmpbuf: bcde != cdef
- * cmpbuf: cdef == cdef -> return &c
- * 
- * cmpbuf and rnrn are treated as 32bit uint and bit-ops are used to 
- * maintain cmpbuf and rnrn
- * 
- */
-
-char *buffer_search_rnrn(buffer *b) {
-	uint32_t cmpbuf, rnrn;
-	char *cp;
-	size_t i;
-	
-	if (b->used < 4) return NULL;
-	
-	rnrn = ('\r' << 24) | ('\n' << 16) |
-		('\r' << 8) | ('\n' << 0);
-	
-	cmpbuf = (b->ptr[0] << 24) | (b->ptr[1] << 16) |
-		(b->ptr[2] << 8) | (b->ptr[3] << 0);
-		
-	cp = b->ptr + 4;
-	for (i = 0; i < b->used - 4; i++) {
-		if (cmpbuf == rnrn) return cp - 4;
-			
-		cmpbuf = (cmpbuf << 8 | *(cp++)) & 0xffffffff;
-	}
-	
-	return NULL;
-}
-/**
  * handle all header and content read
  *
  * we get called by the state-engine and by the fdevent-handler
  */
 int connection_handle_read_state(server *srv, connection *con)  {
 	int ostate = con->state;
-	char *h_term = NULL;
-	chunk *c;
+	chunk *c, *last_chunk;
+	off_t last_offset;
 	chunkqueue *cq = con->read_queue;
 	chunkqueue *dst_cq = con->request_content_queue;
 	
@@ -930,96 +898,107 @@ int connection_handle_read_state(server *srv, connection *con)  {
 	/* nothing to handle */
 	if (cq->first == NULL) return 0;
 
+	/* we might have got several packets at once
+	 */
+
 	switch(ostate) {
 	case CON_STATE_READ:
-		/* prepare con->request.request */
-		c = cq->first;
-		
-		/* check if we need the full package */
-		if (con->request.request->used == 0) {
+		/* if there is a \r\n\r\n in the chunkqueue
+		 *
+		 * scan the chunk-queue twice
+		 * 1. to find the \r\n\r\n
+		 * 2. to copy the header-packet
+		 *
+		 */
+
+		last_chunk = NULL;
+		last_offset = 0;
+
+		for (c = cq->first; !last_chunk && c; c = c->next) {
 			buffer b;
+			size_t i;
 			
 			b.ptr = c->mem->ptr + c->offset;
 			b.used = c->mem->used - c->offset;
-			
-			if (NULL != (h_term = buffer_search_rnrn(&b))) {
-				/* \r\n\r\n found
-				 * - copy everything incl. the terminator to request.request
-				 */
-				
-				buffer_copy_string_len(con->request.request, 
-						       b.ptr, 
-						       h_term - b.ptr + 4);
-				
-				/* the buffer has been read up to the terminator */
-				c->offset += h_term - b.ptr + 4;
-			} else {
-				/* not found, copy everything */
-				buffer_copy_string_len(con->request.request, c->mem->ptr + c->offset, c->mem->used - c->offset - 1);
-				c->offset = c->mem->used - 1;
-			}
-		} else {
-			/* have to take care of overlapping header terminators */
-			
-			size_t l = con->request.request->used - 2;
-			char *s  = con->request.request->ptr;
-			buffer b;
-			
-			b.ptr = c->mem->ptr + c->offset;
-			b.used = c->mem->used - c->offset;
-			
-			if (con->request.request->used - 1 > 3 &&
-			    c->mem->used > 1 &&
-			    s[l-2] == '\r' &&
-			    s[l-1] == '\n' &&
-			    s[l-0] == '\r' &&
-			    c->mem->ptr[0] == '\n') {
-				buffer_append_string_len(con->request.request, c->mem->ptr + c->offset, 1);
-				c->offset += 1;
-				
-				h_term = con->request.request->ptr;
-			} else if (con->request.request->used - 1 > 2 &&
-				   c->mem->used > 2 &&
-				   s[l-1] == '\r' &&
-				   s[l-0] == '\n' &&
-				   c->mem->ptr[0] == '\r' &&
-				   c->mem->ptr[1] == '\n') {
-				buffer_append_string_len(con->request.request, c->mem->ptr + c->offset, 2);
-				c->offset += 2;
-				
-				h_term = con->request.request->ptr;
-			} else if (con->request.request->used - 1 > 1 &&
-				   c->mem->used > 3 &&
-				   s[l-0] == '\r' &&
-				   c->mem->ptr[0] == '\n' &&
-				   c->mem->ptr[1] == '\r' &&
-				   c->mem->ptr[2] == '\n') {
-				buffer_append_string_len(con->request.request, c->mem->ptr + c->offset, 3);
-				c->offset += 3;
-				
-				h_term = con->request.request->ptr;
-			} else if (NULL != (h_term = buffer_search_string_len(&b, "\r\n\r\n", 4))) {
-				/* \r\n\r\n found
-				 * - copy everything incl. the terminator to request.request
-				 */
-				
-				buffer_append_string_len(con->request.request, 
-						       c->mem->ptr + c->offset, 
-						       c->offset + h_term - b.ptr + 4);
-				
-				/* the buffer has been read up to the terminator */
-				c->offset += h_term - b.ptr + 4;
-			} else {
-				/* not found, copy everything */
-				buffer_append_string_len(con->request.request, c->mem->ptr + c->offset, c->mem->used - c->offset - 1);
-				c->offset = c->mem->used - 1;
+
+			for (i = 0; !last_chunk && i < b.used; i++) {
+				char ch = b.ptr[i];
+				size_t have_chars = 0;
+
+				switch (ch) {
+				case '\r':
+					/* we have to do a 4 char lookup */
+					have_chars = b.used - i - 1;
+
+					if (have_chars >= 4) {
+						/* all chars are in this buffer */
+								
+						if (0 == strncmp(b.ptr + i, "\r\n\r\n", 4)) {
+							/* found */
+							last_chunk = c;
+							last_offset = i + 4;
+
+							break;
+						}
+					} else {
+						chunk *lookahead_chunk = c->next;
+						size_t missing_chars;
+						/* looks like the following chars are not in the same chunk */
+
+						missing_chars = 4 - have_chars;
+
+						if (lookahead_chunk && lookahead_chunk->type == MEM_CHUNK) {
+							/* is the chunk long enough to contain the other chars ? */
+
+							if (lookahead_chunk->mem->used > missing_chars) {
+								if (0 == strncmp(b.ptr + i, "\r\n\r\n", have_chars) &&
+								    0 == strncmp(lookahead_chunk->mem->ptr, "\r\n\r\n" + have_chars, missing_chars)) {
+
+									last_chunk = lookahead_chunk;
+									last_offset = missing_chars + 1;
+
+									break;
+								}
+							} else {
+								/* a splited \r \n */
+								return -1;
+							}
+						}
+					}
+
+					break;
+				}
 			}
 		}
 
-		/* con->request.request is setup up */
-		if (h_term) {
+		/* found */
+		if (last_chunk) {
+			buffer_reset(con->request.request);
+
+			for (c = cq->first; c; c = c->next) {
+				buffer b;
+			
+				b.ptr = c->mem->ptr + c->offset;
+				b.used = c->mem->used - c->offset;
+				
+				if (c == last_chunk) {
+					b.used = last_offset + 1;
+				}
+
+				buffer_append_string_buffer(con->request.request, &b);
+				
+				if (c == last_chunk) {
+					c->offset += last_offset;
+
+					break;
+				} else {
+					/* the whole packet was copied */
+					c->offset = c->mem->used - 1;
+				}
+			}
+
 			connection_set_state(srv, con, CON_STATE_REQUEST_END);
-		} else if (con->request.request->used > 64 * 1024) {
+		} else if (chunkqueue_length(cq) > 64 * 1024) {
 			log_error_write(srv, __FILE__, __LINE__, "s", "oversized request-header -> sending Status 414");
 
 			con->http_status = 414; /* Request-URI too large */
