@@ -231,7 +231,7 @@ int array_insert_unique(array *a, data_unset *str) {
 void array_print_indent(int depth) {
 	int i;
 	for (i = 0; i < depth; i ++) {
-		fprintf(stderr, "    ");
+		fprintf(stdout, "    ");
 	}
 }
 
@@ -275,20 +275,20 @@ int array_print(array *a, int depth) {
 		}
 	}
 	if (oneline) {
-		fprintf(stderr, "(");
+		fprintf(stdout, "(");
 		for (i = 0; i < a->used; i++) {
 			data_unset *du = a->data[i];
 			if (i != 0) {
-				fprintf(stderr, ", ");
+				fprintf(stdout, ", ");
 			}
 			du->print(du, depth + 1);
 		}
-		fprintf(stderr, ")");
+		fprintf(stdout, ")");
 		return 0;
 	}
 
 	maxlen = array_get_max_key_length(a);
-	fprintf(stderr, "(\n");
+	fprintf(stdout, "(\n");
 	for (i = 0; i < a->used; i++) {
 		data_unset *du = a->data[i];
 		array_print_indent(depth + 1);
@@ -296,24 +296,24 @@ int array_print(array *a, int depth) {
 			int j;
 
 			if (i && (i % 5) == 0) {
-				fprintf(stderr, "# %zd\n", i);
+				fprintf(stdout, "# %zd\n", i);
 				array_print_indent(depth + 1);
 			}
-			fprintf(stderr, "\"%s\"", du->key->ptr);
+			fprintf(stdout, "\"%s\"", du->key->ptr);
 			for (j = maxlen - strlen(du->key->ptr); j > 0; j --) {
-				fprintf(stderr, " ");
+				fprintf(stdout, " ");
 			}
-			fprintf(stderr, " => ");
+			fprintf(stdout, " => ");
 		}
 		du->print(du, depth + 1);
-		fprintf(stderr, ",\n");
+		fprintf(stdout, ",\n");
 	}
 	if (!(i && (i - 1 % 5) == 0)) {
 		array_print_indent(depth + 1);
-		fprintf(stderr, "# %zd\n", i);
+		fprintf(stdout, "# %zd\n", i);
 	}
 	array_print_indent(depth);
-	fprintf(stderr, ")");
+	fprintf(stdout, ")");
 	
 	return 0;
 }

@@ -44,7 +44,7 @@ static void data_fastcgi_print(const data_unset *d, int depth) {
 	data_fastcgi *ds = (data_fastcgi *)d;
 	UNUSED(depth);
 	
-	fprintf(stderr, "fastcgi(%s)", ds->host->ptr);
+	fprintf(stdout, "fastcgi(%s)", ds->host->ptr);
 }
 
 

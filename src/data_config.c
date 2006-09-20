@@ -58,13 +58,13 @@ static void data_config_print(const data_unset *d, int depth) {
 	size_t maxlen;
 	
 	if (0 == ds->context_ndx) {
-		fprintf(stderr, "config {\n");
+		fprintf(stdout, "config {\n");
 	}
 	else {
-		fprintf(stderr, "$%s %s \"%s\" {\n",
+		fprintf(stdout, "$%s %s \"%s\" {\n",
 				ds->comp_key->ptr, ds->op->ptr, ds->string->ptr);
 		array_print_indent(depth + 1);
-		fprintf(stderr, "# block %d\n", ds->context_ndx);
+		fprintf(stdout, "# block %d\n", ds->context_ndx);
 	}
 	depth ++;
 
@@ -75,42 +75,42 @@ static void data_config_print(const data_unset *d, int depth) {
 		size_t j;
 
 		array_print_indent(depth);
-		fprintf(stderr, "%s", du->key->ptr);
+		fprintf(stdout, "%s", du->key->ptr);
 		for (j = maxlen - len; j > 0; j --) {
-			fprintf(stderr, " ");
+			fprintf(stdout, " ");
 		}
-		fprintf(stderr, " = ");
+		fprintf(stdout, " = ");
 		du->print(du, depth);
-		fprintf(stderr, "\n");
+		fprintf(stdout, "\n");
 	}
 
 	if (ds->childs) {
-		fprintf(stderr, "\n");
+		fprintf(stdout, "\n");
 		for (i = 0; i < ds->childs->used; i ++) {
 			data_unset *du = ds->childs->data[i];
 
 			/* only the 1st block of chaining */
 			if (NULL == ((data_config *)du)->prev) {
-				fprintf(stderr, "\n");
+				fprintf(stdout, "\n");
 				array_print_indent(depth);
 				du->print(du, depth);
-				fprintf(stderr, "\n");
+				fprintf(stdout, "\n");
 			}
 		}
 	}
 
 	depth --;
 	array_print_indent(depth);
-	fprintf(stderr, "}");
+	fprintf(stdout, "}");
 	if (0 != ds->context_ndx) {
-		fprintf(stderr, " # end of $%s %s \"%s\"",
+		fprintf(stdout, " # end of $%s %s \"%s\"",
 				ds->comp_key->ptr, ds->op->ptr, ds->string->ptr);
 	}
 
 	if (ds->next) {
-		fprintf(stderr, "\n");
+		fprintf(stdout, "\n");
 		array_print_indent(depth);
-		fprintf(stderr, "else ");
+		fprintf(stdout, "else ");
 		ds->next->print((data_unset *)ds->next, depth);
 	}
 }
