@@ -45,7 +45,7 @@ static void data_count_print(const data_unset *d, int depth) {
 	data_count *ds = (data_count *)d;
 	UNUSED(depth);
 	
-	fprintf(stderr, "count(%d)", ds->count);
+	fprintf(stdout, "count(%d)", ds->count);
 }
 
 

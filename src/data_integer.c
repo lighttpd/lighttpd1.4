@@ -42,7 +42,7 @@ static void data_integer_print(const data_unset *d, int depth) {
 	data_integer *ds = (data_integer *)d;
 	UNUSED(depth);
 
-	fprintf(stderr, "%d", ds->value);
+	fprintf(stdout, "%d", ds->value);
 }
 
 

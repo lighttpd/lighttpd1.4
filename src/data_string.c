@@ -71,7 +71,7 @@ static void data_string_print(const data_unset *d, int depth) {
 	data_string *ds = (data_string *)d;
 	UNUSED(depth);
 
-	fprintf(stderr, "\"%s\"", ds->value->used ? ds->value->ptr : "");
+	fprintf(stdout, "\"%s\"", ds->value->used ? ds->value->ptr : "");
 }
 
 
