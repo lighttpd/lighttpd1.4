@@ -892,9 +892,6 @@ int connection_handle_read_state(server *srv, connection *con)  {
 		}
 	}
 	
-	/* nothing to handle */
-	if (cq->first == NULL) return 0;
-
 	/* we might have got several packets at once
 	 */
 
