@@ -527,7 +527,15 @@ handler_t stat_cache_get_entry(server *srv, connection *con, buffer *name, stat_
 	 * */
 #ifdef HAVE_LSTAT
 	sce->is_symlink = 0;
-	if (!con->conf.follow_symlink) {
+	/*
+	 * normally we want to only check for symlinks if we should block
+	 * symlinks. for some weird reason it doesnt check for symlinks at all
+	 * in some cases. so we disable it for now.
+	 * this can have a little performance slow down.
+	 *
+	 * if (!con->conf.follow_symlink) {
+	 */
+	if (1) {
 		if (stat_cache_lstat(srv, name, &lst)  == 0) {
 #ifdef DEBUG_STAT_CACHE
 				log_error_write(srv, __FILE__, __LINE__, "sb",
@@ -549,6 +557,7 @@ handler_t stat_cache_get_entry(server *srv, connection *con, buffer *name, stat_
 
 			while ((s_cur = strrchr(dname->ptr,'/'))) {
 				*s_cur = '\0';
+				dname->used = s_cur - dname->ptr + 1;
 				if (dname->ptr == s_cur) {
 #ifdef DEBUG_STAT_CACHE
 					log_error_write(srv, __FILE__, __LINE__, "s", "reached /");
