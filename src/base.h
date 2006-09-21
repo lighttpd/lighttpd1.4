@@ -407,7 +407,7 @@ typedef struct {
 	
 #ifdef USE_OPENSSL
 	SSL *ssl;
-	int is_ssl_error_want;
+	buffer *ssl_error_want_reuse_buffer;
 #endif
 } connection;
 
