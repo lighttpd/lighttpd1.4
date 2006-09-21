@@ -194,6 +194,22 @@ int chunkqueue_append_buffer(chunkqueue *cq, buffer *mem) {
 	return 0;
 }
 
+int chunkqueue_append_buffer_weak(chunkqueue *cq, buffer *mem) {
+	chunk *c;
+	
+	if (mem->used == 0) return 0;
+	
+	c = chunkqueue_get_unused_chunk(cq);
+	c->type = MEM_CHUNK;
+	c->offset = 0;
+	if (c->mem) buffer_free(c->mem);
+	c->mem = mem;
+	
+	chunkqueue_append_chunk(cq, c);
+	
+	return 0;
+}
+
 int chunkqueue_prepend_buffer(chunkqueue *cq, buffer *mem) {
 	chunk *c;
 	
@@ -208,6 +224,7 @@ int chunkqueue_prepend_buffer(chunkqueue *cq, buffer *mem) {
 	
 	return 0;
 }
+
 
 int chunkqueue_append_mem(chunkqueue *cq, const char * mem, size_t len) {
 	chunk *c;
