@@ -193,42 +193,35 @@ static void dump_packet(const unsigned char *data, size_t len) {
 static int connection_handle_read_ssl(server *srv, connection *con) {
 #ifdef USE_OPENSSL
 	int r, ssl_err, len;
+	buffer *b = NULL;
 
 	if (!con->conf.is_ssl) return -1;
 
 	/* don't resize the buffer if we were in SSL_ERROR_WANT_* */
 
 	do {
-		buffer *b;
-
-		if (!con->is_ssl_error_want) {
-			b = chunkqueue_get_append_buffer(con->read_queue);
+		if (!con->ssl_error_want_reuse_buffer) {
+			b = buffer_init();
 			buffer_prepare_copy(b, SSL_pending(con->ssl) + (16 * 1024)); /* the pending bytes + 16kb */
+
+			/* overwrite everything with 0 */
+			memset(b->ptr, 0, b->size);
 		} else {
-			/* we have to get the last buffer */
-			chunk *c;
-
-			for (c = con->read_queue->first; c && c->next; c = c->next);
-
-			if (!c) {
-				b = chunkqueue_get_append_buffer(con->read_queue);
-				buffer_prepare_copy(b, SSL_pending(con->ssl) + (16 * 1024)); /* the pending bytes + 16kb */
-			} else {
-				log_error_write(srv, __FILE__, __LINE__, "s", 
-						"(debug) re-using last buffer after a SSL_ERROR_WANT_READ - good, please report this to jan@kneschke.de");
-
-				b = c->mem;
-			}
+			b = con->ssl_error_want_reuse_buffer;
 		}
 
 		len = SSL_read(con->ssl, b->ptr, b->size - 1);
-		con->is_ssl_error_want = 0; /* reset */
+		con->ssl_error_want_reuse_buffer = NULL; /* reuse it only once */
 
 		if (len > 0) {
 			b->used = len;
 			b->ptr[b->used++] = '\0';
-		
+
+		       	/* we move the buffer to the chunk-queue, no need to free it */
+
+			chunkqueue_append_buffer_weak(con->read_queue, b);		
 			con->bytes_read += len;
+			b = NULL;
 		}
 	} while (len > 0);
 
@@ -238,7 +231,11 @@ static int connection_handle_read_ssl(server *srv, connection *con) {
 		case SSL_ERROR_WANT_READ:
 		case SSL_ERROR_WANT_WRITE:
 			con->is_readable = 0;
-			con->is_ssl_error_want = 1;
+			con->ssl_error_want_reuse_buffer = b;
+
+			b = NULL;
+
+			/* we have to steal the buffer from the queue-queue */
 			return 0;
 		case SSL_ERROR_SYSCALL:
 			/**
@@ -286,6 +283,8 @@ static int connection_handle_read_ssl(server *srv, connection *con) {
 		}
 		
 		connection_set_state(srv, con, CON_STATE_ERROR);
+
+		buffer_free(b);
 		
 		return -1;
 	} else if (len == 0) {
@@ -293,6 +292,7 @@ static int connection_handle_read_ssl(server *srv, connection *con) {
 		/* the other end close the connection -> KEEP-ALIVE */
 
 		/* pipelining */
+		buffer_free(b);
 
 		return -2;
 	}
@@ -814,7 +814,10 @@ int connection_reset(server *srv, connection *con) {
 #endif
 
 #ifdef USE_OPENSSL
-	con->is_ssl_error_want = 0;
+	if (con->ssl_error_want_reuse_buffer) {
+		buffer_free(con->ssl_error_want_reuse_buffer);
+		con->ssl_error_want_reuse_buffer = NULL;
+	}
 #endif
 	
 	con->header_len = 0;
@@ -848,7 +851,7 @@ int connection_handle_read_state(server *srv, connection *con)  {
 			 * if we still have content, handle it, if not leave here */
 
 			if (cq->first == cq->last &&
-			    cq->first->mem->used == 0) {
+			    (!cq->first || cq->first->mem->used == 0)) {
 
 				/* conn-closed, leave here */
 				connection_set_state(srv, con, CON_STATE_ERROR);
