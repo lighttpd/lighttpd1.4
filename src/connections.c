@@ -216,7 +216,7 @@ static int connection_handle_read_ssl(server *srv, connection *con) {
 		if (len > 0) {
 			b->used = len;
 			b->ptr[b->used++] = '\0';
-
+		
 		       	/* we move the buffer to the chunk-queue, no need to free it */
 
 			chunkqueue_append_buffer_weak(con->read_queue, b);		
@@ -839,6 +839,7 @@ int connection_handle_read_state(server *srv, connection *con)  {
 	off_t last_offset;
 	chunkqueue *cq = con->read_queue;
 	chunkqueue *dst_cq = con->request_content_queue;
+	int is_closed = 0; /* the connection got closed, if we don't have a complete header, -> error */
 	
 	if (con->is_readable) {
 		con->read_idle_ts = srv->cur_ts;
@@ -847,15 +848,8 @@ int connection_handle_read_state(server *srv, connection *con)  {
 		case -1:
 			return -1;
 		case -2:
-			/* remote side closed the connection
-			 * if we still have content, handle it, if not leave here */
-
-			if (cq->first == cq->last &&
-			    (!cq->first || cq->first->mem->used == 0)) {
-
-				/* conn-closed, leave here */
-				connection_set_state(srv, con, CON_STATE_ERROR);
-			}
+			is_closed = 1;
+			break;
 		default:
 			break;
 		}
@@ -1123,6 +1117,12 @@ int connection_handle_read_state(server *srv, connection *con)  {
 		}
 			
 		break;
+	}
+
+	/* the connection got closed and we didn't got enough data to leave one of the READ states
+	 * the only way is to leave here */
+	if (is_closed && ostate == con->state) {
+		connection_set_state(srv, con, CON_STATE_ERROR);
 	}
 
 	chunkqueue_remove_finished_chunks(cq);
