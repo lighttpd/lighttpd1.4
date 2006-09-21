@@ -229,6 +229,7 @@ typedef struct {
 	FAMConnection *fam;
 	int    fam_fcce_ndx;
 #endif
+	buffer *hash_key;  /* temp-store for the hash-key */
 } stat_cache;
 
 typedef struct {
