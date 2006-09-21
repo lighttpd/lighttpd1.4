@@ -90,10 +90,12 @@ sub start_proc {
 	$ENV{'SRCDIR'} = $self->{BASEDIR}.'/tests';
 
 	unlink($self->{LIGHTTPD_PIDFILE});
-	if (1) {
-		system($self->{LIGHTTPD_PATH}." -f ".$self->{SRCDIR}."/".$self->{CONFIGFILE}." -m ".$self->{MODULES_PATH});
+	if (defined $ENV{"TRACEME"} && $ENV{"TRACEME"} eq 'strace') {
+		system("strace -tt -s 512 -o strace ".$self->{LIGHTTPD_PATH}." -D -f ".$self->{SRCDIR}."/".$self->{CONFIGFILE}." -m ".$self->{MODULES_PATH}." &");
+	} elsif (defined $ENV{"TRACEME"} && $ENV{"TRACEME"} eq 'valgrind') {
+		system("valgrind --tool=memcheck --show-reachable=yes --leak-check=yes --log-file=valgrind ".$self->{LIGHTTPD_PATH}." -D -f ".$self->{SRCDIR}."/".$self->{CONFIGFILE}." -m ".$self->{MODULES_PATH}." &");
 	} else {
-		system("valgrind --tool=memcheck --show-reachable=yes --leak-check=yes --logfile=foo ".$self->{LIGHTTPD_PATH}." -D -f ".$self->{TESTDIR}."/tmp/cfg.file -m ".$self->{MODULES_PATH}." &");
+		system($self->{LIGHTTPD_PATH}." -f ".$self->{SRCDIR}."/".$self->{CONFIGFILE}." -m ".$self->{MODULES_PATH});
 	}
 
 	select(undef, undef, undef, 0.1);
