@@ -224,12 +224,6 @@ int cache_parse_lua(server *srv, connection *con, plugin_data *p, buffer *fn) {
 	L = luaL_newstate();
 	luaL_openlibs(L);
 
-	luaopen_base(L);
-	luaopen_table(L);
-	luaopen_string(L);
-	luaopen_math(L);
-	luaopen_io(L);
-	
 	/* register functions */
 	lua_register(L, "md5", f_crypto_md5);
 	lua_register(L, "file_mtime", f_file_mtime);
