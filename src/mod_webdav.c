@@ -668,7 +668,7 @@ static int webdav_copy_file(server *srv, connection *con, plugin_data *p, physic
 		return 403;
 	}
 
-	if (-1 == (ofd = open(dst->path->ptr, O_WRONLY|O_TRUNC|O_CREAT|(overwrite ? 0 : O_EXCL), 0600))) {
+	if (-1 == (ofd = open(dst->path->ptr, O_WRONLY|O_TRUNC|O_CREAT|(overwrite ? 0 : O_EXCL), S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP | S_IROTH | S_IWOTH))) {
 		/* opening the destination failed for some reason */
 		switch(errno) {
 		case EEXIST:
@@ -1651,7 +1651,7 @@ URIHANDLER_FUNC(mod_webdav_subrequest_handler) {
 				return HANDLER_FINISHED;
 			}
 
-			if (-1 == (fd = open(con->physical.path->ptr, O_WRONLY, 0600))) {
+			if (-1 == (fd = open(con->physical.path->ptr, O_WRONLY, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP | S_IROTH | S_IWOTH))) {
 				switch (errno) {
 				case ENOENT:
 					con->http_status = 404; /* not found */
@@ -1675,9 +1675,9 @@ URIHANDLER_FUNC(mod_webdav_subrequest_handler) {
 			/* take what we have in the request-body and write it to a file */
 
 			/* if the file doesn't exist, create it */
-			if (-1 == (fd = open(con->physical.path->ptr, O_WRONLY|O_TRUNC, 0600))) {
+			if (-1 == (fd = open(con->physical.path->ptr, O_WRONLY|O_TRUNC, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP | S_IROTH | S_IWOTH))) {
 				if (errno == ENOENT &&
-				    -1 == (fd = open(con->physical.path->ptr, O_WRONLY|O_CREAT|O_TRUNC|O_EXCL, 0600))) {
+				    -1 == (fd = open(con->physical.path->ptr, O_WRONLY|O_CREAT|O_TRUNC|O_EXCL, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP | S_IROTH | S_IWOTH))) {
 					/* we can't open the file */
 					con->http_status = 403;
 
