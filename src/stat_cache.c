@@ -109,6 +109,7 @@ stat_cache *stat_cache_init(void) {
 	fc = calloc(1, sizeof(*fc));
 	
 	fc->dir_name = buffer_init();
+	fc->hash_key = buffer_init();
 #ifdef HAVE_FAM_H
 	fc->fam = calloc(1, sizeof(*fc->fam));
 #endif
@@ -182,6 +183,7 @@ void stat_cache_free(stat_cache *sc) {
 	}
 
 	buffer_free(sc->dir_name);
+	buffer_free(sc->hash_key);
 
 #ifdef HAVE_FAM_H
 	while (sc->dirs) {
@@ -256,7 +258,7 @@ handler_t stat_cache_handle_fdevent(void *_srv, void *_fce, int revent) {
 			FAMEvent fe;
 			fam_dir_entry *fam_dir;
 			splay_tree *node;
-			int ndx;
+			int ndx, j;
 		
 			FAMNextEvent(sc->fam, &fe);
 	
@@ -274,20 +276,25 @@ handler_t stat_cache_handle_fdevent(void *_srv, void *_fce, int revent) {
 				/* file/dir is still here */
 				if (fe.code == FAMChanged) break;
 
-				buffer_copy_string(sc->dir_name, fe.filename);
+				/* we have 2 versions, follow and no-follow-symlink */
 
-				ndx = hashme(sc->dir_name);
+				for (j = 0; j < 2; j++) {
+					buffer_copy_string(sc->hash_key, fe.filename);
+					buffer_append_long(sc->hash_key, j);
 
-				sc->dirs = splaytree_splay(sc->dirs, ndx);
-				node = sc->dirs;
+					ndx = hashme(sc->hash_key);
+
+					sc->dirs = splaytree_splay(sc->dirs, ndx);
+					node = sc->dirs;
 			
-				if (node && (node->key == ndx)) {
-					int osize = splaytree_size(sc->dirs);
-
-					fam_dir_entry_free(node->data);
-					sc->dirs = splaytree_delete(sc->dirs, ndx);
-
-					assert(osize - 1 == splaytree_size(sc->dirs));
+					if (node && (node->key == ndx)) {
+						int osize = splaytree_size(sc->dirs);
+	
+						fam_dir_entry_free(node->data);
+						sc->dirs = splaytree_delete(sc->dirs, ndx);
+	
+						assert(osize - 1 == splaytree_size(sc->dirs));
+					}
 				}
 				break;
 			default:
@@ -378,7 +385,10 @@ handler_t stat_cache_get_entry(server *srv, connection *con, buffer *name, stat_
 
 	sc = srv->stat_cache;
 
-	file_ndx = hashme(name);
+	buffer_copy_string_buffer(sc->hash_key, name);
+	buffer_append_long(sc->hash_key, con->conf.follow_symlink);
+
+	file_ndx = hashme(sc->hash_key);
 	sc->files = splaytree_splay(sc->files, file_ndx);
 
 #ifdef DEBUG_STAT_CACHE	
@@ -437,8 +447,11 @@ handler_t stat_cache_get_entry(server *srv, connection *con, buffer *name, stat_
 		if (0 != buffer_copy_dirname(sc->dir_name, name)) {
 			SEGFAULT();
 		}
+	
+		buffer_copy_string_buffer(sc->hash_key, sc->dir_name);
+		buffer_append_long(sc->hash_key, con->conf.follow_symlink);
 
-		dir_ndx = hashme(sc->dir_name);
+		dir_ndx = hashme(sc->hash_key);
 		
 		sc->dirs = splaytree_splay(sc->dirs, dir_ndx);
 		
@@ -527,15 +540,10 @@ handler_t stat_cache_get_entry(server *srv, connection *con, buffer *name, stat_
 	 * */
 #ifdef HAVE_LSTAT
 	sce->is_symlink = 0;
-	/*
-	 * normally we want to only check for symlinks if we should block
-	 * symlinks. for some weird reason it doesnt check for symlinks at all
-	 * in some cases. so we disable it for now.
-	 * this can have a little performance slow down.
-	 *
-	 * if (!con->conf.follow_symlink) {
+
+	/* we want to only check for symlinks if we should block symlinks. 
 	 */
-	if (1) {
+	if (!con->conf.follow_symlink) {
 		if (stat_cache_lstat(srv, name, &lst)  == 0) {
 #ifdef DEBUG_STAT_CACHE
 				log_error_write(srv, __FILE__, __LINE__, "sb",
