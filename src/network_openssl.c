@@ -69,8 +69,6 @@ int network_write_chunkqueue_openssl(server *srv, connection *con, SSL *ssl, chu
 	    (con->file_finished)) {
 		/* merge the last chunk into the previous chunk */
 
-		fprintf(stderr, "%s.%d: trying to merge final chunk\r\n", __FILE__, __LINE__);
-
 		for(c = cq->first; c && c->next && c->next->next; c = c->next);
 
 		if (c &&
@@ -79,8 +77,6 @@ int network_write_chunkqueue_openssl(server *srv, connection *con, SSL *ssl, chu
 		    c->next->type == MEM_CHUNK &&
 		    c->next->mem->used == sizeof("0\r\n\r\n") &&
 		    0 == strcmp(c->next->mem->ptr, "0\r\n\r\n")) {
-			fprintf(stderr, "%s.%d: trying to merge final chunk, merged\r\n", __FILE__, __LINE__);
-
 			buffer_append_string_buffer(c->mem, c->next->mem);
 
 			c->next->mem->used = 0;
