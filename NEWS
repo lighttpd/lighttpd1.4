@@ -13,6 +13,8 @@ NEWS
   * added mod_magnet as long-term replacement for mod_cml
   * added work-around for a Opera Bug with SSL + Chunked-Encoding
   * changed --print-config to print to stdout instead of stderr
+  * changed no longer use 0600 for new files with webdav. umask is
+    honored. Make sure you have set a proper umask.
   * fixed upload hangs with SSL
   * fixed connection drops with SSL (aka bad retry)
   * fixed path traversal with \ on cygwin
