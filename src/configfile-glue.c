@@ -54,14 +54,14 @@ int config_insert_values_internal(server *srv, array *ca, const config_values_t 
 						array_insert_unique(cv[i].destination, (data_unset *)ds);
 					} else {
 						log_error_write(srv, __FILE__, __LINE__, "sssd", 
-								"the key of and array can only be a string or a integer, variable:", 
+								"the key of an array can only be a string or a integer, variable:", 
 								cv[i].key, "type:", da->value->data[j]->type); 
 						
 						return -1;
 					}
 				}
 			} else {
-				log_error_write(srv, __FILE__, __LINE__, "sss", "unexpected type for key: ", cv[i].key, "array of strings");
+				log_error_write(srv, __FILE__, __LINE__, "ss", cv[i].key, "should have been a array of strings like ... = ( \"...\" )");
 				
 				return -1;
 			}
@@ -72,7 +72,7 @@ int config_insert_values_internal(server *srv, array *ca, const config_values_t 
 				
 				buffer_copy_string_buffer(cv[i].destination, ds->value);
 			} else {
-				log_error_write(srv, __FILE__, __LINE__, "ssss", "unexpected type for key: ", cv[i].key, "(string)", "\"...\"");
+				log_error_write(srv, __FILE__, __LINE__, "ssss", cv[i].key, "should have been a string like ... = \"...\"");
 				
 				return -1;
 			}
@@ -88,7 +88,7 @@ int config_insert_values_internal(server *srv, array *ca, const config_values_t 
 			case TYPE_STRING: {
 				data_string *ds = (data_string *)du;
 					
-				log_error_write(srv, __FILE__, __LINE__, "ssb", "get a string but expected a short:", cv[i].key, ds->value);
+				log_error_write(srv, __FILE__, __LINE__, "ssb", "got a string but expected a short:", cv[i].key, ds->value);
 				
 				return -1;
 			}
