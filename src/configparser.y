@@ -274,6 +274,9 @@ value(A) ::= array(B). {
   ((data_array *)(A))->value = B;
   B = NULL;
 }
+array(A) ::= LPARAN RPARAN. {
+  A = array_init();
+}
 array(A) ::= LPARAN aelements(B) RPARAN. {
   A = B;
   B = NULL;
