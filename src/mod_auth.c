@@ -193,20 +193,20 @@ static handler_t mod_auth_uri_handler(server *srv, connection *con, void *p_d) {
 	
 	/* search auth-directives for path */
 	for (k = 0; k < p->conf.auth_require->used; k++) {
-		buffer *req = p->conf.auth_require->data[k]->key;
+		buffer *require = p->conf.auth_require->data[k]->key;
 
-		if (req->used == 0) continue;
-		if (con->uri.path->used < req->used) continue;
+		if (require->used == 0) continue;
+		if (con->uri.path->used < require->used) continue;
 
 		/* if we have a case-insensitive FS we have to lower-case the URI here too */
 
 		if (con->conf.force_lowercase_filenames) {
-			if (0 == strncasecmp(con->uri.path->ptr, req->ptr, req->used - 1)) {
+			if (0 == strncasecmp(con->uri.path->ptr, require->ptr, require->used - 1)) {
 				auth_required = 1;
 				break;
 			}
 		} else {
-			if (0 == strncmp(con->uri.path->ptr, req->ptr, req->used - 1)) {
+			if (0 == strncmp(con->uri.path->ptr, require->ptr, require->used - 1)) {
 				auth_required = 1;
 				break;
 			}
