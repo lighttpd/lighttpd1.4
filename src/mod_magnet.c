@@ -28,8 +28,8 @@
 static jmp_buf exceptionjmp;
 
 typedef struct {
-	buffer *url_raw;
-	buffer *physical_path;
+	array *url_raw;
+	array *physical_path;
 } plugin_config;
 
 typedef struct {
@@ -72,8 +72,8 @@ FREE_FUNC(mod_magnet_free) {
 
 			if (!s) continue;
 			
-			buffer_free(s->url_raw);
-			buffer_free(s->physical_path);
+			array_free(s->url_raw);
+			array_free(s->physical_path);
 			
 			free(s);
 		}
@@ -95,8 +95,8 @@ SETDEFAULTS_FUNC(mod_magnet_set_defaults) {
 	size_t i = 0;
 	
 	config_values_t cv[] = { 
-		{ MAGNET_CONFIG_RAW_URL,       NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_CONNECTION },       /* 0 */
-		{ MAGNET_CONFIG_PHYSICAL_PATH, NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_CONNECTION },       /* 1 */
+		{ MAGNET_CONFIG_RAW_URL,       NULL, T_CONFIG_ARRAY, T_CONFIG_SCOPE_CONNECTION },       /* 0 */
+		{ MAGNET_CONFIG_PHYSICAL_PATH, NULL, T_CONFIG_ARRAY, T_CONFIG_SCOPE_CONNECTION },       /* 1 */
 		{ NULL,                           NULL, T_CONFIG_UNSET, T_CONFIG_SCOPE_UNSET }
 	};
 	
@@ -108,8 +108,8 @@ SETDEFAULTS_FUNC(mod_magnet_set_defaults) {
 		plugin_config *s;
 		
 		s = calloc(1, sizeof(plugin_config));
-		s->url_raw  = buffer_init();
-		s->physical_path = buffer_init();
+		s->url_raw  = array_init();
+		s->physical_path = array_init();
 		
 		cv[0].destination = s->url_raw;
 		cv[1].destination = s->physical_path;
@@ -682,16 +682,35 @@ static handler_t magnet_attract(server *srv, connection *con, plugin_data *p, bu
 	}
 }
 
+static handler_t magnet_attract_array(server *srv, connection *con, plugin_data *p, array *files) {
+	size_t i;
+
+	/* no filename set */
+	if (files->used == 0) return HANDLER_GO_ON;
+
+	/**
+	 * execute all files and jump out on the first !HANDLER_GO_ON
+	 */
+	for (i = 0; i < files->used; i++) {
+		data_string *ds = (data_string *)files->data[i];
+		handler_t ret;
+
+		if (buffer_is_empty(ds->value)) continue;
+		
+		ret = magnet_attract(srv, con, p, ds->value);
+
+		if (ret != HANDLER_GO_ON) return ret;
+	}
+
+	return HANDLER_GO_ON;
+}
+
 URIHANDLER_FUNC(mod_magnet_uri_handler) {
 	plugin_data *p = p_d;
 	
 	mod_magnet_patch_connection(srv, con, p);
 
-	if (buffer_is_empty(p->conf.url_raw)) return HANDLER_GO_ON;
-
-	/* looks like we have a handler for this request */
-
-	return magnet_attract(srv, con, p, p->conf.url_raw);
+	return magnet_attract_array(srv, con, p, p->conf.url_raw);
 }
 
 URIHANDLER_FUNC(mod_magnet_physical) {
@@ -699,11 +718,7 @@ URIHANDLER_FUNC(mod_magnet_physical) {
 	
 	mod_magnet_patch_connection(srv, con, p);
 
-	if (buffer_is_empty(p->conf.physical_path)) return HANDLER_GO_ON;
-
-	/* looks like we have a handler for this request */
-
-	return magnet_attract(srv, con, p, p->conf.physical_path);
+	return magnet_attract_array(srv, con, p, p->conf.physical_path);
 }
 
 
