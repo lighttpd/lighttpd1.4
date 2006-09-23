@@ -1704,14 +1704,14 @@ URIHANDLER_FUNC(mod_webdav_subrequest_handler) {
 					    -1 == (c->file.fd = open(c->file.name->ptr, O_RDONLY))) {
 						log_error_write(srv, __FILE__, __LINE__, "ss", "open failed: ", strerror(errno));
 
-						return -1;
+						return HANDLER_ERROR;
 					}
 
 					if (MAP_FAILED == (c->file.mmap.start = mmap(0, c->file.length, PROT_READ, MAP_SHARED, c->file.fd, 0))) {
 						log_error_write(srv, __FILE__, __LINE__, "ssbd", "mmap failed: ",
 								strerror(errno), c->file.name,  c->file.fd);
 
-						return -1;
+						return HANDLER_ERROR;
 					}
 
 					c->file.mmap.length = c->file.length;
