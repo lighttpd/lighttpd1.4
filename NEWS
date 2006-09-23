@@ -3,7 +3,7 @@
 NEWS
 ====
 
-- 1.4.12 - 
+- 1.4.12 - 2006-09-23
 
   * added experimental LOCK support for webdav
   * added Content-Range support for PUT in webdav
