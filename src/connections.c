@@ -1342,6 +1342,12 @@ int connection_state_machine(server *srv, connection *con) {
 			con->loops_per_request = 0;
 			
 			connection_set_state(srv, con, CON_STATE_READ);
+
+			/* patch con->conf.is_ssl if the connection is a ssl-socket already */
+
+#ifdef USE_OPENSSL
+			con->conf.is_ssl = srv_sock->is_ssl;
+#endif
 			
 			break;
 		case CON_STATE_REQUEST_END: /* transient */
