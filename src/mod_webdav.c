@@ -23,7 +23,7 @@
 #include <sqlite3.h>
 #endif
 
-#if defined(HAVE_LIBXML_H) && defined(HAVE_SQLITE3_H) && defined(HAVE_UUID_H)
+#if defined(HAVE_LIBXML_H) && defined(HAVE_SQLITE3_H) && defined(HAVE_UUID_UUID_H)
 #define USE_LOCKS
 #include <uuid/uuid.h>
 #endif
