@@ -385,6 +385,8 @@ static int connection_handle_write_prepare(server *srv, connection *con) {
 		case HTTP_METHOD_MOVE:
 		case HTTP_METHOD_PROPFIND:
 		case HTTP_METHOD_PROPPATCH:
+		case HTTP_METHOD_LOCK:
+		case HTTP_METHOD_UNLOCK:
 			break;
 		case HTTP_METHOD_OPTIONS:
 			/*
@@ -427,6 +429,7 @@ static int connection_handle_write_prepare(server *srv, connection *con) {
 	case 403:
 	case 404:
 	case 408:
+	case 409:
 	case 411:
 	case 416:
 	case 423:
