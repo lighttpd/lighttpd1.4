@@ -176,6 +176,9 @@ if 1:
 	if autoconf.CheckLibWithHeader('crypt', 'crypt.h', 'C'):
 		autoconf.env.Append(CPPFLAGS = [ '-DHAVE_CRYPT_H', '-DHAVE_LIBCRYPT' ], LIBCRYPT = 'crypt')
 
+	if autoconf.CheckLibWithHeader('uuid', 'uuid/uuid.h', 'C'):
+		autoconf.env.Append(CPPFLAGS = [ '-DHAVE_UUID_UUID_H', '-DHAVE_LIBUUID' ], LIBUUID = 'uuid')
+
 	if env['with_openssl']:
 		if autoconf.CheckLibWithHeader('ssl', 'openssl/ssl.h', 'C'):
 			autoconf.env.Append(CPPFLAGS = [ '-DHAVE_OPENSSL_SSL_H', '-DHAVE_LIBSSL'] , LIBS = [ 'ssl', 'crypto' ])
