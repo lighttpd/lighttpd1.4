@@ -1154,25 +1154,25 @@ int webdav_has_lock(server *srv, connection *con, plugin_data *p, buffer *uri) {
 	data_string *ds;
 
 	/**
-	 * If can have
-	 * - <lock-token>
-	 * - [etag]
-	 *
-	 * there is NOT, AND and OR
-	 * and a list can be tagged
-	 *
-	 * (<lock-token>) is untagged
-	 * <tag> (<lock-token>) is tagged
-	 *
-	 * as long as we don't handle collections it is simple. :)
+	 * This implementation is more fake than real
+	 * we need a parser for the If: header to really handle the full scope
 	 *
 	 * X-Litmus: locks: 11 (owner_modify)
 	 * If: <http://127.0.0.1:1025/dav/litmus/lockme> (<opaquelocktoken:2165478d-0611-49c4-be92-e790d68a38f1>)
+	 * - a tagged check: 
+	 *   if http://127.0.0.1:1025/dav/litmus/lockme is locked with 
+	 *   opaquelocktoken:2165478d-0611-49c4-be92-e790d68a38f1, go on
 	 *
 	 * X-Litmus: locks: 16 (fail_cond_put)
 	 * If: (<DAV:no-lock> ["-1622396671"])
+	 * - untagged:
+	 *   go on if the resource has the etag [...] and the lock
 	 */
 	if (NULL != (ds = (data_string *)array_get_element(con->request.headers, "If"))) {
+		/* Ooh, ooh. A if tag, now the fun begins.
+		 *
+		 * this can only work with a real parser 
+		 **/
 	} else {
 		/* we didn't provided a lock-token -> */
 		/* if the resource is locked -> 423 */
