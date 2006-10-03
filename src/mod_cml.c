@@ -181,7 +181,6 @@ static int mod_cml_patch_connection(server *srv, connection *con, plugin_data *p
 int cache_call_lua(server *srv, connection *con, plugin_data *p, buffer *cml_file) {
 	buffer *b;
 	char *c;
-	int ret;
 
 	/* cleanup basedir */
 	b = p->baseurl;
@@ -207,9 +206,7 @@ int cache_call_lua(server *srv, connection *con, plugin_data *p, buffer *cml_fil
 	 *   - cookie-based
 	 *   - get-param-based
 	 */
-	
 	return cache_parse_lua(srv, con, p, cml_file);
-	
 }
 
 URIHANDLER_FUNC(mod_cml_power_magnet) {
