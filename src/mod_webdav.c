@@ -661,7 +661,7 @@ static int webdav_delete_dir(server *srv, connection *con, plugin_data *p, physi
 static int webdav_copy_file(server *srv, connection *con, plugin_data *p, physical *src, physical *dst, int overwrite) {
 	stream s;
 	int status = 0, ofd;
-
+	UNUSED(srv);
 	UNUSED(con);
 
 	if (stream_open(&s, src->path)) {
@@ -1148,6 +1148,7 @@ int webdav_lockdiscovery(server *srv, connection *con,
  *
  */
 int webdav_has_lock(server *srv, connection *con, plugin_data *p, buffer *uri) {
+	UNUSED(srv);
 	int has_lock = 1;
 
 #ifdef USE_LOCKS
@@ -2202,7 +2203,7 @@ propmatch_cleanup:
 
 				if (0 == xmlStrcmp(rootnode->name, BAD_CAST "lockinfo")) {
 					xmlNode *lockinfo;
-					const xmlChar *lockscope = NULL, *locktype = NULL, *owner = NULL;
+					const xmlChar *lockscope = NULL, *locktype = NULL; /* TODO: compiler says unused: *owner = NULL; */
 
 					for (lockinfo = rootnode->children; lockinfo; lockinfo = lockinfo->next) {
 						if (0 == xmlStrcmp(lockinfo->name, BAD_CAST "lockscope")) {
@@ -2306,12 +2307,12 @@ propmatch_cleanup:
 									  SQLITE_TRANSIENT);
 
 							sqlite3_bind_text(stmt, 3,
-									  lockscope,
+									  (const char *)lockscope,
 									  xmlStrlen(lockscope),
 									  SQLITE_TRANSIENT);
 
 							sqlite3_bind_text(stmt, 4,
-									  locktype,
+									  (const char *)locktype,
 									  xmlStrlen(locktype),
 									  SQLITE_TRANSIENT);
 
@@ -2332,7 +2333,7 @@ propmatch_cleanup:
 							}
 
 							/* looks like we survived */
-							webdav_lockdiscovery(srv, con, p->tmp_buf, lockscope, locktype, depth);
+							webdav_lockdiscovery(srv, con, p->tmp_buf, (const char *)lockscope, (const char *)locktype, depth);
 
 							con->http_status = 201;
 							con->file_finished = 1;
