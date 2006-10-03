@@ -25,7 +25,15 @@
 #include "stat_cache.h"
 #include "status_counter.h"
 
+#ifdef HAVE_FASTCGI_FASTCGI_H
+#include <fastcgi/fastcgi.h>
+#else
+#ifdef HAVE_FASTCGI_H
 #include <fastcgi.h>
+#else
+#include "fastcgi.h"
+#endif
+#endif /* HAVE_FASTCGI_FASTCGI_H */
 #include <stdio.h>
 
 #ifdef HAVE_SYS_FILIO_H

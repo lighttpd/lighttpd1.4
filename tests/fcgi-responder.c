@@ -1,4 +1,9 @@
+#include "config.h"
+#ifdef HAVE_FASTCGI_FASTCGI_H
+#include <fastcgi/fcgi_stdio.h>
+#else
 #include <fcgi_stdio.h>
+#endif
 #include <stdlib.h>
 #include <unistd.h>
 #include <string.h>
