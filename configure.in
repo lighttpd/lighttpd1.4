@@ -519,7 +519,7 @@ AM_CONDITIONAL(CHECK_WITH_FASTCGI, test "x$fastcgi_found" = xyes)
 
 
 if test "${GCC}" = "yes"; then
-       CFLAGS="${CFLAGS} -Wall -W -Wshadow -pedantic"
+       CFLAGS="${CFLAGS} -Wall -W -Wshadow -pedantic -std=gnu99"
 fi
 
 dnl build version-id
