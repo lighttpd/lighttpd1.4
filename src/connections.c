@@ -837,7 +837,7 @@ int connection_reset(server *srv, connection *con) {
  * we get called by the state-engine and by the fdevent-handler
  */
 int connection_handle_read_state(server *srv, connection *con)  {
-	int ostate = con->state;
+	connection_state_t ostate = con->state;
 	chunk *c, *last_chunk;
 	off_t last_offset;
 	chunkqueue *cq = con->read_queue;
@@ -1117,6 +1117,7 @@ int connection_handle_read_state(server *srv, connection *con)  {
 		}
 			
 		break;
+	default: break;
 	}
 
 	/* the connection got closed and we didn't got enough data to leave one of the READ states
