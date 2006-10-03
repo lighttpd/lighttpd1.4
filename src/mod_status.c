@@ -583,7 +583,7 @@ static handler_t mod_status_handle_server_status_text(server *srv, connection *c
 
 static handler_t mod_status_handle_server_statistics(server *srv, connection *con, void *p_d) {
 	plugin_data *p = p_d;
-	buffer *b, *m = p->module_list;
+	buffer *b = p->module_list;
 	size_t i;
 	array *st = srv->status;
 
