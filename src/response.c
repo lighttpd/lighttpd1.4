@@ -563,7 +563,7 @@ handler_t http_response_prepare(server *srv, connection *con) {
 				}
 				
 				if (slash) pathinfo = slash;
-			} while ((found == 0) && (slash != NULL) && (slash - srv->tmp_buf->ptr > con->physical.basedir->used - 2));
+			} while ((found == 0) && (slash != NULL) && ((size_t)(slash - srv->tmp_buf->ptr) > (con->physical.basedir->used - 2)));
 			
 			if (found == 0) {
 				/* no it really doesn't exists */
