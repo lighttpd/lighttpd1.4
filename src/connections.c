@@ -952,7 +952,7 @@ int connection_handle_read_state(server *srv, connection *con)  {
 								    0 == strncmp(lookahead_chunk->mem->ptr, "\r\n\r\n" + have_chars, missing_chars)) {
 
 									last_chunk = lookahead_chunk;
-									last_offset = missing_chars + 1;
+									last_offset = missing_chars;
 
 									break;
 								}
