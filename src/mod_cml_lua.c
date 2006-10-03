@@ -458,6 +458,10 @@ error:
 }
 #else
 int cache_parse_lua(server *srv, connection *con, plugin_data *p, buffer *fn) {
+	UNUSED(srv);
+	UNUSED(con);
+	UNUSED(p);
+	UNUSED(fn);
 	/* error */
 	return -1;
 }
