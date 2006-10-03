@@ -741,6 +741,7 @@ int mod_magnet_plugin_init(plugin *p) {
 
 #else
 int mod_magnet_plugin_init(plugin *p) {
+	UNUSED(p);
 	return -1;
 }
 #endif
