@@ -510,7 +510,7 @@ AM_CONDITIONAL(CROSS_COMPILING, test "x$cross_compiling" = xyes)
 dnl check for fastcgi lib, for the tests only
 fastcgi_found=no
 AC_CHECK_LIB(fcgi, FCGI_Accept, [
- AC_CHECK_HEADERS([fastcgi.h],[
+ AC_CHECK_HEADERS([fastcgi.h fastcgi/fastcgi.h],[
    fastcgi_found=yes
  ])
 ])
