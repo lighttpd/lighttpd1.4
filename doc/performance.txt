@@ -115,13 +115,13 @@ Solaris    sendfilev
 FreeBSD    sendfile
 ========== ==========
 
-The best backend is selected at compile time. In case you want to use 
-another backend set: :: 
+The best backend is selected at compile time. In case you want to use
+another backend set: ::
 
   server.network-backend = "writev"
 
-You can find more information about network backend in: 
- 
+You can find more information about network backend in:
+
   http://blog.lighttpd.net/articles/2005/11/11/optimizing-lighty-for-high-concurrent-large-file-downloads
 
 

@@ -17,26 +17,26 @@ static data_unset *data_config_copy(const data_unset *s) {
 
 static void data_config_free(data_unset *d) {
 	data_config *ds = (data_config *)d;
-	
+
 	buffer_free(ds->key);
 	buffer_free(ds->op);
 	buffer_free(ds->comp_key);
-	
+
 	array_free(ds->value);
 	array_free(ds->childs);
-	
+
 	if (ds->string) buffer_free(ds->string);
 #ifdef HAVE_PCRE_H
 	if (ds->regex) pcre_free(ds->regex);
 	if (ds->regex_study) pcre_free(ds->regex_study);
 #endif
-	
+
 	free(d);
 }
 
 static void data_config_reset(data_unset *d) {
 	data_config *ds = (data_config *)d;
-	
+
 	/* reused array elements */
 	buffer_reset(ds->key);
 	buffer_reset(ds->comp_key);
@@ -45,9 +45,9 @@ static void data_config_reset(data_unset *d) {
 
 static int data_config_insert_dup(data_unset *dst, data_unset *src) {
 	UNUSED(dst);
-	
+
 	src->free(src);
-	
+
 	return 0;
 }
 
@@ -56,7 +56,7 @@ static void data_config_print(const data_unset *d, int depth) {
 	array *a = (array *)ds->value;
 	size_t i;
 	size_t maxlen;
-	
+
 	if (0 == ds->context_ndx) {
 		fprintf(stdout, "config {\n");
 	}
@@ -117,22 +117,22 @@ static void data_config_print(const data_unset *d, int depth) {
 
 data_config *data_config_init(void) {
 	data_config *ds;
-	
+
 	ds = calloc(1, sizeof(*ds));
-	
+
 	ds->key = buffer_init();
 	ds->op = buffer_init();
 	ds->comp_key = buffer_init();
 	ds->value = array_init();
 	ds->childs = array_init();
 	ds->childs->is_weakref = 1;
-	
+
 	ds->copy = data_config_copy;
 	ds->free = data_config_free;
 	ds->reset = data_config_reset;
 	ds->insert_dup = data_config_insert_dup;
 	ds->print = data_config_print;
 	ds->type = TYPE_CONFIG;
-	
+
 	return ds;
 }

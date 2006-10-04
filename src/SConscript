@@ -24,7 +24,7 @@ common_src = Split("buffer.c log.c \
       network_solaris_sendfilev.c network_openssl.c \
       status_counter.c \
 ")
-      
+
 src = Split("server.c response.c connections.c network.c \
       configfile.c configparser.c request.c proc_open.c")
 
@@ -60,14 +60,14 @@ modules = {
 	'mod_compress' : { 'src' : [ 'mod_compress.c' ], 'lib' : [ env['LIBZ'], env['LIBBZ2'] ] },
 	'mod_redirect' : { 'src' : [ 'mod_redirect.c' ], 'lib' : [ env['LIBPCRE'] ] },
 	'mod_rewrite' : { 'src' : [ 'mod_rewrite.c' ], 'lib' : [ env['LIBPCRE'] ] },
-	'mod_auth' : { 
-		'src' : [ 'mod_auth.c', 'http_auth_digest.c', 'http_auth.c' ], 
+	'mod_auth' : {
+		'src' : [ 'mod_auth.c', 'http_auth_digest.c', 'http_auth.c' ],
 		'lib' : [ env['LIBCRYPT'], env['LIBLDAP'], env['LIBLBER'] ] },
 	'mod_webdav' : { 'src' : [ 'mod_webdav.c' ], 'lib' : [ env['LIBXML2'], env['LIBSQLITE3'], env['LIBUUID'] ] },
 	'mod_mysql_vhost' : { 'src' : [ 'mod_mysql_vhost.c' ], 'lib' : [ env['LIBMYSQL'] ] },
 	'mod_trigger_b4_dl' : { 'src' : [ 'mod_trigger_b4_dl.c' ], 'lib' : [ env['LIBPCRE'] ] },
-	'mod_cml' : { 
-		'src' : [ 'mod_cml_lua.c', 'mod_cml.c', 'mod_cml_funcs.c' ], 
+	'mod_cml' : {
+		'src' : [ 'mod_cml_lua.c', 'mod_cml.c', 'mod_cml_funcs.c' ],
 		'lib' : [ env['LIBPCRE'], env['LIBMEMCACHE'], env['LIBLUA'], env['LIBLUALIB'] ] },
 	'mod_uploadprogress' : { 'src' : [ 'mod_uploadprogress.c' ] },
 	'mod_evasive' : { 'src' : [ 'mod_evasive.c' ] },
@@ -81,7 +81,7 @@ staticenv = env.Copy(CPPFLAGS=[ env['CPPFLAGS'], '-DLIGHTTPD_STATIC', '-DOPENSSL
 ## all the core-sources + the modules
 staticsrc = src + common_src
 
-staticlib = env['LIBS'] 
+staticlib = env['LIBS']
 staticinit = ''
 for module in modules.keys():
 	staticsrc += modules[module]['src']
@@ -96,8 +96,8 @@ staticobj = []
 for cfile in staticsrc:
 	staticobj += [ staticenv.Object('static-' + cfile.replace('.c', ''), cfile) ]
 
-staticbin = staticenv.Program('lighttpd-semi-static', 
-	staticobj, 
+staticbin = staticenv.Program('lighttpd-semi-static',
+	staticobj,
 	LIBS = staticlib
 	)
 
@@ -126,10 +126,10 @@ for libs in staticlib:
 		f.close
 
 
-fullstaticbin = staticenv.Program('lighttpd-static', 
-	staticobj, 
-	LIBS = fullstaticlib, 
-	LINKFLAGS= ['-static'] 
+fullstaticbin = staticenv.Program('lighttpd-static',
+	staticobj,
+	LIBS = fullstaticlib,
+	LINKFLAGS= ['-static']
 	)
 
 Alias('static', staticbin)

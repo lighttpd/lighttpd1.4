@@ -28,7 +28,7 @@ $(DL_DIR)/$(LIGHTTPD_SOURCE) :
 $(LIGHTTPD_DIR)/.unpacked:	$(DL_DIR)/$(LIGHTTPD_SOURCE)
 	gzip -cd $(DL_DIR)/$(LIGHTTPD_SOURCE) | tar -C $(BUILD_DIR) -xvf -
 	touch $(LIGHTTPD_DIR)/.unpacked
-	
+
 # if we have the sources unpacked, we need to configure them
 $(LIGHTTPD_DIR)/.configured:	$(LIGHTTPD_DIR)/.unpacked
 	(cd $(LIGHTTPD_DIR); rm -rf config.cache; \
@@ -48,14 +48,14 @@ $(LIGHTTPD_DIR)/.configured:	$(LIGHTTPD_DIR)/.unpacked
 		--program-transform-name="s,y,y," \
 	);
 	touch $(LIGHTTPD_DIR)/.configured
-	
-	
+
+
 # now that we have it all in place, just build it
 $(LIGHTTPD_DIR)/$(LIGHTTPD_TARGET):	$(LIGHTTPD_DIR)/.configured
-	cd $(LIGHTTPD_DIR) && $(MAKE) CC=$(TARGET_CC) DESTDIR="$(LIGHTTPD_IPK_DIR)" install 
+	cd $(LIGHTTPD_DIR) && $(MAKE) CC=$(TARGET_CC) DESTDIR="$(LIGHTTPD_IPK_DIR)" install
 	$(STAGING_DIR)/bin/sstrip $(LIGHTTPD_IPK_DIR)/usr/sbin/lighttpd
 	touch $(LIGHTTPD_DIR)/$(LIGHTTPD_TARGET)
-	
+
 $(LIGHTTPD_IPK): uclibc $(LIGHTTPD_DIR)/$(LIGHTTPD_TARGET)
 	mkdir -p $(LIGHTTPD_IPK_DIR)/CONTROL
 	mkdir -p $(LIGHTTPD_IPK_DIR)/etc/init.d

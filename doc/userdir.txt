@@ -11,11 +11,11 @@ Module: mod_userdir
 :Revision: $Revision: 1.1 $
 
 :abstract:
-  The userdir module ... 
-  
+  The userdir module ...
+
 .. meta::
   :keywords: lighttpd, userdir
-  
+
 .. contents:: Table of Contents
 
 Description
@@ -29,7 +29,7 @@ building the classic mapping of: ::
 
   userdir.path = "public_html"
 
-  URL: http://www.example.org/~jan/index.html 
+  URL: http://www.example.org/~jan/index.html
   Path: /home/jan/public_html/
 
 To control which users should be able to use this feature you can set a list of usernames to include or exclude.
@@ -48,7 +48,7 @@ Options
 
 userdir.path
   usually it should be set to "public_html" to take ~/public_html/ as the document root
-    
+
   Default: empty (document root is the home directory)
   Example: ::
 

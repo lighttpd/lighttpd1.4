@@ -11,7 +11,7 @@
 # /(usr/)sbin/rcFOO
 #
 # LSB compliant service control script; see http://www.linuxbase.org/spec/
-# 
+#
 # System startup script for some example service or daemon FOO (template)
 #
 ### BEGIN INIT INFO
@@ -23,7 +23,7 @@
 # Description:    Start FOO to allow XY and provide YZ
 #	continued on second line by '#<TAB>'
 ### END INIT INFO
-# 
+#
 # Note on Required-Start: It does specify the init script ordering,
 # not real dependencies. Depencies have to be handled by admin
 # resp. the configuration tools (s)he uses.
@@ -64,7 +64,7 @@ rc_reset
 # 5 - program is not installed
 # 6 - program is not configured
 # 7 - program is not running
-# 
+#
 # Note that starting an already running service, stopping
 # or restarting a not-running service as well as the restart
 # with force-reload (in case signalling is not supported) are
@@ -76,7 +76,7 @@ case "$1" in
 	## Start daemon with startproc(8). If this fails
 	## the echo return value is set appropriate.
 
-	# NOTE: startproc returns 0, even if service is 
+	# NOTE: startproc returns 0, even if service is
 	# already running to match LSB spec.
 	startproc $LIGHTTPD_BIN -f $LIGHTTPD_CONF_PATH
 
@@ -94,7 +94,7 @@ case "$1" in
 	rc_status -v
 	;;
     try-restart)
-	## Stop the service and if this succeeds (i.e. the 
+	## Stop the service and if this succeeds (i.e. the
 	## service was running before), start it again.
 	## Note: try-restart is not (yet) part of LSB (as of 0.7.5)
 	$0 status >/dev/null &&  $0 restart
@@ -121,7 +121,7 @@ case "$1" in
 	$0 start
 	touch /var/run/lighttpd.pid
 	rc_status -v
-	
+
 	## Otherwise if it does not support reload:
 	#rc_failed 3
 	#rc_status -v

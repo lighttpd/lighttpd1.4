@@ -12,10 +12,10 @@ Module: core
 
 :abstract:
   lighttpd was developed with security in mind ...
-  
+
 .. meta::
   :keywords: lighttpd, security
-  
+
 .. contents:: Table of Contents
 
 Description

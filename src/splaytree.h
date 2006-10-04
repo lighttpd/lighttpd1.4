@@ -19,6 +19,6 @@ splay_tree * splaytree_size(splay_tree *t);
 /* This macro returns the size of a node.  Unlike "x->size",     */
 /* it works even if x=NULL.  The test could be avoided by using  */
 /* a special version of NULL which was a real node with size 0.  */
- 
+
 
 #endif

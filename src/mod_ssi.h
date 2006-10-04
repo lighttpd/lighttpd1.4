@@ -19,23 +19,23 @@ typedef struct {
 
 typedef struct {
 	PLUGIN_DATA;
-	
-#ifdef HAVE_PCRE_H	
+
+#ifdef HAVE_PCRE_H
 	pcre *ssi_regex;
-#endif	
+#endif
 	buffer *timefmt;
 	int sizefmt;
-	
+
 	buffer *stat_fn;
-	
+
 	array *ssi_vars;
 	array *ssi_cgi_env;
-	
+
 	int if_level, if_is_false_level, if_is_false, if_is_false_endif;
-	
+
 	plugin_config **config_storage;
-	
-	plugin_config conf; 
+
+	plugin_config conf;
 } plugin_data;
 
 int ssi_eval_expr(server *srv, connection *con, plugin_data *p, const char *expr);

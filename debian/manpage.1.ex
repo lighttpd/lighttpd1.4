@@ -34,7 +34,7 @@ because the original program does not have a manual page.
 Instead, it has documentation in the GNU Info format; see below.
 .PP
 .\" TeX users may be more comfortable with the \fB<whatever>\fP and
-.\" \fI<whatever>\fP escape sequences to invode bold face and italics, 
+.\" \fI<whatever>\fP escape sequences to invode bold face and italics,
 .\" respectively.
 \fBlighttpd\fP is a program that...
 .SH OPTIONS

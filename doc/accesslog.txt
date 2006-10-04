@@ -11,11 +11,11 @@ Module: mod_accesslog
 :Revision: $Revision: 1.2 $
 
 :abstract:
-  The accesslog module ... 
-  
+  The accesslog module ...
+
 .. meta::
   :keywords: lighttpd, accesslog, CLF
-  
+
 .. contents:: Table of Contents
 
 Description
@@ -28,30 +28,30 @@ Options
 
 accesslog.use-syslog
   send the accesslog to syslog
-  
+
   Default: disabled
 
 accesslog.filename
   name of the file where the accesslog should be written too if syslog
   is not used.
-  
+
   if the name starts with a '|' the rest of the name is taken
   as the name of a process which will be spawn and will get the
   output
-  
+
   e.g.: ::
-  
+
     accesslog.filename = "/var/log/lighttpd.log"
-    
+
     $HTTP["host"] == "mail.example.org" {
       accesslog.filename = "|/usr/bin/cronolog"
     }
-    
+
   Default: disabled
 
 accesslog.format
   the format of the logfile
-  
+
   ====== ================================
   Option Description
   ====== ================================
@@ -60,8 +60,8 @@ accesslog.format
   %l     ident name (not supported)
   %u     authenticated user
   %t     timestamp for the request-start
-  %r     request-line 
-  %s     status code 
+  %r     request-line
+  %s     status code
   %b     bytes sent for the body
   %i     HTTP-header field
   %a     remote address
@@ -86,16 +86,16 @@ accesslog.format
   %I     bytes incomming
   %O     bytes outgoing
   ====== ================================
-  
+
   If %s is written %>s or %<s the < and the > are ignored. They are support
-  for compat with apache. 
-  
+  for compat with apache.
+
   %i and %o expect the name of the field which should be written in curly brackets.
-  
+
   e.g.: ::
-  
+
     accesslog.format = "%h %l %u %t \"%r\" %b %>s \"%{User-Agent}i\" \"%{Referer}i\""
-  
+
   Default: CLF compatible output
 
 Response Header
@@ -109,18 +109,18 @@ If you want to log it into the accesslog just specify the field-name within
 a %{...}o like ::
 
   accesslog.format = "%h %l %u %t \"%r\" %b %>s \"%{User-Agent}i\" \"%{Referer}i\" \"%{X-LIGHTTPD-SID}o\""
-  
+
 The prefix ``X-LIGHTTPD-`` is special as every response header starting with
 this prefix is assumed to be special for lighttpd and won't be sent out
-to the client. 
+to the client.
 
 An example the use this functionality is provided below: ::
 
   <?php
-  
+
   session_start();
-  
+
   header("X-LIGHTTPD-SID: ".session_id());
-  
+
   ?>
 

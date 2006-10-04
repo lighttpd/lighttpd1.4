@@ -12,10 +12,10 @@ Module: mod_redirect
 
 :abstract:
   url redirection
-  
+
 .. meta::
   :keywords: lighttpd, redirect
-  
+
 .. contents:: Table of Contents
 
 Description
@@ -28,9 +28,9 @@ Options
 
 url.redirect
   redirects a set of URLs externally
-  
+
   e.g. ::
-  
+
     url.redirect = ( "^/show/([0-9]+)/([0-9]+)$" => "http://www.example.org/show.php?isdn=$1&page$2",
                      "^/get/([0-9]+)/([0-9]+)$"  => "http://www.example.org/get.php?isdn=$1&page$2" )
 

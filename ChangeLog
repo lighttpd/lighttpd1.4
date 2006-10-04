@@ -24,14 +24,14 @@ This file is abondend in favour of the NEWS file
 
   unified test-scripts to use the same framework
 
-14.06.2005 23:38 
+14.06.2005 23:38
 - documentation
 
   updated docs for mod_proxy and mod_scgi
 
 12.06.2005 12:55 - pre-release
 - mod_fastcgi
-  
+
   fixed event handling after delayed connect
 
   make retry timeout configurable
@@ -85,11 +85,11 @@ This file is abondend in favour of the NEWS file
   fixed automatic redirects if SSL is used
 
   fixed compilation on Solaris [283]
-  
+
   disable accept-filtering on FreeBSD if ssl is used [320]
 
   fixed handling of range-request larger than 2Gb
-  
+
   fixed comparisions of mime-types to case-insensitive [266]
 
   added quotation of ETags [376], [378]
@@ -121,7 +121,7 @@ This file is abondend in favour of the NEWS file
 - fastcgi
 
   fixed path-info for prefix-patterns
-  
+
   fixed path-info for PHP
 
 02.03.2005 14:47 - 1.3.12
@@ -131,8 +131,8 @@ This file is abondend in favour of the NEWS file
   initd and not to lighttpd. Moving the daemonize before starting
   the fastcgi procs fixes this.
 
-01.03.2005 23:59 
-- irix 
+01.03.2005 23:59
+- irix
 
   fixed minor compile issues with MIPSpro
 
@@ -142,7 +142,7 @@ This file is abondend in favour of the NEWS file
   handle most duplicate headers as 400, Bug #25
 
 - mod_fastcgi
- 
+
   added more checks
 
 28.02.2005 18:26
@@ -156,7 +156,7 @@ This file is abondend in favour of the NEWS file
   really compare timestamps, Bug #34
 
 28.02.2005 11:54
-- buffer 
+- buffer
 
   rewrote int2buffer functions
 
@@ -173,8 +173,8 @@ This file is abondend in favour of the NEWS file
 
 - cygwin
 
-  moved functions used by plugin and main-program to *-glue.c 
-  
+  moved functions used by plugin and main-program to *-glue.c
+
 - lemon
 
   removed warnings about shadowed variables
@@ -190,7 +190,7 @@ This file is abondend in favour of the NEWS file
 - test cases
 
   rewrote to test-framework to use Perl + Test::More
-  ported more test-cases 
+  ported more test-cases
 
 22.02.2005 01:20
 - mod_fastcgi
@@ -251,22 +251,22 @@ This file is abondend in favour of the NEWS file
   compile error on MacOS X due to missing environ (patch by Johan Sörensen)
   (Bug #2)
 
-- indexfiles 
+- indexfiles
 
   append the detected indexfile only once to uri.path (reported by Thomas
   Seifert)
   (Bug #3)
-   
+
 06.02.2005 15:16 - 1.3.10
 - fastcgi
 
   display a error-message if a hostname if specified in fastcgi.server->host
   we need an IP here
-  
+
 - debug
 
   added debug.log-state-handling
-  
+
 - spawn-fcgi
 
   accept a full commandline for spawning
@@ -275,7 +275,7 @@ This file is abondend in favour of the NEWS file
 - fastcgi
 
   fixed openssl handling
-  
+
 - network_freebsd_sendfilev
 
   gracefull handling of connections closed on client-side
@@ -294,13 +294,13 @@ This file is abondend in favour of the NEWS file
 - fastcgi
 
   added bin-environment to setup the environment of the spawned process
-  
+
   added bin-copy-environment to copy only the specified set of options
   from the old environment
-  
+
   added handling of cmd-line options to bin-path
 
-- setenv 
+- setenv
 
   fixed crashed in setenv.add-response-header
 
@@ -308,18 +308,18 @@ This file is abondend in favour of the NEWS file
 - configure
 
   fixed docs for --with-mysql
-  
+
 - fastcgi
 
   improved performance of building the header (drop strlen())
 
-04.02.2005 01:59 
+04.02.2005 01:59
 - cgi
 
   don't send file on error
-  
+
   check if cgi-handler exists before executing it
-  
+
   added support for nph-...
 
 02.02.2005 21:18 - pre-release
@@ -336,9 +336,9 @@ This file is abondend in favour of the NEWS file
 - fastcgi
 
   delete sockets on shutdown
-  
+
 - http/1.1
-  
+
   adding option to disable http/1.1
 
 01.02.2005 12:03
@@ -352,15 +352,15 @@ This file is abondend in favour of the NEWS file
 - configure
 
   make check for valgrind.h covered by --with-valgrind
-  
+
 - mod_localizer, mod_maps
 
   remove both plugins from the distribution
-  
+
 - file-not-found
 
   handle file not found again
-  
+
 30.01.2005 16:44
 - HEAD requests
 
@@ -368,9 +368,9 @@ This file is abondend in favour of the NEWS file
 
 30.01.2005 15:16 - 1.3.8
 - network-handler
-  
+
   remove debug output on writev() if the remote side closed the connection
-  
+
 - directory index
 
   handle EACCES correctly
@@ -379,7 +379,7 @@ This file is abondend in favour of the NEWS file
 - mod_alias
 
   fixed mod_alias + pathinfo handling
-  
+
 - mod_accesslog
 
   added access-log to syslog patch from allan
@@ -387,13 +387,13 @@ This file is abondend in favour of the NEWS file
 28.01.2005 17:30
 - directory redirect without Host-header
 
-  use server-ip instead of client-ip for the Location: 
+  use server-ip instead of client-ip for the Location:
 
 - fastcgi + pathinfo
 
   if fastcgi-auth redirects to a directory which doesn't exist handle it
   correctly (bug introduced in 1.3.8)
-  
+
 - requesting directories
 
   clean physical.path if directory is requested and dir-listing is disabled
@@ -409,7 +409,7 @@ This file is abondend in favour of the NEWS file
 - fastcgi
 
   send content and headers if authorizer mode is used
-  
+
   use a new connection if connection is died to fastcgi
   and we have not used it yet
 
@@ -423,7 +423,7 @@ This file is abondend in favour of the NEWS file
 
   fixed write-failed after crash of fastcgi-child
 
-16.01.2005 20:43 
+16.01.2005 20:43
 - setenv
 
   fixed setenv.add-environment
@@ -475,10 +475,10 @@ This file is abondend in favour of the NEWS file
   report an error if ssl.engine is enable but no ssl support compiled in
 
 08.01.2005 12:23
-- mod_status 
+- mod_status
 
   added request time to the output
-  
+
   (late changelog) added host and filename to the output (fobax)
   (late changelog) HTMLalized the output (fobax)
 
@@ -493,7 +493,7 @@ This file is abondend in favour of the NEWS file
 
   reworked the error-page handling
 
-05.01.2005 13:10 
+05.01.2005 13:10
 - keep-alive handling
 
   made sure that keep-alive is really handled correctly
@@ -502,7 +502,7 @@ This file is abondend in favour of the NEWS file
 - mod_setenv
 
   added a module to added request and response headers on the fly
-  
+
 - error-log
 
   send error log to syslog() if no errorlogfile is specified (again)
@@ -512,7 +512,7 @@ This file is abondend in favour of the NEWS file
 
   cut of body for status 301, 304 and 205
 
-- buffer 
+- buffer
 
   optimized all _hex functions (Silvan Minghetti)
 
@@ -520,7 +520,7 @@ This file is abondend in favour of the NEWS file
 - fastcgi
 
   if bin-path is not specified, don't die (bug introduced in the last pre-rel)
-  
+
 - auth
 
   if userfile is empty don't auth.
@@ -533,18 +533,18 @@ This file is abondend in favour of the NEWS file
 02.01.2005 16:10
 - conditional config
 
-  fixed !~ and != 
-  
-- buffer 
+  fixed !~ and !=
+
+- buffer
 
   copy empty buffers correctly
 
 31.12.2004 17:45
 - ipv6 + pidfile
- 
+
   don't complain if we can't remove the pidfile (Silvan Minghetti)
-  
-  remove ipv6 option from the commandline of lighttpd doesn't support 
+
+  remove ipv6 option from the commandline of lighttpd doesn't support
   ipv6 (Silvan Minghetti)
 
 31.12.2004 15:41 - pre-release
@@ -571,7 +571,7 @@ This file is abondend in favour of the NEWS file
 
 28.12.2004 23:26
 - traffic shaping
-  
+
   added traffic shaping per connection
 
 25.12.2004 22:58
@@ -585,15 +585,15 @@ This file is abondend in favour of the NEWS file
   added check for signal and select (compile fix for netbsd 1.4 and 1.5)
 
 11.12.2004 12:38 - 1.3.7
-- fastcgi + php 
+- fastcgi + php
 
-  retry to connect to another PHP child if one of them dies after 
+  retry to connect to another PHP child if one of them dies after
   connect
-  
+
 - cgi + multipart
 
   don't transform CONTENT_TYPE to HTTP_CONTENT_TYPE
-  
+
 - debian
 
   more cleanup, updated changelog, added more deps and suggests
@@ -601,32 +601,32 @@ This file is abondend in favour of the NEWS file
 
 10.12.2004 22:33
 - event handler
-  
-  fixed crashes in kqueue 
+
+  fixed crashes in kqueue
 
 10.12.2004 13:57 - pre-release
-- mod_status 
+- mod_status
 
   fixed wraparound in total requests and total traffic
-  
+
 - debian
 
   updated licence and packaging
-  
+
 - security
 
   call setgroups() to get rid of all groups
-  
+
 - ssl
 
   handle SSL_shutdown() == 0 correctly
-  
+
   fixed openssl detection in configure
-  
-  fixed handling of chunked encoding 
-  
+
+  fixed handling of chunked encoding
+
 - request handling
-  
+
   handle Connection: keep-alive correctly (case as not ignored)
 
 21.11.2004 02:39
@@ -637,23 +637,23 @@ This file is abondend in favour of the NEWS file
 20.11.2004 18:43
 - conditional
 
-  ported 
+  ported
   - cgi
   - secdownload
   - expire
   - localizer
-  - usertrack 
+  - usertrack
   - status
   - proxy
-  
+
 - server-tag
 
   Server: ... can now be specified by server.tag = "..."
-  
+
 - spawn-fcgi
 
   fixed typo in usage text
-  
+
 - ssl
 
   fixed detection of libs and headers
@@ -666,7 +666,7 @@ This file is abondend in favour of the NEWS file
 04.11.2004 23:01
 - ssi
 
-  added support for ${...} 
+  added support for ${...}
 
 03.11.2004 14:51 - 1.3.6
 - fastcgi
@@ -681,7 +681,7 @@ This file is abondend in favour of the NEWS file
 
 02.11.2004 15:34
 - fastcgi
-  
+
   handle END-OF-REQUEST correctly if chunk-encoding is not used
 
 02.11.2004 10:53
@@ -694,11 +694,11 @@ This file is abondend in favour of the NEWS file
 
   add REMOTE_USER, suppress AUTHORIZATION
   handle payloads > 4k
-  
+
 - mod_alias
 
   fixed url checking
-  
+
 - follow-symlink
 
   fixed config
@@ -736,7 +736,7 @@ This file is abondend in favour of the NEWS file
   fixed offset calculations
 
 - ipv6
-  
+
   IPv6 might be disabled at compile-time
 
 - rewrite
@@ -746,7 +746,7 @@ This file is abondend in favour of the NEWS file
 - auth
 
   forgot to reset the global-config handler
-  
+
 - symlink
 
   add option to disable follow-symlink
@@ -768,7 +768,7 @@ This file is abondend in favour of the NEWS file
 22.10.2004 17:00
 - accesslog
 
-  added logging of user-supplied data via %{...}o and 
+  added logging of user-supplied data via %{...}o and
   X-LIGHTTPD-* header
 
 22.10.2004 14:57 - pre-release
@@ -776,18 +776,18 @@ This file is abondend in favour of the NEWS file
 
   fixed configure-checks and Makefile.am's to build cleanly with a
   cross-compiler
-  
+
   builds cleanly for openwrt
 
-22.10.2004 13:03 
+22.10.2004 13:03
 - out-of-fd
 
   improved the out-of-fd handler
-  
+
 - cgi, fastcgi
 
-  set SERVER_NAME to server.name or the value submitted by Host: 
-  
+  set SERVER_NAME to server.name or the value submitted by Host:
+
 - error-handler
 
   only set old status code if it wasn't set by a handler
@@ -796,7 +796,7 @@ This file is abondend in favour of the NEWS file
 - fastcgi
 
   don't crash on out-of-fd condition
-  
+
 - out-of-fd
 
   try handle the out-of-fd condition in a sane way
@@ -805,15 +805,15 @@ This file is abondend in favour of the NEWS file
 - mod_auth
 
   seperated auth.backend.*.userfile for plain, htpasswd and htdigest
-  
+
   added 'digest-auth' against 'plain-backend'
-  
+
   added auth.debug for debugging
 
 16.10.2004 10:18 - 1.3.3
 - mod_simple_vhost, mod_evhost
 
-  conditional-ized 
+  conditional-ized
 
 - mod_rrdtool
 
@@ -823,7 +823,7 @@ This file is abondend in favour of the NEWS file
 - accesslogs
 
   cycle all access-logs
-  
+
 - mod_rewrite
 
   tell the user to install pcre.h if he wants to use mod_rewrite
@@ -836,8 +836,8 @@ This file is abondend in favour of the NEWS file
 09.10.2004 16:28 - pre-release
 - cgi
 
-  added support for \n in headers 
-  
+  added support for \n in headers
+
 - mod_auth
 
   added conditional auth
@@ -858,11 +858,11 @@ This file is abondend in favour of the NEWS file
 
   drop a unused file-cache entry after 10 seconds
   reuse unused entries
-  
+
 - request-parser
 
   accept IPv6 adresses in Host header
-  
+
 - tests
 
   modified the scripts to work with zsh (check on Linux, Irix and FreeBSD)
@@ -876,8 +876,8 @@ This file is abondend in favour of the NEWS file
 - cgi + cygwin
 
   cgi need s SYSTEMROOT environment
-  
-  
+
+
 22.09.2004 08:55
 - network
 
@@ -894,11 +894,11 @@ This file is abondend in favour of the NEWS file
 
   fixed cleanup code (matt)
 
-21.09.2004 20:08 
-- rrdtool 
+21.09.2004 20:08
+- rrdtool
 
   rrdtool.db-name is now conditional
-  
+
   fixed check if write() failed (adam)
 
 17.09.2004 17:50 - 1.3.0
@@ -907,10 +907,10 @@ This file is abondend in favour of the NEWS file
   added url.rewrite-final = ...
 
 17.09.2004 15:55
-- code cleanup 
+- code cleanup
 
   integrated the fixes from cygwin into the main tree
-  
+
 - kqueue
 
   init kqueue after daemonizing (broken since 12.09.2004 14:02)
@@ -939,11 +939,11 @@ This file is abondend in favour of the NEWS file
 - mod_proxy
 
   pass remote-addr as X-Forwarded-For to the real server behind the proxy
-  
+
 - code cleanup
 
   moved all cut'n'paste versions of the inet_ntop cache to inet_ntop_cache.c
-  
+
 - fcgi
 
   don't overwrite the fd in fcgi_establish connection if connect fails. this
@@ -956,14 +956,14 @@ This file is abondend in favour of the NEWS file
 
 - last-modified
 
-  don't complain if the If-Modified-Since contains a valid comment/option 
+  don't complain if the If-Modified-Since contains a valid comment/option
   like <timestamp>; length = ...
 
 05.09.2004 09:13
 - expires
 
   overwrite the Expire if it is set by a previous plugin
-  
+
 - conditional config
 
   conditional config as disabled in 1.2.7 by accident
@@ -977,34 +977,34 @@ This file is abondend in favour of the NEWS file
 
   fixed hanging process if cgi-crash terminates to fast (before we read its
   response)
-  
+
 - extented attributes
 
   added xattr support, submitted by Ari
 
 29.08.2004 16:00
-- rrdtool 
+- rrdtool
 
   moved the rrdtool support from mod_status into its own module mod_rrdtool
-  
+
   rrdtool.binary = "/usr/bin/rrdtool"
   rrdtool.db-name = "/var/www/lighttpd.rrd"
- 
+
 29.08.2004 11:00 - pre-release
 - timeouts
 
-  server.max-keep-alive-requests = 0 replaces 
-    server.use-keep-alive = "disable" 
-    
-  added 
+  server.max-keep-alive-requests = 0 replaces
+    server.use-keep-alive = "disable"
+
+  added
     server.max-keep-alive-idle
     server.max-read-idle
-    server.max-write-idle 
-    
+    server.max-write-idle
+
 - docs
 
   added a entry for each config-value into configuration.txt
-  added simple docs for 
+  added simple docs for
     rewrite
     redirect
     compress
@@ -1015,23 +1015,23 @@ This file is abondend in favour of the NEWS file
 - config options
 
   complain if no configfile is specified
-  
+
 - fastcgi
 
   removed stupid allocation bug which might cause a problem in really rare
   cases
 
 26.08.2004 22:06 - 1.2.6
-- optimize 
+- optimize
 
-  use array_strcasecmp() in favour of strcasecmp() as it is slightly 
+  use array_strcasecmp() in favour of strcasecmp() as it is slightly
   faster.
-  
+
   apply the case-insentive conversion also on the last character. (adam)
-  
+
   sort the checked elements in request.c and filter apply the logic to
   compare some less fields, if the header is not used.
-  
+
   improved the config-patch function to use our internal buffer-compare
   functions instead of strcmp
 
@@ -1039,7 +1039,7 @@ This file is abondend in favour of the NEWS file
 - cgi
 
   added missing cleanup code
-  
+
 - fastcgi
 
   remove double-free
@@ -1048,7 +1048,7 @@ This file is abondend in favour of the NEWS file
 - leaks
 
   fixed some leaks in the new config code
-  
+
 - array_strcasecmp
 
   fixed alignment in the improved array_strcasecmp function (adam)
@@ -1058,9 +1058,9 @@ This file is abondend in favour of the NEWS file
 
   optimized a few useless strlen() away as we either know the length from
   buffer->used - 1 or by sizeof(str) - 1 if it is constant.
-  
+
   optimized the 'find the \r\n\r\n' function.
-  
+
   improved the array_strcasecmp() based on another idea from (ralf)
 
 - accesslog
@@ -1068,20 +1068,20 @@ This file is abondend in favour of the NEWS file
   enabled the strftime cache again
 
 15.08.2004 23:41
-- accesslog 
+- accesslog
 
   added apache-like CustomLog handling in accesslog.format
-  
+
   accesslog.format = "..."
 
 15.08.2004 21:08
 - test-cases
 
-  remove testdir 
+  remove testdir
 
 - configfiles
 
-  handle escaping of " in strings properly 
+  handle escaping of " in strings properly
 
 13.08.2004 12:07
 - array
@@ -1089,14 +1089,14 @@ This file is abondend in favour of the NEWS file
   improved inner-loop of array_strcasecmp() (ralf)
 
 11.08.2004 14:14
-- fcgi socket 
+- fcgi socket
 
   use SUN_LEN if available
-  
+
 - keep-alive
 
   disable keep-alive on request
-  
+
   server.use-keep-alive = "disable"
 
 10.08.2004 15:59 - 1.2.5
@@ -1108,10 +1108,10 @@ This file is abondend in favour of the NEWS file
   mod_access
   mod_compress
   mod_accesslog
-  
+
   are ported
 
-10.08.2004 13:05 
+10.08.2004 13:05
 - pipelining
 
   fixed very stupid pipelining bug
@@ -1119,13 +1119,13 @@ This file is abondend in favour of the NEWS file
 09.08.2004 22:07 - pre-release
 - conditional config
 
-  first code for conditional config 
+  first code for conditional config
 
 09.08.2004 14:21
 - fcgi
 
   fixed access to free()'d memory (doesn't create any harm)
-  
+
 - isdigit, warings
 
   signed -> unsigned for 2 more isdigit() calls (adam)
@@ -1138,17 +1138,17 @@ This file is abondend in favour of the NEWS file
 
 08.08.2004 12:05
 - kqueue
- 
+
   use EV_SET() instead of setting the ev-struct by hand (adam)
-  
-- fcgi 
+
+- fcgi
 
   fixed the EINPROGRESS handling to use getsockopt (er)
   fixed a leak of server is disabled (er)
-  
+
 - solaris 10 port-api
 
-  added a skeleton for the sol10 port api 
+  added a skeleton for the sol10 port api
 
 06.08.2004 10:18
 - mod_ssi
@@ -1160,12 +1160,12 @@ This file is abondend in favour of the NEWS file
 
   dropped usage of MAX() in buffer.c
   added prober includes for md5.h if openssl is enabled (brad)
-  
+
 - memory usage
 
   documented the way how lighttpd caches memory blocks
   reset the buffers after they have been written by the network-layer
-  
+
 - kqueue
 
   modify fd-bitmask only if kevent succeeded (adam)
@@ -1180,7 +1180,7 @@ This file is abondend in favour of the NEWS file
 - Makefile
 
   fixed dependencies for parallel build in mod_ssi_expr.c
-  
+
 - combo patch
 
   * Tinker with kqueue().  Add a reset method so that the kqueue file
@@ -1188,28 +1188,28 @@ This file is abondend in favour of the NEWS file
     in that adds and deletes are sent to the notification mechanism im-
     mediately, which should cut down on phantom events.  Use
     ev->kq_results as a sliding window.
-  
+
   * Change F_SETFD calls to use the preferred FD_CLOEXEC instead of 1.
-  
+
   * Remove unnecessary fdevent fcntl handlers.  It appears that the only
     driver that needs one is Linux RT signals.
-    
+
   * Quiet compiler warning about unused parameter.
-    
+
   * Set the close-on-exec flag for the /dev/poll and epoll_create() file
     descriptors.
-      
+
   * Return failure if /dev/poll could not be opened instead of logging
     and continuing.
-	
+
   * Detect EAGAIN after writev() failures.  FreeBSD sendfile() doesn't need
     protection, as the man page says:
-	  
+
      When using a socket marked for non-blocking I/O, sendfile() may send
      fewer bytes than requested.  In this case, the number of bytes success-
      fully written is returned in *sbytes (if specified), and the error
      EAGAIN is returned.
-     
+
   (adam, georg, matt)
 
 
@@ -1217,7 +1217,7 @@ This file is abondend in favour of the NEWS file
 - mod_ssi
 
   check for pcre before compiling the module
-  
+
 - fdevents
 
   dropped fdevent_fcntl added by the last patch (adam)
@@ -1244,19 +1244,19 @@ This file is abondend in favour of the NEWS file
     fd in one kqueue.  The handler maintains a separate bitmask for fd
     filters (1 == EVFILT_IN, 0 == EVFILT_OUT).
   (adam)
-  
+
 - server side includes
 
   added native server-side includes based on the docs from apache:
   http://httpd.apache.org/docs/mod/mod_include.html
-  
+
   not supported are:
-  - exec 
-  - nested virtual 
+  - exec
+  - nested virtual
   - config.errmsg
   - echo.encoding
 
-24.07.2004 
+24.07.2004
 - fdevents
 
   added a bitset to figure out if we received a event for an unregistered fd
@@ -1270,7 +1270,7 @@ This file is abondend in favour of the NEWS file
 - configfile
 
   parse keys correctly that contain a digit (Geoff Adams)
-  
+
 - fcgi
 
   fixed large post uploads (Geoff Adams)
@@ -1281,26 +1281,26 @@ This file is abondend in favour of the NEWS file
 
   rewrite uri.path to the index-file instead of keeping it at .../
   this fixes index-file handling in FastCGI/CGI docroot is used
-  
-- close-on-exec 
+
+- close-on-exec
 
   enable close-on-exec handling to simplify FD handling in CGI code
-  
+
 - cgi
 
   keep error-log-fd open to catch the error handling for execve()
-  
+
   report error if cgi-exec file doesn't exist
-  
+
 - proxy
 
   pass page-content on error to the user (E.R.)
   code cleanup (E.R.)
-  
-- ssi 
+
+- ssi
 
   first skeleton of a plugin for ServerSideIncludes
-  
+
 - security
 
   limit the headerlength again to 64k max
@@ -1321,7 +1321,7 @@ This file is abondend in favour of the NEWS file
 
   connect stdin, stdout and stderr to /dev/null instead of just closing it
   use dup2() instead of dup()
-  
+
 - accesslog
 
   if accesslog.filename starts with a | spawn a process which will get data
@@ -1362,7 +1362,7 @@ This file is abondend in favour of the NEWS file
 - mmap cache
 
   fixed mmap-caching in network_write.c and network_writev.c after a direct
-  hint by E.Rodichev 
+  hint by E.Rodichev
 
 - sendfile + linux
 
@@ -1391,7 +1391,7 @@ This file is abondend in favour of the NEWS file
   response headers behaved the same way but are not grouped anymore. They
   stay seperated. Actually they are concated by \r\n<key>: <value> which is
   the same in the end.
-  
+
 - file uploads
 
   the handling of longer post requests is fixed now.
@@ -1406,7 +1406,7 @@ This file is abondend in favour of the NEWS file
 
   the code cleanup is finished successfully. Now all cases of pipelining are
   handle the right way. POST pipelining was still not working up to now.
-  
+
 22.05.2004 12:55
 - code cleanup
 
@@ -1417,9 +1417,9 @@ This file is abondend in favour of the NEWS file
 - network backends
 
   enabled sendfile support again (__FreeBSD__ instead of __freebsd__)
-  
+
   added a mmap cache as part of the filedescriptor cache
-  
+
   added AIX specific send_file() support (untested)
 
 20.05.2004 10:40
@@ -1431,8 +1431,8 @@ This file is abondend in favour of the NEWS file
 - documentation
 
   reformated the documentation the doc/ directory
-  
-15.05.2004 14:45 
+
+15.05.2004 14:45
 - localizer
 
   fixed build of localizer extension
@@ -1441,7 +1441,7 @@ This file is abondend in favour of the NEWS file
 - POST requests
 
   there is no need to die if we spot a simple POST request on a static file
-  
+
 - pipelining
 
   fixed HTTP/1.1 pipelining which caused the problems with opera
@@ -1458,18 +1458,18 @@ This file is abondend in favour of the NEWS file
   1. the application (.php, ...) controls the access to the files
   2. the webserver is handling the transfer (and check the app generated
      tokens)
-     
-  the token is based on 
+
+  the token is based on
   - a secret
   - a timestamp
   - the filename
   this means even if the token is is distributed by the user it will get
   invalid after a given timeout (default 60 seconds)
-  
+
 - errorfiles
 
   check for errorfiles before using them
-     
+
 - code cleanup
 
   applied cleanup fixes from adam
@@ -1477,15 +1477,15 @@ This file is abondend in favour of the NEWS file
 14.05.2004 18:47
 - fdevent handling
 
-  added a more generic callback interface to the fdevent structures which 
+  added a more generic callback interface to the fdevent structures which
   simplifies the writing of plugins. this might destabilize lighttpd for a
   while
-  
+
 - cgi
 
   fixed header parsing of the header is sent in chunks and the terminator is
   sent in a single chunk
-  
+
 - EINTR
 
   fixed some occurences of EINTR which read()
@@ -1501,8 +1501,8 @@ This file is abondend in favour of the NEWS file
 
   added incomplete support for Expect: 100-continue (RFC 2616 8.2.3) by
   sending always 417 for every Expect-request (see 14.20)
-  
-  we have been blamed for not supporting it: 
+
+  we have been blamed for not supporting it:
   http://lists.w3.org/Archives/Public/ietf-http-wg/2004JanMar/0059.html
 
 29.04.2004 23:07 - 1.1.9
@@ -1512,19 +1512,19 @@ This file is abondend in favour of the NEWS file
 
 29.04.2004 19:37
 - network-writev
-  
+
   Adam:
   * call munmap() on error in write()
-  
+
 - docs
-  
+
   E.R:
-  * documented 'check-local' 
-  
+  * documented 'check-local'
+
 - test-env
 
   made the shell scripts more portable (checked with zsh, bash and ksh)
-  
+
   fixed compilation on NetBSD
 
 28.04.2004 22:22
@@ -1538,7 +1538,7 @@ This file is abondend in favour of the NEWS file
 
   Alexey Slynko:
   * handle SSL_ERROR_WANT_READ or SSL_ERROR_WANT_WRITE in SSL_write the
-    right way.   
+    right way.
 
 - FastCGI
 
@@ -1560,24 +1560,24 @@ This file is abondend in favour of the NEWS file
 - mem-leak
 
   fixed mem-leak on broken HTTP-headers
-  
+
 - FastCGI
 
   patches from E.Rodichev:
-  
+
   1. CONTENT_LENGTH
   "If no data are attached, then this metavariable is either NULL or not
   defined".
-  
+
   2. QUERY_STRING
   If the Script-URI does not include a query component, the QUERY_STRING
   metavariable MUST be defined as an empty string ("").
-  
+
   3. Doubling of REMOTE_ADDR removed.
-  
+
   patches from adam:
   * fixed bug in the sizeof() patches from yesterday.
-  * some more *_long to *_off_t 
+  * some more *_long to *_off_t
 
 24.04.2004 14:34
 - FastCGI
@@ -1588,7 +1588,7 @@ This file is abondend in favour of the NEWS file
 - POST
 
   fixed POST request handling
-  
+
 - chunk-encoding
 
   the generated HEX strings where broken since the 1.1.8
@@ -1601,82 +1601,82 @@ This file is abondend in favour of the NEWS file
   * sizeof(int) -> sizeof(<variable>)
   * assign fd_set instead of memcpy()
   * init fd -> connection fd pointers to -1
-  
+
 16.04.2004 08:48 - 1.1.8
 - code cleanup
-  
+
   don't reuse buffer > 64k (see settings.h)
-  
-  added server.max-request-size to limit the maximum request-body size 
+
+  added server.max-request-size to limit the maximum request-body size
   (in kBytes)
-  
+
   don't accept HTTP-request headers larger then 32kBytes (see settings.h)
-  
+
   minor speed improvements in the request-parser
-  
+
   More cleanup patches from adam:
-  
+
   * change pre-ANSI C/valid C++ syntax for function declarations/definitions
     from using () to (void).  Ex: int foo(); --> int foo(void);
   * use static linkage as much as possible, to limit possible symbol
     collisions
   * whack more unneeded variables
   * try and prevent any errno clobbering by storing the old errno value before
-    any subsequent system calls, and restoring before function exit.  
+    any subsequent system calls, and restoring before function exit.
   * change printf syntax for unsigned variables from %d to %u
-    
+
 15.04.2004 18:41
 - code cleanup
 
   handle all int != size_t cases in fcgi.c correctly
-  
+
   check headerfields to have a value
-  
+
   handle both EINVAL cases of writev() before the can occur
-  
-  limit content-length to SSIZE_MAX 
+
+  limit content-length to SSIZE_MAX
   disallow negative content-length
-  
-  the usage of ltostr() has been reduced to the minimum in favour of 
+
+  the usage of ltostr() has been reduced to the minimum in favour of
   buffer_/append|copy)_(long|off_t)
-  
+
   dropped ultostr() and ultohex() in favour of buffer_*
 
 15.04.2004 16:35
-- portablity 
+- portablity
 
   more patches from adam:
-  
+
   * remove warnings for unused parameters and variables
   * remove warnings for mismatched pointer assignments
   * change "gtime_r" to "gmtime_r"
 
 13.04.2004 20:48
-- test-cases 
+- test-cases
 
   made the 'make check' target self-contained
-  
+
   In our case we have to call the targets in the following order:
-  
+
   $ ./configure ...
-  $ make 
+  $ make
   $ make install
   $ make check
-  
+
   because the path to the plugins is hardcoded in the binary itself
-  
-  using 
-  
+
+  using
+
   $ ./configure --prefix=/tmp/lighttpd-1.1.x/
   ...
-  
+
   will help if you don't really want to install before testing.
 
 13.04.2004 00:05
-- portability 
+- portability
 
   adam sent another patchset:
-  
+
   * Wrap PCRE-specific data member access with an #ifdef
   * Add const to pointer using return value from dlerror()
   * Explicitly initialize pointer in the lemon parser to 0,
@@ -1688,14 +1688,14 @@ This file is abondend in favour of the NEWS file
 - fastcgi
 
   strip WS after HTTP-response headers coming from the FastCGI process
-  
+
   added REMOTE_USER to the Server->FastCGI headers
   removed HTTP_AUTHORIZATION from the Server->FastCGI headers
 
 12.04.2004 10:24
 - cgi
 
-  if we don't get a partial HTTP-response-header send the content out as soon 
+  if we don't get a partial HTTP-response-header send the content out as soon
   as the cgi script is finished
 
 12.04.2004 01:23
@@ -1706,7 +1706,7 @@ This file is abondend in favour of the NEWS file
 12.04.2004 00:12
 - configfile
 
-  add some usefull error messages if the tokenizer or the parser fail to 
+  add some usefull error messages if the tokenizer or the parser fail to
   read the configfile
 
 11.04.2004 22:04
@@ -1717,29 +1717,29 @@ This file is abondend in favour of the NEWS file
 11.04.2004 20:28
 - 64bit offset size
 
-  disable linux-sendfile support for linux 2.4.x for now as it don't 
-  support 64bit transfers 
-  
+  disable linux-sendfile support for linux 2.4.x for now as it don't
+  support 64bit transfers
+
   fixed all assignments on the path from the stat() to the Content-Length
   HTTP-header
 
 - head requests
   set content-length in HEAD requests
-  
+
 - accesslog
 
   write accesslog entry on network error
-  
+
   write the correct amount of byte written to the accesslog
-  
+
 11.04.2004 11:48
 - code cleanup
 
   moved the config for the cgi-plugin from config.c to the plugin.
-  
+
   moved some buffers which were only used by a one or two plugin from
   the server-structure to the plugins
-  
+
   keeping the plugins independent from the server-core is a 'good thing'
 
 10.04.2004 19:06
@@ -1758,47 +1758,47 @@ This file is abondend in favour of the NEWS file
   the hand-written configfile parser has been replaced by a LALR(1) one.
   'lemon' from the sqlite guys has been used to generate the parser.
 
-- by-host, by-url, by-file, by ... 
+- by-host, by-url, by-file, by ...
 
   $HTTP["url"] =~ "~$" {
     access.deny = "all"
   }
-  
+
   $HTTP["host"] =~ "." {
     simple-vhost.server-root    = "/home/weigon/wwwroot/servers/"
     simple-vhost.default-host   = "grisu.home.kneschke.de"
     simple-vhost.document-root  = "pages"
   }
- 
+
   $HTTP["host"] == "incremental.home.kneschke.de" {
     server.docroot              = "/hasdasd"
   }
-  
+
   at least the parser can handle it now. Currently there is no real support
   for this context-based config-option. But the syntax and the parser are
   done.
-  
+
 09.04.2004 10:58
 - ssl support
 
   enable ssl support again
-  
+
 - mmap
 
-  enabled mmap+write again 
-  
+  enabled mmap+write again
+
 08.04.2004 12:34
 - stricter http-parser
 
-  based on a thread at 
-  
+  based on a thread at
+
   http://lists.w3.org/Archives/Public/ietf-http-wg/2004JanMar/0050.html
-  
-  the HTTP-parser has been adjusted to be more correct when it comes to 
+
+  the HTTP-parser has been adjusted to be more correct when it comes to
   request-header fieldnames
-  
+
   the whitespace handling around the ':' has been relaxed as requested
-  
+
 07.04.2004 17:06
 - sigaction
 
@@ -1823,11 +1823,11 @@ This file is abondend in favour of the NEWS file
 - pidfile
 
   fixed the permissions of the pidfile (Matthijs van der Klip)
-  
+
 - specfile
 
   merge the RedHat and SuSE specfile with Matthijs
-  
+
 - 64bit file-offsets
 
   moved the FILE_OFFSET_BITS settings from the config.h the Makefile to enable
@@ -1838,7 +1838,7 @@ This file is abondend in favour of the NEWS file
 
   added an apache compatible mod_expire which adds Expires: headers to the
   request
-  
+
   expire.url = ( "/buggy/" => "access 2 hours" )
 
 05.04.2004 22:34
@@ -1847,14 +1847,14 @@ This file is abondend in favour of the NEWS file
   forgot to provide the infrastructure to actually enable the devpoll event
   handler. the same has been done for the freebsd-kqueue handler (which
   doesn't work yet)
-  
+
   fixed the devpoll support while testing it on a real solaris box
 
 05.04.2004 09:49
 - debian
 
   added debian packaging support written by Vincent Wagelaar
-  
+
 - solaris
 
   Another set of patches for Solaris from Adam
@@ -1879,37 +1879,37 @@ This file is abondend in favour of the NEWS file
 - fdevent
 
   added framework for freebsd_kqueue and solaris_devpoll
-  
+
   the solaris_devpoll one might event work (untested)
 
 03.04.2004 16:41
-- network 
+- network
 
   added framework for filebased chunks
   - read-write + mmap-write
   - linux-sendfile
   - freebsd-sendfile
   - solaris-sendfilev (untested)
-  
+
   and memorybased chunks
   - write
   - writev
-  
+
   made TCP_CORK a 'global' flag around the write_chunkqueue-calls
-  
+
   the writev() support should improve the performance for all non-static
-  pages. 
-  
+  pages.
+
   170 req/s against 158 req/s for the following script if writev() is used
   instead of write()
-  
+
   <?php
-  
+
   for ($i = 0; $i < 1000; $i++) {
       print $i."<br />\n";
       flush();
   }
-	  
+
   ?>
 
 28.03.2004 13:42
@@ -1921,35 +1921,35 @@ This file is abondend in favour of the NEWS file
   * STD{IN,OUT,ERR}_FILENO preferred instead of {0,1,2}
   * dieing --> dying
   * SEGFAULT calls abort directly, instead of derefencing a NULL pointer
-  
+
 - mod_accesslog
 
   modified the accesslog format to be CLF compatible
   set locale for LC_TIME to C
-  
-26.03.2004 16:13 
+
+26.03.2004 16:13
 - path info
 
   enabled the pathinfo code again
-  
+
 
 25.03.2004 13:30 - 1.1.3
-- portability 
+- portability
 
   compiles fine now without any patches on IRIX
-  
+
 - hostname detection
 
   reworked "get the hostname for HTTP/1.0 requests which don't specify a
   Host: ..." to only query the name in this single case for the server side
   of the connection
-  
+
 - errorlog handling
 
   stderr is only used until the errorlog is init'ed
   if no error-log is specified, syslog() is used
   if cycling error-log fails, syslog() is used
-  
+
 - accesslog cycling
 
   don't fall back to stdout anymore
@@ -1967,26 +1967,26 @@ This file is abondend in favour of the NEWS file
 - configure
 
   some protability changes to get the 'inline' working with the MIPS CC
-  
+
 21.03.2004 22:00
 - mod_rewrite, mod_redirect
 
   reading the config for those two plugins was not working
-  
+
 - fdevents
 
   changed the compile time setting for the event handling into a run-time
   setting.
-  
+
   server.event-handler = "select" # poll, linux-rtsig, linux-sysepoll
-  
+
   added sys_epoll() for linux 2.6
-  
+
   select       - all systems
   poll         - Linux 2.1.23+, all XPG4-UNIX
-  sigio        - linux 2.4.0+ 
+  sigio        - linux 2.4.0+
   sysepoll     - linux 2.5.66+
-  
+
            1000-4k-nok   1000-100k-nok
   select       1776.99          296.52
   poll          678.02          607.28
@@ -2003,20 +2003,20 @@ This file is abondend in favour of the NEWS file
 
   as the docroot on external hosts might be different than the webserver
   docroot it can now be specified in the config:
-  
+
   fastcgi.server            = ( ".php" =>
-				( "grisu" => 
-				  ( 
+				( "grisu" =>
+				  (
 				    "host" => "192.168.2.41",
 				    "docroot" => "/home/jan/servers/",
 				    "port" => 1026
 				  )
 				)
 			      )
-			      
+
   a huge internal cleanup in the config handling made the code more readable.
   some more warnings and error checking should track most of the config
-  errors for the fastcgi plugin 
+  errors for the fastcgi plugin
 
 19.03.2004 12:34
 - external patches
@@ -2026,7 +2026,7 @@ This file is abondend in favour of the NEWS file
   - fix for a debug message
   - get the hostname for HTTP/1.0 requests which don't specify a Host: ...
   - rc-script for RedHat
-  
+
 - documentation
 
   added a documentation section about authentification
@@ -2035,22 +2035,22 @@ This file is abondend in favour of the NEWS file
 19.03.2004 05:11
 - optimizations
 
-  implemented special versions of 
+  implemented special versions of
   - strcasecmp (array_strcasecmp)
   - isdigit, isalpha, isalnum (light_*)
-  
+
   added a faster check for a finished header
-  
+
   after disabling all modules it is still possible to get 20 kreq/s.
 
 15.03.2004 19:45 - 1.1.1
 - localizer server
 
-  added the localizer-server module to the code 
-  
+  added the localizer-server module to the code
+
 - chunked-encoding
 
-  Apple's Safari or HTTP-Handler doesn't handle chunked-extensions defined by 
+  Apple's Safari or HTTP-Handler doesn't handle chunked-extensions defined by
   RFC 2616 correctly and doesn't ignore them. Disabled the chunked-extension
   which were just used for debugging purposes.
 
@@ -2059,28 +2059,28 @@ This file is abondend in favour of the NEWS file
 
   moved the checks if a plugins support a given function from the dispatcher
   (plugins_call) to plugins_call_init() to do the check only once.
-  
+
   equalized the plugins functions to only two types:
   SERVER_FUNC()
   CONNECTION_FUNC()
-  
+
   replaced all handwritten plugin_call-handlers with macros
-  
+
   made all plugin-functions 'static'
-  
+
   with all plugins loaded we are at 15kreq/s gain
   without any plugin loaded at 16kreq/s
-  
+
   before the change we were at 13kreq/s
 
-06.03.2004 21:13 
+06.03.2004 21:13
 - compilation fixes
 
   fixed some warnings on FreeBSD and NetBSD by adding
-  #include <netinet/in.h> 
-  
+  #include <netinet/in.h>
+
   ifdef'ed a pcre-entry in base.h
-  
+
   remove #define _XOPEN_SOURCE from http_auth.c for IRIX
   crypt() on Linux needs _XOPEN_SOURCE
 
@@ -2089,20 +2089,20 @@ This file is abondend in favour of the NEWS file
 
   added htpasswd and htdigest backends to work against user-files generated
   by htpasswd and htdigest.
-  
+
   for basic auth:
   - plain
   - htpasswd (crypt only)
   - htdigest
-  
+
   for digest auth:
   - plain
   - htdigest
-  
+
 06.03.2004 17:35
 - authentification
 
-  check the method in the authorization header againt the configured method 
+  check the method in the authorization header againt the configured method
 
 06.03.2004 14:54
 - hostname parsing
@@ -2114,17 +2114,17 @@ This file is abondend in favour of the NEWS file
 - configuration
 
   added a warning for unknown configuration variables.
-  
+
   dropped the 'specific-for.url' ideas for now as it is not known yet how to
   implement it the right way
-  
+
   renamed some config-variables to reflect there actual meaning
   - server.host -> server.bind
   - server.virtual-* -> simple-vhost.*
   - server.userid -> server.username
   - server.groupid -> server.groupname
   - server.docroot -> server.document-root
-  
+
 
 05.03.2004 15:36
 - fastcgi
@@ -2133,26 +2133,26 @@ This file is abondend in favour of the NEWS file
     plugin itself
 
 - vhosting
-  
+
   got a patch for enhanced virtualhosting from christian kruse -> mod_evhost
-  
+
   moved the virtual hosting config (server.virtual-*) to it's own module
   called mod_simple_vhost
 
 23.02.2004 10:06
 - configfile
-  
+
   rearragned the config-file structure again to be able to add settings for
-  a given URL, Host, Filename, ... 
+  a given URL, Host, Filename, ...
     This change affects some config-options directly (access.deny,
   url.rewrite, url.redirect, virtual-hosting, ...)
-  
-  added 'specific-for.url' for url specific config settings 
-  
+
+  added 'specific-for.url' for url specific config settings
+
 - digest auth
 
   FIX: md5-sess type
-  
+
   seperate the auth-backend stuff
 
 13.02.2004 22:23 - lighttpd 1.0.3
@@ -2171,47 +2171,47 @@ This file is abondend in favour of the NEWS file
 
   FIX: the search for header fields was up to now case-sensitive. Now it is
        like required by the standard case-in-sensitive.
-       
+
 - browser bugs
-  
+
   w3m 0.2.5 adds an additional \r\n at the end of the POST requests which is
   handled now
- 
+
 10.02.2004 10:12
 - start script
 
   took the suse rc-skeleton which states to be LSB compliant and modified it
   for lighttpd needs
-  
-09.02.2004 11:48 
+
+09.02.2004 11:48
 - HEAD requests
 
   FIX: HEAD requests for static files delived the content from the GET
        request. (test case is added)
 
-08.02.2004 15:53 
+08.02.2004 15:53
 - directory listings
-  
-  FIX: the pathname has not encoded at all before it was transfered to the 
+
+  FIX: the pathname has not encoded at all before it was transfered to the
        browser. a proper url and html-encoding has been added.
-  
-  added modification-time and filesize to the output 
-  
+
+  added modification-time and filesize to the output
+
   added a basic css for the virtual listings
 
 07.02.2004 22:15 - lighttpd 1.0.2
 - sample configfile
 
   rearranged the config-file to have all the important options at the top
-  
+
 - docs
 
   added a mod-rewrite options
-  
+
 - mod_accesslog
 
   stdout is no longer used a default for the accesslog
-  
+
 - error-messages
 
   the 404 is now reported in the error-log
@@ -2220,39 +2220,39 @@ This file is abondend in favour of the NEWS file
 - configfile handling
 
   if a key is used twice like
-  
-  url.rewrite = ( "url1" => "url") 
-  url.rewrite = ( "url2" => "url") 
-  
+
+  url.rewrite = ( "url1" => "url")
+  url.rewrite = ( "url2" => "url")
+
   you get an error now. You have to write:
-  
-  url.rewrite = ( "url1" => "url", 
-                  "url2" => "url") 
+
+  url.rewrite = ( "url1" => "url",
+                  "url2" => "url")
 
 31.01.2004 12:22 - lighttpd 1.0.1
 - log cycling
 
   added a sighup-handler to the plugin interface and fixed the log-cycling
   for access-logs
-  
+
 - portability
-  
+
   disabled the interval-time optimization on IRIX
 
 - documentation
-  
+
   added a lot of new documentation to README
 
 31.01.2004 10:59
 - status module
 
   added two new options rrd-dir and rrd-reports:
-  
+
   rrd-reports = (boolean)  # enables RRD-reports
   rrd-dir     = (string)   # path for the daily status-files
-  
+
   fixed the "status-files in /"-bug this way
-  
+
 
 22.01.2004 13:38 - lighttpd 1.0.0
 - simple docroot
@@ -2269,10 +2269,10 @@ This file is abondend in favour of the NEWS file
 
   Verified again that the code compiles and runs cleanly on Linux, FreeBSD,
   NetBSD and IRIX
-  
+
   compiling with gcc and the option -pedantic works fine
   compiling with mipspro cc works fine, too
-  
+
 - tests
 
   added some more tests: 39 tests
@@ -2281,11 +2281,11 @@ This file is abondend in favour of the NEWS file
 - protability
 
   some compile fixes for FreeBSD have been applied and a new switch has been
-  added to choose between IPv4 and IPv6 on FreeBSD. 
+  added to choose between IPv4 and IPv6 on FreeBSD.
     (cmdline: -6, configfile: server.use-ipv6)
 
 - packaging
-  
+
   cleaned up the specfile for building RPMs
 
 21.12.2003 01:00
@@ -2302,7 +2302,7 @@ This file is abondend in favour of the NEWS file
 - compression
 
   added gzip compression (gzip-header + deflate + crc)
-  
+
 - test harness framework
 
   added a 22 tests to verify the correct behaviour of lighttpd
@@ -2310,9 +2310,9 @@ This file is abondend in favour of the NEWS file
 - request parsing
 
   GET http://www.yahoo.com/ HTTP/1.0
-  
+
   is handled now as
-  
+
   GET / HTTP/1.0
 
 - plugins
@@ -2325,8 +2325,8 @@ This file is abondend in favour of the NEWS file
   the directory structure is now build automaticly
 
 15.12.2003 01:00
-- compression 
-  
+- compression
+
   added a compression cache to the compression module (mod_compress)
 
   Vary: Accept-Encoding is set now as it influences to delivered stream of
@@ -2336,19 +2336,19 @@ This file is abondend in favour of the NEWS file
 - config files
 
   a new config-file format is ready for the final release of lighttpd.
-  
+
   it supports:
-  
+
   server.docroot   = "string"
   server.host      = integer
   server.modules   = ( "string", "string" )
   server.mimetypes = ( "key" => "value" )
-  server.complex   = ( "key" => ( "string", integer ), 
-                       "string", 
+  server.complex   = ( "key" => ( "string", integer ),
+                       "string",
 		       integer )
-  
+
   the syntax should look familar to all who worked with Perl or PHP.
-  
+
   config-file handling has been seperated into a parser and a lexer. Both
   are currently written by hand and will propably be rewritten into bison +
   flex if time permits. But that would be a cosmetical change.
@@ -2358,11 +2358,11 @@ This file is abondend in favour of the NEWS file
 
   improved the status page to display
   - the current connection-stati
-  - average throughput over 5 seconds 
+  - average throughput over 5 seconds
     (requests/s and output-bound traffic)
 
   now you can see what is going on in the server
-  
+
 - access-log
 
   the accesslog is now a module and can be disabled by just removing the
@@ -2372,36 +2372,36 @@ This file is abondend in favour of the NEWS file
 - chroot-ing
 
   how-to: using chroot
-  
+
   - chroot to /home/www/
   - docroot at /servers/<hostname>/pages/
   - defaulthost www.example.org
-  
+
   e.g. (external view)
   /home/www/servers/www.example.org/pages/index.html
-  
+
   (in chroot)
   /servers/www.example.org/pages/index.html
-  
+
   config:
-  
+
   chroot  /home/www/
   userid  wwwrun
   groupid nogroup
-  
+
   virtual-server-root /servers/
   virtual-server-default-host www.example.org
   virtual-server-docroot /pages/
-  
-  The FastCGI process is living outside this chroot definition as it is 
+
+  The FastCGI process is living outside this chroot definition as it is
   started seperatly.
-  
+
 01.12.2003 02:06
 - cleanup
 
   in preparation for the first stable release some internals had to be
-  cleaned up. Basicly it was a cleanup of workflow of the creation of the 
-  response-header. All modules can use a clean interface for this purpose 
+  cleaned up. Basicly it was a cleanup of workflow of the creation of the
+  response-header. All modules can use a clean interface for this purpose
   now. This is espacially usefull for all modules which have to pass some
   HTTP-headers to the client.
 
@@ -2410,9 +2410,9 @@ This file is abondend in favour of the NEWS file
 
   finally moved the modules to shared libraries and cleaned up some code
   path to become more readable.
-  
+
   So far we have:
-  
+
   mod_rewrite
   mod_redirect
   mod_access
@@ -2426,23 +2426,23 @@ This file is abondend in favour of the NEWS file
 - redirects
 
   as lighttpd supports url-rewriting redirection was a few lines of new code.
-  
+
   redirect ^/wishlist/(.+)    http://jan.kneschke.de/wishlist/$1
-  
+
   rewrite  ^/wishlist/(.+)    /new/wishlist/$1
 
 28.11.2003 17:00
-- signal stuff 
+- signal stuff
 
   setitimer is used to send a event every second to call time() only once a
   second. another system call which has been remove from the main-loop.
-  
+
   sending HUP to lighttpd will close and re-open the logfiles. this is used
   for cycling logfiles.
-  
+
 #! /bin/sh
 
-### 
+###
 #
 # a simple logfile rotator for lighttpd
 #
@@ -2459,7 +2459,7 @@ gzip access.log.${DATE}
   a first attempt for a native win32 has been done. For now mingw is the
   base for the development as it provides a basic unix-like framework for
   building native win32 applications.
-  
+
   the most internal files have been ported and the over all progress is
   going well. At the end this will just be a prove of concept.
 
@@ -2467,7 +2467,7 @@ gzip access.log.${DATE}
 - access denied
 
   added a access-deny filter to block specific urls like
-  
+
   access-deny ~
   access-deny .inc
 
@@ -2476,15 +2476,15 @@ gzip access.log.${DATE}
 
   a fstat() on a opened fd which has changed reports wrong the file-info.
   Using stat() again helps to solve this problem.
-  
+
   the sig-io version doesn't suffer from this problem.
-  
+
   the etags are now used for verifing file-cache-entries.
-  
+
 - chat
-  
+
   enabled the internal login mechanism again
-  
+
   added support transfering session-infos over MySQL.
 
 15.11.2003 00:19
@@ -2493,24 +2493,24 @@ gzip access.log.${DATE}
   added a buffer_equal_reverse function which is optimized version of strcmp
   which is going backwards as pathnames are often the same for in the first
   bytes.
-  
+
   wrote a one-pass parser for the request-header. The combination of
   strstr(..., "\r\n") to seperate lines and strchr(..., ':') to seperate
   keys from values more or less touched every byte twice.
-  
+
   we are still at 18.000 req/s for 4kb keep-alive requests even with etags
   and handling all header fields.
 
 14.11.2003 17:26
 - fcgi
-  
+
   Content-Type wasn't passed correctly to the FastCGI app. HTTP_CONTENT_TYPE
   was sent instead.
-  
+
 - cache
-  
+
   provided access to the Session-ID
-  
+
 - error-log
 
   the timestamp is now written in a human readable form
@@ -2519,142 +2519,142 @@ gzip access.log.${DATE}
 - fcgi, cgi
 
   added a special set of array-functions which are optimised for the "insert
-  only once" case. 
-  
+  only once" case.
+
   this provides access to the headers which are now forwarded to the external
   interfaces. Before this change only a limited set of request-headers were
   forwarded.
-  
+
 21.10.2003 11:58
-- modules 
+- modules
 
   added a new module-hook after the basic-init of the module for handling
   config-settings and prepare the overall operartion (like building
   db-connections, compiling regexes, ...)
-  
+
 - cache
 
   use turckmm-cache 2.4.3 to get some numbers for the php-latency:
-  
+
   /usr/sbin/ab -n 10000 -c 10 http://alba.home.kneschke.de:1025/index.php
-  
+
   handling the cache-decision and the cache-hit in php:
-  
+
     cache-miss: 100% (-&gt; $version = 0)
-  
+
     plain        : 108.13 req/s
     turckmm-cache: 218.39 req/s
-  
+
     cache-hit: 100% (-&gt; $version = 1)
-  
+
     plain        : 164.45 req/s
     turckmm-cache: 653.98 req/s
-  
+
   handling the cache-decision and the cache-hit in the server:
-  
+
     cache-hit: 100%, but using index.cml
-  
+
     cml:           4918.84 req/s (no keep-alive)
     cml:           6901.31 req/s (keep-alive)
-    
+
     cache-miss: 100%, but using index.cml
-    
+
     plain        : 108.39 req/s
     turckmm-cache: 217.84 req/s
-  
+
   Conclusion:
   - there is no loss in the cache-miss case through the cml-handling
   - the cache-hit case can be improved dramaticly with lighttpd-cache
   - turckmm-cache improves the cache-miss case alot
-    
+
 20.10.2003 00:40
 - cache
 
   the first 'real-life' test showed dramatic improvements in the req/s
   handling.
-  
+
   The basic idea was to move the decision if a php-page can be taken from
-  the cache from the php-code to the webserver. 
-  
+  the cache from the php-code to the webserver.
+
   See here why this is a good thing:
-  
+
   the quite common code which works for http://jan.kneschke.de/ is using
   templates and is quite static, but depends on 4 external files (the
   menu-structure, the template, the current content, the class-file).
-  
+
   the index-file is always:
-  
+
   include_once "jk.inc";
-  
+
   $v = new view();
   print $v->get(array(array ("file" => "content.html")));
-  
+
   It is more or less the same for all pages.
-  
-  This basic setup can deliver 100 requests/s. 
-  
-  The next step has: 
+
+  This basic setup can deliver 100 requests/s.
+
+  The next step has:
   - application bases caching
-  
+
   as we know that each pages depends on those 4 files, you can check if they
   have been modified since the last request and deliver the content from the
   cache otherwise.
-  
+
   this increased the throughput to 150 req/s. (cache-hit ratio 100%)
-  
+
   The next logic step is to move the decision-making process out of the PHP
   code as PHP is to slow for the cache-hit path:
-  
+
   a CML (Cache-Markup-Language) has been written which describes the whole
   decision process which has been written in PHP-code before:
-  
-  
+
+
 output.content-type text/html
-  
+
 output.include _cache.html
-  
+
 trigger.handler index.php
-  
+
 trigger.if  file.mtime("../lib/php/menu.csv") > file.mtime("_cache.html")
 trigger.if  file.mtime("templates/jk.tmpl") > file.mtime("_cache.html")
 trigger.if  file.mtime("content.html") > file.mtime("_cache.html")
 
   if one of the 'trigger.if' statements is true the 'trigger.handler' is
   called to generate the pages.
-  
+
   if none of the them is trigger the files from 'output.include' are sent to
   the browser with content-type specified in the first line:
-  
-  The result was very 'promissing': 
-  
+
+  The result was very 'promissing':
+
   5900 req/s with keep-alive
   3800 req/s without keep-alive
 
   (both for a cache-hit ratio of 100%)
-  
+
   for keep-alive this is factor <b>59</b> against the plain un-cached
   version and still <b>39</b> againt the php-cache-version which is doing
   exactly the same.
-  
+
   Time for party. :)
-  
+
 19.10.2003 - 18:55
 - cache
 
   the handling of functions has been improved. they are now 'plugable'. just
   the dlopen() stuff is missing.
-  
+
   a new datatype has been added: the string
-  
+
   this makes it possible to evaluate something like:
-  
+
 trigger.if unix.time.now() - file.mtime("head.html") > 30
 trigger.if mysql.query("SELECT count(*) " + \
                        "  FROM structure AS struc, session AS sess " + \
 		       " WHERE struct.user = sess.user" + \
 		       "   AND sess.id = \"" + mysql.escape("ab\"c") + "\"")
-		       
-  you see: 
+
+  you see:
   - string operations (concat)
   - handing of escape-sequences
   - functions
@@ -2667,19 +2667,19 @@ trigger.if mysql.query("SELECT count(*) " + \
   handler a lot easier. The CVS server was up all the time but not used.
   Importing required 5 minutes of work which included merge the freebsd and
   the linux tree.
-  
+
 - compilers + platforms
 
   on a regular various compilers and platform are check to compile with with
   the current code base:
-  
+
   platform | os                  | compiler     | state
   ---------+---------------------+--------------+---------
   ia32     | Linux 2.4.22        | gcc 2.95.3   | ok
   ia32     | FreeBSD 5.1-CURRENT | gcc 3.3.1    | ok
   mips64   | IRIX 6.5            | gcc 3.2.2    | ok
   misp64   | IRIX 6.5            | MIPSpro 7.41 | ok
-  
+
   the mipspro compiler revealed some warning which resulted in a nice
   code-cleanup that made the code more readable.
 
@@ -2687,23 +2687,23 @@ trigger.if mysql.query("SELECT count(*) " + \
 - e-tags and friends
 
   in preparation for the php-conference at the begin of november in
-  frankfurt/main the server has the support some more caching/proxy tags 
-  like: 
+  frankfurt/main the server has the support some more caching/proxy tags
+  like:
   - E-Tag (14.19) [done]
   - If-Match (14.24)
   - If-None-Match (14.26) [done]
-  - If-Range (14.27) 
-  
+  - If-Range (14.27)
+
   Section (13.3.3) binds them together. [RFC 2616]
-  
+
   using lxr.kde.org and lxr.mozilla.org revealed that
   - konqui only uses if-none-match
   - mozilla uses if-none-match and if-range
-  
+
   it looks like it isn't that easy to trigger the if-range case.
-  
-  As ulf suggested the etag is a hash of file-size, inode-number and mtime. 
-  
+
+  As ulf suggested the etag is a hash of file-size, inode-number and mtime.
+
 - fd-caching
 
   ulf just phoned me ask proposed the free the cache more agressivly in case
@@ -2711,26 +2711,26 @@ trigger.if mysql.query("SELECT count(*) " + \
 
 17.10.2003 12:45
 - chat
-  
+
   finished the mysql-support for storing the sessions
 
 12.10.2003 20:56
 - valgrind
 
   used valgrind again to verify that the code a free of mem-leaks and found
-  a 'leak generator' in the chunk-api. 
-  
+  a 'leak generator' in the chunk-api.
+
   the last few leaks were just some missing free()'s at the end of the
   program run which would have been freed anyway.
-  
+
   at the end valgrind couldn't find any missing free()'s.
 
 11.10.2003 12:09
 - FastCGI
 
-  reduced the number of system calls for FastCGI to WebServer to 2 calls per 
+  reduced the number of system calls for FastCGI to WebServer to 2 calls per
   fd-event. (ioctl() + read())
-  
+
   this has no direct effect of the performance of the server, but improves
   the possible througput of the load-balancer.
 
@@ -2739,8 +2739,8 @@ trigger.if mysql.query("SELECT count(*) " + \
 
   a brown paper bug has been fixed which caused to decreasing throughput if
   load-balancing was enabled.
-  
-  
+
+
   benchmarking the req/s with load-balancing shows really nice results:
 
 
@@ -2748,20 +2748,20 @@ trigger.if mysql.query("SELECT count(*) " + \
   ---------+--------------------------------------------------
   ulf      : 764.06  (php)
   lappi    : 800.06  (php)
-  
+
   ulf+lappi: 1526.95 (2 * php)
-  
-  grisu    : 1265.66 (php + ab + lighttpd) 
-  
-  
+
+  grisu    : 1265.66 (php + ab + lighttpd)
+
+
   all      : 1647.72 (3 * php + ab + lighttpd)
-  all(nice): 1904.40 (same as all, but the local php on grisu 
+  all(nice): 1904.40 (same as all, but the local php on grisu
                       has been 'nice -20'd)
-  
-  
+
+
   if a php is run on the load-balancer it has to get a lower priority than
   the load-balancer itself as to handle the work of (here) 3 php-servers.
-  
+
 
 10.10.2003 15:11
 - java ?
@@ -2773,108 +2773,108 @@ trigger.if mysql.query("SELECT count(*) " + \
 
   Last week 3 RTL8169S gigE cards arrived and were installed in the
   test-framework.
-  
+
   They are very cheap (20 Euros) and are a good start for a low-level
-  benchmark network. 
-  
+  benchmark network.
+
   First result show us:
-  
+
   48 Mb/s with ab.
-  
+
   The webserver and the test-server are equipped with a 2000+ AMD CPU. The
   system load 95%, user load is 3%, the rest is idle on both plattforms.
 
   After some calculations at gets clear that there are various bottlenecks:
-  
-  1. The PCI-Bus (32bit/33Mhz) can only transfer 133Mb/s 
+
+  1. The PCI-Bus (32bit/33Mhz) can only transfer 133Mb/s
     - 48 Mb/s TCP-Traffic results in 55Mb/s Ethernet-Traffic (verified with
       slurm) [outgoing]
     - there is about 10Mb/s incomming traffic at the PCI bus which the
       requests
-    - the rest of the devices at the PCI bus are eating the last few mb/s 
+    - the rest of the devices at the PCI bus are eating the last few mb/s
   2. IRQ-Handling
     - There are reasons why the RTL8169S cards are so cheap
       - they can't send jumbo-frames
-      - only 8k/64k buffers which results in a interrupt every 3 packets 
+      - only 8k/64k buffers which results in a interrupt every 3 packets
       - they are at least handling checksum offloading for ip, udp and tcp
-      
+
   In the end there is a need for new hardware to limit the throughput by the
   Ethernet again.
   - PCI-X, 64bit-PCI, ...
   - 'real' gigE-Network cards
   - ...
-  
-  
+
+
   BTW: 2.4.22 + the r8139 driver are very flacky and resulted in 3 lock-ups
-  for today. 
-  
+  for today.
+
   In another test the dual-PPro-FreeBSD 5.1-CURRENT machine has been used as
   server with a gigE interface (re0) at has shown that the CPU is the limit
   for this combination. The maximum thoughput was 7Mb/s.
-  
-  Another small benchmark: 
+
+  Another small benchmark:
   $ ab -n 1000 -c 10 http://192.168.2.41:&lt;port&gt;/lighttpd-20030925.tar
-  
-  port  | server          | CPU Idle 
+
+  port  | server          | CPU Idle
   ------+-------­---------+-----------
   1025  | lighttpd        | 75%
   1026  | thttpd 2.23b1   | 75%
   1027  | boa-0.94.14rc17 | 69% *
   1028  | apache 1.3.x    | 77%
-  
-  
+
+
   In all 4 cases the thoughput was 8600 kbytes/s.
-  
+
   * boa had 9 failed transfers.
-  
-- FreeBSD 
-  
+
+- FreeBSD
+
   The problems with FreeBSD 5.0-RELEASE vanished after updating to
   5.1-CURRENT.
 
 26.09.2003 18:22
 - FreeBSD
-  
+
   A SMP-machine has been added to the test-farm. It is running FreeBSD
   5.1-RELEASE and will help to the improve the scalability.
 
   fixed sendfile() handling.
-  
+
 - FreeBSD problems
 
   FreeBSD-5.1-RELEASE-SMP
   2 * Pentium Pro 200 MHz
   192.168.2.38 (doubleheart)
   (webserver [lighttpd at port 1025, thttpd at port 1027])
-  
+
   Linux 2.4.20
   1 * AMD 2000+
   192.168.2.10 (grisu)
   (ab)
-  
+
   Problem:
   Connections are reset by the kernel without any application intervention.
-  
+
   Calling 'ab' (apachebench) at grisu with the following paramters:
-  
+
   /usr/sbin/ab -n 10000 -c 10 http://192.168.2.38:1025/index.html
-  
+
   results in the following output:
-  
+
   ...
   Time taken for tests:   40.610 seconds
   Complete requests:      10000
   Failed requests:        5980
      (Connect: 0, Length: 5980, Exceptions: 0)
   ...
-  
-  
-  This is reproducable and the number of failed requests is always 
+
+
+  This is reproducable and the number of failed requests is always
   5980 +/- 50 requests. In other words: after 4000 requests tcpdump shows
   the following output:
 
   tcpdump shows:
-  
+
   00:53:48.923029 192.168.2.10.39774 &gt; 192.168.2.38.1025: S [tcp sum ok]
     1013737315:1013737315(0) win 5840 &lt;mss 1460,sackOK,timestamp 5208461
     0,nop,wscale0&gt; (DF) (ttl 64, id 7918, len 60)
@@ -2892,7 +2892,7 @@ trigger.if mysql.query("SELECT count(*) " + \
 0x0030   0101 080a 0044 0d12 004f 798d                  .....D...Oy.
 
   00:53:48.924009 192.168.2.10.39774 &gt; 192.168.2.38.1025: . [tcp sum ok] ack 1
-    win 5840 &lt;nop,nop,timestamp 5208461 4459794&gt; (DF) 
+    win 5840 &lt;nop,nop,timestamp 5208461 4459794&gt; (DF)
     (ttl 64, id 7919, len 52)
 0x0000   4500 0034 1eef 4000 4006 9654 c0a8 020a        E..4..@.@..T....
 0x0010   c0a8 0226 9b5e 0401 3c6c 6764 6b84 bac1        ...&amp;.^..&lt;lgdk...
@@ -2900,7 +2900,7 @@ trigger.if mysql.query("SELECT count(*) " + \
 0x0030   0044 0d12
 
   00:53:48.924150 192.168.2.10.39774 &gt; 192.168.2.38.1025: P [tcp sum ok]
-    1:29(28) ack 1 win 5840 &lt;nop,nop,timestamp 5208461 4459794&gt; (DF) 
+    1:29(28) ack 1 win 5840 &lt;nop,nop,timestamp 5208461 4459794&gt; (DF)
     (ttl 64, id 7920, len 80)
  0x0000   4500 0050 1ef0 4000 4006 9637 c0a8 020a        E..P..@.@..7....
  0x0010   c0a8 0226 9b5e 0401 3c6c 6764 6b84 bac1        ...&amp;.^..&lt;lgdk...
@@ -2918,9 +2918,9 @@ trigger.if mysql.query("SELECT count(*) " + \
 
   strace shows that no connection attempt has been reported to the
   application which is poll()'ing the server socket.
-  
+
   /* the common loop without any block attempts */
-  
+
   accept(3, {sa_family=AF_UNSPEC, sa_data="\0\0\0\0\0\0\0\0\0\0\0\0\0\0"}, [0]) = 5
   fcntl(5, F_SETFL, O_RDWR|O_NONBLOCK)    = 0
   read(5, "GET /index.html HTTP/1.0\r\n\r\n", 4095) = 28
@@ -2930,13 +2930,13 @@ trigger.if mysql.query("SELECT count(*) " + \
   write(2, "1064875136: (network.c.210) 235 "..., 33) = 33
   syscall_393(0x6, 0x5, 0, 0, 0x10fc, 0, 0xbfbff2c0, 0) = 0
   close(5)                                = 0
-  
+
   /* no futher waiting connections */
-  
+
   accept(3, 0xbfbff700, [1852702730])     = -1 EAGAIN (Resource temporarily unavailable)
-  
+
   /* enter the main-loop */
-  
+
   gettimeofday({1769235301, 1663069807}, NULL) = 0
   poll([{fd=3, events=POLLIN}], 1, 1000)  = 0
   gettimeofday({4294967295, 65537}, NULL) = 0
@@ -2944,9 +2944,9 @@ trigger.if mysql.query("SELECT count(*) " + \
   gettimeofday({4294967295, 65537}, NULL) = 0
   poll([{fd=3, events=POLLIN}], 1, 1000)  = 0
   ...
-  
+
   (strace is broken for accept() and gettimeofday(), syscall_393() is sendfile())
-  
+
   after entering the main-loop the webserver doesn't receive any new POLLIN
   events at all for the next 10-15 seconds. Any connection-attempt within
   the period is, as you can see in the tcpdump output, accepted by the
@@ -2954,23 +2954,23 @@ trigger.if mysql.query("SELECT count(*) " + \
   After those 10-15 seconds the application gets a POLLIN event for the
   server socket and the normal data-transfer taken place for the next 4000
   requests.
-  
+
   This behaviour is reproducable with thttpd 2.20c and the current lighttpd.
-  
+
 
 26.09.2003 11:42
 - localizer
 
-  ported the localizer-server application into a module for lighttpd. After 
-  30 minutes the code was ported and funtional. This modules provides access 
-  to the localizer-db by a HTTP-Interface and generates the response as 
+  ported the localizer-server application into a module for lighttpd. After
+  30 minutes the code was ported and funtional. This modules provides access
+  to the localizer-db by a HTTP-Interface and generates the response as
   HTML, CSV and plain-text.
-  
+
   So far, the module-interface looks good and flexible enough.
-  
+
   7000 req/s is good enough too. Generating the HTML and querying the DB
   needs some time.
- 
+
 22.09.2003 08:40
 - modules
 
@@ -2979,36 +2979,36 @@ trigger.if mysql.query("SELECT count(*) " + \
   auth-sub-system and the cache out of the main-code. The module-interface
   will be extended to allow the cgi and the fastcgi sub-processes to be
   moved into a module.
- 
+
 15.09.2003 09:36
 - error-handling
 
   fastcgi and cgi connections are now closed correctly if the corresponding
   client-connection has died.
-  
+
 14.09.2003 10:40
 - cgi
 
   finally streaming works with CGI, too
-  
+
   this enable support for cgiirc.sf.net and friends which use streaming as
   there transport mechanism.
-  
+
   streaming has been verified with cgiirc-0.5.2.
-  
+
 - fdevents
 
   there where some reports that sigio didn't work as expected. It just
-  reported no events at all. Looks like a known bug in the glibc on 
+  reported no events at all. Looks like a known bug in the glibc on
   those platforms.
-  
+
   Using poll() instead solve the problems.
 
 27.08.2003 22:12
 - rewrite
 
   a pcre based rewrite engine has been integrated
-  
+
 - cgi
 
   the file-based cgi interface has been replace by two pipes.
@@ -3016,13 +3016,13 @@ trigger.if mysql.query("SELECT count(*) " + \
 23.07.2003 13:29
 - fdevents
 
-  the whole fd-event handling has been reworked and several smaller bugs 
+  the whole fd-event handling has been reworked and several smaller bugs
   and design-errors have fixed.
-  
+
   sigio, poll() and select() are working fine again.
-  
+
   On IRIX 6.5 SIGIO could be used, but without further testing poll() is used.
-  
+
 - cgi
   CGI-support is still broken.
 
@@ -3031,16 +3031,16 @@ trigger.if mysql.query("SELECT count(*) " + \
 
   using the F_NOTIFY feautre of the Linux 2.4.x kernel gives anothre nice
   performance boost as lighttpd can cache the stat()'s the right way, now.
-  
+
   23009.66 @ 5-4k-k which means +10% against 30.06.2003 14:03
-  
+
   for 1000-4k-nok the performace nearly doubles: 3730.23 goes up to 6144.39
 
 17.07.2003 13:21
 - FreeBSD
 
   a small patch (#include &lt;&gt;) to compile lighttpd on FreeBSD again.
-  
+
 08.07.2003 10:48
 - fileinfo-cache
 
@@ -3052,35 +3052,35 @@ trigger.if mysql.query("SELECT count(*) " + \
 
   After some problems with other benchmarking tools for webservers the first
   version of lighttpd-bench has been written.
-  
+
   It a revealed a nasty strange behaviour which was fixed by increasing the
   listen-backlog from 5 to 1024.
-  
+
 30.06.2003 14:03
 - fileinfo-cache
 
   the fileinfo-cache has been relaxed a little bit and there are always 2
   fstat()'s per file-request now. This isn't that dramatic:
-  
+
   21800.74 req/s is still a very good result (7-4k-k).
-  
+
 29.06.2003 03:29
 - fileinfo-cache
 
   a fileinfo cache has been added to reduce the number of system-calls to
-  stat and open a file. 
-  
+  stat and open a file.
+
   in the releases before the same file was stat'ed at least 2 times plus a
   stat on the docroot for each request. Now the stat()'s and the
   corresponding open() + close() calls are cached and the number of system
   calls has been reduced to the minimum:
-  
+
   $ strace -eopen,stat64,read,write,sendfile,accept,shutdown,close \
     -p `pidof lighttpd`
 
 /* first connection */
-accept(3, {sin_family=AF_INET6, sin6_port=htons(56211), 
-  inet_pton(AF_INET6, "::ffff:192.168.2.10", &amp;sin6_addr), sin6_flowinfo=0, 
+accept(3, {sin_family=AF_INET6, sin6_port=htons(56211),
+  inet_pton(AF_INET6, "::ffff:192.168.2.10", &amp;sin6_addr), sin6_flowinfo=0,
   sin6_scope_id=0}, [28]) = 5
 accept(3, 0xbffff470, [28])             = -1 EAGAIN
 read(5, "GET /index.html HTTP/1.0\r\nUser-A"..., 4095) = 91
@@ -3108,20 +3108,20 @@ close(5)                                = 0
 
 
   In the end we have a new speed record:
-  
+
   (ab -c 8 -n 100000 http://192.168.2.10:1025/index.html with poll())
   Requests per second:    23435.67 [#/sec] (mean)
-  
+
   This is a speed increasement of 20-30% against the last internal benchmark.
 
 
 28.06.2003 02:30
-- caching framework 
+- caching framework
 
   the trigger.if directive is working fine. the basic algebra is done ( +,
   -, *, / and comperations =, &lt;=, &gt;=, &gt;, &lt; and the boolean logic
   &amp;&amp; and || including braces)
-  
+
   two basic function are available:
   - unix.time.now
   - file.mtime(...)
@@ -3130,37 +3130,37 @@ close(5)                                = 0
 - caching framework
 
   added output.include, output.content-type for a cache-hit and
-  trigger.handler for a cache-miss. 
-  
+  trigger.handler for a cache-miss.
+
   the actual decision is made be trigger.if which will be added tomorrow.
 
 15.06.2003 15:33
-- sig-io 
+- sig-io
 
   After several other smaller optimisations lighttpd performs better with
   sig-io under high load:
-  
+
                   sigio+poll        poll
   c1000-4k-nok  :    2635.95     1643.39
   c1000-4k-k    :    7335.68     6788.87
   c1000-100k-nok:    2353.49     1217.73
   c1000-100k-k  :    3097.89     2080.73
-  
-  
+
+
   The user-space part has been optimized a lot. Now it is time to optimized
   the number of context-switches between user and kernel-mode.
-  
+
   user    0m0.180s
   sys     0m1.160s
-  
+
   a fileinfo-cache is the way to go.
-  
+
   struct {
   	 buffer *name;
 	 struct stat st;
 	 int handler;
 	 ...
-	 
+
 	 int fd;
 	 void *mmap_p;
   }
@@ -3169,42 +3169,42 @@ close(5)                                = 0
 - sig-io is back again
 
   and it works fine.
-  
+
   sigio (Realtime-Signals under Linux 2.4.x) sends one signal per event and
   buffers the rest of the events in a kernel queue. If the is full a SIGIO
   is sent and poll() gets all events at once for further processing.
-  
-  
+
+
   Currently the behaviour is a little bit strange:
   - sig-io + poll() is good for non-keep-alive connections
   - poll() for keep-alive connections
-  
+
   c1000-4k-nok: (1000 concurrent request, 4k filesize, no keepalive)
   poll      : 1521.38
   sigio+poll: 2124.00
-  
+
   c1000-4k-k: (1000 concurrent request, 4k filesize, keepalive)
   poll      : 5882.35
   sigio+poll: 1239.46
-  
-  Very strange for now. 
-  
+
+  Very strange for now.
+
 09.06.2003 23:59
 - code-cleanup
-  
+
   the event-handling code has been rewritten to handle single events better
   as they are expected from sig-io.
-  
+
   the fallback-mode of sig-io is broken now, but the normal poll() mode got
-  a 10% increasement in speed. This means the we are back the speed level of 
-  20030308-0155 are as fast as zeus again. 
-  
+  a 10% increasement in speed. This means the we are back the speed level of
+  20030308-0155 are as fast as zeus again.
+
   Especially under higher load the current lighttpd performes better.
-  
+
 09.06.2003 11:51
 - sig-io benchmark
 
-                    20030609-1151      20030608-2110       20030308-0155                    
+                    20030609-1151      20030608-2110       20030308-0155
 -c 10                  sigio       select()        poll()         poll()
 4k                :  7870.92        7937.77       8035.36        9443.76
 4k (keep-alive)   : 14098.41       14590.02      14275.52       17985.61
@@ -3217,15 +3217,15 @@ close(5)                                = 0
 100k (keep-alive) :  4267.67        4283.94       4094.17        4314.06
 
 
-For -c 100 4k and 100k sig-io gives a small increasment.  
+For -c 100 4k and 100k sig-io gives a small increasment.
 
-09.06.2003 01:00 
+09.06.2003 01:00
 - sig-io
 
   writing large files works now as expected. After removing the limit for
   the chunks of sendfile the write-buffer-is-empty-again signal is
   generated. that was missing.
-  
+
   321 of 10000 connections still have the wrong length. After that is fixed
   it is time to start some benchmarks again.
 
@@ -3233,11 +3233,11 @@ For -c 100 4k and 100k sig-io gives a small increasment.
 - sig-io
 
   first attempts in getting SIGIO support running which were not very
-  successfull yet. 
-  
+  successfull yet.
+
 - poll()/select() benchmark
 
-                        20030608-2110       20030525-1623  20030308-0155                    
+                        20030608-2110       20030525-1623  20030308-0155
 -c 10               select()        poll()         poll()         poll()
 4k                :  7937.77       8035.36        8166.60        9443.76
 4k (keep-alive)   : 14590.02      14275.52       14781.97       17985.61
@@ -3252,7 +3252,7 @@ For -c 100 4k and 100k sig-io gives a small increasment.
 
   as the overall processing cycle has been rearranged the overall figures
   changed in minor ranges. c100-4k-k increased, *-100k-k decreased.
-  
+
   At least it still works.
 
 08.06.2003 12:45
@@ -3260,7 +3260,7 @@ For -c 100 4k and 100k sig-io gives a small increasment.
 
   implementate an abstration layer for fd-events (like eevry other webserver).
   currently we support poll() and select().
-  
+
   This should bring us support for Mac OS X and propably Windows.
 
 04.06.2003 18:35
@@ -3275,10 +3275,10 @@ For -c 100 4k and 100k sig-io gives a small increasment.
 
 04.06.2003 14:34
 - pipelining
-  
+
   adding support for pipeling introduces a problem if the request-header
   was broken. this has been fixed now.
-  
+
 - unneccesary slashes
 
   when building pathes from different portions of a string (e.g. docroot +
@@ -3291,24 +3291,24 @@ For -c 100 4k and 100k sig-io gives a small increasment.
 
   the error-log contains the start and end-times of the lighttpd process,
   now.
-  
+
 - configfile
 
   the config-file parser has been relaxed to accepts tabs instead of spaces.
-  
+
 - better error-handling
 
-  fixed a <a 
+  fixed a <a
   href="http://bugs.php.net/?id=24009">bug in the FastCGI-SAPI of PHP</a>
-  
+
   if the fastcgi process dies or closes the connection unexpectedly we
   return 500 now instead of closing the connection to the client.
-  
+
 - Location
 
   the CGI/1.1-rev-03 specification requires us to send Status 302 if a
   Location-header is sent by the client and a Status-header is missing.
-  
+
 - PATH_TRANSLATED
 
   if PHP is compiled without --discard-path PATH_TRANSLATED has to be
@@ -3318,7 +3318,7 @@ For -c 100 4k and 100k sig-io gives a small increasment.
 - directory listings
 
   if a directory is requested and the directory doesn't contain a index-file
-  a directory-listing can be displayed. You have to enable directory-listings 
+  a directory-listing can be displayed. You have to enable directory-listings
   in the config-file (directory-listings on)
 
 - url-decoding
@@ -3330,35 +3330,35 @@ For -c 100 4k and 100k sig-io gives a small increasment.
 - pipelining
 
   as Sascha required pipelining for his benchmarking tool it has been
-  implemented. 
-  
+  implemented.
+
   pipelining allows sending a bunch of requests at once without waiting for
   the actual responses. This reduces the network-overhead and the
   round-trip-time.
-  
+
 - non-free()d memory
-  
+
   dmalloc helped to close some non-free()d memory. For the normal operation
   this isn't important as only memory chunks which had to be free()d at the
   end of the live-time of the lighttpd-process were not de-allocated.
-  
+
 - partly-initialized variables
 
   lighttpd wasn't initializing the main-structure which resulted in strange
   behaviour in rare circumstances.
-  
+
 
 25.05.2003 16:23
 - benchmarks
 
   after removing some useless internal copies we are more or less at the old
   speed levels.
-  
+
   after adding virtual-hosts 10% of the performance were lost. Using less
   memcpy() operations might add several other boosts.
-  
+
   I've just checked how lighttpd compares to Zeus.
-  
+
                     lighttpd (current)       (old)
 -c 10                 20030525-1623  20030308-0155     Zeus 4_2
 4k                :         8166.60        9443.76      7278.55
@@ -3373,61 +3373,61 @@ For -c 100 4k and 100k sig-io gives a small increasment.
 
 23.05.2003 14:38
 - cgi-variables
-  
+
   HTTP_HOST was missing for the cgi-module while the fcgi-module passed it
   through to the handler. Fixed that.
-  
+
 - fcgi-errors
-  
+
   the connection to the fcgi was dropped and poll() reported an error, the
-  error wasn't reported to the client the right way. 
-  
+  error wasn't reported to the client the right way.
+
 22.05.2003 23:02
 - authorization
 
   the first password-storage has been added:
-  
+
   [auth]
   backend plan
   plain-userfile &lt;filename&gt;
-  
+
   require   /download/ user=jan|user=anom
   http-auth /download/ "download archiv" digest
-  
+
   groups are prepared but not implemented. basic and digest are working fine.
 
 20.05.2003 17:53
 - authentification
-  
-  The auth-methods from RFC 2617 have been added. 
+
+  The auth-methods from RFC 2617 have been added.
   - auth basic
   - auth digest
-  
+
   The only source for accounts is currently only the config-file.
-  
+
   auth-digest needs the plain-text passwort. Are there any source which
   provide a plain-text password ?
 
 12.05.2003 14:33
 - virtual hosts
-  
+
   added very basic virtual-host support
-  
+
   virtual-server-root /home/weigon/projects/lighttpd/servers/
   virtual-server-default-host grisu.home.kneschke.de:1025
   virtual-server-docroot /pages/
-  
-  docroot is 
-  
+
+  docroot is
+
   - if http-host exists
     &lt;virtual-server-root&gt; + &lt;http-host&gt; + &lt;virtual-server-docroot&gt;
-  
+
   - otherwise
-    &lt;virtual-server-root&gt; + &lt;virtual-server-default-host&gt; + 
+    &lt;virtual-server-root&gt; + &lt;virtual-server-default-host&gt; +
     &lt;virtual-server-docroot&gt;
-    
+
   - if even virtual-server-default-host does not exist, 500 is sent
-   
+
 
 12.05.2003 13:02
 - code cleanup
@@ -3435,33 +3435,33 @@ For -c 100 4k and 100k sig-io gives a small increasment.
   After two month of development it was time clean-up the internal
   structures. It looks like every went fine as lighttpd works es expected
   like before.
-  
+
 - deflate
-  the on-the-fly compression has been verified to work fine with opera, 
+  the on-the-fly compression has been verified to work fine with opera,
   konqui, mozilla and the IE.
 
 12.05.2003 02:10
-- on-the-fly compression: deflate 
- 
+- on-the-fly compression: deflate
+
   Why the hell are the defining a "deflate" encoding in the form of
-  
-  _deflate_ The "zlib" format defined in RFC 1950 [31] in combination 
-  with the "deflate" compression mechanism described in RFC 1951 [29]. 
+
+  _deflate_ The "zlib" format defined in RFC 1950 [31] in combination
+  with the "deflate" compression mechanism described in RFC 1951 [29].
   (RFC 2616)
-  
+
   and noone implements it that way ? Konqui and Mozilla expect a plain
-  deflate() package without the zlib-header. 
-  
+  deflate() package without the zlib-header.
+
   Konqui is using "inflate2(..., -MAX_WBITS); " which is noted in the zlib
-  source as 
-  
+  source as
+
   /* handle undocumented nowrap option (no zlib header or check) */
-  
+
   Funny. Very, very funny.
-  
-  
+
+
   Anyway. We have mimetype-depended compression support now.
-  
+
 11.05.2003 21:56
 - logging
   re-arranged the logfile structure to write CLF + useragent + referrer.
@@ -3469,30 +3469,30 @@ For -c 100 4k and 100k sig-io gives a small increasment.
 11.05.2003 10:23
 - POST file-upload
   added the missing functionality to send more than a single packet to the
-  FCGI-Server (or Client ? ... the PHP). 
-  
+  FCGI-Server (or Client ? ... the PHP).
+
     This gives us the file-upload thing for eg. PHP and large user-forms
   (&gt;16kb).
 
 05.05.2003 15:21
 - PATH_INFO
-  
+
   added support for PATH_INFO. PHP is a little strange and doesn't trust the
   passed PATH_INFO setting. Works fine now.
-  
+
 30.04.2003 15:25
 - bug-fixing day
 
   While testing the FastCGI interface with the MSIE Björn Schotte discovered
-  that sometimes the output repeats itself from the start in an endless loop. 
+  that sometimes the output repeats itself from the start in an endless loop.
     This bug has been fixed.
-    
+
   The read-write-fallback for ancient systems seeked the wrong FDs.
-  
+
   The FastCGI handler is now separting the HTTP-Header from the
   response-body what results in a cleaner interface. The "header too long
   for caching" message is gone now.
-  
+
 28.04.2003 18:18
 - chunked transfer-encoding
 
@@ -3502,8 +3502,8 @@ For -c 100 4k and 100k sig-io gives a small increasment.
 27.04.2003 23:10
 - chunked transfer-encoding
   added "Transfer-Encoding: chunked" which is currently used in the web-chat
-  for the endless stream. Perhaps it helps some browsers. 
-  
+  for the endless stream. Perhaps it helps some browsers.
+
     The FastCGI interface will get a the chunked-support too, as it will
   enable keep-alive even if no content-length is returned from the FastCGI
   process. We know the size of the chunks and will report it to the browser.
@@ -3512,14 +3512,14 @@ For -c 100 4k and 100k sig-io gives a small increasment.
 - gigE deatchmatch
 
   sascha compared the current lighttpd to his premium thttpd in his
-  gigabit-Ethernet-Network. 
+  gigabit-Ethernet-Network.
 
   <a
 href="http://schumann.cx/gbit_deathmatch.txt">http://schumann.cx/gbit_deathmatch.txt</a>
 
   small comment:
   lighttpd provides the same performance (req/s and thoughput), but uses more
-  CPU-Time. 
+  CPU-Time.
 
 10.04.2003 17:22
 - works on IRIX
@@ -3527,7 +3527,7 @@ href="http://schumann.cx/gbit_deathmatch.txt">http://schumann.cx/gbit_deathmatch
   Jörg Behrens provided me login to his SGI Origin and after fixing two small
   typos it worked fine on IRIX. (#if define HAVE... was missing a 'd' and
   getopt returns a 'int' and not a 'char')
-  
+
   IPv6 support is currently disabled for IRIX a gethostbyname2() isn't
   available.
 
@@ -3535,11 +3535,11 @@ href="http://schumann.cx/gbit_deathmatch.txt">http://schumann.cx/gbit_deathmatch
 - another bug-fixing day
   The upper limit of open connections was enforced and a caused a seg-fault.
   The current limit is set to 4096 parallel connections.
-  
+
   As sascha benchmarked lighttpd and his premium thttpd I tried to reproduce
   his reported results and had to fix 2 flaws in the async-io handling of
   httpd_load which was used for the testing.
-  
+
   If sascha starts another benchmark session I'll put a link to it here.
 
 09.04.2003 00:08
@@ -3547,9 +3547,9 @@ href="http://schumann.cx/gbit_deathmatch.txt">http://schumann.cx/gbit_deathmatch
   Date: and Last-Modified: where sending a timezone != GMT what was invalid.
   The timestamp itself was correct, just the timezone use the wrong
   characters.
-  
+
   the fcgi-code had an buffer-overflow for larger POST-Requests.
-  
+
   The fcgi-code still has problems with POST-Request larger than 16kb as the
   the write buffer is full. Currently we don't handle this case except from
   reporting it in the error-log.
@@ -3560,29 +3560,29 @@ href="http://schumann.cx/gbit_deathmatch.txt">http://schumann.cx/gbit_deathmatch
   The CGI Interface wasn't tested for a longer time. It don't really
   survived the introduction of the config-file handling and the internal
   changes that were part of it.
-  
+
   A small test with
-  
+
 #! /usr/bin/perl
 print "Content-Type: text/html\r\n\r\n";
 print time()."\n";
 0;
 
-  produced 219 req/s. 
-  
+  produced 219 req/s.
+
   Calling PHP via the CGI interface results in 100 req/s. Same script, same
   parameters for 'ab' and same PHP result in 1400 req/s if we use the
-  FastCGI interface. 
-  
+  FastCGI interface.
+
   <b>Don't forget</b>: these benchmarks only represent figures for scenarios which
   are not very realistic. They are just usefull for comparisions of the
   internals. We don't want to benchmark applications.
 
 01.04.2003 23:04
 - new benchmarks
-  
+
   This time we wanted to see if  we can get the fastcgi-Interface a little bit
-  faster. We use this small script for the testing the interface. 
+  faster. We use this small script for the testing the interface.
 
 &lt;?php
 
@@ -3603,8 +3603,8 @@ ob_end_flush();
 
 01.04.2003 19:28 (no april fools joke)
 - added SSL support
-  I took -lssl and -lcrypto and added SSLv2/SSLv3/TLS support to lighttpd. 
-  
+  I took -lssl and -lcrypto and added SSLv2/SSLv3/TLS support to lighttpd.
+
   After some reading I realisized that libcrypto contained some of my code.
   They have a similar buffer-struct with similar functions and they use the
   same MD5-code from the RFC. :)
@@ -3612,8 +3612,8 @@ ob_end_flush();
   Adding basic SSL-support was quite esay: replacing all write/read-calls by
   SSL_write/read, initializing the ssl-context the right way and telling
   openssl where to get the data from (SSL_set_fd). It fits really well into
-  lighttpd. 
-  
+  lighttpd.
+
 - sidenote
   sooner or later the con->filename handler will vanish in favour of the
   direct interface to the chunk-API which will simplifiy the design a little
@@ -3621,12 +3621,12 @@ ob_end_flush();
 
 31.03.2003 20:50
 - added a web-chat module
-  1400 lines of C-code are neccesary to add a web-chat to lighttpd. 
-  
+  1400 lines of C-code are neccesary to add a web-chat to lighttpd.
+
   Features:
   - bb-code for text-layouting
   - auto-highlight for URLs and Email-adresses
-  - unlimited number of channels 
+  - unlimited number of channels
   - max. 32.000 users per channel
   - fast as it is directly integrated into the web-server
   - easy to install (as easy as lighttpd)
@@ -3635,14 +3635,14 @@ ob_end_flush();
   - uses as little JavaScript as possible to stay compatible with all browsers
   - flood-protection (2 Levels: ignore and kick)
   - uses CSS for customized look-and-feel
-  
+
 25.03.2003 00:36
 - finished the config-file support
-  now we have config-sections 
-  
+  now we have config-sections
+
   [fastcgi]
   fastcgi .php 192.168.2.76 1025
-  
+
   The only this missing is -HUP handling to re-read the config. But that
   will follow when I'm up again.
 
@@ -3653,52 +3653,52 @@ ob_end_flush();
 
 19.03.2003 03:05
 - more on sendfile support
-  added support for freebsd's version of sendfile(). 
-  
+  added support for freebsd's version of sendfile().
+
   Linux:
   ssize_t sendfile(int out_fd, int in_fd, off_t *offset, size_t count);
-  
+
   FreeBSD:
   int     sendfile(int fd, int s, off_t offset, size_t nbytes,
                    struct sf_hdtr *hdtr, off_t *sbytes, int flags);
-		   
+
   the first 2 params are swap, the next 2 are the same and the last 3 are
   set to NULL or 0.
-  
+
   Solaris 9 is providing a direct interface to the chunk-API with the
   sendfilev() system call:
-  
-  ssize_t sendfilev(int fildes, 
+
+  ssize_t sendfilev(int fildes,
                     const struct sendfilevec *vec, int sfvcnt, size_t *xferred);
-		    
+
   recovering from a failure is a little bit more complex, but it should be
   fast. I just need a system to test it. Anyone ?
 
 18.03.2003 17:32
 - in the news
-  what a surprise: lighttpd is announced in entwickler.com. 
-  
+  what a surprise: lighttpd is announced in entwickler.com.
+
   <a href="http://www.entwickler.com/itr/news/psecom,id,9483,nodeid,82.html">http://www.entwickler.com/itr/news/psecom,id,9483,nodeid,82.html</a>
-  
+
   this was not planned.
-  
-  
+
+
 - implemented the chunked-API
   rather writing the content of multi-range'd requests to a temp-file we
-  just register the parts in a chunk-queue. 
-  
+  just register the parts in a chunk-queue.
+
   chunk 1 [mem]  - part-header
   chunk 2 [file] - source-file (offset, len)
   chunk 3 [mem]  - part-header
   chunk 4 [file] - source-file (offset, len)
   chunk 5 [mem]  - part-footer
-  
+
   If everything is prepared, the content-length is calculated and the
   http-header is generated and prepended to the chunk-queue.
-  
+
   the handle_write() function which handles the write-process just sends the
   chunks to the network without only further modifications.
-  
+
   the chunk-api even simplifies the
   'my-fastcgi-process-needs-some-time-to-create-the-response-
   and-sends-the-data-in-chunks' case. Just add the chunk to the queue if it
@@ -3706,11 +3706,11 @@ ob_end_flush();
 
 13.03.2003 10:49
 - another set of real-life benchmarks
-  
+
   the chairman was benchmarked a little bit. Chairman is full-flegded WCMS.
   As every CMS it needs some time to generate pages. To speed the page
   generating the static-parts of the page can be cached internally.
-  
+
                      without caching   with caching
 apache + mod_php   :            2.50          10.64 req/s
 lighttpd + fcgi-php:            2.50          22.74 req/s
@@ -3725,11 +3725,11 @@ lighttpd + fcgi-php:            2.50          22.74 req/s
 - another large application works with lighttpd
 
   <a
-href="http://www.thinkphp.de/content/content2.php?CatID=44&amp;NewsID=95">Chairman</a> from <a href="http://www.thinkphp.de/">thinkphp</a> has been verified to work with lighttpd. 
-  
+href="http://www.thinkphp.de/content/content2.php?CatID=44&amp;NewsID=95">Chairman</a> from <a href="http://www.thinkphp.de/">thinkphp</a> has been verified to work with lighttpd.
+
   Three things are worth to note:
-  
-  1. ALWAYS use log_error in the php.ini if you use FastCGI 
+
+  1. ALWAYS use log_error in the php.ini if you use FastCGI
      otherwise it will put the errormessages directly into fastcgi-socket
      without any FastCGI Header. This will result in strange errors.
      (its a PHP bug)
@@ -3744,7 +3744,7 @@ href="http://www.thinkphp.de/content/content2.php?CatID=44&amp;NewsID=95">Chairm
 
 11.03.2003 00:13
 - another target
-  after adding some headers lighttpd compiles without any warnings 
+  after adding some headers lighttpd compiles without any warnings
   under cygwin on Windows.
 
   A native windows port will take some time as I have to figure out the
@@ -3752,21 +3752,21 @@ href="http://www.thinkphp.de/content/content2.php?CatID=44&amp;NewsID=95">Chairm
 
 10.03.2003 11:52
 - added Solaris 8 and 9
-  lighttpd has been confirmed to compile and work on 
-  
-  - linux 
+  lighttpd has been confirmed to compile and work on
+
+  - linux
   - FreeBSD, NetBSD
   - Solaris 8, 9
-  
+
   Perhaps I can get lcc to compile it on windows.
 
 10.03.2003 01:30
 - another platform was confirmed
   lighttpd works on NetBSD
-  
+
 - another webserver benchmark
   mathopd (http://www.mathopd.org/)
-  
+
                     Mathopd/1.4
 -c 10
 4k                :  6329.11 [#/sec]
@@ -3776,7 +3776,7 @@ href="http://www.thinkphp.de/content/content2.php?CatID=44&amp;NewsID=95">Chairm
 -c 100
 4k                :    ---- (connections dropped)
 4k (keep-alive)   :    ----
-100k              :    ---- 
+100k              :    ----
 100k (keep-alive) :    ----
 
 Very good values for small files, but the rest ?
@@ -3786,11 +3786,11 @@ Very good values for small files, but the rest ?
   1. sendfile (linux only)
   2. mmap + write
   3. read + write
-  
+
   This means that lighttpd runs on some more systems. It has been verified
   to compile and work on linux 2.4.x and FreeBSD.
-  
-  
+
+
 -c 100
          sendfile  mmap     read
 4k       6476.68   5698.01  5363.08 [#/sec]
@@ -3798,11 +3798,11 @@ Very good values for small files, but the rest ?
 
   The mmap() numbers could be better with a fd+mmap-cache. The zero-copy thing
   is good for our performance.
-  
+
 - tested another small httpd - BOA
   just to get a better view about the performance of lighttpd i've tested
   another httpd: Boa/0.94.14rc16 (http://www.boa.org/)
-  
+
                     Boa/0.94.14rc16
 -c 10
 4k                :         5659.63 [#/sec]
@@ -3824,7 +3824,7 @@ Very good values for small files, but the rest ?
 09.03.2003 13:26
 - load-balancing works great
 
-  I used the framework from http://framework.netuse.de/ as a 
+  I used the framework from http://framework.netuse.de/ as a
   real-life example again to test the load-balancer.
 
   setup:
@@ -3832,57 +3832,57 @@ Very good values for small files, but the rest ?
     - AMD athlon XP 2000+
     - runs lighttpd + ab + a 'nice -15'ed FastCGI-PHP
     - generates 153 req/s alone
-    
+
   - laptop
     - Intel PIII 850
     - runs a FastCGI-PHP
     - generates 88 req/s
-   
-   using the internal load-balancer of lighttpd which balances the 
+
+   using the internal load-balancer of lighttpd which balances the
    php-requests over grisu and laptop generate:
      221 req/s
-     
+
    An apache with mod_php running on grisu gives 117.04 req/s only.
 
 09.03.2003 12:46
 - building the connect connection to the fcgi-php is not non-blocking
   socket() -> connect() -> fcntl(non-blocking) resulted in some problems as
-  the connect() call blocked sometimes for 1 seconds. 
-  
+  the connect() call blocked sometimes for 1 seconds.
+
   socket() -> fcntl(non-blocking) -> connect() solves this problem, but
-  addes more overhead. The first connect-attempt seems always to 
+  addes more overhead. The first connect-attempt seems always to
   return EINPROGRESS.
-  
+
 08.03.2003 15:06
-- the first 'real-life' PHP test showed 2 bugs in the POST handling. 
+- the first 'real-life' PHP test showed 2 bugs in the POST handling.
   1. the Content-Type header was not forwarded via fastcgi
   2. the internal content_length handler wasn't reset after the request
-  
+
   now lighttpd + php work with
-  
+
   http://framework.netuse.de/
-  
-  the basic application gives us 145 req/s 
+
+  the basic application gives us 145 req/s
 
 08.03.2003 11:06
 - use diet to 'test' your code
   diet gives some use full warnings which should be followed. I took the
   chance and removed the last few fprintf() and sprintf() from the code.
   now, we don't need stdio.h anymore.
-  
-    a staticly linked, stripped lighttpd is 42884 bytes large. 
+
+    a staticly linked, stripped lighttpd is 42884 bytes large.
 
 08.03.2003 01:55
 - buffer_strcat() uses strlen() to get the length of the 'to-be-catted-string'
   if the string is constant or has a known length you can pass that function
   which gives use buffer_strcat_len() which passes the string length as a
   parameter.
-  
+
 - using a ramdisk as the base for the tempfiles generated mkstemp() is a
-  very cood idea 
+  very cood idea
   it reduces the io-load on the system and gives as more cpu-time for
   load-balancing the php-requests.
-  
+
 - cache the output of strftime(), gmtime() and localtime
   we generate more then 10.000 req/s which results in using the same
   timestamp over and over again. It is sufficient to generate the timestamp
@@ -3893,21 +3893,21 @@ Very good values for small files, but the rest ?
 
 - don't try to overoptimize for code for the sake of clean code
   the range support require some hack in the first versions like setting the
-  write_offset to the start of the range and keeping the rest of the 
-  "code 200" send code as usual. Only a few lines added this first range 
-  feature. fast, but a hack. It made things more complicated then neccesary 
+  write_offset to the start of the range and keeping the rest of the
+  "code 200" send code as usual. Only a few lines added this first range
+  feature. fast, but a hack. It made things more complicated then neccesary
   to add multi-range support in this scenario.
-  
+
   removing the hack doing small clean preprocessing helps to clean up the
   whole 'write a chunk on the wire' code. At the end we use less code and
-  have a cleaner design. 
-  
-  Sascha proposed a chunked layer which just takes the chunks (http-header, 
+  have a cleaner design.
+
+  Sascha proposed a chunked layer which just takes the chunks (http-header,
   part-header, part-message, ... and the last boundary) and passes them to
   the write-to-the-wire-code. This is far more elegant and will perhaps same
   us from other problems, too. Currently I think that it is not necessary.
   First we have to fix some protability issues.
-  
+
 Ok, today benches:
 
                        today      last
@@ -3925,22 +3925,22 @@ Ok, today benches:
 Top Transfer Rate:
 
     86365.77 [Kbytes/sec] received
-    
+
 Too much for a GigE-link ?
-    
+
 
 so far:
 
 - use state-engines
 
-  a non-forking webserver like described in 
-  
+  a non-forking webserver like described in
+
   http://www.kegel.com/c10k.html
 
-- don't use fprintf() for logging. 
+- don't use fprintf() for logging.
   writing one line to log file takes more time that sending responsing the a
   HTTP-request
-  
+
 - take care of your memory
 
   typedef struct {
@@ -3948,7 +3948,7 @@ so far:
           size_t used;
           size_t size;
   } buffer;
-  
+
   buffer* buffer_init();
   void buffer_free(buffer *b);
   int buffer_prepare_copy(buffer *b, size_t size);
@@ -3957,20 +3957,20 @@ so far:
   int buffer_strcpy_len(buffer *b, const char *s, int s_len);
   int buffer_strcat(buffer *b, const char *s);
   int buffer_strcat_len(buffer *b, const char *s, int s_len);
-  
+
   buffer_init() is only called once per buffer. If you don't need the
-  buffer, set 'used' to zero and reused it afterward. 
+  buffer, set 'used' to zero and reused it afterward.
     buffer_strcpy() + buffer_strcat() check if the 'used' + the new strlen()
   fit in to the 'size' of the buffer. If not the realloc() the buffer.
     buffer_strcat() uses memcpy(ptr + used - 1, s, s_len + 1); which should
   be faster than the original strcat().
-  
+
   Using those buffers keep the memory usage at 2Mb. malloc() and free() are
   only called at the beginnig of the programm and at the end.
-  
+
 - don't used sprintf() to convert a integer into a string as like
   sprintf(buf, "%d", l);
-  
+
   write your own ltostr function. sprintf() is to general for the case and
   is slow.
 
@@ -3980,14 +3980,14 @@ Speed:
 
 Let's assume that <a
 href="http://www.acme.com/software/thttpd/">thttpd</a> is (one of) the
-fastest webservers out there. 
+fastest webservers out there.
 
 all httpds were started with:
 
 $ ./thttpd -p 1026 -D \
  -d /home/weigon/projects/localizer/src/lighttpd/docroot/ \
  -l thttpd.access.log
- 
+
 (lighttpd uses the same parameters).
 
 We used ApacheBench for testing the RPS (requests per second).
@@ -4007,7 +4007,7 @@ $ /usr/sbin/ab -dS -c 10 -n 100000 http://192.168.2.10:80/dummy.out
 100k (keep-a.) :   4035.35            893.51[3]     970.21         955.05 [#/sec]
 
 thttpd/2.21b+php has been patched with the keep-alive + php patches from PHP4
-sapi/thttpd/thttpd_patch. 
+sapi/thttpd/thttpd_patch.
 
 [1] ab reported:
 Failed requests:        1

@@ -56,19 +56,19 @@
 
 #define node_size splaytree_size
 
-/* Splay using the key i (which may or may not be in the tree.) 
- * The starting root is t, and the tree used is defined by rat 
+/* Splay using the key i (which may or may not be in the tree.)
+ * The starting root is t, and the tree used is defined by rat
  * size fields are maintained */
 splay_tree * splaytree_splay (splay_tree *t, int i) {
     splay_tree N, *l, *r, *y;
     int comp, root_size, l_size, r_size;
-    
+
     if (t == NULL) return t;
     N.left = N.right = NULL;
     l = r = &N;
     root_size = node_size(t);
     l_size = r_size = 0;
- 
+
     for (;;) {
         comp = compare(i, t->key);
         if (comp < 0) {
@@ -120,7 +120,7 @@ splay_tree * splaytree_splay (splay_tree *t, int i) {
         y->size = r_size;
         r_size -= 1+node_size(y->right);
     }
- 
+
     l->right = t->left;                                /* assemble */
     r->left = t->right;
     t->left = N.right;

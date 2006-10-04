@@ -13,10 +13,10 @@ Module: mod_scgi
 :abstract:
   SCGI is a fast and simplified CGI interface. It is mostly
   used by Python + WSGI.
-    
+
 .. meta::
   :keywords: lighttpd, FastCGI
-  
+
 .. contents:: Table of Contents
 
 Description
@@ -24,7 +24,7 @@ Description
 
 The SCGI module is heavily based on the FastCGI when it comes
 to configuration. Only the internal protocol between server
-and client has been replaced. Please check the documentation 
+and client has been replaced. Please check the documentation
 of the FastCGI module for more information.
 
 History

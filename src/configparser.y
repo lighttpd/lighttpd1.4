@@ -152,7 +152,7 @@ varline ::= key(A) ASSIGN expression(B). {
     array_insert_unique(ctx->current->value, B);
     B = NULL;
   } else {
-    fprintf(stderr, "Duplicate config variable in conditional %d %s: %s\n", 
+    fprintf(stderr, "Duplicate config variable in conditional %d %s: %s\n",
             ctx->current->context_ndx,
             ctx->current->key->ptr, B->key->ptr);
     ctx->ok = 0;
@@ -288,13 +288,13 @@ aelements(A) ::= aelements(C) COMMA aelement(B). {
     array_insert_unique(C, B);
     B = NULL;
   } else {
-    fprintf(stderr, "Duplicate array-key: %s\n", 
+    fprintf(stderr, "Duplicate array-key: %s\n",
             B->key->ptr);
     ctx->ok = 0;
     B->free(B);
     B = NULL;
   }
-  
+
   A = C;
   C = NULL;
 }
@@ -318,7 +318,7 @@ aelement(A) ::= stringop(B) ARRAY_ASSIGN expression(C). {
   buffer_copy_string_buffer(C->key, B);
   buffer_free(B);
   B = NULL;
-  
+
   A = C;
   C = NULL;
 }
@@ -335,7 +335,7 @@ globalstart ::= GLOBAL. {
 
 global(A) ::= globalstart LCURLY metalines RCURLY. {
   data_config *cur;
-  
+
   cur = ctx->current;
   configparser_pop(ctx);
 
@@ -360,7 +360,7 @@ condlines(A) ::= condline(B). {
 
 condline(A) ::= context LCURLY metalines RCURLY. {
   data_config *cur;
-  
+
   cur = ctx->current;
   configparser_pop(ctx);
 
@@ -404,7 +404,7 @@ context ::= DOLLAR SRVVARNAME(B) LBRACKET stringop(C) RBRACKET cond(E) expressio
   buffer_append_string_buffer(b, op);
   rvalue = ((data_string*)D)->value;
   buffer_append_string_buffer(b, rvalue);
-  
+
   if (NULL != (dc = (data_config *)array_get_element(ctx->all_configs, b->ptr))) {
     configparser_push(ctx, dc, 0);
   } else {
@@ -426,7 +426,7 @@ context ::= DOLLAR SRVVARNAME(B) LBRACKET stringop(C) RBRACKET cond(E) expressio
     size_t i;
 
     dc = data_config_init();
-    
+
     buffer_copy_string_buffer(dc->key, b);
     buffer_copy_string_buffer(dc->op, op);
     buffer_copy_string_buffer(dc->comp_key, B);
@@ -434,7 +434,7 @@ context ::= DOLLAR SRVVARNAME(B) LBRACKET stringop(C) RBRACKET cond(E) expressio
     buffer_append_string_buffer(dc->comp_key, C);
     buffer_append_string_len(dc->comp_key, CONST_STR_LEN("\"]"));
     dc->cond = E;
-    
+
     for (i = 0; comps[i].comp_key; i ++) {
       if (buffer_is_equal_string(
             dc->comp_key, comps[i].comp_key, comps[i].len)) {
@@ -457,20 +457,20 @@ context ::= DOLLAR SRVVARNAME(B) LBRACKET stringop(C) RBRACKET cond(E) expressio
 #ifdef HAVE_PCRE_H
       const char *errptr;
       int erroff;
-      
-      if (NULL == (dc->regex = 
+
+      if (NULL == (dc->regex =
           pcre_compile(rvalue->ptr, 0, &errptr, &erroff, NULL))) {
         dc->string = buffer_init_string(errptr);
         dc->cond = CONFIG_COND_UNSET;
 
-        fprintf(stderr, "parsing regex failed: %s -> %s at offset %d\n", 
+        fprintf(stderr, "parsing regex failed: %s -> %s at offset %d\n",
             rvalue->ptr, errptr, erroff);
 
         ctx->ok = 0;
       } else if (NULL == (dc->regex_study =
-          pcre_study(dc->regex, 0, &errptr)) &&  
+          pcre_study(dc->regex, 0, &errptr)) &&
                  errptr != NULL) {
-        fprintf(stderr, "studying regex failed: %s -> %s\n", 
+        fprintf(stderr, "studying regex failed: %s -> %s\n",
             rvalue->ptr, errptr);
         ctx->ok = 0;
       } else {
@@ -478,7 +478,7 @@ context ::= DOLLAR SRVVARNAME(B) LBRACKET stringop(C) RBRACKET cond(E) expressio
       }
 #else
       fprintf(stderr, "can't handle '$%s[%s] =~ ...' as you compiled without pcre support. \n"
-		      "(perhaps just a missing pcre-devel package ?) \n", 
+		      "(perhaps just a missing pcre-devel package ?) \n",
                       B->ptr, C->ptr);
       ctx->ok = 0;
 #endif
@@ -486,12 +486,12 @@ context ::= DOLLAR SRVVARNAME(B) LBRACKET stringop(C) RBRACKET cond(E) expressio
     }
 
     default:
-      fprintf(stderr, "unknown condition for $%s[%s]\n", 
+      fprintf(stderr, "unknown condition for $%s[%s]\n",
                       B->ptr, C->ptr);
       ctx->ok = 0;
       break;
     }
-    
+
     configparser_push(ctx, dc, 1);
   }
 

@@ -12,17 +12,17 @@ Module: mod_compress
 
 :abstract:
   a nice, short abstrace about the module
-  
+
 .. meta::
   :keywords: lighttpd, compress
-  
+
 .. contents:: Table of Contents
 
 Description
 ===========
 
 Output compression reduces the network load and can improve the overall
-throughput of the webserver. 
+throughput of the webserver.
 
 Only static content is supported up to now.
 
@@ -36,21 +36,21 @@ compress.cache-dir
   name of the directory where compressed content will be cached
 
   e.g.: ::
-  
+
     compress.cache-dir = "/var/www/cache/"
-    
+
     # even better with virt-hosting
     $HTTP["host"] == "docs.example.org" {
       compress.cache-dir = "/var/www/cache/docs.example.org/"
     }
-    
+
   Default: not set, compress the file for every request
 
 compress.filetype
   mimetypes where might get compressed
-  
+
   e.g.: ::
-  
+
     compress.filetype           = ("text/plain", "text/html")
 
   Default: not set
@@ -62,5 +62,5 @@ Compressing Dynamic Content
 To compress dynamic content with PHP please enable ::
 
   zlib.output_compression = 1
-  
+
 in the php.ini as PHP provides compression support by itself.

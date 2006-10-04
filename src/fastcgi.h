@@ -1,4 +1,4 @@
-/* 
+/*
  * fastcgi.h --
  *
  *	Defines for the FastCGI protocol.
@@ -123,7 +123,7 @@ typedef struct {
 
 
 typedef struct {
-    unsigned char type;    
+    unsigned char type;
     unsigned char reserved[7];
 } FCGI_UnknownTypeBody;
 

@@ -12,10 +12,10 @@ Module: mod_simple_vhost
 
 :abstract:
   virtual hosting
-  
+
 .. meta::
   :keywords: lighttpd, virtual hosting
-  
+
 .. contents:: Table of Contents
 
 Description
@@ -36,11 +36,11 @@ The document root for each vhost is built from three values:
 The complete document root is constructed either by ::
 
   server-root + hostname + document-root
-  
+
 or if this path does not exist by ::
 
   server-root + default-host + document-root
-  
+
 A small example should make this idea clear: ::
 
   /var/www/
@@ -52,7 +52,7 @@ A small example should make this idea clear: ::
   /var/www/servers/mail.example.org/
   /var/www/servers/mail.example.org/lib/
   /var/www/servers/mail.example.org/pages/
-  
+
   simple-vhost.server-root = "/var/www/servers/"
   simple-vhost.default-host = "www.example.org"
   simple-vhost.document-root = "pages"
@@ -71,7 +71,7 @@ with one another. ::
 
   $HTTP["host"] == "news.example.org" {
     server.document-root = "/var/www/servers/news2.example.org/pages/"
-  } 
+  }
 
 When ``news.example.org`` is requested, the ``server.document-root``
 will be set to ``/var/www/servers/news2.example.org/pages/``, but
@@ -91,7 +91,7 @@ To use conditionals together with simple-vhost, you should do this: ::
 
   $HTTP["host"] == "news.example.org" {
     server.document-root = "/var/www/servers/news2.example.org/pages/"
-  } 
+  }
 
 It will enable simple vhosting for all hosts other than ``news.example.org``.
 
@@ -100,10 +100,10 @@ Options
 
 simple-vhost.server-root
   root of the virtual host
-  
+
 simple-vhost.default-host
   use this hostname if the requested hostname does not have its own directory
-  
+
 simple-vhost.document-root
   path below the vhost directory
 

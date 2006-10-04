@@ -12,7 +12,7 @@ typedef char HASHHEX[HASHHEXLEN+1];
 #ifdef USE_OPENSSL
 #define IN const
 #else
-#define IN 
+#define IN
 #endif
 #define OUT
 

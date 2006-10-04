@@ -11,11 +11,11 @@ Module: mod_alias
 :Revision: $Revision: 1.1 $
 
 :abstract:
-  The alias module ... 
-  
+  The alias module ...
+
 .. meta::
   :keywords: lighttpd, alias
-  
+
 .. contents:: Table of Contents
 
 Description
@@ -32,5 +32,5 @@ alias.url
   Default: empty
 
   Example: ::
-    
+
     alias.url = ( "/cgi-bin/" => "/var/www/servers/www.example.org/cgi-bin/" )

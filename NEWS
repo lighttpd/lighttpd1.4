@@ -32,40 +32,40 @@ NEWS
   * fixed required trailing newline in configfiles (#142)
   * fixed quoting the autoconf files (#466)
   * fixed empty Host: + $HTTP["host"] handling (#458)
-  * fixed handling of If-Modified-Since if ETag is not set 
+  * fixed handling of If-Modified-Since if ETag is not set
   * fixed default-shell if SHELL is not set (#441)
   * fixed appending and assigning of env.* vars
   * fixed empty FCGI_STDERR packets
-  * fixed conditional server.allow-http-11 
+  * fixed conditional server.allow-http-11
   * fixed handling of follow-symlink + lstat()
   * fixed SIGHUP handling if max-workers is used
   * fixed "Software caused connection abort" messages on FreeBSD
 
 - 1.4.11 - 2006-03-09
 
-  * added ability to specify which ip address spawn-fci listens on 
+  * added ability to specify which ip address spawn-fci listens on
     (agkr@pobox.com)
   * added mod_flv_streaming to streaming Flash Movies efficiently
-  * fixed handling of error codes returned by mod_dav_svn behing a 
+  * fixed handling of error codes returned by mod_dav_svn behing a
     mod_proxy
   * fixed error-messages in mod_auth and mod_fastcgi
   * fixed re-enabling overloaded local fastcgi backends
   * fixed handling of deleted files in linux-sendfile
   * fixed compilation on BSD and MacOSX
   * fixed $SERVER["socket"] on a already bound socket
-  * fixed local source retrieval on windows 
+  * fixed local source retrieval on windows
     (secunia)
-  * fixed hanging cgi if remote side is dieing while reading 
+  * fixed hanging cgi if remote side is dieing while reading
     from the pipe (sandy@meebo.com)
 
 - 1.4.10 - 2006-02-08
 
   * added docs for mod_dirlisting
   * added fastcgi.map-extensions to mod_fastcgi
-  * fixed load balancing for mod_fastcgi 
+  * fixed load balancing for mod_fastcgi
   * fixed extra newline for syslog() in mod_accesslog
   * fixed user-track cookie for IE in mod_usertrack
-  * fixed crash in digest handling in mod_auth 
+  * fixed crash in digest handling in mod_auth
   * fixed handling of 301 response-bodies from a mod_proxy backend
   * fixed loading of base modules if server.modules is not set
   * fixed broken cgi if mod_scgi is loaded
@@ -97,15 +97,15 @@ NEWS
 
   * added auto-reconnect to ldap-server in mod_auth
     (joerg@netbsd.org)
-  * changed auth.ldap-cafile to be optional 
+  * changed auth.ldap-cafile to be optional
     (joerg@netbsd.org)
   * added strip_request_uri in mod_fastcgi
   * added more X-* headers to mod_proxy
     (Ben Grimm <bengrimm@gmail.com>)
-  * added 'debug' to simple-vhost to suppress the 
+  * added 'debug' to simple-vhost to suppress the
     (mod_simple_vhost.c.157) No such file or directory /servers/ww.lighttpd.net/pages/
     messages by default
-  * added support to let the server listen on UNIX-socket 
+  * added support to let the server listen on UNIX-socket
   * changed default stat-cache-engine to 'simple'
   * removed debian/ dir from source package on request by packager
   * fixed max-age timestamps in mod_expire
@@ -113,12 +113,12 @@ NEWS
   * fixed range request handling in network_writev
   * fixed retry on connect error in mod_fastcgi
     (Robert G. Jakabosky <bobby@alphatrade.com>)
-  * fixed possible crash in mod_webdav if sqlite3 support 
+  * fixed possible crash in mod_webdav if sqlite3 support
     is available but not use
   * fixed fdvent-handler init if server.max-worker was used
     (Siddharth Vijayakrishnan <mail@bluefireworks.net>)
   * fixed missing cleanup in mysql_vhost
-  * fixed assert() in "connections.c:962: 
+  * fixed assert() in "connections.c:962:
       connection_handle_read_state: Assertion 'c->mem->used' failed."
   * fixed 64bit issue in md5
   * fixed crash in mod_status
@@ -137,13 +137,13 @@ NEWS
   * added madvise() to instruct the kernel the do proper read-ahead in network_writev
   * added support for %I in mod_accesslog
   * added better compat to Apache for ?auto in mod_status
-  * added support for userdirs without a entry in /etc/passwd in mod_userdir 
+  * added support for userdirs without a entry in /etc/passwd in mod_userdir
     (rob@inversepath.com)
   * added startup-time selectable network-backend
   * added location of upload-files to config as array
   * added webdav.log-xml for logging xml-content in mod_webdav
   * added Cache-Control: max-age to mod_expire
-  * workaround missing client-bug by assuming we received a close-notify on 
+  * workaround missing client-bug by assuming we received a close-notify on
     non-keep-alive requests in SSL request
   * disabled kerberos5 support by default to fix compilation on RHEL
   * fixed order of library checks to fix compilation on Solaris 9
@@ -194,10 +194,10 @@ NEWS
 - 1.4.3 - 2005-09-01
 
   * added gracefull shutdown
-  * added server.max-connections 
+  * added server.max-connections
   * fixed compilation on all BSD platforms
   * fixed init of kqueue and /dev/poll after daemonize
-  * fixed segfault if select() is event-handler and more than FD_SETSIZE 
+  * fixed segfault if select() is event-handler and more than FD_SETSIZE
     fds are opened
   * fixed compilation of mod_cml
   * fixed bin-copy-env in mod_fastcgi
@@ -217,13 +217,13 @@ NEWS
   * added a complete Class 1 complient mod_webdav
   * fixed ssl support (especially on OpenBSD)
   * fixed response header in body problem in mod_cgi
-  * fixed numbers before body problem 
+  * fixed numbers before body problem
   * fixed compilation on Solaris and FreeBSD
   * fixed conditional options in mod_dirlisting
   * fixed segfault in mod_dirlisting for NFS directories
   * fixed check for docroot in change-root environments
 
-- 1.4.0 - 2005-08-17 
+- 1.4.0 - 2005-08-17
 
   * added nested conditionals
   * added remote-ip to $HTTP
@@ -239,7 +239,7 @@ NEWS
   * added support for accesslog to syslog
   * added support for PATH_INFO guessing if check-local is disabled in
       mod_fastcgi
-  * added switch to disable range-requests 
+  * added switch to disable range-requests
   * added valid-user option for mod_auth (tigger at gentoo.org)
   * added JavaScript based sorting to mod_status (erik)
   * added selective TCP_CORK (Christian von Roques)
@@ -252,7 +252,7 @@ NEWS
 
 - 1.3.15 - 2005-07-15
 
-  * added mod_cml 
+  * added mod_cml
   * added mod_trigger_b4_dl
   * added encoding to mod_dirlisting
   * added ?auto to mod_status
@@ -295,7 +295,7 @@ NEWS
   * added REMOTE_PORT and SERVER_ADDR to CGI-env
   * relaxed handling of newlines before keep-alive requests
   * relaxed uri-parser again
-  * fixed PHP_SELF for php 
+  * fixed PHP_SELF for php
   * fixed compilation on MacOS X
   * fixed handling of EPIPE and ECONNRESET
   * fixed crash in mod_auth if config-options are missing
@@ -309,7 +309,7 @@ NEWS
   * added support for full commandline in spawn-fcgi
   * fixed missing check for IP-address in mod_fastcgi
   * fixed compile error with openssl in mod_fastcgi
-  * removed a debug-message from network-functions 
+  * removed a debug-message from network-functions
 
 - 1.3.9 - 2005-02-06
 
@@ -321,9 +321,9 @@ NEWS
   * fixed min-procs and max-procs in FastCGI on PowerPC
   * fixed crash in setenv.add-response-header
   * fixed handling of nph-scripts in CGI
-  * fixed accidently sending out physical file in CGI on error 
+  * fixed accidently sending out physical file in CGI on error
   * fixed cygwin support
-  * fixed handling of missing files 
+  * fixed handling of missing files
   * fixed HEAD requests for dynamic requests
 
 - 1.3.8 - 2005-01-30
@@ -338,22 +338,22 @@ NEWS
   * fixed build problems on netbsd 1.4.x and 1.5.x
   * fixed status.url configuration
   * fixed handling of != and !~ in configutation
-  * fixed special cases in keep-alive handling 
+  * fixed special cases in keep-alive handling
   * fixed timeout handling in handling POST requests
-  * fixed mode AUTHORIZER in FastCGI 
+  * fixed mode AUTHORIZER in FastCGI
   * fixed handling if internal redirects if no Host: is supplied
-  * fixed mod_alias + pathinfo 
+  * fixed mod_alias + pathinfo
   * fixed directory indexes and permissions
   * enabled sending errorlog to syslog again
 
 - 1.3.7 - 2004-12-11
 
-  * added retries for a fastcgi connect if a php-childs 
+  * added retries for a fastcgi connect if a php-childs
     dies at startup
   * update the debian directory
   * added setgroups() to drop all group-privs
   * added native port to windows via mingw32
-  * added server.tag = '...' 
+  * added server.tag = '...'
   * added support for ${...} in mod_ssi
   * ported all plugins to conditional support
   * fixed multipart handling in cgi
@@ -367,10 +367,10 @@ NEWS
 - 1.3.6 - 2004-11-03
 
   * added spawn-fcgi to the distribution
-  * added support in fastcgi module to spawn fastcgi 
+  * added support in fastcgi module to spawn fastcgi
     processes itself
   * fixed logfile cycling if external logging is used
-  * fixed connection handling in fastcgi if no chunk 
+  * fixed connection handling in fastcgi if no chunk
     encoding is used
   * fixed internal redirects on directories if a query
     string is supplied
@@ -379,7 +379,7 @@ NEWS
 
 - 1.3.5 - 2004-10-31
 
-  * added mod_alias 
+  * added mod_alias
   * added mod_userdir
   * added the exec command to the SSI handler
   * added a switch to disable follow-symlinks
@@ -395,12 +395,12 @@ NEWS
   * added build target for OpenWRT
   * added plain backend support for auth-digest
   * fixed handling the external accesslog processes
-  * fixed SERVER_NAME in CGI and FastCGI 
+  * fixed SERVER_NAME in CGI and FastCGI
 
 - 1.3.3 - 2004-10-16
 
   * added support for NL terminators in CGI-scripts
-  * added support for conditionals in mod_auth, 
+  * added support for conditionals in mod_auth,
     mod_simple_vhost and mod_evhost
   * added a error-handler for 404 codes
   * fixed request counter in the rrdtool module
@@ -504,7 +504,7 @@ NEWS
 - 1.2.0 - 2004-05-17
 
   * added conforming Expect: handling
-  * added a module for secure and fast downloading 
+  * added a module for secure and fast downloading
   * rewrote the event handling interface
   * fixed array handling which might lead to 'missing header'
   * fixed pipelining support

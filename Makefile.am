@@ -1,3 +1,3 @@
 SUBDIRS=src doc tests cygwin openwrt
 
-EXTRA_DIST=lighttpd.spec 
+EXTRA_DIST=lighttpd.spec

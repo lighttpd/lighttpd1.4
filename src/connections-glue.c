@@ -13,7 +13,7 @@ const char *connection_get_state(connection_state_t state) {
 	case CON_STATE_REQUEST_END: return "req-end";
 	case CON_STATE_RESPONSE_START: return "resp-start";
 	case CON_STATE_RESPONSE_END: return "resp-end";
-	default: return "(unknown)";	
+	default: return "(unknown)";
 	}
 }
 
@@ -30,15 +30,15 @@ const char *connection_get_short_state(connection_state_t state) {
 	case CON_STATE_REQUEST_END: return "Q";
 	case CON_STATE_RESPONSE_START: return "s";
 	case CON_STATE_RESPONSE_END: return "S";
-	default: return "x";	
+	default: return "x";
 	}
 }
 
 int connection_set_state(server *srv, connection *con, connection_state_t state) {
 	UNUSED(srv);
-	
+
 	con->state = state;
-	
+
 	return 0;
 }
 

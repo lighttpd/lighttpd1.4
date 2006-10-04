@@ -12,10 +12,10 @@ Module: mod_setenv
 
 :abstract:
   mod_setenv is used to add request
-  
+
 .. meta::
   :keywords: lighttpd, skeleton
-  
+
 .. contents:: Table of Contents
 
 Description

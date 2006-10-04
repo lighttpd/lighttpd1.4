@@ -9,19 +9,19 @@
 # include <pcre.h>
 #endif
 
-typedef enum { 
-	HTTP_METHOD_UNSET = -1, 
-	HTTP_METHOD_GET, 
-	HTTP_METHOD_POST, 
-	HTTP_METHOD_HEAD, 
-	HTTP_METHOD_OPTIONS, 
+typedef enum {
+	HTTP_METHOD_UNSET = -1,
+	HTTP_METHOD_GET,
+	HTTP_METHOD_POST,
+	HTTP_METHOD_HEAD,
+	HTTP_METHOD_OPTIONS,
 	HTTP_METHOD_PROPFIND,  /* WebDAV */
-	HTTP_METHOD_MKCOL, 
-	HTTP_METHOD_PUT, 
-	HTTP_METHOD_DELETE, 
-	HTTP_METHOD_COPY, 
-	HTTP_METHOD_MOVE, 
-	HTTP_METHOD_PROPPATCH, 
+	HTTP_METHOD_MKCOL,
+	HTTP_METHOD_PUT,
+	HTTP_METHOD_DELETE,
+	HTTP_METHOD_COPY,
+	HTTP_METHOD_MOVE,
+	HTTP_METHOD_PROPPATCH,
 	HTTP_METHOD_REPORT, /* DeltaV */
 	HTTP_METHOD_CHECKOUT,
 	HTTP_METHOD_CHECKIN,
@@ -39,13 +39,13 @@ typedef enum { HTTP_VERSION_UNSET = -1, HTTP_VERSION_1_0, HTTP_VERSION_1_1 } htt
 
 typedef struct {
 	int key;
-	
+
 	char *value;
 } keyvalue;
 
 typedef struct {
 	char *key;
-	
+
 	char *value;
 } s_keyvalue;
 
@@ -54,7 +54,7 @@ typedef struct {
 	pcre *key;
 	pcre_extra *key_extra;
 #endif
-	
+
 	buffer *value;
 } pcre_keyvalue;
 
@@ -62,7 +62,7 @@ typedef enum { HTTP_AUTH_BASIC, HTTP_AUTH_DIGEST } httpauth_type;
 
 typedef struct {
 	char *key;
-	
+
 	char *realm;
 	httpauth_type type;
 } httpauth_keyvalue;

@@ -5,16 +5,16 @@
 
 typedef struct {
 	enum { SSI_TYPE_UNSET, SSI_TYPE_BOOL, SSI_TYPE_STRING } type;
-	
+
 	buffer *str;
 	int     bo;
 } ssi_val_t;
 
 typedef struct {
 	int     ok;
-	
+
 	ssi_val_t val;
-	
+
 	void   *srv;
 } ssi_ctx_t;
 

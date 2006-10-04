@@ -21,12 +21,12 @@
 #endif
 
 /*
- * Plugin for lighttpd to use MySQL 
+ * Plugin for lighttpd to use MySQL
  *   for domain to directory lookups,
  *   i.e virtual hosts (vhosts).
- *   
- * Optionally sets fcgi_offset and fcgi_arg 
- *   in preparation for fcgi.c to handle 
+ *
+ * Optionally sets fcgi_offset and fcgi_arg
+ *   in preparation for fcgi.c to handle
  *   per-user fcgi chroot jails.
  *
  * /ada@riksnet.se 2004-12-06
@@ -35,15 +35,15 @@
 #ifdef HAVE_MYSQL
 typedef struct {
 	MYSQL 	*mysql;
-	
+
 	buffer  *mydb;
 	buffer  *myuser;
 	buffer  *mypass;
 	buffer  *mysock;
-	
+
 	buffer  *hostname;
 	unsigned short port;
-	
+
 	buffer  *mysql_pre;
 	buffer  *mysql_post;
 } plugin_config;
@@ -51,12 +51,12 @@ typedef struct {
 /* global plugin data */
 typedef struct {
 	PLUGIN_DATA;
-	
+
 	buffer 	*tmp_buf;
-	
+
 	plugin_config **config_storage;
-	
-	plugin_config conf; 
+
+	plugin_config conf;
 } plugin_data;
 
 /* per connection plugin data */
@@ -70,7 +70,7 @@ typedef struct {
 /* init the plugin data */
 INIT_FUNC(mod_mysql_vhost_init) {
 	plugin_data *p;
-	
+
 	p = calloc(1, sizeof(*p));
 
 	p->tmp_buf = buffer_init();
@@ -83,22 +83,22 @@ SERVER_FUNC(mod_mysql_vhost_cleanup) {
 	plugin_data *p = p_d;
 
 	UNUSED(srv);
-	
+
 #ifdef DEBUG
-	log_error_write(srv, __FILE__, __LINE__, "ss", 
+	log_error_write(srv, __FILE__, __LINE__, "ss",
 		"mod_mysql_vhost_cleanup", p ? "yes" : "NO");
 #endif
 	if (!p) return HANDLER_GO_ON;
-	
+
 	if (p->config_storage) {
 		size_t i;
 		for (i = 0; i < srv->config_context->used; i++) {
 			plugin_config *s = p->config_storage[i];
 
 			if (!s) continue;
-			
+
 			mysql_close(s->mysql);
-			
+
 			buffer_free(s->mydb);
 			buffer_free(s->myuser);
 			buffer_free(s->mypass);
@@ -106,13 +106,13 @@ SERVER_FUNC(mod_mysql_vhost_cleanup) {
 			buffer_free(s->mysql_pre);
 			buffer_free(s->mysql_post);
 			buffer_free(s->hostname);
-			
+
 			free(s);
 		}
 		free(p->config_storage);
 	}
 	buffer_free(p->tmp_buf);
-	
+
 	free(p);
 
 	return HANDLER_GO_ON;
@@ -127,7 +127,7 @@ static void* mod_mysql_vhost_connection_data(server *srv, connection *con, void 
 	UNUSED(srv);
 
 #ifdef DEBUG
-        log_error_write(srv, __FILE__, __LINE__, "ss", 
+        log_error_write(srv, __FILE__, __LINE__, "ss",
 		"mod_mysql_connection_data", c ? "old" : "NEW");
 #endif
 
@@ -150,10 +150,10 @@ CONNECTION_FUNC(mod_mysql_vhost_handle_connection_close) {
 	UNUSED(srv);
 
 #ifdef DEBUG
-	log_error_write(srv, __FILE__, __LINE__, "ss", 
+	log_error_write(srv, __FILE__, __LINE__, "ss",
 		"mod_mysql_vhost_handle_connection_close", c ? "yes" : "NO");
 #endif
-	
+
 	if (!c) return HANDLER_GO_ON;
 
 	buffer_free(c->server_name);
@@ -184,14 +184,14 @@ SERVER_FUNC(mod_mysql_vhost_set_defaults) {
 		{ "mysql-vhost.port",   NULL, T_CONFIG_SHORT,   T_CONFIG_SCOPE_SERVER },
                 { NULL,			NULL, T_CONFIG_UNSET,	T_CONFIG_SCOPE_UNSET }
         };
-	
+
 	p->config_storage = calloc(1, srv->config_context->used * sizeof(specific_config *));
-	
+
 	for (i = 0; i < srv->config_context->used; i++) {
 		plugin_config *s;
 		buffer *sel;
-		
-		
+
+
 		s = calloc(1, sizeof(plugin_config));
 		s->mydb = buffer_init();
 		s->myuser = buffer_init();
@@ -201,10 +201,10 @@ SERVER_FUNC(mod_mysql_vhost_set_defaults) {
 		s->port   = 0;               /* default port for mysql */
 		sel = buffer_init();
 		s->mysql = NULL;
-		
+
 		s->mysql_pre = buffer_init();
 		s->mysql_post = buffer_init();
-		
+
 		cv[0].destination = s->mydb;
 		cv[1].destination = s->myuser;
 		cv[2].destination = s->mypass;
@@ -212,16 +212,16 @@ SERVER_FUNC(mod_mysql_vhost_set_defaults) {
 		cv[4].destination = sel;
 		cv[5].destination = s->hostname;
 		cv[6].destination = &(s->port);
-		
+
 		p->config_storage[i] = s;
-		
-        	if (config_insert_values_global(srv, 
+
+        	if (config_insert_values_global(srv,
 			((data_config *)srv->config_context->data[i])->value,
 			cv)) return HANDLER_ERROR;
-		
+
 		s->mysql_pre = buffer_init();
 		s->mysql_post = buffer_init();
-		
+
 		if (sel->used && (qmark = index(sel->ptr, '?'))) {
 			*qmark = '\0';
 			buffer_copy_string(s->mysql_pre, sel->ptr);
@@ -229,35 +229,35 @@ SERVER_FUNC(mod_mysql_vhost_set_defaults) {
 		} else {
 			buffer_copy_string_buffer(s->mysql_pre, sel);
 		}
-		
+
 		/* required:
 		 * - username
-		 * - database 
-		 * 
+		 * - database
+		 *
 		 * optional:
 		 * - password, default: empty
 		 * - socket, default: mysql default
 		 * - hostname, if set overrides socket
 		 * - port, default: 3306
 		 */
-		
+
 		/* all have to be set */
 		if (!(buffer_is_empty(s->myuser) ||
 		      buffer_is_empty(s->mydb))) {
 
 			int fd;
-		
+
 			if (NULL == (s->mysql = mysql_init(NULL))) {
 				log_error_write(srv, __FILE__, __LINE__, "s", "mysql_init() failed, exiting...");
-				
+
 				return HANDLER_ERROR;
 			}
 #define FOO(x) (s->x->used ? s->x->ptr : NULL)
-			
-			if (!mysql_real_connect(s->mysql, FOO(hostname), FOO(myuser), FOO(mypass), 
+
+			if (!mysql_real_connect(s->mysql, FOO(hostname), FOO(myuser), FOO(mypass),
 						FOO(mydb), s->port, FOO(mysock), 0)) {
 				log_error_write(srv, __FILE__, __LINE__, "s", mysql_error(s->mysql));
-				
+
 				return HANDLER_ERROR;
 			}
 #undef FOO
@@ -266,12 +266,12 @@ SERVER_FUNC(mod_mysql_vhost_set_defaults) {
 			/* otherwise we cannot be sure that mysql is fd i-1 */
 			if (-1 == (fd = open("/dev/null", 0))) {
 				close(fd);
-				fcntl(fd-1, F_SETFD, FD_CLOEXEC); 
+				fcntl(fd-1, F_SETFD, FD_CLOEXEC);
 			}
 		}
 	}
-	
-	
+
+
 
         return HANDLER_GO_ON;
 }
@@ -281,36 +281,36 @@ SERVER_FUNC(mod_mysql_vhost_set_defaults) {
 static int mod_mysql_vhost_patch_connection(server *srv, connection *con, plugin_data *p) {
 	size_t i, j;
 	plugin_config *s = p->config_storage[0];
-	
+
 	PATCH(mysql_pre);
 	PATCH(mysql_post);
 #ifdef HAVE_MYSQL
 	PATCH(mysql);
 #endif
-	
+
 	/* skip the first, the global context */
 	for (i = 1; i < srv->config_context->used; i++) {
 		data_config *dc = (data_config *)srv->config_context->data[i];
 		s = p->config_storage[i];
-		
+
 		/* condition didn't match */
 		if (!config_check_cond(srv, con, dc)) continue;
-		
+
 		/* merge config */
 		for (j = 0; j < dc->value->used; j++) {
 			data_unset *du = dc->value->data[j];
-			
+
 			if (buffer_is_equal_string(du->key, CONST_STR_LEN("mysql-vhost.sql"))) {
 				PATCH(mysql_pre);
 				PATCH(mysql_post);
 			}
 		}
-		
+
 		if (s->mysql) {
 			PATCH(mysql);
 		}
 	}
-	
+
 	return 0;
 }
 #undef PATCH
@@ -379,7 +379,7 @@ CONNECTION_FUNC(mod_mysql_vhost_handle_docroot) {
 	/* fcgi_offset and fcgi_arg are optional */
 	if (cols > 1 && row[1]) {
 		c->fcgi_offset = atoi(row[1]);
-		
+
 		if (cols > 2 && row[2]) {
 			buffer_copy_string(c->fcgi_arg, row[2]);
 		} else {
@@ -395,12 +395,12 @@ GO_ON:	buffer_copy_string_buffer(con->server_name, c->server_name);
 	buffer_copy_string_buffer(con->physical.doc_root, c->document_root);
 
 #ifdef DEBUG
-	log_error_write(srv, __FILE__, __LINE__, "sbbdb", 
-		result ? "NOT CACHED" : "cached", 
+	log_error_write(srv, __FILE__, __LINE__, "sbbdb",
+		result ? "NOT CACHED" : "cached",
 		con->server_name, con->physical.doc_root,
 		c->fcgi_offset, c->fcgi_arg);
 #endif
-	return HANDLER_GO_ON;	
+	return HANDLER_GO_ON;
 
 ERR500:	if (result) mysql_free_result(result);
 	con->http_status = 500; /* Internal Error */
@@ -418,7 +418,7 @@ int mod_mysql_vhost_plugin_init(plugin *p) {
 
 	p->set_defaults			= mod_mysql_vhost_set_defaults;
 	p->handle_docroot  		= mod_mysql_vhost_handle_docroot;
-	
+
 	return 0;
 }
 #else

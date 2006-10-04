@@ -12,4 +12,4 @@ Provides: httpd, httpd-cgi
 Suggests: openssl, rrdtool
 Description:  A fast webserver with minimal memory footprint
  lighttpd is intended to be a frontend for ad-servers which have to deliver
- small files concurrently to many connections. 
+ small files concurrently to many connections.

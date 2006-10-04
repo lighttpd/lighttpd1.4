@@ -54,7 +54,7 @@ typedef struct {
 	unsigned short hide_readme_file;
 	unsigned short show_header;
 	unsigned short hide_header_file;
-	
+
 	excludes_buffer *excludes;
 
 	buffer *external_css;
@@ -63,13 +63,13 @@ typedef struct {
 
 typedef struct {
 	PLUGIN_DATA;
-	
+
 	buffer *tmp_buf;
 	buffer *content_charset;
-	
+
 	plugin_config **config_storage;
-	
-	plugin_config conf; 
+
+	plugin_config conf;
 } plugin_data;
 
 excludes_buffer *excludes_buffer_init(void) {
@@ -146,44 +146,44 @@ void excludes_buffer_free(excludes_buffer *exb) {
 /* init the plugin data */
 INIT_FUNC(mod_dirlisting_init) {
 	plugin_data *p;
-	
+
 	p = calloc(1, sizeof(*p));
 
 	p->tmp_buf = buffer_init();
 	p->content_charset = buffer_init();
-	
+
 	return p;
 }
 
 /* detroy the plugin data */
 FREE_FUNC(mod_dirlisting_free) {
 	plugin_data *p = p_d;
-	
+
 	UNUSED(srv);
 
 	if (!p) return HANDLER_GO_ON;
-	
+
 	if (p->config_storage) {
 		size_t i;
 		for (i = 0; i < srv->config_context->used; i++) {
 			plugin_config *s = p->config_storage[i];
-			
+
 			if (!s) continue;
-			
+
 			excludes_buffer_free(s->excludes);
 			buffer_free(s->external_css);
 			buffer_free(s->encoding);
-			
+
 			free(s);
 		}
 		free(p->config_storage);
 	}
-	
+
 	buffer_free(p->tmp_buf);
 	buffer_free(p->content_charset);
-	
+
 	free(p);
-	
+
 	return HANDLER_GO_ON;
 }
 
@@ -215,10 +215,10 @@ static int parse_config_entry(server *srv, plugin_config *s, array *ca, const ch
 			if (0 != excludes_buffer_append(s->excludes,
 				    ((data_string *)(da->value->data[j]))->value)) {
 #ifdef HAVE_PCRE_H
-				log_error_write(srv, __FILE__, __LINE__, "sb", 
+				log_error_write(srv, __FILE__, __LINE__, "sb",
 						"pcre-compile failed for", ((data_string *)(da->value->data[j]))->value);
 #else
-				log_error_write(srv, __FILE__, __LINE__, "s", 
+				log_error_write(srv, __FILE__, __LINE__, "s",
 						"pcre support is missing, please install libpcre and the headers");
 #endif
 			}
@@ -233,8 +233,8 @@ static int parse_config_entry(server *srv, plugin_config *s, array *ca, const ch
 SETDEFAULTS_FUNC(mod_dirlisting_set_defaults) {
 	plugin_data *p = p_d;
 	size_t i = 0;
-	
-	config_values_t cv[] = { 
+
+	config_values_t cv[] = {
 		{ "dir-listing.exclude",	  NULL, T_CONFIG_LOCAL, T_CONFIG_SCOPE_CONNECTION },   /* 0 */
 		{ "dir-listing.activate",         NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION }, /* 1 */
 		{ "dir-listing.hide-dotfiles",    NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION }, /* 2 */
@@ -245,18 +245,18 @@ SETDEFAULTS_FUNC(mod_dirlisting_set_defaults) {
 		{ "dir-listing.show-header",      NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION }, /* 7 */
 		{ "dir-listing.hide-header-file", NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION }, /* 8 */
 		{ "server.dir-listing",           NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION }, /* 9 */
-		
+
 		{ NULL,                          NULL, T_CONFIG_UNSET, T_CONFIG_SCOPE_UNSET }
 	};
-	
+
 	if (!p) return HANDLER_ERROR;
-	
+
 	p->config_storage = calloc(1, srv->config_context->used * sizeof(specific_config *));
-	
+
 	for (i = 0; i < srv->config_context->used; i++) {
 		plugin_config *s;
 		array *ca;
-		
+
 		s = calloc(1, sizeof(plugin_config));
 		s->excludes = excludes_buffer_init();
 		s->dir_listing = 0;
@@ -267,7 +267,7 @@ SETDEFAULTS_FUNC(mod_dirlisting_set_defaults) {
 		s->show_header = 0;
 		s->hide_header_file = 0;
 		s->encoding = buffer_init();
-		
+
 		cv[0].destination = s->excludes;
 		cv[1].destination = &(s->dir_listing);
 		cv[2].destination = &(s->hide_dot_files);
@@ -307,19 +307,19 @@ static int mod_dirlisting_patch_connection(server *srv, connection *con, plugin_
 	PATCH(show_header);
 	PATCH(hide_header_file);
 	PATCH(excludes);
-	
+
 	/* skip the first, the global context */
 	for (i = 1; i < srv->config_context->used; i++) {
 		data_config *dc = (data_config *)srv->config_context->data[i];
 		s = p->config_storage[i];
-		
+
 		/* condition didn't match */
 		if (!config_check_cond(srv, con, dc)) continue;
-		
+
 		/* merge config */
 		for (j = 0; j < dc->value->used; j++) {
 			data_unset *du = dc->value->data[j];
-			
+
 			if (buffer_is_equal_string(du->key, CONST_STR_LEN("dir-listing.activate")) ||
 			    buffer_is_equal_string(du->key, CONST_STR_LEN("server.dir-listing"))) {
 				PATCH(dir_listing);
@@ -342,7 +342,7 @@ static int mod_dirlisting_patch_connection(server *srv, connection *con, plugin_
 			}
 		}
 	}
-	
+
 	return 0;
 }
 #undef PATCH
@@ -432,7 +432,7 @@ static int http_list_directory_sizefmt(char *buf, off_t size) {
 
 static void http_list_directory_header(server *srv, connection *con, plugin_data *p, buffer *out) {
 	UNUSED(srv);
-	
+
 	BUFFER_APPEND_STRING_CONST(out,
 		"<!DOCTYPE html PUBLIC \"-//W3C//DTD XHTML 1.1//EN\" \"http://www.w3.org/TR/xhtml11/DTD/xhtml11.dtd\">\n"
 		"<html xmlns=\"http://www.w3.org/1999/xhtml\" xml:lang=\"en\">\n"
@@ -492,11 +492,11 @@ static void http_list_directory_header(server *srv, connection *con, plugin_data
 	if (p->conf.show_header) {
 		stream s;
 		/* if we have a HEADER file, display it in <pre class="header"></pre> */
-		
+
 		buffer_copy_string_buffer(p->tmp_buf, con->physical.path);
 		BUFFER_APPEND_SLASH(p->tmp_buf);
 		BUFFER_APPEND_STRING_CONST(p->tmp_buf, "HEADER.txt");
-		
+
 		if (-1 != stream_open(&s, p->tmp_buf)) {
 			BUFFER_APPEND_STRING_CONST(out, "<pre class=\"header\">");
 			buffer_append_string_encoded(out, s.start, s.size, ENCODING_MINIMAL_XML);
@@ -531,21 +531,21 @@ static void http_list_directory_header(server *srv, connection *con, plugin_data
 
 static void http_list_directory_footer(server *srv, connection *con, plugin_data *p, buffer *out) {
 	UNUSED(srv);
-	
+
 	BUFFER_APPEND_STRING_CONST(out,
 		"</tbody>\n"
 		"</table>\n"
 		"</div>\n"
 	);
-	
+
 	if (p->conf.show_readme) {
 		stream s;
 		/* if we have a README file, display it in <pre class="readme"></pre> */
-		
+
 		buffer_copy_string_buffer(p->tmp_buf,  con->physical.path);
 		BUFFER_APPEND_SLASH(p->tmp_buf);
 		BUFFER_APPEND_STRING_CONST(p->tmp_buf, "README.txt");
-		
+
 		if (-1 != stream_open(&s, p->tmp_buf)) {
 			BUFFER_APPEND_STRING_CONST(out, "<pre class=\"readme\">");
 			buffer_append_string_encoded(out, s.start, s.size, ENCODING_MINIMAL_XML);
@@ -553,7 +553,7 @@ static void http_list_directory_footer(server *srv, connection *con, plugin_data
 		}
 		stream_close(&s);
 	}
-	
+
 	BUFFER_APPEND_STRING_CONST(out,
 		"<div class=\"foot\">"
 	);
@@ -595,7 +595,7 @@ static int http_list_directory(server *srv, connection *con, plugin_data *p, buf
 #endif
 
 	if (dir->used == 0) return -1;
-	
+
 	i = dir->used - 1;
 
 #ifdef HAVE_PATHCONF
@@ -611,14 +611,14 @@ static int http_list_directory(server *srv, connection *con, plugin_data *p, buf
 #else
 	name_max = NAME_MAX;
 #endif
-	
+
 	path = malloc(dir->used + name_max);
 	assert(path);
 	strcpy(path, dir->ptr);
 	path_file = path + i;
 
 	if (NULL == (dp = opendir(path))) {
-		log_error_write(srv, __FILE__, __LINE__, "sbs", 
+		log_error_write(srv, __FILE__, __LINE__, "sbs",
 			"opendir failed:", dir, strerror(errno));
 
 		free(path);
@@ -633,7 +633,7 @@ static int http_list_directory(server *srv, connection *con, plugin_data *p, buf
 	assert(files.ent);
 	files.size = DIRLIST_BLOB_SIZE;
 	files.used = 0;
-	
+
 	while ((dent = readdir(dp)) != NULL) {
 		unsigned short exclude_match = 0;
 
@@ -686,12 +686,12 @@ static int http_list_directory(server *srv, connection *con, plugin_data *p, buf
 #endif
 
 		i = strlen(dent->d_name);
-		
+
 		/* NOTE: the manual says, d_name is never more than NAME_MAX
 		 *       so this should actually not be a buffer-overflow-risk
 		 */
 		if (i > (size_t)name_max) continue;
-		
+
 		memcpy(path_file, dent->d_name, i + 1);
 		if (stat(path, &st) != 0)
 			continue;
@@ -740,7 +740,7 @@ static int http_list_directory(server *srv, connection *con, plugin_data *p, buf
 #else
 		strftime(datebuf, sizeof(datebuf), "%Y-%b-%d %H:%M:%S", localtime(&(tmp->mtime)));
 #endif
-		
+
 		BUFFER_APPEND_STRING_CONST(out, "<tr><td class=\"n\"><a href=\"");
 		buffer_append_string_encoded(out, DIRLIST_ENT_NAME(tmp), tmp->namelen, ENCODING_REL_URI_PART);
 		BUFFER_APPEND_STRING_CONST(out, "/\">");
@@ -758,7 +758,7 @@ static int http_list_directory(server *srv, connection *con, plugin_data *p, buf
 
 		content_type = NULL;
 #ifdef HAVE_XATTR
-		
+
 		if (con->conf.use_xattr) {
 			memcpy(path_file, DIRLIST_ENT_NAME(tmp), tmp->namelen + 1);
 			attrlen = sizeof(attrval) - 1;
@@ -768,7 +768,7 @@ static int http_list_directory(server *srv, connection *con, plugin_data *p, buf
 			}
 		}
 #endif
-		
+
 		if (content_type == NULL) {
 			content_type = "application/octet-stream";
 			for (k = 0; k < con->conf.mimetypes->used; k++) {
@@ -788,7 +788,7 @@ static int http_list_directory(server *srv, connection *con, plugin_data *p, buf
 				}
 			}
 		}
-			
+
 #ifdef HAVE_LOCALTIME_R
 		localtime_r(&(tmp->mtime), &tm);
 		strftime(datebuf, sizeof(datebuf), "%Y-%b-%d %H:%M:%S", &tm);
@@ -837,36 +837,36 @@ static int http_list_directory(server *srv, connection *con, plugin_data *p, buf
 URIHANDLER_FUNC(mod_dirlisting_subrequest) {
 	plugin_data *p = p_d;
 	stat_cache_entry *sce = NULL;
-	
+
 	UNUSED(srv);
-	
+
 	if (con->physical.path->used == 0) return HANDLER_GO_ON;
 	if (con->uri.path->used == 0) return HANDLER_GO_ON;
 	if (con->uri.path->ptr[con->uri.path->used - 2] != '/') return HANDLER_GO_ON;
-	
+
 	mod_dirlisting_patch_connection(srv, con, p);
 
 	if (!p->conf.dir_listing) return HANDLER_GO_ON;
-	
+
 	if (con->conf.log_request_handling) {
 		log_error_write(srv, __FILE__, __LINE__,  "s",  "-- handling the request as Dir-Listing");
 		log_error_write(srv, __FILE__, __LINE__,  "sb", "URI          :", con->uri.path);
 	}
-	
+
 	if (HANDLER_ERROR == stat_cache_get_entry(srv, con, con->physical.path, &sce)) {
 		fprintf(stderr, "%s.%d: %s\n", __FILE__, __LINE__, con->physical.path->ptr);
 		SEGFAULT();
 	}
-	
+
 	if (!S_ISDIR(sce->st.st_mode)) return HANDLER_GO_ON;
-	
+
 	if (http_list_directory(srv, con, p, con->physical.path)) {
 		/* dirlisting failed */
 		con->http_status = 403;
 	}
-	
+
 	buffer_reset(con->physical.path);
-	
+
 	/* not found */
 	return HANDLER_FINISHED;
 }
@@ -876,13 +876,13 @@ URIHANDLER_FUNC(mod_dirlisting_subrequest) {
 int mod_dirlisting_plugin_init(plugin *p) {
 	p->version     = LIGHTTPD_VERSION_ID;
 	p->name        = buffer_init_string("dirlisting");
-	
+
 	p->init        = mod_dirlisting_init;
 	p->handle_subrequest_start  = mod_dirlisting_subrequest;
 	p->set_defaults  = mod_dirlisting_set_defaults;
 	p->cleanup     = mod_dirlisting_free;
-	
+
 	p->data        = NULL;
-	
+
 	return 0;
 }

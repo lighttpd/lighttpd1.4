@@ -12,17 +12,17 @@ Module: mod_webdav
 
 :abstract:
   WebDAV module for lighttpd
-  
+
 .. meta::
   :keywords: lighttpd, webdav
-  
+
 .. contents:: Table of Contents
 
 Description
 ===========
 
 The WebDAV module is a very minimalistic implementation of RFC 2518.
-Minimalistic means that not all operations are implemented yet. 
+Minimalistic means that not all operations are implemented yet.
 
 So far we have
 
@@ -32,7 +32,7 @@ So far we have
  * DELETE
  * PUT
 
-and the usual GET, POST, HEAD from HTTP/1.1. 
+and the usual GET, POST, HEAD from HTTP/1.1.
 
 So far, mounting a WebDAV resource into Windows XP works and the basic litmus
 tests are passed.
@@ -41,9 +41,9 @@ Options
 =======
 
 webdav.activate
-  If you load the webdav module, the WebDAV functionality has to be 
+  If you load the webdav module, the WebDAV functionality has to be
   enabled for the directories you want to provide to the user.
-  
+
   Default: disable
 
 webdav.is-readonly

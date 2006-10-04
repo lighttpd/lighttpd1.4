@@ -17,13 +17,13 @@
 # include <sys/epoll.h>
 #endif
 
-/* MacOS 10.3.x has poll.h under /usr/include/, all other unixes 
+/* MacOS 10.3.x has poll.h under /usr/include/, all other unixes
  * under /usr/include/sys/ */
 #if defined HAVE_POLL && (defined(HAVE_SYS_POLL_H) || defined(HAVE_POLL_H))
 # define USE_POLL
 # ifdef HAVE_POLL_H
 #  include <poll.h>
-# else 
+# else
 #  include <sys/poll.h>
 # endif
 # if defined HAVE_SIGTIMEDWAIT && defined(__linux__)
@@ -67,14 +67,14 @@ typedef handler_t (*fdevent_handler)(void *srv, void *ctx, int revents);
 #define FDEVENT_HUP    BV(4)
 #define FDEVENT_NVAL   BV(5)
 
-typedef enum { FD_EVENT_TYPE_UNSET = -1, 
-		FD_EVENT_TYPE_CONNECTION, 
-		FD_EVENT_TYPE_FCGI_CONNECTION, 
-		FD_EVENT_TYPE_DIRWATCH, 
-		FD_EVENT_TYPE_CGI_CONNECTION 
+typedef enum { FD_EVENT_TYPE_UNSET = -1,
+		FD_EVENT_TYPE_CONNECTION,
+		FD_EVENT_TYPE_FCGI_CONNECTION,
+		FD_EVENT_TYPE_DIRWATCH,
+		FD_EVENT_TYPE_CGI_CONNECTION
 } fd_event_t;
 
-typedef enum { FDEVENT_HANDLER_UNSET, 
+typedef enum { FDEVENT_HANDLER_UNSET,
 		FDEVENT_HANDLER_SELECT,
 		FDEVENT_HANDLER_POLL,
 		FDEVENT_HANDLER_LINUX_RTSIG,
@@ -86,7 +86,7 @@ typedef enum { FDEVENT_HANDLER_UNSET,
 
 /**
  * a mapping from fd to connection structure
- * 
+ *
  */
 typedef struct {
 	int fd;                  /**< the fd */
@@ -98,41 +98,41 @@ typedef struct {
 
 typedef struct {
 	fd_conn *ptr;
-	
+
 	size_t size;
 	size_t used;
 } fd_conn_buffer;
 
 /**
  * array of unused fd's
- * 
+ *
  */
 
 typedef struct _fdnode {
 	fdevent_handler handler;
 	void *ctx;
 	int fd;
-	
+
 	struct _fdnode *prev, *next;
 } fdnode;
 
 typedef struct {
 	int *ptr;
-	
+
 	size_t used;
 	size_t size;
 } buffer_int;
 
 /**
  * fd-event handler for select(), poll() and rt-signals on Linux 2.4
- * 
+ *
  */
 typedef struct fdevents {
 	fdevent_handler_t type;
-	
+
 	fdnode **fdarray;
 	size_t maxfds;
-	
+
 #ifdef USE_LINUX_SIGIO
 	int in_sigio;
 	int signum;
@@ -146,21 +146,21 @@ typedef struct fdevents {
 #endif
 #ifdef USE_POLL
 	struct pollfd *pollfds;
-	
+
 	size_t size;
 	size_t used;
-	
+
 	buffer_int unused;
 #endif
 #ifdef USE_SELECT
 	fd_set select_read;
 	fd_set select_write;
 	fd_set select_error;
-	
+
 	fd_set select_set_read;
 	fd_set select_set_write;
 	fd_set select_set_error;
-	
+
 	int select_max_fd;
 #endif
 #ifdef USE_SOLARIS_DEVPOLL
@@ -177,16 +177,16 @@ typedef struct fdevents {
 #endif
 	int (*reset)(struct fdevents *ev);
 	void (*free)(struct fdevents *ev);
-	
+
 	int (*event_add)(struct fdevents *ev, int fde_ndx, int fd, int events);
 	int (*event_del)(struct fdevents *ev, int fde_ndx, int fd);
 	int (*event_get_revent)(struct fdevents *ev, size_t ndx);
 	int (*event_get_fd)(struct fdevents *ev, size_t ndx);
-	
+
 	int (*event_next_fdndx)(struct fdevents *ev, int ndx);
-	
+
 	int (*poll)(struct fdevents *ev, int timeout_ms);
-	
+
 	int (*fcntl_set)(struct fdevents *ev, int fd);
 } fdevents;
 

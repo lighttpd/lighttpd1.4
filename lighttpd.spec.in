@@ -7,7 +7,7 @@ Packager: Jan Kneschke <jan@kneschke.de>
 License: BSD
 Group: Networking/Daemons
 URL: http://jan.kneschke.de/projects/lighttpd/
-Requires: pcre >= 3.1 zlib 
+Requires: pcre >= 3.1 zlib
 BuildPrereq: libtool zlib-devel
 BuildRoot: %{_tmppath}/%{name}-root
 
@@ -63,7 +63,7 @@ fi
 
 %files
 %defattr(-,root,root)
-%doc doc/lighttpd.conf doc/lighttpd.user README INSTALL ChangeLog COPYING AUTHORS 
+%doc doc/lighttpd.conf doc/lighttpd.user README INSTALL ChangeLog COPYING AUTHORS
 %doc doc/*.txt
 %config(noreplace) %attr(0755,root,root) %{_sysconfdir}/init.d/lighttpd
 %config(noreplace) %attr(0644,root,root) %{_sysconfdir}/sysconfig/lighttpd

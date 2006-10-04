@@ -12,10 +12,10 @@ Module: mod_status
 
 :abstract:
   mod_status displays the server's status and configuration
-  
+
 .. meta::
   :keywords: lighttpd, server status
-  
+
 .. contents:: Table of Contents
 
 Description
@@ -47,8 +47,8 @@ cover it in a conditional. ::
   }
 
 Or require authorization: ::
-  
-  auth.require = ( "/server-status" => 
+
+  auth.require = ( "/server-status" =>
     ( "realm" ... ) )
 
 
@@ -68,7 +68,7 @@ status-url you can get a text version which is simpler to parse. ::
   Uptime: 1234
   BusyServers: 123
 
-Total Accesses is the number of handled requests, kBytes the overall outgoing 
+Total Accesses is the number of handled requests, kBytes the overall outgoing
 traffic, Uptime the uptime in seconds and BusyServers the number of currently
 active connections.
 
@@ -88,7 +88,7 @@ status.status-url
   Example: status.status-url = "/server-status"
 
 status.enable-sort
-  
+
   add JavaScript which allows client-side sorting for the connection overview
 
   Default: enable

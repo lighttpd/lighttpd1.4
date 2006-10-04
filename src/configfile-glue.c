@@ -11,10 +11,10 @@
  * are the external interface of lighttpd. The functions
  * are used by the server itself and the plugins.
  *
- * The main-goal is to have a small library in the end 
- * which is linked against both and which will define 
+ * The main-goal is to have a small library in the end
+ * which is linked against both and which will define
  * the interface itself in the end.
- * 
+ *
  */
 
 
@@ -24,56 +24,56 @@
 int config_insert_values_internal(server *srv, array *ca, const config_values_t cv[]) {
 	size_t i;
 	data_unset *du;
-	
+
 	for (i = 0; cv[i].key; i++) {
-		
+
 		if (NULL == (du = array_get_element(ca, cv[i].key))) {
 			/* no found */
-			
+
 			continue;
 		}
-		
+
 		switch (cv[i].type) {
 		case T_CONFIG_ARRAY:
 			if (du->type == TYPE_ARRAY) {
 				size_t j;
 				data_array *da = (data_array *)du;
-				
+
 				for (j = 0; j < da->value->used; j++) {
 					if (da->value->data[j]->type == TYPE_STRING) {
 						data_string *ds = data_string_init();
-						
+
 						buffer_copy_string_buffer(ds->value, ((data_string *)(da->value->data[j]))->value);
 						if (!da->is_index_key) {
 							/* the id's were generated automaticly, as we copy now we might have to renumber them
-							 * this is used to prepend server.modules by mod_indexfiles as it has to be loaded 
+							 * this is used to prepend server.modules by mod_indexfiles as it has to be loaded
 							 * before mod_fastcgi and friends */
 							buffer_copy_string_buffer(ds->key, ((data_string *)(da->value->data[j]))->key);
 						}
-						
+
 						array_insert_unique(cv[i].destination, (data_unset *)ds);
 					} else {
-						log_error_write(srv, __FILE__, __LINE__, "sssd", 
-								"the key of an array can only be a string or a integer, variable:", 
-								cv[i].key, "type:", da->value->data[j]->type); 
-						
+						log_error_write(srv, __FILE__, __LINE__, "sssd",
+								"the key of an array can only be a string or a integer, variable:",
+								cv[i].key, "type:", da->value->data[j]->type);
+
 						return -1;
 					}
 				}
 			} else {
 				log_error_write(srv, __FILE__, __LINE__, "ss", cv[i].key, "should have been a array of strings like ... = ( \"...\" )");
-				
+
 				return -1;
 			}
 			break;
 		case T_CONFIG_STRING:
 			if (du->type == TYPE_STRING) {
 				data_string *ds = (data_string *)du;
-				
+
 				buffer_copy_string_buffer(cv[i].destination, ds->value);
 			} else {
 				log_error_write(srv, __FILE__, __LINE__, "ssss", cv[i].key, "should have been a string like ... = \"...\"");
-				
+
 				return -1;
 			}
 			break;
@@ -81,15 +81,15 @@ int config_insert_values_internal(server *srv, array *ca, const config_values_t 
 			switch(du->type) {
 			case TYPE_INTEGER: {
 				data_integer *di = (data_integer *)du;
-				
+
 				*((unsigned short *)(cv[i].destination)) = di->value;
 				break;
 			}
 			case TYPE_STRING: {
 				data_string *ds = (data_string *)du;
-					
+
 				log_error_write(srv, __FILE__, __LINE__, "ssb", "got a string but expected a short:", cv[i].key, ds->value);
-				
+
 				return -1;
 			}
 			default:
@@ -100,19 +100,19 @@ int config_insert_values_internal(server *srv, array *ca, const config_values_t 
 		case T_CONFIG_BOOLEAN:
 			if (du->type == TYPE_STRING) {
 				data_string *ds = (data_string *)du;
-				
+
 				if (buffer_is_equal_string(ds->value, CONST_STR_LEN("enable"))) {
 					*((unsigned short *)(cv[i].destination)) = 1;
 				} else if (buffer_is_equal_string(ds->value, CONST_STR_LEN("disable"))) {
 					*((unsigned short *)(cv[i].destination)) = 0;
 				} else {
 					log_error_write(srv, __FILE__, __LINE__, "ssbs", "ERROR: unexpected value for key:", cv[i].key, ds->value, "(enable|disable)");
-						
+
 					return -1;
 				}
 			} else {
 				log_error_write(srv, __FILE__, __LINE__, "ssss", "ERROR: unexpected type for key:", cv[i].key, "(string)", "\"(enable|disable)\"");
-				
+
 				return -1;
 			}
 			break;
@@ -121,15 +121,15 @@ int config_insert_values_internal(server *srv, array *ca, const config_values_t 
 			break;
 		case T_CONFIG_UNSUPPORTED:
 			log_error_write(srv, __FILE__, __LINE__, "ssss", "ERROR: found unsupported key:", cv[i].key, "-", (char *)(cv[i].destination));
-			
+
 			srv->config_unsupported = 1;
-			
+
 			break;
 		case T_CONFIG_DEPRECATED:
 			log_error_write(srv, __FILE__, __LINE__, "ssss", "ERROR: found deprecated key:", cv[i].key, "-", (char *)(cv[i].destination));
-			
+
 			srv->config_deprecated = 1;
-			
+
 			break;
 		}
 	}
@@ -139,25 +139,25 @@ int config_insert_values_internal(server *srv, array *ca, const config_values_t 
 int config_insert_values_global(server *srv, array *ca, const config_values_t cv[]) {
 	size_t i;
 	data_unset *du;
-	
+
 	for (i = 0; cv[i].key; i++) {
 		data_string *touched;
-		
+
 		if (NULL == (du = array_get_element(ca, cv[i].key))) {
 			/* no found */
-			
+
 			continue;
 		}
-		
+
 		/* touched */
 		touched = data_string_init();
-		
+
 		buffer_copy_string(touched->value, "");
 		buffer_copy_string_buffer(touched->key, du->key);
-		
+
 		array_insert_unique(srv->config_touched, (data_unset *)touched);
 	}
-	
+
 	return config_insert_values_internal(srv, ca, cv);
 }
 
@@ -197,25 +197,25 @@ static cond_result_t config_check_cond_nocache(server *srv, connection *con, dat
 	}
 
 	/* pass the rules */
-	
+
 	switch (dc->comp) {
 	case COMP_HTTP_HOST: {
 		char *ck_colon = NULL, *val_colon = NULL;
-		
+
 		if (!buffer_is_empty(con->uri.authority)) {
-		
-			/* 
+
+			/*
 			 * append server-port to the HTTP_POST if necessary
 			 */
-			
+
 			l = con->uri.authority;
-			
+
 			switch(dc->cond) {
 			case CONFIG_COND_NE:
 			case CONFIG_COND_EQ:
 				ck_colon = strchr(dc->string->ptr, ':');
 				val_colon = strchr(l->ptr, ':');
-				
+
 				if (ck_colon == val_colon) {
 					/* nothing to do with it */
 					break;
@@ -242,15 +242,15 @@ static cond_result_t config_check_cond_nocache(server *srv, connection *con, dat
 	}
 	case COMP_HTTP_REMOTEIP: {
 		char *nm_slash;
-		/* handle remoteip limitations 
-		 * 
+		/* handle remoteip limitations
+		 *
 		 * "10.0.0.1" is provided for all comparisions
-		 * 
+		 *
 		 * only for == and != we support
-		 * 
+		 *
 		 * "10.0.0.1/24"
 		 */
-		
+
 		if ((dc->cond == CONFIG_COND_EQ ||
 		     dc->cond == CONFIG_COND_NE) &&
 		    (con->dst_addr.plain.sa_family == AF_INET) &&
@@ -259,41 +259,41 @@ static cond_result_t config_check_cond_nocache(server *srv, connection *con, dat
 			long nm;
 			char *err;
 			struct in_addr val_inp;
-			
+
 			if (*(nm_slash+1) == '\0') {
 				log_error_write(srv, __FILE__, __LINE__, "sb", "ERROR: no number after / ", dc->string);
-					
+
 				return COND_RESULT_FALSE;
 			}
-			
+
 			nm_bits = strtol(nm_slash + 1, &err, 10);
-			
+
 			if (*err) {
 				log_error_write(srv, __FILE__, __LINE__, "sbs", "ERROR: non-digit found in netmask:", dc->string, err);
-				
+
 				return COND_RESULT_FALSE;
 			}
-			
+
 			/* take IP convert to the native */
 			buffer_copy_string_len(srv->cond_check_buf, dc->string->ptr, nm_slash - dc->string->ptr);
-#ifdef __WIN32			
+#ifdef __WIN32
 			if (INADDR_NONE == (val_inp.s_addr = inet_addr(srv->cond_check_buf->ptr))) {
 				log_error_write(srv, __FILE__, __LINE__, "sb", "ERROR: ip addr is invalid:", srv->cond_check_buf);
-				
+
 				return COND_RESULT_FALSE;
 			}
 
 #else
 			if (0 == inet_aton(srv->cond_check_buf->ptr, &val_inp)) {
 				log_error_write(srv, __FILE__, __LINE__, "sb", "ERROR: ip addr is invalid:", srv->cond_check_buf);
-				
+
 				return COND_RESULT_FALSE;
 			}
 #endif
-			
+
 			/* build netmask */
 			nm = htonl(~((1 << (32 - nm_bits)) - 1));
-			
+
 			if ((val_inp.s_addr & nm) == (con->dst_addr.ipv4.sin_addr.s_addr & nm)) {
 				return (dc->cond == CONFIG_COND_EQ) ? COND_RESULT_TRUE : COND_RESULT_FALSE;
 			} else {
@@ -318,7 +318,7 @@ static cond_result_t config_check_cond_nocache(server *srv, connection *con, dat
 
 	case COMP_HTTP_REFERER: {
 		data_string *ds;
-		
+
 		if (NULL != (ds = (data_string *)array_get_element(con->request.headers, "Referer"))) {
 			l = ds->value;
 		} else {
@@ -348,7 +348,7 @@ static cond_result_t config_check_cond_nocache(server *srv, connection *con, dat
 	default:
 		return COND_RESULT_FALSE;
 	}
-	
+
 	if (NULL == l) {
 		if (con->conf.log_condition_handling) {
 			log_error_write(srv, __FILE__, __LINE__,  "bsbs", dc->comp_key,
@@ -356,7 +356,7 @@ static cond_result_t config_check_cond_nocache(server *srv, connection *con, dat
 		}
 		return COND_RESULT_FALSE;
 	}
-	
+
 	if (con->conf.log_condition_handling) {
 		log_error_write(srv, __FILE__, __LINE__,  "bsbsb", dc->comp_key,
 				"(", l, ") compare to ", dc->string);
@@ -375,13 +375,13 @@ static cond_result_t config_check_cond_nocache(server *srv, connection *con, dat
 	case CONFIG_COND_MATCH: {
 		cond_cache_t *cache = &con->cond_cache[dc->context_ndx];
 		int n;
-		
+
 #ifndef elementsof
 #define elementsof(x) (sizeof(x) / sizeof(x[0]))
 #endif
 		n = pcre_exec(dc->regex, dc->regex_study, l->ptr, l->used - 1, 0, 0,
 				cache->matches, elementsof(cache->matches));
-		
+
 		cache->patterncount = n;
 		if (n > 0) {
 			cache->comp_value = l;
@@ -397,7 +397,7 @@ static cond_result_t config_check_cond_nocache(server *srv, connection *con, dat
 		/* no way */
 		break;
 	}
-	
+
 	return COND_RESULT_FALSE;
 }
 
@@ -440,7 +440,7 @@ void config_cond_cache_reset(server *srv, connection *con) {
 		con->cond_cache[i].result = COND_RESULT_UNSET;
 		con->cond_cache[i].patterncount = 0;
 	}
-#else	
+#else
 	memset(con->cond_cache, 0, sizeof(cond_cache_t) * srv->config_context->used);
 #endif
 }

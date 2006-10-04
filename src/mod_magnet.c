@@ -34,36 +34,36 @@ typedef struct {
 
 typedef struct {
 	PLUGIN_DATA;
-	
+
 	script_cache *cache;
 
 	buffer *encode_buf;
-	
+
 	plugin_config **config_storage;
-	
-	plugin_config conf; 
+
+	plugin_config conf;
 } plugin_data;
 
 /* init the plugin data */
 INIT_FUNC(mod_magnet_init) {
 	plugin_data *p;
-	
+
 	p = calloc(1, sizeof(*p));
-	
+
 	p->cache = script_cache_init();
 	p->encode_buf = buffer_init();
-	
+
 	return p;
 }
 
 /* detroy the plugin data */
 FREE_FUNC(mod_magnet_free) {
 	plugin_data *p = p_d;
-	
+
 	UNUSED(srv);
 
 	if (!p) return HANDLER_GO_ON;
-	
+
 	if (p->config_storage) {
 		size_t i;
 
@@ -71,20 +71,20 @@ FREE_FUNC(mod_magnet_free) {
 			plugin_config *s = p->config_storage[i];
 
 			if (!s) continue;
-			
+
 			array_free(s->url_raw);
 			array_free(s->physical_path);
-			
+
 			free(s);
 		}
 		free(p->config_storage);
 	}
-	
+
 	script_cache_free(p->cache);
 	buffer_free(p->encode_buf);
-	
+
 	free(p);
-	
+
 	return HANDLER_GO_ON;
 }
 
@@ -93,34 +93,34 @@ FREE_FUNC(mod_magnet_free) {
 SETDEFAULTS_FUNC(mod_magnet_set_defaults) {
 	plugin_data *p = p_d;
 	size_t i = 0;
-	
-	config_values_t cv[] = { 
+
+	config_values_t cv[] = {
 		{ MAGNET_CONFIG_RAW_URL,       NULL, T_CONFIG_ARRAY, T_CONFIG_SCOPE_CONNECTION },       /* 0 */
 		{ MAGNET_CONFIG_PHYSICAL_PATH, NULL, T_CONFIG_ARRAY, T_CONFIG_SCOPE_CONNECTION },       /* 1 */
 		{ NULL,                           NULL, T_CONFIG_UNSET, T_CONFIG_SCOPE_UNSET }
 	};
-	
+
 	if (!p) return HANDLER_ERROR;
-	
+
 	p->config_storage = calloc(1, srv->config_context->used * sizeof(specific_config *));
-	
+
 	for (i = 0; i < srv->config_context->used; i++) {
 		plugin_config *s;
-		
+
 		s = calloc(1, sizeof(plugin_config));
 		s->url_raw  = array_init();
 		s->physical_path = array_init();
-		
+
 		cv[0].destination = s->url_raw;
 		cv[1].destination = s->physical_path;
-		
+
 		p->config_storage[i] = s;
-	
+
 		if (0 != config_insert_values_global(srv, ((data_config *)srv->config_context->data[i])->value, cv)) {
 			return HANDLER_ERROR;
 		}
 	}
-	
+
 	return HANDLER_GO_ON;
 }
 
@@ -129,22 +129,22 @@ SETDEFAULTS_FUNC(mod_magnet_set_defaults) {
 static int mod_magnet_patch_connection(server *srv, connection *con, plugin_data *p) {
 	size_t i, j;
 	plugin_config *s = p->config_storage[0];
-	
+
 	PATCH(url_raw);
 	PATCH(physical_path);
-	
+
 	/* skip the first, the global context */
 	for (i = 1; i < srv->config_context->used; i++) {
 		data_config *dc = (data_config *)srv->config_context->data[i];
 		s = p->config_storage[i];
-		
+
 		/* condition didn't match */
 		if (!config_check_cond(srv, con, dc)) continue;
-		
+
 		/* merge config */
 		for (j = 0; j < dc->value->used; j++) {
 			data_unset *du = dc->value->data[j];
-			
+
 			if (buffer_is_equal_string(du->key, CONST_STR_LEN(MAGNET_CONFIG_RAW_URL))) {
 				PATCH(url_raw);
 			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN(MAGNET_CONFIG_PHYSICAL_PATH))) {
@@ -152,7 +152,7 @@ static int mod_magnet_patch_connection(server *srv, connection *con, plugin_data
 			}
 		}
 	}
-	
+
 	return 0;
 }
 #undef PATCH
@@ -166,7 +166,7 @@ static int magnet_print(lua_State *L) {
 	srv = lua_touserdata(L, -1);
 	lua_pop(L, 1);
 
-	log_error_write(srv, __FILE__, __LINE__, "ss", 
+	log_error_write(srv, __FILE__, __LINE__, "ss",
 			"(lua-print)", s);
 
 	return 0;
@@ -181,9 +181,9 @@ static int magnet_atpanic(lua_State *L) {
 	srv = lua_touserdata(L, -1);
 	lua_pop(L, 1);
 
-	log_error_write(srv, __FILE__, __LINE__, "ss", 
+	log_error_write(srv, __FILE__, __LINE__, "ss",
 			"(lua-atpanic)", s);
-	
+
 	longjmp(exceptionjmp, 1);
 }
 
@@ -254,7 +254,7 @@ static int magnet_status_set(lua_State *L) {
 
 typedef struct {
 	const char *name;
-	enum { 
+	enum {
 		MAGNET_ENV_UNSET,
 
 		MAGNET_ENV_PHYICAL_PATH,
@@ -291,13 +291,13 @@ static buffer *magnet_env_get_buffer(server *srv, connection *con, const char *k
 		{ "request.method", MAGNET_ENV_REQUEST_METHOD },
 		{ "request.uri", MAGNET_ENV_REQUEST_URI },
 		{ "request.protocol", MAGNET_ENV_REQUEST_PROTOCOL },
-	
+
 		{ NULL, MAGNET_ENV_UNSET }
 	};
 
 
 	/**
-	 * map all internal variables to lua 
+	 * map all internal variables to lua
 	 *
 	 */
 
@@ -414,7 +414,7 @@ static int magnet_copy_response_header(server *srv, connection *con, plugin_data
 
 			lua_pop(L, 1);
 		}
-	} 
+	}
 
 	lua_pop(L, 1); /* pop the header-table */
 	lua_pop(L, 1); /* pop the lighty-env */
@@ -424,12 +424,12 @@ static int magnet_copy_response_header(server *srv, connection *con, plugin_data
 }
 
 /**
- * walk through the content array 
+ * walk through the content array
  *
- * content = { "<pre>", { file = "/content" } , "</pre>" } 
+ * content = { "<pre>", { file = "/content" } , "</pre>" }
  *
  * header["Content-Type"] = "text/html"
- * 
+ *
  * return 200
  */
 static int magnet_attach_content(server *srv, connection *con, plugin_data *p, lua_State *L) {
@@ -489,7 +489,7 @@ static int magnet_attach_content(server *srv, connection *con, plugin_data *p, l
 						if (len < off) {
 							return luaL_error(L, "offset > length for '%s'", fn->ptr);
 						}
-						
+
 						chunkqueue_append_file(con->write_queue, fn, off, len - off);
 					}
 
@@ -534,7 +534,7 @@ static handler_t magnet_attract(server *srv, connection *con, plugin_data *p, bu
 	L = script_cache_get_script(srv, con, p->cache, name);
 
 	if (lua_isstring(L, -1)) {
-		log_error_write(srv, __FILE__, __LINE__, 
+		log_error_write(srv, __FILE__, __LINE__,
 				"sbss",
 				"loading script",
 				name,
@@ -542,7 +542,7 @@ static handler_t magnet_attract(server *srv, connection *con, plugin_data *p, bu
 				lua_tostring(L, -1));
 
 		lua_pop(L, 1);
-		
+
 		assert(lua_gettop(L) == 0); /* only the function should be on the stack */
 
 		con->http_status = 500;
@@ -550,25 +550,25 @@ static handler_t magnet_attract(server *srv, connection *con, plugin_data *p, bu
 		return HANDLER_FINISHED;
 	}
 
-	lua_pushstring(L, "lighty.srv"); 
+	lua_pushstring(L, "lighty.srv");
 	lua_pushlightuserdata(L, srv);
 	lua_settable(L, LUA_REGISTRYINDEX); /* registery[<id>] = srv */
 
-	lua_pushstring(L, "lighty.con"); 
+	lua_pushstring(L, "lighty.con");
 	lua_pushlightuserdata(L, con);
 	lua_settable(L, LUA_REGISTRYINDEX); /* registery[<id>] = con */
 
 	lua_atpanic(L, magnet_atpanic);
 
 	/**
-	 * we want to create empty environment for our script 
-	 * 
+	 * we want to create empty environment for our script
+	 *
 	 * setmetatable({}, {__index = _G})
-	 * 
-	 * if a function, symbol is not defined in our env, __index will lookup 
+	 *
+	 * if a function, symbol is not defined in our env, __index will lookup
 	 * in the global env.
 	 *
-	 * all variables created in the script-env will be thrown 
+	 * all variables created in the script-env will be thrown
 	 * away at the end of the script run.
 	 */
 	lua_newtable(L); /* my empty environment aka {}              (sp += 1) */
@@ -578,8 +578,8 @@ static handler_t magnet_attract(server *srv, connection *con, plugin_data *p, bu
 	lua_setfield(L, -2, "print"); /* -1 is the env we want to set(sp -= 1) */
 
 	/**
-	 * lighty.request[] has the HTTP-request headers 
-	 * lighty.content[] is a table of string/file 
+	 * lighty.request[] has the HTTP-request headers
+	 * lighty.content[] is a table of string/file
 	 * lighty.header[] is a array to set response headers
 	 */
 
@@ -588,25 +588,25 @@ static handler_t magnet_attract(server *srv, connection *con, plugin_data *p, bu
 	lua_newtable(L); /*  {}                                      (sp += 1) */
 	lua_newtable(L); /* the meta-table for the request-table     (sp += 1) */
 	lua_pushcfunction(L, magnet_reqhdr_get);                  /* (sp += 1) */
-	lua_setfield(L, -2, "__index");                           /* (sp -= 1) */    
+	lua_setfield(L, -2, "__index");                           /* (sp -= 1) */
 	lua_setmetatable(L, -2); /* tie the metatable to request     (sp -= 1) */
 	lua_setfield(L, -2, "request"); /* content = {}              (sp -= 1) */
 
 	lua_newtable(L); /*  {}                                      (sp += 1) */
 	lua_newtable(L); /* the meta-table for the request-table     (sp += 1) */
 	lua_pushcfunction(L, magnet_env_get);                     /* (sp += 1) */
-	lua_setfield(L, -2, "__index");                           /* (sp -= 1) */    
+	lua_setfield(L, -2, "__index");                           /* (sp -= 1) */
 	lua_pushcfunction(L, magnet_env_set);                     /* (sp += 1) */
-	lua_setfield(L, -2, "__newindex");                        /* (sp -= 1) */    
+	lua_setfield(L, -2, "__newindex");                        /* (sp -= 1) */
 	lua_setmetatable(L, -2); /* tie the metatable to request     (sp -= 1) */
 	lua_setfield(L, -2, "env"); /* content = {}                  (sp -= 1) */
 
 	lua_newtable(L); /*  {}                                      (sp += 1) */
 	lua_newtable(L); /* the meta-table for the request-table     (sp += 1) */
 	lua_pushcfunction(L, magnet_status_get);                  /* (sp += 1) */
-	lua_setfield(L, -2, "__index");                           /* (sp -= 1) */    
+	lua_setfield(L, -2, "__index");                           /* (sp -= 1) */
 	lua_pushcfunction(L, magnet_status_set);                  /* (sp += 1) */
-	lua_setfield(L, -2, "__newindex");                        /* (sp -= 1) */    
+	lua_setfield(L, -2, "__newindex");                        /* (sp -= 1) */
 	lua_setmetatable(L, -2); /* tie the metatable to request     (sp -= 1) */
 	lua_setfield(L, -2, "status"); /* content = {}               (sp -= 1) */
 
@@ -621,18 +621,18 @@ static handler_t magnet_attract(server *srv, connection *con, plugin_data *p, bu
 	lua_setfield(L, -2, "RESTART_REQUEST");
 
 	lua_setfield(L, -2, "lighty"); /* lighty.*                   (sp -= 1) */
-	
+
 	lua_newtable(L); /* the meta-table for the new env           (sp += 1) */
 	lua_pushvalue(L, LUA_GLOBALSINDEX);                       /* (sp += 1) */
 	lua_setfield(L, -2, "__index"); /* { __index = _G }          (sp -= 1) */
 	lua_setmetatable(L, -2); /* setmetatable({}, {__index = _G}) (sp -= 1) */
-	
+
 
 	lua_setfenv(L, -2); /* on the stack should be a modified env (sp -= 1) */
 
 	if (lua_pcall(L, 0, 1, 0)) {
-		log_error_write(srv, __FILE__, __LINE__, 
-			"ss", 
+		log_error_write(srv, __FILE__, __LINE__,
+			"ss",
 			"lua_pcall():",
 			lua_tostring(L, -1));
 		lua_pop(L, 1); /* remove the error-msg and the function copy from the stack */
@@ -658,7 +658,7 @@ static handler_t magnet_attract(server *srv, connection *con, plugin_data *p, bu
 	if (lua_return_value > 99) {
 		con->http_status = lua_return_value;
 		con->file_finished = 1;
-	
+
 		/* try { ...*/
 		if (0 == setjmp(exceptionjmp)) {
 			magnet_attach_content(srv, con, p, L);
@@ -666,7 +666,7 @@ static handler_t magnet_attract(server *srv, connection *con, plugin_data *p, bu
 			/* } catch () { */
 			con->http_status = 500;
 		}
-	
+
 		assert(lua_gettop(L) == 1); /* only the function should be on the stack */
 
 		/* we are finished */
@@ -677,7 +677,7 @@ static handler_t magnet_attract(server *srv, connection *con, plugin_data *p, bu
 		return HANDLER_COMEBACK;
 	} else {
 		assert(lua_gettop(L) == 1); /* only the function should be on the stack */
-	
+
 		return HANDLER_GO_ON;
 	}
 }
@@ -696,7 +696,7 @@ static handler_t magnet_attract_array(server *srv, connection *con, plugin_data 
 		handler_t ret;
 
 		if (buffer_is_empty(ds->value)) continue;
-		
+
 		ret = magnet_attract(srv, con, p, ds->value);
 
 		if (ret != HANDLER_GO_ON) return ret;
@@ -707,7 +707,7 @@ static handler_t magnet_attract_array(server *srv, connection *con, plugin_data 
 
 URIHANDLER_FUNC(mod_magnet_uri_handler) {
 	plugin_data *p = p_d;
-	
+
 	mod_magnet_patch_connection(srv, con, p);
 
 	return magnet_attract_array(srv, con, p, p->conf.url_raw);
@@ -715,7 +715,7 @@ URIHANDLER_FUNC(mod_magnet_uri_handler) {
 
 URIHANDLER_FUNC(mod_magnet_physical) {
 	plugin_data *p = p_d;
-	
+
 	mod_magnet_patch_connection(srv, con, p);
 
 	return magnet_attract_array(srv, con, p, p->conf.physical_path);
@@ -727,15 +727,15 @@ URIHANDLER_FUNC(mod_magnet_physical) {
 int mod_magnet_plugin_init(plugin *p) {
 	p->version     = LIGHTTPD_VERSION_ID;
 	p->name        = buffer_init_string("magnet");
-	
+
 	p->init        = mod_magnet_init;
 	p->handle_uri_clean  = mod_magnet_uri_handler;
 	p->handle_physical   = mod_magnet_physical;
 	p->set_defaults  = mod_magnet_set_defaults;
 	p->cleanup     = mod_magnet_free;
-	
+
 	p->data        = NULL;
-	
+
 	return 0;
 }
 

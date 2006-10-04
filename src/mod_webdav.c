@@ -1160,8 +1160,8 @@ int webdav_has_lock(server *srv, connection *con, plugin_data *p, buffer *uri) {
 	 *
 	 * X-Litmus: locks: 11 (owner_modify)
 	 * If: <http://127.0.0.1:1025/dav/litmus/lockme> (<opaquelocktoken:2165478d-0611-49c4-be92-e790d68a38f1>)
-	 * - a tagged check: 
-	 *   if http://127.0.0.1:1025/dav/litmus/lockme is locked with 
+	 * - a tagged check:
+	 *   if http://127.0.0.1:1025/dav/litmus/lockme is locked with
 	 *   opaquelocktoken:2165478d-0611-49c4-be92-e790d68a38f1, go on
 	 *
 	 * X-Litmus: locks: 16 (fail_cond_put)
@@ -1172,7 +1172,7 @@ int webdav_has_lock(server *srv, connection *con, plugin_data *p, buffer *uri) {
 	if (NULL != (ds = (data_string *)array_get_element(con->request.headers, "If"))) {
 		/* Ooh, ooh. A if tag, now the fun begins.
 		 *
-		 * this can only work with a real parser 
+		 * this can only work with a real parser
 		 **/
 	} else {
 		/* we didn't provided a lock-token -> */

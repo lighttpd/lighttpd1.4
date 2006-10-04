@@ -72,9 +72,9 @@ static void sigaction_handler(int sig, siginfo_t *si, void *context) {
 
 	switch (sig) {
 	case SIGTERM: srv_shutdown = 1; break;
-	case SIGINT: 
+	case SIGINT:
 	     if (graceful_shutdown) srv_shutdown = 1;
-	     else graceful_shutdown = 1; 
+	     else graceful_shutdown = 1;
 
 	     break;
 	case SIGALRM: handle_sig_alarm = 1; break;
@@ -86,9 +86,9 @@ static void sigaction_handler(int sig, siginfo_t *si, void *context) {
 static void signal_handler(int sig) {
 	switch (sig) {
 	case SIGTERM: srv_shutdown = 1; break;
-	case SIGINT: 
+	case SIGINT:
 	     if (graceful_shutdown) srv_shutdown = 1;
-	     else graceful_shutdown = 1; 
+	     else graceful_shutdown = 1;
 
 	     break;
 	case SIGALRM: handle_sig_alarm = 1; break;
@@ -110,25 +110,25 @@ static void daemonize(void) {
 	signal(SIGTSTP, SIG_IGN);
 #endif
 	if (0 != fork()) exit(0);
-	
+
 	if (-1 == setsid()) exit(0);
 
 	signal(SIGHUP, SIG_IGN);
 
 	if (0 != fork()) exit(0);
-	
+
 	if (0 != chdir("/")) exit(0);
 }
 #endif
 
 static server *server_init(void) {
 	int i;
-	
+
 	server *srv = calloc(1, sizeof(*srv));
 	assert(srv);
 #define CLEAN(x) \
 	srv->x = buffer_init();
-	
+
 	CLEAN(response_header);
 	CLEAN(parse_full_path);
 	CLEAN(ts_debug_str);
@@ -138,7 +138,7 @@ static server *server_init(void) {
 	CLEAN(tmp_buf);
 	srv->empty_string = buffer_init_string("");
 	CLEAN(cond_check_buf);
-	
+
 	CLEAN(srvconf.errorlog_file);
 	CLEAN(srvconf.groupname);
 	CLEAN(srvconf.username);
@@ -146,58 +146,58 @@ static server *server_init(void) {
 	CLEAN(srvconf.bindhost);
 	CLEAN(srvconf.event_handler);
 	CLEAN(srvconf.pid_file);
-	
+
 	CLEAN(tmp_chunk_len);
 #undef CLEAN
-	
+
 #define CLEAN(x) \
 	srv->x = array_init();
-	
+
 	CLEAN(config_context);
 	CLEAN(config_touched);
 	CLEAN(status);
 #undef CLEAN
-	
+
 	for (i = 0; i < FILE_CACHE_MAX; i++) {
 		srv->mtime_cache[i].str = buffer_init();
 	}
-	
+
 	srv->cur_ts = time(NULL);
 	srv->startup_ts = srv->cur_ts;
-	
+
 	srv->conns = calloc(1, sizeof(*srv->conns));
 	assert(srv->conns);
-	
+
 	srv->joblist = calloc(1, sizeof(*srv->joblist));
 	assert(srv->joblist);
-	
+
 	srv->fdwaitqueue = calloc(1, sizeof(*srv->fdwaitqueue));
 	assert(srv->fdwaitqueue);
-	
+
 	srv->srvconf.modules = array_init();
 	srv->srvconf.modules_dir = buffer_init_string(LIBRARY_DIR);
 	srv->srvconf.network_backend = buffer_init();
 	srv->srvconf.upload_tempdirs = array_init();
-	
+
 	/* use syslog */
 	srv->errorlog_fd = -1;
 	srv->errorlog_mode = ERRORLOG_STDERR;
 
 	srv->split_vals = array_init();
-	
+
 	return srv;
 }
 
 static void server_free(server *srv) {
 	size_t i;
-	
+
 	for (i = 0; i < FILE_CACHE_MAX; i++) {
 		buffer_free(srv->mtime_cache[i].str);
 	}
-	
+
 #define CLEAN(x) \
 	buffer_free(srv->x);
-	
+
 	CLEAN(response_header);
 	CLEAN(parse_full_path);
 	CLEAN(ts_debug_str);
@@ -207,7 +207,7 @@ static void server_free(server *srv) {
 	CLEAN(tmp_buf);
 	CLEAN(empty_string);
 	CLEAN(cond_check_buf);
-	
+
 	CLEAN(srvconf.errorlog_file);
 	CLEAN(srvconf.groupname);
 	CLEAN(srvconf.username);
@@ -217,7 +217,7 @@ static void server_free(server *srv) {
 	CLEAN(srvconf.pid_file);
 	CLEAN(srvconf.modules_dir);
 	CLEAN(srvconf.network_backend);
-	
+
 	CLEAN(tmp_chunk_len);
 #undef CLEAN
 
@@ -225,15 +225,15 @@ static void server_free(server *srv) {
 	fdevent_unregister(srv->ev, srv->fd);
 #endif
 	fdevent_free(srv->ev);
-	
+
 	free(srv->conns);
-	
+
 	if (srv->config_storage) {
 		for (i = 0; i < srv->config_context->used; i++) {
 			specific_config *s = srv->config_storage[i];
 
 			if (!s) continue;
-			
+
 			buffer_free(s->document_root);
 			buffer_free(s->server_name);
 			buffer_free(s->server_tag);
@@ -242,32 +242,32 @@ static void server_free(server *srv) {
 			buffer_free(s->error_handler);
 			buffer_free(s->errorfile_prefix);
 			array_free(s->mimetypes);
-			
+
 			free(s);
 		}
 		free(srv->config_storage);
 		srv->config_storage = NULL;
 	}
-	
+
 #define CLEAN(x) \
 	array_free(srv->x);
-	
+
 	CLEAN(config_context);
 	CLEAN(config_touched);
 	CLEAN(status);
 	CLEAN(srvconf.upload_tempdirs);
 #undef CLEAN
-	
+
 	joblist_free(srv, srv->joblist);
 	fdwaitqueue_free(srv, srv->fdwaitqueue);
-	
+
 	if (srv->stat_cache) {
 		stat_cache_free(srv->stat_cache);
 	}
 
 	array_free(srv->srvconf.modules);
 	array_free(srv->split_vals);
-	
+
 	free(srv);
 }
 
@@ -281,7 +281,7 @@ static void show_version (void) {
 " - a light and fast webserver\n" \
 "Build-Date: " __DATE__ " " __TIME__ "\n";
 ;
-#undef TEXT_SSL	
+#undef TEXT_SSL
 	write(STDOUT_FILENO, b, strlen(b));
 }
 
@@ -427,7 +427,7 @@ static void show_help (void) {
 " -h         show this help\n" \
 "\n"
 ;
-#undef TEXT_SSL	
+#undef TEXT_SSL
 #undef TEXT_IPV6
 	write(STDOUT_FILENO, b, strlen(b));
 }
@@ -447,27 +447,27 @@ int main (int argc, char **argv) {
 #ifdef HAVE_GETRLIMIT
 	struct rlimit rlim;
 #endif
-	
+
 #ifdef USE_ALARM
 	struct itimerval interval;
-	
+
 	interval.it_interval.tv_sec = 1;
 	interval.it_interval.tv_usec = 0;
 	interval.it_value.tv_sec = 1;
 	interval.it_value.tv_usec = 0;
 #endif
-	
-	
+
+
 	/* for nice %b handling in strfime() */
 	setlocale(LC_TIME, "C");
-	
+
 	if (NULL == (srv = server_init())) {
 		fprintf(stderr, "did this really happen?\n");
 		return -1;
 	}
-	
+
 	/* init structs done */
-	
+
 	srv->srvconf.port = 0;
 #ifdef HAVE_GETUID
 	i_am_root = (getuid() == 0);
@@ -475,11 +475,11 @@ int main (int argc, char **argv) {
 	i_am_root = 0;
 #endif
 	srv->srvconf.dont_daemonize = 0;
-	
+
 	while(-1 != (o = getopt(argc, argv, "f:m:hvVDpt"))) {
 		switch(o) {
-		case 'f': 
-			if (config_read(srv, optarg)) { 
+		case 'f':
+			if (config_read(srv, optarg)) {
 				server_free(srv);
 				return -1;
 			}
@@ -491,23 +491,23 @@ int main (int argc, char **argv) {
 		case 't': test_config = 1; break;
 		case 'D': srv->srvconf.dont_daemonize = 1; break;
 		case 'v': show_version(); return 0;
-		case 'V': show_features(); return 0;          
+		case 'V': show_features(); return 0;
 		case 'h': show_help(); return 0;
-		default: 
+		default:
 			show_help();
 			server_free(srv);
 			return -1;
 		}
 	}
-	
+
 	if (!srv->config_storage) {
 		log_error_write(srv, __FILE__, __LINE__, "s",
 				"No configuration available. Try using -f option.");
-		
+
 		server_free(srv);
 		return -1;
 	}
-	
+
 	if (print_config) {
 		data_unset *dc = srv->config_context->data[0];
 		if (dc) {
@@ -527,7 +527,7 @@ int main (int argc, char **argv) {
 		server_free(srv);
 		return 0;
 	}
-	
+
 	/* close stdin and stdout, as they are not needed */
 	/* move stdin to /dev/null */
 	if (-1 != (fd = open("/dev/null", O_RDONLY))) {
@@ -535,54 +535,54 @@ int main (int argc, char **argv) {
 		dup2(fd, STDIN_FILENO);
 		close(fd);
 	}
-	
+
 	/* move stdout to /dev/null */
 	if (-1 != (fd = open("/dev/null", O_WRONLY))) {
 		close(STDOUT_FILENO);
 		dup2(fd, STDOUT_FILENO);
 		close(fd);
 	}
-	
+
 	if (0 != config_set_defaults(srv)) {
-		log_error_write(srv, __FILE__, __LINE__, "s", 
+		log_error_write(srv, __FILE__, __LINE__, "s",
 				"setting default values failed");
 		server_free(srv);
 		return -1;
 	}
-	
+
 	/* UID handling */
 #ifdef HAVE_GETUID
 	if (!i_am_root && (geteuid() == 0 || getegid() == 0)) {
 		/* we are setuid-root */
-		
-		log_error_write(srv, __FILE__, __LINE__, "s", 
+
+		log_error_write(srv, __FILE__, __LINE__, "s",
 				"Are you nuts ? Don't apply a SUID bit to this binary");
-		
+
 		server_free(srv);
 		return -1;
 	}
 #endif
-	
+
 	/* check document-root */
 	if (srv->config_storage[0]->document_root->used <= 1) {
-		log_error_write(srv, __FILE__, __LINE__, "s", 
+		log_error_write(srv, __FILE__, __LINE__, "s",
 				"document-root is not set\n");
-		
+
 		server_free(srv);
-		
+
 		return -1;
 	}
-	
+
 	if (plugins_load(srv)) {
 		log_error_write(srv, __FILE__, __LINE__, "s",
 				"loading plugins finally failed");
-		
+
 		plugins_free(srv);
 		server_free(srv);
-		
+
 		return -1;
 	}
-	
+
 	/* open pid file BEFORE chroot */
 	if (srv->srvconf.pid_file->used) {
 		if (-1 == (pid_fd = open(srv->srvconf.pid_file->ptr, O_WRONLY | O_CREAT | O_EXCL | O_TRUNC, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH))) {
@@ -592,18 +592,18 @@ int main (int argc, char **argv) {
 					"opening pid-file failed:", srv->srvconf.pid_file, strerror(errno));
 				return -1;
 			}
-			
+
 			if (0 != stat(srv->srvconf.pid_file->ptr, &st)) {
 				log_error_write(srv, __FILE__, __LINE__, "sbs",
 						"stating existing pid-file failed:", srv->srvconf.pid_file, strerror(errno));
 			}
-			
+
 			if (!S_ISREG(st.st_mode)) {
 				log_error_write(srv, __FILE__, __LINE__, "sb",
 						"pid-file exists and isn't regular file:", srv->srvconf.pid_file);
 				return -1;
 			}
-			
+
 			if (-1 == (pid_fd = open(srv->srvconf.pid_file->ptr, O_WRONLY | O_CREAT | O_TRUNC, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH))) {
 				log_error_write(srv, __FILE__, __LINE__, "sbs",
 						"opening pid-file failed:", srv->srvconf.pid_file, strerror(errno));
@@ -630,7 +630,7 @@ int main (int argc, char **argv) {
 #ifdef HAVE_VALGRIND_VALGRIND_H
 		if (RUNNING_ON_VALGRIND) use_rlimit = 0;
 #endif
-		
+
 #ifdef HAVE_GETRLIMIT
 		if (0 != getrlimit(RLIMIT_NOFILE, &rlim)) {
 			log_error_write(srv, __FILE__, __LINE__,
@@ -638,13 +638,13 @@ int main (int argc, char **argv) {
 					strerror(errno));
 			return -1;
 		}
-		
+
 		if (use_rlimit && srv->srvconf.max_fds) {
 			/* set rlimits */
-			
+
 			rlim.rlim_cur = srv->srvconf.max_fds;
 			rlim.rlim_max = srv->srvconf.max_fds;
-			
+
 			if (0 != setrlimit(RLIMIT_NOFILE, &rlim)) {
 				log_error_write(srv, __FILE__, __LINE__,
 						"ss", "couldn't set 'max filedescriptors'",
@@ -653,7 +653,7 @@ int main (int argc, char **argv) {
 			}
 		}
 
-		/* #372: solaris need some fds extra for devpoll */	
+		/* #372: solaris need some fds extra for devpoll */
 		if (rlim.rlim_cur > 10) rlim.rlim_cur -= 10;
 
 		if (srv->event_handler == FDEVENT_HANDLER_SELECT) {
@@ -671,33 +671,33 @@ int main (int argc, char **argv) {
 		if (srv->event_handler == FDEVENT_HANDLER_SELECT) {
 			/* don't raise the limit above FD_SET_SIZE */
 			if (srv->max_fds > FD_SETSIZE - 200) {
-				log_error_write(srv, __FILE__, __LINE__, "sd", 
+				log_error_write(srv, __FILE__, __LINE__, "sd",
 						"can't raise max filedescriptors above",  FD_SETSIZE - 200,
 						"if event-handler is 'select'. Use 'poll' or something else or reduce server.max-fds.");
 				return -1;
 			}
 		}
 
-		
+
 #ifdef HAVE_PWD_H
 		/* set user and group */
 		if (srv->srvconf.username->used) {
 			if (NULL == (pwd = getpwnam(srv->srvconf.username->ptr))) {
-				log_error_write(srv, __FILE__, __LINE__, "sb", 
+				log_error_write(srv, __FILE__, __LINE__, "sb",
 						"can't find username", srv->srvconf.username);
 				return -1;
 			}
-			
+
 			if (pwd->pw_uid == 0) {
 				log_error_write(srv, __FILE__, __LINE__, "s",
 						"I will not set uid to 0\n");
 				return -1;
 			}
 		}
-		
+
 		if (srv->srvconf.groupname->used) {
 			if (NULL == (grp = getgrnam(srv->srvconf.groupname->ptr))) {
-				log_error_write(srv, __FILE__, __LINE__, "sb", 
+				log_error_write(srv, __FILE__, __LINE__, "sb",
 					"can't find groupname", srv->srvconf.groupname);
 				return -1;
 			}
@@ -707,15 +707,15 @@ int main (int argc, char **argv) {
 				return -1;
 			}
 		}
-#endif		
+#endif
 		/* we need root-perms for port < 1024 */
 		if (0 != network_init(srv)) {
 			plugins_free(srv);
 			server_free(srv);
-			
+
 			return -1;
 		}
-#ifdef HAVE_CHROOT	
+#ifdef HAVE_CHROOT
 		if (srv->srvconf.changeroot->used) {
 			tzset();
 
@@ -735,7 +735,7 @@ int main (int argc, char **argv) {
 			setgid(grp->gr_gid);
 			setgroups(0, NULL);
 		}
-		
+
 		if (srv->srvconf.username->used) {
 			if (srv->srvconf.groupname->used) {
 				initgroups(srv->srvconf.username->ptr, grp->gr_gid);
@@ -774,17 +774,17 @@ int main (int argc, char **argv) {
 		if (srv->event_handler == FDEVENT_HANDLER_SELECT) {
 			/* don't raise the limit above FD_SET_SIZE */
 			if (srv->max_fds > FD_SETSIZE - 200) {
-				log_error_write(srv, __FILE__, __LINE__, "sd", 
+				log_error_write(srv, __FILE__, __LINE__, "sd",
 						"can't raise max filedescriptors above",  FD_SETSIZE - 200,
 						"if event-handler is 'select'. Use 'poll' or something else or reduce server.max-fds.");
 				return -1;
 			}
 		}
-		
+
 		if (0 != network_init(srv)) {
 			plugins_free(srv);
 			server_free(srv);
-			
+
 			return -1;
 		}
 	}
@@ -800,25 +800,25 @@ int main (int argc, char **argv) {
 		/* or use the default */
 		srv->max_conns = srv->max_fds;
 	}
-	
+
 	if (HANDLER_GO_ON != plugins_call_init(srv)) {
 		log_error_write(srv, __FILE__, __LINE__, "s", "Initialization of plugins failed. Going down.");
-		
+
 		plugins_free(srv);
 		network_close(srv);
 		server_free(srv);
-		
+
 		return -1;
 	}
 
-#ifdef HAVE_FORK	
+#ifdef HAVE_FORK
 	/* network is up, let's deamonize ourself */
 	if (srv->srvconf.dont_daemonize == 0) daemonize();
 #endif
 
 	srv->gid = getgid();
 	srv->uid = getuid();
-	
+
 	/* write pid file */
 	if (pid_fd != -1) {
 		buffer_copy_long(srv->tmp_buf, getpid());
@@ -827,17 +827,17 @@ int main (int argc, char **argv) {
 		close(pid_fd);
 		pid_fd = -1;
 	}
-	
+
 	if (HANDLER_GO_ON != plugins_call_set_defaults(srv)) {
 		log_error_write(srv, __FILE__, __LINE__, "s", "Configuration of plugins failed. Going down.");
-		
+
 		plugins_free(srv);
 		network_close(srv);
 		server_free(srv);
-		
+
 		return -1;
 	}
-	
+
 	/* dump unused config-keys */
 	for (i = 0; i < srv->config_context->used; i++) {
 		array *config = ((data_config *)srv->config_context->data[i])->value;
@@ -845,14 +845,14 @@ int main (int argc, char **argv) {
 
 		for (j = 0; config && j < config->used; j++) {
 			data_unset *du = config->data[j];
-			
+
 			/* all var.* is known as user defined variable */
 			if (strncmp(du->key->ptr, "var.", sizeof("var.") - 1) == 0) {
 				continue;
 			}
 
 			if (NULL == array_get_element(srv->config_touched, du->key->ptr)) {
-				log_error_write(srv, __FILE__, __LINE__, "sbs", 
+				log_error_write(srv, __FILE__, __LINE__, "sbs",
 						"WARNING: unknown config-key:",
 						du->key,
 						"(ignored)");
@@ -861,12 +861,12 @@ int main (int argc, char **argv) {
 	}
 
 	if (srv->config_unsupported) {
-		log_error_write(srv, __FILE__, __LINE__, "s", 
+		log_error_write(srv, __FILE__, __LINE__, "s",
 				"Configuration contains unsupported keys. Going down.");
 	}
 
 	if (srv->config_deprecated) {
-		log_error_write(srv, __FILE__, __LINE__, "s", 
+		log_error_write(srv, __FILE__, __LINE__, "s",
 				"Configuration contains deprecated keys. Going down.");
 	}
 
@@ -879,7 +879,7 @@ int main (int argc, char **argv) {
 	}
 
 	if (-1 == log_error_open(srv)) {
-		log_error_write(srv, __FILE__, __LINE__, "s", 
+		log_error_write(srv, __FILE__, __LINE__, "s",
 				"opening errorlog failed, dying");
 
 		plugins_free(srv);
@@ -887,8 +887,8 @@ int main (int argc, char **argv) {
 		server_free(srv);
 		return -1;
 	}
-	
-	
+
+
 #ifdef HAVE_SIGACTION
 	memset(&act, 0, sizeof(act));
 	act.sa_handler = SIG_IGN;
@@ -908,7 +908,7 @@ int main (int argc, char **argv) {
 	sigaction(SIGHUP,  &act, NULL);
 	sigaction(SIGALRM, &act, NULL);
 	sigaction(SIGCHLD, &act, NULL);
-	
+
 #elif defined(HAVE_SIGNAL)
 	/* ignore the SIGPIPE from sendfile() */
 	signal(SIGPIPE, SIG_IGN);
@@ -919,20 +919,20 @@ int main (int argc, char **argv) {
 	signal(SIGCHLD,  signal_handler);
 	signal(SIGINT,  signal_handler);
 #endif
-	
+
 #ifdef USE_ALARM
 	signal(SIGALRM, signal_handler);
-	
+
 	/* setup periodic timer (1 second) */
 	if (setitimer(ITIMER_REAL, &interval, NULL)) {
 		log_error_write(srv, __FILE__, __LINE__, "s", "setting timer failed");
 		return -1;
 	}
-	
+
 	getitimer(ITIMER_REAL, &interval);
 #endif
 
-#ifdef HAVE_FORK	
+#ifdef HAVE_FORK
 	/* start watcher and workers */
 	num_childs = srv->srvconf.max_worker;
 	if (num_childs > 0) {
@@ -968,8 +968,8 @@ int main (int argc, char **argv) {
 				"s", "fdevent_init failed");
 		return -1;
 	}
-	/* 
-	 * kqueue() is called here, select resets its internals, 
+	/*
+	 * kqueue() is called here, select resets its internals,
 	 * all server sockets get their handlers
 	 *
 	 * */
@@ -977,7 +977,7 @@ int main (int argc, char **argv) {
 		plugins_free(srv);
 		network_close(srv);
 		server_free(srv);
-		
+
 		return -1;
 	}
 
@@ -992,7 +992,7 @@ int main (int argc, char **argv) {
 	/* setup FAM */
 	if (srv->srvconf.stat_cache_engine == STAT_CACHE_ENGINE_FAM) {
 		if (0 != FAMOpen2(srv->stat_cache->fam, "lighttpd")) {
-			log_error_write(srv, __FILE__, __LINE__, "s", 
+			log_error_write(srv, __FILE__, __LINE__, "s",
 					 "could not open a fam connection, dieing.");
 			return -1;
 		}
@@ -1024,16 +1024,16 @@ int main (int argc, char **argv) {
 		int n;
 		size_t ndx;
 		time_t min_ts;
-		
+
 		if (handle_sig_hup) {
 			handler_t r;
-			
+
 			/* reset notification */
 			handle_sig_hup = 0;
-			
-			
+
+
 			/* cycle logfiles */
-			
+
 			switch(r = plugins_call_handle_sighup(srv)) {
 			case HANDLER_GO_ON:
 				break;
@@ -1041,30 +1041,30 @@ int main (int argc, char **argv) {
 				log_error_write(srv, __FILE__, __LINE__, "sd", "sighup-handler return with an error", r);
 				break;
 			}
-			
+
 			if (-1 == log_error_cycle(srv)) {
 				log_error_write(srv, __FILE__, __LINE__, "s", "cycling errorlog failed, dying");
-				
+
 				return -1;
 			}
 		}
-		
+
 		if (handle_sig_alarm) {
 			/* a new second */
-			
+
 #ifdef USE_ALARM
 			/* reset notification */
 			handle_sig_alarm = 0;
 #endif
-			
+
 			/* get current time */
 			min_ts = time(NULL);
-			
+
 			if (min_ts != srv->cur_ts) {
 				int cs = 0;
 				connections *conns = srv->conns;
 				handler_t r;
-				
+
 				switch(r = plugins_call_handle_trigger(srv)) {
 				case HANDLER_GO_ON:
 					break;
@@ -1075,21 +1075,21 @@ int main (int argc, char **argv) {
 					log_error_write(srv, __FILE__, __LINE__, "d", r);
 					break;
 				}
-				
+
 				/* trigger waitpid */
 				srv->cur_ts = min_ts;
-			
-				/* cleanup stat-cache */	
+
+				/* cleanup stat-cache */
 				stat_cache_trigger_cleanup(srv);
 				/**
-				 * check all connections for timeouts 
-				 * 
+				 * check all connections for timeouts
+				 *
 				 */
 				for (ndx = 0; ndx < conns->used; ndx++) {
 					int changed = 0;
 					connection *con;
 					int t_diff;
-					
+
 					con = conns->ptr[ndx];
 
 					if (con->state == CON_STATE_READ ||
@@ -1098,7 +1098,7 @@ int main (int argc, char **argv) {
 							if (srv->cur_ts - con->read_idle_ts > con->conf.max_read_idle) {
 								/* time - out */
 #if 0
-								log_error_write(srv, __FILE__, __LINE__, "sd", 
+								log_error_write(srv, __FILE__, __LINE__, "sd",
 										"connection closed - read-timeout:", con->fd);
 #endif
 								connection_set_state(srv, con, CON_STATE_ERROR);
@@ -1108,7 +1108,7 @@ int main (int argc, char **argv) {
 							if (srv->cur_ts - con->read_idle_ts > con->conf.max_keep_alive_idle) {
 								/* time - out */
 #if 0
-								log_error_write(srv, __FILE__, __LINE__, "sd", 
+								log_error_write(srv, __FILE__, __LINE__, "sd",
 										"connection closed - read-timeout:", con->fd);
 #endif
 								connection_set_state(srv, con, CON_STATE_ERROR);
@@ -1116,20 +1116,20 @@ int main (int argc, char **argv) {
 							}
 						}
 					}
-					
+
 					if ((con->state == CON_STATE_WRITE) &&
-					    (con->write_request_ts != 0)) { 
+					    (con->write_request_ts != 0)) {
 #if 0
 						if (srv->cur_ts - con->write_request_ts > 60) {
-							log_error_write(srv, __FILE__, __LINE__, "sdd", 
+							log_error_write(srv, __FILE__, __LINE__, "sdd",
 									"connection closed - pre-write-request-timeout:", con->fd, srv->cur_ts - con->write_request_ts);
 						}
 #endif
-						
+
 						if (srv->cur_ts - con->write_request_ts > con->conf.max_write_idle) {
 							/* time - out */
 #if 1
-							log_error_write(srv, __FILE__, __LINE__, "sbsosds", 
+							log_error_write(srv, __FILE__, __LINE__, "sbsosds",
 									"NOTE: a request for",
 									con->request.uri,
 									"timed out after writing",
@@ -1144,35 +1144,35 @@ int main (int argc, char **argv) {
 					}
 					/* we don't like div by zero */
 					if (0 == (t_diff = srv->cur_ts - con->connection_start)) t_diff = 1;
-	
-					if (con->traffic_limit_reached && 
-					    (con->conf.kbytes_per_second == 0 || 
+
+					if (con->traffic_limit_reached &&
+					    (con->conf.kbytes_per_second == 0 ||
 					     ((con->bytes_written / t_diff) < con->conf.kbytes_per_second * 1024))) {
 						/* enable connection again */
 						con->traffic_limit_reached = 0;
-						
+
 						changed = 1;
 					}
-					
+
 					if (changed) {
 						connection_state_machine(srv, con);
 					}
 					con->bytes_written_cur_second = 0;
 					*(con->conf.global_bytes_per_second_cnt_ptr) = 0;
-					
+
 #if 0
 					if (cs == 0) {
 						fprintf(stderr, "connection-state: ");
 						cs = 1;
 					}
-					
+
 					fprintf(stderr, "c[%d,%d]: %s ",
 						con->fd,
 						con->fcgi.fd,
 						connection_get_state(con->state));
 #endif
 				}
-				
+
 				if (cs == 1) fprintf(stderr, "\n");
 			}
 		}
@@ -1187,18 +1187,18 @@ int main (int argc, char **argv) {
 					server_socket *srv_socket = srv->srv_sockets.ptr[i];
 					fdevent_event_add(srv->ev, &(srv_socket->fde_ndx), srv_socket->fd, FDEVENT_IN);
 				}
-			
+
 				log_error_write(srv, __FILE__, __LINE__, "s", "[note] sockets enabled again");
-			
+
 				srv->sockets_disabled = 0;
 			}
 		} else {
 			if ((srv->cur_fds + srv->want_fds > srv->max_fds * 0.9) || /* out of fds */
 			    (srv->conns->used > srv->max_conns) || /* out of connections */
-			    (graceful_shutdown)) { /* graceful_shutdown */ 
+			    (graceful_shutdown)) { /* graceful_shutdown */
 
 				/* disable server-fds */
-			
+
 				for (i = 0; i < srv->srv_sockets.used; i++) {
 					server_socket *srv_socket = srv->srv_sockets.ptr[i];
 					fdevent_event_del(srv->ev, &(srv_socket->fde_ndx), srv_socket->fd);
@@ -1217,7 +1217,7 @@ int main (int argc, char **argv) {
 						/* network_close() will cleanup after us */
 					}
 				}
-		
+
 				if (graceful_shutdown) {
 					log_error_write(srv, __FILE__, __LINE__, "s", "[note] graceful shutdown started");
 				} else if (srv->conns->used > srv->max_conns) {
@@ -1225,7 +1225,7 @@ int main (int argc, char **argv) {
 				} else {
 					log_error_write(srv, __FILE__, __LINE__, "s", "[note] sockets disabled, out-of-fds");
 				}
-			
+
 				srv->sockets_disabled = 1;
 			}
 		}
@@ -1235,16 +1235,16 @@ int main (int argc, char **argv) {
 			 * we are ready to terminate without harming anyone */
 			srv_shutdown = 1;
 		}
-		
+
 		/* we still have some fds to share */
-		if (srv->want_fds) { 
+		if (srv->want_fds) {
 			/* check the fdwaitqueue for waiting fds */
 			int free_fds = srv->max_fds - srv->cur_fds - 16;
 			connection *con;
-			
+
 			for (; free_fds > 0 && NULL != (con = fdwaitqueue_unshift(srv, srv->fdwaitqueue)); free_fds--) {
 				connection_state_machine(srv, con);
-				
+
 				srv->want_fds--;
 			}
 		}
@@ -1255,27 +1255,27 @@ int main (int argc, char **argv) {
 			int fd_ndx;
 #if 0
 			if (n > 0) {
-				log_error_write(srv, __FILE__, __LINE__, "sd", 
+				log_error_write(srv, __FILE__, __LINE__, "sd",
 						"polls:", n);
 			}
-#endif			
+#endif
 			fd_ndx = -1;
 			do {
 				fdevent_handler handler;
 				void *context;
 				handler_t r;
-				
+
 				fd_ndx  = fdevent_event_next_fdndx (srv->ev, fd_ndx);
 				revents = fdevent_event_get_revent (srv->ev, fd_ndx);
 				fd      = fdevent_event_get_fd     (srv->ev, fd_ndx);
 				handler = fdevent_get_handler(srv->ev, fd);
 				context = fdevent_get_context(srv->ev, fd);
-				
+
 				/* connection_handle_fdevent needs a joblist_append */
 #if 0
-				log_error_write(srv, __FILE__, __LINE__, "sdd", 
+				log_error_write(srv, __FILE__, __LINE__, "sdd",
 						"event for", fd, revents);
-#endif				
+#endif
 				switch (r = (*handler)(srv, context, revents)) {
 				case HANDLER_FINISHED:
 				case HANDLER_GO_ON:
@@ -1292,17 +1292,17 @@ int main (int argc, char **argv) {
 				}
 			} while (--n > 0);
 		} else if (n < 0 && errno != EINTR) {
-			log_error_write(srv, __FILE__, __LINE__, "ss", 
-					"fdevent_poll failed:", 
+			log_error_write(srv, __FILE__, __LINE__, "ss",
+					"fdevent_poll failed:",
 					strerror(errno));
 		}
-		
+
 		for (ndx = 0; ndx < srv->joblist->used; ndx++) {
 			connection *con = srv->joblist->ptr[ndx];
 			handler_t r;
-			
+
 			connection_state_machine(srv, con);
-			
+
 			switch(r = plugins_call_handle_joblist(srv, con)) {
 			case HANDLER_FINISHED:
 			case HANDLER_GO_ON:
@@ -1311,32 +1311,32 @@ int main (int argc, char **argv) {
 				log_error_write(srv, __FILE__, __LINE__, "d", r);
 				break;
 			}
-			
+
 			con->in_joblist = 0;
 		}
-		
+
 		srv->joblist->used = 0;
 	}
-	
+
 	if (srv->srvconf.pid_file->used &&
 	    srv->srvconf.changeroot->used == 0) {
 		if (0 != unlink(srv->srvconf.pid_file->ptr)) {
 			if (errno != EACCES && errno != EPERM) {
-				log_error_write(srv, __FILE__, __LINE__, "sbds", 
-						"unlink failed for:", 
+				log_error_write(srv, __FILE__, __LINE__, "sbds",
+						"unlink failed for:",
 						srv->srvconf.pid_file,
 						errno,
 						strerror(errno));
 			}
 		}
 	}
-	
+
 	/* clean-up */
 	log_error_close(srv);
 	network_close(srv);
 	connections_free(srv);
 	plugins_free(srv);
 	server_free(srv);
-	
+
 	return 0;
 }

@@ -10,7 +10,7 @@ version = '1.4.13'
 def checkCHeaders(autoconf, hdrs):
 	p = re.compile('[^A-Z0-9]')
 	for hdr in hdrs:
-		if not hdr: 
+		if not hdr:
 			continue
 		_hdr = Split(hdr)
  		if autoconf.CheckCHeader(_hdr):
@@ -116,26 +116,26 @@ if 1:
 	autoconf = Configure(env, custom_tests = {'CheckStructMember': checkStructMember })
 	autoconf.headerfile = "foo.h"
 	checkCHeaders(autoconf, string.split("""
-			arpa/inet.h 
-			fcntl.h 
-			netinet/in.h 
-			sys/types.h netinet/in.h 
-			stdlib.h 
+			arpa/inet.h
+			fcntl.h
+			netinet/in.h
+			sys/types.h netinet/in.h
+			stdlib.h
 			string.h
 			sys/socket.h
 			sys/types.h sys/socket.h
-		 	sys/time.h 
-			unistd.h 
-			sys/sendfile.h 
-			sys/uio.h 
-			sys/types.h sys/uio.h 
-			getopt.h 
-			sys/epoll.h 
-			sys/select.h 
-			sys/types.h sys/select.h 
-			poll.h 
+		 	sys/time.h
+			unistd.h
+			sys/sendfile.h
+			sys/uio.h
+			sys/types.h sys/uio.h
+			getopt.h
+			sys/epoll.h
+			sys/select.h
+			sys/types.h sys/select.h
+			poll.h
 			sys/poll.h
-			sys/devpoll.h 
+			sys/devpoll.h
 			sys/filio.h
 			sys/mman.h
 			sys/types.h sys/mman.h
@@ -147,11 +147,11 @@ if 1:
 			sys/syslimits.h
 			sys/resource.h
 			sys/time.h sys/types.h sys/resource.h
-			sys/un.h 
-			sys/types.h sys/un.h 
-			syslog.h 
-			stdint.h 
-			inttypes.h 
+			sys/un.h
+			sys/types.h sys/un.h
+			syslog.h
+			stdint.h
+			inttypes.h
 			sys/prctl.h
 			sys/wait.h""", "\n"))
 
@@ -163,7 +163,7 @@ if 1:
 
 	checkTypes(autoconf, Split('pid_t size_t off_t'))
 
-	autoconf.env.Append( LIBSQLITE3 = '', LIBXML2 = '', LIBMYSQL = '', LIBZ = '', 
+	autoconf.env.Append( LIBSQLITE3 = '', LIBXML2 = '', LIBMYSQL = '', LIBZ = '',
 		LIBBZ2 = '', LIBCRYPT = '', LIBMEMCACHE = '', LIBFCGI = '', LIBPCRE = '',
 		LIBLDAP = '', LIBLBER = '', LIBLUA = '', LIBLUALIB = '', LIBDL = '')
 
@@ -233,7 +233,7 @@ if 1:
 		env.Append(LIBLUA = lualibs)
 		env.Append(CPPFLAGS = [ '-DHAVE_LUA_H' ])
 		env['LIBS'] = oldlibs
-	
+
 
 if env['with_pcre']:
 	pcre_config = checkProgram(env, 'pcre', 'pcre-config')
@@ -243,7 +243,7 @@ if env['with_pcre']:
 if env['with_xml']:
 	xml2_config = checkProgram(env, 'xml', 'xml2-config')
 	oldlib = env['LIBS']
-	env['LIBS'] = [] 
+	env['LIBS'] = []
 	env.ParseConfig(xml2_config + ' --cflags --libs')
 	env.Append(CPPFLAGS = [ '-DHAVE_LIBXML_H', '-DHAVE_LIBXML2' ], LIBXML2 = env['LIBS'])
 	env['LIBS'] = oldlib
@@ -251,7 +251,7 @@ if env['with_xml']:
 if env['with_mysql']:
 	mysql_config = checkProgram(env, 'mysql', 'mysql_config')
 	oldlib = env['LIBS']
-	env['LIBS'] = [] 
+	env['LIBS'] = []
 	env.ParseConfig(mysql_config + ' --cflags --libs')
 	env.Append(CPPFLAGS = [ '-DHAVE_MYSQL_H', '-DHAVE_LIBMYSQL' ], LIBMYSQL = 'mysqlclient')
 	env['LIBS'] = oldlib
@@ -265,7 +265,7 @@ else:
 
 versions = string.split(version, '.')
 version_id = int(versions[0]) << 16 | int(versions[1]) << 8 | int(versions[2])
-env.Append(CPPFLAGS = [ 
+env.Append(CPPFLAGS = [
 		'-DLIGHTTPD_VERSION_ID=' + str(version_id),
 		'-DPACKAGE_NAME=\\"' + package + '\\"',
 		'-DPACKAGE_VERSION=\\"' + version + '\\"',

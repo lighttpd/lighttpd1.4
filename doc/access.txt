@@ -12,10 +12,10 @@ Module: mod_access
 
 :abstract:
   The access module is used to deny access to files with given trailing path names.
- 
+
 .. meta::
   :keywords: lighttpd, trailing path access control
-  
+
 .. contents:: Table of Contents
 
 Description
@@ -32,7 +32,7 @@ url.access-deny
   Default: empty
 
   Example: ::
-    
+
     url.access-deny = ( "~", ".inc")
 
   will deny access to all files ended with a diacritical mark (~) or .inc

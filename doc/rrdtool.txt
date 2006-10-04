@@ -50,7 +50,7 @@ Generating Graphs
 ::
 
   #!/bin/sh
-  
+
   RRDTOOL=/usr/bin/rrdtool
   OUTDIR=/var/www/servers/www.example.org/pages/rrd/
   INFILE=/var/www/lighttpd.rrd
