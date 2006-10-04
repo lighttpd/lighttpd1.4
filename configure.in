@@ -1,7 +1,7 @@
 #                                               -*- Autoconf -*-
 # Process this file with autoconf to produce a configure script.
 AC_PREREQ(2.57)
-AC_INIT(lighttpd, 1.4.12, jan@kneschke.de)
+AC_INIT(lighttpd, 1.4.13, jan@kneschke.de)
 AC_CONFIG_SRCDIR([src/server.c])
 
 AC_CANONICAL_TARGET
@@ -381,30 +381,13 @@ AC_ARG_WITH(lua, AC_HELP_STRING([--with-lua],[lua engine for mod_cml]),
 
 AC_MSG_RESULT($WITH_LUA)
 if test "$WITH_LUA" != "no"; then
- AC_PATH_PROG(LUACONFIG, lua-config)
-
- if test x"$LUACONFIG" != x; then
-   LUA_CFLAGS=`$LUACONFIG --include`
-   LUA_LIBS=`$LUACONFIG --libs --extralibs`
+ if test "$WITH_LUA" == "yes"; then
+  WITH_LUA=lua
+ fi
+ PKG_CHECK_MODULES(LUA, $WITH_LUA >= 5.1, [
    AC_DEFINE([HAVE_LUA], [1], [liblua])
    AC_DEFINE([HAVE_LUA_H], [1], [lua.h])
- else
-   AC_CHECK_LIB(lua, lua_open, [
-     AC_CHECK_HEADERS([lua.h],[
-       LUA_LIBS="-llua -llualib"
-       AC_DEFINE([HAVE_LUA], [1], [liblua])
-       AC_DEFINE([HAVE_LUA_H], [1], [lua.h])
-     ])
-   ])
- fi
-
- if test x"$LUA_LIBS" = x; then
-   # try pkgconfig
-   PKG_CHECK_MODULES(LUA, lua >= 5.0, [
-     AC_DEFINE([HAVE_LUA], [1], [liblua])
-     AC_DEFINE([HAVE_LUA_H], [1], [lua.h])
-   ])
- fi
+ ])
 
  AC_SUBST(LUA_CFLAGS)
  AC_SUBST(LUA_LIBS)

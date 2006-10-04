@@ -3,6 +3,16 @@
 NEWS
 ====
 
+- 1.4.13 - 
+
+  * added initgroups in spawn-fcgi (#871)
+  * added apr1 support htpasswd in mod-auth (#870)
+  * fixed segfault in splitted CRLF CRLF sequences 
+    (introduced in 1.4.12) (#876)
+  * fixed compilation of LOCK support in mod-webdav
+  * fixed fragments in request-URLs (#869)
+  * fixed pkg-config check for lua5.1 on debian
+
 - 1.4.12 - 2006-09-23
 
   * added experimental LOCK support for webdav
