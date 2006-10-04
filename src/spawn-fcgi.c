@@ -424,9 +424,13 @@ int main(int argc, char **argv) {
 		/* drop root privs */
 		if (groupname) {
 			setgid(grp->gr_gid);
-			setgroups(0, NULL);
 		}
-		if (username) setuid(pwd->pw_uid);
+		if (username) {
+			if (groupname) {
+				initgroups(username, grp->gr_gid);
+			}
+			setuid(pwd->pw_uid);
+		}
 	}
 	
        return fcgi_spawn_connection(fcgi_app, addr, port, unixsocket, child_count, pid_fd, nofork);
