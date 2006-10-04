@@ -37,6 +37,21 @@
 # include "md5.h"
 #endif
 
+/**
+ * the $apr1$ handling is taken from apache 1.3.x
+ */
+
+/*
+ * The apr_md5_encode() routine uses much code obtained from the FreeBSD 3.0
+ * MD5 crypt() function, which is licenced as follows:
+ * ----------------------------------------------------------------------------
+ * "THE BEER-WARE LICENSE" (Revision 42):
+ * <phk@login.dknet.dk> wrote this file.  As long as you retain this notice you
+ * can do whatever you want with this stuff. If we meet some day, and you think
+ * this stuff is worth it, you can buy me a beer in return.   Poul-Henning Kamp
+ * ----------------------------------------------------------------------------
+ */
+
 handler_t auth_ldap_init(server *srv, mod_auth_plugin_config *s);
 
 static const char base64_pad = '=';
@@ -403,6 +418,178 @@ static int http_auth_match_rules(server *srv, mod_auth_plugin_data *p, const cha
 	return -1;
 }
 
+#define APR_MD5_DIGESTSIZE 16
+#define APR1_ID "$apr1$"
+
+/*
+ * The following MD5 password encryption code was largely borrowed from
+ * the FreeBSD 3.0 /usr/src/lib/libcrypt/crypt.c file, which is
+ * licenced as stated at the top of this file.
+ */
+
+static void to64(char *s, unsigned long v, int n)
+{
+    static unsigned char itoa64[] =         /* 0 ... 63 => ASCII - 64 */
+        "./0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
+
+    while (--n >= 0) {
+        *s++ = itoa64[v&0x3f];
+        v >>= 6;
+    }
+}
+
+static void apr_md5_encode(const char *pw, const char *salt, char *result, size_t nbytes) {
+    /*
+     * Minimum size is 8 bytes for salt, plus 1 for the trailing NUL,
+     * plus 4 for the '$' separators, plus the password hash itself.
+     * Let's leave a goodly amount of leeway.
+     */
+
+    char passwd[120], *p;
+    const char *sp, *ep;
+    unsigned char final[APR_MD5_DIGESTSIZE];
+    ssize_t sl, pl, i;
+    MD5_CTX ctx, ctx1;
+    unsigned long l;
+
+    /* 
+     * Refine the salt first.  It's possible we were given an already-hashed
+     * string as the salt argument, so extract the actual salt value from it
+     * if so.  Otherwise just use the string up to the first '$' as the salt.
+     */
+    sp = salt;
+
+    /*
+     * If it starts with the magic string, then skip that.
+     */
+    if (!strncmp(sp, APR1_ID, strlen(APR1_ID))) {
+        sp += strlen(APR1_ID);
+    }
+
+    /*
+     * It stops at the first '$' or 8 chars, whichever comes first
+     */
+    for (ep = sp; (*ep != '\0') && (*ep != '$') && (ep < (sp + 8)); ep++) {
+        continue;
+    }
+
+    /*
+     * Get the length of the true salt
+     */
+    sl = ep - sp;
+
+    /*
+     * 'Time to make the doughnuts..'
+     */
+    MD5_Init(&ctx);
+    
+    /*
+     * The password first, since that is what is most unknown
+     */
+    MD5_Update(&ctx, pw, strlen(pw));
+
+    /*
+     * Then our magic string
+     */
+    MD5_Update(&ctx, APR1_ID, strlen(APR1_ID));
+
+    /*
+     * Then the raw salt
+     */
+    MD5_Update(&ctx, sp, sl);
+
+    /*
+     * Then just as many characters of the MD5(pw, salt, pw)
+     */
+    MD5_Init(&ctx1);
+    MD5_Update(&ctx1, pw, strlen(pw));
+    MD5_Update(&ctx1, sp, sl);
+    MD5_Update(&ctx1, pw, strlen(pw));
+    MD5_Final(final, &ctx1);
+    for (pl = strlen(pw); pl > 0; pl -= APR_MD5_DIGESTSIZE) {
+        MD5_Update(&ctx, final, 
+                      (pl > APR_MD5_DIGESTSIZE) ? APR_MD5_DIGESTSIZE : pl);
+    }
+
+    /*
+     * Don't leave anything around in vm they could use.
+     */
+    memset(final, 0, sizeof(final));
+
+    /*
+     * Then something really weird...
+     */
+    for (i = strlen(pw); i != 0; i >>= 1) {
+        if (i & 1) {
+            MD5_Update(&ctx, final, 1);
+        }
+        else {
+            MD5_Update(&ctx, pw, 1);
+        }
+    }
+
+    /*
+     * Now make the output string.  We know our limitations, so we
+     * can use the string routines without bounds checking.
+     */
+    strcpy(passwd, APR1_ID);
+    strncat(passwd, sp, sl);
+    strcat(passwd, "$");
+
+    MD5_Final(final, &ctx);
+
+    /*
+     * And now, just to make sure things don't run too fast..
+     * On a 60 Mhz Pentium this takes 34 msec, so you would
+     * need 30 seconds to build a 1000 entry dictionary...
+     */
+    for (i = 0; i < 1000; i++) {
+        MD5_Init(&ctx1);
+        if (i & 1) {
+            MD5_Update(&ctx1, pw, strlen(pw));
+        }
+        else {
+            MD5_Update(&ctx1, final, APR_MD5_DIGESTSIZE);
+        }
+        if (i % 3) {
+            MD5_Update(&ctx1, sp, sl);
+        }
+
+        if (i % 7) {
+            MD5_Update(&ctx1, pw, strlen(pw));
+        }
+
+        if (i & 1) {
+            MD5_Update(&ctx1, final, APR_MD5_DIGESTSIZE);
+        }
+        else {
+            MD5_Update(&ctx1, pw, strlen(pw));
+        }
+        MD5_Final(final,&ctx1);
+    }
+
+    p = passwd + strlen(passwd);
+
+    l = (final[ 0]<<16) | (final[ 6]<<8) | final[12]; to64(p, l, 4); p += 4;
+    l = (final[ 1]<<16) | (final[ 7]<<8) | final[13]; to64(p, l, 4); p += 4;
+    l = (final[ 2]<<16) | (final[ 8]<<8) | final[14]; to64(p, l, 4); p += 4;
+    l = (final[ 3]<<16) | (final[ 9]<<8) | final[15]; to64(p, l, 4); p += 4;
+    l = (final[ 4]<<16) | (final[10]<<8) | final[ 5]; to64(p, l, 4); p += 4;
+    l =                    final[11]                ; to64(p, l, 2); p += 2;
+    *p = '\0';
+
+    /*
+     * Don't leave anything around in vm they could use.
+     */
+    memset(final, 0, sizeof(final));
+
+	/* FIXME
+	 */
+#define apr_cpystrn strncpy
+    apr_cpystrn(result, passwd, nbytes - 1);
+}
+
+
 /**
  * 
  * 
@@ -439,6 +626,14 @@ static int http_auth_basic_password_compare(server *srv, mod_auth_plugin_data *p
 			return 0;
 		}
 	} else if (p->conf.auth_backend == AUTH_BACKEND_HTPASSWD) { 
+		char sample[120];
+		if (!strncmp(password->ptr, APR1_ID, strlen(APR1_ID))) {
+			/*
+			 * The hash was created using $apr1$ custom algorithm.
+			 */
+			apr_md5_encode(pw, password->ptr, sample, sizeof(sample));
+			return (strcmp(sample, password->ptr) == 0) ? 0 : 1;
+		} else {
 #ifdef HAVE_CRYPT	
 		char salt[32];
 		char *crypted;
@@ -494,6 +689,7 @@ static int http_auth_basic_password_compare(server *srv, mod_auth_plugin_data *p
 		}
 	
 #endif	
+	}
 	} else if (p->conf.auth_backend == AUTH_BACKEND_PLAIN) { 
 		if (0 == strcmp(password->ptr, pw)) {
 			return 0;
