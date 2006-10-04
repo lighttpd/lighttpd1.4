@@ -19,4 +19,4 @@ Format: HTML
 Index: /usr/share/doc/lighttpd/html/index.html
 Files: /usr/share/doc/lighttpd/html/*.html
 
-  
+

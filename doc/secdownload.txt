@@ -114,19 +114,19 @@ Your application has to generate the correct URLs. The following sample
 code for PHP should be easily adaptable to any other language: ::
 
   <?php
-  
+
   $secret = "verysecret";
   $uri_prefix = "/dl/";
-  
+
   # filename
   $f = "/secret-file.txt";
-  
+
   # current timestamp
   $t = time();
-  
+
   $t_hex = sprintf("%08x", $t);
   $m = md5($secret.$f.$t_hex);
-  
+
   # generate link
   printf('<a href="%s%s/%s%s">%s</a>',
          $uri_prefix, $m, $t_hex, $f, $f);
@@ -139,7 +139,7 @@ The server has to be configured in the same way. The URI prefix and
 secret have to match: ::
 
   server.modules = ( ..., "mod_secdownload", ... )
-  
+
   secdownload.secret          = "verysecret"
   secdownload.document-root   = "/home/www/servers/download-area/"
   secdownload.uri-prefix      = "/dl/"

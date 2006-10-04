@@ -12,23 +12,23 @@
 
 typedef struct {
 	char *ptr;
-	
+
 	size_t used;
 	size_t size;
 } buffer;
 
 typedef struct {
 	buffer **ptr;
-	
+
 	size_t used;
 	size_t size;
 } buffer_array;
 
 typedef struct {
 	char *ptr;
-	
+
 	size_t offset; /* input-pointer */
-	
+
 	size_t used;   /* output-pointer */
 	size_t size;
 } read_buffer;
@@ -43,7 +43,7 @@ buffer* buffer_init_buffer(buffer *b);
 buffer* buffer_init_string(const char *str);
 void buffer_free(buffer *b);
 void buffer_reset(buffer *b);
-	
+
 int buffer_prepare_copy(buffer *b, size_t size);
 int buffer_prepare_append(buffer *b, size_t size);
 

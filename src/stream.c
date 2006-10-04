@@ -1,7 +1,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 
-#include <unistd.h> 
+#include <unistd.h>
 #include <fcntl.h>
 
 #include "stream.h"
@@ -25,33 +25,33 @@ int stream_open(stream *f, buffer *fn) {
 #endif
 
 	f->start = NULL;
-	
+
 	if (-1 == stat(fn->ptr, &st)) {
 		return -1;
 	}
-	
+
 	f->size = st.st_size;
 
 #ifdef HAVE_MMAP
 	if (-1 == (fd = open(fn->ptr, O_RDONLY | O_BINARY))) {
 		return -1;
 	}
-	
+
 	f->start = mmap(0, f->size, PROT_READ, MAP_SHARED, fd, 0);
-	
+
 	close(fd);
-	
+
 	if (MAP_FAILED == f->start) {
 		return -1;
 	}
 
 #elif defined __WIN32
-	fh = CreateFile(fn->ptr, 
-			GENERIC_READ, 
-			FILE_SHARE_READ, 
-			NULL, 
-			OPEN_EXISTING, 
-			FILE_ATTRIBUTE_READONLY, 
+	fh = CreateFile(fn->ptr,
+			GENERIC_READ,
+			FILE_SHARE_READ,
+			NULL,
+			OPEN_EXISTING,
+			FILE_ATTRIBUTE_READONLY,
 			NULL);
 
 	if (!fh) return -1;
@@ -66,7 +66,7 @@ int stream_open(stream *f, buffer *fn) {
 	if (!mh) {
 		LPVOID lpMsgBuf;
 		FormatMessage(
-		        FORMAT_MESSAGE_ALLOCATE_BUFFER | 
+		        FORMAT_MESSAGE_ALLOCATE_BUFFER |
 		        FORMAT_MESSAGE_FROM_SYSTEM,
 		        NULL,
 		        GetLastError(),
@@ -76,7 +76,7 @@ int stream_open(stream *f, buffer *fn) {
 
 		return -1;
 	}
-	
+
 	p = MapViewOfFile(mh,
 			FILE_MAP_READ,
 			0,
@@ -87,9 +87,9 @@ int stream_open(stream *f, buffer *fn) {
 
 	f->start = p;
 #else
-# error no mmap found	
+# error no mmap found
 #endif
-	
+
 	return 0;
 }
 

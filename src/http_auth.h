@@ -20,15 +20,15 @@ typedef enum {
 typedef struct {
 	/* auth */
 	array  *auth_require;
-	
+
 	buffer *auth_plain_groupfile;
 	buffer *auth_plain_userfile;
-	
+
 	buffer *auth_htdigest_userfile;
 	buffer *auth_htpasswd_userfile;
-	
+
 	buffer *auth_backend_conf;
-	
+
 	buffer *auth_ldap_hostname;
 	buffer *auth_ldap_basedn;
 	buffer *auth_ldap_binddn;
@@ -36,15 +36,15 @@ typedef struct {
 	buffer *auth_ldap_filter;
 	buffer *auth_ldap_cafile;
 	unsigned short auth_ldap_starttls;
-	
+
 	unsigned short auth_debug;
-	
+
 	/* generated */
 	auth_backend_t auth_backend;
-	
+
 #ifdef USE_LDAP
 	LDAP *ldap;
-	
+
 	buffer *ldap_filter_pre;
 	buffer *ldap_filter_post;
 #endif
@@ -53,15 +53,15 @@ typedef struct {
 typedef struct {
 	PLUGIN_DATA;
 	buffer *tmp_buf;
-	
+
 	buffer *auth_user;
 
 #ifdef USE_LDAP
 	buffer *ldap_filter;
 #endif
-	
+
 	mod_auth_plugin_config **config_storage;
-	
+
 	mod_auth_plugin_config conf; /* this is only used as long as no handler_ctx is setup */
 } mod_auth_plugin_data;
 

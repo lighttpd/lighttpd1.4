@@ -81,7 +81,7 @@ EXTRA_DIST=lighttpd.conf lighttpd.user \
 	newstyle.css \
 	oldstyle.css \
 	$(DOCS)
- 
+
 %.html: %.txt
 	rst2html $^ > $@
 
@@ -90,11 +90,11 @@ html: $(HTMLDOCS)
 
 #%.ps.gz: %.ps
 #	gzip $^
-	
+
 #%.ps: %.dot
-#	dot -Tps -o $@ $^   
+#	dot -Tps -o $@ $^
 
 clean-local:
 	rm -f *.html
 
-	
+

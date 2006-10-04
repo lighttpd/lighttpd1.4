@@ -16,10 +16,10 @@
 
 typedef struct {
 	buffer *ext;
-	
+
 	array  *mc_hosts;
 	buffer *mc_namespace;
-#if defined(HAVE_MEMCACHE_H) 
+#if defined(HAVE_MEMCACHE_H)
 	struct memcache *mc;
 #endif
 	buffer *power_magnet;
@@ -27,15 +27,15 @@ typedef struct {
 
 typedef struct {
 	PLUGIN_DATA;
-	
+
 	buffer *basedir;
 	buffer *baseurl;
-	
+
 	buffer *trigger_handler;
-	
+
 	plugin_config **config_storage;
-	
-	plugin_config conf; 
+
+	plugin_config conf;
 } plugin_data;
 
 int cache_parse_lua(server *srv, connection *con, plugin_data *p, buffer *fn);

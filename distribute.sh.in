@@ -3,7 +3,7 @@ PACKAGE=@PACKAGE_TARNAME@
 VERSION=@VERSION@
 NAME=@PACKAGE_TARNAME@-@VERSION@
 
-DISTDIR="/home/jan/wwwroot/servers/www.lighttpd.net/pages/download/" 
+DISTDIR="/home/jan/wwwroot/servers/www.lighttpd.net/pages/download/"
 RPMS="/home/jan/rpmbuild/RPMS/i386/${NAME}-1.i386.rpm \
 	/home/jan/rpmbuild/SRPMS/${NAME}-1.src.rpm"
 FILES="${RPMS}	${NAME}.tar.gz \
@@ -21,7 +21,7 @@ esac
 echo ${nopack}
 
 if test x${pack} = x1; then
-	make distcheck && rpmbuild -ta --nodeps ${NAME}.tar.gz 
+	make distcheck && rpmbuild -ta --nodeps ${NAME}.tar.gz
 	gpg --detach-sign ${NAME}.tar.gz
 	rpm --addsign ${RPMS}
 fi
@@ -49,7 +49,7 @@ Download
   MD5: ${MD5SRPM}
 - ${NAME}.tar.gz
   ${DLNAME}.tar.gz
-  MD5: ${MD5TGZ} 
+  MD5: ${MD5TGZ}
   Signature: ${DLNAME}.tar.gz.sig
 
 EOF
@@ -67,7 +67,7 @@ Checksums
 - ${NAME}-1.src.rpm
   MD5: ${MD5SRPM}
 - ${NAME}.tar.gz
-  MD5: ${MD5TGZ} 
+  MD5: ${MD5TGZ}
 
 EOF
 

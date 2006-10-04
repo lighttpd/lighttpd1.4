@@ -12,10 +12,10 @@ Module: mod_cgi
 
 :abstract:
   The cgi module provides a CGI-conforming interface.
-  
+
 .. meta::
   :keywords: lighttpd, cgi
-  
+
 .. contents:: Table of Contents
 
 Description
@@ -32,7 +32,7 @@ cgi.assign
   file-extensions that are handled by a CGI program
 
   e.g.: ::
-  
+
     cgi.assign = ( ".pl"  => "/usr/bin/perl",
                    ".cgi" => "/usr/bin/perl" )
 
@@ -43,7 +43,7 @@ To setup a executable which doesn't need the help of a external program you
 just don't specify a handler for the extension. ::
 
   cgi.assign = ( ".sh" => "" )
-  
+
 If the file has no extension keep in mind that lighttpd matches not the
 extension itself but the right part of the URL: ::
 

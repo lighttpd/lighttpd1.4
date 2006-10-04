@@ -12,10 +12,10 @@ Module: mod_cml
 
 :abstract:
   CML is a Meta language to describe the dependencies of a page at one side and building a page from its fragments on the other side using LUA.
-  
+
 .. meta::
   :keywords: lighttpd, cml, lua
-  
+
 .. contents:: Table of Contents
 
 Description
@@ -31,7 +31,7 @@ CML (Cache Meta Language) wants to solves several problems:
 Cache Decision
 --------------
 
-A simple example should show how to a content caching the very simple way in PHP. 
+A simple example should show how to a content caching the very simple way in PHP.
 
 jan.kneschke.de has a very simple design:
 
@@ -39,7 +39,7 @@ jan.kneschke.de has a very simple design:
  * the menu is generated from a menu.csv file
  * the content is coming from files on the local directory named content-1, content-2 and so on
 
-The page content is static as long non of the those tree items changes. A change in the layout 
+The page content is static as long non of the those tree items changes. A change in the layout
 is affecting all pages, a change of menu.csv too, a change of content-x file only affects the
 cached page itself.
 
@@ -58,7 +58,7 @@ If we model this in PHP we get: ::
     }
 
     foreach($content as $k => $v) {
-      if (isset($v["file"]) && 
+      if (isset($v["file"]) &&
           filemtime($v["file"]) > $cachemtime) {
         return 0;
       }
@@ -71,7 +71,7 @@ If we model this in PHP we get: ::
       return 0;
     }
   }
-  
+
   if (is_cachable(...), $cachefile) {
     readfile($cachefile);
     exit();
@@ -81,7 +81,7 @@ If we model this in PHP we get: ::
   ?>
 
 Quite simple. No magic involved. If the one of the files is new than the cached
-content, the content is dirty and has to be regenerated. 
+content, the content is dirty and has to be regenerated.
 
 Now let take a look at the numbers:
 
@@ -92,9 +92,9 @@ As you can see the increase is not as good as it could be. The main reason as th
 of the PHP interpreter to start up (a byte-code cache has been used here).
 
 Moving these decisions out of the PHP script into a server module will remove the need
-to start PHP for a cache-hit. 
+to start PHP for a cache-hit.
 
-To transform this example into a CML you need 'index.cml' in the list of indexfiles 
+To transform this example into a CML you need 'index.cml' in the list of indexfiles
 and the following index.cml file: ::
 
   output_contenttype = "text/html"
@@ -110,7 +110,7 @@ and the following index.cml file: ::
      file_mtime(b .. "templates/jk.tmpl")   > file_mtime(cwd .. "_cache.html") or
      file_mtime(b .. "content.html")        > file_mtime(cwd .. "_cache.html") then
      return CACHE_MISS
-  else 
+  else
      return CACHE_HIT
   end
 
@@ -132,26 +132,26 @@ Sometimes the different fragment are already generated externally. You have to c
   readfile("spacer2.html");
   readfile("news.html");
   readfile("footer.html");
-  ?> 
+  ?>
 
-We we can do the same several times faster directly in the webserver. 
+We we can do the same several times faster directly in the webserver.
 
 Don't forget: Webserver are built to send out static content, that is what they can do best.
 
 The index.cml for this looks like: ::
 
   output_contenttype = "text/html"
-  
+
   cwd = request["CWD"]
-   
-  output_include = { cwd .. "head.html", 
+
+  output_include = { cwd .. "head.html",
                      cwd .. "menu.html",
                      cwd .. "spacer.html",
                      cwd .. "db-content.html",
                      cwd .. "spacer2.html",
                      cwd .. "news.html",
                      cwd .. "footer.html" }
-  
+
   return CACHE_HIT
 
 Now we get about 10000 req/s instead of 600 req/s.
@@ -161,7 +161,7 @@ Power Magnet
 
 Next to all the features about Cache Decisions CML can do more. Starting
 with lighttpd 1.4.9 a power-magnet was added which attracts each request
-and allows you to manipulate the request for your needs.  
+and allows you to manipulate the request for your needs.
 
 We want to display a maintainance page by putting a file in a specified
 place:
@@ -183,7 +183,7 @@ and create /home/www/power-magnet.cml with: ::
 
 For each requested file the /home/www/power-magnet.cml is executed which
 checks if maintainance.html exists in the docroot and displays it
-instead of handling the usual request. 
+instead of handling the usual request.
 
 Another example, create thumbnail for requested image and serve it instead
 of sending the big image: ::
@@ -196,7 +196,7 @@ of sending the big image: ::
   dr = request["DOCUMENT_ROOT"]
   sn = request["SCRIPT_NAME"]
 
-  ## to be continued :) ... 
+  ## to be continued :) ...
 
   trigger_handler = '/gen_image.php'
 
@@ -217,7 +217,7 @@ To use the plugin you have to load it: ::
 Options
 =======
 
-:cml.extension: 
+:cml.extension:
   the file extension that is bound to the cml-module
 :cml.memcache-hosts:
   hosts for the memcache.* functions
@@ -229,7 +229,7 @@ Options
 Language
 ========
 
-The language used for CML is provided by `LUA <http://www.lua.org/>`_. 
+The language used for CML is provided by `LUA <http://www.lua.org/>`_.
 
 Additionally to the functions provided by lua mod_cml provides: ::
 
@@ -252,10 +252,10 @@ Additionally to the functions provided by lua mod_cml provides: ::
   number file_mtime(string)
   string memcache_get_string(string)
   number memcache_get_long(string)
-  boolean memcache_exists(string) 
+  boolean memcache_exists(string)
 
 
-What ever your script does, it has to return either CACHE_HIT or CACHE_MISS. 
-It case a error occures check the error-log, the user will get a error 500. If you don't like 
+What ever your script does, it has to return either CACHE_HIT or CACHE_MISS.
+It case a error occures check the error-log, the user will get a error 500. If you don't like
 the standard error-page use ``server.errorfile-prefix``.
 

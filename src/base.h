@@ -29,7 +29,7 @@
 
 #if defined HAVE_LIBSSL && defined HAVE_OPENSSL_SSL_H
 # define USE_OPENSSL
-# include <openssl/ssl.h> 
+# include <openssl/ssl.h>
 #endif
 
 #ifdef HAVE_FAM_H
@@ -80,25 +80,25 @@ typedef int socklen_t;
 
 #include "settings.h"
 
-typedef enum { T_CONFIG_UNSET, 
-		T_CONFIG_STRING, 
-		T_CONFIG_SHORT, 
-		T_CONFIG_BOOLEAN, 
-		T_CONFIG_ARRAY, 
-		T_CONFIG_LOCAL, 
+typedef enum { T_CONFIG_UNSET,
+		T_CONFIG_STRING,
+		T_CONFIG_SHORT,
+		T_CONFIG_BOOLEAN,
+		T_CONFIG_ARRAY,
+		T_CONFIG_LOCAL,
 		T_CONFIG_DEPRECATED,
 		T_CONFIG_UNSUPPORTED
 } config_values_type_t;
 
-typedef enum { T_CONFIG_SCOPE_UNSET, 
-		T_CONFIG_SCOPE_SERVER, 
+typedef enum { T_CONFIG_SCOPE_UNSET,
+		T_CONFIG_SCOPE_SERVER,
 		T_CONFIG_SCOPE_CONNECTION
 } config_scope_type_t;
 
 typedef struct {
 	const char *key;
 	void *destination;
-	
+
 	config_values_type_t type;
 	config_scope_type_t scope;
 } config_values_t;
@@ -143,29 +143,29 @@ typedef struct {
 	/* the request-line */
 	buffer *request;
 	buffer *uri;
-	
+
 	buffer *orig_uri;
-	
+
 	http_method_t  http_method;
 	http_version_t http_version;
-	
+
 	buffer *request_line;
-	
+
 	/* strings to the header */
 	buffer *http_host; /* not alloced */
 	const char   *http_range;
 	const char   *http_content_type;
 	const char   *http_if_modified_since;
 	const char   *http_if_none_match;
-	
+
 	array  *headers;
-	
+
 	/* CONTENT */
 	size_t content_length; /* returned by strtoul() */
-	
+
 	/* internal representation */
 	int     accept_encoding;
-	
+
 	/* internal */
 	buffer *pathinfo;
 } request;
@@ -173,10 +173,10 @@ typedef struct {
 typedef struct {
 	off_t   content_length;
 	int     keep_alive;               /* used by  the subrequests in proxy, cgi and fcgi to say the subrequest was keep-alive or not */
-	
+
 	array  *headers;
-	
-	enum { 
+
+	enum {
 		HTTP_TRANSFER_ENCODING_IDENTITY, HTTP_TRANSFER_ENCODING_CHUNKED
 	} transfer_encoding;
 } response;
@@ -192,21 +192,21 @@ typedef struct {
 typedef struct {
 	buffer *path;
 	buffer *basedir; /* path = "(basedir)(.*)" */
-	
+
 	buffer *doc_root; /* path = doc_root + rel_path */
 	buffer *rel_path;
-	
+
 	buffer *etag;
 } physical;
 
 typedef struct {
 	buffer *name;
 	buffer *etag;
-	
+
 	struct stat st;
-	
+
 	time_t stat_ts;
-	
+
 #ifdef HAVE_LSTAT
 	char is_symlink;
 #endif
@@ -221,7 +221,7 @@ typedef struct {
 
 typedef struct {
 	splay_tree *files; /* the nodes of the tree are stat_cache_entry's */
-	
+
 	buffer *dir_name; /* for building the dirname from the filename */
 #ifdef HAVE_FAM_H
 	splay_tree *dirs; /* the nodes of the tree are fam_dir_entry */
@@ -234,7 +234,7 @@ typedef struct {
 
 typedef struct {
 	array *mimetypes;
-	
+
 	/* virtual-servers */
 	buffer *document_root;
 	buffer *server_name;
@@ -242,7 +242,7 @@ typedef struct {
 	buffer *server_tag;
 	buffer *dirlist_encoding;
 	buffer *errorfile_prefix;
-	
+
 	unsigned short max_keep_alive_requests;
 	unsigned short max_keep_alive_idle;
 	unsigned short max_read_idle;
@@ -250,16 +250,16 @@ typedef struct {
 	unsigned short use_xattr;
 	unsigned short follow_symlink;
 	unsigned short range_requests;
-	
+
 	/* debug */
-	
+
 	unsigned short log_file_not_found;
 	unsigned short log_request_header;
 	unsigned short log_request_handling;
 	unsigned short log_response_header;
 	unsigned short log_condition_handling;
-	
-	
+
+
 	/* server wide */
 	buffer *ssl_pemfile;
 	buffer *ssl_ca_file;
@@ -277,9 +277,9 @@ typedef struct {
 	/* configside */
 	unsigned short global_kbytes_per_second; /*  */
 
-	off_t  global_bytes_per_second_cnt; 
+	off_t  global_bytes_per_second_cnt;
 	/* server-wide traffic-shaper
-	 * 
+	 *
 	 * each context has the counter which is inited once
 	 * a second by the global_kbytes_per_second config-var
 	 *
@@ -287,12 +287,12 @@ typedef struct {
 	 * the connected conns are "offline" a little bit
 	 *
 	 * the problem:
-	 * we somehow have to loose our "we are writable" signal 
+	 * we somehow have to loose our "we are writable" signal
 	 * on the way.
-	 * 
+	 *
 	 */
 	off_t *global_bytes_per_second_cnt_ptr; /*  */
-	
+
 #ifdef USE_OPENSSL
 	SSL_CTX *ssl_ctx;
 #endif
@@ -300,18 +300,18 @@ typedef struct {
 
 /* the order of the items should be the same as they are processed
  * read before write as we use this later */
-typedef enum { 
-	CON_STATE_CONNECT, 
-	CON_STATE_REQUEST_START, 
-	CON_STATE_READ, 
-	CON_STATE_REQUEST_END, 
-	CON_STATE_READ_POST, 
-	CON_STATE_HANDLE_REQUEST, 
-	CON_STATE_RESPONSE_START, 
-	CON_STATE_WRITE, 
-	CON_STATE_RESPONSE_END, 
-	CON_STATE_ERROR, 
-	CON_STATE_CLOSE 
+typedef enum {
+	CON_STATE_CONNECT,
+	CON_STATE_REQUEST_START,
+	CON_STATE_READ,
+	CON_STATE_REQUEST_END,
+	CON_STATE_READ_POST,
+	CON_STATE_HANDLE_REQUEST,
+	CON_STATE_RESPONSE_START,
+	CON_STATE_WRITE,
+	CON_STATE_RESPONSE_END,
+	CON_STATE_ERROR,
+	CON_STATE_CLOSE
 } connection_state_t;
 
 typedef enum { COND_RESULT_UNSET, COND_RESULT_FALSE, COND_RESULT_TRUE } cond_result_t;
@@ -324,88 +324,88 @@ typedef struct {
 
 typedef struct {
 	connection_state_t state;
-	
+
 	/* timestamps */
 	time_t read_idle_ts;
 	time_t close_timeout_ts;
 	time_t write_request_ts;
-	
+
 	time_t connection_start;
 	time_t request_start;
-	
+
 	struct timeval start_tv;
-	
+
 	size_t request_count;        /* number of requests handled in this connection */
 	size_t loops_per_request;    /* to catch endless loops in a single request
-				      * 
+				      *
 				      * used by mod_rewrite, mod_fastcgi, ... and others
 				      * this is self-protection
 				      */
-	
+
 	int fd;                      /* the FD for this connection */
 	int fde_ndx;                 /* index for the fdevent-handler */
 	int ndx;                     /* reverse mapping to server->connection[ndx] */
-	
+
 	/* fd states */
 	int is_readable;
 	int is_writable;
-	
+
 	int     keep_alive;           /* only request.c can enable it, all other just disable */
-	
+
 	int file_started;
 	int file_finished;
-	
+
 	chunkqueue *write_queue;      /* a large queue for low-level write ( HTTP response ) [ file, mem ] */
 	chunkqueue *read_queue;       /* a small queue for low-level read ( HTTP request ) [ mem ] */
 	chunkqueue *request_content_queue; /* takes request-content into tempfile if necessary [ tempfile, mem ]*/
-	
+
 	int traffic_limit_reached;
-	
+
 	off_t bytes_written;          /* used by mod_accesslog, mod_rrd */
 	off_t bytes_written_cur_second; /* used by mod_accesslog, mod_rrd */
 	off_t bytes_read;             /* used by mod_accesslog, mod_rrd */
 	off_t bytes_header;
-	
+
 	int http_status;
-	
+
 	sock_addr dst_addr;
 	buffer *dst_addr_buf;
 
 	/* request */
 	buffer *parse_request;
 	unsigned int parsed_response; /* bitfield which contains the important header-fields of the parsed response header */
-	
+
 	request  request;
 	request_uri uri;
-	physical physical; 
+	physical physical;
 	response response;
-	
+
 	size_t header_len;
-	
+
 	buffer *authed_user;
 	array  *environment; /* used to pass lighttpd internal stuff to the FastCGI/CGI apps, setenv does that */
-	
+
 	/* response */
 	int    got_response;
-	
+
 	int    in_joblist;
-	
+
 	connection_type mode;
-	
+
 	void **plugin_ctx;           /* plugin connection specific config */
-	
+
 	specific_config conf;        /* global connection specific config */
 	cond_cache_t *cond_cache;
-	
+
 	buffer *server_name;
-	
+
 	/* error-handler */
 	buffer *error_handler;
 	int error_handler_saved_status;
 	int in_error_handler;
-	
+
 	void *srv_socket;   /* reference to the server-socket (typecast to server_socket) */
-	
+
 #ifdef USE_OPENSSL
 	SSL *ssl;
 	buffer *ssl_error_want_reuse_buffer;
@@ -452,36 +452,36 @@ typedef struct {
 typedef struct {
 	unsigned short port;
 	buffer *bindhost;
-	
+
 	buffer *errorlog_file;
 	unsigned short errorlog_use_syslog;
-	
+
 	unsigned short dont_daemonize;
 	buffer *changeroot;
 	buffer *username;
 	buffer *groupname;
-	
+
 	buffer *pid_file;
-	
+
 	buffer *event_handler;
-	
+
 	buffer *modules_dir;
 	buffer *network_backend;
 	array *modules;
 	array *upload_tempdirs;
-	
+
 	unsigned short max_worker;
 	unsigned short max_fds;
 	unsigned short max_conns;
 	unsigned short max_request_size;
-	
+
 	unsigned short log_request_header_on_error;
 	unsigned short log_state_handling;
-	
-	enum { STAT_CACHE_ENGINE_UNSET, 
-			STAT_CACHE_ENGINE_NONE, 
-			STAT_CACHE_ENGINE_SIMPLE, 
-			STAT_CACHE_ENGINE_FAM 
+
+	enum { STAT_CACHE_ENGINE_UNSET,
+			STAT_CACHE_ENGINE_NONE,
+			STAT_CACHE_ENGINE_SIMPLE,
+			STAT_CACHE_ENGINE_FAM
 	} stat_cache_engine;
 	unsigned short enable_cores;
 } server_config;
@@ -490,16 +490,16 @@ typedef struct {
 	sock_addr addr;
 	int       fd;
 	int       fde_ndx;
-	
+
 	buffer *ssl_pemfile;
 	buffer *ssl_ca_file;
 	buffer *ssl_cipher_list;
 	unsigned short ssl_use_sslv2;
 	unsigned short use_ipv6;
 	unsigned short is_ssl;
-	
+
 	buffer *srv_token;
-	
+
 #ifdef USE_OPENSSL
 	SSL_CTX *ssl_ctx;
 #endif
@@ -507,37 +507,37 @@ typedef struct {
 
 typedef struct {
 	server_socket **ptr;
-	
+
 	size_t size;
 	size_t used;
 } server_socket_array;
 
 typedef struct server {
 	server_socket_array srv_sockets;
-	
+
 	/* the errorlog */
 	int errorlog_fd;
 	enum { ERRORLOG_STDERR, ERRORLOG_FILE, ERRORLOG_SYSLOG } errorlog_mode;
 	buffer *errorlog_buf;
-	
+
 	fdevents *ev, *ev_ins;
-	
+
 	buffer_plugin plugins;
 	void *plugin_slots;
-	
+
 	/* counters */
 	int con_opened;
 	int con_read;
 	int con_written;
 	int con_closed;
-	
+
 	int ssl_is_init;
-	
+
 	int max_fds;    /* max possible fds */
 	int cur_fds;    /* currently used fds */
 	int want_fds;   /* waiting fds */
 	int sockets_disabled;
-	
+
 	size_t max_conns;
 
 	/* buffers */
@@ -545,13 +545,13 @@ typedef struct server {
 	buffer *response_header;
 	buffer *response_range;
 	buffer *tmp_buf;
-	
+
 	buffer *tmp_chunk_len;
-	
+
 	buffer *empty_string; /* is necessary for cond_match */
 
 	buffer *cond_check_buf;
-	
+
 	/* caches */
 #ifdef HAVE_IPV6
 	inet_ntop_cache_type inet_ntop_cache[INET_NTOP_CACHE_MAX];
@@ -559,32 +559,32 @@ typedef struct server {
 	mtime_cache_type mtime_cache[FILE_CACHE_MAX];
 
 	array *split_vals;
-	
+
 	/* Timestamps */
 	time_t cur_ts;
 	time_t last_generated_date_ts;
 	time_t last_generated_debug_ts;
 	time_t startup_ts;
-	
+
 	buffer *ts_debug_str;
 	buffer *ts_date_str;
-	
+
 	/* config-file */
 	array *config;
 	array *config_touched;
-	
+
 	array *config_context;
 	specific_config **config_storage;
-	
+
 	server_config  srvconf;
-	
+
 	short int config_deprecated;
 	short int config_unsupported;
-	
+
 	connections *conns;
 	connections *joblist;
 	connections *fdwaitqueue;
-	
+
 	stat_cache  *stat_cache;
 
 	/**
@@ -601,7 +601,7 @@ typedef struct server {
 	 *   fastcgi.backend.<key>.disconnects = ...
 	 */
 	array *status;
-	
+
 	fdevent_handler_t event_handler;
 
 	int (* network_backend_write)(struct server *srv, connection *con, int fd, chunkqueue *cq);

@@ -12,10 +12,10 @@ Module: mod_skeleton
 
 :abstract:
   a nice, short abstrace about the module
-  
+
 .. meta::
   :keywords: lighttpd, skeleton
-  
+
 .. contents:: Table of Contents
 
 Description

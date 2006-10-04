@@ -25,19 +25,19 @@
 #define URIHANDLER_FUNC    CONNECTION_FUNC
 
 #define PLUGIN_DATA        size_t id
-																		
+
 typedef struct {
 	size_t version;
-	
+
 	buffer *name; /* name of the plugin */
-	
+
 	void *(* init)                       ();
 	handler_t (* set_defaults)           (server *srv, void *p_d);
 	handler_t (* cleanup)                (server *srv, void *p_d);
 	                                                                                   /* is called ... */
 	handler_t (* handle_trigger)         (server *srv, void *p_d);                     /* once a second */
 	handler_t (* handle_sighup)          (server *srv, void *p_d);                     /* at a signup */
-	
+
 	handler_t (* handle_uri_raw)         (server *srv, connection *con, void *p_d);    /* after uri_raw is set */
 	handler_t (* handle_uri_clean)       (server *srv, connection *con, void *p_d);    /* after uri is set */
 	handler_t (* handle_docroot)         (server *srv, connection *con, void *p_d);    /* getting the document-root */
@@ -45,18 +45,18 @@ typedef struct {
 	handler_t (* handle_request_done)    (server *srv, connection *con, void *p_d);    /* at the end of a request */
 	handler_t (* handle_connection_close)(server *srv, connection *con, void *p_d);    /* at the end of a connection */
 	handler_t (* handle_joblist)         (server *srv, connection *con, void *p_d);    /* after all events are handled */
-	
-	
-	
-	handler_t (* handle_subrequest_start)(server *srv, connection *con, void *p_d);   
-	
-	                                                                                   /* when a handler for the request 
+
+
+
+	handler_t (* handle_subrequest_start)(server *srv, connection *con, void *p_d);
+
+	                                                                                   /* when a handler for the request
 											    * has to be found
 											    */
 	handler_t (* handle_subrequest)      (server *srv, connection *con, void *p_d);    /* */
 	handler_t (* connection_reset)       (server *srv, connection *con, void *p_d);    /* */
 	void *data;
-	
+
 	/* dlopen handle */
 	void *lib;
 } plugin;

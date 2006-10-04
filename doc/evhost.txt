@@ -12,10 +12,10 @@ Module: mod_evhost
 
 :abstract:
   virtual hosting
-  
+
 .. meta::
   :keywords: lighttpd, virtual hosting
-  
+
 .. contents:: Table of Contents
 
 Description
@@ -23,10 +23,10 @@ Description
 
 mod_evhost builds the document-root based on a pattern which contains
 wildcards. Those wildcards can represent parts if the submitted hostname
- 
+
 
 ::
-  
+
   %% => % sign
   %0 => domain name + tld
   %1 => tld
@@ -39,7 +39,7 @@ wildcards. Those wildcards can represent parts if the submitted hostname
 Options
 =======
 
-evhost.path-pattern 
+evhost.path-pattern
   pattern with wildcards to be replace to build a documentroot
-  
+
 

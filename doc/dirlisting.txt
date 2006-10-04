@@ -13,10 +13,10 @@ Module: mod_dirlisting
 :abstract:
   mod_dirlisting generates HTML based directory listings with full CSS
   control
-  
+
 .. meta::
   :keywords: lighttpd, directory listings, dirlisting
-  
+
 .. contents:: Table of Contents
 
 Description
@@ -53,7 +53,7 @@ Options
 
 dir-listing.activate
   enables virtual directory listings if a directory is requested no
-  index-file was found 
+  index-file was found
 
   Default: disabled
 
@@ -78,5 +78,5 @@ dir-listing.encoding
   encoding)
 
   Example: ::
-   
+
     dir-listing.encoding = "utf-8"

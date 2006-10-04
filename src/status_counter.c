@@ -32,7 +32,7 @@ data_integer *status_counter_get_counter(server *srv, const char *s, size_t len)
 	return di;
 }
 
-/* dummies of the statistic framework functions 
+/* dummies of the statistic framework functions
  * they will be moved to a statistics.c later */
 int status_counter_inc(server *srv, const char *s, size_t len) {
 	data_integer *di = status_counter_get_counter(srv, s, len);

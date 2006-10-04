@@ -40,13 +40,13 @@ dnl more automake stuff
 AM_C_PROTOTYPES
 
 dnl libtool
-AC_DISABLE_STATIC	
+AC_DISABLE_STATIC
 AC_ENABLE_SHARED
 
 AC_LIBTOOL_DLOPEN
 AC_PROG_LIBTOOL
 
-dnl for solaris 
+dnl for solaris
 CPPFLAGS="${CPPFLAGS} -D_REENTRANT -D__EXTENSIONS__"
 
 # Checks for header files.
@@ -90,7 +90,7 @@ AC_ARG_WITH(mysql,
     [WITH_MYSQL=$withval],[WITH_MYSQL=no])
 
 if test "$WITH_MYSQL" != "no"; then
-  AC_MSG_RESULT(yes)  
+  AC_MSG_RESULT(yes)
   if test "$WITH_MYSQL" = "yes"; then
     AC_PATH_PROG(MYSQL_CONFIG, mysql_config)
   else
@@ -237,8 +237,8 @@ if test "x$use_openssl" = "xyes"; then
 
     AC_CHECK_HEADERS([openssl/ssl.h])
     OLDLIBS="$LIBS"
-    AC_CHECK_LIB(crypto, BIO_f_base64, [ 
-      AC_CHECK_LIB(ssl, SSL_new, [ SSL_LIB="-lssl -lcrypto" 
+    AC_CHECK_LIB(crypto, BIO_f_base64, [
+      AC_CHECK_LIB(ssl, SSL_new, [ SSL_LIB="-lssl -lcrypto"
 				 AC_DEFINE(HAVE_LIBSSL, [], [Have libssl]) ], [], [ -lcrypto "$DL_LIB" ])
     ], [], [])
     LIBS="$OLDLIBS"
@@ -253,7 +253,7 @@ AC_MSG_RESULT([$WITH_PCRE])
 if test "x$cross_compiling" = xno -a "$WITH_PCRE" != "no"; then
   AC_PATH_PROG(PCRECONFIG, pcre-config)
 
-  if test x"$PCRECONFIG" != x; then 
+  if test x"$PCRECONFIG" != x; then
     PCRE_LIB=`$PCRECONFIG --libs`
     CPPFLAGS="$CPPFLAGS `$PCRECONFIG --cflags`"
     OLDLIBS="$LIBS"
@@ -373,7 +373,7 @@ if test "$WITH_MEMCACHE" != "no"; then
  ])
  AC_SUBST(MEMCACHE_LIB)
 fi
-  
+
 dnl Check for lua
 AC_MSG_CHECKING(if lua-support is requested)
 AC_ARG_WITH(lua, AC_HELP_STRING([--with-lua],[lua engine for mod_cml]),
@@ -455,13 +455,13 @@ if test "x$ac_cv_func_sendfile" = xyes; then
 		      int o = 0;
 		      if (-1 == sendfile(-1, 0, &o, 0) && errno == ENOSYS) return -1;
 		      return 0;
-		    } ], 
-		    AC_MSG_RESULT(yes), 
-		    [ AC_MSG_RESULT(no) 
+		    } ],
+		    AC_MSG_RESULT(yes),
+		    [ AC_MSG_RESULT(no)
 		    AC_DEFINE([HAVE_SENDFILE_BROKEN], [1], [broken sendfile]) ] )
 	else
-	      AC_MSG_RESULT(no, cross-compiling) 
-	      AC_DEFINE([HAVE_SENDFILE_BROKEN], [1], [broken sendfile]) 
+	      AC_MSG_RESULT(no, cross-compiling)
+	      AC_DEFINE([HAVE_SENDFILE_BROKEN], [1], [broken sendfile])
 	fi
 fi
 
@@ -481,7 +481,7 @@ if test x$ipv6 = xtrue; then
 #include <sys/socket.h>
 #include <netinet/in.h>], [struct sockaddr_in6 s; struct in6_addr t=in6addr_any; int i=AF_INET6; s; t.s6_addr[0] = 0; ],
   [ac_cv_ipv6_support=yes], [ac_cv_ipv6_support=no])])
-  
+
   if test "$ac_cv_ipv6_support" = yes; then
     AC_DEFINE(HAVE_IPV6,1,[Whether to enable IPv6 support])
   fi
@@ -507,7 +507,7 @@ fi
 
 dnl build version-id
 LIGHTTPD_VERSION_ID=`echo $PACKAGE_VERSION | $AWK -F '.' '{print "(" $1 " << 16 | " $2 " << 8 | " $3 ")"}'`
-AC_DEFINE_UNQUOTED([LIGHTTPD_VERSION_ID], [$LIGHTTPD_VERSION_ID], [lighttpd-version-id]) 
+AC_DEFINE_UNQUOTED([LIGHTTPD_VERSION_ID], [$LIGHTTPD_VERSION_ID], [lighttpd-version-id])
 
 AC_CONFIG_FILES([Makefile src/Makefile doc/Makefile tests/Makefile \
 		 tests/docroot/Makefile \
@@ -521,7 +521,7 @@ AC_CONFIG_FILES([Makefile src/Makefile doc/Makefile tests/Makefile \
 AC_OUTPUT
 
 
-do_build="mod_cgi mod_fastcgi mod_proxy mod_evhost mod_simple_vhost mod_access mod_alias mod_setenv mod_usertrack mod_auth mod_status mod_accesslog mod_rrdtool mod_secdownload mod_expire mod_compress mod_dirlisting mod_indexfiles mod_userdir mod_webdav mod_staticfile mod_scgi mod_flv_streaming" 
+do_build="mod_cgi mod_fastcgi mod_proxy mod_evhost mod_simple_vhost mod_access mod_alias mod_setenv mod_usertrack mod_auth mod_status mod_accesslog mod_rrdtool mod_secdownload mod_expire mod_compress mod_dirlisting mod_indexfiles mod_userdir mod_webdav mod_staticfile mod_scgi mod_flv_streaming"
 
 plugins="mod_rewrite mod_redirect mod_ssi mod_trigger_b4_dl"
 features="regex-conditionals"

@@ -12,10 +12,10 @@ Module: mod_rewrite
 
 :abstract:
   url rewrite
-  
+
 .. meta::
   :keywords: lighttpd, rewrite
-  
+
 .. contents:: Table of Contents
 
 Description
@@ -28,25 +28,25 @@ Options
 
 url.rewrite-once
   rewrites a set of URLs interally in the webserver BEFORE they are handled.
-  
+
   e.g. ::
-  
+
     url.rewrite-once = ( "<regex>" => "<relative-uri>" )
-    
+
 url.rewrite-repeat
   rewrites a set of URLs interally in the webserver BEFORE they are handled
-  
+
   e.g. ::
-    
+
     url.rewrite-repeat = ( "<regex>" => "<relative-uri>" )
 
-The options ``url.rewrite`` and ``url.rewrite-final`` were mapped to ``url.rewrite-once`` 
+The options ``url.rewrite`` and ``url.rewrite-final`` were mapped to ``url.rewrite-once``
 in 1.3.16.
 
 Examples
 ========
 
-The regex is matching the full REQUEST_URI which is supplied by the user including 
+The regex is matching the full REQUEST_URI which is supplied by the user including
 query-string.::
 
   url.rewrite-once = ( "^/id/([0-9]+)$" => "/index.php?id=$1",
@@ -58,7 +58,7 @@ query-string.::
   # * you can never change document-root by mod_rewrite
   # use mod_*host instead to make real mass-vhost
 
-  # request:        http://any.domain.com/url/ 
+  # request:        http://any.domain.com/url/
   # before rewrite: REQUEST_URI="/www/htdocs/url/"
   # and DOCUMENT_ROOT="/www/htdocs/" %0="www.domain.com" $1="url/"
   # after rewrite:  REQUEST_URI="/www/htdocs/domain.com/url/"

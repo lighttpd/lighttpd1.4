@@ -7,7 +7,7 @@
 
 int joblist_append(server *srv, connection *con) {
 	if (con->in_joblist) return 0;
-	
+
 	if (srv->joblist->size == 0) {
 		srv->joblist->size  = 16;
 		srv->joblist->ptr   = malloc(sizeof(*srv->joblist->ptr) * srv->joblist->size);
@@ -15,15 +15,15 @@ int joblist_append(server *srv, connection *con) {
 		srv->joblist->size += 16;
 		srv->joblist->ptr   = realloc(srv->joblist->ptr, sizeof(*srv->joblist->ptr) * srv->joblist->size);
 	}
-	
+
 	srv->joblist->ptr[srv->joblist->used++] = con;
-	
+
 	return 0;
 }
 
 void joblist_free(server *srv, connections *joblist) {
 	UNUSED(srv);
-		
+
 	free(joblist->ptr);
 	free(joblist);
 }
@@ -31,14 +31,14 @@ void joblist_free(server *srv, connections *joblist) {
 connection *fdwaitqueue_unshift(server *srv, connections *fdwaitqueue) {
 	connection *con;
 	UNUSED(srv);
-		
-	
+
+
 	if (fdwaitqueue->used == 0) return NULL;
-	
+
 	con = fdwaitqueue->ptr[0];
-	
+
 	memmove(fdwaitqueue->ptr, &(fdwaitqueue->ptr[1]), --fdwaitqueue->used * sizeof(*(fdwaitqueue->ptr)));
-	
+
 	return con;
 }
 
@@ -50,9 +50,9 @@ int fdwaitqueue_append(server *srv, connection *con) {
 		srv->fdwaitqueue->size += 16;
 		srv->fdwaitqueue->ptr   = realloc(srv->fdwaitqueue->ptr, sizeof(*(srv->fdwaitqueue->ptr)) * srv->fdwaitqueue->size);
 	}
-	
+
 	srv->fdwaitqueue->ptr[srv->fdwaitqueue->used++] = con;
-	
+
 	return 0;
 }
 

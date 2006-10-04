@@ -34,7 +34,7 @@ void script_free(script *sc) {
 
 script_cache *script_cache_init() {
 	script_cache *p;
-	
+
 	p = calloc(1, sizeof(*p));
 
 	return p;
@@ -89,7 +89,7 @@ lua_State *script_cache_get_script(server *srv, connection *con, script_cache *c
 		sc = NULL;
 	}
 
-	/* if the script was script already loaded but either got changed or 
+	/* if the script was script already loaded but either got changed or
 	 * failed to load last time */
 	if (sc == NULL) {
 		sc = script_init();
@@ -103,7 +103,7 @@ lua_State *script_cache_get_script(server *srv, connection *con, script_cache *c
 		}
 
 		cache->ptr[cache->used++] = sc;
-	
+
 		buffer_copy_string_buffer(sc->name, name);
 
 		sc->L = luaL_newstate();

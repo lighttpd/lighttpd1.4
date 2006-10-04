@@ -48,7 +48,7 @@ static int fdevent_freebsd_kqueue_event_del(fdevents *ev, int fde_ndx, int fd) {
 
 		return -1;
 	}
-	
+
 	return -1;
 }
 
@@ -65,7 +65,7 @@ static int fdevent_freebsd_kqueue_event_add(fdevents *ev, int fde_ndx, int fd, i
 
 	ts.tv_sec  = 0;
 	ts.tv_nsec = 0;
-	
+
 	ret = kevent(ev->kq_fd,
 		     &kev, 1,
 		     NULL, 0,
@@ -77,7 +77,7 @@ static int fdevent_freebsd_kqueue_event_add(fdevents *ev, int fde_ndx, int fd, i
 
 		return -1;
 	}
-	
+
 	if (filter == EVFILT_READ) {
 		bitset_set_bit(ev->kq_bevents, fd);
 	} else {
@@ -124,7 +124,7 @@ static int fdevent_freebsd_kqueue_event_get_revent(fdevents *ev, size_t ndx) {
 	} else if (e == EVFILT_WRITE) {
 		events |= FDEVENT_OUT;
 	}
-	
+
 	e = ev->kq_results[ndx].flags;
 
 	if (e & EV_EOF) {
@@ -152,10 +152,10 @@ static int fdevent_freebsd_kqueue_reset(fdevents *ev) {
 	if (-1 == (ev->kq_fd = kqueue())) {
 		fprintf(stderr, "%s.%d: kqueue failed (%s), try to set server.event-handler = \"poll\" or \"select\"\n",
 			__FILE__, __LINE__, strerror(errno));
-		
+
 		return -1;
 	}
-	
+
 	return 0;
 }
 
@@ -186,7 +186,7 @@ int fdevent_freebsd_kqueue_init(fdevents *ev) {
 	if (-1 == (ev->kq_fd = kqueue())) {
 		fprintf(stderr, "%s.%d: kqueue failed (%s), try to set server.event-handler = \"poll\" or \"select\"\n",
 			__FILE__, __LINE__, strerror(errno));
-		
+
 		return -1;
 	}
 

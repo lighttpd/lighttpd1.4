@@ -12,7 +12,7 @@ a light httpd
 :Revision: $Revision: 1.8 $
 
 :abstract:
-  lighttpd a secure, fast, compliant and very flexible web-server 
+  lighttpd a secure, fast, compliant and very flexible web-server
   which has been optimized for high-performance environments. It has a very
   low memory footprint compared to other webservers and takes care of cpu-load.
   Its advanced feature-set (FastCGI, CGI, Auth, Output-Compression,
@@ -22,7 +22,7 @@ a light httpd
 the naming
 ----------
 
-lighttpd is a __httpd__ which is 
+lighttpd is a __httpd__ which is
 
 - fast as __light__ning and
 - __light__ when it comes to memory consumption and system requirements
@@ -50,7 +50,7 @@ Advanced Features
 - load-balanced FastCGI
   (one webserver distributes requests to multiple PHP-servers via FastCGI)
 - custom error pages (for Response-Code 400-599)
-- virtual hosts 
+- virtual hosts
 - directory listings
 - streaming CGI and FastCGI
 - URL-Rewriting
@@ -71,18 +71,18 @@ PHP-Support
 - includes a utility to spawn FastCGI processes (necessary for PHP 4.3.x)
 
 Security features
-````````````````` 
+`````````````````
 
 - chroot(), set UID, set GID
 - protecting docroot
 
 HTTP/1.1 features
-````````````````` 
+`````````````````
 
 - Ranges (start-end, start-, -end, multiple ranges)
 - HTTP/1.0 Keep-Alive + HTTP/1.1 persistent Connections
 - methods: GET, HEAD, POST
-- Last-Modified + If-Modified handling 
+- Last-Modified + If-Modified handling
 - sends Content-Length if possible
 - sends Transfer-Encoding: chunk, if Content-Length is not possible
 - sends Content-Type
@@ -91,7 +91,7 @@ HTTP/1.1 features
   (http://www.ietf.org/rfc/rfc2617.txt)
 
 HTTP/1.1 compliance
-``````````````````` 
+```````````````````
 
 - Sends 206 for Range Requests
 - Sends 304 for If-Modified Requests
@@ -101,7 +101,7 @@ HTTP/1.1 compliance
 - Sends 416 for "out-of-range" on Range: Header
 - Sends 501 for request-method != (GET|POST|HEAD)
 - Sends 505 for protocol != HTTP/1.0 or HTTP/1.1
-- Sends Date: on every requests 
+- Sends Date: on every requests
 
 Intended Audience
 -----------------
@@ -118,14 +118,14 @@ It has been tested to work with
 
 - IE 6.0
 - Mozilla 1.x
-- Konqueror 3.1 
+- Konqueror 3.1
   (for Keep-Alive/Persistent Connections, Accept-Encoding for PHP + gzip)
-- wget 
+- wget
   (for Resuming)
 - acrobat plugin
   (for multiple ranges)
-  
-  
+
+
 Works on
 --------
 

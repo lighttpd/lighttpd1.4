@@ -31,22 +31,22 @@
 input ::= exprline(B). {
   ctx->val.bo = ssi_val_tobool(B);
   ctx->val.type = SSI_TYPE_BOOL;
-  
+
   ssi_val_free(B);
 }
 
 exprline(A) ::= expr(B) cond(C) expr(D). {
   int cmp;
-  
-  if (B->type == SSI_TYPE_STRING && 
+
+  if (B->type == SSI_TYPE_STRING &&
       D->type == SSI_TYPE_STRING) {
        cmp = strcmp(B->str->ptr, D->str->ptr);
   } else {
     cmp = ssi_val_tobool(B) - ssi_val_tobool(D);
   }
-  
+
   A = B;
-  
+
   switch(C) {
   case SSI_COND_EQ: A->bo = (cmp == 0) ? 1 : 0; break;
   case SSI_COND_NE: A->bo = (cmp != 0) ? 1 : 0; break;
@@ -55,9 +55,9 @@ exprline(A) ::= expr(B) cond(C) expr(D). {
   case SSI_COND_LE: A->bo = (cmp <= 0) ? 1 : 0; break;
   case SSI_COND_LT: A->bo = (cmp < 0) ? 1 : 0; break;
   }
-  
+
   A->type = SSI_TYPE_BOOL;
-  
+
   ssi_val_free(D);
 }
 exprline(A) ::= expr(B). {
@@ -65,9 +65,9 @@ exprline(A) ::= expr(B). {
 }
 expr(A) ::= expr(B) AND expr(C). {
   int e;
-  
+
   e = ssi_val_tobool(B) && ssi_val_tobool(C);
-  
+
   A = B;
   A->bo = e;
   A->type = SSI_TYPE_BOOL;
@@ -76,9 +76,9 @@ expr(A) ::= expr(B) AND expr(C). {
 
 expr(A) ::= expr(B) OR expr(C). {
   int e;
-  
+
   e = ssi_val_tobool(B) || ssi_val_tobool(C);
-  
+
   A = B;
   A->bo = e;
   A->type = SSI_TYPE_BOOL;
@@ -87,9 +87,9 @@ expr(A) ::= expr(B) OR expr(C). {
 
 expr(A) ::= NOT expr(B). {
   int e;
-  
+
   e = !ssi_val_tobool(B);
-  
+
   A = B;
   A->bo = e;
   A->type = SSI_TYPE_BOOL;

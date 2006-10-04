@@ -49,6 +49,6 @@ E=
 for i in $ALLOWED_ENV; do
   E="$E $i=${!i}"
 done
-  
+
 # clean the environment and set up a new one
 env - $E $EX

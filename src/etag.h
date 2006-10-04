@@ -10,6 +10,6 @@
 int etag_is_equal(buffer *etag, const char *matches);
 int etag_create(buffer *etag, struct stat *st);
 int etag_mutate(buffer *mut, buffer *etag);
-	
+
 
 #endif

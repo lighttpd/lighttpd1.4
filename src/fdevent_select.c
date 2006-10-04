@@ -49,28 +49,28 @@ static int fdevent_select_event_add(fdevents *ev, int fde_ndx, int fd, int event
 		FD_SET(fd, &(ev->select_set_write));
 	}
 	FD_SET(fd, &(ev->select_set_error));
-	
+
 	if (fd > ev->select_max_fd) ev->select_max_fd = fd;
-	
+
 	return fd;
 }
 
 static int fdevent_select_poll(fdevents *ev, int timeout_ms) {
 	struct timeval tv;
-	
+
 	tv.tv_sec =  timeout_ms / 1000;
 	tv.tv_usec = (timeout_ms % 1000) * 1000;
-	
+
 	ev->select_read = ev->select_set_read;
 	ev->select_write = ev->select_set_write;
 	ev->select_error = ev->select_set_error;
-	
+
 	return select(ev->select_max_fd + 1, &(ev->select_read), &(ev->select_write), &(ev->select_error), &tv);
 }
 
 static int fdevent_select_event_get_revent(fdevents *ev, size_t ndx) {
 	int revents = 0;
-	
+
 	if (FD_ISSET(ndx, &(ev->select_read))) {
 		revents |= FDEVENT_IN;
 	}
@@ -80,7 +80,7 @@ static int fdevent_select_event_get_revent(fdevents *ev, size_t ndx) {
 	if (FD_ISSET(ndx, &(ev->select_error))) {
 		revents |= FDEVENT_ERR;
 	}
-	
+
 	return revents;
 }
 
@@ -92,15 +92,15 @@ static int fdevent_select_event_get_fd(fdevents *ev, size_t ndx) {
 
 static int fdevent_select_event_next_fdndx(fdevents *ev, int ndx) {
 	int i;
-	
+
 	i = (ndx < 0) ? 0 : ndx + 1;
-	
+
 	for (; i < ev->select_max_fd + 1; i++) {
 		if (FD_ISSET(i, &(ev->select_read))) break;
 		if (FD_ISSET(i, &(ev->select_write))) break;
 		if (FD_ISSET(i, &(ev->select_error))) break;
 	}
-	
+
 	return i;
 }
 
@@ -108,17 +108,17 @@ int fdevent_select_init(fdevents *ev) {
 	ev->type = FDEVENT_HANDLER_SELECT;
 #define SET(x) \
 	ev->x = fdevent_select_##x;
-	
+
 	SET(reset);
 	SET(poll);
-	
+
 	SET(event_del);
 	SET(event_add);
-	
+
 	SET(event_next_fdndx);
 	SET(event_get_fd);
 	SET(event_get_revent);
-	
+
 	return 0;
 }
 

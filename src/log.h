@@ -9,5 +9,5 @@ int log_error_open(server *srv);
 int log_error_close(server *srv);
 int log_error_write(server *srv, const char *filename, unsigned int line, const char *fmt, ...);
 int log_error_cycle(server *srv);
-	
+
 #endif

@@ -6,7 +6,7 @@
 
 typedef struct chunk {
 	enum { UNUSED_CHUNK, MEM_CHUNK, FILE_CHUNK } type;
-	
+
 	buffer *mem; /* either the storage of the mem-chunk or the read-ahead buffer */
 
 	struct {
@@ -16,7 +16,7 @@ typedef struct chunk {
 		off_t  length; /* octets to send from the starting offset */
 
 		int    fd;
-		struct { 
+		struct {
 			char   *start; /* the start pointer of the mmap'ed area */
 			size_t length; /* size of the mmap'ed area */
 			off_t  offset; /* start is <n> octet away from the start of the file */
@@ -24,20 +24,20 @@ typedef struct chunk {
 
 		int is_temp; /* file is temporary and will be deleted if on cleanup */
 	} file;
-	
-	off_t  offset; /* octets sent from this chunk 
-			  the size of the chunk is either 
+
+	off_t  offset; /* octets sent from this chunk
+			  the size of the chunk is either
 			  - mem-chunk: mem->used - 1
 			  - file-chunk: file.length
 			*/
-	
+
 	struct chunk *next;
 } chunk;
 
 typedef struct {
 	chunk *first;
 	chunk *last;
-	
+
 	chunk *unused;
 	size_t unused_chunks;
 

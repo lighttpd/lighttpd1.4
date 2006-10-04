@@ -24,4 +24,4 @@ postrm.ex \
 preinst.ex \
 prerm.ex \
 rules \
-watch.ex 
+watch.ex

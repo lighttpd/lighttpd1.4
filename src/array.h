@@ -29,21 +29,21 @@ typedef struct data_unset {
 
 typedef struct {
 	data_unset  **data;
-	
+
 	size_t *sorted;
-	
+
 	size_t used;
 	size_t size;
-	
+
 	size_t unique_ndx;
-	
+
 	size_t next_power_of_2;
 	int is_weakref; /* data is weakref, don't bother the data */
 } array;
 
 typedef struct {
 	DATA_UNSET;
-	
+
 	int count;
 } data_count;
 
@@ -51,7 +51,7 @@ data_count *data_count_init(void);
 
 typedef struct {
 	DATA_UNSET;
-	
+
 	buffer *value;
 } data_string;
 
@@ -60,7 +60,7 @@ data_string *data_response_init(void);
 
 typedef struct {
 	DATA_UNSET;
-	
+
 	array *value;
 } data_array;
 
@@ -69,8 +69,8 @@ data_array *data_array_init(void);
 /**
  * possible compare ops in the configfile parser
  */
-typedef enum { 
-	CONFIG_COND_UNSET, 
+typedef enum {
+	CONFIG_COND_UNSET,
 	CONFIG_COND_EQ,      /** == */
 	CONFIG_COND_MATCH,   /** =~ */
 	CONFIG_COND_NE,      /** != */
@@ -82,17 +82,17 @@ typedef enum {
  */
 typedef enum {
 	COMP_UNSET,
-	COMP_SERVER_SOCKET, 
-	COMP_HTTP_URL, 
-	COMP_HTTP_HOST, 
-	COMP_HTTP_REFERER, 
-	COMP_HTTP_USERAGENT, 
-	COMP_HTTP_COOKIE, 
+	COMP_SERVER_SOCKET,
+	COMP_HTTP_URL,
+	COMP_HTTP_HOST,
+	COMP_HTTP_REFERER,
+	COMP_HTTP_USERAGENT,
+	COMP_HTTP_COOKIE,
 	COMP_HTTP_REMOTEIP,
 	COMP_HTTP_QUERYSTRING
 } comp_key_t;
 
-/* $HTTP["host"] ==    "incremental.home.kneschke.de" { ... } 
+/* $HTTP["host"] ==    "incremental.home.kneschke.de" { ... }
  * for print:   comp_key      op    string
  * for compare: comp          cond  string/regex
  */
@@ -100,15 +100,15 @@ typedef enum {
 typedef struct _data_config data_config;
 struct _data_config {
 	DATA_UNSET;
-	
+
 	array *value;
-	
+
 	buffer *comp_key;
 	comp_key_t comp;
-	
+
 	config_cond_t cond;
 	buffer *op;
-	
+
 	int context_ndx; /* more or less like an id */
 	array *childs;
 	/* nested */
@@ -116,7 +116,7 @@ struct _data_config {
 	/* for chaining only */
 	data_config *prev;
 	data_config *next;
-	
+
 	buffer *string;
 #ifdef HAVE_PCRE_H
 	pcre   *regex;
@@ -128,7 +128,7 @@ data_config *data_config_init(void);
 
 typedef struct {
 	DATA_UNSET;
-	
+
 	int value;
 } data_integer;
 
@@ -138,13 +138,13 @@ typedef struct {
 	DATA_UNSET;
 
 	buffer *host;
-	
+
 	unsigned short port;
 
 	time_t disable_ts;
 	int is_disabled;
 	size_t balance;
-		
+
 	int usage; /* fair-balancing needs the no. of connections active on this host */
 	int last_used_ndx; /* round robin */
 } data_fastcgi;

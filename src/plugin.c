@@ -17,23 +17,23 @@
 #include <dlfcn.h>
 #endif
 /*
- * 
+ *
  * if you change this enum to add a new callback, be sure
  * - that PLUGIN_FUNC_SIZEOF is the last entry
  * - that you add PLUGIN_TO_SLOT twice:
- *   1. as callback-dispatcher 
+ *   1. as callback-dispatcher
  *   2. in plugins_call_init()
- * 
+ *
  */
 
 typedef struct {
 	PLUGIN_DATA;
 } plugin_data;
 
-typedef enum { 
+typedef enum {
 	PLUGIN_FUNC_UNSET,
-		PLUGIN_FUNC_HANDLE_URI_CLEAN, 
-		PLUGIN_FUNC_HANDLE_URI_RAW, 
+		PLUGIN_FUNC_HANDLE_URI_CLEAN,
+		PLUGIN_FUNC_HANDLE_URI_RAW,
 		PLUGIN_FUNC_HANDLE_REQUEST_DONE,
 		PLUGIN_FUNC_HANDLE_CONNECTION_CLOSE,
 		PLUGIN_FUNC_HANDLE_TRIGGER,
@@ -44,18 +44,18 @@ typedef enum {
 		PLUGIN_FUNC_HANDLE_DOCROOT,
 		PLUGIN_FUNC_HANDLE_PHYSICAL,
 		PLUGIN_FUNC_CONNECTION_RESET,
-		PLUGIN_FUNC_INIT, 
+		PLUGIN_FUNC_INIT,
 		PLUGIN_FUNC_CLEANUP,
 		PLUGIN_FUNC_SET_DEFAULTS,
-		
+
 		PLUGIN_FUNC_SIZEOF
 } plugin_t;
 
 static plugin *plugin_init(void) {
 	plugin *p;
-	
+
 	p = calloc(1, sizeof(*p));
-	
+
 	return p;
 }
 
@@ -67,7 +67,7 @@ static void plugin_free(plugin *p) {
 #endif
 
 #ifndef LIGHTTPD_STATIC
-	if (use_dlclose && p->lib) {	
+	if (use_dlclose && p->lib) {
 #ifdef __WIN32
 		FreeLibrary(p->lib);
 #else
@@ -75,7 +75,7 @@ static void plugin_free(plugin *p) {
 #endif
 	}
 #endif
-		
+
 	free(p);
 }
 
@@ -89,17 +89,17 @@ static int plugins_register(server *srv, plugin *p) {
 		srv->plugins.size += 4;
 		srv->plugins.ptr   = realloc(srv->plugins.ptr, srv->plugins.size * sizeof(*ps));
 	}
-	
+
 	ps = srv->plugins.ptr;
 	ps[srv->plugins.used++] = p;
-	
+
 	return 0;
 }
 
 /**
- * 
- * 
- * 
+ *
+ *
+ *
  */
 
 #ifdef LIGHTTPD_STATIC
@@ -124,11 +124,11 @@ int plugins_load(server *srv) {
 	int (*init)(plugin *pl);
 	const char *error;
 	size_t i;
-	
+
 	for (i = 0; i < srv->srvconf.modules->used; i++) {
 		data_string *d = (data_string *)srv->srvconf.modules->data[i];
 		char *modules = d->value->ptr;
-	
+
 		buffer_copy_string_buffer(srv->tmp_buf, srv->srvconf.modules_dir);
 
 		buffer_append_string(srv->tmp_buf, "/");
@@ -138,13 +138,13 @@ int plugins_load(server *srv) {
 #else
 		buffer_append_string(srv->tmp_buf, ".so");
 #endif
-	
+
 		p = plugin_init();
 #ifdef __WIN32
 		if (NULL == (p->lib = LoadLibrary(srv->tmp_buf->ptr))) {
 			LPVOID lpMsgBuf;
 			FormatMessage(
-		        	FORMAT_MESSAGE_ALLOCATE_BUFFER | 
+		        	FORMAT_MESSAGE_ALLOCATE_BUFFER |
 		       		FORMAT_MESSAGE_FROM_SYSTEM,
 		        	NULL,
 		        	GetLastError(),
@@ -152,24 +152,24 @@ int plugins_load(server *srv) {
 		        	(LPTSTR) &lpMsgBuf,
 		        	0, NULL );
 
-			log_error_write(srv, __FILE__, __LINE__, "ssb", "LoadLibrary() failed", 
+			log_error_write(srv, __FILE__, __LINE__, "ssb", "LoadLibrary() failed",
 					lpMsgBuf, srv->tmp_buf);
-			
+
 			plugin_free(p);
-			
+
 			return -1;
 
 		}
-#else	
+#else
 		if (NULL == (p->lib = dlopen(srv->tmp_buf->ptr, RTLD_LAZY))) {
-			log_error_write(srv, __FILE__, __LINE__, "sbs", "dlopen() failed for:", 
+			log_error_write(srv, __FILE__, __LINE__, "sbs", "dlopen() failed for:",
 					srv->tmp_buf, dlerror());
-			
+
 			plugin_free(p);
-			
+
 			return -1;
 		}
-		
+
 #endif
 		buffer_reset(srv->tmp_buf);
 		buffer_copy_string(srv->tmp_buf, modules);
@@ -181,7 +181,7 @@ int plugins_load(server *srv) {
 		if (init == NULL)  {
 			LPVOID lpMsgBuf;
 			FormatMessage(
-		        	FORMAT_MESSAGE_ALLOCATE_BUFFER | 
+		        	FORMAT_MESSAGE_ALLOCATE_BUFFER |
 		       		FORMAT_MESSAGE_FROM_SYSTEM,
 		        	NULL,
 		        	GetLastError(),
@@ -190,7 +190,7 @@ int plugins_load(server *srv) {
 		        	0, NULL );
 
 			log_error_write(srv, __FILE__, __LINE__, "sbs", "getprocaddress failed:", srv->tmp_buf, lpMsgBuf);
-			
+
 			plugin_free(p);
 			return -1;
 		}
@@ -203,15 +203,15 @@ int plugins_load(server *srv) {
 #endif
 		if ((error = dlerror()) != NULL)  {
 			log_error_write(srv, __FILE__, __LINE__, "s", error);
-			
+
 			plugin_free(p);
 			return -1;
 		}
-	
+
 #endif
 		if ((*init)(p)) {
 			log_error_write(srv, __FILE__, __LINE__, "ss", modules, "plugin init failed" );
-			
+
 			plugin_free(p);
 			return -1;
 		}
@@ -220,7 +220,7 @@ int plugins_load(server *srv) {
 #endif
 		plugins_register(srv, p);
 	}
-	
+
 	return 0;
 }
 #endif
@@ -253,8 +253,8 @@ int plugins_load(server *srv) {
 	}
 
 /**
- * plugins that use 
- * 
+ * plugins that use
+ *
  * - server *srv
  * - connection *con
  * - void *p_d (plugin_data *)
@@ -301,12 +301,12 @@ PLUGIN_TO_SLOT(PLUGIN_FUNC_CONNECTION_RESET, connection_reset)
 	}
 
 /**
- * plugins that use 
- * 
+ * plugins that use
+ *
  * - server *srv
  * - void *p_d (plugin_data *)
  */
-									
+
 PLUGIN_TO_SLOT(PLUGIN_FUNC_HANDLE_TRIGGER, handle_trigger)
 PLUGIN_TO_SLOT(PLUGIN_FUNC_HANDLE_SIGHUP, handle_sighup)
 PLUGIN_TO_SLOT(PLUGIN_FUNC_CLEANUP, cleanup)
@@ -314,18 +314,18 @@ PLUGIN_TO_SLOT(PLUGIN_FUNC_SET_DEFAULTS, set_defaults)
 
 #undef PLUGIN_TO_SLOT
 
-#if 0									
+#if 0
 /**
- * 
+ *
  * special handler
- * 
+ *
  */
 handler_t plugins_call_handle_fdevent(server *srv, const fd_conn *fdc) {
 	size_t i;
 	plugin **ps;
-	
+
 	ps = srv->plugins.ptr;
-	
+
 	for (i = 0; i < srv->plugins.used; i++) {
 		plugin *p = ps[i];
 		if (p->handle_fdevent) {
@@ -344,34 +344,34 @@ handler_t plugins_call_handle_fdevent(server *srv, const fd_conn *fdc) {
 			}
 		}
 	}
-	
+
 	return HANDLER_GO_ON;
 }
 #endif
 /**
- * 
+ *
  * - call init function of all plugins to init the plugin-internals
  * - added each plugin that supports has callback to the corresponding slot
- * 
+ *
  * - is only called once.
  */
 
 handler_t plugins_call_init(server *srv) {
 	size_t i;
 	plugin **ps;
-	
+
 	ps = srv->plugins.ptr;
-	
+
 	/* fill slots */
-	
+
 	srv->plugin_slots = calloc(PLUGIN_FUNC_SIZEOF, sizeof(ps));
-	
+
 	for (i = 0; i < srv->plugins.used; i++) {
 		size_t j;
 		/* check which calls are supported */
-		
+
 		plugin *p = ps[i];
-		
+
 #define PLUGIN_TO_SLOT(x, y) \
 	if (p->y) { \
 		plugin **slot = ((plugin ***)(srv->plugin_slots))[x]; \
@@ -384,11 +384,11 @@ handler_t plugins_call_init(server *srv) {
 			slot[j] = p;\
 			break;\
 		}\
-	} 
-		
-		
-		PLUGIN_TO_SLOT(PLUGIN_FUNC_HANDLE_URI_CLEAN, handle_uri_clean); 
-		PLUGIN_TO_SLOT(PLUGIN_FUNC_HANDLE_URI_RAW, handle_uri_raw); 
+	}
+
+
+		PLUGIN_TO_SLOT(PLUGIN_FUNC_HANDLE_URI_CLEAN, handle_uri_clean);
+		PLUGIN_TO_SLOT(PLUGIN_FUNC_HANDLE_URI_RAW, handle_uri_raw);
 		PLUGIN_TO_SLOT(PLUGIN_FUNC_HANDLE_REQUEST_DONE, handle_request_done);
 		PLUGIN_TO_SLOT(PLUGIN_FUNC_HANDLE_CONNECTION_CLOSE, handle_connection_close);
 		PLUGIN_TO_SLOT(PLUGIN_FUNC_HANDLE_TRIGGER, handle_trigger);
@@ -402,19 +402,19 @@ handler_t plugins_call_init(server *srv) {
 		PLUGIN_TO_SLOT(PLUGIN_FUNC_CLEANUP, cleanup);
 		PLUGIN_TO_SLOT(PLUGIN_FUNC_SET_DEFAULTS, set_defaults);
 #undef PLUGIN_TO_SLOT
-		
+
 		if (p->init) {
 			if (NULL == (p->data = p->init())) {
-				log_error_write(srv, __FILE__, __LINE__, "sb", 
+				log_error_write(srv, __FILE__, __LINE__, "sb",
 						"plugin-init failed for module", p->name);
 				return HANDLER_ERROR;
 			}
-			
+
 			/* used for con->mode, DIRECT == 0, plugins above that */
 			((plugin_data *)(p->data))->id = i + 1;
-			
+
 			if (p->version != LIGHTTPD_VERSION_ID) {
-				log_error_write(srv, __FILE__, __LINE__, "sb", 
+				log_error_write(srv, __FILE__, __LINE__, "sb",
 						"plugin-version doesn't match lighttpd-version for", p->name);
 				return HANDLER_ERROR;
 			}
@@ -422,29 +422,29 @@ handler_t plugins_call_init(server *srv) {
 			p->data = NULL;
 		}
 	}
-	
+
 	return HANDLER_GO_ON;
 }
 
 void plugins_free(server *srv) {
 	size_t i;
 	plugins_call_cleanup(srv);
-	
+
 	for (i = 0; i < srv->plugins.used; i++) {
 		plugin *p = ((plugin **)srv->plugins.ptr)[i];
-		
+
 		plugin_free(p);
 	}
-	
+
 	for (i = 0; srv->plugin_slots && i < PLUGIN_FUNC_SIZEOF; i++) {
 		plugin **slot = ((plugin ***)(srv->plugin_slots))[i];
-		
+
 		if (slot) free(slot);
 	}
-	
+
 	free(srv->plugin_slots);
 	srv->plugin_slots = NULL;
-	
+
 	free(srv->plugins.ptr);
 	srv->plugins.ptr = NULL;
 	srv->plugins.used = 0;
