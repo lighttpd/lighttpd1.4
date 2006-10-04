@@ -168,7 +168,7 @@ handler_t http_response_prepare(server *srv, connection *con) {
 		 * - path
 		 * - query
 		 * 
-		 * (scheme)://(authority)(path)?(query)
+		 * (scheme)://(authority)(path)?(query)#fragment
 		 * 
 		 * 
 		 */
@@ -182,7 +182,13 @@ handler_t http_response_prepare(server *srv, connection *con) {
 		config_patch_connection(srv, con, COMP_HTTP_REFERER);   /* Referer:     */
 		config_patch_connection(srv, con, COMP_HTTP_USERAGENT); /* User-Agent:  */
 		config_patch_connection(srv, con, COMP_HTTP_COOKIE);    /* Cookie:  */
-		
+	
+		/** their might be a fragment which has to be cut away */
+		if (NULL != (qstr = strchr(con->request.uri->ptr, '#'))) {
+			con->request.uri->used = qstr - con->request.uri->ptr;
+			con->request.uri->ptr[con->request.uri->used++] = '\0';
+		}
+
 		/** extract query string from request.uri */
 		if (NULL != (qstr = strchr(con->request.uri->ptr, '?'))) {
 			buffer_copy_string    (con->uri.query, qstr + 1);
