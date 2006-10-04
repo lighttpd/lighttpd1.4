@@ -324,7 +324,7 @@ static int connection_handle_read(server *srv, connection *con) {
 		return -1;
 	}
 	b = chunkqueue_get_append_buffer(con->read_queue);
-	buffer_prepare_copy(b, toread);
+	buffer_prepare_copy(b, toread + 1);
 
 	len = read(con->fd, b->ptr, b->size - 1);
 #endif
