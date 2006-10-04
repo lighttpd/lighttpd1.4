@@ -207,7 +207,9 @@ SETDEFAULTS_FUNC(mod_webdav_set_defaults) {
 			char *err;
 
 			if (SQLITE_OK != sqlite3_open(s->sqlite_db_name->ptr, &(s->sql))) {
-				log_error_write(srv, __FILE__, __LINE__, "s", "sqlite3_open failed");
+				log_error_write(srv, __FILE__, __LINE__, "sbs", "sqlite3_open failed for",
+						s->sqlite_db_name,
+						sqlite3_errmsg(s->sql));
 				return HANDLER_ERROR;
 			}
 
