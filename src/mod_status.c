@@ -171,7 +171,7 @@ static int mod_status_header_append_sort(buffer *b, void *p_d, const char* key) 
 	if (p->conf.sort) {
 		BUFFER_APPEND_STRING_CONST(b, "<th class=\"status\"><a href=\"#\" class=\"sortheader\" onclick=\"resort(this);return false;\">");
 		buffer_append_string(b, key);
-		BUFFER_APPEND_STRING_CONST(b, "<span class=\"sortarrow\"></span></a></th>\n");
+		BUFFER_APPEND_STRING_CONST(b, "<span class=\"sortarrow\">:</span></a></th>\n");
 	} else {
 		BUFFER_APPEND_STRING_CONST(b, "<th class=\"status\">");
 		buffer_append_string(b, key);
@@ -304,7 +304,7 @@ static handler_t mod_status_handle_server_status_html(server *srv, connection *c
 	/* connection listing */
 	BUFFER_APPEND_STRING_CONST(b, "<h1>Server-Status</h1>");
 	
-	BUFFER_APPEND_STRING_CONST(b, "<table class=\"status\">");
+	BUFFER_APPEND_STRING_CONST(b, "<table summary=\"status\" class=\"status\">");
 	BUFFER_APPEND_STRING_CONST(b, "<tr><td>Hostname</td><td class=\"string\">");
 	buffer_append_string_buffer(b, con->uri.authority);
 	BUFFER_APPEND_STRING_CONST(b, " (");
@@ -462,7 +462,7 @@ static handler_t mod_status_handle_server_status_html(server *srv, connection *c
 	
 	BUFFER_APPEND_STRING_CONST(b, "\n</pre><hr />\n<h2>Connections</h2>\n");
 	
-	BUFFER_APPEND_STRING_CONST(b, "<table class=\"status\">\n");
+	BUFFER_APPEND_STRING_CONST(b, "<table summary=\"status\" class=\"status\">\n");
 	BUFFER_APPEND_STRING_CONST(b, "<tr>");
 	mod_status_header_append_sort(b, p_d, "Client IP");
 	mod_status_header_append_sort(b, p_d, "Read");
@@ -674,7 +674,7 @@ static handler_t mod_status_handle_server_config(server *srv, connection *con, v
 			   " </head>\n"
 			   " <body>\n"
 			   "  <h1>" PACKAGE_NAME " " PACKAGE_VERSION "</h1>\n"
-			   "  <table border=\"1\">\n");
+			   "  <table summary=\"status\" border=\"1\">\n");
 	
 	mod_status_header_append(b, "Server-Features");
 #ifdef HAVE_PCRE_H

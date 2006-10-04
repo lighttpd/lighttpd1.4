@@ -510,7 +510,7 @@ static void http_list_directory_header(server *srv, connection *con, plugin_data
 	BUFFER_APPEND_STRING_CONST(out,
 		"</h2>\n"
 		"<div class=\"list\">\n"
-		"<table cellpadding=\"0\" cellspacing=\"0\">\n"
+		"<table summary=\"Directory Listing\" cellpadding=\"0\" cellspacing=\"0\">\n"
 		"<thead>"
 		"<tr>"
 			"<th class=\"n\">Name</th>"
