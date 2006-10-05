@@ -37,13 +37,13 @@ my $tests = {
       "var.myvar"      => "/good_var_myvar" . $myvar,
       "myvar"          => "/good_myvar" . $myvar,
       "env"            => "/" . $ENV{"env_test"},
-      
+
     "number1"        => "/good_number" . "1",
       "number2"        => "1" . "/good_number",
       "array_append"   => "/good_array_append",
       "string_append"  => "/good_" . $mystr,
       "number_append"  => "/good_" . "2",
-      
+
     "include_shell"  => "/good_include_shell_" . "456"
 };
 

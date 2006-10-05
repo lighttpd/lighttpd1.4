@@ -10,11 +10,11 @@
 
 int main () {
 	int num_requests = 2;
-	
+
 	while (num_requests > 0 &&
 	       FCGI_Accept() >= 0) {
 		char* p;
-		
+
 		if (NULL != (p = getenv("QUERY_STRING"))) {
 			if (0 == strcmp(p, "lf")) {
 				printf("Status: 200 OK\n\n");
@@ -37,9 +37,9 @@ int main () {
 		} else {
 			printf("Status: 500 Internal Foo\r\n\r\n");
 		}
-		 
+
 		printf("test123");
 	}
-	
+
 	return 0;
 }

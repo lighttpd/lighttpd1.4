@@ -223,7 +223,7 @@ ok($tf->handle_http($t) == 0, 'Content-Length > max-request-size');
 $t->{REQUEST}  = ( <<EOF
 POST /12345.txt HTTP/1.0
 Host: 123.example.org
-Content-Length: 
+Content-Length:
 EOF
  );
 $t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 411 } ];

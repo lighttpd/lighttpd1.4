@@ -123,7 +123,7 @@ ok($tf->handle_http($t) == 0, 'no whitespace');
 
 $t->{REQUEST}  = ( <<EOF
 GET / HTTP/1.0
-ABC:foo 
+ABC:foo
   bc
 EOF
  );

@@ -14,7 +14,7 @@ use Digest::MD5 qw(md5_hex);
 
 my $tf = LightyTest->new();
 my $t;
-    
+
 ok($tf->start_proc == 0, "Starting lighttpd") or die();
 
 my $secret = "verysecret";
