@@ -556,7 +556,12 @@ static int connection_handle_write_prepare(server *srv, connection *con) {
 	}
 
 	if (con->request.http_method == HTTP_METHOD_HEAD) {
+		/**
+		 * a HEAD request has the same as a GET 
+		 * without the content
+		 */
 		chunkqueue_reset(con->write_queue);
+		con->response.transfer_encoding &= ~HTTP_TRANSFER_ENCODING_CHUNKED;
 	}
 
 	http_response_write_header(srv, con);
