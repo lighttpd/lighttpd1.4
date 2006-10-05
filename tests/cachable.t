@@ -15,7 +15,7 @@ my $tf = LightyTest->new();
 my $t;
 
 $tf->{CONFIGFILE} = 'lighttpd.conf';
-    
+
 ok($tf->start_proc == 0, "Starting lighttpd") or die();
 
 ## check if If-Modified-Since, If-None-Match works

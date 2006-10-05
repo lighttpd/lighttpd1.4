@@ -14,7 +14,7 @@ use LightyTest;
 
 my $tf = LightyTest->new();
 my $t;
- 
+
 ok($tf->start_proc == 0, "Starting lighttpd") or die();
 
 $t->{REQUEST} = ( <<EOF

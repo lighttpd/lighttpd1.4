@@ -48,7 +48,7 @@ CONFS=fastcgi-10.conf \
       cachable.t
 
 
-TESTS_ENVIRONMENT=$(srcdir)/wrapper.sh $(srcdir) $(top_builddir) 
+TESTS_ENVIRONMENT=$(srcdir)/wrapper.sh $(srcdir) $(top_builddir)
 
 EXTRA_DIST=wrapper.sh lighttpd.conf \
 	lighttpd.user \
@@ -62,7 +62,7 @@ leak-check:
 	for i in $(TESTS); do \
 		$(srcdir)/$$i; \
 		echo $$?; \
-	done 
+	done
 
 clean-local:
 	rm -f *.out

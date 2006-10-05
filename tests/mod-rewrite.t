@@ -13,7 +13,7 @@ use LightyTest;
 
 my $tf = LightyTest->new();
 my $t;
-   
+
 
 SKIP: {
 	skip "no PHP running on port 1026", 5 unless $tf->listening_on(1026);
@@ -27,7 +27,7 @@ EOF
  );
 	$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200, 'HTTP-Content' => '' } ];
 	ok($tf->handle_http($t) == 0, 'valid request');
-    
+
 	$t->{REQUEST}  = ( <<EOF
 GET /rewrite/foo?a=b HTTP/1.0
 Host: www.example.org

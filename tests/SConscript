@@ -32,7 +32,7 @@ extra_dist = Split('fastcgi-10.conf \
       LightyTest.pm \
       mod-setenv.t')
 
-t  = env.Command('foo1', 'prepare.sh', '(cd ./tests/; ./prepare.sh; cd ..)') 
+t  = env.Command('foo1', 'prepare.sh', '(cd ./tests/; ./prepare.sh; cd ..)')
 t += env.Command('foo2', 'run-tests.pl', '( cd ./tests/; SHELL=/bin/sh ./run-tests.pl; cd ..)')
 t += env.Command('foo3', 'cleanup.sh', '(cd ./tests/; ./cleanup.sh; cd ..)')
 
