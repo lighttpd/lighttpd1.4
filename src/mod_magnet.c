@@ -14,6 +14,7 @@
 #include "response.h"
 #include "stat_cache.h"
 #include "status_counter.h"
+#include "etag.h"
 
 #ifdef HAVE_LUA_H
 #include <lua.h>
@@ -172,6 +173,71 @@ static int magnet_print(lua_State *L) {
 	return 0;
 }
 
+static int magnet_stat(lua_State *L) {
+	const char *s = luaL_checkstring(L, 1);
+	server *srv;
+	connection *con;
+	buffer sb, *b;
+	stat_cache_entry *sce = NULL;
+
+	lua_pushstring(L, "lighty.srv");
+	lua_gettable(L, LUA_REGISTRYINDEX);
+	srv = lua_touserdata(L, -1);
+	lua_pop(L, 1);
+
+	lua_pushstring(L, "lighty.con");
+	lua_gettable(L, LUA_REGISTRYINDEX);
+	con = lua_touserdata(L, -1);
+	lua_pop(L, 1);
+
+	sb.ptr = (char *)s;
+	sb.used = sb.size = strlen(s) + 1;
+	
+	if (HANDLER_GO_ON != stat_cache_get_entry(srv, con, &sb, &sce)) {
+		lua_pushnil(L);
+
+		return 1;
+	}
+
+	lua_newtable(L);
+	lua_pushinteger(L, sce->st.st_mode);
+	lua_setfield(L, -2, "st_mode");
+	
+	lua_pushinteger(L, sce->st.st_mtime);
+	lua_setfield(L, -2, "st_mtime");
+
+	lua_pushinteger(L, sce->st.st_ctime);
+	lua_setfield(L, -2, "st_ctime");
+
+	lua_pushinteger(L, sce->st.st_atime);
+	lua_setfield(L, -2, "st_atime");
+
+	lua_pushinteger(L, sce->st.st_uid);
+	lua_setfield(L, -2, "st_uid");
+
+	lua_pushinteger(L, sce->st.st_gid);
+	lua_setfield(L, -2, "st_gid");
+
+	lua_pushinteger(L, sce->st.st_size);
+	lua_setfield(L, -2, "st_size");
+
+	lua_pushinteger(L, sce->st.st_ino);
+	lua_setfield(L, -2, "st_ino");
+
+	/* we have to mutate the etag */
+
+	b = buffer_init();
+	etag_mutate(b, sce->etag);
+
+	lua_pushlstring(L, b->ptr, b->used - 1);
+	lua_setfield(L, -2, "etag");
+
+	buffer_free(b);
+
+	return 1;
+}
+
+
 static int magnet_atpanic(lua_State *L) {
 	const char *s = luaL_checkstring(L, 1);
 	server *srv;
@@ -297,6 +363,7 @@ static buffer *magnet_env_get_buffer(server *srv, connection *con, const char *k
 		{ NULL, MAGNET_ENV_UNSET }
 	};
 
+	UNUSED(srv);
 
 	/**
 	 * map all internal variables to lua
@@ -388,6 +455,7 @@ static int magnet_env_set(lua_State *L) {
 
 
 static int magnet_copy_response_header(server *srv, connection *con, plugin_data *p, lua_State *L) {
+	UNUSED(p);
 	/**
 	 * get the environment of the function
 	 */
@@ -436,6 +504,7 @@ static int magnet_copy_response_header(server *srv, connection *con, plugin_data
  * return 200
  */
 static int magnet_attach_content(server *srv, connection *con, plugin_data *p, lua_State *L) {
+	UNUSED(p);
 	/**
 	 * get the environment of the function
 	 */
@@ -622,6 +691,9 @@ static handler_t magnet_attract(server *srv, connection *con, plugin_data *p, bu
 
 	lua_pushinteger(L, MAGNET_RESTART_REQUEST);
 	lua_setfield(L, -2, "RESTART_REQUEST");
+
+	lua_pushcfunction(L, magnet_stat);                        /* (sp += 1) */
+	lua_setfield(L, -2, "stat"); /* -1 is the env we want to set (sp -= 1) */
 
 	lua_setfield(L, -2, "lighty"); /* lighty.*                   (sp -= 1) */
 
