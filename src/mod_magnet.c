@@ -269,6 +269,7 @@ typedef struct {
 
 		MAGNET_ENV_REQUEST_METHOD,
 		MAGNET_ENV_REQUEST_URI,
+		MAGNET_ENV_REQUEST_ORIG_URI,
 		MAGNET_ENV_REQUEST_PROTOCOL
        	} type;
 } magnet_env_t;
@@ -290,6 +291,7 @@ static buffer *magnet_env_get_buffer(server *srv, connection *con, const char *k
 
 		{ "request.method", MAGNET_ENV_REQUEST_METHOD },
 		{ "request.uri", MAGNET_ENV_REQUEST_URI },
+		{ "request.orig-uri", MAGNET_ENV_REQUEST_ORIG_URI },
 		{ "request.protocol", MAGNET_ENV_REQUEST_PROTOCOL },
 
 		{ NULL, MAGNET_ENV_UNSET }
@@ -318,6 +320,7 @@ static buffer *magnet_env_get_buffer(server *srv, connection *con, const char *k
 
 	case MAGNET_ENV_REQUEST_METHOD:   break;
 	case MAGNET_ENV_REQUEST_URI:      dest = con->request.uri; break;
+	case MAGNET_ENV_REQUEST_ORIG_URI: dest = con->request.orig_uri; break;
 	case MAGNET_ENV_REQUEST_PROTOCOL: break;
 
 	case MAGNET_ENV_UNSET: break;
