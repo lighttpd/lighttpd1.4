@@ -200,9 +200,28 @@ static int magnet_stat(lua_State *L) {
 	}
 
 	lua_newtable(L);
-	lua_pushinteger(L, sce->st.st_mode);
-	lua_setfield(L, -2, "st_mode");
+
+	lua_pushboolean(L, S_ISREG(sce->st.st_mode));
+	lua_setfield(L, -2, "is_file");
 	
+	lua_pushboolean(L, S_ISDIR(sce->st.st_mode));
+	lua_setfield(L, -2, "is_dir");
+
+	lua_pushboolean(L, S_ISCHR(sce->st.st_mode));
+	lua_setfield(L, -2, "is_char");
+
+	lua_pushboolean(L, S_ISBLK(sce->st.st_mode));
+	lua_setfield(L, -2, "is_block");
+
+	lua_pushboolean(L, S_ISSOCK(sce->st.st_mode));
+	lua_setfield(L, -2, "is_socket");
+
+	lua_pushboolean(L, S_ISLNK(sce->st.st_mode));
+	lua_setfield(L, -2, "is_link");
+
+	lua_pushboolean(L, S_ISFIFO(sce->st.st_mode));
+	lua_setfield(L, -2, "is_fifo");
+
 	lua_pushinteger(L, sce->st.st_mtime);
 	lua_setfield(L, -2, "st_mtime");
 
@@ -233,6 +252,13 @@ static int magnet_stat(lua_State *L) {
 	lua_setfield(L, -2, "etag");
 
 	buffer_free(b);
+
+	if (!buffer_is_empty(sce->content_type)) {
+		lua_pushlstring(L, sce->content_type->ptr, sce->content_type->used - 1);
+	} else {
+		lua_pushnil(L);
+	}
+	lua_setfield(L, -2, "content-type");
 
 	return 1;
 }
