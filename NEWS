@@ -7,11 +7,18 @@ NEWS
 
   * added initgroups in spawn-fcgi (#871)
   * added apr1 support htpasswd in mod-auth (#870)
+  * added lighty.stat() to mod_magnet
   * fixed segfault in splitted CRLF CRLF sequences 
     (introduced in 1.4.12) (#876)
   * fixed compilation of LOCK support in mod-webdav
   * fixed fragments in request-URLs (#869)
   * fixed pkg-config check for lua5.1 on debian
+  * fixed Content-Length = 0 on HEAD requests without 
+    a known Content-Length (#119)
+  * fixed mkdir() forcing 0700 (#884)
+  * fixed writev() on FreeBSD 4.x and older (#875)
+  * removed warning about a 404-error-handler 
+    returned 404
 
 - 1.4.12 - 2006-09-23
 
