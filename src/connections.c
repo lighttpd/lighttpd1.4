@@ -522,11 +522,17 @@ static int connection_handle_write_prepare(server *srv, connection *con) {
 		/* we have all the content and chunked encoding is not used, set a content-length */
 
 		if ((!(con->parsed_response & HTTP_CONTENT_LENGTH)) &&
-		    (con->response.transfer_encoding & HTTP_TRANSFER_ENCODING_CHUNKED) == 0 &&
-		    con->request.http_method != HTTP_METHOD_HEAD) { /* don't force a Content-Length if we had a HEAD request */
-			buffer_copy_off_t(srv->tmp_buf, chunkqueue_length(con->write_queue));
+		    (con->response.transfer_encoding & HTTP_TRANSFER_ENCODING_CHUNKED) == 0) {
+			off_t qlen = chunkqueue_length(con->write_queue);
 
-			response_header_overwrite(srv, con, CONST_STR_LEN("Content-Length"), CONST_BUF_LEN(srv->tmp_buf));
+			/* if we have no content for a GET/PORT request, send Content-Length: 0
+			 * if it is a HEAD request, don't generate a Content-Length as 
+			 * the backend might have already cut it off */
+			if (qlen > 0 || con->request.http_method != HTTP_METHOD_HEAD) {
+				buffer_copy_off_t(srv->tmp_buf, chunkqueue_length(con->write_queue));
+
+				response_header_overwrite(srv, con, CONST_STR_LEN("Content-Length"), CONST_BUF_LEN(srv->tmp_buf));
+			}
 		}
 	} else {
 		/* disable keep-alive if size-info for the body is missing */
