@@ -177,7 +177,7 @@ static int magnet_stat(lua_State *L) {
 	const char *s = luaL_checkstring(L, 1);
 	server *srv;
 	connection *con;
-	buffer sb, *b;
+	buffer sb;
 	stat_cache_entry *sce = NULL;
 
 	lua_pushstring(L, "lighty.srv");
@@ -243,15 +243,18 @@ static int magnet_stat(lua_State *L) {
 	lua_pushinteger(L, sce->st.st_ino);
 	lua_setfield(L, -2, "st_ino");
 
-	/* we have to mutate the etag */
 
-	b = buffer_init();
-	etag_mutate(b, sce->etag);
+	if (!buffer_is_empty(sce->etag)) {
+		/* we have to mutate the etag */
+		buffer *b = buffer_init();
+		etag_mutate(b, sce->etag);
 
-	lua_pushlstring(L, b->ptr, b->used - 1);
+		lua_pushlstring(L, b->ptr, b->used - 1);
+		buffer_free(b);
+	} else {
+		lua_pushnil(L);
+	}
 	lua_setfield(L, -2, "etag");
-
-	buffer_free(b);
 
 	if (!buffer_is_empty(sce->content_type)) {
 		lua_pushlstring(L, sce->content_type->ptr, sce->content_type->used - 1);
