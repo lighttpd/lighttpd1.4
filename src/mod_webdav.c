@@ -48,7 +48,8 @@
  *
  */
 
-
+#define WEBDAV_FILE_MODE S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP | S_IROTH | S_IWOTH
+#define WEBDAV_DIR_MODE  S_IRWXU | S_IRWXG | S_IRWXO
 
 /* plugin config for all request/connections */
 
@@ -670,7 +671,7 @@ static int webdav_copy_file(server *srv, connection *con, plugin_data *p, physic
 		return 403;
 	}
 
-	if (-1 == (ofd = open(dst->path->ptr, O_WRONLY|O_TRUNC|O_CREAT|(overwrite ? 0 : O_EXCL), S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP | S_IROTH | S_IWOTH))) {
+	if (-1 == (ofd = open(dst->path->ptr, O_WRONLY|O_TRUNC|O_CREAT|(overwrite ? 0 : O_EXCL), WEBDAV_FILE_MODE))) {
 		/* opening the destination failed for some reason */
 		switch(errno) {
 		case EEXIST:
@@ -775,7 +776,7 @@ static int webdav_copy_dir(server *srv, connection *con, plugin_data *p, physica
 				/* why ? */
 			} else if (S_ISDIR(st.st_mode)) {
 				/* a directory */
-				if (-1 == mkdir(d.path->ptr, 0700) &&
+				if (-1 == mkdir(d.path->ptr, WEBDAV_DIR_MODE) &&
 				    errno != EEXIST) {
 					/* WTH ? */
 				} else {
@@ -1496,7 +1497,7 @@ URIHANDLER_FUNC(mod_webdav_subrequest_handler) {
 
 		/* let's create the directory */
 
-		if (-1 == mkdir(con->physical.path->ptr, 0700)) {
+		if (-1 == mkdir(con->physical.path->ptr, WEBDAV_DIR_MODE)) {
 			switch(errno) {
 			case EPERM:
 				con->http_status = 403;
@@ -1654,7 +1655,7 @@ URIHANDLER_FUNC(mod_webdav_subrequest_handler) {
 				return HANDLER_FINISHED;
 			}
 
-			if (-1 == (fd = open(con->physical.path->ptr, O_WRONLY, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP | S_IROTH | S_IWOTH))) {
+			if (-1 == (fd = open(con->physical.path->ptr, O_WRONLY, WEBDAV_FILE_MODE))) {
 				switch (errno) {
 				case ENOENT:
 					con->http_status = 404; /* not found */
@@ -1678,9 +1679,9 @@ URIHANDLER_FUNC(mod_webdav_subrequest_handler) {
 			/* take what we have in the request-body and write it to a file */
 
 			/* if the file doesn't exist, create it */
-			if (-1 == (fd = open(con->physical.path->ptr, O_WRONLY|O_TRUNC, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP | S_IROTH | S_IWOTH))) {
+			if (-1 == (fd = open(con->physical.path->ptr, O_WRONLY|O_TRUNC, WEBDAV_FILE_MODE))) {
 				if (errno == ENOENT &&
-				    -1 == (fd = open(con->physical.path->ptr, O_WRONLY|O_CREAT|O_TRUNC|O_EXCL, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP | S_IROTH | S_IWOTH))) {
+				    -1 == (fd = open(con->physical.path->ptr, O_WRONLY|O_CREAT|O_TRUNC|O_EXCL, WEBDAV_FILE_MODE))) {
 					/* we can't open the file */
 					con->http_status = 403;
 
@@ -1886,7 +1887,7 @@ URIHANDLER_FUNC(mod_webdav_subrequest_handler) {
 			/* src is a directory */
 
 			if (-1 == stat(p->physical.path->ptr, &st)) {
-				if (-1 == mkdir(p->physical.path->ptr, 0700)) {
+				if (-1 == mkdir(p->physical.path->ptr, WEBDAV_DIR_MODE)) {
 					con->http_status = 403;
 					return HANDLER_FINISHED;
 				}
@@ -1897,7 +1898,7 @@ URIHANDLER_FUNC(mod_webdav_subrequest_handler) {
 					return HANDLER_FINISHED;
 				} else {
 					unlink(p->physical.path->ptr);
-					if (-1 == mkdir(p->physical.path->ptr, 0700)) {
+					if (-1 == mkdir(p->physical.path->ptr, WEBDAV_DIR_MODE)) {
 						con->http_status = 403;
 						return HANDLER_FINISHED;
 					}
