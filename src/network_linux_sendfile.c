@@ -175,6 +175,7 @@ int network_write_chunkqueue_linuxsendfile(server *srv, connection *con, int fd,
 			}
 
 			if (r == 0) {
+				int oerrno = errno;
 				/* We got an event to write but we wrote nothing
 				 *
 				 * - the file shrinked -> error
@@ -187,9 +188,12 @@ int network_write_chunkqueue_linuxsendfile(server *srv, connection *con, int fd,
 
 				if (offset > sce->st.st_size) {
 					/* file shrinked, close the connection */
+					errno = oerrno;
+
 					return -1;
 				}
 
+				errno = oerrno;
 				return -2;
 			}
 
