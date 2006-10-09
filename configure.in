@@ -339,7 +339,24 @@ if test "$WITH_WEBDAV_PROPS" != "no"; then
     AC_DEFINE([HAVE_SQLITE3], [1], [libsqlite3])
     AC_DEFINE([HAVE_SQLITE3_H], [1], [sqlite3.h])
  ])
+
+ AC_MSG_CHECKING(for locks in mod_webdav)
+ AC_ARG_WITH(webdav-locks, AC_HELP_STRING([--with-webdav-locks],[locks in mod_webdav]),
+ [WITH_WEBDAV_LOCKS=$withval],[WITH_WEBDAV_LOCKS=no])
+ AC_MSG_RESULT([$WITH_WEBDAV_LOCKS])
+
+ if test "$WITH_WEBDAV_LOCKS" != "no"; then
+   AC_CHECK_LIB(uuid, uuid_unparse, [
+         AC_CHECK_HEADERS([uuid/uuid.h],[
+                 UUID_LIBS=-luuid
+                 AC_DEFINE([HAVE_UUID], [1], [libuuid])
+		 AC_DEFINE([HAVE_UUID_H], [1], [uuid/uuid.h is available])
+         ])
+ ])
+
+ fi
 fi
+AC_SUBST(UUID_LIBS)
 
 dnl Check for gdbm
 AC_MSG_CHECKING(for gdbm)
@@ -624,6 +641,14 @@ if test "x$XML_LIBS" \!= x -a "x$SQLITE_LIBS" \!= x; then
 else
 	disable_feature="$disable_feature $features"
 fi
+
+features="webdav-locks"
+if test "x$UUID_LIBS" \!= x; then
+	enable_feature="$enable_feature $features"
+else
+	disable_feature="$disable_feature $features"
+fi
+
 
 ## output
 
