@@ -3,7 +3,7 @@
 NEWS
 ====
 
-- 1.4.13 - 
+- 1.4.13 - 2006-10-09
 
   * added initgroups in spawn-fcgi (#871)
   * added apr1 support htpasswd in mod-auth (#870)
@@ -19,6 +19,8 @@ NEWS
   * fixed writev() on FreeBSD 4.x and older (#875)
   * removed warning about a 404-error-handler 
     returned 404
+  * fixed requiring lua-modules in mod_magnet 
+  * fixed large uploads if xattr is enabled
 
 - 1.4.12 - 2006-09-23
 
