@@ -19,7 +19,10 @@ NEWS
   * fixed writev() on FreeBSD 4.x and older (#875)
   * removed warning about a 404-error-handler 
     returned 404
-  * fixed requiring lua-modules in mod_magnet 
+  * backported and fixed the buildsystem changes for
+    webdav locks
+  * fixed plugin loading so we can finally load lua
+    extensions in mod_magnet scripts
   * fixed large uploads if xattr is enabled
 
 - 1.4.12 - 2006-09-23
