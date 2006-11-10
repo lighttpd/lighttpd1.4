@@ -85,6 +85,9 @@ static int request_check_hostname(server *srv, connection *con, buffer *host) {
 	/* Host is empty */
 	if (host_len == 0) return -1;
 
+	/* if the hostname ends in a "." strip it */
+	if (host->ptr[host_len-1] == '.') host_len -= 1;
+
 	/* scan from the right and skip the \0 */
 	for (i = host_len - 1; i + 1 > 0; i--) {
 		const char c = host->ptr[i];
