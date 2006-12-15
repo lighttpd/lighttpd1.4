@@ -970,7 +970,7 @@ int connection_handle_read_state(server *srv, connection *con)  {
 								}
 							} else {
 								/* a splited \r \n */
-								return -1;
+								break;
 							}
 						}
 					}
