@@ -25,7 +25,7 @@
 
 
 #ifndef UIO_MAXIOV
-# ifdef __FreeBSD__
+# if defined(__FreeBSD__) || defined(__DragonFly__)
 /* FreeBSD 4.7, 4.9 defined it in sys/uio.h only if _KERNEL is specified */
 #  define UIO_MAXIOV 1024
 # endif
