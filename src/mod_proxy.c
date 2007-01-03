@@ -656,6 +656,7 @@ static int proxy_demux_response(server *srv, handler_ctx *hctx) {
 		}
 
 		if (-1 == (r = read(hctx->fd, hctx->response->ptr + hctx->response->used - 1, b))) {
+			if (errno == EAGAIN) return 0;
 			log_error_write(srv, __FILE__, __LINE__, "sds",
 					"unexpected end-of-file (perhaps the proxy process died):",
 					proxy_fd, strerror(errno));
