@@ -275,6 +275,7 @@ typedef struct {
 	buffer *key; /* like .php */
 
 	int note_is_sent;
+	int last_used_ndx;
 
 	fcgi_extension_host **hosts;
 
@@ -563,6 +564,7 @@ int fastcgi_extension_insert(fcgi_exts *ext, buffer *key, fcgi_extension_host *f
 		fe = calloc(1, sizeof(*fe));
 		assert(fe);
 		fe->key = buffer_init();
+		fe->last_used_ndx = -1;
 		buffer_copy_string_buffer(fe->key, key);
 
 		/* */
@@ -2381,6 +2383,7 @@ static int fcgi_demux_response(server *srv, handler_ctx *hctx) {
 
 		/* append to read-buffer */
 		if (-1 == (r = read(hctx->fd, b->ptr, toread))) {
+			if (errno == EAGAIN) return 0;
 			log_error_write(srv, __FILE__, __LINE__, "sds",
 					"unexpected end-of-file (perhaps the fastcgi process died):",
 					fcgi_fd, strerror(errno));
@@ -2979,17 +2982,23 @@ SUBREQUEST_FUNC(mod_fastcgi_handle_subrequest) {
 		size_t k;
 		int ndx, used = -1;
 
-		/* get best server */
-		for (k = 0, ndx = -1; k < hctx->ext->used; k++) {
-			host = hctx->ext->hosts[k];
+		/* check if the next server has no load. */
+		ndx = hctx->ext->last_used_ndx + 1;
+		if(ndx >= hctx->ext->used || ndx < 0) ndx = 0;
+		host = hctx->ext->hosts[ndx];
+		if (host->load > 0) {
+			/* get backend with the least load. */
+			for (k = 0, ndx = -1; k < hctx->ext->used; k++) {
+				host = hctx->ext->hosts[k];
 
-			/* we should have at least one proc that can do something */
-			if (host->active_procs == 0) continue;
+				/* we should have at least one proc that can do something */
+				if (host->active_procs == 0) continue;
 
-			if (used == -1 || host->load < used) {
-				used = host->load;
+				if (used == -1 || host->load < used) {
+					used = host->load;
 
-				ndx = k;
+					ndx = k;
+				}
 			}
 		}
 
@@ -3005,6 +3014,7 @@ SUBREQUEST_FUNC(mod_fastcgi_handle_subrequest) {
 			return HANDLER_FINISHED;
 		}
 
+		hctx->ext->last_used_ndx = ndx;
 		host = hctx->ext->hosts[ndx];
 
 		/*
