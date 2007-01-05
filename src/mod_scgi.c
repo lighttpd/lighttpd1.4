@@ -2528,7 +2528,7 @@ static handler_t scgi_handle_fdevent(void *s, void *ctx, int revents) {
 				    hctx->reconnects < 5) {
 					scgi_reconnect(srv, hctx);
 
-					log_error_write(srv, __FILE__, __LINE__, "sdsdsd",
+					log_error_write(srv, __FILE__, __LINE__, "ssdsd",
 						"response not sent, request not sent, reconnection.",
 						"connection-fd:", con->fd,
 						"fcgi-fd:", hctx->fd);
