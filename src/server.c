@@ -163,6 +163,7 @@ static server *server_init(void) {
 #undef CLEAN
 
 	for (i = 0; i < FILE_CACHE_MAX; i++) {
+		srv->mtime_cache[i].mtime = (time_t)-1;
 		srv->mtime_cache[i].str = buffer_init();
 	}
 
