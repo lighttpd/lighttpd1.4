@@ -733,7 +733,8 @@ static int http_auth_basic_password_compare(server *srv, mod_auth_plugin_data *p
 			}
 		}
 
-
+		if (p->conf.auth_ldap_allow_empty_pw != 1 && pw[0] == '\0')
+			return -1;
 
 		/* build filter */
 		buffer_copy_string_buffer(p->ldap_filter, p->conf.ldap_filter_pre);
