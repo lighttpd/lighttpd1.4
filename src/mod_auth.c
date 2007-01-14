@@ -113,6 +113,7 @@ static int mod_auth_patch_connection(server *srv, connection *con, mod_auth_plug
 	PATCH(auth_ldap_filter);
 	PATCH(auth_ldap_cafile);
 	PATCH(auth_ldap_starttls);
+	PATCH(auth_ldap_allow_empty_pw);
 #ifdef USE_LDAP
 	PATCH(ldap);
 	PATCH(ldap_filter_pre);
@@ -160,6 +161,8 @@ static int mod_auth_patch_connection(server *srv, connection *con, mod_auth_plug
 				PATCH(auth_ldap_cafile);
 			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("auth.backend.ldap.starttls"))) {
 				PATCH(auth_ldap_starttls);
+			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("auth.backend.ldap.allow-empty-pw"))) {
+				PATCH(auth_ldap_allow_empty_pw);
 			}
 		}
 	}
@@ -312,6 +315,7 @@ SETDEFAULTS_FUNC(mod_auth_set_defaults) {
 		{ "auth.backend.ldap.starttls",     NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION },
  		{ "auth.backend.ldap.bind-dn",      NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_CONNECTION },
  		{ "auth.backend.ldap.bind-pw",      NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_CONNECTION }, /* 10 */
+		{ "auth.backend.ldap.allow-empty-pw",     NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION },
 		{ "auth.backend.htdigest.userfile", NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_CONNECTION },
 		{ "auth.backend.htpasswd.userfile", NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_CONNECTION },
 		{ "auth.debug",                     NULL, T_CONFIG_SHORT, T_CONFIG_SCOPE_CONNECTION },  /* 13 */
@@ -359,11 +363,12 @@ SETDEFAULTS_FUNC(mod_auth_set_defaults) {
 		cv[6].destination = s->auth_ldap_filter;
 		cv[7].destination = s->auth_ldap_cafile;
 		cv[8].destination = &(s->auth_ldap_starttls);
- 		cv[9].destination = s->auth_ldap_binddn;
- 		cv[10].destination = s->auth_ldap_bindpw;
-		cv[11].destination = s->auth_htdigest_userfile;
-		cv[12].destination = s->auth_htpasswd_userfile;
-		cv[13].destination = &(s->auth_debug);
+		cv[9].destination = s->auth_ldap_binddn;
+		cv[10].destination = s->auth_ldap_bindpw;
+		cv[11].destination = &(s->auth_ldap_allow_empty_pw);
+		cv[12].destination = s->auth_htdigest_userfile;
+		cv[13].destination = s->auth_htpasswd_userfile;
+		cv[14].destination = &(s->auth_debug);
 
 		p->config_storage[i] = s;
 		ca = ((data_config *)srv->config_context->data[i])->value;
