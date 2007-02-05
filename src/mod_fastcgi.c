@@ -2502,6 +2502,8 @@ static int fcgi_demux_response(server *srv, handler_ctx *hctx) {
 			}
 			break;
 		case FCGI_STDERR:
+			if (packet.len == 0) break;
+
 			log_error_write(srv, __FILE__, __LINE__, "sb",
 					"FastCGI-stderr:", packet.b);
 
