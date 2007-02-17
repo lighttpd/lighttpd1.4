@@ -1232,6 +1232,19 @@ int main (int argc, char **argv) {
 						srv_socket->fd = -1;
 
 						/* network_close() will cleanup after us */
+
+						if (srv->srvconf.pid_file->used &&
+						    srv->srvconf.changeroot->used == 0) {
+							if (0 != unlink(srv->srvconf.pid_file->ptr)) {
+								if (errno != EACCES && errno != EPERM) {
+									log_error_write(srv, __FILE__, __LINE__, "sbds",
+											"unlink failed for:",
+											srv->srvconf.pid_file,
+											errno,
+											strerror(errno));
+								}
+							}
+						}
 					}
 				}
 
@@ -1336,7 +1349,8 @@ int main (int argc, char **argv) {
 	}
 
 	if (srv->srvconf.pid_file->used &&
-	    srv->srvconf.changeroot->used == 0) {
+	    srv->srvconf.changeroot->used == 0 &&
+	    0 == graceful_shutdown) {
 		if (0 != unlink(srv->srvconf.pid_file->ptr)) {
 			if (errno != EACCES && errno != EPERM) {
 				log_error_write(srv, __FILE__, __LINE__, "sbds",
