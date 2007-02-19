@@ -2367,6 +2367,7 @@ static int fcgi_demux_response(server *srv, handler_ctx *hctx) {
 	 * check how much we have to read
 	 */
 	if (ioctl(hctx->fd, FIONREAD, &toread)) {
+		if( errno == EAGAIN ) return 0;
 		log_error_write(srv, __FILE__, __LINE__, "sd",
 				"unexpected end-of-file (perhaps the fastcgi process died):",
 				fcgi_fd);
@@ -2377,13 +2378,23 @@ static int fcgi_demux_response(server *srv, handler_ctx *hctx) {
 
 	if (toread > 0) {
 		buffer *b;
+		chunk *cq_first = hctx->rb->first;
+		chunk *cq_last = hctx->rb->last;
 
 		b = chunkqueue_get_append_buffer(hctx->rb);
 		buffer_prepare_copy(b, toread + 1);
 
 		/* append to read-buffer */
 		if (-1 == (r = read(hctx->fd, b->ptr, toread))) {
-			if (errno == EAGAIN) return 0;
+			if( errno == EAGAIN ) {
+				/* roll back the last chunk allocation,
+                                   and continue on next iteration        */
+				buffer_free(hctx->rb->last->mem);
+				free(hctx->rb->last);
+				hctx->rb->first = cq_first;
+				hctx->rb->last = cq_last;
+				return 0;
+			}
 			log_error_write(srv, __FILE__, __LINE__, "sds",
 					"unexpected end-of-file (perhaps the fastcgi process died):",
 					fcgi_fd, strerror(errno));
@@ -2396,6 +2407,7 @@ static int fcgi_demux_response(server *srv, handler_ctx *hctx) {
 		b->used = r + 1; /* one extra for the fake \0 */
 		b->ptr[b->used - 1] = '\0';
 	} else {
+		if( errno == EAGAIN ) return 0;
 		log_error_write(srv, __FILE__, __LINE__, "ssdsb",
 				"unexpected end-of-file (perhaps the fastcgi process died):",
 				"pid:", proc->pid,
