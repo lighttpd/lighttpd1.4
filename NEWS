@@ -3,6 +3,9 @@
 NEWS
 ====
 
+- 1.4.14 - ???
+  * added mod_extforward module [1665]
+
 - 1.4.13 - 2006-10-09
 
   * added initgroups in spawn-fcgi (#871)
