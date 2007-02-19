@@ -6,6 +6,7 @@ authentication.txt \
 cgi.txt \
 compress.txt \
 configuration.txt \
+extforward.txt \
 fastcgi-state.txt \
 fastcgi.txt \
 features.txt \
@@ -43,6 +44,7 @@ HTMLDOCS=accesslog.html \
 	 cgi.html \
 	 compress.html \
 	 configuration.html \
+	 extforward.html \
 	 fastcgi-state.html \
 	 fastcgi.html \
 	 features.html \

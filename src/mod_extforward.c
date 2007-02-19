@@ -1,0 +1,490 @@
+#include <ctype.h>
+#include <stdlib.h>
+#include <string.h>
+#include <stdio.h>
+#include <netinet/in.h>
+
+#include "base.h"
+#include "log.h"
+#include "buffer.h"
+
+#include "plugin.h"
+
+#include "inet_ntop_cache.h"
+#ifdef HAVE_CONFIG_H
+#include "config.h"
+#endif
+
+/**
+ * mod_extforward.c for lighttpd, by comman.kang <at> gmail <dot> com
+ *                  extended, modified by Lionel Elie Mamane (LEM), lionel <at> mamane <dot> lu
+ *
+ * Config example:
+ *
+ *       Trust proxy 10.0.0.232 and 10.0.0.232
+ *       extforward.forwarder = ( "10.0.0.232" => "trust",
+ *                                "10.0.0.233" => "trust" )
+ *
+ *       Trust all proxies  (NOT RECOMMENDED!)
+ *       extforward.forwarder = ( "all" => "trust")
+ *
+ *       Note that "all" has precedence over specific entries,
+ *       so "all except" setups will not work.
+ *
+ * Note: The effect of this module is variable on $HTTP["remotip"] directives and
+ *       other module's remote ip dependent actions.
+ *  Things done by modules before we change the remoteip or after we reset it will match on the proxy's IP.
+ *  Things done in between these two moments will match on the real client's IP.
+ *  The moment things are done by a module depends on in which hook it does things and within the same hook
+ *  on whether they are before/after us in the module loading order
+ *  (order in the server.modules directive in the config file).
+ *
+ * Tested behaviours:
+ *
+ *  mod_access: Will match on the real client.
+ *
+ *  mod_accesslog:
+ *   In order to see the "real" ip address in access log ,
+ *   you'll have to load mod_extforward after mod_accesslog.
+ *   like this:
+ *
+ *    server.modules  = (
+ *       .....
+ *       mod_accesslog,
+ *       mod_extforward
+ *    )
+ *
+ * Known issues:
+ *      seems causing segfault with mod_ssl and $HTTP{"socket"} directives
+ *      LEM 2006.05.26: Fixed segfault $SERVER["socket"] directive. Untested with SSL.
+ *
+ * ChangeLog:
+ *     2005.12.19   Initial Version
+ *     2005.12.19   fixed conflict with conditional directives
+ *     2006.05.26   LEM: IPv6 support
+ *     2006.05.26   LEM: Fix a segfault with $SERVER["socket"] directive.
+ *     2006.05.26   LEM: Run at uri_raw time, as we don't need to see the URI
+ *                       In this manner, we run before mod_access and $HTTP["remoteip"] directives work!
+ *     2006.05.26   LEM: Clean config_cond cache of tests whose result we probably change.
+ */
+
+
+/* plugin config for all request/connections */
+
+typedef struct {
+	array *forwarder;
+} plugin_config;
+
+typedef struct {
+	PLUGIN_DATA;
+
+	plugin_config **config_storage;
+
+	plugin_config conf;
+} plugin_data;
+
+
+/* context , used for restore remote ip */
+
+typedef struct {
+	sock_addr saved_remote_addr;
+	buffer *saved_remote_addr_buf;
+} handler_ctx;
+
+
+static handler_ctx * handler_ctx_init(sock_addr oldaddr, buffer *oldaddr_buf) {
+	handler_ctx * hctx;
+	hctx = calloc(1, sizeof(*hctx));
+	hctx->saved_remote_addr = oldaddr;
+	hctx->saved_remote_addr_buf = oldaddr_buf;
+	return hctx;
+}
+
+static void handler_ctx_free(handler_ctx *hctx) {
+	free(hctx);
+}
+
+/* init the plugin data */
+INIT_FUNC(mod_extforward_init) {
+	plugin_data *p;
+	p = calloc(1, sizeof(*p));
+	return p;
+}
+
+/* destroy the plugin data */
+FREE_FUNC(mod_extforward_free) {
+	plugin_data *p = p_d;
+
+	UNUSED(srv);
+
+	if (!p) return HANDLER_GO_ON;
+
+	if (p->config_storage) {
+		size_t i;
+
+		for (i = 0; i < srv->config_context->used; i++) {
+			plugin_config *s = p->config_storage[i];
+
+			if (!s) continue;
+
+			array_free(s->forwarder);
+
+			free(s);
+		}
+		free(p->config_storage);
+	}
+
+
+	free(p);
+
+	return HANDLER_GO_ON;
+}
+
+/* handle plugin config and check values */
+
+SETDEFAULTS_FUNC(mod_extforward_set_defaults) {
+	plugin_data *p = p_d;
+	size_t i = 0;
+
+	config_values_t cv[] = {
+		{ "extforward.forwarder",             NULL, T_CONFIG_ARRAY, T_CONFIG_SCOPE_CONNECTION },       /* 0 */
+		{ NULL,                         NULL, T_CONFIG_UNSET, T_CONFIG_SCOPE_UNSET }
+	};
+
+	if (!p) return HANDLER_ERROR;
+
+	p->config_storage = calloc(1, srv->config_context->used * sizeof(specific_config *));
+
+	for (i = 0; i < srv->config_context->used; i++) {
+		plugin_config *s;
+
+		s = calloc(1, sizeof(plugin_config));
+		s->forwarder    = array_init();
+
+		cv[0].destination = s->forwarder;
+
+		p->config_storage[i] = s;
+
+		if (0 != config_insert_values_global(srv, ((data_config *)srv->config_context->data[i])->value, cv)) {
+			return HANDLER_ERROR;
+		}
+	}
+
+	return HANDLER_GO_ON;
+}
+
+#define PATCH(x) \
+	p->conf.x = s->x;
+static int mod_extforward_patch_connection(server *srv, connection *con, plugin_data *p) {
+	size_t i, j;
+	plugin_config *s = p->config_storage[0];
+
+	PATCH(forwarder);
+
+	/* LEM: The purpose of this seems to match extforward configuration
+	        stanzas that are not in the global context, but in some sub-context.
+                I fear this will break contexts of the form HTTP['remote'] = .
+		(in the form that they do not work with the real remote, but matching on
+		the proxy instead).
+
+		I'm not sure this this is all thread-safe. Is the p we are passed different
+		for each connection or is it global?
+
+		mod_fastcgi does the same, so it must be safe.
+	 */
+	/* skip the first, the global context */
+	for (i = 1; i < srv->config_context->used; i++) {
+		data_config *dc = (data_config *)srv->config_context->data[i];
+		s = p->config_storage[i];
+
+		/* condition didn't match */
+		if (!config_check_cond(srv, con, dc)) continue;
+
+		/* merge config */
+		for (j = 0; j < dc->value->used; j++) {
+			data_unset *du = dc->value->data[j];
+
+			if (buffer_is_equal_string(du->key, CONST_STR_LEN("extforward.forwarder"))) {
+				PATCH(forwarder);
+			}
+		}
+	}
+
+	return 0;
+}
+#undef PATCH
+
+
+static void put_string_into_array_len(array *ary, const char *str, int len)
+{
+	data_string *tempdata;
+	if (len == 0)
+		return;
+	tempdata = data_string_init();
+	buffer_copy_string_len(tempdata->value,str,len);
+	array_insert_unique(ary,(data_unset *)tempdata);
+}
+/*
+   extract a forward array from the environment
+*/
+static array *extract_forward_array(buffer *pbuffer)
+{
+	array *result = array_init();
+	if (pbuffer->used > 0) {
+		char *base, *curr;
+		/* state variable, 0 means not in string, 1 means in string */
+		int in_str = 0;
+		for (base = pbuffer->ptr, curr = pbuffer->ptr; *curr; curr++)
+		{
+			if (in_str) {
+				if ( (*curr > '9' || *curr < '0') && *curr != '.' && *curr != ':' ) {
+					/* found an separator , insert value into result array */
+					put_string_into_array_len(result, base, curr-base);
+					/* change state to not in string */
+					in_str = 0;
+				}
+			} else {
+				if (*curr >= '0' && *curr <= '9')
+				{
+					/* found leading char of an IP address, move base pointer and change state */
+					base = curr;
+					in_str = 1;
+				}
+			}
+		}
+		/* if breaking out while in str, we got to the end of string, so add it */
+		if (in_str)
+		{
+			put_string_into_array_len(result, base, curr-base);
+		}
+	}
+	return result;
+}
+
+#define IP_TRUSTED 1
+#define IP_UNTRUSTED 0
+/*
+   check whether ip is trusted, return 1 for trusted , 0 for untrusted
+*/
+static int is_proxy_trusted(const char *ipstr, plugin_data *p)
+{
+	data_string* allds = (data_string *) array_get_element(p->conf.forwarder,"all");
+	if (allds) {
+		if (strcasecmp(allds->value->ptr,"trust") == 0)
+			return IP_TRUSTED;
+		else
+			return IP_UNTRUSTED;
+	}
+	return (data_string *)array_get_element(p->conf.forwarder,ipstr) ? IP_TRUSTED : IP_UNTRUSTED ;
+}
+
+struct addrinfo *ipstr_to_sockaddr(const char *host)
+{
+   struct addrinfo hints, *res0;
+   int result;
+   memset(&hints, 0, sizeof(hints));
+   hints.ai_flags = AI_NUMERICHOST | AI_NUMERICSERV;
+
+   result = getaddrinfo(host, NULL, &hints, &res0);
+   if ( result != 0 )
+   {
+      fprintf(stderr,"could not resolve hostname %s because %s\n", host,gai_strerror(result));
+      if (result == EAI_SYSTEM)
+         perror("The system error is ");
+      return NULL;
+   }
+   else
+      if (res0==0)
+         fprintf(stderr, "Problem in resolving hostname %s: succeeded, but no information returned\n", host);
+
+   return res0;
+}
+
+
+static void clean_cond_cache(server *srv, connection *con)
+{
+	size_t i;
+
+	for (i = 0; i < srv->config_context->used; i++) {
+		data_config *dc = (data_config *)srv->config_context->data[i];
+
+		if (dc->comp == COMP_HTTP_REMOTEIP)
+		{
+			con->cond_cache[i].result = COND_RESULT_UNSET;
+			con->cond_cache[i].patterncount = 0;
+		}
+	}
+}
+
+URIHANDLER_FUNC(mod_extforward_uri_handler) {
+	plugin_data *p = p_d;
+	data_string *forwarded = NULL;
+#ifdef HAVE_IPV6
+	char b2[INET6_ADDRSTRLEN + 1];
+#endif
+	const char *s;
+	UNUSED(srv);
+	mod_extforward_patch_connection(srv, con, p);
+
+/* 	log_error_write(srv, __FILE__, __LINE__,"s","mod_extforward_uri_handler called\n"); */
+
+	/* if the remote ip itself is not trusted , then do nothing */
+#ifdef HAVE_IPV6
+	s = inet_ntop(con->dst_addr.plain.sa_family,
+		      con->dst_addr.plain.sa_family == AF_INET6 ?
+		       &(con->dst_addr.ipv6.sin6_addr) :
+		       &(con->dst_addr.ipv4.sin_addr),
+		      b2,
+		      (sizeof b2) - 1);
+#else
+	s = inet_ntoa(con->dst_addr.ipv4.sin_addr);
+#endif
+	if (IP_UNTRUSTED == is_proxy_trusted (s, p) )
+		return HANDLER_GO_ON;
+
+	/* log_error_write(srv, __FILE__, __LINE__,"s","remote address is trusted proxy, go on\n");*/
+	if (con->request.headers &&
+	    ((forwarded = (data_string *) array_get_element(con->request.headers,"X-Forwarded-For")) ||
+	     (forwarded = (data_string *) array_get_element(con->request.headers,  "Forwarded-For"))))
+	{
+		/* log_error_write(srv, __FILE__, __LINE__,"s","found forwarded header\n");*/
+		/* found forwarded for header */
+		int i;
+		array *forward_array = extract_forward_array(forwarded->value);
+		char *real_remote_addr = NULL;
+#ifdef HAVE_IPV6
+		struct addrinfo *addrlist = NULL;
+#endif
+		/* Testing shows that multiple headers and multiple values in one header
+		   come in _reverse_ order. So the first one we get is the last one in the request. */
+		for (i = forward_array->used - 1; i >= 0; i--)
+		{
+			data_string *ds = (data_string *) forward_array->data[i];
+			if (ds) {
+/* 				log_error_write(srv, __FILE__, __LINE__,"ss","forward",ds->value->ptr); */
+				real_remote_addr = ds->value->ptr;
+				break;
+				/* LEM: What the hell is this about?
+				        We test whether the forwarded for IP is trusted?
+					This looks like an ugly hack to handle multiple Forwarded-For's
+					and avoid those set to our proxies, or something like that.
+					My testing shows that reverse proxies add a new X-Forwarded-For header,
+					and we should thus take the last one, which is the first one we see.
+
+					The net result of the old code is that we use the first untrusted IP,
+					or if all are trusted, the last trusted IP.
+					That's crazy. So I've disabled this.
+				 */
+				/* check whether it is trusted */
+/* 				if (IP_UNTRUSTED == is_proxy_trusted(ds->value->ptr,p) ) */
+/* 					break; */
+/* 				log_error_write(srv, __FILE__, __LINE__,"ss",ds->value->ptr," is trusted."); */
+
+			}
+			else {
+				/* bug ?  bailing out here */
+				break;
+			}
+		}
+		if (real_remote_addr != NULL) /* parsed */
+		{
+			sock_addr s;
+			struct addrinfo *addrs_left;
+/* 			log_error_write(srv, __FILE__, __LINE__,"ss","use forward",real_remote_addr); */
+#ifdef HAVE_IPV6
+			addrlist = ipstr_to_sockaddr(real_remote_addr);
+			s.plain.sa_family = AF_UNSPEC;
+			for (addrs_left = addrlist; addrs_left != NULL;
+			     addrs_left = addrs_left -> ai_next)
+			{
+				s.plain.sa_family = addrs_left->ai_family;
+				if ( s.plain.sa_family == AF_INET )
+				{
+					s.ipv4.sin_addr = ((struct sockaddr_in*)addrs_left->ai_addr)->sin_addr;
+					break;
+				}
+				else if ( s.plain.sa_family == AF_INET6 )
+				{
+					s.ipv6.sin6_addr = ((struct sockaddr_in6*)addrs_left->ai_addr)->sin6_addr;
+					break;
+				}
+			}
+#else
+			s.ipv4.sin_addr.s_addr = inet_addr(real_remote_addr);
+			s.plain.sa_family = (s.ipv4.sin_addr.s_addr == 0xFFFFFFFF) ? AF_UNSPEC : AF_INET;
+#endif
+			if (s.plain.sa_family != AF_UNSPEC)
+			{
+				/* we found the remote address, modify current connection and save the old address */
+				if (con->plugin_ctx[p->id]) {
+					log_error_write(srv, __FILE__, __LINE__,"patching an already patched connection!");
+					handler_ctx_free(con->plugin_ctx[p->id]);
+					con->plugin_ctx[p->id] = NULL;
+				}
+				/* save old address */
+				con->plugin_ctx[p->id] = handler_ctx_init(con->dst_addr, con->dst_addr_buf);
+				/* patch connection address */
+				con->dst_addr = s;
+				con->dst_addr_buf = buffer_init();
+				buffer_copy_string(con->dst_addr_buf, real_remote_addr);
+/* 				log_error_write(srv, __FILE__, __LINE__,"ss","Set dst_addr_buf to ", real_remote_addr); */
+				/* Now, clean the conf_cond cache, because we may have changed the results of tests */
+				clean_cond_cache(srv, con);
+			}
+#ifdef HAVE_IPV6
+			if (addrlist != NULL ) freeaddrinfo(addrlist);
+#endif
+		}
+	   	array_free(forward_array);
+	}
+
+	/* not found */
+	return HANDLER_GO_ON;
+}
+
+CONNECTION_FUNC(mod_extforward_restore) {
+	plugin_data *p = p_d;
+	UNUSED(srv);
+
+	/* LEM: This seems completely unuseful, as we are not using
+	        p->conf in this function. Furthermore, it brings a
+	        segfault if one of the conditional configuration
+	        blocks is "SERVER['socket'] == foo", because the
+	        socket is not known yet in the srv/con structure.
+	 */
+	/* mod_extforward_patch_connection(srv, con, p); */
+
+	/* restore this connection's remote ip */
+	if (con->plugin_ctx[p->id]) {
+		handler_ctx *hctx = con->plugin_ctx[p->id];
+		con->dst_addr = hctx->saved_remote_addr;
+		buffer_free(con->dst_addr_buf);
+		con->dst_addr_buf = hctx->saved_remote_addr_buf;
+/* 		log_error_write(srv, __FILE__, __LINE__,"s","LEM: Reset dst_addr_buf"); */
+		handler_ctx_free(hctx);
+		con->plugin_ctx[p->id] = NULL;
+		/* Now, clean the conf_cond cache, because we may have changed the results of tests */
+		clean_cond_cache(srv, con);
+	}
+	return HANDLER_GO_ON;
+}
+
+
+/* this function is called at dlopen() time and inits the callbacks */
+
+int mod_extforward_plugin_init(plugin *p) {
+	p->version     = LIGHTTPD_VERSION_ID;
+	p->name        = buffer_init_string("extforward");
+
+	p->init        = mod_extforward_init;
+	p->handle_uri_raw = mod_extforward_uri_handler;
+	p->handle_request_done = mod_extforward_restore;
+	p->connection_reset = mod_extforward_restore;
+	p->set_defaults  = mod_extforward_set_defaults;
+	p->cleanup     = mod_extforward_free;
+
+	p->data        = NULL;
+
+	return 0;
+}
+
