@@ -481,7 +481,9 @@ typedef struct {
 	enum { STAT_CACHE_ENGINE_UNSET,
 			STAT_CACHE_ENGINE_NONE,
 			STAT_CACHE_ENGINE_SIMPLE,
+#ifdef HAVE_FAM_H
 			STAT_CACHE_ENGINE_FAM
+#endif
 	} stat_cache_engine;
 	unsigned short enable_cores;
 } server_config;
