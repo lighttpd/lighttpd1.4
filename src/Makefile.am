@@ -199,6 +199,11 @@ mod_fastcgi_la_SOURCES = mod_fastcgi.c
 mod_fastcgi_la_LDFLAGS = -module -export-dynamic -avoid-version -no-undefined
 mod_fastcgi_la_LIBADD = $(common_libadd)
 
+lib_LTLIBRARIES += mod_extforward.la
+mod_extforward_la_SOURCES = mod_extforward.c
+mod_extforward_la_LDFLAGS = -module -export-dynamic -avoid-version -no-undefined
+mod_extforward_la_LIBADD = $(common_libadd)
+
 lib_LTLIBRARIES += mod_access.la
 mod_access_la_SOURCES = mod_access.c
 mod_access_la_LDFLAGS = -module -export-dynamic -avoid-version -no-undefined
