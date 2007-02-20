@@ -398,7 +398,7 @@ AC_ARG_WITH(lua, AC_HELP_STRING([--with-lua],[lua engine for mod_cml]),
 
 AC_MSG_RESULT($WITH_LUA)
 if test "$WITH_LUA" != "no"; then
- if test "$WITH_LUA" == "yes"; then
+ if test "$WITH_LUA" = "yes"; then
   WITH_LUA=lua
  fi
  PKG_CHECK_MODULES(LUA, $WITH_LUA >= 5.1, [
