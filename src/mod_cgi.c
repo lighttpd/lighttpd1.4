@@ -842,6 +842,12 @@ static int cgi_create_env(server *srv, connection *con, plugin_data *p, buffer *
 				    CONST_BUF_LEN(con->authed_user));
 		}
 
+#ifdef USE_OPENSSL
+	if (srv_sock->is_ssl) {
+		fcgi_env_add(p->fcgi_env, CONST_STR_LEN("HTTPS"), CONST_STR_LEN("on"));
+	}
+#endif
+
 		/* request.content_length < SSIZE_MAX, see request.c */
 		ltostr(buf, con->request.content_length);
 		cgi_env_add(&env, CONST_STR_LEN("CONTENT_LENGTH"), buf, strlen(buf));
