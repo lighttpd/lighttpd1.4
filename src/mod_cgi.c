@@ -844,7 +844,7 @@ static int cgi_create_env(server *srv, connection *con, plugin_data *p, buffer *
 
 #ifdef USE_OPENSSL
 	if (srv_sock->is_ssl) {
-		fcgi_env_add(p->fcgi_env, CONST_STR_LEN("HTTPS"), CONST_STR_LEN("on"));
+		cgi_env_add(&env, CONST_STR_LEN("HTTPS"), CONST_STR_LEN("on"));
 	}
 #endif
 
