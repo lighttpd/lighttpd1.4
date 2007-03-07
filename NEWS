@@ -5,6 +5,20 @@ NEWS
 
 - 1.4.14 - ???
   * added mod_extforward module [1665]
+  * added HTTPS=on to the environment of cgi scripts (#861)
+  * fix handling of 303 #1045
+  * made the configure check for lua more portable [1677]  
+  * fix http 500 errors (colin.stephen@o2.com) #1041
+  * prevent wrong pidfile unlinking on graceful restart (Chris Webb) [1656]
+  * ignore empty packets from STDERR stream. #998 
+  * fix a crash for files with an mtime of 0 reported by cubiq on irc [1519]
+  * allow empty passwords with ldap (Jörg Sonnenberger) [1516]
+  * mod_scgi.c segfault fix #964
+  * Added round-robin support to mod_fastcgi [1500]
+  * Handle DragonFlyBSD the same way as Freebsd (Jörg Sonnenberger) [1492]
+  * added now and weeks support to mod_expire. #943
+  * fix cpu hog in certain requests [1473]
+  * fix for handling hostnames with trailing dot [1406]
 
 - 1.4.13 - 2006-10-09
 
