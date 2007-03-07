@@ -8,7 +8,7 @@ NEWS
   * added HTTPS=on to the environment of cgi scripts (#861)
   * fix handling of 303 #1045
   * made the configure check for lua more portable [1677]  
-  * fix http 500 errors (colin.stephen@o2.com) #1041
+  * fix http 500 errors (colin.stephen/at/o2.com) #1041
   * prevent wrong pidfile unlinking on graceful restart (Chris Webb) [1656]
   * ignore empty packets from STDERR stream. #998 
   * fix a crash for files with an mtime of 0 reported by cubiq on irc [1519]
@@ -73,7 +73,7 @@ NEWS
 - 1.4.11 - 2006-03-09
 
   * added ability to specify which ip address spawn-fci listens on
-    (agkr@pobox.com)
+    (agkr/at/pobox.com)
   * added mod_flv_streaming to streaming Flash Movies efficiently
   * fixed handling of error codes returned by mod_dav_svn behing a
     mod_proxy
@@ -85,7 +85,7 @@ NEWS
   * fixed local source retrieval on windows
     (secunia)
   * fixed hanging cgi if remote side is dieing while reading
-    from the pipe (sandy@meebo.com)
+    from the pipe (sandy/at/meebo.com)
 
 - 1.4.10 - 2006-02-08
 
@@ -101,23 +101,23 @@ NEWS
 
 - 1.4.9 - 2006-01-14
 
-  * added server.core-files option (sandy <sandy@meebo.com>)
+  * added server.core-files option (sandy <sandy/at/meebo.com>)
   * added docs for mod_status
-  * added mod_evasive to limit the number of connections by IP (<w1zzard@techpowerup.com>)
+  * added mod_evasive to limit the number of connections by IP (<w1zzard/at/techpowerup.com>)
   * added the power-magnet to mod_cml
   * added internal statistics to mod_fastcgi
   * added server.statistics-url to get internal statistics from mod_status
   * added support for conditional range-requests through If-Range
   * added static building via scons
-  * fixed 100% cpu loops in mod_cgi ("sandy" <sjen@cs.stanford.edu>)
-  * fixed handling for secure-download.timeout (jamis@37signals.com)
-  * fixed IE bug in content-charset in the output of mod_dirlisting (sniper@php.net)
-  * fixed typos and language in the docs (ryan-2005@ryandesign.com)
-  * fixed assertion in mod_cgi on HEAD request is Content-Length (<sandy@meebo.com>)
+  * fixed 100% cpu loops in mod_cgi ("sandy" <sjen/at/cs.stanford.edu>)
+  * fixed handling for secure-download.timeout (jamis/at/37signals.com)
+  * fixed IE bug in content-charset in the output of mod_dirlisting (sniper/at/php.net)
+  * fixed typos and language in the docs (ryan-2005/at/ryandesign.com)
+  * fixed assertion in mod_cgi on HEAD request is Content-Length (<sandy/at/meebo.com>)
   * fixed handling if equal but duplicate If-Modified-Since request headers
   * fixed endless loops in mod_fastcgi if backend is dead
   * fixed Depth: 1 handling in PROPFIND requests on empty dirs
-  * fixed encoding of UTF8 encoded dirlistings (Jani Taskinen <sniper@iki.fi>)
+  * fixed encoding of UTF8 encoded dirlistings (Jani Taskinen <sniper/at/iki.fi>)
   * fixed initial bind to a unix-domain socket through server.bind
   * fixed handling of lowercase filesystems
   * fixed duplicate request headers cause by mod_setenv
@@ -125,12 +125,12 @@ NEWS
 - 1.4.8 - 2005-11-23
 
   * added auto-reconnect to ldap-server in mod_auth
-    (joerg@netbsd.org)
+    (joerg/at/netbsd.org)
   * changed auth.ldap-cafile to be optional
-    (joerg@netbsd.org)
+    (joerg/at/netbsd.org)
   * added strip_request_uri in mod_fastcgi
   * added more X-* headers to mod_proxy
-    (Ben Grimm <bengrimm@gmail.com>)
+    (Ben Grimm <bengrimm/at/gmail.com>)
   * added 'debug' to simple-vhost to suppress the
     (mod_simple_vhost.c.157) No such file or directory /servers/ww.lighttpd.net/pages/
     messages by default
@@ -141,11 +141,11 @@ NEWS
   * fixed encoding the filenames in PROPFIND in mod_webdav
   * fixed range request handling in network_writev
   * fixed retry on connect error in mod_fastcgi
-    (Robert G. Jakabosky <bobby@alphatrade.com>)
+    (Robert G. Jakabosky <bobby/at/alphatrade.com>)
   * fixed possible crash in mod_webdav if sqlite3 support
     is available but not use
   * fixed fdvent-handler init if server.max-worker was used
-    (Siddharth Vijayakrishnan <mail@bluefireworks.net>)
+    (Siddharth Vijayakrishnan <mail/at/bluefireworks.net>)
   * fixed missing cleanup in mysql_vhost
   * fixed assert() in "connections.c:962:
       connection_handle_read_state: Assertion 'c->mem->used' failed."
@@ -156,7 +156,7 @@ NEWS
   * fixed unsigned/signed comparisions
   * fixed streaming in mod_cgi
   * fixed possible overflow in password-salt handling
-    (reported on slashdot by james-web@and.org)
+    (reported on slashdot by james-web/at/and.org)
   * fixed server-traffic-limit if connection limit is not set
 
 - 1.4.7 - 2005-11-02
@@ -167,7 +167,7 @@ NEWS
   * added support for %I in mod_accesslog
   * added better compat to Apache for ?auto in mod_status
   * added support for userdirs without a entry in /etc/passwd in mod_userdir
-    (rob@inversepath.com)
+    (rob/at/inversepath.com)
   * added startup-time selectable network-backend
   * added location of upload-files to config as array
   * added webdav.log-xml for logging xml-content in mod_webdav
