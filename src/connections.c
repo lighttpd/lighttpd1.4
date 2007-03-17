@@ -504,8 +504,6 @@ static int connection_handle_write_prepare(server *srv, connection *con) {
 		break;
 
 	case 206: /* write_queue is already prepared */
-		con->file_finished = 1;
-
 		break;
 	case 205: /* class: header only */
 	case 304:
