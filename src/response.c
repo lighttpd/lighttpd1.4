@@ -66,7 +66,11 @@ int http_response_write_header(server *srv, connection *con) {
 			BUFFER_APPEND_STRING_CONST(b, "\r\n");
 			buffer_append_string_buffer(b, ds->key);
 			BUFFER_APPEND_STRING_CONST(b, ": ");
-			buffer_append_string_buffer(b, ds->value);
+
+			/** 
+			 * the value might contain newlines, encode them with at least one white-space
+			 */
+			buffer_append_string_encoded(b, CONST_BUF_LEN(ds->value), ENCODING_HTTP_HEADER);
 #if 0
 			log_error_write(srv, __FILE__, __LINE__, "bb",
 					ds->key, ds->value);
@@ -98,7 +102,7 @@ int http_response_write_header(server *srv, connection *con) {
 			BUFFER_APPEND_STRING_CONST(b, "\r\nServer: " PACKAGE_NAME "/" PACKAGE_VERSION);
 		} else {
 			BUFFER_APPEND_STRING_CONST(b, "\r\nServer: ");
-			buffer_append_string_buffer(b, con->conf.server_tag);
+			buffer_append_string_encoded(b, CONST_BUF_LEN(con->conf.server_tag), ENCODING_HTTP_HEADER);
 		}
 	}
 
