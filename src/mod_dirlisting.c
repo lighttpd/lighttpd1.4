@@ -230,21 +230,32 @@ static int parse_config_entry(server *srv, plugin_config *s, array *ca, const ch
 
 /* handle plugin config and check values */
 
+#define CONFIG_EXCLUDE          "dir-listing.exclude"
+#define CONFIG_ACTIVATE         "dir-listing.activate"
+#define CONFIG_HIDE_DOTFILES    "dir-listing.hide-dotfiles"
+#define CONFIG_EXTERNAL_CSS     "dir-listing.external-css"
+#define CONFIG_ENCODING         "dir-listing.encoding"
+#define CONFIG_SHOW_README      "dir-listing.show-readme"
+#define CONFIG_HIDE_README_FILE "dir-listing.hide-readme-file"
+#define CONFIG_SHOW_HEADER      "dir-listing.show-header"
+#define CONFIG_HIDE_HEADER_FILE "dir-listing.hide-header-file"
+#define CONFIG_DIR_LISTING      "server.dir-listing"
+
 SETDEFAULTS_FUNC(mod_dirlisting_set_defaults) {
 	plugin_data *p = p_d;
 	size_t i = 0;
 
 	config_values_t cv[] = {
-		{ "dir-listing.exclude",	  NULL, T_CONFIG_LOCAL, T_CONFIG_SCOPE_CONNECTION },   /* 0 */
-		{ "dir-listing.activate",         NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION }, /* 1 */
-		{ "dir-listing.hide-dotfiles",    NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION }, /* 2 */
-		{ "dir-listing.external-css",     NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_CONNECTION },  /* 3 */
-		{ "dir-listing.encoding",         NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_CONNECTION },  /* 4 */
-		{ "dir-listing.show-readme",      NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION }, /* 5 */
-		{ "dir-listing.hide-readme-file", NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION }, /* 6 */
-		{ "dir-listing.show-header",      NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION }, /* 7 */
-		{ "dir-listing.hide-header-file", NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION }, /* 8 */
-		{ "server.dir-listing",           NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION }, /* 9 */
+		{ CONFIG_EXCLUDE,          NULL, T_CONFIG_LOCAL, T_CONFIG_SCOPE_CONNECTION },   /* 0 */
+		{ CONFIG_ACTIVATE,         NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION }, /* 1 */
+		{ CONFIG_HIDE_DOTFILES,    NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION }, /* 2 */
+		{ CONFIG_EXTERNAL_CSS,     NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_CONNECTION },  /* 3 */
+		{ CONFIG_ENCODING,         NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_CONNECTION },  /* 4 */
+		{ CONFIG_SHOW_README,      NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION }, /* 5 */
+		{ CONFIG_HIDE_README_FILE, NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION }, /* 6 */
+		{ CONFIG_SHOW_HEADER,      NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION }, /* 7 */
+		{ CONFIG_HIDE_HEADER_FILE, NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION }, /* 8 */
+		{ CONFIG_DIR_LISTING,      NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION }, /* 9 */
 
 		{ NULL,                          NULL, T_CONFIG_UNSET, T_CONFIG_SCOPE_UNSET }
 	};
@@ -286,7 +297,7 @@ SETDEFAULTS_FUNC(mod_dirlisting_set_defaults) {
 			return HANDLER_ERROR;
 		}
 
-		parse_config_entry(srv, s, ca, "dir-listing.exclude");
+		parse_config_entry(srv, s, ca, CONFIG_EXCLUDE);
 	}
 
 	return HANDLER_GO_ON;
@@ -320,24 +331,24 @@ static int mod_dirlisting_patch_connection(server *srv, connection *con, plugin_
 		for (j = 0; j < dc->value->used; j++) {
 			data_unset *du = dc->value->data[j];
 
-			if (buffer_is_equal_string(du->key, CONST_STR_LEN("dir-listing.activate")) ||
-			    buffer_is_equal_string(du->key, CONST_STR_LEN("server.dir-listing"))) {
+			if (buffer_is_equal_string(du->key, CONST_STR_LEN(CONFIG_ACTIVATE)) ||
+			    buffer_is_equal_string(du->key, CONST_STR_LEN(CONFIG_DIR_LISTING))) {
 				PATCH(dir_listing);
-			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("dir-listing.hide-dotfiles"))) {
+			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN(CONFIG_HIDE_DOTFILES))) {
 				PATCH(hide_dot_files);
-			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("dir-listing.external-css"))) {
+			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN(CONFIG_EXTERNAL_CSS))) {
 				PATCH(external_css);
-			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("dir-listing.encoding"))) {
+			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN(CONFIG_ENCODING))) {
 				PATCH(encoding);
-			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("dir-listing.show-readme"))) {
+			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN(CONFIG_SHOW_README))) {
 				PATCH(show_readme);
-			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("dir-listing.hide-readme-file"))) {
+			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN(CONFIG_HIDE_README_FILE))) {
 				PATCH(hide_readme_file);
-			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("dir-listing.show-header"))) {
+			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN(CONFIG_SHOW_HEADER))) {
 				PATCH(show_header);
-			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("dir-listing.hide-header-file"))) {
+			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN(CONFIG_HIDE_HEADER_FILE))) {
 				PATCH(hide_header_file);
-			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("dir-listing.excludes"))) {
+			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN(CONFIG_EXCLUDE))) {
 				PATCH(excludes);
 			}
 		}
