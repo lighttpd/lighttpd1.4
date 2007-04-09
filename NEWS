@@ -32,6 +32,7 @@ NEWS
   * fixed handling of %% in accesslog.format
   * fixed conditional dir-listing.exclude (#930)
   * reduced default PATH_MAX to 255 (#826)
+  * ECONNABORTED is not known on cygwin (fixes #863)
 
 
 - 1.4.13 - 2006-10-09
