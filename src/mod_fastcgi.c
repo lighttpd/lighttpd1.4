@@ -1447,11 +1447,6 @@ void fcgi_connection_close(server *srv, handler_ctx *hctx) {
 	p    = hctx->plugin_data;
 	con  = hctx->remote_conn;
 
-	if (con->mode != p->id) {
-		WP();
-		return;
-	}
-
 	if (hctx->fd != -1) {
 		fdevent_event_del(srv->ev, &(hctx->fde_ndx), hctx->fd);
 		fdevent_unregister(srv->ev, hctx->fd);
