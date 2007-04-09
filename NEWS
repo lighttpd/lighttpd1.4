@@ -31,6 +31,7 @@ NEWS
   * fixed various crashes at startup on broken accesslog.format strings (#1000)
   * fixed handling of %% in accesslog.format
   * fixed conditional dir-listing.exclude (#930)
+  * reduced default PATH_MAX to 255 (#826)
 
 
 - 1.4.13 - 2006-10-09
