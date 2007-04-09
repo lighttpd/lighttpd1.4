@@ -22,6 +22,9 @@ NEWS
   * added now and weeks support to mod_expire. #943
   * fix cpu hog in certain requests [1473]
   * fix for handling hostnames with trailing dot [1406]
+  * fixed header-injection via server.tag #1106
+  * disabled caching of files without a content-type to solve the 
+    aggressive caching of FF
 
 - 1.4.13 - 2006-10-09
 
