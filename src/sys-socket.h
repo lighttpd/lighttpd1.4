@@ -8,6 +8,7 @@
 #define ECONNRESET WSAECONNRESET
 #define EINPROGRESS WSAEINPROGRESS
 #define EALREADY WSAEALREADY
+#define ECONNABORTED WSAECONNABORTED
 #define ioctl ioctlsocket
 #define hstrerror(x) ""
 #else
