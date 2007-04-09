@@ -26,6 +26,9 @@ NEWS
   * disabled caching of files without a content-type to solve the 
     aggressive caching of FF
   * remove trailing white-spaces from HTTP-requests before parsing (#1098)
+  * fixed accesslog.use-syslog in a conditional and the caching of the
+    accesslog for files (fixes #1064)
+
 
 - 1.4.13 - 2006-10-09
 
