@@ -605,6 +605,9 @@ static int mod_accesslog_patch_connection(server *srv, connection *con, plugin_d
 				PATCH(parsed_format);
 			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("accesslog.use-syslog"))) {
 				PATCH(use_syslog);
+				PATCH(last_generated_accesslog_ts_ptr);
+				PATCH(access_logbuffer);
+				PATCH(ts_accesslog_str);
 			}
 		}
 	}
@@ -813,7 +816,7 @@ REQUESTDONE_FUNC(log_access_write) {
 	BUFFER_APPEND_STRING_CONST(b, "\n");
 
 	if (p->conf.use_syslog ||  /* syslog doesn't cache */
-	    (p->conf.access_logfile->used && p->conf.access_logfile->ptr[0] != '|') || /* pipes don't cache */
+	    (p->conf.access_logfile->used && p->conf.access_logfile->ptr[0] == '|') || /* pipes don't cache */
 	    newts ||
 	    b->used > BUFFER_MAX_REUSE_SIZE) {
 		if (p->conf.use_syslog) {
