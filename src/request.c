@@ -744,6 +744,13 @@ int http_request_parse(server *srv, connection *con) {
 
 						s_len = cur - value;
 
+						/* strip trailing white-spaces */
+						for (; s_len > 0 && 
+								(value[s_len - 1] == ' ' || 
+								 value[s_len - 1] == '\t'); s_len--);
+
+						value[s_len] = '\0';
+
 						if (s_len > 0) {
 							int cmp = 0;
 							if (NULL == (ds = (data_string *)array_get_unused_element(con->request.headers, TYPE_STRING))) {
