@@ -428,7 +428,16 @@ URIHANDLER_FUNC(mod_staticfile_subrequest) {
 
 	if (NULL == array_get_element(con->response.headers, "Content-Type")) {
 		if (buffer_is_empty(sce->content_type)) {
+			/* we are setting application/octet-stream, but also announce that
+			 * this header field might change in the seconds few requests 
+			 *
+			 * This should fix the aggressive caching of FF and the script download
+			 * seen by the first installations
+			 */
 			response_header_overwrite(srv, con, CONST_STR_LEN("Content-Type"), CONST_STR_LEN("application/octet-stream"));
+#if 0
+			response_header_overwrite(srv, con, CONST_STR_LEN("Vary"), CONST_STR_LEN("Content-Type"));
+#endif
 		} else {
 			response_header_overwrite(srv, con, CONST_STR_LEN("Content-Type"), CONST_BUF_LEN(sce->content_type));
 		}
