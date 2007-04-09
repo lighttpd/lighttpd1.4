@@ -650,7 +650,11 @@ FREE_FUNC(mod_fastcgi_free) {
 					host = ex->hosts[n];
 
 					for (proc = host->first; proc; proc = proc->next) {
-						if (proc->pid != 0) kill(proc->pid, SIGTERM);
+						if (proc->pid != 0) {
+							/* libfcgi wants SIGUSR1 for killing */
+							kill(proc->pid, SIGUSR1);
+							kill(proc->pid, SIGTERM);
+						}
 
 						if (proc->is_local &&
 						    !buffer_is_empty(proc->unixsocket)) {
@@ -659,8 +663,11 @@ FREE_FUNC(mod_fastcgi_free) {
 					}
 
 					for (proc = host->unused_procs; proc; proc = proc->next) {
-						if (proc->pid != 0) kill(proc->pid, SIGTERM);
-
+						if (proc->pid != 0) {
+							/* libfcgi wants SIGUSR1 for killing */
+							kill(proc->pid, SIGUSR1);
+							kill(proc->pid, SIGTERM);
+						}
 						if (proc->is_local &&
 						    !buffer_is_empty(proc->unixsocket)) {
 							unlink(proc->unixsocket->ptr);
