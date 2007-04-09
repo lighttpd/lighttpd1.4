@@ -347,6 +347,7 @@ URIHANDLER_FUNC(mod_staticfile_subrequest) {
 	stat_cache_entry *sce = NULL;
 	buffer *mtime;
 	data_string *ds;
+	int allow_caching = 1;
 
 	/* someone else has done a decision for us */
 	if (con->http_status != 0) return HANDLER_GO_ON;
@@ -435,33 +436,37 @@ URIHANDLER_FUNC(mod_staticfile_subrequest) {
 			 * seen by the first installations
 			 */
 			response_header_overwrite(srv, con, CONST_STR_LEN("Content-Type"), CONST_STR_LEN("application/octet-stream"));
-#if 0
-			response_header_overwrite(srv, con, CONST_STR_LEN("Vary"), CONST_STR_LEN("Content-Type"));
-#endif
+
+			allow_caching = 0;
 		} else {
 			response_header_overwrite(srv, con, CONST_STR_LEN("Content-Type"), CONST_BUF_LEN(sce->content_type));
 		}
 	}
 
-	if (NULL == array_get_element(con->response.headers, "ETag")) {
-		/* generate e-tag */
-		etag_mutate(con->physical.etag, sce->etag);
-
-		response_header_overwrite(srv, con, CONST_STR_LEN("ETag"), CONST_BUF_LEN(con->physical.etag));
-	}
 	response_header_overwrite(srv, con, CONST_STR_LEN("Accept-Ranges"), CONST_STR_LEN("bytes"));
 
-	/* prepare header */
-	if (NULL == (ds = (data_string *)array_get_element(con->response.headers, "Last-Modified"))) {
-		mtime = strftime_cache_get(srv, sce->st.st_mtime);
-		response_header_overwrite(srv, con, CONST_STR_LEN("Last-Modified"), CONST_BUF_LEN(mtime));
-	} else {
-		mtime = ds->value;
+	if (allow_caching) {
+		if (NULL == array_get_element(con->response.headers, "ETag")) {
+			/* generate e-tag */
+			etag_mutate(con->physical.etag, sce->etag);
+
+			response_header_overwrite(srv, con, CONST_STR_LEN("ETag"), CONST_BUF_LEN(con->physical.etag));
+		}
+
+		/* prepare header */
+		if (NULL == (ds = (data_string *)array_get_element(con->response.headers, "Last-Modified"))) {
+			mtime = strftime_cache_get(srv, sce->st.st_mtime);
+			response_header_overwrite(srv, con, CONST_STR_LEN("Last-Modified"), CONST_BUF_LEN(mtime));
+		} else {
+			mtime = ds->value;
+		}
+
+		if (HANDLER_FINISHED == http_response_handle_cachable(srv, con, mtime)) {
+			return HANDLER_FINISHED;
+		}
 	}
 
-	if (HANDLER_FINISHED == http_response_handle_cachable(srv, con, mtime)) {
-		return HANDLER_FINISHED;
-	} else if (con->request.http_range && con->conf.range_requests) {
+	if (con->request.http_range && con->conf.range_requests) {
 		int do_range_request = 1;
 		/* check if we have a conditional GET */
 
