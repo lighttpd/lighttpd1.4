@@ -159,12 +159,13 @@ INIT_FUNC(mod_accesslog_init) {
 int accesslog_parse_format(server *srv, format_fields *fields, buffer *format) {
 	size_t i, j, k = 0, start = 0;
 
-	for (i = 0; i < format->used - 1; i++) {
+	if (format->used == 0) return -1;
 
+	for (i = 0; i < format->used - 1; i++) {
 		switch(format->ptr[i]) {
 		case '%':
-			if (start != i) {
-				/* copy the string */
+			if (i > 0 && start != i) {
+				/* copy the string before this % */
 				if (fields->size == 0) {
 					fields->size = 16;
 					fields->used = 0;
@@ -183,7 +184,6 @@ int accesslog_parse_format(server *srv, format_fields *fields, buffer *format) {
 				fields->used++;
 			}
 
-
 			/* we need a new field */
 
 			if (fields->size == 0) {
@@ -199,7 +199,12 @@ int accesslog_parse_format(server *srv, format_fields *fields, buffer *format) {
 			switch (format->ptr[i+1]) {
 			case '>':
 			case '<':
-				/* only for s */
+				/* after the } has to be a character */
+				if (format->ptr[i+2] == '\0') {
+					log_error_write(srv, __FILE__, __LINE__, "s", "%< and %> have to be followed by a format-specifier");
+					return -1;
+				}
+
 
 				for (j = 0; fmap[j].key != '\0'; j++) {
 					if (fmap[j].key != format->ptr[i+2]) continue;
@@ -217,11 +222,12 @@ int accesslog_parse_format(server *srv, format_fields *fields, buffer *format) {
 				}
 
 				if (fmap[j].key == '\0') {
-					log_error_write(srv, __FILE__, __LINE__, "ss", "config: ", "failed");
+					log_error_write(srv, __FILE__, __LINE__, "s", "%< and %> have to be followed by a valid format-specifier");
 					return -1;
 				}
 
 				start = i + 3;
+				i = start - 1; /* skip the string */
 
 				break;
 			case '{':
@@ -232,11 +238,18 @@ int accesslog_parse_format(server *srv, format_fields *fields, buffer *format) {
 				}
 
 				if (k == format->used - 1) {
-					log_error_write(srv, __FILE__, __LINE__, "ss", "config: ", "failed");
+					log_error_write(srv, __FILE__, __LINE__, "s", "%{ has to be terminated by a }");
 					return -1;
 				}
+
+				/* after the } has to be a character */
 				if (format->ptr[k+1] == '\0') {
-					log_error_write(srv, __FILE__, __LINE__, "ss", "config: ", "failed");
+					log_error_write(srv, __FILE__, __LINE__, "s", "%{...} has to be followed by a format-specifier");
+					return -1;
+				}
+
+				if (k == i + 2) {
+					log_error_write(srv, __FILE__, __LINE__, "s", "%{...} has to be contain a string");
 					return -1;
 				}
 
@@ -258,14 +271,21 @@ int accesslog_parse_format(server *srv, format_fields *fields, buffer *format) {
 				}
 
 				if (fmap[j].key == '\0') {
-					log_error_write(srv, __FILE__, __LINE__, "ss", "config: ", "failed");
+					log_error_write(srv, __FILE__, __LINE__, "s", "%{...} has to be followed by a valid format-specifier");
 					return -1;
 				}
 
 				start = k + 2;
+				i = start - 1; /* skip the string */
 
 				break;
 			default:
+				/* after the % has to be a character */
+				if (format->ptr[i+1] == '\0') {
+					log_error_write(srv, __FILE__, __LINE__, "s", "% has to be followed by a format-specifier");
+					return -1;
+				}
+
 				for (j = 0; fmap[j].key != '\0'; j++) {
 					if (fmap[j].key != format->ptr[i+1]) continue;
 
@@ -282,11 +302,12 @@ int accesslog_parse_format(server *srv, format_fields *fields, buffer *format) {
 				}
 
 				if (fmap[j].key == '\0') {
-					log_error_write(srv, __FILE__, __LINE__, "ss", "config: ", "failed");
+					log_error_write(srv, __FILE__, __LINE__, "s", "% has to be followed by a valid format-specifier");
 					return -1;
 				}
 
 				start = i + 2;
+				i = start - 1; /* skip the string */
 
 				break;
 			}
@@ -780,6 +801,9 @@ REQUESTDONE_FUNC(log_access_write) {
 				break;
 			case FORMAT_REQUEST_METHOD:
 				buffer_append_string(b, get_http_method_name(con->request.http_method));
+				break;
+			case FORMAT_PERCENT:
+				buffer_append_string(b, "%");
 				break;
 			case FORMAT_SERVER_PORT:
 				buffer_append_long(b, srv->srvconf.port);

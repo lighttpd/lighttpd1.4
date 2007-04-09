@@ -28,6 +28,8 @@ NEWS
   * remove trailing white-spaces from HTTP-requests before parsing (#1098)
   * fixed accesslog.use-syslog in a conditional and the caching of the
     accesslog for files (fixes #1064)
+  * fixed various crashes at startup on broken accesslog.format strings (#1000)
+  * fixed handling of %% in accesslog.format 
 
 
 - 1.4.13 - 2006-10-09
