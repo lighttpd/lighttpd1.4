@@ -38,8 +38,9 @@ NEWS
   * fixed possible crash in debug-message in mod_extforward
   * fixed compilation of mod_extforward on glibc < 2.3.4 
   * fixed include of empty in the configfiles (#1076)
-  * send SIGUSR1 to fastcgi children before SIGTERM. libfcgi wants SIGUSR1.
-  * fixed missing AUTH_TYPE entry in the fastcgi environment.
+  * send SIGUSR1 to fastcgi children before SIGTERM. libfcgi wants SIGUSR1. (#737)
+  * fixed missing AUTH_TYPE entry in the fastcgi environment. (#889)
+  * fixed compilation in network_writev.c on MacOS X 10.3.9 (#903)
 
 - 1.4.13 - 2006-10-09
 
