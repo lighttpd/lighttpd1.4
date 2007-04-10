@@ -55,7 +55,11 @@ int network_write_chunkqueue_writev(server *srv, connection *con, int fd, chunkq
 			const size_t max_chunks = MAX_IOVEC;
 #elif defined(UIO_MAXIOV) /* Linux x86 (glibc-2.2.5-233) */
 			const size_t max_chunks = UIO_MAXIOV;
-#elif (defined(__FreeBSD__) && __FreeBSD_version < 500000) || defined(__DragonFly__) /* FreeBSD 4.x */
+#elif (defined(__FreeBSD__) && __FreeBSD_version < 500000) || defined(__DragonFly__) || defined(__APPLE__) 
+			/* - FreeBSD 4.x
+			 * - MacOS X 10.3.x
+			 *   (covered in -DKERNEL)
+			 *  */
 			const size_t max_chunks = 1024; /* UIO_MAXIOV value from sys/uio.h */
 #else
 #error "sysconf() doesnt return _SC_IOV_MAX ..., check the output of 'man writev' for the EINVAL error and send the output to jan@kneschke.de"
