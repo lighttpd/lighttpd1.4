@@ -37,6 +37,7 @@ NEWS
     (#800)
   * fixed possible crash in debug-message in mod_extforward
   * fixed compilation of mod_extforward on glibc < 2.3.4 
+  * send SIGUSR1 to fastcgi children before SIGTERM. libfcgi wants SIGUSR1.
 
 
 - 1.4.13 - 2006-10-09
