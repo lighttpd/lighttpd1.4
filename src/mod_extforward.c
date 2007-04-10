@@ -282,7 +282,18 @@ struct addrinfo *ipstr_to_sockaddr(const char *host)
 {
    struct addrinfo hints, *res0;
    int result;
+
    memset(&hints, 0, sizeof(hints));
+#ifndef AI_NUMERICSERV
+/** 
+ * quoting $ man getaddrinfo
+ *
+ * NOTES
+ *        AI_ADDRCONFIG, AI_ALL, and AI_V4MAPPED are available since glibc 2.3.3.  
+ *        AI_NUMERICSERV is available since glibc 2.3.4.
+ */
+#define AI_NUMERICSERV 0
+#endif
    hints.ai_flags = AI_NUMERICHOST | AI_NUMERICSERV;
 
    result = getaddrinfo(host, NULL, &hints, &res0);
@@ -321,122 +332,124 @@ URIHANDLER_FUNC(mod_extforward_uri_handler) {
 	data_string *forwarded = NULL;
 #ifdef HAVE_IPV6
 	char b2[INET6_ADDRSTRLEN + 1];
+	struct addrinfo *addrlist = NULL;
 #endif
-	const char *s;
-	UNUSED(srv);
+	const char *dst_addr_str = NULL;
+	int i;
+	array *forward_array = NULL;
+	char *real_remote_addr = NULL;
+#ifdef HAVE_IPV6
+#endif
+
+	if (!con->request.headers) return HANDLER_GO_ON;
+
 	mod_extforward_patch_connection(srv, con, p);
 
-/* 	log_error_write(srv, __FILE__, __LINE__,"s","mod_extforward_uri_handler called\n"); */
+	if (con->conf.log_request_handling) {
+ 		log_error_write(srv, __FILE__, __LINE__, "s", 
+				"-- mod_extforward_uri_handler called");
+	}
+
+	if ((NULL == (forwarded = (data_string *) array_get_element(con->request.headers,"X-Forwarded-For")) &&
+	     NULL == (forwarded = (data_string *) array_get_element(con->request.headers,  "Forwarded-For")))) {
+
+		if (con->conf.log_request_handling) {
+			log_error_write(srv, __FILE__, __LINE__, "s", 
+					"no X-Forwarded-For|Forwarded-For: found, skipping");
+		}
+
+		return HANDLER_GO_ON;
+	}
 
 	/* if the remote ip itself is not trusted , then do nothing */
 #ifdef HAVE_IPV6
-	s = inet_ntop(con->dst_addr.plain.sa_family,
+	dst_addr_str = inet_ntop(con->dst_addr.plain.sa_family,
 		      con->dst_addr.plain.sa_family == AF_INET6 ?
-		       &(con->dst_addr.ipv6.sin6_addr) :
-		       &(con->dst_addr.ipv4.sin_addr),
+		       (struct sockaddr *)&(con->dst_addr.ipv6.sin6_addr) :
+		       (struct sockaddr *)&(con->dst_addr.ipv4.sin_addr),
 		      b2,
 		      (sizeof b2) - 1);
 #else
-	s = inet_ntoa(con->dst_addr.ipv4.sin_addr);
+	dst_addr_str = inet_ntoa(con->dst_addr.ipv4.sin_addr);
 #endif
-	if (IP_UNTRUSTED == is_proxy_trusted (s, p) )
+	if (IP_UNTRUSTED == is_proxy_trusted (dst_addr_str, p) ) {
+		if (con->conf.log_request_handling) {
+			log_error_write(srv, __FILE__, __LINE__, "s",
+					"remote address is NOT a trusted proxy, skipping");
+		}
+
 		return HANDLER_GO_ON;
-
-	/* log_error_write(srv, __FILE__, __LINE__,"s","remote address is trusted proxy, go on\n");*/
-	if (con->request.headers &&
-	    ((forwarded = (data_string *) array_get_element(con->request.headers,"X-Forwarded-For")) ||
-	     (forwarded = (data_string *) array_get_element(con->request.headers,  "Forwarded-For"))))
-	{
-		/* log_error_write(srv, __FILE__, __LINE__,"s","found forwarded header\n");*/
-		/* found forwarded for header */
-		int i;
-		array *forward_array = extract_forward_array(forwarded->value);
-		char *real_remote_addr = NULL;
-#ifdef HAVE_IPV6
-		struct addrinfo *addrlist = NULL;
-#endif
-		/* Testing shows that multiple headers and multiple values in one header
-		   come in _reverse_ order. So the first one we get is the last one in the request. */
-		for (i = forward_array->used - 1; i >= 0; i--)
-		{
-			data_string *ds = (data_string *) forward_array->data[i];
-			if (ds) {
-/* 				log_error_write(srv, __FILE__, __LINE__,"ss","forward",ds->value->ptr); */
-				real_remote_addr = ds->value->ptr;
-				break;
-				/* LEM: What the hell is this about?
-				        We test whether the forwarded for IP is trusted?
-					This looks like an ugly hack to handle multiple Forwarded-For's
-					and avoid those set to our proxies, or something like that.
-					My testing shows that reverse proxies add a new X-Forwarded-For header,
-					and we should thus take the last one, which is the first one we see.
-
-					The net result of the old code is that we use the first untrusted IP,
-					or if all are trusted, the last trusted IP.
-					That's crazy. So I've disabled this.
-				 */
-				/* check whether it is trusted */
-/* 				if (IP_UNTRUSTED == is_proxy_trusted(ds->value->ptr,p) ) */
-/* 					break; */
-/* 				log_error_write(srv, __FILE__, __LINE__,"ss",ds->value->ptr," is trusted."); */
-
-			}
-			else {
-				/* bug ?  bailing out here */
-				break;
-			}
-		}
-		if (real_remote_addr != NULL) /* parsed */
-		{
-			sock_addr s;
-			struct addrinfo *addrs_left;
-/* 			log_error_write(srv, __FILE__, __LINE__,"ss","use forward",real_remote_addr); */
-#ifdef HAVE_IPV6
-			addrlist = ipstr_to_sockaddr(real_remote_addr);
-			s.plain.sa_family = AF_UNSPEC;
-			for (addrs_left = addrlist; addrs_left != NULL;
-			     addrs_left = addrs_left -> ai_next)
-			{
-				s.plain.sa_family = addrs_left->ai_family;
-				if ( s.plain.sa_family == AF_INET )
-				{
-					s.ipv4.sin_addr = ((struct sockaddr_in*)addrs_left->ai_addr)->sin_addr;
-					break;
-				}
-				else if ( s.plain.sa_family == AF_INET6 )
-				{
-					s.ipv6.sin6_addr = ((struct sockaddr_in6*)addrs_left->ai_addr)->sin6_addr;
-					break;
-				}
-			}
-#else
-			s.ipv4.sin_addr.s_addr = inet_addr(real_remote_addr);
-			s.plain.sa_family = (s.ipv4.sin_addr.s_addr == 0xFFFFFFFF) ? AF_UNSPEC : AF_INET;
-#endif
-			if (s.plain.sa_family != AF_UNSPEC)
-			{
-				/* we found the remote address, modify current connection and save the old address */
-				if (con->plugin_ctx[p->id]) {
-					log_error_write(srv, __FILE__, __LINE__,"patching an already patched connection!");
-					handler_ctx_free(con->plugin_ctx[p->id]);
-					con->plugin_ctx[p->id] = NULL;
-				}
-				/* save old address */
-				con->plugin_ctx[p->id] = handler_ctx_init(con->dst_addr, con->dst_addr_buf);
-				/* patch connection address */
-				con->dst_addr = s;
-				con->dst_addr_buf = buffer_init();
-				buffer_copy_string(con->dst_addr_buf, real_remote_addr);
-/* 				log_error_write(srv, __FILE__, __LINE__,"ss","Set dst_addr_buf to ", real_remote_addr); */
-				/* Now, clean the conf_cond cache, because we may have changed the results of tests */
-				clean_cond_cache(srv, con);
-			}
-#ifdef HAVE_IPV6
-			if (addrlist != NULL ) freeaddrinfo(addrlist);
-#endif
-		}
-	   	array_free(forward_array);
 	}
+
+	forward_array = extract_forward_array(forwarded->value);
+
+	/* Testing shows that multiple headers and multiple values in one header
+	   come in _reverse_ order. So the first one we get is the last one in the request. */
+	for (i = forward_array->used - 1; i >= 0; i--) {
+		data_string *ds = (data_string *) forward_array->data[i];
+		if (ds) {
+			real_remote_addr = ds->value->ptr;
+			break;
+		} else {
+			/* bug ?  bailing out here */
+			break;
+		}
+	}
+
+	if (real_remote_addr != NULL) { /* parsed */
+		sock_addr sock;
+
+		struct addrinfo *addrs_left;
+
+		if (con->conf.log_request_handling) {
+ 			log_error_write(srv, __FILE__, __LINE__, "ss",
+					"using address:", real_remote_addr);
+		}
+#ifdef HAVE_IPV6
+		addrlist = ipstr_to_sockaddr(real_remote_addr);
+		sock.plain.sa_family = AF_UNSPEC;
+		for (addrs_left = addrlist; addrs_left != NULL;
+		     addrs_left = addrs_left -> ai_next) {
+			sock.plain.sa_family = addrs_left->ai_family;
+			if ( sock.plain.sa_family == AF_INET ) {
+				sock.ipv4.sin_addr = ((struct sockaddr_in*)addrs_left->ai_addr)->sin_addr;
+				break;
+			} else if ( sock.plain.sa_family == AF_INET6 ) {
+				sock.ipv6.sin6_addr = ((struct sockaddr_in6*)addrs_left->ai_addr)->sin6_addr;
+				break;
+			}
+		}
+#else
+		sock.ipv4.sin_addr.s_addr = inet_addr(real_remote_addr);
+		sock.plain.sa_family = (s.ipv4.sin_addr.s_addr == 0xFFFFFFFF) ? AF_UNSPEC : AF_INET;
+#endif
+		if (sock.plain.sa_family != AF_UNSPEC) {
+			/* we found the remote address, modify current connection and save the old address */
+			if (con->plugin_ctx[p->id]) {
+				log_error_write(srv, __FILE__, __LINE__, "s", 
+						"patching an already patched connection!");
+				handler_ctx_free(con->plugin_ctx[p->id]);
+				con->plugin_ctx[p->id] = NULL;
+			}
+			/* save old address */
+			con->plugin_ctx[p->id] = handler_ctx_init(con->dst_addr, con->dst_addr_buf);
+			/* patch connection address */
+			con->dst_addr = sock;
+			con->dst_addr_buf = buffer_init();
+			buffer_copy_string(con->dst_addr_buf, real_remote_addr);
+		
+			if (con->conf.log_request_handling) {
+ 				log_error_write(srv, __FILE__, __LINE__, "ss",
+						"patching con->dst_addr_buf for the accesslog:", real_remote_addr);
+			}
+			/* Now, clean the conf_cond cache, because we may have changed the results of tests */
+			clean_cond_cache(srv, con);
+		}
+#ifdef HAVE_IPV6
+		if (addrlist != NULL ) freeaddrinfo(addrlist);
+#endif
+	}
+   	array_free(forward_array);
 
 	/* not found */
 	return HANDLER_GO_ON;
