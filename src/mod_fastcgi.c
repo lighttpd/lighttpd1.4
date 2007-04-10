@@ -1879,8 +1879,36 @@ static int fcgi_create_env(server *srv, handler_ctx *hctx, size_t request_id) {
 	fcgi_env_add(p->fcgi_env, CONST_STR_LEN("REMOTE_ADDR"), s, strlen(s));
 
 	if (!buffer_is_empty(con->authed_user)) {
-		fcgi_env_add(p->fcgi_env, CONST_STR_LEN("REMOTE_USER"),
-			     CONST_BUF_LEN(con->authed_user));
+		fcgi_env_add(p->fcgi_env, CONST_STR_LEN("REMOTE_USER"), CONST_BUF_LEN(con->authed_user));
+	
+		/* AUTH_TYPE fix by Troy Kruthoff (tkruthoff@gmail.com)
+		 * section 4.1.1 of RFC 3875 (cgi spec) requires the server to set a AUTH_TYPE env
+		 * declaring the type of authentication used.	 (see http://tools.ietf.org/html/rfc3875#page-11)
+		 *
+		 * I copied this code from mod_auth.c where it extracts auth info from the "Authorization" 
+		 * header to authenticate the user before allowing the request to proceed.  I'm guessing it makes
+		 * sense to re-parse the header here, as mod_auth is unaware if the request is headed for cgi/fcgi.
+		 * Someone more familiar with the lighty internals should be able to quickly determine if we are 
+		 * better storing AUTH_TYPE on the initial parse in mod_auth.
+		 */
+		char *http_authorization = NULL;
+		data_string *ds;
+	  	
+		if (NULL != (ds = (data_string *)array_get_element(con->request.headers, "Authorization"))) {
+			http_authorization = ds->value->ptr;
+		}
+	
+		if (ds && ds->value && ds->value->used) {
+			char *auth_realm;
+		  if (NULL != (auth_realm = strchr(http_authorization, ' '))) {
+				int auth_type_len = auth_realm - http_authorization;
+				if ((auth_type_len == 5) && (0 == strncmp(http_authorization, "Basic", auth_type_len))) {
+					  fcgi_env_add(p->fcgi_env, CONST_STR_LEN("AUTH_TYPE"), CONST_STR_LEN("Basic"));
+				} else if ((auth_type_len == 6) && (0 == strncmp(http_authorization, "Digest", auth_type_len))) {
+					  fcgi_env_add(p->fcgi_env, CONST_STR_LEN("AUTH_TYPE"), CONST_STR_LEN("Digest"));
+				}
+			}
+		}
 	}
 
 	if (con->request.content_length > 0 && host->mode != FCGI_AUTHORIZER) {
