@@ -1151,7 +1151,6 @@ int webdav_lockdiscovery(server *srv, connection *con,
  *
  */
 int webdav_has_lock(server *srv, connection *con, plugin_data *p, buffer *uri) {
-	UNUSED(srv);
 	int has_lock = 1;
 
 #ifdef USE_LOCKS
