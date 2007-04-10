@@ -35,6 +35,8 @@ NEWS
   * ECONNABORTED is not known on cygwin (#863)
   * fixed crash on url.redirect and url.rewrite if %0 is used in a global context
     (#800)
+  * fixed possible crash in debug-message in mod_extforward
+  * fixed compilation of mod_extforward on glibc < 2.3.4 
 
 
 - 1.4.13 - 2006-10-09
