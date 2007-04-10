@@ -39,6 +39,7 @@ NEWS
   * fixed compilation of mod_extforward on glibc < 2.3.4 
   * fixed include of empty in the configfiles (#1076)
   * send SIGUSR1 to fastcgi children before SIGTERM. libfcgi wants SIGUSR1.
+  * fixed missing AUTH_TYPE entry in the fastcgi environment.
 
 - 1.4.13 - 2006-10-09
 
