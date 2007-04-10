@@ -140,6 +140,7 @@ static int mod_redirect_patch_connection(server *srv, connection *con, plugin_da
 	plugin_config *s = p->config_storage[0];
 
 	p->conf.redirect = s->redirect;
+	p->conf.context = NULL;
 
 	/* skip the first, the global context */
 	for (i = 1; i < srv->config_context->used; i++) {
@@ -229,6 +230,11 @@ static handler_t mod_redirect_uri_handler(server *srv, connection *con, void *p_
 						if (num < (size_t)n) {
 							buffer_append_string(p->location, list[num]);
 						}
+					} else if (p->conf.context == NULL) {
+						/* we have no context, we are global */
+						log_error_write(srv, __FILE__, __LINE__, "sb",
+								"used a rewrite containing a %[0-9]+ in the global scope, ignored:",
+								kv->value);
 					} else {
 						config_append_cond_match_buffer(con, p->conf.context, p->location, num);
 					}
