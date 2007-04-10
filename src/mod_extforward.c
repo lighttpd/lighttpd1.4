@@ -421,7 +421,7 @@ URIHANDLER_FUNC(mod_extforward_uri_handler) {
 		}
 #else
 		sock.ipv4.sin_addr.s_addr = inet_addr(real_remote_addr);
-		sock.plain.sa_family = (s.ipv4.sin_addr.s_addr == 0xFFFFFFFF) ? AF_UNSPEC : AF_INET;
+		sock.plain.sa_family = (sock.ipv4.sin_addr.s_addr == 0xFFFFFFFF) ? AF_UNSPEC : AF_INET;
 #endif
 		if (sock.plain.sa_family != AF_UNSPEC) {
 			/* we found the remote address, modify current connection and save the old address */
