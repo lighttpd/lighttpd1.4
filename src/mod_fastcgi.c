@@ -250,6 +250,11 @@ typedef struct {
 	to die and decrements its afterwards */
 
 	buffer *strip_request_uri;
+
+	unsigned short kill_signal; /* we need a setting for this as libfcgi
+				       applications prefer SIGUSR1 while the
+				       rest of the world would use SIGTERM
+				       *sigh* */
 } fcgi_extension_host;
 
 /*
@@ -651,9 +656,7 @@ FREE_FUNC(mod_fastcgi_free) {
 
 					for (proc = host->first; proc; proc = proc->next) {
 						if (proc->pid != 0) {
-							/* libfcgi wants SIGUSR1 for killing */
-							kill(proc->pid, SIGUSR1);
-							kill(proc->pid, SIGTERM);
+							kill(proc->pid, host->kill_signal);
 						}
 
 						if (proc->is_local &&
@@ -664,9 +667,7 @@ FREE_FUNC(mod_fastcgi_free) {
 
 					for (proc = host->unused_procs; proc; proc = proc->next) {
 						if (proc->pid != 0) {
-							/* libfcgi wants SIGUSR1 for killing */
-							kill(proc->pid, SIGUSR1);
-							kill(proc->pid, SIGTERM);
+							kill(proc->pid, host->kill_signal);
 						}
 						if (proc->is_local &&
 						    !buffer_is_empty(proc->unixsocket)) {
@@ -1032,8 +1033,6 @@ static int fcgi_spawn_connection(server *srv,
 							"You can find out if it is the right one by executing 'php -v' and it should display '(cgi-fcgi)' "
 							"in the output, NOT (cgi) NOR (cli)\n"
 							"For more information check http://www.lighttpd.net/documentation/fastcgi.html#preparing-php-as-a-fastcgi-program");
-					log_error_write(srv, __FILE__, __LINE__, "s",
-							"If this is PHP on Gentoo add fastcgi to the USE flags");
 				} else if (WIFSIGNALED(status)) {
 					log_error_write(srv, __FILE__, __LINE__, "sd",
 							"terminated by signal:",
@@ -1185,8 +1184,9 @@ SETDEFAULTS_FUNC(mod_fastcgi_set_defaults) {
 						{ "bin-copy-environment", NULL, T_CONFIG_ARRAY, T_CONFIG_SCOPE_CONNECTION },     /* 13 */
 
 						{ "broken-scriptfilename", NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION },  /* 14 */
-						{ "allow-x-send-file", NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION },      /* 15 */
+						{ "allow-x-send-file",  NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION },      /* 15 */
 						{ "strip-request-uri",  NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_CONNECTION },      /* 16 */
+						{ "kill-signal",        NULL, T_CONFIG_SHORT, T_CONFIG_SCOPE_CONNECTION },      /* 17 */
 
 						{ NULL,                NULL, T_CONFIG_UNSET, T_CONFIG_SCOPE_UNSET }
 					};
@@ -1213,6 +1213,7 @@ SETDEFAULTS_FUNC(mod_fastcgi_set_defaults) {
 					host->disable_time = 60;
 					host->break_scriptfilename_for_php = 0;
 					host->allow_xsendfile = 0; /* handle X-LIGHTTPD-send-file */
+					host->kill_signal = SIGTERM;
 
 					fcv[0].destination = host->host;
 					fcv[1].destination = host->docroot;
@@ -1233,6 +1234,7 @@ SETDEFAULTS_FUNC(mod_fastcgi_set_defaults) {
 					fcv[14].destination = &(host->break_scriptfilename_for_php);
 					fcv[15].destination = &(host->allow_xsendfile);
 					fcv[16].destination = host->strip_request_uri;
+					fcv[17].destination = &(host->kill_signal);
 
 					if (0 != config_insert_values_internal(srv, da_host->value, fcv)) {
 						return HANDLER_ERROR;
