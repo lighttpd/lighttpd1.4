@@ -3,6 +3,10 @@
 NEWS
 ====
 
+- 1.4.15 - 2007-04-??
+
+  *
+
 - 1.4.14 - 2007-04-13
 
   * fix crash if gethostbyaddr() failed on redirect [1718]
