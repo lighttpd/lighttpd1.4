@@ -1881,8 +1881,6 @@ static int fcgi_create_env(server *srv, handler_ctx *hctx, size_t request_id) {
 	fcgi_env_add(p->fcgi_env, CONST_STR_LEN("REMOTE_ADDR"), s, strlen(s));
 
 	if (!buffer_is_empty(con->authed_user)) {
-		fcgi_env_add(p->fcgi_env, CONST_STR_LEN("REMOTE_USER"), CONST_BUF_LEN(con->authed_user));
-	
 		/* AUTH_TYPE fix by Troy Kruthoff (tkruthoff@gmail.com)
 		 * section 4.1.1 of RFC 3875 (cgi spec) requires the server to set a AUTH_TYPE env
 		 * declaring the type of authentication used.	 (see http://tools.ietf.org/html/rfc3875#page-11)
@@ -1896,6 +1894,8 @@ static int fcgi_create_env(server *srv, handler_ctx *hctx, size_t request_id) {
 		char *http_authorization = NULL;
 		data_string *ds;
 	  	
+		fcgi_env_add(p->fcgi_env, CONST_STR_LEN("REMOTE_USER"), CONST_BUF_LEN(con->authed_user));
+	
 		if (NULL != (ds = (data_string *)array_get_element(con->request.headers, "Authorization"))) {
 			http_authorization = ds->value->ptr;
 		}
