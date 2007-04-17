@@ -5,7 +5,7 @@ NEWS
 
 - 1.4.15 - 2007-04-13
 
-  * fixed broken Set-Cookie headers 
+  * fixed broken Set-Cookie headers
 
 - 1.4.14 - 2007-04-13
 
@@ -19,7 +19,7 @@ NEWS
   * fix http 500 errors (colin.stephen/at/o2.com) #1041 [1663]
   * prevent wrong pidfile unlinking on graceful restart (Chris Webb) [1656]
   * ignore empty packets from STDERR stream. #998
-  * fix a crash for files with an mtime of 0 reported by cubiq on irc [1519] CVE-2007-1870
+  * fix a crash for files with an mtime of 0 reported by cubiq on irc [1519]
     CVE-2007-1870
   * allow empty passwords with ldap (Jörg Sonnenberger) [1516]
   * mod_scgi.c segfault fix #964 [1501]
@@ -29,7 +29,7 @@ NEWS
   * fix cpu hog in certain requests [1473] CVE-2007-1869
   * fix for handling hostnames with trailing dot [1406]
   * fixed header-injection via server.tag (#1106)
-  * disabled caching of files without a content-type to solve the 
+  * disabled caching of files without a content-type to solve the
     aggressive caching of FF
   * remove trailing white-spaces from HTTP-requests before parsing (#1098)
   * fixed accesslog.use-syslog in a conditional and the caching of the
@@ -42,7 +42,7 @@ NEWS
   * fixed crash on url.redirect and url.rewrite if %0 is used in a global context
     (#800)
   * fixed possible crash in debug-message in mod_extforward
-  * fixed compilation of mod_extforward on glibc < 2.3.4 
+  * fixed compilation of mod_extforward on glibc < 2.3.4
   * fixed include of empty in the configfiles (#1076)
   * send SIGUSR1 to fastcgi children before SIGTERM. libfcgi wants SIGUSR1. (#737)
   * fixed missing AUTH_TYPE entry in the fastcgi environment. (#889)
@@ -54,16 +54,16 @@ NEWS
   * added initgroups in spawn-fcgi (#871)
   * added apr1 support htpasswd in mod-auth (#870)
   * added lighty.stat() to mod_magnet
-  * fixed segfault in splitted CRLF CRLF sequences 
-    (introduced in 1.4.12) (#876) CVE-2007-1869
+  * fixed segfault in splitted CRLF CRLF sequences
+    (introduced in 1.4.12) (#876)
   * fixed compilation of LOCK support in mod-webdav
   * fixed fragments in request-URLs (#869)
   * fixed pkg-config check for lua5.1 on debian
-  * fixed Content-Length = 0 on HEAD requests without 
+  * fixed Content-Length = 0 on HEAD requests without
     a known Content-Length (#119)
   * fixed mkdir() forcing 0700 (#884)
   * fixed writev() on FreeBSD 4.x and older (#875)
-  * removed warning about a 404-error-handler 
+  * removed warning about a 404-error-handler
     returned 404
   * backported and fixed the buildsystem changes for
     webdav locks
