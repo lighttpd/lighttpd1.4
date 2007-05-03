@@ -69,7 +69,7 @@ typedef struct fcgi_proc {
 	buffer *unixsocket; /* config.socket + "-" + id */
 	unsigned port;  /* config.port + pno */
 
-	buffer *connection_name; /* either tcp:<host>:<port> or unix:<socket> for debuggin purposes */
+	buffer *connection_name; /* either tcp:<host>:<port> or unix:<socket> for debugging purposes */
 
 	pid_t pid;   /* PID of the spawned process (0 if not spawned locally) */
 
@@ -80,7 +80,7 @@ typedef struct fcgi_proc {
 	size_t requests;  /* see max_requests */
 	struct fcgi_proc *prev, *next; /* see first */
 
-	time_t disabled_until; /* this proc is disabled until, use something else until than */
+	time_t disabled_until; /* this proc is disabled until, use something else until then */
 
 	int is_local;
 
@@ -88,7 +88,7 @@ typedef struct fcgi_proc {
 		PROC_STATE_UNSET,    /* init-phase */
 		PROC_STATE_RUNNING,  /* alive */
 		PROC_STATE_OVERLOADED, /* listen-queue is full,
-					  don't send something to this proc for the next 2 seconds */
+					  don't send anything to this proc for the next 2 seconds */
 		PROC_STATE_DIED_WAIT_FOR_PID, /* */
 		PROC_STATE_DIED,     /* marked as dead, should be restarted */
 		PROC_STATE_KILLED    /* was killed as we don't have the load anymore */
@@ -145,7 +145,7 @@ typedef struct {
 	unsigned short disable_time;
 
 	/*
-	 * same fastcgi processes get a little bit larger
+	 * some fastcgi processes get a little bit larger
 	 * than wanted. max_requests_per_proc kills a
 	 * process after a number of handled requests.
 	 *
@@ -184,7 +184,7 @@ typedef struct {
 	 * bin-path is the path to the binary
 	 *
 	 * check min_procs and max_procs for the number
-	 * of process to start-up
+	 * of process to start up
 	 */
 	buffer *bin_path;
 
@@ -217,7 +217,7 @@ typedef struct {
 	unsigned short mode;
 
 	/*
-	 * check_local tell you if the phys file is stat()ed
+	 * check_local tells you if the phys file is stat()ed
 	 * or not. FastCGI doesn't care if the service is
 	 * remote. If the web-server side doesn't contain
 	 * the fastcgi-files we should not stat() for them
@@ -228,7 +228,7 @@ typedef struct {
 	/*
 	 * append PATH_INFO to SCRIPT_FILENAME
 	 *
-	 * php needs this if cgi.fix_pathinfo is provied
+	 * php needs this if cgi.fix_pathinfo is provided
 	 *
 	 */
 
@@ -247,7 +247,7 @@ typedef struct {
 	num_procs.
 
 	only if a process is killed max_id waits for the process itself
-	to die and decrements its afterwards */
+	to die and decrements it afterwards */
 
 	buffer *strip_request_uri;
 
@@ -826,7 +826,7 @@ static int fcgi_spawn_connection(server *srv,
 		} else {
 			struct hostent *he;
 
-			/* set a usefull default */
+			/* set a useful default */
 			fcgi_addr_in.sin_addr.s_addr = htonl(INADDR_ANY);
 
 
@@ -869,7 +869,7 @@ static int fcgi_spawn_connection(server *srv,
 	}
 
 	if (-1 == connect(fcgi_fd, fcgi_addr, servlen)) {
-		/* server is not up, spawn in  */
+		/* server is not up, spawn it  */
 		pid_t child;
 		int val;
 
@@ -1029,10 +1029,11 @@ static int fcgi_spawn_connection(server *srv,
 							"child exited with status",
 							WEXITSTATUS(status), host->bin_path);
 					log_error_write(srv, __FILE__, __LINE__, "s",
-							"if you try do run PHP as FastCGI backend make sure you use the FastCGI enabled version.\n"
+							"If you're trying to run PHP as a FastCGI backend, make sure you're using the FastCGI-enabled version.\n"
 							"You can find out if it is the right one by executing 'php -v' and it should display '(cgi-fcgi)' "
-							"in the output, NOT (cgi) NOR (cli)\n"
-							"For more information check http://www.lighttpd.net/documentation/fastcgi.html#preparing-php-as-a-fastcgi-program");
+							"in the output, NOT '(cgi)' NOR '(cli)'.\n"
+							"For more information, check http://trac.lighttpd.net/trac/wiki/Docs%3AModFastCGI#preparing-php-as-a-fastcgi-program"
+							"If this is PHP on Gentoo, add 'fastcgi' to the USE flags.");
 				} else if (WIFSIGNALED(status)) {
 					log_error_write(srv, __FILE__, __LINE__, "sd",
 							"terminated by signal:",
@@ -1040,9 +1041,9 @@ static int fcgi_spawn_connection(server *srv,
 
 					if (WTERMSIG(status) == 11) {
 						log_error_write(srv, __FILE__, __LINE__, "s",
-								"to be exact: it seg-fault, crashed, died, ... you get the idea." );
+								"to be exact: it segfaulted, crashed, died, ... you get the idea." );
 						log_error_write(srv, __FILE__, __LINE__, "s",
-								"If this is PHP try to remove the byte-code caches for now and try again.");
+								"If this is PHP, try removing the bytecode caches for now and try again.");
 					}
 				} else {
 					log_error_write(srv, __FILE__, __LINE__, "sd",
@@ -1066,7 +1067,7 @@ static int fcgi_spawn_connection(server *srv,
 
 		if (p->conf.debug) {
 			log_error_write(srv, __FILE__, __LINE__, "sb",
-					"(debug) socket is already used, won't spawn:",
+					"(debug) socket is already used; won't spawn:",
 					proc->connection_name);
 		}
 	}
@@ -1508,7 +1509,7 @@ static int fcgi_reconnect(server *srv, handler_ctx *hctx) {
 	 *
 	 * next step is resetting this attemp and setup a connection again
 	 *
-	 * if we have more then 5 reconnects for the same request, die
+	 * if we have more than 5 reconnects for the same request, die
 	 *
 	 * 2.
 	 *
@@ -1626,7 +1627,7 @@ typedef enum {
 	CONNECTION_UNSET,
 	CONNECTION_OK,
 	CONNECTION_DELAYED, /* retry after event, take same host */
-	CONNECTION_OVERLOADED, /* disable for 1 seconds, take another backend */
+	CONNECTION_OVERLOADED, /* disable for 1 second, take another backend */
 	CONNECTION_DEAD /* disable for 60 seconds, take another backend */
 } connection_result_t;
 
@@ -1669,7 +1670,7 @@ static connection_result_t fcgi_establish_connection(server *srv, handler_ctx *h
 		fcgi_addr_in.sin_family = AF_INET;
 		if (0 == inet_aton(host->host->ptr, &(fcgi_addr_in.sin_addr))) {
 			log_error_write(srv, __FILE__, __LINE__, "sbs",
-					"converting IP-adress failed for", host->host,
+					"converting IP address failed for", host->host,
 					"\nBe sure to specify an IP address here");
 
 			return -1;
@@ -1694,16 +1695,16 @@ static connection_result_t fcgi_establish_connection(server *srv, handler_ctx *h
 		    errno == EINTR) {
 			if (hctx->conf.debug > 2) {
 				log_error_write(srv, __FILE__, __LINE__, "sb",
-					"connect delayed, will continue later:", proc->connection_name);
+					"connect delayed; will continue later:", proc->connection_name);
 			}
 
 			return CONNECTION_DELAYED;
 		} else if (errno == EAGAIN) {
 			if (hctx->conf.debug) {
 				log_error_write(srv, __FILE__, __LINE__, "sbsd",
-					"This means that the you have more incoming requests than your fastcgi-backend can handle in parallel. "
-					"Perhaps it helps to spawn more fastcgi backend or php-children, if not decrease server.max-connections."
-					"The load for this fastcgi backend", proc->connection_name, "is", proc->load);
+					"This means that you have more incoming requests than your FastCGI backend can handle in parallel."
+					"It might help to spawn more FastCGI backends or PHP children; if not, decrease server.max-connections."
+					"The load for this FastCGI backend", proc->connection_name, "is", proc->load);
 			}
 
 			return CONNECTION_OVERLOADED;
@@ -2055,8 +2056,8 @@ static int fcgi_create_env(server *srv, handler_ctx *hctx, size_t request_id) {
 			off_t written = 0;
 			off_t weHave = 0;
 
-			/* we announce toWrite octects
-			 * now take all the request_content chunk that we need to fill this request
+			/* we announce toWrite octets
+			 * now take all the request_content chunks that we need to fill this request
 			 * */
 
 			b = chunkqueue_get_append_buffer(hctx->wb);
@@ -2356,7 +2357,7 @@ static int fastcgi_get_packet(server *srv, handler_ctx *hctx, fastcgi_response_p
 		}
 
 		if (packet->b->used < packet->len + 1) {
-			/* we didn't got the full packet */
+			/* we didn't get the full packet */
 
 			buffer_free(packet->b);
 			return -1;
@@ -2558,7 +2559,7 @@ static int fcgi_demux_response(server *srv, handler_ctx *hctx) {
 			if (host->mode != FCGI_AUTHORIZER ||
 			    !(con->http_status == 0 ||
 			      con->http_status == 200)) {
-				/* send chunk-end if nesseary */
+				/* send chunk-end if necessary */
 				http_chunk_append_mem(srv, con, NULL, 0);
 				joblist_append(srv, con);
 			}
@@ -2653,7 +2654,7 @@ static int fcgi_restart_dead_procs(server *srv, plugin_data *p, fcgi_extension_h
 			if (proc->state != PROC_STATE_DIED) break;
 
 		case PROC_STATE_DIED:
-			/* local proc get restarted by us,
+			/* local procs get restarted by us,
 			 * remote ones hopefully by the admin */
 
 			if (proc->is_local) {
@@ -2774,7 +2775,7 @@ static handler_t fcgi_write_request(server *srv, handler_ctx *hctx) {
 		     proc && proc->state != PROC_STATE_RUNNING;
 		     proc = proc->next);
 
-		/* all childs are dead */
+		/* all children are dead */
 		if (proc == NULL) {
 			hctx->fde_ndx = -1;
 
@@ -2834,7 +2835,7 @@ static handler_t fcgi_write_request(server *srv, handler_ctx *hctx) {
 			 * -> EAGAIN */
 
 			log_error_write(srv, __FILE__, __LINE__, "ssdsd",
-				"backend is overloaded, we disable it for a 2 seconds and send the request to another backend instead:",
+				"backend is overloaded; we'll disable it for 2 seconds and send the request to another backend instead:",
 				"reconnects:", hctx->reconnects,
 				"load:", host->load);
 
@@ -2864,7 +2865,7 @@ static handler_t fcgi_write_request(server *srv, handler_ctx *hctx) {
 			}
 
 			log_error_write(srv, __FILE__, __LINE__, "ssdsd",
-				"backend died, we disable it for a 5 seconds and send the request to another backend instead:",
+				"backend died; we'll disable it for 5 seconds and send the request to another backend instead:",
 				"reconnects:", hctx->reconnects,
 				"load:", host->load);
 
@@ -2950,7 +2951,7 @@ static handler_t fcgi_write_request(server *srv, handler_ctx *hctx) {
 				if (hctx->wb->bytes_out == 0 &&
 				    hctx->reconnects < 5) {
 					usleep(10000); /* take away the load of the webserver
-							* to let the php a chance to restart
+							* to give the php a chance to restart
 							*/
 
 					fcgi_reconnect(srv, hctx);
@@ -3152,9 +3153,9 @@ static handler_t fcgi_handle_fdevent(void *s, void *ctx, int revents) {
 		   	    (con->http_status == 200 ||
 			     con->http_status == 0)) {
 				/*
-				 * If we are here in AUTHORIZER mode then a request for autorizer
-				 * was proceeded already, and status 200 has been returned. We need
-				 * now to handle autorized request.
+				 * If we are here in AUTHORIZER mode then a request for authorizer
+				 * was processed already, and status 200 has been returned. We need
+				 * now to handle authorized request.
 				 */
 
 				buffer_copy_string_buffer(con->physical.doc_root, host->docroot);
@@ -3220,7 +3221,7 @@ static handler_t fcgi_handle_fdevent(void *s, void *ctx, int revents) {
 			}
 
 			if (con->file_started == 0) {
-				/* nothing has been send out yet, try to use another child */
+				/* nothing has been sent out yet, try to use another child */
 
 				if (hctx->wb->bytes_out == 0 &&
 				    hctx->reconnects < 5) {
@@ -3270,8 +3271,8 @@ static handler_t fcgi_handle_fdevent(void *s, void *ctx, int revents) {
 		    hctx->state == FCGI_STATE_WRITE) {
 			/* we are allowed to send something out
 			 *
-			 * 1. in a unfinished connect() call
-			 * 2. in a unfinished write() call (long POST request)
+			 * 1. in an unfinished connect() call
+			 * 2. in an unfinished write() call (long POST request)
 			 */
 			return mod_fastcgi_handle_subrequest(srv, con, p);
 		} else {
@@ -3286,8 +3287,8 @@ static handler_t fcgi_handle_fdevent(void *s, void *ctx, int revents) {
 		if (hctx->state == FCGI_STATE_CONNECT_DELAYED) {
 			/* getoptsock will catch this one (right ?)
 			 *
-			 * if we are in connect we might get a EINPROGRESS
-			 * in the first call and a FDEVENT_HUP in the
+			 * if we are in connect we might get an EINPROGRESS
+			 * in the first call and an FDEVENT_HUP in the
 			 * second round
 			 *
 			 * FIXME: as it is a bit ugly.
@@ -3485,7 +3486,7 @@ static handler_t fcgi_check_extension(server *srv, connection *con, void *p_d, i
 		return HANDLER_FINISHED;
 	}
 
-	/* a note about no handler is not sent yey */
+	/* a note about no handler is not sent yet */
 	extension->note_is_sent = 0;
 
 	/*
@@ -3520,7 +3521,7 @@ static handler_t fcgi_check_extension(server *srv, connection *con, void *p_d, i
 			}
 
 			/* the prefix is the SCRIPT_NAME,
-			 * everthing from start to the next slash
+			 * everything from start to the next slash
 			 * this is important for check-local = "disable"
 			 *
 			 * if prefix = /admin.fcgi
@@ -3630,13 +3631,13 @@ TRIGGER_FUNC(mod_fastcgi_handle_trigger) {
 
 	/* perhaps we should kill a connect attempt after 10-15 seconds
 	 *
-	 * currently we wait for the TCP timeout which is on Linux 180 seconds
+	 * currently we wait for the TCP timeout which is 180 seconds on Linux
 	 *
 	 *
 	 *
 	 */
 
-	/* check all childs if they are still up */
+	/* check all children if they are still up */
 
 	for (i = 0; i < srv->config_context->used; i++) {
 		plugin_config *conf;
@@ -3718,11 +3719,11 @@ TRIGGER_FUNC(mod_fastcgi_handle_trigger) {
 
 					if (srv->cur_ts - proc->last_used > host->idle_timeout) {
 						/* a proc is idling for a long time now,
-						 * terminated it */
+						 * terminate it */
 
 						if (p->conf.debug) {
 							log_error_write(srv, __FILE__, __LINE__, "ssbsd",
-									"idle-timeout reached, terminating child:",
+									"idle-timeout reached; terminating child:",
 									"socket:", proc->connection_name,
 									"pid", proc->pid);
 						}
