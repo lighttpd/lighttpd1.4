@@ -220,6 +220,7 @@ static handler_t mod_status_handle_server_status_html(server *srv, connection *c
 	BUFFER_APPEND_STRING_CONST(b,
 				   "  <style type=\"text/css\">\n"
 				   "    table.status { border: black solid thin; }\n"
+				   "    td { white-space: nowrap; }\n"
 				   "    td.int { background-color: #f0f0f0; text-align: right }\n"
 				   "    td.string { background-color: #f0f0f0; text-align: left }\n"
 				   "    th.status { background-color: black; color: white; font-weight: bold; }\n"
@@ -518,6 +519,11 @@ static handler_t mod_status_handle_server_status_html(server *srv, connection *c
 
 		if (!buffer_is_empty(c->uri.path)) {
 			buffer_append_string_encoded(b, CONST_BUF_LEN(c->uri.path), ENCODING_HTML);
+		}
+
+		if (!buffer_is_empty(c->uri.query)) {
+			BUFFER_APPEND_STRING_CONST(b, "?");
+			buffer_append_string_encoded(b, CONST_BUF_LEN(c->uri.query), ENCODING_HTML);
 		}
 
 		BUFFER_APPEND_STRING_CONST(b, "</td><td class=\"string\">");
