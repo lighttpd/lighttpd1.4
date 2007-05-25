@@ -610,7 +610,7 @@ handler_t stat_cache_get_entry(server *srv, connection *con, buffer *name, stat_
 		}
 		etag_create(sce->etag, &(sce->st));
 #ifdef HAVE_XATTR
-		if (buffer_is_empty(sce->content_type)) {
+		if (con->conf.use_xattr && buffer_is_empty(sce->content_type)) {
 			stat_cache_attr_get(sce->content_type, name->ptr);
 		}
 #endif
