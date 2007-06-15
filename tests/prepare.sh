@@ -25,6 +25,7 @@ mkdir -p $tmpdir/cache/compress/
 # copy everything into the right places
 cp $srcdir/docroot/www/*.html \
    $srcdir/docroot/www/*.php \
+   $srcdir/docroot/www/*.html~ \
    $srcdir/docroot/www/*.pl \
    $srcdir/docroot/www/*.fcgi \
    $srcdir/docroot/www/*.shtml \
