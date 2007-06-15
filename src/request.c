@@ -284,8 +284,6 @@ int http_request_parse(server *srv, connection *con) {
 
 	int done = 0;
 
-	data_string *ds = NULL;
-
 	/*
 	 * Request: "^(GET|POST|HEAD) ([^ ]+(\\?[^ ]+|)) (HTTP/1\\.[01])$"
 	 * Option : "^([-a-zA-Z]+): (.+)$"
@@ -715,12 +713,24 @@ int http_request_parse(server *srv, connection *con) {
 			switch(*cur) {
 			case '\r':
 				if (con->parse_request->ptr[i+1] == '\n') {
+					data_string *ds = NULL;
+
 					/* End of Headerline */
 					con->parse_request->ptr[i] = '\0';
 					con->parse_request->ptr[i+1] = '\0';
 
 					if (in_folding) {
-						if (!ds) {
+						buffer *key_b;
+						/**
+						 * we use a evil hack to handle the line-folding
+						 * 
+						 * As array_insert_unique() deletes 'ds' in the case of a duplicate
+						 * ds points somewhere and we get a evil crash. As a solution we keep the old
+						 * "key" and get the current value from the hash and append us
+						 *
+						 * */
+
+						if (!key || !key_len) {
 							/* 400 */
 
 							if (srv->srvconf.log_request_header_on_error) {
@@ -737,7 +747,15 @@ int http_request_parse(server *srv, connection *con) {
 							con->response.keep_alive = 0;
 							return 0;
 						}
-						buffer_append_string(ds->value, value);
+
+						key_b = buffer_init();
+						buffer_copy_string_len(key_b, key, key_len);
+
+						if (NULL != (ds = (data_string *)array_get_element(con->request.headers, key_b->ptr))) {
+							buffer_append_string(ds->value, value);
+						}
+
+						buffer_free(key_b);
 					} else {
 						int s_len;
 						key = con->parse_request->ptr + first;
@@ -969,7 +987,12 @@ int http_request_parse(server *srv, connection *con) {
 					first = i+1;
 					is_key = 1;
 					value = 0;
-					key_len = 0;
+#if 0
+					/**
+					 * for Bug 1230 keep the key_len a live
+					 */
+					key_len = 0; 
+#endif
 					in_folding = 0;
 				} else {
 					if (srv->srvconf.log_request_header_on_error) {
