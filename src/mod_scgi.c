@@ -803,7 +803,7 @@ static int scgi_spawn_connection(server *srv,
 			buffer_append_string_buffer(b, host->bin_path);
 
 			/* exec the cgi */
-			execle("/bin/sh", "sh", "-c", b->ptr, NULL, env.ptr);
+			execle("/bin/sh", "sh", "-c", b->ptr, (char *)NULL, env.ptr);
 
 			log_error_write(srv, __FILE__, __LINE__, "sbs",
 					"execl failed for:", host->bin_path, strerror(errno));

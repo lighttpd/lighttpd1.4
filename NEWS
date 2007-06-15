@@ -3,6 +3,12 @@
 NEWS
 ====
 
+- 1.4.16 - 
+
+  * fixed typecast of NULL on execl() (#1235)
+  * fixed circumventing url.access-deny by trailing slash (#1230)
+  * fixed crash on duplicate headers with trailing WS (#1232)
+
 - 1.4.15 - 2007-04-13
 
   * fixed broken Set-Cookie headers

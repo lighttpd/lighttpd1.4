@@ -169,7 +169,7 @@ int fcgi_spawn_connection(char *appPath, char *addr, unsigned short port, const 
 			strcat(b, appPath);
 
 			/* exec the cgi */
-			execl("/bin/sh", "sh", "-c", b, NULL);
+			execl("/bin/sh", "sh", "-c", b, (char *)NULL);
 
 			exit(errno);
 

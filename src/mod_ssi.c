@@ -702,7 +702,7 @@ static int process_ssi_stmt(server *srv, connection *con, plugin_data *p,
 			/* close stdin */
 			close(STDIN_FILENO);
 
-			execl("/bin/sh", "sh", "-c", cmd, NULL);
+			execl("/bin/sh", "sh", "-c", cmd, (char *)NULL);
 
 			log_error_write(srv, __FILE__, __LINE__, "sss", "spawing exec failed:", strerror(errno), cmd);
 

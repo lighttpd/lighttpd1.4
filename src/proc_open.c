@@ -255,7 +255,7 @@ int proc_open(proc_handler_t *proc, const char *command) {
 		 */
 		proc_close_parents(proc);
 
-		execl(shell, shell, "-c", command, NULL);
+		execl(shell, shell, "-c", command, (char *)NULL);
 		_exit(127);
 
 	} else if (child < 0) {
