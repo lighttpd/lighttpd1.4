@@ -13,6 +13,12 @@ NEWS
   * fixed circumventing url.access-deny by trailing slash (#1230)
   * fixed crash on duplicate headers with trailing WS (#1232)
   * fixed accepting more connections then requested (#1216)
+  * fixed mem-leak in mod_auth (reported by Stefan Esser)
+  * fixed crash with md5-sess and cnonce not set in mod_auth (reported by Stefan Esser)
+  * fixed missing check for base64 encoded string in mod_auth and Basic auth
+    (reported by Stefan Esser)
+  * fixed possible crash in Auth-Digest header parser on trailing WS in 
+    mod_auth (reported by Stefan Esser) 
 
 - 1.4.15 - 2007-04-13
 
