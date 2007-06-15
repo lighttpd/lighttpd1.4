@@ -507,7 +507,7 @@ SETDEFAULTS_FUNC(log_access_open) {
 				 *
 				 */
 
-				execl("/bin/sh", "sh", "-c", s->access_logfile->ptr + 1, NULL);
+				execl("/bin/sh", "sh", "-c", s->access_logfile->ptr + 1, (char *)NULL);
 
 				log_error_write(srv, __FILE__, __LINE__, "sss",
 						"spawning log-process failed: ", strerror(errno),
