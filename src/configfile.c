@@ -89,7 +89,9 @@ static int config_insert(server *srv) {
 		{ "server.core-files",           NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION }, /* 45 */
 		{ "ssl.cipher-list",             NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_SERVER },      /* 46 */
 		{ "ssl.use-sslv2",               NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION }, /* 47 */
-
+		{ "etag.use-inode",             NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_SERVER }, /* 48 */
+		{ "etag.use-mtime",             NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_SERVER }, /* 49 */
+		{ "etag.use-size",             NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_SERVER }, /* 50 */
 		{ "server.host",                 "use server.bind instead", T_CONFIG_DEPRECATED, T_CONFIG_SCOPE_UNSET },
 		{ "server.docroot",              "use server.document-root instead", T_CONFIG_DEPRECATED, T_CONFIG_SCOPE_UNSET },
 		{ "server.virtual-root",         "load mod_simple_vhost and use simple-vhost.server-root instead", T_CONFIG_DEPRECATED, T_CONFIG_SCOPE_UNSET },
@@ -162,6 +164,9 @@ static int config_insert(server *srv) {
 #endif
 		s->kbytes_per_second = 0;
 		s->allow_http11  = 1;
+		s->etag_use_inode = 1;
+		s->etag_use_mtime = 1;
+		s->etag_use_size  = 1;
 		s->range_requests = 1;
 		s->force_lowercase_filenames = 0;
 		s->global_kbytes_per_second = 0;
@@ -206,6 +211,9 @@ static int config_insert(server *srv) {
 
 		cv[46].destination = s->ssl_cipher_list;
 		cv[47].destination = &(s->ssl_use_sslv2);
+		cv[48].destination = &(s->etag_use_inode);
+		cv[49].destination = &(s->etag_use_mtime);
+		cv[50].destination = &(s->etag_use_size);
 
 		srv->config_storage[i] = s;
 
@@ -280,8 +288,10 @@ int config_setup_connection(server *srv, connection *con) {
 	PATCH(ssl_ca_file);
 	PATCH(ssl_cipher_list);
 	PATCH(ssl_use_sslv2);
-
-
+	PATCH(etag_use_inode);
+	PATCH(etag_use_mtime);
+	PATCH(etag_use_size);
+ 
 	return 0;
 }
 
@@ -323,6 +333,12 @@ int config_patch_connection(server *srv, connection *con, comp_key_t comp) {
 				PATCH(max_read_idle);
 			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("mimetype.use-xattr"))) {
 				PATCH(use_xattr);
+			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("etag.use-inode"))) {
+				PATCH(etag_use_inode);
+			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("etag.use-mtime"))) {
+				PATCH(etag_use_mtime);
+			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("etag.use-size"))) {
+				PATCH(etag_use_size);
 			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("ssl.pemfile"))) {
 				PATCH(ssl_pemfile);
 			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("ssl.ca-file"))) {

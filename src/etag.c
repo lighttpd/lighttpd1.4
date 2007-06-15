@@ -8,12 +8,22 @@ int etag_is_equal(buffer *etag, const char *matches) {
 	return 0;
 }
 
-int etag_create(buffer *etag, struct stat *st) {
-	buffer_copy_off_t(etag, st->st_ino);
-	buffer_append_string_len(etag, CONST_STR_LEN("-"));
-	buffer_append_off_t(etag, st->st_size);
-	buffer_append_string_len(etag, CONST_STR_LEN("-"));
-	buffer_append_long(etag, st->st_mtime);
+int etag_create(buffer *etag, struct stat *st,etag_flags_t flags) {
+	if (0 == flags) return 0;
+	
+	if (flags & ETAG_USE_INODE) {
+		buffer_copy_off_t(etag, st->st_ino);
+		buffer_append_string_len(etag, CONST_STR_LEN("-"));
+	}
+	
+	if (flags & ETAG_USE_SIZE) {
+		buffer_append_off_t(etag, st->st_size);
+		buffer_append_string_len(etag, CONST_STR_LEN("-"));
+	}
+	
+	if (flags & ETAG_USE_MTIME) {
+		buffer_append_long(etag, st->st_mtime);
+	}
 
 	return 0;
 }

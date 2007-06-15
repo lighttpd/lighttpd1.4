@@ -25,6 +25,7 @@
 
 typedef struct {
 	array *exclude_ext;
+	unsigned short etags_used;
 } plugin_config;
 
 typedef struct {
@@ -82,6 +83,7 @@ SETDEFAULTS_FUNC(mod_staticfile_set_defaults) {
 
 	config_values_t cv[] = {
 		{ "static-file.exclude-extensions", NULL, T_CONFIG_ARRAY, T_CONFIG_SCOPE_CONNECTION },       /* 0 */
+		{ "static-file.etags",    NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION }, /* 1 */
 		{ NULL,                         NULL, T_CONFIG_UNSET, T_CONFIG_SCOPE_UNSET }
 	};
 
@@ -94,8 +96,10 @@ SETDEFAULTS_FUNC(mod_staticfile_set_defaults) {
 
 		s = calloc(1, sizeof(plugin_config));
 		s->exclude_ext    = array_init();
+		s->etags_used     = 1;
 
 		cv[0].destination = s->exclude_ext;
+		cv[1].destination = &(s->etags_used);
 
 		p->config_storage[i] = s;
 
@@ -114,6 +118,7 @@ static int mod_staticfile_patch_connection(server *srv, connection *con, plugin_
 	plugin_config *s = p->config_storage[0];
 
 	PATCH(exclude_ext);
+	PATCH(etags_used);
 
 	/* skip the first, the global context */
 	for (i = 1; i < srv->config_context->used; i++) {
@@ -129,7 +134,9 @@ static int mod_staticfile_patch_connection(server *srv, connection *con, plugin_
 
 			if (buffer_is_equal_string(du->key, CONST_STR_LEN("static-file.exclude-extensions"))) {
 				PATCH(exclude_ext);
-			}
+			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("static-file.etags"))) {
+				PATCH(etags_used);
+			} 
 		}
 	}
 
@@ -446,11 +453,17 @@ URIHANDLER_FUNC(mod_staticfile_subrequest) {
 	response_header_overwrite(srv, con, CONST_STR_LEN("Accept-Ranges"), CONST_STR_LEN("bytes"));
 
 	if (allow_caching) {
-		if (NULL == array_get_element(con->response.headers, "ETag")) {
-			/* generate e-tag */
-			etag_mutate(con->physical.etag, sce->etag);
+		etag_flags_t flags;
 
-			response_header_overwrite(srv, con, CONST_STR_LEN("ETag"), CONST_BUF_LEN(con->physical.etag));
+		flags =   (con->conf.etag_use_mtime ? ETAG_USE_MTIME : 0) | (con->conf.etag_use_inode ? ETAG_USE_INODE : 0) | (con->conf.etag_use_size ? ETAG_USE_SIZE : 0);
+
+		if (p->conf.etags_used && flags != 0 && !buffer_is_empty(sce->etag)) {
+			if (NULL == array_get_element(con->response.headers, "ETag")) {
+				/* generate e-tag */
+				etag_mutate(con->physical.etag, sce->etag);
+
+				response_header_overwrite(srv, con, CONST_STR_LEN("ETag"), CONST_BUF_LEN(con->physical.etag));
+			}
 		}
 
 		/* prepare header */
