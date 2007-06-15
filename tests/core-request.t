@@ -281,7 +281,7 @@ Location: foobar
 EOF
  );
 $t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200 } ];
-ok($tf->handle_http($t) == 0, '#1209 - duplicate headers with line-wrapping');
+ok($tf->handle_http($t) == 0, '#1232 - duplicate headers with line-wrapping');
 
 $t->{REQUEST}  = ( <<EOF
 GET / HTTP/1.0
@@ -291,7 +291,7 @@ Location: foobar
 EOF
  );
 $t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200 } ];
-ok($tf->handle_http($t) == 0, '#1209 - duplicate headers with line-wrapping - test 2');
+ok($tf->handle_http($t) == 0, '#1232 - duplicate headers with line-wrapping - test 2');
 
 $t->{REQUEST}  = ( <<EOF
 GET / HTTP/1.0
@@ -301,7 +301,7 @@ Location: foobar
 EOF
  );
 $t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200 } ];
-ok($tf->handle_http($t) == 0, '#1209 - duplicate headers with line-wrapping - test 3');
+ok($tf->handle_http($t) == 0, '#1232 - duplicate headers with line-wrapping - test 3');
 
 
 
