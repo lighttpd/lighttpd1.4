@@ -5,7 +5,11 @@ NEWS
 
 - 1.4.16 - 
 
+  * added static-file.etags, etag.use-inode, etag.use-mtime, etag.use-size
+    to customize the generation of ETags for static files. (#1209) 
+    (patch by <Yusufg@gmail.com>)
   * fixed typecast of NULL on execl() (#1235)
+    (patch by F. Denis)
   * fixed circumventing url.access-deny by trailing slash (#1230)
   * fixed crash on duplicate headers with trailing WS (#1232)
   * fixed accepting more connections then requested (#1216)
