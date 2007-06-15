@@ -111,6 +111,15 @@ static int mod_access_patch_connection(server *srv, connection *con, plugin_data
 }
 #undef PATCH
 
+/**
+ * URI handler
+ *
+ * we will get called twice:
+ * - after the clean up of the URL and 
+ * - after the pathinfo checks are done
+ *
+ * this handles the issue of trailing slashes
+ */
 URIHANDLER_FUNC(mod_access_uri_handler) {
 	plugin_data *p = p_d;
 	int s_len;
@@ -122,28 +131,41 @@ URIHANDLER_FUNC(mod_access_uri_handler) {
 
 	s_len = con->uri.path->used - 1;
 
+	if (con->conf.log_request_handling) {
+ 		log_error_write(srv, __FILE__, __LINE__, "s", 
+				"-- mod_access_uri_handler called");
+	}
+
 	for (k = 0; k < p->conf.access_deny->used; k++) {
 		data_string *ds = (data_string *)p->conf.access_deny->data[k];
 		int ct_len = ds->value->used - 1;
+		int denied = 0;
+
 
 		if (ct_len > s_len) continue;
-
 		if (ds->value->used == 0) continue;
 
 		/* if we have a case-insensitive FS we have to lower-case the URI here too */
 
 		if (con->conf.force_lowercase_filenames) {
 			if (0 == strncasecmp(con->uri.path->ptr + s_len - ct_len, ds->value->ptr, ct_len)) {
-				con->http_status = 403;
-
-				return HANDLER_FINISHED;
+				denied = 1;
 			}
 		} else {
 			if (0 == strncmp(con->uri.path->ptr + s_len - ct_len, ds->value->ptr, ct_len)) {
-				con->http_status = 403;
-
-				return HANDLER_FINISHED;
+				denied = 1;
 			}
+		}
+
+		if (denied) {
+			con->http_status = 403;
+
+			if (con->conf.log_request_handling) {
+	 			log_error_write(srv, __FILE__, __LINE__, "sb", 
+					"url denied as we match:", ds->value);
+			}
+
+			return HANDLER_FINISHED;
 		}
 	}
 
@@ -158,7 +180,8 @@ int mod_access_plugin_init(plugin *p) {
 
 	p->init        = mod_access_init;
 	p->set_defaults = mod_access_set_defaults;
-	p->handle_uri_clean  = mod_access_uri_handler;
+	p->handle_uri_clean = mod_access_uri_handler;
+	p->handle_subrequest_start  = mod_access_uri_handler;
 	p->cleanup     = mod_access_free;
 
 	p->data        = NULL;
