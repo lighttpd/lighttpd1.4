@@ -830,7 +830,13 @@ int http_auth_basic_check(server *srv, connection *con, mod_auth_plugin_data *p,
 
 	username = buffer_init();
 
-	base64_decode(username, realm_str);
+	if (!base64_decode(username, realm_str)) {
+		buffer_free(username);
+
+		log_error_write(srv, __FILE__, __LINE__, "sb", "decodeing base64-string failed", username);
+
+		return 0;
+	}
 
 	/* r2 == user:password */
 	if (NULL == (pw = strchr(username->ptr, ':'))) {
@@ -967,7 +973,7 @@ int http_auth_digest_check(server *srv, connection *con, mod_auth_plugin_data *p
 	for (c = b->ptr; *c; c++) {
 		/* skip whitespaces */
 		while (*c == ' ' || *c == '\t') c++;
-		if (!c) break;
+		if (!*c) break;
 
 		for (i = 0; dkv[i].key; i++) {
 			if ((0 == strncmp(c, dkv[i].key, dkv[i].key_len))) {
@@ -1016,6 +1022,21 @@ int http_auth_digest_check(server *srv, connection *con, mod_auth_plugin_data *p
 
 		log_error_write(srv, __FILE__, __LINE__, "s",
 				"digest: missing field");
+
+		buffer_free(b);
+		return -1;
+	}
+
+	/**
+	 * protect the md5-sess against missing cnonce and nonce
+	 */
+	if (algorithm &&
+	    0 == strcasecmp(algorithm, "md5-sess") &&
+	    (!nonce || !cnonce)) {
+		log_error_write(srv, __FILE__, __LINE__, "s",
+				"digest: (md5-sess: missing field");
+
+		buffer_free(b);
 		return -1;
 	}
 
