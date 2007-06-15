@@ -775,6 +775,22 @@ int main (int argc, char **argv) {
 			return -1;
 		}
 
+		/**
+		 * we are not root can can't increase the fd-limit, but we can reduce it
+		 */
+		if (srv->srvconf.max_fds && srv->srvconf.max_fds < rlim.rlim_cur) {
+			/* set rlimits */
+
+			rlim.rlim_cur = srv->srvconf.max_fds;
+
+			if (0 != setrlimit(RLIMIT_NOFILE, &rlim)) {
+				log_error_write(srv, __FILE__, __LINE__,
+						"ss", "couldn't set 'max filedescriptors'",
+						strerror(errno));
+				return -1;
+			}
+		}
+
 		if (srv->event_handler == FDEVENT_HANDLER_SELECT) {
 			srv->max_fds = rlim.rlim_cur < FD_SETSIZE - 200 ? rlim.rlim_cur : FD_SETSIZE - 200;
 		} else {

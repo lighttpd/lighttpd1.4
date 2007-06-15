@@ -8,6 +8,7 @@ NEWS
   * fixed typecast of NULL on execl() (#1235)
   * fixed circumventing url.access-deny by trailing slash (#1230)
   * fixed crash on duplicate headers with trailing WS (#1232)
+  * fixed accepting more connections then requested (#1216)
 
 - 1.4.15 - 2007-04-13
 

@@ -1252,6 +1252,16 @@ connection *connection_accept(server *srv, server_socket *srv_socket) {
 	socklen_t cnt_len;
 	/* accept it and register the fd */
 
+	/**
+	 * check if we can still open a new connections
+	 *
+	 * see #1216
+	 */
+
+	if (srv->conns->used >= srv->max_conns) {
+		return NULL;
+	}
+
 	cnt_len = sizeof(cnt_addr);
 
 	if (-1 == (cnt = accept(srv_socket->fd, (struct sockaddr *) &cnt_addr, &cnt_len))) {
@@ -1264,6 +1274,9 @@ connection *connection_accept(server *srv, server_socket *srv_socket) {
 			/* we were stopped _before_ we had a connection */
 		case ECONNABORTED: /* this is a FreeBSD thingy */
 			/* we were stopped _after_ we had a connection */
+			break;
+		case EMFILE:
+			/* out of fds */
 			break;
 		default:
 			log_error_write(srv, __FILE__, __LINE__, "ssd", "accept failed:", strerror(errno), errno);
