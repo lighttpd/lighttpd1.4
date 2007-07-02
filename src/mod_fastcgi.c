@@ -2440,7 +2440,6 @@ static int fcgi_demux_response(server *srv, handler_ctx *hctx) {
 		b->used = r + 1; /* one extra for the fake \0 */
 		b->ptr[b->used - 1] = '\0';
 	} else {
-		if (errno == EAGAIN) return 0;
 		log_error_write(srv, __FILE__, __LINE__, "ssdsb",
 				"unexpected end-of-file (perhaps the fastcgi process died):",
 				"pid:", proc->pid,

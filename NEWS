@@ -19,6 +19,8 @@ NEWS
     (reported by Stefan Esser)
   * fixed possible crash in Auth-Digest header parser on trailing WS in 
     mod_auth (reported by Stefan Esser) 
+  * fixed check on stale errno values, which broke handling of broken fastcgi
+    applications. (#1245)
 
 - 1.4.15 - 2007-04-13
 
