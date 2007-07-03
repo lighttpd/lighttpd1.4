@@ -453,11 +453,7 @@ URIHANDLER_FUNC(mod_staticfile_subrequest) {
 	response_header_overwrite(srv, con, CONST_STR_LEN("Accept-Ranges"), CONST_STR_LEN("bytes"));
 
 	if (allow_caching) {
-		etag_flags_t flags;
-
-		flags =   (con->conf.etag_use_mtime ? ETAG_USE_MTIME : 0) | (con->conf.etag_use_inode ? ETAG_USE_INODE : 0) | (con->conf.etag_use_size ? ETAG_USE_SIZE : 0);
-
-		if (p->conf.etags_used && flags != 0 && !buffer_is_empty(sce->etag)) {
+		if (p->conf.etags_used && con->etag_flags != 0 && !buffer_is_empty(sce->etag)) {
 			if (NULL == array_get_element(con->response.headers, "ETag")) {
 				/* generate e-tag */
 				etag_mutate(con->physical.etag, sce->etag);

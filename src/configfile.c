@@ -381,6 +381,10 @@ int config_patch_connection(server *srv, connection *con, comp_key_t comp) {
 		}
 	}
 
+		con->etag_flags = (con->conf.etag_use_mtime ? ETAG_USE_MTIME : 0) |
+				  (con->conf.etag_use_inode ? ETAG_USE_INODE : 0) |
+				  (con->conf.etag_use_size  ? ETAG_USE_SIZE  : 0);
+
 	return 0;
 }
 #undef PATCH

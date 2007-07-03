@@ -25,6 +25,7 @@
 #include "fdevent.h"
 #include "sys-socket.h"
 #include "splaytree.h"
+#include "etag.h"
 
 
 #if defined HAVE_LIBSSL && defined HAVE_OPENSSL_SSL_H
@@ -413,6 +414,8 @@ typedef struct {
 	SSL *ssl;
 	buffer *ssl_error_want_reuse_buffer;
 #endif
+	/* etag handling */
+	etag_flags_t etag_flags;
 } connection;
 
 typedef struct {
