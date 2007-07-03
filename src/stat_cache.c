@@ -608,16 +608,14 @@ handler_t stat_cache_get_entry(server *srv, connection *con, buffer *name, stat_
 				break;
 			}
 		}
- 		etag_create(sce->etag, &(sce->st),
-			(con->conf.etag_use_mtime ? ETAG_USE_MTIME : 0) | (con->conf.etag_use_inode ? ETAG_USE_INODE : 0) | (con->conf.etag_use_size ? ETAG_USE_SIZE : 0));
+ 		etag_create(sce->etag, &(sce->st), con->etag_flags);
 #ifdef HAVE_XATTR
 		if (con->conf.use_xattr && buffer_is_empty(sce->content_type)) {
 			stat_cache_attr_get(sce->content_type, name->ptr);
 		}
 #endif
 	} else if (S_ISDIR(st.st_mode)) {
- 		etag_create(sce->etag, &(sce->st),
-			(con->conf.etag_use_mtime ? ETAG_USE_MTIME : 0) | (con->conf.etag_use_inode ? ETAG_USE_INODE : 0) | (con->conf.etag_use_size ? ETAG_USE_SIZE : 0));
+ 		etag_create(sce->etag, &(sce->st), con->etag_flags);
 	}
 
 #ifdef HAVE_FAM_H
