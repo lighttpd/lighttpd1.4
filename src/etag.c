@@ -10,9 +10,11 @@ int etag_is_equal(buffer *etag, const char *matches) {
 
 int etag_create(buffer *etag, struct stat *st,etag_flags_t flags) {
 	if (0 == flags) return 0;
-	
+
+	buffer_reset(etag);
+
 	if (flags & ETAG_USE_INODE) {
-		buffer_copy_off_t(etag, st->st_ino);
+		buffer_append_off_t(etag, st->st_ino);
 		buffer_append_string_len(etag, CONST_STR_LEN("-"));
 	}
 	
