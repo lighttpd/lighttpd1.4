@@ -21,6 +21,8 @@ NEWS
     mod_auth (reported by Stefan Esser) 
   * fixed check on stale errno values, which broke handling of broken fastcgi
     applications. (#1245)
+  * fixed crash on 32bit archs when debug-msgs are printed in mod_scgi, mod_fastcgi 
+    and mod_webdav (#1263)
 
 - 1.4.15 - 2007-04-13
 

@@ -2286,7 +2286,7 @@ static handler_t scgi_write_request(server *srv, handler_ctx *hctx) {
 				 *
 				 */
 
-				log_error_write(srv, __FILE__, __LINE__, "ssdsd",
+				log_error_write(srv, __FILE__, __LINE__, "ssosd",
 						"[REPORT ME] connection was dropped after accept(). reconnect() denied:",
 						"write-offset:", hctx->wb->bytes_out,
 						"reconnect attempts:", hctx->reconnects);
@@ -2536,7 +2536,7 @@ static handler_t scgi_handle_fdevent(void *s, void *ctx, int revents) {
 					return HANDLER_WAIT_FOR_FD;
 				}
 
-				log_error_write(srv, __FILE__, __LINE__, "sdsdsd",
+				log_error_write(srv, __FILE__, __LINE__, "sosdsd",
 						"response not sent, request sent:", hctx->wb->bytes_out,
 						"connection-fd:", con->fd,
 						"fcgi-fd:", hctx->fd);

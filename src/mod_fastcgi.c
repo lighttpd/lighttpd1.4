@@ -2964,7 +2964,7 @@ static handler_t fcgi_write_request(server *srv, handler_ctx *hctx) {
 				 *
 				 */
 
-				log_error_write(srv, __FILE__, __LINE__, "ssdsd",
+				log_error_write(srv, __FILE__, __LINE__, "ssosd",
 						"[REPORT ME] connection was dropped after accept(). reconnect() denied:",
 						"write-offset:", hctx->wb->bytes_out,
 						"reconnect attempts:", hctx->reconnects);
