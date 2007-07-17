@@ -1035,7 +1035,7 @@ static int webdav_parse_chunkqueue(server *srv, connection *con, plugin_data *p,
 			}
 
 			if (XML_ERR_OK != (err = xmlParseChunk(ctxt, c->file.mmap.start + c->offset, weHave, 0))) {
-				log_error_write(srv, __FILE__, __LINE__, "sddd", "xmlParseChunk failed at:", cq->bytes_out, weHave, err);
+				log_error_write(srv, __FILE__, __LINE__, "sodd", "xmlParseChunk failed at:", cq->bytes_out, weHave, err);
 			}
 
 			c->offset += weHave;
@@ -1053,7 +1053,7 @@ static int webdav_parse_chunkqueue(server *srv, connection *con, plugin_data *p,
 			}
 
 			if (XML_ERR_OK != (err = xmlParseChunk(ctxt, c->mem->ptr + c->offset, weHave, 0))) {
-				log_error_write(srv, __FILE__, __LINE__, "sddd", "xmlParseChunk failed at:", cq->bytes_out, weHave, err);
+				log_error_write(srv, __FILE__, __LINE__, "sodd", "xmlParseChunk failed at:", cq->bytes_out, weHave, err);
 			}
 
 			c->offset += weHave;
