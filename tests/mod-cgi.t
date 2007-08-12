@@ -8,7 +8,7 @@ BEGIN {
 
 use strict;
 use IO::Socket;
-use Test::More tests => 15;
+use Test::More tests => 16;
 use LightyTest;
 
 my $tf = LightyTest->new();
@@ -115,6 +115,13 @@ EOF
  );
 $t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.1', 'HTTP-Status' => 200, '+Content-Length' => '' } ];
 ok($tf->handle_http($t) == 0, 'cgi-env: HTTP_HOST');
+# broken header crash
+$t->{REQUEST}  = ( <<EOF
+GET /crlfcrash.pl HTTP/1.0
+EOF
+ );
+$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 500 } ];
+ok($tf->handle_http($t) == 0, 'broken header via perl cgi');
 
 ok($tf->stop_proc == 0, "Stopping lighttpd");
 
