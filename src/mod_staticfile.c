@@ -506,6 +506,7 @@ URIHANDLER_FUNC(mod_staticfile_subrequest) {
 	 */
 	http_chunk_append_file(srv, con, con->physical.path, 0, sce->st.st_size);
 
+	con->http_status = 200;
 	con->file_finished = 1;
 
 	return HANDLER_FINISHED;
