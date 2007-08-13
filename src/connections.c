@@ -1445,9 +1445,13 @@ int connection_state_machine(server *srv, connection *con) {
 				} else if (con->in_error_handler) {
 					/* error-handler is back and has generated content */
 					/* if Status: was set, take it otherwise use 200 */
+				        /* the default should be 200 for now.
+					   but this breaks 948 again. solution
+					   pending
 					if (con->http_status == 0) {
 						con->http_status = con->error_handler_saved_status;
 					}
+					*/
 				}
 
 				if (con->http_status == 0) con->http_status = 200;
