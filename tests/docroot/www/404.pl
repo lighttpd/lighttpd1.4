@@ -8,7 +8,7 @@ if ($request_uri =~ m/^\/dynamic\/200\// ) {
                  -type   => 'text/plain' );
   print ("found here\n");
 }
-elsif ($request_uri =~ m|^/dynamic/301/| ) {
+elsif ($request_uri =~ m|^/dynamic/302/| ) {
   print header( -status=>302,
                 -location => 'http://www.example.org/');
 }
