@@ -3,6 +3,9 @@
 NEWS
 ====
 
+- 1.4.17 -
+  * fixed hardcoded font-sizes in mod_dirlisting (#1267)
+
 - 1.4.16 - 
 
   * added static-file.etags, etag.use-inode, etag.use-mtime, etag.use-size
