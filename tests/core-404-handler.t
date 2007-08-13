@@ -23,15 +23,19 @@ use LightyTest;
 my $tf = LightyTest->new();
 my $t;
 $tf->{CONFIGFILE} = '404-handler.conf';
+
 ok($tf->start_proc == 0, "Starting lighttpd") or die();
 
 $t->{REQUEST}  = ( <<EOF
 GET /static/notfound HTTP/1.0
 EOF
  );
-$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 404, 'HTTP-Content' => "static not found\n" } ];
+$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200, 'HTTP-Content' => "static not found\n" } ];
 ok($tf->handle_http($t) == 0, '404 handler => static');
 
+#
+#
+#
 $t->{REQUEST}  = ( <<EOF
 GET /dynamic/200/notfound HTTP/1.0
 EOF
@@ -47,11 +51,11 @@ $t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 302, 'Locat
 ok($tf->handle_http($t) == 0, '404 handler => dynamic(302)');
 
 $t->{REQUEST}  = ( <<EOF
-GET /dynamic/200/notfound HTTP/1.0
+GET /dynamic/404/notfound HTTP/1.0
 EOF
  );
 $t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 404, 'HTTP-Content' => "Not found here\n" } ];
-ok($tf->handle_http($t) == 0, '404 handler => dynamic(200)');
+ok($tf->handle_http($t) == 0, '404 handler => dynamic(404)');
 
 ok($tf->stop_proc == 0, "Stopping lighttpd");
 
