@@ -1412,48 +1412,42 @@ int connection_state_machine(server *srv, connection *con) {
 
 			switch (r = http_response_prepare(srv, con)) {
 			case HANDLER_FINISHED:
-				if (con->http_status == 404 ||
-				    con->http_status == 403) {
-					/* 404 error-handler */
+				if (con->mode == DIRECT) {
+					if (con->http_status == 404 ||
+					    con->http_status == 403) {
+						/* 404 error-handler */
 
-					if (con->in_error_handler == 0 &&
-					    (!buffer_is_empty(con->conf.error_handler) ||
-					     !buffer_is_empty(con->error_handler))) {
-						/* call error-handler */
+						if (con->in_error_handler == 0 &&
+						    (!buffer_is_empty(con->conf.error_handler) ||
+						     !buffer_is_empty(con->error_handler))) {
+							/* call error-handler */
 
-						con->error_handler_saved_status = con->http_status;
-						con->http_status = 0;
+							con->error_handler_saved_status = con->http_status;
+							con->http_status = 0;
 
-						if (buffer_is_empty(con->error_handler)) {
-							buffer_copy_string_buffer(con->request.uri, con->conf.error_handler);
-						} else {
-							buffer_copy_string_buffer(con->request.uri, con->error_handler);
+							if (buffer_is_empty(con->error_handler)) {
+								buffer_copy_string_buffer(con->request.uri, con->conf.error_handler);
+							} else {
+								buffer_copy_string_buffer(con->request.uri, con->error_handler);
+							}
+							buffer_reset(con->physical.path);
+
+							con->in_error_handler = 1;
+
+							connection_set_state(srv, con, CON_STATE_HANDLE_REQUEST);
+
+							done = -1;
+							break;
+						} else if (con->in_error_handler) {
+							/* error-handler is a 404 */
+
+							con->http_status = con->error_handler_saved_status;
 						}
-						buffer_reset(con->physical.path);
-
-						con->in_error_handler = 1;
-
-						connection_set_state(srv, con, CON_STATE_HANDLE_REQUEST);
-
-						done = -1;
-						break;
 					} else if (con->in_error_handler) {
-						/* error-handler is a 404 */
-
-						con->http_status = con->error_handler_saved_status;
+						/* error-handler is back and has generated content */
+						/* if Status: was set, take it otherwise use 200 */
 					}
-				} else if (con->in_error_handler) {
-					/* error-handler is back and has generated content */
-					/* if Status: was set, take it otherwise use 200 */
-				        /* the default should be 200 for now.
-					   but this breaks 948 again. solution
-					   pending
-					if (con->http_status == 0) {
-						con->http_status = con->error_handler_saved_status;
-					}
-					*/
 				}
-
 				if (con->http_status == 0) con->http_status = 200;
 
 				/* we have something to send, go on */
