@@ -589,6 +589,13 @@ PHYSICALPATH_FUNC(mod_compress_physical) {
 	/* don't compress files that are too large as we need to much time to handle them */
 	if (max_fsize && (sce->st.st_size >> 10) > max_fsize) return HANDLER_GO_ON;
 
+	/* don't try to compress files less than 128 bytes
+	 *
+	 * - extra overhead for compression
+	 * - mmap() fails for st_size = 0 :)
+	 */
+	if (sce->st.st_size < 128) return HANDLER_GO_ON;
+
 	/* check if mimetype is in compress-config */
 	for (m = 0; m < p->conf.compress->used; m++) {
 		data_string *compress_ds = (data_string *)p->conf.compress->data[m];

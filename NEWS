@@ -7,6 +7,7 @@ NEWS
   * added dir-listing.set-footer in mod_dirlisting (#1277)
   * fixed hardcoded font-sizes in mod_dirlisting (#1267)
   * fixed different ETag length on 32/64 platforms (#1279)
+  * fixed compression of files < 128 bytes by disabling compression (#1241)
 
 - 1.4.16 - 
 
