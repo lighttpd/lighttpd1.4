@@ -1,4 +1,5 @@
 #include <string.h>
+#include <stdint.h>
 
 #include "buffer.h"
 #include "etag.h"
@@ -31,7 +32,8 @@ int etag_create(buffer *etag, struct stat *st,etag_flags_t flags) {
 }
 
 int etag_mutate(buffer *mut, buffer *etag) {
-	size_t h, i;
+	size_t i;
+	uint32_t h;
 
 	for (h=0, i=0; i < etag->used; ++i) h = (h<<5)^(h>>27)^(etag->ptr[i]);
 
