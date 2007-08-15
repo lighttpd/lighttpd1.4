@@ -4,6 +4,7 @@ NEWS
 ====
 
 - 1.4.17 -
+  * added dir-listing.set-footer in mod_dirlisting (#1277)
   * fixed hardcoded font-sizes in mod_dirlisting (#1267)
   * fixed different ETag length on 32/64 platforms (#1279)
 
