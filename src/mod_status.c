@@ -559,19 +559,22 @@ static handler_t mod_status_handle_server_status_text(server *srv, connection *c
 	buffer *b;
 	double avg;
 	time_t ts;
+	char buf[32];
 
 	b = chunkqueue_get_append_buffer(con->write_queue);
 
 	/* output total number of requests */
 	BUFFER_APPEND_STRING_CONST(b, "Total Accesses: ");
 	avg = p->abs_requests;
-	buffer_append_long(b, avg);
+	snprintf(buf, sizeof(buf) - 1, "%.0f", avg);
+	buffer_append_string(b, buf);
 	BUFFER_APPEND_STRING_CONST(b, "\n");
 
 	/* output total traffic out in kbytes */
 	BUFFER_APPEND_STRING_CONST(b, "Total kBytes: ");
 	avg = p->abs_traffic_out / 1024;
-	buffer_append_long(b, avg);
+	snprintf(buf, sizeof(buf) - 1, "%.0f", avg);
+	buffer_append_string(b, buf);
 	BUFFER_APPEND_STRING_CONST(b, "\n");
 
 	/* output uptime */
