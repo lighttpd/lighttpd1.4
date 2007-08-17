@@ -1011,6 +1011,17 @@ int http_request_parse(server *srv, connection *con) {
 				/* strip leading WS */
 				if (value == cur) value = cur+1;
 			default:
+				if (*cur >= 0 && *cur < 32) {
+					if (srv->srvconf.log_request_header_on_error) {
+						log_error_write(srv, __FILE__, __LINE__, "sds",
+								"invalid char in header", (int)*cur, "-> 400");
+					}
+
+					con->http_status = 400;
+					con->keep_alive = 0;
+
+					return 0;
+				}
 				break;
 			}
 		}
