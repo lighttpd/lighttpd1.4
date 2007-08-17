@@ -252,6 +252,11 @@ SERVER_FUNC(mod_mysql_vhost_set_defaults) {
 
 				return HANDLER_ERROR;
 			}
+
+			/* in mysql versions above 5.0.3 the reconnect flag is off by default */
+			my_bool reconnect = 1;
+			mysql_options(s->mysql, MYSQL_OPT_RECONNECT, &reconnect);
+
 #define FOO(x) (s->x->used ? s->x->ptr : NULL)
 
 			if (!mysql_real_connect(s->mysql, FOO(hostname), FOO(myuser), FOO(mypass),
