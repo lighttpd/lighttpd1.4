@@ -15,6 +15,7 @@ NEWS
   * fixed invalid char in header values (#1286)
   * fixed invalid "304 Not Modified" on broken timestamps
   * fixed endless loop on shrinked files with sendfile() on BSD (#1289)
+  * fixed counter overrun in ?auto in mod_status (#909)
   * removed config-check if passwd files exist (#1188)
 
 - 1.4.16 - 
