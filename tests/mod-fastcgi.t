@@ -7,7 +7,7 @@ BEGIN {
 }
 
 use strict;
-use Test::More tests => 47;
+use Test::More tests => 46;
 use LightyTest;
 
 my $tf = LightyTest->new();
@@ -15,7 +15,7 @@ my $tf = LightyTest->new();
 my $t;
 
 SKIP: {
-	skip "no PHP running on port 1026", 30 unless $tf->listening_on(1026);
+	skip "no PHP running on port 1026", 29 unless $tf->listening_on(1026);
 
 	ok($tf->start_proc == 0, "Starting lighttpd") or die();
 
@@ -223,7 +223,7 @@ EOF
 }
 
 SKIP: {
-	skip "no php found", 4 unless -x "/home/jan/Documents/php-5.1.0/sapi/cgi/php"; 
+	skip "no php found", 4 unless -x "/usr/bin/php-cgi"; 
 	$tf->{CONFIGFILE} = 'fastcgi-13.conf';
 	ok($tf->start_proc == 0, "Starting lighttpd with $tf->{CONFIGFILE}") or die();
 	$t->{REQUEST}  = ( <<EOF
