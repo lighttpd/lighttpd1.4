@@ -222,7 +222,7 @@ static int cgi_pid_del(server *srv, plugin_data *p, pid_t pid) {
 	return 0;
 }
 
-static int cgi_response_parse(server *srv, connection *con, plugin_data *p, buffer *in, int eol) {
+static int cgi_response_parse(server *srv, connection *con, plugin_data *p, buffer *in) {
 	char *ns;
 	const char *s;
 	int line = 0;
@@ -232,13 +232,16 @@ static int cgi_response_parse(server *srv, connection *con, plugin_data *p, buff
 	buffer_copy_string_buffer(p->parse_response, in);
 
 	for (s = p->parse_response->ptr;
-	     NULL != (ns = (eol == EOL_RN ? strstr(s, "\r\n") : strchr(s, '\n')));
-	     s = ns + (eol == EOL_RN ? 2 : 1), line++) {
+	     NULL != (ns = strchr(s, '\n'));
+	     s = ns + 1, line++) {
 		const char *key, *value;
 		int key_len;
 		data_string *ds;
 
+		/* strip the \n */
 		ns[0] = '\0';
+
+		if (ns > s && ns[-1] == '\r') ns[-1] = '\0';
 
 		if (line == 0 &&
 		    0 == strncmp(s, "HTTP/1.", 7)) {
@@ -260,7 +263,7 @@ static int cgi_response_parse(server *srv, connection *con, plugin_data *p, buff
 				}
 			}
 		} else {
-
+			/* parse the headers */
 			key = s;
 			if (NULL == (value = strchr(s, ':'))) {
 				/* we expect: "<key>: <value>\r\n" */
@@ -362,63 +365,81 @@ static int cgi_demux_response(server *srv, handler_ctx *hctx) {
 		/* split header from body */
 
 		if (con->file_started == 0) {
-			char *c;
-			int in_header = 0;
-			int header_end = 0;
-			int cp, eol = EOL_UNSET;
-			size_t used = 0;
+			int is_header = 0;
+			int is_header_end = 0;
+			size_t last_eol = 0;
+			size_t i;
 
 			buffer_append_string_buffer(hctx->response_header, hctx->response);
 
+			/**
+			 * we have to handle a few cases:
+			 *
+			 * nph:
+			 * 
+			 *   HTTP/1.0 200 Ok\n
+			 *   Header: Value\n
+			 *   \n
+			 *
+			 * CGI:
+			 *   Header: Value\n
+			 *   Status: 200\n
+			 *   \n
+			 *
+			 * and different mixes of \n and \r\n combinations
+			 * 
+			 * Some users also forget about CGI and just send a response and hope 
+			 * we handle it. No headers, no header-content seperator
+			 * 
+			 */
+			
 			/* nph (non-parsed headers) */
-			if (0 == strncmp(hctx->response_header->ptr, "HTTP/1.", 7)) in_header = 1;
+			if (0 == strncmp(hctx->response_header->ptr, "HTTP/1.", 7)) is_header = 1;
+				
+			for (i = 0; !is_header_end && i < hctx->response_header->used - 1; i++) {
+				char c = hctx->response_header->ptr[i];
 
-			/* search for the \r\n\r\n or \n\n in the string */
-			for (c = hctx->response_header->ptr, cp = 0, used = hctx->response_header->used - 1; used; c++, cp++, used--) {
-				if (*c == ':') in_header = 1;
-				else if (*c == '\n') {
-					if (in_header == 0) {
-						/* got a response without a response header */
+				switch (c) {
+				case ':':
+					/* we found a colon
+					 *
+					 * looks like we have a normal header 
+					 */
+					is_header = 1;
+					break;
+				case '\n':
+					/* EOL */
+					if (is_header == 0) {
+						/* we got a EOL but we don't seem to got a HTTP header */
 
-						c = NULL;
-						header_end = 1;
+						is_header_end = 1;
+
 						break;
 					}
 
-					if (eol == EOL_UNSET) eol = EOL_N;
-
-					if (*(c+1) == '\n') {
-						header_end = 1;
+					/**
+					 * check if we saw a \n(\r)?\n sequence 
+					 */
+					if (last_eol > 0 && 
+					    ((i - last_eol == 1) || 
+					     (i - last_eol == 2 && hctx->response_header->ptr[i - 1] == '\r'))) {
+						log_error_write(srv, __FILE__, __LINE__,
+								"sdd", 
+								"EOL at",
+								i, last_eol
+								);
+						is_header_end = 1;
 						break;
 					}
 
-				} else if (used > 1 && *c == '\r' && *(c+1) == '\n') {
-					if (in_header == 0) {
-						/* got a response without a response header */
+					last_eol = i;
 
-						c = NULL;
-						header_end = 1;
-						break;
-					}
-
-					if (eol == EOL_UNSET) eol = EOL_RN;
-
-					if (used > 3 &&
-					    *(c+2) == '\r' &&
-					    *(c+3) == '\n') {
-						header_end = 1;
-						break;
-					}
-
-					/* skip the \n */
-					c++;
-					cp++;
-					used--;
+					break;
 				}
 			}
 
-			if (header_end) {
-				if (c == NULL) {
+			if (is_header_end) {
+				if (!is_header) {
 					/* no header, but a body */
 
 					if (con->request.http_version == HTTP_VERSION_1_1) {
@@ -428,15 +449,30 @@ static int cgi_demux_response(server *srv, handler_ctx *hctx) {
 					http_chunk_append_mem(srv, con, hctx->response_header->ptr, hctx->response_header->used);
 					joblist_append(srv, con);
 				} else {
-					size_t hlen = c - hctx->response_header->ptr + (eol == EOL_RN ? 4 : 2);
-					size_t blen = hctx->response_header->used - hlen - 1;
+					const char *bstart;
+					size_t blen;
+					
+					/**
+					 * i still points to the char after the terminating EOL EOL
+					 *
+					 * put it on the last \n again
+					 */
+					i--;
+					
+					/* the body starts after the EOL */
+					bstart = hctx->response_header->ptr + (i + 1);
+					blen = (hctx->response_header->used - 1) - (i + 1);
+					
+					/* string the last \r?\n */
+					if (i > 0 && (hctx->response_header->ptr[i - 1] == '\r')) {
+						i--;
+					}
 
-					/* a small hack: terminate after at the second \r */
-					hctx->response_header->used = hlen + 1 - (eol == EOL_RN ? 2 : 1);
-					hctx->response_header->ptr[hlen - (eol == EOL_RN ? 2 : 1)] = '\0';
-
+					hctx->response_header->ptr[i] = '\0';
+					hctx->response_header->used = i + 1; /* the string + \0 */
+					
 					/* parse the response header */
-					cgi_response_parse(srv, con, p, hctx->response_header, eol);
+					cgi_response_parse(srv, con, p, hctx->response_header);
 
 					/* enable chunked-transfer-encoding */
 					if (con->request.http_version == HTTP_VERSION_1_1 &&
@@ -444,8 +480,8 @@ static int cgi_demux_response(server *srv, handler_ctx *hctx) {
 						con->response.transfer_encoding = HTTP_TRANSFER_ENCODING_CHUNKED;
 					}
 
-					if ((hctx->response->used != hlen) && blen > 0) {
-						http_chunk_append_mem(srv, con, c + (eol == EOL_RN ? 4: 2), blen + 1);
+					if (blen > 0) {
+						http_chunk_append_mem(srv, con, bstart, blen + 1);
 						joblist_append(srv, con);
 					}
 				}
