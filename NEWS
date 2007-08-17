@@ -9,6 +9,8 @@ NEWS
   * fixed different ETag length on 32/64 platforms (#1279)
   * fixed compression of files < 128 bytes by disabling compression (#1241)
   * fixed mysql server reconnects (#518)
+  * fixed disabled keep-alive for dynamic content with HTTP/1.0 (#1166)
+  * fixed crash on mixed EOL sequences in mod_cgi
 
 - 1.4.16 - 
 

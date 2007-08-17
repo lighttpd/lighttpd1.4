@@ -115,12 +115,13 @@ EOF
  );
 $t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.1', 'HTTP-Status' => 200, '+Content-Length' => '' } ];
 ok($tf->handle_http($t) == 0, 'cgi-env: HTTP_HOST');
+
 # broken header crash
 $t->{REQUEST}  = ( <<EOF
 GET /crlfcrash.pl HTTP/1.0
 EOF
  );
-$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 500 } ];
+$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 302, 'Location' => 'http://www.example.org/' } ];
 ok($tf->handle_http($t) == 0, 'broken header via perl cgi');
 
 ok($tf->stop_proc == 0, "Stopping lighttpd");
