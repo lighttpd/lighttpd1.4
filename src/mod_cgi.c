@@ -423,11 +423,6 @@ static int cgi_demux_response(server *srv, handler_ctx *hctx) {
 					if (last_eol > 0 && 
 					    ((i - last_eol == 1) || 
 					     (i - last_eol == 2 && hctx->response_header->ptr[i - 1] == '\r'))) {
-						log_error_write(srv, __FILE__, __LINE__,
-								"sdd", 
-								"EOL at",
-								i, last_eol
-								);
 						is_header_end = 1;
 						break;
 					}
