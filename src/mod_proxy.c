@@ -63,7 +63,7 @@ typedef enum {
 
 typedef struct {
 	array *extensions;
-	int debug;
+	unsigned short debug;
 
 	proxy_balance_t balance;
 } plugin_config;
