@@ -8,7 +8,7 @@ BEGIN {
 
 use strict;
 use IO::Socket;
-use Test::More tests => 34;
+use Test::More tests => 40;
 use LightyTest;
 
 my $tf = LightyTest->new();
@@ -338,7 +338,6 @@ EOF
 $t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 400 } ];
 ok($tf->handle_http($t) == 0, 'HEAD with Content-Length');
 
-
 $t->{REQUEST}  = ( <<EOF
 GET / HTTP/1.0
 If-Modified-Since: Sun, 1970 Jan 01 00:00:01 GMT
@@ -347,6 +346,40 @@ EOF
  );
 $t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200 } ];
 ok($tf->handle_http($t) == 0, 'Duplicate If-Mod-Since, with equal timestamps');
+
+$t->{REQUEST}  = ( "GET / HTTP/1.0\r\nIf-Modified-Since: \0\r\n\r\n" );
+$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 400 } ];
+ok($tf->handle_http($t) == 0, 'invalid chars in Header values (bug #1286)');
+
+$t->{REQUEST}  = ( "GET / HTTP/1.0\r\nIf-Modified-Since: \r\n\r\n" );
+$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200 } ];
+ok($tf->handle_http($t) == 0, 'empty If-Modified-Since');
+
+$t->{REQUEST}  = ( "GET / HTTP/1.0\r\nIf-Modified-Since: foobar\r\n\r\n" );
+$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200 } ];
+ok($tf->handle_http($t) == 0, 'broken If-Modified-Since');
+
+$t->{REQUEST}  = ( "GET / HTTP/1.0\r\nIf-Modified-Since: this string is too long to be a valid timestamp\r\n\r\n" );
+$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200 } ];
+ok($tf->handle_http($t) == 0, 'broken If-Modified-Since');
+
+
+$t->{REQUEST}  = ( <<EOF
+GET /index.html HTTP/1.0
+If-Modified-Since2: Sun, 01 Jan 2100 00:00:03 GMT
+If-Modified-Since: Sun, 01 Jan 2100 00:00:02 GMT
+EOF
+ );
+$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 304 } ];
+ok($tf->handle_http($t) == 0, 'Similar Headers (bug #1287)');
+
+$t->{REQUEST}  = ( <<EOF
+GET /index.html HTTP/1.0
+If-Modified-Since: Sun, 01 Jan 2100 00:00:02 GMT
+EOF
+ );
+$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 304, 'Content-Type' => 'text/html' } ];
+ok($tf->handle_http($t) == 0, 'If-Modified-Since');
 
 ok($tf->stop_proc == 0, "Stopping lighttpd");
 

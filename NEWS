@@ -11,6 +11,9 @@ NEWS
   * fixed mysql server reconnects (#518)
   * fixed disabled keep-alive for dynamic content with HTTP/1.0 (#1166)
   * fixed crash on mixed EOL sequences in mod_cgi
+  * fixed key compare (#1287)
+  * fixed invalid char in header values (#1286)
+  * fixed invalid "304 Not Modified" on broken timestamps
 
 - 1.4.16 - 
 
