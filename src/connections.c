@@ -534,29 +534,32 @@ static int connection_handle_write_prepare(server *srv, connection *con) {
 			}
 		}
 	} else {
-		/* disable keep-alive if size-info for the body is missing */
-		if ((con->parsed_response & HTTP_CONTENT_LENGTH) &&
+		/**
+		 * the file isn't finished yet, but we have all headers
+		 *
+		 * to get keep-alive we either need:
+		 * - Content-Length: ... (HTTP/1.0 and HTTP/1.0) or
+		 * - Transfer-Encoding: chunked (HTTP/1.1)
+		 */
+
+		if (((con->parsed_response & HTTP_CONTENT_LENGTH) == 0) &&
 		    ((con->response.transfer_encoding & HTTP_TRANSFER_ENCODING_CHUNKED) == 0)) {
 			con->keep_alive = 0;
 		}
 
-		if (0 == (con->parsed_response & HTTP_CONNECTION)) {
-			/* (f)cgi did'nt send Connection: header
-			 *
-			 * shall we ?
-			 */
-			if (((con->response.transfer_encoding & HTTP_TRANSFER_ENCODING_CHUNKED) == 0) &&
-			    (con->parsed_response & HTTP_CONTENT_LENGTH) == 0) {
-				/* without content_length, no keep-alive */
-
-				con->keep_alive = 0;
-			}
-		} else {
+		/**
+		 * if the backend sent a Connection: close, follow the wish
+		 *
+		 * NOTE: if the backend sent Connection: Keep-Alive, but no Content-Length, we
+		 * will close the connection. That's fine. We can always decide the close 
+		 * the connection
+		 *
+		 * FIXME: to be nice we should remove the Connection: ... 
+		 */
+		if (con->parsed_response & HTTP_CONNECTION) {
 			/* a subrequest disable keep-alive although the client wanted it */
 			if (con->keep_alive && !con->response.keep_alive) {
 				con->keep_alive = 0;
-
-				/* FIXME: we have to drop the Connection: Header from the subrequest */
 			}
 		}
 	}
