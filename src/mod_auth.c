@@ -503,45 +503,6 @@ SETDEFAULTS_FUNC(mod_auth_set_defaults) {
 		}
 
 		switch(s->auth_backend) {
-		case AUTH_BACKEND_PLAIN:
-			if (s->auth_plain_userfile->used) {
-				int fd;
-				/* try to read */
-				if (-1 == (fd = open(s->auth_plain_userfile->ptr, O_RDONLY))) {
-					log_error_write(srv, __FILE__, __LINE__, "sbss",
-							"opening auth.backend.plain.userfile:", s->auth_plain_userfile,
-							"failed:", strerror(errno));
-					return HANDLER_ERROR;
-				}
-				close(fd);
-			}
-			break;
-		case AUTH_BACKEND_HTPASSWD:
-			if (s->auth_htpasswd_userfile->used) {
-				int fd;
-				/* try to read */
-				if (-1 == (fd = open(s->auth_htpasswd_userfile->ptr, O_RDONLY))) {
-					log_error_write(srv, __FILE__, __LINE__, "sbss",
-							"opening auth.backend.htpasswd.userfile:", s->auth_htpasswd_userfile,
-							"failed:", strerror(errno));
-					return HANDLER_ERROR;
-				}
-				close(fd);
-			}
-			break;
-		case AUTH_BACKEND_HTDIGEST:
-			if (s->auth_htdigest_userfile->used) {
-				int fd;
-				/* try to read */
-				if (-1 == (fd = open(s->auth_htdigest_userfile->ptr, O_RDONLY))) {
-					log_error_write(srv, __FILE__, __LINE__, "sbss",
-							"opening auth.backend.htdigest.userfile:", s->auth_htdigest_userfile,
-							"failed:", strerror(errno));
-					return HANDLER_ERROR;
-				}
-				close(fd);
-			}
-			break;
 		case AUTH_BACKEND_LDAP: {
 			handler_t ret = auth_ldap_init(srv, s);
 			if (ret == HANDLER_ERROR)
