@@ -279,7 +279,10 @@ int http_response_handle_cachable(server *srv, connection *con, buffer *mtime) {
 						strncpy(buf, con->request.http_if_modified_since, used_len);
 						buf[used_len] = '\0';
 
-						strptime(buf, "%a, %d %b %Y %H:%M:%S GMT", &tm);
+						if (NULL == strptime(buf, "%a, %d %b %Y %H:%M:%S GMT", &tm)) {
+							con->http_status = 412;
+							return HANDLER_FINISHED;
+						}
 						t_header = mktime(&tm);
 
 						strptime(mtime->ptr, "%a, %d %b %Y %H:%M:%S GMT", &tm);
@@ -323,7 +326,14 @@ int http_response_handle_cachable(server *srv, connection *con, buffer *mtime) {
 			strncpy(buf, con->request.http_if_modified_since, used_len);
 			buf[used_len] = '\0';
 
-			strptime(buf, "%a, %d %b %Y %H:%M:%S GMT", &tm);
+			if (NULL == strptime(buf, "%a, %d %b %Y %H:%M:%S GMT", &tm)) {
+				/**
+				 * parsing failed, let's get out of here 
+				 */
+				log_error_write(srv, __FILE__, __LINE__, "ss",
+						"strptime() failed on", buf);
+				return HANDLER_GO_ON;
+			}
 			t_header = mktime(&tm);
 
 			strptime(mtime->ptr, "%a, %d %b %Y %H:%M:%S GMT", &tm);
