@@ -14,6 +14,7 @@ NEWS
   * fixed key compare (#1287)
   * fixed invalid char in header values (#1286)
   * fixed invalid "304 Not Modified" on broken timestamps
+  * fixed endless loop on shrinked files with sendfile() on BSD (#1289)
 
 - 1.4.16 - 
 

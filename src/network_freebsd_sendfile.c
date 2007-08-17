@@ -136,7 +136,6 @@ int network_write_chunkqueue_freebsdsendfile(server *srv, connection *con, int f
 			off_t offset, r;
 			size_t toSend;
 			stat_cache_entry *sce = NULL;
-			int ifd;
 
 			if (HANDLER_ERROR == stat_cache_get_entry(srv, con, c->file.name, &sce)) {
 				log_error_write(srv, __FILE__, __LINE__, "sb",
@@ -149,22 +148,22 @@ int network_write_chunkqueue_freebsdsendfile(server *srv, connection *con, int f
 			toSend = c->file.length - c->offset > ((1 << 30) - 1) ?
 				((1 << 30) - 1) : c->file.length - c->offset;
 
-			if (offset > sce->st.st_size) {
-				log_error_write(srv, __FILE__, __LINE__, "sb", "file was shrinked:", c->file.name);
+			if (-1 == c->file.fd) {
+				if (-1 == (c->file.fd = open(c->file.name->ptr, O_RDONLY))) {
+					log_error_write(srv, __FILE__, __LINE__, "ss", "open failed: ", strerror(errno));
 
-				return -1;
-			}
+					return -1;
+				}
 
-			if (-1 == (ifd = open(c->file.name->ptr, O_RDONLY))) {
-				log_error_write(srv, __FILE__, __LINE__, "ss", "open failed: ", strerror(errno));
-
-				return -1;
+#ifdef FD_CLOEXEC
+				fcntl(c->file.fd, F_SETFD, FD_CLOEXEC);
+#endif
 			}
 
 			r = 0;
 
 			/* FreeBSD sendfile() */
-			if (-1 == sendfile(ifd, fd, offset, toSend, NULL, &r, 0)) {
+			if (-1 == sendfile(c->file.fd, fd, offset, toSend, NULL, &r, 0)) {
 				switch(errno) {
 				case EAGAIN:
 					break;
@@ -177,7 +176,29 @@ int network_write_chunkqueue_freebsdsendfile(server *srv, connection *con, int f
 					return -1;
 				}
 			}
-			close(ifd);
+
+			if (r == 0) {
+				int oerrno = errno;
+				/* We got an event to write but we wrote nothing
+				 *
+				 * - the file shrinked -> error
+				 * - the remote side closed inbetween -> remote-close */
+
+				if (HANDLER_ERROR == stat_cache_get_entry(srv, con, c->file.name, &sce)) {
+					/* file is gone ? */
+					return -1;
+				}
+
+				if (offset >= sce->st.st_size) {
+					/* file shrinked, close the connection */
+					errno = oerrno;
+
+					return -1;
+				}
+
+				errno = oerrno;
+				return -2;
+			}
 
 			c->offset += r;
 			cq->bytes_out += r;
