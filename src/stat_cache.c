@@ -635,9 +635,10 @@ handler_t stat_cache_get_entry(server *srv, connection *con, buffer *name, stat_
 			if (0 != FAMMonitorDirectory(sc->fam, fam_dir->name->ptr,
 						     fam_dir->req, fam_dir)) {
 
-				log_error_write(srv, __FILE__, __LINE__, "sbs",
+				log_error_write(srv, __FILE__, __LINE__, "sbsbs",
 						"monitoring dir failed:",
-						fam_dir->name,
+						fam_dir->name, 
+						"file:", name,
 						FamErrlist[FAMErrno]);
 
 				fam_dir_entry_free(fam_dir);
