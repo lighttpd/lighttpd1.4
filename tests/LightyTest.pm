@@ -235,9 +235,7 @@ sub handle_http {
 				diag(sprintf("body failed: expected '%s', got '%s'\n", $href->{'HTTP-Content'}, $resp_body));
 				return -1;
 			}
-		}
-		
-		if (defined $href->{'-HTTP-Content'}) {
+		} elsif (defined $href->{'-HTTP-Content'}) {
 			if (defined $resp_body && $resp_body ne '') {
 				diag(sprintf("body failed: expected empty body, got '%s'\n", $resp_body));
 				return -1;
@@ -245,6 +243,7 @@ sub handle_http {
 		}
 
 		foreach (keys %{ $href }) {
+			## filter special keys
 			next if $_ eq 'HTTP-Protocol';
 			next if $_ eq 'HTTP-Status';
 			next if $_ eq 'HTTP-Content';
@@ -252,20 +251,33 @@ sub handle_http {
 
 			(my $k = $_) =~ tr/[A-Z]/[a-z]/;
 
-			my $no_val = 0;
+			my $verify_value = 1;
+			my $key_inverted = 0;
 
 			if (substr($k, 0, 1) eq '+') {
+				## the key has to exist, but the value is ignored
 				$k = substr($k, 1);
-				$no_val = 1;
-
+				$verify_value = 0;
+			} elsif (substr($k, 0, 1) eq '-') {
+				## the key should NOT exist
+				$k = substr($k, 1);
+				$key_inverted = 1;
+				$verify_value = 0; ## skip the value check
 			}
 
-			if (!defined $resp_hdr{$k}) {
-				diag(sprintf("required header '%s' is missing\n", $k));
-				return -1;
+			if ($key_inverted) {
+				if (defined $resp_hdr{$k}) {
+					diag(sprintf("required header '%s' is missing\n", $k));
+					return -1;
+				}
+			} else {
+				if (not defined $resp_hdr{$k}) {
+					diag(sprintf("required header '%s' is missing\n", $k));
+					return -1;
+				}
 			}
 
-			if ($no_val == 0) {
+			if ($verify_value) {
 				if ($href->{$_} =~ /^\/(.+)\/$/) {
 					if ($resp_hdr{$k} !~ /$1/) {
 						diag(sprintf("response-header failed: expected '%s', got '%s', regex: %s\n", 

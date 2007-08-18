@@ -18,6 +18,7 @@ NEWS
   * fixed counter overrun in ?auto in mod_status (#909)
   * fixed too aggresive caching of nested conditionals (#41)
   * fixed possible overflow in unix-socket path checks on BSD (#713)
+  * fixed extra Content-Length header on 1xx, 204 and 304 (#1002)
   * removed config-check if passwd files exist (#1188)
   
 
