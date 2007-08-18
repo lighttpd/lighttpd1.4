@@ -922,6 +922,9 @@ int http_request_parse(server *srv, connection *con) {
 								} else if (0 == strcasecmp(con->request.http_if_modified_since,
 											ds->value->ptr)) {
 									/* ignore it if they are the same */
+
+									ds->free((data_unset *)ds);
+									ds = NULL;
 								} else {
 									con->http_status = 400;
 									con->keep_alive = 0;
@@ -977,7 +980,7 @@ int http_request_parse(server *srv, connection *con) {
 								}
 							}
 
-							array_insert_unique(con->request.headers, (data_unset *)ds);
+							if (ds) array_insert_unique(con->request.headers, (data_unset *)ds);
 						} else {
 							/* empty header-fields are not allowed by HTTP-RFC, we just ignore them */
 						}

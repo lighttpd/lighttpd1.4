@@ -339,12 +339,12 @@ $t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 400 } ];
 ok($tf->handle_http($t) == 0, 'HEAD with Content-Length');
 
 $t->{REQUEST}  = ( <<EOF
-GET / HTTP/1.0
-If-Modified-Since: Sun, 1970 Jan 01 00:00:01 GMT
-If-Modified-Since: Sun, 1970 Jan 01 00:00:01 GMT
+GET /index.html HTTP/1.0
+If-Modified-Since: Sun, 01 Jan 2100 00:00:02 GMT
+If-Modified-Since: Sun, 01 Jan 2100 00:00:02 GMT
 EOF
  );
-$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200 } ];
+$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 304 } ];
 ok($tf->handle_http($t) == 0, 'Duplicate If-Mod-Since, with equal timestamps');
 
 $t->{REQUEST}  = ( "GET / HTTP/1.0\r\nIf-Modified-Since: \0\r\n\r\n" );
