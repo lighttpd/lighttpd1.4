@@ -19,6 +19,7 @@ NEWS
   * fixed too aggresive caching of nested conditionals (#41)
   * fixed possible overflow in unix-socket path checks on BSD (#713)
   * fixed extra Content-Length header on 1xx, 204 and 304 (#1002)
+  * fixed handling of duplicate If-Modified-Since to return 304 
   * removed config-check if passwd files exist (#1188)
   
 
