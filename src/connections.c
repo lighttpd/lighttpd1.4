@@ -505,6 +505,7 @@ static int connection_handle_write_prepare(server *srv, connection *con) {
 
 	case 206: /* write_queue is already prepared */
 		break;
+	case 204:
 	case 205: /* class: header only */
 	case 304:
 	default:
@@ -524,10 +525,19 @@ static int connection_handle_write_prepare(server *srv, connection *con) {
 		    (con->response.transfer_encoding & HTTP_TRANSFER_ENCODING_CHUNKED) == 0) {
 			off_t qlen = chunkqueue_length(con->write_queue);
 
-			/* if we have no content for a GET/PORT request, send Content-Length: 0
-			 * if it is a HEAD request, don't generate a Content-Length as 
-			 * the backend might have already cut it off */
-			if (qlen > 0 || con->request.http_method != HTTP_METHOD_HEAD) {
+			/**
+			 * The Content-Length header only can be sent if we have content:
+			 * - HEAD doesn't have a content-body (but have a content-length)
+			 * - 1xx, 204 and 304 don't have a content-body (RFC 2616 Section 4.3)
+			 *
+			 * Otherwise generate a Content-Length header as chunked encoding is not 
+			 * available
+			 */
+			if ((con->http_status >= 100 && con->http_status < 200) ||
+			    con->http_status == 204 ||
+			    con->http_status == 304) {
+				/* no Content-Body, no Content-Length */
+			} else if (qlen > 0) {
 				buffer_copy_off_t(srv->tmp_buf, chunkqueue_length(con->write_queue));
 
 				response_header_overwrite(srv, con, CONST_STR_LEN("Content-Length"), CONST_BUF_LEN(srv->tmp_buf));
