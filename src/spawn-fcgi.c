@@ -25,10 +25,6 @@
 
 #define FCGI_LISTENSOCK_FILENO 0
 
-#ifndef UNIX_PATH_MAX
-# define UNIX_PATH_MAX 108
-#endif
-
 #include "sys-socket.h"
 
 #ifdef HAVE_SYS_WAIT_H
@@ -273,6 +269,8 @@ int main(int argc, char **argv) {
 	int i_am_root, o;
 	int pid_fd = -1;
 	int nofork = 0;
+	struct sockaddr_un un;
+	const size_t sun_path_len = sizeof(un.sun_path);
 
 	i_am_root = (getuid() == 0);
 
@@ -309,7 +307,7 @@ int main(int argc, char **argv) {
 		return -1;
 	}
 
-	if (unixsocket && strlen(unixsocket) > UNIX_PATH_MAX - 1) {
+	if (unixsocket && strlen(unixsocket) > sun_path_len - 1) {
 		fprintf(stderr, "%s.%d: %s\n",
 			__FILE__, __LINE__,
 			"path of the unix socket is too long\n");
