@@ -31,11 +31,6 @@
 
 #include "sys-socket.h"
 
-
-#ifndef UNIX_PATH_MAX
-# define UNIX_PATH_MAX 108
-#endif
-
 #ifdef HAVE_SYS_UIO_H
 #include <sys/uio.h>
 #endif
@@ -1027,8 +1022,9 @@ SETDEFAULTS_FUNC(mod_scgi_set_defaults) {
 
 					if (!buffer_is_empty(df->unixsocket)) {
 						/* unix domain socket */
+						struct sockaddr_un un;
 
-						if (df->unixsocket->used > UNIX_PATH_MAX - 2) {
+						if (df->unixsocket->used > sizeof(un.sun_path) - 2) {
 							log_error_write(srv, __FILE__, __LINE__, "s",
 									"path of the unixdomain socket is too large");
 							return HANDLER_ERROR;
