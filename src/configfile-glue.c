@@ -6,6 +6,8 @@
 #include "log.h"
 #include "plugin.h"
 
+#include "configfile.h"
+
 /**
  * like all glue code this file contains functions which
  * are the external interface of lighttpd. The functions
@@ -133,6 +135,7 @@ int config_insert_values_internal(server *srv, array *ca, const config_values_t 
 			break;
 		}
 	}
+
 	return 0;
 }
 
@@ -174,26 +177,60 @@ static cond_result_t config_check_cond_cached(server *srv, connection *con, data
 static cond_result_t config_check_cond_nocache(server *srv, connection *con, data_config *dc) {
 	buffer *l;
 	server_socket *srv_sock = con->srv_socket;
+
 	/* check parent first */
 	if (dc->parent && dc->parent->context_ndx) {
+		/**
+		 * a nested conditional 
+		 *
+		 * if the parent is not decided yet or false, we can't be true either 
+		 */
 		if (con->conf.log_condition_handling) {
 			log_error_write(srv, __FILE__, __LINE__,  "sb", "go parent", dc->parent->key);
 		}
-		if (config_check_cond_cached(srv, con, dc->parent) == COND_RESULT_FALSE) {
+
+		switch (config_check_cond_cached(srv, con, dc->parent)) {
+		case COND_RESULT_FALSE:
 			return COND_RESULT_FALSE;
+		case COND_RESULT_UNSET:
+			return COND_RESULT_UNSET;
+		default:
+			break;
 		}
 	}
 
 	if (dc->prev) {
+		/**
+		 * a else branch
+		 *
+		 * we can only be executed, if all of our previous brothers 
+		 * are false
+		 */
 		if (con->conf.log_condition_handling) {
 			log_error_write(srv, __FILE__, __LINE__,  "sb", "go prev", dc->prev->key);
 		}
+
 		/* make sure prev is checked first */
 		config_check_cond_cached(srv, con, dc->prev);
+
 		/* one of prev set me to FALSE */
-		if (COND_RESULT_FALSE == con->cond_cache[dc->context_ndx].result) {
-			return COND_RESULT_FALSE;
+		switch (con->cond_cache[dc->context_ndx].result) {
+		case COND_RESULT_FALSE:
+			return con->cond_cache[dc->context_ndx].result;
+		default:
+			break;
 		}
+	}
+
+	if (!con->conditional_is_valid[dc->comp]) {
+		if (con->conf.log_condition_handling) {
+			log_error_write(srv, __FILE__, __LINE__,  "dss", 
+				dc->comp,
+				dc->key->ptr,
+				con->conditional_is_valid[dc->comp] ? "yeah" : "nej");
+		}
+
+		return COND_RESULT_UNSET;
 	}
 
 	/* pass the rules */
@@ -385,6 +422,7 @@ static cond_result_t config_check_cond_nocache(server *srv, connection *con, dat
 		cache->patterncount = n;
 		if (n > 0) {
 			cache->comp_value = l;
+			cache->comp_type  = dc->comp;
 			return (dc->cond == CONFIG_COND_MATCH) ? COND_RESULT_TRUE : COND_RESULT_FALSE;
 		} else {
 			/* cache is already cleared */
@@ -417,32 +455,54 @@ static cond_result_t config_check_cond_cached(server *srv, connection *con, data
 				}
 			}
 		}
+		caches[dc->context_ndx].comp_type = dc->comp;
+
 		if (con->conf.log_condition_handling) {
 			log_error_write(srv, __FILE__, __LINE__, "dss", dc->context_ndx,
 					"(uncached) result:",
-					caches[dc->context_ndx].result == COND_RESULT_TRUE ? "true" : "false");
+					caches[dc->context_ndx].result == COND_RESULT_UNSET ? "unknown" :
+						(caches[dc->context_ndx].result == COND_RESULT_TRUE ? "true" : "false"));
 		}
 	} else {
 		if (con->conf.log_condition_handling) {
 			log_error_write(srv, __FILE__, __LINE__, "dss", dc->context_ndx,
 					"(cached) result:",
-					caches[dc->context_ndx].result == COND_RESULT_TRUE ? "true" : "false");
+					caches[dc->context_ndx].result == COND_RESULT_UNSET ? "unknown" : 
+						(caches[dc->context_ndx].result == COND_RESULT_TRUE ? "true" : "false"));
 		}
 	}
 	return caches[dc->context_ndx].result;
 }
 
-void config_cond_cache_reset(server *srv, connection *con) {
-#if COND_RESULT_UNSET
+/**
+ * reset the config-cache for a named item
+ *
+ * if the item is COND_LAST_ELEMENT we reset all items
+ */
+void config_cond_cache_reset_item(server *srv, connection *con, comp_key_t item) {
 	size_t i;
 
-	for (i = srv->config_context->used - 1; i >= 0; i --) {
-		con->cond_cache[i].result = COND_RESULT_UNSET;
-		con->cond_cache[i].patterncount = 0;
+	for (i = 0; i < srv->config_context->used; i++) {
+		if (item == COMP_LAST_ELEMENT || 
+		    con->cond_cache[i].comp_type == item) {
+			con->cond_cache[i].result = COND_RESULT_UNSET;
+			con->cond_cache[i].patterncount = 0;
+			con->cond_cache[i].comp_value = NULL;
+		}
 	}
-#else
-	memset(con->cond_cache, 0, sizeof(cond_cache_t) * srv->config_context->used);
-#endif
+}
+
+/**
+ * reset the config cache to its initial state at connection start
+ */
+void config_cond_cache_reset(server *srv, connection *con) {
+	size_t i;
+
+	config_cond_cache_reset_all_items(srv, con);
+
+	for (i = 0; i < COMP_LAST_ELEMENT; i++) {
+		con->conditional_is_valid[i] = 0;
+	}
 }
 
 int config_check_cond(server *srv, connection *con, data_config *dc) {

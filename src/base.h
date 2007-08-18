@@ -324,6 +324,8 @@ typedef struct {
 	int patterncount;
 	int matches[3 * 10];
 	buffer *comp_value; /* just a pointer */
+	
+	comp_key_t comp_type;
 } cond_cache_t;
 
 typedef struct {
@@ -416,6 +418,8 @@ typedef struct {
 #endif
 	/* etag handling */
 	etag_flags_t etag_flags;
+
+	int conditional_is_valid[COMP_LAST_ELEMENT]; 
 } connection;
 
 typedef struct {

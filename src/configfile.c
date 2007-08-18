@@ -298,6 +298,8 @@ int config_setup_connection(server *srv, connection *con) {
 int config_patch_connection(server *srv, connection *con, comp_key_t comp) {
 	size_t i, j;
 
+	con->conditional_is_valid[comp] = 1;
+
 	/* skip the first, the global context */
 	for (i = 1; i < srv->config_context->used; i++) {
 		data_config *dc = (data_config *)srv->config_context->data[i];
