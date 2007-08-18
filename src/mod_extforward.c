@@ -1,3 +1,7 @@
+#ifdef HAVE_CONFIG_H
+#include "config.h"
+#endif
+
 #include <ctype.h>
 #include <stdlib.h>
 #include <string.h>
@@ -11,9 +15,7 @@
 #include "plugin.h"
 
 #include "inet_ntop_cache.h"
-#ifdef HAVE_CONFIG_H
-#include "config.h"
-#endif
+#include "configfile.h"
 
 /**
  * mod_extforward.c for lighttpd, by comman.kang <at> gmail <dot> com
@@ -301,21 +303,9 @@ struct addrinfo *ipstr_to_sockaddr(const char *host)
 }
 
 
-static void clean_cond_cache(server *srv, connection *con)
-{
-	size_t i;
 
-	log_error_write(srv, __FILE__, __LINE__, "s", "");
-
-	for (i = 0; i < srv->config_context->used; i++) {
-		data_config *dc = (data_config *)srv->config_context->data[i];
-
-		if (dc->comp == COMP_HTTP_REMOTEIP)
-		{
-			con->cond_cache[i].result = COND_RESULT_UNSET;
-			con->cond_cache[i].patterncount = 0;
-		}
-	}
+static void clean_cond_cache(server *srv, connection *con) {
+	config_cond_cache_reset_item(srv, con, COMP_HTTP_REMOTEIP);
 }
 
 URIHANDLER_FUNC(mod_extforward_uri_handler) {
@@ -452,8 +442,6 @@ CONNECTION_FUNC(mod_extforward_restore) {
 
 	if (!hctx) return HANDLER_GO_ON;
 	
-	log_error_write(srv, __FILE__, __LINE__, "s", "");
-
 	con->dst_addr = hctx->saved_remote_addr;
 	buffer_free(con->dst_addr_buf);
 
