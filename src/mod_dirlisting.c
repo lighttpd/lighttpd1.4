@@ -442,7 +442,7 @@ static int http_list_directory_sizefmt(char *buf, off_t size) {
 		u++;
 	}
 
-	out   += ltostr(out, size);
+	out   += LI_ltostr(out, size);
 	out[0] = '.';
 	out[1] = remain + '0';
 	out[2] = *u;

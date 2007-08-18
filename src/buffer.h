@@ -103,7 +103,7 @@ int buffer_to_lower(buffer *b);
 int buffer_to_upper(buffer *b);
 
 /** deprecated */
-int ltostr(char *buf, long val);
+int LI_ltostr(char *buf, long val);
 char hex2int(unsigned char c);
 char int2hex(char i);
 

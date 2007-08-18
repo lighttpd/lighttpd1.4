@@ -281,7 +281,7 @@ int buffer_append_long_hex(buffer *b, unsigned long value) {
 	return 0;
 }
 
-int ltostr(char *buf, long val) {
+int LI_ltostr(char *buf, long val) {
 	char swap;
 	char *end;
 	int len = 1;
@@ -320,7 +320,7 @@ int buffer_append_long(buffer *b, long val) {
 	if (b->used == 0)
 		b->used++;
 
-	b->used += ltostr(b->ptr + (b->used - 1), val);
+	b->used += LI_ltostr(b->ptr + (b->used - 1), val);
 	return 0;
 }
 
