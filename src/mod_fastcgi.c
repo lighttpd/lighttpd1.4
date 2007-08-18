@@ -1844,7 +1844,7 @@ static int fcgi_create_env(server *srv, handler_ctx *hctx, size_t request_id) {
 
 	fcgi_env_add(p->fcgi_env, CONST_STR_LEN("GATEWAY_INTERFACE"), CONST_STR_LEN("CGI/1.1"));
 
-	ltostr(buf,
+	LI_ltostr(buf,
 #ifdef HAVE_IPV6
 	       ntohs(srv_sock->addr.plain.sa_family ? srv_sock->addr.ipv6.sin6_port : srv_sock->addr.ipv4.sin_port)
 #else
@@ -1864,7 +1864,7 @@ static int fcgi_create_env(server *srv, handler_ctx *hctx, size_t request_id) {
 	}
 	fcgi_env_add(p->fcgi_env, CONST_STR_LEN("SERVER_ADDR"), s, strlen(s));
 
-	ltostr(buf,
+	LI_ltostr(buf,
 #ifdef HAVE_IPV6
 	       ntohs(con->dst_addr.plain.sa_family ? con->dst_addr.ipv6.sin6_port : con->dst_addr.ipv4.sin_port)
 #else
@@ -1914,7 +1914,7 @@ static int fcgi_create_env(server *srv, handler_ctx *hctx, size_t request_id) {
 		/* CGI-SPEC 6.1.2 and FastCGI spec 6.3 */
 
 		/* request.content_length < SSIZE_MAX, see request.c */
-		ltostr(buf, con->request.content_length);
+		LI_ltostr(buf, con->request.content_length);
 		fcgi_env_add(p->fcgi_env, CONST_STR_LEN("CONTENT_LENGTH"), buf, strlen(buf));
 	}
 
