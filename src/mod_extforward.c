@@ -181,17 +181,6 @@ static int mod_extforward_patch_connection(server *srv, connection *con, plugin_
 
 	PATCH(forwarder);
 
-	/* LEM: The purpose of this seems to match extforward configuration
-	        stanzas that are not in the global context, but in some sub-context.
-                I fear this will break contexts of the form HTTP['remote'] = .
-		(in the form that they do not work with the real remote, but matching on
-		the proxy instead).
-
-		I'm not sure this this is all thread-safe. Is the p we are passed different
-		for each connection or is it global?
-
-		mod_fastcgi does the same, so it must be safe.
-	 */
 	/* skip the first, the global context */
 	for (i = 1; i < srv->config_context->used; i++) {
 		data_config *dc = (data_config *)srv->config_context->data[i];
@@ -315,6 +304,8 @@ struct addrinfo *ipstr_to_sockaddr(const char *host)
 static void clean_cond_cache(server *srv, connection *con)
 {
 	size_t i;
+
+	log_error_write(srv, __FILE__, __LINE__, "s", "");
 
 	for (i = 0; i < srv->config_context->used; i++) {
 		data_config *dc = (data_config *)srv->config_context->data[i];
@@ -457,28 +448,24 @@ URIHANDLER_FUNC(mod_extforward_uri_handler) {
 
 CONNECTION_FUNC(mod_extforward_restore) {
 	plugin_data *p = p_d;
-	UNUSED(srv);
+	handler_ctx *hctx = con->plugin_ctx[p->id];
 
-	/* LEM: This seems completely unuseful, as we are not using
-	        p->conf in this function. Furthermore, it brings a
-	        segfault if one of the conditional configuration
-	        blocks is "SERVER['socket'] == foo", because the
-	        socket is not known yet in the srv/con structure.
-	 */
-	/* mod_extforward_patch_connection(srv, con, p); */
+	if (!hctx) return HANDLER_GO_ON;
+	
+	log_error_write(srv, __FILE__, __LINE__, "s", "");
 
-	/* restore this connection's remote ip */
-	if (con->plugin_ctx[p->id]) {
-		handler_ctx *hctx = con->plugin_ctx[p->id];
-		con->dst_addr = hctx->saved_remote_addr;
-		buffer_free(con->dst_addr_buf);
-		con->dst_addr_buf = hctx->saved_remote_addr_buf;
-/* 		log_error_write(srv, __FILE__, __LINE__,"s","LEM: Reset dst_addr_buf"); */
-		handler_ctx_free(hctx);
-		con->plugin_ctx[p->id] = NULL;
-		/* Now, clean the conf_cond cache, because we may have changed the results of tests */
-		clean_cond_cache(srv, con);
-	}
+	con->dst_addr = hctx->saved_remote_addr;
+	buffer_free(con->dst_addr_buf);
+
+	con->dst_addr_buf = hctx->saved_remote_addr_buf;
+	
+	handler_ctx_free(hctx);
+
+	con->plugin_ctx[p->id] = NULL;
+
+	/* Now, clean the conf_cond cache, because we may have changed the results of tests */
+	clean_cond_cache(srv, con);
+
 	return HANDLER_GO_ON;
 }
 

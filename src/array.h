@@ -89,7 +89,9 @@ typedef enum {
 	COMP_HTTP_USERAGENT,
 	COMP_HTTP_COOKIE,
 	COMP_HTTP_REMOTEIP,
-	COMP_HTTP_QUERYSTRING
+	COMP_HTTP_QUERYSTRING,
+
+	COMP_LAST_ELEMENT
 } comp_key_t;
 
 /* $HTTP["host"] ==    "incremental.home.kneschke.de" { ... }
