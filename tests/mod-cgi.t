@@ -8,7 +8,7 @@ BEGIN {
 
 use strict;
 use IO::Socket;
-use Test::More tests => 16;
+use Test::More tests => 18;
 use LightyTest;
 
 my $tf = LightyTest->new();
@@ -40,11 +40,25 @@ $t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200, 'HTTP-
 ok($tf->handle_http($t) == 0, 'perl via cgi + pathinfo');
 
 $t->{REQUEST}  = ( <<EOF
-GET /nph-status.pl HTTP/1.0
+GET /nph-status.pl?30 HTTP/1.0
 EOF
  );
 $t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200 } ];
-ok($tf->handle_http($t) == 0, 'NPH + perl, Bug #14');
+ok($tf->handle_http($t) == 0, 'NPH + perl, invalid status-code (#14)');
+
+$t->{REQUEST}  = ( <<EOF
+GET /nph-status.pl?304 HTTP/1.0
+EOF
+ );
+$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 304 } ];
+ok($tf->handle_http($t) == 0, 'NPH + perl, setting status-code (#1125)');
+
+$t->{REQUEST}  = ( <<EOF
+GET /nph-status.pl?200 HTTP/1.0
+EOF
+ );
+$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200 } ];
+ok($tf->handle_http($t) == 0, 'NPH + perl, setting status-code');
 
 $t->{REQUEST} = ( <<EOF
 GET /get-header.pl?GATEWAY_INTERFACE HTTP/1.0

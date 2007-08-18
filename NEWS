@@ -20,6 +20,7 @@ NEWS
   * fixed possible overflow in unix-socket path checks on BSD (#713)
   * fixed extra Content-Length header on 1xx, 204 and 304 (#1002)
   * fixed handling of duplicate If-Modified-Since to return 304 
+  * fixed extracting status code from NPH scripts (#1125)
   * removed config-check if passwd files exist (#1188)
   
 
