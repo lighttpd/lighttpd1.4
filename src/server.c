@@ -70,20 +70,35 @@ static volatile sig_atomic_t handle_sig_alarm = 1;
 static volatile sig_atomic_t handle_sig_hup = 0;
 
 #if defined(HAVE_SIGACTION) && defined(SA_SIGINFO)
+static volatile siginfo_t last_sigterm_info;
+static volatile siginfo_t last_sighup_info;
+
 static void sigaction_handler(int sig, siginfo_t *si, void *context) {
-	UNUSED(si);
 	UNUSED(context);
 
 	switch (sig) {
-	case SIGTERM: srv_shutdown = 1; break;
+	case SIGTERM:
+		srv_shutdown = 1;
+		memcpy(&last_sigterm_info, si, sizeof(*si));
+		break;
 	case SIGINT:
-	     if (graceful_shutdown) srv_shutdown = 1;
-	     else graceful_shutdown = 1;
+		if (graceful_shutdown) {
+			srv_shutdown = 1;
+		} else {
+			graceful_shutdown = 1;
+		}
+		memcpy(&last_sigterm_info, si, sizeof(*si));
 
-	     break;
-	case SIGALRM: handle_sig_alarm = 1; break;
-	case SIGHUP:  handle_sig_hup = 1; break;
-	case SIGCHLD: break;
+		break;
+	case SIGALRM: 
+		handle_sig_alarm = 1; 
+		break;
+	case SIGHUP:
+		handle_sig_hup = 1;
+		memcpy(&last_sighup_info, si, sizeof(*si));
+		break;
+	case SIGCHLD:
+		break;
 	}
 }
 #elif defined(HAVE_SIGNAL) || defined(HAVE_SIGACTION)
@@ -1079,6 +1094,17 @@ int main (int argc, char **argv) {
 				log_error_write(srv, __FILE__, __LINE__, "s", "cycling errorlog failed, dying");
 
 				return -1;
+			} else {
+#ifdef HAVE_SIGACTION
+				log_error_write(srv, __FILE__, __LINE__, "sdsd", 
+					"logfiles cycled UID =",
+					last_sigterm_info.si_uid,
+					"PID =",
+					last_sigterm_info.si_pid);
+#else
+				log_error_write(srv, __FILE__, __LINE__, "s", 
+					"logfiles cycled");
+#endif
 			}
 		}
 
@@ -1377,6 +1403,17 @@ int main (int argc, char **argv) {
 			}
 		}
 	}
+
+#ifdef HAVE_SIGACTION
+	log_error_write(srv, __FILE__, __LINE__, "sdsd", 
+			"server stopped by UID =",
+			last_sigterm_info.si_uid,
+			"PID =",
+			last_sigterm_info.si_pid);
+#else
+	log_error_write(srv, __FILE__, __LINE__, "s", 
+			"server stopped");
+#endif
 
 	/* clean-up */
 	log_error_close(srv);

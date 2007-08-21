@@ -5,6 +5,7 @@ NEWS
 
 - 1.4.17 -
   * added dir-listing.set-footer in mod_dirlisting (#1277)
+  * added sending UID and PID for SIGTERM and SIGINT to the logs
   * fixed hardcoded font-sizes in mod_dirlisting (#1267)
   * fixed different ETag length on 32/64 platforms (#1279)
   * fixed compression of files < 128 bytes by disabling compression (#1241)
