@@ -340,8 +340,8 @@ ok($tf->handle_http($t) == 0, 'HEAD with Content-Length');
 
 $t->{REQUEST}  = ( <<EOF
 GET /index.html HTTP/1.0
-If-Modified-Since: Sun, 01 Jan 2100 00:00:02 GMT
-If-Modified-Since: Sun, 01 Jan 2100 00:00:02 GMT
+If-Modified-Since: Sun, 01 Jan 2036 00:00:02 GMT
+If-Modified-Since: Sun, 01 Jan 2036 00:00:02 GMT
 EOF
  );
 $t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 304 } ];
@@ -366,8 +366,8 @@ ok($tf->handle_http($t) == 0, 'broken If-Modified-Since');
 
 $t->{REQUEST}  = ( <<EOF
 GET /index.html HTTP/1.0
-If-Modified-Since2: Sun, 01 Jan 2100 00:00:03 GMT
-If-Modified-Since: Sun, 01 Jan 2100 00:00:02 GMT
+If-Modified-Since2: Sun, 01 Jan 2036 00:00:03 GMT
+If-Modified-Since: Sun, 01 Jan 2036 00:00:02 GMT
 EOF
  );
 $t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 304 } ];
@@ -375,7 +375,7 @@ ok($tf->handle_http($t) == 0, 'Similar Headers (bug #1287)');
 
 $t->{REQUEST}  = ( <<EOF
 GET /index.html HTTP/1.0
-If-Modified-Since: Sun, 01 Jan 2100 00:00:02 GMT
+If-Modified-Since: Sun, 01 Jan 2036 00:00:02 GMT
 EOF
  );
 $t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 304, 'Content-Type' => 'text/html' } ];
@@ -383,7 +383,7 @@ ok($tf->handle_http($t) == 0, 'If-Modified-Since');
 
 $t->{REQUEST}  = ( <<EOF
 GET /index.html HTTP/1.0
-If-Modified-Since: Sun, 01 Jan 2100 00:00:02 GMT
+If-Modified-Since: Sun, 01 Jan 2036 00:00:02 GMT
 EOF
  );
 $t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 304, '-Content-Length' => '' } ];
