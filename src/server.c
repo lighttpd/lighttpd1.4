@@ -775,7 +775,7 @@ int main (int argc, char **argv) {
 			setuid(pwd->pw_uid);
 		}
 #endif
-#ifdef HAVE_PRCTL
+#ifdef HAVE_SYS_PRCTL_H
 		if (srv->srvconf.enable_cores) {
 			prctl(PR_SET_DUMPABLE, 1, 0, 0, 0);
 		}
