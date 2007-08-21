@@ -126,14 +126,10 @@ int log_error_cycle(server *srv) {
 		}
 	}
 
-	log_error_write(srv, __FILE__, __LINE__, "s", "logfiles cycled");
-
 	return 0;
 }
 
 int log_error_close(server *srv) {
-	log_error_write(srv, __FILE__, __LINE__, "s", "server stopped");
-
 	switch(srv->errorlog_mode) {
 	case ERRORLOG_FILE:
 		close(srv->errorlog_fd);
