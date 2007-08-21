@@ -45,7 +45,9 @@ CONFS=fastcgi-10.conf \
       mod-setenv.t \
       lowercase.t \
       lowercase.conf \
-      cachable.t
+      cachable.t \
+      core-404-handler.t \
+      404-handler.conf
 
 
 TESTS_ENVIRONMENT=$(srcdir)/wrapper.sh $(srcdir) $(top_builddir)
