@@ -244,7 +244,7 @@ SERVER_FUNC(mod_mysql_vhost_set_defaults) {
 		/* all have to be set */
 		if (!(buffer_is_empty(s->myuser) ||
 		      buffer_is_empty(s->mydb))) {
-
+			my_bool reconnect = 1;
 			int fd;
 
 			if (NULL == (s->mysql = mysql_init(NULL))) {
@@ -253,9 +253,10 @@ SERVER_FUNC(mod_mysql_vhost_set_defaults) {
 				return HANDLER_ERROR;
 			}
 
+#if MYSQL_VERSION_ID >= 50013
 			/* in mysql versions above 5.0.3 the reconnect flag is off by default */
-			my_bool reconnect = 1;
 			mysql_options(s->mysql, MYSQL_OPT_RECONNECT, &reconnect);
+#endif
 
 #define FOO(x) (s->x->used ? s->x->ptr : NULL)
 
