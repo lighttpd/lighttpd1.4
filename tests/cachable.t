@@ -8,7 +8,7 @@ BEGIN {
 
 use strict;
 use IO::Socket;
-use Test::More tests => 12;
+use Test::More tests => 13;
 use LightyTest;
 
 my $tf = LightyTest->new();
@@ -107,6 +107,15 @@ EOF
  );
 $t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 412 } ];
 ok($tf->handle_http($t) == 0, 'Conditional GET - ETag + Last-Modified + overlong timestamp');
+
+$t->{REQUEST}  = ( <<EOF
+GET / HTTP/1.0
+If-None-Match: $etag
+Host: etag.example.org
+EOF
+ );
+$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200 } ];
+ok($tf->handle_http($t) == 0, 'Conditional GET - ETag + disabled etags on server side');
 
 ok($tf->stop_proc == 0, "Stopping lighttpd");
 
