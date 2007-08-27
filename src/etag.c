@@ -5,7 +5,7 @@
 #include "etag.h"
 
 int etag_is_equal(buffer *etag, const char *matches) {
-	if (0 == strcmp(etag->ptr, matches)) return 1;
+	if (etag && !buffer_is_empty(etag) && 0 == strcmp(etag->ptr, matches)) return 1;
 	return 0;
 }
 
