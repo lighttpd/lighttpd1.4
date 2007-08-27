@@ -503,6 +503,7 @@ buffer *buffer_init_string(const char *str) {
 }
 
 int buffer_is_empty(buffer *b) {
+	if (!b) return 1;
 	return (b->used == 0);
 }
 
