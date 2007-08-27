@@ -24,6 +24,7 @@ NEWS
   * fixed extracting status code from NPH scripts (#1125)
   * fixed prctl() usage (#1310)
   * removed config-check if passwd files exist (#1188)
+  * fixed crash when etags are disabled but the client sends one (#1322)
   
 
 - 1.4.16 - 
