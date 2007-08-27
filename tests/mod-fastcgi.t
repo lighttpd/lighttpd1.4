@@ -60,7 +60,7 @@ EOF
 	ok($tf->handle_http($t) == 0, '$_SERVER["PHP_SELF"]');
 
 	$t->{REQUEST}  = ( <<EOF
-GET /get-server-env.php/foo?env=PHP_SELF HTTP/1.0
+GET /get-server-env.php/foo?env=SCRIPT_NAME HTTP/1.0
 Host: www.example.org
 EOF
  );
