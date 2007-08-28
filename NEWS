@@ -25,6 +25,7 @@ NEWS
   * fixed prctl() usage (#1310)
   * removed config-check if passwd files exist (#1188)
   * fixed crash when etags are disabled but the client sends one (#1322)
+  * fixed crash when freeing the config in mod_alias
   
 
 - 1.4.16 - 
