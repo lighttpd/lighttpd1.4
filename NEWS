@@ -3,7 +3,7 @@
 NEWS
 ====
 
-- 1.4.17 -
+- 1.4.17 - 2007-08-29
   * added dir-listing.set-footer in mod_dirlisting (#1277)
   * added sending UID and PID for SIGTERM and SIGINT to the logs
   * fixed hardcoded font-sizes in mod_dirlisting (#1267)
@@ -26,9 +26,12 @@ NEWS
   * removed config-check if passwd files exist (#1188)
   * fixed crash when etags are disabled but the client sends one (#1322)
   * fixed crash when freeing the config in mod_alias
-  
+  * fixed server.error-handler-404 breakage from 1.4.16 (#1270)
+  * fixed entering 404-handler from dynamic content (#948)
+  * added more debug infos for FAM based stat-cache
+  * use more LSB like paths in the sample config (#1242)
 
-- 1.4.16 - 
+- 1.4.16 - 2007-07-25
 
   * added static-file.etags, etag.use-inode, etag.use-mtime, etag.use-size
     to customize the generation of ETags for static files. (#1209) 
