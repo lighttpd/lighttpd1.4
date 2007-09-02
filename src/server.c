@@ -775,7 +775,10 @@ int main (int argc, char **argv) {
 			setuid(pwd->pw_uid);
 		}
 #endif
-#ifdef HAVE_SYS_PRCTL_H
+#if defined(HAVE_SYS_PRCTL_H) && defined(PR_SET_DUMPABLE)
+		/**
+		 * on IRIX 6.5.30 they have prctl() but no DUMPABLE
+		 */
 		if (srv->srvconf.enable_cores) {
 			prctl(PR_SET_DUMPABLE, 1, 0, 0, 0);
 		}
