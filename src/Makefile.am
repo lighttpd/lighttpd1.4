@@ -1,11 +1,13 @@
 AM_CFLAGS = $(FAM_CFLAGS)
 
 noinst_PROGRAMS=proc_open lemon # simple-fcgi #graphic evalo bench ajp ssl error_test adserver gen-license
-sbin_PROGRAMS=lighttpd
+sbin_PROGRAMS=lighttpd lighttpd-angel
 bin_PROGRAMS=spawn-fcgi
 LEMON=$(top_builddir)/src/lemon
 
 lemon_SOURCES=lemon.c
+
+lighttpd_angel_SOURCES=lighttpd-angel.c
 
 #simple_fcgi_SOURCES=simple-fcgi.c
 #simple_fcgi_LDADD=-lfcgi
@@ -254,7 +256,7 @@ hdr = server.h buffer.h network.h log.h keyvalue.h \
       splaytree.h proc_open.h status_counter.h \
       mod_magnet_cache.h
 
-DEFS= @DEFS@ -DLIBRARY_DIR="\"$(libdir)\""
+DEFS= @DEFS@ -DLIBRARY_DIR="\"$(libdir)\"" -DSBIN_DIR="\"$(sbindir)\""
 
 lighttpd_SOURCES = $(src)
 lighttpd_LDADD = $(PCRE_LIB) $(DL_LIB) $(SENDFILE_LIB) $(ATTR_LIB) $(common_libadd) $(SSL_LIB) $(FAM_LIBS)
