@@ -1578,6 +1578,14 @@ static int fcgi_env_add(buffer *env, const char *key, size_t key_len, const char
 		return -1;
 	}
 
+	/**
+	 * field length can be 31bit max
+	 *
+	 * HINT: this can't happen as FCGI_MAX_LENGTH is only 16bit
+	 */
+	if (key_len > 0x7fffffff) key_len = 0x7fffffff;
+	if (val_len > 0x7fffffff) val_len = 0x7fffffff;
+
 	buffer_prepare_append(env, len);
 
 	if (key_len > 127) {
