@@ -1571,6 +1571,13 @@ static int fcgi_env_add(buffer *env, const char *key, size_t key_len, const char
 	len += key_len > 127 ? 4 : 1;
 	len += val_len > 127 ? 4 : 1;
 
+	if (env->used + len >= FCGI_MAX_LENGTH) {
+		/**
+		 * we can't append more headers, ignore it
+		 */
+		return -1;
+	}
+
 	buffer_prepare_append(env, len);
 
 	if (key_len > 127) {
@@ -1600,6 +1607,8 @@ static int fcgi_env_add(buffer *env, const char *key, size_t key_len, const char
 }
 
 static int fcgi_header(FCGI_Header * header, unsigned char type, size_t request_id, int contentLength, unsigned char paddingLength) {
+	assert(contentLength <= FCGI_MAX_LENGTH);
+	
 	header->version = FCGI_VERSION_1;
 	header->type = type;
 	header->requestIdB0 = request_id & 0xff;
