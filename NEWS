@@ -5,6 +5,7 @@ NEWS
 
 - 1.4.18 -
   * fixed compile error on IRIX 6.5.x on prctl() (#1333)
+  * fixed forwarding a SIGINT and SIGHUP when using max-workers (#902)
 
 
 - 1.4.17 - 2007-08-29

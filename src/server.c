@@ -68,6 +68,7 @@ static volatile sig_atomic_t srv_shutdown = 0;
 static volatile sig_atomic_t graceful_shutdown = 0;
 static volatile sig_atomic_t handle_sig_alarm = 1;
 static volatile sig_atomic_t handle_sig_hup = 0;
+static volatile sig_atomic_t forwarded_sig_hup = 0;
 
 #if defined(HAVE_SIGACTION) && defined(SA_SIGINFO)
 static volatile siginfo_t last_sigterm_info;
@@ -94,8 +95,19 @@ static void sigaction_handler(int sig, siginfo_t *si, void *context) {
 		handle_sig_alarm = 1; 
 		break;
 	case SIGHUP:
-		handle_sig_hup = 1;
-		memcpy(&last_sighup_info, si, sizeof(*si));
+		/** 
+		 * we send the SIGHUP to all procs in the process-group
+		 * this includes ourself
+		 * 
+		 * make sure we only send it once and don't create a 
+		 * infinite loop
+		 */
+		if (!forwarded_sig_hup) {
+			handle_sig_hup = 1;
+			memcpy(&last_sighup_info, si, sizeof(*si));
+		} else {
+			forwarded_sig_hup = 0;
+		}
 		break;
 	case SIGCHLD:
 		break;
@@ -988,7 +1000,7 @@ int main (int argc, char **argv) {
 	num_childs = srv->srvconf.max_worker;
 	if (num_childs > 0) {
 		int child = 0;
-		while (!child && !srv_shutdown) {
+		while (!child && !srv_shutdown && !graceful_shutdown) {
 			if (num_childs > 0) {
 				switch (fork()) {
 				case -1:
@@ -1003,14 +1015,61 @@ int main (int argc, char **argv) {
 			} else {
 				int status;
 
-				/* ignore EINTR */
-				if (-1 != wait(&status)) num_childs++;
+				if (-1 != wait(&status)) {
+					/** 
+					 * one of our workers went away 
+					 */
+					num_childs++;
+				} else {
+					switch (errno) {
+					case EINTR:
+						/**
+						 * if we receive a SIGHUP we have to close our logs ourself as we don't 
+						 * have the mainloop who can help us here
+						 */
+						if (handle_sig_hup) {
+							handle_sig_hup = 0;
+
+							log_error_cycle(srv);
+
+							/**
+							 * forward to all procs in the process-group
+							 * 
+							 * we also send it ourself
+							 */
+							if (!forwarded_sig_hup) {
+								forwarded_sig_hup = 1;
+								kill(0, SIGHUP);
+							}
+						}
+						break;
+					default:
+						break;
+					}
+				}
 			}
 		}
-		if (srv_shutdown) {
-			kill(0, SIGTERM);
+
+		/**
+		 * for the parent this is the exit-point 
+		 */
+		if (!child) {
+			/** 
+			 * kill all children too 
+			 */
+			if (graceful_shutdown) {
+				kill(0, SIGINT);
+			} else if (srv_shutdown) {
+				kill(0, SIGTERM);
+			}
+
+			log_error_close(srv);
+			network_close(srv);
+			connections_free(srv);
+			plugins_free(srv);
+			server_free(srv);
+			return 0;
 		}
-		if (!child) return 0;
 	}
 #endif
 
@@ -1101,9 +1160,9 @@ int main (int argc, char **argv) {
 #ifdef HAVE_SIGACTION
 				log_error_write(srv, __FILE__, __LINE__, "sdsd", 
 					"logfiles cycled UID =",
-					last_sigterm_info.si_uid,
+					last_sighup_info.si_uid,
 					"PID =",
-					last_sigterm_info.si_pid);
+					last_sighup_info.si_pid);
 #else
 				log_error_write(srv, __FILE__, __LINE__, "s", 
 					"logfiles cycled");
