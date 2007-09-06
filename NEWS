@@ -7,8 +7,9 @@ NEWS
   * fixed compile error on IRIX 6.5.x on prctl() (#1333)
   * fixed forwarding a SIGINT and SIGHUP when using max-workers (#902)
   * fixed FastCGI header overrun in mod_fastcgi (reported by mattias@secweb.se)
-  * fixed hanging redirects with keep-alive due to missing 
+  * fixed hanging redirects with keep-alive due to missing
     "Content-Length: 0" headers
+  * fixed crashing when using undefined environment variables in the config
 
 
 - 1.4.17 - 2007-08-29
