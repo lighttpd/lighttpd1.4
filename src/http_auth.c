@@ -831,19 +831,17 @@ int http_auth_basic_check(server *srv, connection *con, mod_auth_plugin_data *p,
 	username = buffer_init();
 
 	if (!base64_decode(username, realm_str)) {
-		buffer_free(username);
-
 		log_error_write(srv, __FILE__, __LINE__, "sb", "decodeing base64-string failed", username);
 
+		buffer_free(username);
 		return 0;
 	}
 
 	/* r2 == user:password */
 	if (NULL == (pw = strchr(username->ptr, ':'))) {
-		buffer_free(username);
-
 		log_error_write(srv, __FILE__, __LINE__, "sb", ": is missing in", username);
 
+		buffer_free(username);
 		return 0;
 	}
 
