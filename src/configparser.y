@@ -230,6 +230,7 @@ expression(A) ::= value(B). {
 }
 
 value(A) ::= key(B). {
+  A = NULL;
   if (strncmp(B->ptr, "env.", sizeof("env.") - 1) == 0) {
     char *env;
 
