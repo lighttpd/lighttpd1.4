@@ -8,7 +8,7 @@ BEGIN {
 
 use strict;
 use IO::Socket;
-use Test::More tests => 6;
+use Test::More tests => 7;
 use LightyTest;
 
 my $tf = LightyTest->new();
@@ -23,6 +23,14 @@ EOF
  );
 $t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 301, 'Location' => 'http://localhost:'.$tf->{PORT}.'/' } ];
 ok($tf->handle_http($t) == 0, 'external redirect');
+
+$t->{REQUEST}  = ( <<EOF
+GET /redirect/ HTTP/1.0
+Host: vvv.example.org
+EOF
+ );
+$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 301, 'Location' => 'http://localhost:'.$tf->{PORT}.'/', 'Content-Length' => '0' } ];
+ok($tf->handle_http($t) == 0, 'external redirect should have a Content-Length: 0');
 
 $t->{REQUEST} = ( <<EOF
 GET /redirect/ HTTP/1.0
