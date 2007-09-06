@@ -537,7 +537,10 @@ static int connection_handle_write_prepare(server *srv, connection *con) {
 			    con->http_status == 204 ||
 			    con->http_status == 304) {
 				/* no Content-Body, no Content-Length */
-			} else if (qlen > 0) {
+			} else if (qlen >= 0) {
+				/* qlen = 0 is important for Redirects (301, ...) as they MAY have
+				 * a content. Browsers are waiting for a Content otherwise
+				 */
 				buffer_copy_off_t(srv->tmp_buf, chunkqueue_length(con->write_queue));
 
 				response_header_overwrite(srv, con, CONST_STR_LEN("Content-Length"), CONST_BUF_LEN(srv->tmp_buf));
