@@ -3,16 +3,18 @@
 NEWS
 ====
 
-- 1.4.18 -
+- 1.4.18 - 2007-09-09
+
   * fixed compile error on IRIX 6.5.x on prctl() (#1333)
   * fixed forwarding a SIGINT and SIGHUP when using max-workers (#902)
   * fixed FastCGI header overrun in mod_fastcgi (reported by mattias@secweb.se)
   * fixed hanging redirects with keep-alive due to missing
     "Content-Length: 0" headers
   * fixed crashing when using undefined environment variables in the config
-
+  * fixed compilation of mod_mysql_vhost on irix (#1341)
 
 - 1.4.17 - 2007-08-29
+
   * added dir-listing.set-footer in mod_dirlisting (#1277)
   * added sending UID and PID for SIGTERM and SIGINT to the logs
   * fixed hardcoded font-sizes in mod_dirlisting (#1267)
