@@ -483,7 +483,23 @@ URIHANDLER_FUNC(mod_staticfile_subrequest) {
 			/* if the value is the same as our ETag, we do a Range-request,
 			 * otherwise a full 200 */
 
-			if (!buffer_is_equal(ds->value, con->physical.etag)) {
+			if (ds->value->ptr[0] == '"') {
+				/**
+				 * client wants a ETag
+				 */
+				if (!con->physical.etag) {
+					do_range_request = 0;
+				} else if (!buffer_is_equal(ds->value, con->physical.etag)) {
+					do_range_request = 0;
+				}
+			} else if (!mtime) {
+				/**
+				 * we don't have a Last-Modified and can match the If-Range: 
+				 *
+				 * sending all
+				 */
+				do_range_request = 0;
+			} else if (!buffer_is_equal(ds->value, mtime)) {
 				do_range_request = 0;
 			}
 		}
