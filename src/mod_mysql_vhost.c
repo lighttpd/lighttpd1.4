@@ -222,7 +222,7 @@ SERVER_FUNC(mod_mysql_vhost_set_defaults) {
 		s->mysql_pre = buffer_init();
 		s->mysql_post = buffer_init();
 
-		if (sel->used && (qmark = index(sel->ptr, '?'))) {
+		if (sel->used && (qmark = strchr(sel->ptr, '?'))) {
 			*qmark = '\0';
 			buffer_copy_string(s->mysql_pre, sel->ptr);
 			buffer_copy_string(s->mysql_post, qmark+1);
