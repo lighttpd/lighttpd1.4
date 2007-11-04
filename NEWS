@@ -6,6 +6,7 @@ NEWS
 - 1.4.19 -
 
   * added support for If-Range: <date> (#1346)
+  * added support for matching $HTTP["scheme"] in configs
 
 - 1.4.18 - 2007-09-09
 
