@@ -341,6 +341,10 @@ static cond_result_t config_check_cond_nocache(server *srv, connection *con, dat
 		}
 		break;
 	}
+	case COMP_HTTP_SCHEME:
+		l = con->uri.scheme;
+		break;
+
 	case COMP_HTTP_URL:
 		l = con->uri.path;
 		break;

@@ -85,6 +85,8 @@ where <field> is one of one of the following:
 
 $HTTP["cookie"]
   match on cookie
+$HTTP["scheme"]
+  match on scheme
 $HTTP["host"]
   match on host
 $HTTP["useragent"]

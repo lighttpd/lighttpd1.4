@@ -180,6 +180,7 @@ handler_t http_response_prepare(server *srv, connection *con) {
 		buffer_copy_string_buffer(con->uri.authority, con->request.http_host);
 		buffer_to_lower(con->uri.authority);
 
+		config_patch_connection(srv, con, COMP_HTTP_SCHEME);    /* Scheme:      */
 		config_patch_connection(srv, con, COMP_HTTP_HOST);      /* Host:        */
 		config_patch_connection(srv, con, COMP_HTTP_REMOTEIP);  /* Client-IP */
 		config_patch_connection(srv, con, COMP_HTTP_REFERER);   /* Referer:     */
