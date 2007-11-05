@@ -6,21 +6,19 @@ Source: http://jan.kneschke.de/projects/lighttpd/download/lighttpd-%version.tar.
 Packager: Jan Kneschke <jan@kneschke.de>
 License: BSD
 Group: Networking/Daemons
-URL: http://jan.kneschke.de/projects/lighttpd/
+URL: http://www.lighttpd.net/
 Requires: pcre >= 3.1 zlib
-BuildPrereq: libtool zlib-devel
+BuildRequires: libtool zlib-devel
 BuildRoot: %{_tmppath}/%{name}-root
-
 
 %description
 lighttpd is intented to be a frontend for ad-servers which have to deliver
 small files concurrently to many connections.
 
-Available rpmbuild rebuild options :
---with : ssl mysql lua memcache
+Available rpmbuild rebuild options:
+--with: ssl mysql lua memcache
 
 %prep
-
 %setup -q
 
 %build
@@ -33,14 +31,13 @@ rm -rf %{buildroot}
 make
 
 %install
-
 %makeinstall
 
 mkdir -p %{buildroot}%{_sysconfdir}/{init.d,sysconfig}
-if test -f /etc/redhat-release -o -f /etc/fedora-release; then
-  install -m 755 doc/rc.lighttpd.redhat %{buildroot}%{_sysconfdir}/init.d/lighttpd
+if [ -f /etc/redhat-release -o -f /etc/fedora-release ]; then
+	install -m 755 doc/rc.lighttpd.redhat %{buildroot}%{_sysconfdir}/init.d/lighttpd
 else
-  install -m 755 doc/rc.lighttpd %{buildroot}%{_sysconfdir}/init.d/lighttpd
+	install -m 755 doc/rc.lighttpd %{buildroot}%{_sysconfdir}/init.d/lighttpd
 fi
 install -m 644 doc/sysconfig.lighttpd %{buildroot}%{_sysconfdir}/sysconfig/lighttpd
 
@@ -49,16 +46,16 @@ rm -rf %{buildroot}
 
 %post
 ## read http://www.fedora.us/docs/spec.html next time :)
-if test "$1" = "1"; then
-  # real install, not upgrade
-  /sbin/chkconfig --add lighttpd
+if [ "$1" = "1" ]; then
+	# real install, not upgrade
+	/sbin/chkconfig --add lighttpd
 fi
 
 %preun
-if test "$1" = "0"; then
-  # real uninstall, not upgrade
-  %{_sysconfdir}/init.d/lighttpd stop
-  /sbin/chkconfig --del lighttpd
+if [ "$1" = "0"]; then
+	# real uninstall, not upgrade
+	%{_sysconfdir}/init.d/lighttpd stop
+	/sbin/chkconfig --del lighttpd
 fi
 
 %files
