@@ -759,6 +759,19 @@ int main (int argc, char **argv) {
 
 			return -1;
 		}
+#ifdef HAVE_PWD_H
+		/* 
+		 * Change group before chroot, when we have access
+		 * to /etc/group
+		 * */
+		if (srv->srvconf.groupname->used) {
+			setgid(grp->gr_gid);
+			setgroups(0, NULL);
+			if (srv->srvconf.username->used) {
+				initgroups(srv->srvconf.username->ptr, grp->gr_gid);
+			}
+		}
+#endif
 #ifdef HAVE_CHROOT
 		if (srv->srvconf.changeroot->used) {
 			tzset();
@@ -775,15 +788,7 @@ int main (int argc, char **argv) {
 #endif
 #ifdef HAVE_PWD_H
 		/* drop root privs */
-		if (srv->srvconf.groupname->used) {
-			setgid(grp->gr_gid);
-			setgroups(0, NULL);
-		}
-
 		if (srv->srvconf.username->used) {
-			if (srv->srvconf.groupname->used) {
-				initgroups(srv->srvconf.username->ptr, grp->gr_gid);
-			}
 			setuid(pwd->pw_uid);
 		}
 #endif

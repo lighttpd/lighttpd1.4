@@ -404,6 +404,18 @@ int main(int argc, char **argv) {
 			}
 		}
 
+		/*
+		 * Change group before chroot, when we have access
+		 * to /etc/group
+		 */
+		if (groupname) {
+			setgid(grp->gr_gid);
+			setgroups(0, NULL);
+			if (username) {
+				initgroups(username, grp->gr_gid);
+			}
+		}
+
 		if (changeroot) {
 			if (-1 == chroot(changeroot)) {
 				fprintf(stderr, "%s.%d: %s %s\n",
@@ -420,13 +432,7 @@ int main(int argc, char **argv) {
 		}
 
 		/* drop root privs */
-		if (groupname) {
-			setgid(grp->gr_gid);
-		}
 		if (username) {
-			if (groupname) {
-				initgroups(username, grp->gr_gid);
-			}
 			setuid(pwd->pw_uid);
 		}
 	}
