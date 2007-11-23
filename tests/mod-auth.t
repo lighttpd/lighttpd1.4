@@ -8,7 +8,7 @@ BEGIN {
 
 use strict;
 use IO::Socket;
-use Test::More tests => 13;
+use Test::More tests => 14;
 use LightyTest;
 
 my $tf = LightyTest->new();
@@ -47,6 +47,16 @@ EOF
  );
 $t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200 } ];
 ok($tf->handle_http($t) == 0, 'Basic-Auth: Valid Auth-token - htpasswd (des)');
+
+$t->{REQUEST}  = ( <<EOF
+GET /server-config HTTP/1.0
+Host: auth-htpasswd.example.org
+Authorization: basic ZGVzOmRlcw==
+EOF
+ );
+$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200 } ];
+ok($tf->handle_http($t) == 0, 'Basic-Auth: Valid Auth-token - htpasswd (des) (lowercase)');
+
 
 SKIP: {
 	skip "no md5 for crypt under cygwin", 1 if $^O eq 'cygwin';
