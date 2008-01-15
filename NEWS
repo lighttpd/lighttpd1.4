@@ -10,6 +10,8 @@ NEWS
   * fixed initgroups() called after chroot (#1384)
   * fixed case-sensitive check for Auth-Method (#1456)
   * execute fcgi app without /bin/sh if used as argument to spawn-fcgi (#1428)
+  * fixed a bug that made /-prefixed fcgi extensions being handled also when
+    matching the end of the uri (#1489)
 
 - 1.4.18 - 2007-09-09
 

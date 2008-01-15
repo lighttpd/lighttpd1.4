@@ -3456,8 +3456,9 @@ static handler_t fcgi_check_extension(server *srv, connection *con, void *p_d, i
 			if (s_len < ct_len) continue;
 
 			/* check extension in the form "/fcgi_pattern" */
-			if (*(extension->key->ptr) == '/' && strncmp(fn->ptr, extension->key->ptr, ct_len) == 0) {
-				break;
+			if (*(extension->key->ptr) == '/') {
+				if (strncmp(fn->ptr, extension->key->ptr, ct_len) == 0)
+					break;
 			} else if (0 == strncmp(fn->ptr + s_len - ct_len, extension->key->ptr, ct_len)) {
 				/* check extension in the form ".fcg" */
 				break;
@@ -3473,7 +3474,7 @@ static handler_t fcgi_check_extension(server *srv, connection *con, void *p_d, i
 	for (k = 0; k < extension->used; k++) {
 		host = extension->hosts[k];
 
-		/* we should have at least one proc that can do somthing */
+		/* we should have at least one proc that can do something */
 		if (host->active_procs == 0) {
 			host = NULL;
 
