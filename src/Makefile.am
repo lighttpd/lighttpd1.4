@@ -281,4 +281,4 @@ proc_open_CPPFLAGS= -DDEBUG_PROC_OPEN
 #ajp_SOURCES = ajp.c
 
 noinst_HEADERS   = $(hdr)
-EXTRA_DIST = mod_skeleton.c configparser.y mod_ssi_exprparser.y lempar.c
+EXTRA_DIST = mod_skeleton.c configparser.y mod_ssi_exprparser.y lempar.c SConscript
