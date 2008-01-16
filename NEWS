@@ -12,8 +12,9 @@ NEWS
   * execute fcgi app without /bin/sh if used as argument to spawn-fcgi (#1428)
   * fixed a bug that made /-prefixed extensions being handled also when
     matching the end of the uri in fcgi,scgi and proxy modules (#1489)
-  * Print error if X-LIGHTTPD-send-file cannot be done; reset header
+  * print error if X-LIGHTTPD-send-file cannot be done; reset header
     Content-Length for send-file. Patches by Stefan Bühler
+  * prevent crash in certain php-fcgi configurations (#841)
 
 - 1.4.18 - 2007-09-09
 

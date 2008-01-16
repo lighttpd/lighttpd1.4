@@ -162,8 +162,8 @@ typedef struct {
 	 * if host is one of the local IP adresses the
 	 * whole connection is local
 	 *
-	 * if tcp/ip should be used host AND port have
-	 * to be specified
+	 * if port is not 0, and host is not specified,
+	 * "localhost" (INADDR_LOOPBACK) is assumed.
 	 *
 	 */
 	buffer *host;
@@ -823,12 +823,12 @@ static int fcgi_spawn_connection(server *srv,
 		fcgi_addr_in.sin_family = AF_INET;
 
 		if (buffer_is_empty(host->host)) {
-			fcgi_addr_in.sin_addr.s_addr = htonl(INADDR_ANY);
+			fcgi_addr_in.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
 		} else {
 			struct hostent *he;
 
 			/* set a useful default */
-			fcgi_addr_in.sin_addr.s_addr = htonl(INADDR_ANY);
+			fcgi_addr_in.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
 
 
 			if (NULL == (he = gethostbyname(host->host->ptr))) {
@@ -858,7 +858,11 @@ static int fcgi_spawn_connection(server *srv,
 		fcgi_addr = (struct sockaddr *) &fcgi_addr_in;
 
 		buffer_copy_string(proc->connection_name, "tcp:");
-		buffer_append_string_buffer(proc->connection_name, host->host);
+		if (!buffer_is_empty(host->host)) {
+			buffer_append_string_buffer(proc->connection_name, host->host);
+		} else {
+			buffer_append_string(proc->connection_name, "localhost");
+		}
 		buffer_append_string(proc->connection_name, ":");
 		buffer_append_long(proc->connection_name, proc->port);
 	}
@@ -1687,12 +1691,16 @@ static connection_result_t fcgi_establish_connection(server *srv, handler_ctx *h
 #endif
 	} else {
 		fcgi_addr_in.sin_family = AF_INET;
-		if (0 == inet_aton(host->host->ptr, &(fcgi_addr_in.sin_addr))) {
-			log_error_write(srv, __FILE__, __LINE__, "sbs",
-					"converting IP address failed for", host->host,
-					"\nBe sure to specify an IP address here");
-
-			return -1;
+		if (!buffer_is_empty(host->host)) {
+			if (0 == inet_aton(host->host->ptr, &(fcgi_addr_in.sin_addr))) {
+				log_error_write(srv, __FILE__, __LINE__, "sbs",
+						"converting IP address failed for", host->host,
+						"\nBe sure to specify an IP address here");
+	
+				return -1;
+			}
+		} else {
+			fcgi_addr_in.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
 		}
 		fcgi_addr_in.sin_port = htons(proc->port);
 		servlen = sizeof(fcgi_addr_in);
@@ -1702,7 +1710,11 @@ static connection_result_t fcgi_establish_connection(server *srv, handler_ctx *h
 		if (buffer_is_empty(proc->connection_name)) {
 			/* on remote spawing we have to set the connection-name now */
 			buffer_copy_string(proc->connection_name, "tcp:");
-			buffer_append_string_buffer(proc->connection_name, host->host);
+			if (!buffer_is_empty(host->host)) {
+				buffer_append_string_buffer(proc->connection_name, host->host);
+			} else {
+				buffer_append_string(proc->connection_name, "localhost");
+			}
 			buffer_append_string(proc->connection_name, ":");
 			buffer_append_long(proc->connection_name, proc->port);
 		}
@@ -2732,9 +2744,14 @@ static handler_t fcgi_write_request(server *srv, handler_ctx *hctx) {
 
 	int ret;
 
-	/* sanity check */
+	/* sanity check:
+	 *  - host != NULL
+	 *  - either:
+	 *     - tcp socket (do not check host->host->uses, as it may be not set which means INADDR_LOOPBACK)
+	 *     - unix socket
+	 */
 	if (!host ||
-	    ((!host->host->used || !host->port) && !host->unixsocket->used)) {
+	    (!host->port && !host->unixsocket->used)) {
 		log_error_write(srv, __FILE__, __LINE__, "sxddd",
 				"write-req: error",
 				host,
