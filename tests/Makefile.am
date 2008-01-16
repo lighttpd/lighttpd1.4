@@ -31,6 +31,8 @@ CONFS=fastcgi-10.conf \
       core-response.t \
       core-keepalive.t \
       core.t \
+	  mod-proxy.t \
+	  mod-secdownload.t \
       mod-access.t \
       mod-auth.t \
       mod-cgi.t \
@@ -39,6 +41,8 @@ CONFS=fastcgi-10.conf \
       mod-redirect.t \
       mod-rewrite.t \
       mod-userdir.t \
+	  env-variables.t \
+	  symlink.t \
       request.t \
       mod-ssi.t \
       LightyTest.pm \
@@ -48,7 +52,6 @@ CONFS=fastcgi-10.conf \
       cachable.t \
       core-404-handler.t \
       404-handler.conf
-
 
 TESTS_ENVIRONMENT=$(srcdir)/wrapper.sh $(srcdir) $(top_builddir)
 
