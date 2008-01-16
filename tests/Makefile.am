@@ -32,6 +32,7 @@ CONFS=fastcgi-10.conf \
       core-keepalive.t \
       core.t \
 	  mod-proxy.t \
+	  proxy.conf \
 	  mod-secdownload.t \
       mod-access.t \
       mod-auth.t \
@@ -42,6 +43,7 @@ CONFS=fastcgi-10.conf \
       mod-rewrite.t \
       mod-userdir.t \
 	  env-variables.t \
+	  env-variables.conf \
 	  symlink.t \
       request.t \
       mod-ssi.t \
@@ -58,6 +60,7 @@ TESTS_ENVIRONMENT=$(srcdir)/wrapper.sh $(srcdir) $(top_builddir)
 EXTRA_DIST=wrapper.sh lighttpd.conf \
 	lighttpd.user \
 	lighttpd.htpasswd \
+	SConscript \
 	$(CONFS) \
 	$(TESTS)
 
