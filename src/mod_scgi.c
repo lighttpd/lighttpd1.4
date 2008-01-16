@@ -2694,8 +2694,9 @@ static handler_t scgi_check_extension(server *srv, connection *con, void *p_d, i
 		if (s_len < ct_len) continue;
 
 		/* check extension in the form "/scgi_pattern" */
-		if (*(extension->key->ptr) == '/' && strncmp(fn->ptr, extension->key->ptr, ct_len) == 0) {
-			break;
+		if (*(extension->key->ptr) == '/') {
+			if (strncmp(fn->ptr, extension->key->ptr, ct_len) == 0)
+				break;
 		} else if (0 == strncmp(fn->ptr + s_len - ct_len, extension->key->ptr, ct_len)) {
 			/* check extension in the form ".fcg" */
 			break;

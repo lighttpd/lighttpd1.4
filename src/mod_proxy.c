@@ -1093,15 +1093,17 @@ static handler_t mod_proxy_check_extension(server *srv, connection *con, void *p
 		if (s_len < ct_len) continue;
 
 		/* check extension in the form "/proxy_pattern" */
-		if (*(extension->key->ptr) == '/' && strncmp(fn->ptr, extension->key->ptr, ct_len) == 0) {
-			if (s_len > ct_len + 1) {
-				char *pi_offset;
+		if (*(extension->key->ptr) == '/') {
+			if (strncmp(fn->ptr, extension->key->ptr, ct_len) == 0) {
+				if (s_len > ct_len + 1) {
+					char *pi_offset;
 
-				if (0 != (pi_offset = strchr(fn->ptr + ct_len + 1, '/'))) {
-					path_info_offset = pi_offset - fn->ptr;
+					if (0 != (pi_offset = strchr(fn->ptr + ct_len + 1, '/'))) {
+						path_info_offset = pi_offset - fn->ptr;
+					}
 				}
+				break;
 			}
-			break;
 		} else if (0 == strncmp(fn->ptr + s_len - ct_len, extension->key->ptr, ct_len)) {
 			/* check extension in the form ".fcg" */
 			break;
