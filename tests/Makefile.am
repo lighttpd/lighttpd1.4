@@ -37,8 +37,8 @@ CONFS=fastcgi-10.conf \
       mod-compress.t \
       mod-fastcgi.t \
       mod-redirect.t \
-      mod-userdir.t \
       mod-rewrite.t \
+      mod-userdir.t \
       request.t \
       mod-ssi.t \
       LightyTest.pm \
