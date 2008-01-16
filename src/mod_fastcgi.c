@@ -2530,15 +2530,28 @@ static int fcgi_demux_response(server *srv, handler_ctx *hctx) {
 				}
 
 				if (host->allow_xsendfile &&
-				    NULL != (ds = (data_string *) array_get_element(con->response.headers, "X-LIGHTTPD-send-file"))) {
+				    (NULL != (ds = (data_string *) array_get_element(con->response.headers, "X-LIGHTTPD-send-file"))
+					  || NULL != (ds = (data_string *) array_get_element(con->response.headers, "X-Sendfile")))) {
 					stat_cache_entry *sce;
 
 					if (HANDLER_ERROR != stat_cache_get_entry(srv, con, ds->value, &sce)) {
+						data_string *dcls = data_string_init();
 						/* found */
-
 						http_chunk_append_file(srv, con, ds->value, 0, sce->st.st_size);
 						hctx->send_content_body = 0; /* ignore the content */
 						joblist_append(srv, con);
+
+						buffer_copy_string_len(dcls->key, "Content-Length", sizeof("Content-Length")-1);
+						buffer_copy_long(dcls->value, sce->st.st_size);
+						dcls = (data_string*) array_replace(con->response.headers, (data_unset *)dcls);
+						if (dcls) dcls->free((data_unset*)dcls);
+
+						con->parsed_response |= HTTP_CONTENT_LENGTH;
+						con->response.content_length = sce->st.st_size;
+					} else {
+						log_error_write(srv, __FILE__, __LINE__, "sb",
+							"send-file error: couldn't get stat_cache entry for:",
+							ds->value);
 					}
 				}
 
