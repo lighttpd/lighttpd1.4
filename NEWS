@@ -16,6 +16,7 @@ NEWS
     Content-Length for send-file. Patches by Stefan Buhler
   * prevent crash in certain php-fcgi configurations (#841)
   * add IdleServers and Scoreboard directives in ?auto mode for mod_status (#1507)
+  * open log immediately after daemonizing, fixes SIGPIPEs on startup  (#165)
 
 - 1.4.18 - 2007-09-09
 

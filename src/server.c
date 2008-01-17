@@ -896,6 +896,17 @@ int main (int argc, char **argv) {
 		pid_fd = -1;
 	}
 
+	// Close stderr ASAP in the child process to make sure that nothing
+	// is being written to that fd which may not be valid anymore.
+	if (-1 == log_error_open(srv)) {
+		log_error_write(srv, __FILE__, __LINE__, "s", "Opening errorlog failed. Going down.");
+
+		plugins_free(srv);
+		network_close(srv);
+		server_free(srv);
+		return -1;
+	}
+
 	if (HANDLER_GO_ON != plugins_call_set_defaults(srv)) {
 		log_error_write(srv, __FILE__, __LINE__, "s", "Configuration of plugins failed. Going down.");
 
@@ -946,15 +957,7 @@ int main (int argc, char **argv) {
 		return -1;
 	}
 
-	if (-1 == log_error_open(srv)) {
-		log_error_write(srv, __FILE__, __LINE__, "s",
-				"opening errorlog failed, dying");
 
-		plugins_free(srv);
-		network_close(srv);
-		server_free(srv);
-		return -1;
-	}
 
 
 #ifdef HAVE_SIGACTION
