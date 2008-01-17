@@ -560,6 +560,8 @@ static handler_t mod_status_handle_server_status_text(server *srv, connection *c
 	double avg;
 	time_t ts;
 	char buf[32];
+	unsigned int k;
+	unsigned int l;
 
 	b = chunkqueue_get_append_buffer(con->write_queue);
 
@@ -586,6 +588,22 @@ static handler_t mod_status_handle_server_status_text(server *srv, connection *c
 	/* output busy servers */
 	BUFFER_APPEND_STRING_CONST(b, "BusyServers: ");
 	buffer_append_long(b, srv->conns->used);
+	BUFFER_APPEND_STRING_CONST(b, "\n");
+
+	BUFFER_APPEND_STRING_CONST(b, "IdleServers: ");
+       buffer_append_long(b, srv->conns->size - srv->conns->used);
+       BUFFER_APPEND_STRING_CONST(b, "\n");
+
+       /* output scoreboard */
+       BUFFER_APPEND_STRING_CONST(b, "Scoreboard: ");
+       for (k = 0; k < srv->conns->used; k++) {
+        	connection *c = srv->conns->ptr[k];
+		const char *state = connection_get_short_state(c->state);
+		buffer_append_string_len(b, state, 1);
+	}
+	for (l = 0; l < srv->conns->size - srv->conns->used; l++) {
+		BUFFER_APPEND_STRING_CONST(b, "_");
+	}
 	BUFFER_APPEND_STRING_CONST(b, "\n");
 
 	/* set text/plain output */
