@@ -19,6 +19,7 @@ NEWS
   * open log immediately after daemonizing, fixes SIGPIPEs on startup  (#165)
   * HTTPS env var should be "on" when using mod_extforward and the X-Forwarded-Proto header is set. (#1499)
   * generate ETag and Last-Modified headers for mod_ssi based on newest modified include (#1491)
+  * support letterhomes in mod_userdir (#1473)
 
 - 1.4.18 - 2007-09-09
 
