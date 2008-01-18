@@ -36,6 +36,11 @@
 #include <sys/filio.h>
 #endif
 
+#include "etag.h"
+
+/* The newest modified time of included files for include statement */
+static volatile time_t include_file_last_mtime = 0;
+
 /* init the plugin data */
 INIT_FUNC(mod_ssi_init) {
 	plugin_data *p;
@@ -575,6 +580,11 @@ static int process_ssi_stmt(server *srv, connection *con, plugin_data *p,
 				break;
 			case SSI_INCLUDE:
 				chunkqueue_append_file(con->write_queue, p->stat_fn, 0, st.st_size);
+
+				/* Keep the newest mtime of included files */
+				if (st.st_mtime > include_file_last_mtime)
+				  include_file_last_mtime = st.st_mtime;
+
 				break;
 			}
 		} else {
@@ -912,6 +922,9 @@ static int mod_ssi_handle_request(server *srv, connection *con, plugin_data *p) 
 	build_ssi_cgi_vars(srv, con, p);
 	p->if_is_false = 0;
 
+	/* Reset the modified time of included files */
+	include_file_last_mtime = 0;
+
 	if (-1 == stream_open(&s, con->physical.path)) {
 		log_error_write(srv, __FILE__, __LINE__, "sb",
 				"stream-open: ", con->physical.path);
@@ -1009,6 +1022,30 @@ static int mod_ssi_handle_request(server *srv, connection *con, plugin_data *p) 
 	con->file_finished = 1;
 
 	response_header_overwrite(srv, con, CONST_STR_LEN("Content-Type"), CONST_STR_LEN("text/html"));
+
+  {
+  	/* Generate "ETag" & "Last-Modified" headers */
+
+		stat_cache_entry *sce = NULL;
+		time_t lm_time = 0;
+		buffer *mtime = NULL;
+
+		stat_cache_get_entry(srv, con, con->physical.path, &sce);
+
+		etag_mutate(con->physical.etag, sce->etag);
+		response_header_overwrite(srv, con, CONST_STR_LEN("ETag"), CONST_BUF_LEN(con->physical.etag));
+
+		if (sce->st.st_mtime > include_file_last_mtime)
+			lm_time = sce->st.st_mtime;
+		else
+			lm_time = include_file_last_mtime;
+
+		mtime = strftime_cache_get(srv, lm_time);
+		response_header_overwrite(srv, con, CONST_STR_LEN("Last-Modified"), CONST_BUF_LEN(mtime));
+  }
+
+	/* Reset the modified time of included files */
+	include_file_last_mtime = 0;
 
 	/* reset physical.path */
 	buffer_reset(con->physical.path);
