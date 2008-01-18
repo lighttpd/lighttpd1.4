@@ -2057,12 +2057,9 @@ static int fcgi_create_env(server *srv, handler_ctx *hctx, size_t request_id) {
 	s = get_http_version_name(con->request.http_version);
 	FCGI_ENV_ADD_CHECK(fcgi_env_add(p->fcgi_env, CONST_STR_LEN("SERVER_PROTOCOL"), s, strlen(s)),con)
 
-#ifdef USE_OPENSSL
-	if (srv_sock->is_ssl) {
+    if (srv_sock->is_ssl || srv_sock->is_proxy_ssl) {
 		FCGI_ENV_ADD_CHECK(fcgi_env_add(p->fcgi_env, CONST_STR_LEN("HTTPS"), CONST_STR_LEN("on")),con)
 	}
-#endif
-
 
 	FCGI_ENV_ADD_CHECK(fcgi_env_add_request_headers(srv, con, p), con);
 

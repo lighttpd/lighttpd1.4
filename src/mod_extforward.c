@@ -379,8 +379,14 @@ URIHANDLER_FUNC(mod_extforward_uri_handler) {
 
 	if (real_remote_addr != NULL) { /* parsed */
 		sock_addr sock;
-
 		struct addrinfo *addrs_left;
+		server_socket *srv_sock = con->srv_socket;
+		data_string *forwarded_proto = (data_string *) array_get_element(con->request.headers,"X-Forwarded-Proto");
+
+		if (forwarded_proto && !strcmp(forwarded_proto->value->ptr, "https"))
+			srv_sock->is_proxy_ssl = 1;
+		else
+			srv_sock->is_proxy_ssl = 0;
 
 		if (con->conf.log_request_handling) {
  			log_error_write(srv, __FILE__, __LINE__, "ss",
