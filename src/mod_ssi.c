@@ -1023,7 +1023,7 @@ static int mod_ssi_handle_request(server *srv, connection *con, plugin_data *p) 
 
 	response_header_overwrite(srv, con, CONST_STR_LEN("Content-Type"), CONST_STR_LEN("text/html"));
 
-  {
+	{
   	/* Generate "ETag" & "Last-Modified" headers */
 
 		stat_cache_entry *sce = NULL;
@@ -1042,7 +1042,7 @@ static int mod_ssi_handle_request(server *srv, connection *con, plugin_data *p) 
 
 		mtime = strftime_cache_get(srv, lm_time);
 		response_header_overwrite(srv, con, CONST_STR_LEN("Last-Modified"), CONST_BUF_LEN(mtime));
-  }
+	}
 
 	/* Reset the modified time of included files */
 	include_file_last_mtime = 0;
