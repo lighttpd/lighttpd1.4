@@ -20,6 +20,7 @@
 /**
  * mod_extforward.c for lighttpd, by comman.kang <at> gmail <dot> com
  *                  extended, modified by Lionel Elie Mamane (LEM), lionel <at> mamane <dot> lu
+ *                  support chained proxies by glen@delfi.ee, #1528
  *
  * Config example:
  *
@@ -32,6 +33,10 @@
  *
  *       Note that "all" has precedence over specific entries,
  *       so "all except" setups will not work.
+ *
+ *       In case you have chained proxies, you can add all their IP's to the
+ *       config. However "all" has effect only on connecting IP, as the
+ *       X-Forwarded-For header can not be trusted.
  *
  * Note: The effect of this module is variable on $HTTP["remotip"] directives and
  *       other module's remote ip dependent actions.
@@ -225,18 +230,16 @@ static array *extract_forward_array(buffer *pbuffer)
 		char *base, *curr;
 		/* state variable, 0 means not in string, 1 means in string */
 		int in_str = 0;
-		for (base = pbuffer->ptr, curr = pbuffer->ptr; *curr; curr++)
-		{
+		for (base = pbuffer->ptr, curr = pbuffer->ptr; *curr; curr++) {
 			if (in_str) {
-				if ( (*curr > '9' || *curr < '0') && *curr != '.' && *curr != ':' ) {
+				if ((*curr > '9' || *curr < '0') && *curr != '.' && *curr != ':') {
 					/* found an separator , insert value into result array */
-					put_string_into_array_len(result, base, curr-base);
+					put_string_into_array_len(result, base, curr - base);
 					/* change state to not in string */
 					in_str = 0;
 				}
 			} else {
-				if (*curr >= '0' && *curr <= '9')
-				{
+				if (*curr >= '0' && *curr <= '9') {
 					/* found leading char of an IP address, move base pointer and change state */
 					base = curr;
 					in_str = 1;
@@ -244,9 +247,8 @@ static array *extract_forward_array(buffer *pbuffer)
 			}
 		}
 		/* if breaking out while in str, we got to the end of string, so add it */
-		if (in_str)
-		{
-			put_string_into_array_len(result, base, curr-base);
+		if (in_str) {
+			put_string_into_array_len(result, base, curr - base);
 		}
 	}
 	return result;
@@ -255,18 +257,40 @@ static array *extract_forward_array(buffer *pbuffer)
 #define IP_TRUSTED 1
 #define IP_UNTRUSTED 0
 /*
-   check whether ip is trusted, return 1 for trusted , 0 for untrusted
-*/
+ * check whether ip is trusted, return 1 for trusted , 0 for untrusted
+ */
 static int is_proxy_trusted(const char *ipstr, plugin_data *p)
 {
-	data_string* allds = (data_string *) array_get_element(p->conf.forwarder,"all");
+	data_string* allds = (data_string *)array_get_element(p->conf.forwarder, "all");
+
 	if (allds) {
-		if (strcasecmp(allds->value->ptr,"trust") == 0)
+		if (strcasecmp(allds->value->ptr, "trust") == 0) {
 			return IP_TRUSTED;
-		else
+		} else {
 			return IP_UNTRUSTED;
+		}
 	}
-	return (data_string *)array_get_element(p->conf.forwarder,ipstr) ? IP_TRUSTED : IP_UNTRUSTED ;
+
+	return (data_string *)array_get_element(p->conf.forwarder, ipstr) ? IP_TRUSTED : IP_UNTRUSTED;
+}
+
+/*
+ * Return char *ip of last address of proxy that is not trusted.
+ * Do not accept "all" keyword here.
+ */
+static const char *last_not_in_array(array *a, plugin_data *p)
+{
+	array *forwarder = p->conf.forwarder;
+
+	for (int i = a->used - 1; i >= 0; i--) {
+		data_string *ds = (data_string *)a->data[i];
+		const char *ip = ds->value->ptr;
+
+		if (!array_get_element(forwarder, ip)) {
+			return ip;
+		}
+	}
+	return NULL;
 }
 
 struct addrinfo *ipstr_to_sockaddr(const char *host)
@@ -316,9 +340,8 @@ URIHANDLER_FUNC(mod_extforward_uri_handler) {
 	struct addrinfo *addrlist = NULL;
 #endif
 	const char *dst_addr_str = NULL;
-	int i;
 	array *forward_array = NULL;
-	char *real_remote_addr = NULL;
+	const char *real_remote_addr = NULL;
 #ifdef HAVE_IPV6
 #endif
 
@@ -342,7 +365,6 @@ URIHANDLER_FUNC(mod_extforward_uri_handler) {
 		return HANDLER_GO_ON;
 	}
 
-	/* if the remote ip itself is not trusted , then do nothing */
 #ifdef HAVE_IPV6
 	dst_addr_str = inet_ntop(con->dst_addr.plain.sa_family,
 		      con->dst_addr.plain.sa_family == AF_INET6 ?
@@ -353,7 +375,9 @@ URIHANDLER_FUNC(mod_extforward_uri_handler) {
 #else
 	dst_addr_str = inet_ntoa(con->dst_addr.ipv4.sin_addr);
 #endif
-	if (IP_UNTRUSTED == is_proxy_trusted (dst_addr_str, p) ) {
+
+	/* if the remote ip itself is not trusted, then do nothing */
+	if (IP_UNTRUSTED == is_proxy_trusted(dst_addr_str, p)) {
 		if (con->conf.log_request_handling) {
 			log_error_write(srv, __FILE__, __LINE__, "s",
 					"remote address is NOT a trusted proxy, skipping");
@@ -362,46 +386,34 @@ URIHANDLER_FUNC(mod_extforward_uri_handler) {
 		return HANDLER_GO_ON;
 	}
 
+	/* build forward_array from forwarded data_string */
 	forward_array = extract_forward_array(forwarded->value);
-
-	/* Testing shows that multiple headers and multiple values in one header
-	   come in _reverse_ order. So the first one we get is the last one in the request. */
-	for (i = forward_array->used - 1; i >= 0; i--) {
-		data_string *ds = (data_string *) forward_array->data[i];
-		if (ds) {
-			real_remote_addr = ds->value->ptr;
-			break;
-		} else {
-			/* bug ?  bailing out here */
-			break;
-		}
-	}
+	real_remote_addr = last_not_in_array(forward_array, p);
 
 	if (real_remote_addr != NULL) { /* parsed */
 		sock_addr sock;
 		struct addrinfo *addrs_left;
 		server_socket *srv_sock = con->srv_socket;
-		data_string *forwarded_proto = (data_string *) array_get_element(con->request.headers,"X-Forwarded-Proto");
+		data_string *forwarded_proto = (data_string *)array_get_element(con->request.headers, "X-Forwarded-Proto");
 
-		if (forwarded_proto && !strcmp(forwarded_proto->value->ptr, "https"))
+		if (forwarded_proto && !strcmp(forwarded_proto->value->ptr, "https")) {
 			srv_sock->is_proxy_ssl = 1;
-		else
+		} else {
 			srv_sock->is_proxy_ssl = 0;
+		}
 
 		if (con->conf.log_request_handling) {
- 			log_error_write(srv, __FILE__, __LINE__, "ss",
-					"using address:", real_remote_addr);
+ 			log_error_write(srv, __FILE__, __LINE__, "ss", "using address:", real_remote_addr);
 		}
 #ifdef HAVE_IPV6
 		addrlist = ipstr_to_sockaddr(real_remote_addr);
 		sock.plain.sa_family = AF_UNSPEC;
-		for (addrs_left = addrlist; addrs_left != NULL;
-		     addrs_left = addrs_left -> ai_next) {
+		for (addrs_left = addrlist; addrs_left != NULL; addrs_left = addrs_left -> ai_next) {
 			sock.plain.sa_family = addrs_left->ai_family;
-			if ( sock.plain.sa_family == AF_INET ) {
+			if (sock.plain.sa_family == AF_INET) {
 				sock.ipv4.sin_addr = ((struct sockaddr_in*)addrs_left->ai_addr)->sin_addr;
 				break;
-			} else if ( sock.plain.sa_family == AF_INET6 ) {
+			} else if (sock.plain.sa_family == AF_INET6) {
 				sock.ipv6.sin6_addr = ((struct sockaddr_in6*)addrs_left->ai_addr)->sin6_addr;
 				break;
 			}
@@ -436,7 +448,7 @@ URIHANDLER_FUNC(mod_extforward_uri_handler) {
 		if (addrlist != NULL ) freeaddrinfo(addrlist);
 #endif
 	}
-   	array_free(forward_array);
+	array_free(forward_array);
 
 	/* not found */
 	return HANDLER_GO_ON;
