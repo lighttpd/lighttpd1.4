@@ -21,6 +21,8 @@ NEWS
   * generate ETag and Last-Modified headers for mod_ssi based on newest modified include (#1491)
   * support letterhomes in mod_userdir (#1473)
   * support chained proxies in mod_extforward (#1528)
+  * fixed bogus "cgi died ?" if we kill the CGI process on shutdown
+  * fixed ECONNRESET handling in network-openssl
 
 - 1.4.18 - 2007-09-09
 
