@@ -1227,8 +1227,14 @@ TRIGGER_FUNC(cgi_trigger) {
 #if 0
 				log_error_write(srv, __FILE__, __LINE__, "sd", "(debug) cgi exited fine, pid:", p->cgi_pid.ptr[ndx]);
 #endif
+			} else if (WIFSIGNALED(status)) {
+				/* FIXME: what if we killed the CGI script with a kill(..., SIGTERM) ?
+				 */
+				if (WTERMSIG(status) != SIGTERM) {
+					log_error_write(srv, __FILE__, __LINE__, "sd", "cleaning up CGI: process died with signal", WTERMSIG(status));
+				}
 			} else {
-				log_error_write(srv, __FILE__, __LINE__, "s", "cgi died ?");
+				log_error_write(srv, __FILE__, __LINE__, "s", "cleaning up CGI: ended unexpectedly");
 			}
 
 			cgi_pid_del(srv, p, p->cgi_pid.ptr[ndx]);
