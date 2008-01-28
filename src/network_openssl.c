@@ -231,6 +231,7 @@ int network_write_chunkqueue_openssl(server *srv, connection *con, SSL *ssl, chu
 							/* no, but we have errno */
 							switch(errno) {
 							case EPIPE:
+							case ECONNRESET:
 								return -2;
 							default:
 								log_error_write(srv, __FILE__, __LINE__, "sddds", "SSL:",
