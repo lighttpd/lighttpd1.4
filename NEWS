@@ -23,6 +23,7 @@ NEWS
   * support chained proxies in mod_extforward (#1528)
   * fixed bogus "cgi died ?" if we kill the CGI process on shutdown
   * fixed ECONNRESET handling in network-openssl
+  * fixed handling of EAGAIN in network-linux-sendfile (#657)
 
 - 1.4.18 - 2007-09-09
 

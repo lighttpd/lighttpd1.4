@@ -162,6 +162,7 @@ int network_write_chunkqueue_linuxsendfile(server *srv, connection *con, int fd,
 				switch (errno) {
 				case EAGAIN:
 				case EINTR:
+					/* ok, we can't send more, let's try later again */
 					r = 0;
 					break;
 				case EPIPE:
@@ -172,9 +173,7 @@ int network_write_chunkqueue_linuxsendfile(server *srv, connection *con, int fd,
 							"sendfile failed:", strerror(errno), fd);
 					return -1;
 				}
-			}
-
-			if (r == 0) {
+			} else if (r == 0) {
 				int oerrno = errno;
 				/* We got an event to write but we wrote nothing
 				 *
