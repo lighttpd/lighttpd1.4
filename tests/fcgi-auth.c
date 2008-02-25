@@ -1,4 +1,6 @@
+#ifdef HAVE_CONFIG_H
 #include "config.h"
+#endif
 #ifdef HAVE_FASTCGI_FASTCGI_H
 #include <fastcgi/fcgi_stdio.h>
 #else
