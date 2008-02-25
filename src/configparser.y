@@ -51,7 +51,7 @@ static data_unset *configparser_get_variable(config_t *ctx, const buffer *key) {
   return NULL;
 }
 
-/* op1 is to be eat/return by this function, op1->key is not cared
+/* op1 is to be eat/return by this function if success, op1->key is not cared
    op2 is left untouch, unreferenced
  */
 data_unset *configparser_merge_data(data_unset *op1, const data_unset *op2) {
@@ -69,7 +69,6 @@ data_unset *configparser_merge_data(data_unset *op1, const data_unset *op2) {
       return (data_unset *)ds;
     } else {
       fprintf(stderr, "data type mismatch, cannot be merge\n");
-      op1->free(op1);
       return NULL;
     }
   }
@@ -142,22 +141,24 @@ metaline ::= EOL.
 %token_destructor                  { buffer_free($$); }
 
 varline ::= key(A) ASSIGN expression(B). {
-  buffer_copy_string_buffer(B->key, A);
-  if (strncmp(A->ptr, "env.", sizeof("env.") - 1) == 0) {
-    fprintf(stderr, "Setting env variable is not supported in conditional %d %s: %s\n",
-        ctx->current->context_ndx,
-        ctx->current->key->ptr, A->ptr);
-    ctx->ok = 0;
-  } else if (NULL == array_get_element(ctx->current->value, B->key->ptr)) {
-    array_insert_unique(ctx->current->value, B);
-    B = NULL;
-  } else {
-    fprintf(stderr, "Duplicate config variable in conditional %d %s: %s\n",
-            ctx->current->context_ndx,
-            ctx->current->key->ptr, B->key->ptr);
-    ctx->ok = 0;
-    B->free(B);
-    B = NULL;
+  if (ctx->ok) {
+    buffer_copy_string_buffer(B->key, A);
+    if (strncmp(A->ptr, "env.", sizeof("env.") - 1) == 0) {
+      fprintf(stderr, "Setting env variable is not supported in conditional %d %s: %s\n",
+          ctx->current->context_ndx,
+          ctx->current->key->ptr, A->ptr);
+      ctx->ok = 0;
+    } else if (NULL == array_get_element(ctx->current->value, B->key->ptr)) {
+      array_insert_unique(ctx->current->value, B);
+      B = NULL;
+    } else {
+      fprintf(stderr, "Duplicate config variable in conditional %d %s: %s\n",
+              ctx->current->context_ndx,
+              ctx->current->key->ptr, B->key->ptr);
+      ctx->ok = 0;
+      B->free(B);
+      B = NULL;
+    }
   }
   buffer_free(A);
   A = NULL;
@@ -187,6 +188,7 @@ varline ::= key(A) APPEND expression(B). {
     du = configparser_merge_data(du, B);
     if (NULL == du) {
       ctx->ok = 0;
+      du->free(du);
     }
     else {
       buffer_copy_string_buffer(du->key, A);
