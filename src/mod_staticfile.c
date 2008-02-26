@@ -450,7 +450,9 @@ URIHANDLER_FUNC(mod_staticfile_subrequest) {
 		}
 	}
 
-	response_header_overwrite(srv, con, CONST_STR_LEN("Accept-Ranges"), CONST_STR_LEN("bytes"));
+	if (con->conf.range_requests) {
+		response_header_overwrite(srv, con, CONST_STR_LEN("Accept-Ranges"), CONST_STR_LEN("bytes"));
+	}
 
 	if (allow_caching) {
 		if (p->conf.etags_used && con->etag_flags != 0 && !buffer_is_empty(sce->etag)) {
