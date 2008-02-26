@@ -67,7 +67,7 @@ static int fdevent_solaris_devpoll_poll(fdevents *ev, int timeout_ms) {
 	int ret;
 
 	dopoll.dp_timeout = timeout_ms;
-	dopoll.dp_nfds = ev->maxfds;
+	dopoll.dp_nfds = ev->maxfds - 1;
 	dopoll.dp_fds = ev->devpollfds;
 
 	ret = ioctl(ev->devpoll_fd, DP_POLL, &dopoll);
