@@ -64,6 +64,7 @@ int stream_open(stream *f, buffer *fn) {
 			NULL);
 
 	if (!mh) {
+/*
 		LPVOID lpMsgBuf;
 		FormatMessage(
 		        FORMAT_MESSAGE_ALLOCATE_BUFFER |
@@ -73,7 +74,7 @@ int stream_open(stream *f, buffer *fn) {
 		        MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
 		        (LPTSTR) &lpMsgBuf,
 		        0, NULL );
-
+*/
 		return -1;
 	}
 
