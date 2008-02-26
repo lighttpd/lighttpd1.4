@@ -697,9 +697,6 @@ int main (int argc, char **argv) {
 			}
 		}
 
-		/* #372: solaris need some fds extra for devpoll */
-		if (rlim.rlim_cur > 10) rlim.rlim_cur -= 10;
-
 		if (srv->event_handler == FDEVENT_HANDLER_SELECT) {
 			srv->max_fds = rlim.rlim_cur < FD_SETSIZE - 200 ? rlim.rlim_cur : FD_SETSIZE - 200;
 		} else {
