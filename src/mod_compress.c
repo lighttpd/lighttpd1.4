@@ -102,6 +102,50 @@ FREE_FUNC(mod_compress_free) {
 	return HANDLER_GO_ON;
 }
 
+// 0 on success, -1 for error
+int mkdir_recursive(char *dir) {
+	char *p = dir;
+
+	if (!dir || !dir[0])
+		return 0;
+
+	while ((p = strchr(p + 1, '/')) != NULL) {
+
+		*p = '\0';
+		if ((mkdir(dir, 0700) != 0) && (errno != EEXIST)) {
+			*p = '/';
+			return -1;
+		}
+
+		*p++ = '/';
+		if (!*p) return 0; // Ignore trailing slash
+	}
+
+	return (mkdir(dir, 0700) != 0) && (errno != EEXIST) ? -1 : 0;
+}
+
+// 0 on success, -1 for error
+int mkdir_for_file(char *filename) {
+	char *p = filename;
+
+	if (!filename || !filename[0])
+		return -1;
+
+	while ((p = strchr(p + 1, '/')) != NULL) {
+
+		*p = '\0';
+		if ((mkdir(filename, 0700) != 0) && (errno != EEXIST)) {
+			*p = '/';
+			return -1;
+		}
+
+		*p++ = '/';
+		if (!*p) return -1; // Unexpected trailing slash in filename
+	}
+
+	return 0;
+}
+
 SETDEFAULTS_FUNC(mod_compress_setdefaults) {
 	plugin_data *p = p_d;
 	size_t i = 0;
@@ -134,6 +178,8 @@ SETDEFAULTS_FUNC(mod_compress_setdefaults) {
 		}
 
 		if (!buffer_is_empty(s->compress_cache_dir)) {
+			mkdir_recursive(s->compress_cache_dir->ptr);
+
 			struct stat st;
 			if (0 != stat(s->compress_cache_dir->ptr, &st)) {
 				log_error_write(srv, __FILE__, __LINE__, "sbs", "can't stat compress.cache-dir",
@@ -342,27 +388,8 @@ static int deflate_file_to_file(server *srv, connection *con, plugin_data *p, bu
 	BUFFER_APPEND_SLASH(p->ofn);
 
 	if (0 == strncmp(con->physical.path->ptr, con->physical.doc_root->ptr, con->physical.doc_root->used-1)) {
-		size_t offset = p->ofn->used - 1;
-		char *dir, *nextdir;
-
 		buffer_append_string(p->ofn, con->physical.path->ptr + con->physical.doc_root->used - 1);
-
 		buffer_copy_string_buffer(p->b, p->ofn);
-
-		/* mkdir -p ... */
-		for (dir = p->b->ptr + offset; NULL != (nextdir = strchr(dir, '/')); dir = nextdir + 1) {
-			*nextdir = '\0';
-
-			if (-1 == mkdir(p->b->ptr, 0700)) {
-				if (errno != EEXIST) {
-					log_error_write(srv, __FILE__, __LINE__, "sbss", "creating cache-directory", p->b, "failed", strerror(errno));
-
-					return -1;
-				}
-			}
-
-			*nextdir = '/';
-		}
 	} else {
 		buffer_append_string_buffer(p->ofn, con->uri.path);
 	}
@@ -383,6 +410,11 @@ static int deflate_file_to_file(server *srv, connection *con, plugin_data *p, bu
 	}
 
 	buffer_append_string_buffer(p->ofn, sce->etag);
+
+	if (-1 == mkdir_for_file(p->ofn->ptr)) {
+		log_error_write(srv, __FILE__, __LINE__, "sb", "couldn't create directory for file", p->ofn);
+		return -1;
+	}
 
 	if (-1 == (ofd = open(p->ofn->ptr, O_WRONLY | O_CREAT | O_EXCL | O_BINARY, 0600))) {
 		if (errno == EEXIST) {
