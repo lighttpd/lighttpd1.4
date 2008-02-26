@@ -648,8 +648,14 @@ handler_t http_response_prepare(server *srv, connection *con) {
 
 		/* if we are still here, no one wanted the file, status 403 is ok I think */
 
-		if (con->mode == DIRECT) {
-			con->http_status = 403;
+		if (con->mode == DIRECT && con->http_status == 0) {
+			switch (con->request.http_method) {
+			case HTTP_METHOD_OPTIONS:
+				con->http_status = 200;
+				break;
+			default:
+				con->http_status = 403;
+			}
 
 			return HANDLER_FINISHED;
 		}
