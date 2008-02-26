@@ -602,6 +602,8 @@ PHYSICALPATH_FUNC(mod_compress_physical) {
 	off_t max_fsize;
 	stat_cache_entry *sce = NULL;
 
+	if (con->mode != DIRECT || con->http_status) return HANDLER_GO_ON;
+
 	/* only GET and POST can get compressed */
 	if (con->request.http_method != HTTP_METHOD_GET &&
 	    con->request.http_method != HTTP_METHOD_POST) {
