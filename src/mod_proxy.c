@@ -1205,7 +1205,7 @@ static handler_t mod_proxy_check_extension(server *srv, connection *con, void *p
 		}
 
 		/* didn't found a higher id, wrap to the start */
-		if (ndx != -1 && max_usage != INT_MAX) {
+		if (ndx == -1 && max_usage != INT_MAX) {
 			ndx = max_usage;
 		}
 
