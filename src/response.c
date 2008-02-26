@@ -553,17 +553,14 @@ handler_t http_response_prepare(server *srv, connection *con) {
 			buffer_copy_string_buffer(srv->tmp_buf, con->physical.path);
 
 			do {
-				struct stat st;
-
 				if (slash) {
 					buffer_copy_string_len(con->physical.path, srv->tmp_buf->ptr, slash - srv->tmp_buf->ptr);
 				} else {
 					buffer_copy_string_buffer(con->physical.path, srv->tmp_buf);
 				}
 
-				if (0 == stat(con->physical.path->ptr, &(st)) &&
-				    S_ISREG(st.st_mode)) {
-					found = 1;
+				if (HANDLER_ERROR != stat_cache_get_entry(srv, con, con->physical.path, &sce)) {
+					found = S_ISREG(sce->st.st_mode);
 					break;
 				}
 
@@ -594,6 +591,20 @@ handler_t http_response_prepare(server *srv, connection *con) {
 
 				return HANDLER_FINISHED;
 			}
+
+#ifdef HAVE_LSTAT
+			if ((sce->is_symlink != 0) && !con->conf.follow_symlink) {
+				con->http_status = 403;
+
+				if (con->conf.log_request_handling) {
+					log_error_write(srv, __FILE__, __LINE__,  "s",  "-- access denied due symlink restriction");
+					log_error_write(srv, __FILE__, __LINE__,  "sb", "Path         :", con->physical.path);
+				}
+
+				buffer_reset(con->physical.path);
+				return HANDLER_FINISHED;
+			};
+#endif
 
 			/* we have a PATHINFO */
 			if (pathinfo) {
