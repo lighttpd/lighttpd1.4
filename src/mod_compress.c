@@ -712,8 +712,16 @@ PHYSICALPATH_FUNC(mod_compress_physical) {
 						}
 					} else if (0 == deflate_file_to_buffer(srv, con, p,
 									       con->physical.path, sce, compression_type)) {
+						buffer *mtime;
 
 						response_header_overwrite(srv, con, CONST_STR_LEN("Content-Encoding"), compression_name, strlen(compression_name));
+
+						mtime = strftime_cache_get(srv, sce->st.st_mtime);
+						response_header_overwrite(srv, con, CONST_STR_LEN("Last-Modified"), CONST_BUF_LEN(mtime));
+
+						etag_mutate(con->physical.etag, sce->etag);
+						response_header_overwrite(srv, con, CONST_STR_LEN("ETag"), CONST_BUF_LEN(con->physical.etag));
+
 						response_header_overwrite(srv, con, CONST_STR_LEN("Content-Type"), CONST_BUF_LEN(sce->content_type));
 
 						return HANDLER_FINISHED;
