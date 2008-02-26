@@ -834,14 +834,8 @@ int connection_reset(server *srv, connection *con) {
 		con->plugin_ctx[pd->id] = NULL;
 	}
 
-#if COND_RESULT_UNSET
-	for (i = srv->config_context->used - 1; i >= 0; i --) {
-		con->cond_cache[i].result = COND_RESULT_UNSET;
-		con->cond_cache[i].patterncount = 0;
-	}
-#else
-	memset(con->cond_cache, 0, sizeof(cond_cache_t) * srv->config_context->used);
-#endif
+	/* The cond_cache gets reset in response.c */
+//	config_cond_cache_reset(srv, con);
 
 #ifdef USE_OPENSSL
 	if (con->ssl_error_want_reuse_buffer) {

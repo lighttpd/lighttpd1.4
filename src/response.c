@@ -19,6 +19,7 @@
 #include "stat_cache.h"
 #include "chunk.h"
 
+#include "configfile.h"
 #include "connections.h"
 
 #include "plugin.h"
@@ -149,6 +150,9 @@ handler_t http_response_prepare(server *srv, connection *con) {
 		 * mod_compress might add headers twice too
 		 *
 		 *  */
+
+		config_cond_cache_reset(srv, con);
+		config_setup_connection(srv, con); // Perhaps this could be removed at other places.
 
 		if (con->conf.log_condition_handling) {
 			log_error_write(srv, __FILE__, __LINE__,  "s",  "run condition");
