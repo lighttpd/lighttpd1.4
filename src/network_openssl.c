@@ -58,31 +58,6 @@ int network_write_chunkqueue_openssl(server *srv, connection *con, SSL *ssl, chu
 		SSL_set_shutdown(ssl, SSL_RECEIVED_SHUTDOWN);
 	}
 
-	/* evil hack for opera 9.01 and 8.54 and earlier
-	 *
-	 * opera hangs if the trainling 0\r\n\r\n is in a seperate SSL-packet
-	 *
-	 * we try to move the packet into the previous mem-chunk if possible
-	 */
-	if ((cq == con->write_queue) &&
-	    (con->response.transfer_encoding & HTTP_TRANSFER_ENCODING_CHUNKED) &&
-	    (con->file_finished)) {
-		/* merge the last chunk into the previous chunk */
-
-		for(c = cq->first; c && c->next && c->next->next; c = c->next);
-
-		if (c &&
-		    c->type == MEM_CHUNK &&
-		    c->next &&
-		    c->next->type == MEM_CHUNK &&
-		    c->next->mem->used == sizeof("0\r\n\r\n") &&
-		    0 == strcmp(c->next->mem->ptr, "0\r\n\r\n")) {
-			buffer_append_string_buffer(c->mem, c->next->mem);
-
-			c->next->mem->used = 0;
-		}
-	}
-
 	for(c = cq->first; c; c = c->next) {
 		int chunk_finished = 0;
 
