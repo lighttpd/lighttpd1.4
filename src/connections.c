@@ -394,7 +394,7 @@ static int connection_handle_write_prepare(server *srv, connection *con) {
 			 * 403 is from the response handler when noone else catched it
 			 *
 			 * */
-			if (con->uri.path->used &&
+			if ((!con->http_status || con->http_status == 200) && con->uri.path->used &&
 			    con->uri.path->ptr[0] != '*') {
 				response_header_insert(srv, con, CONST_STR_LEN("Allow"), CONST_STR_LEN("OPTIONS, GET, HEAD, POST"));
 
