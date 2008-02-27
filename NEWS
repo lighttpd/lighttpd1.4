@@ -43,6 +43,7 @@ NEWS
   * fixed Content-Length header if response body gets removed in connections.c (#1412, part 2)
   * do not generate a "Content-Length: 0" header for HEAD requests, added test too
   * remove compress cache file if compression or write failed (#1150)
+  * fixed body handling of status 300 requests 
 
 - 1.4.18 - 2007-09-09
 
