@@ -41,6 +41,7 @@ NEWS
   * fixed mod-proxy.t to run with a builddir outside of the src dir
   * do not suppress content on "307 Temporary Redirect" (#1412)
   * fixed Content-Length header if response body gets removed in connections.c (#1412, part 2)
+  * do not generate a "Content-Length: 0" header for HEAD requests, added test too
 
 - 1.4.18 - 2007-09-09
 
