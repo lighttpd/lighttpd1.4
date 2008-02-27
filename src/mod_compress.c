@@ -439,6 +439,11 @@ static int deflate_file_to_file(server *srv, connection *con, plugin_data *p, bu
 
 		close(ofd);
 
+		/* Remove the incomplete cache file, so that later hits aren't served from it */
+		if (-1 == unlink(p->ofn->ptr)) {
+			log_error_write(srv, __FILE__, __LINE__, "sbss", "unlinking incomplete cachefile", p->ofn, "failed:", strerror(errno));
+		}
+
 		return -1;
 	}
 
@@ -448,6 +453,12 @@ static int deflate_file_to_file(server *srv, connection *con, plugin_data *p, bu
 
 		close(ofd);
 		close(ifd);
+
+		/* Remove the incomplete cache file, so that later hits aren't served from it */
+		if (-1 == unlink(p->ofn->ptr)) {
+			log_error_write(srv, __FILE__, __LINE__, "sbss", "unlinking incomplete cachefile", p->ofn, "failed:", strerror(errno));
+		}
+
 		return -1;
 	}
 
@@ -470,22 +481,29 @@ static int deflate_file_to_file(server *srv, connection *con, plugin_data *p, bu
 		break;
 	}
 
-	if (-1 == (r = write(ofd, p->b->ptr, p->b->used))) {
-		munmap(start, sce->st.st_size);
-		close(ofd);
-		close(ifd);
-		return -1;
-	}
-
-	if ((size_t)r != p->b->used) {
-
+	if (ret == 0) {
+		r = write(ofd, p->b->ptr, p->b->used);
+		if (-1 == r) {
+			log_error_write(srv, __FILE__, __LINE__, "sbss", "writing cachefile", p->ofn, "failed:", strerror(errno));
+			ret = -1;
+		} else if ((size_t)r != p->b->used) {
+			log_error_write(srv, __FILE__, __LINE__, "sbs", "writing cachefile", p->ofn, "failed: not enough bytes written");
+			ret = -1;
+		}
 	}
 
 	munmap(start, sce->st.st_size);
 	close(ofd);
 	close(ifd);
 
-	if (ret != 0) return -1;
+	if (ret != 0) {
+		/* Remove the incomplete cache file, so that later hits aren't served from it */
+		if (-1 == unlink(p->ofn->ptr)) {
+			log_error_write(srv, __FILE__, __LINE__, "sbss", "unlinking incomplete cachefile", p->ofn, "failed:", strerror(errno));
+		}
+
+		return -1;
+	}
 
 	buffer_copy_string_buffer(con->physical.path, p->ofn);
 
