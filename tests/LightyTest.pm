@@ -72,7 +72,7 @@ sub stop_proc {
 
 	if (defined $pid) {
 		kill('TERM',$pid) or return -1;
-		select(undef, undef, undef, 0.01);
+		select(undef, undef, undef, 0.1);
 	}
 
 	return 0;
