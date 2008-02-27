@@ -545,11 +545,11 @@ static int connection_handle_write_prepare(server *srv, connection *con) {
 				if (NULL != (ds = (data_string*) array_get_element(con->response.headers, "Content-Length"))) {
 					buffer_reset(ds->value); // Headers with empty values are ignored for output
 				}
-			} else if (qlen >= 0) {
+			} else if (qlen > 0 || con->request.http_method != HTTP_METHOD_HEAD) {
 				/* qlen = 0 is important for Redirects (301, ...) as they MAY have
 				 * a content. Browsers are waiting for a Content otherwise
 				 */
-				buffer_copy_off_t(srv->tmp_buf, chunkqueue_length(con->write_queue));
+				buffer_copy_off_t(srv->tmp_buf, qlen);
 
 				response_header_overwrite(srv, con, CONST_STR_LEN("Content-Length"), CONST_BUF_LEN(srv->tmp_buf));
 			}

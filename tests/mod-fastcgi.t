@@ -7,7 +7,7 @@ BEGIN {
 }
 
 use strict;
-use Test::More tests => 46;
+use Test::More tests => 47;
 use LightyTest;
 
 my $tf = LightyTest->new();
@@ -223,7 +223,7 @@ EOF
 }
 
 SKIP: {
-	skip "no php found", 4 unless -x "/usr/bin/php-cgi"; 
+	skip "no php found", 5 unless -x "/usr/bin/php-cgi"; 
 	$tf->{CONFIGFILE} = 'fastcgi-13.conf';
 	ok($tf->start_proc == 0, "Starting lighttpd with $tf->{CONFIGFILE}") or die();
 	$t->{REQUEST}  = ( <<EOF
@@ -233,6 +233,15 @@ EOF
  );
 	$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200 } ];
 	ok($tf->handle_http($t) == 0, 'FastCGI + local spawning');
+
+	$t->{REQUEST} = ( <<EOF
+HEAD /indexfile/index.php HTTP/1.0
+Host: www.example.org
+EOF
+ );
+	$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200, '-Content-Length' => '0' } ];
+	# Of course a valid content-length != 0 would be ok, but we assume for now that such one is not generated.
+	ok($tf->handle_http($t) == 0, 'Check for buggy content length with HEAD');
 
 	$t->{REQUEST}  = ( <<EOF
 GET /get-env.php?env=MAIL HTTP/1.0
