@@ -501,6 +501,7 @@ static int connection_handle_write_prepare(server *srv, connection *con) {
 	case 301:
 	case 302:
 	case 303:
+	case 307:
 		break;
 
 	case 206: /* write_queue is already prepared */

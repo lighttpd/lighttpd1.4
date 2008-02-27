@@ -39,6 +39,7 @@ NEWS
   * fixed RoundRobin in mod_proxy (#516)
   * check for symlinks after successful pathinfo matching (#1574)
   * fixed mod-proxy.t to run with a builddir outside of the src dir
+  * do not suppress content on "307 Temporary Redirect" (#1412)
 
 - 1.4.18 - 2007-09-09
 
