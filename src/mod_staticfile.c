@@ -352,7 +352,7 @@ URIHANDLER_FUNC(mod_staticfile_subrequest) {
 	size_t k;
 	int s_len;
 	stat_cache_entry *sce = NULL;
-	buffer *mtime;
+	buffer *mtime = NULL;
 	data_string *ds;
 	int allow_caching = 1;
 
