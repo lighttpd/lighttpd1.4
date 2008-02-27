@@ -398,6 +398,9 @@ static int connection_handle_write_prepare(server *srv, connection *con) {
 			    con->uri.path->ptr[0] != '*') {
 				response_header_insert(srv, con, CONST_STR_LEN("Allow"), CONST_STR_LEN("OPTIONS, GET, HEAD, POST"));
 
+				con->response.transfer_encoding &= ~HTTP_TRANSFER_ENCODING_CHUNKED;
+				con->parsed_response &= ~HTTP_CONTENT_LENGTH;
+
 				con->http_status = 200;
 				con->file_finished = 1;
 
@@ -512,12 +515,12 @@ static int connection_handle_write_prepare(server *srv, connection *con) {
 	default:
 		/* disable chunked encoding again as we have no body */
 		con->response.transfer_encoding &= ~HTTP_TRANSFER_ENCODING_CHUNKED;
+		con->parsed_response &= ~HTTP_CONTENT_LENGTH;
 		chunkqueue_reset(con->write_queue);
 
 		con->file_finished = 1;
 		break;
 	}
-
 
 	if (con->file_finished) {
 		/* we have all the content and chunked encoding is not used, set a content-length */
@@ -537,7 +540,11 @@ static int connection_handle_write_prepare(server *srv, connection *con) {
 			if ((con->http_status >= 100 && con->http_status < 200) ||
 			    con->http_status == 204 ||
 			    con->http_status == 304) {
+				data_string *ds;
 				/* no Content-Body, no Content-Length */
+				if (NULL != (ds = (data_string*) array_get_element(con->response.headers, "Content-Length"))) {
+					buffer_reset(ds->value); // Headers with empty values are ignored for output
+				}
 			} else if (qlen >= 0) {
 				/* qlen = 0 is important for Redirects (301, ...) as they MAY have
 				 * a content. Browsers are waiting for a Content otherwise
@@ -583,6 +590,8 @@ static int connection_handle_write_prepare(server *srv, connection *con) {
 		 * a HEAD request has the same as a GET 
 		 * without the content
 		 */
+		con->file_finished = 1;
+
 		chunkqueue_reset(con->write_queue);
 		con->response.transfer_encoding &= ~HTTP_TRANSFER_ENCODING_CHUNKED;
 	}
