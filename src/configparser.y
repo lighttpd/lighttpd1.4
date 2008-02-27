@@ -122,6 +122,7 @@ metaline ::= EOL.
 %type       aelement               {data_unset *}
 %type       condline               {data_config *}
 %type       condlines              {data_config *}
+%type       global                 {data_config *}
 %type       aelements              {array *}
 %type       array                  {array *}
 %type       key                    {buffer *}
