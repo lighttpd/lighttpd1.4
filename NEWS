@@ -13,7 +13,7 @@ NEWS
   * fixed a bug that made /-prefixed extensions being handled also when
     matching the end of the uri in fcgi,scgi and proxy modules (#1489)
   * print error if X-LIGHTTPD-send-file cannot be done; reset header
-    Content-Length for send-file. Patches by Stefan Buhler
+    Content-Length for send-file. Patches by Stefan Buehler
   * prevent crash in certain php-fcgi configurations (#841)
   * add IdleServers and Scoreboard directives in ?auto mode for mod_status (#1507)
   * open log immediately after daemonizing, fixes SIGPIPEs on startup  (#165)
@@ -24,6 +24,21 @@ NEWS
   * fixed bogus "cgi died ?" if we kill the CGI process on shutdown
   * fixed ECONNRESET handling in network-openssl
   * fixed handling of EAGAIN in network-linux-sendfile (#657)
+  * reset conditional cache (#1164)
+  * create directories in mod_compress (was broken with alias/userdir) (#1027)
+  * fixed out of range access in fd array (#1562, #372)
+  * mod_compress should check if the request is already handled, e.g. by fastcgi (#1565)
+  * remove broken workaround for buggy Opera version with ssl/chunked encoding (#285)
+  * generate etag/last-modified header for on-the-fly-compressed files (#1171)
+  * req-method OPTIONS: do not insert default response if request was denied, do not deny OPTIONS by default (#1324)
+  * fixed memory leak on windows (#1347)
+  * fixed building outside of the src dir (#1349)
+  * fixed including of stdint.h/inttypes.h in etag.c (#1413)
+  * do not add Accept-Ranges header if range-request is disabled (#1449)
+  * log the ip of failed auth tries in error.log (enhancement #1544)
+  * fixed RoundRobin in mod_proxy (#516)
+  * check for symlinks after successful pathinfo matching (#1574)
+  * fixed mod-proxy.t to run with a builddir outside of the src dir
 
 - 1.4.18 - 2007-09-09
 
