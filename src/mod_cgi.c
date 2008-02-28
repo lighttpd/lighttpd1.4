@@ -1004,6 +1004,7 @@ static int cgi_create_env(server *srv, connection *con, plugin_data *p, buffer *
 	case -1:
 		/* error */
 		log_error_write(srv, __FILE__, __LINE__, "ss", "fork failed:", strerror(errno));
+		return -1;
 		break;
 	default: {
 		handler_ctx *hctx;
