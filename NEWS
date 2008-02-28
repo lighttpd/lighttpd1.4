@@ -44,6 +44,7 @@ NEWS
   * do not generate a "Content-Length: 0" header for HEAD requests, added test too
   * remove compress cache file if compression or write failed (#1150)
   * fixed body handling of status 300 requests 
+  * spawn-fcgi: only try to connect to unix socket (not tcp) before spawning (#1575)
 
 - 1.4.18 - 2007-09-09
 
