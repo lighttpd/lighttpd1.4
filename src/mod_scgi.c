@@ -1057,6 +1057,9 @@ SETDEFAULTS_FUNC(mod_scgi_set_defaults) {
 						/* a local socket + self spawning */
 						size_t pno;
 
+						/* HACK:  just to make sure the adaptive spawing is disabled */
+						df->min_procs = df->max_procs;
+
 						if (df->min_procs > df->max_procs) df->max_procs = df->min_procs;
 						if (df->max_load_per_proc < 1) df->max_load_per_proc = 0;
 
