@@ -47,6 +47,7 @@ NEWS
   * spawn-fcgi: only try to connect to unix socket (not tcp) before spawning (#1575)
   * fix sending source of cgi script instead of 500 error if fork fails
   * fix min-procs handling in mod_scgi.c, just set to max-procs (patch from #623)
+  * fix sending "408 - Timeout" instead of "410 - Gone" for timedout urls in mod_secdownload (#1440)
 
 - 1.4.18 - 2007-09-09
 
