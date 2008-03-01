@@ -39,9 +39,9 @@ GET /sec/$m/$thex$f HTTP/1.0
 Host: vvv.example.org
 EOF
  );
-$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 408 } ];
+$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 410 } ];
 
-ok($tf->handle_http($t) == 0, 'secdownload - timeout');
+ok($tf->handle_http($t) == 0, 'secdownload - gone (timeout)');
 
 $t->{REQUEST}  = ( <<EOF
 GET /sec$f HTTP/1.0
