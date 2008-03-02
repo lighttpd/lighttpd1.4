@@ -187,9 +187,9 @@ handler_t http_response_prepare(server *srv, connection *con) {
 
 		config_patch_connection(srv, con, COMP_HTTP_SCHEME);    /* Scheme:      */
 		config_patch_connection(srv, con, COMP_HTTP_HOST);      /* Host:        */
-		config_patch_connection(srv, con, COMP_HTTP_REMOTEIP);  /* Client-IP */
+		config_patch_connection(srv, con, COMP_HTTP_REMOTE_IP); /* Client-IP */
 		config_patch_connection(srv, con, COMP_HTTP_REFERER);   /* Referer:     */
-		config_patch_connection(srv, con, COMP_HTTP_USERAGENT); /* User-Agent:  */
+		config_patch_connection(srv, con, COMP_HTTP_USER_AGENT);/* User-Agent:  */
 		config_patch_connection(srv, con, COMP_HTTP_COOKIE);    /* Cookie:  */
 
 		/** their might be a fragment which has to be cut away */
@@ -276,7 +276,6 @@ handler_t http_response_prepare(server *srv, connection *con) {
 		 */
 
 		config_patch_connection(srv, con, COMP_HTTP_URL); /* HTTPurl */
-		config_patch_connection(srv, con, COMP_HTTP_QUERYSTRING); /* HTTPqs */
 
 		/* do we have to downgrade to 1.0 ? */
 		if (!con->conf.allow_http11) {

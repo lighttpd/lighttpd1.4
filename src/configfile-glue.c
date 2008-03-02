@@ -277,7 +277,7 @@ static cond_result_t config_check_cond_nocache(server *srv, connection *con, dat
 		}
 		break;
 	}
-	case COMP_HTTP_REMOTEIP: {
+	case COMP_HTTP_REMOTE_IP: {
 		char *nm_slash;
 		/* handle remoteip limitations
 		 *
@@ -349,7 +349,7 @@ static cond_result_t config_check_cond_nocache(server *srv, connection *con, dat
 		l = con->uri.path;
 		break;
 
-	case COMP_HTTP_QUERYSTRING:
+	case COMP_HTTP_QUERY_STRING:
 		l = con->uri.query;
 		break;
 
@@ -376,7 +376,7 @@ static cond_result_t config_check_cond_nocache(server *srv, connection *con, dat
 		}
 		break;
 	}
-	case COMP_HTTP_USERAGENT: {
+	case COMP_HTTP_USER_AGENT: {
 		data_string *ds;
 		if (NULL != (ds = (data_string *)array_get_element(con->request.headers, "User-Agent"))) {
 			l = ds->value;
@@ -385,7 +385,17 @@ static cond_result_t config_check_cond_nocache(server *srv, connection *con, dat
 		}
 		break;
 	}
+	case COMP_HTTP_REQUEST_METHOD: {
+		const char *method = get_http_method_name(con->request.http_method);
 
+		/* we only have the request method as const char but we need a buffer for comparing */
+
+		buffer_copy_string(srv->tmp_buf, method);
+
+		l = srv->tmp_buf;
+
+		break;
+	}
 	default:
 		return COND_RESULT_FALSE;
 	}
