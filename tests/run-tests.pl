@@ -3,7 +3,7 @@
 use strict;
 
 use Test::Harness qw(&runtests $verbose);
-$verbose=0;
+$verbose = (defined $ENV{'VERBOSE'} ? $ENV{'VERBOSE'} : 0);;
 
 my $srcdir = (defined $ENV{'srcdir'} ? $ENV{'srcdir'} : '.');
 
