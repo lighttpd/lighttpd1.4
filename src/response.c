@@ -191,6 +191,7 @@ handler_t http_response_prepare(server *srv, connection *con) {
 		config_patch_connection(srv, con, COMP_HTTP_REFERER);   /* Referer:     */
 		config_patch_connection(srv, con, COMP_HTTP_USER_AGENT);/* User-Agent:  */
 		config_patch_connection(srv, con, COMP_HTTP_COOKIE);    /* Cookie:  */
+		config_patch_connection(srv, con, COMP_HTTP_REQUEST_METHOD); /* REQUEST_METHOD */
 
 		/** their might be a fragment which has to be cut away */
 		if (NULL != (qstr = strchr(con->request.uri->ptr, '#'))) {
@@ -276,6 +277,7 @@ handler_t http_response_prepare(server *srv, connection *con) {
 		 */
 
 		config_patch_connection(srv, con, COMP_HTTP_URL); /* HTTPurl */
+		config_patch_connection(srv, con, COMP_HTTP_QUERY_STRING); /* HTTPqs */
 
 		/* do we have to downgrade to 1.0 ? */
 		if (!con->conf.allow_http11) {

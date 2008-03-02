@@ -329,7 +329,7 @@ struct addrinfo *ipstr_to_sockaddr(const char *host)
 
 
 static void clean_cond_cache(server *srv, connection *con) {
-	config_cond_cache_reset_item(srv, con, COMP_HTTP_REMOTEIP);
+	config_cond_cache_reset_item(srv, con, COMP_HTTP_REMOTE_IP);
 }
 
 URIHANDLER_FUNC(mod_extforward_uri_handler) {
