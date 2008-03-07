@@ -2352,7 +2352,7 @@ static int fastcgi_get_packet(server *srv, handler_ctx *hctx, fastcgi_response_p
 		/* no header */
 		buffer_free(packet->b);
 
-		log_error_write(srv, __FILE__, __LINE__, "s", "FastCGI: header too small");
+		log_error_write(srv, __FILE__, __LINE__, "sdsds", "FastCGI: header too small:", packet->b->used, "bytes <", sizeof(FCGI_Header), "bytes");
 		return -1;
 	}
 
