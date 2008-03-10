@@ -266,18 +266,30 @@ if test "x$cross_compiling" = xno -a "$WITH_PCRE" != "no"; then
       ])
     ])
     LIBS="$OLDLIBS"
+  else
+     AC_MSG_ERROR([pcre-config not found, install the pcre-devel package and build with --without-pcre])
   fi
 fi
 
 AC_SUBST(PCRE_LIB)
 
-AC_CHECK_LIB(z, deflate, [
-  AC_CHECK_HEADERS([zlib.h],[
-    Z_LIB=-lz
-    AC_DEFINE([HAVE_LIBZ], [1], [libz])
-    AC_DEFINE([HAVE_ZLIB_H], [1])
+AC_MSG_CHECKING(for zlib support)
+AC_ARG_WITH(zlib, AC_HELP_STRING([--with-zlib],[Enable zlib support for mod_compress]),
+    [WITH_ZLIB=$withval],[WITH_ZLIB=yes])
+AC_MSG_RESULT([$WITH_ZLIB])
+
+if test "$WITH_ZLIB" != "no"; then
+  AC_CHECK_LIB(z, deflate, [
+    AC_CHECK_HEADERS([zlib.h],[
+      Z_LIB=-lz
+      AC_DEFINE([HAVE_LIBZ], [1], [libz])
+      AC_DEFINE([HAVE_ZLIB_H], [1])
+    ])
   ])
-])
+  if test x$Z_LIB = x; then
+     AC_MSG_ERROR([zlib-headers and/or libs where not found, install them or build with --without-zlib])
+  fi
+fi
 AC_SUBST(Z_LIB)
 
 AC_MSG_CHECKING(for bzip2 support)
@@ -293,6 +305,9 @@ if test "$WITH_BZIP2" != "no"; then
       AC_DEFINE([HAVE_BZLIB_H], [1])
     ])
   ])
+  if test x$BZ_LIB = x; then
+     AC_MSG_ERROR([bzip2-headers and/or libs where not found, install them or build with --without-bzip2])
+  fi
 fi
 AC_SUBST(BZ_LIB)
 
@@ -324,6 +339,10 @@ if test "$WITH_FAM" != "no"; then
   LIBS=$FAM_LIBS
   AC_CHECK_FUNCS([FAMNoExists])
   LIBS=$OLD_LIBS
+  
+  if test x$FAM_LIBS = x; then
+     AC_MSG_ERROR([fam/gamin-headers and/or libs where not found, install them or build with --without-fam])
+  fi
 fi
 
 AC_MSG_CHECKING(for properties in mod_webdav)
