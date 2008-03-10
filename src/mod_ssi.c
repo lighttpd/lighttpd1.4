@@ -728,50 +728,57 @@ static int process_ssi_stmt(server *srv, connection *con, plugin_data *p,
 			/* father */
 			int status;
 			ssize_t r;
+			int was_interrupted = 0;
 
 			close(from_exec_fds[1]);
 
 			/* wait for the client to end */
 
 			/*
-			 * FIXME: if we get interrupted by a SIGCHILD we count this as error
-			 *
-			 * for now it only happened on OpenBSD.
-			 *
-			 * that leads to zombies and missing output
+			 * OpenBSD and Solaris send a EINTR on SIGCHILD even if we ignore it
 			 */
-			if (-1 == waitpid(pid, &status, 0)) {
-				log_error_write(srv, __FILE__, __LINE__, "ss", "waitpid failed:", strerror(errno));
-			} else if (WIFEXITED(status)) {
-				int toread;
-				/* read everything from client and paste it into the output */
-
-				while(1) {
-					if (ioctl(from_exec_fds[0], FIONREAD, &toread)) {
-						log_error_write(srv, __FILE__, __LINE__, "s",
-							"unexpected end-of-file (perhaps the ssi-exec process died)");
-						return -1;
-					}
-
-					if (toread > 0) {
-						b = chunkqueue_get_append_buffer(con->write_queue);
-
-						buffer_prepare_copy(b, toread + 1);
-
-						if ((r = read(from_exec_fds[0], b->ptr, b->size - 1)) < 0) {
-							/* read failed */
-							break;
-						} else {
-							b->used = r;
-							b->ptr[b->used++] = '\0';
-						}
+			do {
+				if (-1 == waitpid(pid, &status, 0)) {
+					if (errno == EINTR) {
+						was_interrupted++;
 					} else {
-						break;
+						was_interrupted = 0;
+						log_error_write(srv, __FILE__, __LINE__, "ss", "waitpid failed:", strerror(errno));
 					}
+				} else if (WIFEXITED(status)) {
+					int toread;
+					/* read everything from client and paste it into the output */
+					was_interrupted = 0;
+	
+					while(1) {
+						if (ioctl(from_exec_fds[0], FIONREAD, &toread)) {
+							log_error_write(srv, __FILE__, __LINE__, "s",
+								"unexpected end-of-file (perhaps the ssi-exec process died)");
+							return -1;
+						}
+	
+						if (toread > 0) {
+							b = chunkqueue_get_append_buffer(con->write_queue);
+	
+							buffer_prepare_copy(b, toread + 1);
+	
+							if ((r = read(from_exec_fds[0], b->ptr, b->size - 1)) < 0) {
+								/* read failed */
+								break;
+							} else {
+								b->used = r;
+								b->ptr[b->used++] = '\0';
+							}
+						} else {
+							break;
+						}
+					}
+				} else {
+					was_interrupted = 0;
+					log_error_write(srv, __FILE__, __LINE__, "s", "process exited abnormally");
 				}
-			} else {
-				log_error_write(srv, __FILE__, __LINE__, "s", "process exited abnormally");
-			}
+			} while (was_interrupted > 0 && was_interrupted < 4); /* if waitpid() gets interrupted, retry, but max 4 times */
+
 			close(from_exec_fds[0]);
 
 			break;
