@@ -92,6 +92,8 @@ sub start_proc {
 	unlink($self->{LIGHTTPD_PIDFILE});
 	if (defined $ENV{"TRACEME"} && $ENV{"TRACEME"} eq 'strace') {
 		system("strace -tt -s 512 -o strace ".$self->{LIGHTTPD_PATH}." -D -f ".$self->{SRCDIR}."/".$self->{CONFIGFILE}." -m ".$self->{MODULES_PATH}." &");
+	} elsif (defined $ENV{"TRACEME"} && $ENV{"TRACEME"} eq 'truss') {
+		system("/usr/dtrctkit/bin/dtruss -d -e ".$self->{LIGHTTPD_PATH}." -D -f ".$self->{SRCDIR}."/".$self->{CONFIGFILE}." -m ".$self->{MODULES_PATH}." 2> strace &");
 	} elsif (defined $ENV{"TRACEME"} && $ENV{"TRACEME"} eq 'valgrind') {
 		system("valgrind --tool=memcheck --show-reachable=yes --leak-check=yes --log-file=valgrind ".$self->{LIGHTTPD_PATH}." -D -f ".$self->{SRCDIR}."/".$self->{CONFIGFILE}." -m ".$self->{MODULES_PATH}." &");
 	} else {
