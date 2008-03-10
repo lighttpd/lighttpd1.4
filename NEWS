@@ -26,7 +26,7 @@ NEWS
   * fixed handling of EAGAIN in network-linux-sendfile (#657)
   * reset conditional cache (#1164)
   * create directories in mod_compress (was broken with alias/userdir) (#1027)
-  * fixed out of range access in fd array (#1562, #372)
+  * fixed out of range access in fd array (#1562, #372) (CVE-2008-0983)
   * mod_compress should check if the request is already handled, e.g. by fastcgi (#1565)
   * remove broken workaround for buggy Opera version with ssl/chunked encoding (#285)
   * generate etag/last-modified header for on-the-fly-compressed files (#1171)
@@ -45,7 +45,7 @@ NEWS
   * remove compress cache file if compression or write failed (#1150)
   * fixed body handling of status 300 requests 
   * spawn-fcgi: only try to connect to unix socket (not tcp) before spawning (#1575)
-  * fix sending source of cgi script instead of 500 error if fork fails
+  * fix sending source of cgi script instead of 500 error if fork fails (CVE-2008-1111)
   * fix min-procs handling in mod_scgi.c, just set to max-procs (patch from #623)
   * fix sending "408 - Timeout" instead of "410 - Gone" for timedout urls in mod_secdownload (#1440)
   * workaround #1587: require userdir.path to be set to enable mod_userdir (empty string allowed)
