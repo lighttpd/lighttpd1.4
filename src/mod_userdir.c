@@ -177,6 +177,11 @@ URIHANDLER_FUNC(mod_userdir_docroot_handler) {
 
 	mod_userdir_patch_connection(srv, con, p);
 
+	/* enforce the userdir.path to be set in the config, ugly fix for #1587;
+	 * should be replaced with a clean .enabled option in 1.5
+	 */
+	if (p->conf.path->used == 0) return HANDLER_GO_ON;
+
 	uri_len = con->uri.path->used - 1;
 
 	/* /~user/foo.html -> /home/user/public_html/foo.html */
