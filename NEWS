@@ -48,7 +48,7 @@ NEWS
   * fix sending source of cgi script instead of 500 error if fork fails (CVE-2008-1111)
   * fix min-procs handling in mod_scgi.c, just set to max-procs (patch from #623)
   * fix sending "408 - Timeout" instead of "410 - Gone" for timedout urls in mod_secdownload (#1440)
-  * workaround #1587: require userdir.path to be set to enable mod_userdir (empty string allowed)
+  * workaround #1587: require userdir.path to be set to enable mod_userdir (empty string allowed) (CVE-2008-1270)
   * make configure checks for --with-pcre, --with-zlib and --with-bzip2 failing if the headers aren't found
   * fixed handling of waitpid() == EINTR mod_ssi on solaris 
 
