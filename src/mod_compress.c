@@ -178,9 +178,9 @@ SETDEFAULTS_FUNC(mod_compress_setdefaults) {
 		}
 
 		if (!buffer_is_empty(s->compress_cache_dir)) {
+			struct stat st;
 			mkdir_recursive(s->compress_cache_dir->ptr);
 
-			struct stat st;
 			if (0 != stat(s->compress_cache_dir->ptr, &st)) {
 				log_error_write(srv, __FILE__, __LINE__, "sbs", "can't stat compress.cache-dir",
 						s->compress_cache_dir, strerror(errno));
