@@ -6,6 +6,7 @@ NEWS
 - 1.4.20 -
 
   * Fix mod_compress to compile with old gcc version (#1592)
+  * Fix mod_extforward to compile with old gcc version (#1591)
 
 - 1.4.19 - 2008-03-10
 
