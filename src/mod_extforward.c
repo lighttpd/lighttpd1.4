@@ -281,8 +281,9 @@ static int is_proxy_trusted(const char *ipstr, plugin_data *p)
 static const char *last_not_in_array(array *a, plugin_data *p)
 {
 	array *forwarder = p->conf.forwarder;
+	int i;
 
-	for (int i = a->used - 1; i >= 0; i--) {
+	for (i = a->used - 1; i >= 0; i--) {
 		data_string *ds = (data_string *)a->data[i];
 		const char *ip = ds->value->ptr;
 
