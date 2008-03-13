@@ -3,7 +3,11 @@
 NEWS
 ====
 
-- 1.4.19 -
+- 1.4.20 -
+
+  *
+
+- 1.4.19 - 2008-03-10
 
   * added support for If-Range: <date> (#1346)
   * added support for matching $HTTP["scheme"] in configs
