@@ -529,7 +529,7 @@ int config_check_cond(server *srv, connection *con, data_config *dc) {
 int config_append_cond_match_buffer(connection *con, data_config *dc, buffer *buf, int n)
 {
 	cond_cache_t *cache = &con->cond_cache[dc->context_ndx];
-	if (n > cache->patterncount) {
+	if (n >= cache->patterncount) {
 		return 0;
 	}
 
