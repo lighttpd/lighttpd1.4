@@ -9,6 +9,7 @@ NEWS
   * Fix mod_extforward to compile with old gcc version (#1591)
   * Update documentation for #1587
   * Fix #285 again: read error after SSL_shutdown (thx marton.illes@balabit.com) and clear the error queue before some other calls
+  * Fix mod_magnet: enable "request.method" and "request.protocol" in lighty.env (#1308)
 
 - 1.4.19 - 2008-03-10
 

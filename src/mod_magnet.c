@@ -414,10 +414,16 @@ static buffer *magnet_env_get_buffer(server *srv, connection *con, const char *k
 	case MAGNET_ENV_URI_AUTHORITY: dest = con->uri.authority; break;
 	case MAGNET_ENV_URI_QUERY: dest = con->uri.query; break;
 
-	case MAGNET_ENV_REQUEST_METHOD:   break;
+	case MAGNET_ENV_REQUEST_METHOD:
+		buffer_copy_string(srv->tmp_buf, get_http_method_name(con->request.http_method));
+		dest = srv->tmp_buf;
+		break;
 	case MAGNET_ENV_REQUEST_URI:      dest = con->request.uri; break;
 	case MAGNET_ENV_REQUEST_ORIG_URI: dest = con->request.orig_uri; break;
-	case MAGNET_ENV_REQUEST_PROTOCOL: break;
+	case MAGNET_ENV_REQUEST_PROTOCOL:
+		buffer_copy_string(srv->tmp_buf, get_http_version_name(con->request.http_version));
+		dest = srv->tmp_buf;
+		break;
 
 	case MAGNET_ENV_UNSET: break;
 	}
