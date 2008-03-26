@@ -199,6 +199,7 @@ static int connection_handle_read_ssl(server *srv, connection *con) {
 
 	/* don't resize the buffer if we were in SSL_ERROR_WANT_* */
 
+	ERR_clear_error();
 	do {
 		if (!con->ssl_error_want_reuse_buffer) {
 			b = buffer_init();
@@ -1669,13 +1670,16 @@ int connection_state_machine(server *srv, connection *con) {
 #ifdef USE_OPENSSL
 			if (srv_sock->is_ssl) {
 				int ret;
+				ERR_clear_error();
 				switch ((ret = SSL_shutdown(con->ssl))) {
 				case 1:
 					/* ok */
 					break;
 				case 0:
-					SSL_shutdown(con->ssl);
-					break;
+					ERR_clear_error();
+					if ((ret = SSL_shutdown(con->ssl)) == 1) break;
+
+					// fall through
 				default:
 					log_error_write(srv, __FILE__, __LINE__, "sds", "SSL:",
 							SSL_get_error(con->ssl, ret),
