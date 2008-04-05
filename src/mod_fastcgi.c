@@ -2544,7 +2544,10 @@ static int fcgi_demux_response(server *srv, handler_ctx *hctx) {
 					stat_cache_entry *sce;
 
 					if (HANDLER_ERROR != stat_cache_get_entry(srv, con, ds->value, &sce)) {
-						data_string *dcls = data_string_init();
+						data_string *dcls;
+						if (NULL == (dcls = (data_string *)array_get_unused_element(con->response.headers, TYPE_STRING))) {
+							dcls = data_response_init();
+						}
 						/* found */
 						http_chunk_append_file(srv, con, ds->value, 0, sce->st.st_size);
 						hctx->send_content_body = 0; /* ignore the content */
