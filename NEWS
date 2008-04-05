@@ -11,6 +11,7 @@ NEWS
   * Fix #285 again: read error after SSL_shutdown (thx marton.illes@balabit.com) and clear the error queue before some other calls (CVE-2008-1531)
   * Fix mod_magnet: enable "request.method" and "request.protocol" in lighty.env (#1308)
   * Fix segfault for appending matched parts if there was no regex matching (just give empty strings) (#1601)
+  * Use data_response_init in mod_fastcgi x-sendfile handling for response.headers, fix a small "memleak" (#1628)
 
 - 1.4.19 - 2008-03-10
 
