@@ -1680,7 +1680,7 @@ int connection_state_machine(server *srv, connection *con) {
 					ERR_clear_error();
 					if (-1 != (ret = SSL_shutdown(con->ssl))) break;
 
-					// fall through
+					/* fall through */
 				default:
 
 					switch ((ssl_r = SSL_get_error(con->ssl, ret))) {
@@ -1697,7 +1697,7 @@ int connection_state_machine(server *srv, connection *con) {
 							} while((err = ERR_get_error()));
 						} else {
 							log_error_write(srv, __FILE__, __LINE__, "sddds", "SSL (error):",
-									ssl_r, r, errno,
+									ssl_r, ret, errno,
 									strerror(errno));
 						}
 	
