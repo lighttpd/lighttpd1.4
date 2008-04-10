@@ -101,7 +101,7 @@ int http_response_write_header(server *srv, connection *con) {
 	if (!have_server) {
 		if (buffer_is_empty(con->conf.server_tag)) {
 			BUFFER_APPEND_STRING_CONST(b, "\r\nServer: " PACKAGE_NAME "/" PACKAGE_VERSION);
-		} else {
+		} else if (con->conf.server_tag->used > 1) {
 			BUFFER_APPEND_STRING_CONST(b, "\r\nServer: ");
 			buffer_append_string_encoded(b, CONST_BUF_LEN(con->conf.server_tag), ENCODING_HTTP_HEADER);
 		}
