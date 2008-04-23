@@ -3077,7 +3077,7 @@ SUBREQUEST_FUNC(mod_fastcgi_handle_subrequest) {
 
 		/* check if the next server has no load. */
 		ndx = hctx->ext->last_used_ndx + 1;
-		if(ndx >= hctx->ext->used || ndx < 0) ndx = 0;
+		if(ndx >= (int) hctx->ext->used || ndx < 0) ndx = 0;
 		host = hctx->ext->hosts[ndx];
 		if (host->load > 0) {
 			/* get backend with the least load. */
@@ -3483,13 +3483,12 @@ static handler_t fcgi_check_extension(server *srv, connection *con, void *p_d, i
 
 			ct_len = extension->key->used - 1;
 
-			if (s_len < ct_len) continue;
-
-			/* check extension in the form "/fcgi_pattern" */
-			if (*(extension->key->ptr) == '/') {
-				if (strncmp(fn->ptr, extension->key->ptr, ct_len) == 0)
+			/* check _url_ in the form "/fcgi_pattern" */
+			if (extension->key->ptr[0] == '/') {
+				if ((ct_len <= con->uri.path->used -1) &&
+				    (strncmp(con->uri.path->ptr, extension->key->ptr, ct_len) == 0))
 					break;
-			} else if (0 == strncmp(fn->ptr + s_len - ct_len, extension->key->ptr, ct_len)) {
+			} else if ((ct_len <= s_len) && (0 == strncmp(fn->ptr + s_len - ct_len, extension->key->ptr, ct_len))) {
 				/* check extension in the form ".fcg" */
 				break;
 			}
