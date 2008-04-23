@@ -3,7 +3,6 @@ Makefile.in
 configure
 depcomp
 config.*
-lighttpd.spec
 mkinstalldirs
 distribute.sh
 autom4te.cache

@@ -1,3 +1,3 @@
 SUBDIRS=src doc tests cygwin openwrt
 
-EXTRA_DIST=lighttpd.spec autogen.sh SConstruct
+EXTRA_DIST=autogen.sh SConstruct

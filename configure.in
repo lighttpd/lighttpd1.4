@@ -553,7 +553,7 @@ AC_CONFIG_FILES([Makefile src/Makefile doc/Makefile tests/Makefile \
 		 tests/docroot/www/go/Makefile \
 		 tests/docroot/www/indexfile/Makefile \
 		 tests/docroot/www/expire/Makefile \
-		 lighttpd.spec distribute.sh cygwin/Makefile cygwin/lighttpd.README
+		 distribute.sh cygwin/Makefile cygwin/lighttpd.README
 		 openwrt/Makefile openwrt/control openwrt/lighttpd.mk])
 AC_OUTPUT
 
