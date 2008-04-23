@@ -1058,8 +1058,9 @@ static int cgi_create_env(server *srv, connection *con, plugin_data *p, buffer *
 						switch(errno) {
 						case ENOSPC:
 							con->http_status = 507;
-
 							break;
+						case EINTR:
+							continue;
 						default:
 							con->http_status = 403;
 							break;
@@ -1071,8 +1072,9 @@ static int cgi_create_env(server *srv, connection *con, plugin_data *p, buffer *
 						switch(errno) {
 						case ENOSPC:
 							con->http_status = 507;
-
 							break;
+						case EINTR:
+							continue;
 						default:
 							con->http_status = 403;
 							break;
@@ -1087,6 +1089,8 @@ static int cgi_create_env(server *srv, connection *con, plugin_data *p, buffer *
 					c->offset += r;
 					cq->bytes_out += r;
 				} else {
+					log_error_write(srv, __FILE__, __LINE__, "ss", "write() failed due to: ", strerror(errno)); 
+					con->http_status = 500;
 					break;
 				}
 				chunkqueue_remove_finished_chunks(cq);
