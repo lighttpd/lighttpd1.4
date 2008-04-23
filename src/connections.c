@@ -545,7 +545,7 @@ static int connection_handle_write_prepare(server *srv, connection *con) {
 				data_string *ds;
 				/* no Content-Body, no Content-Length */
 				if (NULL != (ds = (data_string*) array_get_element(con->response.headers, "Content-Length"))) {
-					buffer_reset(ds->value); // Headers with empty values are ignored for output
+					buffer_reset(ds->value); /* Headers with empty values are ignored for output */
 				}
 			} else if (qlen > 0 || con->request.http_method != HTTP_METHOD_HEAD) {
 				/* qlen = 0 is important for Redirects (301, ...) as they MAY have
@@ -847,7 +847,7 @@ int connection_reset(server *srv, connection *con) {
 	}
 
 	/* The cond_cache gets reset in response.c */
-//	config_cond_cache_reset(srv, con);
+	/* config_cond_cache_reset(srv, con); */
 
 #ifdef USE_OPENSSL
 	if (con->ssl_error_want_reuse_buffer) {
