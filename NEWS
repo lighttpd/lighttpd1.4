@@ -15,6 +15,7 @@ NEWS
   * Don't send empty Server headers (#1620)
   * Fix conditional interpretation of core options
   * Enable escaping of % and $ in redirect/rewrite; only two cases changed their behaviour: "%%" => "%", "$$" => "$"
+  * Fix accesslog port (should be port from the connection, not the "server.port") (#1618)
 
 - 1.4.19 - 2008-03-10
 
