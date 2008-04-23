@@ -215,8 +215,7 @@ static handler_t mod_redirect_uri_handler(server *srv, connection *con, void *p_
 
 			start = 0; end = pattern_len;
 			for (k = 0; k < pattern_len; k++) {
-				if ((pattern[k] == '$' || pattern[k] == '%') &&
-				    isdigit((unsigned char)pattern[k + 1])) {
+				if (pattern[k] == '$' || pattern[k] == '%') {
 					/* got one */
 
 					size_t num = pattern[k + 1] - '0';
@@ -225,7 +224,10 @@ static handler_t mod_redirect_uri_handler(server *srv, connection *con, void *p_
 
 					buffer_append_string_len(p->location, pattern + start, end - start);
 
-					if (pattern[k] == '$') {
+					if (!isdigit((unsigned char)pattern[k + 1])) {
+						/* enable escape: "%%" => "%", "%a" => "%a", "$$" => "$" */
+						buffer_append_string_len(p->location, pattern+k, pattern[k] == pattern[k+1] ? 1 : 2);
+					} else if (pattern[k] == '$') {
 						/* n is always > 0 */
 						if (num < (size_t)n) {
 							buffer_append_string(p->location, list[num]);

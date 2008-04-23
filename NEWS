@@ -14,6 +14,7 @@ NEWS
   * Use data_response_init in mod_fastcgi x-sendfile handling for response.headers, fix a small "memleak" (#1628)
   * Don't send empty Server headers (#1620)
   * Fix conditional interpretation of core options
+  * Enable escaping of % and $ in redirect/rewrite; only two cases changed their behaviour: "%%" => "%", "$$" => "$"
 
 - 1.4.19 - 2008-03-10
 

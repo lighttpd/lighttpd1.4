@@ -385,8 +385,7 @@ URIHANDLER_FUNC(mod_rewrite_uri_handler) {
 
 			start = 0; end = pattern_len;
 			for (k = 0; k < pattern_len; k++) {
-				if ((pattern[k] == '$' || pattern[k] == '%') &&
-				    isdigit((unsigned char)pattern[k + 1])) {
+				if (pattern[k] == '$' || pattern[k] == '%') {
 					/* got one */
 
 					size_t num = pattern[k + 1] - '0';
@@ -395,7 +394,10 @@ URIHANDLER_FUNC(mod_rewrite_uri_handler) {
 
 					buffer_append_string_len(con->request.uri, pattern + start, end - start);
 
-					if (pattern[k] == '$') {
+					if (!isdigit((unsigned char)pattern[k + 1])) {
+						/* enable escape: "%%" => "%", "%a" => "%a", "$$" => "$" */
+						buffer_append_string_len(con->request.uri, pattern+k, pattern[k] == pattern[k+1] ? 1 : 2);
+					} else if (pattern[k] == '$') {
 						/* n is always > 0 */
 						if (num < (size_t)n) {
 							buffer_append_string(con->request.uri, list[num]);
