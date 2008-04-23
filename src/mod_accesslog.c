@@ -806,7 +806,14 @@ REQUESTDONE_FUNC(log_access_write) {
 				buffer_append_string(b, "%");
 				break;
 			case FORMAT_SERVER_PORT:
-				buffer_append_long(b, srv->srvconf.port);
+				{
+					char *colon = strchr(((server_socket*)(con->srv_socket))->srv_token->ptr, ':');
+					if (colon) {
+						buffer_append_string(b, colon+1);
+					} else {
+						buffer_append_long(b, srv->srvconf.port);
+					}
+				}
 				break;
 			case FORMAT_QUERY_STRING:
 				buffer_append_string_buffer(b, con->uri.query);
