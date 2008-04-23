@@ -305,9 +305,6 @@ int config_patch_connection(server *srv, connection *con, comp_key_t comp) {
 		data_config *dc = (data_config *)srv->config_context->data[i];
 		specific_config *s = srv->config_storage[i];
 
-		/* not our stage */
-		if (comp != dc->comp) continue;
-
 		/* condition didn't match */
 		if (!config_check_cond(srv, con, dc)) continue;
 
