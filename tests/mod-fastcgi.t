@@ -65,7 +65,7 @@ Host: www.example.org
 EOF
  );
 	$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200, 'HTTP-Content' => '/get-server-env.php' } ];
-	ok($tf->handle_http($t) == 0, '$_SERVER["PHP_SELF"]');
+	ok($tf->handle_http($t) == 0, '$_SERVER["SCRIPT_NAME"]');
 
 	$t->{REQUEST}  = ( <<EOF
 GET /get-server-env.php/foo?env=PATH_INFO HTTP/1.0
