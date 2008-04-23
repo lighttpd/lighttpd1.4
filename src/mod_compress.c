@@ -102,7 +102,7 @@ FREE_FUNC(mod_compress_free) {
 	return HANDLER_GO_ON;
 }
 
-// 0 on success, -1 for error
+/* 0 on success, -1 for error */
 int mkdir_recursive(char *dir) {
 	char *p = dir;
 
@@ -118,13 +118,13 @@ int mkdir_recursive(char *dir) {
 		}
 
 		*p++ = '/';
-		if (!*p) return 0; // Ignore trailing slash
+		if (!*p) return 0; /* Ignore trailing slash */
 	}
 
 	return (mkdir(dir, 0700) != 0) && (errno != EEXIST) ? -1 : 0;
 }
 
-// 0 on success, -1 for error
+/* 0 on success, -1 for error */
 int mkdir_for_file(char *filename) {
 	char *p = filename;
 
@@ -140,7 +140,7 @@ int mkdir_for_file(char *filename) {
 		}
 
 		*p++ = '/';
-		if (!*p) return -1; // Unexpected trailing slash in filename
+		if (!*p) return -1; /* Unexpected trailing slash in filename */
 	}
 
 	return 0;

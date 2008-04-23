@@ -893,8 +893,8 @@ int main (int argc, char **argv) {
 		pid_fd = -1;
 	}
 
-	// Close stderr ASAP in the child process to make sure that nothing
-	// is being written to that fd which may not be valid anymore.
+	/* Close stderr ASAP in the child process to make sure that nothing
+	 * is being written to that fd which may not be valid anymore. */
 	if (-1 == log_error_open(srv)) {
 		log_error_write(srv, __FILE__, __LINE__, "s", "Opening errorlog failed. Going down.");
 
