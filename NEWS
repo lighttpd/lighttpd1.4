@@ -17,6 +17,7 @@ NEWS
   * Enable escaping of % and $ in redirect/rewrite; only two cases changed their behaviour: "%%" => "%", "$$" => "$"
   * Fix accesslog port (should be port from the connection, not the "server.port") (#1618)
   * Fix mod_fastcgi prefix matching: match the prefix always against url, not the absolute filepath (regardless of check-local)
+  * Overwrite Content-Type header in mod_dirlisting instead of inserting (#1614), patch by Henrik Holst
 
 - 1.4.19 - 2008-03-10
 
