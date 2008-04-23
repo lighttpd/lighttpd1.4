@@ -20,6 +20,7 @@ NEWS
   * Overwrite Content-Type header in mod_dirlisting instead of inserting (#1614), patch by Henrik Holst
   * Handle EINTR in mod_cgi during write() (#1640)
   * Allow all http status codes by default; disable body only for 204,205 and 304; generate error pages for 4xx and 5xx (#1639)
+  * Fix mod_magnet to set con->mode = p->id if it generates content, so returning 4xx/5xx doesn't append an error page
 
 - 1.4.19 - 2008-03-10
 

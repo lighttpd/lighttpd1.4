@@ -767,11 +767,13 @@ static handler_t magnet_attract(server *srv, connection *con, plugin_data *p, bu
 
 	if (lua_return_value > 99) {
 		con->http_status = lua_return_value;
-		con->file_finished = 1;
 
 		/* try { ...*/
 		if (0 == setjmp(exceptionjmp)) {
 			magnet_attach_content(srv, con, p, L);
+			if (!chunkqueue_is_empty(con->write_queue)) {
+				con->mode = p->id;
+			}
 		} else {
 			/* } catch () { */
 			con->http_status = 500;
