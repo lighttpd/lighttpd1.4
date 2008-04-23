@@ -101,7 +101,7 @@ Connection: close
 Expect: 100-continue
 EOF
  );
-$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.1', 'HTTP-Status' => 417, '-HTTP-Content' => ''} ];
+$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.1', 'HTTP-Status' => 417 } ];
 ok($tf->handle_http($t) == 0, 'Continue, Expect');
 
 ## ranges

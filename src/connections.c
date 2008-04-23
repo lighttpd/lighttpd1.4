@@ -428,20 +428,21 @@ static int connection_handle_write_prepare(server *srv, connection *con) {
 	}
 
 	switch(con->http_status) {
-	case 400: /* class: header + custom body */
-	case 401:
-	case 403:
-	case 404:
-	case 408:
-	case 409:
-	case 411:
-	case 416:
-	case 423:
-	case 500:
-	case 501:
-	case 503:
-	case 505:
+	case 204: /* class: header only */
+	case 205:
+	case 304:
+		/* disable chunked encoding again as we have no body */
+		con->response.transfer_encoding &= ~HTTP_TRANSFER_ENCODING_CHUNKED;
+		con->parsed_response &= ~HTTP_CONTENT_LENGTH;
+		chunkqueue_reset(con->write_queue);
+
+		con->file_finished = 1;
+		break;
+	default: /* class: header + body */
 		if (con->mode != DIRECT) break;
+
+		/* only custom body for 4xx and 5xx */
+		if (con->http_status < 400 || con->http_status >= 600) break;
 
 		con->file_finished = 0;
 
@@ -452,7 +453,8 @@ static int connection_handle_write_prepare(server *srv, connection *con) {
 			stat_cache_entry *sce = NULL;
 
 			buffer_copy_string_buffer(con->physical.path, con->conf.errorfile_prefix);
-			buffer_append_string(con->physical.path, get_http_status_body_name(con->http_status));
+			buffer_append_long(con->physical.path, con->http_status);
+			buffer_append_string_len(con->physical.path, CONST_STR_LEN(".html"));
 
 			if (HANDLER_ERROR != stat_cache_get_entry(srv, con, con->physical.path, &sce)) {
 				con->file_finished = 1;
@@ -498,29 +500,6 @@ static int connection_handle_write_prepare(server *srv, connection *con) {
 
 			response_header_overwrite(srv, con, CONST_STR_LEN("Content-Type"), CONST_STR_LEN("text/html"));
 		}
-		/* fall through */
-	case 207:
-	case 200: /* class: header + body */
-	case 201:
-	case 300:
-	case 301:
-	case 302:
-	case 303:
-	case 307:
-		break;
-
-	case 206: /* write_queue is already prepared */
-		break;
-	case 204:
-	case 205: /* class: header only */
-	case 304:
-	default:
-		/* disable chunked encoding again as we have no body */
-		con->response.transfer_encoding &= ~HTTP_TRANSFER_ENCODING_CHUNKED;
-		con->parsed_response &= ~HTTP_CONTENT_LENGTH;
-		chunkqueue_reset(con->write_queue);
-
-		con->file_finished = 1;
 		break;
 	}
 
