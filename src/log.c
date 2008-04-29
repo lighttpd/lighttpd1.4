@@ -31,6 +31,29 @@
 # define O_LARGEFILE 0
 #endif
 
+/* Close fd and _try_ to get a /dev/null for it instead.
+ * close() alone may trigger some bugs when a
+ * process opens another file and gets fd = STDOUT_FILENO or STDERR_FILENO
+ * and later tries to just print on stdout/stderr
+ *
+ * Returns 0 on success and -1 on failure (fd gets closed in all cases)
+ */
+int openDevNull(int fd) {
+	int tmpfd;
+	close(fd);
+#if defined(__WIN32)
+	/* Cygwin should work with /dev/null */
+	tmpfd = open("nul", O_RDWR);
+#else
+	tmpfd = open("/dev/null", O_RDWR);
+#endif
+	if (tmpfd != -1 && tmpfd != fd) {
+		dup2(tmpfd, fd);
+		close(tmpfd);
+	}
+	return (tmpfd != -1) ? 0 : -1;
+}
+
 /**
  * open the errorlog
  *
@@ -44,7 +67,6 @@
  */
 
 int log_error_open(server *srv) {
-	int fd;
 	int close_stderr = 1;
 
 #ifdef HAVE_SYSLOG_H
@@ -78,15 +100,16 @@ int log_error_open(server *srv) {
 	/* don't close stderr for debugging purposes if run in valgrind */
 	if (RUNNING_ON_VALGRIND) close_stderr = 0;
 #endif
-	if (srv->errorlog_mode == ERRORLOG_STDERR) close_stderr = 0;
+
+	if (srv->errorlog_mode == ERRORLOG_STDERR && srv->srvconf.dont_daemonize) {
+		/* We can only log to stderr in dont-daemonize mode;
+		 * if we do daemonize and no errorlog file is specified, we log into /dev/null
+		 */
+		close_stderr = 0;
+	}
 
 	/* move stderr to /dev/null */
-	if (close_stderr &&
-	    -1 != (fd = open("/dev/null", O_WRONLY))) {
-		close(STDERR_FILENO);
-		dup2(fd, STDERR_FILENO);
-		close(fd);
-	}
+	if (close_stderr) openDevNull(STDERR_FILENO);
 	return 0;
 }
 

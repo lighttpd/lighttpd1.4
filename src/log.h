@@ -3,6 +3,11 @@
 
 #include "server.h"
 
+/* Close fd and _try_ to get a /dev/null for it instead.
+ * Returns 0 on success and -1 on failure (fd gets closed in all cases)
+ */
+int openDevNull(int fd);
+
 #define WP() log_error_write(srv, __FILE__, __LINE__, "");
 
 int log_error_open(server *srv);

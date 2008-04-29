@@ -148,6 +148,8 @@ int mod_rrd_create_pipe(server *srv, plugin_data *p) {
 		args[i++] = dash;
 		args[i++] = NULL;
 
+		openDevNull(STDERR_FILENO);
+	
 		/* we don't need the client socket */
 		for (i = 3; i < 256; i++) {
 			close(i);
@@ -156,7 +158,7 @@ int mod_rrd_create_pipe(server *srv, plugin_data *p) {
 		/* exec the cgi */
 		execv(args[0], args);
 
-		log_error_write(srv, __FILE__, __LINE__, "sss", "spawing rrdtool failed: ", strerror(errno), args[0]);
+		/* log_error_write(srv, __FILE__, __LINE__, "sss", "spawing rrdtool failed: ", strerror(errno), args[0]); */
 
 		/* */
 		SEGFAULT();
