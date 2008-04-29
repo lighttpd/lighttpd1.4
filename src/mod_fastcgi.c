@@ -937,6 +937,8 @@ static int fcgi_spawn_connection(server *srv,
 				close(fcgi_fd);
 			}
 
+			openDevNull(STDERR_FILENO);
+
 			/* we don't need the client socket */
 			for (i = 3; i < 256; i++) {
 				close(i);
@@ -1000,8 +1002,8 @@ static int fcgi_spawn_connection(server *srv,
 			/* exec the cgi */
 			execve(arg.ptr[0], arg.ptr, env.ptr);
 
-			log_error_write(srv, __FILE__, __LINE__, "sbs",
-					"execve failed for:", host->bin_path, strerror(errno));
+			/* log_error_write(srv, __FILE__, __LINE__, "sbs",
+					"execve failed for:", host->bin_path, strerror(errno)); */
 
 			exit(errno);
 

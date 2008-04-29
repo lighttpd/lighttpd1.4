@@ -987,6 +987,8 @@ static int cgi_create_env(server *srv, connection *con, plugin_data *p, buffer *
 			*c = '/';
 		}
 
+		openDevNull(STDERR_FILENO);
+
 		/* we don't need the client socket */
 		for (i = 3; i < 256; i++) {
 			if (i != srv->errorlog_fd) close(i);
@@ -995,7 +997,7 @@ static int cgi_create_env(server *srv, connection *con, plugin_data *p, buffer *
 		/* exec the cgi */
 		execve(args[0], args, env.ptr);
 
-		log_error_write(srv, __FILE__, __LINE__, "sss", "CGI failed:", strerror(errno), args[0]);
+		/* log_error_write(srv, __FILE__, __LINE__, "sss", "CGI failed:", strerror(errno), args[0]); */
 
 		/* */
 		SEGFAULT();

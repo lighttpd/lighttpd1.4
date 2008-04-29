@@ -498,6 +498,8 @@ SETDEFAULTS_FUNC(log_access_open) {
 				/* not needed */
 				close(to_log_fds[1]);
 
+				openDevNull(STDERR_FILENO);
+
 				/* we don't need the client socket */
 				for (i = 3; i < 256; i++) {
 					close(i);

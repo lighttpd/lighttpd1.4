@@ -573,19 +573,8 @@ int main (int argc, char **argv) {
 	}
 
 	/* close stdin and stdout, as they are not needed */
-	/* move stdin to /dev/null */
-	if (-1 != (fd = open("/dev/null", O_RDONLY))) {
-		close(STDIN_FILENO);
-		dup2(fd, STDIN_FILENO);
-		close(fd);
-	}
-
-	/* move stdout to /dev/null */
-	if (-1 != (fd = open("/dev/null", O_WRONLY))) {
-		close(STDOUT_FILENO);
-		dup2(fd, STDOUT_FILENO);
-		close(fd);
-	}
+	openDevNull(STDIN_FILENO);
+	openDevNull(STDOUT_FILENO);
 
 	if (0 != config_set_defaults(srv)) {
 		log_error_write(srv, __FILE__, __LINE__, "s",
