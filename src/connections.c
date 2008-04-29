@@ -300,6 +300,8 @@ static int connection_handle_read_ssl(server *srv, connection *con) {
 
 	return 0;
 #else
+	UNUSED(srv);
+	UNUSED(con);
 	return -1;
 #endif
 }
