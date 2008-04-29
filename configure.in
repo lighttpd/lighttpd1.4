@@ -142,6 +142,7 @@ if test "$WITH_LDAP" != "no"; then
     LDAP_LIB=-lldap
     AC_DEFINE([HAVE_LIBLDAP], [1], [libldap])
     AC_DEFINE([HAVE_LDAP_H], [1])
+    AC_DEFINE([LDAP_DEPRECATED], [1], [Using deprecated ldap api])
   ])
  ])
  AC_SUBST(LDAP_LIB)
