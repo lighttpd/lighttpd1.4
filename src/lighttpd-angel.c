@@ -28,9 +28,12 @@ static volatile sig_atomic_t start_process    = 1;
 static volatile sig_atomic_t graceful_restart = 0;
 static volatile pid_t pid = -1;
 
+#define UNUSED(x) ( (void)(x) )
+
 static void sigaction_handler(int sig, siginfo_t *si, void *context) {
 	int exitcode;
 
+	UNUSED(context);
 	switch (sig) {
 	case SIGINT: 
 	case SIGTERM:
@@ -59,6 +62,8 @@ static void sigaction_handler(int sig, siginfo_t *si, void *context) {
 int main(int argc, char **argv) {
 	int is_shutdown = 0;
 	struct sigaction act;
+
+	UNUSED(argc);
 
 	/**
 	 * we are running as root BEWARE
