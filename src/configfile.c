@@ -7,6 +7,7 @@
 #include <string.h>
 #include <stdio.h>
 #include <ctype.h>
+#include <limits.h>
 #include <assert.h>
 
 #include "server.h"
@@ -909,15 +910,39 @@ int config_parse_file(server *srv, config_t *context, const char *fn) {
 	return ret;
 }
 
+static char* getCWD() {
+	char *s, *s1;
+	size_t len;
+#ifdef PATH_MAX
+	len = PATH_MAX;
+#else
+	len = 4096;
+#endif
+
+	s = malloc(len);
+	if (!s) return NULL;
+	while (NULL == getcwd(s, len)) {
+		if (errno != ERANGE || SSIZE_MAX - len < len) return NULL;
+		len *= 2;
+		s1 = realloc(s, len);
+		if (!s1) {
+			free(s);
+			return NULL;
+		}
+		s = s1;
+	}
+	return s;
+}
+
 int config_parse_cmd(server *srv, config_t *context, const char *cmd) {
 	proc_handler_t proc;
 	tokenizer_t t;
 	int ret;
 	buffer *source;
 	buffer *out;
-	char oldpwd[PATH_MAX];
+	char *oldpwd;
 
-	if (NULL == getcwd(oldpwd, sizeof(oldpwd))) {
+	if (NULL == (oldpwd = getCWD())) {
 		log_error_write(srv, __FILE__, __LINE__, "s",
 				"cannot get cwd", strerror(errno));
 		return -1;
@@ -942,6 +967,7 @@ int config_parse_cmd(server *srv, config_t *context, const char *cmd) {
 	buffer_free(source);
 	buffer_free(out);
 	chdir(oldpwd);
+	free(oldpwd);
 	return ret;
 }
 
