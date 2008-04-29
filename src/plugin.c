@@ -197,7 +197,7 @@ int plugins_load(server *srv) {
 
 #else
 #if 1
-		init = (int (*)(plugin *))dlsym(p->lib, srv->tmp_buf->ptr);
+		init = (int (*)(plugin *))(intptr_t)dlsym(p->lib, srv->tmp_buf->ptr);
 #else
 		*(void **)(&init) = dlsym(p->lib, srv->tmp_buf->ptr);
 #endif

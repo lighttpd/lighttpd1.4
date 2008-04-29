@@ -12,6 +12,19 @@
 #include <ctype.h>
 #include <stdlib.h>
 
+#ifdef HAVE_CONFIG_H
+#include "config.h"
+#endif
+
+#ifdef HAVE_STDINT_H
+# include <stdint.h>
+#endif
+#ifdef HAVE_INTTYPES_H
+# include <inttypes.h>
+#endif
+
+#define UNUSED(x) ( (void)(x) )
+
 extern void qsort();
 extern double strtod();
 extern long strtol();
@@ -983,6 +996,7 @@ struct symbol *errsym;   /* The error symbol (if defined.  NULL otherwise) */
 {
   struct symbol *spx, *spy;
   int errcnt = 0;
+  UNUSED(errsym);
   assert( apx->sp==apy->sp );  /* Otherwise there would be no conflict */
   if( apx->type==SHIFT && apy->type==REDUCE ){
     spx = apx->sp;
@@ -1347,6 +1361,7 @@ char **argv;
   struct lemon lem;
   char *def_tmpl_name = "lempar.c";
 
+  UNUSED(argc);
   OptInit(argv,options,stderr);
   if( version ){
      printf("Lemon version 1.0\n");
@@ -1651,7 +1666,7 @@ FILE *err;
   }else if( op[j].type==OPT_FLAG ){
     *((int*)op[j].arg) = v;
   }else if( op[j].type==OPT_FFLAG ){
-    (*(void(*)())(op[j].arg))(v);
+    (*(void(*)())(intptr_t)(op[j].arg))(v);
   }else{
     if( err ){
       fprintf(err,"%smissing argument on switch.\n",emsg);
@@ -1733,19 +1748,19 @@ FILE *err;
         *(double*)(op[j].arg) = dv;
         break;
       case OPT_FDBL:
-        (*(void(*)())(op[j].arg))(dv);
+        (*(void(*)())(intptr_t)(op[j].arg))(dv);
         break;
       case OPT_INT:
         *(int*)(op[j].arg) = lv;
         break;
       case OPT_FINT:
-        (*(void(*)())(op[j].arg))((int)lv);
+        (*(void(*)())(intptr_t)(op[j].arg))((int)lv);
         break;
       case OPT_STR:
         *(char**)(op[j].arg) = sv;
         break;
       case OPT_FSTR:
-        (*(void(*)())(op[j].arg))(sv);
+        (*(void(*)())(intptr_t)(op[j].arg))(sv);
         break;
     }
   }
@@ -2286,10 +2301,10 @@ to follow the previous rule.");
 ** token is passed to the function "parseonetoken" which builds all
 ** the appropriate data structures in the global state vector "gp".
 */
+struct pstate ps;
 void Parse(gp)
 struct lemon *gp;
 {
-  struct pstate ps;
   FILE *fp;
   char *filebuf;
   size_t filesize;
