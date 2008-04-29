@@ -570,6 +570,8 @@ static int webdav_delete_file(server *srv, connection *con, plugin_data *p, phys
 				/* */
 			}
 		}
+#else
+		UNUSED(p),
 #endif
 	}
 
@@ -730,6 +732,8 @@ static int webdav_copy_file(server *srv, connection *con, plugin_data *p, physic
 			}
 		}
 	}
+#else
+	UNUSED(p);
 #endif
 	return status;
 }
