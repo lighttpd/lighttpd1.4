@@ -571,7 +571,7 @@ static int webdav_delete_file(server *srv, connection *con, plugin_data *p, phys
 			}
 		}
 #else
-		UNUSED(p),
+		UNUSED(p);
 #endif
 	}
 
