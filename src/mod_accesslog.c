@@ -473,7 +473,7 @@ SETDEFAULTS_FUNC(log_access_open) {
 			continue;
 		}
 
-		if (buffer_is_empty(s->access_logfile)) continue;
+		if (s->access_logfile->used < 2) continue;
 
 		if (s->access_logfile->ptr[0] == '|') {
 #ifdef HAVE_FORK
@@ -570,7 +570,7 @@ SIGHUP_FUNC(log_access_cycle) {
 		}
 
 		if (s->use_syslog == 0 &&
-		    !buffer_is_empty(s->access_logfile) &&
+		    s->access_logfile->used > 1 &&
 		    s->access_logfile->ptr[0] != '|') {
 
 			close(s->log_access_fd);
@@ -646,6 +646,9 @@ REQUESTDONE_FUNC(log_access_write) {
 	data_string *ds;
 
 	mod_accesslog_patch_connection(srv, con, p);
+
+	/* No output device, nothing to do */
+	if (!p->conf.use_syslog && p->conf.log_access_fd == -1) return HANDLER_GO_ON;
 
 	b = p->conf.access_logbuffer;
 	if (b->used == 0) {

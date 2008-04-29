@@ -23,6 +23,7 @@ NEWS
   * Fix mod_magnet to set con->mode = p->id if it generates content, so returning 4xx/5xx doesn't append an error page
   * Remove lighttpd.spec* from source, fixing all problems with it ;-)
   * Do not rely on PATH_MAX (POSIX does not require it) (#580)
+  * Disable logging to access.log if filename is an empty string
 
 - 1.4.19 - 2008-03-10
 
