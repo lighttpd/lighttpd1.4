@@ -2672,6 +2672,7 @@ static handler_t scgi_check_extension(server *srv, connection *con, void *p_d, i
 	size_t k;
 	buffer *fn;
 	scgi_extension *extension = NULL;
+	scgi_extension_host *host = NULL;
 
 	/* Possibly, we processed already this request */
 	if (con->file_started == 1) return HANDLER_GO_ON;
@@ -2726,81 +2727,37 @@ static handler_t scgi_check_extension(server *srv, connection *con, void *p_d, i
 	}
 
 	/* found a server */
-	if (ndx != -1) {
-		scgi_extension_host *host = extension->hosts[ndx];
+	if (ndx == -1) {
+		/* no handler found */
+		buffer_reset(con->physical.path);
+		con->http_status = 500;
 
-		/*
-		 * if check-local is disabled, use the uri.path handler
-		 *
-		 */
+		log_error_write(srv, __FILE__, __LINE__,  "sb",
+				"no fcgi-handler found for:",
+				fn);
 
-		/* init handler-context */
-		if (uri_path_handler) {
-			if (host->check_local == 0) {
-				handler_ctx *hctx;
-				char *pathinfo;
+		return HANDLER_FINISHED;
+	}
 
-				hctx = handler_ctx_init();
+	host = extension->hosts[ndx];
 
-				hctx->remote_conn      = con;
-				hctx->plugin_data      = p;
-				hctx->host             = host;
-				hctx->proc	       = NULL;
+	/*
+	 * if check-local is disabled, use the uri.path handler
+	 *
+	 */
 
-				hctx->conf.exts        = p->conf.exts;
-				hctx->conf.debug       = p->conf.debug;
-
-				con->plugin_ctx[p->id] = hctx;
-
-				host->load++;
-
-				con->mode = p->id;
-
-				if (con->conf.log_request_handling) {
-					log_error_write(srv, __FILE__, __LINE__, "s", "handling it in mod_scgi");
-				}
-
-				/* the prefix is the SCRIPT_NAME,
-				 * everthing from start to the next slash
-				 * this is important for check-local = "disable"
-				 *
-				 * if prefix = /admin.fcgi
-				 *
-				 * /admin.fcgi/foo/bar
-				 *
-				 * SCRIPT_NAME = /admin.fcgi
-				 * PATH_INFO   = /foo/bar
-				 *
-				 * if prefix = /fcgi-bin/
-				 *
-				 * /fcgi-bin/foo/bar
-				 *
-				 * SCRIPT_NAME = /fcgi-bin/foo
-				 * PATH_INFO   = /bar
-				 *
-				 */
-
-				/* the rewrite is only done for /prefix/? matches */
-				if (extension->key->ptr[0] == '/' &&
-				    con->uri.path->used > extension->key->used &&
-				    NULL != (pathinfo = strchr(con->uri.path->ptr + extension->key->used - 1, '/'))) {
-					/* rewrite uri.path and pathinfo */
-
-					buffer_copy_string(con->request.pathinfo, pathinfo);
-
-					con->uri.path->used -= con->request.pathinfo->used - 1;
-					con->uri.path->ptr[con->uri.path->used - 1] = '\0';
-				}
-			}
-			return HANDLER_GO_ON;
-		} else {
+	/* init handler-context */
+	if (uri_path_handler) {
+		if (host->check_local == 0) {
 			handler_ctx *hctx;
+			char *pathinfo;
+
 			hctx = handler_ctx_init();
 
 			hctx->remote_conn      = con;
 			hctx->plugin_data      = p;
 			hctx->host             = host;
-			hctx->proc             = NULL;
+			hctx->proc	       = NULL;
 
 			hctx->conf.exts        = p->conf.exts;
 			hctx->conf.debug       = p->conf.debug;
@@ -2812,21 +2769,65 @@ static handler_t scgi_check_extension(server *srv, connection *con, void *p_d, i
 			con->mode = p->id;
 
 			if (con->conf.log_request_handling) {
-				log_error_write(srv, __FILE__, __LINE__, "s", "handling it in mod_fastcgi");
+				log_error_write(srv, __FILE__, __LINE__, "s", "handling it in mod_scgi");
 			}
 
-			return HANDLER_GO_ON;
+			/* the prefix is the SCRIPT_NAME,
+			 * everthing from start to the next slash
+			 * this is important for check-local = "disable"
+			 *
+			 * if prefix = /admin.fcgi
+			 *
+			 * /admin.fcgi/foo/bar
+			 *
+			 * SCRIPT_NAME = /admin.fcgi
+			 * PATH_INFO   = /foo/bar
+			 *
+			 * if prefix = /fcgi-bin/
+			 *
+			 * /fcgi-bin/foo/bar
+			 *
+			 * SCRIPT_NAME = /fcgi-bin/foo
+			 * PATH_INFO   = /bar
+			 *
+			 */
+
+			/* the rewrite is only done for /prefix/? matches */
+			if (extension->key->ptr[0] == '/' &&
+			    con->uri.path->used > extension->key->used &&
+			    NULL != (pathinfo = strchr(con->uri.path->ptr + extension->key->used - 1, '/'))) {
+				/* rewrite uri.path and pathinfo */
+
+				buffer_copy_string(con->request.pathinfo, pathinfo);
+
+				con->uri.path->used -= con->request.pathinfo->used - 1;
+				con->uri.path->ptr[con->uri.path->used - 1] = '\0';
+			}
 		}
+		return HANDLER_GO_ON;
 	} else {
-		/* no handler found */
-		buffer_reset(con->physical.path);
-		con->http_status = 500;
+		handler_ctx *hctx;
+		hctx = handler_ctx_init();
 
-		log_error_write(srv, __FILE__, __LINE__,  "sb",
-				"no fcgi-handler found for:",
-				fn);
+		hctx->remote_conn      = con;
+		hctx->plugin_data      = p;
+		hctx->host             = host;
+		hctx->proc             = NULL;
 
-		return HANDLER_FINISHED;
+		hctx->conf.exts        = p->conf.exts;
+		hctx->conf.debug       = p->conf.debug;
+
+		con->plugin_ctx[p->id] = hctx;
+
+		host->load++;
+
+		con->mode = p->id;
+
+		if (con->conf.log_request_handling) {
+			log_error_write(srv, __FILE__, __LINE__, "s", "handling it in mod_fastcgi");
+		}
+
+		return HANDLER_GO_ON;
 	}
 	return HANDLER_GO_ON;
 }
