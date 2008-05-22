@@ -233,6 +233,7 @@ typedef struct {
 typedef struct {
 	buffer *key; /* like .php */
 
+	int note_is_sent;
 	scgi_extension_host **hosts;
 
 	size_t used;
@@ -2668,7 +2669,6 @@ static handler_t scgi_check_extension(server *srv, connection *con, void *p_d, i
 	plugin_data *p = p_d;
 	size_t s_len;
 	int used = -1;
-	int ndx;
 	size_t k;
 	buffer *fn;
 	scgi_extension *extension = NULL;
@@ -2713,33 +2713,41 @@ static handler_t scgi_check_extension(server *srv, connection *con, void *p_d, i
 	}
 
 	/* get best server */
-	for (k = 0, ndx = -1; k < extension->used; k++) {
-		scgi_extension_host *host = extension->hosts[k];
+	for (k = 0; k < extension->used; k++) {
+		scgi_extension_host *h = extension->hosts[k];
 
-		/* we should have at least one proc that can do somthing */
-		if (host->active_procs == 0) continue;
+		/* we should have at least one proc that can do something */
+		if (h->active_procs == 0) {
+			continue;
+		}
 
-		if (used == -1 || host->load < used) {
-			used = host->load;
+		if (used == -1 || h->load < used) {
+			used = h->load;
 
-			ndx = k;
+			host = h;
 		}
 	}
 
-	/* found a server */
-	if (ndx == -1) {
-		/* no handler found */
+	if (!host) {
+		/* sorry, we don't have a server alive for this ext */
 		buffer_reset(con->physical.path);
 		con->http_status = 500;
 
-		log_error_write(srv, __FILE__, __LINE__,  "sb",
-				"no fcgi-handler found for:",
-				fn);
+		/* only send the 'no handler' once */
+		if (!extension->note_is_sent) {
+			extension->note_is_sent = 1;
+
+			log_error_write(srv, __FILE__, __LINE__, "sbsbs",
+					"all handlers for ", con->uri.path,
+					"on", extension->key,
+					"are down.");
+		}
 
 		return HANDLER_FINISHED;
 	}
 
-	host = extension->hosts[ndx];
+	/* a note about no handler is not sent yet */
+	extension->note_is_sent = 0;
 
 	/*
 	 * if check-local is disabled, use the uri.path handler
@@ -2769,11 +2777,12 @@ static handler_t scgi_check_extension(server *srv, connection *con, void *p_d, i
 			con->mode = p->id;
 
 			if (con->conf.log_request_handling) {
-				log_error_write(srv, __FILE__, __LINE__, "s", "handling it in mod_scgi");
+				log_error_write(srv, __FILE__, __LINE__, "s",
+				"handling it in mod_fastcgi");
 			}
 
 			/* the prefix is the SCRIPT_NAME,
-			 * everthing from start to the next slash
+			 * everything from start to the next slash
 			 * this is important for check-local = "disable"
 			 *
 			 * if prefix = /admin.fcgi
@@ -2804,7 +2813,6 @@ static handler_t scgi_check_extension(server *srv, connection *con, void *p_d, i
 				con->uri.path->ptr[con->uri.path->used - 1] = '\0';
 			}
 		}
-		return HANDLER_GO_ON;
 	} else {
 		handler_ctx *hctx;
 		hctx = handler_ctx_init();
@@ -2826,9 +2834,8 @@ static handler_t scgi_check_extension(server *srv, connection *con, void *p_d, i
 		if (con->conf.log_request_handling) {
 			log_error_write(srv, __FILE__, __LINE__, "s", "handling it in mod_fastcgi");
 		}
-
-		return HANDLER_GO_ON;
 	}
+
 	return HANDLER_GO_ON;
 }
 

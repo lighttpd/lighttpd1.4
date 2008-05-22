@@ -3503,16 +3503,15 @@ static handler_t fcgi_check_extension(server *srv, connection *con, void *p_d, i
 
 	/* check if we have at least one server for this extension up and running */
 	for (k = 0; k < extension->used; k++) {
-		host = extension->hosts[k];
+		fcgi_extension_host *h = extension->hosts[k];
 
 		/* we should have at least one proc that can do something */
-		if (host->active_procs == 0) {
-			host = NULL;
-
+		if (h->active_procs == 0) {
 			continue;
 		}
 
 		/* we found one host that is alive */
+		host = h;
 		break;
 	}
 
