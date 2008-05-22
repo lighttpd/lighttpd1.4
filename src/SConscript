@@ -43,6 +43,7 @@ modules = {
 	'mod_cgi' : { 'src' : [ 'mod_cgi.c' ] },
 	'mod_fastcgi' : { 'src' : [ 'mod_fastcgi.c' ] },
 	'mod_scgi' : { 'src' : [ 'mod_scgi.c' ] },
+	'mod_extforward' : { 'src' : [ 'mod_extforward.c' ] },
 	'mod_staticfile' : { 'src' : [ 'mod_staticfile.c' ] },
 	'mod_dirlisting' : { 'src' : [ 'mod_dirlisting.c' ], 'lib' : [ env['LIBPCRE'] ] },
 	'mod_indexfile' : { 'src' : [ 'mod_indexfile.c' ] },
