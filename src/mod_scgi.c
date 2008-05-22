@@ -202,6 +202,15 @@ typedef struct {
 	 *
 	 */
 
+	/*
+	 * workaround for program when prefix="/"
+	 *
+	 * rule to build PATH_INFO is hardcoded for when check_local is disabled
+	 * enable this option to use the workaround
+	 *
+	 */
+
+	unsigned short fix_root_path_name;
 	ssize_t load; /* replace by host->load */
 
 	size_t max_id; /* corresponds most of the time to
@@ -969,6 +978,7 @@ SETDEFAULTS_FUNC(mod_scgi_set_defaults) {
 
 						{ "bin-environment",   NULL, T_CONFIG_ARRAY, T_CONFIG_SCOPE_CONNECTION },        /* 11 */
 						{ "bin-copy-environment", NULL, T_CONFIG_ARRAY, T_CONFIG_SCOPE_CONNECTION },     /* 12 */
+						{ "fix-root-scriptname",  NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION },   /* 13 */
 
 
 						{ NULL,                NULL, T_CONFIG_UNSET, T_CONFIG_SCOPE_UNSET }
@@ -991,6 +1001,7 @@ SETDEFAULTS_FUNC(mod_scgi_set_defaults) {
 					df->max_load_per_proc = 1;
 					df->idle_timeout = 60;
 					df->disable_time = 60;
+					df->fix_root_path_name = 0;
 
 					fcv[0].destination = df->host;
 					fcv[1].destination = df->docroot;
@@ -1007,6 +1018,7 @@ SETDEFAULTS_FUNC(mod_scgi_set_defaults) {
 
 					fcv[11].destination = df->bin_env;
 					fcv[12].destination = df->bin_env_copy;
+					fcv[13].destination = &(df->fix_root_path_name);
 
 
 					if (0 != config_insert_values_internal(srv, da_host->value, fcv)) {
@@ -2810,6 +2822,10 @@ static handler_t scgi_check_extension(server *srv, connection *con, void *p_d, i
 				buffer_copy_string(con->request.pathinfo, pathinfo);
 
 				con->uri.path->used -= con->request.pathinfo->used - 1;
+				con->uri.path->ptr[con->uri.path->used - 1] = '\0';
+			} else if (host->fix_root_path_name && extension->key->ptr[0] == '/' && extension->key->ptr[1] == '\0') {
+				buffer_copy_string(con->request.pathinfo, con->uri.path->ptr);
+				con->uri.path->used = 1;
 				con->uri.path->ptr[con->uri.path->used - 1] = '\0';
 			}
 		}

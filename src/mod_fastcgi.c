@@ -236,6 +236,16 @@ typedef struct {
 	unsigned short break_scriptfilename_for_php;
 
 	/*
+	 * workaround for program when prefix="/"
+	 *
+	 * rule to build PATH_INFO is hardcoded for when check_local is disabled
+	 * enable this option to use the workaround
+	 *
+	 */
+
+	unsigned short fix_root_path_name;
+
+	/*
 	 * If the backend includes X-LIGHTTPD-send-file in the response
 	 * we use the value as filename and ignore the content.
 	 *
@@ -1195,6 +1205,7 @@ SETDEFAULTS_FUNC(mod_fastcgi_set_defaults) {
 						{ "allow-x-send-file",  NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION },      /* 15 */
 						{ "strip-request-uri",  NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_CONNECTION },      /* 16 */
 						{ "kill-signal",        NULL, T_CONFIG_SHORT, T_CONFIG_SCOPE_CONNECTION },      /* 17 */
+						{ "fix-root-scriptname",   NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION },  /* 18 */
 
 						{ NULL,                NULL, T_CONFIG_UNSET, T_CONFIG_SCOPE_UNSET }
 					};
@@ -1222,6 +1233,7 @@ SETDEFAULTS_FUNC(mod_fastcgi_set_defaults) {
 					host->break_scriptfilename_for_php = 0;
 					host->allow_xsendfile = 0; /* handle X-LIGHTTPD-send-file */
 					host->kill_signal = SIGTERM;
+					host->fix_root_path_name = 0;
 
 					fcv[0].destination = host->host;
 					fcv[1].destination = host->docroot;
@@ -1243,6 +1255,7 @@ SETDEFAULTS_FUNC(mod_fastcgi_set_defaults) {
 					fcv[15].destination = &(host->allow_xsendfile);
 					fcv[16].destination = host->strip_request_uri;
 					fcv[17].destination = &(host->kill_signal);
+					fcv[18].destination = &(host->fix_root_path_name);
 
 					if (0 != config_insert_values_internal(srv, da_host->value, fcv)) {
 						return HANDLER_ERROR;
@@ -3585,6 +3598,13 @@ static handler_t fcgi_check_extension(server *srv, connection *con, void *p_d, i
 			 * SCRIPT_NAME = /fcgi-bin/foo
 			 * PATH_INFO   = /bar
 			 *
+			 * if prefix = /, and fix-root-path-name is enable
+			 *
+			 * /fcgi-bin/foo/bar
+			 *
+			 * SCRIPT_NAME = /fcgi-bin/foo
+			 * PATH_INFO   = /bar
+			 *
 			 */
 
 			/* the rewrite is only done for /prefix/? matches */
@@ -3596,6 +3616,10 @@ static handler_t fcgi_check_extension(server *srv, connection *con, void *p_d, i
 				buffer_copy_string(con->request.pathinfo, pathinfo);
 
 				con->uri.path->used -= con->request.pathinfo->used - 1;
+				con->uri.path->ptr[con->uri.path->used - 1] = '\0';
+			} else if (host->fix_root_path_name && extension->key->ptr[0] == '/' && extension->key->ptr[1] == '\0') {
+				buffer_copy_string(con->request.pathinfo, con->uri.path->ptr);
+				con->uri.path->used = 1;
 				con->uri.path->ptr[con->uri.path->used - 1] = '\0';
 			}
 		}
