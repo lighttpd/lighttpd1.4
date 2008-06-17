@@ -268,7 +268,7 @@ if test "x$cross_compiling" = xno -a "$WITH_PCRE" != "no"; then
     ])
     LIBS="$OLDLIBS"
   else
-     AC_MSG_ERROR([pcre-config not found, install the pcre-devel package and build with --without-pcre])
+     AC_MSG_ERROR([pcre-config not found, install the pcre-devel package or build with --without-pcre])
   fi
 fi
 
