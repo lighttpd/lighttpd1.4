@@ -225,9 +225,8 @@ int fcgi_spawn_connection(char *appPath, char **appArgv, char *addr, unsigned sh
 					break;
 				default:
 					if (WIFEXITED(status)) {
-						fprintf(stderr, "%s.%d: child exited with: %d, %s\n",
-							__FILE__, __LINE__,
-							WEXITSTATUS(status), strerror(WEXITSTATUS(status)));
+						fprintf(stderr, "%s.%d: child exited with: %d\n",
+							__FILE__, __LINE__, WEXITSTATUS(status));
 					} else if (WIFSIGNALED(status)) {
 						fprintf(stderr, "%s.%d: child signaled: %d\n",
 							__FILE__, __LINE__,
