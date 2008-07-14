@@ -37,7 +37,7 @@ typedef int socklen_t;
 #endif
 
 #ifdef HAVE_SYS_UN_H
-int fcgi_spawn_connection(char *appPath, char **appArgv, char *addr, unsigned short port, const char *unixsocket, int child_count, int pid_fd, int nofork) {
+int fcgi_spawn_connection(char *appPath, char **appArgv, char *addr, unsigned short port, const char *unixsocket, int fork_count, int child_count, int pid_fd, int nofork) {
 	int fcgi_fd;
 	int socket_type, status;
 	struct timeval tv = { 0, 100 * 1000 };
@@ -47,9 +47,6 @@ int fcgi_spawn_connection(char *appPath, char **appArgv, char *addr, unsigned sh
 	struct sockaddr *fcgi_addr;
 
 	socklen_t servlen;
-
-	pid_t child;
-	int val;
 
 	if (child_count < 2) {
 		child_count = 5;
@@ -74,25 +71,6 @@ int fcgi_spawn_connection(char *appPath, char **appArgv, char *addr, unsigned sh
 #endif
 		socket_type = AF_UNIX;
 		fcgi_addr = (struct sockaddr *) &fcgi_addr_un;
-
-		/* check if some backend is listening on the socket
-		 * as if we delete the socket-file and rebind there will be no "socket already in use" error
-		 */
-		if (-1 == (fcgi_fd = socket(socket_type, SOCK_STREAM, 0))) {
-			fprintf(stderr, "%s.%d\n",
-				__FILE__, __LINE__);
-			return -1;
-		}
-
-		if (-1 != connect(fcgi_fd, fcgi_addr, servlen)) {
-			fprintf(stderr, "%s.%d: socket is already used, can't spawn\n",
-				__FILE__, __LINE__);
-			return -1;
-		}
-
-		/* cleanup previous socket if it exists */
-		unlink(unixsocket);
-		close(fcgi_fd);
 	} else {
 		fcgi_addr_in.sin_family = AF_INET;
                 if (addr != NULL) {
@@ -107,128 +85,169 @@ int fcgi_spawn_connection(char *appPath, char **appArgv, char *addr, unsigned sh
 		fcgi_addr = (struct sockaddr *) &fcgi_addr_in;
 	}
 
-	/* open socket */
 	if (-1 == (fcgi_fd = socket(socket_type, SOCK_STREAM, 0))) {
 		fprintf(stderr, "%s.%d\n",
 			__FILE__, __LINE__);
 		return -1;
 	}
 
-	val = 1;
-	if (setsockopt(fcgi_fd, SOL_SOCKET, SO_REUSEADDR, &val, sizeof(val)) < 0) {
-		fprintf(stderr, "%s.%d\n",
-			__FILE__, __LINE__);
-		return -1;
-	}
+	if (-1 == connect(fcgi_fd, fcgi_addr, servlen)) {
+		/* server is not up, spawn in  */
+		pid_t child;
+		int val;
 
-	/* create socket */
-	if (-1 == bind(fcgi_fd, fcgi_addr, servlen)) {
-		fprintf(stderr, "%s.%d: bind failed: %s\n",
-			__FILE__, __LINE__,
-			strerror(errno));
-		return -1;
-	}
+		if (unixsocket) unlink(unixsocket);
 
-	if (-1 == listen(fcgi_fd, 1024)) {
-		fprintf(stderr, "%s.%d: fd = -1\n",
-			__FILE__, __LINE__);
-		return -1;
-	}
+		close(fcgi_fd);
 
-	if (!nofork) {
-		child = fork();
-	} else {
-		child = 0;
-	}
-
-	switch (child) {
-	case 0: {
-		char cgi_childs[64];
-
-		int i = 0;
-
-		/* is safe as we limit to 256 childs */
-		sprintf(cgi_childs, "PHP_FCGI_CHILDREN=%d", child_count);
-
-		if(fcgi_fd != FCGI_LISTENSOCK_FILENO) {
-			close(FCGI_LISTENSOCK_FILENO);
-			dup2(fcgi_fd, FCGI_LISTENSOCK_FILENO);
-			close(fcgi_fd);
+		/* reopen socket */
+		if (-1 == (fcgi_fd = socket(socket_type, SOCK_STREAM, 0))) {
+			fprintf(stderr, "%s.%d\n",
+				__FILE__, __LINE__);
+			return -1;
 		}
 
-		/* we don't need the client socket */
-		for (i = 3; i < 256; i++) {
-			close(i);
+		val = 1;
+		if (setsockopt(fcgi_fd, SOL_SOCKET, SO_REUSEADDR, &val, sizeof(val)) < 0) {
+			fprintf(stderr, "%s.%d\n",
+				__FILE__, __LINE__);
+			return -1;
 		}
 
-		/* create environment */
-
-		putenv(cgi_childs);
-
-		/* fork and replace shell */
-		if (appArgv) {
-			execv(appArgv[0], appArgv);
-
-		} else {
-			char *b = malloc(strlen("exec ") + strlen(appPath) + 1);
-			strcpy(b, "exec ");
-			strcat(b, appPath);
-
-			/* exec the cgi */
-			execl("/bin/sh", "sh", "-c", b, (char *)NULL);
-		}
-
-		exit(errno);
-
-		break;
-	}
-	case -1:
-		/* error */
-		break;
-	default:
-		/* father */
-
-		/* wait */
-		select(0, NULL, NULL, NULL, &tv);
-
-		switch (waitpid(child, &status, WNOHANG)) {
-		case 0:
-			fprintf(stderr, "%s.%d: child spawned successfully: PID: %d\n",
+		/* create socket */
+		if (-1 == bind(fcgi_fd, fcgi_addr, servlen)) {
+			fprintf(stderr, "%s.%d: bind failed: %s\n",
 				__FILE__, __LINE__,
-				child);
-
-			/* write pid file */
-			if (pid_fd != -1) {
-				/* assume a 32bit pid_t */
-				char pidbuf[12];
-
-				snprintf(pidbuf, sizeof(pidbuf) - 1, "%d", child);
-
-				write(pid_fd, pidbuf, strlen(pidbuf));
-				close(pid_fd);
-				pid_fd = -1;
-			}
-
-			break;
-		case -1:
-			break;
-		default:
-			if (WIFEXITED(status)) {
-				fprintf(stderr, "%s.%d: child exited with: %d, %s\n",
-					__FILE__, __LINE__,
-					WEXITSTATUS(status), strerror(WEXITSTATUS(status)));
-			} else if (WIFSIGNALED(status)) {
-				fprintf(stderr, "%s.%d: child signaled: %d\n",
-					__FILE__, __LINE__,
-					WTERMSIG(status));
-			} else {
-				fprintf(stderr, "%s.%d: child died somehow: %d\n",
-					__FILE__, __LINE__,
-					status);
-			}
+				strerror(errno));
+			return -1;
 		}
 
-		break;
+		if (-1 == listen(fcgi_fd, 1024)) {
+			fprintf(stderr, "%s.%d: fd = -1\n",
+				__FILE__, __LINE__);
+			return -1;
+		}
+
+		while (fork_count-- > 0) {
+
+			if (!nofork) {
+				child = fork();
+			} else {
+				child = 0;
+			}
+
+			switch (child) {
+			case 0: {
+				char cgi_childs[64];
+				int max_fd = 0;
+
+				int i = 0;
+
+				/* loose control terminal */
+				setsid();
+
+				/* is safe as we limit to 256 childs */
+				sprintf(cgi_childs, "PHP_FCGI_CHILDREN=%d", child_count);
+
+				if(fcgi_fd != FCGI_LISTENSOCK_FILENO) {
+					close(FCGI_LISTENSOCK_FILENO);
+					dup2(fcgi_fd, FCGI_LISTENSOCK_FILENO);
+					close(fcgi_fd);
+				}
+
+				max_fd = open("/dev/null", O_RDWR);
+				close(STDERR_FILENO);
+				dup2(max_fd, STDERR_FILENO);
+				close(max_fd);
+
+				max_fd = open("/dev/null", O_RDWR);
+				close(STDOUT_FILENO);
+				dup2(max_fd, STDOUT_FILENO);
+				close(max_fd);
+
+				/* we don't need the client socket */
+				for (i = 3; i < max_fd; i++) {
+					if (i != FCGI_LISTENSOCK_FILENO) close(i);
+				}
+
+				/* create environment */
+
+				putenv(cgi_childs);
+
+				/* fork and replace shell */
+				if (appArgv) {
+					execv(appArgv[0], appArgv);
+
+				} else {
+					char *b = malloc(strlen("exec ") + strlen(appPath) + 1);
+					strcpy(b, "exec ");
+					strcat(b, appPath);
+
+					/* exec the cgi */
+					execl("/bin/sh", "sh", "-c", b, (char *)NULL);
+				}
+
+				exit(errno);
+
+				break;
+			}
+			case -1:
+				/* error */
+				break;
+			default:
+				/* father */
+
+				/* wait */
+				select(0, NULL, NULL, NULL, &tv);
+
+				switch (waitpid(child, &status, WNOHANG)) {
+				case 0:
+					fprintf(stderr, "%s.%d: child spawned successfully: PID: %d\n",
+						__FILE__, __LINE__,
+						child);
+
+					/* write pid file */
+					if (pid_fd != -1) {
+						/* assume a 32bit pid_t */
+						char pidbuf[12];
+
+						snprintf(pidbuf, sizeof(pidbuf) - 1, "%d", child);
+
+						write(pid_fd, pidbuf, strlen(pidbuf));
+						/* avoid eol for the last one */
+						if (fork_count != 0) {
+							write(pid_fd, "\n", 1);
+						}
+					}
+
+					break;
+				case -1:
+					break;
+				default:
+					if (WIFEXITED(status)) {
+						fprintf(stderr, "%s.%d: child exited with: %d, %s\n",
+							__FILE__, __LINE__,
+							WEXITSTATUS(status), strerror(WEXITSTATUS(status)));
+					} else if (WIFSIGNALED(status)) {
+						fprintf(stderr, "%s.%d: child signaled: %d\n",
+							__FILE__, __LINE__,
+							WTERMSIG(status));
+					} else {
+						fprintf(stderr, "%s.%d: child died somehow: %d\n",
+							__FILE__, __LINE__,
+							status);
+					}
+				}
+
+				break;
+			}
+		}
+		close(pid_fd);
+		pid_fd = -1;
+	} else {
+		fprintf(stderr, "%s.%d: socket is already used, can't spawn\n",
+			__FILE__, __LINE__);
+		return -1;
 	}
 
 	close(fcgi_fd);
@@ -256,6 +275,7 @@ void show_help () {
 " -p <port>    bind to tcp-port\n" \
 " -s <path>    bind to unix-domain socket\n" \
 " -C <childs>  (PHP only) numbers of childs to spawn (default 5)\n" \
+" -F <childs>  numbers of childs to fork (default 1)\n" \
 " -P <path>    name of PID-file for spawed process\n" \
 " -n           no fork (for daemontools)\n" \
 " -v           show version\n" \
@@ -276,20 +296,21 @@ int main(int argc, char **argv) {
 	char **fcgi_app_argv = { NULL };
 	unsigned short port = 0;
 	int child_count = 5;
+	int fork_count = 1;
 	int i_am_root, o;
 	int pid_fd = -1;
 	int nofork = 0;
 	struct sockaddr_un un;
-	const size_t sun_path_len = sizeof(un.sun_path);
 
 	i_am_root = (getuid() == 0);
 
-	while(-1 != (o = getopt(argc, argv, "c:f:g:hna:p:u:vC:s:P:"))) {
+	while (-1 != (o = getopt(argc, argv, "c:f:g:hna:p:u:vC:F:s:P:"))) {
 		switch(o) {
 		case 'f': fcgi_app = optarg; break;
 		case 'a': addr = optarg;/* ip addr */ break;
 		case 'p': port = strtol(optarg, NULL, 10);/* port */ break;
 		case 'C': child_count = strtol(optarg, NULL, 10);/*  */ break;
+		case 'F': fork_count = strtol(optarg, NULL, 10);/*  */ break;
 		case 's': unixsocket = optarg; /* unix-domain socket */ break;
 		case 'c': if (i_am_root) { changeroot = optarg; }/* chroot() */ break;
 		case 'u': if (i_am_root) { username = optarg; } /* set user */ break;
@@ -321,7 +342,7 @@ int main(int argc, char **argv) {
 		return -1;
 	}
 
-	if (unixsocket && strlen(unixsocket) > sun_path_len - 1) {
+	if (unixsocket && strlen(unixsocket) > sizeof(un.sun_path) - 1) {
 		fprintf(stderr, "%s.%d: %s\n",
 			__FILE__, __LINE__,
 			"path of the unix socket is too long\n");
@@ -416,18 +437,15 @@ int main(int argc, char **argv) {
 					"I will not set gid to 0\n");
 				return -1;
 			}
-		}
 
-		/*
-		 * Change group before chroot, when we have access
-		 * to /etc/group
-		 */
-		if (groupname) {
+			/* do the change before we do the chroot() */
 			setgid(grp->gr_gid);
-			setgroups(0, NULL);
+			setgroups(0, NULL); 
+
 			if (username) {
 				initgroups(username, grp->gr_gid);
 			}
+
 		}
 
 		if (changeroot) {
@@ -451,7 +469,7 @@ int main(int argc, char **argv) {
 		}
 	}
 
-       return fcgi_spawn_connection(fcgi_app, fcgi_app_argv, addr, port, unixsocket, child_count, pid_fd, nofork);
+       return fcgi_spawn_connection(fcgi_app, fcgi_app_argv, addr, port, unixsocket, fork_count, child_count, pid_fd, nofork);
 }
 #else
 int main() {

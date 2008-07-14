@@ -865,33 +865,8 @@ int main (int argc, char **argv) {
 		return -1;
 	}
 
-#ifdef HAVE_FORK
-	/* network is up, let's deamonize ourself */
-	if (srv->srvconf.dont_daemonize == 0) daemonize();
-#endif
-
 	srv->gid = getgid();
 	srv->uid = getuid();
-
-	/* write pid file */
-	if (pid_fd != -1) {
-		buffer_copy_long(srv->tmp_buf, getpid());
-		buffer_append_string(srv->tmp_buf, "\n");
-		write(pid_fd, srv->tmp_buf->ptr, srv->tmp_buf->used - 1);
-		close(pid_fd);
-		pid_fd = -1;
-	}
-
-	/* Close stderr ASAP in the child process to make sure that nothing
-	 * is being written to that fd which may not be valid anymore. */
-	if (-1 == log_error_open(srv)) {
-		log_error_write(srv, __FILE__, __LINE__, "s", "Opening errorlog failed. Going down.");
-
-		plugins_free(srv);
-		network_close(srv);
-		server_free(srv);
-		return -1;
-	}
 
 	if (HANDLER_GO_ON != plugins_call_set_defaults(srv)) {
 		log_error_write(srv, __FILE__, __LINE__, "s", "Configuration of plugins failed. Going down.");
@@ -943,7 +918,86 @@ int main (int argc, char **argv) {
 		return -1;
 	}
 
+	if (NULL == (srv->ev = fdevent_init(srv->max_fds + 1, srv->event_handler))) {
+		log_error_write(srv, __FILE__, __LINE__,
+				"s", "fdevent_init failed");
+		return -1;
+	}
+	/*
+	 * kqueue() is called here, select resets its internals,
+	 * all server sockets get their handlers
+	 *
+	 * */
+	if (0 != network_register_fdevents(srv)) {
+		plugins_free(srv);
+		network_close(srv);
+		server_free(srv);
 
+		return -1;
+	}
+
+	/* might fail if user is using fam (not gamin) and famd isn't running */
+	if (NULL == (srv->stat_cache = stat_cache_init())) {
+		log_error_write(srv, __FILE__, __LINE__, "s",
+			"stat-cache could not be setup, dieing.");
+		return -1;
+	}
+
+#ifdef HAVE_FAM_H
+	/* setup FAM */
+	if (srv->srvconf.stat_cache_engine == STAT_CACHE_ENGINE_FAM) {
+		if (0 != FAMOpen2(srv->stat_cache->fam, "lighttpd")) {
+			log_error_write(srv, __FILE__, __LINE__, "s",
+					 "could not open a fam connection, dieing.");
+			return -1;
+		}
+#ifdef HAVE_FAMNOEXISTS
+		FAMNoExists(srv->stat_cache->fam);
+#endif
+
+		srv->stat_cache->fam_fcce_ndx = -1;
+		fdevent_register(srv->ev, FAMCONNECTION_GETFD(srv->stat_cache->fam), stat_cache_handle_fdevent, NULL);
+		fdevent_event_add(srv->ev, &(srv->stat_cache->fam_fcce_ndx), FAMCONNECTION_GETFD(srv->stat_cache->fam), FDEVENT_IN);
+	}
+#endif
+
+
+	/* get the current number of FDs */
+	srv->cur_fds = open("/dev/null", O_RDONLY);
+	close(srv->cur_fds);
+
+	for (i = 0; i < srv->srv_sockets.used; i++) {
+		server_socket *srv_socket = srv->srv_sockets.ptr[i];
+		if (-1 == fdevent_fcntl_set(srv->ev, srv_socket->fd)) {
+			log_error_write(srv, __FILE__, __LINE__, "ss", "fcntl failed:", strerror(errno));
+			return -1;
+		}
+	}
+
+	/* Close stderr ASAP to make sure that nothing is being written to
+	 * that fd which may not be valid anymore after forking. */
+	if (-1 == log_error_open(srv)) {
+		log_error_write(srv, __FILE__, __LINE__, "s", "Opening errorlog failed. Going down.");
+
+		plugins_free(srv);
+		network_close(srv);
+		server_free(srv);
+		return -1;
+	}
+
+#ifdef HAVE_FORK
+	/* network is up, let's deamonize ourself */
+	if (srv->srvconf.dont_daemonize == 0) daemonize();
+#endif
+
+	/* write pid file */
+	if (pid_fd != -1) {
+		buffer_copy_long(srv->tmp_buf, getpid());
+		buffer_append_string(srv->tmp_buf, "\n");
+		write(pid_fd, srv->tmp_buf->ptr, srv->tmp_buf->used - 1);
+		close(pid_fd);
+		pid_fd = -1;
+	}
 
 
 #ifdef HAVE_SIGACTION
@@ -1066,62 +1120,6 @@ int main (int argc, char **argv) {
 		}
 	}
 #endif
-
-	if (NULL == (srv->ev = fdevent_init(srv->max_fds + 1, srv->event_handler))) {
-		log_error_write(srv, __FILE__, __LINE__,
-				"s", "fdevent_init failed");
-		return -1;
-	}
-	/*
-	 * kqueue() is called here, select resets its internals,
-	 * all server sockets get their handlers
-	 *
-	 * */
-	if (0 != network_register_fdevents(srv)) {
-		plugins_free(srv);
-		network_close(srv);
-		server_free(srv);
-
-		return -1;
-	}
-
-	/* might fail if user is using fam (not gamin) and famd isn't running */
-	if (NULL == (srv->stat_cache = stat_cache_init())) {
-		log_error_write(srv, __FILE__, __LINE__, "s",
-			"stat-cache could not be setup, dieing.");
-		return -1;
-	}
-
-#ifdef HAVE_FAM_H
-	/* setup FAM */
-	if (srv->srvconf.stat_cache_engine == STAT_CACHE_ENGINE_FAM) {
-		if (0 != FAMOpen2(srv->stat_cache->fam, "lighttpd")) {
-			log_error_write(srv, __FILE__, __LINE__, "s",
-					 "could not open a fam connection, dieing.");
-			return -1;
-		}
-#ifdef HAVE_FAMNOEXISTS
-		FAMNoExists(srv->stat_cache->fam);
-#endif
-
-		srv->stat_cache->fam_fcce_ndx = -1;
-		fdevent_register(srv->ev, FAMCONNECTION_GETFD(srv->stat_cache->fam), stat_cache_handle_fdevent, NULL);
-		fdevent_event_add(srv->ev, &(srv->stat_cache->fam_fcce_ndx), FAMCONNECTION_GETFD(srv->stat_cache->fam), FDEVENT_IN);
-	}
-#endif
-
-
-	/* get the current number of FDs */
-	srv->cur_fds = open("/dev/null", O_RDONLY);
-	close(srv->cur_fds);
-
-	for (i = 0; i < srv->srv_sockets.used; i++) {
-		server_socket *srv_socket = srv->srv_sockets.ptr[i];
-		if (-1 == fdevent_fcntl_set(srv->ev, srv_socket->fd)) {
-			log_error_write(srv, __FILE__, __LINE__, "ss", "fcntl failed:", strerror(errno));
-			return -1;
-		}
-	}
 
 	/* main-loop */
 	while (!srv_shutdown) {
