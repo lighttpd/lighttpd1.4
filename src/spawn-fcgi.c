@@ -39,7 +39,7 @@ typedef int socklen_t;
 #ifdef HAVE_SYS_UN_H
 int fcgi_spawn_connection(char *appPath, char **appArgv, char *addr, unsigned short port, const char *unixsocket, int fork_count, int child_count, int pid_fd, int nofork) {
 	int fcgi_fd;
-	int socket_type, status;
+	int socket_type, status, rc = 0;
 	struct timeval tv = { 0, 100 * 1000 };
 
 	struct sockaddr_un fcgi_addr_un;
@@ -227,14 +227,17 @@ int fcgi_spawn_connection(char *appPath, char **appArgv, char *addr, unsigned sh
 					if (WIFEXITED(status)) {
 						fprintf(stderr, "%s.%d: child exited with: %d\n",
 							__FILE__, __LINE__, WEXITSTATUS(status));
+						rc = WEXITSTATUS(status);
 					} else if (WIFSIGNALED(status)) {
 						fprintf(stderr, "%s.%d: child signaled: %d\n",
 							__FILE__, __LINE__,
 							WTERMSIG(status));
+						rc = 1;
 					} else {
 						fprintf(stderr, "%s.%d: child died somehow: %d\n",
 							__FILE__, __LINE__,
 							status);
+						rc = status;
 					}
 				}
 
@@ -251,7 +254,7 @@ int fcgi_spawn_connection(char *appPath, char **appArgv, char *addr, unsigned sh
 
 	close(fcgi_fd);
 
-	return 0;
+	return rc;
 }
 
 
