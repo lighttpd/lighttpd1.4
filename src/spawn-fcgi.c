@@ -202,7 +202,7 @@ int fcgi_spawn_connection(char *appPath, char **appArgv, char *addr, unsigned sh
 
 				switch (waitpid(child, &status, WNOHANG)) {
 				case 0:
-					fprintf(stderr, "%s.%d: child spawned successfully: PID: %d\n",
+					fprintf(stdout, "%s.%d: child spawned successfully: PID: %d\n",
 						__FILE__, __LINE__,
 						child);
 
