@@ -25,6 +25,7 @@ NEWS
   * Do not rely on PATH_MAX (POSIX does not require it) (#580)
   * Disable logging to access.log if filename is an empty string
   * Implement a clean way to open /dev/null and use it to close stdin/out/err in the needed places (#624)
+  * merge spawn-fcgi changes from trunk (from @2191)
 
 - 1.4.19 - 2008-03-10
 
