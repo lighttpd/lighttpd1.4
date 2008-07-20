@@ -767,6 +767,7 @@ static handler_t magnet_attract(server *srv, connection *con, plugin_data *p, bu
 
 	if (lua_return_value > 99) {
 		con->http_status = lua_return_value;
+		con->file_finished = 1;
 
 		/* try { ...*/
 		if (0 == setjmp(exceptionjmp)) {

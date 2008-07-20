@@ -28,6 +28,7 @@ NEWS
   * merge spawn-fcgi changes from trunk (from @2191)
   * let spawn-fcgi propagate exit code from spawned fcgi application
   * close connection after redirect in trigger_b4_dl (thx icy)
+  * close connection in mod_magnet if returned status code
 
 - 1.4.19 - 2008-03-10
 
