@@ -27,6 +27,7 @@ NEWS
   * Implement a clean way to open /dev/null and use it to close stdin/out/err in the needed places (#624)
   * merge spawn-fcgi changes from trunk (from @2191)
   * let spawn-fcgi propagate exit code from spawned fcgi application
+  * close connection after redirect in trigger_b4_dl (thx icy)
 
 - 1.4.19 - 2008-03-10
 
