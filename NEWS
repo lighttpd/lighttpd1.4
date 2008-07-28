@@ -29,6 +29,7 @@ NEWS
   * let spawn-fcgi propagate exit code from spawned fcgi application
   * close connection after redirect in trigger_b4_dl (thx icy)
   * close connection in mod_magnet if returned status code
+  * fix bug with IPv6 in mod_evasive (#1579)
 
 - 1.4.19 - 2008-03-10
 
