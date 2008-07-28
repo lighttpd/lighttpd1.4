@@ -1686,9 +1686,8 @@ static int scgi_response_parse(server *srv, connection *con, plugin_data *p, buf
 
 				status = strtol(s+9, NULL, 10);
 
-				if (con->http_status >= 100 &&
-				    con->http_status < 1000) {
-					/* we expected 3 digits and didn't got them */
+				if (status >= 100 && status < 1000) {
+					/* we expected 3 digits got them */
 					con->parsed_response |= HTTP_STATUS;
 					con->http_status = status;
 				}
