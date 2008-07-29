@@ -42,8 +42,6 @@ sub new {
 		$self->{MODULES_PATH} = $self->{BASEDIR}.'/build';
 	}
 	$self->{LIGHTTPD_PATH} = $self->{BINDIR}.'/lighttpd';
-	$self->{LIGHTTPD_PIDFILE} = $self->{TESTDIR}.'/tmp/lighttpd/lighttpd.pid';
-	$self->{PIDOF_PIDFILE} = $self->{TESTDIR}.'/tmp/lighttpd/pidof.pid';
 	$self->{PORT} = 2048;
 
 	my ($name, $aliases, $addrtype, $net) = gethostbyaddr(inet_aton("127.0.0.1"), AF_INET);
@@ -72,21 +70,13 @@ sub listening_on {
 sub stop_proc {
 	my $self = shift;
 
-#	open F, $self->{LIGHTTPD_PIDFILE} or return -1;
-#	my $pid = <F>;
-#	close F;
-
-#	if (defined $pid) {
-#		kill('TERM',$pid) or return -1;
-#		select(undef, undef, undef, 0.5);
-#	}
-
 	my $pid = $self->{LIGHTTPD_PID};
-	if (defined $pid) {
+	if (defined $pid && $pid != -1) {
 		kill('TERM', $pid) or return -1;
 		return -1 if ($pid != waitpid($pid, 0));
 	} else {
-		diag("Nothing to kill\n");
+		diag("Process not started, nothing to stop");
+		return -1;
 	}
 
 	return 0;
@@ -120,7 +110,6 @@ sub start_proc {
 	$ENV{'SRCDIR'} = $self->{BASEDIR}.'/tests';
 	$ENV{'PORT'} = $self->{PORT};
 
-	unlink($self->{LIGHTTPD_PIDFILE});
 	my $cmdline = $self->{LIGHTTPD_PATH}." -D -f ".$self->{SRCDIR}."/".$self->{CONFIGFILE}." -m ".$self->{MODULES_PATH};
 	if (defined $ENV{"TRACEME"} && $ENV{"TRACEME"} eq 'strace') {
 		$cmdline = "strace -tt -s 512 -o strace ".$cmdline;
@@ -140,9 +129,6 @@ sub start_proc {
 	if ($child == 0) {
 		exec $cmdline or die($?);
 	}
-#	system($cmdline) == 0 or die($?);
-
-	unlink($self->{TESTDIR}."/tmp/cfg.file");
 
 	if (0 != $self->wait_for_port_with_proc($self->{PORT}, $child)) {
 		diag(sprintf('The process %i is not up', $child));
@@ -227,8 +213,9 @@ sub handle_http {
 					(my $h = $1) =~ tr/[A-Z]/[a-z]/;
 
 					if (defined $resp_hdr{$h}) {
-						diag(sprintf("header '%s' is duplicated: '%s' and '%s'\n",
-						             $h, $resp_hdr{$h}, $2));
+# 						diag(sprintf("header '%s' is duplicated: '%s' and '%s'\n",
+# 						             $h, $resp_hdr{$h}, $2));
+						$resp_hdr{$h} .= ', '.$2;
 					} else {
 						$resp_hdr{$h} = $2;
 					}
