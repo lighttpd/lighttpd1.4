@@ -42,8 +42,6 @@ CONFS=fastcgi-10.conf \
       mod-redirect.t \
       mod-rewrite.t \
       mod-userdir.t \
-	  env-variables.t \
-	  env-variables.conf \
 	  symlink.t \
       request.t \
       mod-ssi.t \
