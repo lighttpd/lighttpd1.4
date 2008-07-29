@@ -32,6 +32,7 @@ NEWS
   * fix bug with IPv6 in mod_evasive (#1579)
   * fix scgi HTTP/1.* status parsing (#1638), found by met@uberstats.com
   * [tests] fixed system, use foreground daemons and waitpid
+  * [tests] removed pidfile from test system
 
 - 1.4.19 - 2008-03-10
 

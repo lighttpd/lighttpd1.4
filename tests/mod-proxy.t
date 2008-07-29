@@ -22,11 +22,9 @@ my $t;
 
 $tf_real->{PORT} = 2048;
 $tf_real->{CONFIGFILE} = 'lighttpd.conf';
-$tf_real->{LIGHTTPD_PIDFILE} = $tf_real->{TESTDIR}.'/tmp/lighttpd/lighttpd.pid';
 
 $tf_proxy->{PORT} = 2050;
 $tf_proxy->{CONFIGFILE} = 'proxy.conf';
-$tf_proxy->{LIGHTTPD_PIDFILE} = $tf_proxy->{TESTDIR}.'/tmp/lighttpd/lighttpd-proxy.pid';
 
 ok($tf_real->start_proc == 0, "Starting lighttpd") or die();
 
