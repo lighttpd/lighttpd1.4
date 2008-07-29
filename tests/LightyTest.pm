@@ -6,6 +6,7 @@ use IO::Socket;
 use Test::More;
 use Socket;
 use Cwd 'abs_path';
+use POSIX ":sys_wait_h";
 
 sub mtime {
 	my $file = shift;
@@ -30,12 +31,17 @@ sub new {
 
 
 	if (mtime($self->{BASEDIR}.'/src/lighttpd') > mtime($self->{BASEDIR}.'/build/lighttpd')) {
-		$self->{LIGHTTPD_PATH} = $self->{BASEDIR}.'/src/lighttpd';
-		$self->{MODULES_PATH} = $self->{BASEDIR}.'/src/.libs';
+		$self->{BINDIR} = $self->{BASEDIR}.'/src';
+		if (mtime($self->{BASEDIR}.'/src/.libs')) {
+			$self->{MODULES_PATH} = $self->{BASEDIR}.'/src/.libs';
+		} else {
+			$self->{MODULES_PATH} = $self->{BASEDIR}.'/src';
+		}
 	} else {
-		$self->{LIGHTTPD_PATH} = $self->{BASEDIR}.'/build/lighttpd';
+		$self->{BINDIR} = $self->{BASEDIR}.'/build';
 		$self->{MODULES_PATH} = $self->{BASEDIR}.'/build';
 	}
+	$self->{LIGHTTPD_PATH} = $self->{BINDIR}.'/lighttpd';
 	$self->{LIGHTTPD_PIDFILE} = $self->{TESTDIR}.'/tmp/lighttpd/lighttpd.pid';
 	$self->{PIDOF_PIDFILE} = $self->{TESTDIR}.'/tmp/lighttpd/pidof.pid';
 	$self->{PORT} = 2048;
@@ -66,58 +72,84 @@ sub listening_on {
 sub stop_proc {
 	my $self = shift;
 
-	open F, $self->{LIGHTTPD_PIDFILE} or return -1;
-	my $pid = <F>;
-	close F;
+#	open F, $self->{LIGHTTPD_PIDFILE} or return -1;
+#	my $pid = <F>;
+#	close F;
 
+#	if (defined $pid) {
+#		kill('TERM',$pid) or return -1;
+#		select(undef, undef, undef, 0.5);
+#	}
+
+	my $pid = $self->{LIGHTTPD_PID};
 	if (defined $pid) {
-		kill('TERM',$pid) or return -1;
-		select(undef, undef, undef, 0.1);
+		kill('TERM', $pid) or return -1;
+		return -1 if ($pid != waitpid($pid, 0));
+	} else {
+		diag("Nothing to kill\n");
 	}
 
 	return 0;
 }
 
+sub wait_for_port_with_proc {
+	my $self = shift;
+	my $port = shift;
+	my $child = shift;
+
+	while (0 == $self->listening_on($port)) {
+		select(undef, undef, undef, 0.1);
+
+		# the process is gone, we failed
+		if (0 != waitpid($child, WNOHANG)) {
+			return -1;
+		}
+	}
+
+	return 0;
+}
 
 sub start_proc {
 	my $self = shift;
 	# kill old proc if necessary
-	$self->stop_proc;
+	#$self->stop_proc;
 
 	# pre-process configfile if necessary
 	#
 
 	$ENV{'SRCDIR'} = $self->{BASEDIR}.'/tests';
+	$ENV{'PORT'} = $self->{PORT};
 
 	unlink($self->{LIGHTTPD_PIDFILE});
+	my $cmdline = $self->{LIGHTTPD_PATH}." -D -f ".$self->{SRCDIR}."/".$self->{CONFIGFILE}." -m ".$self->{MODULES_PATH};
 	if (defined $ENV{"TRACEME"} && $ENV{"TRACEME"} eq 'strace') {
-		system("strace -tt -s 512 -o strace ".$self->{LIGHTTPD_PATH}." -D -f ".$self->{SRCDIR}."/".$self->{CONFIGFILE}." -m ".$self->{MODULES_PATH}." &");
+		$cmdline = "strace -tt -s 512 -o strace ".$cmdline;
 	} elsif (defined $ENV{"TRACEME"} && $ENV{"TRACEME"} eq 'truss') {
-		system("/usr/dtrctkit/bin/dtruss -d -e ".$self->{LIGHTTPD_PATH}." -D -f ".$self->{SRCDIR}."/".$self->{CONFIGFILE}." -m ".$self->{MODULES_PATH}." 2> strace &");
+		$cmdline = "truss -a -l -w all -v all -o strace ".$cmdline;
+	} elsif (defined $ENV{"TRACEME"} && $ENV{"TRACEME"} eq 'gdb') {
+		$cmdline = "gdb --batch --ex 'run' --ex 'bt' --args ".$cmdline." > gdb.out";
 	} elsif (defined $ENV{"TRACEME"} && $ENV{"TRACEME"} eq 'valgrind') {
-		system("valgrind --tool=memcheck --show-reachable=yes --leak-check=yes --log-file=valgrind ".$self->{LIGHTTPD_PATH}." -D -f ".$self->{SRCDIR}."/".$self->{CONFIGFILE}." -m ".$self->{MODULES_PATH}." &");
-	} else {
-		system($self->{LIGHTTPD_PATH}." -f ".$self->{SRCDIR}."/".$self->{CONFIGFILE}." -m ".$self->{MODULES_PATH});
+		$cmdline = "valgrind --tool=memcheck --show-reachable=yes --leak-check=yes --log-file=valgrind ".$cmdline;
 	}
-
-	select(undef, undef, undef, 0.1);
-	if (not -e $self->{LIGHTTPD_PIDFILE} or 0 == kill 0, `cat $self->{LIGHTTPD_PIDFILE}`) {
-		select(undef, undef, undef, 2);	
+	# diag("starting lighttpd at :".$self->{PORT}.", cmdline: ".$cmdline );
+	my $child = fork();
+	if (not defined $child) {
+		diag("Fork failed");
+		return -1;
 	}
+	if ($child == 0) {
+		exec $cmdline or die($?);
+	}
+#	system($cmdline) == 0 or die($?);
 
 	unlink($self->{TESTDIR}."/tmp/cfg.file");
 
-	# no pidfile, we failed
-	if (not -e $self->{LIGHTTPD_PIDFILE}) {
-		diag(sprintf('Could not find pidfile: %s', $self->{LIGHTTPD_PIDFILE}));
+	if (0 != $self->wait_for_port_with_proc($self->{PORT}, $child)) {
+		diag(sprintf('The process %i is not up', $child));
 		return -1;
 	}
 
-	# the process is gone, we failed
-	if (0 == kill 0, `cat $self->{LIGHTTPD_PIDFILE}`) {
-		diag(sprintf('the process referenced by %s is not up', $self->{LIGHTTPD_PIDFILE}));
-		return -1;
-	}
+	$self->{LIGHTTPD_PID} = $child;
 
 	0;
 }
@@ -131,6 +163,7 @@ sub handle_http {
 
 	my @request = $t->{REQUEST};
 	my @response = $t->{RESPONSE};
+	my $is_debug = $ENV{"TRACE_HTTP"};
 
 	my $remote = 
  	  IO::Socket::INET->new(Proto    => "tcp",
@@ -144,20 +177,27 @@ sub handle_http {
 
 	$remote->autoflush(1);
 
+	diag("sending request header to ".$host.":".$self->{PORT}) if $is_debug;
 	foreach(@request) {
 		# pipeline requests
 		s/\r//g;
 		s/\n/$EOL/g;
 
-		print $remote $_.$BLANK;	
+		print $remote $_.$BLANK;
+		diag("<< ".$_) if $is_debug;
 	}
+	shutdown($remote, 1); # I've stopped writing data
+	diag("... done") if $is_debug;
 
 	my $lines = "";
 
+	diag("receiving response") if $is_debug;
 	# read everything
 	while(<$remote>) {
 		$lines .= $_;
+		diag(">> ".$_) if $is_debug;
 	}
+	diag("... done") if $is_debug;
 	
 	close $remote;
 
@@ -187,16 +227,21 @@ sub handle_http {
 					(my $h = $1) =~ tr/[A-Z]/[a-z]/;
 
 					if (defined $resp_hdr{$h}) {
-						diag(sprintf("header %s is duplicated: %s and %s\n",
+						diag(sprintf("header '%s' is duplicated: '%s' and '%s'\n",
 						             $h, $resp_hdr{$h}, $2));
 					} else {
 						$resp_hdr{$h} = $2;
 					}
 				} else {
-					diag(sprintf("unexpected line '$line'\n"));
+					diag(sprintf("unexpected line '%s'\n", $line));
 					return -1;
 				}
 			}
+		}
+
+		if (not defined($resp_line)) {
+			diag(sprintf("empty response\n"));
+			return -1;
 		}
 
 		$t->{etag} = $resp_hdr{'etag'};
@@ -227,7 +272,7 @@ sub handle_http {
 				return -1;
 			}
 		} else {
-			diag(sprintf("unexpected resp_line '$resp_line'\n"));
+			diag(sprintf("unexpected resp_line '%s'\n", $resp_line));
 			return -1;
 		}
 
@@ -237,7 +282,9 @@ sub handle_http {
 				diag(sprintf("body failed: expected '%s', got '%s'\n", $href->{'HTTP-Content'}, $resp_body));
 				return -1;
 			}
-		} elsif (defined $href->{'-HTTP-Content'}) {
+		}
+		
+		if (defined $href->{'-HTTP-Content'}) {
 			if (defined $resp_body && $resp_body ne '') {
 				diag(sprintf("body failed: expected empty body, got '%s'\n", $resp_body));
 				return -1;
@@ -245,7 +292,6 @@ sub handle_http {
 		}
 
 		foreach (keys %{ $href }) {
-			## filter special keys
 			next if $_ eq 'HTTP-Protocol';
 			next if $_ eq 'HTTP-Status';
 			next if $_ eq 'HTTP-Content';
@@ -257,7 +303,6 @@ sub handle_http {
 			my $key_inverted = 0;
 
 			if (substr($k, 0, 1) eq '+') {
-				## the key has to exist, but the value is ignored
 				$k = substr($k, 1);
 				$verify_value = 0;
 			} elsif (substr($k, 0, 1) eq '-') {
@@ -265,11 +310,11 @@ sub handle_http {
 				$k = substr($k, 1);
 				$key_inverted = 1;
 				$verify_value = 0; ## skip the value check
-			}
+                        }
 
 			if ($key_inverted) {
 				if (defined $resp_hdr{$k}) {
-					diag(sprintf("required header '%s' is missing\n", $k));
+					diag(sprintf("header '%s' MUST not be set\n", $k));
 					return -1;
 				}
 			} else {
@@ -297,12 +342,38 @@ sub handle_http {
 
 	# we should have sucked up everything
 	if (defined $lines) {
-		diag(sprintf("unexpected lines '$lines'\n"));
+		diag(sprintf("unexpected lines '%s'\n", $lines));
 		return -1;
 	}
 
 	return 0;
 }
-    
-1;
 
+sub spawnfcgi {
+	my ($self, $binary, $port) = @_;
+	my $child = fork();
+	if (not defined $child) {
+		diag("Couldn't fork\n");
+		return -1;
+	}
+	if ($child == 0) {
+		my $cmd = $self->{BINDIR}.'/spawn-fcgi -n -p '.$port.' -f "'.$binary.'"';
+		exec $cmd or die($?);
+	} else {
+		if (0 != $self->wait_for_port_with_proc($port, $child)) {
+			diag(sprintf('The process %i is not up (port %i, %s)', $child, $port, $binary));
+			return -1;
+		}
+		return $child;
+	}
+}
+
+sub endspawnfcgi {
+	my ($self, $pid) = @_;
+	return -1 if (-1 == $pid);
+	kill(2, $pid);
+	waitpid($pid, 0);
+	return 0;
+}
+
+1;
