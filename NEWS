@@ -37,6 +37,7 @@ NEWS
   * fixed typo in mod_accesslog (#1699)
   * replaced buffer_{append,copy}_string with the _len variant where possible (#1732) (thx crypt)
   * case insensitive match for secdownload md5 token (#1710)
+  * Handle only HEAD, GET and POST in mod_dirlisting (same as in staticfile) (#1687)
 
 - 1.4.19 - 2008-03-10
 
