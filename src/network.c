@@ -494,7 +494,7 @@ int network_init(server *srv) {
 	b = buffer_init();
 
 	buffer_copy_string_buffer(b, srv->srvconf.bindhost);
-	buffer_append_string(b, ":");
+	buffer_append_string_len(b, CONST_STR_LEN(":"));
 	buffer_append_long(b, srv->srvconf.port);
 
 	if (0 != network_server_init(srv, b, srv->config_storage[0])) {

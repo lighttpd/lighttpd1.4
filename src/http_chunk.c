@@ -27,7 +27,7 @@ static int http_chunk_append_len(server *srv, connection *con, size_t len) {
 	b = srv->tmp_chunk_len;
 
 	if (len == 0) {
-		buffer_copy_string(b, "0");
+		buffer_copy_string_len(b, CONST_STR_LEN("0"));
 	} else {
 		for (i = 0; i < 8 && len; i++) {
 			len >>= 4;
@@ -44,7 +44,7 @@ static int http_chunk_append_len(server *srv, connection *con, size_t len) {
 		b->ptr[b->used++] = '\0';
 	}
 
-	buffer_append_string(b, "\r\n");
+	buffer_append_string_len(b, CONST_STR_LEN("\r\n"));
 	chunkqueue_append_buffer(con->write_queue, b);
 
 	return 0;

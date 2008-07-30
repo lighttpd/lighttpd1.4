@@ -103,7 +103,7 @@ SETDEFAULTS_FUNC(mod_usertrack_set_defaults) {
 		}
 
 		if (buffer_is_empty(s->cookie_name)) {
-			buffer_copy_string(s->cookie_name, "TRACKID");
+			buffer_copy_string_len(s->cookie_name, CONST_STR_LEN("TRACKID"));
 		} else {
 			size_t j;
 			for (j = 0; j < s->cookie_name->used - 1; j++) {
@@ -214,9 +214,9 @@ URIHANDLER_FUNC(mod_usertrack_uri_handler) {
 	if (NULL == (ds = (data_string *)array_get_unused_element(con->response.headers, TYPE_STRING))) {
 		ds = data_response_init();
 	}
-	buffer_copy_string(ds->key, "Set-Cookie");
+	buffer_copy_string_len(ds->key, CONST_STR_LEN("Set-Cookie"));
 	buffer_copy_string_buffer(ds->value, p->conf.cookie_name);
-	buffer_append_string(ds->value, "=");
+	buffer_append_string_len(ds->value, CONST_STR_LEN("="));
 
 
 	/* taken from mod_auth.c */
@@ -235,16 +235,16 @@ URIHANDLER_FUNC(mod_usertrack_uri_handler) {
 	MD5_Final(h, &Md5Ctx);
 
 	buffer_append_string_encoded(ds->value, (char *)h, 16, ENCODING_HEX);
-	buffer_append_string(ds->value, "; Path=/");
-	buffer_append_string(ds->value, "; Version=1");
+	buffer_append_string_len(ds->value, CONST_STR_LEN("; Path=/"));
+	buffer_append_string_len(ds->value, CONST_STR_LEN("; Version=1"));
 
 	if (!buffer_is_empty(p->conf.cookie_domain)) {
-		buffer_append_string(ds->value, "; Domain=");
+		buffer_append_string_len(ds->value, CONST_STR_LEN("; Domain="));
 		buffer_append_string_encoded(ds->value, CONST_BUF_LEN(p->conf.cookie_domain), ENCODING_REL_URI);
 	}
 
 	if (p->conf.cookie_max_age) {
-		buffer_append_string(ds->value, "; max-age=");
+		buffer_append_string_len(ds->value, CONST_STR_LEN("; max-age="));
 		buffer_append_long(ds->value, p->conf.cookie_max_age);
 	}
 

@@ -59,7 +59,7 @@ static int ssi_expr_tokenizer(server *srv, connection *con, plugin_data *p,
 			t->offset++;
 			t->line_pos++;
 
-			buffer_copy_string(token, "(=)");
+			buffer_copy_string_len(token, CONST_STR_LEN("(=)"));
 
 			break;
 		case '>':
@@ -69,14 +69,14 @@ static int ssi_expr_tokenizer(server *srv, connection *con, plugin_data *p,
 
 				tid = TK_GE;
 
-				buffer_copy_string(token, "(>=)");
+				buffer_copy_string_len(token, CONST_STR_LEN("(>=)"));
 			} else {
 				t->offset += 1;
 				t->line_pos += 1;
 
 				tid = TK_GT;
 
-				buffer_copy_string(token, "(>)");
+				buffer_copy_string_len(token, CONST_STR_LEN("(>)"));
 			}
 
 			break;
@@ -87,14 +87,14 @@ static int ssi_expr_tokenizer(server *srv, connection *con, plugin_data *p,
 
 				tid = TK_LE;
 
-				buffer_copy_string(token, "(<=)");
+				buffer_copy_string_len(token, CONST_STR_LEN("(<=)"));
 			} else {
 				t->offset += 1;
 				t->line_pos += 1;
 
 				tid = TK_LT;
 
-				buffer_copy_string(token, "(<)");
+				buffer_copy_string_len(token, CONST_STR_LEN("(<)"));
 			}
 
 			break;
@@ -106,14 +106,14 @@ static int ssi_expr_tokenizer(server *srv, connection *con, plugin_data *p,
 
 				tid = TK_NE;
 
-				buffer_copy_string(token, "(!=)");
+				buffer_copy_string_len(token, CONST_STR_LEN("(!=)"));
 			} else {
 				t->offset += 1;
 				t->line_pos += 1;
 
 				tid = TK_NOT;
 
-				buffer_copy_string(token, "(!)");
+				buffer_copy_string_len(token, CONST_STR_LEN("(!)"));
 			}
 
 			break;
@@ -124,7 +124,7 @@ static int ssi_expr_tokenizer(server *srv, connection *con, plugin_data *p,
 
 				tid = TK_AND;
 
-				buffer_copy_string(token, "(&&)");
+				buffer_copy_string_len(token, CONST_STR_LEN("(&&)"));
 			} else {
 				log_error_write(srv, __FILE__, __LINE__, "sds",
 						"pos:", t->line_pos,
@@ -140,7 +140,7 @@ static int ssi_expr_tokenizer(server *srv, connection *con, plugin_data *p,
 
 				tid = TK_OR;
 
-				buffer_copy_string(token, "(||)");
+				buffer_copy_string_len(token, CONST_STR_LEN("(||)"));
 			} else {
 				log_error_write(srv, __FILE__, __LINE__, "sds",
 						"pos:", t->line_pos,
@@ -183,7 +183,7 @@ static int ssi_expr_tokenizer(server *srv, connection *con, plugin_data *p,
 
 			tid = TK_LPARAN;
 
-			buffer_copy_string(token, "(");
+			buffer_copy_string_len(token, CONST_STR_LEN("("));
 			break;
 		case ')':
 			t->offset++;
@@ -191,7 +191,7 @@ static int ssi_expr_tokenizer(server *srv, connection *con, plugin_data *p,
 
 			tid = TK_RPARAN;
 
-			buffer_copy_string(token, ")");
+			buffer_copy_string_len(token, CONST_STR_LEN(")"));
 			break;
 		case '$':
 			if (t->input[t->offset + 1] == '{') {
@@ -219,7 +219,7 @@ static int ssi_expr_tokenizer(server *srv, connection *con, plugin_data *p,
 			} else if (NULL != (ds = (data_string *)array_get_element(p->ssi_vars, token->ptr))) {
 				buffer_copy_string_buffer(token, ds->value);
 			} else {
-				buffer_copy_string(token, "");
+				buffer_copy_string_len(token, CONST_STR_LEN(""));
 			}
 
 			t->offset += i;

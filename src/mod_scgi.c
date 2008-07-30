@@ -804,7 +804,7 @@ static int scgi_spawn_connection(server *srv,
 			env.ptr[env.used] = NULL;
 
 			b = buffer_init();
-			buffer_copy_string(b, "exec ");
+			buffer_copy_string_len(b, CONST_STR_LEN("exec "));
 			buffer_append_string_buffer(b, host->bin_path);
 
 			/* exec the cgi */
@@ -1097,7 +1097,7 @@ SETDEFAULTS_FUNC(mod_scgi_set_defaults) {
 								proc->port = df->port + pno;
 							} else {
 								buffer_copy_string_buffer(proc->socket, df->unixsocket);
-								buffer_append_string(proc->socket, "-");
+								buffer_append_string_len(proc->socket, CONST_STR_LEN("-"));
 								buffer_append_long(proc->socket, pno);
 							}
 
@@ -1379,7 +1379,7 @@ static int scgi_env_add_request_headers(server *srv, connection *con, plugin_dat
 			buffer_reset(srv->tmp_buf);
 
 			if (0 != strcasecmp(ds->key->ptr, "CONTENT-TYPE")) {
-				BUFFER_COPY_STRING_CONST(srv->tmp_buf, "HTTP_");
+				buffer_copy_string_len(srv->tmp_buf, CONST_STR_LEN("HTTP_"));
 				srv->tmp_buf->used--;
 			}
 
@@ -2972,7 +2972,7 @@ TRIGGER_FUNC(mod_scgi_handle_trigger) {
 						fp->port = host->port + fp->id;
 					} else {
 						buffer_copy_string_buffer(fp->socket, host->unixsocket);
-						buffer_append_string(fp->socket, "-");
+						buffer_append_string_len(fp->socket, CONST_STR_LEN("-"));
 						buffer_append_long(fp->socket, fp->id);
 					}
 

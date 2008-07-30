@@ -177,7 +177,7 @@ static int ssi_env_add_request_headers(server *srv, connection *con, plugin_data
 			}
 
 			if (0 != strcasecmp(ds->key->ptr, "CONTENT-TYPE")) {
-				buffer_copy_string(srv->tmp_buf, "HTTP_");
+				buffer_copy_string_len(srv->tmp_buf, CONST_STR_LEN("HTTP_"));
 				srv->tmp_buf->used--;
 			}
 
@@ -419,7 +419,7 @@ static int process_ssi_stmt(server *srv, connection *con, plugin_data *p,
 
 			b = chunkqueue_get_append_buffer(con->write_queue);
 			if (0 == strftime(buf, sizeof(buf), p->timefmt->ptr, localtime(&t))) {
-				buffer_copy_string(b, "(none)");
+				buffer_copy_string_len(b, CONST_STR_LEN("(none)"));
 			} else {
 				buffer_copy_string(b, buf);
 			}
@@ -430,7 +430,7 @@ static int process_ssi_stmt(server *srv, connection *con, plugin_data *p,
 
 			b = chunkqueue_get_append_buffer(con->write_queue);
 			if (0 == strftime(buf, sizeof(buf), p->timefmt->ptr, localtime(&t))) {
-				buffer_copy_string(b, "(none)");
+				buffer_copy_string_len(b, CONST_STR_LEN("(none)"));
 			} else {
 				buffer_copy_string(b, buf);
 			}
@@ -441,7 +441,7 @@ static int process_ssi_stmt(server *srv, connection *con, plugin_data *p,
 
 			b = chunkqueue_get_append_buffer(con->write_queue);
 			if (0 == strftime(buf, sizeof(buf), p->timefmt->ptr, gmtime(&t))) {
-				buffer_copy_string(b, "(none)");
+				buffer_copy_string_len(b, CONST_STR_LEN("(none)"));
 			} else {
 				buffer_copy_string(b, buf);
 			}
@@ -472,7 +472,7 @@ static int process_ssi_stmt(server *srv, connection *con, plugin_data *p,
 			if (NULL != (ds = (data_string *)array_get_element(p->ssi_cgi_env, var_val))) {
 				buffer_copy_string_buffer(b, ds->value);
 			} else {
-				buffer_copy_string(b, "(none)");
+				buffer_copy_string_len(b, CONST_STR_LEN("(none)"));
 			}
 
 			break;
@@ -519,7 +519,7 @@ static int process_ssi_stmt(server *srv, connection *con, plugin_data *p,
 		if (file_path) {
 			/* current doc-root */
 			if (NULL == (sl = strrchr(con->physical.path->ptr, '/'))) {
-				buffer_copy_string(p->stat_fn, "/");
+				buffer_copy_string_len(p->stat_fn, CONST_STR_LEN("/"));
 			} else {
 				buffer_copy_string_len(p->stat_fn, con->physical.path->ptr, sl - con->physical.path->ptr + 1);
 			}
@@ -573,7 +573,7 @@ static int process_ssi_stmt(server *srv, connection *con, plugin_data *p,
 			case SSI_FLASTMOD:
 				b = chunkqueue_get_append_buffer(con->write_queue);
 				if (0 == strftime(buf, sizeof(buf), p->timefmt->ptr, localtime(&t))) {
-					buffer_copy_string(b, "(none)");
+					buffer_copy_string_len(b, CONST_STR_LEN("(none)"));
 				} else {
 					buffer_copy_string(b, buf);
 				}
@@ -656,17 +656,17 @@ static int process_ssi_stmt(server *srv, connection *con, plugin_data *p,
 		if (p->if_is_false) break;
 
 		b = chunkqueue_get_append_buffer(con->write_queue);
-		buffer_copy_string(b, "<pre>");
+		buffer_copy_string_len(b, CONST_STR_LEN("<pre>"));
 		for (i = 0; i < p->ssi_vars->used; i++) {
 			data_string *ds = (data_string *)p->ssi_vars->data[p->ssi_vars->sorted[i]];
 
 			buffer_append_string_buffer(b, ds->key);
-			buffer_append_string(b, ": ");
+			buffer_append_string_len(b, CONST_STR_LEN(": "));
 			buffer_append_string_buffer(b, ds->value);
-			buffer_append_string(b, "<br />");
+			buffer_append_string_len(b, CONST_STR_LEN("<br />"));
 
 		}
-		buffer_append_string(b, "</pre>");
+		buffer_append_string_len(b, CONST_STR_LEN("</pre>"));
 
 		break;
 	case SSI_EXEC: {
@@ -924,7 +924,7 @@ static int mod_ssi_handle_request(server *srv, connection *con, plugin_data *p) 
 
 	array_reset(p->ssi_vars);
 	array_reset(p->ssi_cgi_env);
-	buffer_copy_string(p->timefmt, "%a, %d %b %Y %H:%M:%S %Z");
+	buffer_copy_string_len(p->timefmt, CONST_STR_LEN("%a, %d %b %Y %H:%M:%S %Z"));
 	p->sizefmt = 0;
 	build_ssi_cgi_vars(srv, con, p);
 	p->if_is_false = 0;

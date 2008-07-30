@@ -485,23 +485,23 @@ static int webdav_gen_prop_tag(server *srv, connection *con,
 	UNUSED(con);
 
 	if (value) {
-		buffer_append_string(b,"<");
+		buffer_append_string_len(b,CONST_STR_LEN("<"));
 		buffer_append_string(b, prop_name);
-		buffer_append_string(b, " xmlns=\"");
+		buffer_append_string_len(b, CONST_STR_LEN(" xmlns=\""));
 		buffer_append_string(b, prop_ns);
-		buffer_append_string(b, "\">");
+		buffer_append_string_len(b, CONST_STR_LEN("\">"));
 
 		buffer_append_string(b, value);
 
-		buffer_append_string(b,"</");
+		buffer_append_string_len(b,CONST_STR_LEN("</"));
 		buffer_append_string(b, prop_name);
-		buffer_append_string(b, ">");
+		buffer_append_string_len(b, CONST_STR_LEN(">"));
 	} else {
-		buffer_append_string(b,"<");
+		buffer_append_string_len(b,CONST_STR_LEN("<"));
 		buffer_append_string(b, prop_name);
-		buffer_append_string(b, " xmlns=\"");
+		buffer_append_string_len(b, CONST_STR_LEN(" xmlns=\""));
 		buffer_append_string(b, prop_ns);
-		buffer_append_string(b, "\"/>");
+		buffer_append_string_len(b, CONST_STR_LEN("\"/>"));
 	}
 
 	return 0;
@@ -511,24 +511,24 @@ static int webdav_gen_prop_tag(server *srv, connection *con,
 static int webdav_gen_response_status_tag(server *srv, connection *con, physical *dst, int status, buffer *b) {
 	UNUSED(srv);
 
-	buffer_append_string(b,"<D:response xmlns:ns0=\"urn:uuid:c2f41010-65b3-11d1-a29f-00aa00c14882/\">\n");
+	buffer_append_string_len(b,CONST_STR_LEN("<D:response xmlns:ns0=\"urn:uuid:c2f41010-65b3-11d1-a29f-00aa00c14882/\">\n"));
 
-	buffer_append_string(b,"<D:href>\n");
+	buffer_append_string_len(b,CONST_STR_LEN("<D:href>\n"));
 	buffer_append_string_buffer(b, dst->rel_path);
-	buffer_append_string(b,"</D:href>\n");
-	buffer_append_string(b,"<D:status>\n");
+	buffer_append_string_len(b,CONST_STR_LEN("</D:href>\n"));
+	buffer_append_string_len(b,CONST_STR_LEN("<D:status>\n"));
 
 	if (con->request.http_version == HTTP_VERSION_1_1) {
-		BUFFER_COPY_STRING_CONST(b, "HTTP/1.1 ");
+		buffer_copy_string_len(b, CONST_STR_LEN("HTTP/1.1 "));
 	} else {
-		BUFFER_COPY_STRING_CONST(b, "HTTP/1.0 ");
+		buffer_copy_string_len(b, CONST_STR_LEN("HTTP/1.0 "));
 	}
 	buffer_append_long(b, status);
-	BUFFER_APPEND_STRING_CONST(b, " ");
+	buffer_append_string_len(b, CONST_STR_LEN(" "));
 	buffer_append_string(b, get_http_status_name(status));
 
-	buffer_append_string(b,"</D:status>\n");
-	buffer_append_string(b,"</D:response>\n");
+	buffer_append_string_len(b,CONST_STR_LEN("</D:status>\n"));
+	buffer_append_string_len(b,CONST_STR_LEN("</D:response>\n"));
 
 	return 0;
 }
@@ -844,12 +844,12 @@ static int webdav_get_live_property(server *srv, connection *con, plugin_data *p
 
 		if (0 == strcmp(prop_name, "resourcetype")) {
 			if (S_ISDIR(sce->st.st_mode)) {
-				buffer_append_string(b, "<D:resourcetype><D:collection/></D:resourcetype>");
+				buffer_append_string_len(b, CONST_STR_LEN("<D:resourcetype><D:collection/></D:resourcetype>"));
 				found = 1;
 			}
 		} else if (0 == strcmp(prop_name, "getcontenttype")) {
 			if (S_ISDIR(sce->st.st_mode)) {
-				buffer_append_string(b, "<D:getcontenttype>httpd/unix-directory</D:getcontenttype>");
+				buffer_append_string_len(b, CONST_STR_LEN("<D:getcontenttype>httpd/unix-directory</D:getcontenttype>"));
 				found = 1;
 			} else if(S_ISREG(sce->st.st_mode)) {
 				for (k = 0; k < con->conf.mimetypes->used; k++) {
@@ -858,9 +858,9 @@ static int webdav_get_live_property(server *srv, connection *con, plugin_data *p
 					if (ds->key->used == 0) continue;
 
 					if (buffer_is_equal_right_len(dst->path, ds->key, ds->key->used - 1)) {
-						buffer_append_string(b,"<D:getcontenttype>");
+						buffer_append_string_len(b,CONST_STR_LEN("<D:getcontenttype>"));
 						buffer_append_string_buffer(b, ds->value);
-						buffer_append_string(b, "</D:getcontenttype>");
+						buffer_append_string_len(b, CONST_STR_LEN("</D:getcontenttype>"));
 						found = 1;
 
 						break;
@@ -868,26 +868,26 @@ static int webdav_get_live_property(server *srv, connection *con, plugin_data *p
 				}
 			}
 		} else if (0 == strcmp(prop_name, "creationdate")) {
-			buffer_append_string(b, "<D:creationdate ns0:dt=\"dateTime.tz\">");
+			buffer_append_string_len(b, CONST_STR_LEN("<D:creationdate ns0:dt=\"dateTime.tz\">"));
 			strftime(ctime_buf, sizeof(ctime_buf), "%Y-%m-%dT%H:%M:%SZ", gmtime(&(sce->st.st_ctime)));
 			buffer_append_string(b, ctime_buf);
-			buffer_append_string(b, "</D:creationdate>");
+			buffer_append_string_len(b, CONST_STR_LEN("</D:creationdate>"));
 			found = 1;
 		} else if (0 == strcmp(prop_name, "getlastmodified")) {
-			buffer_append_string(b,"<D:getlastmodified ns0:dt=\"dateTime.rfc1123\">");
+			buffer_append_string_len(b,CONST_STR_LEN("<D:getlastmodified ns0:dt=\"dateTime.rfc1123\">"));
 			strftime(mtime_buf, sizeof(mtime_buf), "%a, %d %b %Y %H:%M:%S GMT", gmtime(&(sce->st.st_mtime)));
 			buffer_append_string(b, mtime_buf);
-			buffer_append_string(b, "</D:getlastmodified>");
+			buffer_append_string_len(b, CONST_STR_LEN("</D:getlastmodified>"));
 			found = 1;
 		} else if (0 == strcmp(prop_name, "getcontentlength")) {
-			buffer_append_string(b,"<D:getcontentlength>");
+			buffer_append_string_len(b,CONST_STR_LEN("<D:getcontentlength>"));
 			buffer_append_off_t(b, sce->st.st_size);
-			buffer_append_string(b, "</D:getcontentlength>");
+			buffer_append_string_len(b, CONST_STR_LEN("</D:getcontentlength>"));
 			found = 1;
 		} else if (0 == strcmp(prop_name, "getcontentlanguage")) {
-			buffer_append_string(b,"<D:getcontentlanguage>");
-			buffer_append_string(b, "en");
-			buffer_append_string(b, "</D:getcontentlanguage>");
+			buffer_append_string_len(b,CONST_STR_LEN("<D:getcontentlanguage>"));
+			buffer_append_string_len(b, CONST_STR_LEN("en"));
+			buffer_append_string_len(b, CONST_STR_LEN("</D:getcontentlanguage>"));
 			found = 1;
 		}
 	}
@@ -1107,44 +1107,44 @@ int webdav_lockdiscovery(server *srv, connection *con,
 
 	b = chunkqueue_get_append_buffer(con->write_queue);
 
-	buffer_copy_string(b, "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n");
+	buffer_copy_string_len(b, CONST_STR_LEN("<?xml version=\"1.0\" encoding=\"utf-8\"?>\n"));
 
-	buffer_append_string(b,"<D:prop xmlns:D=\"DAV:\" xmlns:ns0=\"urn:uuid:c2f41010-65b3-11d1-a29f-00aa00c14882/\">\n");
-	buffer_append_string(b,"<D:lockdiscovery>\n");
-	buffer_append_string(b,"<D:activelock>\n");
+	buffer_append_string_len(b,CONST_STR_LEN("<D:prop xmlns:D=\"DAV:\" xmlns:ns0=\"urn:uuid:c2f41010-65b3-11d1-a29f-00aa00c14882/\">\n"));
+	buffer_append_string_len(b,CONST_STR_LEN("<D:lockdiscovery>\n"));
+	buffer_append_string_len(b,CONST_STR_LEN("<D:activelock>\n"));
 
-	buffer_append_string(b,"<D:lockscope>");
-	buffer_append_string(b,"<D:");
+	buffer_append_string_len(b,CONST_STR_LEN("<D:lockscope>"));
+	buffer_append_string_len(b,CONST_STR_LEN("<D:"));
 	buffer_append_string(b, lockscope);
-	buffer_append_string(b, "/>");
-	buffer_append_string(b,"</D:lockscope>\n");
+	buffer_append_string_len(b, CONST_STR_LEN("/>"));
+	buffer_append_string_len(b,CONST_STR_LEN("</D:lockscope>\n"));
 
-	buffer_append_string(b,"<D:locktype>");
-	buffer_append_string(b,"<D:");
+	buffer_append_string_len(b,CONST_STR_LEN("<D:locktype>"));
+	buffer_append_string_len(b,CONST_STR_LEN("<D:"));
 	buffer_append_string(b, locktype);
-	buffer_append_string(b, "/>");
-	buffer_append_string(b,"</D:locktype>\n");
+	buffer_append_string_len(b, CONST_STR_LEN("/>"));
+	buffer_append_string_len(b,CONST_STR_LEN("</D:locktype>\n"));
 
-	buffer_append_string(b,"<D:depth>");
+	buffer_append_string_len(b,CONST_STR_LEN("<D:depth>"));
 	buffer_append_string(b, depth == 0 ? "0" : "infinity");
-	buffer_append_string(b,"</D:depth>\n");
+	buffer_append_string_len(b,CONST_STR_LEN("</D:depth>\n"));
 
-	buffer_append_string(b,"<D:timeout>");
-	buffer_append_string(b, "Second-600");
-	buffer_append_string(b,"</D:timeout>\n");
+	buffer_append_string_len(b,CONST_STR_LEN("<D:timeout>"));
+	buffer_append_string_len(b, CONST_STR_LEN("Second-600"));
+	buffer_append_string_len(b,CONST_STR_LEN("</D:timeout>\n"));
 
-	buffer_append_string(b,"<D:owner>");
-	buffer_append_string(b,"</D:owner>\n");
+	buffer_append_string_len(b,CONST_STR_LEN("<D:owner>"));
+	buffer_append_string_len(b,CONST_STR_LEN("</D:owner>\n"));
 
-	buffer_append_string(b,"<D:locktoken>");
-	buffer_append_string(b, "<D:href>");
+	buffer_append_string_len(b,CONST_STR_LEN("<D:locktoken>"));
+	buffer_append_string_len(b, CONST_STR_LEN("<D:href>"));
 	buffer_append_string_buffer(b, locktoken);
-	buffer_append_string(b, "</D:href>");
-	buffer_append_string(b,"</D:locktoken>\n");
+	buffer_append_string_len(b, CONST_STR_LEN("</D:href>"));
+	buffer_append_string_len(b,CONST_STR_LEN("</D:locktoken>\n"));
 
-	buffer_append_string(b,"</D:activelock>\n");
-	buffer_append_string(b,"</D:lockdiscovery>\n");
-	buffer_append_string(b,"</D:prop>\n");
+	buffer_append_string_len(b,CONST_STR_LEN("</D:activelock>\n"));
+	buffer_append_string_len(b,CONST_STR_LEN("</D:lockdiscovery>\n"));
+	buffer_append_string_len(b,CONST_STR_LEN("</D:prop>\n"));
 
 	return 0;
 }
@@ -1344,9 +1344,9 @@ URIHANDLER_FUNC(mod_webdav_subrequest_handler) {
 
 		b = chunkqueue_get_append_buffer(con->write_queue);
 
-		buffer_copy_string(b, "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n");
+		buffer_copy_string_len(b, CONST_STR_LEN("<?xml version=\"1.0\" encoding=\"utf-8\"?>\n"));
 
-		buffer_append_string(b,"<D:multistatus xmlns:D=\"DAV:\" xmlns:ns0=\"urn:uuid:c2f41010-65b3-11d1-a29f-00aa00c14882/\">\n");
+		buffer_append_string_len(b,CONST_STR_LEN("<D:multistatus xmlns:D=\"DAV:\" xmlns:ns0=\"urn:uuid:c2f41010-65b3-11d1-a29f-00aa00c14882/\">\n"));
 
 		/* allprop */
 
@@ -1358,40 +1358,40 @@ URIHANDLER_FUNC(mod_webdav_subrequest_handler) {
 			/* Depth: 0 */
 			webdav_get_props(srv, con, p, &(con->physical), req_props, prop_200, prop_404);
 
-			buffer_append_string(b,"<D:response>\n");
-			buffer_append_string(b,"<D:href>");
+			buffer_append_string_len(b,CONST_STR_LEN("<D:response>\n"));
+			buffer_append_string_len(b,CONST_STR_LEN("<D:href>"));
 			buffer_append_string_buffer(b, con->uri.scheme);
-			buffer_append_string(b,"://");
+			buffer_append_string_len(b,CONST_STR_LEN("://"));
 			buffer_append_string_buffer(b, con->uri.authority);
 			buffer_append_string_encoded(b, CONST_BUF_LEN(con->uri.path), ENCODING_REL_URI);
-			buffer_append_string(b,"</D:href>\n");
+			buffer_append_string_len(b,CONST_STR_LEN("</D:href>\n"));
 
 			if (!buffer_is_empty(prop_200)) {
-				buffer_append_string(b,"<D:propstat>\n");
-				buffer_append_string(b,"<D:prop>\n");
+				buffer_append_string_len(b,CONST_STR_LEN("<D:propstat>\n"));
+				buffer_append_string_len(b,CONST_STR_LEN("<D:prop>\n"));
 
 				buffer_append_string_buffer(b, prop_200);
 
-				buffer_append_string(b,"</D:prop>\n");
+				buffer_append_string_len(b,CONST_STR_LEN("</D:prop>\n"));
 
-				buffer_append_string(b,"<D:status>HTTP/1.1 200 OK</D:status>\n");
+				buffer_append_string_len(b,CONST_STR_LEN("<D:status>HTTP/1.1 200 OK</D:status>\n"));
 
-				buffer_append_string(b,"</D:propstat>\n");
+				buffer_append_string_len(b,CONST_STR_LEN("</D:propstat>\n"));
 			}
 			if (!buffer_is_empty(prop_404)) {
-				buffer_append_string(b,"<D:propstat>\n");
-				buffer_append_string(b,"<D:prop>\n");
+				buffer_append_string_len(b,CONST_STR_LEN("<D:propstat>\n"));
+				buffer_append_string_len(b,CONST_STR_LEN("<D:prop>\n"));
 
 				buffer_append_string_buffer(b, prop_404);
 
-				buffer_append_string(b,"</D:prop>\n");
+				buffer_append_string_len(b,CONST_STR_LEN("</D:prop>\n"));
 
-				buffer_append_string(b,"<D:status>HTTP/1.1 404 Not Found</D:status>\n");
+				buffer_append_string_len(b,CONST_STR_LEN("<D:status>HTTP/1.1 404 Not Found</D:status>\n"));
 
-				buffer_append_string(b,"</D:propstat>\n");
+				buffer_append_string_len(b,CONST_STR_LEN("</D:propstat>\n"));
 			}
 
-			buffer_append_string(b,"</D:response>\n");
+			buffer_append_string_len(b,CONST_STR_LEN("</D:response>\n"));
 
 			break;
 		case 1:
@@ -1427,40 +1427,40 @@ URIHANDLER_FUNC(mod_webdav_subrequest_handler) {
 
 					webdav_get_props(srv, con, p, &d, req_props, prop_200, prop_404);
 
-					buffer_append_string(b,"<D:response>\n");
-					buffer_append_string(b,"<D:href>");
+					buffer_append_string_len(b,CONST_STR_LEN("<D:response>\n"));
+					buffer_append_string_len(b,CONST_STR_LEN("<D:href>"));
 					buffer_append_string_buffer(b, con->uri.scheme);
-					buffer_append_string(b,"://");
+					buffer_append_string_len(b,CONST_STR_LEN("://"));
 					buffer_append_string_buffer(b, con->uri.authority);
 					buffer_append_string_encoded(b, CONST_BUF_LEN(d.rel_path), ENCODING_REL_URI);
-					buffer_append_string(b,"</D:href>\n");
+					buffer_append_string_len(b,CONST_STR_LEN("</D:href>\n"));
 
 					if (!buffer_is_empty(prop_200)) {
-						buffer_append_string(b,"<D:propstat>\n");
-						buffer_append_string(b,"<D:prop>\n");
+						buffer_append_string_len(b,CONST_STR_LEN("<D:propstat>\n"));
+						buffer_append_string_len(b,CONST_STR_LEN("<D:prop>\n"));
 
 						buffer_append_string_buffer(b, prop_200);
 
-						buffer_append_string(b,"</D:prop>\n");
+						buffer_append_string_len(b,CONST_STR_LEN("</D:prop>\n"));
 
-						buffer_append_string(b,"<D:status>HTTP/1.1 200 OK</D:status>\n");
+						buffer_append_string_len(b,CONST_STR_LEN("<D:status>HTTP/1.1 200 OK</D:status>\n"));
 
-						buffer_append_string(b,"</D:propstat>\n");
+						buffer_append_string_len(b,CONST_STR_LEN("</D:propstat>\n"));
 					}
 					if (!buffer_is_empty(prop_404)) {
-						buffer_append_string(b,"<D:propstat>\n");
-						buffer_append_string(b,"<D:prop>\n");
+						buffer_append_string_len(b,CONST_STR_LEN("<D:propstat>\n"));
+						buffer_append_string_len(b,CONST_STR_LEN("<D:prop>\n"));
 
 						buffer_append_string_buffer(b, prop_404);
 
-						buffer_append_string(b,"</D:prop>\n");
+						buffer_append_string_len(b,CONST_STR_LEN("</D:prop>\n"));
 
-						buffer_append_string(b,"<D:status>HTTP/1.1 404 Not Found</D:status>\n");
+						buffer_append_string_len(b,CONST_STR_LEN("<D:status>HTTP/1.1 404 Not Found</D:status>\n"));
 
-						buffer_append_string(b,"</D:propstat>\n");
+						buffer_append_string_len(b,CONST_STR_LEN("</D:propstat>\n"));
 					}
 
-					buffer_append_string(b,"</D:response>\n");
+					buffer_append_string_len(b,CONST_STR_LEN("</D:response>\n"));
 				}
 				closedir(dir);
 				buffer_free(d.path);
@@ -1483,7 +1483,7 @@ URIHANDLER_FUNC(mod_webdav_subrequest_handler) {
 		buffer_free(prop_200);
 		buffer_free(prop_404);
 
-		buffer_append_string(b,"</D:multistatus>\n");
+		buffer_append_string_len(b,CONST_STR_LEN("</D:multistatus>\n"));
 
 		if (p->conf.log_xml) {
 			log_error_write(srv, __FILE__, __LINE__, "sb", "XML-response-body:", b);
@@ -1558,13 +1558,13 @@ URIHANDLER_FUNC(mod_webdav_subrequest_handler) {
 
 				b = chunkqueue_get_append_buffer(con->write_queue);
 
-				buffer_copy_string(b, "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n");
+				buffer_copy_string_len(b, CONST_STR_LEN("<?xml version=\"1.0\" encoding=\"utf-8\"?>\n"));
 
-				buffer_append_string(b,"<D:multistatus xmlns:D=\"DAV:\">\n");
+				buffer_append_string_len(b,CONST_STR_LEN("<D:multistatus xmlns:D=\"DAV:\">\n"));
 
 				buffer_append_string_buffer(b, multi_status_resp);
 
-				buffer_append_string(b,"</D:multistatus>\n");
+				buffer_append_string_len(b,CONST_STR_LEN("</D:multistatus>\n"));
 
 				if (p->conf.log_xml) {
 					log_error_write(srv, __FILE__, __LINE__, "sb", "XML-response-body:", b);
@@ -2296,7 +2296,7 @@ propmatch_cleanup:
 							uuid_generate(id);
 							uuid_unparse(id, uuid);
 
-							buffer_copy_string(p->tmp_buf, "opaquelocktoken:");
+							buffer_copy_string_len(p->tmp_buf, CONST_STR_LEN("opaquelocktoken:"));
 							buffer_append_string(p->tmp_buf, uuid);
 
 							/* "CREATE TABLE locks ("

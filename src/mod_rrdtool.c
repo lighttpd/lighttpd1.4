@@ -204,24 +204,25 @@ static int mod_rrdtool_create_rrd(server *srv, plugin_data *p, plugin_config *s)
 		int r ;
 		/* create a new one */
 
-		BUFFER_COPY_STRING_CONST(p->cmd, "create ");
+		buffer_copy_string_len(p->cmd, CONST_STR_LEN("create "));
 		buffer_append_string_buffer(p->cmd, s->path_rrd);
-		buffer_append_string(p->cmd, " --step 60 ");
-		buffer_append_string(p->cmd, "DS:InOctets:ABSOLUTE:600:U:U ");
-		buffer_append_string(p->cmd, "DS:OutOctets:ABSOLUTE:600:U:U ");
-		buffer_append_string(p->cmd, "DS:Requests:ABSOLUTE:600:U:U ");
-		buffer_append_string(p->cmd, "RRA:AVERAGE:0.5:1:600 ");
-		buffer_append_string(p->cmd, "RRA:AVERAGE:0.5:6:700 ");
-		buffer_append_string(p->cmd, "RRA:AVERAGE:0.5:24:775 ");
-		buffer_append_string(p->cmd, "RRA:AVERAGE:0.5:288:797 ");
-		buffer_append_string(p->cmd, "RRA:MAX:0.5:1:600 ");
-		buffer_append_string(p->cmd, "RRA:MAX:0.5:6:700 ");
-		buffer_append_string(p->cmd, "RRA:MAX:0.5:24:775 ");
-		buffer_append_string(p->cmd, "RRA:MAX:0.5:288:797 ");
-		buffer_append_string(p->cmd, "RRA:MIN:0.5:1:600 ");
-		buffer_append_string(p->cmd, "RRA:MIN:0.5:6:700 ");
-		buffer_append_string(p->cmd, "RRA:MIN:0.5:24:775 ");
-		buffer_append_string(p->cmd, "RRA:MIN:0.5:288:797\n");
+		buffer_append_string_len(p->cmd, CONST_STR_LEN(
+			" --step 60 "
+			"DS:InOctets:ABSOLUTE:600:U:U "
+			"DS:OutOctets:ABSOLUTE:600:U:U "
+			"DS:Requests:ABSOLUTE:600:U:U "
+			"RRA:AVERAGE:0.5:1:600 "
+			"RRA:AVERAGE:0.5:6:700 "
+			"RRA:AVERAGE:0.5:24:775 "
+			"RRA:AVERAGE:0.5:288:797 "
+			"RRA:MAX:0.5:1:600 "
+			"RRA:MAX:0.5:6:700 "
+			"RRA:MAX:0.5:24:775 "
+			"RRA:MAX:0.5:288:797 "
+			"RRA:MIN:0.5:1:600 "
+			"RRA:MIN:0.5:6:700 "
+			"RRA:MIN:0.5:24:775 "
+			"RRA:MIN:0.5:288:797\n"));
 
 		if (-1 == (r = write(p->write_fd, p->cmd->ptr, p->cmd->used - 1))) {
 			log_error_write(srv, __FILE__, __LINE__, "ss",
@@ -374,15 +375,15 @@ TRIGGER_FUNC(mod_rrd_trigger) {
 
 		if (HANDLER_GO_ON != mod_rrdtool_create_rrd(srv, p, s)) return HANDLER_ERROR;
 
-		BUFFER_COPY_STRING_CONST(p->cmd, "update ");
+		buffer_copy_string_len(p->cmd, CONST_STR_LEN("update "));
 		buffer_append_string_buffer(p->cmd, s->path_rrd);
-		BUFFER_APPEND_STRING_CONST(p->cmd, " N:");
+		buffer_append_string_len(p->cmd, CONST_STR_LEN(" N:"));
 		buffer_append_off_t(p->cmd, s->bytes_read);
-		BUFFER_APPEND_STRING_CONST(p->cmd, ":");
+		buffer_append_string_len(p->cmd, CONST_STR_LEN(":"));
 		buffer_append_off_t(p->cmd, s->bytes_written);
-		BUFFER_APPEND_STRING_CONST(p->cmd, ":");
+		buffer_append_string_len(p->cmd, CONST_STR_LEN(":"));
 		buffer_append_long(p->cmd, s->requests);
-		BUFFER_APPEND_STRING_CONST(p->cmd, "\n");
+		buffer_append_string_len(p->cmd, CONST_STR_LEN("\n"));
 
 		if (-1 == (r = write(p->write_fd, p->cmd->ptr, p->cmd->used - 1))) {
 			p->rrdtool_running = 0;

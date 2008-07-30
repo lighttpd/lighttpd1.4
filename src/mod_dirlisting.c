@@ -454,21 +454,21 @@ static int http_list_directory_sizefmt(char *buf, off_t size) {
 static void http_list_directory_header(server *srv, connection *con, plugin_data *p, buffer *out) {
 	UNUSED(srv);
 
-	BUFFER_APPEND_STRING_CONST(out,
+	buffer_append_string_len(out, CONST_STR_LEN(
 		"<!DOCTYPE html PUBLIC \"-//W3C//DTD XHTML 1.1//EN\" \"http://www.w3.org/TR/xhtml11/DTD/xhtml11.dtd\">\n"
 		"<html xmlns=\"http://www.w3.org/1999/xhtml\" xml:lang=\"en\">\n"
 		"<head>\n"
 		"<title>Index of "
-	);
+	));
 	buffer_append_string_encoded(out, CONST_BUF_LEN(con->uri.path), ENCODING_MINIMAL_XML);
-	BUFFER_APPEND_STRING_CONST(out, "</title>\n");
+	buffer_append_string_len(out, CONST_STR_LEN("</title>\n"));
 
 	if (p->conf.external_css->used > 1) {
-		BUFFER_APPEND_STRING_CONST(out, "<link rel=\"stylesheet\" type=\"text/css\" href=\"");
+		buffer_append_string_len(out, CONST_STR_LEN("<link rel=\"stylesheet\" type=\"text/css\" href=\""));
 		buffer_append_string_buffer(out, p->conf.external_css);
-		BUFFER_APPEND_STRING_CONST(out, "\" />\n");
+		buffer_append_string_len(out, CONST_STR_LEN("\" />\n"));
 	} else {
-		BUFFER_APPEND_STRING_CONST(out,
+		buffer_append_string_len(out, CONST_STR_LEN(
 			"<style type=\"text/css\">\n"
 			"a, a:active {text-decoration: none; color: blue;}\n"
 			"a:visited {color: #48468F;}\n"
@@ -485,8 +485,6 @@ static void http_list_directory_header(server *srv, connection *con, plugin_data
 			" padding-right: 14px;"
 			" padding-bottom: 3px;"
 			"}\n"
-		);
-		BUFFER_APPEND_STRING_CONST(out,
 			"td {padding-right: 14px;}\n"
 			"td.s, th.s {text-align: right;}\n"
 			"div.list {"
@@ -502,10 +500,10 @@ static void http_list_directory_header(server *srv, connection *con, plugin_data
 			" padding-top: 4px;"
 			"}\n"
 			"</style>\n"
-		);
+		));
 	}
 
-	BUFFER_APPEND_STRING_CONST(out, "</head>\n<body>\n");
+	buffer_append_string_len(out, CONST_STR_LEN("</head>\n<body>\n"));
 
 	/* HEADER.txt */
 	if (p->conf.show_header) {
@@ -514,19 +512,19 @@ static void http_list_directory_header(server *srv, connection *con, plugin_data
 
 		buffer_copy_string_buffer(p->tmp_buf, con->physical.path);
 		BUFFER_APPEND_SLASH(p->tmp_buf);
-		BUFFER_APPEND_STRING_CONST(p->tmp_buf, "HEADER.txt");
+		buffer_append_string_len(p->tmp_buf, CONST_STR_LEN("HEADER.txt"));
 
 		if (-1 != stream_open(&s, p->tmp_buf)) {
-			BUFFER_APPEND_STRING_CONST(out, "<pre class=\"header\">");
+			buffer_append_string_len(out, CONST_STR_LEN("<pre class=\"header\">"));
 			buffer_append_string_encoded(out, s.start, s.size, ENCODING_MINIMAL_XML);
-			BUFFER_APPEND_STRING_CONST(out, "</pre>");
+			buffer_append_string_len(out, CONST_STR_LEN("</pre>"));
 		}
 		stream_close(&s);
 	}
 
-	BUFFER_APPEND_STRING_CONST(out, "<h2>Index of ");
+	buffer_append_string_len(out, CONST_STR_LEN("<h2>Index of "));
 	buffer_append_string_encoded(out, CONST_BUF_LEN(con->uri.path), ENCODING_MINIMAL_XML);
-	BUFFER_APPEND_STRING_CONST(out,
+	buffer_append_string_len(out, CONST_STR_LEN(
 		"</h2>\n"
 		"<div class=\"list\">\n"
 		"<table summary=\"Directory Listing\" cellpadding=\"0\" cellspacing=\"0\">\n"
@@ -545,17 +543,17 @@ static void http_list_directory_header(server *srv, connection *con, plugin_data
 			"<td class=\"s\">- &nbsp;</td>"
 			"<td class=\"t\">Directory</td>"
 		"</tr>\n"
-	);
+	));
 }
 
 static void http_list_directory_footer(server *srv, connection *con, plugin_data *p, buffer *out) {
 	UNUSED(srv);
 
-	BUFFER_APPEND_STRING_CONST(out,
+	buffer_append_string_len(out, CONST_STR_LEN(
 		"</tbody>\n"
 		"</table>\n"
 		"</div>\n"
-	);
+	));
 
 	if (p->conf.show_readme) {
 		stream s;
@@ -563,33 +561,33 @@ static void http_list_directory_footer(server *srv, connection *con, plugin_data
 
 		buffer_copy_string_buffer(p->tmp_buf,  con->physical.path);
 		BUFFER_APPEND_SLASH(p->tmp_buf);
-		BUFFER_APPEND_STRING_CONST(p->tmp_buf, "README.txt");
+		buffer_append_string_len(p->tmp_buf, CONST_STR_LEN("README.txt"));
 
 		if (-1 != stream_open(&s, p->tmp_buf)) {
-			BUFFER_APPEND_STRING_CONST(out, "<pre class=\"readme\">");
+			buffer_append_string_len(out, CONST_STR_LEN("<pre class=\"readme\">"));
 			buffer_append_string_encoded(out, s.start, s.size, ENCODING_MINIMAL_XML);
-			BUFFER_APPEND_STRING_CONST(out, "</pre>");
+			buffer_append_string_len(out, CONST_STR_LEN("</pre>"));
 		}
 		stream_close(&s);
 	}
 
-	BUFFER_APPEND_STRING_CONST(out,
+	buffer_append_string_len(out, CONST_STR_LEN(
 		"<div class=\"foot\">"
-	);
+	));
 
 	if (p->conf.set_footer->used > 1) {
 		buffer_append_string_buffer(out, p->conf.set_footer);
 	} else if (buffer_is_empty(con->conf.server_tag)) {
-		BUFFER_APPEND_STRING_CONST(out, PACKAGE_NAME "/" PACKAGE_VERSION);
+		buffer_append_string_len(out, CONST_STR_LEN(PACKAGE_NAME "/" PACKAGE_VERSION));
 	} else {
 		buffer_append_string_buffer(out, con->conf.server_tag);
 	}
 
-	BUFFER_APPEND_STRING_CONST(out,
+	buffer_append_string_len(out, CONST_STR_LEN(
 		"</div>\n"
 		"</body>\n"
 		"</html>\n"
-	);
+	));
 }
 
 static int http_list_directory(server *srv, connection *con, plugin_data *p, buffer *dir) {
@@ -742,13 +740,13 @@ static int http_list_directory(server *srv, connection *con, plugin_data *p, buf
 	if (files.used) http_dirls_sort(files.ent, files.used);
 
 	out = chunkqueue_get_append_buffer(con->write_queue);
-	BUFFER_COPY_STRING_CONST(out, "<?xml version=\"1.0\" encoding=\"");
+	buffer_copy_string_len(out, CONST_STR_LEN("<?xml version=\"1.0\" encoding=\""));
 	if (buffer_is_empty(p->conf.encoding)) {
-		BUFFER_APPEND_STRING_CONST(out, "iso-8859-1");
+		buffer_append_string_len(out, CONST_STR_LEN("iso-8859-1"));
 	} else {
 		buffer_append_string_buffer(out, p->conf.encoding);
 	}
-	BUFFER_APPEND_STRING_CONST(out, "\"?>\n");
+	buffer_append_string_len(out, CONST_STR_LEN("\"?>\n"));
 	http_list_directory_header(srv, con, p, out);
 
 	/* directories */
@@ -762,13 +760,13 @@ static int http_list_directory(server *srv, connection *con, plugin_data *p, buf
 		strftime(datebuf, sizeof(datebuf), "%Y-%b-%d %H:%M:%S", localtime(&(tmp->mtime)));
 #endif
 
-		BUFFER_APPEND_STRING_CONST(out, "<tr><td class=\"n\"><a href=\"");
+		buffer_append_string_len(out, CONST_STR_LEN("<tr><td class=\"n\"><a href=\""));
 		buffer_append_string_encoded(out, DIRLIST_ENT_NAME(tmp), tmp->namelen, ENCODING_REL_URI_PART);
-		BUFFER_APPEND_STRING_CONST(out, "/\">");
+		buffer_append_string_len(out, CONST_STR_LEN("/\">"));
 		buffer_append_string_encoded(out, DIRLIST_ENT_NAME(tmp), tmp->namelen, ENCODING_MINIMAL_XML);
-		BUFFER_APPEND_STRING_CONST(out, "</a>/</td><td class=\"m\">");
+		buffer_append_string_len(out, CONST_STR_LEN("</a>/</td><td class=\"m\">"));
 		buffer_append_string_len(out, datebuf, sizeof(datebuf) - 1);
-		BUFFER_APPEND_STRING_CONST(out, "</td><td class=\"s\">- &nbsp;</td><td class=\"t\">Directory</td></tr>\n");
+		buffer_append_string_len(out, CONST_STR_LEN("</td><td class=\"s\">- &nbsp;</td><td class=\"t\">Directory</td></tr>\n"));
 
 		free(tmp);
 	}
@@ -818,17 +816,17 @@ static int http_list_directory(server *srv, connection *con, plugin_data *p, buf
 #endif
 		http_list_directory_sizefmt(sizebuf, tmp->size);
 
-		BUFFER_APPEND_STRING_CONST(out, "<tr><td class=\"n\"><a href=\"");
+		buffer_append_string_len(out, CONST_STR_LEN("<tr><td class=\"n\"><a href=\""));
 		buffer_append_string_encoded(out, DIRLIST_ENT_NAME(tmp), tmp->namelen, ENCODING_REL_URI_PART);
-		BUFFER_APPEND_STRING_CONST(out, "\">");
+		buffer_append_string_len(out, CONST_STR_LEN("\">"));
 		buffer_append_string_encoded(out, DIRLIST_ENT_NAME(tmp), tmp->namelen, ENCODING_MINIMAL_XML);
-		BUFFER_APPEND_STRING_CONST(out, "</a></td><td class=\"m\">");
+		buffer_append_string_len(out, CONST_STR_LEN("</a></td><td class=\"m\">"));
 		buffer_append_string_len(out, datebuf, sizeof(datebuf) - 1);
-		BUFFER_APPEND_STRING_CONST(out, "</td><td class=\"s\">");
+		buffer_append_string_len(out, CONST_STR_LEN("</td><td class=\"s\">"));
 		buffer_append_string(out, sizebuf);
-		BUFFER_APPEND_STRING_CONST(out, "</td><td class=\"t\">");
+		buffer_append_string_len(out, CONST_STR_LEN("</td><td class=\"t\">"));
 		buffer_append_string(out, content_type);
-		BUFFER_APPEND_STRING_CONST(out, "</td></tr>\n");
+		buffer_append_string_len(out, CONST_STR_LEN("</td></tr>\n"));
 
 		free(tmp);
 	}
@@ -843,7 +841,7 @@ static int http_list_directory(server *srv, connection *con, plugin_data *p, buf
 	if (buffer_is_empty(p->conf.encoding)) {
 		response_header_overwrite(srv, con, CONST_STR_LEN("Content-Type"), CONST_STR_LEN("text/html"));
 	} else {
-		buffer_copy_string(p->content_charset, "text/html; charset=");
+		buffer_copy_string_len(p->content_charset, CONST_STR_LEN("text/html; charset="));
 		buffer_append_string_buffer(p->content_charset, p->conf.encoding);
 		response_header_overwrite(srv, con, CONST_STR_LEN("Content-Type"), CONST_BUF_LEN(p->content_charset));
 	}

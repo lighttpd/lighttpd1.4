@@ -432,10 +432,10 @@ static int proxy_create_env(server *srv, handler_ctx *hctx) {
 
 	/* request line */
 	buffer_copy_string(b, get_http_method_name(con->request.http_method));
-	BUFFER_APPEND_STRING_CONST(b, " ");
+	buffer_append_string_len(b, CONST_STR_LEN(" "));
 
 	buffer_append_string_buffer(b, con->request.uri);
-	BUFFER_APPEND_STRING_CONST(b, " HTTP/1.0\r\n");
+	buffer_append_string_len(b, CONST_STR_LEN(" HTTP/1.0\r\n"));
 
 	proxy_append_header(con, "X-Forwarded-For", (char *)inet_ntop_cache_get_ip(srv, &(con->dst_addr)));
 	/* http_host is NOT is just a pointer to a buffer
@@ -456,13 +456,13 @@ static int proxy_create_env(server *srv, handler_ctx *hctx) {
 			if (buffer_is_equal_string(ds->key, CONST_STR_LEN("Connection"))) continue;
 
 			buffer_append_string_buffer(b, ds->key);
-			BUFFER_APPEND_STRING_CONST(b, ": ");
+			buffer_append_string_len(b, CONST_STR_LEN(": "));
 			buffer_append_string_buffer(b, ds->value);
-			BUFFER_APPEND_STRING_CONST(b, "\r\n");
+			buffer_append_string_len(b, CONST_STR_LEN("\r\n"));
 		}
 	}
 
-	BUFFER_APPEND_STRING_CONST(b, "\r\n");
+	buffer_append_string_len(b, CONST_STR_LEN("\r\n"));
 
 	hctx->wb->bytes_in += b->used - 1;
 	/* body */

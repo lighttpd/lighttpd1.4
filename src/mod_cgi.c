@@ -912,7 +912,7 @@ static int cgi_create_env(server *srv, connection *con, plugin_data *p, buffer *
 				buffer_reset(p->tmp_buf);
 
 				if (0 != strcasecmp(ds->key->ptr, "CONTENT-TYPE")) {
-					buffer_copy_string(p->tmp_buf, "HTTP_");
+					buffer_copy_string_len(p->tmp_buf, CONST_STR_LEN("HTTP_"));
 					p->tmp_buf->used--; /* strip \0 after HTTP_ */
 				}
 

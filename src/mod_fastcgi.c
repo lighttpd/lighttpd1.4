@@ -390,10 +390,10 @@ typedef struct {
 static handler_t fcgi_handle_fdevent(void *s, void *ctx, int revents);
 
 int fastcgi_status_copy_procname(buffer *b, fcgi_extension_host *host, fcgi_proc *proc) {
-	buffer_copy_string(b, "fastcgi.backend.");
+	buffer_copy_string_len(b, CONST_STR_LEN("fastcgi.backend."));
 	buffer_append_string_buffer(b, host->id);
 	if (proc) {
-		buffer_append_string(b, ".");
+		buffer_append_string_len(b, CONST_STR_LEN("."));
 		buffer_append_long(b, proc->id);
 	}
 
@@ -403,7 +403,7 @@ int fastcgi_status_copy_procname(buffer *b, fcgi_extension_host *host, fcgi_proc
 int fastcgi_status_init(server *srv, buffer *b, fcgi_extension_host *host, fcgi_proc *proc) {
 #define CLEAN(x) \
 	fastcgi_status_copy_procname(b, host, proc); \
-	buffer_append_string(b, x); \
+	buffer_append_string_len(b, CONST_STR_LEN(x)); \
 	status_counter_set(srv, CONST_BUF_LEN(b), 0);
 
 	CLEAN(".disabled");
@@ -416,7 +416,7 @@ int fastcgi_status_init(server *srv, buffer *b, fcgi_extension_host *host, fcgi_
 
 #define CLEAN(x) \
 	fastcgi_status_copy_procname(b, host, NULL); \
-	buffer_append_string(b, x); \
+	buffer_append_string_len(b, CONST_STR_LEN(x)); \
 	status_counter_set(srv, CONST_BUF_LEN(b), 0);
 
 	CLEAN(".load");
@@ -821,7 +821,7 @@ static int fcgi_spawn_connection(server *srv,
 		socket_type = AF_UNIX;
 		fcgi_addr = (struct sockaddr *) &fcgi_addr_un;
 
-		buffer_copy_string(proc->connection_name, "unix:");
+		buffer_copy_string_len(proc->connection_name, CONST_STR_LEN("unix:"));
 		buffer_append_string_buffer(proc->connection_name, proc->unixsocket);
 
 #else
@@ -867,13 +867,13 @@ static int fcgi_spawn_connection(server *srv,
 		socket_type = AF_INET;
 		fcgi_addr = (struct sockaddr *) &fcgi_addr_in;
 
-		buffer_copy_string(proc->connection_name, "tcp:");
+		buffer_copy_string_len(proc->connection_name, CONST_STR_LEN("tcp:"));
 		if (!buffer_is_empty(host->host)) {
 			buffer_append_string_buffer(proc->connection_name, host->host);
 		} else {
-			buffer_append_string(proc->connection_name, "localhost");
+			buffer_append_string_len(proc->connection_name, CONST_STR_LEN("localhost"));
 		}
-		buffer_append_string(proc->connection_name, ":");
+		buffer_append_string_len(proc->connection_name, CONST_STR_LEN(":"));
 		buffer_append_long(proc->connection_name, proc->port);
 	}
 
@@ -1339,7 +1339,7 @@ SETDEFAULTS_FUNC(mod_fastcgi_set_defaults) {
 								proc->port = host->port + pno;
 							} else {
 								buffer_copy_string_buffer(proc->unixsocket, host->unixsocket);
-								buffer_append_string(proc->unixsocket, "-");
+								buffer_append_string_len(proc->unixsocket, CONST_STR_LEN("-"));
 								buffer_append_long(proc->unixsocket, pno);
 							}
 
@@ -1497,7 +1497,7 @@ void fcgi_connection_close(server *srv, handler_ctx *hctx) {
 			status_counter_dec(srv, CONST_STR_LEN("fastcgi.active-requests"));
 
 			fastcgi_status_copy_procname(p->statuskey, hctx->host, hctx->proc);
-			buffer_append_string(p->statuskey, ".load");
+			buffer_append_string_len(p->statuskey, CONST_STR_LEN(".load"));
 
 			status_counter_set(srv, CONST_BUF_LEN(p->statuskey), hctx->proc->load);
 
@@ -1698,7 +1698,7 @@ static connection_result_t fcgi_establish_connection(server *srv, handler_ctx *h
 
 		if (buffer_is_empty(proc->connection_name)) {
 			/* on remote spawing we have to set the connection-name now */
-			buffer_copy_string(proc->connection_name, "unix:");
+			buffer_copy_string_len(proc->connection_name, CONST_STR_LEN("unix:"));
 			buffer_append_string_buffer(proc->connection_name, proc->unixsocket);
 		}
 #else
@@ -1724,13 +1724,13 @@ static connection_result_t fcgi_establish_connection(server *srv, handler_ctx *h
 
 		if (buffer_is_empty(proc->connection_name)) {
 			/* on remote spawing we have to set the connection-name now */
-			buffer_copy_string(proc->connection_name, "tcp:");
+			buffer_copy_string_len(proc->connection_name, CONST_STR_LEN("tcp:"));
 			if (!buffer_is_empty(host->host)) {
 				buffer_append_string_buffer(proc->connection_name, host->host);
 			} else {
-				buffer_append_string(proc->connection_name, "localhost");
+				buffer_append_string_len(proc->connection_name, CONST_STR_LEN("localhost"));
 			}
-			buffer_append_string(proc->connection_name, ":");
+			buffer_append_string_len(proc->connection_name, CONST_STR_LEN(":"));
 			buffer_append_long(proc->connection_name, proc->port);
 		}
 	}
@@ -1786,7 +1786,7 @@ static int fcgi_env_add_request_headers(server *srv, connection *con, plugin_dat
 			buffer_reset(srv->tmp_buf);
 
 			if (0 != strcasecmp(ds->key->ptr, "CONTENT-TYPE")) {
-				BUFFER_COPY_STRING_CONST(srv->tmp_buf, "HTTP_");
+				buffer_copy_string_len(srv->tmp_buf, CONST_STR_LEN("HTTP_"));
 				srv->tmp_buf->used--;
 			}
 
@@ -2041,7 +2041,7 @@ static int fcgi_create_env(server *srv, handler_ctx *hctx, size_t request_id) {
 		 */
 		if ('/' != host->strip_request_uri->ptr[host->strip_request_uri->used - 2]) {
 			/* fix the user-input to have / as last char */
-			buffer_append_string(host->strip_request_uri, "/");
+			buffer_append_string_len(host->strip_request_uri, CONST_STR_LEN("/"));
 		}
 
 		if (con->request.orig_uri->used >= host->strip_request_uri->used &&
@@ -2383,7 +2383,7 @@ static int fastcgi_get_packet(server *srv, handler_ctx *hctx, fastcgi_response_p
 	offset = sizeof(*header);
 
 	/* ->b should only be the content */
-	buffer_copy_string(packet->b, ""); /* used == 1 */
+	buffer_copy_string_len(packet->b, CONST_STR_LEN("")); /* used == 1 */
 
 	if (packet->len) {
 		/* copy the content */
@@ -2815,7 +2815,7 @@ static handler_t fcgi_write_request(server *srv, handler_ctx *hctx) {
 			hctx->proc->state = PROC_STATE_DIED;
 
 			fastcgi_status_copy_procname(p->statuskey, hctx->host, hctx->proc);
-			buffer_append_string(p->statuskey, ".died");
+			buffer_append_string_len(p->statuskey, CONST_STR_LEN(".died"));
 
 			status_counter_inc(srv, CONST_BUF_LEN(p->statuskey));
 
@@ -2907,7 +2907,7 @@ static handler_t fcgi_write_request(server *srv, handler_ctx *hctx) {
 			hctx->proc->state = PROC_STATE_OVERLOADED;
 
 			fastcgi_status_copy_procname(p->statuskey, hctx->host, hctx->proc);
-			buffer_append_string(p->statuskey, ".overloaded");
+			buffer_append_string_len(p->statuskey, CONST_STR_LEN(".overloaded"));
 
 			status_counter_inc(srv, CONST_BUF_LEN(p->statuskey));
 
@@ -2933,7 +2933,7 @@ static handler_t fcgi_write_request(server *srv, handler_ctx *hctx) {
 				"load:", host->load);
 
 			fastcgi_status_copy_procname(p->statuskey, hctx->host, hctx->proc);
-			buffer_append_string(p->statuskey, ".died");
+			buffer_append_string_len(p->statuskey, CONST_STR_LEN(".died"));
 
 			status_counter_inc(srv, CONST_BUF_LEN(p->statuskey));
 
@@ -2959,19 +2959,19 @@ static handler_t fcgi_write_request(server *srv, handler_ctx *hctx) {
 		status_counter_inc(srv, CONST_STR_LEN("fastcgi.active-requests"));
 
 		fastcgi_status_copy_procname(p->statuskey, hctx->host, hctx->proc);
-		buffer_append_string(p->statuskey, ".connected");
+		buffer_append_string_len(p->statuskey, CONST_STR_LEN(".connected"));
 
 		status_counter_inc(srv, CONST_BUF_LEN(p->statuskey));
 
 		/* the proc-load */
 		fastcgi_status_copy_procname(p->statuskey, hctx->host, hctx->proc);
-		buffer_append_string(p->statuskey, ".load");
+		buffer_append_string_len(p->statuskey, CONST_STR_LEN(".load"));
 
 		status_counter_set(srv, CONST_BUF_LEN(p->statuskey), hctx->proc->load);
 
 		/* the host-load */
 		fastcgi_status_copy_procname(p->statuskey, hctx->host, NULL);
-		buffer_append_string(p->statuskey, ".load");
+		buffer_append_string_len(p->statuskey, CONST_STR_LEN(".load"));
 
 		status_counter_set(srv, CONST_BUF_LEN(p->statuskey), hctx->host->load);
 
@@ -3765,7 +3765,7 @@ TRIGGER_FUNC(mod_fastcgi_handle_trigger) {
 						proc->port = host->port + proc->id;
 					} else {
 						buffer_copy_string_buffer(proc->unixsocket, host->unixsocket);
-						buffer_append_string(proc->unixsocket, "-");
+						buffer_append_string_len(proc->unixsocket, CONST_STR_LEN("-"));
 						buffer_append_long(proc->unixsocket, proc->id);
 					}
 

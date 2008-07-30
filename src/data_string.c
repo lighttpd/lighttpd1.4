@@ -37,7 +37,7 @@ static int data_string_insert_dup(data_unset *dst, data_unset *src) {
 	data_string *ds_src = (data_string *)src;
 
 	if (ds_dst->value->used) {
-		buffer_append_string(ds_dst->value, ", ");
+		buffer_append_string_len(ds_dst->value, CONST_STR_LEN(", "));
 		buffer_append_string_buffer(ds_dst->value, ds_src->value);
 	} else {
 		buffer_copy_string_buffer(ds_dst->value, ds_src->value);
@@ -53,9 +53,9 @@ static int data_response_insert_dup(data_unset *dst, data_unset *src) {
 	data_string *ds_src = (data_string *)src;
 
 	if (ds_dst->value->used) {
-		buffer_append_string(ds_dst->value, "\r\n");
+		buffer_append_string_len(ds_dst->value, CONST_STR_LEN("\r\n"));
 		buffer_append_string_buffer(ds_dst->value, ds_dst->key);
-		buffer_append_string(ds_dst->value, ": ");
+		buffer_append_string_len(ds_dst->value, CONST_STR_LEN(": "));
 		buffer_append_string_buffer(ds_dst->value, ds_src->value);
 	} else {
 		buffer_copy_string_buffer(ds_dst->value, ds_src->value);

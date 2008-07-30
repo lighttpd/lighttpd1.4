@@ -296,7 +296,7 @@ chunk *chunkqueue_get_append_tempfile(chunkqueue *cq) {
 
 			buffer_copy_string_buffer(template, ds->value);
 			BUFFER_APPEND_SLASH(template);
-			BUFFER_APPEND_STRING_CONST(template, "lighttpd-upload-XXXXXX");
+			buffer_append_string_len(template, CONST_STR_LEN("lighttpd-upload-XXXXXX"));
 
 			if (-1 != (c->file.fd = mkstemp(template->ptr))) {
 				/* only trigger the unlink if we created the temp-file successfully */

@@ -363,7 +363,7 @@ URIHANDLER_FUNC(mod_uploadprogress_uri_handler) {
 
 			b = chunkqueue_get_append_buffer(con->write_queue);
 
-			BUFFER_APPEND_STRING_CONST(b, "starting");
+			buffer_append_string_len(b, CONST_STR_LEN("starting"));
 
 			return HANDLER_FINISHED;
 		}
@@ -378,15 +378,18 @@ URIHANDLER_FUNC(mod_uploadprogress_uri_handler) {
 		b = chunkqueue_get_append_buffer(con->write_queue);
 
 		/* prepare XML */
-		BUFFER_COPY_STRING_CONST(b, "<?xml version=\"1.0\" encoding=\"iso-8859-1\"?>");
-		BUFFER_APPEND_STRING_CONST(b, "<upload>");
-		BUFFER_APPEND_STRING_CONST(b, "<size>");
+		buffer_copy_string_len(b, CONST_STR_LEN(
+			"<?xml version=\"1.0\" encoding=\"iso-8859-1\"?>"
+			"<upload>"
+			"<size>"));
 		buffer_append_off_t(b, post_con->request.content_length);
-		BUFFER_APPEND_STRING_CONST(b, "</size>");
-		BUFFER_APPEND_STRING_CONST(b, "<received>");
+		buffer_append_string_len(b, CONST_STR_LEN(
+			"</size>"
+			"<received>"));
 		buffer_append_off_t(b, post_con->request_content_queue->bytes_in);
-		BUFFER_APPEND_STRING_CONST(b, "</received>");
-		BUFFER_APPEND_STRING_CONST(b, "</upload>");
+		buffer_append_string_len(b, CONST_STR_LEN(
+			"</received>"
+			"</upload>"));
 
 		log_error_write(srv, __FILE__, __LINE__, "sb", "...", b);
 
