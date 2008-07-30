@@ -679,7 +679,7 @@ REQUESTDONE_FUNC(log_access_write) {
 					localtime_r(&(srv->cur_ts), &tm);
 					strftime(p->conf.ts_accesslog_str->ptr, p->conf.ts_accesslog_str->size - 1, "[%d/%b/%Y:%H:%M:%S ", &tm);
 # else
-					strftime(p->conf.ts_accesslog_str->ptr, p->conf.ts_accesslog_str->size - 1, "[%d/%b/%Y:%H:%M:%S ", localtime_r(&(srv->cur_ts)));
+					strftime(p->conf.ts_accesslog_str->ptr, p->conf.ts_accesslog_str->size - 1, "[%d/%b/%Y:%H:%M:%S ", localtime(&(srv->cur_ts)));
 # endif
 					p->conf.ts_accesslog_str->used = strlen(p->conf.ts_accesslog_str->ptr) + 1;
 
