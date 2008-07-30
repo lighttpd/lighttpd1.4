@@ -34,6 +34,7 @@ NEWS
   * [tests] fixed system, use foreground daemons and waitpid
   * [tests] removed pidfile from test system
   * [tests] fixed tests needing php running (if not running on port 1026, search php in env[PHP] or /usr/bin/php-cgi)
+  * fixed typo in mod_accesslog (#1699)
 
 - 1.4.19 - 2008-03-10
 
