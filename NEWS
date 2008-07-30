@@ -36,6 +36,7 @@ NEWS
   * [tests] fixed tests needing php running (if not running on port 1026, search php in env[PHP] or /usr/bin/php-cgi)
   * fixed typo in mod_accesslog (#1699)
   * replaced buffer_{append,copy}_string with the _len variant where possible (#1732) (thx crypt)
+  * case insensitive match for secdownload md5 token (#1710)
 
 - 1.4.19 - 2008-03-10
 
