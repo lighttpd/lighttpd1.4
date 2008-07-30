@@ -16,6 +16,7 @@ my $t;
 my $php_child = -1;
 
 my $phpbin = (defined $ENV{'PHP'} ? $ENV{'PHP'} : '/usr/bin/php-cgi');
+$ENV{'PHP'} = $phpbin;
 
 SKIP: {
 	skip "PHP already running on port 1026", 1 if $tf->listening_on(1026);
@@ -238,7 +239,7 @@ EOF
 }
 
 SKIP: {
-	skip "no php found", 5 unless -x "/usr/bin/php-cgi"; 
+	skip "no php found", 5 unless -x $phpbin;
 	$tf->{CONFIGFILE} = 'fastcgi-13.conf';
 	ok($tf->start_proc == 0, "Starting lighttpd with $tf->{CONFIGFILE}") or die();
 	$t->{REQUEST}  = ( <<EOF
