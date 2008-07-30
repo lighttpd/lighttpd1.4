@@ -185,18 +185,18 @@ int log_error_write(server *srv, const char *filename, unsigned int line, const 
 		}
 
 		buffer_copy_string_buffer(srv->errorlog_buf, srv->ts_debug_str);
-		BUFFER_APPEND_STRING_CONST(srv->errorlog_buf, ": (");
+		buffer_append_string_len(srv->errorlog_buf, CONST_STR_LEN(": ("));
 		break;
 	case ERRORLOG_SYSLOG:
 		/* syslog is generating its own timestamps */
-		BUFFER_COPY_STRING_CONST(srv->errorlog_buf, "(");
+		buffer_copy_string_len(srv->errorlog_buf, CONST_STR_LEN("("));
 		break;
 	}
 
 	buffer_append_string(srv->errorlog_buf, filename);
-	BUFFER_APPEND_STRING_CONST(srv->errorlog_buf, ".");
+	buffer_append_string_len(srv->errorlog_buf, CONST_STR_LEN("."));
 	buffer_append_long(srv->errorlog_buf, line);
-	BUFFER_APPEND_STRING_CONST(srv->errorlog_buf, ") ");
+	buffer_append_string_len(srv->errorlog_buf, CONST_STR_LEN(") "));
 
 
 	for(va_start(ap, fmt); *fmt; fmt++) {
@@ -209,28 +209,28 @@ int log_error_write(server *srv, const char *filename, unsigned int line, const 
 		case 's':           /* string */
 			s = va_arg(ap, char *);
 			buffer_append_string(srv->errorlog_buf, s);
-			BUFFER_APPEND_STRING_CONST(srv->errorlog_buf, " ");
+			buffer_append_string_len(srv->errorlog_buf, CONST_STR_LEN(" "));
 			break;
 		case 'b':           /* buffer */
 			b = va_arg(ap, buffer *);
 			buffer_append_string_buffer(srv->errorlog_buf, b);
-			BUFFER_APPEND_STRING_CONST(srv->errorlog_buf, " ");
+			buffer_append_string_len(srv->errorlog_buf, CONST_STR_LEN(" "));
 			break;
 		case 'd':           /* int */
 			d = va_arg(ap, int);
 			buffer_append_long(srv->errorlog_buf, d);
-			BUFFER_APPEND_STRING_CONST(srv->errorlog_buf, " ");
+			buffer_append_string_len(srv->errorlog_buf, CONST_STR_LEN(" "));
 			break;
 		case 'o':           /* off_t */
 			o = va_arg(ap, off_t);
 			buffer_append_off_t(srv->errorlog_buf, o);
-			BUFFER_APPEND_STRING_CONST(srv->errorlog_buf, " ");
+			buffer_append_string_len(srv->errorlog_buf, CONST_STR_LEN(" "));
 			break;
 		case 'x':           /* int (hex) */
 			d = va_arg(ap, int);
-			BUFFER_APPEND_STRING_CONST(srv->errorlog_buf, "0x");
+			buffer_append_string_len(srv->errorlog_buf, CONST_STR_LEN("0x"));
 			buffer_append_long_hex(srv->errorlog_buf, d);
-			BUFFER_APPEND_STRING_CONST(srv->errorlog_buf, " ");
+			buffer_append_string_len(srv->errorlog_buf, CONST_STR_LEN(" "));
 			break;
 		case 'S':           /* string */
 			s = va_arg(ap, char *);
@@ -258,11 +258,11 @@ int log_error_write(server *srv, const char *filename, unsigned int line, const 
 
 	switch(srv->errorlog_mode) {
 	case ERRORLOG_FILE:
-		BUFFER_APPEND_STRING_CONST(srv->errorlog_buf, "\n");
+		buffer_append_string_len(srv->errorlog_buf, CONST_STR_LEN("\n"));
 		write(srv->errorlog_fd, srv->errorlog_buf->ptr, srv->errorlog_buf->used - 1);
 		break;
 	case ERRORLOG_STDERR:
-		BUFFER_APPEND_STRING_CONST(srv->errorlog_buf, "\n");
+		buffer_append_string_len(srv->errorlog_buf, CONST_STR_LEN("\n"));
 		write(STDERR_FILENO, srv->errorlog_buf->ptr, srv->errorlog_buf->used - 1);
 		break;
 	case ERRORLOG_SYSLOG:

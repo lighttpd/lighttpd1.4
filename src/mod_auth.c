@@ -270,20 +270,20 @@ static handler_t mod_auth_uri_handler(server *srv, connection *con, void *p_d) {
 		con->http_status = 401;
 
 		if (0 == strcmp(method->value->ptr, "basic")) {
-			buffer_copy_string(p->tmp_buf, "Basic realm=\"");
+			buffer_copy_string_len(p->tmp_buf, CONST_STR_LEN("Basic realm=\""));
 			buffer_append_string_buffer(p->tmp_buf, realm->value);
-			buffer_append_string(p->tmp_buf, "\"");
+			buffer_append_string_len(p->tmp_buf, CONST_STR_LEN("\""));
 
 			response_header_insert(srv, con, CONST_STR_LEN("WWW-Authenticate"), CONST_BUF_LEN(p->tmp_buf));
 		} else if (0 == strcmp(method->value->ptr, "digest")) {
 			char hh[33];
 			http_auth_digest_generate_nonce(srv, p, srv->tmp_buf, hh);
 
-			buffer_copy_string(p->tmp_buf, "Digest realm=\"");
+			buffer_copy_string_len(p->tmp_buf, CONST_STR_LEN("Digest realm=\""));
 			buffer_append_string_buffer(p->tmp_buf, realm->value);
-			buffer_append_string(p->tmp_buf, "\", nonce=\"");
+			buffer_append_string_len(p->tmp_buf, CONST_STR_LEN("\", nonce=\""));
 			buffer_append_string(p->tmp_buf, hh);
-			buffer_append_string(p->tmp_buf, "\", qop=\"auth\"");
+			buffer_append_string_len(p->tmp_buf, CONST_STR_LEN("\", qop=\"auth\""));
 
 			response_header_insert(srv, con, CONST_STR_LEN("WWW-Authenticate"), CONST_BUF_LEN(p->tmp_buf));
 		} else {
@@ -479,21 +479,21 @@ SETDEFAULTS_FUNC(mod_auth_set_defaults) {
 
 				ds = data_string_init();
 
-				buffer_copy_string(ds->key, "method");
+				buffer_copy_string_len(ds->key, CONST_STR_LEN("method"));
 				buffer_copy_string(ds->value, method);
 
 				array_insert_unique(a->value, (data_unset *)ds);
 
 				ds = data_string_init();
 
-				buffer_copy_string(ds->key, "realm");
+				buffer_copy_string_len(ds->key, CONST_STR_LEN("realm"));
 				buffer_copy_string(ds->value, realm);
 
 				array_insert_unique(a->value, (data_unset *)ds);
 
 				ds = data_string_init();
 
-				buffer_copy_string(ds->key, "require");
+				buffer_copy_string_len(ds->key, CONST_STR_LEN("require"));
 				buffer_copy_string(ds->value, require);
 
 				array_insert_unique(a->value, (data_unset *)ds);

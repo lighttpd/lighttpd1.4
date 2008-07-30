@@ -330,30 +330,30 @@ int main (int argc, char **argv) {
 	a = array_init();
 
 	ds = data_string_init();
-	buffer_copy_string(ds->key, "abc");
-	buffer_copy_string(ds->value, "alfrag");
+	buffer_copy_string_len(ds->key, CONST_STR_LEN("abc"));
+	buffer_copy_string_len(ds->value, CONST_STR_LEN("alfrag"));
 
 	array_insert_unique(a, (data_unset *)ds);
 
 	ds = data_string_init();
-	buffer_copy_string(ds->key, "abc");
-	buffer_copy_string(ds->value, "hameplman");
+	buffer_copy_string_len(ds->key, CONST_STR_LEN("abc"));
+	buffer_copy_string_len(ds->value, CONST_STR_LEN("hameplman"));
 
 	array_insert_unique(a, (data_unset *)ds);
 
 	ds = data_string_init();
-	buffer_copy_string(ds->key, "123");
-	buffer_copy_string(ds->value, "alfrag");
+	buffer_copy_string_len(ds->key, CONST_STR_LEN("123"));
+	buffer_copy_string_len(ds->value, CONST_STR_LEN("alfrag"));
 
 	array_insert_unique(a, (data_unset *)ds);
 
 	dc = data_count_init();
-	buffer_copy_string(dc->key, "def");
+	buffer_copy_string_len(dc->key, CONST_STR_LEN("def"));
 
 	array_insert_unique(a, (data_unset *)dc);
 
 	dc = data_count_init();
-	buffer_copy_string(dc->key, "def");
+	buffer_copy_string_len(dc->key, CONST_STR_LEN("def"));
 
 	array_insert_unique(a, (data_unset *)dc);
 

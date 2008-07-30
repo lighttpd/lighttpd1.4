@@ -433,7 +433,7 @@ SETDEFAULTS_FUNC(log_access_open) {
 		if (i == 0 && buffer_is_empty(s->format)) {
 			/* set a default logfile string */
 
-			buffer_copy_string(s->format, "%h %V %u %t \"%r\" %>s %b \"%{Referer}i\" \"%{User-Agent}i\"");
+			buffer_copy_string_len(s->format, CONST_STR_LEN("%h %V %u %t \"%r\" %>s %b \"%{Referer}i\" \"%{User-Agent}i\""));
 		}
 
 		/* parse */
@@ -654,7 +654,7 @@ REQUESTDONE_FUNC(log_access_write) {
 
 	b = p->conf.access_logbuffer;
 	if (b->used == 0) {
-		buffer_copy_string(b, "");
+		buffer_copy_string_len(b, CONST_STR_LEN(""));
 	}
 
 	for (j = 0; j < p->conf.parsed_format->used; j++) {
@@ -683,19 +683,19 @@ REQUESTDONE_FUNC(log_access_write) {
 # endif
 					p->conf.ts_accesslog_str->used = strlen(p->conf.ts_accesslog_str->ptr) + 1;
 
-					buffer_append_string(p->conf.ts_accesslog_str, tm.tm_gmtoff >= 0 ? "+" : "-");
+					buffer_append_string_len(p->conf.ts_accesslog_str, tm.tm_gmtoff >= 0 ? "+" : "-", 1);
 
 					scd = abs(tm.tm_gmtoff);
 					hrs = scd / 3600;
 					min = (scd % 3600) / 60;
 
 					/* hours */
-					if (hrs < 10) buffer_append_string(p->conf.ts_accesslog_str, "0");
+					if (hrs < 10) buffer_append_string_len(p->conf.ts_accesslog_str, CONST_STR_LEN("0"));
 					buffer_append_long(p->conf.ts_accesslog_str, hrs);
 
-					if (min < 10) buffer_append_string(p->conf.ts_accesslog_str, "0");
+					if (min < 10) buffer_append_string_len(p->conf.ts_accesslog_str, CONST_STR_LEN("0"));
 					buffer_append_long(p->conf.ts_accesslog_str, min);
-					BUFFER_APPEND_STRING_CONST(p->conf.ts_accesslog_str, "]");
+					buffer_append_string_len(p->conf.ts_accesslog_str, CONST_STR_LEN("]"));
 #else
 #ifdef HAVE_GMTIME_R
 					gmtime_r(&(srv->cur_ts), &tm);
@@ -722,13 +722,13 @@ REQUESTDONE_FUNC(log_access_write) {
 				break;
 			case FORMAT_REMOTE_IDENT:
 				/* ident */
-				BUFFER_APPEND_STRING_CONST(b, "-");
+				buffer_append_string_len(b, CONST_STR_LEN("-"));
 				break;
 			case FORMAT_REMOTE_USER:
 				if (con->authed_user->used > 1) {
 					buffer_append_string_buffer(b, con->authed_user);
 				} else {
-					BUFFER_APPEND_STRING_CONST(b, "-");
+					buffer_append_string_len(b, CONST_STR_LEN("-"));
 				}
 				break;
 			case FORMAT_REQUEST_LINE:
@@ -745,42 +745,42 @@ REQUESTDONE_FUNC(log_access_write) {
 					buffer_append_off_t(b,
 							    con->bytes_written - con->bytes_header <= 0 ? 0 : con->bytes_written - con->bytes_header);
 				} else {
-					BUFFER_APPEND_STRING_CONST(b, "-");
+					buffer_append_string_len(b, CONST_STR_LEN("-"));
 				}
 				break;
 			case FORMAT_HEADER:
 				if (NULL != (ds = (data_string *)array_get_element(con->request.headers, p->conf.parsed_format->ptr[j]->string->ptr))) {
 					buffer_append_string_buffer(b, ds->value);
 				} else {
-					BUFFER_APPEND_STRING_CONST(b, "-");
+					buffer_append_string_len(b, CONST_STR_LEN("-"));
 				}
 				break;
 			case FORMAT_RESPONSE_HEADER:
 				if (NULL != (ds = (data_string *)array_get_element(con->response.headers, p->conf.parsed_format->ptr[j]->string->ptr))) {
 					buffer_append_string_buffer(b, ds->value);
 				} else {
-					BUFFER_APPEND_STRING_CONST(b, "-");
+					buffer_append_string_len(b, CONST_STR_LEN("-"));
 				}
 				break;
 			case FORMAT_FILENAME:
 				if (con->physical.path->used > 1) {
 					buffer_append_string_buffer(b, con->physical.path);
 				} else {
-					BUFFER_APPEND_STRING_CONST(b, "-");
+					buffer_append_string_len(b, CONST_STR_LEN("-"));
 				}
 				break;
 			case FORMAT_BYTES_OUT:
 				if (con->bytes_written > 0) {
 					buffer_append_off_t(b, con->bytes_written);
 				} else {
-					BUFFER_APPEND_STRING_CONST(b, "-");
+					buffer_append_string_len(b, CONST_STR_LEN("-"));
 				}
 				break;
 			case FORMAT_BYTES_IN:
 				if (con->bytes_read > 0) {
 					buffer_append_off_t(b, con->bytes_read);
 				} else {
-					BUFFER_APPEND_STRING_CONST(b, "-");
+					buffer_append_string_len(b, CONST_STR_LEN("-"));
 				}
 				break;
 			case FORMAT_TIME_USED:
@@ -790,25 +790,25 @@ REQUESTDONE_FUNC(log_access_write) {
 				if (con->server_name->used > 1) {
 					buffer_append_string_buffer(b, con->server_name);
 				} else {
-					BUFFER_APPEND_STRING_CONST(b, "-");
+					buffer_append_string_len(b, CONST_STR_LEN("-"));
 				}
 				break;
 			case FORMAT_HTTP_HOST:
 				if (con->uri.authority->used > 1) {
 					buffer_append_string_buffer(b, con->uri.authority);
 				} else {
-					BUFFER_APPEND_STRING_CONST(b, "-");
+					buffer_append_string_len(b, CONST_STR_LEN("-"));
 				}
 				break;
 			case FORMAT_REQUEST_PROTOCOL:
-				buffer_append_string(b,
-						     con->request.http_version == HTTP_VERSION_1_1 ? "HTTP/1.1" : "HTTP/1.0");
+				buffer_append_string_len(b,
+						     con->request.http_version == HTTP_VERSION_1_1 ? "HTTP/1.1" : "HTTP/1.0", 8);
 				break;
 			case FORMAT_REQUEST_METHOD:
 				buffer_append_string(b, get_http_method_name(con->request.http_method));
 				break;
 			case FORMAT_PERCENT:
-				buffer_append_string(b, "%");
+				buffer_append_string_len(b, CONST_STR_LEN("%"));
 				break;
 			case FORMAT_SERVER_PORT:
 				{
@@ -828,8 +828,8 @@ REQUESTDONE_FUNC(log_access_write) {
 				break;
 			case FORMAT_CONNECTION_STATUS:
 				switch(con->keep_alive) {
-				case 0: buffer_append_string(b, "-"); break;
-				default: buffer_append_string(b, "+"); break;
+				case 0: buffer_append_string_len(b, CONST_STR_LEN("-")); break;
+				default: buffer_append_string_len(b, CONST_STR_LEN("+")); break;
 				}
 				break;
 			default:
@@ -849,7 +849,7 @@ REQUESTDONE_FUNC(log_access_write) {
 		}
 	}
 
-	BUFFER_APPEND_STRING_CONST(b, "\n");
+	buffer_append_string_len(b, CONST_STR_LEN("\n"));
 
 	if (p->conf.use_syslog ||  /* syslog doesn't cache */
 	    (p->conf.access_logfile->used && p->conf.access_logfile->ptr[0] == '|') || /* pipes don't cache */

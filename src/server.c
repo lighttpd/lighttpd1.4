@@ -876,7 +876,7 @@ int main (int argc, char **argv) {
 	/* write pid file */
 	if (pid_fd != -1) {
 		buffer_copy_long(srv->tmp_buf, getpid());
-		buffer_append_string(srv->tmp_buf, "\n");
+		buffer_append_string_len(srv->tmp_buf, CONST_STR_LEN("\n"));
 		write(pid_fd, srv->tmp_buf->ptr, srv->tmp_buf->used - 1);
 		close(pid_fd);
 		pid_fd = -1;

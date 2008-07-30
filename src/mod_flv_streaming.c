@@ -245,7 +245,7 @@ URIHANDLER_FUNC(mod_flv_streaming_path_handler) {
 
 			/* we are safe now, let's build a flv header */
 			b = chunkqueue_get_append_buffer(con->write_queue);
-			BUFFER_COPY_STRING_CONST(b, "FLV\x1\x1\0\0\0\x9\0\0\0\x9");
+			buffer_copy_string_len(b, CONST_STR_LEN("FLV\x1\x1\0\0\0\x9\0\0\0\x9"));
 
 			http_chunk_append_file(srv, con, con->physical.path, start, sce->st.st_size - start);
 

@@ -35,21 +35,25 @@ int http_response_write_header(server *srv, connection *con) {
 	b = chunkqueue_get_prepend_buffer(con->write_queue);
 
 	if (con->request.http_version == HTTP_VERSION_1_1) {
-		BUFFER_COPY_STRING_CONST(b, "HTTP/1.1 ");
+		buffer_copy_string_len(b, CONST_STR_LEN("HTTP/1.1 "));
 	} else {
-		BUFFER_COPY_STRING_CONST(b, "HTTP/1.0 ");
+		buffer_copy_string_len(b, CONST_STR_LEN("HTTP/1.0 "));
 	}
 	buffer_append_long(b, con->http_status);
-	BUFFER_APPEND_STRING_CONST(b, " ");
+	buffer_append_string_len(b, CONST_STR_LEN(" "));
 	buffer_append_string(b, get_http_status_name(con->http_status));
 
 	if (con->request.http_version != HTTP_VERSION_1_1 || con->keep_alive == 0) {
-		BUFFER_APPEND_STRING_CONST(b, "\r\nConnection: ");
-		buffer_append_string(b, con->keep_alive ? "keep-alive" : "close");
+		buffer_append_string_len(b, CONST_STR_LEN("\r\nConnection: "));
+		if (con->keep_alive) {
+			buffer_append_string_len(b, CONST_STR_LEN("keep-alive"));
+		} else {
+			buffer_append_string_len(b, CONST_STR_LEN("close"));
+		}
 	}
 
 	if (con->response.transfer_encoding & HTTP_TRANSFER_ENCODING_CHUNKED) {
-		BUFFER_APPEND_STRING_CONST(b, "\r\nTransfer-Encoding: chunked");
+		buffer_append_string_len(b, CONST_STR_LEN("\r\nTransfer-Encoding: chunked"));
 	}
 
 
@@ -65,9 +69,9 @@ int http_response_write_header(server *srv, connection *con) {
 			if (buffer_is_equal_string(ds->key, CONST_STR_LEN("Date"))) have_date = 1;
 			if (buffer_is_equal_string(ds->key, CONST_STR_LEN("Server"))) have_server = 1;
 
-			BUFFER_APPEND_STRING_CONST(b, "\r\n");
+			buffer_append_string_len(b, CONST_STR_LEN("\r\n"));
 			buffer_append_string_buffer(b, ds->key);
-			BUFFER_APPEND_STRING_CONST(b, ": ");
+			buffer_append_string_len(b, CONST_STR_LEN(": "));
 #if 0
 			/** 
 			 * the value might contain newlines, encode them with at least one white-space
@@ -81,7 +85,7 @@ int http_response_write_header(server *srv, connection *con) {
 
 	if (!have_date) {
 		/* HTTP/1.1 requires a Date: header */
-		BUFFER_APPEND_STRING_CONST(b, "\r\nDate: ");
+		buffer_append_string_len(b, CONST_STR_LEN("\r\nDate: "));
 
 		/* cache the generated timestamp */
 		if (srv->cur_ts != srv->last_generated_date_ts) {
@@ -100,14 +104,14 @@ int http_response_write_header(server *srv, connection *con) {
 
 	if (!have_server) {
 		if (buffer_is_empty(con->conf.server_tag)) {
-			BUFFER_APPEND_STRING_CONST(b, "\r\nServer: " PACKAGE_NAME "/" PACKAGE_VERSION);
+			buffer_append_string_len(b, CONST_STR_LEN("\r\nServer: " PACKAGE_NAME "/" PACKAGE_VERSION));
 		} else if (con->conf.server_tag->used > 1) {
-			BUFFER_APPEND_STRING_CONST(b, "\r\nServer: ");
+			buffer_append_string_len(b, CONST_STR_LEN("\r\nServer: "));
 			buffer_append_string_encoded(b, CONST_BUF_LEN(con->conf.server_tag), ENCODING_HTTP_HEADER);
 		}
 	}
 
-	BUFFER_APPEND_STRING_CONST(b, "\r\n\r\n");
+	buffer_append_string_len(b, CONST_STR_LEN("\r\n\r\n"));
 
 
 	con->bytes_header = b->used - 1;
@@ -181,7 +185,11 @@ handler_t http_response_prepare(server *srv, connection *con) {
 		 *
 		 */
 
-		buffer_copy_string(con->uri.scheme, con->conf.is_ssl ? "https" : "http");
+		if (con->conf.is_ssl) {
+			buffer_copy_string_len(con->uri.scheme, CONST_STR_LEN("https"));
+		} else {
+			buffer_copy_string_len(con->uri.scheme, CONST_STR_LEN("http"));
+		}
 		buffer_copy_string_buffer(con->uri.authority, con->request.http_host);
 		buffer_to_lower(con->uri.authority);
 

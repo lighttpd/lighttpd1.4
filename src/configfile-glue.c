@@ -155,7 +155,7 @@ int config_insert_values_global(server *srv, array *ca, const config_values_t cv
 		/* touched */
 		touched = data_string_init();
 
-		buffer_copy_string(touched->value, "");
+		buffer_copy_string_len(touched->value, CONST_STR_LEN(""));
 		buffer_copy_string_buffer(touched->key, du->key);
 
 		array_insert_unique(srv->config_touched, (data_unset *)touched);
@@ -260,7 +260,7 @@ static cond_result_t config_check_cond_nocache(server *srv, connection *con, dat
 				if (ck_colon) {
 					/* condition "host:port" but client send "host" */
 					buffer_copy_string_buffer(srv->cond_check_buf, l);
-					BUFFER_APPEND_STRING_CONST(srv->cond_check_buf, ":");
+					buffer_append_string_len(srv->cond_check_buf, CONST_STR_LEN(":"));
 					buffer_append_long(srv->cond_check_buf, sock_addr_get_port(&(srv_sock->addr)));
 					l = srv->cond_check_buf;
 				} else if (!ck_colon) {

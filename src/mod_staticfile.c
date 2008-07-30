@@ -282,22 +282,22 @@ static int http_response_parse_range(server *srv, connection *con, plugin_data *
 
 				b = chunkqueue_get_append_buffer(con->write_queue);
 
-				buffer_copy_string(b, "\r\n--");
+				buffer_copy_string_len(b, CONST_STR_LEN("\r\n--"));
 				buffer_append_string(b, boundary);
 
 				/* write Content-Range */
-				buffer_append_string(b, "\r\nContent-Range: bytes ");
+				buffer_append_string_len(b, CONST_STR_LEN("\r\nContent-Range: bytes "));
 				buffer_append_off_t(b, start);
-				buffer_append_string(b, "-");
+				buffer_append_string_len(b, CONST_STR_LEN("-"));
 				buffer_append_off_t(b, end);
-				buffer_append_string(b, "/");
+				buffer_append_string_len(b, CONST_STR_LEN("/"));
 				buffer_append_off_t(b, sce->st.st_size);
 
-				buffer_append_string(b, "\r\nContent-Type: ");
+				buffer_append_string_len(b, CONST_STR_LEN("\r\nContent-Type: "));
 				buffer_append_string_buffer(b, content_type);
 
 				/* write END-OF-HEADER */
-				buffer_append_string(b, "\r\n\r\n");
+				buffer_append_string_len(b, CONST_STR_LEN("\r\n\r\n"));
 
 				con->response.content_length += b->used - 1;
 
@@ -325,7 +325,7 @@ static int http_response_parse_range(server *srv, connection *con, plugin_data *
 
 		/* set header-fields */
 
-		buffer_copy_string(p->range_buf, "multipart/byteranges; boundary=");
+		buffer_copy_string_len(p->range_buf, CONST_STR_LEN("multipart/byteranges; boundary="));
 		buffer_append_string(p->range_buf, boundary);
 
 		/* overwrite content-type */
@@ -333,11 +333,11 @@ static int http_response_parse_range(server *srv, connection *con, plugin_data *
 	} else {
 		/* add Content-Range-header */
 
-		buffer_copy_string(p->range_buf, "bytes ");
+		buffer_copy_string_len(p->range_buf, CONST_STR_LEN("bytes "));
 		buffer_append_off_t(p->range_buf, start);
-		buffer_append_string(p->range_buf, "-");
+		buffer_append_string_len(p->range_buf, CONST_STR_LEN("-"));
 		buffer_append_off_t(p->range_buf, end);
-		buffer_append_string(p->range_buf, "/");
+		buffer_append_string_len(p->range_buf, CONST_STR_LEN("/"));
 		buffer_append_off_t(p->range_buf, sce->st.st_size);
 
 		response_header_insert(srv, con, CONST_STR_LEN("Content-Range"), CONST_BUF_LEN(p->range_buf));

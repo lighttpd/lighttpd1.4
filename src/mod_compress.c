@@ -396,13 +396,13 @@ static int deflate_file_to_file(server *srv, connection *con, plugin_data *p, bu
 
 	switch(type) {
 	case HTTP_ACCEPT_ENCODING_GZIP:
-		buffer_append_string(p->ofn, "-gzip-");
+		buffer_append_string_len(p->ofn, CONST_STR_LEN("-gzip-"));
 		break;
 	case HTTP_ACCEPT_ENCODING_DEFLATE:
-		buffer_append_string(p->ofn, "-deflate-");
+		buffer_append_string_len(p->ofn, CONST_STR_LEN("-deflate-"));
 		break;
 	case HTTP_ACCEPT_ENCODING_BZIP2:
-		buffer_append_string(p->ofn, "-bzip2-");
+		buffer_append_string_len(p->ofn, CONST_STR_LEN("-bzip2-"));
 		break;
 	default:
 		log_error_write(srv, __FILE__, __LINE__, "sd", "unknown compression type", type);

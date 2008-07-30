@@ -184,7 +184,7 @@ int proc_open(proc_handler_t *proc, const char *command) {
 		buffer_append_string(cmdline, shell);
 	} else {
 		buffer_append_string(cmdline, windir);
-		buffer_append_string(cmdline, "\\system32\\cmd.exe");
+		buffer_append_string_len(cmdline, CONST_STR_LEN("\\system32\\cmd.exe"));
 	}
 	buffer_append_string_len(cmdline, CONST_STR_LEN(" /c "));
 	buffer_append_string(cmdline, command);

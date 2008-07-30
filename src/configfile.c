@@ -478,7 +478,7 @@ static int config_tokenizer(server *srv, tokenizer_t *t, int *token_id, buffer *
 				if (t->input[t->offset + 1] == '>') {
 					t->offset += 2;
 
-					buffer_copy_string(token, "=>");
+					buffer_copy_string_len(token, CONST_STR_LEN("=>"));
 
 					tid = TK_ARRAY_ASSIGN;
 				} else {
@@ -492,13 +492,13 @@ static int config_tokenizer(server *srv, tokenizer_t *t, int *token_id, buffer *
 				if (t->input[t->offset + 1] == '=') {
 					t->offset += 2;
 
-					buffer_copy_string(token, "==");
+					buffer_copy_string_len(token, CONST_STR_LEN("=="));
 
 					tid = TK_EQ;
 				} else if (t->input[t->offset + 1] == '~') {
 					t->offset += 2;
 
-					buffer_copy_string(token, "=~");
+					buffer_copy_string_len(token, CONST_STR_LEN("=~"));
 
 					tid = TK_MATCH;
 				} else {
@@ -531,13 +531,13 @@ static int config_tokenizer(server *srv, tokenizer_t *t, int *token_id, buffer *
 				if (t->input[t->offset + 1] == '=') {
 					t->offset += 2;
 
-					buffer_copy_string(token, "!=");
+					buffer_copy_string_len(token, CONST_STR_LEN("!="));
 
 					tid = TK_NE;
 				} else if (t->input[t->offset + 1] == '~') {
 					t->offset += 2;
 
-					buffer_copy_string(token, "!~");
+					buffer_copy_string_len(token, CONST_STR_LEN("!~"));
 
 					tid = TK_NOMATCH;
 				} else {
@@ -592,7 +592,7 @@ static int config_tokenizer(server *srv, tokenizer_t *t, int *token_id, buffer *
 				}
 				t->in_key = 1;
 				tid = TK_EOL;
-				buffer_copy_string(token, "(EOL)");
+				buffer_copy_string_len(token, CONST_STR_LEN("(EOL)"));
 			} else {
 				config_skip_newline(t);
 				t->line_pos = 1;
@@ -603,7 +603,7 @@ static int config_tokenizer(server *srv, tokenizer_t *t, int *token_id, buffer *
 			if (t->in_brace > 0) {
 				tid = TK_COMMA;
 
-				buffer_copy_string(token, "(COMMA)");
+				buffer_copy_string_len(token, CONST_STR_LEN("(COMMA)"));
 			}
 
 			t->offset++;
@@ -612,7 +612,7 @@ static int config_tokenizer(server *srv, tokenizer_t *t, int *token_id, buffer *
 		case '"':
 			/* search for the terminating " */
 			start = t->input + t->offset + 1;
-			buffer_copy_string(token, "");
+			buffer_copy_string_len(token, CONST_STR_LEN(""));
 
 			for (i = 1; t->input[t->offset + i]; i++) {
 				if (t->input[t->offset + i] == '\\' &&
@@ -658,7 +658,7 @@ static int config_tokenizer(server *srv, tokenizer_t *t, int *token_id, buffer *
 
 			tid = TK_LPARAN;
 
-			buffer_copy_string(token, "(");
+			buffer_copy_string_len(token, CONST_STR_LEN("("));
 			break;
 		case ')':
 			t->offset++;
@@ -666,7 +666,7 @@ static int config_tokenizer(server *srv, tokenizer_t *t, int *token_id, buffer *
 
 			tid = TK_RPARAN;
 
-			buffer_copy_string(token, ")");
+			buffer_copy_string_len(token, CONST_STR_LEN(")"));
 			break;
 		case '$':
 			t->offset++;
@@ -675,19 +675,19 @@ static int config_tokenizer(server *srv, tokenizer_t *t, int *token_id, buffer *
 			t->in_cond = 1;
 			t->in_key = 0;
 
-			buffer_copy_string(token, "$");
+			buffer_copy_string_len(token, CONST_STR_LEN("$"));
 
 			break;
 
 		case '+':
 			if (t->input[t->offset + 1] == '=') {
 				t->offset += 2;
-				buffer_copy_string(token, "+=");
+				buffer_copy_string_len(token, CONST_STR_LEN("+="));
 				tid = TK_APPEND;
 			} else {
 				t->offset++;
 				tid = TK_PLUS;
-				buffer_copy_string(token, "+");
+				buffer_copy_string_len(token, CONST_STR_LEN("+"));
 			}
 			break;
 
@@ -696,7 +696,7 @@ static int config_tokenizer(server *srv, tokenizer_t *t, int *token_id, buffer *
 
 			tid = TK_LCURLY;
 
-			buffer_copy_string(token, "{");
+			buffer_copy_string_len(token, CONST_STR_LEN("{"));
 
 			break;
 
@@ -705,7 +705,7 @@ static int config_tokenizer(server *srv, tokenizer_t *t, int *token_id, buffer *
 
 			tid = TK_RCURLY;
 
-			buffer_copy_string(token, "}");
+			buffer_copy_string_len(token, CONST_STR_LEN("}"));
 
 			break;
 
@@ -714,7 +714,7 @@ static int config_tokenizer(server *srv, tokenizer_t *t, int *token_id, buffer *
 
 			tid = TK_LBRACKET;
 
-			buffer_copy_string(token, "[");
+			buffer_copy_string_len(token, CONST_STR_LEN("["));
 
 			break;
 
@@ -723,7 +723,7 @@ static int config_tokenizer(server *srv, tokenizer_t *t, int *token_id, buffer *
 
 			tid = TK_RBRACKET;
 
-			buffer_copy_string(token, "]");
+			buffer_copy_string_len(token, CONST_STR_LEN("]"));
 
 			break;
 		case '#':
@@ -1009,7 +1009,7 @@ int config_read(server *srv, const char *fn) {
 	}
 
 	dc = data_config_init();
-	buffer_copy_string(dc->key, "global");
+	buffer_copy_string_len(dc->key, CONST_STR_LEN("global"));
 
 	assert(context.all_configs->used == 0);
 	dc->context_ndx = context.all_configs->used;
@@ -1020,14 +1020,14 @@ int config_read(server *srv, const char *fn) {
 	srv->config = dc->value;
 	dpid = data_integer_init();
 	dpid->value = getpid();
-	buffer_copy_string(dpid->key, "var.PID");
+	buffer_copy_string_len(dpid->key, CONST_STR_LEN("var.PID"));
 	array_insert_unique(srv->config, (data_unset *)dpid);
 
 	dcwd = data_string_init();
 	buffer_prepare_copy(dcwd->value, 1024);
 	if (NULL != getcwd(dcwd->value->ptr, dcwd->value->size - 1)) {
 		dcwd->value->used = strlen(dcwd->value->ptr) + 1;
-		buffer_copy_string(dcwd->key, "var.CWD");
+		buffer_copy_string_len(dcwd->key, CONST_STR_LEN("var.CWD"));
 		array_insert_unique(srv->config, (data_unset *)dcwd);
 	}
 
@@ -1061,7 +1061,7 @@ int config_read(server *srv, const char *fn) {
 		/* prepend default modules */
 		if (NULL == array_get_element(modules->value, "mod_indexfile")) {
 			ds = data_string_init();
-			buffer_copy_string(ds->value, "mod_indexfile");
+			buffer_copy_string_len(ds->value, CONST_STR_LEN("mod_indexfile"));
 			array_insert_unique(prepends->value, (data_unset *)ds);
 		}
 
@@ -1074,13 +1074,13 @@ int config_read(server *srv, const char *fn) {
 		/* append default modules */
 		if (NULL == array_get_element(modules->value, "mod_dirlisting")) {
 			ds = data_string_init();
-			buffer_copy_string(ds->value, "mod_dirlisting");
+			buffer_copy_string_len(ds->value, CONST_STR_LEN("mod_dirlisting"));
 			array_insert_unique(modules->value, (data_unset *)ds);
 		}
 
 		if (NULL == array_get_element(modules->value, "mod_staticfile")) {
 			ds = data_string_init();
-			buffer_copy_string(ds->value, "mod_staticfile");
+			buffer_copy_string_len(ds->value, CONST_STR_LEN("mod_staticfile"));
 			array_insert_unique(modules->value, (data_unset *)ds);
 		}
 	} else {
@@ -1090,18 +1090,18 @@ int config_read(server *srv, const char *fn) {
 
 		/* server.modules is not set */
 		ds = data_string_init();
-		buffer_copy_string(ds->value, "mod_indexfile");
+		buffer_copy_string_len(ds->value, CONST_STR_LEN("mod_indexfile"));
 		array_insert_unique(modules->value, (data_unset *)ds);
 
 		ds = data_string_init();
-		buffer_copy_string(ds->value, "mod_dirlisting");
+		buffer_copy_string_len(ds->value, CONST_STR_LEN("mod_dirlisting"));
 		array_insert_unique(modules->value, (data_unset *)ds);
 
 		ds = data_string_init();
-		buffer_copy_string(ds->value, "mod_staticfile");
+		buffer_copy_string_len(ds->value, CONST_STR_LEN("mod_staticfile"));
 		array_insert_unique(modules->value, (data_unset *)ds);
 
-		buffer_copy_string(modules->key, "server.modules");
+		buffer_copy_string_len(modules->key, CONST_STR_LEN("server.modules"));
 		array_insert_unique(srv->config, (data_unset *)modules);
 	}
 
