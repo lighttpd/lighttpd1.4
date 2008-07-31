@@ -43,6 +43,7 @@ NEWS
   * Use filedescriptor 0 for mod_scgi spawn socket, redirect STDERR to /dev/null (#1716)
   * fixed round-robin balancing in mod_proxy (#1715)
   * fixed EINTR handling for waitpid in mod_fastcgi
+  * mod_{fast,s}cgi: overwrite environment variables (#1722)
 
 - 1.4.19 - 2008-03-10
 

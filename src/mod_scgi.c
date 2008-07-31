@@ -593,6 +593,7 @@ FREE_FUNC(mod_scgi_free) {
 
 static int env_add(char_array *env, const char *key, size_t key_len, const char *val, size_t val_len) {
 	char *dst;
+	size_t i;
 
 	if (!key || !val) return -1;
 
@@ -601,6 +602,15 @@ static int env_add(char_array *env, const char *key, size_t key_len, const char 
 	dst[key_len] = '=';
 	/* add the \0 from the value */
 	memcpy(dst + key_len + 1, val, val_len + 1);
+
+	for (i = 0; i < env->used; i++) {
+		if (0 == strncmp(dst, env->ptr[i], key_len + 1)) {
+			/* don't care about free as we are in a forked child which is going to exec(...) */
+			/* free(env->ptr[i]); */
+			env->ptr[i] = dst;
+			return 0;
+		}
+	}
 
 	if (env->size == 0) {
 		env->size = 16;
