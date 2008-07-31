@@ -1118,7 +1118,13 @@ static handler_t mod_proxy_check_extension(server *srv, connection *con, void *p
 		log_error_write(srv, __FILE__, __LINE__,  "s", "proxy - ext found");
 	}
 
-	switch(p->conf.balance) {
+	if (extension->value->used == 1) {
+		if ( ((data_proxy *)extension->value->data[0])->is_disabled ) {
+			ndx = -1;
+		} else {
+			ndx = 0;
+		}
+	} else if (extension->value->used != 0) switch(p->conf.balance) {
 	case PROXY_BALANCE_HASH:
 		/* hash balancing */
 
@@ -1175,7 +1181,9 @@ static handler_t mod_proxy_check_extension(server *srv, connection *con, void *p
 		}
 
 		break;
-	case PROXY_BALANCE_RR:
+	case PROXY_BALANCE_RR: {
+		data_proxy *host;
+
 		/* round robin */
 		if (p->conf.debug) {
 			log_error_write(srv, __FILE__, __LINE__,  "s",
@@ -1185,31 +1193,32 @@ static handler_t mod_proxy_check_extension(server *srv, connection *con, void *p
 		/* just to be sure */
 		assert(extension->value->used < INT_MAX);
 
-		for (k = 0, ndx = -1, max_usage = INT_MAX; k < extension->value->used; k++) {
-			data_proxy *host = (data_proxy *)extension->value->data[k];
+		host = (data_proxy *)extension->value->data[0];
 
-			if (host->is_disabled) continue;
+		/* Use last_used_ndx from first host in list */
+		k = ndx = host->last_used_ndx;
+		if (ndx < 0) ndx = 0;
 
-			/* first usable ndx */
-			if (max_usage == INT_MAX) {
-				max_usage = k;
+		/* Search first active host after last_used_ndx */
+		while ( ndx < (int) extension->value->used
+				&& (host = (data_proxy *)extension->value->data[ndx])->is_disabled ) ndx++;
+
+		if (ndx >= (int) extension->value->used) {
+			/* didn't found a higher id, wrap to the start */
+			for (ndx = 0; ndx < (int) k; ndx++) {
+				host = (data_proxy *)extension->value->data[ndx];
+				if (!host->is_disabled) break;
 			}
 
-			/* get next ndx */
-			if ((int)k > host->last_used_ndx) {
-				ndx = k;
-				host->last_used_ndx = k;
-
-				break;
-			}
+			/* No active host found */
+			if (host->is_disabled) ndx = -1;
 		}
 
-		/* didn't found a higher id, wrap to the start */
-		if (ndx == -1 && max_usage != INT_MAX) {
-			ndx = max_usage;
-		}
+		/* Save new index for next round */
+		((data_proxy *)extension->value->data[0])->last_used_ndx = ndx;
 
 		break;
+	}
 	default:
 		break;
 	}
