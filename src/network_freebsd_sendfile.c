@@ -166,6 +166,7 @@ int network_write_chunkqueue_freebsdsendfile(server *srv, connection *con, int f
 			if (-1 == sendfile(c->file.fd, fd, offset, toSend, NULL, &r, 0)) {
 				switch(errno) {
 				case EAGAIN:
+				case EINTR:
 					break;
 				case ENOTCONN:
 					return -2;
@@ -175,7 +176,7 @@ int network_write_chunkqueue_freebsdsendfile(server *srv, connection *con, int f
 				}
 			}
 
-			if (r == 0) {
+			if (r == 0 && (errno != EAGAIN && errno != EINTR)) {
 				int oerrno = errno;
 				/* We got an event to write but we wrote nothing
 				 *
