@@ -42,6 +42,7 @@ NEWS
   * handle EAGAIN and EINTR for freebsd sendfile (#1675)
   * Use filedescriptor 0 for mod_scgi spawn socket, redirect STDERR to /dev/null (#1716)
   * fixed round-robin balancing in mod_proxy (#1715)
+  * fixed EINTR handling for waitpid in mod_fastcgi
 
 - 1.4.19 - 2008-03-10
 
