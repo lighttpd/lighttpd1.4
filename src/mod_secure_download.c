@@ -243,8 +243,8 @@ URIHANDLER_FUNC(mod_secdownload_uri_handler) {
 	}
 
 	/* timed-out */
-	if (srv->cur_ts - ts > p->conf.timeout ||
-	    srv->cur_ts - ts < -p->conf.timeout) {
+	if ( (srv->cur_ts > ts && srv->cur_ts - ts > p->conf.timeout) ||
+	     (srv->cur_ts < ts && ts - srv->cur_ts > p->conf.timeout) ) {
 		/* "Gone" as the url will never be valid again instead of "408 - Timeout" where the request may be repeated */
 		con->http_status = 410;
 
