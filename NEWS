@@ -39,6 +39,7 @@ NEWS
   * case insensitive match for secdownload md5 token (#1710)
   * Handle only HEAD, GET and POST in mod_dirlisting (same as in staticfile) (#1687)
   * fixed mod_secdownload problem with unsigned time_t (#1688)
+  * handle EAGAIN and EINTR for freebsd sendfile (#1675)
 
 - 1.4.19 - 2008-03-10
 
