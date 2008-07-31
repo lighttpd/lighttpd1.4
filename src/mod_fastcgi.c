@@ -2681,30 +2681,48 @@ static int fcgi_restart_dead_procs(server *srv, plugin_data *p, fcgi_extension_h
 
 			/* the child should not terminate at all */
 
-			switch(waitpid(proc->pid, &status, WNOHANG)) {
-			case 0:
-				/* child is still alive */
-				break;
-			case -1:
-				break;
-			default:
-				if (WIFEXITED(status)) {
-#if 0
-					log_error_write(srv, __FILE__, __LINE__, "sdsd",
-							"child exited, pid:", proc->pid,
-							"status:", WEXITSTATUS(status));
-#endif
-				} else if (WIFSIGNALED(status)) {
-					log_error_write(srv, __FILE__, __LINE__, "sd",
-							"child signaled:",
-							WTERMSIG(status));
-				} else {
-					log_error_write(srv, __FILE__, __LINE__, "sd",
-							"child died somehow:",
-							status);
-				}
+			for ( ;; ) {
+				switch(waitpid(proc->pid, &status, WNOHANG)) {
+				case 0:
+					/* child is still alive */
+					if (srv->cur_ts <= proc->disabled_until) break;
+					
+					proc->state = PROC_STATE_RUNNING;
+					host->active_procs++;
+		
+					log_error_write(srv, __FILE__, __LINE__,  "sbdb",
+							"fcgi-server re-enabled:",
+							host->host, host->port,
+							host->unixsocket);
+					break;
+				case -1:
+					if (errno == EINTR) continue;
 
-				proc->state = PROC_STATE_DIED;
+					log_error_write(srv, __FILE__, __LINE__, "sd",
+							"child died somehow, waitpid failed:",
+							errno);
+					proc->state = PROC_STATE_DIED;
+					break;
+				default:
+					if (WIFEXITED(status)) {
+#if 0
+						log_error_write(srv, __FILE__, __LINE__, "sdsd",
+								"child exited, pid:", proc->pid,
+								"status:", WEXITSTATUS(status));
+#endif
+					} else if (WIFSIGNALED(status)) {
+						log_error_write(srv, __FILE__, __LINE__, "sd",
+								"child signaled:",
+								WTERMSIG(status));
+					} else {
+						log_error_write(srv, __FILE__, __LINE__, "sd",
+								"child died somehow:",
+								status);
+					}
+	
+					proc->state = PROC_STATE_DIED;
+					break;
+				}
 				break;
 			}
 
