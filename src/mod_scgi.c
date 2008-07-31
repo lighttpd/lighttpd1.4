@@ -759,10 +759,19 @@ static int scgi_spawn_connection(server *srv,
 			env.size = 0;
 			env.used = 0;
 
+			if (scgi_fd != 0) {
+				close(0);
+				dup2(scgi_fd, 0);
+				close(scgi_fd);
+				scgi_fd = 0;
+			}
+
 			/* we don't need the client socket */
 			for (fd = 3; fd < 256; fd++) {
-				if (fd != 2 && fd != scgi_fd) close(fd);
+				close(fd);
 			}
+
+			openDevNull(STDERR_FILENO);
 
 			/* build clean environment */
 			if (host->bin_env_copy->used) {
