@@ -45,6 +45,7 @@ NEWS
   * fixed EINTR handling for waitpid in mod_fastcgi
   * mod_{fast,s}cgi: overwrite environment variables (#1722)
   * inserted many con->mode checks; they should prevent two modules to handle the same request if they shouldn't (#631)
+  * fixed url encoding to encode more characters (#266)
 
 - 1.4.19 - 2008-03-10
 
