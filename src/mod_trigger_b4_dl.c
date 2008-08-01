@@ -316,6 +316,8 @@ URIHANDLER_FUNC(mod_trigger_b4_dl_uri_handler) {
 # define N 10
 	int ovec[N * 3];
 
+	if (con->mode != DIRECT) return HANDLER_GO_ON;
+
 	if (con->uri.path->used == 0) return HANDLER_GO_ON;
 
 	mod_trigger_b4_dl_patch_connection(srv, con, p);

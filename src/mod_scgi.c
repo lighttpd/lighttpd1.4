@@ -1187,11 +1187,6 @@ void scgi_connection_cleanup(server *srv, handler_ctx *hctx) {
 	p    = hctx->plugin_data;
 	con  = hctx->remote_conn;
 
-	if (con->mode != p->id) {
-		WP();
-		return;
-	}
-
 	if (hctx->fd != -1) {
 		fdevent_event_del(srv->ev, &(hctx->fde_ndx), hctx->fd);
 		fdevent_unregister(srv->ev, hctx->fd);
@@ -2469,14 +2464,10 @@ static handler_t scgi_connection_close(server *srv, handler_ctx *hctx) {
 	p    = hctx->plugin_data;
 	con  = hctx->remote_conn;
 
-	if (con->mode != p->id) return HANDLER_GO_ON;
-
 	log_error_write(srv, __FILE__, __LINE__, "ssdsd",
 			"emergency exit: scgi:",
 			"connection-fd:", con->fd,
 			"fcgi-fd:", hctx->fd);
-
-
 
 	scgi_connection_cleanup(srv, hctx);
 
@@ -2703,6 +2694,8 @@ static handler_t scgi_check_extension(server *srv, connection *con, void *p_d, i
 	buffer *fn;
 	scgi_extension *extension = NULL;
 	scgi_extension_host *host = NULL;
+
+	if (con->mode != DIRECT) return HANDLER_GO_ON;
 
 	/* Possibly, we processed already this request */
 	if (con->file_started == 1) return HANDLER_GO_ON;

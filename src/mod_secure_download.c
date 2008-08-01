@@ -204,6 +204,8 @@ URIHANDLER_FUNC(mod_secdownload_uri_handler) {
 	time_t ts = 0;
 	size_t i;
 
+	if (con->mode != DIRECT) return HANDLER_GO_ON;
+
 	if (con->uri.path->used == 0) return HANDLER_GO_ON;
 
 	mod_secdownload_patch_connection(srv, con, p);

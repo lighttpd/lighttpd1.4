@@ -140,6 +140,8 @@ URIHANDLER_FUNC(mod_indexfile_subrequest) {
 	size_t k;
 	stat_cache_entry *sce = NULL;
 
+	if (con->mode != DIRECT) return HANDLER_GO_ON;
+
 	if (con->uri.path->used == 0) return HANDLER_GO_ON;
 	if (con->uri.path->ptr[con->uri.path->used - 2] != '/') return HANDLER_GO_ON;
 

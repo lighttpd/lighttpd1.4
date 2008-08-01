@@ -193,6 +193,8 @@ URIHANDLER_FUNC(mod_flv_streaming_path_handler) {
 
 	UNUSED(srv);
 
+	if (con->mode != DIRECT) return HANDLER_GO_ON;
+
 	if (buffer_is_empty(con->physical.path)) return HANDLER_GO_ON;
 
 	mod_flv_streaming_patch_connection(srv, con, p);

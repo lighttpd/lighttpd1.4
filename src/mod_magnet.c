@@ -653,6 +653,7 @@ static handler_t magnet_attract(server *srv, connection *con, plugin_data *p, bu
 		assert(lua_gettop(L) == 0); /* only the function should be on the stack */
 
 		con->http_status = 500;
+		con->mode = DIRECT;
 
 		return HANDLER_FINISHED;
 	}
@@ -750,6 +751,7 @@ static handler_t magnet_attract(server *srv, connection *con, plugin_data *p, bu
 		assert(lua_gettop(L) == 1); /* only the function should be on the stack */
 
 		con->http_status = 500;
+		con->mode = DIRECT;
 
 		return HANDLER_FINISHED;
 	}
@@ -778,6 +780,7 @@ static handler_t magnet_attract(server *srv, connection *con, plugin_data *p, bu
 		} else {
 			/* } catch () { */
 			con->http_status = 500;
+			con->mode = DIRECT;
 		}
 
 		assert(lua_gettop(L) == 1); /* only the function should be on the stack */

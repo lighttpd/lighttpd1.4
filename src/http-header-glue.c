@@ -272,6 +272,7 @@ int http_response_handle_cachable(server *srv, connection *con, buffer *mtime) {
 									con->request.http_if_modified_since, used_len, sizeof(buf) - 1);
 
 							con->http_status = 412;
+							con->mode = DIRECT;
 							return HANDLER_FINISHED;
 						}
 
@@ -281,6 +282,7 @@ int http_response_handle_cachable(server *srv, connection *con, buffer *mtime) {
 
 						if (NULL == strptime(buf, "%a, %d %b %Y %H:%M:%S GMT", &tm)) {
 							con->http_status = 412;
+							con->mode = DIRECT;
 							return HANDLER_FINISHED;
 						}
 						t_header = mktime(&tm);
@@ -299,6 +301,7 @@ int http_response_handle_cachable(server *srv, connection *con, buffer *mtime) {
 				}
 			} else {
 				con->http_status = 412;
+				con->mode = DIRECT;
 				return HANDLER_FINISHED;
 			}
 		}

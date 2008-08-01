@@ -177,6 +177,7 @@ URIHANDLER_FUNC(mod_evasive_uri_handler) {
 				"turned away. Too many connections.");
 
 			con->http_status = 403;
+			con->mode = DIRECT;
 			return HANDLER_FINISHED;
 		}
 	}

@@ -1180,6 +1180,8 @@ URIHANDLER_FUNC(cgi_is_handled) {
 	plugin_data *p = p_d;
 	buffer *fn = con->physical.path;
 
+	if (con->mode != DIRECT) return HANDLER_GO_ON;
+
 	if (fn->used == 0) return HANDLER_GO_ON;
 
 	mod_cgi_patch_connection(srv, con, p);
@@ -1195,6 +1197,7 @@ URIHANDLER_FUNC(cgi_is_handled) {
 
 		if (0 == strncmp(fn->ptr + s_len - ct_len, ds->key->ptr, ct_len)) {
 			if (cgi_create_env(srv, con, p, ds->value)) {
+				con->mode = DIRECT;
 				con->http_status = 500;
 
 				buffer_reset(con->physical.path);

@@ -1060,6 +1060,8 @@ static handler_t mod_proxy_check_extension(server *srv, connection *con, void *p
 	data_array *extension = NULL;
 	size_t path_info_offset;
 
+	if (con->mode != DIRECT) return HANDLER_GO_ON;
+
 	/* Possibly, we processed already this request */
 	if (con->file_started == 1) return HANDLER_GO_ON;
 

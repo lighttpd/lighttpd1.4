@@ -869,6 +869,8 @@ URIHANDLER_FUNC(mod_dirlisting_subrequest) {
 		return HANDLER_GO_ON;
 	}
 
+	if (con->mode != DIRECT) return HANDLER_GO_ON;
+
 	if (con->physical.path->used == 0) return HANDLER_GO_ON;
 	if (con->uri.path->used == 0) return HANDLER_GO_ON;
 	if (con->uri.path->ptr[con->uri.path->used - 2] != '/') return HANDLER_GO_ON;
