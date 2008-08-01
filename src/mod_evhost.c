@@ -95,7 +95,7 @@ static void mod_evhost_parse_pattern(plugin_config *s) {
 		s->path_pieces = realloc(s->path_pieces,(s->len+1) * sizeof(*s->path_pieces));
 		s->path_pieces[s->len] = buffer_init();
 
-		buffer_append_memory(s->path_pieces[s->len],pos,ptr-pos);
+		buffer_copy_string_len(s->path_pieces[s->len],pos,ptr-pos);
 
 		s->len += 1;
 	}
