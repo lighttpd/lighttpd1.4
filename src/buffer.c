@@ -55,6 +55,8 @@ void buffer_reset(buffer *b) {
 		free(b->ptr);
 		b->ptr = NULL;
 		b->size = 0;
+	} else if (b->size) {
+		b->ptr[0] = '\0';
 	}
 
 	b->used = 0;
