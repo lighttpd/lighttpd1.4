@@ -949,7 +949,7 @@ static int cgi_create_env(server *srv, connection *con, plugin_data *p, buffer *
 
 				for (j = 0; j < ds->key->used - 1; j++) {
 					p->tmp_buf->ptr[p->tmp_buf->used++] =
-						isalpha((unsigned char)ds->key->ptr[j]) ?
+						light_isalnum((unsigned char)ds->key->ptr[j]) ?
 						toupper((unsigned char)ds->key->ptr[j]) : '_';
 				}
 				p->tmp_buf->ptr[p->tmp_buf->used++] = '\0';
