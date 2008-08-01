@@ -1421,7 +1421,7 @@ static int scgi_env_add_request_headers(server *srv, connection *con, plugin_dat
 			buffer_prepare_append(srv->tmp_buf, ds->key->used + 2);
 			for (j = 0; j < ds->key->used - 1; j++) {
 				srv->tmp_buf->ptr[srv->tmp_buf->used++] =
-					isalpha((unsigned char)ds->key->ptr[j]) ?
+					light_isalnum((unsigned char)ds->key->ptr[j]) ?
 					toupper((unsigned char)ds->key->ptr[j]) : '_';
 			}
 			srv->tmp_buf->ptr[srv->tmp_buf->used++] = '\0';
