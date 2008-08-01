@@ -48,6 +48,7 @@ NEWS
   * fixed url encoding to encode more characters (#266)
   * allow digits in [s]cgi env vars (#1712)
   * fixed dropping last character of evhost pattern (#161)
+  * print helpful error message on conditionals in global block (#1550)
 
 - 1.4.19 - 2008-03-10
 
