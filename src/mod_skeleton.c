@@ -169,6 +169,8 @@ URIHANDLER_FUNC(mod_skeleton_uri_handler) {
 
 	UNUSED(srv);
 
+	if (con->mode != DIRECT) return HANDLER_GO_ON;
+
 	if (con->uri.path->used == 0) return HANDLER_GO_ON;
 
 	mod_skeleton_patch_connection(srv, con, p);

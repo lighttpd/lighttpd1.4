@@ -1027,6 +1027,7 @@ static int mod_ssi_handle_request(server *srv, connection *con, plugin_data *p) 
 
 	con->file_started  = 1;
 	con->file_finished = 1;
+	con->mode = p->id;
 
 	response_header_overwrite(srv, con, CONST_STR_LEN("Content-Type"), CONST_STR_LEN("text/html"));
 
@@ -1094,6 +1095,8 @@ URIHANDLER_FUNC(mod_ssi_physical_path) {
 	plugin_data *p = p_d;
 	size_t k;
 
+	if (con->mode != DIRECT) return HANDLER_GO_ON;
+
 	if (con->physical.path->used == 0) return HANDLER_GO_ON;
 
 	mod_ssi_patch_connection(srv, con, p);
@@ -1109,6 +1112,7 @@ URIHANDLER_FUNC(mod_ssi_physical_path) {
 			if (mod_ssi_handle_request(srv, con, p)) {
 				/* on error */
 				con->http_status = 500;
+				con->mode = DIRECT;
 			}
 
 			return HANDLER_FINISHED;

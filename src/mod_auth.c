@@ -248,6 +248,7 @@ static handler_t mod_auth_uri_handler(server *srv, connection *con, void *p_d) {
 				if (0 == strcmp(method->value->ptr, "digest")) {
 					if (-1 == (auth_satisfied = http_auth_digest_check(srv, con, p, req, con->uri.path, auth_realm+1))) {
 						con->http_status = 400;
+						con->mode = DIRECT;
 
 						/* a field was missing */
 
@@ -268,6 +269,7 @@ static handler_t mod_auth_uri_handler(server *srv, connection *con, void *p_d) {
 		realm = (data_string *)array_get_element(req, "realm");
 
 		con->http_status = 401;
+		con->mode = DIRECT;
 
 		if (0 == strcmp(method->value->ptr, "basic")) {
 			buffer_copy_string_len(p->tmp_buf, CONST_STR_LEN("Basic realm=\""));

@@ -3464,6 +3464,8 @@ static handler_t fcgi_check_extension(server *srv, connection *con, void *p_d, i
 	fcgi_extension *extension = NULL;
 	fcgi_extension_host *host = NULL;
 
+	if (con->mode != DIRECT) return HANDLER_GO_ON;
+
 	/* Possibly, we processed already this request */
 	if (con->file_started == 1) return HANDLER_GO_ON;
 

@@ -792,6 +792,8 @@ static int mod_status_patch_connection(server *srv, connection *con, plugin_data
 static handler_t mod_status_handler(server *srv, connection *con, void *p_d) {
 	plugin_data *p = p_d;
 
+	if (con->mode != DIRECT) return HANDLER_GO_ON;
+
 	mod_status_patch_connection(srv, con, p);
 
 	if (!buffer_is_empty(p->conf.status_url) &&

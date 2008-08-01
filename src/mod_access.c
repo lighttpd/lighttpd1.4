@@ -159,6 +159,7 @@ URIHANDLER_FUNC(mod_access_uri_handler) {
 
 		if (denied) {
 			con->http_status = 403;
+			con->mode = DIRECT;
 
 			if (con->conf.log_request_handling) {
 	 			log_error_write(srv, __FILE__, __LINE__, "sb", 

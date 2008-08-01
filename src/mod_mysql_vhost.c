@@ -410,6 +410,7 @@ GO_ON:	buffer_copy_string_buffer(con->server_name, c->server_name);
 
 ERR500:	if (result) mysql_free_result(result);
 	con->http_status = 500; /* Internal Error */
+	con->mode = DIRECT;
 	return HANDLER_FINISHED;
 }
 
