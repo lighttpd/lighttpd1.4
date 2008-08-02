@@ -49,6 +49,7 @@ NEWS
   * allow digits in [s]cgi env vars (#1712)
   * fixed dropping last character of evhost pattern (#161)
   * print helpful error message on conditionals in global block (#1550)
+  * decode url before matching in mod_rewrite (#1720)
 
 - 1.4.19 - 2008-03-10
 
