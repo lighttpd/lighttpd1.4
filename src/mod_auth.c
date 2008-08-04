@@ -150,13 +150,15 @@ static int mod_auth_patch_connection(server *srv, connection *con, mod_auth_plug
 				PATCH(auth_ldap_hostname);
 #ifdef USE_LDAP
 				PATCH(ldap);
-				PATCH(ldap_filter_pre);
-				PATCH(ldap_filter_post);
 #endif
 			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("auth.backend.ldap.base-dn"))) {
 				PATCH(auth_ldap_basedn);
 			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("auth.backend.ldap.filter"))) {
 				PATCH(auth_ldap_filter);
+#ifdef USE_LDAP
+				PATCH(ldap_filter_pre);
+				PATCH(ldap_filter_post);
+#endif
 			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("auth.backend.ldap.ca-file"))) {
 				PATCH(auth_ldap_cafile);
 			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("auth.backend.ldap.starttls"))) {
