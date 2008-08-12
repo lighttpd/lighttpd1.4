@@ -64,10 +64,10 @@ int http_response_write_header(server *srv, connection *con) {
 		ds = (data_string *)con->response.headers->data[i];
 
 		if (ds->value->used && ds->key->used &&
-		    0 != strncmp(ds->key->ptr, "X-LIGHTTPD-", sizeof("X-LIGHTTPD-") - 1) &&
-			0 != strncmp(ds->key->ptr, "X-Sendfile", sizeof("X-Sendfile") - 1)) {
-			if (buffer_is_equal_string(ds->key, CONST_STR_LEN("Date"))) have_date = 1;
-			if (buffer_is_equal_string(ds->key, CONST_STR_LEN("Server"))) have_server = 1;
+		    0 != strncasecmp(ds->key->ptr, CONST_STR_LEN("X-LIGHTTPD-")) &&
+			0 != strcasecmp(ds->key->ptr, "X-Sendfile")) {
+			if (0 == strcasecmp(ds->key->ptr, "Date")) have_date = 1;
+			if (0 == strcasecmp(ds->key->ptr, "Server")) have_server = 1;
 
 			buffer_append_string_len(b, CONST_STR_LEN("\r\n"));
 			buffer_append_string_buffer(b, ds->key);
