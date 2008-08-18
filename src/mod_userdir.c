@@ -262,6 +262,9 @@ URIHANDLER_FUNC(mod_userdir_docroot_handler) {
 				return HANDLER_GO_ON;
 			}
 		}
+		if (con->conf.force_lowercase_filenames) {
+			buffer_to_lower(p->username);
+		}
 
 		buffer_copy_string_buffer(p->temp_path, p->conf.basepath);
 		BUFFER_APPEND_SLASH(p->temp_path);
@@ -284,8 +287,24 @@ URIHANDLER_FUNC(mod_userdir_docroot_handler) {
 		}
 	}
 
+	/* the physical rel_path is basically the same as uri.path;
+	 * but it is converted to lowercase in case of force_lowercase_filenames and some special handling
+	 * for trailing '.', ' ' and '/' on windows
+	 * we assume that no docroot/physical handler changed this
+	 * (docroot should only set the docroot/server name, phyiscal should only change the phyiscal.path;
+	 *  the exception mod_secure_download doesn't work with userdir anyway)
+	 */
 	BUFFER_APPEND_SLASH(p->temp_path);
-	buffer_append_string(p->temp_path, rel_url + 1); /* skip the / */
+	/* if no second '/' is found, we assume that it was stripped from the uri.path for the special handling
+	 * on windows.
+	 * we do not care about the trailing slash here on windows, as we already ensured it is a directory
+	 *
+	 * TODO: what to do with trailing dots in usernames on windows? they may result in the same directory
+	 *       as a username without them.
+	 */
+	if (NULL != (rel_url = strchr(con->physical.rel_path->ptr + 2, '/'))) {
+		buffer_append_string(p->temp_path, rel_url + 1); /* skip the / */
+	}
 	buffer_copy_string_buffer(con->physical.path, p->temp_path);
 
 	buffer_reset(p->temp_path);
