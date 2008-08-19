@@ -53,6 +53,7 @@ NEWS
   * fixed conditional patching of ldap filter (#1564)
   * Match headers case insensitive in response (removing of X-{Sendfile,LIGHTTPD-*}, catching Date/Server)
   * fixed bug with case-insensitive filenames in mod_userdir (#1589), spotted by "anders1"
+  * fixed format string bugs in mod_accesslog for SYSLOG
 
 - 1.4.19 - 2008-03-10
 
