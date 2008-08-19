@@ -356,7 +356,7 @@ FREE_FUNC(mod_accesslog_free) {
 				if (s->use_syslog) {
 # ifdef HAVE_SYSLOG_H
 					if (s->access_logbuffer->used > 2) {
-						syslog(LOG_INFO, "%*s", s->access_logbuffer->used - 2, s->access_logbuffer->ptr);
+						syslog(LOG_INFO, "%*s", (int) s->access_logbuffer->used - 2, s->access_logbuffer->ptr);
 					}
 # endif
 				} else if (s->log_access_fd != -1) {
@@ -561,7 +561,7 @@ SIGHUP_FUNC(log_access_cycle) {
 #ifdef HAVE_SYSLOG_H
 				if (s->access_logbuffer->used > 2) {
 					/* syslog appends a \n on its own */
-					syslog(LOG_INFO, "%*s", s->access_logbuffer->used - 2, s->access_logbuffer->ptr);
+					syslog(LOG_INFO, "%*s", (int) s->access_logbuffer->used - 2, s->access_logbuffer->ptr);
 				}
 #endif
 			} else if (s->log_access_fd != -1) {
@@ -859,7 +859,7 @@ REQUESTDONE_FUNC(log_access_write) {
 #ifdef HAVE_SYSLOG_H
 			if (b->used > 2) {
 				/* syslog appends a \n on its own */
-				syslog(LOG_INFO, "%*s", b->used - 2, b->ptr);
+				syslog(LOG_INFO, "%*s", (int) b->used - 2, b->ptr);
 			}
 #endif
 		} else if (p->conf.log_access_fd != -1) {
