@@ -80,7 +80,7 @@ static void sigaction_handler(int sig, siginfo_t *si, void *context) {
 	switch (sig) {
 	case SIGTERM:
 		srv_shutdown = 1;
-		memcpy(&last_sigterm_info, si, sizeof(*si));
+		last_sigterm_info = *si;
 		break;
 	case SIGINT:
 		if (graceful_shutdown) {
@@ -88,7 +88,7 @@ static void sigaction_handler(int sig, siginfo_t *si, void *context) {
 		} else {
 			graceful_shutdown = 1;
 		}
-		memcpy(&last_sigterm_info, si, sizeof(*si));
+		last_sigterm_info = *si;
 
 		break;
 	case SIGALRM: 
@@ -104,7 +104,7 @@ static void sigaction_handler(int sig, siginfo_t *si, void *context) {
 		 */
 		if (!forwarded_sig_hup) {
 			handle_sig_hup = 1;
-			memcpy(&last_sighup_info, si, sizeof(*si));
+			last_sighup_info = *si;
 		} else {
 			forwarded_sig_hup = 0;
 		}
