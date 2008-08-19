@@ -244,6 +244,15 @@ int log_error_write(server *srv, const char *filename, unsigned int line, const 
 			d = va_arg(ap, int);
 			buffer_append_long(srv->errorlog_buf, d);
 			break;
+		case 'O':           /* off_t */
+			o = va_arg(ap, off_t);
+			buffer_append_off_t(srv->errorlog_buf, o);
+			break;
+		case 'X':           /* int (hex) */
+			d = va_arg(ap, int);
+			buffer_append_string_len(srv->errorlog_buf, CONST_STR_LEN("0x"));
+			buffer_append_long_hex(srv->errorlog_buf, d);
+			break;
 		case '(':
 		case ')':
 		case '<':
