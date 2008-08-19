@@ -2196,7 +2196,7 @@ static int fcgi_create_env(server *srv, handler_ctx *hctx, size_t request_id) {
 
 					hctx->wb->bytes_in += weHave;
 
-					if (req_c->offset == req_c->mem->used - 1) {
+					if (req_c->offset == (off_t) req_c->mem->used - 1) {
 						chunkqueue_remove_finished_chunks(req_cq);
 
 						req_c = req_cq->first;
