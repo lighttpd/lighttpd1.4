@@ -513,3 +513,6 @@ debug.log-file-not-found
 
 debug.log-request-handling
   default: disabled
+
+debug.log-ssl-noise
+  default: disabled
