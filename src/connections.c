@@ -276,9 +276,19 @@ static int connection_handle_read_ssl(server *srv, connection *con) {
 			/* fall thourgh */
 		default:
 			while((ssl_err = ERR_get_error())) {
+				switch (ERR_GET_REASON(ssl_err)) {
+				case SSL_R_SSL_HANDSHAKE_FAILURE:
+				case SSL_R_TLSV1_ALERT_UNKNOWN_CA:
+				case SSL_R_SSLV3_ALERT_CERTIFICATE_UNKNOWN:
+				case SSL_R_SSLV3_ALERT_BAD_CERTIFICATE:
+					if (!con->conf.log_ssl_noise) continue;
+					break;
+				default:
+					break;
+				}
 				/* get all errors from the error-queue */
 				log_error_write(srv, __FILE__, __LINE__, "sds", "SSL:",
-						r, ERR_error_string(ssl_err, NULL));
+				                r, ERR_error_string(ssl_err, NULL));
 			}
 			break;
 		}

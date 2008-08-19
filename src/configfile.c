@@ -75,24 +75,25 @@ static int config_insert(server *srv) {
 		{ "debug.log-request-handling",  NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_SERVER },     /* 32 */
 		{ "debug.log-response-header",   NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_SERVER },     /* 33 */
 		{ "debug.log-request-header",    NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_SERVER },     /* 34 */
+		{ "debug.log-ssl-noise",         NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_SERVER },     /* 35 */
 
-		{ "server.protocol-http11",      NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_SERVER },     /* 35 */
-		{ "debug.log-request-header-on-error", NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_SERVER }, /* 36 */
-		{ "debug.log-state-handling",    NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_SERVER },     /* 37 */
-		{ "ssl.ca-file",                 NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_SERVER },      /* 38 */
+		{ "server.protocol-http11",      NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_SERVER },     /* 36 */
+		{ "debug.log-request-header-on-error", NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_SERVER }, /* 37 */
+		{ "debug.log-state-handling",    NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_SERVER },     /* 38 */
+		{ "ssl.ca-file",                 NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_SERVER },      /* 39 */
 
-		{ "server.errorlog-use-syslog",  NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_SERVER },     /* 39 */
-		{ "server.range-requests",       NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION }, /* 40 */
-		{ "server.stat-cache-engine",    NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_CONNECTION },  /* 41 */
-		{ "server.max-connections",      NULL, T_CONFIG_SHORT, T_CONFIG_SCOPE_SERVER },       /* 42 */
-		{ "server.network-backend",      NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_CONNECTION },  /* 43 */
-		{ "server.upload-dirs",          NULL, T_CONFIG_ARRAY, T_CONFIG_SCOPE_CONNECTION },   /* 44 */
-		{ "server.core-files",           NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION }, /* 45 */
-		{ "ssl.cipher-list",             NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_SERVER },      /* 46 */
-		{ "ssl.use-sslv2",               NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION }, /* 47 */
-		{ "etag.use-inode",             NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_SERVER }, /* 48 */
-		{ "etag.use-mtime",             NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_SERVER }, /* 49 */
-		{ "etag.use-size",             NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_SERVER }, /* 50 */
+		{ "server.errorlog-use-syslog",  NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_SERVER },     /* 40 */
+		{ "server.range-requests",       NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION }, /* 41 */
+		{ "server.stat-cache-engine",    NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_CONNECTION },  /* 42 */
+		{ "server.max-connections",      NULL, T_CONFIG_SHORT, T_CONFIG_SCOPE_SERVER },       /* 43 */
+		{ "server.network-backend",      NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_CONNECTION },  /* 44 */
+		{ "server.upload-dirs",          NULL, T_CONFIG_ARRAY, T_CONFIG_SCOPE_CONNECTION },   /* 45 */
+		{ "server.core-files",           NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION }, /* 46 */
+		{ "ssl.cipher-list",             NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_SERVER },      /* 47 */
+		{ "ssl.use-sslv2",               NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION }, /* 48 */
+		{ "etag.use-inode",             NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_SERVER }, /* 49 */
+		{ "etag.use-mtime",             NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_SERVER }, /* 50 */
+		{ "etag.use-size",             NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_SERVER }, /* 51 */
 		{ "server.host",                 "use server.bind instead", T_CONFIG_DEPRECATED, T_CONFIG_SCOPE_UNSET },
 		{ "server.docroot",              "use server.document-root instead", T_CONFIG_DEPRECATED, T_CONFIG_SCOPE_UNSET },
 		{ "server.virtual-root",         "load mod_simple_vhost and use simple-vhost.server-root instead", T_CONFIG_DEPRECATED, T_CONFIG_SCOPE_UNSET },
@@ -121,18 +122,18 @@ static int config_insert(server *srv) {
 
 	cv[13].destination = &(srv->srvconf.max_worker);
 	cv[23].destination = &(srv->srvconf.max_fds);
-	cv[36].destination = &(srv->srvconf.log_request_header_on_error);
-	cv[37].destination = &(srv->srvconf.log_state_handling);
+	cv[37].destination = &(srv->srvconf.log_request_header_on_error);
+	cv[38].destination = &(srv->srvconf.log_state_handling);
 
-	cv[39].destination = &(srv->srvconf.errorlog_use_syslog);
+	cv[40].destination = &(srv->srvconf.errorlog_use_syslog);
 
 	stat_cache_string = buffer_init();
-	cv[41].destination = stat_cache_string;
-	cv[43].destination = srv->srvconf.network_backend;
-	cv[44].destination = srv->srvconf.upload_tempdirs;
-	cv[45].destination = &(srv->srvconf.enable_cores);
+	cv[42].destination = stat_cache_string;
+	cv[44].destination = srv->srvconf.network_backend;
+	cv[45].destination = srv->srvconf.upload_tempdirs;
+	cv[46].destination = &(srv->srvconf.enable_cores);
 
-	cv[42].destination = &(srv->srvconf.max_conns);
+	cv[43].destination = &(srv->srvconf.max_conns);
 	cv[12].destination = &(srv->srvconf.max_request_size);
 	srv->config_storage = calloc(1, srv->config_context->used * sizeof(specific_config *));
 
@@ -205,16 +206,17 @@ static int config_insert(server *srv) {
 		cv[32].destination = &(s->log_request_handling);
 		cv[33].destination = &(s->log_response_header);
 		cv[34].destination = &(s->log_request_header);
+		cv[35].destination = &(s->log_ssl_noise);
 
-		cv[35].destination = &(s->allow_http11);
-		cv[38].destination = s->ssl_ca_file;
-		cv[40].destination = &(s->range_requests);
+		cv[36].destination = &(s->allow_http11);
+		cv[39].destination = s->ssl_ca_file;
+		cv[41].destination = &(s->range_requests);
 
-		cv[46].destination = s->ssl_cipher_list;
-		cv[47].destination = &(s->ssl_use_sslv2);
-		cv[48].destination = &(s->etag_use_inode);
-		cv[49].destination = &(s->etag_use_mtime);
-		cv[50].destination = &(s->etag_use_size);
+		cv[47].destination = s->ssl_cipher_list;
+		cv[48].destination = &(s->ssl_use_sslv2);
+		cv[49].destination = &(s->etag_use_inode);
+		cv[50].destination = &(s->etag_use_mtime);
+		cv[51].destination = &(s->etag_use_size);
 
 		srv->config_storage[i] = s;
 
@@ -280,6 +282,7 @@ int config_setup_connection(server *srv, connection *con) {
 	PATCH(log_request_handling);
 	PATCH(log_condition_handling);
 	PATCH(log_file_not_found);
+	PATCH(log_ssl_noise);
 
 	PATCH(range_requests);
 	PATCH(force_lowercase_filenames);
@@ -369,6 +372,8 @@ int config_patch_connection(server *srv, connection *con, comp_key_t comp) {
 				PATCH(log_condition_handling);
 			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("debug.log-file-not-found"))) {
 				PATCH(log_file_not_found);
+			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("debug.log-ssl-noise"))) {
+				PATCH(log_ssl_noise);
 			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("server.protocol-http11"))) {
 				PATCH(allow_http11);
 			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("server.force-lowercase-filenames"))) {
