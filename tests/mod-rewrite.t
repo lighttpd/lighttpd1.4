@@ -24,7 +24,7 @@ SKIP: {
 }
 
 SKIP: {
-	skip "no PHP running on port 1026", 5 unless $tf->listening_on(1026);
+	skip "no PHP running on port 1026", 6 unless $tf->listening_on(1026);
 
 	ok($tf->start_proc == 0, "Starting lighttpd") or goto cleanup;
 
