@@ -2119,12 +2119,12 @@ static int fcgi_create_env(server *srv, handler_ctx *hctx, size_t request_id) {
 			hctx->wb->bytes_in += sizeof(header);
 
 			if (p->conf.debug > 10) {
-				fprintf(stderr, "%s.%d: tosend: %lld / %lld\n", __FILE__, __LINE__, offset, req_cq->bytes_in);
+				log_error_write(srv, __FILE__, __LINE__, "soso", "tosend:", offset, "/", req_cq->bytes_in);
 			}
 
 			for (written = 0; written != weWant; ) {
 				if (p->conf.debug > 10) {
-					fprintf(stderr, "%s.%d: chunk: %lld / %lld\n", __FILE__, __LINE__, written, weWant);
+					log_error_write(srv, __FILE__, __LINE__, "soso", "chunk:", written, "/", weWant);
 				}
 
 				switch (req_c->type) {
@@ -2134,12 +2134,10 @@ static int fcgi_create_env(server *srv, handler_ctx *hctx, size_t request_id) {
 					if (weHave > weWant - written) weHave = weWant - written;
 
 					if (p->conf.debug > 10) {
-						fprintf(stderr, "%s.%d: sending %lld bytes from (%lld / %lld) %s\n",
-								__FILE__, __LINE__,
-								weHave,
-								req_c->offset,
-								req_c->file.length,
-								req_c->file.name->ptr);
+						log_error_write(srv, __FILE__, __LINE__, "soSosOsb",
+							"sending", weHave, "bytes from (",
+							req_c->offset, "/", req_c->file.length, ")",
+							req_c->file.name);
 					}
 
 					assert(weHave != 0);
@@ -2168,7 +2166,7 @@ static int fcgi_create_env(server *srv, handler_ctx *hctx, size_t request_id) {
 						chunk *c;
 
 						if (p->conf.debug > 10) {
-							fprintf(stderr, "%s.%d: next chunk\n", __FILE__, __LINE__);
+							log_error_write(srv, __FILE__, __LINE__, "s", "next chunk");
 						}
 						c = hctx->wb->last;
 
