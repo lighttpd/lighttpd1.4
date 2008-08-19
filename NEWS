@@ -55,6 +55,7 @@ NEWS
   * fixed bug with case-insensitive filenames in mod_userdir (#1589), spotted by "anders1"
   * fixed format string bugs in mod_accesslog for SYSLOG
   * replaced fprintf with log_error_write in fastcgi debug
+  * fixed mem leak in ssi expression parser (#1753), thx Take5k
 
 - 1.4.19 - 2008-03-10
 

@@ -105,12 +105,13 @@ expr(A) ::= value(B). {
 }
 
 value(A) ::= VALUE(B). {
-  A = buffer_init_string(B->ptr);
+  A = B;
 }
 
 value(A) ::= value(B) VALUE(C). {
   A = B;
   buffer_append_string_buffer(A, C);
+  buffer_free(C);
 }
 
 cond(A) ::= EQ. { A = SSI_COND_EQ; }
