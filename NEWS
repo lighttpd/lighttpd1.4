@@ -54,6 +54,7 @@ NEWS
   * Match headers case insensitive in response (removing of X-{Sendfile,LIGHTTPD-*}, catching Date/Server)
   * fixed bug with case-insensitive filenames in mod_userdir (#1589), spotted by "anders1"
   * fixed format string bugs in mod_accesslog for SYSLOG
+  * replaced fprintf with log_error_write in fastcgi debug
 
 - 1.4.19 - 2008-03-10
 
