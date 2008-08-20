@@ -16,17 +16,16 @@ if CROSS_COMPILING
 configparser.c configparser.h:
 mod_ssi_exprparser.c mod_ssi_exprparser.h:
 else
-configparser.c configparser.h: lemon $(srcdir)/configparser.y $(srcdir)/lempar.c
+configparser.c configparser.h: $(srcdir)/configparser.y $(srcdir)/lempar.c | lemon
 	rm -f configparser.h
 	$(LEMON) -q $(srcdir)/configparser.y $(srcdir)/lempar.c
 
-mod_ssi_exprparser.c mod_ssi_exprparser.h: lemon $(srcdir)/mod_ssi_exprparser.y $(srcdir)/lempar.c
+mod_ssi_exprparser.c mod_ssi_exprparser.h: $(srcdir)/mod_ssi_exprparser.y $(srcdir)/lempar.c | lemon
 	rm -f mod_ssi_exprparser.h
 	$(LEMON) -q $(srcdir)/mod_ssi_exprparser.y $(srcdir)/lempar.c
 endif
 
-configfile.o: configparser.h
-mod_ssi_expr.o: mod_ssi_exprparser.h
+BUILT_SOURCES = configparser.c configparser.h mod_ssi_exprparser.c mod_ssi_exprparser.h
 
 common_src=buffer.c log.c \
       keyvalue.c chunk.c  \
