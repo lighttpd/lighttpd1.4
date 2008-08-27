@@ -68,7 +68,7 @@ int http_response_write_header(server *srv, connection *con) {
 			0 != strcasecmp(ds->key->ptr, "X-Sendfile")) {
 			if (0 == strcasecmp(ds->key->ptr, "Date")) have_date = 1;
 			if (0 == strcasecmp(ds->key->ptr, "Server")) have_server = 1;
-			if (0 == strcasecmp(ds->key, "Content-Encoding") && 304 == con->http_status) continue;
+			if (0 == strcasecmp(ds->key->ptr, "Content-Encoding") && 304 == con->http_status) continue;
 
 			buffer_append_string_len(b, CONST_STR_LEN("\r\n"));
 			buffer_append_string_buffer(b, ds->key);
