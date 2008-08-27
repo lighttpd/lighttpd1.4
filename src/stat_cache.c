@@ -445,7 +445,9 @@ handler_t stat_cache_get_entry(server *srv, connection *con, buffer *name, stat_
 	/* dir-check */
 	if (srv->srvconf.stat_cache_engine == STAT_CACHE_ENGINE_FAM) {
 		if (0 != buffer_copy_dirname(sc->dir_name, name)) {
-			SEGFAULT();
+			log_error_write(srv, __FILE__, __LINE__, "sb",
+				"no '/' found in filename:", name);
+			return HANDLER_ERROR;
 		}
 
 		buffer_copy_string_buffer(sc->hash_key, sc->dir_name);

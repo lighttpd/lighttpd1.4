@@ -58,6 +58,7 @@ NEWS
   * fixed mem leak in ssi expression parser (#1753), thx Take5k
   * hide some ssl errors per default, enable them with debug.log-ssl-noise (#397)
   * do not send content-encoding for 304 (#1754), thx yzlai
+  * fix segfault for stat_cache(fam) calls with relative path (without '/', can be triggered by x-sendfile) (#1750)
 
 - 1.4.19 - 2008-03-10
 
