@@ -3,7 +3,7 @@ AM_CFLAGS = $(FAM_CFLAGS)
 noinst_PROGRAMS=proc_open lemon # simple-fcgi #graphic evalo bench ajp ssl error_test adserver gen-license
 sbin_PROGRAMS=lighttpd lighttpd-angel
 bin_PROGRAMS=spawn-fcgi
-LEMON=$(top_builddir)/src/lemon
+LEMON=$(top_builddir)/src/lemon$(EXEEXT)
 
 lemon_SOURCES=lemon.c
 
@@ -15,17 +15,26 @@ lighttpd_angel_SOURCES=lighttpd-angel.c
 if CROSS_COMPILING
 configparser.c configparser.h:
 mod_ssi_exprparser.c mod_ssi_exprparser.h:
+
+.PHONY: parsers
+parsers:
 else
-configparser.c configparser.h: $(srcdir)/configparser.y $(srcdir)/lempar.c | lemon
+configparser.h: configparser.c
+configparser.c: $(srcdir)/configparser.y $(srcdir)/lempar.c lemon$(EXEEXT)
 	rm -f configparser.h
 	$(LEMON) -q $(srcdir)/configparser.y $(srcdir)/lempar.c
 
-mod_ssi_exprparser.c mod_ssi_exprparser.h: $(srcdir)/mod_ssi_exprparser.y $(srcdir)/lempar.c | lemon
+mod_ssi_exprparser.h: mod_ssi_exprparser.c
+mod_ssi_exprparser.c: $(srcdir)/mod_ssi_exprparser.y $(srcdir)/lempar.c lemon$(EXEEXT)
 	rm -f mod_ssi_exprparser.h
 	$(LEMON) -q $(srcdir)/mod_ssi_exprparser.y $(srcdir)/lempar.c
+
+.PHONY: parsers
+parsers: configparser.c mod_ssi_exprparser.c
 endif
 
-BUILT_SOURCES = configparser.c configparser.h mod_ssi_exprparser.c mod_ssi_exprparser.h
+BUILT_SOURCES = parsers
+MAINTAINERCLEANFILES = configparser.c configparser.h mod_ssi_exprparser.c mod_ssi_exprparser.h
 
 common_src=buffer.c log.c \
       keyvalue.c chunk.c  \
