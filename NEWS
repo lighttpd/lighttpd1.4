@@ -60,6 +60,7 @@ NEWS
   * do not send content-encoding for 304 (#1754), thx yzlai
   * fix segfault for stat_cache(fam) calls with relative path (without '/', can be triggered by x-sendfile) (#1750)
   * fix splitting of auth-ldap filter
+  * workaround ldap connection leak if a ldap connection failed (restarting ldap)
 
 - 1.4.19 - 2008-03-10
 

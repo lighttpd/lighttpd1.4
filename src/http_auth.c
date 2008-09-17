@@ -697,7 +697,7 @@ static int http_auth_basic_password_compare(server *srv, mod_auth_plugin_data *p
 		}
 	} else if (p->conf.auth_backend == AUTH_BACKEND_LDAP) {
 #ifdef USE_LDAP
-		LDAP *ldap;
+		LDAP *ldap = NULL;
 		LDAPMessage *lm, *first;
 		char *dn;
 		int ret;
@@ -742,39 +742,56 @@ static int http_auth_basic_password_compare(server *srv, mod_auth_plugin_data *p
 		buffer_append_string_buffer(p->ldap_filter, username);
 		buffer_append_string_buffer(p->ldap_filter, p->conf.ldap_filter_post);
 
-
 		/* 2. */
 		if (p->conf.ldap == NULL ||
 		    LDAP_SUCCESS != (ret = ldap_search_s(p->conf.ldap, p->conf.auth_ldap_basedn->ptr, LDAP_SCOPE_SUBTREE, p->ldap_filter->ptr, attrs, 0, &lm))) {
-			if (auth_ldap_init(srv, &p->conf) != HANDLER_GO_ON)
-				return -1;
-			if (LDAP_SUCCESS != (ret = ldap_search_s(p->conf.ldap, p->conf.auth_ldap_basedn->ptr, LDAP_SCOPE_SUBTREE, p->ldap_filter->ptr, attrs, 0, &lm))) {
+			/* try again if ldap was only temporary down */
+			if (p->conf.ldap == NULL || ret != LDAP_SERVER_DOWN ||  LDAP_SUCCESS != (ret = ldap_search_s(p->conf.ldap, p->conf.auth_ldap_basedn->ptr, LDAP_SCOPE_SUBTREE, p->ldap_filter->ptr, attrs, 0, &lm))) {
+				if (auth_ldap_init(srv, &p->conf) != HANDLER_GO_ON)
+					return -1;
 
-			log_error_write(srv, __FILE__, __LINE__, "sssb",
-					"ldap:", ldap_err2string(ret), "filter:", p->ldap_filter);
-
-			return -1;
+				ldap = p->conf.ldap; /* save temporary ldap connection (TODO: redo ldap) */
+				if (LDAP_SUCCESS != (ret = ldap_search_s(p->conf.ldap, p->conf.auth_ldap_basedn->ptr, LDAP_SCOPE_SUBTREE, p->ldap_filter->ptr, attrs, 0, &lm))) {
+					log_error_write(srv, __FILE__, __LINE__, "sssb",
+							"ldap:", ldap_err2string(ret), "filter:", p->ldap_filter);
+					/* destroy temporary ldap connection (TODO: redo ldap) */
+					ldap_unbind_s(ldap);
+					return -1;
+				}
 			}
 		}
 
 		if (NULL == (first = ldap_first_entry(p->conf.ldap, lm))) {
-			log_error_write(srv, __FILE__, __LINE__, "s", "ldap ...");
+			/* No matching entry is not an error */
+			/* log_error_write(srv, __FILE__, __LINE__, "s", "ldap ..."); */
 
 			ldap_msgfree(lm);
 
+			/* destroy temporary ldap connection (TODO: redo ldap) */
+			if (NULL != ldap) {
+				ldap_unbind_s(ldap);
+			}
 			return -1;
 		}
 
 		if (NULL == (dn = ldap_get_dn(p->conf.ldap, first))) {
-			log_error_write(srv, __FILE__, __LINE__, "s", "ldap ...");
+			log_error_write(srv, __FILE__, __LINE__, "s", "ldap: ldap_get_dn failed");
 
 			ldap_msgfree(lm);
 
+			/* destroy temporary ldap connection (TODO: redo ldap) */
+			if (NULL != ldap) {
+				ldap_unbind_s(ldap);
+			}
 			return -1;
 		}
 
 		ldap_msgfree(lm);
 
+		/* destroy temporary ldap connection (TODO: redo ldap) */
+		if (NULL != ldap) {
+			ldap_unbind_s(ldap);
+		}
 
 		/* 3. */
 		if (NULL == (ldap = ldap_init(p->conf.auth_ldap_hostname->ptr, LDAP_PORT))) {
