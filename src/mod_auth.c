@@ -397,6 +397,23 @@ SETDEFAULTS_FUNC(mod_auth_set_defaults) {
 			}
 		}
 
+#ifdef USE_LDAP
+		if (s->auth_ldap_filter->used) {
+			char *dollar;
+
+			/* parse filter */
+
+			if (NULL == (dollar = strchr(s->auth_ldap_filter->ptr, '$'))) {
+				log_error_write(srv, __FILE__, __LINE__, "s", "ldap: auth.backend.ldap.filter is missing a replace-operator '$'");
+
+				return HANDLER_ERROR;
+			}
+
+			buffer_copy_string_len(s->ldap_filter_pre, s->auth_ldap_filter->ptr, dollar - s->auth_ldap_filter->ptr);
+			buffer_copy_string(s->ldap_filter_post, dollar+1);
+		}
+#endif
+
 		/* no auth.require for this section */
 		if (NULL == (da = (data_array *)array_get_element(ca, "auth.require"))) continue;
 
@@ -511,14 +528,14 @@ SETDEFAULTS_FUNC(mod_auth_set_defaults) {
 			handler_t ret = auth_ldap_init(srv, s);
 			if (ret == HANDLER_ERROR)
 				return (ret);
-                        break;
+			break;
 		}
-                default:
-                        break;
-                }
-        }
+		default:
+			break;
+		}
+	}
 
-        return HANDLER_GO_ON;
+	return HANDLER_GO_ON;
 }
 
 handler_t auth_ldap_init(server *srv, mod_auth_plugin_config *s) {
@@ -531,21 +548,6 @@ handler_t auth_ldap_init(server *srv, mod_auth_plugin_config *s) {
 		return HANDLER_ERROR;
 	}
 #endif
-
-	if (s->auth_ldap_filter->used) {
-		char *dollar;
-
-		/* parse filter */
-
-		if (NULL == (dollar = strchr(s->auth_ldap_filter->ptr, '$'))) {
-			log_error_write(srv, __FILE__, __LINE__, "s", "ldap: auth.backend.ldap.filter is missing a replace-operator '$'");
-
-			return HANDLER_ERROR;
-		}
-
-		buffer_copy_string_len(s->ldap_filter_pre, s->auth_ldap_filter->ptr, dollar - s->auth_ldap_filter->ptr);
-		buffer_copy_string(s->ldap_filter_post, dollar+1);
-	}
 
 	if (s->auth_ldap_hostname->used) {
 		if (NULL == (s->ldap = ldap_init(s->auth_ldap_hostname->ptr, LDAP_PORT))) {
