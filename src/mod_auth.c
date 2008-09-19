@@ -163,6 +163,10 @@ static int mod_auth_patch_connection(server *srv, connection *con, mod_auth_plug
 				PATCH(auth_ldap_cafile);
 			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("auth.backend.ldap.starttls"))) {
 				PATCH(auth_ldap_starttls);
+			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("auth.backend.ldap.bind-dn"))) {
+				PATCH(auth_ldap_binddn);
+			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("auth.backend.ldap.bind-pw"))) {
+				PATCH(auth_ldap_bindpw);
 			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("auth.backend.ldap.allow-empty-pw"))) {
 				PATCH(auth_ldap_allow_empty_pw);
 			}

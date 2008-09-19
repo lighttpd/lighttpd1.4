@@ -61,6 +61,7 @@ NEWS
   * fix segfault for stat_cache(fam) calls with relative path (without '/', can be triggered by x-sendfile) (#1750)
   * fix splitting of auth-ldap filter
   * workaround ldap connection leak if a ldap connection failed (restarting ldap)
+  * fix auth.backend.ldap.bind-dn/pw problems (only read from global context for temporary ldap reconnects, thx ruskie)
 
 - 1.4.19 - 2008-03-10
 
