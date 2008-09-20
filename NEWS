@@ -62,6 +62,7 @@ NEWS
   * fix splitting of auth-ldap filter
   * workaround ldap connection leak if a ldap connection failed (restarting ldap)
   * fix auth.backend.ldap.bind-dn/pw problems (only read from global context for temporary ldap reconnects, thx ruskie)
+  * fix memleak in request header parsing (#1774, thx qhy)
 
 - 1.4.19 - 2008-03-10
 
