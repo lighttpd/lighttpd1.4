@@ -425,9 +425,12 @@ URIHANDLER_FUNC(mod_rewrite_uri_handler) {
 
 			pcre_free(list);
 
-			hctx = handler_ctx_init();
-
-			con->plugin_ctx[p->id] = hctx;
+			if (con->plugin_ctx[p->id] == NULL) {
+				hctx = handler_ctx_init();
+				con->plugin_ctx[p->id] = hctx;
+			} else {
+				hctx = con->plugin_ctx[p->id];
+			}
 
 			if (rule->once) hctx->state = REWRITE_STATE_FINISHED;
 

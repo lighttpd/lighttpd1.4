@@ -63,6 +63,7 @@ NEWS
   * workaround ldap connection leak if a ldap connection failed (restarting ldap)
   * fix auth.backend.ldap.bind-dn/pw problems (only read from global context for temporary ldap reconnects, thx ruskie)
   * fix memleak in request header parsing (#1774, thx qhy)
+  * fix mod_rewrite memleak/endless loop detection (#1775, thx phy - again!)
 
 - 1.4.19 - 2008-03-10
 
