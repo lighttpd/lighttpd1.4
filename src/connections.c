@@ -330,15 +330,13 @@ static int connection_handle_read(server *srv, connection *con) {
 	buffer_prepare_copy(b, 4 * 1024);
 	len = recv(con->fd, b->ptr, b->size - 1, 0);
 #else
-	if (ioctl(con->fd, FIONREAD, &toread)) {
-		log_error_write(srv, __FILE__, __LINE__, "sd",
-				"unexpected end-of-file:",
-				con->fd);
-		return -1;
+	if (ioctl(con->fd, FIONREAD, &toread) || toread == 0) {
+		b = chunkqueue_get_append_buffer(con->read_queue);
+		buffer_prepare_copy(b, 4 * 1024);
+	} else {
+		b = chunkqueue_get_append_buffer(con->read_queue);
+		buffer_prepare_copy(b, toread + 1);
 	}
-	b = chunkqueue_get_append_buffer(con->read_queue);
-	buffer_prepare_copy(b, toread + 1);
-
 	len = read(con->fd, b->ptr, b->size - 1);
 #endif
 
