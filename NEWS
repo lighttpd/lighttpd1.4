@@ -10,6 +10,7 @@ NEWS
   * Do not rely on ioctl FIONREAD (#673)
   * Now really fix mod auth ldap (#1066)
   * Fix leaving zombie process with include_shell (#1777)
+  * Removed debian/, openwrt/ and cygwin/; they weren't kept up-to-date, and we decided to remove dist. specific stuff
 
 - 1.4.20 - 2008-09-30
 

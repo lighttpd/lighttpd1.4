@@ -1,4 +1,0 @@
-#!/bin/sh
-
-/usr/sbin/lighttpd -f /etc/lighttpd.conf
-exit $?
