@@ -287,31 +287,32 @@ static void proc_read_fd_to_buffer(int fd, buffer *b) {
 }
 /* }}} */
 /* {{{ proc_open_buffer */
-int proc_open_buffer(proc_handler_t *proc, const char *command, buffer *in, buffer *out, buffer *err) {
+int proc_open_buffer(const char *command, buffer *in, buffer *out, buffer *err) {
+	proc_handler_t proc;
 
-	UNUSED(err);
-
-	if (proc_open(proc, command) != 0) {
+	if (proc_open(&proc, command) != 0) {
 		return -1;
 	}
 
 	if (in) {
-		if (write(proc->in.fd, (void *)in->ptr, in->used) < 0) {
+		if (write(proc.in.fd, (void *)in->ptr, in->used) < 0) {
 			perror("error writing pipe");
 			return -1;
 		}
 	}
-	pipe_close(&proc->in);
+	pipe_close(&proc.in);
 
 	if (out) {
-		proc_read_fd_to_buffer(proc->out.fd, out);
+		proc_read_fd_to_buffer(proc.out.fd, out);
 	}
-	pipe_close(&proc->out);
+	pipe_close(&proc.out);
 
 	if (err) {
-		proc_read_fd_to_buffer(proc->err.fd, err);
+		proc_read_fd_to_buffer(proc.err.fd, err);
 	}
-	pipe_close(&proc->err);
+	pipe_close(&proc.err);
+
+	proc_close(&proc);
 
 	return 0;
 }
@@ -366,7 +367,7 @@ int main() {
 		RESET();
 
 		fprintf(stdout, "test: echo 321 with read\n"); fflush(stdout);
-		if (proc_open_buffer(&proc, "echo 321", NULL, out, err) != 0) {
+		if (proc_open_buffer("echo 321", NULL, out, err) != 0) {
 			ERROR_OUT();
 		}
 		fprintf(stdout, "result: ->%s<-\n\n", out->ptr); fflush(stdout);
@@ -374,7 +375,7 @@ int main() {
 
 		fprintf(stdout, "test: echo 123 | " CMD_CAT "\n"); fflush(stdout);
 		buffer_copy_string_len(in, CONST_STR_LEN("123\n"));
-		if (proc_open_buffer(&proc, CMD_CAT, in, out, err) != 0) {
+		if (proc_open_buffer(CMD_CAT, in, out, err) != 0) {
 			ERROR_OUT();
 		}
 		fprintf(stdout, "result: ->%s<-\n\n", out->ptr); fflush(stdout);
