@@ -115,7 +115,7 @@ static int mod_auth_patch_connection(server *srv, connection *con, mod_auth_plug
 	PATCH(auth_ldap_starttls);
 	PATCH(auth_ldap_allow_empty_pw);
 #ifdef USE_LDAP
-	PATCH(ldap);
+	p->anon_conf = s;
 	PATCH(ldap_filter_pre);
 	PATCH(ldap_filter_post);
 #endif
@@ -149,7 +149,7 @@ static int mod_auth_patch_connection(server *srv, connection *con, mod_auth_plug
 			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("auth.backend.ldap.hostname"))) {
 				PATCH(auth_ldap_hostname);
 #ifdef USE_LDAP
-				PATCH(ldap);
+				p->anon_conf = s;
 #endif
 			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("auth.backend.ldap.base-dn"))) {
 				PATCH(auth_ldap_basedn);
@@ -527,7 +527,7 @@ SETDEFAULTS_FUNC(mod_auth_set_defaults) {
 			}
 		}
 
-		switch(s->auth_backend) {
+		switch(s->auth_ldap_hostname->used) {
 		case AUTH_BACKEND_LDAP: {
 			handler_t ret = auth_ldap_init(srv, s);
 			if (ret == HANDLER_ERROR)
@@ -554,6 +554,9 @@ handler_t auth_ldap_init(server *srv, mod_auth_plugin_config *s) {
 #endif
 
 	if (s->auth_ldap_hostname->used) {
+		/* free old context */
+		if (NULL != s->ldap) ldap_unbind_s(s->ldap);
+
 		if (NULL == (s->ldap = ldap_init(s->auth_ldap_hostname->ptr, LDAP_PORT))) {
 			log_error_write(srv, __FILE__, __LINE__, "ss", "ldap ...", strerror(errno));
 

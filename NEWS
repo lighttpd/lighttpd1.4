@@ -8,6 +8,7 @@ NEWS
   * Fix base64 decoding in mod_auth (#1757, thx guido)
   * Fix mod_cgi segfault when bound to unix domain socket (#653)
   * Do not rely on ioctl FIONREAD (#673)
+  * Now really fix mod auth ldap (#1066)
 
 - 1.4.20 - 2008-09-30
 
