@@ -1,4 +1,4 @@
-SUBDIRS=src doc tests cygwin openwrt
+SUBDIRS=src doc tests
 
 EXTRA_DIST=autogen.sh SConstruct
 

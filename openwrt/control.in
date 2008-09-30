@@ -1,9 +1,0 @@
-Package: lighttpd
-Version: @VERSION@
-Architecture: mipsel
-Maintainer: Jan Kneschke <jan@kneschke.de>
-Source: http://jan.kneschke.de/projects/lighttpd/download/lighttpd-@VERSION@.tar.gz
-Section: net
-Priority: optional
-Depends:
-Description: Flexible and Lightweight Webserver
