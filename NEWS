@@ -9,6 +9,7 @@ NEWS
   * Fix mod_cgi segfault when bound to unix domain socket (#653)
   * Do not rely on ioctl FIONREAD (#673)
   * Now really fix mod auth ldap (#1066)
+  * Fix leaving zombie process with include_shell (#1777)
 
 - 1.4.20 - 2008-09-30
 

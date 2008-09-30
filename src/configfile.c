@@ -940,7 +940,6 @@ static char* getCWD() {
 }
 
 int config_parse_cmd(server *srv, config_t *context, const char *cmd) {
-	proc_handler_t proc;
 	tokenizer_t t;
 	int ret;
 	buffer *source;
@@ -960,7 +959,7 @@ int config_parse_cmd(server *srv, config_t *context, const char *cmd) {
 		chdir(context->basedir->ptr);
 	}
 
-	if (0 != proc_open_buffer(&proc, cmd, NULL, out, NULL)) {
+	if (0 != proc_open_buffer(cmd, NULL, out, NULL)) {
 		log_error_write(srv, __FILE__, __LINE__, "sbss",
 				"opening", source, "failed:", strerror(errno));
 		ret = -1;
