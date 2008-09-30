@@ -822,15 +822,27 @@ static int cgi_create_env(server *srv, connection *con, plugin_data *p, buffer *
 			);
 		cgi_env_add(&env, CONST_STR_LEN("SERVER_PORT"), buf, strlen(buf));
 
+		switch (srv_sock->addr.plain.sa_family) {
 #ifdef HAVE_IPV6
-		s = inet_ntop(srv_sock->addr.plain.sa_family,
-			      srv_sock->addr.plain.sa_family == AF_INET6 ?
-			      (const void *) &(srv_sock->addr.ipv6.sin6_addr) :
-			      (const void *) &(srv_sock->addr.ipv4.sin_addr),
-			      b2, sizeof(b2)-1);
+		case AF_INET6:
+			s = inet_ntop(srv_sock->addr.plain.sa_family,
+			              (const void *) &(srv_sock->addr.ipv6.sin6_addr),
+			              b2, sizeof(b2)-1);
+			break;
+		case AF_INET:
+			s = inet_ntop(srv_sock->addr.plain.sa_family,
+			              (const void *) &(srv_sock->addr.ipv4.sin_addr),
+			              b2, sizeof(b2)-1);
+			break;
 #else
-		s = inet_ntoa(srv_sock->addr.ipv4.sin_addr);
+		case AF_INET:
+			s = inet_ntoa(srv_sock->addr.ipv4.sin_addr);
+			break;
 #endif
+		default:
+			s = "";
+			break;
+		}
 		cgi_env_add(&env, CONST_STR_LEN("SERVER_ADDR"), s, strlen(s));
 
 		s = get_http_method_name(con->request.http_method);
@@ -848,15 +860,27 @@ static int cgi_create_env(server *srv, connection *con, plugin_data *p, buffer *
 		}
 
 
+		switch (con->dst_addr.plain.sa_family) {
 #ifdef HAVE_IPV6
-		s = inet_ntop(con->dst_addr.plain.sa_family,
-			      con->dst_addr.plain.sa_family == AF_INET6 ?
-			      (const void *) &(con->dst_addr.ipv6.sin6_addr) :
-			      (const void *) &(con->dst_addr.ipv4.sin_addr),
-			      b2, sizeof(b2)-1);
+		case AF_INET6:
+			s = inet_ntop(con->dst_addr.plain.sa_family,
+			              (const void *) &(con->dst_addr.ipv6.sin6_addr),
+			              b2, sizeof(b2)-1);
+			break;
+		case AF_INET:
+			s = inet_ntop(con->dst_addr.plain.sa_family,
+			              (const void *) &(con->dst_addr.ipv4.sin_addr),
+			              b2, sizeof(b2)-1);
+			break;
 #else
-		s = inet_ntoa(con->dst_addr.ipv4.sin_addr);
+		case AF_INET:
+			s = inet_ntoa(con->dst_addr.ipv4.sin_addr);
+			break;
 #endif
+		default:
+			s = "";
+			break;
+		}
 		cgi_env_add(&env, CONST_STR_LEN("REMOTE_ADDR"), s, strlen(s));
 
 		LI_ltostr(buf,
