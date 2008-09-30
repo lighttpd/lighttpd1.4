@@ -63,7 +63,7 @@ typedef struct {
 
 	mod_auth_plugin_config **config_storage;
 
-	mod_auth_plugin_config conf; /* this is only used as long as no handler_ctx is setup */
+	mod_auth_plugin_config conf, *anon_conf; /* this is only used as long as no handler_ctx is setup */
 } mod_auth_plugin_data;
 
 int http_auth_basic_check(server *srv, connection *con, mod_auth_plugin_data *p, array *req, buffer *url, const char *realm_str);
