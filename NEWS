@@ -14,6 +14,7 @@ NEWS
   * Try to convert string options to shorts for numeric options in config file; allows to use env-vars for numeric options. (#1159, thx andrewb)
   * Do not cache default vhost in mod_simple_vhost (#709)
   * Trust pcre-config, do not check for pcre manually (#1769)
+  * Fix fastcgi authorization in subdirectories with check-local=disabled; don't split pathinfo for authorizer. (#963)
 
 - 1.4.20 - 2008-09-30
 

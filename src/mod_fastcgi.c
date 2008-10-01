@@ -3608,47 +3608,50 @@ static handler_t fcgi_check_extension(server *srv, connection *con, void *p_d, i
 				"handling it in mod_fastcgi");
 			}
 
-			/* the prefix is the SCRIPT_NAME,
-			 * everything from start to the next slash
-			 * this is important for check-local = "disable"
-			 *
-			 * if prefix = /admin.fcgi
-			 *
-			 * /admin.fcgi/foo/bar
-			 *
-			 * SCRIPT_NAME = /admin.fcgi
-			 * PATH_INFO   = /foo/bar
-			 *
-			 * if prefix = /fcgi-bin/
-			 *
-			 * /fcgi-bin/foo/bar
-			 *
-			 * SCRIPT_NAME = /fcgi-bin/foo
-			 * PATH_INFO   = /bar
-			 *
-			 * if prefix = /, and fix-root-path-name is enable
-			 *
-			 * /fcgi-bin/foo/bar
-			 *
-			 * SCRIPT_NAME = /fcgi-bin/foo
-			 * PATH_INFO   = /bar
-			 *
-			 */
+			/* do not split path info for authorizer */
+			if (host->mode != FCGI_AUTHORIZER) {
+				/* the prefix is the SCRIPT_NAME,
+				* everything from start to the next slash
+				* this is important for check-local = "disable"
+				*
+				* if prefix = /admin.fcgi
+				*
+				* /admin.fcgi/foo/bar
+				*
+				* SCRIPT_NAME = /admin.fcgi
+				* PATH_INFO   = /foo/bar
+				*
+				* if prefix = /fcgi-bin/
+				*
+				* /fcgi-bin/foo/bar
+				*
+				* SCRIPT_NAME = /fcgi-bin/foo
+				* PATH_INFO   = /bar
+				*
+				* if prefix = /, and fix-root-path-name is enable
+				*
+				* /fcgi-bin/foo/bar
+				*
+				* SCRIPT_NAME = /fcgi-bin/foo
+				* PATH_INFO   = /bar
+				*
+				*/
 
-			/* the rewrite is only done for /prefix/? matches */
-			if (extension->key->ptr[0] == '/' &&
-			    con->uri.path->used > extension->key->used &&
-			    NULL != (pathinfo = strchr(con->uri.path->ptr + extension->key->used - 1, '/'))) {
-				/* rewrite uri.path and pathinfo */
+				/* the rewrite is only done for /prefix/? matches */
+				if (extension->key->ptr[0] == '/' &&
+					con->uri.path->used > extension->key->used &&
+					NULL != (pathinfo = strchr(con->uri.path->ptr + extension->key->used - 1, '/'))) {
+					/* rewrite uri.path and pathinfo */
 
-				buffer_copy_string(con->request.pathinfo, pathinfo);
+					buffer_copy_string(con->request.pathinfo, pathinfo);
 
-				con->uri.path->used -= con->request.pathinfo->used - 1;
-				con->uri.path->ptr[con->uri.path->used - 1] = '\0';
-			} else if (host->fix_root_path_name && extension->key->ptr[0] == '/' && extension->key->ptr[1] == '\0') {
-				buffer_copy_string(con->request.pathinfo, con->uri.path->ptr);
-				con->uri.path->used = 1;
-				con->uri.path->ptr[con->uri.path->used - 1] = '\0';
+					con->uri.path->used -= con->request.pathinfo->used - 1;
+					con->uri.path->ptr[con->uri.path->used - 1] = '\0';
+				} else if (host->fix_root_path_name && extension->key->ptr[0] == '/' && extension->key->ptr[1] == '\0') {
+					buffer_copy_string(con->request.pathinfo, con->uri.path->ptr);
+					con->uri.path->used = 1;
+					con->uri.path->ptr[con->uri.path->used - 1] = '\0';
+				}
 			}
 		}
 	} else {

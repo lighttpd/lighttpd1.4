@@ -7,7 +7,7 @@ BEGIN {
 }
 
 use strict;
-use Test::More tests => 49;
+use Test::More tests => 50;
 use LightyTest;
 
 my $tf = LightyTest->new();
@@ -215,7 +215,7 @@ SKIP: {
 }
 
 SKIP: {
-	skip "no fcgi-auth found", 4 unless -x $tf->{BASEDIR}."/tests/fcgi-auth" || -x $tf->{BASEDIR}."/tests/fcgi-auth.exe"; 
+	skip "no fcgi-auth found", 5 unless -x $tf->{BASEDIR}."/tests/fcgi-auth" || -x $tf->{BASEDIR}."/tests/fcgi-auth.exe"; 
 
 	$tf->{CONFIGFILE} = 'fastcgi-auth.conf';
 	ok($tf->start_proc == 0, "Starting lighttpd with $tf->{CONFIGFILE}") or die();
@@ -234,6 +234,14 @@ EOF
  );
 	$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 403 } ];
 	ok($tf->handle_http($t) == 0, 'FastCGI - Auth');
+
+	$t->{REQUEST}  = ( <<EOF
+GET /expire/access.txt?ok HTTP/1.0
+Host: www.example.org
+EOF
+ );
+	$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200 } ];
+	ok($tf->handle_http($t) == 0, 'FastCGI - Auth in subdirectory');
 
 	ok($tf->stop_proc == 0, "Stopping lighttpd");
 }
