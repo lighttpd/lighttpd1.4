@@ -13,6 +13,7 @@ NEWS
   * Removed debian/, openwrt/ and cygwin/; they weren't kept up-to-date, and we decided to remove dist. specific stuff
   * Try to convert string options to shorts for numeric options in config file; allows to use env-vars for numeric options. (#1159, thx andrewb)
   * Do not cache default vhost in mod_simple_vhost (#709)
+  * Trust pcre-config, do not check for pcre manually (#1769)
 
 - 1.4.20 - 2008-09-30
 
