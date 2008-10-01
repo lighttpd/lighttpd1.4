@@ -1,4 +1,5 @@
 #include <string.h>
+#include <stdlib.h>
 
 #include "base.h"
 #include "buffer.h"
@@ -89,6 +90,22 @@ int config_insert_values_internal(server *srv, array *ca, const config_values_t 
 			}
 			case TYPE_STRING: {
 				data_string *ds = (data_string *)du;
+
+				/* If the value came from an environment variable, then it is a
+				 * data_string, although it may contain a number in ASCII
+				 * decimal format.  We try to interpret the string as a decimal
+				 * short before giving up, in order to support setting numeric
+				 * values with environment variables (eg, port number).
+				 */
+				if (ds->value->ptr && *ds->value->ptr) {
+					char *e;
+					long l = strtol(ds->value->ptr, &e, 10);
+					if (e != ds->value->ptr && !*e && l >=0 && l <= 65535) {
+						*((unsigned short *)(cv[i].destination)) = l;
+						break;
+
+					}
+				}
 
 				log_error_write(srv, __FILE__, __LINE__, "ssb", "got a string but expected a short:", cv[i].key, ds->value);
 
