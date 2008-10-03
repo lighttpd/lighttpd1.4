@@ -32,6 +32,12 @@ Supported are gzip, deflate, bzip.
 Options
 =======
 
+compress.allowed-encodings
+  override default set of allowed encodings
+
+  e.g.: ::
+    compress.allowed-encodings = ("bzip2", "gzip", "deflate")
+
 compress.cache-dir
   name of the directory where compressed content will be cached
 
