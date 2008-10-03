@@ -15,6 +15,7 @@ NEWS
   * Do not cache default vhost in mod_simple_vhost (#709)
   * Trust pcre-config, do not check for pcre manually (#1769)
   * Fix fastcgi authorization in subdirectories with check-local=disabled; don't split pathinfo for authorizer. (#963)
+  * Add possibility to disable methods in mod_compress (#1773)
 
 - 1.4.20 - 2008-09-30
 

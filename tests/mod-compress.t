@@ -8,11 +8,13 @@ BEGIN {
 
 use strict;
 use IO::Socket;
-use Test::More tests => 10;
+use Test::More tests => 11;
 use LightyTest;
 
 my $tf = LightyTest->new();
 my $t;
+
+$tf->{CONFIGFILE} = 'mod-compress.conf';
 
 ok($tf->start_proc == 0, "Starting lighttpd") or die();
 
@@ -87,6 +89,15 @@ EOF
  );
 $t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200, '+Vary' => '', 'Content-Type' => "text/plain" } ];
 ok($tf->handle_http($t) == 0, 'Empty Accept-Encoding');
+
+$t->{REQUEST}  = ( <<EOF
+GET /index.txt HTTP/1.0
+Accept-Encoding: bzip2, gzip, deflate
+Host: cache.example.org
+EOF
+ );
+$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200, '+Vary' => '', 'Content-Encoding' => 'gzip', 'Content-Type' => "text/plain" } ];
+ok($tf->handle_http($t) == 0, 'bzip2 requested but disabled');
 
 
 ok($tf->stop_proc == 0, "Stopping lighttpd");
