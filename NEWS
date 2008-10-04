@@ -67,7 +67,7 @@ NEWS
   * decode url before matching in mod_rewrite (#1720)
   * fixed conditional patching of ldap filter (#1564)
   * Match headers case insensitive in response (removing of X-{Sendfile,LIGHTTPD-*}, catching Date/Server)
-  * fixed bug with case-insensitive filenames in mod_userdir (#1589), spotted by "anders1"
+  * fixed bug with case-insensitive filenames in mod_userdir (#1589), spotted by "anders1" (CVE-2008-4360)
   * fixed format string bugs in mod_accesslog for SYSLOG
   * replaced fprintf with log_error_write in fastcgi debug
   * fixed mem leak in ssi expression parser (#1753), thx Take5k
@@ -77,9 +77,9 @@ NEWS
   * fix splitting of auth-ldap filter
   * workaround ldap connection leak if a ldap connection failed (restarting ldap)
   * fix auth.backend.ldap.bind-dn/pw problems (only read from global context for temporary ldap reconnects, thx ruskie)
-  * fix memleak in request header parsing (#1774, thx qhy)
+  * fix memleak in request header parsing (#1774, thx qhy) (CVE-2008-4298)
   * fix mod_rewrite memleak/endless loop detection (#1775, thx phy - again!)
-  * use decoded url for matching in mod_redirect (#1720)
+  * use decoded url for matching in mod_redirect (#1720) (CVE-2008-4359)
 
 - 1.4.19 - 2008-03-10
 
