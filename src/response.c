@@ -44,16 +44,15 @@ int http_response_write_header(server *srv, connection *con) {
 	buffer_append_string(b, get_http_status_name(con->http_status));
 
 	if (con->request.http_version != HTTP_VERSION_1_1 || con->keep_alive == 0) {
-		buffer_append_string_len(b, CONST_STR_LEN("\r\nConnection: "));
 		if (con->keep_alive) {
-			buffer_append_string_len(b, CONST_STR_LEN("keep-alive"));
+			response_header_overwrite(srv, con, CONST_STR_LEN("Connection"), CONST_STR_LEN("keep-alive"));
 		} else {
-			buffer_append_string_len(b, CONST_STR_LEN("close"));
+			response_header_overwrite(srv, con, CONST_STR_LEN("Connection"), CONST_STR_LEN("close"));
 		}
 	}
 
 	if (con->response.transfer_encoding & HTTP_TRANSFER_ENCODING_CHUNKED) {
-		buffer_append_string_len(b, CONST_STR_LEN("\r\nTransfer-Encoding: chunked"));
+		response_header_overwrite(srv, con, CONST_STR_LEN("Transfer-Encoding"), CONST_STR_LEN("chunked"));
 	}
 
 
