@@ -1198,7 +1198,8 @@ static handler_t mod_proxy_check_extension(server *srv, connection *con, void *p
 		host = (data_proxy *)extension->value->data[0];
 
 		/* Use last_used_ndx from first host in list */
-		k = ndx = host->last_used_ndx;
+		k = host->last_used_ndx;
+		ndx = k + 1; /* use next host after the last one */
 		if (ndx < 0) ndx = 0;
 
 		/* Search first active host after last_used_ndx */
