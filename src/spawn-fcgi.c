@@ -58,7 +58,7 @@ int fcgi_spawn_connection(char *appPath, char **appArgv, char *addr, unsigned sh
 
 
 	if (unixsocket) {
-		memset(&fcgi_addr, 0, sizeof(fcgi_addr));
+		memset(&fcgi_addr_un, 0, sizeof(fcgi_addr_un));
 
 		fcgi_addr_un.sun_family = AF_UNIX;
 		strcpy(fcgi_addr_un.sun_path, unixsocket);
@@ -72,12 +72,13 @@ int fcgi_spawn_connection(char *appPath, char **appArgv, char *addr, unsigned sh
 		socket_type = AF_UNIX;
 		fcgi_addr = (struct sockaddr *) &fcgi_addr_un;
 	} else {
+		memset(&fcgi_addr_in, 0, sizeof(fcgi_addr_in));
 		fcgi_addr_in.sin_family = AF_INET;
-                if (addr != NULL) {
-                        fcgi_addr_in.sin_addr.s_addr = inet_addr(addr);
-                } else {
-                        fcgi_addr_in.sin_addr.s_addr = htonl(INADDR_ANY);
-                }
+		if (addr != NULL) {
+			fcgi_addr_in.sin_addr.s_addr = inet_addr(addr);
+		} else {
+			fcgi_addr_in.sin_addr.s_addr = htonl(INADDR_ANY);
+		}
 		fcgi_addr_in.sin_port = htons(port);
 		servlen = sizeof(fcgi_addr_in);
 
