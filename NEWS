@@ -67,7 +67,7 @@ NEWS
   * print helpful error message on conditionals in global block (#1550)
   * decode url before matching in mod_rewrite (#1720)
   * fixed conditional patching of ldap filter (#1564)
-  * Match headers case insensitive in response (removing of X-{Sendfile,LIGHTTPD-*}, catching Date/Server)
+  * Match headers case insensitive in response (removing of X-{Sendfile,LIGHTTPD-*}, catching Date/Server) [2281]
   * fixed bug with case-insensitive filenames in mod_userdir (#1589), spotted by "anders1" (CVE-2008-4360)
   * fixed format string bugs in mod_accesslog for SYSLOG
   * replaced fprintf with log_error_write in fastcgi debug
