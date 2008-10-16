@@ -3252,6 +3252,7 @@ static handler_t fcgi_handle_fdevent(void *s, void *ctx, int revents) {
 				fcgi_connection_close(srv, hctx);
 
 				con->mode = DIRECT;
+				con->http_status = 0;
 				con->file_started = 1; /* fcgi_extension won't touch the request afterwards */
 			} else {
 				/* we are done */
