@@ -103,9 +103,8 @@ SETDEFAULTS_FUNC(mod_alias_set_defaults) {
 					}
 					/* ok, they have same prefix. check position */
 					if (a->sorted[j] < a->sorted[k]) {
-						fprintf(stderr, "url.alias: `%s' will never match as `%s' matched first\n",
-								key->ptr,
-								prefix->ptr);
+						log_error_write(srv, __FILE__, __LINE__, "SBSBS",
+							"url.alias: `", key, "' will never match as `", prefix, "' matched first");
 						return HANDLER_ERROR;
 					}
 				}
