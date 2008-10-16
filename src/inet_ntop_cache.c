@@ -11,7 +11,7 @@ const char * inet_ntop_cache_get_ip(server *srv, sock_addr *addr) {
 #ifdef HAVE_IPV6
 	size_t ndx = 0, i;
 	for (i = 0; i < INET_NTOP_CACHE_MAX; i++) {
-		if (srv->inet_ntop_cache[i].ts != 0) {
+		if (srv->inet_ntop_cache[i].ts != 0 && srv->inet_ntop_cache[i].family == addr->plain.sa_family) {
 			if (srv->inet_ntop_cache[i].family == AF_INET6 &&
 			    0 == memcmp(srv->inet_ntop_cache[i].addr.ipv6.s6_addr, addr->ipv6.sin6_addr.s6_addr, 16)) {
 				/* IPv6 found in cache */

@@ -19,6 +19,7 @@ NEWS
   * Fix duplicate connection keep-alive/transfer-encoding headers (#960)
   * Fixed fix for round-robin in mod_proxy (forgot to increment the index) (#1715)
   * Fix fastcgi-authorizer handling; Status: 200 is now accepted as the doc requests
+  * Compare address family in inet_ntop_cache
 
 - 1.4.20 - 2008-09-30
 
