@@ -38,6 +38,7 @@ CONFS=fastcgi-10.conf \
       mod-auth.t \
       mod-cgi.t \
       mod-compress.t \
+      mod-compress.conf \
       mod-fastcgi.t \
       mod-redirect.t \
       mod-rewrite.t \
