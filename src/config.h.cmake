@@ -23,6 +23,7 @@
 #cmakedefine HAVE_UNISTD_H
 #cmakedefine HAVE_PTHREAD_H
 #cmakedefine HAVE_INET_ATON
+#cmakedefine HAVE_IPV6
 
 /* XATTR */
 #cmakedefine HAVE_ATTR_ATTRIBUTES_H
