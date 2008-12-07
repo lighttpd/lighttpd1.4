@@ -21,6 +21,7 @@ NEWS
   * Fix fastcgi-authorizer handling; Status: 200 is now accepted as the doc requests
   * Compare address family in inet_ntop_cache
   * Revert CVE-2008-4359 (#1720) fix "encoding+simplifying urls for rewrite/redirect": too many regressions.
+  * Use FD_CLOEXEC if possible (fixes #1821)
 
 - 1.4.20 - 2008-09-30
 
