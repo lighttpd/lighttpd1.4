@@ -232,29 +232,6 @@ handler_t http_response_prepare(server *srv, connection *con) {
 		}
 
 
-		/* build filename
-		 *
-		 * - decode url-encodings  (e.g. %20 -> ' ')
-		 * - remove path-modifiers (e.g. /../)
-		 */
-
-
-		if (con->request.http_method == HTTP_METHOD_OPTIONS &&
-		    con->uri.path_raw->ptr[0] == '*' && con->uri.path_raw->ptr[1] == '\0') {
-			/* OPTIONS * ... */
-			buffer_copy_string_buffer(con->uri.path, con->uri.path_raw);
-		} else {
-			buffer_copy_string_buffer(srv->tmp_buf, con->uri.path_raw);
-			buffer_urldecode_path(srv->tmp_buf);
-			buffer_path_simplify(con->uri.path, srv->tmp_buf);
-		}
-
-		if (con->conf.log_request_handling) {
-			log_error_write(srv, __FILE__, __LINE__,  "s",  "-- sanatising URI");
-			log_error_write(srv, __FILE__, __LINE__,  "sb", "URI-path     : ", con->uri.path);
-		}
-
-
 		/**
 		 *
 		 * call plugins
@@ -274,6 +251,29 @@ handler_t http_response_prepare(server *srv, connection *con) {
 		default:
 			log_error_write(srv, __FILE__, __LINE__, "sd", "handle_uri_raw: unknown return value", r);
 			break;
+		}
+
+		/* build filename
+		 *
+		 * - decode url-encodings  (e.g. %20 -> ' ')
+		 * - remove path-modifiers (e.g. /../)
+		 */
+
+
+
+		if (con->request.http_method == HTTP_METHOD_OPTIONS &&
+		    con->uri.path_raw->ptr[0] == '*' && con->uri.path_raw->ptr[1] == '\0') {
+			/* OPTIONS * ... */
+			buffer_copy_string_buffer(con->uri.path, con->uri.path_raw);
+		} else {
+			buffer_copy_string_buffer(srv->tmp_buf, con->uri.path_raw);
+			buffer_urldecode_path(srv->tmp_buf);
+			buffer_path_simplify(con->uri.path, srv->tmp_buf);
+		}
+
+		if (con->conf.log_request_handling) {
+			log_error_write(srv, __FILE__, __LINE__,  "s",  "-- sanatising URI");
+			log_error_write(srv, __FILE__, __LINE__,  "sb", "URI-path     : ", con->uri.path);
 		}
 
 		/**

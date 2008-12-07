@@ -178,11 +178,7 @@ static handler_t mod_redirect_uri_handler(server *srv, connection *con, void *p_
 
 	mod_redirect_patch_connection(srv, con, p);
 
-	buffer_copy_string_buffer(p->match_buf, con->uri.path);
-	if (con->uri.query->used > 0) {
-		buffer_append_string_len(p->match_buf, CONST_STR_LEN("?"));
-		buffer_append_string_buffer(p->match_buf, con->uri.query);
-	}
+	buffer_copy_string_buffer(p->match_buf, con->request.uri);
 
 	for (i = 0; i < p->conf.redirect->used; i++) {
 		pcre *match;

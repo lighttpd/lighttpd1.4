@@ -39,3 +39,9 @@ url.redirect
     $HTTP["host"] =~ "^www\.(.*)" {
       url.redirect = ( "^/(.*)" => "http://%1/$1" )
     }
+
+Warning
+=======
+
+Do NOT use mod_redirect to protect specific urls, as the original url passed from the client
+is matched against your rules, for example strings like "/abc/../xyz%2f/path".
