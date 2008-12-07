@@ -19,7 +19,6 @@
 #cmakedefine  HAVE_SYS_UN_H
 #cmakedefine  HAVE_SYS_WAIT_H
 #cmakedefine HAVE_SYS_TIME_H
-#cmakedefine HAVE_TIME_H
 #cmakedefine HAVE_UNISTD_H
 #cmakedefine HAVE_PTHREAD_H
 #cmakedefine HAVE_INET_ATON
@@ -27,10 +26,11 @@
 
 /* XATTR */
 #cmakedefine HAVE_ATTR_ATTRIBUTES_H
+#cmakedefine HAVE_XATTR
 
 /* mySQL */
 #cmakedefine  HAVE_MYSQL_H
-#cmakedefine  HAVE_LIBMYSQL
+#cmakedefine  HAVE_MYSQL
 
 /* OpenSSL */
 #cmakedefine  HAVE_OPENSSL_SSL_H
@@ -44,6 +44,7 @@
 
 /* FAM */
 #cmakedefine  HAVE_FAM_H
+#cmakedefine  HAVE_FAMNOEXISTS
 
 /* getopt */
 #cmakedefine  HAVE_GETOPT_H
@@ -53,6 +54,9 @@
 /* LDAP */
 #cmakedefine  HAVE_LDAP_H
 #cmakedefine  HAVE_LIBLDAP
+#cmakedefine  HAVE_LBER_H
+#cmakedefine  HAVE_LIBLBER
+#cmakedefine  LDAP_DEPRECATED 1
 
 /* XML */
 #cmakedefine  HAVE_LIBXML_H
@@ -74,7 +78,7 @@
 #cmakedefine  HAVE_SYSLOG_H
 
 /* UUID */
-#cmakedefine  HAVE_UUID_H
+#cmakedefine  HAVE_UUID_UUID_H
 #cmakedefine  HAVE_LIBUUID
 
 /* ZLIB */
@@ -84,6 +88,13 @@
 /* lua */
 #cmakedefine  HAVE_LUA_H
 #cmakedefine  HAVE_LIBLUA
+
+/* gdbm */
+#cmakedefine  HAVE_GDBM_H
+#cmakedefine  HAVE_GDBM
+
+/* memcache */
+#cmakedefine  HAVE_MEMCACHE_H
 
 /* inotify */
 #cmakedefine  HAVE_INOTIFY_INIT
@@ -118,6 +129,7 @@
 #cmakedefine  HAVE_POSIX_FADVISE
 #cmakedefine  HAVE_SELECT
 #cmakedefine  HAVE_SENDFILE
+#cmakedefine  HAVE_SEND_FILE
 #cmakedefine  HAVE_SENDFILE64
 #cmakedefine  HAVE_SENDFILEV
 #cmakedefine  HAVE_SIGACTION
@@ -128,6 +140,7 @@
 #cmakedefine  HAVE_WRITEV
 
 /* libcrypt */
+#cmakedefine  HAVE_CRYPT_H
 #cmakedefine  HAVE_LIBCRYPT
 
 /* fastcgi */
