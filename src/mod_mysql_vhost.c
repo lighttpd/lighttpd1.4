@@ -245,7 +245,6 @@ SERVER_FUNC(mod_mysql_vhost_set_defaults) {
 		if (!(buffer_is_empty(s->myuser) ||
 		      buffer_is_empty(s->mydb))) {
 			my_bool reconnect = 1;
-			int fd;
 
 			if (NULL == (s->mysql = mysql_init(NULL))) {
 				log_error_write(srv, __FILE__, __LINE__, "s", "mysql_init() failed, exiting...");
@@ -267,19 +266,27 @@ SERVER_FUNC(mod_mysql_vhost_set_defaults) {
 				return HANDLER_ERROR;
 			}
 #undef FOO
+
+#if 0
 			/* set close_on_exec for mysql the hard way */
 			/* Note: this only works as it is done during startup, */
 			/* otherwise we cannot be sure that mysql is fd i-1 */
-			if (-1 == (fd = open("/dev/null", 0))) {
+			{ int fd;
+			if (-1 != (fd = open("/dev/null", 0))) {
 				close(fd);
+#ifdef FD_CLOEXEC
 				fcntl(fd-1, F_SETFD, FD_CLOEXEC);
-			}
+#endif
+			} }
+#else
+#ifdef FD_CLOEXEC
+			fcntl(s->mysql->net.fd, F_SETFD, FD_CLOEXEC);
+#endif
+#endif
 		}
 	}
 
-
-
-        return HANDLER_GO_ON;
+	return HANDLER_GO_ON;
 }
 
 #define PATCH(x) \

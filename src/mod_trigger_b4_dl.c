@@ -1,5 +1,6 @@
 #include <ctype.h>
 #include <stdlib.h>
+#include <fcntl.h>
 #include <string.h>
 
 #include "base.h"
@@ -180,6 +181,9 @@ SETDEFAULTS_FUNC(mod_trigger_b4_dl_set_defaults) {
 						"gdbm-open failed");
 				return HANDLER_ERROR;
 			}
+#ifdef FD_CLOEXEC
+			fcntl(gdbm_fdesc(s->db), F_SETFD, FD_CLOEXEC);
+#endif
 		}
 #endif
 #if defined(HAVE_PCRE_H)
