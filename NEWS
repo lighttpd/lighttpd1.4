@@ -22,6 +22,7 @@ NEWS
   * Compare address family in inet_ntop_cache
   * Revert CVE-2008-4359 (#1720) fix "encoding+simplifying urls for rewrite/redirect": too many regressions.
   * Use FD_CLOEXEC if possible (fixes #1821)
+  * Optimized buffer usage in mod_proxy (fixes #1850)
 
 - 1.4.20 - 2008-09-30
 
