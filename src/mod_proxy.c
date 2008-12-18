@@ -652,7 +652,7 @@ static int proxy_demux_response(server *srv, handler_ctx *hctx) {
 			buffer_prepare_append(hctx->response, b + 1);
 			hctx->response->used = 1;
 		} else {
-			buffer_prepare_append(hctx->response, hctx->response->used + b);
+			buffer_prepare_append(hctx->response, b);
 		}
 
 		if (-1 == (r = read(hctx->fd, hctx->response->ptr + hctx->response->used - 1, b))) {
