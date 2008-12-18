@@ -280,6 +280,7 @@ int http_response_handle_cachable(server *srv, connection *con, buffer *mtime) {
 						strncpy(buf, con->request.http_if_modified_since, used_len);
 						buf[used_len] = '\0';
 
+						tm.tm_isdst = 0;
 						if (NULL == strptime(buf, "%a, %d %b %Y %H:%M:%S GMT", &tm)) {
 							con->http_status = 412;
 							con->mode = DIRECT;
@@ -329,6 +330,7 @@ int http_response_handle_cachable(server *srv, connection *con, buffer *mtime) {
 			strncpy(buf, con->request.http_if_modified_since, used_len);
 			buf[used_len] = '\0';
 
+			tm.tm_isdst = 0;
 			if (NULL == strptime(buf, "%a, %d %b %Y %H:%M:%S GMT", &tm)) {
 				/**
 				 * parsing failed, let's get out of here 
