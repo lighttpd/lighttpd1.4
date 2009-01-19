@@ -454,6 +454,7 @@ static int proxy_create_env(server *srv, handler_ctx *hctx) {
 
 		if (ds->value->used && ds->key->used) {
 			if (buffer_is_equal_string(ds->key, CONST_STR_LEN("Connection"))) continue;
+			if (buffer_is_equal_string(ds->key, CONST_STR_LEN("Proxy-Connection"))) continue;
 
 			buffer_append_string_buffer(b, ds->key);
 			buffer_append_string_len(b, CONST_STR_LEN(": "));
