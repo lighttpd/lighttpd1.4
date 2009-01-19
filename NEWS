@@ -24,6 +24,7 @@ NEWS
   * Use FD_CLOEXEC if possible (fixes #1821)
   * Optimized buffer usage in mod_proxy (fixes #1850)
   * Fix uninitialized value in time struct after strptime
+  * Do not pass Proxy-Connection: header from client to backend http server in mod_proxy (#1877)
 
 - 1.4.20 - 2008-09-30
 
