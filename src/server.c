@@ -844,15 +844,16 @@ int main (int argc, char **argv) {
 	}
 
 	/* set max-conns */
-	if (srv->srvconf.max_conns > srv->max_fds) {
-		/* we can't have more connections than max-fds */
-		srv->max_conns = srv->max_fds;
+	if (srv->srvconf.max_conns > srv->max_fds/2) {
+		/* we can't have more connections than max-fds/2 */
+		log_error_write(srv, __FILE__, __LINE__, "sdd", "can't have more connections than fds/2: ", srv->srvconf.max_conns, srv->max_fds);
+		srv->max_conns = srv->max_fds/2;
 	} else if (srv->srvconf.max_conns) {
 		/* otherwise respect the wishes of the user */
 		srv->max_conns = srv->srvconf.max_conns;
 	} else {
-		/* or use the default */
-		srv->max_conns = srv->max_fds;
+		/* or use the default: we really don't want to hit max-fds */
+		srv->max_conns = srv->max_fds/3;
 	}
 
 	if (HANDLER_GO_ON != plugins_call_init(srv)) {
