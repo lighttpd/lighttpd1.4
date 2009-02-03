@@ -159,7 +159,7 @@ static int config_insert(server *srv) {
 		s->max_write_idle = 360;
 		s->use_xattr     = 0;
 		s->is_ssl        = 0;
-		s->ssl_use_sslv2 = 1;
+		s->ssl_use_sslv2 = 0;
 		s->use_ipv6      = 0;
 #ifdef HAVE_LSTAT
 		s->follow_symlink = 1;

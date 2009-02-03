@@ -28,6 +28,7 @@ NEWS
   * Fix wrong malloc sizes in mod_accesslog (probably nothing bad happened...) (fixes #1855, thx ycheng)
   * Some small buffer.c fixes (closes #1837)
   * Remove floating point math from server.c (fixes #1402)
+  * Disable SSLv2 by default
 
 - 1.4.20 - 2008-09-30
 
