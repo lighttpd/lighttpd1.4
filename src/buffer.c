@@ -159,7 +159,7 @@ int buffer_copy_string_buffer(buffer *b, const buffer *src) {
 	if (!src) return -1;
 
 	if (src->used == 0) {
-		b->used = 0;
+		buffer_reset(b);
 		return 0;
 	}
 	return buffer_copy_string_len(b, src->ptr, src->used - 1);
@@ -187,6 +187,7 @@ int buffer_append_string_rfill(buffer *b, const char *s, size_t maxlen) {
 	if (!s || !b) return -1;
 
 	s_len = strlen(s);
+	if (s_len > maxlen)  s_len = maxlen;
 	buffer_prepare_append(b, maxlen + 1);
 	if (b->used == 0)
 		b->used++;
