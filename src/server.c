@@ -1295,7 +1295,7 @@ int main (int argc, char **argv) {
 		if (srv->sockets_disabled) {
 			/* our server sockets are disabled, why ? */
 
-			if ((srv->cur_fds + srv->want_fds < srv->max_fds * 0.8) && /* we have enough unused fds */
+			if ((srv->cur_fds + srv->want_fds < srv->max_fds * 8 / 10) && /* we have enough unused fds */
 			    (srv->conns->used < srv->max_conns * 0.9) &&
 			    (0 == graceful_shutdown)) {
 				for (i = 0; i < srv->srv_sockets.used; i++) {
@@ -1308,7 +1308,7 @@ int main (int argc, char **argv) {
 				srv->sockets_disabled = 0;
 			}
 		} else {
-			if ((srv->cur_fds + srv->want_fds > srv->max_fds * 0.9) || /* out of fds */
+			if ((srv->cur_fds + srv->want_fds > srv->max_fds * 9 / 10) || /* out of fds */
 			    (srv->conns->used > srv->max_conns) || /* out of connections */
 			    (graceful_shutdown)) { /* graceful_shutdown */
 
