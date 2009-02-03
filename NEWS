@@ -29,6 +29,7 @@ NEWS
   * Some small buffer.c fixes (closes #1837)
   * Remove floating point math from server.c (fixes #1402)
   * Disable SSLv2 by default
+  * Use/enforce sane max-connection values (fixes #1803)
 
 - 1.4.20 - 2008-09-30
 
