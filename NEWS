@@ -25,6 +25,7 @@ NEWS
   * Optimized buffer usage in mod_proxy (fixes #1850)
   * Fix uninitialized value in time struct after strptime
   * Do not pass Proxy-Connection: header from client to backend http server in mod_proxy (#1877)
+  * Fix wrong malloc sizes in mod_accesslog (probably nothing bad happened...) (fixes #1855, thx ycheng)
 
 - 1.4.20 - 2008-09-30
 
