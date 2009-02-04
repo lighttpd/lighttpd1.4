@@ -660,6 +660,7 @@ PHYSICALPATH_FUNC(mod_compress_physical) {
 	size_t m;
 	off_t max_fsize;
 	stat_cache_entry *sce = NULL;
+	buffer *mtime = NULL;
 
 	if (con->mode != DIRECT || con->http_status) return HANDLER_GO_ON;
 
@@ -677,7 +678,29 @@ PHYSICALPATH_FUNC(mod_compress_physical) {
 
 	max_fsize = p->conf.compress_max_filesize;
 
-	stat_cache_get_entry(srv, con, con->physical.path, &sce);
+	if (con->conf.log_request_handling) {
+		log_error_write(srv, __FILE__, __LINE__,  "s",  "-- handling file as static file");
+	}
+
+	if (HANDLER_ERROR == stat_cache_get_entry(srv, con, con->physical.path, &sce)) {
+		con->http_status = 403;
+
+		log_error_write(srv, __FILE__, __LINE__, "sbsb",
+				"not a regular file:", con->uri.path,
+				"->", con->physical.path);
+
+		return HANDLER_FINISHED;
+	}
+
+	/* we only handle regular files */
+#ifdef HAVE_LSTAT
+	if ((sce->is_symlink == 1) && !con->conf.follow_symlink) {
+		return HANDLER_GO_ON;
+	}
+#endif
+	if (!S_ISREG(sce->st.st_mode)) {
+		return HANDLER_GO_ON;
+	}
 
 	/* don't compress files that are too large as we need to much time to handle them */
 	if (max_fsize && (sce->st.st_size >> 10) > max_fsize) return HANDLER_GO_ON;
@@ -702,6 +725,16 @@ PHYSICALPATH_FUNC(mod_compress_physical) {
 		if (buffer_is_equal(compress_ds->value, sce->content_type)) {
 			/* mimetype found */
 			data_string *ds;
+
+			etag_mutate(con->physical.etag, sce->etag);
+			mtime = strftime_cache_get(srv, sce->st.st_mtime);
+
+			if (HANDLER_FINISHED == http_response_handle_cachable(srv, con, mtime)) {
+				response_header_overwrite(srv, con, CONST_STR_LEN("Content-Type"), CONST_BUF_LEN(sce->content_type));
+				response_header_overwrite(srv, con, CONST_STR_LEN("Last-Modified"), CONST_BUF_LEN(mtime));
+				response_header_overwrite(srv, con, CONST_STR_LEN("ETag"), CONST_BUF_LEN(con->physical.etag));
+				return HANDLER_FINISHED;
+			}
 
 			/* the response might change according to Accept-Encoding */
 			response_header_insert(srv, con, CONST_STR_LEN("Vary"), CONST_STR_LEN("Accept-Encoding"));
@@ -749,34 +782,18 @@ PHYSICALPATH_FUNC(mod_compress_physical) {
 					if (p->conf.compress_cache_dir->used) {
 						if (0 == deflate_file_to_file(srv, con, p,
 									      con->physical.path, sce, compression_type)) {
-							buffer *mtime;
-
 							response_header_overwrite(srv, con, CONST_STR_LEN("Content-Encoding"), compression_name, strlen(compression_name));
-
-							mtime = strftime_cache_get(srv, sce->st.st_mtime);
 							response_header_overwrite(srv, con, CONST_STR_LEN("Last-Modified"), CONST_BUF_LEN(mtime));
-
-							etag_mutate(con->physical.etag, sce->etag);
 							response_header_overwrite(srv, con, CONST_STR_LEN("ETag"), CONST_BUF_LEN(con->physical.etag));
-
 							response_header_overwrite(srv, con, CONST_STR_LEN("Content-Type"), CONST_BUF_LEN(sce->content_type));
-
 							return HANDLER_GO_ON;
 						}
 					} else if (0 == deflate_file_to_buffer(srv, con, p,
 									       con->physical.path, sce, compression_type)) {
-						buffer *mtime;
-
 						response_header_overwrite(srv, con, CONST_STR_LEN("Content-Encoding"), compression_name, strlen(compression_name));
-
-						mtime = strftime_cache_get(srv, sce->st.st_mtime);
 						response_header_overwrite(srv, con, CONST_STR_LEN("Last-Modified"), CONST_BUF_LEN(mtime));
-
-						etag_mutate(con->physical.etag, sce->etag);
 						response_header_overwrite(srv, con, CONST_STR_LEN("ETag"), CONST_BUF_LEN(con->physical.etag));
-
 						response_header_overwrite(srv, con, CONST_STR_LEN("Content-Type"), CONST_BUF_LEN(sce->content_type));
-
 						return HANDLER_FINISHED;
 					}
 					break;

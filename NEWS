@@ -30,6 +30,7 @@ NEWS
   * Remove floating point math from server.c (fixes #1402)
   * Disable SSLv2 by default
   * Use/enforce sane max-connection values (fixes #1803)
+  * Allow mod_compress to return 304 (Not Modified); compress ignores the static-file.etags option.(fixes #1884)
 
 - 1.4.20 - 2008-09-30
 
