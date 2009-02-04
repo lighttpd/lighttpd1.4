@@ -31,6 +31,7 @@ NEWS
   * Disable SSLv2 by default
   * Use/enforce sane max-connection values (fixes #1803)
   * Allow mod_compress to return 304 (Not Modified); compress ignores the static-file.etags option.(fixes #1884)
+  * Add option to ignore the "Expect: 100-continue" header instead of returning 417 Expectation failed (closes #1017)
 
 - 1.4.20 - 2008-09-30
 

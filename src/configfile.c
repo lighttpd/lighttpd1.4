@@ -94,6 +94,7 @@ static int config_insert(server *srv) {
 		{ "etag.use-inode",             NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_SERVER }, /* 49 */
 		{ "etag.use-mtime",             NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_SERVER }, /* 50 */
 		{ "etag.use-size",             NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_SERVER }, /* 51 */
+		{ "server.reject-expect-100-with-417",  NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_SERVER }, /* 52 */
 		{ "server.host",                 "use server.bind instead", T_CONFIG_DEPRECATED, T_CONFIG_SCOPE_UNSET },
 		{ "server.docroot",              "use server.document-root instead", T_CONFIG_DEPRECATED, T_CONFIG_SCOPE_UNSET },
 		{ "server.virtual-root",         "load mod_simple_vhost and use simple-vhost.server-root instead", T_CONFIG_DEPRECATED, T_CONFIG_SCOPE_UNSET },
@@ -135,6 +136,7 @@ static int config_insert(server *srv) {
 
 	cv[43].destination = &(srv->srvconf.max_conns);
 	cv[12].destination = &(srv->srvconf.max_request_size);
+	cv[52].destination = &(srv->srvconf.reject_expect_100_with_417);
 	srv->config_storage = calloc(1, srv->config_context->used * sizeof(specific_config *));
 
 	assert(srv->config_storage);

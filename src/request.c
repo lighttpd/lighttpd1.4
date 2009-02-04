@@ -894,11 +894,12 @@ int http_request_parse(server *srv, connection *con) {
 								 *
 								 */
 
-								con->http_status = 417;
-								con->keep_alive = 0;
-
-								array_insert_unique(con->request.headers, (data_unset *)ds);
-								return 0;
+								if (srv->srvconf.reject_expect_100_with_417 && 0 == buffer_caseless_compare(CONST_BUF_LEN(ds->value), CONST_STR_LEN("100-continue"))) {
+									con->http_status = 417;
+									con->keep_alive = 0;
+									array_insert_unique(con->request.headers, (data_unset *)ds);
+									return 0;
+								}
 							} else if (cmp > 0 && 0 == (cmp = buffer_caseless_compare(CONST_BUF_LEN(ds->key), CONST_STR_LEN("Host")))) {
 								if (!con->request.http_host) {
 									con->request.http_host = ds->value;
