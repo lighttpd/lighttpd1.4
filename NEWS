@@ -33,6 +33,7 @@ NEWS
   * Allow mod_compress to return 304 (Not Modified); compress ignores the static-file.etags option.(fixes #1884)
   * Add option to ignore the "Expect: 100-continue" header instead of returning 417 Expectation failed (closes #1017)
   * Use modified etags in mod_compress (fixes #1800)
+  * Fix max-connection limit handling/100% cpu usage (fixes #1436)
 
 - 1.4.20 - 2008-09-30
 
