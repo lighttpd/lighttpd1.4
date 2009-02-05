@@ -1298,7 +1298,7 @@ int main (int argc, char **argv) {
 			/* our server sockets are disabled, why ? */
 
 			if ((srv->cur_fds + srv->want_fds < srv->max_fds * 8 / 10) && /* we have enough unused fds */
-			    (srv->conns->used < srv->max_conns * 0.9) &&
+			    (srv->conns->used <= srv->max_conns * 9 / 10) &&
 			    (0 == graceful_shutdown)) {
 				for (i = 0; i < srv->srv_sockets.used; i++) {
 					server_socket *srv_socket = srv->srv_sockets.ptr[i];
@@ -1311,7 +1311,7 @@ int main (int argc, char **argv) {
 			}
 		} else {
 			if ((srv->cur_fds + srv->want_fds > srv->max_fds * 9 / 10) || /* out of fds */
-			    (srv->conns->used > srv->max_conns) || /* out of connections */
+			    (srv->conns->used >= srv->max_conns) || /* out of connections */
 			    (graceful_shutdown)) { /* graceful_shutdown */
 
 				/* disable server-fds */
@@ -1350,7 +1350,7 @@ int main (int argc, char **argv) {
 
 				if (graceful_shutdown) {
 					log_error_write(srv, __FILE__, __LINE__, "s", "[note] graceful shutdown started");
-				} else if (srv->conns->used > srv->max_conns) {
+				} else if (srv->conns->used >= srv->max_conns) {
 					log_error_write(srv, __FILE__, __LINE__, "s", "[note] sockets disabled, connection limit reached");
 				} else {
 					log_error_write(srv, __FILE__, __LINE__, "s", "[note] sockets disabled, out-of-fds");
