@@ -413,6 +413,15 @@ static cond_result_t config_check_cond_nocache(server *srv, connection *con, dat
 
 		break;
 	}
+	case COMP_HTTP_LANGUAGE: {
+		data_string *ds;
+		if (NULL != (ds = (data_string *)array_get_element(con->request.headers, "Accept-Language"))) {
+			l = ds->value;
+		} else {
+			l = srv->empty_string;
+		}
+		break;
+	}
 	default:
 		return COND_RESULT_FALSE;
 	}

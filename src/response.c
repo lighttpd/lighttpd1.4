@@ -198,6 +198,7 @@ handler_t http_response_prepare(server *srv, connection *con) {
 		config_patch_connection(srv, con, COMP_HTTP_REMOTE_IP); /* Client-IP */
 		config_patch_connection(srv, con, COMP_HTTP_REFERER);   /* Referer:     */
 		config_patch_connection(srv, con, COMP_HTTP_USER_AGENT);/* User-Agent:  */
+		config_patch_connection(srv, con, COMP_HTTP_LANGUAGE);  /* Accept-Language:  */
 		config_patch_connection(srv, con, COMP_HTTP_COOKIE);    /* Cookie:  */
 		config_patch_connection(srv, con, COMP_HTTP_REQUEST_METHOD); /* REQUEST_METHOD */
 
