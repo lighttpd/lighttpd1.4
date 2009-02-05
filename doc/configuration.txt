@@ -90,13 +90,21 @@ $HTTP["scheme"]
 $HTTP["host"]
   match on host
 $HTTP["useragent"]
+$HTTP["user-agent"]
   match on useragent
 $HTTP["referer"]
   match on referer
+$HTTP["method"]
+  math on the http method
 $HTTP["url"]
   match on url
+$HTTP["query-string"]
+  match on the (not decoded) query-string
 $HTTP["remoteip"]
+$HTTP["remote-ip"]
   match on the remote IP or a remote Network
+$HTTP["language"]
+  match on the Accept-Language header
 $SERVER["socket"]
   match on socket. Value must be on the format "ip:port" where ip is an IP
   address and port a port number. Only equal match (==) is supported.
