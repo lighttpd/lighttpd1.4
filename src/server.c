@@ -1245,8 +1245,8 @@ int main (int argc, char **argv) {
 
 						if (srv->cur_ts - con->write_request_ts > con->conf.max_write_idle) {
 							/* time - out */
-#if 1
-							log_error_write(srv, __FILE__, __LINE__, "sbsosds",
+							if (con->conf.log_timeouts) {
+								log_error_write(srv, __FILE__, __LINE__, "sbsosds",
 									"NOTE: a request for",
 									con->request.uri,
 									"timed out after writing",
@@ -1254,7 +1254,7 @@ int main (int argc, char **argv) {
 									"bytes. We waited",
 									(int)con->conf.max_write_idle,
 									"seconds. If this a problem increase server.max-write-idle");
-#endif
+							}
 							connection_set_state(srv, con, CON_STATE_ERROR);
 							changed = 1;
 						}

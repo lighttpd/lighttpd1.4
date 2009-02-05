@@ -35,6 +35,7 @@ NEWS
   * Use modified etags in mod_compress (fixes #1800)
   * Fix max-connection limit handling/100% cpu usage (fixes #1436)
   * Fix error handling in freebsd-sendfile (fixes #1813)
+  * Silenced the annoying "request timed out" warning, enable with the "debug.log-timeouts" option (fixes #1529)
 
 - 1.4.20 - 2008-09-30
 

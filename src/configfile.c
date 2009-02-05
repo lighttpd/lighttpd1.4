@@ -91,10 +91,11 @@ static int config_insert(server *srv) {
 		{ "server.core-files",           NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION }, /* 46 */
 		{ "ssl.cipher-list",             NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_SERVER },      /* 47 */
 		{ "ssl.use-sslv2",               NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION }, /* 48 */
-		{ "etag.use-inode",             NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_SERVER }, /* 49 */
-		{ "etag.use-mtime",             NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_SERVER }, /* 50 */
-		{ "etag.use-size",             NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_SERVER }, /* 51 */
+		{ "etag.use-inode",              NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_SERVER }, /* 49 */
+		{ "etag.use-mtime",              NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_SERVER }, /* 50 */
+		{ "etag.use-size",               NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_SERVER }, /* 51 */
 		{ "server.reject-expect-100-with-417",  NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_SERVER }, /* 52 */
+		{ "debug.log-timeouts",          NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION }, /* 53 */
 		{ "server.host",                 "use server.bind instead", T_CONFIG_DEPRECATED, T_CONFIG_SCOPE_UNSET },
 		{ "server.docroot",              "use server.document-root instead", T_CONFIG_DEPRECATED, T_CONFIG_SCOPE_UNSET },
 		{ "server.virtual-root",         "load mod_simple_vhost and use simple-vhost.server-root instead", T_CONFIG_DEPRECATED, T_CONFIG_SCOPE_UNSET },
@@ -209,6 +210,7 @@ static int config_insert(server *srv) {
 		cv[33].destination = &(s->log_response_header);
 		cv[34].destination = &(s->log_request_header);
 		cv[35].destination = &(s->log_ssl_noise);
+		cv[53].destination = &(s->log_timeouts);
 
 		cv[36].destination = &(s->allow_http11);
 		cv[39].destination = s->ssl_ca_file;
@@ -376,6 +378,8 @@ int config_patch_connection(server *srv, connection *con, comp_key_t comp) {
 				PATCH(log_file_not_found);
 			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("debug.log-ssl-noise"))) {
 				PATCH(log_ssl_noise);
+			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("debug.log-timeouts"))) {
+				PATCH(log_timeouts);
 			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("server.protocol-http11"))) {
 				PATCH(allow_http11);
 			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("server.force-lowercase-filenames"))) {

@@ -260,6 +260,7 @@ typedef struct {
 	unsigned short log_response_header;
 	unsigned short log_condition_handling;
 	unsigned short log_ssl_noise;
+	unsigned short log_timeouts;
 
 
 	/* server wide */
