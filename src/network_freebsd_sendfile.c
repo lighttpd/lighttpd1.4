@@ -167,6 +167,7 @@ int network_write_chunkqueue_freebsdsendfile(server *srv, connection *con, int f
 				switch(errno) {
 				case EAGAIN:
 				case EINTR:
+					r = 0; /* try again later */
 					break;
 				case ENOTCONN:
 					return -2;
@@ -174,10 +175,7 @@ int network_write_chunkqueue_freebsdsendfile(server *srv, connection *con, int f
 					log_error_write(srv, __FILE__, __LINE__, "ssd", "sendfile: ", strerror(errno), errno);
 					return -1;
 				}
-			}
-
-			if (r == 0 && (errno != EAGAIN && errno != EINTR)) {
-				int oerrno = errno;
+			} else if (r == 0) {
 				/* We got an event to write but we wrote nothing
 				 *
 				 * - the file shrinked -> error
@@ -190,12 +188,9 @@ int network_write_chunkqueue_freebsdsendfile(server *srv, connection *con, int f
 
 				if (offset >= sce->st.st_size) {
 					/* file shrinked, close the connection */
-					errno = oerrno;
-
 					return -1;
 				}
 
-				errno = oerrno;
 				return -2;
 			}
 
