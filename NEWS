@@ -38,6 +38,7 @@ NEWS
   * Silenced the annoying "request timed out" warning, enable with the "debug.log-timeouts" option (fixes #1529)
   * Allow tabs in header values (fixes #1822)
   * Added Language conditional (fixes #1119); patch by petar
+  * Fix wrong format strings (#1900, thx stepancheg)
 
 - 1.4.20 - 2008-09-30
 

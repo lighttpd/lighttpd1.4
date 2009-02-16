@@ -1136,8 +1136,8 @@ int http_request_parse(server *srv, connection *con) {
 			con->http_status = 413;
 			con->keep_alive = 0;
 
-			log_error_write(srv, __FILE__, __LINE__, "sds",
-					"request-size too long:", con->request.content_length, "-> 413");
+			log_error_write(srv, __FILE__, __LINE__, "sos",
+					"request-size too long:", (off_t) con->request.content_length, "-> 413");
 			return 0;
 		}
 
@@ -1151,8 +1151,8 @@ int http_request_parse(server *srv, connection *con) {
 			con->http_status = 413;
 			con->keep_alive = 0;
 
-			log_error_write(srv, __FILE__, __LINE__, "sds",
-					"request-size too long:", con->request.content_length, "-> 413");
+			log_error_write(srv, __FILE__, __LINE__, "sos",
+					"request-size too long:", (off_t) con->request.content_length, "-> 413");
 			return 0;
 		}
 
