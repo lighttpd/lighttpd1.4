@@ -4,7 +4,7 @@ NEWS
 ====
 
 - 1.4.22 -
-  *
+  * Fix wrong lua type for CACHE_MISS/CACHE_HIT in mod_cml (fixes #533)
 
 - 1.4.21 - 2009-02-16
 
