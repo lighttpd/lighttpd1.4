@@ -282,11 +282,11 @@ int cache_parse_lua(server *srv, connection *con, plugin_data *p, buffer *fn) {
 
 	/* 2 default constants */
 	lua_pushliteral(L, "CACHE_HIT");
-	lua_pushboolean(L, 0);
+	lua_pushnumber(L, 0);
 	lua_settable(L, LUA_GLOBALSINDEX);
 
 	lua_pushliteral(L, "CACHE_MISS");
-	lua_pushboolean(L, 1);
+	lua_pushnumber(L, 1);
 	lua_settable(L, LUA_GLOBALSINDEX);
 
 	/* load lua program */
