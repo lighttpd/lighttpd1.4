@@ -454,12 +454,15 @@ TRIGGER_FUNC(mod_rrd_trigger) {
 
 		if (p->resp->ptr[0] != 'O' ||
 		    p->resp->ptr[1] != 'K') {
-			p->rrdtool_running = 0;
+			/* don't fail on this error if we just started (graceful restart, the old one might have just updated too) */
+			if (!(strstr(p->resp->ptr, "(minimum one second step)") && (srv->cur_ts - srv->startup_ts < 3))) {
+				p->rrdtool_running = 0;
 
-			log_error_write(srv, __FILE__, __LINE__, "sbb",
+				log_error_write(srv, __FILE__, __LINE__, "sbb",
 					"rrdtool-response:", p->cmd, p->resp);
 
-			return HANDLER_ERROR;
+				return HANDLER_ERROR;
+			}
 		}
 		s->requests = 0;
 		s->bytes_written = 0;

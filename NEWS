@@ -7,6 +7,7 @@ NEWS
   * Fix wrong lua type for CACHE_MISS/CACHE_HIT in mod_cml (fixes #533)
   * Fix default vhost in mod_simple_vhost (fixes #1905)
   * Handle EINTR in mod_rrdtool (fixes #604)
+  * Fix rrd error after graceful restart (fixes #419)
 
 - 1.4.21 - 2009-02-16
 
