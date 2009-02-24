@@ -8,6 +8,7 @@ NEWS
   * Fix default vhost in mod_simple_vhost (fixes #1905)
   * Handle EINTR in mod_rrdtool (fixes #604)
   * Fix rrd error after graceful restart (fixes #419)
+  * Fix EAGAIN handling for freebsd sendfile (fixes #1913, thx AnMaster for spotting the problem)
 
 - 1.4.21 - 2009-02-16
 
