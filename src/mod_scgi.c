@@ -1814,6 +1814,7 @@ static int scgi_demux_response(server *srv, handler_ctx *hctx) {
 			int header_end = 0;
 			int cp, eol = EOL_UNSET;
 			size_t used = 0;
+			size_t hlen = 0;
 
 			buffer_append_string_buffer(hctx->response_header, hctx->response);
 
@@ -1836,6 +1837,7 @@ static int scgi_demux_response(server *srv, handler_ctx *hctx) {
 
 					if (*(c+1) == '\n') {
 						header_end = 1;
+						hlen = cp + 2;
 						break;
 					}
 
@@ -1854,6 +1856,7 @@ static int scgi_demux_response(server *srv, handler_ctx *hctx) {
 					    *(c+2) == '\r' &&
 					    *(c+3) == '\n') {
 						header_end = 1;
+						hlen = cp + 4;
 						break;
 					}
 
@@ -1875,12 +1878,11 @@ static int scgi_demux_response(server *srv, handler_ctx *hctx) {
 					http_chunk_append_mem(srv, con, hctx->response_header->ptr, hctx->response_header->used);
 					joblist_append(srv, con);
 				} else {
-					size_t hlen = c - hctx->response_header->ptr + (eol == EOL_RN ? 4 : 2);
 					size_t blen = hctx->response_header->used - hlen - 1;
 
 					/* a small hack: terminate after at the second \r */
-					hctx->response_header->used = hlen + 1 - (eol == EOL_RN ? 2 : 1);
-					hctx->response_header->ptr[hlen - (eol == EOL_RN ? 2 : 1)] = '\0';
+					hctx->response_header->used = hlen;
+					hctx->response_header->ptr[hlen - 1] = '\0';
 
 					/* parse the response header */
 					scgi_response_parse(srv, con, p, hctx->response_header, eol);
@@ -1892,7 +1894,7 @@ static int scgi_demux_response(server *srv, handler_ctx *hctx) {
 					}
 
 					if ((hctx->response->used != hlen) && blen > 0) {
-						http_chunk_append_mem(srv, con, c + (eol == EOL_RN ? 4: 2), blen + 1);
+						http_chunk_append_mem(srv, con, hctx->response_header->ptr + hlen, blen + 1);
 						joblist_append(srv, con);
 					}
 				}
@@ -2570,12 +2572,12 @@ static handler_t scgi_handle_fdevent(void *s, void *ctx, int revents) {
 				con->mode = DIRECT;
 			} else {
 				/* response might have been already started, kill the connection */
-				scgi_connection_cleanup(srv, hctx);
-
 				log_error_write(srv, __FILE__, __LINE__, "ssdsd",
 						"response already sent out, termination connection",
 						"connection-fd:", con->fd,
 						"fcgi-fd:", hctx->fd);
+
+				scgi_connection_cleanup(srv, hctx);
 
 				connection_set_state(srv, con, CON_STATE_ERROR);
 			}

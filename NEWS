@@ -9,6 +9,7 @@ NEWS
   * Handle EINTR in mod_rrdtool (fixes #604)
   * Fix rrd error after graceful restart (fixes #419)
   * Fix EAGAIN handling for freebsd sendfile (fixes #1913, thx AnMaster for spotting the problem)
+  * Fix segfault in mod_scgi (fixes #1911)
 
 - 1.4.21 - 2009-02-16
 
