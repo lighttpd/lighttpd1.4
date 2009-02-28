@@ -167,8 +167,9 @@ int network_write_chunkqueue_freebsdsendfile(server *srv, connection *con, int f
 				switch(errno) {
 				case EAGAIN:
 				case EINTR:
-					/* for EAGAIN r still contains the sent bytes */
+					/* for EAGAIN/EINTR r still contains the sent bytes */
 					break; /* try again later */
+				case EPIPE:
 				case ENOTCONN:
 					return -2;
 				default:
