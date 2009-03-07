@@ -187,7 +187,8 @@ splay_tree * splaytree_delete(splay_tree *t, int i) {
     }
 }
 
-splay_tree *find_rank(int r, splay_tree *t) {
+#if 0
+static splay_tree *find_rank(int r, splay_tree *t) {
 /* Returns a pointer to the node in the tree with the given rank.  */
 /* Returns NULL if there is no such node.                          */
 /* Does not change the tree.  To guarantee logarithmic behavior,   */
@@ -206,5 +207,4 @@ splay_tree *find_rank(int r, splay_tree *t) {
 	}
     }
 }
-
-
+#endif

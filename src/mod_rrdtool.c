@@ -91,7 +91,7 @@ FREE_FUNC(mod_rrd_free) {
 	return HANDLER_GO_ON;
 }
 
-int mod_rrd_create_pipe(server *srv, plugin_data *p) {
+static int mod_rrd_create_pipe(server *srv, plugin_data *p) {
 #ifdef HAVE_FORK
 	pid_t pid;
 
@@ -477,6 +477,7 @@ REQUESTDONE_FUNC(mod_rrd_account) {
 	return HANDLER_GO_ON;
 }
 
+int mod_rrdtool_plugin_init(plugin *p);
 int mod_rrdtool_plugin_init(plugin *p) {
 	p->version     = LIGHTTPD_VERSION_ID;
 	p->name        = buffer_init_string("rrd");

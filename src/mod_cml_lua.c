@@ -105,7 +105,7 @@ static int c_to_lua_push(lua_State *L, int tbl, const char *key, size_t key_len,
 }
 
 
-int cache_export_get_params(lua_State *L, int tbl, buffer *qrystr) {
+static int cache_export_get_params(lua_State *L, int tbl, buffer *qrystr) {
 	size_t is_key = 1;
 	size_t i;
 	char *key = NULL, *val = NULL;

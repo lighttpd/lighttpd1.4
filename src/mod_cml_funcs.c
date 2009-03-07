@@ -93,7 +93,7 @@ int f_file_mtime(lua_State *L) {
 	return 1;
 }
 
-int f_dir_files_iter(lua_State *L) {
+static int f_dir_files_iter(lua_State *L) {
 	DIR *d;
 	struct dirent *de;
 

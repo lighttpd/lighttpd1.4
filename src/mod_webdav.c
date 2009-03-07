@@ -1096,7 +1096,7 @@ static int webdav_parse_chunkqueue(server *srv, connection *con, plugin_data *p,
 }
 #endif
 
-int webdav_lockdiscovery(server *srv, connection *con,
+static int webdav_lockdiscovery(server *srv, connection *con,
 		buffer *locktoken, const char *lockscope, const char *locktype, int depth) {
 
 	buffer *b;
@@ -1156,7 +1156,7 @@ int webdav_lockdiscovery(server *srv, connection *con,
  *
  *
  */
-int webdav_has_lock(server *srv, connection *con, plugin_data *p, buffer *uri) {
+static int webdav_has_lock(server *srv, connection *con, plugin_data *p, buffer *uri) {
 	int has_lock = 1;
 
 #ifdef USE_LOCKS
@@ -2474,6 +2474,7 @@ propmatch_cleanup:
 
 /* this function is called at dlopen() time and inits the callbacks */
 
+int mod_webdav_plugin_init(plugin *p);
 int mod_webdav_plugin_init(plugin *p) {
 	p->version     = LIGHTTPD_VERSION_ID;
 	p->name        = buffer_init_string("webdav");

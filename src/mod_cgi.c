@@ -1369,6 +1369,7 @@ SUBREQUEST_FUNC(mod_cgi_handle_subrequest) {
 }
 
 
+int mod_cgi_plugin_init(plugin *p);
 int mod_cgi_plugin_init(plugin *p) {
 	p->version     = LIGHTTPD_VERSION_ID;
 	p->name        = buffer_init_string("cgi");

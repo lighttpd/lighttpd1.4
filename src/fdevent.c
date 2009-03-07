@@ -92,7 +92,7 @@ int fdevent_reset(fdevents *ev) {
 	return 0;
 }
 
-fdnode *fdnode_init() {
+static fdnode *fdnode_init() {
 	fdnode *fdn;
 
 	fdn = calloc(1, sizeof(*fdn));
@@ -100,7 +100,7 @@ fdnode *fdnode_init() {
 	return fdn;
 }
 
-void fdnode_free(fdnode *fdn) {
+static void fdnode_free(fdnode *fdn) {
 	free(fdn);
 }
 

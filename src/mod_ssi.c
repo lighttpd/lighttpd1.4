@@ -139,7 +139,7 @@ SETDEFAULTS_FUNC(mod_ssi_set_defaults) {
 	return HANDLER_GO_ON;
 }
 
-int ssi_env_add(array *env, const char *key, const char *val) {
+static int ssi_env_add(array *env, const char *key, const char *val) {
 	data_string *ds;
 
 	if (NULL == (ds = (data_string *)array_get_unused_element(env, TYPE_STRING))) {
@@ -1125,6 +1125,7 @@ URIHANDLER_FUNC(mod_ssi_physical_path) {
 
 /* this function is called at dlopen() time and inits the callbacks */
 
+int mod_ssi_plugin_init(plugin *p);
 int mod_ssi_plugin_init(plugin *p) {
 	p->version     = LIGHTTPD_VERSION_ID;
 	p->name        = buffer_init_string("ssi");

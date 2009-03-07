@@ -853,6 +853,7 @@ REQUESTDONE_FUNC(mod_status_account) {
 	return HANDLER_GO_ON;
 }
 
+int mod_status_plugin_init(plugin *p);
 int mod_status_plugin_init(plugin *p) {
 	p->version     = LIGHTTPD_VERSION_ID;
 	p->name        = buffer_init_string("status");

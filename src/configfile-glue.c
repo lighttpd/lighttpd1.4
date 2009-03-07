@@ -181,7 +181,7 @@ int config_insert_values_global(server *srv, array *ca, const config_values_t cv
 	return config_insert_values_internal(srv, ca, cv);
 }
 
-unsigned short sock_addr_get_port(sock_addr *addr) {
+static unsigned short sock_addr_get_port(sock_addr *addr) {
 #ifdef HAVE_IPV6
 	return ntohs(addr->plain.sa_family ? addr->ipv6.sin6_port : addr->ipv4.sin_port);
 #else

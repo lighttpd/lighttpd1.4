@@ -372,7 +372,7 @@ static void handler_ctx_free(handler_ctx *hctx) {
 	free(hctx);
 }
 
-scgi_proc *scgi_process_init() {
+static scgi_proc *scgi_process_init() {
 	scgi_proc *f;
 
 	f = calloc(1, sizeof(*f));
@@ -384,7 +384,7 @@ scgi_proc *scgi_process_init() {
 	return f;
 }
 
-void scgi_process_free(scgi_proc *f) {
+static void scgi_process_free(scgi_proc *f) {
 	if (!f) return;
 
 	scgi_process_free(f->next);
@@ -394,7 +394,7 @@ void scgi_process_free(scgi_proc *f) {
 	free(f);
 }
 
-scgi_extension_host *scgi_host_init() {
+static scgi_extension_host *scgi_host_init() {
 	scgi_extension_host *f;
 
 	f = calloc(1, sizeof(*f));
@@ -409,7 +409,7 @@ scgi_extension_host *scgi_host_init() {
 	return f;
 }
 
-void scgi_host_free(scgi_extension_host *h) {
+static void scgi_host_free(scgi_extension_host *h) {
 	if (!h) return;
 
 	buffer_free(h->host);
@@ -426,7 +426,7 @@ void scgi_host_free(scgi_extension_host *h) {
 
 }
 
-scgi_exts *scgi_extensions_init() {
+static scgi_exts *scgi_extensions_init() {
 	scgi_exts *f;
 
 	f = calloc(1, sizeof(*f));
@@ -434,7 +434,7 @@ scgi_exts *scgi_extensions_init() {
 	return f;
 }
 
-void scgi_extensions_free(scgi_exts *f) {
+static void scgi_extensions_free(scgi_exts *f) {
 	size_t i;
 
 	if (!f) return;
@@ -464,7 +464,7 @@ void scgi_extensions_free(scgi_exts *f) {
 	free(f);
 }
 
-int scgi_extension_insert(scgi_exts *ext, buffer *key, scgi_extension_host *fh) {
+static int scgi_extension_insert(scgi_exts *ext, buffer *key, scgi_extension_host *fh) {
 	scgi_extension *fe;
 	size_t i;
 
@@ -1178,7 +1178,7 @@ static int scgi_set_state(server *srv, handler_ctx *hctx, scgi_connection_state_
 }
 
 
-void scgi_connection_cleanup(server *srv, handler_ctx *hctx) {
+static void scgi_connection_cleanup(server *srv, handler_ctx *hctx) {
 	plugin_data *p;
 	connection  *con;
 
@@ -1915,7 +1915,7 @@ static int scgi_demux_response(server *srv, handler_ctx *hctx) {
 }
 
 
-int scgi_proclist_sort_up(server *srv, scgi_extension_host *host, scgi_proc *proc) {
+static int scgi_proclist_sort_up(server *srv, scgi_extension_host *host, scgi_proc *proc) {
 	scgi_proc *p;
 
 	UNUSED(srv);
@@ -3105,6 +3105,7 @@ TRIGGER_FUNC(mod_scgi_handle_trigger) {
 }
 
 
+int mod_scgi_plugin_init(plugin *p);
 int mod_scgi_plugin_init(plugin *p) {
 	p->version     = LIGHTTPD_VERSION_ID;
 	p->name         = buffer_init_string("scgi");

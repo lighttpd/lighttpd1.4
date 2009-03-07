@@ -4,7 +4,7 @@ NEWS
 ====
 
 - 1.4.23 -
-  *
+  * Added some extra warning options in cmake and fix the resulting warnings (unused/static functions)
 
 - 1.4.22 - 2009-03-07
   * Fix wrong lua type for CACHE_MISS/CACHE_HIT in mod_cml (fixes #533)

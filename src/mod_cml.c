@@ -178,7 +178,7 @@ static int mod_cml_patch_connection(server *srv, connection *con, plugin_data *p
 }
 #undef PATCH
 
-int cache_call_lua(server *srv, connection *con, plugin_data *p, buffer *cml_file) {
+static int cache_call_lua(server *srv, connection *con, plugin_data *p, buffer *cml_file) {
 	buffer *b;
 	char *c;
 
@@ -305,6 +305,7 @@ URIHANDLER_FUNC(mod_cml_is_handled) {
 	}
 }
 
+int mod_cml_plugin_init(plugin *p);
 int mod_cml_plugin_init(plugin *p) {
 	p->version     = LIGHTTPD_VERSION_ID;
 	p->name        = buffer_init_string("cache");

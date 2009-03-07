@@ -318,6 +318,7 @@ static handler_t mod_evhost_uri_handler(server *srv, connection *con, void *p_d)
 	return HANDLER_GO_ON;
 }
 
+int mod_evhost_plugin_init(plugin *p);
 int mod_evhost_plugin_init(plugin *p) {
 	p->version     = LIGHTTPD_VERSION_ID;
 	p->name                    = buffer_init_string("evhost");

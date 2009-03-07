@@ -294,7 +294,7 @@ static const char *last_not_in_array(array *a, plugin_data *p)
 	return NULL;
 }
 
-struct addrinfo *ipstr_to_sockaddr(const char *host)
+static struct addrinfo *ipstr_to_sockaddr(const char *host)
 {
    struct addrinfo hints, *res0;
    int result;
@@ -479,6 +479,7 @@ CONNECTION_FUNC(mod_extforward_restore) {
 
 /* this function is called at dlopen() time and inits the callbacks */
 
+int mod_extforward_plugin_init(plugin *p);
 int mod_extforward_plugin_init(plugin *p) {
 	p->version     = LIGHTTPD_VERSION_ID;
 	p->name        = buffer_init_string("extforward");

@@ -104,7 +104,7 @@ FREE_FUNC(mod_compress_free) {
 }
 
 /* 0 on success, -1 for error */
-int mkdir_recursive(char *dir) {
+static int mkdir_recursive(char *dir) {
 	char *p = dir;
 
 	if (!dir || !dir[0])
@@ -126,7 +126,7 @@ int mkdir_recursive(char *dir) {
 }
 
 /* 0 on success, -1 for error */
-int mkdir_for_file(char *filename) {
+static int mkdir_for_file(char *filename) {
 	char *p = filename;
 
 	if (!filename || !filename[0])
@@ -815,6 +815,7 @@ PHYSICALPATH_FUNC(mod_compress_physical) {
 	return HANDLER_GO_ON;
 }
 
+int mod_compress_plugin_init(plugin *p);
 int mod_compress_plugin_init(plugin *p) {
 	p->version     = LIGHTTPD_VERSION_ID;
 	p->name        = buffer_init_string("compress");

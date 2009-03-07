@@ -73,7 +73,7 @@ typedef struct {
 	plugin_config conf;
 } plugin_data;
 
-excludes_buffer *excludes_buffer_init(void) {
+static excludes_buffer *excludes_buffer_init(void) {
 	excludes_buffer *exb;
 
 	exb = calloc(1, sizeof(*exb));
@@ -81,7 +81,7 @@ excludes_buffer *excludes_buffer_init(void) {
 	return exb;
 }
 
-int excludes_buffer_append(excludes_buffer *exb, buffer *string) {
+static int excludes_buffer_append(excludes_buffer *exb, buffer *string) {
 #ifdef HAVE_PCRE_H
 	size_t i;
 	const char *errptr;
@@ -128,7 +128,7 @@ int excludes_buffer_append(excludes_buffer *exb, buffer *string) {
 #endif
 }
 
-void excludes_buffer_free(excludes_buffer *exb) {
+static void excludes_buffer_free(excludes_buffer *exb) {
 #ifdef HAVE_PCRE_H
 	size_t i;
 
@@ -904,6 +904,7 @@ URIHANDLER_FUNC(mod_dirlisting_subrequest) {
 
 /* this function is called at dlopen() time and inits the callbacks */
 
+int mod_dirlisting_plugin_init(plugin *p);
 int mod_dirlisting_plugin_init(plugin *p) {
 	p->version     = LIGHTTPD_VERSION_ID;
 	p->name        = buffer_init_string("dirlisting");

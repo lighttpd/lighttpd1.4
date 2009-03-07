@@ -51,7 +51,7 @@ typedef struct {
  */
 
 /* init the plugin data */
-connection_map *connection_map_init() {
+static connection_map *connection_map_init() {
 	connection_map *cm;
 
 	cm = calloc(1, sizeof(*cm));
@@ -59,7 +59,7 @@ connection_map *connection_map_init() {
 	return cm;
 }
 
-void connection_map_free(connection_map *cm) {
+static void connection_map_free(connection_map *cm) {
 	size_t i;
 	for (i = 0; i < cm->size; i++) {
 		connection_map_entry *cme = cm->ptr[i];
@@ -75,7 +75,7 @@ void connection_map_free(connection_map *cm) {
 	free(cm);
 }
 
-int connection_map_insert(connection_map *cm, connection *con, buffer *con_id) {
+static int connection_map_insert(connection_map *cm, connection *con, buffer *con_id) {
 	connection_map_entry *cme;
 	size_t i;
 
@@ -108,7 +108,7 @@ int connection_map_insert(connection_map *cm, connection *con, buffer *con_id) {
 	return 0;
 }
 
-connection *connection_map_get_connection(connection_map *cm, buffer *con_id) {
+static connection *connection_map_get_connection(connection_map *cm, buffer *con_id) {
 	size_t i;
 
 	for (i = 0; i < cm->used; i++) {
@@ -123,7 +123,7 @@ connection *connection_map_get_connection(connection_map *cm, buffer *con_id) {
 	return NULL;
 }
 
-int connection_map_remove_connection(connection_map *cm, connection *con) {
+static int connection_map_remove_connection(connection_map *cm, connection *con) {
 	size_t i;
 
 	for (i = 0; i < cm->used; i++) {
@@ -418,6 +418,7 @@ REQUESTDONE_FUNC(mod_uploadprogress_request_done) {
 
 /* this function is called at dlopen() time and inits the callbacks */
 
+int mod_uploadprogress_plugin_init(plugin *p);
 int mod_uploadprogress_plugin_init(plugin *p) {
 	p->version     = LIGHTTPD_VERSION_ID;
 	p->name        = buffer_init_string("uploadprogress");
