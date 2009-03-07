@@ -211,7 +211,7 @@ int f_memcache_exists(lua_State *L) {
 	}
 
 	if (NULL == (r = mc_aget(mc,
-				 lua_tostring(L, 1), lua_strlen(L, 1)))) {
+				 (char*) lua_tostring(L, 1), lua_strlen(L, 1)))) {
 
 		lua_pushboolean(L, 0);
 		return 1;
@@ -248,7 +248,7 @@ int f_memcache_get_string(lua_State *L) {
 	}
 
 	if (NULL == (r = mc_aget(mc,
-				 lua_tostring(L, 1), lua_strlen(L, 1)))) {
+				 (char*) lua_tostring(L, 1), lua_strlen(L, 1)))) {
 		lua_pushnil(L);
 		return 1;
 	}
@@ -285,7 +285,7 @@ int f_memcache_get_long(lua_State *L) {
 	}
 
 	if (NULL == (r = mc_aget(mc,
-				 lua_tostring(L, 1), lua_strlen(L, 1)))) {
+				 (char*) lua_tostring(L, 1), lua_strlen(L, 1)))) {
 		lua_pushnil(L);
 		return 1;
 	}
