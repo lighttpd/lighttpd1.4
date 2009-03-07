@@ -63,7 +63,7 @@ static void handler_ctx_free(handler_ctx *hctx) {
 	free(hctx);
 }
 
-rewrite_rule_buffer *rewrite_rule_buffer_init(void) {
+static rewrite_rule_buffer *rewrite_rule_buffer_init(void) {
 	rewrite_rule_buffer *kvb;
 
 	kvb = calloc(1, sizeof(*kvb));
@@ -71,7 +71,7 @@ rewrite_rule_buffer *rewrite_rule_buffer_init(void) {
 	return kvb;
 }
 
-int rewrite_rule_buffer_append(rewrite_rule_buffer *kvb, buffer *key, buffer *value, int once) {
+static int rewrite_rule_buffer_append(rewrite_rule_buffer *kvb, buffer *key, buffer *value, int once) {
 #ifdef HAVE_PCRE_H
 	size_t i;
 	const char *errptr;
@@ -121,7 +121,7 @@ int rewrite_rule_buffer_append(rewrite_rule_buffer *kvb, buffer *key, buffer *va
 #endif
 }
 
-void rewrite_rule_buffer_free(rewrite_rule_buffer *kvb) {
+static void rewrite_rule_buffer_free(rewrite_rule_buffer *kvb) {
 #ifdef HAVE_PCRE_H
 	size_t i;
 
@@ -444,6 +444,7 @@ URIHANDLER_FUNC(mod_rewrite_uri_handler) {
 	return HANDLER_GO_ON;
 }
 
+int mod_rewrite_plugin_init(plugin *p);
 int mod_rewrite_plugin_init(plugin *p) {
 	p->version     = LIGHTTPD_VERSION_ID;
 	p->name        = buffer_init_string("rewrite");

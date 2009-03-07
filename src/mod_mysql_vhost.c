@@ -422,6 +422,7 @@ ERR500:	if (result) mysql_free_result(result);
 }
 
 /* this function is called at dlopen() time and inits the callbacks */
+int mod_mysql_vhost_plugin_init(plugin *p);
 int mod_mysql_vhost_plugin_init(plugin *p) {
 	p->version     = LIGHTTPD_VERSION_ID;
 	p->name        			= buffer_init_string("mysql_vhost");
@@ -437,6 +438,7 @@ int mod_mysql_vhost_plugin_init(plugin *p) {
 }
 #else
 /* we don't have mysql support, this plugin does nothing */
+int mod_mysql_vhost_plugin_init(plugin *p);
 int mod_mysql_vhost_plugin_init(plugin *p) {
 	p->version     = LIGHTTPD_VERSION_ID;
 	p->name        			= buffer_init_string("mysql_vhost");

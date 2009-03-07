@@ -614,6 +614,7 @@ handler_t auth_ldap_init(server *srv, mod_auth_plugin_config *s) {
 #endif
 }
 
+int mod_auth_plugin_init(plugin *p);
 int mod_auth_plugin_init(plugin *p) {
 	p->version     = LIGHTTPD_VERSION_ID;
 	p->name        = buffer_init_string("auth");

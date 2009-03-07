@@ -9,7 +9,7 @@
 #include <lualib.h>
 #include <lauxlib.h>
 
-script *script_init() {
+static script *script_init() {
 	script *sc;
 
 	sc = calloc(1, sizeof(*sc));
@@ -19,7 +19,7 @@ script *script_init() {
 	return sc;
 }
 
-void script_free(script *sc) {
+static void script_free(script *sc) {
 	if (!sc) return;
 
 	lua_pop(sc->L, 1); /* the function copy */

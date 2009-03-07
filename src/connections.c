@@ -858,7 +858,7 @@ int connection_reset(server *srv, connection *con) {
  *
  * we get called by the state-engine and by the fdevent-handler
  */
-int connection_handle_read_state(server *srv, connection *con)  {
+static int connection_handle_read_state(server *srv, connection *con)  {
 	connection_state_t ostate = con->state;
 	chunk *c, *last_chunk;
 	off_t last_offset;
@@ -1156,7 +1156,7 @@ int connection_handle_read_state(server *srv, connection *con)  {
 	return 0;
 }
 
-handler_t connection_handle_fdevent(void *s, void *context, int revents) {
+static handler_t connection_handle_fdevent(void *s, void *context, int revents) {
 	server     *srv = (server *)s;
 	connection *con = context;
 

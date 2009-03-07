@@ -37,7 +37,7 @@ typedef int socklen_t;
 #endif
 
 #ifdef HAVE_SYS_UN_H
-int fcgi_spawn_connection(char *appPath, char **appArgv, char *addr, unsigned short port, const char *unixsocket, int fork_count, int child_count, int pid_fd, int nofork) {
+static int fcgi_spawn_connection(char *appPath, char **appArgv, char *addr, unsigned short port, const char *unixsocket, int fork_count, int child_count, int pid_fd, int nofork) {
 	int fcgi_fd;
 	int socket_type, status, rc = 0;
 	struct timeval tv = { 0, 100 * 1000 };
@@ -259,14 +259,14 @@ int fcgi_spawn_connection(char *appPath, char **appArgv, char *addr, unsigned sh
 }
 
 
-void show_version () {
+static void show_version () {
 	char *b = "spawn-fcgi" "-" PACKAGE_VERSION \
 " - spawns fastcgi processes\n"
 ;
 	write(1, b, strlen(b));
 }
 
-void show_help () {
+static void show_help () {
 	char *b = \
 "Usage: spawn-fcgi [options] -- <fcgiapp> [fcgi app arguments]\n" \
 "\n" \

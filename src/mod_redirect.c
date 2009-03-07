@@ -271,6 +271,7 @@ static handler_t mod_redirect_uri_handler(server *srv, connection *con, void *p_
 }
 
 
+int mod_redirect_plugin_init(plugin *p);
 int mod_redirect_plugin_init(plugin *p) {
 	p->version     = LIGHTTPD_VERSION_ID;
 	p->name        = buffer_init_string("redirect");

@@ -206,6 +206,7 @@ URIHANDLER_FUNC(mod_indexfile_subrequest) {
 
 /* this function is called at dlopen() time and inits the callbacks */
 
+int mod_indexfile_plugin_init(plugin *p);
 int mod_indexfile_plugin_init(plugin *p) {
 	p->version     = LIGHTTPD_VERSION_ID;
 	p->name        = buffer_init_string("indexfile");

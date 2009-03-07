@@ -389,7 +389,7 @@ typedef struct {
 /* ok, we need a prototype */
 static handler_t fcgi_handle_fdevent(void *s, void *ctx, int revents);
 
-int fastcgi_status_copy_procname(buffer *b, fcgi_extension_host *host, fcgi_proc *proc) {
+static int fastcgi_status_copy_procname(buffer *b, fcgi_extension_host *host, fcgi_proc *proc) {
 	buffer_copy_string_len(b, CONST_STR_LEN("fastcgi.backend."));
 	buffer_append_string_buffer(b, host->id);
 	if (proc) {
@@ -400,7 +400,7 @@ int fastcgi_status_copy_procname(buffer *b, fcgi_extension_host *host, fcgi_proc
 	return 0;
 }
 
-int fastcgi_status_init(server *srv, buffer *b, fcgi_extension_host *host, fcgi_proc *proc) {
+static int fastcgi_status_init(server *srv, buffer *b, fcgi_extension_host *host, fcgi_proc *proc) {
 #define CLEAN(x) \
 	fastcgi_status_copy_procname(b, host, proc); \
 	buffer_append_string_len(b, CONST_STR_LEN(x)); \
@@ -465,7 +465,7 @@ static void handler_ctx_free(handler_ctx *hctx) {
 	free(hctx);
 }
 
-fcgi_proc *fastcgi_process_init() {
+static fcgi_proc *fastcgi_process_init() {
 	fcgi_proc *f;
 
 	f = calloc(1, sizeof(*f));
@@ -478,7 +478,7 @@ fcgi_proc *fastcgi_process_init() {
 	return f;
 }
 
-void fastcgi_process_free(fcgi_proc *f) {
+static void fastcgi_process_free(fcgi_proc *f) {
 	if (!f) return;
 
 	fastcgi_process_free(f->next);
@@ -489,7 +489,7 @@ void fastcgi_process_free(fcgi_proc *f) {
 	free(f);
 }
 
-fcgi_extension_host *fastcgi_host_init() {
+static fcgi_extension_host *fastcgi_host_init() {
 	fcgi_extension_host *f;
 
 	f = calloc(1, sizeof(*f));
@@ -506,7 +506,7 @@ fcgi_extension_host *fastcgi_host_init() {
 	return f;
 }
 
-void fastcgi_host_free(fcgi_extension_host *h) {
+static void fastcgi_host_free(fcgi_extension_host *h) {
 	if (!h) return;
 
 	buffer_free(h->id);
@@ -525,7 +525,7 @@ void fastcgi_host_free(fcgi_extension_host *h) {
 
 }
 
-fcgi_exts *fastcgi_extensions_init() {
+static fcgi_exts *fastcgi_extensions_init() {
 	fcgi_exts *f;
 
 	f = calloc(1, sizeof(*f));
@@ -533,7 +533,7 @@ fcgi_exts *fastcgi_extensions_init() {
 	return f;
 }
 
-void fastcgi_extensions_free(fcgi_exts *f) {
+static void fastcgi_extensions_free(fcgi_exts *f) {
 	size_t i;
 
 	if (!f) return;
@@ -563,7 +563,7 @@ void fastcgi_extensions_free(fcgi_exts *f) {
 	free(f);
 }
 
-int fastcgi_extension_insert(fcgi_exts *ext, buffer *key, fcgi_extension_host *fh) {
+static int fastcgi_extension_insert(fcgi_exts *ext, buffer *key, fcgi_extension_host *fh) {
 	fcgi_extension *fe;
 	size_t i;
 
@@ -1479,7 +1479,7 @@ static int fcgi_requestid_del(server *srv, plugin_data *p, size_t request_id) {
 
 	return 0;
 }
-void fcgi_connection_close(server *srv, handler_ctx *hctx) {
+static void fcgi_connection_close(server *srv, handler_ctx *hctx) {
 	plugin_data *p;
 	connection  *con;
 
@@ -3916,6 +3916,7 @@ TRIGGER_FUNC(mod_fastcgi_handle_trigger) {
 }
 
 
+int mod_fastcgi_plugin_init(plugin *p);
 int mod_fastcgi_plugin_init(plugin *p) {
 	p->version      = LIGHTTPD_VERSION_ID;
 	p->name         = buffer_init_string("fastcgi");

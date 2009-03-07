@@ -175,6 +175,7 @@ URIHANDLER_FUNC(mod_access_uri_handler) {
 }
 
 
+int mod_access_plugin_init(plugin *p);
 int mod_access_plugin_init(plugin *p) {
 	p->version     = LIGHTTPD_VERSION_ID;
 	p->name        = buffer_init_string("access");

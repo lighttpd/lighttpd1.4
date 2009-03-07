@@ -332,7 +332,7 @@ SETDEFAULTS_FUNC(mod_proxy_set_defaults) {
 	return HANDLER_GO_ON;
 }
 
-void proxy_connection_close(server *srv, handler_ctx *hctx) {
+static void proxy_connection_close(server *srv, handler_ctx *hctx) {
 	plugin_data *p;
 	connection *con;
 
@@ -395,7 +395,7 @@ static int proxy_establish_connection(server *srv, handler_ctx *hctx) {
 	return 0;
 }
 
-void proxy_set_header(connection *con, const char *key, const char *value) {
+static void proxy_set_header(connection *con, const char *key, const char *value) {
     data_string *ds_dst;
 
     if (NULL == (ds_dst = (data_string *)array_get_unused_element(con->request.headers, TYPE_STRING))) {
@@ -407,7 +407,7 @@ void proxy_set_header(connection *con, const char *key, const char *value) {
     array_insert_unique(con->request.headers, (data_unset *)ds_dst);
 }
 
-void proxy_append_header(connection *con, const char *key, const char *value) {
+static void proxy_append_header(connection *con, const char *key, const char *value) {
     data_string *ds_dst;
 
     if (NULL == (ds_dst = (data_string *)array_get_unused_element(con->request.headers, TYPE_STRING))) {
@@ -1321,6 +1321,7 @@ TRIGGER_FUNC(mod_proxy_trigger) {
 }
 
 
+int mod_proxy_plugin_init(plugin *p);
 int mod_proxy_plugin_init(plugin *p) {
 	p->version      = LIGHTTPD_VERSION_ID;
 	p->name         = buffer_init_string("proxy");
