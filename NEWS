@@ -3,7 +3,10 @@
 NEWS
 ====
 
-- 1.4.22 -
+- 1.4.23 -
+  *
+
+- 1.4.22 - 2009-03-07
   * Fix wrong lua type for CACHE_MISS/CACHE_HIT in mod_cml (fixes #533)
   * Fix default vhost in mod_simple_vhost (fixes #1905)
   * Handle EINTR in mod_rrdtool (fixes #604)
