@@ -1160,8 +1160,8 @@ int webdav_has_lock(server *srv, connection *con, plugin_data *p, buffer *uri) {
 	int has_lock = 1;
 
 #ifdef USE_LOCKS
-	UNUSED(srv);
 	data_string *ds;
+	UNUSED(srv);
 
 	/**
 	 * This implementation is more fake than real

@@ -1,4 +1,5 @@
 #include "base.h"
+#include "connections.h"
 
 const char *connection_get_state(connection_state_t state) {
 	switch (state) {

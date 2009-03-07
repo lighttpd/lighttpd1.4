@@ -12,6 +12,7 @@ NEWS
   * Fix segfault in mod_scgi (fixes #1911)
   * Treat EPIPE as connection-closed error in network_freebsd_sendfile.c (another fix from #1913)
   * Fix useless redirection of stderr in mod_rrdtool, as it gets redirected to /dev/null later. (fixes #1922)
+  * Fix some problems with more strict compilers (#1923)
 
 - 1.4.21 - 2009-02-16
 

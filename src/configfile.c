@@ -1006,13 +1006,11 @@ int config_read(server *srv, const char *fn) {
 	context_init(srv, &context);
 	context.all_configs = srv->config_context;
 
-	pos = strrchr(fn,
 #ifdef __WIN32
-			'\\'
+	pos = strrchr(fn, '\\');
 #else
-			'/'
+	pos = strrchr(fn, '/');
 #endif
-			);
 	if (pos) {
 		buffer_copy_string_len(context.basedir, fn, pos - fn + 1);
 		fn = pos + 1;
