@@ -180,12 +180,14 @@ static char *yyTracePrompt = 0;
 ** Outputs:
 ** None.
 */
+#if 0
 void ParseTrace(FILE *TraceFILE, char *zTracePrompt){
   yyTraceFILE = TraceFILE;
   yyTracePrompt = zTracePrompt;
   if( yyTraceFILE==0 ) yyTracePrompt = 0;
   else if( yyTracePrompt==0 ) yyTraceFILE = 0;
 }
+#endif
 #endif /* NDEBUG */
 
 #ifndef NDEBUG
@@ -208,6 +210,7 @@ static const char *yyRuleName[] = {
 ** This function returns the symbolic name associated with a token
 ** value.
 */
+#if 0
 const char *ParseTokenName(int tokenType){
 #ifndef NDEBUG
   if( tokenType>0 && (size_t)tokenType<(sizeof(yyTokenName)/sizeof(yyTokenName[0])) ){
@@ -219,6 +222,7 @@ const char *ParseTokenName(int tokenType){
   return "";
 #endif
 }
+#endif
 
 /*
 ** This function allocates a new parser.
@@ -511,9 +515,9 @@ static void yy_syntax_error(
   int yymajor,                   /* The major type of the error token */
   YYMINORTYPE yyminor            /* The minor type of the error token */
 ){
+  ParseARG_FETCH;
   UNUSED(yymajor);
   UNUSED(yyminor);
-  ParseARG_FETCH;
 #define TOKEN (yyminor.yy0)
 %%
   ParseARG_STORE; /* Suppress warning about unused %extra_argument variable */

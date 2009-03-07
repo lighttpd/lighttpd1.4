@@ -144,7 +144,7 @@ URIHANDLER_FUNC(mod_evasive_uri_handler) {
 		case AF_INET6:
 #endif
 			break;
-		default: // Address family not supported
+		default: /* Address family not supported */
 			return HANDLER_GO_ON;
 	};
 
