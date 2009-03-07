@@ -75,7 +75,10 @@ static volatile siginfo_t last_sigterm_info;
 static volatile siginfo_t last_sighup_info;
 
 static void sigaction_handler(int sig, siginfo_t *si, void *context) {
+	static siginfo_t empty_siginfo;
 	UNUSED(context);
+
+	if (!si) si = &empty_siginfo;
 
 	switch (sig) {
 	case SIGTERM:
