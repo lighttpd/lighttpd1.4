@@ -239,10 +239,15 @@ static int mod_rrdtool_create_rrd(server *srv, plugin_data *p, plugin_config *s)
 					"not a regular file:", s->path_rrd);
 			return HANDLER_ERROR;
 		}
-	} else {
+	}
+
+	/* still create DB if it's empty file */
+	if (st.st_size > 0) {
+		return HANDLER_GO_ON;
+	}
+
 		int r ;
 		/* create a new one */
-
 		buffer_copy_string_len(p->cmd, CONST_STR_LEN("create "));
 		buffer_append_string_buffer(p->cmd, s->path_rrd);
 		buffer_append_string_len(p->cmd, CONST_STR_LEN(
@@ -287,7 +292,6 @@ static int mod_rrdtool_create_rrd(server *srv, plugin_data *p, plugin_config *s)
 
 			return HANDLER_ERROR;
 		}
-	}
 
 	return HANDLER_GO_ON;
 }
