@@ -40,7 +40,13 @@ int main () {
 			printf("Status: 500 Internal Foo\r\n\r\n");
 		}
 
-		printf("test123");
+		if (0 == strcmp(p, "path_info")) {
+			printf("%s", getenv("PATH_INFO"));
+		} else if (0 == strcmp(p, "script_name")) {
+			printf("%s", getenv("SCRIPT_NAME"));
+		} else {
+			printf("test123");
+		}
 	}
 
 	return 0;

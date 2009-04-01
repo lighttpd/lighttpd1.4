@@ -7,7 +7,7 @@ BEGIN {
 }
 
 use strict;
-use Test::More tests => 50;
+use Test::More tests => 52;
 use LightyTest;
 
 my $tf = LightyTest->new();
@@ -166,7 +166,7 @@ EOF
 	$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200, 'HTTP-Content' => '/foo/bar' } ];
 	ok($tf->handle_http($t) == 0, 'PATH_INFO, check-local off');
 
-	
+
 	ok($tf->stop_proc == 0, "Stopping lighttpd");
 
 
@@ -282,7 +282,7 @@ EOF
 
 
 SKIP: {
-	skip "no fcgi-responder found", 9 unless -x $tf->{BASEDIR}."/tests/fcgi-responder" || -x $tf->{BASEDIR}."/tests/fcgi-responder.exe"; 
+	skip "no fcgi-responder found", 11 unless -x $tf->{BASEDIR}."/tests/fcgi-responder" || -x $tf->{BASEDIR}."/tests/fcgi-responder.exe";
 	
 	$tf->{CONFIGFILE} = 'fastcgi-responder.conf';
 	ok($tf->start_proc == 0, "Starting lighttpd with $tf->{CONFIGFILE}") or die();
@@ -317,6 +317,23 @@ EOF
  );
 	$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200, 'HTTP-Content' => 'test123' } ];
 	ok($tf->handle_http($t) == 0, 'line-ending \r\n + \r\n');
+
+	$t->{REQUEST}  = ( <<EOF
+GET /abc/def/ghi?path_info HTTP/1.0
+Host: wsgi.example.org
+EOF
+ );
+	$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200, 'HTTP-Content' => '/abc/def/ghi' } ];
+	ok($tf->handle_http($t) == 0, 'PATH_INFO (wsgi)');
+
+	$t->{REQUEST}  = ( <<EOF
+GET /abc/def/ghi?script_name HTTP/1.0
+Host: wsgi.example.org
+EOF
+ );
+	$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200, 'HTTP-Content' => '' } ];
+	ok($tf->handle_http($t) == 0, 'SCRIPT_NAME (wsgi)');
+
 
 	$t->{REQUEST}  = ( <<EOF
 GET /index.fcgi?die-at-end HTTP/1.0

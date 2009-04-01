@@ -3639,7 +3639,11 @@ static handler_t fcgi_check_extension(server *srv, connection *con, void *p_d, i
 				*/
 
 				/* the rewrite is only done for /prefix/? matches */
-				if (extension->key->ptr[0] == '/' &&
+				if (host->fix_root_path_name && extension->key->ptr[0] == '/' && extension->key->ptr[1] == '\0') {
+					buffer_copy_string(con->request.pathinfo, con->uri.path->ptr);
+					con->uri.path->used = 1;
+					con->uri.path->ptr[con->uri.path->used - 1] = '\0';
+				} else if (extension->key->ptr[0] == '/' &&
 					con->uri.path->used > extension->key->used &&
 					NULL != (pathinfo = strchr(con->uri.path->ptr + extension->key->used - 1, '/'))) {
 					/* rewrite uri.path and pathinfo */
@@ -3647,10 +3651,6 @@ static handler_t fcgi_check_extension(server *srv, connection *con, void *p_d, i
 					buffer_copy_string(con->request.pathinfo, pathinfo);
 
 					con->uri.path->used -= con->request.pathinfo->used - 1;
-					con->uri.path->ptr[con->uri.path->used - 1] = '\0';
-				} else if (host->fix_root_path_name && extension->key->ptr[0] == '/' && extension->key->ptr[1] == '\0') {
-					buffer_copy_string(con->request.pathinfo, con->uri.path->ptr);
-					con->uri.path->used = 1;
 					con->uri.path->ptr[con->uri.path->used - 1] = '\0';
 				}
 			}
