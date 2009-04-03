@@ -1,4 +1,3 @@
-dist_man1_MANS=spawn-fcgi.1
 dist_man8_MANS=lighttpd.8
 
 DOCS=accesslog.txt \

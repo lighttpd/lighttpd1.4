@@ -433,9 +433,6 @@ LEMON_PARSER(mod_ssi_exprparser.y)
 
 SET(L_INSTALL_TARGETS)
 
-ADD_EXECUTABLE(spawn-fcgi spawn-fcgi.c)
-SET(L_INSTALL_TARGETS ${L_INSTALL_TARGETS} spawn-fcgi)
-
 ADD_EXECUTABLE(lighttpd-angel lighttpd-angel.c)
 SET(L_INSTALL_TARGETS ${L_INSTALL_TARGETS} lighttpd-angel)
 ADD_TARGET_PROPERTIES(lighttpd-angel COMPILE_FLAGS "-DSBIN_DIR=\\\\\"${CMAKE_INSTALL_PREFIX}/${SBINDIR}\\\\\"")

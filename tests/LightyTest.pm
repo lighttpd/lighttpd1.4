@@ -6,7 +6,8 @@ use IO::Socket;
 use Test::More;
 use Socket;
 use Cwd 'abs_path';
-use POSIX ":sys_wait_h";
+use POSIX qw(:sys_wait_h dup2);
+use Errno qw(EADDRINUSE);
 
 sub mtime {
 	my $file = shift;
@@ -344,8 +345,14 @@ sub spawnfcgi {
 		return -1;
 	}
 	if ($child == 0) {
-		my $cmd = $self->{BINDIR}.'/spawn-fcgi -n -p '.$port.' -f "'.$binary.'"';
-		exec $cmd or die($?);
+		my $iaddr   = inet_aton('localhost') || die "no host: localhost";
+		my $proto   = getprotobyname('tcp');
+		socket(SOCK, PF_INET, SOCK_STREAM, $proto) || die "socket: $!";
+		setsockopt(SOCK, SOL_SOCKET, SO_REUSEADDR, pack("l", 1)) || die "setsockopt: $!";
+		bind(SOCK, sockaddr_in($port, $iaddr)) || die "bind: $!";
+		listen(SOCK, 1024) || die "listen: $!";
+		dup2(fileno(SOCK), 0) || die "dup2: $!";
+		exec $binary or die($?);
 	} else {
 		if (0 != $self->wait_for_port_with_proc($port, $child)) {
 			diag(sprintf('The process %i is not up (port %i, %s)', $child, $port, $binary));
