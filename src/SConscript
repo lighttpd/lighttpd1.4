@@ -153,8 +153,6 @@ else:
 instbin = env.Program(bin_targets, src, LINKFLAGS = bin_linkflags, LIBS= [ env['LIBS'], common_lib, env['LIBDL'] ])
 env.Depends(instbin, configparser)
 
-spawn_fcgi = env.Program("spawn-fcgi", "spawn-fcgi.c")
-
 if env['COMMON_LIB'] == 'bin':
 	common_lib = instbin[1]
 
@@ -167,9 +165,6 @@ for module in modules.keys():
 	instlib += env.SharedLibrary(module, modules[module]['src'], LIBS= [ libs ])
 
 inst = []
-
-Default(spawn_fcgi)
-inst += env.Install('${bindir}', spawn_fcgi)
 
 if env['build_dynamic']:
 	Default(instbin[0], instlib)

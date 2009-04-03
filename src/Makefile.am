@@ -2,7 +2,6 @@ AM_CFLAGS = $(FAM_CFLAGS)
 
 noinst_PROGRAMS=proc_open lemon # simple-fcgi #graphic evalo bench ajp ssl error_test adserver gen-license
 sbin_PROGRAMS=lighttpd lighttpd-angel
-bin_PROGRAMS=spawn-fcgi
 LEMON=$(top_builddir)/src/lemon$(EXEEXT)
 
 lemon_SOURCES=lemon.c
@@ -57,8 +56,6 @@ common_src=buffer.c log.c \
 
 src = server.c response.c connections.c network.c \
       configfile.c configparser.c request.c proc_open.c
-
-spawn_fcgi_SOURCES=spawn-fcgi.c
 
 lib_LTLIBRARIES =
 
