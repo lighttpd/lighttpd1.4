@@ -1056,10 +1056,7 @@ static int fcgi_spawn_connection(server *srv,
 							"child exited with status",
 							WEXITSTATUS(status), host->bin_path);
 					log_error_write(srv, __FILE__, __LINE__, "s",
-							"If you're trying to run PHP as a FastCGI backend, make sure you're using the FastCGI-enabled version.\n"
-							"You can find out if it is the right one by executing 'php -v' and it should display '(cgi-fcgi)' "
-							"in the output, NOT '(cgi)' NOR '(cli)'.\n"
-							"For more information, check http://trac.lighttpd.net/trac/wiki/Docs%3AModFastCGI#preparing-php-as-a-fastcgi-program"
+							"If you're trying to run your app as a FastCGI backend, make sure you're using the FastCGI-enabled version.\n"
 							"If this is PHP on Gentoo, add 'fastcgi' to the USE flags.");
 				} else if (WIFSIGNALED(status)) {
 					log_error_write(srv, __FILE__, __LINE__, "sd",
