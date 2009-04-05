@@ -10,6 +10,7 @@ NEWS
   * Fix workaround for incorrect path info/scriptname if fastcgi prefix is "/" (fixes #729)
   * Finally removed spawn-fcgi
   * Allow xattr to overwrite mime type (fixes #1929)
+  * Remove link from errormsg about fastcgi apps (fixes #1942)
 
 - 1.4.22 - 2009-03-07
   * Fix wrong lua type for CACHE_MISS/CACHE_HIT in mod_cml (fixes #533)
