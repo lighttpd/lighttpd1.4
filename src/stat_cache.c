@@ -595,29 +595,31 @@ handler_t stat_cache_get_entry(server *srv, connection *con, buffer *name, stat_
 	if (S_ISREG(st.st_mode)) {
 		/* determine mimetype */
 		buffer_reset(sce->content_type);
-
-		for (k = 0; k < con->conf.mimetypes->used; k++) {
-			data_string *ds = (data_string *)con->conf.mimetypes->data[k];
-			buffer *type = ds->key;
-
-			if (type->used == 0) continue;
-
-			/* check if the right side is the same */
-			if (type->used > name->used) continue;
-
-			if (0 == strncasecmp(name->ptr + name->used - type->used, type->ptr, type->used - 1)) {
-				buffer_copy_string_buffer(sce->content_type, ds->value);
-				break;
-			}
-		}
- 		etag_create(sce->etag, &(sce->st), con->etag_flags);
 #ifdef HAVE_XATTR
 		if (con->conf.use_xattr && buffer_is_empty(sce->content_type)) {
 			stat_cache_attr_get(sce->content_type, name->ptr);
 		}
 #endif
+		/* xattr did not set a content-type. ask the config */
+		if (buffer_is_empty(sce->content_type)) {
+			for (k = 0; k < con->conf.mimetypes->used; k++) {
+				data_string *ds = (data_string *)con->conf.mimetypes->data[k];
+				buffer *type = ds->key;
+
+				if (type->used == 0) continue;
+
+				/* check if the right side is the same */
+				if (type->used > name->used) continue;
+
+				if (0 == strncasecmp(name->ptr + name->used - type->used, type->ptr, type->used - 1)) {
+					buffer_copy_string_buffer(sce->content_type, ds->value);
+					break;
+				}
+			}
+		}
+		etag_create(sce->etag, &(sce->st), con->etag_flags);
 	} else if (S_ISDIR(st.st_mode)) {
- 		etag_create(sce->etag, &(sce->st), con->etag_flags);
+		etag_create(sce->etag, &(sce->st), con->etag_flags);
 	}
 
 #ifdef HAVE_FAM_H
