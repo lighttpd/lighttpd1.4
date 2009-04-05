@@ -230,6 +230,7 @@ static ssize_t safe_read(int fd, void *buf, size_t count) {
 
 static int mod_rrdtool_create_rrd(server *srv, plugin_data *p, plugin_config *s) {
 	struct stat st;
+	int r;
 
 	/* check if DB already exists */
 	if (0 == stat(s->path_rrd->ptr, &st)) {
@@ -246,7 +247,6 @@ static int mod_rrdtool_create_rrd(server *srv, plugin_data *p, plugin_config *s)
 		return HANDLER_GO_ON;
 	}
 
-	int r;
 	/* create a new one */
 	buffer_copy_string_len(p->cmd, CONST_STR_LEN("create "));
 	buffer_append_string_buffer(p->cmd, s->path_rrd);
