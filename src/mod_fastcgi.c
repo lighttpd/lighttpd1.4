@@ -1885,7 +1885,11 @@ static int fcgi_create_env(server *srv, handler_ctx *hctx, size_t request_id) {
 	FCGI_ENV_ADD_CHECK(fcgi_env_add(p->fcgi_env, CONST_STR_LEN("SERVER_SOFTWARE"), CONST_STR_LEN(PACKAGE_NAME"/"PACKAGE_VERSION)),con)
 
 	if (con->server_name->used) {
-		FCGI_ENV_ADD_CHECK(fcgi_env_add(p->fcgi_env, CONST_STR_LEN("SERVER_NAME"), CONST_BUF_LEN(con->server_name)),con)
+		size_t len = con->server_name->used - 1;
+		char *colon = strchr(con->server_name->ptr, ':');
+		if (colon) len = colon - con->server_name->ptr;
+
+		FCGI_ENV_ADD_CHECK(fcgi_env_add(p->fcgi_env, CONST_STR_LEN("SERVER_NAME"), con->server_name->ptr, len),con)
 	} else {
 #ifdef HAVE_IPV6
 		s = inet_ntop(srv_sock->addr.plain.sa_family,
