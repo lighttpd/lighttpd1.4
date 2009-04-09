@@ -44,7 +44,7 @@ int etag_mutate(buffer *mut, buffer *etag) {
 	size_t i;
 	uint32_t h;
 
-	for (h=0, i=0; i < etag->used; ++i) h = (h<<5)^(h>>27)^(etag->ptr[i]);
+	for (h=0, i=0; i < etag->used-1; ++i) h = (h<<5)^(h>>27)^(etag->ptr[i]);
 
 	buffer_reset(mut);
 	buffer_copy_string_len(mut, CONST_STR_LEN("\""));
