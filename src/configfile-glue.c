@@ -49,7 +49,7 @@ int config_insert_values_internal(server *srv, array *ca, const config_values_t 
 						buffer_copy_string_buffer(ds->value, ((data_string *)(da->value->data[j]))->value);
 						if (!da->is_index_key) {
 							/* the id's were generated automaticly, as we copy now we might have to renumber them
-							 * this is used to prepend server.modules by mod_indexfiles as it has to be loaded
+							 * this is used to prepend server.modules by mod_indexfile as it has to be loaded
 							 * before mod_fastcgi and friends */
 							buffer_copy_string_buffer(ds->key, ((data_string *)(da->value->data[j]))->key);
 						}
