@@ -17,6 +17,7 @@ NEWS
   * Rename configure.in to configure.ac, with small cleanups (fixes #1932)
   * Add proper SUID bit detection (fixes #416)
   * Check for regular file in mod_cgi, so we don't try to start directories
+  * Include mmap.h from chunk.h to fix some problems with #define mmap mmap64 (fixes #1923)
 
 - 1.4.22 - 2009-03-07
   * Fix wrong lua type for CACHE_MISS/CACHE_HIT in mod_cml (fixes #533)
