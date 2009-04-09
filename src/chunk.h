@@ -3,6 +3,7 @@
 
 #include "buffer.h"
 #include "array.h"
+#include "sys-mmap.h"
 
 typedef struct chunk {
 	enum { UNUSED_CHUNK, MEM_CHUNK, FILE_CHUNK } type;
