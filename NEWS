@@ -16,6 +16,7 @@ NEWS
   * Fix mod_proxy RoundRobin (off by one problem if only one backend is up)
   * Rename configure.in to configure.ac, with small cleanups (fixes #1932)
   * Add proper SUID bit detection (fixes #416)
+  * Check for regular file in mod_cgi, so we don't try to start directories
 
 - 1.4.22 - 2009-03-07
   * Fix wrong lua type for CACHE_MISS/CACHE_HIT in mod_cml (fixes #533)
