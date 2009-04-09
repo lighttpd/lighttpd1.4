@@ -15,6 +15,7 @@ NEWS
   * Remove the optional port info from SERVER_NAME (thx Mr_Bond)
   * Fix mod_proxy RoundRobin (off by one problem if only one backend is up)
   * Rename configure.in to configure.ac, with small cleanups (fixes #1932)
+  * Add proper SUID bit detection (fixes #416)
 
 - 1.4.22 - 2009-03-07
   * Fix wrong lua type for CACHE_MISS/CACHE_HIT in mod_cml (fixes #533)

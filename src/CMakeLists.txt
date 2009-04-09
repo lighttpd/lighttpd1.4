@@ -145,6 +145,7 @@ CHECK_C_SOURCE_COMPILES("
 		struct sockaddr_in6 s; struct in6_addr t=in6addr_any; int i=AF_INET6; s; t.s6_addr[0] = 0;
 		return 0;
 	}" HAVE_IPV6)
+CHECK_FUNCTION_EXISTS(issetugid HAVE_ISSETUGID)
 
 ## refactor me
 MACRO(XCONFIG _package _include_DIR _link_DIR _link_FLAGS _cflags)
