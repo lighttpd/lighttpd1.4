@@ -1,16 +1,13 @@
 #                                               -*- Autoconf -*-
 # Process this file with autoconf to produce a configure script.
 AC_PREREQ(2.57)
-AC_INIT(lighttpd, 1.4.23, jan@kneschke.de)
+AC_INIT([lighttpd], [1.4.23], [jan@kneschke.de])
 AC_CONFIG_SRCDIR([src/server.c])
+AC_CONFIG_HEADER([config.h])
 
 AC_CANONICAL_TARGET
 
 AM_INIT_AUTOMAKE
-
-AC_CONFIG_HEADER([config.h])
-
-AM_MAINTAINER_MODE
 
 # Checks for programs.
 AC_PROG_CC
@@ -538,8 +535,21 @@ AC_CHECK_LIB(fcgi, FCGI_Accept, [
 AM_CONDITIONAL(CHECK_WITH_FASTCGI, test "x$fastcgi_found" = xyes)
 
 
+# check for extra compiler options (warning options)
 if test "${GCC}" = "yes"; then
-       CFLAGS="${CFLAGS} -Wall -W -Wshadow -pedantic -std=gnu99"
+    CFLAGS="${CFLAGS} -Wall -W -Wshadow -pedantic -std=gnu99"
+fi
+
+AC_ARG_ENABLE(extra-warnings,
+ AC_HELP_STRING([--enable-extra-warnings],[enable extra warnings (gcc specific)]),
+ [case "${enableval}" in
+   yes) extrawarnings=true ;;
+    no) extrawarnings=false ;;
+     *) AC_MSG_ERROR(bad value ${enableval} for --enable-extra-warnings) ;;
+  esac],[extrawarnings=false])
+
+if test x$extrawarnings = xtrue; then
+    CFLAGS="${CFLAGS} -g -O2 -g2 -Wall -Wmissing-declarations -Wdeclaration-after-statement -Wno-pointer-sign -Wcast-align -Winline -Wsign-compare -Wnested-externs -Wpointer-arith -Wl,--as-needed -Wformat-security"
 fi
 
 dnl build version-id
