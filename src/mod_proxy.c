@@ -1209,7 +1209,7 @@ static handler_t mod_proxy_check_extension(server *srv, connection *con, void *p
 
 		if (ndx >= (int) extension->value->used) {
 			/* didn't found a higher id, wrap to the start */
-			for (ndx = 0; ndx < (int) k; ndx++) {
+			for (ndx = 0; ndx <= (int) k; ndx++) {
 				host = (data_proxy *)extension->value->data[ndx];
 				if (!host->is_disabled) break;
 			}
