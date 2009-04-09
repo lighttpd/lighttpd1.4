@@ -86,10 +86,18 @@ static int request_check_hostname(server *srv, connection *con, buffer *host) {
 	if (host_len == 0) return -1;
 
 	/* if the hostname ends in a "." strip it */
-	if (host->ptr[host_len-1] == '.') host_len -= 1;
+	if (host->ptr[host_len-1] == '.') {
+		/* shift port info one left */
+		if (NULL != colon) memmove(colon-1, colon, host->used - host_len);
+		else host->ptr[host_len-1] = '\0';
+		host_len -= 1;
+		host->used -= 1;
+	}
+
+	if (host_len == 0) return -1;
 
 	/* scan from the right and skip the \0 */
-	for (i = host_len - 1; i + 1 > 0; i--) {
+	for (i = host_len; i-- > 0; ) {
 		const char c = host->ptr[i];
 
 		switch (stage) {
