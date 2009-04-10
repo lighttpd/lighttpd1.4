@@ -537,7 +537,7 @@ typedef struct server {
 
 	/* the errorlog */
 	int errorlog_fd;
-	enum { ERRORLOG_STDERR, ERRORLOG_FILE, ERRORLOG_SYSLOG } errorlog_mode;
+	enum { ERRORLOG_STDERR, ERRORLOG_FILE, ERRORLOG_SYSLOG, ERRORLOG_PIPE } errorlog_mode;
 	buffer *errorlog_buf;
 
 	fdevents *ev, *ev_ins;
