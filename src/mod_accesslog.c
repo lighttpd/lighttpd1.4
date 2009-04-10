@@ -475,74 +475,9 @@ SETDEFAULTS_FUNC(log_access_open) {
 
 		if (s->access_logfile->used < 2) continue;
 
-		if (s->access_logfile->ptr[0] == '|') {
-#ifdef HAVE_FORK
-			/* create write pipe and spawn process */
-
-			int to_log_fds[2];
-			pid_t pid;
-
-			if (pipe(to_log_fds)) {
-				log_error_write(srv, __FILE__, __LINE__, "ss", "pipe failed: ", strerror(errno));
-				return HANDLER_ERROR;
-			}
-
-			/* fork, execve */
-			switch (pid = fork()) {
-			case 0:
-				/* child */
-
-				close(STDIN_FILENO);
-				dup2(to_log_fds[0], STDIN_FILENO);
-				close(to_log_fds[0]);
-				/* not needed */
-				close(to_log_fds[1]);
-
-				openDevNull(STDERR_FILENO);
-
-				/* we don't need the client socket */
-				for (i = 3; i < 256; i++) {
-					close(i);
-				}
-
-				/* exec the log-process (skip the | )
-				 *
-				 */
-
-				execl("/bin/sh", "sh", "-c", s->access_logfile->ptr + 1, (char *)NULL);
-
-				log_error_write(srv, __FILE__, __LINE__, "sss",
-						"spawning log-process failed: ", strerror(errno),
-						s->access_logfile->ptr + 1);
-
-				exit(-1);
-				break;
-			case -1:
-				/* error */
-				log_error_write(srv, __FILE__, __LINE__, "ss", "fork failed: ", strerror(errno));
-				break;
-			default:
-				close(to_log_fds[0]);
-
-				s->log_access_fd = to_log_fds[1];
-
-				break;
-			}
-#else
-			return -1;
-#endif
-		} else if (-1 == (s->log_access_fd =
-				  open(s->access_logfile->ptr, O_APPEND | O_WRONLY | O_CREAT | O_LARGEFILE, 0644))) {
-
-			log_error_write(srv, __FILE__, __LINE__, "ssb",
-					"opening access-log failed:",
-					strerror(errno), s->access_logfile);
-
+		if (-1 == (s->log_access_fd = open_logfile_or_pipe(srv, s->access_logfile->ptr)))
 			return HANDLER_ERROR;
-		}
-#ifdef FD_CLOEXEC
-		fcntl(s->log_access_fd, F_SETFD, FD_CLOEXEC);
-#endif
+
 	}
 
 	return HANDLER_GO_ON;

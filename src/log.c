@@ -54,13 +54,94 @@ int openDevNull(int fd) {
 	return (tmpfd != -1) ? 0 : -1;
 }
 
+int open_logfile_or_pipe(server *srv, const char* logfile) {
+	int fd;
+
+	if (logfile[0] == '|') {
+#ifdef HAVE_FORK
+		/* create write pipe and spawn process */
+
+		int to_log_fds[2];
+		pid_t pid;
+		int i;
+
+		if (pipe(to_log_fds)) {
+			log_error_write(srv, __FILE__, __LINE__, "ss", "pipe failed: ", strerror(errno));
+			return -1;
+		}
+
+		/* fork, execve */
+		switch (pid = fork()) {
+		case 0:
+			/* child */
+			close(STDIN_FILENO);
+
+			/* dup the filehandle to STDIN */
+			if (to_log_fds[0] != STDIN_FILENO) {
+				if (STDIN_FILENO != dup2(to_log_fds[0], STDIN_FILENO)) {
+					log_error_write(srv, __FILE__, __LINE__, "ss",
+						"dup2 failed: ", strerror(errno));
+					exit(-1);
+				}
+				close(to_log_fds[0]);
+			}
+			close(to_log_fds[1]);
+
+#ifndef FD_CLOEXEC
+			/* we don't need the client socket */
+			for (i = 3; i < 256; i++) {
+				close(i);
+			}
+#endif
+
+			/* close old stderr */
+			openDevNull(STDERR_FILENO);
+
+			/* exec the log-process (skip the | ) */
+			execl("/bin/sh", "sh", "-c", logfile + 1, NULL);
+			log_error_write(srv, __FILE__, __LINE__, "sss",
+					"spawning log process failed: ", strerror(errno),
+					logfile + 1);
+
+			exit(-1);
+			break;
+		case -1:
+			/* error */
+			log_error_write(srv, __FILE__, __LINE__, "ss", "fork failed: ", strerror(errno));
+			return -1;
+		default:
+			close(to_log_fds[0]);
+			fd = to_log_fds[1];
+			break;
+		}
+
+#else
+		return -1;
+#endif
+	} else if (-1 == (fd = open(logfile, O_APPEND | O_WRONLY | O_CREAT | O_LARGEFILE, 0644))) {
+		log_error_write(srv, __FILE__, __LINE__, "SSSS",
+				"opening errorlog '", logfile,
+				"' failed: ", strerror(errno));
+
+		return -1;
+	}
+
+#ifdef FD_CLOEXEC
+	fcntl(fd, F_SETFD, FD_CLOEXEC);
+#endif
+
+	return fd;
+}
+
+
 /**
  * open the errorlog
  *
- * we have 3 possibilities:
+ * we have 4 possibilities:
  * - stderr (default)
  * - syslog
  * - logfile
+ * - pipe
  *
  * if the open failed, report to the user and die
  *
@@ -80,18 +161,10 @@ int log_error_open(server *srv) {
 	} else if (!buffer_is_empty(srv->srvconf.errorlog_file)) {
 		const char *logfile = srv->srvconf.errorlog_file->ptr;
 
-		if (-1 == (srv->errorlog_fd = open(logfile, O_APPEND | O_WRONLY | O_CREAT | O_LARGEFILE, 0644))) {
-			log_error_write(srv, __FILE__, __LINE__, "SSSS",
-					"opening errorlog '", logfile,
-					"' failed: ", strerror(errno));
-
+		if (-1 == (srv->errorlog_fd = open_logfile_or_pipe(srv, logfile))) {
 			return -1;
 		}
-#ifdef FD_CLOEXEC
-		/* close fd on exec (cgi) */
-		fcntl(srv->errorlog_fd, F_SETFD, FD_CLOEXEC);
-#endif
-		srv->errorlog_mode = ERRORLOG_FILE;
+		srv->errorlog_mode = (logfile[0] == '|') ? ERRORLOG_PIPE : ERRORLOG_FILE;
 	}
 
 	log_error_write(srv, __FILE__, __LINE__, "s", "server started");
@@ -122,7 +195,7 @@ int log_error_open(server *srv) {
  */
 
 int log_error_cycle(server *srv) {
-	/* only cycle if we are not in syslog-mode */
+	/* only cycle if the error log is a file */
 
 	if (srv->errorlog_mode == ERRORLOG_FILE) {
 		const char *logfile = srv->srvconf.errorlog_file->ptr;
@@ -130,7 +203,7 @@ int log_error_cycle(server *srv) {
 
 		int new_fd;
 
-		if (-1 == (new_fd = open(logfile, O_APPEND | O_WRONLY | O_CREAT | O_LARGEFILE, 0644))) {
+		if (-1 == (new_fd = open_logfile_or_pipe(srv, logfile))) {
 			/* write to old log */
 			log_error_write(srv, __FILE__, __LINE__, "SSSSS",
 					"cycling errorlog '", logfile,
@@ -158,6 +231,7 @@ int log_error_cycle(server *srv) {
 
 int log_error_close(server *srv) {
 	switch(srv->errorlog_mode) {
+	case ERRORLOG_PIPE:
 	case ERRORLOG_FILE:
 		close(srv->errorlog_fd);
 		break;
@@ -177,6 +251,7 @@ int log_error_write(server *srv, const char *filename, unsigned int line, const 
 	va_list ap;
 
 	switch(srv->errorlog_mode) {
+	case ERRORLOG_PIPE:
 	case ERRORLOG_FILE:
 	case ERRORLOG_STDERR:
 		/* cache the generated timestamp */
@@ -270,6 +345,7 @@ int log_error_write(server *srv, const char *filename, unsigned int line, const 
 	va_end(ap);
 
 	switch(srv->errorlog_mode) {
+	case ERRORLOG_PIPE:
 	case ERRORLOG_FILE:
 		buffer_append_string_len(srv->errorlog_buf, CONST_STR_LEN("\n"));
 		write(srv->errorlog_fd, srv->errorlog_buf->ptr, srv->errorlog_buf->used - 1);

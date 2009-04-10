@@ -777,16 +777,6 @@ static int cgi_create_env(server *srv, connection *con, plugin_data *p, buffer *
 		/* not needed */
 		close(to_cgi_fds[1]);
 
-		/* HACK:
-		 * this is not nice, but it works
-		 *
-		 * we feed the stderr of the CGI to our errorlog, if possible
-		 */
-		if (srv->errorlog_mode == ERRORLOG_FILE) {
-			close(STDERR_FILENO);
-			dup2(srv->errorlog_fd, STDERR_FILENO);
-		}
-
 		/* create environment */
 		env.ptr = NULL;
 		env.size = 0;
