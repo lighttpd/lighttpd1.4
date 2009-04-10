@@ -37,6 +37,7 @@
 #endif
 
 #include "etag.h"
+#include "version.h"
 
 /* The newest modified time of included files for include statement */
 static volatile time_t include_file_last_mtime = 0;
@@ -216,7 +217,7 @@ static int build_ssi_cgi_vars(server *srv, connection *con, plugin_data *p) {
 
 	array_reset(p->ssi_cgi_env);
 
-	ssi_env_add(p->ssi_cgi_env, CONST_STRING("SERVER_SOFTWARE"), PACKAGE_NAME"/"PACKAGE_VERSION);
+	ssi_env_add(p->ssi_cgi_env, CONST_STRING("SERVER_SOFTWARE"), PACKAGE_DESC);
 	ssi_env_add(p->ssi_cgi_env, CONST_STRING("SERVER_NAME"),
 #ifdef HAVE_IPV6
 		     inet_ntop(srv_sock->addr.plain.sa_family,

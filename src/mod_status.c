@@ -18,6 +18,7 @@
 #include "plugin.h"
 
 #include "inet_ntop_cache.h"
+#include "version.h"
 
 typedef struct {
 	buffer *config_url;
@@ -701,7 +702,7 @@ static handler_t mod_status_handle_server_config(server *srv, connection *con, v
 			   "  <title>Status</title>\n"
 			   " </head>\n"
 			   " <body>\n"
-			   "  <h1>" PACKAGE_NAME " " PACKAGE_VERSION "</h1>\n"
+			   "  <h1>" PACKAGE_DESC "</h1>\n"
 			   "  <table summary=\"status\" border=\"1\">\n"));
 
 	mod_status_header_append(b, "Server-Features");

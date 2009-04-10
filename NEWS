@@ -19,6 +19,7 @@ NEWS
   * Check for regular file in mod_cgi, so we don't try to start directories
   * Include mmap.h from chunk.h to fix some problems with #define mmap mmap64 (fixes #1923)
   * Add support for pipe logging for server.errorlog (fixes #296)
+  * Add revision number to package version for svn/git checkouts
 
 - 1.4.22 - 2009-03-07
   * Fix wrong lua type for CACHE_MISS/CACHE_HIT in mod_cml (fixes #533)

@@ -25,6 +25,7 @@
 #include "plugin.h"
 
 #include "sys-socket.h"
+#include "version.h"
 
 int http_response_write_header(server *srv, connection *con) {
 	buffer *b;
@@ -104,7 +105,7 @@ int http_response_write_header(server *srv, connection *con) {
 
 	if (!have_server) {
 		if (buffer_is_empty(con->conf.server_tag)) {
-			buffer_append_string_len(b, CONST_STR_LEN("\r\nServer: " PACKAGE_NAME "/" PACKAGE_VERSION));
+			buffer_append_string_len(b, CONST_STR_LEN("\r\nServer: " PACKAGE_DESC));
 		} else if (con->conf.server_tag->used > 1) {
 			buffer_append_string_len(b, CONST_STR_LEN("\r\nServer: "));
 			buffer_append_string_encoded(b, CONST_BUF_LEN(con->conf.server_tag), ENCODING_HTTP_HEADER);
