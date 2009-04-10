@@ -49,6 +49,8 @@
 #include <sys/wait.h>
 #endif
 
+#include "version.h"
+
 #define FCGI_ENV_ADD_CHECK(ret, con) \
 	if (ret == -1) { \
 		con->http_status = 400; \
@@ -1882,7 +1884,7 @@ static int fcgi_create_env(server *srv, handler_ctx *hctx, size_t request_id) {
 	buffer_prepare_copy(p->fcgi_env, 1024);
 
 
-	FCGI_ENV_ADD_CHECK(fcgi_env_add(p->fcgi_env, CONST_STR_LEN("SERVER_SOFTWARE"), CONST_STR_LEN(PACKAGE_NAME"/"PACKAGE_VERSION)),con)
+	FCGI_ENV_ADD_CHECK(fcgi_env_add(p->fcgi_env, CONST_STR_LEN("SERVER_SOFTWARE"), CONST_STR_LEN(PACKAGE_DESC)),con)
 
 	if (con->server_name->used) {
 		size_t len = con->server_name->used - 1;

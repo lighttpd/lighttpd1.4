@@ -29,6 +29,7 @@
 #include "plugin.h"
 #include "joblist.h"
 #include "network_backends.h"
+#include "version.h"
 
 #ifdef HAVE_GETOPT_H
 #include <getopt.h>
@@ -336,7 +337,7 @@ static void show_version (void) {
 #else
 # define TEXT_SSL
 #endif
-	char *b = PACKAGE_NAME "-" PACKAGE_VERSION TEXT_SSL \
+	char *b = PACKAGE_DESC TEXT_SSL \
 " - a light and fast webserver\n" \
 "Build-Date: " __DATE__ " " __TIME__ "\n";
 ;
@@ -473,7 +474,7 @@ static void show_help (void) {
 #else
 # define TEXT_SSL
 #endif
-	char *b = PACKAGE_NAME "-" PACKAGE_VERSION TEXT_SSL " ("__DATE__ " " __TIME__ ")" \
+	char *b = PACKAGE_DESC TEXT_SSL " ("__DATE__ " " __TIME__ ")" \
 " - a light and fast webserver\n" \
 "usage:\n" \
 " -f <name>  filename of the config-file\n" \

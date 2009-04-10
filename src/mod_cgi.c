@@ -37,6 +37,8 @@
 # include <sys/filio.h>
 #endif
 
+#include "version.h"
+
 enum {EOL_UNSET, EOL_N, EOL_RN};
 
 typedef struct {
@@ -782,7 +784,7 @@ static int cgi_create_env(server *srv, connection *con, plugin_data *p, buffer *
 		env.size = 0;
 		env.used = 0;
 
-		cgi_env_add(&env, CONST_STR_LEN("SERVER_SOFTWARE"), CONST_STR_LEN(PACKAGE_NAME"/"PACKAGE_VERSION));
+		cgi_env_add(&env, CONST_STR_LEN("SERVER_SOFTWARE"), CONST_STR_LEN(PACKAGE_DESC));
 
 		if (!buffer_is_empty(con->server_name)) {
 			size_t len = con->server_name->used - 1;
