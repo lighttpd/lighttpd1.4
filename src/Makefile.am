@@ -8,11 +8,11 @@ lemon_SOURCES=lemon.c
 
 lighttpd_angel_SOURCES=lighttpd-angel.c
 
-.PHONY: versionstamp.h parsers
+.PHONY: versionstamp parsers
 
-all: versionstamp.h
+all: versionstamp
 
-versionstamp.h:
+versionstamp:
 	@test -f versionstamp.h || touch versionstamp.h; \
 	REVISION="$$(LANG=C svnversion "$(top_srcdir)" 2>/dev/null || echo exported)"; \
 	if test $$REVISION = "exported"; then \
