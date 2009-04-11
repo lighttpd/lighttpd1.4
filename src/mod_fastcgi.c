@@ -1884,7 +1884,11 @@ static int fcgi_create_env(server *srv, handler_ctx *hctx, size_t request_id) {
 	buffer_prepare_copy(p->fcgi_env, 1024);
 
 
-	FCGI_ENV_ADD_CHECK(fcgi_env_add(p->fcgi_env, CONST_STR_LEN("SERVER_SOFTWARE"), CONST_STR_LEN(PACKAGE_DESC)),con)
+	if (buffer_is_empty(con->conf.server_tag)) {
+		FCGI_ENV_ADD_CHECK(fcgi_env_add(p->fcgi_env, CONST_STR_LEN("SERVER_SOFTWARE"), CONST_STR_LEN(PACKAGE_DESC)),con)
+	} else {
+		FCGI_ENV_ADD_CHECK(fcgi_env_add(p->fcgi_env, CONST_STR_LEN("SERVER_SOFTWARE"), CONST_BUF_LEN(con->conf.server_tag)),con)
+	}
 
 	if (con->server_name->used) {
 		size_t len = con->server_name->used - 1;

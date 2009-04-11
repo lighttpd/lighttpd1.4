@@ -1463,7 +1463,11 @@ static int scgi_create_env(server *srv, handler_ctx *hctx) {
 	scgi_env_add(p->scgi_env, CONST_STR_LEN("SCGI"), CONST_STR_LEN("1"));
 
 
-	scgi_env_add(p->scgi_env, CONST_STR_LEN("SERVER_SOFTWARE"), CONST_STR_LEN(PACKAGE_DESC));
+	if (buffer_is_empty(con->conf.server_tag)) {
+		scgi_env_add(p->scgi_env, CONST_STR_LEN("SERVER_SOFTWARE"), CONST_STR_LEN(PACKAGE_DESC));
+	} else {
+		scgi_env_add(p->scgi_env, CONST_STR_LEN("SERVER_SOFTWARE"), CONST_BUF_LEN(con->conf.server_tag));
+	}
 
 	if (con->server_name->used) {
 		size_t len = con->server_name->used - 1;
