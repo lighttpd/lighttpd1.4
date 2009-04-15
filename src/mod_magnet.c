@@ -365,6 +365,7 @@ typedef struct {
 		MAGNET_ENV_REQUEST_METHOD,
 		MAGNET_ENV_REQUEST_URI,
 		MAGNET_ENV_REQUEST_ORIG_URI,
+		MAGNET_ENV_REQUEST_PATH_INFO,
 		MAGNET_ENV_REQUEST_REMOTE_IP,
 		MAGNET_ENV_REQUEST_PROTOCOL
        	} type;
@@ -388,6 +389,7 @@ static buffer *magnet_env_get_buffer(server *srv, connection *con, const char *k
 		{ "request.method", MAGNET_ENV_REQUEST_METHOD },
 		{ "request.uri", MAGNET_ENV_REQUEST_URI },
 		{ "request.orig-uri", MAGNET_ENV_REQUEST_ORIG_URI },
+		{ "request.path-info", MAGNET_ENV_REQUEST_PATH_INFO },
 		{ "request.remote-ip", MAGNET_ENV_REQUEST_REMOTE_IP },
 		{ "request.protocol", MAGNET_ENV_REQUEST_PROTOCOL },
 
@@ -422,6 +424,7 @@ static buffer *magnet_env_get_buffer(server *srv, connection *con, const char *k
 		break;
 	case MAGNET_ENV_REQUEST_URI:      dest = con->request.uri; break;
 	case MAGNET_ENV_REQUEST_ORIG_URI: dest = con->request.orig_uri; break;
+	case MAGNET_ENV_REQUEST_PATH_INFO: dest = con->request.pathinfo; break;
 	case MAGNET_ENV_REQUEST_REMOTE_IP: dest = con->dst_addr_buf; break;
 	case MAGNET_ENV_REQUEST_PROTOCOL:
 		buffer_copy_string(srv->tmp_buf, get_http_version_name(con->request.http_version));
