@@ -2067,7 +2067,7 @@ static int fcgi_create_env(server *srv, handler_ctx *hctx, size_t request_id) {
 
 			fcgi_env_add(p->fcgi_env, CONST_STR_LEN("REQUEST_URI"),
 					con->request.orig_uri->ptr + (host->strip_request_uri->used - 2),
-					con->request.orig_uri->used - (host->strip_request_uri->used - 2));
+					con->request.orig_uri->used - (host->strip_request_uri->used - 2) - 1);
 		} else {
 			FCGI_ENV_ADD_CHECK(fcgi_env_add(p->fcgi_env, CONST_STR_LEN("REQUEST_URI"), CONST_BUF_LEN(con->request.orig_uri)),con)
 		}

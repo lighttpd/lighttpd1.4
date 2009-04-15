@@ -21,6 +21,7 @@ NEWS
   * Add support for pipe logging for server.errorlog (fixes #296)
   * Add revision number to package version for svn/git checkouts
   * Use server.tag for SERVER_SOFTWARE if configured (fixes #357)
+  * Fix trailing zero char in REQUEST_URI after "strip-request-uri" in mod_fastcgi
 
 - 1.4.22 - 2009-03-07
   * Fix wrong lua type for CACHE_MISS/CACHE_HIT in mod_cml (fixes #533)
