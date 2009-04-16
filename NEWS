@@ -24,6 +24,7 @@ NEWS
   * Fix trailing zero char in REQUEST_URI after "strip-request-uri" in mod_fastcgi
   * mod_magnet: Add env["request.remote-ip"] (fixes #1740)
   * mod_magnet: Add env["request.path-info"]
+  * Change name/version separator back to "/" (affects every place where the version is printed)
 
 - 1.4.22 - 2009-03-07
   * Fix wrong lua type for CACHE_MISS/CACHE_HIT in mod_cml (fixes #533)
