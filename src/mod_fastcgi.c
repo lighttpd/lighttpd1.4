@@ -318,12 +318,6 @@ typedef struct {
 } plugin_config;
 
 typedef struct {
-	size_t *ptr;
-	size_t used;
-	size_t size;
-} buffer_uint;
-
-typedef struct {
 	char **ptr;
 
 	size_t size;
@@ -333,7 +327,6 @@ typedef struct {
 /* generic plugin data, shared between all connections */
 typedef struct {
 	PLUGIN_DATA;
-	buffer_uint fcgi_request_id;
 
 	buffer *fcgi_env;
 
@@ -635,11 +628,8 @@ INIT_FUNC(mod_fastcgi_init) {
 
 FREE_FUNC(mod_fastcgi_free) {
 	plugin_data *p = p_d;
-	buffer_uint *r = &(p->fcgi_request_id);
 
 	UNUSED(srv);
-
-	if (r->ptr) free(r->ptr);
 
 	buffer_free(p->fcgi_env);
 	buffer_free(p->path);
@@ -1433,51 +1423,6 @@ static int fcgi_set_state(server *srv, handler_ctx *hctx, fcgi_connection_state_
 }
 
 
-static size_t fcgi_requestid_new(server *srv, plugin_data *p) {
-	size_t m = 0;
-	size_t i;
-	buffer_uint *r = &(p->fcgi_request_id);
-
-	UNUSED(srv);
-
-	for (i = 0; i < r->used; i++) {
-		if (r->ptr[i] > m) m = r->ptr[i];
-	}
-
-	if (r->size == 0) {
-		r->size = 16;
-		r->ptr = malloc(sizeof(*r->ptr) * r->size);
-	} else if (r->used == r->size) {
-		r->size += 16;
-		r->ptr = realloc(r->ptr, sizeof(*r->ptr) * r->size);
-	}
-
-	r->ptr[r->used++] = ++m;
-
-	return m;
-}
-
-static int fcgi_requestid_del(server *srv, plugin_data *p, size_t request_id) {
-	size_t i;
-	buffer_uint *r = &(p->fcgi_request_id);
-
-	UNUSED(srv);
-
-	for (i = 0; i < r->used; i++) {
-		if (r->ptr[i] == request_id) break;
-	}
-
-	if (i != r->used) {
-		/* found */
-
-		if (i != r->used - 1) {
-			r->ptr[i] = r->ptr[r->used - 1];
-		}
-		r->used--;
-	}
-
-	return 0;
-}
 static void fcgi_connection_close(server *srv, handler_ctx *hctx) {
 	plugin_data *p;
 	connection  *con;
@@ -1492,10 +1437,6 @@ static void fcgi_connection_close(server *srv, handler_ctx *hctx) {
 		fdevent_unregister(srv->ev, hctx->fd);
 		close(hctx->fd);
 		srv->cur_fds--;
-	}
-
-	if (hctx->request_id != 0) {
-		fcgi_requestid_del(srv, p, hctx->request_id);
 	}
 
 	if (hctx->host && hctx->proc) {
@@ -1554,8 +1495,6 @@ static int fcgi_reconnect(server *srv, handler_ctx *hctx) {
 		srv->cur_fds--;
 		hctx->fd = -1;
 	}
-
-	fcgi_requestid_del(srv, p, hctx->request_id);
 
 	fcgi_set_state(srv, hctx, FCGI_STATE_INIT);
 
@@ -3018,7 +2957,7 @@ static handler_t fcgi_write_request(server *srv, handler_ctx *hctx) {
 
 		/* move the proc-list entry down the list */
 		if (hctx->request_id == 0) {
-			hctx->request_id = fcgi_requestid_new(srv, p);
+			hctx->request_id = 1; /* always use id 1 as we don't use multiplexing */
 		} else {
 			log_error_write(srv, __FILE__, __LINE__, "sd",
 					"fcgi-request is already in use:", hctx->request_id);
