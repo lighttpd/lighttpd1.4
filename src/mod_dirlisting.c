@@ -54,8 +54,11 @@ typedef struct {
 	unsigned short hide_dot_files;
 	unsigned short show_readme;
 	unsigned short hide_readme_file;
+	unsigned short encode_readme;
 	unsigned short show_header;
 	unsigned short hide_header_file;
+	unsigned short encode_header;
+	unsigned short auto_layout;
 
 	excludes_buffer *excludes;
 
@@ -245,6 +248,9 @@ static int parse_config_entry(server *srv, plugin_config *s, array *ca, const ch
 #define CONFIG_HIDE_HEADER_FILE "dir-listing.hide-header-file"
 #define CONFIG_DIR_LISTING      "server.dir-listing"
 #define CONFIG_SET_FOOTER       "dir-listing.set-footer"
+#define CONFIG_ENCODE_README    "dir-listing.encode-readme"
+#define CONFIG_ENCODE_HEADER    "dir-listing.encode-header"
+#define CONFIG_AUTO_LAYOUT      "dir-listing.auto-layout"
 
 
 SETDEFAULTS_FUNC(mod_dirlisting_set_defaults) {
@@ -262,7 +268,10 @@ SETDEFAULTS_FUNC(mod_dirlisting_set_defaults) {
 		{ CONFIG_SHOW_HEADER,      NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION }, /* 7 */
 		{ CONFIG_HIDE_HEADER_FILE, NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION }, /* 8 */
 		{ CONFIG_DIR_LISTING,      NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION }, /* 9 */
-		{ CONFIG_SET_FOOTER,       NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_CONNECTION }, /* 10 */
+		{ CONFIG_SET_FOOTER,       NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_CONNECTION },  /* 10 */
+		{ CONFIG_ENCODE_README,    NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION }, /* 11 */
+		{ CONFIG_ENCODE_HEADER,    NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION }, /* 12 */
+		{ CONFIG_AUTO_LAYOUT,      NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION }, /* 13 */
 
 		{ NULL,                          NULL, T_CONFIG_UNSET, T_CONFIG_SCOPE_UNSET }
 	};
@@ -284,6 +293,10 @@ SETDEFAULTS_FUNC(mod_dirlisting_set_defaults) {
 		s->hide_readme_file = 0;
 		s->show_header = 0;
 		s->hide_header_file = 0;
+		s->encode_readme = 1;
+		s->encode_header = 1;
+		s->auto_layout = 1;
+
 		s->encoding = buffer_init();
 		s->set_footer = buffer_init();
 
@@ -298,6 +311,9 @@ SETDEFAULTS_FUNC(mod_dirlisting_set_defaults) {
 		cv[8].destination = &(s->hide_header_file);
 		cv[9].destination = &(s->dir_listing); /* old name */
 		cv[10].destination = s->set_footer;
+		cv[11].destination = &(s->encode_readme);
+		cv[12].destination = &(s->encode_header);
+		cv[13].destination = &(s->auto_layout);
 
 		p->config_storage[i] = s;
 		ca = ((data_config *)srv->config_context->data[i])->value;
@@ -328,6 +344,9 @@ static int mod_dirlisting_patch_connection(server *srv, connection *con, plugin_
 	PATCH(hide_header_file);
 	PATCH(excludes);
 	PATCH(set_footer);
+	PATCH(encode_readme);
+	PATCH(encode_header);
+	PATCH(auto_layout);
 
 	/* skip the first, the global context */
 	for (i = 1; i < srv->config_context->used; i++) {
@@ -362,6 +381,12 @@ static int mod_dirlisting_patch_connection(server *srv, connection *con, plugin_
 				PATCH(set_footer);
 			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN(CONFIG_EXCLUDE))) {
 				PATCH(excludes);
+			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN(CONFIG_ENCODE_README))) {
+				PATCH(encode_readme);
+			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN(CONFIG_ENCODE_HEADER))) {
+				PATCH(encode_header);
+			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN(CONFIG_AUTO_LAYOUT))) {
+				PATCH(auto_layout);
 			}
 		}
 	}
@@ -456,56 +481,58 @@ static int http_list_directory_sizefmt(char *buf, off_t size) {
 static void http_list_directory_header(server *srv, connection *con, plugin_data *p, buffer *out) {
 	UNUSED(srv);
 
-	buffer_append_string_len(out, CONST_STR_LEN(
-		"<!DOCTYPE html PUBLIC \"-//W3C//DTD XHTML 1.1//EN\" \"http://www.w3.org/TR/xhtml11/DTD/xhtml11.dtd\">\n"
-		"<html xmlns=\"http://www.w3.org/1999/xhtml\" xml:lang=\"en\">\n"
-		"<head>\n"
-		"<title>Index of "
-	));
-	buffer_append_string_encoded(out, CONST_BUF_LEN(con->uri.path), ENCODING_MINIMAL_XML);
-	buffer_append_string_len(out, CONST_STR_LEN("</title>\n"));
-
-	if (p->conf.external_css->used > 1) {
-		buffer_append_string_len(out, CONST_STR_LEN("<link rel=\"stylesheet\" type=\"text/css\" href=\""));
-		buffer_append_string_buffer(out, p->conf.external_css);
-		buffer_append_string_len(out, CONST_STR_LEN("\" />\n"));
-	} else {
+	if (p->conf.auto_layout) {
 		buffer_append_string_len(out, CONST_STR_LEN(
-			"<style type=\"text/css\">\n"
-			"a, a:active {text-decoration: none; color: blue;}\n"
-			"a:visited {color: #48468F;}\n"
-			"a:hover, a:focus {text-decoration: underline; color: red;}\n"
-			"body {background-color: #F5F5F5;}\n"
-			"h2 {margin-bottom: 12px;}\n"
-			"table {margin-left: 12px;}\n"
-			"th, td {"
-			" font: 90% monospace;"
-			" text-align: left;"
-			"}\n"
-			"th {"
-			" font-weight: bold;"
-			" padding-right: 14px;"
-			" padding-bottom: 3px;"
-			"}\n"
-			"td {padding-right: 14px;}\n"
-			"td.s, th.s {text-align: right;}\n"
-			"div.list {"
-			" background-color: white;"
-			" border-top: 1px solid #646464;"
-			" border-bottom: 1px solid #646464;"
-			" padding-top: 10px;"
-			" padding-bottom: 14px;"
-			"}\n"
-			"div.foot {"
-			" font: 90% monospace;"
-			" color: #787878;"
-			" padding-top: 4px;"
-			"}\n"
-			"</style>\n"
+			"<!DOCTYPE html PUBLIC \"-//W3C//DTD XHTML 1.1//EN\" \"http://www.w3.org/TR/xhtml11/DTD/xhtml11.dtd\">\n"
+			"<html xmlns=\"http://www.w3.org/1999/xhtml\" xml:lang=\"en\">\n"
+			"<head>\n"
+			"<title>Index of "
 		));
-	}
+		buffer_append_string_encoded(out, CONST_BUF_LEN(con->uri.path), ENCODING_MINIMAL_XML);
+		buffer_append_string_len(out, CONST_STR_LEN("</title>\n"));
 
-	buffer_append_string_len(out, CONST_STR_LEN("</head>\n<body>\n"));
+		if (p->conf.external_css->used > 1) {
+			buffer_append_string_len(out, CONST_STR_LEN("<link rel=\"stylesheet\" type=\"text/css\" href=\""));
+			buffer_append_string_buffer(out, p->conf.external_css);
+			buffer_append_string_len(out, CONST_STR_LEN("\" />\n"));
+		} else {
+			buffer_append_string_len(out, CONST_STR_LEN(
+				"<style type=\"text/css\">\n"
+				"a, a:active {text-decoration: none; color: blue;}\n"
+				"a:visited {color: #48468F;}\n"
+				"a:hover, a:focus {text-decoration: underline; color: red;}\n"
+				"body {background-color: #F5F5F5;}\n"
+				"h2 {margin-bottom: 12px;}\n"
+				"table {margin-left: 12px;}\n"
+				"th, td {"
+				" font: 90% monospace;"
+				" text-align: left;"
+				"}\n"
+				"th {"
+				" font-weight: bold;"
+				" padding-right: 14px;"
+				" padding-bottom: 3px;"
+				"}\n"
+				"td {padding-right: 14px;}\n"
+				"td.s, th.s {text-align: right;}\n"
+				"div.list {"
+				" background-color: white;"
+				" border-top: 1px solid #646464;"
+				" border-bottom: 1px solid #646464;"
+				" padding-top: 10px;"
+				" padding-bottom: 14px;"
+				"}\n"
+				"div.foot {"
+				" font: 90% monospace;"
+				" color: #787878;"
+				" padding-top: 4px;"
+				"}\n"
+				"</style>\n"
+			));
+		}
+
+		buffer_append_string_len(out, CONST_STR_LEN("</head>\n<body>\n"));
+	}
 
 	/* HEADER.txt */
 	if (p->conf.show_header) {
@@ -517,9 +544,13 @@ static void http_list_directory_header(server *srv, connection *con, plugin_data
 		buffer_append_string_len(p->tmp_buf, CONST_STR_LEN("HEADER.txt"));
 
 		if (-1 != stream_open(&s, p->tmp_buf)) {
-			buffer_append_string_len(out, CONST_STR_LEN("<pre class=\"header\">"));
-			buffer_append_string_encoded(out, s.start, s.size, ENCODING_MINIMAL_XML);
-			buffer_append_string_len(out, CONST_STR_LEN("</pre>"));
+			if (p->conf.encode_header) {
+				buffer_append_string_len(out, CONST_STR_LEN("<pre class=\"header\">"));
+				buffer_append_string_encoded(out, s.start, s.size, ENCODING_MINIMAL_XML);
+				buffer_append_string_len(out, CONST_STR_LEN("</pre>"));
+			} else {
+				buffer_append_string_len(out, s.start, s.size);
+			}
 		}
 		stream_close(&s);
 	}
@@ -566,30 +597,36 @@ static void http_list_directory_footer(server *srv, connection *con, plugin_data
 		buffer_append_string_len(p->tmp_buf, CONST_STR_LEN("README.txt"));
 
 		if (-1 != stream_open(&s, p->tmp_buf)) {
-			buffer_append_string_len(out, CONST_STR_LEN("<pre class=\"readme\">"));
-			buffer_append_string_encoded(out, s.start, s.size, ENCODING_MINIMAL_XML);
-			buffer_append_string_len(out, CONST_STR_LEN("</pre>"));
+			if (p->conf.encode_readme) {
+				buffer_append_string_len(out, CONST_STR_LEN("<pre class=\"readme\">"));
+				buffer_append_string_encoded(out, s.start, s.size, ENCODING_MINIMAL_XML);
+				buffer_append_string_len(out, CONST_STR_LEN("</pre>"));
+			} else {
+				buffer_append_string_len(out, s.start, s.size);
+			}
 		}
 		stream_close(&s);
 	}
 
-	buffer_append_string_len(out, CONST_STR_LEN(
-		"<div class=\"foot\">"
-	));
+	if(p->conf.auto_layout) {
+		buffer_append_string_len(out, CONST_STR_LEN(
+			"<div class=\"foot\">"
+		));
 
-	if (p->conf.set_footer->used > 1) {
-		buffer_append_string_buffer(out, p->conf.set_footer);
-	} else if (buffer_is_empty(con->conf.server_tag)) {
-		buffer_append_string_len(out, CONST_STR_LEN(PACKAGE_DESC));
-	} else {
-		buffer_append_string_buffer(out, con->conf.server_tag);
+		if (p->conf.set_footer->used > 1) {
+			buffer_append_string_buffer(out, p->conf.set_footer);
+		} else if (buffer_is_empty(con->conf.server_tag)) {
+			buffer_append_string_len(out, CONST_STR_LEN(PACKAGE_DESC));
+		} else {
+			buffer_append_string_buffer(out, con->conf.server_tag);
+		}
+
+		buffer_append_string_len(out, CONST_STR_LEN(
+			"</div>\n"
+			"</body>\n"
+			"</html>\n"
+		));
 	}
-
-	buffer_append_string_len(out, CONST_STR_LEN(
-		"</div>\n"
-		"</body>\n"
-		"</html>\n"
-	));
 }
 
 static int http_list_directory(server *srv, connection *con, plugin_data *p, buffer *dir) {
