@@ -192,7 +192,7 @@ static void dump_packet(const unsigned char *data, size_t len) {
 
 static int connection_handle_read_ssl(server *srv, connection *con) {
 #ifdef USE_OPENSSL
-	int r, ssl_err, len;
+	int r, ssl_err, len, count = 0;
 	buffer *b = NULL;
 
 	if (!con->conf.is_ssl) return -1;
@@ -221,10 +221,11 @@ static int connection_handle_read_ssl(server *srv, connection *con) {
 		       	/* we move the buffer to the chunk-queue, no need to free it */
 
 			chunkqueue_append_buffer_weak(con->read_queue, b);
+			count += len;
 			con->bytes_read += len;
 			b = NULL;
 		}
-	} while (len > 0);
+	} while (len > 0 && count < MAX_READ_LIMIT);
 
 
 	if (len < 0) {
@@ -334,6 +335,7 @@ static int connection_handle_read(server *srv, connection *con) {
 		b = chunkqueue_get_append_buffer(con->read_queue);
 		buffer_prepare_copy(b, 4 * 1024);
 	} else {
+		if (toread > MAX_READ_LIMIT) toread = MAX_READ_LIMIT;
 		b = chunkqueue_get_append_buffer(con->read_queue);
 		buffer_prepare_copy(b, toread + 1);
 	}
