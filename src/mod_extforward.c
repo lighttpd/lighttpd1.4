@@ -80,6 +80,7 @@
 
 typedef struct {
 	array *forwarder;
+	array *headers;
 } plugin_config;
 
 typedef struct {
@@ -135,6 +136,7 @@ FREE_FUNC(mod_extforward_free) {
 			if (!s) continue;
 
 			array_free(s->forwarder);
+			array_free(s->headers);
 
 			free(s);
 		}
@@ -154,7 +156,8 @@ SETDEFAULTS_FUNC(mod_extforward_set_defaults) {
 	size_t i = 0;
 
 	config_values_t cv[] = {
-		{ "extforward.forwarder",             NULL, T_CONFIG_ARRAY, T_CONFIG_SCOPE_CONNECTION },       /* 0 */
+		{ "extforward.forwarder",       NULL, T_CONFIG_ARRAY, T_CONFIG_SCOPE_CONNECTION },       /* 0 */
+		{ "extforward.headers",         NULL, T_CONFIG_ARRAY, T_CONFIG_SCOPE_CONNECTION },       /* 1 */
 		{ NULL,                         NULL, T_CONFIG_UNSET, T_CONFIG_SCOPE_UNSET }
 	};
 
@@ -167,8 +170,10 @@ SETDEFAULTS_FUNC(mod_extforward_set_defaults) {
 
 		s = calloc(1, sizeof(plugin_config));
 		s->forwarder    = array_init();
+		s->headers      = array_init();
 
 		cv[0].destination = s->forwarder;
+		cv[1].destination = s->headers;
 
 		p->config_storage[i] = s;
 
@@ -187,6 +192,7 @@ static int mod_extforward_patch_connection(server *srv, connection *con, plugin_
 	plugin_config *s = p->config_storage[0];
 
 	PATCH(forwarder);
+	PATCH(headers);
 
 	/* skip the first, the global context */
 	for (i = 1; i < srv->config_context->used; i++) {
@@ -202,6 +208,8 @@ static int mod_extforward_patch_connection(server *srv, connection *con, plugin_
 
 			if (buffer_is_equal_string(du->key, CONST_STR_LEN("extforward.forwarder"))) {
 				PATCH(forwarder);
+			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("extforward.headers"))) {
+				PATCH(headers);
 			}
 		}
 	}
@@ -294,37 +302,37 @@ static const char *last_not_in_array(array *a, plugin_data *p)
 	return NULL;
 }
 
-static struct addrinfo *ipstr_to_sockaddr(const char *host)
-{
-   struct addrinfo hints, *res0;
-   int result;
+static struct addrinfo *ipstr_to_sockaddr(const char *host) {
+	struct addrinfo hints, *res0;
+	int result;
 
-   memset(&hints, 0, sizeof(hints));
+	memset(&hints, 0, sizeof(hints));
 #ifndef AI_NUMERICSERV
-/** 
- * quoting $ man getaddrinfo
- *
- * NOTES
- *        AI_ADDRCONFIG, AI_ALL, and AI_V4MAPPED are available since glibc 2.3.3.  
- *        AI_NUMERICSERV is available since glibc 2.3.4.
- */
+	/**
+	  * quoting $ man getaddrinfo
+	  *
+	  * NOTES
+	  *        AI_ADDRCONFIG, AI_ALL, and AI_V4MAPPED are available since glibc 2.3.3.
+	  *        AI_NUMERICSERV is available since glibc 2.3.4.
+	  */
 #define AI_NUMERICSERV 0
 #endif
-   hints.ai_flags = AI_NUMERICHOST | AI_NUMERICSERV;
+	hints.ai_flags = AI_NUMERICHOST | AI_NUMERICSERV;
 
-   result = getaddrinfo(host, NULL, &hints, &res0);
-   if ( result != 0 )
-   {
-      fprintf(stderr,"could not resolve hostname %s because %s\n", host,gai_strerror(result));
-      if (result == EAI_SYSTEM)
-         perror("The system error is ");
-      return NULL;
-   }
-   else
-      if (res0==0)
-         fprintf(stderr, "Problem in resolving hostname %s: succeeded, but no information returned\n", host);
+	result = getaddrinfo(host, NULL, &hints, &res0);
 
-   return res0;
+	if (result != 0) {
+		fprintf(stderr, "could not resolve hostname %s because %s\n", host, gai_strerror(result));
+
+		if (result == EAI_SYSTEM)
+			perror("The system error is ");
+
+		return NULL;
+	} else if (res0 == 0) {
+		fprintf(stderr, "Problem in resolving hostname %s: succeeded, but no information returned\n", host);
+	}
+
+	return res0;
 }
 
 
@@ -351,16 +359,26 @@ URIHANDLER_FUNC(mod_extforward_uri_handler) {
 	mod_extforward_patch_connection(srv, con, p);
 
 	if (con->conf.log_request_handling) {
- 		log_error_write(srv, __FILE__, __LINE__, "s", 
-				"-- mod_extforward_uri_handler called");
+		log_error_write(srv, __FILE__, __LINE__, "s",
+			"-- mod_extforward_uri_handler called");
 	}
 
-	if ((NULL == (forwarded = (data_string *) array_get_element(con->request.headers,"X-Forwarded-For")) &&
-	     NULL == (forwarded = (data_string *) array_get_element(con->request.headers,  "Forwarded-For")))) {
+	if (p->conf.headers->used) {
+		data_string *ds;
+		size_t k;
 
+		for(k = 0; k < p->conf.headers->used; k++) {
+			ds = (data_string *) p->conf.headers->data[k];
+			if (NULL != (forwarded = (data_string*) array_get_element(con->request.headers, ds->value->ptr))) break;
+		}
+	} else {
+		forwarded = (data_string *) array_get_element(con->request.headers,"X-Forwarded-For");
+		if (NULL == forwarded) forwarded = (data_string *) array_get_element(con->request.headers,  "Forwarded-For");
+	}
+
+	if (NULL == forwarded) {
 		if (con->conf.log_request_handling) {
-			log_error_write(srv, __FILE__, __LINE__, "s", 
-					"no X-Forwarded-For|Forwarded-For: found, skipping");
+			log_error_write(srv, __FILE__, __LINE__, "s", "no forward header found, skipping");
 		}
 
 		return HANDLER_GO_ON;
@@ -368,11 +386,10 @@ URIHANDLER_FUNC(mod_extforward_uri_handler) {
 
 #ifdef HAVE_IPV6
 	dst_addr_str = inet_ntop(con->dst_addr.plain.sa_family,
-		      con->dst_addr.plain.sa_family == AF_INET6 ?
-		       (struct sockaddr *)&(con->dst_addr.ipv6.sin6_addr) :
-		       (struct sockaddr *)&(con->dst_addr.ipv4.sin_addr),
-		      b2,
-		      (sizeof b2) - 1);
+		con->dst_addr.plain.sa_family == AF_INET6 ?
+			(struct sockaddr *)&(con->dst_addr.ipv6.sin6_addr) :
+			(struct sockaddr *)&(con->dst_addr.ipv4.sin_addr),
+		b2, (sizeof b2) - 1);
 #else
 	dst_addr_str = inet_ntoa(con->dst_addr.ipv4.sin_addr);
 #endif
@@ -439,7 +456,7 @@ URIHANDLER_FUNC(mod_extforward_uri_handler) {
 			buffer_copy_string(con->dst_addr_buf, real_remote_addr);
 		
 			if (con->conf.log_request_handling) {
- 				log_error_write(srv, __FILE__, __LINE__, "ss",
+				log_error_write(srv, __FILE__, __LINE__, "ss",
 						"patching con->dst_addr_buf for the accesslog:", real_remote_addr);
 			}
 			/* Now, clean the conf_cond cache, because we may have changed the results of tests */
