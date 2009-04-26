@@ -146,6 +146,7 @@ CHECK_C_SOURCE_COMPILES("
 		return 0;
 	}" HAVE_IPV6)
 CHECK_FUNCTION_EXISTS(issetugid HAVE_ISSETUGID)
+CHECK_FUNCTION_EXISTS(inet_pton HAVE_INET_PTON)
 
 ## refactor me
 MACRO(XCONFIG _package _include_DIR _link_DIR _link_FLAGS _cflags)

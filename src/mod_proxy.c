@@ -356,20 +356,35 @@ static void proxy_connection_close(server *srv, handler_ctx *hctx) {
 static int proxy_establish_connection(server *srv, handler_ctx *hctx) {
 	struct sockaddr *proxy_addr;
 	struct sockaddr_in proxy_addr_in;
+#if defined(HAVE_IPV6) && defined(HAVE_INET_PTON)
+	struct sockaddr_in6 proxy_addr_in6;
+#endif
 	socklen_t servlen;
 
 	plugin_data *p    = hctx->plugin_data;
 	data_proxy *host= hctx->host;
 	int proxy_fd       = hctx->fd;
 
-	memset(&proxy_addr, 0, sizeof(proxy_addr));
 
-	proxy_addr_in.sin_family = AF_INET;
-	proxy_addr_in.sin_addr.s_addr = inet_addr(host->host->ptr);
-	proxy_addr_in.sin_port = htons(host->port);
-	servlen = sizeof(proxy_addr_in);
+#if defined(HAVE_IPV6) && defined(HAVE_INET_PTON)
+	if (strstr(host->host->ptr, ":")) {
+		memset(&proxy_addr_in6, 0, sizeof(proxy_addr_in6));
+		proxy_addr_in6.sin6_family = AF_INET6;
+		inet_pton(AF_INET6, host->host->ptr, (char *) &proxy_addr_in6.sin6_addr);
+		proxy_addr_in6.sin6_port = htons(host->port);
+		servlen = sizeof(proxy_addr_in6);
+		proxy_addr = (struct sockaddr *) &proxy_addr_in6;
+	} else
+#endif
+	{
+		memset(&proxy_addr_in, 0, sizeof(proxy_addr_in));
+		proxy_addr_in.sin_family = AF_INET;
+		proxy_addr_in.sin_addr.s_addr = inet_addr(host->host->ptr);
+		proxy_addr_in.sin_port = htons(host->port);
+		servlen = sizeof(proxy_addr_in);
+		proxy_addr = (struct sockaddr *) &proxy_addr_in;
+	}
 
-	proxy_addr = (struct sockaddr *) &proxy_addr_in;
 
 	if (-1 == connect(proxy_fd, proxy_addr, servlen)) {
 		if (errno == EINPROGRESS || errno == EALREADY) {
@@ -741,9 +756,16 @@ static handler_t proxy_write_request(server *srv, handler_ctx *hctx) {
 
 	switch(hctx->state) {
 	case PROXY_STATE_INIT:
-		if (-1 == (hctx->fd = socket(AF_INET, SOCK_STREAM, 0))) {
+		if (strstr(host->host->ptr,":")) {
+		    if (-1 == (hctx->fd = socket(AF_INET6, SOCK_STREAM, 0))) {
 			log_error_write(srv, __FILE__, __LINE__, "ss", "socket failed: ", strerror(errno));
 			return HANDLER_ERROR;
+		    }
+		} else {
+		    if (-1 == (hctx->fd = socket(AF_INET, SOCK_STREAM, 0))) {
+			log_error_write(srv, __FILE__, __LINE__, "ss", "socket failed: ", strerror(errno));
+			return HANDLER_ERROR;
+		    }
 		}
 		hctx->fde_ndx = -1;
 

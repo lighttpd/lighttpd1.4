@@ -159,7 +159,7 @@ if 1:
 			strdup strerror strstr strtol sendfile  getopt socket \
 			gethostbyname poll sigtimedwait epoll_ctl getrlimit chroot \
 			getuid select signal pathconf madvise prctl\
-			writev sigaction sendfile64 send_file kqueue port_create localtime_r posix_fadvise'))
+			writev sigaction sendfile64 send_file kqueue port_create localtime_r posix_fadvise issetugid inet_pton'))
 
 	checkTypes(autoconf, Split('pid_t size_t off_t'))
 

@@ -77,7 +77,7 @@ dnl AC_FUNC_REALLOC
 AC_TYPE_SIGNAL
 AC_FUNC_STAT
 AC_FUNC_STRFTIME
-AC_CHECK_FUNCS([issetugid])
+AC_CHECK_FUNCS([issetugid inet_pton])
 
 dnl Checks for database.
 MYSQL_INCLUDE=""
