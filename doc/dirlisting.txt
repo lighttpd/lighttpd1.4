@@ -80,3 +80,47 @@ dir-listing.encoding
   Example: ::
 
     dir-listing.encoding = "utf-8"
+
+dir-listing.show-readme
+  shows README.txt after the dirlisting if it exists in the directory
+
+  Default: disabled
+
+dir-listing.hide-readme-file
+  hides README.txt in the dirlisting
+
+  Default: disabled
+
+dir-listing.show-header
+  shows HEADER.txt before the dirlisting if it exists in the directory
+
+  Default: disabled
+
+dir-listing.hide-header-file
+  hides HEADER.txt in the dirlisting
+
+  Default: disabled
+
+dir-listing.set-footer
+
+  Default: empty, uses server.tag instead
+
+dir-listing.encode-readme
+  encodes all control characers, '&', '<', '>' and '\x7f' as &#x**;
+
+  Default: enabled
+
+dir-listing.encode-header
+  encodes all control characers, '&', '<', '>' and '\x7f' as &#x**;
+
+  Default: enabled
+
+dir-listing.auto-layout
+  Disable this if you want your own html header and footer; specify
+  them in HEADER.txt and README.txt
+
+  you have to enable dir-list.show-readme/header for this of course
+
+  .external-css and .set-footer will be ignored if this is disabled
+
+  Default: enabled

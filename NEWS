@@ -26,6 +26,7 @@ NEWS
   * mod_magnet: Add env["request.path-info"]
   * Change name/version separator back to "/" (affects every place where the version is printed)
   * Fix bug with FastCGI request id overflow under high load; just use always id 1 as we don't use multiplexing. (thx jgray)
+  * Add some dirlisting enhancements (fixes #1458)
 
 - 1.4.22 - 2009-03-07
   * Fix wrong lua type for CACHE_MISS/CACHE_HIT in mod_cml (fixes #533)
