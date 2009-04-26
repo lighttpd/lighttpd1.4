@@ -281,6 +281,12 @@ server.port
 server.use-ipv6
   bind to the IPv6 socket
 
+server.defer-accept
+  set TCP_DEFER_ACCEPT to the specified value on the socket if the value is > 0
+  and TCP_DEFER_ACCEPT is available on the platform (linux2.4+)
+
+  default: 0
+
 server.tag
   set the string returned by the Server: response header
 
