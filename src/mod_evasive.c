@@ -27,6 +27,7 @@
 
 typedef struct {
 	unsigned short max_conns;
+	unsigned short silent;
 } plugin_config;
 
 typedef struct {
@@ -72,7 +73,8 @@ SETDEFAULTS_FUNC(mod_evasive_set_defaults) {
 	size_t i = 0;
 
 	config_values_t cv[] = {
-		{ "evasive.max-conns-per-ip",    NULL, T_CONFIG_SHORT, T_CONFIG_SCOPE_CONNECTION },
+		{ "evasive.max-conns-per-ip",    NULL, T_CONFIG_SHORT, T_CONFIG_SCOPE_CONNECTION },   /* 1 */
+		{ "evasive.silent",              NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION }, /* 2 */
 		{ NULL,                          NULL, T_CONFIG_UNSET, T_CONFIG_SCOPE_UNSET }
 	};
 
@@ -83,6 +85,7 @@ SETDEFAULTS_FUNC(mod_evasive_set_defaults) {
 
 		s = calloc(1, sizeof(plugin_config));
 		s->max_conns       = 0;
+		s->silent          = 0;
 
 		cv[0].destination = &(s->max_conns);
 
@@ -103,6 +106,7 @@ static int mod_evasive_patch_connection(server *srv, connection *con, plugin_dat
 	plugin_config *s = p->config_storage[0];
 
 	PATCH(max_conns);
+	PATCH(silent);
 
 	/* skip the first, the global context */
 	for (i = 1; i < srv->config_context->used; i++) {
@@ -118,6 +122,8 @@ static int mod_evasive_patch_connection(server *srv, connection *con, plugin_dat
 
 			if (buffer_is_equal_string(du->key, CONST_STR_LEN("evasive.max-conns-per-ip"))) {
 				PATCH(max_conns);
+			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("evasive.silent"))) {
+				PATCH(silent);
 			}
 		}
 	}
@@ -172,9 +178,11 @@ URIHANDLER_FUNC(mod_evasive_uri_handler) {
 		conns_by_ip++;
 
 		if (conns_by_ip > p->conf.max_conns) {
-			log_error_write(srv, __FILE__, __LINE__, "ss",
-				inet_ntop_cache_get_ip(srv, &(con->dst_addr)),
-				"turned away. Too many connections.");
+			if (!p->conf.silent) {
+				log_error_write(srv, __FILE__, __LINE__, "ss",
+					inet_ntop_cache_get_ip(srv, &(con->dst_addr)),
+					"turned away. Too many connections.");
+			}
 
 			con->http_status = 403;
 			con->mode = DIRECT;
