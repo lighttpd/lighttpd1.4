@@ -96,6 +96,7 @@ static int config_insert(server *srv) {
 		{ "etag.use-size",               NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_SERVER }, /* 51 */
 		{ "server.reject-expect-100-with-417",  NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_SERVER }, /* 52 */
 		{ "debug.log-timeouts",          NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION }, /* 53 */
+		{ "server.defer-accept",         NULL, T_CONFIG_SHORT, T_CONFIG_SCOPE_CONNECTION },     /* 54 */
 		{ "server.host",                 "use server.bind instead", T_CONFIG_DEPRECATED, T_CONFIG_SCOPE_UNSET },
 		{ "server.docroot",              "use server.document-root instead", T_CONFIG_DEPRECATED, T_CONFIG_SCOPE_UNSET },
 		{ "server.virtual-root",         "load mod_simple_vhost and use simple-vhost.server-root instead", T_CONFIG_DEPRECATED, T_CONFIG_SCOPE_UNSET },
@@ -164,6 +165,7 @@ static int config_insert(server *srv) {
 		s->is_ssl        = 0;
 		s->ssl_use_sslv2 = 0;
 		s->use_ipv6      = 0;
+		s->defer_accept  = 0;
 #ifdef HAVE_LSTAT
 		s->follow_symlink = 1;
 #endif
@@ -182,6 +184,7 @@ static int config_insert(server *srv) {
 
 		cv[7].destination = s->server_tag;
 		cv[8].destination = &(s->use_ipv6);
+		cv[54].destination = &(s->defer_accept);
 
 
 		/* 13 max-worker */

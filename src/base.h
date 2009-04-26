@@ -274,6 +274,7 @@ typedef struct {
 	unsigned short ssl_use_sslv2;
 
 	unsigned short use_ipv6;
+	unsigned short defer_accept;
 	unsigned short is_ssl;
 	unsigned short allow_http11;
 	unsigned short etag_use_inode;
