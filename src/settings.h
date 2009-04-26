@@ -13,6 +13,7 @@
  * 64kB (no real reason, just a guess)
  */
 #define BUFFER_MAX_REUSE_SIZE  (4 * 1024)
+#define MAX_READ_LIMIT (4*1024*1024)
 
 /**
  * max size of the HTTP request header
