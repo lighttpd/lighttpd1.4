@@ -33,6 +33,7 @@ wildcards. Those wildcards can represent parts if the submitted hostname
   %2 => domain name without tld
   %3 => subdomain 1 name
   %4 => subdomain 2 name
+  %_ => the complete hostname (without port info)
 
   evhost.path-pattern = "/home/www/servers/%3/pages/"
 

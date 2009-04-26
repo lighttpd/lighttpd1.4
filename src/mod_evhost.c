@@ -115,6 +115,7 @@ SETDEFAULTS_FUNC(mod_evhost_set_defaults) {
 	 * # %2 => domain name without tld
 	 * # %3 => subdomain 1 name
 	 * # %4 => subdomain 2 name
+	 * # %_ => fqdn (without port info)
 	 * #
 	 * evhost.path-pattern = "/home/ckruse/dev/www/%3/htdocs/"
 	 *
@@ -154,11 +155,12 @@ SETDEFAULTS_FUNC(mod_evhost_set_defaults) {
 }
 
 /**
- * assign the different parts of the domain to array-indezes
- * - %0 - full hostname (authority w/o port)
+ * assign the different parts of the domain to array-indezes (sub2.sub1.domain.tld)
+ * - %0 - domain.tld
  * - %1 - tld
- * - %2 - domain.tld
- * - %3 -
+ * - %2 - domain
+ * - %3 - sub1
+ * - ...
  */
 
 static int mod_evhost_parse_host(connection *con,array *host) {
@@ -287,6 +289,16 @@ static handler_t mod_evhost_uri_handler(server *srv, connection *con, void *p_d)
 			if (*(ptr+1) == '%') {
 				/* %% */
 				buffer_append_string_len(p->tmp_buf,CONST_STR_LEN("%"));
+			} else if (*(ptr+1) == '_' ) {
+				/* %_ == full hostname */
+				char *colon = strchr(con->uri.authority->ptr, ':');
+
+				if(colon == NULL) {
+					buffer_append_string_buffer(p->tmp_buf, con->uri.authority); // adds fqdn
+				} else {
+					/* strip the port out of the authority-part of the URI scheme */
+					buffer_append_string_len(p->tmp_buf, con->uri.authority->ptr, colon - con->uri.authority->ptr); // adds fqdn
+				}
 			} else if (NULL != (ds = (data_string *)array_get_element(parsed_host,p->conf.path_pieces[i]->ptr))) {
 				if (ds->value->used) {
 					buffer_append_string_buffer(p->tmp_buf,ds->value);
