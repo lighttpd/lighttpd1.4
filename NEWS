@@ -31,6 +31,7 @@ NEWS
   * Limit amount of bytes read for one read-event (fixes #1070)
   * Add evasive.silent option (fixes #1438)
   * Make mod_extforward headers configurable (fixes #1545)
+  * Add '%_' pattern for complete hostname in mod_evhost (fixes #1737)
 
 - 1.4.22 - 2009-03-07
   * Fix wrong lua type for CACHE_MISS/CACHE_HIT in mod_cml (fixes #533)
