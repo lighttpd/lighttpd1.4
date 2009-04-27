@@ -865,7 +865,11 @@ int http_auth_basic_check(server *srv, connection *con, mod_auth_plugin_data *p,
 		buffer_free(username);
 		buffer_free(password);
 
-		log_error_write(srv, __FILE__, __LINE__, "s", "get_password failed");
+		if (AUTH_BACKEND_UNSET == p->conf.auth_backend) {
+			log_error_write(srv, __FILE__, __LINE__, "s", "auth.backend is not set");
+		} else {
+			log_error_write(srv, __FILE__, __LINE__, "s", "get_password failed");
+		}
 
 		return 0;
 	}
