@@ -200,6 +200,34 @@ static int ssi_env_add_request_headers(server *srv, connection *con, plugin_data
 		}
 	}
 
+	for (i = 0; i < con->environment->used; i++) {
+		data_string *ds;
+
+		ds = (data_string *)con->environment->data[i];
+
+		if (ds->value->used && ds->key->used) {
+			size_t j;
+
+			buffer_reset(srv->tmp_buf);
+			buffer_prepare_append(srv->tmp_buf, ds->key->used + 2);
+
+			for (j = 0; j < ds->key->used - 1; j++) {
+				char c = '_';
+				if (light_isalpha(ds->key->ptr[j])) {
+					/* upper-case */
+					c = ds->key->ptr[j] & ~32;
+				} else if (light_isdigit(ds->key->ptr[j])) {
+					/* copy */
+					c = ds->key->ptr[j];
+				}
+				srv->tmp_buf->ptr[srv->tmp_buf->used++] = c;
+			}
+			srv->tmp_buf->ptr[srv->tmp_buf->used] = '\0';
+
+			ssi_env_add(p->ssi_cgi_env, srv->tmp_buf->ptr, ds->value->ptr);
+		}
+	}
+
 	return 0;
 }
 
@@ -657,17 +685,22 @@ static int process_ssi_stmt(server *srv, connection *con, plugin_data *p,
 		if (p->if_is_false) break;
 
 		b = chunkqueue_get_append_buffer(con->write_queue);
-		buffer_copy_string_len(b, CONST_STR_LEN("<pre>"));
 		for (i = 0; i < p->ssi_vars->used; i++) {
 			data_string *ds = (data_string *)p->ssi_vars->data[p->ssi_vars->sorted[i]];
 
 			buffer_append_string_buffer(b, ds->key);
-			buffer_append_string_len(b, CONST_STR_LEN(": "));
-			buffer_append_string_buffer(b, ds->value);
-			buffer_append_string_len(b, CONST_STR_LEN("<br />"));
-
+			buffer_append_string_len(b, CONST_STR_LEN("="));
+			buffer_append_string_encoded(b, CONST_BUF_LEN(ds->value), ENCODING_MINIMAL_XML);
+			buffer_append_string_len(b, CONST_STR_LEN("\n"));
 		}
-		buffer_append_string_len(b, CONST_STR_LEN("</pre>"));
+		for (i = 0; i < p->ssi_cgi_env->used; i++) {
+			data_string *ds = (data_string *)p->ssi_cgi_env->data[p->ssi_cgi_env->sorted[i]];
+
+			buffer_append_string_buffer(b, ds->key);
+			buffer_append_string_len(b, CONST_STR_LEN("="));
+			buffer_append_string_encoded(b, CONST_BUF_LEN(ds->value), ENCODING_MINIMAL_XML);
+			buffer_append_string_len(b, CONST_STR_LEN("\n"));
+		}
 
 		break;
 	case SSI_EXEC: {
