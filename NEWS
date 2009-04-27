@@ -34,6 +34,7 @@ NEWS
   * Add '%_' pattern for complete hostname in mod_evhost (fixes #1737)
   * Add IPv6 support to mod_proxy (fixes #1537)
   * mod_ssi printenv: print cgi env, add environment vars to cgi env (fixes #1713)
+  * Fix error message if no auth backend was set
 
 - 1.4.22 - 2009-03-07
   * Fix wrong lua type for CACHE_MISS/CACHE_HIT in mod_cml (fixes #533)
