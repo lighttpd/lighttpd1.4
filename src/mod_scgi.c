@@ -1283,10 +1283,11 @@ static int scgi_env_add(buffer *env, const char *key, size_t key_len, const char
 
 	buffer_prepare_append(env, len);
 
-	/* include the NUL */
-	memcpy(env->ptr + env->used, key, key_len + 1);
+	memcpy(env->ptr + env->used, key, key_len);
+	env->ptr[env->used + key_len] = '\0';
 	env->used += key_len + 1;
-	memcpy(env->ptr + env->used, val, val_len + 1);
+	memcpy(env->ptr + env->used, val, val_len);
+	env->ptr[env->used + val_len] = '\0';
 	env->used += val_len + 1;
 
 	return 0;

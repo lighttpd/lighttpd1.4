@@ -702,8 +702,8 @@ static int env_add(char_array *env, const char *key, size_t key_len, const char 
 	dst = malloc(key_len + val_len + 3);
 	memcpy(dst, key, key_len);
 	dst[key_len] = '=';
-	/* add the \0 from the value */
-	memcpy(dst + key_len + 1, val, val_len + 1);
+	memcpy(dst + key_len + 1, val, val_len);
+	dst[key_len + 1 + val_len] = '\0';
 
 	for (i = 0; i < env->used; i++) {
 		if (0 == strncmp(dst, env->ptr[i], key_len + 1)) {

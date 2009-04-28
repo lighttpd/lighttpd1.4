@@ -699,11 +699,11 @@ static int cgi_env_add(char_array *env, const char *key, size_t key_len, const c
 
 	if (!key || !val) return -1;
 
-	dst = malloc(key_len + val_len + 3);
+	dst = malloc(key_len + val_len + 2);
 	memcpy(dst, key, key_len);
 	dst[key_len] = '=';
-	/* add the \0 from the value */
-	memcpy(dst + key_len + 1, val, val_len + 1);
+	memcpy(dst + key_len + 1, val, val_len);
+	dst[key_len + 1 + val_len] = '\0';
 
 	if (env->size == 0) {
 		env->size = 16;
