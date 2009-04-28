@@ -973,9 +973,15 @@ static int cgi_create_env(server *srv, connection *con, plugin_data *p, buffer *
 				buffer_prepare_append(p->tmp_buf, ds->key->used + 2);
 
 				for (j = 0; j < ds->key->used - 1; j++) {
-					p->tmp_buf->ptr[p->tmp_buf->used++] =
-						light_isalnum((unsigned char)ds->key->ptr[j]) ?
-						toupper((unsigned char)ds->key->ptr[j]) : '_';
+					char cr = '_';
+					if (light_isalpha(ds->key->ptr[j])) {
+						/* upper-case */
+						cr = ds->key->ptr[j] & ~32;
+					} else if (light_isdigit(ds->key->ptr[j])) {
+						/* copy */
+						cr = ds->key->ptr[j];
+					}
+					p->tmp_buf->ptr[p->tmp_buf->used++] = cr;
 				}
 				p->tmp_buf->ptr[p->tmp_buf->used++] = '\0';
 
