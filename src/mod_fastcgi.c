@@ -2523,7 +2523,7 @@ static int fcgi_demux_response(server *srv, handler_ctx *hctx) {
 						joblist_append(srv, con);
 
 						buffer_copy_string_len(dcls->key, "Content-Length", sizeof("Content-Length")-1);
-						buffer_copy_long(dcls->value, sce->st.st_size);
+						buffer_copy_off_t(dcls->value, sce->st.st_size);
 						dcls = (data_string*) array_replace(con->response.headers, (data_unset *)dcls);
 						if (dcls) dcls->free((data_unset*)dcls);
 
