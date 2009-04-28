@@ -36,6 +36,7 @@ NEWS
   * mod_ssi printenv: print cgi env, add environment vars to cgi env (fixes #1713)
   * Fix error message if no auth backend was set
   * Fix SERVER_NAME port stripping (fixes #1968)
+  * Fix x-sendfile 2gb limiting (fixes #1970)
 
 - 1.4.22 - 2009-03-07
   * Fix wrong lua type for CACHE_MISS/CACHE_HIT in mod_cml (fixes #533)
