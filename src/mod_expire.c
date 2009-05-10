@@ -75,10 +75,10 @@ FREE_FUNC(mod_expire_free) {
 	return HANDLER_GO_ON;
 }
 
-static int mod_expire_get_offset(server *srv, plugin_data *p, buffer *expire, int *offset) {
+static int mod_expire_get_offset(server *srv, plugin_data *p, buffer *expire, time_t *offset) {
 	char *ts;
 	int type = -1;
-	int retts = 0;
+	time_t retts = 0;
 
 	UNUSED(p);
 
@@ -302,8 +302,7 @@ URIHANDLER_FUNC(mod_expire_path_handler) {
 		if (ds->key->used == 0) continue;
 
 		if (0 == strncmp(con->uri.path->ptr, ds->key->ptr, ct_len)) {
-			int ts;
-			time_t t;
+			time_t ts, expires;
 			size_t len;
 			stat_cache_entry *sce = NULL;
 
@@ -312,25 +311,26 @@ URIHANDLER_FUNC(mod_expire_path_handler) {
 			switch(mod_expire_get_offset(srv, p, ds->value, &ts)) {
 			case 0:
 				/* access */
-				t = (ts + srv->cur_ts);
+				expires = (ts + srv->cur_ts);
 				break;
 			case 1:
 				/* modification */
 
-				t = (ts + sce->st.st_mtime);
+				expires = (ts + sce->st.st_mtime);
 				break;
 			default:
 				/* -1 is handled at parse-time */
 				break;
 			}
 
+			/* expires should be at least srv->cur_ts */
+			if (expires < srv->cur_ts) expires = srv->cur_ts;
 
 			if (0 == (len = strftime(p->expire_tstmp->ptr, p->expire_tstmp->size - 1,
-					   "%a, %d %b %Y %H:%M:%S GMT", gmtime(&(t))))) {
+					   "%a, %d %b %Y %H:%M:%S GMT", gmtime(&(expires))))) {
 				/* could not set expire header, out of mem */
 
 				return HANDLER_GO_ON;
-
 			}
 
 			p->expire_tstmp->used = len + 1;
@@ -340,7 +340,7 @@ URIHANDLER_FUNC(mod_expire_path_handler) {
 
 			/* HTTP/1.1 */
 			buffer_copy_string_len(p->expire_tstmp, CONST_STR_LEN("max-age="));
-			buffer_append_long(p->expire_tstmp, ts);
+			buffer_append_long(p->expire_tstmp, expires - srv->cur_ts); /* as expires >= srv->cur_ts the difference is >= 0 */
 
 			response_header_overwrite(srv, con, CONST_STR_LEN("Cache-Control"), CONST_BUF_LEN(p->expire_tstmp));
 
