@@ -40,6 +40,7 @@ NEWS
   * Fix mod_cgi environment keys mangling (fixes #1969)
   * Fix workaround for incorrect path info/scriptname if scgi prefix is "/" (fixes #729)
   * Fix max-age value in mod_expire for 'modification' (fixes #1978)
+  * Fix evasive.silent option (#1438)
 
 - 1.4.22 - 2009-03-07
   * Fix wrong lua type for CACHE_MISS/CACHE_HIT in mod_cml (fixes #533)
