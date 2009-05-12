@@ -73,8 +73,8 @@ SETDEFAULTS_FUNC(mod_evasive_set_defaults) {
 	size_t i = 0;
 
 	config_values_t cv[] = {
-		{ "evasive.max-conns-per-ip",    NULL, T_CONFIG_SHORT, T_CONFIG_SCOPE_CONNECTION },   /* 1 */
-		{ "evasive.silent",              NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION }, /* 2 */
+		{ "evasive.max-conns-per-ip",    NULL, T_CONFIG_SHORT, T_CONFIG_SCOPE_CONNECTION },   /* 0 */
+		{ "evasive.silent",              NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION }, /* 1 */
 		{ NULL,                          NULL, T_CONFIG_UNSET, T_CONFIG_SCOPE_UNSET }
 	};
 
@@ -88,6 +88,7 @@ SETDEFAULTS_FUNC(mod_evasive_set_defaults) {
 		s->silent          = 0;
 
 		cv[0].destination = &(s->max_conns);
+		cv[1].destination = &(s->silent);
 
 		p->config_storage[i] = s;
 
