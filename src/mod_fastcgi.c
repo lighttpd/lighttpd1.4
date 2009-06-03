@@ -394,7 +394,7 @@ static void fastcgi_status_copy_procname(buffer *b, fcgi_extension_host *host, f
 }
 
 static void fcgi_proc_load_inc(server *srv, handler_ctx *hctx) {
-	plugin_data *p = hctx->plugin_data;;
+	plugin_data *p = hctx->plugin_data;
 	hctx->proc->load++;
 
 	status_counter_inc(srv, CONST_STR_LEN("fastcgi.active-requests"));
@@ -406,7 +406,7 @@ static void fcgi_proc_load_inc(server *srv, handler_ctx *hctx) {
 }
 
 static void fcgi_proc_load_dec(server *srv, handler_ctx *hctx) {
-	plugin_data *p = hctx->plugin_data;;
+	plugin_data *p = hctx->plugin_data;
 	hctx->proc->load--;
 
 	status_counter_dec(srv, CONST_STR_LEN("fastcgi.active-requests"));
@@ -418,7 +418,7 @@ static void fcgi_proc_load_dec(server *srv, handler_ctx *hctx) {
 }
 
 static void fcgi_host_assign(server *srv, handler_ctx *hctx, fcgi_extension_host *host) {
-	plugin_data *p = hctx->plugin_data;;
+	plugin_data *p = hctx->plugin_data;
 	hctx->host = host;
 	hctx->host->load++;
 
@@ -429,7 +429,7 @@ static void fcgi_host_assign(server *srv, handler_ctx *hctx, fcgi_extension_host
 }
 
 static void fcgi_host_reset(server *srv, handler_ctx *hctx) {
-	plugin_data *p = hctx->plugin_data;;
+	plugin_data *p = hctx->plugin_data;
 	hctx->host->load--;
 
 	fastcgi_status_copy_procname(p->statuskey, hctx->host, NULL);
@@ -3359,14 +3359,10 @@ static handler_t fcgi_handle_fdevent(void *s, void *ctx, int revents) {
 			 * even if the FCGI_FIN packet is not received yet
 			 */
 		} else {
-			log_error_write(srv, __FILE__, __LINE__, "sbSBSDSd",
+			log_error_write(srv, __FILE__, __LINE__, "sbsbsd",
 					"error: unexpected close of fastcgi connection for",
 					con->uri.path,
-					"(no fastcgi process on host:",
-					host->host,
-					", port: ",
-					host->port,
-					" ?)",
+					"(no fastcgi process on socket:", proc->connection_name, "?)",
 					hctx->state);
 
 			connection_set_state(srv, con, CON_STATE_ERROR);
