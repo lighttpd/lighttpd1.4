@@ -43,6 +43,7 @@ NEWS
   * Fix evasive.silent option (#1438)
   * Fix mod-fastcgi counters
   * Modify fastcgi error message
+  * Backup errno for later usage (reported by Guido Reina via mailinglist)
 
 - 1.4.22 - 2009-03-07
   * Fix wrong lua type for CACHE_MISS/CACHE_HIT in mod_cml (fixes #533)

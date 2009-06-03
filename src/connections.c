@@ -229,6 +229,7 @@ static int connection_handle_read_ssl(server *srv, connection *con) {
 
 
 	if (len < 0) {
+		int oerrno = errno;
 		switch ((r = SSL_get_error(con->ssl, len))) {
 		case SSL_ERROR_WANT_READ:
 		case SSL_ERROR_WANT_WRITE:
@@ -258,11 +259,11 @@ static int connection_handle_read_ssl(server *srv, connection *con) {
 						r, ERR_error_string(ssl_err, NULL));
 			}
 
-			switch(errno) {
+			switch(oerrno) {
 			default:
 				log_error_write(srv, __FILE__, __LINE__, "sddds", "SSL:",
-						len, r, errno,
-						strerror(errno));
+						len, r, oerrno,
+						strerror(oerrno));
 				break;
 			}
 
