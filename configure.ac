@@ -250,7 +250,7 @@ AC_ARG_WITH(pcre, AC_HELP_STRING([--with-pcre],[Enable pcre support (default yes
     [WITH_PCRE=$withval],[WITH_PCRE=yes])
 AC_MSG_RESULT([$WITH_PCRE])
 
-if test "x$cross_compiling" = xno -a "$WITH_PCRE" != "no"; then
+if test "$WITH_PCRE" != "no"; then
   AC_PATH_PROG(PCRECONFIG, pcre-config)
 
   if test x"$PCRECONFIG" != x; then
