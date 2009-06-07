@@ -7,7 +7,7 @@ BEGIN {
 }
 
 use strict;
-use Test::More tests => 52;
+use Test::More tests => 53;
 use LightyTest;
 
 my $tf = LightyTest->new();
@@ -25,7 +25,7 @@ SKIP: {
 }
 
 SKIP: {
-	skip "no PHP running on port 1026", 29 unless $tf->listening_on(1026);
+	skip "no PHP running on port 1026", 30 unless $tf->listening_on(1026);
 
 	ok($tf->start_proc == 0, "Starting lighttpd") or goto cleanup;
 
@@ -60,6 +60,14 @@ EOF
  );
 	$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 302, 'Location' => 'http://www.example.org:2048/' } ];
 	ok($tf->handle_http($t) == 0, 'Status + Location via FastCGI');
+
+	$t->{REQUEST}  = ( <<EOF
+GET /redirect.php/ HTTP/1.0
+Host: www.example.org
+EOF
+ );
+	$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 302, 'Location' => 'http://www.example.org:2048/' } ];
+	ok($tf->handle_http($t) == 0, 'Trailing slash as path-info (#1989: workaround broken operating systems)');
 
 	$t->{REQUEST}  = ( <<EOF
 GET /get-server-env.php?env=PHP_SELF HTTP/1.0
