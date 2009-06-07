@@ -45,6 +45,7 @@ NEWS
   * Modify fastcgi error message
   * Backup errno for later usage (reported by Guido Reina via mailinglist)
   * Improve FastCGI performance (fixes #1999)
+  * Workaround broken operating systems: check for trailing '/' in filenames (fixes #1989)
 
 - 1.4.22 - 2009-03-07
   * Fix wrong lua type for CACHE_MISS/CACHE_HIT in mod_cml (fixes #533)
