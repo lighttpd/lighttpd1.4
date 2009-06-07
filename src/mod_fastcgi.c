@@ -2343,10 +2343,15 @@ static int fastcgi_get_packet(server *srv, handler_ctx *hctx, fastcgi_response_p
 
 	/* get at least the FastCGI header */
 	for (c = hctx->rb->first; c; c = c->next) {
+		size_t weWant = sizeof(*header) - (packet->b->used - 1);
+		size_t weHave = c->mem->used - c->offset - 1;
+
+		if (weHave > weWant) weHave = weWant;
+
 		if (packet->b->used == 0) {
-			buffer_copy_string_len(packet->b, c->mem->ptr + c->offset, c->mem->used - c->offset - 1);
+			buffer_copy_string_len(packet->b, c->mem->ptr + c->offset, weHave);
 		} else {
-			buffer_append_string_len(packet->b, c->mem->ptr + c->offset, c->mem->used - c->offset - 1);
+			buffer_append_string_len(packet->b, c->mem->ptr + c->offset, weHave);
 		}
 
 		if (packet->b->used >= sizeof(*header) + 1) break;

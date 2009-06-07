@@ -44,6 +44,7 @@ NEWS
   * Fix mod-fastcgi counters
   * Modify fastcgi error message
   * Backup errno for later usage (reported by Guido Reina via mailinglist)
+  * Improve FastCGI performance (fixes #1999)
 
 - 1.4.22 - 2009-03-07
   * Fix wrong lua type for CACHE_MISS/CACHE_HIT in mod_cml (fixes #533)
