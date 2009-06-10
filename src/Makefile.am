@@ -10,8 +10,6 @@ lighttpd_angel_SOURCES=lighttpd-angel.c
 
 .PHONY: versionstamp parsers
 
-all: versionstamp
-
 versionstamp:
 	@test -f versionstamp.h || touch versionstamp.h; \
 	REVISION="$$(LANG=C svnversion "$(top_srcdir)" 2>/dev/null || echo exported)"; \
@@ -48,7 +46,7 @@ mod_ssi_exprparser.c: $(srcdir)/mod_ssi_exprparser.y $(srcdir)/lempar.c lemon$(E
 parsers: configparser.c mod_ssi_exprparser.c
 endif
 
-BUILT_SOURCES = parsers
+BUILT_SOURCES = parsers versionstamp
 MAINTAINERCLEANFILES = configparser.c configparser.h mod_ssi_exprparser.c mod_ssi_exprparser.h
 CLEANFILES = versionstamp.h versionstamp.h.tmp
 
