@@ -495,6 +495,42 @@ static int magnet_env_set(lua_State *L) {
 }
 
 
+static int magnet_cgi_get(lua_State *L) {
+	connection *con;
+	data_string *ds;
+
+	const char *key = luaL_checkstring(L, 2);
+
+	lua_pushstring(L, "lighty.con");
+	lua_gettable(L, LUA_REGISTRYINDEX);
+	con = lua_touserdata(L, -1);
+	lua_pop(L, 1);
+
+	if (NULL != (ds = (data_string *)array_get_element(con->environment, key)) && ds->value->used)
+		lua_pushlstring(L, CONST_BUF_LEN(ds->value));
+	else
+		lua_pushnil(L);
+
+	return 1;
+}
+
+static int magnet_cgi_set(lua_State *L) {
+	connection *con;
+
+	const char *key = luaL_checkstring(L, 2);
+	const char *val = luaL_checkstring(L, 3);
+
+	lua_pushstring(L, "lighty.con");
+	lua_gettable(L, LUA_REGISTRYINDEX);
+	con = lua_touserdata(L, -1);
+	lua_pop(L, 1);
+
+	array_set_key_value(con->environment, key, strlen(key), val, strlen(val));
+
+	return 0;
+}
+
+
 static int magnet_copy_response_header(server *srv, connection *con, plugin_data *p, lua_State *L) {
 	UNUSED(p);
 	/**
@@ -714,6 +750,15 @@ static handler_t magnet_attract(server *srv, connection *con, plugin_data *p, bu
 	lua_setfield(L, -2, "__newindex");                        /* (sp -= 1) */
 	lua_setmetatable(L, -2); /* tie the metatable to request     (sp -= 1) */
 	lua_setfield(L, -2, "env"); /* content = {}                  (sp -= 1) */
+
+	lua_newtable(L); /*  {}                                      (sp += 1) */
+	lua_newtable(L); /* the meta-table for the request-table     (sp += 1) */
+	lua_pushcfunction(L, magnet_cgi_get);                     /* (sp += 1) */
+	lua_setfield(L, -2, "__index");                           /* (sp -= 1) */
+	lua_pushcfunction(L, magnet_cgi_set);                     /* (sp += 1) */
+	lua_setfield(L, -2, "__newindex");                        /* (sp -= 1) */
+	lua_setmetatable(L, -2); /* tie the metatable to req_env     (sp -= 1) */
+	lua_setfield(L, -2, "req_env"); /* content = {}              (sp -= 1) */
 
 	lua_newtable(L); /*  {}                                      (sp += 1) */
 	lua_newtable(L); /* the meta-table for the request-table     (sp += 1) */
