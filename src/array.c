@@ -146,6 +146,23 @@ data_unset *array_get_unused_element(array *a, data_type_t t) {
 	return ds;
 }
 
+void array_set_key_value(array *hdrs, const char *key, size_t key_len, const char *value, size_t val_len) {
+	data_string *ds_dst;
+
+	if (NULL != (ds_dst = (data_string *)array_get_element(hdrs, key))) {
+		buffer_copy_string_len(ds_dst->value, value, val_len);
+		return;
+	}
+
+	if (NULL == (ds_dst = (data_string *)array_get_unused_element(hdrs, TYPE_STRING))) {
+		ds_dst = data_string_init();
+	}
+
+	buffer_copy_string_len(ds_dst->key, key, key_len);
+	buffer_copy_string_len(ds_dst->value, value, val_len);
+	array_insert_unique(hdrs, (data_unset *)ds_dst);
+}
+
 /* replace or insert data, return the old one with the same key */
 data_unset *array_replace(array *a, data_unset *du) {
 	int ndx;

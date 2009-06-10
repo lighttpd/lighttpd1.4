@@ -165,6 +165,7 @@ data_unset *array_pop(array *a);
 int array_print(array *a, int depth);
 data_unset *array_get_unused_element(array *a, data_type_t t);
 data_unset *array_get_element(array *a, const char *key);
+void array_set_key_value(array *hdrs, const char *key, size_t key_len, const char *value, size_t val_len);
 data_unset *array_replace(array *a, data_unset *du);
 int array_strcasecmp(const char *a, size_t a_len, const char *b, size_t b_len);
 void array_print_indent(int depth);
