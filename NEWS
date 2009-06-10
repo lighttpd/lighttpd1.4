@@ -49,6 +49,7 @@ NEWS
   * Allow using pcre with cross-compiling (pcre-config got fixed; fixes #1986)
   * Add "lighty.req_env" table to mod_magnet for setting/getting environment values for cgi (fixes #1967, thx presbrey)
   * Fix segfault in mod_expire after failed config parsing (fixes #1992)
+  * Add ssi.content-type option (default text/html, fixes #615)
 
 - 1.4.22 - 2009-03-07
   * Fix wrong lua type for CACHE_MISS/CACHE_HIT in mod_cml (fixes #533)
