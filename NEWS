@@ -51,6 +51,7 @@ NEWS
   * Fix segfault in mod_expire after failed config parsing (fixes #1992)
   * Add ssi.content-type option (default text/html, fixes #615)
   * Add support for "real" entropy from /dev/[u]random (fixes #1977)
+  * Adding support for additional chars in LDAP usernames (fixes #1941)
 
 - 1.4.22 - 2009-03-07
   * Fix wrong lua type for CACHE_MISS/CACHE_HIT in mod_cml (fixes #533)
