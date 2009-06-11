@@ -63,7 +63,6 @@ int open_logfile_or_pipe(server *srv, const char* logfile) {
 
 		int to_log_fds[2];
 		pid_t pid;
-		int i;
 
 		if (pipe(to_log_fds)) {
 			log_error_write(srv, __FILE__, __LINE__, "ss", "pipe failed: ", strerror(errno));
@@ -88,9 +87,12 @@ int open_logfile_or_pipe(server *srv, const char* logfile) {
 			close(to_log_fds[1]);
 
 #ifndef FD_CLOEXEC
-			/* we don't need the client socket */
-			for (i = 3; i < 256; i++) {
-				close(i);
+			{
+				int i;
+				/* we don't need the client socket */
+				for (i = 3; i < 256; i++) {
+					close(i);
+				}
 			}
 #endif
 
