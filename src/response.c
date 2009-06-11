@@ -44,6 +44,11 @@ int http_response_write_header(server *srv, connection *con) {
 	buffer_append_string_len(b, CONST_STR_LEN(" "));
 	buffer_append_string(b, get_http_status_name(con->http_status));
 
+	/* disable keep-alive if requested */
+	if (con->request_count > con->conf.max_keep_alive_requests) {
+		con->keep_alive = 0;
+	}
+
 	if (con->request.http_version != HTTP_VERSION_1_1 || con->keep_alive == 0) {
 		if (con->keep_alive) {
 			response_header_overwrite(srv, con, CONST_STR_LEN("Connection"), CONST_STR_LEN("keep-alive"));
@@ -225,12 +230,6 @@ handler_t http_response_prepare(server *srv, connection *con) {
 			log_error_write(srv, __FILE__, __LINE__,  "sb", "URI-authority: ", con->uri.authority);
 			log_error_write(srv, __FILE__, __LINE__,  "sb", "URI-path     : ", con->uri.path_raw);
 			log_error_write(srv, __FILE__, __LINE__,  "sb", "URI-query    : ", con->uri.query);
-		}
-
-		/* disable keep-alive if requested */
-
-		if (con->request_count > con->conf.max_keep_alive_requests) {
-			con->keep_alive = 0;
 		}
 
 
