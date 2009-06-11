@@ -728,10 +728,15 @@ static int http_auth_basic_password_compare(server *srv, mod_auth_plugin_data *p
 			char c = username->ptr[i];
 
 			if (!isalpha(c) &&
-			    !isdigit(c)) {
+			    !isdigit(c) &&
+			    (c != ' ') &&
+			    (c != '@') &&
+			    (c != '-') &&
+			    (c != '_') &&
+			    (c != '.') ) {
 
 				log_error_write(srv, __FILE__, __LINE__, "sbd",
-					"ldap: invalid character (a-zA-Z0-9 allowed) in username:", username, i);
+					"ldap: invalid character (- _.@a-zA-Z0-9 allowed) in username:", username, i);
 
 				return -1;
 			}
