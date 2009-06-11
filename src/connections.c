@@ -1183,7 +1183,7 @@ static handler_t connection_handle_fdevent(void *s, void *context, int revents) 
 		/* FIXME: revents = 0x19 still means that we should read from the queue */
 		if (revents & FDEVENT_HUP) {
 			if (con->state == CON_STATE_CLOSE) {
-				con->close_timeout_ts = 0;
+				con->close_timeout_ts = srv->cur_ts - 2;
 			} else {
 				/* sigio reports the wrong event here
 				 *
@@ -1252,7 +1252,7 @@ static handler_t connection_handle_fdevent(void *s, void *context, int revents) 
 		} else {
 			/* nothing to read */
 
-			con->close_timeout_ts = 0;
+			con->close_timeout_ts = srv->cur_ts - 2;
 		}
 	}
 
@@ -1604,10 +1604,10 @@ int connection_state_machine(server *srv, connection *con) {
 				} else {
 					/* nothing to read */
 
-					con->close_timeout_ts = 0;
+					con->close_timeout_ts = srv->cur_ts - 2;
 				}
 			} else {
-				con->close_timeout_ts = 0;
+				con->close_timeout_ts = srv->cur_ts - 2;
 			}
 
 			if (srv->cur_ts - con->close_timeout_ts > 1) {
