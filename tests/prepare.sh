@@ -25,7 +25,6 @@ mkdir -p $tmpdir/cache/compress/
 # copy everything into the right places
 cp $srcdir/docroot/www/*.html \
    $srcdir/docroot/www/*.php \
-   $srcdir/docroot/www/*.html~ \
    $srcdir/docroot/www/*.pl \
    $srcdir/docroot/www/*.fcgi \
    $srcdir/docroot/www/*.shtml \
@@ -43,7 +42,8 @@ cp $srcdir/var-include-sub.conf $tmpdir/../
 touch $tmpdir/servers/www.example.org/pages/image.jpg \
       $tmpdir/servers/www.example.org/pages/image.JPG \
       $tmpdir/servers/www.example.org/pages/Foo.txt \
-      $tmpdir/servers/www.example.org/pages/a
+      $tmpdir/servers/www.example.org/pages/a \
+      $tmpdir/servers/www.example.org/pages/index.html~
 echo "12345" > $tmpdir/servers/www.example.org/pages/range.pdf
 
 printf "%-40s" "preparing infrastructure"
