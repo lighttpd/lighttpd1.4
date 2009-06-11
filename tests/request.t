@@ -280,7 +280,7 @@ If-None-Match: 5
 If-None-Match: 4
 EOF
  );
-$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 400 } ];
+$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200 } ];
 ok($tf->handle_http($t) == 0, 'Duplicate If-None-Match headers');
 
 $t->{REQUEST}  = ( <<EOF

@@ -956,18 +956,8 @@ int http_request_parse(server *srv, connection *con) {
 								if (!con->request.http_if_none_match) {
 									con->request.http_if_none_match = ds->value->ptr;
 								} else {
-									con->http_status = 400;
-									con->keep_alive = 0;
-
-									if (srv->srvconf.log_request_header_on_error) {
-										log_error_write(srv, __FILE__, __LINE__, "s",
-												"duplicate If-None-Match-header -> 400");
-										log_error_write(srv, __FILE__, __LINE__, "Sb",
-												"request-header:\n",
-												con->request.request);
-									}
-									array_insert_unique(con->request.headers, (data_unset *)ds);
-									return 0;
+									ds->free((data_unset*) ds);
+									ds = NULL;
 								}
 							} else if (cmp > 0 && 0 == (cmp = buffer_caseless_compare(CONST_BUF_LEN(ds->key), CONST_STR_LEN("Range")))) {
 								if (!con->request.http_range) {
