@@ -169,6 +169,7 @@ static void daemonize(void) {
 
 static server *server_init(void) {
 	int i;
+	FILE *frandom = NULL;
 
 	server *srv = calloc(1, sizeof(*srv));
 	assert(srv);
@@ -208,6 +209,19 @@ static server *server_init(void) {
 		srv->mtime_cache[i].mtime = (time_t)-1;
 		srv->mtime_cache[i].str = buffer_init();
 	}
+
+	if ((NULL != (frandom = fopen("/dev/urandom", "rb")) || NULL != (frandom = fopen("/dev/random", "rb")))
+	            && 1 == fread(srv->entropy, sizeof(srv->entropy), 1, frandom)) {
+		srand(*(unsigned int*)srv->entropy);
+		srv->is_real_entropy = 1;
+	} else {
+		unsigned int j;
+		srand(time(NULL) ^ getpid());
+		srv->is_real_entropy = 0;
+		for (j = 0; j < sizeof(srv->entropy); j++)
+			srv->entropy[j] = rand();
+	}
+	if (frandom) fclose(frandom);
 
 	srv->cur_ts = time(NULL);
 	srv->startup_ts = srv->cur_ts;
