@@ -2554,22 +2554,51 @@ static int fcgi_demux_response(server *srv, handler_ctx *hctx) {
 					stat_cache_entry *sce;
 
 					if (HANDLER_ERROR != stat_cache_get_entry(srv, con, ds->value, &sce)) {
-						data_string *dcls;
+						data_string *dcls, *dsr;
+						off_t start = 0, end = sce->st.st_size, len;
 						if (NULL == (dcls = (data_string *)array_get_unused_element(con->response.headers, TYPE_STRING))) {
 							dcls = data_response_init();
 						}
 						/* found */
-						http_chunk_append_file(srv, con, ds->value, 0, sce->st.st_size);
+						/* Assume we should serve from the beginning to the end of the file. */
+						/* If they gave us X-Sendfile-Range, adjust portion to serve. */
+						/* X-Sendfile-Range: header must include start offset, may include end offset, must end after the last offset */
+						if (NULL != (dsr = (data_string *) array_get_element(con->response.headers, "X-Sendfile-Range"))) {
+							char *end_part = NULL, *final_part = NULL;
+							start = strtoll(dsr->value->ptr, &end_part, 10);
+							if (start < 0 || end_part == ds->value->ptr) {
+								start = 0;
+								log_error_write(srv, __FILE__, __LINE__, "sb",
+									"Invalid X-Sendfile-Range header:",
+									dsr->value);
+							} else if (end_part && *end_part) {
+								end = strtoll(end_part, &final_part, 10);
+								if (end < 0 || end_part == final_part || !final_part || *final_part || start > end) {
+									start = 0;
+									end = sce->st.st_size;
+									log_error_write(srv, __FILE__, __LINE__, "sb",
+										"Invalid X-Sendfile-Range header:",
+										dsr->value);
+								} else {
+									if (end > sce->st.st_size) end = sce->st.st_size;
+									if (start > end) start = end;
+								}
+							} else {
+								if (start > end) start = end;
+							}
+						}
+						len = end - start;
+						if (len != 0) http_chunk_append_file(srv, con, ds->value, start, len);
 						hctx->send_content_body = 0; /* ignore the content */
 						joblist_append(srv, con);
 
-						buffer_copy_string_len(dcls->key, "Content-Length", sizeof("Content-Length")-1);
-						buffer_copy_off_t(dcls->value, sce->st.st_size);
+						buffer_copy_string_len(dcls->key, CONST_STR_LEN("Content-Length"));
+						buffer_copy_off_t(dcls->value, len);
 						dcls = (data_string*) array_replace(con->response.headers, (data_unset *)dcls);
 						if (dcls) dcls->free((data_unset*)dcls);
 
 						con->parsed_response |= HTTP_CONTENT_LENGTH;
-						con->response.content_length = sce->st.st_size;
+						con->response.content_length = len;
 					} else {
 						log_error_write(srv, __FILE__, __LINE__, "sb",
 							"send-file error: couldn't get stat_cache entry for:",
