@@ -56,6 +56,7 @@ NEWS
   * Add X-Sendfile-Range feature (fixes #2005)
   * Fix 100% cpu usage if time() < 0 (thx to gaspa and cate, fixes #1964)
   * Allow max-keep-alive-requests to depend on conditional (fixes #1881)
+  * Make dependency on svnversion/git optional (for devel versionstamp, fixes #2009)
 
 - 1.4.22 - 2009-03-07
   * Fix wrong lua type for CACHE_MISS/CACHE_HIT in mod_cml (fixes #533)

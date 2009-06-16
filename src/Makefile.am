@@ -12,9 +12,15 @@ lighttpd_angel_SOURCES=lighttpd-angel.c
 
 versionstamp:
 	@test -f versionstamp.h || touch versionstamp.h; \
-	REVISION="$$(LANG=C svnversion "$(top_srcdir)" 2>/dev/null || echo exported)"; \
-	if test $$REVISION = "exported"; then \
-		REVISION="$$(LANG=C cd "$(top_srcdir)"; git describe --always 2>/dev/null)"; \
+	REVISION=""; \
+	if test -x "`which svnversion`"; then \
+		REVISION="$$(LANG=C svnversion "$(top_srcdir)" 2>/dev/null || echo exported)"; \
+		if test "$$REVISION" = "exported"; then \
+			REVISION=""; \
+		fi; \
+	fi; \
+	if test -z "$$REVISION" -a -x "`which git`"; then \
+		REVISION="$$(cd "$(top_srcdir)"; LANG=C git describe --always 2>/dev/null || echo)"; \
 	fi; \
 	if test -n "$$REVISION"; then \
 		echo "#define REPO_VERSION \"-devel-$$REVISION\"" > versionstamp.h.tmp; \
