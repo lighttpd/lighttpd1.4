@@ -3,7 +3,10 @@
 NEWS
 ====
 
-- 1.4.23 -
+- 1.4.24 -
+  *
+
+- 1.4.23 - 2009-06-19
   * Added some extra warning options in cmake and fix the resulting warnings (unused/static functions)
   * New lighttpd man page (moved it to section 8) (fixes #1875)
   * Create rrd file for empty rrdfile in mod_rrdtool (#1788)
