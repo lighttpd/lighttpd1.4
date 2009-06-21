@@ -150,13 +150,13 @@ int open_logfile_or_pipe(server *srv, const char* logfile) {
  */
 
 int log_error_open(server *srv) {
-	int close_stderr = 1;
-
 #ifdef HAVE_SYSLOG_H
 	/* perhaps someone wants to use syslog() */
 	openlog("lighttpd", LOG_CONS | LOG_PID, LOG_DAEMON);
 #endif
-	srv->errorlog_mode = ERRORLOG_STDERR;
+
+	srv->errorlog_mode = ERRORLOG_FD;
+	srv->errorlog_fd = STDERR_FILENO;
 
 	if (srv->srvconf.errorlog_use_syslog) {
 		srv->errorlog_mode = ERRORLOG_SYSLOG;
@@ -171,20 +171,36 @@ int log_error_open(server *srv) {
 
 	log_error_write(srv, __FILE__, __LINE__, "s", "server started");
 
-#ifdef HAVE_VALGRIND_VALGRIND_H
-	/* don't close stderr for debugging purposes if run in valgrind */
-	if (RUNNING_ON_VALGRIND) close_stderr = 0;
-#endif
-
-	if (srv->errorlog_mode == ERRORLOG_STDERR && srv->srvconf.dont_daemonize) {
+	if (srv->errorlog_mode == ERRORLOG_FD && !srv->srvconf.dont_daemonize) {
 		/* We can only log to stderr in dont-daemonize mode;
 		 * if we do daemonize and no errorlog file is specified, we log into /dev/null
 		 */
-		close_stderr = 0;
+		srv->errorlog_fd = -1;
 	}
 
-	/* move stderr to /dev/null */
-	if (close_stderr) openDevNull(STDERR_FILENO);
+	if (!buffer_is_empty(srv->srvconf.breakagelog_file)) {
+		int breakage_fd;
+		const char *logfile = srv->srvconf.breakagelog_file->ptr;
+
+		if (srv->errorlog_mode == ERRORLOG_FD) {
+			srv->errorlog_fd = dup(STDERR_FILENO);
+#ifdef FD_CLOEXEC
+			fcntl(srv->errorlog_fd, F_SETFD, FD_CLOEXEC);
+#endif
+		}
+
+		if (-1 == (breakage_fd = open_logfile_or_pipe(srv, logfile))) {
+			return -1;
+		}
+
+		if (STDERR_FILENO != breakage_fd) {
+			dup2(breakage_fd, STDERR_FILENO);
+			close(breakage_fd);
+		}
+	} else if (!srv->srvconf.dont_daemonize) {
+		/* move stderr to /dev/null */
+		openDevNull(STDERR_FILENO);
+	}
 	return 0;
 }
 
@@ -235,14 +251,18 @@ int log_error_close(server *srv) {
 	switch(srv->errorlog_mode) {
 	case ERRORLOG_PIPE:
 	case ERRORLOG_FILE:
-		close(srv->errorlog_fd);
+	case ERRORLOG_FD:
+		if (-1 != srv->errorlog_fd) {
+			/* don't close STDERR */
+			if (STDERR_FILENO != srv->errorlog_fd)
+				close(srv->errorlog_fd);
+			srv->errorlog_fd = -1;
+		}
 		break;
 	case ERRORLOG_SYSLOG:
 #ifdef HAVE_SYSLOG_H
 		closelog();
 #endif
-		break;
-	case ERRORLOG_STDERR:
 		break;
 	}
 
@@ -255,7 +275,8 @@ int log_error_write(server *srv, const char *filename, unsigned int line, const 
 	switch(srv->errorlog_mode) {
 	case ERRORLOG_PIPE:
 	case ERRORLOG_FILE:
-	case ERRORLOG_STDERR:
+	case ERRORLOG_FD:
+		if (-1 == srv->errorlog_fd) return 0;
 		/* cache the generated timestamp */
 		if (srv->cur_ts != srv->last_generated_debug_ts) {
 			buffer_prepare_copy(srv->ts_debug_str, 255);
@@ -349,12 +370,9 @@ int log_error_write(server *srv, const char *filename, unsigned int line, const 
 	switch(srv->errorlog_mode) {
 	case ERRORLOG_PIPE:
 	case ERRORLOG_FILE:
+	case ERRORLOG_FD:
 		buffer_append_string_len(srv->errorlog_buf, CONST_STR_LEN("\n"));
 		write(srv->errorlog_fd, srv->errorlog_buf->ptr, srv->errorlog_buf->used - 1);
-		break;
-	case ERRORLOG_STDERR:
-		buffer_append_string_len(srv->errorlog_buf, CONST_STR_LEN("\n"));
-		write(STDERR_FILENO, srv->errorlog_buf->ptr, srv->errorlog_buf->used - 1);
 		break;
 	case ERRORLOG_SYSLOG:
 		syslog(LOG_ERR, "%s", srv->errorlog_buf->ptr);

@@ -783,8 +783,6 @@ static int scgi_spawn_connection(server *srv,
 				close(fd);
 			}
 
-			openDevNull(STDERR_FILENO);
-
 			/* build clean environment */
 			if (host->bin_env_copy->used) {
 				for (i = 0; i < host->bin_env_copy->used; i++) {

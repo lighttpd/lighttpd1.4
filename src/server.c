@@ -187,6 +187,7 @@ static server *server_init(void) {
 	CLEAN(cond_check_buf);
 
 	CLEAN(srvconf.errorlog_file);
+	CLEAN(srvconf.breakagelog_file);
 	CLEAN(srvconf.groupname);
 	CLEAN(srvconf.username);
 	CLEAN(srvconf.changeroot);
@@ -242,8 +243,8 @@ static server *server_init(void) {
 	srv->srvconf.reject_expect_100_with_417 = 1;
 
 	/* use syslog */
-	srv->errorlog_fd = -1;
-	srv->errorlog_mode = ERRORLOG_STDERR;
+	srv->errorlog_fd = STDERR_FILENO;
+	srv->errorlog_mode = ERRORLOG_FD;
 
 	srv->split_vals = array_init();
 
@@ -271,6 +272,7 @@ static void server_free(server *srv) {
 	CLEAN(cond_check_buf);
 
 	CLEAN(srvconf.errorlog_file);
+	CLEAN(srvconf.breakagelog_file);
 	CLEAN(srvconf.groupname);
 	CLEAN(srvconf.username);
 	CLEAN(srvconf.changeroot);

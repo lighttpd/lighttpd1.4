@@ -1018,8 +1018,6 @@ static int cgi_create_env(server *srv, connection *con, plugin_data *p, buffer *
 			*c = '/';
 		}
 
-		openDevNull(STDERR_FILENO);
-
 		/* we don't need the client socket */
 		for (i = 3; i < 256; i++) {
 			if (i != srv->errorlog_fd) close(i);
