@@ -438,7 +438,7 @@ static handler_t mod_status_handle_server_status_html(server *srv, connection *c
 
 	buffer_append_string_len(b, CONST_STR_LEN(
 		"<hr />\n<pre><b>legend</b>\n"
-		". = connect, C = close, E = hard error\n"
+		". = connect, C = close, E = hard error, k = keep-alive\n"
 		"r = read, R = read-POST, W = write, h = handle-request\n"
 		"q = request-start,  Q = request-end\n"
 		"s = response-start, S = response-end\n"));
@@ -449,7 +449,13 @@ static handler_t mod_status_handle_server_status_html(server *srv, connection *c
 
 	for (j = 0; j < srv->conns->used; j++) {
 		connection *c = srv->conns->ptr[j];
-		const char *state = connection_get_short_state(c->state);
+		const char *state;
+
+		if (CON_STATE_READ == c->state && c->request.orig_uri->used > 0) {
+			state = "k";
+		} else {
+			state = connection_get_short_state(c->state);
+		}
 
 		buffer_append_string_len(b, state, 1);
 
@@ -497,7 +503,11 @@ static handler_t mod_status_handle_server_status_html(server *srv, connection *c
 
 		buffer_append_string_len(b, CONST_STR_LEN("</td><td class=\"string\">"));
 
-		buffer_append_string(b, connection_get_state(c->state));
+		if (CON_STATE_READ == c->state && c->request.orig_uri->used > 0) {
+			buffer_append_string_len(b, CONST_STR_LEN("keep-alive"));
+		} else {
+			buffer_append_string(b, connection_get_state(c->state));
+		}
 
 		buffer_append_string_len(b, CONST_STR_LEN("</td><td class=\"int\">"));
 
