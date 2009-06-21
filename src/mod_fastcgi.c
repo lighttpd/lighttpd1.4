@@ -993,8 +993,6 @@ static int fcgi_spawn_connection(server *srv,
 				close(fcgi_fd);
 			}
 
-			openDevNull(STDERR_FILENO);
-
 			/* we don't need the client socket */
 			for (i = 3; i < 256; i++) {
 				close(i);

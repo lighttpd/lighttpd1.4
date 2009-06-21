@@ -473,6 +473,7 @@ typedef struct {
 
 	buffer *errorlog_file;
 	unsigned short errorlog_use_syslog;
+	buffer *breakagelog_file;
 
 	unsigned short dont_daemonize;
 	buffer *changeroot;
@@ -539,7 +540,7 @@ typedef struct server {
 
 	/* the errorlog */
 	int errorlog_fd;
-	enum { ERRORLOG_STDERR, ERRORLOG_FILE, ERRORLOG_SYSLOG, ERRORLOG_PIPE } errorlog_mode;
+	enum { ERRORLOG_FILE, ERRORLOG_FD, ERRORLOG_SYSLOG, ERRORLOG_PIPE } errorlog_mode;
 	buffer *errorlog_buf;
 
 	fdevents *ev, *ev_ins;

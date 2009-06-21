@@ -141,8 +141,6 @@ static int mod_rrd_create_pipe(server *srv, plugin_data *p) {
 		args[i++] = dash;
 		args[i++] = NULL;
 
-		openDevNull(STDERR_FILENO);
-
 		/* we don't need the client socket */
 		for (i = 3; i < 256; i++) {
 			close(i);
