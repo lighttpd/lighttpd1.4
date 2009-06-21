@@ -103,7 +103,6 @@ int config_insert_values_internal(server *srv, array *ca, const config_values_t 
 					if (e != ds->value->ptr && !*e && l >=0 && l <= 65535) {
 						*((unsigned short *)(cv[i].destination)) = l;
 						break;
-
 					}
 				}
 
@@ -112,7 +111,37 @@ int config_insert_values_internal(server *srv, array *ca, const config_values_t 
 				return -1;
 			}
 			default:
-				log_error_write(srv, __FILE__, __LINE__, "ssds", "unexpected type for key:", cv[i].key, du->type, "expected a integer, range 0 ... 65535");
+				log_error_write(srv, __FILE__, __LINE__, "ssds", "unexpected type for key:", cv[i].key, du->type, "expected a short integer, range 0 ... 65535");
+				return -1;
+			}
+			break;
+		case T_CONFIG_INT:
+			switch(du->type) {
+			case TYPE_INTEGER: {
+				data_integer *di = (data_integer *)du;
+
+				*((unsigned int *)(cv[i].destination)) = di->value;
+				break;
+			}
+			case TYPE_STRING: {
+				data_string *ds = (data_string *)du;
+
+				if (ds->value->ptr && *ds->value->ptr) {
+					char *e;
+					long l = strtol(ds->value->ptr, &e, 10);
+					if (e != ds->value->ptr && !*e && l >= 0) {
+						*((unsigned int *)(cv[i].destination)) = l;
+						break;
+					}
+				}
+
+
+				log_error_write(srv, __FILE__, __LINE__, "ssb", "got a string but expected an integer:", cv[i].key, ds->value);
+
+				return -1;
+			}
+			default:
+				log_error_write(srv, __FILE__, __LINE__, "ssds", "unexpected type for key:", cv[i].key, du->type, "expected an integer, range 0 ... 4294967295");
 				return -1;
 			}
 			break;
