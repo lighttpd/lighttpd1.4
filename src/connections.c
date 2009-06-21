@@ -782,13 +782,13 @@ int connection_reset(server *srv, connection *con) {
 	CLEAN(request.pathinfo);
 	CLEAN(request.request);
 
-	CLEAN(request.orig_uri);
+	/* CLEAN(request.orig_uri); */
 
 	CLEAN(uri.scheme);
-	CLEAN(uri.authority);
-	CLEAN(uri.path);
+	/* CLEAN(uri.authority); */
+	/* CLEAN(uri.path); */
 	CLEAN(uri.path_raw);
-	CLEAN(uri.query);
+	/* CLEAN(uri.query); */
 
 	CLEAN(physical.doc_root);
 	CLEAN(physical.path);
@@ -1400,6 +1400,11 @@ int connection_state_machine(server *srv, connection *con) {
 				log_error_write(srv, __FILE__, __LINE__, "sds",
 						"state for fd", con->fd, connection_get_state(con->state));
 			}
+
+			buffer_reset(con->uri.authority);
+			buffer_reset(con->uri.path);
+			buffer_reset(con->uri.query);
+			buffer_reset(con->request.orig_uri);
 
 			if (http_request_parse(srv, con)) {
 				/* we have to read some data from the POST request */
