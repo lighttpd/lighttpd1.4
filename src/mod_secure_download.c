@@ -37,7 +37,7 @@ typedef struct {
 	buffer *secret;
 	buffer *uri_prefix;
 
-	unsigned short timeout;
+	unsigned int timeout;
 } plugin_config;
 
 typedef struct {
@@ -99,7 +99,7 @@ SETDEFAULTS_FUNC(mod_secdownload_set_defaults) {
 		{ "secdownload.secret",            NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_CONNECTION },       /* 0 */
 		{ "secdownload.document-root",     NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_CONNECTION },       /* 1 */
 		{ "secdownload.uri-prefix",        NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_CONNECTION },       /* 2 */
-		{ "secdownload.timeout",           NULL, T_CONFIG_SHORT, T_CONFIG_SCOPE_CONNECTION },        /* 3 */
+		{ "secdownload.timeout",           NULL, T_CONFIG_INT, T_CONFIG_SCOPE_CONNECTION },        /* 3 */
 		{ NULL,                            NULL, T_CONFIG_UNSET, T_CONFIG_SCOPE_UNSET }
 	};
 

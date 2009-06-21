@@ -5,7 +5,8 @@ NEWS
 
 - 1.4.24 -
   * Add T_CONFIG_INT for bigger integers from the config (needed for #1966)
-  * Use unsigned int (and T_CONFIG_INT) for max_request_size.
+  * Use unsigned int (and T_CONFIG_INT) for max_request_size
+  * Use unsigned int for secdownload.timeout (fixes #1966)
 
 - 1.4.23 - 2009-06-19
   * Added some extra warning options in cmake and fix the resulting warnings (unused/static functions)
