@@ -282,7 +282,7 @@ typedef struct {
 	unsigned short etag_use_mtime;
 	unsigned short etag_use_size;
 	unsigned short force_lowercase_filenames; /* if the FS is case-insensitive, force all files to lower-case */
-	unsigned short max_request_size;
+	unsigned int max_request_size;
 
 	unsigned short kbytes_per_second; /* connection kb/s limit */
 
@@ -491,7 +491,7 @@ typedef struct {
 	unsigned short max_worker;
 	unsigned short max_fds;
 	unsigned short max_conns;
-	unsigned short max_request_size;
+	unsigned int max_request_size;
 
 	unsigned short log_request_header_on_error;
 	unsigned short log_state_handling;

@@ -42,12 +42,12 @@ static int config_insert(server *srv) {
 
 		{ "server.event-handler",        NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_SERVER },      /* 10 */
 		{ "server.pid-file",             NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_SERVER },      /* 11 */
-		{ "server.max-request-size",     NULL, T_CONFIG_SHORT, T_CONFIG_SCOPE_CONNECTION },   /* 12 */
+		{ "server.max-request-size",     NULL, T_CONFIG_INT, T_CONFIG_SCOPE_CONNECTION },     /* 12 */
 		{ "server.max-worker",           NULL, T_CONFIG_SHORT, T_CONFIG_SCOPE_SERVER },       /* 13 */
 		{ "server.document-root",        NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_CONNECTION },  /* 14 */
-		{ "server.force-lowercase-filenames", NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_SERVER },   /* 15 */
+		{ "server.force-lowercase-filenames", NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_SERVER },/* 15 */
 		{ "debug.log-condition-handling", NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_SERVER },    /* 16 */
-		{ "server.max-keep-alive-requests", NULL, T_CONFIG_SHORT, T_CONFIG_SCOPE_CONNECTION }, /* 17 */
+		{ "server.max-keep-alive-requests", NULL, T_CONFIG_SHORT, T_CONFIG_SCOPE_CONNECTION },/* 17 */
 		{ "server.name",                 NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_CONNECTION },  /* 18 */
 		{ "server.max-keep-alive-idle",  NULL, T_CONFIG_SHORT, T_CONFIG_SCOPE_CONNECTION },   /* 19 */
 
