@@ -9,6 +9,7 @@ NEWS
   * Use unsigned int for secdownload.timeout (fixes #1966)
   * Keep url/host values from connection to display information while keep-alive in mod_status (fixes #1202)
   * Add server.breakagelog, a "special" stderr (fixes #1863)
+  * Fix config evaluation for debug.log-timeouts option (#1529)
 
 - 1.4.23 - 2009-06-19
   * Added some extra warning options in cmake and fix the resulting warnings (unused/static functions)

@@ -293,6 +293,7 @@ int config_setup_connection(server *srv, connection *con) {
 	PATCH(log_condition_handling);
 	PATCH(log_file_not_found);
 	PATCH(log_ssl_noise);
+	PATCH(log_timeouts);
 
 	PATCH(range_requests);
 	PATCH(force_lowercase_filenames);
