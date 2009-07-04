@@ -56,6 +56,7 @@ typedef struct {
 
 typedef struct {
 	array *cgi;
+	unsigned short execute_x_only;
 } plugin_config;
 
 typedef struct {
@@ -151,6 +152,7 @@ SETDEFAULTS_FUNC(mod_fastcgi_set_defaults) {
 
 	config_values_t cv[] = {
 		{ "cgi.assign",                  NULL, T_CONFIG_ARRAY, T_CONFIG_SCOPE_CONNECTION },       /* 0 */
+		{ "cgi.execute-x-only",          NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION },     /* 1 */
 		{ NULL,                          NULL, T_CONFIG_UNSET, T_CONFIG_SCOPE_UNSET}
 	};
 
@@ -165,8 +167,10 @@ SETDEFAULTS_FUNC(mod_fastcgi_set_defaults) {
 		assert(s);
 
 		s->cgi    = array_init();
+		s->execute_x_only = 0;
 
 		cv[0].destination = s->cgi;
+		cv[1].destination = &(s->execute_x_only);
 
 		p->config_storage[i] = s;
 
@@ -1196,6 +1200,8 @@ static int mod_cgi_patch_connection(server *srv, connection *con, plugin_data *p
 
 			if (buffer_is_equal_string(du->key, CONST_STR_LEN("cgi.assign"))) {
 				PATCH(cgi);
+			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("cgi.execute-x-only"))) {
+				PATCH(execute_x_only);
 			}
 		}
 	}
@@ -1218,6 +1224,7 @@ URIHANDLER_FUNC(cgi_is_handled) {
 
 	if (HANDLER_ERROR == stat_cache_get_entry(srv, con, con->physical.path, &sce)) return HANDLER_GO_ON;
 	if (!S_ISREG(sce->st.st_mode)) return HANDLER_GO_ON;
+	if (p->conf.execute_x_only == 1 && (sce->st.st_mode & (S_IXUSR | S_IXGRP | S_IXOTH)) == 0) return HANDLER_GO_ON;
 
 	s_len = fn->used - 1;
 
