@@ -342,7 +342,7 @@ IF(WITH_LDAP)
 ENDIF(WITH_LDAP)
 
 IF(WITH_LUA)
-  pkg_search_module(LUA REQUIRED lua lua5.1)
+  pkg_search_module(LUA REQUIRED lua lua5.1 lua-5.1)
   MESSAGE(STATUS "found lua at: INCDIR: ${LUA_INCLUDE_DIRS} LIBDIR: ${LUA_LIBRARY_DIRS} LDFLAGS: ${LUA_LDFLAGS} CFLAGS: ${LUA_CFLAGS}")
   SET(HAVE_LIBLUA 1 "Have liblua")
   SET(HAVE_LUA_H  1 "Have liblua header")

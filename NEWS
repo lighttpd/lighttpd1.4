@@ -12,6 +12,7 @@ NEWS
   * Fix config evaluation for debug.log-timeouts option (#1529)
   * Add "cgi.execute-x-only" to mod_cgi, requires +x for cgi scripts (fixes #2013)
   * Fix FD_SETSIZE comparision warnings
+  * Add "lua-5.1" to searched pkg-config names for lua
 
 - 1.4.23 - 2009-06-19
   * Added some extra warning options in cmake and fix the resulting warnings (unused/static functions)
