@@ -719,7 +719,7 @@ int main (int argc, char **argv) {
 		}
 
 		if (srv->event_handler == FDEVENT_HANDLER_SELECT) {
-			srv->max_fds = rlim.rlim_cur < FD_SETSIZE - 200 ? rlim.rlim_cur : FD_SETSIZE - 200;
+			srv->max_fds = rlim.rlim_cur < ((int)FD_SETSIZE) - 200 ? rlim.rlim_cur : FD_SETSIZE - 200;
 		} else {
 			srv->max_fds = rlim.rlim_cur;
 		}
@@ -732,7 +732,7 @@ int main (int argc, char **argv) {
 #endif
 		if (srv->event_handler == FDEVENT_HANDLER_SELECT) {
 			/* don't raise the limit above FD_SET_SIZE */
-			if (srv->max_fds > FD_SETSIZE - 200) {
+			if (srv->max_fds > ((int)FD_SETSIZE) - 200) {
 				log_error_write(srv, __FILE__, __LINE__, "sd",
 						"can't raise max filedescriptors above",  FD_SETSIZE - 200,
 						"if event-handler is 'select'. Use 'poll' or something else or reduce server.max-fds.");
@@ -845,7 +845,7 @@ int main (int argc, char **argv) {
 		}
 
 		if (srv->event_handler == FDEVENT_HANDLER_SELECT) {
-			srv->max_fds = rlim.rlim_cur < FD_SETSIZE - 200 ? rlim.rlim_cur : FD_SETSIZE - 200;
+			srv->max_fds = rlim.rlim_cur < ((int)FD_SETSIZE) - 200 ? rlim.rlim_cur : FD_SETSIZE - 200;
 		} else {
 			srv->max_fds = rlim.rlim_cur;
 		}
@@ -859,7 +859,7 @@ int main (int argc, char **argv) {
 #endif
 		if (srv->event_handler == FDEVENT_HANDLER_SELECT) {
 			/* don't raise the limit above FD_SET_SIZE */
-			if (srv->max_fds > FD_SETSIZE - 200) {
+			if (srv->max_fds > ((int)FD_SETSIZE) - 200) {
 				log_error_write(srv, __FILE__, __LINE__, "sd",
 						"can't raise max filedescriptors above",  FD_SETSIZE - 200,
 						"if event-handler is 'select'. Use 'poll' or something else or reduce server.max-fds.");
