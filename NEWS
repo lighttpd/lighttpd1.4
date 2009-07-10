@@ -14,6 +14,7 @@ NEWS
   * Fix FD_SETSIZE comparision warnings
   * Add "lua-5.1" to searched pkg-config names for lua
   * Fix unused function webdav_lockdiscovery in mod_webdav
+  * cmake: Fix crypt lib check
 
 - 1.4.23 - 2009-06-19
   * Added some extra warning options in cmake and fix the resulting warnings (unused/static functions)
