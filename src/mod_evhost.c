@@ -294,10 +294,10 @@ static handler_t mod_evhost_uri_handler(server *srv, connection *con, void *p_d)
 				char *colon = strchr(con->uri.authority->ptr, ':');
 
 				if(colon == NULL) {
-					buffer_append_string_buffer(p->tmp_buf, con->uri.authority); // adds fqdn
+					buffer_append_string_buffer(p->tmp_buf, con->uri.authority); /* adds fqdn */
 				} else {
 					/* strip the port out of the authority-part of the URI scheme */
-					buffer_append_string_len(p->tmp_buf, con->uri.authority->ptr, colon - con->uri.authority->ptr); // adds fqdn
+					buffer_append_string_len(p->tmp_buf, con->uri.authority->ptr, colon - con->uri.authority->ptr); /* adds fqdn */
 				}
 			} else if (NULL != (ds = (data_string *)array_get_element(parsed_host,p->conf.path_pieces[i]->ptr))) {
 				if (ds->value->used) {
