@@ -2312,8 +2312,8 @@ static handler_t scgi_write_request(server *srv, handler_ctx *hctx) {
 
 		chunkqueue_remove_finished_chunks(hctx->wb);
 
-		if (-1 == ret) {
-			if (errno == ENOTCONN) {
+		if (ret < 0) {
+			if (errno == ENOTCONN || ret == -2) {
 				/* the connection got dropped after accept()
 				 *
 				 * this is most of the time a PHP which dies
@@ -2338,7 +2338,7 @@ static handler_t scgi_write_request(server *srv, handler_ctx *hctx) {
 				 */
 
 				log_error_write(srv, __FILE__, __LINE__, "ssosd",
-						"[REPORT ME] connection was dropped after accept(). reconnect() denied:",
+						"connection was dropped after accept(). reconnect() denied:",
 						"write-offset:", hctx->wb->bytes_out,
 						"reconnect attempts:", hctx->reconnects);
 
