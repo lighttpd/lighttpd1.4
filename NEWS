@@ -17,6 +17,7 @@ NEWS
   * cmake: Fix crypt lib check
   * cmake: Add -export-dynamic to link flags, fixes build on FreeBSD
   * Set FD_CLOEXEC for bound sockets before pipe-logger forks (fixes #2026)
+  * Reset ignored signals to SIG_DFL before exec() in fastcgi/scgi (fixes #2029)
 
 - 1.4.23 - 2009-06-19
   * Added some extra warning options in cmake and fix the resulting warnings (unused/static functions)
