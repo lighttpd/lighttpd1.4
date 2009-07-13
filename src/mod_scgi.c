@@ -331,7 +331,20 @@ static handler_t scgi_handle_fdevent(void *s, void *ctx, int revents);
 
 int scgi_proclist_sort_down(server *srv, scgi_extension_host *host, scgi_proc *proc);
 
-
+static void reset_signals(void) {
+#ifdef SIGTTOU
+	signal(SIGTTOU, SIG_DFL);
+#endif
+#ifdef SIGTTIN
+	signal(SIGTTIN, SIG_DFL);
+#endif
+#ifdef SIGTSTP
+	signal(SIGTSTP, SIG_DFL);
+#endif
+	signal(SIGHUP, SIG_DFL);
+	signal(SIGPIPE, SIG_DFL);
+	signal(SIGUSR1, SIG_DFL);
+}
 
 static handler_ctx * handler_ctx_init() {
 	handler_ctx * hctx;
@@ -825,6 +838,8 @@ static int scgi_spawn_connection(server *srv,
 			b = buffer_init();
 			buffer_copy_string_len(b, CONST_STR_LEN("exec "));
 			buffer_append_string_buffer(b, host->bin_path);
+
+			reset_signals();
 
 			/* exec the cgi */
 			execle("/bin/sh", "sh", "-c", b->ptr, (char *)NULL, env.ptr);

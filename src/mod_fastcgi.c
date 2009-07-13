@@ -384,6 +384,21 @@ typedef struct {
 /* ok, we need a prototype */
 static handler_t fcgi_handle_fdevent(void *s, void *ctx, int revents);
 
+static void reset_signals(void) {
+#ifdef SIGTTOU
+	signal(SIGTTOU, SIG_DFL);
+#endif
+#ifdef SIGTTIN
+	signal(SIGTTIN, SIG_DFL);
+#endif
+#ifdef SIGTSTP
+	signal(SIGTSTP, SIG_DFL);
+#endif
+	signal(SIGHUP, SIG_DFL);
+	signal(SIGPIPE, SIG_DFL);
+	signal(SIGUSR1, SIG_DFL);
+}
+
 static void fastcgi_status_copy_procname(buffer *b, fcgi_extension_host *host, fcgi_proc *proc) {
 	buffer_copy_string_len(b, CONST_STR_LEN("fastcgi.backend."));
 	buffer_append_string_buffer(b, host->id);
@@ -1052,6 +1067,7 @@ static int fcgi_spawn_connection(server *srv,
 				*c = '/';
 			}
 
+			reset_signals();
 
 			/* exec the cgi */
 			execve(arg.ptr[0], arg.ptr, env.ptr);
