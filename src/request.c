@@ -540,8 +540,8 @@ int http_request_parse(server *srv, connection *con) {
 		con->response.keep_alive = 0;
 		con->keep_alive = 0;
 
-		log_error_write(srv, __FILE__, __LINE__, "s", "no uri specified -> 400");
 		if (srv->srvconf.log_request_header_on_error) {
+			log_error_write(srv, __FILE__, __LINE__, "s", "no uri specified -> 400");
 			log_error_write(srv, __FILE__, __LINE__, "Sb",
 							"request-header:\n",
 							con->request.request);
