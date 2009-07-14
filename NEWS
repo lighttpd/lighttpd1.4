@@ -22,6 +22,7 @@ NEWS
   * Fix hanging connection in mod_scgi (fixes #2024)
   * Allow digits in hostnames in more places (fixes #1148)
   * Use connection_reset instead of handle_request_done for cleanup callbacks
+  * Change mod_expire to append Cache-Control instead of overwriting it (fixes #1197)
 
 - 1.4.23 - 2009-06-19
   * Added some extra warning options in cmake and fix the resulting warnings (unused/static functions)
