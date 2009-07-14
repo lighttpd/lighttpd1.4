@@ -20,6 +20,7 @@ NEWS
   * Reset ignored signals to SIG_DFL before exec() in fastcgi/scgi (fixes #2029)
   * Show "no uri specified -> 400" error only when "debug.log-request-header-on-error" is enabled (fixes #2030)
   * Fix hanging connection in mod_scgi (fixes #2024)
+  * Allow digits in hostnames in more places (fixes #1148)
 
 - 1.4.23 - 2009-06-19
   * Added some extra warning options in cmake and fix the resulting warnings (unused/static functions)
