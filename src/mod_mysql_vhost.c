@@ -424,15 +424,15 @@ ERR500:	if (result) mysql_free_result(result);
 /* this function is called at dlopen() time and inits the callbacks */
 int mod_mysql_vhost_plugin_init(plugin *p);
 int mod_mysql_vhost_plugin_init(plugin *p) {
-	p->version     = LIGHTTPD_VERSION_ID;
-	p->name        			= buffer_init_string("mysql_vhost");
+	p->version        = LIGHTTPD_VERSION_ID;
+	p->name           = buffer_init_string("mysql_vhost");
 
-	p->init        			= mod_mysql_vhost_init;
-	p->cleanup     			= mod_mysql_vhost_cleanup;
-	p->handle_request_done	 	= mod_mysql_vhost_handle_connection_close;
+	p->init           = mod_mysql_vhost_init;
+	p->cleanup        = mod_mysql_vhost_cleanup;
+	p->connection_reset = mod_mysql_vhost_handle_connection_close;
 
-	p->set_defaults			= mod_mysql_vhost_set_defaults;
-	p->handle_docroot  		= mod_mysql_vhost_handle_docroot;
+	p->set_defaults   = mod_mysql_vhost_set_defaults;
+	p->handle_docroot = mod_mysql_vhost_handle_docroot;
 
 	return 0;
 }
@@ -441,7 +441,7 @@ int mod_mysql_vhost_plugin_init(plugin *p) {
 int mod_mysql_vhost_plugin_init(plugin *p);
 int mod_mysql_vhost_plugin_init(plugin *p) {
 	p->version     = LIGHTTPD_VERSION_ID;
-	p->name        			= buffer_init_string("mysql_vhost");
+	p->name        = buffer_init_string("mysql_vhost");
 
 	return 0;
 }

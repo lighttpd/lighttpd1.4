@@ -215,7 +215,7 @@ URIHANDLER_FUNC(mod_setenv_uri_handler) {
 	return HANDLER_GO_ON;
 }
 
-REQUESTDONE_FUNC(mod_setenv_reset) {
+CONNECTION_FUNC(mod_setenv_reset) {
 	plugin_data *p = p_d;
 
 	UNUSED(srv);
@@ -240,7 +240,7 @@ int mod_setenv_plugin_init(plugin *p) {
 	p->set_defaults  = mod_setenv_set_defaults;
 	p->cleanup     = mod_setenv_free;
 
-	p->handle_request_done  = mod_setenv_reset;
+	p->connection_reset  = mod_setenv_reset;
 
 	p->data        = NULL;
 
