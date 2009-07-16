@@ -572,11 +572,7 @@ int network_init(server *srv) {
 		/* not our stage */
 		if (COMP_SERVER_SOCKET != dc->comp) continue;
 
-		if (dc->cond != CONFIG_COND_EQ) {
-			log_error_write(srv, __FILE__, __LINE__, "s", "only == is allowed for $SERVER[\"socket\"].");
-
-			return -1;
-		}
+		if (dc->cond != CONFIG_COND_EQ) continue;
 
 		/* check if we already know this socket,
 		 * if yes, don't init it */
