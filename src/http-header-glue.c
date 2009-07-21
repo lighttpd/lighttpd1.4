@@ -336,8 +336,6 @@ int http_response_handle_cachable(server *srv, connection *con, buffer *mtime) {
 				/**
 				 * parsing failed, let's get out of here 
 				 */
-				log_error_write(srv, __FILE__, __LINE__, "ss",
-						"strptime() failed on", buf);
 				return HANDLER_GO_ON;
 			}
 			t_header = mktime(&tm);
