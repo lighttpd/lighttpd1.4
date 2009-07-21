@@ -1107,19 +1107,20 @@ static handler_t mod_proxy_check_extension(server *srv, connection *con, void *p
 
 	/* check if extension matches */
 	for (k = 0; k < p->conf.extensions->used; k++) {
+		data_array *ext = NULL;
 		size_t ct_len;
 
-		extension = (data_array *)p->conf.extensions->data[k];
+		ext = (data_array *)p->conf.extensions->data[k];
 
-		if (extension->key->used == 0) continue;
+		if (ext->key->used == 0) continue;
 
-		ct_len = extension->key->used - 1;
+		ct_len = ext->key->used - 1;
 
 		if (s_len < ct_len) continue;
 
 		/* check extension in the form "/proxy_pattern" */
-		if (*(extension->key->ptr) == '/') {
-			if (strncmp(fn->ptr, extension->key->ptr, ct_len) == 0) {
+		if (*(ext->key->ptr) == '/') {
+			if (strncmp(fn->ptr, ext->key->ptr, ct_len) == 0) {
 				if (s_len > ct_len + 1) {
 					char *pi_offset;
 
@@ -1127,15 +1128,17 @@ static handler_t mod_proxy_check_extension(server *srv, connection *con, void *p
 						path_info_offset = pi_offset - fn->ptr;
 					}
 				}
+				extension = ext;
 				break;
 			}
-		} else if (0 == strncmp(fn->ptr + s_len - ct_len, extension->key->ptr, ct_len)) {
+		} else if (0 == strncmp(fn->ptr + s_len - ct_len, ext->key->ptr, ct_len)) {
 			/* check extension in the form ".fcg" */
+			extension = ext;
 			break;
 		}
 	}
 
-	if (k == p->conf.extensions->used) {
+	if (NULL == extension) {
 		return HANDLER_GO_ON;
 	}
 

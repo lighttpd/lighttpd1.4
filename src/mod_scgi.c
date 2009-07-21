@@ -785,10 +785,8 @@ static int scgi_spawn_connection(server *srv,
 			env.used = 0;
 
 			if (scgi_fd != 0) {
-				close(0);
 				dup2(scgi_fd, 0);
 				close(scgi_fd);
-				scgi_fd = 0;
 			}
 
 			/* we don't need the client socket */
@@ -2176,8 +2174,11 @@ static handler_t scgi_write_request(server *srv, handler_ctx *hctx) {
 	int ret;
 
 	/* sanity check */
-	if (!host ||
-	    ((!host->host->used || !host->port) && !host->unixsocket->used)) {
+	if (!host) {
+		log_error_write(srv, __FILE__, __LINE__, "s", "fatal error: host = NULL");
+		return HANDLER_ERROR;
+	}
+	if (((!host->host->used || !host->port) && !host->unixsocket->used)) {
 		log_error_write(srv, __FILE__, __LINE__, "sxddd",
 				"write-req: error",
 				host,
@@ -2482,12 +2483,10 @@ SUBREQUEST_FUNC(mod_scgi_handle_subrequest) {
 }
 
 static handler_t scgi_connection_close(server *srv, handler_ctx *hctx) {
-	plugin_data *p;
 	connection  *con;
 
 	if (NULL == hctx) return HANDLER_GO_ON;
 
-	p    = hctx->plugin_data;
 	con  = hctx->remote_conn;
 
 	log_error_write(srv, __FILE__, __LINE__, "ssdsd",
@@ -2737,27 +2736,29 @@ static handler_t scgi_check_extension(server *srv, connection *con, void *p_d, i
 	/* check if extension matches */
 	for (k = 0; k < p->conf.exts->used; k++) {
 		size_t ct_len;
+		scgi_extension *ext = p->conf.exts->exts[k];
 
-		extension = p->conf.exts->exts[k];
+		if (ext->key->used == 0) continue;
 
-		if (extension->key->used == 0) continue;
-
-		ct_len = extension->key->used - 1;
+		ct_len = ext->key->used - 1;
 
 		if (s_len < ct_len) continue;
 
 		/* check extension in the form "/scgi_pattern" */
-		if (*(extension->key->ptr) == '/') {
-			if (strncmp(fn->ptr, extension->key->ptr, ct_len) == 0)
+		if (*(ext->key->ptr) == '/') {
+			if (strncmp(fn->ptr, ext->key->ptr, ct_len) == 0) {
+				extension = ext;
 				break;
-		} else if (0 == strncmp(fn->ptr + s_len - ct_len, extension->key->ptr, ct_len)) {
+			}
+		} else if (0 == strncmp(fn->ptr + s_len - ct_len, ext->key->ptr, ct_len)) {
 			/* check extension in the form ".fcg" */
+			extension = ext;
 			break;
 		}
 	}
 
 	/* extension doesn't match */
-	if (k == p->conf.exts->used) {
+	if (NULL == extension) {
 		return HANDLER_GO_ON;
 	}
 

@@ -782,7 +782,7 @@ int main (int argc, char **argv) {
 		 * Change group before chroot, when we have access
 		 * to /etc/group
 		 * */
-		if (srv->srvconf.groupname->used) {
+		if (NULL != grp) {
 			setgid(grp->gr_gid);
 			setgroups(0, NULL);
 			if (srv->srvconf.username->used) {
@@ -806,7 +806,7 @@ int main (int argc, char **argv) {
 #endif
 #ifdef HAVE_PWD_H
 		/* drop root privs */
-		if (srv->srvconf.username->used) {
+		if (NULL != pwd) {
 			setuid(pwd->pw_uid);
 		}
 #endif

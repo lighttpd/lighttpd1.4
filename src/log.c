@@ -62,7 +62,6 @@ int open_logfile_or_pipe(server *srv, const char* logfile) {
 		/* create write pipe and spawn process */
 
 		int to_log_fds[2];
-		pid_t pid;
 
 		if (pipe(to_log_fds)) {
 			log_error_write(srv, __FILE__, __LINE__, "ss", "pipe failed: ", strerror(errno));
@@ -70,7 +69,7 @@ int open_logfile_or_pipe(server *srv, const char* logfile) {
 		}
 
 		/* fork, execve */
-		switch (pid = fork()) {
+		switch (fork()) {
 		case 0:
 			/* child */
 			close(STDIN_FILENO);

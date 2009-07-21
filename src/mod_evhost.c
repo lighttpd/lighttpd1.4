@@ -213,7 +213,7 @@ static int mod_evhost_parse_host(connection *con,array *host) {
 		if (colon != ptr) {
 			ds = data_string_init();
 			buffer_copy_string_len(ds->key,CONST_STR_LEN("%"));
-			buffer_append_long(ds->key, i++);
+			buffer_append_long(ds->key, i /* ++ */);
 			buffer_copy_string_len(ds->value,ptr,colon-ptr);
 
 			array_insert_unique(host,(data_unset *)ds);

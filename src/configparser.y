@@ -72,7 +72,7 @@ data_unset *configparser_merge_data(data_unset *op1, const data_unset *op2) {
       op1->free(op1);
       return (data_unset *)ds;
     } else {
-      fprintf(stderr, "data type mismatch, cannot be merge\n");
+      fprintf(stderr, "data type mismatch, cannot merge\n");
       return NULL;
     }
   }
@@ -193,7 +193,6 @@ varline ::= key(A) APPEND expression(B). {
     du = configparser_merge_data(du, B);
     if (NULL == du) {
       ctx->ok = 0;
-      du->free(du);
     }
     else {
       buffer_copy_string_buffer(du->key, A);

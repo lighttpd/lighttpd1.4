@@ -2792,8 +2792,11 @@ static handler_t fcgi_write_request(server *srv, handler_ctx *hctx) {
 	 *     - tcp socket (do not check host->host->uses, as it may be not set which means INADDR_LOOPBACK)
 	 *     - unix socket
 	 */
-	if (!host ||
-	    (!host->port && !host->unixsocket->used)) {
+	if (!host) {
+		log_error_write(srv, __FILE__, __LINE__, "s", "fatal error: host = NULL");
+		return HANDLER_ERROR;
+	}
+	if ((!host->port && !host->unixsocket->used)) {
 		log_error_write(srv, __FILE__, __LINE__, "sxddd",
 				"write-req: error",
 				host,
@@ -3503,25 +3506,27 @@ static handler_t fcgi_check_extension(server *srv, connection *con, void *p_d, i
 		/* check if extension matches */
 		for (k = 0; k < p->conf.exts->used; k++) {
 			size_t ct_len; /* length of the config entry */
+			fcgi_extension *ext = p->conf.exts->exts[k];
 
-			extension = p->conf.exts->exts[k];
+			if (ext->key->used == 0) continue;
 
-			if (extension->key->used == 0) continue;
-
-			ct_len = extension->key->used - 1;
+			ct_len = ext->key->used - 1;
 
 			/* check _url_ in the form "/fcgi_pattern" */
-			if (extension->key->ptr[0] == '/') {
+			if (ext->key->ptr[0] == '/') {
 				if ((ct_len <= con->uri.path->used -1) &&
-				    (strncmp(con->uri.path->ptr, extension->key->ptr, ct_len) == 0))
+				    (strncmp(con->uri.path->ptr, ext->key->ptr, ct_len) == 0)) {
+					extension = ext;
 					break;
-			} else if ((ct_len <= s_len) && (0 == strncmp(fn->ptr + s_len - ct_len, extension->key->ptr, ct_len))) {
+				}
+			} else if ((ct_len <= s_len) && (0 == strncmp(fn->ptr + s_len - ct_len, ext->key->ptr, ct_len))) {
 				/* check extension in the form ".fcg" */
+				extension = ext;
 				break;
 			}
 		}
 		/* extension doesn't match */
-		if (k == p->conf.exts->used) {
+		if (NULL == extension) {
 			return HANDLER_GO_ON;
 		}
 	}

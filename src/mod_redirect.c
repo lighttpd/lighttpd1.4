@@ -203,7 +203,7 @@ static handler_t mod_redirect_uri_handler(server *srv, connection *con, void *p_
 			}
 		} else {
 			const char **list;
-			size_t start, end;
+			size_t start;
 			size_t k;
 
 			/* it matched */
@@ -213,16 +213,14 @@ static handler_t mod_redirect_uri_handler(server *srv, connection *con, void *p_
 
 			buffer_reset(p->location);
 
-			start = 0; end = pattern_len;
+			start = 0;
 			for (k = 0; k < pattern_len; k++) {
 				if (pattern[k] == '$' || pattern[k] == '%') {
 					/* got one */
 
 					size_t num = pattern[k + 1] - '0';
 
-					end = k;
-
-					buffer_append_string_len(p->location, pattern + start, end - start);
+					buffer_append_string_len(p->location, pattern + start, k - start);
 
 					if (!isdigit((unsigned char)pattern[k + 1])) {
 						/* enable escape: "%%" => "%", "%a" => "%a", "$$" => "$" */

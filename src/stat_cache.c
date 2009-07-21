@@ -503,11 +503,9 @@ handler_t stat_cache_get_entry(server *srv, connection *con, buffer *name, stat_
 	}
 
 	if (NULL == sce) {
-		int osize = 0;
-
-		if (sc->files) {
-			osize = sc->files->size;
-		}
+#ifdef DEBUG_STAT_CACHE
+		int osize = splaytree_size(sc->files);
+#endif
 
 		sce = stat_cache_entry_init();
 		buffer_copy_string_buffer(sce->name, name);

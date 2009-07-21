@@ -1730,7 +1730,7 @@ int connection_state_machine(server *srv, connection *con) {
 				case HANDLER_FINISHED:
 					break;
 				default:
-					log_error_write(srv, __FILE__, __LINE__, "");
+					log_error_write(srv, __FILE__, __LINE__, "sd", "unhandling return value", r);
 					break;
 				}
 				break;

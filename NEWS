@@ -25,6 +25,7 @@ NEWS
   * Change mod_expire to append Cache-Control instead of overwriting it (fixes #1197)
   * Allow all comparisons for $SERVER["socket"] - only bind for "=="
   * Remove strptime failed message (fixes #2031)
+  * Fix issues found with clang analyzer
 
 - 1.4.23 - 2009-06-19
   * Added some extra warning options in cmake and fix the resulting warnings (unused/static functions)
