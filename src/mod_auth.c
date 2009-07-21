@@ -468,7 +468,7 @@ SETDEFAULTS_FUNC(mod_auth_set_defaults) {
 
 			if (method == NULL) {
 				log_error_write(srv, __FILE__, __LINE__, "ss",
-						"the require field is missing in:",
+						"the method field is missing in:",
 						"auth.require = ( \"...\" => ( ..., \"method\" => \"...\" ) )");
 				return HANDLER_ERROR;
 			} else {
@@ -483,7 +483,7 @@ SETDEFAULTS_FUNC(mod_auth_set_defaults) {
 
 			if (realm == NULL) {
 				log_error_write(srv, __FILE__, __LINE__, "ss",
-						"the require field is missing in:",
+						"the realm field is missing in:",
 						"auth.require = ( \"...\" => ( ..., \"realm\" => \"...\" ) )");
 				return HANDLER_ERROR;
 			}

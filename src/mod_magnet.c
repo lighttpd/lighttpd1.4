@@ -283,16 +283,10 @@ static int magnet_atpanic(lua_State *L) {
 }
 
 static int magnet_reqhdr_get(lua_State *L) {
-	server *srv;
 	connection *con;
 	data_string *ds;
 
 	const char *key = luaL_checkstring(L, 2);
-
-	lua_pushstring(L, "lighty.srv");
-	lua_gettable(L, LUA_REGISTRYINDEX);
-	srv = lua_touserdata(L, -1);
-	lua_pop(L, 1);
 
 	lua_pushstring(L, "lighty.con");
 	lua_gettable(L, LUA_REGISTRYINDEX);

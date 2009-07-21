@@ -285,8 +285,6 @@ static int network_server_init(server *srv, buffer *host_token, specific_config 
 
 		break;
 	default:
-		addr_len = 0;
-
 		return -1;
 	}
 

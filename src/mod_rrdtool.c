@@ -139,7 +139,7 @@ static int mod_rrd_create_pipe(server *srv, plugin_data *p) {
 
 		args[i++] = p->conf.path_rrdtool_bin->ptr;
 		args[i++] = dash;
-		args[i++] = NULL;
+		args[i  ] = NULL;
 
 		/* we don't need the client socket */
 		for (i = 3; i < 256; i++) {
@@ -266,7 +266,7 @@ static int mod_rrdtool_create_rrd(server *srv, plugin_data *p, plugin_config *s)
 		"RRA:MIN:0.5:24:775 "
 		"RRA:MIN:0.5:288:797\n"));
 
-	if (-1 == (r = safe_write(p->write_fd, p->cmd->ptr, p->cmd->used - 1))) {
+	if (-1 == (safe_write(p->write_fd, p->cmd->ptr, p->cmd->used - 1))) {
 		log_error_write(srv, __FILE__, __LINE__, "ss",
 			"rrdtool-write: failed", strerror(errno));
 

@@ -132,7 +132,7 @@ static int fdevent_poll_event_get_revent(fdevents *ev, size_t ndx) {
 	if (poll_r & POLLNVAL) r |= FDEVENT_NVAL;
 	if (poll_r & POLLPRI) r |= FDEVENT_PRI;
 
-	return ev->pollfds[ndx].revents;
+	return r;
 }
 
 static int fdevent_poll_event_get_fd(fdevents *ev, size_t ndx) {

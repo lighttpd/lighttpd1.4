@@ -584,12 +584,9 @@ static handler_t cgi_connection_close(server *srv, handler_ctx *hctx) {
 #if 0
 				log_error_write(srv, __FILE__, __LINE__, "sd", "(debug) cgi exited fine, pid:", pid);
 #endif
-				pid = 0;
-
 				return HANDLER_GO_ON;
 			} else {
 				log_error_write(srv, __FILE__, __LINE__, "sd", "cgi died, pid:", pid);
-				pid = 0;
 				return HANDLER_GO_ON;
 			}
 		}
@@ -1009,7 +1006,7 @@ static int cgi_create_env(server *srv, connection *con, plugin_data *p, buffer *
 			args[i++] = cgi_handler->ptr;
 		}
 		args[i++] = con->physical.path->ptr;
-		args[i++] = NULL;
+		args[i  ] = NULL;
 
 		/* search for the last / */
 		if (NULL != (c = strrchr(con->physical.path->ptr, '/'))) {

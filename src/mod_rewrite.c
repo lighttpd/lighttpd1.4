@@ -176,7 +176,7 @@ static int parse_config_entry(server *srv, plugin_config *s, array *ca, const ch
 	data_unset *du;
 
 	if (NULL != (du = array_get_element(ca, option))) {
-		data_array *da = (data_array *)du;
+		data_array *da;
 		size_t j;
 
 		if (du->type != TYPE_ARRAY) {
@@ -373,7 +373,7 @@ URIHANDLER_FUNC(mod_rewrite_uri_handler) {
 			}
 		} else {
 			const char **list;
-			size_t start, end;
+			size_t start;
 			size_t k;
 
 			/* it matched */
@@ -383,16 +383,14 @@ URIHANDLER_FUNC(mod_rewrite_uri_handler) {
 
 			buffer_reset(con->request.uri);
 
-			start = 0; end = pattern_len;
+			start = 0;
 			for (k = 0; k < pattern_len; k++) {
 				if (pattern[k] == '$' || pattern[k] == '%') {
 					/* got one */
 
 					size_t num = pattern[k + 1] - '0';
 
-					end = k;
-
-					buffer_append_string_len(con->request.uri, pattern + start, end - start);
+					buffer_append_string_len(con->request.uri, pattern + start, k - start);
 
 					if (!isdigit((unsigned char)pattern[k + 1])) {
 						/* enable escape: "%%" => "%", "%a" => "%a", "$$" => "$" */
