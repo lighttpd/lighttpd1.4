@@ -1286,7 +1286,7 @@ SETDEFAULTS_FUNC(mod_fastcgi_set_defaults) {
 					host->max_load_per_proc = 1;
 					host->idle_timeout = 60;
 					host->mode = FCGI_RESPONDER;
-					host->disable_time = 60;
+					host->disable_time = 1;
 					host->break_scriptfilename_for_php = 0;
 					host->allow_xsendfile = 0; /* handle X-LIGHTTPD-send-file */
 					host->kill_signal = SIGTERM;
@@ -2804,7 +2804,7 @@ static handler_t fcgi_write_request(server *srv, handler_ctx *hctx) {
 				host->port,
 				host->unixsocket->used);
 
-		hctx->proc->disabled_until = srv->cur_ts + 10;
+		hctx->proc->disabled_until = srv->cur_ts + hctx->host->disable_time;
 		hctx->proc->state = PROC_STATE_DIED;
 
 		return HANDLER_ERROR;
@@ -2820,7 +2820,7 @@ static handler_t fcgi_write_request(server *srv, handler_ctx *hctx) {
 			log_error_write(srv, __FILE__, __LINE__, "ss",
 					"getsockopt failed:", strerror(errno));
 
-			hctx->proc->disabled_until = srv->cur_ts + 10;
+			hctx->proc->disabled_until = srv->cur_ts + hctx->host->disable_time;
 			hctx->proc->state = PROC_STATE_DIED;
 
 			return HANDLER_ERROR;
@@ -2834,7 +2834,7 @@ static handler_t fcgi_write_request(server *srv, handler_ctx *hctx) {
 						"socket:", hctx->proc->connection_name);
 			}
 
-			hctx->proc->disabled_until = srv->cur_ts + 5;
+			hctx->proc->disabled_until = srv->cur_ts + hctx->host->disable_time;
 
 			if (hctx->proc->is_local) {
 				hctx->proc->state = PROC_STATE_DIED_WAIT_FOR_PID;
@@ -2927,13 +2927,13 @@ static handler_t fcgi_write_request(server *srv, handler_ctx *hctx) {
 			/* cool down the backend, it is overloaded
 			 * -> EAGAIN */
 
-			log_error_write(srv, __FILE__, __LINE__, "ssdsd",
-				"backend is overloaded; we'll disable it for 2 seconds and send the request to another backend instead:",
+			log_error_write(srv, __FILE__, __LINE__, "sdssdsd",
+				"backend is overloaded; we'll disable it for", hctx->host->disable_time, "seconds and send the request to another backend instead:",
 				"reconnects:", hctx->reconnects,
 				"load:", host->load);
 
 
-			hctx->proc->disabled_until = srv->cur_ts + 2;
+			hctx->proc->disabled_until = srv->cur_ts + hctx->host->disable_time;
 			hctx->proc->state = PROC_STATE_OVERLOADED;
 
 			fastcgi_status_copy_procname(p->statuskey, hctx->host, hctx->proc);
@@ -2947,18 +2947,18 @@ static handler_t fcgi_write_request(server *srv, handler_ctx *hctx) {
 			 * - ECONNREFUSED for tcp-ip sockets
 			 * - ENOENT for unix-domain-sockets
 			 *
-			 * for check if the host is back in 5 seconds
+			 * for check if the host is back in hctx->host->disable_time seconds
 			 *  */
 
-			hctx->proc->disabled_until = srv->cur_ts + 5;
+			hctx->proc->disabled_until = srv->cur_ts + hctx->host->disable_time;
 			if (hctx->proc->is_local) {
 				hctx->proc->state = PROC_STATE_DIED_WAIT_FOR_PID;
 			} else {
 				hctx->proc->state = PROC_STATE_DIED;
 			}
 
-			log_error_write(srv, __FILE__, __LINE__, "ssdsd",
-				"backend died; we'll disable it for 5 seconds and send the request to another backend instead:",
+			log_error_write(srv, __FILE__, __LINE__, "sdssdsd",
+				"backend died; we'll disable it for", hctx->host->disable_time, "seconds and send the request to another backend instead:",
 				"reconnects:", hctx->reconnects,
 				"load:", host->load);
 
