@@ -842,17 +842,14 @@ static handler_t proxy_write_request(server *srv, handler_ctx *hctx) {
 
 		chunkqueue_remove_finished_chunks(hctx->wb);
 
-		if (-1 == ret) {
-			if (errno != EAGAIN &&
-			    errno != EINTR) {
-				log_error_write(srv, __FILE__, __LINE__, "ssd", "write failed:", strerror(errno), errno);
+		if (-1 == ret) { /* error on our side */
+			log_error_write(srv, __FILE__, __LINE__, "ssd", "write failed:", strerror(errno), errno);
 
-				return HANDLER_ERROR;
-			} else {
-				fdevent_event_add(srv->ev, &(hctx->fde_ndx), hctx->fd, FDEVENT_OUT);
+			return HANDLER_WAIT_FOR_EVENT;
+		} else if (-2 == ret) { /* remote close */
+			log_error_write(srv, __FILE__, __LINE__, "ssd", "write failed, remote connection close:", strerror(errno), errno);
 
-				return HANDLER_WAIT_FOR_EVENT;
-			}
+			return HANDLER_WAIT_FOR_EVENT;
 		}
 
 		if (hctx->wb->bytes_out == hctx->wb->bytes_in) {

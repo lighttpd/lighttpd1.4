@@ -27,6 +27,7 @@ NEWS
   * Remove strptime failed message (fixes #2031)
   * Fix issues found with clang analyzer
   * Try to fix server.tag issue with localized svnversion
+  * Fix handling network-write return values (#2024)
 
 - 1.4.23 - 2009-06-19
   * Added some extra warning options in cmake and fix the resulting warnings (unused/static functions)
