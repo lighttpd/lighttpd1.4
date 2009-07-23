@@ -29,6 +29,7 @@ NEWS
   * Try to fix server.tag issue with localized svnversion
   * Fix handling network-write return values (#2024)
   * Use disable-time in fastcgi for all disables after errors, default is 1sec (fixes #2040)
+  * Remove adaptive spawning code from fastcgi (was disabled for a long time)
 
 - 1.4.23 - 2009-06-19
   * Added some extra warning options in cmake and fix the resulting warnings (unused/static functions)
