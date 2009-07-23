@@ -122,22 +122,9 @@ typedef struct {
 	 *
 	 */
 
-	unsigned short min_procs;
 	unsigned short max_procs;
 	size_t num_procs;    /* how many procs are started */
 	size_t active_procs; /* how many of them are really running */
-
-	unsigned short max_load_per_proc;
-
-	/*
-	 * kick the process from the list if it was not
-	 * used for idle_timeout until min_procs is
-	 * reached. this helps to get the processlist
-	 * small again we had a small peak load.
-	 *
-	 */
-
-	unsigned short idle_timeout;
 
 	/*
 	 * time after a disabled remote connection is tried to be re-enabled
@@ -1249,20 +1236,17 @@ SETDEFAULTS_FUNC(mod_fastcgi_set_defaults) {
 
 						{ "check-local",       NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION },      /* 5 */
 						{ "port",              NULL, T_CONFIG_SHORT, T_CONFIG_SCOPE_CONNECTION },        /* 6 */
-						{ "min-procs-not-working",         NULL, T_CONFIG_SHORT, T_CONFIG_SCOPE_CONNECTION },        /* 7 this is broken for now */
-						{ "max-procs",         NULL, T_CONFIG_SHORT, T_CONFIG_SCOPE_CONNECTION },        /* 8 */
-						{ "max-load-per-proc", NULL, T_CONFIG_SHORT, T_CONFIG_SCOPE_CONNECTION },        /* 9 */
-						{ "idle-timeout",      NULL, T_CONFIG_SHORT, T_CONFIG_SCOPE_CONNECTION },        /* 10 */
-						{ "disable-time",      NULL, T_CONFIG_SHORT, T_CONFIG_SCOPE_CONNECTION },        /* 11 */
+						{ "max-procs",         NULL, T_CONFIG_SHORT, T_CONFIG_SCOPE_CONNECTION },        /* 7 */
+						{ "disable-time",      NULL, T_CONFIG_SHORT, T_CONFIG_SCOPE_CONNECTION },        /* 8 */
 
-						{ "bin-environment",   NULL, T_CONFIG_ARRAY, T_CONFIG_SCOPE_CONNECTION },        /* 12 */
-						{ "bin-copy-environment", NULL, T_CONFIG_ARRAY, T_CONFIG_SCOPE_CONNECTION },     /* 13 */
+						{ "bin-environment",   NULL, T_CONFIG_ARRAY, T_CONFIG_SCOPE_CONNECTION },        /* 9 */
+						{ "bin-copy-environment", NULL, T_CONFIG_ARRAY, T_CONFIG_SCOPE_CONNECTION },     /* 10 */
 
-						{ "broken-scriptfilename", NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION },  /* 14 */
-						{ "allow-x-send-file",  NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION },      /* 15 */
-						{ "strip-request-uri",  NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_CONNECTION },      /* 16 */
-						{ "kill-signal",        NULL, T_CONFIG_SHORT, T_CONFIG_SCOPE_CONNECTION },      /* 17 */
-						{ "fix-root-scriptname",   NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION },  /* 18 */
+						{ "broken-scriptfilename", NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION },  /* 11 */
+						{ "allow-x-send-file",  NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION },     /* 12 */
+						{ "strip-request-uri",  NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_CONNECTION },      /* 13 */
+						{ "kill-signal",        NULL, T_CONFIG_SHORT, T_CONFIG_SCOPE_CONNECTION },       /* 14 */
+						{ "fix-root-scriptname",   NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION },  /* 15 */
 
 						{ NULL,                NULL, T_CONFIG_UNSET, T_CONFIG_SCOPE_UNSET }
 					};
@@ -1281,10 +1265,7 @@ SETDEFAULTS_FUNC(mod_fastcgi_set_defaults) {
 					buffer_copy_string_buffer(host->id, da_host->key);
 
 					host->check_local  = 1;
-					host->min_procs    = 4;
 					host->max_procs    = 4;
-					host->max_load_per_proc = 1;
-					host->idle_timeout = 60;
 					host->mode = FCGI_RESPONDER;
 					host->disable_time = 1;
 					host->break_scriptfilename_for_php = 0;
@@ -1300,19 +1281,16 @@ SETDEFAULTS_FUNC(mod_fastcgi_set_defaults) {
 
 					fcv[5].destination = &(host->check_local);
 					fcv[6].destination = &(host->port);
-					fcv[7].destination = &(host->min_procs);
-					fcv[8].destination = &(host->max_procs);
-					fcv[9].destination = &(host->max_load_per_proc);
-					fcv[10].destination = &(host->idle_timeout);
-					fcv[11].destination = &(host->disable_time);
+					fcv[7].destination = &(host->max_procs);
+					fcv[8].destination = &(host->disable_time);
 
-					fcv[12].destination = host->bin_env;
-					fcv[13].destination = host->bin_env_copy;
-					fcv[14].destination = &(host->break_scriptfilename_for_php);
-					fcv[15].destination = &(host->allow_xsendfile);
-					fcv[16].destination = host->strip_request_uri;
-					fcv[17].destination = &(host->kill_signal);
-					fcv[18].destination = &(host->fix_root_path_name);
+					fcv[9].destination = host->bin_env;
+					fcv[10].destination = host->bin_env_copy;
+					fcv[11].destination = &(host->break_scriptfilename_for_php);
+					fcv[12].destination = &(host->allow_xsendfile);
+					fcv[13].destination = host->strip_request_uri;
+					fcv[14].destination = &(host->kill_signal);
+					fcv[15].destination = &(host->fix_root_path_name);
 
 					if (0 != config_insert_values_internal(srv, da_host->value, fcv)) {
 						return HANDLER_ERROR;
@@ -1369,23 +1347,16 @@ SETDEFAULTS_FUNC(mod_fastcgi_set_defaults) {
 						/* a local socket + self spawning */
 						size_t pno;
 
-						/* HACK:  just to make sure the adaptive spawing is disabled */
-						host->min_procs = host->max_procs;
-
-						if (host->min_procs > host->max_procs) host->max_procs = host->min_procs;
-						if (host->max_load_per_proc < 1) host->max_load_per_proc = 0;
-
 						if (s->debug) {
-							log_error_write(srv, __FILE__, __LINE__, "ssbsdsbsdsd",
+							log_error_write(srv, __FILE__, __LINE__, "ssbsdsbsd",
 									"--- fastcgi spawning local",
 									"\n\tproc:", host->bin_path,
 									"\n\tport:", host->port,
 									"\n\tsocket", host->unixsocket,
-									"\n\tmin-procs:", host->min_procs,
 									"\n\tmax-procs:", host->max_procs);
 						}
 
-						for (pno = 0; pno < host->min_procs; pno++) {
+						for (pno = 0; pno < host->max_procs; pno++) {
 							fcgi_proc *proc;
 
 							proc = fastcgi_process_init();
@@ -1405,7 +1376,7 @@ SETDEFAULTS_FUNC(mod_fastcgi_set_defaults) {
 										"--- fastcgi spawning",
 										"\n\tport:", host->port,
 										"\n\tsocket", host->unixsocket,
-										"\n\tcurrent:", pno, "/", host->min_procs);
+										"\n\tcurrent:", pno, "/", host->max_procs);
 							}
 
 							if (fcgi_spawn_connection(srv, p, host, proc)) {
@@ -1440,7 +1411,6 @@ SETDEFAULTS_FUNC(mod_fastcgi_set_defaults) {
 
 						host->first = proc;
 
-						host->min_procs = 1;
 						host->max_procs = 1;
 					}
 
@@ -2753,7 +2723,7 @@ static int fcgi_restart_dead_procs(server *srv, plugin_data *p, fcgi_extension_h
 					log_error_write(srv, __FILE__, __LINE__, "ssbsdsd",
 							"--- fastcgi spawning",
 							"\n\tsocket", proc->connection_name,
-							"\n\tcurrent:", 1, "/", host->min_procs);
+							"\n\tcurrent:", 1, "/", host->max_procs);
 				}
 
 				if (fcgi_spawn_connection(srv, p, host, proc)) {
@@ -3278,7 +3248,7 @@ static handler_t fcgi_handle_fdevent(void *s, void *ctx, int revents) {
 						log_error_write(srv, __FILE__, __LINE__, "ssbsdsd",
 								"--- fastcgi spawning",
 								"\n\tsocket", proc->connection_name,
-								"\n\tcurrent:", 1, "/", host->min_procs);
+								"\n\tcurrent:", 1, "/", host->max_procs);
 					}
 
 					if (fcgi_spawn_connection(srv, p, host, proc)) {
@@ -3741,106 +3711,11 @@ TRIGGER_FUNC(mod_fastcgi_handle_trigger) {
 			for (n = 0; n < ex->used; n++) {
 
 				fcgi_proc *proc;
-				unsigned long sum_load = 0;
 				fcgi_extension_host *host;
 
 				host = ex->hosts[n];
 
 				fcgi_restart_dead_procs(srv, p, host);
-
-				for (proc = host->first; proc; proc = proc->next) {
-					sum_load += proc->load;
-				}
-
-				if (host->num_procs &&
-				    host->num_procs < host->max_procs &&
-				    (sum_load / host->num_procs) > host->max_load_per_proc) {
-					/* overload, spawn new child */
-					if (p->conf.debug) {
-						log_error_write(srv, __FILE__, __LINE__, "s",
-								"overload detected, spawning a new child");
-					}
-
-					for (proc = host->unused_procs; proc && proc->pid != 0; proc = proc->next);
-
-					if (proc) {
-						if (proc == host->unused_procs) host->unused_procs = proc->next;
-
-						if (proc->next) proc->next->prev = NULL;
-
-						host->max_id++;
-					} else {
-						proc = fastcgi_process_init();
-						proc->id = host->max_id++;
-					}
-
-					host->num_procs++;
-
-					if (buffer_is_empty(host->unixsocket)) {
-						proc->port = host->port + proc->id;
-					} else {
-						buffer_copy_string_buffer(proc->unixsocket, host->unixsocket);
-						buffer_append_string_len(proc->unixsocket, CONST_STR_LEN("-"));
-						buffer_append_long(proc->unixsocket, proc->id);
-					}
-
-					if (fcgi_spawn_connection(srv, p, host, proc)) {
-						log_error_write(srv, __FILE__, __LINE__, "s",
-								"ERROR: spawning fcgi failed.");
-						return HANDLER_ERROR;
-					}
-
-					proc->prev = NULL;
-					proc->next = host->first;
-					if (host->first) {
-						host->first->prev = proc;
-					}
-					host->first = proc;
-				}
-
-				for (proc = host->first; proc; proc = proc->next) {
-					if (proc->load != 0) break;
-					if (host->num_procs <= host->min_procs) break;
-					if (proc->pid == 0) continue;
-
-					if (srv->cur_ts - proc->last_used > host->idle_timeout) {
-						/* a proc is idling for a long time now,
-						 * terminate it */
-
-						if (p->conf.debug) {
-							log_error_write(srv, __FILE__, __LINE__, "ssbsd",
-									"idle-timeout reached; terminating child:",
-									"socket:", proc->connection_name,
-									"pid", proc->pid);
-						}
-
-
-						if (proc->next) proc->next->prev = proc->prev;
-						if (proc->prev) proc->prev->next = proc->next;
-
-						if (proc->prev == NULL) host->first = proc->next;
-
-						proc->prev = NULL;
-						proc->next = host->unused_procs;
-
-						if (host->unused_procs) host->unused_procs->prev = proc;
-						host->unused_procs = proc;
-
-						kill(proc->pid, SIGTERM);
-
-						proc->state = PROC_STATE_KILLED;
-
-						log_error_write(srv, __FILE__, __LINE__, "ssbsd",
-									"killed:",
-									"socket:", proc->connection_name,
-									"pid", proc->pid);
-
-						host->num_procs--;
-
-						/* proc is now in unused, let the next second handle the next process */
-						break;
-					}
-				}
 
 				for (proc = host->unused_procs; proc; proc = proc->next) {
 					int status;
