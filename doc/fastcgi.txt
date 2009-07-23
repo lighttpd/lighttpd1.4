@@ -95,23 +95,22 @@ fastcgi.server
       (
         ( "host" => <string> ,
           "port" => <integer> ,
-	  "socket" => <string>,       # either socket
-	                              # or host+port
-	  "bin-path" => <string>,     # OPTIONAL
-	  "bin-environment" => <array>, # OPTIONAL
-	  "bin-copy-environment" => <array>, # OPTIONAL
+          "socket" => <string>,       # either socket
+                                      # or host+port
+          "bin-path" => <string>,     # OPTIONAL
+          "bin-environment" => <array>, # OPTIONAL
+          "bin-copy-environment" => <array>, # OPTIONAL
           "mode" => <string>,         # OPTIONAL
           "docroot" => <string> ,     # OPTIONAL if "mode"
-	                              # is not "authorizer"
+                                      # is not "authorizer"
           "check-local" => <string>,  # OPTIONAL
-	  "min-procs" => <integer>,   # OPTIONAL
-	  "max-procs" => <integer>,   # OPTIONAL
-	  "max-load-per-proc" => <integer>, # OPTIONAL
-	  "idle-timeout" => <integer>, # OPTIONAL
-	  "broken-scriptfilename" => <boolean>, # OPTIONAL
+          "max-procs" => <integer>,   # OPTIONAL
+          "broken-scriptfilename" => <boolean>, # OPTIONAL
           "disable-time" => <integer>, # optional
-          "allow-x-send-file" => <boolean> # optional
-	),
+          "allow-x-send-file" => <boolean>, # optional
+          "kill-signal" => <integer>, # OPTIONAL
+          "fix-root-scriptname" => <boolean>,
+                                      # OPTIONAL
         ( "host" => ...
         )
       )
@@ -127,41 +126,37 @@ fastcgi.server
   :"socket":    path to the unix-domain socket
   :"mode":      is the FastCGI protocol mode.
                 Default is "responder", also "authorizer"
-		mode is implemented.
+                mode is implemented.
   :"docroot":   is optional and is the docroot on the remote
                 host for default "responder" mode. For
-		"authorizer" mode it is MANDATORY and it points
-		to docroot for authorized requests. For security
-		reasons it is recommended to keep this docroot
+                "authorizer" mode it is MANDATORY and it points
+                to docroot for authorized requests. For security
+                reasons it is recommended to keep this docroot
                 outside of server.document-root tree.
   :"check-local": is optional and may be "enable" (default) or
                 "disable". If enabled the server first check
-		for a file in local server.document-root tree
-		and return 404 (Not Found) if no such file.
+                for a file in local server.document-root tree
+                and return 404 (Not Found) if no such file.
                 If disabled, the server forward request to
-		FastCGI interface without this check.
+                FastCGI interface without this check.
   :"broken-scriptfilename": breaks SCRIPT_FILENAME in a wat that
                 PHP can extract PATH_INFO from it (default: disabled)
   :"disable-time": time to wait before a disabled backend is checked
                 again
   :"allow-x-send-file": controls if X-LIGHTTPD-send-file headers
                 are allowed
+  :"fix-root-scriptname": fix broken path-info split for "/" extension ("prefix")
 
   If bin-path is set:
 
-  :"min-procs": sets the minium processes to start
   :"max-procs": the upper limit of the processess to start
-  :"max-load-per-proc": maximum number of waiting processes on
-                average per process before a new process is
-                spawned
-  :"idle-timeout": number of seconds before a unused process
-                gets terminated
   :"bin-environment": put an entry into the environment of
                 the started process
   :"bin-copy-environement": clean up the environment and copy
                 only the specified entries into the fresh
                 environment of the spawn process
-
+  :"kill-signal": signal to terminate the FastCGI process with,
+                defauls to SIGTERM
 
 Examples
 --------
@@ -171,11 +166,11 @@ Examples
     fastcgi.server = ( ".php" =>
       (( "host" => "127.0.0.1",
          "port" => 1026,
-	 "bin-path" => "/usr/local/bin/php"
+         "bin-path" => "/usr/local/bin/php"
       )),
       ".php4" =>
       (( "host" => "127.0.0.1",
-	 "port" => 1026
+         "port" => 1026
       ))
     )
 
@@ -183,10 +178,10 @@ Examples
 
     fastcgi.server = ( "/remote_scripts/" =>
       (( "host" => "192.168.0.3",
-	 "port" => 9000,
+         "port" => 9000,
          "check-local" => "disable",
          "docroot" => "/" # remote server may use
-	                  # it's own docroot
+                          # it's own docroot
       ))
     )
 
@@ -206,7 +201,7 @@ Examples
 
     fastcgi.server = ( "/remote_scripts/" =>
       (( "host" => "10.0.0.2",
-	 "port" => 9000,
+         "port" => 9000,
          "docroot" => "/path_to_private_docs",
          "mode" => "authorizer"
       ))
@@ -318,10 +313,10 @@ is done:
      $ PHP_FCGI_CHILDREN=384 ./lighttpd -f ./lighttpd.conf
 
      fastcgi.server = ( ".php" =>
-  	(( "socket" => "/tmp/php.socket",
+        (( "socket" => "/tmp/php.socket",
            "bin-path" => "/usr/local/bin/php",
            "min-procs" => 1,
-	   "max-procs" => 1,
+           "max-procs" => 1,
            "max-load-per-proc" => 4,
            "idle-timeout" => 20
         ))
@@ -408,7 +403,7 @@ the necessary environment variables to the FastCGI process. ::
            "PHP_FCGI_CHILDREN" => "16",
            "PHP_FCGI_MAX_REQUESTS" => "10000" ),
         "bin-copy-environment" => (
-	   "PATH", "SHELL", "USER" )
+           "PATH", "SHELL", "USER" )
      ))
    )
 
