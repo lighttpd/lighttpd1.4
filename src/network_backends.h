@@ -45,6 +45,11 @@
 
 #include "base.h"
 
+/* return values:
+ * >= 0 : chunks completed
+ *   -1 : error (on our side)
+ *   -2 : remote close
+ */
 
 int network_write_chunkqueue_write(server *srv, connection *con, int fd, chunkqueue *cq);
 int network_write_chunkqueue_writev(server *srv, connection *con, int fd, chunkqueue *cq);

@@ -46,15 +46,27 @@ int network_write_chunkqueue_write(server *srv, connection *con, int fd, chunkqu
 			toSend = c->mem->used - 1 - c->offset;
 #ifdef __WIN32
 			if ((r = send(fd, offset, toSend, 0)) < 0) {
-				log_error_write(srv, __FILE__, __LINE__, "ssd", "write failed: ", strerror(errno), fd);
+				/* no error handling for windows... */
+				log_error_write(srv, __FILE__, __LINE__, "ssd", "send failed: ", strerror(errno), fd);
 
 				return -1;
 			}
 #else
 			if ((r = write(fd, offset, toSend)) < 0) {
-				log_error_write(srv, __FILE__, __LINE__, "ssd", "write failed: ", strerror(errno), fd);
+				switch (errno) {
+				case EAGAIN:
+				case EINTR:
+					r = 0;
+					break;
+				case EPIPE:
+				case ECONNRESET:
+					return -2;
+				default:
+					log_error_write(srv, __FILE__, __LINE__, "ssd",
+						"write failed:", strerror(errno), fd);
 
-				return -1;
+					return -1;
+				}
 			}
 #endif
 
@@ -98,7 +110,7 @@ int network_write_chunkqueue_write(server *srv, connection *con, int fd, chunkqu
 				return -1;
 			}
 
-#if defined USE_MMAP
+#ifdef USE_MMAP
 			if (MAP_FAILED == (p = mmap(0, sce->st.st_size, PROT_READ, MAP_SHARED, ifd, 0))) {
 				log_error_write(srv, __FILE__, __LINE__, "ss", "mmap failed: ", strerror(errno));
 
@@ -109,13 +121,26 @@ int network_write_chunkqueue_write(server *srv, connection *con, int fd, chunkqu
 			close(ifd);
 
 			if ((r = write(fd, p + offset, toSend)) <= 0) {
-				log_error_write(srv, __FILE__, __LINE__, "ss", "write failed: ", strerror(errno));
-				munmap(p, sce->st.st_size);
-				return -1;
+				switch (errno) {
+				case EAGAIN:
+				case EINTR:
+					r = 0;
+					break;
+				case EPIPE:
+				case ECONNRESET:
+					munmap(p, sce->st.st_size);
+					return -2;
+				default:
+					log_error_write(srv, __FILE__, __LINE__, "ssd",
+						"write failed:", strerror(errno), fd);
+					munmap(p, sce->st.st_size);
+
+					return -1;
+				}
 			}
 
 			munmap(p, sce->st.st_size);
-#else
+#else /* USE_MMAP */
 			buffer_prepare_copy(srv->tmp_buf, toSend);
 
 			lseek(ifd, offset, SEEK_SET);
@@ -127,12 +152,33 @@ int network_write_chunkqueue_write(server *srv, connection *con, int fd, chunkqu
 			}
 			close(ifd);
 
-			if (-1 == (r = send(fd, srv->tmp_buf->ptr, toSend, 0))) {
-				log_error_write(srv, __FILE__, __LINE__, "ss", "write: ", strerror(errno));
+#ifdef __WIN32
+			if ((r = send(fd, srv->tmp_buf->ptr, toSend, 0)) < 0) {
+				/* no error handling for windows... */
+				log_error_write(srv, __FILE__, __LINE__, "ssd", "send failed: ", strerror(errno), fd);
 
 				return -1;
 			}
-#endif
+#else /* __WIN32 */
+			if ((r = write(fd, srv->tmp_buf->ptr, toSend)) < 0) {
+				switch (errno) {
+				case EAGAIN:
+				case EINTR:
+					r = 0;
+					break;
+				case EPIPE:
+				case ECONNRESET:
+					return -2;
+				default:
+					log_error_write(srv, __FILE__, __LINE__, "ssd",
+						"write failed:", strerror(errno), fd);
+
+					return -1;
+				}
+			}
+#endif /* __WIN32 */
+#endif /* USE_MMAP */
+
 			c->offset += r;
 			cq->bytes_out += r;
 

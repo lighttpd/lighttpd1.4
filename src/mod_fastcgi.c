@@ -3049,11 +3049,6 @@ static handler_t fcgi_write_request(server *srv, handler_ctx *hctx) {
 						"reconnect attempts:", hctx->reconnects);
 
 				return HANDLER_ERROR;
-			case EAGAIN:
-			case EINTR:
-				fdevent_event_add(srv->ev, &(hctx->fde_ndx), hctx->fd, FDEVENT_OUT);
-
-				return HANDLER_WAIT_FOR_EVENT;
 			default:
 				log_error_write(srv, __FILE__, __LINE__, "ssd",
 						"write failed:", strerror(errno), errno);

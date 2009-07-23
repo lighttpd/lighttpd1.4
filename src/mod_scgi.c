@@ -2344,19 +2344,12 @@ static handler_t scgi_write_request(server *srv, handler_ctx *hctx) {
 						"reconnect attempts:", hctx->reconnects);
 
 				return HANDLER_ERROR;
-			}
-
-			if ((errno != EAGAIN) &&
-			    (errno != EINTR)) {
-
+			} else {
+				/* -1 == ret => error on our side */
 				log_error_write(srv, __FILE__, __LINE__, "ssd",
-						"write failed:", strerror(errno), errno);
+					"write failed:", strerror(errno), errno);
 
 				return HANDLER_ERROR;
-			} else {
-				fdevent_event_add(srv->ev, &(hctx->fde_ndx), hctx->fd, FDEVENT_OUT);
-
-				return HANDLER_WAIT_FOR_EVENT;
 			}
 		}
 
