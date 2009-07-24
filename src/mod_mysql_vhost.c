@@ -259,8 +259,14 @@ SERVER_FUNC(mod_mysql_vhost_set_defaults) {
 
 #define FOO(x) (s->x->used ? s->x->ptr : NULL)
 
+#if MYSQL_VERSION_ID >= 40100
+                        /* CLIENT_MULTI_STATEMENTS first appeared in 4.1 */ 
+			if (!mysql_real_connect(s->mysql, FOO(hostname), FOO(myuser), FOO(mypass),
+						FOO(mydb), s->port, FOO(mysock), CLIENT_MULTI_STATEMENTS)) {
+#else
 			if (!mysql_real_connect(s->mysql, FOO(hostname), FOO(myuser), FOO(mypass),
 						FOO(mydb), s->port, FOO(mysock), 0)) {
+#endif
 				log_error_write(srv, __FILE__, __LINE__, "s", mysql_error(s->mysql));
 
 				return HANDLER_ERROR;
@@ -369,6 +375,9 @@ CONNECTION_FUNC(mod_mysql_vhost_handle_docroot) {
 	if (!row || cols < 1) {
 		/* no such virtual host */
 		mysql_free_result(result);
+#if MYSQL_VERSION_ID >= 40100
+		while (mysql_next_result(p->conf.mysql) == 0);
+#endif
 		return HANDLER_GO_ON;
 	}
 
@@ -402,6 +411,9 @@ CONNECTION_FUNC(mod_mysql_vhost_handle_docroot) {
 		c->fcgi_offset = c->fcgi_arg->used = 0;
 	}
 	mysql_free_result(result);
+#if MYSQL_VERSION_ID >= 40100
+	while (mysql_next_result(p->conf.mysql) == 0);
+#endif
 
 	/* fix virtual server and docroot */
 GO_ON:	buffer_copy_string_buffer(con->server_name, c->server_name);
@@ -416,6 +428,9 @@ GO_ON:	buffer_copy_string_buffer(con->server_name, c->server_name);
 	return HANDLER_GO_ON;
 
 ERR500:	if (result) mysql_free_result(result);
+#if MYSQL_VERSION_ID >= 40100
+	while (mysql_next_result(p->conf.mysql) == 0);
+#endif
 	con->http_status = 500; /* Internal Error */
 	con->mode = DIRECT;
 	return HANDLER_FINISHED;
