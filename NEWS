@@ -31,6 +31,7 @@ NEWS
   * Use disable-time in fastcgi for all disables after errors, default is 1sec (fixes #2040)
   * Remove adaptive spawning code from fastcgi (was disabled for a long time)
   * Allow mod_mysql_vhost to use stored procedures (fixes #2011, thx Ben Brown)
+  * Fix ipv6 in mod_proxy (fixes #2043)
 
 - 1.4.23 - 2009-06-19
   * Added some extra warning options in cmake and fix the resulting warnings (unused/static functions)

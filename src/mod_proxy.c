@@ -756,12 +756,15 @@ static handler_t proxy_write_request(server *srv, handler_ctx *hctx) {
 
 	switch(hctx->state) {
 	case PROXY_STATE_INIT:
+#if defined(HAVE_IPV6) && defined(HAVE_INET_PTON)
 		if (strstr(host->host->ptr,":")) {
 		    if (-1 == (hctx->fd = socket(AF_INET6, SOCK_STREAM, 0))) {
 			log_error_write(srv, __FILE__, __LINE__, "ss", "socket failed: ", strerror(errno));
 			return HANDLER_ERROR;
 		    }
-		} else {
+		} else
+#endif
+		{
 		    if (-1 == (hctx->fd = socket(AF_INET, SOCK_STREAM, 0))) {
 			log_error_write(srv, __FILE__, __LINE__, "ss", "socket failed: ", strerror(errno));
 			return HANDLER_ERROR;
