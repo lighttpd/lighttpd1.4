@@ -87,12 +87,19 @@ sub wait_for_port_with_proc {
 	my $self = shift;
 	my $port = shift;
 	my $child = shift;
+	my $timeout = 5*10; # 5 secs, select waits 0.1 s
 
 	while (0 == $self->listening_on($port)) {
 		select(undef, undef, undef, 0.1);
+		$timeout--;
 
 		# the process is gone, we failed
 		if (0 != waitpid($child, WNOHANG)) {
+			return -1;
+		}
+		if (0 >= $timeout) {
+			diag("Timeout while trying to connect; killing child");
+			kill('TERM', $child);
 			return -1;
 		}
 	}
