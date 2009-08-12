@@ -1139,14 +1139,14 @@ int config_set_defaults(server *srv) {
 		 * - select works everywhere
 		 * - linux-* are experimental
 		 */
+#ifdef USE_LINUX_EPOLL
+		{ FDEVENT_HANDLER_LINUX_SYSEPOLL, "linux-sysepoll" },
+#endif
 #ifdef USE_POLL
 		{ FDEVENT_HANDLER_POLL,           "poll" },
 #endif
 #ifdef USE_SELECT
 		{ FDEVENT_HANDLER_SELECT,         "select" },
-#endif
-#ifdef USE_LINUX_EPOLL
-		{ FDEVENT_HANDLER_LINUX_SYSEPOLL, "linux-sysepoll" },
 #endif
 #ifdef USE_LINUX_SIGIO
 		{ FDEVENT_HANDLER_LINUX_RTSIG,    "linux-rtsig" },

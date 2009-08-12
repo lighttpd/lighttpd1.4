@@ -34,6 +34,7 @@ NEWS
   * Fix ipv6 in mod_proxy (fixes #2043)
   * Print errors from include_shell to stderr
   * Set tm.tm_isdst = 0 before mktime() (fixes #2047)
+  * Use linux-epoll by default if available (fixes #2021, thx Olaf van der Spek)
 
 - 1.4.23 - 2009-06-19
   * Added some extra warning options in cmake and fix the resulting warnings (unused/static functions)
