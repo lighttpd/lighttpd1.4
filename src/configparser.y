@@ -469,7 +469,7 @@ context ::= DOLLAR SRVVARNAME(B) LBRACKET stringop(C) RBRACKET cond(E) expressio
     case CONFIG_COND_MATCH: {
 #ifdef HAVE_PCRE_H
       const char *errptr;
-      int erroff;
+      int erroff, captures;
 
       if (NULL == (dc->regex =
           pcre_compile(rvalue->ptr, 0, &errptr, &erroff, NULL))) {
@@ -485,6 +485,14 @@ context ::= DOLLAR SRVVARNAME(B) LBRACKET stringop(C) RBRACKET cond(E) expressio
                  errptr != NULL) {
         fprintf(stderr, "studying regex failed: %s -> %s\n",
             rvalue->ptr, errptr);
+        ctx->ok = 0;
+      } else if (0 != (pcre_fullinfo(dc->regex, dc->regex_study, PCRE_INFO_CAPTURECOUNT, &captures))) {
+        fprintf(stderr, "getting capture count for regex failed: %s\n",
+            rvalue->ptr);
+        ctx->ok = 0;
+      } else if (captures > 9) {
+        fprintf(stderr, "Too many captures in regex, use (?:...) instead of (...): %s\n",
+            rvalue->ptr);
         ctx->ok = 0;
       } else {
         dc->string = buffer_init_buffer(rvalue);
