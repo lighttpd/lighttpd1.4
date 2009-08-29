@@ -80,7 +80,7 @@ if test x$AUTOHEADER = x; then
   fi
 fi
 
-
+mkdir -p m4
 run $LIBTOOLIZE $LIBTOOLIZE_FLAGS
 run $ACLOCAL $ACLOCAL_FLAGS -I m4
 run $AUTOHEADER
