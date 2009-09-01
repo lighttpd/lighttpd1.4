@@ -90,6 +90,7 @@ static int network_server_init(server *srv, buffer *host_token, specific_config 
 
 	srv_socket = calloc(1, sizeof(*srv_socket));
 	srv_socket->fd = -1;
+	srv_socket->fde_ndx = -1;
 
 	srv_socket->srv_token = buffer_init();
 	buffer_copy_string_buffer(srv_socket->srv_token, host_token);
@@ -103,7 +104,7 @@ static int network_server_init(server *srv, buffer *host_token, specific_config 
 	if (NULL == (sp = strrchr(b->ptr, ':'))) {
 		log_error_write(srv, __FILE__, __LINE__, "sb", "value of $SERVER[\"socket\"] has to be \"ip:port\".", b);
 
-		return -1;
+		goto error_free_socket;
 	}
 
 	host = b->ptr;
@@ -126,7 +127,7 @@ static int network_server_init(server *srv, buffer *host_token, specific_config 
 	} else if (port == 0 || port > 65535) {
 		log_error_write(srv, __FILE__, __LINE__, "sd", "port out of range:", port);
 
-		return -1;
+		goto error_free_socket;
 	}
 
 	if (*host == '\0') host = NULL;
@@ -138,12 +139,12 @@ static int network_server_init(server *srv, buffer *host_token, specific_config 
 
 		if (-1 == (srv_socket->fd = socket(srv_socket->addr.plain.sa_family, SOCK_STREAM, 0))) {
 			log_error_write(srv, __FILE__, __LINE__, "ss", "socket failed:", strerror(errno));
-			return -1;
+			goto error_free_socket;
 		}
 #else
 		log_error_write(srv, __FILE__, __LINE__, "s",
 				"ERROR: Unix Domain sockets are not supported.");
-		return -1;
+		goto error_free_socket;
 #endif
 	}
 
@@ -153,7 +154,7 @@ static int network_server_init(server *srv, buffer *host_token, specific_config 
 
 		if (-1 == (srv_socket->fd = socket(srv_socket->addr.plain.sa_family, SOCK_STREAM, IPPROTO_TCP))) {
 			log_error_write(srv, __FILE__, __LINE__, "ss", "socket failed:", strerror(errno));
-			return -1;
+			goto error_free_socket;
 		}
 		srv_socket->use_ipv6 = 1;
 	}
@@ -163,7 +164,7 @@ static int network_server_init(server *srv, buffer *host_token, specific_config 
 		srv_socket->addr.plain.sa_family = AF_INET;
 		if (-1 == (srv_socket->fd = socket(srv_socket->addr.plain.sa_family, SOCK_STREAM, IPPROTO_TCP))) {
 			log_error_write(srv, __FILE__, __LINE__, "ss", "socket failed:", strerror(errno));
-			return -1;
+			goto error_free_socket;
 		}
 	}
 
@@ -178,7 +179,7 @@ static int network_server_init(server *srv, buffer *host_token, specific_config 
 	val = 1;
 	if (setsockopt(srv_socket->fd, SOL_SOCKET, SO_REUSEADDR, &val, sizeof(val)) < 0) {
 		log_error_write(srv, __FILE__, __LINE__, "ss", "socketsockopt failed:", strerror(errno));
-		return -1;
+		goto error_free_socket;
 	}
 
 	switch(srv_socket->addr.plain.sa_family) {
@@ -203,7 +204,7 @@ static int network_server_init(server *srv, buffer *host_token, specific_config 
 						"sssss", "getaddrinfo failed: ",
 						gai_strerror(r), "'", host, "'");
 
-				return -1;
+				goto error_free_socket;
 			}
 
 			memcpy(&(srv_socket->addr), res->ai_addr, res->ai_addrlen);
@@ -225,17 +226,17 @@ static int network_server_init(server *srv, buffer *host_token, specific_config 
 				log_error_write(srv, __FILE__, __LINE__,
 						"sds", "gethostbyname failed: ",
 						h_errno, host);
-				return -1;
+				goto error_free_socket;
 			}
 
 			if (he->h_addrtype != AF_INET) {
 				log_error_write(srv, __FILE__, __LINE__, "sd", "addr-type != AF_INET: ", he->h_addrtype);
-				return -1;
+				goto error_free_socket;
 			}
 
 			if (he->h_length != sizeof(struct in_addr)) {
 				log_error_write(srv, __FILE__, __LINE__, "sd", "addr-length != sizeof(in_addr): ", he->h_length);
-				return -1;
+				goto error_free_socket;
 			}
 
 			memcpy(&(srv_socket->addr.ipv4.sin_addr.s_addr), he->h_addr_list[0], he->h_length);
@@ -265,7 +266,7 @@ static int network_server_init(server *srv, buffer *host_token, specific_config 
 				host);
 
 
-			return -1;
+			goto error_free_socket;
 		}
 
 		/* connect failed */
@@ -280,12 +281,12 @@ static int network_server_init(server *srv, buffer *host_token, specific_config 
 				"testing socket failed:",
 				host, strerror(errno));
 
-			return -1;
+			goto error_free_socket;
 		}
 
 		break;
 	default:
-		return -1;
+		goto error_free_socket;
 	}
 
 	if (0 != bind(srv_socket->fd, (struct sockaddr *) &(srv_socket->addr), addr_len)) {
@@ -301,12 +302,12 @@ static int network_server_init(server *srv, buffer *host_token, specific_config 
 					host, port, strerror(errno));
 			break;
 		}
-		return -1;
+		goto error_free_socket;
 	}
 
 	if (-1 == listen(srv_socket->fd, 128 * 8)) {
 		log_error_write(srv, __FILE__, __LINE__, "ss", "listen failed: ", strerror(errno));
-		return -1;
+		goto error_free_socket;
 	}
 
 	if (s->is_ssl) {
@@ -319,14 +320,14 @@ static int network_server_init(server *srv, buffer *host_token, specific_config 
 			if (0 == RAND_status()) {
 				log_error_write(srv, __FILE__, __LINE__, "ss", "SSL:",
 						"not enough entropy in the pool");
-				return -1;
+				goto error_free_socket;
 			}
 		}
 
 		if (NULL == (s->ssl_ctx = SSL_CTX_new(SSLv23_server_method()))) {
 			log_error_write(srv, __FILE__, __LINE__, "ss", "SSL:",
 					ERR_error_string(ERR_get_error(), NULL));
-			return -1;
+			goto error_free_socket;
 		}
 
 		if (!s->ssl_use_sslv2) {
@@ -334,7 +335,7 @@ static int network_server_init(server *srv, buffer *host_token, specific_config 
 			if (SSL_OP_NO_SSLv2 != SSL_CTX_set_options(s->ssl_ctx, SSL_OP_NO_SSLv2)) {
 				log_error_write(srv, __FILE__, __LINE__, "ss", "SSL:",
 						ERR_error_string(ERR_get_error(), NULL));
-				return -1;
+				goto error_free_socket;
 			}
 		}
 
@@ -343,33 +344,33 @@ static int network_server_init(server *srv, buffer *host_token, specific_config 
 			if (SSL_CTX_set_cipher_list(s->ssl_ctx, s->ssl_cipher_list->ptr) != 1) {
 				log_error_write(srv, __FILE__, __LINE__, "ss", "SSL:",
 						ERR_error_string(ERR_get_error(), NULL));
-				return -1;
+				goto error_free_socket;
 			}
 		}
 
 		if (buffer_is_empty(s->ssl_pemfile)) {
 			log_error_write(srv, __FILE__, __LINE__, "s", "ssl.pemfile has to be set");
-			return -1;
+			goto error_free_socket;
 		}
 
 		if (!buffer_is_empty(s->ssl_ca_file)) {
 			if (1 != SSL_CTX_load_verify_locations(s->ssl_ctx, s->ssl_ca_file->ptr, NULL)) {
 				log_error_write(srv, __FILE__, __LINE__, "ssb", "SSL:",
 						ERR_error_string(ERR_get_error(), NULL), s->ssl_ca_file);
-				return -1;
+				goto error_free_socket;
 			}
 		}
 
 		if (SSL_CTX_use_certificate_file(s->ssl_ctx, s->ssl_pemfile->ptr, SSL_FILETYPE_PEM) < 0) {
 			log_error_write(srv, __FILE__, __LINE__, "ssb", "SSL:",
 					ERR_error_string(ERR_get_error(), NULL), s->ssl_pemfile);
-			return -1;
+			goto error_free_socket;
 		}
 
 		if (SSL_CTX_use_PrivateKey_file (s->ssl_ctx, s->ssl_pemfile->ptr, SSL_FILETYPE_PEM) < 0) {
 			log_error_write(srv, __FILE__, __LINE__, "ssb", "SSL:",
 					ERR_error_string(ERR_get_error(), NULL), s->ssl_pemfile);
-			return -1;
+			goto error_free_socket;
 		}
 
 		if (SSL_CTX_check_private_key(s->ssl_ctx) != 1) {
@@ -377,7 +378,7 @@ static int network_server_init(server *srv, buffer *host_token, specific_config 
 					"Private key does not match the certificate public key, reason:",
 					ERR_error_string(ERR_get_error(), NULL),
 					s->ssl_pemfile);
-			return -1;
+			goto error_free_socket;
 		}
 		SSL_CTX_set_default_read_ahead(s->ssl_ctx, 1);
 		SSL_CTX_set_mode(s->ssl_ctx, SSL_CTX_get_mode(s->ssl_ctx) | SSL_MODE_ACCEPT_MOVING_WRITE_BUFFER);
@@ -393,7 +394,7 @@ static int network_server_init(server *srv, buffer *host_token, specific_config 
 		log_error_write(srv, __FILE__, __LINE__, "ss", "SSL:",
 				"ssl requested but openssl support is not compiled in");
 
-		return -1;
+		goto error_free_socket;
 #endif
 #ifdef TCP_DEFER_ACCEPT
 	} else if (s->defer_accept) {
@@ -417,7 +418,6 @@ static int network_server_init(server *srv, buffer *host_token, specific_config 
 	}
 
 	srv_socket->is_ssl = s->is_ssl;
-	srv_socket->fde_ndx = -1;
 
 	if (srv->srv_sockets.size == 0) {
 		srv->srv_sockets.size = 4;
@@ -433,6 +433,21 @@ static int network_server_init(server *srv, buffer *host_token, specific_config 
 	buffer_free(b);
 
 	return 0;
+
+error_free_socket:
+	if (srv_socket->fd != -1) {
+		/* check if server fd are already registered */
+		if (srv_socket->fde_ndx != -1) {
+			fdevent_event_del(srv->ev, &(srv_socket->fde_ndx), srv_socket->fd);
+			fdevent_unregister(srv->ev, srv_socket->fd);
+		}
+
+		close(srv_socket->fd);
+	}
+	buffer_free(srv_socket->srv_token);
+	free(srv_socket);
+
+	return -1;
 }
 
 int network_close(server *srv) {
