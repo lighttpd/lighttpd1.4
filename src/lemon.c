@@ -2341,6 +2341,7 @@ struct lemon *gp;
   if( filebuf==0 ){
     ErrorMsg(ps.filename,0,"Can't allocate %d of memory to hold this file.",
       filesize+1);
+    fclose(fp);
     gp->errorcnt++;
     return;
   }
@@ -2348,6 +2349,7 @@ struct lemon *gp;
     ErrorMsg(ps.filename,0,"Can't read in all %d bytes of this file.",
       filesize);
     free(filebuf);
+    fclose(fp);
     gp->errorcnt++;
     return;
   }
