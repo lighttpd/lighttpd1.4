@@ -3270,7 +3270,7 @@ static handler_t fcgi_handle_fdevent(void *s, void *ctx, int revents) {
 				    hctx->reconnects < 5) {
 					fcgi_reconnect(srv, hctx);
 
-					log_error_write(srv, __FILE__, __LINE__, "ssbsBSbs",
+					log_error_write(srv, __FILE__, __LINE__, "ssbsBSBs",
 						"response not received, request not sent",
 						"on socket:", proc->connection_name,
 						"for", con->uri.path, "?", con->uri.query, ", reconnecting");
@@ -3278,7 +3278,7 @@ static handler_t fcgi_handle_fdevent(void *s, void *ctx, int revents) {
 					return HANDLER_WAIT_FOR_FD;
 				}
 
-				log_error_write(srv, __FILE__, __LINE__, "sosbsBSbs",
+				log_error_write(srv, __FILE__, __LINE__, "sosbsBSBs",
 						"response not received, request sent:", hctx->wb->bytes_out,
 						"on socket:", proc->connection_name,
 						"for", con->uri.path, "?", con->uri.query, ", closing connection");
