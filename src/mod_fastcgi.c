@@ -3270,18 +3270,18 @@ static handler_t fcgi_handle_fdevent(void *s, void *ctx, int revents) {
 				    hctx->reconnects < 5) {
 					fcgi_reconnect(srv, hctx);
 
-					log_error_write(srv, __FILE__, __LINE__, "ssbsbs",
+					log_error_write(srv, __FILE__, __LINE__, "ssbsBSbs",
 						"response not received, request not sent",
 						"on socket:", proc->connection_name,
-						"for", con->uri.path, ", reconnecting");
+						"for", con->uri.path, "?", con->uri.query, ", reconnecting");
 
 					return HANDLER_WAIT_FOR_FD;
 				}
 
-				log_error_write(srv, __FILE__, __LINE__, "sosbsbs",
+				log_error_write(srv, __FILE__, __LINE__, "sosbsBSbs",
 						"response not received, request sent:", hctx->wb->bytes_out,
 						"on socket:", proc->connection_name,
-						"for", con->uri.path, ", closing connection");
+						"for", con->uri.path, "?", con->uri.query, ", closing connection");
 
 				fcgi_connection_close(srv, hctx);
 
@@ -3293,10 +3293,10 @@ static handler_t fcgi_handle_fdevent(void *s, void *ctx, int revents) {
 				/* response might have been already started, kill the connection */
 				fcgi_connection_close(srv, hctx);
 
-				log_error_write(srv, __FILE__, __LINE__, "ssbsbs",
+				log_error_write(srv, __FILE__, __LINE__, "ssbsBSBs",
 						"response already sent out, but backend returned error",
 						"on socket:", proc->connection_name,
-						"for", con->uri.path, ", terminating connection");
+						"for", con->uri.path, "?", con->uri.query, ", terminating connection");
 
 				connection_set_state(srv, con, CON_STATE_ERROR);
 			}
@@ -3346,9 +3346,9 @@ static handler_t fcgi_handle_fdevent(void *s, void *ctx, int revents) {
 			 * even if the FCGI_FIN packet is not received yet
 			 */
 		} else {
-			log_error_write(srv, __FILE__, __LINE__, "sbsbsd",
+			log_error_write(srv, __FILE__, __LINE__, "sBSbsbsd",
 					"error: unexpected close of fastcgi connection for",
-					con->uri.path,
+					con->uri.path, "?", con->uri.query,
 					"(no fastcgi process on socket:", proc->connection_name, "?)",
 					hctx->state);
 
@@ -3519,8 +3519,8 @@ static handler_t fcgi_check_extension(server *srv, connection *con, void *p_d, i
 		if (!extension->note_is_sent) {
 			extension->note_is_sent = 1;
 
-			log_error_write(srv, __FILE__, __LINE__, "sbsbs",
-					"all handlers for ", con->uri.path,
+			log_error_write(srv, __FILE__, __LINE__, "sBSbsbs",
+					"all handlers for", con->uri.path, "?", con->uri.query,
 					"on", extension->key,
 					"are down.");
 		}
