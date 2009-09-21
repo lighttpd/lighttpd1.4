@@ -104,6 +104,21 @@ int response_header_overwrite(server *srv, connection *con, const char *key, siz
 	return response_header_insert(srv, con, key, keylen, value, vallen);
 }
 
+int response_header_append(server *srv, connection *con, const char *key, size_t keylen, const char *value, size_t vallen) {
+	data_string *ds;
+
+	UNUSED(srv);
+
+	/* if there already is a key by this name append the value */
+	if (NULL != (ds = (data_string *)array_get_element(con->response.headers, key))) {
+		buffer_append_string_len(ds->value, CONST_STR_LEN(", "));
+		buffer_append_string_len(ds->value, value, vallen);
+		return 0;
+	}
+
+	return response_header_insert(srv, con, key, keylen, value, vallen);
+}
+
 int http_response_redirect_to_directory(server *srv, connection *con) {
 	buffer *o;
 
