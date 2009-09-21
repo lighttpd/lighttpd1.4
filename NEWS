@@ -36,6 +36,7 @@ NEWS
   * Set tm.tm_isdst = 0 before mktime() (fixes #2047)
   * Use linux-epoll by default if available (fixes #2021, thx Olaf van der Spek)
   * Print an error if you use too many captures in a regex pattern (fixes #2059)
+  * Combine Cache-Control header value in mod_expire to existing HTTP header if header already added by other modules (fixes #2068)
 
 - 1.4.23 - 2009-06-19
   * Added some extra warning options in cmake and fix the resulting warnings (unused/static functions)
