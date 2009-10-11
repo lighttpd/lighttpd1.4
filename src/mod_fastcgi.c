@@ -2657,53 +2657,55 @@ static int fcgi_restart_dead_procs(server *srv, plugin_data *p, fcgi_extension_h
 			break;
 		case PROC_STATE_DIED_WAIT_FOR_PID:
 			/* non-local procs don't have PIDs to wait for */
-			if (!proc->is_local) break;
+			if (!proc->is_local) {
+				proc->state = PROC_STATE_DIED;
+			} else {
+				/* the child should not terminate at all */
 
-			/* the child should not terminate at all */
+				for ( ;; ) {
+					switch(waitpid(proc->pid, &status, WNOHANG)) {
+					case 0:
+						/* child is still alive */
+						if (srv->cur_ts <= proc->disabled_until) break;
 
-			for ( ;; ) {
-				switch(waitpid(proc->pid, &status, WNOHANG)) {
-				case 0:
-					/* child is still alive */
-					if (srv->cur_ts <= proc->disabled_until) break;
-					
-					proc->state = PROC_STATE_RUNNING;
-					host->active_procs++;
-		
-					log_error_write(srv, __FILE__, __LINE__,  "sbdb",
+						proc->state = PROC_STATE_RUNNING;
+						host->active_procs++;
+
+						log_error_write(srv, __FILE__, __LINE__,  "sbdb",
 							"fcgi-server re-enabled:",
 							host->host, host->port,
 							host->unixsocket);
-					break;
-				case -1:
-					if (errno == EINTR) continue;
+						break;
+					case -1:
+						if (errno == EINTR) continue;
 
-					log_error_write(srv, __FILE__, __LINE__, "sd",
+						log_error_write(srv, __FILE__, __LINE__, "sd",
 							"child died somehow, waitpid failed:",
 							errno);
-					proc->state = PROC_STATE_DIED;
-					break;
-				default:
-					if (WIFEXITED(status)) {
+						proc->state = PROC_STATE_DIED;
+						break;
+					default:
+						if (WIFEXITED(status)) {
 #if 0
-						log_error_write(srv, __FILE__, __LINE__, "sdsd",
+							log_error_write(srv, __FILE__, __LINE__, "sdsd",
 								"child exited, pid:", proc->pid,
 								"status:", WEXITSTATUS(status));
 #endif
-					} else if (WIFSIGNALED(status)) {
-						log_error_write(srv, __FILE__, __LINE__, "sd",
+						} else if (WIFSIGNALED(status)) {
+							log_error_write(srv, __FILE__, __LINE__, "sd",
 								"child signaled:",
 								WTERMSIG(status));
-					} else {
-						log_error_write(srv, __FILE__, __LINE__, "sd",
+						} else {
+							log_error_write(srv, __FILE__, __LINE__, "sd",
 								"child died somehow:",
 								status);
+						}
+
+						proc->state = PROC_STATE_DIED;
+						break;
 					}
-	
-					proc->state = PROC_STATE_DIED;
 					break;
 				}
-				break;
 			}
 
 			/* fall through if we have a dead proc now */
@@ -2712,8 +2714,9 @@ static int fcgi_restart_dead_procs(server *srv, plugin_data *p, fcgi_extension_h
 		case PROC_STATE_DIED:
 			/* local procs get restarted by us,
 			 * remote ones hopefully by the admin */
+			if (srv->cur_ts <= proc->disabled_until) break;
 
-			if (proc->is_local) {
+			if (host->bin_path) {
 				/* we still have connections bound to this proc,
 				 * let them terminate first */
 				if (proc->load != 0) break;
@@ -2733,8 +2736,6 @@ static int fcgi_restart_dead_procs(server *srv, plugin_data *p, fcgi_extension_h
 					return HANDLER_ERROR;
 				}
 			} else {
-				if (srv->cur_ts <= proc->disabled_until) break;
-
 				proc->state = PROC_STATE_RUNNING;
 				host->active_procs++;
 
