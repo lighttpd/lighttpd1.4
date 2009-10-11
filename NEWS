@@ -44,6 +44,7 @@ NEWS
   * Read hostname from absolute uris in the request line (fixes #1937)
   * mod_fastcgi: don't disable backend if disable-time is 0 (fixes #1825)
   * mod_compress: match partial+full content-type (fixes #1552)
+  * mod_fastcgi: fix is_local detection, respawn backends if bin-path is set (fixes #897)
 
 - 1.4.23 - 2009-06-19
   * Added some extra warning options in cmake and fix the resulting warnings (unused/static functions)
