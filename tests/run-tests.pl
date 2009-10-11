@@ -4,7 +4,7 @@ use strict;
 
 use Test::Harness qw(&runtests $verbose);
 $verbose = (defined $ENV{'VERBOSE'} ? $ENV{'VERBOSE'} : 0);
-my $tests = (defined $ENV{'TESTS'} ? $ENV{'TESTS'} : '');
+my $tests = (defined $ENV{'RUNTESTS'} ? $ENV{'RUNTESTS'} : '');
 
 my $srcdir = (defined $ENV{'srcdir'} ? $ENV{'srcdir'} : '.');
 
