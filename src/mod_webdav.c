@@ -1980,8 +1980,25 @@ URIHANDLER_FUNC(mod_webdav_subrequest_handler) {
 
 				if (0 == rename(con->physical.path->ptr, p->physical.path->ptr)) {
 #ifdef USE_PROPPATCH
-					sqlite3_stmt *stmt = p->conf.stmt_move_uri;
+					sqlite3_stmt *stmt;
 
+					stmt = p->conf.stmt_delete_uri;
+					if (stmt) {
+
+						sqlite3_reset(stmt);
+
+						/* bind the values to the insert */
+						sqlite3_bind_text(stmt, 1,
+								  con->uri.path->ptr,
+								  con->uri.path->used - 1,
+								  SQLITE_TRANSIENT);
+
+						if (SQLITE_DONE != sqlite3_step(stmt)) {
+							log_error_write(srv, __FILE__, __LINE__, "ss", "sql-move(delete old) failed:", sqlite3_errmsg(p->conf.sql));
+						}
+					}
+
+					stmt = p->conf.stmt_move_uri;
 					if (stmt) {
 
 						sqlite3_reset(stmt);
