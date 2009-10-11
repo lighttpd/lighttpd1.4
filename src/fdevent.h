@@ -14,6 +14,8 @@
 # include <inttypes.h>
 #endif
 
+#include <sys/types.h>
+
 /* select event-system */
 
 #if defined(HAVE_EPOLL_CTL) && defined(HAVE_SYS_EPOLL_H)
