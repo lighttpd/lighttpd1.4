@@ -2768,16 +2768,7 @@ static handler_t fcgi_write_request(server *srv, handler_ctx *hctx) {
 		return HANDLER_ERROR;
 	}
 	if ((!host->port && !host->unixsocket->used)) {
-		log_error_write(srv, __FILE__, __LINE__, "sxddd",
-				"write-req: error",
-				host,
-				host->host->used,
-				host->port,
-				host->unixsocket->used);
-
-		hctx->proc->disabled_until = srv->cur_ts + hctx->host->disable_time;
-		hctx->proc->state = PROC_STATE_DIED;
-
+		log_error_write(srv, __FILE__, __LINE__, "s", "fatal error: neither host->port nor host->unixsocket is set");
 		return HANDLER_ERROR;
 	}
 
@@ -2791,8 +2782,10 @@ static handler_t fcgi_write_request(server *srv, handler_ctx *hctx) {
 			log_error_write(srv, __FILE__, __LINE__, "ss",
 					"getsockopt failed:", strerror(errno));
 
-			hctx->proc->disabled_until = srv->cur_ts + hctx->host->disable_time;
-			hctx->proc->state = PROC_STATE_DIED;
+			if (hctx->host->disable_time) {
+				hctx->proc->disabled_until = srv->cur_ts + hctx->host->disable_time;
+				hctx->proc->state = PROC_STATE_DIED;
+			}
 
 			return HANDLER_ERROR;
 		}
@@ -2805,15 +2798,10 @@ static handler_t fcgi_write_request(server *srv, handler_ctx *hctx) {
 						"socket:", hctx->proc->connection_name);
 			}
 
-			hctx->proc->disabled_until = srv->cur_ts + hctx->host->disable_time;
-
-			if (hctx->proc->is_local) {
-				hctx->proc->state = PROC_STATE_DIED_WAIT_FOR_PID;
-			} else {
+			if (hctx->host->disable_time) {
+				hctx->proc->disabled_until = srv->cur_ts + hctx->host->disable_time;
 				hctx->proc->state = PROC_STATE_DIED;
 			}
-
-			hctx->proc->state = PROC_STATE_DIED;
 
 			fastcgi_status_copy_procname(p->statuskey, hctx->host, hctx->proc);
 			buffer_append_string_len(p->statuskey, CONST_STR_LEN(".died"));
@@ -2898,14 +2886,15 @@ static handler_t fcgi_write_request(server *srv, handler_ctx *hctx) {
 			/* cool down the backend, it is overloaded
 			 * -> EAGAIN */
 
-			log_error_write(srv, __FILE__, __LINE__, "sdssdsd",
-				"backend is overloaded; we'll disable it for", hctx->host->disable_time, "seconds and send the request to another backend instead:",
-				"reconnects:", hctx->reconnects,
-				"load:", host->load);
+			if (hctx->host->disable_time) {
+				log_error_write(srv, __FILE__, __LINE__, "sdssdsd",
+					"backend is overloaded; we'll disable it for", hctx->host->disable_time, "seconds and send the request to another backend instead:",
+					"reconnects:", hctx->reconnects,
+					"load:", host->load);
 
-
-			hctx->proc->disabled_until = srv->cur_ts + hctx->host->disable_time;
-			hctx->proc->state = PROC_STATE_OVERLOADED;
+				hctx->proc->disabled_until = srv->cur_ts + hctx->host->disable_time;
+				hctx->proc->state = PROC_STATE_OVERLOADED;
+			}
 
 			fastcgi_status_copy_procname(p->statuskey, hctx->host, hctx->proc);
 			buffer_append_string_len(p->statuskey, CONST_STR_LEN(".overloaded"));
@@ -2921,17 +2910,19 @@ static handler_t fcgi_write_request(server *srv, handler_ctx *hctx) {
 			 * for check if the host is back in hctx->host->disable_time seconds
 			 *  */
 
-			hctx->proc->disabled_until = srv->cur_ts + hctx->host->disable_time;
-			if (hctx->proc->is_local) {
-				hctx->proc->state = PROC_STATE_DIED_WAIT_FOR_PID;
-			} else {
-				hctx->proc->state = PROC_STATE_DIED;
-			}
+			if (hctx->host->disable_time) {
+				hctx->proc->disabled_until = srv->cur_ts + hctx->host->disable_time;
+				if (hctx->proc->is_local) {
+					hctx->proc->state = PROC_STATE_DIED_WAIT_FOR_PID;
+				} else {
+					hctx->proc->state = PROC_STATE_DIED;
+				}
 
-			log_error_write(srv, __FILE__, __LINE__, "sdssdsd",
-				"backend died; we'll disable it for", hctx->host->disable_time, "seconds and send the request to another backend instead:",
-				"reconnects:", hctx->reconnects,
-				"load:", host->load);
+				log_error_write(srv, __FILE__, __LINE__, "sdssdsd",
+					"backend died; we'll disable it for", hctx->host->disable_time, "seconds and send the request to another backend instead:",
+					"reconnects:", hctx->reconnects,
+					"load:", host->load);
+			}
 
 			fastcgi_status_copy_procname(p->statuskey, hctx->host, hctx->proc);
 			buffer_append_string_len(p->statuskey, CONST_STR_LEN(".died"));
