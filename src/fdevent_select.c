@@ -1,3 +1,6 @@
+#include "fdevent.h"
+#include "buffer.h"
+
 #include <sys/time.h>
 #include <sys/types.h>
 
@@ -8,10 +11,6 @@
 #include <signal.h>
 #include <fcntl.h>
 #include <assert.h>
-
-#include "fdevent.h"
-#include "settings.h"
-#include "buffer.h"
 
 #ifdef USE_SELECT
 

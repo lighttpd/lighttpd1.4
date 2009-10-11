@@ -1,6 +1,12 @@
 #include "network_backends.h"
 
 #ifdef USE_LINUX_SENDFILE
+
+#include "network.h"
+#include "fdevent.h"
+#include "log.h"
+#include "stat_cache.h"
+
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <sys/stat.h>
@@ -17,11 +23,6 @@
 #include <string.h>
 #include <stdlib.h>
 #include <fcntl.h>
-
-#include "network.h"
-#include "fdevent.h"
-#include "log.h"
-#include "stat_cache.h"
 
 /* on linux 2.4.29 + debian/ubuntu we have crashes if this is enabled */
 #undef HAVE_POSIX_FADVISE

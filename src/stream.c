@@ -1,13 +1,10 @@
+#include "stream.h"
+
 #include <sys/types.h>
 #include <sys/stat.h>
 
 #include <unistd.h>
 #include <fcntl.h>
-
-#include "stream.h"
-#ifdef HAVE_CONFIG_H
-#include "config.h"
-#endif
 
 #include "sys-mmap.h"
 

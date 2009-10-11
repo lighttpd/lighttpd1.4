@@ -2,8 +2,9 @@
 #define _NETWORK_BACKENDS_H_
 
 #ifdef HAVE_CONFIG_H
-#include "config.h"
+# include "config.h"
 #endif
+#include "settings.h"
 
 #include <sys/types.h>
 

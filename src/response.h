@@ -1,9 +1,9 @@
 #ifndef _RESPONSE_H_
 #define _RESPONSE_H_
 
-#include <time.h>
-
 #include "server.h"
+
+#include <time.h>
 
 int http_response_parse(server *srv, connection *con);
 int http_response_write_header(server *srv, connection *con);

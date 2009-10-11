@@ -1,13 +1,3 @@
-#include <sys/types.h>
-#include <unistd.h>
-#include <errno.h>
-#include <fcntl.h>
-#include <string.h>
-#include <stdlib.h>
-#include <ctype.h>
-#include <assert.h>
-#include <signal.h>
-
 #include "buffer.h"
 #include "server.h"
 #include "keyvalue.h"
@@ -25,15 +15,26 @@
 #include "stat_cache.h"
 #include "status_counter.h"
 
+#include <sys/types.h>
+#include <unistd.h>
+#include <errno.h>
+#include <fcntl.h>
+#include <string.h>
+#include <stdlib.h>
+#include <ctype.h>
+#include <assert.h>
+#include <signal.h>
+
 #ifdef HAVE_FASTCGI_FASTCGI_H
-#include <fastcgi/fastcgi.h>
+# include <fastcgi/fastcgi.h>
 #else
-#ifdef HAVE_FASTCGI_H
-#include <fastcgi.h>
-#else
-#include "fastcgi.h"
-#endif
+# ifdef HAVE_FASTCGI_H
+#  include <fastcgi.h>
+# else
+#  include "fastcgi.h"
+# endif
 #endif /* HAVE_FASTCGI_FASTCGI_H */
+
 #include <stdio.h>
 
 #ifdef HAVE_SYS_FILIO_H

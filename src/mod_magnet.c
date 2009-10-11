@@ -1,9 +1,3 @@
-#include <ctype.h>
-#include <stdlib.h>
-#include <string.h>
-#include <assert.h>
-#include <setjmp.h>
-
 #include "base.h"
 #include "log.h"
 #include "buffer.h"
@@ -15,6 +9,12 @@
 #include "stat_cache.h"
 #include "status_counter.h"
 #include "etag.h"
+
+#include <ctype.h>
+#include <stdlib.h>
+#include <string.h>
+#include <assert.h>
+#include <setjmp.h>
 
 #ifdef HAVE_LUA_H
 #include <lua.h>

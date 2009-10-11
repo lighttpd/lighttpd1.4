@@ -1,11 +1,11 @@
-#include <string.h>
-#include <errno.h>
-#include <ctype.h>
-
 #include "plugin.h"
 #include "log.h"
 #include "response.h"
 #include "stat_cache.h"
+
+#include <string.h>
+#include <errno.h>
+#include <ctype.h>
 
 typedef struct {
 	/* unparsed pieces */

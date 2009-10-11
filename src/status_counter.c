@@ -1,6 +1,7 @@
+#include "status_counter.h"
+
 #include <stdlib.h>
 
-#include "status_counter.h"
 /**
  * The status array can carry all the status information you want
  * the key to the array is <module-prefix>.<name>

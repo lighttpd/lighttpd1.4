@@ -4,13 +4,11 @@
 %name ssiexprparser
 
 %include {
-#include <assert.h>
-#include <string.h>
-#ifdef HAVE_CONFIG_H
-#include "config.h"
-#endif
 #include "mod_ssi_expr.h"
 #include "buffer.h"
+
+#include <assert.h>
+#include <string.h>
 }
 
 %parse_failure {

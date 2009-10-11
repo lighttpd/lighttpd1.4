@@ -2,6 +2,11 @@
 
 #ifdef USE_SOLARIS_SENDFILEV
 
+#include "network.h"
+#include "fdevent.h"
+#include "log.h"
+#include "stat_cache.h"
+
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <sys/stat.h>
@@ -19,13 +24,8 @@
 #include <stdlib.h>
 #include <limits.h>
 
-#include "network.h"
-#include "fdevent.h"
-#include "log.h"
-#include "stat_cache.h"
-
 #ifndef UIO_MAXIOV
-#define UIO_MAXIOV IOV_MAX
+# define UIO_MAXIOV IOV_MAX
 #endif
 
 /**

@@ -1,20 +1,17 @@
+#include "plugin.h"
+#include "log.h"
+
 #include <string.h>
 #include <stdlib.h>
 
 #include <stdio.h>
 
-#include "plugin.h"
-#include "log.h"
-#ifdef HAVE_CONFIG_H
-#include "config.h"
-#endif
-
 #ifdef HAVE_VALGRIND_VALGRIND_H
-#include <valgrind/valgrind.h>
+# include <valgrind/valgrind.h>
 #endif
 
 #ifndef __WIN32
-#include <dlfcn.h>
+# include <dlfcn.h>
 #endif
 /*
  *

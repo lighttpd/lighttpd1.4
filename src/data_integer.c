@@ -1,8 +1,8 @@
+#include "array.h"
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-
-#include "array.h"
 
 static data_unset *data_integer_copy(const data_unset *s) {
 	data_integer *src = (data_integer *)s;

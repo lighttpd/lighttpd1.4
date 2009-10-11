@@ -4,6 +4,11 @@
  *
  */
 
+#include "server.h"
+#include "chunk.h"
+#include "http_chunk.h"
+#include "log.h"
+
 #include <sys/types.h>
 #include <sys/stat.h>
 
@@ -14,11 +19,6 @@
 #include <stdio.h>
 #include <errno.h>
 #include <string.h>
-
-#include "server.h"
-#include "chunk.h"
-#include "http_chunk.h"
-#include "log.h"
 
 static int http_chunk_append_len(server *srv, connection *con, size_t len) {
 	size_t i, olen = len, j;

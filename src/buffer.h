@@ -1,14 +1,14 @@
 #ifndef _BUFFER_H_
 #define _BUFFER_H_
 
-#include <stdlib.h>
-#include <sys/types.h>
-
 #ifdef HAVE_CONFIG_H
 # include "config.h"
 #endif
 
 #include "settings.h"
+
+#include <stdlib.h>
+#include <sys/types.h>
 
 typedef struct {
 	char *ptr;

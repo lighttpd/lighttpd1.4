@@ -1,3 +1,6 @@
+#include "array.h"
+#include "buffer.h"
+
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -5,9 +8,6 @@
 
 #include <errno.h>
 #include <assert.h>
-
-#include "array.h"
-#include "buffer.h"
 
 array *array_init(void) {
 	array *a;

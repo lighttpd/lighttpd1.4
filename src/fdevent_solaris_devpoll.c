@@ -1,3 +1,6 @@
+#include "fdevent.h"
+#include "buffer.h"
+
 #include <sys/types.h>
 
 #include <unistd.h>
@@ -7,10 +10,6 @@
 #include <errno.h>
 #include <signal.h>
 #include <fcntl.h>
-
-#include "fdevent.h"
-#include "settings.h"
-#include "buffer.h"
 
 #ifdef USE_SOLARIS_DEVPOLL
 

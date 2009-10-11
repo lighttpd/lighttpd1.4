@@ -1,15 +1,16 @@
+#include "proc_open.h"
+
 #include <stdlib.h>
 #include <stdio.h>
 #include <ctype.h>
 #include <errno.h>
-#include "proc_open.h"
 
 #ifdef WIN32
-#include <io.h>
-#include <fcntl.h>
+# include <io.h>
+# include <fcntl.h>
 #else
-#include <sys/wait.h>
-#include <unistd.h>
+# include <sys/wait.h>
+# include <unistd.h>
 #endif
 
 

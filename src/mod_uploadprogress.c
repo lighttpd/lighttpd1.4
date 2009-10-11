@@ -1,7 +1,3 @@
-#include <ctype.h>
-#include <stdlib.h>
-#include <string.h>
-
 #include "base.h"
 #include "log.h"
 #include "buffer.h"
@@ -10,6 +6,10 @@
 
 #include "response.h"
 #include "stat_cache.h"
+
+#include <ctype.h>
+#include <stdlib.h>
+#include <string.h>
 
 /**
  * this is a uploadprogress for a lighttpd plugin

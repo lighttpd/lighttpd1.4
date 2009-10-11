@@ -1,14 +1,23 @@
+#include "server.h"
+#include "stat_cache.h"
+#include "keyvalue.h"
+#include "log.h"
+#include "connections.h"
+#include "joblist.h"
+#include "http_chunk.h"
+
+#include "plugin.h"
+
 #include <sys/types.h>
+
 #ifdef __WIN32
-#include <winsock2.h>
+# include <winsock2.h>
 #else
-#include <sys/socket.h>
-#include <sys/wait.h>
-#include <sys/mman.h>
-
-#include <netinet/in.h>
-
-#include <arpa/inet.h>
+# include <sys/socket.h>
+# include <sys/wait.h>
+# include <sys/mman.h>
+# include <netinet/in.h>
+# include <arpa/inet.h>
 #endif
 
 #include <unistd.h>
@@ -22,16 +31,6 @@
 
 #include <stdio.h>
 #include <fcntl.h>
-
-#include "server.h"
-#include "stat_cache.h"
-#include "keyvalue.h"
-#include "log.h"
-#include "connections.h"
-#include "joblist.h"
-#include "http_chunk.h"
-
-#include "plugin.h"
 
 #ifdef HAVE_SYS_FILIO_H
 # include <sys/filio.h>

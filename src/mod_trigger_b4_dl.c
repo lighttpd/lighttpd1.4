@@ -1,8 +1,3 @@
-#include <ctype.h>
-#include <stdlib.h>
-#include <fcntl.h>
-#include <string.h>
-
 #include "base.h"
 #include "log.h"
 #include "buffer.h"
@@ -11,16 +6,21 @@
 #include "response.h"
 #include "inet_ntop_cache.h"
 
+#include <ctype.h>
+#include <stdlib.h>
+#include <fcntl.h>
+#include <string.h>
+
 #if defined(HAVE_GDBM_H)
-#include <gdbm.h>
+# include <gdbm.h>
 #endif
 
 #if defined(HAVE_PCRE_H)
-#include <pcre.h>
+# include <pcre.h>
 #endif
 
 #if defined(HAVE_MEMCACHE_H)
-#include <memcache.h>
+# include <memcache.h>
 #endif
 
 /**

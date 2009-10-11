@@ -1,3 +1,14 @@
+#include "response.h"
+#include "keyvalue.h"
+#include "log.h"
+#include "stat_cache.h"
+#include "chunk.h"
+
+#include "configfile.h"
+#include "connections.h"
+
+#include "plugin.h"
+
 #include <sys/types.h>
 #include <sys/stat.h>
 
@@ -12,17 +23,6 @@
 #include <assert.h>
 
 #include <stdio.h>
-
-#include "response.h"
-#include "keyvalue.h"
-#include "log.h"
-#include "stat_cache.h"
-#include "chunk.h"
-
-#include "configfile.h"
-#include "connections.h"
-
-#include "plugin.h"
 
 #include "sys-socket.h"
 #include "version.h"

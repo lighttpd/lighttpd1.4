@@ -1,11 +1,10 @@
-#include <sys/types.h>
-
-#include <string.h>
-
-
 #include "base.h"
 #include "inet_ntop_cache.h"
 #include "sys-socket.h"
+
+#include <sys/types.h>
+
+#include <string.h>
 
 const char * inet_ntop_cache_get_ip(server *srv, sock_addr *addr) {
 #ifdef HAVE_IPV6

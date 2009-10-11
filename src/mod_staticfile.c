@@ -1,8 +1,3 @@
-#include <ctype.h>
-#include <stdlib.h>
-#include <stdio.h>
-#include <string.h>
-
 #include "base.h"
 #include "log.h"
 #include "buffer.h"
@@ -13,6 +8,11 @@
 #include "etag.h"
 #include "http_chunk.h"
 #include "response.h"
+
+#include <ctype.h>
+#include <stdlib.h>
+#include <stdio.h>
+#include <string.h>
 
 /**
  * this is a staticfile for a lighttpd plugin

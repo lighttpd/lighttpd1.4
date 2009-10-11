@@ -1,15 +1,13 @@
-#define _GNU_SOURCE
-
-#include <string.h>
-#include <errno.h>
-#include <time.h>
-
 #include "base.h"
 #include "array.h"
 #include "buffer.h"
 #include "log.h"
 #include "etag.h"
 #include "response.h"
+
+#include <string.h>
+#include <errno.h>
+#include <time.h>
 
 /*
  * This was 'borrowed' from tcpdump.

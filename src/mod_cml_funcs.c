@@ -1,3 +1,12 @@
+#include "buffer.h"
+#include "server.h"
+#include "log.h"
+#include "plugin.h"
+#include "response.h"
+
+#include "mod_cml.h"
+#include "mod_cml_funcs.h"
+
 #include <sys/stat.h>
 #include <time.h>
 
@@ -7,15 +16,6 @@
 #include <unistd.h>
 #include <dirent.h>
 #include <stdio.h>
-
-#include "buffer.h"
-#include "server.h"
-#include "log.h"
-#include "plugin.h"
-#include "response.h"
-
-#include "mod_cml.h"
-#include "mod_cml_funcs.h"
 
 #ifdef USE_OPENSSL
 # include <openssl/md5.h>

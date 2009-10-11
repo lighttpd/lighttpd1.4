@@ -1,7 +1,3 @@
-#include <ctype.h>
-#include <stdlib.h>
-#include <string.h>
-
 #include "base.h"
 #include "log.h"
 #include "buffer.h"
@@ -11,9 +7,9 @@
 
 #include "plugin.h"
 
-#ifdef HAVE_CONFIG_H
-#include "config.h"
-#endif
+#include <ctype.h>
+#include <stdlib.h>
+#include <string.h>
 
 /* plugin config for all request/connections */
 

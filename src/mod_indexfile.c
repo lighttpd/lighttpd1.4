@@ -1,9 +1,3 @@
-#include <ctype.h>
-#include <stdlib.h>
-#include <string.h>
-#include <errno.h>
-
-
 #include "base.h"
 #include "log.h"
 #include "buffer.h"
@@ -11,6 +5,11 @@
 #include "plugin.h"
 
 #include "stat_cache.h"
+
+#include <ctype.h>
+#include <stdlib.h>
+#include <string.h>
+#include <errno.h>
 
 /* plugin config for all request/connections */
 

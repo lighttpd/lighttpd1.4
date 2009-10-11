@@ -1,13 +1,3 @@
-#include <ctype.h>
-#include <stdlib.h>
-#include <string.h>
-#include <dirent.h>
-#include <assert.h>
-#include <errno.h>
-#include <stdio.h>
-#include <unistd.h>
-#include <time.h>
-
 #include "base.h"
 #include "log.h"
 #include "buffer.h"
@@ -17,6 +7,16 @@
 #include "response.h"
 #include "stat_cache.h"
 #include "stream.h"
+
+#include <ctype.h>
+#include <stdlib.h>
+#include <string.h>
+#include <dirent.h>
+#include <assert.h>
+#include <errno.h>
+#include <stdio.h>
+#include <unistd.h>
+#include <time.h>
 
 /**
  * this is a dirlisting for a lighttpd plugin

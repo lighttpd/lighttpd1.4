@@ -1,13 +1,3 @@
-#include <sys/types.h>
-#include <unistd.h>
-#include <errno.h>
-#include <fcntl.h>
-#include <string.h>
-#include <stdlib.h>
-#include <ctype.h>
-#include <assert.h>
-#include <signal.h>
-
 #include "buffer.h"
 #include "server.h"
 #include "keyvalue.h"
@@ -23,6 +13,16 @@
 
 #include "inet_ntop_cache.h"
 
+#include <sys/types.h>
+#include <unistd.h>
+#include <errno.h>
+#include <fcntl.h>
+#include <string.h>
+#include <stdlib.h>
+#include <ctype.h>
+#include <assert.h>
+#include <signal.h>
+
 #include <stdio.h>
 
 #ifdef HAVE_SYS_FILIO_H
@@ -32,10 +32,11 @@
 #include "sys-socket.h"
 
 #ifdef HAVE_SYS_UIO_H
-#include <sys/uio.h>
+# include <sys/uio.h>
 #endif
+
 #ifdef HAVE_SYS_WAIT_H
-#include <sys/wait.h>
+# include <sys/wait.h>
 #endif
 
 #include "version.h"

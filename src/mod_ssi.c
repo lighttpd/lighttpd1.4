@@ -1,13 +1,3 @@
-#include <sys/types.h>
-
-#include <ctype.h>
-#include <stdlib.h>
-#include <stdio.h>
-#include <string.h>
-#include <errno.h>
-#include <time.h>
-#include <unistd.h>
-
 #include "base.h"
 #include "log.h"
 #include "buffer.h"
@@ -24,16 +14,26 @@
 
 #include "sys-socket.h"
 
+#include <sys/types.h>
+
+#include <ctype.h>
+#include <stdlib.h>
+#include <stdio.h>
+#include <string.h>
+#include <errno.h>
+#include <time.h>
+#include <unistd.h>
+
 #ifdef HAVE_PWD_H
-#include <pwd.h>
+# include <pwd.h>
 #endif
 
 #ifdef HAVE_FORK
-#include <sys/wait.h>
+# include <sys/wait.h>
 #endif
 
 #ifdef HAVE_SYS_FILIO_H
-#include <sys/filio.h>
+# include <sys/filio.h>
 #endif
 
 #include "etag.h"

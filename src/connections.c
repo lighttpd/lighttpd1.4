@@ -1,13 +1,3 @@
-#include <sys/stat.h>
-
-#include <stdlib.h>
-#include <stdio.h>
-#include <unistd.h>
-#include <errno.h>
-#include <string.h>
-#include <fcntl.h>
-#include <assert.h>
-
 #include "buffer.h"
 #include "server.h"
 #include "log.h"
@@ -24,6 +14,16 @@
 #include "plugin.h"
 
 #include "inet_ntop_cache.h"
+
+#include <sys/stat.h>
+
+#include <stdlib.h>
+#include <stdio.h>
+#include <unistd.h>
+#include <errno.h>
+#include <string.h>
+#include <fcntl.h>
+#include <assert.h>
 
 #ifdef USE_OPENSSL
 # include <openssl/ssl.h>

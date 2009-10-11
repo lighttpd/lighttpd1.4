@@ -1,3 +1,7 @@
+#include "fdevent.h"
+#include "buffer.h"
+#include "server.h"
+
 #include <sys/types.h>
 
 #include <unistd.h>
@@ -7,11 +11,6 @@
 #include <errno.h>
 #include <signal.h>
 #include <fcntl.h>
-
-#include "fdevent.h"
-#include "settings.h"
-#include "buffer.h"
-#include "server.h"
 
 #ifdef USE_FREEBSD_KQUEUE
 #include <sys/event.h>

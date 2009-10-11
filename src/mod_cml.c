@@ -1,12 +1,3 @@
-#include <sys/stat.h>
-#include <time.h>
-
-#include <stdlib.h>
-#include <string.h>
-#include <errno.h>
-#include <unistd.h>
-#include <stdio.h>
-
 #include "buffer.h"
 #include "server.h"
 #include "log.h"
@@ -16,6 +7,15 @@
 #include "stream.h"
 
 #include "mod_cml.h"
+
+#include <sys/stat.h>
+#include <time.h>
+
+#include <stdlib.h>
+#include <string.h>
+#include <errno.h>
+#include <unistd.h>
+#include <stdio.h>
 
 /* init the plugin data */
 INIT_FUNC(mod_cml_init) {

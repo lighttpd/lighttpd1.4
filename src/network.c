@@ -1,14 +1,3 @@
-#include <sys/types.h>
-#include <sys/stat.h>
-#include <sys/time.h>
-
-#include <errno.h>
-#include <fcntl.h>
-#include <unistd.h>
-#include <string.h>
-#include <stdlib.h>
-#include <assert.h>
-
 #include "network.h"
 #include "fdevent.h"
 #include "log.h"
@@ -19,6 +8,17 @@
 #include "network_backends.h"
 #include "sys-mmap.h"
 #include "sys-socket.h"
+
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <sys/time.h>
+
+#include <errno.h>
+#include <fcntl.h>
+#include <unistd.h>
+#include <string.h>
+#include <stdlib.h>
+#include <assert.h>
 
 #ifdef USE_OPENSSL
 # include <openssl/ssl.h>

@@ -1,3 +1,12 @@
+#include "server.h"
+#include "log.h"
+#include "stream.h"
+#include "plugin.h"
+
+#include "configparser.h"
+#include "configfile.h"
+#include "proc_open.h"
+
 #include <sys/stat.h>
 
 #include <stdlib.h>
@@ -9,18 +18,6 @@
 #include <ctype.h>
 #include <limits.h>
 #include <assert.h>
-
-#include "server.h"
-#include "log.h"
-#include "stream.h"
-#include "plugin.h"
-#ifdef USE_LICENSE
-#include "license.h"
-#endif
-
-#include "configparser.h"
-#include "configfile.h"
-#include "proc_open.h"
 
 
 static int config_insert(server *srv) {
