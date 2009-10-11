@@ -364,7 +364,8 @@ typedef struct {
 	int is_readable;
 	int is_writable;
 
-	int     keep_alive;           /* only request.c can enable it, all other just disable */
+	int keep_alive;              /* only request.c can enable it, all other just disable */
+	int keep_alive_idle;         /* remember max_keep_alive_idle from config */
 
 	int file_started;
 	int file_finished;
