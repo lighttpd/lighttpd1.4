@@ -37,6 +37,12 @@ NEWS
   * Use linux-epoll by default if available (fixes #2021, thx Olaf van der Spek)
   * Print an error if you use too many captures in a regex pattern (fixes #2059)
   * Combine Cache-Control header value in mod_expire to existing HTTP header if header already added by other modules (fixes #2068)
+  * Remember keep-alive-idle in separate variable (fixes #1988)
+  * Fix header inclusion order, always include "config.h" before any system header
+  * mod_webdav: Patch to skip login information for domain part of Destination field (fixes #1793)
+  * mod_webdav: Delete old properties before updating new for MOVE (fixes #1317)
+  * Read hostname from absolute uris in the request line (fixes #1937)
+  * mod_fastcgi: don't disable backend if disable-time is 0 (fixes #1825)
 
 - 1.4.23 - 2009-06-19
   * Added some extra warning options in cmake and fix the resulting warnings (unused/static functions)
