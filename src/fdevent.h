@@ -8,12 +8,15 @@
 #include "settings.h"
 #include "bitset.h"
 
+#if defined HAVE_STDINT_H
+# include <stdint.h>
+#elif defined HAVE_INTTYPES_H
+# include <inttypes.h>
+#endif
+
 /* select event-system */
 
 #if defined(HAVE_EPOLL_CTL) && defined(HAVE_SYS_EPOLL_H)
-# if defined HAVE_STDINT_H
-#  include <stdint.h>
-# endif
 # define USE_LINUX_EPOLL
 # include <sys/epoll.h>
 #endif
