@@ -1,7 +1,3 @@
-#ifndef _XOPEN_SOURCE
-# define _XOPEN_SOURCE
-#endif
-
 #include "base.h"
 #include "array.h"
 #include "buffer.h"
@@ -11,6 +7,11 @@
 
 #include <string.h>
 #include <errno.h>
+
+#ifndef _GNU_SOURCE
+# define _GNU_SOURCE
+#endif
+
 #include <time.h>
 
 /*
