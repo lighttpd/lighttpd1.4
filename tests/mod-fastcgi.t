@@ -7,7 +7,7 @@ BEGIN {
 }
 
 use strict;
-use Test::More tests => 53;
+use Test::More tests => 54;
 use LightyTest;
 
 my $tf = LightyTest->new();
@@ -25,7 +25,7 @@ SKIP: {
 }
 
 SKIP: {
-	skip "no PHP running on port 1026", 30 unless $tf->listening_on(1026);
+	skip "no PHP running on port 1026", 31 unless $tf->listening_on(1026);
 
 	ok($tf->start_proc == 0, "Starting lighttpd") or goto cleanup;
 
@@ -187,6 +187,14 @@ EOF
  );
 	$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200, 'HTTP-Content' => 'zzz.example.org' } ];
 	ok($tf->handle_http($t) == 0, 'FastCGI + Host');
+
+	$t->{REQUEST}  = ( <<EOF
+GET http://zzz.example.org/get-server-env.php?env=SERVER_NAME HTTP/1.0
+Host: aaa.example.org
+EOF
+ );
+	$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200, 'HTTP-Content' => 'zzz.example.org' } ];
+	ok($tf->handle_http($t) == 0, 'SERVER_NAME (absolute url in request line)');
 
 	ok($tf->stop_proc == 0, "Stopping lighttpd");
 	
