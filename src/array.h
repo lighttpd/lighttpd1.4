@@ -1,14 +1,17 @@
 #ifndef ARRAY_H
 #define ARRAY_H
 
-#include <stdlib.h>
 #ifdef HAVE_CONFIG_H
-#include "config.h"
+# include "config.h"
 #endif
+
 #ifdef HAVE_PCRE_H
 # include <pcre.h>
 #endif
+
 #include "buffer.h"
+
+#include <stdlib.h>
 
 #define DATA_IS_STRING(x) (x->type == TYPE_STRING)
 

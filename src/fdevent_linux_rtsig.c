@@ -1,3 +1,6 @@
+#include "fdevent.h"
+#include "buffer.h"
+
 #include <sys/types.h>
 
 #include <unistd.h>
@@ -8,12 +11,7 @@
 #include <signal.h>
 #include <limits.h>
 
-#define __USE_GNU
 #include <fcntl.h>
-
-#include "fdevent.h"
-#include "settings.h"
-#include "buffer.h"
 
 #ifdef USE_LINUX_SIGIO
 static void fdevent_linux_rtsig_free(fdevents *ev) {

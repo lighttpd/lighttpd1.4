@@ -2,7 +2,7 @@
 #define _DIGCALC_H_
 
 #ifdef HAVE_CONFIG_H
-#include "config.h"
+# include "config.h"
 #endif
 
 #define HASHLEN 16

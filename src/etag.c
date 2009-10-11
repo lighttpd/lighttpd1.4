@@ -1,17 +1,13 @@
-#include <string.h>
-
-#ifdef HAVE_CONFIG_H
-#include "config.h"
-#endif
-
-#if defined HAVE_STDINT_H
-#include <stdint.h>
-#elif defined HAVE_INTTYPES_H
-#include <inttypes.h>
-#endif
-
 #include "buffer.h"
 #include "etag.h"
+
+#if defined HAVE_STDINT_H
+# include <stdint.h>
+#elif defined HAVE_INTTYPES_H
+# include <inttypes.h>
+#endif
+
+#include <string.h>
 
 int etag_is_equal(buffer *etag, const char *matches) {
 	if (etag && !buffer_is_empty(etag) && 0 == strcmp(etag->ptr, matches)) return 1;

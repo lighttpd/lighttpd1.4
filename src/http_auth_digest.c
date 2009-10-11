@@ -1,7 +1,8 @@
-#include <string.h>
+#include "buffer.h"
+
 #include "http_auth_digest.h"
 
-#include "buffer.h"
+#include <string.h>
 
 #ifndef USE_OPENSSL
 # include "md5.h"

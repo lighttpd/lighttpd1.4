@@ -1,4 +1,6 @@
-#define _GNU_SOURCE
+#include "base.h"
+#include "log.h"
+#include "array.h"
 
 #include <sys/types.h>
 
@@ -12,19 +14,12 @@
 #include <stdarg.h>
 #include <stdio.h>
 
-#ifdef HAVE_CONFIG_H
-#include "config.h"
-#endif
-
 #ifdef HAVE_SYSLOG_H
-#include <syslog.h>
+# include <syslog.h>
 #endif
-
-#include "log.h"
-#include "array.h"
 
 #ifdef HAVE_VALGRIND_VALGRIND_H
-#include <valgrind/valgrind.h>
+# include <valgrind/valgrind.h>
 #endif
 
 #ifndef O_LARGEFILE

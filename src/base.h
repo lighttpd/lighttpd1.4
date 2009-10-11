@@ -1,18 +1,20 @@
 #ifndef _BASE_H_
 #define _BASE_H_
 
+#ifdef HAVE_CONFIG_H
+# include "config.h"
+#endif
+
 #include <sys/types.h>
 #include <sys/time.h>
 #include <sys/stat.h>
 
-#ifdef HAVE_CONFIG_H
-#include "config.h"
-#endif
-
 #include <limits.h>
+
 #ifdef HAVE_STDINT_H
 # include <stdint.h>
 #endif
+
 #ifdef HAVE_INTTYPES_H
 # include <inttypes.h>
 #endif
@@ -78,8 +80,6 @@ typedef int socklen_t;
 #ifndef SHUT_WR
 # define SHUT_WR 1
 #endif
-
-#include "settings.h"
 
 typedef enum { T_CONFIG_UNSET,
 		T_CONFIG_STRING,

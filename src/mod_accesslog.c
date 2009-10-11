@@ -1,4 +1,12 @@
-#define _GNU_SOURCE
+#include "base.h"
+#include "log.h"
+#include "buffer.h"
+
+#include "plugin.h"
+
+#include "inet_ntop_cache.h"
+
+#include "sys-socket.h"
 
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -12,16 +20,6 @@
 #include <time.h>
 
 #include <stdio.h>
-
-#include "base.h"
-#include "log.h"
-#include "buffer.h"
-
-#include "plugin.h"
-
-#include "inet_ntop_cache.h"
-
-#include "sys-socket.h"
 
 #ifdef HAVE_SYSLOG_H
 # include <syslog.h>

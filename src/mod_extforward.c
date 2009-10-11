@@ -1,3 +1,12 @@
+#include "base.h"
+#include "log.h"
+#include "buffer.h"
+
+#include "plugin.h"
+
+#include "inet_ntop_cache.h"
+#include "configfile.h"
+
 #ifdef HAVE_CONFIG_H
 #include "config.h"
 #endif
@@ -7,15 +16,6 @@
 #include <string.h>
 #include <stdio.h>
 #include <netinet/in.h>
-
-#include "base.h"
-#include "log.h"
-#include "buffer.h"
-
-#include "plugin.h"
-
-#include "inet_ntop_cache.h"
-#include "configfile.h"
 
 /**
  * mod_extforward.c for lighttpd, by comman.kang <at> gmail <dot> com

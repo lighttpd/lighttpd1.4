@@ -1,4 +1,7 @@
-#define _GNU_SOURCE
+#include "log.h"
+#include "stat_cache.h"
+#include "fdevent.h"
+#include "etag.h"
 
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -11,13 +14,8 @@
 #include <fcntl.h>
 #include <assert.h>
 
-#include "log.h"
-#include "stat_cache.h"
-#include "fdevent.h"
-#include "etag.h"
-
 #ifdef HAVE_ATTR_ATTRIBUTES_H
-#include <attr/attributes.h>
+# include <attr/attributes.h>
 #endif
 
 #ifdef HAVE_FAM_H
@@ -36,7 +34,7 @@
 #endif
 
 #ifndef HAVE_LSTAT
-#define lstat stat
+# define lstat stat
 #endif
 
 #if 0

@@ -1,8 +1,8 @@
+#include "array.h"
+
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
-
-#include "array.h"
 
 static data_unset *data_count_copy(const data_unset *s) {
 	data_count *src = (data_count *)s;

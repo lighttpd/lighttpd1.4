@@ -3,15 +3,13 @@
 %name configparser
 
 %include {
-#include <assert.h>
-#include <stdio.h>
-#include <string.h>
-#ifdef HAVE_CONFIG_H
-#include "config.h"
-#endif
 #include "configfile.h"
 #include "buffer.h"
 #include "array.h"
+
+#include <assert.h>
+#include <stdio.h>
+#include <string.h>
 
 static void configparser_push(config_t *ctx, data_config *dc, int isnew) {
   if (isnew) {

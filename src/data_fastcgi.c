@@ -1,9 +1,9 @@
+#include "array.h"
+#include "fastcgi.h"
+
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
-
-#include "array.h"
-#include "fastcgi.h"
 
 static data_unset *data_fastcgi_copy(const data_unset *s) {
 	data_fastcgi *src = (data_fastcgi *)s;

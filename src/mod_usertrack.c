@@ -1,12 +1,12 @@
-#include <ctype.h>
-#include <stdlib.h>
-#include <string.h>
-
 #include "base.h"
 #include "log.h"
 #include "buffer.h"
 
 #include "plugin.h"
+
+#include <ctype.h>
+#include <stdlib.h>
+#include <string.h>
 
 #ifdef USE_OPENSSL
 # include <openssl/md5.h>

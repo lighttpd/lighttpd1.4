@@ -2,6 +2,11 @@
 
 #ifdef USE_WRITEV
 
+#include "network.h"
+#include "fdevent.h"
+#include "log.h"
+#include "stat_cache.h"
+
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <sys/uio.h>
@@ -20,11 +25,6 @@
 #include <limits.h>
 #include <stdio.h>
 #include <assert.h>
-
-#include "network.h"
-#include "fdevent.h"
-#include "log.h"
-#include "stat_cache.h"
 
 #if 0
 #define LOCAL_BUFFERING 1

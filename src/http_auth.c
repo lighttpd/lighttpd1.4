@@ -1,6 +1,9 @@
-#ifdef HAVE_CONFIG_H
-#include "config.h"
-#endif
+#include "server.h"
+#include "log.h"
+#include "http_auth.h"
+#include "http_auth_digest.h"
+#include "inet_ntop_cache.h"
+#include "stream.h"
 
 #ifdef HAVE_CRYPT_H
 # include <crypt.h>
@@ -24,13 +27,6 @@
 #include <errno.h>
 #include <unistd.h>
 #include <ctype.h>
-
-#include "server.h"
-#include "log.h"
-#include "http_auth.h"
-#include "http_auth_digest.h"
-#include "inet_ntop_cache.h"
-#include "stream.h"
 
 #ifdef USE_OPENSSL
 # include <openssl/md5.h>

@@ -1,3 +1,7 @@
+#include "request.h"
+#include "keyvalue.h"
+#include "log.h"
+
 #include <sys/stat.h>
 
 #include <limits.h>
@@ -5,10 +9,6 @@
 #include <string.h>
 #include <stdio.h>
 #include <ctype.h>
-
-#include "request.h"
-#include "keyvalue.h"
-#include "log.h"
 
 static int request_check_hostname(server *srv, connection *con, buffer *host) {
 	enum { DOMAINLABEL, TOPLABEL } stage = TOPLABEL;

@@ -1,19 +1,3 @@
-#include <sys/types.h>
-#include <sys/time.h>
-#include <sys/stat.h>
-
-#include <string.h>
-#include <errno.h>
-#include <fcntl.h>
-#include <unistd.h>
-#include <stdlib.h>
-#include <time.h>
-#include <signal.h>
-#include <assert.h>
-#include <locale.h>
-
-#include <stdio.h>
-
 #include "server.h"
 #include "buffer.h"
 #include "network.h"
@@ -31,29 +15,45 @@
 #include "network_backends.h"
 #include "version.h"
 
+#include <sys/types.h>
+#include <sys/time.h>
+#include <sys/stat.h>
+
+#include <string.h>
+#include <errno.h>
+#include <fcntl.h>
+#include <unistd.h>
+#include <stdlib.h>
+#include <time.h>
+#include <signal.h>
+#include <assert.h>
+#include <locale.h>
+
+#include <stdio.h>
+
 #ifdef HAVE_GETOPT_H
-#include <getopt.h>
+# include <getopt.h>
 #endif
 
 #ifdef HAVE_VALGRIND_VALGRIND_H
-#include <valgrind/valgrind.h>
+# include <valgrind/valgrind.h>
 #endif
 
 #ifdef HAVE_SYS_WAIT_H
-#include <sys/wait.h>
+# include <sys/wait.h>
 #endif
 
 #ifdef HAVE_PWD_H
-#include <grp.h>
-#include <pwd.h>
+# include <grp.h>
+# include <pwd.h>
 #endif
 
 #ifdef HAVE_SYS_RESOURCE_H
-#include <sys/resource.h>
+# include <sys/resource.h>
 #endif
 
 #ifdef HAVE_SYS_PRCTL_H
-#include <sys/prctl.h>
+# include <sys/prctl.h>
 #endif
 
 #ifdef USE_OPENSSL

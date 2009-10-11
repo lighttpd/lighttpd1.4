@@ -1,3 +1,12 @@
+#include "network_backends.h"
+
+#include "network.h"
+#include "fdevent.h"
+#include "log.h"
+#include "stat_cache.h"
+
+#include "sys-socket.h"
+
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <sys/time.h>
@@ -7,21 +16,12 @@
 #include <string.h>
 #include <stdlib.h>
 
-#include "network.h"
-#include "fdevent.h"
-#include "log.h"
-#include "stat_cache.h"
-
-#include "sys-socket.h"
-
-#include "network_backends.h"
-
 #ifdef HAVE_SYS_FILIO_H
 # include <sys/filio.h>
 #endif
 
 #ifdef HAVE_SYS_RESOURCE_H
-#include <sys/resource.h>
+# include <sys/resource.h>
 #endif
 
 int network_write_chunkqueue_write(server *srv, connection *con, int fd, chunkqueue *cq) {

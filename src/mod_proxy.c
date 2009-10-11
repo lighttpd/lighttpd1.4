@@ -1,13 +1,3 @@
-#include <sys/types.h>
-
-#include <unistd.h>
-#include <errno.h>
-#include <fcntl.h>
-#include <string.h>
-#include <stdlib.h>
-#include <ctype.h>
-#include <assert.h>
-
 #include "buffer.h"
 #include "server.h"
 #include "keyvalue.h"
@@ -23,6 +13,16 @@
 
 #include "inet_ntop_cache.h"
 #include "crc32.h"
+
+#include <sys/types.h>
+
+#include <unistd.h>
+#include <errno.h>
+#include <fcntl.h>
+#include <string.h>
+#include <stdlib.h>
+#include <ctype.h>
+#include <assert.h>
 
 #include <stdio.h>
 

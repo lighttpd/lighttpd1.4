@@ -2,6 +2,11 @@
 
 #ifdef USE_FREEBSD_SENDFILE
 
+#include "network.h"
+#include "fdevent.h"
+#include "log.h"
+#include "stat_cache.h"
+
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <sys/stat.h>
@@ -17,11 +22,6 @@
 #include <netdb.h>
 #include <string.h>
 #include <stdlib.h>
-
-#include "network.h"
-#include "fdevent.h"
-#include "log.h"
-#include "stat_cache.h"
 
 
 #ifndef UIO_MAXIOV

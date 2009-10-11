@@ -1,4 +1,10 @@
-#define _GNU_SOURCE
+#include "server.h"
+#include "connections.h"
+#include "response.h"
+#include "connections.h"
+#include "log.h"
+
+#include "plugin.h"
 #include <sys/types.h>
 
 #include <fcntl.h>
@@ -9,13 +15,6 @@
 #include <errno.h>
 #include <time.h>
 
-#include "server.h"
-#include "connections.h"
-#include "response.h"
-#include "connections.h"
-#include "log.h"
-
-#include "plugin.h"
 #ifdef HAVE_FORK
 /* no need for waitpid if we don't have fork */
 #include <sys/wait.h>

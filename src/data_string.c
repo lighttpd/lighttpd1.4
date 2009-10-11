@@ -1,9 +1,9 @@
+#include "array.h"
+
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <assert.h>
-
-#include "array.h"
 
 static data_unset *data_string_copy(const data_unset *s) {
 	data_string *src = (data_string *)s;

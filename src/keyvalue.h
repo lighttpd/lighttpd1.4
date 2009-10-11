@@ -2,7 +2,7 @@
 #define _KEY_VALUE_H_
 
 #ifdef HAVE_CONFIG_H
-#include "config.h"
+# include "config.h"
 #endif
 
 #ifdef HAVE_PCRE_H

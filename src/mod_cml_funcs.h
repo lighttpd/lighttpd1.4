@@ -2,7 +2,7 @@
 #define _MOD_CML_FUNCS_H_
 
 #ifdef HAVE_CONFIG_H
-#include "config.h"
+# include "config.h"
 #endif
 
 #ifdef HAVE_LUA_H

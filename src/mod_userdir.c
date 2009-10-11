@@ -1,8 +1,3 @@
-#include <sys/types.h>
-
-#include <stdlib.h>
-#include <string.h>
-
 #include "base.h"
 #include "log.h"
 #include "buffer.h"
@@ -11,8 +6,13 @@
 
 #include "plugin.h"
 
+#include <sys/types.h>
+
+#include <stdlib.h>
+#include <string.h>
+
 #ifdef HAVE_PWD_H
-#include <pwd.h>
+# include <pwd.h>
 #endif
 
 /* plugin config for all request/connections */

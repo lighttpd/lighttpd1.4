@@ -1,14 +1,3 @@
-#include <sys/types.h>
-#include <sys/stat.h>
-
-#include <fcntl.h>
-#include <unistd.h>
-#include <ctype.h>
-#include <stdlib.h>
-#include <string.h>
-#include <errno.h>
-#include <time.h>
-
 #include "base.h"
 #include "log.h"
 #include "buffer.h"
@@ -19,6 +8,17 @@
 
 #include "crc32.h"
 #include "etag.h"
+
+#include <sys/types.h>
+#include <sys/stat.h>
+
+#include <fcntl.h>
+#include <unistd.h>
+#include <ctype.h>
+#include <stdlib.h>
+#include <string.h>
+#include <errno.h>
+#include <time.h>
 
 #if defined HAVE_ZLIB_H && defined HAVE_LIBZ
 # define USE_ZLIB
@@ -42,7 +42,7 @@
 #define HTTP_ACCEPT_ENCODING_BZIP2    BV(4)
 
 #ifdef __WIN32
-#define mkdir(x,y) mkdir(x)
+# define mkdir(x,y) mkdir(x)
 #endif
 
 typedef struct {

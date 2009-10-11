@@ -1,4 +1,13 @@
-#define _GNU_SOURCE
+#include "server.h"
+#include "connections.h"
+#include "response.h"
+#include "connections.h"
+#include "log.h"
+
+#include "plugin.h"
+
+#include "inet_ntop_cache.h"
+
 #include <sys/types.h>
 
 #include <fcntl.h>
@@ -9,15 +18,6 @@
 #include <time.h>
 #include <stdio.h>
 
-#include "server.h"
-#include "connections.h"
-#include "response.h"
-#include "connections.h"
-#include "log.h"
-
-#include "plugin.h"
-
-#include "inet_ntop_cache.h"
 #include "version.h"
 
 typedef struct {

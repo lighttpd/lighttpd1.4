@@ -1,11 +1,11 @@
+#include "buffer.h"
+#include "bitset.h"
+
 #include <limits.h>
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
 #include <assert.h>
-
-#include "bitset.h"
-#include "buffer.h"
 
 #define BITSET_BITS \
 	( CHAR_BIT * sizeof(size_t) )

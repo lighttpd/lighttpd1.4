@@ -1,6 +1,7 @@
-#include <sys/types.h>
+#include "fdevent.h"
+#include "buffer.h"
 
-#include "settings.h"
+#include <sys/types.h>
 
 #include <unistd.h>
 #include <stdlib.h>
@@ -9,8 +10,6 @@
 #include <stdio.h>
 #include <fcntl.h>
 
-#include "fdevent.h"
-#include "buffer.h"
 
 fdevents *fdevent_init(size_t maxfds, fdevent_handler_t type) {
 	fdevents *ev;

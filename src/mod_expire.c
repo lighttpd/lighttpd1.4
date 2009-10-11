@@ -1,8 +1,3 @@
-#include <ctype.h>
-#include <stdlib.h>
-#include <string.h>
-#include <time.h>
-
 #include "base.h"
 #include "log.h"
 #include "buffer.h"
@@ -10,6 +5,11 @@
 
 #include "plugin.h"
 #include "stat_cache.h"
+
+#include <ctype.h>
+#include <stdlib.h>
+#include <string.h>
+#include <time.h>
 
 /**
  * this is a expire module for a lighttpd

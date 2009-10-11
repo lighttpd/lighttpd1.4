@@ -1,3 +1,15 @@
+#include "base.h"
+#include "log.h"
+#include "buffer.h"
+#include "response.h"
+
+#include "plugin.h"
+
+#include "stream.h"
+#include "stat_cache.h"
+
+#include "sys-mmap.h"
+
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <ctype.h>
@@ -11,10 +23,6 @@
 #include <unistd.h>
 #include <dirent.h>
 
-#ifdef HAVE_CONFIG_H
-#include "config.h"
-#endif
-
 #if defined(HAVE_LIBXML_H) && defined(HAVE_SQLITE3_H)
 #define USE_PROPPATCH
 #include <libxml/tree.h>
@@ -27,18 +35,6 @@
 #define USE_LOCKS
 #include <uuid/uuid.h>
 #endif
-
-#include "base.h"
-#include "log.h"
-#include "buffer.h"
-#include "response.h"
-
-#include "plugin.h"
-
-#include "stream.h"
-#include "stat_cache.h"
-
-#include "sys-mmap.h"
 
 /**
  * this is a webdav for a lighttpd plugin

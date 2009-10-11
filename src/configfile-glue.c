@@ -1,6 +1,3 @@
-#include <string.h>
-#include <stdlib.h>
-
 #include "base.h"
 #include "buffer.h"
 #include "array.h"
@@ -8,6 +5,9 @@
 #include "plugin.h"
 
 #include "configfile.h"
+
+#include <string.h>
+#include <stdlib.h>
 
 /**
  * like all glue code this file contains functions which
