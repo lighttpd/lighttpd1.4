@@ -1782,7 +1782,7 @@ URIHANDLER_FUNC(mod_webdav_subrequest_handler) {
 	case HTTP_METHOD_MOVE:
 	case HTTP_METHOD_COPY: {
 		buffer *destination = NULL;
-		char *sep, *start;
+		char *sep, *sep2, *start;
 		int overwrite = 1;
 
 		if (p->conf.is_readonly) {
@@ -1840,6 +1840,10 @@ URIHANDLER_FUNC(mod_webdav_subrequest_handler) {
 		if (NULL == (sep = strchr(start, '/'))) {
 			con->http_status = 400;
 			return HANDLER_FINISHED;
+		}
+		if (NULL != (sep2 = strchr(start, '@'))) {
+			/* skip login information */
+			start = sep2 + 1;
 		}
 		buffer_copy_string_len(p->uri.authority, start, sep - start);
 
