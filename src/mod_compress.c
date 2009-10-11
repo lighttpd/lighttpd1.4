@@ -661,6 +661,7 @@ PHYSICALPATH_FUNC(mod_compress_physical) {
 	off_t max_fsize;
 	stat_cache_entry *sce = NULL;
 	buffer *mtime = NULL;
+	buffer *content_type;
 
 	if (con->mode != DIRECT || con->http_status) return HANDLER_GO_ON;
 
@@ -713,6 +714,15 @@ PHYSICALPATH_FUNC(mod_compress_physical) {
 	if (sce->st.st_size < 128) return HANDLER_GO_ON;
 
 	/* check if mimetype is in compress-config */
+	content_type = 0;
+	if (sce->content_type->ptr) {
+		char *c;
+		if ( (c = strchr(sce->content_type->ptr, ';')) != 0) {
+			content_type = srv->tmp_buf;
+			buffer_copy_string_len(content_type, sce->content_type->ptr, c - sce->content_type->ptr);
+		}
+	}
+
 	for (m = 0; m < p->conf.compress->used; m++) {
 		data_string *compress_ds = (data_string *)p->conf.compress->data[m];
 
@@ -722,7 +732,8 @@ PHYSICALPATH_FUNC(mod_compress_physical) {
 			return HANDLER_GO_ON;
 		}
 
-		if (buffer_is_equal(compress_ds->value, sce->content_type)) {
+		if (buffer_is_equal(compress_ds->value, sce->content_type)
+		    || (content_type && buffer_is_equal(compress_ds->value, content_type))) {
 			/* mimetype found */
 			data_string *ds;
 

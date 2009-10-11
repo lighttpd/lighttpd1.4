@@ -76,7 +76,7 @@ GET /index.txt HTTP/1.0
 Accept-Encoding: gzip, deflate
 EOF
  );
-$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200, '+Vary' => '', '+Content-Encoding' => '', 'Content-Type' => "text/plain" } ];
+$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200, '+Vary' => '', '+Content-Encoding' => '', 'Content-Type' => "text/plain; charset=utf-8" } ];
 ok($tf->handle_http($t) == 0, 'Content-Type is from the original file');
 
 $t->{REQUEST}  = ( <<EOF
@@ -87,7 +87,7 @@ User-Agent: MYOB/6.66 (AN/ON)
 Connection: close
 EOF
  );
-$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200, '+Vary' => '', 'Content-Type' => "text/plain" } ];
+$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200, '+Vary' => '', 'Content-Type' => "text/plain; charset=utf-8" } ];
 ok($tf->handle_http($t) == 0, 'Empty Accept-Encoding');
 
 $t->{REQUEST}  = ( <<EOF
@@ -96,7 +96,7 @@ Accept-Encoding: bzip2, gzip, deflate
 Host: cache.example.org
 EOF
  );
-$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200, '+Vary' => '', 'Content-Encoding' => 'gzip', 'Content-Type' => "text/plain" } ];
+$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200, '+Vary' => '', 'Content-Encoding' => 'gzip', 'Content-Type' => "text/plain; charset=utf-8" } ];
 ok($tf->handle_http($t) == 0, 'bzip2 requested but disabled');
 
 
