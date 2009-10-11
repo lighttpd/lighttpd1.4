@@ -1250,9 +1250,11 @@ static handler_t connection_handle_fdevent(void *s, void *context, int revents) 
 			/* */
 			read(con->fd, buf, sizeof(buf));
 		} else {
-			/* nothing to read */
-
-			con->close_timeout_ts = srv->cur_ts - 2;
+			/* nothing to read - yet.  But that doesn't
+			 * mean something won't show up in our buffers
+			 * sometime soon, so we can't quite until
+			 * poll() gives us the HUP notification.
+			 */
 		}
 	}
 
@@ -1569,7 +1571,12 @@ int connection_state_machine(server *srv, connection *con) {
 					}
 				}
 #endif
-				connection_close(srv, con);
+				if ((0 == shutdown(con->fd, SHUT_WR))) {
+					con->close_timeout_ts = srv->cur_ts;
+					connection_set_state(srv, con, CON_STATE_CLOSE);
+				} else {
+					connection_close(srv, con);
+				}
 
 				srv->con_closed++;
 			}
@@ -1594,28 +1601,31 @@ int connection_state_machine(server *srv, connection *con) {
 						"state for fd", con->fd, connection_get_state(con->state));
 			}
 
-			if (con->keep_alive) {
-				if (ioctl(con->fd, FIONREAD, &b)) {
-					log_error_write(srv, __FILE__, __LINE__, "ss",
-							"ioctl() failed", strerror(errno));
-				}
-				if (b > 0) {
-					char buf[1024];
-					log_error_write(srv, __FILE__, __LINE__, "sdd",
-							"CLOSE-read()", con->fd, b);
+			/* we have to do the linger_on_close stuff regardless
+			 * of con->keep_alive; even non-keepalive sockets may
+			 * still have unread data, and closing before reading
+			 * it will make the client not see all our output.
+			 */
+			if (ioctl(con->fd, FIONREAD, &b)) {
+				log_error_write(srv, __FILE__, __LINE__, "ss",
+					"ioctl() failed", strerror(errno));
+			}
+			if (b > 0) {
+				char buf[1024];
+				log_error_write(srv, __FILE__, __LINE__, "sdd",
+						"CLOSE-read()", con->fd, b);
 
-					/* */
-					read(con->fd, buf, sizeof(buf));
-				} else {
-					/* nothing to read */
-
-					con->close_timeout_ts = srv->cur_ts - 2;
-				}
+				/* */
+				read(con->fd, buf, sizeof(buf));
 			} else {
-				con->close_timeout_ts = srv->cur_ts - 2;
+				/* nothing to read - yet.  But that doesn't
+				 * mean something won't show up in our buffers
+				 * sometime soon, so we can't quite until
+				 * poll() gives us the HUP notification.
+				 */
 			}
 
-			if (srv->cur_ts - con->close_timeout_ts > 1) {
+			if (srv->cur_ts - con->close_timeout_ts > 30) {
 				connection_close(srv, con);
 
 				if (srv->srvconf.log_state_handling) {
@@ -1739,8 +1749,7 @@ int connection_state_machine(server *srv, connection *con) {
 			connection_reset(srv, con);
 
 			/* close the connection */
-			if ((con->keep_alive == 1) &&
-			    (0 == shutdown(con->fd, SHUT_WR))) {
+			if ((0 == shutdown(con->fd, SHUT_WR))) {
 				con->close_timeout_ts = srv->cur_ts;
 				connection_set_state(srv, con, CON_STATE_CLOSE);
 
