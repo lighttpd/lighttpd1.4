@@ -1253,7 +1253,7 @@ int main (int argc, char **argv) {
 								changed = 1;
 							}
 						} else {
-							if (srv->cur_ts - con->read_idle_ts > con->conf.max_keep_alive_idle) {
+							if (srv->cur_ts - con->read_idle_ts > con->keep_alive_idle) {
 								/* time - out */
 #if 0
 								log_error_write(srv, __FILE__, __LINE__, "sd",

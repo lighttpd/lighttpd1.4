@@ -45,8 +45,10 @@ int http_response_write_header(server *srv, connection *con) {
 	buffer_append_string(b, get_http_status_name(con->http_status));
 
 	/* disable keep-alive if requested */
-	if (con->request_count > con->conf.max_keep_alive_requests) {
+	if (con->request_count > con->conf.max_keep_alive_requests || 0 == con->conf.max_keep_alive_idle) {
 		con->keep_alive = 0;
+	} else {
+		con->keep_alive_idle = con->conf.max_keep_alive_idle;
 	}
 
 	if (con->request.http_version != HTTP_VERSION_1_1 || con->keep_alive == 0) {
