@@ -46,6 +46,7 @@ NEWS
   * mod_compress: match partial+full content-type (fixes #1552)
   * mod_fastcgi: fix is_local detection, respawn backends if bin-path is set (fixes #897)
   * Fix linger-on-close behaviour to avoid rare failure conditions (was r2636, fixes #657)
+  * mod_fastcgi: restart local procs immediately after they terminated, fix local procs handling
 
 - 1.4.23 - 2009-06-19
   * Added some extra warning options in cmake and fix the resulting warnings (unused/static functions)

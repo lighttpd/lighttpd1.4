@@ -359,7 +359,7 @@ EOF
 	$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200, 'HTTP-Content' => 'test123' } ];
 	ok($tf->handle_http($t) == 0, 'killing fastcgi and wait for restart');
 
-	select(undef, undef, undef, 2);
+	select(undef, undef, undef, .2);
 	$t->{REQUEST}  = ( <<EOF
 GET /index.fcgi?die-at-end HTTP/1.0
 Host: www.example.org
@@ -369,7 +369,7 @@ EOF
 	ok($tf->handle_http($t) == 0, 'killing fastcgi and wait for restart');
 
 
-	select(undef, undef, undef, 2);
+	select(undef, undef, undef, .2);
 	$t->{REQUEST}  = ( <<EOF
 GET /index.fcgi?crlf HTTP/1.0
 Host: www.example.org

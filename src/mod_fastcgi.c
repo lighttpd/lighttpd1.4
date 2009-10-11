@@ -443,6 +443,20 @@ static void fcgi_host_reset(server *srv, handler_ctx *hctx) {
 	hctx->host = NULL;
 }
 
+static void fcgi_host_disable(server *srv, handler_ctx *hctx) {
+	plugin_data *p    = hctx->plugin_data;
+
+	if (hctx->host->disable_time || hctx->proc->is_local) {
+		hctx->proc->disabled_until = srv->cur_ts + hctx->host->disable_time;
+		hctx->proc->state = hctx->proc->is_local ? PROC_STATE_DIED_WAIT_FOR_PID : PROC_STATE_DIED;
+
+		if (p->conf.debug) {
+			log_error_write(srv, __FILE__, __LINE__, "sds",
+				"backend disabled for", hctx->host->disable_time, "seconds");
+		}
+	}
+}
+
 static int fastcgi_status_init(server *srv, buffer *b, fcgi_extension_host *host, fcgi_proc *proc) {
 #define CLEAN(x) \
 	fastcgi_status_copy_procname(b, host, proc); \
@@ -2714,7 +2728,6 @@ static int fcgi_restart_dead_procs(server *srv, plugin_data *p, fcgi_extension_h
 		case PROC_STATE_DIED:
 			/* local procs get restarted by us,
 			 * remote ones hopefully by the admin */
-			if (srv->cur_ts <= proc->disabled_until) break;
 
 			if (host->bin_path) {
 				/* we still have connections bound to this proc,
@@ -2736,6 +2749,8 @@ static int fcgi_restart_dead_procs(server *srv, plugin_data *p, fcgi_extension_h
 					return HANDLER_ERROR;
 				}
 			} else {
+				if (srv->cur_ts <= proc->disabled_until) break;
+
 				proc->state = PROC_STATE_RUNNING;
 				host->active_procs++;
 
@@ -2783,10 +2798,7 @@ static handler_t fcgi_write_request(server *srv, handler_ctx *hctx) {
 			log_error_write(srv, __FILE__, __LINE__, "ss",
 					"getsockopt failed:", strerror(errno));
 
-			if (hctx->host->disable_time) {
-				hctx->proc->disabled_until = srv->cur_ts + hctx->host->disable_time;
-				hctx->proc->state = PROC_STATE_DIED;
-			}
+			fcgi_host_disable(srv, hctx);
 
 			return HANDLER_ERROR;
 		}
@@ -2799,10 +2811,11 @@ static handler_t fcgi_write_request(server *srv, handler_ctx *hctx) {
 						"socket:", hctx->proc->connection_name);
 			}
 
-			if (hctx->host->disable_time) {
-				hctx->proc->disabled_until = srv->cur_ts + hctx->host->disable_time;
-				hctx->proc->state = PROC_STATE_DIED;
-			}
+			fcgi_host_disable(srv, hctx);
+			log_error_write(srv, __FILE__, __LINE__, "sdssdsd",
+				"backend is overloaded; we'll disable it for", hctx->host->disable_time, "seconds and send the request to another backend instead:",
+				"reconnects:", hctx->reconnects,
+				"load:", host->load);
 
 			fastcgi_status_copy_procname(p->statuskey, hctx->host, hctx->proc);
 			buffer_append_string_len(p->statuskey, CONST_STR_LEN(".died"));
@@ -2911,19 +2924,12 @@ static handler_t fcgi_write_request(server *srv, handler_ctx *hctx) {
 			 * for check if the host is back in hctx->host->disable_time seconds
 			 *  */
 
-			if (hctx->host->disable_time) {
-				hctx->proc->disabled_until = srv->cur_ts + hctx->host->disable_time;
-				if (hctx->proc->is_local) {
-					hctx->proc->state = PROC_STATE_DIED_WAIT_FOR_PID;
-				} else {
-					hctx->proc->state = PROC_STATE_DIED;
-				}
+			fcgi_host_disable(srv, hctx);
 
-				log_error_write(srv, __FILE__, __LINE__, "sdssdsd",
-					"backend died; we'll disable it for", hctx->host->disable_time, "seconds and send the request to another backend instead:",
-					"reconnects:", hctx->reconnects,
-					"load:", host->load);
-			}
+			log_error_write(srv, __FILE__, __LINE__, "sdssdsd",
+				"backend died; we'll disable it for", hctx->host->disable_time, "seconds and send the request to another backend instead:",
+				"reconnects:", hctx->reconnects,
+				"load:", host->load);
 
 			fastcgi_status_copy_procname(p->statuskey, hctx->host, hctx->proc);
 			buffer_append_string_len(p->statuskey, CONST_STR_LEN(".died"));
