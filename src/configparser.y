@@ -350,7 +350,10 @@ global(A) ::= globalstart LCURLY metalines RCURLY. {
 }
 
 condlines(A) ::= condlines(B) eols ELSE condline(C). {
-  assert(B->context_ndx < C->context_ndx);
+  if (B->context_ndx >= C->context_ndx) {
+    fprintf(stderr, "unreachable else condition\n");
+    ctx->ok = 0;
+  }
   C->prev = B;
   B->next = C;
   A = C;
