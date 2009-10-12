@@ -49,6 +49,7 @@ NEWS
   * mod_fastcgi: restart local procs immediately after they terminated, fix local procs handling
   * Fix segfault on invalid config "duplicate else conditions" (fixes #2065)
   * mod_usertrack: Use T_CONFIG_INT for max-age, solves range problem (#1455)
+  * mod_accesslog: configurable timestamp logging (fixes #1479)
 
 - 1.4.23 - 2009-06-19
   * Added some extra warning options in cmake and fix the resulting warnings (unused/static functions)
