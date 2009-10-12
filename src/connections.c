@@ -1183,7 +1183,7 @@ static handler_t connection_handle_fdevent(void *s, void *context, int revents) 
 		/* FIXME: revents = 0x19 still means that we should read from the queue */
 		if (revents & FDEVENT_HUP) {
 			if (con->state == CON_STATE_CLOSE) {
-				con->close_timeout_ts = srv->cur_ts - 2;
+				con->close_timeout_ts = srv->cur_ts - (HTTP_LINGER_TIMEOUT+1);
 			} else {
 				/* sigio reports the wrong event here
 				 *
@@ -1625,7 +1625,7 @@ int connection_state_machine(server *srv, connection *con) {
 				 */
 			}
 
-			if (srv->cur_ts - con->close_timeout_ts > 30) {
+			if (srv->cur_ts - con->close_timeout_ts > HTTP_LINGER_TIMEOUT) {
 				connection_close(srv, con);
 
 				if (srv->srvconf.log_state_handling) {

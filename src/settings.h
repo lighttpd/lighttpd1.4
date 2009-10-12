@@ -40,6 +40,7 @@ typedef enum { HANDLER_UNSET,
 		HANDLER_WAIT_FOR_FD
 } handler_t;
 
+#define HTTP_LINGER_TIMEOUT 30
 
 /* we use it in a enum */
 #ifdef TRUE
