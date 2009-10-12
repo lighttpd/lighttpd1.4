@@ -52,6 +52,7 @@ NEWS
   * mod_accesslog: configurable timestamp logging (fixes #1479)
   * always define _GNU_SOURCE
   * Add some iterators for mod_magnet (fixes #1307)
+  * Fix close_timeout_ts trigger (should finally fix lingering close)
 
 - 1.4.23 - 2009-06-19
   * Added some extra warning options in cmake and fix the resulting warnings (unused/static functions)
