@@ -19,7 +19,7 @@
 typedef struct {
 	buffer *cookie_name;
 	buffer *cookie_domain;
-	unsigned short cookie_max_age;
+	unsigned int cookie_max_age;
 } plugin_config;
 
 typedef struct {
@@ -73,7 +73,7 @@ SETDEFAULTS_FUNC(mod_usertrack_set_defaults) {
 
 	config_values_t cv[] = {
 		{ "usertrack.cookie-name",       NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_CONNECTION },       /* 0 */
-		{ "usertrack.cookie-max-age",    NULL, T_CONFIG_SHORT, T_CONFIG_SCOPE_CONNECTION },        /* 1 */
+		{ "usertrack.cookie-max-age",    NULL, T_CONFIG_INT, T_CONFIG_SCOPE_CONNECTION },          /* 1 */
 		{ "usertrack.cookie-domain",     NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_CONNECTION },       /* 2 */
 
 		{ "usertrack.cookiename",        NULL, T_CONFIG_DEPRECATED, T_CONFIG_SCOPE_CONNECTION },

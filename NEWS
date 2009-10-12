@@ -48,6 +48,7 @@ NEWS
   * Fix linger-on-close behaviour to avoid rare failure conditions (was r2636, fixes #657)
   * mod_fastcgi: restart local procs immediately after they terminated, fix local procs handling
   * Fix segfault on invalid config "duplicate else conditions" (fixes #2065)
+  * mod_usertrack: Use T_CONFIG_INT for max-age, solves range problem (#1455)
 
 - 1.4.23 - 2009-06-19
   * Added some extra warning options in cmake and fix the resulting warnings (unused/static functions)
