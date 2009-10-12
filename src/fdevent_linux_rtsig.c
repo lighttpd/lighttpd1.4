@@ -11,9 +11,6 @@
 #include <signal.h>
 #include <limits.h>
 
-#ifndef __USE_GNU
-# define __USE_GNU /* a hack in my eyes, should work with _GNU_SOURCE */
-#endif
 #include <fcntl.h>
 
 #ifdef USE_LINUX_SIGIO
