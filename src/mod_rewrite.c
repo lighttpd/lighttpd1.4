@@ -3,6 +3,7 @@
 #include "buffer.h"
 
 #include "plugin.h"
+#include "stat_cache.h"
 
 #include <ctype.h>
 #include <stdlib.h>
@@ -27,7 +28,8 @@ typedef struct {
 
 typedef struct {
 	rewrite_rule_buffer *rewrite;
-	data_config *context; /* to which apply me */
+	rewrite_rule_buffer *rewrite_NF;
+	data_config *context, *context_NF; /* to which apply me */
 } plugin_config;
 
 typedef struct {
@@ -157,6 +159,7 @@ FREE_FUNC(mod_rewrite_free) {
 		for (i = 0; i < srv->config_context->used; i++) {
 			plugin_config *s = p->config_storage[i];
 			rewrite_rule_buffer_free(s->rewrite);
+			rewrite_rule_buffer_free(s->rewrite_NF);
 
 			free(s);
 		}
@@ -168,7 +171,7 @@ FREE_FUNC(mod_rewrite_free) {
 	return HANDLER_GO_ON;
 }
 
-static int parse_config_entry(server *srv, plugin_config *s, array *ca, const char *option, int once) {
+static int parse_config_entry(server *srv, array *ca, rewrite_rule_buffer *kvb, const char *option, int once) {
 	data_unset *du;
 
 	if (NULL != (du = array_get_element(ca, option))) {
@@ -194,7 +197,7 @@ static int parse_config_entry(server *srv, plugin_config *s, array *ca, const ch
 				return HANDLER_ERROR;
 			}
 
-			if (0 != rewrite_rule_buffer_append(s->rewrite,
+			if (0 != rewrite_rule_buffer_append(kvb,
 							    ((data_string *)(da->value->data[j]))->key,
 							    ((data_string *)(da->value->data[j]))->value,
 							    once)) {
@@ -220,14 +223,23 @@ SETDEFAULTS_FUNC(mod_rewrite_set_defaults) {
 		{ "url.rewrite-repeat",        NULL, T_CONFIG_LOCAL, T_CONFIG_SCOPE_CONNECTION }, /* 0 */
 		{ "url.rewrite-once",          NULL, T_CONFIG_LOCAL, T_CONFIG_SCOPE_CONNECTION }, /* 1 */
 
+		/* these functions only rewrite if the target is not already in the filestore
+		 *
+		 * url.rewrite-repeat-if-not-file is the equivalent of url.rewrite-repeat
+		 * url.rewrite-if-not-file is the equivalent of url.rewrite-once
+		 *
+		 */
+		{ "url.rewrite-repeat-if-not-file", NULL, T_CONFIG_LOCAL, T_CONFIG_SCOPE_CONNECTION }, /* 2 */
+		{ "url.rewrite-if-not-file",        NULL, T_CONFIG_LOCAL, T_CONFIG_SCOPE_CONNECTION }, /* 3 */
+
 		/* old names, still supported
 		 *
 		 * url.rewrite remapped to url.rewrite-once
 		 * url.rewrite-final    is url.rewrite-once
 		 *
 		 */
-		{ "url.rewrite",               NULL, T_CONFIG_LOCAL, T_CONFIG_SCOPE_CONNECTION }, /* 2 */
-		{ "url.rewrite-final",         NULL, T_CONFIG_LOCAL, T_CONFIG_SCOPE_CONNECTION }, /* 3 */
+		{ "url.rewrite",               NULL, T_CONFIG_LOCAL, T_CONFIG_SCOPE_CONNECTION }, /* 4 */
+		{ "url.rewrite-final",         NULL, T_CONFIG_LOCAL, T_CONFIG_SCOPE_CONNECTION }, /* 5 */
 		{ NULL,                        NULL, T_CONFIG_UNSET, T_CONFIG_SCOPE_UNSET }
 	};
 
@@ -241,11 +253,15 @@ SETDEFAULTS_FUNC(mod_rewrite_set_defaults) {
 		array *ca;
 
 		s = calloc(1, sizeof(plugin_config));
-		s->rewrite   = rewrite_rule_buffer_init();
+		s->rewrite = rewrite_rule_buffer_init();
+		s->rewrite_NF = rewrite_rule_buffer_init();
 
 		cv[0].destination = s->rewrite;
 		cv[1].destination = s->rewrite;
-		cv[2].destination = s->rewrite;
+		cv[2].destination = s->rewrite_NF;
+		cv[3].destination = s->rewrite_NF;
+		cv[4].destination = s->rewrite;
+		cv[5].destination = s->rewrite;
 
 		p->config_storage[i] = s;
 		ca = ((data_config *)srv->config_context->data[i])->value;
@@ -254,21 +270,27 @@ SETDEFAULTS_FUNC(mod_rewrite_set_defaults) {
 			return HANDLER_ERROR;
 		}
 
-		parse_config_entry(srv, s, ca, "url.rewrite-once",   1);
-		parse_config_entry(srv, s, ca, "url.rewrite-final",  1);
-		parse_config_entry(srv, s, ca, "url.rewrite",        1);
-		parse_config_entry(srv, s, ca, "url.rewrite-repeat", 0);
+		parse_config_entry(srv, ca, s->rewrite, "url.rewrite-once",      1);
+		parse_config_entry(srv, ca, s->rewrite, "url.rewrite-final",     1);
+		parse_config_entry(srv, ca, s->rewrite_NF, "url.rewrite-if-not-file",   1);
+		parse_config_entry(srv, ca, s->rewrite_NF, "url.rewrite-repeat-if-not-file", 0);
+		parse_config_entry(srv, ca, s->rewrite, "url.rewrite",           1);
+		parse_config_entry(srv, ca, s->rewrite, "url.rewrite-repeat",    0);
 	}
 
 	return HANDLER_GO_ON;
 }
 #ifdef HAVE_PCRE_H
+#define PATCH(x) \
+	p->conf.x = s->x;
 static int mod_rewrite_patch_connection(server *srv, connection *con, plugin_data *p) {
 	size_t i, j;
 	plugin_config *s = p->config_storage[0];
 
-	p->conf.rewrite = s->rewrite;
+	PATCH(rewrite);
+	PATCH(rewrite_NF);
 	p->conf.context = NULL;
+	p->conf.context_NF = NULL;
 
 	/* skip the first, the global context */
 	for (i = 1; i < srv->config_context->used; i++) {
@@ -285,16 +307,22 @@ static int mod_rewrite_patch_connection(server *srv, connection *con, plugin_dat
 			data_unset *du = dc->value->data[j];
 
 			if (buffer_is_equal_string(du->key, CONST_STR_LEN("url.rewrite"))) {
-				p->conf.rewrite = s->rewrite;
+				PATCH(rewrite);
 				p->conf.context = dc;
 			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("url.rewrite-once"))) {
-				p->conf.rewrite = s->rewrite;
+				PATCH(rewrite);
 				p->conf.context = dc;
 			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("url.rewrite-repeat"))) {
-				p->conf.rewrite = s->rewrite;
+				PATCH(rewrite);
 				p->conf.context = dc;
+			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("url.rewrite-if-not-file"))) {
+				PATCH(rewrite_NF);
+				p->conf.context_NF = dc;
+			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("url.rewrite-repeat-if-not-file"))) {
+				PATCH(rewrite_NF);
+				p->conf.context_NF = dc;
 			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("url.rewrite-final"))) {
-				p->conf.rewrite = s->rewrite;
+				PATCH(rewrite);
 				p->conf.context = dc;
 			}
 		}
@@ -316,18 +344,10 @@ URIHANDLER_FUNC(mod_rewrite_con_reset) {
 	return HANDLER_GO_ON;
 }
 
-URIHANDLER_FUNC(mod_rewrite_uri_handler) {
+static int process_rewrite_rules(server *srv, connection *con, plugin_data *p, rewrite_rule_buffer *kvb) {
 #ifdef HAVE_PCRE_H
-	plugin_data *p = p_d;
 	size_t i;
 	handler_ctx *hctx;
-
-	/*
-	 * REWRITE URL
-	 *
-	 * e.g. rewrite /base/ to /index.php?section=base
-	 *
-	 */
 
 	if (con->plugin_ctx[p->id]) {
 		hctx = con->plugin_ctx[p->id];
@@ -342,18 +362,14 @@ URIHANDLER_FUNC(mod_rewrite_uri_handler) {
 		if (hctx->state == REWRITE_STATE_FINISHED) return HANDLER_GO_ON;
 	}
 
-	mod_rewrite_patch_connection(srv, con, p);
-
-	if (!p->conf.rewrite) return HANDLER_GO_ON;
-
 	buffer_copy_string_buffer(p->match_buf, con->request.uri);
 
-	for (i = 0; i < p->conf.rewrite->used; i++) {
+	for (i = 0; i < kvb->used; i++) {
 		pcre *match;
 		const char *pattern;
 		size_t pattern_len;
 		int n;
-		rewrite_rule *rule = p->conf.rewrite->ptr[i];
+		rewrite_rule *rule = kvb->ptr[i];
 # define N 10
 		int ovec[N * 3];
 
@@ -426,9 +442,62 @@ URIHANDLER_FUNC(mod_rewrite_uri_handler) {
 
 			return HANDLER_COMEBACK;
 		}
-	}
 #undef N
+	}
+#else
+	UNUSED(srv);
+	UNUSED(con);
+	UNUSED(p);
+	UNUSED(hctx);
+	UNUSED(kvb);
+#endif
 
+	return HANDLER_GO_ON;
+}
+
+URIHANDLER_FUNC(mod_rewrite_physical) {
+#ifdef HAVE_PCRE_H
+	plugin_data *p = p_d;
+	handler_t r;
+	stat_cache_entry *sce;
+
+	if (con->mode != DIRECT) return HANDLER_GO_ON;
+
+	mod_rewrite_patch_connection(srv, con, p);
+	p->conf.context = p->conf.context_NF;
+
+	if (!p->conf.rewrite_NF) return HANDLER_GO_ON;
+
+	/* skip if physical.path is a regular file */
+	sce = NULL;
+	if (HANDLER_ERROR != stat_cache_get_entry(srv, con, con->physical.path, &sce)) {
+		if (S_ISREG(sce->st.st_mode)) return HANDLER_GO_ON;
+	}
+
+	switch(r = process_rewrite_rules(srv, con, p, p->conf.rewrite_NF)) {
+	case HANDLER_COMEBACK:
+		buffer_reset(con->physical.path);
+	default:
+		return r;
+	}
+#else
+	UNUSED(srv);
+	UNUSED(con);
+	UNUSED(p_d);
+#endif
+
+	return HANDLER_GO_ON;
+}
+
+URIHANDLER_FUNC(mod_rewrite_uri_handler) {
+#ifdef HAVE_PCRE_H
+	plugin_data *p = p_d;
+
+	mod_rewrite_patch_connection(srv, con, p);
+
+	if (!p->conf.rewrite) return HANDLER_GO_ON;
+
+	return process_rewrite_rules(srv, con, p, p->conf.rewrite);
 #else
 	UNUSED(srv);
 	UNUSED(con);
@@ -448,6 +517,7 @@ int mod_rewrite_plugin_init(plugin *p) {
 	 */
 
 	p->handle_uri_raw = mod_rewrite_uri_handler;
+	p->handle_physical = mod_rewrite_physical;
 	p->set_defaults = mod_rewrite_set_defaults;
 	p->cleanup     = mod_rewrite_free;
 	p->connection_reset = mod_rewrite_con_reset;
