@@ -8,7 +8,7 @@ BEGIN {
 
 use strict;
 use IO::Socket;
-use Test::More tests => 7;
+use Test::More tests => 8;
 use LightyTest;
 
 my $tf = LightyTest->new();
@@ -24,7 +24,7 @@ SKIP: {
 }
 
 SKIP: {
-	skip "no PHP running on port 1026", 5 unless $tf->listening_on(1026);
+	skip "no PHP running on port 1026", 6 unless $tf->listening_on(1026);
 
 	ok($tf->start_proc == 0, "Starting lighttpd") or goto cleanup;
 
@@ -51,6 +51,14 @@ EOF
  );
 	$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200, 'HTTP-Content' => 'bar&a=b' } ];
 	ok($tf->handle_http($t) == 0, 'valid request');
+
+	$t->{REQUEST}  = ( <<EOF
+GET /rewrite/nofile?a=b HTTP/1.0
+Host: www.example.org
+EOF
+ );
+	$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200, 'HTTP-Content' => 'file=/rewrite/nofile&a=b' } ];
+	ok($tf->handle_http($t) == 0, 'not existing file rewrite');
 
 	ok($tf->stop_proc == 0, "Stopping lighttpd");
 }
