@@ -2729,7 +2729,7 @@ static int fcgi_restart_dead_procs(server *srv, plugin_data *p, fcgi_extension_h
 			/* local procs get restarted by us,
 			 * remote ones hopefully by the admin */
 
-			if (host->bin_path) {
+			if (!buffer_is_empty(host->bin_path)) {
 				/* we still have connections bound to this proc,
 				 * let them terminate first */
 				if (proc->load != 0) break;
