@@ -4,6 +4,7 @@
 #ifdef HAVE_CONFIG_H
 # include "config.h"
 #endif
+#include "settings.h"
 
 #include <sys/types.h>
 #include <sys/time.h>
@@ -23,7 +24,6 @@
 #include "array.h"
 #include "chunk.h"
 #include "keyvalue.h"
-#include "settings.h"
 #include "fdevent.h"
 #include "sys-socket.h"
 #include "splaytree.h"
