@@ -491,10 +491,13 @@ int network_init(server *srv) {
 		if (buffer_is_empty(s->ssl_pemfile)) continue;
 
 #ifdef OPENSSL_NO_TLSEXT
-		if (COMP_HTTP_HOST == dc->comp) {
-		    log_error_write(srv, __FILE__, __LINE__, "ss", "SSL:",
-				    "can't use ssl.pemfile with $HTTP[\"host\"], openssl version does not support TLS extensions");
-		    return -1;
+		{
+			data_config *dc = (data_config *)srv->config_context->data[i];
+			if (COMP_HTTP_HOST == dc->comp) {
+			    log_error_write(srv, __FILE__, __LINE__, "ss", "SSL:",
+					    "can't use ssl.pemfile with $HTTP[\"host\"], openssl version does not support TLS extensions");
+			    return -1;
+			}
 		}
 #endif
 
