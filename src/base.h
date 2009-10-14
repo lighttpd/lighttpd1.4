@@ -33,6 +33,9 @@
 #if defined HAVE_LIBSSL && defined HAVE_OPENSSL_SSL_H
 # define USE_OPENSSL
 # include <openssl/ssl.h>
+# if ! defined OPENSSL_NO_TLSEXT && ! defined SSL_CTRL_SET_TLSEXT_HOSTNAME
+#  define OPENSSL_NO_TLSEXT
+# endif
 #endif
 
 #ifdef HAVE_FAM_H
@@ -424,6 +427,9 @@ typedef struct {
 #ifdef USE_OPENSSL
 	SSL *ssl;
 	buffer *ssl_error_want_reuse_buffer;
+# ifndef OPENSSL_NO_TLSEXT
+	buffer *tlsext_server_name;
+# endif
 #endif
 	/* etag handling */
 	etag_flags_t etag_flags;

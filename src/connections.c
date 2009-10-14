@@ -667,6 +667,9 @@ connection *connection_init(server *srv) {
 	CLEAN(server_name);
 	CLEAN(error_handler);
 	CLEAN(dst_addr_buf);
+#if defined USE_OPENSSL && ! defined OPENSSL_NO_TLSEXT
+	CLEAN(tlsext_server_name);
+#endif
 
 #undef CLEAN
 	con->write_queue = chunkqueue_init();
@@ -731,6 +734,9 @@ void connections_free(server *srv) {
 		CLEAN(server_name);
 		CLEAN(error_handler);
 		CLEAN(dst_addr_buf);
+#if defined USE_OPENSSL && ! defined OPENSSL_NO_TLSEXT
+		CLEAN(tlsext_server_name);
+#endif
 #undef CLEAN
 		free(con->plugin_ctx);
 		free(con->cond_cache);
@@ -1343,6 +1349,9 @@ connection *connection_accept(server *srv, server_socket *srv_socket) {
 				return NULL;
 			}
 
+#ifndef OPENSSL_NO_TLSEXT
+			SSL_set_app_data(con->ssl, con);
+#endif
 			SSL_set_accept_state(con->ssl);
 			con->conf.is_ssl=1;
 

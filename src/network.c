@@ -62,6 +62,45 @@ static handler_t network_server_handle_fdevent(void *s, void *context, int reven
 	return HANDLER_GO_ON;
 }
 
+#if defined USE_OPENSSL && ! defined OPENSSL_NO_TLSEXT
+int network_ssl_servername_callback(SSL *ssl, int *al, server *srv) {
+	const char *servername;
+	connection *con = (connection *) SSL_get_app_data(ssl);
+
+	buffer_copy_string(con->uri.scheme, "https");
+
+	if (NULL == (servername = SSL_get_servername(ssl, TLSEXT_NAMETYPE_host_name))) {
+		log_error_write(srv, __FILE__, __LINE__, "ss", "SSL:",
+				"failed to get TLS server name");
+		return SSL_TLSEXT_ERR_NOACK;
+	}
+	buffer_copy_string(con->tlsext_server_name, servername);
+	buffer_to_lower(con->tlsext_server_name);
+
+	config_cond_cache_reset(srv, con);
+	config_setup_connection(srv, con);
+
+	config_patch_connection(srv, con, COMP_SERVER_SOCKET);
+	config_patch_connection(srv, con, COMP_HTTP_SCHEME);
+	config_patch_connection(srv, con, COMP_HTTP_HOST);
+
+	if (NULL == con->conf.ssl_ctx) {
+		log_error_write(srv, __FILE__, __LINE__, "ssb", "SSL:",
+				"null SSL_CTX for TLS server name", con->tlsext_server_name);
+		return SSL_TLSEXT_ERR_ALERT_FATAL;
+	}
+
+	/* switch to new SSL_CTX in reaction to a client's server_name extension */
+	if (con->conf.ssl_ctx != SSL_set_SSL_CTX(ssl, con->conf.ssl_ctx)) {
+		log_error_write(srv, __FILE__, __LINE__, "ssb", "SSL:",
+				"failed to set SSL_CTX for TLS server name", con->tlsext_server_name);
+		return SSL_TLSEXT_ERR_ALERT_FATAL;
+	}
+
+	return SSL_TLSEXT_ERR_OK;
+}
+#endif
+
 static int network_server_init(server *srv, buffer *host_token, specific_config *s) {
 	int val;
 	socklen_t addr_len;
@@ -312,78 +351,10 @@ static int network_server_init(server *srv, buffer *host_token, specific_config 
 
 	if (s->is_ssl) {
 #ifdef USE_OPENSSL
-		if (srv->ssl_is_init == 0) {
-			SSL_load_error_strings();
-			SSL_library_init();
-			srv->ssl_is_init = 1;
-
-			if (0 == RAND_status()) {
-				log_error_write(srv, __FILE__, __LINE__, "ss", "SSL:",
-						"not enough entropy in the pool");
-				goto error_free_socket;
-			}
-		}
-
-		if (NULL == (s->ssl_ctx = SSL_CTX_new(SSLv23_server_method()))) {
-			log_error_write(srv, __FILE__, __LINE__, "ss", "SSL:",
-					ERR_error_string(ERR_get_error(), NULL));
-			goto error_free_socket;
-		}
-
-		if (!s->ssl_use_sslv2) {
-			/* disable SSLv2 */
-			if (SSL_OP_NO_SSLv2 != SSL_CTX_set_options(s->ssl_ctx, SSL_OP_NO_SSLv2)) {
-				log_error_write(srv, __FILE__, __LINE__, "ss", "SSL:",
-						ERR_error_string(ERR_get_error(), NULL));
-				goto error_free_socket;
-			}
-		}
-
-		if (!buffer_is_empty(s->ssl_cipher_list)) {
-			/* Disable support for low encryption ciphers */
-			if (SSL_CTX_set_cipher_list(s->ssl_ctx, s->ssl_cipher_list->ptr) != 1) {
-				log_error_write(srv, __FILE__, __LINE__, "ss", "SSL:",
-						ERR_error_string(ERR_get_error(), NULL));
-				goto error_free_socket;
-			}
-		}
-
-		if (buffer_is_empty(s->ssl_pemfile)) {
+		if (NULL == (srv_socket->ssl_ctx = s->ssl_ctx)) {
 			log_error_write(srv, __FILE__, __LINE__, "s", "ssl.pemfile has to be set");
 			goto error_free_socket;
 		}
-
-		if (!buffer_is_empty(s->ssl_ca_file)) {
-			if (1 != SSL_CTX_load_verify_locations(s->ssl_ctx, s->ssl_ca_file->ptr, NULL)) {
-				log_error_write(srv, __FILE__, __LINE__, "ssb", "SSL:",
-						ERR_error_string(ERR_get_error(), NULL), s->ssl_ca_file);
-				goto error_free_socket;
-			}
-		}
-
-		if (SSL_CTX_use_certificate_file(s->ssl_ctx, s->ssl_pemfile->ptr, SSL_FILETYPE_PEM) < 0) {
-			log_error_write(srv, __FILE__, __LINE__, "ssb", "SSL:",
-					ERR_error_string(ERR_get_error(), NULL), s->ssl_pemfile);
-			goto error_free_socket;
-		}
-
-		if (SSL_CTX_use_PrivateKey_file (s->ssl_ctx, s->ssl_pemfile->ptr, SSL_FILETYPE_PEM) < 0) {
-			log_error_write(srv, __FILE__, __LINE__, "ssb", "SSL:",
-					ERR_error_string(ERR_get_error(), NULL), s->ssl_pemfile);
-			goto error_free_socket;
-		}
-
-		if (SSL_CTX_check_private_key(s->ssl_ctx) != 1) {
-			log_error_write(srv, __FILE__, __LINE__, "sssb", "SSL:",
-					"Private key does not match the certificate public key, reason:",
-					ERR_error_string(ERR_get_error(), NULL),
-					s->ssl_pemfile);
-			goto error_free_socket;
-		}
-		SSL_CTX_set_default_read_ahead(s->ssl_ctx, 1);
-		SSL_CTX_set_mode(s->ssl_ctx, SSL_CTX_get_mode(s->ssl_ctx) | SSL_MODE_ACCEPT_MOVING_WRITE_BUFFER);
-
-		srv_socket->ssl_ctx = s->ssl_ctx;
 #else
 
 		buffer_free(srv_socket->srv_token);
@@ -509,6 +480,99 @@ int network_init(server *srv) {
 		{ NETWORK_BACKEND_WRITE,		"write" },
 		{ NETWORK_BACKEND_UNSET,        	NULL }
 	};
+
+#ifdef USE_OPENSSL
+	/* load SSL certificates */
+	for (i = 0; i < srv->config_context->used; i++) {
+		data_config *dc = (data_config *)srv->config_context->data[i];
+		specific_config *s = srv->config_storage[i];
+
+		if (buffer_is_empty(s->ssl_pemfile)) continue;
+
+#ifdef OPENSSL_NO_TLSEXT
+		if (COMP_HTTP_HOST == dc->comp) {
+		    log_error_write(srv, __FILE__, __LINE__, "ss", "SSL:",
+				    "can't use ssl.pemfile with $HTTP[\"host\"], openssl version does not support TLS extensions");
+		    return -1;
+		}
+#endif
+
+		if (srv->ssl_is_init == 0) {
+			SSL_load_error_strings();
+			SSL_library_init();
+			srv->ssl_is_init = 1;
+
+			if (0 == RAND_status()) {
+				log_error_write(srv, __FILE__, __LINE__, "ss", "SSL:",
+						"not enough entropy in the pool");
+				return -1;
+			}
+		}
+
+		if (NULL == (s->ssl_ctx = SSL_CTX_new(SSLv23_server_method()))) {
+			log_error_write(srv, __FILE__, __LINE__, "ss", "SSL:",
+					ERR_error_string(ERR_get_error(), NULL));
+			return -1;
+		}
+
+		if (!s->ssl_use_sslv2) {
+			/* disable SSLv2 */
+			if (SSL_OP_NO_SSLv2 != SSL_CTX_set_options(s->ssl_ctx, SSL_OP_NO_SSLv2)) {
+				log_error_write(srv, __FILE__, __LINE__, "ss", "SSL:",
+						ERR_error_string(ERR_get_error(), NULL));
+				return -1;
+			}
+		}
+
+		if (!buffer_is_empty(s->ssl_cipher_list)) {
+			/* Disable support for low encryption ciphers */
+			if (SSL_CTX_set_cipher_list(s->ssl_ctx, s->ssl_cipher_list->ptr) != 1) {
+				log_error_write(srv, __FILE__, __LINE__, "ss", "SSL:",
+						ERR_error_string(ERR_get_error(), NULL));
+				return -1;
+			}
+		}
+
+		if (!buffer_is_empty(s->ssl_ca_file)) {
+			if (1 != SSL_CTX_load_verify_locations(s->ssl_ctx, s->ssl_ca_file->ptr, NULL)) {
+				log_error_write(srv, __FILE__, __LINE__, "ssb", "SSL:",
+						ERR_error_string(ERR_get_error(), NULL), s->ssl_ca_file);
+				return -1;
+			}
+		}
+
+		if (SSL_CTX_use_certificate_file(s->ssl_ctx, s->ssl_pemfile->ptr, SSL_FILETYPE_PEM) < 0) {
+			log_error_write(srv, __FILE__, __LINE__, "ssb", "SSL:",
+					ERR_error_string(ERR_get_error(), NULL), s->ssl_pemfile);
+			return -1;
+		}
+
+		if (SSL_CTX_use_PrivateKey_file (s->ssl_ctx, s->ssl_pemfile->ptr, SSL_FILETYPE_PEM) < 0) {
+			log_error_write(srv, __FILE__, __LINE__, "ssb", "SSL:",
+					ERR_error_string(ERR_get_error(), NULL), s->ssl_pemfile);
+			return -1;
+		}
+
+		if (SSL_CTX_check_private_key(s->ssl_ctx) != 1) {
+			log_error_write(srv, __FILE__, __LINE__, "sssb", "SSL:",
+					"Private key does not match the certificate public key, reason:",
+					ERR_error_string(ERR_get_error(), NULL),
+					s->ssl_pemfile);
+			return -1;
+		}
+		SSL_CTX_set_default_read_ahead(s->ssl_ctx, 1);
+		SSL_CTX_set_mode(s->ssl_ctx, SSL_CTX_get_mode(s->ssl_ctx) | SSL_MODE_ACCEPT_MOVING_WRITE_BUFFER);
+
+# ifndef OPENSSL_NO_TLSEXT
+		if (!SSL_CTX_set_tlsext_servername_callback(s->ssl_ctx, network_ssl_servername_callback) ||
+		    !SSL_CTX_set_tlsext_servername_arg(s->ssl_ctx, srv)) {
+			log_error_write(srv, __FILE__, __LINE__, "ss", "SSL:",
+					"failed to initialize TLS servername callback, openssl library does not support TLS servername extension");
+			return -1;
+		}
+# endif
+	}
+#endif
 
 	b = buffer_init();
 
