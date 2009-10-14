@@ -543,6 +543,30 @@ int network_init(server *srv) {
 						ERR_error_string(ERR_get_error(), NULL), s->ssl_ca_file);
 				return -1;
 			}
+			if (s->ssl_verifyclient) {
+				STACK_OF(X509_NAME) *certs = SSL_load_client_CA_file(s->ssl_ca_file->ptr);
+				if (!certs) {
+					log_error_write(srv, __FILE__, __LINE__, "ssb", "SSL:",
+							ERR_error_string(ERR_get_error(), NULL), s->ssl_ca_file);
+				}
+				if (SSL_CTX_set_session_id_context(s->ssl_ctx, (void*) &srv, sizeof(srv)) != 1) {
+					log_error_write(srv, __FILE__, __LINE__, "ss", "SSL:",
+						ERR_error_string(ERR_get_error(), NULL));
+					return -1;
+				}
+				SSL_CTX_set_client_CA_list(s->ssl_ctx, certs);
+				SSL_CTX_set_verify(
+					s->ssl_ctx,
+					SSL_VERIFY_PEER | (s->ssl_verifyclient_enforce ? SSL_VERIFY_FAIL_IF_NO_PEER_CERT : 0),
+					NULL
+				);
+				SSL_CTX_set_verify_depth(s->ssl_ctx, s->ssl_verifyclient_depth);
+			}
+		} else if (s->ssl_verifyclient) {
+			log_error_write(
+				srv, __FILE__, __LINE__, "s",
+				"SSL: You specified ssl.verifyclient.activate but no ca_file"
+			);
 		}
 
 		if (SSL_CTX_use_certificate_file(s->ssl_ctx, s->ssl_pemfile->ptr, SSL_FILETYPE_PEM) < 0) {
