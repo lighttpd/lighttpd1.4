@@ -7,7 +7,7 @@ BEGIN {
 }
 
 use strict;
-use Test::More tests => 54;
+use Test::More tests => 56;
 use LightyTest;
 
 my $tf = LightyTest->new();
@@ -25,7 +25,7 @@ SKIP: {
 }
 
 SKIP: {
-	skip "no PHP running on port 1026", 31 unless $tf->listening_on(1026);
+	skip "no PHP running on port 1026", 33 unless $tf->listening_on(1026);
 
 	ok($tf->start_proc == 0, "Starting lighttpd") or goto cleanup;
 
@@ -173,6 +173,20 @@ EOF
  );
 	$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200, 'HTTP-Content' => '/foo/bar' } ];
 	ok($tf->handle_http($t) == 0, 'PATH_INFO, check-local off');
+
+	$t->{REQUEST}  = ( <<EOF
+GET /sendfile.php?range=0- HTTP/1.0
+EOF
+ );
+	$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200, 'Content-Length' => 4348 } ];
+	ok($tf->handle_http($t) == 0, 'X-Sendfile2');
+
+	$t->{REQUEST}  = ( <<EOF
+GET /sendfile.php?range=0-4&range2=5- HTTP/1.0
+EOF
+ );
+	$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200, 'Content-Length' => 4348 } ];
+	ok($tf->handle_http($t) == 0, 'X-Sendfile2');
 
 
 	ok($tf->stop_proc == 0, "Stopping lighttpd");

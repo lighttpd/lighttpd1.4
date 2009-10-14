@@ -72,7 +72,7 @@ int http_response_write_header(server *srv, connection *con) {
 
 		if (ds->value->used && ds->key->used &&
 		    0 != strncasecmp(ds->key->ptr, CONST_STR_LEN("X-LIGHTTPD-")) &&
-			0 != strcasecmp(ds->key->ptr, "X-Sendfile")) {
+			0 != strncasecmp(ds->key->ptr, CONST_STR_LEN("X-Sendfile"))) {
 			if (0 == strcasecmp(ds->key->ptr, "Date")) have_date = 1;
 			if (0 == strcasecmp(ds->key->ptr, "Server")) have_server = 1;
 			if (0 == strcasecmp(ds->key->ptr, "Content-Encoding") && 304 == con->http_status) continue;

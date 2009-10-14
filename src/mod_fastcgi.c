@@ -2224,6 +2224,8 @@ static int fcgi_response_parse(server *srv, connection *con, plugin_data *p, buf
 
 	handler_ctx *hctx = con->plugin_ctx[p->id];
 	fcgi_extension_host *host= hctx->host;
+	int have_sendfile2 = 0;
+	off_t sendfile2_content_length = 0;
 
 	UNUSED(srv);
 
@@ -2233,7 +2235,7 @@ static int fcgi_response_parse(server *srv, connection *con, plugin_data *p, buf
 	for (s = p->parse_response->ptr; NULL != (ns = strchr(s, '\n')); s = ns + 1) {
 		char *key, *value;
 		int key_len;
-		data_string *ds;
+		data_string *ds = NULL;
 
 		/* a good day. Someone has read the specs and is sending a \r\n to us */
 
@@ -2296,6 +2298,79 @@ static int fcgi_response_parse(server *srv, connection *con, plugin_data *p, buf
 				con->parsed_response |= HTTP_CONNECTION;
 			}
 			break;
+		case 11:
+			if (host->allow_xsendfile && 0 == strncasecmp(key, "X-Sendfile2", key_len)&& hctx->send_content_body) {
+				char *pos = value;
+				have_sendfile2 = 1;
+
+				while (*pos) {
+					char *filename, *range;
+					stat_cache_entry *sce;
+					off_t begin_range, end_range, range_len;
+
+					while (' ' == *pos) pos++;
+					if (!*pos) break;
+
+					filename = pos;
+					if (NULL == (range = strchr(pos, ' '))) {
+						/* missing range */
+						return 1;
+					}
+					buffer_copy_string_len(srv->tmp_buf, filename, range - filename);
+
+					/* find end of range */
+					for (pos = ++range; *pos && *pos != ' ' && *pos != ','; pos++) ;
+
+					buffer_urldecode_path(srv->tmp_buf);
+					if (HANDLER_ERROR == stat_cache_get_entry(srv, con, srv->tmp_buf, &sce)) {
+						if (p->conf.debug) {
+							log_error_write(srv, __FILE__, __LINE__, "sb",
+								"send-file error: couldn't get stat_cache entry for X-Sendfile2:",
+								srv->tmp_buf);
+						}
+						return 1;
+					} else if (!S_ISREG(sce->st.st_mode)) {
+						if (p->conf.debug) {
+							log_error_write(srv, __FILE__, __LINE__, "sb",
+								"send-file error: wrong filetype for X-Sendfile2:",
+								srv->tmp_buf);
+						}
+						return 1;
+					}
+					/* found the file */
+
+					/* parse range */
+					begin_range = 0; end_range = sce->st.st_size - 1;
+					{
+						char *rpos = NULL;
+						errno = 0;
+						begin_range = strtoll(range, &rpos, 10);
+						if (errno != 0 || begin_range < 0 || rpos == range) return 1;
+						if ('-' != *rpos++) return 1;
+						if (rpos != pos) {
+							range = rpos;
+							end_range = strtoll(range, &rpos, 10);
+							if (errno != 0 || end_range < 0 || rpos == range) return 1;
+						}
+						if (rpos != pos) return 1;
+					}
+
+					/* no parameters accepted */
+
+					while (*pos == ' ') pos++;
+					if (*pos != '\0' && *pos != ',') return 1;
+
+					range_len = end_range - begin_range + 1;
+					if (range_len < 0) return 1;
+					if (range_len != 0) {
+						http_chunk_append_file(srv, con, srv->tmp_buf, begin_range, range_len);
+					}
+					sendfile2_content_length += range_len;
+
+					if (*pos == ',') pos++;
+				}
+			}
+			break;
 		case 14:
 			if (0 == strncasecmp(key, "Content-Length", key_len)) {
 				con->response.content_length = strtol(value, NULL, 10);
@@ -2307,6 +2382,26 @@ static int fcgi_response_parse(server *srv, connection *con, plugin_data *p, buf
 		default:
 			break;
 		}
+	}
+
+	if (have_sendfile2) {
+		data_string *dcls;
+
+		hctx->send_content_body = 0;
+		joblist_append(srv, con);
+
+		/* fix content-length */
+		if (NULL == (dcls = (data_string *)array_get_unused_element(con->response.headers, TYPE_STRING))) {
+			dcls = data_response_init();
+		}
+
+		buffer_copy_string_len(dcls->key, "Content-Length", sizeof("Content-Length")-1);
+		buffer_copy_off_t(dcls->value, sendfile2_content_length);
+		dcls = (data_string*) array_replace(con->response.headers, (data_unset *)dcls);
+		if (dcls) dcls->free((data_unset*)dcls);
+
+		con->parsed_response |= HTTP_CONTENT_LENGTH;
+		con->response.content_length = sendfile2_content_length;
 	}
 
 	/* CGI/1.1 rev 03 - 7.2.1.2 */
@@ -2536,7 +2631,12 @@ static int fcgi_demux_response(server *srv, handler_ctx *hctx) {
 				}
 
 				/* parse the response header */
-				fcgi_response_parse(srv, con, p, hctx->response_header);
+				if (fcgi_response_parse(srv, con, p, hctx->response_header)) {
+					con->http_status = 502;
+					hctx->send_content_body = 0;
+					con->file_started = 1;
+					break;
+				}
 
 				con->file_started = 1;
 
@@ -2547,7 +2647,7 @@ static int fcgi_demux_response(server *srv, handler_ctx *hctx) {
 					hctx->send_content_body = 0;
 				}
 
-				if (host->allow_xsendfile &&
+				if (host->allow_xsendfile && hctx->send_content_body &&
 				    (NULL != (ds = (data_string *) array_get_element(con->response.headers, "X-LIGHTTPD-send-file"))
 					  || NULL != (ds = (data_string *) array_get_element(con->response.headers, "X-Sendfile")))) {
 					stat_cache_entry *sce;
