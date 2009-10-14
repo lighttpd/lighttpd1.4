@@ -4,6 +4,7 @@
 #include "connections.h"
 #include "plugin.h"
 #include "joblist.h"
+#include "configfile.h"
 
 #include "network_backends.h"
 #include "sys-mmap.h"
@@ -63,9 +64,10 @@ static handler_t network_server_handle_fdevent(void *s, void *context, int reven
 }
 
 #if defined USE_OPENSSL && ! defined OPENSSL_NO_TLSEXT
-int network_ssl_servername_callback(SSL *ssl, int *al, server *srv) {
+static int network_ssl_servername_callback(SSL *ssl, int *al, server *srv) {
 	const char *servername;
 	connection *con = (connection *) SSL_get_app_data(ssl);
+	UNUSED(al);
 
 	buffer_copy_string(con->uri.scheme, "https");
 
@@ -484,7 +486,6 @@ int network_init(server *srv) {
 #ifdef USE_OPENSSL
 	/* load SSL certificates */
 	for (i = 0; i < srv->config_context->used; i++) {
-		data_config *dc = (data_config *)srv->config_context->data[i];
 		specific_config *s = srv->config_storage[i];
 
 		if (buffer_is_empty(s->ssl_pemfile)) continue;
