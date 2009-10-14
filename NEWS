@@ -55,6 +55,7 @@ NEWS
   * Fix close_timeout_ts trigger (should finally fix lingering close)
   * mod_rewrite: add url.rewrite-[repeat-]if-not-file to rewrite if file doesn't exist or is not a regular file (fixes #985, thx lucas aerbeydt)
   * Add TLS servername indication (SNI) support (fixes #386, thx Peter Colberg <peter@colberg.org>)
+  * Add SSL Client Certificate verification (#1288)
 
 - 1.4.23 - 2009-06-19
   * Added some extra warning options in cmake and fix the resulting warnings (unused/static functions)

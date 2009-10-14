@@ -307,6 +307,7 @@ static void server_free(server *srv) {
 			buffer_free(s->error_handler);
 			buffer_free(s->errorfile_prefix);
 			array_free(s->mimetypes);
+			buffer_free(s->ssl_verifyclient_username);
 #ifdef USE_OPENSSL
 			SSL_CTX_free(s->ssl_ctx);
 #endif
