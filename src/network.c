@@ -72,8 +72,11 @@ static int network_ssl_servername_callback(SSL *ssl, int *al, server *srv) {
 	buffer_copy_string(con->uri.scheme, "https");
 
 	if (NULL == (servername = SSL_get_servername(ssl, TLSEXT_NAMETYPE_host_name))) {
+#if 0
+		/* this "error" just means the client didn't support it */
 		log_error_write(srv, __FILE__, __LINE__, "ss", "SSL:",
 				"failed to get TLS server name");
+#endif
 		return SSL_TLSEXT_ERR_NOACK;
 	}
 	buffer_copy_string(con->tlsext_server_name, servername);
@@ -87,15 +90,16 @@ static int network_ssl_servername_callback(SSL *ssl, int *al, server *srv) {
 	config_patch_connection(srv, con, COMP_HTTP_HOST);
 
 	if (NULL == con->conf.ssl_ctx) {
+		/* ssl_ctx <=> pemfile was set <=> ssl_ctx got patched: so this should never happen */
 		log_error_write(srv, __FILE__, __LINE__, "ssb", "SSL:",
-				"null SSL_CTX for TLS server name", con->tlsext_server_name);
+			"null SSL_CTX for TLS server name", con->tlsext_server_name);
 		return SSL_TLSEXT_ERR_ALERT_FATAL;
 	}
 
 	/* switch to new SSL_CTX in reaction to a client's server_name extension */
 	if (con->conf.ssl_ctx != SSL_set_SSL_CTX(ssl, con->conf.ssl_ctx)) {
 		log_error_write(srv, __FILE__, __LINE__, "ssb", "SSL:",
-				"failed to set SSL_CTX for TLS server name", con->tlsext_server_name);
+			"failed to set SSL_CTX for TLS server name", con->tlsext_server_name);
 		return SSL_TLSEXT_ERR_ALERT_FATAL;
 	}
 
