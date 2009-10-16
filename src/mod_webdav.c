@@ -1841,7 +1841,7 @@ URIHANDLER_FUNC(mod_webdav_subrequest_handler) {
 			con->http_status = 400;
 			return HANDLER_FINISHED;
 		}
-		if (NULL != (sep2 = strchr(start, '@'))) {
+		if (NULL != (sep2 = memchr(start, '@', sep - start))) {
 			/* skip login information */
 			start = sep2 + 1;
 		}
