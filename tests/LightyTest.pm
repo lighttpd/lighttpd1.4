@@ -124,7 +124,7 @@ sub start_proc {
 	} elsif (defined $ENV{"TRACEME"} && $ENV{"TRACEME"} eq 'truss') {
 		$cmdline = "truss -a -l -w all -v all -o strace ".$cmdline;
 	} elsif (defined $ENV{"TRACEME"} && $ENV{"TRACEME"} eq 'gdb') {
-		$cmdline = "gdb --batch --ex 'run' --ex 'bt' --args ".$cmdline." > gdb.out";
+		$cmdline = "gdb --batch --ex 'run' --ex 'bt full' --args ".$cmdline." > gdb.out";
 	} elsif (defined $ENV{"TRACEME"} && $ENV{"TRACEME"} eq 'valgrind') {
 		$cmdline = "valgrind --tool=memcheck --show-reachable=yes --leak-check=yes --log-file=valgrind ".$cmdline;
 	}
