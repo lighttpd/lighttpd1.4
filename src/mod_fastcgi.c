@@ -125,7 +125,7 @@ typedef struct {
 
 	unsigned short max_procs;
 	size_t num_procs;    /* how many procs are started */
-	size_t active_procs; /* how many of them are really running */
+	size_t active_procs; /* how many of them are really running, i.e. state = PROC_STATE_RUNNING */
 
 	/*
 	 * time after a disabled remote connection is tried to be re-enabled
@@ -447,6 +447,7 @@ static void fcgi_host_disable(server *srv, handler_ctx *hctx) {
 	plugin_data *p    = hctx->plugin_data;
 
 	if (hctx->host->disable_time || hctx->proc->is_local) {
+		if (hctx->proc->state == PROC_STATE_RUNNING) hctx->host->active_procs--;
 		hctx->proc->disabled_until = srv->cur_ts + hctx->host->disable_time;
 		hctx->proc->state = hctx->proc->is_local ? PROC_STATE_DIED_WAIT_FOR_PID : PROC_STATE_DIED;
 
@@ -3007,6 +3008,7 @@ static handler_t fcgi_write_request(server *srv, handler_ctx *hctx) {
 					"load:", host->load);
 
 				hctx->proc->disabled_until = srv->cur_ts + hctx->host->disable_time;
+				if (hctx->proc->state == PROC_STATE_RUNNING) hctx->host->active_procs--;
 				hctx->proc->state = PROC_STATE_OVERLOADED;
 			}
 
@@ -3230,8 +3232,6 @@ SUBREQUEST_FUNC(mod_fastcgi_handle_subrequest) {
 
 		if (hctx->state == FCGI_STATE_INIT ||
 		    hctx->state == FCGI_STATE_CONNECT_DELAYED) {
-			if (proc) host->active_procs--;
-
 			fcgi_restart_dead_procs(srv, p, host);
 
 			/* cleanup this request and let the request handler start this request again */
@@ -3245,7 +3245,7 @@ SUBREQUEST_FUNC(mod_fastcgi_handle_subrequest) {
 
 				buffer_reset(con->physical.path);
 				con->mode = DIRECT;
-				con->http_status = 500;
+				con->http_status = 503;
 				joblist_append(srv, con); /* in case we come from the event-handler */
 
 				return HANDLER_FINISHED;
@@ -3861,6 +3861,7 @@ TRIGGER_FUNC(mod_fastcgi_handle_trigger) {
 									status);
 						}
 						proc->pid = 0;
+						if (proc->state == PROC_STATE_RUNNING) host->active_procs--;
 						proc->state = PROC_STATE_UNSET;
 						host->max_id--;
 					}
