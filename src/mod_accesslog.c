@@ -156,6 +156,51 @@ INIT_FUNC(mod_accesslog_init) {
 	return p;
 }
 
+static void accesslog_append_escaped(buffer *dest, buffer *str) {
+	/* replaces non-printable chars with \xHH where HH is the hex representation of the byte */
+	/* exceptions: " => \", \ => \\, whitespace chars => \n \t etc. */
+	buffer_prepare_append(dest, str->used - 1);
+
+	for (unsigned int i = 0; i < str->used - 1; i++) {
+		if (str->ptr[i] >= ' ' && str->ptr[i] <= '~') {
+			/* printable chars */
+			buffer_append_string_len(dest, &str->ptr[i], 1);
+		} else switch (str->ptr[i]) {
+		case '"':
+			BUFFER_APPEND_STRING_CONST(dest, "\\\"");
+			break;
+		case '\\':
+			BUFFER_APPEND_STRING_CONST(dest, "\\\\");
+			break;
+		case '\b':
+			BUFFER_APPEND_STRING_CONST(dest, "\\b");
+			break;
+		case '\n':
+			BUFFER_APPEND_STRING_CONST(dest, "\\n");
+			break;
+		case '\r':
+			BUFFER_APPEND_STRING_CONST(dest, "\\r");
+			break;
+		case '\t':
+			BUFFER_APPEND_STRING_CONST(dest, "\\t");
+			break;
+		case '\v':
+			BUFFER_APPEND_STRING_CONST(dest, "\\v");
+			break;
+		default: {
+				/* non printable char => \xHH */
+				char hh[5] = {'\\','x',0,0,0};
+				char h = str->ptr[i] / 16;
+				hh[2] = (h > 9) ? (h - 10 + 'A') : (h + '0');
+				h = str->ptr[i] % 16;
+				hh[3] = (h > 9) ? (h - 10 + 'A') : (h + '0');
+				buffer_append_string_len(dest, &hh[0], 4);
+			}
+			break;
+		}
+	}
+}
+
 static int accesslog_parse_format(server *srv, format_fields *fields, buffer *format) {
 	size_t i, j, k = 0, start = 0;
 
@@ -713,7 +758,7 @@ REQUESTDONE_FUNC(log_access_write) {
 				break;
 			case FORMAT_REQUEST_LINE:
 				if (con->request.request_line->used) {
-					buffer_append_string_buffer(b, con->request.request_line);
+					accesslog_append_escaped(b, con->request.request_line);
 				}
 				break;
 			case FORMAT_STATUS:
@@ -730,14 +775,14 @@ REQUESTDONE_FUNC(log_access_write) {
 				break;
 			case FORMAT_HEADER:
 				if (NULL != (ds = (data_string *)array_get_element(con->request.headers, p->conf.parsed_format->ptr[j]->string->ptr))) {
-					buffer_append_string_buffer(b, ds->value);
+					accesslog_append_escaped(b, ds->value);
 				} else {
 					buffer_append_string_len(b, CONST_STR_LEN("-"));
 				}
 				break;
 			case FORMAT_RESPONSE_HEADER:
 				if (NULL != (ds = (data_string *)array_get_element(con->response.headers, p->conf.parsed_format->ptr[j]->string->ptr))) {
-					buffer_append_string_buffer(b, ds->value);
+					accesslog_append_escaped(b, ds->value);
 				} else {
 					buffer_append_string_len(b, CONST_STR_LEN("-"));
 				}
@@ -775,7 +820,7 @@ REQUESTDONE_FUNC(log_access_write) {
 				break;
 			case FORMAT_HTTP_HOST:
 				if (con->uri.authority->used > 1) {
-					buffer_append_string_buffer(b, con->uri.authority);
+					accesslog_append_escaped(b, con->uri.authority);
 				} else {
 					buffer_append_string_len(b, CONST_STR_LEN("-"));
 				}
@@ -801,10 +846,10 @@ REQUESTDONE_FUNC(log_access_write) {
 				}
 				break;
 			case FORMAT_QUERY_STRING:
-				buffer_append_string_buffer(b, con->uri.query);
+				accesslog_append_escaped(b, con->uri.query);
 				break;
 			case FORMAT_URL:
-				buffer_append_string_buffer(b, con->uri.path_raw);
+				accesslog_append_escaped(b, con->uri.path_raw);
 				break;
 			case FORMAT_CONNECTION_STATUS:
 				switch(con->keep_alive) {
