@@ -58,7 +58,7 @@ NEWS
   * Add SSL Client Certificate verification (#1288)
   * mod_fastcgi: Fix host->active_procs counter, return 503 if connect wasn't successful after 5 tries (fixes #1825)
   * mod_accesslog: escape special characters (fixes #1551, thx icy)
-  * fix mod_webdav crash from #1793 (fixes #2048, thx hiroya)
+  * fix mod_webdav crash from #1793 (fixes #2084, thx hiroya)
   * Don't print ssl error if client didn't support TLS SNI
 
 - 1.4.23 - 2009-06-19
