@@ -1291,6 +1291,11 @@ int main (int argc, char **argv) {
 							changed = 1;
 						}
 					}
+
+					if (con->state == CON_STATE_CLOSE && (srv->cur_ts - con->close_timeout_ts > HTTP_LINGER_TIMEOUT)) {
+						changed = 1;
+					}
+
 					/* we don't like div by zero */
 					if (0 == (t_diff = srv->cur_ts - con->connection_start)) t_diff = 1;
 
