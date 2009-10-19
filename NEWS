@@ -60,6 +60,7 @@ NEWS
   * mod_accesslog: escape special characters (fixes #1551, thx icy)
   * fix mod_webdav crash from #1793 (fixes #2084, thx hiroya)
   * Don't print ssl error if client didn't support TLS SNI
+  * Fix linger close timeout handling, drop timeout to 5 seconds (fixes #2086)
 
 - 1.4.23 - 2009-06-19
   * Added some extra warning options in cmake and fix the resulting warnings (unused/static functions)
