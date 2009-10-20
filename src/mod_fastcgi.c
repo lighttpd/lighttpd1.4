@@ -1637,16 +1637,8 @@ static int fcgi_header(FCGI_Header * header, unsigned char type, size_t request_
 
 	return 0;
 }
-/**
- *
- * returns
- *   -1 error
- *    0 connected
- *    1 not connected yet
- */
 
 typedef enum {
-	CONNECTION_UNSET,
 	CONNECTION_OK,
 	CONNECTION_DELAYED, /* retry after event, take same host */
 	CONNECTION_OVERLOADED, /* disable for 1 second, take another backend */
@@ -1686,7 +1678,7 @@ static connection_result_t fcgi_establish_connection(server *srv, handler_ctx *h
 			buffer_append_string_buffer(proc->connection_name, proc->unixsocket);
 		}
 #else
-		return -1;
+		return CONNECTION_DEAD;
 #endif
 	} else {
 		fcgi_addr_in.sin_family = AF_INET;
@@ -1696,7 +1688,7 @@ static connection_result_t fcgi_establish_connection(server *srv, handler_ctx *h
 						"converting IP address failed for", host->host,
 						"\nBe sure to specify an IP address here");
 	
-				return -1;
+				return CONNECTION_DEAD;
 			}
 		} else {
 			fcgi_addr_in.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
@@ -3045,8 +3037,6 @@ static handler_t fcgi_write_request(server *srv, handler_ctx *hctx) {
 			fcgi_set_state(srv, hctx, FCGI_STATE_PREPARE_WRITE);
 
 			break;
-		case CONNECTION_UNSET:
-			break;
 		}
 
 	case FCGI_STATE_PREPARE_WRITE:
@@ -3065,10 +3055,10 @@ static handler_t fcgi_write_request(server *srv, handler_ctx *hctx) {
 
 		if (p->conf.debug) {
 			log_error_write(srv, __FILE__, __LINE__, "ssdsbsd",
-					"got proc:",
-					"pid:", hctx->proc->pid,
-					"socket:", hctx->proc->connection_name,
-					"load:", hctx->proc->load);
+				"got proc:",
+				"pid:", hctx->proc->pid,
+				"socket:", hctx->proc->connection_name,
+				"load:", hctx->proc->load);
 		}
 
 		/* move the proc-list entry down the list */
