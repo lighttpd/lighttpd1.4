@@ -1250,8 +1250,10 @@ static handler_t connection_handle_fdevent(void *s, void *context, int revents) 
 
 		if (b > 0) {
 			char buf[1024];
+#if 0
 			log_error_write(srv, __FILE__, __LINE__, "sdd",
 					"CLOSE-read()", con->fd, b);
+#endif
 
 			/* */
 			read(con->fd, buf, sizeof(buf));
