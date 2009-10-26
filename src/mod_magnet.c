@@ -825,9 +825,36 @@ static int magnet_attach_content(server *srv, connection *con, plugin_data *p, l
 	return 0;
 }
 
+static int traceback (lua_State *L) {
+	if (!lua_isstring(L, 1))  /* 'message' not a string? */
+		return 1;  /* keep it intact */
+	lua_getfield(L, LUA_GLOBALSINDEX, "debug");
+	if (!lua_istable(L, -1)) {
+		lua_pop(L, 1);
+		return 1;
+	}
+	lua_getfield(L, -1, "traceback");
+	if (!lua_isfunction(L, -1)) {
+		lua_pop(L, 2);
+		return 1;
+	}
+	lua_pushvalue(L, 1);  /* pass error message */
+	lua_pushinteger(L, 2);  /* skip this function and traceback */
+	lua_call(L, 2, 1);  /* call debug.traceback */
+	return 1;
+}
+
+static int push_traceback(lua_State *L, int narg) {
+	int base = lua_gettop(L) - narg;  /* function index */
+	lua_pushcfunction(L, traceback);
+	lua_insert(L, base);
+	return base;
+}
+
 static handler_t magnet_attract(server *srv, connection *con, plugin_data *p, buffer *name) {
 	lua_State *L;
 	int lua_return_value = -1;
+	int errfunc;
 	/* get the script-context */
 
 
@@ -956,7 +983,9 @@ static handler_t magnet_attract(server *srv, connection *con, plugin_data *p, bu
 
 	lua_setfenv(L, -2); /* on the stack should be a modified env (sp -= 1) */
 
-	if (lua_pcall(L, 0, 1, 0)) {
+	errfunc = push_traceback(L, 0);
+	if (lua_pcall(L, 0, 1, errfunc)) {
+		lua_remove(L, errfunc);
 		log_error_write(srv, __FILE__, __LINE__,
 			"ss",
 			"lua_pcall():",
@@ -970,6 +999,7 @@ static handler_t magnet_attract(server *srv, connection *con, plugin_data *p, bu
 
 		return HANDLER_FINISHED;
 	}
+	lua_remove(L, errfunc);
 
 	/* we should have the function-copy and the return value on the stack */
 	assert(lua_gettop(L) == 2);
