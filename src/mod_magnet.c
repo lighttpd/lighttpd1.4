@@ -170,6 +170,7 @@ static int magnet_pairs(lua_State *L) {
 		return lua_gettop(L);
 	} else {
 		lua_pushvalue(L, lua_upvalueindex(1));
+		lua_insert(L, 1);
 		lua_call(L, lua_gettop(L) - 1, LUA_MULTRET);
 		return lua_gettop(L);
 	}

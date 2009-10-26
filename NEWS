@@ -4,7 +4,7 @@ NEWS
 ====
 
 - 1.4.25 -
-  *
+  * mod_magnet: fix pairs() for normal tables and strings (fixes #1307)
 
 - 1.4.24 - 2009-10-25
   * Add T_CONFIG_INT for bigger integers from the config (needed for #1966)
