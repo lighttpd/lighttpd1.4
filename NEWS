@@ -8,6 +8,7 @@ NEWS
   * mod_magnet: add traceback for printing lua errors
   * mod_rewrite: fix compile error if compiled without pcre
   * disable warning "CLOSE-read" (fixes #2091)
+  * mod_rrdtool: fix creating file if it doesn't exist (#1788)
 
 - 1.4.24 - 2009-10-25
   * Add T_CONFIG_INT for bigger integers from the config (needed for #1966)

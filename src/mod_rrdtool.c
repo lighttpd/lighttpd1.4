@@ -237,11 +237,11 @@ static int mod_rrdtool_create_rrd(server *srv, plugin_data *p, plugin_config *s)
 					"not a regular file:", s->path_rrd);
 			return HANDLER_ERROR;
 		}
-	}
 
-	/* still create DB if it's empty file */
-	if (st.st_size > 0) {
-		return HANDLER_GO_ON;
+		/* still create DB if it's empty file */
+		if (st.st_size > 0) {
+			return HANDLER_GO_ON;
+		}
 	}
 
 	/* create a new one */
