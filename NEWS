@@ -9,6 +9,7 @@ NEWS
   * mod_rewrite: fix compile error if compiled without pcre
   * disable warning "CLOSE-read" (fixes #2091)
   * mod_rrdtool: fix creating file if it doesn't exist (#1788)
+  * reset tlsext_server_name in connection_reset - fixes random hostnames in the $HTTP["host"] conditional
 
 - 1.4.24 - 2009-10-25
   * Add T_CONFIG_INT for bigger integers from the config (needed for #1966)

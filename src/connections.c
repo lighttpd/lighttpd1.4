@@ -807,6 +807,9 @@ int connection_reset(server *srv, connection *con) {
 	CLEAN(authed_user);
 	CLEAN(server_name);
 	CLEAN(error_handler);
+#if defined USE_OPENSSL && ! defined OPENSSL_NO_TLSEXT
+	CLEAN(tlsext_server_name);
+#endif
 #undef CLEAN
 
 #define CLEAN(x) \
