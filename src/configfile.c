@@ -99,6 +99,7 @@ static int config_insert(server *srv) {
 		{ "ssl.verifyclient.enforce",    NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_SERVER },     /* 57 */
 		{ "ssl.verifyclient.depth",      NULL, T_CONFIG_SHORT,   T_CONFIG_SCOPE_SERVER },     /* 58 */
 		{ "ssl.verifyclient.username",   NULL, T_CONFIG_STRING,  T_CONFIG_SCOPE_SERVER },     /* 59 */
+		{ "ssl.verifyclient.exportcert", NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_SERVER },     /* 60 */
 		{ "server.host",                 "use server.bind instead", T_CONFIG_DEPRECATED, T_CONFIG_SCOPE_UNSET },
 		{ "server.docroot",              "use server.document-root instead", T_CONFIG_DEPRECATED, T_CONFIG_SCOPE_UNSET },
 		{ "server.virtual-root",         "load mod_simple_vhost and use simple-vhost.server-root instead", T_CONFIG_DEPRECATED, T_CONFIG_SCOPE_UNSET },
@@ -187,6 +188,7 @@ static int config_insert(server *srv) {
 		s->ssl_verifyclient_enforce = 1;
 		s->ssl_verifyclient_username = buffer_init();
 		s->ssl_verifyclient_depth = 9;
+		s->ssl_verifyclient_export_cert = 0;
 
 		cv[2].destination = s->errorfile_prefix;
 
@@ -238,6 +240,7 @@ static int config_insert(server *srv) {
 		cv[57].destination = &(s->ssl_verifyclient_enforce);
 		cv[58].destination = &(s->ssl_verifyclient_depth);
 		cv[59].destination = s->ssl_verifyclient_username;
+		cv[60].destination = &(s->ssl_verifyclient_export_cert);
 
 		srv->config_storage[i] = s;
 
@@ -325,6 +328,7 @@ int config_setup_connection(server *srv, connection *con) {
 	PATCH(ssl_verifyclient_enforce);
 	PATCH(ssl_verifyclient_depth);
 	PATCH(ssl_verifyclient_username);
+	PATCH(ssl_verifyclient_export_cert);
 
 	return 0;
 }
@@ -425,6 +429,8 @@ int config_patch_connection(server *srv, connection *con, comp_key_t comp) {
 				PATCH(ssl_verifyclient_depth);
 			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("ssl.verifyclient.username"))) {
 				PATCH(ssl_verifyclient_username);
+			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("ssl.verifyclient.exportcert"))) {
+				PATCH(ssl_verifyclient_export_cert);
 			}
 		}
 	}

@@ -280,6 +280,7 @@ typedef struct {
 	unsigned short ssl_verifyclient_enforce;
 	unsigned short ssl_verifyclient_depth;
 	buffer *ssl_verifyclient_username;
+	unsigned short ssl_verifyclient_export_cert;
 
 	unsigned short use_ipv6;
 	unsigned short defer_accept;
