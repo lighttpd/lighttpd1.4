@@ -3081,34 +3081,17 @@ static handler_t fcgi_write_request(server *srv, handler_ctx *hctx) {
 
 		if (ret < 0) {
 			switch(errno) {
+			case EPIPE:
 			case ENOTCONN:
+			case ECONNRESET:
 				/* the connection got dropped after accept()
-				 *
-				 * this is most of the time a PHP which dies
-				 * after PHP_FCGI_MAX_REQUESTS
-				 *
-				 */
-				if (hctx->wb->bytes_out == 0 &&
-				    hctx->reconnects < 5) {
-					usleep(10000); /* take away the load of the webserver
-							* to give the php a chance to restart
-							*/
-
-					fcgi_reconnect(srv, hctx);
-
-					return HANDLER_WAIT_FOR_FD;
-				}
-
-				/* not reconnected ... why
-				 *
-				 * far@#lighttpd report this for FreeBSD
-				 *
+				 * we don't care about that - if you accept() it, you have to handle it.
 				 */
 
-				log_error_write(srv, __FILE__, __LINE__, "ssosd",
-						"[REPORT ME] connection was dropped after accept(). reconnect() denied:",
+				log_error_write(srv, __FILE__, __LINE__, "ssosb",
+							"connection was dropped after accept() (perhaps the fastcgi process died),",
 						"write-offset:", hctx->wb->bytes_out,
-						"reconnect attempts:", hctx->reconnects);
+						"socket:", hctx->proc->connection_name);
 
 				return HANDLER_ERROR;
 			default:
