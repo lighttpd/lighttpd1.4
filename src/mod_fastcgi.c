@@ -2416,8 +2416,8 @@ typedef struct {
 
 static int fastcgi_get_packet(server *srv, handler_ctx *hctx, fastcgi_response_packet *packet) {
 	chunk *	c;
-	size_t offset = 0;
-	size_t toread = 0;
+	size_t offset;
+	size_t toread;
 	FCGI_Header *header;
 
 	if (!hctx->rb->first) return -1;
@@ -2428,20 +2428,22 @@ static int fastcgi_get_packet(server *srv, handler_ctx *hctx, fastcgi_response_p
 	packet->padding = 0;
 	packet->request_id = 0;
 
+	offset = 0; toread = 8;
 	/* get at least the FastCGI header */
 	for (c = hctx->rb->first; c; c = c->next) {
-		size_t weWant = sizeof(*header) - (packet->b->used - 1);
 		size_t weHave = c->mem->used - c->offset - 1;
 
-		if (weHave > weWant) weHave = weWant;
+		if (weHave > toread) weHave = toread;
 
 		if (packet->b->used == 0) {
 			buffer_copy_string_len(packet->b, c->mem->ptr + c->offset, weHave);
 		} else {
 			buffer_append_string_len(packet->b, c->mem->ptr + c->offset, weHave);
 		}
+		toread -= weHave;
+		offset = weHave; /* skip offset bytes in chunk for "real" data */
 
-		if (packet->b->used >= sizeof(*header) + 1) break;
+		if (0 == toread) break;
 	}
 
 	if ((packet->b->used == 0) ||
@@ -2449,7 +2451,9 @@ static int fastcgi_get_packet(server *srv, handler_ctx *hctx, fastcgi_response_p
 		/* no header */
 		buffer_free(packet->b);
 
-		log_error_write(srv, __FILE__, __LINE__, "sdsds", "FastCGI: header too small:", packet->b->used, "bytes <", sizeof(FCGI_Header), "bytes");
+		if (hctx->plugin_data->conf.debug) {
+			log_error_write(srv, __FILE__, __LINE__, "sdsds", "FastCGI: header too small:", packet->b->used, "bytes <", sizeof(FCGI_Header), "bytes, waiting for more data");
+		}
 		return -1;
 	}
 
@@ -2460,9 +2464,6 @@ static int fastcgi_get_packet(server *srv, handler_ctx *hctx, fastcgi_response_p
 	packet->request_id = (header->requestIdB0 | (header->requestIdB1 << 8));
 	packet->type = header->type;
 	packet->padding = header->paddingLength;
-
-	/* the first bytes in packet->b are the header */
-	offset = sizeof(*header);
 
 	/* ->b should only be the content */
 	buffer_copy_string_len(packet->b, CONST_STR_LEN("")); /* used == 1 */
@@ -2477,7 +2478,7 @@ static int fastcgi_get_packet(server *srv, handler_ctx *hctx, fastcgi_response_p
 
 			buffer_append_string_len(packet->b, c->mem->ptr + c->offset + offset, weHave);
 
-			/* we only skipped the first 8 bytes as they are the fcgi header */
+			/* we only skipped the first bytes as they belonged to the fcgi header */
 			offset = 0;
 		}
 
