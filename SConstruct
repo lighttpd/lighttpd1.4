@@ -5,7 +5,7 @@ import string
 from stat import *
 
 package = 'lighttpd'
-version = '1.4.25'
+version = '1.4.26'
 
 def checkCHeaders(autoconf, hdrs):
 	p = re.compile('[^A-Z0-9]')

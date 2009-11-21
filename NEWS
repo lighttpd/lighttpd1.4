@@ -3,7 +3,10 @@
 NEWS
 ====
 
-- 1.4.25 -
+- 1.4.26 -
+  *
+
+- 1.4.25 - 2009-11-21
   * mod_magnet: fix pairs() for normal tables and strings (fixes #1307)
   * mod_magnet: add traceback for printing lua errors
   * mod_rewrite: fix compile error if compiled without pcre
