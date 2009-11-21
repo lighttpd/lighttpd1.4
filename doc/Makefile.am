@@ -89,7 +89,7 @@ EXTRA_DIST=lighttpd.conf lighttpd.user \
 	rst2html $^ > $@
 
 
-html: $(HTMLDOCS)
+html-local: $(HTMLDOCS)
 
 #%.ps.gz: %.ps
 #	gzip $^

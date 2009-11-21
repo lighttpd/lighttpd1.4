@@ -8,7 +8,8 @@ AC_CONFIG_MACRO_DIR([m4])
 
 AC_CANONICAL_TARGET
 
-AM_INIT_AUTOMAKE
+AM_INIT_AUTOMAKE([-Wall -Wportability -Wno-override -Werror foreign dist-bzip2 tar-ustar silent-rules color-tests])
+AM_SILENT_RULES
 
 # Checks for programs.
 AC_PROG_CC

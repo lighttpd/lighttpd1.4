@@ -13,6 +13,7 @@ NEWS
   * export some SSL_CLIENT_* vars for client cert validation (fixes #1288, thx presbrey)
   * mod_fastcgi: fix mod_fastcgi packet parsing
   * mod_fastcgi: Don't reconnect after connect() succeeded (fixes #2096)
+  * Fix configure.ac to allow autoreconf, also enables make V=0
 
 - 1.4.24 - 2009-10-25
   * Add T_CONFIG_INT for bigger integers from the config (needed for #1966)
