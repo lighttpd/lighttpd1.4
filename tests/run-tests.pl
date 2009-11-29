@@ -17,4 +17,4 @@ while ($f = readdir(DIR)) {
 	}
 }
 closedir DIR;
-runtests @fs;
+runtests (sort @fs);

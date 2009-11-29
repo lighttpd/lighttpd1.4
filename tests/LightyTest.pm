@@ -76,7 +76,7 @@ sub stop_proc {
 		kill('TERM', $pid) or return -1;
 		return -1 if ($pid != waitpid($pid, 0));
 	} else {
-		diag("Process not started, nothing to stop");
+		diag("\nProcess not started, nothing to stop");
 		return -1;
 	}
 
@@ -98,7 +98,7 @@ sub wait_for_port_with_proc {
 			return -1;
 		}
 		if (0 >= $timeout) {
-			diag("Timeout while trying to connect; killing child");
+			diag("\nTimeout while trying to connect; killing child");
 			kill('TERM', $child);
 			return -1;
 		}
@@ -128,10 +128,10 @@ sub start_proc {
 	} elsif (defined $ENV{"TRACEME"} && $ENV{"TRACEME"} eq 'valgrind') {
 		$cmdline = "valgrind --tool=memcheck --show-reachable=yes --leak-check=yes --log-file=valgrind ".$cmdline;
 	}
-	# diag("starting lighttpd at :".$self->{PORT}.", cmdline: ".$cmdline );
+	# diag("\nstarting lighttpd at :".$self->{PORT}.", cmdline: ".$cmdline );
 	my $child = fork();
 	if (not defined $child) {
-		diag("Fork failed");
+		diag("\nFork failed");
 		return -1;
 	}
 	if ($child == 0) {
@@ -139,7 +139,7 @@ sub start_proc {
 	}
 
 	if (0 != $self->wait_for_port_with_proc($self->{PORT}, $child)) {
-		diag(sprintf('The process %i is not up', $child));
+		diag(sprintf('\nThe process %i is not up', $child));
 		return -1;
 	}
 
@@ -157,6 +157,7 @@ sub handle_http {
 
 	my @request = $t->{REQUEST};
 	my @response = $t->{RESPONSE};
+	my $slow = defined $t->{SLOWREQUEST};
 	my $is_debug = $ENV{"TRACE_HTTP"};
 
 	my $remote = 
@@ -165,33 +166,56 @@ sub handle_http {
 				PeerPort => $self->{PORT});
 
 	if (not defined $remote) {
-		diag("connect failed: $!");
+		diag("\nconnect failed: $!");
 	       	return -1;
 	}
 
 	$remote->autoflush(1);
 
-	diag("sending request header to ".$host.":".$self->{PORT}) if $is_debug;
-	foreach(@request) {
-		# pipeline requests
-		s/\r//g;
-		s/\n/$EOL/g;
+	if (!$slow) {
+		diag("\nsending request header to ".$host.":".$self->{PORT}) if $is_debug;
+		foreach(@request) {
+			# pipeline requests
+			s/\r//g;
+			s/\n/$EOL/g;
 
-		print $remote $_.$BLANK;
-		diag("<< ".$_) if $is_debug;
+			print $remote $_.$BLANK;
+			diag("\n<< ".$_) if $is_debug;
+		}
+		shutdown($remote, 1); # I've stopped writing data
+	} else {
+		diag("\nsending request header to ".$host.":".$self->{PORT}) if $is_debug;
+		foreach(@request) {
+			# pipeline requests
+			chomp;
+			s/\r//g;
+			s/\n/$EOL/g;
+
+			print $remote $_;
+			diag("<< ".$_."\n") if $is_debug;
+			select(undef, undef, undef, 0.1);
+			print $remote "\015";
+			select(undef, undef, undef, 0.1);
+			print $remote "\012";
+			select(undef, undef, undef, 0.1);
+			print $remote "\015";
+			select(undef, undef, undef, 0.1);
+			print $remote "\012";
+			select(undef, undef, undef, 0.1);
+		}
+	
 	}
-	shutdown($remote, 1); # I've stopped writing data
-	diag("... done") if $is_debug;
+	diag("\n... done") if $is_debug;
 
 	my $lines = "";
 
-	diag("receiving response") if $is_debug;
+	diag("\nreceiving response") if $is_debug;
 	# read everything
 	while(<$remote>) {
 		$lines .= $_;
 		diag(">> ".$_) if $is_debug;
 	}
-	diag("... done") if $is_debug;
+	diag("\n... done") if $is_debug;
 	
 	close $remote;
 
@@ -209,7 +233,7 @@ sub handle_http {
 			(my $line, $lines) = split($EOL, $lines, 2);
 
 			# header finished
-			last if(length($line) == 0);
+			last if(!defined $line or length($line) == 0);
 
 			if ($ln == 0) {
 				# response header
@@ -221,21 +245,21 @@ sub handle_http {
 					(my $h = $1) =~ tr/[A-Z]/[a-z]/;
 
 					if (defined $resp_hdr{$h}) {
-# 						diag(sprintf("header '%s' is duplicated: '%s' and '%s'\n",
+# 						diag(sprintf("\nheader '%s' is duplicated: '%s' and '%s'\n",
 # 						             $h, $resp_hdr{$h}, $2));
 						$resp_hdr{$h} .= ', '.$2;
 					} else {
 						$resp_hdr{$h} = $2;
 					}
 				} else {
-					diag(sprintf("unexpected line '%s'\n", $line));
+					diag(sprintf("\nunexpected line '%s'", $line));
 					return -1;
 				}
 			}
 		}
 
 		if (not defined($resp_line)) {
-			diag(sprintf("empty response\n"));
+			diag(sprintf("\nempty response"));
 			return -1;
 		}
 
@@ -259,29 +283,29 @@ sub handle_http {
 		# check conditions
 		if ($resp_line =~ /^(HTTP\/1\.[01]) ([0-9]{3}) .+$/) {
 			if ($href->{'HTTP-Protocol'} ne $1) {
-				diag(sprintf("proto failed: expected '%s', got '%s'\n", $href->{'HTTP-Protocol'}, $1));
+				diag(sprintf("\nproto failed: expected '%s', got '%s'", $href->{'HTTP-Protocol'}, $1));
 				return -1;
 			}
 			if ($href->{'HTTP-Status'} ne $2) {
-				diag(sprintf("status failed: expected '%s', got '%s'\n", $href->{'HTTP-Status'}, $2));
+				diag(sprintf("\nstatus failed: expected '%s', got '%s'", $href->{'HTTP-Status'}, $2));
 				return -1;
 			}
 		} else {
-			diag(sprintf("unexpected resp_line '%s'\n", $resp_line));
+			diag(sprintf("\nunexpected resp_line '%s'", $resp_line));
 			return -1;
 		}
 
 		if (defined $href->{'HTTP-Content'}) {
 			$resp_body = "" unless defined $resp_body;
 			if ($href->{'HTTP-Content'} ne $resp_body) {
-				diag(sprintf("body failed: expected '%s', got '%s'\n", $href->{'HTTP-Content'}, $resp_body));
+				diag(sprintf("\nbody failed: expected '%s', got '%s'", $href->{'HTTP-Content'}, $resp_body));
 				return -1;
 			}
 		}
 		
 		if (defined $href->{'-HTTP-Content'}) {
 			if (defined $resp_body && $resp_body ne '') {
-				diag(sprintf("body failed: expected empty body, got '%s'\n", $resp_body));
+				diag(sprintf("\nbody failed: expected empty body, got '%s'", $resp_body));
 				return -1;
 			}
 		}
@@ -309,12 +333,12 @@ sub handle_http {
 
 			if ($key_inverted) {
 				if (defined $resp_hdr{$k}) {
-					diag(sprintf("header '%s' MUST not be set\n", $k));
+					diag(sprintf("\nheader '%s' MUST not be set", $k));
 					return -1;
 				}
 			} else {
 				if (not defined $resp_hdr{$k}) {
-					diag(sprintf("required header '%s' is missing\n", $k));
+					diag(sprintf("\nrequired header '%s' is missing", $k));
 					return -1;
 				}
 			}
@@ -322,12 +346,12 @@ sub handle_http {
 			if ($verify_value) {
 				if ($href->{$_} =~ /^\/(.+)\/$/) {
 					if ($resp_hdr{$k} !~ /$1/) {
-						diag(sprintf("response-header failed: expected '%s', got '%s', regex: %s\n", 
+						diag(sprintf("\nresponse-header failed: expected '%s', got '%s', regex: %s", 
 					             $href->{$_}, $resp_hdr{$k}, $1));
 						return -1;
 					}
 				} elsif ($href->{$_} ne $resp_hdr{$k}) {
-					diag(sprintf("response-header failed: expected '%s', got '%s'\n", 
+					diag(sprintf("\nresponse-header failed: expected '%s', got '%s'",
 					     $href->{$_}, $resp_hdr{$k}));
 					return -1;
 				}
@@ -337,7 +361,7 @@ sub handle_http {
 
 	# we should have sucked up everything
 	if (defined $lines) {
-		diag(sprintf("unexpected lines '%s'\n", $lines));
+		diag(sprintf("\nunexpected lines '%s'", $lines));
 		return -1;
 	}
 
@@ -348,7 +372,7 @@ sub spawnfcgi {
 	my ($self, $binary, $port) = @_;
 	my $child = fork();
 	if (not defined $child) {
-		diag("Couldn't fork\n");
+		diag("\nCouldn't fork");
 		return -1;
 	}
 	if ($child == 0) {
@@ -362,7 +386,7 @@ sub spawnfcgi {
 		exec $binary or die($?);
 	} else {
 		if (0 != $self->wait_for_port_with_proc($port, $child)) {
-			diag(sprintf('The process %i is not up (port %i, %s)', $child, $port, $binary));
+			diag(sprintf("\nThe process %i is not up (port %i, %s)", $child, $port, $binary));
 			return -1;
 		}
 		return $child;

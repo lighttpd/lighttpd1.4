@@ -945,62 +945,50 @@ static int connection_handle_read_state(server *srv, connection *con)  {
 		last_chunk = NULL;
 		last_offset = 0;
 
-		for (c = cq->first; !last_chunk && c; c = c->next) {
+		for (c = cq->first; c; c = c->next) {
 			buffer b;
 			size_t i;
 
 			b.ptr = c->mem->ptr + c->offset;
 			b.used = c->mem->used - c->offset;
+			if (b.used > 0) b.used--; /* buffer "used" includes terminating zero */
 
-			for (i = 0; !last_chunk && i < b.used; i++) {
+			for (i = 0; i < b.used; i++) {
 				char ch = b.ptr[i];
-				size_t have_chars = 0;
 
-				switch (ch) {
-				case '\r':
-					/* we have to do a 4 char lookup */
-					have_chars = b.used - i - 1;
+				if ('\r' == ch) {
+					/* chec if \n\r\n follows */
+					size_t j = i+1;
+					chunk *cc = c;
+					const char header_end[] = "\r\n\r\n";
+					int header_end_match_pos = 1;
 
-					if (have_chars >= 4) {
-						/* all chars are in this buffer */
+					for ( ; cc; cc = cc->next, j = 0 ) {
+						buffer bb;
+						bb.ptr = cc->mem->ptr + cc->offset;
+						bb.used = cc->mem->used - cc->offset;
+						if (bb.used > 0) bb.used--; /* buffer "used" includes terminating zero */
 
-						if (0 == strncmp(b.ptr + i, "\r\n\r\n", 4)) {
-							/* found */
-							last_chunk = c;
-							last_offset = i + 4;
+						for ( ; j < bb.used; j++) {
+							ch = bb.ptr[j];
 
-							break;
-						}
-					} else {
-						chunk *lookahead_chunk = c->next;
-						size_t missing_chars;
-						/* looks like the following chars are not in the same chunk */
-
-						missing_chars = 4 - have_chars;
-
-						if (lookahead_chunk && lookahead_chunk->type == MEM_CHUNK) {
-							/* is the chunk long enough to contain the other chars ? */
-
-							if (lookahead_chunk->mem->used > missing_chars) {
-								if (0 == strncmp(b.ptr + i, "\r\n\r\n", have_chars) &&
-								    0 == strncmp(lookahead_chunk->mem->ptr, "\r\n\r\n" + have_chars, missing_chars)) {
-
-									last_chunk = lookahead_chunk;
-									last_offset = missing_chars;
-
-									break;
+							if (ch == header_end[header_end_match_pos]) {
+								header_end_match_pos++;
+								if (4 == header_end_match_pos) {
+									last_chunk = cc;
+									last_offset = j+1;
+									goto found_header_end;
 								}
 							} else {
-								/* a splited \r \n */
-								break;
+								goto reset_search;
 							}
 						}
 					}
-
-					break;
 				}
+reset_search: ;
 			}
 		}
+found_header_end:
 
 		/* found */
 		if (last_chunk) {
