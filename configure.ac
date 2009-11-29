@@ -1,5 +1,5 @@
-#                                               -*- Autoconf -*-
-# Process this file with autoconf to produce a configure script.
+dnl                                               -*- Autoconf -*-
+dnl Process this file with autoconf to produce a configure script.
 AC_PREREQ(2.57)
 AC_INIT([lighttpd], [1.4.26], [contact@lighttpd.net])
 AC_CONFIG_SRCDIR([src/server.c])
@@ -8,10 +8,12 @@ AC_CONFIG_MACRO_DIR([m4])
 
 AC_CANONICAL_TARGET
 
-AM_INIT_AUTOMAKE([-Wall -Wportability -Wno-override -Werror foreign dist-bzip2 tar-ustar silent-rules color-tests])
-AM_SILENT_RULES
+AM_INIT_AUTOMAKE([-Wall -Wportability -Wno-override -Werror foreign dist-bzip2 tar-ustar])
 
-# Checks for programs.
+dnl enable with --enable-silent-rules or make V=0 (needs automake >= 1.11)
+m4_ifdef([AM_SILENT_RULES], [AM_SILENT_RULES])
+
+dnl Checks for programs.
 AC_PROG_CC
 AM_PROG_CC_C_O
 AC_PROG_LD
@@ -30,7 +32,7 @@ AC_MINIX
 dnl AC_CANONICAL_HOST
 case $host_os in
 	*darwin*|*cygwin*|*aix*|*mingw* ) NO_RDYNAMIC=yes;;
-        * ) NO_RDYNAMIC=no;;
+	* ) NO_RDYNAMIC=no;;
 esac
 AM_CONDITIONAL(NO_RDYNAMIC, test x$NO_RDYNAMIC = xyes)
 
@@ -49,7 +51,7 @@ AC_PROG_LIBTOOL
 dnl for solaris
 CPPFLAGS="${CPPFLAGS} -D_REENTRANT -D__EXTENSIONS__"
 
-# Checks for header files.
+dnl Checks for header files.
 AC_HEADER_STDC
 AC_HEADER_SYS_WAIT
 AC_CHECK_HEADERS([arpa/inet.h fcntl.h netinet/in.h stdlib.h string.h \
@@ -58,7 +60,7 @@ getopt.h sys/epoll.h sys/select.h poll.h sys/poll.h sys/devpoll.h sys/filio.h \
 sys/mman.h sys/event.h sys/port.h pwd.h sys/syslimits.h \
 sys/resource.h sys/un.h syslog.h sys/prctl.h uuid/uuid.h])
 
-# Checks for typedefs, structures, and compiler characteristics.
+dnl Checks for typedefs, structures, and compiler characteristics.
 AC_C_CONST
 AC_C_INLINE
 AC_C_CHAR_UNSIGNED
@@ -71,10 +73,10 @@ AC_CHECK_TYPES(struct sockaddr_storage,,,[#include <sys/socket.h>])
 AC_CHECK_TYPES(socklen_t,,,[#include <sys/types.h>
 #include <sys/socket.h>])
 
-# Checks for library functions.
+dnl Checks for library functions.
 AC_FUNC_FORK
 dnl AC_FUNC_MALLOC
-#AC_FUNC_MMAP
+dnl AC_FUNC_MMAP
 dnl AC_FUNC_REALLOC
 AC_TYPE_SIGNAL
 AC_FUNC_STAT
@@ -172,7 +174,7 @@ if test "$WITH_ATTR" != "no"; then
  AC_SUBST(ATTR_LIB)
 fi
 
-## openssl on solaris needs -lsocket -lnsl
+dnl openssl on solaris needs -lsocket -lnsl
 AC_SEARCH_LIBS(socket,socket)
 AC_SEARCH_LIBS(gethostbyname,nsl socket)
 AC_SEARCH_LIBS(hstrerror,resolv)
@@ -419,12 +421,12 @@ if test "$WITH_LUA" != "no"; then
    AC_DEFINE([HAVE_LUA], [1], [liblua])
    AC_DEFINE([HAVE_LUA_H], [1], [lua.h])
  ],[
- # for debian based systems
+ dnl for debian based systems
  PKG_CHECK_MODULES(LUA, lua5.1 >= 5.1, [
    AC_DEFINE([HAVE_LUA], [1], [liblua])
    AC_DEFINE([HAVE_LUA_H], [1], [lua.h])
  ],[
- # for freebsd
+ dnl for freebsd
  PKG_CHECK_MODULES(LUA, lua-5.1 >= 5.1, [
    AC_DEFINE([HAVE_LUA], [1], [liblua])
    AC_DEFINE([HAVE_LUA_H], [1], [lua.h])
@@ -486,7 +488,7 @@ AC_CHECK_SIZEOF(long)
 AC_CHECK_SIZEOF(off_t)
 
 if test "x$ac_cv_func_sendfile" = xyes; then
-	# check if sendfile works
+	dnl check if sendfile works
         AC_MSG_CHECKING(if sendfile works)
 	if test "x$cross_compiling" = xno; then
 	AC_TRY_RUN([
@@ -544,7 +546,7 @@ AC_CHECK_LIB(fcgi, FCGI_Accept, [
 AM_CONDITIONAL(CHECK_WITH_FASTCGI, test "x$fastcgi_found" = xyes)
 
 
-# check for extra compiler options (warning options)
+dnl check for extra compiler options (warning options)
 if test "${GCC}" = "yes"; then
     CFLAGS="${CFLAGS} -Wall -W -Wshadow -pedantic -std=gnu99"
 fi
@@ -645,7 +647,7 @@ else
 	disable_feature="$disable_feature $features"
 fi
 
-# no crypt call
+dnl no crypt call
 features="auth-crypt"
 if test "$ac_cv_search_crypt" = no; then
 	disable_feature="$disable_feature $features"
@@ -689,7 +691,7 @@ else
 fi
 
 
-## output
+dnl output
 
 $ECHO
 $ECHO "Plugins:"
