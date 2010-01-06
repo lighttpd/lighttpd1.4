@@ -1181,6 +1181,7 @@ static int mod_cgi_patch_connection(server *srv, connection *con, plugin_data *p
 	plugin_config *s = p->config_storage[0];
 
 	PATCH(cgi);
+	PATCH(execute_x_only);
 
 	/* skip the first, the global context */
 	for (i = 1; i < srv->config_context->used; i++) {
