@@ -1047,11 +1047,32 @@ static handler_t proxy_handle_fdevent(void *s, void *ctx, int revents) {
 			 *
 			 */
 
-			proxy_connection_close(srv, hctx);
-			joblist_append(srv, con);
+			if (hctx->host) {
+				hctx->host->is_disabled = 1;
+				hctx->host->disable_ts = srv->cur_ts;
+				log_error_write(srv, __FILE__, __LINE__,  "sbdd", "proxy-server disabled:",
+						hctx->host->host,
+						hctx->host->port,
+						hctx->fd);
 
-			con->http_status = 503;
-			con->mode = DIRECT;
+				/* disable this server */
+				hctx->host->is_disabled = 1;
+				hctx->host->disable_ts = srv->cur_ts;
+
+				proxy_connection_close(srv, hctx);
+
+				/* reset the enviroment and restart the sub-request */
+				buffer_reset(con->physical.path);
+				con->mode = DIRECT;
+
+				joblist_append(srv, con);
+			} else {
+				proxy_connection_close(srv, hctx);
+				joblist_append(srv, con);
+
+				con->mode = DIRECT;
+				con->http_status = 503;
+			}
 
 			return HANDLER_FINISHED;
 		}
