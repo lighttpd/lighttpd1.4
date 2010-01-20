@@ -2307,6 +2307,9 @@ static int fcgi_response_parse(server *srv, connection *con, plugin_data *p, buf
 					filename = pos;
 					if (NULL == (range = strchr(pos, ' '))) {
 						/* missing range */
+						if (p->conf.debug) {
+							log_error_write(srv, __FILE__, __LINE__, "ss", "Couldn't find range after filename:", filename);
+						}
 						return 1;
 					}
 					buffer_copy_string_len(srv->tmp_buf, filename, range - filename);
@@ -2338,14 +2341,24 @@ static int fcgi_response_parse(server *srv, connection *con, plugin_data *p, buf
 						char *rpos = NULL;
 						errno = 0;
 						begin_range = strtoll(range, &rpos, 10);
-						if (errno != 0 || begin_range < 0 || rpos == range) return 1;
-						if ('-' != *rpos++) return 1;
+						if (errno != 0 || begin_range < 0 || rpos == range) goto range_failed;
+						if ('-' != *rpos++) goto range_failed;
 						if (rpos != pos) {
 							range = rpos;
 							end_range = strtoll(range, &rpos, 10);
-							if (errno != 0 || end_range < 0 || rpos == range) return 1;
+							if (errno != 0 || end_range < 0 || rpos == range) goto range_failed;
 						}
-						if (rpos != pos) return 1;
+						if (rpos != pos) goto range_failed;
+
+						goto range_success;
+
+range_failed:
+						if (p->conf.debug) {
+							log_error_write(srv, __FILE__, __LINE__, "ss", "Couldn't decode range after filename:", filename);
+						}
+						return 1;
+
+range_success: ;
 					}
 
 					/* no parameters accepted */
