@@ -4,7 +4,14 @@ NEWS
 ====
 
 - 1.4.26 -
-  *
+  * Fix request parser to handle packets with splitted \r\n\r\n (fixes #2105)
+  * Remove dependency on automake >= 1.11 with m4_ifdef check
+  * mod_accesslog: support %e (fixes #2113, thx presbrey)
+  * Fix mod_cgi cgi.execute-x-only option in global block
+  * mod_fastcgi: x-sendfile2 parse error debugging
+  * Fix mod_proxy dead host detection if connect() fails
+  * Fix fd leaks in mod_cgi (fds not closed on pipe/fork failures, found by Rodrigo, fixes #2158, #2159)
+  * Fix segfault with broken rewrite/redirect patterns (fixes #2140, found by crypt)
 
 - 1.4.25 - 2009-11-21
   * mod_magnet: fix pairs() for normal tables and strings (fixes #1307)
