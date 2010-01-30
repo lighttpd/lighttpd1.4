@@ -210,7 +210,7 @@ static handler_t mod_redirect_uri_handler(server *srv, connection *con, void *p_
 			buffer_reset(p->location);
 
 			start = 0;
-			for (k = 0; k < pattern_len; k++) {
+			for (k = 0; k + 1 < pattern_len; k++) {
 				if (pattern[k] == '$' || pattern[k] == '%') {
 					/* got one */
 

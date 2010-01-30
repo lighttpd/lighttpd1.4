@@ -394,7 +394,7 @@ static int process_rewrite_rules(server *srv, connection *con, plugin_data *p, r
 			buffer_reset(con->request.uri);
 
 			start = 0;
-			for (k = 0; k < pattern_len; k++) {
+			for (k = 0; k+1 < pattern_len; k++) {
 				if (pattern[k] == '$' || pattern[k] == '%') {
 					/* got one */
 
