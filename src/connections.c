@@ -192,40 +192,42 @@ static void dump_packet(const unsigned char *data, size_t len) {
 
 static int connection_handle_read_ssl(server *srv, connection *con) {
 #ifdef USE_OPENSSL
-	int r, ssl_err, len, count = 0;
+	int r, ssl_err, len, count = 0, read_offset, toread;
 	buffer *b = NULL;
 
 	if (!con->conf.is_ssl) return -1;
 
-	/* don't resize the buffer if we were in SSL_ERROR_WANT_* */
-
 	ERR_clear_error();
 	do {
-		if (!con->ssl_error_want_reuse_buffer) {
-			b = buffer_init();
-			buffer_prepare_copy(b, SSL_pending(con->ssl) + (16 * 1024)); /* the pending bytes + 16kb */
+		if (NULL != con->read_queue->last) {
+			b = con->read_queue->last->mem;
+		}
+
+		if (NULL == b || b->size - b->used < 1024) {
+			b = chunkqueue_get_append_buffer(con->read_queue);
+			len = SSL_pending(con->ssl);
+			if (len < 4*1024) len = 4*1024; /* always alloc >= 4k buffer */
+			buffer_prepare_copy(b, len + 1);
 
 			/* overwrite everything with 0 */
 			memset(b->ptr, 0, b->size);
-		} else {
-			b = con->ssl_error_want_reuse_buffer;
 		}
 
-		len = SSL_read(con->ssl, b->ptr, b->size - 1);
-		con->ssl_error_want_reuse_buffer = NULL; /* reuse it only once */
+		read_offset = (b->used > 0) ? b->used - 1 : 0;
+		toread = b->size - 1 - read_offset;
+
+		len = SSL_read(con->ssl, b->ptr + read_offset, toread);
 
 		if (len > 0) {
-			b->used = len;
+			if (b->used > 0) b->used--;
+			b->used += len;
 			b->ptr[b->used++] = '\0';
 
-		       	/* we move the buffer to the chunk-queue, no need to free it */
-
-			chunkqueue_append_buffer_weak(con->read_queue, b);
-			count += len;
 			con->bytes_read += len;
-			b = NULL;
+
+			count += len;
 		}
-	} while (len > 0 && count < MAX_READ_LIMIT);
+	} while (len == toread && count < MAX_READ_LIMIT);
 
 
 	if (len < 0) {
@@ -234,11 +236,11 @@ static int connection_handle_read_ssl(server *srv, connection *con) {
 		case SSL_ERROR_WANT_READ:
 		case SSL_ERROR_WANT_WRITE:
 			con->is_readable = 0;
-			con->ssl_error_want_reuse_buffer = b;
 
-			b = NULL;
+			/* the manual says we have to call SSL_read with the same arguments next time.
+			 * we ignore this restriction; no one has complained about it in 1.5 yet, so it probably works anyway.
+			 */
 
-			/* we have to steal the buffer from the queue-queue */
 			return 0;
 		case SSL_ERROR_SYSCALL:
 			/**
@@ -297,15 +299,10 @@ static int connection_handle_read_ssl(server *srv, connection *con) {
 
 		connection_set_state(srv, con, CON_STATE_ERROR);
 
-		buffer_free(b);
-
 		return -1;
 	} else if (len == 0) {
 		con->is_readable = 0;
 		/* the other end close the connection -> KEEP-ALIVE */
-
-		/* pipelining */
-		buffer_free(b);
 
 		return -2;
 	}
@@ -321,26 +318,41 @@ static int connection_handle_read_ssl(server *srv, connection *con) {
 static int connection_handle_read(server *srv, connection *con) {
 	int len;
 	buffer *b;
-	int toread;
+	int toread, read_offset;
 
 	if (con->conf.is_ssl) {
 		return connection_handle_read_ssl(srv, con);
 	}
 
+	b = (NULL != con->read_queue->last) ? con->read_queue->last->mem : NULL;
+
+	/* default size for chunks is 4kb; only use bigger chunks if FIONREAD tells
+	 *  us more than 4kb is available
+	 * if FIONREAD doesn't signal a big chunk we fill the previous buffer
+	 *  if it has >= 1kb free
+	 */
 #if defined(__WIN32)
-	b = chunkqueue_get_append_buffer(con->read_queue);
-	buffer_prepare_copy(b, 4 * 1024);
-	len = recv(con->fd, b->ptr, b->size - 1, 0);
-#else
-	if (ioctl(con->fd, FIONREAD, &toread) || toread == 0) {
+	if (NULL == b || b->size - b->used < 1024) {
 		b = chunkqueue_get_append_buffer(con->read_queue);
 		buffer_prepare_copy(b, 4 * 1024);
+	}
+
+	read_offset = (b->used == 0) ? 0 : b->used - 1;
+	len = recv(con->fd, b->ptr + read_offset, b->size - 1 - read_offset, 0);
+#else
+	if (ioctl(con->fd, FIONREAD, &toread) || toread == 0 || toread <= 4*1024) {
+		if (NULL == b || b->size - b->used < 1024) {
+			b = chunkqueue_get_append_buffer(con->read_queue);
+			buffer_prepare_copy(b, 4 * 1024);
+		}
 	} else {
 		if (toread > MAX_READ_LIMIT) toread = MAX_READ_LIMIT;
 		b = chunkqueue_get_append_buffer(con->read_queue);
 		buffer_prepare_copy(b, toread + 1);
 	}
-	len = read(con->fd, b->ptr, b->size - 1);
+
+	read_offset = (b->used == 0) ? 0 : b->used - 1;
+	len = read(con->fd, b->ptr + read_offset, b->size - 1 - read_offset);
 #endif
 
 	if (len < 0) {
@@ -374,7 +386,8 @@ static int connection_handle_read(server *srv, connection *con) {
 		con->is_readable = 0;
 	}
 
-	b->used = len;
+	if (b->used > 0) b->used--;
+	b->used += len;
 	b->ptr[b->used++] = '\0';
 
 	con->bytes_read += len;
@@ -850,13 +863,6 @@ int connection_reset(server *srv, connection *con) {
 	/* The cond_cache gets reset in response.c */
 	/* config_cond_cache_reset(srv, con); */
 
-#ifdef USE_OPENSSL
-	if (con->ssl_error_want_reuse_buffer) {
-		buffer_free(con->ssl_error_want_reuse_buffer);
-		con->ssl_error_want_reuse_buffer = NULL;
-	}
-#endif
-
 	con->header_len = 0;
 	con->in_error_handler = 0;
 
@@ -1128,8 +1134,15 @@ found_header_end:
 			} else {
 				buffer *b;
 
-				b = chunkqueue_get_append_buffer(dst_cq);
-				buffer_copy_string_len(b, c->mem->ptr + c->offset, toRead);
+				if (dst_cq->last &&
+				    dst_cq->last->type == MEM_CHUNK) {
+					b = dst_cq->last->mem;
+				} else {
+					b = chunkqueue_get_append_buffer(dst_cq);
+					/* prepare buffer size for remaining POST data; is < 64kb */
+					buffer_prepare_copy(b, con->request.content_length - dst_cq->bytes_in + 1);
+				}
+				buffer_append_string_len(b, c->mem->ptr + c->offset, toRead);
 			}
 
 			c->offset += toRead;
