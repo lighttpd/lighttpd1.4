@@ -1245,28 +1245,12 @@ static handler_t connection_handle_fdevent(void *s, void *context, int revents) 
 
 	if (con->state == CON_STATE_CLOSE) {
 		/* flush the read buffers */
-		int b;
+		int len;
+		char buf[1024];
 
-		if (ioctl(con->fd, FIONREAD, &b)) {
-			log_error_write(srv, __FILE__, __LINE__, "ss",
-					"ioctl() failed", strerror(errno));
-		}
-
-		if (b > 0) {
-			char buf[1024];
-#if 0
-			log_error_write(srv, __FILE__, __LINE__, "sdd",
-					"CLOSE-read()", con->fd, b);
-#endif
-
-			/* */
-			read(con->fd, buf, sizeof(buf));
-		} else {
-			/* nothing to read - yet.  But that doesn't
-			 * mean something won't show up in our buffers
-			 * sometime soon, so we can't quite until
-			 * poll() gives us the HUP notification.
-			 */
+		len = read(con->fd, buf, sizeof(buf));
+		if (len == 0 || (len < 0 && errno != EAGAIN && errno != EINTR) ) {
+			con->close_timeout_ts = srv->cur_ts - (HTTP_LINGER_TIMEOUT+1);
 		}
 	}
 
@@ -1388,7 +1372,6 @@ int connection_state_machine(server *srv, connection *con) {
 
 	while (done == 0) {
 		size_t ostate = con->state;
-		int b;
 
 		switch (con->state) {
 		case CON_STATE_REQUEST_START: /* transient */
@@ -1621,25 +1604,14 @@ int connection_state_machine(server *srv, connection *con) {
 			 * still have unread data, and closing before reading
 			 * it will make the client not see all our output.
 			 */
-			if (ioctl(con->fd, FIONREAD, &b)) {
-				log_error_write(srv, __FILE__, __LINE__, "ss",
-					"ioctl() failed", strerror(errno));
-			}
-			if (b > 0) {
+			{
+				int len;
 				char buf[1024];
-#if 0
-				log_error_write(srv, __FILE__, __LINE__, "sdd",
-						"CLOSE-read()", con->fd, b);
-#endif
 
-				/* */
-				read(con->fd, buf, sizeof(buf));
-			} else {
-				/* nothing to read - yet.  But that doesn't
-				 * mean something won't show up in our buffers
-				 * sometime soon, so we can't quite until
-				 * poll() gives us the HUP notification.
-				 */
+				len = read(con->fd, buf, sizeof(buf));
+				if (len == 0 || (len < 0 && errno != EAGAIN && errno != EINTR) ) {
+					con->close_timeout_ts = srv->cur_ts - (HTTP_LINGER_TIMEOUT+1);
+				}
 			}
 
 			if (srv->cur_ts - con->close_timeout_ts > HTTP_LINGER_TIMEOUT) {
