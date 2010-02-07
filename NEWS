@@ -12,7 +12,7 @@ NEWS
   * Fix mod_proxy dead host detection if connect() fails
   * Fix fd leaks in mod_cgi (fds not closed on pipe/fork failures, found by Rodrigo, fixes #2158, #2159)
   * Fix segfault with broken rewrite/redirect patterns (fixes #2140, found by crypt)
-  * Append to previous buffer in con read (fixes #2147, found by liming, CVE-2010-0295)
+  * Append to previous buffer in con read, fix DoS/OOM vulnerability (fixes #2147, found by liming, CVE-2010-0295)
   * Fix HUP detection in close-state if event-backend doesn't support FDEVENT_HUP (like select or poll on FreeBSD)
 
 - 1.4.25 - 2009-11-21
