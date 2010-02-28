@@ -4,7 +4,7 @@ NEWS
 ====
 
 - 1.4.27 -
-  *
+  * Fix handling return value of SSL_CTX_set_options (fixes #2157, thx mlcreech)
 
 - 1.4.26 - 2010-02-07
   * Fix request parser to handle packets with splitted \r\n\r\n (fixes #2105)
