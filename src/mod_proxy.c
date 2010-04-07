@@ -349,6 +349,10 @@ static void proxy_connection_close(server *srv, handler_ctx *hctx) {
 		srv->cur_fds--;
 	}
 
+	if (hctx->host) {
+		hctx->host->usage--;
+	}
+
 	handler_ctx_free(hctx);
 	con->plugin_ctx[p->id] = NULL;
 }
@@ -989,8 +993,6 @@ static handler_t proxy_handle_fdevent(void *s, void *ctx, int revents) {
 		case 0:
 			break;
 		case 1:
-			hctx->host->usage--;
-
 			/* we are done */
 			proxy_connection_close(srv, hctx);
 
@@ -1077,8 +1079,11 @@ static handler_t proxy_handle_fdevent(void *s, void *ctx, int revents) {
 			return HANDLER_FINISHED;
 		}
 
-		con->file_finished = 1;
+		if (!con->file_finished) {
+			http_chunk_append_mem(srv, con, NULL, 0);
+		}
 
+		con->file_finished = 1;
 		proxy_connection_close(srv, hctx);
 		joblist_append(srv, con);
 	} else if (revents & FDEVENT_ERR) {
@@ -1086,6 +1091,7 @@ static handler_t proxy_handle_fdevent(void *s, void *ctx, int revents) {
 
 		log_error_write(srv, __FILE__, __LINE__, "sd", "proxy-FDEVENT_ERR, but no HUP", revents);
 
+		con->file_finished = 1;
 		joblist_append(srv, con);
 		proxy_connection_close(srv, hctx);
 	}
