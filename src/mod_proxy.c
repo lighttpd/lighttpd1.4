@@ -852,11 +852,11 @@ static handler_t proxy_write_request(server *srv, handler_ctx *hctx) {
 		if (-1 == ret) { /* error on our side */
 			log_error_write(srv, __FILE__, __LINE__, "ssd", "write failed:", strerror(errno), errno);
 
-			return HANDLER_WAIT_FOR_EVENT;
+			return HANDLER_ERROR;
 		} else if (-2 == ret) { /* remote close */
 			log_error_write(srv, __FILE__, __LINE__, "ssd", "write failed, remote connection close:", strerror(errno), errno);
 
-			return HANDLER_WAIT_FOR_EVENT;
+			return HANDLER_ERROR;
 		}
 
 		if (hctx->wb->bytes_out == hctx->wb->bytes_in) {
