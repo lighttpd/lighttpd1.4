@@ -581,7 +581,7 @@ handler_t http_response_prepare(server *srv, connection *con) {
 			};
 #endif
 			if (S_ISDIR(sce->st.st_mode)) {
-				if (con->physical.path->ptr[con->physical.path->used - 2] != '/') {
+				if (con->uri.path->ptr[con->uri.path->used - 2] != '/') {
 					/* redirect to .../ */
 
 					http_response_redirect_to_directory(srv, con);
