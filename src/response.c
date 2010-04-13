@@ -136,6 +136,8 @@ static void https_add_ssl_entries(connection *con) {
 	X509 *xs;
 	X509_NAME *xn;
 	X509_NAME_ENTRY *xe;
+	int i, nentries;
+
 	if (
 		SSL_get_verify_result(con->ssl) != X509_V_OK
 		|| !(xs = SSL_get_peer_certificate(con->ssl))
@@ -144,7 +146,7 @@ static void https_add_ssl_entries(connection *con) {
 	}
 
 	xn = X509_get_subject_name(xs);
-	for (int i = 0, nentries = X509_NAME_entry_count(xn); i < nentries; ++i) {
+	for (i = 0, nentries = X509_NAME_entry_count(xn); i < nentries; ++i) {
 		int xobjnid;
 		const char * xobjsn;
 		data_string *envds;
