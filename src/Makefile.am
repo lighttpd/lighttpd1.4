@@ -19,7 +19,7 @@ versionstamp:
 			REVISION=""; \
 		fi; \
 	fi; \
-	if test -z "$$REVISION" -a -x "`which git`"; then \
+	if test -z "$$REVISION" -a -d "$(top_srcdir)/.git" -a -x "`which git`"; then \
 		REVISION="$$(cd "$(top_srcdir)"; LANG= LC_ALL=C git describe --always 2>/dev/null || echo)"; \
 	fi; \
 	if test -n "$$REVISION"; then \
