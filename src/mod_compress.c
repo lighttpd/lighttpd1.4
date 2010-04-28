@@ -744,6 +744,7 @@ PHYSICALPATH_FUNC(mod_compress_physical) {
 				int accept_encoding = 0;
 				char *value = ds->value->ptr;
 				int matched_encodings = 0;
+				int use_etag = sce->etag != NULL && sce->etag->ptr != NULL;
 
 				/* get client side support encodings */
 #ifdef USE_ZLIB
@@ -770,12 +771,14 @@ PHYSICALPATH_FUNC(mod_compress_physical) {
 					mtime = strftime_cache_get(srv, sce->st.st_mtime);
 
 					/* try matching original etag of uncompressed version */
-					etag_mutate(con->physical.etag, sce->etag);
-					if (HANDLER_FINISHED == http_response_handle_cachable(srv, con, mtime)) {
-						response_header_overwrite(srv, con, CONST_STR_LEN("Content-Type"), CONST_BUF_LEN(sce->content_type));
-						response_header_overwrite(srv, con, CONST_STR_LEN("Last-Modified"), CONST_BUF_LEN(mtime));
-						response_header_overwrite(srv, con, CONST_STR_LEN("ETag"), CONST_BUF_LEN(con->physical.etag));
-						return HANDLER_FINISHED;
+					if (use_etag) {
+						etag_mutate(con->physical.etag, sce->etag);
+						if (HANDLER_FINISHED == http_response_handle_cachable(srv, con, mtime)) {
+							response_header_overwrite(srv, con, CONST_STR_LEN("Content-Type"), CONST_BUF_LEN(sce->content_type));
+							response_header_overwrite(srv, con, CONST_STR_LEN("Last-Modified"), CONST_BUF_LEN(mtime));
+							response_header_overwrite(srv, con, CONST_STR_LEN("ETag"), CONST_BUF_LEN(con->physical.etag));
+							return HANDLER_FINISHED;
+						}
 					}
 
 					/* select best matching encoding */
@@ -790,22 +793,26 @@ PHYSICALPATH_FUNC(mod_compress_physical) {
 						compression_name = dflt_deflate;
 					}
 
-					/* try matching etag of compressed version */
-					buffer_copy_string_buffer(srv->tmp_buf, sce->etag);
-					buffer_append_string_len(srv->tmp_buf, CONST_STR_LEN("-"));
-					buffer_append_string(srv->tmp_buf, compression_name);
-					etag_mutate(con->physical.etag, srv->tmp_buf);
+					if (use_etag) {
+						/* try matching etag of compressed version */
+						buffer_copy_string_buffer(srv->tmp_buf, sce->etag);
+						buffer_append_string_len(srv->tmp_buf, CONST_STR_LEN("-"));
+						buffer_append_string(srv->tmp_buf, compression_name);
+						etag_mutate(con->physical.etag, srv->tmp_buf);
+					}
 
 					if (HANDLER_FINISHED == http_response_handle_cachable(srv, con, mtime)) {
 						response_header_overwrite(srv, con, CONST_STR_LEN("Content-Encoding"), compression_name, strlen(compression_name));
 						response_header_overwrite(srv, con, CONST_STR_LEN("Content-Type"), CONST_BUF_LEN(sce->content_type));
 						response_header_overwrite(srv, con, CONST_STR_LEN("Last-Modified"), CONST_BUF_LEN(mtime));
-						response_header_overwrite(srv, con, CONST_STR_LEN("ETag"), CONST_BUF_LEN(con->physical.etag));
+						if (use_etag) {
+							response_header_overwrite(srv, con, CONST_STR_LEN("ETag"), CONST_BUF_LEN(con->physical.etag));
+						}
 						return HANDLER_FINISHED;
 					}
 
 					/* deflate it */
-					if (p->conf.compress_cache_dir->used) {
+					if (use_etag && p->conf.compress_cache_dir->used) {
 						if (0 != deflate_file_to_file(srv, con, p, con->physical.path, sce, compression_type))
 							return HANDLER_GO_ON;
 					} else {
@@ -814,7 +821,9 @@ PHYSICALPATH_FUNC(mod_compress_physical) {
 					}
 					response_header_overwrite(srv, con, CONST_STR_LEN("Content-Encoding"), compression_name, strlen(compression_name));
 					response_header_overwrite(srv, con, CONST_STR_LEN("Last-Modified"), CONST_BUF_LEN(mtime));
-					response_header_overwrite(srv, con, CONST_STR_LEN("ETag"), CONST_BUF_LEN(con->physical.etag));
+					if (use_etag) {
+						response_header_overwrite(srv, con, CONST_STR_LEN("ETag"), CONST_BUF_LEN(con->physical.etag));
+					}
 					response_header_overwrite(srv, con, CONST_STR_LEN("Content-Type"), CONST_BUF_LEN(sce->content_type));
 					/* let mod_staticfile handle the cached compressed files, physical path was modified */
 					return p->conf.compress_cache_dir->used ? HANDLER_GO_ON : HANDLER_FINISHED;

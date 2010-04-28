@@ -9,6 +9,7 @@ NEWS
   * mod_proxy: close connection on write error (fixes #2114)
   * Check uri instead of physical path for directory redirect
   * Fix detecting git repository (fixes #2173, thx ncopa)
+  * [mod_compress] Fix segfault when etags are disabled (fixes #2169)
 
 - 1.4.26 - 2010-02-07
   * Fix request parser to handle packets with splitted \r\n\r\n (fixes #2105)
