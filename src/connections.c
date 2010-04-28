@@ -82,6 +82,11 @@ static int connection_del(server *srv, connection *con) {
 
 	if (-1 == con->ndx) return -1;
 
+	buffer_reset(con->uri.authority);
+	buffer_reset(con->uri.path);
+	buffer_reset(con->uri.query);
+	buffer_reset(con->request.orig_uri);
+
 	i = con->ndx;
 
 	/* not last element */

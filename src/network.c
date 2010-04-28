@@ -82,6 +82,9 @@ static int network_ssl_servername_callback(SSL *ssl, int *al, server *srv) {
 	buffer_copy_string(con->tlsext_server_name, servername);
 	buffer_to_lower(con->tlsext_server_name);
 
+	/* Sometimes this is still set, confusing COMP_HTTP_HOST */
+	buffer_reset(con->uri.authority);
+
 	config_cond_cache_reset(srv, con);
 	config_setup_connection(srv, con);
 
