@@ -869,7 +869,7 @@ int http_auth_basic_check(server *srv, connection *con, mod_auth_plugin_data *p,
 		if (AUTH_BACKEND_UNSET == p->conf.auth_backend) {
 			log_error_write(srv, __FILE__, __LINE__, "s", "auth.backend is not set");
 		} else {
-			log_error_write(srv, __FILE__, __LINE__, "s", "get_password failed");
+			log_error_write(srv, __FILE__, __LINE__, "ss", "get_password failed, IP:", inet_ntop_cache_get_ip(srv, &(con->dst_addr)));
 		}
 
 		return 0;
@@ -877,7 +877,7 @@ int http_auth_basic_check(server *srv, connection *con, mod_auth_plugin_data *p,
 
 	/* password doesn't match */
 	if (http_auth_basic_password_compare(srv, p, req, username, realm->value, password, pw)) {
-		log_error_write(srv, __FILE__, __LINE__, "sbbss", "password doesn't match for ", con->uri.path, username, ", IP:", inet_ntop_cache_get_ip(srv, &(con->dst_addr)));
+		log_error_write(srv, __FILE__, __LINE__, "sbsBss", "password doesn't match for", con->uri.path, "username:", username, ", IP:", inet_ntop_cache_get_ip(srv, &(con->dst_addr)));
 
 		buffer_free(username);
 		buffer_free(password);
@@ -1138,7 +1138,7 @@ int http_auth_digest_check(server *srv, connection *con, mod_auth_plugin_data *p
 				"digest: digest mismatch", a2, respons);
 		}
 
-		log_error_write(srv, __FILE__, __LINE__, "sss",
+		log_error_write(srv, __FILE__, __LINE__, "ssss",
 				"digest: auth failed for ", username, ": wrong password, IP:", inet_ntop_cache_get_ip(srv, &(con->dst_addr)));
 
 		buffer_free(b);
