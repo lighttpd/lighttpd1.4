@@ -70,8 +70,25 @@ static int data_response_insert_dup(data_unset *dst, data_unset *src) {
 static void data_string_print(const data_unset *d, int depth) {
 	data_string *ds = (data_string *)d;
 	UNUSED(depth);
+	unsigned int i = 0;
 
-	fprintf(stdout, "\"%s\"", ds->value->used ? ds->value->ptr : "");
+	// empty and uninitialized strings
+	if (ds->value->used < 1) {
+		fputs("\"\"", stdout);
+		return;
+	}
+
+	// print out the string as is, except prepend " with backslash
+	putc('"', stdout);
+	for (i = 0; i < ds->value->used - 1; i++) {
+		unsigned char c = ds->value->ptr[i];
+		if (c == '"') {
+			fputs("\\\"", stdout);
+		} else {
+			putc(c, stdout);
+		}
+	}
+	putc('"', stdout);
 }
 
 

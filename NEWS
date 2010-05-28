@@ -11,6 +11,7 @@ NEWS
   * Fix detecting git repository (fixes #2173, thx ncopa)
   * [mod_compress] Fix segfault when etags are disabled (fixes #2169)
   * Reset uri.authority before TLS servername handling, reset all "keep-alive" data in connection_del (fixes #2125)
+  * Print double quotes properly when dumping config file (fixes #1806)
 
 - 1.4.26 - 2010-02-07
   * Fix request parser to handle packets with splitted \r\n\r\n (fixes #2105)
