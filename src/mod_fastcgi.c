@@ -302,7 +302,7 @@ typedef struct {
 
 	array *ext_mapping;
 
-	int debug;
+	unsigned int debug;
 } plugin_config;
 
 typedef struct {
@@ -1166,7 +1166,7 @@ SETDEFAULTS_FUNC(mod_fastcgi_set_defaults) {
 
 	config_values_t cv[] = {
 		{ "fastcgi.server",              NULL, T_CONFIG_LOCAL, T_CONFIG_SCOPE_CONNECTION },       /* 0 */
-		{ "fastcgi.debug",               NULL, T_CONFIG_SHORT, T_CONFIG_SCOPE_CONNECTION },       /* 1 */
+		{ "fastcgi.debug",               NULL, T_CONFIG_INT  , T_CONFIG_SCOPE_CONNECTION },       /* 1 */
 		{ "fastcgi.map-extensions",      NULL, T_CONFIG_ARRAY, T_CONFIG_SCOPE_CONNECTION },       /* 2 */
 		{ NULL,                          NULL, T_CONFIG_UNSET, T_CONFIG_SCOPE_UNSET }
 	};
