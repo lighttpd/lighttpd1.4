@@ -213,7 +213,9 @@ static server *server_init(void) {
 
 	if ((NULL != (frandom = fopen("/dev/urandom", "rb")) || NULL != (frandom = fopen("/dev/random", "rb")))
 	            && 1 == fread(srv->entropy, sizeof(srv->entropy), 1, frandom)) {
-		srand(*(unsigned int*)srv->entropy);
+		unsigned int e;
+		memcpy(&e, srv->entropy, sizeof(e) < sizeof(srv->entropy) ? sizeof(e) : sizeof(srv->entropy));
+		srand(e);
 		srv->is_real_entropy = 1;
 	} else {
 		unsigned int j;

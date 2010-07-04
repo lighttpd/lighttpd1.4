@@ -69,8 +69,8 @@ static int data_response_insert_dup(data_unset *dst, data_unset *src) {
 
 static void data_string_print(const data_unset *d, int depth) {
 	data_string *ds = (data_string *)d;
+	unsigned int i;
 	UNUSED(depth);
-	unsigned int i = 0;
 
 	/* empty and uninitialized strings */
 	if (ds->value->used < 1) {
