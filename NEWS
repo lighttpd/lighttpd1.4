@@ -14,6 +14,7 @@ NEWS
   * Print double quotes properly when dumping config file (fixes #1806)
   * Include IP addresses on error log on password failures (fixes #2191)
   * Fix stalls while reading from ssl sockets (fixes #2197)
+  * Fix etag formatting on boxes with 32-bit longs
 
 - 1.4.26 - 2010-02-07
   * Fix request parser to handle packets with splitted \r\n\r\n (fixes #2105)

@@ -44,7 +44,7 @@ int etag_mutate(buffer *mut, buffer *etag) {
 
 	buffer_reset(mut);
 	buffer_copy_string_len(mut, CONST_STR_LEN("\""));
-	buffer_append_long(mut, h);
+	buffer_append_off_t(mut, h);
 	buffer_append_string_len(mut, CONST_STR_LEN("\""));
 
 	return 0;
