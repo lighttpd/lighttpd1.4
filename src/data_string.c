@@ -72,13 +72,13 @@ static void data_string_print(const data_unset *d, int depth) {
 	UNUSED(depth);
 	unsigned int i = 0;
 
-	// empty and uninitialized strings
+	/* empty and uninitialized strings */
 	if (ds->value->used < 1) {
 		fputs("\"\"", stdout);
 		return;
 	}
 
-	// print out the string as is, except prepend " with backslash
+	/* print out the string as is, except prepend " with backslash */
 	putc('"', stdout);
 	for (i = 0; i < ds->value->used - 1; i++) {
 		unsigned char c = ds->value->ptr[i];
