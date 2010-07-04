@@ -2680,6 +2680,10 @@ static int fcgi_demux_response(server *srv, handler_ctx *hctx) {
 						log_error_write(srv, __FILE__, __LINE__, "sb",
 							"send-file error: couldn't get stat_cache entry for:",
 							ds->value);
+						con->http_status = 502;
+						hctx->send_content_body = 0;
+						con->file_started = 1;
+						break;
 					}
 				}
 
