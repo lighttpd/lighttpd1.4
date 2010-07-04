@@ -13,6 +13,7 @@ NEWS
   * Reset uri.authority before TLS servername handling, reset all "keep-alive" data in connection_del (fixes #2125)
   * Print double quotes properly when dumping config file (fixes #1806)
   * Include IP addresses on error log on password failures (fixes #2191)
+  * Fix stalls while reading from ssl sockets (fixes #2197)
 
 - 1.4.26 - 2010-02-07
   * Fix request parser to handle packets with splitted \r\n\r\n (fixes #2105)
