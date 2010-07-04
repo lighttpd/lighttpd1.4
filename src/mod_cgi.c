@@ -577,6 +577,8 @@ static handler_t cgi_connection_close(server *srv, handler_ctx *hctx) {
 				connection_set_state(srv, con, CON_STATE_HANDLE_REQUEST);
 				con->http_status = 500;
 				con->mode = DIRECT;
+			} else {
+				con->file_finished = 1;
 			}
 
 			if (WIFEXITED(status)) {
@@ -635,9 +637,14 @@ static handler_t cgi_handle_fdevent(void *s, void *ctx, int revents) {
 			/* if we get a IN|HUP and have read everything don't exec the close twice */
 			return HANDLER_FINISHED;
 		case FDEVENT_HANDLED_ERROR:
-			connection_set_state(srv, con, CON_STATE_HANDLE_REQUEST);
-			con->http_status = 500;
-			con->mode = DIRECT;
+			/* Send an error if we haven't sent any data yet */
+			if (0 == con->file_started) {
+				connection_set_state(srv, con, CON_STATE_HANDLE_REQUEST);
+				con->http_status = 500;
+				con->mode = DIRECT;
+			} else {
+				con->file_finished = 1;
+			}
 
 			log_error_write(srv, __FILE__, __LINE__, "s", "demuxer failed: ");
 			break;
@@ -1302,6 +1309,11 @@ TRIGGER_FUNC(cgi_trigger) {
 	return HANDLER_GO_ON;
 }
 
+/*
+ * - HANDLER_GO_ON : not our job
+ * - HANDLER_FINISHED: got response header
+ * - HANDLER_WAIT_FOR_EVENT: waiting for response header
+ */
 SUBREQUEST_FUNC(mod_cgi_handle_subrequest) {
 	int status;
 	plugin_data *p = p_d;
@@ -1313,7 +1325,13 @@ SUBREQUEST_FUNC(mod_cgi_handle_subrequest) {
 #if 0
 	log_error_write(srv, __FILE__, __LINE__, "sdd", "subrequest, pid =", hctx, hctx->pid);
 #endif
-	if (hctx->pid == 0) return HANDLER_FINISHED;
+
+	if (hctx->pid == 0) {
+		/* cgi already dead */
+		if (!con->file_started) return HANDLER_WAIT_FOR_EVENT;
+		return HANDLER_FINISHED;
+	}
+
 #ifndef __WIN32
 	switch(waitpid(hctx->pid, &status, WNOHANG)) {
 	case 0:
@@ -1351,24 +1369,24 @@ SUBREQUEST_FUNC(mod_cgi_handle_subrequest) {
 
 		return HANDLER_FINISHED;
 	default:
-		/* cgi process exited cleanly
-		 *
-		 * check if we already got the response
+		/* cgi process exited
 		 */
 
-		if (!con->file_started) return HANDLER_WAIT_FOR_EVENT;
+		hctx->pid = 0;
+
+		/* we already have response headers? just continue */
+		if (con->file_started) return HANDLER_FINISHED;
 
 		if (WIFEXITED(status)) {
-			/* nothing */
-		} else {
-			log_error_write(srv, __FILE__, __LINE__, "s", "cgi died ?");
-
-			con->mode = DIRECT;
-			con->http_status = 500;
-
+			/* clean exit - just continue */
+			return HANDLER_WAIT_FOR_EVENT;
 		}
 
-		hctx->pid = 0;
+		/* cgi proc died, and we didn't get any data yet - send error message and close cgi con */
+		log_error_write(srv, __FILE__, __LINE__, "s", "cgi died ?");
+
+		con->http_status = 500;
+		con->mode = DIRECT;
 
 		fdevent_event_del(srv->ev, &(hctx->fde_ndx), hctx->fd);
 		fdevent_unregister(srv->ev, hctx->fd);
