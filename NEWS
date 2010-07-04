@@ -18,6 +18,7 @@ NEWS
   * Fix two compiler warnings
   * mod_accesslog: fix %p for ipv6 sockets (fixes #2228, thx jo.henke)
   * mod_fastcgi: Send 502 "Bad Gateway" if we couldn't open the file for X-Sendfile (fixes #2226)
+  * mod_staticfile: add debug output if we ignore a file with static-file.exclude-extensions (fixes #2215)
 
 - 1.4.26 - 2010-02-07
   * Fix request parser to handle packets with splitted \r\n\r\n (fixes #2105)

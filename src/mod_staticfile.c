@@ -385,6 +385,9 @@ URIHANDLER_FUNC(mod_staticfile_subrequest) {
 		if (ds->value->used == 0) continue;
 
 		if (buffer_is_equal_right_len(con->physical.path, ds->value, ds->value->used - 1)) {
+			if (con->conf.log_request_handling) {
+				log_error_write(srv, __FILE__, __LINE__,  "s",  "-- NOT handling file as static file, extension forbidden");
+			}
 			return HANDLER_GO_ON;
 		}
 	}
