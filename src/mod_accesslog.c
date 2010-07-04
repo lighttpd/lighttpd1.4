@@ -845,7 +845,7 @@ REQUESTDONE_FUNC(log_access_write) {
 				break;
 			case FORMAT_SERVER_PORT:
 				{
-					char *colon = strchr(((server_socket*)(con->srv_socket))->srv_token->ptr, ':');
+					char *colon = strrchr(((server_socket*)(con->srv_socket))->srv_token->ptr, ':');
 					if (colon) {
 						buffer_append_string(b, colon+1);
 					} else {
