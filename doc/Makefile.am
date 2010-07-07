@@ -1,3 +1,4 @@
+SUBDIRS=config
 dist_man8_MANS=lighttpd.8
 
 DOCS=accesslog.txt \
@@ -76,7 +77,7 @@ HTMLDOCS=accesslog.html \
 	 evhost.html \
 	 magnet.html
 
-EXTRA_DIST=lighttpd.conf lighttpd.user \
+EXTRA_DIST=lighttpd.user \
 	rc.lighttpd rc.lighttpd.redhat sysconfig.lighttpd \
 	rrdtool-graph.sh \
 	state.dot fastcgi-state.dot \
