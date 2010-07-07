@@ -567,7 +567,11 @@ dnl build version-id
 LIGHTTPD_VERSION_ID=`echo $PACKAGE_VERSION | $AWK -F '.' '{print "(" $1 " << 16 | " $2 " << 8 | " $3 ")"}'`
 AC_DEFINE_UNQUOTED([LIGHTTPD_VERSION_ID], [$LIGHTTPD_VERSION_ID], [lighttpd-version-id])
 
-AC_CONFIG_FILES([Makefile src/Makefile doc/Makefile tests/Makefile \
+AC_CONFIG_FILES([Makefile src/Makefile
+		 doc/config/conf.d/Makefile \
+		 doc/config/vhosts.d/Makefile \
+		 doc/config/Makefile \
+		 doc/Makefile tests/Makefile \
 		 tests/docroot/Makefile \
 		 tests/docroot/123/Makefile \
 		 tests/docroot/www/Makefile \
