@@ -1,4 +1,4 @@
-SUBDIRS=config
+SUBDIRS=config scripts initscripts
 dist_man8_MANS=lighttpd.8
 
 DOCS=accesslog.txt \
@@ -77,11 +77,8 @@ HTMLDOCS=accesslog.html \
 	 evhost.html \
 	 magnet.html
 
-EXTRA_DIST=lighttpd.user \
-	rc.lighttpd rc.lighttpd.redhat sysconfig.lighttpd \
-	rrdtool-graph.sh \
+EXTRA_DIST= \
 	state.dot fastcgi-state.dot \
-	spawn-php.sh \
 	newstyle.css \
 	oldstyle.css \
 	$(DOCS)
