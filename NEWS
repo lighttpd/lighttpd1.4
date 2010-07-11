@@ -21,6 +21,7 @@ NEWS
   * mod_staticfile: add debug output if we ignore a file with static-file.exclude-extensions (fixes #2215)
   * mod_cgi: fix race condition leaving response not forwarded to client (fixes #2217)
   * mod_accesslog: Fix var declarations mixed in source (fixes #2233)
+  * mod_status: Add version to status page (fixes #2219)
 
 - 1.4.26 - 2010-02-07
   * Fix request parser to handle packets with splitted \r\n\r\n (fixes #2105)

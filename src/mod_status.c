@@ -299,7 +299,7 @@ static handler_t mod_status_handle_server_status_html(server *srv, connection *c
 
 
 	/* connection listing */
-	buffer_append_string_len(b, CONST_STR_LEN("<h1>Server-Status</h1>"));
+	buffer_append_string_len(b, CONST_STR_LEN("<h1>Server-Status (" PACKAGE_NAME " " PACKAGE_VERSION ")</h1>"));
 
 	buffer_append_string_len(b, CONST_STR_LEN("<table summary=\"status\" class=\"status\">"));
 	buffer_append_string_len(b, CONST_STR_LEN("<tr><td>Hostname</td><td class=\"string\">"));
