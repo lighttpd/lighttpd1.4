@@ -130,20 +130,21 @@ data_unset *array_get_element(array *a, const char *key) {
 
 data_unset *array_get_unused_element(array *a, data_type_t t) {
 	data_unset *ds = NULL;
+	unsigned int i;
 
-	UNUSED(t);
+	for (i = a->used; i < a->size; i++) {
+		if (a->data[i] && a->data[i]->type == t) {
+			ds = a->data[i];
 
-	if (a->size == 0) return NULL;
+			/* make empty slot at a->used for next insert */
+			a->data[i] = a->data[a->used];
+			a->data[a->used] = NULL;
 
-	if (a->used == a->size) return NULL;
-
-	if (a->data[a->used]) {
-		ds = a->data[a->used];
-
-		a->data[a->used] = NULL;
+			return ds;
+		}
 	}
 
-	return ds;
+	return NULL;
 }
 
 void array_set_key_value(array *hdrs, const char *key, size_t key_len, const char *value, size_t val_len) {
@@ -223,6 +224,9 @@ int array_insert_unique(array *a, data_unset *str) {
 	}
 
 	ndx = (int) a->used;
+
+	/* make sure there is nothing here */
+	if (a->data[ndx]) a->data[ndx]->free(a->data[ndx]);
 
 	a->data[a->used++] = str;
 
