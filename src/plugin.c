@@ -120,11 +120,18 @@ int plugins_load(server *srv) {
 	plugin *p;
 	int (*init)(plugin *pl);
 	const char *error;
-	size_t i;
+	size_t i, j;
 
 	for (i = 0; i < srv->srvconf.modules->used; i++) {
 		data_string *d = (data_string *)srv->srvconf.modules->data[i];
 		char *modules = d->value->ptr;
+
+		for (j = 0; j < i; j++) {
+			if (buffer_is_equal(d->value, ((data_string *) srv->srvconf.modules->data[j])->value)) {
+				log_error_write(srv, __FILE__, __LINE__, "sbs", "Cannot load plugin", d->value, "more than once");
+				return -1;
+			}
+		}
 
 		buffer_copy_string_buffer(srv->tmp_buf, srv->srvconf.modules_dir);
 
