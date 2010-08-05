@@ -1707,7 +1707,7 @@ int connection_state_machine(server *srv, connection *con) {
 										ssl_r, ret,
 										ERR_error_string(err, NULL));
 							} while((err = ERR_get_error()));
-						} else {
+						} else if (errno != 0) { /* ssl bug (see lighttpd ticket #2213): sometimes errno == 0 */
 							log_error_write(srv, __FILE__, __LINE__, "sddds", "SSL (error):",
 									ssl_r, ret, errno,
 									strerror(errno));

@@ -24,6 +24,7 @@ NEWS
   * mod_status: Add version to status page (fixes #2219)
   * mod_accesslog: optimize accesslog_append_escaped (fixes #2236, thx crypt)
   * autotools: don't recreate parser files with lemon after lemon rebuild
+  * openssl: silence annoying error messages for errno==0 (fixes #2213)
 
 - 1.4.26 - 2010-02-07
   * Fix request parser to handle packets with splitted \r\n\r\n (fixes #2105)
