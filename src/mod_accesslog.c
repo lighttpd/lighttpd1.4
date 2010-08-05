@@ -157,50 +157,61 @@ INIT_FUNC(mod_accesslog_init) {
 }
 
 static void accesslog_append_escaped(buffer *dest, buffer *str) {
-	unsigned int i;
+	char *ptr, *start, *end;
 
 	/* replaces non-printable chars with \xHH where HH is the hex representation of the byte */
 	/* exceptions: " => \", \ => \\, whitespace chars => \n \t etc. */
 	if (str->used == 0) return;
 	buffer_prepare_append(dest, str->used - 1);
 
-	for (i = 0; i < str->used - 1; i++) {
-		if (str->ptr[i] >= ' ' && str->ptr[i] <= '~') {
-			/* printable chars */
-			buffer_append_string_len(dest, &str->ptr[i], 1);
-		} else switch (str->ptr[i]) {
-		case '"':
-			BUFFER_APPEND_STRING_CONST(dest, "\\\"");
-			break;
-		case '\\':
-			BUFFER_APPEND_STRING_CONST(dest, "\\\\");
-			break;
-		case '\b':
-			BUFFER_APPEND_STRING_CONST(dest, "\\b");
-			break;
-		case '\n':
-			BUFFER_APPEND_STRING_CONST(dest, "\\n");
-			break;
-		case '\r':
-			BUFFER_APPEND_STRING_CONST(dest, "\\r");
-			break;
-		case '\t':
-			BUFFER_APPEND_STRING_CONST(dest, "\\t");
-			break;
-		case '\v':
-			BUFFER_APPEND_STRING_CONST(dest, "\\v");
-			break;
-		default: {
-				/* non printable char => \xHH */
-				char hh[5] = {'\\','x',0,0,0};
-				char h = str->ptr[i] / 16;
-				hh[2] = (h > 9) ? (h - 10 + 'A') : (h + '0');
-				h = str->ptr[i] % 16;
-				hh[3] = (h > 9) ? (h - 10 + 'A') : (h + '0');
-				buffer_append_string_len(dest, &hh[0], 4);
+	for (ptr = start = str->ptr, end = str->ptr + str->used - 1; ptr < end; ptr++) {
+		if (*ptr >= ' ' && *ptr <= '~') {
+			/* nothing to change, add later as one block */
+		} else {
+			/* copy previous part */
+			if (start < ptr) {
+				buffer_append_string_len(dest, start, ptr - start);
 			}
-			break;
+			start = ptr + 1;
+
+			switch (*ptr) {
+			case '"':
+				BUFFER_APPEND_STRING_CONST(dest, "\\\"");
+				break;
+			case '\\':
+				BUFFER_APPEND_STRING_CONST(dest, "\\\\");
+				break;
+			case '\b':
+				BUFFER_APPEND_STRING_CONST(dest, "\\b");
+				break;
+			case '\n':
+				BUFFER_APPEND_STRING_CONST(dest, "\\n");
+				break;
+			case '\r':
+				BUFFER_APPEND_STRING_CONST(dest, "\\r");
+				break;
+			case '\t':
+				BUFFER_APPEND_STRING_CONST(dest, "\\t");
+				break;
+			case '\v':
+				BUFFER_APPEND_STRING_CONST(dest, "\\v");
+				break;
+			default: {
+					/* non printable char => \xHH */
+					char hh[5] = {'\\','x',0,0,0};
+					char h = *ptr / 16;
+					hh[2] = (h > 9) ? (h - 10 + 'A') : (h + '0');
+					h = *ptr % 16;
+					hh[3] = (h > 9) ? (h - 10 + 'A') : (h + '0');
+					buffer_append_string_len(dest, &hh[0], 4);
+				}
+				break;
+			}
 		}
+	}
+
+	if (start < end) {
+		buffer_append_string_len(dest, start, end - start);
 	}
 }
 
