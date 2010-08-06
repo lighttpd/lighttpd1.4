@@ -34,7 +34,7 @@ static handler_t network_server_handle_fdevent(server *srv, void *context, int r
 
 	UNUSED(context);
 
-	if (revents != FDEVENT_IN) {
+	if (0 == (revents & FDEVENT_IN)) {
 		log_error_write(srv, __FILE__, __LINE__, "sdd",
 				"strange event for server socket",
 				srv_socket->fd,
