@@ -1184,9 +1184,6 @@ int config_set_defaults(server *srv) {
 #ifdef USE_SELECT
 		{ FDEVENT_HANDLER_SELECT,         "select" },
 #endif
-#ifdef USE_LINUX_SIGIO
-		{ FDEVENT_HANDLER_LINUX_RTSIG,    "linux-rtsig" },
-#endif
 #ifdef USE_SOLARIS_DEVPOLL
 		{ FDEVENT_HANDLER_SOLARIS_DEVPOLL,"solaris-devpoll" },
 #endif

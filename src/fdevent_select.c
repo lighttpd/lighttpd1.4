@@ -1,5 +1,6 @@
 #include "fdevent.h"
 #include "buffer.h"
+#include "log.h"
 
 #include <sys/time.h>
 #include <sys/types.h>
@@ -95,12 +96,12 @@ static int fdevent_select_event_next_fdndx(fdevents *ev, int ndx) {
 	i = (ndx < 0) ? 0 : ndx + 1;
 
 	for (; i < ev->select_max_fd + 1; i++) {
-		if (FD_ISSET(i, &(ev->select_read))) break;
-		if (FD_ISSET(i, &(ev->select_write))) break;
-		if (FD_ISSET(i, &(ev->select_error))) break;
+		if (FD_ISSET(i, &(ev->select_read))) return i;
+		if (FD_ISSET(i, &(ev->select_write))) return i;
+		if (FD_ISSET(i, &(ev->select_error))) return i;
 	}
 
-	return i;
+	return -1;
 }
 
 int fdevent_select_init(fdevents *ev) {

@@ -27,8 +27,7 @@
 # include <openssl/rand.h>
 #endif
 
-static handler_t network_server_handle_fdevent(void *s, void *context, int revents) {
-	server     *srv = (server *)s;
+static handler_t network_server_handle_fdevent(server *srv, void *context, int revents) {
 	server_socket *srv_socket = (server_socket *)context;
 	connection *con;
 	int loops = 0;

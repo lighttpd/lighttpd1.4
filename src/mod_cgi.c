@@ -609,8 +609,7 @@ static handler_t cgi_connection_close_callback(server *srv, connection *con, voi
 }
 
 
-static handler_t cgi_handle_fdevent(void *s, void *ctx, int revents) {
-	server      *srv  = (server *)s;
+static handler_t cgi_handle_fdevent(server *srv, void *ctx, int revents) {
 	handler_ctx *hctx = ctx;
 	connection  *con  = hctx->remote_conn;
 

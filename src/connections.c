@@ -1177,8 +1177,7 @@ found_header_end:
 	return 0;
 }
 
-static handler_t connection_handle_fdevent(void *s, void *context, int revents) {
-	server     *srv = (server *)s;
+static handler_t connection_handle_fdevent(server *srv, void *context, int revents) {
 	connection *con = context;
 
 	joblist_append(srv, con);

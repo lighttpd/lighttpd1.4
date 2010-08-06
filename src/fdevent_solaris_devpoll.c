@@ -1,5 +1,6 @@
 #include "fdevent.h"
 #include "buffer.h"
+#include "log.h"
 
 #include <sys/types.h>
 
@@ -30,9 +31,8 @@ static int fdevent_solaris_devpoll_event_del(fdevents *ev, int fde_ndx, int fd) 
 	pfd.revents = 0;
 
 	if (-1 == write(ev->devpoll_fd, &pfd, sizeof(pfd))) {
-		fprintf(stderr, "%s.%d: (del) write failed: (%d, %s)\n",
-			__FILE__, __LINE__,
-			fd, strerror(errno));
+		log_error_write(ev->srv, __FILE__, __LINE__, "S(D, S)",
+			"(del) write failed: ", fd, strerror(errno));
 
 		return -1;
 	}
@@ -44,16 +44,19 @@ static int fdevent_solaris_devpoll_event_add(fdevents *ev, int fde_ndx, int fd, 
 	struct pollfd pfd;
 	int add = 0;
 
+	int pevents = 0;
+	if (events & FDEVENT_IN)  pevents |= POLLIN;
+	if (events & FDEVENT_OUT) pevents |= POLLOUT;
+
 	if (fde_ndx == -1) add = 1;
 
 	pfd.fd = fd;
-	pfd.events = events;
+	pfd.events = pevents;
 	pfd.revents = 0;
 
 	if (-1 == write(ev->devpoll_fd, &pfd, sizeof(pfd))) {
-		fprintf(stderr, "%s.%d: (del) write failed: (%d, %s)\n",
-			__FILE__, __LINE__,
-			fd, strerror(errno));
+		log_error_write(ev->srv, __FILE__, __LINE__, "S(D, S)",
+			"(add) write failed: ", fd, strerror(errno));
 
 		return -1;
 	}
@@ -75,7 +78,21 @@ static int fdevent_solaris_devpoll_poll(fdevents *ev, int timeout_ms) {
 }
 
 static int fdevent_solaris_devpoll_event_get_revent(fdevents *ev, size_t ndx) {
-	return ev->devpollfds[ndx].revents;
+	int r, poll_r;
+
+	r = 0;
+	poll_r = ev->devpollfds[ndx].revents;
+
+	/* map POLL* to FDEVEN_*; they are probably the same, but still. */
+
+	if (poll_r & POLLIN) r |= FDEVENT_IN;
+	if (poll_r & POLLOUT) r |= FDEVENT_OUT;
+	if (poll_r & POLLERR) r |= FDEVENT_ERR;
+	if (poll_r & POLLHUP) r |= FDEVENT_HUP;
+	if (poll_r & POLLNVAL) r |= FDEVENT_NVAL;
+	if (poll_r & POLLPRI) r |= FDEVENT_PRI;
+
+	return r;
 }
 
 static int fdevent_solaris_devpoll_event_get_fd(fdevents *ev, size_t ndx) {
@@ -96,15 +113,15 @@ int fdevent_solaris_devpoll_reset(fdevents *ev) {
 	/* a forked process does only inherit the filedescriptor,
 	 * but every operation on the device will lead to a EACCES */
 	if ((ev->devpoll_fd = open("/dev/poll", O_RDWR)) < 0) {
-		fprintf(stderr, "%s.%d: opening /dev/poll failed (%s), try to set server.event-handler = \"poll\" or \"select\"\n",
-			__FILE__, __LINE__, strerror(errno));
+		log_error_write(ev->srv, __FILE__, __LINE__, "SSS",
+			"opening /dev/poll failed (", strerror(errno), "), try to set server.event-handler = \"poll\" or \"select\"");
 
 		return -1;
 	}
 
 	if (fcntl(ev->devpoll_fd, F_SETFD, FD_CLOEXEC) < 0) {
-		fprintf(stderr, "%s.%d: opening /dev/poll failed (%s), try to set server.event-handler = \"poll\" or \"select\"\n",
-			__FILE__, __LINE__, strerror(errno));
+		log_error_write(ev->srv, __FILE__, __LINE__, "SSS",
+			"fcntl /dev/poll fd failed (", strerror(errno), "), try to set server.event-handler = \"poll\" or \"select\"");
 
 		close(ev->devpoll_fd);
 
@@ -131,8 +148,8 @@ int fdevent_solaris_devpoll_init(fdevents *ev) {
 	ev->devpollfds = malloc(sizeof(*ev->devpollfds) * ev->maxfds);
 
 	if ((ev->devpoll_fd = open("/dev/poll", O_RDWR)) < 0) {
-		fprintf(stderr, "%s.%d: opening /dev/poll failed (%s), try to set server.event-handler = \"poll\" or \"select\"\n",
-			__FILE__, __LINE__, strerror(errno));
+		log_error_write(ev->srv, __FILE__, __LINE__, "SSS",
+			"opening /dev/poll failed (", strerror(errno), "), try to set server.event-handler = \"poll\" or \"select\"");
 
 		return -1;
 	}
@@ -149,8 +166,8 @@ int fdevent_solaris_devpoll_init(fdevents *ev) {
 int fdevent_solaris_devpoll_init(fdevents *ev) {
 	UNUSED(ev);
 
-	fprintf(stderr, "%s.%d: solaris-devpoll not supported, try to set server.event-handler = \"poll\" or \"select\"\n",
-			__FILE__, __LINE__);
+	log_error_write(ev->srv, __FILE__, __LINE__, "S",
+		"solaris-devpoll not supported, try to set server.event-handler = \"poll\" or \"select\"");
 
 	return -1;
 }

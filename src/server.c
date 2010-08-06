@@ -1103,7 +1103,7 @@ int main (int argc, char **argv) {
 	}
 #endif
 
-	if (NULL == (srv->ev = fdevent_init(srv->max_fds + 1, srv->event_handler))) {
+	if (NULL == (srv->ev = fdevent_init(srv, srv->max_fds + 1, srv->event_handler))) {
 		log_error_write(srv, __FILE__, __LINE__,
 				"s", "fdevent_init failed");
 		return -1;
@@ -1435,6 +1435,8 @@ int main (int argc, char **argv) {
 				handler_t r;
 
 				fd_ndx  = fdevent_event_next_fdndx (srv->ev, fd_ndx);
+				if (-1 == fd_ndx) break; /* not all fdevent handlers know how many fds got an event */
+
 				revents = fdevent_event_get_revent (srv->ev, fd_ndx);
 				fd      = fdevent_event_get_fd     (srv->ev, fd_ndx);
 				handler = fdevent_get_handler(srv->ev, fd);

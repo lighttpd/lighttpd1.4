@@ -1,5 +1,6 @@
 #include "fdevent.h"
 #include "buffer.h"
+#include "log.h"
 
 #include <sys/types.h>
 
@@ -28,7 +29,8 @@ static int fdevent_linux_sysepoll_event_del(fdevents *ev, int fde_ndx, int fd) {
 	ep.data.ptr = NULL;
 
 	if (0 != epoll_ctl(ev->epoll_fd, EPOLL_CTL_DEL, fd, &ep)) {
-		fprintf(stderr, "%s.%d: epoll_ctl failed: %s, dying\n", __FILE__, __LINE__, strerror(errno));
+		log_error_write(ev->srv, __FILE__, __LINE__, "SSS",
+			"epoll_ctl failed: ", strerror(errno), ", dying");
 
 		SEGFAULT();
 
@@ -66,7 +68,8 @@ static int fdevent_linux_sysepoll_event_add(fdevents *ev, int fde_ndx, int fd, i
 	ep.data.fd = fd;
 
 	if (0 != epoll_ctl(ev->epoll_fd, add ? EPOLL_CTL_ADD : EPOLL_CTL_MOD, fd, &ep)) {
-		fprintf(stderr, "%s.%d: epoll_ctl failed: %s, dying\n", __FILE__, __LINE__, strerror(errno));
+		log_error_write(ev->srv, __FILE__, __LINE__, "SSS",
+			"epoll_ctl failed: ", strerror(errno), ", dying");
 
 		SEGFAULT();
 
@@ -95,7 +98,8 @@ static int fdevent_linux_sysepoll_event_get_revent(fdevents *ev, size_t ndx) {
 
 static int fdevent_linux_sysepoll_event_get_fd(fdevents *ev, size_t ndx) {
 # if 0
-	fprintf(stderr, "%s.%d: %d, %d\n", __FILE__, __LINE__, ndx, ev->epoll_events[ndx].data.fd);
+	log_error_write(ev->srv, __FILE__, __LINE__, "SD, D",
+		"fdevent_linux_sysepoll_event_get_fd: ", (int) ndx, ev->epoll_events[ndx].data.fd);
 # endif
 
 	return ev->epoll_events[ndx].data.fd;
@@ -127,15 +131,15 @@ int fdevent_linux_sysepoll_init(fdevents *ev) {
 	SET(event_get_revent);
 
 	if (-1 == (ev->epoll_fd = epoll_create(ev->maxfds))) {
-		fprintf(stderr, "%s.%d: epoll_create failed (%s), try to set server.event-handler = \"poll\" or \"select\"\n",
-			__FILE__, __LINE__, strerror(errno));
+		log_error_write(ev->srv, __FILE__, __LINE__, "SSS",
+			"epoll_create failed (", strerror(errno), "), try to set server.event-handler = \"poll\" or \"select\"");
 
 		return -1;
 	}
 
 	if (-1 == fcntl(ev->epoll_fd, F_SETFD, FD_CLOEXEC)) {
-		fprintf(stderr, "%s.%d: epoll_create failed (%s), try to set server.event-handler = \"poll\" or \"select\"\n",
-			__FILE__, __LINE__, strerror(errno));
+		log_error_write(ev->srv, __FILE__, __LINE__, "SSS",
+			"fcntl on epoll-fd failed (", strerror(errno), "), try to set server.event-handler = \"poll\" or \"select\"");
 
 		close(ev->epoll_fd);
 
@@ -151,8 +155,8 @@ int fdevent_linux_sysepoll_init(fdevents *ev) {
 int fdevent_linux_sysepoll_init(fdevents *ev) {
 	UNUSED(ev);
 
-	fprintf(stderr, "%s.%d: linux-sysepoll not supported, try to set server.event-handler = \"poll\" or \"select\"\n",
-		__FILE__, __LINE__);
+	log_error_write(ev->srv, __FILE__, __LINE__, "S",
+		"linux-sysepoll not supported, try to set server.event-handler = \"poll\" or \"select\"");
 
 	return -1;
 }

@@ -1,5 +1,6 @@
 #include "fdevent.h"
 #include "buffer.h"
+#include "log.h"
 
 #include <sys/types.h>
 
@@ -21,7 +22,8 @@ static int fdevent_poll_event_del(fdevents *ev, int fde_ndx, int fd) {
 	if (fde_ndx < 0) return -1;
 
 	if ((size_t)fde_ndx >= ev->used) {
-		fprintf(stderr, "%s.%d: del! out of range %d %zd\n", __FILE__, __LINE__, fde_ndx, ev->used);
+		log_error_write(ev->srv, __FILE__, __LINE__, "SdD",
+			"del! out of range ", fde_ndx, (int) ev->used);
 		SEGFAULT();
 	}
 
@@ -42,6 +44,9 @@ static int fdevent_poll_event_del(fdevents *ev, int fde_ndx, int fd) {
 
 		ev->unused.ptr[ev->unused.used++] = k;
 	} else {
+		log_error_write(ev->srv, __FILE__, __LINE__, "SdD",
+			"del! ", ev->pollfds[fde_ndx].fd, fd);
+
 		SEGFAULT();
 	}
 
@@ -62,15 +67,20 @@ static int fdevent_poll_event_compress(fdevents *ev) {
 #endif
 
 static int fdevent_poll_event_add(fdevents *ev, int fde_ndx, int fd, int events) {
+	int pevents = 0;
+	if (events & FDEVENT_IN)  pevents |= POLLIN;
+	if (events & FDEVENT_OUT) pevents |= POLLOUT;
+
 	/* known index */
 
 	if (fde_ndx != -1) {
 		if (ev->pollfds[fde_ndx].fd == fd) {
-			ev->pollfds[fde_ndx].events = events;
+			ev->pollfds[fde_ndx].events = pevents;
 
 			return fde_ndx;
 		}
-		fprintf(stderr, "%s.%d: add: (%d, %d)\n", __FILE__, __LINE__, fde_ndx, ev->pollfds[fde_ndx].fd);
+		log_error_write(ev->srv, __FILE__, __LINE__, "SdD",
+			"add: ", fde_ndx, ev->pollfds[fde_ndx].fd);
 		SEGFAULT();
 	}
 
@@ -78,7 +88,7 @@ static int fdevent_poll_event_add(fdevents *ev, int fde_ndx, int fd, int events)
 		int k = ev->unused.ptr[--ev->unused.used];
 
 		ev->pollfds[k].fd = fd;
-		ev->pollfds[k].events = events;
+		ev->pollfds[k].events = pevents;
 
 		return k;
 	} else {
@@ -91,7 +101,7 @@ static int fdevent_poll_event_add(fdevents *ev, int fde_ndx, int fd, int events)
 		}
 
 		ev->pollfds[ev->used].fd = fd;
-		ev->pollfds[ev->used].events = events;
+		ev->pollfds[ev->used].events = pevents;
 
 		return ev->used++;
 	}
@@ -106,8 +116,10 @@ static int fdevent_poll_poll(fdevents *ev, int timeout_ms) {
 
 static int fdevent_poll_event_get_revent(fdevents *ev, size_t ndx) {
 	int r, poll_r;
+
 	if (ndx >= ev->used) {
-		fprintf(stderr, "%s.%d: dying because: event: %zd >= %zd\n", __FILE__, __LINE__, ndx, ev->used);
+		log_error_write(ev->srv, __FILE__, __LINE__, "sii",
+			"dying because: event: ", (int) ndx, (int) ev->used);
 
 		SEGFAULT();
 
@@ -122,7 +134,7 @@ static int fdevent_poll_event_get_revent(fdevents *ev, size_t ndx) {
 	r = 0;
 	poll_r = ev->pollfds[ndx].revents;
 
-	/* map POLL* to FDEVEN_* */
+	/* map POLL* to FDEVEN_*; they are probably the same, but still. */
 
 	if (poll_r & POLLIN) r |= FDEVENT_IN;
 	if (poll_r & POLLOUT) r |= FDEVENT_OUT;
@@ -143,10 +155,10 @@ static int fdevent_poll_event_next_fdndx(fdevents *ev, int ndx) {
 
 	i = (ndx < 0) ? 0 : ndx + 1;
 	for (; i < ev->used; i++) {
-		if (ev->pollfds[i].revents) break;
+		if (ev->pollfds[i].revents) return i;
 	}
 
-	return i;
+	return -1;
 }
 
 int fdevent_poll_init(fdevents *ev) {
@@ -174,8 +186,9 @@ int fdevent_poll_init(fdevents *ev) {
 int fdevent_poll_init(fdevents *ev) {
 	UNUSED(ev);
 
-	fprintf(stderr, "%s.%d: poll is not supported, try to set server.event-handler = \"select\"\n",
-			__FILE__, __LINE__);
+	log_error_write(srv, __FILE__, __LINE__,
+		"s", "poll is not supported, try to set server.event-handler = \"select\"");
+
 	return -1;
 }
 #endif

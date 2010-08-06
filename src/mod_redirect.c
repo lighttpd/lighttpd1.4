@@ -118,7 +118,7 @@ SETDEFAULTS_FUNC(mod_redirect_set_defaults) {
 				return HANDLER_ERROR;
 			}
 
-			if (0 != pcre_keyvalue_buffer_append(s->redirect,
+			if (0 != pcre_keyvalue_buffer_append(srv, s->redirect,
 							     ((data_string *)(da->value->data[j]))->key->ptr,
 							     ((data_string *)(da->value->data[j]))->value->ptr)) {
 

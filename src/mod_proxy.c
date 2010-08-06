@@ -112,7 +112,7 @@ typedef struct {
 
 
 /* ok, we need a prototype */
-static handler_t proxy_handle_fdevent(void *s, void *ctx, int revents);
+static handler_t proxy_handle_fdevent(server *srv, void *ctx, int revents);
 
 static handler_ctx * handler_ctx_init() {
 	handler_ctx * hctx;
@@ -974,8 +974,7 @@ SUBREQUEST_FUNC(mod_proxy_handle_subrequest) {
 	}
 }
 
-static handler_t proxy_handle_fdevent(void *s, void *ctx, int revents) {
-	server      *srv  = (server *)s;
+static handler_t proxy_handle_fdevent(server *srv, void *ctx, int revents) {
 	handler_ctx *hctx = ctx;
 	connection  *con  = hctx->remote_conn;
 	plugin_data *p    = hctx->plugin_data;

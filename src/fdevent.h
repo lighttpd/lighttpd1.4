@@ -32,10 +32,6 @@
 # else
 #  include <sys/poll.h>
 # endif
-# if defined HAVE_SIGTIMEDWAIT && defined(__linux__)
-#  define USE_LINUX_SIGIO
-#  include <signal.h>
-# endif
 #endif
 
 #if defined HAVE_SELECT
@@ -63,8 +59,12 @@
 # include <sys/port.h>
 #endif
 
+struct server;
 
-typedef handler_t (*fdevent_handler)(void *srv, void *ctx, int revents);
+typedef handler_t (*fdevent_handler)(struct server *srv, void *ctx, int revents);
+
+/* these are the POLL* values from <bits/poll.h> (linux poll)
+ */
 
 #define FDEVENT_IN     BV(0)
 #define FDEVENT_PRI    BV(1)
@@ -134,18 +134,12 @@ typedef struct {
  *
  */
 typedef struct fdevents {
+	struct server *srv;
 	fdevent_handler_t type;
 
 	fdnode **fdarray;
 	size_t maxfds;
 
-#ifdef USE_LINUX_SIGIO
-	int in_sigio;
-	int signum;
-	sigset_t sigset;
-	siginfo_t siginfo;
-	bitset *sigbset;
-#endif
 #ifdef USE_LINUX_EPOLL
 	int epoll_fd;
 	struct epoll_event *epoll_events;
@@ -176,7 +170,6 @@ typedef struct fdevents {
 #ifdef USE_FREEBSD_KQUEUE
 	int kq_fd;
 	struct kevent *kq_results;
-	bitset *kq_bevents;
 #endif
 #ifdef USE_SOLARIS_PORT
 	int port_fd;
@@ -196,8 +189,8 @@ typedef struct fdevents {
 	int (*fcntl_set)(struct fdevents *ev, int fd);
 } fdevents;
 
-fdevents *fdevent_init(size_t maxfds, fdevent_handler_t type);
-int fdevent_reset(fdevents *ev);
+fdevents *fdevent_init(struct server *srv, size_t maxfds, fdevent_handler_t type);
+int fdevent_reset(fdevents *ev); /* "init" after fork() */
 void fdevent_free(fdevents *ev);
 
 int fdevent_event_add(fdevents *ev, int *fde_ndx, int fd, int events);
@@ -218,7 +211,6 @@ int fdevent_fcntl_set(fdevents *ev, int fd);
 
 int fdevent_select_init(fdevents *ev);
 int fdevent_poll_init(fdevents *ev);
-int fdevent_linux_rtsig_init(fdevents *ev);
 int fdevent_linux_sysepoll_init(fdevents *ev);
 int fdevent_solaris_devpoll_init(fdevents *ev);
 int fdevent_freebsd_kqueue_init(fdevents *ev);

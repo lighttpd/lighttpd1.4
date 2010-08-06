@@ -195,7 +195,7 @@ int array_insert_unique(array *a, data_unset *str) {
 		if (a->data[ndx]->type == str->type) {
 			str->insert_dup(a->data[ndx], str);
 		} else {
-			fprintf(stderr, "a\n");
+			SEGFAULT();
 		}
 		return 0;
 	}

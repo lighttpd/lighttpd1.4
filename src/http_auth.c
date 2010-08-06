@@ -653,7 +653,6 @@ static int http_auth_basic_password_compare(server *srv, mod_auth_plugin_data *p
 		 */
 
 		if (password->used < 13 + 1) {
-			fprintf(stderr, "%s.%d\n", __FILE__, __LINE__);
 			return -1;
 		}
 
@@ -664,7 +663,6 @@ static int http_auth_basic_password_compare(server *srv, mod_auth_plugin_data *p
 			char *dollar = NULL;
 
 			if (NULL == (dollar = strchr(password->ptr + 3, '$'))) {
-				fprintf(stderr, "%s.%d\n", __FILE__, __LINE__);
 				return -1;
 			}
 
@@ -672,7 +670,6 @@ static int http_auth_basic_password_compare(server *srv, mod_auth_plugin_data *p
 		}
 
 		if (salt_len > sizeof(salt) - 1) {
-			fprintf(stderr, "%s.%d\n", __FILE__, __LINE__);
 			return -1;
 		}
 
@@ -684,8 +681,6 @@ static int http_auth_basic_password_compare(server *srv, mod_auth_plugin_data *p
 
 		if (0 == strcmp(password->ptr, crypted)) {
 			return 0;
-		} else {
-			fprintf(stderr, "%s.%d\n", __FILE__, __LINE__);
 		}
 
 #endif

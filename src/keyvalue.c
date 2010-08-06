@@ -1,5 +1,6 @@
 #include "server.h"
 #include "keyvalue.h"
+#include "log.h"
 
 #include <stdlib.h>
 #include <string.h>
@@ -312,7 +313,7 @@ pcre_keyvalue_buffer *pcre_keyvalue_buffer_init(void) {
 	return kvb;
 }
 
-int pcre_keyvalue_buffer_append(pcre_keyvalue_buffer *kvb, const char *key, const char *value) {
+int pcre_keyvalue_buffer_append(server *srv, pcre_keyvalue_buffer *kvb, const char *key, const char *value) {
 #ifdef HAVE_PCRE_H
 	size_t i;
 	const char *errptr;
@@ -346,7 +347,8 @@ int pcre_keyvalue_buffer_append(pcre_keyvalue_buffer *kvb, const char *key, cons
 	if (NULL == (kv->key = pcre_compile(key,
 					  0, &errptr, &erroff, NULL))) {
 
-		fprintf(stderr, "%s.%d: rexexp compilation error at %s\n", __FILE__, __LINE__, errptr);
+		log_error_write(srv, __FILE__, __LINE__, "SS",
+			"rexexp compilation error at ", errptr);
 		return -1;
 	}
 

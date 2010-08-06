@@ -924,7 +924,7 @@ URIHANDLER_FUNC(mod_dirlisting_subrequest) {
 	}
 
 	if (HANDLER_ERROR == stat_cache_get_entry(srv, con, con->physical.path, &sce)) {
-		fprintf(stderr, "%s.%d: %s\n", __FILE__, __LINE__, con->physical.path->ptr);
+		log_error_write(srv, __FILE__, __LINE__,  "SB", "stat_cache_get_entry failed: ", con->physical.path);
 		SEGFAULT();
 	}
 

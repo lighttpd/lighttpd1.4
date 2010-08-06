@@ -328,7 +328,7 @@ typedef struct {
 
 
 /* ok, we need a prototype */
-static handler_t scgi_handle_fdevent(void *s, void *ctx, int revents);
+static handler_t scgi_handle_fdevent(server *srv, void *ctx, int revents);
 
 int scgi_proclist_sort_down(server *srv, scgi_extension_host *host, scgi_proc *proc);
 
@@ -1676,20 +1676,6 @@ static int scgi_create_env(server *srv, handler_ctx *hctx) {
 		}
 	}
 
-#if 0
-	for (i = 0; i < hctx->write_buffer->used; i++) {
-		fprintf(stderr, "%02x ", hctx->write_buffer->ptr[i]);
-		if ((i+1) % 16 == 0) {
-			size_t j;
-			for (j = i-15; j <= i; j++) {
-				fprintf(stderr, "%c",
-					isprint((unsigned char)hctx->write_buffer->ptr[j]) ? hctx->write_buffer->ptr[j] : '.');
-			}
-			fprintf(stderr, "\n");
-		}
-	}
-#endif
-
 	return 0;
 }
 
@@ -2494,8 +2480,7 @@ static handler_t scgi_connection_close(server *srv, handler_ctx *hctx) {
 }
 
 
-static handler_t scgi_handle_fdevent(void *s, void *ctx, int revents) {
-	server      *srv  = (server *)s;
+static handler_t scgi_handle_fdevent(server *srv, void *ctx, int revents) {
 	handler_ctx *hctx = ctx;
 	connection  *con  = hctx->remote_conn;
 	plugin_data *p    = hctx->plugin_data;

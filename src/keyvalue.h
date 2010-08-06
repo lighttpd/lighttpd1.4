@@ -9,6 +9,8 @@
 # include <pcre.h>
 #endif
 
+struct server;
+
 typedef enum {
 	HTTP_METHOD_UNSET = -1,
 	HTTP_METHOD_GET,
@@ -102,7 +104,7 @@ int httpauth_keyvalue_buffer_append(httpauth_keyvalue_buffer *kvb, const char *k
 void httpauth_keyvalue_buffer_free(httpauth_keyvalue_buffer *kvb);
 
 pcre_keyvalue_buffer *pcre_keyvalue_buffer_init(void);
-int pcre_keyvalue_buffer_append(pcre_keyvalue_buffer *kvb, const char *key, const char *value);
+int pcre_keyvalue_buffer_append(struct server *srv, pcre_keyvalue_buffer *kvb, const char *key, const char *value);
 void pcre_keyvalue_buffer_free(pcre_keyvalue_buffer *kvb);
 
 #endif

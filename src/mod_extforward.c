@@ -16,6 +16,7 @@
 #include <string.h>
 #include <stdio.h>
 #include <netinet/in.h>
+#include <errno.h>
 
 /**
  * mod_extforward.c for lighttpd, by comman.kang <at> gmail <dot> com
@@ -302,7 +303,7 @@ static const char *last_not_in_array(array *a, plugin_data *p)
 	return NULL;
 }
 
-static struct addrinfo *ipstr_to_sockaddr(const char *host) {
+static struct addrinfo *ipstr_to_sockaddr(server *srv, const char *host) {
 	struct addrinfo hints, *res0;
 	int result;
 
@@ -319,17 +320,17 @@ static struct addrinfo *ipstr_to_sockaddr(const char *host) {
 #endif
 	hints.ai_flags = AI_NUMERICHOST | AI_NUMERICSERV;
 
+	errno = 0;
 	result = getaddrinfo(host, NULL, &hints, &res0);
 
 	if (result != 0) {
-		fprintf(stderr, "could not resolve hostname %s because %s\n", host, gai_strerror(result));
-
-		if (result == EAI_SYSTEM)
-			perror("The system error is ");
+		log_error_write(srv, __FILE__, __LINE__, "SSSs(S)",
+			"could not resolve hostname ", host, " because ", gai_strerror(result), strerror(errno));
 
 		return NULL;
 	} else if (res0 == 0) {
-		fprintf(stderr, "Problem in resolving hostname %s: succeeded, but no information returned\n", host);
+		log_error_write(srv, __FILE__, __LINE__, "SSS",
+			"Problem in resolving hostname ", host, ": succeeded, but no information returned");
 	}
 
 	return res0;
@@ -424,7 +425,7 @@ URIHANDLER_FUNC(mod_extforward_uri_handler) {
  			log_error_write(srv, __FILE__, __LINE__, "ss", "using address:", real_remote_addr);
 		}
 #ifdef HAVE_IPV6
-		addrlist = ipstr_to_sockaddr(real_remote_addr);
+		addrlist = ipstr_to_sockaddr(srv, real_remote_addr);
 		sock.plain.sa_family = AF_UNSPEC;
 		for (addrs_left = addrlist; addrs_left != NULL; addrs_left = addrs_left -> ai_next) {
 			sock.plain.sa_family = addrs_left->ai_family;

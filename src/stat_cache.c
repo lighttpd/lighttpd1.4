@@ -238,9 +238,8 @@ static uint32_t hashme(buffer *str) {
 }
 
 #ifdef HAVE_FAM_H
-handler_t stat_cache_handle_fdevent(void *_srv, void *_fce, int revent) {
+handler_t stat_cache_handle_fdevent(server *srv, void *_fce, int revent) {
 	size_t i;
-	server *srv = _srv;
 	stat_cache *sc = srv->stat_cache;
 	size_t events;
 
@@ -433,7 +432,8 @@ handler_t stat_cache_get_entry(server *srv, connection *con, buffer *name, stat_
 	} else {
 #ifdef DEBUG_STAT_CACHE
 		if (i != ctrl.used) {
-			fprintf(stderr, "%s.%d: %08x was already inserted but not found in cache, %s\n", __FILE__, __LINE__, file_ndx, name->ptr);
+			log_error_write(srv, __FILE__, __LINE__, "xSB",
+				file_ndx, "was already inserted but not found in cache, ", name);
 		}
 		assert(i == ctrl.used);
 #endif
