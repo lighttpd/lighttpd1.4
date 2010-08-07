@@ -180,7 +180,7 @@ static int config_insert(server *srv) {
 		s->etag_use_mtime = 1;
 		s->etag_use_size  = 1;
 		s->range_requests = 1;
-		s->force_lowercase_filenames = 0;
+		s->force_lowercase_filenames = (i == 0) ? 2 : 0; /* we wan't to detect later if user changed this for global section */
 		s->global_kbytes_per_second = 0;
 		s->global_bytes_per_second_cnt = 0;
 		s->global_bytes_per_second_cnt_ptr = &s->global_bytes_per_second_cnt;
@@ -1229,35 +1229,39 @@ int config_set_defaults(server *srv) {
 
 	buffer_to_lower(srv->tmp_buf);
 
-	if (0 == stat(srv->tmp_buf->ptr, &st1)) {
-		int is_lower = 0;
+	if (2 == s->force_lowercase_filenames) { /* user didn't configure it in global section? */
+		s->force_lowercase_filenames = 0; /* default to 0 */
 
-		is_lower = buffer_is_equal(srv->tmp_buf, s->document_root);
+		if (0 == stat(srv->tmp_buf->ptr, &st1)) {
+			int is_lower = 0;
 
-		/* lower-case existed, check upper-case */
-		buffer_copy_string_buffer(srv->tmp_buf, s->document_root);
+			is_lower = buffer_is_equal(srv->tmp_buf, s->document_root);
 
-		buffer_to_upper(srv->tmp_buf);
+			/* lower-case existed, check upper-case */
+			buffer_copy_string_buffer(srv->tmp_buf, s->document_root);
 
-		/* we have to handle the special case that upper and lower-casing results in the same filename
-		 * as in server.document-root = "/" or "/12345/" */
+			buffer_to_upper(srv->tmp_buf);
 
-		if (is_lower && buffer_is_equal(srv->tmp_buf, s->document_root)) {
-			/* lower-casing and upper-casing didn't result in
-			 * an other filename, no need to stat(),
-			 * just assume it is case-sensitive. */
+			/* we have to handle the special case that upper and lower-casing results in the same filename
+			 * as in server.document-root = "/" or "/12345/" */
 
-			s->force_lowercase_filenames = 0;
-		} else if (0 == stat(srv->tmp_buf->ptr, &st2)) {
+			if (is_lower && buffer_is_equal(srv->tmp_buf, s->document_root)) {
+				/* lower-casing and upper-casing didn't result in
+				 * an other filename, no need to stat(),
+				 * just assume it is case-sensitive. */
 
-			/* upper case exists too, doesn't the FS handle this ? */
+				s->force_lowercase_filenames = 0;
+			} else if (0 == stat(srv->tmp_buf->ptr, &st2)) {
 
-			/* upper and lower have the same inode -> case-insensitve FS */
+				/* upper case exists too, doesn't the FS handle this ? */
 
-			if (st1.st_ino == st2.st_ino) {
 				/* upper and lower have the same inode -> case-insensitve FS */
 
-				s->force_lowercase_filenames = 1;
+				if (st1.st_ino == st2.st_ino) {
+					/* upper and lower have the same inode -> case-insensitve FS */
+
+					s->force_lowercase_filenames = 1;
+				}
 			}
 		}
 	}
