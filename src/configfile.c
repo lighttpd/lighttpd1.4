@@ -100,6 +100,9 @@ static int config_insert(server *srv) {
 		{ "ssl.verifyclient.depth",      NULL, T_CONFIG_SHORT,   T_CONFIG_SCOPE_SERVER },     /* 58 */
 		{ "ssl.verifyclient.username",   NULL, T_CONFIG_STRING,  T_CONFIG_SCOPE_SERVER },     /* 59 */
 		{ "ssl.verifyclient.exportcert", NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_SERVER },     /* 60 */
+
+		{ "server.set-v6only",           NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION }, /* 61 */
+
 		{ "server.host",                 "use server.bind instead", T_CONFIG_DEPRECATED, T_CONFIG_SCOPE_UNSET },
 		{ "server.docroot",              "use server.document-root instead", T_CONFIG_DEPRECATED, T_CONFIG_SCOPE_UNSET },
 		{ "server.virtual-root",         "load mod_simple_vhost and use simple-vhost.server-root instead", T_CONFIG_DEPRECATED, T_CONFIG_SCOPE_UNSET },
@@ -170,6 +173,7 @@ static int config_insert(server *srv) {
 		s->is_ssl        = 0;
 		s->ssl_use_sslv2 = 0;
 		s->use_ipv6      = 0;
+		s->set_v6only    = 1;
 		s->defer_accept  = 0;
 #ifdef HAVE_LSTAT
 		s->follow_symlink = 1;
@@ -194,6 +198,7 @@ static int config_insert(server *srv) {
 
 		cv[7].destination = s->server_tag;
 		cv[8].destination = &(s->use_ipv6);
+		cv[61].destination = &(s->set_v6only);
 		cv[54].destination = &(s->defer_accept);
 
 

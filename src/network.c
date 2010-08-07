@@ -225,7 +225,7 @@ static int network_server_init(server *srv, buffer *host_token, specific_config 
 
 	val = 1;
 	if (setsockopt(srv_socket->fd, SOL_SOCKET, SO_REUSEADDR, &val, sizeof(val)) < 0) {
-		log_error_write(srv, __FILE__, __LINE__, "ss", "socketsockopt failed:", strerror(errno));
+		log_error_write(srv, __FILE__, __LINE__, "ss", "socketsockopt(SO_REUSEADDR) failed:", strerror(errno));
 		goto error_free_socket;
 	}
 
@@ -236,9 +236,20 @@ static int network_server_init(server *srv, buffer *host_token, specific_config 
 		srv_socket->addr.ipv6.sin6_family = AF_INET6;
 		if (host == NULL) {
 			srv_socket->addr.ipv6.sin6_addr = in6addr_any;
+			log_error_write(srv, __FILE__, __LINE__, "s", "warning: please use server.use-ipv6 only for hostnames, not without server.bind / empty address; your config will break if the kernel default for IPV6_V6ONLY changes");
 		} else {
 			struct addrinfo hints, *res;
 			int r;
+
+			if (s->set_v6only) {
+				val = 1;
+				if (-1 == setsockopt(srv_socket->fd, IPPROTO_IPV6, IPV6_V6ONLY, &val, sizeof(val))) {
+					log_error_write(srv, __FILE__, __LINE__, "ss", "socketsockopt(IPV6_V6ONLY) failed:", strerror(errno));
+					goto error_free_socket;
+				}
+			} else {
+				log_error_write(srv, __FILE__, __LINE__, "s", "warning: server.set-v6only will be removed soon, update your config to have different sockets for ipv4 and ipv6");
+			}
 
 			memset(&hints, 0, sizeof(hints));
 
