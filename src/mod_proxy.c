@@ -960,7 +960,7 @@ SUBREQUEST_FUNC(mod_proxy_handle_subrequest) {
 
 		return HANDLER_WAIT_FOR_FD;
 	case HANDLER_WAIT_FOR_EVENT:
-		return HANDLER_WAIT_FOR_EVENT;
+		break;
 	case HANDLER_WAIT_FOR_FD:
 		return HANDLER_WAIT_FOR_FD;
 	default:

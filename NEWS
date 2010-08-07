@@ -30,6 +30,7 @@ NEWS
   * cleanup fdevent code, removed linux-rtsig handler, replaced some fprintf calls
   * only require FDEVENT_IN bit to be set for listening connections (fixes #2227)
   * add libev fdevent handler: server.event-handler = "libev"
+  * mod_proxy: return response as soon as it is available (fixes #2196)
 
 - 1.4.26 - 2010-02-07
   * Fix request parser to handle packets with splitted \r\n\r\n (fixes #2105)
