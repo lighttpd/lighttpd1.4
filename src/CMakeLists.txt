@@ -28,6 +28,7 @@ OPTION(WITH_LUA "with lua 5.1 for mod_magnet [default: off]")
 OPTION(WITH_FAM "fam/gamin for reducing number of stat() calls [default: off]")
 OPTION(WITH_GDBM "gdbm storage for mod_trigger_b4_dl [default: off]")
 OPTION(WITH_MEMCACHE "memcached storage for mod_trigger_b4_dl [default: off]")
+OPTION(WITH_LIBEV "libev support for fdevent handlers [default: off]")
 
 IF(CMAKE_COMPILER_IS_GNUCC)
 	OPTION(BUILD_EXTRA_WARNINGS "extra warnings")
@@ -48,6 +49,11 @@ IF(BUILD_STATIC)
 ELSE(BUILD_STATIC)
   SET(CMAKE_SHARED_LIBRARY_PREFIX "")
 ENDIF(BUILD_STATIC)
+
+IF(WITH_LIBEV)
+  FIND_PACKAGE(LibEV REQUIRED)
+  SET(HAVE_LIBEV 1 FORCE)
+ENDIF(WITH_LIBEV)
 
 IF(WITH_WEBDAV_PROPS)
   SET(WITH_XML 1)
@@ -409,7 +415,7 @@ SET(COMMON_SRC
 	stat_cache.c plugin.c joblist.c etag.c array.c
 	data_string.c data_count.c data_array.c
 	data_integer.c md5.c data_fastcgi.c
-	fdevent_select.c
+	fdevent_select.c fdevent_libev.c
 	fdevent_poll.c fdevent_linux_sysepoll.c
 	fdevent_solaris_devpoll.c fdevent_freebsd_kqueue.c
 	data_config.c bitset.c
@@ -598,6 +604,11 @@ IF(HAVE_LIBSSL AND HAVE_LIBCRYPTO)
   TARGET_LINK_LIBRARIES(lighttpd ssl)
   TARGET_LINK_LIBRARIES(lighttpd crypto)
 ENDIF(HAVE_LIBSSL AND HAVE_LIBCRYPTO)
+
+IF(WITH_LIBEV)
+  ADD_TARGET_PROPERTIES(lighttpd LINK_FLAGS ${LIBEV_LDFLAGS})
+  ADD_TARGET_PROPERTIES(lighttpd COMPILE_FLAGS ${LIBEV_CFLAGS})
+ENDIF(WITH_LIBEV)
 
 IF(NOT WIN32)
 INSTALL(TARGETS ${L_INSTALL_TARGETS}

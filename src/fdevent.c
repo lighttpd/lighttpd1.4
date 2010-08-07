@@ -27,42 +27,49 @@ fdevents *fdevent_init(server *srv, size_t maxfds, fdevent_handler_t type) {
 
 			return NULL;
 		}
-		break;
+		return ev;
 	case FDEVENT_HANDLER_SELECT:
 		if (0 != fdevent_select_init(ev)) {
 			log_error_write(ev->srv, __FILE__, __LINE__, "S",
 				"event-handler select failed");
 			return NULL;
 		}
-		break;
+		return ev;
 	case FDEVENT_HANDLER_LINUX_SYSEPOLL:
 		if (0 != fdevent_linux_sysepoll_init(ev)) {
 			log_error_write(ev->srv, __FILE__, __LINE__, "S",
 				"event-handler linux-sysepoll failed, try to set server.event-handler = \"poll\" or \"select\"");
 			return NULL;
 		}
-		break;
+		return ev;
 	case FDEVENT_HANDLER_SOLARIS_DEVPOLL:
 		if (0 != fdevent_solaris_devpoll_init(ev)) {
 			log_error_write(ev->srv, __FILE__, __LINE__, "S",
 				"event-handler solaris-devpoll failed, try to set server.event-handler = \"poll\" or \"select\"");
 			return NULL;
 		}
-		break;
+		return ev;
 	case FDEVENT_HANDLER_FREEBSD_KQUEUE:
 		if (0 != fdevent_freebsd_kqueue_init(ev)) {
 			log_error_write(ev->srv, __FILE__, __LINE__, "S",
 				"event-handler freebsd-kqueue failed, try to set server.event-handler = \"poll\" or \"select\"");
 			return NULL;
 		}
+		return ev;
+	case FDEVENT_HANDLER_LIBEV:
+		if (0 != fdevent_libev_init(ev)) {
+			log_error_write(ev->srv, __FILE__, __LINE__, "S",
+				"event-handler libev failed, try to set server.event-handler = \"poll\" or \"select\"");
+			return NULL;
+		}
+		return ev;
+	case FDEVENT_HANDLER_UNSET:
 		break;
-	default:
-		log_error_write(ev->srv, __FILE__, __LINE__, "S",
-			"event-handler is unknown, try to set server.event-handler = \"poll\" or \"select\"");
-		return NULL;
 	}
 
-	return ev;
+	log_error_write(ev->srv, __FILE__, __LINE__, "S",
+		"event-handler is unknown, try to set server.event-handler = \"poll\" or \"select\"");
+	return NULL;
 }
 
 void fdevent_free(fdevents *ev) {
@@ -104,6 +111,7 @@ int fdevent_register(fdevents *ev, int fd, fdevent_handler handler, void *ctx) {
 	fdn->handler = handler;
 	fdn->fd      = fd;
 	fdn->ctx     = ctx;
+	fdn->handler_ctx = NULL;
 
 	ev->fdarray[fd] = fdn;
 

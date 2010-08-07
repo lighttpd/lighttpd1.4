@@ -59,6 +59,11 @@
 # include <sys/port.h>
 #endif
 
+#if defined HAVE_LIBEV
+# define USE_LIBEV
+# include <ev.h>
+#endif
+
 struct server;
 
 typedef handler_t (*fdevent_handler)(struct server *srv, void *ctx, int revents);
@@ -83,44 +88,25 @@ typedef enum { FD_EVENT_TYPE_UNSET = -1,
 typedef enum { FDEVENT_HANDLER_UNSET,
 		FDEVENT_HANDLER_SELECT,
 		FDEVENT_HANDLER_POLL,
-		FDEVENT_HANDLER_LINUX_RTSIG,
 		FDEVENT_HANDLER_LINUX_SYSEPOLL,
 		FDEVENT_HANDLER_SOLARIS_DEVPOLL,
 		FDEVENT_HANDLER_FREEBSD_KQUEUE,
-		FDEVENT_HANDLER_SOLARIS_PORT
+		FDEVENT_HANDLER_SOLARIS_PORT,
+		FDEVENT_HANDLER_LIBEV
 } fdevent_handler_t;
 
-/**
- * a mapping from fd to connection structure
- *
- */
-typedef struct {
-	int fd;                  /**< the fd */
-	void *conn;              /**< a reference the corresponding data-structure */
-	fd_event_t fd_type;      /**< type of the fd */
-	int events;              /**< registered events */
-	int revents;
-} fd_conn;
 
-typedef struct {
-	fd_conn *ptr;
-
-	size_t size;
-	size_t used;
-} fd_conn_buffer;
+typedef struct _fdnode {
+	fdevent_handler handler;
+	void *ctx;
+	void *handler_ctx;
+	int fd;
+} fdnode;
 
 /**
  * array of unused fd's
  *
  */
-
-typedef struct _fdnode {
-	fdevent_handler handler;
-	void *ctx;
-	int fd;
-
-	struct _fdnode *prev, *next;
-} fdnode;
 
 typedef struct {
 	int *ptr;
@@ -174,6 +160,9 @@ typedef struct fdevents {
 #ifdef USE_SOLARIS_PORT
 	int port_fd;
 #endif
+#ifdef USE_LIBEV
+	struct ev_loop *libev_loop;
+#endif
 	int (*reset)(struct fdevents *ev);
 	void (*free)(struct fdevents *ev);
 
@@ -214,7 +203,6 @@ int fdevent_poll_init(fdevents *ev);
 int fdevent_linux_sysepoll_init(fdevents *ev);
 int fdevent_solaris_devpoll_init(fdevents *ev);
 int fdevent_freebsd_kqueue_init(fdevents *ev);
+int fdevent_libev_init(fdevents *ev);
 
 #endif
-
-

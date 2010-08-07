@@ -62,7 +62,7 @@ common_src=buffer.c log.c \
       stat_cache.c plugin.c joblist.c etag.c array.c \
       data_string.c data_count.c data_array.c \
       data_integer.c md5.c data_fastcgi.c \
-      fdevent_select.c \
+      fdevent_select.c fdevent_libev.c \
       fdevent_poll.c fdevent_linux_sysepoll.c \
       fdevent_solaris_devpoll.c fdevent_freebsd_kqueue.c \
       data_config.c bitset.c \
@@ -86,9 +86,9 @@ if NO_RDYNAMIC
 # everything
 lib_LTLIBRARIES += liblightcomp.la
 liblightcomp_la_SOURCES=$(common_src)
-liblightcomp_la_CFLAGS=$(AM_CFLAGS)
+liblightcomp_la_CFLAGS=$(AM_CFLAGS) $(LIBEV_CFLAGS)
 liblightcomp_la_LDFLAGS = -avoid-version -no-undefined
-liblightcomp_la_LIBADD = $(PCRE_LIB) $(SSL_LIB) $(FAM_LIBS)
+liblightcomp_la_LIBADD = $(PCRE_LIB) $(SSL_LIB) $(FAM_LIBS) $(LIBEV_LIBS)
 common_libadd = liblightcomp.la
 else
 src += $(common_src)
@@ -283,9 +283,9 @@ hdr = server.h buffer.h network.h log.h keyvalue.h \
 DEFS= @DEFS@ -DHAVE_VERSION_H -DLIBRARY_DIR="\"$(libdir)\"" -DSBIN_DIR="\"$(sbindir)\""
 
 lighttpd_SOURCES = $(src)
-lighttpd_LDADD = $(PCRE_LIB) $(DL_LIB) $(SENDFILE_LIB) $(ATTR_LIB) $(common_libadd) $(SSL_LIB) $(FAM_LIBS)
+lighttpd_LDADD = $(PCRE_LIB) $(DL_LIB) $(SENDFILE_LIB) $(ATTR_LIB) $(common_libadd) $(SSL_LIB) $(FAM_LIBS) $(LIBEV_LIBS)
 lighttpd_LDFLAGS = -export-dynamic
-lighttpd_CCPFLAGS = $(FAM_CFLAGS)
+lighttpd_CCPFLAGS = $(FAM_CFLAGS) $(LIBEV_CFLAGS)
 
 proc_open_SOURCES = proc_open.c buffer.c
 proc_open_CPPFLAGS= -DDEBUG_PROC_OPEN

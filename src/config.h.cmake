@@ -155,4 +155,7 @@
 #cmakedefine HAVE_FASTCGI_H
 #cmakedefine HAVE_FASTCGI_FASTCGI_H
 
+/* libev */
+#cmakedefine HAVE_LIBEV
+
 #cmakedefine LIGHTTPD_STATIC
