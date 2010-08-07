@@ -396,6 +396,11 @@ static void show_features (void) {
 #else
       "\t- kqueue (FreeBSD)\n"
 #endif
+#ifdef USE_LIBEV
+      "\t+ libev (generic)\n"
+#else
+      "\t- libev (generic)\n"
+#endif
       "\nNetwork handler:\n\n"
 #if defined(USE_LINUX_SENDFILE) || defined(USE_FREEBSD_SENDFILE) || defined(USE_SOLARIS_SENDFILEV) || defined(USE_AIX_SENDFILE)
       "\t+ sendfile\n"

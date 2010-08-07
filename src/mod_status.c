@@ -676,21 +676,20 @@ static handler_t mod_status_handle_server_config(server *srv, connection *con, v
 
 	struct ev_map { fdevent_handler_t et; const char *name; } event_handlers[] =
 	{
-		/* - poll is most reliable
+		/* - epoll is most reliable
 		 * - select works everywhere
-		 * - linux-* are experimental
 		 */
+#ifdef USE_LINUX_EPOLL
+		{ FDEVENT_HANDLER_LINUX_SYSEPOLL, "linux-sysepoll" },
+#endif
 #ifdef USE_POLL
 		{ FDEVENT_HANDLER_POLL,           "poll" },
 #endif
 #ifdef USE_SELECT
 		{ FDEVENT_HANDLER_SELECT,         "select" },
 #endif
-#ifdef USE_LINUX_EPOLL
-		{ FDEVENT_HANDLER_LINUX_SYSEPOLL, "linux-sysepoll" },
-#endif
-#ifdef USE_LINUX_SIGIO
-		{ FDEVENT_HANDLER_LINUX_RTSIG,    "linux-rtsig" },
+#ifdef USE_LIBEV
+		{ FDEVENT_HANDLER_LIBEV,          "libev" },
 #endif
 #ifdef USE_SOLARIS_DEVPOLL
 		{ FDEVENT_HANDLER_SOLARIS_DEVPOLL,"solaris-devpoll" },
