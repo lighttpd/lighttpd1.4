@@ -83,6 +83,10 @@ AC_FUNC_STAT
 AC_FUNC_STRFTIME
 AC_CHECK_FUNCS([issetugid inet_pton])
 
+if test -z "$PKG_CONFIG"; then
+  AC_PATH_PROG(PKG_CONFIG, pkg-config, no)
+fi
+
 dnl checking for libev
 AC_MSG_CHECKING(for libev support)
 AC_ARG_WITH(libev,
@@ -343,10 +347,6 @@ if test "$WITH_BZIP2" != "no"; then
   fi
 fi
 AC_SUBST(BZ_LIB)
-
-if test -z "$PKG_CONFIG"; then
-  AC_PATH_PROG(PKG_CONFIG, pkg-config, no)
-fi
 
 dnl Check for gamin
 AC_MSG_CHECKING(for FAM)
