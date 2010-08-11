@@ -40,12 +40,12 @@ mod_ssi_exprparser.c mod_ssi_exprparser.h:
 parsers:
 else
 configparser.h: configparser.c
-configparser.c: $(srcdir)/configparser.y $(srcdir)/lempar.c | lemon$(EXEEXT)
+configparser.c: $(srcdir)/configparser.y $(srcdir)/lempar.c lemon$(EXEEXT)
 	rm -f configparser.h
 	$(LEMON) -q $(srcdir)/configparser.y $(srcdir)/lempar.c
 
 mod_ssi_exprparser.h: mod_ssi_exprparser.c
-mod_ssi_exprparser.c: $(srcdir)/mod_ssi_exprparser.y $(srcdir)/lempar.c | lemon$(EXEEXT)
+mod_ssi_exprparser.c: $(srcdir)/mod_ssi_exprparser.y $(srcdir)/lempar.c lemon$(EXEEXT)
 	rm -f mod_ssi_exprparser.h
 	$(LEMON) -q $(srcdir)/mod_ssi_exprparser.y $(srcdir)/lempar.c
 

@@ -23,7 +23,6 @@ NEWS
   * mod_accesslog: Fix var declarations mixed in source (fixes #2233)
   * mod_status: Add version to status page (fixes #2219)
   * mod_accesslog: optimize accesslog_append_escaped (fixes #2236, thx crypt)
-  * autotools: don't recreate parser files with lemon after lemon rebuild
   * openssl: silence annoying error messages for errno==0 (fixes #2213)
   * array.c: improve array_get_unused_element to check data type; fix mem leak if unused_element didn't find a matching entry (fixes #2145)
   * add check to stop loading plugins twice
