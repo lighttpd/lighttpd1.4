@@ -128,8 +128,8 @@ int plugins_load(server *srv) {
 
 		for (j = 0; j < i; j++) {
 			if (buffer_is_equal(d->value, ((data_string *) srv->srvconf.modules->data[j])->value)) {
-				log_error_write(srv, __FILE__, __LINE__, "sbs", "Cannot load plugin", d->value, "more than once");
-				return -1;
+				log_error_write(srv, __FILE__, __LINE__, "sbs", "Cannot load plugin", d->value, "more than once, please fix your config (we may not accept such configs in future releases");
+				continue;
 			}
 		}
 
