@@ -39,12 +39,15 @@ static int fdevent_freebsd_kqueue_event_del(fdevents *ev, int fde_ndx, int fd) {
 		NULL, 0,
 		&ts);
 
+	/* Ignore errors for now, as we remove for READ and WRITE without knowing what was registered */
+#if 0
 	if (ret == -1) {
 		log_error_write(ev->srv, __FILE__, __LINE__, "SS",
 			"kqueue event delete failed: ", strerror(errno));
 
 		return -1;
 	}
+#endif
 
 	return -1;
 }

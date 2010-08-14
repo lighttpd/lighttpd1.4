@@ -4,7 +4,7 @@ NEWS
 ====
 
 - 1.4.28 -
-  *
+  * Silence freebsd_kqueue delete errors
 
 - 1.4.27 - 2010-08-13
   * Fix handling return value of SSL_CTX_set_options (fixes #2157, thx mlcreech)
