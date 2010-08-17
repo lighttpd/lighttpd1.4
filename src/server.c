@@ -1147,7 +1147,7 @@ int main (int argc, char **argv) {
 
 		srv->stat_cache->fam_fcce_ndx = -1;
 		fdevent_register(srv->ev, FAMCONNECTION_GETFD(srv->stat_cache->fam), stat_cache_handle_fdevent, NULL);
-		fdevent_event_add(srv->ev, &(srv->stat_cache->fam_fcce_ndx), FAMCONNECTION_GETFD(srv->stat_cache->fam), FDEVENT_IN);
+		fdevent_event_set(srv->ev, &(srv->stat_cache->fam_fcce_ndx), FAMCONNECTION_GETFD(srv->stat_cache->fam), FDEVENT_IN);
 	}
 #endif
 
@@ -1346,7 +1346,7 @@ int main (int argc, char **argv) {
 			    (0 == graceful_shutdown)) {
 				for (i = 0; i < srv->srv_sockets.used; i++) {
 					server_socket *srv_socket = srv->srv_sockets.ptr[i];
-					fdevent_event_add(srv->ev, &(srv_socket->fde_ndx), srv_socket->fd, FDEVENT_IN);
+					fdevent_event_set(srv->ev, &(srv_socket->fde_ndx), srv_socket->fd, FDEVENT_IN);
 				}
 
 				log_error_write(srv, __FILE__, __LINE__, "s", "[note] sockets enabled again");

@@ -2230,7 +2230,7 @@ static handler_t scgi_write_request(server *srv, handler_ctx *hctx) {
 
 				/* connection is in progress, wait for an event and call getsockopt() below */
 
-				fdevent_event_add(srv->ev, &(hctx->fde_ndx), hctx->fd, FDEVENT_OUT);
+				fdevent_event_set(srv->ev, &(hctx->fde_ndx), hctx->fd, FDEVENT_OUT);
 
 				return HANDLER_WAIT_FOR_EVENT;
 			case -1:
@@ -2343,10 +2343,10 @@ static handler_t scgi_write_request(server *srv, handler_ctx *hctx) {
 		if (hctx->wb->bytes_out == hctx->wb->bytes_in) {
 			/* we don't need the out event anymore */
 			fdevent_event_del(srv->ev, &(hctx->fde_ndx), hctx->fd);
-			fdevent_event_add(srv->ev, &(hctx->fde_ndx), hctx->fd, FDEVENT_IN);
+			fdevent_event_set(srv->ev, &(hctx->fde_ndx), hctx->fd, FDEVENT_IN);
 			scgi_set_state(srv, hctx, FCGI_STATE_READ);
 		} else {
-			fdevent_event_add(srv->ev, &(hctx->fde_ndx), hctx->fd, FDEVENT_OUT);
+			fdevent_event_set(srv->ev, &(hctx->fde_ndx), hctx->fd, FDEVENT_OUT);
 
 			return HANDLER_WAIT_FOR_EVENT;
 		}
@@ -2891,12 +2891,12 @@ JOBLIST_FUNC(mod_scgi_handle_joblist) {
 	if (hctx->fd != -1) {
 		switch (hctx->state) {
 		case FCGI_STATE_READ:
-			fdevent_event_add(srv->ev, &(hctx->fde_ndx), hctx->fd, FDEVENT_IN);
+			fdevent_event_set(srv->ev, &(hctx->fde_ndx), hctx->fd, FDEVENT_IN);
 
 			break;
 		case FCGI_STATE_CONNECT:
 		case FCGI_STATE_WRITE:
-			fdevent_event_add(srv->ev, &(hctx->fde_ndx), hctx->fd, FDEVENT_OUT);
+			fdevent_event_set(srv->ev, &(hctx->fde_ndx), hctx->fd, FDEVENT_OUT);
 
 			break;
 		case FCGI_STATE_INIT:

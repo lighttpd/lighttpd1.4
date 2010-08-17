@@ -66,7 +66,7 @@ static int fdevent_poll_event_compress(fdevents *ev) {
 }
 #endif
 
-static int fdevent_poll_event_add(fdevents *ev, int fde_ndx, int fd, int events) {
+static int fdevent_poll_event_set(fdevents *ev, int fde_ndx, int fd, int events) {
 	int pevents = 0;
 	if (events & FDEVENT_IN)  pevents |= POLLIN;
 	if (events & FDEVENT_OUT) pevents |= POLLOUT;
@@ -80,7 +80,7 @@ static int fdevent_poll_event_add(fdevents *ev, int fde_ndx, int fd, int events)
 			return fde_ndx;
 		}
 		log_error_write(ev->srv, __FILE__, __LINE__, "SdD",
-			"add: ", fde_ndx, ev->pollfds[fde_ndx].fd);
+			"set: ", fde_ndx, ev->pollfds[fde_ndx].fd);
 		SEGFAULT();
 	}
 
@@ -170,7 +170,7 @@ int fdevent_poll_init(fdevents *ev) {
 	SET(poll);
 
 	SET(event_del);
-	SET(event_add);
+	SET(event_set);
 
 	SET(event_next_fdndx);
 	SET(event_get_fd);

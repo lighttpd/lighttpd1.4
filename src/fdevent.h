@@ -91,7 +91,6 @@ typedef enum { FDEVENT_HANDLER_UNSET,
 		FDEVENT_HANDLER_LINUX_SYSEPOLL,
 		FDEVENT_HANDLER_SOLARIS_DEVPOLL,
 		FDEVENT_HANDLER_FREEBSD_KQUEUE,
-		FDEVENT_HANDLER_SOLARIS_PORT,
 		FDEVENT_HANDLER_LIBEV
 } fdevent_handler_t;
 
@@ -101,6 +100,7 @@ typedef struct _fdnode {
 	void *ctx;
 	void *handler_ctx;
 	int fd;
+	int events;
 } fdnode;
 
 /**
@@ -166,7 +166,7 @@ typedef struct fdevents {
 	int (*reset)(struct fdevents *ev);
 	void (*free)(struct fdevents *ev);
 
-	int (*event_add)(struct fdevents *ev, int fde_ndx, int fd, int events);
+	int (*event_set)(struct fdevents *ev, int fde_ndx, int fd, int events);
 	int (*event_del)(struct fdevents *ev, int fde_ndx, int fd);
 	int (*event_get_revent)(struct fdevents *ev, size_t ndx);
 	int (*event_get_fd)(struct fdevents *ev, size_t ndx);
@@ -182,7 +182,7 @@ fdevents *fdevent_init(struct server *srv, size_t maxfds, fdevent_handler_t type
 int fdevent_reset(fdevents *ev); /* "init" after fork() */
 void fdevent_free(fdevents *ev);
 
-int fdevent_event_add(fdevents *ev, int *fde_ndx, int fd, int events);
+int fdevent_event_set(fdevents *ev, int *fde_ndx, int fd, int events); /* events can be FDEVENT_IN, FDEVENT_OUT or FDEVENT_IN | FDEVENT_OUT */
 int fdevent_event_del(fdevents *ev, int *fde_ndx, int fd);
 int fdevent_event_get_revent(fdevents *ev, size_t ndx);
 int fdevent_event_get_fd(fdevents *ev, size_t ndx);

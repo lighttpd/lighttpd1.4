@@ -4,7 +4,7 @@ NEWS
 ====
 
 - 1.4.28 -
-  * Silence freebsd_kqueue delete errors
+  * Rename fdevent_event_add to _set to reflect what the function does. Fix some handlers.
 
 - 1.4.27 - 2010-08-13
   * Fix handling return value of SSL_CTX_set_options (fixes #2157, thx mlcreech)

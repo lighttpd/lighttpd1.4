@@ -724,7 +724,7 @@ int network_register_fdevents(server *srv) {
 		server_socket *srv_socket = srv->srv_sockets.ptr[i];
 
 		fdevent_register(srv->ev, srv_socket->fd, network_server_handle_fdevent, srv_socket);
-		fdevent_event_add(srv->ev, &(srv_socket->fde_ndx), srv_socket->fd, FDEVENT_IN);
+		fdevent_event_set(srv->ev, &(srv_socket->fde_ndx), srv_socket->fd, FDEVENT_IN);
 	}
 	return 0;
 }

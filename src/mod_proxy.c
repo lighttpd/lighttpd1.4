@@ -798,7 +798,7 @@ static handler_t proxy_write_request(server *srv, handler_ctx *hctx) {
 
 				/* connection is in progress, wait for an event and call getsockopt() below */
 
-				fdevent_event_add(srv->ev, &(hctx->fde_ndx), hctx->fd, FDEVENT_OUT);
+				fdevent_event_set(srv->ev, &(hctx->fde_ndx), hctx->fd, FDEVENT_OUT);
 
 				return HANDLER_WAIT_FOR_EVENT;
 			case -1:
@@ -863,9 +863,9 @@ static handler_t proxy_write_request(server *srv, handler_ctx *hctx) {
 			proxy_set_state(srv, hctx, PROXY_STATE_READ);
 
 			fdevent_event_del(srv->ev, &(hctx->fde_ndx), hctx->fd);
-			fdevent_event_add(srv->ev, &(hctx->fde_ndx), hctx->fd, FDEVENT_IN);
+			fdevent_event_set(srv->ev, &(hctx->fde_ndx), hctx->fd, FDEVENT_IN);
 		} else {
-			fdevent_event_add(srv->ev, &(hctx->fde_ndx), hctx->fd, FDEVENT_OUT);
+			fdevent_event_set(srv->ev, &(hctx->fde_ndx), hctx->fd, FDEVENT_OUT);
 
 			return HANDLER_WAIT_FOR_EVENT;
 		}

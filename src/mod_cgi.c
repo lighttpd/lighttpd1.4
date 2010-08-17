@@ -1157,7 +1157,7 @@ static int cgi_create_env(server *srv, connection *con, plugin_data *p, buffer *
 		con->plugin_ctx[p->id] = hctx;
 
 		fdevent_register(srv->ev, hctx->fd, cgi_handle_fdevent, hctx);
-		fdevent_event_add(srv->ev, &(hctx->fde_ndx), hctx->fd, FDEVENT_IN);
+		fdevent_event_set(srv->ev, &(hctx->fde_ndx), hctx->fd, FDEVENT_IN);
 
 		if (-1 == fdevent_fcntl_set(srv->ev, hctx->fd)) {
 			log_error_write(srv, __FILE__, __LINE__, "ss", "fcntl failed: ", strerror(errno));

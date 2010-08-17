@@ -1792,7 +1792,7 @@ int connection_state_machine(server *srv, connection *con) {
 	case CON_STATE_READ_POST:
 	case CON_STATE_READ:
 	case CON_STATE_CLOSE:
-		fdevent_event_add(srv->ev, &(con->fde_ndx), con->fd, FDEVENT_IN);
+		fdevent_event_set(srv->ev, &(con->fde_ndx), con->fd, FDEVENT_IN);
 		break;
 	case CON_STATE_WRITE:
 		/* request write-fdevent only if we really need it
@@ -1802,7 +1802,7 @@ int connection_state_machine(server *srv, connection *con) {
 		if (!chunkqueue_is_empty(con->write_queue) &&
 		    (con->is_writable == 0) &&
 		    (con->traffic_limit_reached == 0)) {
-			fdevent_event_add(srv->ev, &(con->fde_ndx), con->fd, FDEVENT_OUT);
+			fdevent_event_set(srv->ev, &(con->fde_ndx), con->fd, FDEVENT_OUT);
 		} else {
 			fdevent_event_del(srv->ev, &(con->fde_ndx), con->fd);
 		}

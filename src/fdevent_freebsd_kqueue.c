@@ -22,58 +22,84 @@ static void fdevent_freebsd_kqueue_free(fdevents *ev) {
 }
 
 static int fdevent_freebsd_kqueue_event_del(fdevents *ev, int fde_ndx, int fd) {
-	int ret;
+	int ret, n = 0;
 	struct kevent kev[2];
 	struct timespec ts;
+	int oevents;
 
 	if (fde_ndx < 0) return -1;
 
-	EV_SET(&kev[0], fd, EVFILT_READ, EV_DELETE, 0, 0, NULL);
-	EV_SET(&kev[1], fd, EVFILT_WRITE, EV_DELETE, 0, 0, NULL);
+	oevents = ev->fdarray[fd]->events;
+
+	if (oevents & FDEVENT_IN)  {
+		EV_SET(&kev[n], fd, EVFILT_READ, EV_DELETE, 0, 0, NULL);
+		n++;
+	}
+	if (oevents & FDEVENT_OUT)  {
+		EV_SET(&kev[n], fd, EVFILT_WRITE, EV_DELETE, 0, 0, NULL);
+		n++;
+	}
+
+	if (0 == n) return -1;
 
 	ts.tv_sec  = 0;
 	ts.tv_nsec = 0;
 
 	ret = kevent(ev->kq_fd,
-		&kev, 2,
+		&kev, n,
 		NULL, 0,
 		&ts);
 
-	/* Ignore errors for now, as we remove for READ and WRITE without knowing what was registered */
-#if 0
 	if (ret == -1) {
 		log_error_write(ev->srv, __FILE__, __LINE__, "SS",
 			"kqueue event delete failed: ", strerror(errno));
 
 		return -1;
 	}
-#endif
 
 	return -1;
 }
 
-static int fdevent_freebsd_kqueue_event_add(fdevents *ev, int fde_ndx, int fd, int events) {
-	int filter, ret;
-	struct kevent kev;
+static int fdevent_freebsd_kqueue_event_set(fdevents *ev, int fde_ndx, int fd, int events) {
+	int ret, n = 0;
+	struct kevent kev[2];
 	struct timespec ts;
+	int oevents = ev->fdarray[fd]->events;
+	int addevents = events & ~oevents;
+	int delevents = ~events & oevents;
 
 	UNUSED(fde_ndx);
 
-	filter = (events & FDEVENT_IN) ? EVFILT_READ : EVFILT_WRITE;
+	if (events == oevents) return fd;
 
-	EV_SET(&kev, fd, filter, EV_ADD|EV_CLEAR, 0, 0, NULL);
+	if (addevents & FDEVENT_IN)  {
+		EV_SET(&kev[n], fd, EVFILT_READ, EV_ADD|EV_CLEAR, 0, 0, NULL);
+		n++;
+	} else if (delevents & FDEVENT_IN) {
+		EV_SET(&kev[n], fd, EVFILT_READ, EV_DELETE, 0, 0, NULL);
+		n++;
+	}
+	if (addevents & FDEVENT_OUT)  {
+		EV_SET(&kev[n], fd, EVFILT_WRITE, EV_ADD|EV_CLEAR, 0, 0, NULL);
+		n++;
+	} else if (delevents & FDEVENT_OUT) {
+		EV_SET(&kev[n], fd, EVFILT_WRITE, EV_DELETE, 0, 0, NULL);
+		n++;
+	}
+
+	if (0 == n) return fd;
 
 	ts.tv_sec  = 0;
 	ts.tv_nsec = 0;
 
 	ret = kevent(ev->kq_fd,
-		&kev, 1,
+		kev, n,
 		NULL, 0,
 		&ts);
 
 	if (ret == -1) {
 		log_error_write(ev->srv, __FILE__, __LINE__, "SS",
-			"kqueue event add failed: ", strerror(errno));
+			"kqueue event set failed: ", strerror(errno));
 
 		return -1;
 	}
@@ -164,7 +190,7 @@ int fdevent_freebsd_kqueue_init(fdevents *ev) {
 	SET(reset);
 
 	SET(event_del);
-	SET(event_add);
+	SET(event_set);
 
 	SET(event_next_fdndx);
 	SET(event_get_fd);

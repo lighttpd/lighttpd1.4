@@ -53,7 +53,7 @@ static int fdevent_libev_event_del(fdevents *ev, int fde_ndx, int fd) {
 	return -1;
 }
 
-static int fdevent_libev_event_add(fdevents *ev, int fde_ndx, int fd, int events) {
+static int fdevent_libev_event_set(fdevents *ev, int fde_ndx, int fd, int events) {
 	fdnode *fdn = ev->fdarray[fd];
 	ev_io *watcher = fdn->handler_ctx;
 	int ev_events = 0;
@@ -70,9 +70,9 @@ static int fdevent_libev_event_add(fdevents *ev, int fde_ndx, int fd, int events
 		watcher->data = ev;
 		ev_io_start(ev->libev_loop, watcher);
 	} else {
-		if ((watcher->events & ev_events) != ev_events) {
+		if ((watcher->events & (EV_READ | EV_WRITE)) != ev_events) {
 			ev_io_stop(ev->libev_loop, watcher);
-			ev_io_set(watcher, watcher->fd, watcher->events | ev_events);
+			ev_io_set(watcher, watcher->fd, ev_events);
 			ev_io_start(ev->libev_loop, watcher);
 		}
 	}
@@ -140,7 +140,7 @@ int fdevent_libev_init(fdevents *ev) {
 	SET(reset);
 
 	SET(event_del);
-	SET(event_add);
+	SET(event_set);
 
 	SET(event_next_fdndx);
 	SET(event_get_fd);

@@ -41,7 +41,7 @@ static int fdevent_linux_sysepoll_event_del(fdevents *ev, int fde_ndx, int fd) {
 	return -1;
 }
 
-static int fdevent_linux_sysepoll_event_add(fdevents *ev, int fde_ndx, int fd, int events) {
+static int fdevent_linux_sysepoll_event_set(fdevents *ev, int fde_ndx, int fd, int events) {
 	struct epoll_event ep;
 	int add = 0;
 
@@ -124,7 +124,7 @@ int fdevent_linux_sysepoll_init(fdevents *ev) {
 	SET(poll);
 
 	SET(event_del);
-	SET(event_add);
+	SET(event_set);
 
 	SET(event_next_fdndx);
 	SET(event_get_fd);

@@ -9,6 +9,7 @@
 #include <errno.h>
 #include <stdio.h>
 #include <fcntl.h>
+#include <assert.h>
 
 
 fdevents *fdevent_init(server *srv, size_t maxfds, fdevent_handler_t type) {
@@ -112,6 +113,7 @@ int fdevent_register(fdevents *ev, int fd, fdevent_handler handler, void *ctx) {
 	fdn->fd      = fd;
 	fdn->ctx     = ctx;
 	fdn->handler_ctx = NULL;
+	fdn->events  = 0;
 
 	ev->fdarray[fd] = fdn;
 
@@ -120,8 +122,11 @@ int fdevent_register(fdevents *ev, int fd, fdevent_handler handler, void *ctx) {
 
 int fdevent_unregister(fdevents *ev, int fd) {
 	fdnode *fdn;
-        if (!ev) return 0;
+
+	if (!ev) return 0;
 	fdn = ev->fdarray[fd];
+
+	assert(fdn->events == 0);
 
 	fdnode_free(fdn);
 
@@ -133,17 +138,21 @@ int fdevent_unregister(fdevents *ev, int fd) {
 int fdevent_event_del(fdevents *ev, int *fde_ndx, int fd) {
 	int fde = fde_ndx ? *fde_ndx : -1;
 
+	if (NULL == ev->fdarray[fd]) return 0;
+
 	if (ev->event_del) fde = ev->event_del(ev, fde, fd);
+	ev->fdarray[fd]->events = 0;
 
 	if (fde_ndx) *fde_ndx = fde;
 
 	return 0;
 }
 
-int fdevent_event_add(fdevents *ev, int *fde_ndx, int fd, int events) {
+int fdevent_event_set(fdevents *ev, int *fde_ndx, int fd, int events) {
 	int fde = fde_ndx ? *fde_ndx : -1;
 
-	if (ev->event_add) fde = ev->event_add(ev, fde, fd, events);
+	if (ev->event_set) fde = ev->event_set(ev, fde, fd, events);
+	ev->fdarray[fd]->events = events;
 
 	if (fde_ndx) *fde_ndx = fde;
 

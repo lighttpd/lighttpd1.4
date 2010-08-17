@@ -34,7 +34,7 @@ static int fdevent_select_event_del(fdevents *ev, int fde_ndx, int fd) {
 	return -1;
 }
 
-static int fdevent_select_event_add(fdevents *ev, int fde_ndx, int fd, int events) {
+static int fdevent_select_event_set(fdevents *ev, int fde_ndx, int fd, int events) {
 	UNUSED(fde_ndx);
 
 	/* we should be protected by max-fds, but you never know */
@@ -42,11 +42,13 @@ static int fdevent_select_event_add(fdevents *ev, int fde_ndx, int fd, int event
 
 	if (events & FDEVENT_IN) {
 		FD_SET(fd, &(ev->select_set_read));
-		FD_CLR(fd, &(ev->select_set_write));
+	} else {
+		FD_CLR(fd, &(ev->select_set_read));
 	}
 	if (events & FDEVENT_OUT) {
-		FD_CLR(fd, &(ev->select_set_read));
 		FD_SET(fd, &(ev->select_set_write));
+	} else {
+		FD_CLR(fd, &(ev->select_set_write));
 	}
 	FD_SET(fd, &(ev->select_set_error));
 
@@ -113,7 +115,7 @@ int fdevent_select_init(fdevents *ev) {
 	SET(poll);
 
 	SET(event_del);
-	SET(event_add);
+	SET(event_set);
 
 	SET(event_next_fdndx);
 	SET(event_get_fd);

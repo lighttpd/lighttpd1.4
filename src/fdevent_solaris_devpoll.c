@@ -40,7 +40,7 @@ static int fdevent_solaris_devpoll_event_del(fdevents *ev, int fde_ndx, int fd) 
 	return -1;
 }
 
-static int fdevent_solaris_devpoll_event_add(fdevents *ev, int fde_ndx, int fd, int events) {
+static int fdevent_solaris_devpoll_event_set(fdevents *ev, int fde_ndx, int fd, int events) {
 	struct pollfd pfd;
 	int add = 0;
 
@@ -56,7 +56,7 @@ static int fdevent_solaris_devpoll_event_add(fdevents *ev, int fde_ndx, int fd, 
 
 	if (-1 == write(ev->devpoll_fd, &pfd, sizeof(pfd))) {
 		log_error_write(ev->srv, __FILE__, __LINE__, "S(D, S)",
-			"(add) write failed: ", fd, strerror(errno));
+			"(set) write failed: ", fd, strerror(errno));
 
 		return -1;
 	}
@@ -139,7 +139,7 @@ int fdevent_solaris_devpoll_init(fdevents *ev) {
 	SET(reset);
 
 	SET(event_del);
-	SET(event_add);
+	SET(event_set);
 
 	SET(event_next_fdndx);
 	SET(event_get_fd);
