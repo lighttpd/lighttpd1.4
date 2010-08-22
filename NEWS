@@ -4,7 +4,7 @@ NEWS
 ====
 
 - 1.4.28 -
-  * Rename fdevent_event_add to _set to reflect what the function does. Fix some handlers.
+  * Rename fdevent_event_add to _set to reflect what the function does. Fix some handlers. (fixes #2249)
   * Fix buffer.h to include stdio.h as it is needer for SEGFAULT() (fixes #2250)
 
 - 1.4.27 - 2010-08-13
