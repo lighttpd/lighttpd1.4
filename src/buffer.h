@@ -9,6 +9,7 @@
 
 #include <stdlib.h>
 #include <sys/types.h>
+#include <stdio.h>
 
 typedef struct {
 	char *ptr;
