@@ -724,9 +724,9 @@ static int proxy_demux_response(server *srv, handler_ctx *hctx) {
 				con->file_started = 1;
 				if (blen) {
 					http_chunk_append_mem(srv, con, c + 4, blen + 1);
-					joblist_append(srv, con);
 				}
 				hctx->response->used = 0;
+				joblist_append(srv, con);
 			}
 		} else {
 			http_chunk_append_mem(srv, con, hctx->response->ptr, hctx->response->used);
