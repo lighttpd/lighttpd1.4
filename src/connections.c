@@ -1224,7 +1224,8 @@ static handler_t connection_handle_fdevent(server *srv, void *context, int reven
 
 			}
 		} else if (revents & FDEVENT_ERR) {
-#ifndef USE_LINUX_SIGIO
+			/* error, connection reset, whatever... we don't want to spam the logfile */
+#if 0
 			log_error_write(srv, __FILE__, __LINE__, "sd",
 					"connection closed: poll() -> ERR", con->fd);
 #endif
