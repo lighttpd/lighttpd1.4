@@ -80,7 +80,6 @@ typedef struct fcgi_proc {
 
 	size_t load; /* number of requests waiting on this process */
 
-	time_t last_used; /* see idle_timeout */
 	size_t requests;  /* see max_requests */
 	struct fcgi_proc *prev, *next; /* see first */
 
@@ -1132,7 +1131,6 @@ static int fcgi_spawn_connection(server *srv,
 
 			/* register process */
 			proc->pid = child;
-			proc->last_used = srv->cur_ts;
 			proc->is_local = 1;
 
 			break;
@@ -3047,7 +3045,6 @@ static handler_t fcgi_write_request(server *srv, handler_ctx *hctx) {
 		/* ok, we have the connection */
 
 		fcgi_proc_load_inc(srv, hctx);
-		hctx->proc->last_used = srv->cur_ts;
 		hctx->got_proc = 1;
 
 		status_counter_inc(srv, CONST_STR_LEN("fastcgi.requests"));
