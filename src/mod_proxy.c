@@ -750,7 +750,6 @@ static int proxy_demux_response(server *srv, handler_ctx *hctx) {
 
 static handler_t proxy_write_request(server *srv, handler_ctx *hctx) {
 	data_proxy *host= hctx->host;
-	plugin_data *p    = hctx->plugin_data;
 	connection *con   = hctx->remote_conn;
 
 	int ret;
@@ -759,6 +758,17 @@ static handler_t proxy_write_request(server *srv, handler_ctx *hctx) {
 	    (!host->host->used || !host->port)) return -1;
 
 	switch(hctx->state) {
+	case PROXY_STATE_CONNECT:
+		/* wait for the connect() to finish */
+
+		/* connect failed ? */
+		if (-1 == hctx->fde_ndx) return HANDLER_ERROR;
+
+		/* wait */
+		return HANDLER_WAIT_FOR_EVENT;
+
+		break;
+
 	case PROXY_STATE_INIT:
 #if defined(HAVE_IPV6) && defined(HAVE_INET_PTON)
 		if (strstr(host->host->ptr,":")) {
@@ -786,58 +796,28 @@ static handler_t proxy_write_request(server *srv, handler_ctx *hctx) {
 			return HANDLER_ERROR;
 		}
 
-		/* fall through */
+		switch (proxy_establish_connection(srv, hctx)) {
+		case 1:
+			proxy_set_state(srv, hctx, PROXY_STATE_CONNECT);
 
-	case PROXY_STATE_CONNECT:
-		/* try to finish the connect() */
-		if (hctx->state == PROXY_STATE_INIT) {
-			/* first round */
-			switch (proxy_establish_connection(srv, hctx)) {
-			case 1:
-				proxy_set_state(srv, hctx, PROXY_STATE_CONNECT);
+			/* connection is in progress, wait for an event and call getsockopt() below */
 
-				/* connection is in progress, wait for an event and call getsockopt() below */
+			fdevent_event_set(srv->ev, &(hctx->fde_ndx), hctx->fd, FDEVENT_OUT);
 
-				fdevent_event_set(srv->ev, &(hctx->fde_ndx), hctx->fd, FDEVENT_OUT);
+			return HANDLER_WAIT_FOR_EVENT;
+		case -1:
+			/* if ECONNREFUSED choose another connection -> FIXME */
+			hctx->fde_ndx = -1;
 
-				return HANDLER_WAIT_FOR_EVENT;
-			case -1:
-				/* if ECONNREFUSED choose another connection -> FIXME */
-				hctx->fde_ndx = -1;
-
-				return HANDLER_ERROR;
-			default:
-				/* everything is ok, go on */
-				break;
-			}
-		} else {
-			int socket_error;
-			socklen_t socket_error_len = sizeof(socket_error);
-
-			/* we don't need it anymore */
-			fdevent_event_del(srv->ev, &(hctx->fde_ndx), hctx->fd);
-
-			/* try to finish the connect() */
-			if (0 != getsockopt(hctx->fd, SOL_SOCKET, SO_ERROR, &socket_error, &socket_error_len)) {
-				log_error_write(srv, __FILE__, __LINE__, "ss",
-						"getsockopt failed:", strerror(errno));
-
-				return HANDLER_ERROR;
-			}
-			if (socket_error != 0) {
-				log_error_write(srv, __FILE__, __LINE__, "ss",
-						"establishing connection failed:", strerror(socket_error),
-						"port:", hctx->host->port);
-
-				return HANDLER_ERROR;
-			}
-			if (p->conf.debug) {
-				log_error_write(srv, __FILE__, __LINE__,  "s", "proxy - connect - delayed success");
-			}
+			return HANDLER_ERROR;
+		default:
+			/* everything is ok, go on */
+			proxy_set_state(srv, hctx, PROXY_STATE_PREPARE_WRITE);
+			break;
 		}
 
-		proxy_set_state(srv, hctx, PROXY_STATE_PREPARE_WRITE);
 		/* fall through */
+
 	case PROXY_STATE_PREPARE_WRITE:
 		proxy_create_env(srv, hctx);
 
@@ -1019,11 +999,42 @@ static handler_t proxy_handle_fdevent(server *srv, void *ctx, int revents) {
 					"proxy: fdevent-out", hctx->state);
 		}
 
-		if (hctx->state == PROXY_STATE_CONNECT ||
+		if (hctx->state == PROXY_STATE_CONNECT) {
+			int socket_error;
+			socklen_t socket_error_len = sizeof(socket_error);
+
+			/* we don't need it anymore */
+			fdevent_event_del(srv->ev, &(hctx->fde_ndx), hctx->fd);
+			hctx->fde_ndx = -1;
+
+			/* try to finish the connect() */
+			if (0 != getsockopt(hctx->fd, SOL_SOCKET, SO_ERROR, &socket_error, &socket_error_len)) {
+				log_error_write(srv, __FILE__, __LINE__, "ss",
+					"getsockopt failed:", strerror(errno));
+
+				joblist_append(srv, con);
+				return HANDLER_FINISHED;
+			}
+			if (socket_error != 0) {
+				log_error_write(srv, __FILE__, __LINE__, "ss",
+					"establishing connection failed:", strerror(socket_error),
+					"port:", hctx->host->port);
+
+				joblist_append(srv, con);
+				return HANDLER_FINISHED;
+			}
+			if (p->conf.debug) {
+				log_error_write(srv, __FILE__, __LINE__,  "s", "proxy - connect - delayed success");
+			}
+
+			proxy_set_state(srv, hctx, PROXY_STATE_PREPARE_WRITE);
+		}
+
+		if (hctx->state == PROXY_STATE_PREPARE_WRITE ||
 		    hctx->state == PROXY_STATE_WRITE) {
 			/* we are allowed to send something out
 			 *
-			 * 1. in a unfinished connect() call
+			 * 1. after a just finished connect() call
 			 * 2. in a unfinished write() call (long POST request)
 			 */
 			return mod_proxy_handle_subrequest(srv, con, p);
