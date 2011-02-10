@@ -8,7 +8,7 @@ BEGIN {
 
 use strict;
 use IO::Socket;
-use Test::More tests => 17;
+use Test::More tests => 19;
 use LightyTest;
 
 my $tf = LightyTest->new();
@@ -48,6 +48,22 @@ EOF
  );
 $t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 301, 'Location' => "/match_5" } ];
 ok($tf->handle_http($t) == 0, 'nesting');
+
+$t->{REQUEST}  = ( <<EOF
+GET /subdir/index.html HTTP/1.0
+Host: test4.example.org
+EOF
+ );
+$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 301, 'Location' => "/match_7" } ];
+ok($tf->handle_http($t) == 0, 'url subdir');
+
+$t->{REQUEST}  = ( <<EOF
+GET /subdir/../css/index.html HTTP/1.0
+Host: test4.example.org
+EOF
+ );
+$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 301, 'Location' => "/match_6" } ];
+ok($tf->handle_http($t) == 0, 'url subdir with path traversal');
 
 ok($tf->stop_proc == 0, "Stopping lighttpd");
 
