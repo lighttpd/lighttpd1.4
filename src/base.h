@@ -275,7 +275,10 @@ typedef struct {
 	buffer *ssl_pemfile;
 	buffer *ssl_ca_file;
 	buffer *ssl_cipher_list;
+	buffer *ssl_dh_file;
+	buffer *ssl_ec_curve;
 	unsigned short ssl_use_sslv2;
+	unsigned short ssl_use_sslv3;
 	unsigned short ssl_verifyclient;
 	unsigned short ssl_verifyclient_enforce;
 	unsigned short ssl_verifyclient_depth;
@@ -527,7 +530,10 @@ typedef struct {
 	buffer *ssl_pemfile;
 	buffer *ssl_ca_file;
 	buffer *ssl_cipher_list;
+	buffer *ssl_dh_file;
+	buffer *ssl_ec_curve;
 	unsigned short ssl_use_sslv2;
+	unsigned short ssl_use_sslv3;
 	unsigned short use_ipv6;
 	unsigned short is_ssl;
 

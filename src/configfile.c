@@ -102,6 +102,9 @@ static int config_insert(server *srv) {
 		{ "ssl.verifyclient.exportcert", NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_SERVER },     /* 60 */
 
 		{ "server.set-v6only",           NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION }, /* 61 */
+		{ "ssl.use-sslv3",               NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_SERVER },     /* 62 */
+		{ "ssl.dh-file",                 NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_SERVER },      /* 63 */
+		{ "ssl.ec-curve",                NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_SERVER },      /* 64 */
 
 		{ "server.host",                 "use server.bind instead", T_CONFIG_DEPRECATED, T_CONFIG_SCOPE_UNSET },
 		{ "server.docroot",              "use server.document-root instead", T_CONFIG_DEPRECATED, T_CONFIG_SCOPE_UNSET },
@@ -164,6 +167,8 @@ static int config_insert(server *srv) {
 		s->error_handler = buffer_init();
 		s->server_tag    = buffer_init();
 		s->ssl_cipher_list = buffer_init();
+		s->ssl_dh_file   = buffer_init();
+		s->ssl_ec_curve  = buffer_init();
 		s->errorfile_prefix = buffer_init();
 		s->max_keep_alive_requests = 16;
 		s->max_keep_alive_idle = 5;
@@ -172,6 +177,7 @@ static int config_insert(server *srv) {
 		s->use_xattr     = 0;
 		s->is_ssl        = 0;
 		s->ssl_use_sslv2 = 0;
+		s->ssl_use_sslv3 = 1;
 		s->use_ipv6      = 0;
 		s->set_v6only    = 1;
 		s->defer_accept  = 0;
@@ -236,6 +242,9 @@ static int config_insert(server *srv) {
 
 		cv[47].destination = s->ssl_cipher_list;
 		cv[48].destination = &(s->ssl_use_sslv2);
+		cv[62].destination = &(s->ssl_use_sslv3);
+		cv[63].destination = s->ssl_dh_file;
+		cv[64].destination = s->ssl_ec_curve;
 		cv[49].destination = &(s->etag_use_inode);
 		cv[50].destination = &(s->etag_use_mtime);
 		cv[51].destination = &(s->etag_use_size);
@@ -324,7 +333,10 @@ int config_setup_connection(server *srv, connection *con) {
 #endif
 	PATCH(ssl_ca_file);
 	PATCH(ssl_cipher_list);
+	PATCH(ssl_dh_file);
+	PATCH(ssl_ec_curve);
 	PATCH(ssl_use_sslv2);
+	PATCH(ssl_use_sslv3);
 	PATCH(etag_use_inode);
 	PATCH(etag_use_mtime);
 	PATCH(etag_use_size);
@@ -390,10 +402,16 @@ int config_patch_connection(server *srv, connection *con, comp_key_t comp) {
 				PATCH(ssl_ca_file);
 			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("ssl.use-sslv2"))) {
 				PATCH(ssl_use_sslv2);
+			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("ssl.use-sslv3"))) {
+				PATCH(ssl_use_sslv3);
 			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("ssl.cipher-list"))) {
 				PATCH(ssl_cipher_list);
 			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("ssl.engine"))) {
 				PATCH(is_ssl);
+			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("ssl.dh-file"))) {
+				PATCH(ssl_dh_file);
+			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("ssl.ec-curve"))) {
+				PATCH(ssl_ec_curve);
 #ifdef HAVE_LSTAT
 			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("server.follow-symlink"))) {
 				PATCH(follow_symlink);

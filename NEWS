@@ -8,6 +8,9 @@ NEWS
   * Silence annoying "connection closed: poll() -> ERR" error.log message (fixes #2257)
   * mod_cgi: make read buffer as big as incoming data block
   * [build] Fix detection of libev (fixes #2300)
+  * ssl: Support for Diffie-Hellman and Elliptic-Curve Diffie-Hellman key exchange (fixes #2301)
+         add ssl.use-sslv3 (fixes #2246)
+         load all algorithms (fixes #2239)
 
 - 1.4.28 - 2010-08-22
   * Rename fdevent_event_add to _set to reflect what the function does. Fix some handlers. (fixes #2249)
