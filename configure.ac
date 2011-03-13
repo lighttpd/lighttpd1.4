@@ -105,7 +105,7 @@ if test "$WITH_LIBEV" != "no"; then
 			LIBEV_LIBS="-L$WITH_LIBEV/lib -lev"
 		else
 			AC_CHECK_HEADERS([ev.h],[
-				AC_CHECK_LIB([ev], [ev_loop], [
+				AC_CHECK_LIB([ev], [ev_time], [
 						LIBEV_CFLAGS=""
 						LIBEV_LIBS="-lev"
 					],[
