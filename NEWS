@@ -6,6 +6,7 @@ NEWS
 - 1.4.29 -
   * Fix mod_proxy waiting for response even if content-length is 0 (fixes #2259)
   * Silence annoying "connection closed: poll() -> ERR" error.log message (fixes #2257)
+  * mod_cgi: make read buffer as big as incoming data block
 
 - 1.4.28 - 2010-08-22
   * Rename fdevent_event_add to _set to reflect what the function does. Fix some handlers. (fixes #2249)

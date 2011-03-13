@@ -341,8 +341,19 @@ static int cgi_demux_response(server *srv, handler_ctx *hctx) {
 
 	while(1) {
 		int n;
+		int toread;
 
-		buffer_prepare_copy(hctx->response, 1024);
+#if defined(__WIN32)
+		buffer_prepare_copy(hctx->response, 4 * 1024);
+#else
+		if (ioctl(con->fd, FIONREAD, &toread) || toread == 0 || toread <= 4*1024) {
+			buffer_prepare_copy(hctx->response, 4 * 1024);
+		} else {
+			if (toread > MAX_READ_LIMIT) toread = MAX_READ_LIMIT;
+			buffer_prepare_copy(hctx->response, toread + 1);
+		}
+#endif
+
 		if (-1 == (n = read(hctx->fd, hctx->response->ptr, hctx->response->size - 1))) {
 			if (errno == EAGAIN || errno == EINTR) {
 				/* would block, wait for signal */
