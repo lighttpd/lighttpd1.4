@@ -8,7 +8,7 @@ BEGIN {
 
 use strict;
 use IO::Socket;
-use Test::More tests => 42;
+use Test::More tests => 44;
 use LightyTest;
 
 my $tf = LightyTest->new();
@@ -87,6 +87,21 @@ EOF
  );
 $t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200, '-HTTP-Content' => '', 'Content-Type' => 'text/html', 'Content-Length' => '6'} ];
 ok($tf->handle_http($t) == 0, 'HEAD request, mimetype text/html, content-length');
+
+$t->{REQUEST}  = ( <<EOF
+HEAD http://123.example.org/12345.html HTTP/1.1
+Connection: close
+EOF
+ );
+$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.1', 'HTTP-Status' => 200, '-HTTP-Content' => '', 'Content-Type' => 'text/html', 'Content-Length' => '6'} ];
+ok($tf->handle_http($t) == 0, 'Hostname in first line, HTTP/1.1');
+
+$t->{REQUEST}  = ( <<EOF
+HEAD https://123.example.org/12345.html HTTP/1.0
+EOF
+ );
+$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200, '-HTTP-Content' => '', 'Content-Type' => 'text/html', 'Content-Length' => '6'} ];
+ok($tf->handle_http($t) == 0, 'Hostname in first line as https url');
 
 $t->{REQUEST}  = ( <<EOF
 HEAD /foobar?foobar HTTP/1.0
