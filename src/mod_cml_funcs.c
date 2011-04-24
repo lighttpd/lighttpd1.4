@@ -21,6 +21,12 @@
 # include <openssl/md5.h>
 #else
 # include "md5.h"
+
+typedef li_MD5_CTX MD5_CTX;
+#define MD5_Init li_MD5_Init
+#define MD5_Update li_MD5_Update
+#define MD5_Final li_MD5_Final
+
 #endif
 
 #define HASHLEN 16
