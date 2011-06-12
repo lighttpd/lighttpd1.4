@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <ctype.h>
+#include <string.h>
 #include <errno.h>
 
 #ifdef WIN32
@@ -257,6 +258,7 @@ int proc_open(proc_handler_t *proc, const char *command) {
 		proc_close_parents(proc);
 
 		execl(shell, shell, "-c", command, (char *)NULL);
+		fprintf(stderr, "failed to execute shell: %s -c %s: %s\n", shell, command, strerror(errno));
 		_exit(127);
 
 	} else if (child < 0) {
