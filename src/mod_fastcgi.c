@@ -1968,7 +1968,7 @@ static int fcgi_create_env(server *srv, handler_ctx *hctx, size_t request_id) {
 			if (!buffer_is_empty(host->docroot)) {
 				buffer_copy_string_buffer(p->path, host->docroot);
 			} else {
-				buffer_copy_string_buffer(p->path, con->physical.doc_root);
+				buffer_copy_string_buffer(p->path, con->physical.basedir);
 			}
 			buffer_append_string_buffer(p->path, con->request.pathinfo);
 			FCGI_ENV_ADD_CHECK(fcgi_env_add(p->fcgi_env, CONST_STR_LEN("PATH_TRANSLATED"), CONST_BUF_LEN(p->path)),con)
@@ -2008,7 +2008,7 @@ static int fcgi_create_env(server *srv, handler_ctx *hctx, size_t request_id) {
 		}
 
 		FCGI_ENV_ADD_CHECK(fcgi_env_add(p->fcgi_env, CONST_STR_LEN("SCRIPT_FILENAME"), CONST_BUF_LEN(p->path)),con)
-		FCGI_ENV_ADD_CHECK(fcgi_env_add(p->fcgi_env, CONST_STR_LEN("DOCUMENT_ROOT"), CONST_BUF_LEN(con->physical.doc_root)),con)
+		FCGI_ENV_ADD_CHECK(fcgi_env_add(p->fcgi_env, CONST_STR_LEN("DOCUMENT_ROOT"), CONST_BUF_LEN(con->physical.basedir)),con)
 	}
 
 	if (host->strip_request_uri->used > 1) {
@@ -3273,6 +3273,7 @@ static handler_t fcgi_handle_fdevent(server *srv, void *ctx, int revents) {
 				 */
 
 				buffer_copy_string_buffer(con->physical.doc_root, host->docroot);
+				buffer_copy_string_buffer(con->physical.basedir, host->docroot);
 
 				buffer_copy_string_buffer(con->physical.path, host->docroot);
 				buffer_append_string_buffer(con->physical.path, con->uri.path);

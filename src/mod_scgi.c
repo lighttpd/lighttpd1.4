@@ -1558,7 +1558,7 @@ static int scgi_create_env(server *srv, handler_ctx *hctx) {
 		if (!buffer_is_empty(host->docroot)) {
 			buffer_copy_string_buffer(p->path, host->docroot);
 		} else {
-			buffer_copy_string_buffer(p->path, con->physical.doc_root);
+			buffer_copy_string_buffer(p->path, con->physical.basedir);
 		}
 		buffer_append_string_buffer(p->path, con->request.pathinfo);
 		scgi_env_add(p->scgi_env, CONST_STR_LEN("PATH_TRANSLATED"), CONST_BUF_LEN(p->path));
@@ -1589,7 +1589,7 @@ static int scgi_create_env(server *srv, handler_ctx *hctx) {
 		buffer_copy_string_buffer(p->path, con->physical.path);
 
 		scgi_env_add(p->scgi_env, CONST_STR_LEN("SCRIPT_FILENAME"), CONST_BUF_LEN(p->path));
-		scgi_env_add(p->scgi_env, CONST_STR_LEN("DOCUMENT_ROOT"), CONST_BUF_LEN(con->physical.doc_root));
+		scgi_env_add(p->scgi_env, CONST_STR_LEN("DOCUMENT_ROOT"), CONST_BUF_LEN(con->physical.basedir));
 	}
 	scgi_env_add(p->scgi_env, CONST_STR_LEN("REQUEST_URI"), CONST_BUF_LEN(con->request.orig_uri));
 	if (!buffer_is_equal(con->request.uri, con->request.orig_uri)) {
