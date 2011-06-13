@@ -694,6 +694,9 @@ static handler_t mod_status_handle_server_config(server *srv, connection *con, v
 #ifdef USE_SOLARIS_DEVPOLL
 		{ FDEVENT_HANDLER_SOLARIS_DEVPOLL,"solaris-devpoll" },
 #endif
+#ifdef USE_SOLARIS_PORT
+		{ FDEVENT_HANDLER_SOLARIS_PORT,   "solaris-eventports" },
+#endif
 #ifdef USE_FREEBSD_KQUEUE
 		{ FDEVENT_HANDLER_FREEBSD_KQUEUE, "freebsd-kqueue" },
 #endif

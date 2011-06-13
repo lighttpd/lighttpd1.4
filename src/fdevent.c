@@ -50,6 +50,13 @@ fdevents *fdevent_init(server *srv, size_t maxfds, fdevent_handler_t type) {
 			return NULL;
 		}
 		return ev;
+	case FDEVENT_HANDLER_SOLARIS_PORT:
+		if (0 != fdevent_solaris_port_init(ev)) {
+			log_error_write(ev->srv, __FILE__, __LINE__, "S",
+				"event-handler solaris-eventports failed, try to set server.event-handler = \"poll\" or \"select\"");
+			return NULL;
+		}
+		return ev;
 	case FDEVENT_HANDLER_FREEBSD_KQUEUE:
 		if (0 != fdevent_freebsd_kqueue_init(ev)) {
 			log_error_write(ev->srv, __FILE__, __LINE__, "S",

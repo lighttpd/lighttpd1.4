@@ -1212,6 +1212,9 @@ int config_set_defaults(server *srv) {
 #ifdef USE_SOLARIS_DEVPOLL
 		{ FDEVENT_HANDLER_SOLARIS_DEVPOLL,"solaris-devpoll" },
 #endif
+#ifdef USE_SOLARIS_PORT
+		{ FDEVENT_HANDLER_SOLARIS_PORT,   "solaris-eventports" },
+#endif
 #ifdef USE_FREEBSD_KQUEUE
 		{ FDEVENT_HANDLER_FREEBSD_KQUEUE, "freebsd-kqueue" },
 		{ FDEVENT_HANDLER_FREEBSD_KQUEUE, "kqueue" },

@@ -393,6 +393,11 @@ static void show_features (void) {
 #else
       "\t- /dev/poll (Solaris)\n"
 #endif
+#ifdef USE_SOLARIS_PORT
+      "\t+ eventports (Solaris)\n"
+#else
+      "\t- eventports (Solaris)\n"
+#endif
 #ifdef USE_FREEBSD_KQUEUE
       "\t+ kqueue (FreeBSD)\n"
 #else

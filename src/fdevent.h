@@ -49,14 +49,14 @@
 # include <sys/devpoll.h>
 #endif
 
+#if defined HAVE_PORT_H && defined HAVE_PORT_CREATE && defined(__sun)
+# define USE_SOLARIS_PORT
+# include <port.h>
+#endif
+
 #if defined HAVE_SYS_EVENT_H && defined HAVE_KQUEUE
 # define USE_FREEBSD_KQUEUE
 # include <sys/event.h>
-#endif
-
-#if defined HAVE_SYS_PORT_H && defined HAVE_PORT_CREATE
-# define USE_SOLARIS_PORT
-# include <sys/port.h>
 #endif
 
 #if defined HAVE_LIBEV
@@ -90,6 +90,7 @@ typedef enum { FDEVENT_HANDLER_UNSET,
 		FDEVENT_HANDLER_POLL,
 		FDEVENT_HANDLER_LINUX_SYSEPOLL,
 		FDEVENT_HANDLER_SOLARIS_DEVPOLL,
+		FDEVENT_HANDLER_SOLARIS_PORT,
 		FDEVENT_HANDLER_FREEBSD_KQUEUE,
 		FDEVENT_HANDLER_LIBEV
 } fdevent_handler_t;
@@ -153,6 +154,9 @@ typedef struct fdevents {
 	int devpoll_fd;
 	struct pollfd *devpollfds;
 #endif
+#ifdef USE_SOLARIS_PORT
+	port_event_t *port_events;
+#endif
 #ifdef USE_FREEBSD_KQUEUE
 	int kq_fd;
 	struct kevent *kq_results;
@@ -202,6 +206,7 @@ int fdevent_select_init(fdevents *ev);
 int fdevent_poll_init(fdevents *ev);
 int fdevent_linux_sysepoll_init(fdevents *ev);
 int fdevent_solaris_devpoll_init(fdevents *ev);
+int fdevent_solaris_port_init(fdevents *ev);
 int fdevent_freebsd_kqueue_init(fdevents *ev);
 int fdevent_libev_init(fdevents *ev);
 
