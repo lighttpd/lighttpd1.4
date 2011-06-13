@@ -19,6 +19,9 @@ a light httpd
   URL-Rewriting and many more) make lighttpd the perfect webserver-software
   for every server that is suffering load problems.
 
+:documentation:
+  http://wiki.lighttpd.net/
+
 the naming
 ----------
 

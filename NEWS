@@ -15,6 +15,7 @@ NEWS
   * [ssl/build] some minor fixes; fix compile without ssl, cleanup ssl config buffers
   * [proc,include_shell] log error if exec shell fails (fixes #2280)
   * [*cgi] Use physical base dir (alias, userdir) as DOCUMENT_ROOT in cgi environments (fixes #2216)
+  * [doc] Move docs to outdated/ subdir and refer to wiki instead (fixes #2248)
 
 - 1.4.28 - 2010-08-22
   * Rename fdevent_event_add to _set to reflect what the function does. Fix some handlers. (fixes #2249)

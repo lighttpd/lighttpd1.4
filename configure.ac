@@ -610,6 +610,7 @@ AC_CONFIG_FILES([Makefile src/Makefile
 		 doc/config/Makefile \
 		 doc/scripts/Makefile \
 		 doc/initscripts/Makefile \
+		 doc/outdated/Makefile \
 		 doc/Makefile \
 		 tests/Makefile \
 		 tests/docroot/Makefile \
