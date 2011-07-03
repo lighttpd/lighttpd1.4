@@ -3,7 +3,10 @@
 NEWS
 ====
 
-- 1.4.29 -
+- 1.4.30 -
+  *
+
+- 1.4.29 - 2011-07-03
   * Fix mod_proxy waiting for response even if content-length is 0 (fixes #2259)
   * Silence annoying "connection closed: poll() -> ERR" error.log message (fixes #2257)
   * mod_cgi: make read buffer as big as incoming data block
