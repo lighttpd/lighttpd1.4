@@ -417,7 +417,8 @@ SET(COMMON_SRC
 	data_integer.c md5.c data_fastcgi.c
 	fdevent_select.c fdevent_libev.c
 	fdevent_poll.c fdevent_linux_sysepoll.c
-	fdevent_solaris_devpoll.c fdevent_freebsd_kqueue.c
+	fdevent_solaris_devpoll.c fdevent_solaris_port.c
+	fdevent_freebsd_kqueue.c
 	data_config.c bitset.c
 	inet_ntop_cache.c crc32.c
 	connections-glue.c
@@ -463,7 +464,7 @@ SET(L_INSTALL_TARGETS ${L_INSTALL_TARGETS} lighttpd)
 ADD_AND_INSTALL_LIBRARY(mod_access mod_access.c)
 ADD_AND_INSTALL_LIBRARY(mod_accesslog mod_accesslog.c)
 ADD_AND_INSTALL_LIBRARY(mod_alias mod_alias.c)
-ADD_AND_INSTALL_LIBRARY(mod_auth "mod_auth.c;http_auth_digest.c;http_auth.c")
+ADD_AND_INSTALL_LIBRARY(mod_auth "mod_auth.c;http_auth.c")
 IF(NOT WIN32)
 ADD_AND_INSTALL_LIBRARY(mod_cgi mod_cgi.c)
 ENDIF(NOT WIN32)

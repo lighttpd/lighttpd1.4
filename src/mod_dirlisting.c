@@ -657,7 +657,8 @@ static int http_list_directory(server *srv, connection *con, plugin_data *p, buf
 	i = dir->used - 1;
 
 #ifdef HAVE_PATHCONF
-	if (-1 == (name_max = pathconf(dir->ptr, _PC_NAME_MAX))) {
+	if (0 >= (name_max = pathconf(dir->ptr, _PC_NAME_MAX))) {
+		/* some broken fs (fuse) return 0 instead of -1 */
 #ifdef NAME_MAX
 		name_max = NAME_MAX;
 #else

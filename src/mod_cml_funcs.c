@@ -17,17 +17,7 @@
 #include <dirent.h>
 #include <stdio.h>
 
-#ifdef USE_OPENSSL
-# include <openssl/md5.h>
-#else
-# include "md5.h"
-
-typedef li_MD5_CTX MD5_CTX;
-#define MD5_Init li_MD5_Init
-#define MD5_Update li_MD5_Update
-#define MD5_Final li_MD5_Final
-
-#endif
+#include "md5.h"
 
 #define HASHLEN 16
 typedef unsigned char HASH[HASHLEN];
@@ -43,7 +33,7 @@ typedef char HASHHEX[HASHHEXLEN+1];
 #ifdef HAVE_LUA_H
 
 int f_crypto_md5(lua_State *L) {
-	MD5_CTX Md5Ctx;
+	li_MD5_CTX Md5Ctx;
 	HASH HA1;
 	buffer b;
 	char hex[33];
@@ -63,9 +53,9 @@ int f_crypto_md5(lua_State *L) {
 		lua_error(L);
 	}
 
-	MD5_Init(&Md5Ctx);
-	MD5_Update(&Md5Ctx, (unsigned char *)lua_tostring(L, 1), lua_strlen(L, 1));
-	MD5_Final(HA1, &Md5Ctx);
+	li_MD5_Init(&Md5Ctx);
+	li_MD5_Update(&Md5Ctx, (unsigned char *)lua_tostring(L, 1), lua_strlen(L, 1));
+	li_MD5_Final(HA1, &Md5Ctx);
 
 	buffer_copy_string_hex(&b, (char *)HA1, 16);
 

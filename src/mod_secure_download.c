@@ -8,17 +8,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#ifdef USE_OPENSSL
-# include <openssl/md5.h>
-#else
-# include "md5.h"
-
-typedef li_MD5_CTX MD5_CTX;
-#define MD5_Init li_MD5_Init
-#define MD5_Update li_MD5_Update
-#define MD5_Final li_MD5_Final
-
-#endif
+#include "md5.h"
 
 #define HASHLEN 16
 typedef unsigned char HASH[HASHLEN];
@@ -200,7 +190,7 @@ static int mod_secdownload_patch_connection(server *srv, connection *con, plugin
 
 URIHANDLER_FUNC(mod_secdownload_uri_handler) {
 	plugin_data *p = p_d;
-	MD5_CTX Md5Ctx;
+	li_MD5_CTX Md5Ctx;
 	HASH HA1;
 	const char *rel_uri, *ts_str, *md5_str;
 	time_t ts = 0;
@@ -266,9 +256,9 @@ URIHANDLER_FUNC(mod_secdownload_uri_handler) {
 	buffer_append_string(p->md5, rel_uri);
 	buffer_append_string_len(p->md5, ts_str, 8);
 
-	MD5_Init(&Md5Ctx);
-	MD5_Update(&Md5Ctx, (unsigned char *)p->md5->ptr, p->md5->used - 1);
-	MD5_Final(HA1, &Md5Ctx);
+	li_MD5_Init(&Md5Ctx);
+	li_MD5_Update(&Md5Ctx, (unsigned char *)p->md5->ptr, p->md5->used - 1);
+	li_MD5_Final(HA1, &Md5Ctx);
 
 	buffer_copy_string_hex(p->md5, (char *)HA1, 16);
 

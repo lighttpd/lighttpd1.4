@@ -8,17 +8,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#ifdef USE_OPENSSL
-# include <openssl/md5.h>
-#else
-# include "md5.h"
-
-typedef li_MD5_CTX MD5_CTX;
-#define MD5_Init li_MD5_Init
-#define MD5_Update li_MD5_Update
-#define MD5_Final li_MD5_Final
-
-#endif
+#include "md5.h"
 
 /* plugin config for all request/connections */
 
@@ -182,7 +172,7 @@ URIHANDLER_FUNC(mod_usertrack_uri_handler) {
 	plugin_data *p = p_d;
 	data_string *ds;
 	unsigned char h[16];
-	MD5_CTX Md5Ctx;
+	li_MD5_CTX Md5Ctx;
 	char hh[32];
 
 	if (con->uri.path->used == 0) return HANDLER_GO_ON;
@@ -228,18 +218,18 @@ URIHANDLER_FUNC(mod_usertrack_uri_handler) {
 	/* taken from mod_auth.c */
 
 	/* generate shared-secret */
-	MD5_Init(&Md5Ctx);
-	MD5_Update(&Md5Ctx, (unsigned char *)con->uri.path->ptr, con->uri.path->used - 1);
-	MD5_Update(&Md5Ctx, (unsigned char *)"+", 1);
+	li_MD5_Init(&Md5Ctx);
+	li_MD5_Update(&Md5Ctx, (unsigned char *)con->uri.path->ptr, con->uri.path->used - 1);
+	li_MD5_Update(&Md5Ctx, (unsigned char *)"+", 1);
 
 	/* we assume sizeof(time_t) == 4 here, but if not it ain't a problem at all */
 	LI_ltostr(hh, srv->cur_ts);
-	MD5_Update(&Md5Ctx, (unsigned char *)hh, strlen(hh));
-	MD5_Update(&Md5Ctx, (unsigned char *)srv->entropy, sizeof(srv->entropy));
+	li_MD5_Update(&Md5Ctx, (unsigned char *)hh, strlen(hh));
+	li_MD5_Update(&Md5Ctx, (unsigned char *)srv->entropy, sizeof(srv->entropy));
 	LI_ltostr(hh, rand());
-	MD5_Update(&Md5Ctx, (unsigned char *)hh, strlen(hh));
+	li_MD5_Update(&Md5Ctx, (unsigned char *)hh, strlen(hh));
 
-	MD5_Final(h, &Md5Ctx);
+	li_MD5_Final(h, &Md5Ctx);
 
 	buffer_append_string_encoded(ds->value, (char *)h, 16, ENCODING_HEX);
 	buffer_append_string_len(ds->value, CONST_STR_LEN("; Path=/"));

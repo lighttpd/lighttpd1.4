@@ -4,7 +4,7 @@ NEWS
 ====
 
 - 1.4.30 -
-  *
+  * Always use our 'own' md5 implementation, fixes linking issues on MacOS (fixes #2331)
 
 - 1.4.29 - 2011-07-03
   * Fix mod_proxy waiting for response even if content-length is 0 (fixes #2259)

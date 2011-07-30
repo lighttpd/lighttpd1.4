@@ -12,7 +12,8 @@ common_src = Split("buffer.c log.c \
       data_integer.c md5.c data_fastcgi.c \
       fdevent_select.c fdevent_libev.c \
       fdevent_poll.c fdevent_linux_sysepoll.c \
-      fdevent_solaris_devpoll.c fdevent_freebsd_kqueue.c \
+      fdevent_solaris_devpoll.c fdevent_solaris_port.c \
+      fdevent_freebsd_kqueue.c \
       data_config.c bitset.c \
       inet_ntop_cache.c crc32.c \
       connections-glue.c \
@@ -62,7 +63,7 @@ modules = {
 	'mod_redirect' : { 'src' : [ 'mod_redirect.c' ], 'lib' : [ env['LIBPCRE'] ] },
 	'mod_rewrite' : { 'src' : [ 'mod_rewrite.c' ], 'lib' : [ env['LIBPCRE'] ] },
 	'mod_auth' : {
-		'src' : [ 'mod_auth.c', 'http_auth_digest.c', 'http_auth.c' ],
+		'src' : [ 'mod_auth.c', 'http_auth.c' ],
 		'lib' : [ env['LIBCRYPT'], env['LIBLDAP'], env['LIBLBER'] ] },
 	'mod_webdav' : { 'src' : [ 'mod_webdav.c' ], 'lib' : [ env['LIBXML2'], env['LIBSQLITE3'], env['LIBUUID'] ] },
 	'mod_mysql_vhost' : { 'src' : [ 'mod_mysql_vhost.c' ], 'lib' : [ env['LIBMYSQL'] ] },

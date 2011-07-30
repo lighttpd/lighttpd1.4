@@ -241,7 +241,7 @@ mod_compress_la_LDFLAGS = -module -export-dynamic -avoid-version -no-undefined
 mod_compress_la_LIBADD = $(Z_LIB) $(BZ_LIB) $(common_libadd)
 
 lib_LTLIBRARIES += mod_auth.la
-mod_auth_la_SOURCES = mod_auth.c http_auth_digest.c http_auth.c
+mod_auth_la_SOURCES = mod_auth.c http_auth.c
 mod_auth_la_LDFLAGS = -module -export-dynamic -avoid-version -no-undefined
 mod_auth_la_LIBADD = $(CRYPT_LIB) $(LDAP_LIB) $(LBER_LIB) $(common_libadd)
 
@@ -268,7 +268,7 @@ mod_accesslog_la_LIBADD = $(common_libadd)
 
 hdr = server.h buffer.h network.h log.h keyvalue.h \
       response.h request.h fastcgi.h chunk.h \
-      settings.h http_chunk.h http_auth_digest.h \
+      settings.h http_chunk.h \
       md5.h http_auth.h stream.h \
       fdevent.h connections.h base.h stat_cache.h \
       plugin.h mod_auth.h \
