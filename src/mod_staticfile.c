@@ -350,7 +350,6 @@ static int http_response_parse_range(server *srv, connection *con, plugin_data *
 URIHANDLER_FUNC(mod_staticfile_subrequest) {
 	plugin_data *p = p_d;
 	size_t k;
-	int s_len;
 	stat_cache_entry *sce = NULL;
 	buffer *mtime = NULL;
 	data_string *ds;
@@ -375,8 +374,6 @@ URIHANDLER_FUNC(mod_staticfile_subrequest) {
 	}
 
 	mod_staticfile_patch_connection(srv, con, p);
-
-	s_len = con->uri.path->used - 1;
 
 	/* ignore certain extensions */
 	for (k = 0; k < p->conf.exclude_ext->used; k++) {

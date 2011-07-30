@@ -3132,7 +3132,6 @@ SUBREQUEST_FUNC(mod_fastcgi_handle_subrequest) {
 	plugin_data *p = p_d;
 
 	handler_ctx *hctx = con->plugin_ctx[p->id];
-	fcgi_proc *proc;
 	fcgi_extension_host *host;
 
 	if (NULL == hctx) return HANDLER_GO_ON;
@@ -3201,7 +3200,6 @@ SUBREQUEST_FUNC(mod_fastcgi_handle_subrequest) {
 	/* ok, create the request */
 	switch(fcgi_write_request(srv, hctx)) {
 	case HANDLER_ERROR:
-		proc = hctx->proc;
 		host = hctx->host;
 
 		if (hctx->state == FCGI_STATE_INIT ||

@@ -166,7 +166,6 @@ static int mod_userdir_patch_connection(server *srv, connection *con, plugin_dat
 
 URIHANDLER_FUNC(mod_userdir_docroot_handler) {
 	plugin_data *p = p_d;
-	int uri_len;
 	size_t k;
 	char *rel_url;
 #ifdef HAVE_PWD_H
@@ -181,8 +180,6 @@ URIHANDLER_FUNC(mod_userdir_docroot_handler) {
 	 * should be replaced with a clean .enabled option in 1.5
 	 */
 	if (p->conf.path->used == 0) return HANDLER_GO_ON;
-
-	uri_len = con->uri.path->used - 1;
 
 	/* /~user/foo.html -> /home/user/public_html/foo.html */
 
