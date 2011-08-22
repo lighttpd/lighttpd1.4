@@ -480,8 +480,10 @@ int network_init(server *srv) {
 	network_backend_t backend;
 
 #if OPENSSL_VERSION_NUMBER >= 0x0090800fL
+#ifndef OPENSSL_NO_ECDH
 	EC_KEY *ecdh;
 	int nid;
+#endif
 #endif
 
 #ifdef USE_OPENSSL
