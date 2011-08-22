@@ -617,8 +617,9 @@ static int connection_handle_write_prepare(server *srv, connection *con) {
 }
 
 static int connection_handle_write(server *srv, connection *con) {
-	switch(network_write_chunkqueue(srv, con, con->write_queue)) {
+	switch(network_write_chunkqueue(srv, con, con->write_queue, MAX_WRITE_LIMIT)) {
 	case 0:
+		con->write_request_ts = srv->cur_ts;
 		if (con->file_finished) {
 			connection_set_state(srv, con, CON_STATE_RESPONSE_END);
 			joblist_append(srv, con);
@@ -635,6 +636,7 @@ static int connection_handle_write(server *srv, connection *con) {
 		joblist_append(srv, con);
 		break;
 	case 1:
+		con->write_request_ts = srv->cur_ts;
 		con->is_writable = 0;
 
 		/* not finished yet -> WRITE */
@@ -1251,8 +1253,6 @@ static handler_t connection_handle_fdevent(server *srv, void *context, int reven
 			log_error_write(srv, __FILE__, __LINE__, "ds",
 					con->fd,
 					"handle write failed.");
-		} else if (con->state == CON_STATE_WRITE) {
-			con->write_request_ts = srv->cur_ts;
 		}
 	}
 
@@ -1667,8 +1667,6 @@ int connection_state_machine(server *srv, connection *con) {
 							con->fd,
 							"handle write failed.");
 					connection_set_state(srv, con, CON_STATE_ERROR);
-				} else if (con->state == CON_STATE_WRITE) {
-					con->write_request_ts = srv->cur_ts;
 				}
 			}
 

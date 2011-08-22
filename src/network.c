@@ -847,7 +847,7 @@ int network_register_fdevents(server *srv) {
 	return 0;
 }
 
-int network_write_chunkqueue(server *srv, connection *con, chunkqueue *cq) {
+int network_write_chunkqueue(server *srv, connection *con, chunkqueue *cq, off_t max_bytes) {
 	int ret = -1;
 	off_t written = 0;
 #ifdef TCP_CORK
@@ -855,14 +855,32 @@ int network_write_chunkqueue(server *srv, connection *con, chunkqueue *cq) {
 #endif
 	server_socket *srv_socket = con->srv_socket;
 
-	if (con->conf.global_kbytes_per_second &&
-	    *(con->conf.global_bytes_per_second_cnt_ptr) > con->conf.global_kbytes_per_second * 1024) {
-		/* we reached the global traffic limit */
+	if (con->conf.global_kbytes_per_second) {
+		off_t limit = con->conf.global_kbytes_per_second * 1024 - *(con->conf.global_bytes_per_second_cnt_ptr);
+		if (limit <= 0) {
+			/* we reached the global traffic limit */
 
-		con->traffic_limit_reached = 1;
-		joblist_append(srv, con);
+			con->traffic_limit_reached = 1;
+			joblist_append(srv, con);
 
-		return 1;
+			return 1;
+		} else {
+			if (max_bytes > limit) max_bytes = limit;
+		}
+	}
+
+	if (con->conf.kbytes_per_second) {
+		off_t limit = con->conf.kbytes_per_second * 1024 - con->bytes_written_cur_second;
+		if (limit <= 0) {
+			/* we reached the traffic limit */
+
+			con->traffic_limit_reached = 1;
+			joblist_append(srv, con);
+
+			return 1;
+		} else {
+			if (max_bytes > limit) max_bytes = limit;
+		}
 	}
 
 	written = cq->bytes_out;
@@ -879,10 +897,10 @@ int network_write_chunkqueue(server *srv, connection *con, chunkqueue *cq) {
 
 	if (srv_socket->is_ssl) {
 #ifdef USE_OPENSSL
-		ret = srv->network_ssl_backend_write(srv, con, con->ssl, cq);
+		ret = srv->network_ssl_backend_write(srv, con, con->ssl, cq, max_bytes);
 #endif
 	} else {
-		ret = srv->network_backend_write(srv, con, con->fd, cq);
+		ret = srv->network_backend_write(srv, con, con->fd, cq, max_bytes);
 	}
 
 	if (ret >= 0) {
@@ -903,12 +921,5 @@ int network_write_chunkqueue(server *srv, connection *con, chunkqueue *cq) {
 
 	*(con->conf.global_bytes_per_second_cnt_ptr) += written;
 
-	if (con->conf.kbytes_per_second &&
-	    (con->bytes_written_cur_second > con->conf.kbytes_per_second * 1024)) {
-		/* we reached the traffic limit */
-
-		con->traffic_limit_reached = 1;
-		joblist_append(srv, con);
-	}
 	return ret;
 }

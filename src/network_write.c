@@ -24,17 +24,16 @@
 # include <sys/resource.h>
 #endif
 
-int network_write_chunkqueue_write(server *srv, connection *con, int fd, chunkqueue *cq) {
+int network_write_chunkqueue_write(server *srv, connection *con, int fd, chunkqueue *cq, off_t max_bytes) {
 	chunk *c;
-	size_t chunks_written = 0;
 
-	for(c = cq->first; c; c = c->next) {
+	for(c = cq->first; (max_bytes > 0) && (NULL != c); c = c->next) {
 		int chunk_finished = 0;
 
 		switch(c->type) {
 		case MEM_CHUNK: {
 			char * offset;
-			size_t toSend;
+			off_t toSend;
 			ssize_t r;
 
 			if (c->mem->used == 0) {
@@ -44,6 +43,8 @@ int network_write_chunkqueue_write(server *srv, connection *con, int fd, chunkqu
 
 			offset = c->mem->ptr + c->offset;
 			toSend = c->mem->used - 1 - c->offset;
+			if (toSend > max_bytes) toSend = max_bytes;
+
 #ifdef __WIN32
 			if ((r = send(fd, offset, toSend, 0)) < 0) {
 				/* no error handling for windows... */
@@ -72,6 +73,7 @@ int network_write_chunkqueue_write(server *srv, connection *con, int fd, chunkqu
 
 			c->offset += r;
 			cq->bytes_out += r;
+			max_bytes -= r;
 
 			if (c->offset == (off_t)c->mem->used - 1) {
 				chunk_finished = 1;
@@ -85,7 +87,7 @@ int network_write_chunkqueue_write(server *srv, connection *con, int fd, chunkqu
 #endif
 			ssize_t r;
 			off_t offset;
-			size_t toSend;
+			off_t toSend;
 			stat_cache_entry *sce = NULL;
 			int ifd;
 
@@ -97,6 +99,8 @@ int network_write_chunkqueue_write(server *srv, connection *con, int fd, chunkqu
 
 			offset = c->file.start + c->offset;
 			toSend = c->file.length - c->offset;
+
+			if (toSend > max_bytes) toSend = max_bytes;
 
 			if (offset > sce->st.st_size) {
 				log_error_write(srv, __FILE__, __LINE__, "sb", "file was shrinked:", c->file.name);
@@ -181,6 +185,7 @@ int network_write_chunkqueue_write(server *srv, connection *con, int fd, chunkqu
 
 			c->offset += r;
 			cq->bytes_out += r;
+			max_bytes -= r;
 
 			if (c->offset == c->file.length) {
 				chunk_finished = 1;
@@ -200,11 +205,9 @@ int network_write_chunkqueue_write(server *srv, connection *con, int fd, chunkqu
 
 			break;
 		}
-
-		chunks_written++;
 	}
 
-	return chunks_written;
+	return 0;
 }
 
 #if 0

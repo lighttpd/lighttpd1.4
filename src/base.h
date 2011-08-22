@@ -647,11 +647,9 @@ typedef struct server {
 
 	fdevent_handler_t event_handler;
 
-	int (* network_backend_write)(struct server *srv, connection *con, int fd, chunkqueue *cq);
-	int (* network_backend_read)(struct server *srv, connection *con, int fd, chunkqueue *cq);
+	int (* network_backend_write)(struct server *srv, connection *con, int fd, chunkqueue *cq, off_t max_bytes);
 #ifdef USE_OPENSSL
-	int (* network_ssl_backend_write)(struct server *srv, connection *con, SSL *ssl, chunkqueue *cq);
-	int (* network_ssl_backend_read)(struct server *srv, connection *con, SSL *ssl, chunkqueue *cq);
+	int (* network_ssl_backend_write)(struct server *srv, connection *con, SSL *ssl, chunkqueue *cq, off_t max_bytes);
 #endif
 
 	uid_t uid;

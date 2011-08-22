@@ -31,17 +31,16 @@
 # endif
 #endif
 
-int network_write_chunkqueue_freebsdsendfile(server *srv, connection *con, int fd, chunkqueue *cq) {
+int network_write_chunkqueue_freebsdsendfile(server *srv, connection *con, int fd, chunkqueue *cq, off_t max_bytes) {
 	chunk *c;
-	size_t chunks_written = 0;
 
-	for(c = cq->first; c; c = c->next, chunks_written++) {
+	for(c = cq->first; (max_bytes > 0) && (NULL != c); c = c->next) {
 		int chunk_finished = 0;
 
 		switch(c->type) {
 		case MEM_CHUNK: {
 			char * offset;
-			size_t toSend;
+			off_t toSend;
 			ssize_t r;
 
 			size_t num_chunks, i;
@@ -49,12 +48,10 @@ int network_write_chunkqueue_freebsdsendfile(server *srv, connection *con, int f
 			chunk *tc;
 			size_t num_bytes = 0;
 
-			/* we can't send more then SSIZE_MAX bytes in one chunk */
-
 			/* build writev list
 			 *
 			 * 1. limit: num_chunks < UIO_MAXIOV
-			 * 2. limit: num_bytes < SSIZE_MAX
+			 * 2. limit: num_bytes < max_bytes
 			 */
 			for(num_chunks = 0, tc = c; tc && tc->type == MEM_CHUNK && num_chunks < UIO_MAXIOV; num_chunks++, tc = tc->next);
 
@@ -69,9 +66,9 @@ int network_write_chunkqueue_freebsdsendfile(server *srv, connection *con, int f
 					chunks[i].iov_base = offset;
 
 					/* protect the return value of writev() */
-					if (toSend > SSIZE_MAX ||
-					    num_bytes + toSend > SSIZE_MAX) {
-						chunks[i].iov_len = SSIZE_MAX - num_bytes;
+					if (toSend > max_bytes ||
+					    (off_t) num_bytes + toSend > max_bytes) {
+						chunks[i].iov_len = max_bytes - num_bytes;
 
 						num_chunks = i + 1;
 						break;
@@ -105,6 +102,7 @@ int network_write_chunkqueue_freebsdsendfile(server *srv, connection *con, int f
 
 			/* check which chunks have been written */
 			cq->bytes_out += r;
+			max_bytes -= r;
 
 			for(i = 0, tc = c; i < num_chunks; i++, tc = tc->next) {
 				if (r >= (ssize_t)chunks[i].iov_len) {
@@ -114,11 +112,10 @@ int network_write_chunkqueue_freebsdsendfile(server *srv, connection *con, int f
 
 					if (chunk_finished) {
 						/* skip the chunks from further touches */
-						chunks_written++;
 						c = c->next;
 					} else {
 						/* chunks_written + c = c->next is done in the for()*/
-						chunk_finished++;
+						chunk_finished = 1;
 					}
 				} else {
 					/* partially written */
@@ -134,7 +131,7 @@ int network_write_chunkqueue_freebsdsendfile(server *srv, connection *con, int f
 		}
 		case FILE_CHUNK: {
 			off_t offset, r;
-			size_t toSend;
+			off_t toSend;
 			stat_cache_entry *sce = NULL;
 
 			if (HANDLER_ERROR == stat_cache_get_entry(srv, con, c->file.name, &sce)) {
@@ -144,9 +141,8 @@ int network_write_chunkqueue_freebsdsendfile(server *srv, connection *con, int f
 			}
 
 			offset = c->file.start + c->offset;
-			/* limit the toSend to 2^31-1 bytes in a chunk */
-			toSend = c->file.length - c->offset > ((1 << 30) - 1) ?
-				((1 << 30) - 1) : c->file.length - c->offset;
+			toSend = c->file.length - c->offset;
+			if (toSend > max_bytes) toSend = max_bytes;
 
 			if (-1 == c->file.fd) {
 				if (-1 == (c->file.fd = open(c->file.name->ptr, O_RDONLY))) {
@@ -197,6 +193,7 @@ int network_write_chunkqueue_freebsdsendfile(server *srv, connection *con, int f
 
 			c->offset += r;
 			cq->bytes_out += r;
+			max_bytes -= r;
 
 			if (c->offset == c->file.length) {
 				chunk_finished = 1;
@@ -218,7 +215,7 @@ int network_write_chunkqueue_freebsdsendfile(server *srv, connection *con, int f
 		}
 	}
 
-	return chunks_written;
+	return 0;
 }
 
 #endif

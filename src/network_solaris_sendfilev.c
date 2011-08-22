@@ -38,17 +38,16 @@
  */
 
 
-int network_write_chunkqueue_solarissendfilev(server *srv, connection *con, int fd, chunkqueue *cq) {
+int network_write_chunkqueue_solarissendfilev(server *srv, connection *con, int fd, chunkqueue *cq, off_t max_bytes) {
 	chunk *c;
-	size_t chunks_written = 0;
 
-	for(c = cq->first; c; c = c->next, chunks_written++) {
+	for(c = cq->first; (max_bytes > 0) && (NULL != c); c = c->next) {
 		int chunk_finished = 0;
 
 		switch(c->type) {
 		case MEM_CHUNK: {
 			char * offset;
-			size_t toSend;
+			off_t toSend;
 			ssize_t r;
 
 			size_t num_chunks, i;
@@ -77,9 +76,9 @@ int network_write_chunkqueue_solarissendfilev(server *srv, connection *con, int 
 					chunks[i].iov_base = offset;
 
 					/* protect the return value of writev() */
-					if (toSend > SSIZE_MAX ||
-					    num_bytes + toSend > SSIZE_MAX) {
-						chunks[i].iov_len = SSIZE_MAX - num_bytes;
+					if (toSend > max_bytes ||
+					    (off_t) num_bytes + toSend > max_bytes) {
+						chunks[i].iov_len = max_bytes - num_bytes;
 
 						num_chunks = i + 1;
 						break;
@@ -119,11 +118,10 @@ int network_write_chunkqueue_solarissendfilev(server *srv, connection *con, int 
 
 					if (chunk_finished) {
 						/* skip the chunks from further touches */
-						chunks_written++;
 						c = c->next;
 					} else {
 						/* chunks_written + c = c->next is done in the for()*/
-						chunk_finished++;
+						chunk_finished = 1;
 					}
 				} else {
 					/* partially written */
@@ -139,8 +137,8 @@ int network_write_chunkqueue_solarissendfilev(server *srv, connection *con, int 
 		}
 		case FILE_CHUNK: {
 			ssize_t r;
-			off_t offset;
-			size_t toSend, written;
+			off_t offset, toSend;
+			size_t written;
 			sendfilevec_t fvec;
 			stat_cache_entry *sce = NULL;
 			int ifd;
@@ -153,6 +151,7 @@ int network_write_chunkqueue_solarissendfilev(server *srv, connection *con, int 
 
 			offset = c->file.start + c->offset;
 			toSend = c->file.length - c->offset;
+			if (toSend > max_bytes) toSend = max_bytes;
 
 			if (offset > sce->st.st_size) {
 				log_error_write(srv, __FILE__, __LINE__, "sb", "file was shrinked:", c->file.name);
@@ -186,6 +185,7 @@ int network_write_chunkqueue_solarissendfilev(server *srv, connection *con, int 
 			close(ifd);
 			c->offset += written;
 			cq->bytes_out += written;
+			max_bytes -= written;
 
 			if (c->offset == c->file.length) {
 				chunk_finished = 1;
@@ -207,7 +207,7 @@ int network_write_chunkqueue_solarissendfilev(server *srv, connection *con, int 
 		}
 	}
 
-	return chunks_written;
+	return 0;
 }
 
 #endif

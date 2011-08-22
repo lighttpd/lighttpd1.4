@@ -47,18 +47,18 @@
 #include "base.h"
 
 /* return values:
- * >= 0 : chunks completed
+ * >= 0 : no error
  *   -1 : error (on our side)
  *   -2 : remote close
  */
 
-int network_write_chunkqueue_write(server *srv, connection *con, int fd, chunkqueue *cq);
-int network_write_chunkqueue_writev(server *srv, connection *con, int fd, chunkqueue *cq);
-int network_write_chunkqueue_linuxsendfile(server *srv, connection *con, int fd, chunkqueue *cq);
-int network_write_chunkqueue_freebsdsendfile(server *srv, connection *con, int fd, chunkqueue *cq);
-int network_write_chunkqueue_solarissendfilev(server *srv, connection *con, int fd, chunkqueue *cq);
+int network_write_chunkqueue_write(server *srv, connection *con, int fd, chunkqueue *cq, off_t max_bytes);
+int network_write_chunkqueue_writev(server *srv, connection *con, int fd, chunkqueue *cq, off_t max_bytes);
+int network_write_chunkqueue_linuxsendfile(server *srv, connection *con, int fd, chunkqueue *cq, off_t max_bytes);
+int network_write_chunkqueue_freebsdsendfile(server *srv, connection *con, int fd, chunkqueue *cq, off_t max_bytes);
+int network_write_chunkqueue_solarissendfilev(server *srv, connection *con, int fd, chunkqueue *cq, off_t max_bytes);
 #ifdef USE_OPENSSL
-int network_write_chunkqueue_openssl(server *srv, connection *con, SSL *ssl, chunkqueue *cq);
+int network_write_chunkqueue_openssl(server *srv, connection *con, SSL *ssl, chunkqueue *cq, off_t max_bytes);
 #endif
 
 #endif

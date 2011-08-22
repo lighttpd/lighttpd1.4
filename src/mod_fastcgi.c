@@ -3075,7 +3075,7 @@ static handler_t fcgi_write_request(server *srv, handler_ctx *hctx) {
 		fcgi_set_state(srv, hctx, FCGI_STATE_WRITE);
 		/* fall through */
 	case FCGI_STATE_WRITE:
-		ret = srv->network_backend_write(srv, con, hctx->fd, hctx->wb);
+		ret = srv->network_backend_write(srv, con, hctx->fd, hctx->wb, MAX_WRITE_LIMIT);
 
 		chunkqueue_remove_finished_chunks(hctx->wb);
 

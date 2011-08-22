@@ -27,10 +27,9 @@
 # include <openssl/ssl.h>
 # include <openssl/err.h>
 
-int network_write_chunkqueue_openssl(server *srv, connection *con, SSL *ssl, chunkqueue *cq) {
+int network_write_chunkqueue_openssl(server *srv, connection *con, SSL *ssl, chunkqueue *cq, off_t max_bytes) {
 	int ssl_r;
 	chunk *c;
-	size_t chunks_written = 0;
 
 	/* this is a 64k sendbuffer
 	 *
@@ -59,13 +58,13 @@ int network_write_chunkqueue_openssl(server *srv, connection *con, SSL *ssl, chu
 		SSL_set_shutdown(ssl, SSL_RECEIVED_SHUTDOWN);
 	}
 
-	for(c = cq->first; c; c = c->next) {
+	for(c = cq->first; (max_bytes > 0) && (NULL != c); c = c->next) {
 		int chunk_finished = 0;
 
 		switch(c->type) {
 		case MEM_CHUNK: {
 			char * offset;
-			size_t toSend;
+			off_t toSend;
 			ssize_t r;
 
 			if (c->mem->used == 0 || c->mem->used == 1) {
@@ -75,6 +74,7 @@ int network_write_chunkqueue_openssl(server *srv, connection *con, SSL *ssl, chu
 
 			offset = c->mem->ptr + c->offset;
 			toSend = c->mem->used - 1 - c->offset;
+			if (toSend > max_bytes) toSend = max_bytes;
 
 			/**
 			 * SSL_write man-page
@@ -139,6 +139,7 @@ int network_write_chunkqueue_openssl(server *srv, connection *con, SSL *ssl, chu
 			} else {
 				c->offset += r;
 				cq->bytes_out += r;
+				max_bytes -= r;
 			}
 
 			if (c->offset == (off_t)c->mem->used - 1) {
@@ -168,6 +169,7 @@ int network_write_chunkqueue_openssl(server *srv, connection *con, SSL *ssl, chu
 			do {
 				off_t offset = c->file.start + c->offset;
 				off_t toSend = c->file.length - c->offset;
+				if (toSend > max_bytes) toSend = max_bytes;
 
 				if (toSend > LOCAL_SEND_BUFSIZE) toSend = LOCAL_SEND_BUFSIZE;
 
@@ -243,6 +245,7 @@ int network_write_chunkqueue_openssl(server *srv, connection *con, SSL *ssl, chu
 				} else {
 					c->offset += r;
 					cq->bytes_out += r;
+					max_bytes -= r;
 				}
 
 				if (c->offset == c->file.length) {
@@ -263,11 +266,9 @@ int network_write_chunkqueue_openssl(server *srv, connection *con, SSL *ssl, chu
 
 			break;
 		}
-
-		chunks_written++;
 	}
 
-	return chunks_written;
+	return 0;
 }
 #endif
 

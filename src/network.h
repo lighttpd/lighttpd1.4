@@ -3,7 +3,7 @@
 
 #include "server.h"
 
-int network_write_chunkqueue(server *srv, connection *con, chunkqueue *c);
+int network_write_chunkqueue(server *srv, connection *con, chunkqueue *c, off_t max_bytes);
 
 int network_init(server *srv);
 int network_close(server *srv);

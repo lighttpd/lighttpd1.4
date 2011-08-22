@@ -30,17 +30,16 @@
 #define LOCAL_BUFFERING 1
 #endif
 
-int network_write_chunkqueue_writev(server *srv, connection *con, int fd, chunkqueue *cq) {
+int network_write_chunkqueue_writev(server *srv, connection *con, int fd, chunkqueue *cq, off_t max_bytes) {
 	chunk *c;
-	size_t chunks_written = 0;
 
-	for(c = cq->first; c; c = c->next) {
+	for(c = cq->first; (max_bytes > 0) && (NULL != c); c = c->next) {
 		int chunk_finished = 0;
 
 		switch(c->type) {
 		case MEM_CHUNK: {
 			char * offset;
-			size_t toSend;
+			off_t toSend;
 			ssize_t r;
 
 			size_t num_chunks, i;
@@ -65,12 +64,10 @@ int network_write_chunkqueue_writev(server *srv, connection *con, int fd, chunkq
 #error "sysconf() doesnt return _SC_IOV_MAX ..., check the output of 'man writev' for the EINVAL error and send the output to jan@kneschke.de"
 #endif
 
-			/* we can't send more then SSIZE_MAX bytes in one chunk */
-
 			/* build writev list
 			 *
 			 * 1. limit: num_chunks < max_chunks
-			 * 2. limit: num_bytes < SSIZE_MAX
+			 * 2. limit: num_bytes < max_bytes
 			 */
 			for (num_chunks = 0, tc = c; tc && tc->type == MEM_CHUNK && num_chunks < max_chunks; num_chunks++, tc = tc->next);
 
@@ -87,9 +84,9 @@ int network_write_chunkqueue_writev(server *srv, connection *con, int fd, chunkq
 					chunks[i].iov_base = offset;
 
 					/* protect the return value of writev() */
-					if (toSend > SSIZE_MAX ||
-					    num_bytes + toSend > SSIZE_MAX) {
-						chunks[i].iov_len = SSIZE_MAX - num_bytes;
+					if (toSend > max_bytes ||
+					    (off_t) num_bytes + toSend > max_bytes) {
+						chunks[i].iov_len = max_bytes - num_bytes;
 
 						num_chunks = i + 1;
 						break;
@@ -121,6 +118,7 @@ int network_write_chunkqueue_writev(server *srv, connection *con, int fd, chunkq
 			}
 
 			cq->bytes_out += r;
+			max_bytes -= r;
 
 			/* check which chunks have been written */
 
@@ -132,11 +130,10 @@ int network_write_chunkqueue_writev(server *srv, connection *con, int fd, chunkq
 
 					if (chunk_finished) {
 						/* skip the chunks from further touches */
-						chunks_written++;
 						c = c->next;
 					} else {
 						/* chunks_written + c = c->next is done in the for()*/
-						chunk_finished++;
+						chunk_finished = 1;
 					}
 				} else {
 					/* partially written */
@@ -284,6 +281,8 @@ int network_write_chunkqueue_writev(server *srv, connection *con, int fd, chunkq
 				assert(toSend < 0);
 			}
 
+			if (toSend > max_bytes) toSend = max_bytes;
+
 #ifdef LOCAL_BUFFERING
 			start = c->mem->ptr;
 #else
@@ -309,6 +308,7 @@ int network_write_chunkqueue_writev(server *srv, connection *con, int fd, chunkq
 
 			c->offset += r;
 			cq->bytes_out += r;
+			max_bytes -= r;
 
 			if (c->offset == c->file.length) {
 				chunk_finished = 1;
@@ -334,11 +334,9 @@ int network_write_chunkqueue_writev(server *srv, connection *con, int fd, chunkq
 
 			break;
 		}
-
-		chunks_written++;
 	}
 
-	return chunks_written;
+	return 0;
 }
 
 #endif
