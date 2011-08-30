@@ -6,4 +6,4 @@ srcdir=$1
 top_builddir=$2
 export SHELL srcdir top_builddir
 
-$3
+exec $3

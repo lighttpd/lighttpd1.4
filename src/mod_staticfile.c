@@ -26,6 +26,7 @@
 typedef struct {
 	array *exclude_ext;
 	unsigned short etags_used;
+	unsigned short disable_pathinfo;
 } plugin_config;
 
 typedef struct {
@@ -84,6 +85,7 @@ SETDEFAULTS_FUNC(mod_staticfile_set_defaults) {
 	config_values_t cv[] = {
 		{ "static-file.exclude-extensions", NULL, T_CONFIG_ARRAY, T_CONFIG_SCOPE_CONNECTION },       /* 0 */
 		{ "static-file.etags",    NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION }, /* 1 */
+		{ "static-file.disable-pathinfo", NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION }, /* 2 */
 		{ NULL,                         NULL, T_CONFIG_UNSET, T_CONFIG_SCOPE_UNSET }
 	};
 
@@ -97,9 +99,11 @@ SETDEFAULTS_FUNC(mod_staticfile_set_defaults) {
 		s = calloc(1, sizeof(plugin_config));
 		s->exclude_ext    = array_init();
 		s->etags_used     = 1;
+		s->disable_pathinfo = 0;
 
 		cv[0].destination = s->exclude_ext;
 		cv[1].destination = &(s->etags_used);
+		cv[2].destination = &(s->disable_pathinfo);
 
 		p->config_storage[i] = s;
 
@@ -119,6 +123,7 @@ static int mod_staticfile_patch_connection(server *srv, connection *con, plugin_
 
 	PATCH(exclude_ext);
 	PATCH(etags_used);
+	PATCH(disable_pathinfo);
 
 	/* skip the first, the global context */
 	for (i = 1; i < srv->config_context->used; i++) {
@@ -136,7 +141,9 @@ static int mod_staticfile_patch_connection(server *srv, connection *con, plugin_
 				PATCH(exclude_ext);
 			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("static-file.etags"))) {
 				PATCH(etags_used);
-			} 
+			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("static-file.disable-pathinfo"))) {
+				PATCH(disable_pathinfo);
+			}
 		}
 	}
 
@@ -374,6 +381,13 @@ URIHANDLER_FUNC(mod_staticfile_subrequest) {
 	}
 
 	mod_staticfile_patch_connection(srv, con, p);
+
+	if (p->conf.disable_pathinfo && 0 != con->request.pathinfo->used) {
+		if (con->conf.log_request_handling) {
+			log_error_write(srv, __FILE__, __LINE__,  "s",  "-- NOT handling file as static file, pathinfo forbidden");
+		}
+		return HANDLER_GO_ON;
+	}
 
 	/* ignore certain extensions */
 	for (k = 0; k < p->conf.exclude_ext->used; k++) {

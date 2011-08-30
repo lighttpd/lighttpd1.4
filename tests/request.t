@@ -8,7 +8,7 @@ BEGIN {
 
 use strict;
 use IO::Socket;
-use Test::More tests => 44;
+use Test::More tests => 46;
 use LightyTest;
 
 my $tf = LightyTest->new();
@@ -412,6 +412,22 @@ EOF
 $t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200, 'HTTP-Content' => '12345'."\n", 'Content-Type' => 'text/plain' } ];
 $t->{SLOWREQUEST} = 1;
 ok($tf->handle_http($t) == 0, 'GET, slow \\r\\n\\r\\n (#2105)');
+
+print "\nPathinfo for static files\n";
+$t->{REQUEST}  = ( <<EOF
+GET /image.jpg/index.php HTTP/1.0
+EOF
+ );
+$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200, 'Content-Type' => 'image/jpeg' } ];
+ok($tf->handle_http($t) == 0, 'static file accepting pathinfo by default');
+
+$t->{REQUEST}  = ( <<EOF
+GET /image.jpg/index.php HTTP/1.0
+Host: zzz.example.org
+EOF
+ );
+$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 403 } ];
+ok($tf->handle_http($t) == 0, 'static file with forbidden pathinfo');
 
 ok($tf->stop_proc == 0, "Stopping lighttpd");
 

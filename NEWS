@@ -7,6 +7,7 @@ NEWS
   * Always use our 'own' md5 implementation, fixes linking issues on MacOS (fixes #2331)
   * Limit amount of bytes we send in one go; fixes stalling in one connection and timeouts on slow systems.
   * [ssl] fix build errors when Elliptic-Curve Diffie-Hellman is disabled
+  * Add static-file.disable-pathinfo option to prevent handling of urls like .../secret.php/image.jpg as static file
 
 - 1.4.29 - 2011-07-03
   * Fix mod_proxy waiting for response even if content-length is 0 (fixes #2259)
