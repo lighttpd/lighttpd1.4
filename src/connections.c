@@ -445,6 +445,7 @@ static int connection_handle_write_prepare(server *srv, connection *con) {
 		default:
 			switch(con->http_status) {
 			case 400: /* bad request */
+			case 401: /* authorization required */
 			case 414: /* overload request header */
 			case 505: /* unknown protocol */
 			case 207: /* this was webdav */
