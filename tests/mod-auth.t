@@ -8,7 +8,7 @@ BEGIN {
 
 use strict;
 use IO::Socket;
-use Test::More tests => 14;
+use Test::More tests => 15;
 use LightyTest;
 
 my $tf = LightyTest->new();
@@ -22,6 +22,14 @@ EOF
  );
 $t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 401 } ];
 ok($tf->handle_http($t) == 0, 'Missing Auth-token');
+
+$t->{REQUEST}  = ( <<EOF
+GET /server-status HTTP/1.0
+Authorization: Basic \x80mFuOmphb
+EOF
+ );
+$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 401 } ];
+ok($tf->handle_http($t) == 0, 'Basic-Auth: Invalid base64 Auth-token');
 
 $t->{REQUEST}  = ( <<EOF
 GET /server-status HTTP/1.0

@@ -99,7 +99,7 @@ static unsigned char * base64_decode(buffer *out, const char *in) {
 	ch = in[0];
 	/* run through the whole string, converting as we go */
 	for (i = 0; i < in_len; i++) {
-		ch = in[i];
+		ch = (unsigned char) in[i];
 
 		if (ch == '\0') break;
 
