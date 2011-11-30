@@ -632,6 +632,10 @@ int network_init(server *srv) {
 						ERR_error_string(ERR_get_error(), NULL));
 				return -1;
 			}
+
+			if (s->ssl_honor_cipher_order) {
+				SSL_CTX_set_options(s->ssl_ctx, SSL_OP_CIPHER_SERVER_PREFERENCE);
+			}
 		}
 
 		/* Support for Diffie-Hellman key exchange */

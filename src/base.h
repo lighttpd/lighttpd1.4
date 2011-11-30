@@ -277,6 +277,7 @@ typedef struct {
 	buffer *ssl_cipher_list;
 	buffer *ssl_dh_file;
 	buffer *ssl_ec_curve;
+	unsigned short ssl_honor_cipher_order; /* determine SSL cipher in server-preferred order, not client-order */
 	unsigned short ssl_use_sslv2;
 	unsigned short ssl_use_sslv3;
 	unsigned short ssl_verifyclient;

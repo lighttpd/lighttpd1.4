@@ -106,6 +106,7 @@ static int config_insert(server *srv) {
 		{ "ssl.dh-file",                 NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_SERVER },      /* 63 */
 		{ "ssl.ec-curve",                NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_SERVER },      /* 64 */
 		{ "ssl.disable-client-renegotiation", NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_SERVER },/* 65 */
+		{ "ssl.honor-cipher-order",      NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_SERVER },     /* 66 */
 
 		{ "server.host",                 "use server.bind instead", T_CONFIG_DEPRECATED, T_CONFIG_SCOPE_UNSET },
 		{ "server.docroot",              "use server.document-root instead", T_CONFIG_DEPRECATED, T_CONFIG_SCOPE_UNSET },
@@ -177,6 +178,7 @@ static int config_insert(server *srv) {
 		s->max_write_idle = 360;
 		s->use_xattr     = 0;
 		s->is_ssl        = 0;
+		s->ssl_honor_cipher_order = 1;
 		s->ssl_use_sslv2 = 0;
 		s->ssl_use_sslv3 = 1;
 		s->use_ipv6      = 0;
@@ -247,6 +249,7 @@ static int config_insert(server *srv) {
 		cv[62].destination = &(s->ssl_use_sslv3);
 		cv[63].destination = s->ssl_dh_file;
 		cv[64].destination = s->ssl_ec_curve;
+		cv[65].destination = &(s->ssl_honor_cipher_order);
 
 		cv[49].destination = &(s->etag_use_inode);
 		cv[50].destination = &(s->etag_use_mtime);
@@ -339,6 +342,7 @@ int config_setup_connection(server *srv, connection *con) {
 	PATCH(ssl_cipher_list);
 	PATCH(ssl_dh_file);
 	PATCH(ssl_ec_curve);
+	PATCH(ssl_honor_cipher_order);
 	PATCH(ssl_use_sslv2);
 	PATCH(ssl_use_sslv3);
 	PATCH(etag_use_inode);
@@ -405,6 +409,8 @@ int config_patch_connection(server *srv, connection *con, comp_key_t comp) {
 #endif
 			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("ssl.ca-file"))) {
 				PATCH(ssl_ca_file);
+			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("ssl.honor-cipher-order"))) {
+				PATCH(ssl_honor_cipher_order);
 			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("ssl.use-sslv2"))) {
 				PATCH(ssl_use_sslv2);
 			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("ssl.use-sslv3"))) {
