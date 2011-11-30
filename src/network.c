@@ -27,6 +27,7 @@
 # include <openssl/rand.h>
 #endif
 
+#ifdef USE_OPENSSL
 static void ssl_info_callback(const SSL *ssl, int where, int ret) {
 	UNUSED(ret);
 
@@ -37,6 +38,7 @@ static void ssl_info_callback(const SSL *ssl, int where, int ret) {
 		ssl->s3->flags |= SSL3_FLAGS_NO_RENEGOTIATE_CIPHERS;
 	}
 }
+#endif
 
 static handler_t network_server_handle_fdevent(server *srv, void *context, int revents) {
 	server_socket *srv_socket = (server_socket *)context;
