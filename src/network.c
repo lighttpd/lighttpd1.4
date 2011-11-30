@@ -27,6 +27,17 @@
 # include <openssl/rand.h>
 #endif
 
+static void ssl_info_callback(const SSL *ssl, int where, int ret) {
+	UNUSED(ret);
+
+	if (0 != (where & SSL_CB_HANDSHAKE_START)) {
+		connection *con = SSL_get_app_data(ssl);
+		++con->renegotiations;
+	} else if (0 != (where & SSL_CB_HANDSHAKE_DONE)) {
+		ssl->s3->flags |= SSL3_FLAGS_NO_RENEGOTIATE_CIPHERS;
+	}
+}
+
 static handler_t network_server_handle_fdevent(server *srv, void *context, int revents) {
 	server_socket *srv_socket = (server_socket *)context;
 	connection *con;
@@ -555,6 +566,11 @@ int network_init(server *srv) {
 	/* load SSL certificates */
 	for (i = 0; i < srv->config_context->used; i++) {
 		specific_config *s = srv->config_storage[i];
+#ifndef SSL_OP_NO_COMPRESSION
+# define SSL_OP_NO_COMPRESSION 0
+#endif
+		long ssloptions =
+			SSL_OP_ALL | SSL_OP_NO_SESSION_RESUMPTION_ON_RENEGOTIATION | SSL_OP_NO_COMPRESSION;
 
 		if (buffer_is_empty(s->ssl_pemfile)) continue;
 
@@ -587,6 +603,16 @@ int network_init(server *srv) {
 					ERR_error_string(ERR_get_error(), NULL));
 			return -1;
 		}
+
+		SSL_CTX_set_options(s->ssl_ctx, ssloptions);
+		SSL_CTX_set_info_callback(s->ssl_ctx, ssl_info_callback);
+
+		if (!(SSL_OP_NO_SSLv2 & SSL_CTX_set_options(s->ssl_ctx, SSL_OP_NO_SSLv2))) {
+			log_error_write(srv, __FILE__, __LINE__, "ss", "SSL:",
+					ERR_error_string(ERR_get_error(), NULL));
+			return -1;
+		}
+
 
 		if (!s->ssl_use_sslv2) {
 			/* disable SSLv2 */

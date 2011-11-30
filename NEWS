@@ -11,6 +11,7 @@ NEWS
   * Don't overwrite 401 (auth required) with 501 (unknown method) (fixes #2341)
   * Fix mod_status bug: always showed "0/0" in the "Read" column for uploads (fixes #2351)
   * [mod_auth] Fix signedness error in http_auth (fixes #2370, CVE-2011-4362)
+  * [ssl] count renegotiations to prevent client renegotiations
 
 - 1.4.29 - 2011-07-03
   * Fix mod_proxy waiting for response even if content-length is 0 (fixes #2259)

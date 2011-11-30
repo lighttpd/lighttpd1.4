@@ -223,6 +223,12 @@ static int connection_handle_read_ssl(server *srv, connection *con) {
 
 		len = SSL_read(con->ssl, b->ptr + read_offset, toread);
 
+		if (con->renegotiations > 1 && con->conf.ssl_disable_client_renegotiation) {
+			connection_set_state(srv, con, CON_STATE_ERROR);
+			log_error_write(srv, __FILE__, __LINE__, "s", "SSL: renegotiation initiated by client");
+			return -1;
+		}
+
 		if (len > 0) {
 			if (b->used > 0) b->used--;
 			b->used += len;
@@ -1353,6 +1359,7 @@ connection *connection_accept(server *srv, server_socket *srv_socket) {
 				return NULL;
 			}
 
+			con->renegotiations = 0;
 #ifndef OPENSSL_NO_TLSEXT
 			SSL_set_app_data(con->ssl, con);
 #endif

@@ -87,7 +87,14 @@ int network_write_chunkqueue_openssl(server *srv, connection *con, SSL *ssl, chu
 			 */
 
 			ERR_clear_error();
-			if ((r = SSL_write(ssl, offset, toSend)) <= 0) {
+			r = SSL_write(ssl, offset, toSend);
+
+			if (con->renegotiations > 1 && con->conf.ssl_disable_client_renegotiation) {
+				log_error_write(srv, __FILE__, __LINE__, "s", "SSL: renegotiation initiated by client");
+				return -1;
+			}
+
+			if (r <= 0) {
 				unsigned long err;
 
 				switch ((ssl_r = SSL_get_error(ssl, r))) {
@@ -192,7 +199,14 @@ int network_write_chunkqueue_openssl(server *srv, connection *con, SSL *ssl, chu
 				close(ifd);
 
 				ERR_clear_error();
-				if ((r = SSL_write(ssl, s, toSend)) <= 0) {
+				r = SSL_write(ssl, s, toSend);
+
+				if (con->renegotiations > 1 && con->conf.ssl_disable_client_renegotiation) {
+					log_error_write(srv, __FILE__, __LINE__, "s", "SSL: renegotiation initiated by client");
+					return -1;
+				}
+
+				if (r <= 0) {
 					unsigned long err;
 
 					switch ((ssl_r = SSL_get_error(ssl, r))) {

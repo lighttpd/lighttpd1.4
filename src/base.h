@@ -284,6 +284,7 @@ typedef struct {
 	unsigned short ssl_verifyclient_depth;
 	buffer *ssl_verifyclient_username;
 	unsigned short ssl_verifyclient_export_cert;
+	unsigned short ssl_disable_client_renegotiation;
 
 	unsigned short use_ipv6, set_v6only; /* set_v6only is only a temporary option */
 	unsigned short defer_accept;
@@ -437,6 +438,7 @@ typedef struct {
 # ifndef OPENSSL_NO_TLSEXT
 	buffer *tlsext_server_name;
 # endif
+	unsigned int renegotiations; /* count of SSL_CB_HANDSHAKE_START */
 #endif
 	/* etag handling */
 	etag_flags_t etag_flags;
