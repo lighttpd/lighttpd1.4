@@ -49,7 +49,7 @@ static int request_check_hostname(server *srv, connection *con, buffer *host) {
 				if (++colon_cnt > 7) {
 					return -1;
 				}
-			} else if (!light_isxdigit(*c)) {
+			} else if (!light_isxdigit(*c) && '.' != *c) {
 				return -1;
 			}
 		}

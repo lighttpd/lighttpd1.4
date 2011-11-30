@@ -13,6 +13,7 @@ NEWS
   * [mod_auth] Fix signedness error in http_auth (fixes #2370, CVE-2011-4362)
   * [ssl] count renegotiations to prevent client renegotiations
   * [ssl] add option to honor server cipher order (fixes #2364, BEAST attack)
+  * [core] accept dots in ipv6 addresses in host header (fixes #2359)
 
 - 1.4.29 - 2011-07-03
   * Fix mod_proxy waiting for response even if content-length is 0 (fixes #2259)
