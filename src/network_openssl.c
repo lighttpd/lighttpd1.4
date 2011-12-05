@@ -265,7 +265,7 @@ int network_write_chunkqueue_openssl(server *srv, connection *con, SSL *ssl, chu
 				if (c->offset == c->file.length) {
 					chunk_finished = 1;
 				}
-			} while(!chunk_finished && !write_wait);
+			} while (!chunk_finished && !write_wait && max_bytes > 0);
 
 			break;
 		}

@@ -14,6 +14,7 @@ NEWS
   * [ssl] count renegotiations to prevent client renegotiations
   * [ssl] add option to honor server cipher order (fixes #2364, BEAST attack)
   * [core] accept dots in ipv6 addresses in host header (fixes #2359)
+  * [ssl] fix ssl connection aborts if files are larger than the MAX_WRITE_LIMIT (256kb)
 
 - 1.4.29 - 2011-07-03
   * Fix mod_proxy waiting for response even if content-length is 0 (fixes #2259)
