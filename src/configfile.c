@@ -249,7 +249,7 @@ static int config_insert(server *srv) {
 		cv[62].destination = &(s->ssl_use_sslv3);
 		cv[63].destination = s->ssl_dh_file;
 		cv[64].destination = s->ssl_ec_curve;
-		cv[65].destination = &(s->ssl_honor_cipher_order);
+		cv[66].destination = &(s->ssl_honor_cipher_order);
 
 		cv[49].destination = &(s->etag_use_inode);
 		cv[50].destination = &(s->etag_use_mtime);
