@@ -1120,6 +1120,14 @@ int main (int argc, char **argv) {
 				"s", "fdevent_init failed");
 		return -1;
 	}
+
+	/* libev backend overwrites our SIGCHLD handler and calls waitpid on SIGCHLD; we want our own SIGCHLD handling. */
+#ifdef HAVE_SIGACTION
+	sigaction(SIGCHLD, &act, NULL);
+#elif defined(HAVE_SIGNAL)
+	signal(SIGCHLD,  signal_handler);
+#endif
+
 	/*
 	 * kqueue() is called here, select resets its internals,
 	 * all server sockets get their handlers

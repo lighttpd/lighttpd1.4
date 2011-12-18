@@ -1288,6 +1288,15 @@ TRIGGER_FUNC(cgi_trigger) {
 #endif
 			break;
 		case -1:
+			if (errno == ECHILD) {
+				/* someone else called waitpid... remove the pid to stop looping the error each time */
+				log_error_write(srv, __FILE__, __LINE__, "s", "cgi child vanished, probably someone else called waitpid");
+
+				cgi_pid_del(srv, p, p->cgi_pid.ptr[ndx]);
+				ndx--;
+				continue;
+			}
+
 			log_error_write(srv, __FILE__, __LINE__, "ss", "waitpid failed: ", strerror(errno));
 
 			return HANDLER_ERROR;
