@@ -13,8 +13,8 @@
 #include <fcntl.h>
 
 #ifdef USE_FREEBSD_KQUEUE
-#include <sys/event.h>
-#include <sys/time.h>
+# include <sys/event.h>
+# include <sys/time.h>
 
 static void fdevent_freebsd_kqueue_free(fdevents *ev) {
 	close(ev->kq_fd);

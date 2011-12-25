@@ -5,6 +5,9 @@
 #include <assert.h>
 
 #ifdef USE_LIBEV
+
+# include <ev.h>
+
 static void io_watcher_cb(struct ev_loop *loop, ev_io *w, int revents) {
 	fdevents *ev = w->data;
 	fdnode *fdn = ev->fdarray[w->fd];

@@ -5,6 +5,7 @@ NEWS
 
 - 1.4.31 -
   * [ssl] fix segfault in counting renegotiations for openssl versions without TLSEXT/SNI
+  * Move fdevent subsystem includes to implementation files to reduce conflicts (fixes #2373)
 
 - 1.4.30 - 2011-12-18
   * Always use our 'own' md5 implementation, fixes linking issues on MacOS (fixes #2331)

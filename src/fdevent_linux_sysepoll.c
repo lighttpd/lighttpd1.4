@@ -13,6 +13,9 @@
 #include <fcntl.h>
 
 #ifdef USE_LINUX_EPOLL
+
+# include <sys/epoll.h>
+
 static void fdevent_linux_sysepoll_free(fdevents *ev) {
 	close(ev->epoll_fd);
 	free(ev->epoll_events);

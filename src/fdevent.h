@@ -20,18 +20,12 @@
 
 #if defined(HAVE_EPOLL_CTL) && defined(HAVE_SYS_EPOLL_H)
 # define USE_LINUX_EPOLL
-# include <sys/epoll.h>
 #endif
 
 /* MacOS 10.3.x has poll.h under /usr/include/, all other unixes
  * under /usr/include/sys/ */
 #if defined HAVE_POLL && (defined(HAVE_SYS_POLL_H) || defined(HAVE_POLL_H))
 # define USE_POLL
-# ifdef HAVE_POLL_H
-#  include <poll.h>
-# else
-#  include <sys/poll.h>
-# endif
 #endif
 
 #if defined HAVE_SELECT
@@ -46,7 +40,6 @@
 
 #if defined HAVE_SYS_DEVPOLL_H && defined(__sun)
 # define USE_SOLARIS_DEVPOLL
-# include <sys/devpoll.h>
 #endif
 
 #if defined HAVE_PORT_H && defined HAVE_PORT_CREATE && defined(__sun)
@@ -56,12 +49,10 @@
 
 #if defined HAVE_SYS_EVENT_H && defined HAVE_KQUEUE
 # define USE_FREEBSD_KQUEUE
-# include <sys/event.h>
 #endif
 
 #if defined HAVE_LIBEV
 # define USE_LIBEV
-# include <ev.h>
 #endif
 
 struct server;

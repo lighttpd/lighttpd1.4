@@ -14,6 +14,8 @@
 
 #ifdef USE_SOLARIS_DEVPOLL
 
+# include <sys/devpoll.h>
+
 static void fdevent_solaris_devpoll_free(fdevents *ev) {
 	free(ev->devpollfds);
 	close(ev->devpoll_fd);

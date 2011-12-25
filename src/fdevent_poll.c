@@ -13,6 +13,13 @@
 #include <fcntl.h>
 
 #ifdef USE_POLL
+
+# ifdef HAVE_POLL_H
+#  include <poll.h>
+# else
+#  include <sys/poll.h>
+# endif
+
 static void fdevent_poll_free(fdevents *ev) {
 	free(ev->pollfds);
 	if (ev->unused.ptr) free(ev->unused.ptr);
