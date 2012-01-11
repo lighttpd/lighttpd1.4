@@ -826,7 +826,7 @@ PHYSICALPATH_FUNC(mod_compress_physical) {
 					}
 					response_header_overwrite(srv, con, CONST_STR_LEN("Content-Type"), CONST_BUF_LEN(sce->content_type));
 					/* let mod_staticfile handle the cached compressed files, physical path was modified */
-					return p->conf.compress_cache_dir->used ? HANDLER_GO_ON : HANDLER_FINISHED;
+					return (use_etag && p->conf.compress_cache_dir->used) ? HANDLER_GO_ON : HANDLER_FINISHED;
 				}
 			}
 		}
