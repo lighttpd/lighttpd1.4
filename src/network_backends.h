@@ -31,7 +31,7 @@
 # include <sys/uio.h>
 #endif
 
-#if defined HAVE_SYS_MMAN_H && defined HAVE_MMAP
+#if defined HAVE_SYS_MMAN_H && defined HAVE_MMAP && defined ENABLE_MMAP
 # define USE_MMAP
 # include <sys/mman.h>
 /* NetBSD 1.3.x needs it */

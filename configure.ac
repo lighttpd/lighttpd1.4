@@ -569,6 +569,21 @@ if test x$ipv6 = xtrue; then
   fi
 fi
 
+# disable mmap by default; if a mmapped file gets truncated, the process gets a SIGBUS signal
+# on reading the truncated area which we can't handle (yet).
+# lighttpd may always use mmap with files it owns (created tmp files)
+AC_ARG_ENABLE(mmap,
+  AC_HELP_STRING([--enable-mmap],[use mmap if available (DANGEROUS, allows local users to trigger SIGBUS crashes)]),
+  [case "${enableval}" in
+   yes) mmap=true ;;
+    no) mmap=false ;;
+     *) AC_MSG_ERROR(bad value ${enableval} for --enable-mmap) ;;
+  esac],[mmap=false])
+
+if teest x$mmap = xtrue; then
+  AC_DEFINE(ENABLE_MMAP, [1], [Use mmap if available])
+fi
+
 
 AM_CONDITIONAL(CROSS_COMPILING, test "x$cross_compiling" = xyes)
 

@@ -485,7 +485,7 @@ static int deflate_file_to_file(server *srv, connection *con, plugin_data *p, bu
 		return -1;
 	}
 
-
+#ifdef USE_MMAP
 	if (MAP_FAILED == (start = mmap(NULL, sce->st.st_size, PROT_READ, MAP_SHARED, ifd, 0))) {
 		log_error_write(srv, __FILE__, __LINE__, "sbss", "mmaping", fn, "failed", strerror(errno));
 
@@ -499,6 +499,23 @@ static int deflate_file_to_file(server *srv, connection *con, plugin_data *p, bu
 
 		return -1;
 	}
+#else
+	start = malloc(sce->st.st_size);
+	if (NULL == start || sce->st.st_size != read(ifd, start, sce->st.st_size)) {
+		log_error_write(srv, __FILE__, __LINE__, "sbss", "reading", fn, "failed", strerror(errno));
+
+		close(ofd);
+		close(ifd);
+		free(start);
+
+		/* Remove the incomplete cache file, so that later hits aren't served from it */
+		if (-1 == unlink(p->ofn->ptr)) {
+			log_error_write(srv, __FILE__, __LINE__, "sbss", "unlinking incomplete cachefile", p->ofn, "failed:", strerror(errno));
+		}
+
+		return -1;
+	}
+#endif
 
 	switch(type) {
 #ifdef USE_ZLIB
@@ -530,7 +547,12 @@ static int deflate_file_to_file(server *srv, connection *con, plugin_data *p, bu
 		}
 	}
 
+#ifdef USE_MMAP
 	munmap(start, sce->st.st_size);
+#else
+	free(start);
+#endif
+
 	close(ofd);
 	close(ifd);
 
@@ -571,13 +593,23 @@ static int deflate_file_to_buffer(server *srv, connection *con, plugin_data *p, 
 		return -1;
 	}
 
-
+#ifdef USE_MMAP
 	if (MAP_FAILED == (start = mmap(NULL, sce->st.st_size, PROT_READ, MAP_SHARED, ifd, 0))) {
 		log_error_write(srv, __FILE__, __LINE__, "sbss", "mmaping", fn, "failed", strerror(errno));
 
 		close(ifd);
 		return -1;
 	}
+#else
+	start = malloc(sce->st.st_size);
+	if (NULL == start || sce->st.st_size != read(ifd, start, sce->st.st_size)) {
+		log_error_write(srv, __FILE__, __LINE__, "sbss", "reading", fn, "failed", strerror(errno));
+
+		close(ifd);
+		free(start);
+		return -1;
+	}
+#endif
 
 	switch(type) {
 #ifdef USE_ZLIB
@@ -598,7 +630,11 @@ static int deflate_file_to_buffer(server *srv, connection *con, plugin_data *p, 
 		break;
 	}
 
+#ifdef USE_MMAP
 	munmap(start, sce->st.st_size);
+#else
+	free(start);
+#endif
 	close(ifd);
 
 	if (ret != 0) return -1;
