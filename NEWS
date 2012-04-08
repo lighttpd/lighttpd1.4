@@ -8,6 +8,7 @@ NEWS
   * Move fdevent subsystem includes to implementation files to reduce conflicts (fixes #2373)
   * [mod_compress] fix handling if etags are disabled but cache-dir is set - may lead to double response
   * disable mmap by default (fixes #2391)
+  * buffer_caseless_compare: always convert letters to lowercase to get transitive results, fixing array lookups (fixes #2405)
 
 - 1.4.30 - 2011-12-18
   * Always use our 'own' md5 implementation, fixes linking issues on MacOS (fixes #2331)
