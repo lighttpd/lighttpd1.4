@@ -165,7 +165,8 @@ static void accesslog_append_escaped(buffer *dest, buffer *str) {
 	buffer_prepare_append(dest, str->used - 1);
 
 	for (ptr = start = str->ptr, end = str->ptr + str->used - 1; ptr < end; ptr++) {
-		if (*ptr >= ' ' && *ptr <= '~') {
+		char const c = *ptr;
+		if (c >= ' ' && c <= '~' && c != '"' && c != '\\') {
 			/* nothing to change, add later as one block */
 		} else {
 			/* copy previous part */
@@ -174,7 +175,7 @@ static void accesslog_append_escaped(buffer *dest, buffer *str) {
 			}
 			start = ptr + 1;
 
-			switch (*ptr) {
+			switch (c) {
 			case '"':
 				BUFFER_APPEND_STRING_CONST(dest, "\\\"");
 				break;
@@ -199,9 +200,9 @@ static void accesslog_append_escaped(buffer *dest, buffer *str) {
 			default: {
 					/* non printable char => \xHH */
 					char hh[5] = {'\\','x',0,0,0};
-					char h = *ptr / 16;
+					char h = c / 16;
 					hh[2] = (h > 9) ? (h - 10 + 'A') : (h + '0');
-					h = *ptr % 16;
+					h = c % 16;
 					hh[3] = (h > 9) ? (h - 10 + 'A') : (h + '0');
 					buffer_append_string_len(dest, &hh[0], 4);
 				}
