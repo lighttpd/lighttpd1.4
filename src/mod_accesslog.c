@@ -859,7 +859,13 @@ REQUESTDONE_FUNC(log_access_write) {
 				break;
 			case FORMAT_SERVER_PORT:
 				{
-					char *colon = strrchr(((server_socket*)(con->srv_socket))->srv_token->ptr, ':');
+					const char *colon;
+					buffer *srvtoken = ((server_socket*)(con->srv_socket))->srv_token;
+					if (srvtoken->ptr[0] == '[') {
+						colon = strstr(srvtoken->ptr, "]:");
+					} else {
+						colon = strchr(srvtoken->ptr, ':');
+					}
 					if (colon) {
 						buffer_append_string(b, colon+1);
 					} else {

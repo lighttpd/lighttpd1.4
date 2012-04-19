@@ -1857,8 +1857,14 @@ static int fcgi_create_env(server *srv, handler_ctx *hctx, size_t request_id) {
 
 	if (con->server_name->used) {
 		size_t len = con->server_name->used - 1;
-		char *colon = strchr(con->server_name->ptr, ':');
-		if (colon) len = colon - con->server_name->ptr;
+
+		if (con->server_name->ptr[0] == '[') {
+			const char *colon = strstr(con->server_name->ptr, "]:");
+			if (colon) len = (colon + 1) - con->server_name->ptr;
+		} else {
+			const char *colon = strchr(con->server_name->ptr, ':');
+			if (colon) len = colon - con->server_name->ptr;
+		}
 
 		FCGI_ENV_ADD_CHECK(fcgi_env_add(p->fcgi_env, CONST_STR_LEN("SERVER_NAME"), con->server_name->ptr, len),con)
 	} else {
