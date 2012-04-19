@@ -1095,7 +1095,9 @@ int http_auth_digest_check(server *srv, connection *con, mod_auth_plugin_data *p
 	if (algorithm &&
 	    strcasecmp(algorithm, "md5-sess") == 0) {
 		li_MD5_Init(&Md5Ctx);
-		li_MD5_Update(&Md5Ctx, (unsigned char *)HA1, 16);
+		/* Errata ID 1649: http://www.rfc-editor.org/errata_search.php?rfc=2617 */
+		CvtHex(HA1, a1);
+		li_MD5_Update(&Md5Ctx, (unsigned char *)a1, 32);
 		li_MD5_Update(&Md5Ctx, (unsigned char *)":", 1);
 		li_MD5_Update(&Md5Ctx, (unsigned char *)nonce, strlen(nonce));
 		li_MD5_Update(&Md5Ctx, (unsigned char *)":", 1);

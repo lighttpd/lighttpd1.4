@@ -11,6 +11,7 @@ NEWS
   * buffer_caseless_compare: always convert letters to lowercase to get transitive results, fixing array lookups (fixes #2405)
   * Fix handling of empty header list entries in http_request_split_value, fixing invalid read in valgrind (fixes #2413)
   * Fix access log escaping of " and \\ (fixes #1551)
+  * [mod_auth] Fix digest "md5-sess" implementation (Errata ID 1649, RFC 2617) (fixes #2410)
 
 - 1.4.30 - 2011-12-18
   * Always use our 'own' md5 implementation, fixes linking issues on MacOS (fixes #2331)
