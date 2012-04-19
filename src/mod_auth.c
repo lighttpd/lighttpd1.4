@@ -181,6 +181,7 @@ static handler_t mod_auth_uri_handler(server *srv, connection *con, void *p_d) {
 	size_t k;
 	int auth_required = 0, auth_satisfied = 0;
 	char *http_authorization = NULL;
+	const char *auth_type = NULL;
 	data_string *ds;
 	mod_auth_plugin_data *p = p_d;
 	array *req;
@@ -245,12 +246,14 @@ static handler_t mod_auth_uri_handler(server *srv, connection *con, void *p_d) {
 
 			if ((auth_type_len == 5) &&
 			    (0 == strncasecmp(http_authorization, "Basic", auth_type_len))) {
+				auth_type = "Basic";
 
 				if (0 == strcmp(method->value->ptr, "basic")) {
 					auth_satisfied = http_auth_basic_check(srv, con, p, req, con->uri.path, auth_realm+1);
 				}
 			} else if ((auth_type_len == 6) &&
 				   (0 == strncasecmp(http_authorization, "Digest", auth_type_len))) {
+				auth_type = "Digest";
 				if (0 == strcmp(method->value->ptr, "digest")) {
 					if (-1 == (auth_satisfied = http_auth_digest_check(srv, con, p, req, con->uri.path, auth_realm+1))) {
 						con->http_status = 400;
@@ -302,6 +305,17 @@ static handler_t mod_auth_uri_handler(server *srv, connection *con, void *p_d) {
 		/* the REMOTE_USER header */
 
 		buffer_copy_string_buffer(con->authed_user, p->auth_user);
+
+		/* AUTH_TYPE environment */
+
+		if (NULL == (ds = (data_string *)array_get_unused_element(con->environment, TYPE_STRING))) {
+			ds = data_string_init();
+		}
+
+		buffer_copy_string(ds->key, "AUTH_TYPE");
+		buffer_copy_string(ds->value, auth_type);
+
+		array_insert_unique(con->environment, (data_unset *)ds);
 	}
 
 	return HANDLER_GO_ON;

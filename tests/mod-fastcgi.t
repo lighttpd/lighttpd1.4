@@ -7,7 +7,7 @@ BEGIN {
 }
 
 use strict;
-use Test::More tests => 56;
+use Test::More tests => 58;
 use LightyTest;
 
 my $tf = LightyTest->new();
@@ -25,7 +25,7 @@ SKIP: {
 }
 
 SKIP: {
-	skip "no PHP running on port 1026", 33 unless $tf->listening_on(1026);
+	skip "no PHP running on port 1026", 35 unless $tf->listening_on(1026);
 
 	ok($tf->start_proc == 0, "Starting lighttpd") or goto cleanup;
 
@@ -187,6 +187,24 @@ EOF
  );
 	$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200, 'Content-Length' => 4348 } ];
 	ok($tf->handle_http($t) == 0, 'X-Sendfile2');
+
+	$t->{REQUEST}  = ( <<EOF
+GET /get-server-env.php?env=REMOTE_USER HTTP/1.0
+Host: auth.example.org
+Authorization: Basic ZGVzOmRlcw==
+EOF
+ );
+	$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200, 'HTTP-Content' => 'des' } ];
+	ok($tf->handle_http($t) == 0, '$_SERVER["REMOTE_USER"]');
+
+	$t->{REQUEST}  = ( <<EOF
+GET /get-server-env.php?env=AUTH_TYPE HTTP/1.0
+Host: auth.example.org
+Authorization: Basic ZGVzOmRlcw==
+EOF
+ );
+	$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200, 'HTTP-Content' => 'Basic' } ];
+	ok($tf->handle_http($t) == 0, '$_SERVER["AUTH_TYPE"]');
 
 
 	ok($tf->stop_proc == 0, "Stopping lighttpd");
