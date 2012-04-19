@@ -241,9 +241,11 @@ static int http_request_split_value(array *vals, buffer *b) {
 			start = s;
 
 			for (; *s != ',' && i < b->used - 1; i++, s++);
+			if (start == s) break; /* empty fields are skipped */
 			end = s - 1;
 
-			for (; (*end == ' ' || *end == '\t') && end > start; end--);
+			for (; end > start && (*end == ' ' || *end == '\t'); end--);
+			if (start == end) break; /* empty fields are skipped */
 
 			if (NULL == (ds = (data_string *)array_get_unused_element(vals, TYPE_STRING))) {
 				ds = data_string_init();
