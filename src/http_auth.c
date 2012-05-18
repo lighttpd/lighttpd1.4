@@ -1016,7 +1016,7 @@ int http_auth_digest_check(server *srv, connection *con, mod_auth_plugin_data *p
 		log_error_write(srv, __FILE__, __LINE__, "ss", "realm", realm);
 		log_error_write(srv, __FILE__, __LINE__, "ss", "nonce", nonce);
 		log_error_write(srv, __FILE__, __LINE__, "ss", "uri", uri);
-		log_error_write(srv, __FILE__, __LINE__, "ss", "algorigthm", algorithm);
+		log_error_write(srv, __FILE__, __LINE__, "ss", "algorithm", algorithm);
 		log_error_write(srv, __FILE__, __LINE__, "ss", "qop", qop);
 		log_error_write(srv, __FILE__, __LINE__, "ss", "cnonce", cnonce);
 		log_error_write(srv, __FILE__, __LINE__, "ss", "nc", nc);
