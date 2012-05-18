@@ -14,6 +14,7 @@ NEWS
   * [mod_auth] Fix digest "md5-sess" implementation (Errata ID 1649, RFC 2617) (fixes #2410)
   * [auth] Add "AUTH_TYPE" environment (for *cgi), remove fastcgi specific workaround, add fastcgi test case (fixes #889)
   * [mod_*cgi,mod_accesslog] Fix splitting :port with ipv6 (fixes #2333, thx simoncpu)
+  * Detect multiple -f options: show error message instead of assert (fixes #2416)
 
 - 1.4.30 - 2011-12-18
   * Always use our 'own' md5 implementation, fixes linking issues on MacOS (fixes #2331)

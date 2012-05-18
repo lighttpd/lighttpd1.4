@@ -582,6 +582,13 @@ int main (int argc, char **argv) {
 	while(-1 != (o = getopt(argc, argv, "f:m:hvVDpt"))) {
 		switch(o) {
 		case 'f':
+			if (srv->config_storage) {
+				log_error_write(srv, __FILE__, __LINE__, "s",
+						"Can only read one config file. Use the include command to use multiple config files.");
+
+				server_free(srv);
+				return -1;
+			}
 			if (config_read(srv, optarg)) {
 				server_free(srv);
 				return -1;
