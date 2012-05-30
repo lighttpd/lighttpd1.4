@@ -12,6 +12,8 @@
 typedef struct {
 	pcre_keyvalue_buffer *redirect;
 	data_config *context; /* to which apply me */
+
+	unsigned short redirect_code;
 } plugin_config;
 
 typedef struct {
@@ -68,6 +70,7 @@ SETDEFAULTS_FUNC(mod_redirect_set_defaults) {
 
 	config_values_t cv[] = {
 		{ "url.redirect",               NULL, T_CONFIG_LOCAL, T_CONFIG_SCOPE_CONNECTION }, /* 0 */
+		{ "url.redirect-code",          NULL, T_CONFIG_SHORT, T_CONFIG_SCOPE_CONNECTION }, /* 1 */
 		{ NULL,                         NULL, T_CONFIG_UNSET, T_CONFIG_SCOPE_UNSET }
 	};
 
@@ -84,8 +87,10 @@ SETDEFAULTS_FUNC(mod_redirect_set_defaults) {
 
 		s = calloc(1, sizeof(plugin_config));
 		s->redirect   = pcre_keyvalue_buffer_init();
+		s->redirect_code = 301;
 
 		cv[0].destination = s->redirect;
+		cv[1].destination = &(s->redirect_code);
 
 		p->config_storage[i] = s;
 		ca = ((data_config *)srv->config_context->data[i])->value;
@@ -136,6 +141,7 @@ static int mod_redirect_patch_connection(server *srv, connection *con, plugin_da
 	plugin_config *s = p->config_storage[0];
 
 	p->conf.redirect = s->redirect;
+	p->conf.redirect_code = s->redirect_code;
 	p->conf.context = NULL;
 
 	/* skip the first, the global context */
@@ -153,6 +159,8 @@ static int mod_redirect_patch_connection(server *srv, connection *con, plugin_da
 			if (0 == strcmp(du->key->ptr, "url.redirect")) {
 				p->conf.redirect = s->redirect;
 				p->conf.context = dc;
+			} else if (0 == strcmp(du->key->ptr, "url.redirect-code")) {
+				p->conf.redirect_code = s->redirect_code;
 			}
 		}
 	}
@@ -246,7 +254,7 @@ static handler_t mod_redirect_uri_handler(server *srv, connection *con, void *p_
 
 			response_header_insert(srv, con, CONST_STR_LEN("Location"), CONST_BUF_LEN(p->location));
 
-			con->http_status = 301;
+			con->http_status = p->conf.redirect_code > 99 && p->conf.redirect_code < 1000 ? p->conf.redirect_code : 301;
 			con->mode = DIRECT;
 			con->file_finished = 1;
 

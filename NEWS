@@ -16,6 +16,7 @@ NEWS
   * [mod_*cgi,mod_accesslog] Fix splitting :port with ipv6 (fixes #2333, thx simoncpu)
   * Detect multiple -f options: show error message instead of assert (fixes #2416)
   * [mod_extforward] Support ipv6 addresses (fixes #1889)
+  * [mod_redirect] Support url.redirect-code option (fixes #2247)
 
 - 1.4.30 - 2011-12-18
   * Always use our 'own' md5 implementation, fixes linking issues on MacOS (fixes #2331)
