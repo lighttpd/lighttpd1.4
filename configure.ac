@@ -580,7 +580,7 @@ AC_ARG_ENABLE(mmap,
      *) AC_MSG_ERROR(bad value ${enableval} for --enable-mmap) ;;
   esac],[mmap=false])
 
-if teest x$mmap = xtrue; then
+if test x$mmap = xtrue; then
   AC_DEFINE(ENABLE_MMAP, [1], [Use mmap if available])
 fi
 

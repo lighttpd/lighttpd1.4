@@ -4,7 +4,7 @@ NEWS
 ====
 
 - 1.4.31 -
-  * [ssl] fix segfault in counting renegotiations for openssl versions without TLSEXT/SNI
+  * [ssl] fix segfault in counting renegotiations for openssl versions without TLSEXT/SNI (thx carpii for reporting)
   * Move fdevent subsystem includes to implementation files to reduce conflicts (fixes #2373)
   * [mod_compress] fix handling if etags are disabled but cache-dir is set - may lead to double response
   * disable mmap by default (fixes #2391)
@@ -17,6 +17,7 @@ NEWS
   * Detect multiple -f options: show error message instead of assert (fixes #2416)
   * [mod_extforward] Support ipv6 addresses (fixes #1889)
   * [mod_redirect] Support url.redirect-code option (fixes #2247)
+  * Fix --enable-mmap handling in configure.ac
 
 - 1.4.30 - 2011-12-18
   * Always use our 'own' md5 implementation, fixes linking issues on MacOS (fixes #2331)
