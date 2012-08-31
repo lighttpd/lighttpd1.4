@@ -404,7 +404,7 @@ void Action_add(app,type,sp,arg)
 struct action **app;
 enum e_action type;
 struct symbol *sp;
-char *arg;
+void *arg;
 {
   struct action *new;
   new = Action_new();
