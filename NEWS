@@ -3,7 +3,10 @@
 NEWS
 ====
 
-- 1.4.31 -
+- 1.4.32 -
+  *
+
+- 1.4.31 - 2012-05-31
   * [ssl] fix segfault in counting renegotiations for openssl versions without TLSEXT/SNI (thx carpii for reporting)
   * Move fdevent subsystem includes to implementation files to reduce conflicts (fixes #2373)
   * [mod_compress] fix handling if etags are disabled but cache-dir is set - may lead to double response
