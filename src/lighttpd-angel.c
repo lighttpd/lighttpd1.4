@@ -25,7 +25,6 @@ static siginfo_t last_sigterm_info;
 static siginfo_t last_sighup_info;
 
 static volatile sig_atomic_t start_process    = 1;
-static volatile sig_atomic_t graceful_restart = 0;
 static volatile pid_t pid = -1;
 
 #define UNUSED(x) ( (void)(x) )
