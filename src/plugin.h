@@ -11,7 +11,7 @@
 		static handler_t x(server *srv, connection *con, void *p_d)
 
 #define INIT_FUNC(x) \
-		static void *x()
+		static void *x(void)
 
 #define FREE_FUNC          SERVER_FUNC
 #define TRIGGER_FUNC       SERVER_FUNC

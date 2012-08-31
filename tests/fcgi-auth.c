@@ -10,7 +10,7 @@
 #include <unistd.h>
 #include <string.h>
 
-int main () {
+int main (void) {
 	char* p;
 
 	while (FCGI_Accept() >= 0) {

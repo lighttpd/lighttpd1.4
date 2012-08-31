@@ -483,7 +483,7 @@ static int fastcgi_status_init(server *srv, buffer *b, fcgi_extension_host *host
 	return 0;
 }
 
-static handler_ctx * handler_ctx_init() {
+static handler_ctx * handler_ctx_init(void) {
 	handler_ctx * hctx;
 
 	hctx = calloc(1, sizeof(*hctx));
@@ -521,7 +521,7 @@ static void handler_ctx_free(server *srv, handler_ctx *hctx) {
 	free(hctx);
 }
 
-static fcgi_proc *fastcgi_process_init() {
+static fcgi_proc *fastcgi_process_init(void) {
 	fcgi_proc *f;
 
 	f = calloc(1, sizeof(*f));
@@ -545,7 +545,7 @@ static void fastcgi_process_free(fcgi_proc *f) {
 	free(f);
 }
 
-static fcgi_extension_host *fastcgi_host_init() {
+static fcgi_extension_host *fastcgi_host_init(void) {
 	fcgi_extension_host *f;
 
 	f = calloc(1, sizeof(*f));
@@ -581,7 +581,7 @@ static void fastcgi_host_free(fcgi_extension_host *h) {
 
 }
 
-static fcgi_exts *fastcgi_extensions_init() {
+static fcgi_exts *fastcgi_extensions_init(void) {
 	fcgi_exts *f;
 
 	f = calloc(1, sizeof(*f));

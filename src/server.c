@@ -68,7 +68,7 @@
 #ifdef HAVE_GETUID
 # ifndef HAVE_ISSETUGID
 
-static int l_issetugid() {
+static int l_issetugid(void) {
 	return (geteuid() != getuid() || getegid() != getgid());
 }
 

@@ -82,7 +82,7 @@ typedef struct {
 	buffer *response_header;
 } handler_ctx;
 
-static handler_ctx * cgi_handler_ctx_init() {
+static handler_ctx * cgi_handler_ctx_init(void) {
 	handler_ctx *hctx = calloc(1, sizeof(*hctx));
 
 	assert(hctx);

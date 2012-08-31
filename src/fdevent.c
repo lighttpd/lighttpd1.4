@@ -100,7 +100,7 @@ int fdevent_reset(fdevents *ev) {
 	return 0;
 }
 
-static fdnode *fdnode_init() {
+static fdnode *fdnode_init(void) {
 	fdnode *fdn;
 
 	fdn = calloc(1, sizeof(*fdn));

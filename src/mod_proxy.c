@@ -114,7 +114,7 @@ typedef struct {
 /* ok, we need a prototype */
 static handler_t proxy_handle_fdevent(server *srv, void *ctx, int revents);
 
-static handler_ctx * handler_ctx_init() {
+static handler_ctx * handler_ctx_init(void) {
 	handler_ctx * hctx;
 
 

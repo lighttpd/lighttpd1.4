@@ -331,7 +331,7 @@ int proc_open_buffer(const char *command, buffer *in, buffer *out, buffer *err) 
 
 /* {{{ test */
 #ifdef DEBUG_PROC_OPEN
-int main() {
+int main(void) {
 	proc_handler_t proc;
 	buffer *in = buffer_init(), *out = buffer_init(), *err = buffer_init();
 	int wstatus;

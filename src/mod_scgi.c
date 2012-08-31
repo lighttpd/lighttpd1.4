@@ -347,7 +347,7 @@ static void reset_signals(void) {
 	signal(SIGUSR1, SIG_DFL);
 }
 
-static handler_ctx * handler_ctx_init() {
+static handler_ctx * handler_ctx_init(void) {
 	handler_ctx * hctx;
 
 	hctx = calloc(1, sizeof(*hctx));
@@ -388,7 +388,7 @@ static void handler_ctx_free(handler_ctx *hctx) {
 	free(hctx);
 }
 
-static scgi_proc *scgi_process_init() {
+static scgi_proc *scgi_process_init(void) {
 	scgi_proc *f;
 
 	f = calloc(1, sizeof(*f));
@@ -410,7 +410,7 @@ static void scgi_process_free(scgi_proc *f) {
 	free(f);
 }
 
-static scgi_extension_host *scgi_host_init() {
+static scgi_extension_host *scgi_host_init(void) {
 	scgi_extension_host *f;
 
 	f = calloc(1, sizeof(*f));
@@ -442,7 +442,7 @@ static void scgi_host_free(scgi_extension_host *h) {
 
 }
 
-static scgi_exts *scgi_extensions_init() {
+static scgi_exts *scgi_extensions_init(void) {
 	scgi_exts *f;
 
 	f = calloc(1, sizeof(*f));

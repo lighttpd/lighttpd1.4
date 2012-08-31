@@ -45,7 +45,7 @@ typedef struct {
 	plugin_config conf;
 } plugin_data;
 
-static handler_ctx * handler_ctx_init() {
+static handler_ctx * handler_ctx_init(void) {
 	handler_ctx * hctx;
 
 	hctx = calloc(1, sizeof(*hctx));

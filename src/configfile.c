@@ -1000,7 +1000,7 @@ int config_parse_file(server *srv, config_t *context, const char *fn) {
 	return ret;
 }
 
-static char* getCWD() {
+static char* getCWD(void) {
 	char *s, *s1;
 	size_t len;
 #ifdef PATH_MAX

@@ -10,7 +10,7 @@
 #include <unistd.h>
 #include <string.h>
 
-int main () {
+int main (void) {
 	int num_requests = 2;
 
 	while (num_requests > 0 &&

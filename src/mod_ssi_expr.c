@@ -19,7 +19,7 @@ typedef struct {
 	int in_cond;
 } ssi_tokenizer_t;
 
-ssi_val_t *ssi_val_init() {
+ssi_val_t *ssi_val_init(void) {
 	ssi_val_t *s;
 
 	s = calloc(1, sizeof(*s));
