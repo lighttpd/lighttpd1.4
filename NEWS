@@ -4,7 +4,7 @@ NEWS
 ====
 
 - 1.4.32 -
-  *
+  * Code cleanup with clang/sparse (fixes #2437, thx kibi)
 
 - 1.4.31 - 2012-05-31
   * [ssl] fix segfault in counting renegotiations for openssl versions without TLSEXT/SNI (thx carpii for reporting)
