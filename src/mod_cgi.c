@@ -1099,7 +1099,7 @@ static int cgi_create_env(server *srv, connection *con, plugin_data *p, buffer *
 
 						c->file.mmap.length = c->file.length;
 
-						if (MAP_FAILED == (c->file.mmap.start = mmap(0,  c->file.mmap.length, PROT_READ, MAP_SHARED, c->file.fd, 0))) {
+						if (MAP_FAILED == (c->file.mmap.start = mmap(NULL,  c->file.mmap.length, PROT_READ, MAP_SHARED, c->file.fd, 0))) {
 							log_error_write(srv, __FILE__, __LINE__, "ssbd", "mmap failed: ",
 									strerror(errno), c->file.name,  c->file.fd);
 

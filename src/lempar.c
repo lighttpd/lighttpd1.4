@@ -158,8 +158,8 @@ typedef struct yyParser yyParser;
 
 #ifndef NDEBUG
 #include <stdio.h>
-static FILE *yyTraceFILE = 0;
-static char *yyTracePrompt = 0;
+static FILE *yyTraceFILE = NULL;
+static char *yyTracePrompt = NULL;
 #endif /* NDEBUG */
 
 #ifndef NDEBUG
@@ -310,7 +310,7 @@ void ParseFree(
   void (*freeProc)(void*)     /* Function used to reclaim memory */
 ){
   yyParser *pParser = (yyParser*)p;
-  if( pParser==0 ) return;
+  if( pParser==NULL ) return;
   while( pParser->yyidx>=0 ) yy_pop_parser_stack(pParser);
   (*freeProc)((void*)pParser);
 }

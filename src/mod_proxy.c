@@ -1161,7 +1161,7 @@ static handler_t mod_proxy_check_extension(server *srv, connection *con, void *p
 				if (s_len > ct_len + 1) {
 					char *pi_offset;
 
-					if (0 != (pi_offset = strchr(fn->ptr + ct_len + 1, '/'))) {
+					if (NULL != (pi_offset = strchr(fn->ptr + ct_len + 1, '/'))) {
 						path_info_offset = pi_offset - fn->ptr;
 					}
 				}

@@ -328,7 +328,7 @@ static struct addrinfo *ipstr_to_sockaddr(server *srv, const char *host) {
 			"could not resolve hostname ", host, " because ", gai_strerror(result), strerror(errno));
 
 		return NULL;
-	} else if (res0 == 0) {
+	} else if (res0 == NULL) {
 		log_error_write(srv, __FILE__, __LINE__, "SSS",
 			"Problem in resolving hostname ", host, ": succeeded, but no information returned");
 	}

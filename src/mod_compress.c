@@ -750,10 +750,10 @@ PHYSICALPATH_FUNC(mod_compress_physical) {
 	if (sce->st.st_size < 128) return HANDLER_GO_ON;
 
 	/* check if mimetype is in compress-config */
-	content_type = 0;
+	content_type = NULL;
 	if (sce->content_type->ptr) {
 		char *c;
-		if ( (c = strchr(sce->content_type->ptr, ';')) != 0) {
+		if ( (c = strchr(sce->content_type->ptr, ';')) != NULL) {
 			content_type = srv->tmp_buf;
 			buffer_copy_string_len(content_type, sce->content_type->ptr, c - sce->content_type->ptr);
 		}

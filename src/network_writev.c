@@ -240,7 +240,7 @@ int network_write_chunkqueue_writev(server *srv, connection *con, int fd, chunkq
 #endif
 				}
 
-				if (MAP_FAILED == (c->file.mmap.start = mmap(0, to_mmap, PROT_READ, MAP_SHARED, c->file.fd, c->file.mmap.offset))) {
+				if (MAP_FAILED == (c->file.mmap.start = mmap(NULL, to_mmap, PROT_READ, MAP_SHARED, c->file.fd, c->file.mmap.offset))) {
 					/* close it here, otherwise we'd have to set FD_CLOEXEC */
 
 					log_error_write(srv, __FILE__, __LINE__, "ssbd", "mmap failed:",

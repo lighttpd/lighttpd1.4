@@ -1022,7 +1022,7 @@ int http_request_parse(server *srv, connection *con) {
 					i++;
 					first = i+1;
 					is_key = 1;
-					value = 0;
+					value = NULL;
 #if 0
 					/**
 					 * for Bug 1230 keep the key_len a live

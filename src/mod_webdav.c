@@ -1721,7 +1721,7 @@ URIHANDLER_FUNC(mod_webdav_subrequest_handler) {
 						return HANDLER_ERROR;
 					}
 
-					if (MAP_FAILED == (c->file.mmap.start = mmap(0, c->file.length, PROT_READ, MAP_SHARED, c->file.fd, 0))) {
+					if (MAP_FAILED == (c->file.mmap.start = mmap(NULL, c->file.length, PROT_READ, MAP_SHARED, c->file.fd, 0))) {
 						log_error_write(srv, __FILE__, __LINE__, "ssbd", "mmap failed: ",
 								strerror(errno), c->file.name,  c->file.fd);
 						close(c->file.fd);

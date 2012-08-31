@@ -34,7 +34,7 @@ int stream_open(stream *f, buffer *fn) {
 		return -1;
 	}
 
-	f->start = mmap(0, f->size, PROT_READ, MAP_SHARED, fd, 0);
+	f->start = mmap(NULL, f->size, PROT_READ, MAP_SHARED, fd, 0);
 
 	close(fd);
 

@@ -357,10 +357,10 @@ void Configtable_clear(/* int(*)(struct config *) */);
 
 /* Allocate a new parser action */
 struct action *Action_new(){
-  static struct action *freelist = 0;
+  static struct action *freelist = NULL;
   struct action *new;
 
-  if( freelist==0 ){
+  if( freelist==NULL ){
     int i;
     int amt = 100;
     freelist = (struct action *)malloc( sizeof(struct action)*amt );
