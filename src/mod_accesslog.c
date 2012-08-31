@@ -69,7 +69,7 @@ typedef struct {
  *
  */
 
-const format_mapping fmap[] =
+static const format_mapping fmap[] =
 {
 	{ '%', FORMAT_PERCENT },
 	{ 'h', FORMAT_REMOTE_HOST },

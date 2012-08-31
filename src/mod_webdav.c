@@ -939,7 +939,7 @@ typedef struct {
 	char *prop;
 } webdav_property;
 
-webdav_property live_properties[] = {
+static webdav_property live_properties[] = {
 	{ "DAV:", "creationdate" },
 	{ "DAV:", "displayname" },
 	{ "DAV:", "getcontentlanguage" },

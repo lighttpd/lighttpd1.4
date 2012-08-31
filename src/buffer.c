@@ -629,7 +629,7 @@ int buffer_copy_string_hex(buffer *b, const char *in, size_t in_len) {
 }
 
 /* everything except: ! ( ) * - . 0-9 A-Z _ a-z */
-const char encoded_chars_rel_uri_part[] = {
+static const char encoded_chars_rel_uri_part[] = {
 	/*
 	0  1  2  3  4  5  6  7  8  9  A  B  C  D  E  F
 	*/
@@ -652,7 +652,7 @@ const char encoded_chars_rel_uri_part[] = {
 };
 
 /* everything except: ! ( ) * - . / 0-9 A-Z _ a-z */
-const char encoded_chars_rel_uri[] = {
+static const char encoded_chars_rel_uri[] = {
 	/*
 	0  1  2  3  4  5  6  7  8  9  A  B  C  D  E  F
 	*/
@@ -674,7 +674,7 @@ const char encoded_chars_rel_uri[] = {
 	1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,  /*  F0 -  FF */
 };
 
-const char encoded_chars_html[] = {
+static const char encoded_chars_html[] = {
 	/*
 	0  1  2  3  4  5  6  7  8  9  A  B  C  D  E  F
 	*/
@@ -696,7 +696,7 @@ const char encoded_chars_html[] = {
 	1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,  /*  F0 -  FF */
 };
 
-const char encoded_chars_minimal_xml[] = {
+static const char encoded_chars_minimal_xml[] = {
 	/*
 	0  1  2  3  4  5  6  7  8  9  A  B  C  D  E  F
 	*/
@@ -718,7 +718,7 @@ const char encoded_chars_minimal_xml[] = {
 	0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,  /*  F0 -  FF */
 };
 
-const char encoded_chars_hex[] = {
+static const char encoded_chars_hex[] = {
 	/*
 	0  1  2  3  4  5  6  7  8  9  A  B  C  D  E  F
 	*/
@@ -740,7 +740,7 @@ const char encoded_chars_hex[] = {
 	1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,  /*  F0 -  FF */
 };
 
-const char encoded_chars_http_header[] = {
+static const char encoded_chars_http_header[] = {
 	/*
 	0  1  2  3  4  5  6  7  8  9  A  B  C  D  E  F
 	*/
