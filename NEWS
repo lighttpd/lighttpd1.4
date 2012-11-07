@@ -8,6 +8,7 @@ NEWS
   * Ignore EPIPE/ECONNRESET after SSL_shutdown
   * Handle ENAMETOOLONG, return 404 Not Found (fixes #2396, thx dererkazo)
   * configure.ac: remove old stuff, add some new to fix warnings in automake 1.12 (fixes #2419, thx blino)
+  * add PATCH method (fixes #2424)
 
 - 1.4.31 - 2012-05-31
   * [ssl] fix segfault in counting renegotiations for openssl versions without TLSEXT/SNI (thx carpii for reporting)

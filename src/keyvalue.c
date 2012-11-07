@@ -22,6 +22,7 @@ static keyvalue http_methods[] = {
 	{ HTTP_METHOD_OPTIONS, "OPTIONS" },
 	{ HTTP_METHOD_MKCOL, "MKCOL" },
 	{ HTTP_METHOD_PUT, "PUT" },
+	{ HTTP_METHOD_PATCH, "PATCH" },
 	{ HTTP_METHOD_DELETE, "DELETE" },
 	{ HTTP_METHOD_COPY, "COPY" },
 	{ HTTP_METHOD_MOVE, "MOVE" },

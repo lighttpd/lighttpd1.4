@@ -420,6 +420,7 @@ static int connection_handle_write_prepare(server *srv, connection *con) {
 		case HTTP_METHOD_POST:
 		case HTTP_METHOD_HEAD:
 		case HTTP_METHOD_PUT:
+		case HTTP_METHOD_PATCH:
 		case HTTP_METHOD_MKCOL:
 		case HTTP_METHOD_DELETE:
 		case HTTP_METHOD_COPY:
