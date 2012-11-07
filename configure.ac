@@ -8,7 +8,7 @@ AC_CONFIG_MACRO_DIR([m4])
 
 AC_CANONICAL_TARGET
 
-AM_INIT_AUTOMAKE([-Wall -Wportability -Wno-override -Werror foreign dist-bzip2 tar-ustar])
+AM_INIT_AUTOMAKE([-Wall -Wportability -Wno-override foreign dist-bzip2 tar-ustar])
 
 dnl enable with --enable-silent-rules or make V=0 (needs automake >= 1.11)
 m4_ifdef([AM_SILENT_RULES], [AM_SILENT_RULES])
@@ -24,6 +24,12 @@ dnl AC_PROG_CXX
 AC_PROG_LN_S
 AC_PROG_MAKE_SET
 
+dnl AM_PROG_AR is needed for some linker stuff
+dnl AC_USE_SYSTEM_EXTENSIONS requires autoconf 2.60
+m4_ifdef([AC_USE_SYSTEM_EXTENSIONS], [AC_USE_SYSTEM_EXTENSIONS])
+dnl AM_PROG_AR requires automake 1.11 (and uses AC_COMPILE_IFELSE which wants AC_USE_SYSTEM_EXTENSIONS)
+m4_ifdef([AM_PROG_AR], [AM_PROG_AR])
+
 dnl check environment
 AC_AIX
 AC_ISC_POSIX
@@ -37,9 +43,6 @@ esac
 AM_CONDITIONAL(NO_RDYNAMIC, test x$NO_RDYNAMIC = xyes)
 
 AC_EXEEXT
-
-dnl more automake stuff
-AM_C_PROTOTYPES
 
 dnl libtool
 AC_DISABLE_STATIC
