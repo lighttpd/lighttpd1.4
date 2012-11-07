@@ -611,6 +611,8 @@ handler_t http_response_prepare(server *srv, connection *con) {
 
 				buffer_reset(con->physical.path);
 				return HANDLER_FINISHED;
+			case ENAMETOOLONG:
+				/* file name to be read was too long. return 404 */
 			case ENOENT:
 				con->http_status = 404;
 
