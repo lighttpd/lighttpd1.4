@@ -82,5 +82,7 @@ exit 0;
 cleanup:
 
 $tf_real->endspawnfcgi($php_child) if $php_child != -1;
+$tf_real->stop_proc;
+$tf_proxy->stop_proc;
 
 die();
