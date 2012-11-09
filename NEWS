@@ -11,6 +11,7 @@ NEWS
   * add PATCH method (fixes #2424)
   * fix :port handling in $HTTP["host"] checks (fixes #2135. thx liming)
   * network_server_init: fix double free and memleak on error (fixes #2440, thx kyprizel)
+  * detect "x-gzip"/"x-bzip2" as separate encodings, more strict encoding matching (fixes #2443)
 
 - 1.4.31 - 2012-05-31
   * [ssl] fix segfault in counting renegotiations for openssl versions without TLSEXT/SNI (thx carpii for reporting)

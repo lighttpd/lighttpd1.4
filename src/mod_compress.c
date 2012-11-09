@@ -40,6 +40,8 @@
 #define HTTP_ACCEPT_ENCODING_DEFLATE  BV(2)
 #define HTTP_ACCEPT_ENCODING_COMPRESS BV(3)
 #define HTTP_ACCEPT_ENCODING_BZIP2    BV(4)
+#define HTTP_ACCEPT_ENCODING_X_GZIP   BV(5)
+#define HTTP_ACCEPT_ENCODING_X_BZIP2  BV(6)
 
 #ifdef __WIN32
 # define mkdir(x,y) mkdir(x)
@@ -188,7 +190,9 @@ SETDEFAULTS_FUNC(mod_compress_setdefaults) {
 				data_string *ds = (data_string *)encodings_arr->data[j];
 #ifdef USE_ZLIB
 				if (NULL != strstr(ds->value->ptr, "gzip"))
-					s->allowed_encodings |= HTTP_ACCEPT_ENCODING_GZIP;
+					s->allowed_encodings |= HTTP_ACCEPT_ENCODING_GZIP | HTTP_ACCEPT_ENCODING_X_GZIP;
+				if (NULL != strstr(ds->value->ptr, "x-gzip"))
+					s->allowed_encodings |= HTTP_ACCEPT_ENCODING_X_GZIP;
 				if (NULL != strstr(ds->value->ptr, "deflate"))
 					s->allowed_encodings |= HTTP_ACCEPT_ENCODING_DEFLATE;
 				/*
@@ -198,17 +202,19 @@ SETDEFAULTS_FUNC(mod_compress_setdefaults) {
 #endif
 #ifdef USE_BZ2LIB
 				if (NULL != strstr(ds->value->ptr, "bzip2"))
-					s->allowed_encodings |= HTTP_ACCEPT_ENCODING_BZIP2;
+					s->allowed_encodings |= HTTP_ACCEPT_ENCODING_BZIP2 | HTTP_ACCEPT_ENCODING_X_BZIP2;
+				if (NULL != strstr(ds->value->ptr, "x-bzip2"))
+					s->allowed_encodings |= HTTP_ACCEPT_ENCODING_X_BZIP2;
 #endif
 			}
 		} else {
 			/* default encodings */
 			s->allowed_encodings = 0
 #ifdef USE_ZLIB
-				| HTTP_ACCEPT_ENCODING_GZIP | HTTP_ACCEPT_ENCODING_DEFLATE
+				| HTTP_ACCEPT_ENCODING_GZIP | HTTP_ACCEPT_ENCODING_X_GZIP | HTTP_ACCEPT_ENCODING_DEFLATE
 #endif
 #ifdef USE_BZ2LIB
-				| HTTP_ACCEPT_ENCODING_BZIP2
+				| HTTP_ACCEPT_ENCODING_BZIP2 | HTTP_ACCEPT_ENCODING_X_BZIP2
 #endif
 				;
 		}
@@ -434,12 +440,14 @@ static int deflate_file_to_file(server *srv, connection *con, plugin_data *p, bu
 
 	switch(type) {
 	case HTTP_ACCEPT_ENCODING_GZIP:
+	case HTTP_ACCEPT_ENCODING_X_GZIP:
 		buffer_append_string_len(p->ofn, CONST_STR_LEN("-gzip-"));
 		break;
 	case HTTP_ACCEPT_ENCODING_DEFLATE:
 		buffer_append_string_len(p->ofn, CONST_STR_LEN("-deflate-"));
 		break;
 	case HTTP_ACCEPT_ENCODING_BZIP2:
+	case HTTP_ACCEPT_ENCODING_X_BZIP2:
 		buffer_append_string_len(p->ofn, CONST_STR_LEN("-bzip2-"));
 		break;
 	default:
@@ -520,6 +528,7 @@ static int deflate_file_to_file(server *srv, connection *con, plugin_data *p, bu
 	switch(type) {
 #ifdef USE_ZLIB
 	case HTTP_ACCEPT_ENCODING_GZIP:
+	case HTTP_ACCEPT_ENCODING_X_GZIP:
 		ret = deflate_file_to_buffer_gzip(srv, con, p, start, sce->st.st_size, sce->st.st_mtime);
 		break;
 	case HTTP_ACCEPT_ENCODING_DEFLATE:
@@ -528,6 +537,7 @@ static int deflate_file_to_file(server *srv, connection *con, plugin_data *p, bu
 #endif
 #ifdef USE_BZ2LIB
 	case HTTP_ACCEPT_ENCODING_BZIP2:
+	case HTTP_ACCEPT_ENCODING_X_BZIP2:
 		ret = deflate_file_to_buffer_bzip2(srv, con, p, start, sce->st.st_size);
 		break;
 #endif
@@ -614,6 +624,7 @@ static int deflate_file_to_buffer(server *srv, connection *con, plugin_data *p, 
 	switch(type) {
 #ifdef USE_ZLIB
 	case HTTP_ACCEPT_ENCODING_GZIP:
+	case HTTP_ACCEPT_ENCODING_X_GZIP:
 		ret = deflate_file_to_buffer_gzip(srv, con, p, start, sce->st.st_size, sce->st.st_mtime);
 		break;
 	case HTTP_ACCEPT_ENCODING_DEFLATE:
@@ -622,6 +633,7 @@ static int deflate_file_to_buffer(server *srv, connection *con, plugin_data *p, 
 #endif
 #ifdef USE_BZ2LIB
 	case HTTP_ACCEPT_ENCODING_BZIP2:
+	case HTTP_ACCEPT_ENCODING_X_BZIP2:
 		ret = deflate_file_to_buffer_bzip2(srv, con, p, start, sce->st.st_size);
 		break;
 #endif
@@ -690,6 +702,20 @@ static int mod_compress_patch_connection(server *srv, connection *con, plugin_da
 	return 0;
 }
 #undef PATCH
+
+static int mod_compress_contains_encoding(const char *headervalue, const char *encoding) {
+	const char *m;
+	for ( ;; ) {
+		m = strstr(headervalue, encoding);
+		if (NULL == m) return 0;
+		if (m == headervalue || m[-1] == ' ' || m[-1] == ',') return 1;
+
+		/* only partial match, search for next value */
+		m = strchr(m, ',');
+		if (NULL == m) return 0;
+		headervalue = m + 1;
+	}
+}
 
 PHYSICALPATH_FUNC(mod_compress_physical) {
 	plugin_data *p = p_d;
@@ -784,22 +810,26 @@ PHYSICALPATH_FUNC(mod_compress_physical) {
 
 				/* get client side support encodings */
 #ifdef USE_ZLIB
-				if (NULL != strstr(value, "gzip")) accept_encoding |= HTTP_ACCEPT_ENCODING_GZIP;
-				if (NULL != strstr(value, "deflate")) accept_encoding |= HTTP_ACCEPT_ENCODING_DEFLATE;
-				if (NULL != strstr(value, "compress")) accept_encoding |= HTTP_ACCEPT_ENCODING_COMPRESS;
+				if (mod_compress_contains_encoding(value, "gzip")) accept_encoding |= HTTP_ACCEPT_ENCODING_GZIP;
+				if (mod_compress_contains_encoding(value, "x-gzip")) accept_encoding |= HTTP_ACCEPT_ENCODING_X_GZIP;
+				if (mod_compress_contains_encoding(value, "deflate")) accept_encoding |= HTTP_ACCEPT_ENCODING_DEFLATE;
+				if (mod_compress_contains_encoding(value, "compress")) accept_encoding |= HTTP_ACCEPT_ENCODING_COMPRESS;
 #endif
 #ifdef USE_BZ2LIB
-				if (NULL != strstr(value, "bzip2")) accept_encoding |= HTTP_ACCEPT_ENCODING_BZIP2;
+				if (mod_compress_contains_encoding(value, "bzip2")) accept_encoding |= HTTP_ACCEPT_ENCODING_BZIP2;
+				if (mod_compress_contains_encoding(value, "x-bzip2")) accept_encoding |= HTTP_ACCEPT_ENCODING_X_BZIP2;
 #endif
-				if (NULL != strstr(value, "identity")) accept_encoding |= HTTP_ACCEPT_ENCODING_IDENTITY;
+				if (mod_compress_contains_encoding(value, "identity")) accept_encoding |= HTTP_ACCEPT_ENCODING_IDENTITY;
 
 				/* find matching entries */
 				matched_encodings = accept_encoding & p->conf.allowed_encodings;
 
 				if (matched_encodings) {
-					const char *dflt_gzip = "gzip";
-					const char *dflt_deflate = "deflate";
-					const char *dflt_bzip2 = "bzip2";
+					static const char dflt_gzip[] = "gzip";
+					static const char dflt_x_gzip[] = "x-gzip";
+					static const char dflt_deflate[] = "deflate";
+					static const char dflt_bzip2[] = "bzip2";
+					static const char dflt_x_bzip2[] = "x-bzip2";
 
 					const char *compression_name = NULL;
 					int compression_type = 0;
@@ -821,9 +851,15 @@ PHYSICALPATH_FUNC(mod_compress_physical) {
 					if (matched_encodings & HTTP_ACCEPT_ENCODING_BZIP2) {
 						compression_type = HTTP_ACCEPT_ENCODING_BZIP2;
 						compression_name = dflt_bzip2;
+					} else if (matched_encodings & HTTP_ACCEPT_ENCODING_X_BZIP2) {
+						compression_type = HTTP_ACCEPT_ENCODING_X_BZIP2;
+						compression_name = dflt_x_bzip2;
 					} else if (matched_encodings & HTTP_ACCEPT_ENCODING_GZIP) {
 						compression_type = HTTP_ACCEPT_ENCODING_GZIP;
 						compression_name = dflt_gzip;
+					} else if (matched_encodings & HTTP_ACCEPT_ENCODING_X_GZIP) {
+						compression_type = HTTP_ACCEPT_ENCODING_X_GZIP;
+						compression_name = dflt_x_gzip;
 					} else if (matched_encodings & HTTP_ACCEPT_ENCODING_DEFLATE) {
 						compression_type = HTTP_ACCEPT_ENCODING_DEFLATE;
 						compression_name = dflt_deflate;
