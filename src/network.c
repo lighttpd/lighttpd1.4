@@ -397,11 +397,6 @@ static int network_server_init(server *srv, buffer *host_token, specific_config 
 		}
 #else
 
-		buffer_free(srv_socket->srv_token);
-		free(srv_socket);
-
-		buffer_free(b);
-
 		log_error_write(srv, __FILE__, __LINE__, "ss", "SSL:",
 				"ssl requested but openssl support is not compiled in");
 
@@ -457,6 +452,8 @@ error_free_socket:
 	}
 	buffer_free(srv_socket->srv_token);
 	free(srv_socket);
+
+	buffer_free(b);
 
 	return -1;
 }
