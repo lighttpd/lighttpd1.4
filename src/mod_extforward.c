@@ -398,8 +398,8 @@ URIHANDLER_FUNC(mod_extforward_uri_handler) {
 	/* if the remote ip itself is not trusted, then do nothing */
 	if (IP_UNTRUSTED == is_proxy_trusted(dst_addr_str, p)) {
 		if (con->conf.log_request_handling) {
-			log_error_write(srv, __FILE__, __LINE__, "s",
-					"remote address is NOT a trusted proxy, skipping");
+			log_error_write(srv, __FILE__, __LINE__, "sss",
+					"remote address", dst_addr_str, "is NOT a trusted proxy, skipping");
 		}
 
 		return HANDLER_GO_ON;
