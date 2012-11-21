@@ -643,10 +643,11 @@ int http_request_parse(server *srv, connection *con) {
 						/* skip WS */
 						continue;
 					case ':':
-						/* ok, done */
+						/* ok, done; handle the colon the usual way */
 
 						i += j - 1;
 						got_colon = 1;
+						is_ws_after_key = 1; /* we already know the key length */
 
 						break;
 					default:
