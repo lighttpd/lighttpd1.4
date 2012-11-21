@@ -14,6 +14,7 @@ NEWS
   * detect "x-gzip"/"x-bzip2" as separate encodings, more strict encoding matching (fixes #2443)
   * tests: make sure mod_proxy doesn't leave running processes (fixes #2435, thx kibi)
   * mod_extforward: log address of untrusted proxy with debug.log-request-handling
+  * fix DoS in Connection header value split (reported by Jesse Sipprell, CVE-2012-5533)
 
 - 1.4.31 - 2012-05-31
   * [ssl] fix segfault in counting renegotiations for openssl versions without TLSEXT/SNI (thx carpii for reporting)
