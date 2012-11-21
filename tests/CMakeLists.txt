@@ -27,7 +27,7 @@ SET(T_FILES
 )
 
 FOREACH(it ${T_FILES})
-  ADD_TEST(${it} "${lighttpd_SOURCE_DIR}/tests/wrapper.sh"
+  ADD_TEST(NAME ${it} COMMAND "${lighttpd_SOURCE_DIR}/tests/wrapper.sh"
 		"${lighttpd_SOURCE_DIR}/tests"
 		"${lighttpd_BINARY_DIR}"
 		"${lighttpd_SOURCE_DIR}/tests/${it}")
