@@ -3,7 +3,10 @@
 NEWS
 ====
 
-- 1.4.32 -
+- 1.4.33 -
+  *
+
+- 1.4.32 - 2012-11-21
   * Code cleanup with clang/sparse (fixes #2437, thx kibi)
   * Ignore EPIPE/ECONNRESET after SSL_shutdown
   * Handle ENAMETOOLONG, return 404 Not Found (fixes #2396, thx dererkazo)
