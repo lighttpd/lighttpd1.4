@@ -1275,6 +1275,7 @@ SETDEFAULTS_FUNC(mod_fastcgi_set_defaults) {
 					}
 
 					host = fastcgi_host_init();
+					buffer_reset(fcgi_mode);
 
 					buffer_copy_string_buffer(host->id, da_host->key);
 

@@ -4,7 +4,7 @@ NEWS
 ====
 
 - 1.4.33 -
-  *
+  * mod_fastcgi: fix mix up of "mode" => "authorizer" in other fastcgi configs (fixes #2465, thx peex)
 
 - 1.4.32 - 2012-11-21
   * Code cleanup with clang/sparse (fixes #2437, thx kibi)
