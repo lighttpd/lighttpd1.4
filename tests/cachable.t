@@ -78,8 +78,8 @@ If-None-Match: $etag
 If-Modified-Since: Sun, 01 Jan 1970 00:00:01 GMT; foo
 EOF
  );
-$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200 } ];
-ok($tf->handle_http($t) == 0, 'Conditional GET - ETag + old Last-Modified');
+$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 304 } ];
+ok($tf->handle_http($t) == 0, 'Conditional GET - ETag + old Last-Modified (which should be ignored)');
 
 $t->{REQUEST}  = ( <<EOF
 GET / HTTP/1.0
@@ -88,7 +88,7 @@ If-Modified-Since: $now; foo
 EOF
  );
 $t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 304 } ];
-ok($tf->handle_http($t) == 0, 'Conditional GET - ETag, Last-Modified + comment');
+ok($tf->handle_http($t) == 0, 'Conditional GET - ETag, Last-Modified + comment (which should be ignored)');
 
 $t->{REQUEST}  = ( <<EOF
 GET / HTTP/1.0
@@ -105,8 +105,8 @@ If-None-Match: $etag
 If-Modified-Since: $now foo
 EOF
  );
-$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 412 } ];
-ok($tf->handle_http($t) == 0, 'Conditional GET - ETag + Last-Modified + overlong timestamp');
+$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 304 } ];
+ok($tf->handle_http($t) == 0, 'Conditional GET - ETag + Last-Modified + overlong timestamp (which should be ignored)');
 
 $t->{REQUEST}  = ( <<EOF
 GET / HTTP/1.0
