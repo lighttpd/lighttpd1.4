@@ -8,6 +8,7 @@ NEWS
   * fix handling of If-Modified-Since if If-None-Match is present (don't return 412 for date parsing errors);
     follow current draft for HTTP/1.1, which tells us to ignore If-Modified-Since if we have matching etags.
   * [mod_fastcgi,log] support multi line logging (fixes #2252)
+  * call ERR_clear_error only for ssl connections in CON_STATE_ERROR
 
 - 1.4.32 - 2012-11-21
   * Code cleanup with clang/sparse (fixes #2437, thx kibi)

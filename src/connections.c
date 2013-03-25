@@ -1736,8 +1736,8 @@ int connection_state_machine(server *srv, connection *con) {
 						break;
 					}
 				}
+				ERR_clear_error();
 			}
-			ERR_clear_error();
 #endif
 
 			switch(con->mode) {
