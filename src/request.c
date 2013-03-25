@@ -584,7 +584,7 @@ int http_request_parse(server *srv, connection *con) {
 
 			/**
 			 * 1*<any CHAR except CTLs or separators>
-			 * CTLs == 0-31 + 127
+			 * CTLs == 0-31 + 127, CHAR = 7-bit ascii (0..127)
 			 *
 			 */
 			switch(*cur) {
@@ -619,8 +619,14 @@ int http_request_parse(server *srv, connection *con) {
 				con->keep_alive = 0;
 				con->response.keep_alive = 0;
 
-				log_error_write(srv, __FILE__, __LINE__, "sbsds",
+				if (srv->srvconf.log_request_header_on_error) {
+					log_error_write(srv, __FILE__, __LINE__, "sbsds",
 						"invalid character in key", con->request.request, cur, *cur, "-> 400");
+
+					log_error_write(srv, __FILE__, __LINE__, "Sb",
+						"request-header:\n",
+						con->request.request);
+				}
 				return 0;
 			case ' ':
 			case '\t':
@@ -678,8 +684,6 @@ int http_request_parse(server *srv, connection *con) {
 					i++;
 
 					done = 1;
-
-					break;
 				} else {
 					if (srv->srvconf.log_request_header_on_error) {
 						log_error_write(srv, __FILE__, __LINE__, "s", "CR without LF -> 400");
@@ -693,53 +697,24 @@ int http_request_parse(server *srv, connection *con) {
 					con->response.keep_alive = 0;
 					return 0;
 				}
-				/* fall thru */
-			case 0: /* illegal characters (faster than a if () :) */
-			case 1:
-			case 2:
-			case 3:
-			case 4:
-			case 5:
-			case 6:
-			case 7:
-			case 8:
-			case 10:
-			case 11:
-			case 12:
-			case 14:
-			case 15:
-			case 16:
-			case 17:
-			case 18:
-			case 19:
-			case 20:
-			case 21:
-			case 22:
-			case 23:
-			case 24:
-			case 25:
-			case 26:
-			case 27:
-			case 28:
-			case 29:
-			case 30:
-			case 31:
-			case 127:
-				con->http_status = 400;
-				con->keep_alive = 0;
-				con->response.keep_alive = 0;
-
-				if (srv->srvconf.log_request_header_on_error) {
-					log_error_write(srv, __FILE__, __LINE__, "sbsds",
-						"CTL character in key", con->request.request, cur, *cur, "-> 400");
-
-					log_error_write(srv, __FILE__, __LINE__, "Sb",
-						"request-header:\n",
-						con->request.request);
-				}
-
-				return 0;
+				break;
 			default:
+				if (*cur < 32 || ((unsigned char)*cur) >= 127) {
+					con->http_status = 400;
+					con->keep_alive = 0;
+					con->response.keep_alive = 0;
+
+					if (srv->srvconf.log_request_header_on_error) {
+						log_error_write(srv, __FILE__, __LINE__, "sbsds",
+							"invalid character in key", con->request.request, cur, *cur, "-> 400");
+
+						log_error_write(srv, __FILE__, __LINE__, "Sb",
+							"request-header:\n",
+							con->request.request);
+					}
+
+					return 0;
+				}
 				/* ok */
 				break;
 			}
