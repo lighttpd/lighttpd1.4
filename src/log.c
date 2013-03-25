@@ -263,14 +263,80 @@ int log_error_close(server *srv) {
 	return 0;
 }
 
-int log_error_write(server *srv, const char *filename, unsigned int line, const char *fmt, ...) {
-	va_list ap;
+/* lowercase: append space, uppercase: don't */
+static void log_buffer_append_printf(buffer *out, const char *fmt, va_list ap) {
+	for(; *fmt; fmt++) {
+		int d;
+		char *s;
+		buffer *b;
+		off_t o;
 
+		switch(*fmt) {
+		case 's':           /* string */
+			s = va_arg(ap, char *);
+			buffer_append_string(out, s);
+			buffer_append_string_len(out, CONST_STR_LEN(" "));
+			break;
+		case 'b':           /* buffer */
+			b = va_arg(ap, buffer *);
+			buffer_append_string_buffer(out, b);
+			buffer_append_string_len(out, CONST_STR_LEN(" "));
+			break;
+		case 'd':           /* int */
+			d = va_arg(ap, int);
+			buffer_append_long(out, d);
+			buffer_append_string_len(out, CONST_STR_LEN(" "));
+			break;
+		case 'o':           /* off_t */
+			o = va_arg(ap, off_t);
+			buffer_append_off_t(out, o);
+			buffer_append_string_len(out, CONST_STR_LEN(" "));
+			break;
+		case 'x':           /* int (hex) */
+			d = va_arg(ap, int);
+			buffer_append_string_len(out, CONST_STR_LEN("0x"));
+			buffer_append_long_hex(out, d);
+			buffer_append_string_len(out, CONST_STR_LEN(" "));
+			break;
+		case 'S':           /* string */
+			s = va_arg(ap, char *);
+			buffer_append_string(out, s);
+			break;
+		case 'B':           /* buffer */
+			b = va_arg(ap, buffer *);
+			buffer_append_string_buffer(out, b);
+			break;
+		case 'D':           /* int */
+			d = va_arg(ap, int);
+			buffer_append_long(out, d);
+			break;
+		case 'O':           /* off_t */
+			o = va_arg(ap, off_t);
+			buffer_append_off_t(out, o);
+			break;
+		case 'X':           /* int (hex) */
+			d = va_arg(ap, int);
+			buffer_append_string_len(out, CONST_STR_LEN("0x"));
+			buffer_append_long_hex(out, d);
+			break;
+		case '(':
+		case ')':
+		case '<':
+		case '>':
+		case ',':
+		case ' ':
+			buffer_append_string_len(out, fmt, 1);
+			break;
+		}
+	}
+}
+
+static int log_buffer_prepare(buffer *b, server *srv, const char *filename, unsigned int line) {
 	switch(srv->errorlog_mode) {
 	case ERRORLOG_PIPE:
 	case ERRORLOG_FILE:
 	case ERRORLOG_FD:
-		if (-1 == srv->errorlog_fd) return 0;
+		if (-1 == srv->errorlog_fd) return -1;
 		/* cache the generated timestamp */
 		if (srv->cur_ts != srv->last_generated_debug_ts) {
 			buffer_prepare_copy(srv->ts_debug_str, 255);
@@ -280,99 +346,89 @@ int log_error_write(server *srv, const char *filename, unsigned int line, const 
 			srv->last_generated_debug_ts = srv->cur_ts;
 		}
 
-		buffer_copy_string_buffer(srv->errorlog_buf, srv->ts_debug_str);
-		buffer_append_string_len(srv->errorlog_buf, CONST_STR_LEN(": ("));
+		buffer_copy_string_buffer(b, srv->ts_debug_str);
+		buffer_append_string_len(b, CONST_STR_LEN(": ("));
 		break;
 	case ERRORLOG_SYSLOG:
 		/* syslog is generating its own timestamps */
-		buffer_copy_string_len(srv->errorlog_buf, CONST_STR_LEN("("));
+		buffer_copy_string_len(b, CONST_STR_LEN("("));
 		break;
 	}
 
-	buffer_append_string(srv->errorlog_buf, filename);
-	buffer_append_string_len(srv->errorlog_buf, CONST_STR_LEN("."));
-	buffer_append_long(srv->errorlog_buf, line);
-	buffer_append_string_len(srv->errorlog_buf, CONST_STR_LEN(") "));
-
-
-	for(va_start(ap, fmt); *fmt; fmt++) {
-		int d;
-		char *s;
-		buffer *b;
-		off_t o;
-
-		switch(*fmt) {
-		case 's':           /* string */
-			s = va_arg(ap, char *);
-			buffer_append_string(srv->errorlog_buf, s);
-			buffer_append_string_len(srv->errorlog_buf, CONST_STR_LEN(" "));
-			break;
-		case 'b':           /* buffer */
-			b = va_arg(ap, buffer *);
-			buffer_append_string_buffer(srv->errorlog_buf, b);
-			buffer_append_string_len(srv->errorlog_buf, CONST_STR_LEN(" "));
-			break;
-		case 'd':           /* int */
-			d = va_arg(ap, int);
-			buffer_append_long(srv->errorlog_buf, d);
-			buffer_append_string_len(srv->errorlog_buf, CONST_STR_LEN(" "));
-			break;
-		case 'o':           /* off_t */
-			o = va_arg(ap, off_t);
-			buffer_append_off_t(srv->errorlog_buf, o);
-			buffer_append_string_len(srv->errorlog_buf, CONST_STR_LEN(" "));
-			break;
-		case 'x':           /* int (hex) */
-			d = va_arg(ap, int);
-			buffer_append_string_len(srv->errorlog_buf, CONST_STR_LEN("0x"));
-			buffer_append_long_hex(srv->errorlog_buf, d);
-			buffer_append_string_len(srv->errorlog_buf, CONST_STR_LEN(" "));
-			break;
-		case 'S':           /* string */
-			s = va_arg(ap, char *);
-			buffer_append_string(srv->errorlog_buf, s);
-			break;
-		case 'B':           /* buffer */
-			b = va_arg(ap, buffer *);
-			buffer_append_string_buffer(srv->errorlog_buf, b);
-			break;
-		case 'D':           /* int */
-			d = va_arg(ap, int);
-			buffer_append_long(srv->errorlog_buf, d);
-			break;
-		case 'O':           /* off_t */
-			o = va_arg(ap, off_t);
-			buffer_append_off_t(srv->errorlog_buf, o);
-			break;
-		case 'X':           /* int (hex) */
-			d = va_arg(ap, int);
-			buffer_append_string_len(srv->errorlog_buf, CONST_STR_LEN("0x"));
-			buffer_append_long_hex(srv->errorlog_buf, d);
-			break;
-		case '(':
-		case ')':
-		case '<':
-		case '>':
-		case ',':
-		case ' ':
-			buffer_append_string_len(srv->errorlog_buf, fmt, 1);
-			break;
-		}
-	}
-	va_end(ap);
-
-	switch(srv->errorlog_mode) {
-	case ERRORLOG_PIPE:
-	case ERRORLOG_FILE:
-	case ERRORLOG_FD:
-		buffer_append_string_len(srv->errorlog_buf, CONST_STR_LEN("\n"));
-		write(srv->errorlog_fd, srv->errorlog_buf->ptr, srv->errorlog_buf->used - 1);
-		break;
-	case ERRORLOG_SYSLOG:
-		syslog(LOG_ERR, "%s", srv->errorlog_buf->ptr);
-		break;
-	}
+	buffer_append_string(b, filename);
+	buffer_append_string_len(b, CONST_STR_LEN("."));
+	buffer_append_long(b, line);
+	buffer_append_string_len(b, CONST_STR_LEN(") "));
 
 	return 0;
 }
 
+static void log_write(server *srv, buffer *b) {
+	switch(srv->errorlog_mode) {
+	case ERRORLOG_PIPE:
+	case ERRORLOG_FILE:
+	case ERRORLOG_FD:
+		buffer_append_string_len(b, CONST_STR_LEN("\n"));
+		write(srv->errorlog_fd, b->ptr, b->used - 1);
+		break;
+	case ERRORLOG_SYSLOG:
+		syslog(LOG_ERR, "%s", b->ptr);
+		break;
+	}
+}
+
+int log_error_write(server *srv, const char *filename, unsigned int line, const char *fmt, ...) {
+	va_list ap;
+
+	if (-1 == log_buffer_prepare(srv->errorlog_buf, srv, filename, line)) return 0;
+
+	va_start(ap, fmt);
+	log_buffer_append_printf(srv->errorlog_buf, fmt, ap);
+	va_end(ap);
+
+	log_write(srv, srv->errorlog_buf);
+
+	return 0;
+}
+
+int log_error_write_multiline_buffer(server *srv, const char *filename, unsigned int line, buffer *multiline, const char *fmt, ...) {
+	va_list ap;
+	size_t prefix_used;
+	buffer *b = srv->errorlog_buf;
+	char *pos, *end, *current_line;
+
+	if (multiline->used < 2) return 0;
+
+	if (-1 == log_buffer_prepare(b, srv, filename, line)) return 0;
+
+	va_start(ap, fmt);
+	log_buffer_append_printf(b, fmt, ap);
+	va_end(ap);
+
+	prefix_used = b->used;
+
+	current_line = pos = multiline->ptr;
+	end = multiline->ptr + multiline->used;
+
+	for ( ; pos < end ; ++pos) {
+		switch (*pos) {
+		case '\n':
+		case '\r':
+		case '\0': /* handles end of string */
+			if (current_line < pos) {
+				/* truncate to prefix */
+				b->used = prefix_used;
+				b->ptr[b->used - 1] = '\0';
+
+				buffer_append_string_len(b, current_line, pos - current_line);
+				log_write(srv, b);
+			}
+			current_line = pos + 1;
+			break;
+		default:
+			break;
+		}
+	}
+
+	return 0;
+}

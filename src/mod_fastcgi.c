@@ -2674,8 +2674,8 @@ static int fcgi_demux_response(server *srv, handler_ctx *hctx) {
 		case FCGI_STDERR:
 			if (packet.len == 0) break;
 
-			log_error_write(srv, __FILE__, __LINE__, "sb",
-					"FastCGI-stderr:", packet.b);
+			log_error_write_multiline_buffer(srv, __FILE__, __LINE__, packet.b, "s",
+					"FastCGI-stderr:");
 
 			break;
 		case FCGI_END_REQUEST:
