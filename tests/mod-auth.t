@@ -8,7 +8,7 @@ BEGIN {
 
 use strict;
 use IO::Socket;
-use Test::More tests => 15;
+use Test::More tests => 17;
 use LightyTest;
 
 my $tf = LightyTest->new();
@@ -64,6 +64,24 @@ EOF
  );
 $t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200 } ];
 ok($tf->handle_http($t) == 0, 'Basic-Auth: Valid Auth-token - htpasswd (des) (lowercase)');
+
+$t->{REQUEST}  = ( <<EOF
+GET /server-config HTTP/1.0
+Host: auth-htpasswd.example.org
+Authorization: Basic c2hhOnNoYQ==
+EOF
+ );
+$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200 } ];
+ok($tf->handle_http($t) == 0, 'Basic-Auth: Valid Auth-token - htpasswd (sha)');
+
+$t->{REQUEST}  = ( <<EOF
+GET /server-config HTTP/1.0
+Host: auth-htpasswd.example.org
+Authorization: Basic c2hhOnNoYg==
+EOF
+ );
+$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 401 } ];
+ok($tf->handle_http($t) == 0, 'Basic-Auth: Valid Auth-token - htpasswd (sha, wrong password)');
 
 
 SKIP: {

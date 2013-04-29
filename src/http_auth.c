@@ -29,6 +29,10 @@
 
 #include "md5.h"
 
+#ifdef USE_OPENSSL
+#include <openssl/sha.h>
+#endif
+
 #define HASHLEN 16
 #define HASHHEXLEN 32
 typedef unsigned char HASH[HASHLEN];
@@ -599,6 +603,35 @@ static void apr_md5_encode(const char *pw, const char *salt, char *result, size_
     apr_cpystrn(result, passwd, nbytes - 1);
 }
 
+#ifdef USE_OPENSSL
+static void apr_sha_encode(const char *pw, char *result, size_t nbytes) {
+	static const unsigned char base64_data[65] =
+		"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+	unsigned char digest[21]; /* multiple of 3 for base64 encoding */
+	int i;
+
+	memset(result, 0, nbytes);
+
+	/* need 5 bytes for "{SHA}", 28 for base64 (3 bytes -> 4 bytes) of SHA1 (20 bytes), 1 terminating */
+	if (nbytes < 5 + 28 + 1) return;
+
+	SHA1((const unsigned char*) pw, strlen(pw), digest);
+	digest[20] = 0;
+
+	strcpy(result, "{SHA}");
+	result = result + 5;
+	for (i = 0; i < 21; i += 3) {
+		unsigned int v = (digest[i] << 16) | (digest[i+1] << 8) | digest[i+2];
+		result[3] = base64_data[v & 0x3f]; v >>= 6;
+		result[2] = base64_data[v & 0x3f]; v >>= 6;
+		result[1] = base64_data[v & 0x3f]; v >>= 6;
+		result[0] = base64_data[v & 0x3f];
+		result += 4;
+	}
+	result[-1] = '='; /* last digest character was already end of string, pad it */
+	*result = '\0';
+}
+#endif
 
 /**
  *
@@ -643,6 +676,11 @@ static int http_auth_basic_password_compare(server *srv, mod_auth_plugin_data *p
 			 */
 			apr_md5_encode(pw, password->ptr, sample, sizeof(sample));
 			return (strcmp(sample, password->ptr) == 0) ? 0 : 1;
+#ifdef USE_OPENSSL
+		} else if (0 == strncmp(password->ptr, "{SHA}", 5)) {
+			apr_sha_encode(pw, sample, sizeof(sample));
+			return (strcmp(sample, password->ptr) == 0) ? 0 : 1;
+#endif
 		} else {
 #ifdef HAVE_CRYPT
 			char *crypted;
