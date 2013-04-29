@@ -10,6 +10,7 @@ NEWS
   * [mod_fastcgi,log] support multi line logging (fixes #2252)
   * call ERR_clear_error only for ssl connections in CON_STATE_ERROR
   * reject non ASCII characters in HTTP header names
+  * [mod_auth] use crypt() on encrypted password instead of extracting salt first (fixes #2483)
 
 - 1.4.32 - 2012-11-21
   * Code cleanup with clang/sparse (fixes #2437, thx kibi)

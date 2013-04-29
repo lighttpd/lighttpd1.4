@@ -645,56 +645,23 @@ static int http_auth_basic_password_compare(server *srv, mod_auth_plugin_data *p
 			return (strcmp(sample, password->ptr) == 0) ? 0 : 1;
 		} else {
 #ifdef HAVE_CRYPT
-		char salt[32];
-		char *crypted;
-		size_t salt_len = 0;
-		/*
-		 * htpasswd format
-		 *
-		 * user:crypted password
-		 */
+			char *crypted;
 
-		/*
-		 *  Algorithm      Salt
-		 *  CRYPT_STD_DES   2-character (Default)
-		 *  CRYPT_EXT_DES   9-character
-		 *  CRYPT_MD5       12-character beginning with $1$
-		 *  CRYPT_BLOWFISH  16-character beginning with $2$
-		 */
-
-		if (password->used < 13 + 1) {
-			return -1;
-		}
-
-		if (password->used == 13 + 1) {
-			/* a simple DES password is 2 + 11 characters */
-			salt_len = 2;
-		} else if (password->ptr[0] == '$' && password->ptr[2] == '$') {
-			char *dollar = NULL;
-
-			if (NULL == (dollar = strchr(password->ptr + 3, '$'))) {
+			/* a simple DES password is 2 + 11 characters. everything else should be longer. */
+			if (password->used < 13 + 1) {
 				return -1;
 			}
 
-			salt_len = dollar - password->ptr;
-		}
+			if (0 == (crypted = crypt(pw, password->ptr))) {
+				/* crypt failed. */
+				return -1;
+			}
 
-		if (salt_len > sizeof(salt) - 1) {
-			return -1;
-		}
-
-		strncpy(salt, password->ptr, salt_len);
-
-		salt[salt_len] = '\0';
-
-		crypted = crypt(pw, salt);
-
-		if (0 == strcmp(password->ptr, crypted)) {
-			return 0;
-		}
-
+			if (0 == strcmp(password->ptr, crypted)) {
+				return 0;
+			}
 #endif
-	}
+		}
 	} else if (p->conf.auth_backend == AUTH_BACKEND_PLAIN) {
 		if (0 == strcmp(password->ptr, pw)) {
 			return 0;
