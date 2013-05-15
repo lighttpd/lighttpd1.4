@@ -13,6 +13,7 @@ NEWS
   * [mod_auth] use crypt() on encrypted password instead of extracting salt first (fixes #2483)
   * [mod_auth] add htpasswd -s (SHA1) support if openssl is used (needs openssl for SHA1). This doesn't use any salt, md5 with salt is probably better.
   * [mod_auth] fix base64_decode (#2484)
+  * fix some bugs found with canalyze (fixes #2484, thx Zhenbo Xu)
 
 - 1.4.32 - 2012-11-21
   * Code cleanup with clang/sparse (fixes #2437, thx kibi)

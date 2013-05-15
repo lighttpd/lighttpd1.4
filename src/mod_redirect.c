@@ -65,7 +65,6 @@ FREE_FUNC(mod_redirect_free) {
 
 SETDEFAULTS_FUNC(mod_redirect_set_defaults) {
 	plugin_data *p = p_d;
-	data_unset *du;
 	size_t i = 0;
 
 	config_values_t cv[] = {
@@ -83,7 +82,8 @@ SETDEFAULTS_FUNC(mod_redirect_set_defaults) {
 		plugin_config *s;
 		size_t j;
 		array *ca;
-		data_array *da = (data_array *)du;
+		data_unset *du;
+		data_array *da;
 
 		s = calloc(1, sizeof(plugin_config));
 		s->redirect   = pcre_keyvalue_buffer_init();
