@@ -91,7 +91,8 @@ static const short base64_reverse_table[256] = {
 
 static unsigned char * base64_decode(buffer *out, const char *in) {
 	unsigned char *result;
-	int ch, j = 0, k;
+	unsigned int j = 0; /* current output character (position) that is decoded. can contain partial result */
+	unsigned int group = 0; /* how many base64 digits in the current group were decoded already. each group has up to 4 digits */
 	size_t i;
 
 	size_t in_len = strlen(in);
@@ -100,51 +101,64 @@ static unsigned char * base64_decode(buffer *out, const char *in) {
 
 	result = (unsigned char *)out->ptr;
 
-	ch = in[0];
 	/* run through the whole string, converting as we go */
 	for (i = 0; i < in_len; i++) {
-		ch = (unsigned char) in[i];
+		unsigned char c = (unsigned char) in[i];
+		short ch;
 
-		if (ch == '\0') break;
+		if (c == '\0') break;
 
-		if (ch == base64_pad) break;
+		if (c == base64_pad) {
+			/* pad character can only come after 2 base64 digits in a group */
+			if (group < 2) return NULL;
+			break;
+		}
 
-		ch = base64_reverse_table[ch];
-		if (ch < 0) continue;
+		ch = base64_reverse_table[c];
+		if (ch < 0) continue; /* skip invalid characters */
 
-		switch(i % 4) {
+		switch(group) {
 		case 0:
 			result[j] = ch << 2;
+			group = 1;
 			break;
 		case 1:
 			result[j++] |= ch >> 4;
 			result[j] = (ch & 0x0f) << 4;
+			group = 2;
 			break;
 		case 2:
 			result[j++] |= ch >>2;
 			result[j] = (ch & 0x03) << 6;
+			group = 3;
 			break;
 		case 3:
 			result[j++] |= ch;
+			group = 0;
 			break;
 		}
 	}
-	k = j;
-	/* mop things up if we ended on a boundary */
-	if (ch == base64_pad) {
-		switch(i % 4) {
-		case 0:
-		case 1:
-			return NULL;
-		case 2:
-			k++;
-		case 3:
-			result[k++] = 0;
-		}
-	}
-	result[k] = '\0';
 
-	out->used = k;
+	switch(group) {
+	case 0:
+		/* ended on boundary */
+		break;
+	case 1:
+		/* need at least 2 base64 digits per group */
+		return NULL;
+	case 2:
+		/* have 2 base64 digits in last group => one real octect, two zeroes padded */
+	case 3:
+		/* have 3 base64 digits in last group => two real octects, one zero padded */
+
+		/* for both cases the current index already is on the first zero padded octet
+		 * - check it really is zero (overlapping bits) */
+		if (0 != result[j]) return NULL;
+		break;
+	}
+
+	result[j] = '\0';
+	out->used = j;
 
 	return result;
 }
