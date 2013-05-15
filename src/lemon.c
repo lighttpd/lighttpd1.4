@@ -3105,7 +3105,7 @@ int mhflag;                 /* True if generating makeheaders output */
     stddt[j] = 0;
     hash = 0;
     for(j=0; stddt[j]; j++){
-      hash = hash*53 + stddt[j];
+      hash = (unsigned int)hash*53u + (unsigned int) stddt[j];
     }
     hash = (hash & 0x7fffffff)%arraysize;
     while( types[hash] ){
@@ -3751,8 +3751,8 @@ char *s2;
 PRIVATE int strhash(x)
 char *x;
 {
-  int h = 0;
-  while( *x) h = h*13 + *(x++);
+  unsigned int h = 0;
+  while( *x) h = h*13u + (unsigned int) *(x++);
   return h;
 }
 
@@ -4124,9 +4124,9 @@ struct config *b;
 PRIVATE int statehash(a)
 struct config *a;
 {
-  int h=0;
+  unsigned int h=0;
   while( a ){
-    h = h*571 + a->rp->index*37 + a->dot;
+    h = h*571u + (unsigned int)a->rp->index*37u + (unsigned int)a->dot;
     a = a->bp;
   }
   return h;

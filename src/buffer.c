@@ -7,6 +7,11 @@
 #include <assert.h>
 #include <ctype.h>
 
+#if defined HAVE_STDINT_H
+# include <stdint.h>
+#elif defined HAVE_INTTYPES_H
+# include <inttypes.h>
+#endif
 
 static const char hex_chars[] = "0123456789abcdef";
 
@@ -533,59 +538,31 @@ int buffer_is_equal_string(buffer *a, const char *s, size_t b_len) {
 	return buffer_is_equal(a, &b);
 }
 
-/* simple-assumption:
- *
- * most parts are equal and doing a case conversion needs time
- *
- */
+
 int buffer_caseless_compare(const char *a, size_t a_len, const char *b, size_t b_len) {
-	size_t ndx = 0, max_ndx;
-	size_t *al, *bl;
-	size_t mask = sizeof(*al) - 1;
+	size_t const len = (a_len < b_len) ? a_len : b_len;
+	size_t i;
 
-	al = (size_t *)a;
-	bl = (size_t *)b;
+	for (i = 0; i < len; ++i) {
+		unsigned char ca = a[i], cb = b[i];
+		if (ca == cb) continue;
 
-	/* is the alignment correct ? */
-	if ( ((size_t)al & mask) == 0 &&
-	     ((size_t)bl & mask) == 0 ) {
+		/* always lowercase for transitive results */
+#if 1
+		if (ca >= 'A' && ca <= 'Z') ca |= 32;
+		if (cb >= 'A' && cb <= 'Z') cb |= 32;
+#else
+		/* try to produce code without branching (jumps) */
+		ca |= ((unsigned char)(ca - (unsigned char)'A') <= (unsigned char)('Z' - 'A')) ? 32 : 0;
+		cb |= ((unsigned char)(cb - (unsigned char)'A') <= (unsigned char)('Z' - 'A')) ? 32 : 0;
+#endif
 
-		max_ndx = ((a_len < b_len) ? a_len : b_len) & ~mask;
-
-		for (; ndx < max_ndx; ndx += sizeof(*al)) {
-			if (*al != *bl) break;
-			al++; bl++;
-
-		}
-
+		if (ca == cb) continue;
+		return ca - cb;
 	}
-
-	a = (char *)al;
-	b = (char *)bl;
-
-	max_ndx = ((a_len < b_len) ? a_len : b_len);
-
-	for (; ndx < max_ndx; ndx++) {
-		int a1 = *a++, b1 = *b++;
-
-		if (a1 != b1) {
-			/* always lowercase for transitive results */
-			if (a1 >= 'A' && a1 <= 'Z') a1 |= 32;
-			if (b1 >= 'A' && b1 <= 'Z') b1 |= 32;
-
-			if ((a1 - b1) != 0) return (a1 - b1);
-		}
-	}
-
-	/* all chars are the same, and the length match too
-	 *
-	 * they are the same */
 	if (a_len == b_len) return 0;
-
-	/* if a is shorter then b, then b is larger */
-	return (a_len - b_len);
+	return a_len - b_len;
 }
-
 
 /**
  * check if the rightmost bytes of the string are equal.

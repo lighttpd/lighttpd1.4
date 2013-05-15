@@ -437,7 +437,7 @@ URIHANDLER_FUNC(mod_trigger_b4_dl_uri_handler) {
 				return HANDLER_FINISHED;
 			}
 
-			last_hit = *(time_t *)(val.dptr);
+			memcpy(&last_hit, val.dptr, sizeof(time_t));
 
 			free(val.dptr);
 
@@ -555,7 +555,7 @@ TRIGGER_FUNC(mod_trigger_b4_dl_handle_trigger) {
 
 			val = gdbm_fetch(s->db, key);
 
-			last_hit = *(time_t *)(val.dptr);
+			memcpy(&last_hit, val.dptr, sizeof(time_t));
 
 			free(val.dptr);
 
