@@ -19,6 +19,7 @@ NEWS
   * [mod_auth] fix invalid read in digest qop=auth-int handling (fixes #2478)
   * [auto* build] simplify autogen.sh, handle automake 1.13 test running (fixes #2490)
   * [mod_userdir] add userdir.active option, "enabled" by default
+  * [core] return 501 Not Implemented in static file mode for all methods except GET/POST/HEAD/OPTIONS
 
 - 1.4.32 - 2012-11-21
   * Code cleanup with clang/sparse (fixes #2437, thx kibi)

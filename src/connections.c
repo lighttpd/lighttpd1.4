@@ -419,16 +419,6 @@ static int connection_handle_write_prepare(server *srv, connection *con) {
 		case HTTP_METHOD_GET:
 		case HTTP_METHOD_POST:
 		case HTTP_METHOD_HEAD:
-		case HTTP_METHOD_PUT:
-		case HTTP_METHOD_PATCH:
-		case HTTP_METHOD_MKCOL:
-		case HTTP_METHOD_DELETE:
-		case HTTP_METHOD_COPY:
-		case HTTP_METHOD_MOVE:
-		case HTTP_METHOD_PROPFIND:
-		case HTTP_METHOD_PROPPATCH:
-		case HTTP_METHOD_LOCK:
-		case HTTP_METHOD_UNLOCK:
 			break;
 		case HTTP_METHOD_OPTIONS:
 			/*
@@ -450,16 +440,8 @@ static int connection_handle_write_prepare(server *srv, connection *con) {
 			}
 			break;
 		default:
-			switch(con->http_status) {
-			case 400: /* bad request */
-			case 401: /* authorization required */
-			case 414: /* overload request header */
-			case 505: /* unknown protocol */
-			case 207: /* this was webdav */
-				break;
-			default:
+			if (0 == con->http_status) {
 				con->http_status = 501;
-				break;
 			}
 			break;
 		}

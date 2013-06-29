@@ -366,7 +366,7 @@ int http_request_parse(server *srv, connection *con) {
 				*(proto - 1) = '\0';
 
 				/* we got the first one :) */
-				if (-1 == (r = get_http_method_key(method))) {
+				if (HTTP_METHOD_UNSET == (r = get_http_method_key(method))) {
 					con->http_status = 501;
 					con->response.keep_alive = 0;
 					con->keep_alive = 0;
