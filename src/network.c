@@ -25,7 +25,9 @@
 # include <openssl/ssl.h>
 # include <openssl/err.h>
 # include <openssl/rand.h>
-# include <openssl/dh.h>
+# ifndef OPENSSL_NO_DH
+#  include <openssl/dh.h>
+# endif
 # include <openssl/bn.h>
 
 # if OPENSSL_VERSION_NUMBER >= 0x0090800fL
@@ -505,7 +507,9 @@ int network_init(server *srv) {
 #endif
 
 #ifdef USE_OPENSSL
+# ifndef OPENSSL_NO_DH
 	DH *dh;
+# endif
 	BIO *bio;
 
        /* 1024-bit MODP Group with 160-bit prime order subgroup (RFC5114)
@@ -645,6 +649,7 @@ int network_init(server *srv) {
 			}
 		}
 
+#ifndef OPENSSL_NO_DH
 		/* Support for Diffie-Hellman key exchange */
 		if (!buffer_is_empty(s->ssl_dh_file)) {
 			/* DH parameters from file */
@@ -678,6 +683,11 @@ int network_init(server *srv) {
 		SSL_CTX_set_tmp_dh(s->ssl_ctx,dh);
 		SSL_CTX_set_options(s->ssl_ctx,SSL_OP_SINGLE_DH_USE);
 		DH_free(dh);
+#else
+		if (!buffer_is_empty(s->ssl_dh_file)) {
+			log_error_write(srv, __FILE__, __LINE__, "ss", "SSL: openssl compiled without DH support, can't load parameters from", s->ssl_dh_file->ptr);
+		}
+#endif
 
 #if OPENSSL_VERSION_NUMBER >= 0x0090800fL
 #ifndef OPENSSL_NO_ECDH
