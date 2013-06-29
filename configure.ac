@@ -8,7 +8,17 @@ AC_CONFIG_MACRO_DIR([m4])
 
 AC_CANONICAL_TARGET
 
-AM_INIT_AUTOMAKE([-Wall -Wportability -Wno-override foreign dist-bzip2 tar-ustar])
+dnl HOW FUCKING BROKEN IS AUTOMAKE...
+dnl serial-tests is not recognized before 1.12, and required for serial tests with 1.13, sane version checks "impossible"
+dnl if you don't use the default (symlinked) automake on your box, set AUTOMAKE to the path you're using
+m4_define([serial_tests], [
+    m4_esyscmd([case `${AUTOMAKE:-automake} --version | head -n 1` in
+      *1.11.*|*1.10.*|*1.9.*);;
+      *) echo serial-tests;;
+      esac])
+])
+
+AM_INIT_AUTOMAKE([-Wall -Wno-portability -Wno-override foreign dist-bzip2 tar-ustar] serial_tests)
 
 dnl enable with --enable-silent-rules or make V=0 (needs automake >= 1.11)
 m4_ifdef([AM_SILENT_RULES], [AM_SILENT_RULES])
