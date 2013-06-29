@@ -8,7 +8,7 @@ BEGIN {
 
 use strict;
 use IO::Socket;
-use Test::More tests => 5;
+use Test::More tests => 7;
 use LightyTest;
 
 my $tf = LightyTest->new();
@@ -26,11 +26,25 @@ $t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 404 } ];
 ok($tf->handle_http($t) == 0, 'valid user');
 
 $t->{REQUEST}  = ( <<EOF
+GET /%7Efoobar/ HTTP/1.0
+EOF
+ );
+$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 404 } ];
+ok($tf->handle_http($t) == 0, 'valid user with url-encoded ~ as %7E');
+
+$t->{REQUEST}  = ( <<EOF
 GET /~jan HTTP/1.0
 EOF
  );
 $t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 301, 'Location' => 'http://'.$tf->{HOSTNAME}.':'.$tf->{PORT}.'/~jan/' } ];
 ok($tf->handle_http($t) == 0, 'valid user + redirect');
+
+$t->{REQUEST}  = ( <<EOF
+GET /%7Ejan HTTP/1.0
+EOF
+ );
+$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 301, 'Location' => 'http://'.$tf->{HOSTNAME}.':'.$tf->{PORT}.'/~jan/' } ];
+ok($tf->handle_http($t) == 0, 'valid user with url encoded ~ as %7E + redirect');
 
 $t->{REQUEST}  = ( <<EOF
 GET /~jan HTTP/1.0
