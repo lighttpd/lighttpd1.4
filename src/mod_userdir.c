@@ -22,6 +22,7 @@ typedef struct {
 	buffer *path;
 	buffer *basepath;
 	unsigned short letterhomes;
+	unsigned short active;
 } plugin_config;
 
 typedef struct {
@@ -88,7 +89,8 @@ SETDEFAULTS_FUNC(mod_userdir_set_defaults) {
 		{ "userdir.exclude-user",       NULL, T_CONFIG_ARRAY,  T_CONFIG_SCOPE_CONNECTION },       /* 1 */
 		{ "userdir.include-user",       NULL, T_CONFIG_ARRAY,  T_CONFIG_SCOPE_CONNECTION },       /* 2 */
 		{ "userdir.basepath",           NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_CONNECTION },       /* 3 */
-		{ "userdir.letterhomes",	NULL, T_CONFIG_BOOLEAN,T_CONFIG_SCOPE_CONNECTION },	  /* 4 */
+		{ "userdir.letterhomes",        NULL, T_CONFIG_BOOLEAN,T_CONFIG_SCOPE_CONNECTION },       /* 4 */
+		{ "userdir.active",             NULL, T_CONFIG_BOOLEAN,T_CONFIG_SCOPE_CONNECTION },       /* 5 */
 		{ NULL,                         NULL, T_CONFIG_UNSET,  T_CONFIG_SCOPE_UNSET }
 	};
 
@@ -105,12 +107,16 @@ SETDEFAULTS_FUNC(mod_userdir_set_defaults) {
 		s->path = buffer_init();
 		s->basepath = buffer_init();
 		s->letterhomes = 0;
+		/* enabled by default for backward compatibility; if userdir.path isn't set userdir is disabled too,
+		 * but you can't disable it by setting it to an empty string. */
+		s->active = 1;
 
 		cv[0].destination = s->path;
 		cv[1].destination = s->exclude_user;
 		cv[2].destination = s->include_user;
 		cv[3].destination = s->basepath;
 		cv[4].destination = &(s->letterhomes);
+		cv[5].destination = &(s->active);
 
 		p->config_storage[i] = s;
 
@@ -133,6 +139,7 @@ static int mod_userdir_patch_connection(server *srv, connection *con, plugin_dat
 	PATCH(include_user);
 	PATCH(basepath);
 	PATCH(letterhomes);
+	PATCH(active);
 
 	/* skip the first, the global context */
 	for (i = 1; i < srv->config_context->used; i++) {
@@ -156,6 +163,8 @@ static int mod_userdir_patch_connection(server *srv, connection *con, plugin_dat
 				PATCH(basepath);
 			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("userdir.letterhomes"))) {
 				PATCH(letterhomes);
+			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("userdir.active"))) {
+				PATCH(active);
 			}
 		}
 	}
@@ -179,7 +188,7 @@ URIHANDLER_FUNC(mod_userdir_docroot_handler) {
 	/* enforce the userdir.path to be set in the config, ugly fix for #1587;
 	 * should be replaced with a clean .enabled option in 1.5
 	 */
-	if (p->conf.path->used == 0) return HANDLER_GO_ON;
+	if (!p->conf.active || p->conf.path->used == 0) return HANDLER_GO_ON;
 
 	/* /~user/foo.html -> /home/user/public_html/foo.html */
 
