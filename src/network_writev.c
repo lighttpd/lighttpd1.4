@@ -30,6 +30,18 @@
 #define LOCAL_BUFFERING 1
 #endif
 
+#if defined(UIO_MAXIOV)
+# define MAX_CHUNKS UIO_MAXIOV
+#elif defined(IOV_MAX)
+/* new name for UIO_MAXIOV since IEEE Std 1003.1-2001 */
+# define MAX_CHUNKS IOV_MAX
+#elif defined(_XOPEN_IOV_MAX)
+/* minimum value for sysconf(_SC_IOV_MAX); posix requires this to be at least 16, which is good enough - no need to call sysconf() */
+# define MAX_CHUNKS _XOPEN_IOV_MAX
+#else
+# error neither UIO_MAXIOV nor IOV_MAX nor _XOPEN_IOV_MAX are defined
+#endif
+
 int network_write_chunkqueue_writev(server *srv, connection *con, int fd, chunkqueue *cq, off_t max_bytes) {
 	chunk *c;
 
@@ -46,30 +58,13 @@ int network_write_chunkqueue_writev(server *srv, connection *con, int fd, chunkq
 			struct iovec *chunks;
 			chunk *tc;
 			size_t num_bytes = 0;
-#if defined(_SC_IOV_MAX) /* IRIX, MacOS X, FreeBSD, Solaris, ... */
-			const size_t max_chunks = sysconf(_SC_IOV_MAX);
-#elif defined(IOV_MAX) /* Linux x86 (glibc-2.3.6-3) */
-			const size_t max_chunks = IOV_MAX;
-#elif defined(MAX_IOVEC) /* Linux ia64 (glibc-2.3.3-98.28) */
-			const size_t max_chunks = MAX_IOVEC;
-#elif defined(UIO_MAXIOV) /* Linux x86 (glibc-2.2.5-233) */
-			const size_t max_chunks = UIO_MAXIOV;
-#elif (defined(__FreeBSD__) && __FreeBSD_version < 500000) || defined(__DragonFly__) || defined(__APPLE__) 
-			/* - FreeBSD 4.x
-			 * - MacOS X 10.3.x
-			 *   (covered in -DKERNEL)
-			 *  */
-			const size_t max_chunks = 1024; /* UIO_MAXIOV value from sys/uio.h */
-#else
-#error "sysconf() doesnt return _SC_IOV_MAX ..., check the output of 'man writev' for the EINVAL error and send the output to jan@kneschke.de"
-#endif
 
 			/* build writev list
 			 *
-			 * 1. limit: num_chunks < max_chunks
+			 * 1. limit: num_chunks < MAX_CHUNKS
 			 * 2. limit: num_bytes < max_bytes
 			 */
-			for (num_chunks = 0, tc = c; tc && tc->type == MEM_CHUNK && num_chunks < max_chunks; num_chunks++, tc = tc->next);
+			for (num_chunks = 0, tc = c; tc && tc->type == MEM_CHUNK && num_chunks < MAX_CHUNKS; num_chunks++, tc = tc->next);
 
 			chunks = calloc(num_chunks, sizeof(*chunks));
 

@@ -22,6 +22,7 @@ NEWS
   * [core] return 501 Not Implemented in static file mode for all methods except GET/POST/HEAD/OPTIONS
   * [core] recognize more http methods to forward to backends (fixes #2346)
   * [ssl] use DH only if openssl supports it (fixes #2479)
+  * [network] use constants available at compile time for maximum number of chunks for writev instead of calling sysconf (fixes #2470)
 
 - 1.4.32 - 2012-11-21
   * Code cleanup with clang/sparse (fixes #2437, thx kibi)
