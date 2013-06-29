@@ -934,6 +934,7 @@ typedef struct {
 	char **ptr;
 } digest_kv;
 
+/* return values: -1: error/bad request, 0: failed, 1: success */
 int http_auth_digest_check(server *srv, connection *con, mod_auth_plugin_data *p, array *req, buffer *url, const char *realm_str) {
 	char a1[256];
 	char a2[256];
@@ -1071,6 +1072,14 @@ int http_auth_digest_check(server *srv, connection *con, mod_auth_plugin_data *p
 		return -1;
 	}
 
+	if (qop && strcasecmp(qop, "auth-int") == 0) {
+		log_error_write(srv, __FILE__, __LINE__, "s",
+				"digest: qop=auth-int not supported");
+
+		buffer_free(b);
+		return -1;
+	}
+
 	m = get_http_method_name(con->request.http_method);
 
 	/* password-string == HA1 */
@@ -1131,10 +1140,13 @@ int http_auth_digest_check(server *srv, connection *con, mod_auth_plugin_data *p
 	li_MD5_Update(&Md5Ctx, (unsigned char *)m, strlen(m));
 	li_MD5_Update(&Md5Ctx, (unsigned char *)":", 1);
 	li_MD5_Update(&Md5Ctx, (unsigned char *)uri, strlen(uri));
+	/* qop=auth-int not supported, already checked above */
+/*
 	if (qop && strcasecmp(qop, "auth-int") == 0) {
 		li_MD5_Update(&Md5Ctx, (unsigned char *)":", 1);
-		li_MD5_Update(&Md5Ctx, (unsigned char *)"", HASHHEXLEN);
+		li_MD5_Update(&Md5Ctx, (unsigned char *) [body checksum], HASHHEXLEN);
 	}
+*/
 	li_MD5_Final(HA2, &Md5Ctx);
 	CvtHex(HA2, HA2Hex);
 

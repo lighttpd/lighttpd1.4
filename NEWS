@@ -16,6 +16,7 @@ NEWS
   * fix some bugs found with canalyze (fixes #2484, thx Zhenbo Xu)
   * fix undefined stuff found with clang
   * [cmake] Use TARGET_LINK_LIBRARIES instead of LINK_FLAGS for library dependencies, also add -Wl,--as-needed to extra warnings (fixes #2448)
+  * [mod_auth] fix invalid read in digest qop=auth-int handling (fixes #2478)
 
 - 1.4.32 - 2012-11-21
   * Code cleanup with clang/sparse (fixes #2437, thx kibi)
