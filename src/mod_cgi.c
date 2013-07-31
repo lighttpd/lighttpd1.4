@@ -923,11 +923,9 @@ static int cgi_create_env(server *srv, connection *con, plugin_data *p, buffer *
 				    CONST_BUF_LEN(con->authed_user));
 		}
 
-#ifdef USE_OPENSSL
-	if (srv_sock->is_ssl) {
-		cgi_env_add(&env, CONST_STR_LEN("HTTPS"), CONST_STR_LEN("on"));
-	}
-#endif
+		if (buffer_is_equal_caseless_string(con->uri.scheme, CONST_STR_LEN("https"))) {
+			cgi_env_add(&env, CONST_STR_LEN("HTTPS"), CONST_STR_LEN("on"));
+		}
 
 		/* request.content_length < SSIZE_MAX, see request.c */
 		LI_ltostr(buf, con->request.content_length);

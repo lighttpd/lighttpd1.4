@@ -538,6 +538,12 @@ int buffer_is_equal_string(buffer *a, const char *s, size_t b_len) {
 	return buffer_is_equal(a, &b);
 }
 
+/* buffer_is_equal_caseless_string(b, CONST_STR_LEN("value")) */
+int buffer_is_equal_caseless_string(buffer *a, const char *s, size_t b_len) {
+	if (a->used != b_len + 1) return 0;
+
+	return (0 == strcasecmp(a->ptr, s));
+}
 
 int buffer_caseless_compare(const char *a, size_t a_len, const char *b, size_t b_len) {
 	size_t const len = (a_len < b_len) ? a_len : b_len;

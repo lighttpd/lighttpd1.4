@@ -200,7 +200,7 @@ static int connection_handle_read_ssl(server *srv, connection *con) {
 	int r, ssl_err, len, count = 0, read_offset, toread;
 	buffer *b = NULL;
 
-	if (!con->conf.is_ssl) return -1;
+	if (!con->srv_socket->is_ssl) return -1;
 
 	ERR_clear_error();
 	do {
@@ -334,7 +334,7 @@ static int connection_handle_read(server *srv, connection *con) {
 	buffer *b;
 	int toread, read_offset;
 
-	if (con->conf.is_ssl) {
+	if (con->srv_socket->is_ssl) {
 		return connection_handle_read_ssl(srv, con);
 	}
 
@@ -1174,7 +1174,7 @@ static handler_t connection_handle_fdevent(server *srv, void *context, int reven
 
 	joblist_append(srv, con);
 
-	if (con->conf.is_ssl) {
+	if (con->srv_socket->is_ssl) {
 		/* ssl may read and write for both reads and writes */
 		if (revents & (FDEVENT_IN | FDEVENT_OUT)) {
 			con->is_readable = 1;
@@ -1345,7 +1345,6 @@ connection *connection_accept(server *srv, server_socket *srv_socket) {
 			con->renegotiations = 0;
 			SSL_set_app_data(con->ssl, con);
 			SSL_set_accept_state(con->ssl);
-			con->conf.is_ssl=1;
 
 			if (1 != (SSL_set_fd(con->ssl, cnt))) {
 				log_error_write(srv, __FILE__, __LINE__, "ss", "SSL:",
@@ -1389,12 +1388,6 @@ int connection_state_machine(server *srv, connection *con) {
 			con->loops_per_request = 0;
 
 			connection_set_state(srv, con, CON_STATE_READ);
-
-			/* patch con->conf.is_ssl if the connection is a ssl-socket already */
-
-#ifdef USE_OPENSSL
-			con->conf.is_ssl = srv_sock->is_ssl;
-#endif
 
 			break;
 		case CON_STATE_REQUEST_END: /* transient */

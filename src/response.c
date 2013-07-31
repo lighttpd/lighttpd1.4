@@ -264,7 +264,8 @@ handler_t http_response_prepare(server *srv, connection *con) {
 		 *
 		 */
 
-		if (con->conf.is_ssl) {
+		/* initial scheme value. can be overwritten for example by mod_extforward later */
+		if (con->srv_socket->is_ssl) {
 			buffer_copy_string_len(con->uri.scheme, CONST_STR_LEN("https"));
 		} else {
 			buffer_copy_string_len(con->uri.scheme, CONST_STR_LEN("http"));
@@ -351,7 +352,7 @@ handler_t http_response_prepare(server *srv, connection *con) {
 		}
 
 #ifdef USE_OPENSSL
-		if (con->conf.is_ssl && con->conf.ssl_verifyclient) {
+		if (con->srv_socket->is_ssl && con->conf.ssl_verifyclient) {
 			https_add_ssl_entries(con);
 		}
 #endif

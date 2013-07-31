@@ -177,7 +177,7 @@ static int config_insert(server *srv) {
 		s->max_read_idle = 60;
 		s->max_write_idle = 360;
 		s->use_xattr     = 0;
-		s->is_ssl        = 0;
+		s->ssl_enabled   = 0;
 		s->ssl_honor_cipher_order = 1;
 		s->ssl_use_sslv2 = 0;
 		s->ssl_use_sslv3 = 1;
@@ -231,7 +231,7 @@ static int config_insert(server *srv) {
 		cv[27].destination = &(s->use_xattr);
 		cv[28].destination = s->mimetypes;
 		cv[29].destination = s->ssl_pemfile;
-		cv[30].destination = &(s->is_ssl);
+		cv[30].destination = &(s->ssl_enabled);
 
 		cv[31].destination = &(s->log_file_not_found);
 		cv[32].destination = &(s->log_request_handling);
@@ -332,7 +332,7 @@ int config_setup_connection(server *srv, connection *con) {
 
 	PATCH(range_requests);
 	PATCH(force_lowercase_filenames);
-	PATCH(is_ssl);
+	PATCH(ssl_enabled);
 
 	PATCH(ssl_pemfile);
 #ifdef USE_OPENSSL
@@ -418,7 +418,7 @@ int config_patch_connection(server *srv, connection *con, comp_key_t comp) {
 			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("ssl.cipher-list"))) {
 				PATCH(ssl_cipher_list);
 			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("ssl.engine"))) {
-				PATCH(is_ssl);
+				PATCH(ssl_enabled);
 			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("ssl.dh-file"))) {
 				PATCH(ssl_dh_file);
 			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("ssl.ec-curve"))) {
@@ -1306,7 +1306,7 @@ int config_set_defaults(server *srv) {
 	}
 
 	if (srv->srvconf.port == 0) {
-		srv->srvconf.port = s->is_ssl ? 443 : 80;
+		srv->srvconf.port = s->ssl_enabled ? 443 : 80;
 	}
 
 	if (srv->srvconf.event_handler->used == 0) {
@@ -1344,7 +1344,7 @@ int config_set_defaults(server *srv) {
 		}
 	}
 
-	if (s->is_ssl) {
+	if (s->ssl_enabled) {
 		if (buffer_is_empty(s->ssl_pemfile)) {
 			/* PEM file is require */
 

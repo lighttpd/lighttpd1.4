@@ -423,17 +423,18 @@ URIHANDLER_FUNC(mod_extforward_uri_handler) {
 
 	if (real_remote_addr != NULL) { /* parsed */
 		sock_addr sock;
-		server_socket *srv_sock = con->srv_socket;
 		data_string *forwarded_proto = (data_string *)array_get_element(con->request.headers, "X-Forwarded-Proto");
 
-		if (forwarded_proto && !strcmp(forwarded_proto->value->ptr, "https")) {
-			srv_sock->is_proxy_ssl = 1;
-		} else {
-			srv_sock->is_proxy_ssl = 0;
+		if (NULL != forwarded_proto) {
+			if (buffer_is_equal_caseless_string(forwarded_proto->value, CONST_STR_LEN("https"))) {
+				buffer_copy_string_len(con->uri.scheme, CONST_STR_LEN("https"));
+			} else if (buffer_is_equal_caseless_string(forwarded_proto->value, CONST_STR_LEN("http"))) {
+				buffer_copy_string_len(con->uri.scheme, CONST_STR_LEN("http"));
+			}
 		}
 
 		if (con->conf.log_request_handling) {
- 			log_error_write(srv, __FILE__, __LINE__, "ss", "using address:", real_remote_addr);
+			log_error_write(srv, __FILE__, __LINE__, "ss", "using address:", real_remote_addr);
 		}
 #ifdef HAVE_IPV6
 		ipstr_to_sockaddr(srv, real_remote_addr, &sock);

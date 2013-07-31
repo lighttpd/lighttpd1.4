@@ -2032,7 +2032,7 @@ static int fcgi_create_env(server *srv, handler_ctx *hctx, size_t request_id) {
 	s = get_http_version_name(con->request.http_version);
 	FCGI_ENV_ADD_CHECK(fcgi_env_add(p->fcgi_env, CONST_STR_LEN("SERVER_PROTOCOL"), s, strlen(s)),con)
 
-    if (srv_sock->is_ssl || srv_sock->is_proxy_ssl) {
+	if (buffer_is_equal_caseless_string(con->uri.scheme, CONST_STR_LEN("https"))) {
 		FCGI_ENV_ADD_CHECK(fcgi_env_add(p->fcgi_env, CONST_STR_LEN("HTTPS"), CONST_STR_LEN("on")),con)
 	}
 

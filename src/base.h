@@ -289,7 +289,7 @@ typedef struct {
 
 	unsigned short use_ipv6, set_v6only; /* set_v6only is only a temporary option */
 	unsigned short defer_accept;
-	unsigned short is_ssl;
+	unsigned short ssl_enabled; /* only interesting for setting up listening sockets. don't use at runtime */
 	unsigned short allow_http11;
 	unsigned short etag_use_inode;
 	unsigned short etag_use_mtime;
@@ -432,7 +432,7 @@ typedef struct {
 	int error_handler_saved_status;
 	int in_error_handler;
 
-	void *srv_socket;   /* reference to the server-socket (typecast to server_socket) */
+	struct server_socket *srv_socket;   /* reference to the server-socket */
 
 #ifdef USE_OPENSSL
 	SSL *ssl;
@@ -525,7 +525,7 @@ typedef struct {
 	unsigned short reject_expect_100_with_417;
 } server_config;
 
-typedef struct {
+typedef struct server_socket {
 	sock_addr addr;
 	int       fd;
 	int       fde_ndx;
@@ -545,7 +545,6 @@ typedef struct {
 #ifdef USE_OPENSSL
 	SSL_CTX *ssl_ctx;
 #endif
-       unsigned short is_proxy_ssl;
 } server_socket;
 
 typedef struct {

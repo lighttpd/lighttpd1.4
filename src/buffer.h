@@ -82,6 +82,7 @@ int buffer_is_empty(buffer *b);
 int buffer_is_equal(buffer *a, buffer *b);
 int buffer_is_equal_right_len(buffer *a, buffer *b, size_t len);
 int buffer_is_equal_string(buffer *a, const char *s, size_t b_len);
+int buffer_is_equal_caseless_string(buffer *a, const char *s, size_t b_len);
 int buffer_caseless_compare(const char *a, size_t a_len, const char *b, size_t b_len);
 
 typedef enum {

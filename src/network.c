@@ -391,7 +391,7 @@ static int network_server_init(server *srv, buffer *host_token, specific_config 
 		goto error_free_socket;
 	}
 
-	if (s->is_ssl) {
+	if (s->ssl_enabled) {
 #ifdef USE_OPENSSL
 		if (NULL == (srv_socket->ssl_ctx = s->ssl_ctx)) {
 			log_error_write(srv, __FILE__, __LINE__, "s", "ssl.pemfile has to be set");
@@ -425,7 +425,7 @@ static int network_server_init(server *srv, buffer *host_token, specific_config 
 #endif
 	}
 
-	srv_socket->is_ssl = s->is_ssl;
+	srv_socket->is_ssl = s->ssl_enabled;
 
 	if (srv->srv_sockets.size == 0) {
 		srv->srv_sockets.size = 4;

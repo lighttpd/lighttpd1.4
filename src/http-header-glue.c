@@ -123,11 +123,8 @@ int http_response_redirect_to_directory(server *srv, connection *con) {
 
 	o = buffer_init();
 
-	if (con->conf.is_ssl) {
-		buffer_copy_string_len(o, CONST_STR_LEN("https://"));
-	} else {
-		buffer_copy_string_len(o, CONST_STR_LEN("http://"));
-	}
+	buffer_copy_string_buffer(o, con->uri.scheme);
+	buffer_append_string_len(o, CONST_STR_LEN("://"));
 	if (con->uri.authority->used) {
 		buffer_append_string_buffer(o, con->uri.authority);
 	} else {
@@ -193,10 +190,15 @@ int http_response_redirect_to_directory(server *srv, connection *con) {
 			return -1;
 		}
 
-		if (!((con->conf.is_ssl == 0 && srv->srvconf.port == 80) ||
-		      (con->conf.is_ssl == 1 && srv->srvconf.port == 443))) {
-			buffer_append_string_len(o, CONST_STR_LEN(":"));
-			buffer_append_long(o, srv->srvconf.port);
+		{
+			unsigned short default_port = 80;
+			if (buffer_is_equal_caseless_string(con->uri.scheme, CONST_STR_LEN("https"))) {
+				default_port = 443;
+			}
+			if (default_port != srv->srvconf.port) {
+				buffer_append_string_len(o, CONST_STR_LEN(":"));
+				buffer_append_long(o, srv->srvconf.port);
+			}
 		}
 	}
 	buffer_append_string_buffer(o, con->uri.path);

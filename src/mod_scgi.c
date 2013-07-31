@@ -1614,7 +1614,7 @@ static int scgi_create_env(server *srv, handler_ctx *hctx) {
 	scgi_env_add(p->scgi_env, CONST_STR_LEN("SERVER_PROTOCOL"), s, strlen(s));
 
 #ifdef USE_OPENSSL
-	if (srv_sock->is_ssl) {
+	if (buffer_is_equal_caseless_string(con->uri.scheme, CONST_STR_LEN("https"))) {
 		scgi_env_add(p->scgi_env, CONST_STR_LEN("HTTPS"), CONST_STR_LEN("on"));
 	}
 #endif

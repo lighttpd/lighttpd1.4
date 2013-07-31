@@ -463,7 +463,7 @@ static int proxy_create_env(server *srv, handler_ctx *hctx) {
 	    !buffer_is_empty(con->request.http_host)) {
 		proxy_set_header(con, "X-Host", con->request.http_host->ptr);
 	}
-	proxy_set_header(con, "X-Forwarded-Proto", con->conf.is_ssl ? "https" : "http");
+	proxy_set_header(con, "X-Forwarded-Proto", con->uri.scheme->ptr);
 
 	/* request header */
 	for (i = 0; i < con->request.headers->used; i++) {
