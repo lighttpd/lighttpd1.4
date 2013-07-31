@@ -467,21 +467,21 @@ if test "$WITH_LUA" != "no"; then
  if test "$WITH_LUA" = "yes"; then
   WITH_LUA=lua
  fi
- PKG_CHECK_MODULES(LUA, $WITH_LUA >= 5.1, [
-   AC_DEFINE([HAVE_LUA], [1], [liblua])
-   AC_DEFINE([HAVE_LUA_H], [1], [lua.h])
- ],[
- dnl for debian based systems
+ dnl first check for lua5.1 (debian and others), then lua-5.1 (freebsd), then $WITH_LUA (defaults to lua)
+ dnl check "lua" last now that lua5.2 is out
  PKG_CHECK_MODULES(LUA, lua5.1 >= 5.1, [
-   AC_DEFINE([HAVE_LUA], [1], [liblua])
-   AC_DEFINE([HAVE_LUA_H], [1], [lua.h])
+  AC_DEFINE([HAVE_LUA], [1], [liblua])
+  AC_DEFINE([HAVE_LUA_H], [1], [lua.h])
  ],[
- dnl for freebsd
- PKG_CHECK_MODULES(LUA, lua-5.1 >= 5.1, [
+  PKG_CHECK_MODULES(LUA, lua-5.1 >= 5.1, [
    AC_DEFINE([HAVE_LUA], [1], [liblua])
    AC_DEFINE([HAVE_LUA_H], [1], [lua.h])
- ])
- ])
+  ],[
+   PKG_CHECK_MODULES(LUA, $WITH_LUA >= 5.1, [
+    AC_DEFINE([HAVE_LUA], [1], [liblua])
+    AC_DEFINE([HAVE_LUA_H], [1], [lua.h])
+   ])
+  ])
  ])
 
  AC_SUBST(LUA_CFLAGS)
