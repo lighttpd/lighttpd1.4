@@ -1916,10 +1916,6 @@ static int fcgi_create_env(server *srv, handler_ctx *hctx, size_t request_id) {
 	s = inet_ntop_cache_get_ip(srv, &(con->dst_addr));
 	FCGI_ENV_ADD_CHECK(fcgi_env_add(p->fcgi_env, CONST_STR_LEN("REMOTE_ADDR"), s, strlen(s)),con)
 
-	if (!buffer_is_empty(con->authed_user)) {
-		FCGI_ENV_ADD_CHECK(fcgi_env_add(p->fcgi_env, CONST_STR_LEN("REMOTE_USER"), CONST_BUF_LEN(con->authed_user)),con)
-	}
-
 	if (con->request.content_length > 0 && host->mode != FCGI_AUTHORIZER) {
 		/* CGI-SPEC 6.1.2 and FastCGI spec 6.3 */
 

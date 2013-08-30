@@ -1542,12 +1542,6 @@ static int scgi_create_env(server *srv, handler_ctx *hctx) {
 	s = inet_ntop_cache_get_ip(srv, &(con->dst_addr));
 	scgi_env_add(p->scgi_env, CONST_STR_LEN("REMOTE_ADDR"), s, strlen(s));
 
-	if (!buffer_is_empty(con->authed_user)) {
-		scgi_env_add(p->scgi_env, CONST_STR_LEN("REMOTE_USER"),
-			     CONST_BUF_LEN(con->authed_user));
-	}
-
-
 	/*
 	 * SCRIPT_NAME, PATH_INFO and PATH_TRANSLATED according to
 	 * http://cgi-spec.golux.com/draft-coar-cgi-v11-03-clean.html

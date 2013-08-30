@@ -169,11 +169,19 @@ static void https_add_ssl_entries(connection *con) {
 			envds->value,
 			(const char *)xe->value->data, xe->value->length
 		);
-		/* pick one of the exported values as "authed user", for example
+		/* pick one of the exported values as "REMOTE_USER", for example
 		 * ssl.verifyclient.username   = "SSL_CLIENT_S_DN_UID" or "SSL_CLIENT_S_DN_emailAddress"
 		 */
 		if (buffer_is_equal(con->conf.ssl_verifyclient_username, envds->key)) {
-			buffer_copy_string_buffer(con->authed_user, envds->value);
+			data_string *ds;
+			if (NULL == (ds = (data_string *)array_get_element(con->environment, "REMOTE_USER"))) {
+				if (NULL == (ds = (data_string *)array_get_unused_element(con->environment, TYPE_STRING))) {
+					ds = data_string_init();
+				}
+				buffer_copy_string(ds->key, "REMOTE_USER");
+				array_insert_unique(con->environment, (data_unset *)ds);
+			}
+			buffer_copy_string_buffer(ds->value, envds->value);
 		}
 		array_insert_unique(con->environment, (data_unset *)envds);
 	}

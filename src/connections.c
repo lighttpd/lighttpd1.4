@@ -676,7 +676,6 @@ connection *connection_init(server *srv) {
 	CLEAN(physical.etag);
 	CLEAN(parse_request);
 
-	CLEAN(authed_user);
 	CLEAN(server_name);
 	CLEAN(error_handler);
 	CLEAN(dst_addr_buf);
@@ -743,7 +742,6 @@ void connections_free(server *srv) {
 		CLEAN(physical.rel_path);
 		CLEAN(parse_request);
 
-		CLEAN(authed_user);
 		CLEAN(server_name);
 		CLEAN(error_handler);
 		CLEAN(dst_addr_buf);
@@ -817,7 +815,6 @@ int connection_reset(server *srv, connection *con) {
 
 	CLEAN(parse_request);
 
-	CLEAN(authed_user);
 	CLEAN(server_name);
 	CLEAN(error_handler);
 #if defined USE_OPENSSL && ! defined OPENSSL_NO_TLSEXT

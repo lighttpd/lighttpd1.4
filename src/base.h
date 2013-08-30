@@ -411,7 +411,6 @@ typedef struct {
 
 	size_t header_len;
 
-	buffer *authed_user;
 	array  *environment; /* used to pass lighttpd internal stuff to the FastCGI/CGI apps, setenv does that */
 
 	/* response */

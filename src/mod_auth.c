@@ -304,18 +304,25 @@ static handler_t mod_auth_uri_handler(server *srv, connection *con, void *p_d) {
 	} else {
 		/* the REMOTE_USER header */
 
-		buffer_copy_string_buffer(con->authed_user, p->auth_user);
+		if (NULL == (ds = (data_string *)array_get_element(con->environment, "REMOTE_USER"))) {
+			if (NULL == (ds = (data_string *)array_get_unused_element(con->environment, TYPE_STRING))) {
+				ds = data_string_init();
+			}
+			buffer_copy_string(ds->key, "REMOTE_USER");
+			array_insert_unique(con->environment, (data_unset *)ds);
+		}
+		buffer_copy_string_buffer(ds->value, p->auth_user);
 
 		/* AUTH_TYPE environment */
 
-		if (NULL == (ds = (data_string *)array_get_unused_element(con->environment, TYPE_STRING))) {
-			ds = data_string_init();
+		if (NULL == (ds = (data_string *)array_get_element(con->environment, "AUTH_TYPE"))) {
+			if (NULL == (ds = (data_string *)array_get_unused_element(con->environment, TYPE_STRING))) {
+				ds = data_string_init();
+			}
+			buffer_copy_string(ds->key, "AUTH_TYPE");
+			array_insert_unique(con->environment, (data_unset *)ds);
 		}
-
-		buffer_copy_string(ds->key, "AUTH_TYPE");
 		buffer_copy_string(ds->value, auth_type);
-
-		array_insert_unique(con->environment, (data_unset *)ds);
 	}
 
 	return HANDLER_GO_ON;

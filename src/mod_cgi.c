@@ -918,11 +918,6 @@ static int cgi_create_env(server *srv, connection *con, plugin_data *p, buffer *
 			);
 		cgi_env_add(&env, CONST_STR_LEN("REMOTE_PORT"), buf, strlen(buf));
 
-		if (!buffer_is_empty(con->authed_user)) {
-			cgi_env_add(&env, CONST_STR_LEN("REMOTE_USER"),
-				    CONST_BUF_LEN(con->authed_user));
-		}
-
 		if (buffer_is_equal_caseless_string(con->uri.scheme, CONST_STR_LEN("https"))) {
 			cgi_env_add(&env, CONST_STR_LEN("HTTPS"), CONST_STR_LEN("on"));
 		}

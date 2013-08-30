@@ -760,8 +760,8 @@ REQUESTDONE_FUNC(log_access_write) {
 				buffer_append_string_len(b, CONST_STR_LEN("-"));
 				break;
 			case FORMAT_REMOTE_USER:
-				if (con->authed_user->used > 1) {
-					buffer_append_string_buffer(b, con->authed_user);
+				if (NULL != (ds = (data_string *)array_get_element(con->environment, "REMOTE_USER")) && ds->value->used > 1) {
+					accesslog_append_escaped(b, ds->value);
 				} else {
 					buffer_append_string_len(b, CONST_STR_LEN("-"));
 				}

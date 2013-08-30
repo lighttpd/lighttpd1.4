@@ -276,11 +276,6 @@ static int build_ssi_cgi_vars(server *srv, connection *con, plugin_data *p) {
 	ssi_env_add(p->ssi_cgi_env, CONST_STRING("REMOTE_ADDR"),
 		    inet_ntop_cache_get_ip(srv, &(con->dst_addr)));
 
-	if (con->authed_user->used) {
-		ssi_env_add(p->ssi_cgi_env, CONST_STRING("REMOTE_USER"),
-			     con->authed_user->ptr);
-	}
-
 	if (con->request.content_length > 0) {
 		/* CGI-SPEC 6.1.2 and FastCGI spec 6.3 */
 
