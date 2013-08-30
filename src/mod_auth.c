@@ -185,6 +185,7 @@ static handler_t mod_auth_uri_handler(server *srv, connection *con, void *p_d) {
 	data_string *ds;
 	mod_auth_plugin_data *p = p_d;
 	array *req;
+	data_string *req_method;
 
 	/* select the right config */
 	mod_auth_patch_connection(srv, con, p);
@@ -227,18 +228,30 @@ static handler_t mod_auth_uri_handler(server *srv, connection *con, void *p_d) {
 	if (auth_required == 0) return HANDLER_GO_ON;
 
 	req = ((data_array *)(p->conf.auth_require->data[k]))->value;
+	req_method = (data_string *)array_get_element(req, "method");
+
+	if (0 == strcmp(req_method->value->ptr, "extern")) {
+		/* require REMOTE_USER to be already set */
+		if (NULL == (ds = (data_string *)array_get_element(con->environment, "REMOTE_USER"))) {
+			con->http_status = 401;
+			con->mode = DIRECT;
+			return HANDLER_FINISHED;
+		} else if (http_auth_match_rules(srv, req, ds->value->ptr, NULL, NULL)) {
+			log_error_write(srv, __FILE__, __LINE__, "s", "rules didn't match");
+			con->http_status = 401;
+			con->mode = DIRECT;
+			return HANDLER_FINISHED;
+		} else {
+			return HANDLER_GO_ON;
+		}
+	}
 
 	/* try to get Authorization-header */
 
-	if (NULL != (ds = (data_string *)array_get_element(con->request.headers, "Authorization"))) {
-		http_authorization = ds->value->ptr;
-	}
-
-	if (ds && ds->value && ds->value->used) {
+	if (NULL != (ds = (data_string *)array_get_element(con->request.headers, "Authorization")) && ds->value->used) {
 		char *auth_realm;
-		data_string *method;
 
-		method = (data_string *)array_get_element(req, "method");
+		http_authorization = ds->value->ptr;
 
 		/* parse auth-header */
 		if (NULL != (auth_realm = strchr(http_authorization, ' '))) {
@@ -248,13 +261,13 @@ static handler_t mod_auth_uri_handler(server *srv, connection *con, void *p_d) {
 			    (0 == strncasecmp(http_authorization, "Basic", auth_type_len))) {
 				auth_type = "Basic";
 
-				if (0 == strcmp(method->value->ptr, "basic")) {
+				if (0 == strcmp(req_method->value->ptr, "basic")) {
 					auth_satisfied = http_auth_basic_check(srv, con, p, req, auth_realm+1);
 				}
 			} else if ((auth_type_len == 6) &&
 				   (0 == strncasecmp(http_authorization, "Digest", auth_type_len))) {
 				auth_type = "Digest";
-				if (0 == strcmp(method->value->ptr, "digest")) {
+				if (0 == strcmp(req_method->value->ptr, "digest")) {
 					if (-1 == (auth_satisfied = http_auth_digest_check(srv, con, p, req, auth_realm+1))) {
 						con->http_status = 400;
 						con->mode = DIRECT;
@@ -494,9 +507,10 @@ SETDEFAULTS_FUNC(mod_auth_set_defaults) {
 				return HANDLER_ERROR;
 			} else {
 				if (0 != strcmp(method, "basic") &&
-				    0 != strcmp(method, "digest")) {
+				    0 != strcmp(method, "digest") &&
+				    0 != strcmp(method, "extern")) {
 					log_error_write(srv, __FILE__, __LINE__, "ss",
-							"method has to be either \"basic\" or \"digest\" in",
+							"method has to be either \"basic\", \"digest\" or \"extern\" in",
 							"auth.require = ( \"...\" => ( ..., \"method\" => \"...\") )");
 					return HANDLER_ERROR;
 				}

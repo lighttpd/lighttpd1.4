@@ -27,6 +27,7 @@ NEWS
   * [ssl] accept ssl renegotiations if they are not disabled (fixes #2491)
   * [ssl] add option ssl.empty-fragments, defaulting to disabled (fixes #2492)
   * [auth] put REMOTE_USER into cgi environment, making it accessible to lua via lighty.req_env (fixes #2495)
+  * [auth] new method "extern" to use already present REMOTE_USER (from magnet, ssl, ...) (fixes #2436)
 
 - 1.4.32 - 2012-11-21
   * Code cleanup with clang/sparse (fixes #2437, thx kibi)
