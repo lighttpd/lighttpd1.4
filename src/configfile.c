@@ -1241,6 +1241,18 @@ int config_set_defaults(server *srv) {
 		{ FDEVENT_HANDLER_UNSET,          NULL }
 	};
 
+	if (!buffer_is_empty(srv->srvconf.changeroot)) {
+		if (-1 == stat(srv->srvconf.changeroot->ptr, &st1)) {
+			log_error_write(srv, __FILE__, __LINE__, "sb",
+					"server.chroot doesn't exist:", srv->srvconf.changeroot);
+			return -1;
+		}
+		if (!S_ISDIR(st1.st_mode)) {
+			log_error_write(srv, __FILE__, __LINE__, "sb",
+					"server.chroot isn't a directory:", srv->srvconf.changeroot);
+			return -1;
+		}
+	}
 
 	if (buffer_is_empty(s->document_root)) {
 		log_error_write(srv, __FILE__, __LINE__, "s",
