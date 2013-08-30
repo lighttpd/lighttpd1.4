@@ -90,7 +90,7 @@ int network_write_chunkqueue_openssl(server *srv, connection *con, SSL *ssl, chu
 			r = SSL_write(ssl, offset, toSend);
 
 			if (con->renegotiations > 1 && con->conf.ssl_disable_client_renegotiation) {
-				log_error_write(srv, __FILE__, __LINE__, "s", "SSL: renegotiation initiated by client");
+				log_error_write(srv, __FILE__, __LINE__, "s", "SSL: renegotiation initiated by client, killing connection");
 				return -1;
 			}
 
@@ -202,7 +202,7 @@ int network_write_chunkqueue_openssl(server *srv, connection *con, SSL *ssl, chu
 				r = SSL_write(ssl, s, toSend);
 
 				if (con->renegotiations > 1 && con->conf.ssl_disable_client_renegotiation) {
-					log_error_write(srv, __FILE__, __LINE__, "s", "SSL: renegotiation initiated by client");
+					log_error_write(srv, __FILE__, __LINE__, "s", "SSL: renegotiation initiated by client, killing connection");
 					return -1;
 				}
 

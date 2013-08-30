@@ -44,8 +44,6 @@ static void ssl_info_callback(const SSL *ssl, int where, int ret) {
 	if (0 != (where & SSL_CB_HANDSHAKE_START)) {
 		connection *con = SSL_get_app_data(ssl);
 		++con->renegotiations;
-	} else if (0 != (where & SSL_CB_HANDSHAKE_DONE)) {
-		ssl->s3->flags |= SSL3_FLAGS_NO_RENEGOTIATE_CIPHERS;
 	}
 }
 #endif
