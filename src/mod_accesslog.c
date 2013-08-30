@@ -128,6 +128,7 @@ typedef struct {
 	buffer *access_logbuffer; /* each logfile has a separate buffer */
 
 	unsigned short use_syslog; /* syslog has global buffer */
+	unsigned short syslog_level;
 
 	buffer *format;
 
@@ -459,6 +460,7 @@ SETDEFAULTS_FUNC(log_access_open) {
 		{ "accesslog.filename",             NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_CONNECTION },
 		{ "accesslog.use-syslog",           NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION },
 		{ "accesslog.format",               NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_CONNECTION },
+		{ "accesslog.syslog-level",         NULL, T_CONFIG_SHORT, T_CONFIG_SCOPE_CONNECTION },
 		{ NULL,                             NULL, T_CONFIG_UNSET, T_CONFIG_SCOPE_UNSET }
 	};
 
@@ -478,11 +480,13 @@ SETDEFAULTS_FUNC(log_access_open) {
 		s->log_access_fd = -1;
 		s->last_generated_accesslog_ts = 0;
 		s->last_generated_accesslog_ts_ptr = &(s->last_generated_accesslog_ts);
+		s->syslog_level = LOG_INFO;
 
 
 		cv[0].destination = s->access_logfile;
 		cv[1].destination = &(s->use_syslog);
 		cv[2].destination = s->format;
+		cv[3].destination = &(s->syslog_level);
 
 		p->config_storage[i] = s;
 
@@ -633,6 +637,7 @@ static int mod_accesslog_patch_connection(server *srv, connection *con, plugin_d
 	PATCH(append_tz_offset);
 	PATCH(parsed_format);
 	PATCH(use_syslog);
+	PATCH(syslog_level);
 
 	/* skip the first, the global context */
 	for (i = 1; i < srv->config_context->used; i++) {
@@ -659,6 +664,8 @@ static int mod_accesslog_patch_connection(server *srv, connection *con, plugin_d
 				PATCH(append_tz_offset);
 			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("accesslog.use-syslog"))) {
 				PATCH(use_syslog);
+			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("accesslog.syslog-level"))) {
+				PATCH(syslog_level);
 			}
 		}
 	}
@@ -906,7 +913,7 @@ REQUESTDONE_FUNC(log_access_write) {
 #ifdef HAVE_SYSLOG_H
 			if (b->used > 2) {
 				/* syslog appends a \n on its own */
-				syslog(LOG_INFO, "%*s", (int) b->used - 2, b->ptr);
+				syslog(p->conf.syslog_level, "%*s", (int) b->used - 2, b->ptr);
 			}
 #endif
 		} else if (p->conf.log_access_fd != -1) {
