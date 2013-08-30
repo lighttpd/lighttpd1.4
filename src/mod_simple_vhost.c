@@ -5,6 +5,7 @@
 
 #include "plugin.h"
 
+#include <assert.h>
 #include <ctype.h>
 #include <stdlib.h>
 #include <string.h>
@@ -123,36 +124,31 @@ SETDEFAULTS_FUNC(mod_simple_vhost_set_defaults) {
 
 static int build_doc_root(server *srv, connection *con, plugin_data *p, buffer *out, buffer *host) {
 	stat_cache_entry *sce = NULL;
+	assert(p->conf.server_root->used > 1);
 
 	buffer_prepare_copy(out, 128);
+	buffer_copy_string_buffer(out, p->conf.server_root);
 
-	if (p->conf.server_root->used) {
-		buffer_copy_string_buffer(out, p->conf.server_root);
+	if (host->used) {
+		/* a hostname has to start with a alpha-numerical character
+		 * and must not contain a slash "/"
+		 */
+		char *dp;
 
-		if (host->used) {
-			/* a hostname has to start with a alpha-numerical character
-			 * and must not contain a slash "/"
-			 */
-			char *dp;
-
-			BUFFER_APPEND_SLASH(out);
-
-			if (NULL == (dp = strchr(host->ptr, ':'))) {
-				buffer_append_string_buffer(out, host);
-			} else {
-				buffer_append_string_len(out, host->ptr, dp - host->ptr);
-			}
-		}
 		BUFFER_APPEND_SLASH(out);
 
-		if (p->conf.document_root->used > 2 && p->conf.document_root->ptr[0] == '/') {
-			buffer_append_string_len(out, p->conf.document_root->ptr + 1, p->conf.document_root->used - 2);
+		if (NULL == (dp = strchr(host->ptr, ':'))) {
+			buffer_append_string_buffer(out, host);
 		} else {
-			buffer_append_string_buffer(out, p->conf.document_root);
-			BUFFER_APPEND_SLASH(out);
+			buffer_append_string_len(out, host->ptr, dp - host->ptr);
 		}
+	}
+	BUFFER_APPEND_SLASH(out);
+
+	if (p->conf.document_root->used > 2 && p->conf.document_root->ptr[0] == '/') {
+		buffer_append_string_len(out, p->conf.document_root->ptr + 1, p->conf.document_root->used - 2);
 	} else {
-		buffer_copy_string_buffer(out, con->conf.document_root);
+		buffer_append_string_buffer(out, p->conf.document_root);
 		BUFFER_APPEND_SLASH(out);
 	}
 
@@ -228,38 +224,41 @@ static handler_t mod_simple_vhost_docroot(server *srv, connection *con, void *p_
 
 	mod_simple_vhost_patch_connection(srv, con, p);
 
+	/* build_doc_root() requires a server_root; skip module if simple-vhost.server-root is not set
+	 * or set to an empty string (especially don't cache any results!)
+	 */
+	if (p->conf.server_root->used < 2) return HANDLER_GO_ON;
+
 	if (p->conf.docroot_cache_key->used &&
 	    con->uri.authority->used &&
 	    buffer_is_equal(p->conf.docroot_cache_key, con->uri.authority)) {
 		/* cache hit */
-		buffer_copy_string_buffer(con->physical.doc_root, p->conf.docroot_cache_value);
 		buffer_copy_string_buffer(con->server_name,       p->conf.docroot_cache_servername);
+		buffer_copy_string_buffer(con->physical.doc_root, p->conf.docroot_cache_value);
 	} else {
 		/* build document-root */
 		if ((con->uri.authority->used == 0) ||
 		    build_doc_root(srv, con, p, p->doc_root, con->uri.authority)) {
 			/* not found, fallback the default-host */
-			if (build_doc_root(srv, con, p,
+			if (0 == build_doc_root(srv, con, p,
 					   p->doc_root,
 					   p->conf.default_host)) {
-				return HANDLER_GO_ON;
-			} else {
+				/* default host worked */
 				buffer_copy_string_buffer(con->server_name, p->conf.default_host);
 				buffer_copy_string_buffer(con->physical.doc_root, p->doc_root);
-
 				/* do not cache default host */
-				return HANDLER_GO_ON;
 			}
-		} else {
-			buffer_copy_string_buffer(con->server_name, con->uri.authority);
+			return HANDLER_GO_ON;
 		}
+
+		/* found host */
+		buffer_copy_string_buffer(con->server_name, con->uri.authority);
+		buffer_copy_string_buffer(con->physical.doc_root, p->doc_root);
 
 		/* copy to cache */
 		buffer_copy_string_buffer(p->conf.docroot_cache_key,        con->uri.authority);
 		buffer_copy_string_buffer(p->conf.docroot_cache_value,      p->doc_root);
 		buffer_copy_string_buffer(p->conf.docroot_cache_servername, con->server_name);
-
-		buffer_copy_string_buffer(con->physical.doc_root, p->doc_root);
 	}
 
 	return HANDLER_GO_ON;
