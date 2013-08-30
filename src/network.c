@@ -613,6 +613,16 @@ int network_init(server *srv) {
 			return -1;
 		}
 
+		if (s->ssl_empty_fragments) {
+#ifdef SSL_OP_DONT_INSERT_EMPTY_FRAGMENTS
+			ssloptions &= ~SSL_OP_DONT_INSERT_EMPTY_FRAGMENTS;
+#else
+			ssloptions &= ~0x00000800L; /* hardcode constant */
+			log_error_write(srv, __FILE__, __LINE__, "ss", "WARNING: SSL:",
+					"'insert empty fragments' not supported by the openssl version used to compile lighttpd with");
+#endif
+		}
+
 		SSL_CTX_set_options(s->ssl_ctx, ssloptions);
 		SSL_CTX_set_info_callback(s->ssl_ctx, ssl_info_callback);
 

@@ -25,6 +25,7 @@ NEWS
   * [network] use constants available at compile time for maximum number of chunks for writev instead of calling sysconf (fixes #2470)
   * [ssl] Fix $HTTP["scheme"] conditional, could be "http" for ssl connections if the ssl $SERVER["socket"] conditional was nested (fixes #2501)
   * [ssl] accept ssl renegotiations if they are not disabled (fixes #2491)
+  * [ssl] add option ssl.empty-fragments, defaulting to disabled (fixes #2492)
 
 - 1.4.32 - 2012-11-21
   * Code cleanup with clang/sparse (fixes #2437, thx kibi)
