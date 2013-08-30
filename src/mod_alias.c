@@ -156,7 +156,8 @@ PHYSICALPATH_FUNC(mod_alias_physical_handler) {
 	mod_alias_patch_connection(srv, con, p);
 
 	/* not to include the tailing slash */
-	basedir_len = (con->physical.basedir->used - 1) - 1;
+	basedir_len = (con->physical.basedir->used - 1);
+	if ('/' == con->physical.basedir->ptr[basedir_len-1]) --basedir_len;
 	uri_len = con->physical.path->used - 1 - basedir_len;
 	uri_ptr = con->physical.path->ptr + basedir_len;
 

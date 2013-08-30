@@ -517,8 +517,8 @@ handler_t http_response_prepare(server *srv, connection *con) {
 		 */
 
 		buffer_copy_string_buffer(con->physical.path, con->physical.doc_root);
-		BUFFER_APPEND_SLASH(con->physical.path);
 		buffer_copy_string_buffer(con->physical.basedir, con->physical.path);
+		BUFFER_APPEND_SLASH(con->physical.path);
 		if (con->physical.rel_path->used &&
 		    con->physical.rel_path->ptr[0] == '/') {
 			buffer_append_string_len(con->physical.path, con->physical.rel_path->ptr + 1, con->physical.rel_path->used - 2);
