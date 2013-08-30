@@ -322,31 +322,13 @@ static int http_auth_get_password(server *srv, mod_auth_plugin_data *p, buffer *
 	return ret;
 }
 
-static int http_auth_match_rules(server *srv, mod_auth_plugin_data *p, const char *url, const char *username, const char *group, const char *host) {
+int http_auth_match_rules(server *srv, array *req, const char *username, const char *group, const char *host) {
 	const char *r = NULL, *rules = NULL;
-	size_t i;
 	int username_len;
 	data_string *require;
-	array *req;
 
 	UNUSED(group);
 	UNUSED(host);
-
-	/* check what has to be match to fullfil the request */
-	/* search auth-directives for path */
-	for (i = 0; i < p->conf.auth_require->used; i++) {
-		if (p->conf.auth_require->data[i]->key->used == 0) continue;
-
-		if (0 == strncmp(url, p->conf.auth_require->data[i]->key->ptr, p->conf.auth_require->data[i]->key->used - 1)) {
-			break;
-		}
-	}
-
-	if (i == p->conf.auth_require->used) {
-		return -1;
-	}
-
-	req = ((data_array *)(p->conf.auth_require->data[i]))->value;
 
 	require = (data_string *)array_get_element(req, "require");
 
@@ -855,7 +837,7 @@ static int http_auth_basic_password_compare(server *srv, mod_auth_plugin_data *p
 	return -1;
 }
 
-int http_auth_basic_check(server *srv, connection *con, mod_auth_plugin_data *p, array *req, buffer *url, const char *realm_str) {
+int http_auth_basic_check(server *srv, connection *con, mod_auth_plugin_data *p, array *req, const char *realm_str) {
 	buffer *username, *password;
 	char *pw;
 
@@ -910,7 +892,7 @@ int http_auth_basic_check(server *srv, connection *con, mod_auth_plugin_data *p,
 	}
 
 	/* value is our allow-rules */
-	if (http_auth_match_rules(srv, p, url->ptr, username->ptr, NULL, NULL)) {
+	if (http_auth_match_rules(srv, req, username->ptr, NULL, NULL)) {
 		buffer_free(username);
 		buffer_free(password);
 
@@ -935,7 +917,7 @@ typedef struct {
 } digest_kv;
 
 /* return values: -1: error/bad request, 0: failed, 1: success */
-int http_auth_digest_check(server *srv, connection *con, mod_auth_plugin_data *p, array *req, buffer *url, const char *realm_str) {
+int http_auth_digest_check(server *srv, connection *con, mod_auth_plugin_data *p, array *req, const char *realm_str) {
 	char a1[256];
 	char a2[256];
 
@@ -1184,7 +1166,7 @@ int http_auth_digest_check(server *srv, connection *con, mod_auth_plugin_data *p
 	}
 
 	/* value is our allow-rules */
-	if (http_auth_match_rules(srv, p, url->ptr, username, NULL, NULL)) {
+	if (http_auth_match_rules(srv, req, username, NULL, NULL)) {
 		buffer_free(b);
 
 		log_error_write(srv, __FILE__, __LINE__, "s",

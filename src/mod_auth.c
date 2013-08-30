@@ -249,13 +249,13 @@ static handler_t mod_auth_uri_handler(server *srv, connection *con, void *p_d) {
 				auth_type = "Basic";
 
 				if (0 == strcmp(method->value->ptr, "basic")) {
-					auth_satisfied = http_auth_basic_check(srv, con, p, req, con->uri.path, auth_realm+1);
+					auth_satisfied = http_auth_basic_check(srv, con, p, req, auth_realm+1);
 				}
 			} else if ((auth_type_len == 6) &&
 				   (0 == strncasecmp(http_authorization, "Digest", auth_type_len))) {
 				auth_type = "Digest";
 				if (0 == strcmp(method->value->ptr, "digest")) {
-					if (-1 == (auth_satisfied = http_auth_digest_check(srv, con, p, req, con->uri.path, auth_realm+1))) {
+					if (-1 == (auth_satisfied = http_auth_digest_check(srv, con, p, req, auth_realm+1))) {
 						con->http_status = 400;
 						con->mode = DIRECT;
 
