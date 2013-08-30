@@ -937,6 +937,51 @@ int main (int argc, char **argv) {
 	if (srv->srvconf.dont_daemonize == 0) daemonize();
 #endif
 
+
+#ifdef HAVE_SIGACTION
+	memset(&act, 0, sizeof(act));
+	act.sa_handler = SIG_IGN;
+	sigaction(SIGPIPE, &act, NULL);
+	sigaction(SIGUSR1, &act, NULL);
+# if defined(SA_SIGINFO)
+	act.sa_sigaction = sigaction_handler;
+	sigemptyset(&act.sa_mask);
+	act.sa_flags = SA_SIGINFO;
+# else
+	act.sa_handler = signal_handler;
+	sigemptyset(&act.sa_mask);
+	act.sa_flags = 0;
+# endif
+	sigaction(SIGINT,  &act, NULL);
+	sigaction(SIGTERM, &act, NULL);
+	sigaction(SIGHUP,  &act, NULL);
+	sigaction(SIGALRM, &act, NULL);
+	sigaction(SIGCHLD, &act, NULL);
+
+#elif defined(HAVE_SIGNAL)
+	/* ignore the SIGPIPE from sendfile() */
+	signal(SIGPIPE, SIG_IGN);
+	signal(SIGUSR1, SIG_IGN);
+	signal(SIGALRM, signal_handler);
+	signal(SIGTERM, signal_handler);
+	signal(SIGHUP,  signal_handler);
+	signal(SIGCHLD,  signal_handler);
+	signal(SIGINT,  signal_handler);
+#endif
+
+#ifdef USE_ALARM
+	signal(SIGALRM, signal_handler);
+
+	/* setup periodic timer (1 second) */
+	if (setitimer(ITIMER_REAL, &interval, NULL)) {
+		log_error_write(srv, __FILE__, __LINE__, "s", "setting timer failed");
+		return -1;
+	}
+
+	getitimer(ITIMER_REAL, &interval);
+#endif
+
+
 	srv->gid = getgid();
 	srv->uid = getuid();
 
@@ -1010,51 +1055,6 @@ int main (int argc, char **argv) {
 		return -1;
 	}
 
-
-
-
-#ifdef HAVE_SIGACTION
-	memset(&act, 0, sizeof(act));
-	act.sa_handler = SIG_IGN;
-	sigaction(SIGPIPE, &act, NULL);
-	sigaction(SIGUSR1, &act, NULL);
-# if defined(SA_SIGINFO)
-	act.sa_sigaction = sigaction_handler;
-	sigemptyset(&act.sa_mask);
-	act.sa_flags = SA_SIGINFO;
-# else
-	act.sa_handler = signal_handler;
-	sigemptyset(&act.sa_mask);
-	act.sa_flags = 0;
-# endif
-	sigaction(SIGINT,  &act, NULL);
-	sigaction(SIGTERM, &act, NULL);
-	sigaction(SIGHUP,  &act, NULL);
-	sigaction(SIGALRM, &act, NULL);
-	sigaction(SIGCHLD, &act, NULL);
-
-#elif defined(HAVE_SIGNAL)
-	/* ignore the SIGPIPE from sendfile() */
-	signal(SIGPIPE, SIG_IGN);
-	signal(SIGUSR1, SIG_IGN);
-	signal(SIGALRM, signal_handler);
-	signal(SIGTERM, signal_handler);
-	signal(SIGHUP,  signal_handler);
-	signal(SIGCHLD,  signal_handler);
-	signal(SIGINT,  signal_handler);
-#endif
-
-#ifdef USE_ALARM
-	signal(SIGALRM, signal_handler);
-
-	/* setup periodic timer (1 second) */
-	if (setitimer(ITIMER_REAL, &interval, NULL)) {
-		log_error_write(srv, __FILE__, __LINE__, "s", "setting timer failed");
-		return -1;
-	}
-
-	getitimer(ITIMER_REAL, &interval);
-#endif
 
 #ifdef HAVE_FORK
 	/* start watcher and workers */

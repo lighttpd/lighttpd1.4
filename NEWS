@@ -33,6 +33,7 @@ NEWS
   * [mod_simple_vhost] fix cache; skip module if simple-vhost.server-root is empty (thx rm for reporting)
   * [mod_accesslog] add accesslog.syslog-level option (fixes #2480)
   * [core] allow files to be used as document-root (fixes #2475)
+  * [core] set signal handlers before forking child processes in modules/plugins_call_set_defaults (fixes #2502)
 
 - 1.4.32 - 2012-11-21
   * Code cleanup with clang/sparse (fixes #2437, thx kibi)
