@@ -1,5 +1,7 @@
 #!/bin/sh
 
+set -e
+
 if test x$srcdir = x; then
 	srcdir=.
 fi
@@ -18,6 +20,8 @@ mkdir -p $tmpdir/servers/www.example.org/pages/go/
 mkdir -p $tmpdir/servers/www.example.org/pages/expire/
 mkdir -p $tmpdir/servers/www.example.org/pages/indexfile/
 mkdir -p $tmpdir/servers/123.example.org/pages/
+mkdir -p $tmpdir/servers/a.example.org/pages/a/
+mkdir -p $tmpdir/servers/b.example.org/pages/b/
 mkdir -p $tmpdir/logs/
 mkdir -p $tmpdir/cache/
 mkdir -p $tmpdir/cache/compress/
@@ -43,7 +47,9 @@ touch $tmpdir/servers/www.example.org/pages/image.jpg \
       $tmpdir/servers/www.example.org/pages/image.JPG \
       $tmpdir/servers/www.example.org/pages/Foo.txt \
       $tmpdir/servers/www.example.org/pages/a \
-      $tmpdir/servers/www.example.org/pages/index.html~
+      $tmpdir/servers/www.example.org/pages/index.html~ \
+      $tmpdir/servers/a.example.org/pages/a/a.html \
+      $tmpdir/servers/b.example.org/pages/b/b.html
 echo "12345" > $tmpdir/servers/www.example.org/pages/range.pdf
 
 printf "%-40s" "preparing infrastructure"

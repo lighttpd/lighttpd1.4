@@ -16,43 +16,46 @@ TESTS=\
 	run-tests.pl \
 	cleanup.sh
 
-CONFS=fastcgi-10.conf \
-      fastcgi-auth.conf \
-      fastcgi-responder.conf \
-      fastcgi-13.conf \
+CONFS=\
+      404-handler.conf \
       bug-06.conf \
       bug-12.conf \
-      core-var-include.t \
-      var-include.conf \
-      var-include-sub.conf \
+      cachable.t \
       condition.conf \
+      core-404-handler.t \
       core-condition.t \
+      core-keepalive.t \
       core-request.t \
       core-response.t \
-      core-keepalive.t \
+      core-var-include.t \
       core.t \
-	  mod-proxy.t \
-	  proxy.conf \
-	  mod-secdownload.t \
+      fastcgi-10.conf \
+      fastcgi-13.conf \
+      fastcgi-auth.conf \
+      fastcgi-responder.conf \
+      LightyTest.pm \
+      lowercase.conf \
+      lowercase.t \
       mod-access.t \
       mod-auth.t \
       mod-cgi.t \
-      mod-compress.t \
       mod-compress.conf \
+      mod-compress.t \
       mod-fastcgi.t \
+      mod-proxy.t \
       mod-redirect.t \
       mod-rewrite.t \
-      mod-userdir.t \
-	  symlink.t \
-      request.t \
-      mod-ssi.t \
-      LightyTest.pm \
+      mod-secdownload.t \
       mod-setenv.t \
-      lowercase.t \
-      lowercase.conf \
-      cachable.t \
-      core-404-handler.t \
-      404-handler.conf
+      mod-simplevhost.conf \
+      mod-simplevhost.t \
+      mod-ssi.t \
+      mod-userdir.t \
+      proxy.conf \
+      request.t \
+      symlink.t \
+      var-include-sub.conf \
+      var-include.conf
 
 TESTS_ENVIRONMENT=$(srcdir)/wrapper.sh $(srcdir) $(top_builddir)
 
