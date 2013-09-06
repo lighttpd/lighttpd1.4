@@ -2807,7 +2807,7 @@ static handler_t scgi_check_extension(server *srv, connection *con, void *p_d, i
 
 			if (con->conf.log_request_handling) {
 				log_error_write(srv, __FILE__, __LINE__, "s",
-				"handling it in mod_fastcgi");
+				"handling it in mod_scgi");
 			}
 
 			/* the prefix is the SCRIPT_NAME,
@@ -2865,7 +2865,7 @@ static handler_t scgi_check_extension(server *srv, connection *con, void *p_d, i
 		con->mode = p->id;
 
 		if (con->conf.log_request_handling) {
-			log_error_write(srv, __FILE__, __LINE__, "s", "handling it in mod_fastcgi");
+			log_error_write(srv, __FILE__, __LINE__, "s", "handling it in mod_scgi");
 		}
 	}
 
