@@ -112,30 +112,35 @@ sub start_proc {
 	# kill old proc if necessary
 	#$self->stop_proc;
 
+	if ($self->listening_on($self->{PORT})) {
+		diag("\nPort ".$self->{PORT}." already in use");
+		return -1;
+	}
+
 	# pre-process configfile if necessary
 	#
 
 	$ENV{'SRCDIR'} = $self->{BASEDIR}.'/tests';
 	$ENV{'PORT'} = $self->{PORT};
 
-	my $cmdline = $self->{LIGHTTPD_PATH}." -D -f ".$self->{SRCDIR}."/".$self->{CONFIGFILE}." -m ".$self->{MODULES_PATH};
+	my @cmdline = ($self->{LIGHTTPD_PATH}, "-D", "-f", $self->{SRCDIR}."/".$self->{CONFIGFILE}, "-m", $self->{MODULES_PATH});
 	if (defined $ENV{"TRACEME"} && $ENV{"TRACEME"} eq 'strace') {
-		$cmdline = "strace -tt -s 512 -o strace ".$cmdline;
+		@cmdline = (qw(strace -tt -s 512 -o strace), @cmdline);
 	} elsif (defined $ENV{"TRACEME"} && $ENV{"TRACEME"} eq 'truss') {
-		$cmdline = "truss -a -l -w all -v all -o strace ".$cmdline;
+		@cmdline = (qw(truss -a -l -w all -v all -o strace), @cmdline);
 	} elsif (defined $ENV{"TRACEME"} && $ENV{"TRACEME"} eq 'gdb') {
-		$cmdline = "gdb --batch --ex 'run' --ex 'bt full' --args ".$cmdline." > gdb.out";
+		@cmdline = ('gdb', '--batch', '--ex', 'run', '--ex', 'bt full', '--args', @cmdline);
 	} elsif (defined $ENV{"TRACEME"} && $ENV{"TRACEME"} eq 'valgrind') {
-		$cmdline = "valgrind --tool=memcheck --show-reachable=yes --leak-check=yes --log-file=valgrind ".$cmdline;
+		@cmdline = (qw(valgrind --tool=memcheck --show-reachable=yes --leak-check=yes --log-file=valgrind), @cmdline);
 	}
-	# diag("\nstarting lighttpd at :".$self->{PORT}.", cmdline: ".$cmdline );
+	# diag("\nstarting lighttpd at :".$self->{PORT}.", cmdline: ".@cmdline );
 	my $child = fork();
 	if (not defined $child) {
 		diag("\nFork failed");
 		return -1;
 	}
 	if ($child == 0) {
-		exec $cmdline or die($?);
+		exec @cmdline or die($?);
 	}
 
 	if (0 != $self->wait_for_port_with_proc($self->{PORT}, $child)) {
@@ -383,7 +388,7 @@ sub spawnfcgi {
 		bind(SOCK, sockaddr_in($port, $iaddr)) || die "bind: $!";
 		listen(SOCK, 1024) || die "listen: $!";
 		dup2(fileno(SOCK), 0) || die "dup2: $!";
-		exec $binary or die($?);
+		exec { $binary } ($binary) or die($?);
 	} else {
 		if (0 != $self->wait_for_port_with_proc($port, $child)) {
 			diag(sprintf("\nThe process %i is not up (port %i, %s)", $child, $port, $binary));
