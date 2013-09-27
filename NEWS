@@ -3,7 +3,10 @@
 NEWS
 ====
 
-- 1.4.33 -
+- 1.4.34
+  *
+
+- 1.4.33 - 2013-09-27
   * mod_fastcgi: fix mix up of "mode" => "authorizer" in other fastcgi configs (fixes #2465, thx peex)
   * fix handling of If-Modified-Since if If-None-Match is present (don't return 412 for date parsing errors);
     follow current draft for HTTP/1.1, which tells us to ignore If-Modified-Since if we have matching etags.
