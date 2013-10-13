@@ -439,7 +439,6 @@ URIHANDLER_FUNC(mod_extforward_uri_handler) {
 #ifdef HAVE_IPV6
 		ipstr_to_sockaddr(srv, real_remote_addr, &sock);
 #else
-		UNUSED(addrs_left);
 		sock.ipv4.sin_addr.s_addr = inet_addr(real_remote_addr);
 		sock.plain.sa_family = (sock.ipv4.sin_addr.s_addr == 0xFFFFFFFF) ? AF_UNSPEC : AF_INET;
 #endif
