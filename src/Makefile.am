@@ -243,7 +243,7 @@ mod_compress_la_LIBADD = $(Z_LIB) $(BZ_LIB) $(common_libadd)
 lib_LTLIBRARIES += mod_auth.la
 mod_auth_la_SOURCES = mod_auth.c http_auth.c
 mod_auth_la_LDFLAGS = -module -export-dynamic -avoid-version -no-undefined
-mod_auth_la_LIBADD = $(CRYPT_LIB) $(LDAP_LIB) $(LBER_LIB) $(common_libadd)
+mod_auth_la_LIBADD = $(CRYPT_LIB) $(SSL_LIB) $(LDAP_LIB) $(LBER_LIB) $(common_libadd)
 
 lib_LTLIBRARIES += mod_rewrite.la
 mod_rewrite_la_SOURCES = mod_rewrite.c

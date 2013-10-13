@@ -4,7 +4,7 @@ NEWS
 ====
 
 - 1.4.34
-  *
+  * [mod_auth] explicitly link ssl for SHA1 (fixes #2517)
 
 - 1.4.33 - 2013-09-27
   * mod_fastcgi: fix mix up of "mode" => "authorizer" in other fastcgi configs (fixes #2465, thx peex)
