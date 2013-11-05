@@ -6,6 +6,7 @@ NEWS
 - 1.4.34
   * [mod_auth] explicitly link ssl for SHA1 (fixes #2517)
   * [mod_extforward] fix compilation without IPv6, (not) using undefined var (fixes #2515, thx mm)
+  * [ssl] fix SNI handling; only use key+cert from SNI specific config (fixes #2525, CVE-2013-4508)
 
 - 1.4.33 - 2013-09-27
   * mod_fastcgi: fix mix up of "mode" => "authorizer" in other fastcgi configs (fixes #2465, thx peex)

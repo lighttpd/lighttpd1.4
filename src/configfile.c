@@ -339,9 +339,13 @@ int config_setup_connection(server *srv, connection *con) {
 
 	PATCH(ssl_pemfile);
 #ifdef USE_OPENSSL
-	PATCH(ssl_ctx);
+	PATCH(ssl_pemfile_x509);
+	PATCH(ssl_pemfile_pkey);
 #endif
 	PATCH(ssl_ca_file);
+#ifdef USE_OPENSSL
+	PATCH(ssl_ca_file_cert_names);
+#endif
 	PATCH(ssl_cipher_list);
 	PATCH(ssl_dh_file);
 	PATCH(ssl_ec_curve);
@@ -409,10 +413,14 @@ int config_patch_connection(server *srv, connection *con, comp_key_t comp) {
 			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("ssl.pemfile"))) {
 				PATCH(ssl_pemfile);
 #ifdef USE_OPENSSL
-				PATCH(ssl_ctx);
+				PATCH(ssl_pemfile_x509);
+				PATCH(ssl_pemfile_pkey);
 #endif
 			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("ssl.ca-file"))) {
 				PATCH(ssl_ca_file);
+#ifdef USE_OPENSSL
+				PATCH(ssl_ca_file_cert_names);
+#endif
 			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("ssl.honor-cipher-order"))) {
 				PATCH(ssl_honor_cipher_order);
 			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("ssl.empty-fragments"))) {
