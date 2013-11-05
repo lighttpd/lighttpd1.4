@@ -530,14 +530,6 @@ typedef struct server_socket {
 	int       fd;
 	int       fde_ndx;
 
-	buffer *ssl_pemfile;
-	buffer *ssl_ca_file;
-	buffer *ssl_cipher_list;
-	buffer *ssl_dh_file;
-	buffer *ssl_ec_curve;
-	unsigned short ssl_use_sslv2;
-	unsigned short ssl_use_sslv3;
-	unsigned short use_ipv6;
 	unsigned short is_ssl;
 
 	buffer *srv_token;

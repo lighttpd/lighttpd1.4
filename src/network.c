@@ -224,7 +224,6 @@ static int network_server_init(server *srv, buffer *host_token, specific_config 
 			log_error_write(srv, __FILE__, __LINE__, "ss", "socket failed:", strerror(errno));
 			goto error_free_socket;
 		}
-		srv_socket->use_ipv6 = 1;
 	}
 #endif
 
