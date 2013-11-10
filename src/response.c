@@ -355,7 +355,7 @@ handler_t http_response_prepare(server *srv, connection *con) {
 		}
 
 		if (con->conf.log_request_handling) {
-			log_error_write(srv, __FILE__, __LINE__,  "s",  "-- sanatising URI");
+			log_error_write(srv, __FILE__, __LINE__,  "s",  "-- sanitising URI");
 			log_error_write(srv, __FILE__, __LINE__,  "sb", "URI-path     : ", con->uri.path);
 		}
 
