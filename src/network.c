@@ -741,6 +741,14 @@ int network_init(server *srv) {
 			return -1;
 		}
 
+		/* completely useless identifier; required for client cert verification to work with sessions */
+		if (0 == SSL_CTX_set_session_id_context(s->ssl_ctx, (const unsigned char*) CONST_STR_LEN("lighttpd"))) {
+			log_error_write(srv, __FILE__, __LINE__, "ss:s", "SSL:",
+				"failed to set session context",
+				ERR_error_string(ERR_get_error(), NULL));
+			return -1;
+		}
+
 		if (s->ssl_empty_fragments) {
 #ifdef SSL_OP_DONT_INSERT_EMPTY_FRAGMENTS
 			ssloptions &= ~SSL_OP_DONT_INSERT_EMPTY_FRAGMENTS;

@@ -11,6 +11,7 @@ NEWS
   * [stat-cache] FAM: fix use after free (CVE-2013-4560)
   * [stat-cache] fix FAM cleanup/fdevent handling
   * [core] check success of setuid,setgid,setgroups (CVE-2013-4559)
+  * [ssl] fix regression from CVE-2013-4508 (client-cert sessions were broken)
 
 - 1.4.33 - 2013-09-27
   * mod_fastcgi: fix mix up of "mode" => "authorizer" in other fastcgi configs (fixes #2465, thx peex)
