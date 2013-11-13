@@ -8,6 +8,7 @@ NEWS
   * [mod_extforward] fix compilation without IPv6, (not) using undefined var (fixes #2515, thx mm)
   * [ssl] fix SNI handling; only use key+cert from SNI specific config (fixes #2525, CVE-2013-4508)
   * [doc] update ssl.cipher-list recommendation
+  * [stat-cache] FAM: fix use after free (CVE-2013-4560)
 
 - 1.4.33 - 2013-09-27
   * mod_fastcgi: fix mix up of "mode" => "authorizer" in other fastcgi configs (fixes #2465, thx peex)

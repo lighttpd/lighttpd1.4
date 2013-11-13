@@ -648,6 +648,7 @@ handler_t stat_cache_get_entry(server *srv, connection *con, buffer *name, stat_
 						FamErrlist[FAMErrno]);
 
 				fam_dir_entry_free(fam_dir);
+				fam_dir = NULL;
 			} else {
 				int osize = 0;
 
