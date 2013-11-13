@@ -23,59 +23,62 @@ fdevents *fdevent_init(server *srv, size_t maxfds, fdevent_handler_t type) {
 	switch(type) {
 	case FDEVENT_HANDLER_POLL:
 		if (0 != fdevent_poll_init(ev)) {
-			log_error_write(ev->srv, __FILE__, __LINE__, "S",
+			log_error_write(srv, __FILE__, __LINE__, "S",
 				"event-handler poll failed");
-
-			return NULL;
+			goto error;
 		}
 		return ev;
 	case FDEVENT_HANDLER_SELECT:
 		if (0 != fdevent_select_init(ev)) {
-			log_error_write(ev->srv, __FILE__, __LINE__, "S",
+			log_error_write(srv, __FILE__, __LINE__, "S",
 				"event-handler select failed");
-			return NULL;
+			goto error;
 		}
 		return ev;
 	case FDEVENT_HANDLER_LINUX_SYSEPOLL:
 		if (0 != fdevent_linux_sysepoll_init(ev)) {
-			log_error_write(ev->srv, __FILE__, __LINE__, "S",
+			log_error_write(srv, __FILE__, __LINE__, "S",
 				"event-handler linux-sysepoll failed, try to set server.event-handler = \"poll\" or \"select\"");
-			return NULL;
+			goto error;
 		}
 		return ev;
 	case FDEVENT_HANDLER_SOLARIS_DEVPOLL:
 		if (0 != fdevent_solaris_devpoll_init(ev)) {
-			log_error_write(ev->srv, __FILE__, __LINE__, "S",
+			log_error_write(srv, __FILE__, __LINE__, "S",
 				"event-handler solaris-devpoll failed, try to set server.event-handler = \"poll\" or \"select\"");
-			return NULL;
+			goto error;
 		}
 		return ev;
 	case FDEVENT_HANDLER_SOLARIS_PORT:
 		if (0 != fdevent_solaris_port_init(ev)) {
-			log_error_write(ev->srv, __FILE__, __LINE__, "S",
+			log_error_write(srv, __FILE__, __LINE__, "S",
 				"event-handler solaris-eventports failed, try to set server.event-handler = \"poll\" or \"select\"");
-			return NULL;
+			goto error;
 		}
 		return ev;
 	case FDEVENT_HANDLER_FREEBSD_KQUEUE:
 		if (0 != fdevent_freebsd_kqueue_init(ev)) {
-			log_error_write(ev->srv, __FILE__, __LINE__, "S",
+			log_error_write(srv, __FILE__, __LINE__, "S",
 				"event-handler freebsd-kqueue failed, try to set server.event-handler = \"poll\" or \"select\"");
-			return NULL;
+			goto error;
 		}
 		return ev;
 	case FDEVENT_HANDLER_LIBEV:
 		if (0 != fdevent_libev_init(ev)) {
-			log_error_write(ev->srv, __FILE__, __LINE__, "S",
+			log_error_write(srv, __FILE__, __LINE__, "S",
 				"event-handler libev failed, try to set server.event-handler = \"poll\" or \"select\"");
-			return NULL;
+			goto error;
 		}
 		return ev;
 	case FDEVENT_HANDLER_UNSET:
 		break;
 	}
 
-	log_error_write(ev->srv, __FILE__, __LINE__, "S",
+error:
+	free(ev->fdarray);
+	free(ev);
+
+	log_error_write(srv, __FILE__, __LINE__, "S",
 		"event-handler is unknown, try to set server.event-handler = \"poll\" or \"select\"");
 	return NULL;
 }

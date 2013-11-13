@@ -242,7 +242,7 @@ SETDEFAULTS_FUNC(mod_rewrite_set_defaults) {
 	if (!p) return HANDLER_ERROR;
 
 	/* 0 */
-	p->config_storage = calloc(1, srv->config_context->used * sizeof(specific_config *));
+	p->config_storage = calloc(1, srv->config_context->used * sizeof(plugin_config *));
 #else
 	UNUSED(p_d);
 #endif

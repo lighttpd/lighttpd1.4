@@ -764,8 +764,9 @@ static int http_auth_basic_password_compare(server *srv, mod_auth_plugin_data *p
 				if (auth_ldap_init(srv, p->anon_conf) != HANDLER_GO_ON)
 					return -1;
 
-				if (p->anon_conf->ldap == NULL ||
-				    LDAP_SUCCESS != (ret = ldap_search_s(p->anon_conf->ldap, p->conf.auth_ldap_basedn->ptr, LDAP_SCOPE_SUBTREE, p->ldap_filter->ptr, attrs, 0, &lm))) {
+				if (NULL == p->anon_conf->ldap) return -1;
+
+				if (LDAP_SUCCESS != (ret = ldap_search_s(p->anon_conf->ldap, p->conf.auth_ldap_basedn->ptr, LDAP_SCOPE_SUBTREE, p->ldap_filter->ptr, attrs, 0, &lm))) {
 					log_error_write(srv, __FILE__, __LINE__, "sssb",
 							"ldap:", ldap_err2string(ret), "filter:", p->ldap_filter);
 					return -1;

@@ -24,6 +24,8 @@ array *array_init_array(array *src) {
 	size_t i;
 	array *a = array_init();
 
+	if (0 == src->size) return a;
+
 	a->used = src->used;
 	a->size = src->size;
 	a->next_power_of_2 = src->next_power_of_2;

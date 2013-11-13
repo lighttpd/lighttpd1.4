@@ -453,10 +453,10 @@ static int network_server_init(server *srv, buffer *host_token, specific_config 
 	if (srv->srv_sockets.size == 0) {
 		srv->srv_sockets.size = 4;
 		srv->srv_sockets.used = 0;
-		srv->srv_sockets.ptr = malloc(srv->srv_sockets.size * sizeof(server_socket));
+		srv->srv_sockets.ptr = malloc(srv->srv_sockets.size * sizeof(server_socket*));
 	} else if (srv->srv_sockets.used == srv->srv_sockets.size) {
 		srv->srv_sockets.size += 4;
-		srv->srv_sockets.ptr = realloc(srv->srv_sockets.ptr, srv->srv_sockets.size * sizeof(server_socket));
+		srv->srv_sockets.ptr = realloc(srv->srv_sockets.ptr, srv->srv_sockets.size * sizeof(server_socket*));
 	}
 
 	srv->srv_sockets.ptr[srv->srv_sockets.used++] = srv_socket;

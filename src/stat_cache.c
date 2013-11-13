@@ -713,7 +713,7 @@ int stat_cache_trigger_cleanup(server *srv) {
 
 	if (!sc->files) return 0;
 
-	keys = calloc(1, sizeof(size_t) * sc->files->size);
+	keys = calloc(1, sizeof(int) * sc->files->size);
 
 	stat_cache_tag_old_entries(srv, sc->files, keys, &max_ndx);
 

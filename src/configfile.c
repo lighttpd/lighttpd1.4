@@ -1026,7 +1026,10 @@ static char* getCWD(void) {
 	s = malloc(len);
 	if (!s) return NULL;
 	while (NULL == getcwd(s, len)) {
-		if (errno != ERANGE || SSIZE_MAX - len < len) return NULL;
+		if (errno != ERANGE || SSIZE_MAX - len < len) {
+			free(s);
+			return NULL;
+		}
 		len *= 2;
 		s1 = realloc(s, len);
 		if (!s1) {

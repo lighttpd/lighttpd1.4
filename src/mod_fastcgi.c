@@ -1169,7 +1169,7 @@ SETDEFAULTS_FUNC(mod_fastcgi_set_defaults) {
 		{ NULL,                          NULL, T_CONFIG_UNSET, T_CONFIG_SCOPE_UNSET }
 	};
 
-	p->config_storage = calloc(1, srv->config_context->used * sizeof(specific_config *));
+	p->config_storage = calloc(1, srv->config_context->used * sizeof(plugin_config *));
 
 	for (i = 0; i < srv->config_context->used; i++) {
 		plugin_config *s;
@@ -3174,8 +3174,6 @@ SUBREQUEST_FUNC(mod_fastcgi_handle_subrequest) {
 	/* ok, create the request */
 	switch(fcgi_write_request(srv, hctx)) {
 	case HANDLER_ERROR:
-		host = hctx->host;
-
 		if (hctx->state == FCGI_STATE_INIT ||
 		    hctx->state == FCGI_STATE_CONNECT_DELAYED) {
 			fcgi_restart_dead_procs(srv, p, host);

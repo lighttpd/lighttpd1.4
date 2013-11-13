@@ -12,6 +12,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 
+#include <assert.h>
 #include <fcntl.h>
 #include <unistd.h>
 #include <ctype.h>
@@ -161,7 +162,7 @@ SETDEFAULTS_FUNC(mod_compress_setdefaults) {
 		{ NULL,                             NULL, T_CONFIG_UNSET, T_CONFIG_SCOPE_UNSET }
 	};
 
-	p->config_storage = calloc(1, srv->config_context->used * sizeof(specific_config *));
+	p->config_storage = calloc(1, srv->config_context->used * sizeof(plugin_config *));
 
 	for (i = 0; i < srv->config_context->used; i++) {
 		plugin_config *s;
@@ -860,7 +861,8 @@ PHYSICALPATH_FUNC(mod_compress_physical) {
 					} else if (matched_encodings & HTTP_ACCEPT_ENCODING_X_GZIP) {
 						compression_type = HTTP_ACCEPT_ENCODING_X_GZIP;
 						compression_name = dflt_x_gzip;
-					} else if (matched_encodings & HTTP_ACCEPT_ENCODING_DEFLATE) {
+					} else {
+						assert(matched_encodings & HTTP_ACCEPT_ENCODING_DEFLATE);
 						compression_type = HTTP_ACCEPT_ENCODING_DEFLATE;
 						compression_name = dflt_deflate;
 					}

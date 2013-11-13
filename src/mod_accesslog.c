@@ -446,8 +446,8 @@ FREE_FUNC(mod_accesslog_free) {
 		free(p->config_storage);
 	}
 
-	free(p);
 	if (p->syslog_logbuffer) buffer_free(p->syslog_logbuffer);
+	free(p);
 
 	return HANDLER_GO_ON;
 }
@@ -466,7 +466,7 @@ SETDEFAULTS_FUNC(log_access_open) {
 
 	if (!p) return HANDLER_ERROR;
 
-	p->config_storage = calloc(1, srv->config_context->used * sizeof(specific_config *));
+	p->config_storage = calloc(1, srv->config_context->used * sizeof(plugin_config *));
 
 	for (i = 0; i < srv->config_context->used; i++) {
 		plugin_config *s;
