@@ -222,7 +222,6 @@ typedef struct {
 
 #ifdef HAVE_FAM_H
 	int    dir_version;
-	int    dir_ndx;
 #endif
 
 	buffer *content_type;
@@ -235,7 +234,7 @@ typedef struct {
 #ifdef HAVE_FAM_H
 	splay_tree *dirs; /* the nodes of the tree are fam_dir_entry */
 
-	FAMConnection *fam;
+	FAMConnection fam;
 	int    fam_fcce_ndx;
 #endif
 	buffer *hash_key;  /* temp-store for the hash-key */

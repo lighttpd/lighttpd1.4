@@ -1173,18 +1173,17 @@ int main (int argc, char **argv) {
 #ifdef HAVE_FAM_H
 	/* setup FAM */
 	if (srv->srvconf.stat_cache_engine == STAT_CACHE_ENGINE_FAM) {
-		if (0 != FAMOpen2(srv->stat_cache->fam, "lighttpd")) {
+		if (0 != FAMOpen2(&srv->stat_cache->fam, "lighttpd")) {
 			log_error_write(srv, __FILE__, __LINE__, "s",
 					 "could not open a fam connection, dieing.");
 			return -1;
 		}
 #ifdef HAVE_FAMNOEXISTS
-		FAMNoExists(srv->stat_cache->fam);
+		FAMNoExists(&srv->stat_cache->fam);
 #endif
 
-		srv->stat_cache->fam_fcce_ndx = -1;
-		fdevent_register(srv->ev, FAMCONNECTION_GETFD(srv->stat_cache->fam), stat_cache_handle_fdevent, NULL);
-		fdevent_event_set(srv->ev, &(srv->stat_cache->fam_fcce_ndx), FAMCONNECTION_GETFD(srv->stat_cache->fam), FDEVENT_IN);
+		fdevent_register(srv->ev, FAMCONNECTION_GETFD(&srv->stat_cache->fam), stat_cache_handle_fdevent, NULL);
+		fdevent_event_set(srv->ev, &(srv->stat_cache->fam_fcce_ndx), FAMCONNECTION_GETFD(&srv->stat_cache->fam), FDEVENT_IN);
 	}
 #endif
 

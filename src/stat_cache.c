@@ -69,7 +69,6 @@
 #ifdef HAVE_FAM_H
 typedef struct {
 	FAMRequest *req;
-	FAMConnection *fc;
 
 	buffer *name;
 
@@ -102,21 +101,22 @@ static fake_keys ctrl;
 #endif
 
 stat_cache *stat_cache_init(void) {
-	stat_cache *fc = NULL;
+	stat_cache *sc = NULL;
 
-	fc = calloc(1, sizeof(*fc));
+	sc = calloc(1, sizeof(*sc));
 
-	fc->dir_name = buffer_init();
-	fc->hash_key = buffer_init();
+	sc->dir_name = buffer_init();
+	sc->hash_key = buffer_init();
+
 #ifdef HAVE_FAM_H
-	fc->fam = calloc(1, sizeof(*fc->fam));
+	sc->fam_fcce_ndx = -1;
 #endif
 
 #ifdef DEBUG_STAT_CACHE
 	ctrl.size = 0;
 #endif
 
-	return fc;
+	return sc;
 }
 
 static stat_cache_entry * stat_cache_entry_init(void) {
@@ -153,12 +153,12 @@ static fam_dir_entry * fam_dir_entry_init(void) {
 	return fam_dir;
 }
 
-static void fam_dir_entry_free(void *data) {
+static void fam_dir_entry_free(FAMConnection *fc, void *data) {
 	fam_dir_entry *fam_dir = data;
 
 	if (!fam_dir) return;
 
-	FAMCancelMonitor(fam_dir->fc, fam_dir->req);
+	FAMCancelMonitor(fc, fam_dir->req);
 
 	buffer_free(fam_dir->name);
 	free(fam_dir->req);
@@ -190,7 +190,7 @@ void stat_cache_free(stat_cache *sc) {
 
 		osize = sc->dirs->size;
 
-		fam_dir_entry_free(node->data);
+		fam_dir_entry_free(&sc->fam, node->data);
 		sc->dirs = splaytree_delete(sc->dirs, node->key);
 
 		if (osize == 1) {
@@ -200,9 +200,11 @@ void stat_cache_free(stat_cache *sc) {
 		}
 	}
 
-	if (sc->fam) {
-		FAMClose(sc->fam);
-		free(sc->fam);
+	if (-1 != sc->fam_fcce_ndx) {
+		/* fd events already gone */
+		sc->fam_fcce_ndx = -1;
+
+		FAMClose(&sc->fam);
 	}
 #endif
 	free(sc);
@@ -246,10 +248,8 @@ handler_t stat_cache_handle_fdevent(server *srv, void *_fce, int revent) {
 	UNUSED(_fce);
 	/* */
 
-	if ((revent & FDEVENT_IN) &&
-	    sc->fam) {
-
-		events = FAMPending(sc->fam);
+	if (revent & FDEVENT_IN) {
+		events = FAMPending(&sc->fam);
 
 		for (i = 0; i < events; i++) {
 			FAMEvent fe;
@@ -257,7 +257,7 @@ handler_t stat_cache_handle_fdevent(server *srv, void *_fce, int revent) {
 			splay_tree *node;
 			int ndx, j;
 
-			FAMNextEvent(sc->fam, &fe);
+			FAMNextEvent(&sc->fam, &fe);
 
 			/* handle event */
 
@@ -287,7 +287,7 @@ handler_t stat_cache_handle_fdevent(server *srv, void *_fce, int revent) {
 					if (node && (node->key == ndx)) {
 						int osize = splaytree_size(sc->dirs);
 
-						fam_dir_entry_free(node->data);
+						fam_dir_entry_free(&sc->fam, node->data);
 						sc->dirs = splaytree_delete(sc->dirs, ndx);
 
 						assert(osize - 1 == splaytree_size(sc->dirs));
@@ -302,15 +302,10 @@ handler_t stat_cache_handle_fdevent(server *srv, void *_fce, int revent) {
 
 	if (revent & FDEVENT_HUP) {
 		/* fam closed the connection */
-		srv->stat_cache->fam_fcce_ndx = -1;
+		fdevent_event_del(srv->ev, &(sc->fam_fcce_ndx), FAMCONNECTION_GETFD(&sc->fam));
+		fdevent_unregister(srv->ev, FAMCONNECTION_GETFD(&sc->fam));
 
-		fdevent_event_del(srv->ev, &(sc->fam_fcce_ndx), FAMCONNECTION_GETFD(sc->fam));
-		fdevent_unregister(srv->ev, FAMCONNECTION_GETFD(sc->fam));
-
-		FAMClose(sc->fam);
-		free(sc->fam);
-
-		sc->fam = NULL;
+		FAMClose(&sc->fam);
 	}
 
 	return HANDLER_GO_ON;
@@ -625,12 +620,10 @@ handler_t stat_cache_get_entry(server *srv, connection *con, buffer *name, stat_
 	}
 
 #ifdef HAVE_FAM_H
-	if (sc->fam &&
-	    (srv->srvconf.stat_cache_engine == STAT_CACHE_ENGINE_FAM)) {
+	if (srv->srvconf.stat_cache_engine == STAT_CACHE_ENGINE_FAM) {
 		/* is this directory already registered ? */
 		if (!dir_node) {
 			fam_dir = fam_dir_entry_init();
-			fam_dir->fc = sc->fam;
 
 			buffer_copy_string_buffer(fam_dir->name, sc->dir_name);
 
@@ -638,7 +631,7 @@ handler_t stat_cache_get_entry(server *srv, connection *con, buffer *name, stat_
 
 			fam_dir->req = calloc(1, sizeof(FAMRequest));
 
-			if (0 != FAMMonitorDirectory(sc->fam, fam_dir->name->ptr,
+			if (0 != FAMMonitorDirectory(&sc->fam, fam_dir->name->ptr,
 						     fam_dir->req, fam_dir)) {
 
 				log_error_write(srv, __FILE__, __LINE__, "sbsbs",
@@ -647,12 +640,12 @@ handler_t stat_cache_get_entry(server *srv, connection *con, buffer *name, stat_
 						"file:", name,
 						FamErrlist[FAMErrno]);
 
-				fam_dir_entry_free(fam_dir);
+				fam_dir_entry_free(&sc->fam, fam_dir);
 				fam_dir = NULL;
 			} else {
 				int osize = 0;
 
-			       	if (sc->dirs) {
+				if (sc->dirs) {
 					osize = sc->dirs->size;
 				}
 
@@ -669,7 +662,6 @@ handler_t stat_cache_get_entry(server *srv, connection *con, buffer *name, stat_
 
 		if (fam_dir) {
 			sce->dir_version = fam_dir->version;
-			sce->dir_ndx     = dir_ndx;
 		}
 	}
 #endif
