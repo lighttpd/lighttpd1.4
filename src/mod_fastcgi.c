@@ -965,7 +965,7 @@ static int fcgi_spawn_connection(server *srv,
 		buffer_append_int(proc->connection_name, proc->port);
 	}
 
-	if (-1 == (fcgi_fd = socket(fcgi_addr->sa_family, SOCK_STREAM, 0))) {
+	if (-1 == (fcgi_fd = socket(fcgi_addr->sa_family, SOCK_STREAM | SOCK_CLOEXEC, 0))) {
 		log_error_write(srv, __FILE__, __LINE__, "ss",
 				"failed:", strerror(errno));
 		return -1;
@@ -984,7 +984,7 @@ static int fcgi_spawn_connection(server *srv,
 		close(fcgi_fd);
 
 		/* reopen socket */
-		if (-1 == (fcgi_fd = socket(fcgi_addr->sa_family, SOCK_STREAM, 0))) {
+		if (-1 == (fcgi_fd = socket(fcgi_addr->sa_family, SOCK_STREAM | SOCK_CLOEXEC, 0))) {
 			log_error_write(srv, __FILE__, __LINE__, "ss",
 				"socket failed:", strerror(errno));
 			return -1;
@@ -1036,6 +1036,8 @@ static int fcgi_spawn_connection(server *srv,
 				dup2(fcgi_fd, FCGI_LISTENSOCK_FILENO);
 				close(fcgi_fd);
 			}
+			else if (SOCK_CLOEXEC)
+				fcntl(fcgi_fd, F_SETFD, 0); /* clear cloexec */
 
 			/* we don't need the client socket */
 			for (i = 3; i < 256; i++) {
@@ -2926,7 +2928,7 @@ static handler_t fcgi_write_request(server *srv, handler_ctx *hctx) {
 			if (proc->load < hctx->proc->load) hctx->proc = proc;
 		}
 
-		if (-1 == (hctx->fd = socket(host->family, SOCK_STREAM, 0))) {
+		if (-1 == (hctx->fd = socket(host->family, SOCK_STREAM | SOCK_CLOEXEC | SOCK_NONBLOCK, 0))) {
 			if (errno == EMFILE ||
 			    errno == EINTR) {
 				log_error_write(srv, __FILE__, __LINE__, "sd",
@@ -2943,9 +2945,15 @@ static handler_t fcgi_write_request(server *srv, handler_ctx *hctx) {
 
 		srv->cur_fds++;
 
-		fdevent_register(srv->ev, hctx->fd, fcgi_handle_fdevent, hctx);
+		if (-1 == fdevent_register(srv->ev, hctx->fd, fcgi_handle_fdevent, hctx)) {
+			log_error_write(srv, __FILE__, __LINE__, "ss",
+					"fdevent_register failed:", strerror(errno));
 
-		if (-1 == fdevent_fcntl_set(srv->ev, hctx->fd)) {
+			return HANDLER_ERROR;
+		}
+
+		if ((!SOCK_CLOEXEC || !SOCK_NONBLOCK)
+		    && -1 == fdevent_fcntl_set(srv->ev, hctx->fd)) {
 			log_error_write(srv, __FILE__, __LINE__, "ss",
 					"fcntl failed:", strerror(errno));
 

@@ -367,7 +367,7 @@ static int network_server_init(server *srv, buffer *host_token, specific_config 
 	if (AF_UNIX == srv_socket->addr.plain.sa_family) {
 		/* check if the socket exists and try to connect to it. */
 		force_assert(host); /*(static analysis hint)*/
-		if (-1 == (srv_socket->fd = socket(srv_socket->addr.plain.sa_family, SOCK_STREAM, 0))) {
+		if (-1 == (srv_socket->fd = socket(srv_socket->addr.plain.sa_family, SOCK_STREAM | SOCK_CLOEXEC, 0))) {
 			log_error_write(srv, __FILE__, __LINE__, "ss", "socket failed:", strerror(errno));
 			goto error_free_socket;
 		}
@@ -394,10 +394,12 @@ static int network_server_init(server *srv, buffer *host_token, specific_config 
 
 			goto error_free_socket;
 		}
+
+		fdevent_fcntl_set(srv->ev, srv_socket->fd);/* set nonblocking */
 	} else
 #endif
 	{
-		if (-1 == (srv_socket->fd = socket(srv_socket->addr.plain.sa_family, SOCK_STREAM, IPPROTO_TCP))) {
+		if (-1 == (srv_socket->fd = socket(srv_socket->addr.plain.sa_family, SOCK_STREAM | SOCK_CLOEXEC | SOCK_NONBLOCK, IPPROTO_TCP))) {
 			log_error_write(srv, __FILE__, __LINE__, "ss", "socket failed:", strerror(errno));
 			goto error_free_socket;
 		}
@@ -419,7 +421,7 @@ static int network_server_init(server *srv, buffer *host_token, specific_config 
 	}
 
 	/* set FD_CLOEXEC now, fdevent_fcntl_set is called later; needed for pipe-logger forks */
-	fd_close_on_exec(srv_socket->fd);
+	if (!SOCK_CLOEXEC) fd_close_on_exec(srv_socket->fd);
 
 	/* */
 	srv->cur_fds = srv_socket->fd;

@@ -118,6 +118,20 @@ static int connection_del(server *srv, connection *con) {
 	return 0;
 }
 
+static int connection_closesocket(int fd, server *srv) {
+#ifdef __WIN32
+	if (0 == closesocket(fd))
+		return 0;
+#else
+	if (0 == close(fd))
+		return 0;
+#endif
+
+	log_error_write(srv, __FILE__, __LINE__, "sds",
+			"(warning) close:", fd, strerror(errno));
+	return -1;
+}
+
 static int connection_close(server *srv, connection *con) {
 #ifdef USE_OPENSSL
 	server_socket *srv_sock = con->srv_socket;
@@ -132,24 +146,15 @@ static int connection_close(server *srv, connection *con) {
 
 	fdevent_event_del(srv->ev, &(con->fde_ndx), con->fd);
 	fdevent_unregister(srv->ev, con->fd);
-#ifdef __WIN32
-	if (closesocket(con->fd)) {
-		log_error_write(srv, __FILE__, __LINE__, "sds",
-				"(warning) close:", con->fd, strerror(errno));
-	}
-#else
-	if (close(con->fd)) {
-		log_error_write(srv, __FILE__, __LINE__, "sds",
-				"(warning) close:", con->fd, strerror(errno));
-	}
-#endif
-	con->fd = -1;
 
-	srv->cur_fds--;
+	if (0 == connection_closesocket(con->fd, srv))
+		srv->cur_fds--;
 #if 0
 	log_error_write(srv, __FILE__, __LINE__, "sd",
 			"closed()", con->fd);
 #endif
+
+	con->fd = -1;
 
 	connection_del(srv, con);
 	connection_set_state(srv, con, CON_STATE_CONNECT);
@@ -894,7 +899,8 @@ connection *connection_accept(server *srv, server_socket *srv_socket) {
 
 	cnt_len = sizeof(cnt_addr);
 
-	if (-1 == (cnt = accept(srv_socket->fd, (struct sockaddr *) &cnt_addr, &cnt_len))) {
+	cnt = accept4(srv_socket->fd, (struct sockaddr *) &cnt_addr, &cnt_len, SOCK_CLOEXEC | SOCK_NONBLOCK);
+	if (-1 == cnt) {
 		switch (errno) {
 		case EAGAIN:
 #if EWOULDBLOCK != EAGAIN
@@ -923,8 +929,6 @@ connection *connection_accept(server *srv, server_socket *srv_socket) {
 connection *connection_accepted(server *srv, server_socket *srv_socket, sock_addr *cnt_addr, int cnt) {
 		connection *con;
 
-		srv->cur_fds++;
-
 		/* ok, we have the connection, register it */
 #if 0
 		log_error_write(srv, __FILE__, __LINE__, "sd",
@@ -936,7 +940,15 @@ connection *connection_accepted(server *srv, server_socket *srv_socket, sock_add
 
 		con->fd = cnt;
 		con->fde_ndx = -1;
-		fdevent_register(srv->ev, con->fd, connection_handle_fdevent, con);
+		if (-1 == fdevent_register(srv->ev, cnt, connection_handle_fdevent, con)) {
+			log_error_write(srv, __FILE__, __LINE__, "ss", "fdevent_register failed: ", strerror(errno));
+			connection_del(srv, con);
+			connection_closesocket(cnt, srv);
+			return NULL;
+		}
+		/* XXX: ? add connection fd cleanup to error handling below ? */
+
+		srv->cur_fds++;
 
 		connection_set_state(srv, con, CON_STATE_REQUEST_START);
 
@@ -945,7 +957,8 @@ connection *connection_accepted(server *srv, server_socket *srv_socket, sock_add
 		buffer_copy_string(con->dst_addr_buf, inet_ntop_cache_get_ip(srv, &(con->dst_addr)));
 		con->srv_socket = srv_socket;
 
-		if (-1 == (fdevent_fcntl_set(srv->ev, con->fd))) {
+		if ((!SOCK_CLOEXEC || !SOCK_NONBLOCK)
+		    && -1 == (fdevent_fcntl_set(srv->ev, con->fd))) {
 			log_error_write(srv, __FILE__, __LINE__, "ss", "fcntl failed: ", strerror(errno));
 			return NULL;
 		}
