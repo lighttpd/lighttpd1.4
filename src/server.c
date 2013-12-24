@@ -931,7 +931,7 @@ int main (int argc, char **argv) {
 
 	/* open pid file BEFORE chroot */
 	if (!buffer_string_is_empty(srv->srvconf.pid_file)) {
-		if (-1 == (pid_fd = open(srv->srvconf.pid_file->ptr, O_WRONLY | O_CREAT | O_EXCL | O_TRUNC, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH))) {
+		if (-1 == (pid_fd = fdevent_open_cloexec(srv->srvconf.pid_file->ptr, O_WRONLY | O_CREAT | O_EXCL | O_TRUNC, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH))) {
 			struct stat st;
 			if (errno != EEXIST) {
 				log_error_write(srv, __FILE__, __LINE__, "sbs",
@@ -956,7 +956,6 @@ int main (int argc, char **argv) {
 				return -1;
 			}
 		}
-		fd_close_on_exec(pid_fd);
 	}
 
 	if (srv->event_handler == FDEVENT_HANDLER_SELECT) {
@@ -1489,6 +1488,7 @@ int main (int argc, char **argv) {
 		FAMNoExists(&srv->stat_cache->fam);
 #endif
 
+		fd_close_on_exec(FAMCONNECTION_GETFD(&srv->stat_cache->fam));
 		fdevent_register(srv->ev, FAMCONNECTION_GETFD(&srv->stat_cache->fam), stat_cache_handle_fdevent, NULL);
 		fdevent_event_set(srv->ev, &(srv->stat_cache->fam_fcce_ndx), FAMCONNECTION_GETFD(&srv->stat_cache->fam), FDEVENT_IN);
 	}
@@ -1502,7 +1502,7 @@ int main (int argc, char **argv) {
 	for (i = 0; i < srv->srv_sockets.used; i++) {
 		server_socket *srv_socket = srv->srv_sockets.ptr[i];
 		if (srv->sockets_disabled) continue; /* lighttpd -1 (one-shot mode) */
-		if (-1 == fdevent_fcntl_set(srv->ev, srv_socket->fd)) {
+		if (-1 == fdevent_fcntl_set_nb_cloexec_sock(srv->ev, srv_socket->fd)) {
 			log_error_write(srv, __FILE__, __LINE__, "ss", "fcntl failed:", strerror(errno));
 			return -1;
 		}

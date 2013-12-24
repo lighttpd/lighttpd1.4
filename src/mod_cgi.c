@@ -36,6 +36,14 @@
 #include <stdio.h>
 #include <fcntl.h>
 
+#ifdef O_CLOEXEC
+#define pipe_cloexec(pipefd) pipe2((pipefd), O_CLOEXEC)
+#elif defined FD_CLOEXEC
+#define pipe_cloexec(pipefd) (0 == pipe(pipefd) ? fcntl(fd, F_SETFD, FD_CLOEXEC) : -1)
+#else
+#define pipe_cloexec(pipefd) pipe(pipefd)
+#endif
+
 enum {EOL_UNSET, EOL_N, EOL_RN};
 
 typedef struct {
@@ -1072,12 +1080,12 @@ static int cgi_create_env(server *srv, connection *con, plugin_data *p, handler_
 		}
 	}
 
-	if (pipe(to_cgi_fds)) {
+	if (pipe_cloexec(to_cgi_fds)) {
 		log_error_write(srv, __FILE__, __LINE__, "ss", "pipe failed:", strerror(errno));
 		return -1;
 	}
 
-	if (pipe(from_cgi_fds)) {
+	if (pipe_cloexec(from_cgi_fds)) {
 		close(to_cgi_fds[0]);
 		close(to_cgi_fds[1]);
 		log_error_write(srv, __FILE__, __LINE__, "ss", "pipe failed:", strerror(errno));
@@ -1099,18 +1107,20 @@ static int cgi_create_env(server *srv, connection *con, plugin_data *p, handler_
 		server_socket *srv_sock = con->srv_socket;
 
 		/* move stdout to from_cgi_fd[1] */
-		close(STDOUT_FILENO);
 		dup2(from_cgi_fds[1], STDOUT_FILENO);
+	      #ifndef FD_CLOEXEC
 		close(from_cgi_fds[1]);
 		/* not needed */
 		close(from_cgi_fds[0]);
+	      #endif
 
 		/* move the stdin to to_cgi_fd[0] */
-		close(STDIN_FILENO);
 		dup2(to_cgi_fds[0], STDIN_FILENO);
+	      #ifndef FD_CLOEXEC
 		close(to_cgi_fds[0]);
 		/* not needed */
 		close(to_cgi_fds[1]);
+	      #endif
 
 		/* create environment */
 		env.ptr = NULL;
@@ -1372,7 +1382,7 @@ static int cgi_create_env(server *srv, connection *con, plugin_data *p, handler_
 			close(to_cgi_fds[1]);
 		} else {
 			/* there is content to send */
-			if (-1 == fdevent_fcntl_set(srv->ev, to_cgi_fds[1])) {
+			if (-1 == fdevent_fcntl_set_nb(srv->ev, to_cgi_fds[1])) {
 				log_error_write(srv, __FILE__, __LINE__, "ss", "fcntl failed: ", strerror(errno));
 				close(to_cgi_fds[1]);
 				cgi_connection_close(srv, hctx);
@@ -1389,13 +1399,12 @@ static int cgi_create_env(server *srv, connection *con, plugin_data *p, handler_
 		}
 
 		fdevent_register(srv->ev, hctx->fd, cgi_handle_fdevent, hctx);
-		fdevent_event_set(srv->ev, &(hctx->fde_ndx), hctx->fd, FDEVENT_IN);
-
-		if (-1 == fdevent_fcntl_set(srv->ev, hctx->fd)) {
+		if (-1 == fdevent_fcntl_set_nb(srv->ev, hctx->fd)) {
 			log_error_write(srv, __FILE__, __LINE__, "ss", "fcntl failed: ", strerror(errno));
 			cgi_connection_close(srv, hctx);
 			return -1;
 		}
+		fdevent_event_set(srv->ev, &(hctx->fde_ndx), hctx->fd, FDEVENT_IN);
 
 		break;
 	}

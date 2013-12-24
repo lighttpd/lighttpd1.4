@@ -663,13 +663,12 @@ SIGHUP_FUNC(log_access_cycle) {
 			if (-1 != s->log_access_fd) close(s->log_access_fd);
 
 			if (-1 == (s->log_access_fd =
-				   open(s->access_logfile->ptr, O_APPEND | O_WRONLY | O_CREAT | O_LARGEFILE, 0644))) {
+				   fdevent_open_cloexec(s->access_logfile->ptr, O_APPEND | O_WRONLY | O_CREAT | O_LARGEFILE, 0644))) {
 
 				log_error_write(srv, __FILE__, __LINE__, "ss", "cycling access-log failed:", strerror(errno));
 
 				return HANDLER_ERROR;
 			}
-			fd_close_on_exec(s->log_access_fd);
 		}
 	}
 

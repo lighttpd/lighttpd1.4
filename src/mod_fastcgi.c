@@ -993,7 +993,7 @@ static int fcgi_spawn_connection(server *srv,
 		buffer_append_int(proc->connection_name, proc->port);
 	}
 
-	if (-1 == (fcgi_fd = socket(fcgi_addr->sa_family, SOCK_STREAM, 0))) {
+	if (-1 == (fcgi_fd = fdevent_socket_cloexec(fcgi_addr->sa_family, SOCK_STREAM, 0))) {
 		log_error_write(srv, __FILE__, __LINE__, "ss",
 				"failed:", strerror(errno));
 		return -1;
@@ -1012,7 +1012,7 @@ static int fcgi_spawn_connection(server *srv,
 		close(fcgi_fd);
 
 		/* reopen socket */
-		if (-1 == (fcgi_fd = socket(fcgi_addr->sa_family, SOCK_STREAM, 0))) {
+		if (-1 == (fcgi_fd = fdevent_socket_cloexec(fcgi_addr->sa_family, SOCK_STREAM, 0))) {
 			log_error_write(srv, __FILE__, __LINE__, "ss",
 				"socket failed:", strerror(errno));
 			return -1;
@@ -1060,10 +1060,13 @@ static int fcgi_spawn_connection(server *srv,
 			arg.used = 0;
 
 			if(fcgi_fd != FCGI_LISTENSOCK_FILENO) {
-				close(FCGI_LISTENSOCK_FILENO);
 				dup2(fcgi_fd, FCGI_LISTENSOCK_FILENO);
 				close(fcgi_fd);
 			}
+		      #ifdef SOCK_CLOEXEC
+			else
+				fcntl(fcgi_fd, F_SETFD, 0); /* clear cloexec */
+		      #endif
 
 			/* we don't need the client socket */
 			for (i = 3; i < 256; i++) {
@@ -2996,7 +2999,7 @@ static handler_t fcgi_write_request(server *srv, handler_ctx *hctx) {
 			if (proc->load < hctx->proc->load) hctx->proc = proc;
 		}
 
-		if (-1 == (hctx->fd = socket(host->family, SOCK_STREAM, 0))) {
+		if (-1 == (hctx->fd = fdevent_socket_nb_cloexec(host->family, SOCK_STREAM, 0))) {
 			if (errno == EMFILE ||
 			    errno == EINTR) {
 				log_error_write(srv, __FILE__, __LINE__, "sd",

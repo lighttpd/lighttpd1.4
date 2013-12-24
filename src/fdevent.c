@@ -270,12 +270,76 @@ void fd_close_on_exec(int fd) {
 }
 
 int fdevent_fcntl_set(fdevents *ev, int fd) {
-	fd_close_on_exec(fd);
+	return ((ev) && (ev->fcntl_set)) ? ev->fcntl_set(ev, fd) : 0;
+}
+
+int fdevent_fcntl_set_nb(fdevents *ev, int fd) {
 	if ((ev) && (ev->fcntl_set)) return ev->fcntl_set(ev, fd);
 #ifdef O_NONBLOCK
 	return fcntl(fd, F_SETFL, O_NONBLOCK | O_RDWR);
 #else
 	return 0;
+#endif
+}
+
+int fdevent_fcntl_set_nb_cloexec(fdevents *ev, int fd) {
+	fd_close_on_exec(fd);
+	return fdevent_fcntl_set_nb(ev, fd);
+}
+
+int fdevent_fcntl_set_nb_cloexec_sock(fdevents *ev, int fd) {
+#if defined(SOCK_CLOEXEC) && defined(SOCK_NONBLOCK)
+	return ((ev) && (ev->fcntl_set)) ? ev->fcntl_set(ev, fd) : 0;
+#else
+	return fdevent_fcntl_set_nb_cloexec(ev, fd);
+#endif
+}
+
+int fdevent_socket_cloexec(int domain, int type, int protocol) {
+#ifdef SOCK_CLOEXEC
+	return socket(domain, type | SOCK_CLOEXEC, protocol);
+#else
+	int fd;
+	if (-1 != (fd = socket(domain, type, protocol))) {
+#ifdef FD_CLOEXEC
+		fcntl(fd, F_SETFD, FD_CLOEXEC);
+#endif
+	}
+	return fd;
+#endif
+}
+
+int fdevent_socket_nb_cloexec(int domain, int type, int protocol) {
+#ifdef SOCK_CLOEXEC
+	return socket(domain, type | SOCK_CLOEXEC | SOCK_NONBLOCK, protocol);
+#else
+	int fd;
+	if (-1 != (fd = socket(domain, type, protocol))) {
+#ifdef FD_CLOEXEC
+		fcntl(fd, F_SETFD, FD_CLOEXEC);
+#endif
+#ifdef O_NONBLOCK
+		fcntl(fd, F_SETFL, O_NONBLOCK | O_RDWR);
+#endif
+	}
+	return fd;
+#endif
+}
+
+#ifndef O_NOCTTY
+#define O_NOCTTY 0
+#endif
+
+int fdevent_open_cloexec(const char *pathname, int flags, mode_t mode) {
+#ifdef O_CLOEXEC
+	return open(pathname, flags | O_CLOEXEC | O_NOCTTY, mode);
+#else
+	int fd = open(pathname, flags | O_NOCTTY, mode);
+#ifdef FD_CLOEXEC
+	if (fd != -1)
+		fcntl(fd, F_SETFD, FD_CLOEXEC);
+#endif
+	return fd;
 #endif
 }
 

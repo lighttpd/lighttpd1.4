@@ -140,14 +140,11 @@ static int connection_close(server *srv, connection *con) {
 				"(warning) close:", con->fd, strerror(errno));
 	}
 #endif
+	else {
+		srv->cur_fds--;
+	}
+
 	con->fd = -1;
-
-	srv->cur_fds--;
-#if 0
-	log_error_write(srv, __FILE__, __LINE__, "sd",
-			"closed()", con->fd);
-#endif
-
 	connection_del(srv, con);
 	connection_set_state(srv, con, CON_STATE_CONNECT);
 
@@ -1027,7 +1024,12 @@ connection *connection_accept(server *srv, server_socket *srv_socket) {
 
 	cnt_len = sizeof(cnt_addr);
 
-	if (-1 == (cnt = accept(srv_socket->fd, (struct sockaddr *) &cnt_addr, &cnt_len))) {
+#if defined(SOCK_CLOEXEC) && defined(SOCK_NONBLOCK)
+	cnt = accept4(srv_socket->fd, (struct sockaddr *) &cnt_addr, &cnt_len, SOCK_CLOEXEC | SOCK_NONBLOCK);
+#else
+	cnt = accept(srv_socket->fd, (struct sockaddr *) &cnt_addr, &cnt_len);
+#endif
+	if (-1 == cnt) {
 		switch (errno) {
 		case EAGAIN:
 #if EWOULDBLOCK != EAGAIN
@@ -1078,8 +1080,9 @@ connection *connection_accepted(server *srv, server_socket *srv_socket, sock_add
 		buffer_copy_string(con->dst_addr_buf, inet_ntop_cache_get_ip(srv, &(con->dst_addr)));
 		con->srv_socket = srv_socket;
 
-		if (-1 == (fdevent_fcntl_set(srv->ev, con->fd))) {
+		if (-1 == fdevent_fcntl_set_nb_cloexec_sock(srv->ev, con->fd)) {
 			log_error_write(srv, __FILE__, __LINE__, "ss", "fcntl failed: ", strerror(errno));
+			connection_close(srv, con);
 			return NULL;
 		}
 #ifdef USE_OPENSSL
@@ -1089,6 +1092,7 @@ connection *connection_accepted(server *srv, server_socket *srv_socket, sock_add
 				log_error_write(srv, __FILE__, __LINE__, "ss", "SSL:",
 						ERR_error_string(ERR_get_error(), NULL));
 
+				connection_close(srv, con);
 				return NULL;
 			}
 
@@ -1099,6 +1103,7 @@ connection *connection_accepted(server *srv, server_socket *srv_socket, sock_add
 			if (1 != (SSL_set_fd(con->ssl, cnt))) {
 				log_error_write(srv, __FILE__, __LINE__, "ss", "SSL:",
 						ERR_error_string(ERR_get_error(), NULL));
+				connection_close(srv, con);
 				return NULL;
 			}
 		}
