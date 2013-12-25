@@ -19,10 +19,6 @@
 #include <errno.h>
 #include <string.h>
 
-#ifndef O_CLOEXEC
-#define O_CLOEXEC 0
-#endif
-
 int network_open_file_chunk(server *srv, connection *con, chunkqueue *cq) {
 	chunk* const c = cq->first;
 	off_t file_size, offset, toSend;
@@ -42,11 +38,10 @@ int network_open_file_chunk(server *srv, connection *con, chunkqueue *cq) {
 			return -1;
 		}
 
-		if (-1 == (c->file.fd = open(c->file.name->ptr, O_RDONLY|O_NOCTTY|O_CLOEXEC))) {
+		if (-1 == (c->file.fd = fdevent_open_cloexec(c->file.name->ptr, O_RDONLY|O_NOCTTY))) {
 			log_error_write(srv, __FILE__, __LINE__, "ssb", "open failed:", strerror(errno), c->file.name);
 			return -1;
 		}
-		if (!O_CLOEXEC) fd_close_on_exec(c->file.fd);
 
 		file_size = sce->st.st_size;
 	} else {

@@ -780,14 +780,14 @@ static handler_t proxy_write_request(server *srv, handler_ctx *hctx) {
 #endif
 #if defined(HAVE_IPV6) && defined(HAVE_INET_PTON)
 		if (strstr(host->host->ptr,":")) {
-			if (-1 == (hctx->fd = socket(AF_INET6, SOCK_STREAM | SOCK_CLOEXEC | SOCK_NONBLOCK, 0))) {
+			if (-1 == (hctx->fd = fdevent_socket_nb_cloexec(AF_INET6, SOCK_STREAM, 0))) {
 				log_error_write(srv, __FILE__, __LINE__, "ss", "socket failed: ", strerror(errno));
 				return HANDLER_ERROR;
 			}
 		} else
 #endif
 		{
-			if (-1 == (hctx->fd = socket(AF_INET, SOCK_STREAM | SOCK_CLOEXEC | SOCK_NONBLOCK, 0))) {
+			if (-1 == (hctx->fd = fdevent_socket_nb_cloexec(AF_INET, SOCK_STREAM, 0))) {
 				log_error_write(srv, __FILE__, __LINE__, "ss", "socket failed: ", strerror(errno));
 				return HANDLER_ERROR;
 			}
@@ -799,14 +799,11 @@ static handler_t proxy_write_request(server *srv, handler_ctx *hctx) {
 
 		if (-1 == fdevent_register(srv->ev, hctx->fd, proxy_handle_fdevent, hctx)) {
 			log_error_write(srv, __FILE__, __LINE__, "ss", "fdevent_register failed: ", strerror(errno));
-
 			return HANDLER_ERROR;
 		}
 
-		if ((!SOCK_CLOEXEC || !SOCK_NONBLOCK)
-		    && -1 == fdevent_fcntl_set(srv->ev, hctx->fd)) {
+		if (-1 == fdevent_fcntl_hook(srv->ev, hctx->fd)) {
 			log_error_write(srv, __FILE__, __LINE__, "ss", "fcntl failed: ", strerror(errno));
-
 			return HANDLER_ERROR;
 		}
 

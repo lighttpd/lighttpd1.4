@@ -1488,7 +1488,7 @@ int main (int argc, char **argv) {
 	for (i = 0; i < srv->srv_sockets.used; i++) {
 		server_socket *srv_socket = srv->srv_sockets.ptr[i];
 		if (srv->sockets_disabled) continue; /* lighttpd -1 (one-shot mode) */
-		if (-1 == fdevent_fcntl_set(srv->ev, srv_socket->fd)) {
+		if (-1 == fdevent_fcntl_sock(srv->ev, srv_socket->fd)) {
 			log_error_write(srv, __FILE__, __LINE__, "ss", "fcntl failed:", strerror(errno));
 			return -1;
 		}

@@ -757,7 +757,7 @@ static int scgi_spawn_connection(server *srv,
 		scgi_addr = (struct sockaddr *) &scgi_addr_in;
 	}
 
-	if (-1 == (scgi_fd = socket(scgi_addr->sa_family, SOCK_STREAM | SOCK_CLOEXEC, 0))) {
+	if (-1 == (scgi_fd = fdevent_socket_cloexec(scgi_addr->sa_family, SOCK_STREAM, 0))) {
 		log_error_write(srv, __FILE__, __LINE__, "ss",
 				"failed:", strerror(errno));
 		return -1;
@@ -775,7 +775,7 @@ static int scgi_spawn_connection(server *srv,
 		close(scgi_fd);
 
 		/* reopen socket */
-		if (-1 == (scgi_fd = socket(scgi_addr->sa_family, SOCK_STREAM | SOCK_CLOEXEC, 0))) {
+		if (-1 == (scgi_fd = fdevent_socket_cloexec(scgi_addr->sa_family, SOCK_STREAM, 0))) {
 			log_error_write(srv, __FILE__, __LINE__, "ss",
 				"socket failed:", strerror(errno));
 			return -1;
@@ -824,8 +824,10 @@ static int scgi_spawn_connection(server *srv,
 				dup2(scgi_fd, 0);
 				close(scgi_fd);
 			}
-			else if (SOCK_CLOEXEC)
+#ifdef SOCK_CLOEXEC
+			else
 				fcntl(scgi_fd, F_SETFD, 0); /* clear cloexec */
+#endif
 
 			/* we don't need the client socket */
 			for (fd = 3; fd < 256; fd++) {
@@ -2271,7 +2273,7 @@ static handler_t scgi_write_request(server *srv, handler_ctx *hctx) {
 
 	switch(hctx->state) {
 	case FCGI_STATE_INIT:
-		if (-1 == (hctx->fd = socket(host->family, SOCK_STREAM | SOCK_CLOEXEC | SOCK_NONBLOCK, 0))) {
+		if (-1 == (hctx->fd = fdevent_socket_nb_cloexec(host->family, SOCK_STREAM, 0))) {
 			if (errno == EMFILE ||
 			    errno == EINTR) {
 				log_error_write(srv, __FILE__, __LINE__, "sd",
@@ -2296,11 +2298,9 @@ static handler_t scgi_write_request(server *srv, handler_ctx *hctx) {
 			return HANDLER_ERROR;
 		}
 
-		if ((!SOCK_CLOEXEC || !SOCK_NONBLOCK)
-		    && -1 == fdevent_fcntl_set(srv->ev, hctx->fd)) {
+		if (-1 == fdevent_fcntl_hook(srv->ev, hctx->fd)) {
 			log_error_write(srv, __FILE__, __LINE__, "ss",
 					"fcntl failed: ", strerror(errno));
-
 			return HANDLER_ERROR;
 		}
 

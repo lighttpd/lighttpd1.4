@@ -23,10 +23,4 @@
 #include <netdb.h>
 #endif
 
-#ifndef SOCK_CLOEXEC
-#define SOCK_CLOEXEC 0
-#define SOCK_NONBLOCK 0
-#define accept4(sockfd,addr,addrlen,flags)  accept((sockfd),(addr),(addrlen))
-#endif
-
 #endif

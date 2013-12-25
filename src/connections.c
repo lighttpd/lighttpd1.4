@@ -899,7 +899,11 @@ connection *connection_accept(server *srv, server_socket *srv_socket) {
 
 	cnt_len = sizeof(cnt_addr);
 
+#if defined(SOCK_CLOEXEC) && defined(SOCK_NONBLOCK)
 	cnt = accept4(srv_socket->fd, (struct sockaddr *) &cnt_addr, &cnt_len, SOCK_CLOEXEC | SOCK_NONBLOCK);
+#else
+	cnt = accept(srv_socket->fd, (struct sockaddr *) &cnt_addr, &cnt_len);
+#endif
 	if (-1 == cnt) {
 		switch (errno) {
 		case EAGAIN:
@@ -957,8 +961,7 @@ connection *connection_accepted(server *srv, server_socket *srv_socket, sock_add
 		buffer_copy_string(con->dst_addr_buf, inet_ntop_cache_get_ip(srv, &(con->dst_addr)));
 		con->srv_socket = srv_socket;
 
-		if ((!SOCK_CLOEXEC || !SOCK_NONBLOCK)
-		    && -1 == (fdevent_fcntl_set(srv->ev, con->fd))) {
+		if (-1 == fdevent_fcntl_sock(srv->ev, con->fd)) {
 			log_error_write(srv, __FILE__, __LINE__, "ss", "fcntl failed: ", strerror(errno));
 			return NULL;
 		}
