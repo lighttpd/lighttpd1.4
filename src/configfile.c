@@ -1170,6 +1170,7 @@ int config_read(server *srv, const char *fn) {
 		}
 
 		prepends = (data_array *)configparser_merge_data((data_unset *)prepends, (data_unset *)modules);
+		assert(NULL != prepends);
 		buffer_copy_string_buffer(prepends->key, modules->key);
 		array_replace(srv->config, (data_unset *)prepends);
 		modules->free((data_unset *)modules);

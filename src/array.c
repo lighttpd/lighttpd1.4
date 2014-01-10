@@ -170,6 +170,7 @@ void array_set_key_value(array *hdrs, const char *key, size_t key_len, const cha
 data_unset *array_replace(array *a, data_unset *du) {
 	int ndx;
 
+	assert(NULL != du);
 	if (-1 == (ndx = array_get_index(a, du->key->ptr, du->key->used, NULL))) {
 		array_insert_unique(a, du);
 		return NULL;
