@@ -412,6 +412,7 @@ EOF
 $t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200, 'HTTP-Content' => '12345'."\n", 'Content-Type' => 'text/plain' } ];
 $t->{SLOWREQUEST} = 1;
 ok($tf->handle_http($t) == 0, 'GET, slow \\r\\n\\r\\n (#2105)');
+undef $t->{SLOWREQUEST};
 
 print "\nPathinfo for static files\n";
 $t->{REQUEST}  = ( <<EOF

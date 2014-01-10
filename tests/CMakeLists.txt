@@ -25,6 +25,7 @@ SET(T_FILES
 	mod-userdir.t
 	request.t
 	symlink.t
+	cleanup.sh
 )
 
 FOREACH(it ${T_FILES})
