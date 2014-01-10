@@ -127,7 +127,7 @@ static void* mod_mysql_vhost_connection_data(server *srv, connection *con, void 
 	UNUSED(srv);
 
 #ifdef DEBUG
-        log_error_write(srv, __FILE__, __LINE__, "ss",
+	log_error_write(srv, __FILE__, __LINE__, "ss",
 		"mod_mysql_connection_data", c ? "old" : "NEW");
 #endif
 
@@ -173,24 +173,24 @@ SERVER_FUNC(mod_mysql_vhost_set_defaults) {
 
 	char *qmark;
 	size_t i = 0;
+	buffer *sel;
 
 	config_values_t cv[] = {
-		{ "mysql-vhost.db",	NULL, T_CONFIG_STRING, 	T_CONFIG_SCOPE_SERVER },
-		{ "mysql-vhost.user",	NULL, T_CONFIG_STRING, 	T_CONFIG_SCOPE_SERVER },
-		{ "mysql-vhost.pass",	NULL, T_CONFIG_STRING, 	T_CONFIG_SCOPE_SERVER },
-		{ "mysql-vhost.sock",	NULL, T_CONFIG_STRING, 	T_CONFIG_SCOPE_SERVER },
-		{ "mysql-vhost.sql",	NULL, T_CONFIG_STRING, 	T_CONFIG_SCOPE_SERVER },
-		{ "mysql-vhost.hostname", NULL, T_CONFIG_STRING,T_CONFIG_SCOPE_SERVER },
-		{ "mysql-vhost.port",   NULL, T_CONFIG_SHORT,   T_CONFIG_SCOPE_SERVER },
-                { NULL,			NULL, T_CONFIG_UNSET,	T_CONFIG_SCOPE_UNSET }
-        };
+		{ "mysql-vhost.db",       NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_SERVER },
+		{ "mysql-vhost.user",     NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_SERVER },
+		{ "mysql-vhost.pass",     NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_SERVER },
+		{ "mysql-vhost.sock",     NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_SERVER },
+		{ "mysql-vhost.sql",      NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_SERVER },
+		{ "mysql-vhost.hostname", NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_SERVER },
+		{ "mysql-vhost.port",     NULL, T_CONFIG_SHORT,  T_CONFIG_SCOPE_SERVER },
+		{ NULL,                   NULL, T_CONFIG_UNSET,  T_CONFIG_SCOPE_UNSET }
+	};
 
 	p->config_storage = calloc(1, srv->config_context->used * sizeof(plugin_config *));
+	sel = buffer_init();
 
 	for (i = 0; i < srv->config_context->used; i++) {
 		plugin_config *s;
-		buffer *sel;
-
 
 		s = calloc(1, sizeof(plugin_config));
 		s->mydb = buffer_init();
@@ -198,8 +198,7 @@ SERVER_FUNC(mod_mysql_vhost_set_defaults) {
 		s->mypass = buffer_init();
 		s->mysock = buffer_init();
 		s->hostname = buffer_init();
-		s->port   = 0;               /* default port for mysql */
-		sel = buffer_init();
+		s->port = 0;               /* default port for mysql */
 		s->mysql = NULL;
 
 		s->mysql_pre = buffer_init();
@@ -209,13 +208,14 @@ SERVER_FUNC(mod_mysql_vhost_set_defaults) {
 		cv[1].destination = s->myuser;
 		cv[2].destination = s->mypass;
 		cv[3].destination = s->mysock;
+		buffer_reset(sel);
 		cv[4].destination = sel;
 		cv[5].destination = s->hostname;
 		cv[6].destination = &(s->port);
 
 		p->config_storage[i] = s;
 
-        	if (config_insert_values_global(srv,
+		if (config_insert_values_global(srv,
 			((data_config *)srv->config_context->data[i])->value,
 			cv)) return HANDLER_ERROR;
 
@@ -249,6 +249,7 @@ SERVER_FUNC(mod_mysql_vhost_set_defaults) {
 			if (NULL == (s->mysql = mysql_init(NULL))) {
 				log_error_write(srv, __FILE__, __LINE__, "s", "mysql_init() failed, exiting...");
 
+				buffer_free(sel);
 				return HANDLER_ERROR;
 			}
 
@@ -260,7 +261,7 @@ SERVER_FUNC(mod_mysql_vhost_set_defaults) {
 #define FOO(x) (s->x->used ? s->x->ptr : NULL)
 
 #if MYSQL_VERSION_ID >= 40100
-                        /* CLIENT_MULTI_STATEMENTS first appeared in 4.1 */ 
+			/* CLIENT_MULTI_STATEMENTS first appeared in 4.1 */ 
 			if (!mysql_real_connect(s->mysql, FOO(hostname), FOO(myuser), FOO(mypass),
 						FOO(mydb), s->port, FOO(mysock), CLIENT_MULTI_STATEMENTS)) {
 #else
@@ -269,6 +270,7 @@ SERVER_FUNC(mod_mysql_vhost_set_defaults) {
 #endif
 				log_error_write(srv, __FILE__, __LINE__, "s", mysql_error(s->mysql));
 
+				buffer_free(sel);
 				return HANDLER_ERROR;
 			}
 #undef FOO
@@ -292,6 +294,7 @@ SERVER_FUNC(mod_mysql_vhost_set_defaults) {
 		}
 	}
 
+	buffer_free(sel);
 	return HANDLER_GO_ON;
 }
 
@@ -357,7 +360,7 @@ CONNECTION_FUNC(mod_mysql_vhost_handle_docroot) {
 
 	/* check if cached this connection */
 	if (c->server_name->used && /* con->uri.authority->used && */
-            buffer_is_equal(c->server_name, con->uri.authority)) goto GO_ON;
+	    buffer_is_equal(c->server_name, con->uri.authority)) goto GO_ON;
 
 	/* build and run SQL query */
 	buffer_copy_string_buffer(p->tmp_buf, p->conf.mysql_pre);
@@ -365,7 +368,7 @@ CONNECTION_FUNC(mod_mysql_vhost_handle_docroot) {
 		buffer_append_string_buffer(p->tmp_buf, con->uri.authority);
 		buffer_append_string_buffer(p->tmp_buf, p->conf.mysql_post);
 	}
-   	if (mysql_query(p->conf.mysql, p->tmp_buf->ptr)) {
+	if (mysql_query(p->conf.mysql, p->tmp_buf->ptr)) {
 		log_error_write(srv, __FILE__, __LINE__, "s", mysql_error(p->conf.mysql));
 		goto ERR500;
 	}
@@ -389,7 +392,7 @@ CONNECTION_FUNC(mod_mysql_vhost_handle_docroot) {
 		log_error_write(srv, __FILE__, __LINE__, "sb", strerror(errno), p->tmp_buf);
 		goto ERR500;
 	}
-        if (!S_ISDIR(sce->st.st_mode)) {
+	if (!S_ISDIR(sce->st.st_mode)) {
 		log_error_write(srv, __FILE__, __LINE__, "sb", "Not a directory", p->tmp_buf);
 		goto ERR500;
 	}
@@ -416,7 +419,8 @@ CONNECTION_FUNC(mod_mysql_vhost_handle_docroot) {
 #endif
 
 	/* fix virtual server and docroot */
-GO_ON:	buffer_copy_string_buffer(con->server_name, c->server_name);
+GO_ON:
+	buffer_copy_string_buffer(con->server_name, c->server_name);
 	buffer_copy_string_buffer(con->physical.doc_root, c->document_root);
 
 #ifdef DEBUG
@@ -427,7 +431,8 @@ GO_ON:	buffer_copy_string_buffer(con->server_name, c->server_name);
 #endif
 	return HANDLER_GO_ON;
 
-ERR500:	if (result) mysql_free_result(result);
+ERR500:
+	if (result) mysql_free_result(result);
 #if MYSQL_VERSION_ID >= 40100
 	while (mysql_next_result(p->conf.mysql) == 0);
 #endif
