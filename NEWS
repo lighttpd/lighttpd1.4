@@ -16,6 +16,7 @@ NEWS
   * [core] decode URL before rewrite, enabling it to work in $HTTP["url"] conditionals (fixes #2526)
   * [auto* build] remove -no-undefined from linker flags, as we actually link modules with undefined symbols (fixes #2533)
   * [mod_mysql_vhost] fix memory leak on config init (#2530)
+  * [mod_webdav] fix fd leak found with parfait (fixes #2530, thx kukackajiri)
 
 - 1.4.33 - 2013-09-27
   * mod_fastcgi: fix mix up of "mode" => "authorizer" in other fastcgi configs (fixes #2465, thx peex)

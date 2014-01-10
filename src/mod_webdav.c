@@ -1717,7 +1717,7 @@ URIHANDLER_FUNC(mod_webdav_subrequest_handler) {
 					if (-1 == c->file.fd &&  /* open the file if not already open */
 					    -1 == (c->file.fd = open(c->file.name->ptr, O_RDONLY))) {
 						log_error_write(srv, __FILE__, __LINE__, "ss", "open failed: ", strerror(errno));
-
+						close(fd);
 						return HANDLER_ERROR;
 					}
 
@@ -1726,7 +1726,7 @@ URIHANDLER_FUNC(mod_webdav_subrequest_handler) {
 								strerror(errno), c->file.name,  c->file.fd);
 						close(c->file.fd);
 						c->file.fd = -1;
-
+						close(fd);
 						return HANDLER_ERROR;
 					}
 
