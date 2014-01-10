@@ -296,8 +296,6 @@ static int mod_rewrite_patch_connection(server *srv, connection *con, plugin_dat
 		data_config *dc = (data_config *)srv->config_context->data[i];
 		s = p->config_storage[i];
 
-		if (COMP_HTTP_URL == dc->comp) continue;
-
 		/* condition didn't match */
 		if (!config_check_cond(srv, con, dc)) continue;
 

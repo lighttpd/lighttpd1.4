@@ -305,13 +305,44 @@ handler_t http_response_prepare(server *srv, connection *con) {
 			buffer_copy_string_buffer(con->uri.path_raw, con->request.uri);
 		}
 
+		/* decode url to path
+		 *
+		 * - decode url-encodings  (e.g. %20 -> ' ')
+		 * - remove path-modifiers (e.g. /../)
+		 */
+
+		if (con->request.http_method == HTTP_METHOD_OPTIONS &&
+		    con->uri.path_raw->ptr[0] == '*' && con->uri.path_raw->ptr[1] == '\0') {
+			/* OPTIONS * ... */
+			buffer_copy_string_buffer(con->uri.path, con->uri.path_raw);
+		} else {
+			buffer_copy_string_buffer(srv->tmp_buf, con->uri.path_raw);
+			buffer_urldecode_path(srv->tmp_buf);
+			buffer_path_simplify(con->uri.path, srv->tmp_buf);
+		}
+
+		config_patch_connection(srv, con, COMP_HTTP_URL); /* HTTPurl */
+		config_patch_connection(srv, con, COMP_HTTP_QUERY_STRING); /* HTTPqs */
+
+#ifdef USE_OPENSSL
+		if (con->srv_socket->is_ssl && con->conf.ssl_verifyclient) {
+			https_add_ssl_entries(con);
+		}
+#endif
+
+		/* do we have to downgrade to 1.0 ? */
+		if (!con->conf.allow_http11) {
+			con->request.http_version = HTTP_VERSION_1_0;
+		}
+
 		if (con->conf.log_request_handling) {
 			log_error_write(srv, __FILE__, __LINE__,  "s",  "-- splitting Request-URI");
-			log_error_write(srv, __FILE__, __LINE__,  "sb", "Request-URI  : ", con->request.uri);
-			log_error_write(srv, __FILE__, __LINE__,  "sb", "URI-scheme   : ", con->uri.scheme);
-			log_error_write(srv, __FILE__, __LINE__,  "sb", "URI-authority: ", con->uri.authority);
-			log_error_write(srv, __FILE__, __LINE__,  "sb", "URI-path     : ", con->uri.path_raw);
-			log_error_write(srv, __FILE__, __LINE__,  "sb", "URI-query    : ", con->uri.query);
+			log_error_write(srv, __FILE__, __LINE__,  "sb", "Request-URI     : ", con->request.uri);
+			log_error_write(srv, __FILE__, __LINE__,  "sb", "URI-scheme      : ", con->uri.scheme);
+			log_error_write(srv, __FILE__, __LINE__,  "sb", "URI-authority   : ", con->uri.authority);
+			log_error_write(srv, __FILE__, __LINE__,  "sb", "URI-path (raw)  : ", con->uri.path_raw);
+			log_error_write(srv, __FILE__, __LINE__,  "sb", "URI-path (clean): ", con->uri.path);
+			log_error_write(srv, __FILE__, __LINE__,  "sb", "URI-query       : ", con->uri.query);
 		}
 
 
@@ -336,35 +367,6 @@ handler_t http_response_prepare(server *srv, connection *con) {
 			break;
 		}
 
-		/* build filename
-		 *
-		 * - decode url-encodings  (e.g. %20 -> ' ')
-		 * - remove path-modifiers (e.g. /../)
-		 */
-
-
-
-		if (con->request.http_method == HTTP_METHOD_OPTIONS &&
-		    con->uri.path_raw->ptr[0] == '*' && con->uri.path_raw->ptr[1] == '\0') {
-			/* OPTIONS * ... */
-			buffer_copy_string_buffer(con->uri.path, con->uri.path_raw);
-		} else {
-			buffer_copy_string_buffer(srv->tmp_buf, con->uri.path_raw);
-			buffer_urldecode_path(srv->tmp_buf);
-			buffer_path_simplify(con->uri.path, srv->tmp_buf);
-		}
-
-		if (con->conf.log_request_handling) {
-			log_error_write(srv, __FILE__, __LINE__,  "s",  "-- sanitising URI");
-			log_error_write(srv, __FILE__, __LINE__,  "sb", "URI-path     : ", con->uri.path);
-		}
-
-#ifdef USE_OPENSSL
-		if (con->srv_socket->is_ssl && con->conf.ssl_verifyclient) {
-			https_add_ssl_entries(con);
-		}
-#endif
-
 		/**
 		 *
 		 * call plugins
@@ -372,14 +374,6 @@ handler_t http_response_prepare(server *srv, connection *con) {
 		 * - based on the clean URL
 		 *
 		 */
-
-		config_patch_connection(srv, con, COMP_HTTP_URL); /* HTTPurl */
-		config_patch_connection(srv, con, COMP_HTTP_QUERY_STRING); /* HTTPqs */
-
-		/* do we have to downgrade to 1.0 ? */
-		if (!con->conf.allow_http11) {
-			con->request.http_version = HTTP_VERSION_1_0;
-		}
 
 		switch(r = plugins_call_handle_uri_clean(srv, con)) {
 		case HANDLER_GO_ON:
