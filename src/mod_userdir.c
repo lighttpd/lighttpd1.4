@@ -293,6 +293,8 @@ URIHANDLER_FUNC(mod_userdir_docroot_handler) {
 		}
 	}
 
+	buffer_copy_string_buffer(con->physical.basedir, p->temp_path);
+
 	/* the physical rel_path is basically the same as uri.path;
 	 * but it is converted to lowercase in case of force_lowercase_filenames and some special handling
 	 * for trailing '.', ' ' and '/' on windows

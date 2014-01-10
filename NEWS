@@ -12,6 +12,7 @@ NEWS
   * [stat-cache] fix FAM cleanup/fdevent handling
   * [core] check success of setuid,setgid,setgroups (CVE-2013-4559)
   * [ssl] fix regression from CVE-2013-4508 (client-cert sessions were broken)
+  * maintain physical.basedir (the "acting" doc-root as prefix of physical.path) in more places
 
 - 1.4.33 - 2013-09-27
   * mod_fastcgi: fix mix up of "mode" => "authorizer" in other fastcgi configs (fixes #2465, thx peex)

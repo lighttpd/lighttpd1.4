@@ -516,8 +516,8 @@ handler_t http_response_prepare(server *srv, connection *con) {
 		 *
 		 */
 
+		buffer_copy_string_buffer(con->physical.basedir, con->physical.doc_root);
 		buffer_copy_string_buffer(con->physical.path, con->physical.doc_root);
-		buffer_copy_string_buffer(con->physical.basedir, con->physical.path);
 		BUFFER_APPEND_SLASH(con->physical.path);
 		if (con->physical.rel_path->used &&
 		    con->physical.rel_path->ptr[0] == '/') {
@@ -549,6 +549,7 @@ handler_t http_response_prepare(server *srv, connection *con) {
 		if (con->conf.log_request_handling) {
 			log_error_write(srv, __FILE__, __LINE__,  "s",  "-- logical -> physical");
 			log_error_write(srv, __FILE__, __LINE__,  "sb", "Doc-Root     :", con->physical.doc_root);
+			log_error_write(srv, __FILE__, __LINE__,  "sb", "Basedir      :", con->physical.basedir);
 			log_error_write(srv, __FILE__, __LINE__,  "sb", "Rel-Path     :", con->physical.rel_path);
 			log_error_write(srv, __FILE__, __LINE__,  "sb", "Path         :", con->physical.path);
 		}
