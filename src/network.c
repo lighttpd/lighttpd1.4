@@ -583,7 +583,7 @@ static int network_openssl_load_pemfile(server *srv, size_t ndx) {
 
 #ifdef OPENSSL_NO_TLSEXT
 	{
-		data_config *dc = (data_config *)srv->config_context->data[i];
+		data_config *dc = (data_config *)srv->config_context->data[ndx];
 		if ((ndx > 0 && (COMP_SERVER_SOCKET != dc->comp || dc->cond != CONFIG_COND_EQ))
 			|| !s->ssl_enabled) {
 			log_error_write(srv, __FILE__, __LINE__, "ss", "SSL:",
