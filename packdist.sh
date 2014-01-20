@@ -226,7 +226,7 @@ force gpg -a --output "${name}.tar.xz.asc" --detach-sig "${name}.tar.xz"
 (
 	echo "* \"${name}.tar.gz\":${BASEDOWNLOADURL}/${name}.tar.gz (\"GPG signature\":${BASEDOWNLOADURL}/${name}.tar.gz.asc)"
 	echo "** SHA256: @$(sha256sum ${name}.tar.gz | cut -d' ' -f1)@"
-	echo "* \"${name}.tar.bz\":${BASEDOWNLOADURL}/${name}.tar.bz2 (\"GPG signature\":${BASEDOWNLOADURL}/${name}.tar.bz2.asc)"
+	echo "* \"${name}.tar.bz2\":${BASEDOWNLOADURL}/${name}.tar.bz2 (\"GPG signature\":${BASEDOWNLOADURL}/${name}.tar.bz2.asc)"
 	echo "** SHA256: @$(sha256sum ${name}.tar.bz2 | cut -d' ' -f1)@"
 	echo "* \"${name}.tar.xz\":${BASEDOWNLOADURL}/${name}.tar.xz (\"GPG signature\":${BASEDOWNLOADURL}/${name}.tar.xz.asc)"
 	echo "** SHA256: @$(sha256sum ${name}.tar.xz | cut -d' ' -f1)@"
