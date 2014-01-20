@@ -3,6 +3,9 @@
 NEWS
 ====
 
+- 1.4.35
+  *
+
 - 1.4.34
   * [mod_auth] explicitly link ssl for SHA1 (fixes #2517)
   * [mod_extforward] fix compilation without IPv6, (not) using undefined var (fixes #2515, thx mm)
