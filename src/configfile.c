@@ -1133,6 +1133,8 @@ int config_read(server *srv, const char *fn) {
 		dcwd->value->used = strlen(dcwd->value->ptr) + 1;
 		buffer_copy_string_len(dcwd->key, CONST_STR_LEN("var.CWD"));
 		array_insert_unique(srv->config, (data_unset *)dcwd);
+	} else {
+		dcwd->free((data_unset*) dcwd);
 	}
 
 	ret = config_parse_file(srv, &context, fn);

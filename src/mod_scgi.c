@@ -921,6 +921,7 @@ SETDEFAULTS_FUNC(mod_scgi_set_defaults) {
 	plugin_data *p = p_d;
 	data_unset *du;
 	size_t i = 0;
+	scgi_extension_host *df = NULL;
 
 	config_values_t cv[] = {
 		{ "scgi.server",              NULL, T_CONFIG_LOCAL, T_CONFIG_SCOPE_CONNECTION },       /* 0 */
@@ -996,8 +997,6 @@ SETDEFAULTS_FUNC(mod_scgi_set_defaults) {
 				for (n = 0; n < da_ext->value->used; n++) {
 					data_array *da_host = (data_array *)da_ext->value->data[n];
 
-					scgi_extension_host *df;
-
 					config_values_t fcv[] = {
 						{ "host",              NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_CONNECTION },       /* 0 */
 						{ "docroot",           NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_CONNECTION },       /* 1 */
@@ -1058,7 +1057,7 @@ SETDEFAULTS_FUNC(mod_scgi_set_defaults) {
 
 
 					if (0 != config_insert_values_internal(srv, da_host->value, fcv)) {
-						return HANDLER_ERROR;
+						goto error;
 					}
 
 					if ((!buffer_is_empty(df->host) || df->port) &&
@@ -1066,7 +1065,7 @@ SETDEFAULTS_FUNC(mod_scgi_set_defaults) {
 						log_error_write(srv, __FILE__, __LINE__, "s",
 								"either host+port or socket");
 
-						return HANDLER_ERROR;
+						goto error;
 					}
 
 					if (!buffer_is_empty(df->unixsocket)) {
@@ -1076,7 +1075,7 @@ SETDEFAULTS_FUNC(mod_scgi_set_defaults) {
 						if (df->unixsocket->used > sizeof(un.sun_path) - 2) {
 							log_error_write(srv, __FILE__, __LINE__, "s",
 									"path of the unixdomain socket is too large");
-							return HANDLER_ERROR;
+							goto error;
 						}
 					} else {
 						/* tcp/ip */
@@ -1090,7 +1089,7 @@ SETDEFAULTS_FUNC(mod_scgi_set_defaults) {
 									da_host->key,
 									"host");
 
-							return HANDLER_ERROR;
+							goto error;
 						} else if (df->port == 0) {
 							log_error_write(srv, __FILE__, __LINE__, "sbbbs",
 									"missing key (short):",
@@ -1098,7 +1097,7 @@ SETDEFAULTS_FUNC(mod_scgi_set_defaults) {
 									da_ext->key,
 									da_host->key,
 									"port");
-							return HANDLER_ERROR;
+							goto error;
 						}
 					}
 
@@ -1148,7 +1147,8 @@ SETDEFAULTS_FUNC(mod_scgi_set_defaults) {
 							if (scgi_spawn_connection(srv, p, df, proc)) {
 								log_error_write(srv, __FILE__, __LINE__, "s",
 										"[ERROR]: spawning fcgi failed.");
-								return HANDLER_ERROR;
+								scgi_process_free(proc);
+								goto error;
 							}
 
 							proc->next = df->first;
@@ -1179,12 +1179,17 @@ SETDEFAULTS_FUNC(mod_scgi_set_defaults) {
 
 					/* if extension already exists, take it */
 					scgi_extension_insert(s->exts, da_ext->key, df);
+					df = NULL;
 				}
 			}
 		}
 	}
 
 	return HANDLER_GO_ON;
+
+error:
+	if (NULL != df) scgi_host_free(df);
+	return HANDLER_ERROR;
 }
 
 static int scgi_set_state(server *srv, handler_ctx *hctx, scgi_connection_state_t state) {

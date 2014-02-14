@@ -13,6 +13,7 @@ NEWS
   * add comments for switch fall throughs
   * remove logical dead code
   * [buffer] fix length check in buffer_is_equal_right_len
+  * fix resource leaks in error cases on config parsing and other initializations
 
 - 1.4.34
   * [mod_auth] explicitly link ssl for SHA1 (fixes #2517)

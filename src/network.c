@@ -925,6 +925,7 @@ int network_init(server *srv) {
 	buffer_append_long(b, srv->srvconf.port);
 
 	if (0 != network_server_init(srv, b, srv->config_storage[0])) {
+		buffer_free(b);
 		return -1;
 	}
 	buffer_free(b);

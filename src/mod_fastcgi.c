@@ -1164,6 +1164,7 @@ SETDEFAULTS_FUNC(mod_fastcgi_set_defaults) {
 	data_unset *du;
 	size_t i = 0;
 	buffer *fcgi_mode = buffer_init();
+	fcgi_extension_host *host = NULL;
 
 	config_values_t cv[] = {
 		{ "fastcgi.server",              NULL, T_CONFIG_LOCAL, T_CONFIG_SCOPE_CONNECTION },       /* 0 */
@@ -1191,7 +1192,7 @@ SETDEFAULTS_FUNC(mod_fastcgi_set_defaults) {
 		ca = ((data_config *)srv->config_context->data[i])->value;
 
 		if (0 != config_insert_values_global(srv, ca, cv)) {
-			return HANDLER_ERROR;
+			goto error;
 		}
 
 		/*
@@ -1206,7 +1207,7 @@ SETDEFAULTS_FUNC(mod_fastcgi_set_defaults) {
 				log_error_write(srv, __FILE__, __LINE__, "sss",
 						"unexpected type for key: ", "fastcgi.server", "array of strings");
 
-				return HANDLER_ERROR;
+				goto error;
 			}
 
 
@@ -1224,7 +1225,7 @@ SETDEFAULTS_FUNC(mod_fastcgi_set_defaults) {
 							"unexpected type for key: ", "fastcgi.server",
 							"[", da->value->data[j]->key, "](string)");
 
-					return HANDLER_ERROR;
+					goto error;
 				}
 
 				/*
@@ -1241,8 +1242,6 @@ SETDEFAULTS_FUNC(mod_fastcgi_set_defaults) {
 
 				for (n = 0; n < da_ext->value->used; n++) {
 					data_array *da_host = (data_array *)da_ext->value->data[n];
-
-					fcgi_extension_host *host;
 
 					config_values_t fcv[] = {
 						{ "host",              NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_CONNECTION },       /* 0 */
@@ -1274,7 +1273,7 @@ SETDEFAULTS_FUNC(mod_fastcgi_set_defaults) {
 								"fastcgi.server",
 								"[", da_host->key, "](string)");
 
-						return HANDLER_ERROR;
+						goto error;
 					}
 
 					host = fastcgi_host_init();
@@ -1311,7 +1310,7 @@ SETDEFAULTS_FUNC(mod_fastcgi_set_defaults) {
 					fcv[15].destination = &(host->fix_root_path_name);
 
 					if (0 != config_insert_values_internal(srv, da_host->value, fcv)) {
-						return HANDLER_ERROR;
+						goto error;
 					}
 
 					if ((!buffer_is_empty(host->host) || host->port) &&
@@ -1322,7 +1321,7 @@ SETDEFAULTS_FUNC(mod_fastcgi_set_defaults) {
 								da_ext->key, " => (",
 								da_host->key, " ( ...");
 
-						return HANDLER_ERROR;
+						goto error;
 					}
 
 					if (!buffer_is_empty(host->unixsocket)) {
@@ -1336,7 +1335,7 @@ SETDEFAULTS_FUNC(mod_fastcgi_set_defaults) {
 									da_ext->key, " => (",
 									da_host->key, " ( ...");
 
-							return HANDLER_ERROR;
+							goto error;
 						}
 					} else {
 						/* tcp/ip */
@@ -1349,7 +1348,7 @@ SETDEFAULTS_FUNC(mod_fastcgi_set_defaults) {
 									da_ext->key, " => (",
 									da_host->key, " ( ...");
 
-							return HANDLER_ERROR;
+							goto error;
 						} else if (host->port == 0) {
 							log_error_write(srv, __FILE__, __LINE__, "sbsbsbs",
 									"port has to be set in:",
@@ -1357,7 +1356,7 @@ SETDEFAULTS_FUNC(mod_fastcgi_set_defaults) {
 									da_ext->key, " => (",
 									da_host->key, " ( ...");
 
-							return HANDLER_ERROR;
+							goto error;
 						}
 					}
 
@@ -1400,13 +1399,14 @@ SETDEFAULTS_FUNC(mod_fastcgi_set_defaults) {
 							if (fcgi_spawn_connection(srv, p, host, proc)) {
 								log_error_write(srv, __FILE__, __LINE__, "s",
 										"[ERROR]: spawning fcgi failed.");
-								return HANDLER_ERROR;
+								fastcgi_process_free(proc);
+								goto error;
 							}
 
 							fastcgi_status_init(srv, p->statuskey, host, proc);
 
 							proc->next = host->first;
-							if (host->first) 	host->first->prev = proc;
+							if (host->first) host->first->prev = proc;
 
 							host->first = proc;
 						}
@@ -1440,7 +1440,7 @@ SETDEFAULTS_FUNC(mod_fastcgi_set_defaults) {
 							if (buffer_is_empty(host->docroot)) {
 								log_error_write(srv, __FILE__, __LINE__, "s",
 										"ERROR: docroot is required for authorizer mode.");
-								return HANDLER_ERROR;
+								goto error;
 							}
 						} else {
 							log_error_write(srv, __FILE__, __LINE__, "sbs",
@@ -1451,14 +1451,19 @@ SETDEFAULTS_FUNC(mod_fastcgi_set_defaults) {
 
 					/* if extension already exists, take it */
 					fastcgi_extension_insert(s->exts, da_ext->key, host);
+					host = NULL;
 				}
 			}
 		}
 	}
 
 	buffer_free(fcgi_mode);
-
 	return HANDLER_GO_ON;
+
+error:
+	if (NULL != host) fastcgi_host_free(host);
+	buffer_free(fcgi_mode);
+	return HANDLER_ERROR;
 }
 
 static int fcgi_set_state(server *srv, handler_ctx *hctx, fcgi_connection_state_t state) {

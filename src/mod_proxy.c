@@ -298,6 +298,7 @@ SETDEFAULTS_FUNC(mod_proxy_set_defaults) {
 					pcv[1].destination = &(df->port);
 
 					if (0 != config_insert_values_internal(srv, da_host->value, pcv)) {
+						df->free((data_unset*) df);
 						return HANDLER_ERROR;
 					}
 
@@ -309,6 +310,7 @@ SETDEFAULTS_FUNC(mod_proxy_set_defaults) {
 								da_host->key,
 								"host");
 
+						df->free((data_unset*) df);
 						return HANDLER_ERROR;
 					}
 
