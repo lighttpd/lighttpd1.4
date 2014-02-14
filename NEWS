@@ -6,6 +6,7 @@ NEWS
 - 1.4.35
   * [network/ssl] fix build error if TLSEXT is disabled
   * [mod_fastcgi] fix use after free (only triggered if fastcgi debug is active)
+  * [mod_rrdtool] fix invalid read (string not null terminated)
 
 - 1.4.34
   * [mod_auth] explicitly link ssl for SHA1 (fixes #2517)

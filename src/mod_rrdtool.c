@@ -437,7 +437,7 @@ TRIGGER_FUNC(mod_rrd_trigger) {
 		}
 
 		buffer_prepare_copy(p->resp, 4096);
-		if (-1 == (r = safe_read(p->read_fd, p->resp->ptr, p->resp->size))) {
+		if (-1 == (r = safe_read(p->read_fd, p->resp->ptr, p->resp->size - 1))) {
 			p->rrdtool_running = 0;
 
 			log_error_write(srv, __FILE__, __LINE__, "ss",
@@ -446,7 +446,8 @@ TRIGGER_FUNC(mod_rrd_trigger) {
 			return HANDLER_ERROR;
 		}
 
-		p->resp->used = r;
+		p->resp->used = r + 1;
+		p->resp->ptr[r] = '\0';
 
 		if (p->resp->ptr[0] != 'O' ||
 		    p->resp->ptr[1] != 'K') {
