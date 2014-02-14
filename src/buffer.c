@@ -584,7 +584,7 @@ int buffer_is_equal_right_len(buffer *b1, buffer *b2, size_t len) {
 	if (b1->used == 0 || b2->used == 0) return 0;
 
 	/* buffers too small -> not equal */
-	if (b1->used - 1 < len || b1->used - 1 < len) return 0;
+	if (b1->used - 1 < len || b2->used - 1 < len) return 0;
 
 	if (0 == strncmp(b1->ptr + b1->used - 1 - len,
 			 b2->ptr + b2->used - 1 - len, len)) {
