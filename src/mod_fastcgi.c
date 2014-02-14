@@ -2420,11 +2420,12 @@ static int fastcgi_get_packet(server *srv, handler_ctx *hctx, fastcgi_response_p
 	if ((packet->b->used == 0) ||
 	    (packet->b->used - 1 < sizeof(FCGI_Header))) {
 		/* no header */
-		buffer_free(packet->b);
-
 		if (hctx->plugin_data->conf.debug) {
 			log_error_write(srv, __FILE__, __LINE__, "sdsds", "FastCGI: header too small:", packet->b->used, "bytes <", sizeof(FCGI_Header), "bytes, waiting for more data");
 		}
+
+		buffer_free(packet->b);
+
 		return -1;
 	}
 
