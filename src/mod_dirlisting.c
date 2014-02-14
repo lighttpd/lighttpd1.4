@@ -730,7 +730,11 @@ static int http_list_directory(server *srv, connection *con, plugin_data *p, buf
 					log_error_write(srv, __FILE__, __LINE__, "sd",
 						"execution error while matching:", n);
 
-					return -1;
+					/* aborting would require a lot of manual cleanup here.
+					 * skip instead (to not leak names that break pcre matching)
+					 */
+					exclude_match = 1;
+					break;
 				}
 			}
 			else {
