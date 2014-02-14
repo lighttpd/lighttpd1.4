@@ -969,6 +969,7 @@ static int fcgi_spawn_connection(server *srv,
 		if (setsockopt(fcgi_fd, SOL_SOCKET, SO_REUSEADDR, &val, sizeof(val)) < 0) {
 			log_error_write(srv, __FILE__, __LINE__, "ss",
 					"socketsockopt failed:", strerror(errno));
+			close(fcgi_fd);
 			return -1;
 		}
 
@@ -978,12 +979,14 @@ static int fcgi_spawn_connection(server *srv,
 				"bind failed for:",
 				proc->connection_name,
 				strerror(errno));
+			close(fcgi_fd);
 			return -1;
 		}
 
 		if (-1 == listen(fcgi_fd, 1024)) {
 			log_error_write(srv, __FILE__, __LINE__, "ss",
 				"listen failed:", strerror(errno));
+			close(fcgi_fd);
 			return -1;
 		}
 

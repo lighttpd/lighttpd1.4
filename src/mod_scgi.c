@@ -752,6 +752,7 @@ static int scgi_spawn_connection(server *srv,
 		if (setsockopt(scgi_fd, SOL_SOCKET, SO_REUSEADDR, &val, sizeof(val)) < 0) {
 			log_error_write(srv, __FILE__, __LINE__, "ss",
 					"socketsockopt failed:", strerror(errno));
+			close(scgi_fd);
 			return -1;
 		}
 
@@ -762,12 +763,14 @@ static int scgi_spawn_connection(server *srv,
 				proc->socket,
 				proc->port,
 				strerror(errno));
+			close(scgi_fd);
 			return -1;
 		}
 
 		if (-1 == listen(scgi_fd, 1024)) {
 			log_error_write(srv, __FILE__, __LINE__, "ss",
 				"listen failed:", strerror(errno));
+			close(scgi_fd);
 			return -1;
 		}
 
@@ -2997,6 +3000,7 @@ TRIGGER_FUNC(mod_scgi_handle_trigger) {
 					if (scgi_spawn_connection(srv, p, host, fp)) {
 						log_error_write(srv, __FILE__, __LINE__, "s",
 								"ERROR: spawning fcgi failed.");
+						scgi_process_free(fp);
 						return HANDLER_ERROR;
 					}
 
