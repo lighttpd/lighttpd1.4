@@ -543,7 +543,6 @@ static X509* x509_load_pem_file(server *srv, const char *file) {
 	return x;
 
 error:
-	if (NULL != x) X509_free(x);
 	if (NULL != in) BIO_free(in);
 	return NULL;
 }
@@ -573,7 +572,6 @@ static EVP_PKEY* evp_pkey_load_pem_file(server *srv, const char *file) {
 	return x;
 
 error:
-	if (NULL != x) EVP_PKEY_free(x);
 	if (NULL != in) BIO_free(in);
 	return NULL;
 }

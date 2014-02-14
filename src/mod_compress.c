@@ -413,7 +413,7 @@ static int deflate_file_to_buffer_bzip2(server *srv, connection *con, plugin_dat
 
 static int deflate_file_to_file(server *srv, connection *con, plugin_data *p, buffer *fn, stat_cache_entry *sce, int type) {
 	int ifd, ofd;
-	int ret = -1;
+	int ret;
 	void *start;
 	const char *filename = fn->ptr;
 	ssize_t r;
@@ -526,6 +526,7 @@ static int deflate_file_to_file(server *srv, connection *con, plugin_data *p, bu
 	}
 #endif
 
+	ret = -1;
 	switch(type) {
 #ifdef USE_ZLIB
 	case HTTP_ACCEPT_ENCODING_GZIP:
@@ -542,9 +543,6 @@ static int deflate_file_to_file(server *srv, connection *con, plugin_data *p, bu
 		ret = deflate_file_to_buffer_bzip2(srv, con, p, start, sce->st.st_size);
 		break;
 #endif
-	default:
-		ret = -1;
-		break;
 	}
 
 	if (ret == 0) {

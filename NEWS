@@ -11,6 +11,7 @@ NEWS
   * [mod_fastcgi,mod_scgi] fix resource leaks on spawning backends
   * [mod_magnet] fix memory leak
   * add comments for switch fall throughs
+  * remove logical dead code
 
 - 1.4.34
   * [mod_auth] explicitly link ssl for SHA1 (fixes #2517)
