@@ -786,10 +786,12 @@ static int magnet_attach_content(server *srv, connection *con, plugin_data *p, l
 						}
 
 						if (off < 0) {
+							buffer_free(fn);
 							return luaL_error(L, "offset for '%s' is negative", fn->ptr);
 						}
 
 						if (len < off) {
+							buffer_free(fn);
 							return luaL_error(L, "offset > length for '%s'", fn->ptr);
 						}
 
