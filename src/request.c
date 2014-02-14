@@ -1023,6 +1023,7 @@ int http_request_parse(server *srv, connection *con) {
 			case '\t':
 				/* strip leading WS */
 				if (value == cur) value = cur+1;
+				/* fallthrough */
 			default:
 				if (*cur >= 0 && *cur < 32 && *cur != '\t') {
 					if (srv->srvconf.log_request_header_on_error) {

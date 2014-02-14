@@ -1477,6 +1477,7 @@ int connection_state_machine(server *srv, connection *con) {
 				break;
 			case HANDLER_COMEBACK:
 				done = -1;
+				/* fallthrough */
 			case HANDLER_WAIT_FOR_EVENT:
 				/* come back here */
 				connection_set_state(srv, con, CON_STATE_HANDLE_REQUEST);

@@ -3018,7 +3018,7 @@ static handler_t fcgi_write_request(server *srv, handler_ctx *hctx) {
 
 			break;
 		}
-
+		/* fallthrough */
 	case FCGI_STATE_PREPARE_WRITE:
 		/* ok, we have the connection */
 
