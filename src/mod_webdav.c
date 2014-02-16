@@ -1690,7 +1690,7 @@ URIHANDLER_FUNC(mod_webdav_subrequest_handler) {
 
 			/* if the file doesn't exist, create it */
 			if (-1 == (fd = open(con->physical.path->ptr, O_WRONLY|O_TRUNC, WEBDAV_FILE_MODE))) {
-				if (errno == ENOENT &&
+				if (errno != ENOENT ||
 				    -1 == (fd = open(con->physical.path->ptr, O_WRONLY|O_CREAT|O_TRUNC|O_EXCL, WEBDAV_FILE_MODE))) {
 					/* we can't open the file */
 					con->http_status = 403;
