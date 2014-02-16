@@ -209,12 +209,17 @@ int cache_parse_lua(server *srv, connection *con, plugin_data *p, buffer *fn) {
 	lua_State *L;
 	readme rm;
 	int ret = -1;
-	buffer *b = buffer_init();
+	buffer *b;
 	int header_tbl = 0;
 
 	rm.done = 0;
-	stream_open(&rm.st, fn);
+	if (-1 == stream_open(&rm.st, fn)) {
+		log_error_write(srv, __FILE__, __LINE__, "sbss",
+				"opening lua cml file ", fn, "failed:", strerror(errno));
+		return -1;
+	}
 
+	b = buffer_init();
 	/* push the lua file to the interpreter and see what happends */
 	L = luaL_newstate();
 	luaL_openlibs(L);

@@ -319,8 +319,7 @@ static int build_ssi_cgi_vars(server *srv, connection *con, plugin_data *p) {
 	return 0;
 }
 
-static int process_ssi_stmt(server *srv, connection *con, plugin_data *p,
-			    const char **l, size_t n) {
+static int process_ssi_stmt(server *srv, connection *con, plugin_data *p, const char **l, size_t n, stat_cache_entry *sce) {
 	size_t i, ssicmd = 0;
 	char buf[255];
 	buffer *b = NULL;
@@ -360,7 +359,6 @@ static int process_ssi_stmt(server *srv, connection *con, plugin_data *p,
 		int var = 0;
 		/* int enc = 0; */
 		const char *var_val = NULL;
-		stat_cache_entry *sce = NULL;
 
 		struct {
 			const char *var;
@@ -428,8 +426,6 @@ static int process_ssi_stmt(server *srv, connection *con, plugin_data *p,
 					l[1], "var is missing");
 			break;
 		}
-
-		stat_cache_get_entry(srv, con, con->physical.path, &sce);
 
 		switch(var) {
 		case SSI_ECHO_USER_NAME: {
@@ -958,6 +954,9 @@ static int mod_ssi_handle_request(server *srv, connection *con, plugin_data *p) 
 	int ovec[N * 3];
 #endif
 
+	stat_cache_entry *sce = NULL;
+
+
 	/* get a stream to the file */
 
 	array_reset(p->ssi_vars);
@@ -969,6 +968,11 @@ static int mod_ssi_handle_request(server *srv, connection *con, plugin_data *p) 
 
 	/* Reset the modified time of included files */
 	include_file_last_mtime = 0;
+
+	if (HANDLER_ERROR == stat_cache_get_entry(srv, con, con->physical.path, &sce)) {
+		log_error_write(srv, __FILE__, __LINE__,  "SB", "stat_cache_get_entry failed: ", con->physical.path);
+		return -1;
+	}
 
 	if (-1 == stream_open(&s, con->physical.path)) {
 		log_error_write(srv, __FILE__, __LINE__, "sb",
@@ -1043,7 +1047,7 @@ static int mod_ssi_handle_request(server *srv, connection *con, plugin_data *p) 
 		if (!p->if_is_false) chunkqueue_append_file(con->write_queue, con->physical.path, i, ovec[0] - i);
 
 		pcre_get_substring_list(s.start, ovec, n, &l);
-		process_ssi_stmt(srv, con, p, l, n);
+		process_ssi_stmt(srv, con, p, l, n, sce);
 		pcre_free_substring_list(l);
 	}
 
@@ -1074,13 +1078,9 @@ static int mod_ssi_handle_request(server *srv, connection *con, plugin_data *p) 
 	}
 
 	{
-  	/* Generate "ETag" & "Last-Modified" headers */
-
-		stat_cache_entry *sce = NULL;
+		/* Generate "ETag" & "Last-Modified" headers */
 		time_t lm_time = 0;
 		buffer *mtime = NULL;
-
-		stat_cache_get_entry(srv, con, con->physical.path, &sce);
 
 		etag_mutate(con->physical.etag, sce->etag);
 		response_header_overwrite(srv, con, CONST_STR_LEN("ETag"), CONST_BUF_LEN(con->physical.etag));

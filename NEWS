@@ -18,6 +18,7 @@ NEWS
   * [mod_cml_lua] fix null pointer dereference
   * force assertion: setting FD_CLOEXEC must work (if available)
   * [network] check return value of lseek()
+  * fix unchecked return values from stream_open/stat_cache_get_entry
 
 - 1.4.34
   * [mod_auth] explicitly link ssl for SHA1 (fixes #2517)

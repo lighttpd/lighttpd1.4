@@ -306,7 +306,8 @@ URIHANDLER_FUNC(mod_expire_path_handler) {
 			size_t len;
 			stat_cache_entry *sce = NULL;
 
-			stat_cache_get_entry(srv, con, con->physical.path, &sce);
+			/* if stat fails => sce == NULL, ignore return value */
+			(void) stat_cache_get_entry(srv, con, con->physical.path, &sce);
 
 			switch(mod_expire_get_offset(srv, p, ds->value, &ts)) {
 			case 0:
@@ -315,6 +316,11 @@ URIHANDLER_FUNC(mod_expire_path_handler) {
 				break;
 			case 1:
 				/* modification */
+
+				/* can't set modification based expire header if
+				 * mtime is not available
+				 */
+				if (NULL == sce) return HANDLER_GO_ON;
 
 				expires = (ts + sce->st.st_mtime);
 				break;
