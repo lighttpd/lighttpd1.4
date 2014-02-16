@@ -362,6 +362,7 @@ static void log_write(server *srv, buffer *b) {
 	case ERRORLOG_FILE:
 	case ERRORLOG_FD:
 		buffer_append_string_len(b, CONST_STR_LEN("\n"));
+		force_assert(b->used > 0);
 		write(srv->errorlog_fd, b->ptr, b->used - 1);
 		break;
 	case ERRORLOG_SYSLOG:

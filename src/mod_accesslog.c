@@ -915,6 +915,7 @@ REQUESTDONE_FUNC(log_access_write) {
 			}
 #endif
 		} else if (p->conf.log_access_fd != -1) {
+			force_assert(b->used > 0);
 			write(p->conf.log_access_fd, b->ptr, b->used - 1);
 		}
 		buffer_reset(b);

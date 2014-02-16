@@ -255,6 +255,7 @@ URIHANDLER_FUNC(mod_secdownload_uri_handler) {
 	buffer_copy_string_buffer(p->md5, p->conf.secret);
 	buffer_append_string(p->md5, rel_uri);
 	buffer_append_string_len(p->md5, ts_str, 8);
+	force_assert(p->md5->used > 0);
 
 	li_MD5_Init(&Md5Ctx);
 	li_MD5_Update(&Md5Ctx, (unsigned char *)p->md5->ptr, p->md5->used - 1);
