@@ -140,14 +140,7 @@ int fdevent_linux_sysepoll_init(fdevents *ev) {
 		return -1;
 	}
 
-	if (-1 == fcntl(ev->epoll_fd, F_SETFD, FD_CLOEXEC)) {
-		log_error_write(ev->srv, __FILE__, __LINE__, "SSS",
-			"fcntl on epoll-fd failed (", strerror(errno), "), try to set server.event-handler = \"poll\" or \"select\"");
-
-		close(ev->epoll_fd);
-
-		return -1;
-	}
+	fd_close_on_exec(ev->epoll_fd);
 
 	ev->epoll_events = malloc(ev->maxfds * sizeof(*ev->epoll_events));
 

@@ -612,9 +612,7 @@ SIGHUP_FUNC(log_access_cycle) {
 
 				return HANDLER_ERROR;
 			}
-#ifdef FD_CLOEXEC
-			fcntl(s->log_access_fd, F_SETFD, FD_CLOEXEC);
-#endif
+			fd_close_on_exec(s->log_access_fd);
 		}
 	}
 

@@ -121,14 +121,7 @@ int fdevent_solaris_devpoll_reset(fdevents *ev) {
 		return -1;
 	}
 
-	if (fcntl(ev->devpoll_fd, F_SETFD, FD_CLOEXEC) < 0) {
-		log_error_write(ev->srv, __FILE__, __LINE__, "SSS",
-			"fcntl /dev/poll fd failed (", strerror(errno), "), try to set server.event-handler = \"poll\" or \"select\"");
-
-		close(ev->devpoll_fd);
-
-		return -1;
-	}
+	fd_close_on_exec(ev->devpoll_fd);
 	return 0;
 }
 int fdevent_solaris_devpoll_init(fdevents *ev) {

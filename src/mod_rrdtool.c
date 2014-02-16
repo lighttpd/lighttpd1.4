@@ -170,10 +170,8 @@ static int mod_rrd_create_pipe(server *srv, plugin_data *p) {
 		p->read_fd = from_rrdtool_fds[0];
 		p->rrdtool_pid = pid;
 
-#ifdef FD_CLOEXEC
-		fcntl(p->write_fd, F_SETFD, FD_CLOEXEC);
-		fcntl(p->read_fd, F_SETFD, FD_CLOEXEC);
-#endif
+		fd_close_on_exec(p->write_fd);
+		fd_close_on_exec(p->read_fd);
 
 		break;
 	}

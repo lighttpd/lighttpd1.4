@@ -1067,9 +1067,7 @@ found_header_end:
 						if (dst_c->file.fd == -1) {
 							/* this should not happen as we cache the fd, but you never know */
 							dst_c->file.fd = open(dst_c->file.name->ptr, O_WRONLY | O_APPEND);
-#ifdef FD_CLOEXEC
-							fcntl(dst_c->file.fd, F_SETFD, FD_CLOEXEC);
-#endif
+							fd_close_on_exec(dst_c->file.fd);
 						}
 					} else {
 						/* the chunk is too large now, close it */

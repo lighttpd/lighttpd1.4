@@ -200,11 +200,17 @@ void * fdevent_get_context(fdevents *ev, int fd) {
 	return ev->fdarray[fd]->ctx;
 }
 
-int fdevent_fcntl_set(fdevents *ev, int fd) {
+void fd_close_on_exec(int fd) {
 #ifdef FD_CLOEXEC
-	/* close fd on exec (cgi) */
-	fcntl(fd, F_SETFD, FD_CLOEXEC);
+	if (fd < 0) return;
+	force_assert(-1 != fcntl(fd, F_SETFD, FD_CLOEXEC));
+#else
+	UNUSED(fd);
 #endif
+}
+
+int fdevent_fcntl_set(fdevents *ev, int fd) {
+	fd_close_on_exec(fd);
 	if ((ev) && (ev->fcntl_set)) return ev->fcntl_set(ev, fd);
 #ifdef O_NONBLOCK
 	return fcntl(fd, F_SETFL, O_NONBLOCK | O_RDWR);

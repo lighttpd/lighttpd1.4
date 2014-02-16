@@ -141,9 +141,7 @@ int network_write_chunkqueue_linuxsendfile(server *srv, connection *con, int fd,
 
 					return -1;
 				}
-#ifdef FD_CLOEXEC
-				fcntl(c->file.fd, F_SETFD, FD_CLOEXEC);
-#endif
+				fd_close_on_exec(c->file.fd);
 #ifdef HAVE_POSIX_FADVISE
 				/* tell the kernel that we want to stream the file */
 				if (-1 == posix_fadvise(c->file.fd, 0, 0, POSIX_FADV_SEQUENTIAL)) {

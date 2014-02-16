@@ -261,10 +261,8 @@ static int network_server_init(server *srv, buffer *host_token, specific_config 
 		}
 	}
 
-#ifdef FD_CLOEXEC
 	/* set FD_CLOEXEC now, fdevent_fcntl_set is called later; needed for pipe-logger forks */
-	fcntl(srv_socket->fd, F_SETFD, FD_CLOEXEC);
-#endif
+	fd_close_on_exec(srv_socket->fd);
 
 	/* */
 	srv->cur_fds = srv_socket->fd;

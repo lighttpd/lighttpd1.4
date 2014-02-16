@@ -151,9 +151,7 @@ int network_write_chunkqueue_freebsdsendfile(server *srv, connection *con, int f
 					return -1;
 				}
 
-#ifdef FD_CLOEXEC
-				fcntl(c->file.fd, F_SETFD, FD_CLOEXEC);
-#endif
+				fd_close_on_exec(c->file.fd);
 			}
 
 			r = 0;

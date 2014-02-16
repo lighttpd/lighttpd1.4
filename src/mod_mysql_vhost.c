@@ -275,22 +275,7 @@ SERVER_FUNC(mod_mysql_vhost_set_defaults) {
 			}
 #undef FOO
 
-#if 0
-			/* set close_on_exec for mysql the hard way */
-			/* Note: this only works as it is done during startup, */
-			/* otherwise we cannot be sure that mysql is fd i-1 */
-			{ int fd;
-			if (-1 != (fd = open("/dev/null", 0))) {
-				close(fd);
-#ifdef FD_CLOEXEC
-				fcntl(fd-1, F_SETFD, FD_CLOEXEC);
-#endif
-			} }
-#else
-#ifdef FD_CLOEXEC
-			fcntl(s->mysql->net.fd, F_SETFD, FD_CLOEXEC);
-#endif
-#endif
+			fd_close_on_exec(s->mysql->net.fd);
 		}
 	}
 

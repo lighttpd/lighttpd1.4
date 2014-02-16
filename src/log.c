@@ -122,9 +122,7 @@ int open_logfile_or_pipe(server *srv, const char* logfile) {
 		return -1;
 	}
 
-#ifdef FD_CLOEXEC
-	fcntl(fd, F_SETFD, FD_CLOEXEC);
-#endif
+	fd_close_on_exec(fd);
 
 	return fd;
 }
@@ -178,9 +176,7 @@ int log_error_open(server *srv) {
 
 		if (srv->errorlog_mode == ERRORLOG_FD) {
 			srv->errorlog_fd = dup(STDERR_FILENO);
-#ifdef FD_CLOEXEC
-			fcntl(srv->errorlog_fd, F_SETFD, FD_CLOEXEC);
-#endif
+			fd_close_on_exec(srv->errorlog_fd);
 		}
 
 		if (-1 == (breakage_fd = open_logfile_or_pipe(srv, logfile))) {
@@ -231,10 +227,7 @@ int log_error_cycle(server *srv) {
 			/* ok, new log is open, close the old one */
 			close(srv->errorlog_fd);
 			srv->errorlog_fd = new_fd;
-#ifdef FD_CLOEXEC
-			/* close fd on exec (cgi) */
-			fcntl(srv->errorlog_fd, F_SETFD, FD_CLOEXEC);
-#endif
+			fd_close_on_exec(srv->errorlog_fd);
 		}
 	}
 
