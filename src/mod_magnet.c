@@ -766,12 +766,17 @@ static int magnet_attach_content(server *srv, connection *con, plugin_data *p, l
 				lua_getfield(L, -3, "offset");
 
 				if (lua_isstring(L, -3)) { /* filename has to be a string */
-					buffer *fn = buffer_init();
+					buffer *fn;
 					stat_cache_entry *sce;
+					const char *fn_str;
+					handler_t res;
 
-					buffer_copy_string(fn, lua_tostring(L, -3));
+					fn_str = lua_tostring(L, -3);
+					fn = buffer_init_string(fn_str);
 
-					if (HANDLER_GO_ON == stat_cache_get_entry(srv, con, fn, &sce)) {
+					res = stat_cache_get_entry(srv, con, fn, &sce);
+
+					if (HANDLER_GO_ON == res) {
 						off_t off = 0;
 						off_t len = 0;
 
@@ -787,12 +792,12 @@ static int magnet_attach_content(server *srv, connection *con, plugin_data *p, l
 
 						if (off < 0) {
 							buffer_free(fn);
-							return luaL_error(L, "offset for '%s' is negative", fn->ptr);
+							return luaL_error(L, "offset for '%s' is negative", fn_str);
 						}
 
 						if (len < off) {
 							buffer_free(fn);
-							return luaL_error(L, "offset > length for '%s'", fn->ptr);
+							return luaL_error(L, "offset > length for '%s'", fn_str);
 						}
 
 						chunkqueue_append_file(con->write_queue, fn, off, len - off);
