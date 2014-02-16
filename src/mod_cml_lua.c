@@ -398,26 +398,22 @@ int cache_parse_lua(server *srv, connection *con, plugin_data *p, buffer *fn) {
 			con->file_finished = 1;
 
 			ds = (data_string *)array_get_element(con->response.headers, "Last-Modified");
+			if (0 == mtime) mtime = time(NULL); /* default last-modified to now */
 
 			/* no Last-Modified specified */
-			if ((mtime) && (NULL == ds)) {
+			if (NULL == ds) {
 
 				strftime(timebuf, sizeof(timebuf), "%a, %d %b %Y %H:%M:%S GMT", gmtime(&mtime));
 
 				response_header_overwrite(srv, con, CONST_STR_LEN("Last-Modified"), timebuf, sizeof(timebuf) - 1);
 
-
 				tbuf.ptr = timebuf;
 				tbuf.used = sizeof(timebuf);
 				tbuf.size = sizeof(timebuf);
-			} else if (ds) {
+			} else {
 				tbuf.ptr = ds->value->ptr;
 				tbuf.used = ds->value->used;
 				tbuf.size = ds->value->size;
-			} else {
-				tbuf.size = 0;
-				tbuf.used = 0;
-				tbuf.ptr = NULL;
 			}
 
 			if (HANDLER_FINISHED == http_response_handle_cachable(srv, con, &tbuf)) {

@@ -15,6 +15,7 @@ NEWS
   * [buffer] fix length check in buffer_is_equal_right_len
   * fix resource leaks in error cases on config parsing and other initializations
   * add force_assert() to enforce assertions as simple assert()s are disabled by -DNDEBUG (fixes #2546)
+  * [mod_cml_lua] fix null pointer dereference
 
 - 1.4.34
   * [mod_auth] explicitly link ssl for SHA1 (fixes #2517)
