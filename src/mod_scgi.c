@@ -946,7 +946,7 @@ SETDEFAULTS_FUNC(mod_scgi_set_defaults) {
 		ca = ((data_config *)srv->config_context->data[i])->value;
 
 		if (0 != config_insert_values_global(srv, ca, cv)) {
-			return HANDLER_ERROR;
+			goto error;
 		}
 
 		/*
@@ -961,7 +961,7 @@ SETDEFAULTS_FUNC(mod_scgi_set_defaults) {
 				log_error_write(srv, __FILE__, __LINE__, "sss",
 						"unexpected type for key: ", "scgi.server", "array of strings");
 
-				return HANDLER_ERROR;
+				goto error;
 			}
 
 
@@ -979,7 +979,7 @@ SETDEFAULTS_FUNC(mod_scgi_set_defaults) {
 							"unexpected type for key: ", "scgi.server",
 							"[", da->value->data[j]->key, "](string)");
 
-					return HANDLER_ERROR;
+					goto error;
 				}
 
 				/*
@@ -1025,7 +1025,7 @@ SETDEFAULTS_FUNC(mod_scgi_set_defaults) {
 								"scgi.server",
 								"[", da_host->key, "](string)");
 
-						return HANDLER_ERROR;
+						goto error;
 					}
 
 					df = scgi_host_init();
