@@ -124,7 +124,7 @@ SETDEFAULTS_FUNC(mod_simple_vhost_set_defaults) {
 
 static int build_doc_root(server *srv, connection *con, plugin_data *p, buffer *out, buffer *host) {
 	stat_cache_entry *sce = NULL;
-	assert(p->conf.server_root->used > 1);
+	force_assert(p->conf.server_root->used > 1);
 
 	buffer_prepare_copy(out, 128);
 	buffer_copy_string_buffer(out, p->conf.server_root);

@@ -14,7 +14,7 @@
 static void configparser_push(config_t *ctx, data_config *dc, int isnew) {
   if (isnew) {
     dc->context_ndx = ctx->all_configs->used;
-    assert(dc->context_ndx > ctx->current->context_ndx);
+    force_assert(dc->context_ndx > ctx->current->context_ndx);
     array_insert_unique(ctx->all_configs, (data_unset *)dc);
     dc->parent = ctx->current;
     array_insert_unique(dc->parent->childs, (data_unset *)dc);
@@ -96,7 +96,7 @@ data_unset *configparser_merge_data(data_unset *op1, const data_unset *op2) {
       }
       break;
     default:
-      assert(0);
+      force_assert(0);
       break;
     }
   }
@@ -334,7 +334,7 @@ eols ::= .
 globalstart ::= GLOBAL. {
   data_config *dc;
   dc = (data_config *)array_get_element(ctx->srv->config_context, "global");
-  assert(dc);
+  force_assert(dc);
   configparser_push(ctx, dc, 0);
 }
 
@@ -344,7 +344,7 @@ global(A) ::= globalstart LCURLY metalines RCURLY. {
   cur = ctx->current;
   configparser_pop(ctx);
 
-  assert(cur && ctx->current);
+  force_assert(cur && ctx->current);
 
   A = cur;
 }
@@ -372,7 +372,7 @@ condline(A) ::= context LCURLY metalines RCURLY. {
   cur = ctx->current;
   configparser_pop(ctx);
 
-  assert(cur && ctx->current);
+  force_assert(cur && ctx->current);
 
   A = cur;
 }
@@ -400,7 +400,7 @@ context ::= DOLLAR SRVVARNAME(B) LBRACKET stringop(C) RBRACKET cond(E) expressio
     op = buffer_init_string("=~");
     break;
   default:
-    assert(0);
+    force_assert(0);
     return;
   }
 

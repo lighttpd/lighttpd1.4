@@ -155,13 +155,13 @@ static int config_insert(server *srv) {
 
 	srv->config_storage = calloc(1, srv->config_context->used * sizeof(specific_config *));
 
-	assert(srv->config_storage);
+	force_assert(srv->config_storage);
 
 	for (i = 0; i < srv->config_context->used; i++) {
 		specific_config *s;
 
 		s = calloc(1, sizeof(specific_config));
-		assert(s);
+		force_assert(s);
 		s->document_root = buffer_init();
 		s->mimetypes     = array_init();
 		s->server_name   = buffer_init();
@@ -549,7 +549,7 @@ static int tokenizer_close(server *srv, tokenizer_t *t) {
 #endif
 static int config_skip_newline(tokenizer_t *t) {
 	int skipped = 1;
-	assert(t->input[t->offset] == '\r' || t->input[t->offset] == '\n');
+	force_assert(t->input[t->offset] == '\r' || t->input[t->offset] == '\n');
 	if (t->input[t->offset] == '\r' && t->input[t->offset + 1] == '\n') {
 		skipped ++;
 		t->offset ++;
@@ -560,7 +560,7 @@ static int config_skip_newline(tokenizer_t *t) {
 
 static int config_skip_comment(tokenizer_t *t) {
 	int i;
-	assert(t->input[t->offset] == '#');
+	force_assert(t->input[t->offset] == '#');
 	for (i = 1; t->input[t->offset + i] &&
 	     (t->input[t->offset + i] != '\n' && t->input[t->offset + i] != '\r');
 	     i++);
@@ -1115,7 +1115,7 @@ int config_read(server *srv, const char *fn) {
 	dc = data_config_init();
 	buffer_copy_string_len(dc->key, CONST_STR_LEN("global"));
 
-	assert(context.all_configs->used == 0);
+	force_assert(context.all_configs->used == 0);
 	dc->context_ndx = context.all_configs->used;
 	array_insert_unique(context.all_configs, (data_unset *)dc);
 	context.current = dc;
@@ -1140,7 +1140,7 @@ int config_read(server *srv, const char *fn) {
 	ret = config_parse_file(srv, &context, fn);
 
 	/* remains nothing if parser is ok */
-	assert(!(0 == ret && context.ok && 0 != context.configs_stack->used));
+	force_assert(!(0 == ret && context.ok && 0 != context.configs_stack->used));
 	context_free(&context);
 
 	if (0 != ret) {
@@ -1172,7 +1172,7 @@ int config_read(server *srv, const char *fn) {
 		}
 
 		prepends = (data_array *)configparser_merge_data((data_unset *)prepends, (data_unset *)modules);
-		assert(NULL != prepends);
+		force_assert(NULL != prepends);
 		buffer_copy_string_buffer(prepends->key, modules->key);
 		array_replace(srv->config, (data_unset *)prepends);
 		modules->free((data_unset *)modules);

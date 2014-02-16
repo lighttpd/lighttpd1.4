@@ -177,7 +177,7 @@ void stat_cache_free(stat_cache *sc) {
 		stat_cache_entry_free(node->data);
 		sc->files = splaytree_delete(sc->files, node->key);
 
-		assert(osize - 1 == splaytree_size(sc->files));
+		force_assert(osize - 1 == splaytree_size(sc->files));
 	}
 
 	buffer_free(sc->dir_name);
@@ -194,9 +194,9 @@ void stat_cache_free(stat_cache *sc) {
 		sc->dirs = splaytree_delete(sc->dirs, node->key);
 
 		if (osize == 1) {
-			assert(NULL == sc->dirs);
+			force_assert(NULL == sc->dirs);
 		} else {
-			assert(osize == (sc->dirs->size + 1));
+			force_assert(osize == (sc->dirs->size + 1));
 		}
 	}
 
@@ -290,7 +290,7 @@ handler_t stat_cache_handle_fdevent(server *srv, void *_fce, int revent) {
 						fam_dir_entry_free(&sc->fam, node->data);
 						sc->dirs = splaytree_delete(sc->dirs, ndx);
 
-						assert(osize - 1 == splaytree_size(sc->dirs));
+						force_assert(osize - 1 == splaytree_size(sc->dirs));
 					}
 				}
 				break;
@@ -392,7 +392,7 @@ handler_t stat_cache_get_entry(server *srv, connection *con, buffer *name, stat_
 	if (sc->files && (sc->files->key == file_ndx)) {
 #ifdef DEBUG_STAT_CACHE
 		/* it was in the cache */
-		assert(i < ctrl.used);
+		force_assert(i < ctrl.used);
 #endif
 
 		/* we have seen this file already and
@@ -430,7 +430,7 @@ handler_t stat_cache_get_entry(server *srv, connection *con, buffer *name, stat_
 			log_error_write(srv, __FILE__, __LINE__, "xSB",
 				file_ndx, "was already inserted but not found in cache, ", name);
 		}
-		assert(i == ctrl.used);
+		force_assert(i == ctrl.used);
 #endif
 	}
 
@@ -516,9 +516,9 @@ handler_t stat_cache_get_entry(server *srv, connection *con, buffer *name, stat_
 
 		ctrl.ptr[ctrl.used++] = file_ndx;
 
-		assert(sc->files);
-		assert(sc->files->data == sce);
-		assert(osize + 1 == splaytree_size(sc->files));
+		force_assert(sc->files);
+		force_assert(sc->files->data == sce);
+		force_assert(osize + 1 == splaytree_size(sc->files));
 #endif
 	}
 
@@ -650,9 +650,9 @@ handler_t stat_cache_get_entry(server *srv, connection *con, buffer *name, stat_
 				}
 
 				sc->dirs = splaytree_insert(sc->dirs, dir_ndx, fam_dir);
-				assert(sc->dirs);
-				assert(sc->dirs->data == fam_dir);
-				assert(osize == (sc->dirs->size - 1));
+				force_assert(sc->dirs);
+				force_assert(sc->dirs->data == fam_dir);
+				force_assert(osize == (sc->dirs->size - 1));
 			}
 		} else {
 			fam_dir = dir_node->data;
@@ -735,7 +735,7 @@ int stat_cache_trigger_cleanup(server *srv) {
 				}
 			}
 
-			assert(osize - 1 == splaytree_size(sc->files));
+			force_assert(osize - 1 == splaytree_size(sc->files));
 #endif
 		}
 	}

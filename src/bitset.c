@@ -23,12 +23,12 @@ bitset *bitset_init(size_t nbits) {
 	bitset *set;
 
 	set = malloc(sizeof(*set));
-	assert(set);
+	force_assert(set);
 
 	set->bits = calloc(BITSET_USED(nbits), sizeof(*set->bits));
 	set->nbits = nbits;
 
-	assert(set->bits);
+	force_assert(set->bits);
 
 	return set;
 }

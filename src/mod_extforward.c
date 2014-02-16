@@ -336,11 +336,11 @@ static void ipstr_to_sockaddr(server *srv, const char *host, sock_addr *sock) {
 	} else switch (addrlist->ai_family) {
 	case AF_INET:
 		memcpy(&sock->ipv4, addrlist->ai_addr, sizeof(sock->ipv4));
-		assert(AF_INET == sock->plain.sa_family);
+		force_assert(AF_INET == sock->plain.sa_family);
 		break;
 	case AF_INET6:
 		memcpy(&sock->ipv6, addrlist->ai_addr, sizeof(sock->ipv6));
-		assert(AF_INET6 == sock->plain.sa_family);
+		force_assert(AF_INET6 == sock->plain.sa_family);
 		break;
 	default:
 		log_error_write(srv, __FILE__, __LINE__, "SSS",

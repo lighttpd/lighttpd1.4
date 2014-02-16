@@ -96,7 +96,7 @@ data_string *data_string_init(void) {
 	data_string *ds;
 
 	ds = calloc(1, sizeof(*ds));
-	assert(ds);
+	force_assert(ds);
 
 	ds->key = buffer_init();
 	ds->value = buffer_init();

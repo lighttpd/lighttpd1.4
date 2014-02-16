@@ -696,7 +696,7 @@ static int magnet_copy_response_header(server *srv, connection *con, plugin_data
 	/* lighty.header */
 
 	lua_getfield(L, -1, "lighty"); /* lighty.* from the env  */
-	assert(lua_istable(L, -1));
+	force_assert(lua_istable(L, -1));
 
 	lua_getfield(L, -1, "header"); /* lighty.header */
 	if (lua_istable(L, -1)) {
@@ -740,11 +740,11 @@ static int magnet_attach_content(server *srv, connection *con, plugin_data *p, l
 	 * get the environment of the function
 	 */
 
-	assert(lua_isfunction(L, -1));
+	force_assert(lua_isfunction(L, -1));
 	lua_getfenv(L, -1); /* -1 is the function */
 
 	lua_getfield(L, -1, "lighty"); /* lighty.* from the env  */
-	assert(lua_istable(L, -1));
+	force_assert(lua_istable(L, -1));
 
 	lua_getfield(L, -1, "content"); /* lighty.content */
 	if (lua_istable(L, -1)) {
@@ -875,7 +875,7 @@ static handler_t magnet_attract(server *srv, connection *con, plugin_data *p, bu
 
 		lua_pop(L, 1);
 
-		assert(lua_gettop(L) == 0); /* only the function should be on the stack */
+		force_assert(lua_gettop(L) == 0); /* only the function should be on the stack */
 
 		con->http_status = 500;
 		con->mode = DIRECT;
@@ -997,7 +997,7 @@ static handler_t magnet_attract(server *srv, connection *con, plugin_data *p, bu
 			lua_tostring(L, -1));
 		lua_pop(L, 1); /* remove the error-msg and the function copy from the stack */
 
-		assert(lua_gettop(L) == 1); /* only the function should be on the stack */
+		force_assert(lua_gettop(L) == 1); /* only the function should be on the stack */
 
 		con->http_status = 500;
 		con->mode = DIRECT;
@@ -1007,7 +1007,7 @@ static handler_t magnet_attract(server *srv, connection *con, plugin_data *p, bu
 	lua_remove(L, errfunc);
 
 	/* we should have the function-copy and the return value on the stack */
-	assert(lua_gettop(L) == 2);
+	force_assert(lua_gettop(L) == 2);
 
 	if (lua_isnumber(L, -1)) {
 		/* if the ret-value is a number, take it */
@@ -1033,16 +1033,16 @@ static handler_t magnet_attract(server *srv, connection *con, plugin_data *p, bu
 			con->mode = DIRECT;
 		}
 
-		assert(lua_gettop(L) == 1); /* only the function should be on the stack */
+		force_assert(lua_gettop(L) == 1); /* only the function should be on the stack */
 
 		/* we are finished */
 		return HANDLER_FINISHED;
 	} else if (MAGNET_RESTART_REQUEST == lua_return_value) {
-		assert(lua_gettop(L) == 1); /* only the function should be on the stack */
+		force_assert(lua_gettop(L) == 1); /* only the function should be on the stack */
 
 		return HANDLER_COMEBACK;
 	} else {
-		assert(lua_gettop(L) == 1); /* only the function should be on the stack */
+		force_assert(lua_gettop(L) == 1); /* only the function should be on the stack */
 
 		return HANDLER_GO_ON;
 	}

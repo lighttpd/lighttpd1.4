@@ -273,7 +273,7 @@ int network_write_chunkqueue_writev(server *srv, connection *con, int fd, chunkq
 						c->file.mmap.length,
 						abs_offset,
 						c->file.mmap.offset);
-				assert(toSend < 0);
+				force_assert(toSend < 0);
 			}
 
 			if (toSend > max_bytes) toSend = max_bytes;

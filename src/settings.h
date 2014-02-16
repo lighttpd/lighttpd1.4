@@ -9,6 +9,12 @@
 # define __USE_GNU /* a hack in my eyes, <fcntl.h> F_SETSIG should work with _GNU_SOURCE */
 #endif
 
+#ifdef __GNUC__
+# define LI_NORETURN __attribute__((noreturn))
+#else
+# define LI_NORETURN
+#endif
+
 #define BV(x) (1 << x)
 
 #define INET_NTOP_CACHE_MAX 4

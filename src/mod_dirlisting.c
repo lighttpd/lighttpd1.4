@@ -672,7 +672,7 @@ static int http_list_directory(server *srv, connection *con, plugin_data *p, buf
 #endif
 
 	path = malloc(dir->used + name_max);
-	assert(path);
+	force_assert(path);
 	strcpy(path, dir->ptr);
 	path_file = path + i;
 
@@ -685,11 +685,11 @@ static int http_list_directory(server *srv, connection *con, plugin_data *p, buf
 	}
 
 	dirs.ent   = (dirls_entry_t**) malloc(sizeof(dirls_entry_t*) * DIRLIST_BLOB_SIZE);
-	assert(dirs.ent);
+	force_assert(dirs.ent);
 	dirs.size  = DIRLIST_BLOB_SIZE;
 	dirs.used  = 0;
 	files.ent  = (dirls_entry_t**) malloc(sizeof(dirls_entry_t*) * DIRLIST_BLOB_SIZE);
-	assert(files.ent);
+	force_assert(files.ent);
 	files.size = DIRLIST_BLOB_SIZE;
 	files.used = 0;
 
@@ -766,7 +766,7 @@ static int http_list_directory(server *srv, connection *con, plugin_data *p, buf
 		if (list->used == list->size) {
 			list->size += DIRLIST_BLOB_SIZE;
 			list->ent   = (dirls_entry_t**) realloc(list->ent, sizeof(dirls_entry_t*) * list->size);
-			assert(list->ent);
+			force_assert(list->ent);
 		}
 
 		tmp = (dirls_entry_t*) malloc(sizeof(dirls_entry_t) + 1 + i);

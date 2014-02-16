@@ -8,8 +8,6 @@
  */
 int openDevNull(int fd);
 
-#define WP() log_error_write(srv, __FILE__, __LINE__, "");
-
 int open_logfile_or_pipe(server *srv, const char* logfile);
 
 int log_error_open(server *srv);

@@ -9,7 +9,6 @@
 
 #include <stdlib.h>
 #include <sys/types.h>
-#include <stdio.h>
 
 typedef struct {
 	char *ptr;
@@ -127,7 +126,10 @@ int light_isalnum(int c);
 #define CONST_BUF_LEN(x) x->ptr, x->used ? x->used - 1 : 0
 
 
-#define SEGFAULT() do { fprintf(stderr, "%s.%d: aborted\n", __FILE__, __LINE__); abort(); } while(0)
 #define UNUSED(x) ( (void)(x) )
+
+void log_failed_assert(const char *filename, unsigned int line, const char *msg) LI_NORETURN;
+#define force_assert(x) do { if (!(x)) log_failed_assert(__FILE__, __LINE__, "assertion failed: " #x); } while(0)
+#define SEGFAULT() log_failed_assert(__FILE__, __LINE__, "aborted");
 
 #endif

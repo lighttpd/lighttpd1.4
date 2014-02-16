@@ -1258,7 +1258,7 @@ URIHANDLER_FUNC(mod_webdav_subrequest_handler) {
 			if (1 == webdav_parse_chunkqueue(srv, con, p, con->request_content_queue, &xml)) {
 				xmlNode *rootnode = xmlDocGetRootElement(xml);
 
-				assert(rootnode);
+				force_assert(rootnode);
 
 				if (0 == xmlStrcmp(rootnode->name, BAD_CAST "propfind")) {
 					xmlNode *cmd;
@@ -2235,7 +2235,7 @@ propmatch_cleanup:
 			if (1 == webdav_parse_chunkqueue(srv, con, p, con->request_content_queue, &xml)) {
 				xmlNode *rootnode = xmlDocGetRootElement(xml);
 
-				assert(rootnode);
+				force_assert(rootnode);
 
 				if (0 == xmlStrcmp(rootnode->name, BAD_CAST "lockinfo")) {
 					xmlNode *lockinfo;

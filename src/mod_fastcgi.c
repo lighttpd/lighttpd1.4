@@ -487,7 +487,7 @@ static handler_ctx * handler_ctx_init(void) {
 	handler_ctx * hctx;
 
 	hctx = calloc(1, sizeof(*hctx));
-	assert(hctx);
+	force_assert(hctx);
 
 	hctx->fde_ndx = -1;
 
@@ -634,7 +634,7 @@ static int fastcgi_extension_insert(fcgi_exts *ext, buffer *key, fcgi_extension_
 	if (i == ext->used) {
 		/* filextension is new */
 		fe = calloc(1, sizeof(*fe));
-		assert(fe);
+		force_assert(fe);
 		fe->key = buffer_init();
 		fe->last_used_ndx = -1;
 		buffer_copy_string_buffer(fe->key, key);
@@ -644,11 +644,11 @@ static int fastcgi_extension_insert(fcgi_exts *ext, buffer *key, fcgi_extension_
 		if (ext->size == 0) {
 			ext->size = 8;
 			ext->exts = malloc(ext->size * sizeof(*(ext->exts)));
-			assert(ext->exts);
+			force_assert(ext->exts);
 		} else if (ext->used == ext->size) {
 			ext->size += 8;
 			ext->exts = realloc(ext->exts, ext->size * sizeof(*(ext->exts)));
-			assert(ext->exts);
+			force_assert(ext->exts);
 		}
 		ext->exts[ext->used++] = fe;
 	} else {
@@ -658,11 +658,11 @@ static int fastcgi_extension_insert(fcgi_exts *ext, buffer *key, fcgi_extension_
 	if (fe->size == 0) {
 		fe->size = 4;
 		fe->hosts = malloc(fe->size * sizeof(*(fe->hosts)));
-		assert(fe->hosts);
+		force_assert(fe->hosts);
 	} else if (fe->size == fe->used) {
 		fe->size += 4;
 		fe->hosts = realloc(fe->hosts, fe->size * sizeof(*(fe->hosts)));
-		assert(fe->hosts);
+		force_assert(fe->hosts);
 	}
 
 	fe->hosts[fe->used++] = fh;
@@ -1631,7 +1631,7 @@ static int fcgi_env_add(buffer *env, const char *key, size_t key_len, const char
 }
 
 static int fcgi_header(FCGI_Header * header, unsigned char type, size_t request_id, int contentLength, unsigned char paddingLength) {
-	assert(contentLength <= FCGI_MAX_LENGTH);
+	force_assert(contentLength <= FCGI_MAX_LENGTH);
 	
 	header->version = FCGI_VERSION_1;
 	header->type = type;
@@ -2094,7 +2094,7 @@ static int fcgi_create_env(server *srv, handler_ctx *hctx, size_t request_id) {
 							req_c->file.name);
 					}
 
-					assert(weHave != 0);
+					force_assert(weHave != 0);
 
 					chunkqueue_append_file(hctx->wb, req_c->file.name, req_c->offset, weHave);
 
@@ -2124,8 +2124,8 @@ static int fcgi_create_env(server *srv, handler_ctx *hctx, size_t request_id) {
 						}
 						c = hctx->wb->last;
 
-						assert(c->type == FILE_CHUNK);
-						assert(req_c->file.is_temp == 1);
+						force_assert(c->type == FILE_CHUNK);
+						force_assert(req_c->file.is_temp == 1);
 
 						c->file.is_temp = 1;
 						req_c->file.is_temp = 0;
@@ -2541,7 +2541,7 @@ static int fcgi_demux_response(server *srv, handler_ctx *hctx) {
 		}
 
 		/* this should be catched by the b > 0 above */
-		assert(r);
+		force_assert(r);
 
 		b->used = r + 1; /* one extra for the fake \0 */
 		b->ptr[b->used - 1] = '\0';
@@ -2731,7 +2731,7 @@ static int fcgi_restart_dead_procs(server *srv, plugin_data *p, fcgi_extension_h
 		case PROC_STATE_KILLED:
 		case PROC_STATE_UNSET:
 			/* this should never happen as long as adaptive spawing is disabled */
-			assert(0);
+			force_assert(0);
 
 			break;
 		case PROC_STATE_RUNNING:

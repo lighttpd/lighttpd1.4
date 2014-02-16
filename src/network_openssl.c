@@ -170,7 +170,7 @@ int network_write_chunkqueue_openssl(server *srv, connection *con, SSL *ssl, chu
 
 			if (NULL == local_send_buffer) {
 				local_send_buffer = malloc(LOCAL_SEND_BUFSIZE);
-				assert(local_send_buffer);
+				force_assert(local_send_buffer);
 			}
 
 			do {

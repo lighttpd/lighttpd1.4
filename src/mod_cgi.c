@@ -85,7 +85,7 @@ typedef struct {
 static handler_ctx * cgi_handler_ctx_init(void) {
 	handler_ctx *hctx = calloc(1, sizeof(*hctx));
 
-	assert(hctx);
+	force_assert(hctx);
 
 	hctx->response = buffer_init();
 	hctx->response_header = buffer_init();
@@ -107,7 +107,7 @@ INIT_FUNC(mod_cgi_init) {
 
 	p = calloc(1, sizeof(*p));
 
-	assert(p);
+	force_assert(p);
 
 	p->tmp_buf = buffer_init();
 	p->parse_response = buffer_init();
@@ -163,7 +163,7 @@ SETDEFAULTS_FUNC(mod_fastcgi_set_defaults) {
 		plugin_config *s;
 
 		s = calloc(1, sizeof(plugin_config));
-		assert(s);
+		force_assert(s);
 
 		s->cgi    = array_init();
 		s->execute_x_only = 0;

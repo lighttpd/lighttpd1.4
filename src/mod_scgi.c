@@ -351,7 +351,7 @@ static handler_ctx * handler_ctx_init(void) {
 	handler_ctx * hctx;
 
 	hctx = calloc(1, sizeof(*hctx));
-	assert(hctx);
+	force_assert(hctx);
 
 	hctx->fde_ndx = -1;
 
@@ -495,7 +495,7 @@ static int scgi_extension_insert(scgi_exts *ext, buffer *key, scgi_extension_hos
 	if (i == ext->used) {
 		/* filextension is new */
 		fe = calloc(1, sizeof(*fe));
-		assert(fe);
+		force_assert(fe);
 		fe->key = buffer_init();
 		buffer_copy_string_buffer(fe->key, key);
 
@@ -504,11 +504,11 @@ static int scgi_extension_insert(scgi_exts *ext, buffer *key, scgi_extension_hos
 		if (ext->size == 0) {
 			ext->size = 8;
 			ext->exts = malloc(ext->size * sizeof(*(ext->exts)));
-			assert(ext->exts);
+			force_assert(ext->exts);
 		} else if (ext->used == ext->size) {
 			ext->size += 8;
 			ext->exts = realloc(ext->exts, ext->size * sizeof(*(ext->exts)));
-			assert(ext->exts);
+			force_assert(ext->exts);
 		}
 		ext->exts[ext->used++] = fe;
 	} else {
@@ -518,11 +518,11 @@ static int scgi_extension_insert(scgi_exts *ext, buffer *key, scgi_extension_hos
 	if (fe->size == 0) {
 		fe->size = 4;
 		fe->hosts = malloc(fe->size * sizeof(*(fe->hosts)));
-		assert(fe->hosts);
+		force_assert(fe->hosts);
 	} else if (fe->size == fe->used) {
 		fe->size += 4;
 		fe->hosts = realloc(fe->hosts, fe->size * sizeof(*(fe->hosts)));
-		assert(fe->hosts);
+		force_assert(fe->hosts);
 	}
 
 	fe->hosts[fe->used++] = fh;

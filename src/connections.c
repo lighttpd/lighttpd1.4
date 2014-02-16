@@ -1034,7 +1034,7 @@ found_header_end:
 
 			weWant = con->request.content_length - dst_cq->bytes_in;
 
-			assert(c->mem->used);
+			force_assert(c->mem->used);
 
 			weHave = c->mem->used - c->offset - 1;
 

@@ -67,7 +67,7 @@ static int fdevent_libev_event_set(fdevents *ev, int fde_ndx, int fd, int events
 
 	if (!watcher) {
 		fdn->handler_ctx = watcher = calloc(1, sizeof(ev_io));
-		assert(watcher);
+		force_assert(watcher);
 
 		ev_io_init(watcher, io_watcher_cb, fd, ev_events);
 		watcher->data = ev;
@@ -103,7 +103,7 @@ static int fdevent_libev_poll(fdevents *ev, int timeout_ms) {
 	ev_init(&timeout_watcher.w, NULL);
 	ev_set_cb(&timeout_watcher.timer, timeout_watcher_cb);
 	timeout_watcher.timer.repeat = ((ev_tstamp) timeout_ms)/1000.0;
-	assert(timeout_watcher.timer.repeat);
+	force_assert(timeout_watcher.timer.repeat);
 	ev_timer_again(ev->libev_loop, &timeout_watcher.timer);
 
 	ev_loop(ev->libev_loop, EVLOOP_ONESHOT);

@@ -860,7 +860,7 @@ PHYSICALPATH_FUNC(mod_compress_physical) {
 						compression_type = HTTP_ACCEPT_ENCODING_X_GZIP;
 						compression_name = dflt_x_gzip;
 					} else {
-						assert(matched_encodings & HTTP_ACCEPT_ENCODING_DEFLATE);
+						force_assert(matched_encodings & HTTP_ACCEPT_ENCODING_DEFLATE);
 						compression_type = HTTP_ACCEPT_ENCODING_DEFLATE;
 						compression_name = dflt_deflate;
 					}

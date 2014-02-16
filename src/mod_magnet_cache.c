@@ -80,7 +80,7 @@ lua_State *script_cache_get_script(server *srv, connection *con, script_cache *c
 				break;
 			}
 
-			assert(lua_isfunction(sc->L, -1));
+			force_assert(lua_isfunction(sc->L, -1));
 			lua_pushvalue(sc->L, -1); /* copy the function-reference */
 
 			return sc->L;
@@ -128,7 +128,7 @@ lua_State *script_cache_get_script(server *srv, connection *con, script_cache *c
 	 * as pcall() will pop the script from the stack when done, we have to
 	 * duplicate it here
 	 */
-	assert(lua_isfunction(sc->L, -1));
+	force_assert(lua_isfunction(sc->L, -1));
 	lua_pushvalue(sc->L, -1); /* copy the function-reference */
 
 	return sc->L;

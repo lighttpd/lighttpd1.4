@@ -64,7 +64,7 @@ static int lua_to_c_get_string(lua_State *L, const char *varname, buffer *b) {
 
 	lua_pop(L, 1);
 
-	assert(curelem - 1 == lua_gettop(L));
+	force_assert(curelem - 1 == lua_gettop(L));
 
 	return 0;
 }
@@ -86,7 +86,7 @@ static int lua_to_c_is_table(lua_State *L, const char *varname) {
 
 	lua_settop(L, curelem - 1);
 
-	assert(curelem - 1 == lua_gettop(L));
+	force_assert(curelem - 1 == lua_gettop(L));
 
 	return 1;
 }

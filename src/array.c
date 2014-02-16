@@ -13,7 +13,7 @@ array *array_init(void) {
 	array *a;
 
 	a = calloc(1, sizeof(*a));
-	assert(a);
+	force_assert(a);
 
 	a->next_power_of_2 = 1;
 
@@ -74,7 +74,7 @@ void array_reset(array *a) {
 data_unset *array_pop(array *a) {
 	data_unset *du;
 
-	assert(a->used != 0);
+	force_assert(a->used != 0);
 
 	a->used --;
 	du = a->data[a->used];
@@ -170,7 +170,7 @@ void array_set_key_value(array *hdrs, const char *key, size_t key_len, const cha
 data_unset *array_replace(array *a, data_unset *du) {
 	int ndx;
 
-	assert(NULL != du);
+	force_assert(NULL != du);
 	if (-1 == (ndx = array_get_index(a, du->key->ptr, du->key->used, NULL))) {
 		array_insert_unique(a, du);
 		return NULL;
@@ -214,15 +214,15 @@ int array_insert_unique(array *a, data_unset *str) {
 		a->size   = 16;
 		a->data   = malloc(sizeof(*a->data)     * a->size);
 		a->sorted = malloc(sizeof(*a->sorted)   * a->size);
-		assert(a->data);
-		assert(a->sorted);
+		force_assert(a->data);
+		force_assert(a->sorted);
 		for (j = a->used; j < a->size; j++) a->data[j] = NULL;
 	} else if (a->size == a->used) {
 		a->size  += 16;
 		a->data   = realloc(a->data,   sizeof(*a->data)   * a->size);
 		a->sorted = realloc(a->sorted, sizeof(*a->sorted) * a->size);
-		assert(a->data);
-		assert(a->sorted);
+		force_assert(a->data);
+		force_assert(a->sorted);
 		for (j = a->used; j < a->size; j++) a->data[j] = NULL;
 	}
 

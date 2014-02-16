@@ -25,7 +25,7 @@ buffer* buffer_init(void) {
 	buffer *b;
 
 	b = malloc(sizeof(*b));
-	assert(b);
+	force_assert(b);
 
 	b->ptr = NULL;
 	b->size = 0;
@@ -90,7 +90,7 @@ int buffer_prepare_copy(buffer *b, size_t size) {
 		b->size += BUFFER_PIECE_SIZE - (b->size % BUFFER_PIECE_SIZE);
 
 		b->ptr = malloc(b->size);
-		assert(b->ptr);
+		force_assert(b->ptr);
 	}
 	b->used = 0;
 	return 0;
@@ -114,7 +114,7 @@ int buffer_prepare_append(buffer *b, size_t size) {
 
 		b->ptr = malloc(b->size);
 		b->used = 0;
-		assert(b->ptr);
+		force_assert(b->ptr);
 	} else if (b->used + size > b->size) {
 		b->size += size;
 
@@ -122,7 +122,7 @@ int buffer_prepare_append(buffer *b, size_t size) {
 		b->size += BUFFER_PIECE_SIZE - (b->size % BUFFER_PIECE_SIZE);
 
 		b->ptr = realloc(b->ptr, b->size);
-		assert(b->ptr);
+		force_assert(b->ptr);
 	}
 	return 0;
 }
@@ -419,7 +419,7 @@ buffer_array* buffer_array_init(void) {
 
 	b = malloc(sizeof(*b));
 
-	assert(b);
+	force_assert(b);
 	b->ptr = NULL;
 	b->size = 0;
 	b->used = 0;
@@ -463,14 +463,14 @@ buffer *buffer_array_append_get_buffer(buffer_array *b) {
 	if (b->size == 0) {
 		b->size = 16;
 		b->ptr = malloc(sizeof(*b->ptr) * b->size);
-		assert(b->ptr);
+		force_assert(b->ptr);
 		for (i = 0; i < b->size; i++) {
 			b->ptr[i] = NULL;
 		}
 	} else if (b->size == b->used) {
 		b->size += 16;
 		b->ptr = realloc(b->ptr, sizeof(*b->ptr) * b->size);
-		assert(b->ptr);
+		force_assert(b->ptr);
 		for (i = b->used; i < b->size; i++) {
 			b->ptr[i] = NULL;
 		}
@@ -783,7 +783,7 @@ int buffer_append_string_encoded(buffer *b, const char *s, size_t s_len, buffer_
 		break;
 	}
 
-	assert(map != NULL);
+	force_assert(map != NULL);
 
 	/* count to-be-encoded-characters */
 	for (ds = (unsigned char *)s, d_len = 0, ndx = 0; ndx < s_len; ds++, ndx++) {
@@ -1057,4 +1057,11 @@ int buffer_to_upper(buffer *b) {
 	}
 
 	return 0;
+}
+
+void log_failed_assert(const char *filename, unsigned int line, const char *msg) {
+	/* can't use buffer here; could lead to recursive assertions */
+	fprintf(stderr, "%s.%d: %s\n", filename, line, msg);
+	fflush(stderr);
+	abort();
 }
