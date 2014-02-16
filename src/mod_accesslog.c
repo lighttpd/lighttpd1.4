@@ -603,7 +603,7 @@ SIGHUP_FUNC(log_access_cycle) {
 		    s->access_logfile->used > 1 &&
 		    s->access_logfile->ptr[0] != '|') {
 
-			close(s->log_access_fd);
+			if (-1 != s->log_access_fd) close(s->log_access_fd);
 
 			if (-1 == (s->log_access_fd =
 				   open(s->access_logfile->ptr, O_APPEND | O_WRONLY | O_CREAT | O_LARGEFILE, 0644))) {
