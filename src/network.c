@@ -349,14 +349,21 @@ static int network_server_init(server *srv, buffer *host_token, specific_config 
 
 		break;
 	case AF_UNIX:
+		{
+			size_t hostlen = strlen(host) + 1;
+			if (hostlen > sizeof(srv_socket->addr.un.sun_path)) {
+				log_error_write(srv, __FILE__, __LINE__, "sS", "unix socket filename too long:", host);
+				goto error_free_socket;
+			}
+			memcpy(srv_socket->addr.un.sun_path, host, hostlen);
+		}
 		srv_socket->addr.un.sun_family = AF_UNIX;
-		strcpy(srv_socket->addr.un.sun_path, host);
 
 #ifdef SUN_LEN
 		addr_len = SUN_LEN(&srv_socket->addr.un);
 #else
 		/* stevens says: */
-		addr_len = strlen(host) + 1 + sizeof(srv_socket->addr.un.sun_family);
+		addr_len = hostlen + sizeof(srv_socket->addr.un.sun_family);
 #endif
 
 		/* check if the socket exists and try to connect to it. */

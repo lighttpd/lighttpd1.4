@@ -20,6 +20,7 @@ NEWS
   * [network] check return value of lseek()
   * fix unchecked return values from stream_open/stat_cache_get_entry
   * [mod_webdav] fix logic error in handling file creation error
+  * check length of unix domain socket filenames
 
 - 1.4.34
   * [mod_auth] explicitly link ssl for SHA1 (fixes #2517)

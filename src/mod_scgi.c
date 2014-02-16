@@ -670,7 +670,13 @@ static int scgi_spawn_connection(server *srv,
 
 #ifdef HAVE_SYS_UN_H
 		scgi_addr_un.sun_family = AF_UNIX;
-		strcpy(scgi_addr_un.sun_path, proc->socket->ptr);
+		if (proc->socket->used > sizeof(scgi_addr_un.sun_path)) {
+			log_error_write(srv, __FILE__, __LINE__, "sB",
+					"ERROR: Unix Domain socket filename too long:",
+					proc->socket);
+			return -1;
+		}
+		memcpy(scgi_addr_un.sun_path, proc->socket->ptr, proc->socket->used);
 
 #ifdef SUN_LEN
 		servlen = SUN_LEN(&scgi_addr_un);
@@ -1340,7 +1346,14 @@ static int scgi_establish_connection(server *srv, handler_ctx *hctx) {
 #ifdef HAVE_SYS_UN_H
 		/* use the unix domain socket */
 		scgi_addr_un.sun_family = AF_UNIX;
-		strcpy(scgi_addr_un.sun_path, proc->socket->ptr);
+		if (proc->socket->used > sizeof(scgi_addr_un.sun_path)) {
+			log_error_write(srv, __FILE__, __LINE__, "sB",
+					"ERROR: Unix Domain socket filename too long:",
+					proc->socket);
+			return -1;
+		}
+		memcpy(scgi_addr_un.sun_path, proc->socket->ptr, proc->socket->used);
+
 #ifdef SUN_LEN
 		servlen = SUN_LEN(&scgi_addr_un);
 #else

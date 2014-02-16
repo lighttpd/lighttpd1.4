@@ -873,7 +873,13 @@ static int fcgi_spawn_connection(server *srv,
 
 #ifdef HAVE_SYS_UN_H
 		fcgi_addr_un.sun_family = AF_UNIX;
-		strcpy(fcgi_addr_un.sun_path, proc->unixsocket->ptr);
+		if (proc->unixsocket->used > sizeof(fcgi_addr_un.sun_path)) {
+			log_error_write(srv, __FILE__, __LINE__, "sB",
+					"ERROR: Unix Domain socket filename too long:",
+					proc->unixsocket);
+			return -1;
+		}
+		memcpy(fcgi_addr_un.sun_path, proc->unixsocket->ptr, proc->unixsocket->used);
 
 #ifdef SUN_LEN
 		servlen = SUN_LEN(&fcgi_addr_un);
@@ -1670,7 +1676,14 @@ static connection_result_t fcgi_establish_connection(server *srv, handler_ctx *h
 #ifdef HAVE_SYS_UN_H
 		/* use the unix domain socket */
 		fcgi_addr_un.sun_family = AF_UNIX;
-		strcpy(fcgi_addr_un.sun_path, proc->unixsocket->ptr);
+		if (proc->unixsocket->used > sizeof(fcgi_addr_un.sun_path)) {
+			log_error_write(srv, __FILE__, __LINE__, "sB",
+					"ERROR: Unix Domain socket filename too long:",
+					proc->unixsocket);
+			return -1;
+		}
+		memcpy(fcgi_addr_un.sun_path, proc->unixsocket->ptr, proc->unixsocket->used);
+
 #ifdef SUN_LEN
 		servlen = SUN_LEN(&fcgi_addr_un);
 #else
