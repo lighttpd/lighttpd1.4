@@ -339,6 +339,7 @@ CONNECTION_FUNC(mod_mysql_vhost_handle_docroot) {
 	mod_mysql_vhost_patch_connection(srv, con, p);
 
 	if (!p->conf.mysql) return HANDLER_GO_ON;
+	if (0 == p->conf.mysql_pre->used) return HANDLER_GO_ON;
 
 	/* sets up connection data if not done yet */
 	c = mod_mysql_vhost_connection_data(srv, con, p_d);
@@ -350,10 +351,20 @@ CONNECTION_FUNC(mod_mysql_vhost_handle_docroot) {
 	/* build and run SQL query */
 	buffer_copy_string_buffer(p->tmp_buf, p->conf.mysql_pre);
 	if (p->conf.mysql_post->used) {
-		buffer_append_string_buffer(p->tmp_buf, con->uri.authority);
+		/* escape the uri.authority */
+		unsigned long to_len;
+
+		/* 'to' has to be 'from_len * 2 + 1' */
+		buffer_prepare_append(p->tmp_buf, (con->uri.authority->used - 1) * 2 + 1);
+
+		to_len = mysql_real_escape_string(p->conf.mysql,
+				p->tmp_buf->ptr + p->tmp_buf->used - 1,
+				con->uri.authority->ptr, con->uri.authority->used - 1);
+		p->tmp_buf->used += to_len;
+
 		buffer_append_string_buffer(p->tmp_buf, p->conf.mysql_post);
 	}
-	if (mysql_query(p->conf.mysql, p->tmp_buf->ptr)) {
+	if (mysql_real_query(p->conf.mysql, p->tmp_buf->ptr, p->tmp_buf->used - 1)) {
 		log_error_write(srv, __FILE__, __LINE__, "s", mysql_error(p->conf.mysql));
 		goto ERR500;
 	}

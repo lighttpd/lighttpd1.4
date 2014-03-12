@@ -43,7 +43,7 @@ static int request_check_hostname(server *srv, connection *con, buffer *host) {
 		char *c = host->ptr + 1;
 		int colon_cnt = 0;
 
-		/* check portnumber */
+		/* check the address inside [...] */
 		for (; *c && *c != ']'; c++) {
 			if (*c == ':') {
 				if (++colon_cnt > 7) {
@@ -66,6 +66,10 @@ static int request_check_hostname(server *srv, connection *con, buffer *host) {
 					return -1;
 				}
 			}
+		}
+		else if ('\0' != *(c+1)) {
+			/* only a port is allowed to follow [...] */
+			return -1;
 		}
 		return 0;
 	}

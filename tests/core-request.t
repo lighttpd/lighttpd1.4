@@ -8,7 +8,7 @@ BEGIN {
 
 use strict;
 use IO::Socket;
-use Test::More tests => 36;
+use Test::More tests => 38;
 use LightyTest;
 
 my $tf = LightyTest->new();
@@ -197,6 +197,22 @@ EOF
  );
 $t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 400 } ];
 ok($tf->handle_http($t) == 0, 'broken IPv4 address - too short');
+
+$t->{REQUEST}  = ( <<EOF
+GET / HTTP/1.0
+Host: [::1]' UNION SELECT '/
+EOF
+ );
+$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 400 } ];
+ok($tf->handle_http($t) == 0, 'IPv6 address + SQL injection');
+
+$t->{REQUEST}  = ( <<EOF
+GET / HTTP/1.0
+Host: [::1]/../../../
+EOF
+ );
+$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 400 } ];
+ok($tf->handle_http($t) == 0, 'IPv6 address + path traversal');
 
 
 
