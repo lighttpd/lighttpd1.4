@@ -1296,23 +1296,25 @@ int main (int argc, char **argv) {
 
 					if (con->state == CON_STATE_READ ||
 					    con->state == CON_STATE_READ_POST) {
-						if (con->request_count == 1) {
+						if (con->request_count == 1 || con->state == CON_STATE_READ_POST) {
 							if (srv->cur_ts - con->read_idle_ts > con->conf.max_read_idle) {
 								/* time - out */
-#if 0
-								log_error_write(srv, __FILE__, __LINE__, "sd",
-										"connection closed - read-timeout:", con->fd);
-#endif
+								if (con->conf.log_request_handling) {
+									log_error_write(srv, __FILE__, __LINE__, "sd",
+										"connection closed - read timeout:", con->fd);
+								}
+
 								connection_set_state(srv, con, CON_STATE_ERROR);
 								changed = 1;
 							}
 						} else {
 							if (srv->cur_ts - con->read_idle_ts > con->keep_alive_idle) {
 								/* time - out */
-#if 0
-								log_error_write(srv, __FILE__, __LINE__, "sd",
-										"connection closed - read-timeout:", con->fd);
-#endif
+								if (con->conf.log_request_handling) {
+									log_error_write(srv, __FILE__, __LINE__, "sd",
+										"connection closed - keep-alive timeout:", con->fd);
+								}
+
 								connection_set_state(srv, con, CON_STATE_ERROR);
 								changed = 1;
 							}

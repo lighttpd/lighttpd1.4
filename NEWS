@@ -4,7 +4,7 @@ NEWS
 ====
 
 - 1.4.36
-  *
+  * use keep-alive timeout while waiting for HTTP headers; use always the read timeout while waiting for the HTTP body
 
 - 1.4.35 - 2014-03-12
   * [network/ssl] fix build error if TLSEXT is disabled
