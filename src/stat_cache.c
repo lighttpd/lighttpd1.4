@@ -18,6 +18,10 @@
 # include <attr/attributes.h>
 #endif
 
+#ifdef HAVE_SYS_EXTATTR_H
+# include <sys/extattr.h>
+#endif
+
 #ifdef HAVE_FAM_H
 # include <fam.h>
 #endif
@@ -210,7 +214,7 @@ void stat_cache_free(stat_cache *sc) {
 	free(sc);
 }
 
-#ifdef HAVE_XATTR
+#if defined(HAVE_XATTR)
 static int stat_cache_attr_get(buffer *buf, char *name) {
 	int attrlen;
 	int ret;
@@ -223,6 +227,19 @@ static int stat_cache_attr_get(buffer *buf, char *name) {
 		buf->ptr[attrlen] = '\0';
 	}
 	return ret;
+}
+#elif defined(HAVE_EXTATTR)
+static int stat_cache_attr_get(buffer *buf, char *name) {
+	ssize_t attrlen = 1024;
+
+	buffer_prepare_copy(buf, attrlen);
+
+	if (-1 != (attrlen = extattr_get_file(name, EXTATTR_NAMESPACE_USER, "Content-Type", buf->ptr, attrlen-1))) {
+		buf->used = attrlen + 1;
+		buf->ptr[attrlen] = '\0';
+		return 0;
+	}
+	return -1;
 }
 #endif
 
@@ -592,7 +609,7 @@ handler_t stat_cache_get_entry(server *srv, connection *con, buffer *name, stat_
 	if (S_ISREG(st.st_mode)) {
 		/* determine mimetype */
 		buffer_reset(sce->content_type);
-#ifdef HAVE_XATTR
+#if defined(HAVE_XATTR) || defined(HAVE_EXTATTR)
 		if (con->conf.use_xattr) {
 			stat_cache_attr_get(sce->content_type, name->ptr);
 		}

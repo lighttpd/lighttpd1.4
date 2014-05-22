@@ -218,14 +218,23 @@ AC_ARG_WITH(attr, AC_HELP_STRING([--with-attr],[enable extended attribute suppor
 [WITH_ATTR=$withval],[WITH_ATTR=no])
 AC_MSG_RESULT($withval)
 if test "$WITH_ATTR" != "no"; then
- AC_CHECK_LIB(attr, attr_get, [
-	AC_CHECK_HEADERS([attr/attributes.h],[
-		ATTR_LIB=-lattr
-		AC_DEFINE([HAVE_XATTR], [1], [libattr])
-		AC_DEFINE([HAVE_ATTR_ATTRIBUTES_H], [1])
-	])
- ])
- AC_SUBST(ATTR_LIB)
+  # libattr (linux only?)
+  AC_CHECK_LIB(attr, attr_get, [
+    AC_CHECK_HEADERS([attr/attributes.h],[
+      ATTR_LIB=-lattr
+      AC_DEFINE([HAVE_XATTR], [1], [libattr])
+      AC_DEFINE([HAVE_ATTR_ATTRIBUTES_H], [1])
+    ])
+  ])
+  AC_SUBST(ATTR_LIB)
+
+  # (Free)BSD extattr
+  AC_CHECK_FUNC([extattr_get_file], [
+    AC_CHECK_HEADERS([sys/extattr.h],[
+      AC_DEFINE([HAVE_EXTATTR], [1], [BSD extended attributes])
+      AC_DEFINE([HAVE_SYS_EXTATTR_H], [1])
+    ])
+  ])
 fi
 
 dnl openssl on solaris needs -lsocket -lnsl

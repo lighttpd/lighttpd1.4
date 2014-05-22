@@ -31,6 +31,10 @@
 #include <attr/attributes.h>
 #endif
 
+#ifdef HAVE_SYS_EXTATTR_H
+#include <sys/extattr.h>
+#endif
+
 #include "version.h"
 
 /* plugin config for all request/connections */
@@ -644,7 +648,7 @@ static int http_list_directory(server *srv, connection *con, plugin_data *p, buf
 	size_t k;
 	const char *content_type;
 	long name_max;
-#ifdef HAVE_XATTR
+#if defined(HAVE_XATTR) || defined(HAVE_EXTATTR)
 	char attrval[128];
 	int attrlen;
 #endif
@@ -820,12 +824,19 @@ static int http_list_directory(server *srv, connection *con, plugin_data *p, buf
 		tmp = files.ent[i];
 
 		content_type = NULL;
-#ifdef HAVE_XATTR
-
+#if defined(HAVE_XATTR)
 		if (con->conf.use_xattr) {
 			memcpy(path_file, DIRLIST_ENT_NAME(tmp), tmp->namelen + 1);
 			attrlen = sizeof(attrval) - 1;
 			if (attr_get(path, "Content-Type", attrval, &attrlen, 0) == 0) {
+				attrval[attrlen] = '\0';
+				content_type = attrval;
+			}
+		}
+#elif defined(HAVE_EXTATTR)
+		if (con->conf.use_xattr) {
+			memcpy(path_file, DIRLIST_ENT_NAME(tmp), tmp->namelen + 1);
+			if(-1 != (attrlen = extattr_get_file(path, EXTATTR_NAMESPACE_USER, "Content-Type", attrval, sizeof(attrval)-1))) {
 				attrval[attrlen] = '\0';
 				content_type = attrval;
 			}
