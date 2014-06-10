@@ -606,6 +606,18 @@ if test x$mmap = xtrue; then
   AC_DEFINE(ENABLE_MMAP, [1], [Use mmap if available])
 fi
 
+AC_ARG_ENABLE(proxy,
+  AC_HELP_STRING([--enable-proxy],[allow use of HAProxy headers]),
+  [case "${enableval}" in
+   yes) proxy=true ;;
+    no) proxy=false ;;
+     *) AC_MSG_ERROR(bad value ${enableval} for --enable-proxy) ;;
+  esac],[proxy=false])
+
+if test x$proxy = xtrue; then
+  AC_DEFINE(ENABLE_PROXY, [1], [allow for proxy-protocol header parsing])
+fi
+
 
 AM_CONDITIONAL(CROSS_COMPILING, test "x$cross_compiling" = xyes)
 

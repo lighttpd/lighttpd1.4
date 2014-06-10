@@ -1321,6 +1321,14 @@ int main (int argc, char **argv) {
 						}
 					}
 
+#ifdef ENABLE_PROXY
+					if (con->state == CON_STATE_READ_PROXY && srv->cur_ts - con->connection_start > con->conf.max_read_idle) {
+						/* time - out */
+						connection_set_state(srv, con, CON_STATE_ERROR);
+						changed = 1;
+					}
+#endif
+
 					if ((con->state == CON_STATE_WRITE) &&
 					    (con->write_request_ts != 0)) {
 #if 0

@@ -275,6 +275,10 @@ handler_t http_response_prepare(server *srv, connection *con) {
 		/* initial scheme value. can be overwritten for example by mod_extforward later */
 		if (con->srv_socket->is_ssl) {
 			buffer_copy_string_len(con->uri.scheme, CONST_STR_LEN("https"));
+#ifdef ENABLE_PROXY
+		} else if (con->srv_socket->is_proxy & 2) {
+			buffer_copy_string_len(con->uri.scheme, CONST_STR_LEN("https"));
+#endif
 		} else {
 			buffer_copy_string_len(con->uri.scheme, CONST_STR_LEN("http"));
 		}
