@@ -1,3 +1,4 @@
+#include "buffer.h"
 #include "server.h"
 #include "log.h"
 #include "connections.h"
