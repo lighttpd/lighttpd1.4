@@ -1172,7 +1172,7 @@ found_header_end:
  * we get called by the state-engine and by the fdevent-handler
  */
 static int connection_handle_read_proxy(server *srv, connection *con)  {
-// http://haproxy.1wt.eu/download/1.5/doc/proxy-protocol.txt
+/* http://haproxy.1wt.eu/download/1.5/doc/proxy-protocol.txt */
 	sock_addr from; /* already filled by accept() */
 	sock_addr to;   /* already filled by getsockname() */
 	const char v2sig[13] = "\x0D\x0A\x0D\x0A\x00\x0D\x0A\x51\x55\x49\x54\x0A\x02";
@@ -1206,7 +1206,7 @@ static int connection_handle_read_proxy(server *srv, connection *con)  {
 				} unx;
 			} addr;
 		} v2;
-	} __attribute__((aligned(1))) hdr; // try to make sure compiler doesn't pad this, because it's directly read from the network
+	} __attribute__((aligned(1))) hdr; /* try to make sure compiler doesn't pad this, because it's directly read from the network */
 	memset(&hdr, 0, sizeof(hdr));
 
 	int size, ret;
