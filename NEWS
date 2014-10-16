@@ -10,6 +10,7 @@ NEWS
   * add support for (Free)BSD extended attributes
   * [build] use fortify flags with "extra-warnings"
   * [mod_dirlisting,mod_redirect,mod_rewrite] abort config parsing if pcre-compile fails or isn't available
+  * [ssl] disable SSL3.0 by default
 
 - 1.4.35 - 2014-03-12
   * [network/ssl] fix build error if TLSEXT is disabled

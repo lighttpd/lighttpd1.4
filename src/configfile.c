@@ -182,7 +182,7 @@ static int config_insert(server *srv) {
 		s->ssl_honor_cipher_order = 1;
 		s->ssl_empty_fragments = 0;
 		s->ssl_use_sslv2 = 0;
-		s->ssl_use_sslv3 = 1;
+		s->ssl_use_sslv3 = 0;
 		s->use_ipv6      = 0;
 		s->set_v6only    = 1;
 		s->defer_accept  = 0;
