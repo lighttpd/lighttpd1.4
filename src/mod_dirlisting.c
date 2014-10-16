@@ -198,47 +198,6 @@ FREE_FUNC(mod_dirlisting_free) {
 	return HANDLER_GO_ON;
 }
 
-static int parse_config_entry(server *srv, plugin_config *s, array *ca, const char *option) {
-	data_unset *du;
-
-	if (NULL != (du = array_get_element(ca, option))) {
-		data_array *da;
-		size_t j;
-
-		if (du->type != TYPE_ARRAY) {
-			log_error_write(srv, __FILE__, __LINE__, "sss",
-				"unexpected type for key: ", option, "array of strings");
-
-			return HANDLER_ERROR;
-		}
-
-		da = (data_array *)du;
-
-		for (j = 0; j < da->value->used; j++) {
-			if (da->value->data[j]->type != TYPE_STRING) {
-				log_error_write(srv, __FILE__, __LINE__, "sssbs",
-					"unexpected type for key: ", option, "[",
-					da->value->data[j]->key, "](string)");
-
-				return HANDLER_ERROR;
-			}
-
-			if (0 != excludes_buffer_append(s->excludes,
-				    ((data_string *)(da->value->data[j]))->value)) {
-#ifdef HAVE_PCRE_H
-				log_error_write(srv, __FILE__, __LINE__, "sb",
-						"pcre-compile failed for", ((data_string *)(da->value->data[j]))->value);
-#else
-				log_error_write(srv, __FILE__, __LINE__, "s",
-						"pcre support is missing, please install libpcre and the headers");
-#endif
-			}
-		}
-	}
-
-	return 0;
-}
-
 /* handle plugin config and check values */
 
 #define CONFIG_EXCLUDE          "dir-listing.exclude"
@@ -287,6 +246,7 @@ SETDEFAULTS_FUNC(mod_dirlisting_set_defaults) {
 	for (i = 0; i < srv->config_context->used; i++) {
 		plugin_config *s;
 		array *ca;
+		data_unset *du_excludes;
 
 		s = calloc(1, sizeof(plugin_config));
 		s->excludes = excludes_buffer_init();
@@ -326,7 +286,43 @@ SETDEFAULTS_FUNC(mod_dirlisting_set_defaults) {
 			return HANDLER_ERROR;
 		}
 
-		parse_config_entry(srv, s, ca, CONFIG_EXCLUDE);
+		if (NULL != (du_excludes = array_get_element(ca, CONFIG_EXCLUDE))) {
+			array *excludes_list;
+			size_t j;
+
+			if (du_excludes->type != TYPE_ARRAY) {
+				log_error_write(srv, __FILE__, __LINE__, "sss",
+					"unexpected type for key: ", CONFIG_EXCLUDE, "array of strings");
+				return HANDLER_ERROR;
+			}
+
+			excludes_list = ((data_array*)du_excludes)->value;
+
+#ifndef HAVE_PCRE_H
+			if (excludes_list->used > 0) {
+				log_error_write(srv, __FILE__, __LINE__, "sss",
+					"pcre support is missing for: ", CONFIG_EXCLUDE, ", please install libpcre and the headers");
+				return HANDLER_ERROR;
+			}
+#else
+			for (j = 0; j < excludes_list->used; j++) {
+				data_unset *du_exclude = excludes_list->data[j];
+
+				if (du_exclude->type != TYPE_STRING) {
+					log_error_write(srv, __FILE__, __LINE__, "sssbs",
+						"unexpected type for key: ", CONFIG_EXCLUDE, "[",
+						du_exclude->key, "](string)");
+					return HANDLER_ERROR;
+				}
+
+				if (0 != excludes_buffer_append(s->excludes, ((data_string*)(du_exclude))->value)) {
+					log_error_write(srv, __FILE__, __LINE__, "sb",
+						"pcre-compile failed for", ((data_string*)(du_exclude))->value);
+					return HANDLER_ERROR;
+				}
+			}
+#endif
+		}
 	}
 
 	return HANDLER_GO_ON;

@@ -129,6 +129,7 @@ SETDEFAULTS_FUNC(mod_redirect_set_defaults) {
 
 				log_error_write(srv, __FILE__, __LINE__, "sb",
 						"pcre-compile failed for", da->value->data[j]->key);
+				return HANDLER_ERROR;
 			}
 		}
 	}

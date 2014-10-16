@@ -191,6 +191,7 @@ static int parse_config_entry(server *srv, array *ca, rewrite_rule_buffer *kvb, 
 							    once)) {
 				log_error_write(srv, __FILE__, __LINE__, "sb",
 						"pcre-compile failed for", da->value->data[j]->key);
+				return HANDLER_ERROR;
 			}
 		}
 	}
