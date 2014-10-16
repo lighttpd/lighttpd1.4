@@ -8,6 +8,7 @@ NEWS
   * fix bad shift in conditional netmask ".../0" handling
   * add more mime types and a script to generate mime.conf (fixes #2579)
   * add support for (Free)BSD extended attributes
+  * [build] use fortify flags with "extra-warnings"
 
 - 1.4.35 - 2014-03-12
   * [network/ssl] fix build error if TLSEXT is disabled
