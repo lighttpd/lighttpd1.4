@@ -14,6 +14,7 @@
 #include "joblist.h"
 #include "network_backends.h"
 #include "version.h"
+#include "keyvalue.h"
 
 #include <sys/types.h>
 #include <sys/time.h>
@@ -173,6 +174,10 @@ static server *server_init(void) {
 
 	server *srv = calloc(1, sizeof(*srv));
 	force_assert(srv);
+
+	/*init the http_status*/
+	INIT_HTTP_STATUS();
+
 #define CLEAN(x) \
 	srv->x = buffer_init();
 
