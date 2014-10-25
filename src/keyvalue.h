@@ -67,7 +67,7 @@ typedef enum { HTTP_VERSION_UNSET = -1, HTTP_VERSION_1_0, HTTP_VERSION_1_1 } htt
 /*It can save some storage space*/
 typedef enum {
 	HTTP_VERSIONS	= 0,
-	HTTP_METHODS		= 0,
+	HTTP_METHODS	= 0,
 	HTTP_STATUS		= 100,
 	HTTP_STATUS_BODY= 400
 } keyvalue_t;
@@ -170,7 +170,7 @@ void set_http_status(keyvalue *kv, int key, const char *value);
 		set_http_status(http_status, 504, "Gateway Timeout");	\
 		set_http_status(http_status, 505, "HTTP Version Not Supported");	\
 		set_http_status(http_status, 507, "Insufficient Storage");	\
-		set_http_status(http_status, -1, NULL);	\
+		set_http_status(http_status, -1, NULL);
 
 
 const char *get_http_status_name(int i);
