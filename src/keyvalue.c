@@ -7,54 +7,62 @@
 #include <stdio.h>
 
 static keyvalue http_versions[] = {
-	{ HTTP_VERSION_1_1, "HTTP/1.1" },
-	{ HTTP_VERSION_1_0, "HTTP/1.0" },
-	{ HTTP_VERSION_UNSET, NULL }
+	"HTTP/1.1" ,
+	"HTTP/1.0" ,
+	NULL
 };
 
 static keyvalue http_methods[] = {
-	{ HTTP_METHOD_GET, "GET" },
-	{ HTTP_METHOD_HEAD, "HEAD" },
-	{ HTTP_METHOD_POST, "POST" },
-	{ HTTP_METHOD_PUT, "PUT" },
-	{ HTTP_METHOD_DELETE, "DELETE" },
-	{ HTTP_METHOD_CONNECT, "CONNECT" },
-	{ HTTP_METHOD_OPTIONS, "OPTIONS" },
-	{ HTTP_METHOD_TRACE, "TRACE" },
-	{ HTTP_METHOD_ACL, "ACL" },
-	{ HTTP_METHOD_BASELINE_CONTROL, "BASELINE-CONTROL" },
-	{ HTTP_METHOD_BIND, "BIND" },
-	{ HTTP_METHOD_CHECKIN, "CHECKIN" },
-	{ HTTP_METHOD_CHECKOUT, "CHECKOUT" },
-	{ HTTP_METHOD_COPY, "COPY" },
-	{ HTTP_METHOD_LABEL, "LABEL" },
-	{ HTTP_METHOD_LINK, "LINK" },
-	{ HTTP_METHOD_LOCK, "LOCK" },
-	{ HTTP_METHOD_MERGE, "MERGE" },
-	{ HTTP_METHOD_MKACTIVITY, "MKACTIVITY" },
-	{ HTTP_METHOD_MKCALENDAR, "MKCALENDAR" },
-	{ HTTP_METHOD_MKCOL, "MKCOL" },
-	{ HTTP_METHOD_MKREDIRECTREF, "MKREDIRECTREF" },
-	{ HTTP_METHOD_MKWORKSPACE, "MKWORKSPACE" },
-	{ HTTP_METHOD_MOVE, "MOVE" },
-	{ HTTP_METHOD_ORDERPATCH, "ORDERPATCH" },
-	{ HTTP_METHOD_PATCH, "PATCH" },
-	{ HTTP_METHOD_PROPFIND, "PROPFIND" },
-	{ HTTP_METHOD_PROPPATCH, "PROPPATCH" },
-	{ HTTP_METHOD_REBIND, "REBIND" },
-	{ HTTP_METHOD_REPORT, "REPORT" },
-	{ HTTP_METHOD_SEARCH, "SEARCH" },
-	{ HTTP_METHOD_UNBIND, "UNBIND" },
-	{ HTTP_METHOD_UNCHECKOUT, "UNCHECKOUT" },
-	{ HTTP_METHOD_UNLINK, "UNLINK" },
-	{ HTTP_METHOD_UNLOCK, "UNLOCK" },
-	{ HTTP_METHOD_UPDATE, "UPDATE" },
-	{ HTTP_METHOD_UPDATEREDIRECTREF, "UPDATEREDIRECTREF" },
-	{ HTTP_METHOD_VERSION_CONTROL, "VERSION-CONTROL" },
+	"GET" ,
+	"HEAD" ,
+	"POST" ,
+	"PUT" ,
+	"DELETE" ,
+	"CONNECT" ,
+	"OPTIONS" ,
+	"TRACE" ,
+	"ACL" ,
+	"BASELINE-CONTROL" ,
+	"BIND" ,
+	"CHECKIN" ,
+	"CHECKOUT" ,
+	"COPY" ,
+	"LABEL" ,
+	"LINK" ,
+	"LOCK",
+	"MERGE" ,
+	"MKACTIVITY" ,
+	"MKCALENDAR" ,
+	"MKCOL" ,
+	"MKREDIRECTREF" ,
+	"MKWORKSPACE" ,
+	"MOVE" ,
+	"ORDERPATCH" ,
+	"PATCH" ,
+	"PROPFIND" ,
+	"PROPPATCH" ,
+	"REBIND" ,
+	"REPORT" ,
+	"SEARCH" ,
+	"UNBIND" ,
+	"UNCHECKOUT" ,
+	"UNLINK" ,
+	"UNLOCK" ,
+	"UPDATE" ,
+	"UPDATEREDIRECTREF" ,
+	"VERSION-CONTROL" ,
 
-	{ HTTP_METHOD_UNSET, NULL }
+	NULL
 };
 
+void set_http_status(keyvalue *kv, int key, const char *value)
+{
+	kv[key-HTTP_STATUS] = value;
+}
+
+static keyvalue http_status[412];
+/*Remove the http_status init, We have used the macro INIT_HTTP_STATUS instead.*/
+#if 0
 static keyvalue http_status[] = {
 	{ 100, "Continue" },
 	{ 101, "Switching Protocols" },
@@ -107,23 +115,32 @@ static keyvalue http_status[] = {
 
 	{ -1, NULL }
 };
+#endif
 
 static keyvalue http_status_body[] = {
-	{ 400, "400.html" },
-	{ 401, "401.html" },
-	{ 403, "403.html" },
-	{ 404, "404.html" },
-	{ 411, "411.html" },
-	{ 416, "416.html" },
-	{ 500, "500.html" },
-	{ 501, "501.html" },
-	{ 503, "503.html" },
-	{ 505, "505.html" },
+	"400.html" ,
+	"401.html" ,
+	"403.html" ,
+	"404.html" ,
+	"411.html" ,
+	"416.html" ,
+	"500.html" ,
+	"501.html" ,
+	"503.html" ,
+	"505.html" ,
 
-	{ -1, NULL }
+	NULL
 };
-
-
+/*remove the function of keyvalue_get_value,  We add a new function
+ * keyvalue_get_value_by_keyvalue_t(keyvalue *kv, int k, keyvalue_t kt)
+ * It perform Efficiency.Time complexity is O (1)*/
+const char *keyvalue_get_value_by_keyvalue_t(keyvalue *kv, int k, keyvalue_t kt)
+{
+	if (kv[k-kt])
+		return kv[k-kt];
+	return NULL;
+}
+#if 0
 const char *keyvalue_get_value(keyvalue *kv, int k) {
 	int i;
 	for (i = 0; kv[i].value; i++) {
@@ -131,7 +148,18 @@ const char *keyvalue_get_value(keyvalue *kv, int k) {
 	}
 	return NULL;
 }
+#endif
 
+/*remove the function of keyvalue_get_key,  We add a new function
+ * keyvalue_get_key_by_keyvalue_t(keyvalue *kv, const char *s, keyvalue_t kt)*/
+int keyvalue_get_key_by_keyvalue_t(keyvalue *kv, const char *s, keyvalue_t kt) {
+	int i;
+	for (i = 0; kv[i]; i++) {
+		if (0 == strcmp(kv[i], s)) return ( i + kt );
+	}
+	return -1;
+}
+#if 0
 int keyvalue_get_key(keyvalue *kv, const char *s) {
 	int i;
 	for (i = 0; kv[i].value; i++) {
@@ -139,7 +167,10 @@ int keyvalue_get_key(keyvalue *kv, const char *s) {
 	}
 	return -1;
 }
+#endif
 
+/*Since we never used the keyvalue_buffer, So we remove all of them directly.*/
+#if 0
 keyvalue_buffer *keyvalue_buffer_init(void) {
 	keyvalue_buffer *kvb;
 
@@ -188,7 +219,7 @@ void keyvalue_buffer_free(keyvalue_buffer *kvb) {
 
 	free(kvb);
 }
-
+#endif
 
 s_keyvalue_buffer *s_keyvalue_buffer_init(void) {
 	s_keyvalue_buffer *kvb;
@@ -295,27 +326,27 @@ void httpauth_keyvalue_buffer_free(httpauth_keyvalue_buffer *kvb) {
 
 
 const char *get_http_version_name(int i) {
-	return keyvalue_get_value(http_versions, i);
+	return keyvalue_get_value_by_keyvalue_t(http_versions, i, HTTP_VERSIONS);
 }
 
 const char *get_http_status_name(int i) {
-	return keyvalue_get_value(http_status, i);
+	return keyvalue_get_value_by_keyvalue_t(http_status, i, HTTP_STATUS);
 }
 
 const char *get_http_method_name(http_method_t i) {
-	return keyvalue_get_value(http_methods, i);
+	return keyvalue_get_value_by_keyvalue_t(http_methods, i, HTTP_METHODS);
 }
 
 const char *get_http_status_body_name(int i) {
-	return keyvalue_get_value(http_status_body, i);
+	return keyvalue_get_value_by_keyvalue_t(http_status_body, i, HTTP_STATUS_BODY);
 }
 
 int get_http_version_key(const char *s) {
-	return keyvalue_get_key(http_versions, s);
+	return keyvalue_get_key_by_keyvalue_t(http_versions, s, HTTP_VERSIONS);
 }
 
 http_method_t get_http_method_key(const char *s) {
-	return (http_method_t)keyvalue_get_key(http_methods, s);
+	return (http_method_t)keyvalue_get_key_by_keyvalue_t(http_methods, s, HTTP_METHODS);
 }
 
 
