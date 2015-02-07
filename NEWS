@@ -13,6 +13,7 @@ NEWS
   * [ssl] disable SSL3.0 by default
   * fixed typo in example config found by openSUSE user (boo# 907709)
   * [network] fix compile break in calculation of sockaddr_un size if SUN_LEN is not defined (fixes #2609)
+  * [connections] fix bug in connection state handling
 
 - 1.4.35 - 2014-03-12
   * [network/ssl] fix build error if TLSEXT is disabled

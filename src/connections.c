@@ -1632,20 +1632,16 @@ int connection_state_machine(server *srv, connection *con) {
 
 			/* only try to write if we have something in the queue */
 			if (!chunkqueue_is_empty(con->write_queue)) {
-#if 0
-				log_error_write(srv, __FILE__, __LINE__, "dsd",
-						con->fd,
-						"packets to write:",
-						con->write_queue->used);
-#endif
-			}
-			if (!chunkqueue_is_empty(con->write_queue) && con->is_writable) {
-				if (-1 == connection_handle_write(srv, con)) {
-					log_error_write(srv, __FILE__, __LINE__, "ds",
-							con->fd,
-							"handle write failed.");
-					connection_set_state(srv, con, CON_STATE_ERROR);
+				if (con->is_writable) {
+					if (-1 == connection_handle_write(srv, con)) {
+						log_error_write(srv, __FILE__, __LINE__, "ds",
+								con->fd,
+								"handle write failed.");
+						connection_set_state(srv, con, CON_STATE_ERROR);
+					}
 				}
+			} else if (con->file_finished) {
+				connection_set_state(srv, con, CON_STATE_RESPONSE_END);
 			}
 
 			break;
