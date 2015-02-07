@@ -1059,9 +1059,80 @@ int buffer_to_upper(buffer *b) {
 	return 0;
 }
 
+#ifdef HAVE_LIBUNWIND
+# define UNW_LOCAL_ONLY
+# include <libunwind.h>
+
+void print_backtrace(FILE *file) {
+	unw_cursor_t cursor;
+	unw_context_t context;
+	int ret;
+	unsigned int frame = 0;
+
+	if (0 != (ret = unw_getcontext(&context))) goto error;
+	if (0 != (ret = unw_init_local(&cursor, &context))) goto error;
+
+	fprintf(file, "Backtrace:\n");
+
+	while (0 < (ret = unw_step(&cursor))) {
+		unw_word_t proc_ip = 0;
+		unw_proc_info_t procinfo;
+		char procname[256];
+		unw_word_t proc_offset = 0;
+
+		if (0 != (ret = unw_get_reg(&cursor, UNW_REG_IP, &proc_ip))) goto error;
+
+		if (0 == proc_ip) {
+			/* without an IP the other functions are useless; unw_get_proc_name would return UNW_EUNSPEC */
+			++frame;
+			fprintf(file, "%u: (nil)\n", frame);
+			continue;
+		}
+
+		if (0 != (ret = unw_get_proc_info(&cursor, &procinfo))) goto error;
+
+		if (0 != (ret = unw_get_proc_name(&cursor, procname, sizeof(procname), &proc_offset))) {
+			switch (-ret) {
+			case UNW_ENOMEM:
+				memset(procname + sizeof(procname) - 4, '.', 3);
+				procname[sizeof(procname) - 1] = '\0';
+				break;
+			case UNW_ENOINFO:
+				procname[0] = '?';
+				procname[1] = '\0';
+				proc_offset = 0;
+				break;
+			default:
+				snprintf(procname, sizeof(procname), "?? (unw_get_proc_name error %d)", -ret);
+				break;
+			}
+		}
+
+		++frame;
+		fprintf(file, "%u: %s (+0x%x) [%p]\n",
+			frame,
+			procname,
+			(unsigned int) proc_offset,
+			(void*)(uintptr_t)proc_ip);
+	}
+
+	if (0 != ret) goto error;
+
+	return;
+
+error:
+	fprintf(file, "Error while generating backtrace: unwind error %i\n", (int) -ret);
+}
+#else
+void print_backtrace(FILE *file) {
+	UNUSED(file);
+}
+#endif
+
 void log_failed_assert(const char *filename, unsigned int line, const char *msg) {
 	/* can't use buffer here; could lead to recursive assertions */
 	fprintf(stderr, "%s.%d: %s\n", filename, line, msg);
+	print_backtrace(stderr);
 	fflush(stderr);
 	abort();
 }

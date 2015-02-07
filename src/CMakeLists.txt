@@ -29,6 +29,7 @@ OPTION(WITH_FAM "fam/gamin for reducing number of stat() calls [default: off]")
 OPTION(WITH_GDBM "gdbm storage for mod_trigger_b4_dl [default: off]")
 OPTION(WITH_MEMCACHE "memcached storage for mod_trigger_b4_dl [default: off]")
 OPTION(WITH_LIBEV "libev support for fdevent handlers [default: off]")
+OPTION(WITH_LIBUNWIND "with libunwind to print backtraces in asserts [default: off]")
 
 IF(CMAKE_COMPILER_IS_GNUCC)
 	OPTION(BUILD_EXTRA_WARNINGS "extra warnings")
@@ -53,6 +54,11 @@ IF(WITH_LIBEV)
   FIND_PACKAGE(LibEV REQUIRED)
   SET(HAVE_LIBEV 1 FORCE)
 ENDIF(WITH_LIBEV)
+
+IF(WITH_LIBUNWIND)
+  pkg_check_modules(LIBUNWIND REQUIRED libunwind)
+  SET(HAVE_LIBUNWIND 1 FORCE)
+ENDIF()
 
 IF(WITH_WEBDAV_PROPS)
   SET(WITH_XML 1)
@@ -609,6 +615,11 @@ IF(WITH_LIBEV)
   TARGET_LINK_LIBRARIES(lighttpd ${LIBEV_LDFLAGS})
   ADD_TARGET_PROPERTIES(lighttpd COMPILE_FLAGS ${LIBEV_CFLAGS})
 ENDIF(WITH_LIBEV)
+
+IF(WITH_LIBUNWIND)
+  TARGET_LINK_LIBRARIES(lighttpd ${LIBUNWIND_LDFLAGS})
+  ADD_TARGET_PROPERTIES(lighttpd COMPILE_FLAGS ${LIBUNWIND_CFLAGS})
+ENDIF()
 
 IF(NOT WIN32)
 INSTALL(TARGETS ${L_INSTALL_TARGETS}

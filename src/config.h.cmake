@@ -158,4 +158,7 @@
 /* libev */
 #cmakedefine HAVE_LIBEV
 
+/* libunwind */
+#cmakedefine HAVE_LIBUNWIND
+
 #cmakedefine LIGHTTPD_STATIC

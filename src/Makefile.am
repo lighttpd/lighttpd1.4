@@ -1,4 +1,4 @@
-AM_CFLAGS = $(FAM_CFLAGS)
+AM_CFLAGS = $(FAM_CFLAGS) $(LIBUNWIND_CFLAGS)
 
 noinst_PROGRAMS=proc_open lemon # simple-fcgi #graphic evalo bench ajp ssl error_test adserver gen-license
 sbin_PROGRAMS=lighttpd lighttpd-angel
@@ -284,11 +284,12 @@ hdr = server.h buffer.h network.h log.h keyvalue.h \
 DEFS= @DEFS@ -DHAVE_VERSION_H -DLIBRARY_DIR="\"$(libdir)\"" -DSBIN_DIR="\"$(sbindir)\""
 
 lighttpd_SOURCES = $(src)
-lighttpd_LDADD = $(PCRE_LIB) $(DL_LIB) $(SENDFILE_LIB) $(ATTR_LIB) $(common_libadd) $(SSL_LIB) $(FAM_LIBS) $(LIBEV_LIBS)
+lighttpd_LDADD = $(PCRE_LIB) $(DL_LIB) $(SENDFILE_LIB) $(ATTR_LIB) $(common_libadd) $(SSL_LIB) $(FAM_LIBS) $(LIBEV_LIBS) $(LIBUNWIND_LIBS)
 lighttpd_LDFLAGS = -export-dynamic
 lighttpd_CCPFLAGS = $(FAM_CFLAGS) $(LIBEV_CFLAGS)
 
 proc_open_SOURCES = proc_open.c buffer.c
+proc_open_LDADD = $(LIBUNWIND_LIBS)
 proc_open_CPPFLAGS= -DDEBUG_PROC_OPEN
 
 #gen_license_SOURCES = license.c md5.c buffer.c gen_license.c
