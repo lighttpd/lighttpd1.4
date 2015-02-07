@@ -349,6 +349,8 @@ static int network_server_init(server *srv, buffer *host_token, specific_config 
 
 		break;
 	case AF_UNIX:
+		memset(&srv_socket->addr, 0, sizeof(struct sockaddr_un));
+		srv_socket->addr.un.sun_family = AF_UNIX;
 		{
 			size_t hostlen = strlen(host) + 1;
 			if (hostlen > sizeof(srv_socket->addr.un.sun_path)) {
@@ -356,15 +358,14 @@ static int network_server_init(server *srv, buffer *host_token, specific_config 
 				goto error_free_socket;
 			}
 			memcpy(srv_socket->addr.un.sun_path, host, hostlen);
-		}
-		srv_socket->addr.un.sun_family = AF_UNIX;
 
-#ifdef SUN_LEN
-		addr_len = SUN_LEN(&srv_socket->addr.un);
+#if defined(SUN_LEN)
+			addr_len = SUN_LEN(&srv_socket->addr.un);
 #else
-		/* stevens says: */
-		addr_len = hostlen + sizeof(srv_socket->addr.un.sun_family);
+			/* stevens says: */
+			addr_len = hostlen + sizeof(srv_socket->addr.un.sun_family);
 #endif
+		}
 
 		/* check if the socket exists and try to connect to it. */
 		if (-1 != (fd = connect(srv_socket->fd, (struct sockaddr *) &(srv_socket->addr), addr_len))) {
