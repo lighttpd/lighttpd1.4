@@ -13,6 +13,6 @@
 # include <inttypes.h>
 #endif
 
-uint32_t generate_crc32c(char *string, size_t length);
+uint32_t generate_crc32c(const char *string, size_t length);
 
 #endif

@@ -70,7 +70,7 @@ static const unsigned int crc_c[256] = {
 };
 
 
-uint32_t generate_crc32c(char *buffer, size_t length) {
+uint32_t generate_crc32c(const char *buffer, size_t length) {
   size_t i;
   uint32_t crc32 = ~0L;
 
