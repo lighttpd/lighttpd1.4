@@ -234,12 +234,12 @@ void buffer_append_string_buffer(buffer *b, const buffer *src) {
 	}
 }
 
-void buffer_append_long_hex(buffer *b, unsigned long value) {
+void buffer_append_uint_hex(buffer *b, uintmax_t value) {
 	char *buf;
 	int shift = 0;
 
 	{
-		unsigned long copy = value;
+		uintmax_t copy = value;
 		do {
 			copy >>= 8;
 			shift += 2; /* counting nibbles (4 bits) */

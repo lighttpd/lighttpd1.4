@@ -288,7 +288,7 @@ static void log_buffer_append_printf(buffer *out, const char *fmt, va_list ap) {
 		case 'x':           /* int (hex) */
 			d = va_arg(ap, int);
 			buffer_append_string_len(out, CONST_STR_LEN("0x"));
-			buffer_append_long_hex(out, d);
+			buffer_append_uint_hex(out, d);
 			buffer_append_string_len(out, CONST_STR_LEN(" "));
 			break;
 		case 'S':           /* string */
@@ -310,7 +310,7 @@ static void log_buffer_append_printf(buffer *out, const char *fmt, va_list ap) {
 		case 'X':           /* int (hex) */
 			d = va_arg(ap, int);
 			buffer_append_string_len(out, CONST_STR_LEN("0x"));
-			buffer_append_long_hex(out, d);
+			buffer_append_uint_hex(out, d);
 			break;
 		case '(':
 		case ')':

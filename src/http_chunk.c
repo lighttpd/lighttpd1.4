@@ -21,31 +21,15 @@
 #include <string.h>
 
 static void http_chunk_append_len(server *srv, connection *con, size_t len) {
-	size_t i, olen = len, j;
 	buffer *b;
 
 	force_assert(NULL != srv);
 
 	b = srv->tmp_chunk_len;
 
-	if (len == 0) {
-		buffer_copy_string_len(b, CONST_STR_LEN("0\r\n"));
-	} else {
-		for (i = 0; i < 8 && len; i++) {
-			len >>= 4;
-		}
-
-		/* i is the number of hex digits we have, + \r\n */
-		buffer_string_prepare_copy(b, i + 2);
-
-		for (j = i-1, len = olen; j+1 > 0; j--) {
-			b->ptr[j] = (len & 0xf) + (((len & 0xf) <= 9) ? '0' : 'a' - 10);
-			len >>= 4;
-		}
-		buffer_commit(b, i);
-
-		buffer_append_string_len(b, CONST_STR_LEN("\r\n"));
-	}
+	buffer_string_set_length(b, 0);
+	buffer_append_uint_hex(b, len);
+	buffer_append_string_len(b, CONST_STR_LEN("\r\n"));
 
 	chunkqueue_append_buffer(con->write_queue, b);
 }

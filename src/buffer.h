@@ -89,7 +89,7 @@ void buffer_append_string(buffer *b, const char *s);
 void buffer_append_string_len(buffer *b, const char *s, size_t s_len);
 void buffer_append_string_buffer(buffer *b, const buffer *src);
 
-void buffer_append_long_hex(buffer *b, unsigned long len);
+void buffer_append_uint_hex(buffer *b, uintmax_t len);
 void buffer_append_int(buffer *b, intmax_t val);
 void buffer_copy_int(buffer *b, intmax_t val);
 
