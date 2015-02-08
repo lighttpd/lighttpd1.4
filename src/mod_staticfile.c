@@ -294,11 +294,11 @@ static int http_response_parse_range(server *srv, connection *con, plugin_data *
 
 				/* write Content-Range */
 				buffer_append_string_len(b, CONST_STR_LEN("\r\nContent-Range: bytes "));
-				buffer_append_off_t(b, start);
+				buffer_append_int(b, start);
 				buffer_append_string_len(b, CONST_STR_LEN("-"));
-				buffer_append_off_t(b, end);
+				buffer_append_int(b, end);
 				buffer_append_string_len(b, CONST_STR_LEN("/"));
-				buffer_append_off_t(b, sce->st.st_size);
+				buffer_append_int(b, sce->st.st_size);
 
 				buffer_append_string_len(b, CONST_STR_LEN("\r\nContent-Type: "));
 				buffer_append_string_buffer(b, content_type);
@@ -341,11 +341,11 @@ static int http_response_parse_range(server *srv, connection *con, plugin_data *
 		/* add Content-Range-header */
 
 		buffer_copy_string_len(p->range_buf, CONST_STR_LEN("bytes "));
-		buffer_append_off_t(p->range_buf, start);
+		buffer_append_int(p->range_buf, start);
 		buffer_append_string_len(p->range_buf, CONST_STR_LEN("-"));
-		buffer_append_off_t(p->range_buf, end);
+		buffer_append_int(p->range_buf, end);
 		buffer_append_string_len(p->range_buf, CONST_STR_LEN("/"));
-		buffer_append_off_t(p->range_buf, sce->st.st_size);
+		buffer_append_int(p->range_buf, sce->st.st_size);
 
 		response_header_insert(srv, con, CONST_STR_LEN("Content-Range"), CONST_BUF_LEN(p->range_buf));
 	}
@@ -449,7 +449,7 @@ URIHANDLER_FUNC(mod_staticfile_subrequest) {
 	/* set response content-type, if not set already */
 
 	if (NULL == array_get_element(con->response.headers, "Content-Type")) {
-		if (buffer_is_empty(sce->content_type)) {
+		if (buffer_string_is_empty(sce->content_type)) {
 			/* we are setting application/octet-stream, but also announce that
 			 * this header field might change in the seconds few requests 
 			 *
@@ -469,7 +469,7 @@ URIHANDLER_FUNC(mod_staticfile_subrequest) {
 	}
 
 	if (allow_caching) {
-		if (p->conf.etags_used && con->etag_flags != 0 && !buffer_is_empty(sce->etag)) {
+		if (p->conf.etags_used && con->etag_flags != 0 && !buffer_string_is_empty(sce->etag)) {
 			if (NULL == array_get_element(con->response.headers, "ETag")) {
 				/* generate e-tag */
 				etag_mutate(con->physical.etag, sce->etag);

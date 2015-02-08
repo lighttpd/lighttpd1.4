@@ -133,7 +133,7 @@ int plugins_load(server *srv) {
 			}
 		}
 
-		buffer_copy_string_buffer(srv->tmp_buf, srv->srvconf.modules_dir);
+		buffer_copy_buffer(srv->tmp_buf, srv->srvconf.modules_dir);
 
 		buffer_append_string_len(srv->tmp_buf, CONST_STR_LEN("/"));
 		buffer_append_string(srv->tmp_buf, modules);

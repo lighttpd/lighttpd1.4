@@ -188,7 +188,7 @@ int array_insert_unique(array *a, data_unset *str) {
 
 	/* generate unique index if neccesary */
 	if (str->key->used == 0 || str->is_index_key) {
-		buffer_copy_long(str->key, a->unique_ndx++);
+		buffer_copy_int(str->key, a->unique_ndx++);
 		str->is_index_key = 1;
 	}
 

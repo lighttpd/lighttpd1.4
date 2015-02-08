@@ -346,7 +346,7 @@ URIHANDLER_FUNC(mod_expire_path_handler) {
 
 			/* HTTP/1.1 */
 			buffer_copy_string_len(p->expire_tstmp, CONST_STR_LEN("max-age="));
-			buffer_append_long(p->expire_tstmp, expires - srv->cur_ts); /* as expires >= srv->cur_ts the difference is >= 0 */
+			buffer_append_int(p->expire_tstmp, expires - srv->cur_ts); /* as expires >= srv->cur_ts the difference is >= 0 */
 
 			response_header_append(srv, con, CONST_STR_LEN("Cache-Control"), CONST_BUF_LEN(p->expire_tstmp));
 

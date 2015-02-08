@@ -215,9 +215,9 @@ static int ssi_expr_tokenizer(server *srv, connection *con, plugin_data *p,
 			tid = TK_VALUE;
 
 			if (NULL != (ds = (data_string *)array_get_element(p->ssi_cgi_env, token->ptr))) {
-				buffer_copy_string_buffer(token, ds->value);
+				buffer_copy_buffer(token, ds->value);
 			} else if (NULL != (ds = (data_string *)array_get_element(p->ssi_vars, token->ptr))) {
-				buffer_copy_string_buffer(token, ds->value);
+				buffer_copy_buffer(token, ds->value);
 			} else {
 				buffer_copy_string_len(token, CONST_STR_LEN(""));
 			}

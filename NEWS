@@ -15,6 +15,7 @@ NEWS
   * [network] fix compile break in calculation of sockaddr_un size if SUN_LEN is not defined (fixes #2609)
   * [connections] fix bug in connection state handling
   * print backtrace in assert logging with libunwind
+  * major refactoring of internal buffer/chunk handling
 
 - 1.4.35 - 2014-03-12
   * [network/ssl] fix build error if TLSEXT is disabled

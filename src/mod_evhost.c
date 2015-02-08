@@ -200,7 +200,7 @@ static int mod_evhost_parse_host(connection *con,array *host) {
 					/* is something between the dots */
 					ds = data_string_init();
 					buffer_copy_string_len(ds->key,CONST_STR_LEN("%"));
-					buffer_append_long(ds->key, i++);
+					buffer_append_int(ds->key, i++);
 					buffer_copy_string_len(ds->value,ptr+1,colon-ptr-1);
 
 					array_insert_unique(host,(data_unset *)ds);
@@ -213,7 +213,7 @@ static int mod_evhost_parse_host(connection *con,array *host) {
 		if (colon != ptr) {
 			ds = data_string_init();
 			buffer_copy_string_len(ds->key,CONST_STR_LEN("%"));
-			buffer_append_long(ds->key, i /* ++ */);
+			buffer_append_int(ds->key, i /* ++ */);
 			buffer_copy_string_len(ds->value,ptr,colon-ptr);
 
 			array_insert_unique(host,(data_unset *)ds);
@@ -311,7 +311,7 @@ static handler_t mod_evhost_uri_handler(server *srv, connection *con, void *p_d)
 		}
 	}
 
-	BUFFER_APPEND_SLASH(p->tmp_buf);
+	buffer_append_slash(p->tmp_buf);
 
 	array_free(parsed_host);
 
@@ -324,7 +324,7 @@ static handler_t mod_evhost_uri_handler(server *srv, connection *con, void *p_d)
 	}
 
 	if (!not_good) {
-		buffer_copy_string_buffer(con->physical.doc_root, p->tmp_buf);
+		buffer_copy_buffer(con->physical.doc_root, p->tmp_buf);
 	}
 
 	return HANDLER_GO_ON;

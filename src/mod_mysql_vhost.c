@@ -227,7 +227,7 @@ SERVER_FUNC(mod_mysql_vhost_set_defaults) {
 			buffer_copy_string(s->mysql_pre, sel->ptr);
 			buffer_copy_string(s->mysql_post, qmark+1);
 		} else {
-			buffer_copy_string_buffer(s->mysql_pre, sel);
+			buffer_copy_buffer(s->mysql_pre, sel);
 		}
 
 		/* required:
@@ -242,8 +242,8 @@ SERVER_FUNC(mod_mysql_vhost_set_defaults) {
 		 */
 
 		/* all have to be set */
-		if (!(buffer_is_empty(s->myuser) ||
-		      buffer_is_empty(s->mydb))) {
+		if (!(buffer_string_is_empty(s->myuser) ||
+		      buffer_string_is_empty(s->mydb))) {
 			my_bool reconnect = 1;
 
 			if (NULL == (s->mysql = mysql_init(NULL))) {
@@ -349,7 +349,7 @@ CONNECTION_FUNC(mod_mysql_vhost_handle_docroot) {
 	    buffer_is_equal(c->server_name, con->uri.authority)) goto GO_ON;
 
 	/* build and run SQL query */
-	buffer_copy_string_buffer(p->tmp_buf, p->conf.mysql_pre);
+	buffer_copy_buffer(p->tmp_buf, p->conf.mysql_pre);
 	if (p->conf.mysql_post->used) {
 		/* escape the uri.authority */
 		unsigned long to_len;
@@ -382,7 +382,7 @@ CONNECTION_FUNC(mod_mysql_vhost_handle_docroot) {
 
 	/* sanity check that really is a directory */
 	buffer_copy_string(p->tmp_buf, row[0]);
-	BUFFER_APPEND_SLASH(p->tmp_buf);
+	buffer_append_slash(p->tmp_buf);
 
 	if (HANDLER_ERROR == stat_cache_get_entry(srv, con, p->tmp_buf, &sce)) {
 		log_error_write(srv, __FILE__, __LINE__, "sb", strerror(errno), p->tmp_buf);
@@ -394,8 +394,8 @@ CONNECTION_FUNC(mod_mysql_vhost_handle_docroot) {
 	}
 
 	/* cache the data */
-	buffer_copy_string_buffer(c->server_name, con->uri.authority);
-	buffer_copy_string_buffer(c->document_root, p->tmp_buf);
+	buffer_copy_buffer(c->server_name, con->uri.authority);
+	buffer_copy_buffer(c->document_root, p->tmp_buf);
 
 	/* fcgi_offset and fcgi_arg are optional */
 	if (cols > 1 && row[1]) {
@@ -416,8 +416,8 @@ CONNECTION_FUNC(mod_mysql_vhost_handle_docroot) {
 
 	/* fix virtual server and docroot */
 GO_ON:
-	buffer_copy_string_buffer(con->server_name, c->server_name);
-	buffer_copy_string_buffer(con->physical.doc_root, c->document_root);
+	buffer_copy_buffer(con->server_name, c->server_name);
+	buffer_copy_buffer(con->physical.doc_root, c->document_root);
 
 #ifdef DEBUG
 	log_error_write(srv, __FILE__, __LINE__, "sbbdb",

@@ -184,7 +184,7 @@ static int cache_call_lua(server *srv, connection *con, plugin_data *p, buffer *
 
 	/* cleanup basedir */
 	b = p->baseurl;
-	buffer_copy_string_buffer(b, con->uri.path);
+	buffer_copy_buffer(b, con->uri.path);
 	for (c = b->ptr + b->used - 1; c > b->ptr && *c != '/'; c--);
 
 	if (*c == '/') {
@@ -193,7 +193,7 @@ static int cache_call_lua(server *srv, connection *con, plugin_data *p, buffer *
 	}
 
 	b = p->basedir;
-	buffer_copy_string_buffer(b, con->physical.path);
+	buffer_copy_buffer(b, con->physical.path);
 	for (c = b->ptr + b->used - 1; c > b->ptr && *c != '/'; c--);
 
 	if (*c == '/') {
@@ -218,7 +218,7 @@ URIHANDLER_FUNC(mod_cml_power_magnet) {
 	buffer_reset(p->baseurl);
 	buffer_reset(p->trigger_handler);
 
-	if (buffer_is_empty(p->conf.power_magnet)) return HANDLER_GO_ON;
+	if (buffer_string_is_empty(p->conf.power_magnet)) return HANDLER_GO_ON;
 
 	/*
 	 * power-magnet:
@@ -264,7 +264,7 @@ URIHANDLER_FUNC(mod_cml_power_magnet) {
 URIHANDLER_FUNC(mod_cml_is_handled) {
 	plugin_data *p = p_d;
 
-	if (buffer_is_empty(con->physical.path)) return HANDLER_ERROR;
+	if (buffer_string_is_empty(con->physical.path)) return HANDLER_ERROR;
 
 	mod_cml_patch_connection(srv, con, p);
 
@@ -272,7 +272,7 @@ URIHANDLER_FUNC(mod_cml_is_handled) {
 	buffer_reset(p->baseurl);
 	buffer_reset(p->trigger_handler);
 
-	if (buffer_is_empty(p->conf.ext)) return HANDLER_GO_ON;
+	if (buffer_string_is_empty(p->conf.ext)) return HANDLER_GO_ON;
 
 	if (!buffer_is_equal_right_len(con->physical.path, p->conf.ext, p->conf.ext->used - 1)) {
 		return HANDLER_GO_ON;

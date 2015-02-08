@@ -10,7 +10,7 @@
 #include <string.h>
 
 int etag_is_equal(buffer *etag, const char *matches) {
-	if (etag && !buffer_is_empty(etag) && 0 == strcmp(etag->ptr, matches)) return 1;
+	if (etag && !buffer_string_is_empty(etag) && 0 == strcmp(etag->ptr, matches)) return 1;
 	return 0;
 }
 
@@ -20,17 +20,17 @@ int etag_create(buffer *etag, struct stat *st,etag_flags_t flags) {
 	buffer_reset(etag);
 
 	if (flags & ETAG_USE_INODE) {
-		buffer_append_off_t(etag, st->st_ino);
+		buffer_append_int(etag, st->st_ino);
 		buffer_append_string_len(etag, CONST_STR_LEN("-"));
 	}
 	
 	if (flags & ETAG_USE_SIZE) {
-		buffer_append_off_t(etag, st->st_size);
+		buffer_append_int(etag, st->st_size);
 		buffer_append_string_len(etag, CONST_STR_LEN("-"));
 	}
 	
 	if (flags & ETAG_USE_MTIME) {
-		buffer_append_long(etag, st->st_mtime);
+		buffer_append_int(etag, st->st_mtime);
 	}
 
 	return 0;
@@ -44,7 +44,7 @@ int etag_mutate(buffer *mut, buffer *etag) {
 
 	buffer_reset(mut);
 	buffer_copy_string_len(mut, CONST_STR_LEN("\""));
-	buffer_append_off_t(mut, h);
+	buffer_append_int(mut, h);
 	buffer_append_string_len(mut, CONST_STR_LEN("\""));
 
 	return 0;

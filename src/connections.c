@@ -212,7 +212,7 @@ static int connection_handle_read_ssl(server *srv, connection *con) {
 			b = chunkqueue_get_append_buffer(con->read_queue);
 			len = SSL_pending(con->ssl);
 			if (len < 4*1024) len = 4*1024; /* always alloc >= 4k buffer */
-			buffer_prepare_copy(b, len + 1);
+			buffer_prepare_copy(b, len);
 
 			/* overwrite everything with 0 */
 			memset(b->ptr, 0, b->size);
@@ -362,7 +362,7 @@ static int connection_handle_read(server *srv, connection *con) {
 	} else {
 		if (toread > MAX_READ_LIMIT) toread = MAX_READ_LIMIT;
 		b = chunkqueue_get_append_buffer(con->read_queue);
-		buffer_prepare_copy(b, toread + 1);
+		buffer_prepare_copy(b, toread);
 	}
 
 	read_offset = (b->used == 0) ? 0 : b->used - 1;
@@ -473,11 +473,11 @@ static int connection_handle_write_prepare(server *srv, connection *con) {
 		buffer_reset(con->physical.path);
 
 		/* try to send static errorfile */
-		if (!buffer_is_empty(con->conf.errorfile_prefix)) {
+		if (!buffer_string_is_empty(con->conf.errorfile_prefix)) {
 			stat_cache_entry *sce = NULL;
 
-			buffer_copy_string_buffer(con->physical.path, con->conf.errorfile_prefix);
-			buffer_append_long(con->physical.path, con->http_status);
+			buffer_copy_buffer(con->physical.path, con->conf.errorfile_prefix);
+			buffer_append_int(con->physical.path, con->http_status);
 			buffer_append_string_len(con->physical.path, CONST_STR_LEN(".html"));
 
 			if (HANDLER_ERROR != stat_cache_get_entry(srv, con, con->physical.path, &sce)) {
@@ -504,7 +504,7 @@ static int connection_handle_write_prepare(server *srv, connection *con) {
 					   "<html xmlns=\"http://www.w3.org/1999/xhtml\" xml:lang=\"en\" lang=\"en\">\n"
 					   " <head>\n"
 					   "  <title>"));
-			buffer_append_long(b, con->http_status);
+			buffer_append_int(b, con->http_status);
 			buffer_append_string_len(b, CONST_STR_LEN(" - "));
 			buffer_append_string(b, get_http_status_name(con->http_status));
 
@@ -513,7 +513,7 @@ static int connection_handle_write_prepare(server *srv, connection *con) {
 					     " </head>\n"
 					     " <body>\n"
 					     "  <h1>"));
-			buffer_append_long(b, con->http_status);
+			buffer_append_int(b, con->http_status);
 			buffer_append_string_len(b, CONST_STR_LEN(" - "));
 			buffer_append_string(b, get_http_status_name(con->http_status));
 
@@ -554,7 +554,7 @@ static int connection_handle_write_prepare(server *srv, connection *con) {
 				/* qlen = 0 is important for Redirects (301, ...) as they MAY have
 				 * a content. Browsers are waiting for a Content otherwise
 				 */
-				buffer_copy_off_t(srv->tmp_buf, qlen);
+				buffer_copy_int(srv->tmp_buf, qlen);
 
 				response_header_overwrite(srv, con, CONST_STR_LEN("Content-Length"), CONST_BUF_LEN(srv->tmp_buf));
 			}
@@ -1135,7 +1135,7 @@ found_header_end:
 				} else {
 					b = chunkqueue_get_append_buffer(dst_cq);
 					/* prepare buffer size for remaining POST data; is < 64kb */
-					buffer_prepare_copy(b, con->request.content_length - dst_cq->bytes_in + 1);
+					buffer_prepare_copy(b, con->request.content_length - dst_cq->bytes_in);
 				}
 				buffer_append_string_len(b, c->mem->ptr + c->offset, toRead);
 			}
@@ -1430,17 +1430,17 @@ int connection_state_machine(server *srv, connection *con) {
 						/* 404 error-handler */
 
 						if (con->in_error_handler == 0 &&
-						    (!buffer_is_empty(con->conf.error_handler) ||
-						     !buffer_is_empty(con->error_handler))) {
+						    (!buffer_string_is_empty(con->conf.error_handler) ||
+						     !buffer_string_is_empty(con->error_handler))) {
 							/* call error-handler */
 
 							con->error_handler_saved_status = con->http_status;
 							con->http_status = 0;
 
-							if (buffer_is_empty(con->error_handler)) {
-								buffer_copy_string_buffer(con->request.uri, con->conf.error_handler);
+							if (buffer_string_is_empty(con->error_handler)) {
+								buffer_copy_buffer(con->request.uri, con->conf.error_handler);
 							} else {
-								buffer_copy_string_buffer(con->request.uri, con->error_handler);
+								buffer_copy_buffer(con->request.uri, con->error_handler);
 							}
 							buffer_reset(con->physical.path);
 

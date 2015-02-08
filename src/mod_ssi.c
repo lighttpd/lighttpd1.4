@@ -236,7 +236,7 @@ static int ssi_env_add_request_headers(server *srv, connection *con, plugin_data
 }
 
 static int build_ssi_cgi_vars(server *srv, connection *con, plugin_data *p) {
-	char buf[32];
+	char buf[LI_ITOSTRING_LENGTH];
 
 	server_socket *srv_sock = con->srv_socket;
 
@@ -263,7 +263,7 @@ static int build_ssi_cgi_vars(server *srv, connection *con, plugin_data *p) {
 		     );
 	ssi_env_add(p->ssi_cgi_env, CONST_STRING("GATEWAY_INTERFACE"), "CGI/1.1");
 
-	LI_ltostr(buf,
+	li_utostr(buf,
 #ifdef HAVE_IPV6
 	       ntohs(srv_sock->addr.plain.sa_family ? srv_sock->addr.ipv6.sin6_port : srv_sock->addr.ipv4.sin_port)
 #else
@@ -279,8 +279,7 @@ static int build_ssi_cgi_vars(server *srv, connection *con, plugin_data *p) {
 	if (con->request.content_length > 0) {
 		/* CGI-SPEC 6.1.2 and FastCGI spec 6.3 */
 
-		/* request.content_length < SSIZE_MAX, see request.c */
-		LI_ltostr(buf, con->request.content_length);
+		li_itostr(buf, con->request.content_length);
 		ssi_env_add(p->ssi_cgi_env, CONST_STRING("CONTENT_LENGTH"), buf);
 	}
 
@@ -434,12 +433,12 @@ static int process_ssi_stmt(server *srv, connection *con, plugin_data *p, const 
 			b = chunkqueue_get_append_buffer(con->write_queue);
 #ifdef HAVE_PWD_H
 			if (NULL == (pw = getpwuid(sce->st.st_uid))) {
-				buffer_copy_long(b, sce->st.st_uid);
+				buffer_copy_int(b, sce->st.st_uid);
 			} else {
 				buffer_copy_string(b, pw->pw_name);
 			}
 #else
-			buffer_copy_long(b, sce->st.st_uid);
+			buffer_copy_int(b, sce->st.st_uid);
 #endif
 			break;
 		}
@@ -481,7 +480,7 @@ static int process_ssi_stmt(server *srv, connection *con, plugin_data *p, const 
 
 			b = chunkqueue_get_append_buffer(con->write_queue);
 			if (NULL == (sl = strrchr(con->physical.path->ptr, '/'))) {
-				buffer_copy_string_buffer(b, con->physical.path);
+				buffer_copy_buffer(b, con->physical.path);
 			} else {
 				buffer_copy_string(b, sl + 1);
 			}
@@ -489,7 +488,7 @@ static int process_ssi_stmt(server *srv, connection *con, plugin_data *p, const 
 		}
 		case SSI_ECHO_DOCUMENT_URI: {
 			b = chunkqueue_get_append_buffer(con->write_queue);
-			buffer_copy_string_buffer(b, con->uri.path);
+			buffer_copy_buffer(b, con->uri.path);
 			break;
 		}
 		default: {
@@ -499,7 +498,7 @@ static int process_ssi_stmt(server *srv, connection *con, plugin_data *p, const 
 			b = chunkqueue_get_append_buffer(con->write_queue);
 
 			if (NULL != (ds = (data_string *)array_get_element(p->ssi_cgi_env, var_val))) {
-				buffer_copy_string_buffer(b, ds->value);
+				buffer_copy_buffer(b, ds->value);
 			} else {
 				buffer_copy_string_len(b, CONST_STR_LEN("(none)"));
 			}
@@ -575,7 +574,7 @@ static int process_ssi_stmt(server *srv, connection *con, plugin_data *p, const 
 
 			/* we have an uri */
 
-			buffer_copy_string_buffer(p->stat_fn, con->physical.doc_root);
+			buffer_copy_buffer(p->stat_fn, con->physical.doc_root);
 			buffer_append_string_buffer(p->stat_fn, srv->tmp_buf);
 		}
 
@@ -593,10 +592,10 @@ static int process_ssi_stmt(server *srv, connection *con, plugin_data *p, const 
 
 					for (j = 0; s > 1024 && abr[j+1]; s /= 1024, j++);
 
-					buffer_copy_off_t(b, s);
+					buffer_copy_int(b, s);
 					buffer_append_string(b, abr[j]);
 				} else {
-					buffer_copy_off_t(b, st.st_size);
+					buffer_copy_int(b, st.st_size);
 				}
 				break;
 			case SSI_FLASTMOD:
@@ -783,19 +782,19 @@ static int process_ssi_stmt(server *srv, connection *con, plugin_data *p, const 
 					int toread;
 					/* read everything from client and paste it into the output */
 					was_interrupted = 0;
-	
+
 					while(1) {
 						if (ioctl(from_exec_fds[0], FIONREAD, &toread)) {
 							log_error_write(srv, __FILE__, __LINE__, "s",
 								"unexpected end-of-file (perhaps the ssi-exec process died)");
 							return -1;
 						}
-	
+
 						if (toread > 0) {
 							b = chunkqueue_get_append_buffer(con->write_queue);
-	
-							buffer_prepare_copy(b, toread + 1);
-	
+
+							buffer_prepare_copy(b, toread);
+
 							if ((r = read(from_exec_fds[0], b->ptr, b->size - 1)) < 0) {
 								/* read failed */
 								break;

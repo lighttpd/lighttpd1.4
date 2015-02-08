@@ -191,7 +191,7 @@ URIHANDLER_FUNC(mod_flv_streaming_path_handler) {
 
 	if (con->mode != DIRECT) return HANDLER_GO_ON;
 
-	if (buffer_is_empty(con->physical.path)) return HANDLER_GO_ON;
+	if (buffer_string_is_empty(con->physical.path)) return HANDLER_GO_ON;
 
 	mod_flv_streaming_patch_connection(srv, con, p);
 
@@ -214,7 +214,7 @@ URIHANDLER_FUNC(mod_flv_streaming_path_handler) {
 			 * otherwise send the full file */
 
 			array_reset(p->get_params);
-			buffer_copy_string_buffer(p->query_str, con->uri.query);
+			buffer_copy_buffer(p->query_str, con->uri.query);
 			split_get_params(p->get_params, p->query_str);
 
 			if (NULL == (get_param = (data_string *)array_get_element(p->get_params, "start"))) {

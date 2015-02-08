@@ -6,7 +6,7 @@
 #include "sys-mmap.h"
 
 typedef struct chunk {
-	enum { UNUSED_CHUNK, MEM_CHUNK, FILE_CHUNK } type;
+	enum { MEM_CHUNK, FILE_CHUNK } type;
 
 	buffer *mem; /* either the storage of the mem-chunk or the read-ahead buffer */
 
@@ -48,21 +48,21 @@ typedef struct {
 } chunkqueue;
 
 chunkqueue *chunkqueue_init(void);
-int chunkqueue_set_tempdirs(chunkqueue *c, array *tempdirs);
-int chunkqueue_append_file(chunkqueue *c, buffer *fn, off_t offset, off_t len);
-int chunkqueue_append_mem(chunkqueue *c, const char *mem, size_t len);
-int chunkqueue_append_buffer(chunkqueue *c, buffer *mem);
-int chunkqueue_append_buffer_weak(chunkqueue *c, buffer *mem);
-int chunkqueue_prepend_buffer(chunkqueue *c, buffer *mem);
+void chunkqueue_set_tempdirs(chunkqueue *c, array *tempdirs);
+void chunkqueue_append_file(chunkqueue *c, buffer *fn, off_t offset, off_t len); /* copies "fn" */
+void chunkqueue_append_mem(chunkqueue *c, const char *mem, size_t len); /* copies memory */
+void chunkqueue_append_buffer(chunkqueue *c, buffer *mem); /* may reset "mem" */
+void chunkqueue_prepend_buffer(chunkqueue *c, buffer *mem); /* may reset "mem" */
 
 buffer * chunkqueue_get_append_buffer(chunkqueue *c);
 buffer * chunkqueue_get_prepend_buffer(chunkqueue *c);
 chunk * chunkqueue_get_append_tempfile(chunkqueue *cq);
 
-int chunkqueue_remove_finished_chunks(chunkqueue *cq);
+void chunkqueue_remove_finished_chunks(chunkqueue *cq);
+
+void chunkqueue_steal(chunkqueue *dest, chunkqueue *src, off_t len);
 
 off_t chunkqueue_length(chunkqueue *c);
-off_t chunkqueue_written(chunkqueue *c);
 void chunkqueue_free(chunkqueue *c);
 void chunkqueue_reset(chunkqueue *c);
 

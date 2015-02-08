@@ -36,30 +36,28 @@ static chunk *chunk_init(void) {
 
 	c = calloc(1, sizeof(*c));
 
+	c->type = MEM_CHUNK;
 	c->mem = buffer_init();
 	c->file.name = buffer_init();
+	c->file.start = c->file.length = c->file.mmap.offset = 0;
 	c->file.fd = -1;
 	c->file.mmap.start = MAP_FAILED;
+	c->file.mmap.length = 0;
+	c->file.is_temp = 0;
+	c->offset = 0;
 	c->next = NULL;
 
 	return c;
 }
 
-static void chunk_free(chunk *c) {
-	if (!c) return;
-
-	buffer_free(c->mem);
-	buffer_free(c->file.name);
-
-	free(c);
-}
-
 static void chunk_reset(chunk *c) {
-	if (!c) return;
+	if (NULL == c) return;
+
+	c->type = MEM_CHUNK;
 
 	buffer_reset(c->mem);
 
-	if (c->file.is_temp && !buffer_is_empty(c->file.name)) {
+	if (c->file.is_temp && !buffer_string_is_empty(c->file.name)) {
 		unlink(c->file.name->ptr);
 	}
 
@@ -73,13 +71,28 @@ static void chunk_reset(chunk *c) {
 		munmap(c->file.mmap.start, c->file.mmap.length);
 		c->file.mmap.start = MAP_FAILED;
 	}
+	c->file.start = c->file.length = c->file.mmap.offset = 0;
+	c->file.mmap.length = 0;
+	c->file.is_temp = 0;
+	c->offset = 0;
+	c->next = NULL;
 }
 
+static void chunk_free(chunk *c) {
+	if (NULL == c) return;
+
+	chunk_reset(c);
+
+	buffer_free(c->mem);
+	buffer_free(c->file.name);
+
+	free(c);
+}
 
 void chunkqueue_free(chunkqueue *cq) {
 	chunk *c, *pc;
 
-	if (!cq) return;
+	if (NULL == cq) return;
 
 	for (c = cq->first; c; ) {
 		pc = c;
@@ -96,11 +109,27 @@ void chunkqueue_free(chunkqueue *cq) {
 	free(cq);
 }
 
+static void chunkqueue_push_unused_chunk(chunkqueue *cq, chunk *c) {
+	force_assert(NULL != cq && NULL != c);
+
+	/* keep at max 4 chunks in the 'unused'-cache */
+	if (cq->unused_chunks > 4) {
+		chunk_free(c);
+	} else {
+		chunk_reset(c);
+		c->next = cq->unused;
+		cq->unused = c;
+		cq->unused_chunks++;
+	}
+}
+
 static chunk *chunkqueue_get_unused_chunk(chunkqueue *cq) {
 	chunk *c;
 
+	force_assert(NULL != cq);
+
 	/* check if we have a unused chunk */
-	if (!cq->unused) {
+	if (0 == cq->unused) {
 		c = chunk_init();
 	} else {
 		/* take the first element from the list (a stack) */
@@ -113,130 +142,95 @@ static chunk *chunkqueue_get_unused_chunk(chunkqueue *cq) {
 	return c;
 }
 
-static int chunkqueue_prepend_chunk(chunkqueue *cq, chunk *c) {
+static void chunkqueue_prepend_chunk(chunkqueue *cq, chunk *c) {
 	c->next = cq->first;
 	cq->first = c;
 
-	if (cq->last == NULL) {
+	if (NULL == cq->last) {
 		cq->last = c;
 	}
-
-	return 0;
 }
 
-static int chunkqueue_append_chunk(chunkqueue *cq, chunk *c) {
+static void chunkqueue_append_chunk(chunkqueue *cq, chunk *c) {
 	if (cq->last) {
 		cq->last->next = c;
 	}
 	cq->last = c;
 
-	if (cq->first == NULL) {
+	if (NULL == cq->first) {
 		cq->first = c;
 	}
-
-	return 0;
 }
 
 void chunkqueue_reset(chunkqueue *cq) {
-	chunk *c;
-	/* move everything to the unused queue */
+	chunk *cur = cq->first;
 
-	/* mark all read written */
-	for (c = cq->first; c; c = c->next) {
-		switch(c->type) {
-		case MEM_CHUNK:
-			c->offset = c->mem->used - 1;
-			break;
-		case FILE_CHUNK:
-			c->offset = c->file.length;
-			break;
-		default:
-			break;
-		}
+	cq->first = cq->last = NULL;
+
+	while (NULL != cur) {
+		chunk *next = cur->next;
+		chunkqueue_push_unused_chunk(cq, cur);
+		cur = next;
 	}
 
-	chunkqueue_remove_finished_chunks(cq);
 	cq->bytes_in = 0;
 	cq->bytes_out = 0;
 }
 
-int chunkqueue_append_file(chunkqueue *cq, buffer *fn, off_t offset, off_t len) {
+void chunkqueue_append_file(chunkqueue *cq, buffer *fn, off_t offset, off_t len) {
 	chunk *c;
 
-	if (len == 0) return 0;
+	if (0 == len) return;
 
 	c = chunkqueue_get_unused_chunk(cq);
 
 	c->type = FILE_CHUNK;
 
-	buffer_copy_string_buffer(c->file.name, fn);
+	buffer_copy_buffer(c->file.name, fn);
 	c->file.start = offset;
 	c->file.length = len;
 	c->offset = 0;
 
 	chunkqueue_append_chunk(cq, c);
-
-	return 0;
 }
 
-int chunkqueue_append_buffer(chunkqueue *cq, buffer *mem) {
+void chunkqueue_append_buffer(chunkqueue *cq, buffer *mem) {
 	chunk *c;
 
-	if (mem->used == 0) return 0;
+	if (buffer_string_is_empty(mem)) return;
 
 	c = chunkqueue_get_unused_chunk(cq);
 	c->type = MEM_CHUNK;
-	c->offset = 0;
-	buffer_copy_string_buffer(c->mem, mem);
+	force_assert(NULL != c->mem);
+	buffer_move(c->mem, mem);
 
 	chunkqueue_append_chunk(cq, c);
-
-	return 0;
 }
 
-int chunkqueue_append_buffer_weak(chunkqueue *cq, buffer *mem) {
+void chunkqueue_prepend_buffer(chunkqueue *cq, buffer *mem) {
 	chunk *c;
+
+	if (buffer_string_is_empty(mem)) return;
 
 	c = chunkqueue_get_unused_chunk(cq);
 	c->type = MEM_CHUNK;
-	c->offset = 0;
-	if (c->mem) buffer_free(c->mem);
-	c->mem = mem;
-
-	chunkqueue_append_chunk(cq, c);
-
-	return 0;
-}
-
-int chunkqueue_prepend_buffer(chunkqueue *cq, buffer *mem) {
-	chunk *c;
-
-	if (mem->used == 0) return 0;
-
-	c = chunkqueue_get_unused_chunk(cq);
-	c->type = MEM_CHUNK;
-	c->offset = 0;
-	buffer_copy_string_buffer(c->mem, mem);
+	force_assert(NULL != c->mem);
+	buffer_move(c->mem, mem);
 
 	chunkqueue_prepend_chunk(cq, c);
-
-	return 0;
 }
 
 
-int chunkqueue_append_mem(chunkqueue *cq, const char * mem, size_t len) {
+void chunkqueue_append_mem(chunkqueue *cq, const char * mem, size_t len) {
 	chunk *c;
 
-	if (len == 0) return 0;
+	if (0 == len) return;
 
 	c = chunkqueue_get_unused_chunk(cq);
 	c->type = MEM_CHUNK;
-	c->offset = 0;
-	buffer_copy_string_len(c->mem, mem, len - 1);
+	buffer_copy_string_len(c->mem, mem, len);
 
 	chunkqueue_append_chunk(cq, c);
-
-	return 0;
 }
 
 buffer * chunkqueue_get_prepend_buffer(chunkqueue *cq) {
@@ -245,8 +239,6 @@ buffer * chunkqueue_get_prepend_buffer(chunkqueue *cq) {
 	c = chunkqueue_get_unused_chunk(cq);
 
 	c->type = MEM_CHUNK;
-	c->offset = 0;
-	buffer_reset(c->mem);
 
 	chunkqueue_prepend_chunk(cq, c);
 
@@ -259,20 +251,15 @@ buffer *chunkqueue_get_append_buffer(chunkqueue *cq) {
 	c = chunkqueue_get_unused_chunk(cq);
 
 	c->type = MEM_CHUNK;
-	c->offset = 0;
-	buffer_reset(c->mem);
 
 	chunkqueue_append_chunk(cq, c);
 
 	return c->mem;
 }
 
-int chunkqueue_set_tempdirs(chunkqueue *cq, array *tempdirs) {
-	if (!cq) return -1;
-
+void chunkqueue_set_tempdirs(chunkqueue *cq, array *tempdirs) {
+	force_assert(NULL != cq);
 	cq->tempdirs = tempdirs;
-
-	return 0;
 }
 
 chunk *chunkqueue_get_append_tempfile(chunkqueue *cq) {
@@ -282,7 +269,6 @@ chunk *chunkqueue_get_append_tempfile(chunkqueue *cq) {
 	c = chunkqueue_get_unused_chunk(cq);
 
 	c->type = FILE_CHUNK;
-	c->offset = 0;
 
 	if (cq->tempdirs && cq->tempdirs->used) {
 		size_t i;
@@ -292,8 +278,8 @@ chunk *chunkqueue_get_append_tempfile(chunkqueue *cq) {
 		for (i = 0; i < cq->tempdirs->used; i++) {
 			data_string *ds = (data_string *)cq->tempdirs->data[i];
 
-			buffer_copy_string_buffer(template, ds->value);
-			BUFFER_APPEND_SLASH(template);
+			buffer_copy_buffer(template, ds->value);
+			buffer_append_slash(template);
 			buffer_append_string_len(template, CONST_STR_LEN("lighttpd-upload-XXXXXX"));
 
 			if (-1 != (c->file.fd = mkstemp(template->ptr))) {
@@ -309,7 +295,7 @@ chunk *chunkqueue_get_append_tempfile(chunkqueue *cq) {
 		}
 	}
 
-	buffer_copy_string_buffer(c->file.name, template);
+	buffer_copy_buffer(c->file.name, template);
 	c->file.length = 0;
 
 	chunkqueue_append_chunk(cq, c);
@@ -319,82 +305,102 @@ chunk *chunkqueue_get_append_tempfile(chunkqueue *cq) {
 	return c;
 }
 
+void chunkqueue_steal(chunkqueue *dest, chunkqueue *src, off_t len) {
+	while (len > 0) {
+		chunk *c = src->first;
+		off_t clen = 0;
+
+		if (NULL == c) break;
+
+		switch (c->type) {
+		case MEM_CHUNK:
+			clen = buffer_string_length(c->mem);
+			break;
+		case FILE_CHUNK:
+			clen = c->file.length;
+			break;
+		}
+		force_assert(clen >= c->offset);
+		clen -= c->offset;
+
+		if (len >= clen) {
+			/* move complete chunk */
+			src->first = c->next;
+			if (c == src->last) src->last = NULL;
+
+			chunkqueue_append_chunk(dest, c);
+			src->bytes_out += clen;
+			dest->bytes_in += clen;
+			len -= clen;
+			continue;
+		}
+
+		/* partial chunk with length "len" */
+
+		switch (c->type) {
+		case MEM_CHUNK:
+			chunkqueue_append_mem(dest, c->mem->ptr + c->offset, len);
+			break;
+		case FILE_CHUNK:
+			/* tempfile flag is in "last" chunk after the split */
+			chunkqueue_append_file(dest, c->file.name, c->file.start + c->offset, len);
+			break;
+		}
+
+		c->offset += len;
+		src->bytes_out += len;
+		dest->bytes_in += len;
+		len = 0;
+	}
+}
 
 off_t chunkqueue_length(chunkqueue *cq) {
 	off_t len = 0;
 	chunk *c;
 
 	for (c = cq->first; c; c = c->next) {
+		off_t c_len = 0;
+
 		switch (c->type) {
 		case MEM_CHUNK:
-			len += c->mem->used ? c->mem->used - 1 : 0;
+			c_len = buffer_string_length(c->mem);
 			break;
 		case FILE_CHUNK:
-			len += c->file.length;
-			break;
-		default:
+			c_len = c->file.length;
 			break;
 		}
-	}
-
-	return len;
-}
-
-off_t chunkqueue_written(chunkqueue *cq) {
-	off_t len = 0;
-	chunk *c;
-
-	for (c = cq->first; c; c = c->next) {
-		switch (c->type) {
-		case MEM_CHUNK:
-		case FILE_CHUNK:
-			len += c->offset;
-			break;
-		default:
-			break;
-		}
+		force_assert(c_len >= c->offset);
+		len += c_len - c->offset;
 	}
 
 	return len;
 }
 
 int chunkqueue_is_empty(chunkqueue *cq) {
-	return cq->first ? 0 : 1;
+	return NULL == cq->first;
 }
 
-int chunkqueue_remove_finished_chunks(chunkqueue *cq) {
+void chunkqueue_remove_finished_chunks(chunkqueue *cq) {
 	chunk *c;
 
 	for (c = cq->first; c; c = cq->first) {
-		int is_finished = 0;
+		off_t c_len = 0;
 
 		switch (c->type) {
 		case MEM_CHUNK:
-			if (c->mem->used == 0 || (c->offset == (off_t)c->mem->used - 1)) is_finished = 1;
+			c_len = buffer_string_length(c->mem);
 			break;
 		case FILE_CHUNK:
-			if (c->offset == c->file.length) is_finished = 1;
-			break;
-		default:
+			c_len = c->file.length;
 			break;
 		}
+		force_assert(c_len >= c->offset);
 
-		if (!is_finished) break;
-
-		chunk_reset(c);
+		if (c_len > c->offset) break; /* not finished yet */
 
 		cq->first = c->next;
 		if (c == cq->last) cq->last = NULL;
 
-		/* keep at max 4 chunks in the 'unused'-cache */
-		if (cq->unused_chunks > 4) {
-			chunk_free(c);
-		} else {
-			c->next = cq->unused;
-			cq->unused = c;
-			cq->unused_chunks++;
-		}
+		chunkqueue_push_unused_chunk(cq, c);
 	}
-
-	return 0;
 }

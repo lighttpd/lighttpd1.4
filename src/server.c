@@ -999,7 +999,7 @@ int main (int argc, char **argv) {
 
 	/* write pid file */
 	if (pid_fd != -1) {
-		buffer_copy_long(srv->tmp_buf, getpid());
+		buffer_copy_int(srv->tmp_buf, getpid());
 		buffer_append_string_len(srv->tmp_buf, CONST_STR_LEN("\n"));
 		force_assert(srv->tmp_buf->used > 0);
 		write(pid_fd, srv->tmp_buf->ptr, srv->tmp_buf->used - 1);

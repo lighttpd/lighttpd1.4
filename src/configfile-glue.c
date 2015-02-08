@@ -46,12 +46,12 @@ int config_insert_values_internal(server *srv, array *ca, const config_values_t 
 					if (da->value->data[j]->type == TYPE_STRING) {
 						data_string *ds = data_string_init();
 
-						buffer_copy_string_buffer(ds->value, ((data_string *)(da->value->data[j]))->value);
+						buffer_copy_buffer(ds->value, ((data_string *)(da->value->data[j]))->value);
 						if (!da->is_index_key) {
 							/* the id's were generated automaticly, as we copy now we might have to renumber them
 							 * this is used to prepend server.modules by mod_indexfile as it has to be loaded
 							 * before mod_fastcgi and friends */
-							buffer_copy_string_buffer(ds->key, ((data_string *)(da->value->data[j]))->key);
+							buffer_copy_buffer(ds->key, ((data_string *)(da->value->data[j]))->key);
 						}
 
 						array_insert_unique(cv[i].destination, (data_unset *)ds);
@@ -73,7 +73,7 @@ int config_insert_values_internal(server *srv, array *ca, const config_values_t 
 			if (du->type == TYPE_STRING) {
 				data_string *ds = (data_string *)du;
 
-				buffer_copy_string_buffer(cv[i].destination, ds->value);
+				buffer_copy_buffer(cv[i].destination, ds->value);
 			} else {
 				log_error_write(srv, __FILE__, __LINE__, "ssss", cv[i].key, "should have been a string like ... = \"...\"");
 
@@ -202,7 +202,7 @@ int config_insert_values_global(server *srv, array *ca, const config_values_t cv
 		touched = data_string_init();
 
 		buffer_copy_string_len(touched->value, CONST_STR_LEN(""));
-		buffer_copy_string_buffer(touched->key, du->key);
+		buffer_copy_buffer(touched->key, du->key);
 
 		array_insert_unique(srv->config_touched, (data_unset *)touched);
 	}
@@ -285,7 +285,7 @@ static cond_result_t config_check_cond_nocache(server *srv, connection *con, dat
 	case COMP_HTTP_HOST: {
 		char *ck_colon = NULL, *val_colon = NULL;
 
-		if (!buffer_is_empty(con->uri.authority)) {
+		if (!buffer_string_is_empty(con->uri.authority)) {
 
 			/*
 			 * append server-port to the HTTP_POST if necessary
@@ -301,9 +301,9 @@ static cond_result_t config_check_cond_nocache(server *srv, connection *con, dat
 
 				if (NULL != ck_colon && NULL == val_colon) {
 					/* condition "host:port" but client send "host" */
-					buffer_copy_string_buffer(srv->cond_check_buf, l);
+					buffer_copy_buffer(srv->cond_check_buf, l);
 					buffer_append_string_len(srv->cond_check_buf, CONST_STR_LEN(":"));
-					buffer_append_long(srv->cond_check_buf, sock_addr_get_port(&(srv_sock->addr)));
+					buffer_append_int(srv->cond_check_buf, sock_addr_get_port(&(srv_sock->addr)));
 					l = srv->cond_check_buf;
 				} else if (NULL != val_colon && NULL == ck_colon) {
 					/* condition "host" but client send "host:port" */
@@ -315,7 +315,7 @@ static cond_result_t config_check_cond_nocache(server *srv, connection *con, dat
 				break;
 			}
 #if defined USE_OPENSSL && ! defined OPENSSL_NO_TLSEXT
-		} else if (!buffer_is_empty(con->tlsext_server_name)) {
+		} else if (!buffer_string_is_empty(con->tlsext_server_name)) {
 			l = con->tlsext_server_name;
 #endif
 		} else {

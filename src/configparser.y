@@ -61,11 +61,11 @@ data_unset *configparser_merge_data(data_unset *op1, const data_unset *op2) {
   if (op1->type != op2->type) {
     if (op1->type == TYPE_STRING && op2->type == TYPE_INTEGER) {
       data_string *ds = (data_string *)op1;
-      buffer_append_long(ds->value, ((data_integer*)op2)->value);
+      buffer_append_int(ds->value, ((data_integer*)op2)->value);
       return op1;
     } else if (op1->type == TYPE_INTEGER && op2->type == TYPE_STRING) {
       data_string *ds = data_string_init();
-      buffer_append_long(ds->value, ((data_integer*)op1)->value);
+      buffer_append_int(ds->value, ((data_integer*)op1)->value);
       buffer_append_string_buffer(ds->value, ((data_string*)op2)->value);
       op1->free(op1);
       return (data_unset *)ds;
@@ -145,7 +145,7 @@ metaline ::= EOL.
 
 varline ::= key(A) ASSIGN expression(B). {
   if (ctx->ok) {
-    buffer_copy_string_buffer(B->key, A);
+    buffer_copy_buffer(B->key, A);
     if (strncmp(A->ptr, "env.", sizeof("env.") - 1) == 0) {
       fprintf(stderr, "Setting env variable is not supported in conditional %d %s: %s\n",
           ctx->current->context_ndx,
@@ -183,7 +183,7 @@ varline ::= key(A) APPEND expression(B). {
       ctx->ok = 0;
     }
     else {
-      buffer_copy_string_buffer(du->key, A);
+      buffer_copy_buffer(du->key, A);
       array_replace(vars, du);
     }
     B->free(B);
@@ -193,12 +193,12 @@ varline ::= key(A) APPEND expression(B). {
       ctx->ok = 0;
     }
     else {
-      buffer_copy_string_buffer(du->key, A);
+      buffer_copy_buffer(du->key, A);
       array_insert_unique(ctx->current->value, du);
     }
     B->free(B);
   } else {
-    buffer_copy_string_buffer(B->key, A);
+    buffer_copy_buffer(B->key, A);
     array_insert_unique(ctx->current->value, B);
   }
   buffer_free(A);
@@ -262,7 +262,7 @@ value(A) ::= key(B). {
 
 value(A) ::= STRING(B). {
   A = (data_unset *)data_string_init();
-  buffer_copy_string_buffer(((data_string *)(A))->value, B);
+  buffer_copy_buffer(((data_string *)(A))->value, B);
   buffer_free(B);
   B = NULL;
 }
@@ -320,7 +320,7 @@ aelement(A) ::= expression(B). {
   B = NULL;
 }
 aelement(A) ::= stringop(B) ARRAY_ASSIGN expression(C). {
-  buffer_copy_string_buffer(C->key, B);
+  buffer_copy_buffer(C->key, B);
   buffer_free(B);
   B = NULL;
 
@@ -405,7 +405,7 @@ context ::= DOLLAR SRVVARNAME(B) LBRACKET stringop(C) RBRACKET cond(E) expressio
   }
 
   b = buffer_init();
-  buffer_copy_string_buffer(b, ctx->current->key);
+  buffer_copy_buffer(b, ctx->current->key);
   buffer_append_string(b, "/");
   buffer_append_string_buffer(b, B);
   buffer_append_string_buffer(b, C);
@@ -441,9 +441,9 @@ context ::= DOLLAR SRVVARNAME(B) LBRACKET stringop(C) RBRACKET cond(E) expressio
 
     dc = data_config_init();
 
-    buffer_copy_string_buffer(dc->key, b);
-    buffer_copy_string_buffer(dc->op, op);
-    buffer_copy_string_buffer(dc->comp_key, B);
+    buffer_copy_buffer(dc->key, b);
+    buffer_copy_buffer(dc->op, op);
+    buffer_copy_buffer(dc->comp_key, B);
     buffer_append_string_len(dc->comp_key, CONST_STR_LEN("[\""));
     buffer_append_string_buffer(dc->comp_key, C);
     buffer_append_string_len(dc->comp_key, CONST_STR_LEN("\"]"));
@@ -546,7 +546,7 @@ stringop(A) ::= expression(B). {
       A = buffer_init_buffer(((data_string*)B)->value);
     } else if (B->type == TYPE_INTEGER) {
       A = buffer_init();
-      buffer_copy_long(A, ((data_integer *)B)->value);
+      buffer_copy_int(A, ((data_integer *)B)->value);
     } else {
       fprintf(stderr, "operand must be string");
       ctx->ok = 0;

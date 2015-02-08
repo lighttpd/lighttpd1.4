@@ -204,13 +204,13 @@ URIHANDLER_FUNC(mod_secdownload_uri_handler) {
 
 	if (buffer_is_empty(p->conf.uri_prefix)) return HANDLER_GO_ON;
 
-	if (buffer_is_empty(p->conf.secret)) {
+	if (buffer_string_is_empty(p->conf.secret)) {
 		log_error_write(srv, __FILE__, __LINE__, "s",
 				"secdownload.secret has to be set");
 		return HANDLER_ERROR;
 	}
 
-	if (buffer_is_empty(p->conf.doc_root)) {
+	if (buffer_string_is_empty(p->conf.doc_root)) {
 		log_error_write(srv, __FILE__, __LINE__, "s",
 				"secdownload.document-root has to be set");
 		return HANDLER_ERROR;
@@ -233,7 +233,7 @@ URIHANDLER_FUNC(mod_secdownload_uri_handler) {
 	if (*(ts_str + 8) != '/') return HANDLER_GO_ON;
 
 	for (i = 0; i < 8; i++) {
-		ts = (ts << 4) + hex2int(*(ts_str + i));
+		ts = (ts << 4) + hex2int(ts_str[i]);
 	}
 
 	/* timed-out */
@@ -252,7 +252,7 @@ URIHANDLER_FUNC(mod_secdownload_uri_handler) {
 	 * <secret><rel-path><timestamp-hex>
 	 */
 
-	buffer_copy_string_buffer(p->md5, p->conf.secret);
+	buffer_copy_buffer(p->md5, p->conf.secret);
 	buffer_append_string(p->md5, rel_uri);
 	buffer_append_string_len(p->md5, ts_str, 8);
 	force_assert(p->md5->used > 0);
@@ -276,10 +276,10 @@ URIHANDLER_FUNC(mod_secdownload_uri_handler) {
 	/* starting with the last / we should have relative-path to the docroot
 	 */
 
-	buffer_copy_string_buffer(con->physical.doc_root, p->conf.doc_root);
-	buffer_copy_string_buffer(con->physical.basedir, p->conf.doc_root);
+	buffer_copy_buffer(con->physical.doc_root, p->conf.doc_root);
+	buffer_copy_buffer(con->physical.basedir, p->conf.doc_root);
 	buffer_copy_string(con->physical.rel_path, rel_uri);
-	buffer_copy_string_buffer(con->physical.path, con->physical.doc_root);
+	buffer_copy_buffer(con->physical.path, con->physical.doc_root);
 	buffer_append_string_buffer(con->physical.path, con->physical.rel_path);
 
 	return HANDLER_GO_ON;

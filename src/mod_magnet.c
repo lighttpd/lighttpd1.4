@@ -319,7 +319,7 @@ static int magnet_stat(lua_State *L) {
 	lua_setfield(L, -2, "st_ino");
 
 
-	if (!buffer_is_empty(sce->etag)) {
+	if (!buffer_string_is_empty(sce->etag)) {
 		/* we have to mutate the etag */
 		buffer *b = buffer_init();
 		etag_mutate(b, sce->etag);
@@ -331,7 +331,7 @@ static int magnet_stat(lua_State *L) {
 	}
 	lua_setfield(L, -2, "etag");
 
-	if (!buffer_is_empty(sce->content_type)) {
+	if (!buffer_string_is_empty(sce->content_type)) {
 		lua_pushlstring(L, sce->content_type->ptr, sce->content_type->used - 1);
 	} else {
 		lua_pushnil(L);
@@ -759,7 +759,7 @@ static int magnet_attach_content(server *srv, connection *con, plugin_data *p, l
 				size_t s_len = 0;
 				const char *s = lua_tolstring(L, -1, &s_len);
 
-				chunkqueue_append_mem(con->write_queue, s, s_len + 1);
+				chunkqueue_append_mem(con->write_queue, s, s_len);
 			} else if (lua_istable(L, -1)) {
 				lua_getfield(L, -1, "filename");
 				lua_getfield(L, -2, "length");
@@ -1066,7 +1066,7 @@ static handler_t magnet_attract_array(server *srv, connection *con, plugin_data 
 		data_string *ds = (data_string *)files->data[i];
 		handler_t ret;
 
-		if (buffer_is_empty(ds->value)) continue;
+		if (buffer_string_is_empty(ds->value)) continue;
 
 		ret = magnet_attract(srv, con, p, ds->value);
 

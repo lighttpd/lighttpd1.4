@@ -222,7 +222,7 @@ SETDEFAULTS_FUNC(mod_compress_setdefaults) {
 
 		array_free(encodings_arr);
 
-		if (!buffer_is_empty(s->compress_cache_dir)) {
+		if (!buffer_string_is_empty(s->compress_cache_dir)) {
 			struct stat st;
 			mkdir_recursive(s->compress_cache_dir->ptr);
 
@@ -351,7 +351,7 @@ static int deflate_file_to_buffer_deflate(server *srv, connection *con, plugin_d
 	}
 
 	/* trailer */
-	p->b->used += z.total_out;
+	p->b->used = z.total_out;
 
 	if (Z_OK != deflateEnd(&z)) {
 		return -1;
@@ -429,12 +429,12 @@ static int deflate_file_to_file(server *srv, connection *con, plugin_data *p, bu
 	if (sce->st.st_size > 128 * 1024 * 1024) return -1;
 
 	buffer_reset(p->ofn);
-	buffer_copy_string_buffer(p->ofn, p->conf.compress_cache_dir);
-	BUFFER_APPEND_SLASH(p->ofn);
+	buffer_copy_buffer(p->ofn, p->conf.compress_cache_dir);
+	buffer_append_slash(p->ofn);
 
 	if (0 == strncmp(con->physical.path->ptr, con->physical.doc_root->ptr, con->physical.doc_root->used-1)) {
 		buffer_append_string(p->ofn, con->physical.path->ptr + con->physical.doc_root->used - 1);
-		buffer_copy_string_buffer(p->b, p->ofn);
+		buffer_copy_buffer(p->b, p->ofn);
 	} else {
 		buffer_append_string_buffer(p->ofn, con->uri.path);
 	}
@@ -469,7 +469,7 @@ static int deflate_file_to_file(server *srv, connection *con, plugin_data *p, bu
 #if 0
 			log_error_write(srv, __FILE__, __LINE__, "bs", p->ofn, "compress-cache hit");
 #endif
-			buffer_copy_string_buffer(con->physical.path, p->ofn);
+			buffer_copy_buffer(con->physical.path, p->ofn);
 
 			return 0;
 		}
@@ -574,7 +574,7 @@ static int deflate_file_to_file(server *srv, connection *con, plugin_data *p, bu
 		return -1;
 	}
 
-	buffer_copy_string_buffer(con->physical.path, p->ofn);
+	buffer_copy_buffer(con->physical.path, p->ofn);
 
 	return 0;
 }
@@ -652,7 +652,7 @@ static int deflate_file_to_buffer(server *srv, connection *con, plugin_data *p, 
 
 	chunkqueue_reset(con->write_queue);
 	b = chunkqueue_get_append_buffer(con->write_queue);
-	buffer_copy_memory(b, p->b->ptr, p->b->used + 1);
+	buffer_copy_string_len(b, p->b->ptr, p->b->used);
 
 	buffer_reset(con->physical.path);
 
@@ -732,7 +732,7 @@ PHYSICALPATH_FUNC(mod_compress_physical) {
 		return HANDLER_GO_ON;
 	}
 
-	if (buffer_is_empty(con->physical.path)) {
+	if (buffer_string_is_empty(con->physical.path)) {
 		return HANDLER_GO_ON;
 	}
 
@@ -867,7 +867,7 @@ PHYSICALPATH_FUNC(mod_compress_physical) {
 
 					if (use_etag) {
 						/* try matching etag of compressed version */
-						buffer_copy_string_buffer(srv->tmp_buf, sce->etag);
+						buffer_copy_buffer(srv->tmp_buf, sce->etag);
 						buffer_append_string_len(srv->tmp_buf, CONST_STR_LEN("-"));
 						buffer_append_string(srv->tmp_buf, compression_name);
 						etag_mutate(con->physical.etag, srv->tmp_buf);

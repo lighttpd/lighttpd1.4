@@ -100,7 +100,7 @@ static int connection_map_insert(connection_map *cm, connection *con, buffer *co
 		cme = malloc(sizeof(*cme));
 	}
 	cme->con_id = buffer_init();
-	buffer_copy_string_buffer(cme->con_id, con_id);
+	buffer_copy_buffer(cme->con_id, con_id);
 	cme->con = con;
 
 	cm->ptr[cm->used++] = cme;
@@ -288,7 +288,7 @@ URIHANDLER_FUNC(mod_uploadprogress_uri_handler) {
 		/* the request has to contain a 32byte ID */
 
 		if (NULL == (ds = (data_string *)array_get_element(con->request.headers, "X-Progress-ID"))) {
-			if (!buffer_is_empty(con->uri.query)) {
+			if (!buffer_string_is_empty(con->uri.query)) {
 				/* perhaps the POST request is using the querystring to pass the X-Progress-ID */
 				b = con->uri.query;
 			} else {
@@ -323,7 +323,7 @@ URIHANDLER_FUNC(mod_uploadprogress_uri_handler) {
 		}
 
 		if (NULL == (ds = (data_string *)array_get_element(con->request.headers, "X-Progress-ID"))) {
-			if (!buffer_is_empty(con->uri.query)) {
+			if (!buffer_string_is_empty(con->uri.query)) {
 				/* perhaps the GET request is using the querystring to pass the X-Progress-ID */
 				b = con->uri.query;
 			} else {
@@ -383,11 +383,11 @@ URIHANDLER_FUNC(mod_uploadprogress_uri_handler) {
 			"<?xml version=\"1.0\" encoding=\"iso-8859-1\"?>"
 			"<upload>"
 			"<size>"));
-		buffer_append_off_t(b, post_con->request.content_length);
+		buffer_append_int(b, post_con->request.content_length);
 		buffer_append_string_len(b, CONST_STR_LEN(
 			"</size>"
 			"<received>"));
-		buffer_append_off_t(b, post_con->request_content_queue->bytes_in);
+		buffer_append_int(b, post_con->request_content_queue->bytes_in);
 		buffer_append_string_len(b, CONST_STR_LEN(
 			"</received>"
 			"</upload>"));

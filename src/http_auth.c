@@ -172,7 +172,7 @@ static int http_auth_get_password(server *srv, mod_auth_plugin_data *p, buffer *
 		stream f;
 		char * f_line;
 
-		if (buffer_is_empty(p->conf.auth_htdigest_userfile)) return -1;
+		if (buffer_string_is_empty(p->conf.auth_htdigest_userfile)) return -1;
 
 		if (0 != stream_open(&f, p->conf.auth_htdigest_userfile)) {
 			log_error_write(srv, __FILE__, __LINE__, "sbss", "opening digest-userfile", p->conf.auth_htdigest_userfile, "failed:", strerror(errno));
@@ -253,7 +253,7 @@ static int http_auth_get_password(server *srv, mod_auth_plugin_data *p, buffer *
 
 		auth_fn = (p->conf.auth_backend == AUTH_BACKEND_HTPASSWD) ? p->conf.auth_htpasswd_userfile : p->conf.auth_plain_userfile;
 
-		if (buffer_is_empty(auth_fn)) return -1;
+		if (buffer_string_is_empty(auth_fn)) return -1;
 
 		if (0 != stream_open(&f, auth_fn)) {
 			log_error_write(srv, __FILE__, __LINE__, "sbss",
@@ -748,7 +748,7 @@ static int http_auth_basic_password_compare(server *srv, mod_auth_plugin_data *p
 			return -1;
 
 		/* build filter */
-		buffer_copy_string_buffer(p->ldap_filter, p->conf.ldap_filter_pre);
+		buffer_copy_buffer(p->ldap_filter, p->conf.ldap_filter_pre);
 		buffer_append_string_buffer(p->ldap_filter, username);
 		buffer_append_string_buffer(p->ldap_filter, p->conf.ldap_filter_post);
 
@@ -903,7 +903,7 @@ int http_auth_basic_check(server *srv, connection *con, mod_auth_plugin_data *p,
 	}
 
 	/* remember the username */
-	buffer_copy_string_buffer(p->auth_user, username);
+	buffer_copy_buffer(p->auth_user, username);
 
 	buffer_free(username);
 	buffer_free(password);
@@ -1192,7 +1192,7 @@ int http_auth_digest_check(server *srv, connection *con, mod_auth_plugin_data *p
 int http_auth_digest_generate_nonce(server *srv, mod_auth_plugin_data *p, buffer *fn, char out[33]) {
 	HASH h;
 	li_MD5_CTX Md5Ctx;
-	char hh[32];
+	char hh[LI_ITOSTRING_LENGTH];
 
 	UNUSED(p);
 
@@ -1202,10 +1202,10 @@ int http_auth_digest_generate_nonce(server *srv, mod_auth_plugin_data *p, buffer
 	li_MD5_Update(&Md5Ctx, (unsigned char *)"+", 1);
 
 	/* we assume sizeof(time_t) == 4 here, but if not it ain't a problem at all */
-	LI_ltostr(hh, srv->cur_ts);
+	li_itostr(hh, srv->cur_ts);
 	li_MD5_Update(&Md5Ctx, (unsigned char *)hh, strlen(hh));
 	li_MD5_Update(&Md5Ctx, (unsigned char *)srv->entropy, sizeof(srv->entropy));
-	LI_ltostr(hh, rand());
+	li_itostr(hh, rand());
 	li_MD5_Update(&Md5Ctx, (unsigned char *)hh, strlen(hh));
 
 	li_MD5_Final(h, &Md5Ctx);

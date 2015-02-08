@@ -101,7 +101,7 @@ static int rewrite_rule_buffer_append(rewrite_rule_buffer *kvb, buffer *key, buf
 	}
 
 	kvb->ptr[kvb->used]->value = buffer_init();
-	buffer_copy_string_buffer(kvb->ptr[kvb->used]->value, value);
+	buffer_copy_buffer(kvb->ptr[kvb->used]->value, value);
 	kvb->ptr[kvb->used]->once = once;
 
 	kvb->used++;
@@ -359,7 +359,7 @@ static int process_rewrite_rules(server *srv, connection *con, plugin_data *p, r
 		if (hctx->state == REWRITE_STATE_FINISHED) return HANDLER_GO_ON;
 	}
 
-	buffer_copy_string_buffer(p->match_buf, con->request.uri);
+	buffer_copy_buffer(p->match_buf, con->request.uri);
 
 	for (i = 0; i < kvb->used; i++) {
 		pcre *match;

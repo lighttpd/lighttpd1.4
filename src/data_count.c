@@ -8,7 +8,7 @@ static data_unset *data_count_copy(const data_unset *s) {
 	data_count *src = (data_count *)s;
 	data_count *ds = data_count_init();
 
-	buffer_copy_string_buffer(ds->key, src->key);
+	buffer_copy_buffer(ds->key, src->key);
 	ds->count = src->count;
 	ds->is_index_key = src->is_index_key;
 	return (data_unset *)ds;

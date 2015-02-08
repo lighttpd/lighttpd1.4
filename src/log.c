@@ -152,7 +152,7 @@ int log_error_open(server *srv) {
 
 	if (srv->srvconf.errorlog_use_syslog) {
 		srv->errorlog_mode = ERRORLOG_SYSLOG;
-	} else if (!buffer_is_empty(srv->srvconf.errorlog_file)) {
+	} else if (!buffer_string_is_empty(srv->srvconf.errorlog_file)) {
 		const char *logfile = srv->srvconf.errorlog_file->ptr;
 
 		if (-1 == (srv->errorlog_fd = open_logfile_or_pipe(srv, logfile))) {
@@ -170,7 +170,7 @@ int log_error_open(server *srv) {
 		srv->errorlog_fd = -1;
 	}
 
-	if (!buffer_is_empty(srv->srvconf.breakagelog_file)) {
+	if (!buffer_string_is_empty(srv->srvconf.breakagelog_file)) {
 		int breakage_fd;
 		const char *logfile = srv->srvconf.breakagelog_file->ptr;
 
@@ -277,12 +277,12 @@ static void log_buffer_append_printf(buffer *out, const char *fmt, va_list ap) {
 			break;
 		case 'd':           /* int */
 			d = va_arg(ap, int);
-			buffer_append_long(out, d);
+			buffer_append_int(out, d);
 			buffer_append_string_len(out, CONST_STR_LEN(" "));
 			break;
 		case 'o':           /* off_t */
 			o = va_arg(ap, off_t);
-			buffer_append_off_t(out, o);
+			buffer_append_int(out, o);
 			buffer_append_string_len(out, CONST_STR_LEN(" "));
 			break;
 		case 'x':           /* int (hex) */
@@ -301,11 +301,11 @@ static void log_buffer_append_printf(buffer *out, const char *fmt, va_list ap) {
 			break;
 		case 'D':           /* int */
 			d = va_arg(ap, int);
-			buffer_append_long(out, d);
+			buffer_append_int(out, d);
 			break;
 		case 'O':           /* off_t */
 			o = va_arg(ap, off_t);
-			buffer_append_off_t(out, o);
+			buffer_append_int(out, o);
 			break;
 		case 'X':           /* int (hex) */
 			d = va_arg(ap, int);
@@ -339,7 +339,7 @@ static int log_buffer_prepare(buffer *b, server *srv, const char *filename, unsi
 			srv->last_generated_debug_ts = srv->cur_ts;
 		}
 
-		buffer_copy_string_buffer(b, srv->ts_debug_str);
+		buffer_copy_buffer(b, srv->ts_debug_str);
 		buffer_append_string_len(b, CONST_STR_LEN(": ("));
 		break;
 	case ERRORLOG_SYSLOG:
@@ -350,7 +350,7 @@ static int log_buffer_prepare(buffer *b, server *srv, const char *filename, unsi
 
 	buffer_append_string(b, filename);
 	buffer_append_string_len(b, CONST_STR_LEN("."));
-	buffer_append_long(b, line);
+	buffer_append_int(b, line);
 	buffer_append_string_len(b, CONST_STR_LEN(") "));
 
 	return 0;

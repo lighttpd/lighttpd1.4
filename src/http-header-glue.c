@@ -123,7 +123,7 @@ int http_response_redirect_to_directory(server *srv, connection *con) {
 
 	o = buffer_init();
 
-	buffer_copy_string_buffer(o, con->uri.scheme);
+	buffer_copy_buffer(o, con->uri.scheme);
 	buffer_append_string_len(o, CONST_STR_LEN("://"));
 	if (con->uri.authority->used) {
 		buffer_append_string_buffer(o, con->uri.authority);
@@ -197,13 +197,13 @@ int http_response_redirect_to_directory(server *srv, connection *con) {
 			}
 			if (default_port != srv->srvconf.port) {
 				buffer_append_string_len(o, CONST_STR_LEN(":"));
-				buffer_append_long(o, srv->srvconf.port);
+				buffer_append_int(o, srv->srvconf.port);
 			}
 		}
 	}
 	buffer_append_string_buffer(o, con->uri.path);
 	buffer_append_string_len(o, CONST_STR_LEN("/"));
-	if (!buffer_is_empty(con->uri.query)) {
+	if (!buffer_string_is_empty(con->uri.query)) {
 		buffer_append_string_len(o, CONST_STR_LEN("?"));
 		buffer_append_string_buffer(o, con->uri.query);
 	}

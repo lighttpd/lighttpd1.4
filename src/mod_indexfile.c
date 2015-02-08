@@ -158,9 +158,9 @@ URIHANDLER_FUNC(mod_indexfile_subrequest) {
 		if (ds->value && ds->value->ptr[0] == '/') {
 			/* if the index-file starts with a prefix as use this file as
 			 * index-generator */
-			buffer_copy_string_buffer(p->tmp_buf, con->physical.doc_root);
+			buffer_copy_buffer(p->tmp_buf, con->physical.doc_root);
 		} else {
-			buffer_copy_string_buffer(p->tmp_buf, con->physical.path);
+			buffer_copy_buffer(p->tmp_buf, con->physical.path);
 		}
 		buffer_append_string_buffer(p->tmp_buf, ds->value);
 
@@ -192,7 +192,7 @@ URIHANDLER_FUNC(mod_indexfile_subrequest) {
 
 		/* rewrite uri.path to the real path (/ -> /index.php) */
 		buffer_append_string_buffer(con->uri.path, ds->value);
-		buffer_copy_string_buffer(con->physical.path, p->tmp_buf);
+		buffer_copy_buffer(con->physical.path, p->tmp_buf);
 
 		/* fce is already set up a few lines above */
 

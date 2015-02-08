@@ -221,7 +221,7 @@ static int stat_cache_attr_get(buffer *buf, char *name) {
 
 	attrlen = 1024;
 	buffer_prepare_copy(buf, attrlen);
-	attrlen--;
+	attrlen = buf->size - 1;
 	if(0 == (ret = attr_get(name, "Content-Type", buf->ptr, &attrlen, 0))) {
 		buf->used = attrlen + 1;
 		buf->ptr[attrlen] = '\0';
@@ -234,7 +234,7 @@ static int stat_cache_attr_get(buffer *buf, char *name) {
 
 	buffer_prepare_copy(buf, attrlen);
 
-	if (-1 != (attrlen = extattr_get_file(name, EXTATTR_NAMESPACE_USER, "Content-Type", buf->ptr, attrlen-1))) {
+	if (-1 != (attrlen = extattr_get_file(name, EXTATTR_NAMESPACE_USER, "Content-Type", buf->ptr, buf->size - 1))) {
 		buf->used = attrlen + 1;
 		buf->ptr[attrlen] = '\0';
 		return 0;
@@ -294,7 +294,7 @@ handler_t stat_cache_handle_fdevent(server *srv, void *_fce, int revent) {
 
 				for (j = 0; j < 2; j++) {
 					buffer_copy_string(sc->hash_key, fe.filename);
-					buffer_append_long(sc->hash_key, j);
+					buffer_append_int(sc->hash_key, j);
 
 					ndx = hashme(sc->hash_key);
 
@@ -331,7 +331,7 @@ handler_t stat_cache_handle_fdevent(server *srv, void *_fce, int revent) {
 static int buffer_copy_dirname(buffer *dst, buffer *file) {
 	size_t i;
 
-	if (buffer_is_empty(file)) return -1;
+	if (buffer_string_is_empty(file)) return -1;
 
 	for (i = file->used - 1; i+1 > 0; i--) {
 		if (file->ptr[i] == '/') {
@@ -394,8 +394,8 @@ handler_t stat_cache_get_entry(server *srv, connection *con, buffer *name, stat_
 
 	sc = srv->stat_cache;
 
-	buffer_copy_string_buffer(sc->hash_key, name);
-	buffer_append_long(sc->hash_key, con->conf.follow_symlink);
+	buffer_copy_buffer(sc->hash_key, name);
+	buffer_append_int(sc->hash_key, con->conf.follow_symlink);
 
 	file_ndx = hashme(sc->hash_key);
 	sc->files = splaytree_splay(sc->files, file_ndx);
@@ -460,8 +460,8 @@ handler_t stat_cache_get_entry(server *srv, connection *con, buffer *name, stat_
 			return HANDLER_ERROR;
 		}
 
-		buffer_copy_string_buffer(sc->hash_key, sc->dir_name);
-		buffer_append_long(sc->hash_key, con->conf.follow_symlink);
+		buffer_copy_buffer(sc->hash_key, sc->dir_name);
+		buffer_append_int(sc->hash_key, con->conf.follow_symlink);
 
 		dir_ndx = hashme(sc->hash_key);
 
@@ -518,7 +518,7 @@ handler_t stat_cache_get_entry(server *srv, connection *con, buffer *name, stat_
 #endif
 
 		sce = stat_cache_entry_init();
-		buffer_copy_string_buffer(sce->name, name);
+		buffer_copy_buffer(sce->name, name);
 
 		sc->files = splaytree_insert(sc->files, file_ndx, sce);
 #ifdef DEBUG_STAT_CACHE
@@ -577,7 +577,7 @@ handler_t stat_cache_get_entry(server *srv, connection *con, buffer *name, stat_
 			char *s_cur;
 
 			dname = buffer_init();
-			buffer_copy_string_buffer(dname, name);
+			buffer_copy_buffer(dname, name);
 
 			while ((s_cur = strrchr(dname->ptr,'/'))) {
 				*s_cur = '\0';
@@ -615,7 +615,7 @@ handler_t stat_cache_get_entry(server *srv, connection *con, buffer *name, stat_
 		}
 #endif
 		/* xattr did not set a content-type. ask the config */
-		if (buffer_is_empty(sce->content_type)) {
+		if (buffer_string_is_empty(sce->content_type)) {
 			for (k = 0; k < con->conf.mimetypes->used; k++) {
 				data_string *ds = (data_string *)con->conf.mimetypes->data[k];
 				buffer *type = ds->key;
@@ -626,7 +626,7 @@ handler_t stat_cache_get_entry(server *srv, connection *con, buffer *name, stat_
 				if (type->used > name->used) continue;
 
 				if (0 == strncasecmp(name->ptr + name->used - type->used, type->ptr, type->used - 1)) {
-					buffer_copy_string_buffer(sce->content_type, ds->value);
+					buffer_copy_buffer(sce->content_type, ds->value);
 					break;
 				}
 			}
@@ -642,7 +642,7 @@ handler_t stat_cache_get_entry(server *srv, connection *con, buffer *name, stat_
 		if (!dir_node) {
 			fam_dir = fam_dir_entry_init();
 
-			buffer_copy_string_buffer(fam_dir->name, sc->dir_name);
+			buffer_copy_buffer(fam_dir->name, sc->dir_name);
 
 			fam_dir->version = 1;
 

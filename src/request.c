@@ -322,7 +322,7 @@ int http_request_parse(server *srv, connection *con) {
 		buffer_copy_string_len(con->parse_request, con->request.request->ptr + 2, con->request.request->used - 1 - 2);
 	} else {
 		/* fill the local request buffer */
-		buffer_copy_string_buffer(con->parse_request, con->request.request);
+		buffer_copy_buffer(con->parse_request, con->request.request);
 	}
 
 	keep_alive_set = 0;
@@ -508,7 +508,7 @@ int http_request_parse(server *srv, connection *con) {
 					}
 				}
 
-				buffer_copy_string_buffer(con->request.orig_uri, con->request.uri);
+				buffer_copy_buffer(con->request.orig_uri, con->request.uri);
 
 				con->http_status = 0;
 
@@ -1061,7 +1061,7 @@ int http_request_parse(server *srv, connection *con) {
 
 		/* RFC 2616, 14.23 */
 		if (con->request.http_host == NULL ||
-		    buffer_is_empty(con->request.http_host)) {
+		    buffer_string_is_empty(con->request.http_host)) {
 			con->http_status = 400;
 			con->response.keep_alive = 0;
 			con->keep_alive = 0;

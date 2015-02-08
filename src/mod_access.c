@@ -132,7 +132,7 @@ URIHANDLER_FUNC(mod_access_uri_handler) {
 	s_len = con->uri.path->used - 1;
 
 	if (con->conf.log_request_handling) {
- 		log_error_write(srv, __FILE__, __LINE__, "s", 
+		log_error_write(srv, __FILE__, __LINE__, "s",
 				"-- mod_access_uri_handler called");
 	}
 

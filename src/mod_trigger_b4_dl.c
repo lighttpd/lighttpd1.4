@@ -175,7 +175,7 @@ SETDEFAULTS_FUNC(mod_trigger_b4_dl_set_defaults) {
 			return HANDLER_ERROR;
 		}
 #if defined(HAVE_GDBM_H)
-		if (!buffer_is_empty(s->db_filename)) {
+		if (!buffer_string_is_empty(s->db_filename)) {
 			if (NULL == (s->db = gdbm_open(s->db_filename->ptr, 4096, GDBM_WRCREAT | GDBM_NOLOCK, S_IRUSR | S_IWUSR, 0))) {
 				log_error_write(srv, __FILE__, __LINE__, "s",
 						"gdbm-open failed");
@@ -185,7 +185,7 @@ SETDEFAULTS_FUNC(mod_trigger_b4_dl_set_defaults) {
 		}
 #endif
 #if defined(HAVE_PCRE_H)
-		if (!buffer_is_empty(s->download_url)) {
+		if (!buffer_string_is_empty(s->download_url)) {
 			if (NULL == (s->download_regex = pcre_compile(s->download_url->ptr,
 								      0, &errptr, &erroff, NULL))) {
 
@@ -196,7 +196,7 @@ SETDEFAULTS_FUNC(mod_trigger_b4_dl_set_defaults) {
 			}
 		}
 
-		if (!buffer_is_empty(s->trigger_url)) {
+		if (!buffer_string_is_empty(s->trigger_url)) {
 			if (NULL == (s->trigger_regex = pcre_compile(s->trigger_url->ptr,
 								     0, &errptr, &erroff, NULL))) {
 
@@ -384,7 +384,7 @@ URIHANDLER_FUNC(mod_trigger_b4_dl_uri_handler) {
 # if defined(HAVE_MEMCACHE_H)
 		if (p->conf.mc) {
 			size_t i;
-			buffer_copy_string_buffer(p->tmp_buf, p->conf.mc_namespace);
+			buffer_copy_buffer(p->tmp_buf, p->conf.mc_namespace);
 			buffer_append_string(p->tmp_buf, remote_ip);
 
 			for (i = 0; i < p->tmp_buf->used - 1; i++) {
@@ -471,7 +471,7 @@ URIHANDLER_FUNC(mod_trigger_b4_dl_uri_handler) {
 			void *r;
 			size_t i;
 
-			buffer_copy_string_buffer(p->tmp_buf, p->conf.mc_namespace);
+			buffer_copy_buffer(p->tmp_buf, p->conf.mc_namespace);
 			buffer_append_string(p->tmp_buf, remote_ip);
 
 			for (i = 0; i < p->tmp_buf->used - 1; i++) {

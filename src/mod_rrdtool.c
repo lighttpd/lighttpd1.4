@@ -366,7 +366,7 @@ SETDEFAULTS_FUNC(mod_rrd_set_defaults) {
 			return HANDLER_ERROR;
 		}
 
-		if (i > 0 && !buffer_is_empty(s->path_rrdtool_bin)) {
+		if (i > 0 && !buffer_string_is_empty(s->path_rrdtool_bin)) {
 			/* path_rrdtool_bin is a global option */
 
 			log_error_write(srv, __FILE__, __LINE__, "s",
@@ -382,7 +382,7 @@ SETDEFAULTS_FUNC(mod_rrd_set_defaults) {
 
 	/* check for dir */
 
-	if (buffer_is_empty(p->conf.path_rrdtool_bin)) {
+	if (buffer_string_is_empty(p->conf.path_rrdtool_bin)) {
 		log_error_write(srv, __FILE__, __LINE__, "s",
 				"rrdtool.binary has to be set");
 		return HANDLER_ERROR;
@@ -409,7 +409,7 @@ TRIGGER_FUNC(mod_rrd_trigger) {
 		plugin_config *s = p->config_storage[i];
 		int r;
 
-		if (buffer_is_empty(s->path_rrd)) continue;
+		if (buffer_string_is_empty(s->path_rrd)) continue;
 
 		/* write the data down every minute */
 
@@ -418,11 +418,11 @@ TRIGGER_FUNC(mod_rrd_trigger) {
 		buffer_copy_string_len(p->cmd, CONST_STR_LEN("update "));
 		buffer_append_string_buffer(p->cmd, s->path_rrd);
 		buffer_append_string_len(p->cmd, CONST_STR_LEN(" N:"));
-		buffer_append_off_t(p->cmd, s->bytes_read);
+		buffer_append_int(p->cmd, s->bytes_read);
 		buffer_append_string_len(p->cmd, CONST_STR_LEN(":"));
-		buffer_append_off_t(p->cmd, s->bytes_written);
+		buffer_append_int(p->cmd, s->bytes_written);
 		buffer_append_string_len(p->cmd, CONST_STR_LEN(":"));
-		buffer_append_long(p->cmd, s->requests);
+		buffer_append_int(p->cmd, s->requests);
 		buffer_append_string_len(p->cmd, CONST_STR_LEN("\n"));
 
 		if (-1 == (r = safe_write(p->write_fd, p->cmd->ptr, p->cmd->used - 1))) {

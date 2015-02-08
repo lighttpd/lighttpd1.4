@@ -235,7 +235,7 @@ static int cgi_response_parse(server *srv, connection *con, plugin_data *p, buff
 
 	UNUSED(srv);
 
-	buffer_copy_string_buffer(p->parse_response, in);
+	buffer_copy_buffer(p->parse_response, in);
 
 	for (s = p->parse_response->ptr;
 	     NULL != (ns = strchr(s, '\n'));
@@ -350,7 +350,7 @@ static int cgi_demux_response(server *srv, handler_ctx *hctx) {
 			buffer_prepare_copy(hctx->response, 4 * 1024);
 		} else {
 			if (toread > MAX_READ_LIMIT) toread = MAX_READ_LIMIT;
-			buffer_prepare_copy(hctx->response, toread + 1);
+			buffer_prepare_copy(hctx->response, toread);
 		}
 #endif
 
@@ -370,7 +370,7 @@ static int cgi_demux_response(server *srv, handler_ctx *hctx) {
 			con->file_finished = 1;
 
 			/* send final chunk */
-			http_chunk_append_mem(srv, con, NULL, 0);
+			http_chunk_close(srv, con);
 			joblist_append(srv, con);
 
 			return FDEVENT_HANDLED_FINISHED;
@@ -458,7 +458,7 @@ static int cgi_demux_response(server *srv, handler_ctx *hctx) {
 						con->response.transfer_encoding = HTTP_TRANSFER_ENCODING_CHUNKED;
 					}
 
-					http_chunk_append_mem(srv, con, hctx->response_header->ptr, hctx->response_header->used);
+					http_chunk_append_buffer(srv, con, hctx->response_header);
 					joblist_append(srv, con);
 				} else {
 					const char *bstart;
@@ -493,7 +493,7 @@ static int cgi_demux_response(server *srv, handler_ctx *hctx) {
 					}
 
 					if (blen > 0) {
-						http_chunk_append_mem(srv, con, bstart, blen + 1);
+						http_chunk_append_mem(srv, con, bstart, blen);
 						joblist_append(srv, con);
 					}
 				}
@@ -501,7 +501,7 @@ static int cgi_demux_response(server *srv, handler_ctx *hctx) {
 				con->file_started = 1;
 			}
 		} else {
-			http_chunk_append_mem(srv, con, hctx->response->ptr, hctx->response->used);
+			http_chunk_append_buffer(srv, con, hctx->response);
 			joblist_append(srv, con);
 		}
 
@@ -668,27 +668,17 @@ static handler_t cgi_handle_fdevent(server *srv, void *ctx, int revents) {
 	/* perhaps this issue is already handled */
 	if (revents & FDEVENT_HUP) {
 		/* check if we still have a unfinished header package which is a body in reality */
-		if (con->file_started == 0 &&
-		    hctx->response_header->used) {
+		if (con->file_started == 0 && !buffer_string_is_empty(hctx->response_header)) {
 			con->file_started = 1;
-			http_chunk_append_mem(srv, con, hctx->response_header->ptr, hctx->response_header->used);
-			joblist_append(srv, con);
+			http_chunk_append_buffer(srv, con, hctx->response_header);
 		}
 
 		if (con->file_finished == 0) {
-			http_chunk_append_mem(srv, con, NULL, 0);
-			joblist_append(srv, con);
+			http_chunk_close(srv, con);
 		}
-
 		con->file_finished = 1;
 
-		if (chunkqueue_is_empty(con->write_queue)) {
-			/* there is nothing left to write */
-			connection_set_state(srv, con, CON_STATE_RESPONSE_END);
-		} else {
-			/* used the write-handler to finish the request on demand */
-
-		}
+		joblist_append(srv, con);
 
 # if 0
 		log_error_write(srv, __FILE__, __LINE__, "sddd", "got HUP from cgi", con->fd, hctx->fd, revents);
@@ -777,7 +767,7 @@ static int cgi_create_env(server *srv, connection *con, plugin_data *p, buffer *
 		char **args;
 		int argc;
 		int i = 0;
-		char buf[32];
+		char buf[LI_ITOSTRING_LENGTH];
 		size_t n;
 		char_array env;
 		char *c;
@@ -809,7 +799,7 @@ static int cgi_create_env(server *srv, connection *con, plugin_data *p, buffer *
 			cgi_env_add(&env, CONST_STR_LEN("SERVER_SOFTWARE"), CONST_BUF_LEN(con->conf.server_tag));
 		}
 
-		if (!buffer_is_empty(con->server_name)) {
+		if (!buffer_string_is_empty(con->server_name)) {
 			size_t len = con->server_name->used - 1;
 
 			if (con->server_name->ptr[0] == '[') {
@@ -839,7 +829,7 @@ static int cgi_create_env(server *srv, connection *con, plugin_data *p, buffer *
 
 		cgi_env_add(&env, CONST_STR_LEN("SERVER_PROTOCOL"), s, strlen(s));
 
-		LI_ltostr(buf,
+		li_utostr(buf,
 #ifdef HAVE_IPV6
 			ntohs(srv_sock->addr.plain.sa_family == AF_INET6 ? srv_sock->addr.ipv6.sin6_port : srv_sock->addr.ipv4.sin_port)
 #else
@@ -874,14 +864,14 @@ static int cgi_create_env(server *srv, connection *con, plugin_data *p, buffer *
 		s = get_http_method_name(con->request.http_method);
 		cgi_env_add(&env, CONST_STR_LEN("REQUEST_METHOD"), s, strlen(s));
 
-		if (!buffer_is_empty(con->request.pathinfo)) {
+		if (!buffer_string_is_empty(con->request.pathinfo)) {
 			cgi_env_add(&env, CONST_STR_LEN("PATH_INFO"), CONST_BUF_LEN(con->request.pathinfo));
 		}
 		cgi_env_add(&env, CONST_STR_LEN("REDIRECT_STATUS"), CONST_STR_LEN("200"));
-		if (!buffer_is_empty(con->uri.query)) {
+		if (!buffer_string_is_empty(con->uri.query)) {
 			cgi_env_add(&env, CONST_STR_LEN("QUERY_STRING"), CONST_BUF_LEN(con->uri.query));
 		}
-		if (!buffer_is_empty(con->request.orig_uri)) {
+		if (!buffer_string_is_empty(con->request.orig_uri)) {
 			cgi_env_add(&env, CONST_STR_LEN("REQUEST_URI"), CONST_BUF_LEN(con->request.orig_uri));
 		}
 
@@ -909,7 +899,7 @@ static int cgi_create_env(server *srv, connection *con, plugin_data *p, buffer *
 		}
 		cgi_env_add(&env, CONST_STR_LEN("REMOTE_ADDR"), s, strlen(s));
 
-		LI_ltostr(buf,
+		li_utostr(buf,
 #ifdef HAVE_IPV6
 			ntohs(con->dst_addr.plain.sa_family == AF_INET6 ? con->dst_addr.ipv6.sin6_port : con->dst_addr.ipv4.sin_port)
 #else
@@ -922,8 +912,7 @@ static int cgi_create_env(server *srv, connection *con, plugin_data *p, buffer *
 			cgi_env_add(&env, CONST_STR_LEN("HTTPS"), CONST_STR_LEN("on"));
 		}
 
-		/* request.content_length < SSIZE_MAX, see request.c */
-		LI_ltostr(buf, con->request.content_length);
+		li_itostr(buf, con->request.content_length);
 		cgi_env_add(&env, CONST_STR_LEN("CONTENT_LENGTH"), buf, strlen(buf));
 		cgi_env_add(&env, CONST_STR_LEN("SCRIPT_FILENAME"), CONST_BUF_LEN(con->physical.path));
 		cgi_env_add(&env, CONST_STR_LEN("SCRIPT_NAME"), CONST_BUF_LEN(con->uri.path));
@@ -1133,8 +1122,6 @@ static int cgi_create_env(server *srv, connection *con, plugin_data *p, buffer *
 							break;
 						}
 					}
-					break;
-				case UNUSED_CHUNK:
 					break;
 				}
 

@@ -9,8 +9,8 @@ static data_unset *data_string_copy(const data_unset *s) {
 	data_string *src = (data_string *)s;
 	data_string *ds = data_string_init();
 
-	buffer_copy_string_buffer(ds->key, src->key);
-	buffer_copy_string_buffer(ds->value, src->value);
+	buffer_copy_buffer(ds->key, src->key);
+	buffer_copy_buffer(ds->value, src->value);
 	ds->is_index_key = src->is_index_key;
 	return (data_unset *)ds;
 }
@@ -40,7 +40,7 @@ static int data_string_insert_dup(data_unset *dst, data_unset *src) {
 		buffer_append_string_len(ds_dst->value, CONST_STR_LEN(", "));
 		buffer_append_string_buffer(ds_dst->value, ds_src->value);
 	} else {
-		buffer_copy_string_buffer(ds_dst->value, ds_src->value);
+		buffer_copy_buffer(ds_dst->value, ds_src->value);
 	}
 
 	src->free(src);
@@ -58,7 +58,7 @@ static int data_response_insert_dup(data_unset *dst, data_unset *src) {
 		buffer_append_string_len(ds_dst->value, CONST_STR_LEN(": "));
 		buffer_append_string_buffer(ds_dst->value, ds_src->value);
 	} else {
-		buffer_copy_string_buffer(ds_dst->value, ds_src->value);
+		buffer_copy_buffer(ds_dst->value, ds_src->value);
 	}
 
 	src->free(src);

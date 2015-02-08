@@ -40,7 +40,7 @@ int http_response_write_header(server *srv, connection *con) {
 	} else {
 		buffer_copy_string_len(b, CONST_STR_LEN("HTTP/1.0 "));
 	}
-	buffer_append_long(b, con->http_status);
+	buffer_append_int(b, con->http_status);
 	buffer_append_string_len(b, CONST_STR_LEN(" "));
 	buffer_append_string(b, get_http_status_name(con->http_status));
 
@@ -181,7 +181,7 @@ static void https_add_ssl_entries(connection *con) {
 				buffer_copy_string(ds->key, "REMOTE_USER");
 				array_insert_unique(con->environment, (data_unset *)ds);
 			}
-			buffer_copy_string_buffer(ds->value, envds->value);
+			buffer_copy_buffer(ds->value, envds->value);
 		}
 		array_insert_unique(con->environment, (data_unset *)envds);
 	}
@@ -199,7 +199,7 @@ static void https_add_ssl_entries(connection *con) {
 			}
 
 			buffer_copy_string_len(envds->key, CONST_STR_LEN("SSL_CLIENT_CERT"));
-			buffer_prepare_copy(envds->value, n+1);
+			buffer_prepare_copy(envds->value, n);
 			BIO_read(bio, envds->value->ptr, n);
 			BIO_free(bio);
 			envds->value->ptr[n] = '\0';
@@ -278,7 +278,7 @@ handler_t http_response_prepare(server *srv, connection *con) {
 		} else {
 			buffer_copy_string_len(con->uri.scheme, CONST_STR_LEN("http"));
 		}
-		buffer_copy_string_buffer(con->uri.authority, con->request.http_host);
+		buffer_copy_buffer(con->uri.authority, con->request.http_host);
 		buffer_to_lower(con->uri.authority);
 
 		config_patch_connection(srv, con, COMP_HTTP_SCHEME);    /* Scheme:      */
@@ -302,7 +302,7 @@ handler_t http_response_prepare(server *srv, connection *con) {
 			buffer_copy_string_len(con->uri.path_raw, con->request.uri->ptr, qstr - con->request.uri->ptr);
 		} else {
 			buffer_reset     (con->uri.query);
-			buffer_copy_string_buffer(con->uri.path_raw, con->request.uri);
+			buffer_copy_buffer(con->uri.path_raw, con->request.uri);
 		}
 
 		/* decode url to path
@@ -314,9 +314,9 @@ handler_t http_response_prepare(server *srv, connection *con) {
 		if (con->request.http_method == HTTP_METHOD_OPTIONS &&
 		    con->uri.path_raw->ptr[0] == '*' && con->uri.path_raw->ptr[1] == '\0') {
 			/* OPTIONS * ... */
-			buffer_copy_string_buffer(con->uri.path, con->uri.path_raw);
+			buffer_copy_buffer(con->uri.path, con->uri.path_raw);
 		} else {
-			buffer_copy_string_buffer(srv->tmp_buf, con->uri.path_raw);
+			buffer_copy_buffer(srv->tmp_buf, con->uri.path_raw);
 			buffer_urldecode_path(srv->tmp_buf);
 			buffer_path_simplify(con->uri.path, srv->tmp_buf);
 		}
@@ -430,8 +430,8 @@ handler_t http_response_prepare(server *srv, connection *con) {
 
 		/* set a default */
 
-		buffer_copy_string_buffer(con->physical.doc_root, con->conf.document_root);
-		buffer_copy_string_buffer(con->physical.rel_path, con->uri.path);
+		buffer_copy_buffer(con->physical.doc_root, con->conf.document_root);
+		buffer_copy_buffer(con->physical.rel_path, con->uri.path);
 
 #if defined(__WIN32) || defined(__CYGWIN__)
 		/* strip dots from the end and spaces
@@ -500,8 +500,8 @@ handler_t http_response_prepare(server *srv, connection *con) {
 		}
 
 		/* the docroot plugins might set the servername, if they don't we take http-host */
-		if (buffer_is_empty(con->server_name)) {
-			buffer_copy_string_buffer(con->server_name, con->uri.authority);
+		if (buffer_string_is_empty(con->server_name)) {
+			buffer_copy_buffer(con->server_name, con->uri.authority);
 		}
 
 		/**
@@ -510,9 +510,9 @@ handler_t http_response_prepare(server *srv, connection *con) {
 		 *
 		 */
 
-		buffer_copy_string_buffer(con->physical.basedir, con->physical.doc_root);
-		buffer_copy_string_buffer(con->physical.path, con->physical.doc_root);
-		BUFFER_APPEND_SLASH(con->physical.path);
+		buffer_copy_buffer(con->physical.basedir, con->physical.doc_root);
+		buffer_copy_buffer(con->physical.path, con->physical.doc_root);
+		buffer_append_slash(con->physical.path);
 		if (con->physical.rel_path->used &&
 		    con->physical.rel_path->ptr[0] == '/') {
 			buffer_append_string_len(con->physical.path, con->physical.rel_path->ptr + 1, con->physical.rel_path->used - 2);
@@ -645,13 +645,13 @@ handler_t http_response_prepare(server *srv, connection *con) {
 
 			/* not found, perhaps PATHINFO */
 
-			buffer_copy_string_buffer(srv->tmp_buf, con->physical.path);
+			buffer_copy_buffer(srv->tmp_buf, con->physical.path);
 
 			do {
 				if (slash) {
 					buffer_copy_string_len(con->physical.path, srv->tmp_buf->ptr, slash - srv->tmp_buf->ptr);
 				} else {
-					buffer_copy_string_buffer(con->physical.path, srv->tmp_buf);
+					buffer_copy_buffer(con->physical.path, srv->tmp_buf);
 				}
 
 				if (HANDLER_ERROR != stat_cache_get_entry(srv, con, con->physical.path, &sce)) {

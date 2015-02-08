@@ -124,7 +124,7 @@ static int excludes_buffer_append(excludes_buffer *exb, buffer *string) {
 	}
 
 	exb->ptr[exb->used]->string = buffer_init();
-	buffer_copy_string_buffer(exb->ptr[exb->used]->string, string);
+	buffer_copy_buffer(exb->ptr[exb->used]->string, string);
 
 	exb->used++;
 
@@ -469,7 +469,8 @@ static int http_list_directory_sizefmt(char *buf, off_t size) {
 		u++;
 	}
 
-	out   += LI_ltostr(out, size);
+	li_itostr(out, size);
+	out += strlen(out);
 	out[0] = '.';
 	out[1] = remain + '0';
 	out[2] = *u;
@@ -539,8 +540,8 @@ static void http_list_directory_header(server *srv, connection *con, plugin_data
 		stream s;
 		/* if we have a HEADER file, display it in <pre class="header"></pre> */
 
-		buffer_copy_string_buffer(p->tmp_buf, con->physical.path);
-		BUFFER_APPEND_SLASH(p->tmp_buf);
+		buffer_copy_buffer(p->tmp_buf, con->physical.path);
+		buffer_append_slash(p->tmp_buf);
 		buffer_append_string_len(p->tmp_buf, CONST_STR_LEN("HEADER.txt"));
 
 		if (-1 != stream_open(&s, p->tmp_buf)) {
@@ -592,8 +593,8 @@ static void http_list_directory_footer(server *srv, connection *con, plugin_data
 		stream s;
 		/* if we have a README file, display it in <pre class="readme"></pre> */
 
-		buffer_copy_string_buffer(p->tmp_buf,  con->physical.path);
-		BUFFER_APPEND_SLASH(p->tmp_buf);
+		buffer_copy_buffer(p->tmp_buf,  con->physical.path);
+		buffer_append_slash(p->tmp_buf);
 		buffer_append_string_len(p->tmp_buf, CONST_STR_LEN("README.txt"));
 
 		if (-1 != stream_open(&s, p->tmp_buf)) {
@@ -785,7 +786,7 @@ static int http_list_directory(server *srv, connection *con, plugin_data *p, buf
 
 	out = chunkqueue_get_append_buffer(con->write_queue);
 	buffer_copy_string_len(out, CONST_STR_LEN("<?xml version=\"1.0\" encoding=\""));
-	if (buffer_is_empty(p->conf.encoding)) {
+	if (buffer_string_is_empty(p->conf.encoding)) {
 		buffer_append_string_len(out, CONST_STR_LEN("iso-8859-1"));
 	} else {
 		buffer_append_string_buffer(out, p->conf.encoding);
@@ -889,7 +890,7 @@ static int http_list_directory(server *srv, connection *con, plugin_data *p, buf
 	http_list_directory_footer(srv, con, p, out);
 
 	/* Insert possible charset to Content-Type */
-	if (buffer_is_empty(p->conf.encoding)) {
+	if (buffer_string_is_empty(p->conf.encoding)) {
 		response_header_overwrite(srv, con, CONST_STR_LEN("Content-Type"), CONST_STR_LEN("text/html"));
 	} else {
 		buffer_copy_string_len(p->content_charset, CONST_STR_LEN("text/html; charset="));

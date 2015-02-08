@@ -209,7 +209,7 @@ URIHANDLER_FUNC(mod_userdir_docroot_handler) {
 
 	buffer_copy_string_len(p->username, con->uri.path->ptr + 2, rel_url - (con->uri.path->ptr + 2));
 
-	if (buffer_is_empty(p->conf.basepath)
+	if (buffer_string_is_empty(p->conf.basepath)
 #ifdef HAVE_PWD_H
 	    && NULL == (pwd = getpwnam(p->username->ptr))
 #endif
@@ -245,7 +245,7 @@ URIHANDLER_FUNC(mod_userdir_docroot_handler) {
 
 	/* we build the physical path */
 
-	if (buffer_is_empty(p->conf.basepath)) {
+	if (buffer_string_is_empty(p->conf.basepath)) {
 #ifdef HAVE_PWD_H
 		buffer_copy_string(p->temp_path, pwd->pw_dir);
 #endif
@@ -272,18 +272,18 @@ URIHANDLER_FUNC(mod_userdir_docroot_handler) {
 			buffer_to_lower(p->username);
 		}
 
-		buffer_copy_string_buffer(p->temp_path, p->conf.basepath);
-		BUFFER_APPEND_SLASH(p->temp_path);
+		buffer_copy_buffer(p->temp_path, p->conf.basepath);
+		buffer_append_slash(p->temp_path);
 		if (p->conf.letterhomes) {
 			buffer_append_string_len(p->temp_path, p->username->ptr, 1);
-			BUFFER_APPEND_SLASH(p->temp_path);
+			buffer_append_slash(p->temp_path);
 		}
 		buffer_append_string_buffer(p->temp_path, p->username);
 	}
-	BUFFER_APPEND_SLASH(p->temp_path);
+	buffer_append_slash(p->temp_path);
 	buffer_append_string_buffer(p->temp_path, p->conf.path);
 
-	if (buffer_is_empty(p->conf.basepath)) {
+	if (buffer_string_is_empty(p->conf.basepath)) {
 		struct stat st;
 		int ret;
 
@@ -293,7 +293,7 @@ URIHANDLER_FUNC(mod_userdir_docroot_handler) {
 		}
 	}
 
-	buffer_copy_string_buffer(con->physical.basedir, p->temp_path);
+	buffer_copy_buffer(con->physical.basedir, p->temp_path);
 
 	/* the physical rel_path is basically the same as uri.path;
 	 * but it is converted to lowercase in case of force_lowercase_filenames and some special handling
@@ -302,7 +302,7 @@ URIHANDLER_FUNC(mod_userdir_docroot_handler) {
 	 * (docroot should only set the docroot/server name, phyiscal should only change the phyiscal.path;
 	 *  the exception mod_secure_download doesn't work with userdir anyway)
 	 */
-	BUFFER_APPEND_SLASH(p->temp_path);
+	buffer_append_slash(p->temp_path);
 	/* if no second '/' is found, we assume that it was stripped from the uri.path for the special handling
 	 * on windows.
 	 * we do not care about the trailing slash here on windows, as we already ensured it is a directory
@@ -313,7 +313,7 @@ URIHANDLER_FUNC(mod_userdir_docroot_handler) {
 	if (NULL != (rel_url = strchr(con->physical.rel_path->ptr + 2, '/'))) {
 		buffer_append_string(p->temp_path, rel_url + 1); /* skip the / */
 	}
-	buffer_copy_string_buffer(con->physical.path, p->temp_path);
+	buffer_copy_buffer(con->physical.path, p->temp_path);
 
 	buffer_reset(p->temp_path);
 

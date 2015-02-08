@@ -323,21 +323,21 @@ static handler_t mod_status_handle_server_status_html(server *srv, connection *c
 	seconds = ts;
 
 	if (days) {
-		buffer_append_long(b, days);
+		buffer_append_int(b, days);
 		buffer_append_string_len(b, CONST_STR_LEN(" days "));
 	}
 
 	if (hours) {
-		buffer_append_long(b, hours);
+		buffer_append_int(b, hours);
 		buffer_append_string_len(b, CONST_STR_LEN(" hours "));
 	}
 
 	if (mins) {
-		buffer_append_long(b, mins);
+		buffer_append_int(b, mins);
 		buffer_append_string_len(b, CONST_STR_LEN(" min "));
 	}
 
-	buffer_append_long(b, seconds);
+	buffer_append_int(b, seconds);
 	buffer_append_string_len(b, CONST_STR_LEN(" s"));
 
 	buffer_append_string_len(b, CONST_STR_LEN("</td></tr>\n"));
@@ -357,7 +357,7 @@ static handler_t mod_status_handle_server_status_html(server *srv, connection *c
 
 	mod_status_get_multiplier(&avg, &multiplier, 1000);
 
-	buffer_append_long(b, avg);
+	buffer_append_int(b, avg);
 	buffer_append_string_len(b, CONST_STR_LEN(" "));
 	if (multiplier)	buffer_append_string_len(b, &multiplier, 1);
 	buffer_append_string_len(b, CONST_STR_LEN("req</td></tr>\n"));
@@ -382,7 +382,7 @@ static handler_t mod_status_handle_server_status_html(server *srv, connection *c
 
 	mod_status_get_multiplier(&avg, &multiplier, 1000);
 
-	buffer_append_long(b, avg);
+	buffer_append_int(b, avg);
 	buffer_append_string_len(b, CONST_STR_LEN(" "));
 	if (multiplier)	buffer_append_string_len(b, &multiplier, 1);
 	buffer_append_string_len(b, CONST_STR_LEN("req/s</td></tr>\n"));
@@ -411,7 +411,7 @@ static handler_t mod_status_handle_server_status_html(server *srv, connection *c
 
 	mod_status_get_multiplier(&avg, &multiplier, 1000);
 
-	buffer_append_long(b, avg);
+	buffer_append_int(b, avg);
 	buffer_append_string_len(b, CONST_STR_LEN(" "));
 	if (multiplier)	buffer_append_string_len(b, &multiplier, 1);
 
@@ -444,7 +444,7 @@ static handler_t mod_status_handle_server_status_html(server *srv, connection *c
 		"s = response-start, S = response-end\n"));
 
 	buffer_append_string_len(b, CONST_STR_LEN("<b>"));
-	buffer_append_long(b, srv->conns->used);
+	buffer_append_int(b, srv->conns->used);
 	buffer_append_string_len(b, CONST_STR_LEN(" connections</b>\n"));
 
 	for (j = 0; j < srv->conns->used; j++) {
@@ -488,18 +488,18 @@ static handler_t mod_status_handle_server_status_html(server *srv, connection *c
 		buffer_append_string_len(b, CONST_STR_LEN("</td><td class=\"int\">"));
 
 		if (c->request.content_length) {
-			buffer_append_long(b, c->request_content_queue->bytes_in);
+			buffer_append_int(b, c->request_content_queue->bytes_in);
 			buffer_append_string_len(b, CONST_STR_LEN("/"));
-			buffer_append_long(b, c->request.content_length);
+			buffer_append_int(b, c->request.content_length);
 		} else {
 			buffer_append_string_len(b, CONST_STR_LEN("0/0"));
 		}
 
 		buffer_append_string_len(b, CONST_STR_LEN("</td><td class=\"int\">"));
 
-		buffer_append_off_t(b, chunkqueue_written(c->write_queue));
+		buffer_append_int(b, c->write_queue->bytes_out);
 		buffer_append_string_len(b, CONST_STR_LEN("/"));
-		buffer_append_off_t(b, chunkqueue_length(c->write_queue));
+		buffer_append_int(b, c->write_queue->bytes_out + chunkqueue_length(c->write_queue));
 
 		buffer_append_string_len(b, CONST_STR_LEN("</td><td class=\"string\">"));
 
@@ -511,11 +511,11 @@ static handler_t mod_status_handle_server_status_html(server *srv, connection *c
 
 		buffer_append_string_len(b, CONST_STR_LEN("</td><td class=\"int\">"));
 
-		buffer_append_long(b, srv->cur_ts - c->request_start);
+		buffer_append_int(b, srv->cur_ts - c->request_start);
 
 		buffer_append_string_len(b, CONST_STR_LEN("</td><td class=\"string\">"));
 
-		if (buffer_is_empty(c->server_name)) {
+		if (buffer_string_is_empty(c->server_name)) {
 			buffer_append_string_buffer(b, c->uri.authority);
 		}
 		else {
@@ -524,16 +524,16 @@ static handler_t mod_status_handle_server_status_html(server *srv, connection *c
 
 		buffer_append_string_len(b, CONST_STR_LEN("</td><td class=\"string\">"));
 
-		if (!buffer_is_empty(c->uri.path)) {
+		if (!buffer_string_is_empty(c->uri.path)) {
 			buffer_append_string_encoded(b, CONST_BUF_LEN(c->uri.path), ENCODING_HTML);
 		}
 
-		if (!buffer_is_empty(c->uri.query)) {
+		if (!buffer_string_is_empty(c->uri.query)) {
 			buffer_append_string_len(b, CONST_STR_LEN("?"));
 			buffer_append_string_encoded(b, CONST_BUF_LEN(c->uri.query), ENCODING_HTML);
 		}
 
-		if (!buffer_is_empty(c->request.orig_uri)) {
+		if (!buffer_string_is_empty(c->request.orig_uri)) {
 			buffer_append_string_len(b, CONST_STR_LEN(" ("));
 			buffer_append_string_encoded(b, CONST_BUF_LEN(c->request.orig_uri), ENCODING_HTML);
 			buffer_append_string_len(b, CONST_STR_LEN(")"));
@@ -589,16 +589,16 @@ static handler_t mod_status_handle_server_status_text(server *srv, connection *c
 	/* output uptime */
 	buffer_append_string_len(b, CONST_STR_LEN("Uptime: "));
 	ts = srv->cur_ts - srv->startup_ts;
-	buffer_append_long(b, ts);
+	buffer_append_int(b, ts);
 	buffer_append_string_len(b, CONST_STR_LEN("\n"));
 
 	/* output busy servers */
 	buffer_append_string_len(b, CONST_STR_LEN("BusyServers: "));
-	buffer_append_long(b, srv->conns->used);
+	buffer_append_int(b, srv->conns->used);
 	buffer_append_string_len(b, CONST_STR_LEN("\n"));
 
 	buffer_append_string_len(b, CONST_STR_LEN("IdleServers: "));
-       buffer_append_long(b, srv->conns->size - srv->conns->used);
+       buffer_append_int(b, srv->conns->size - srv->conns->used);
        buffer_append_string_len(b, CONST_STR_LEN("\n"));
 
        /* output scoreboard */
@@ -641,7 +641,7 @@ static handler_t mod_status_handle_server_statistics(server *srv, connection *co
 
 		buffer_append_string_buffer(b, st->data[ndx]->key);
 		buffer_append_string_len(b, CONST_STR_LEN(": "));
-		buffer_append_long(b, ((data_integer *)(st->data[ndx]))->value);
+		buffer_append_int(b, ((data_integer *)(st->data[ndx]))->value);
 		buffer_append_string_len(b, CONST_STR_LEN("\n"));
 	}
 
@@ -740,7 +740,7 @@ static handler_t mod_status_handle_server_config(server *srv, connection *con, v
 		plugin *pl = ps[i];
 
 		if (i == 0) {
-			buffer_copy_string_buffer(m, pl->name);
+			buffer_copy_buffer(m, pl->name);
 		} else {
 			buffer_append_string_len(m, CONST_STR_LEN("<br />"));
 			buffer_append_string_buffer(m, pl->name);
@@ -809,13 +809,13 @@ static handler_t mod_status_handler(server *srv, connection *con, void *p_d) {
 
 	mod_status_patch_connection(srv, con, p);
 
-	if (!buffer_is_empty(p->conf.status_url) &&
+	if (!buffer_string_is_empty(p->conf.status_url) &&
 	    buffer_is_equal(p->conf.status_url, con->uri.path)) {
 		return mod_status_handle_server_status(srv, con, p_d);
-	} else if (!buffer_is_empty(p->conf.config_url) &&
+	} else if (!buffer_string_is_empty(p->conf.config_url) &&
 	    buffer_is_equal(p->conf.config_url, con->uri.path)) {
 		return mod_status_handle_server_config(srv, con, p_d);
-	} else if (!buffer_is_empty(p->conf.statistics_url) &&
+	} else if (!buffer_string_is_empty(p->conf.statistics_url) &&
 	    buffer_is_equal(p->conf.statistics_url, con->uri.path)) {
 		return mod_status_handle_server_statistics(srv, con, p_d);
 	}

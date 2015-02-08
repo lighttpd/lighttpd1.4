@@ -324,7 +324,7 @@ static handler_t mod_auth_uri_handler(server *srv, connection *con, void *p_d) {
 			buffer_copy_string(ds->key, "REMOTE_USER");
 			array_insert_unique(con->environment, (data_unset *)ds);
 		}
-		buffer_copy_string_buffer(ds->value, p->auth_user);
+		buffer_copy_buffer(ds->value, p->auth_user);
 
 		/* AUTH_TYPE environment */
 
@@ -535,7 +535,7 @@ SETDEFAULTS_FUNC(mod_auth_set_defaults) {
 				data_array *a;
 
 				a = data_array_init();
-				buffer_copy_string_buffer(a->key, da_file->key);
+				buffer_copy_buffer(a->key, da_file->key);
 
 				ds = data_string_init();
 
@@ -608,7 +608,7 @@ handler_t auth_ldap_init(server *srv, mod_auth_plugin_config *s) {
 		if (s->auth_ldap_starttls) {
 			/* if no CA file is given, it is ok, as we will use encryption
 				* if the server requires a CAfile it will tell us */
-			if (!buffer_is_empty(s->auth_ldap_cafile)) {
+			if (!buffer_string_is_empty(s->auth_ldap_cafile)) {
 				if (LDAP_OPT_SUCCESS != (ret = ldap_set_option(NULL, LDAP_OPT_X_TLS_CACERTFILE,
 								s->auth_ldap_cafile->ptr))) {
 					log_error_write(srv, __FILE__, __LINE__, "ss",

@@ -198,7 +198,7 @@ SETDEFAULTS_FUNC(mod_webdav_set_defaults) {
 			return HANDLER_ERROR;
 		}
 
-		if (!buffer_is_empty(s->sqlite_db_name)) {
+		if (!buffer_string_is_empty(s->sqlite_db_name)) {
 #ifdef USE_PROPPATCH
 			const char *next_stmt;
 			char *err;
@@ -519,7 +519,7 @@ static int webdav_gen_response_status_tag(server *srv, connection *con, physical
 	} else {
 		buffer_copy_string_len(b, CONST_STR_LEN("HTTP/1.0 "));
 	}
-	buffer_append_long(b, status);
+	buffer_append_int(b, status);
 	buffer_append_string_len(b, CONST_STR_LEN(" "));
 	buffer_append_string(b, get_http_status_name(status));
 
@@ -595,12 +595,12 @@ static int webdav_delete_dir(server *srv, connection *con, plugin_data *p, physi
 				/* ignore the parent dir */
 			}
 
-			buffer_copy_string_buffer(d.path, dst->path);
-			BUFFER_APPEND_SLASH(d.path);
+			buffer_copy_buffer(d.path, dst->path);
+			buffer_append_slash(d.path);
 			buffer_append_string(d.path, de->d_name);
 
-			buffer_copy_string_buffer(d.rel_path, dst->rel_path);
-			BUFFER_APPEND_SLASH(d.rel_path);
+			buffer_copy_buffer(d.rel_path, dst->rel_path);
+			buffer_append_slash(d.rel_path);
 			buffer_append_string(d.rel_path, de->d_name);
 
 			/* stat and unlink afterwards */
@@ -756,20 +756,20 @@ static int webdav_copy_dir(server *srv, connection *con, plugin_data *p, physica
 				continue;
 			}
 
-			buffer_copy_string_buffer(s.path, src->path);
-			BUFFER_APPEND_SLASH(s.path);
+			buffer_copy_buffer(s.path, src->path);
+			buffer_append_slash(s.path);
 			buffer_append_string(s.path, de->d_name);
 
-			buffer_copy_string_buffer(d.path, dst->path);
-			BUFFER_APPEND_SLASH(d.path);
+			buffer_copy_buffer(d.path, dst->path);
+			buffer_append_slash(d.path);
 			buffer_append_string(d.path, de->d_name);
 
-			buffer_copy_string_buffer(s.rel_path, src->rel_path);
-			BUFFER_APPEND_SLASH(s.rel_path);
+			buffer_copy_buffer(s.rel_path, src->rel_path);
+			buffer_append_slash(s.rel_path);
 			buffer_append_string(s.rel_path, de->d_name);
 
-			buffer_copy_string_buffer(d.rel_path, dst->rel_path);
-			BUFFER_APPEND_SLASH(d.rel_path);
+			buffer_copy_buffer(d.rel_path, dst->rel_path);
+			buffer_append_slash(d.rel_path);
 			buffer_append_string(d.rel_path, de->d_name);
 
 			if (-1 == stat(s.path->ptr, &st)) {
@@ -877,7 +877,7 @@ static int webdav_get_live_property(server *srv, connection *con, plugin_data *p
 			found = 1;
 		} else if (0 == strcmp(prop_name, "getcontentlength")) {
 			buffer_append_string_len(b,CONST_STR_LEN("<D:getcontentlength>"));
-			buffer_append_off_t(b, sce->st.st_size);
+			buffer_append_int(b, sce->st.st_size);
 			buffer_append_string_len(b, CONST_STR_LEN("</D:getcontentlength>"));
 			found = 1;
 		} else if (0 == strcmp(prop_name, "getcontentlanguage")) {
@@ -1061,8 +1061,6 @@ static int webdav_parse_chunkqueue(server *srv, connection *con, plugin_data *p,
 			c->offset += weHave;
 			cq->bytes_out += weHave;
 
-			break;
-		case UNUSED_CHUNK:
 			break;
 		}
 		chunkqueue_remove_finished_chunks(cq);
@@ -1367,7 +1365,7 @@ URIHANDLER_FUNC(mod_webdav_subrequest_handler) {
 			buffer_append_string_encoded(b, CONST_BUF_LEN(con->uri.path), ENCODING_REL_URI);
 			buffer_append_string_len(b,CONST_STR_LEN("</D:href>\n"));
 
-			if (!buffer_is_empty(prop_200)) {
+			if (!buffer_string_is_empty(prop_200)) {
 				buffer_append_string_len(b,CONST_STR_LEN("<D:propstat>\n"));
 				buffer_append_string_len(b,CONST_STR_LEN("<D:prop>\n"));
 
@@ -1379,7 +1377,7 @@ URIHANDLER_FUNC(mod_webdav_subrequest_handler) {
 
 				buffer_append_string_len(b,CONST_STR_LEN("</D:propstat>\n"));
 			}
-			if (!buffer_is_empty(prop_404)) {
+			if (!buffer_string_is_empty(prop_404)) {
 				buffer_append_string_len(b,CONST_STR_LEN("<D:propstat>\n"));
 				buffer_append_string_len(b,CONST_STR_LEN("<D:prop>\n"));
 
@@ -1410,11 +1408,11 @@ URIHANDLER_FUNC(mod_webdav_subrequest_handler) {
 						/* ignore the parent dir */
 					}
 
-					buffer_copy_string_buffer(d.path, dst->path);
-					BUFFER_APPEND_SLASH(d.path);
+					buffer_copy_buffer(d.path, dst->path);
+					buffer_append_slash(d.path);
 
-					buffer_copy_string_buffer(d.rel_path, dst->rel_path);
-					BUFFER_APPEND_SLASH(d.rel_path);
+					buffer_copy_buffer(d.rel_path, dst->rel_path);
+					buffer_append_slash(d.rel_path);
 
 					if (de->d_name[0] == '.' && de->d_name[1] == '\0') {
 						/* don't append the . */
@@ -1436,7 +1434,7 @@ URIHANDLER_FUNC(mod_webdav_subrequest_handler) {
 					buffer_append_string_encoded(b, CONST_BUF_LEN(d.rel_path), ENCODING_REL_URI);
 					buffer_append_string_len(b,CONST_STR_LEN("</D:href>\n"));
 
-					if (!buffer_is_empty(prop_200)) {
+					if (!buffer_string_is_empty(prop_200)) {
 						buffer_append_string_len(b,CONST_STR_LEN("<D:propstat>\n"));
 						buffer_append_string_len(b,CONST_STR_LEN("<D:prop>\n"));
 
@@ -1448,7 +1446,7 @@ URIHANDLER_FUNC(mod_webdav_subrequest_handler) {
 
 						buffer_append_string_len(b,CONST_STR_LEN("</D:propstat>\n"));
 					}
-					if (!buffer_is_empty(prop_404)) {
+					if (!buffer_string_is_empty(prop_404)) {
 						buffer_append_string_len(b,CONST_STR_LEN("<D:propstat>\n"));
 						buffer_append_string_len(b,CONST_STR_LEN("<D:prop>\n"));
 
@@ -1763,8 +1761,6 @@ URIHANDLER_FUNC(mod_webdav_subrequest_handler) {
 					}
 				}
 				break;
-			case UNUSED_CHUNK:
-				break;
 			}
 
 			if (r > 0) {
@@ -1862,21 +1858,21 @@ URIHANDLER_FUNC(mod_webdav_subrequest_handler) {
 			return HANDLER_FINISHED;
 		}
 
-		buffer_copy_string_buffer(p->tmp_buf, p->uri.path_raw);
+		buffer_copy_buffer(p->tmp_buf, p->uri.path_raw);
 		buffer_urldecode_path(p->tmp_buf);
 		buffer_path_simplify(p->uri.path, p->tmp_buf);
 
 		/* we now have a URI which is clean. transform it into a physical path */
-		buffer_copy_string_buffer(p->physical.doc_root, con->physical.doc_root);
-		buffer_copy_string_buffer(p->physical.rel_path, p->uri.path);
+		buffer_copy_buffer(p->physical.doc_root, con->physical.doc_root);
+		buffer_copy_buffer(p->physical.rel_path, p->uri.path);
 
 		if (con->conf.force_lowercase_filenames) {
 			buffer_to_lower(p->physical.rel_path);
 		}
 
-		buffer_copy_string_buffer(p->physical.path, p->physical.doc_root);
-		BUFFER_APPEND_SLASH(p->physical.path);
-		buffer_copy_string_buffer(p->physical.basedir, p->physical.path);
+		buffer_copy_buffer(p->physical.path, p->physical.doc_root);
+		buffer_append_slash(p->physical.path);
+		buffer_copy_buffer(p->physical.basedir, p->physical.path);
 
 		/* don't add a second / */
 		if (p->physical.rel_path->ptr[0] == '/') {

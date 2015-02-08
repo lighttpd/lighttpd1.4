@@ -104,7 +104,7 @@ lua_State *script_cache_get_script(server *srv, connection *con, script_cache *c
 
 		cache->ptr[cache->used++] = sc;
 
-		buffer_copy_string_buffer(sc->name, name);
+		buffer_copy_buffer(sc->name, name);
 
 		sc->L = luaL_newstate();
 		luaL_openlibs(sc->L);
@@ -119,7 +119,7 @@ lua_State *script_cache_get_script(server *srv, connection *con, script_cache *c
 	}
 
 	if (HANDLER_GO_ON == stat_cache_get_entry(srv, con, sc->name, &sce)) {
-		buffer_copy_string_buffer(sc->etag, sce->etag);
+		buffer_copy_buffer(sc->etag, sce->etag);
 	}
 
 	/**

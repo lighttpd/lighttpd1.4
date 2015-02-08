@@ -185,8 +185,8 @@ URIHANDLER_FUNC(mod_setenv_uri_handler) {
 			ds_dst = data_string_init();
 		}
 
-		buffer_copy_string_buffer(ds_dst->key, ds->key);
-		buffer_copy_string_buffer(ds_dst->value, ds->value);
+		buffer_copy_buffer(ds_dst->key, ds->key);
+		buffer_copy_buffer(ds_dst->value, ds->value);
 
 		array_insert_unique(con->request.headers, (data_unset *)ds_dst);
 	}
@@ -199,8 +199,8 @@ URIHANDLER_FUNC(mod_setenv_uri_handler) {
 			ds_dst = data_string_init();
 		}
 
-		buffer_copy_string_buffer(ds_dst->key, ds->key);
-		buffer_copy_string_buffer(ds_dst->value, ds->value);
+		buffer_copy_buffer(ds_dst->key, ds->key);
+		buffer_copy_buffer(ds_dst->value, ds->value);
 
 		array_insert_unique(con->environment, (data_unset *)ds_dst);
 	}

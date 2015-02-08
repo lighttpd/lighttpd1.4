@@ -273,7 +273,7 @@ static int config_insert(server *srv) {
 		}
 	}
 
-	if (buffer_is_empty(stat_cache_string)) {
+	if (buffer_string_is_empty(stat_cache_string)) {
 		srv->srvconf.stat_cache_engine = STAT_CACHE_ENGINE_SIMPLE;
 	} else if (buffer_is_equal_string(stat_cache_string, CONST_STR_LEN("simple"))) {
 		srv->srvconf.stat_cache_engine = STAT_CACHE_ENGINE_SIMPLE;
@@ -323,7 +323,7 @@ int config_setup_connection(server *srv, connection *con) {
 	PATCH(global_bytes_per_second_cnt);
 
 	con->conf.global_bytes_per_second_cnt_ptr = &s->global_bytes_per_second_cnt;
-	buffer_copy_string_buffer(con->server_name, s->server_name);
+	buffer_copy_buffer(con->server_name, s->server_name);
 
 	PATCH(log_request_header);
 	PATCH(log_response_header);
@@ -442,7 +442,7 @@ int config_patch_connection(server *srv, connection *con, comp_key_t comp) {
 				PATCH(follow_symlink);
 #endif
 			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("server.name"))) {
-				buffer_copy_string_buffer(con->server_name, s->server_name);
+				buffer_copy_buffer(con->server_name, s->server_name);
 			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("server.tag"))) {
 				PATCH(server_tag);
 			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("connection.kbytes-per-second"))) {
@@ -512,7 +512,7 @@ typedef struct {
 
 #if 0
 static int tokenizer_open(server *srv, tokenizer_t *t, buffer *basedir, const char *fn) {
-	if (buffer_is_empty(basedir) ||
+	if (buffer_string_is_empty(basedir) ||
 			(fn[0] == '/' || fn[0] == '\\') ||
 			(fn[0] == '.' && (fn[1] == '/' || fn[1] == '\\'))) {
 		t->file = buffer_init_string(fn);
@@ -934,7 +934,7 @@ static int config_parse(server *srv, config_t *context, tokenizer_t *t) {
 	lasttoken = buffer_init();
 	token = buffer_init();
 	while((1 == (ret = config_tokenizer(srv, t, &token_id, token))) && context->ok) {
-		buffer_copy_string_buffer(lasttoken, token);
+		buffer_copy_buffer(lasttoken, token);
 		configparser(pParser, token_id, token, context);
 
 		token = buffer_init();
@@ -986,7 +986,7 @@ int config_parse_file(server *srv, config_t *context, const char *fn) {
 	int ret;
 	buffer *filename;
 
-	if (buffer_is_empty(context->basedir) ||
+	if (buffer_string_is_empty(context->basedir) ||
 			(fn[0] == '/' || fn[0] == '\\') ||
 			(fn[0] == '.' && (fn[1] == '/' || fn[1] == '\\'))) {
 		filename = buffer_init_string(fn);
@@ -1057,7 +1057,7 @@ int config_parse_cmd(server *srv, config_t *context, const char *cmd) {
 	source = buffer_init_string(cmd);
 	out = buffer_init();
 
-	if (!buffer_is_empty(context->basedir)) {
+	if (!buffer_string_is_empty(context->basedir)) {
 		chdir(context->basedir->ptr);
 	}
 
@@ -1173,7 +1173,7 @@ int config_read(server *srv, const char *fn) {
 
 		prepends = (data_array *)configparser_merge_data((data_unset *)prepends, (data_unset *)modules);
 		force_assert(NULL != prepends);
-		buffer_copy_string_buffer(prepends->key, modules->key);
+		buffer_copy_buffer(prepends->key, modules->key);
 		array_replace(srv->config, (data_unset *)prepends);
 		modules->free((data_unset *)modules);
 		modules = prepends;
@@ -1255,7 +1255,7 @@ int config_set_defaults(server *srv) {
 		{ FDEVENT_HANDLER_UNSET,          NULL }
 	};
 
-	if (!buffer_is_empty(srv->srvconf.changeroot)) {
+	if (!buffer_string_is_empty(srv->srvconf.changeroot)) {
 		if (-1 == stat(srv->srvconf.changeroot->ptr, &st1)) {
 			log_error_write(srv, __FILE__, __LINE__, "sb",
 					"server.chroot doesn't exist:", srv->srvconf.changeroot);
@@ -1268,14 +1268,14 @@ int config_set_defaults(server *srv) {
 		}
 	}
 
-	if (buffer_is_empty(s->document_root)) {
+	if (buffer_string_is_empty(s->document_root)) {
 		log_error_write(srv, __FILE__, __LINE__, "s",
 				"a default document-root has to be set");
 
 		return -1;
 	}
 
-	buffer_copy_string_buffer(srv->tmp_buf, s->document_root);
+	buffer_copy_buffer(srv->tmp_buf, s->document_root);
 
 	buffer_to_lower(srv->tmp_buf);
 
@@ -1288,7 +1288,7 @@ int config_set_defaults(server *srv) {
 			is_lower = buffer_is_equal(srv->tmp_buf, s->document_root);
 
 			/* lower-case existed, check upper-case */
-			buffer_copy_string_buffer(srv->tmp_buf, s->document_root);
+			buffer_copy_buffer(srv->tmp_buf, s->document_root);
 
 			buffer_to_upper(srv->tmp_buf);
 
@@ -1356,7 +1356,7 @@ int config_set_defaults(server *srv) {
 	}
 
 	if (s->ssl_enabled) {
-		if (buffer_is_empty(s->ssl_pemfile)) {
+		if (buffer_string_is_empty(s->ssl_pemfile)) {
 			/* PEM file is require */
 
 			log_error_write(srv, __FILE__, __LINE__, "s",
