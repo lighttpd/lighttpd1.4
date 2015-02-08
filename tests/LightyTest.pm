@@ -87,7 +87,7 @@ sub wait_for_port_with_proc {
 	my $self = shift;
 	my $port = shift;
 	my $child = shift;
-	my $timeout = 5*10; # 5 secs, select waits 0.1 s
+	my $timeout = 10*10; # 10 secs (valgrind might take a while), select waits 0.1 s
 
 	while (0 == $self->listening_on($port)) {
 		select(undef, undef, undef, 0.1);
@@ -125,13 +125,13 @@ sub start_proc {
 
 	my @cmdline = ($self->{LIGHTTPD_PATH}, "-D", "-f", $self->{SRCDIR}."/".$self->{CONFIGFILE}, "-m", $self->{MODULES_PATH});
 	if (defined $ENV{"TRACEME"} && $ENV{"TRACEME"} eq 'strace') {
-		@cmdline = (qw(strace -tt -s 512 -o strace), @cmdline);
+		@cmdline = (qw(strace -tt -s 4096 -o strace -f -v), @cmdline);
 	} elsif (defined $ENV{"TRACEME"} && $ENV{"TRACEME"} eq 'truss') {
 		@cmdline = (qw(truss -a -l -w all -v all -o strace), @cmdline);
 	} elsif (defined $ENV{"TRACEME"} && $ENV{"TRACEME"} eq 'gdb') {
 		@cmdline = ('gdb', '--batch', '--ex', 'run', '--ex', 'bt full', '--args', @cmdline);
 	} elsif (defined $ENV{"TRACEME"} && $ENV{"TRACEME"} eq 'valgrind') {
-		@cmdline = (qw(valgrind --tool=memcheck --show-reachable=yes --leak-check=yes --log-file=valgrind), @cmdline);
+		@cmdline = (qw(valgrind --tool=memcheck --track-origins=yes --show-reachable=yes --leak-check=yes --log-file=valgrind.%p), @cmdline);
 	}
 	# diag("\nstarting lighttpd at :".$self->{PORT}.", cmdline: ".@cmdline );
 	my $child = fork();
