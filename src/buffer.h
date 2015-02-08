@@ -112,14 +112,14 @@ char * buffer_search_string_len(buffer *b, const char *needle, size_t len);
  * unset "string" (buffer) config options are initialized to used == 0,
  * while setting an empty string leads to used == 1
  */
-int buffer_is_empty(buffer *b);
+int buffer_is_empty(const buffer *b);
 /* NULL buffer, empty buffer (used == 0) or empty string (used == 1) */
-int buffer_string_is_empty(buffer *b);
+int buffer_string_is_empty(const buffer *b);
 
-int buffer_is_equal(buffer *a, buffer *b);
-int buffer_is_equal_right_len(buffer *a, buffer *b, size_t len);
-int buffer_is_equal_string(buffer *a, const char *s, size_t b_len);
-int buffer_is_equal_caseless_string(buffer *a, const char *s, size_t b_len);
+int buffer_is_equal(const buffer *a, const buffer *b);
+int buffer_is_equal_right_len(const buffer *a, const buffer *b, size_t len);
+int buffer_is_equal_string(const buffer *a, const char *s, size_t b_len);
+int buffer_is_equal_caseless_string(const buffer *a, const char *s, size_t b_len);
 int buffer_caseless_compare(const char *a, size_t a_len, const char *b, size_t b_len);
 
 typedef enum {

@@ -409,11 +409,11 @@ char * buffer_search_string_len(buffer *b, const char *needle, size_t len) {
 	return NULL;
 }
 
-int buffer_is_empty(buffer *b) {
+int buffer_is_empty(const buffer *b) {
 	return NULL == b || 0 == b->used;
 }
 
-int buffer_string_is_empty(buffer *b) {
+int buffer_string_is_empty(const buffer *b) {
 	return 0 == buffer_string_length(b);
 }
 
@@ -424,7 +424,7 @@ int buffer_string_is_empty(buffer *b) {
  * alignment properly.
  */
 
-int buffer_is_equal(buffer *a, buffer *b) {
+int buffer_is_equal(const buffer *a, const buffer *b) {
 	force_assert(NULL != a && NULL != b);
 
 	if (a->used != b->used) return 0;
@@ -433,7 +433,7 @@ int buffer_is_equal(buffer *a, buffer *b) {
 	return (0 == memcmp(a->ptr, b->ptr, a->used));
 }
 
-int buffer_is_equal_string(buffer *a, const char *s, size_t b_len) {
+int buffer_is_equal_string(const buffer *a, const char *s, size_t b_len) {
 	force_assert(NULL != a && NULL != s);
 	force_assert(b_len + 1 > b_len);
 
@@ -445,7 +445,7 @@ int buffer_is_equal_string(buffer *a, const char *s, size_t b_len) {
 }
 
 /* buffer_is_equal_caseless_string(b, CONST_STR_LEN("value")) */
-int buffer_is_equal_caseless_string(buffer *a, const char *s, size_t b_len) {
+int buffer_is_equal_caseless_string(const buffer *a, const char *s, size_t b_len) {
 	force_assert(NULL != a);
 	if (a->used != b_len + 1) return 0;
 	force_assert('\0' == a->ptr[a->used - 1]);
@@ -472,7 +472,7 @@ int buffer_caseless_compare(const char *a, size_t a_len, const char *b, size_t b
 	return a_len < b_len ? -1 : 1;
 }
 
-int buffer_is_equal_right_len(buffer *b1, buffer *b2, size_t len) {
+int buffer_is_equal_right_len(const buffer *b1, const buffer *b2, size_t len) {
 	/* no len -> equal */
 	if (len == 0) return 1;
 
