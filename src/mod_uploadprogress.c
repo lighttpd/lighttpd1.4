@@ -362,9 +362,7 @@ URIHANDLER_FUNC(mod_uploadprogress_uri_handler) {
 			log_error_write(srv, __FILE__, __LINE__, "sb",
 					"ID no known:", b);
 
-			b = chunkqueue_get_append_buffer(con->write_queue);
-
-			buffer_append_string_len(b, CONST_STR_LEN("starting"));
+			chunkqueue_get_append_mem(con->write_queue, CONST_STR_LEN("starting"));
 
 			return HANDLER_FINISHED;
 		}
@@ -376,7 +374,7 @@ URIHANDLER_FUNC(mod_uploadprogress_uri_handler) {
 		response_header_overwrite(srv, con, CONST_STR_LEN("Expires"), CONST_STR_LEN("Thu, 19 Nov 1981 08:52:00 GMT"));
 		response_header_overwrite(srv, con, CONST_STR_LEN("Cache-Control"), CONST_STR_LEN("no-store, no-cache, must-revalidate, post-check=0, pre-check=0"));
 
-		b = chunkqueue_get_append_buffer(con->write_queue);
+		b = buffer_init();
 
 		/* prepare XML */
 		buffer_copy_string_len(b, CONST_STR_LEN(
@@ -392,7 +390,12 @@ URIHANDLER_FUNC(mod_uploadprogress_uri_handler) {
 			"</received>"
 			"</upload>"));
 
+#if 0
 		log_error_write(srv, __FILE__, __LINE__, "sb", "...", b);
+#endif
+
+		chunkqueue_append_buffer(con->write_queue, b);
+		buffer_free(b);
 
 		return HANDLER_FINISHED;
 	default:

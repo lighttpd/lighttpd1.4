@@ -33,7 +33,7 @@ int http_response_write_header(server *srv, connection *con) {
 	int have_date = 0;
 	int have_server = 0;
 
-	b = chunkqueue_get_prepend_buffer(con->write_queue);
+	b = buffer_init();
 
 	if (con->request.http_version == HTTP_VERSION_1_1) {
 		buffer_copy_string_len(b, CONST_STR_LEN("HTTP/1.1 "));
@@ -121,12 +121,14 @@ int http_response_write_header(server *srv, connection *con) {
 
 	buffer_append_string_len(b, CONST_STR_LEN("\r\n\r\n"));
 
-
 	con->bytes_header = b->used - 1;
 
 	if (con->conf.log_response_header) {
 		log_error_write(srv, __FILE__, __LINE__, "sSb", "Response-Header:", "\n", b);
 	}
+
+	chunkqueue_prepend_buffer(con->write_queue, b);
+	buffer_free(b);
 
 	return 0;
 }

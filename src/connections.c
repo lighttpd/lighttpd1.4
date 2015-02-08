@@ -197,31 +197,22 @@ static void dump_packet(const unsigned char *data, size_t len) {
 
 static int connection_handle_read_ssl(server *srv, connection *con) {
 #ifdef USE_OPENSSL
-	int r, ssl_err, len, count = 0, read_offset, toread;
-	buffer *b = NULL;
+	int r, ssl_err, len, count = 0;
+	char *mem = NULL;
+	size_t mem_len = 0;
 
 	if (!con->srv_socket->is_ssl) return -1;
 
 	ERR_clear_error();
 	do {
-		if (NULL != con->read_queue->last) {
-			b = con->read_queue->last->mem;
-		}
+		chunkqueue_get_memory(con->read_queue, &mem, &mem_len, 0, SSL_pending(con->ssl));
+#if 0
+		/* overwrite everything with 0 */
+		memset(mem, 0, mem_len);
+#endif
 
-		if (NULL == b || b->size - b->used < 1024) {
-			b = chunkqueue_get_append_buffer(con->read_queue);
-			len = SSL_pending(con->ssl);
-			if (len < 4*1024) len = 4*1024; /* always alloc >= 4k buffer */
-			buffer_prepare_copy(b, len);
-
-			/* overwrite everything with 0 */
-			memset(b->ptr, 0, b->size);
-		}
-
-		read_offset = (b->used > 0) ? b->used - 1 : 0;
-		toread = b->size - 1 - read_offset;
-
-		len = SSL_read(con->ssl, b->ptr + read_offset, toread);
+		len = SSL_read(con->ssl, mem, mem_len);
+		chunkqueue_use_memory(con->read_queue, len > 0 ? len : 0);
 
 		if (con->renegotiations > 1 && con->conf.ssl_disable_client_renegotiation) {
 			log_error_write(srv, __FILE__, __LINE__, "s", "SSL: renegotiation initiated by client, killing connection");
@@ -230,15 +221,10 @@ static int connection_handle_read_ssl(server *srv, connection *con) {
 		}
 
 		if (len > 0) {
-			if (b->used > 0) b->used--;
-			b->used += len;
-			b->ptr[b->used++] = '\0';
-
 			con->bytes_read += len;
-
 			count += len;
 		}
-	} while (len == toread && count < MAX_READ_LIMIT);
+	} while (len == (ssize_t) mem_len && count < MAX_READ_LIMIT);
 
 
 	if (len < 0) {
@@ -331,14 +317,13 @@ static int connection_handle_read_ssl(server *srv, connection *con) {
 /* 0: everything ok, -1: error, -2: con closed */
 static int connection_handle_read(server *srv, connection *con) {
 	int len;
-	buffer *b;
-	int toread, read_offset;
+	char *mem = NULL;
+	size_t mem_len = 0;
+	int toread;
 
 	if (con->srv_socket->is_ssl) {
 		return connection_handle_read_ssl(srv, con);
 	}
-
-	b = (NULL != con->read_queue->last) ? con->read_queue->last->mem : NULL;
 
 	/* default size for chunks is 4kb; only use bigger chunks if FIONREAD tells
 	 *  us more than 4kb is available
@@ -346,28 +331,21 @@ static int connection_handle_read(server *srv, connection *con) {
 	 *  if it has >= 1kb free
 	 */
 #if defined(__WIN32)
-	if (NULL == b || b->size - b->used < 1024) {
-		b = chunkqueue_get_append_buffer(con->read_queue);
-		buffer_prepare_copy(b, 4 * 1024);
-	}
+	chunkqueue_get_memory(con->read_queue, &mem, &mem_len, 0, 4096);
 
-	read_offset = (b->used == 0) ? 0 : b->used - 1;
-	len = recv(con->fd, b->ptr + read_offset, b->size - 1 - read_offset, 0);
+	len = recv(con->fd, mem, mem_len, 0);
 #else
 	if (ioctl(con->fd, FIONREAD, &toread) || toread == 0 || toread <= 4*1024) {
-		if (NULL == b || b->size - b->used < 1024) {
-			b = chunkqueue_get_append_buffer(con->read_queue);
-			buffer_prepare_copy(b, 4 * 1024);
-		}
-	} else {
 		if (toread > MAX_READ_LIMIT) toread = MAX_READ_LIMIT;
-		b = chunkqueue_get_append_buffer(con->read_queue);
-		buffer_prepare_copy(b, toread);
+	} else {
+		toread = 4096;
 	}
+	chunkqueue_get_memory(con->read_queue, &mem, &mem_len, 0, toread);
 
-	read_offset = (b->used == 0) ? 0 : b->used - 1;
-	len = read(con->fd, b->ptr + read_offset, b->size - 1 - read_offset);
+	len = read(con->fd, mem, mem_len);
 #endif
+
+	chunkqueue_use_memory(con->read_queue, len > 0 ? len : 0);
 
 	if (len < 0) {
 		con->is_readable = 0;
@@ -394,15 +372,11 @@ static int connection_handle_read(server *srv, connection *con) {
 		/* pipelining */
 
 		return -2;
-	} else if ((size_t)len < b->size - 1) {
+	} else if (len != (ssize_t) mem_len) {
 		/* we got less then expected, wait for the next fd-event */
 
 		con->is_readable = 0;
 	}
-
-	if (b->used > 0) b->used--;
-	b->used += len;
-	b->ptr[b->used++] = '\0';
 
 	con->bytes_read += len;
 #if 0
@@ -494,7 +468,7 @@ static int connection_handle_write_prepare(server *srv, connection *con) {
 			buffer_reset(con->physical.path);
 
 			con->file_finished = 1;
-			b = chunkqueue_get_append_buffer(con->write_queue);
+			b = buffer_init();
 
 			/* build default error-page */
 			buffer_copy_string_len(b, CONST_STR_LEN(
@@ -521,6 +495,10 @@ static int connection_handle_write_prepare(server *srv, connection *con) {
 					     " </body>\n"
 					     "</html>\n"
 					     ));
+
+			http_chunk_append_buffer(srv, con, b);
+			buffer_free(b);
+			http_chunk_close(srv, con);
 
 			response_header_overwrite(srv, con, CONST_STR_LEN("Content-Type"), CONST_STR_LEN("text/html"));
 		}
@@ -1029,119 +1007,10 @@ found_header_end:
 		}
 		break;
 	case CON_STATE_READ_POST:
-		for (c = cq->first; c && (dst_cq->bytes_in != (off_t)con->request.content_length); c = c->next) {
-			off_t weWant, weHave, toRead;
-
-			weWant = con->request.content_length - dst_cq->bytes_in;
-
-			force_assert(c->mem->used);
-
-			weHave = c->mem->used - c->offset - 1;
-
-			toRead = weHave > weWant ? weWant : weHave;
-
-			/* the new way, copy everything into a chunkqueue whcih might use tempfiles */
-			if (con->request.content_length > 64 * 1024) {
-				chunk *dst_c = NULL;
-				/* copy everything to max 1Mb sized tempfiles */
-
-				/*
-				 * if the last chunk is
-				 * - smaller than 1Mb (size < 1Mb)
-				 * - not read yet (offset == 0)
-				 * -> append to it
-				 * otherwise
-				 * -> create a new chunk
-				 *
-				 * */
-
-				if (dst_cq->last &&
-				    dst_cq->last->type == FILE_CHUNK &&
-				    dst_cq->last->file.is_temp &&
-				    dst_cq->last->offset == 0) {
-					/* ok, take the last chunk for our job */
-
-			 		if (dst_cq->last->file.length < 1 * 1024 * 1024) {
-						dst_c = dst_cq->last;
-
-						if (dst_c->file.fd == -1) {
-							/* this should not happen as we cache the fd, but you never know */
-							dst_c->file.fd = open(dst_c->file.name->ptr, O_WRONLY | O_APPEND);
-							fd_close_on_exec(dst_c->file.fd);
-						}
-					} else {
-						/* the chunk is too large now, close it */
-						dst_c = dst_cq->last;
-
-						if (dst_c->file.fd != -1) {
-							close(dst_c->file.fd);
-							dst_c->file.fd = -1;
-						}
-						dst_c = chunkqueue_get_append_tempfile(dst_cq);
-					}
-				} else {
-					dst_c = chunkqueue_get_append_tempfile(dst_cq);
-				}
-
-				/* we have a chunk, let's write to it */
-
-				if (dst_c->file.fd == -1) {
-					/* we don't have file to write to,
-					 * EACCES might be one reason.
-					 *
-					 * Instead of sending 500 we send 413 and say the request is too large
-					 *  */
-
-					log_error_write(srv, __FILE__, __LINE__, "sbs",
-							"denying upload as opening to temp-file for upload failed:",
-							dst_c->file.name, strerror(errno));
-
-					con->http_status = 413; /* Request-Entity too large */
-					con->keep_alive = 0;
-					connection_set_state(srv, con, CON_STATE_HANDLE_REQUEST);
-
-					break;
-				}
-
-				if (toRead != write(dst_c->file.fd, c->mem->ptr + c->offset, toRead)) {
-					/* write failed for some reason ... disk full ? */
-					log_error_write(srv, __FILE__, __LINE__, "sbs",
-							"denying upload as writing to file failed:",
-							dst_c->file.name, strerror(errno));
-
-					con->http_status = 413; /* Request-Entity too large */
-					con->keep_alive = 0;
-					connection_set_state(srv, con, CON_STATE_HANDLE_REQUEST);
-
-					close(dst_c->file.fd);
-					dst_c->file.fd = -1;
-
-					break;
-				}
-
-				dst_c->file.length += toRead;
-
-				if (dst_cq->bytes_in + toRead == (off_t)con->request.content_length) {
-					/* we read everything, close the chunk */
-					close(dst_c->file.fd);
-					dst_c->file.fd = -1;
-				}
-			} else {
-				buffer *b;
-
-				if (dst_cq->last &&
-				    dst_cq->last->type == MEM_CHUNK) {
-					b = dst_cq->last->mem;
-				} else {
-					b = chunkqueue_get_append_buffer(dst_cq);
-					/* prepare buffer size for remaining POST data; is < 64kb */
-					buffer_prepare_copy(b, con->request.content_length - dst_cq->bytes_in);
-				}
-				buffer_append_string_len(b, c->mem->ptr + c->offset, toRead);
-			}
-
-			c->offset += toRead;
-			dst_cq->bytes_in += toRead;
+		if (0 != chunkqueue_steal_with_tempfiles(srv, dst_cq, cq, con->request.content_length - dst_cq->bytes_in )) {
+			con->http_status = 413; /* Request-Entity too large */
+			con->keep_alive = 0;
+			connection_set_state(srv, con, CON_STATE_HANDLE_REQUEST);
 		}
 
 		/* Content is ready */

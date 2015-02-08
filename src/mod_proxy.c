@@ -449,7 +449,7 @@ static int proxy_create_env(server *srv, handler_ctx *hctx) {
 
 	/* build header */
 
-	b = chunkqueue_get_append_buffer(hctx->wb);
+	b = buffer_init();
 
 	/* request line */
 	buffer_copy_string(b, get_http_method_name(con->request.http_method));
@@ -486,6 +486,9 @@ static int proxy_create_env(server *srv, handler_ctx *hctx) {
 	buffer_append_string_len(b, CONST_STR_LEN("\r\n"));
 
 	hctx->wb->bytes_in += b->used - 1;
+	chunkqueue_append_buffer(hctx->wb, b);
+	buffer_free(b);
+
 	/* body */
 
 	if (con->request.content_length) {

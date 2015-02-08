@@ -1629,7 +1629,7 @@ static int scgi_create_env(server *srv, handler_ctx *hctx) {
 
 	scgi_env_add_request_headers(srv, con, p);
 
-	b = chunkqueue_get_append_buffer(hctx->wb);
+	b = buffer_init();
 
 	buffer_append_int(b, p->scgi_env->used);
 	buffer_append_string_len(b, CONST_STR_LEN(":"));
@@ -1637,6 +1637,8 @@ static int scgi_create_env(server *srv, handler_ctx *hctx) {
 	buffer_append_string_len(b, CONST_STR_LEN(","));
 
 	hctx->wb->bytes_in += b->used - 1;
+	chunkqueue_append_buffer(hctx->wb, b);
+	buffer_free(b);
 
 	if (con->request.content_length) {
 		chunkqueue *req_cq = con->request_content_queue;

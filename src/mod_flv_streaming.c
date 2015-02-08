@@ -207,7 +207,6 @@ URIHANDLER_FUNC(mod_flv_streaming_path_handler) {
 		if (0 == strncmp(con->physical.path->ptr + s_len - ct_len, ds->value->ptr, ct_len)) {
 			data_string *get_param;
 			stat_cache_entry *sce = NULL;
-			buffer *b;
 			int start;
 			char *err = NULL;
 			/* if there is a start=[0-9]+ in the header use it as start,
@@ -242,10 +241,9 @@ URIHANDLER_FUNC(mod_flv_streaming_path_handler) {
 			}
 
 			/* we are safe now, let's build a flv header */
-			b = chunkqueue_get_append_buffer(con->write_queue);
-			buffer_copy_string_len(b, CONST_STR_LEN("FLV\x1\x1\0\0\0\x9\0\0\0\x9"));
-
+			http_chunk_append_mem(srv, con, CONST_STR_LEN("FLV\x1\x1\0\0\0\x9\0\0\0\x9"));
 			http_chunk_append_file(srv, con, con->physical.path, start, sce->st.st_size - start);
+			http_chunk_close(srv, con);
 
 			response_header_overwrite(srv, con, CONST_STR_LEN("Content-Type"), CONST_STR_LEN("video/x-flv"));
 

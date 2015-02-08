@@ -583,7 +583,6 @@ static int deflate_file_to_buffer(server *srv, connection *con, plugin_data *p, 
 	int ifd;
 	int ret = -1;
 	void *start;
-	buffer *b;
 
 	/* overflow */
 	if ((off_t)(sce->st.st_size * 1.1) < sce->st.st_size) return -1;
@@ -651,8 +650,7 @@ static int deflate_file_to_buffer(server *srv, connection *con, plugin_data *p, 
 	if (ret != 0) return -1;
 
 	chunkqueue_reset(con->write_queue);
-	b = chunkqueue_get_append_buffer(con->write_queue);
-	buffer_copy_string_len(b, p->b->ptr, p->b->used);
+	chunkqueue_append_mem(con->write_queue, p->b->ptr, p->b->used);
 
 	buffer_reset(con->physical.path);
 

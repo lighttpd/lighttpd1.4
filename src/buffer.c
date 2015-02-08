@@ -139,6 +139,27 @@ char* buffer_prepare_append(buffer *b, size_t size) {
 	return b->ptr + b->used - 1;
 }
 
+char* buffer_string_prepare_copy(buffer *b, size_t size) {
+	force_assert(NULL != b);
+
+	buffer_prepare_copy(b, size);
+	b->used = 1;
+
+	return b->ptr;
+}
+
+char* buffer_string_prepare_append(buffer *b, size_t size) {
+	force_assert(NULL !=  b);
+
+	if (0 == b->used) {
+		return buffer_string_prepare_copy(b, size);
+	} else {
+		force_assert('\0' == b->ptr[b->used - 1]);
+		return buffer_prepare_append(b, size);
+	}
+}
+
+
 void buffer_commit(buffer *b, size_t size)
 {
 	force_assert(NULL != b);
@@ -231,7 +252,7 @@ void buffer_append_long_hex(buffer *b, unsigned long value) {
 		} while (0 != copy);
 	}
 
-	buf = buffer_prepare_append(b, shift);
+	buf = buffer_string_prepare_append(b, shift);
 	buffer_commit(b, shift); /* will fill below */
 
 	shift <<= 2; /* count bits now */

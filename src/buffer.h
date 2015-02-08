@@ -62,6 +62,11 @@ char* buffer_prepare_copy(buffer *b, size_t size);
  */
 char* buffer_prepare_append(buffer *b, size_t size);
 
+/* similar to buffer_prepare_copy(b, size), but sets b->used = 1 */
+char* buffer_string_prepare_copy(buffer *b, size_t size);
+/* similar to buffer_prepare_append(b, size), but sets b->used = 1 if used was b->0 before */
+char* buffer_string_prepare_append(buffer *b, size_t size);
+
 /* use after prepare_(copy,append) when you have written data to the buffer
  * to increase the buffer length by size. also sets the terminating zero.
  * requires enough space is present for the terminating zero (prepare with the
@@ -136,6 +141,7 @@ int light_isalpha(int c);
 int light_isalnum(int c);
 
 static inline size_t buffer_string_length(const buffer *b); /* buffer string length without terminating 0 */
+static inline size_t buffer_string_space(const buffer *b); /* maximum length of string that can be stored without reallocating */
 static inline void buffer_append_slash(buffer *b); /* append '/' no non-empty strings not ending in '/' */
 
 #define BUFFER_APPEND_STRING_CONST(x, y) \
@@ -159,6 +165,12 @@ void log_failed_assert(const char *filename, unsigned int line, const char *msg)
 
 static inline size_t buffer_string_length(const buffer *b) {
 	return NULL != b && 0 != b->used ? b->used - 1 : 0;
+}
+
+static inline size_t buffer_string_space(const buffer *b) {
+	if (NULL == b || b->size == 0) return 0;
+	if (0 == b->used) return b->size - 1;
+	return b->size - b->used;
 }
 
 static inline void buffer_append_slash(buffer *b) {

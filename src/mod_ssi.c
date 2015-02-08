@@ -430,7 +430,7 @@ static int process_ssi_stmt(server *srv, connection *con, plugin_data *p, const 
 		case SSI_ECHO_USER_NAME: {
 			struct passwd *pw;
 
-			b = chunkqueue_get_append_buffer(con->write_queue);
+			b = buffer_init();
 #ifdef HAVE_PWD_H
 			if (NULL == (pw = getpwuid(sce->st.st_uid))) {
 				buffer_copy_int(b, sce->st.st_uid);
@@ -440,67 +440,62 @@ static int process_ssi_stmt(server *srv, connection *con, plugin_data *p, const 
 #else
 			buffer_copy_int(b, sce->st.st_uid);
 #endif
+			chunkqueue_append_buffer(con->write_queue, b);
+			buffer_free(b);
 			break;
 		}
 		case SSI_ECHO_LAST_MODIFIED:	{
 			time_t t = sce->st.st_mtime;
 
-			b = chunkqueue_get_append_buffer(con->write_queue);
 			if (0 == strftime(buf, sizeof(buf), p->timefmt->ptr, localtime(&t))) {
-				buffer_copy_string_len(b, CONST_STR_LEN("(none)"));
+				chunkqueue_append_mem(con->write_queue, CONST_STR_LEN("(none)"));
 			} else {
-				buffer_copy_string(b, buf);
+				chunkqueue_append_mem(con->write_queue, buf, strlen(buf));
 			}
 			break;
 		}
 		case SSI_ECHO_DATE_LOCAL: {
 			time_t t = time(NULL);
 
-			b = chunkqueue_get_append_buffer(con->write_queue);
 			if (0 == strftime(buf, sizeof(buf), p->timefmt->ptr, localtime(&t))) {
-				buffer_copy_string_len(b, CONST_STR_LEN("(none)"));
+				chunkqueue_append_mem(con->write_queue, CONST_STR_LEN("(none)"));
 			} else {
-				buffer_copy_string(b, buf);
+				chunkqueue_append_mem(con->write_queue, buf, strlen(buf));
 			}
 			break;
 		}
 		case SSI_ECHO_DATE_GMT: {
 			time_t t = time(NULL);
 
-			b = chunkqueue_get_append_buffer(con->write_queue);
 			if (0 == strftime(buf, sizeof(buf), p->timefmt->ptr, gmtime(&t))) {
-				buffer_copy_string_len(b, CONST_STR_LEN("(none)"));
+				chunkqueue_append_mem(con->write_queue, CONST_STR_LEN("(none)"));
 			} else {
-				buffer_copy_string(b, buf);
+				chunkqueue_append_mem(con->write_queue, buf, strlen(buf));
 			}
 			break;
 		}
 		case SSI_ECHO_DOCUMENT_NAME: {
 			char *sl;
 
-			b = chunkqueue_get_append_buffer(con->write_queue);
 			if (NULL == (sl = strrchr(con->physical.path->ptr, '/'))) {
-				buffer_copy_buffer(b, con->physical.path);
+				chunkqueue_append_mem(con->write_queue, CONST_BUF_LEN(con->physical.path));
 			} else {
-				buffer_copy_string(b, sl + 1);
+				chunkqueue_append_mem(con->write_queue, sl + 1, strlen(sl + 1));
 			}
 			break;
 		}
 		case SSI_ECHO_DOCUMENT_URI: {
-			b = chunkqueue_get_append_buffer(con->write_queue);
-			buffer_copy_buffer(b, con->uri.path);
+			chunkqueue_append_mem(con->write_queue, CONST_BUF_LEN(con->uri.path));
 			break;
 		}
 		default: {
 			data_string *ds;
 			/* check if it is a cgi-var */
 
-			b = chunkqueue_get_append_buffer(con->write_queue);
-
 			if (NULL != (ds = (data_string *)array_get_element(p->ssi_cgi_env, var_val))) {
-				buffer_copy_buffer(b, ds->value);
+				chunkqueue_append_mem(con->write_queue, CONST_BUF_LEN(ds->value));
 			} else {
-				buffer_copy_string_len(b, CONST_STR_LEN("(none)"));
+				chunkqueue_append_mem(con->write_queue, CONST_STR_LEN("(none)"));
 			}
 
 			break;
@@ -583,7 +578,7 @@ static int process_ssi_stmt(server *srv, connection *con, plugin_data *p, const 
 
 			switch (ssicmd) {
 			case SSI_FSIZE:
-				b = chunkqueue_get_append_buffer(con->write_queue);
+				b = buffer_init();
 				if (p->sizefmt) {
 					int j = 0;
 					const char *abr[] = { " B", " kB", " MB", " GB", " TB", NULL };
@@ -597,13 +592,14 @@ static int process_ssi_stmt(server *srv, connection *con, plugin_data *p, const 
 				} else {
 					buffer_copy_int(b, st.st_size);
 				}
+				chunkqueue_append_buffer(con->write_queue, b);
+				buffer_free(b);
 				break;
 			case SSI_FLASTMOD:
-				b = chunkqueue_get_append_buffer(con->write_queue);
 				if (0 == strftime(buf, sizeof(buf), p->timefmt->ptr, localtime(&t))) {
-					buffer_copy_string_len(b, CONST_STR_LEN("(none)"));
+					chunkqueue_append_mem(con->write_queue, CONST_STR_LEN("(none)"));
 				} else {
-					buffer_copy_string(b, buf);
+					chunkqueue_append_mem(con->write_queue, buf, strlen(buf));
 				}
 				break;
 			case SSI_INCLUDE:
@@ -611,7 +607,7 @@ static int process_ssi_stmt(server *srv, connection *con, plugin_data *p, const 
 
 				/* Keep the newest mtime of included files */
 				if (st.st_mtime > include_file_last_mtime)
-				  include_file_last_mtime = st.st_mtime;
+					include_file_last_mtime = st.st_mtime;
 
 				break;
 			}
@@ -683,7 +679,7 @@ static int process_ssi_stmt(server *srv, connection *con, plugin_data *p, const 
 	case SSI_PRINTENV:
 		if (p->if_is_false) break;
 
-		b = chunkqueue_get_append_buffer(con->write_queue);
+		b = buffer_init();
 		for (i = 0; i < p->ssi_vars->used; i++) {
 			data_string *ds = (data_string *)p->ssi_vars->data[p->ssi_vars->sorted[i]];
 
@@ -700,6 +696,8 @@ static int process_ssi_stmt(server *srv, connection *con, plugin_data *p, const 
 			buffer_append_string_encoded(b, CONST_BUF_LEN(ds->value), ENCODING_MINIMAL_XML);
 			buffer_append_string_len(b, CONST_STR_LEN("\n"));
 		}
+		chunkqueue_append_buffer(con->write_queue, b);
+		buffer_free(b);
 
 		break;
 	case SSI_EXEC: {
@@ -791,17 +789,14 @@ static int process_ssi_stmt(server *srv, connection *con, plugin_data *p, const 
 						}
 
 						if (toread > 0) {
-							b = chunkqueue_get_append_buffer(con->write_queue);
+							char *mem;
+							size_t mem_len;
 
-							buffer_prepare_copy(b, toread);
+							chunkqueue_get_memory(con->write_queue, &mem, &mem_len, 0, toread);
+							r = read(from_exec_fds[0], mem, mem_len);
+							chunkqueue_use_memory(con->write_queue, r > 0 ? r : 0);
 
-							if ((r = read(from_exec_fds[0], b->ptr, b->size - 1)) < 0) {
-								/* read failed */
-								break;
-							} else {
-								b->used = r;
-								b->ptr[b->used++] = '\0';
-							}
+							if (r < 0) break; /* read failed */
 						} else {
 							break;
 						}

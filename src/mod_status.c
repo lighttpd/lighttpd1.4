@@ -199,7 +199,7 @@ static int mod_status_get_multiplier(double *avg, char *multiplier, int size) {
 
 static handler_t mod_status_handle_server_status_html(server *srv, connection *con, void *p_d) {
 	plugin_data *p = p_d;
-	buffer *b;
+	buffer *b = buffer_init();
 	size_t j;
 	double avg;
 	char multiplier = '\0';
@@ -207,8 +207,6 @@ static handler_t mod_status_handle_server_status_html(server *srv, connection *c
 	time_t ts;
 
 	int days, hours, mins, seconds;
-
-	b = chunkqueue_get_append_buffer(con->write_queue);
 
 	buffer_copy_string_len(b, CONST_STR_LEN(
 				 "<?xml version=\"1.0\" encoding=\"iso-8859-1\"?>\n"
@@ -555,6 +553,9 @@ static handler_t mod_status_handle_server_status_html(server *srv, connection *c
 		      "</html>\n"
 		      ));
 
+	chunkqueue_append_buffer(con->write_queue, b);
+	buffer_free(b);
+
 	response_header_overwrite(srv, con, CONST_STR_LEN("Content-Type"), CONST_STR_LEN("text/html"));
 
 	return 0;
@@ -563,14 +564,12 @@ static handler_t mod_status_handle_server_status_html(server *srv, connection *c
 
 static handler_t mod_status_handle_server_status_text(server *srv, connection *con, void *p_d) {
 	plugin_data *p = p_d;
-	buffer *b;
+	buffer *b = buffer_init();
 	double avg;
 	time_t ts;
 	char buf[32];
 	unsigned int k;
 	unsigned int l;
-
-	b = chunkqueue_get_append_buffer(con->write_queue);
 
 	/* output total number of requests */
 	buffer_append_string_len(b, CONST_STR_LEN("Total Accesses: "));
@@ -598,13 +597,13 @@ static handler_t mod_status_handle_server_status_text(server *srv, connection *c
 	buffer_append_string_len(b, CONST_STR_LEN("\n"));
 
 	buffer_append_string_len(b, CONST_STR_LEN("IdleServers: "));
-       buffer_append_int(b, srv->conns->size - srv->conns->used);
-       buffer_append_string_len(b, CONST_STR_LEN("\n"));
+	buffer_append_int(b, srv->conns->size - srv->conns->used);
+	buffer_append_string_len(b, CONST_STR_LEN("\n"));
 
-       /* output scoreboard */
-       buffer_append_string_len(b, CONST_STR_LEN("Scoreboard: "));
-       for (k = 0; k < srv->conns->used; k++) {
-        	connection *c = srv->conns->ptr[k];
+	/* output scoreboard */
+	buffer_append_string_len(b, CONST_STR_LEN("Scoreboard: "));
+	for (k = 0; k < srv->conns->used; k++) {
+		connection *c = srv->conns->ptr[k];
 		const char *state = connection_get_short_state(c->state);
 		buffer_append_string_len(b, state, 1);
 	}
@@ -613,15 +612,17 @@ static handler_t mod_status_handle_server_status_text(server *srv, connection *c
 	}
 	buffer_append_string_len(b, CONST_STR_LEN("\n"));
 
-	/* set text/plain output */
+	chunkqueue_append_buffer(con->write_queue, b);
+	buffer_free(b);
 
+	/* set text/plain output */
 	response_header_overwrite(srv, con, CONST_STR_LEN("Content-Type"), CONST_STR_LEN("text/plain"));
 
 	return 0;
 }
 
 static handler_t mod_status_handle_server_statistics(server *srv, connection *con, void *p_d) {
-	buffer *b;
+	buffer *b = buffer_init();
 	size_t i;
 	array *st = srv->status;
 	UNUSED(p_d);
@@ -634,8 +635,6 @@ static handler_t mod_status_handle_server_statistics(server *srv, connection *co
 		return HANDLER_FINISHED;
 	}
 
-	b = chunkqueue_get_append_buffer(con->write_queue);
-
 	for (i = 0; i < st->used; i++) {
 		size_t ndx = st->sorted[i];
 
@@ -644,6 +643,9 @@ static handler_t mod_status_handle_server_statistics(server *srv, connection *co
 		buffer_append_int(b, ((data_integer *)(st->data[ndx]))->value);
 		buffer_append_string_len(b, CONST_STR_LEN("\n"));
 	}
+
+	chunkqueue_append_buffer(con->write_queue, b);
+	buffer_free(b);
 
 	response_header_overwrite(srv, con, CONST_STR_LEN("Content-Type"), CONST_STR_LEN("text/plain"));
 
@@ -671,7 +673,8 @@ static handler_t mod_status_handle_server_status(server *srv, connection *con, v
 
 static handler_t mod_status_handle_server_config(server *srv, connection *con, void *p_d) {
 	plugin_data *p = p_d;
-	buffer *b, *m = p->module_list;
+	buffer *b = buffer_init();
+	buffer *m = p->module_list;
 	size_t i;
 
 	struct ev_map { fdevent_handler_t et; const char *name; } event_handlers[] =
@@ -702,8 +705,6 @@ static handler_t mod_status_handle_server_config(server *srv, connection *con, v
 #endif
 		{ FDEVENT_HANDLER_UNSET,          NULL }
 	};
-
-	b = chunkqueue_get_append_buffer(con->write_queue);
 
 	buffer_copy_string_len(b, CONST_STR_LEN(
 			   "<?xml version=\"1.0\" encoding=\"iso-8859-1\"?>\n"
@@ -755,6 +756,9 @@ static handler_t mod_status_handle_server_config(server *srv, connection *con, v
 		      " </body>\n"
 		      "</html>\n"
 		      ));
+
+	chunkqueue_append_buffer(con->write_queue, b);
+	buffer_free(b);
 
 	response_header_overwrite(srv, con, CONST_STR_LEN("Content-Type"), CONST_STR_LEN("text/html"));
 

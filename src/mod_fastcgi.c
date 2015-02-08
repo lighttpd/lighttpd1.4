@@ -52,13 +52,6 @@
 
 #include "version.h"
 
-#define FCGI_ENV_ADD_CHECK(ret, con) \
-	if (ret == -1) { \
-		con->http_status = 400; \
-		con->file_finished = 1; \
-		return -1; \
-	};
-
 /*
  *
  * TODO:
@@ -1769,6 +1762,12 @@ static connection_result_t fcgi_establish_connection(server *srv, handler_ctx *h
 	return CONNECTION_OK;
 }
 
+#define FCGI_ENV_ADD_CHECK(ret, con) \
+	if (ret == -1) { \
+		con->http_status = 400; \
+		con->file_finished = 1; \
+		return -1; \
+	};
 static int fcgi_env_add_request_headers(server *srv, connection *con, plugin_data *p) {
 	size_t i;
 
@@ -1834,11 +1833,9 @@ static int fcgi_env_add_request_headers(server *srv, connection *con, plugin_dat
 	return 0;
 }
 
-
 static int fcgi_create_env(server *srv, handler_ctx *hctx, size_t request_id) {
 	FCGI_BeginRequestRecord beginRecord;
 	FCGI_Header header;
-	buffer *b;
 
 	char buf[LI_ITOSTRING_LENGTH];
 	const char *s;
@@ -1862,10 +1859,6 @@ static int fcgi_create_env(server *srv, handler_ctx *hctx, size_t request_id) {
 	beginRecord.body.roleB1 = 0;
 	beginRecord.body.flags = 0;
 	memset(beginRecord.body.reserved, 0, sizeof(beginRecord.body.reserved));
-
-	b = chunkqueue_get_append_buffer(hctx->wb);
-
-	buffer_copy_string_len(b, (const char *)&beginRecord, sizeof(beginRecord));
 
 	/* send FCGI_PARAMS */
 	buffer_prepare_copy(p->fcgi_env, 1024);
@@ -2054,14 +2047,22 @@ static int fcgi_create_env(server *srv, handler_ctx *hctx, size_t request_id) {
 
 	FCGI_ENV_ADD_CHECK(fcgi_env_add_request_headers(srv, con, p), con);
 
-	fcgi_header(&(header), FCGI_PARAMS, request_id, p->fcgi_env->used, 0);
-	buffer_append_string_len(b, (const char *)&header, sizeof(header));
-	buffer_append_string_len(b, (const char *)p->fcgi_env->ptr, p->fcgi_env->used);
+	{
+		buffer *b = buffer_init();
 
-	fcgi_header(&(header), FCGI_PARAMS, request_id, 0, 0);
-	buffer_append_string_len(b, (const char *)&header, sizeof(header));
+		buffer_copy_string_len(b, (const char *)&beginRecord, sizeof(beginRecord));
 
-	hctx->wb->bytes_in += b->used - 1;
+		fcgi_header(&(header), FCGI_PARAMS, request_id, p->fcgi_env->used, 0);
+		buffer_append_string_len(b, (const char *)&header, sizeof(header));
+		buffer_append_string_len(b, (const char *)p->fcgi_env->ptr, p->fcgi_env->used);
+
+		fcgi_header(&(header), FCGI_PARAMS, request_id, 0, 0);
+		buffer_append_string_len(b, (const char *)&header, sizeof(header));
+
+		hctx->wb->bytes_in += b->used - 1;
+		chunkqueue_append_buffer(hctx->wb, b);
+		buffer_free(b);
+	}
 
 	if (con->request.content_length) {
 		chunkqueue *req_cq = con->request_content_queue;
@@ -2433,38 +2434,21 @@ static int fcgi_demux_response(server *srv, handler_ctx *hctx) {
 		return -1;
 	}
 
-	/* init read-buffer */
-
 	if (toread > 0) {
-		buffer *b;
-		chunk *cq_first = hctx->rb->first;
-		chunk *cq_last = hctx->rb->last;
+		char *mem;
+		size_t mem_len;
 
-		b = chunkqueue_get_append_buffer(hctx->rb);
-		buffer_prepare_copy(b, toread + 1);
+		chunkqueue_get_memory(hctx->rb, &mem, &mem_len, 0, toread);
+		r = read(hctx->fd, mem, mem_len);
+		chunkqueue_use_memory(hctx->rb, r > 0 ? r : 0);
 
-		/* append to read-buffer */
-		if (-1 == (r = read(hctx->fd, b->ptr, toread))) {
-			if (errno == EAGAIN) {
-				/* roll back the last chunk allocation,
-                                   and continue on next iteration        */
-				buffer_free(hctx->rb->last->mem);
-				free(hctx->rb->last);
-				hctx->rb->first = cq_first;
-				hctx->rb->last = cq_last;
-				return 0;
-			}
+		if (-1 == r) {
+			if (errno == EAGAIN) return 0;
 			log_error_write(srv, __FILE__, __LINE__, "sds",
 					"unexpected end-of-file (perhaps the fastcgi process died):",
 					fcgi_fd, strerror(errno));
 			return -1;
 		}
-
-		/* this should be catched by the b > 0 above */
-		force_assert(r);
-
-		b->used = r + 1; /* one extra for the fake \0 */
-		b->ptr[b->used - 1] = '\0';
 	} else {
 		log_error_write(srv, __FILE__, __LINE__, "ssdsb",
 				"unexpected end-of-file (perhaps the fastcgi process died):",
@@ -2973,8 +2957,8 @@ static handler_t fcgi_write_request(server *srv, handler_ctx *hctx) {
 					"fcgi-request is already in use:", hctx->request_id);
 		}
 
-		/* fall through */
 		if (-1 == fcgi_create_env(srv, hctx, hctx->request_id)) return HANDLER_ERROR;
+
 		fcgi_set_state(srv, hctx, FCGI_STATE_WRITE);
 		/* fall through */
 	case FCGI_STATE_WRITE:
