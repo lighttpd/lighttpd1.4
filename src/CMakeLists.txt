@@ -424,7 +424,7 @@ SET(COMMON_SRC
 	fdevent_poll.c fdevent_linux_sysepoll.c
 	fdevent_solaris_devpoll.c fdevent_solaris_port.c
 	fdevent_freebsd_kqueue.c
-	data_config.c bitset.c
+	data_config.c
 	inet_ntop_cache.c crc32.c
 	connections-glue.c
 	configfile-glue.c

@@ -66,7 +66,7 @@ common_src=buffer.c log.c \
       fdevent_poll.c fdevent_linux_sysepoll.c \
       fdevent_solaris_devpoll.c fdevent_solaris_port.c \
       fdevent_freebsd_kqueue.c \
-      data_config.c bitset.c \
+      data_config.c \
       inet_ntop_cache.c crc32.c \
       connections-glue.c \
       configfile-glue.c \
@@ -273,7 +273,7 @@ hdr = server.h buffer.h network.h log.h keyvalue.h \
       fdevent.h connections.h base.h stat_cache.h \
       plugin.h mod_auth.h \
       etag.h joblist.h array.h crc32.h \
-      network_backends.h configfile.h bitset.h \
+      network_backends.h configfile.h \
       mod_ssi.h mod_ssi_expr.h inet_ntop_cache.h \
       configparser.h mod_ssi_exprparser.h \
       sys-mmap.h sys-socket.h mod_cml.h mod_cml_funcs.h \

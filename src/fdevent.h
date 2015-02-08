@@ -6,7 +6,6 @@
 #endif
 
 #include "settings.h"
-#include "bitset.h"
 
 #if defined HAVE_STDINT_H
 # include <stdint.h>
