@@ -35,7 +35,7 @@ void ssi_val_free(ssi_val_t *s) {
 
 int ssi_val_tobool(ssi_val_t *B) {
 	if (B->type == SSI_TYPE_STRING) {
-		return B->str->used > 1 ? 1 : 0;
+		return !buffer_string_is_empty(B->str);
 	} else {
 		return B->bo;
 	}

@@ -185,20 +185,18 @@ static int cache_call_lua(server *srv, connection *con, plugin_data *p, buffer *
 	/* cleanup basedir */
 	b = p->baseurl;
 	buffer_copy_buffer(b, con->uri.path);
-	for (c = b->ptr + b->used - 1; c > b->ptr && *c != '/'; c--);
+	for (c = b->ptr + buffer_string_length(b); c > b->ptr && *c != '/'; c--);
 
 	if (*c == '/') {
-		b->used = c - b->ptr + 2;
-		*(c+1) = '\0';
+		buffer_string_set_length(b, c - b->ptr + 1);
 	}
 
 	b = p->basedir;
 	buffer_copy_buffer(b, con->physical.path);
-	for (c = b->ptr + b->used - 1; c > b->ptr && *c != '/'; c--);
+	for (c = b->ptr + buffer_string_length(b); c > b->ptr && *c != '/'; c--);
 
 	if (*c == '/') {
-		b->used = c - b->ptr + 2;
-		*(c+1) = '\0';
+		buffer_string_set_length(b, c - b->ptr + 1);
 	}
 
 
@@ -274,7 +272,7 @@ URIHANDLER_FUNC(mod_cml_is_handled) {
 
 	if (buffer_string_is_empty(p->conf.ext)) return HANDLER_GO_ON;
 
-	if (!buffer_is_equal_right_len(con->physical.path, p->conf.ext, p->conf.ext->used - 1)) {
+	if (!buffer_is_equal_right_len(con->physical.path, p->conf.ext, buffer_string_length(p->conf.ext))) {
 		return HANDLER_GO_ON;
 	}
 

@@ -264,7 +264,7 @@ static int mod_rrdtool_create_rrd(server *srv, plugin_data *p, plugin_config *s)
 		"RRA:MIN:0.5:24:775 "
 		"RRA:MIN:0.5:288:797\n"));
 
-	if (-1 == (safe_write(p->write_fd, p->cmd->ptr, p->cmd->used - 1))) {
+	if (-1 == (safe_write(p->write_fd, CONST_BUF_LEN(p->cmd)))) {
 		log_error_write(srv, __FILE__, __LINE__, "ss",
 			"rrdtool-write: failed", strerror(errno));
 
@@ -279,8 +279,7 @@ static int mod_rrdtool_create_rrd(server *srv, plugin_data *p, plugin_config *s)
 		return HANDLER_ERROR;
 	}
 
-	p->resp->used = r;
-	p->resp->ptr[p->resp->used++] = '\0';
+	buffer_commit(p->resp, r);
 
 	if (p->resp->ptr[0] != 'O' ||
 		p->resp->ptr[1] != 'K') {
@@ -426,7 +425,7 @@ TRIGGER_FUNC(mod_rrd_trigger) {
 		buffer_append_int(p->cmd, s->requests);
 		buffer_append_string_len(p->cmd, CONST_STR_LEN("\n"));
 
-		if (-1 == (r = safe_write(p->write_fd, p->cmd->ptr, p->cmd->used - 1))) {
+		if (-1 == (r = safe_write(p->write_fd, CONST_BUF_LEN(p->cmd)))) {
 			p->rrdtool_running = 0;
 
 			log_error_write(srv, __FILE__, __LINE__, "ss",
@@ -435,7 +434,7 @@ TRIGGER_FUNC(mod_rrd_trigger) {
 			return HANDLER_ERROR;
 		}
 
-		buffer_string_prepare_copy(p->resp, 4096);
+		buffer_string_prepare_copy(p->resp, 4095);
 		if (-1 == (r = safe_read(p->read_fd, p->resp->ptr, p->resp->size - 1))) {
 			p->rrdtool_running = 0;
 
@@ -445,8 +444,7 @@ TRIGGER_FUNC(mod_rrd_trigger) {
 			return HANDLER_ERROR;
 		}
 
-		p->resp->used = r;
-		p->resp->ptr[p->resp->used++] = '\0';
+		buffer_commit(p->resp, r);
 
 		if (p->resp->ptr[0] != 'O' ||
 		    p->resp->ptr[1] != 'K') {

@@ -67,13 +67,13 @@ int network_write_chunkqueue_openssl(server *srv, connection *con, SSL *ssl, chu
 			off_t toSend;
 			ssize_t r;
 
-			if (c->mem->used == 0 || c->mem->used == 1) {
+			if (buffer_string_is_empty(c->mem)) {
 				chunk_finished = 1;
 				break;
 			}
 
 			offset = c->mem->ptr + c->offset;
-			toSend = c->mem->used - 1 - c->offset;
+			toSend = buffer_string_length(c->mem) - c->offset;
 			if (toSend > max_bytes) toSend = max_bytes;
 
 			/**
@@ -149,7 +149,7 @@ int network_write_chunkqueue_openssl(server *srv, connection *con, SSL *ssl, chu
 				max_bytes -= r;
 			}
 
-			if (c->offset == (off_t)c->mem->used - 1) {
+			if (c->offset == (off_t)buffer_string_length(c->mem)) {
 				chunk_finished = 1;
 			}
 

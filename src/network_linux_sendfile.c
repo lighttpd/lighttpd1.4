@@ -54,12 +54,12 @@ int network_write_chunkqueue_linuxsendfile(server *srv, connection *con, int fd,
 			     tc = tc->next, num_chunks++);
 
 			for (tc = c, i = 0; i < num_chunks; tc = tc->next, i++) {
-				if (tc->mem->used == 0) {
+				if (buffer_string_is_empty(tc->mem)) {
 					chunks[i].iov_base = tc->mem->ptr;
 					chunks[i].iov_len  = 0;
 				} else {
 					offset = tc->mem->ptr + tc->offset;
-					toSend = tc->mem->used - 1 - tc->offset;
+					toSend = buffer_string_length(tc->mem) - tc->offset;
 
 					chunks[i].iov_base = offset;
 

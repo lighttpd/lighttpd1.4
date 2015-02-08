@@ -320,7 +320,7 @@ URIHANDLER_FUNC(mod_trigger_b4_dl_uri_handler) {
 
 	if (con->mode != DIRECT) return HANDLER_GO_ON;
 
-	if (con->uri.path->used == 0) return HANDLER_GO_ON;
+	if (buffer_is_empty(con->uri.path)) return HANDLER_GO_ON;
 
 	mod_trigger_b4_dl_patch_connection(srv, con, p);
 
@@ -356,7 +356,7 @@ URIHANDLER_FUNC(mod_trigger_b4_dl_uri_handler) {
 	}
 
 	/* check if URL is a trigger -> insert IP into DB */
-	if ((n = pcre_exec(p->conf.trigger_regex, NULL, con->uri.path->ptr, con->uri.path->used - 1, 0, 0, ovec, 3 * N)) < 0) {
+	if ((n = pcre_exec(p->conf.trigger_regex, NULL, CONST_BUF_LEN(con->uri.path), 0, 0, ovec, 3 * N)) < 0) {
 		if (n != PCRE_ERROR_NOMATCH) {
 			log_error_write(srv, __FILE__, __LINE__, "sd",
 					"execution error while matching:", n);
@@ -383,11 +383,12 @@ URIHANDLER_FUNC(mod_trigger_b4_dl_uri_handler) {
 # endif
 # if defined(HAVE_MEMCACHE_H)
 		if (p->conf.mc) {
-			size_t i;
+			size_t i, len;
 			buffer_copy_buffer(p->tmp_buf, p->conf.mc_namespace);
 			buffer_append_string(p->tmp_buf, remote_ip);
 
-			for (i = 0; i < p->tmp_buf->used - 1; i++) {
+			len = buffer_string_length(p->tmp_buf);
+			for (i = 0; i < len; i++) {
 				if (p->tmp_buf->ptr[i] == ' ') p->tmp_buf->ptr[i] = '-';
 			}
 
@@ -407,7 +408,7 @@ URIHANDLER_FUNC(mod_trigger_b4_dl_uri_handler) {
 	}
 
 	/* check if URL is a download -> check IP in DB, update timestamp */
-	if ((n = pcre_exec(p->conf.download_regex, NULL, con->uri.path->ptr, con->uri.path->used - 1, 0, 0, ovec, 3 * N)) < 0) {
+	if ((n = pcre_exec(p->conf.download_regex, NULL, CONST_BUF_LEN(con->uri.path), 0, 0, ovec, 3 * N)) < 0) {
 		if (n != PCRE_ERROR_NOMATCH) {
 			log_error_write(srv, __FILE__, __LINE__, "sd",
 					"execution error while matching: ", n);
@@ -469,12 +470,13 @@ URIHANDLER_FUNC(mod_trigger_b4_dl_uri_handler) {
 # if defined(HAVE_MEMCACHE_H)
 		if (p->conf.mc) {
 			void *r;
-			size_t i;
+			size_t i, len;
 
 			buffer_copy_buffer(p->tmp_buf, p->conf.mc_namespace);
 			buffer_append_string(p->tmp_buf, remote_ip);
 
-			for (i = 0; i < p->tmp_buf->used - 1; i++) {
+			len = buffer_string_length(p->tmp_buf);
+			for (i = 0; i < len; i++) {
 				if (p->tmp_buf->ptr[i] == ' ') p->tmp_buf->ptr[i] = '-';
 			}
 

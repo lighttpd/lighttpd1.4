@@ -304,7 +304,7 @@ static int http_response_parse_range(server *srv, connection *con, plugin_data *
 				/* write END-OF-HEADER */
 				buffer_append_string_len(b, CONST_STR_LEN("\r\n\r\n"));
 
-				con->response.content_length += b->used - 1;
+				con->response.content_length += buffer_string_length(b);
 				chunkqueue_append_buffer(con->write_queue, b);
 				buffer_free(b);
 			}
@@ -325,7 +325,7 @@ static int http_response_parse_range(server *srv, connection *con, plugin_data *
 		buffer_append_string(b, boundary);
 		buffer_append_string_len(b, "--\r\n", 4);
 
-		con->response.content_length += b->used - 1;
+		con->response.content_length += buffer_string_length(b);
 		chunkqueue_append_buffer(con->write_queue, b);
 		buffer_free(b);
 
@@ -363,8 +363,8 @@ URIHANDLER_FUNC(mod_staticfile_subrequest) {
 
 	/* someone else has done a decision for us */
 	if (con->http_status != 0) return HANDLER_GO_ON;
-	if (con->uri.path->used == 0) return HANDLER_GO_ON;
-	if (con->physical.path->used == 0) return HANDLER_GO_ON;
+	if (buffer_is_empty(con->uri.path)) return HANDLER_GO_ON;
+	if (buffer_is_empty(con->physical.path)) return HANDLER_GO_ON;
 
 	/* someone else has handled this request */
 	if (con->mode != DIRECT) return HANDLER_GO_ON;
@@ -381,7 +381,7 @@ URIHANDLER_FUNC(mod_staticfile_subrequest) {
 
 	mod_staticfile_patch_connection(srv, con, p);
 
-	if (p->conf.disable_pathinfo && 0 != con->request.pathinfo->used) {
+	if (p->conf.disable_pathinfo && !buffer_string_is_empty(con->request.pathinfo)) {
 		if (con->conf.log_request_handling) {
 			log_error_write(srv, __FILE__, __LINE__,  "s",  "-- NOT handling file as static file, pathinfo forbidden");
 		}
@@ -392,9 +392,9 @@ URIHANDLER_FUNC(mod_staticfile_subrequest) {
 	for (k = 0; k < p->conf.exclude_ext->used; k++) {
 		ds = (data_string *)p->conf.exclude_ext->data[k];
 
-		if (ds->value->used == 0) continue;
+		if (buffer_is_empty(ds->value)) continue;
 
-		if (buffer_is_equal_right_len(con->physical.path, ds->value, ds->value->used - 1)) {
+		if (buffer_is_equal_right_len(con->physical.path, ds->value, buffer_string_length(ds->value))) {
 			if (con->conf.log_request_handling) {
 				log_error_write(srv, __FILE__, __LINE__,  "s",  "-- NOT handling file as static file, extension forbidden");
 			}

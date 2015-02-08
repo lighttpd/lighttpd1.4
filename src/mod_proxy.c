@@ -472,7 +472,7 @@ static int proxy_create_env(server *srv, handler_ctx *hctx) {
 
 		ds = (data_string *)con->request.headers->data[i];
 
-		if (ds->value->used && ds->key->used) {
+		if (!buffer_is_empty(ds->value) && !buffer_is_empty(ds->key)) {
 			if (buffer_is_equal_string(ds->key, CONST_STR_LEN("Connection"))) continue;
 			if (buffer_is_equal_string(ds->key, CONST_STR_LEN("Proxy-Connection"))) continue;
 
@@ -485,7 +485,7 @@ static int proxy_create_env(server *srv, handler_ctx *hctx) {
 
 	buffer_append_string_len(b, CONST_STR_LEN("\r\n"));
 
-	hctx->wb->bytes_in += b->used - 1;
+	hctx->wb->bytes_in += buffer_string_length(b);
 	chunkqueue_append_buffer(hctx->wb, b);
 	buffer_free(b);
 
@@ -620,7 +620,7 @@ static int proxy_demux_response(server *srv, handler_ctx *hctx) {
 
 	if (p->conf.debug) {
 		log_error_write(srv, __FILE__, __LINE__, "sd",
-			       "proxy - have to read:", b);
+				"proxy - have to read:", b);
 	}
 
 	if (b > 0) {
@@ -637,8 +637,7 @@ static int proxy_demux_response(server *srv, handler_ctx *hctx) {
 		/* this should be catched by the b > 0 above */
 		force_assert(r);
 
-		hctx->response->used += r;
-		hctx->response->ptr[hctx->response->used - 1] = '\0';
+		buffer_commit(hctx->response, r);
 
 #if 0
 		log_error_write(srv, __FILE__, __LINE__, "sdsbs",
@@ -656,7 +655,7 @@ static int proxy_demux_response(server *srv, handler_ctx *hctx) {
 			/* search for the \r\n\r\n in the string */
 			if (NULL != (c = buffer_search_string_len(hctx->response, CONST_STR_LEN("\r\n\r\n")))) {
 				size_t hlen = c - hctx->response->ptr + 4;
-				size_t blen = hctx->response->used - hlen - 1;
+				size_t blen = buffer_string_length(hctx->response) - hlen;
 				/* found */
 
 				buffer_append_string_len(hctx->response_header, hctx->response->ptr, hlen);
@@ -674,13 +673,13 @@ static int proxy_demux_response(server *srv, handler_ctx *hctx) {
 
 				con->file_started = 1;
 				if (blen > 0) http_chunk_append_mem(srv, con, c + 4, blen);
-				hctx->response->used = 0;
+				buffer_reset(hctx->response);
 				joblist_append(srv, con);
 			}
 		} else {
 			http_chunk_append_buffer(srv, con, hctx->response);
 			joblist_append(srv, con);
-			hctx->response->used = 0;
+			buffer_reset(hctx->response);
 		}
 
 	} else {
@@ -703,8 +702,7 @@ static handler_t proxy_write_request(server *srv, handler_ctx *hctx) {
 
 	int ret;
 
-	if (!host ||
-	    (!host->host->used || !host->port)) return -1;
+	if (!host || buffer_string_is_empty(host->host) || !host->port) return -1;
 
 	switch(hctx->state) {
 	case PROXY_STATE_CONNECT:
@@ -721,17 +719,17 @@ static handler_t proxy_write_request(server *srv, handler_ctx *hctx) {
 	case PROXY_STATE_INIT:
 #if defined(HAVE_IPV6) && defined(HAVE_INET_PTON)
 		if (strstr(host->host->ptr,":")) {
-		    if (-1 == (hctx->fd = socket(AF_INET6, SOCK_STREAM, 0))) {
-			log_error_write(srv, __FILE__, __LINE__, "ss", "socket failed: ", strerror(errno));
-			return HANDLER_ERROR;
-		    }
+			if (-1 == (hctx->fd = socket(AF_INET6, SOCK_STREAM, 0))) {
+				log_error_write(srv, __FILE__, __LINE__, "ss", "socket failed: ", strerror(errno));
+				return HANDLER_ERROR;
+			}
 		} else
 #endif
 		{
-		    if (-1 == (hctx->fd = socket(AF_INET, SOCK_STREAM, 0))) {
-			log_error_write(srv, __FILE__, __LINE__, "ss", "socket failed: ", strerror(errno));
-			return HANDLER_ERROR;
-		    }
+			if (-1 == (hctx->fd = socket(AF_INET, SOCK_STREAM, 0))) {
+				log_error_write(srv, __FILE__, __LINE__, "ss", "socket failed: ", strerror(errno));
+				return HANDLER_ERROR;
+			}
 		}
 		hctx->fde_ndx = -1;
 
@@ -1078,13 +1076,8 @@ static handler_t mod_proxy_check_extension(server *srv, connection *con, void *p
 	mod_proxy_patch_connection(srv, con, p);
 
 	fn = con->uri.path;
-
-	if (fn->used == 0) {
-		return HANDLER_ERROR;
-	}
-
-	s_len = fn->used - 1;
-
+	if (buffer_string_is_empty(fn)) return HANDLER_ERROR;
+	s_len = buffer_string_length(fn);
 
 	path_info_offset = 0;
 
@@ -1099,9 +1092,9 @@ static handler_t mod_proxy_check_extension(server *srv, connection *con, void *p
 
 		ext = (data_array *)p->conf.extensions->data[k];
 
-		if (ext->key->used == 0) continue;
+		if (buffer_is_empty(ext->key)) continue;
 
-		ct_len = ext->key->used - 1;
+		ct_len = buffer_string_length(ext->key);
 
 		if (s_len < ct_len) continue;
 

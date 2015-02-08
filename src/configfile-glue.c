@@ -491,7 +491,7 @@ static cond_result_t config_check_cond_nocache(server *srv, connection *con, dat
 #ifndef elementsof
 #define elementsof(x) (sizeof(x) / sizeof(x[0]))
 #endif
-		n = pcre_exec(dc->regex, dc->regex_study, l->ptr, l->used - 1, 0, 0,
+		n = pcre_exec(dc->regex, dc->regex_study, CONST_BUF_LEN(l), 0, 0,
 				cache->matches, elementsof(cache->matches));
 
 		cache->patterncount = n;

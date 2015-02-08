@@ -34,9 +34,9 @@ static int request_check_hostname(server *srv, connection *con, buffer *host) {
 	 */
 
 	/* no Host: */
-	if (!host || host->used == 0) return 0;
+	if (buffer_is_empty(host)) return 0;
 
-	host_len = host->used - 1;
+	host_len = buffer_string_length(host);
 
 	/* IPv6 adress */
 	if (host->ptr[0] == '[') {
@@ -92,10 +92,9 @@ static int request_check_hostname(server *srv, connection *con, buffer *host) {
 	/* if the hostname ends in a "." strip it */
 	if (host->ptr[host_len-1] == '.') {
 		/* shift port info one left */
-		if (NULL != colon) memmove(colon-1, colon, host->used - host_len);
-		else host->ptr[host_len-1] = '\0';
+		if (NULL != colon) memmove(colon-1, colon, buffer_string_length(host) - host_len);
+		buffer_string_set_length(host, buffer_string_length(host) - 1);
 		host_len -= 1;
-		host->used -= 1;
 	}
 
 	if (host_len == 0) return -1;
@@ -213,7 +212,7 @@ static int request_check_hostname(server *srv, connection *con, buffer *host) {
 #endif
 
 static int http_request_split_value(array *vals, buffer *b) {
-	size_t i;
+	size_t i, len;
 	int state = 0;
 
 	const char *current;
@@ -226,10 +225,11 @@ static int http_request_split_value(array *vals, buffer *b) {
 	 * into a array (more or less a explode() incl. striping of whitespaces
 	 */
 
-	if (b->used == 0) return 0;
+	if (buffer_string_is_empty(b)) return 0;
 
 	current = b->ptr;
-	for (i =  0; i < b->used; ++i, ++current) {
+	len = buffer_string_length(b);
+	for (i =  0; i <= len; ++i, ++current) {
 		data_string *ds;
 
 		switch (state) {
@@ -297,7 +297,7 @@ int http_request_parse(server *srv, connection *con) {
 	int line = 0;
 
 	int request_line_stage = 0;
-	size_t i, first;
+	size_t i, first, ilen;
 
 	int done = 0;
 
@@ -310,7 +310,7 @@ int http_request_parse(server *srv, connection *con) {
 	if (con->conf.log_request_header) {
 		log_error_write(srv, __FILE__, __LINE__, "sdsdSb",
 				"fd:", con->fd,
-				"request-len:", con->request.request->used,
+				"request-len:", buffer_string_length(con->request.request),
 				"\n", con->request.request);
 	}
 
@@ -319,7 +319,7 @@ int http_request_parse(server *srv, connection *con) {
 	    con->request.request->ptr[1] == '\n') {
 		/* we are in keep-alive and might get \r\n after a previous POST request.*/
 
-		buffer_copy_string_len(con->parse_request, con->request.request->ptr + 2, con->request.request->used - 1 - 2);
+		buffer_copy_string_len(con->parse_request, con->request.request->ptr + 2, buffer_string_length(con->request.request) - 2);
 	} else {
 		/* fill the local request buffer */
 		buffer_copy_buffer(con->parse_request, con->request.request);
@@ -334,15 +334,14 @@ int http_request_parse(server *srv, connection *con) {
 	 *
 	 * <method> <uri> <protocol>\r\n
 	 * */
-	for (i = 0, first = 0; i < con->parse_request->used && line == 0; i++) {
-		char *cur = con->parse_request->ptr + i;
-
-		switch(*cur) {
+	ilen = buffer_string_length(con->parse_request);
+	for (i = 0, first = 0; i < ilen && line == 0; i++) {
+		switch(con->parse_request->ptr[i]) {
 		case '\r':
 			if (con->parse_request->ptr[i+1] == '\n') {
 				http_method_t r;
 				char *nuri = NULL;
-				size_t j;
+				size_t j, jlen;
 
 				/* \r\n -> \0\0 */
 				con->parse_request->ptr[i] = '\0';
@@ -476,7 +475,8 @@ int http_request_parse(server *srv, connection *con) {
 				}
 
 				/* check uri for invalid characters */
-				for (j = 0; j < con->request.uri->used - 1; j++) {
+				jlen = buffer_string_length(con->request.uri);
+				for (j = 0; j < jlen; j++) {
 					if (!request_uri_is_valid_char(con->request.uri->ptr[j])) {
 						unsigned char buf[2];
 						con->http_status = 400;
@@ -551,7 +551,7 @@ int http_request_parse(server *srv, connection *con) {
 
 	in_folding = 0;
 
-	if (con->request.uri->used == 1) {
+	if (buffer_string_is_empty(con->request.uri)) {
 		con->http_status = 400;
 		con->response.keep_alive = 0;
 		con->keep_alive = 0;
@@ -579,7 +579,7 @@ int http_request_parse(server *srv, connection *con) {
 		con->request.http_host = ds->value;
 	}
 
-	for (; i < con->parse_request->used && !done; i++) {
+	for (; i <= ilen && !done; i++) {
 		char *cur = con->parse_request->ptr + i;
 
 		if (is_key) {
@@ -825,7 +825,7 @@ int http_request_parse(server *srv, connection *con) {
 							} else if (cmp > 0 && 0 == (cmp = buffer_caseless_compare(CONST_BUF_LEN(ds->key), CONST_STR_LEN("Content-Length")))) {
 								char *err;
 								unsigned long int r;
-								size_t j;
+								size_t j, jlen;
 
 								if (con_length_set) {
 									con->http_status = 400;
@@ -842,9 +842,8 @@ int http_request_parse(server *srv, connection *con) {
 									return 0;
 								}
 
-								if (ds->value->used == 0) SEGFAULT();
-
-								for (j = 0; j < ds->value->used - 1; j++) {
+								jlen = buffer_string_length(ds->value);
+								for (j = 0; j < jlen; j++) {
 									char c = ds->value->ptr[j];
 									if (!isdigit((unsigned char)c)) {
 										log_error_write(srv, __FILE__, __LINE__, "sbs",
@@ -1177,9 +1176,9 @@ int http_request_parse(server *srv, connection *con) {
 int http_request_header_finished(server *srv, connection *con) {
 	UNUSED(srv);
 
-	if (con->request.request->used < 5) return 0;
+	if (buffer_string_length(con->request.request) < 4) return 0;
 
-	if (0 == memcmp(con->request.request->ptr + con->request.request->used - 5, "\r\n\r\n", 4)) return 1;
+	if (0 == memcmp(con->request.request->ptr + buffer_string_length(con->request.request) - 4, CONST_STR_LEN("\r\n\r\n"))) return 1;
 	if (NULL != strstr(con->request.request->ptr, "\r\n\r\n")) return 1;
 
 	return 0;

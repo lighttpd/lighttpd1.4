@@ -36,13 +36,13 @@ int network_write_chunkqueue_write(server *srv, connection *con, int fd, chunkqu
 			off_t toSend;
 			ssize_t r;
 
-			if (c->mem->used == 0) {
+			if (buffer_string_is_empty(c->mem)) {
 				chunk_finished = 1;
 				break;
 			}
 
 			offset = c->mem->ptr + c->offset;
-			toSend = c->mem->used - 1 - c->offset;
+			toSend = buffer_string_length(c->mem) - c->offset;
 			if (toSend > max_bytes) toSend = max_bytes;
 
 #ifdef __WIN32
@@ -75,7 +75,7 @@ int network_write_chunkqueue_write(server *srv, connection *con, int fd, chunkqu
 			cq->bytes_out += r;
 			max_bytes -= r;
 
-			if (c->offset == (off_t)c->mem->used - 1) {
+			if (c->offset == (off_t)buffer_string_length(c->mem)) {
 				chunk_finished = 1;
 			}
 

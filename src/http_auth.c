@@ -39,13 +39,7 @@ typedef unsigned char HASH[HASHLEN];
 typedef char HASHHEX[HASHHEXLEN+1];
 
 static void CvtHex(const HASH Bin, char Hex[33]) {
-	unsigned short i;
-
-	for (i = 0; i < 16; i++) {
-		Hex[i*2] = int2hex((Bin[i] >> 4) & 0xf);
-		Hex[i*2+1] = int2hex(Bin[i] & 0xf);
-	}
-	Hex[32] = '\0';
+	li_tohex(Hex, (const char*) Bin, 16);
 }
 
 /**
@@ -97,9 +91,7 @@ static unsigned char * base64_decode(buffer *out, const char *in) {
 
 	size_t in_len = strlen(in);
 
-	buffer_string_prepare_copy(out, in_len);
-
-	result = (unsigned char *)out->ptr;
+	result = (unsigned char *) buffer_string_prepare_copy(out, in_len);
 
 	/* run through the whole string, converting as we go */
 	for (i = 0; i < in_len; i++) {
@@ -157,8 +149,7 @@ static unsigned char * base64_decode(buffer *out, const char *in) {
 		break;
 	}
 
-	result[j] = '\0';
-	out->used = j;
+	buffer_commit(out, j);
 
 	return result;
 }
@@ -166,7 +157,7 @@ static unsigned char * base64_decode(buffer *out, const char *in) {
 static int http_auth_get_password(server *srv, mod_auth_plugin_data *p, buffer *username, buffer *realm, buffer *password) {
 	int ret = -1;
 
-	if (!username->used|| !realm->used) return -1;
+	if (buffer_is_empty(username) || buffer_is_empty(realm)) return -1;
 
 	if (p->conf.auth_backend == AUTH_BACKEND_HTDIGEST) {
 		stream f;
@@ -226,8 +217,8 @@ static int http_auth_get_password(server *srv, mod_auth_plugin_data *p, buffer *
 				pwd_len = f.size - (f_pwd - f.start);
 			}
 
-			if (username->used - 1 == u_len &&
-			    (realm->used - 1 == r_len) &&
+			if (buffer_string_length(username) == u_len &&
+			    (buffer_string_length(realm) == r_len) &&
 			    (0 == strncmp(username->ptr, f_user, u_len)) &&
 			    (0 == strncmp(realm->ptr, f_realm, r_len))) {
 				/* found */
@@ -296,7 +287,7 @@ static int http_auth_get_password(server *srv, mod_auth_plugin_data *p, buffer *
 				pwd_len = f.size - (f_pwd - f.start);
 			}
 
-			if (username->used - 1 == u_len &&
+			if (buffer_string_length(username) == u_len &&
 			    (0 == strncmp(username->ptr, f_user, u_len))) {
 				/* found */
 
@@ -652,10 +643,10 @@ static int http_auth_basic_password_compare(server *srv, mod_auth_plugin_data *p
 		char a1[256];
 
 		li_MD5_Init(&Md5Ctx);
-		li_MD5_Update(&Md5Ctx, (unsigned char *)username->ptr, username->used - 1);
-		li_MD5_Update(&Md5Ctx, (unsigned char *)":", 1);
-		li_MD5_Update(&Md5Ctx, (unsigned char *)realm->ptr, realm->used - 1);
-		li_MD5_Update(&Md5Ctx, (unsigned char *)":", 1);
+		li_MD5_Update(&Md5Ctx, CONST_BUF_LEN(username));
+		li_MD5_Update(&Md5Ctx, CONST_STR_LEN(":"));
+		li_MD5_Update(&Md5Ctx, CONST_BUF_LEN(realm));
+		li_MD5_Update(&Md5Ctx, CONST_STR_LEN(":"));
 		li_MD5_Update(&Md5Ctx, (unsigned char *)pw, strlen(pw));
 		li_MD5_Final(HA1, &Md5Ctx);
 
@@ -682,7 +673,7 @@ static int http_auth_basic_password_compare(server *srv, mod_auth_plugin_data *p
 			char *crypted;
 
 			/* a simple DES password is 2 + 11 characters. everything else should be longer. */
-			if (password->used < 13 + 1) {
+			if (buffer_string_length(password) < 13) {
 				return -1;
 			}
 
@@ -707,7 +698,7 @@ static int http_auth_basic_password_compare(server *srv, mod_auth_plugin_data *p
 		char *dn;
 		int ret;
 		char *attrs[] = { LDAP_NO_ATTRS, NULL };
-		size_t i;
+		size_t i, len;
 
 		/* for now we stay synchronous */
 
@@ -726,7 +717,8 @@ static int http_auth_basic_password_compare(server *srv, mod_auth_plugin_data *p
 		 * a unpleasant way
 		 */
 
-		for (i = 0; i < username->used - 1; i++) {
+		len = buffer_string_length(username);
+		for (i = 0; i < len; i++) {
 			char c = username->ptr[i];
 
 			if (!isalpha(c) &&
@@ -863,9 +855,8 @@ int http_auth_basic_check(server *srv, connection *con, mod_auth_plugin_data *p,
 		return 0;
 	}
 
-	*pw++ = '\0';
-
-	username->used = pw - username->ptr;
+	buffer_string_set_length(username, pw - username->ptr);
+	pw++;
 
 	password = buffer_init();
 	/* copy password to r1 */
@@ -1084,10 +1075,10 @@ int http_auth_digest_check(server *srv, connection *con, mod_auth_plugin_data *p
 		/* generate password from plain-text */
 		li_MD5_Init(&Md5Ctx);
 		li_MD5_Update(&Md5Ctx, (unsigned char *)username, strlen(username));
-		li_MD5_Update(&Md5Ctx, (unsigned char *)":", 1);
+		li_MD5_Update(&Md5Ctx, CONST_STR_LEN(":"));
 		li_MD5_Update(&Md5Ctx, (unsigned char *)realm, strlen(realm));
-		li_MD5_Update(&Md5Ctx, (unsigned char *)":", 1);
-		li_MD5_Update(&Md5Ctx, (unsigned char *)password->ptr, password->used - 1);
+		li_MD5_Update(&Md5Ctx, CONST_STR_LEN(":"));
+		li_MD5_Update(&Md5Ctx, CONST_BUF_LEN(password));
 		li_MD5_Final(HA1, &Md5Ctx);
 	} else if (p->conf.auth_backend == AUTH_BACKEND_HTDIGEST) {
 		/* HA1 */
@@ -1109,9 +1100,9 @@ int http_auth_digest_check(server *srv, connection *con, mod_auth_plugin_data *p
 		/* Errata ID 1649: http://www.rfc-editor.org/errata_search.php?rfc=2617 */
 		CvtHex(HA1, a1);
 		li_MD5_Update(&Md5Ctx, (unsigned char *)a1, 32);
-		li_MD5_Update(&Md5Ctx, (unsigned char *)":", 1);
+		li_MD5_Update(&Md5Ctx, CONST_STR_LEN(":"));
 		li_MD5_Update(&Md5Ctx, (unsigned char *)nonce, strlen(nonce));
-		li_MD5_Update(&Md5Ctx, (unsigned char *)":", 1);
+		li_MD5_Update(&Md5Ctx, CONST_STR_LEN(":"));
 		li_MD5_Update(&Md5Ctx, (unsigned char *)cnonce, strlen(cnonce));
 		li_MD5_Final(HA1, &Md5Ctx);
 	}
@@ -1121,12 +1112,12 @@ int http_auth_digest_check(server *srv, connection *con, mod_auth_plugin_data *p
 	/* calculate H(A2) */
 	li_MD5_Init(&Md5Ctx);
 	li_MD5_Update(&Md5Ctx, (unsigned char *)m, strlen(m));
-	li_MD5_Update(&Md5Ctx, (unsigned char *)":", 1);
+	li_MD5_Update(&Md5Ctx, CONST_STR_LEN(":"));
 	li_MD5_Update(&Md5Ctx, (unsigned char *)uri, strlen(uri));
 	/* qop=auth-int not supported, already checked above */
 /*
 	if (qop && strcasecmp(qop, "auth-int") == 0) {
-		li_MD5_Update(&Md5Ctx, (unsigned char *)":", 1);
+		li_MD5_Update(&Md5Ctx, CONST_STR_LEN(":"));
 		li_MD5_Update(&Md5Ctx, (unsigned char *) [body checksum], HASHHEXLEN);
 	}
 */
@@ -1136,16 +1127,16 @@ int http_auth_digest_check(server *srv, connection *con, mod_auth_plugin_data *p
 	/* calculate response */
 	li_MD5_Init(&Md5Ctx);
 	li_MD5_Update(&Md5Ctx, (unsigned char *)a1, HASHHEXLEN);
-	li_MD5_Update(&Md5Ctx, (unsigned char *)":", 1);
+	li_MD5_Update(&Md5Ctx, CONST_STR_LEN(":"));
 	li_MD5_Update(&Md5Ctx, (unsigned char *)nonce, strlen(nonce));
-	li_MD5_Update(&Md5Ctx, (unsigned char *)":", 1);
+	li_MD5_Update(&Md5Ctx, CONST_STR_LEN(":"));
 	if (qop && *qop) {
 		li_MD5_Update(&Md5Ctx, (unsigned char *)nc, strlen(nc));
-		li_MD5_Update(&Md5Ctx, (unsigned char *)":", 1);
+		li_MD5_Update(&Md5Ctx, CONST_STR_LEN(":"));
 		li_MD5_Update(&Md5Ctx, (unsigned char *)cnonce, strlen(cnonce));
-		li_MD5_Update(&Md5Ctx, (unsigned char *)":", 1);
+		li_MD5_Update(&Md5Ctx, CONST_STR_LEN(":"));
 		li_MD5_Update(&Md5Ctx, (unsigned char *)qop, strlen(qop));
-		li_MD5_Update(&Md5Ctx, (unsigned char *)":", 1);
+		li_MD5_Update(&Md5Ctx, CONST_STR_LEN(":"));
 	};
 	li_MD5_Update(&Md5Ctx, (unsigned char *)HA2Hex, HASHHEXLEN);
 	li_MD5_Final(RespHash, &Md5Ctx);
@@ -1198,8 +1189,8 @@ int http_auth_digest_generate_nonce(server *srv, mod_auth_plugin_data *p, buffer
 
 	/* generate shared-secret */
 	li_MD5_Init(&Md5Ctx);
-	li_MD5_Update(&Md5Ctx, (unsigned char *)fn->ptr, fn->used - 1);
-	li_MD5_Update(&Md5Ctx, (unsigned char *)"+", 1);
+	li_MD5_Update(&Md5Ctx, CONST_BUF_LEN(fn));
+	li_MD5_Update(&Md5Ctx, CONST_STR_LEN("+"));
 
 	/* we assume sizeof(time_t) == 4 here, but if not it ain't a problem at all */
 	li_itostr(hh, srv->cur_ts);

@@ -372,9 +372,9 @@ static int process_rewrite_rules(server *srv, connection *con, plugin_data *p, r
 
 		match       = rule->key;
 		pattern     = rule->value->ptr;
-		pattern_len = rule->value->used - 1;
+		pattern_len = buffer_string_length(rule->value);
 
-		if ((n = pcre_exec(match, NULL, p->match_buf->ptr, p->match_buf->used - 1, 0, 0, ovec, 3 * N)) < 0) {
+		if ((n = pcre_exec(match, NULL, CONST_BUF_LEN(p->match_buf), 0, 0, ovec, 3 * N)) < 0) {
 			if (n != PCRE_ERROR_NOMATCH) {
 				log_error_write(srv, __FILE__, __LINE__, "sd",
 						"execution error while matching: ", n);

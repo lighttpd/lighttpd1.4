@@ -70,7 +70,7 @@ int http_response_write_header(server *srv, connection *con) {
 
 		ds = (data_string *)con->response.headers->data[i];
 
-		if (ds->value->used && ds->key->used &&
+		if (!buffer_is_empty(ds->value) && !buffer_is_empty(ds->key) &&
 		    0 != strncasecmp(ds->key->ptr, CONST_STR_LEN("X-LIGHTTPD-")) &&
 			0 != strncasecmp(ds->key->ptr, CONST_STR_LEN("X-Sendfile"))) {
 			if (0 == strcasecmp(ds->key->ptr, "Date")) have_date = 1;
@@ -99,10 +99,7 @@ int http_response_write_header(server *srv, connection *con) {
 		if (srv->cur_ts != srv->last_generated_date_ts) {
 			buffer_string_prepare_copy(srv->ts_date_str, 255);
 
-			strftime(srv->ts_date_str->ptr, srv->ts_date_str->size - 1,
-				 "%a, %d %b %Y %H:%M:%S GMT", gmtime(&(srv->cur_ts)));
-
-			srv->ts_date_str->used = strlen(srv->ts_date_str->ptr) + 1;
+			buffer_append_strftime(srv->ts_date_str, "%a, %d %b %Y %H:%M:%S GMT", gmtime(&(srv->cur_ts)));
 
 			srv->last_generated_date_ts = srv->cur_ts;
 		}
@@ -113,7 +110,7 @@ int http_response_write_header(server *srv, connection *con) {
 	if (!have_server) {
 		if (buffer_is_empty(con->conf.server_tag)) {
 			buffer_append_string_len(b, CONST_STR_LEN("\r\nServer: " PACKAGE_DESC));
-		} else if (con->conf.server_tag->used > 1) {
+		} else if (!buffer_string_is_empty(con->conf.server_tag)) {
 			buffer_append_string_len(b, CONST_STR_LEN("\r\nServer: "));
 			buffer_append_string_encoded(b, CONST_BUF_LEN(con->conf.server_tag), ENCODING_HTTP_HEADER);
 		}
@@ -121,7 +118,7 @@ int http_response_write_header(server *srv, connection *con) {
 
 	buffer_append_string_len(b, CONST_STR_LEN("\r\n\r\n"));
 
-	con->bytes_header = b->used - 1;
+	con->bytes_header = buffer_string_length(b);
 
 	if (con->conf.log_response_header) {
 		log_error_write(srv, __FILE__, __LINE__, "sSb", "Response-Header:", "\n", b);
@@ -204,8 +201,7 @@ static void https_add_ssl_entries(connection *con) {
 			buffer_string_prepare_copy(envds->value, n);
 			BIO_read(bio, envds->value->ptr, n);
 			BIO_free(bio);
-			envds->value->ptr[n] = '\0';
-			envds->value->used = n+1;
+			buffer_commit(envds->value, n);
 			array_insert_unique(con->environment, (data_unset *)envds);
 		}
 	}
@@ -229,7 +225,7 @@ handler_t http_response_prepare(server *srv, connection *con) {
 	}
 
 	/* no decision yet, build conf->filename */
-	if (con->mode == DIRECT && con->physical.path->used == 0) {
+	if (con->mode == DIRECT && buffer_is_empty(con->physical.path)) {
 		char *qstr;
 
 		/* we only come here when we have the parse the full request again
@@ -294,8 +290,7 @@ handler_t http_response_prepare(server *srv, connection *con) {
 
 		/** their might be a fragment which has to be cut away */
 		if (NULL != (qstr = strchr(con->request.uri->ptr, '#'))) {
-			con->request.uri->used = qstr - con->request.uri->ptr;
-			con->request.uri->ptr[con->request.uri->used++] = '\0';
+			buffer_string_set_length(con->request.uri, qstr - con->request.uri->ptr);
 		}
 
 		/** extract query string from request.uri */
@@ -451,23 +446,18 @@ handler_t http_response_prepare(server *srv, connection *con) {
 
 		if (con->physical.rel_path->used > 1) {
 			buffer *b = con->physical.rel_path;
+			size_t len = buffer_string_length(b);
 			size_t i;
 
-			if (b->used > 2 &&
-			    b->ptr[b->used-2] == '/' &&
-			    (b->ptr[b->used-3] == ' ' ||
-			     b->ptr[b->used-3] == '.')) {
-				b->ptr[b->used--] = '\0';
+			/* strip trailing " /" or "./" once */
+			if (len > 1 &&
+			    b->ptr[len - 1] == '/' &&
+			    (b->ptr[len - 2] == ' ' || b->ptr[len - 2] == '.')) {
+				len -= 2;
 			}
-
-			for (i = b->used - 2; b->used > 1; i--) {
-				if (b->ptr[i] == ' ' ||
-				    b->ptr[i] == '.') {
-					b->ptr[b->used--] = '\0';
-				} else {
-					break;
-				}
-			}
+			/* strip all trailing " " and "." */
+			while (len > 0 &&  ( ' ' == b->ptr[len-1] || '.' == b->ptr[len-1] ) ) --len;
+			buffer_string_set_length(b, len);
 		}
 #endif
 
@@ -515,9 +505,9 @@ handler_t http_response_prepare(server *srv, connection *con) {
 		buffer_copy_buffer(con->physical.basedir, con->physical.doc_root);
 		buffer_copy_buffer(con->physical.path, con->physical.doc_root);
 		buffer_append_slash(con->physical.path);
-		if (con->physical.rel_path->used &&
+		if (!buffer_string_is_empty(con->physical.rel_path) &&
 		    con->physical.rel_path->ptr[0] == '/') {
-			buffer_append_string_len(con->physical.path, con->physical.rel_path->ptr + 1, con->physical.rel_path->used - 2);
+			buffer_append_string_len(con->physical.path, con->physical.rel_path->ptr + 1, buffer_string_length(con->physical.rel_path) - 1);
 		} else {
 			buffer_append_string_buffer(con->physical.path, con->physical.rel_path);
 		}
@@ -589,7 +579,7 @@ handler_t http_response_prepare(server *srv, connection *con) {
 			};
 #endif
 			if (S_ISDIR(sce->st.st_mode)) {
-				if (con->uri.path->ptr[con->uri.path->used - 2] != '/') {
+				if (con->uri.path->ptr[buffer_string_length(con->uri.path) - 1] != '/') {
 					/* redirect to .../ */
 
 					http_response_redirect_to_directory(srv, con);
@@ -672,7 +662,7 @@ handler_t http_response_prepare(server *srv, connection *con) {
 				}
 
 				if (slash) pathinfo = slash;
-			} while ((found == 0) && (slash != NULL) && ((size_t)(slash - srv->tmp_buf->ptr) > (con->physical.basedir->used - 2)));
+			} while ((found == 0) && (slash != NULL) && ((size_t)(slash - srv->tmp_buf->ptr) > (buffer_string_length(con->physical.basedir) - 1)));
 
 			if (found == 0) {
 				/* no it really doesn't exists */
@@ -711,8 +701,7 @@ handler_t http_response_prepare(server *srv, connection *con) {
 				 * shorten uri.path
 				 */
 
-				con->uri.path->used -= strlen(pathinfo);
-				con->uri.path->ptr[con->uri.path->used - 1] = '\0';
+				buffer_string_set_length(con->uri.path, buffer_string_length(con->uri.path) - strlen(pathinfo));
 			}
 
 			if (con->conf.log_request_handling) {

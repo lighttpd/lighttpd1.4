@@ -42,8 +42,7 @@ static void http_chunk_append_len(server *srv, connection *con, size_t len) {
 			b->ptr[j] = (len & 0xf) + (((len & 0xf) <= 9) ? '0' : 'a' - 10);
 			len >>= 4;
 		}
-		b->used = i;
-		b->ptr[b->used++] = '\0';
+		buffer_commit(b, i);
 
 		buffer_append_string_len(b, CONST_STR_LEN("\r\n"));
 	}
@@ -82,7 +81,7 @@ void http_chunk_append_buffer(server *srv, connection *con, buffer *mem) {
 	cq = con->write_queue;
 
 	if (con->response.transfer_encoding & HTTP_TRANSFER_ENCODING_CHUNKED) {
-		http_chunk_append_len(srv, con, mem->used - 1);
+		http_chunk_append_len(srv, con, buffer_string_length(mem));
 	}
 
 	chunkqueue_append_buffer(cq, mem);

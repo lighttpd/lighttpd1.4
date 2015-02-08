@@ -9,7 +9,6 @@
 
 static const char hex_chars[] = "0123456789abcdef";
 
-
 /**
  * init the buffer
  *
@@ -83,37 +82,44 @@ static size_t buffer_align_size(size_t size) {
 	return size + align;
 }
 
-static char* buffer_prepare_copy(buffer *b, size_t size) {
+/* make sure buffer is at least "size" big. discard old data */
+static void buffer_alloc(buffer *b, size_t size) {
 	force_assert(NULL != b);
+	if (0 == size) size = 1;
 
-	/* also allocate space for terminating 0 */
-	/* check for overflow: unsigned overflow is defined to wrap around */
-	force_assert(1 + size > size);
-	++size;
+	if (size <= b->size) return;
 
-	if (0 == b->size || size > b->size) {
-		if (NULL != b->ptr) free(b->ptr);
-		b->ptr = NULL;
+	if (NULL != b->ptr) free(b->ptr);
 
-		b->size = buffer_align_size(size);
-		force_assert(b->size > 0);
-
-		b->ptr = malloc(b->size);
-		force_assert(NULL != b->ptr);
-	}
-
-	/* reset */
 	b->used = 0;
-	b->ptr[0] = '\0';
+	b->size = buffer_align_size(size);
+	b->ptr = malloc(b->size);
 
-	return b->ptr;
+	force_assert(NULL != b->ptr);
 }
+
+/* make sure buffer is at least "size" big. keep old data */
+static void buffer_realloc(buffer *b, size_t size) {
+	force_assert(NULL != b);
+	if (0 == size) size = 1;
+
+	if (size <= b->size) return;
+
+	b->size = buffer_align_size(size);
+	b->ptr = realloc(b->ptr, b->size);
+
+	force_assert(NULL != b->ptr);
+}
+
 
 char* buffer_string_prepare_copy(buffer *b, size_t size) {
 	force_assert(NULL != b);
+	force_assert(size + 1 > size);
 
-	buffer_prepare_copy(b, size);
+	buffer_alloc(b, size + 1);
+
 	b->used = 1;
+	b->ptr[0] = '\0';
 
 	return b->ptr;
 }
@@ -124,28 +130,29 @@ char* buffer_string_prepare_append(buffer *b, size_t size) {
 	if (buffer_string_is_empty(b)) {
 		return buffer_string_prepare_copy(b, size);
 	} else {
-		/* not empty, b->used already includes a terminating 0 */
 		size_t req_size = b->used + size;
+
+		/* not empty, b->used already includes a terminating 0 */
+		force_assert(req_size >= b->used);
 
 		/* check for overflow: unsigned overflow is defined to wrap around */
 		force_assert(req_size >= b->used);
 
-		/* only append to 0-terminated string */
-		force_assert('\0' == b->ptr[b->used - 1]);
-
-		if (req_size > b->size) {
-			char *ptr;
-			b->size = buffer_align_size(req_size);
-
-			ptr = realloc(b->ptr, b->size);
-			force_assert(NULL != ptr);
-			b->ptr = ptr;
-		}
+		buffer_realloc(b, req_size);
 
 		return b->ptr + b->used - 1;
 	}
 }
 
+void buffer_string_set_length(buffer *b, size_t len) {
+	force_assert(NULL != b);
+	force_assert(len + 1 > len);
+
+	buffer_realloc(b, len + 1);
+
+	b->used = len + 1;
+	b->ptr[len] = '\0';
+}
 
 void buffer_commit(buffer *b, size_t size)
 {
@@ -182,7 +189,8 @@ void buffer_copy_string_len(buffer *b, const char *s, size_t s_len) {
 
 void buffer_copy_buffer(buffer *b, const buffer *src) {
 	if (NULL == src || 0 == src->used) {
-		buffer_prepare_copy(b, 0);
+		buffer_string_prepare_copy(b, 0);
+		b->used = 0; /* keep special empty state for now */
 	} else {
 		buffer_copy_string_len(b, src->ptr, buffer_string_length(src));
 	}
@@ -300,6 +308,37 @@ void buffer_copy_int(buffer *b, intmax_t val) {
 	b->used = 0;
 	buffer_append_int(b, val);
 }
+
+void buffer_append_strftime(buffer *b, const char *format, const struct tm *tm) {
+	size_t r;
+	char* buf;
+	force_assert(NULL != b);
+	force_assert(NULL != tm);
+
+	if (NULL == format || '\0' == format[0]) {
+		/* empty format */
+		buffer_string_prepare_append(b, 0);
+		return;
+	}
+
+	buf = buffer_string_prepare_append(b, 255);
+	r = strftime(buf, buffer_string_space(b), format, tm);
+
+	/* 0 (in some apis buffer_string_space(b)) signals the string may have
+	 * been too small; but the format could also just have lead to an empty
+	 * string
+	 */
+	if (0 == r || r >= buffer_string_space(b)) {
+		/* give it a second try with a larger string */
+		buf = buffer_string_prepare_append(b, 4095);
+		r = strftime(buf, buffer_string_space(b), format, tm);
+	}
+
+	if (r >= buffer_string_space(b)) r = 0;
+
+	buffer_commit(b, r);
+}
+
 
 void li_itostrn(char *buf, size_t buf_len, intmax_t val) {
 	char p_buf[LI_ITOSTRING_LENGTH];
@@ -446,20 +485,22 @@ int buffer_is_equal_right_len(buffer *b1, buffer *b2, size_t len) {
 	return 0 == memcmp(b1->ptr + b1->used - 1 - len, b2->ptr + b2->used - 1 - len, len);
 }
 
-void buffer_copy_string_hex(buffer *b, const char *in, size_t in_len) {
+void li_tohex(char *buf, const char *s, size_t s_len) {
 	size_t i;
 
-	/* overflow protection */
-	force_assert(in_len * 2 + 1 > in_len);
-
-	buffer_prepare_copy(b, in_len * 2);
-
-	b->used = 0;
-	for (i = 0; i < in_len; i++) {
-		b->ptr[b->used++] = hex_chars[(in[i] >> 4) & 0x0F];
-		b->ptr[b->used++] = hex_chars[in[i] & 0x0F];
+	for (i = 0; i < s_len; i++) {
+		buf[2*i] = hex_chars[(s[i] >> 4) & 0x0F];
+		buf[2*i+1] = hex_chars[s[i] & 0x0F];
 	}
-	b->ptr[b->used++] = '\0';
+	buf[2*s_len] = '\0';
+}
+
+void buffer_copy_string_hex(buffer *b, const char *in, size_t in_len) {
+	/* overflow protection */
+	force_assert(in_len * 2 > in_len);
+
+	buffer_string_set_length(b, 2 * in_len);
+	li_tohex(b->ptr, in, in_len);
 }
 
 /* everything except: ! ( ) * - . 0-9 A-Z _ a-z */
@@ -882,8 +923,7 @@ void buffer_path_simplify(buffer *dest, buffer *src)
 		walk++;
 	}
 
-	*out = '\0';
-	dest->used = (out - start) + 1;
+	buffer_string_set_length(dest, out - start);
 }
 
 int light_isdigit(int c) {

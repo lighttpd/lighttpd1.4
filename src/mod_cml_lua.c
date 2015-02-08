@@ -102,13 +102,14 @@ static int c_to_lua_push(lua_State *L, int tbl, const char *key, size_t key_len,
 
 static int cache_export_get_params(lua_State *L, int tbl, buffer *qrystr) {
 	size_t is_key = 1;
-	size_t i;
+	size_t i, len;
 	char *key = NULL, *val = NULL;
 
 	key = qrystr->ptr;
 
 	/* we need the \0 */
-	for (i = 0; i < qrystr->used; i++) {
+	len = buffer_string_length(qrystr);
+	for (i = 0; i <= len; i++) {
 		switch(qrystr->ptr[i]) {
 		case '=':
 			if (is_key) {
@@ -129,8 +130,8 @@ static int cache_export_get_params(lua_State *L, int tbl, buffer *qrystr) {
 				qrystr->ptr[i] = '\0';
 
 				c_to_lua_push(L, tbl,
-					      key, strlen(key),
-					      val, strlen(val));
+					key, strlen(key),
+					val, strlen(val));
 			}
 
 			key = qrystr->ptr + i + 1;
@@ -398,7 +399,6 @@ int cache_parse_lua(server *srv, connection *con, plugin_data *p, buffer *fn) {
 		if (ret == 0) {
 			data_string *ds;
 			char timebuf[sizeof("Sat, 23 Jul 2005 21:20:01 GMT")];
-			buffer tbuf;
 
 			con->file_finished = 1;
 
@@ -411,17 +411,11 @@ int cache_parse_lua(server *srv, connection *con, plugin_data *p, buffer *fn) {
 				strftime(timebuf, sizeof(timebuf), "%a, %d %b %Y %H:%M:%S GMT", gmtime(&mtime));
 
 				response_header_overwrite(srv, con, CONST_STR_LEN("Last-Modified"), timebuf, sizeof(timebuf) - 1);
-
-				tbuf.ptr = timebuf;
-				tbuf.used = sizeof(timebuf);
-				tbuf.size = sizeof(timebuf);
-			} else {
-				tbuf.ptr = ds->value->ptr;
-				tbuf.used = ds->value->used;
-				tbuf.size = ds->value->size;
+				ds = (data_string *)array_get_element(con->response.headers, "Last-Modified");
+				force_assert(NULL != ds);
 			}
 
-			if (HANDLER_FINISHED == http_response_handle_cachable(srv, con, &tbuf)) {
+			if (HANDLER_FINISHED == http_response_handle_cachable(srv, con, ds->value)) {
 				/* ok, the client already has our content,
 				 * no need to send it again */
 

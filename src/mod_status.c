@@ -449,7 +449,7 @@ static handler_t mod_status_handle_server_status_html(server *srv, connection *c
 		connection *c = srv->conns->ptr[j];
 		const char *state;
 
-		if (CON_STATE_READ == c->state && c->request.orig_uri->used > 0) {
+		if (CON_STATE_READ == c->state && !buffer_string_is_empty(c->request.orig_uri)) {
 			state = "k";
 		} else {
 			state = connection_get_short_state(c->state);
@@ -501,7 +501,7 @@ static handler_t mod_status_handle_server_status_html(server *srv, connection *c
 
 		buffer_append_string_len(b, CONST_STR_LEN("</td><td class=\"string\">"));
 
-		if (CON_STATE_READ == c->state && c->request.orig_uri->used > 0) {
+		if (CON_STATE_READ == c->state && !buffer_string_is_empty(c->request.orig_uri)) {
 			buffer_append_string_len(b, CONST_STR_LEN("keep-alive"));
 		} else {
 			buffer_append_string(b, connection_get_state(c->state));

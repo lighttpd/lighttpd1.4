@@ -198,7 +198,7 @@ URIHANDLER_FUNC(mod_secdownload_uri_handler) {
 
 	if (con->mode != DIRECT) return HANDLER_GO_ON;
 
-	if (con->uri.path->used == 0) return HANDLER_GO_ON;
+	if (buffer_is_empty(con->uri.path)) return HANDLER_GO_ON;
 
 	mod_secdownload_patch_connection(srv, con, p);
 
@@ -220,9 +220,9 @@ URIHANDLER_FUNC(mod_secdownload_uri_handler) {
 	 *  /<uri-prefix>[a-f0-9]{32}/[a-f0-9]{8}/<rel-path>
 	 */
 
-	if (0 != strncmp(con->uri.path->ptr, p->conf.uri_prefix->ptr, p->conf.uri_prefix->used - 1)) return HANDLER_GO_ON;
+	if (0 != strncmp(con->uri.path->ptr, p->conf.uri_prefix->ptr, buffer_string_length(p->conf.uri_prefix))) return HANDLER_GO_ON;
 
-	md5_str = con->uri.path->ptr + p->conf.uri_prefix->used - 1;
+	md5_str = con->uri.path->ptr + buffer_string_length(p->conf.uri_prefix);
 
 	if (!is_hex_len(md5_str, 32)) return HANDLER_GO_ON;
 	if (*(md5_str + 32) != '/') return HANDLER_GO_ON;
@@ -255,10 +255,9 @@ URIHANDLER_FUNC(mod_secdownload_uri_handler) {
 	buffer_copy_buffer(p->md5, p->conf.secret);
 	buffer_append_string(p->md5, rel_uri);
 	buffer_append_string_len(p->md5, ts_str, 8);
-	force_assert(p->md5->used > 0);
 
 	li_MD5_Init(&Md5Ctx);
-	li_MD5_Update(&Md5Ctx, (unsigned char *)p->md5->ptr, p->md5->used - 1);
+	li_MD5_Update(&Md5Ctx, CONST_BUF_LEN(p->md5));
 	li_MD5_Final(HA1, &Md5Ctx);
 
 	buffer_copy_string_hex(p->md5, (char *)HA1, 16);

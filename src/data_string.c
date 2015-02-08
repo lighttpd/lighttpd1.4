@@ -36,7 +36,7 @@ static int data_string_insert_dup(data_unset *dst, data_unset *src) {
 	data_string *ds_dst = (data_string *)dst;
 	data_string *ds_src = (data_string *)src;
 
-	if (ds_dst->value->used) {
+	if (!buffer_is_empty(ds_dst->value)) {
 		buffer_append_string_len(ds_dst->value, CONST_STR_LEN(", "));
 		buffer_append_string_buffer(ds_dst->value, ds_src->value);
 	} else {
@@ -52,7 +52,7 @@ static int data_response_insert_dup(data_unset *dst, data_unset *src) {
 	data_string *ds_dst = (data_string *)dst;
 	data_string *ds_src = (data_string *)src;
 
-	if (ds_dst->value->used) {
+	if (!buffer_is_empty(ds_dst->value)) {
 		buffer_append_string_len(ds_dst->value, CONST_STR_LEN("\r\n"));
 		buffer_append_string_buffer(ds_dst->value, ds_dst->key);
 		buffer_append_string_len(ds_dst->value, CONST_STR_LEN(": "));
@@ -69,18 +69,19 @@ static int data_response_insert_dup(data_unset *dst, data_unset *src) {
 
 static void data_string_print(const data_unset *d, int depth) {
 	data_string *ds = (data_string *)d;
-	unsigned int i;
+	size_t i, len;
 	UNUSED(depth);
 
 	/* empty and uninitialized strings */
-	if (ds->value->used < 1) {
+	if (buffer_string_is_empty(ds->value)) {
 		fputs("\"\"", stdout);
 		return;
 	}
 
 	/* print out the string as is, except prepend " with backslash */
 	putc('"', stdout);
-	for (i = 0; i < ds->value->used - 1; i++) {
+	len = buffer_string_length(ds->value);
+	for (i = 0; i < len; i++) {
 		unsigned char c = ds->value->ptr[i];
 		if (c == '"') {
 			fputs("\\\"", stdout);

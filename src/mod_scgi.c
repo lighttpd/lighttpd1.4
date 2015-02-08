@@ -664,19 +664,19 @@ static int scgi_spawn_connection(server *srv,
 
 #ifdef HAVE_SYS_UN_H
 		scgi_addr_un.sun_family = AF_UNIX;
-		if (proc->socket->used > sizeof(scgi_addr_un.sun_path)) {
+		if (buffer_string_length(proc->socket) + 1 > sizeof(scgi_addr_un.sun_path)) {
 			log_error_write(srv, __FILE__, __LINE__, "sB",
 					"ERROR: Unix Domain socket filename too long:",
 					proc->socket);
 			return -1;
 		}
-		memcpy(scgi_addr_un.sun_path, proc->socket->ptr, proc->socket->used);
+		memcpy(scgi_addr_un.sun_path, proc->socket->ptr, buffer_string_length(proc->socket) + 1);
 
 #ifdef SUN_LEN
 		servlen = SUN_LEN(&scgi_addr_un);
 #else
 		/* stevens says: */
-		servlen = proc->socket->used + sizeof(scgi_addr_un.sun_family);
+		servlen = buffer_string_length(proc->socket) + 1 + sizeof(scgi_addr_un.sun_family);
 #endif
 		socket_type = AF_UNIX;
 		scgi_addr = (struct sockaddr *) &scgi_addr_un;
@@ -1072,7 +1072,7 @@ SETDEFAULTS_FUNC(mod_scgi_set_defaults) {
 						/* unix domain socket */
 						struct sockaddr_un un;
 
-						if (df->unixsocket->used > sizeof(un.sun_path) - 2) {
+						if (buffer_string_length(df->unixsocket) + 1 > sizeof(un.sun_path) - 2) {
 							log_error_write(srv, __FILE__, __LINE__, "s",
 									"path of the unixdomain socket is too large");
 							goto error;
@@ -1338,19 +1338,19 @@ static int scgi_establish_connection(server *srv, handler_ctx *hctx) {
 #ifdef HAVE_SYS_UN_H
 		/* use the unix domain socket */
 		scgi_addr_un.sun_family = AF_UNIX;
-		if (proc->socket->used > sizeof(scgi_addr_un.sun_path)) {
+		if (buffer_string_length(proc->socket) + 1 > sizeof(scgi_addr_un.sun_path)) {
 			log_error_write(srv, __FILE__, __LINE__, "sB",
 					"ERROR: Unix Domain socket filename too long:",
 					proc->socket);
 			return -1;
 		}
-		memcpy(scgi_addr_un.sun_path, proc->socket->ptr, proc->socket->used);
+		memcpy(scgi_addr_un.sun_path, proc->socket->ptr, buffer_string_length(proc->socket) + 1);
 
 #ifdef SUN_LEN
 		servlen = SUN_LEN(&scgi_addr_un);
 #else
 		/* stevens says: */
-		servlen = proc->socket->used + sizeof(scgi_addr_un.sun_family);
+		servlen = buffer_string_length(proc->socket) + 1 + sizeof(scgi_addr_un.sun_family);
 #endif
 		scgi_addr = (struct sockaddr *) &scgi_addr_un;
 #else
@@ -1416,7 +1416,7 @@ static int scgi_env_add_request_headers(server *srv, connection *con, plugin_dat
 
 		ds = (data_string *)con->request.headers->data[i];
 
-		if (ds->value->used && ds->key->used) {
+		if (!buffer_is_empty(ds->value) && !buffer_is_empty(ds->key)) {
 			buffer_copy_string_encoded_cgi_varnames(srv->tmp_buf, CONST_BUF_LEN(ds->key), 1);
 
 			scgi_env_add(p->scgi_env, CONST_BUF_LEN(srv->tmp_buf), CONST_BUF_LEN(ds->value));
@@ -1428,7 +1428,7 @@ static int scgi_env_add_request_headers(server *srv, connection *con, plugin_dat
 
 		ds = (data_string *)con->environment->data[i];
 
-		if (ds->value->used && ds->key->used) {
+		if (!buffer_is_empty(ds->value) && !buffer_is_empty(ds->key)) {
 			buffer_copy_string_encoded_cgi_varnames(srv->tmp_buf, CONST_BUF_LEN(ds->key), 0);
 
 			scgi_env_add(p->scgi_env, CONST_BUF_LEN(srv->tmp_buf), CONST_BUF_LEN(ds->value));
@@ -1471,8 +1471,8 @@ static int scgi_create_env(server *srv, handler_ctx *hctx) {
 		scgi_env_add(p->scgi_env, CONST_STR_LEN("SERVER_SOFTWARE"), CONST_BUF_LEN(con->conf.server_tag));
 	}
 
-	if (con->server_name->used) {
-		size_t len = con->server_name->used - 1;
+	if (!buffer_is_empty(con->server_name)) {
+		size_t len = buffer_string_length(con->server_name);
 
 		if (con->server_name->ptr[0] == '[') {
 			const char *colon = strstr(con->server_name->ptr, "]:");
@@ -1611,7 +1611,7 @@ static int scgi_create_env(server *srv, handler_ctx *hctx) {
 	buffer_append_string_buffer(b, p->scgi_env);
 	buffer_append_string_len(b, CONST_STR_LEN(","));
 
-	hctx->wb->bytes_in += b->used - 1;
+	hctx->wb->bytes_in += buffer_string_length(b);
 	chunkqueue_append_buffer(hctx->wb, b);
 	buffer_free(b);
 
@@ -1757,8 +1757,7 @@ static int scgi_demux_response(server *srv, handler_ctx *hctx) {
 			return 1;
 		}
 
-		hctx->response->ptr[n] = '\0';
-		hctx->response->used = n+1;
+		buffer_commit(hctx->response, n);
 
 		/* split header from body */
 
@@ -1776,7 +1775,7 @@ static int scgi_demux_response(server *srv, handler_ctx *hctx) {
 			if (0 == strncmp(hctx->response_header->ptr, "HTTP/1.", 7)) in_header = 1;
 
 			/* search for the \r\n\r\n or \n\n in the string */
-			for (c = hctx->response_header->ptr, cp = 0, used = hctx->response_header->used - 1; used; c++, cp++, used--) {
+			for (c = hctx->response_header->ptr, cp = 0, used = buffer_string_length(hctx->response_header); used; c++, cp++, used--) {
 				if (*c == ':') in_header = 1;
 				else if (*c == '\n') {
 					if (in_header == 0) {
@@ -1832,11 +1831,10 @@ static int scgi_demux_response(server *srv, handler_ctx *hctx) {
 					http_chunk_append_buffer(srv, con, hctx->response_header);
 					joblist_append(srv, con);
 				} else {
-					size_t blen = hctx->response_header->used - hlen - 1;
+					size_t blen = buffer_string_length(hctx->response_header) - hlen;
 
 					/* a small hack: terminate after at the second \r */
-					hctx->response_header->used = hlen;
-					hctx->response_header->ptr[hlen - 1] = '\0';
+					buffer_string_set_length(hctx->response_header, hlen - 1);
 
 					/* parse the response header */
 					scgi_response_parse(srv, con, p, hctx->response_header, eol);
@@ -1847,7 +1845,7 @@ static int scgi_demux_response(server *srv, handler_ctx *hctx) {
 						con->response.transfer_encoding = HTTP_TRANSFER_ENCODING_CHUNKED;
 					}
 
-					if ((hctx->response->used != hlen) && blen > 0) {
+					if (blen > 0) {
 						http_chunk_append_mem(srv, con, hctx->response_header->ptr + hlen, blen);
 						joblist_append(srv, con);
 					}
@@ -2110,20 +2108,20 @@ static handler_t scgi_write_request(server *srv, handler_ctx *hctx) {
 		log_error_write(srv, __FILE__, __LINE__, "s", "fatal error: host = NULL");
 		return HANDLER_ERROR;
 	}
-	if (((!host->host->used || !host->port) && !host->unixsocket->used)) {
+	if (((buffer_string_is_empty(host->host) || !host->port) && buffer_string_is_empty(host->unixsocket))) {
 		log_error_write(srv, __FILE__, __LINE__, "sxddd",
 				"write-req: error",
 				host,
-				host->host->used,
+				buffer_string_length(host->host),
 				host->port,
-				host->unixsocket->used);
+				buffer_string_length(host->unixsocket));
 		return HANDLER_ERROR;
 	}
 
 
 	switch(hctx->state) {
 	case FCGI_STATE_INIT:
-		ret = host->unixsocket->used ? AF_UNIX : AF_INET;
+		ret = buffer_string_is_empty(host->unixsocket) ? AF_INET : AF_UNIX;
 
 		if (-1 == (hctx->fd = socket(ret, SOCK_STREAM, 0))) {
 			if (errno == EMFILE ||
@@ -2653,7 +2651,7 @@ static handler_t scgi_check_extension(server *srv, connection *con, void *p_d, i
 
 	if (buffer_string_is_empty(fn)) return HANDLER_GO_ON;
 
-	s_len = fn->used - 1;
+	s_len = buffer_string_length(fn);
 
 	scgi_patch_connection(srv, con, p);
 
@@ -2662,9 +2660,9 @@ static handler_t scgi_check_extension(server *srv, connection *con, void *p_d, i
 		size_t ct_len;
 		scgi_extension *ext = p->conf.exts->exts[k];
 
-		if (ext->key->used == 0) continue;
+		if (buffer_is_empty(ext->key)) continue;
 
-		ct_len = ext->key->used - 1;
+		ct_len = buffer_string_length(ext->key);
 
 		if (s_len < ct_len) continue;
 
@@ -2778,17 +2776,14 @@ static handler_t scgi_check_extension(server *srv, connection *con, void *p_d, i
 			/* the rewrite is only done for /prefix/? matches */
 			if (host->fix_root_path_name && extension->key->ptr[0] == '/' && extension->key->ptr[1] == '\0') {
 				buffer_copy_string(con->request.pathinfo, con->uri.path->ptr);
-				con->uri.path->used = 1;
-				con->uri.path->ptr[con->uri.path->used - 1] = '\0';
+				buffer_string_set_length(con->uri.path, 0);
 			} else if (extension->key->ptr[0] == '/' &&
-			    con->uri.path->used > extension->key->used &&
-			    NULL != (pathinfo = strchr(con->uri.path->ptr + extension->key->used - 1, '/'))) {
+			    buffer_string_length(con->uri.path) > buffer_string_length(extension->key) &&
+			    NULL != (pathinfo = strchr(con->uri.path->ptr + buffer_string_length(extension->key), '/'))) {
 				/* rewrite uri.path and pathinfo */
 
 				buffer_copy_string(con->request.pathinfo, pathinfo);
-
-				con->uri.path->used -= con->request.pathinfo->used - 1;
-				con->uri.path->ptr[con->uri.path->used - 1] = '\0';
+				buffer_string_set_length(con->uri.path, buffer_string_length(con->uri.path) - buffer_string_length(con->request.pathinfo));
 			}
 		}
 	} else {

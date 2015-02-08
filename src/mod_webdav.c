@@ -446,7 +446,7 @@ URIHANDLER_FUNC(mod_webdav_uri_handler) {
 
 	UNUSED(srv);
 
-	if (con->uri.path->used == 0) return HANDLER_GO_ON;
+	if (buffer_is_empty(con->uri.path)) return HANDLER_GO_ON;
 
 	mod_webdav_patch_connection(srv, con, p);
 
@@ -558,9 +558,8 @@ static int webdav_delete_file(server *srv, connection *con, plugin_data *p, phys
 			/* bind the values to the insert */
 
 			sqlite3_bind_text(stmt, 1,
-					  dst->rel_path->ptr,
-					  dst->rel_path->used - 1,
-					  SQLITE_TRANSIENT);
+				CONST_BUF_LEN(dst->rel_path),
+				SQLITE_TRANSIENT);
 
 			if (SQLITE_DONE != sqlite3_step(stmt)) {
 				/* */
@@ -590,7 +589,7 @@ static int webdav_delete_dir(server *srv, connection *con, plugin_data *p, physi
 			int status = 0;
 
 			if ((de->d_name[0] == '.' && de->d_name[1] == '\0')  ||
-			    (de->d_name[0] == '.' && de->d_name[1] == '.' && de->d_name[2] == '\0')) {
+			  (de->d_name[0] == '.' && de->d_name[1] == '.' && de->d_name[2] == '\0')) {
 				continue;
 				/* ignore the parent dir */
 			}
@@ -636,9 +635,8 @@ static int webdav_delete_dir(server *srv, connection *con, plugin_data *p, physi
 						/* bind the values to the insert */
 
 						sqlite3_bind_text(stmt, 1,
-								  d.rel_path->ptr,
-								  d.rel_path->used - 1,
-								  SQLITE_TRANSIENT);
+							CONST_BUF_LEN(d.rel_path),
+							SQLITE_TRANSIENT);
 
 						if (SQLITE_DONE != sqlite3_step(stmt)) {
 							/* */
@@ -714,14 +712,12 @@ static int webdav_copy_file(server *srv, connection *con, plugin_data *p, physic
 
 			/* bind the values to the insert */
 			sqlite3_bind_text(stmt, 1,
-					  dst->rel_path->ptr,
-					  dst->rel_path->used - 1,
-					  SQLITE_TRANSIENT);
+				CONST_BUF_LEN(dst->rel_path),
+				SQLITE_TRANSIENT);
 
 			sqlite3_bind_text(stmt, 2,
-					  src->rel_path->ptr,
-					  src->rel_path->used - 1,
-					  SQLITE_TRANSIENT);
+				CONST_BUF_LEN(src->rel_path),
+				SQLITE_TRANSIENT);
 
 			if (SQLITE_DONE != sqlite3_step(stmt)) {
 				/* */
@@ -751,8 +747,8 @@ static int webdav_copy_dir(server *srv, connection *con, plugin_data *p, physica
 		while (NULL != (de = readdir(srcdir))) {
 			struct stat st;
 
-			if ((de->d_name[0] == '.' && de->d_name[1] == '\0') ||
-		            (de->d_name[0] == '.' && de->d_name[1] == '.' && de->d_name[2] == '\0')) {
+			if ((de->d_name[0] == '.' && de->d_name[1] == '\0')
+				|| (de->d_name[0] == '.' && de->d_name[1] == '.' && de->d_name[2] == '\0')) {
 				continue;
 			}
 
@@ -793,14 +789,12 @@ static int webdav_copy_dir(server *srv, connection *con, plugin_data *p, physica
 
 						/* bind the values to the insert */
 						sqlite3_bind_text(stmt, 1,
-							  dst->rel_path->ptr,
-							  dst->rel_path->used - 1,
-							  SQLITE_TRANSIENT);
+							CONST_BUF_LEN(dst->rel_path),
+							SQLITE_TRANSIENT);
 
 						sqlite3_bind_text(stmt, 2,
-							  src->rel_path->ptr,
-							  src->rel_path->used - 1,
-							  SQLITE_TRANSIENT);
+							CONST_BUF_LEN(src->rel_path),
+							SQLITE_TRANSIENT);
 
 						if (SQLITE_DONE != sqlite3_step(stmt)) {
 							/* */
@@ -851,9 +845,9 @@ static int webdav_get_live_property(server *srv, connection *con, plugin_data *p
 				for (k = 0; k < con->conf.mimetypes->used; k++) {
 					data_string *ds = (data_string *)con->conf.mimetypes->data[k];
 
-					if (ds->key->used == 0) continue;
+					if (buffer_is_empty(ds->key)) continue;
 
-					if (buffer_is_equal_right_len(dst->path, ds->key, ds->key->used - 1)) {
+					if (buffer_is_equal_right_len(dst->path, ds->key, buffer_string_length(ds->key))) {
 						buffer_append_string_len(b,CONST_STR_LEN("<D:getcontenttype>"));
 						buffer_append_string_buffer(b, ds->value);
 						buffer_append_string_len(b, CONST_STR_LEN("</D:getcontenttype>"));
@@ -907,17 +901,16 @@ static int webdav_get_property(server *srv, connection *con, plugin_data *p, phy
 			/* bind the values to the insert */
 
 			sqlite3_bind_text(stmt, 1,
-					  dst->rel_path->ptr,
-					  dst->rel_path->used - 1,
-					  SQLITE_TRANSIENT);
+				CONST_BUF_LEN(dst->rel_path),
+				SQLITE_TRANSIENT);
 			sqlite3_bind_text(stmt, 2,
-					  prop_name,
-					  strlen(prop_name),
-					  SQLITE_TRANSIENT);
+				prop_name,
+				strlen(prop_name),
+				SQLITE_TRANSIENT);
 			sqlite3_bind_text(stmt, 3,
-					  prop_ns,
-					  strlen(prop_ns),
-					  SQLITE_TRANSIENT);
+				prop_ns,
+				strlen(prop_ns),
+				SQLITE_TRANSIENT);
 
 			/* it is the PK */
 			while (SQLITE_ROW == sqlite3_step(stmt)) {
@@ -1046,7 +1039,7 @@ static int webdav_parse_chunkqueue(server *srv, connection *con, plugin_data *p,
 			break;
 		case MEM_CHUNK:
 			/* append to the buffer */
-			weHave = c->mem->used - 1 - c->offset;
+			weHave = buffer_string_length(c->mem) - c->offset;
 
 			if (weHave > weWant) weHave = weWant;
 
@@ -1190,8 +1183,8 @@ static int webdav_has_lock(server *srv, connection *con, plugin_data *p, buffer 
 		sqlite3_reset(stmt);
 
 		sqlite3_bind_text(stmt, 1,
-			  CONST_BUF_LEN(uri),
-			  SQLITE_TRANSIENT);
+			CONST_BUF_LEN(uri),
+			SQLITE_TRANSIENT);
 
 		while (SQLITE_ROW == sqlite3_step(stmt)) {
 			has_lock = 0;
@@ -1223,7 +1216,7 @@ URIHANDLER_FUNC(mod_webdav_subrequest_handler) {
 
 	if (!p->conf.enabled) return HANDLER_GO_ON;
 	/* physical path is setup */
-	if (con->physical.path->used == 0) return HANDLER_GO_ON;
+	if (buffer_is_empty(con->physical.path)) return HANDLER_GO_ON;
 
 	/* PROPFIND need them */
 	if (NULL != (ds = (data_string *)array_get_element(con->request.headers, "Depth"))) {
@@ -1274,7 +1267,7 @@ URIHANDLER_FUNC(mod_webdav_subrequest_handler) {
 								if (prop->type == XML_TEXT_NODE) continue; /* ignore WS */
 
 								if (prop->ns &&
-								    (0 == xmlStrcmp(prop->ns->href, BAD_CAST "")) &&
+								  (0 == xmlStrcmp(prop->ns->href, BAD_CAST "")) &&
 								    (0 != xmlStrcmp(prop->ns->prefix, BAD_CAST ""))) {
 									size_t i;
 									log_error_write(srv, __FILE__, __LINE__, "ss",
@@ -1318,9 +1311,8 @@ URIHANDLER_FUNC(mod_webdav_subrequest_handler) {
 								/* bind the values to the insert */
 
 								sqlite3_bind_text(stmt, 1,
-										  con->uri.path->ptr,
-										  con->uri.path->used - 1,
-										  SQLITE_TRANSIENT);
+									CONST_BUF_LEN(con->uri.path),
+									SQLITE_TRANSIENT);
 
 								if (SQLITE_DONE != sqlite3_step(stmt)) {
 								}
@@ -1757,7 +1749,7 @@ URIHANDLER_FUNC(mod_webdav_subrequest_handler) {
 				}
 				break;
 			case MEM_CHUNK:
-				if ((r = write(fd, c->mem->ptr + c->offset, c->mem->used - c->offset - 1)) < 0) {
+				if ((r = write(fd, c->mem->ptr + c->offset, buffer_string_length(c->mem) - c->offset)) < 0) {
 					switch(errno) {
 					case ENOSPC:
 						con->http_status = 507;
@@ -1810,7 +1802,7 @@ URIHANDLER_FUNC(mod_webdav_subrequest_handler) {
 		}
 
 		if (NULL != (ds = (data_string *)array_get_element(con->request.headers, "Overwrite"))) {
-			if (ds->value->used != 2 ||
+			if (buffer_string_length(ds->value) != 1 ||
 			    (ds->value->ptr[0] != 'F' &&
 			     ds->value->ptr[0] != 'T') )  {
 				con->http_status = 400;
@@ -1884,7 +1876,7 @@ URIHANDLER_FUNC(mod_webdav_subrequest_handler) {
 
 		/* don't add a second / */
 		if (p->physical.rel_path->ptr[0] == '/') {
-			buffer_append_string_len(p->physical.path, p->physical.rel_path->ptr + 1, p->physical.rel_path->used - 2);
+			buffer_append_string_len(p->physical.path, p->physical.rel_path->ptr + 1, buffer_string_length(p->physical.rel_path) - 1);
 		} else {
 			buffer_append_string_buffer(p->physical.path, p->physical.rel_path);
 		}
@@ -1993,9 +1985,8 @@ URIHANDLER_FUNC(mod_webdav_subrequest_handler) {
 
 						/* bind the values to the insert */
 						sqlite3_bind_text(stmt, 1,
-								  con->uri.path->ptr,
-								  con->uri.path->used - 1,
-								  SQLITE_TRANSIENT);
+							CONST_BUF_LEN(con->uri.path),
+							SQLITE_TRANSIENT);
 
 						if (SQLITE_DONE != sqlite3_step(stmt)) {
 							log_error_write(srv, __FILE__, __LINE__, "ss", "sql-move(delete old) failed:", sqlite3_errmsg(p->conf.sql));
@@ -2009,14 +2000,12 @@ URIHANDLER_FUNC(mod_webdav_subrequest_handler) {
 
 						/* bind the values to the insert */
 						sqlite3_bind_text(stmt, 1,
-								  p->uri.path->ptr,
-								  p->uri.path->used - 1,
-								  SQLITE_TRANSIENT);
+							CONST_BUF_LEN(p->uri.path),
+							SQLITE_TRANSIENT);
 
 						sqlite3_bind_text(stmt, 2,
-								  con->uri.path->ptr,
-								  con->uri.path->used - 1,
-								  SQLITE_TRANSIENT);
+							CONST_BUF_LEN(con->uri.path),
+							SQLITE_TRANSIENT);
 
 						if (SQLITE_DONE != sqlite3_step(stmt)) {
 							log_error_write(srv, __FILE__, __LINE__, "ss", "sql-move failed:", sqlite3_errmsg(p->conf.sql));
@@ -2121,29 +2110,28 @@ URIHANDLER_FUNC(mod_webdav_subrequest_handler) {
 									/* bind the values to the insert */
 
 									sqlite3_bind_text(stmt, 1,
-											  con->uri.path->ptr,
-											  con->uri.path->used - 1,
-											  SQLITE_TRANSIENT);
+										CONST_BUF_LEN(con->uri.path),
+										SQLITE_TRANSIENT);
 									sqlite3_bind_text(stmt, 2,
-											  (char *)prop->name,
-											  strlen((char *)prop->name),
-											  SQLITE_TRANSIENT);
+										(char *)prop->name,
+										strlen((char *)prop->name),
+										SQLITE_TRANSIENT);
 									if (prop->ns) {
 										sqlite3_bind_text(stmt, 3,
-												  (char *)prop->ns->href,
-												  strlen((char *)prop->ns->href),
-												  SQLITE_TRANSIENT);
+											(char *)prop->ns->href,
+											strlen((char *)prop->ns->href),
+											SQLITE_TRANSIENT);
 									} else {
 										sqlite3_bind_text(stmt, 3,
-												  "",
-												  0,
-												  SQLITE_TRANSIENT);
+											"",
+											0,
+											SQLITE_TRANSIENT);
 									}
 									if (stmt == p->conf.stmt_update_prop) {
 										sqlite3_bind_text(stmt, 4,
-											  (char *)xmlNodeGetContent(prop),
-											  strlen((char *)xmlNodeGetContent(prop)),
-											  SQLITE_TRANSIENT);
+											(char *)xmlNodeGetContent(prop),
+											strlen((char *)xmlNodeGetContent(prop)),
+											SQLITE_TRANSIENT);
 									}
 
 									if (SQLITE_DONE != (r = sqlite3_step(stmt))) {
@@ -2290,9 +2278,8 @@ propmatch_cleanup:
 							sqlite3_reset(stmt);
 
 							sqlite3_bind_text(stmt, 1,
-									  p->uri.path->ptr,
-									  p->uri.path->used - 1,
-									  SQLITE_TRANSIENT);
+								CONST_BUF_LEN(p->uri.path),
+								SQLITE_TRANSIENT);
 
 							/* it is the PK */
 							while (SQLITE_ROW == sqlite3_step(stmt)) {
@@ -2339,32 +2326,32 @@ propmatch_cleanup:
 							sqlite3_reset(stmt);
 
 							sqlite3_bind_text(stmt, 1,
-									  CONST_BUF_LEN(p->tmp_buf),
-									  SQLITE_TRANSIENT);
+									CONST_BUF_LEN(p->tmp_buf),
+									SQLITE_TRANSIENT);
 
 							sqlite3_bind_text(stmt, 2,
-									  CONST_BUF_LEN(con->uri.path),
-									  SQLITE_TRANSIENT);
+									CONST_BUF_LEN(con->uri.path),
+									SQLITE_TRANSIENT);
 
 							sqlite3_bind_text(stmt, 3,
-									  (const char *)lockscope,
-									  xmlStrlen(lockscope),
-									  SQLITE_TRANSIENT);
+									(const char *)lockscope,
+									xmlStrlen(lockscope),
+									SQLITE_TRANSIENT);
 
 							sqlite3_bind_text(stmt, 4,
-									  (const char *)locktype,
-									  xmlStrlen(locktype),
-									  SQLITE_TRANSIENT);
+									(const char *)locktype,
+									xmlStrlen(locktype),
+									SQLITE_TRANSIENT);
 
 							/* owner */
 							sqlite3_bind_text(stmt, 5,
-									  "",
-									  0,
-									  SQLITE_TRANSIENT);
+									"",
+									0,
+									SQLITE_TRANSIENT);
 
 							/* depth */
 							sqlite3_bind_int(stmt, 6,
-									 depth);
+									depth);
 
 
 							if (SQLITE_DONE != sqlite3_step(stmt)) {
@@ -2394,19 +2381,19 @@ propmatch_cleanup:
 				sqlite3_stmt *stmt = p->conf.stmt_refresh_lock;
 
 				/* remove the < > around the token */
-				if (locktoken->used < 6) {
+				if (buffer_string_length(locktoken) < 5) {
 					con->http_status = 400;
 
 					return HANDLER_FINISHED;
 				}
 
-				buffer_copy_string_len(p->tmp_buf, locktoken->ptr + 2, locktoken->used - 5);
+				buffer_copy_string_len(p->tmp_buf, locktoken->ptr + 2, buffer_string_length(locktoken) - 4);
 
 				sqlite3_reset(stmt);
 
 				sqlite3_bind_text(stmt, 1,
-					  CONST_BUF_LEN(p->tmp_buf),
-					  SQLITE_TRANSIENT);
+					CONST_BUF_LEN(p->tmp_buf),
+					SQLITE_TRANSIENT);
 
 				if (SQLITE_DONE != sqlite3_step(stmt)) {
 					log_error_write(srv, __FILE__, __LINE__, "ss",
@@ -2437,7 +2424,7 @@ propmatch_cleanup:
 			sqlite3_stmt *stmt = p->conf.stmt_remove_lock;
 
 			/* remove the < > around the token */
-			if (locktoken->used < 4) {
+			if (buffer_string_length(locktoken) < 3) {
 				con->http_status = 400;
 
 				return HANDLER_FINISHED;
@@ -2453,17 +2440,17 @@ propmatch_cleanup:
 			 * - 412
 			 *  */
 
-			buffer_copy_string_len(p->tmp_buf, locktoken->ptr + 1, locktoken->used - 3);
+			buffer_copy_string_len(p->tmp_buf, locktoken->ptr + 1, buffer_string_length(locktoken) - 2);
 
 			sqlite3_reset(stmt);
 
 			sqlite3_bind_text(stmt, 1,
-				  CONST_BUF_LEN(p->tmp_buf),
-				  SQLITE_TRANSIENT);
+				CONST_BUF_LEN(p->tmp_buf),
+				SQLITE_TRANSIENT);
 
 			sqlite3_bind_text(stmt, 2,
-				  CONST_BUF_LEN(con->uri.path),
-				  SQLITE_TRANSIENT);
+				CONST_BUF_LEN(con->uri.path),
+				SQLITE_TRANSIENT);
 
 			if (SQLITE_DONE != sqlite3_step(stmt)) {
 				log_error_write(srv, __FILE__, __LINE__, "ss",

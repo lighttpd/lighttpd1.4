@@ -141,8 +141,8 @@ URIHANDLER_FUNC(mod_indexfile_subrequest) {
 
 	if (con->mode != DIRECT) return HANDLER_GO_ON;
 
-	if (con->uri.path->used == 0) return HANDLER_GO_ON;
-	if (con->uri.path->ptr[con->uri.path->used - 2] != '/') return HANDLER_GO_ON;
+	if (buffer_is_empty(con->uri.path)) return HANDLER_GO_ON;
+	if (con->uri.path->ptr[buffer_string_length(con->uri.path) - 1] != '/') return HANDLER_GO_ON;
 
 	mod_indexfile_patch_connection(srv, con, p);
 

@@ -25,10 +25,6 @@
  *   for domain to directory lookups,
  *   i.e virtual hosts (vhosts).
  *
- * Optionally sets fcgi_offset and fcgi_arg
- *   in preparation for fcgi.c to handle
- *   per-user fcgi chroot jails.
- *
  * /ada@riksnet.se 2004-12-06
  */
 
@@ -63,8 +59,6 @@ typedef struct {
 typedef struct {
 	buffer	*server_name;
 	buffer	*document_root;
-	buffer	*fcgi_arg;
-	unsigned fcgi_offset;
 } plugin_connection_data;
 
 /* init the plugin data */
@@ -136,8 +130,6 @@ static void* mod_mysql_vhost_connection_data(server *srv, connection *con, void 
 
 	c->server_name = buffer_init();
 	c->document_root = buffer_init();
-	c->fcgi_arg = buffer_init();
-	c->fcgi_offset = 0;
 
 	return con->plugin_ctx[p->id] = c;
 }
@@ -158,8 +150,6 @@ CONNECTION_FUNC(mod_mysql_vhost_handle_connection_close) {
 
 	buffer_free(c->server_name);
 	buffer_free(c->document_root);
-	buffer_free(c->fcgi_arg);
-	c->fcgi_offset = 0;
 
 	free(c);
 
@@ -222,7 +212,7 @@ SERVER_FUNC(mod_mysql_vhost_set_defaults) {
 		s->mysql_pre = buffer_init();
 		s->mysql_post = buffer_init();
 
-		if (sel->used && (qmark = strchr(sel->ptr, '?'))) {
+		if (!buffer_string_is_empty(sel) && (qmark = strchr(sel->ptr, '?'))) {
 			*qmark = '\0';
 			buffer_copy_string(s->mysql_pre, sel->ptr);
 			buffer_copy_string(s->mysql_post, qmark+1);
@@ -258,7 +248,7 @@ SERVER_FUNC(mod_mysql_vhost_set_defaults) {
 			mysql_options(s->mysql, MYSQL_OPT_RECONNECT, &reconnect);
 #endif
 
-#define FOO(x) (s->x->used ? s->x->ptr : NULL)
+#define FOO(x) (buffer_string_is_empty(s->x) ? NULL : s->x->ptr)
 
 #if MYSQL_VERSION_ID >= 40100
 			/* CLIENT_MULTI_STATEMENTS first appeared in 4.1 */ 
@@ -334,37 +324,35 @@ CONNECTION_FUNC(mod_mysql_vhost_handle_docroot) {
 	MYSQL_RES *result = NULL;
 
 	/* no host specified? */
-	if (!con->uri.authority->used) return HANDLER_GO_ON;
+	if (buffer_string_is_empty(con->uri.authority)) return HANDLER_GO_ON;
 
 	mod_mysql_vhost_patch_connection(srv, con, p);
 
 	if (!p->conf.mysql) return HANDLER_GO_ON;
-	if (0 == p->conf.mysql_pre->used) return HANDLER_GO_ON;
+	if (buffer_string_is_empty(p->conf.mysql_pre)) return HANDLER_GO_ON;
 
 	/* sets up connection data if not done yet */
 	c = mod_mysql_vhost_connection_data(srv, con, p_d);
 
 	/* check if cached this connection */
-	if (c->server_name->used && /* con->uri.authority->used && */
-	    buffer_is_equal(c->server_name, con->uri.authority)) goto GO_ON;
+	if (buffer_is_equal(c->server_name, con->uri.authority)) goto GO_ON;
 
 	/* build and run SQL query */
 	buffer_copy_buffer(p->tmp_buf, p->conf.mysql_pre);
-	if (p->conf.mysql_post->used) {
+	if (!buffer_is_empty(p->conf.mysql_post)) {
 		/* escape the uri.authority */
 		unsigned long to_len;
 
-		/* 'to' has to be 'from_len * 2 + 1' */
-		buffer_string_prepare_append(p->tmp_buf, (con->uri.authority->used - 1) * 2 + 1);
+		buffer_string_prepare_append(p->tmp_buf, buffer_string_length(con->uri.authority) * 2);
 
 		to_len = mysql_real_escape_string(p->conf.mysql,
-				p->tmp_buf->ptr + p->tmp_buf->used - 1,
-				con->uri.authority->ptr, con->uri.authority->used - 1);
-		p->tmp_buf->used += to_len;
+				p->tmp_buf->ptr + buffer_string_length(p->tmp_buf),
+				CONST_BUF_LEN(con->uri.authority));
+		buffer_commit(p->tmp_buf, to_len);
 
 		buffer_append_string_buffer(p->tmp_buf, p->conf.mysql_post);
 	}
-	if (mysql_real_query(p->conf.mysql, p->tmp_buf->ptr, p->tmp_buf->used - 1)) {
+	if (mysql_real_query(p->conf.mysql, CONST_BUF_LEN(p->tmp_buf))) {
 		log_error_write(srv, __FILE__, __LINE__, "s", mysql_error(p->conf.mysql));
 		goto ERR500;
 	}
@@ -397,18 +385,6 @@ CONNECTION_FUNC(mod_mysql_vhost_handle_docroot) {
 	buffer_copy_buffer(c->server_name, con->uri.authority);
 	buffer_copy_buffer(c->document_root, p->tmp_buf);
 
-	/* fcgi_offset and fcgi_arg are optional */
-	if (cols > 1 && row[1]) {
-		c->fcgi_offset = atoi(row[1]);
-
-		if (cols > 2 && row[2]) {
-			buffer_copy_string(c->fcgi_arg, row[2]);
-		} else {
-			c->fcgi_arg->used = 0;
-		}
-	} else {
-		c->fcgi_offset = c->fcgi_arg->used = 0;
-	}
 	mysql_free_result(result);
 #if MYSQL_VERSION_ID >= 40100
 	while (mysql_next_result(p->conf.mysql) == 0);
@@ -420,10 +396,9 @@ GO_ON:
 	buffer_copy_buffer(con->physical.doc_root, c->document_root);
 
 #ifdef DEBUG
-	log_error_write(srv, __FILE__, __LINE__, "sbbdb",
+	log_error_write(srv, __FILE__, __LINE__, "sbb",
 		result ? "NOT CACHED" : "cached",
-		con->server_name, con->physical.doc_root,
-		c->fcgi_offset, c->fcgi_arg);
+		con->server_name, con->physical.doc_root);
 #endif
 	return HANDLER_GO_ON;
 

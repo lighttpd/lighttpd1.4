@@ -172,7 +172,7 @@ static int ssi_env_add_request_headers(server *srv, connection *con, plugin_data
 
 		ds = (data_string *)con->request.headers->data[i];
 
-		if (ds->value->used && ds->key->used) {
+		if (!buffer_is_empty(ds->value) && !buffer_is_empty(ds->key)) {
 			/* don't forward the Authorization: Header */
 			if (0 == strcasecmp(ds->key->ptr, "AUTHORIZATION")) {
 				continue;
@@ -189,7 +189,7 @@ static int ssi_env_add_request_headers(server *srv, connection *con, plugin_data
 
 		ds = (data_string *)con->environment->data[i];
 
-		if (ds->value->used && ds->key->used) {
+		if (!buffer_is_empty(ds->value) && !buffer_is_empty(ds->key)) {
 			buffer_copy_string_encoded_cgi_varnames(srv->tmp_buf, CONST_BUF_LEN(ds->key), 0);
 
 			ssi_env_add(p->ssi_cgi_env, srv->tmp_buf->ptr, ds->value->ptr);
@@ -264,7 +264,7 @@ static int build_ssi_cgi_vars(server *srv, connection *con, plugin_data *p) {
 	 * parameter.
 	 */
 
-	if (con->request.pathinfo->used) {
+	if (!buffer_string_is_empty(con->request.pathinfo)) {
 		ssi_env_add(p->ssi_cgi_env, CONST_STRING("PATH_INFO"), con->request.pathinfo->ptr);
 	}
 
@@ -272,7 +272,7 @@ static int build_ssi_cgi_vars(server *srv, connection *con, plugin_data *p) {
 	ssi_env_add(p->ssi_cgi_env, CONST_STRING("DOCUMENT_ROOT"), con->physical.doc_root->ptr);
 
 	ssi_env_add(p->ssi_cgi_env, CONST_STRING("REQUEST_URI"), con->request.uri->ptr);
-	ssi_env_add(p->ssi_cgi_env, CONST_STRING("QUERY_STRING"), con->uri.query->used ? con->uri.query->ptr : "");
+	ssi_env_add(p->ssi_cgi_env, CONST_STRING("QUERY_STRING"), buffer_is_empty(con->uri.query) ? "" : con->uri.query->ptr);
 	ssi_env_add(p->ssi_cgi_env, CONST_STRING("REQUEST_METHOD"), get_http_method_name(con->request.http_method));
 	ssi_env_add(p->ssi_cgi_env, CONST_STRING("REDIRECT_STATUS"), "200");
 	ssi_env_add(p->ssi_cgi_env, CONST_STRING("SERVER_PROTOCOL"), get_http_version_name(con->request.http_version));
@@ -1029,7 +1029,7 @@ static int mod_ssi_handle_request(server *srv, connection *con, plugin_data *p) 
 	con->file_finished = 1;
 	con->mode = p->id;
 
-	if (p->conf.content_type->used <= 1) {
+	if (buffer_string_is_empty(p->conf.content_type)) {
 		response_header_overwrite(srv, con, CONST_STR_LEN("Content-Type"), CONST_STR_LEN("text/html"));
 	} else {
 		response_header_overwrite(srv, con, CONST_STR_LEN("Content-Type"), CONST_BUF_LEN(p->conf.content_type));
@@ -1100,16 +1100,16 @@ URIHANDLER_FUNC(mod_ssi_physical_path) {
 
 	if (con->mode != DIRECT) return HANDLER_GO_ON;
 
-	if (con->physical.path->used == 0) return HANDLER_GO_ON;
+	if (buffer_is_empty(con->physical.path)) return HANDLER_GO_ON;
 
 	mod_ssi_patch_connection(srv, con, p);
 
 	for (k = 0; k < p->conf.ssi_extension->used; k++) {
 		data_string *ds = (data_string *)p->conf.ssi_extension->data[k];
 
-		if (ds->value->used == 0) continue;
+		if (buffer_is_empty(ds->value)) continue;
 
-		if (buffer_is_equal_right_len(con->physical.path, ds->value, ds->value->used - 1)) {
+		if (buffer_is_equal_right_len(con->physical.path, ds->value, buffer_string_length(ds->value))) {
 			/* handle ssi-request */
 
 			if (mod_ssi_handle_request(srv, con, p)) {

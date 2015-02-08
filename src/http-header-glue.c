@@ -125,7 +125,7 @@ int http_response_redirect_to_directory(server *srv, connection *con) {
 
 	buffer_copy_buffer(o, con->uri.scheme);
 	buffer_append_string_len(o, CONST_STR_LEN("://"));
-	if (con->uri.authority->used) {
+	if (!buffer_is_empty(con->uri.authority)) {
 		buffer_append_string_buffer(o, con->uri.authority);
 	} else {
 		/* get the name of the currently connected socket */
@@ -237,10 +237,7 @@ buffer * strftime_cache_get(server *srv, time_t last_mod) {
 	srv->mtime_cache[i].mtime = last_mod;
 	buffer_string_prepare_copy(srv->mtime_cache[i].str, 1023);
 	tm = gmtime(&(srv->mtime_cache[i].mtime));
-	srv->mtime_cache[i].str->used = strftime(srv->mtime_cache[i].str->ptr,
-						 srv->mtime_cache[i].str->size - 1,
-						 "%a, %d %b %Y %H:%M:%S GMT", tm);
-	srv->mtime_cache[i].str->used++;
+	buffer_append_strftime(srv->mtime_cache[i].str, "%a, %d %b %Y %H:%M:%S GMT", tm);
 
 	return srv->mtime_cache[i].str;
 }

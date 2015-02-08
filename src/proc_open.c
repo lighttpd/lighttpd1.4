@@ -284,8 +284,7 @@ static void proc_read_fd_to_buffer(int fd, buffer *b) {
 		if ((s = read(fd, (void *)(b->ptr + buffer_string_length(b)), buffer_string_space(b))) <= 0) {
 			break;
 		}
-		b->used += s;
-		b->ptr[b->used-1] = '\0';
+		buffer_commit(b, s);
 	}
 }
 /* }}} */
@@ -298,7 +297,7 @@ int proc_open_buffer(const char *command, buffer *in, buffer *out, buffer *err) 
 	}
 
 	if (in) {
-		if (write(proc.in.fd, (void *)in->ptr, in->used) < 0) {
+		if (write(proc.in.fd, CONST_BUF_LEN(in)) < 0) {
 			perror("error writing pipe");
 			return -1;
 		}
@@ -315,7 +314,7 @@ int proc_open_buffer(const char *command, buffer *in, buffer *out, buffer *err) 
 	} else {
 		buffer *tmp = buffer_init();
 		proc_read_fd_to_buffer(proc.err.fd, tmp);
-		if (tmp->used > 0 &&  write(2, (void*)tmp->ptr, tmp->used) < 0) {
+		if (!buffer_string_is_empty(tmp) &&  write(2, CONST_BUF_LEN(tmp)) < 0) {
 			perror("error writing pipe");
 			buffer_free(tmp);
 			return -1;

@@ -90,7 +90,7 @@ static int mod_expire_get_offset(server *srv, plugin_data *p, buffer *expire, ti
 	 * e.g. 'access 1 years'
 	 */
 
-	if (expire->used == 0) {
+	if (buffer_string_is_empty(expire)) {
 		log_error_write(srv, __FILE__, __LINE__, "s",
 				"empty:");
 		return -1;
@@ -288,22 +288,21 @@ URIHANDLER_FUNC(mod_expire_path_handler) {
 	int s_len;
 	size_t k;
 
-	if (con->uri.path->used == 0) return HANDLER_GO_ON;
+	if (buffer_is_empty(con->uri.path)) return HANDLER_GO_ON;
 
 	mod_expire_patch_connection(srv, con, p);
 
-	s_len = con->uri.path->used - 1;
+	s_len = buffer_string_length(con->uri.path);
 
 	for (k = 0; k < p->conf.expire_url->used; k++) {
 		data_string *ds = (data_string *)p->conf.expire_url->data[k];
-		int ct_len = ds->key->used - 1;
+		int ct_len = buffer_string_length(ds->key);
 
 		if (ct_len > s_len) continue;
-		if (ds->key->used == 0) continue;
+		if (buffer_is_empty(ds->key)) continue;
 
 		if (0 == strncmp(con->uri.path->ptr, ds->key->ptr, ct_len)) {
 			time_t ts, expires;
-			size_t len;
 			stat_cache_entry *sce = NULL;
 
 			/* if stat fails => sce == NULL, ignore return value */
@@ -332,14 +331,8 @@ URIHANDLER_FUNC(mod_expire_path_handler) {
 			/* expires should be at least srv->cur_ts */
 			if (expires < srv->cur_ts) expires = srv->cur_ts;
 
-			if (0 == (len = strftime(p->expire_tstmp->ptr, p->expire_tstmp->size - 1,
-					   "%a, %d %b %Y %H:%M:%S GMT", gmtime(&(expires))))) {
-				/* could not set expire header, out of mem */
-
-				return HANDLER_GO_ON;
-			}
-
-			p->expire_tstmp->used = len + 1;
+			buffer_string_prepare_copy(p->expire_tstmp, 255);
+			buffer_append_strftime(p->expire_tstmp, "%a, %d %b %Y %H:%M:%S GMT", gmtime(&(expires)));
 
 			/* HTTP/1.0 */
 			response_header_overwrite(srv, con, CONST_STR_LEN("Expires"), CONST_BUF_LEN(p->expire_tstmp));

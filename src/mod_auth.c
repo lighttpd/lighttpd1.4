@@ -206,18 +206,18 @@ static handler_t mod_auth_uri_handler(server *srv, connection *con, void *p_d) {
 	for (k = 0; k < p->conf.auth_require->used; k++) {
 		buffer *require = p->conf.auth_require->data[k]->key;
 
-		if (require->used == 0) continue;
-		if (con->uri.path->used < require->used) continue;
+		if (buffer_is_empty(require)) continue;
+		if (buffer_string_length(con->uri.path) < buffer_string_length(require)) continue;
 
 		/* if we have a case-insensitive FS we have to lower-case the URI here too */
 
 		if (con->conf.force_lowercase_filenames) {
-			if (0 == strncasecmp(con->uri.path->ptr, require->ptr, require->used - 1)) {
+			if (0 == strncasecmp(con->uri.path->ptr, require->ptr, buffer_string_length(require))) {
 				auth_required = 1;
 				break;
 			}
 		} else {
-			if (0 == strncmp(con->uri.path->ptr, require->ptr, require->used - 1)) {
+			if (0 == strncmp(con->uri.path->ptr, require->ptr, buffer_string_length(require))) {
 				auth_required = 1;
 				break;
 			}
@@ -248,7 +248,7 @@ static handler_t mod_auth_uri_handler(server *srv, connection *con, void *p_d) {
 
 	/* try to get Authorization-header */
 
-	if (NULL != (ds = (data_string *)array_get_element(con->request.headers, "Authorization")) && ds->value->used) {
+	if (NULL != (ds = (data_string *)array_get_element(con->request.headers, "Authorization")) && !buffer_is_empty(ds->value)) {
 		char *auth_realm;
 
 		http_authorization = ds->value->ptr;
@@ -419,7 +419,7 @@ SETDEFAULTS_FUNC(mod_auth_set_defaults) {
 			return HANDLER_ERROR;
 		}
 
-		if (s->auth_backend_conf->used) {
+		if (!buffer_string_is_empty(s->auth_backend_conf)) {
 			if (0 == strcmp(s->auth_backend_conf->ptr, "htpasswd")) {
 				s->auth_backend = AUTH_BACKEND_HTPASSWD;
 			} else if (0 == strcmp(s->auth_backend_conf->ptr, "htdigest")) {
@@ -436,7 +436,7 @@ SETDEFAULTS_FUNC(mod_auth_set_defaults) {
 		}
 
 #ifdef USE_LDAP
-		if (s->auth_ldap_filter->used) {
+		if (!buffer_string_is_empty(s->auth_ldap_filter)) {
 			char *dollar;
 
 			/* parse filter */
@@ -562,7 +562,7 @@ SETDEFAULTS_FUNC(mod_auth_set_defaults) {
 			}
 		}
 
-		switch(s->auth_ldap_hostname->used) {
+		switch(s->auth_backend) {
 		case AUTH_BACKEND_LDAP: {
 			handler_t ret = auth_ldap_init(srv, s);
 			if (ret == HANDLER_ERROR)
@@ -588,7 +588,7 @@ handler_t auth_ldap_init(server *srv, mod_auth_plugin_config *s) {
 	}
 #endif
 
-	if (s->auth_ldap_hostname->used) {
+	if (!buffer_string_is_empty(s->auth_ldap_hostname)) {
 		/* free old context */
 		if (NULL != s->ldap) ldap_unbind_s(s->ldap);
 
@@ -627,7 +627,7 @@ handler_t auth_ldap_init(server *srv, mod_auth_plugin_config *s) {
 
 
 		/* 1. */
-		if (s->auth_ldap_binddn->used) {
+		if (!buffer_string_is_empty(s->auth_ldap_binddn)) {
 			if (LDAP_SUCCESS != (ret = ldap_simple_bind_s(s->ldap, s->auth_ldap_binddn->ptr, s->auth_ldap_bindpw->ptr))) {
 				log_error_write(srv, __FILE__, __LINE__, "ss", "ldap:", ldap_err2string(ret));
 

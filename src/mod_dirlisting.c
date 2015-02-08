@@ -492,7 +492,7 @@ static void http_list_directory_header(server *srv, connection *con, plugin_data
 		buffer_append_string_encoded(out, CONST_BUF_LEN(con->uri.path), ENCODING_MINIMAL_XML);
 		buffer_append_string_len(out, CONST_STR_LEN("</title>\n"));
 
-		if (p->conf.external_css->used > 1) {
+		if (!buffer_string_is_empty(p->conf.external_css)) {
 			buffer_append_string_len(out, CONST_STR_LEN("<link rel=\"stylesheet\" type=\"text/css\" href=\""));
 			buffer_append_string_buffer(out, p->conf.external_css);
 			buffer_append_string_len(out, CONST_STR_LEN("\" />\n"));
@@ -614,7 +614,7 @@ static void http_list_directory_footer(server *srv, connection *con, plugin_data
 			"<div class=\"foot\">"
 		));
 
-		if (p->conf.set_footer->used > 1) {
+		if (buffer_string_is_empty(p->conf.set_footer)) {
 			buffer_append_string_buffer(out, p->conf.set_footer);
 		} else if (buffer_is_empty(con->conf.server_tag)) {
 			buffer_append_string_len(out, CONST_STR_LEN(PACKAGE_DESC));
@@ -653,9 +653,9 @@ static int http_list_directory(server *srv, connection *con, plugin_data *p, buf
 	struct tm tm;
 #endif
 
-	if (dir->used == 0) return -1;
+	if (buffer_string_is_empty(dir)) return -1;
 
-	i = dir->used - 1;
+	i = buffer_string_length(dir);
 
 #ifdef HAVE_PATHCONF
 	if (0 >= (name_max = pathconf(dir->ptr, _PC_NAME_MAX))) {
@@ -672,8 +672,8 @@ static int http_list_directory(server *srv, connection *con, plugin_data *p, buf
 	name_max = NAME_MAX;
 #endif
 
-	path = malloc(dir->used + name_max);
-	force_assert(path);
+	path = malloc(buffer_string_length(dir) + name_max + 1);
+	force_assert(NULL != path);
 	strcpy(path, dir->ptr);
 	path_file = path + i;
 
@@ -846,10 +846,10 @@ static int http_list_directory(server *srv, connection *con, plugin_data *p, buf
 				data_string *ds = (data_string *)con->conf.mimetypes->data[k];
 				size_t ct_len;
 
-				if (ds->key->used == 0)
+				if (buffer_is_empty(ds->key))
 					continue;
 
-				ct_len = ds->key->used - 1;
+				ct_len = buffer_string_length(ds->key);
 				if (tmp->namelen < ct_len)
 					continue;
 
@@ -925,9 +925,9 @@ URIHANDLER_FUNC(mod_dirlisting_subrequest) {
 
 	if (con->mode != DIRECT) return HANDLER_GO_ON;
 
-	if (con->physical.path->used == 0) return HANDLER_GO_ON;
-	if (con->uri.path->used == 0) return HANDLER_GO_ON;
-	if (con->uri.path->ptr[con->uri.path->used - 2] != '/') return HANDLER_GO_ON;
+	if (buffer_is_empty(con->physical.path)) return HANDLER_GO_ON;
+	if (buffer_is_empty(con->uri.path)) return HANDLER_GO_ON;
+	if (con->uri.path->ptr[buffer_string_length(con->uri.path) - 1] != '/') return HANDLER_GO_ON;
 
 	mod_dirlisting_patch_connection(srv, con, p);
 

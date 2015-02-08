@@ -35,13 +35,8 @@ typedef char HASHHEX[HASHHEXLEN+1];
 int f_crypto_md5(lua_State *L) {
 	li_MD5_CTX Md5Ctx;
 	HASH HA1;
-	buffer b;
 	char hex[33];
 	int n = lua_gettop(L);
-
-	b.ptr = hex;
-	b.used = 0;
-	b.size = sizeof(hex);
 
 	if (n != 1) {
 		lua_pushstring(L, "md5: expected one argument");
@@ -57,9 +52,9 @@ int f_crypto_md5(lua_State *L) {
 	li_MD5_Update(&Md5Ctx, (unsigned char *)lua_tostring(L, 1), lua_strlen(L, 1));
 	li_MD5_Final(HA1, &Md5Ctx);
 
-	buffer_copy_string_hex(&b, (char *)HA1, 16);
+	li_tohex(hex, (const char*) HA1, 16);
 
-	lua_pushstring(L, b.ptr);
+	lua_pushstring(L, hex);
 
 	return 1;
 }

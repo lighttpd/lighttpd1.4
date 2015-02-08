@@ -146,7 +146,7 @@ SETDEFAULTS_FUNC(mod_evhost_set_defaults) {
 			return HANDLER_ERROR;
 		}
 
-		if (s->path_pieces_raw->used != 0) {
+		if (!buffer_string_is_empty(s->path_pieces_raw)) {
 			mod_evhost_parse_pattern(s);
 		}
 	}
@@ -164,8 +164,7 @@ SETDEFAULTS_FUNC(mod_evhost_set_defaults) {
  */
 
 static int mod_evhost_parse_host(connection *con,array *host) {
-	/* con->uri.authority->used is always > 0 if we come here */
-	register char *ptr = con->uri.authority->ptr + con->uri.authority->used - 1;
+	register char *ptr = con->uri.authority->ptr + buffer_string_length(con->uri.authority);
 	char *colon = ptr; /* needed to filter out the colon (if exists) */
 	int first = 1;
 	data_string *ds;
@@ -265,7 +264,7 @@ static handler_t mod_evhost_uri_handler(server *srv, connection *con, void *p_d)
 	stat_cache_entry *sce = NULL;
 
 	/* not authority set */
-	if (con->uri.authority->used == 0) return HANDLER_GO_ON;
+	if (buffer_string_is_empty(con->uri.authority)) return HANDLER_GO_ON;
 
 	mod_evhost_patch_connection(srv, con, p);
 
@@ -300,9 +299,7 @@ static handler_t mod_evhost_uri_handler(server *srv, connection *con, void *p_d)
 					buffer_append_string_len(p->tmp_buf, con->uri.authority->ptr, colon - con->uri.authority->ptr); /* adds fqdn */
 				}
 			} else if (NULL != (ds = (data_string *)array_get_element(parsed_host,p->conf.path_pieces[i]->ptr))) {
-				if (ds->value->used) {
-					buffer_append_string_buffer(p->tmp_buf,ds->value);
-				}
+				buffer_append_string_buffer(p->tmp_buf,ds->value);
 			} else {
 				/* unhandled %-sequence */
 			}

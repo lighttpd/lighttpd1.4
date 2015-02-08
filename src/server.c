@@ -666,7 +666,7 @@ int main (int argc, char **argv) {
 #endif
 
 	/* check document-root */
-	if (srv->config_storage[0]->document_root->used <= 1) {
+	if (buffer_string_is_empty(srv->config_storage[0]->document_root)) {
 		log_error_write(srv, __FILE__, __LINE__, "s",
 				"document-root is not set\n");
 
@@ -686,7 +686,7 @@ int main (int argc, char **argv) {
 	}
 
 	/* open pid file BEFORE chroot */
-	if (srv->srvconf.pid_file->used) {
+	if (!buffer_string_is_empty(srv->srvconf.pid_file)) {
 		if (-1 == (pid_fd = open(srv->srvconf.pid_file->ptr, O_WRONLY | O_CREAT | O_EXCL | O_TRUNC, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH))) {
 			struct stat st;
 			if (errno != EEXIST) {
@@ -780,7 +780,7 @@ int main (int argc, char **argv) {
 
 #ifdef HAVE_PWD_H
 		/* set user and group */
-		if (srv->srvconf.username->used) {
+		if (!buffer_string_is_empty(srv->srvconf.username)) {
 			if (NULL == (pwd = getpwnam(srv->srvconf.username->ptr))) {
 				log_error_write(srv, __FILE__, __LINE__, "sb",
 						"can't find username", srv->srvconf.username);
@@ -794,7 +794,7 @@ int main (int argc, char **argv) {
 			}
 		}
 
-		if (srv->srvconf.groupname->used) {
+		if (!buffer_string_is_empty(srv->srvconf.groupname)) {
 			if (NULL == (grp = getgrnam(srv->srvconf.groupname->ptr))) {
 				log_error_write(srv, __FILE__, __LINE__, "sb",
 					"can't find groupname", srv->srvconf.groupname);
@@ -828,13 +828,13 @@ int main (int argc, char **argv) {
 				log_error_write(srv, __FILE__, __LINE__, "ss", "setgroups failed: ", strerror(errno));
 				return -1;
 			}
-			if (srv->srvconf.username->used) {
+			if (!buffer_string_is_empty(srv->srvconf.username)) {
 				initgroups(srv->srvconf.username->ptr, grp->gr_gid);
 			}
 		}
 #endif
 #ifdef HAVE_CHROOT
-		if (srv->srvconf.changeroot->used) {
+		if (!buffer_string_is_empty(srv->srvconf.changeroot)) {
 			tzset();
 
 			if (-1 == chroot(srv->srvconf.changeroot->ptr)) {
@@ -1001,8 +1001,7 @@ int main (int argc, char **argv) {
 	if (pid_fd != -1) {
 		buffer_copy_int(srv->tmp_buf, getpid());
 		buffer_append_string_len(srv->tmp_buf, CONST_STR_LEN("\n"));
-		force_assert(srv->tmp_buf->used > 0);
-		write(pid_fd, srv->tmp_buf->ptr, srv->tmp_buf->used - 1);
+		write(pid_fd, CONST_BUF_LEN(srv->tmp_buf));
 		close(pid_fd);
 		pid_fd = -1;
 	}
@@ -1425,8 +1424,8 @@ int main (int argc, char **argv) {
 
 						/* network_close() will cleanup after us */
 
-						if (srv->srvconf.pid_file->used &&
-						    srv->srvconf.changeroot->used == 0) {
+						if (!buffer_string_is_empty(srv->srvconf.pid_file) &&
+						    buffer_string_is_empty(srv->srvconf.changeroot)) {
 							if (0 != unlink(srv->srvconf.pid_file->ptr)) {
 								if (errno != EACCES && errno != EPERM) {
 									log_error_write(srv, __FILE__, __LINE__, "sbds",
@@ -1542,8 +1541,8 @@ int main (int argc, char **argv) {
 		srv->joblist->used = 0;
 	}
 
-	if (srv->srvconf.pid_file->used &&
-	    srv->srvconf.changeroot->used == 0 &&
+	if (!buffer_string_is_empty(srv->srvconf.pid_file) &&
+	    buffer_string_is_empty(srv->srvconf.changeroot) &&
 	    0 == graceful_shutdown) {
 		if (0 != unlink(srv->srvconf.pid_file->ptr)) {
 			if (errno != EACCES && errno != EPERM) {

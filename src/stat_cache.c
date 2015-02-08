@@ -222,8 +222,7 @@ static int stat_cache_attr_get(buffer *buf, char *name) {
 	buffer_string_prepare_copy(buf, 1023);
 	attrlen = buf->size - 1;
 	if(0 == (ret = attr_get(name, "Content-Type", buf->ptr, &attrlen, 0))) {
-		buf->used = attrlen + 1;
-		buf->ptr[attrlen] = '\0';
+		buffer_commit(buf, attrlen);
 	}
 	return ret;
 }
@@ -332,7 +331,7 @@ static int buffer_copy_dirname(buffer *dst, buffer *file) {
 
 	if (buffer_string_is_empty(file)) return -1;
 
-	for (i = file->used - 1; i+1 > 0; i--) {
+	for (i = buffer_string_length(file); i > 0; i--) {
 		if (file->ptr[i] == '/') {
 			buffer_copy_string_len(dst, file->ptr, i);
 			return 0;
@@ -499,7 +498,7 @@ handler_t stat_cache_get_entry(server *srv, connection *con, buffer *name, stat_
 
 	if (S_ISREG(st.st_mode)) {
 		/* fix broken stat/open for symlinks to reg files with appended slash on freebsd,osx */
-		if (name->ptr[name->used-2] == '/') {
+		if (name->ptr[buffer_string_length(name) - 1] == '/') {
 			errno = ENOTDIR;
 			return HANDLER_ERROR;
 		}
@@ -571,16 +570,15 @@ handler_t stat_cache_get_entry(server *srv, connection *con, buffer *name, stat_
 		 * we assume "/" can not be symlink, so
 		 * skip the symlink stuff if our path is /
 		 **/
-		else if ((name->used > 2)) {
+		else if (buffer_string_length(name) > 1) {
 			buffer *dname;
 			char *s_cur;
 
 			dname = buffer_init();
 			buffer_copy_buffer(dname, name);
 
-			while ((s_cur = strrchr(dname->ptr,'/'))) {
-				*s_cur = '\0';
-				dname->used = s_cur - dname->ptr + 1;
+			while ((s_cur = strrchr(dname->ptr, '/'))) {
+				buffer_string_set_length(dname, s_cur - dname->ptr);
 				if (dname->ptr == s_cur) {
 #ifdef DEBUG_STAT_CACHE
 					log_error_write(srv, __FILE__, __LINE__, "s", "reached /");
@@ -615,16 +613,19 @@ handler_t stat_cache_get_entry(server *srv, connection *con, buffer *name, stat_
 #endif
 		/* xattr did not set a content-type. ask the config */
 		if (buffer_string_is_empty(sce->content_type)) {
+			size_t namelen = buffer_string_length(name);
+
 			for (k = 0; k < con->conf.mimetypes->used; k++) {
 				data_string *ds = (data_string *)con->conf.mimetypes->data[k];
 				buffer *type = ds->key;
+				size_t typelen = buffer_string_length(type);
 
-				if (type->used == 0) continue;
+				if (buffer_is_empty(type)) continue;
 
 				/* check if the right side is the same */
-				if (type->used > name->used) continue;
+				if (typelen > namelen) continue;
 
-				if (0 == strncasecmp(name->ptr + name->used - type->used, type->ptr, type->used - 1)) {
+				if (0 == strncasecmp(name->ptr + namelen - typelen, type->ptr, typelen)) {
 					buffer_copy_buffer(sce->content_type, ds->value);
 					break;
 				}

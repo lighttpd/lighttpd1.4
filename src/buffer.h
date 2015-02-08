@@ -10,6 +10,7 @@
 #include <stdlib.h>
 #include <sys/types.h>
 #include <stdio.h>
+#include <time.h>
 
 #if defined HAVE_STDINT_H
 # include <stdint.h>
@@ -71,6 +72,13 @@ char* buffer_string_prepare_append(buffer *b, size_t size);
  */
 void buffer_commit(buffer *b, size_t size);
 
+/* sets string length:
+ * - always stores a terminating zero to terminate the "new" string
+ * - does not modify the string data apart from terminating zero
+ * - reallocates the buffer iff needed
+ */
+void buffer_string_set_length(buffer *b, size_t len);
+
 void buffer_copy_string(buffer *b, const char *s);
 void buffer_copy_string_len(buffer *b, const char *s, size_t s_len);
 void buffer_copy_buffer(buffer *b, const buffer *src);
@@ -85,6 +93,8 @@ void buffer_append_long_hex(buffer *b, unsigned long len);
 void buffer_append_int(buffer *b, intmax_t val);
 void buffer_copy_int(buffer *b, intmax_t val);
 
+void buffer_append_strftime(buffer *b, const char *format, const struct tm *tm);
+
 /* '-', log_10 (2^bits) = bits * log 2 / log 10 < bits * 0.31, terminating 0 */
 #define LI_ITOSTRING_LENGTH (2 + (8 * sizeof(intmax_t) * 31 + 99) / 100)
 
@@ -92,6 +102,9 @@ void li_itostrn(char *buf, size_t buf_len, intmax_t val);
 void li_itostr(char *buf, intmax_t val); /* buf must have at least LI_ITOSTRING_LENGTH bytes */
 void li_utostrn(char *buf, size_t buf_len, uintmax_t val);
 void li_utostr(char *buf, uintmax_t val); /* buf must have at least LI_ITOSTRING_LENGTH bytes */
+
+/* buf must be (at least) 2*s_len + 1 big. uses lower-case hex letters. */
+void li_tohex(char *buf, const char *s, size_t s_len);
 
 char * buffer_search_string_len(buffer *b, const char *needle, size_t len);
 

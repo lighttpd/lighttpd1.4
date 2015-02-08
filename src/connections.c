@@ -400,7 +400,7 @@ static int connection_handle_write_prepare(server *srv, connection *con) {
 			 * 403 is from the response handler when noone else catched it
 			 *
 			 * */
-			if ((!con->http_status || con->http_status == 200) && con->uri.path->used &&
+			if ((!con->http_status || con->http_status == 200) && !buffer_string_is_empty(con->uri.path) &&
 			    con->uri.path->ptr[0] != '*') {
 				response_header_insert(srv, con, CONST_STR_LEN("Allow"), CONST_STR_LEN("OPTIONS, GET, HEAD, POST"));
 
@@ -873,42 +873,7 @@ static int connection_handle_read_state(server *srv, connection *con)  {
 		}
 	}
 
-	/* the last chunk might be empty */
-	for (c = cq->first; c;) {
-		if (cq->first == c && c->mem->used == 0) {
-			/* the first node is empty */
-			/* ... and it is empty, move it to unused */
-
-			cq->first = c->next;
-			if (cq->first == NULL) cq->last = NULL;
-
-			c->next = cq->unused;
-			cq->unused = c;
-			cq->unused_chunks++;
-
-			c = cq->first;
-		} else if (c->next && c->next->mem->used == 0) {
-			chunk *fc;
-			/* next node is the last one */
-			/* ... and it is empty, move it to unused */
-
-			fc = c->next;
-			c->next = fc->next;
-
-			fc->next = cq->unused;
-			cq->unused = fc;
-			cq->unused_chunks++;
-
-			/* the last node was empty */
-			if (c->next == NULL) {
-				cq->last = c;
-			}
-
-			c = c->next;
-		} else {
-			c = c->next;
-		}
-	}
+	chunkqueue_remove_finished_chunks(cq);
 
 	/* we might have got several packets at once
 	 */
@@ -927,15 +892,12 @@ static int connection_handle_read_state(server *srv, connection *con)  {
 		last_offset = 0;
 
 		for (c = cq->first; c; c = c->next) {
-			buffer b;
 			size_t i;
+			size_t len = buffer_string_length(c->mem) - c->offset;
+			const char *b = c->mem->ptr + c->offset;
 
-			b.ptr = c->mem->ptr + c->offset;
-			b.used = c->mem->used - c->offset;
-			if (b.used > 0) b.used--; /* buffer "used" includes terminating zero */
-
-			for (i = 0; i < b.used; i++) {
-				char ch = b.ptr[i];
+			for (i = 0; i < len; ++i) {
+				char ch = b[i];
 
 				if ('\r' == ch) {
 					/* chec if \n\r\n follows */
@@ -945,13 +907,11 @@ static int connection_handle_read_state(server *srv, connection *con)  {
 					int header_end_match_pos = 1;
 
 					for ( ; cc; cc = cc->next, j = 0 ) {
-						buffer bb;
-						bb.ptr = cc->mem->ptr + cc->offset;
-						bb.used = cc->mem->used - cc->offset;
-						if (bb.used > 0) bb.used--; /* buffer "used" includes terminating zero */
+						size_t bblen = buffer_string_length(cc->mem) - cc->offset;
+						const char *bb = c->mem->ptr + cc->offset;
 
-						for ( ; j < bb.used; j++) {
-							ch = bb.ptr[j];
+						for ( ; j < bblen; j++) {
+							ch = bb[j];
 
 							if (ch == header_end[header_end_match_pos]) {
 								header_end_match_pos++;
@@ -976,25 +936,16 @@ found_header_end:
 			buffer_reset(con->request.request);
 
 			for (c = cq->first; c; c = c->next) {
-				buffer b;
-
-				b.ptr = c->mem->ptr + c->offset;
-				b.used = c->mem->used - c->offset;
+				size_t len = buffer_string_length(c->mem) - c->offset;
 
 				if (c == last_chunk) {
-					b.used = last_offset + 1;
+					len = last_offset;
 				}
 
-				buffer_append_string_buffer(con->request.request, &b);
+				buffer_append_string_len(con->request.request, c->mem->ptr + c->offset, len);
+				c->offset += len;
 
-				if (c == last_chunk) {
-					c->offset += last_offset;
-
-					break;
-				} else {
-					/* the whole packet was copied */
-					c->offset = c->mem->used - 1;
-				}
+				if (c == last_chunk) break;
 			}
 
 			connection_set_state(srv, con, CON_STATE_REQUEST_END);

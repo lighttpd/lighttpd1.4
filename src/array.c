@@ -98,7 +98,7 @@ static int array_get_index(array *a, const char *key, size_t keylen, int *rndx) 
 		} else if (pos >= (int)a->used) {
 			pos -= i;
 		} else {
-			cmp = buffer_caseless_compare(key, keylen, a->data[a->sorted[pos]]->key->ptr, a->data[a->sorted[pos]]->key->used);
+			cmp = buffer_caseless_compare(key, keylen, CONST_BUF_LEN(a->data[a->sorted[pos]]->key));
 
 			if (cmp == 0) {
 				/* found */
@@ -121,7 +121,7 @@ static int array_get_index(array *a, const char *key, size_t keylen, int *rndx) 
 data_unset *array_get_element(array *a, const char *key) {
 	int ndx;
 
-	if (-1 != (ndx = array_get_index(a, key, strlen(key) + 1, NULL))) {
+	if (-1 != (ndx = array_get_index(a, key, strlen(key), NULL))) {
 		/* found, leave here */
 
 		return a->data[ndx];
@@ -171,7 +171,7 @@ data_unset *array_replace(array *a, data_unset *du) {
 	int ndx;
 
 	force_assert(NULL != du);
-	if (-1 == (ndx = array_get_index(a, du->key->ptr, du->key->used, NULL))) {
+	if (-1 == (ndx = array_get_index(a, CONST_BUF_LEN(du->key), NULL))) {
 		array_insert_unique(a, du);
 		return NULL;
 	} else {
@@ -187,13 +187,13 @@ int array_insert_unique(array *a, data_unset *str) {
 	size_t j;
 
 	/* generate unique index if neccesary */
-	if (str->key->used == 0 || str->is_index_key) {
+	if (buffer_is_empty(str->key) || str->is_index_key) {
 		buffer_copy_int(str->key, a->unique_ndx++);
 		str->is_index_key = 1;
 	}
 
 	/* try to find the string */
-	if (-1 != (ndx = array_get_index(a, str->key->ptr, str->key->used, &pos))) {
+	if (-1 != (ndx = array_get_index(a, CONST_BUF_LEN(str->key), &pos))) {
 		/* found, leave here */
 		if (a->data[ndx]->type == str->type) {
 			str->insert_dup(a->data[ndx], str);
@@ -235,7 +235,7 @@ int array_insert_unique(array *a, data_unset *str) {
 
 	if (pos != ndx &&
 	    ((pos < 0) ||
-	     buffer_caseless_compare(str->key->ptr, str->key->used, a->data[a->sorted[pos]]->key->ptr, a->data[a->sorted[pos]]->key->used) > 0)) {
+	     buffer_caseless_compare(CONST_BUF_LEN(str->key), CONST_BUF_LEN(a->data[a->sorted[pos]]->key)) > 0)) {
 		pos++;
 	}
 

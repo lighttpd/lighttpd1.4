@@ -181,14 +181,14 @@ URIHANDLER_FUNC(mod_userdir_docroot_handler) {
 	struct passwd *pwd = NULL;
 #endif
 
-	if (con->uri.path->used == 0) return HANDLER_GO_ON;
+	if (buffer_is_empty(con->uri.path)) return HANDLER_GO_ON;
 
 	mod_userdir_patch_connection(srv, con, p);
 
 	/* enforce the userdir.path to be set in the config, ugly fix for #1587;
 	 * should be replaced with a clean .enabled option in 1.5
 	 */
-	if (!p->conf.active || p->conf.path->used == 0) return HANDLER_GO_ON;
+	if (!p->conf.active || buffer_is_empty(p->conf.path)) return HANDLER_GO_ON;
 
 	/* /~user/foo.html -> /home/user/public_html/foo.html */
 

@@ -101,8 +101,8 @@ SETDEFAULTS_FUNC(mod_usertrack_set_defaults) {
 		if (buffer_string_is_empty(s->cookie_name)) {
 			buffer_copy_string_len(s->cookie_name, CONST_STR_LEN("TRACKID"));
 		} else {
-			size_t j;
-			for (j = 0; j < s->cookie_name->used - 1; j++) {
+			size_t j, len = buffer_string_length(s->cookie_name);
+			for (j = 0; j < len; j++) {
 				char c = s->cookie_name->ptr[j] | 32;
 				if (c < 'a' || c > 'z') {
 					log_error_write(srv, __FILE__, __LINE__, "sb",
@@ -115,8 +115,8 @@ SETDEFAULTS_FUNC(mod_usertrack_set_defaults) {
 		}
 
 		if (!buffer_string_is_empty(s->cookie_domain)) {
-			size_t j;
-			for (j = 0; j < s->cookie_domain->used - 1; j++) {
+			size_t j, len = buffer_string_length(s->cookie_domain);
+			for (j = 0; j < len; j++) {
 				char c = s->cookie_domain->ptr[j];
 				if (c <= 32 || c >= 127 || c == '"' || c == '\\') {
 					log_error_write(srv, __FILE__, __LINE__, "sb",
@@ -175,7 +175,7 @@ URIHANDLER_FUNC(mod_usertrack_uri_handler) {
 	li_MD5_CTX Md5Ctx;
 	char hh[LI_ITOSTRING_LENGTH];
 
-	if (con->uri.path->used == 0) return HANDLER_GO_ON;
+	if (buffer_is_empty(con->uri.path)) return HANDLER_GO_ON;
 
 	mod_usertrack_patch_connection(srv, con, p);
 
@@ -193,7 +193,7 @@ URIHANDLER_FUNC(mod_usertrack_uri_handler) {
 			char *nc;
 
 			/* skip WS */
-			for (nc = g + p->conf.cookie_name->used-1; *nc == ' ' || *nc == '\t'; nc++);
+			for (nc = g + buffer_string_length(p->conf.cookie_name); *nc == ' ' || *nc == '\t'; nc++);
 
 			if (*nc == '=') {
 				/* ok, found the key of our own cookie */
@@ -219,8 +219,8 @@ URIHANDLER_FUNC(mod_usertrack_uri_handler) {
 
 	/* generate shared-secret */
 	li_MD5_Init(&Md5Ctx);
-	li_MD5_Update(&Md5Ctx, (unsigned char *)con->uri.path->ptr, con->uri.path->used - 1);
-	li_MD5_Update(&Md5Ctx, (unsigned char *)"+", 1);
+	li_MD5_Update(&Md5Ctx, CONST_BUF_LEN(con->uri.path));
+	li_MD5_Update(&Md5Ctx, CONST_STR_LEN("+"));
 
 	/* we assume sizeof(time_t) == 4 here, but if not it ain't a problem at all */
 	li_itostr(hh, srv->cur_ts);

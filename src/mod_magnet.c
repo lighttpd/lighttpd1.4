@@ -189,17 +189,12 @@ static int magnet_array_next(lua_State *L) {
 
 	if (pos >= a->used) return 0;
 	if (NULL != (du = a->data[pos])) {
-		if (du->key->used) {
-			lua_pushlstring(L, du->key->ptr, du->key->used - 1);
-		}
-		else {
-			lua_pushlstring(L, "", 0);
-		}
+		lua_pushlstring(L, CONST_BUF_LEN(du->key));
 		switch (du->type) {
 			case TYPE_STRING:
 				ds = (data_string *)du;
-				if (ds->value && ds->value->used) {
-					lua_pushlstring(L, ds->value->ptr, ds->value->used - 1);
+				if (!buffer_is_empty(ds->value)) {
+					lua_pushlstring(L, CONST_BUF_LEN(ds->value));
 				} else {
 					lua_pushnil(L);
 				}
@@ -252,8 +247,9 @@ static int magnet_stat(lua_State *L) {
 	const char *s = luaL_checkstring(L, 1);
 	server *srv;
 	connection *con;
-	buffer sb;
+	buffer *sb;
 	stat_cache_entry *sce = NULL;
+	handler_t res;
 
 	lua_pushstring(L, "lighty.srv");
 	lua_gettable(L, LUA_REGISTRYINDEX);
@@ -265,12 +261,12 @@ static int magnet_stat(lua_State *L) {
 	con = lua_touserdata(L, -1);
 	lua_pop(L, 1);
 
-	sb.ptr = (char *)s;
-	sb.used = sb.size = strlen(s) + 1;
-	
-	if (HANDLER_GO_ON != stat_cache_get_entry(srv, con, &sb, &sce)) {
-		lua_pushnil(L);
+	sb = buffer_init_string(s);
+	res = stat_cache_get_entry(srv, con, sb, &sce);
+	buffer_free(sb);
 
+	if (HANDLER_GO_ON != res) {
+		lua_pushnil(L);
 		return 1;
 	}
 
@@ -324,7 +320,7 @@ static int magnet_stat(lua_State *L) {
 		buffer *b = buffer_init();
 		etag_mutate(b, sce->etag);
 
-		lua_pushlstring(L, b->ptr, b->used - 1);
+		lua_pushlstring(L, CONST_BUF_LEN(b));
 		buffer_free(b);
 	} else {
 		lua_pushnil(L);
@@ -332,7 +328,7 @@ static int magnet_stat(lua_State *L) {
 	lua_setfield(L, -2, "etag");
 
 	if (!buffer_string_is_empty(sce->content_type)) {
-		lua_pushlstring(L, sce->content_type->ptr, sce->content_type->used - 1);
+		lua_pushlstring(L, CONST_BUF_LEN(sce->content_type));
 	} else {
 		lua_pushnil(L);
 	}
@@ -369,8 +365,8 @@ static int magnet_reqhdr_get(lua_State *L) {
 	lua_pop(L, 1);
 
 	if (NULL != (ds = (data_string *)array_get_element(con->request.headers, key))) {
-		if (ds->value->used) {
-			lua_pushlstring(L, ds->value->ptr, ds->value->used - 1);
+		if (!buffer_is_empty(ds->value)) {
+			lua_pushlstring(L, CONST_BUF_LEN(ds->value));
 		} else {
 			lua_pushnil(L);
 		}
@@ -555,8 +551,8 @@ static int magnet_env_get(lua_State *L) {
 
 	dest = magnet_env_get_buffer(srv, con, key);
 
-	if (dest && dest->used) {
-		lua_pushlstring(L, dest->ptr, dest->used - 1);
+	if (!buffer_is_empty(dest)) {
+		lua_pushlstring(L, CONST_BUF_LEN(dest));
 	} else {
 		lua_pushnil(L);
 	}
@@ -617,8 +613,8 @@ static int magnet_env_next(lua_State *L) {
 	lua_pushstring(L, magnet_env[pos].name);
 
 	dest = magnet_env_get_buffer_by_id(srv, con, magnet_env[pos].type);
-	if (dest && dest->used) {
-		lua_pushlstring(L, dest->ptr, dest->used - 1);
+	if (!buffer_is_empty(dest)) {
+		lua_pushlstring(L, CONST_BUF_LEN(dest));
 	} else {
 		lua_pushnil(L);
 	}
@@ -649,7 +645,8 @@ static int magnet_cgi_get(lua_State *L) {
 	con = lua_touserdata(L, -1);
 	lua_pop(L, 1);
 
-	if (NULL != (ds = (data_string *)array_get_element(con->environment, key)) && ds->value->used)
+	ds = (data_string *)array_get_element(con->environment, key);
+	if (!buffer_is_empty(ds->value))
 		lua_pushlstring(L, CONST_BUF_LEN(ds->value));
 	else
 		lua_pushnil(L);

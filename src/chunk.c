@@ -264,10 +264,11 @@ void chunkqueue_get_memory(chunkqueue *cq, char **mem, size_t *len, size_t min_s
 		}
 		/* if buffer is really small just make it bigger */
 		else if (have < min_size && b->size <= REALLOC_MAX_SIZE) {
-			size_t new_size = b->used + min_size, append;
+			size_t cur_len = buffer_string_length(b);
+			size_t new_size = cur_len + min_size, append;
 			if (new_size < alloc_size) new_size = alloc_size;
 
-			append = new_size - b->used;
+			append = new_size - cur_len;
 			if (append >= min_size) {
 				buffer_string_prepare_append(b, append);
 				have = buffer_string_space(b);
@@ -301,12 +302,8 @@ void chunkqueue_use_memory(chunkqueue *cq, size_t len) {
 	force_assert(NULL != cq->last && MEM_CHUNK == cq->last->type);
 	b = cq->last->mem;
 
-	force_assert(b->used > 0);
-	force_assert(len <= buffer_string_space(b));
-
 	if (len > 0) {
-		b->used += len;
-		b->ptr[b->used - 1] = '\0';
+		buffer_commit(b, len);
 	} else if (buffer_string_is_empty(b)) {
 		/* unused buffer: can't remove chunk easily from
 		 * end of list, so just reset the buffer

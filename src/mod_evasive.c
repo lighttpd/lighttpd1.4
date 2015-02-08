@@ -138,7 +138,7 @@ URIHANDLER_FUNC(mod_evasive_uri_handler) {
 	size_t conns_by_ip = 0;
 	size_t j;
 
-	if (con->uri.path->used == 0) return HANDLER_GO_ON;
+	if (buffer_is_empty(con->uri.path)) return HANDLER_GO_ON;
 
 	mod_evasive_patch_connection(srv, con, p);
 

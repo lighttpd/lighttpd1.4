@@ -244,6 +244,7 @@ static int deflate_file_to_buffer_gzip(server *srv, connection *con, plugin_data
 	unsigned char *c;
 	unsigned long crc;
 	z_stream z;
+	size_t outlen;
 
 	UNUSED(srv);
 	UNUSED(con);
@@ -282,9 +283,9 @@ static int deflate_file_to_buffer_gzip(server *srv, connection *con, plugin_data
 	c[8] = 0x00; /* extra flags */
 	c[9] = 0x03; /* UNIX */
 
-	p->b->used = 10;
-	z.next_out = (unsigned char *)p->b->ptr + p->b->used;
-	z.avail_out = p->b->size - p->b->used - 9;
+	outlen = 10;
+	z.next_out = (unsigned char *)p->b->ptr + outlen;
+	z.avail_out = p->b->size - outlen - 9;
 	z.total_out = 0;
 
 	if (Z_STREAM_END != deflate(&z, Z_FINISH)) {
@@ -293,11 +294,11 @@ static int deflate_file_to_buffer_gzip(server *srv, connection *con, plugin_data
 	}
 
 	/* trailer */
-	p->b->used += z.total_out;
+	outlen += z.total_out;
 
 	crc = generate_crc32c(start, st_size);
 
-	c = (unsigned char *)p->b->ptr + p->b->used;
+	c = (unsigned char *)p->b->ptr + outlen;
 
 	c[0] = (crc >>  0) & 0xff;
 	c[1] = (crc >>  8) & 0xff;
@@ -307,8 +308,8 @@ static int deflate_file_to_buffer_gzip(server *srv, connection *con, plugin_data
 	c[5] = (z.total_in >>  8) & 0xff;
 	c[6] = (z.total_in >> 16) & 0xff;
 	c[7] = (z.total_in >> 24) & 0xff;
-	p->b->used += 8;
-	p->b->ptr[p->b->used++] = '\0';
+	outlen += 8;
+	buffer_commit(p->b, outlen);
 
 	if (Z_OK != deflateEnd(&z)) {
 		return -1;
@@ -398,16 +399,15 @@ static int deflate_file_to_buffer_bzip2(server *srv, connection *con, plugin_dat
 		return -1;
 	}
 
+	if (BZ_OK != BZ2_bzCompressEnd(&bz)) {
+		return -1;
+	}
+
 	/* file is too large for now */
 	if (bz.total_out_hi32) return -1;
 
 	/* trailer */
-	p->b->used = bz.total_out_lo32;
-	p->b->ptr[p->b->used++] = '\0';
-
-	if (BZ_OK != BZ2_bzCompressEnd(&bz)) {
-		return -1;
-	}
+	buffer_commit(p->b, bz.total_out_lo32);
 
 	return 0;
 }
@@ -434,8 +434,8 @@ static int deflate_file_to_file(server *srv, connection *con, plugin_data *p, bu
 	buffer_copy_buffer(p->ofn, p->conf.compress_cache_dir);
 	buffer_append_slash(p->ofn);
 
-	if (0 == strncmp(con->physical.path->ptr, con->physical.doc_root->ptr, con->physical.doc_root->used-1)) {
-		buffer_append_string(p->ofn, con->physical.path->ptr + con->physical.doc_root->used - 1);
+	if (0 == strncmp(con->physical.path->ptr, con->physical.doc_root->ptr, buffer_string_length(con->physical.doc_root))) {
+		buffer_append_string(p->ofn, con->physical.path->ptr + buffer_string_length(con->physical.doc_root));
 	} else {
 		buffer_append_string_buffer(p->ofn, con->uri.path);
 	}
@@ -883,7 +883,7 @@ PHYSICALPATH_FUNC(mod_compress_physical) {
 					}
 
 					/* deflate it */
-					if (use_etag && p->conf.compress_cache_dir->used) {
+					if (use_etag && !buffer_string_is_empty(p->conf.compress_cache_dir)) {
 						if (0 != deflate_file_to_file(srv, con, p, con->physical.path, sce, compression_type))
 							return HANDLER_GO_ON;
 					} else {
@@ -897,7 +897,7 @@ PHYSICALPATH_FUNC(mod_compress_physical) {
 					}
 					response_header_overwrite(srv, con, CONST_STR_LEN("Content-Type"), CONST_BUF_LEN(sce->content_type));
 					/* let mod_staticfile handle the cached compressed files, physical path was modified */
-					return (use_etag && p->conf.compress_cache_dir->used) ? HANDLER_GO_ON : HANDLER_FINISHED;
+					return (use_etag && !buffer_string_is_empty(p->conf.compress_cache_dir)) ? HANDLER_GO_ON : HANDLER_FINISHED;
 				}
 			}
 		}

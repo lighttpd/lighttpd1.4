@@ -125,11 +125,11 @@ URIHANDLER_FUNC(mod_access_uri_handler) {
 	int s_len;
 	size_t k;
 
-	if (con->uri.path->used == 0) return HANDLER_GO_ON;
+	if (buffer_is_empty(con->uri.path)) return HANDLER_GO_ON;
 
 	mod_access_patch_connection(srv, con, p);
 
-	s_len = con->uri.path->used - 1;
+	s_len = buffer_string_length(con->uri.path);
 
 	if (con->conf.log_request_handling) {
 		log_error_write(srv, __FILE__, __LINE__, "s",
@@ -138,12 +138,12 @@ URIHANDLER_FUNC(mod_access_uri_handler) {
 
 	for (k = 0; k < p->conf.access_deny->used; k++) {
 		data_string *ds = (data_string *)p->conf.access_deny->data[k];
-		int ct_len = ds->value->used - 1;
+		int ct_len = buffer_string_length(ds->value);
 		int denied = 0;
 
 
 		if (ct_len > s_len) continue;
-		if (ds->value->used == 0) continue;
+		if (buffer_is_empty(ds->value)) continue;
 
 		/* if we have a case-insensitive FS we have to lower-case the URI here too */
 

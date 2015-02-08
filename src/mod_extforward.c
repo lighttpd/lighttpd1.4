@@ -236,7 +236,7 @@ static void put_string_into_array_len(array *ary, const char *str, int len)
 static array *extract_forward_array(buffer *pbuffer)
 {
 	array *result = array_init();
-	if (pbuffer->used > 0) {
+	if (!buffer_string_is_empty(pbuffer)) {
 		char *base, *curr;
 		/* state variable, 0 means not in string, 1 means in string */
 		int in_str = 0;

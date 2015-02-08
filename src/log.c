@@ -333,8 +333,7 @@ static int log_buffer_prepare(buffer *b, server *srv, const char *filename, unsi
 		/* cache the generated timestamp */
 		if (srv->cur_ts != srv->last_generated_debug_ts) {
 			buffer_string_prepare_copy(srv->ts_debug_str, 255);
-			strftime(srv->ts_debug_str->ptr, srv->ts_debug_str->size - 1, "%Y-%m-%d %H:%M:%S", localtime(&(srv->cur_ts)));
-			srv->ts_debug_str->used = strlen(srv->ts_debug_str->ptr) + 1;
+			buffer_append_strftime(srv->ts_debug_str, "%Y-%m-%d %H:%M:%S", localtime(&(srv->cur_ts)));
 
 			srv->last_generated_debug_ts = srv->cur_ts;
 		}
@@ -362,8 +361,7 @@ static void log_write(server *srv, buffer *b) {
 	case ERRORLOG_FILE:
 	case ERRORLOG_FD:
 		buffer_append_string_len(b, CONST_STR_LEN("\n"));
-		force_assert(b->used > 0);
-		write(srv->errorlog_fd, b->ptr, b->used - 1);
+		write(srv->errorlog_fd, CONST_BUF_LEN(b));
 		break;
 	case ERRORLOG_SYSLOG:
 		syslog(LOG_ERR, "%s", b->ptr);
@@ -387,11 +385,11 @@ int log_error_write(server *srv, const char *filename, unsigned int line, const 
 
 int log_error_write_multiline_buffer(server *srv, const char *filename, unsigned int line, buffer *multiline, const char *fmt, ...) {
 	va_list ap;
-	size_t prefix_used;
+	size_t prefix_len;
 	buffer *b = srv->errorlog_buf;
 	char *pos, *end, *current_line;
 
-	if (multiline->used < 2) return 0;
+	if (buffer_string_is_empty(multiline)) return 0;
 
 	if (-1 == log_buffer_prepare(b, srv, filename, line)) return 0;
 
@@ -399,20 +397,19 @@ int log_error_write_multiline_buffer(server *srv, const char *filename, unsigned
 	log_buffer_append_printf(b, fmt, ap);
 	va_end(ap);
 
-	prefix_used = b->used;
+	prefix_len = buffer_string_length(b);
 
 	current_line = pos = multiline->ptr;
-	end = multiline->ptr + multiline->used;
+	end = multiline->ptr + buffer_string_length(multiline);
 
-	for ( ; pos < end ; ++pos) {
+	for ( ; pos <= end ; ++pos) {
 		switch (*pos) {
 		case '\n':
 		case '\r':
 		case '\0': /* handles end of string */
 			if (current_line < pos) {
 				/* truncate to prefix */
-				b->used = prefix_used;
-				b->ptr[b->used - 1] = '\0';
+				buffer_string_set_length(b, prefix_len);
 
 				buffer_append_string_len(b, current_line, pos - current_line);
 				log_write(srv, b);

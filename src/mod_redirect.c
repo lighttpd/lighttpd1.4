@@ -198,9 +198,9 @@ static handler_t mod_redirect_uri_handler(server *srv, connection *con, void *p_
 		match       = kv->key;
 		extra       = kv->key_extra;
 		pattern     = kv->value->ptr;
-		pattern_len = kv->value->used - 1;
+		pattern_len = buffer_string_length(kv->value);
 
-		if ((n = pcre_exec(match, extra, p->match_buf->ptr, p->match_buf->used - 1, 0, 0, ovec, 3 * N)) < 0) {
+		if ((n = pcre_exec(match, extra, CONST_BUF_LEN(p->match_buf), 0, 0, ovec, 3 * N)) < 0) {
 			if (n != PCRE_ERROR_NOMATCH) {
 				log_error_write(srv, __FILE__, __LINE__, "sd",
 						"execution error while matching: ", n);

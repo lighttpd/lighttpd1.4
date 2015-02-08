@@ -376,8 +376,7 @@ static int cgi_demux_response(server *srv, handler_ctx *hctx) {
 			return FDEVENT_HANDLED_FINISHED;
 		}
 
-		hctx->response->ptr[n] = '\0';
-		hctx->response->used = n+1;
+		buffer_commit(hctx->response, n);
 
 		/* split header from body */
 
@@ -385,7 +384,7 @@ static int cgi_demux_response(server *srv, handler_ctx *hctx) {
 			int is_header = 0;
 			int is_header_end = 0;
 			size_t last_eol = 0;
-			size_t i;
+			size_t i, header_len;
 
 			buffer_append_string_buffer(hctx->response_header, hctx->response);
 
@@ -412,8 +411,9 @@ static int cgi_demux_response(server *srv, handler_ctx *hctx) {
 			
 			/* nph (non-parsed headers) */
 			if (0 == strncmp(hctx->response_header->ptr, "HTTP/1.", 7)) is_header = 1;
-				
-			for (i = 0; !is_header_end && i < hctx->response_header->used - 1; i++) {
+
+			header_len = buffer_string_length(hctx->response_header);
+			for (i = 0; !is_header_end && i < header_len; i++) {
 				char c = hctx->response_header->ptr[i];
 
 				switch (c) {
@@ -463,26 +463,25 @@ static int cgi_demux_response(server *srv, handler_ctx *hctx) {
 				} else {
 					const char *bstart;
 					size_t blen;
-					
+
+					/* the body starts after the EOL */
+					bstart = hctx->response_header->ptr + i;
+					blen = header_len - i;
+
 					/**
 					 * i still points to the char after the terminating EOL EOL
 					 *
 					 * put it on the last \n again
 					 */
 					i--;
-					
-					/* the body starts after the EOL */
-					bstart = hctx->response_header->ptr + (i + 1);
-					blen = (hctx->response_header->used - 1) - (i + 1);
-					
+
 					/* string the last \r?\n */
 					if (i > 0 && (hctx->response_header->ptr[i - 1] == '\r')) {
 						i--;
 					}
 
-					hctx->response_header->ptr[i] = '\0';
-					hctx->response_header->used = i + 1; /* the string + \0 */
-					
+					buffer_string_set_length(hctx->response_header, i);
+
 					/* parse the response header */
 					cgi_response_parse(srv, con, p, hctx->response_header);
 
@@ -738,7 +737,7 @@ static int cgi_create_env(server *srv, connection *con, plugin_data *p, buffer *
 
 #ifndef __WIN32
 
-	if (cgi_handler->used > 1) {
+	if (!buffer_string_is_empty(cgi_handler)) {
 		/* stat the exec file */
 		if (-1 == (stat(cgi_handler->ptr, &st))) {
 			log_error_write(srv, __FILE__, __LINE__, "sbss",
@@ -800,7 +799,7 @@ static int cgi_create_env(server *srv, connection *con, plugin_data *p, buffer *
 		}
 
 		if (!buffer_string_is_empty(con->server_name)) {
-			size_t len = con->server_name->used - 1;
+			size_t len = buffer_string_length(con->server_name);
 
 			if (con->server_name->ptr[0] == '[') {
 				const char *colon = strstr(con->server_name->ptr, "]:");
@@ -938,7 +937,7 @@ static int cgi_create_env(server *srv, connection *con, plugin_data *p, buffer *
 
 			ds = (data_string *)con->request.headers->data[n];
 
-			if (ds->value->used && ds->key->used) {
+			if (!buffer_is_empty(ds->value) && !buffer_is_empty(ds->key)) {
 				buffer_copy_string_encoded_cgi_varnames(p->tmp_buf, CONST_BUF_LEN(ds->key), 1);
 
 				cgi_env_add(&env, CONST_BUF_LEN(p->tmp_buf), CONST_BUF_LEN(ds->value));
@@ -950,7 +949,7 @@ static int cgi_create_env(server *srv, connection *con, plugin_data *p, buffer *
 
 			ds = (data_string *)con->environment->data[n];
 
-			if (ds->value->used && ds->key->used) {
+			if (!buffer_is_empty(ds->value) && !buffer_is_empty(ds->key)) {
 				buffer_copy_string_encoded_cgi_varnames(p->tmp_buf, CONST_BUF_LEN(ds->key), 0);
 
 				cgi_env_add(&env, CONST_BUF_LEN(p->tmp_buf), CONST_BUF_LEN(ds->value));
@@ -969,7 +968,7 @@ static int cgi_create_env(server *srv, connection *con, plugin_data *p, buffer *
 		args = malloc(sizeof(*args) * argc);
 		i = 0;
 
-		if (cgi_handler->used > 1) {
+		if (!buffer_string_is_empty(cgi_handler)) {
 			args[i++] = cgi_handler->ptr;
 		}
 		args[i++] = con->physical.path->ptr;
@@ -1071,7 +1070,7 @@ static int cgi_create_env(server *srv, connection *con, plugin_data *p, buffer *
 					}
 					break;
 				case MEM_CHUNK:
-					if ((r = write(to_cgi_fds[1], c->mem->ptr + c->offset, c->mem->used - c->offset - 1)) < 0) {
+					if ((r = write(to_cgi_fds[1], c->mem->ptr + c->offset, buffer_string_length(c->mem) - c->offset)) < 0) {
 						switch(errno) {
 						case ENOSPC:
 							con->http_status = 507;
@@ -1185,7 +1184,7 @@ URIHANDLER_FUNC(cgi_is_handled) {
 
 	if (con->mode != DIRECT) return HANDLER_GO_ON;
 
-	if (fn->used == 0) return HANDLER_GO_ON;
+	if (buffer_is_empty(fn)) return HANDLER_GO_ON;
 
 	mod_cgi_patch_connection(srv, con, p);
 
@@ -1193,13 +1192,13 @@ URIHANDLER_FUNC(cgi_is_handled) {
 	if (!S_ISREG(sce->st.st_mode)) return HANDLER_GO_ON;
 	if (p->conf.execute_x_only == 1 && (sce->st.st_mode & (S_IXUSR | S_IXGRP | S_IXOTH)) == 0) return HANDLER_GO_ON;
 
-	s_len = fn->used - 1;
+	s_len = buffer_string_length(fn);
 
 	for (k = 0; k < p->conf.cgi->used; k++) {
 		data_string *ds = (data_string *)p->conf.cgi->data[k];
-		size_t ct_len = ds->key->used - 1;
+		size_t ct_len = buffer_string_length(ds->key);
 
-		if (ds->key->used == 0) continue;
+		if (buffer_is_empty(ds->key)) continue;
 		if (s_len < ct_len) continue;
 
 		if (0 == strncmp(fn->ptr + s_len - ct_len, ds->key->ptr, ct_len)) {

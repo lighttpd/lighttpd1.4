@@ -136,13 +136,14 @@ static int mod_flv_streaming_patch_connection(server *srv, connection *con, plug
 
 static int split_get_params(array *get_params, buffer *qrystr) {
 	size_t is_key = 1;
-	size_t i;
+	size_t i, len;
 	char *key = NULL, *val = NULL;
 
 	key = qrystr->ptr;
 
 	/* we need the \0 */
-	for (i = 0; i < qrystr->used; i++) {
+	len = buffer_string_length(qrystr);
+	for (i = 0; i <= len; i++) {
 		switch(qrystr->ptr[i]) {
 		case '=':
 			if (is_key) {
@@ -195,14 +196,14 @@ URIHANDLER_FUNC(mod_flv_streaming_path_handler) {
 
 	mod_flv_streaming_patch_connection(srv, con, p);
 
-	s_len = con->physical.path->used - 1;
+	s_len = buffer_string_length(con->physical.path);
 
 	for (k = 0; k < p->conf.extensions->used; k++) {
 		data_string *ds = (data_string *)p->conf.extensions->data[k];
-		int ct_len = ds->value->used - 1;
+		int ct_len = buffer_string_length(ds->value);
 
 		if (ct_len > s_len) continue;
-		if (ds->value->used == 0) continue;
+		if (buffer_is_empty(ds->value)) continue;
 
 		if (0 == strncmp(con->physical.path->ptr + s_len - ct_len, ds->value->ptr, ct_len)) {
 			data_string *get_param;
@@ -221,7 +222,7 @@ URIHANDLER_FUNC(mod_flv_streaming_path_handler) {
 			}
 
 			/* too short */
-			if (get_param->value->used < 2) return HANDLER_GO_ON;
+			if (buffer_string_is_empty(get_param->value)) return HANDLER_GO_ON;
 
 			/* check if it is a number */
 			start = strtol(get_param->value->ptr, &err, 10);

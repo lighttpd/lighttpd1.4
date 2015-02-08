@@ -1130,7 +1130,7 @@ int config_read(server *srv, const char *fn) {
 	dcwd = data_string_init();
 	buffer_string_prepare_copy(dcwd->value, 1023);
 	if (NULL != getcwd(dcwd->value->ptr, dcwd->value->size - 1)) {
-		dcwd->value->used = strlen(dcwd->value->ptr) + 1;
+		buffer_commit(dcwd->value, strlen(dcwd->value->ptr));
 		buffer_copy_string_len(dcwd->key, CONST_STR_LEN("var.CWD"));
 		array_insert_unique(srv->config, (data_unset *)dcwd);
 	} else {
@@ -1320,7 +1320,7 @@ int config_set_defaults(server *srv) {
 		srv->srvconf.port = s->ssl_enabled ? 443 : 80;
 	}
 
-	if (srv->srvconf.event_handler->used == 0) {
+	if (buffer_string_is_empty(srv->srvconf.event_handler)) {
 		/* choose a good default
 		 *
 		 * the event_handler list is sorted by 'goodness'
