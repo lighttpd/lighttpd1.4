@@ -311,7 +311,6 @@ typedef struct {
 	buffer *fcgi_env;
 
 	buffer *path;
-	buffer *parse_response;
 
 	buffer *statuskey;
 
@@ -672,7 +671,6 @@ INIT_FUNC(mod_fastcgi_init) {
 	p->fcgi_env = buffer_init();
 
 	p->path = buffer_init();
-	p->parse_response = buffer_init();
 
 	p->statuskey = buffer_init();
 
@@ -687,7 +685,6 @@ FREE_FUNC(mod_fastcgi_free) {
 
 	buffer_free(p->fcgi_env);
 	buffer_free(p->path);
-	buffer_free(p->parse_response);
 	buffer_free(p->statuskey);
 
 	if (p->config_storage) {
@@ -1578,6 +1575,8 @@ static handler_t fcgi_connection_reset(server *srv, connection *con, void *p_d) 
 
 static int fcgi_env_add(buffer *env, const char *key, size_t key_len, const char *val, size_t val_len) {
 	size_t len;
+	char len_enc[8];
+	size_t len_enc_len = 0;
 
 	if (!key || !val) return -1;
 
@@ -1586,7 +1585,7 @@ static int fcgi_env_add(buffer *env, const char *key, size_t key_len, const char
 	len += key_len > 127 ? 4 : 1;
 	len += val_len > 127 ? 4 : 1;
 
-	if (env->used + len >= FCGI_MAX_LENGTH) {
+	if (buffer_string_length(env) + len >= FCGI_MAX_LENGTH) {
 		/**
 		 * we can't append more headers, ignore it
 		 */
@@ -1598,33 +1597,32 @@ static int fcgi_env_add(buffer *env, const char *key, size_t key_len, const char
 	 *
 	 * HINT: this can't happen as FCGI_MAX_LENGTH is only 16bit
 	 */
-	if (key_len > 0x7fffffff) key_len = 0x7fffffff;
-	if (val_len > 0x7fffffff) val_len = 0x7fffffff;
+	force_assert(key_len < 0x7fffffffu);
+	force_assert(val_len < 0x7fffffffu);
 
-	buffer_prepare_append(env, len);
+	buffer_string_prepare_append(env, len);
 
 	if (key_len > 127) {
-		env->ptr[env->used++] = ((key_len >> 24) & 0xff) | 0x80;
-		env->ptr[env->used++] = (key_len >> 16) & 0xff;
-		env->ptr[env->used++] = (key_len >> 8) & 0xff;
-		env->ptr[env->used++] = (key_len >> 0) & 0xff;
+		len_enc[len_enc_len++] = ((key_len >> 24) & 0xff) | 0x80;
+		len_enc[len_enc_len++] = (key_len >> 16) & 0xff;
+		len_enc[len_enc_len++] = (key_len >> 8) & 0xff;
+		len_enc[len_enc_len++] = (key_len >> 0) & 0xff;
 	} else {
-		env->ptr[env->used++] = (key_len >> 0) & 0xff;
+		len_enc[len_enc_len++] = (key_len >> 0) & 0xff;
 	}
 
 	if (val_len > 127) {
-		env->ptr[env->used++] = ((val_len >> 24) & 0xff) | 0x80;
-		env->ptr[env->used++] = (val_len >> 16) & 0xff;
-		env->ptr[env->used++] = (val_len >> 8) & 0xff;
-		env->ptr[env->used++] = (val_len >> 0) & 0xff;
+		len_enc[len_enc_len++] = ((val_len >> 24) & 0xff) | 0x80;
+		len_enc[len_enc_len++] = (val_len >> 16) & 0xff;
+		len_enc[len_enc_len++] = (val_len >> 8) & 0xff;
+		len_enc[len_enc_len++] = (val_len >> 0) & 0xff;
 	} else {
-		env->ptr[env->used++] = (val_len >> 0) & 0xff;
+		len_enc[len_enc_len++] = (val_len >> 0) & 0xff;
 	}
 
-	memcpy(env->ptr + env->used, key, key_len);
-	env->used += key_len;
-	memcpy(env->ptr + env->used, val, val_len);
-	env->used += val_len;
+	buffer_append_string_len(env, len_enc, len_enc_len);
+	buffer_append_string_len(env, key, key_len);
+	buffer_append_string_len(env, val, val_len);
 
 	return 0;
 }
@@ -1777,27 +1775,7 @@ static int fcgi_env_add_request_headers(server *srv, connection *con, plugin_dat
 		ds = (data_string *)con->request.headers->data[i];
 
 		if (ds->value->used && ds->key->used) {
-			size_t j;
-			buffer_reset(srv->tmp_buf);
-
-			if (0 != strcasecmp(ds->key->ptr, "CONTENT-TYPE")) {
-				buffer_copy_string_len(srv->tmp_buf, CONST_STR_LEN("HTTP_"));
-				srv->tmp_buf->used--;
-			}
-
-			buffer_prepare_append(srv->tmp_buf, ds->key->used + 2);
-			for (j = 0; j < ds->key->used - 1; j++) {
-				char c = '_';
-				if (light_isalpha(ds->key->ptr[j])) {
-					/* upper-case */
-					c = ds->key->ptr[j] & ~32;
-				} else if (light_isdigit(ds->key->ptr[j])) {
-					/* copy */
-					c = ds->key->ptr[j];
-				}
-				srv->tmp_buf->ptr[srv->tmp_buf->used++] = c;
-			}
-			srv->tmp_buf->ptr[srv->tmp_buf->used++] = '\0';
+			buffer_copy_string_encoded_cgi_varnames(srv->tmp_buf, CONST_BUF_LEN(ds->key), 1);
 
 			FCGI_ENV_ADD_CHECK(fcgi_env_add(p->fcgi_env, CONST_BUF_LEN(srv->tmp_buf), CONST_BUF_LEN(ds->value)),con);
 		}
@@ -1809,22 +1787,7 @@ static int fcgi_env_add_request_headers(server *srv, connection *con, plugin_dat
 		ds = (data_string *)con->environment->data[i];
 
 		if (ds->value->used && ds->key->used) {
-			size_t j;
-			buffer_reset(srv->tmp_buf);
-
-			buffer_prepare_append(srv->tmp_buf, ds->key->used + 2);
-			for (j = 0; j < ds->key->used - 1; j++) {
-				char c = '_';
-				if (light_isalpha(ds->key->ptr[j])) {
-					/* upper-case */
-					c = ds->key->ptr[j] & ~32;
-				} else if (light_isdigit(ds->key->ptr[j])) {
-					/* copy */
-					c = ds->key->ptr[j];
-				}
-				srv->tmp_buf->ptr[srv->tmp_buf->used++] = c;
-			}
-			srv->tmp_buf->ptr[srv->tmp_buf->used++] = '\0';
+			buffer_copy_string_encoded_cgi_varnames(srv->tmp_buf, CONST_BUF_LEN(ds->key), 0);
 
 			FCGI_ENV_ADD_CHECK(fcgi_env_add(p->fcgi_env, CONST_BUF_LEN(srv->tmp_buf), CONST_BUF_LEN(ds->value)), con);
 		}
@@ -1861,7 +1824,7 @@ static int fcgi_create_env(server *srv, handler_ctx *hctx, size_t request_id) {
 	memset(beginRecord.body.reserved, 0, sizeof(beginRecord.body.reserved));
 
 	/* send FCGI_PARAMS */
-	buffer_prepare_copy(p->fcgi_env, 1024);
+	buffer_string_prepare_copy(p->fcgi_env, 1023);
 
 
 	if (buffer_is_empty(con->conf.server_tag)) {
@@ -2052,9 +2015,9 @@ static int fcgi_create_env(server *srv, handler_ctx *hctx, size_t request_id) {
 
 		buffer_copy_string_len(b, (const char *)&beginRecord, sizeof(beginRecord));
 
-		fcgi_header(&(header), FCGI_PARAMS, request_id, p->fcgi_env->used, 0);
+		fcgi_header(&(header), FCGI_PARAMS, request_id, buffer_string_length(p->fcgi_env), 0);
 		buffer_append_string_len(b, (const char *)&header, sizeof(header));
-		buffer_append_string_len(b, (const char *)p->fcgi_env->ptr, p->fcgi_env->used);
+		buffer_append_string_buffer(b, p->fcgi_env);
 
 		fcgi_header(&(header), FCGI_PARAMS, request_id, 0, 0);
 		buffer_append_string_len(b, (const char *)&header, sizeof(header));
@@ -2109,17 +2072,15 @@ static int fcgi_response_parse(server *srv, connection *con, plugin_data *p, buf
 
 	UNUSED(srv);
 
-	buffer_copy_buffer(p->parse_response, in);
-
 	/* search for \n */
-	for (s = p->parse_response->ptr; NULL != (ns = strchr(s, '\n')); s = ns + 1) {
+	for (s = in->ptr; NULL != (ns = strchr(s, '\n')); s = ns + 1) {
 		char *key, *value;
 		int key_len;
 		data_string *ds = NULL;
 
 		/* a good day. Someone has read the specs and is sending a \r\n to us */
 
-		if (ns > p->parse_response->ptr &&
+		if (ns > in->ptr &&
 		    *(ns-1) == '\r') {
 			*(ns-1) = '\0';
 		}
@@ -2315,7 +2276,7 @@ typedef struct {
 } fastcgi_response_packet;
 
 static int fastcgi_get_packet(server *srv, handler_ctx *hctx, fastcgi_response_packet *packet) {
-	chunk *	c;
+	chunk *c;
 	size_t offset;
 	size_t toread;
 	FCGI_Header *header;
@@ -2331,15 +2292,11 @@ static int fastcgi_get_packet(server *srv, handler_ctx *hctx, fastcgi_response_p
 	offset = 0; toread = 8;
 	/* get at least the FastCGI header */
 	for (c = hctx->rb->first; c; c = c->next) {
-		size_t weHave = c->mem->used - c->offset - 1;
+		size_t weHave = buffer_string_length(c->mem) - c->offset;
 
 		if (weHave > toread) weHave = toread;
 
-		if (packet->b->used == 0) {
-			buffer_copy_string_len(packet->b, c->mem->ptr + c->offset, weHave);
-		} else {
-			buffer_append_string_len(packet->b, c->mem->ptr + c->offset, weHave);
-		}
+		buffer_append_string_len(packet->b, c->mem->ptr + c->offset, weHave);
 		toread -= weHave;
 		offset = weHave; /* skip offset bytes in chunk for "real" data */
 
@@ -2478,7 +2435,6 @@ static int fcgi_demux_response(server *srv, handler_ctx *hctx) {
 			/* is the header already finished */
 			if (0 == con->file_started) {
 				char *c;
-				size_t blen;
 				data_string *ds;
 
 				/* search for header terminator
@@ -2489,20 +2445,20 @@ static int fcgi_demux_response(server *srv, handler_ctx *hctx) {
 				 * search for \n\n
 				 */
 
-				if (hctx->response_header->used == 0) {
-					buffer_copy_buffer(hctx->response_header, packet.b);
-				} else {
-					buffer_append_string_buffer(hctx->response_header, packet.b);
-				}
+				buffer_append_string_buffer(hctx->response_header, packet.b);
 
 				if (NULL != (c = buffer_search_string_len(hctx->response_header, CONST_STR_LEN("\r\n\r\n")))) {
-					blen = hctx->response_header->used - (c - hctx->response_header->ptr) - 4 - 1;
-					hctx->response_header->used = (c - hctx->response_header->ptr) + 3;
-					c += 4; /* point the the start of the response */
+					char *hend = c + 4; /* header end == body start */
+					size_t hlen = hend - hctx->response_header->ptr;
+					buffer_copy_string_len(packet.b, hend, buffer_string_length(hctx->response_header) - hlen);
+					hctx->response_header->used = hlen;
+					hctx->response_header->ptr[hctx->response_header->used++] = '\0';
 				} else if (NULL != (c = buffer_search_string_len(hctx->response_header, CONST_STR_LEN("\n\n")))) {
-					blen = hctx->response_header->used - (c - hctx->response_header->ptr) - 2 - 1;
-					hctx->response_header->used = c - hctx->response_header->ptr + 2;
-					c += 2; /* point the the start of the response */
+					char *hend = c + 2; /* header end == body start */
+					size_t hlen = hend - hctx->response_header->ptr;
+					buffer_copy_string_len(packet.b, hend, buffer_string_length(hctx->response_header) - hlen);
+					hctx->response_header->used = hlen;
+					hctx->response_header->ptr[hctx->response_header->used++] = '\0';
 				} else {
 					/* no luck, no header found */
 					break;
@@ -2559,14 +2515,14 @@ static int fcgi_demux_response(server *srv, handler_ctx *hctx) {
 				}
 
 
-				if (hctx->send_content_body && blen > 0) {
+				if (hctx->send_content_body && buffer_string_length(packet.b) > 0) {
 					/* enable chunked-transfer-encoding */
 					if (con->request.http_version == HTTP_VERSION_1_1 &&
 					    !(con->parsed_response & HTTP_CONTENT_LENGTH)) {
 						con->response.transfer_encoding = HTTP_TRANSFER_ENCODING_CHUNKED;
 					}
 
-					http_chunk_append_mem(srv, con, c, blen);
+					http_chunk_append_buffer(srv, con, packet.b);
 					joblist_append(srv, con);
 				}
 			} else if (hctx->send_content_body && packet.b->used > 1) {

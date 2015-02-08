@@ -35,8 +35,8 @@ static void http_chunk_append_len(server *srv, connection *con, size_t len) {
 			len >>= 4;
 		}
 
-		/* i is the number of hex digits we have */
-		buffer_prepare_copy(b, i + 2);
+		/* i is the number of hex digits we have, + \r\n */
+		buffer_string_prepare_copy(b, i + 2);
 
 		for (j = i-1, len = olen; j+1 > 0; j--) {
 			b->ptr[j] = (len & 0xf) + (((len & 0xf) <= 9) ? '0' : 'a' - 10);

@@ -43,7 +43,7 @@ INIT_FUNC(mod_expire_init) {
 
 	p->expire_tstmp = buffer_init();
 
-	buffer_prepare_copy(p->expire_tstmp, 255);
+	buffer_string_prepare_copy(p->expire_tstmp, 255);
 
 	return p;
 }

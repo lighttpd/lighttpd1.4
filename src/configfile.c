@@ -1066,7 +1066,7 @@ int config_parse_cmd(server *srv, config_t *context, const char *cmd) {
 				"opening", source, "failed:", strerror(errno));
 		ret = -1;
 	} else {
-		tokenizer_init(&t, source, out->ptr, out->used);
+		tokenizer_init(&t, source, CONST_BUF_LEN(out));
 		ret = config_parse(srv, context, &t);
 	}
 
@@ -1128,7 +1128,7 @@ int config_read(server *srv, const char *fn) {
 	array_insert_unique(srv->config, (data_unset *)dpid);
 
 	dcwd = data_string_init();
-	buffer_prepare_copy(dcwd->value, 1024);
+	buffer_string_prepare_copy(dcwd->value, 1023);
 	if (NULL != getcwd(dcwd->value->ptr, dcwd->value->size - 1)) {
 		dcwd->value->used = strlen(dcwd->value->ptr) + 1;
 		buffer_copy_string_len(dcwd->key, CONST_STR_LEN("var.CWD"));

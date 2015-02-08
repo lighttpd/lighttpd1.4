@@ -344,13 +344,13 @@ static int cgi_demux_response(server *srv, handler_ctx *hctx) {
 		int toread;
 
 #if defined(__WIN32)
-		buffer_prepare_copy(hctx->response, 4 * 1024);
+		buffer_string_prepare_copy(hctx->response, 4 * 1024);
 #else
 		if (ioctl(con->fd, FIONREAD, &toread) || toread == 0 || toread <= 4*1024) {
-			buffer_prepare_copy(hctx->response, 4 * 1024);
+			buffer_string_prepare_copy(hctx->response, 4 * 1024);
 		} else {
 			if (toread > MAX_READ_LIMIT) toread = MAX_READ_LIMIT;
-			buffer_prepare_copy(hctx->response, toread);
+			buffer_string_prepare_copy(hctx->response, toread);
 		}
 #endif
 
@@ -939,29 +939,7 @@ static int cgi_create_env(server *srv, connection *con, plugin_data *p, buffer *
 			ds = (data_string *)con->request.headers->data[n];
 
 			if (ds->value->used && ds->key->used) {
-				size_t j;
-
-				buffer_reset(p->tmp_buf);
-
-				if (0 != strcasecmp(ds->key->ptr, "CONTENT-TYPE")) {
-					buffer_copy_string_len(p->tmp_buf, CONST_STR_LEN("HTTP_"));
-					p->tmp_buf->used--; /* strip \0 after HTTP_ */
-				}
-
-				buffer_prepare_append(p->tmp_buf, ds->key->used + 2);
-
-				for (j = 0; j < ds->key->used - 1; j++) {
-					char cr = '_';
-					if (light_isalpha(ds->key->ptr[j])) {
-						/* upper-case */
-						cr = ds->key->ptr[j] & ~32;
-					} else if (light_isdigit(ds->key->ptr[j])) {
-						/* copy */
-						cr = ds->key->ptr[j];
-					}
-					p->tmp_buf->ptr[p->tmp_buf->used++] = cr;
-				}
-				p->tmp_buf->ptr[p->tmp_buf->used++] = '\0';
+				buffer_copy_string_encoded_cgi_varnames(p->tmp_buf, CONST_BUF_LEN(ds->key), 1);
 
 				cgi_env_add(&env, CONST_BUF_LEN(p->tmp_buf), CONST_BUF_LEN(ds->value));
 			}
@@ -973,24 +951,7 @@ static int cgi_create_env(server *srv, connection *con, plugin_data *p, buffer *
 			ds = (data_string *)con->environment->data[n];
 
 			if (ds->value->used && ds->key->used) {
-				size_t j;
-
-				buffer_reset(p->tmp_buf);
-
-				buffer_prepare_append(p->tmp_buf, ds->key->used + 2);
-
-				for (j = 0; j < ds->key->used - 1; j++) {
-					char cr = '_';
-					if (light_isalpha(ds->key->ptr[j])) {
-						/* upper-case */
-						cr = ds->key->ptr[j] & ~32;
-					} else if (light_isdigit(ds->key->ptr[j])) {
-						/* copy */
-						cr = ds->key->ptr[j];
-					}
-					p->tmp_buf->ptr[p->tmp_buf->used++] = cr;
-				}
-				p->tmp_buf->ptr[p->tmp_buf->used++] = '\0';
+				buffer_copy_string_encoded_cgi_varnames(p->tmp_buf, CONST_BUF_LEN(ds->key), 0);
 
 				cgi_env_add(&env, CONST_BUF_LEN(p->tmp_buf), CONST_BUF_LEN(ds->value));
 			}

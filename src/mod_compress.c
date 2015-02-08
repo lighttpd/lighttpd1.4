@@ -266,7 +266,7 @@ static int deflate_file_to_buffer_gzip(server *srv, connection *con, plugin_data
 	z.total_in = 0;
 
 
-	buffer_prepare_copy(p->b, (z.avail_in * 1.1) + 12 + 18);
+	buffer_string_prepare_copy(p->b, (z.avail_in * 1.1) + 12 + 18);
 
 	/* write gzip header */
 
@@ -284,7 +284,7 @@ static int deflate_file_to_buffer_gzip(server *srv, connection *con, plugin_data
 
 	p->b->used = 10;
 	z.next_out = (unsigned char *)p->b->ptr + p->b->used;
-	z.avail_out = p->b->size - p->b->used - 8;
+	z.avail_out = p->b->size - p->b->used - 9;
 	z.total_out = 0;
 
 	if (Z_STREAM_END != deflate(&z, Z_FINISH)) {
@@ -308,6 +308,7 @@ static int deflate_file_to_buffer_gzip(server *srv, connection *con, plugin_data
 	c[6] = (z.total_in >> 16) & 0xff;
 	c[7] = (z.total_in >> 24) & 0xff;
 	p->b->used += 8;
+	p->b->ptr[p->b->used++] = '\0';
 
 	if (Z_OK != deflateEnd(&z)) {
 		return -1;
@@ -339,10 +340,10 @@ static int deflate_file_to_buffer_deflate(server *srv, connection *con, plugin_d
 	z.avail_in = st_size;
 	z.total_in = 0;
 
-	buffer_prepare_copy(p->b, (z.avail_in * 1.1) + 12);
+	buffer_string_prepare_copy(p->b, (z.avail_in * 1.1) + 12);
 
 	z.next_out = (unsigned char *)p->b->ptr;
-	z.avail_out = p->b->size;
+	z.avail_out = p->b->size - 1;
 	z.total_out = 0;
 
 	if (Z_STREAM_END != deflate(&z, Z_FINISH)) {
@@ -350,12 +351,12 @@ static int deflate_file_to_buffer_deflate(server *srv, connection *con, plugin_d
 		return -1;
 	}
 
-	/* trailer */
-	p->b->used = z.total_out;
-
 	if (Z_OK != deflateEnd(&z)) {
 		return -1;
 	}
+
+	/* trailer */
+	buffer_commit(p->b, z.total_out);
 
 	return 0;
 }
@@ -385,10 +386,10 @@ static int deflate_file_to_buffer_bzip2(server *srv, connection *con, plugin_dat
 	bz.total_in_lo32 = 0;
 	bz.total_in_hi32 = 0;
 
-	buffer_prepare_copy(p->b, (bz.avail_in * 1.1) + 12);
+	buffer_string_prepare_copy(p->b, (bz.avail_in * 1.1) + 12);
 
 	bz.next_out = p->b->ptr;
-	bz.avail_out = p->b->size;
+	bz.avail_out = p->b->size - 1;
 	bz.total_out_lo32 = 0;
 	bz.total_out_hi32 = 0;
 
@@ -402,6 +403,7 @@ static int deflate_file_to_buffer_bzip2(server *srv, connection *con, plugin_dat
 
 	/* trailer */
 	p->b->used = bz.total_out_lo32;
+	p->b->ptr[p->b->used++] = '\0';
 
 	if (BZ_OK != BZ2_bzCompressEnd(&bz)) {
 		return -1;
@@ -434,7 +436,6 @@ static int deflate_file_to_file(server *srv, connection *con, plugin_data *p, bu
 
 	if (0 == strncmp(con->physical.path->ptr, con->physical.doc_root->ptr, con->physical.doc_root->used-1)) {
 		buffer_append_string(p->ofn, con->physical.path->ptr + con->physical.doc_root->used - 1);
-		buffer_copy_buffer(p->b, p->ofn);
 	} else {
 		buffer_append_string_buffer(p->ofn, con->uri.path);
 	}
@@ -546,11 +547,11 @@ static int deflate_file_to_file(server *srv, connection *con, plugin_data *p, bu
 	}
 
 	if (ret == 0) {
-		r = write(ofd, p->b->ptr, p->b->used);
+		r = write(ofd, CONST_BUF_LEN(p->b));
 		if (-1 == r) {
 			log_error_write(srv, __FILE__, __LINE__, "sbss", "writing cachefile", p->ofn, "failed:", strerror(errno));
 			ret = -1;
-		} else if ((size_t)r != p->b->used) {
+		} else if ((size_t)r != buffer_string_length(p->b)) {
 			log_error_write(srv, __FILE__, __LINE__, "sbs", "writing cachefile", p->ofn, "failed: not enough bytes written");
 			ret = -1;
 		}
@@ -650,7 +651,7 @@ static int deflate_file_to_buffer(server *srv, connection *con, plugin_data *p, 
 	if (ret != 0) return -1;
 
 	chunkqueue_reset(con->write_queue);
-	chunkqueue_append_mem(con->write_queue, p->b->ptr, p->b->used);
+	chunkqueue_append_buffer(con->write_queue, p->b);
 
 	buffer_reset(con->physical.path);
 

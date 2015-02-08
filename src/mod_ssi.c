@@ -173,32 +173,12 @@ static int ssi_env_add_request_headers(server *srv, connection *con, plugin_data
 		ds = (data_string *)con->request.headers->data[i];
 
 		if (ds->value->used && ds->key->used) {
-			size_t j;
-			buffer_reset(srv->tmp_buf);
-
 			/* don't forward the Authorization: Header */
 			if (0 == strcasecmp(ds->key->ptr, "AUTHORIZATION")) {
 				continue;
 			}
 
-			if (0 != strcasecmp(ds->key->ptr, "CONTENT-TYPE")) {
-				buffer_copy_string_len(srv->tmp_buf, CONST_STR_LEN("HTTP_"));
-				srv->tmp_buf->used--;
-			}
-
-			buffer_prepare_append(srv->tmp_buf, ds->key->used + 2);
-			for (j = 0; j < ds->key->used - 1; j++) {
-				char c = '_';
-				if (light_isalpha(ds->key->ptr[j])) {
-					/* upper-case */
-					c = ds->key->ptr[j] & ~32;
-				} else if (light_isdigit(ds->key->ptr[j])) {
-					/* copy */
-					c = ds->key->ptr[j];
-				}
-				srv->tmp_buf->ptr[srv->tmp_buf->used++] = c;
-			}
-			srv->tmp_buf->ptr[srv->tmp_buf->used] = '\0';
+			buffer_copy_string_encoded_cgi_varnames(srv->tmp_buf, CONST_BUF_LEN(ds->key), 1);
 
 			ssi_env_add(p->ssi_cgi_env, srv->tmp_buf->ptr, ds->value->ptr);
 		}
@@ -210,23 +190,7 @@ static int ssi_env_add_request_headers(server *srv, connection *con, plugin_data
 		ds = (data_string *)con->environment->data[i];
 
 		if (ds->value->used && ds->key->used) {
-			size_t j;
-
-			buffer_reset(srv->tmp_buf);
-			buffer_prepare_append(srv->tmp_buf, ds->key->used + 2);
-
-			for (j = 0; j < ds->key->used - 1; j++) {
-				char c = '_';
-				if (light_isalpha(ds->key->ptr[j])) {
-					/* upper-case */
-					c = ds->key->ptr[j] & ~32;
-				} else if (light_isdigit(ds->key->ptr[j])) {
-					/* copy */
-					c = ds->key->ptr[j];
-				}
-				srv->tmp_buf->ptr[srv->tmp_buf->used++] = c;
-			}
-			srv->tmp_buf->ptr[srv->tmp_buf->used] = '\0';
+			buffer_copy_string_encoded_cgi_varnames(srv->tmp_buf, CONST_BUF_LEN(ds->key), 0);
 
 			ssi_env_add(p->ssi_cgi_env, srv->tmp_buf->ptr, ds->value->ptr);
 		}

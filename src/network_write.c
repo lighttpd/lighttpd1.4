@@ -145,7 +145,7 @@ int network_write_chunkqueue_write(server *srv, connection *con, int fd, chunkqu
 
 			munmap(p, sce->st.st_size);
 #else /* USE_MMAP */
-			buffer_prepare_copy(srv->tmp_buf, toSend);
+			buffer_string_prepare_copy(srv->tmp_buf, toSend);
 
 			if (-1 == lseek(ifd, offset, SEEK_SET)) {
 				log_error_write(srv, __FILE__, __LINE__, "ss", "lseek: ", strerror(errno));

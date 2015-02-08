@@ -97,7 +97,7 @@ static unsigned char * base64_decode(buffer *out, const char *in) {
 
 	size_t in_len = strlen(in);
 
-	buffer_prepare_copy(out, in_len);
+	buffer_string_prepare_copy(out, in_len);
 
 	result = (unsigned char *)out->ptr;
 

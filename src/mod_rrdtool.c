@@ -271,8 +271,8 @@ static int mod_rrdtool_create_rrd(server *srv, plugin_data *p, plugin_config *s)
 		return HANDLER_ERROR;
 	}
 
-	buffer_prepare_copy(p->resp, 4096);
-	if (-1 == (r = safe_read(p->read_fd, p->resp->ptr, p->resp->size))) {
+	buffer_string_prepare_copy(p->resp, 4095);
+	if (-1 == (r = safe_read(p->read_fd, p->resp->ptr, p->resp->size - 1))) {
 		log_error_write(srv, __FILE__, __LINE__, "ss",
 			"rrdtool-read: failed", strerror(errno));
 
@@ -280,6 +280,7 @@ static int mod_rrdtool_create_rrd(server *srv, plugin_data *p, plugin_config *s)
 	}
 
 	p->resp->used = r;
+	p->resp->ptr[p->resp->used++] = '\0';
 
 	if (p->resp->ptr[0] != 'O' ||
 		p->resp->ptr[1] != 'K') {
@@ -434,7 +435,7 @@ TRIGGER_FUNC(mod_rrd_trigger) {
 			return HANDLER_ERROR;
 		}
 
-		buffer_prepare_copy(p->resp, 4096);
+		buffer_string_prepare_copy(p->resp, 4096);
 		if (-1 == (r = safe_read(p->read_fd, p->resp->ptr, p->resp->size - 1))) {
 			p->rrdtool_running = 0;
 
@@ -444,8 +445,8 @@ TRIGGER_FUNC(mod_rrd_trigger) {
 			return HANDLER_ERROR;
 		}
 
-		p->resp->used = r + 1;
-		p->resp->ptr[r] = '\0';
+		p->resp->used = r;
+		p->resp->ptr[p->resp->used++] = '\0';
 
 		if (p->resp->ptr[0] != 'O' ||
 		    p->resp->ptr[1] != 'K') {

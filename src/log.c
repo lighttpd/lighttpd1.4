@@ -332,7 +332,7 @@ static int log_buffer_prepare(buffer *b, server *srv, const char *filename, unsi
 		if (-1 == srv->errorlog_fd) return -1;
 		/* cache the generated timestamp */
 		if (srv->cur_ts != srv->last_generated_debug_ts) {
-			buffer_prepare_copy(srv->ts_debug_str, 255);
+			buffer_string_prepare_copy(srv->ts_debug_str, 255);
 			strftime(srv->ts_debug_str->ptr, srv->ts_debug_str->size - 1, "%Y-%m-%d %H:%M:%S", localtime(&(srv->cur_ts)));
 			srv->ts_debug_str->used = strlen(srv->ts_debug_str->ptr) + 1;
 

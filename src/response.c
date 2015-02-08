@@ -97,7 +97,7 @@ int http_response_write_header(server *srv, connection *con) {
 
 		/* cache the generated timestamp */
 		if (srv->cur_ts != srv->last_generated_date_ts) {
-			buffer_prepare_copy(srv->ts_date_str, 255);
+			buffer_string_prepare_copy(srv->ts_date_str, 255);
 
 			strftime(srv->ts_date_str->ptr, srv->ts_date_str->size - 1,
 				 "%a, %d %b %Y %H:%M:%S GMT", gmtime(&(srv->cur_ts)));
@@ -201,7 +201,7 @@ static void https_add_ssl_entries(connection *con) {
 			}
 
 			buffer_copy_string_len(envds->key, CONST_STR_LEN("SSL_CLIENT_CERT"));
-			buffer_prepare_copy(envds->value, n);
+			buffer_string_prepare_copy(envds->value, n);
 			BIO_read(bio, envds->value->ptr, n);
 			BIO_free(bio);
 			envds->value->ptr[n] = '\0';

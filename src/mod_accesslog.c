@@ -165,10 +165,10 @@ static void accesslog_append_escaped(buffer *dest, buffer *str) {
 
 	/* replaces non-printable chars with \xHH where HH is the hex representation of the byte */
 	/* exceptions: " => \", \ => \\, whitespace chars => \n \t etc. */
-	if (str->used == 0) return;
-	buffer_prepare_append(dest, str->used - 1);
+	if (buffer_string_is_empty(str)) return;
+	buffer_string_prepare_append(dest, buffer_string_length(str));
 
-	for (ptr = start = str->ptr, end = str->ptr + str->used - 1; ptr < end; ptr++) {
+	for (ptr = start = str->ptr, end = str->ptr + buffer_string_length(str); ptr < end; ptr++) {
 		char const c = *ptr;
 		if (c >= ' ' && c <= '~' && c != '"' && c != '\\') {
 			/* nothing to change, add later as one block */
@@ -711,7 +711,7 @@ REQUESTDONE_FUNC(log_access_write) {
 					long scd, hrs, min;
 #endif
 
-					buffer_prepare_copy(p->conf.ts_accesslog_str, 255);
+					buffer_string_prepare_copy(p->conf.ts_accesslog_str, 255);
 #if defined(HAVE_STRUCT_TM_GMTOFF)
 # ifdef HAVE_LOCALTIME_R
 					localtime_r(&(srv->cur_ts), &tm);

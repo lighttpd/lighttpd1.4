@@ -235,7 +235,7 @@ buffer * strftime_cache_get(server *srv, time_t last_mod) {
 	}
 
 	srv->mtime_cache[i].mtime = last_mod;
-	buffer_prepare_copy(srv->mtime_cache[i].str, 1024);
+	buffer_string_prepare_copy(srv->mtime_cache[i].str, 1023);
 	tm = gmtime(&(srv->mtime_cache[i].mtime));
 	srv->mtime_cache[i].str->used = strftime(srv->mtime_cache[i].str->ptr,
 						 srv->mtime_cache[i].str->size - 1,

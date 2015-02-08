@@ -355,7 +355,7 @@ CONNECTION_FUNC(mod_mysql_vhost_handle_docroot) {
 		unsigned long to_len;
 
 		/* 'to' has to be 'from_len * 2 + 1' */
-		buffer_prepare_append(p->tmp_buf, (con->uri.authority->used - 1) * 2 + 1);
+		buffer_string_prepare_append(p->tmp_buf, (con->uri.authority->used - 1) * 2 + 1);
 
 		to_len = mysql_real_escape_string(p->conf.mysql,
 				p->tmp_buf->ptr + p->tmp_buf->used - 1,

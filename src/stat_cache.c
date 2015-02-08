@@ -219,8 +219,7 @@ static int stat_cache_attr_get(buffer *buf, char *name) {
 	int attrlen;
 	int ret;
 
-	attrlen = 1024;
-	buffer_prepare_copy(buf, attrlen);
+	buffer_string_prepare_copy(buf, 1023);
 	attrlen = buf->size - 1;
 	if(0 == (ret = attr_get(name, "Content-Type", buf->ptr, &attrlen, 0))) {
 		buf->used = attrlen + 1;
@@ -230,9 +229,9 @@ static int stat_cache_attr_get(buffer *buf, char *name) {
 }
 #elif defined(HAVE_EXTATTR)
 static int stat_cache_attr_get(buffer *buf, char *name) {
-	ssize_t attrlen = 1024;
+	ssize_t attrlen;
 
-	buffer_prepare_copy(buf, attrlen);
+	buffer_prepare_copy(buf, 1023);
 
 	if (-1 != (attrlen = extattr_get_file(name, EXTATTR_NAMESPACE_USER, "Content-Type", buf->ptr, buf->size - 1))) {
 		buf->used = attrlen + 1;

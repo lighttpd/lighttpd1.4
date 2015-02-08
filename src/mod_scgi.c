@@ -1301,14 +1301,12 @@ static int scgi_env_add(buffer *env, const char *key, size_t key_len, const char
 
 	len = key_len + val_len + 2;
 
-	buffer_prepare_append(env, len);
+	buffer_string_prepare_append(env, len);
 
-	memcpy(env->ptr + env->used, key, key_len);
-	env->ptr[env->used + key_len] = '\0';
-	env->used += key_len + 1;
-	memcpy(env->ptr + env->used, val, val_len);
-	env->ptr[env->used + val_len] = '\0';
-	env->used += val_len + 1;
+	buffer_append_string_len(env, key, key_len);
+	buffer_append_string_len(env, "", 1);
+	buffer_append_string_len(env, val, val_len);
+	buffer_append_string_len(env, "", 1);
 
 	return 0;
 }
@@ -1419,21 +1417,7 @@ static int scgi_env_add_request_headers(server *srv, connection *con, plugin_dat
 		ds = (data_string *)con->request.headers->data[i];
 
 		if (ds->value->used && ds->key->used) {
-			size_t j;
-			buffer_reset(srv->tmp_buf);
-
-			if (0 != strcasecmp(ds->key->ptr, "CONTENT-TYPE")) {
-				buffer_copy_string_len(srv->tmp_buf, CONST_STR_LEN("HTTP_"));
-				srv->tmp_buf->used--;
-			}
-
-			buffer_prepare_append(srv->tmp_buf, ds->key->used + 2);
-			for (j = 0; j < ds->key->used - 1; j++) {
-				srv->tmp_buf->ptr[srv->tmp_buf->used++] =
-					light_isalpha(ds->key->ptr[j]) ?
-					ds->key->ptr[j] & ~32 : '_';
-			}
-			srv->tmp_buf->ptr[srv->tmp_buf->used++] = '\0';
+			buffer_copy_string_encoded_cgi_varnames(srv->tmp_buf, CONST_BUF_LEN(ds->key), 1);
 
 			scgi_env_add(p->scgi_env, CONST_BUF_LEN(srv->tmp_buf), CONST_BUF_LEN(ds->value));
 		}
@@ -1445,16 +1429,7 @@ static int scgi_env_add_request_headers(server *srv, connection *con, plugin_dat
 		ds = (data_string *)con->environment->data[i];
 
 		if (ds->value->used && ds->key->used) {
-			size_t j;
-			buffer_reset(srv->tmp_buf);
-
-			buffer_prepare_append(srv->tmp_buf, ds->key->used + 2);
-			for (j = 0; j < ds->key->used - 1; j++) {
-				srv->tmp_buf->ptr[srv->tmp_buf->used++] =
-					light_isalnum((unsigned char)ds->key->ptr[j]) ?
-					toupper((unsigned char)ds->key->ptr[j]) : '_';
-			}
-			srv->tmp_buf->ptr[srv->tmp_buf->used++] = '\0';
+			buffer_copy_string_encoded_cgi_varnames(srv->tmp_buf, CONST_BUF_LEN(ds->key), 0);
 
 			scgi_env_add(p->scgi_env, CONST_BUF_LEN(srv->tmp_buf), CONST_BUF_LEN(ds->value));
 		}
@@ -1481,7 +1456,7 @@ static int scgi_create_env(server *srv, handler_ctx *hctx) {
 	sock_addr our_addr;
 	socklen_t our_addr_len;
 
-	buffer_prepare_copy(p->scgi_env, 1024);
+	buffer_string_prepare_copy(p->scgi_env, 1023);
 
 	/* CGI-SPEC 6.1.2, FastCGI spec 6.3 and SCGI spec */
 
@@ -1631,9 +1606,9 @@ static int scgi_create_env(server *srv, handler_ctx *hctx) {
 
 	b = buffer_init();
 
-	buffer_append_int(b, p->scgi_env->used);
+	buffer_append_int(b, buffer_string_length(p->scgi_env));
 	buffer_append_string_len(b, CONST_STR_LEN(":"));
-	buffer_append_string_len(b, (const char *)p->scgi_env->ptr, p->scgi_env->used);
+	buffer_append_string_buffer(b, p->scgi_env);
 	buffer_append_string_len(b, CONST_STR_LEN(","));
 
 	hctx->wb->bytes_in += b->used - 1;
@@ -1759,7 +1734,7 @@ static int scgi_demux_response(server *srv, handler_ctx *hctx) {
 	while(1) {
 		int n;
 
-		buffer_prepare_copy(hctx->response, 1024);
+		buffer_string_prepare_copy(hctx->response, 1023);
 		if (-1 == (n = read(hctx->fd, hctx->response->ptr, hctx->response->size - 1))) {
 			if (errno == EAGAIN || errno == EINTR) {
 				/* would block, wait for signal */

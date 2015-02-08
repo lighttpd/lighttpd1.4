@@ -49,22 +49,19 @@ void buffer_reset(buffer *b); /* b can be NULL */
 /* reset b. if NULL != b && NULL != src, move src content to b. reset src. */
 void buffer_move(buffer *b, buffer *src);
 
-/* prepare for size bytes in the buffer (b->size > size), destroys content
- * (sets used = 0 and ptr[0] = 0). allocates storage for terminating 0.
+/* make sure buffer is large enough to store a string of given size
+ * and a terminating zero.
+ * sets b to an empty string, and may drop old content.
  * @return b->ptr
  */
-char* buffer_prepare_copy(buffer *b, size_t size);
-
-/* prepare for appending size bytes to the buffer
- * allocates storage for terminating 0; if used > 0 assumes ptr[used-1] == 0,
- * i.e. doesn't allocate another byte for terminating 0.
- * @return (b->used > 0 ? b->ptr + b->used - 1 : b->ptr) - first new character
- */
-char* buffer_prepare_append(buffer *b, size_t size);
-
-/* similar to buffer_prepare_copy(b, size), but sets b->used = 1 */
 char* buffer_string_prepare_copy(buffer *b, size_t size);
-/* similar to buffer_prepare_append(b, size), but sets b->used = 1 if used was b->0 before */
+
+/* allocate buffer large enough to be able to append a string of given size
+ * if b was empty (used == 0) it will contain an empty string (used == 1)
+ * afterwards
+ * "used" data is preserved; if not empty buffer must contain a
+ * zero terminated string.
+ */
 char* buffer_string_prepare_append(buffer *b, size_t size);
 
 /* use after prepare_(copy,append) when you have written data to the buffer
@@ -122,6 +119,9 @@ typedef enum {
 } buffer_encoding_t;
 
 void buffer_append_string_encoded(buffer *b, const char *s, size_t s_len, buffer_encoding_t encoding);
+
+/* to upper case, replace non alpha-numerics with '_'; if is_http_header prefix with "HTTP_" unless s is "content-type" */
+void buffer_copy_string_encoded_cgi_varnames(buffer *b, const char *s, size_t s_len, int is_http_header);
 
 void buffer_urldecode_path(buffer *url);
 void buffer_urldecode_query(buffer *url);

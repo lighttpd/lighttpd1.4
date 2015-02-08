@@ -624,15 +624,9 @@ static int proxy_demux_response(server *srv, handler_ctx *hctx) {
 	}
 
 	if (b > 0) {
-		if (hctx->response->used == 0) {
-			/* avoid too small buffer */
-			buffer_prepare_append(hctx->response, b + 1);
-			hctx->response->used = 1;
-		} else {
-			buffer_prepare_append(hctx->response, b);
-		}
+		buffer_string_prepare_append(hctx->response, b);
 
-		if (-1 == (r = read(hctx->fd, hctx->response->ptr + hctx->response->used - 1, b))) {
+		if (-1 == (r = read(hctx->fd, hctx->response->ptr + buffer_string_length(hctx->response), buffer_string_space(hctx->response)))) {
 			if (errno == EAGAIN) return 0;
 			log_error_write(srv, __FILE__, __LINE__, "sds",
 					"unexpected end-of-file (perhaps the proxy process died):",
@@ -653,7 +647,7 @@ static int proxy_demux_response(server *srv, handler_ctx *hctx) {
 
 		if (0 == con->got_response) {
 			con->got_response = 1;
-			buffer_prepare_copy(hctx->response_header, 128);
+			buffer_string_prepare_copy(hctx->response_header, 1023);
 		}
 
 		if (0 == con->file_started) {

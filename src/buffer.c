@@ -83,7 +83,7 @@ static size_t buffer_align_size(size_t size) {
 	return size + align;
 }
 
-char* buffer_prepare_copy(buffer *b, size_t size) {
+static char* buffer_prepare_copy(buffer *b, size_t size) {
 	force_assert(NULL != b);
 
 	/* also allocate space for terminating 0 */
@@ -109,36 +109,6 @@ char* buffer_prepare_copy(buffer *b, size_t size) {
 	return b->ptr;
 }
 
-char* buffer_prepare_append(buffer *b, size_t size) {
-	size_t req_size;
-	force_assert(NULL != b);
-
-	if (buffer_string_is_empty(b)) {
-		size_t old_used = b->used; /* either 0 or 1 */
-		/* just prepare copy (free+malloc instead of realloc) */
-		buffer_prepare_copy(b, size);
-		b->used = old_used; /* buffer_prepare_append mustn't modify b->used */
-		return b->ptr;
-	}
-
-	/* not empty, b->used already includes a terminating 0 */
-	req_size = b->used + size;
-
-	/* check for overflow: unsigned overflow is defined to wrap around */
-	force_assert(req_size >= b->used);
-
-	if (req_size > b->size) {
-		char *ptr;
-		b->size = buffer_align_size(req_size);
-
-		ptr = realloc(b->ptr, b->size);
-		force_assert(NULL != ptr);
-		b->ptr = ptr;
-	}
-
-	return b->ptr + b->used - 1;
-}
-
 char* buffer_string_prepare_copy(buffer *b, size_t size) {
 	force_assert(NULL != b);
 
@@ -151,11 +121,28 @@ char* buffer_string_prepare_copy(buffer *b, size_t size) {
 char* buffer_string_prepare_append(buffer *b, size_t size) {
 	force_assert(NULL !=  b);
 
-	if (0 == b->used) {
+	if (buffer_string_is_empty(b)) {
 		return buffer_string_prepare_copy(b, size);
 	} else {
+		/* not empty, b->used already includes a terminating 0 */
+		size_t req_size = b->used + size;
+
+		/* check for overflow: unsigned overflow is defined to wrap around */
+		force_assert(req_size >= b->used);
+
+		/* only append to 0-terminated string */
 		force_assert('\0' == b->ptr[b->used - 1]);
-		return buffer_prepare_append(b, size);
+
+		if (req_size > b->size) {
+			char *ptr;
+			b->size = buffer_align_size(req_size);
+
+			ptr = realloc(b->ptr, b->size);
+			force_assert(NULL != ptr);
+			b->ptr = ptr;
+		}
+
+		return b->ptr + b->used - 1;
 	}
 }
 
@@ -186,7 +173,7 @@ void buffer_copy_string_len(buffer *b, const char *s, size_t s_len) {
 	force_assert(NULL != b);
 	force_assert(NULL != s || s_len == 0);
 
-	buffer_prepare_copy(b, s_len);
+	buffer_string_prepare_copy(b, s_len);
 
 	if (0 != s_len) memcpy(b->ptr, s, s_len);
 
@@ -222,12 +209,11 @@ void buffer_append_string_len(buffer *b, const char *s, size_t s_len) {
 	force_assert(NULL != b);
 	force_assert(NULL != s || s_len == 0);
 
-	target_buf = buffer_prepare_append(b, s_len);
+	target_buf = buffer_string_prepare_append(b, s_len);
 
-	/* only append to 0-terminated string */
-	force_assert('\0' == *target_buf);
+	if (0 == s_len) return; /* nothing to append */
 
-	if (s_len > 0) memcpy(target_buf, s, s_len);
+	memcpy(target_buf, s, s_len);
 
 	buffer_commit(b, s_len);
 }
@@ -667,7 +653,7 @@ void buffer_append_string_encoded(buffer *b, const char *s, size_t s_len, buffer
 		}
 	}
 
-	d = (unsigned char*) buffer_prepare_append(b, d_len);
+	d = (unsigned char*) buffer_string_prepare_append(b, d_len);
 	buffer_commit(b, d_len); /* fill below */
 	force_assert('\0' == *d);
 
@@ -704,6 +690,35 @@ void buffer_append_string_encoded(buffer *b, const char *s, size_t s_len, buffer
 	}
 }
 
+void buffer_copy_string_encoded_cgi_varnames(buffer *b, const char *s, size_t s_len, int is_http_header) {
+	size_t i, j;
+
+	force_assert(NULL != b);
+	force_assert(NULL != s || 0 == s_len);
+
+	buffer_reset(b);
+
+	if (is_http_header && NULL != s && 0 != strcasecmp(s, "CONTENT-TYPE")) {
+		buffer_string_prepare_append(b, s_len + 5);
+		buffer_copy_string_len(b, CONST_STR_LEN("HTTP_"));
+	} else {
+		buffer_string_prepare_append(b, s_len);
+	}
+
+	j = buffer_string_length(b);
+	for (i = 0; i < s_len; ++i) {
+		unsigned char cr = s[i];
+		if (light_isalpha(cr)) {
+			/* upper-case */
+			cr &= ~32;
+		} else if (!light_isdigit(cr)) {
+			cr = '_';
+		}
+		b->ptr[j++] = cr;
+	}
+	b->used = j;
+	b->ptr[b->used++] = '\0';
+}
 
 /* decodes url-special-chars inplace.
  * replaces non-printable characters with '_'
@@ -790,7 +805,7 @@ void buffer_path_simplify(buffer *dest, buffer *src)
 	force_assert(NULL != dest && NULL != src);
 
 	if (buffer_string_is_empty(src)) {
-		buffer_copy_string_len(dest, NULL, 0);
+		buffer_string_prepare_copy(dest, 0);
 		return;
 	}
 
@@ -798,9 +813,9 @@ void buffer_path_simplify(buffer *dest, buffer *src)
 
 	/* might need one character more for the '/' prefix */
 	if (src == dest) {
-		buffer_prepare_append(dest, 1);
+		buffer_string_prepare_append(dest, 1);
 	} else {
-		buffer_prepare_copy(dest, buffer_string_length(src) + 1);
+		buffer_string_prepare_copy(dest, buffer_string_length(src) + 1);
 	}
 
 #if defined(__WIN32) || defined(__CYGWIN__)

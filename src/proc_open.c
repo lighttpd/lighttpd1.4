@@ -280,13 +280,13 @@ static void proc_read_fd_to_buffer(int fd, buffer *b) {
 	ssize_t s;
 
 	for (;;) {
-		buffer_prepare_append(b, 512);
-		if ((s = read(fd, (void *)(b->ptr + b->used), 512 - 1)) <= 0) {
+		buffer_string_prepare_append(b, 1024);
+		if ((s = read(fd, (void *)(b->ptr + buffer_string_length(b)), buffer_string_space(b))) <= 0) {
 			break;
 		}
 		b->used += s;
+		b->ptr[b->used-1] = '\0';
 	}
-	b->ptr[b->used] = '\0';
 }
 /* }}} */
 /* {{{ proc_open_buffer */
