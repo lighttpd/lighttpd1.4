@@ -528,19 +528,27 @@ if test "$WITH_LUA" != "no"; then
  AC_SUBST(LUA_LIBS)
 fi
 
+dnl search for crypt_r and (fallback) for crypt
 save_LIBS=$LIBS
-AC_SEARCH_LIBS(crypt,crypt,[
+LIBS=
+AC_SEARCH_LIBS([crypt_r],[crypt],[
+  AC_DEFINE([HAVE_CRYPT_R], [1], [crypt_r])
   AC_CHECK_HEADERS([crypt.h],[
-    AC_DEFINE([HAVE_CRYPT_H], [1])
+    AC_DEFINE([HAVE_CRYPT_H], [1], [crypt.h])
   ])
 
-  AC_DEFINE([HAVE_LIBCRYPT], [1], [libcrypt])
-  if test "$ac_cv_search_crypt" != no; then
-    test "$ac_cv_search_crypt" = "none required" || CRYPT_LIB="$ac_cv_search_crypt"
-  fi
+  CRYPT_LIB=$LIBS
+],[
+  AC_SEARCH_LIBS([crypt],[crypt],[
+    AC_CHECK_HEADERS([crypt.h],[
+      AC_DEFINE([HAVE_CRYPT_H], [1], [crypt.h])
+    ])
+
+    CRYPT_LIB=$LIBS
+  ])
 ])
 LIBS=$save_LIBS
-AC_SUBST(CRYPT_LIB)
+AC_SUBST([CRYPT_LIB])
 
 save_LIBS=$LIBS
 AC_SEARCH_LIBS(sendfilev,sendfile,[

@@ -115,7 +115,6 @@
 
 /* Functions */
 #cmakedefine  HAVE_CHROOT
-#cmakedefine  HAVE_CRYPT
 #cmakedefine  HAVE_EPOLL_CTL
 #cmakedefine  HAVE_FORK
 #cmakedefine  HAVE_GETRLIMIT
@@ -150,6 +149,8 @@
 /* libcrypt */
 #cmakedefine  HAVE_CRYPT_H
 #cmakedefine  HAVE_LIBCRYPT
+#cmakedefine  HAVE_CRYPT
+#cmakedefine  HAVE_CRYPT_R
 
 /* fastcgi */
 #cmakedefine HAVE_FASTCGI_H

@@ -669,15 +669,23 @@ static int http_auth_basic_password_compare(server *srv, mod_auth_plugin_data *p
 			return (strcmp(sample, password->ptr) == 0) ? 0 : 1;
 #endif
 		} else {
-#ifdef HAVE_CRYPT
+#if defined(HAVE_CRYPT_R) || defined(HAVE_CRYPT)
 			char *crypted;
+#if defined(HAVE_CRYPT_R)
+			struct crypt_data crypt_tmp_data;
+			crypt_tmp_data.initialized = 0;
+#endif
 
 			/* a simple DES password is 2 + 11 characters. everything else should be longer. */
 			if (buffer_string_length(password) < 13) {
 				return -1;
 			}
 
+#if defined(HAVE_CRYPT_R)
+			if (0 == (crypted = crypt_r(pw, password->ptr, &crypt_tmp_data))) {
+#else
 			if (0 == (crypted = crypt(pw, password->ptr))) {
+#endif
 				/* crypt failed. */
 				return -1;
 			}
