@@ -56,9 +56,9 @@ int config_insert_values_internal(server *srv, array *ca, const config_values_t 
 
 						array_insert_unique(cv[i].destination, (data_unset *)ds);
 					} else {
-						log_error_write(srv, __FILE__, __LINE__, "sssd",
-								"the key of an array can only be a string or a integer, variable:",
-								cv[i].key, "type:", da->value->data[j]->type);
+						log_error_write(srv, __FILE__, __LINE__, "sssbsd",
+								"the value of an array can only be a string, variable:",
+								cv[i].key, "[", da->value->data[j]->key, "], type:", da->value->data[j]->type);
 
 						return -1;
 					}
