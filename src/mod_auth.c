@@ -60,7 +60,7 @@ FREE_FUNC(mod_auth_free) {
 		for (i = 0; i < srv->config_context->used; i++) {
 			mod_auth_plugin_config *s = p->config_storage[i];
 
-			if (!s) continue;
+			if (NULL == s) continue;
 
 			array_free(s->auth_require);
 			buffer_free(s->auth_plain_groupfile);

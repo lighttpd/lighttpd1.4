@@ -65,6 +65,8 @@ FREE_FUNC(mod_rrd_free) {
 		for (i = 0; i < srv->config_context->used; i++) {
 			plugin_config *s = p->config_storage[i];
 
+			if (NULL == s) continue;
+
 			buffer_free(s->path_rrdtool_bin);
 			buffer_free(s->path_rrd);
 

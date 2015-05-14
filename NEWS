@@ -18,6 +18,7 @@ NEWS
   * major refactoring of internal buffer/chunk handling
   * [mod_auth] use crypt_r instead of crypt if available
   * fix error message for T_CONFIG_ARRAY config values if an entry value is not a string
+  * fix segfaults in many plugins if they failed configuration
 
 - 1.4.35 - 2014-03-12
   * [network/ssl] fix build error if TLSEXT is disabled

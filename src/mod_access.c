@@ -40,6 +40,8 @@ FREE_FUNC(mod_access_free) {
 		for (i = 0; i < srv->config_context->used; i++) {
 			plugin_config *s = p->config_storage[i];
 
+			if (NULL == s) continue;
+
 			array_free(s->access_deny);
 
 			free(s);

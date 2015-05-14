@@ -414,7 +414,7 @@ FREE_FUNC(mod_accesslog_free) {
 		for (i = 0; i < srv->config_context->used; i++) {
 			plugin_config *s = p->config_storage[i];
 
-			if (!s) continue;
+			if (NULL == s) continue;
 
 			if (!buffer_string_is_empty(s->access_logbuffer)) {
 				if (s->log_access_fd != -1) {

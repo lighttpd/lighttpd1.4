@@ -71,7 +71,7 @@ FREE_FUNC(mod_magnet_free) {
 		for (i = 0; i < srv->config_context->used; i++) {
 			plugin_config *s = p->config_storage[i];
 
-			if (!s) continue;
+			if (NULL == s) continue;
 
 			array_free(s->url_raw);
 			array_free(s->physical_path);

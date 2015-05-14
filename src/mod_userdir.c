@@ -60,6 +60,8 @@ FREE_FUNC(mod_userdir_free) {
 		for (i = 0; i < srv->config_context->used; i++) {
 			plugin_config *s = p->config_storage[i];
 
+			if (NULL == s) continue;
+
 			array_free(s->include_user);
 			array_free(s->exclude_user);
 			buffer_free(s->path);

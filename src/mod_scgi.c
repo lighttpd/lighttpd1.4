@@ -554,7 +554,7 @@ FREE_FUNC(mod_scgi_free) {
 			plugin_config *s = p->config_storage[i];
 			scgi_exts *exts;
 
-			if (!s) continue;
+			if (NULL == s) continue;
 
 			exts = s->exts;
 

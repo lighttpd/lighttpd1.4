@@ -69,6 +69,8 @@ FREE_FUNC(mod_ssi_free) {
 		for (i = 0; i < srv->config_context->used; i++) {
 			plugin_config *s = p->config_storage[i];
 
+			if (NULL == s) continue;
+
 			array_free(s->ssi_extension);
 			buffer_free(s->content_type);
 

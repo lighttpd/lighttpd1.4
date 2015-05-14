@@ -693,7 +693,7 @@ FREE_FUNC(mod_fastcgi_free) {
 			plugin_config *s = p->config_storage[i];
 			fcgi_exts *exts;
 
-			if (!s) continue;
+			if (NULL == s) continue;
 
 			exts = s->exts;
 

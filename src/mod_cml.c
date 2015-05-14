@@ -43,6 +43,8 @@ FREE_FUNC(mod_cml_free) {
 		for (i = 0; i < srv->config_context->used; i++) {
 			plugin_config *s = p->config_storage[i];
 
+			if (NULL == s) continue;
+
 			buffer_free(s->ext);
 
 			buffer_free(s->mc_namespace);

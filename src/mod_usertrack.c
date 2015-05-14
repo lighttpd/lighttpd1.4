@@ -48,6 +48,8 @@ FREE_FUNC(mod_usertrack_free) {
 		for (i = 0; i < srv->config_context->used; i++) {
 			plugin_config *s = p->config_storage[i];
 
+			if (NULL == s) continue;
+
 			buffer_free(s->cookie_name);
 			buffer_free(s->cookie_domain);
 

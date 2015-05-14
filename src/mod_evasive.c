@@ -58,6 +58,8 @@ FREE_FUNC(mod_evasive_free) {
 		for (i = 0; i < srv->config_context->used; i++) {
 			plugin_config *s = p->config_storage[i];
 
+			if (NULL == s) continue;
+
 			free(s);
 		}
 		free(p->config_storage);

@@ -146,6 +146,9 @@ FREE_FUNC(mod_rewrite_free) {
 		size_t i;
 		for (i = 0; i < srv->config_context->used; i++) {
 			plugin_config *s = p->config_storage[i];
+
+			if (NULL == s) continue;
+
 			rewrite_rule_buffer_free(s->rewrite);
 			rewrite_rule_buffer_free(s->rewrite_NF);
 

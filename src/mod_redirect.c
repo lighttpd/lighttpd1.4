@@ -47,6 +47,8 @@ FREE_FUNC(mod_redirect_free) {
 		for (i = 0; i < srv->config_context->used; i++) {
 			plugin_config *s = p->config_storage[i];
 
+			if (NULL == s) continue;
+
 			pcre_keyvalue_buffer_free(s->redirect);
 
 			free(s);

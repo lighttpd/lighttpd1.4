@@ -90,7 +90,7 @@ FREE_FUNC(mod_compress_free) {
 		for (i = 0; i < srv->config_context->used; i++) {
 			plugin_config *s = p->config_storage[i];
 
-			if (!s) continue;
+			if (NULL == s) continue;
 
 			array_free(s->compress);
 			buffer_free(s->compress_cache_dir);

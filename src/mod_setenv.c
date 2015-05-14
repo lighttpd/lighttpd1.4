@@ -67,6 +67,8 @@ FREE_FUNC(mod_setenv_free) {
 		for (i = 0; i < srv->config_context->used; i++) {
 			plugin_config *s = p->config_storage[i];
 
+			if (NULL == s) continue;
+
 			array_free(s->request_header);
 			array_free(s->response_header);
 			array_free(s->environment);
