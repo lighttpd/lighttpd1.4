@@ -267,12 +267,12 @@ static void log_buffer_append_printf(buffer *out, const char *fmt, va_list ap) {
 		switch(*fmt) {
 		case 's':           /* string */
 			s = va_arg(ap, char *);
-			buffer_append_string(out, s);
+			buffer_append_string_c_escaped(out, s, (NULL != s) ? strlen(s) : 0);
 			buffer_append_string_len(out, CONST_STR_LEN(" "));
 			break;
 		case 'b':           /* buffer */
 			b = va_arg(ap, buffer *);
-			buffer_append_string_buffer(out, b);
+			buffer_append_string_c_escaped(out, CONST_BUF_LEN(b));
 			buffer_append_string_len(out, CONST_STR_LEN(" "));
 			break;
 		case 'd':           /* int */
@@ -293,11 +293,11 @@ static void log_buffer_append_printf(buffer *out, const char *fmt, va_list ap) {
 			break;
 		case 'S':           /* string */
 			s = va_arg(ap, char *);
-			buffer_append_string(out, s);
+			buffer_append_string_c_escaped(out, s, (NULL != s) ? strlen(s) : 0);
 			break;
 		case 'B':           /* buffer */
 			b = va_arg(ap, buffer *);
-			buffer_append_string_buffer(out, b);
+			buffer_append_string_c_escaped(out, CONST_BUF_LEN(b));
 			break;
 		case 'D':           /* int */
 			d = va_arg(ap, int);

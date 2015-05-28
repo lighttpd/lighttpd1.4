@@ -133,6 +133,9 @@ typedef enum {
 
 void buffer_append_string_encoded(buffer *b, const char *s, size_t s_len, buffer_encoding_t encoding);
 
+/* escape non-printable characters; simple escapes for \t, \r, \n; fallback to \xCC */
+void buffer_append_string_c_escaped(buffer *b, const char *s, size_t s_len);
+
 /* to upper case, replace non alpha-numerics with '_'; if is_http_header prefix with "HTTP_" unless s is "content-type" */
 void buffer_copy_string_encoded_cgi_varnames(buffer *b, const char *s, size_t s_len, int is_http_header);
 
@@ -164,7 +167,7 @@ static inline void buffer_append_slash(buffer *b); /* append '/' no non-empty st
 	buffer_copy_string_len(x, y, sizeof(y) - 1)
 
 #define CONST_STR_LEN(x) x, (x) ? sizeof(x) - 1 : 0
-#define CONST_BUF_LEN(x) (x)->ptr, buffer_string_length(x)
+#define CONST_BUF_LEN(x) ((x) ? (x)->ptr : NULL), buffer_string_length(x)
 
 
 #define UNUSED(x) ( (void)(x) )

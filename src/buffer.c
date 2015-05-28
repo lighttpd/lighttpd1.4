@@ -731,6 +731,65 @@ void buffer_append_string_encoded(buffer *b, const char *s, size_t s_len, buffer
 	}
 }
 
+void buffer_append_string_c_escaped(buffer *b, const char *s, size_t s_len) {
+	unsigned char *ds, *d;
+	size_t d_len, ndx;
+
+	force_assert(NULL != b);
+	force_assert(NULL != s || 0 == s_len);
+
+	if (0 == s_len) return;
+
+	/* count to-be-encoded-characters */
+	for (ds = (unsigned char *)s, d_len = 0, ndx = 0; ndx < s_len; ds++, ndx++) {
+		if ((*ds < 0x20) /* control character */
+				|| (*ds >= 0x7f)) { /* DEL + non-ASCII characters */
+			switch (*ds) {
+			case '\t':
+			case '\r':
+			case '\n':
+				d_len += 2;
+				break;
+			default:
+				d_len += 4; /* \xCC */
+				break;
+			}
+		} else {
+			d_len++;
+		}
+	}
+
+	d = (unsigned char*) buffer_string_prepare_append(b, d_len);
+	buffer_commit(b, d_len); /* fill below */
+	force_assert('\0' == *d);
+
+	for (ds = (unsigned char *)s, d_len = 0, ndx = 0; ndx < s_len; ds++, ndx++) {
+		if ((*ds < 0x20) /* control character */
+				|| (*ds >= 0x7f)) { /* DEL + non-ASCII characters */
+			d[d_len++] = '\\';
+			switch (*ds) {
+			case '\t':
+				d[d_len++] = 't';
+				break;
+			case '\r':
+				d[d_len++] = 'r';
+				break;
+			case '\n':
+				d[d_len++] = 'n';
+				break;
+			default:
+				d[d_len++] = 'x';
+				d[d_len++] = hex_chars[((*ds) >> 4) & 0x0F];
+				d[d_len++] = hex_chars[(*ds) & 0x0F];
+				break;
+			}
+		} else {
+			d[d_len++] = *ds;
+		}
+	}
+}
+
+
 void buffer_copy_string_encoded_cgi_varnames(buffer *b, const char *s, size_t s_len, int is_http_header) {
 	size_t i, j;
 

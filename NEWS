@@ -19,6 +19,7 @@ NEWS
   * [mod_auth] use crypt_r instead of crypt if available
   * fix error message for T_CONFIG_ARRAY config values if an entry value is not a string
   * fix segfaults in many plugins if they failed configuration
+  * escape all strings for logging (fixes #2646 log file injection, reported by Jaanus Kääp)
 
 - 1.4.35 - 2014-03-12
   * [network/ssl] fix build error if TLSEXT is disabled
@@ -557,10 +558,10 @@ NEWS
   * ignore empty packets from STDERR stream. #998
   * fix a crash for files with an mtime of 0 reported by cubiq on irc [1519]
     CVE-2007-1870
-  * allow empty passwords with ldap (J�rg Sonnenberger) [1516]
+  * allow empty passwords with ldap (Jörg Sonnenberger) [1516]
   * mod_scgi.c segfault fix #964 [1501]
   * Added round-robin support to mod_fastcgi [1500]
-  * Handle DragonFlyBSD the same way as Freebsd (J�rg Sonnenberger) [1492,1676]
+  * Handle DragonFlyBSD the same way as Freebsd (Jörg Sonnenberger) [1492,1676]
   * added now and weeks support to mod_expire. #943
   * fix cpu hog in certain requests [1473] CVE-2007-1869
   * fix for handling hostnames with trailing dot [1406]
