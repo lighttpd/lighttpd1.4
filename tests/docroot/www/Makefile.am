@@ -1,5 +1,27 @@
-EXTRA_DIST=cgi.php cgi.pl index.html index.txt phpinfo.php \
-	   redirect.php cgi-pathinfo.pl get-env.php get-server-env.php \
-	   nph-status.pl prefix.fcgi get-header.pl ssi.shtml get-post-len.pl \
-	   exec-date.shtml 404.fcgi 404.html 404.pl send404.pl crlfcrash.pl sendfile.php
-SUBDIRS=go indexfile expire
+EXTRA_DIST=\
+	404.fcgi \
+	404.html \
+	404.pl \
+	cgi-pathinfo.pl \
+	cgi.php \
+	cgi.pl \
+	crlfcrash.pl \
+	exec-date.shtml \
+	get-env.php \
+	get-header.pl \
+	get-post-len.pl \
+	get-server-env.php \
+	index.html \
+	index.txt \
+	ip.pl \
+	nph-status.pl \
+	phpinfo.php \
+	prefix.fcgi \
+	redirect.php \
+	send404.pl \
+	sendfile.php \
+	ssi.shtml
+SUBDIRS=\
+	expire \
+	go \
+	indexfile

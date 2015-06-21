@@ -1,6 +1,6 @@
 SUBDIRS=src doc tests
 
-EXTRA_DIST=autogen.sh SConstruct
+EXTRA_DIST=autogen.sh SConstruct CMakeLists.txt cmake
 
 ACLOCAL_AMFLAGS = -I m4
 
