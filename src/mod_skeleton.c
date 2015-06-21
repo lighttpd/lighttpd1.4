@@ -65,7 +65,7 @@ INIT_FUNC(mod_skeleton_init) {
 	return p;
 }
 
-/* detroy the plugin data */
+/* destroy the plugin data */
 FREE_FUNC(mod_skeleton_free) {
 	plugin_data *p = p_d;
 

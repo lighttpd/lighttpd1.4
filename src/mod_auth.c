@@ -279,7 +279,7 @@ static handler_t mod_auth_uri_handler(server *srv, connection *con, void *p_d) {
 				}
 			} else {
 				log_error_write(srv, __FILE__, __LINE__, "ss",
-						"unknown authentification type:",
+						"unknown authentication type:",
 						http_authorization);
 			}
 		}
