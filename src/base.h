@@ -28,6 +28,11 @@
 #include "etag.h"
 
 
+#ifdef HAVE_I2P
+# include "libsam3.h"
+#endif
+
+
 #if defined HAVE_LIBSSL && defined HAVE_OPENSSL_SSL_H
 # define USE_OPENSSL
 # include <openssl/opensslconf.h>
@@ -571,6 +576,11 @@ typedef struct server_socket {
 	sock_addr addr;
 	int       fd;
 	int       fde_ndx;
+
+#ifdef HAVE_I2P
+	unsigned short is_i2p;
+	Sam3Session    i2p_ses;
+#endif
 
 	unsigned short is_ssl;
 

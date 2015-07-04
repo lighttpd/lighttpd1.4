@@ -59,6 +59,10 @@
 # include <sys/prctl.h>
 #endif
 
+#ifdef HAVE_I2P
+# include "libsam3.h"
+#endif
+
 #ifdef USE_OPENSSL
 # include <openssl/err.h> 
 #endif
@@ -1743,6 +1747,11 @@ int main (int argc, char **argv) {
 						fdevent_unregister(srv->ev, srv_socket->fd);
 						close(srv_socket->fd);
 						srv_socket->fd = -1;
+#ifdef HAVE_I2P
+						if (srv_socket->is_i2p) {
+							sam3CloseSession(&(srv_socket->i2p_ses));
+						}
+#endif
 
 						/* network_close() will cleanup after us */
 					} else {

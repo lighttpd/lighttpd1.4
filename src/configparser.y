@@ -629,7 +629,8 @@ context ::= DOLLAR SRVVARNAME(B) LBRACKET stringop(C) RBRACKET cond(E) expressio
       else if (COMP_SERVER_SOCKET == dc->comp) {
         /*(redundant with parsing in network.c; not actually required here)*/
         if (rvalue->ptr[0] != ':' /*(network.c special-cases ":" and "[]")*/
-            && !(rvalue->ptr[0] == '[' && rvalue->ptr[1] == ']')) {
+            && !(rvalue->ptr[0] == '[' && rvalue->ptr[1] == ']')
+            && strncmp(rvalue->ptr, "i2p:", 4) != 0) {
           if (http_request_host_normalize(rvalue)) {
             fprintf(stderr, "invalid IP addr: %s\n", rvalue->ptr);
             ctx->ok = 0;

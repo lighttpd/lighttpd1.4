@@ -847,6 +847,23 @@ if test x$ipv6 = xtrue; then
   fi
 fi
 
+dnl Check for I2P support
+
+AC_MSG_CHECKING(for I2P support)
+AC_ARG_ENABLE(i2p,
+ AC_HELP_STRING([--enable-i2p],[enable I2P support]),
+ [case "${enableval}" in
+   yes) i2p=true ;;
+    no) i2p=false ;;
+     *) AC_MSG_ERROR(bad value ${enableval} for --enable-i2p) ;;
+  esac],[i2p=false])
+AC_MSG_RESULT($enableval)
+
+if test x$i2p = xtrue; then
+  AC_DEFINE(HAVE_I2P,1,[Whether to enable I2P support])
+fi
+AM_CONDITIONAL(BUILD_WITH_I2P, test x$i2p = xtrue)
+
 # disable mmap by default; if a mmapped file gets truncated, the process gets a SIGBUS signal
 # on reading the truncated area which we can't handle (yet).
 # lighttpd may always use mmap with files it owns (created tmp files)
@@ -1018,6 +1035,13 @@ fi
 
 features="network-ipv6"
 if test "$ac_cv_ipv6_support" = yes; then
+	enable_feature="$enable_feature $features"
+else
+	disable_feature="$disable_feature $features"
+fi
+
+features="network-i2p"
+if test "x$i2p" = xtrue; then
 	enable_feature="$enable_feature $features"
 else
 	disable_feature="$disable_feature $features"

@@ -83,6 +83,10 @@ common_src=base64.c buffer.c log.c \
 src = server.c response.c connections.c network.c \
 	configfile.c configparser.c request.c proc_open.c
 
+if BUILD_WITH_I2P
+src += libsam3.c
+endif
+
 lib_LTLIBRARIES =
 
 if NO_RDYNAMIC
@@ -340,6 +344,10 @@ hdr = server.h base64.h buffer.h network.h log.h keyvalue.h \
 	safe_memclear.h splaytree.h proc_open.h status_counter.h \
 	mod_magnet_cache.h \
 	version.h
+
+if BUILD_WITH_I2P
+hdr += libsam3.h
+endif
 
 DEFS= @DEFS@ -DHAVE_VERSION_H -DLIBRARY_DIR="\"$(libdir)\"" -DSBIN_DIR="\"$(sbindir)\""
 

@@ -11,6 +11,9 @@
 #include "network_backends.h"
 #include "sys-mmap.h"
 #include "sys-socket.h"
+#ifdef HAVE_I2P
+# include "libsam3.h"
+#endif
 
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -21,6 +24,7 @@
 #include <unistd.h>
 #include <string.h>
 #include <stdlib.h>
+#include <stdio.h>
 #include <assert.h>
 
 #ifdef USE_OPENSSL
@@ -178,6 +182,9 @@ static int network_server_init(server *srv, buffer *host_token, specific_config 
 	socklen_t addr_len;
 	server_socket *srv_socket;
 	unsigned int port = 0;
+	const char *i2p_keyfile;
+	char *hp;
+	FILE *fl;
 	const char *host;
 	buffer *b;
 	int err;
@@ -202,6 +209,9 @@ static int network_server_init(server *srv, buffer *host_token, specific_config 
 	srv_socket->addr.plain.sa_family = AF_INET; /* default */
 	srv_socket->fd = -1;
 	srv_socket->fde_ndx = -1;
+#ifdef HAVE_I2P
+	srv_socket->is_i2p = 0;
+#endif
 
 	srv_socket->srv_token = buffer_init();
 	buffer_copy_buffer(srv_socket->srv_token, host_token);
@@ -210,6 +220,43 @@ static int network_server_init(server *srv, buffer *host_token, specific_config 
 	buffer_copy_buffer(b, host_token);
 
 	host = b->ptr;
+
+	if (strncmp(host, "i2p:", 4) == 0) {
+		/* host is an I2P socket */
+#ifdef HAVE_I2P
+		/* i2p:keyfile:address:port */
+		i2p_keyfile = host + 4;
+
+		if (NULL == (hp = strchr(i2p_keyfile, ':'))) {
+			log_error_write(srv, __FILE__, __LINE__, "sb", "value of $SERVER[\"socket\"] has to be \"i2p:keyfile:ip:port\".", b);
+
+			goto error_free_socket;
+		}
+
+		*(hp++) = '\0';
+		host = hp;
+
+		srv_socket->is_i2p = 1;
+
+		log_error_write(srv, __FILE__, __LINE__, "s", "Creating SAMv3 session");
+		/* Open a SAMv3 session */
+		if (sam3CreateSession(&(srv_socket->i2p_ses), SAM3_HOST_DEFAULT, SAM3_PORT_DEFAULT, SAM3_DESTINATION_TRANSIENT, SAM3_SESSION_STREAM, NULL) < 0) {
+			log_error_write(srv, __FILE__, __LINE__, "ss", "SAMv3 create session failed:", strerror(errno));
+			goto error_free_socket;
+		}
+		log_error_write(srv, __FILE__, __LINE__, "ss", "Session built. Destination:", srv_socket->i2p_ses.pubkey);
+
+		/* Write out the Destination */
+		/*if ((fl = fopen(i2p_keyfile, "wb")) != NULL) {
+			fwrite(srv_socket->i2p_ses.pubkey, strlen(srv_socket->i2p_ses.pubkey), 1, fl);
+			fclose(fl);
+		}*/
+#else
+		log_error_write(srv, __FILE__, __LINE__, "s",
+				"ERROR: I2P sockets are not supported.");
+		goto error_free_socket;
+#endif
+	}
 
 	if (host[0] == '/') {
 		/* host is a unix-domain-socket */
@@ -230,7 +277,7 @@ static int network_server_init(server *srv, buffer *host_token, specific_config 
 			log_error_write(srv, __FILE__, __LINE__, "s", "value of $SERVER[\"socket\"] must not be empty");
 			goto error_free_socket;
 		}
-		if ((b->ptr[0] == '[' && b->ptr[len-1] == ']') || NULL == (sp = strrchr(b->ptr, ':'))) {
+		if ((host[0] == '[' && b->ptr[len-1] == ']') || NULL == (sp = strrchr(host, ':'))) {
 			/* use server.port if set in config, or else default from config_set_defaults() */
 			port = srv->srvconf.port;
 			sp = b->ptr + len; /* point to '\0' at end of string so end of IPv6 address can be found below */
@@ -241,7 +288,7 @@ static int network_server_init(server *srv, buffer *host_token, specific_config 
 		}
 
 		/* check for [ and ] */
-		if (b->ptr[0] == '[' && *(sp-1) == ']') {
+		if (host[0] == '[' && *(sp-1) == ']') {
 			*(sp-1) = '\0';
 			host++;
 
@@ -260,6 +307,16 @@ static int network_server_init(server *srv, buffer *host_token, specific_config 
 #ifdef HAVE_IPV6
 	if (s->use_ipv6) {
 		srv_socket->addr.plain.sa_family = AF_INET6;
+	}
+#endif
+
+#ifdef HAVE_I2P
+	if (srv_socket->is_i2p) {
+		/* Set up the stream (the listener will be opened below) */
+		if (sam3StreamForward(&(srv_socket->i2p_ses), host, port) < 0) {
+			log_error_write(srv, __FILE__, __LINE__, "ss", "SAMv3 stream forward failed:", strerror(errno));
+			goto error_free_socket;
+		}
 	}
 #endif
 
@@ -542,6 +599,11 @@ error_free_socket:
 		}
 
 		close(srv_socket->fd);
+#ifdef HAVE_I2P
+		if (srv_socket->is_i2p) {
+			sam3CloseSession(&(srv_socket->i2p_ses));
+		}
+#endif
 	}
 	buffer_free(srv_socket->srv_token);
 	free(srv_socket);
@@ -564,6 +626,11 @@ int network_close(server *srv) {
 			}
 
 			close(srv_socket->fd);
+#ifdef HAVE_I2P
+			if (srv_socket->is_i2p) {
+				sam3CloseSession(&(srv_socket->i2p_ses));
+			}
+#endif
 		}
 
 		buffer_free(srv_socket->srv_token);
