@@ -185,6 +185,7 @@ static int network_server_init(server *srv, buffer *host_token, specific_config 
 	const char *i2p_keyname;
 	char *hp;
 #ifdef HAVE_I2P
+	buffer *ob;
 	buffer *kb;
 	FILE *fl;
 	char i2p_keybuffer[SAM3_PRIVKEY_SIZE+1];
@@ -242,6 +243,11 @@ static int network_server_init(server *srv, buffer *host_token, specific_config 
 
 		srv_socket->is_i2p = 1;
 
+		/* Prepare SAM options */
+		ob = buffer_init();
+		buffer_copy_string_len(ob, CONST_STR_LEN("inbound.nickname=lighttpd-"));
+		buffer_append_string(ob, i2p_keyname);
+
 		/* Read in the Destination */
 		kb = buffer_init();
 		buffer_copy_string(kb, i2p_keyname);
@@ -252,14 +258,14 @@ static int network_server_init(server *srv, buffer *host_token, specific_config 
 			fclose(fl);
 
 			log_error_write(srv, __FILE__, __LINE__, "ss", "Creating SAMv3 session for", i2p_keyname);
-			if (sam3CreateSession(&(srv_socket->i2p_ses), srv->srvconf.i2p_sam_host, srv->srvconf.i2p_sam_port, i2p_keybuffer, SAM3_SESSION_STREAM, NULL) < 0) {
+			if (sam3CreateSession(&(srv_socket->i2p_ses), srv->srvconf.i2p_sam_host, srv->srvconf.i2p_sam_port, i2p_keybuffer, SAM3_SESSION_STREAM, ob->ptr) < 0) {
 				log_error_write(srv, __FILE__, __LINE__, "ss", "SAMv3 SESSION CREATE failed:", strerror(errno));
 				goto error_free_socket;
 			}
 		} else {
 			/* No file, so open a transient SAMv3 session and save its key */
 			log_error_write(srv, __FILE__, __LINE__, "sss", "Creating SAMv3 session for", i2p_keyname, "with new Destination");
-			if (sam3CreateSession(&(srv_socket->i2p_ses), srv->srvconf.i2p_sam_host, srv->srvconf.i2p_sam_port, SAM3_DESTINATION_TRANSIENT, SAM3_SESSION_STREAM, NULL) < 0) {
+			if (sam3CreateSession(&(srv_socket->i2p_ses), srv->srvconf.i2p_sam_host, srv->srvconf.i2p_sam_port, SAM3_DESTINATION_TRANSIENT, SAM3_SESSION_STREAM, ob->ptr) < 0) {
 				log_error_write(srv, __FILE__, __LINE__, "ss", "SAMv3 SESSION CREATE failed:", strerror(errno));
 				goto error_free_socket;
 			}
@@ -270,6 +276,7 @@ static int network_server_init(server *srv, buffer *host_token, specific_config 
 			}
 			log_error_write(srv, __FILE__, __LINE__, "ss", "Private key saved to", kb->ptr);
 		}
+		buffer_free(ob);
 		buffer_free(kb);
 
 		/* Update pubkey file with current Destination */
