@@ -13,6 +13,7 @@
 #include "sys-socket.h"
 #ifdef HAVE_I2P
 # include "libsam3.h"
+# include "i2p-base64.h"
 #endif
 
 #include <sys/types.h>
@@ -31,6 +32,7 @@
 # include <openssl/ssl.h>
 # include <openssl/err.h>
 # include <openssl/rand.h>
+# include <openssl/sha.h>
 # ifndef OPENSSL_NO_DH
 #  include <openssl/dh.h>
 # endif
@@ -316,6 +318,38 @@ static int network_server_init(server *srv, buffer *host_token, specific_config 
 			log_error_write(srv, __FILE__, __LINE__, "ss", "WARNING: Could not save Destination B64 to", kb->ptr);
 		}
 		buffer_free(kb);
+
+#ifdef USE_OPENSSL
+		/* Calculate B32 */
+		int raw_dest_len;
+		unsigned char *raw_dest = i2p_unbase64(srv_socket->i2p_ses.pubkey, strlen(srv_socket->i2p_ses.pubkey), &raw_dest_len);
+		unsigned char *hash = SHA256(raw_dest, raw_dest_len, 0);
+		free(raw_dest);
+		char b32_hash[56];
+		sam3Base32Encode(b32_hash, hash, strlen(hash));
+		char *eq_pos = strchrnul(b32_hash, '=');
+		eq_pos[0] = '\0';
+		buffer *b32;
+		b32 = buffer_init();
+		buffer_copy_string(b32, b32_hash);
+		buffer_append_string_len(b32, CONST_STR_LEN(".b32.i2p"));
+
+		/* Export B32 */
+		kb = buffer_init();
+		buffer_copy_string_buffer(kb, kpb);
+		buffer_append_string_len(kb, CONST_STR_LEN(".b32.txt"));
+		if (!buffer_is_empty(srv->srvconf.i2p_sam_keydir)) {
+			buffer_path_simplify(kb, kb);
+		}
+		if ((fl = fopen(kb->ptr, "wt")) != NULL) {
+			fwrite(b32->ptr, strlen(b32->ptr), 1, fl);
+			fclose(fl);
+			log_error_write(srv, __FILE__, __LINE__, "ss", "Destination B32 saved to", kb->ptr);
+		} else {
+			log_error_write(srv, __FILE__, __LINE__, "ss", "WARNING: Could not save Destination B32 to", kb->ptr);
+		}
+		buffer_free(kb);
+#endif
 
 		buffer_free(kpb);
 #else

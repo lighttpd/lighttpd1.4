@@ -346,7 +346,7 @@ hdr = server.h base64.h buffer.h network.h log.h keyvalue.h \
 	version.h
 
 if BUILD_WITH_I2P
-hdr += libsam3.h
+hdr += libsam3.h i2p-base64.h
 endif
 
 DEFS= @DEFS@ -DHAVE_VERSION_H -DLIBRARY_DIR="\"$(libdir)\"" -DSBIN_DIR="\"$(sbindir)\""
