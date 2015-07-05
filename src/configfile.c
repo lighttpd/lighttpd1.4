@@ -148,6 +148,7 @@ static int config_insert(server *srv) {
 #ifdef HAVE_I2P
 		{ "i2p.sam.host",                      NULL, T_CONFIG_STRING,  T_CONFIG_SCOPE_SERVER     }, /* 79 */
 		{ "i2p.sam.port",                      NULL, T_CONFIG_SHORT,   T_CONFIG_SCOPE_SERVER     }, /* 80 */
+		{ "i2p.sam.keydir",                    NULL, T_CONFIG_STRING,  T_CONFIG_SCOPE_SERVER     }, /* 81 */
 #else
 		{ "i2p.sam.host",
 			"lighttpd has not been built with I2P support."
@@ -156,6 +157,10 @@ static int config_insert(server *srv) {
 		{ "i2p.sam.port",
 			"lighttpd has not been built with I2P support."
 			"Please remove i2p.sam.port from your config, or recompile with --enable-i2p.",
+			T_CONFIG_UNSUPPORTED, T_CONFIG_SCOPE_UNSET },
+		{ "i2p.sam.keydir",
+			"lighttpd has not been built with I2P support."
+			"Please remove i2p.sam.keydir from your config, or recompile with --enable-i2p.",
 			T_CONFIG_UNSUPPORTED, T_CONFIG_SCOPE_UNSET },
 #endif
 
@@ -201,6 +206,7 @@ static int config_insert(server *srv) {
 #ifdef HAVE_I2P
 	cv[79].destination = srv->srvconf.i2p_sam_host;
 	cv[80].destination = &(srv->srvconf.i2p_sam_port);
+	cv[81].destination = srv->srvconf.i2p_sam_keydir;
 #endif
 
 	srv->config_storage = calloc(1, srv->config_context->used * sizeof(specific_config *));

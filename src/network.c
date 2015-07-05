@@ -250,8 +250,15 @@ static int network_server_init(server *srv, buffer *host_token, specific_config 
 
 		/* Read in the Destination */
 		kb = buffer_init();
-		buffer_copy_string(kb, i2p_keyname);
+		if (!buffer_is_empty(srv->srvconf.i2p_sam_keydir)) {
+			buffer_copy_buffer(kb, srv->srvconf.i2p_sam_keydir);
+			buffer_append_string_len(kb, CONST_STR_LEN("/"));
+		}
+		buffer_append_string(kb, i2p_keyname);
 		buffer_append_string_len(kb, CONST_STR_LEN(".privkey"));
+		if (!buffer_is_empty(srv->srvconf.i2p_sam_keydir)) {
+			buffer_path_simplify(kb, kb);
+		}
 
 		if ((fl = fopen(kb->ptr, "rt")) != NULL) {
 			fgets(i2p_keybuffer, SAM3_PRIVKEY_SIZE+1, fl);
@@ -273,22 +280,33 @@ static int network_server_init(server *srv, buffer *host_token, specific_config 
 			if ((fl = fopen(kb->ptr, "wt")) != NULL) {
 				fwrite(srv_socket->i2p_ses.privkey, strlen(srv_socket->i2p_ses.privkey), 1, fl);
 				fclose(fl);
+				log_error_write(srv, __FILE__, __LINE__, "ss", "Private key saved to", kb->ptr);
+			} else {
+				log_error_write(srv, __FILE__, __LINE__, "sss", "WARNING: Could not save private key to", kb->ptr, "; Destination will be lost on shutdown.");
 			}
-			log_error_write(srv, __FILE__, __LINE__, "ss", "Private key saved to", kb->ptr);
 		}
 		buffer_free(ob);
 		buffer_free(kb);
 
 		/* Update pubkey file with current Destination */
 		kb = buffer_init();
-		buffer_copy_string(kb, i2p_keyname);
+		if (!buffer_is_empty(srv->srvconf.i2p_sam_keydir)) {
+			buffer_copy_buffer(kb, srv->srvconf.i2p_sam_keydir);
+			buffer_append_string_len(kb, CONST_STR_LEN("/"));
+		}
+		buffer_append_string(kb, i2p_keyname);
 		buffer_append_string_len(kb, CONST_STR_LEN(".pubkey"));
+		if (!buffer_is_empty(srv->srvconf.i2p_sam_keydir)) {
+			buffer_path_simplify(kb, kb);
+		}
 
 		if ((fl = fopen(kb->ptr, "wt")) != NULL) {
 			fwrite(srv_socket->i2p_ses.pubkey, strlen(srv_socket->i2p_ses.pubkey), 1, fl);
 			fclose(fl);
+			log_error_write(srv, __FILE__, __LINE__, "ss", "Session built. Destination saved to", kb->ptr);
+		} else {
+			log_error_write(srv, __FILE__, __LINE__, "ss", "WARNING: Could not save Destination to", kb->ptr);
 		}
-		log_error_write(srv, __FILE__, __LINE__, "ss", "Session built. Destination saved to", kb->ptr);
 		buffer_free(kb);
 #else
 		log_error_write(srv, __FILE__, __LINE__, "s",

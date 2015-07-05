@@ -233,6 +233,7 @@ static server *server_init(void) {
 
 #ifdef HAVE_I2P
 	CLEAN(srvconf.i2p_sam_host);
+	CLEAN(srvconf.i2p_sam_keydir);
 #endif
 
 	CLEAN(tmp_chunk_len);
@@ -328,6 +329,7 @@ static void server_free(server *srv) {
 
 #ifdef HAVE_I2P
 	CLEAN(srvconf.i2p_sam_host);
+	CLEAN(srvconf.i2p_sam_keydir);
 #endif
 
 	CLEAN(tmp_chunk_len);
