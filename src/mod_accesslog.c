@@ -169,7 +169,7 @@ static void accesslog_append_escaped(buffer *dest, buffer *str) {
 	buffer_string_prepare_append(dest, buffer_string_length(str));
 
 	for (ptr = start = str->ptr, end = str->ptr + buffer_string_length(str); ptr < end; ptr++) {
-		char const c = *ptr;
+		unsigned char const c = (unsigned char) *ptr;
 		if (c >= ' ' && c <= '~' && c != '"' && c != '\\') {
 			/* nothing to change, add later as one block */
 		} else {
