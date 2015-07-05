@@ -275,6 +275,7 @@ static int network_server_init(server *srv, buffer *host_token, specific_config 
 				log_error_write(srv, __FILE__, __LINE__, "ss", "SAMv3 SESSION CREATE failed:", strerror(errno));
 				goto error_free_socket;
 			}
+			log_error_write(srv, __FILE__, __LINE__, "s", "Session built");
 		} else {
 			/* No file, so open a transient SAMv3 session and save its key */
 			log_error_write(srv, __FILE__, __LINE__, "sss", "Creating SAMv3 session for", i2p_keyname, "with new Destination");
@@ -282,6 +283,7 @@ static int network_server_init(server *srv, buffer *host_token, specific_config 
 				log_error_write(srv, __FILE__, __LINE__, "ss", "SAMv3 SESSION CREATE failed:", strerror(errno));
 				goto error_free_socket;
 			}
+			log_error_write(srv, __FILE__, __LINE__, "s", "Session built");
 
 			if ((fl = fopen(kb->ptr, "wt")) != NULL) {
 				fwrite(srv_socket->i2p_ses.privkey, strlen(srv_socket->i2p_ses.privkey), 1, fl);
@@ -294,14 +296,14 @@ static int network_server_init(server *srv, buffer *host_token, specific_config 
 		buffer_free(ob);
 		buffer_free(kb);
 
-		/* Update pubkey file with current Destination */
+		/* Export current Destination */
 		kb = buffer_init();
 		if (!buffer_is_empty(srv->srvconf.i2p_sam_keydir)) {
 			buffer_copy_buffer(kb, srv->srvconf.i2p_sam_keydir);
 			buffer_append_string_len(kb, CONST_STR_LEN("/"));
 		}
 		buffer_append_string(kb, i2p_keyname);
-		buffer_append_string_len(kb, CONST_STR_LEN(".pubkey"));
+		buffer_append_string_len(kb, CONST_STR_LEN(".b64.txt"));
 		if (!buffer_is_empty(srv->srvconf.i2p_sam_keydir)) {
 			buffer_path_simplify(kb, kb);
 		}
@@ -309,9 +311,9 @@ static int network_server_init(server *srv, buffer *host_token, specific_config 
 		if ((fl = fopen(kb->ptr, "wt")) != NULL) {
 			fwrite(srv_socket->i2p_ses.pubkey, strlen(srv_socket->i2p_ses.pubkey), 1, fl);
 			fclose(fl);
-			log_error_write(srv, __FILE__, __LINE__, "ss", "Session built. Destination saved to", kb->ptr);
+			log_error_write(srv, __FILE__, __LINE__, "ss", "Destination B64 saved to", kb->ptr);
 		} else {
-			log_error_write(srv, __FILE__, __LINE__, "ss", "WARNING: Could not save Destination to", kb->ptr);
+			log_error_write(srv, __FILE__, __LINE__, "ss", "WARNING: Could not save Destination B64 to", kb->ptr);
 		}
 		buffer_free(kb);
 #else
