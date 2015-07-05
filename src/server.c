@@ -231,6 +231,10 @@ static server *server_init(void) {
 	CLEAN(srvconf.event_handler);
 	CLEAN(srvconf.pid_file);
 
+#ifdef HAVE_I2P
+	CLEAN(srvconf.i2p_sam_host);
+#endif
+
 	CLEAN(tmp_chunk_len);
 #undef CLEAN
 
@@ -321,6 +325,10 @@ static void server_free(server *srv) {
 	CLEAN(srvconf.modules_dir);
 	CLEAN(srvconf.network_backend);
 	CLEAN(srvconf.xattr_name);
+
+#ifdef HAVE_I2P
+	CLEAN(srvconf.i2p_sam_host);
+#endif
 
 	CLEAN(tmp_chunk_len);
 #undef CLEAN

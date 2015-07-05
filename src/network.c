@@ -184,8 +184,10 @@ static int network_server_init(server *srv, buffer *host_token, specific_config 
 	unsigned int port = 0;
 	const char *i2p_keyfile;
 	char *hp;
+#ifdef HAVE_I2P
 	FILE *fl;
 	char i2p_keybuffer[SAM3_PRIVKEY_SIZE+1];
+#endif
 	const char *host;
 	buffer *b;
 	int err;
@@ -245,15 +247,15 @@ static int network_server_init(server *srv, buffer *host_token, specific_config 
 			fclose(fl);
 
 			log_error_write(srv, __FILE__, __LINE__, "ss", "Creating SAMv3 session with Destination from", i2p_keyfile);
-			if (sam3CreateSession(&(srv_socket->i2p_ses), SAM3_HOST_DEFAULT, SAM3_PORT_DEFAULT, i2p_keybuffer, SAM3_SESSION_STREAM, NULL) < 0) {
-				log_error_write(srv, __FILE__, __LINE__, "ss", "SAMv3 create session failed:", strerror(errno));
+			if (sam3CreateSession(&(srv_socket->i2p_ses), srv->srvconf.i2p_sam_host, srv->srvconf.i2p_sam_port, i2p_keybuffer, SAM3_SESSION_STREAM, NULL) < 0) {
+				log_error_write(srv, __FILE__, __LINE__, "ss", "SAMv3 SESSION CREATE failed:", strerror(errno));
 				goto error_free_socket;
 			}
 		} else {
 			/* No file, so open a transient SAMv3 session and save its key */
 			log_error_write(srv, __FILE__, __LINE__, "s", "Creating SAMv3 session with new Destination");
-			if (sam3CreateSession(&(srv_socket->i2p_ses), SAM3_HOST_DEFAULT, SAM3_PORT_DEFAULT, SAM3_DESTINATION_TRANSIENT, SAM3_SESSION_STREAM, NULL) < 0) {
-				log_error_write(srv, __FILE__, __LINE__, "ss", "SAMv3 create session failed:", strerror(errno));
+			if (sam3CreateSession(&(srv_socket->i2p_ses), srv->srvconf.i2p_sam_host, srv->srvconf.i2p_sam_port, SAM3_DESTINATION_TRANSIENT, SAM3_SESSION_STREAM, NULL) < 0) {
+				log_error_write(srv, __FILE__, __LINE__, "ss", "SAMv3 SESSION CREATE failed:", strerror(errno));
 				goto error_free_socket;
 			}
 
@@ -326,7 +328,7 @@ static int network_server_init(server *srv, buffer *host_token, specific_config 
 	if (srv_socket->is_i2p) {
 		/* Set up the stream (the listener will be opened below) */
 		if (sam3StreamForward(&(srv_socket->i2p_ses), host, port) < 0) {
-			log_error_write(srv, __FILE__, __LINE__, "ss", "SAMv3 stream forward failed:", strerror(errno));
+			log_error_write(srv, __FILE__, __LINE__, "ss", "SAMv3 STREAM FORWARD failed:", strerror(errno));
 			goto error_free_socket;
 		}
 	}

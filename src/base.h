@@ -553,6 +553,11 @@ typedef struct {
 	unsigned short log_request_header_on_error;
 	unsigned short log_state_handling;
 
+#ifdef HAVE_I2P
+	buffer *i2p_sam_host;
+	unsigned short i2p_sam_port;
+#endif
+
 	enum { STAT_CACHE_ENGINE_UNSET,
 			STAT_CACHE_ENGINE_NONE,
 			STAT_CACHE_ENGINE_SIMPLE

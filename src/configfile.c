@@ -145,6 +145,20 @@ static int config_insert(server *srv) {
 		{ "server.stream-response-body",       NULL, T_CONFIG_SHORT,   T_CONFIG_SCOPE_CONNECTION }, /* 77 */
 		{ "server.max-request-field-size",     NULL, T_CONFIG_INT,     T_CONFIG_SCOPE_SERVER     }, /* 78 */
 
+#ifdef HAVE_I2P
+		{ "i2p.sam.host",                      NULL, T_CONFIG_STRING,  T_CONFIG_SCOPE_SERVER     }, /* 79 */
+		{ "i2p.sam.port",                      NULL, T_CONFIG_SHORT,   T_CONFIG_SCOPE_SERVER     }, /* 80 */
+#else
+		{ "i2p.sam.host",
+			"lighttpd has not been built with I2P support."
+			"Please remove i2p.sam.host from your config, or recompile with --enable-i2p.",
+			T_CONFIG_UNSUPPORTED, T_CONFIG_SCOPE_UNSET },
+		{ "i2p.sam.port",
+			"lighttpd has not been built with I2P support."
+			"Please remove i2p.sam.port from your config, or recompile with --enable-i2p.",
+			T_CONFIG_UNSUPPORTED, T_CONFIG_SCOPE_UNSET },
+#endif
+
 		{ NULL,                                NULL, T_CONFIG_UNSET,   T_CONFIG_SCOPE_UNSET      }
 	};
 
@@ -183,6 +197,11 @@ static int config_insert(server *srv) {
 	cv[73].destination = &(srv->srvconf.http_host_strict);
 	cv[74].destination = &(srv->srvconf.http_host_normalize);
 	cv[78].destination = &(srv->srvconf.max_request_field_size);
+
+#ifdef HAVE_I2P
+	cv[79].destination = srv->srvconf.i2p_sam_host;
+	cv[80].destination = &(srv->srvconf.i2p_sam_port);
+#endif
 
 	srv->config_storage = calloc(1, srv->config_context->used * sizeof(specific_config *));
 
