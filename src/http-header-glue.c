@@ -244,7 +244,11 @@ buffer * strftime_cache_get(server *srv, time_t last_mod) {
 
 
 int http_response_handle_cachable(server *srv, connection *con, buffer *mtime) {
+	int head_or_get =
+		(  HTTP_METHOD_GET  == con->request.http_method
+		|| HTTP_METHOD_HEAD == con->request.http_method);
 	UNUSED(srv);
+
 	/*
 	 * 14.26 If-None-Match
 	 *    [...]
@@ -255,12 +259,12 @@ int http_response_handle_cachable(server *srv, connection *con, buffer *mtime) {
 	 *    return a 304 (Not Modified) response.
 	 */
 
-	/* last-modified handling */
 	if (con->request.http_if_none_match) {
-		if (etag_is_equal(con->physical.etag, con->request.http_if_none_match)) {
-			if (con->request.http_method == HTTP_METHOD_GET ||
-			    con->request.http_method == HTTP_METHOD_HEAD) {
-
+		/* use strong etag checking for now: weak comparison must not be used
+		 * for ranged requests
+		 */
+		if (etag_is_equal(con->physical.etag, con->request.http_if_none_match, 0)) {
+			if (head_or_get) {
 				con->http_status = 304;
 				return HANDLER_FINISHED;
 			} else {
@@ -269,9 +273,8 @@ int http_response_handle_cachable(server *srv, connection *con, buffer *mtime) {
 				return HANDLER_FINISHED;
 			}
 		}
-	} else if (con->request.http_if_modified_since &&
-	           (con->request.http_method == HTTP_METHOD_GET ||
-	            con->request.http_method == HTTP_METHOD_HEAD)) {
+	} else if (con->request.http_if_modified_since && head_or_get) {
+		/* last-modified handling */
 		size_t used_len;
 		char *semicolon;
 

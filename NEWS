@@ -22,6 +22,7 @@ NEWS
   * escape all strings for logging (fixes #2646 log file injection, reported by Jaanus Kääp)
   * fix hex escape in accesslog (fixes #2559)
   * show extforward re-run warning only with debug.log-request-handling (fixes #2561)
+  * parse If-None-Match for ETag validation (fixes #2578)
 
 - 1.4.35 - 2014-03-12
   * [network/ssl] fix build error if TLSEXT is disabled

@@ -8,7 +8,7 @@ BEGIN {
 
 use strict;
 use IO::Socket;
-use Test::More tests => 13;
+use Test::More tests => 25;
 use LightyTest;
 
 my $tf = LightyTest->new();
@@ -116,6 +116,106 @@ EOF
  );
 $t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200 } ];
 ok($tf->handle_http($t) == 0, 'Conditional GET - ETag + disabled etags on server side');
+
+###############
+
+ok($etag =~ /^\"(.*)\"$/, "The server must quote ETags");
+
+$t->{REQUEST}  = ( <<EOF
+GET / HTTP/1.0
+If-None-Match: $1
+EOF
+ );
+$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200 } ];
+ok($tf->handle_http($t) == 0, 'The client must send a quoted ETag');
+
+$etag =~ /^(\".*)\"$/;
+$t->{REQUEST}  = ( <<EOF
+GET / HTTP/1.0
+If-None-Match: $1
+EOF
+ );
+$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200 } ];
+ok($tf->handle_http($t) == 0, 'The ETag must be surrounded by quotes');
+
+$t->{REQUEST}  = ( <<EOF
+GET / HTTP/1.0
+If-None-Match: *
+EOF
+ );
+$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 304 } ];
+ok($tf->handle_http($t) == 0, 'An unquoted star matches any ETag');
+
+$t->{REQUEST}  = ( <<EOF
+GET / HTTP/1.0
+If-None-Match: "*"
+EOF
+ );
+$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200 } ];
+ok($tf->handle_http($t) == 0, 'A quoted star is just a regular ETag');
+
+TODO: {
+	local $TODO = "weak etags not allowed yet";
+	$t->{REQUEST}  = ( <<EOF
+GET / HTTP/1.0
+If-None-Match: W/$etag
+EOF
+	 );
+	$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 304 } ];
+	ok($tf->handle_http($t) == 0, 'A weak etag matches like a regular ETag for HEAD and GET');
+}
+
+$t->{REQUEST}  = ( <<EOF
+GET / HTTP/1.0
+If-None-Match: W/$etag
+Range: bytes=0-0
+EOF
+);
+$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 206, 'HTTP-Content' => '<' } ];
+ok($tf->handle_http($t) == 0, 'A weak etag does not match for ranged requests');
+
+$t->{REQUEST}  = ( <<EOF
+GET / HTTP/1.0
+If-None-Match: W/"12345"
+EOF
+ );
+$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200 } ];
+ok($tf->handle_http($t) == 0, 'However, a weak ETag is not *');
+
+$t->{REQUEST}  = ( <<EOF
+GET / HTTP/1.0
+If-None-Match: "12345", $etag
+EOF
+ );
+$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 304 } ];
+ok($tf->handle_http($t) == 0, 'Client sent a list of ETags, the second matches');
+
+TODO: {
+	local $TODO = "weak etags not allowed yet";
+	$t->{REQUEST}  = ( <<EOF
+GET / HTTP/1.0
+If-None-Match: "12345", W/$etag
+EOF
+	 );
+	$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 304 } ];
+	ok($tf->handle_http($t) == 0, 'The second provided ETag matches weakly');
+}
+
+$t->{REQUEST}  = ( <<EOF
+GET / HTTP/1.0
+If-None-Match: "12345",, ,,  ,  $etag
+EOF
+ );
+$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 304 } ];
+ok($tf->handle_http($t) == 0, 'Broken client did get around to sending good data');
+
+$t->{REQUEST}  = ( <<EOF
+GET / HTTP/1.0
+If-None-Match: "1234", $etag, "brokentrailing
+EOF
+ );
+$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 304 } ];
+ok($tf->handle_http($t) == 0, 'Bad syntax *after* a matching ETag doesn\'t matter');
 
 ok($tf->stop_proc == 0, "Stopping lighttpd");
 

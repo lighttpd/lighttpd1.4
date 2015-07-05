@@ -9,8 +9,139 @@
 
 #include <string.h>
 
-int etag_is_equal(buffer *etag, const char *matches) {
-	if (etag && !buffer_string_is_empty(etag) && 0 == strcmp(etag->ptr, matches)) return 1;
+int etag_is_equal(buffer *etag, const char *line, int weak_ok) {
+	enum {
+		START = 0,
+		CHECK,
+		CHECK_QUOTED,
+		SKIP,
+		SKIP_QUOTED,
+		TAIL
+	} state = START;
+
+	const char *current;
+	const char *tok_start = etag->ptr;
+	const char *tok = NULL;
+	int matched;
+
+	if ('*' == line[0] && '\0' == line[1]) {
+		return 1;
+	}
+
+	if (!etag || buffer_string_is_empty(etag)) return 0;
+
+	if ('W' == tok_start[0]) {
+		if (!weak_ok || '/' != tok_start[1]) return 0; /* bad etag */
+		tok_start = tok_start + 2;
+	}
+
+	if ('"' != tok_start[0]) return 0; /* bad etag */
+	/* we start comparing after the first '"' */
+	++tok_start;
+
+	for (current = line; *current; ++current) {
+		switch (state) {
+		case START:
+			/* wait for etag to start; ignore whitespace and ',' */
+			switch (*current) {
+			case 'W':
+				/* weak etag always starts with 'W/"' */
+				if ('/' != *++current) return 0; /* bad etag list */
+				if ('"' != *++current) return 0; /* bad etag list */
+				if (!weak_ok) {
+					state = SKIP;
+				} else {
+					state = CHECK;
+					tok = tok_start;
+				}
+				break;
+			case '"':
+				/* strong etag starts with '"' */
+				state = CHECK;
+				tok = tok_start;
+				break;
+			case ' ':
+			case ',':
+			case '\t':
+			case '\r':
+			case '\n':
+				break;
+			default:
+				return 0; /* bad etag list */
+			}
+			break;
+		case CHECK:
+			/* compare etags (after the beginning '"')
+			 * quoted-pairs must match too (i.e. quoted in both strings):
+			 * > (RFC 2616:) both validators MUST be identical in every way
+			 */
+			matched = *tok && *tok == *current;
+			++tok;
+			switch (*current) {
+			case '\\':
+				state = matched ? CHECK_QUOTED : SKIP_QUOTED;
+				break;
+			case '"':
+				if (*tok)  {
+					/* bad etag - string should end after '"' */
+					return 0;
+				}
+				if (matched) {
+					/* matching etag: strings were equal */
+					return 1;
+				}
+
+				state = TAIL;
+				break;
+			default:
+				if (!matched) {
+					/* strings not matching, skip remainder of etag */
+					state = SKIP;
+				}
+				break;
+			}
+			break;
+		case CHECK_QUOTED:
+			if (!*tok || *tok != *current) {
+				/* strings not matching, skip remainder of etag */
+				state = SKIP;
+				break;
+			}
+			++tok;
+			state = CHECK;
+			break;
+		case SKIP:
+			/* wait for final (not quoted) '"' */
+			switch (*current) {
+			case '\\':
+				state = SKIP_QUOTED;
+				break;
+			case '"':
+				state = TAIL;
+				break;
+			}
+			break;
+		case SKIP_QUOTED:
+			state = SKIP;
+			break;
+		case TAIL:
+			/* search for ',', ignore white space */
+			switch (*current) {
+			case ',':
+				state = START;
+				break;
+			case ' ':
+			case '\t':
+			case '\r':
+			case '\n':
+				break;
+			default:
+				return 0; /* bad etag list */
+			}
+			break;
+		}
+	}
+	/* no matching etag found */
 	return 0;
 }
 
