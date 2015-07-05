@@ -182,9 +182,10 @@ static int network_server_init(server *srv, buffer *host_token, specific_config 
 	socklen_t addr_len;
 	server_socket *srv_socket;
 	unsigned int port = 0;
-	const char *i2p_keyfile;
+	const char *i2p_keyname;
 	char *hp;
 #ifdef HAVE_I2P
+	buffer *kb;
 	FILE *fl;
 	char i2p_keybuffer[SAM3_PRIVKEY_SIZE+1];
 #endif
@@ -228,10 +229,10 @@ static int network_server_init(server *srv, buffer *host_token, specific_config 
 		/* host is an I2P socket */
 #ifdef HAVE_I2P
 		/* i2p:keyfile:address:port */
-		i2p_keyfile = host + 4;
+		i2p_keyname = host + 4;
 
-		if (NULL == (hp = strchr(i2p_keyfile, ':'))) {
-			log_error_write(srv, __FILE__, __LINE__, "sb", "value of $SERVER[\"socket\"] has to be \"i2p:keyfile:ip:port\".", b);
+		if (NULL == (hp = strchr(i2p_keyname, ':'))) {
+			log_error_write(srv, __FILE__, __LINE__, "sb", "value of $SERVER[\"socket\"] has to be \"i2p:keyname:ip:port\".", b);
 
 			goto error_free_socket;
 		}
@@ -242,29 +243,46 @@ static int network_server_init(server *srv, buffer *host_token, specific_config 
 		srv_socket->is_i2p = 1;
 
 		/* Read in the Destination */
-		if ((fl = fopen(i2p_keyfile, "rt")) != NULL) {
+		kb = buffer_init();
+		buffer_copy_string(kb, i2p_keyname);
+		buffer_append_string_len(kb, CONST_STR_LEN(".privkey"));
+
+		if ((fl = fopen(kb->ptr, "rt")) != NULL) {
 			fgets(i2p_keybuffer, SAM3_PRIVKEY_SIZE+1, fl);
 			fclose(fl);
 
-			log_error_write(srv, __FILE__, __LINE__, "ss", "Creating SAMv3 session with Destination from", i2p_keyfile);
+			log_error_write(srv, __FILE__, __LINE__, "ss", "Creating SAMv3 session for", i2p_keyname);
 			if (sam3CreateSession(&(srv_socket->i2p_ses), srv->srvconf.i2p_sam_host, srv->srvconf.i2p_sam_port, i2p_keybuffer, SAM3_SESSION_STREAM, NULL) < 0) {
 				log_error_write(srv, __FILE__, __LINE__, "ss", "SAMv3 SESSION CREATE failed:", strerror(errno));
 				goto error_free_socket;
 			}
 		} else {
 			/* No file, so open a transient SAMv3 session and save its key */
-			log_error_write(srv, __FILE__, __LINE__, "s", "Creating SAMv3 session with new Destination");
+			log_error_write(srv, __FILE__, __LINE__, "sss", "Creating SAMv3 session for", i2p_keyname, "with new Destination");
 			if (sam3CreateSession(&(srv_socket->i2p_ses), srv->srvconf.i2p_sam_host, srv->srvconf.i2p_sam_port, SAM3_DESTINATION_TRANSIENT, SAM3_SESSION_STREAM, NULL) < 0) {
 				log_error_write(srv, __FILE__, __LINE__, "ss", "SAMv3 SESSION CREATE failed:", strerror(errno));
 				goto error_free_socket;
 			}
 
-			if ((fl = fopen(i2p_keyfile, "wt")) != NULL) {
+			if ((fl = fopen(kb->ptr, "wt")) != NULL) {
 				fwrite(srv_socket->i2p_ses.privkey, strlen(srv_socket->i2p_ses.privkey), 1, fl);
 				fclose(fl);
 			}
+			log_error_write(srv, __FILE__, __LINE__, "ss", "Private key saved to", kb->ptr);
 		}
-		log_error_write(srv, __FILE__, __LINE__, "ss", "Session built. Destination:", srv_socket->i2p_ses.pubkey);
+		buffer_free(kb);
+
+		/* Update pubkey file with current Destination */
+		kb = buffer_init();
+		buffer_copy_string(kb, i2p_keyname);
+		buffer_append_string_len(kb, CONST_STR_LEN(".pubkey"));
+
+		if ((fl = fopen(kb->ptr, "wt")) != NULL) {
+			fwrite(srv_socket->i2p_ses.pubkey, strlen(srv_socket->i2p_ses.pubkey), 1, fl);
+			fclose(fl);
+		}
+		log_error_write(srv, __FILE__, __LINE__, "ss", "Session built. Destination saved to", kb->ptr);
+		buffer_free(kb);
 #else
 		log_error_write(srv, __FILE__, __LINE__, "s",
 				"ERROR: I2P sockets are not supported.");
