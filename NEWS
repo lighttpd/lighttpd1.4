@@ -25,6 +25,7 @@ NEWS
   * parse If-None-Match for ETag validation (fixes #2578)
   * fix memory leak in mod_status when no counters are set (found by coverity)
   * [mod_magnet] fix segfault when accessing not existing lighty.req_env[] entry (found by coverity)
+  * fix segfault when temp file for upload couldn't be created (found by coverity)
 
 - 1.4.35 - 2014-03-12
   * [network/ssl] fix build error if TLSEXT is disabled

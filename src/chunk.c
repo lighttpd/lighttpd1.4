@@ -458,9 +458,9 @@ static int chunkqueue_append_to_tempfile(server *srv, chunkqueue *dest, const ch
 		 * Instead of sending 500 we send 413 and say the request is too large
 		 */
 
-		log_error_write(srv, __FILE__, __LINE__, "sbs",
-				"denying upload as opening temp-file for upload failed:",
-				dst_c->file.name, strerror(errno));
+		log_error_write(srv, __FILE__, __LINE__, "ss",
+			"denying upload as opening temp-file for upload failed:",
+			strerror(errno));
 
 		return -1;
 	}
