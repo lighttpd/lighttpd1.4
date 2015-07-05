@@ -186,6 +186,7 @@ static int network_server_init(server *srv, buffer *host_token, specific_config 
 	char *hp;
 #ifdef HAVE_I2P
 	buffer *ob;
+	buffer *kpb;
 	buffer *kb;
 	FILE *fl;
 	char i2p_keybuffer[SAM3_PRIVKEY_SIZE+1];
@@ -254,13 +255,17 @@ static int network_server_init(server *srv, buffer *host_token, specific_config 
 			buffer_append_string(ob, i2p_keyname);
 		}
 
+		/* Prepare keyfile prefix */
+		kpb = buffer_init();
+		if (!buffer_is_empty(srv->srvconf.i2p_sam_keydir)) {
+			buffer_copy_buffer(kpb, srv->srvconf.i2p_sam_keydir);
+			buffer_append_string_len(kpb, CONST_STR_LEN("/"));
+		}
+		buffer_append_string(kpb, i2p_keyname);
+
 		/* Read in the Destination */
 		kb = buffer_init();
-		if (!buffer_is_empty(srv->srvconf.i2p_sam_keydir)) {
-			buffer_copy_buffer(kb, srv->srvconf.i2p_sam_keydir);
-			buffer_append_string_len(kb, CONST_STR_LEN("/"));
-		}
-		buffer_append_string(kb, i2p_keyname);
+		buffer_copy_buffer(kb, kpb);
 		buffer_append_string_len(kb, CONST_STR_LEN(".privkey"));
 		if (!buffer_is_empty(srv->srvconf.i2p_sam_keydir)) {
 			buffer_path_simplify(kb, kb);
@@ -296,18 +301,13 @@ static int network_server_init(server *srv, buffer *host_token, specific_config 
 		buffer_free(ob);
 		buffer_free(kb);
 
-		/* Export current Destination */
+		/* Export current Destination as B64 */
 		kb = buffer_init();
-		if (!buffer_is_empty(srv->srvconf.i2p_sam_keydir)) {
-			buffer_copy_buffer(kb, srv->srvconf.i2p_sam_keydir);
-			buffer_append_string_len(kb, CONST_STR_LEN("/"));
-		}
-		buffer_append_string(kb, i2p_keyname);
+		buffer_copy_buffer(kb, kpb);
 		buffer_append_string_len(kb, CONST_STR_LEN(".b64.txt"));
 		if (!buffer_is_empty(srv->srvconf.i2p_sam_keydir)) {
 			buffer_path_simplify(kb, kb);
 		}
-
 		if ((fl = fopen(kb->ptr, "wt")) != NULL) {
 			fwrite(srv_socket->i2p_ses.pubkey, strlen(srv_socket->i2p_ses.pubkey), 1, fl);
 			fclose(fl);
@@ -316,6 +316,8 @@ static int network_server_init(server *srv, buffer *host_token, specific_config 
 			log_error_write(srv, __FILE__, __LINE__, "ss", "WARNING: Could not save Destination B64 to", kb->ptr);
 		}
 		buffer_free(kb);
+
+		buffer_free(kpb);
 #else
 		log_error_write(srv, __FILE__, __LINE__, "s",
 				"ERROR: I2P sockets are not supported.");
