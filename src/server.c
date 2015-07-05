@@ -1262,7 +1262,9 @@ int main (int argc, char **argv) {
 			min_ts = time(NULL);
 
 			if (min_ts != srv->cur_ts) {
+#ifdef DEBUG_CONNECTION_STATES
 				int cs = 0;
+#endif
 				connections *conns = srv->conns;
 				handler_t r;
 
@@ -1368,7 +1370,7 @@ int main (int argc, char **argv) {
 					con->bytes_written_cur_second = 0;
 					*(con->conf.global_bytes_per_second_cnt_ptr) = 0;
 
-#if 0
+#if DEBUG_CONNECTION_STATES
 					if (cs == 0) {
 						fprintf(stderr, "connection-state: ");
 						cs = 1;
@@ -1381,7 +1383,9 @@ int main (int argc, char **argv) {
 #endif
 				}
 
+#ifdef DEBUG_CONNECTION_STATES
 				if (cs == 1) fprintf(stderr, "\n");
+#endif
 			}
 		}
 
