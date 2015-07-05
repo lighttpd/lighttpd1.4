@@ -245,8 +245,14 @@ static int network_server_init(server *srv, buffer *host_token, specific_config 
 
 		/* Prepare SAM options */
 		ob = buffer_init();
-		buffer_copy_string_len(ob, CONST_STR_LEN("inbound.nickname=lighttpd-"));
-		buffer_append_string(ob, i2p_keyname);
+		if (!buffer_is_empty(s->i2p_sam_nickname)) {
+			buffer_copy_string_len(ob, CONST_STR_LEN("inbound.nickname=\""));
+			buffer_append_string_buffer(ob, s->i2p_sam_nickname);
+			buffer_append_string_len(ob, CONST_STR_LEN("\""));
+		} else {
+			buffer_copy_string_len(ob, CONST_STR_LEN("inbound.nickname=lighttpd-"));
+			buffer_append_string(ob, i2p_keyname);
+		}
 
 		/* Read in the Destination */
 		kb = buffer_init();

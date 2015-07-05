@@ -338,6 +338,10 @@ typedef struct {
 	buffer *bsd_accept_filter;
 #endif
 
+#ifdef HAVE_I2P
+	buffer *i2p_sam_nickname;
+#endif
+
 #ifdef USE_OPENSSL
 	SSL_CTX *ssl_ctx; /* not patched */
 	/* SNI per host: with COMP_SERVER_SOCKET, COMP_HTTP_SCHEME, COMP_HTTP_HOST */
