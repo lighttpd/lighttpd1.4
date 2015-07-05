@@ -445,8 +445,10 @@ URIHANDLER_FUNC(mod_extforward_uri_handler) {
 		if (sock.plain.sa_family != AF_UNSPEC) {
 			/* we found the remote address, modify current connection and save the old address */
 			if (con->plugin_ctx[p->id]) {
-				log_error_write(srv, __FILE__, __LINE__, "s", 
-						"patching an already patched connection!");
+				if (con->conf.log_request_handling) {
+					log_error_write(srv, __FILE__, __LINE__, "s",
+						"-- mod_extforward_uri_handler already patched this connection, resetting state");
+				}
 				handler_ctx_free(con->plugin_ctx[p->id]);
 				con->plugin_ctx[p->id] = NULL;
 			}
@@ -456,7 +458,7 @@ URIHANDLER_FUNC(mod_extforward_uri_handler) {
 			con->dst_addr = sock;
 			con->dst_addr_buf = buffer_init();
 			buffer_copy_string(con->dst_addr_buf, real_remote_addr);
-		
+
 			if (con->conf.log_request_handling) {
 				log_error_write(srv, __FILE__, __LINE__, "ss",
 						"patching con->dst_addr_buf for the accesslog:", real_remote_addr);

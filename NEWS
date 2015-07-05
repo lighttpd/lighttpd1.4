@@ -21,6 +21,7 @@ NEWS
   * fix segfaults in many plugins if they failed configuration
   * escape all strings for logging (fixes #2646 log file injection, reported by Jaanus Kääp)
   * fix hex escape in accesslog (fixes #2559)
+  * show extforward re-run warning only with debug.log-request-handling (fixes #2561)
 
 - 1.4.35 - 2014-03-12
   * [network/ssl] fix build error if TLSEXT is disabled
