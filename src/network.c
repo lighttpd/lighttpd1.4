@@ -185,6 +185,7 @@ static int network_server_init(server *srv, buffer *host_token, specific_config 
 	const char *i2p_keyfile;
 	char *hp;
 	FILE *fl;
+	char i2p_keybuffer[SAM3_PRIVKEY_SIZE+1];
 	const char *host;
 	buffer *b;
 	int err;
@@ -238,19 +239,30 @@ static int network_server_init(server *srv, buffer *host_token, specific_config 
 
 		srv_socket->is_i2p = 1;
 
-		log_error_write(srv, __FILE__, __LINE__, "s", "Creating SAMv3 session");
-		/* Open a SAMv3 session */
-		if (sam3CreateSession(&(srv_socket->i2p_ses), SAM3_HOST_DEFAULT, SAM3_PORT_DEFAULT, SAM3_DESTINATION_TRANSIENT, SAM3_SESSION_STREAM, NULL) < 0) {
-			log_error_write(srv, __FILE__, __LINE__, "ss", "SAMv3 create session failed:", strerror(errno));
-			goto error_free_socket;
+		/* Read in the Destination */
+		if ((fl = fopen(i2p_keyfile, "rt")) != NULL) {
+			fgets(i2p_keybuffer, SAM3_PRIVKEY_SIZE+1, fl);
+			fclose(fl);
+
+			log_error_write(srv, __FILE__, __LINE__, "ss", "Creating SAMv3 session with Destination from", i2p_keyfile);
+			if (sam3CreateSession(&(srv_socket->i2p_ses), SAM3_HOST_DEFAULT, SAM3_PORT_DEFAULT, i2p_keybuffer, SAM3_SESSION_STREAM, NULL) < 0) {
+				log_error_write(srv, __FILE__, __LINE__, "ss", "SAMv3 create session failed:", strerror(errno));
+				goto error_free_socket;
+			}
+		} else {
+			/* No file, so open a transient SAMv3 session and save its key */
+			log_error_write(srv, __FILE__, __LINE__, "s", "Creating SAMv3 session with new Destination");
+			if (sam3CreateSession(&(srv_socket->i2p_ses), SAM3_HOST_DEFAULT, SAM3_PORT_DEFAULT, SAM3_DESTINATION_TRANSIENT, SAM3_SESSION_STREAM, NULL) < 0) {
+				log_error_write(srv, __FILE__, __LINE__, "ss", "SAMv3 create session failed:", strerror(errno));
+				goto error_free_socket;
+			}
+
+			if ((fl = fopen(i2p_keyfile, "wt")) != NULL) {
+				fwrite(srv_socket->i2p_ses.privkey, strlen(srv_socket->i2p_ses.privkey), 1, fl);
+				fclose(fl);
+			}
 		}
 		log_error_write(srv, __FILE__, __LINE__, "ss", "Session built. Destination:", srv_socket->i2p_ses.pubkey);
-
-		/* Write out the Destination */
-		/*if ((fl = fopen(i2p_keyfile, "wb")) != NULL) {
-			fwrite(srv_socket->i2p_ses.pubkey, strlen(srv_socket->i2p_ses.pubkey), 1, fl);
-			fclose(fl);
-		}*/
 #else
 		log_error_write(srv, __FILE__, __LINE__, "s",
 				"ERROR: I2P sockets are not supported.");
