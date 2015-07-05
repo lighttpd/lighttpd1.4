@@ -622,7 +622,7 @@ static handler_t mod_status_handle_server_status_text(server *srv, connection *c
 }
 
 static handler_t mod_status_handle_server_statistics(server *srv, connection *con, void *p_d) {
-	buffer *b = buffer_init();
+	buffer *b;
 	size_t i;
 	array *st = srv->status;
 	UNUSED(p_d);
@@ -635,6 +635,7 @@ static handler_t mod_status_handle_server_statistics(server *srv, connection *co
 		return HANDLER_FINISHED;
 	}
 
+	b = buffer_init();
 	for (i = 0; i < st->used; i++) {
 		size_t ndx = st->sorted[i];
 
