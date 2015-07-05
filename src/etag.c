@@ -20,7 +20,7 @@ int etag_is_equal(buffer *etag, const char *line, int weak_ok) {
 	} state = START;
 
 	const char *current;
-	const char *tok_start = etag->ptr;
+	const char *tok_start;
 	const char *tok = NULL;
 	int matched;
 
@@ -29,6 +29,7 @@ int etag_is_equal(buffer *etag, const char *line, int weak_ok) {
 	}
 
 	if (!etag || buffer_string_is_empty(etag)) return 0;
+	tok_start = etag->ptr;
 
 	if ('W' == tok_start[0]) {
 		if (!weak_ok || '/' != tok_start[1]) return 0; /* bad etag */
