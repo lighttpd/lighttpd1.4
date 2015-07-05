@@ -1980,9 +1980,9 @@ static int fcgi_create_env(server *srv, handler_ctx *hctx, size_t request_id) {
 		    0 == strncmp(con->request.orig_uri->ptr, host->strip_request_uri->ptr, buffer_string_length(host->strip_request_uri))) {
 			/* the left is the same */
 
-			fcgi_env_add(p->fcgi_env, CONST_STR_LEN("REQUEST_URI"),
+			FCGI_ENV_ADD_CHECK(fcgi_env_add(p->fcgi_env, CONST_STR_LEN("REQUEST_URI"),
 					con->request.orig_uri->ptr + (buffer_string_length(host->strip_request_uri) - 1),
-					buffer_string_length(con->request.orig_uri) - (buffer_string_length(host->strip_request_uri) - 1));
+					buffer_string_length(con->request.orig_uri) - (buffer_string_length(host->strip_request_uri) - 1)), con);
 		} else {
 			FCGI_ENV_ADD_CHECK(fcgi_env_add(p->fcgi_env, CONST_STR_LEN("REQUEST_URI"), CONST_BUF_LEN(con->request.orig_uri)),con)
 		}
