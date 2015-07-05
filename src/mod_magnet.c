@@ -646,7 +646,7 @@ static int magnet_cgi_get(lua_State *L) {
 	lua_pop(L, 1);
 
 	ds = (data_string *)array_get_element(con->environment, key);
-	if (!buffer_is_empty(ds->value))
+	if (NULL != ds && !buffer_is_empty(ds->value))
 		lua_pushlstring(L, CONST_BUF_LEN(ds->value));
 	else
 		lua_pushnil(L);
