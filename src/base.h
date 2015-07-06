@@ -442,6 +442,13 @@ typedef struct {
 	sock_addr dst_addr;
 	buffer *dst_addr_buf;
 
+#ifdef HAVE_I2P
+	int reading_i2p_dest;
+	buffer *i2p_dest;
+	buffer *i2p_dest_hash;
+	buffer *i2p_dest_b32;
+#endif
+
 	/* request */
 	buffer *parse_request;
 	unsigned int parsed_response; /* bitfield which contains the important header-fields of the parsed response header */

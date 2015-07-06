@@ -611,6 +611,11 @@ connection *connection_init(server *srv) {
 
 	CLEAN(server_name);
 	CLEAN(dst_addr_buf);
+#ifdef HAVE_I2P
+	CLEAN(i2p_dest);
+	CLEAN(i2p_dest_hash);
+	CLEAN(i2p_dest_b32);
+#endif
 #if defined USE_OPENSSL && ! defined OPENSSL_NO_TLSEXT
 	CLEAN(tlsext_server_name);
 #endif
@@ -677,6 +682,11 @@ void connections_free(server *srv) {
 
 		CLEAN(server_name);
 		CLEAN(dst_addr_buf);
+#ifdef HAVE_I2P
+		CLEAN(i2p_dest);
+		CLEAN(i2p_dest_hash);
+		CLEAN(i2p_dest_b32);
+#endif
 #if defined USE_OPENSSL && ! defined OPENSSL_NO_TLSEXT
 		CLEAN(tlsext_server_name);
 #endif
@@ -1074,6 +1084,15 @@ connection *connection_accepted(server *srv, server_socket *srv_socket, sock_add
 		srv->con_opened++;
 
 		con = connections_get_new_connection(srv);
+
+#ifdef HAVE_I2P
+		if (srv_socket->is_i2p) {
+			con->reading_i2p_dest = 1;
+			buffer_reset(con->i2p_dest);
+			buffer_reset(con->i2p_dest_hash);
+			buffer_reset(con->i2p_dest_b32);
+		}
+#endif
 
 		con->fd = cnt;
 		con->fde_ndx = -1;
