@@ -106,7 +106,7 @@ while (<MIMETYPES>) {
 	chomp;
 	s/\#.*//;
 	next if /^\w*$/;
-	if (/^([a-z0-9\/+-.]+)\s+((?:[a-z0-9.+-]+[ ]?)+)$/) {
+	if (/^([a-z0-9\/+-.]+)\s+((?:[a-z0-9.+-]+[ ]?)+)$/i) {
 		my $mimetype = $1;
 		my @extensions = split / /, $2;
 
