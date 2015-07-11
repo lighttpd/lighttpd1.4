@@ -361,6 +361,9 @@ static void proxy_connection_close(server *srv, handler_ctx *hctx) {
 static int proxy_establish_connection(server *srv, handler_ctx *hctx) {
 	struct sockaddr *proxy_addr;
 	struct sockaddr_in proxy_addr_in;
+#if defined(HAVE_SYS_UN_H)
+	struct sockaddr_un proxy_addr_un;
+#endif
 #if defined(HAVE_IPV6) && defined(HAVE_INET_PTON)
 	struct sockaddr_in6 proxy_addr_in6;
 #endif
@@ -371,6 +374,15 @@ static int proxy_establish_connection(server *srv, handler_ctx *hctx) {
 	int proxy_fd       = hctx->fd;
 
 
+#if defined(HAVE_SYS_UN_H)
+	if (strstr(host->host->ptr, "/")) {
+		memset(&proxy_addr_un, 0, sizeof(proxy_addr_un));
+		proxy_addr_un.sun_family = AF_UNIX;
+		strcpy(proxy_addr_un.sun_path, host->host->ptr);
+		servlen = sizeof(proxy_addr_un);
+		proxy_addr = (struct sockaddr *) &proxy_addr_un;
+	} else
+#endif
 #if defined(HAVE_IPV6) && defined(HAVE_INET_PTON)
 	if (strstr(host->host->ptr, ":")) {
 		memset(&proxy_addr_in6, 0, sizeof(proxy_addr_in6));
@@ -416,27 +428,27 @@ static int proxy_establish_connection(server *srv, handler_ctx *hctx) {
 }
 
 static void proxy_set_header(connection *con, const char *key, const char *value) {
-    data_string *ds_dst;
+	data_string *ds_dst;
 
-    if (NULL == (ds_dst = (data_string *)array_get_unused_element(con->request.headers, TYPE_STRING))) {
-          ds_dst = data_string_init();
-    }
+	if (NULL == (ds_dst = (data_string *)array_get_unused_element(con->request.headers, TYPE_STRING))) {
+		ds_dst = data_string_init();
+	}
 
-    buffer_copy_string(ds_dst->key, key);
-    buffer_copy_string(ds_dst->value, value);
-    array_insert_unique(con->request.headers, (data_unset *)ds_dst);
+	buffer_copy_string(ds_dst->key, key);
+	buffer_copy_string(ds_dst->value, value);
+	array_insert_unique(con->request.headers, (data_unset *)ds_dst);
 }
 
 static void proxy_append_header(connection *con, const char *key, const char *value) {
-    data_string *ds_dst;
+	data_string *ds_dst;
 
-    if (NULL == (ds_dst = (data_string *)array_get_unused_element(con->request.headers, TYPE_STRING))) {
-          ds_dst = data_string_init();
-    }
+	if (NULL == (ds_dst = (data_string *)array_get_unused_element(con->request.headers, TYPE_STRING))) {
+		ds_dst = data_string_init();
+	}
 
-    buffer_copy_string(ds_dst->key, key);
-    buffer_append_string(ds_dst->value, value);
-    array_insert_unique(con->request.headers, (data_unset *)ds_dst);
+	buffer_copy_string(ds_dst->key, key);
+	buffer_append_string(ds_dst->value, value);
+	array_insert_unique(con->request.headers, (data_unset *)ds_dst);
 }
 
 
@@ -716,6 +728,14 @@ static handler_t proxy_write_request(server *srv, handler_ctx *hctx) {
 		break;
 
 	case PROXY_STATE_INIT:
+#if defined(HAVE_SYS_UN_H)
+		if (strstr(host->host->ptr,"/")) {
+			if (-1 == (hctx->fd = socket(AF_UNIX, SOCK_STREAM, 0))) {
+				log_error_write(srv, __FILE__, __LINE__, "ss", "socket failed: ", strerror(errno));
+				return HANDLER_ERROR;
+			}
+		} else
+#endif
 #if defined(HAVE_IPV6) && defined(HAVE_INET_PTON)
 		if (strstr(host->host->ptr,":")) {
 			if (-1 == (hctx->fd = socket(AF_INET6, SOCK_STREAM, 0))) {

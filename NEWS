@@ -27,6 +27,7 @@ NEWS
   * [mod_magnet] fix segfault when accessing not existing lighty.req_env[] entry (found by coverity)
   * fix segfault when temp file for upload couldn't be created (found by coverity)
   * mime.conf: add some new mime types, remove .dat, .sha1, .md5, update .vcf
+  * [mod_proxy] add unix domain socket support (fixes #2653)
 
 - 1.4.35 - 2014-03-12
   * [network/ssl] fix build error if TLSEXT is disabled
