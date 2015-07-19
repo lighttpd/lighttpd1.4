@@ -18,7 +18,7 @@ m4_define([serial_tests], [
       esac])
 ])
 
-AM_INIT_AUTOMAKE([-Wall -Wno-portability -Wno-override foreign dist-bzip2 tar-ustar] serial_tests)
+AM_INIT_AUTOMAKE([-Wall -Wno-portability -Wno-override foreign dist-xz tar-ustar] serial_tests)
 
 dnl enable with --enable-silent-rules or make V=0 (needs automake >= 1.11)
 m4_ifdef([AM_SILENT_RULES], [AM_SILENT_RULES])

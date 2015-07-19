@@ -11,7 +11,7 @@ AUTHOR=stbuehler
 # ./packdist.sh [--nopack] rc1-r10
 
 syntax() {
-	echo "./packdist.sh [--nopack] [--help] [rc1-r10]" >&2
+	echo "./packdist.sh [--nopack] [--help] [~rc1]" >&2
 	exit 2
 }
 
@@ -30,7 +30,7 @@ while [ $# -gt 0 ]; do
 	"--help")
 		syntax
 		;;
-	"rc"*)
+	"rc"*|"~rc"*)
 		if [ -n "$append" ]; then
 			echo "Only one append allowed" >&2
 			syntax
@@ -186,9 +186,7 @@ if [ ${dopack} = "1" ]; then
 	# force make check
 
 	force make distcheck
-	force make dist-gzip
-	force make dist-bzip2
-	force make dist-xz
+	force make dist
 else
 	force cd distbuild
 fi
@@ -197,26 +195,21 @@ version=`./config.status -V | head -n 1 | cut -d' ' -f3`
 name="${PACKAGE}-${version}"
 if [ -n "${append}" ]; then
 	cp "${name}.tar.gz" "${name}${append}.tar.gz"
-	cp "${name}.tar.bz2" "${name}${append}.tar.bz2"
 	cp "${name}.tar.xz" "${name}${append}.tar.xz"
 	name="${name}${append}"
 fi
 
-force sha256sum "${name}.tar."{gz,bz2,xz} > "${name}.sha256sum"
+force sha256sum "${name}.tar."{gz,xz} > "${name}.sha256sum"
 
 rm -f "${name}".tar.*.asc
 
 force gpg -a --output "${name}.tar.gz.asc" --detach-sig "${name}.tar.gz"
-force gpg -a --output "${name}.tar.bz2.asc" --detach-sig "${name}.tar.bz2"
 force gpg -a --output "${name}.tar.xz.asc" --detach-sig "${name}.tar.xz"
 
 (
 	echo "* ${BASEDOWNLOADURL}/${name}.tar.gz"
 	echo "** GPG signature: ${BASEDOWNLOADURL}/${name}.tar.gz.asc"
 	echo "** SHA256: @$(sha256sum ${name}.tar.gz | cut -d' ' -f1)@"
-	echo "* ${BASEDOWNLOADURL}/${name}.tar.bz2"
-	echo "** GPG signature: ${BASEDOWNLOADURL}/${name}.tar.bz2.asc"
-	echo "** SHA256: @$(sha256sum ${name}.tar.bz2 | cut -d' ' -f1)@"
 	echo "* ${BASEDOWNLOADURL}/${name}.tar.xz"
 	echo "** GPG signature: ${BASEDOWNLOADURL}/${name}.tar.xz.asc"
 	echo "** SHA256: @$(sha256sum ${name}.tar.xz | cut -d' ' -f1)@"
@@ -226,8 +219,6 @@ force gpg -a --output "${name}.tar.xz.asc" --detach-sig "${name}.tar.xz"
 (
 	echo "* \"${name}.tar.gz\":${BASEDOWNLOADURL}/${name}.tar.gz (\"GPG signature\":${BASEDOWNLOADURL}/${name}.tar.gz.asc)"
 	echo "** SHA256: @$(sha256sum ${name}.tar.gz | cut -d' ' -f1)@"
-	echo "* \"${name}.tar.bz2\":${BASEDOWNLOADURL}/${name}.tar.bz2 (\"GPG signature\":${BASEDOWNLOADURL}/${name}.tar.bz2.asc)"
-	echo "** SHA256: @$(sha256sum ${name}.tar.bz2 | cut -d' ' -f1)@"
 	echo "* \"${name}.tar.xz\":${BASEDOWNLOADURL}/${name}.tar.xz (\"GPG signature\":${BASEDOWNLOADURL}/${name}.tar.xz.asc)"
 	echo "** SHA256: @$(sha256sum ${name}.tar.xz | cut -d' ' -f1)@"
 	echo "* \"SHA256 checksums\":${BASEDOWNLOADURL}/${name}.sha256sum"
@@ -292,4 +283,4 @@ echo
 echo -------
 echo
 
-echo wget "${BASEDOWNLOADURL}/${name}".'{tar.gz,tar.bz2,tar.xz,sha256sum}; sha256sum -c '${name}'.sha256sum'
+echo wget "${BASEDOWNLOADURL}/${name}".'{tar.gz,tar.xz,sha256sum}; sha256sum -c '${name}'.sha256sum'
