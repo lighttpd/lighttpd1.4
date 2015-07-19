@@ -27,6 +27,9 @@ int stream_open(stream *f, buffer *fn) {
 		return -1;
 	}
 
+        if(f->size < 1)  /* < 1, or == 0 */
+          return -2;
+           
 	f->size = st.st_size;
 
 #ifdef HAVE_MMAP
