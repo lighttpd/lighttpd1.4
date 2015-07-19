@@ -22,23 +22,28 @@ int stream_open(stream *f, buffer *fn) {
 #endif
 
 	f->start = NULL;
+	f->size = 0;
 
 	if (-1 == stat(fn->ptr, &st)) {
 		return -1;
 	}
 
-	f->size = st.st_size;
+	if (0 == st.st_size) {
+		/* empty file doesn't need a mapping */
+		return 0;
+	}
 
 #ifdef HAVE_MMAP
 	if (-1 == (fd = open(fn->ptr, O_RDONLY | O_BINARY))) {
 		return -1;
 	}
 
-	f->start = mmap(NULL, f->size, PROT_READ, MAP_SHARED, fd, 0);
+	f->start = mmap(NULL, st.st_size, PROT_READ, MAP_SHARED, fd, 0);
 
 	close(fd);
 
 	if (MAP_FAILED == f->start) {
+		f->start = NULL;
 		return -1;
 	}
 
@@ -56,8 +61,8 @@ int stream_open(stream *f, buffer *fn) {
 	mh = CreateFileMapping( fh,
 			NULL,
 			PAGE_READONLY,
-			(sizeof(off_t) > 4) ? f->size >> 32 : 0,
-			f->size & 0xffffffff,
+			(sizeof(off_t) > 4) ? st.st_size >> 32 : 0,
+			st.st_size & 0xffffffff,
 			NULL);
 
 	if (!mh) {
@@ -88,6 +93,8 @@ int stream_open(stream *f, buffer *fn) {
 # error no mmap found
 #endif
 
+	f->size = st.st_size;
+
 	return 0;
 }
 
@@ -99,6 +106,7 @@ int stream_close(stream *f) {
 #endif
 
 	f->start = NULL;
+	f->size = 0;
 
 	return 0;
 }

@@ -996,14 +996,9 @@ int config_parse_file(server *srv, config_t *context, const char *fn) {
 	}
 
 	if (0 != stream_open(&s, filename)) {
-		if (s.size == 0) {
-			/* the file was empty, nothing to parse */
-			ret = 0;
-		} else {
-			log_error_write(srv, __FILE__, __LINE__, "sbss",
-					"opening configfile ", filename, "failed:", strerror(errno));
-			ret = -1;
-		} 
+		log_error_write(srv, __FILE__, __LINE__, "sbss",
+				"opening configfile ", filename, "failed:", strerror(errno));
+		ret = -1;
 	} else {
 		tokenizer_init(&t, filename, s.start, s.size);
 		ret = config_parse(srv, context, &t);
