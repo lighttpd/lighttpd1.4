@@ -940,7 +940,6 @@ static handler_t proxy_handle_fdevent(server *srv, void *ctx, int revents) {
 		case 1:
 			/* we are done */
 			proxy_connection_close(srv, hctx);
-			log_error_write(srv, __FILE__, __LINE__, "s", "proxy request finished");
 
 			joblist_append(srv, con);
 			return HANDLER_FINISHED;

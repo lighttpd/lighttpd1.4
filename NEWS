@@ -4,6 +4,7 @@ NEWS
 ====
 
 - 1.4.37
+  * [mod_proxy] remove debug log line from error log (fixes #2659)
 
 - 1.4.36 - 2015-07-26
   * use keep-alive timeout while waiting for HTTP headers; use always the read timeout while waiting for the HTTP body
