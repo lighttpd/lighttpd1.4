@@ -614,7 +614,7 @@ static void http_list_directory_footer(server *srv, connection *con, plugin_data
 			"<div class=\"foot\">"
 		));
 
-		if (buffer_string_is_empty(p->conf.set_footer)) {
+		if (!buffer_string_is_empty(p->conf.set_footer)) {
 			buffer_append_string_buffer(out, p->conf.set_footer);
 		} else if (buffer_is_empty(con->conf.server_tag)) {
 			buffer_append_string_len(out, CONST_STR_LEN(PACKAGE_DESC));
