@@ -432,7 +432,7 @@ static int chunkqueue_append_to_tempfile(server *srv, chunkqueue *dest, const ch
 	 * */
 
 	if (NULL != dest->last
-		&& FILE_CHUNK != dest->last->type
+		&& FILE_CHUNK == dest->last->type
 		&& dest->last->file.is_temp
 		&& -1 != dest->last->file.fd
 		&& 0 == dest->last->offset) {
