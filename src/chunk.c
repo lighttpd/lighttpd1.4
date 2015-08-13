@@ -417,15 +417,16 @@ static chunk *chunkqueue_get_append_tempfile(chunkqueue *cq) {
 }
 
 static int chunkqueue_append_to_tempfile(server *srv, chunkqueue *dest, const char *mem, size_t len) {
+	/* copy everything to max MAX_TEMPFILE_SIZE sized tempfiles */
+	static const off_t MAX_TEMPFILE_SIZE = 16 * 1024 * 1024; /* 16MB */
 	chunk *dst_c = NULL;
 	ssize_t written;
-	/* copy everything to max 1Mb sized tempfiles */
 
 	/*
 	 * if the last chunk is
-	 * - smaller than 1Mb (size < 1Mb)
+	 * - smaller than MAX_TEMPFILE_SIZE
 	 * - not read yet (offset == 0)
-	 * -> append to it
+	 * -> append to it (so it might actually become larger than MAX_TEMPFILE_SIZE)
 	 * otherwise
 	 * -> create a new chunk
 	 *
@@ -439,7 +440,7 @@ static int chunkqueue_append_to_tempfile(server *srv, chunkqueue *dest, const ch
 		/* ok, take the last chunk for our job */
 		dst_c = dest->last;
 
-		if (dest->last->file.length >= 1 * 1024 * 1024) {
+		if (dest->last->file.length >= MAX_TEMPFILE_SIZE) {
 			/* the chunk is too large now, close it */
 			if (-1 != dst_c->file.fd) {
 				close(dst_c->file.fd);
