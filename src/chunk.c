@@ -91,6 +91,23 @@ static void chunk_free(chunk *c) {
 	free(c);
 }
 
+static off_t chunk_remaining_length(const chunk *c) {
+	off_t len = 0;
+	switch (c->type) {
+	case MEM_CHUNK:
+		len = buffer_string_length(c->mem);
+		break;
+	case FILE_CHUNK:
+		len = c->file.length;
+		break;
+	default:
+		force_assert(c->type == MEM_CHUNK || c->type == FILE_CHUNK);
+		break;
+	}
+	force_assert(c->offset <= len);
+	return len - c->offset;
+}
+
 void chunkqueue_free(chunkqueue *cq) {
 	chunk *c, *pc;
 
@@ -151,6 +168,7 @@ static void chunkqueue_prepend_chunk(chunkqueue *cq, chunk *c) {
 	if (NULL == cq->last) {
 		cq->last = c;
 	}
+	cq->bytes_in += chunk_remaining_length(c);
 }
 
 static void chunkqueue_append_chunk(chunkqueue *cq, chunk *c) {
@@ -162,6 +180,7 @@ static void chunkqueue_append_chunk(chunkqueue *cq, chunk *c) {
 	if (NULL == cq->first) {
 		cq->first = c;
 	}
+	cq->bytes_in += chunk_remaining_length(c);
 }
 
 void chunkqueue_reset(chunkqueue *cq) {
@@ -304,6 +323,7 @@ void chunkqueue_use_memory(chunkqueue *cq, size_t len) {
 
 	if (len > 0) {
 		buffer_commit(b, len);
+		cq->bytes_in += len;
 	} else if (buffer_string_is_empty(b)) {
 		/* unused buffer: can't remove chunk easily from
 		 * end of list, so just reset the buffer
@@ -324,22 +344,7 @@ void chunkqueue_steal(chunkqueue *dest, chunkqueue *src, off_t len) {
 
 		if (NULL == c) break;
 
-		switch (c->type) {
-		case MEM_CHUNK:
-			clen = buffer_string_length(c->mem);
-			break;
-		case FILE_CHUNK:
-			clen = c->file.length;
-			break;
-		}
-		force_assert(clen >= c->offset);
-		clen -= c->offset;
-		use = len >= clen ? clen : len;
-
-		src->bytes_out += use;
-		dest->bytes_in += use;
-		len -= use;
-
+		clen = chunk_remaining_length(c);
 		if (0 == clen) {
 			/* drop empty chunk */
 			src->first = c->next;
@@ -348,29 +353,33 @@ void chunkqueue_steal(chunkqueue *dest, chunkqueue *src, off_t len) {
 			continue;
 		}
 
+		use = len >= clen ? clen : len;
+		len -= use;
+
 		if (use == clen) {
 			/* move complete chunk */
 			src->first = c->next;
 			if (c == src->last) src->last = NULL;
 
 			chunkqueue_append_chunk(dest, c);
-			continue;
+		} else {
+			/* partial chunk with length "use" */
+
+			switch (c->type) {
+			case MEM_CHUNK:
+				chunkqueue_append_mem(dest, c->mem->ptr + c->offset, use);
+				break;
+			case FILE_CHUNK:
+				/* tempfile flag is in "last" chunk after the split */
+				chunkqueue_append_file(dest, c->file.name, c->file.start + c->offset, use);
+				break;
+			}
+
+			c->offset += use;
+			force_assert(0 == len);
 		}
 
-		/* partial chunk with length "use" */
-
-		switch (c->type) {
-		case MEM_CHUNK:
-			chunkqueue_append_mem(dest, c->mem->ptr + c->offset, use);
-			break;
-		case FILE_CHUNK:
-			/* tempfile flag is in "last" chunk after the split */
-			chunkqueue_append_file(dest, c->file.name, c->file.start + c->offset, use);
-			break;
-		}
-
-		c->offset += use;
-		force_assert(0 == len);
+		src->bytes_out += use;
 	}
 }
 
@@ -479,6 +488,7 @@ static int chunkqueue_append_to_tempfile(server *srv, chunkqueue *dest, const ch
 	}
 
 	dst_c->file.length += len;
+	dest->bytes_in += len;
 
 	return 0;
 }
@@ -490,22 +500,7 @@ int chunkqueue_steal_with_tempfiles(server *srv, chunkqueue *dest, chunkqueue *s
 
 		if (NULL == c) break;
 
-		switch (c->type) {
-		case MEM_CHUNK:
-			clen = buffer_string_length(c->mem);
-			break;
-		case FILE_CHUNK:
-			clen = c->file.length;
-			break;
-		}
-		force_assert(clen >= c->offset);
-		clen -= c->offset;
-		use = len >= clen ? clen : len;
-
-		src->bytes_out += use;
-		dest->bytes_in += use;
-		len -= use;
-
+		clen = chunk_remaining_length(c);
 		if (0 == clen) {
 			/* drop empty chunk */
 			src->first = c->next;
@@ -514,12 +509,15 @@ int chunkqueue_steal_with_tempfiles(server *srv, chunkqueue *dest, chunkqueue *s
 			continue;
 		}
 
-		if (FILE_CHUNK == c->type) {
+		use = (len >= clen) ? clen : len;
+		len -= use;
+
+		switch (c->type) {
+		case FILE_CHUNK:
 			if (use == clen) {
 				/* move complete chunk */
 				src->first = c->next;
 				if (c == src->last) src->last = NULL;
-
 				chunkqueue_append_chunk(dest, c);
 			} else {
 				/* partial chunk with length "use" */
@@ -529,25 +527,28 @@ int chunkqueue_steal_with_tempfiles(server *srv, chunkqueue *dest, chunkqueue *s
 				c->offset += use;
 				force_assert(0 == len);
 			}
-			continue;
+			break;
+
+		case MEM_CHUNK:
+			/* store "use" bytes from memory chunk in tempfile */
+			if (0 != chunkqueue_append_to_tempfile(srv, dest, c->mem->ptr + c->offset, use)) {
+				return -1;
+			}
+
+			if (use == clen) {
+				/* finished chunk */
+				src->first = c->next;
+				if (c == src->last) src->last = NULL;
+				chunkqueue_push_unused_chunk(src, c);
+			} else {
+				/* partial chunk */
+				c->offset += use;
+				force_assert(0 == len);
+			}
+			break;
 		}
 
-		/* store "use" bytes from memory chunk in tempfile */
-		if (0 != chunkqueue_append_to_tempfile(srv, dest, c->mem->ptr + c->offset, use)) {
-			/* undo counters */
-			src->bytes_out -= use;
-			dest->bytes_in -= use;
-			return -1;
-		}
-
-
-		c->offset += use;
-		if (use == clen) {
-			/* finished chunk */
-			src->first = c->next;
-			if (c == src->last) src->last = NULL;
-			chunkqueue_push_unused_chunk(src, c);
-		}
+		src->bytes_out += use;
 	}
 
 	return 0;
@@ -558,18 +559,7 @@ off_t chunkqueue_length(chunkqueue *cq) {
 	chunk *c;
 
 	for (c = cq->first; c; c = c->next) {
-		off_t c_len = 0;
-
-		switch (c->type) {
-		case MEM_CHUNK:
-			c_len = buffer_string_length(c->mem);
-			break;
-		case FILE_CHUNK:
-			c_len = c->file.length;
-			break;
-		}
-		force_assert(c_len >= c->offset);
-		len += c_len - c->offset;
+		len += chunk_remaining_length(c);
 	}
 
 	return len;
@@ -582,20 +572,10 @@ int chunkqueue_is_empty(chunkqueue *cq) {
 void chunkqueue_mark_written(chunkqueue *cq, off_t len) {
 	off_t written = len;
 	chunk *c;
+	force_assert(len >= 0);
 
 	for (c = cq->first; NULL != c; c = cq->first) {
-		off_t c_len = 0;
-
-		switch (c->type) {
-		case MEM_CHUNK:
-			c_len = buffer_string_length(c->mem);
-			break;
-		case FILE_CHUNK:
-			c_len = c->file.length;
-			break;
-		}
-		force_assert(c_len >= c->offset);
-		c_len -= c->offset;
+		off_t c_len = chunk_remaining_length(c);
 
 		if (0 == written && 0 != c_len) break; /* no more finished chunks */
 
@@ -622,19 +602,7 @@ void chunkqueue_remove_finished_chunks(chunkqueue *cq) {
 	chunk *c;
 
 	for (c = cq->first; c; c = cq->first) {
-		off_t c_len = 0;
-
-		switch (c->type) {
-		case MEM_CHUNK:
-			c_len = buffer_string_length(c->mem);
-			break;
-		case FILE_CHUNK:
-			c_len = c->file.length;
-			break;
-		}
-		force_assert(c_len >= c->offset);
-
-		if (c_len > c->offset) break; /* not finished yet */
+		if (0 != chunk_remaining_length(c)) break; /* not finished yet */
 
 		cq->first = c->next;
 		if (c == cq->last) cq->last = NULL;

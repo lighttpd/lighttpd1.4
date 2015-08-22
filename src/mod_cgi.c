@@ -814,11 +814,12 @@ static int cgi_create_env(server *srv, connection *con, plugin_data *p, buffer *
 			cgi_env_add(&env, CONST_STR_LEN("SERVER_NAME"), con->server_name->ptr, len);
 		} else {
 #ifdef HAVE_IPV6
-			s = inet_ntop(srv_sock->addr.plain.sa_family,
-				      srv_sock->addr.plain.sa_family == AF_INET6 ?
-				      (const void *) &(srv_sock->addr.ipv6.sin6_addr) :
-				      (const void *) &(srv_sock->addr.ipv4.sin_addr),
-				      b2, sizeof(b2)-1);
+			s = inet_ntop(
+				srv_sock->addr.plain.sa_family,
+				srv_sock->addr.plain.sa_family == AF_INET6 ?
+				(const void *) &(srv_sock->addr.ipv6.sin6_addr) :
+				(const void *) &(srv_sock->addr.ipv4.sin_addr),
+				b2, sizeof(b2)-1);
 #else
 			s = inet_ntoa(srv_sock->addr.ipv4.sin_addr);
 #endif
@@ -842,14 +843,16 @@ static int cgi_create_env(server *srv, connection *con, plugin_data *p, buffer *
 		switch (srv_sock->addr.plain.sa_family) {
 #ifdef HAVE_IPV6
 		case AF_INET6:
-			s = inet_ntop(srv_sock->addr.plain.sa_family,
-			              (const void *) &(srv_sock->addr.ipv6.sin6_addr),
-			              b2, sizeof(b2)-1);
+			s = inet_ntop(
+				srv_sock->addr.plain.sa_family,
+				(const void *) &(srv_sock->addr.ipv6.sin6_addr),
+				b2, sizeof(b2)-1);
 			break;
 		case AF_INET:
-			s = inet_ntop(srv_sock->addr.plain.sa_family,
-			              (const void *) &(srv_sock->addr.ipv4.sin_addr),
-			              b2, sizeof(b2)-1);
+			s = inet_ntop(
+				srv_sock->addr.plain.sa_family,
+				(const void *) &(srv_sock->addr.ipv4.sin_addr),
+				b2, sizeof(b2)-1);
 			break;
 #else
 		case AF_INET:
@@ -880,14 +883,16 @@ static int cgi_create_env(server *srv, connection *con, plugin_data *p, buffer *
 		switch (con->dst_addr.plain.sa_family) {
 #ifdef HAVE_IPV6
 		case AF_INET6:
-			s = inet_ntop(con->dst_addr.plain.sa_family,
-			              (const void *) &(con->dst_addr.ipv6.sin6_addr),
-			              b2, sizeof(b2)-1);
+			s = inet_ntop(
+				con->dst_addr.plain.sa_family,
+				(const void *) &(con->dst_addr.ipv6.sin6_addr),
+				b2, sizeof(b2)-1);
 			break;
 		case AF_INET:
-			s = inet_ntop(con->dst_addr.plain.sa_family,
-			              (const void *) &(con->dst_addr.ipv4.sin_addr),
-			              b2, sizeof(b2)-1);
+			s = inet_ntop(
+				con->dst_addr.plain.sa_family,
+				(const void *) &(con->dst_addr.ipv4.sin_addr),
+				b2, sizeof(b2)-1);
 			break;
 #else
 		case AF_INET:
@@ -1088,14 +1093,12 @@ static int cgi_create_env(server *srv, connection *con, plugin_data *p, buffer *
 				}
 
 				if (r > 0) {
-					c->offset += r;
-					cq->bytes_out += r;
+					chunkqueue_mark_written(cq, r);
 				} else {
 					log_error_write(srv, __FILE__, __LINE__, "ss", "write() failed due to: ", strerror(errno)); 
 					con->http_status = 500;
 					break;
 				}
-				chunkqueue_remove_finished_chunks(cq);
 			}
 		}
 

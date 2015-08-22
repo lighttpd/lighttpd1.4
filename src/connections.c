@@ -967,6 +967,7 @@ found_header_end:
 
 				buffer_append_string_len(con->request.request, c->mem->ptr + c->offset, len);
 				c->offset += len;
+				cq->bytes_out += len;
 
 				if (c == last_chunk) break;
 			}

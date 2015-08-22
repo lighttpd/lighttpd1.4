@@ -1611,7 +1611,6 @@ static int scgi_create_env(server *srv, handler_ctx *hctx) {
 	buffer_append_string_buffer(b, p->scgi_env);
 	buffer_append_string_len(b, CONST_STR_LEN(","));
 
-	hctx->wb->bytes_in += buffer_string_length(b);
 	chunkqueue_append_buffer(hctx->wb, b);
 	buffer_free(b);
 

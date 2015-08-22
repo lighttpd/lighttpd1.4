@@ -1033,8 +1033,7 @@ static int webdav_parse_chunkqueue(server *srv, connection *con, plugin_data *p,
 				log_error_write(srv, __FILE__, __LINE__, "sodd", "xmlParseChunk failed at:", cq->bytes_out, weHave, err);
 			}
 
-			c->offset += weHave;
-			cq->bytes_out += weHave;
+			chunkqueue_mark_written(cq, weHave);
 
 			break;
 		case MEM_CHUNK:
@@ -1051,14 +1050,11 @@ static int webdav_parse_chunkqueue(server *srv, connection *con, plugin_data *p,
 				log_error_write(srv, __FILE__, __LINE__, "sodd", "xmlParseChunk failed at:", cq->bytes_out, weHave, err);
 			}
 
-			c->offset += weHave;
-			cq->bytes_out += weHave;
+			chunkqueue_mark_written(cq, weHave);
 
 			break;
 		}
-		chunkqueue_remove_finished_chunks(cq);
 	}
-
 
 	switch ((err = xmlParseChunk(ctxt, 0, 0, 1))) {
 	case XML_ERR_DOCUMENT_END:
@@ -1764,12 +1760,10 @@ URIHANDLER_FUNC(mod_webdav_subrequest_handler) {
 			}
 
 			if (r > 0) {
-				c->offset += r;
-				cq->bytes_out += r;
+				chunkqueue_mark_written(cq, r);
 			} else {
 				break;
 			}
-			chunkqueue_remove_finished_chunks(cq);
 		}
 		close(fd);
 
