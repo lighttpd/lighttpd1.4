@@ -13,6 +13,7 @@ NEWS
   * fix some unchecked return value warnings
   * [kqueue] fix kevent call
   * [autoconf] define HAVE_CRYPT when crypt() is present
+  * [bsd xattr] fix compile break with BSD extended attributes in stat_cache
 
 - 1.4.36 - 2015-07-26
   * use keep-alive timeout while waiting for HTTP headers; use always the read timeout while waiting for the HTTP body

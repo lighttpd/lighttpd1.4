@@ -230,7 +230,7 @@ static int stat_cache_attr_get(buffer *buf, char *name) {
 static int stat_cache_attr_get(buffer *buf, char *name) {
 	ssize_t attrlen;
 
-	buffer_prepare_copy(buf, 1023);
+	buffer_string_prepare_copy(buf, 1023);
 
 	if (-1 != (attrlen = extattr_get_file(name, EXTATTR_NAMESPACE_USER, "Content-Type", buf->ptr, buf->size - 1))) {
 		buf->used = attrlen + 1;
