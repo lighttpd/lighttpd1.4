@@ -249,7 +249,7 @@ static uint32_t hashme(buffer *str) {
 		hash = ((hash << 5) + hash) + *s;
 	}
 
-	hash &= ~(1 << 31); /* strip the highest bit */
+	hash &= ~(((uint32_t)1) << 31); /* strip the highest bit */
 
 	return hash;
 }
