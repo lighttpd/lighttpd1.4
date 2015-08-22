@@ -540,6 +540,7 @@ AC_SEARCH_LIBS([crypt_r],[crypt],[
   CRYPT_LIB=$LIBS
 ],[
   AC_SEARCH_LIBS([crypt],[crypt],[
+    AC_DEFINE([HAVE_CRYPT], [1], [crypt])
     AC_CHECK_HEADERS([crypt.h],[
       AC_DEFINE([HAVE_CRYPT_H], [1], [crypt.h])
     ])
