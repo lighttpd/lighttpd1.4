@@ -15,13 +15,10 @@ my $tf = LightyTest->new();
 my $t;
 my $php_child = -1;
 
-my $phpbin = (defined $ENV{'PHP'} ? $ENV{'PHP'} : '/usr/bin/php-cgi');
-$ENV{'PHP'} = $phpbin;
-
 SKIP: {
 	skip "PHP already running on port 1026", 1 if $tf->listening_on(1026);
-	skip "no php binary found", 1 unless -x $phpbin;
-	ok(-1 != ($php_child = $tf->spawnfcgi($phpbin, 1026)), "Spawning php");
+	skip "no php binary found", 1 unless $LightyTest::HAVE_PHP;
+	ok(-1 != ($php_child = $tf->spawnfcgi($ENV{'PHP'}, 1026)), "Spawning php");
 }
 
 SKIP: {
@@ -295,7 +292,7 @@ EOF
 }
 
 SKIP: {
-	skip "no php found", 5 unless -x $phpbin;
+	skip "no php found", 5 unless $LightyTest::HAVE_PHP;
 	$tf->{CONFIGFILE} = 'fastcgi-13.conf';
 	ok($tf->start_proc == 0, "Starting lighttpd with $tf->{CONFIGFILE}") or die();
 	$t->{REQUEST}  = ( <<EOF

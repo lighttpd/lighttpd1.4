@@ -1,4 +1,4 @@
-#!/usr/bin/perl
+#!/usr/bin/env perl
 use CGI qw/:standard/;
 print header ( -status => 404
                -type   => 'text/plain' );

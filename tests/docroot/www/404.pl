@@ -1,5 +1,7 @@
-#!/usr/bin/perl
+#!/usr/bin/env perl
+
 use CGI qw/:standard/;
+
 my $cgi = new CGI;
 my $request_uri = $ENV{'REQUEST_URI'};
 print (STDERR "REQUEST_URI: $request_uri\n");

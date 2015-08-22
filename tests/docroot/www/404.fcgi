@@ -1,6 +1,8 @@
-#!/usr/bin/perl
+#!/usr/bin/env perl
+
 #use CGI qw/:standard/;
 use CGI::Fast qw(:standard);
+
 my $cgi = new CGI;
 while (new CGI::Fast) {
     my $request_uri = $ENV{'REQUEST_URI'};

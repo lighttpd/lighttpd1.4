@@ -1,5 +1,4 @@
-#!/usr/bin/perl
-
+#!/usr/bin/env perl
 
 print "Content-Type: text/plain\r\n\r\n";
 
@@ -12,4 +11,3 @@ if ($ENV{"REQUEST_METHOD"} eq "POST") {
 } else {
 	print "0";
 }
-

@@ -17,13 +17,10 @@ my $tf_proxy = LightyTest->new();
 my $t;
 my $php_child = -1;
 
-my $phpbin = (defined $ENV{'PHP'} ? $ENV{'PHP'} : '/usr/bin/php-cgi');
-$ENV{'PHP'} = $phpbin;
-
 SKIP: {
 	skip "PHP already running on port 1026", 1 if $tf_real->listening_on(1026);
-	skip "no php binary found", 1 unless -x $phpbin;
-	ok(-1 != ($php_child = $tf_real->spawnfcgi($phpbin, 1026)), "Spawning php");
+	skip "no php binary found", 1 unless $LightyTest::HAVE_PHP;
+	ok(-1 != ($php_child = $tf_real->spawnfcgi($ENV{'PHP'}, 1026)), "Spawning php");
 }
 
 ## we need two procs
