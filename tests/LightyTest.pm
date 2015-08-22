@@ -17,6 +17,7 @@ sub find_program {
 		$location = $ENV{$envname};
 	} else {
 		$location = `which "$program" 2>/dev/null`;
+		chomp $location;
 		if (! -x $location) {
 			for my $path (@DEFAULT_PATHS) {
 				$location = $path . $program;
