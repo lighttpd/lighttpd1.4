@@ -635,7 +635,7 @@ if(CMAKE_COMPILER_IS_GNUCC)
 	add_definitions(-D_GNU_SOURCE)
 endif()
 
-add_target_properties(lighttpd LINK_FLAGS "-export-dynamic")
+add_target_properties(lighttpd LINK_FLAGS "-Wl,-export-dynamic")
 
 set_target_properties(lighttpd PROPERTIES CMAKE_INSTALL_PREFIX ${CMAKE_INSTALL_PREFIX})
 
