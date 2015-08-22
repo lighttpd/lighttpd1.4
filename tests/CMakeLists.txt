@@ -1,4 +1,4 @@
-SET(T_FILES
+set(T_FILES
 	prepare.sh
 	cachable.t
 	core-404-handler.t
@@ -28,9 +28,9 @@ SET(T_FILES
 	cleanup.sh
 )
 
-FOREACH(it ${T_FILES})
-  ADD_TEST(NAME ${it} COMMAND "${lighttpd_SOURCE_DIR}/tests/wrapper.sh"
+foreach(it ${T_FILES})
+	add_test(NAME ${it} COMMAND "${lighttpd_SOURCE_DIR}/tests/wrapper.sh"
 		"${lighttpd_SOURCE_DIR}/tests"
 		"${lighttpd_BINARY_DIR}"
 		"${lighttpd_SOURCE_DIR}/tests/${it}")
-ENDFOREACH(it)
+endforeach()

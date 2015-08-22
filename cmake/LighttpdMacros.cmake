@@ -1,43 +1,43 @@
 ## our modules are without the "lib" prefix
 
-MACRO(ADD_AND_INSTALL_LIBRARY LIBNAME SRCFILES)
-  IF(BUILD_STATIC)
-    ADD_LIBRARY(${LIBNAME} STATIC ${SRCFILES})
-    TARGET_LINK_LIBRARIES(lighttpd ${LIBNAME})
-  ELSE(BUILD_STATIC)
-    ADD_LIBRARY(${LIBNAME} SHARED ${SRCFILES})
-    SET(L_INSTALL_TARGETS ${L_INSTALL_TARGETS} ${LIBNAME})
-    ## Windows likes to link it this way back to app!
-    IF(WIN32)
-        SET_TARGET_PROPERTIES(${LIBNAME} PROPERTIES LINK_FLAGS lighttpd.lib)
-    ENDIF(WIN32)
+macro(ADD_AND_INSTALL_LIBRARY LIBNAME SRCFILES)
+	if(BUILD_STATIC)
+		add_library(${LIBNAME} STATIC ${SRCFILES})
+		target_link_libraries(lighttpd ${LIBNAME})
+	else()
+		add_library(${LIBNAME} SHARED ${SRCFILES})
+		set(L_INSTALL_TARGETS ${L_INSTALL_TARGETS} ${LIBNAME})
+		## Windows likes to link it this way back to app!
+		if(WIN32)
+			set_target_properties(${LIBNAME} PROPERTIES LINK_FLAGS lighttpd.lib)
+		endif()
 
-    IF(APPLE)
-        SET_TARGET_PROPERTIES(${LIBNAME} PROPERTIES LINK_FLAGS "-flat_namespace -undefined suppress")
-    ENDIF(APPLE)
-  ENDIF(BUILD_STATIC)
-ENDMACRO(ADD_AND_INSTALL_LIBRARY)
+		if(APPLE)
+			set_target_properties(${LIBNAME} PROPERTIES LINK_FLAGS "-flat_namespace -undefined suppress")
+		endif()
+	endif()
+endmacro(ADD_AND_INSTALL_LIBRARY)
 
-MACRO(LEMON_PARSER SRCFILE)
-  GET_FILENAME_COMPONENT(SRCBASE ${SRCFILE} NAME_WE)
-  ADD_CUSTOM_COMMAND(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/${SRCBASE}.c ${CMAKE_CURRENT_BINARY_DIR}/${SRCBASE}.h
-  COMMAND ${CMAKE_BINARY_DIR}/build/lemon
-  ARGS -q ${CMAKE_CURRENT_SOURCE_DIR}/${SRCFILE} ${CMAKE_SOURCE_DIR}/src/lempar.c
-    DEPENDS ${CMAKE_BINARY_DIR}/build/lemon ${CMAKE_CURRENT_SOURCE_DIR}/${SRCFILE} ${CMAKE_SOURCE_DIR}/src/lempar.c
-  COMMENT "Generating ${SRCBASE}.c from ${SRCFILE}"
-)
-ENDMACRO(LEMON_PARSER)
+macro(LEMON_PARSER SRCFILE)
+	get_filename_component(SRCBASE ${SRCFILE} NAME_WE)
+	add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/${SRCBASE}.c ${CMAKE_CURRENT_BINARY_DIR}/${SRCBASE}.h
+		COMMAND ${CMAKE_BINARY_DIR}/build/lemon
+		ARGS -q ${CMAKE_CURRENT_SOURCE_DIR}/${SRCFILE} ${CMAKE_SOURCE_DIR}/src/lempar.c
+		DEPENDS ${CMAKE_BINARY_DIR}/build/lemon ${CMAKE_CURRENT_SOURCE_DIR}/${SRCFILE} ${CMAKE_SOURCE_DIR}/src/lempar.c
+		COMMENT "Generating ${SRCBASE}.c from ${SRCFILE}"
+	)
+endmacro(LEMON_PARSER)
 
-MACRO(ADD_TARGET_PROPERTIES _target _name)
-  SET(_properties)
-  FOREACH(_prop ${ARGN})
-    SET(_properties "${_properties} ${_prop}")
-  ENDFOREACH(_prop)
-  GET_TARGET_PROPERTY(_old_properties ${_target} ${_name})
-  MESSAGE("adding property to ${_target} ${_name}:" ${_properties})
-  IF(NOT _old_properties)
-    # in case it's NOTFOUND
-    SET(_old_properties)
-  ENDIF(NOT _old_properties)
-  SET_TARGET_PROPERTIES(${_target} PROPERTIES ${_name} "${_old_properties} ${_properties}")
-ENDMACRO(ADD_TARGET_PROPERTIES)
+macro(ADD_TARGET_PROPERTIES _target _name)
+	set(_properties)
+	foreach(_prop ${ARGN})
+		set(_properties "${_properties} ${_prop}")
+	endforeach()
+	get_target_property(_old_properties ${_target} ${_name})
+	message("adding property to ${_target} ${_name}:" ${_properties})
+	if(NOT _old_properties)
+		# in case it's NOTFOUND
+		set(_old_properties)
+	endif()
+	set_target_properties(${_target} PROPERTIES ${_name} "${_old_properties} ${_properties}")
+endmacro(ADD_TARGET_PROPERTIES)
