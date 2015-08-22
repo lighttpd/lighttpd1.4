@@ -3,6 +3,8 @@
 
 #include "server.h"
 
+ssize_t write_all(int fd, const void* buf, size_t count);
+
 /* Close fd and _try_ to get a /dev/null for it instead.
  * Returns 0 on success and -1 on failure (fd gets closed in all cases)
  */

@@ -160,6 +160,13 @@ INIT_FUNC(mod_accesslog_init) {
 	return p;
 }
 
+static void accesslog_write_all(server *srv, const buffer *filename, int fd, const void* buf, size_t count) {
+	if (-1 == write_all(fd, buf, count)) {
+		log_error_write(srv, __FILE__, __LINE__, "sbs",
+			"writing access log entry failed:", filename, strerror(errno));
+	}
+}
+
 static void accesslog_append_escaped(buffer *dest, buffer *str) {
 	char *ptr, *start, *end;
 
@@ -418,7 +425,7 @@ FREE_FUNC(mod_accesslog_free) {
 
 			if (!buffer_string_is_empty(s->access_logbuffer)) {
 				if (s->log_access_fd != -1) {
-					write(s->log_access_fd, CONST_BUF_LEN(s->access_logbuffer));
+					accesslog_write_all(srv, s->access_logfile, s->log_access_fd, CONST_BUF_LEN(s->access_logbuffer));
 				}
 			}
 
@@ -593,7 +600,7 @@ SIGHUP_FUNC(log_access_cycle) {
 
 		if (!buffer_string_is_empty(s->access_logbuffer)) {
 			if (s->log_access_fd != -1) {
-				write(s->log_access_fd, CONST_BUF_LEN(s->access_logbuffer));
+				accesslog_write_all(srv, s->access_logfile, s->log_access_fd, CONST_BUF_LEN(s->access_logbuffer));
 			}
 
 			buffer_reset(s->access_logbuffer);
@@ -914,7 +921,7 @@ REQUESTDONE_FUNC(log_access_write) {
 			}
 #endif
 		} else if (p->conf.log_access_fd != -1) {
-			write(p->conf.log_access_fd, CONST_BUF_LEN(b));
+			accesslog_write_all(srv, p->conf.access_logfile, p->conf.log_access_fd, CONST_BUF_LEN(b));
 		}
 		buffer_reset(b);
 	}

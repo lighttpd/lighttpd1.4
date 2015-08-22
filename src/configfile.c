@@ -1045,7 +1045,7 @@ int config_parse_cmd(server *srv, config_t *context, const char *cmd) {
 
 	if (NULL == (oldpwd = getCWD())) {
 		log_error_write(srv, __FILE__, __LINE__, "s",
-				"cannot get cwd", strerror(errno));
+			"cannot get cwd", strerror(errno));
 		return -1;
 	}
 
@@ -1053,12 +1053,16 @@ int config_parse_cmd(server *srv, config_t *context, const char *cmd) {
 	out = buffer_init();
 
 	if (!buffer_string_is_empty(context->basedir)) {
-		chdir(context->basedir->ptr);
+		if (0 != chdir(context->basedir->ptr)) {
+			log_error_write(srv, __FILE__, __LINE__, "sbs",
+				"cannot change directory to", context->basedir, strerror(errno));
+			return -1;
+		}
 	}
 
 	if (0 != proc_open_buffer(cmd, NULL, out, NULL)) {
 		log_error_write(srv, __FILE__, __LINE__, "sbss",
-				"opening", source, "failed:", strerror(errno));
+			"opening", source, "failed:", strerror(errno));
 		ret = -1;
 	} else {
 		tokenizer_init(&t, source, CONST_BUF_LEN(out));
@@ -1067,7 +1071,11 @@ int config_parse_cmd(server *srv, config_t *context, const char *cmd) {
 
 	buffer_free(source);
 	buffer_free(out);
-	chdir(oldpwd);
+	if (0 != chdir(oldpwd)) {
+		log_error_write(srv, __FILE__, __LINE__, "sss",
+			"cannot change directory to", oldpwd, strerror(errno));
+		return -1;
+	}
 	free(oldpwd);
 	return ret;
 }

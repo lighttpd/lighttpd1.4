@@ -366,7 +366,7 @@ static void show_version (void) {
 "Build-Date: " __DATE__ " " __TIME__ "\n";
 ;
 #undef TEXT_SSL
-	write(STDOUT_FILENO, b, strlen(b));
+	write_all(STDOUT_FILENO, b, strlen(b));
 }
 
 static void show_features (void) {
@@ -535,7 +535,7 @@ static void show_help (void) {
 ;
 #undef TEXT_SSL
 #undef TEXT_IPV6
-	write(STDOUT_FILENO, b, strlen(b));
+	write_all(STDOUT_FILENO, b, strlen(b));
 }
 
 int main (int argc, char **argv) {
@@ -1001,7 +1001,11 @@ int main (int argc, char **argv) {
 	if (pid_fd != -1) {
 		buffer_copy_int(srv->tmp_buf, getpid());
 		buffer_append_string_len(srv->tmp_buf, CONST_STR_LEN("\n"));
-		write(pid_fd, CONST_BUF_LEN(srv->tmp_buf));
+		if (-1 == write_all(pid_fd, CONST_BUF_LEN(srv->tmp_buf))) {
+			log_error_write(srv, __FILE__, __LINE__, "ss", "Couldn't write pid file:", strerror(errno));
+			close(pid_fd);
+			return -1;
+		}
 		close(pid_fd);
 		pid_fd = -1;
 	}

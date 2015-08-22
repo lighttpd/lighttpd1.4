@@ -26,6 +26,36 @@
 # define O_LARGEFILE 0
 #endif
 
+/* retry write on EINTR or when not all data was written */
+ssize_t write_all(int fd, const void* buf, size_t count) {
+	ssize_t written = 0;
+
+	while (count > 0) {
+		ssize_t r = write(fd, buf, count);
+		if (r < 0) {
+			switch (errno) {
+			case EINTR:
+				/* try again */
+				break;
+			default:
+				/* fail - repeating probably won't help */
+				return -1;
+			}
+		} else if (0 == r) {
+			/* really shouldn't happen... */
+			errno = EIO;
+			return -1;
+		} else {
+			force_assert(r <= (ssize_t) count);
+			written += r;
+			buf = r + (char const*) buf;
+			count -= r;
+		}
+	}
+
+	return written;
+}
+
 /* Close fd and _try_ to get a /dev/null for it instead.
  * close() alone may trigger some bugs when a
  * process opens another file and gets fd = STDOUT_FILENO or STDERR_FILENO
@@ -361,7 +391,7 @@ static void log_write(server *srv, buffer *b) {
 	case ERRORLOG_FILE:
 	case ERRORLOG_FD:
 		buffer_append_string_len(b, CONST_STR_LEN("\n"));
-		write(srv->errorlog_fd, CONST_BUF_LEN(b));
+		write_all(srv->errorlog_fd, CONST_BUF_LEN(b));
 		break;
 	case ERRORLOG_SYSLOG:
 		syslog(LOG_ERR, "%s", b->ptr);
