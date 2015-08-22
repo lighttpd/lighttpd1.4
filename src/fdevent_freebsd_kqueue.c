@@ -46,7 +46,7 @@ static int fdevent_freebsd_kqueue_event_del(fdevents *ev, int fde_ndx, int fd) {
 	ts.tv_nsec = 0;
 
 	ret = kevent(ev->kq_fd,
-		&kev, n,
+		kev, n,
 		NULL, 0,
 		&ts);
 
