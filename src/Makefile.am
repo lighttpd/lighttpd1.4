@@ -72,6 +72,7 @@ common_src=buffer.c log.c \
 	configfile-glue.c \
 	http-header-glue.c \
 	network_write.c network_linux_sendfile.c \
+	network_write_mmap.c network_write_no_mmap.c \
 	network_freebsd_sendfile.c network_writev.c \
 	network_solaris_sendfilev.c network_openssl.c \
 	splaytree.c status_counter.c

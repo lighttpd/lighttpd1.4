@@ -9,6 +9,7 @@ NEWS
   * fix out-of-filedescriptors when uploading "large" files (fixes #2660, thx rmilecki)
   * increase upload temporary chunk file size from 1MB to 16MB
   * fix undefined integer shift
+  * rewrite network sendfile/mmap/writev/write backends
 
 - 1.4.36 - 2015-07-26
   * use keep-alive timeout while waiting for HTTP headers; use always the read timeout while waiting for the HTTP body

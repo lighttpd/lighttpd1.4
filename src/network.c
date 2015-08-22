@@ -518,9 +518,7 @@ typedef enum {
 	NETWORK_BACKEND_UNSET,
 	NETWORK_BACKEND_WRITE,
 	NETWORK_BACKEND_WRITEV,
-	NETWORK_BACKEND_LINUX_SENDFILE,
-	NETWORK_BACKEND_FREEBSD_SENDFILE,
-	NETWORK_BACKEND_SOLARIS_SENDFILEV
+	NETWORK_BACKEND_SENDFILE,
 } network_backend_t;
 
 #ifdef USE_OPENSSL
@@ -675,20 +673,23 @@ int network_init(server *srv) {
 		const char *name;
 	} network_backends[] = {
 		/* lowest id wins */
+#if defined USE_SENDFILE
+		{ NETWORK_BACKEND_SENDFILE,   "sendfile" },
+#endif
 #if defined USE_LINUX_SENDFILE
-		{ NETWORK_BACKEND_LINUX_SENDFILE,       "linux-sendfile" },
+		{ NETWORK_BACKEND_SENDFILE,   "linux-sendfile" },
 #endif
 #if defined USE_FREEBSD_SENDFILE
-		{ NETWORK_BACKEND_FREEBSD_SENDFILE,     "freebsd-sendfile" },
+		{ NETWORK_BACKEND_SENDFILE,   "freebsd-sendfile" },
 #endif
 #if defined USE_SOLARIS_SENDFILEV
-		{ NETWORK_BACKEND_SOLARIS_SENDFILEV,	"solaris-sendfilev" },
+		{ NETWORK_BACKEND_SENDFILE,   "solaris-sendfilev" },
 #endif
 #if defined USE_WRITEV
-		{ NETWORK_BACKEND_WRITEV,		"writev" },
+		{ NETWORK_BACKEND_WRITEV,     "writev" },
 #endif
-		{ NETWORK_BACKEND_WRITE,		"write" },
-		{ NETWORK_BACKEND_UNSET,        	NULL }
+		{ NETWORK_BACKEND_WRITE,      "write" },
+		{ NETWORK_BACKEND_UNSET,       NULL }
 	};
 
 #ifdef USE_OPENSSL
@@ -967,24 +968,14 @@ int network_init(server *srv) {
 	case NETWORK_BACKEND_WRITE:
 		srv->network_backend_write = network_write_chunkqueue_write;
 		break;
-#ifdef USE_WRITEV
+#if defined(USE_WRITEV)
 	case NETWORK_BACKEND_WRITEV:
 		srv->network_backend_write = network_write_chunkqueue_writev;
 		break;
 #endif
-#ifdef USE_LINUX_SENDFILE
-	case NETWORK_BACKEND_LINUX_SENDFILE:
-		srv->network_backend_write = network_write_chunkqueue_linuxsendfile;
-		break;
-#endif
-#ifdef USE_FREEBSD_SENDFILE
-	case NETWORK_BACKEND_FREEBSD_SENDFILE:
-		srv->network_backend_write = network_write_chunkqueue_freebsdsendfile;
-		break;
-#endif
-#ifdef USE_SOLARIS_SENDFILEV
-	case NETWORK_BACKEND_SOLARIS_SENDFILEV:
-		srv->network_backend_write = network_write_chunkqueue_solarissendfilev;
+#if defined(USE_SENDFILE)
+	case NETWORK_BACKEND_SENDFILE:
+		srv->network_backend_write = network_write_chunkqueue_sendfile;
 		break;
 #endif
 	default:

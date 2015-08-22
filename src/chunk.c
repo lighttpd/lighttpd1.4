@@ -10,7 +10,7 @@
 
 #include <sys/types.h>
 #include <sys/stat.h>
-#include <sys/mman.h>
+#include "sys-mmap.h"
 
 #include <stdlib.h>
 #include <fcntl.h>
@@ -577,6 +577,45 @@ off_t chunkqueue_length(chunkqueue *cq) {
 
 int chunkqueue_is_empty(chunkqueue *cq) {
 	return NULL == cq->first;
+}
+
+void chunkqueue_mark_written(chunkqueue *cq, off_t len) {
+	off_t written = len;
+	chunk *c;
+
+	for (c = cq->first; NULL != c; c = cq->first) {
+		off_t c_len = 0;
+
+		switch (c->type) {
+		case MEM_CHUNK:
+			c_len = buffer_string_length(c->mem);
+			break;
+		case FILE_CHUNK:
+			c_len = c->file.length;
+			break;
+		}
+		force_assert(c_len >= c->offset);
+		c_len -= c->offset;
+
+		if (0 == written && 0 != c_len) break; /* no more finished chunks */
+
+		if (written >= c_len) { /* chunk got finished */
+			c->offset += c_len;
+			written -= c_len;
+
+			cq->first = c->next;
+			if (c == cq->last) cq->last = NULL;
+
+			chunkqueue_push_unused_chunk(cq, c);
+		} else { /* partial chunk */
+			c->offset += written;
+			written = 0;
+			break; /* chunk not finished */
+		}
+	}
+
+	force_assert(0 == written);
+	cq->bytes_out += len;
 }
 
 void chunkqueue_remove_finished_chunks(chunkqueue *cq) {

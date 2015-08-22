@@ -334,7 +334,7 @@ static int connection_handle_read(server *srv, connection *con) {
 	chunkqueue_get_memory(con->read_queue, &mem, &mem_len, 0, 4096);
 
 	len = recv(con->fd, mem, mem_len, 0);
-#else
+#else /* __WIN32 */
 	if (ioctl(con->fd, FIONREAD, &toread) || toread == 0 || toread <= 4*1024) {
 		if (toread > MAX_READ_LIMIT) toread = MAX_READ_LIMIT;
 	} else {
@@ -343,24 +343,47 @@ static int connection_handle_read(server *srv, connection *con) {
 	chunkqueue_get_memory(con->read_queue, &mem, &mem_len, 0, toread);
 
 	len = read(con->fd, mem, mem_len);
-#endif
+#endif /* __WIN32 */
 
 	chunkqueue_use_memory(con->read_queue, len > 0 ? len : 0);
 
 	if (len < 0) {
 		con->is_readable = 0;
 
-		if (errno == EAGAIN) return 0;
-		if (errno == EINTR) {
+#if defined(__WIN32)
+		{
+			int lastError = WSAGetLastError();
+			switch (lastError) {
+			case EAGAIN:
+				return 0;
+			case EINTR:
+				/* we have been interrupted before we could read */
+				con->is_readable = 1;
+				return 0;
+			case ECONNRESET:
+				/* suppress logging for this error, expected for keep-alive */
+				break;
+			default:
+				log_error_write(srv, __FILE__, __LINE__, "sd", "connection closed - recv failed: ", lastError);
+				break;
+			}
+		}
+#else /* __WIN32 */
+		switch (errno) {
+		case EAGAIN:
+			return 0;
+		case EINTR:
 			/* we have been interrupted before we could read */
 			con->is_readable = 1;
 			return 0;
-		}
-
-		if (errno != ECONNRESET) {
-			/* expected for keep-alive */
+		case ECONNRESET:
+			/* suppress logging for this error, expected for keep-alive */
+			break;
+		default:
 			log_error_write(srv, __FILE__, __LINE__, "ssd", "connection closed - read failed: ", strerror(errno), errno);
+			break;
 		}
+#endif /* __WIN32 */
 
 		connection_set_state(srv, con, CON_STATE_ERROR);
 

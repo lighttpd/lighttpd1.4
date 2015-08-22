@@ -436,6 +436,7 @@ SET(COMMON_SRC
 	configfile-glue.c
 	http-header-glue.c
 	splaytree.c network_writev.c
+	network_write_mmap.c network_write_no_mmap.c
 	network_write.c network_linux_sendfile.c
 	network_freebsd_sendfile.c
 	network_solaris_sendfilev.c network_openssl.c

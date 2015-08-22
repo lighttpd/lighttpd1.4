@@ -3,7 +3,6 @@
 
 #include "buffer.h"
 #include "array.h"
-#include "sys-mmap.h"
 
 typedef struct chunk {
 	enum { MEM_CHUNK, FILE_CHUNK } type;
@@ -26,11 +25,11 @@ typedef struct chunk {
 		int is_temp; /* file is temporary and will be deleted if on cleanup */
 	} file;
 
-	off_t  offset; /* octets sent from this chunk
-			  the size of the chunk is either
-			  - mem-chunk: mem->used - 1
-			  - file-chunk: file.length
-			*/
+	/* the size of the chunk is either:
+	 * - mem-chunk: buffer_string_length(chunk::mem)
+	 * - file-chunk: chunk::file.length
+	 */
+	off_t  offset; /* octets sent from this chunk */
 
 	struct chunk *next;
 } chunk;
@@ -68,6 +67,11 @@ void chunkqueue_get_memory(chunkqueue *cq, char **mem, size_t *len, size_t min_s
  * chunkqueue_get_memory to the chunkqueue
  */
 void chunkqueue_use_memory(chunkqueue *cq, size_t len);
+
+/* mark first "len" bytes as written (incrementing chunk offsets)
+ * and remove finished chunks
+ */
+void chunkqueue_mark_written(chunkqueue *cq, off_t len);
 
 void chunkqueue_remove_finished_chunks(chunkqueue *cq);
 
