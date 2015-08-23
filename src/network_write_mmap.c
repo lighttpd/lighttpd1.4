@@ -1,7 +1,5 @@
 #include "network_backends.h"
 
-#if defined(USE_MMAP)
-
 #include "network.h"
 #include "log.h"
 #include "sys-mmap.h"
@@ -10,6 +8,20 @@
 
 #include <errno.h>
 #include <string.h>
+
+#define MMAP_CHUNK_SIZE (512*1024)
+
+off_t mmap_align_offset(off_t start) {
+	static long pagesize = 0;
+	if (0 == pagesize) {
+		pagesize = sysconf(_SC_PAGESIZE);
+		force_assert(pagesize < MMAP_CHUNK_SIZE);
+	}
+	force_assert(start >= (start % pagesize));
+	return start - (start % pagesize);
+}
+
+#if defined(USE_MMAP)
 
 #if 0
 /* read mmap()ed data into local buffer */
@@ -70,10 +82,10 @@ int network_write_file_chunk_mmap(server *srv, connection *con, int fd, chunkque
 		 *     3. use non-blocking IO for file-transfers
 		 *   */
 
-		c->file.mmap.offset = offset & ~(4095); /* align at 4kb */
+		c->file.mmap.offset = mmap_align_offset(offset);
 
-		/* all mmap()ed areas are 512kb except the last which might be smaller */
-		c->file.mmap.length = 512*1024;
+		/* all mmap()ed areas are MMAP_CHUNK_SIZE except the last which might be smaller */
+		c->file.mmap.length = MMAP_CHUNK_SIZE;
 		if (c->file.mmap.offset > file_end - (off_t)c->file.mmap.length) {
 			c->file.mmap.length = file_end - c->file.mmap.offset;
 		}

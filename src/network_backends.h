@@ -91,6 +91,7 @@ static inline int network_writev_mem_chunks(server *srv, connection *con, int fd
 /* next chunk must be FILE_CHUNK. use temporary buffer (srv->tmp_buf) to read into, then write()/send() it */
 int network_write_file_chunk_no_mmap(server *srv, connection *con, int fd, chunkqueue *cq, off_t *p_max_bytes);
 
+off_t mmap_align_offset(off_t start);
 #if defined(USE_MMAP)
 /* next chunk must be FILE_CHUNK. send mmap()ed file with write() */
 int network_write_file_chunk_mmap(server *srv, connection *con, int fd, chunkqueue *cq, off_t *p_max_bytes);

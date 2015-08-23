@@ -766,8 +766,8 @@ static int cgi_write_file_chunk_mmap(server *srv, connection *con, int fd, chunk
 			c->file.mmap.start = MAP_FAILED;
 		}
 
-		c->file.mmap.offset = offset;
-		c->file.mmap.length = toSend;
+		c->file.mmap.offset = mmap_align_offset(offset);
+		c->file.mmap.length = file_end - c->file.mmap.offset;
 
 		if (MAP_FAILED == (c->file.mmap.start = mmap(NULL, c->file.mmap.length, PROT_READ, MAP_SHARED, c->file.fd, c->file.mmap.offset))) {
 			log_error_write(srv, __FILE__, __LINE__, "ssbdoo", "mmap failed:",
