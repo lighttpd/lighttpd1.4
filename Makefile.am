@@ -1,6 +1,6 @@
 SUBDIRS=src doc tests
 
-EXTRA_DIST=autogen.sh SConstruct CMakeLists.txt cmake
+EXTRA_DIST=autogen.sh SConstruct CMakeLists.txt cmake README.FreeBSD
 
 ACLOCAL_AMFLAGS = -I m4
 
