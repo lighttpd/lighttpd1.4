@@ -19,7 +19,6 @@
 #cmakedefine  HAVE_SYS_RESOURCE_H
 #cmakedefine  HAVE_SYS_SENDFILE_H
 #cmakedefine  HAVE_SYS_SELECT_H
-#cmakedefine  HAVE_SYS_SYSLIMITS_H
 #cmakedefine  HAVE_SYS_TYPES_H
 #cmakedefine  HAVE_SYS_UIO_H
 #cmakedefine  HAVE_SYS_UN_H

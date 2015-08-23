@@ -22,11 +22,6 @@
  * this is a dirlisting for a lighttpd plugin
  */
 
-
-#ifdef HAVE_SYS_SYSLIMITS_H
-#include <sys/syslimits.h>
-#endif
-
 #ifdef HAVE_ATTR_ATTRIBUTES_H
 #include <attr/attributes.h>
 #endif

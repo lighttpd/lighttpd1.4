@@ -144,7 +144,6 @@ if 1:
 			sys/port.h
 			winsock2.h
 			pwd.h
-			sys/syslimits.h
 			sys/resource.h
 			sys/time.h sys/types.h sys/resource.h
 			sys/un.h

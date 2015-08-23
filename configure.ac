@@ -90,7 +90,7 @@ AC_HEADER_SYS_WAIT
 AC_CHECK_HEADERS([arpa/inet.h fcntl.h netinet/in.h stdlib.h string.h \
 sys/socket.h sys/time.h unistd.h sys/sendfile.h sys/uio.h \
 getopt.h sys/epoll.h sys/select.h poll.h sys/poll.h sys/devpoll.h sys/filio.h \
-sys/mman.h sys/event.h port.h pwd.h sys/syslimits.h \
+sys/mman.h sys/event.h port.h pwd.h \
 sys/resource.h sys/un.h syslog.h sys/prctl.h uuid/uuid.h])
 
 dnl Checks for typedefs, structures, and compiler characteristics.
@@ -437,30 +437,29 @@ AC_ARG_WITH(webdav-props, AC_HELP_STRING([--with-webdav-props],[properties in mo
 AC_MSG_RESULT([$WITH_WEBDAV_PROPS])
 
 if test "$WITH_WEBDAV_PROPS" != "no"; then
- PKG_CHECK_MODULES(XML, libxml-2.0, [
+  PKG_CHECK_MODULES(XML, libxml-2.0, [
     AC_DEFINE([HAVE_LIBXML2], [1], [libxml2])
     AC_DEFINE([HAVE_LIBXML_H], [1], [libxml.h])
- ])
- PKG_CHECK_MODULES(SQLITE, sqlite3, [
+  ])
+  PKG_CHECK_MODULES(SQLITE, sqlite3, [
     AC_DEFINE([HAVE_SQLITE3], [1], [libsqlite3])
     AC_DEFINE([HAVE_SQLITE3_H], [1], [sqlite3.h])
- ])
+  ])
 
- AC_MSG_CHECKING(for locks in mod_webdav)
- AC_ARG_WITH(webdav-locks, AC_HELP_STRING([--with-webdav-locks],[locks in mod_webdav]),
- [WITH_WEBDAV_LOCKS=$withval],[WITH_WEBDAV_LOCKS=no])
- AC_MSG_RESULT([$WITH_WEBDAV_LOCKS])
+  AC_MSG_CHECKING(for locks in mod_webdav)
+  AC_ARG_WITH(webdav-locks, AC_HELP_STRING([--with-webdav-locks],[locks in mod_webdav]),
+  [WITH_WEBDAV_LOCKS=$withval],[WITH_WEBDAV_LOCKS=no])
+  AC_MSG_RESULT([$WITH_WEBDAV_LOCKS])
 
- if test "$WITH_WEBDAV_LOCKS" != "no"; then
-   AC_CHECK_LIB(uuid, uuid_unparse, [
-         AC_CHECK_HEADERS([uuid/uuid.h],[
-                 UUID_LIBS=-luuid
-                 AC_DEFINE([HAVE_UUID], [1], [libuuid])
-		 AC_DEFINE([HAVE_UUID_H], [1], [uuid/uuid.h is available])
-         ])
- ])
-
- fi
+  if test "$WITH_WEBDAV_LOCKS" != "no"; then
+    AC_CHECK_LIB(uuid, uuid_unparse, [
+      AC_CHECK_HEADERS([uuid/uuid.h],[
+        UUID_LIBS=-luuid
+        AC_DEFINE([HAVE_UUID], [1], [libuuid])
+        AC_DEFINE([HAVE_UUID_H], [1], [uuid/uuid.h is available])
+      ])
+    ])
+  fi
 fi
 AC_SUBST(UUID_LIBS)
 
