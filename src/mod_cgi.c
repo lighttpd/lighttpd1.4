@@ -5,6 +5,7 @@
 #include "connections.h"
 #include "joblist.h"
 #include "http_chunk.h"
+#include "network_backends.h"
 
 #include "plugin.h"
 
@@ -726,6 +727,85 @@ static int cgi_env_add(char_array *env, const char *key, size_t key_len, const c
 	return 0;
 }
 
+/* returns: 0: continue, -1: fatal error, -2: connection reset */
+/* similar to network_write_file_chunk_mmap, but doesn't use send on windows (because we're on pipes),
+ * also mmaps and sends complete chunk instead of only small parts - the files
+ * are supposed to be temp files with reasonable chunk sizes.
+ *
+ * Also always use mmap; the files are "trusted", as we created them.
+ */
+static int cgi_write_file_chunk_mmap(server *srv, connection *con, int fd, chunkqueue *cq) {
+	chunk* const c = cq->first;
+	off_t offset, toSend, file_end;
+	ssize_t r;
+	size_t mmap_offset, mmap_avail;
+	const char *data;
+
+	force_assert(NULL != c);
+	force_assert(FILE_CHUNK == c->type);
+	force_assert(c->offset >= 0 && c->offset <= c->file.length);
+
+	offset = c->file.start + c->offset;
+	toSend = c->file.length - c->offset;
+	file_end = c->file.start + c->file.length; /* offset to file end in this chunk */
+
+	if (0 == toSend) {
+		chunkqueue_remove_finished_chunks(cq);
+		return 0;
+	}
+
+	if (0 != network_open_file_chunk(srv, con, cq)) return -1;
+
+	/* (re)mmap the buffer if range is not covered completely */
+	if (MAP_FAILED == c->file.mmap.start
+		|| offset < c->file.mmap.offset
+		|| file_end > (off_t)(c->file.mmap.offset + c->file.mmap.length)) {
+
+		if (MAP_FAILED != c->file.mmap.start) {
+			munmap(c->file.mmap.start, c->file.mmap.length);
+			c->file.mmap.start = MAP_FAILED;
+		}
+
+		c->file.mmap.offset = offset;
+		c->file.mmap.length = toSend;
+
+		if (MAP_FAILED == (c->file.mmap.start = mmap(NULL, c->file.mmap.length, PROT_READ, MAP_SHARED, c->file.fd, c->file.mmap.offset))) {
+			log_error_write(srv, __FILE__, __LINE__, "ssbdoo", "mmap failed:",
+				strerror(errno), c->file.name, c->file.fd, c->file.mmap.offset, (off_t) c->file.mmap.length);
+			return -1;
+		}
+	}
+
+	force_assert(offset >= c->file.mmap.offset);
+	mmap_offset = offset - c->file.mmap.offset;
+	force_assert(c->file.mmap.length > mmap_offset);
+	mmap_avail = c->file.mmap.length - mmap_offset;
+	force_assert(toSend <= (off_t) mmap_avail);
+
+	data = c->file.mmap.start + mmap_offset;
+
+	if ((r = write(fd, data, toSend)) < 0) {
+		switch (errno) {
+		case EAGAIN:
+		case EINTR:
+			return 0;
+		case EPIPE:
+		case ECONNRESET:
+			return -2;
+		default:
+			log_error_write(srv, __FILE__, __LINE__, "ssd",
+				"write failed:", strerror(errno), fd);
+			return -1;
+		}
+	}
+
+	if (r >= 0) {
+		chunkqueue_mark_written(cq, r);
+	}
+
+	return 0;
+}
+
 static int cgi_create_env(server *srv, connection *con, plugin_data *p, buffer *cgi_handler) {
 	pid_t pid;
 
@@ -1014,10 +1094,9 @@ static int cgi_create_env(server *srv, connection *con, plugin_data *p, buffer *
 		close(to_cgi_fds[0]);
 		close(to_cgi_fds[1]);
 		return -1;
-		break;
 	default: {
 		handler_ctx *hctx;
-		/* father */
+		/* parent proces */
 
 		close(from_cgi_fds[1]);
 		close(to_cgi_fds[0]);
@@ -1028,75 +1107,61 @@ static int cgi_create_env(server *srv, connection *con, plugin_data *p, buffer *
 
 			assert(chunkqueue_length(cq) == (off_t)con->request.content_length);
 
+			/* NOTE: yes, this is synchronous sending of CGI post data;
+			 * if you need something asynchronous (recommended with large
+			 * request bodies), use mod_fastcgi + fcgi-cgi.
+			 *
+			 * Also: windows doesn't support select() on pipes - wouldn't be
+			 * easy to fix for all platforms.
+			 */
+
 			/* there is content to send */
 			for (c = cq->first; c; c = cq->first) {
-				int r = 0;
+				int r = -1;
 
-				/* copy all chunks */
 				switch(c->type) {
 				case FILE_CHUNK:
-
-					if (c->file.mmap.start == MAP_FAILED) {
-						if (-1 == c->file.fd &&  /* open the file if not already open */
-						    -1 == (c->file.fd = open(c->file.name->ptr, O_RDONLY))) {
-							log_error_write(srv, __FILE__, __LINE__, "ss", "open failed: ", strerror(errno));
-
-							close(from_cgi_fds[0]);
-							close(to_cgi_fds[1]);
-							return -1;
-						}
-
-						c->file.mmap.length = c->file.length;
-
-						if (MAP_FAILED == (c->file.mmap.start = mmap(NULL,  c->file.mmap.length, PROT_READ, MAP_SHARED, c->file.fd, 0))) {
-							log_error_write(srv, __FILE__, __LINE__, "ssbd", "mmap failed: ",
-									strerror(errno), c->file.name,  c->file.fd);
-
-							close(from_cgi_fds[0]);
-							close(to_cgi_fds[1]);
-							return -1;
-						}
-
-						close(c->file.fd);
-						c->file.fd = -1;
-
-						/* chunk_reset() or chunk_free() will cleanup for us */
-					}
-
-					if ((r = write(to_cgi_fds[1], c->file.mmap.start + c->offset, c->file.length - c->offset)) < 0) {
-						switch(errno) {
-						case ENOSPC:
-							con->http_status = 507;
-							break;
-						case EINTR:
-							continue;
-						default:
-							con->http_status = 403;
-							break;
-						}
-					}
+					r = cgi_write_file_chunk_mmap(srv, con, to_cgi_fds[1], cq);
 					break;
+
 				case MEM_CHUNK:
 					if ((r = write(to_cgi_fds[1], c->mem->ptr + c->offset, buffer_string_length(c->mem) - c->offset)) < 0) {
 						switch(errno) {
-						case ENOSPC:
-							con->http_status = 507;
-							break;
+						case EAGAIN:
 						case EINTR:
-							continue;
+							/* ignore and try again */
+							r = 0;
+							break;
+						case EPIPE:
+						case ECONNRESET:
+							/* connection closed */
+							r = -2;
+							break;
 						default:
-							con->http_status = 403;
+							/* fatal error */
+							log_error_write(srv, __FILE__, __LINE__, "ss", "write failed due to: ", strerror(errno)); 
+							r = -1;
 							break;
 						}
+					} else if (r > 0) {
+						chunkqueue_mark_written(cq, r);
 					}
 					break;
 				}
 
-				if (r > 0) {
-					chunkqueue_mark_written(cq, r);
-				} else {
-					log_error_write(srv, __FILE__, __LINE__, "ss", "write() failed due to: ", strerror(errno)); 
-					con->http_status = 500;
+				switch (r) {
+				case -1:
+					/* fatal error */
+					close(from_cgi_fds[0]);
+					close(to_cgi_fds[1]);
+					return -1;
+				case -2:
+					/* connection reset */
+					log_error_write(srv, __FILE__, __LINE__, "s", "failed to send post data to cgi, connection closed by CGI");
+					/* skip all remaining data */
+					chunkqueue_mark_written(cq, chunkqueue_length(cq));
+					break;
+				default:
 					break;
 				}
 			}
