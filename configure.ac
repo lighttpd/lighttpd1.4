@@ -25,7 +25,7 @@ m4_ifdef([AM_SILENT_RULES], [AM_SILENT_RULES])
 
 
 dnl @synopsis TRY_CFLAGS [compiler flags]
-dnl @summary check whether compiler supports given C flags and adds them to CFLAGS
+dnl @summary check whether compiler supports given flags and adds them to CFLAGS
 AC_DEFUN([TRY_CFLAGS],
 [dnl
   AC_MSG_CHECKING([if $CC supports $1])
@@ -42,6 +42,23 @@ AC_DEFUN([TRY_CFLAGS],
   AC_LANG_POP([C])
 ])
 
+dnl @synopsis TRY_LDFLAGS [linker flags]
+dnl @summary check whether linker supports given flags and adds them to LDFLAGS
+AC_DEFUN([TRY_LDFLAGS],
+[dnl
+  AC_MSG_CHECKING([if $LD supports $1])
+  AC_LANG_PUSH([C])
+  ac_try_ldflags_saved_ldflags="${LDFLAGS}"
+  LDFLAGS="${LDFLAGS} $1"
+  AC_LINK_IFELSE([AC_LANG_PROGRAM([])],
+    [AC_MSG_RESULT([yes])],
+    [
+      AC_MSG_ERROR([no])
+      LDFLAGS="${ac_try_ldflags_saved_cflags}"
+    ]
+  )
+  AC_LANG_POP([C])
+])
 
 dnl Checks for programs.
 AC_PROG_CC
@@ -674,7 +691,8 @@ AC_ARG_ENABLE(extra-warnings,
   esac],[extrawarnings=false])
 
 if test x$extrawarnings = xtrue; then
-  TRY_CFLAGS([-g -O2 -g2 -Wall -Wmissing-declarations -Wdeclaration-after-statement -Wcast-align -Wsign-compare -Wnested-externs -Wpointer-arith -Wl,--as-needed -D_FORTIFY_SOURCE=2 -fstack-protector --param=ssp-buffer-size=4 -Wformat -Werror=format-security])
+  TRY_CFLAGS([-g -O2 -g2 -Wall -Wmissing-declarations -Wdeclaration-after-statement -Wcast-align -Wsign-compare -Wnested-externs -Wpointer-arith -D_FORTIFY_SOURCE=2 -fstack-protector --param=ssp-buffer-size=4 -Wformat -Werror=format-security])
+  TRY_LDFLAGS([-Wl,--as-needed])
 fi
 
 dnl build version-id

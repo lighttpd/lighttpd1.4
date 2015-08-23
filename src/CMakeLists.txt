@@ -35,10 +35,9 @@ if(CMAKE_COMPILER_IS_GNUCC)
 	option(BUILD_EXTRA_WARNINGS "extra warnings")
 
 	if(BUILD_EXTRA_WARNINGS)
-		set(WARN_FLAGS "-g -g2 -Wall -Wmissing-declarations -Wdeclaration-after-statement -Wcast-align -Wsign-compare -Wnested-externs -Wpointer-arith -Wl,--as-needed -D_FORTIFY_SOURCE=2 -fstack-protector --param=ssp-buffer-size=4 -Wformat -Werror=format-security")
+		set(WARN_CFLAGS "-g -g2 -Wall -Wmissing-declarations -Wdeclaration-after-statement -Wcast-align -Wsign-compare -Wnested-externs -Wpointer-arith -D_FORTIFY_SOURCE=2 -fstack-protector --param=ssp-buffer-size=4 -Wformat -Werror=format-security")
+		set(WARN_LDFLAGS "-Wl,--as-needed")
 		# -Werror -Wbad-function-cast -Wmissing-prototypes
-	else()
-		set(WARN_FLAGS "")
 	endif()
 endif()
 
@@ -627,10 +626,12 @@ if(HAVE_MEMCACHE_H)
 endif()
 
 if(CMAKE_COMPILER_IS_GNUCC)
-	set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -std=gnu99 -Wall -g -Wshadow -W -pedantic ${WARN_FLAGS}")
+	set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -std=gnu99 -Wall -g -Wshadow -W -pedantic ${WARN_CFLAGS}")
 	set(CMAKE_C_FLAGS_RELEASE        "${CMAKE_C_FLAGS_RELEASE}     -O2")
 	set(CMAKE_C_FLAGS_DEBUG          "${CMAKE_C_FLAGS_DEBUG}       -O0")
 	set(CMAKE_C_FLAGS_RELWITHDEBINFO "${CMAKE_C_FLAGS_WITHDEBINFO} -O2")
+	set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} ${WARN_LDFLAGS}")
+	set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} ${WARN_LDFLAGS}")
 	add_definitions(-D_GNU_SOURCE)
 endif()
 
