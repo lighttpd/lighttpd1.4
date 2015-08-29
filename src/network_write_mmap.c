@@ -4,6 +4,8 @@
 #include "log.h"
 #include "sys-mmap.h"
 
+#include <setjmp.h>
+#include <signal.h>
 #include <unistd.h>
 
 #include <errno.h>
@@ -22,6 +24,15 @@ off_t mmap_align_offset(off_t start) {
 }
 
 #if defined(USE_MMAP)
+
+static volatile int sigbus_jmp_valid;
+static sigjmp_buf sigbus_jmp;
+
+static void sigbus_handler(int sig) {
+	UNUSED(sig);
+	if (sigbus_jmp_valid) siglongjmp(sigbus_jmp, 1);
+	log_failed_assert(__FILE__, __LINE__, "SIGBUS");
+}
 
 #if 0
 /* read mmap()ed data into local buffer */
@@ -50,6 +61,24 @@ int network_write_file_chunk_mmap(server *srv, connection *con, int fd, chunkque
 	}
 
 	if (0 != network_open_file_chunk(srv, con, cq)) return -1;
+
+	/* setup SIGBUS handler, but don't activate sigbus_jmp_valid yet */
+	if (0 != sigsetjmp(sigbus_jmp, 1)) {
+		sigbus_jmp_valid = 0;
+
+		log_error_write(srv, __FILE__, __LINE__, "sbd", "SIGBUS in mmap:",
+			c->file.name, c->file.fd);
+
+		munmap(c->file.mmap.start, c->file.mmap.length);
+		c->file.mmap.start = MAP_FAILED;
+#ifdef LOCAL_BUFFERING
+		buffer_reset(c->mem);
+#endif
+
+		return -1;
+	}
+
+	signal(SIGBUS, sigbus_handler);
 
 	/* mmap the buffer if offset is outside old mmap area or not mapped at all */
 	if (MAP_FAILED == c->file.mmap.start
@@ -97,7 +126,9 @@ int network_write_file_chunk_mmap(server *srv, connection *con, int fd, chunkque
 		}
 
 #if defined(LOCAL_BUFFERING)
+		sigbus_jmp_valid = 1;
 		buffer_copy_string_len(c->mem, c->file.mmap.start, c->file.mmap.length);
+		sigbus_jmp_valid = 0;
 #else
 #  if defined(HAVE_MADVISE)
 		/* don't advise files < 64Kb */
@@ -124,8 +155,16 @@ int network_write_file_chunk_mmap(server *srv, connection *con, int fd, chunkque
 	data = c->file.mmap.start + mmap_offset;
 #endif
 
+	sigbus_jmp_valid = 1;
 #if defined(__WIN32)
-	if ((r = send(fd, data, toSend, 0)) < 0) {
+	r = send(fd, data, toSend, 0);
+#else /* __WIN32 */
+	r = write(fd, data, toSend);
+#endif /* __WIN32 */
+	sigbus_jmp_valid = 0;
+
+#if defined(__WIN32)
+	if (r < 0) {
 		int lastError = WSAGetLastError();
 		switch (lastError) {
 		case WSAEINTR:
@@ -142,7 +181,7 @@ int network_write_file_chunk_mmap(server *srv, connection *con, int fd, chunkque
 		}
 	}
 #else /* __WIN32 */
-	if ((r = write(fd, data, toSend)) < 0) {
+	if (r < 0) {
 		switch (errno) {
 		case EAGAIN:
 		case EINTR:
