@@ -1109,6 +1109,9 @@ int mod_magnet_plugin_init(plugin *p) {
 }
 
 #else
+
+#pragma message("lua is required, but was not found")
+
 int mod_magnet_plugin_init(plugin *p);
 int mod_magnet_plugin_init(plugin *p) {
 	UNUSED(p);

@@ -11,6 +11,8 @@
 #include <fcntl.h>
 #include <string.h>
 
+#if (defined(HAVE_GDBM_H) || defined(HAVE_MEMCACHE_H)) && defined(HAVE_PCRE_H)
+
 #if defined(HAVE_GDBM_H)
 # include <gdbm.h>
 #endif
@@ -593,3 +595,15 @@ int mod_trigger_b4_dl_plugin_init(plugin *p) {
 
 	return 0;
 }
+
+#else
+
+#pragma message("(either gdbm or libmemcache) and pcre are required, but were not found")
+
+int mod_trigger_b4_dl_plugin_init(plugin *p);
+int mod_trigger_b4_dl_plugin_init(plugin *p) {
+	UNUSED(p);
+	return -1;
+}
+
+#endif

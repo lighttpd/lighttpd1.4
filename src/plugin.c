@@ -29,23 +29,24 @@ typedef struct {
 
 typedef enum {
 	PLUGIN_FUNC_UNSET,
-		PLUGIN_FUNC_HANDLE_URI_CLEAN,
-		PLUGIN_FUNC_HANDLE_URI_RAW,
-		PLUGIN_FUNC_HANDLE_REQUEST_DONE,
-		PLUGIN_FUNC_HANDLE_CONNECTION_CLOSE,
-		PLUGIN_FUNC_HANDLE_TRIGGER,
-		PLUGIN_FUNC_HANDLE_SIGHUP,
-		PLUGIN_FUNC_HANDLE_SUBREQUEST,
-		PLUGIN_FUNC_HANDLE_SUBREQUEST_START,
-		PLUGIN_FUNC_HANDLE_JOBLIST,
-		PLUGIN_FUNC_HANDLE_DOCROOT,
-		PLUGIN_FUNC_HANDLE_PHYSICAL,
-		PLUGIN_FUNC_CONNECTION_RESET,
-		PLUGIN_FUNC_INIT,
-		PLUGIN_FUNC_CLEANUP,
-		PLUGIN_FUNC_SET_DEFAULTS,
 
-		PLUGIN_FUNC_SIZEOF
+	PLUGIN_FUNC_HANDLE_URI_CLEAN,
+	PLUGIN_FUNC_HANDLE_URI_RAW,
+	PLUGIN_FUNC_HANDLE_REQUEST_DONE,
+	PLUGIN_FUNC_HANDLE_CONNECTION_CLOSE,
+	PLUGIN_FUNC_HANDLE_TRIGGER,
+	PLUGIN_FUNC_HANDLE_SIGHUP,
+	PLUGIN_FUNC_HANDLE_SUBREQUEST,
+	PLUGIN_FUNC_HANDLE_SUBREQUEST_START,
+	PLUGIN_FUNC_HANDLE_JOBLIST,
+	PLUGIN_FUNC_HANDLE_DOCROOT,
+	PLUGIN_FUNC_HANDLE_PHYSICAL,
+	PLUGIN_FUNC_CONNECTION_RESET,
+	PLUGIN_FUNC_INIT,
+	PLUGIN_FUNC_CLEANUP,
+	PLUGIN_FUNC_SET_DEFAULTS,
+
+	PLUGIN_FUNC_SIZEOF
 } plugin_t;
 
 static plugin *plugin_init(void) {
@@ -57,16 +58,19 @@ static plugin *plugin_init(void) {
 }
 
 static void plugin_free(plugin *p) {
+#if !defined(LIGHTTPD_STATIC)
 	int use_dlclose = 1;
+#endif
+
 	if (p->name) buffer_free(p->name);
-#ifdef HAVE_VALGRIND_VALGRIND_H
+#if defined(HAVE_VALGRIND_VALGRIND_H) && !defined(LIGHTTPD_STATIC)
 	/*if (RUNNING_ON_VALGRIND) use_dlclose = 0;*/
 #endif
 
-#ifndef LIGHTTPD_STATIC
+#if !defined(LIGHTTPD_STATIC)
 	if (use_dlclose && p->lib) {
-#ifdef __WIN32
-		FreeLibrary(p->lib);
+#if defined(__WIN32)
+)		FreeLibrary(p->lib);
 #else
 		dlclose(p->lib);
 #endif
@@ -99,23 +103,71 @@ static int plugins_register(server *srv, plugin *p) {
  *
  */
 
-#ifdef LIGHTTPD_STATIC
-int plugins_load(server *srv) {
-	plugin *p;
+#if defined(LIGHTTPD_STATIC)
+
+/* pre-declare functions, as there is no header for them */
 #define PLUGIN_INIT(x)\
-	p = plugin_init(); \
-	if (x ## _plugin_init(p)) { \
-		log_error_write(srv, __FILE__, __LINE__, "ss", #x, "plugin init failed" ); \
-		plugin_free(p); \
-		return -1;\
-	}\
-	plugins_register(srv, p);
+	int x ## _plugin_init(plugin *p);
 
 #include "plugin-static.h"
 
+#undef PLUGIN_INIT
+
+/* build NULL-terminated table of name + init-function */
+
+typedef struct {
+	const char* name;
+	int (*plugin_init)(plugin *p);
+} plugin_load_functions;
+
+static const plugin_load_functions load_functions[] = {
+#define PLUGIN_INIT(x) \
+	{ #x, &x ## _plugin_init },
+
+#include "plugin-static.h"
+
+	{ NULL, NULL }
+#undef PLUGIN_INIT
+};
+
+int plugins_load(server *srv) {
+	plugin *p;
+	size_t i, j;
+
+	for (i = 0; i < srv->srvconf.modules->used; i++) {
+		data_string *d = (data_string *)srv->srvconf.modules->data[i];
+		char *module = d->value->ptr;
+
+		for (j = 0; j < i; j++) {
+			if (buffer_is_equal(d->value, ((data_string *) srv->srvconf.modules->data[j])->value)) {
+				log_error_write(srv, __FILE__, __LINE__, "sbs",
+					"Cannot load plugin", d->value,
+					"more than once, please fix your config (lighttpd may not accept such configs in future releases)");
+				continue;
+			}
+		}
+
+		for (j = 0; load_functions[j].name; ++j) {
+			if (0 == strcmp(load_functions[j].name, module)) {
+				p = plugin_init();
+				if ((*load_functions[j].plugin_init)(p)) {
+					log_error_write(srv, __FILE__, __LINE__, "ss", module, "plugin init failed" );
+					plugin_free(p);
+					return -1;
+				}
+				plugins_register(srv, p);
+				break;
+			}
+		}
+		if (!load_functions[j].name) {
+			log_error_write(srv, __FILE__, __LINE__, "ss", module, " plugin not found" );
+			return -1;
+		}
+	}
+
 	return 0;
 }
-#else
+#else /* defined(LIGHTTPD_STATIC) */
 int plugins_load(server *srv) {
 	plugin *p;
 	int (*init)(plugin *pl);
@@ -124,11 +176,13 @@ int plugins_load(server *srv) {
 
 	for (i = 0; i < srv->srvconf.modules->used; i++) {
 		data_string *d = (data_string *)srv->srvconf.modules->data[i];
-		char *modules = d->value->ptr;
+		char *module = d->value->ptr;
 
 		for (j = 0; j < i; j++) {
 			if (buffer_is_equal(d->value, ((data_string *) srv->srvconf.modules->data[j])->value)) {
-				log_error_write(srv, __FILE__, __LINE__, "sbs", "Cannot load plugin", d->value, "more than once, please fix your config (we may not accept such configs in future releases");
+				log_error_write(srv, __FILE__, __LINE__, "sbs",
+					"Cannot load plugin", d->value,
+					"more than once, please fix your config (lighttpd may not accept such configs in future releases)");
 				continue;
 			}
 		}
@@ -136,7 +190,7 @@ int plugins_load(server *srv) {
 		buffer_copy_buffer(srv->tmp_buf, srv->srvconf.modules_dir);
 
 		buffer_append_string_len(srv->tmp_buf, CONST_STR_LEN("/"));
-		buffer_append_string(srv->tmp_buf, modules);
+		buffer_append_string(srv->tmp_buf, module);
 #if defined(__WIN32) || defined(__CYGWIN__)
 		buffer_append_string_len(srv->tmp_buf, CONST_STR_LEN(".dll"));
 #else
@@ -148,16 +202,16 @@ int plugins_load(server *srv) {
 		if (NULL == (p->lib = LoadLibrary(srv->tmp_buf->ptr))) {
 			LPVOID lpMsgBuf;
 			FormatMessage(
-		        	FORMAT_MESSAGE_ALLOCATE_BUFFER |
-		       		FORMAT_MESSAGE_FROM_SYSTEM,
-		        	NULL,
-		        	GetLastError(),
-		        	MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
-		        	(LPTSTR) &lpMsgBuf,
-		        	0, NULL );
+				FORMAT_MESSAGE_ALLOCATE_BUFFER |
+					FORMAT_MESSAGE_FROM_SYSTEM,
+				NULL,
+				GetLastError(),
+				MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
+				(LPTSTR) &lpMsgBuf,
+				0, NULL);
 
 			log_error_write(srv, __FILE__, __LINE__, "ssb", "LoadLibrary() failed",
-					lpMsgBuf, srv->tmp_buf);
+				lpMsgBuf, srv->tmp_buf);
 
 			plugin_free(p);
 
@@ -167,7 +221,7 @@ int plugins_load(server *srv) {
 #else
 		if (NULL == (p->lib = dlopen(srv->tmp_buf->ptr, RTLD_NOW|RTLD_GLOBAL))) {
 			log_error_write(srv, __FILE__, __LINE__, "sbs", "dlopen() failed for:",
-					srv->tmp_buf, dlerror());
+				srv->tmp_buf, dlerror());
 
 			plugin_free(p);
 
@@ -176,22 +230,22 @@ int plugins_load(server *srv) {
 
 #endif
 		buffer_reset(srv->tmp_buf);
-		buffer_copy_string(srv->tmp_buf, modules);
+		buffer_copy_string(srv->tmp_buf, module);
 		buffer_append_string_len(srv->tmp_buf, CONST_STR_LEN("_plugin_init"));
 
 #ifdef __WIN32
 		init = GetProcAddress(p->lib, srv->tmp_buf->ptr);
 
-		if (init == NULL)  {
+		if (init == NULL) {
 			LPVOID lpMsgBuf;
 			FormatMessage(
-		        	FORMAT_MESSAGE_ALLOCATE_BUFFER |
-		       		FORMAT_MESSAGE_FROM_SYSTEM,
-		        	NULL,
-		        	GetLastError(),
-		        	MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
-		        	(LPTSTR) &lpMsgBuf,
-		        	0, NULL );
+				FORMAT_MESSAGE_ALLOCATE_BUFFER |
+					FORMAT_MESSAGE_FROM_SYSTEM,
+				NULL,
+				GetLastError(),
+				MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
+				(LPTSTR) &lpMsgBuf,
+				0, NULL);
 
 			log_error_write(srv, __FILE__, __LINE__, "sbs", "getprocaddress failed:", srv->tmp_buf, lpMsgBuf);
 
@@ -214,27 +268,27 @@ int plugins_load(server *srv) {
 
 #endif
 		if ((*init)(p)) {
-			log_error_write(srv, __FILE__, __LINE__, "ss", modules, "plugin init failed" );
+			log_error_write(srv, __FILE__, __LINE__, "ss", module, "plugin init failed" );
 
 			plugin_free(p);
 			return -1;
 		}
 #if 0
-		log_error_write(srv, __FILE__, __LINE__, "ss", modules, "plugin loaded" );
+		log_error_write(srv, __FILE__, __LINE__, "ss", module, "plugin loaded" );
 #endif
 		plugins_register(srv, p);
 	}
 
 	return 0;
 }
-#endif
+#endif /* defined(LIGHTTPD_STATIC) */
 
 #define PLUGIN_TO_SLOT(x, y) \
 	handler_t plugins_call_##y(server *srv, connection *con) {\
 		plugin **slot;\
 		size_t j;\
-                if (!srv->plugin_slots) return HANDLER_GO_ON;\
-                slot = ((plugin ***)(srv->plugin_slots))[x];\
+		if (!srv->plugin_slots) return HANDLER_GO_ON;\
+		slot = ((plugin ***)(srv->plugin_slots))[x];\
 		if (!slot) return HANDLER_GO_ON;\
 		for (j = 0; j < srv->plugins.used && slot[j]; j++) { \
 			plugin *p = slot[j];\
@@ -281,8 +335,8 @@ PLUGIN_TO_SLOT(PLUGIN_FUNC_CONNECTION_RESET, connection_reset)
 	handler_t plugins_call_##y(server *srv) {\
 		plugin **slot;\
 		size_t j;\
-                if (!srv->plugin_slots) return HANDLER_GO_ON;\
-                slot = ((plugin ***)(srv->plugin_slots))[x];\
+		if (!srv->plugin_slots) return HANDLER_GO_ON;\
+		slot = ((plugin ***)(srv->plugin_slots))[x];\
 		if (!slot) return HANDLER_GO_ON;\
 		for (j = 0; j < srv->plugins.used && slot[j]; j++) { \
 			plugin *p = slot[j];\
