@@ -169,8 +169,7 @@ if 1:
 			sys/wait.h
 			syslog.h
 			unistd.h
-			winsock2.h
-			""", "\n"))
+			winsock2.h""", "\n"))
 
 	checkFuncs(autoconf, Split('fork stat lstat strftime dup2 getcwd inet_ntoa inet_ntop memset mmap munmap strchr \
 			strdup strerror strstr strtol sendfile getopt socket \
