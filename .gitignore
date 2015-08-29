@@ -13,3 +13,6 @@ depcomp
 install-sh
 ltmain.sh
 missing
+.sconf_temp
+.sconsign.dblite
+config.log

@@ -1,42 +1,47 @@
 import os
 import re
 import types
+import itertools
 
 Import('env')
 
+def GatherLibs(env, *libs):
+	return env['LIBS'] + [libs] + [env['APPEND_LIBS']]
+
 common_src = Split("buffer.c log.c \
-      keyvalue.c chunk.c  \
-      http_chunk.c stream.c fdevent.c \
-      stat_cache.c plugin.c joblist.c etag.c array.c \
-      data_string.c data_count.c data_array.c \
-      data_integer.c md5.c data_fastcgi.c \
-      fdevent_select.c fdevent_libev.c \
-      fdevent_poll.c fdevent_linux_sysepoll.c \
-      fdevent_solaris_devpoll.c fdevent_solaris_port.c \
-      fdevent_freebsd_kqueue.c \
-      data_config.c \
-      inet_ntop_cache.c crc32.c \
-      connections-glue.c \
-      configfile-glue.c \
-      http-header-glue.c \
-      splaytree.c network_writev.c \
-      network_write_mmap.c network_write_no_mmap.c \
-      network_write.c network_linux_sendfile.c \
-      network_freebsd_sendfile.c  \
-      network_solaris_sendfilev.c network_openssl.c \
-      status_counter.c \
+	keyvalue.c chunk.c  \
+	http_chunk.c stream.c fdevent.c \
+	stat_cache.c plugin.c joblist.c etag.c array.c \
+	data_string.c data_count.c data_array.c \
+	data_integer.c md5.c data_fastcgi.c \
+	fdevent_select.c fdevent_libev.c \
+	fdevent_poll.c fdevent_linux_sysepoll.c \
+	fdevent_solaris_devpoll.c fdevent_solaris_port.c \
+	fdevent_freebsd_kqueue.c \
+	data_config.c \
+	inet_ntop_cache.c crc32.c \
+	connections-glue.c \
+	configfile-glue.c \
+	http-header-glue.c \
+	splaytree.c network_writev.c \
+	network_write_mmap.c network_write_no_mmap.c \
+	network_write.c network_linux_sendfile.c \
+	network_freebsd_sendfile.c  \
+	network_solaris_sendfilev.c network_openssl.c \
+	status_counter.c \
 ")
 
 src = Split("server.c response.c connections.c network.c \
-      configfile.c configparser.c request.c proc_open.c")
+	configfile.c configparser.c request.c proc_open.c")
 
-lemon = env.Program('lemon', 'lemon.c')
+lemon = env.Program('lemon', 'lemon.c', LIBS = GatherLibs(env))
 
-configparser = env.Command(['configparser.c', 'configparser.h'], 'configparser.y', '(cd build; ../' + lemon[0].path + ' -q ../$SOURCE ../src/lempar.c; cd ..)')
-env.Depends(configparser, lemon)
+def Lemon(env, input):
+	parser = env.Command([input.replace('.y', '.c'),input.replace('.y', '.h')], input, '(cd sconsbuild/build; ../../' + lemon[0].path + ' -q ../../$SOURCE ../../src/lempar.c)')
+	env.Depends(parser, lemon)
 
-mod_ssi_exprparser = env.Command(['mod_ssi_exprparser.c', 'mod_ssi_exprparser.h'], 'mod_ssi_exprparser.y', '(cd build; ../' + lemon[0].path + ' -q ../$SOURCE ../src/lempar.c; cd ..)')
-env.Depends(mod_ssi_exprparser, lemon)
+configparser = Lemon(env, 'configparser.y')
+mod_ssi_exprparser = Lemon(env, 'mod_ssi_exprparser.y')
 
 ## the modules and how they are built
 modules = {
@@ -68,18 +73,23 @@ modules = {
 		'lib' : [ env['LIBCRYPT'], env['LIBLDAP'], env['LIBLBER'] ] },
 	'mod_webdav' : { 'src' : [ 'mod_webdav.c' ], 'lib' : [ env['LIBXML2'], env['LIBSQLITE3'], env['LIBUUID'] ] },
 	'mod_mysql_vhost' : { 'src' : [ 'mod_mysql_vhost.c' ], 'lib' : [ env['LIBMYSQL'] ] },
-	'mod_trigger_b4_dl' : { 'src' : [ 'mod_trigger_b4_dl.c' ], 'lib' : [ env['LIBPCRE'] ] },
-	'mod_cml' : {
-		'src' : [ 'mod_cml_lua.c', 'mod_cml.c', 'mod_cml_funcs.c' ],
-		'lib' : [ env['LIBPCRE'], env['LIBMEMCACHE'], env['LIBLUA'], env['LIBLUALIB'] ] },
 #	'mod_uploadprogress' : { 'src' : [ 'mod_uploadprogress.c' ] },
 	'mod_evasive' : { 'src' : [ 'mod_evasive.c' ] },
 	'mod_ssi' : { 'src' : [ 'mod_ssi_exprparser.c', 'mod_ssi_expr.c', 'mod_ssi.c' ], 'lib' : [ env['LIBPCRE'] ] },
 	'mod_flv_streaming' : { 'src' : [ 'mod_flv_streaming.c' ] },
-	'mod_magnet' : { 'src' : [ 'mod_magnet.c', 'mod_magnet_cache.c' ], 'lib' : [ env['LIBLUA'] ] },
+	'mod_cml': {
+		'src' : [ 'mod_cml_lua.c', 'mod_cml.c', 'mod_cml_funcs.c' ],
+		'lib' : [ env['LIBPCRE'], env['LIBMEMCACHE'], env['LIBLUA'] ] 
+	},
 }
 
-staticenv = env.Copy(CPPFLAGS=[ env['CPPFLAGS'], '-DLIGHTTPD_STATIC', '-DOPENSSL_NO_KRB5'])
+if env['with_memcache']:
+	modules[mod_trigger_b4_dl] = { 'src' : [ 'mod_trigger_b4_dl.c' ], 'lib' : [ env['LIBPCRE'], env['LIBMEMCACHE'] ] }
+
+if env['with_lua']:
+	modules['mod_magnet'] = { 'src' : [ 'mod_magnet.c', 'mod_magnet_cache.c' ], 'lib' : [ env['LIBLUA'] ] }
+
+staticenv = env.Clone(CPPFLAGS=[ env['CPPFLAGS'], '-DLIGHTTPD_STATIC', '-DOPENSSL_NO_KRB5'])
 
 ## all the core-sources + the modules
 staticsrc = src + common_src
@@ -92,16 +102,27 @@ for module in modules.keys():
 	if modules[module].has_key('lib'):
 		staticlib += modules[module]['lib']
 
-open('plugin-static.h', 'w+').write(staticinit)
+def WriteStaticPluginHeader(target, source, env):
+	open(target[0].abspath, 'w+').write(env['STATICINIT'])
+env['STATICINIT'] = staticinit
+staticheader = env.AlwaysBuild(env.Command('plugin-static.h', [], WriteStaticPluginHeader))
 
 ## turn all src-files into objects
 staticobj = []
+static_plugin_obj = None
 for cfile in staticsrc:
-	staticobj += [ staticenv.Object('static-' + cfile.replace('.c', ''), cfile) ]
+	if cfile == 'plugin.c':
+		static_plugin_obj = [ staticenv.Object('static-' + cfile.replace('.c', ''), cfile) ]
+		staticobj += static_plugin_obj
+	else:
+		staticobj += [ staticenv.Object('static-' + cfile.replace('.c', ''), cfile) ]
+env.Depends(static_plugin_obj, 'plugin-static.h')
+print(str(static_plugin_obj))
 
-staticbin = staticenv.Program('lighttpd-semi-static',
+## includes all modules, but links dynamically against other libs
+staticbin = staticenv.Program('../static/build/lighttpd',
 	staticobj,
-	LIBS = staticlib
+	LIBS = GatherLibs(env, staticlib)
 	)
 
 ## you might have to adjust the list of libs and the order for your setup
@@ -128,11 +149,11 @@ for libs in staticlib:
 			fullstaticlib += [ aword ]
 		f.close
 
-
-fullstaticbin = staticenv.Program('lighttpd-static',
+## includes all modules, linked statically
+fullstaticbin = staticenv.Program('../fullstatic/build/lighttpd',
 	staticobj,
-	LIBS = fullstaticlib,
-	LINKFLAGS= ['-static']
+	LIBS = GatherLibs(env, fullstaticlib),
+	LINKFLAGS= [staticenv['LINKFLAGS'], '-static']
 	)
 
 Alias('static', staticbin)
@@ -152,7 +173,7 @@ else:
 	else:
 		bin_linkflags += [ '-Wl,--export-dynamic' ]
 
-instbin = env.Program(bin_targets, src, LINKFLAGS = bin_linkflags, LIBS= [ env['LIBS'], common_lib, env['LIBDL'] ])
+instbin = env.Program(bin_targets, src, LINKFLAGS = bin_linkflags, LIBS = GatherLibs(env, env['LIBS'], common_lib, env['LIBDL']))
 env.Depends(instbin, configparser)
 
 if env['COMMON_LIB'] == 'bin':
@@ -164,7 +185,8 @@ for module in modules.keys():
 	libs = [ common_lib ]
 	if modules[module].has_key('lib'):
 		libs +=  modules[module]['lib']
-	instlib += env.SharedLibrary(module, modules[module]['src'], LIBS= [ libs ])
+	instlib += env.SharedLibrary(module, modules[module]['src'], LIBS= GatherLibs(env, libs))
+env.Alias('modules', instlib)
 
 inst = []
 
@@ -190,4 +212,3 @@ env.Alias('install', inst)
 
 pkgdir = '.'
 tarname = env['package'] + '-' + env['version']
-

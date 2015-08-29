@@ -70,37 +70,38 @@ int main() {
 	return result
 
 
-BuildDir('build', 'src', duplicate = 0)
+VariantDir('sconsbuild/build', 'src', duplicate = 0)
+VariantDir('sconsbuild/tests', 'tests', duplicate = 0)
 
-opts = Options('config.py')
-opts.AddOptions(
+vars = Variables() #('config.py')
+vars.AddVariables(
 	('prefix', 'prefix', '/usr/local'),
 	('bindir', 'binary directory', '${prefix}/bin'),
 	('sbindir', 'binary directory', '${prefix}/sbin'),
 	('libdir', 'library directory', '${prefix}/lib'),
-	PackageOption('with_mysql', 'enable mysql support', 'no'),
-	PackageOption('with_xml', 'enable xml support', 'no'),
-	PackageOption('with_pcre', 'enable pcre support', 'yes'),
-	PathOption('CC', 'path to the c-compiler', None),
-	BoolOption('build_dynamic', 'enable dynamic build', 'yes'),
-	BoolOption('build_static', 'enable static build', 'no'),
-	BoolOption('build_fullstatic', 'enable fullstatic build', 'no'),
-	BoolOption('with_sqlite3', 'enable sqlite3 support', 'no'),
-	BoolOption('with_memcache', 'enable memcache support', 'no'),
-	BoolOption('with_fam', 'enable FAM/gamin support', 'no'),
-	BoolOption('with_openssl', 'enable memcache support', 'no'),
-	BoolOption('with_gzip', 'enable gzip compression', 'no'),
-	BoolOption('with_bzip2', 'enable bzip2 compression', 'no'),
-	BoolOption('with_lua', 'enable lua support for mod_cml', 'no'),
-	BoolOption('with_ldap', 'enable ldap auth support', 'no'))
+	PackageVariable('with_mysql', 'enable mysql support', 'no'),
+	PackageVariable('with_xml', 'enable xml support', 'no'),
+	PackageVariable('with_pcre', 'enable pcre support', 'yes'),
+	PathVariable('CC', 'path to the c-compiler', None),
+	BoolVariable('build_dynamic', 'enable dynamic build', 'yes'),
+	BoolVariable('build_static', 'enable static build', 'no'),
+	BoolVariable('build_fullstatic', 'enable fullstatic build', 'no'),
+	BoolVariable('with_sqlite3', 'enable sqlite3 support', 'no'),
+	BoolVariable('with_memcache', 'enable memcache support', 'no'),
+	BoolVariable('with_fam', 'enable FAM/gamin support', 'no'),
+	BoolVariable('with_openssl', 'enable memcache support', 'no'),
+	BoolVariable('with_gzip', 'enable gzip compression', 'no'),
+	BoolVariable('with_bzip2', 'enable bzip2 compression', 'no'),
+	BoolVariable('with_lua', 'enable lua support for mod_cml', 'no'),
+	BoolVariable('with_ldap', 'enable ldap auth support', 'no'))
 
 env = Environment(
-	env = os.environ,
-	options = opts,
-	CPPPATH = Split('#build')
+	ENV = os.environ,
+	variables = vars,
+	CPPPATH = Split('#sconsbuild/build')
 )
 
-env.Help(opts.GenerateHelpText(env))
+env.Help(vars.GenerateHelpText(env))
 
 if env.subst('${CC}') is not '':
 	env['CC'] = env.subst('${CC}')
@@ -114,6 +115,19 @@ if env['CC'] == 'gcc':
 # cache configure checks
 if 1:
 	autoconf = Configure(env, custom_tests = {'CheckStructMember': checkStructMember })
+
+	if 'CFLAGS' in os.environ:
+		autoconf.env.Append(CCFLAGS = os.environ['CFLAGS'])
+		print(">> Appending custom build flags : " + os.environ['CFLAGS'])
+
+	if 'LDFLAGS' in os.environ:
+		autoconf.env.Append(LINKFLAGS = os.environ['LDFLAGS'])
+		print(">> Appending custom link flags : " + os.environ['LDFLAGS'])
+
+	if 'LIBS' in os.environ:
+		autoconf.env.Append(APPEND_LIBS = os.environ['LIBS'])
+		print(">> Appending custom libraries : " + os.environ['LIBS'])
+
 	autoconf.headerfile = "foo.h"
 	checkCHeaders(autoconf, string.split("""
 			arpa/inet.h
@@ -124,7 +138,7 @@ if 1:
 			string.h
 			sys/socket.h
 			sys/types.h sys/socket.h
-		 	sys/time.h
+			sys/time.h
 			unistd.h
 			sys/sendfile.h
 			sys/uio.h
@@ -164,7 +178,7 @@ if 1:
 
 	autoconf.env.Append( LIBSQLITE3 = '', LIBXML2 = '', LIBMYSQL = '', LIBZ = '',
 		LIBBZ2 = '', LIBCRYPT = '', LIBMEMCACHE = '', LIBFCGI = '', LIBPCRE = '',
-		LIBLDAP = '', LIBLBER = '', LIBLUA = '', LIBLUALIB = '', LIBDL = '')
+		LIBLDAP = '', LIBLBER = '', LIBLUA = '', LIBDL = '')
 
 	if env['with_fam']:
 		if autoconf.CheckLibWithHeader('fam', 'fam.h', 'C'):
@@ -225,14 +239,28 @@ if 1:
 
 	env = autoconf.Finish()
 
-	if env['with_lua']:
-		oldlibs = env['LIBS']
-		env.ParseConfig("pkg-config 'lua >= 5.0' --cflags --libs")
-		lualibs = env['LIBS'][len(oldlibs):]
-		env.Append(LIBLUA = lualibs)
+def TryLua(env, name):
+	result = False
+	oldlibs = env['LIBS']
+	try:
+		print("Searching for lua: " + name + " >= 5.0")
+		env.ParseConfig("pkg-config '" + name + " >= 5.0' --cflags --libs")
+		env.Append(LIBLUA = env['LIBS'][len(oldlibs):])
 		env.Append(CPPFLAGS = [ '-DHAVE_LUA_H' ])
-		env['LIBS'] = oldlibs
+		result = True
+	except:
+		pass
+	env['LIBS'] = oldlibs
+	return result
 
+if env['with_lua']:
+	found_lua = False
+	for lua_name in ['lua5.1', 'lua5.0', 'lua']:
+		if TryLua(env, lua_name):
+			found_lua = True
+			break
+	if not found_lua:
+		raise RuntimeError("Couldn't find any lua implementation")
 
 if env['with_pcre']:
 	pcre_config = checkProgram(env, 'pcre', 'pcre-config')
@@ -265,12 +293,12 @@ else:
 versions = string.split(version, '.')
 version_id = int(versions[0]) << 16 | int(versions[1]) << 8 | int(versions[2])
 env.Append(CPPFLAGS = [
-		'-DLIGHTTPD_VERSION_ID=' + str(version_id),
+		'-DLIGHTTPD_VERSION_ID=' + hex(version_id),
 		'-DPACKAGE_NAME=\\"' + package + '\\"',
 		'-DPACKAGE_VERSION=\\"' + version + '\\"',
 		'-DLIBRARY_DIR="\\"${libdir}\\""',
 		'-D_FILE_OFFSET_BITS=64', '-D_LARGEFILE_SOURCE', '-D_LARGE_FILES'
 		] )
 
-SConscript( 'src/SConscript', 'env', build_dir = 'build', duplicate = 0)
-SConscript( 'tests/SConscript', 'env' )
+SConscript('src/SConscript', exports = 'env', variant_dir = 'sconsbuild/build', duplicate = 0)
+SConscript('tests/SConscript', exports = 'env', variant_dir = 'sconsbuild/tests')

@@ -4,10 +4,14 @@ if test x$srcdir = x; then
 	srcdir=.
 fi
 
-tmpdir=$top_builddir/tests/tmp/
+if test x$top_builddir = x; then
+	top_builddir=..
+fi
+
+tmpdir="$top_builddir/tests/tmp/"
 
 # remove test-framework
-rm -rf $tmpdir
+rm -rf "$tmpdir"
 
 printf "%-40s" "cleaning up"
 
