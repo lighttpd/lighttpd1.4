@@ -13,8 +13,8 @@ def checkCHeaders(autoconf, hdrs):
 		if not hdr:
 			continue
 		_hdr = Split(hdr)
- 		if autoconf.CheckCHeader(_hdr):
- 			autoconf.env.Append(CPPFLAGS = [ '-DHAVE_' + p.sub('_', _hdr[-1].upper()) ])
+		if autoconf.CheckCHeader(_hdr):
+			autoconf.env.Append(CPPFLAGS = [ '-DHAVE_' + p.sub('_', _hdr[-1].upper()) ])
 
 def checkFuncs(autoconf, funcs):
 	p = re.compile('[^A-Z0-9]')
@@ -127,49 +127,53 @@ if 1:
 	if 'LIBS' in os.environ:
 		autoconf.env.Append(APPEND_LIBS = os.environ['LIBS'])
 		print(">> Appending custom libraries : " + os.environ['LIBS'])
+	else:
+		autoconf.env.Append(APPEND_LIBS = '')
 
 	autoconf.headerfile = "foo.h"
 	checkCHeaders(autoconf, string.split("""
 			arpa/inet.h
+			crypt.h
 			fcntl.h
+			getopt.h
+			inttypes.h
 			netinet/in.h
-			sys/types.h netinet/in.h
+			poll.h
+			pwd.h
+			stdint.h
 			stdlib.h
 			string.h
-			sys/socket.h
-			sys/types.h sys/socket.h
-			sys/time.h
-			unistd.h
-			sys/sendfile.h
-			sys/uio.h
-			sys/types.h sys/uio.h
-			getopt.h
-			sys/epoll.h
-			sys/select.h
-			sys/types.h sys/select.h
-			poll.h
-			sys/poll.h
 			sys/devpoll.h
+			sys/epoll.h
+			sys/event.h
 			sys/filio.h
 			sys/mman.h
-			sys/types.h sys/mman.h
-			sys/event.h
-			sys/types.h sys/event.h
+			sys/poll.h
 			sys/port.h
-			winsock2.h
-			pwd.h
-			sys/resource.h
-			sys/time.h sys/types.h sys/resource.h
-			sys/un.h
-			sys/types.h sys/un.h
-			syslog.h
-			stdint.h
-			inttypes.h
 			sys/prctl.h
-			sys/wait.h""", "\n"))
+			sys/resource.h
+			sys/select.h
+			sys/sendfile.h
+			sys/socket.h
+			sys/time.h
+			sys/time.h sys/types.h sys/resource.h
+			sys/types.h netinet/in.h
+			sys/types.h sys/event.h
+			sys/types.h sys/mman.h
+			sys/types.h sys/select.h
+			sys/types.h sys/socket.h
+			sys/types.h sys/uio.h
+			sys/types.h sys/un.h
+			sys/uio.h
+			sys/un.h
+			sys/wait.h
+			syslog.h
+			unistd.h
+			winsock2.h
+			""", "\n"))
 
 	checkFuncs(autoconf, Split('fork stat lstat strftime dup2 getcwd inet_ntoa inet_ntop memset mmap munmap strchr \
-			strdup strerror strstr strtol sendfile  getopt socket \
+			strdup strerror strstr strtol sendfile getopt socket \
 			gethostbyname poll epoll_ctl getrlimit chroot \
 			getuid select signal pathconf madvise prctl\
 			writev sigaction sendfile64 send_file kqueue port_create localtime_r posix_fadvise issetugid inet_pton'))
@@ -178,16 +182,21 @@ if 1:
 
 	autoconf.env.Append( LIBSQLITE3 = '', LIBXML2 = '', LIBMYSQL = '', LIBZ = '',
 		LIBBZ2 = '', LIBCRYPT = '', LIBMEMCACHE = '', LIBFCGI = '', LIBPCRE = '',
-		LIBLDAP = '', LIBLBER = '', LIBLUA = '', LIBDL = '')
+		LIBLDAP = '', LIBLBER = '', LIBLUA = '', LIBDL = '', LIBUUID = '')
 
 	if env['with_fam']:
 		if autoconf.CheckLibWithHeader('fam', 'fam.h', 'C'):
 			autoconf.env.Append(CPPFLAGS = [ '-DHAVE_FAM_H', '-DHAVE_LIBFAM' ], LIBS = 'fam')
 			checkFuncs(autoconf, ['FAMNoExists']);
 
-
-	if autoconf.CheckLibWithHeader('crypt', 'crypt.h', 'C'):
-		autoconf.env.Append(CPPFLAGS = [ '-DHAVE_CRYPT_H', '-DHAVE_LIBCRYPT' ], LIBCRYPT = 'crypt')
+	if autoconf.CheckLib('crypt'):
+		autoconf.env.Append(CPPFLAGS = [ '-DHAVE_LIBCRYPT' ], LIBCRYPT = 'crypt')
+		oldlib = env['LIBS']
+		env['LIBS'] += ['crypt']
+		checkFuncs(autoconf, ['crypt', 'crypt_r']);
+		env['LIBS'] = oldlib
+	else:
+		checkFuncs(autoconf, ['crypt', 'crypt_r']);
 
 	if autoconf.CheckLibWithHeader('uuid', 'uuid/uuid.h', 'C'):
 		autoconf.env.Append(CPPFLAGS = [ '-DHAVE_UUID_UUID_H', '-DHAVE_LIBUUID' ], LIBUUID = 'uuid')

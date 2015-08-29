@@ -11,7 +11,8 @@
 # define _XOPEN_SOURCE
 #endif
 
-#ifdef HAVE_LIBCRYPT
+#if defined(HAVE_LIBCRYPT) && !defined(HAVE_CRYPT)
+/* always assume crypt() is present if we have -lcrypt */
 # define HAVE_CRYPT
 #endif
 
