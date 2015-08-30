@@ -18,6 +18,7 @@ NEWS
   * [mmap] fix mmap alignment
   * [plugins] when modules are linked statically still only load the modules given in the config
   * [mmap] handle SIGBUS in network; those get triggered if the file gets smaller during reading
+  * fix some warnings found by coverity ("leak" in setup phase, not catching too long unix socket paths in mod_proxy)
 
 - 1.4.36 - 2015-07-26
   * use keep-alive timeout while waiting for HTTP headers; use always the read timeout while waiting for the HTTP body

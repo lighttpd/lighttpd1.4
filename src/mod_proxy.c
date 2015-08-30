@@ -376,6 +376,13 @@ static int proxy_establish_connection(server *srv, handler_ctx *hctx) {
 
 #if defined(HAVE_SYS_UN_H)
 	if (strstr(host->host->ptr, "/")) {
+		if (buffer_string_length(host->host) + 1 > sizeof(proxy_addr_un.sun_path)) {
+			log_error_write(srv, __FILE__, __LINE__, "sB",
+				"ERROR: Unix Domain socket filename too long:",
+				host->host);
+			return -1;
+		}
+
 		memset(&proxy_addr_un, 0, sizeof(proxy_addr_un));
 		proxy_addr_un.sun_family = AF_UNIX;
 		strcpy(proxy_addr_un.sun_path, host->host->ptr);

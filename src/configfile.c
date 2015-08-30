@@ -1049,16 +1049,17 @@ int config_parse_cmd(server *srv, config_t *context, const char *cmd) {
 		return -1;
 	}
 
-	source = buffer_init_string(cmd);
-	out = buffer_init();
-
 	if (!buffer_string_is_empty(context->basedir)) {
 		if (0 != chdir(context->basedir->ptr)) {
 			log_error_write(srv, __FILE__, __LINE__, "sbs",
 				"cannot change directory to", context->basedir, strerror(errno));
+			free(oldpwd);
 			return -1;
 		}
 	}
+
+	source = buffer_init_string(cmd);
+	out = buffer_init();
 
 	if (0 != proc_open_buffer(cmd, NULL, out, NULL)) {
 		log_error_write(srv, __FILE__, __LINE__, "sbss",
@@ -1074,6 +1075,7 @@ int config_parse_cmd(server *srv, config_t *context, const char *cmd) {
 	if (0 != chdir(oldpwd)) {
 		log_error_write(srv, __FILE__, __LINE__, "sss",
 			"cannot change directory to", oldpwd, strerror(errno));
+		free(oldpwd);
 		return -1;
 	}
 	free(oldpwd);
