@@ -106,6 +106,9 @@ tags:
 - releases
 ---
 {% excerpt %}
+
+TODO
+
 h2. Important changes
 
 TODO
@@ -262,7 +265,7 @@ EOF
 
 h1. External references
 
-* http://www.lighttpd.net/$(date +"%Y/%m/%d")/${version//./-}
+* http://www.lighttpd.net/$(date +"%Y/%-m/%-d")/${version}
 
 EOF
 	) > "Release-${version//./_}.page"
@@ -276,8 +279,8 @@ echo
 
 
 
-blog_post > $(date +"%Y-%m-%d")-"${version//./-}.textile"
-cat $(date +"%Y-%m-%d")-"${version//./-}.textile"
+blog_post > $(date +"%Y-%m-%d")-"${version}.textile"
+cat $(date +"%Y-%m-%d")-"${version}.textile"
 
 echo
 echo -------
