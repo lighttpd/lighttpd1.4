@@ -3,7 +3,9 @@
 NEWS
 ====
 
-- 1.4.37
+- 1.4.38
+
+- 1.4.37 - 2015-08-30
   * [mod_proxy] remove debug log line from error log (fixes #2659)
   * [mod_dirlisting] fix dir-listing.set-footer not showing
   * fix out-of-filedescriptors when uploading "large" files (fixes #2660, thx rmilecki)
