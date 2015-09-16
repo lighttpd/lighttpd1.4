@@ -369,7 +369,6 @@ handler_t stat_cache_get_entry(server *srv, connection *con, buffer *name, stat_
 #ifdef HAVE_FAM_H
 	fam_dir_entry *fam_dir = NULL;
 	int dir_ndx = -1;
-	splay_tree *dir_node = NULL;
 #endif
 	stat_cache_entry *sce = NULL;
 	stat_cache *sc;
@@ -382,7 +381,6 @@ handler_t stat_cache_get_entry(server *srv, connection *con, buffer *name, stat_
 #endif
 
 	int file_ndx;
-	splay_tree *file_node = NULL;
 
 	*ret_sce = NULL;
 
@@ -413,9 +411,7 @@ handler_t stat_cache_get_entry(server *srv, connection *con, buffer *name, stat_
 		/* we have seen this file already and
 		 * don't stat() it again in the same second */
 
-		file_node = sc->files;
-
-		sce = file_node->data;
+		sce = sc->files->data;
 
 		/* check if the name is the same, we might have a collision */
 
@@ -427,17 +423,8 @@ handler_t stat_cache_get_entry(server *srv, connection *con, buffer *name, stat_
 				}
 			}
 		} else {
-			/* oops, a collision,
-			 *
-			 * file_node is used by the FAM check below to see if we know this file
-			 * and if we can save a stat().
-			 *
-			 * BUT, the sce is not reset here as the entry into the cache is ok, we
-			 * it is just not pointing to our requested file.
-			 *
-			 *  */
-
-			file_node = NULL;
+			/* collision, forget about the entry */
+			sce = NULL;
 		}
 	} else {
 #ifdef DEBUG_STAT_CACHE
@@ -465,21 +452,21 @@ handler_t stat_cache_get_entry(server *srv, connection *con, buffer *name, stat_
 
 		sc->dirs = splaytree_splay(sc->dirs, dir_ndx);
 
-		if (sc->dirs && (sc->dirs->key == dir_ndx)) {
-			dir_node = sc->dirs;
-		}
+		if ((NULL != sc->dirs) && (sc->dirs->key == dir_ndx)) {
+			fam_dir = sc->dirs->data;
 
-		if (dir_node && file_node) {
-			/* we found a file */
+			/* check whether we got a collision */
+			if (buffer_is_equal(sc->dir_name, fam_dir->name)) {
+				/* test whether a found file cache entry is still ok */
+				if ((NULL != sce) && (fam_dir->version == sce->dir_version)) {
+					/* the stat()-cache entry is still ok */
 
-			sce = file_node->data;
-			fam_dir = dir_node->data;
-
-			if (fam_dir->version == sce->dir_version) {
-				/* the stat()-cache entry is still ok */
-
-				*ret_sce = sce;
-				return HANDLER_GO_ON;
+					*ret_sce = sce;
+					return HANDLER_GO_ON;
+				}
+			} else {
+				/* hash collision, forget about the entry */
+				fam_dir = NULL;
 			}
 		}
 	}
@@ -511,30 +498,36 @@ handler_t stat_cache_get_entry(server *srv, connection *con, buffer *name, stat_
 	}
 
 	if (NULL == sce) {
-#ifdef DEBUG_STAT_CACHE
-		int osize = splaytree_size(sc->files);
-#endif
 
 		sce = stat_cache_entry_init();
 		buffer_copy_buffer(sce->name, name);
 
-		sc->files = splaytree_insert(sc->files, file_ndx, sce);
+		/* already splayed file_ndx */
+		if ((NULL != sc->files) && (sc->files->key == file_ndx)) {
+			/* hash collision: replace old entry */
+			stat_cache_entry_free(sc->files->data);
+			sc->files->data = sce;
+		} else {
+			int osize = splaytree_size(sc->files);
+
+			sc->files = splaytree_insert(sc->files, file_ndx, sce);
+			force_assert(osize + 1 == splaytree_size(sc->files));
+
 #ifdef DEBUG_STAT_CACHE
-		if (ctrl.size == 0) {
-			ctrl.size = 16;
-			ctrl.used = 0;
-			ctrl.ptr = malloc(ctrl.size * sizeof(*ctrl.ptr));
-		} else if (ctrl.size == ctrl.used) {
-			ctrl.size += 16;
-			ctrl.ptr = realloc(ctrl.ptr, ctrl.size * sizeof(*ctrl.ptr));
+			if (ctrl.size == 0) {
+				ctrl.size = 16;
+				ctrl.used = 0;
+				ctrl.ptr = malloc(ctrl.size * sizeof(*ctrl.ptr));
+			} else if (ctrl.size == ctrl.used) {
+				ctrl.size += 16;
+				ctrl.ptr = realloc(ctrl.ptr, ctrl.size * sizeof(*ctrl.ptr));
+			}
+
+			ctrl.ptr[ctrl.used++] = file_ndx;
+#endif
 		}
-
-		ctrl.ptr[ctrl.used++] = file_ndx;
-
 		force_assert(sc->files);
 		force_assert(sc->files->data == sce);
-		force_assert(osize + 1 == splaytree_size(sc->files));
-#endif
 	}
 
 	sce->st = st;
@@ -639,7 +632,7 @@ handler_t stat_cache_get_entry(server *srv, connection *con, buffer *name, stat_
 #ifdef HAVE_FAM_H
 	if (srv->srvconf.stat_cache_engine == STAT_CACHE_ENGINE_FAM) {
 		/* is this directory already registered ? */
-		if (!dir_node) {
+		if (NULL == fam_dir) {
 			fam_dir = fam_dir_entry_init();
 
 			buffer_copy_buffer(fam_dir->name, sc->dir_name);
@@ -660,19 +653,21 @@ handler_t stat_cache_get_entry(server *srv, connection *con, buffer *name, stat_
 				fam_dir_entry_free(&sc->fam, fam_dir);
 				fam_dir = NULL;
 			} else {
-				int osize = 0;
+				int osize = splaytree_size(sc->dirs);
 
-				if (sc->dirs) {
-					osize = sc->dirs->size;
+				/* already splayed dir_ndx */
+				if ((NULL != sc->dirs) && (sc->dirs->key == dir_ndx)) {
+					/* hash collision: replace old entry */
+					fam_dir_entry_free(&sc->fam, sc->dirs->data);
+					sc->dirs->data = fam_dir;
+				} else {
+					sc->dirs = splaytree_insert(sc->dirs, dir_ndx, fam_dir);
+					force_assert(osize == (splaytree_size(sc->dirs) - 1));
 				}
 
-				sc->dirs = splaytree_insert(sc->dirs, dir_ndx, fam_dir);
 				force_assert(sc->dirs);
 				force_assert(sc->dirs->data == fam_dir);
-				force_assert(osize == (sc->dirs->size - 1));
 			}
-		} else {
-			fam_dir = dir_node->data;
 		}
 
 		/* bind the fam_fc to the stat() cache entry */
