@@ -932,7 +932,7 @@ static int connection_handle_read_state(server *srv, connection *con)  {
 
 					for ( ; cc; cc = cc->next, j = 0 ) {
 						size_t bblen = buffer_string_length(cc->mem) - cc->offset;
-						const char *bb = c->mem->ptr + cc->offset;
+						const char *bb = cc->mem->ptr + cc->offset;
 
 						for ( ; j < bblen; j++) {
 							ch = bb[j];
