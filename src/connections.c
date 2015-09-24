@@ -336,9 +336,10 @@ static int connection_handle_read(server *srv, connection *con) {
 	len = recv(con->fd, mem, mem_len, 0);
 #else /* __WIN32 */
 	if (ioctl(con->fd, FIONREAD, &toread) || toread == 0 || toread <= 4*1024) {
-		if (toread > MAX_READ_LIMIT) toread = MAX_READ_LIMIT;
-	} else {
 		toread = 4096;
+	}
+	else if (toread > MAX_READ_LIMIT) {
+		toread = MAX_READ_LIMIT;
 	}
 	chunkqueue_get_memory(con->read_queue, &mem, &mem_len, 0, toread);
 
