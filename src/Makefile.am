@@ -75,7 +75,8 @@ common_src=buffer.c log.c \
 	network_write_mmap.c network_write_no_mmap.c \
 	network_freebsd_sendfile.c network_writev.c \
 	network_solaris_sendfilev.c network_openssl.c \
-	splaytree.c status_counter.c
+	splaytree.c status_counter.c \
+	explicit_bzero.c
 
 src = server.c response.c connections.c network.c \
 	configfile.c configparser.c request.c proc_open.c
@@ -280,6 +281,7 @@ hdr = server.h buffer.h network.h log.h keyvalue.h \
 	sys-mmap.h sys-socket.h mod_cml.h mod_cml_funcs.h \
 	splaytree.h proc_open.h status_counter.h \
 	mod_magnet_cache.h \
+	explicit_bzero.h \
 	version.h
 
 DEFS= @DEFS@ -DHAVE_VERSION_H -DLIBRARY_DIR="\"$(libdir)\"" -DSBIN_DIR="\"$(sbindir)\""

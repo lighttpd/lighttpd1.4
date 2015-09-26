@@ -29,6 +29,7 @@
 #include <ctype.h>
 
 #include "md5.h"
+#include "explicit_bzero.h"
 
 #ifdef USE_OPENSSL
 #include <openssl/sha.h>
@@ -583,7 +584,7 @@ static void apr_md5_encode(const char *pw, const char *salt, char *result, size_
     /*
      * Don't leave anything around in vm they could use.
      */
-    memset(final, 0, sizeof(final));
+    explicit_bzero(final, sizeof(final));
 
 	/* FIXME
 	 */
