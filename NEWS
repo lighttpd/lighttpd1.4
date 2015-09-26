@@ -9,6 +9,7 @@ NEWS
   * [core] fix search for header end if split across chunks (fixes #2670)
   * [core] check configparserAlloc() result with force_assert
   * [mod_auth] implement and use safe_memclear, using memset_s or explicit_bzero if available (thx loganaden)
+  * [mod_ssi] check ssiexprparserAlloc() result with force assert
 
 - 1.4.37 - 2015-08-30
   * [mod_proxy] remove debug log line from error log (fixes #2659)
