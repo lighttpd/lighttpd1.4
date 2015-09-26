@@ -26,9 +26,8 @@
 #cmakedefine HAVE_SYS_TIME_H
 #cmakedefine HAVE_UNISTD_H
 #cmakedefine HAVE_PTHREAD_H
-#cmakedefine HAVE_INET_ATON
 #cmakedefine HAVE_IPV6
-#cmakedefine HAVE_ISSETUGID
+#cmakedefine HAVE_WEAK_SYMBOLS
 
 /* XATTR */
 #cmakedefine HAVE_ATTR_ATTRIBUTES_H
@@ -143,6 +142,11 @@
 #cmakedefine  HAVE_STRPTIME
 #cmakedefine  HAVE_SYSLOG
 #cmakedefine  HAVE_WRITEV
+#cmakedefine  HAVE_INET_ATON
+#cmakedefine  HAVE_ISSETUGID
+#cmakedefine  HAVE_INET_PTON
+#cmakedefine  HAVE_MEMSET_S
+#cmakedefine  HAVE_EXPLICIT_BZERO
 
 /* libcrypt */
 #cmakedefine  HAVE_CRYPT_H

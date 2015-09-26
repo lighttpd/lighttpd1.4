@@ -586,7 +586,18 @@ AC_CHECK_FUNCS([dup2 getcwd inet_ntoa inet_ntop memset mmap munmap strchr \
 		  strdup strerror strstr strtol sendfile  getopt socket lstat \
 		  gethostbyname poll epoll_ctl getrlimit chroot \
 		  getuid select signal pathconf madvise posix_fadvise posix_madvise \
-		  writev sigaction sendfile64 send_file kqueue port_create localtime_r gmtime_r])
+		  writev sigaction sendfile64 send_file kqueue port_create localtime_r gmtime_r \
+		  memset_s explicit_bzero])
+
+AC_MSG_CHECKING(if weak symbols are supported)
+AC_LINK_IFELSE([AC_LANG_PROGRAM([[
+		__attribute__((weak)) void __dummy(void *x) { }
+		void f(void *x) { __dummy(x); }
+	]])],
+	[
+		AC_MSG_RESULT(yes)
+		AC_DEFINE([HAVE_WEAK_SYMBOLS], [1], [weak symbols are supported])
+	],[AC_MSG_RESULT(no)])
 
 AC_MSG_CHECKING(for Large File System support)
 AC_ARG_ENABLE(lfs,

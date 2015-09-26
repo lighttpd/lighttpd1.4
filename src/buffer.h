@@ -170,8 +170,6 @@ static inline void buffer_append_slash(buffer *b); /* append '/' no non-empty st
 #define CONST_BUF_LEN(x) ((x) ? (x)->ptr : NULL), buffer_string_length(x)
 
 
-#define UNUSED(x) ( (void)(x) )
-
 void print_backtrace(FILE *file);
 void log_failed_assert(const char *filename, unsigned int line, const char *msg) LI_NORETURN;
 #define force_assert(x) do { if (!(x)) log_failed_assert(__FILE__, __LINE__, "assertion failed: " #x); } while(0)

@@ -28,7 +28,7 @@ common_src = Split("buffer.c log.c \
 	network_write.c network_linux_sendfile.c \
 	network_freebsd_sendfile.c  \
 	network_solaris_sendfilev.c network_openssl.c \
-	status_counter.c \
+	status_counter.c safe_memclear.c \
 ")
 
 src = Split("server.c response.c connections.c network.c \

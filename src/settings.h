@@ -15,6 +15,8 @@
 # define LI_NORETURN
 #endif
 
+#define UNUSED(x) ( (void)(x) )
+
 #define BV(x) (1 << x)
 
 #define INET_NTOP_CACHE_MAX 4

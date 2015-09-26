@@ -28,6 +28,52 @@ def checkTypes(autoconf, types):
 		if autoconf.CheckType(type, '#include <sys/types.h>'):
 			autoconf.env.Append(CPPFLAGS = [ '-DHAVE_' + p.sub('_', type.upper()) ])
 
+def checkGmtOffInStructTm(context):
+	source = """
+#include <time.h>
+int main() {
+	struct tm a;
+	a.tm_gmtoff = 0;
+	return 0;
+}
+"""
+	context.Message('Checking for tm_gmtoff in struct tm...')
+	result = context.TryLink(source, '.c')
+	context.Result(result)
+
+	return result
+
+def checkIPv6(context):
+	source = """
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+
+int main() {
+	struct sockaddr_in6 s; struct in6_addr t=in6addr_any; int i=AF_INET6; s; t.s6_addr[0] = 0;
+	return 0;
+}
+"""
+	context.Message('Checking for IPv6 support...')
+	result = context.TryLink(source, '.c')
+	context.Result(result)
+
+	return result
+
+def checkWeakSymbols(context):
+	source = """
+__attribute__((weak)) void __dummy(void *x) { }
+int main() {
+	void *x;
+	__dummy(x);
+}
+"""
+	context.Message('Checking for weak symbol support...')
+	result = context.TryLink(source, '.c')
+	context.Result(result)
+
+	return result
+
 def checkProgram(env, withname, progname):
 	withname = 'with_' + withname
 	binpath = None
@@ -53,22 +99,6 @@ def checkProgram(env, withname, progname):
 		env.Exit(-1)
 
 	return binpath
-
-def checkStructMember(context):
-	struct_member = """
-#include <time.h>
-int main() {
-	struct tm a;
-	a.tm_gmtoff = 0;
-	return 0;
-}
-"""
-	context.Message('Checking for tm_gmtoff in struct tm...')
-	result = context.TryLink(struct_member, '.c')
-	context.Result(result)
-
-	return result
-
 
 VariantDir('sconsbuild/build', 'src', duplicate = 0)
 VariantDir('sconsbuild/tests', 'tests', duplicate = 0)
@@ -114,7 +144,11 @@ if env['CC'] == 'gcc':
 
 # cache configure checks
 if 1:
-	autoconf = Configure(env, custom_tests = {'CheckStructMember': checkStructMember })
+	autoconf = Configure(env, custom_tests = {
+		'CheckGmtOffInStructTm': checkGmtOffInStructTm,
+		'CheckIPv6': checkIPv6,
+		'CheckWeakSymbols': checkWeakSymbols,
+	})
 
 	if 'CFLAGS' in os.environ:
 		autoconf.env.Append(CCFLAGS = os.environ['CFLAGS'])
@@ -175,7 +209,8 @@ if 1:
 			strdup strerror strstr strtol sendfile getopt socket \
 			gethostbyname poll epoll_ctl getrlimit chroot \
 			getuid select signal pathconf madvise prctl\
-			writev sigaction sendfile64 send_file kqueue port_create localtime_r posix_fadvise issetugid inet_pton'))
+			writev sigaction sendfile64 send_file kqueue port_create localtime_r posix_fadvise issetugid inet_pton \
+			memset_s explicit_bzero'))
 
 	checkTypes(autoconf, Split('pid_t size_t off_t'))
 
@@ -242,8 +277,14 @@ if 1:
 	if autoconf.CheckType('struct sockaddr_storage', '#include <sys/socket.h>\n'):
 		autoconf.env.Append(CPPFLAGS = [ '-DHAVE_STRUCT_SOCKADDR_STORAGE' ])
 
-	if autoconf.CheckStructMember():
+	if autoconf.CheckGmtOffInStructTm():
 		autoconf.env.Append(CPPFLAGS = [ '-DHAVE_STRUCT_TM_GMTOFF' ])
+
+	if autoconf.CheckIPv6():
+		autoconf.env.Append(CPPFLAGS = [ '-DHAVE_IPV6' ])
+
+	if autoconf.CheckWeakSymbols():
+		autoconf.env.Append(CPPFLAGS = [ '-DHAVE_WEAK_SYMBOLS' ])
 
 	env = autoconf.Finish()
 

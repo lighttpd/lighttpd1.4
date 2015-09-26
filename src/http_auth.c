@@ -34,6 +34,8 @@
 #include <openssl/sha.h>
 #endif
 
+#include "safe_memclear.h"
+
 #define HASHLEN 16
 #define HASHHEXLEN 32
 typedef unsigned char HASH[HASHLEN];
@@ -431,164 +433,165 @@ int http_auth_match_rules(server *srv, array *req, const char *username, const c
 
 static void to64(char *s, unsigned long v, int n)
 {
-    static const unsigned char itoa64[] =         /* 0 ... 63 => ASCII - 64 */
-        "./0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
+	static const unsigned char itoa64[] =         /* 0 ... 63 => ASCII - 64 */
+		"./0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
 
-    while (--n >= 0) {
-        *s++ = itoa64[v&0x3f];
-        v >>= 6;
-    }
+	while (--n >= 0) {
+		*s++ = itoa64[v&0x3f];
+		v >>= 6;
+	}
 }
 
 static void apr_md5_encode(const char *pw, const char *salt, char *result, size_t nbytes) {
-    /*
-     * Minimum size is 8 bytes for salt, plus 1 for the trailing NUL,
-     * plus 4 for the '$' separators, plus the password hash itself.
-     * Let's leave a goodly amount of leeway.
-     */
+	/*
+	 * Minimum size is 8 bytes for salt, plus 1 for the trailing NUL,
+	 * plus 4 for the '$' separators, plus the password hash itself.
+	 * Let's leave a goodly amount of leeway.
+	 */
 
-    char passwd[120], *p;
-    const char *sp, *ep;
-    unsigned char final[APR_MD5_DIGESTSIZE];
-    ssize_t sl, pl, i;
-    li_MD5_CTX ctx, ctx1;
-    unsigned long l;
+	char passwd[120], *p;
+	const char *sp, *ep;
+	unsigned char final[APR_MD5_DIGESTSIZE];
+	ssize_t sl, pl, i;
+	li_MD5_CTX ctx, ctx1;
+	unsigned long l;
 
-    /*
-     * Refine the salt first.  It's possible we were given an already-hashed
-     * string as the salt argument, so extract the actual salt value from it
-     * if so.  Otherwise just use the string up to the first '$' as the salt.
-     */
-    sp = salt;
+	/*
+	 * Refine the salt first.  It's possible we were given an already-hashed
+	 * string as the salt argument, so extract the actual salt value from it
+	 * if so.  Otherwise just use the string up to the first '$' as the salt.
+	 */
+	sp = salt;
 
-    /*
-     * If it starts with the magic string, then skip that.
-     */
-    if (!strncmp(sp, APR1_ID, strlen(APR1_ID))) {
-        sp += strlen(APR1_ID);
-    }
+	/*
+	 * If it starts with the magic string, then skip that.
+	 */
+	if (!strncmp(sp, APR1_ID, strlen(APR1_ID))) {
+		sp += strlen(APR1_ID);
+	}
 
-    /*
-     * It stops at the first '$' or 8 chars, whichever comes first
-     */
-    for (ep = sp; (*ep != '\0') && (*ep != '$') && (ep < (sp + 8)); ep++) {
-        continue;
-    }
+	/*
+	 * It stops at the first '$' or 8 chars, whichever comes first
+	 */
+	for (ep = sp; (*ep != '\0') && (*ep != '$') && (ep < (sp + 8)); ep++) {
+		continue;
+	}
 
-    /*
-     * Get the length of the true salt
-     */
-    sl = ep - sp;
+	/*
+	 * Get the length of the true salt
+	 */
+	sl = ep - sp;
 
-    /*
-     * 'Time to make the doughnuts..'
-     */
-    li_MD5_Init(&ctx);
+	/*
+	 * 'Time to make the doughnuts..'
+	 */
+	li_MD5_Init(&ctx);
 
-    /*
-     * The password first, since that is what is most unknown
-     */
-    li_MD5_Update(&ctx, pw, strlen(pw));
+	/*
+	 * The password first, since that is what is most unknown
+	 */
+	li_MD5_Update(&ctx, pw, strlen(pw));
 
-    /*
-     * Then our magic string
-     */
-    li_MD5_Update(&ctx, APR1_ID, strlen(APR1_ID));
+	/*
+	 * Then our magic string
+	 */
+	li_MD5_Update(&ctx, APR1_ID, strlen(APR1_ID));
 
-    /*
-     * Then the raw salt
-     */
-    li_MD5_Update(&ctx, sp, sl);
+	/*
+	 * Then the raw salt
+	 */
+	li_MD5_Update(&ctx, sp, sl);
 
-    /*
-     * Then just as many characters of the MD5(pw, salt, pw)
-     */
-    li_MD5_Init(&ctx1);
-    li_MD5_Update(&ctx1, pw, strlen(pw));
-    li_MD5_Update(&ctx1, sp, sl);
-    li_MD5_Update(&ctx1, pw, strlen(pw));
-    li_MD5_Final(final, &ctx1);
-    for (pl = strlen(pw); pl > 0; pl -= APR_MD5_DIGESTSIZE) {
-        li_MD5_Update(&ctx, final,
-                      (pl > APR_MD5_DIGESTSIZE) ? APR_MD5_DIGESTSIZE : pl);
-    }
+	/*
+	 * Then just as many characters of the MD5(pw, salt, pw)
+	 */
+	li_MD5_Init(&ctx1);
+	li_MD5_Update(&ctx1, pw, strlen(pw));
+	li_MD5_Update(&ctx1, sp, sl);
+	li_MD5_Update(&ctx1, pw, strlen(pw));
+	li_MD5_Final(final, &ctx1);
+	for (pl = strlen(pw); pl > 0; pl -= APR_MD5_DIGESTSIZE) {
+		li_MD5_Update(
+			&ctx, final,
+			(pl > APR_MD5_DIGESTSIZE) ? APR_MD5_DIGESTSIZE : pl);
+	}
 
-    /*
-     * Don't leave anything around in vm they could use.
-     */
-    memset(final, 0, sizeof(final));
+	/*
+	 * Don't leave anything around in vm they could use.
+	 */
+	memset(final, 0, sizeof(final));
 
-    /*
-     * Then something really weird...
-     */
-    for (i = strlen(pw); i != 0; i >>= 1) {
-        if (i & 1) {
-            li_MD5_Update(&ctx, final, 1);
-        }
-        else {
-            li_MD5_Update(&ctx, pw, 1);
-        }
-    }
+	/*
+	 * Then something really weird...
+	 */
+	for (i = strlen(pw); i != 0; i >>= 1) {
+		if (i & 1) {
+			li_MD5_Update(&ctx, final, 1);
+		}
+		else {
+			li_MD5_Update(&ctx, pw, 1);
+		}
+	}
 
-    /*
-     * Now make the output string.  We know our limitations, so we
-     * can use the string routines without bounds checking.
-     */
-    strcpy(passwd, APR1_ID);
-    strncat(passwd, sp, sl);
-    strcat(passwd, "$");
+	/*
+	 * Now make the output string.  We know our limitations, so we
+	 * can use the string routines without bounds checking.
+	 */
+	strcpy(passwd, APR1_ID);
+	strncat(passwd, sp, sl);
+	strcat(passwd, "$");
 
-    li_MD5_Final(final, &ctx);
+	li_MD5_Final(final, &ctx);
 
-    /*
-     * And now, just to make sure things don't run too fast..
-     * On a 60 Mhz Pentium this takes 34 msec, so you would
-     * need 30 seconds to build a 1000 entry dictionary...
-     */
-    for (i = 0; i < 1000; i++) {
-        li_MD5_Init(&ctx1);
-        if (i & 1) {
-            li_MD5_Update(&ctx1, pw, strlen(pw));
-        }
-        else {
-            li_MD5_Update(&ctx1, final, APR_MD5_DIGESTSIZE);
-        }
-        if (i % 3) {
-            li_MD5_Update(&ctx1, sp, sl);
-        }
+	/*
+	 * And now, just to make sure things don't run too fast..
+	 * On a 60 Mhz Pentium this takes 34 msec, so you would
+	 * need 30 seconds to build a 1000 entry dictionary...
+	 */
+	for (i = 0; i < 1000; i++) {
+		li_MD5_Init(&ctx1);
+		if (i & 1) {
+			li_MD5_Update(&ctx1, pw, strlen(pw));
+		}
+		else {
+			li_MD5_Update(&ctx1, final, APR_MD5_DIGESTSIZE);
+		}
+		if (i % 3) {
+			li_MD5_Update(&ctx1, sp, sl);
+		}
 
-        if (i % 7) {
-            li_MD5_Update(&ctx1, pw, strlen(pw));
-        }
+		if (i % 7) {
+			li_MD5_Update(&ctx1, pw, strlen(pw));
+		}
 
-        if (i & 1) {
-            li_MD5_Update(&ctx1, final, APR_MD5_DIGESTSIZE);
-        }
-        else {
-            li_MD5_Update(&ctx1, pw, strlen(pw));
-        }
-        li_MD5_Final(final,&ctx1);
-    }
+		if (i & 1) {
+			li_MD5_Update(&ctx1, final, APR_MD5_DIGESTSIZE);
+		}
+		else {
+			li_MD5_Update(&ctx1, pw, strlen(pw));
+		}
+		li_MD5_Final(final,&ctx1);
+	}
 
-    p = passwd + strlen(passwd);
+	p = passwd + strlen(passwd);
 
-    l = (final[ 0]<<16) | (final[ 6]<<8) | final[12]; to64(p, l, 4); p += 4;
-    l = (final[ 1]<<16) | (final[ 7]<<8) | final[13]; to64(p, l, 4); p += 4;
-    l = (final[ 2]<<16) | (final[ 8]<<8) | final[14]; to64(p, l, 4); p += 4;
-    l = (final[ 3]<<16) | (final[ 9]<<8) | final[15]; to64(p, l, 4); p += 4;
-    l = (final[ 4]<<16) | (final[10]<<8) | final[ 5]; to64(p, l, 4); p += 4;
-    l =                    final[11]                ; to64(p, l, 2); p += 2;
-    *p = '\0';
+	l = (final[ 0]<<16) | (final[ 6]<<8) | final[12]; to64(p, l, 4); p += 4;
+	l = (final[ 1]<<16) | (final[ 7]<<8) | final[13]; to64(p, l, 4); p += 4;
+	l = (final[ 2]<<16) | (final[ 8]<<8) | final[14]; to64(p, l, 4); p += 4;
+	l = (final[ 3]<<16) | (final[ 9]<<8) | final[15]; to64(p, l, 4); p += 4;
+	l = (final[ 4]<<16) | (final[10]<<8) | final[ 5]; to64(p, l, 4); p += 4;
+	l =                    final[11]                ; to64(p, l, 2); p += 2;
+	*p = '\0';
 
-    /*
-     * Don't leave anything around in vm they could use.
-     */
-    memset(final, 0, sizeof(final));
+	/*
+	 * Don't leave anything around in vm they could use.
+	 */
+	safe_memclear(final, sizeof(final));
 
 	/* FIXME
 	 */
 #define apr_cpystrn strncpy
-    apr_cpystrn(result, passwd, nbytes - 1);
+	apr_cpystrn(result, passwd, nbytes - 1);
 }
 
 #ifdef USE_OPENSSL

@@ -105,6 +105,7 @@ else()
 	check_library_exists(crypt crypt "" HAVE_LIBCRYPT)
 endif()
 check_function_exists(crypt_r HAVE_CRYPT_R)
+check_function_exists(crypt HAVE_CRYPT)
 
 check_include_files(sys/inotify.h HAVE_SYS_INOTIFY_H)
 if(HAVE_SYS_INOTIFY_H)
@@ -119,7 +120,6 @@ check_type_size(long SIZEOF_LONG)
 check_type_size(off_t SIZEOF_OFF_T)
 
 check_function_exists(chroot HAVE_CHROOT)
-check_function_exists(crypt HAVE_CRYPT)
 check_function_exists(epoll_ctl HAVE_EPOLL_CTL)
 check_function_exists(fork HAVE_FORK)
 check_function_exists(getrlimit HAVE_GETRLIMIT)
@@ -151,6 +151,10 @@ check_function_exists(strptime HAVE_STRPTIME)
 check_function_exists(syslog HAVE_SYSLOG)
 check_function_exists(writev HAVE_WRITEV)
 check_function_exists(inet_aton HAVE_INET_ATON)
+check_function_exists(issetugid HAVE_ISSETUGID)
+check_function_exists(inet_pton HAVE_INET_PTON)
+check_function_exists(memset_s HAVE_MEMSET_S)
+check_function_exists(explicit_bzero HAVE_EXPLICIT_BZERO)
 check_c_source_compiles("
 	#include <sys/types.h>
 	#include <sys/socket.h>
@@ -160,8 +164,13 @@ check_c_source_compiles("
 		struct sockaddr_in6 s; struct in6_addr t=in6addr_any; int i=AF_INET6; s; t.s6_addr[0] = 0;
 		return 0;
 	}" HAVE_IPV6)
-check_function_exists(issetugid HAVE_ISSETUGID)
-check_function_exists(inet_pton HAVE_INET_PTON)
+check_c_source_compiles("
+	__attribute__((weak)) void __dummy(void *x) { }
+	int main() {
+		void *x;
+		__dummy(x);
+	}
+	" HAVE_WEAK_SYMBOLS)
 
 ## refactor me
 macro(XCONFIG _package _include_DIR _link_DIR _link_FLAGS _cflags)
@@ -485,7 +494,7 @@ set(COMMON_SRC
 	network_write.c network_linux_sendfile.c
 	network_freebsd_sendfile.c
 	network_solaris_sendfilev.c network_openssl.c
-	status_counter.c
+	status_counter.c safe_memclear.c
 )
 
 if(WIN32)
