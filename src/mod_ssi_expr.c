@@ -6,6 +6,7 @@
 
 #include <ctype.h>
 #include <string.h>
+#include <assert.h>
 
 typedef struct {
 	const char *input;
@@ -291,6 +292,7 @@ int ssi_eval_expr(server *srv, connection *con, plugin_data *p, const char *expr
 	/* default context */
 
 	pParser = ssiexprparserAlloc( malloc );
+	force_assert(pParser);
 	token = buffer_init();
 	while((1 == (ret = ssi_expr_tokenizer(srv, con, p, &t, &token_id, token))) && context.ok) {
 		ssiexprparser(pParser, token_id, token, &context);
