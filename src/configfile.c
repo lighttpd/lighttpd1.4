@@ -931,6 +931,7 @@ static int config_parse(server *srv, config_t *context, tokenizer_t *t) {
 	int ret;
 
 	pParser = configparserAlloc( malloc );
+	force_assert(pParser);
 	lasttoken = buffer_init();
 	token = buffer_init();
 	while((1 == (ret = config_tokenizer(srv, t, &token_id, token))) && context->ok) {

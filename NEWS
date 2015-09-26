@@ -7,6 +7,7 @@ NEWS
   * [stat-cache] fix handling of collisions, might have returned wrong data (fixes #2669)
   * [core] allocate at least 4k buffer for incoming data
   * [core] fix search for header end if split across chunks (fixes #2670)
+  * [core] check configparserAlloc() result with force_assert
 
 - 1.4.37 - 2015-08-30
   * [mod_proxy] remove debug log line from error log (fixes #2659)
