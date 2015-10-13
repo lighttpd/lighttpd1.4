@@ -983,7 +983,11 @@ found_header_end:
 		}
 		break;
 	case CON_STATE_READ_POST:
-		if (0 != chunkqueue_steal_with_tempfiles(srv, dst_cq, cq, con->request.content_length - dst_cq->bytes_in )) {
+		if (con->request.content_length <= 64*1024) {
+			/* don't buffer request bodies <= 64k on disk */
+			chunkqueue_steal(dst_cq, cq, con->request.content_length - dst_cq->bytes_in);
+		}
+		else if (0 != chunkqueue_steal_with_tempfiles(srv, dst_cq, cq, con->request.content_length - dst_cq->bytes_in )) {
 			con->http_status = 413; /* Request-Entity too large */
 			con->keep_alive = 0;
 			connection_set_state(srv, con, CON_STATE_HANDLE_REQUEST);
