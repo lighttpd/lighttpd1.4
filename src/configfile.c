@@ -109,6 +109,14 @@ static int config_insert(server *srv) {
 		{ "ssl.honor-cipher-order",      NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_SERVER },     /* 66 */
 		{ "ssl.empty-fragments",         NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_SERVER },     /* 67 */
 
+#ifdef ENABLE_PROXY
+		{ "proxy.expect_header",         NULL, T_CONFIG_SHORT, T_CONFIG_SCOPE_SERVER },       /* 68 */
+#else
+		{ "proxy.expect_header",  "Not configured with ENABLE_PROXY,please remove proxy.expect_header from your config.",
+		  T_CONFIG_UNSUPPORTED, T_CONFIG_SCOPE_UNSET }, /* 68 */
+	
+#endif
+
 		{ "server.host",                 "use server.bind instead", T_CONFIG_DEPRECATED, T_CONFIG_SCOPE_UNSET },
 		{ "server.docroot",              "use server.document-root instead", T_CONFIG_DEPRECATED, T_CONFIG_SCOPE_UNSET },
 		{ "server.virtual-root",         "load mod_simple_vhost and use simple-vhost.server-root instead", T_CONFIG_DEPRECATED, T_CONFIG_SCOPE_UNSET },
@@ -266,6 +274,10 @@ static int config_insert(server *srv) {
 		cv[60].destination = &(s->ssl_verifyclient_export_cert);
 		cv[65].destination = &(s->ssl_disable_client_renegotiation);
 
+#ifdef ENABLE_PROXY
+		cv[68].destination = &(s->proxy_enabled);
+#endif
+
 		srv->config_storage[i] = s;
 
 		if (0 != (ret = config_insert_values_global(srv, ((data_config *)srv->config_context->data[i])->value, cv))) {
@@ -363,6 +375,10 @@ int config_setup_connection(server *srv, connection *con) {
 	PATCH(ssl_verifyclient_username);
 	PATCH(ssl_verifyclient_export_cert);
 	PATCH(ssl_disable_client_renegotiation);
+
+#ifdef ENABLE_PROXY
+	PATCH(proxy_enabled);
+#endif
 
 	return 0;
 }
@@ -481,6 +497,10 @@ int config_patch_connection(server *srv, connection *con, comp_key_t comp) {
 				PATCH(ssl_verifyclient_export_cert);
 			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("ssl.disable-client-renegotiation"))) {
 				PATCH(ssl_disable_client_renegotiation);
+#ifdef ENABLE_PROXY
+			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("proxy.expect_header"))) {
+				PATCH(proxy_enabled);
+#endif
 			}
 		}
 	}

@@ -455,6 +455,9 @@ static int network_server_init(server *srv, buffer *host_token, specific_config 
 	}
 
 	srv_socket->is_ssl = s->ssl_enabled;
+#ifdef ENABLE_PROXY
+	srv_socket->is_proxy = s->proxy_enabled;
+#endif
 
 	if (srv->srv_sockets.size == 0) {
 		srv->srv_sockets.size = 4;

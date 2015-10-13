@@ -325,6 +325,10 @@ typedef struct {
 	X509 *ssl_pemfile_x509;
 	STACK_OF(X509_NAME) *ssl_ca_file_cert_names;
 #endif
+
+#ifdef ENABLE_PROXY
+	unsigned short proxy_enabled;
+#endif
 } specific_config;
 
 /* the order of the items should be the same as they are processed
@@ -335,6 +339,9 @@ typedef enum {
 	CON_STATE_READ,
 	CON_STATE_REQUEST_END,
 	CON_STATE_READ_POST,
+#ifdef ENABLE_PROXY
+	CON_STATE_READ_PROXY,
+#endif
 	CON_STATE_HANDLE_REQUEST,
 	CON_STATE_RESPONSE_START,
 	CON_STATE_WRITE,
@@ -539,6 +546,10 @@ typedef struct server_socket {
 
 #ifdef USE_OPENSSL
 	SSL_CTX *ssl_ctx;
+#endif
+
+#ifdef ENABLE_PROXY
+	unsigned short is_proxy;
 #endif
 } server_socket;
 

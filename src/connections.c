@@ -1013,6 +1013,232 @@ found_header_end:
 	return 0;
 }
 
+#ifdef ENABLE_PROXY
+
+/**
+ * handle proxy header read
+ *
+ * we get called by the state-engine and by the fdevent-handler
+ */
+static int connection_handle_read_proxy(server *srv, connection *con)  {
+/* http://haproxy.1wt.eu/download/1.5/doc/proxy-protocol.txt */
+	sock_addr from; /* already filled by accept() */
+	sock_addr to;   /* already filled by getsockname() */
+	const char v2sig[13] = "\x0D\x0A\x0D\x0A\x00\x0D\x0A\x51\x55\x49\x54\x0A\x02";
+
+	union {
+		struct {
+			char line[108];
+		} v1;
+		struct {
+			uint8_t sig[12];
+			uint8_t ver;
+			uint8_t cmd;
+			uint8_t fam;
+			uint8_t len;
+			union {
+				struct {	/* for TCP/UDP over IPv4, len = 12 */
+						uint32_t src_addr;
+						uint32_t dst_addr;
+						uint16_t src_port;
+						uint16_t dst_port;
+				} ip4;
+				struct {	/* for TCP/UDP over IPv6, len = 36 */
+						 uint8_t	src_addr[16];
+						 uint8_t	dst_addr[16];
+						 uint16_t src_port;
+						 uint16_t dst_port;
+				} ip6;
+				struct {	/* for AF_UNIX sockets, len = 216 */
+						 uint8_t src_addr[108];
+						 uint8_t dst_addr[108];
+				} unx;
+			} addr;
+		} v2;
+	} __attribute__((aligned(1))) hdr; /* try to make sure compiler doesn't pad this, because it's directly read from the network */
+	memset(&hdr, 0, sizeof(hdr));
+
+	int size, ret;
+	int af = AF_UNSPEC; 
+
+	do {
+		ret = recv(con->fd, &hdr, sizeof(hdr), MSG_PEEK);
+	} while (ret == -1 && errno == EINTR);
+
+	if (ret == -1) {
+		if (errno == EAGAIN) {
+			return 0; // data not ready?
+		}
+		log_error_write(srv, __FILE__, __LINE__, "sdd", "couldn't recv", con->fd, errno);
+		return -1;
+	}
+
+	if (ret >= 16 && memcmp(&hdr.v2, v2sig, 13) == 0) {
+		size = 16 + hdr.v2.len;
+		if (ret < size) {
+			log_error_write(srv, __FILE__, __LINE__, "sd", "wrong header length", con->fd);
+			return -1; // if header says length is longer than we got, something is wrong
+		}
+		if (hdr.v2.ver != 0x02) {
+			log_error_write(srv, __FILE__, __LINE__, "sd", "wrong v2 header version", con->fd);
+			return -1;
+		}
+
+		switch (hdr.v2.cmd) {
+		case 0x01: /* PROXY command */
+			switch (hdr.v2.fam) {
+			case 0x11:	/* TCPv4 */
+				af = to.ipv4.sin_family = from.ipv4.sin_family = AF_INET;
+				from.ipv4.sin_addr.s_addr = hdr.v2.addr.ip4.src_addr;
+				from.ipv4.sin_port = hdr.v2.addr.ip4.src_port;
+
+				to.ipv4.sin_addr.s_addr = hdr.v2.addr.ip4.dst_addr;
+				to.ipv4.sin_port = hdr.v2.addr.ip4.dst_port;
+				break;
+			case 0x21:	/* TCPv6 */
+#ifdef HAVE_IPV6
+
+				af = to.ipv6.sin6_family = from.ipv6.sin6_family = AF_INET6;
+				memcpy(&from.ipv6.sin6_addr, hdr.v2.addr.ip6.src_addr, 16);
+				from.ipv6.sin6_port = hdr.v2.addr.ip6.src_port;
+
+				memcpy(&to.ipv6.sin6_addr, hdr.v2.addr.ip6.dst_addr, 16);
+				to.ipv6.sin6_port = hdr.v2.addr.ip6.dst_port;
+				break;
+#else
+				log_error_write(srv, __FILE__, __LINE__, "sd", "proxy v2 ipv6, but ipv6 not available", con->fd);
+				return -1;
+#endif
+			}
+			/* unsupported protocol, keep local connection address */
+			break;
+		case 0x00: /* LOCAL command */
+			/* keep local connection address for LOCAL */
+			break;
+		default:
+			log_error_write(srv, __FILE__, __LINE__, "sd", "unknown proxy v2 command", con->fd);
+			return -1; /* not a supported command */
+		}
+	}
+	else if (ret >= 8 && memcmp(hdr.v1.line, "PROXY ", 6) == 0) {
+		char *end, *ptr, *protocol, *src_addr, *dst_addr, *src_port, *dst_port;
+
+		end = memchr(hdr.v1.line, '\r', ret - 1);
+		if (!end || end[1] != '\n') {
+			log_error_write(srv, __FILE__, __LINE__, "sds", "invalid line ending", con->fd, hdr.v1.line);
+			return -1;
+		}
+		*end = '\0'; /* terminate the string to ease parsing */
+		size = end + 2 - hdr.v1.line; /* skip header + CRLF */
+
+		// the rest of this block added by russor@; example code left it out
+
+		ptr = hdr.v1.line;
+		strsep(&ptr, " ");
+
+		protocol = strsep(&ptr, " ");
+		src_addr = strsep(&ptr, " ");
+		dst_addr = strsep(&ptr, " ");
+		src_port = strsep(&ptr, " ");
+		dst_port = ptr;
+
+		if (protocol != NULL && dst_port != NULL && memcmp(protocol, "TCP4", 4) == 0) {
+			long porttmp;
+			af = to.ipv4.sin_family = from.ipv4.sin_family = AF_INET;
+
+			if (inet_pton(AF_INET, src_addr, &from.ipv4.sin_addr) != 1) {
+				log_error_write(srv, __FILE__, __LINE__, "sd", "invalid proxy v1 ipv4 source address", con->fd);
+				return -1;
+			}
+
+			if (inet_pton(AF_INET, dst_addr, &to.ipv4.sin_addr) != 1) {
+				log_error_write(srv, __FILE__, __LINE__, "sd", "invalid proxy v1 ipv4 destination address", con->fd);
+				return -1;
+			}
+
+			porttmp = strtol(src_port, NULL, 10);
+			if (!(porttmp > 0 && porttmp < 65536)) {
+				log_error_write(srv, __FILE__, __LINE__, "sd", "invalid proxy v1 ipv4 source port", con->fd);
+				return -1;
+			}
+			from.ipv4.sin_port = htons(porttmp);
+
+			porttmp = strtol(dst_port, NULL, 10);
+			if (!(porttmp > 0 && porttmp < 65536)) {
+				log_error_write(srv, __FILE__, __LINE__, "sd", "invalid proxy v1 ipv4 destination port", con->fd);
+				return -1;
+			}
+
+			to.ipv4.sin_port = htons(porttmp);
+		} else if (protocol != NULL && dst_port != NULL && memcmp(protocol, "TCP6", 4) == 0) {
+#ifdef HAVE_IPV6
+			long porttmp;
+			af = to.ipv6.sin6_family = from.ipv6.sin6_family = AF_INET6;
+
+			if (inet_pton(AF_INET6, src_addr, &from.ipv6.sin6_addr) != 1) {
+				log_error_write(srv, __FILE__, __LINE__, "sd", "invalid proxy v1 ipv6 source address", con->fd);
+				return -1;
+			}
+
+			if (inet_pton(AF_INET6, dst_addr, &to.ipv6.sin6_addr) != 1) {
+				log_error_write(srv, __FILE__, __LINE__, "sd", "invalid proxy v1 ipv6 destination address", con->fd);
+				return -1;
+			}
+
+			porttmp = strtol(src_port, NULL, 10);
+			if (!(porttmp > 0 && porttmp < 65536)) {
+				log_error_write(srv, __FILE__, __LINE__, "sd", "invalid proxy v1 ipv6 source port", con->fd);
+				return -1;
+			}
+			from.ipv6.sin6_port = htons(porttmp);
+
+			porttmp = strtol(dst_port, NULL, 10);
+			if (!(porttmp > 0 && porttmp < 65536)) {
+				log_error_write(srv, __FILE__, __LINE__, "sd", "invalid proxy v1 ipv6 destination port", con->fd);
+				return -1;
+			}
+
+			to.ipv6.sin6_port = htons(porttmp);
+#else
+			log_error_write(srv, __FILE__, __LINE__, "sd", "proxy v1 ipv6, but ipv6 not available", con->fd);
+			return -1;
+#endif
+		} else if (protocol != NULL && memcmp(protocol, "UNKNOWN", 7) == 0) {
+			// Protocol Unknown -> strip header, go about your busin[Bess
+		} else {
+			log_error_write(srv, __FILE__, __LINE__, "sd", "missing arguments or unknown proxy v1 command", con->fd);
+			return -1;
+		}
+	}
+	else {
+		/* Wrong protocol */
+		log_error_write(srv, __FILE__, __LINE__, "sds", "unknown proxy protocol", ret, hdr.v1.line);
+		return -1;
+	}
+
+	switch (af) {
+	case AF_INET:
+	case AF_INET6:
+		con->dst_addr = from;
+		buffer_copy_string(con->dst_addr_buf, inet_ntop_cache_get_ip(srv, &(con->dst_addr)));
+		break;
+	}
+
+	/* we need to consume the appropriate amount of data from the socket */
+	do {
+		ret = recv(con->fd, &hdr, size, 0);
+	} while (ret == -1 && errno == EINTR);
+
+	if (ret == size) {
+		return 1;
+	} else {
+		log_error_write(srv, __FILE__, __LINE__, "sd", "incorrect size removed from socket", con->fd);
+		return -1;
+	}
+}
+#endif
+
+
 static handler_t connection_handle_fdevent(server *srv, void *context, int revents) {
 	connection *con = context;
 
@@ -1076,6 +1302,17 @@ static handler_t connection_handle_fdevent(server *srv, void *context, int reven
 	    con->state == CON_STATE_READ_POST) {
 		connection_handle_read_state(srv, con);
 	}
+
+#ifdef ENABLE_PROXY
+	if (con->state == CON_STATE_READ_PROXY) {
+		int result = connection_handle_read_proxy(srv, con);
+		if (result > 0) {
+			connection_set_state(srv, con, CON_STATE_REQUEST_START);
+		} else if (result < 0) {
+			connection_set_state(srv, con, CON_STATE_ERROR);
+		}
+	}
+#endif
 
 	if (con->state == CON_STATE_WRITE &&
 	    !chunkqueue_is_empty(con->write_queue) &&
@@ -1165,7 +1402,15 @@ connection *connection_accept(server *srv, server_socket *srv_socket) {
 #endif
 		fdevent_register(srv->ev, con->fd, connection_handle_fdevent, con);
 
+#ifdef ENABLE_PROXY
+		if (srv_socket->is_proxy) {
+			connection_set_state(srv, con, CON_STATE_READ_PROXY);
+		} else {
+			connection_set_state(srv, con, CON_STATE_REQUEST_START);
+		}
+#else
 		connection_set_state(srv, con, CON_STATE_REQUEST_START);
+#endif
 
 		con->connection_start = srv->cur_ts;
 		con->dst_addr = cnt_addr;
@@ -1473,6 +1718,21 @@ int connection_state_machine(server *srv, connection *con) {
 
 			connection_handle_read_state(srv, con);
 			break;
+#ifdef ENABLE_PROXY
+		case CON_STATE_READ_PROXY:
+			if (srv->srvconf.log_state_handling) {
+				log_error_write(srv, __FILE__, __LINE__, "sds",
+						"state for fd", con->fd, connection_get_state(con->state));
+			}
+
+			int result = connection_handle_read_proxy(srv, con);
+			if (result > 0) {
+				connection_set_state(srv, con, CON_STATE_REQUEST_START);
+			} else if (result < 0) {
+				connection_set_state(srv, con, CON_STATE_ERROR);
+			}
+			break;
+#endif
 		case CON_STATE_WRITE:
 			if (srv->srvconf.log_state_handling) {
 				log_error_write(srv, __FILE__, __LINE__, "sds",
@@ -1618,6 +1878,9 @@ int connection_state_machine(server *srv, connection *con) {
 	}
 
 	switch(con->state) {
+#ifdef ENABLE_PROXY
+	case CON_STATE_READ_PROXY:
+#endif
 	case CON_STATE_READ_POST:
 	case CON_STATE_READ:
 	case CON_STATE_CLOSE:
