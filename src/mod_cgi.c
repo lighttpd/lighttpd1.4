@@ -161,6 +161,7 @@ SETDEFAULTS_FUNC(mod_fastcgi_set_defaults) {
 	if (!p) return HANDLER_ERROR;
 
 	p->config_storage = calloc(1, srv->config_context->used * sizeof(plugin_config *));
+	force_assert(p->config_storage);
 
 	for (i = 0; i < srv->config_context->used; i++) {
 		plugin_config *s;
@@ -199,9 +200,11 @@ static int cgi_pid_add(server *srv, plugin_data *p, pid_t pid) {
 	if (r->size == 0) {
 		r->size = 16;
 		r->ptr = malloc(sizeof(*r->ptr) * r->size);
+		force_assert(r->ptr);
 	} else if (r->used == r->size) {
 		r->size += 16;
 		r->ptr = realloc(r->ptr, sizeof(*r->ptr) * r->size);
+		force_assert(r->ptr);
 	}
 
 	r->ptr[r->used++] = pid;
@@ -709,6 +712,7 @@ static int cgi_env_add(char_array *env, const char *key, size_t key_len, const c
 	if (!key || !val) return -1;
 
 	dst = malloc(key_len + val_len + 2);
+	force_assert(dst);
 	memcpy(dst, key, key_len);
 	dst[key_len] = '=';
 	memcpy(dst + key_len + 1, val, val_len);
@@ -717,9 +721,11 @@ static int cgi_env_add(char_array *env, const char *key, size_t key_len, const c
 	if (env->size == 0) {
 		env->size = 16;
 		env->ptr = malloc(env->size * sizeof(*env->ptr));
+		force_assert(env->ptr);
 	} else if (env->size == env->used) {
 		env->size += 16;
 		env->ptr = realloc(env->ptr, env->size * sizeof(*env->ptr));
+		force_assert(env->ptr);
 	}
 
 	env->ptr[env->used++] = dst;
@@ -903,12 +909,13 @@ static int cgi_create_env(server *srv, connection *con, plugin_data *p, buffer *
 #else
 			s = inet_ntoa(srv_sock->addr.ipv4.sin_addr);
 #endif
+			force_assert(s);
 			cgi_env_add(&env, CONST_STR_LEN("SERVER_NAME"), s, strlen(s));
 		}
 		cgi_env_add(&env, CONST_STR_LEN("GATEWAY_INTERFACE"), CONST_STR_LEN("CGI/1.1"));
 
 		s = get_http_version_name(con->request.http_version);
-
+		force_assert(s);
 		cgi_env_add(&env, CONST_STR_LEN("SERVER_PROTOCOL"), s, strlen(s));
 
 		li_utostr(buf,
@@ -943,9 +950,11 @@ static int cgi_create_env(server *srv, connection *con, plugin_data *p, buffer *
 			s = "";
 			break;
 		}
+		force_assert(s);
 		cgi_env_add(&env, CONST_STR_LEN("SERVER_ADDR"), s, strlen(s));
 
 		s = get_http_method_name(con->request.http_method);
+		force_assert(s);
 		cgi_env_add(&env, CONST_STR_LEN("REQUEST_METHOD"), s, strlen(s));
 
 		if (!buffer_string_is_empty(con->request.pathinfo)) {
@@ -983,6 +992,7 @@ static int cgi_create_env(server *srv, connection *con, plugin_data *p, buffer *
 			s = "";
 			break;
 		}
+		force_assert(s);
 		cgi_env_add(&env, CONST_STR_LEN("REMOTE_ADDR"), s, strlen(s));
 
 		li_utostr(buf,
@@ -1053,6 +1063,7 @@ static int cgi_create_env(server *srv, connection *con, plugin_data *p, buffer *
 		/* set up args */
 		argc = 3;
 		args = malloc(sizeof(*args) * argc);
+		force_assert(args);
 		i = 0;
 
 		if (!buffer_string_is_empty(cgi_handler)) {

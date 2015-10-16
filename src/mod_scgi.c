@@ -386,6 +386,7 @@ static scgi_proc *scgi_process_init(void) {
 	scgi_proc *f;
 
 	f = calloc(1, sizeof(*f));
+	force_assert(f);
 	f->socket = buffer_init();
 
 	f->prev = NULL;
@@ -440,6 +441,7 @@ static scgi_exts *scgi_extensions_init(void) {
 	scgi_exts *f;
 
 	f = calloc(1, sizeof(*f));
+	force_assert(f);
 
 	return f;
 }
@@ -529,6 +531,7 @@ INIT_FUNC(mod_scgi_init) {
 	plugin_data *p;
 
 	p = calloc(1, sizeof(*p));
+	force_assert(p);
 
 	p->scgi_env = buffer_init();
 
@@ -608,6 +611,7 @@ static int env_add(char_array *env, const char *key, size_t key_len, const char 
 	if (!key || !val) return -1;
 
 	dst = malloc(key_len + val_len + 3);
+	force_assert(dst);
 	memcpy(dst, key, key_len);
 	dst[key_len] = '=';
 	/* add the \0 from the value */
@@ -625,9 +629,11 @@ static int env_add(char_array *env, const char *key, size_t key_len, const char 
 	if (env->size == 0) {
 		env->size = 16;
 		env->ptr = malloc(env->size * sizeof(*env->ptr));
+		force_assert(env->ptr);
 	} else if (env->size == env->used) {
 		env->size += 16;
 		env->ptr = realloc(env->ptr, env->size * sizeof(*env->ptr));
+		force_assert(env->ptr);
 	}
 
 	env->ptr[env->used++] = dst;
@@ -930,12 +936,14 @@ SETDEFAULTS_FUNC(mod_scgi_set_defaults) {
 	};
 
 	p->config_storage = calloc(1, srv->config_context->used * sizeof(plugin_config *));
+	force_assert(p->config_storage);
 
 	for (i = 0; i < srv->config_context->used; i++) {
 		plugin_config *s;
 		array *ca;
 
 		s = malloc(sizeof(plugin_config));
+		force_assert(s);
 		s->exts          = scgi_extensions_init();
 		s->debug         = 0;
 
@@ -1493,6 +1501,7 @@ static int scgi_create_env(server *srv, handler_ctx *hctx) {
 #else
 		s = inet_ntoa(srv_sock->addr.ipv4.sin_addr);
 #endif
+		force_assert(s);
 		scgi_env_add(p->scgi_env, CONST_STR_LEN("SERVER_NAME"), s, strlen(s));
 	}
 
@@ -1529,6 +1538,7 @@ static int scgi_create_env(server *srv, handler_ctx *hctx) {
 	scgi_env_add(p->scgi_env, CONST_STR_LEN("REMOTE_PORT"), buf, strlen(buf));
 
 	s = inet_ntop_cache_get_ip(srv, &(con->dst_addr));
+	force_assert(s);
 	scgi_env_add(p->scgi_env, CONST_STR_LEN("REMOTE_ADDR"), s, strlen(s));
 
 	/*
@@ -1591,9 +1601,11 @@ static int scgi_create_env(server *srv, handler_ctx *hctx) {
 	}
 
 	s = get_http_method_name(con->request.http_method);
+	force_assert(s);
 	scgi_env_add(p->scgi_env, CONST_STR_LEN("REQUEST_METHOD"), s, strlen(s));
 	scgi_env_add(p->scgi_env, CONST_STR_LEN("REDIRECT_STATUS"), CONST_STR_LEN("200")); /* if php is compiled with --force-redirect */
 	s = get_http_version_name(con->request.http_version);
+	force_assert(s);
 	scgi_env_add(p->scgi_env, CONST_STR_LEN("SERVER_PROTOCOL"), s, strlen(s));
 
 #ifdef USE_OPENSSL
