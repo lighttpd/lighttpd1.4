@@ -42,6 +42,16 @@ typedef struct {
 	plugin_config conf;
 } plugin_data;
 
+static int const_time_memeq(const char *a, const char *b, size_t len) {
+	/* constant time memory compare, unless the compiler figures it out */
+	char diff = 0;
+	size_t i;
+	for (i = 0; i < len; ++i) {
+		diff |= (a[i] ^ b[i]);
+	}
+	return 0 == diff;
+}
+
 /* init the plugin data */
 INIT_FUNC(mod_secdownload_init) {
 	plugin_data *p;
@@ -264,7 +274,7 @@ URIHANDLER_FUNC(mod_secdownload_uri_handler) {
 
 	buffer_copy_string_hex(p->md5, (char *)HA1, 16);
 
-	if (0 != strncasecmp(md5_str, p->md5->ptr, 32)) {
+	if (!const_time_memeq(md5_str, p->md5->ptr, 32)) {
 		con->http_status = 403;
 
 		log_error_write(srv, __FILE__, __LINE__, "sss",
