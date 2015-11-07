@@ -332,9 +332,10 @@ void chunkqueue_use_memory(chunkqueue *cq, size_t len) {
 	}
 }
 
-void chunkqueue_set_tempdirs(chunkqueue *cq, array *tempdirs) {
+void chunkqueue_set_tempdirs(chunkqueue *cq, array *tempdirs, unsigned int upload_temp_file_size) {
 	force_assert(NULL != cq);
 	cq->tempdirs = tempdirs;
+	cq->upload_temp_file_size = upload_temp_file_size;
 }
 
 void chunkqueue_steal(chunkqueue *dest, chunkqueue *src, off_t len) {
@@ -425,17 +426,24 @@ static chunk *chunkqueue_get_append_tempfile(chunkqueue *cq) {
 	return c;
 }
 
+/* default 1MB, upper limit 128MB */
+#define DEFAULT_TEMPFILE_SIZE (1 * 1024 * 1024)
+#define MAX_TEMPFILE_SIZE (128 * 1024 * 1024)
+
 static int chunkqueue_append_to_tempfile(server *srv, chunkqueue *dest, const char *mem, size_t len) {
-	/* copy everything to max MAX_TEMPFILE_SIZE sized tempfiles */
-	static const off_t MAX_TEMPFILE_SIZE = 16 * 1024 * 1024; /* 16MB */
+	/* copy everything to max max_tempfile_size sized tempfiles */
+	const off_t max_tempfile_size
+		= (0 == dest->upload_temp_file_size)                ? DEFAULT_TEMPFILE_SIZE
+		: (dest->upload_temp_file_size > MAX_TEMPFILE_SIZE) ? MAX_TEMPFILE_SIZE
+		                                                    : dest->upload_temp_file_size;
 	chunk *dst_c = NULL;
 	ssize_t written;
 
 	/*
 	 * if the last chunk is
-	 * - smaller than MAX_TEMPFILE_SIZE
+	 * - smaller than max_tempfile_size
 	 * - not read yet (offset == 0)
-	 * -> append to it (so it might actually become larger than MAX_TEMPFILE_SIZE)
+	 * -> append to it (so it might actually become larger than max_tempfile_size)
 	 * otherwise
 	 * -> create a new chunk
 	 *
@@ -449,7 +457,7 @@ static int chunkqueue_append_to_tempfile(server *srv, chunkqueue *dest, const ch
 		/* ok, take the last chunk for our job */
 		dst_c = dest->last;
 
-		if (dest->last->file.length >= MAX_TEMPFILE_SIZE) {
+		if (dest->last->file.length >= max_tempfile_size) {
 			/* the chunk is too large now, close it */
 			if (-1 != dst_c->file.fd) {
 				close(dst_c->file.fd);

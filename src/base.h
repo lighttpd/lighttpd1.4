@@ -508,6 +508,7 @@ typedef struct {
 	buffer *network_backend;
 	array *modules;
 	array *upload_tempdirs;
+	unsigned int upload_temp_file_size;
 
 	unsigned short max_worker;
 	unsigned short max_fds;

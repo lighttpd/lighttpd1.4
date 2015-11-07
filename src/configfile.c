@@ -107,6 +107,7 @@ static int config_insert(server *srv) {
 		{ "ssl.disable-client-renegotiation",  NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION }, /* 65 */
 		{ "ssl.honor-cipher-order",            NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION }, /* 66 */
 		{ "ssl.empty-fragments",               NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION }, /* 67 */
+		{ "server.upload-temp-file-size",      NULL, T_CONFIG_INT,     T_CONFIG_SCOPE_SERVER     }, /* 68 */
 
 		{ "server.host",
 			"use server.bind instead",
@@ -168,6 +169,8 @@ static int config_insert(server *srv) {
 
 	cv[52].destination = &(srv->srvconf.reject_expect_100_with_417);
 	cv[55].destination = srv->srvconf.breakagelog_file;
+
+	cv[68].destination = &(srv->srvconf.upload_temp_file_size);
 
 	srv->config_storage = calloc(1, srv->config_context->used * sizeof(specific_config *));
 
