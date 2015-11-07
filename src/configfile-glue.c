@@ -24,7 +24,7 @@
 /* handle global options */
 
 /* parse config array */
-int config_insert_values_internal(server *srv, array *ca, const config_values_t cv[]) {
+int config_insert_values_internal(server *srv, array *ca, const config_values_t cv[], config_scope_type_t scope) {
 	size_t i;
 	data_unset *du;
 
@@ -34,6 +34,14 @@ int config_insert_values_internal(server *srv, array *ca, const config_values_t 
 			/* no found */
 
 			continue;
+		}
+
+		if ((T_CONFIG_SCOPE_SERVER == cv[i].scope)
+		    && (T_CONFIG_SCOPE_SERVER != scope)) {
+			/* server scope options should only be set in server scope, not in conditionals */
+			log_error_write(srv, __FILE__, __LINE__, "ss",
+				"DEPRECATED: don't set server options in conditionals, variable:",
+				cv[i].key);
 		}
 
 		switch (cv[i].type) {
@@ -135,7 +143,6 @@ int config_insert_values_internal(server *srv, array *ca, const config_values_t 
 					}
 				}
 
-
 				log_error_write(srv, __FILE__, __LINE__, "ssb", "got a string but expected an integer:", cv[i].key, ds->value);
 
 				return -1;
@@ -185,7 +192,7 @@ int config_insert_values_internal(server *srv, array *ca, const config_values_t 
 	return 0;
 }
 
-int config_insert_values_global(server *srv, array *ca, const config_values_t cv[]) {
+int config_insert_values_global(server *srv, array *ca, const config_values_t cv[], config_scope_type_t scope) {
 	size_t i;
 	data_unset *du;
 
@@ -207,7 +214,7 @@ int config_insert_values_global(server *srv, array *ca, const config_values_t cv
 		array_insert_unique(srv->config_touched, (data_unset *)touched);
 	}
 
-	return config_insert_values_internal(srv, ca, cv);
+	return config_insert_values_internal(srv, ca, cv, scope);
 }
 
 static unsigned short sock_addr_get_port(sock_addr *addr) {

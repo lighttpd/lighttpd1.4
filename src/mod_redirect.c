@@ -81,9 +81,9 @@ SETDEFAULTS_FUNC(mod_redirect_set_defaults) {
 	p->config_storage = calloc(1, srv->config_context->used * sizeof(plugin_config *));
 
 	for (i = 0; i < srv->config_context->used; i++) {
+		data_config const* config = (data_config const*)srv->config_context->data[i];
 		plugin_config *s;
 		size_t j;
-		array *ca;
 		data_unset *du;
 		data_array *da;
 
@@ -95,13 +95,12 @@ SETDEFAULTS_FUNC(mod_redirect_set_defaults) {
 		cv[1].destination = &(s->redirect_code);
 
 		p->config_storage[i] = s;
-		ca = ((data_config *)srv->config_context->data[i])->value;
 
-		if (0 != config_insert_values_global(srv, ca, cv)) {
+		if (0 != config_insert_values_global(srv, config->value, cv, i == 0 ? T_CONFIG_SCOPE_SERVER : T_CONFIG_SCOPE_CONNECTION)) {
 			return HANDLER_ERROR;
 		}
 
-		if (NULL == (du = array_get_element(ca, "url.redirect"))) {
+		if (NULL == (du = array_get_element(config->value, "url.redirect"))) {
 			/* no url.redirect defined */
 			continue;
 		}

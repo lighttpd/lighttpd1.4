@@ -1172,8 +1172,8 @@ SETDEFAULTS_FUNC(mod_fastcgi_set_defaults) {
 	p->config_storage = calloc(1, srv->config_context->used * sizeof(plugin_config *));
 
 	for (i = 0; i < srv->config_context->used; i++) {
+		data_config const* config = (data_config const*)srv->config_context->data[i];
 		plugin_config *s;
-		array *ca;
 
 		s = malloc(sizeof(plugin_config));
 		s->exts          = fastcgi_extensions_init();
@@ -1185,9 +1185,8 @@ SETDEFAULTS_FUNC(mod_fastcgi_set_defaults) {
 		cv[2].destination = s->ext_mapping;
 
 		p->config_storage[i] = s;
-		ca = ((data_config *)srv->config_context->data[i])->value;
 
-		if (0 != config_insert_values_global(srv, ca, cv)) {
+		if (0 != config_insert_values_global(srv, config->value, cv, i == 0 ? T_CONFIG_SCOPE_SERVER : T_CONFIG_SCOPE_CONNECTION)) {
 			goto error;
 		}
 
@@ -1195,7 +1194,7 @@ SETDEFAULTS_FUNC(mod_fastcgi_set_defaults) {
 		 * <key> = ( ... )
 		 */
 
-		if (NULL != (du = array_get_element(ca, "fastcgi.server"))) {
+		if (NULL != (du = array_get_element(config->value, "fastcgi.server"))) {
 			size_t j;
 			data_array *da = (data_array *)du;
 
@@ -1305,7 +1304,7 @@ SETDEFAULTS_FUNC(mod_fastcgi_set_defaults) {
 					fcv[14].destination = &(host->kill_signal);
 					fcv[15].destination = &(host->fix_root_path_name);
 
-					if (0 != config_insert_values_internal(srv, da_host->value, fcv)) {
+					if (0 != config_insert_values_internal(srv, da_host->value, fcv, T_CONFIG_SCOPE_CONNECTION)) {
 						goto error;
 					}
 

@@ -82,8 +82,8 @@ handler_t plugins_call_init(server *srv);
 handler_t plugins_call_set_defaults(server *srv);
 handler_t plugins_call_cleanup(server *srv);
 
-int config_insert_values_global(server *srv, array *ca, const config_values_t *cv);
-int config_insert_values_internal(server *srv, array *ca, const config_values_t *cv);
+int config_insert_values_global(server *srv, array *ca, const config_values_t *cv, config_scope_type_t scope);
+int config_insert_values_internal(server *srv, array *ca, const config_values_t *cv, config_scope_type_t scope);
 int config_setup_connection(server *srv, connection *con);
 int config_patch_connection(server *srv, connection *con, comp_key_t comp);
 int config_check_cond(server *srv, connection *con, data_config *dc);

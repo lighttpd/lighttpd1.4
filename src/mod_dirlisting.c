@@ -239,8 +239,8 @@ SETDEFAULTS_FUNC(mod_dirlisting_set_defaults) {
 	p->config_storage = calloc(1, srv->config_context->used * sizeof(plugin_config *));
 
 	for (i = 0; i < srv->config_context->used; i++) {
+		data_config const* config = (data_config const*)srv->config_context->data[i];
 		plugin_config *s;
-		array *ca;
 		data_unset *du_excludes;
 
 		s = calloc(1, sizeof(plugin_config));
@@ -275,13 +275,12 @@ SETDEFAULTS_FUNC(mod_dirlisting_set_defaults) {
 		cv[13].destination = &(s->auto_layout);
 
 		p->config_storage[i] = s;
-		ca = ((data_config *)srv->config_context->data[i])->value;
 
-		if (0 != config_insert_values_global(srv, ca, cv)) {
+		if (0 != config_insert_values_global(srv, config->value, cv, i == 0 ? T_CONFIG_SCOPE_SERVER : T_CONFIG_SCOPE_CONNECTION)) {
 			return HANDLER_ERROR;
 		}
 
-		if (NULL != (du_excludes = array_get_element(ca, CONFIG_EXCLUDE))) {
+		if (NULL != (du_excludes = array_get_element(config->value, CONFIG_EXCLUDE))) {
 			array *excludes_list;
 			size_t j;
 

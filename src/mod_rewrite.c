@@ -252,7 +252,7 @@ SETDEFAULTS_FUNC(mod_rewrite_set_defaults) {
 #endif
 
 	for (i = 0; i < srv->config_context->used; i++) {
-		array *ca;
+		data_config const* config = (data_config const*)srv->config_context->data[i];
 #ifdef HAVE_PCRE_H
 		plugin_config *s;
 
@@ -262,21 +262,19 @@ SETDEFAULTS_FUNC(mod_rewrite_set_defaults) {
 		p->config_storage[i] = s;
 #endif
 
-		ca = ((data_config *)srv->config_context->data[i])->value;
-
-		if (0 != config_insert_values_global(srv, ca, cv)) {
+		if (0 != config_insert_values_global(srv, config->value, cv, i == 0 ? T_CONFIG_SCOPE_SERVER : T_CONFIG_SCOPE_CONNECTION)) {
 			return HANDLER_ERROR;
 		}
 
 #ifndef HAVE_PCRE_H
 # define parse_config_entry(srv, ca, x, option, y) parse_config_entry(srv, ca, option)
 #endif
-		parse_config_entry(srv, ca, s->rewrite, "url.rewrite-once",      1);
-		parse_config_entry(srv, ca, s->rewrite, "url.rewrite-final",     1);
-		parse_config_entry(srv, ca, s->rewrite_NF, "url.rewrite-if-not-file",   1);
-		parse_config_entry(srv, ca, s->rewrite_NF, "url.rewrite-repeat-if-not-file", 0);
-		parse_config_entry(srv, ca, s->rewrite, "url.rewrite",           1);
-		parse_config_entry(srv, ca, s->rewrite, "url.rewrite-repeat",    0);
+		parse_config_entry(srv, config->value, s->rewrite, "url.rewrite-once",      1);
+		parse_config_entry(srv, config->value, s->rewrite, "url.rewrite-final",     1);
+		parse_config_entry(srv, config->value, s->rewrite_NF, "url.rewrite-if-not-file",   1);
+		parse_config_entry(srv, config->value, s->rewrite_NF, "url.rewrite-repeat-if-not-file", 0);
+		parse_config_entry(srv, config->value, s->rewrite, "url.rewrite",           1);
+		parse_config_entry(srv, config->value, s->rewrite, "url.rewrite-repeat",    0);
 	}
 
 	return HANDLER_GO_ON;

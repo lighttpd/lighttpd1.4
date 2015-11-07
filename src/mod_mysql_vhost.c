@@ -166,20 +166,21 @@ SERVER_FUNC(mod_mysql_vhost_set_defaults) {
 	buffer *sel;
 
 	config_values_t cv[] = {
-		{ "mysql-vhost.db",       NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_SERVER },
-		{ "mysql-vhost.user",     NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_SERVER },
-		{ "mysql-vhost.pass",     NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_SERVER },
-		{ "mysql-vhost.sock",     NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_SERVER },
-		{ "mysql-vhost.sql",      NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_SERVER },
-		{ "mysql-vhost.hostname", NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_SERVER },
-		{ "mysql-vhost.port",     NULL, T_CONFIG_SHORT,  T_CONFIG_SCOPE_SERVER },
-		{ NULL,                   NULL, T_CONFIG_UNSET,  T_CONFIG_SCOPE_UNSET }
+		{ "mysql-vhost.db",       NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_CONNECTION }, /* 0 */
+		{ "mysql-vhost.user",     NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_CONNECTION }, /* 1 */
+		{ "mysql-vhost.pass",     NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_CONNECTION }, /* 2 */
+		{ "mysql-vhost.sock",     NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_CONNECTION }, /* 3 */
+		{ "mysql-vhost.sql",      NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_CONNECTION }, /* 4 */
+		{ "mysql-vhost.hostname", NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_CONNECTION }, /* 5 */
+		{ "mysql-vhost.port",     NULL, T_CONFIG_SHORT,  T_CONFIG_SCOPE_CONNECTION }, /* 6 */
+		{ NULL,                   NULL, T_CONFIG_UNSET,  T_CONFIG_SCOPE_UNSET      }
 	};
 
 	p->config_storage = calloc(1, srv->config_context->used * sizeof(plugin_config *));
 	sel = buffer_init();
 
 	for (i = 0; i < srv->config_context->used; i++) {
+		data_config const* config = (data_config const*)srv->config_context->data[i];
 		plugin_config *s;
 
 		s = calloc(1, sizeof(plugin_config));
@@ -205,9 +206,9 @@ SERVER_FUNC(mod_mysql_vhost_set_defaults) {
 
 		p->config_storage[i] = s;
 
-		if (config_insert_values_global(srv,
-			((data_config *)srv->config_context->data[i])->value,
-			cv)) return HANDLER_ERROR;
+		if (config_insert_values_global(srv, config->value, cv, i == 0 ? T_CONFIG_SCOPE_SERVER : T_CONFIG_SCOPE_CONNECTION)) {
+			return HANDLER_ERROR;
+		}
 
 		s->mysql_pre = buffer_init();
 		s->mysql_post = buffer_init();

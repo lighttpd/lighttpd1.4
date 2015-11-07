@@ -339,9 +339,9 @@ SETDEFAULTS_FUNC(mod_rrd_set_defaults) {
 	size_t i;
 
 	config_values_t cv[] = {
-		{ "rrdtool.binary",              NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_SERVER },
-		{ "rrdtool.db-name",             NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_CONNECTION },
-		{ NULL,                          NULL, T_CONFIG_UNSET, T_CONFIG_SCOPE_UNSET }
+		{ "rrdtool.binary",  NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_CONNECTION }, /* 0 */
+		{ "rrdtool.db-name", NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_CONNECTION }, /* 1 */
+		{ NULL,              NULL, T_CONFIG_UNSET,  T_CONFIG_SCOPE_UNSET      }
 	};
 
 	if (!p) return HANDLER_ERROR;
@@ -350,6 +350,7 @@ SETDEFAULTS_FUNC(mod_rrd_set_defaults) {
 	p->config_storage = calloc(1, srv->config_context->used * sizeof(plugin_config *));
 
 	for (i = 0; i < srv->config_context->used; i++) {
+		data_config const* config = (data_config const*)srv->config_context->data[i];
 		plugin_config *s;
 
 		s = calloc(1, sizeof(plugin_config));
@@ -364,7 +365,7 @@ SETDEFAULTS_FUNC(mod_rrd_set_defaults) {
 
 		p->config_storage[i] = s;
 
-		if (0 != config_insert_values_global(srv, ((data_config *)srv->config_context->data[i])->value, cv)) {
+		if (0 != config_insert_values_global(srv, config->value, cv, i == 0 ? T_CONFIG_SCOPE_SERVER : T_CONFIG_SCOPE_CONNECTION)) {
 			return HANDLER_ERROR;
 		}
 

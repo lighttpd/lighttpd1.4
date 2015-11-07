@@ -367,10 +367,10 @@ SETDEFAULTS_FUNC(mod_auth_set_defaults) {
 	p->config_storage = calloc(1, srv->config_context->used * sizeof(mod_auth_plugin_config *));
 
 	for (i = 0; i < srv->config_context->used; i++) {
+		data_config const* config = (data_config const*)srv->config_context->data[i];
 		mod_auth_plugin_config *s;
 		size_t n;
 		data_array *da;
-		array *ca;
 
 		s = calloc(1, sizeof(mod_auth_plugin_config));
 		s->auth_plain_groupfile = buffer_init();
@@ -413,9 +413,8 @@ SETDEFAULTS_FUNC(mod_auth_set_defaults) {
 		cv[14].destination = &(s->auth_debug);
 
 		p->config_storage[i] = s;
-		ca = ((data_config *)srv->config_context->data[i])->value;
 
-		if (0 != config_insert_values_global(srv, ca, cv)) {
+		if (0 != config_insert_values_global(srv, config->value, cv, i == 0 ? T_CONFIG_SCOPE_SERVER : T_CONFIG_SCOPE_CONNECTION)) {
 			return HANDLER_ERROR;
 		}
 
@@ -453,7 +452,7 @@ SETDEFAULTS_FUNC(mod_auth_set_defaults) {
 #endif
 
 		/* no auth.require for this section */
-		if (NULL == (da = (data_array *)array_get_element(ca, "auth.require"))) continue;
+		if (NULL == (da = (data_array *)array_get_element(config->value, "auth.require"))) continue;
 
 		if (da->type != TYPE_ARRAY) continue;
 

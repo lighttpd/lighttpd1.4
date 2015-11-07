@@ -196,8 +196,8 @@ SETDEFAULTS_FUNC(mod_proxy_set_defaults) {
 	p->config_storage = calloc(1, srv->config_context->used * sizeof(plugin_config *));
 
 	for (i = 0; i < srv->config_context->used; i++) {
+		data_config const* config = (data_config const*)srv->config_context->data[i];
 		plugin_config *s;
-		array *ca;
 
 		s = malloc(sizeof(plugin_config));
 		s->extensions    = array_init();
@@ -210,9 +210,8 @@ SETDEFAULTS_FUNC(mod_proxy_set_defaults) {
 		buffer_reset(p->balance_buf);
 
 		p->config_storage[i] = s;
-		ca = ((data_config *)srv->config_context->data[i])->value;
 
-		if (0 != config_insert_values_global(srv, ca, cv)) {
+		if (0 != config_insert_values_global(srv, config->value, cv, i == 0 ? T_CONFIG_SCOPE_SERVER : T_CONFIG_SCOPE_CONNECTION)) {
 			return HANDLER_ERROR;
 		}
 
@@ -230,7 +229,7 @@ SETDEFAULTS_FUNC(mod_proxy_set_defaults) {
 			return HANDLER_ERROR;
 		}
 
-		if (NULL != (du = array_get_element(ca, "proxy.server"))) {
+		if (NULL != (du = array_get_element(config->value, "proxy.server"))) {
 			size_t j;
 			data_array *da = (data_array *)du;
 
@@ -296,7 +295,7 @@ SETDEFAULTS_FUNC(mod_proxy_set_defaults) {
 					pcv[0].destination = df->host;
 					pcv[1].destination = &(df->port);
 
-					if (0 != config_insert_values_internal(srv, da_host->value, pcv)) {
+					if (0 != config_insert_values_internal(srv, da_host->value, pcv, T_CONFIG_SCOPE_CONNECTION)) {
 						df->free((data_unset*) df);
 						return HANDLER_ERROR;
 					}
