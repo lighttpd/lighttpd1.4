@@ -8,7 +8,7 @@ BEGIN {
 
 use strict;
 use IO::Socket;
-use Test::More tests => 12;
+use Test::More tests => 14;
 use LightyTest;
 
 my $tf = LightyTest->new();
@@ -85,6 +85,20 @@ EOF
  );
 $t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 301, 'Location' => 'http://'.$tf->{HOSTNAME}.':'.$tf->{PORT}.'/dummydir/?foo' } ];
 ok($tf->handle_http($t) == 0, 'internal redirect in directory + querystring');
+
+$t->{REQUEST}  = ( <<EOF
+GET /~test%20ä_ HTTP/1.0
+EOF
+ );
+$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 301, 'Location' => 'http://'.$tf->{HOSTNAME}.':'.$tf->{PORT}.'/~test%20%c3%a4_/' } ];
+ok($tf->handle_http($t) == 0, 'internal redirect in directory with special characters');
+
+$t->{REQUEST}  = ( <<EOF
+GET /~test%20ä_?foo HTTP/1.0
+EOF
+ );
+$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 301, 'Location' => 'http://'.$tf->{HOSTNAME}.':'.$tf->{PORT}.'/~test%20%c3%a4_/?foo' } ];
+ok($tf->handle_http($t) == 0, 'internal redirect in directory with special characters + querystring');
 
 ## simple-vhost
 

@@ -201,7 +201,7 @@ int http_response_redirect_to_directory(server *srv, connection *con) {
 			}
 		}
 	}
-	buffer_append_string_buffer(o, con->uri.path);
+	buffer_append_string_encoded(o, CONST_BUF_LEN(con->uri.path), ENCODING_REL_URI);
 	buffer_append_string_len(o, CONST_STR_LEN("/"));
 	if (!buffer_string_is_empty(con->uri.query)) {
 		buffer_append_string_len(o, CONST_STR_LEN("?"));
