@@ -8,7 +8,7 @@ Import('env')
 def GatherLibs(env, *libs):
 	return env['LIBS'] + [libs] + [env['APPEND_LIBS']]
 
-common_src = Split("buffer.c log.c \
+common_src = Split("base64.c buffer.c log.c \
 	keyvalue.c chunk.c  \
 	http_chunk.c stream.c fdevent.c \
 	stat_cache.c plugin.c joblist.c etag.c array.c \

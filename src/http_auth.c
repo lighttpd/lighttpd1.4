@@ -3,6 +3,7 @@
 #include "http_auth.h"
 #include "inet_ntop_cache.h"
 #include "stream.h"
+#include "base64.h"
 
 #ifdef HAVE_CRYPT_H
 # include <crypt.h>
@@ -61,101 +62,6 @@ static void CvtHex(const HASH Bin, char Hex[33]) {
  */
 
 handler_t auth_ldap_init(server *srv, mod_auth_plugin_config *s);
-
-static const char base64_pad = '=';
-
-/* "A-Z a-z 0-9 + /" maps to 0-63 */
-static const short base64_reverse_table[256] = {
-/*	 0   1   2   3   4   5   6   7   8   9   A   B   C   D   E   F */
-	-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, /* 0x00 - 0x0F */
-	-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, /* 0x10 - 0x1F */
-	-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, 62, -1, -1, -1, 63, /* 0x20 - 0x2F */
-	52, 53, 54, 55, 56, 57, 58, 59, 60, 61, -1, -1, -1, -1, -1, -1, /* 0x30 - 0x3F */
-	-1,  0,  1,  2,  3,  4,  5,  6,  7,  8,  9, 10, 11, 12, 13, 14, /* 0x40 - 0x4F */
-	15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, -1, -1, -1, -1, -1, /* 0x50 - 0x5F */
-	-1, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, /* 0x60 - 0x6F */
-	41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, -1, -1, -1, -1, -1, /* 0x70 - 0x7F */
-	-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, /* 0x80 - 0x8F */
-	-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, /* 0x90 - 0x9F */
-	-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, /* 0xA0 - 0xAF */
-	-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, /* 0xB0 - 0xBF */
-	-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, /* 0xC0 - 0xCF */
-	-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, /* 0xD0 - 0xDF */
-	-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, /* 0xE0 - 0xEF */
-	-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, /* 0xF0 - 0xFF */
-};
-
-
-static unsigned char * base64_decode(buffer *out, const char *in) {
-	unsigned char *result;
-	unsigned int j = 0; /* current output character (position) that is decoded. can contain partial result */
-	unsigned int group = 0; /* how many base64 digits in the current group were decoded already. each group has up to 4 digits */
-	size_t i;
-
-	size_t in_len = strlen(in);
-
-	result = (unsigned char *) buffer_string_prepare_copy(out, in_len);
-
-	/* run through the whole string, converting as we go */
-	for (i = 0; i < in_len; i++) {
-		unsigned char c = (unsigned char) in[i];
-		short ch;
-
-		if (c == '\0') break;
-
-		if (c == base64_pad) {
-			/* pad character can only come after 2 base64 digits in a group */
-			if (group < 2) return NULL;
-			break;
-		}
-
-		ch = base64_reverse_table[c];
-		if (ch < 0) continue; /* skip invalid characters */
-
-		switch(group) {
-		case 0:
-			result[j] = ch << 2;
-			group = 1;
-			break;
-		case 1:
-			result[j++] |= ch >> 4;
-			result[j] = (ch & 0x0f) << 4;
-			group = 2;
-			break;
-		case 2:
-			result[j++] |= ch >>2;
-			result[j] = (ch & 0x03) << 6;
-			group = 3;
-			break;
-		case 3:
-			result[j++] |= ch;
-			group = 0;
-			break;
-		}
-	}
-
-	switch(group) {
-	case 0:
-		/* ended on boundary */
-		break;
-	case 1:
-		/* need at least 2 base64 digits per group */
-		return NULL;
-	case 2:
-		/* have 2 base64 digits in last group => one real octect, two zeroes padded */
-	case 3:
-		/* have 3 base64 digits in last group => two real octects, one zero padded */
-
-		/* for both cases the current index already is on the first zero padded octet
-		 * - check it really is zero (overlapping bits) */
-		if (0 != result[j]) return NULL;
-		break;
-	}
-
-	buffer_commit(out, j);
-
-	return result;
-}
 
 static int http_auth_get_password(server *srv, mod_auth_plugin_data *p, buffer *username, buffer *realm, buffer *password) {
 	int ret = -1;
@@ -596,31 +502,20 @@ static void apr_md5_encode(const char *pw, const char *salt, char *result, size_
 
 #ifdef USE_OPENSSL
 static void apr_sha_encode(const char *pw, char *result, size_t nbytes) {
-	static const unsigned char base64_data[65] =
-		"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-	unsigned char digest[21]; /* multiple of 3 for base64 encoding */
-	int i;
+	unsigned char digest[20];
+	size_t base64_written;
+
+	SHA1((const unsigned char*) pw, strlen(pw), digest);
 
 	memset(result, 0, nbytes);
 
 	/* need 5 bytes for "{SHA}", 28 for base64 (3 bytes -> 4 bytes) of SHA1 (20 bytes), 1 terminating */
 	if (nbytes < 5 + 28 + 1) return;
 
-	SHA1((const unsigned char*) pw, strlen(pw), digest);
-	digest[20] = 0;
-
-	strcpy(result, "{SHA}");
-	result = result + 5;
-	for (i = 0; i < 21; i += 3) {
-		unsigned int v = (digest[i] << 16) | (digest[i+1] << 8) | digest[i+2];
-		result[3] = base64_data[v & 0x3f]; v >>= 6;
-		result[2] = base64_data[v & 0x3f]; v >>= 6;
-		result[1] = base64_data[v & 0x3f]; v >>= 6;
-		result[0] = base64_data[v & 0x3f];
-		result += 4;
-	}
-	result[-1] = '='; /* last digest character was already end of string, pad it */
-	*result = '\0';
+	memcpy(result, "{SHA}", 5);
+	base64_written = li_to_base64(result + 5, nbytes - 5, digest, 20, BASE64_STANDARD);
+	force_assert(base64_written == 28);
+	result[5 + base64_written] = '\0'; /* terminate string */
 }
 #endif
 
@@ -852,7 +747,7 @@ int http_auth_basic_check(server *srv, connection *con, mod_auth_plugin_data *p,
 
 	username = buffer_init();
 
-	if (!base64_decode(username, realm_str)) {
+	if (!buffer_append_base64_decode(username, realm_str, strlen(realm_str), BASE64_STANDARD)) {
 		log_error_write(srv, __FILE__, __LINE__, "sb", "decodeing base64-string failed", username);
 
 		buffer_free(username);

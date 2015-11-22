@@ -474,7 +474,7 @@ add_definitions(-DHAVE_CONFIG_H)
 include_directories(${CMAKE_CURRENT_BINARY_DIR} ${CMAKE_CURRENT_SOURCE_DIR})
 
 set(COMMON_SRC
-	buffer.c log.c
+	base64.c buffer.c log.c
 	keyvalue.c chunk.c
 	http_chunk.c stream.c fdevent.c
 	stat_cache.c plugin.c joblist.c etag.c array.c

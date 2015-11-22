@@ -56,7 +56,7 @@ BUILT_SOURCES = parsers versionstamp
 MAINTAINERCLEANFILES = configparser.c configparser.h mod_ssi_exprparser.c mod_ssi_exprparser.h
 CLEANFILES = versionstamp.h versionstamp.h.tmp
 
-common_src=buffer.c log.c \
+common_src=base64.c buffer.c log.c \
 	keyvalue.c chunk.c  \
 	http_chunk.c stream.c fdevent.c \
 	stat_cache.c plugin.c joblist.c etag.c array.c \
@@ -293,20 +293,6 @@ lighttpd_CCPFLAGS = $(FAM_CFLAGS) $(LIBEV_CFLAGS)
 proc_open_SOURCES = proc_open.c buffer.c
 proc_open_LDADD = $(LIBUNWIND_LIBS)
 proc_open_CPPFLAGS= -DDEBUG_PROC_OPEN
-
-#gen_license_SOURCES = license.c md5.c buffer.c gen_license.c
-
-#ssl_SOURCES = ssl.c
-
-
-#adserver_SOURCES = buffer.c iframe.c
-#adserver_LDADD = -lfcgi -lmysqlclient
-
-#error_test_SOURCES = error_test.c
-
-#evalo_SOURCES = buffer.c eval.c
-#bench_SOURCES = buffer.c bench.c
-#ajp_SOURCES = ajp.c
 
 noinst_HEADERS   = $(hdr)
 EXTRA_DIST = \
