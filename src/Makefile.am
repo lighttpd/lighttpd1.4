@@ -198,7 +198,7 @@ mod_ssi_la_LDFLAGS = -module -export-dynamic -avoid-version
 mod_ssi_la_LIBADD = $(common_libadd) $(PCRE_LIB)
 
 lib_LTLIBRARIES += mod_secdownload.la
-mod_secdownload_la_SOURCES = mod_secure_download.c
+mod_secdownload_la_SOURCES = mod_secdownload.c
 mod_secdownload_la_LDFLAGS = -module -export-dynamic -avoid-version
 mod_secdownload_la_LIBADD = $(common_libadd)
 

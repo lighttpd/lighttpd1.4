@@ -16,6 +16,7 @@ NEWS
   * [core] revert increase of temp file size back to 1MB, provide a configure option "server.upload-temp-file-size" instead (fixes #2680)
   * [core] add '~' to safe characters in ENCODING_REL_URI/ENCODING_REL_URI_PART encoding
   * [core] encode path with ENCODING_REL_URI in redirect to directory (fixes #2661, thx gstrauss)
+  * [mod_secdownload] add required algorithm option; old behaviour available as "md5", new options "hmac-sha1" and "hmac-sha256"
 
 - 1.4.37 - 2015-08-30
   * [mod_proxy] remove debug log line from error log (fixes #2659)

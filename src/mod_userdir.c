@@ -303,7 +303,7 @@ URIHANDLER_FUNC(mod_userdir_docroot_handler) {
 	 * for trailing '.', ' ' and '/' on windows
 	 * we assume that no docroot/physical handler changed this
 	 * (docroot should only set the docroot/server name, phyiscal should only change the phyiscal.path;
-	 *  the exception mod_secure_download doesn't work with userdir anyway)
+	 *  the exception mod_secdownload doesn't work with userdir anyway)
 	 */
 	buffer_append_slash(p->temp_path);
 	/* if no second '/' is found, we assume that it was stripped from the uri.path for the special handling

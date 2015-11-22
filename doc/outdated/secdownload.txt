@@ -144,4 +144,4 @@ secret have to match: ::
   secdownload.document-root   = "/home/www/servers/download-area/"
   secdownload.uri-prefix      = "/dl/"
   secdownload.timeout         = 120
-
+  secdownload.algorithm       = "md5"
