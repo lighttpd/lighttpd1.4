@@ -666,9 +666,8 @@ static int scgi_spawn_connection(server *srv,
 	}
 
 	if (!buffer_string_is_empty(proc->socket)) {
-		memset(&scgi_addr, 0, sizeof(scgi_addr));
-
 #ifdef HAVE_SYS_UN_H
+		memset(&scgi_addr_un, 0, sizeof(scgi_addr_un));
 		scgi_addr_un.sun_family = AF_UNIX;
 		if (buffer_string_length(proc->socket) + 1 > sizeof(scgi_addr_un.sun_path)) {
 			log_error_write(srv, __FILE__, __LINE__, "sB",
@@ -692,6 +691,7 @@ static int scgi_spawn_connection(server *srv,
 		return -1;
 #endif
 	} else {
+		memset(&scgi_addr_in, 0, sizeof(scgi_addr_in));
 		scgi_addr_in.sin_family = AF_INET;
 
 		if (buffer_string_is_empty(host->host)) {
@@ -1339,11 +1339,10 @@ static int scgi_establish_connection(server *srv, handler_ctx *hctx) {
 	scgi_proc *proc   = hctx->proc;
 	int scgi_fd       = hctx->fd;
 
-	memset(&scgi_addr, 0, sizeof(scgi_addr));
-
 	if (!buffer_string_is_empty(proc->socket)) {
 #ifdef HAVE_SYS_UN_H
 		/* use the unix domain socket */
+		memset(&scgi_addr_un, 0, sizeof(scgi_addr_un));
 		scgi_addr_un.sun_family = AF_UNIX;
 		if (buffer_string_length(proc->socket) + 1 > sizeof(scgi_addr_un.sun_path)) {
 			log_error_write(srv, __FILE__, __LINE__, "sB",
@@ -1364,6 +1363,7 @@ static int scgi_establish_connection(server *srv, handler_ctx *hctx) {
 		return -1;
 #endif
 	} else {
+		memset(&scgi_addr_in, 0, sizeof(scgi_addr_in));
 		scgi_addr_in.sin_family = AF_INET;
 		if (0 == inet_aton(host->host->ptr, &(scgi_addr_in.sin_addr))) {
 			log_error_write(srv, __FILE__, __LINE__, "sbs",

@@ -859,9 +859,8 @@ static int fcgi_spawn_connection(server *srv,
 	}
 
 	if (!buffer_string_is_empty(proc->unixsocket)) {
-		memset(&fcgi_addr, 0, sizeof(fcgi_addr));
-
 #ifdef HAVE_SYS_UN_H
+		memset(&fcgi_addr_un, 0, sizeof(fcgi_addr_un));
 		fcgi_addr_un.sun_family = AF_UNIX;
 		if (buffer_string_length(proc->unixsocket) + 1 > sizeof(fcgi_addr_un.sun_path)) {
 			log_error_write(srv, __FILE__, __LINE__, "sB",
@@ -889,6 +888,7 @@ static int fcgi_spawn_connection(server *srv,
 		return -1;
 #endif
 	} else {
+		memset(&fcgi_addr_in, 0, sizeof(fcgi_addr_in));
 		fcgi_addr_in.sin_family = AF_INET;
 
 		if (buffer_string_is_empty(host->host)) {
@@ -1660,11 +1660,10 @@ static connection_result_t fcgi_establish_connection(server *srv, handler_ctx *h
 	fcgi_proc *proc   = hctx->proc;
 	int fcgi_fd       = hctx->fd;
 
-	memset(&fcgi_addr, 0, sizeof(fcgi_addr));
-
 	if (!buffer_string_is_empty(proc->unixsocket)) {
 #ifdef HAVE_SYS_UN_H
 		/* use the unix domain socket */
+		memset(&fcgi_addr_un, 0, sizeof(fcgi_addr_un));
 		fcgi_addr_un.sun_family = AF_UNIX;
 		if (buffer_string_length(proc->unixsocket) + 1 > sizeof(fcgi_addr_un.sun_path)) {
 			log_error_write(srv, __FILE__, __LINE__, "sB",
@@ -1691,6 +1690,7 @@ static connection_result_t fcgi_establish_connection(server *srv, handler_ctx *h
 		return CONNECTION_DEAD;
 #endif
 	} else {
+		memset(&fcgi_addr_in, 0, sizeof(fcgi_addr_in));
 		fcgi_addr_in.sin_family = AF_INET;
 		if (!buffer_string_is_empty(host->host)) {
 			if (0 == inet_aton(host->host->ptr, &(fcgi_addr_in.sin_addr))) {
