@@ -8,7 +8,7 @@ BEGIN {
 
 use strict;
 use IO::Socket;
-use Test::More tests => 17;
+use Test::More tests => 19;
 use LightyTest;
 
 my $tf = LightyTest->new();
@@ -83,10 +83,27 @@ EOF
 $t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 401 } ];
 ok($tf->handle_http($t) == 0, 'Basic-Auth: Valid Auth-token - htpasswd (sha, wrong password)');
 
+$t->{REQUEST}  = ( <<EOF
+GET /server-config HTTP/1.0
+Host: auth-htpasswd.example.org
+Authorization: Basic YXByLW1kNTphcHItbWQ1
+EOF
+ );
+$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200 } ];
+ok($tf->handle_http($t) == 0, 'Basic-Auth: Valid Auth-token - htpasswd (apr-md5)');
+
+$t->{REQUEST}  = ( <<EOF
+GET /server-config HTTP/1.0
+Host: auth-htpasswd.example.org
+Authorization: Basic YXByLW1kNTphcHItbWQ2
+EOF
+ );
+$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 401 } ];
+ok($tf->handle_http($t) == 0, 'Basic-Auth: Valid Auth-token - htpasswd (apr-md5, wrong password)');
 
 SKIP: {
-	skip "no md5 for crypt under cygwin", 1 if $^O eq 'cygwin';
-	skip "no md5 for crypt under darwin", 1 if $^O eq 'darwin';
+	skip "no crypt-md5 under cygwin", 1 if $^O eq 'cygwin';
+	skip "no crypt-md5 under darwin", 1 if $^O eq 'darwin';
 $t->{REQUEST}  = ( <<EOF
 GET /server-config HTTP/1.0
 Host: auth-htpasswd.example.org
@@ -94,7 +111,7 @@ Authorization: Basic bWQ1Om1kNQ==
 EOF
  );
 $t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200 } ];
-ok($tf->handle_http($t) == 0, 'Basic-Auth: Valid Auth-token - htpasswd (md5)');
+ok($tf->handle_http($t) == 0, 'Basic-Auth: Valid Auth-token - htpasswd (crypt-md5)');
 }
 
 $t->{REQUEST}  = ( <<EOF
