@@ -86,6 +86,7 @@ ok($tf->handle_http($t) == 0, 'Basic-Auth: Valid Auth-token - htpasswd (sha, wro
 
 SKIP: {
 	skip "no md5 for crypt under cygwin", 1 if $^O eq 'cygwin';
+	skip "no md5 for crypt under darwin", 1 if $^O eq 'darwin';
 $t->{REQUEST}  = ( <<EOF
 GET /server-config HTTP/1.0
 Host: auth-htpasswd.example.org
