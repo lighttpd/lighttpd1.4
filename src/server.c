@@ -422,6 +422,11 @@ static void show_features (void) {
 #else
       "\t- freebsd-sendfile\n"
 #endif
+#if defined USE_DARWIN_SENDFILE
+      "\t+ darwin-sendfile\n"
+#else
+      "\t- darwin-sendfile\n"
+#endif
 #if defined USE_SOLARIS_SENDFILEV
       "\t+ solaris-sendfilev\n"
 #else

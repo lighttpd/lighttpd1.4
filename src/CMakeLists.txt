@@ -494,7 +494,7 @@ set(COMMON_SRC
 	network_write.c network_linux_sendfile.c
 	network_freebsd_sendfile.c
 	network_solaris_sendfilev.c network_openssl.c
-	status_counter.c safe_memclear.c
+	status_counter.c safe_memclear.c network_darwin_sendfile.c
 )
 
 if(WIN32)

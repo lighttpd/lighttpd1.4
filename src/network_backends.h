@@ -25,6 +25,14 @@
 # define USE_FREEBSD_SENDFILE
 #endif
 
+#if defined HAVE_SENDFILE && defined(__APPLE__)
+# ifdef USE_SENDFILE
+#  error "can't have more than one sendfile implementation"
+# endif
+# define USE_SENDFILE "darwin-sendfile"
+# define USE_DARWIN_SENDFILE
+#endif
+
 #if defined HAVE_SYS_SENDFILE_H && defined HAVE_SENDFILEV && defined(__sun)
 # ifdef USE_SENDFILE
 #  error "can't have more than one sendfile implementation"

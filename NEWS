@@ -18,6 +18,7 @@ NEWS
   * [core] encode path with ENCODING_REL_URI in redirect to directory (fixes #2661, thx gstrauss)
   * [mod_secdownload] add required algorithm option; old behaviour available as "md5", new options "hmac-sha1" and "hmac-sha256"
   * [mod_fastcgi/mod_scgi] zero sockaddr structs before use (fixes #2691, thx Kyle J. McKay)
+  * [network] add darwin-sendfile backend (fixes #2687, thx Kyle J. McKay)
 
 - 1.4.37 - 2015-08-30
   * [mod_proxy] remove debug log line from error log (fixes #2659)

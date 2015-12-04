@@ -76,7 +76,7 @@ common_src=base64.c buffer.c log.c \
 	network_freebsd_sendfile.c network_writev.c \
 	network_solaris_sendfilev.c network_openssl.c \
 	splaytree.c status_counter.c \
-	safe_memclear.c
+	safe_memclear.c network_darwin_sendfile.c
 
 src = server.c response.c connections.c network.c \
 	configfile.c configparser.c request.c proc_open.c
