@@ -459,7 +459,7 @@ static void show_features (void) {
 #else
       "\t- bzip2 support\n"
 #endif
-#ifdef HAVE_LIBCRYPT
+#if defined(HAVE_CRYPT) || defined(HAVE_CRYPT_R) || defined(HAVE_LIBCRYPT)
       "\t+ crypt support\n"
 #else
       "\t- crypt support\n"
