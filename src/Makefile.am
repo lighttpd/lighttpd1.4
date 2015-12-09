@@ -187,6 +187,11 @@ mod_usertrack_la_SOURCES = mod_usertrack.c
 mod_usertrack_la_LDFLAGS = -module -export-dynamic -avoid-version
 mod_usertrack_la_LIBADD = $(common_libadd)
 
+lib_LTLIBRARIES += mod_csrf.la
+mod_csrf_la_SOURCES = mod_csrf.c
+mod_csrf_la_LDFLAGS = -module -export-dynamic -avoid-version
+mod_csrf_la_LIBADD = $(CSRF_CRYPT_LIB) $(SSL_LIB) $(common_libadd)
+
 lib_LTLIBRARIES += mod_proxy.la
 mod_proxy_la_SOURCES = mod_proxy.c
 mod_proxy_la_LDFLAGS = -module -export-dynamic -avoid-version

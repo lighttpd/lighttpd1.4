@@ -8,6 +8,8 @@ AC_CONFIG_MACRO_DIR([m4])
 
 AC_CANONICAL_TARGET
 
+MOD_CSRF=0
+
 dnl HOW FUCKING BROKEN IS AUTOMAKE...
 dnl serial-tests is not recognized before 1.12, and required for serial tests with 1.13, sane version checks "impossible"
 dnl if you don't use the default (symlinked) automake on your box, set AUTOMAKE to the path you're using
@@ -354,10 +356,13 @@ if test "x$use_openssl" = "xyes"; then
     OLDLIBS="$LIBS"
     AC_CHECK_LIB(crypto, BIO_f_base64, [
       AC_CHECK_LIB(ssl, SSL_new, [ SSL_LIB="-lssl -lcrypto"
-				 AC_DEFINE(HAVE_LIBSSL, [], [Have libssl]) ], [], [ -lcrypto "$DL_LIB" ])
+				 AC_DEFINE(HAVE_LIBSSL, [], [Have libssl])
+                 MOD_CSRF=1 ], [], [ -lcrypto "$DL_LIB" ])
     ], [], [])
     LIBS="$OLDLIBS"
     AC_SUBST(SSL_LIB)
+else
+    MOD_CSRF=0
 fi
 
 AC_MSG_CHECKING(for perl regular expressions support)
@@ -564,6 +569,9 @@ AC_SEARCH_LIBS([crypt_r],[crypt],[
     ])
 
     CRYPT_LIB=$LIBS
+  ],
+  [
+    MOD_CSRF=0
   ])
 ])
 LIBS=$save_LIBS
@@ -712,6 +720,11 @@ dnl build version-id
 LIGHTTPD_VERSION_ID=`echo $PACKAGE_VERSION | $AWK -F '.' '{print "(" $1 " << 16 | " $2 " << 8 | " $3 ")"}'`
 AC_DEFINE_UNQUOTED([LIGHTTPD_VERSION_ID], [$LIGHTTPD_VERSION_ID], [lighttpd-version-id])
 
+if test "x$MOD_CSRF" = "x1"; then
+    CSRF_CRYPT_LIB="$CRYPT_LIB"
+    AC_SUBST(CSRF_CRYPT_LIB)
+fi
+
 AC_CONFIG_FILES([Makefile src/Makefile
 		 doc/config/conf.d/Makefile \
 		 doc/config/vhosts.d/Makefile \
@@ -844,6 +857,12 @@ else
 	disable_feature="$disable_feature $features"
 fi
 
+plugin="mod_csrf"
+if test "x$MOD_CSRF" = "x1"; then
+	do_build="$do_build $plugin"
+else
+	no_build="$no_build $plugin"
+fi
 
 dnl output
 
