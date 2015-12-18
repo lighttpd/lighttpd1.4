@@ -4,6 +4,7 @@ NEWS
 ====
 
 - 1.4.39
+  * [core] fix memset_s call (fixes #2698)
 
 - 1.4.38 - 2015-12-05
   * [stat-cache] fix handling of collisions, might have returned wrong data (fixes #2669)

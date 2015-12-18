@@ -41,7 +41,7 @@ static void* safe_memset(void *s, int c, size_t n)
 
 void safe_memclear(void *s, size_t n) {
 #if defined(HAVE_MEMSET_S)
-	memset_s(s, 0, n);
+	memset_s(s, n, 0, n);
 #elif defined(HAVE_EXPLICIT_BZERO)
 	explicit_bzero(s, n);
 #else
