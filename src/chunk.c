@@ -172,6 +172,7 @@ static void chunkqueue_prepend_chunk(chunkqueue *cq, chunk *c) {
 }
 
 static void chunkqueue_append_chunk(chunkqueue *cq, chunk *c) {
+	c->next = NULL;
 	if (cq->last) {
 		cq->last->next = c;
 	}
