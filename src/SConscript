@@ -2,11 +2,41 @@ import os
 import re
 import types
 import itertools
+from collections import OrderedDict
+
+# search any file, not just executables
+def WhereIsFile(file, paths):
+	for d in paths:
+		f = os.path.join(d, file)
+		if os.path.isfile(f):
+			try:
+				st = os.stat(f)
+			except OSError:
+				# os.stat() raises OSError, not IOError if the file
+				# doesn't exist, so in this case we let IOError get
+				# raised so as to not mask possibly serious disk or
+				# network issues.
+				continue
+			return os.path.normpath(f)
+	return None
+
+def FlattenLibs(libs):
+	if isinstance(libs, basestring):
+		return [libs]
+	else:
+		return [item for sublibs in libs for item in FlattenLibs(sublibs)]
+
+# removes all but the *LAST* occurance of a lib in the list
+def RemoveDuplicateLibs(libs):
+	libs = FlattenLibs(libs)
+	# remove empty strings from list
+	libs = list(filter(lambda x: x != '', libs))
+	return list(reversed(OrderedDict.fromkeys(reversed(libs))))
 
 Import('env')
 
 def GatherLibs(env, *libs):
-	return env['LIBS'] + [libs] + [env['APPEND_LIBS']]
+	return RemoveDuplicateLibs(env['LIBS'] + list(libs) + [env['APPEND_LIBS']])
 
 common_src = Split("base64.c buffer.c log.c \
 	keyvalue.c chunk.c  \
@@ -103,7 +133,18 @@ for module in modules.keys():
 		staticlib += modules[module]['lib']
 
 def WriteStaticPluginHeader(target, source, env):
-	open(target[0].abspath, 'w+').write(env['STATICINIT'])
+	do_write = True
+	data = env['STATICINIT']
+	# only touch the file if content actually changes
+	try:
+		with open(target[0].abspath, 'r') as f:
+			do_write = (data != f.read())
+	except IOError:
+		pass
+	if do_write:
+		with open(target[0].abspath, 'w+') as f:
+			f.write(env['STATICINIT'])
+
 env['STATICINIT'] = staticinit
 staticheader = env.AlwaysBuild(env.Command('plugin-static.h', [], WriteStaticPluginHeader))
 
@@ -117,7 +158,6 @@ for cfile in staticsrc:
 	else:
 		staticobj += [ staticenv.Object('static-' + cfile.replace('.c', ''), cfile) ]
 env.Depends(static_plugin_obj, 'plugin-static.h')
-print(str(static_plugin_obj))
 
 ## includes all modules, but links dynamically against other libs
 staticbin = staticenv.Program('../static/build/lighttpd',
@@ -133,14 +173,20 @@ fullstaticlib = []
 ## 1. find the lib
 ## 2. check the deps
 ## 3. add them to the libs
-searchlibs = os.pathsep.join([ '/lib/', '/usr/lib/', '/usr/local/lib/' ])
+#searchlibs = os.pathsep.join([ '/lib/', '/usr/lib/', '/usr/local/lib/' ])
+searchlibs = []
+searchpathre = re.compile(r'\bSEARCH_DIR\("=([^"]+)"\)')
+f = os.popen('ld --verbose | grep SEARCH_DIR', 'r')
+for aword in searchpathre.findall(f.read()):
+	searchlibs += [ aword]
+f.close
+
 lddre = re.compile(r'^\s+lib([^=-]+)(?:-[\.0-9]+)?\.so\.[0-9]+ =>', re.MULTILINE)
 for libs in staticlib:
 	if type(libs) is types.StringType: libs = [ libs ]
 	for lib in libs:
 		fullstaticlib += [ lib ]
-		solibpath = env.WhereIs('lib' + lib + '.so', searchlibs)
-		fullstaticlib += [ lib ]
+		solibpath = WhereIsFile('lib' + lib + '.so', paths = searchlibs)
 		if solibpath is None:
 			continue
 
