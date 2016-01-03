@@ -27,7 +27,7 @@ FreeBSD dependencies:
   pkg install gamin
   or
   pkg install fam
-- Lua 5.1 (mod_magnet and mod_cml; lighty upstream doesn't support 5.2 yet)
+- Lua 5.1, 5.2 or 5.3 (mod_magnet and mod_cml)
   pkg install lua51
 - (deprecated) memcache library (mod_cml and mod_trigger_b4_dl feature)
   pkg install libmemcache

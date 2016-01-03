@@ -68,6 +68,7 @@ lua_State *script_cache_get_script(server *srv, connection *con, script_cache *c
 			/* oops, the script failed last time */
 
 			if (lua_gettop(sc->L) == 0) break;
+			force_assert(lua_gettop(sc->L) == 1);
 
 			if (HANDLER_ERROR == stat_cache_get_entry(srv, con, sc->name, &sce)) {
 				lua_pop(sc->L, 1); /* pop the old function */
@@ -81,7 +82,6 @@ lua_State *script_cache_get_script(server *srv, connection *con, script_cache *c
 			}
 
 			force_assert(lua_isfunction(sc->L, -1));
-			lua_pushvalue(sc->L, -1); /* copy the function-reference */
 
 			return sc->L;
 		}
@@ -114,7 +114,6 @@ lua_State *script_cache_get_script(server *srv, connection *con, script_cache *c
 
 	if (0 != luaL_loadfile(sc->L, name->ptr)) {
 		/* oops, an error, return it */
-
 		return sc->L;
 	}
 
@@ -122,14 +121,7 @@ lua_State *script_cache_get_script(server *srv, connection *con, script_cache *c
 		buffer_copy_buffer(sc->etag, sce->etag);
 	}
 
-	/**
-	 * pcall() needs the function on the stack
-	 *
-	 * as pcall() will pop the script from the stack when done, we have to
-	 * duplicate it here
-	 */
 	force_assert(lua_isfunction(sc->L, -1));
-	lua_pushvalue(sc->L, -1); /* copy the function-reference */
 
 	return sc->L;
 }

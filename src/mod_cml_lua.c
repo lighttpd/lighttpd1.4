@@ -28,67 +28,35 @@ typedef char HASHHEX[HASHHEXLEN+1];
 #include <lualib.h>
 #include <lauxlib.h>
 
-typedef struct {
-	stream st;
-	int done;
-} readme;
-
-static const char * load_file(lua_State *L, void *data, size_t *size) {
-	readme *rm = data;
-
-	UNUSED(L);
-
-	if (rm->done) return 0;
-
-	*size = rm->st.size;
-	rm->done = 1;
-	return rm->st.start;
-}
-
 static int lua_to_c_get_string(lua_State *L, const char *varname, buffer *b) {
-	int curelem;
+	int curelem = lua_gettop(L);
+	int result;
 
-	lua_pushstring(L, varname);
+	lua_getglobal(L, varname);
 
-	curelem = lua_gettop(L);
-	lua_gettable(L, LUA_GLOBALSINDEX);
-
-	/* it should be a table */
-	if (!lua_isstring(L, curelem)) {
-		lua_settop(L, curelem - 1);
-
-		return -1;
+	if (lua_isstring(L, curelem)) {
+		buffer_copy_string(b, lua_tostring(L, curelem));
+		result = 0;
+	} else {
+		result = -1;
 	}
 
-	buffer_copy_string(b, lua_tostring(L, curelem));
-
 	lua_pop(L, 1);
-
-	force_assert(curelem - 1 == lua_gettop(L));
-
-	return 0;
+	force_assert(curelem == lua_gettop(L));
+	return result;
 }
 
 static int lua_to_c_is_table(lua_State *L, const char *varname) {
-	int curelem;
+	int curelem = lua_gettop(L);
+	int result;
 
-	lua_pushstring(L, varname);
+	lua_getglobal(L, varname);
 
-	curelem = lua_gettop(L);
-	lua_gettable(L, LUA_GLOBALSINDEX);
+	result = lua_istable(L, curelem) ? 1 : 0;
 
-	/* it should be a table */
-	if (!lua_istable(L, curelem)) {
-		lua_settop(L, curelem - 1);
-
-		return 0;
-	}
-
-	lua_settop(L, curelem - 1);
-
-	force_assert(curelem - 1 == lua_gettop(L));
-
-	return 1;
+	lua_pop(L, 1);
+	force_assert(curelem == lua_gettop(L));
+	return result;
 }
 
 static int c_to_lua_push(lua_State *L, int tbl, const char *key, size_t key_len, const char *val, size_t val_len) {
@@ -98,7 +66,6 @@ static int c_to_lua_push(lua_State *L, int tbl, const char *key, size_t key_len,
 
 	return 0;
 }
-
 
 static int cache_export_get_params(lua_State *L, int tbl, buffer *qrystr) {
 	size_t is_key = 1;
@@ -143,82 +110,11 @@ static int cache_export_get_params(lua_State *L, int tbl, buffer *qrystr) {
 
 	return 0;
 }
-#if 0
-int cache_export_cookie_params(server *srv, connection *con, plugin_data *p) {
-	data_unset *d;
-
-	UNUSED(srv);
-
-	if (NULL != (d = array_get_element(con->request.headers, "Cookie"))) {
-		data_string *ds = (data_string *)d;
-		size_t key = 0, value = 0;
-		size_t is_key = 1, is_sid = 0;
-		size_t i;
-
-		/* found COOKIE */
-		if (!DATA_IS_STRING(d)) return -1;
-		if (ds->value->used == 0) return -1;
-
-		if (ds->value->ptr[0] == '\0' ||
-		    ds->value->ptr[0] == '=' ||
-		    ds->value->ptr[0] == ';') return -1;
-
-		buffer_reset(p->session_id);
-		for (i = 0; i < ds->value->used; i++) {
-			switch(ds->value->ptr[i]) {
-			case '=':
-				if (is_key) {
-					if (0 == strncmp(ds->value->ptr + key, "PHPSESSID", i - key)) {
-						/* found PHP-session-id-key */
-						is_sid = 1;
-					}
-					value = i + 1;
-
-					is_key = 0;
-				}
-
-				break;
-			case ';':
-				if (is_sid) {
-					buffer_copy_string_len(p->session_id, ds->value->ptr + value, i - value);
-				}
-
-				is_sid = 0;
-				key = i + 1;
-				value = 0;
-				is_key = 1;
-				break;
-			case ' ':
-				if (is_key == 1 && key == i) key = i + 1;
-				if (is_key == 0 && value == i) value = i + 1;
-				break;
-			case '\0':
-				if (is_sid) {
-					buffer_copy_string_len(p->session_id, ds->value->ptr + value, i - value);
-				}
-				/* fin */
-				break;
-			}
-		}
-	}
-
-	return 0;
-}
-#endif
 
 int cache_parse_lua(server *srv, connection *con, plugin_data *p, buffer *fn) {
 	lua_State *L;
-	readme rm;
 	int ret = -1;
 	buffer *b;
-	int header_tbl = 0;
-
-	rm.done = 0;
-	if (-1 == stream_open(&rm.st, fn)) {
-		log_error_write(srv, __FILE__, __LINE__, "sbss",
-				"opening lua cml file ", fn, "failed:", strerror(errno));
-		return -1;
-	}
 
 	b = buffer_init();
 	/* push the lua file to the interpreter and see what happends */
@@ -233,73 +129,77 @@ int cache_parse_lua(server *srv, connection *con, plugin_data *p, buffer *fn) {
 	lua_register(L, "dir_files", f_dir_files);
 
 #ifdef HAVE_MEMCACHE_H
-	lua_pushliteral(L, "memcache_get_long");
 	lua_pushlightuserdata(L, p->conf.mc);
 	lua_pushcclosure(L, f_memcache_get_long, 1);
-	lua_settable(L, LUA_GLOBALSINDEX);
+	lua_setglobal(L, "memcache_get_long");
 
-	lua_pushliteral(L, "memcache_get_string");
 	lua_pushlightuserdata(L, p->conf.mc);
 	lua_pushcclosure(L, f_memcache_get_string, 1);
-	lua_settable(L, LUA_GLOBALSINDEX);
+	lua_setglobal(L, "memcache_get_string");
 
-	lua_pushliteral(L, "memcache_exists");
 	lua_pushlightuserdata(L, p->conf.mc);
 	lua_pushcclosure(L, f_memcache_exists, 1);
-	lua_settable(L, LUA_GLOBALSINDEX);
+	lua_setglobal(L, "memcache_exists");
 #endif
+
 	/* register CGI environment */
-	lua_pushliteral(L, "request");
 	lua_newtable(L);
-	lua_settable(L, LUA_GLOBALSINDEX);
+	{
+		int header_tbl = lua_gettop(L);
 
-	lua_pushliteral(L, "request");
-	header_tbl = lua_gettop(L);
-	lua_gettable(L, LUA_GLOBALSINDEX);
+		c_to_lua_push(L, header_tbl, CONST_STR_LEN("REQUEST_URI"), CONST_BUF_LEN(con->request.orig_uri));
+		c_to_lua_push(L, header_tbl, CONST_STR_LEN("SCRIPT_NAME"), CONST_BUF_LEN(con->uri.path));
+		c_to_lua_push(L, header_tbl, CONST_STR_LEN("SCRIPT_FILENAME"), CONST_BUF_LEN(con->physical.path));
+		c_to_lua_push(L, header_tbl, CONST_STR_LEN("DOCUMENT_ROOT"), CONST_BUF_LEN(con->physical.doc_root));
+		if (!buffer_string_is_empty(con->request.pathinfo)) {
+			c_to_lua_push(L, header_tbl, CONST_STR_LEN("PATH_INFO"), CONST_BUF_LEN(con->request.pathinfo));
+		}
 
-	c_to_lua_push(L, header_tbl, CONST_STR_LEN("REQUEST_URI"), CONST_BUF_LEN(con->request.orig_uri));
-	c_to_lua_push(L, header_tbl, CONST_STR_LEN("SCRIPT_NAME"), CONST_BUF_LEN(con->uri.path));
-	c_to_lua_push(L, header_tbl, CONST_STR_LEN("SCRIPT_FILENAME"), CONST_BUF_LEN(con->physical.path));
-	c_to_lua_push(L, header_tbl, CONST_STR_LEN("DOCUMENT_ROOT"), CONST_BUF_LEN(con->physical.doc_root));
-	if (!buffer_string_is_empty(con->request.pathinfo)) {
-		c_to_lua_push(L, header_tbl, CONST_STR_LEN("PATH_INFO"), CONST_BUF_LEN(con->request.pathinfo));
+		c_to_lua_push(L, header_tbl, CONST_STR_LEN("CWD"), CONST_BUF_LEN(p->basedir));
+		c_to_lua_push(L, header_tbl, CONST_STR_LEN("BASEURL"), CONST_BUF_LEN(p->baseurl));
 	}
-
-	c_to_lua_push(L, header_tbl, CONST_STR_LEN("CWD"), CONST_BUF_LEN(p->basedir));
-	c_to_lua_push(L, header_tbl, CONST_STR_LEN("BASEURL"), CONST_BUF_LEN(p->baseurl));
+	lua_setglobal(L, "request");
 
 	/* register GET parameter */
-	lua_pushliteral(L, "get");
 	lua_newtable(L);
-	lua_settable(L, LUA_GLOBALSINDEX);
+	{
+		int get_tbl = lua_gettop(L);
 
-	lua_pushliteral(L, "get");
-	header_tbl = lua_gettop(L);
-	lua_gettable(L, LUA_GLOBALSINDEX);
-
-	buffer_copy_buffer(b, con->uri.query);
-	cache_export_get_params(L, header_tbl, b);
-	buffer_reset(b);
+		buffer_copy_buffer(b, con->uri.query);
+		cache_export_get_params(L, get_tbl, b);
+		buffer_reset(b);
+	}
+	lua_setglobal(L, "get");
 
 	/* 2 default constants */
-	lua_pushliteral(L, "CACHE_HIT");
-	lua_pushnumber(L, 0);
-	lua_settable(L, LUA_GLOBALSINDEX);
+	lua_pushinteger(L, 0);
+	lua_setglobal(L, "CACHE_HIT");
 
-	lua_pushliteral(L, "CACHE_MISS");
-	lua_pushnumber(L, 1);
-	lua_settable(L, LUA_GLOBALSINDEX);
+	lua_pushinteger(L, 1);
+	lua_setglobal(L, "CACHE_MISS");
 
 	/* load lua program */
-	if (lua_load(L, load_file, &rm, fn->ptr) || lua_pcall(L,0,1,0)) {
-		log_error_write(srv, __FILE__, __LINE__, "s",
-				lua_tostring(L,-1));
+	ret = luaL_loadfile(L, fn->ptr);
+	if (0 != ret) {
+		log_error_write(srv, __FILE__, __LINE__, "sbsS",
+			"failed loading cml_lua script",
+			fn,
+			":",
+			lua_tostring(L, -1));
+		goto error;
+	}
 
+	if (lua_pcall(L, 0, 1, 0)) {
+		log_error_write(srv, __FILE__, __LINE__, "sbsS",
+			"failed running cml_lua script",
+			fn,
+			":",
+			lua_tostring(L, -1));
 		goto error;
 	}
 
 	/* get return value */
-	ret = (int)lua_tonumber(L, -1);
+	ret = (int)lua_tointeger(L, -1);
 	lua_pop(L, 1);
 
 	/* fetch the data from lua */
@@ -323,10 +223,8 @@ int cache_parse_lua(server *srv, connection *con, plugin_data *p, buffer *fn) {
 			goto error;
 		}
 
-		lua_pushstring(L, "output_include");
-
+		lua_getglobal(L, "output_include");
 		curelem = lua_gettop(L);
-		lua_gettable(L, LUA_GLOBALSINDEX);
 
 		/* HOW-TO build a etag ?
 		 * as we don't just have one file we have to take the stat()
@@ -441,7 +339,6 @@ int cache_parse_lua(server *srv, connection *con, plugin_data *p, buffer *fn) {
 error:
 	lua_close(L);
 
-	stream_close(&rm.st);
 	buffer_free(b);
 
 	return ret /* cache-error */;

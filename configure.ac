@@ -520,28 +520,31 @@ AC_ARG_WITH(lua, AC_HELP_STRING([--with-lua],[lua engine for mod_cml]),
 
 AC_MSG_RESULT($WITH_LUA)
 if test "$WITH_LUA" != "no"; then
- if test "$WITH_LUA" = "yes"; then
-  WITH_LUA=lua
- fi
- dnl first check for lua5.1 (debian and others), then lua-5.1 (freebsd), then $WITH_LUA (defaults to lua)
- dnl check "lua" last now that lua5.2 is out
- PKG_CHECK_MODULES(LUA, lua5.1 >= 5.1, [
-  AC_DEFINE([HAVE_LUA], [1], [liblua])
-  AC_DEFINE([HAVE_LUA_H], [1], [lua.h])
- ],[
-  PKG_CHECK_MODULES(LUA, lua-5.1 >= 5.1, [
-   AC_DEFINE([HAVE_LUA], [1], [liblua])
-   AC_DEFINE([HAVE_LUA_H], [1], [lua.h])
-  ],[
-   PKG_CHECK_MODULES(LUA, $WITH_LUA >= 5.1, [
-    AC_DEFINE([HAVE_LUA], [1], [liblua])
-    AC_DEFINE([HAVE_LUA_H], [1], [lua.h])
-   ])
-  ])
- ])
+  if test "$WITH_LUA" != "yes"; then
+    PKG_CHECK_MODULES(LUA, $WITH_LUA >= 5.1, [
+      AC_DEFINE([HAVE_LUA], [1], [liblua])
+      AC_DEFINE([HAVE_LUA_H], [1], [lua.h])
+    ],[
+      AC_MSG_ERROR([Couldn't find requested lua pkg-config module $WITH_LUA])
+    ])
+  else
+    found_lua=0
+    for luaname in lua5.3 lua-5.3 lua5.2 lua-5.2 lua5.1 lua-5.1 lua; do
+      if test "$found_lua" = "0"; then
+        PKG_CHECK_MODULES(LUA, $luaname >= 5.1, [
+          AC_DEFINE([HAVE_LUA], [1], [liblua])
+          AC_DEFINE([HAVE_LUA_H], [1], [lua.h])
+          found_lua=1
+        ], [])
+      fi
+    done
+    if test "$found_lua" = "0"; then
+      AC_MSG_ERROR([Couldn't find any lua pkg-config module])
+    fi
+  fi
 
- AC_SUBST(LUA_CFLAGS)
- AC_SUBST(LUA_LIBS)
+  AC_SUBST(LUA_CFLAGS)
+  AC_SUBST(LUA_LIBS)
 fi
 
 dnl search for crypt_r and (fallback) for crypt

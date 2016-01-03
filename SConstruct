@@ -304,7 +304,7 @@ def TryLua(env, name):
 
 if env['with_lua']:
 	found_lua = False
-	for lua_name in ['lua5.1', 'lua5.0', 'lua']:
+	for lua_name in ['lua5.3', 'lua-5.3', 'lua5.2', 'lua-5.2', 'lua5.1', 'lua-5.1', 'lua']:
 		if TryLua(env, lua_name):
 			found_lua = True
 			break

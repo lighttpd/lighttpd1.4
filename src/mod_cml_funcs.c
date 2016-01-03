@@ -37,6 +37,8 @@ int f_crypto_md5(lua_State *L) {
 	HASH HA1;
 	char hex[33];
 	int n = lua_gettop(L);
+	size_t s_len;
+	const char *s;
 
 	if (n != 1) {
 		lua_pushstring(L, "md5: expected one argument");
@@ -48,8 +50,10 @@ int f_crypto_md5(lua_State *L) {
 		lua_error(L);
 	}
 
+	s = lua_tolstring(L, 1, &s_len);
+
 	li_MD5_Init(&Md5Ctx);
-	li_MD5_Update(&Md5Ctx, (unsigned char *)lua_tostring(L, 1), lua_strlen(L, 1));
+	li_MD5_Update(&Md5Ctx, (unsigned char *) s, (unsigned int) s_len);
 	li_MD5_Final(HA1, &Md5Ctx);
 
 	li_tohex(hex, (const char*) HA1, 16);
@@ -79,7 +83,7 @@ int f_file_mtime(lua_State *L) {
 		return 1;
 	}
 
-	lua_pushnumber(L, st.st_mtime);
+	lua_pushinteger(L, st.st_mtime);
 
 	return 1;
 }
@@ -121,7 +125,7 @@ int f_dir_files(lua_State *L) {
 		return 1;
 	}
 
-	/* push d into registry */
+	/* push d into userdata */
 	lua_pushlightuserdata(L, d);
 	lua_pushcclosure(L, f_dir_files_iter, 1);
 
@@ -147,7 +151,7 @@ int f_file_isreg(lua_State *L) {
 		return 1;
 	}
 
-	lua_pushnumber(L, S_ISREG(st.st_mode));
+	lua_pushinteger(L, S_ISREG(st.st_mode));
 
 	return 1;
 }
@@ -171,7 +175,7 @@ int f_file_isdir(lua_State *L) {
 		return 1;
 	}
 
-	lua_pushnumber(L, S_ISDIR(st.st_mode));
+	lua_pushinteger(L, S_ISDIR(st.st_mode));
 
 	return 1;
 }
@@ -183,6 +187,8 @@ int f_memcache_exists(lua_State *L) {
 	char *r;
 	int n = lua_gettop(L);
 	struct memcache *mc;
+	size_t s_len;
+	const char *s;
 
 	if (!lua_islightuserdata(L, lua_upvalueindex(1))) {
 		lua_pushstring(L, "where is my userdata ?");
@@ -201,9 +207,8 @@ int f_memcache_exists(lua_State *L) {
 		lua_error(L);
 	}
 
-	if (NULL == (r = mc_aget(mc,
-				 (char*) lua_tostring(L, 1), lua_strlen(L, 1)))) {
-
+	s = lua_tolstring(L, 1, &s_len);
+	if (NULL == (r = mc_aget(mc, (char*) s, s_len))) {
 		lua_pushboolean(L, 0);
 		return 1;
 	}
@@ -217,6 +222,8 @@ int f_memcache_exists(lua_State *L) {
 int f_memcache_get_string(lua_State *L) {
 	char *r;
 	int n = lua_gettop(L);
+	size_t s_len;
+	const char *s;
 
 	struct memcache *mc;
 
@@ -238,8 +245,8 @@ int f_memcache_get_string(lua_State *L) {
 		lua_error(L);
 	}
 
-	if (NULL == (r = mc_aget(mc,
-				 (char*) lua_tostring(L, 1), lua_strlen(L, 1)))) {
+	s = lua_tolstring(L, 1, &s_len);
+	if (NULL == (r = mc_aget(mc, (char*) s, s_len))) {
 		lua_pushnil(L);
 		return 1;
 	}
@@ -254,6 +261,8 @@ int f_memcache_get_string(lua_State *L) {
 int f_memcache_get_long(lua_State *L) {
 	char *r;
 	int n = lua_gettop(L);
+	size_t s_len;
+	const char *s;
 
 	struct memcache *mc;
 
@@ -275,13 +284,13 @@ int f_memcache_get_long(lua_State *L) {
 		lua_error(L);
 	}
 
-	if (NULL == (r = mc_aget(mc,
-				 (char*) lua_tostring(L, 1), lua_strlen(L, 1)))) {
+	s = lua_tolstring(L, 1, &s_len);
+	if (NULL == (r = mc_aget(mc, (char*) s, s_len))) {
 		lua_pushnil(L);
 		return 1;
 	}
 
-	lua_pushnumber(L, strtol(r, NULL, 10));
+	lua_pushinteger(L, strtol(r, NULL, 10));
 
 	free(r);
 
