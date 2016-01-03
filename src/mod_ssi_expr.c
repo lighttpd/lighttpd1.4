@@ -207,7 +207,9 @@ static int ssi_expr_tokenizer(server *srv, connection *con, plugin_data *p,
 
 				buffer_copy_string_len(token, t->input + t->offset + 2, i-3);
 			} else {
-				for (i = 1; isalpha(t->input[t->offset + i]) || t->input[t->offset + i] == '_';  i++);
+				for (i = 1; isalpha(t->input[t->offset + i]) ||
+					    t->input[t->offset + i] == '_' ||
+					    ((i > 1) && isdigit(t->input[t->offset + i]));  i++);
 
 				buffer_copy_string_len(token, t->input + t->offset + 1, i-1);
 			}

@@ -457,9 +457,10 @@ static int process_ssi_stmt(server *srv, connection *con, plugin_data *p, const 
 		}
 		default: {
 			data_string *ds;
-			/* check if it is a cgi-var */
+			/* check if it is a cgi-var or a ssi-var */
 
-			if (NULL != (ds = (data_string *)array_get_element(p->ssi_cgi_env, var_val))) {
+			if (NULL != (ds = (data_string *)array_get_element(p->ssi_cgi_env, var_val)) ||
+			    NULL != (ds = (data_string *)array_get_element(p->ssi_vars, var_val))) {
 				chunkqueue_append_mem(con->write_queue, CONST_BUF_LEN(ds->value));
 			} else {
 				chunkqueue_append_mem(con->write_queue, CONST_STR_LEN("(none)"));
