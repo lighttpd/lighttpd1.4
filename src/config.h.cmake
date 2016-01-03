@@ -99,7 +99,7 @@
 #cmakedefine  HAVE_GDBM
 
 /* memcache */
-#cmakedefine  HAVE_MEMCACHE_H
+#cmakedefine  USE_MEMCACHED
 
 /* inotify */
 #cmakedefine  HAVE_INOTIFY_INIT

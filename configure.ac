@@ -497,20 +497,19 @@ if test "$WITH_GDBM" != "no"; then
  AC_SUBST(GDBM_LIB)
 fi
 
-dnl Check for memcache
-AC_MSG_CHECKING(for memcache)
-AC_ARG_WITH(memcache, AC_HELP_STRING([--with-memcache],[memcached storage for mod_trigger_b4_dl]),
-[WITH_MEMCACHE=$withval],[WITH_MEMCACHE=no])
-AC_MSG_RESULT([$WITH_MEMCACHE])
-if test "$WITH_MEMCACHE" != "no"; then
- AC_CHECK_LIB(memcache, mc_new, [
-         AC_CHECK_HEADERS([memcache.h],[
-                 MEMCACHE_LIB=-lmemcache
-                 AC_DEFINE([HAVE_MEMCACHE], [1], [libmemcache])
-		 AC_DEFINE([HAVE_MEMCACHE_H], [1], [memcache.h])
-         ])
- ])
- AC_SUBST(MEMCACHE_LIB)
+dnl Check for memcached
+AC_MSG_CHECKING(for memcached)
+AC_ARG_WITH(memcached, AC_HELP_STRING([--with-memcached],[memcached storage for mod_trigger_b4_dl]),
+[WITH_MEMCACHED=$withval],[WITH_MEMCACHED=no])
+AC_MSG_RESULT([$WITH_MEMCACHED])
+if test "$WITH_MEMCACHED" != "no"; then
+  AC_CHECK_LIB(memcached, memcached, [
+    AC_CHECK_HEADERS([libmemcached/memcached.h],[
+      MEMCACHED_LIB=-lmemcached
+      AC_DEFINE([USE_MEMCACHED], [1], [libmemcached])
+    ])
+  ])
+  AC_SUBST(MEMCACHED_LIB)
 fi
 
 dnl Check for lua
@@ -767,8 +766,8 @@ else
 	disable_feature="$disable_feature $features"
 fi
 
-features="storage-memcache"
-if test ! "x$MEMCACHE_LIB" = x; then
+features="storage-memcached"
+if test ! "x$MEMCACHED_LIB" = x; then
 	enable_feature="$enable_feature $features"
 else
 	disable_feature="$disable_feature $features"

@@ -51,8 +51,8 @@ FREE_FUNC(mod_cml_free) {
 			buffer_free(s->power_magnet);
 			array_free(s->mc_hosts);
 
-#if defined(HAVE_MEMCACHE_H)
-			if (s->mc) mc_free(s->mc);
+#if defined(USE_MEMCACHED)
+			if (s->memc) memcached_free(s->memc);
 #endif
 
 			free(s);
@@ -96,8 +96,8 @@ SETDEFAULTS_FUNC(mod_cml_set_defaults) {
 		s->mc_hosts       = array_init();
 		s->mc_namespace   = buffer_init();
 		s->power_magnet   = buffer_init();
-#if defined(HAVE_MEMCACHE_H)
-		s->mc = NULL;
+#if defined(USE_MEMCACHED)
+		s->memc = NULL;
 #endif
 
 		cv[0].destination = s->ext;
@@ -112,24 +112,37 @@ SETDEFAULTS_FUNC(mod_cml_set_defaults) {
 		}
 
 		if (s->mc_hosts->used) {
-#if defined(HAVE_MEMCACHE_H)
+#if defined(USE_MEMCACHED)
+			buffer *option_string = buffer_init();
 			size_t k;
-			s->mc = mc_new();
 
-			for (k = 0; k < s->mc_hosts->used; k++) {
+			{
+				data_string *ds = (data_string *)s->mc_hosts->data[0];
+
+				buffer_append_string_len(option_string, CONST_STR_LEN("--SERVER="));
+				buffer_append_string_buffer(option_string, ds->value);
+			}
+
+			for (k = 1; k < s->mc_hosts->used; k++) {
 				data_string *ds = (data_string *)s->mc_hosts->data[k];
 
-				if (0 != mc_server_add4(s->mc, ds->value->ptr)) {
-					log_error_write(srv, __FILE__, __LINE__, "sb",
-							"connection to host failed:",
-							ds->value);
-
-					return HANDLER_ERROR;
-				}
+				buffer_append_string_len(option_string, CONST_STR_LEN(" --SERVER="));
+				buffer_append_string_buffer(option_string, ds->value);
 			}
+
+			s->memc = memcached(CONST_BUF_LEN(option_string));
+
+			if (NULL == s->memc) {
+				log_error_write(srv, __FILE__, __LINE__, "sb",
+					"configuring memcached failed for option string:",
+					option_string);
+			}
+			buffer_free(option_string);
+
+			if (NULL == s->memc) return HANDLER_ERROR;
 #else
 			log_error_write(srv, __FILE__, __LINE__, "s",
-					"memcache support is not compiled in but cml.memcache-hosts is set, aborting");
+				"memcache support is not compiled in but cml.memcache-hosts is set, aborting");
 			return HANDLER_ERROR;
 #endif
 		}
@@ -145,8 +158,8 @@ static int mod_cml_patch_connection(server *srv, connection *con, plugin_data *p
 	plugin_config *s = p->config_storage[0];
 
 	PATCH(ext);
-#if defined(HAVE_MEMCACHE_H)
-	PATCH(mc);
+#if defined(USE_MEMCACHED)
+	PATCH(memc);
 #endif
 	PATCH(mc_namespace);
 	PATCH(power_magnet);
@@ -166,8 +179,8 @@ static int mod_cml_patch_connection(server *srv, connection *con, plugin_data *p
 			if (buffer_is_equal_string(du->key, CONST_STR_LEN("cml.extension"))) {
 				PATCH(ext);
 			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("cml.memcache-hosts"))) {
-#if defined(HAVE_MEMCACHE_H)
-				PATCH(mc);
+#if defined(USE_MEMCACHED)
+				PATCH(memc);
 #endif
 			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("cml.memcache-namespace"))) {
 				PATCH(mc_namespace);

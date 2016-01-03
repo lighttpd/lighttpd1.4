@@ -28,9 +28,9 @@ FreeBSD dependencies:
   or
   pkg install fam
 - Lua 5.1, 5.2 or 5.3 (mod_magnet and mod_cml)
-  pkg install lua51
-- (deprecated) memcache library (mod_cml and mod_trigger_b4_dl feature)
-  pkg install libmemcache
+  pkg install lua51  (or lua52 or lua53)
+- memcached library (mod_cml and mod_trigger_b4_dl feature)
+  pkg install libmemcached
 - gdbm (mod_trigger_b4_dl feature)
   pkg install gdbm
 - LDAP (mod_auth feature)

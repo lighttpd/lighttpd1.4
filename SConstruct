@@ -117,9 +117,9 @@ vars.AddVariables(
 	BoolVariable('build_static', 'enable static build', 'no'),
 	BoolVariable('build_fullstatic', 'enable fullstatic build', 'no'),
 	BoolVariable('with_sqlite3', 'enable sqlite3 support', 'no'),
-	BoolVariable('with_memcache', 'enable memcache support', 'no'),
+	BoolVariable('with_memcached', 'enable memcached support', 'no'),
 	BoolVariable('with_fam', 'enable FAM/gamin support', 'no'),
-	BoolVariable('with_openssl', 'enable memcache support', 'no'),
+	BoolVariable('with_openssl', 'enable openssl support', 'no'),
 	BoolVariable('with_gzip', 'enable gzip compression', 'no'),
 	BoolVariable('with_bzip2', 'enable bzip2 compression', 'no'),
 	BoolVariable('with_lua', 'enable lua support for mod_cml', 'no'),
@@ -215,7 +215,7 @@ if 1:
 	checkTypes(autoconf, Split('pid_t size_t off_t'))
 
 	autoconf.env.Append( LIBSQLITE3 = '', LIBXML2 = '', LIBMYSQL = '', LIBZ = '',
-		LIBBZ2 = '', LIBCRYPT = '', LIBMEMCACHE = '', LIBFCGI = '', LIBPCRE = '',
+		LIBBZ2 = '', LIBCRYPT = '', LIBMEMCACHED = '', LIBFCGI = '', LIBPCRE = '',
 		LIBLDAP = '', LIBLBER = '', LIBLUA = '', LIBDL = '', LIBUUID = '')
 
 	if env['with_fam']:
@@ -253,9 +253,9 @@ if 1:
 		if autoconf.CheckLibWithHeader('bz2', 'bzlib.h', 'C'):
 			autoconf.env.Append(CPPFLAGS = [ '-DHAVE_BZLIB_H', '-DHAVE_LIBBZ2' ], LIBBZ2 = 'bz2')
 
-	if env['with_memcache']:
-		if autoconf.CheckLibWithHeader('memcache', 'memcache.h', 'C'):
-			autoconf.env.Append(CPPFLAGS = [ '-DHAVE_MEMCACHE_H', '-DHAVE_LIBMEMCACHE' ], LIBMEMCACHE = 'memcache')
+	if env['with_memcached']:
+		if autoconf.CheckLibWithHeader('memcached', 'libmemcached/memcached.h', 'C'):
+			autoconf.env.Append(CPPFLAGS = [ '-DUSE_MEMCACHED' ], LIBMEMCACHED = 'memcached')
 
 	if env['with_sqlite3']:
 		if autoconf.CheckLibWithHeader('sqlite3', 'sqlite3.h', 'C'):

@@ -128,16 +128,16 @@ int cache_parse_lua(server *srv, connection *con, plugin_data *p, buffer *fn) {
 	lua_register(L, "file_isdir", f_file_isreg);
 	lua_register(L, "dir_files", f_dir_files);
 
-#ifdef HAVE_MEMCACHE_H
-	lua_pushlightuserdata(L, p->conf.mc);
+#ifdef USE_MEMCACHED
+	lua_pushlightuserdata(L, p->conf.memc);
 	lua_pushcclosure(L, f_memcache_get_long, 1);
 	lua_setglobal(L, "memcache_get_long");
 
-	lua_pushlightuserdata(L, p->conf.mc);
+	lua_pushlightuserdata(L, p->conf.memc);
 	lua_pushcclosure(L, f_memcache_get_string, 1);
 	lua_setglobal(L, "memcache_get_string");
 
-	lua_pushlightuserdata(L, p->conf.mc);
+	lua_pushlightuserdata(L, p->conf.memc);
 	lua_pushcclosure(L, f_memcache_exists, 1);
 	lua_setglobal(L, "memcache_exists");
 #endif

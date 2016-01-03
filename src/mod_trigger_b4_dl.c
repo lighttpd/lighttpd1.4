@@ -11,7 +11,7 @@
 #include <fcntl.h>
 #include <string.h>
 
-#if (defined(HAVE_GDBM_H) || defined(HAVE_MEMCACHE_H)) && defined(HAVE_PCRE_H)
+#if (defined(HAVE_GDBM_H) || defined(USE_MEMCACHED)) && defined(HAVE_PCRE_H)
 
 #if defined(HAVE_GDBM_H)
 # include <gdbm.h>
@@ -21,8 +21,8 @@
 # include <pcre.h>
 #endif
 
-#if defined(HAVE_MEMCACHE_H)
-# include <memcache.h>
+#if defined(USE_MEMCACHED)
+# include <libmemcached/memcached.h>
 #endif
 
 /**
@@ -49,8 +49,8 @@ typedef struct {
 	GDBM_FILE db;
 #endif
 
-#if defined(HAVE_MEMCACHE_H)
-	struct memcache *mc;
+#if defined(USE_MEMCACHED)
+	memcached_st *memc;
 #endif
 
 	unsigned short trigger_timeout;
@@ -108,8 +108,8 @@ FREE_FUNC(mod_trigger_b4_dl_free) {
 #if defined(HAVE_GDBM_H)
 			if (s->db) gdbm_close(s->db);
 #endif
-#if defined(HAVE_MEMCACHE_H)
-			if (s->mc) mc_free(s->mc);
+#if defined(USE_MEMCACHED)
+			if (s->memc) memcached_free(s->memc);
 #endif
 
 			free(s);
@@ -213,21 +213,34 @@ SETDEFAULTS_FUNC(mod_trigger_b4_dl_set_defaults) {
 #endif
 
 		if (s->mc_hosts->used) {
-#if defined(HAVE_MEMCACHE_H)
+#if defined(USE_MEMCACHED)
+			buffer *option_string = buffer_init();
 			size_t k;
-			s->mc = mc_new();
 
-			for (k = 0; k < s->mc_hosts->used; k++) {
+			{
+				data_string *ds = (data_string *)s->mc_hosts->data[0];
+
+				buffer_append_string_len(option_string, CONST_STR_LEN("--SERVER="));
+				buffer_append_string_buffer(option_string, ds->value);
+			}
+
+			for (k = 1; k < s->mc_hosts->used; k++) {
 				data_string *ds = (data_string *)s->mc_hosts->data[k];
 
-				if (0 != mc_server_add4(s->mc, ds->value->ptr)) {
-					log_error_write(srv, __FILE__, __LINE__, "sb",
-							"connection to host failed:",
-							ds->value);
-
-					return HANDLER_ERROR;
-				}
+				buffer_append_string_len(option_string, CONST_STR_LEN(" --SERVER="));
+				buffer_append_string_buffer(option_string, ds->value);
 			}
+
+			s->memc = memcached(CONST_BUF_LEN(option_string));
+
+			if (NULL == s->memc) {
+				log_error_write(srv, __FILE__, __LINE__, "sb",
+					"configuring memcached failed for option string:",
+					option_string);
+			}
+			buffer_free(option_string);
+
+			if (NULL == s->memc) return HANDLER_ERROR;
 #else
 			log_error_write(srv, __FILE__, __LINE__, "s",
 					"memcache support is not compiled in but trigger-before-download.memcache-hosts is set, aborting");
@@ -236,7 +249,7 @@ SETDEFAULTS_FUNC(mod_trigger_b4_dl_set_defaults) {
 		}
 
 
-#if (!defined(HAVE_GDBM_H) && !defined(HAVE_MEMCACHE_H)) || !defined(HAVE_PCRE_H)
+#if (!defined(HAVE_GDBM_H) && !defined(USE_MEMCACHED)) || !defined(HAVE_PCRE_H)
 		log_error_write(srv, __FILE__, __LINE__, "s",
 				"(either gdbm or libmemcache) and pcre are require, but were not found, aborting");
 		return HANDLER_ERROR;
@@ -263,8 +276,8 @@ static int mod_trigger_b4_dl_patch_connection(server *srv, connection *con, plug
 	PATCH(deny_url);
 	PATCH(mc_namespace);
 	PATCH(debug);
-#if defined(HAVE_MEMCACHE_H)
-	PATCH(mc);
+#if defined(USE_MEMCACHED)
+	PATCH(memc);
 #endif
 
 	/* skip the first, the global context */
@@ -300,8 +313,8 @@ static int mod_trigger_b4_dl_patch_connection(server *srv, connection *con, plug
 			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("trigger-before-download.memcache-namespace"))) {
 				PATCH(mc_namespace);
 			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("trigger-before-download.memcache-hosts"))) {
-#if defined(HAVE_MEMCACHE_H)
-				PATCH(mc);
+#if defined(USE_MEMCACHED)
+				PATCH(memc);
 #endif
 			}
 		}
@@ -329,11 +342,11 @@ URIHANDLER_FUNC(mod_trigger_b4_dl_uri_handler) {
 
 	if (!p->conf.trigger_regex || !p->conf.download_regex) return HANDLER_GO_ON;
 
-# if !defined(HAVE_GDBM_H) && !defined(HAVE_MEMCACHE_H)
+# if !defined(HAVE_GDBM_H) && !defined(USE_MEMCACHED)
 	return HANDLER_GO_ON;
-# elif defined(HAVE_GDBM_H) && defined(HAVE_MEMCACHE_H)
-	if (!p->conf.db && !p->conf.mc) return HANDLER_GO_ON;
-	if (p->conf.db && p->conf.mc) {
+# elif defined(HAVE_GDBM_H) && defined(USE_MEMCACHED)
+	if (!p->conf.db && !p->conf.memc) return HANDLER_GO_ON;
+	if (p->conf.db && p->conf.memc) {
 		/* can't decide which one */
 
 		return HANDLER_GO_ON;
@@ -341,7 +354,7 @@ URIHANDLER_FUNC(mod_trigger_b4_dl_uri_handler) {
 # elif defined(HAVE_GDBM_H)
 	if (!p->conf.db) return HANDLER_GO_ON;
 # else
-	if (!p->conf.mc) return HANDLER_GO_ON;
+	if (!p->conf.memc) return HANDLER_GO_ON;
 # endif
 
 	if (NULL != (ds = (data_string *)array_get_element(con->request.headers, "X-Forwarded-For"))) {
@@ -384,8 +397,8 @@ URIHANDLER_FUNC(mod_trigger_b4_dl_uri_handler) {
 			}
 		}
 # endif
-# if defined(HAVE_MEMCACHE_H)
-		if (p->conf.mc) {
+# if defined(USE_MEMCACHED)
+		if (p->conf.memc) {
 			size_t i, len;
 			buffer_copy_buffer(p->tmp_buf, p->conf.mc_namespace);
 			buffer_append_string(p->tmp_buf, remote_ip);
@@ -399,12 +412,12 @@ URIHANDLER_FUNC(mod_trigger_b4_dl_uri_handler) {
 				log_error_write(srv, __FILE__, __LINE__, "sb", "(debug) triggered IP:", p->tmp_buf);
 			}
 
-			if (0 != mc_set(p->conf.mc,
+			if (MEMCACHED_SUCCESS != memcached_set(p->conf.memc,
 					CONST_BUF_LEN(p->tmp_buf),
-					(char *)&(srv->cur_ts), sizeof(srv->cur_ts),
+					(const char *)&(srv->cur_ts), sizeof(srv->cur_ts),
 					p->conf.trigger_timeout, 0)) {
 				log_error_write(srv, __FILE__, __LINE__, "s",
-						"insert failed");
+					"insert failed");
 			}
 		}
 # endif
@@ -470,9 +483,8 @@ URIHANDLER_FUNC(mod_trigger_b4_dl_uri_handler) {
 		}
 # endif
 
-# if defined(HAVE_MEMCACHE_H)
-		if (p->conf.mc) {
-			void *r;
+# if defined(USE_MEMCACHED)
+		if (p->conf.memc) {
 			size_t i, len;
 
 			buffer_copy_buffer(p->tmp_buf, p->conf.mc_namespace);
@@ -493,10 +505,7 @@ URIHANDLER_FUNC(mod_trigger_b4_dl_uri_handler) {
 			 * and the timestamp is updated
 			 *
 			 */
-			if (NULL == (r = mc_aget(p->conf.mc,
-						 CONST_BUF_LEN(p->tmp_buf)
-						 ))) {
-
+			if (MEMCACHED_SUCCESS != memcached_exist(p->conf.memc, CONST_BUF_LEN(p->tmp_buf))) {
 				response_header_insert(srv, con, CONST_STR_LEN("Location"), CONST_BUF_LEN(p->conf.deny_url));
 
 				con->http_status = 307;
@@ -505,15 +514,13 @@ URIHANDLER_FUNC(mod_trigger_b4_dl_uri_handler) {
 				return HANDLER_FINISHED;
 			}
 
-			free(r);
-
 			/* set a new timeout */
-			if (0 != mc_set(p->conf.mc,
+			if (MEMCACHED_SUCCESS != memcached_set(p->conf.memc,
 					CONST_BUF_LEN(p->tmp_buf),
-					(char *)&(srv->cur_ts), sizeof(srv->cur_ts),
+					(const char *)&(srv->cur_ts), sizeof(srv->cur_ts),
 					p->conf.trigger_timeout, 0)) {
 				log_error_write(srv, __FILE__, __LINE__, "s",
-						"insert failed");
+					"insert failed");
 			}
 		}
 # endif

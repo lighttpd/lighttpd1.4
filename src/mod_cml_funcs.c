@@ -32,6 +32,8 @@ typedef char HASHHEX[HASHHEXLEN+1];
 
 #ifdef HAVE_LUA_H
 
+#include <lauxlib.h>
+
 int f_crypto_md5(lua_State *L) {
 	li_MD5_CTX Md5Ctx;
 	HASH HA1;
@@ -182,117 +184,87 @@ int f_file_isdir(lua_State *L) {
 
 
 
-#ifdef HAVE_MEMCACHE_H
+#ifdef USE_MEMCACHED
 int f_memcache_exists(lua_State *L) {
-	char *r;
-	int n = lua_gettop(L);
-	struct memcache *mc;
-	size_t s_len;
-	const char *s;
+	size_t key_len;
+	const char *key;
+	memcached_st *memc;
 
 	if (!lua_islightuserdata(L, lua_upvalueindex(1))) {
 		lua_pushstring(L, "where is my userdata ?");
 		lua_error(L);
 	}
 
-	mc = lua_touserdata(L, lua_upvalueindex(1));
+	memc = lua_touserdata(L, lua_upvalueindex(1));
 
-	if (n != 1) {
+	if (1 != lua_gettop(L)) {
 		lua_pushstring(L, "expected one argument");
 		lua_error(L);
 	}
 
-	if (!lua_isstring(L, 1)) {
-		lua_pushstring(L, "argument has to be a string");
-		lua_error(L);
-	}
-
-	s = lua_tolstring(L, 1, &s_len);
-	if (NULL == (r = mc_aget(mc, (char*) s, s_len))) {
-		lua_pushboolean(L, 0);
-		return 1;
-	}
-
-	free(r);
-
-	lua_pushboolean(L, 1);
+	key = luaL_checklstring(L, 1, &key_len);
+	lua_pushboolean(L, (MEMCACHED_SUCCESS == memcached_exist(memc, key, key_len)));
 	return 1;
 }
 
 int f_memcache_get_string(lua_State *L) {
-	char *r;
-	int n = lua_gettop(L);
-	size_t s_len;
-	const char *s;
-
-	struct memcache *mc;
+	size_t key_len, value_len;
+	char *value;
+	const char *key;
+	memcached_st *memc;
 
 	if (!lua_islightuserdata(L, lua_upvalueindex(1))) {
 		lua_pushstring(L, "where is my userdata ?");
 		lua_error(L);
 	}
 
-	mc = lua_touserdata(L, lua_upvalueindex(1));
+	memc = lua_touserdata(L, lua_upvalueindex(1));
 
-
-	if (n != 1) {
+	if (1 != lua_gettop(L)) {
 		lua_pushstring(L, "expected one argument");
 		lua_error(L);
 	}
 
-	if (!lua_isstring(L, 1)) {
-		lua_pushstring(L, "argument has to be a string");
-		lua_error(L);
-	}
-
-	s = lua_tolstring(L, 1, &s_len);
-	if (NULL == (r = mc_aget(mc, (char*) s, s_len))) {
+	key = luaL_checklstring(L, 1, &key_len);
+	if (NULL == (value = memcached_get(memc, key, key_len, &value_len, NULL, NULL))) {
 		lua_pushnil(L);
 		return 1;
 	}
 
-	lua_pushstring(L, r);
+	lua_pushlstring(L, value, value_len);
 
-	free(r);
+	free(value);
 
 	return 1;
 }
 
 int f_memcache_get_long(lua_State *L) {
-	char *r;
-	int n = lua_gettop(L);
-	size_t s_len;
-	const char *s;
-
-	struct memcache *mc;
+	size_t key_len, value_len;
+	char *value;
+	const char *key;
+	memcached_st *memc;
 
 	if (!lua_islightuserdata(L, lua_upvalueindex(1))) {
 		lua_pushstring(L, "where is my userdata ?");
 		lua_error(L);
 	}
 
-	mc = lua_touserdata(L, lua_upvalueindex(1));
+	memc = lua_touserdata(L, lua_upvalueindex(1));
 
-
-	if (n != 1) {
+	if (1 != lua_gettop(L)) {
 		lua_pushstring(L, "expected one argument");
 		lua_error(L);
 	}
 
-	if (!lua_isstring(L, 1)) {
-		lua_pushstring(L, "argument has to be a string");
-		lua_error(L);
-	}
-
-	s = lua_tolstring(L, 1, &s_len);
-	if (NULL == (r = mc_aget(mc, (char*) s, s_len))) {
+	key = luaL_checklstring(L, 1, &key_len);
+	if (NULL == (value = memcached_get(memc, key, key_len, &value_len, NULL, NULL))) {
 		lua_pushnil(L);
 		return 1;
 	}
 
-	lua_pushinteger(L, strtol(r, NULL, 10));
+	lua_pushinteger(L, strtol(value, NULL, 10));
 
-	free(r);
+	free(value);
 
 	return 1;
 }

@@ -484,7 +484,7 @@ static void show_features (void) {
 #else
       "\t- LDAP support\n"
 #endif
-#ifdef HAVE_MEMCACHE_H
+#ifdef USE_MEMCACHED
       "\t+ memcached support\n"
 #else
       "\t- memcached support\n"

@@ -109,12 +109,12 @@ modules = {
 	'mod_flv_streaming' : { 'src' : [ 'mod_flv_streaming.c' ] },
 	'mod_cml': {
 		'src' : [ 'mod_cml_lua.c', 'mod_cml.c', 'mod_cml_funcs.c' ],
-		'lib' : [ env['LIBPCRE'], env['LIBMEMCACHE'], env['LIBLUA'] ] 
+		'lib' : [ env['LIBPCRE'], env['LIBMEMCACHED'], env['LIBLUA'] ]
 	},
 }
 
-if env['with_memcache']:
-	modules[mod_trigger_b4_dl] = { 'src' : [ 'mod_trigger_b4_dl.c' ], 'lib' : [ env['LIBPCRE'], env['LIBMEMCACHE'] ] }
+if env['with_memcached']:
+	modules['mod_trigger_b4_dl'] = { 'src' : [ 'mod_trigger_b4_dl.c' ], 'lib' : [ env['LIBPCRE'], env['LIBMEMCACHED'] ] }
 
 if env['with_lua']:
 	modules['mod_magnet'] = { 'src' : [ 'mod_magnet.c', 'mod_magnet_cache.c' ], 'lib' : [ env['LIBLUA'] ] }
