@@ -53,6 +53,7 @@ data_count *data_count_init(void) {
 	data_count *ds;
 
 	ds = calloc(1, sizeof(*ds));
+	force_assert(NULL != ds);
 
 	ds->key = buffer_init();
 	ds->count = 1;

@@ -53,6 +53,7 @@ static plugin *plugin_init(void) {
 	plugin *p;
 
 	p = calloc(1, sizeof(*p));
+	force_assert(NULL != p);
 
 	return p;
 }
@@ -85,10 +86,12 @@ static int plugins_register(server *srv, plugin *p) {
 	if (0 == srv->plugins.size) {
 		srv->plugins.size = 4;
 		srv->plugins.ptr  = malloc(srv->plugins.size * sizeof(*ps));
+		force_assert(NULL != srv->plugins.ptr);
 		srv->plugins.used = 0;
 	} else if (srv->plugins.used == srv->plugins.size) {
 		srv->plugins.size += 4;
 		srv->plugins.ptr   = realloc(srv->plugins.ptr, srv->plugins.size * sizeof(*ps));
+		force_assert(NULL != srv->plugins.ptr);
 	}
 
 	ps = srv->plugins.ptr;
@@ -423,6 +426,7 @@ handler_t plugins_call_init(server *srv) {
 	/* fill slots */
 
 	srv->plugin_slots = calloc(PLUGIN_FUNC_SIZEOF, sizeof(ps));
+	force_assert(NULL != srv->plugin_slots);
 
 	for (i = 0; i < srv->plugins.used; i++) {
 		size_t j;
@@ -435,6 +439,7 @@ handler_t plugins_call_init(server *srv) {
 		plugin **slot = ((plugin ***)(srv->plugin_slots))[x]; \
 		if (!slot) { \
 			slot = calloc(srv->plugins.used, sizeof(*slot));\
+			force_assert(NULL != slot); \
 			((plugin ***)(srv->plugin_slots))[x] = slot; \
 		} \
 		for (j = 0; j < srv->plugins.used; j++) { \

@@ -199,6 +199,7 @@ int fdevent_freebsd_kqueue_init(fdevents *ev) {
 	ev->kq_fd = -1;
 
 	ev->kq_results = calloc(ev->maxfds, sizeof(*ev->kq_results));
+	force_assert(NULL != ev->kq_results);
 
 	/* check that kqueue works */
 

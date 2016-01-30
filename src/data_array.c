@@ -50,6 +50,7 @@ data_array *data_array_init(void) {
 	data_array *ds;
 
 	ds = calloc(1, sizeof(*ds));
+	force_assert(NULL != ds);
 
 	ds->key = buffer_init();
 	ds->value = array_init();

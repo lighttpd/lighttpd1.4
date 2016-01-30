@@ -48,12 +48,14 @@ static connection *connections_get_new_connection(server *srv) {
 		conns->size = 128;
 		conns->ptr = NULL;
 		conns->ptr = malloc(sizeof(*conns->ptr) * conns->size);
+		force_assert(NULL != conns->ptr);
 		for (i = 0; i < conns->size; i++) {
 			conns->ptr[i] = connection_init(srv);
 		}
 	} else if (conns->size == conns->used) {
 		conns->size += 128;
 		conns->ptr = realloc(conns->ptr, sizeof(*conns->ptr) * conns->size);
+		force_assert(NULL != conns->ptr);
 
 		for (i = conns->used; i < conns->size; i++) {
 			conns->ptr[i] = connection_init(srv);
@@ -646,6 +648,7 @@ connection *connection_init(server *srv) {
 	UNUSED(srv);
 
 	con = calloc(1, sizeof(*con));
+	force_assert(NULL != con);
 
 	con->fd = 0;
 	con->ndx = -1;
@@ -701,8 +704,10 @@ connection *connection_init(server *srv) {
 	/* init plugin specific connection structures */
 
 	con->plugin_ctx = calloc(1, (srv->plugins.used + 1) * sizeof(void *));
+	force_assert(NULL != con->plugin_ctx);
 
 	con->cond_cache = calloc(srv->config_context->used, sizeof(cond_cache_t));
+	force_assert(NULL != con->cond_cache);
 	config_setup_connection(srv, con);
 
 	return con;

@@ -16,8 +16,10 @@ fdevents *fdevent_init(server *srv, size_t maxfds, fdevent_handler_t type) {
 	fdevents *ev;
 
 	ev = calloc(1, sizeof(*ev));
+	force_assert(NULL != ev);
 	ev->srv = srv;
 	ev->fdarray = calloc(maxfds, sizeof(*ev->fdarray));
+	force_assert(NULL != ev->fdarray);
 	ev->maxfds = maxfds;
 
 	switch(type) {
@@ -107,6 +109,7 @@ static fdnode *fdnode_init(void) {
 	fdnode *fdn;
 
 	fdn = calloc(1, sizeof(*fdn));
+	force_assert(NULL != fdn);
 	fdn->fd = -1;
 	return fdn;
 }

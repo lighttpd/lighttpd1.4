@@ -143,6 +143,7 @@ int fdevent_linux_sysepoll_init(fdevents *ev) {
 	fd_close_on_exec(ev->epoll_fd);
 
 	ev->epoll_events = malloc(ev->maxfds * sizeof(*ev->epoll_events));
+	force_assert(NULL != ev->epoll_events);
 
 	return 0;
 }

@@ -141,6 +141,7 @@ int fdevent_solaris_devpoll_init(fdevents *ev) {
 	SET(event_get_revent);
 
 	ev->devpollfds = malloc(sizeof(*ev->devpollfds) * ev->maxfds);
+	force_assert(NULL != ev->devpollfds);
 
 	if ((ev->devpoll_fd = open("/dev/poll", O_RDWR)) < 0) {
 		log_error_write(ev->srv, __FILE__, __LINE__, "SSS",

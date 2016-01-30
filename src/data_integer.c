@@ -50,6 +50,7 @@ data_integer *data_integer_init(void) {
 	data_integer *ds;
 
 	ds = calloc(1, sizeof(*ds));
+	force_assert(NULL != ds);
 
 	ds->key = buffer_init();
 	ds->value = 0;

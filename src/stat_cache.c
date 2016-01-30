@@ -108,6 +108,7 @@ stat_cache *stat_cache_init(void) {
 	stat_cache *sc = NULL;
 
 	sc = calloc(1, sizeof(*sc));
+	force_assert(NULL != sc);
 
 	sc->dir_name = buffer_init();
 	sc->hash_key = buffer_init();
@@ -127,6 +128,7 @@ static stat_cache_entry * stat_cache_entry_init(void) {
 	stat_cache_entry *sce = NULL;
 
 	sce = calloc(1, sizeof(*sce));
+	force_assert(NULL != sce);
 
 	sce->name = buffer_init();
 	sce->etag = buffer_init();
@@ -151,6 +153,7 @@ static fam_dir_entry * fam_dir_entry_init(void) {
 	fam_dir_entry *fam_dir = NULL;
 
 	fam_dir = calloc(1, sizeof(*fam_dir));
+	force_assert(NULL != fam_dir);
 
 	fam_dir->name = buffer_init();
 
@@ -518,9 +521,11 @@ handler_t stat_cache_get_entry(server *srv, connection *con, buffer *name, stat_
 				ctrl.size = 16;
 				ctrl.used = 0;
 				ctrl.ptr = malloc(ctrl.size * sizeof(*ctrl.ptr));
+				force_assert(NULL != ctrl.ptr);
 			} else if (ctrl.size == ctrl.used) {
 				ctrl.size += 16;
 				ctrl.ptr = realloc(ctrl.ptr, ctrl.size * sizeof(*ctrl.ptr));
+				force_assert(NULL != ctrl.ptr);
 			}
 
 			ctrl.ptr[ctrl.used++] = file_ndx;
@@ -640,6 +645,7 @@ handler_t stat_cache_get_entry(server *srv, connection *con, buffer *name, stat_
 			fam_dir->version = 1;
 
 			fam_dir->req = calloc(1, sizeof(FAMRequest));
+			force_assert(NULL != fam_dir);
 
 			if (0 != FAMMonitorDirectory(&sc->fam, fam_dir->name->ptr,
 						     fam_dir->req, fam_dir)) {
@@ -719,6 +725,7 @@ int stat_cache_trigger_cleanup(server *srv) {
 	if (!sc->files) return 0;
 
 	keys = calloc(1, sizeof(int) * sc->files->size);
+	force_assert(NULL != keys);
 
 	stat_cache_tag_old_entries(srv, sc->files, keys, &max_ndx);
 

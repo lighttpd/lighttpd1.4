@@ -32,13 +32,15 @@ array *array_init_array(array *src) {
 	a->unique_ndx = src->unique_ndx;
 
 	a->data = malloc(sizeof(*src->data) * src->size);
+	force_assert(NULL != a->data);
 	for (i = 0; i < src->size; i++) {
 		if (src->data[i]) a->data[i] = src->data[i]->copy(src->data[i]);
 		else a->data[i] = NULL;
 	}
 
-	a->sorted = malloc(sizeof(*src->sorted)   * src->size);
-	memcpy(a->sorted, src->sorted, sizeof(*src->sorted)   * src->size);
+	a->sorted = malloc(sizeof(*src->sorted) * src->size);
+	force_assert(NULL != a->sorted);
+	memcpy(a->sorted, src->sorted, sizeof(*src->sorted) * src->size);
 	return a;
 }
 

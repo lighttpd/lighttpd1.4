@@ -24,6 +24,7 @@ chunkqueue *chunkqueue_init(void) {
 	chunkqueue *cq;
 
 	cq = calloc(1, sizeof(*cq));
+	force_assert(NULL != cq);
 
 	cq->first = NULL;
 	cq->last = NULL;
@@ -37,6 +38,7 @@ static chunk *chunk_init(void) {
 	chunk *c;
 
 	c = calloc(1, sizeof(*c));
+	force_assert(NULL != c);
 
 	c->type = MEM_CHUNK;
 	c->mem = buffer_init();

@@ -183,6 +183,7 @@ static int network_server_init(server *srv, buffer *host_token, specific_config 
 #endif
 
 	srv_socket = calloc(1, sizeof(*srv_socket));
+	force_assert(NULL != srv_socket);
 	srv_socket->fd = -1;
 	srv_socket->fde_ndx = -1;
 
@@ -460,9 +461,11 @@ static int network_server_init(server *srv, buffer *host_token, specific_config 
 		srv->srv_sockets.size = 4;
 		srv->srv_sockets.used = 0;
 		srv->srv_sockets.ptr = malloc(srv->srv_sockets.size * sizeof(server_socket*));
+		force_assert(NULL != srv->srv_sockets.ptr);
 	} else if (srv->srv_sockets.used == srv->srv_sockets.size) {
 		srv->srv_sockets.size += 4;
 		srv->srv_sockets.ptr = realloc(srv->srv_sockets.ptr, srv->srv_sockets.size * sizeof(server_socket*));
+		force_assert(NULL != srv->srv_sockets.ptr);
 	}
 
 	srv->srv_sockets.ptr[srv->srv_sockets.used++] = srv_socket;
