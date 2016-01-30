@@ -534,7 +534,9 @@ if test "$WITH_LUA" != "no"; then
           AC_DEFINE([HAVE_LUA], [1], [liblua])
           AC_DEFINE([HAVE_LUA_H], [1], [lua.h])
           found_lua=1
-        ], [])
+        ], [
+          AC_MSG_NOTICE([Couldn't find $luaname])
+        ])
       fi
     done
     if test "$found_lua" = "0"; then
