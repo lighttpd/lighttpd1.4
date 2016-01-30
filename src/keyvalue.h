@@ -72,12 +72,6 @@ typedef struct {
 } keyvalue;
 
 typedef struct {
-	char *key;
-
-	char *value;
-} s_keyvalue;
-
-typedef struct {
 #ifdef HAVE_PCRE_H
 	pcre *key;
 	pcre_extra *key_extra;
@@ -86,26 +80,11 @@ typedef struct {
 	buffer *value;
 } pcre_keyvalue;
 
-typedef enum { HTTP_AUTH_BASIC, HTTP_AUTH_DIGEST } httpauth_type;
-
 typedef struct {
-	char *key;
-
-	char *realm;
-	httpauth_type type;
-} httpauth_keyvalue;
-
-#define KVB(x) \
-typedef struct {\
-	x **kv; \
-	size_t used;\
-	size_t size;\
-} x ## _buffer
-
-KVB(keyvalue);
-KVB(s_keyvalue);
-KVB(httpauth_keyvalue);
-KVB(pcre_keyvalue);
+	pcre_keyvalue **kv;
+	size_t used;
+	size_t size;
+} pcre_keyvalue_buffer;
 
 const char *get_http_status_name(int i);
 const char *get_http_version_name(int i);
@@ -116,18 +95,6 @@ http_method_t get_http_method_key(const char *s);
 
 const char *keyvalue_get_value(keyvalue *kv, int k);
 int keyvalue_get_key(keyvalue *kv, const char *s);
-
-keyvalue_buffer *keyvalue_buffer_init(void);
-int keyvalue_buffer_append(keyvalue_buffer *kvb, int k, const char *value);
-void keyvalue_buffer_free(keyvalue_buffer *kvb);
-
-s_keyvalue_buffer *s_keyvalue_buffer_init(void);
-int s_keyvalue_buffer_append(s_keyvalue_buffer *kvb, const char *key, const char *value);
-void s_keyvalue_buffer_free(s_keyvalue_buffer *kvb);
-
-httpauth_keyvalue_buffer *httpauth_keyvalue_buffer_init(void);
-int httpauth_keyvalue_buffer_append(httpauth_keyvalue_buffer *kvb, const char *key, const char *realm, httpauth_type type);
-void httpauth_keyvalue_buffer_free(httpauth_keyvalue_buffer *kvb);
 
 pcre_keyvalue_buffer *pcre_keyvalue_buffer_init(void);
 int pcre_keyvalue_buffer_append(struct server *srv, pcre_keyvalue_buffer *kvb, const char *key, const char *value);

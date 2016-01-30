@@ -140,159 +140,6 @@ int keyvalue_get_key(keyvalue *kv, const char *s) {
 	return -1;
 }
 
-keyvalue_buffer *keyvalue_buffer_init(void) {
-	keyvalue_buffer *kvb;
-
-	kvb = calloc(1, sizeof(*kvb));
-
-	return kvb;
-}
-
-int keyvalue_buffer_append(keyvalue_buffer *kvb, int key, const char *value) {
-	size_t i;
-	if (kvb->size == 0) {
-		kvb->size = 4;
-
-		kvb->kv = malloc(kvb->size * sizeof(*kvb->kv));
-
-		for(i = 0; i < kvb->size; i++) {
-			kvb->kv[i] = calloc(1, sizeof(**kvb->kv));
-		}
-	} else if (kvb->used == kvb->size) {
-		kvb->size += 4;
-
-		kvb->kv = realloc(kvb->kv, kvb->size * sizeof(*kvb->kv));
-
-		for(i = kvb->used; i < kvb->size; i++) {
-			kvb->kv[i] = calloc(1, sizeof(**kvb->kv));
-		}
-	}
-
-	kvb->kv[kvb->used]->key = key;
-	kvb->kv[kvb->used]->value = strdup(value);
-
-	kvb->used++;
-
-	return 0;
-}
-
-void keyvalue_buffer_free(keyvalue_buffer *kvb) {
-	size_t i;
-
-	for (i = 0; i < kvb->size; i++) {
-		if (kvb->kv[i]->value) free(kvb->kv[i]->value);
-		free(kvb->kv[i]);
-	}
-
-	if (kvb->kv) free(kvb->kv);
-
-	free(kvb);
-}
-
-
-s_keyvalue_buffer *s_keyvalue_buffer_init(void) {
-	s_keyvalue_buffer *kvb;
-
-	kvb = calloc(1, sizeof(*kvb));
-
-	return kvb;
-}
-
-int s_keyvalue_buffer_append(s_keyvalue_buffer *kvb, const char *key, const char *value) {
-	size_t i;
-	if (kvb->size == 0) {
-		kvb->size = 4;
-		kvb->used = 0;
-
-		kvb->kv = malloc(kvb->size * sizeof(*kvb->kv));
-
-		for(i = 0; i < kvb->size; i++) {
-			kvb->kv[i] = calloc(1, sizeof(**kvb->kv));
-		}
-	} else if (kvb->used == kvb->size) {
-		kvb->size += 4;
-
-		kvb->kv = realloc(kvb->kv, kvb->size * sizeof(*kvb->kv));
-
-		for(i = kvb->used; i < kvb->size; i++) {
-			kvb->kv[i] = calloc(1, sizeof(**kvb->kv));
-		}
-	}
-
-	kvb->kv[kvb->used]->key = key ? strdup(key) : NULL;
-	kvb->kv[kvb->used]->value = strdup(value);
-
-	kvb->used++;
-
-	return 0;
-}
-
-void s_keyvalue_buffer_free(s_keyvalue_buffer *kvb) {
-	size_t i;
-
-	for (i = 0; i < kvb->size; i++) {
-		if (kvb->kv[i]->key) free(kvb->kv[i]->key);
-		if (kvb->kv[i]->value) free(kvb->kv[i]->value);
-		free(kvb->kv[i]);
-	}
-
-	if (kvb->kv) free(kvb->kv);
-
-	free(kvb);
-}
-
-
-httpauth_keyvalue_buffer *httpauth_keyvalue_buffer_init(void) {
-	httpauth_keyvalue_buffer *kvb;
-
-	kvb = calloc(1, sizeof(*kvb));
-
-	return kvb;
-}
-
-int httpauth_keyvalue_buffer_append(httpauth_keyvalue_buffer *kvb, const char *key, const char *realm, httpauth_type type) {
-	size_t i;
-	if (kvb->size == 0) {
-		kvb->size = 4;
-
-		kvb->kv = malloc(kvb->size * sizeof(*kvb->kv));
-
-		for(i = 0; i < kvb->size; i++) {
-			kvb->kv[i] = calloc(1, sizeof(**kvb->kv));
-		}
-	} else if (kvb->used == kvb->size) {
-		kvb->size += 4;
-
-		kvb->kv = realloc(kvb->kv, kvb->size * sizeof(*kvb->kv));
-
-		for(i = kvb->used; i < kvb->size; i++) {
-			kvb->kv[i] = calloc(1, sizeof(**kvb->kv));
-		}
-	}
-
-	kvb->kv[kvb->used]->key = strdup(key);
-	kvb->kv[kvb->used]->realm = strdup(realm);
-	kvb->kv[kvb->used]->type = type;
-
-	kvb->used++;
-
-	return 0;
-}
-
-void httpauth_keyvalue_buffer_free(httpauth_keyvalue_buffer *kvb) {
-	size_t i;
-
-	for (i = 0; i < kvb->size; i++) {
-		if (kvb->kv[i]->key) free(kvb->kv[i]->key);
-		if (kvb->kv[i]->realm) free(kvb->kv[i]->realm);
-		free(kvb->kv[i]);
-	}
-
-	if (kvb->kv) free(kvb->kv);
-
-	free(kvb);
-}
-
 
 const char *get_http_version_name(int i) {
 	return keyvalue_get_value(http_versions, i);
@@ -325,6 +172,7 @@ pcre_keyvalue_buffer *pcre_keyvalue_buffer_init(void) {
 	pcre_keyvalue_buffer *kvb;
 
 	kvb = calloc(1, sizeof(*kvb));
+	force_assert(NULL != kvb);
 
 	return kvb;
 }
@@ -345,17 +193,21 @@ int pcre_keyvalue_buffer_append(server *srv, pcre_keyvalue_buffer *kvb, const ch
 		kvb->used = 0;
 
 		kvb->kv = malloc(kvb->size * sizeof(*kvb->kv));
+		force_assert(NULL != kvb->kv);
 
 		for(i = 0; i < kvb->size; i++) {
 			kvb->kv[i] = calloc(1, sizeof(**kvb->kv));
+			force_assert(NULL != kvb->kv[i]);
 		}
 	} else if (kvb->used == kvb->size) {
 		kvb->size += 4;
 
 		kvb->kv = realloc(kvb->kv, kvb->size * sizeof(*kvb->kv));
+		force_assert(NULL != kvb->kv);
 
 		for(i = kvb->used; i < kvb->size; i++) {
 			kvb->kv[i] = calloc(1, sizeof(**kvb->kv));
+			force_assert(NULL != kvb->kv[i]);
 		}
 	}
 
