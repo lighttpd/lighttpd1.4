@@ -8,6 +8,7 @@ NEWS
   * add handling for lua 5.2 and 5.3 (fixes #2674)
   * use libmemcached instead of deprecated libmemcache
   * add force_assert for more allocation results
+  * [mod_cgi] use MAP_PRIVATE to mmap temporary file (fixes #2715)
 
 - 1.4.39 - 2016-01-02
   * [core] fix memset_s call (fixes #2698)
