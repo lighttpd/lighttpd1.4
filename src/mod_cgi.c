@@ -10,13 +10,13 @@
 #include "plugin.h"
 
 #include <sys/types.h>
+#include "sys-mmap.h"
 
 #ifdef __WIN32
 # include <winsock2.h>
 #else
 # include <sys/socket.h>
 # include <sys/wait.h>
-# include <sys/mman.h>
 # include <netinet/in.h>
 # include <arpa/inet.h>
 #endif
@@ -776,7 +776,7 @@ static int cgi_write_file_chunk_mmap(server *srv, connection *con, int fd, chunk
 		c->file.mmap.offset = mmap_align_offset(offset);
 		c->file.mmap.length = file_end - c->file.mmap.offset;
 
-		if (MAP_FAILED == (c->file.mmap.start = mmap(NULL, c->file.mmap.length, PROT_READ, MAP_SHARED, c->file.fd, c->file.mmap.offset))) {
+		if (MAP_FAILED == (c->file.mmap.start = mmap(NULL, c->file.mmap.length, PROT_READ, MAP_PRIVATE, c->file.fd, c->file.mmap.offset))) {
 			log_error_write(srv, __FILE__, __LINE__, "ssbdoo", "mmap failed:",
 				strerror(errno), c->file.name, c->file.fd, c->file.mmap.offset, (off_t) c->file.mmap.length);
 			return -1;
