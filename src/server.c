@@ -1119,7 +1119,7 @@ int main (int argc, char **argv) {
 							 * 
 							 * we also send it ourself
 							 */
-							if (!forwarded_sig_hup) {
+							if (!forwarded_sig_hup && 0 != srv->srvconf.max_worker) {
 								forwarded_sig_hup = 1;
 								kill(0, SIGHUP);
 							}
