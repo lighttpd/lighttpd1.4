@@ -286,6 +286,7 @@ static int network_server_init(server *srv, buffer *host_token, specific_config 
 			struct addrinfo hints, *res;
 			int r;
 
+		      #ifdef IPV6_V6ONLY
 			if (s->set_v6only) {
 				val = 1;
 				if (-1 == setsockopt(srv_socket->fd, IPPROTO_IPV6, IPV6_V6ONLY, &val, sizeof(val))) {
@@ -295,6 +296,7 @@ static int network_server_init(server *srv, buffer *host_token, specific_config 
 			} else {
 				log_error_write(srv, __FILE__, __LINE__, "s", "warning: server.set-v6only will be removed soon, update your config to have different sockets for ipv4 and ipv6");
 			}
+		      #endif
 
 			memset(&hints, 0, sizeof(hints));
 
