@@ -1092,11 +1092,10 @@ static int cgi_create_env(server *srv, connection *con, plugin_data *p, buffer *
 		/* exec the cgi */
 		execve(args[0], args, env.ptr);
 
-		/* log_error_write(srv, __FILE__, __LINE__, "sss", "CGI failed:", strerror(errno), args[0]); */
-
-		/* */
-		SEGFAULT();
-		break;
+		/* most log files may have been closed/redirected by this point,
+		 * though stderr might still point to lighttpd.breakage.log */
+		perror(args[0]);
+		_exit(1);
 	}
 	case -1:
 		/* error */
