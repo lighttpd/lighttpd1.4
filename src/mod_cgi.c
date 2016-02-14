@@ -1078,7 +1078,7 @@ static int cgi_create_env(server *srv, connection *con, plugin_data *p, buffer *
 			*c = '\0';
 
 			/* change to the physical directory */
-			if (-1 == chdir(con->physical.path->ptr)) {
+			if (-1 == chdir(c != con->physical.path->ptr ? con->physical.path->ptr : "/")) {
 				log_error_write(srv, __FILE__, __LINE__, "ssb", "chdir failed:", strerror(errno), con->physical.path);
 			}
 			*c = '/';
