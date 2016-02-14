@@ -9,6 +9,7 @@ NEWS
   * use libmemcached instead of deprecated libmemcache
   * add force_assert for more allocation results
   * [mod_cgi] use MAP_PRIVATE to mmap temporary file (fixes #2715)
+  * [core] do not send SIGHUP to process group unless server.max-workers is used (fixes #2711)
 
 - 1.4.39 - 2016-01-02
   * [core] fix memset_s call (fixes #2698)
