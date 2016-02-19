@@ -457,8 +457,17 @@ int buffer_caseless_compare(const char *a, size_t a_len, const char *b, size_t b
 	size_t const len = (a_len < b_len) ? a_len : b_len;
 	size_t i;
 
+	/* XXX: some existing usage of this routine expects sane behavior even
+	 * when NULL arg passed with size 1 (pretending '\0' byte exists (""))*/
+	if (a == NULL || b == NULL) {
+		return a_len < b_len ? -1 : (a_len > b_len);
+	}
+
+	/* XXX: some existing usage of this routine expects sane behavior even
+	 * when args passed do not end '\0', i.e. must compare len, not len-1 */
 	for (i = 0; i < len; ++i) {
-		unsigned char ca = a[i], cb = b[i];
+		int ca = ((unsigned char *)a)[i];
+		int cb = ((unsigned char *)b)[i];
 		if (ca == cb) continue;
 
 		/* always lowercase for transitive results */
