@@ -124,7 +124,6 @@ metaline ::= EOL.
 %type       aelement               {data_unset *}
 %type       condline               {data_config *}
 %type       condlines              {data_config *}
-%type       global                 {data_config *}
 %type       aelements              {array *}
 %type       array                  {array *}
 %type       key                    {buffer *}
@@ -132,9 +131,9 @@ metaline ::= EOL.
 
 %type       cond                   {config_cond_t }
 
-%destructor value                  { $$->free($$); }
-%destructor expression             { $$->free($$); }
-%destructor aelement               { $$->free($$); }
+%destructor value                  { if ($$) $$->free($$); }
+%destructor expression             { if ($$) $$->free($$); }
+%destructor aelement               { if ($$) $$->free($$); }
 %destructor aelements              { array_free($$); }
 %destructor array                  { array_free($$); }
 %destructor key                    { buffer_free($$); }
@@ -168,42 +167,44 @@ varline ::= key(A) ASSIGN expression(B). {
 }
 
 varline ::= key(A) APPEND expression(B). {
-  array *vars = ctx->current->value;
-  data_unset *du;
+  if (ctx->ok) {
+    array *vars = ctx->current->value;
+    data_unset *du;
 
-  if (strncmp(A->ptr, "env.", sizeof("env.") - 1) == 0) {
-    fprintf(stderr, "Appending env variable is not supported in conditional %d %s: %s\n",
-        ctx->current->context_ndx,
-        ctx->current->key->ptr, A->ptr);
-    ctx->ok = 0;
-  } else if (NULL != (du = array_get_element(vars, A->ptr))) {
-    /* exists in current block */
-    du = configparser_merge_data(du, B);
-    if (NULL == du) {
+    if (strncmp(A->ptr, "env.", sizeof("env.") - 1) == 0) {
+      fprintf(stderr, "Appending env variable is not supported in conditional %d %s: %s\n",
+          ctx->current->context_ndx,
+          ctx->current->key->ptr, A->ptr);
       ctx->ok = 0;
+    } else if (NULL != (du = array_get_element(vars, A->ptr))) {
+      /* exists in current block */
+      du = configparser_merge_data(du, B);
+      if (NULL == du) {
+        ctx->ok = 0;
+      }
+      else {
+        buffer_copy_buffer(du->key, A);
+        array_replace(vars, du);
+      }
+      B->free(B);
+    } else if (NULL != (du = configparser_get_variable(ctx, A))) {
+      du = configparser_merge_data(du, B);
+      if (NULL == du) {
+        ctx->ok = 0;
+      }
+      else {
+        buffer_copy_buffer(du->key, A);
+        array_insert_unique(ctx->current->value, du);
+      }
+      B->free(B);
+    } else {
+      buffer_copy_buffer(B->key, A);
+      array_insert_unique(ctx->current->value, B);
     }
-    else {
-      buffer_copy_buffer(du->key, A);
-      array_replace(vars, du);
-    }
-    B->free(B);
-  } else if (NULL != (du = configparser_get_variable(ctx, A))) {
-    du = configparser_merge_data(du, B);
-    if (NULL == du) {
-      ctx->ok = 0;
-    }
-    else {
-      buffer_copy_buffer(du->key, A);
-      array_insert_unique(ctx->current->value, du);
-    }
-    B->free(B);
-  } else {
-    buffer_copy_buffer(B->key, A);
-    array_insert_unique(ctx->current->value, B);
+    buffer_free(A);
+    A = NULL;
+    B = NULL;
   }
-  buffer_free(A);
-  A = NULL;
-  B = NULL;
 }
 
 key(A) ::= LKEY(B). {
@@ -219,13 +220,16 @@ key(A) ::= LKEY(B). {
 }
 
 expression(A) ::= expression(B) PLUS value(C). {
-  A = configparser_merge_data(B, C);
-  if (NULL == A) {
-    ctx->ok = 0;
+  A = NULL;
+  if (ctx->ok) {
+    A = configparser_merge_data(B, C);
+    if (NULL == A) {
+      ctx->ok = 0;
+    }
+    B = NULL;
+    C->free(C);
+    C = NULL;
   }
-  B = NULL;
-  C->free(C);
-  C = NULL;
 }
 
 expression(A) ::= value(B). {
@@ -235,29 +239,27 @@ expression(A) ::= value(B). {
 
 value(A) ::= key(B). {
   A = NULL;
-  if (strncmp(B->ptr, "env.", sizeof("env.") - 1) == 0) {
-    char *env;
+  if (ctx->ok) {
+    if (strncmp(B->ptr, "env.", sizeof("env.") - 1) == 0) {
+      char *env;
 
-    if (NULL != (env = getenv(B->ptr + 4))) {
-      data_string *ds;
-      ds = data_string_init();
-      buffer_append_string(ds->value, env);
-      A = (data_unset *)ds;
-    }
-    else {
-      fprintf(stderr, "Undefined env variable: %s\n", B->ptr + 4);
+      if (NULL != (env = getenv(B->ptr + 4))) {
+        data_string *ds;
+        ds = data_string_init();
+        buffer_append_string(ds->value, env);
+        A = (data_unset *)ds;
+      }
+      else {
+        fprintf(stderr, "Undefined env variable: %s\n", B->ptr + 4);
+        ctx->ok = 0;
+      }
+    } else if (NULL == (A = configparser_get_variable(ctx, B))) {
+      fprintf(stderr, "Undefined config variable: %s\n", B->ptr);
       ctx->ok = 0;
     }
-  } else if (NULL == (A = configparser_get_variable(ctx, B))) {
-    fprintf(stderr, "Undefined config variable: %s\n", B->ptr);
-    ctx->ok = 0;
+    buffer_free(B);
+    B = NULL;
   }
-  if (!A) {
-    /* make a dummy so it won't crash */
-    A = (data_unset *)data_string_init();
-  }
-  buffer_free(B);
-  B = NULL;
 }
 
 value(A) ::= STRING(B). {
@@ -288,20 +290,23 @@ array(A) ::= LPARAN aelements(B) RPARAN. {
 }
 
 aelements(A) ::= aelements(C) COMMA aelement(B). {
-  if (buffer_is_empty(B->key) ||
-      NULL == array_get_element(C, B->key->ptr)) {
-    array_insert_unique(C, B);
-    B = NULL;
-  } else {
-    fprintf(stderr, "Duplicate array-key: %s\n",
-            B->key->ptr);
-    ctx->ok = 0;
-    B->free(B);
-    B = NULL;
-  }
+  A = NULL;
+  if (ctx->ok) {
+    if (buffer_is_empty(B->key) ||
+        NULL == array_get_element(C, B->key->ptr)) {
+      array_insert_unique(C, B);
+      B = NULL;
+    } else {
+      fprintf(stderr, "Duplicate array-key: %s\n",
+              B->key->ptr);
+      ctx->ok = 0;
+      B->free(B);
+      B = NULL;
+    }
 
-  A = C;
-  C = NULL;
+    A = C;
+    C = NULL;
+  }
 }
 
 aelements(A) ::= aelements(C) COMMA. {
@@ -310,9 +315,12 @@ aelements(A) ::= aelements(C) COMMA. {
 }
 
 aelements(A) ::= aelement(B). {
-  A = array_init();
-  array_insert_unique(A, B);
-  B = NULL;
+  A = NULL;
+  if (ctx->ok) {
+    A = array_init();
+    array_insert_unique(A, B);
+    B = NULL;
+  }
 }
 
 aelement(A) ::= expression(B). {
@@ -320,12 +328,15 @@ aelement(A) ::= expression(B). {
   B = NULL;
 }
 aelement(A) ::= stringop(B) ARRAY_ASSIGN expression(C). {
-  buffer_copy_buffer(C->key, B);
-  buffer_free(B);
-  B = NULL;
+  A = NULL;
+  if (ctx->ok) {
+    buffer_copy_buffer(C->key, B);
+    buffer_free(B);
+    B = NULL;
 
-  A = C;
-  C = NULL;
+    A = C;
+    C = NULL;
+  }
 }
 
 eols ::= EOL.
@@ -338,27 +349,25 @@ globalstart ::= GLOBAL. {
   configparser_push(ctx, dc, 0);
 }
 
-global(A) ::= globalstart LCURLY metalines RCURLY. {
-  data_config *cur;
-
-  cur = ctx->current;
+global ::= globalstart LCURLY metalines RCURLY. {
+  force_assert(ctx->current);
   configparser_pop(ctx);
-
-  force_assert(cur && ctx->current);
-
-  A = cur;
+  force_assert(ctx->current);
 }
 
 condlines(A) ::= condlines(B) eols ELSE condline(C). {
-  if (B->context_ndx >= C->context_ndx) {
-    fprintf(stderr, "unreachable else condition\n");
-    ctx->ok = 0;
+  A = NULL;
+  if (ctx->ok) {
+    if (B->context_ndx >= C->context_ndx) {
+      fprintf(stderr, "unreachable else condition\n");
+      ctx->ok = 0;
+    }
+    C->prev = B;
+    B->next = C;
+    A = C;
+    B = NULL;
+    C = NULL;
   }
-  C->prev = B;
-  B->next = C;
-  A = C;
-  B = NULL;
-  C = NULL;
 }
 
 condlines(A) ::= condline(B). {
@@ -367,14 +376,17 @@ condlines(A) ::= condline(B). {
 }
 
 condline(A) ::= context LCURLY metalines RCURLY. {
-  data_config *cur;
+  A = NULL;
+  if (ctx->ok) {
+    data_config *cur;
 
-  cur = ctx->current;
-  configparser_pop(ctx);
+    cur = ctx->current;
+    configparser_pop(ctx);
 
-  force_assert(cur && ctx->current);
+    force_assert(cur && ctx->current);
 
-  A = cur;
+    A = cur;
+  }
 }
 
 context ::= DOLLAR SRVVARNAME(B) LBRACKET stringop(C) RBRACKET cond(E) expression(D). {
@@ -386,145 +398,146 @@ context ::= DOLLAR SRVVARNAME(B) LBRACKET stringop(C) RBRACKET cond(E) expressio
     ctx->ok = 0;
   }
 
-  switch(E) {
-  case CONFIG_COND_NE:
-    op = buffer_init_string("!=");
-    break;
-  case CONFIG_COND_EQ:
-    op = buffer_init_string("==");
-    break;
-  case CONFIG_COND_NOMATCH:
-    op = buffer_init_string("!~");
-    break;
-  case CONFIG_COND_MATCH:
-    op = buffer_init_string("=~");
-    break;
-  default:
-    force_assert(0);
-    return;
-  }
-
-  b = buffer_init();
-  buffer_copy_buffer(b, ctx->current->key);
-  buffer_append_string(b, "/");
-  buffer_append_string_buffer(b, B);
-  buffer_append_string_buffer(b, C);
-  buffer_append_string_buffer(b, op);
-  rvalue = ((data_string*)D)->value;
-  buffer_append_string_buffer(b, rvalue);
-
-  if (NULL != (dc = (data_config *)array_get_element(ctx->all_configs, b->ptr))) {
-    configparser_push(ctx, dc, 0);
-  } else {
-    struct {
-      comp_key_t comp;
-      char *comp_key;
-      size_t len;
-    } comps[] = {
-      { COMP_SERVER_SOCKET,      CONST_STR_LEN("SERVER[\"socket\"]"   ) },
-      { COMP_HTTP_URL,           CONST_STR_LEN("HTTP[\"url\"]"        ) },
-      { COMP_HTTP_HOST,          CONST_STR_LEN("HTTP[\"host\"]"       ) },
-      { COMP_HTTP_REFERER,       CONST_STR_LEN("HTTP[\"referer\"]"    ) },
-      { COMP_HTTP_USER_AGENT,    CONST_STR_LEN("HTTP[\"useragent\"]"  ) },
-      { COMP_HTTP_USER_AGENT,    CONST_STR_LEN("HTTP[\"user-agent\"]"  ) },
-      { COMP_HTTP_LANGUAGE,      CONST_STR_LEN("HTTP[\"language\"]"   ) },
-      { COMP_HTTP_COOKIE,        CONST_STR_LEN("HTTP[\"cookie\"]"     ) },
-      { COMP_HTTP_REMOTE_IP,     CONST_STR_LEN("HTTP[\"remoteip\"]"   ) },
-      { COMP_HTTP_REMOTE_IP,     CONST_STR_LEN("HTTP[\"remote-ip\"]"   ) },
-      { COMP_HTTP_QUERY_STRING,  CONST_STR_LEN("HTTP[\"querystring\"]") },
-      { COMP_HTTP_QUERY_STRING,  CONST_STR_LEN("HTTP[\"query-string\"]") },
-      { COMP_HTTP_REQUEST_METHOD, CONST_STR_LEN("HTTP[\"request-method\"]") },
-      { COMP_HTTP_SCHEME,        CONST_STR_LEN("HTTP[\"scheme\"]"     ) },
-      { COMP_UNSET, NULL, 0 },
-    };
-    size_t i;
-
-    dc = data_config_init();
-
-    buffer_copy_buffer(dc->key, b);
-    buffer_copy_buffer(dc->op, op);
-    buffer_copy_buffer(dc->comp_key, B);
-    buffer_append_string_len(dc->comp_key, CONST_STR_LEN("[\""));
-    buffer_append_string_buffer(dc->comp_key, C);
-    buffer_append_string_len(dc->comp_key, CONST_STR_LEN("\"]"));
-    dc->cond = E;
-
-    for (i = 0; comps[i].comp_key; i ++) {
-      if (buffer_is_equal_string(
-            dc->comp_key, comps[i].comp_key, comps[i].len)) {
-        dc->comp = comps[i].comp;
-        break;
-      }
-    }
-    if (COMP_UNSET == dc->comp) {
-      fprintf(stderr, "error comp_key %s", dc->comp_key->ptr);
-      ctx->ok = 0;
-    }
-
+  if (ctx->ok) {
     switch(E) {
     case CONFIG_COND_NE:
+      op = buffer_init_string("!=");
+      break;
     case CONFIG_COND_EQ:
-      dc->string = buffer_init_buffer(rvalue);
+      op = buffer_init_string("==");
       break;
     case CONFIG_COND_NOMATCH:
-    case CONFIG_COND_MATCH: {
-#ifdef HAVE_PCRE_H
-      const char *errptr;
-      int erroff, captures;
-
-      if (NULL == (dc->regex =
-          pcre_compile(rvalue->ptr, 0, &errptr, &erroff, NULL))) {
-        dc->string = buffer_init_string(errptr);
-        dc->cond = CONFIG_COND_UNSET;
-
-        fprintf(stderr, "parsing regex failed: %s -> %s at offset %d\n",
-            rvalue->ptr, errptr, erroff);
-
-        ctx->ok = 0;
-      } else if (NULL == (dc->regex_study =
-          pcre_study(dc->regex, 0, &errptr)) &&
-                 errptr != NULL) {
-        fprintf(stderr, "studying regex failed: %s -> %s\n",
-            rvalue->ptr, errptr);
-        ctx->ok = 0;
-      } else if (0 != (pcre_fullinfo(dc->regex, dc->regex_study, PCRE_INFO_CAPTURECOUNT, &captures))) {
-        fprintf(stderr, "getting capture count for regex failed: %s\n",
-            rvalue->ptr);
-        ctx->ok = 0;
-      } else if (captures > 9) {
-        fprintf(stderr, "Too many captures in regex, use (?:...) instead of (...): %s\n",
-            rvalue->ptr);
-        ctx->ok = 0;
-      } else {
-        dc->string = buffer_init_buffer(rvalue);
-      }
-#else
-      fprintf(stderr, "can't handle '$%s[%s] =~ ...' as you compiled without pcre support. \n"
-		      "(perhaps just a missing pcre-devel package ?) \n",
-                      B->ptr, C->ptr);
-      ctx->ok = 0;
-#endif
+      op = buffer_init_string("!~");
       break;
-    }
-
+    case CONFIG_COND_MATCH:
+      op = buffer_init_string("=~");
+      break;
     default:
-      fprintf(stderr, "unknown condition for $%s[%s]\n",
-                      B->ptr, C->ptr);
-      ctx->ok = 0;
-      break;
+      force_assert(0);
+      return; /* unreachable */
     }
 
-    configparser_push(ctx, dc, 1);
-  }
+    b = buffer_init();
+    buffer_copy_buffer(b, ctx->current->key);
+    buffer_append_string(b, "/");
+    buffer_append_string_buffer(b, B);
+    buffer_append_string_buffer(b, C);
+    buffer_append_string_buffer(b, op);
+    rvalue = ((data_string*)D)->value;
+    buffer_append_string_buffer(b, rvalue);
 
-  buffer_free(b);
-  buffer_free(op);
-  buffer_free(B);
-  B = NULL;
-  buffer_free(C);
-  C = NULL;
-  D->free(D);
-  D = NULL;
+    if (NULL != (dc = (data_config *)array_get_element(ctx->all_configs, b->ptr))) {
+      configparser_push(ctx, dc, 0);
+    } else {
+      static const struct {
+        comp_key_t comp;
+        char *comp_key;
+        size_t len;
+      } comps[] = {
+        { COMP_SERVER_SOCKET,      CONST_STR_LEN("SERVER[\"socket\"]"   ) },
+        { COMP_HTTP_URL,           CONST_STR_LEN("HTTP[\"url\"]"        ) },
+        { COMP_HTTP_HOST,          CONST_STR_LEN("HTTP[\"host\"]"       ) },
+        { COMP_HTTP_REFERER,       CONST_STR_LEN("HTTP[\"referer\"]"    ) },
+        { COMP_HTTP_USER_AGENT,    CONST_STR_LEN("HTTP[\"useragent\"]"  ) },
+        { COMP_HTTP_USER_AGENT,    CONST_STR_LEN("HTTP[\"user-agent\"]"  ) },
+        { COMP_HTTP_LANGUAGE,      CONST_STR_LEN("HTTP[\"language\"]"   ) },
+        { COMP_HTTP_COOKIE,        CONST_STR_LEN("HTTP[\"cookie\"]"     ) },
+        { COMP_HTTP_REMOTE_IP,     CONST_STR_LEN("HTTP[\"remoteip\"]"   ) },
+        { COMP_HTTP_REMOTE_IP,     CONST_STR_LEN("HTTP[\"remote-ip\"]"   ) },
+        { COMP_HTTP_QUERY_STRING,  CONST_STR_LEN("HTTP[\"querystring\"]") },
+        { COMP_HTTP_QUERY_STRING,  CONST_STR_LEN("HTTP[\"query-string\"]") },
+        { COMP_HTTP_REQUEST_METHOD, CONST_STR_LEN("HTTP[\"request-method\"]") },
+        { COMP_HTTP_SCHEME,        CONST_STR_LEN("HTTP[\"scheme\"]"     ) },
+        { COMP_UNSET, NULL, 0 },
+      };
+      size_t i;
+
+      dc = data_config_init();
+
+      buffer_copy_buffer(dc->key, b);
+      buffer_copy_buffer(dc->op, op);
+      buffer_copy_buffer(dc->comp_key, B);
+      buffer_append_string_len(dc->comp_key, CONST_STR_LEN("[\""));
+      buffer_append_string_buffer(dc->comp_key, C);
+      buffer_append_string_len(dc->comp_key, CONST_STR_LEN("\"]"));
+      dc->cond = E;
+
+      for (i = 0; comps[i].comp_key; i ++) {
+        if (buffer_is_equal_string(
+              dc->comp_key, comps[i].comp_key, comps[i].len)) {
+          dc->comp = comps[i].comp;
+          break;
+        }
+      }
+      if (COMP_UNSET == dc->comp) {
+        fprintf(stderr, "error comp_key %s", dc->comp_key->ptr);
+        ctx->ok = 0;
+      }
+      else switch(E) {
+      case CONFIG_COND_NE:
+      case CONFIG_COND_EQ:
+        dc->string = buffer_init_buffer(rvalue);
+        break;
+      case CONFIG_COND_NOMATCH:
+      case CONFIG_COND_MATCH: {
+#ifdef HAVE_PCRE_H
+        const char *errptr;
+        int erroff, captures;
+
+        if (NULL == (dc->regex =
+            pcre_compile(rvalue->ptr, 0, &errptr, &erroff, NULL))) {
+          dc->string = buffer_init_string(errptr);
+          dc->cond = CONFIG_COND_UNSET;
+
+          fprintf(stderr, "parsing regex failed: %s -> %s at offset %d\n",
+              rvalue->ptr, errptr, erroff);
+
+          ctx->ok = 0;
+        } else if (NULL == (dc->regex_study =
+            pcre_study(dc->regex, 0, &errptr)) &&
+                   errptr != NULL) {
+          fprintf(stderr, "studying regex failed: %s -> %s\n",
+              rvalue->ptr, errptr);
+          ctx->ok = 0;
+        } else if (0 != (pcre_fullinfo(dc->regex, dc->regex_study, PCRE_INFO_CAPTURECOUNT, &captures))) {
+          fprintf(stderr, "getting capture count for regex failed: %s\n",
+              rvalue->ptr);
+          ctx->ok = 0;
+        } else if (captures > 9) {
+          fprintf(stderr, "Too many captures in regex, use (?:...) instead of (...): %s\n",
+              rvalue->ptr);
+          ctx->ok = 0;
+        } else {
+          dc->string = buffer_init_buffer(rvalue);
+        }
+#else
+        fprintf(stderr, "can't handle '$%s[%s] =~ ...' as you compiled without pcre support. \n"
+                        "(perhaps just a missing pcre-devel package ?) \n",
+                        B->ptr, C->ptr);
+        ctx->ok = 0;
+ #endif
+        break;
+      }
+
+      default:
+        fprintf(stderr, "unknown condition for $%s[%s]\n",
+                        B->ptr, C->ptr);
+        ctx->ok = 0;
+        break;
+      }
+
+      if (ctx->ok) configparser_push(ctx, dc, 1);
+    }
+
+    buffer_free(b);
+    buffer_free(op);
+    buffer_free(B);
+    B = NULL;
+    buffer_free(C);
+    C = NULL;
+    D->free(D);
+    D = NULL;
+  }
 }
 cond(A) ::= EQ. {
   A = CONFIG_COND_EQ;
