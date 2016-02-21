@@ -264,7 +264,8 @@ static cond_result_t config_check_cond_nocache(server *srv, connection *con, dat
 		}
 
 		/* make sure prev is checked first */
-		config_check_cond_cached(srv, con, dc->prev);
+		if (config_check_cond_cached(srv, con, dc->prev) != COND_RESULT_FALSE) /* prev true or prev unset */
+			return con->cond_cache[dc->context_ndx].result; /* false if prev true; unset if prev unset */
 
 		/* one of prev set me to FALSE */
 		switch (con->cond_cache[dc->context_ndx].result) {
