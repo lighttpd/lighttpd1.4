@@ -225,11 +225,22 @@ static unsigned short sock_addr_get_port(sock_addr *addr) {
 #endif
 }
 
+static const char* cond_result_to_string(cond_result_t cond_result) {
+	switch (cond_result) {
+	case COND_RESULT_UNSET: return "unset";
+	case COND_RESULT_SKIP: return "skipped";
+	case COND_RESULT_FALSE: return "false";
+	case COND_RESULT_TRUE: return "true";
+	default: return "invalid cond_result_t";
+	}
+}
+
 static cond_result_t config_check_cond_cached(server *srv, connection *con, data_config *dc);
 
 static cond_result_t config_check_cond_nocache(server *srv, connection *con, data_config *dc) {
 	buffer *l;
 	server_socket *srv_sock = con->srv_socket;
+	cond_cache_t *cache = &con->cond_cache[dc->context_ndx];
 
 	/* check parent first */
 	if (dc->parent && dc->parent->context_ndx) {
@@ -243,21 +254,23 @@ static cond_result_t config_check_cond_nocache(server *srv, connection *con, dat
 		}
 
 		switch (config_check_cond_cached(srv, con, dc->parent)) {
-		case COND_RESULT_FALSE:
-			return COND_RESULT_FALSE;
 		case COND_RESULT_UNSET:
+			/* decide later */
 			return COND_RESULT_UNSET;
-		default:
+		case COND_RESULT_SKIP:
+		case COND_RESULT_FALSE:
+			/* failed precondition */
+			return COND_RESULT_SKIP;
+		case COND_RESULT_TRUE:
+			/* proceed */
 			break;
 		}
 	}
 
 	if (dc->prev) {
 		/**
-		 * a else branch
-		 *
-		 * we can only be executed, if all of our previous brothers 
-		 * are false
+		 * a else branch; can only be executed if the previous branch
+		 * was evaluated as "false" (not unset/skipped/true)
 		 */
 		if (con->conf.log_condition_handling) {
 			log_error_write(srv, __FILE__, __LINE__,  "sb", "go prev", dc->prev->key);
@@ -266,18 +279,14 @@ static cond_result_t config_check_cond_nocache(server *srv, connection *con, dat
 		/* make sure prev is checked first */
 		switch (config_check_cond_cached(srv, con, dc->prev)) {
 		case COND_RESULT_UNSET:
+			/* decide later */
 			return COND_RESULT_UNSET;
-		case COND_RESULT_FALSE:
-			break;
+		case COND_RESULT_SKIP:
 		case COND_RESULT_TRUE:
-			return COND_RESULT_FALSE;
-		}
-
-		/* one of prev set me to FALSE */
-		switch (con->cond_cache[dc->context_ndx].result) {
+			/* failed precondition */
+			return COND_RESULT_SKIP;
 		case COND_RESULT_FALSE:
-			return con->cond_cache[dc->context_ndx].result;
-		default:
+			/* proceed */
 			break;
 		}
 	}
@@ -287,10 +296,19 @@ static cond_result_t config_check_cond_nocache(server *srv, connection *con, dat
 			log_error_write(srv, __FILE__, __LINE__,  "dss", 
 				dc->comp,
 				dc->key->ptr,
-				con->conditional_is_valid[dc->comp] ? "yeah" : "nej");
+				"not available yet");
 		}
 
 		return COND_RESULT_UNSET;
+	}
+
+	/* if we had a real result before and weren't cleared just return it */
+	switch (cache->local_result) {
+	case COND_RESULT_TRUE:
+	case COND_RESULT_FALSE:
+		return cache->local_result;
+	default:
+		break;
 	}
 
 	/* pass the rules */
@@ -499,7 +517,6 @@ static cond_result_t config_check_cond_nocache(server *srv, connection *con, dat
 #ifdef HAVE_PCRE_H
 	case CONFIG_COND_NOMATCH:
 	case CONFIG_COND_MATCH: {
-		cond_cache_t *cache = &con->cond_cache[dc->context_ndx];
 		int n;
 
 #ifndef elementsof
@@ -511,7 +528,6 @@ static cond_result_t config_check_cond_nocache(server *srv, connection *con, dat
 		cache->patterncount = n;
 		if (n > 0) {
 			cache->comp_value = l;
-			cache->comp_type  = dc->comp;
 			return (dc->cond == CONFIG_COND_MATCH) ? COND_RESULT_TRUE : COND_RESULT_FALSE;
 		} else {
 			/* cache is already cleared */
@@ -532,35 +548,54 @@ static cond_result_t config_check_cond_cached(server *srv, connection *con, data
 	cond_cache_t *caches = con->cond_cache;
 
 	if (COND_RESULT_UNSET == caches[dc->context_ndx].result) {
-		if (COND_RESULT_TRUE == (caches[dc->context_ndx].result = config_check_cond_nocache(srv, con, dc))) {
-			if (dc->next) {
-				data_config *c;
-				if (con->conf.log_condition_handling) {
-					log_error_write(srv, __FILE__, __LINE__, "s",
-							"setting remains of chaining to false");
-				}
-				for (c = dc->next; c; c = c->next) {
-					caches[c->context_ndx].result = COND_RESULT_FALSE;
-				}
-			}
+		caches[dc->context_ndx].result = config_check_cond_nocache(srv, con, dc);
+		switch (caches[dc->context_ndx].result) {
+		case COND_RESULT_FALSE:
+		case COND_RESULT_TRUE:
+			/* remember result of local condition for a partial reset */
+			caches[dc->context_ndx].local_result = caches[dc->context_ndx].result;
+			break;
+		default:
+			break;
 		}
-		caches[dc->context_ndx].comp_type = dc->comp;
 
 		if (con->conf.log_condition_handling) {
-			log_error_write(srv, __FILE__, __LINE__, "dss", dc->context_ndx,
-					"(uncached) result:",
-					caches[dc->context_ndx].result == COND_RESULT_UNSET ? "unknown" :
-						(caches[dc->context_ndx].result == COND_RESULT_TRUE ? "true" : "false"));
+			log_error_write(srv, __FILE__, __LINE__, "dss",
+				dc->context_ndx,
+				"(uncached) result:",
+				cond_result_to_string(caches[dc->context_ndx].result));
 		}
 	} else {
 		if (con->conf.log_condition_handling) {
-			log_error_write(srv, __FILE__, __LINE__, "dss", dc->context_ndx,
-					"(cached) result:",
-					caches[dc->context_ndx].result == COND_RESULT_UNSET ? "unknown" : 
-						(caches[dc->context_ndx].result == COND_RESULT_TRUE ? "true" : "false"));
+			log_error_write(srv, __FILE__, __LINE__, "dss",
+				dc->context_ndx,
+				"(cached) result:",
+				cond_result_to_string(caches[dc->context_ndx].result));
 		}
 	}
 	return caches[dc->context_ndx].result;
+}
+
+/* if we reset the cache result for a node, we also need to clear all
+ * child nodes and else-branches*/
+static void config_cond_clear_node(server *srv, connection *con, data_config *dc) {
+	/* if a node is "unset" all children are unset too */
+	if (con->cond_cache[dc->context_ndx].result != COND_RESULT_UNSET) {
+		size_t i;
+
+		con->cond_cache[dc->context_ndx].patterncount = 0;
+		con->cond_cache[dc->context_ndx].comp_value = NULL;
+		con->cond_cache[dc->context_ndx].result = COND_RESULT_UNSET;
+
+		for (i = 0; i < dc->children->used; ++i) {
+			data_config *dc_child = (data_config*) dc->children->data[i];
+			if (NULL == dc_child->prev) {
+				/* only call for first node in if-else chain */
+				config_cond_clear_node(srv, con, dc_child);
+			}
+		}
+		if (NULL != dc->next) config_cond_clear_node(srv, con, dc->next);
+	}
 }
 
 /**
@@ -572,11 +607,13 @@ void config_cond_cache_reset_item(server *srv, connection *con, comp_key_t item)
 	size_t i;
 
 	for (i = 0; i < srv->config_context->used; i++) {
-		if (item == COMP_LAST_ELEMENT || 
-		    con->cond_cache[i].comp_type == item) {
-			con->cond_cache[i].result = COND_RESULT_UNSET;
-			con->cond_cache[i].patterncount = 0;
-			con->cond_cache[i].comp_value = NULL;
+		data_config *dc = (data_config *)srv->config_context->data[i];
+
+		if (item == dc->comp) {
+			/* clear local_result */
+			con->cond_cache[i].local_result = COND_RESULT_UNSET;
+			/* clear result in subtree (including the node itself) */
+			config_cond_clear_node(srv, con, dc);
 		}
 	}
 }
@@ -587,7 +624,13 @@ void config_cond_cache_reset_item(server *srv, connection *con, comp_key_t item)
 void config_cond_cache_reset(server *srv, connection *con) {
 	size_t i;
 
-	config_cond_cache_reset_all_items(srv, con);
+	/* resetting all entries; no need to follow children as in config_cond_cache_reset_item */
+	for (i = 0; i < srv->config_context->used; i++) {
+		con->cond_cache[i].result = COND_RESULT_UNSET;
+		con->cond_cache[i].local_result = COND_RESULT_UNSET;
+		con->cond_cache[i].patterncount = 0;
+		con->cond_cache[i].comp_value = NULL;
+	}
 
 	for (i = 0; i < COMP_LAST_ELEMENT; i++) {
 		con->conditional_is_valid[i] = 0;
@@ -614,4 +657,3 @@ int config_append_cond_match_buffer(connection *con, data_config *dc, buffer *bu
 			cache->matches[n + 1] - cache->matches[n]);
 	return 1;
 }
-

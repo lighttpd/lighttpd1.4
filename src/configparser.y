@@ -17,7 +17,7 @@ static void configparser_push(config_t *ctx, data_config *dc, int isnew) {
     force_assert(dc->context_ndx > ctx->current->context_ndx);
     array_insert_unique(ctx->all_configs, (data_unset *)dc);
     dc->parent = ctx->current;
-    array_insert_unique(dc->parent->childs, (data_unset *)dc);
+    array_insert_unique(dc->parent->children, (data_unset *)dc);
   }
   if (ctx->configs_stack->used > 0 && ctx->current->context_ndx == 0) {
     fprintf(stderr, "Cannot use conditionals inside a global { ... } block\n");

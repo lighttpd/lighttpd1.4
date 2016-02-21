@@ -343,14 +343,30 @@ typedef enum {
 	CON_STATE_CLOSE
 } connection_state_t;
 
-typedef enum { COND_RESULT_UNSET, COND_RESULT_FALSE, COND_RESULT_TRUE } cond_result_t;
+typedef enum {
+	/* condition not active at the moment because itself or some
+	 * pre-condition depends on data not available yet
+	 */
+	COND_RESULT_UNSET,
+
+	/* special "unset" for branches not selected due to pre-conditions
+	 * not met (but pre-conditions are not "unset" anymore)
+	 */
+	COND_RESULT_SKIP,
+
+	/* actually evaluated the condition itself */
+	COND_RESULT_FALSE, /* not active */
+	COND_RESULT_TRUE, /* active */
+} cond_result_t;
+
 typedef struct {
+	/* current result (with preconditions) */
 	cond_result_t result;
+	/* result without preconditions (must never be "skip") */
+	cond_result_t local_result;
 	int patterncount;
 	int matches[3 * 10];
 	buffer *comp_value; /* just a pointer */
-	
-	comp_key_t comp_type;
 } cond_cache_t;
 
 typedef struct {

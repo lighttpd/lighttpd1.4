@@ -105,8 +105,7 @@ typedef enum {
  * for compare: comp          cond  string/regex
  */
 
-typedef struct _data_config data_config;
-struct _data_config {
+typedef struct data_config {
 	DATA_UNSET;
 
 	array *value;
@@ -118,19 +117,19 @@ struct _data_config {
 	buffer *op;
 
 	int context_ndx; /* more or less like an id */
-	array *childs;
+	array *children;
 	/* nested */
-	data_config *parent;
+	struct data_config *parent;
 	/* for chaining only */
-	data_config *prev;
-	data_config *next;
+	struct data_config *prev;
+	struct data_config *next;
 
 	buffer *string;
 #ifdef HAVE_PCRE_H
 	pcre   *regex;
 	pcre_extra *regex_study;
 #endif
-};
+} data_config;
 
 data_config *data_config_init(void);
 

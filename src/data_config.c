@@ -23,7 +23,7 @@ static void data_config_free(data_unset *d) {
 	buffer_free(ds->comp_key);
 
 	array_free(ds->value);
-	array_free(ds->childs);
+	array_free(ds->children);
 
 	if (ds->string) buffer_free(ds->string);
 #ifdef HAVE_PCRE_H
@@ -84,10 +84,10 @@ static void data_config_print(const data_unset *d, int depth) {
 		fprintf(stdout, "\n");
 	}
 
-	if (ds->childs) {
+	if (ds->children) {
 		fprintf(stdout, "\n");
-		for (i = 0; i < ds->childs->used; i ++) {
-			data_unset *du = ds->childs->data[i];
+		for (i = 0; i < ds->children->used; i ++) {
+			data_unset *du = ds->children->data[i];
 
 			/* only the 1st block of chaining */
 			if (NULL == ((data_config *)du)->prev) {
@@ -124,8 +124,8 @@ data_config *data_config_init(void) {
 	ds->op = buffer_init();
 	ds->comp_key = buffer_init();
 	ds->value = array_init();
-	ds->childs = array_init();
-	ds->childs->is_weakref = 1;
+	ds->children = array_init();
+	ds->children->is_weakref = 1;
 
 	ds->copy = data_config_copy;
 	ds->free = data_config_free;
