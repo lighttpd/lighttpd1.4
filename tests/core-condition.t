@@ -8,7 +8,7 @@ BEGIN {
 
 use strict;
 use IO::Socket;
-use Test::More tests => 19;
+use Test::More tests => 21;
 use LightyTest;
 
 my $tf = LightyTest->new();
@@ -64,6 +64,20 @@ EOF
  );
 $t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 301, 'Location' => "/match_6" } ];
 ok($tf->handle_http($t) == 0, 'url subdir with path traversal');
+
+$t->{REQUEST}  = ( <<EOF
+GET / HTTP/1.0
+EOF
+ );
+$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 301, 'Server' => 'Apache 1.3.29' } ];
+ok($tf->handle_http($t) == 0, 'condition: handle if before else branches');
+
+$t->{REQUEST}  = ( <<EOF
+GET /show/other/server-tag HTTP/1.0
+EOF
+ );
+$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 301, 'Server' => 'special tag' } ];
+ok($tf->handle_http($t) == 0, 'condition: handle if before else branches #2');
 
 ok($tf->stop_proc == 0, "Stopping lighttpd");
 
@@ -152,4 +166,3 @@ $t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 404 } ];
 ok($tf->handle_http($t) == 0, 'condition: $HTTP["referer"] == "" and Referer: foobar');
 
 ok($tf->stop_proc == 0, "Stopping lighttpd");
-
