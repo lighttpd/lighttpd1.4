@@ -4,6 +4,7 @@
 #include "connections.h"
 #include "fdevent.h"
 
+#include "configfile.h"
 #include "request.h"
 #include "response.h"
 #include "network.h"

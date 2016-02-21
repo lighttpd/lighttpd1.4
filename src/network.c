@@ -108,9 +108,10 @@ static int network_ssl_servername_callback(SSL *ssl, int *al, server *srv) {
 	config_cond_cache_reset(srv, con);
 	config_setup_connection(srv, con);
 
-	config_patch_connection(srv, con, COMP_SERVER_SOCKET);
-	config_patch_connection(srv, con, COMP_HTTP_SCHEME);
-	config_patch_connection(srv, con, COMP_HTTP_HOST);
+	con->conditional_is_valid[COMP_SERVER_SOCKET] = 1;
+	con->conditional_is_valid[COMP_HTTP_SCHEME] = 1;
+	con->conditional_is_valid[COMP_HTTP_HOST] = 1;
+	config_patch_connection(srv, con);
 
 	if (NULL == con->conf.ssl_pemfile_x509 || NULL == con->conf.ssl_pemfile_pkey) {
 		/* x509/pkey available <=> pemfile was set <=> pemfile got patched: so this should never happen, unless you nest $SERVER["socket"] */

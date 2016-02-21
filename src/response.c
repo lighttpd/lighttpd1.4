@@ -246,7 +246,6 @@ handler_t http_response_prepare(server *srv, connection *con) {
 		if (con->conf.log_condition_handling) {
 			log_error_write(srv, __FILE__, __LINE__,  "s",  "run condition");
 		}
-		config_patch_connection(srv, con, COMP_SERVER_SOCKET); /* SERVERsocket */
 
 		/**
 		 * prepare strings
@@ -279,15 +278,6 @@ handler_t http_response_prepare(server *srv, connection *con) {
 		buffer_copy_buffer(con->uri.authority, con->request.http_host);
 		buffer_to_lower(con->uri.authority);
 
-		config_patch_connection(srv, con, COMP_HTTP_SCHEME);    /* Scheme:      */
-		config_patch_connection(srv, con, COMP_HTTP_HOST);      /* Host:        */
-		config_patch_connection(srv, con, COMP_HTTP_REMOTE_IP); /* Client-IP */
-		config_patch_connection(srv, con, COMP_HTTP_REFERER);   /* Referer:     */
-		config_patch_connection(srv, con, COMP_HTTP_USER_AGENT);/* User-Agent:  */
-		config_patch_connection(srv, con, COMP_HTTP_LANGUAGE);  /* Accept-Language:  */
-		config_patch_connection(srv, con, COMP_HTTP_COOKIE);    /* Cookie:  */
-		config_patch_connection(srv, con, COMP_HTTP_REQUEST_METHOD); /* REQUEST_METHOD */
-
 		/** their might be a fragment which has to be cut away */
 		if (NULL != (qstr = strchr(con->request.uri->ptr, '#'))) {
 			buffer_string_set_length(con->request.uri, qstr - con->request.uri->ptr);
@@ -318,8 +308,18 @@ handler_t http_response_prepare(server *srv, connection *con) {
 			buffer_path_simplify(con->uri.path, srv->tmp_buf);
 		}
 
-		config_patch_connection(srv, con, COMP_HTTP_URL); /* HTTPurl */
-		config_patch_connection(srv, con, COMP_HTTP_QUERY_STRING); /* HTTPqs */
+		con->conditional_is_valid[COMP_SERVER_SOCKET] = 1;       /* SERVERsocket */
+		con->conditional_is_valid[COMP_HTTP_SCHEME] = 1;         /* Scheme:      */
+		con->conditional_is_valid[COMP_HTTP_HOST] = 1;           /* Host:        */
+		con->conditional_is_valid[COMP_HTTP_REMOTE_IP] = 1;      /* Client-IP */
+		con->conditional_is_valid[COMP_HTTP_REFERER] = 1;        /* Referer:     */
+		con->conditional_is_valid[COMP_HTTP_USER_AGENT] =        /* User-Agent:  */
+		con->conditional_is_valid[COMP_HTTP_LANGUAGE] = 1;       /* Accept-Language:  */
+		con->conditional_is_valid[COMP_HTTP_COOKIE] = 1;         /* Cookie:  */
+		con->conditional_is_valid[COMP_HTTP_REQUEST_METHOD] = 1; /* REQUEST_METHOD */
+		con->conditional_is_valid[COMP_HTTP_URL] = 1;            /* HTTPurl */
+		con->conditional_is_valid[COMP_HTTP_QUERY_STRING] = 1;   /* HTTPqs */
+		config_patch_connection(srv, con);
 
 #ifdef USE_OPENSSL
 		if (con->srv_socket->is_ssl && con->conf.ssl_verifyclient) {

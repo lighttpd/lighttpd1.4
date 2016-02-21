@@ -383,10 +383,8 @@ int config_setup_connection(server *srv, connection *con) {
 	return 0;
 }
 
-int config_patch_connection(server *srv, connection *con, comp_key_t comp) {
+int config_patch_connection(server *srv, connection *con) {
 	size_t i, j;
-
-	con->conditional_is_valid[comp] = 1;
 
 	/* skip the first, the global context */
 	for (i = 1; i < srv->config_context->used; i++) {
