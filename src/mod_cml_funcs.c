@@ -243,6 +243,8 @@ int f_memcache_get_long(lua_State *L) {
 	char *value;
 	const char *key;
 	memcached_st *memc;
+	char *endptr;
+	long v;
 
 	if (!lua_islightuserdata(L, lua_upvalueindex(1))) {
 		lua_pushstring(L, "where is my userdata ?");
@@ -262,7 +264,12 @@ int f_memcache_get_long(lua_State *L) {
 		return 1;
 	}
 
-	lua_pushinteger(L, strtol(value, NULL, 10));
+	errno = 0;
+	v = strtol(value, &endptr, 10);
+	if (0 == errno && *endptr == '\0')
+		lua_pushinteger(L, v);
+	else
+		lua_pushnil(L);
 
 	free(value);
 

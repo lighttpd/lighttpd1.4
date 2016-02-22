@@ -550,7 +550,7 @@ static int proxy_response_parse(server *srv, connection *con, plugin_data *p, bu
 
 			if (*key) {
 				http_response_status = (int) strtol(key, NULL, 10);
-				if (http_response_status <= 0) http_response_status = 502;
+				if (http_response_status < 100 || http_response_status >= 1000) http_response_status = 502;
 			} else {
 				http_response_status = 502;
 			}
@@ -593,7 +593,7 @@ static int proxy_response_parse(server *srv, connection *con, plugin_data *p, bu
 			break;
 		case 14:
 			if (0 == strncasecmp(key, "Content-Length", key_len)) {
-				con->response.content_length = strtol(value, NULL, 10);
+				con->response.content_length = strtoul(value, NULL, 10);
 				con->parsed_response |= HTTP_CONTENT_LENGTH;
 			}
 			break;

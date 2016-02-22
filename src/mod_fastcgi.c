@@ -2119,8 +2119,13 @@ static int fcgi_response_parse(server *srv, connection *con, plugin_data *p, buf
 			break;
 		case 6:
 			if (0 == strncasecmp(key, "Status", key_len)) {
-				con->http_status = strtol(value, NULL, 10);
-				con->parsed_response |= HTTP_STATUS;
+				int status = strtol(value, NULL, 10);
+				if (status >= 100 && status < 1000) {
+					con->http_status = status;
+					con->parsed_response |= HTTP_STATUS;
+				} else {
+					con->http_status = 502;
+				}
 			}
 			break;
 		case 8:
@@ -2222,7 +2227,7 @@ range_success: ;
 			break;
 		case 14:
 			if (0 == strncasecmp(key, "Content-Length", key_len)) {
-				con->response.content_length = strtol(value, NULL, 10);
+				con->response.content_length = strtoul(value, NULL, 10);
 				con->parsed_response |= HTTP_CONTENT_LENGTH;
 
 				if (con->response.content_length < 0) con->response.content_length = 0;
