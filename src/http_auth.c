@@ -962,6 +962,7 @@ int http_auth_digest_check(server *srv, connection *con, mod_auth_plugin_data *p
 	}
 
 	m = get_http_method_name(con->request.http_method);
+	force_assert(m);
 
 	/* password-string == HA1 */
 	password = buffer_init();
