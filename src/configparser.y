@@ -297,7 +297,7 @@ aelements(A) ::= aelements(C) COMMA aelement(B). {
       array_insert_unique(C, B);
       B = NULL;
     } else {
-      fprintf(stderr, "Duplicate array-key: %s\n",
+      fprintf(stderr, "Error: duplicate array-key: %s. Please get rid of the duplicate entry.\n",
               B->key->ptr);
       ctx->ok = 0;
       B->free(B);
