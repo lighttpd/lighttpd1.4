@@ -466,7 +466,7 @@ int buffer_caseless_compare(const char *a, size_t a_len, const char *b, size_t b
 		if (cb >= 'A' && cb <= 'Z') cb |= 32;
 
 		if (ca == cb) continue;
-		return ca - cb;
+		return ((int)ca) - ((int)cb);
 	}
 	if (a_len == b_len) return 0;
 	return a_len < b_len ? -1 : 1;
