@@ -276,8 +276,7 @@ value(A) ::= INTEGER(B). {
   errno = 0;
   ((data_integer *)(A))->value = strtol(B->ptr, &endptr, 10);
   if (0 != errno || *endptr != '\0') {
-    fprintf(stderr, "error parsing number: %s\n", B->ptr);
-    ctx->ok = 0;
+    fprintf(stderr, "warning: potential error parsing number: '%s'\n", B->ptr);
   }
   buffer_free(B);
   B = NULL;
