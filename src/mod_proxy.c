@@ -534,14 +534,15 @@ static int proxy_response_parse(server *srv, connection *con, plugin_data *p, bu
 
 	buffer_copy_buffer(p->parse_response, in);
 
-	for (s = p->parse_response->ptr; NULL != (ns = strstr(s, "\r\n")); s = ns + 2) {
+	for (s = p->parse_response->ptr; NULL != (ns = strchr(s, '\n')); s = ns + 1) {
 		char *key, *value;
 		int key_len;
 		data_string *ds;
 		int copy_header;
 
 		ns[0] = '\0';
-		ns[1] = '\0';
+		if (s != ns && ns[-1] == '\r')
+			ns[-1] = '\0';
 
 		if (-1 == http_response_status) {
 			/* The first line of a Response message is the Status-Line */
