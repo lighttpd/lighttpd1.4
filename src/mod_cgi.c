@@ -1147,6 +1147,8 @@ static int cgi_create_env(server *srv, connection *con, plugin_data *p, buffer *
 					/* fatal error */
 					close(from_cgi_fds[0]);
 					close(to_cgi_fds[1]);
+					kill(pid, SIGTERM);
+					cgi_pid_add(srv, p, pid);
 					return -1;
 				case -2:
 					/* connection reset */
