@@ -10,7 +10,7 @@
 # include <valgrind/valgrind.h>
 #endif
 
-#ifndef __WIN32
+#if !defined(__WIN32) && !defined(LIGHTTPD_STATIC)
 # include <dlfcn.h>
 #endif
 /*
