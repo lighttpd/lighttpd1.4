@@ -16,6 +16,7 @@ NEWS
   * [core] never evaluate else branches until the previous branches are ready (fixes #2598)
   * [core] fix conditional cache handling
   * [core] improve conditional enabling (thx Gwenlliana, #2598)
+  * [mod_compress] case-insensitive content-codings (fixes #2645)
 
 - 1.4.39 - 2016-01-02
   * [core] fix memset_s call (fixes #2698)

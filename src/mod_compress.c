@@ -18,6 +18,7 @@
 #include <ctype.h>
 #include <stdlib.h>
 #include <string.h>
+#include <strings.h>
 #include <errno.h>
 #include <time.h>
 
@@ -702,18 +703,22 @@ static int mod_compress_patch_connection(server *srv, connection *con, plugin_da
 }
 #undef PATCH
 
-static int mod_compress_contains_encoding(const char *headervalue, const char *encoding) {
-	const char *m;
-	for ( ;; ) {
-		m = strstr(headervalue, encoding);
-		if (NULL == m) return 0;
-		if (m == headervalue || m[-1] == ' ' || m[-1] == ',') return 1;
-
-		/* only partial match, search for next value */
-		m = strchr(m, ',');
-		if (NULL == m) return 0;
-		headervalue = m + 1;
-	}
+static int mod_compress_contains_encoding(const char *headervalue, const char *encoding, size_t len) {
+	const char *m = headervalue;
+	do {
+		while (*m == ',' || *m == ' ' || *m == '\t') {
+			++m;
+		}
+		if (0 == strncasecmp(m, encoding, len)) {
+			/*(not a full HTTP field parse: not parsing for q-values and not handling q=0)*/
+			m += len;
+			if (*m == '\0' || *m == ',' || *m == ';' || *m == ' ' || *m == '\t')
+				return 1;
+		} else if (*m != '\0') {
+			++m;
+		}
+	} while ((m = strchr(m, ',')));
+	return 0;
 }
 
 PHYSICALPATH_FUNC(mod_compress_physical) {
@@ -809,16 +814,16 @@ PHYSICALPATH_FUNC(mod_compress_physical) {
 
 				/* get client side support encodings */
 #ifdef USE_ZLIB
-				if (mod_compress_contains_encoding(value, "gzip")) accept_encoding |= HTTP_ACCEPT_ENCODING_GZIP;
-				if (mod_compress_contains_encoding(value, "x-gzip")) accept_encoding |= HTTP_ACCEPT_ENCODING_X_GZIP;
-				if (mod_compress_contains_encoding(value, "deflate")) accept_encoding |= HTTP_ACCEPT_ENCODING_DEFLATE;
-				if (mod_compress_contains_encoding(value, "compress")) accept_encoding |= HTTP_ACCEPT_ENCODING_COMPRESS;
+				if (mod_compress_contains_encoding(value, CONST_STR_LEN("gzip"))) accept_encoding |= HTTP_ACCEPT_ENCODING_GZIP;
+				if (mod_compress_contains_encoding(value, CONST_STR_LEN("x-gzip"))) accept_encoding |= HTTP_ACCEPT_ENCODING_X_GZIP;
+				if (mod_compress_contains_encoding(value, CONST_STR_LEN("deflate"))) accept_encoding |= HTTP_ACCEPT_ENCODING_DEFLATE;
+				if (mod_compress_contains_encoding(value, CONST_STR_LEN("compress"))) accept_encoding |= HTTP_ACCEPT_ENCODING_COMPRESS;
 #endif
 #ifdef USE_BZ2LIB
-				if (mod_compress_contains_encoding(value, "bzip2")) accept_encoding |= HTTP_ACCEPT_ENCODING_BZIP2;
-				if (mod_compress_contains_encoding(value, "x-bzip2")) accept_encoding |= HTTP_ACCEPT_ENCODING_X_BZIP2;
+				if (mod_compress_contains_encoding(value, CONST_STR_LEN("bzip2"))) accept_encoding |= HTTP_ACCEPT_ENCODING_BZIP2;
+				if (mod_compress_contains_encoding(value, CONST_STR_LEN("x-bzip2"))) accept_encoding |= HTTP_ACCEPT_ENCODING_X_BZIP2;
 #endif
-				if (mod_compress_contains_encoding(value, "identity")) accept_encoding |= HTTP_ACCEPT_ENCODING_IDENTITY;
+				if (mod_compress_contains_encoding(value, CONST_STR_LEN("identity"))) accept_encoding |= HTTP_ACCEPT_ENCODING_IDENTITY;
 
 				/* find matching entries */
 				matched_encodings = accept_encoding & p->conf.allowed_encodings;
