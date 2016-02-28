@@ -1078,7 +1078,6 @@ static int cgi_create_env(server *srv, connection *con, plugin_data *p, handler_
 		if (!buffer_string_is_empty(con->request.pathinfo)) {
 			cgi_env_add(&env, CONST_STR_LEN("PATH_INFO"), CONST_BUF_LEN(con->request.pathinfo));
 		}
-		cgi_env_add(&env, CONST_STR_LEN("REDIRECT_STATUS"), CONST_STR_LEN("200"));
 		if (!buffer_string_is_empty(con->uri.query)) {
 			cgi_env_add(&env, CONST_STR_LEN("QUERY_STRING"), CONST_BUF_LEN(con->uri.query));
 		} else {
@@ -1086,6 +1085,11 @@ static int cgi_create_env(server *srv, connection *con, plugin_data *p, handler_
 		}
 		if (!buffer_string_is_empty(con->request.orig_uri)) {
 			cgi_env_add(&env, CONST_STR_LEN("REQUEST_URI"), CONST_BUF_LEN(con->request.orig_uri));
+		}
+		/* set REDIRECT_STATUS for php compiled with --force-redirect
+		 * (if REDIRECT_STATUS has not already been set by error handler) */
+		if (0 == con->error_handler_saved_status) {
+			cgi_env_add(&env, CONST_STR_LEN("REDIRECT_STATUS"), CONST_STR_LEN("200"));
 		}
 
 
