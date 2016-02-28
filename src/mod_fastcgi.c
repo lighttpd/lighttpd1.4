@@ -1999,7 +1999,11 @@ static int fcgi_create_env(server *srv, handler_ctx *hctx, size_t request_id) {
 
 	s = get_http_method_name(con->request.http_method);
 	FCGI_ENV_ADD_CHECK(fcgi_env_add(p->fcgi_env, CONST_STR_LEN("REQUEST_METHOD"), s, strlen(s)),con)
-	FCGI_ENV_ADD_CHECK(fcgi_env_add(p->fcgi_env, CONST_STR_LEN("REDIRECT_STATUS"), CONST_STR_LEN("200")),con) /* if php is compiled with --force-redirect */
+	/* set REDIRECT_STATUS for php compiled with --force-redirect
+	 * (if REDIRECT_STATUS has not already been set by error handler) */
+	if (0 == con->error_handler_saved_status) {
+		FCGI_ENV_ADD_CHECK(fcgi_env_add(p->fcgi_env, CONST_STR_LEN("REDIRECT_STATUS"), CONST_STR_LEN("200")), con);
+	}
 	s = get_http_version_name(con->request.http_version);
 	FCGI_ENV_ADD_CHECK(fcgi_env_add(p->fcgi_env, CONST_STR_LEN("SERVER_PROTOCOL"), s, strlen(s)),con)
 
