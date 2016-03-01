@@ -446,9 +446,7 @@ typedef struct {
 	buffer *server_name;
 
 	/* error-handler */
-	buffer *error_handler;
 	int error_handler_saved_status;
-	int in_error_handler;
 
 	struct server_socket *srv_socket;   /* reference to the server-socket */
 
