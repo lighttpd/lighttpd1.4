@@ -52,7 +52,7 @@ static int config_insert(server *srv) {
 
 		{ "server.max-read-idle",              NULL, T_CONFIG_SHORT,   T_CONFIG_SCOPE_CONNECTION }, /* 20 */
 		{ "server.max-write-idle",             NULL, T_CONFIG_SHORT,   T_CONFIG_SCOPE_CONNECTION }, /* 21 */
-		{ "server.error-handler-404",          NULL, T_CONFIG_STRING,  T_CONFIG_SCOPE_CONNECTION }, /* 22 */
+		{ "server.error-handler",              NULL, T_CONFIG_STRING,  T_CONFIG_SCOPE_CONNECTION }, /* 22 */
 		{ "server.max-fds",                    NULL, T_CONFIG_SHORT,   T_CONFIG_SCOPE_SERVER     }, /* 23 */
 #ifdef HAVE_LSTAT
 		{ "server.follow-symlink",             NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION }, /* 24 */
@@ -112,6 +112,7 @@ static int config_insert(server *srv) {
 		{ "server.upload-temp-file-size",      NULL, T_CONFIG_INT,     T_CONFIG_SCOPE_SERVER     }, /* 68 */
 		{ "mimetype.xattr-name",               NULL, T_CONFIG_STRING,  T_CONFIG_SCOPE_SERVER     }, /* 69 */
 		{ "server.listen-backlog",             NULL, T_CONFIG_INT,     T_CONFIG_SCOPE_CONNECTION }, /* 70 */
+		{ "server.error-handler-404",          NULL, T_CONFIG_STRING,  T_CONFIG_SCOPE_CONNECTION }, /* 71 */
 
 		{ "server.host",
 			"use server.bind instead",
@@ -193,6 +194,7 @@ static int config_insert(server *srv) {
 		s->ssl_pemfile   = buffer_init();
 		s->ssl_ca_file   = buffer_init();
 		s->error_handler = buffer_init();
+		s->error_handler_404 = buffer_init();
 		s->server_tag    = buffer_init();
 		s->ssl_cipher_list = buffer_init();
 		s->ssl_dh_file   = buffer_init();
@@ -288,6 +290,7 @@ static int config_insert(server *srv) {
 		cv[66].destination = &(s->ssl_honor_cipher_order);
 		cv[67].destination = &(s->ssl_empty_fragments);
 		cv[70].destination = &(s->listen_backlog);
+		cv[71].destination = s->error_handler_404;
 
 		srv->config_storage[i] = s;
 
@@ -336,6 +339,7 @@ int config_setup_connection(server *srv, connection *con) {
 	PATCH(max_write_idle);
 	PATCH(use_xattr);
 	PATCH(error_handler);
+	PATCH(error_handler_404);
 	PATCH(errorfile_prefix);
 #ifdef HAVE_LSTAT
 	PATCH(follow_symlink);
@@ -410,8 +414,10 @@ int config_patch_connection(server *srv, connection *con) {
 				PATCH(document_root);
 			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("server.range-requests"))) {
 				PATCH(range_requests);
-			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("server.error-handler-404"))) {
+			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("server.error-handler"))) {
 				PATCH(error_handler);
+			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("server.error-handler-404"))) {
+				PATCH(error_handler_404);
 			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("server.errorfile-prefix"))) {
 				PATCH(errorfile_prefix);
 			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("mimetype.assign"))) {

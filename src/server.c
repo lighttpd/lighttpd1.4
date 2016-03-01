@@ -343,6 +343,7 @@ static void server_free(server *srv) {
 			buffer_free(s->ssl_dh_file);
 			buffer_free(s->ssl_ec_curve);
 			buffer_free(s->error_handler);
+			buffer_free(s->error_handler_404);
 			buffer_free(s->errorfile_prefix);
 			array_free(s->mimetypes);
 			buffer_free(s->ssl_verifyclient_username);

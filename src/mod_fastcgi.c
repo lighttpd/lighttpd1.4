@@ -1864,6 +1864,7 @@ static int fcgi_create_env(server *srv, handler_ctx *hctx, size_t request_id) {
 	fcgi_extension_host *host= hctx->host;
 
 	connection *con   = hctx->remote_conn;
+	buffer * const req_uri = (con->error_handler_saved_status >= 0) ? con->request.uri : con->request.orig_uri;
 	server_socket *srv_sock = con->srv_socket;
 
 	sock_addr our_addr;
@@ -2026,26 +2027,24 @@ static int fcgi_create_env(server *srv, handler_ctx *hctx, size_t request_id) {
 		 * /index/list
 		 *
 		 */
+
 		if ('/' != host->strip_request_uri->ptr[buffer_string_length(host->strip_request_uri) - 1]) {
 			/* fix the user-input to have / as last char */
 			buffer_append_string_len(host->strip_request_uri, CONST_STR_LEN("/"));
 		}
 
-		if (buffer_string_length(con->request.orig_uri) >= buffer_string_length(host->strip_request_uri) &&
-		    0 == strncmp(con->request.orig_uri->ptr, host->strip_request_uri->ptr, buffer_string_length(host->strip_request_uri))) {
+		if (buffer_string_length(req_uri) >= buffer_string_length(host->strip_request_uri) &&
+		    0 == strncmp(req_uri->ptr, host->strip_request_uri->ptr, buffer_string_length(host->strip_request_uri))) {
 			/* the left is the same */
 
 			FCGI_ENV_ADD_CHECK(fcgi_env_add(p->fcgi_env, CONST_STR_LEN("REQUEST_URI"),
-					con->request.orig_uri->ptr + (buffer_string_length(host->strip_request_uri) - 1),
-					buffer_string_length(con->request.orig_uri) - (buffer_string_length(host->strip_request_uri) - 1)), con);
+					req_uri->ptr + (buffer_string_length(host->strip_request_uri) - 1),
+					buffer_string_length(req_uri) - (buffer_string_length(host->strip_request_uri) - 1)), con)
 		} else {
-			FCGI_ENV_ADD_CHECK(fcgi_env_add(p->fcgi_env, CONST_STR_LEN("REQUEST_URI"), CONST_BUF_LEN(con->request.orig_uri)),con)
+			FCGI_ENV_ADD_CHECK(fcgi_env_add(p->fcgi_env, CONST_STR_LEN("REQUEST_URI"), CONST_BUF_LEN(req_uri)),con)
 		}
 	} else {
-		FCGI_ENV_ADD_CHECK(fcgi_env_add(p->fcgi_env, CONST_STR_LEN("REQUEST_URI"), CONST_BUF_LEN(con->request.orig_uri)),con)
-	}
-	if (!buffer_is_equal(con->request.uri, con->request.orig_uri)) {
-		FCGI_ENV_ADD_CHECK(fcgi_env_add(p->fcgi_env, CONST_STR_LEN("REDIRECT_URI"), CONST_BUF_LEN(con->request.uri)),con)
+		FCGI_ENV_ADD_CHECK(fcgi_env_add(p->fcgi_env, CONST_STR_LEN("REQUEST_URI"), CONST_BUF_LEN(req_uri)),con)
 	}
 	if (!buffer_string_is_empty(con->uri.query)) {
 		FCGI_ENV_ADD_CHECK(fcgi_env_add(p->fcgi_env, CONST_STR_LEN("QUERY_STRING"), CONST_BUF_LEN(con->uri.query)),con)

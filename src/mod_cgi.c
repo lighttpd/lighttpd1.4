@@ -1083,7 +1083,9 @@ static int cgi_create_env(server *srv, connection *con, plugin_data *p, handler_
 		} else {
 			cgi_env_add(&env, CONST_STR_LEN("QUERY_STRING"), CONST_STR_LEN(""));
 		}
-		if (!buffer_string_is_empty(con->request.orig_uri)) {
+		if (con->error_handler_saved_status >= 0) {
+			cgi_env_add(&env, CONST_STR_LEN("REQUEST_URI"), CONST_BUF_LEN(con->request.uri));
+		} else {
 			cgi_env_add(&env, CONST_STR_LEN("REQUEST_URI"), CONST_BUF_LEN(con->request.orig_uri));
 		}
 		/* set REDIRECT_STATUS for php compiled with --force-redirect
