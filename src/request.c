@@ -1131,7 +1131,15 @@ int http_request_parse(server *srv, connection *con) {
 		}
 		break;
 	default:
-		/* the may have a content-length */
+		/* require Content-Length if request contains request body */
+		if (array_get_element(con->request.headers, "Transfer-Encoding")) {
+			/* presence of Transfer-Encoding in request headers requires "chunked"
+			 * be final encoding in HTTP/1.1.  Return 411 Length Required as
+			 * lighttpd does not support request input transfer-encodings */
+			con->keep_alive = 0;
+			con->http_status = 411; /* 411 Length Required */
+			return 0;
+		}
 		break;
 	}
 
