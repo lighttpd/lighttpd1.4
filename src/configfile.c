@@ -1174,6 +1174,7 @@ int config_read(server *srv, const char *fn) {
 	}
 
 	if (NULL != (modules = (data_array *)array_get_element(srv->config, "server.modules"))) {
+		size_t i;
 		data_string *ds;
 		data_array *prepends;
 
@@ -1185,7 +1186,12 @@ int config_read(server *srv, const char *fn) {
 		prepends = data_array_init();
 
 		/* prepend default modules */
-		if (NULL == array_get_element(modules->value, "mod_indexfile")) {
+		for (i = 0; i < modules->value->used; ++i) {
+			ds = (data_string *)modules->value->data[i];
+			if (buffer_is_equal_string(ds->value, CONST_STR_LEN("mod_indexfile")))
+				break;
+		}
+		if (i == modules->value->used) { /*("mod_indexfile" not found in modules list)*/
 			ds = data_string_init();
 			buffer_copy_string_len(ds->value, CONST_STR_LEN("mod_indexfile"));
 			array_insert_unique(prepends->value, (data_unset *)ds);
@@ -1199,13 +1205,23 @@ int config_read(server *srv, const char *fn) {
 		modules = prepends;
 
 		/* append default modules */
-		if (NULL == array_get_element(modules->value, "mod_dirlisting")) {
+		for (i = 0; i < modules->value->used; ++i) {
+			ds = (data_string *)modules->value->data[i];
+			if (buffer_is_equal_string(ds->value, CONST_STR_LEN("mod_dirlisting")))
+				break;
+		}
+		if (i == modules->value->used) { /*("mod_dirlisting " not found in modules list)*/
 			ds = data_string_init();
 			buffer_copy_string_len(ds->value, CONST_STR_LEN("mod_dirlisting"));
 			array_insert_unique(modules->value, (data_unset *)ds);
 		}
 
-		if (NULL == array_get_element(modules->value, "mod_staticfile")) {
+		for (i = 0; i < modules->value->used; ++i) {
+			ds = (data_string *)modules->value->data[i];
+			if (buffer_is_equal_string(ds->value, CONST_STR_LEN("mod_staticfile")))
+				break;
+		}
+		if (i == modules->value->used) { /*("mod_staticfile" not found in modules list)*/
 			ds = data_string_init();
 			buffer_copy_string_len(ds->value, CONST_STR_LEN("mod_staticfile"));
 			array_insert_unique(modules->value, (data_unset *)ds);
