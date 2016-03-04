@@ -584,38 +584,48 @@ static handler_t cgi_connection_close(server *srv, handler_ctx *hctx) {
 			 * -> we get here with waitpid == ECHILD
 			 *
 			 */
-			if (errno == ECHILD) return HANDLER_GO_ON;
-
-			log_error_write(srv, __FILE__, __LINE__, "ss", "waitpid failed: ", strerror(errno));
-			return HANDLER_ERROR;
-		default:
-			/* Send an error if we haven't sent any data yet */
-			if (0 == con->file_started) {
-				connection_set_state(srv, con, CON_STATE_HANDLE_REQUEST);
-				con->http_status = 500;
-				con->mode = DIRECT;
-			} else {
-				con->file_finished = 1;
+			if (errno != ECHILD) {
+				log_error_write(srv, __FILE__, __LINE__, "ss", "waitpid failed: ", strerror(errno));
 			}
-
+			/* anyway: don't wait for it anymore */
+			pid = 0;
+			break;
+		default:
 			if (WIFEXITED(status)) {
 #if 0
 				log_error_write(srv, __FILE__, __LINE__, "sd", "(debug) cgi exited fine, pid:", pid);
 #endif
-				return HANDLER_GO_ON;
 			} else {
 				log_error_write(srv, __FILE__, __LINE__, "sd", "cgi died, pid:", pid);
-				return HANDLER_GO_ON;
 			}
+
+			pid = 0;
+			break;
 		}
 
+		if (pid) {
+			kill(pid, SIGTERM);
 
-		kill(pid, SIGTERM);
-
-		/* cgi-script is still alive, queue the PID for removal */
-		cgi_pid_add(srv, p, pid);
+			/* cgi-script is still alive, queue the PID for removal */
+			cgi_pid_add(srv, p, pid);
+		}
 	}
 #endif
+
+	if (con->state == CON_STATE_HANDLE_REQUEST) {
+		/* (not CON_STATE_ERROR and not CON_STATE_RESPONSE_END,
+		 * i.e. not called from cgi_connection_close_callback()) */
+
+		/* Send an error if we haven't sent any data yet */
+		if (0 == con->file_started) {
+			con->http_status = 500;
+			con->mode = DIRECT;
+		} else if (0 == con->file_finished) {
+			http_chunk_close(srv, con);
+			con->file_finished = 1;
+		}
+	}
+
 	return HANDLER_GO_ON;
 }
 
@@ -1422,6 +1432,10 @@ SUBREQUEST_FUNC(mod_cgi_handle_subrequest) {
 		 */
 
 		hctx->pid = 0;
+
+		if (cgi_demux_response(srv, hctx) == FDEVENT_HANDLED_ERROR) {
+			log_error_write(srv, __FILE__, __LINE__, "s", "demuxer failed: ");
+		}
 
 		/* we already have response headers? just continue */
 		if (con->file_started) return HANDLER_FINISHED;
