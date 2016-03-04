@@ -490,8 +490,8 @@ static int proxy_create_env(server *srv, handler_ctx *hctx) {
 		ds = (data_string *)con->request.headers->data[i];
 
 		if (!buffer_is_empty(ds->value) && !buffer_is_empty(ds->key)) {
-			if (buffer_is_equal_string(ds->key, CONST_STR_LEN("Connection"))) continue;
-			if (buffer_is_equal_string(ds->key, CONST_STR_LEN("Proxy-Connection"))) continue;
+			if (buffer_is_equal_caseless_string(ds->key, CONST_STR_LEN("Connection"))) continue;
+			if (buffer_is_equal_caseless_string(ds->key, CONST_STR_LEN("Proxy-Connection"))) continue;
 
 			buffer_append_string_buffer(b, ds->key);
 			buffer_append_string_len(b, CONST_STR_LEN(": "));
@@ -500,7 +500,7 @@ static int proxy_create_env(server *srv, handler_ctx *hctx) {
 		}
 	}
 
-	buffer_append_string_len(b, CONST_STR_LEN("\r\n"));
+	buffer_append_string_len(b, CONST_STR_LEN("Connection: close\r\n\r\n"));
 
 	chunkqueue_append_buffer(hctx->wb, b);
 	buffer_free(b);

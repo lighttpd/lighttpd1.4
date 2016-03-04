@@ -23,6 +23,7 @@ NEWS
   * [mod_cgi] consolidate CGI cleanup code
   * [mod_cgi] simplify mod_cgi_handle_subrequest()
   * [mod_cgi] kill CGI if fail to write request body
+  * [mod_proxy] use case-insensitive comparision to filter headers, send Connection: Close to backend (fixes #421)
 
 - 1.4.39 - 2016-01-02
   * [core] fix memset_s call (fixes #2698)
