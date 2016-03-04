@@ -500,7 +500,7 @@ static int proxy_create_env(server *srv, handler_ctx *hctx) {
 		}
 	}
 
-	buffer_append_string_len(b, CONST_STR_LEN("\r\n"));
+	buffer_append_string_len(b, CONST_STR_LEN("Connection: close\r\n\r\n"));
 
 	chunkqueue_append_buffer(hctx->wb, b);
 	buffer_free(b);
