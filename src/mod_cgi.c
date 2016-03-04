@@ -522,15 +522,8 @@ static int cgi_demux_response(server *srv, handler_ctx *hctx) {
 static handler_t cgi_connection_close(server *srv, handler_ctx *hctx) {
 	int status;
 	pid_t pid;
-	plugin_data *p;
-	connection  *con;
-
-	if (NULL == hctx) return HANDLER_GO_ON;
-
-	p    = hctx->plugin_data;
-	con  = hctx->remote_conn;
-
-	if (con->mode != p->id) return HANDLER_GO_ON;
+	plugin_data *p = hctx->plugin_data;
+	connection *con = hctx->remote_conn;
 
 #ifndef __WIN32
 
@@ -584,45 +577,53 @@ static handler_t cgi_connection_close(server *srv, handler_ctx *hctx) {
 			 * -> we get here with waitpid == ECHILD
 			 *
 			 */
-			if (errno == ECHILD) return HANDLER_GO_ON;
+			if (errno == ECHILD) { pid = 0; break; }
 
 			log_error_write(srv, __FILE__, __LINE__, "ss", "waitpid failed: ", strerror(errno));
-			return HANDLER_ERROR;
+			break;
 		default:
-			/* Send an error if we haven't sent any data yet */
-			if (0 == con->file_started) {
-				connection_set_state(srv, con, CON_STATE_HANDLE_REQUEST);
-				con->http_status = 500;
-				con->mode = DIRECT;
-			} else {
-				con->file_finished = 1;
+			if (!WIFEXITED(status)) {
+				log_error_write(srv, __FILE__, __LINE__, "sd", "cgi died, pid:", pid);
 			}
 
-			if (WIFEXITED(status)) {
-#if 0
-				log_error_write(srv, __FILE__, __LINE__, "sd", "(debug) cgi exited fine, pid:", pid);
-#endif
-				return HANDLER_GO_ON;
-			} else {
-				log_error_write(srv, __FILE__, __LINE__, "sd", "cgi died, pid:", pid);
-				return HANDLER_GO_ON;
-			}
+			pid = 0;
+			break;
 		}
 
+		if (pid) {
+			kill(pid, SIGTERM);
 
-		kill(pid, SIGTERM);
-
-		/* cgi-script is still alive, queue the PID for removal */
-		cgi_pid_add(srv, p, pid);
+			/* cgi-script is still alive, queue the PID for removal */
+			cgi_pid_add(srv, p, pid);
+		}
 	}
 #endif
+
+	if (con->state == CON_STATE_HANDLE_REQUEST) {
+		/*(not CON_STATE_ERROR and not CON_STATE_RESPONSE_END,
+		 * i.e. not called from cgi_connection_close_callback())*/
+
+		/* Send an error if we haven't sent any data yet */
+		if (0 == con->file_started) {
+			con->http_status = 500;
+			con->mode = DIRECT;
+		} else if (0 == con->file_finished) {
+			http_chunk_close(srv, con);
+			con->file_finished = 1;
+		}
+	}
+
 	return HANDLER_GO_ON;
 }
 
 static handler_t cgi_connection_close_callback(server *srv, connection *con, void *p_d) {
 	plugin_data *p = p_d;
+	handler_ctx *hctx = con->plugin_ctx[p->id];
 
-	return cgi_connection_close(srv, con->plugin_ctx[p->id]);
+	if (con->mode != p->id) return HANDLER_GO_ON;
+	if (NULL == hctx) return HANDLER_GO_ON;
+
+	return cgi_connection_close(srv, hctx);
 }
 
 
@@ -631,12 +632,6 @@ static handler_t cgi_handle_fdevent(server *srv, void *ctx, int revents) {
 	connection  *con  = hctx->remote_conn;
 
 	joblist_append(srv, con);
-
-	if (hctx->fd == -1) {
-		log_error_write(srv, __FILE__, __LINE__, "ddss", con->fd, hctx->fd, connection_get_state(con->state), "invalid cgi-fd");
-
-		return HANDLER_ERROR;
-	}
 
 	if (revents & FDEVENT_IN) {
 		switch (cgi_demux_response(srv, hctx)) {
@@ -653,17 +648,10 @@ static handler_t cgi_handle_fdevent(server *srv, void *ctx, int revents) {
 			/* if we get a IN|HUP and have read everything don't exec the close twice */
 			return HANDLER_FINISHED;
 		case FDEVENT_HANDLED_ERROR:
-			/* Send an error if we haven't sent any data yet */
-			if (0 == con->file_started) {
-				connection_set_state(srv, con, CON_STATE_HANDLE_REQUEST);
-				con->http_status = 500;
-				con->mode = DIRECT;
-			} else {
-				con->file_finished = 1;
-			}
-
 			log_error_write(srv, __FILE__, __LINE__, "s", "demuxer failed: ");
-			break;
+
+			cgi_connection_close(srv, hctx);
+			return HANDLER_FINISHED;
 		}
 	}
 
@@ -679,13 +667,6 @@ static handler_t cgi_handle_fdevent(server *srv, void *ctx, int revents) {
 			http_chunk_append_buffer(srv, con, hctx->response_header);
 		}
 
-		if (con->file_finished == 0) {
-			http_chunk_close(srv, con);
-		}
-		con->file_finished = 1;
-
-		joblist_append(srv, con);
-
 # if 0
 		log_error_write(srv, __FILE__, __LINE__, "sddd", "got HUP from cgi", con->fd, hctx->fd, revents);
 # endif
@@ -693,8 +674,6 @@ static handler_t cgi_handle_fdevent(server *srv, void *ctx, int revents) {
 		/* rtsigs didn't liked the close */
 		cgi_connection_close(srv, hctx);
 	} else if (revents & FDEVENT_ERR) {
-		con->file_finished = 1;
-
 		/* kill all connections to the cgi process */
 		cgi_connection_close(srv, hctx);
 #if 1
@@ -1168,6 +1147,8 @@ static int cgi_create_env(server *srv, connection *con, plugin_data *p, buffer *
 					/* fatal error */
 					close(from_cgi_fds[0]);
 					close(to_cgi_fds[1]);
+					kill(pid, SIGTERM);
+					cgi_pid_add(srv, p, pid);
 					return -1;
 				case -2:
 					/* connection reset */
@@ -1202,18 +1183,7 @@ static int cgi_create_env(server *srv, connection *con, plugin_data *p, buffer *
 
 		if (-1 == fdevent_fcntl_set(srv->ev, hctx->fd)) {
 			log_error_write(srv, __FILE__, __LINE__, "ss", "fcntl failed: ", strerror(errno));
-
-			fdevent_event_del(srv->ev, &(hctx->fde_ndx), hctx->fd);
-			fdevent_unregister(srv->ev, hctx->fd);
-
-			log_error_write(srv, __FILE__, __LINE__, "sd", "cgi close:", hctx->fd);
-
-			close(hctx->fd);
-
-			cgi_handler_ctx_free(hctx);
-
-			con->plugin_ctx[p->id] = NULL;
-
+			cgi_connection_close(srv, hctx);
 			return -1;
 		}
 
@@ -1360,13 +1330,13 @@ TRIGGER_FUNC(cgi_trigger) {
 
 /*
  * - HANDLER_GO_ON : not our job
- * - HANDLER_FINISHED: got response header
- * - HANDLER_WAIT_FOR_EVENT: waiting for response header
+ * - HANDLER_FINISHED: got response
+ * - HANDLER_WAIT_FOR_EVENT: waiting for response
  */
 SUBREQUEST_FUNC(mod_cgi_handle_subrequest) {
-	int status;
 	plugin_data *p = p_d;
 	handler_ctx *hctx = con->plugin_ctx[p->id];
+	UNUSED(srv);
 
 	if (con->mode != p->id) return HANDLER_GO_ON;
 	if (NULL == hctx) return HANDLER_GO_ON;
@@ -1375,83 +1345,8 @@ SUBREQUEST_FUNC(mod_cgi_handle_subrequest) {
 	log_error_write(srv, __FILE__, __LINE__, "sdd", "subrequest, pid =", hctx, hctx->pid);
 #endif
 
-	if (hctx->pid == 0) {
-		/* cgi already dead */
-		if (!con->file_started) return HANDLER_WAIT_FOR_EVENT;
-		return HANDLER_FINISHED;
-	}
-
-#ifndef __WIN32
-	switch(waitpid(hctx->pid, &status, WNOHANG)) {
-	case 0:
-		/* we only have for events here if we don't have the header yet,
-		 * otherwise the event-handler will send us the incoming data */
-		if (con->file_started) return HANDLER_FINISHED;
-
-		return HANDLER_WAIT_FOR_EVENT;
-	case -1:
-		if (errno == EINTR) return HANDLER_WAIT_FOR_EVENT;
-
-		if (errno == ECHILD && con->file_started == 0) {
-			/*
-			 * second round but still not response
-			 */
-			return HANDLER_WAIT_FOR_EVENT;
-		}
-
-		log_error_write(srv, __FILE__, __LINE__, "ss", "waitpid failed: ", strerror(errno));
-		con->mode = DIRECT;
-		con->http_status = 500;
-
-		hctx->pid = 0;
-
-		fdevent_event_del(srv->ev, &(hctx->fde_ndx), hctx->fd);
-		fdevent_unregister(srv->ev, hctx->fd);
-
-		if (close(hctx->fd)) {
-			log_error_write(srv, __FILE__, __LINE__, "sds", "cgi close failed ", hctx->fd, strerror(errno));
-		}
-
-		cgi_handler_ctx_free(hctx);
-
-		con->plugin_ctx[p->id] = NULL;
-
-		return HANDLER_FINISHED;
-	default:
-		/* cgi process exited
-		 */
-
-		hctx->pid = 0;
-
-		/* we already have response headers? just continue */
-		if (con->file_started) return HANDLER_FINISHED;
-
-		if (WIFEXITED(status)) {
-			/* clean exit - just continue */
-			return HANDLER_WAIT_FOR_EVENT;
-		}
-
-		/* cgi proc died, and we didn't get any data yet - send error message and close cgi con */
-		log_error_write(srv, __FILE__, __LINE__, "s", "cgi died ?");
-
-		con->http_status = 500;
-		con->mode = DIRECT;
-
-		fdevent_event_del(srv->ev, &(hctx->fde_ndx), hctx->fd);
-		fdevent_unregister(srv->ev, hctx->fd);
-
-		if (close(hctx->fd)) {
-			log_error_write(srv, __FILE__, __LINE__, "sds", "cgi close failed ", hctx->fd, strerror(errno));
-		}
-
-		cgi_handler_ctx_free(hctx);
-
-		con->plugin_ctx[p->id] = NULL;
-		return HANDLER_FINISHED;
-	}
-#else
-	return HANDLER_ERROR;
-#endif
+	/* if not done, wait for CGI to close stdout, so we read EOF on pipe */
+	return con->file_finished ? HANDLER_FINISHED : HANDLER_WAIT_FOR_EVENT;
 }
 
 
