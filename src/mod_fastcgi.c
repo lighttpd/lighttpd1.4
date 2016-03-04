@@ -2153,7 +2153,7 @@ static int fcgi_response_parse(server *srv, connection *con, plugin_data *p, buf
 						if (p->conf.debug) {
 							log_error_write(srv, __FILE__, __LINE__, "ss", "Couldn't find range after filename:", filename);
 						}
-						return 1;
+						return 502;
 					}
 					buffer_copy_string_len(srv->tmp_buf, filename, range - filename);
 
@@ -2167,14 +2167,14 @@ static int fcgi_response_parse(server *srv, connection *con, plugin_data *p, buf
 								"send-file error: couldn't get stat_cache entry for X-Sendfile2:",
 								srv->tmp_buf);
 						}
-						return 1;
+						return 404;
 					} else if (!S_ISREG(sce->st.st_mode)) {
 						if (p->conf.debug) {
 							log_error_write(srv, __FILE__, __LINE__, "sb",
 								"send-file error: wrong filetype for X-Sendfile2:",
 								srv->tmp_buf);
 						}
-						return 1;
+						return 502;
 					}
 					/* found the file */
 
@@ -2199,7 +2199,7 @@ range_failed:
 						if (p->conf.debug) {
 							log_error_write(srv, __FILE__, __LINE__, "ss", "Couldn't decode range after filename:", filename);
 						}
-						return 1;
+						return 502;
 
 range_success: ;
 					}
@@ -2207,10 +2207,10 @@ range_success: ;
 					/* no parameters accepted */
 
 					while (*pos == ' ') pos++;
-					if (*pos != '\0' && *pos != ',') return 1;
+					if (*pos != '\0' && *pos != ',') return 502;
 
 					range_len = end_range - begin_range + 1;
-					if (range_len < 0) return 1;
+					if (range_len < 0) return 502;
 					if (range_len != 0) {
 						http_chunk_append_file(srv, con, srv->tmp_buf, begin_range, range_len);
 					}
@@ -2351,7 +2351,7 @@ static int fastcgi_get_packet(server *srv, handler_ctx *hctx, fastcgi_response_p
 
 static int fcgi_demux_response(server *srv, handler_ctx *hctx) {
 	int fin = 0;
-	int toread;
+	int toread, ret;
 	ssize_t r;
 
 	plugin_data *p    = hctx->plugin_data;
@@ -2443,8 +2443,8 @@ static int fcgi_demux_response(server *srv, handler_ctx *hctx) {
 				}
 
 				/* parse the response header */
-				if (fcgi_response_parse(srv, con, p, hctx->response_header)) {
-					con->http_status = 502;
+				if ((ret = fcgi_response_parse(srv, con, p, hctx->response_header))) {
+					con->http_status = ret;
 					hctx->send_content_body = 0;
 					con->file_started = 1;
 					break;
@@ -2485,7 +2485,7 @@ static int fcgi_demux_response(server *srv, handler_ctx *hctx) {
 						log_error_write(srv, __FILE__, __LINE__, "sb",
 							"send-file error: couldn't get stat_cache entry for:",
 							ds->value);
-						con->http_status = 502;
+						con->http_status = 404;
 						hctx->send_content_body = 0;
 						con->file_started = 1;
 						break;
