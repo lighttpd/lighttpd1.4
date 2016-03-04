@@ -1,0 +1,172 @@
+# .gitattributes
+
+# http://www.kernel.org/pub/software/scm/git/docs/gitattributes.html
+# http://git-scm.com/book/ch7-2.html
+
+# attempt to normalize all files, this is typically a good thing
+* text=auto
+
+# types requiring CRLF
+[attr]visualstudio text eol=crlf
+*.csproj  visualstudio
+*.def     visualstudio
+*.dsp     visualstudio
+*.dsw     visualstudio
+*.rc2     visualstudio
+*.resx    visualstudio
+*.sln     visualstudio
+*.vcproj  visualstudio
+*.vcxproj visualstudio
+*.vsprops visualstudio
+
+# explicit normalizations
+
+*.gyp  text
+*.gypi text
+
+# C/C++
+*.h    text
+*.hpp  text
+*.hxx  text
+*.c    text
+*.cc   text
+*.cpp  text
+*.inl  text
+
+# C#
+*.cs   text
+*.xaml text
+
+# Configuration
+*.conf text
+*.ini  text
+
+# HTML5
+*.css  text
+*.html text
+*.htm  text
+*.svg  text
+
+# Sass (http://sass-lang.com/)
+*.scss text
+
+# JavaScript (ECMAScript)
+*.json text
+*.js   text
+
+# Lua
+*.lua  text
+
+# Make
+*.mak  text
+*.mk   text
+
+# Shell
+*.sh   text eol=lf
+*.ksh  text eol=lf
+
+# Text
+*.txt  text
+
+# Python
+*.py   text
+
+# Ruby
+*.rb   text
+
+# XML
+*.xml  text
+*.xsd  text
+
+
+
+# skip git delta compression for compressed file formats
+# initial list modified from https://github.com/hbons/SparkleShare/issues/519
+# 'binary' implies '-diff'
+#   (so if custom diff textconv=exif for jpg, then also remove binary attribute)
+#   (if exif data changes, but image does not, then delta compression helps,
+#    so delta compression desirable when images are uniquely named, and not
+#    changed except for exif info)
+[attr] nopack binary -delta
+# media
+*.jpg  nopack
+*.JPG  nopack
+*.jpeg nopack
+*.JPEG nopack
+*.png  nopack
+*.PNG  nopack
+*.tiff nopack
+*.TIFF nopack
+*.flac nopack
+*.FLAC nopack
+*.mp3  nopack
+*.MP3  nopack
+*.mp4  nopack
+*.MP4  nopack
+*.ogg  nopack
+*.OGG  nopack
+*.oga  nopack
+*.OGA  nopack
+*.avi  nopack
+*.AVI  nopack
+*.mov  nopack
+*.MOV  nopack
+*.mpg  nopack
+*.MPG  nopack
+*.mpeg nopack
+*.MPEG nopack
+*.mkv  nopack
+*.MKV  nopack
+*.ogv  nopack
+*.OGV  nopack
+*.ogx  nopack
+*.OGX  nopack
+*.webm nopack
+*.WEBM nopack
+
+# archive
+*.7z   nopack
+*.7Z   nopack
+*.ace  nopack
+*.ACE  nopack
+*.gz   nopack
+*.GZ   nopack
+*.bz2  nopack
+*.BZ2  nopack
+*.pak  nopack
+*.PAK  nopack
+*.rar  nopack
+*.RAR  nopack
+*.tar  nopack
+*.TAR  nopack
+*.tgz  nopack
+*.TGZ  nopack
+*.z    nopack
+*.Z    nopack
+*.zip  nopack
+*.ZIP  nopack
+
+# package management
+*.deb  nopack
+*.DEB  nopack
+*.rpm  nopack
+*.RPM  nopack
+
+# postscript (can compress)
+*.ps   -diff
+
+# (above is not an unabridged list)
+# (more compressed file formats, compressed media formats, package formats, ...)
+# http://en.wikipedia.org/wiki/List_of_archive_formats
+# http://en.wikipedia.org/wiki/List_of_file_formats
+# http://www.fileinfo.com/filetypes/compressed
+# http://www.file-extensions.org/filetype/extension/name/archive-and-compressed-files
+
+# (consider managing binary artifacts in git-annex or other external management
+#  such as Archiva, Artifactory, Nexus)
+
+# (binary artifacts are best stored outside of git, but abuse is inevitable)
+*.a    nopack
+*.exe  nopack
+*.o    nopack
+*.so   nopack
