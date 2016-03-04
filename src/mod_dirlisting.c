@@ -247,7 +247,7 @@ SETDEFAULTS_FUNC(mod_dirlisting_set_defaults) {
 		s->excludes = excludes_buffer_init();
 		s->dir_listing = 0;
 		s->external_css = buffer_init();
-		s->hide_dot_files = 0;
+		s->hide_dot_files = 1;
 		s->show_readme = 0;
 		s->hide_readme_file = 0;
 		s->show_header = 0;
