@@ -1338,9 +1338,9 @@ TRIGGER_FUNC(cgi_trigger) {
  * - HANDLER_WAIT_FOR_EVENT: waiting for response
  */
 SUBREQUEST_FUNC(mod_cgi_handle_subrequest) {
-	int status;
 	plugin_data *p = p_d;
 	handler_ctx *hctx = con->plugin_ctx[p->id];
+	UNUSED(srv);
 
 	if (con->mode != p->id) return HANDLER_GO_ON;
 	if (NULL == hctx) return HANDLER_GO_ON;
@@ -1349,42 +1349,8 @@ SUBREQUEST_FUNC(mod_cgi_handle_subrequest) {
 	log_error_write(srv, __FILE__, __LINE__, "sdd", "subrequest, pid =", hctx, hctx->pid);
 #endif
 
-#ifndef __WIN32
-	switch(waitpid(hctx->pid, &status, WNOHANG)) {
-	case 0:
-		return HANDLER_WAIT_FOR_EVENT;
-
-	case -1:
-		if (errno == EINTR) return HANDLER_WAIT_FOR_EVENT;
-
-		hctx->pid = 0;
-		if (errno != ECHILD) {
-			log_error_write(srv, __FILE__, __LINE__, "ss", "waitpid failed: ", strerror(errno));
-		}
-		break;
-
-	default:
-		/* cgi process exited
-		 */
-
-		hctx->pid = 0;
-
-		if (!WIFEXITED(status)) {
-			log_error_write(srv, __FILE__, __LINE__, "s", "cgi died ?");
-		}
-
-		if (cgi_demux_response(srv, hctx) == FDEVENT_HANDLED_ERROR) {
-			log_error_write(srv, __FILE__, __LINE__, "s", "demuxer failed: ");
-		}
-
-		break;
-	}
-
-	cgi_connection_close(srv, hctx);
-	return HANDLER_FINISHED;
-#else
-	return HANDLER_ERROR;
-#endif
+	/* if not done, wait for CGI to close stdout, so we read EOF on pipe */
+	return con->file_finished ? HANDLER_FINISHED : HANDLER_WAIT_FOR_EVENT;
 }
 
 
