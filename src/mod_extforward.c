@@ -1,3 +1,5 @@
+#include "first.h"
+
 #include "base.h"
 #include "log.h"
 #include "buffer.h"
@@ -6,10 +8,6 @@
 
 #include "inet_ntop_cache.h"
 #include "configfile.h"
-
-#ifdef HAVE_CONFIG_H
-#include "config.h"
-#endif
 
 #include <assert.h>
 #include <ctype.h>

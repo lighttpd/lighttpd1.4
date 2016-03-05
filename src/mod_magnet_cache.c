@@ -1,3 +1,5 @@
+#include "first.h"
+
 #include "mod_magnet_cache.h"
 #include "stat_cache.h"
 

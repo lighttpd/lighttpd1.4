@@ -1,5 +1,6 @@
 #ifndef _PLUGIN_H_
 #define _PLUGIN_H_
+#include "first.h"
 
 #include "base.h"
 #include "buffer.h"

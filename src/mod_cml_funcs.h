@@ -1,9 +1,6 @@
 #ifndef _MOD_CML_FUNCS_H_
 #define _MOD_CML_FUNCS_H_
-
-#ifdef HAVE_CONFIG_H
-# include "config.h"
-#endif
+#include "first.h"
 
 #ifdef HAVE_LUA_H
 #include <lua.h>

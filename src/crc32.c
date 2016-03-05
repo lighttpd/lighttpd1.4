@@ -1,3 +1,5 @@
+#include "first.h"
+
 #include "crc32.h"
 
 #define CRC32C(c,d) (c=(c>>8)^crc_c[(c^(d))&0xFF])

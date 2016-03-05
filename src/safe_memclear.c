@@ -1,6 +1,5 @@
-#ifdef HAVE_CONFIG_H
-# include "config.h"
-#endif
+#include "first.h"
+
 #include "settings.h"
 
 #include "safe_memclear.h"

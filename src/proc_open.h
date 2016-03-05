@@ -1,3 +1,6 @@
+#ifndef LI_PROC_OPEN_H
+#define LI_PROC_OPEN_H
+#include "first.h"
 
 #include "buffer.h"
 
@@ -23,3 +26,5 @@ typedef struct {
 int proc_close(proc_handler_t *ht);
 int proc_open(proc_handler_t *ht, const char *command);
 int proc_open_buffer(const char *command, buffer *in, buffer *out, buffer *err);
+
+#endif

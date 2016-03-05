@@ -1,3 +1,5 @@
+#include "first.h"
+
 /**
  * angel process for lighttpd 
  *
