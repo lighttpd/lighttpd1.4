@@ -343,7 +343,7 @@ URIHANDLER_FUNC(mod_rewrite_con_reset) {
 	return HANDLER_GO_ON;
 }
 
-static int process_rewrite_rules(server *srv, connection *con, plugin_data *p, rewrite_rule_buffer *kvb) {
+static handler_t process_rewrite_rules(server *srv, connection *con, plugin_data *p, rewrite_rule_buffer *kvb) {
 	size_t i;
 	handler_ctx *hctx;
 
