@@ -153,7 +153,7 @@ static int secdl_verify_mac(server *srv, plugin_config *config, const char* prot
 		{
 			li_MD5_CTX Md5Ctx;
 			HASH HA1;
-			char hexmd5[32];
+			char hexmd5[33];
 			const char *ts_str;
 			const char *rel_uri;
 

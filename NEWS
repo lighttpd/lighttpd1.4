@@ -25,6 +25,7 @@ NEWS
   * [mod_cgi] kill CGI if fail to write request body
   * [mod_proxy] use case-insensitive comparision to filter headers, send Connection: Close to backend (fixes #421)
   * [mod_dirlisting] dir-listing.hide-dotfiles = "enabled" by default (fixes #1081)
+  * [mod_secdownload] fix buffer overflow in secdl_verify_mac (reported by Fortify Open Review Project)
 
 - 1.4.39 - 2016-01-02
   * [core] fix memset_s call (fixes #2698)
