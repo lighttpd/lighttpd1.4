@@ -834,10 +834,24 @@ static int parse_binpath(char_array *env, buffer *b) {
 	return 0;
 }
 
+#if !defined(HAVE_FORK)
 static int fcgi_spawn_connection(server *srv,
-				 plugin_data *p,
-				 fcgi_extension_host *host,
-				 fcgi_proc *proc) {
+                                 plugin_data *p,
+                                 fcgi_extension_host *host,
+                                 fcgi_proc *proc) {
+	UNUSED(srv);
+	UNUSED(p);
+	UNUSED(host);
+	UNUSED(proc);
+	return -1;
+}
+
+#else /* -> defined(HAVE_FORK) */
+
+static int fcgi_spawn_connection(server *srv,
+                                 plugin_data *p,
+                                 fcgi_extension_host *host,
+                                 fcgi_proc *proc) {
 	int fcgi_fd;
 	int socket_type, status;
 	struct timeval tv = { 0, 100 * 1000 };
@@ -848,10 +862,6 @@ static int fcgi_spawn_connection(server *srv,
 	struct sockaddr *fcgi_addr;
 
 	socklen_t servlen;
-
-#ifndef HAVE_FORK
-	return -1;
-#endif
 
 	if (p->conf.debug) {
 		log_error_write(srv, __FILE__, __LINE__, "sdb",
@@ -986,7 +996,6 @@ static int fcgi_spawn_connection(server *srv,
 			return -1;
 		}
 
-#ifdef HAVE_FORK
 		switch ((child = fork())) {
 		case 0: {
 			size_t i = 0;
@@ -1082,9 +1091,11 @@ static int fcgi_spawn_connection(server *srv,
 		}
 		case -1:
 			/* error */
+			close(fcgi_fd);
 			break;
 		default:
 			/* father */
+			close(fcgi_fd);
 
 			/* wait */
 			select(0, NULL, NULL, NULL, &tv);
@@ -1134,8 +1145,8 @@ static int fcgi_spawn_connection(server *srv,
 
 			break;
 		}
-#endif
 	} else {
+		close(fcgi_fd);
 		proc->is_local = 0;
 		proc->pid = 0;
 
@@ -1149,11 +1160,10 @@ static int fcgi_spawn_connection(server *srv,
 	proc->state = PROC_STATE_RUNNING;
 	host->active_procs++;
 
-	close(fcgi_fd);
-
 	return 0;
 }
 
+#endif /* HAVE_FORK */
 
 SETDEFAULTS_FUNC(mod_fastcgi_set_defaults) {
 	plugin_data *p = p_d;
