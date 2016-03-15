@@ -178,13 +178,22 @@ varline ::= key(A) APPEND expression(B). {
       ctx->ok = 0;
     } else if (NULL != (du = array_get_element(vars, A->ptr))) {
       /* exists in current block */
-      du = configparser_merge_data(du, B);
+      if (du->type != B->type) {
+        /* might create new data when merging different types; need to replace old array entry */
+        /* also merging will kill the old data */
+        du = du->copy(du);
+        du = configparser_merge_data(du, B);
+        if (NULL != du) {
+          buffer_copy_buffer(du->key, A);
+          array_replace(vars, du);
+        }
+      } else {
+        data_unset *old_du = du;
+        du = configparser_merge_data(old_du, B);
+        force_assert((NULL == du) || (du == old_du)); /* must not create new data when types match */
+      }
       if (NULL == du) {
         ctx->ok = 0;
-      }
-      else {
-        buffer_copy_buffer(du->key, A);
-        array_replace(vars, du);
       }
       B->free(B);
     } else if (NULL != (du = configparser_get_variable(ctx, A))) {

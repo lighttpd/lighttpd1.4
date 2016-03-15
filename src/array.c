@@ -71,6 +71,7 @@ void array_reset(array *a) {
 	}
 
 	a->used = 0;
+	a->unique_ndx = 0;
 }
 
 data_unset *array_pop(array *a) {
@@ -80,6 +81,7 @@ data_unset *array_pop(array *a) {
 
 	a->used --;
 	du = a->data[a->used];
+	force_assert(a->sorted[a->used] == a->used); /* only works on "simple" lists */
 	a->data[a->used] = NULL;
 
 	return du;
@@ -168,22 +170,8 @@ void array_set_key_value(array *hdrs, const char *key, size_t key_len, const cha
 	array_insert_unique(hdrs, (data_unset *)ds_dst);
 }
 
-/* replace or insert data, return the old one with the same key */
-data_unset *array_replace(array *a, data_unset *du) {
-	int ndx;
-
-	force_assert(NULL != du);
-	if (-1 == (ndx = array_get_index(a, CONST_BUF_LEN(du->key), NULL))) {
-		array_insert_unique(a, du);
-		return NULL;
-	} else {
-		data_unset *old = a->data[ndx];
-		a->data[ndx] = du;
-		return old;
-	}
-}
-
-int array_insert_unique(array *a, data_unset *str) {
+/* if entry already exists return pointer to existing entry, otherwise insert entry and return NULL */
+static data_unset **array_find_or_insert(array *a, data_unset *str) {
 	int ndx = -1;
 	int pos = 0;
 	size_t j;
@@ -192,25 +180,21 @@ int array_insert_unique(array *a, data_unset *str) {
 	if (buffer_is_empty(str->key) || str->is_index_key) {
 		buffer_copy_int(str->key, a->unique_ndx++);
 		str->is_index_key = 1;
+		force_assert(0 != a->unique_ndx); /* must not wrap or we'll get problems */
 	}
 
 	/* try to find the string */
 	if (-1 != (ndx = array_get_index(a, CONST_BUF_LEN(str->key), &pos))) {
-		/* found, leave here */
-		if (a->data[ndx]->type == str->type) {
-			str->insert_dup(a->data[ndx], str);
-		} else {
-			SEGFAULT();
-		}
-		return 0;
+		/* found collision, return it */
+		return &a->data[ndx];
 	}
 
 	/* insert */
 
-	if (a->used+1 > INT_MAX) {
-		/* we can't handle more then INT_MAX entries: see array_get_index() */
-		return -1;
-	}
+	/* there is no good error handling for hitting this limit
+	 * (we can't handle more then INT_MAX entries: see array_get_index())
+	 */
+	force_assert(a->used + 1 <= INT_MAX);
 
 	if (a->size == 0) {
 		a->size   = 16;
@@ -241,7 +225,7 @@ int array_insert_unique(array *a, data_unset *str) {
 		pos++;
 	}
 
-	/* move everything on step to the right */
+	/* move everything one step to the right */
 	if (pos != ndx) {
 		memmove(a->sorted + (pos + 1), a->sorted + (pos), (ndx - pos) * sizeof(*a->sorted));
 	}
@@ -251,7 +235,29 @@ int array_insert_unique(array *a, data_unset *str) {
 
 	if (a->next_power_of_2 == (size_t)ndx) a->next_power_of_2 <<= 1;
 
-	return 0;
+	return NULL;
+}
+
+/* replace or insert data (free existing entry) */
+void array_replace(array *a, data_unset *entry) {
+	data_unset **old;
+
+	force_assert(NULL != entry);
+	if (NULL != (old = array_find_or_insert(a, entry))) {
+		force_assert(*old != entry);
+		(*old)->free(*old);
+		*old = entry;
+	}
+}
+
+void array_insert_unique(array *a, data_unset *entry) {
+	data_unset **old;
+
+	force_assert(NULL != entry);
+	if (NULL != (old = array_find_or_insert(a, entry))) {
+		force_assert((*old)->type == entry->type);
+		entry->insert_dup(*old, entry);
+	}
 }
 
 void array_print_indent(int depth) {

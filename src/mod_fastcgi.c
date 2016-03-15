@@ -2256,8 +2256,7 @@ range_success: ;
 
 		buffer_copy_string_len(dcls->key, "Content-Length", sizeof("Content-Length")-1);
 		buffer_copy_int(dcls->value, sendfile2_content_length);
-		dcls = (data_string*) array_replace(con->response.headers, (data_unset *)dcls);
-		if (dcls) dcls->free((data_unset*)dcls);
+		array_replace(con->response.headers, (data_unset *)dcls);
 
 		con->parsed_response |= HTTP_CONTENT_LENGTH;
 		con->response.content_length = sendfile2_content_length;
@@ -2486,8 +2485,7 @@ static int fcgi_demux_response(server *srv, handler_ctx *hctx) {
 
 						buffer_copy_string_len(dcls->key, "Content-Length", sizeof("Content-Length")-1);
 						buffer_copy_int(dcls->value, sce->st.st_size);
-						dcls = (data_string*) array_replace(con->response.headers, (data_unset *)dcls);
-						if (dcls) dcls->free((data_unset*)dcls);
+						array_replace(con->response.headers, (data_unset *)dcls);
 
 						con->parsed_response |= HTTP_CONTENT_LENGTH;
 						con->response.content_length = sce->st.st_size;

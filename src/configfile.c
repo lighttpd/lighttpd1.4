@@ -1195,7 +1195,6 @@ int config_read(server *srv, const char *fn) {
 		force_assert(NULL != prepends);
 		buffer_copy_buffer(prepends->key, modules->key);
 		array_replace(srv->config, (data_unset *)prepends);
-		modules->free((data_unset *)modules);
 		modules = prepends;
 
 		/* append default modules */
