@@ -35,12 +35,11 @@ typedef struct {
 
 	size_t *sorted;
 
-	size_t used;
+	size_t used; /* <= SSIZE_MAX */
 	size_t size;
 
 	size_t unique_ndx;
 
-	size_t next_power_of_2;
 	int is_weakref; /* data is weakref, don't bother the data */
 } array;
 

@@ -9,13 +9,13 @@
 #include <errno.h>
 #include <assert.h>
 
+#define ARRAY_NOT_FOUND ((size_t)(-1))
+
 array *array_init(void) {
 	array *a;
 
 	a = calloc(1, sizeof(*a));
 	force_assert(a);
-
-	a->next_power_of_2 = 1;
 
 	return a;
 }
@@ -28,7 +28,6 @@ array *array_init_array(array *src) {
 
 	a->used = src->used;
 	a->size = src->size;
-	a->next_power_of_2 = src->next_power_of_2;
 	a->unique_ndx = src->unique_ndx;
 
 	a->data = malloc(sizeof(*src->data) * src->size);
@@ -87,47 +86,48 @@ data_unset *array_pop(array *a) {
 	return du;
 }
 
-static int array_get_index(array *a, const char *key, size_t keylen, int *rndx) {
-	int ndx = -1;
-	int i, pos = 0;
+/* returns index of element or ARRAY_NOT_FOUND
+ * if rndx != NULL it stores the position in a->sorted[] where the key needs
+ * to be inserted
+ */
+static size_t array_get_index(array *a, const char *key, size_t keylen, size_t *rndx) {
+	/* invariant: [lower-1] < key < [upper]
+	 * "virtual elements": [-1] = -INFTY, [a->used] = +INFTY
+	 * also an invariant: 0 <= lower <= upper <= a->used
+	 */
+	size_t lower = 0, upper = a->used;
+	force_assert(upper <= SSIZE_MAX); /* (lower + upper) can't overflow */
 
-	if (key == NULL) return -1;
+	while (lower != upper) {
+		size_t probe = (lower + upper) / 2;
+		int cmp = buffer_caseless_compare(key, keylen, CONST_BUF_LEN(a->data[a->sorted[probe]]->key));
+		assert(lower < upper); /* from loop invariant (lower <= upper) + (lower != upper) */
+		assert((lower <= probe) && (probe < upper)); /* follows from lower < upper */
 
-	/* try to find the string */
-	for (i = pos = a->next_power_of_2 / 2; ; i >>= 1) {
-		int cmp;
-
-		if (pos < 0) {
-			pos += i;
-		} else if (pos >= (int)a->used) {
-			pos -= i;
+		if (cmp == 0) {
+			/* found */
+			if (rndx) *rndx = probe;
+			return a->sorted[probe];
+		} else if (cmp < 0) {
+			/* key < [probe] */
+			upper = probe; /* still: lower <= upper */
 		} else {
-			cmp = buffer_caseless_compare(key, keylen, CONST_BUF_LEN(a->data[a->sorted[pos]]->key));
-
-			if (cmp == 0) {
-				/* found */
-				ndx = a->sorted[pos];
-				break;
-			} else if (cmp < 0) {
-				pos -= i;
-			} else {
-				pos += i;
-			}
+			/* key > [probe] */
+			lower = probe + 1; /* still: lower <= upper */
 		}
-		if (i == 0) break;
 	}
 
-	if (rndx) *rndx = pos;
-
-	return ndx;
+	/* not found: [lower-1] < key < [upper] = [lower] ==> insert at [lower] */
+	if (rndx) *rndx = lower;
+	return ARRAY_NOT_FOUND;
 }
 
 data_unset *array_get_element(array *a, const char *key) {
-	int ndx;
+	size_t ndx;
+	force_assert(NULL != key);
 
-	if (-1 != (ndx = array_get_index(a, key, strlen(key), NULL))) {
-		/* found, leave here */
-
+	if (ARRAY_NOT_FOUND != (ndx = array_get_index(a, key, strlen(key), NULL))) {
+		/* found, return it */
 		return a->data[ndx];
 	}
 
@@ -172,9 +172,7 @@ void array_set_key_value(array *hdrs, const char *key, size_t key_len, const cha
 
 /* if entry already exists return pointer to existing entry, otherwise insert entry and return NULL */
 static data_unset **array_find_or_insert(array *a, data_unset *entry) {
-	int ndx = -1;
-	int pos = 0;
-	size_t j;
+	size_t ndx, pos, j;
 
 	/* generate unique index if neccesary */
 	if (buffer_is_empty(entry->key) || entry->is_index_key) {
@@ -184,17 +182,15 @@ static data_unset **array_find_or_insert(array *a, data_unset *entry) {
 	}
 
 	/* try to find the entry */
-	if (-1 != (ndx = array_get_index(a, CONST_BUF_LEN(entry->key), &pos))) {
+	if (ARRAY_NOT_FOUND != (ndx = array_get_index(a, CONST_BUF_LEN(entry->key), &pos))) {
 		/* found collision, return it */
 		return &a->data[ndx];
 	}
 
 	/* insert */
 
-	/* there is no good error handling for hitting this limit
-	 * (we can't handle more then INT_MAX entries: see array_get_index())
-	 */
-	force_assert(a->used + 1 <= INT_MAX);
+	/* there couldn't possibly be enough memory to store so many entries */
+	force_assert(a->used + 1 <= SSIZE_MAX);
 
 	if (a->size == 0) {
 		a->size   = 16;
@@ -212,18 +208,12 @@ static data_unset **array_find_or_insert(array *a, data_unset *entry) {
 		for (j = a->used; j < a->size; j++) a->data[j] = NULL;
 	}
 
-	ndx = (int) a->used;
+	ndx = a->used;
 
 	/* make sure there is nothing here */
 	if (a->data[ndx]) a->data[ndx]->free(a->data[ndx]);
 
 	a->data[a->used++] = entry;
-
-	if (pos != ndx &&
-	    ((pos < 0) ||
-	     buffer_caseless_compare(CONST_BUF_LEN(entry->key), CONST_BUF_LEN(a->data[a->sorted[pos]]->key)) > 0)) {
-		pos++;
-	}
 
 	/* move everything one step to the right */
 	if (pos != ndx) {
@@ -232,8 +222,6 @@ static data_unset **array_find_or_insert(array *a, data_unset *entry) {
 
 	/* insert */
 	a->sorted[pos] = ndx;
-
-	if (a->next_power_of_2 == (size_t)ndx) a->next_power_of_2 <<= 1;
 
 	return NULL;
 }
