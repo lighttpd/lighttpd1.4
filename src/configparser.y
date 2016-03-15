@@ -71,6 +71,7 @@ data_unset *configparser_merge_data(data_unset *op1, const data_unset *op2) {
       return (data_unset *)ds;
     } else {
       fprintf(stderr, "data type mismatch, cannot merge\n");
+      op1->free(op1);
       return NULL;
     }
   }
