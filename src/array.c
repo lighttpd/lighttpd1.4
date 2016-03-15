@@ -171,20 +171,20 @@ void array_set_key_value(array *hdrs, const char *key, size_t key_len, const cha
 }
 
 /* if entry already exists return pointer to existing entry, otherwise insert entry and return NULL */
-static data_unset **array_find_or_insert(array *a, data_unset *str) {
+static data_unset **array_find_or_insert(array *a, data_unset *entry) {
 	int ndx = -1;
 	int pos = 0;
 	size_t j;
 
 	/* generate unique index if neccesary */
-	if (buffer_is_empty(str->key) || str->is_index_key) {
-		buffer_copy_int(str->key, a->unique_ndx++);
-		str->is_index_key = 1;
+	if (buffer_is_empty(entry->key) || entry->is_index_key) {
+		buffer_copy_int(entry->key, a->unique_ndx++);
+		entry->is_index_key = 1;
 		force_assert(0 != a->unique_ndx); /* must not wrap or we'll get problems */
 	}
 
-	/* try to find the string */
-	if (-1 != (ndx = array_get_index(a, CONST_BUF_LEN(str->key), &pos))) {
+	/* try to find the entry */
+	if (-1 != (ndx = array_get_index(a, CONST_BUF_LEN(entry->key), &pos))) {
 		/* found collision, return it */
 		return &a->data[ndx];
 	}
@@ -217,11 +217,11 @@ static data_unset **array_find_or_insert(array *a, data_unset *str) {
 	/* make sure there is nothing here */
 	if (a->data[ndx]) a->data[ndx]->free(a->data[ndx]);
 
-	a->data[a->used++] = str;
+	a->data[a->used++] = entry;
 
 	if (pos != ndx &&
 	    ((pos < 0) ||
-	     buffer_caseless_compare(CONST_BUF_LEN(str->key), CONST_BUF_LEN(a->data[a->sorted[pos]]->key)) > 0)) {
+	     buffer_caseless_compare(CONST_BUF_LEN(entry->key), CONST_BUF_LEN(a->data[a->sorted[pos]]->key)) > 0)) {
 		pos++;
 	}
 
