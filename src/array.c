@@ -134,6 +134,45 @@ data_unset *array_get_element(array *a, const char *key) {
 	return NULL;
 }
 
+data_unset *array_extract_element(array *a, const char *key) {
+	size_t ndx, pos;
+	force_assert(NULL != key);
+
+	if (ARRAY_NOT_FOUND != (ndx = array_get_index(a, key, strlen(key), &pos))) {
+		/* found */
+		const size_t last_ndx = a->used - 1;
+		data_unset *entry = a->data[ndx];
+
+		/* now we need to swap it with the last element (if it isn't already the last element) */
+		if (ndx != last_ndx) {
+			/* to swap we also need to modify the index in a->sorted - find pos of last_elem there */
+			size_t last_elem_pos;
+			/* last element must be present at the expected position */
+			force_assert(last_ndx == array_get_index(a, CONST_BUF_LEN(a->data[last_ndx]->key), &last_elem_pos));
+
+			/* move entry from last_ndx to ndx */
+			a->data[ndx] = a->data[last_ndx];
+			a->data[last_ndx] = NULL;
+
+			/* fix index entry for moved entry */
+			a->sorted[last_elem_pos] = ndx;
+		} else {
+			a->data[ndx] = NULL;
+		}
+
+		/* remove entry in a->sorted: move everything after pos one step to the left */
+		if (pos != last_ndx) {
+			memmove(a->sorted + pos, a->sorted + pos + 1, (last_ndx - pos) * sizeof(*a->sorted));
+		}
+		a->sorted[last_ndx] = ARRAY_NOT_FOUND;
+		--a->used;
+
+		return entry;
+	}
+
+	return NULL;
+}
+
 data_unset *array_get_unused_element(array *a, data_type_t t) {
 	data_unset *ds = NULL;
 	unsigned int i;
