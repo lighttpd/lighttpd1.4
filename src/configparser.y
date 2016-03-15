@@ -92,7 +92,13 @@ data_unset *configparser_merge_data(data_unset *op1, const data_unset *op2) {
       for (i = 0; i < src->used; i ++) {
         du = (data_unset *)src->data[i];
         if (du) {
-          array_insert_unique(dst, du->copy(du));
+          if (du->is_index_key || buffer_is_empty(du->key) || !array_get_element(dst, du->key->ptr)) {
+            array_insert_unique(dst, du->copy(du));
+          } else {
+            fprintf(stderr, "Duplicate array-key '%s'\n", du->key->ptr);
+            op1->free(op1);
+            return NULL;
+          }
         }
       }
       break;

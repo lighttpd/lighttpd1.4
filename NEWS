@@ -31,6 +31,7 @@ NEWS
   * [core] refactor array search; raise array size limit to SSIZE_MAX
   * [core] fix memory leak in configparser_merge_data
   * [core] provide array_extract_element and use it
+  * [core] configparser: error on duplicate keys in array merge (fixes #2685)
 
 - 1.4.39 - 2016-01-02
   * [core] fix memset_s call (fixes #2698)
