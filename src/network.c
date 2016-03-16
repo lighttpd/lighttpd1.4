@@ -161,7 +161,6 @@ static int network_server_init(server *srv, buffer *host_token, specific_config 
 	int val;
 	socklen_t addr_len;
 	server_socket *srv_socket;
-	char *sp;
 	unsigned int port = 0;
 	const char *host;
 	buffer *b;
@@ -194,36 +193,44 @@ static int network_server_init(server *srv, buffer *host_token, specific_config 
 	b = buffer_init();
 	buffer_copy_buffer(b, host_token);
 
-	/* ipv4:port
-	 * [ipv6]:port
-	 */
-	if (NULL == (sp = strrchr(b->ptr, ':'))) {
-		log_error_write(srv, __FILE__, __LINE__, "sb", "value of $SERVER[\"socket\"] has to be \"ip:port\".", b);
-
-		goto error_free_socket;
-	}
-
 	host = b->ptr;
-
-	/* check for [ and ] */
-	if (b->ptr[0] == '[' && *(sp-1) == ']') {
-		*(sp-1) = '\0';
-		host++;
-
-		s->use_ipv6 = 1;
-	}
-
-	*(sp++) = '\0';
-
-	port = strtol(sp, NULL, 10);
 
 	if (host[0] == '/') {
 		/* host is a unix-domain-socket */
 		is_unix_domain_socket = 1;
-	} else if (port == 0 || port > 65535) {
-		log_error_write(srv, __FILE__, __LINE__, "sd", "port out of range:", port);
+	} else {
+		/* ipv4:port
+		 * [ipv6]:port
+		 */
+		size_t len = buffer_string_length(b);
+		char *sp = NULL;
+		if ((b->ptr[0] == '[' && b->ptr[len-1] == ']') || NULL == (sp = strrchr(b->ptr, ':'))) {
+			if (NULL == sp) {
+				log_error_write(srv, __FILE__, __LINE__, "sb", "value of $SERVER[\"socket\"] has to be \"ip:port\".", b);
 
-		goto error_free_socket;
+				goto error_free_socket;
+			}
+		}
+
+		/* check for [ and ] */
+		if (b->ptr[0] == '[' && *(sp-1) == ']') {
+			*(sp-1) = '\0';
+			host++;
+
+			s->use_ipv6 = 1;
+		}
+
+		if (*sp == ':') {
+			*(sp++) = '\0';
+
+			port = strtol(sp, NULL, 10);
+		}
+
+		if (port == 0 || port > 65535) {
+			log_error_write(srv, __FILE__, __LINE__, "sd", "port out of range:", port);
+
+			goto error_free_socket;
+		}
 	}
 
 	if (*host == '\0') host = NULL;
