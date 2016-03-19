@@ -36,6 +36,7 @@ NEWS
   * [core] accept $SERVER["socket"] without port, use server.port as fallback (fixes #2204)
   * [mod_magnet] define lua_pushglobaltable (for lua5.1) and use it (fixes #2719)
   * [ssl] support disabling ssl.verifyclient.activate in SNI callback (fixes #2531)
+  * restart (some) syscalls after SIGCHLD interrupted them; should fix LDAP problems (fixes #2464)
 
 - 1.4.39 - 2016-01-02
   * [core] fix memset_s call (fixes #2698)

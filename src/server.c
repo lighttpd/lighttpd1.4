@@ -973,6 +973,9 @@ int main (int argc, char **argv) {
 	sigaction(SIGTERM, &act, NULL);
 	sigaction(SIGHUP,  &act, NULL);
 	sigaction(SIGALRM, &act, NULL);
+
+	/* it should be safe to restart syscalls after SIGCHLD */
+	act.sa_flags |= SA_RESTART | SA_NOCLDSTOP;
 	sigaction(SIGCHLD, &act, NULL);
 
 #elif defined(HAVE_SIGNAL)
