@@ -891,6 +891,8 @@ static int connection_handle_read_state(server *srv, connection *con)  {
 	chunkqueue *cq = con->read_queue;
 	chunkqueue *dst_cq = con->request_content_queue;
 	int is_closed = 0; /* the connection got closed, if we don't have a complete header, -> error */
+	/* when in CON_STATE_READ: about to receive first byte for a request: */
+	int is_request_start = chunkqueue_is_empty(cq);
 
 	if (con->is_readable) {
 		con->read_idle_ts = srv->cur_ts;
@@ -913,6 +915,10 @@ static int connection_handle_read_state(server *srv, connection *con)  {
 
 	switch(ostate) {
 	case CON_STATE_READ:
+	/* update request_start timestamp when first byte of
+	 * next request is received on a keep-alive connection */
+	if (con->request_count > 1 && is_request_start) con->request_start = srv->cur_ts;
+
 		/* if there is a \r\n\r\n in the chunkqueue
 		 *
 		 * scan the chunk-queue twice
