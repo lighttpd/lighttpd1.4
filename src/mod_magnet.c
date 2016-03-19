@@ -162,13 +162,12 @@ static int mod_magnet_patch_connection(server *srv, connection *con, plugin_data
 }
 #undef PATCH
 
-static void magnet_get_global_table(lua_State *L) { /* (-0, +1, e) */
-#if defined(LUA_VERSION_NUM) && LUA_VERSION_NUM >= 502
-	lua_geti(L, LUA_REGISTRYINDEX, LUA_RIDX_GLOBALS);
-#else
+#if !defined(LUA_VERSION_NUM) || LUA_VERSION_NUM < 502
+/* lua5.1 backward compat definition */
+static void lua_pushglobaltable(lua_State *L) { /* (-0, +1, -) */
 	lua_pushvalue(L, LUA_GLOBALSINDEX);
-#endif
 }
+#endif
 
 static void magnet_setfenv_mainfn(lua_State *L, int funcIndex) { /* (-1, 0, -) */
 #if defined(LUA_VERSION_NUM) && LUA_VERSION_NUM >= 502
@@ -955,7 +954,7 @@ static handler_t magnet_attract(server *srv, connection *con, plugin_data *p, bu
 #endif
 
 	lua_newtable(L); /* the meta-table for the new env           (sp += 1) */
-	magnet_get_global_table(L);                               /* (sp += 1) */
+	lua_pushglobaltable(L);                                   /* (sp += 1) */
 	lua_setfield(L, -2, "__index"); /* { __index = _G }          (sp -= 1) */
 	lua_setmetatable(L, -2); /* setmetatable({}, {__index = _G}) (sp -= 1) */
 
@@ -969,7 +968,7 @@ static handler_t magnet_attract(server *srv, connection *con, plugin_data *p, bu
 		lua_remove(L, errfunc);
 
 		/* reset environment */
-		magnet_get_global_table(L);                           /* (sp += 1) */
+		lua_pushglobaltable(L);                               /* (sp += 1) */
 		magnet_setfenv_mainfn(L, 1);                          /* (sp -= 1) */
 
 		if (0 != ret) {
