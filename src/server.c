@@ -1346,8 +1346,10 @@ int main (int argc, char **argv) {
 						if (srv->cur_ts - con->write_request_ts > con->conf.max_write_idle) {
 							/* time - out */
 							if (con->conf.log_timeouts) {
-								log_error_write(srv, __FILE__, __LINE__, "sbsosds",
-									"NOTE: a request for",
+								log_error_write(srv, __FILE__, __LINE__, "sbsbsosds",
+									"NOTE: a request from",
+									con->dst_addr_buf,
+									"for",
 									con->request.uri,
 									"timed out after writing",
 									con->bytes_written,
