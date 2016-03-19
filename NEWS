@@ -40,6 +40,7 @@ NEWS
   * [core] log remote address on request timeouts (fixes #652)
   * [autobuild] use AC_CANONICAL_HOST instead of AC_CANONICAL_TARGET (fixes #1866)
   * [core] fix request_start in keep-alive requests to mark time when received first byte (fixes #2412)
+  * [core] truncate pidfile on exit (fixes #2695)
 
 - 1.4.39 - 2016-01-02
   * [core] fix memset_s call (fixes #2698)
