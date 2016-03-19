@@ -6,7 +6,7 @@ AC_CONFIG_SRCDIR([src/server.c])
 AC_CONFIG_HEADER([config.h])
 AC_CONFIG_MACRO_DIR([m4])
 
-AC_CANONICAL_TARGET
+AC_CANONICAL_HOST
 
 dnl HOW FUCKING BROKEN IS AUTOMAKE...
 dnl serial-tests is not recognized before 1.12, and required for serial tests with 1.13, sane version checks "impossible"
