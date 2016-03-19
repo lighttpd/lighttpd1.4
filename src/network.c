@@ -204,9 +204,14 @@ static int network_server_init(server *srv, buffer *host_token, specific_config 
 		 */
 		size_t len = buffer_string_length(b);
 		char *sp = NULL;
-		if ((b->ptr[0] == '[' && b->ptr[len-1] == ']') || NULL == (sp = strrchr(b->ptr, ':'))) {
-			log_error_write(srv, __FILE__, __LINE__, "sb", "value of $SERVER[\"socket\"] has to be \"ip:port\".", b);
+		if (0 == len) {
+			log_error_write(srv, __FILE__, __LINE__, "s", "value of $SERVER[\"socket\"] must not be empty");
 			goto error_free_socket;
+		}
+		if ((b->ptr[0] == '[' && b->ptr[len-1] == ']') || NULL == (sp = strrchr(b->ptr, ':'))) {
+			/* use server.port if set in config, or else default from config_set_defaults() */
+			port = srv->srvconf.port;
+			sp = b->ptr + len; /* point to '\0' at end of string so end of IPv6 address can be found below */
 		} else {
 			/* found ip:port separator at *sp; port doesn't end in ']', so *sp hopefully doesn't split an IPv6 address */
 			*(sp++) = '\0';
@@ -222,7 +227,7 @@ static int network_server_init(server *srv, buffer *host_token, specific_config 
 		}
 
 		if (port == 0 || port > 65535) {
-			log_error_write(srv, __FILE__, __LINE__, "sd", "port out of range:", port);
+			log_error_write(srv, __FILE__, __LINE__, "sd", "port not set or out of range:", port);
 
 			goto error_free_socket;
 		}
