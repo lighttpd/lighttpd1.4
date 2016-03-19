@@ -1102,13 +1102,12 @@ int config_parse_cmd(server *srv, config_t *context, const char *cmd) {
 static void context_init(server *srv, config_t *context) {
 	context->srv = srv;
 	context->ok = 1;
-	context->configs_stack = array_init();
-	context->configs_stack->is_weakref = 1;
+	vector_config_weak_init(&context->configs_stack);
 	context->basedir = buffer_init();
 }
 
 static void context_free(config_t *context) {
-	array_free(context->configs_stack);
+	vector_config_weak_clear(&context->configs_stack);
 	buffer_free(context->basedir);
 }
 
@@ -1162,7 +1161,7 @@ int config_read(server *srv, const char *fn) {
 	ret = config_parse_file(srv, &context, fn);
 
 	/* remains nothing if parser is ok */
-	force_assert(!(0 == ret && context.ok && 0 != context.configs_stack->used));
+	force_assert(!(0 == ret && context.ok && 0 != context.configs_stack.used));
 	context_free(&context);
 
 	if (0 != ret) {

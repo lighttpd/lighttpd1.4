@@ -49,10 +49,8 @@ void array_free(array *a) {
 	size_t i;
 	if (!a) return;
 
-	if (!a->is_weakref) {
-		for (i = 0; i < a->size; i++) {
-			if (a->data[i]) a->data[i]->free(a->data[i]);
-		}
+	for (i = 0; i < a->size; i++) {
+		if (a->data[i]) a->data[i]->free(a->data[i]);
 	}
 
 	if (a->data) free(a->data);
@@ -65,10 +63,8 @@ void array_reset(array *a) {
 	size_t i;
 	if (!a) return;
 
-	if (!a->is_weakref) {
-		for (i = 0; i < a->used; i++) {
-			a->data[i]->reset(a->data[i]);
-		}
+	for (i = 0; i < a->used; i++) {
+		a->data[i]->reset(a->data[i]);
 	}
 
 	a->used = 0;

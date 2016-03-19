@@ -7,6 +7,7 @@
 #endif
 
 #include "buffer.h"
+#include "vector.h"
 
 #include <stdlib.h>
 
@@ -36,8 +37,6 @@ typedef struct {
 	size_t size;
 
 	size_t unique_ndx;
-
-	int is_weakref; /* data is weakref, don't bother the data */
 } array;
 
 typedef struct {
@@ -101,7 +100,10 @@ typedef enum {
  * for compare: comp          cond  string/regex
  */
 
-typedef struct data_config {
+typedef struct data_config data_config;
+DEFINE_TYPED_VECTOR_NO_RELEASE(config_weak, data_config*);
+
+struct data_config {
 	DATA_UNSET;
 
 	array *value;
@@ -113,19 +115,19 @@ typedef struct data_config {
 	buffer *op;
 
 	int context_ndx; /* more or less like an id */
-	array *children;
+	vector_config_weak children;
 	/* nested */
-	struct data_config *parent;
+	data_config *parent;
 	/* for chaining only */
-	struct data_config *prev;
-	struct data_config *next;
+	data_config *prev;
+	data_config *next;
 
 	buffer *string;
 #ifdef HAVE_PCRE_H
 	pcre   *regex;
 	pcre_extra *regex_study;
 #endif
-} data_config;
+};
 
 data_config *data_config_init(void);
 

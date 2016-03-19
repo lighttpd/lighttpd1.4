@@ -25,7 +25,7 @@ static void data_config_free(data_unset *d) {
 	buffer_free(ds->comp_key);
 
 	array_free(ds->value);
-	array_free(ds->children);
+	vector_config_weak_clear(&ds->children);
 
 	if (ds->string) buffer_free(ds->string);
 #ifdef HAVE_PCRE_H
@@ -86,18 +86,16 @@ static void data_config_print(const data_unset *d, int depth) {
 		fprintf(stdout, "\n");
 	}
 
-	if (ds->children) {
-		fprintf(stdout, "\n");
-		for (i = 0; i < ds->children->used; i ++) {
-			data_unset *du = ds->children->data[i];
+	fprintf(stdout, "\n");
+	for (i = 0; i < ds->children.used; i ++) {
+		data_config *dc = ds->children.data[i];
 
-			/* only the 1st block of chaining */
-			if (NULL == ((data_config *)du)->prev) {
-				fprintf(stdout, "\n");
-				array_print_indent(depth);
-				du->print(du, depth);
-				fprintf(stdout, "\n");
-			}
+		/* only the 1st block of chaining */
+		if (NULL == dc->prev) {
+			fprintf(stdout, "\n");
+			array_print_indent(depth);
+			dc->print((data_unset *) dc, depth);
+			fprintf(stdout, "\n");
 		}
 	}
 
@@ -126,8 +124,7 @@ data_config *data_config_init(void) {
 	ds->op = buffer_init();
 	ds->comp_key = buffer_init();
 	ds->value = array_init();
-	ds->children = array_init();
-	ds->children->is_weakref = 1;
+	vector_config_weak_init(&ds->children);
 
 	ds->copy = data_config_copy;
 	ds->free = data_config_free;

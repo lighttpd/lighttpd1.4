@@ -18,19 +18,19 @@ static void configparser_push(config_t *ctx, data_config *dc, int isnew) {
     force_assert(dc->context_ndx > ctx->current->context_ndx);
     array_insert_unique(ctx->all_configs, (data_unset *)dc);
     dc->parent = ctx->current;
-    array_insert_unique(dc->parent->children, (data_unset *)dc);
+    vector_config_weak_push(&dc->parent->children, dc);
   }
-  if (ctx->configs_stack->used > 0 && ctx->current->context_ndx == 0) {
+  if (ctx->configs_stack.used > 0 && ctx->current->context_ndx == 0) {
     fprintf(stderr, "Cannot use conditionals inside a global { ... } block\n");
     exit(-1);
   }
-  array_insert_unique(ctx->configs_stack, (data_unset *)ctx->current);
+  vector_config_weak_push(&ctx->configs_stack, ctx->current);
   ctx->current = dc;
 }
 
 static data_config *configparser_pop(config_t *ctx) {
   data_config *old = ctx->current;
-  ctx->current = (data_config *) array_pop(ctx->configs_stack);
+  ctx->current = vector_config_weak_pop(&ctx->configs_stack);
   return old;
 }
 

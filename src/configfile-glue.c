@@ -589,8 +589,8 @@ static void config_cond_clear_node(server *srv, connection *con, data_config *dc
 		con->cond_cache[dc->context_ndx].comp_value = NULL;
 		con->cond_cache[dc->context_ndx].result = COND_RESULT_UNSET;
 
-		for (i = 0; i < dc->children->used; ++i) {
-			data_config *dc_child = (data_config*) dc->children->data[i];
+		for (i = 0; i < dc->children.used; ++i) {
+			data_config *dc_child = dc->children.data[i];
 			if (NULL == dc_child->prev) {
 				/* only call for first node in if-else chain */
 				config_cond_clear_node(srv, con, dc_child);
