@@ -1,5 +1,6 @@
 #ifndef _HTTP_AUTH_H_
 #define _HTTP_AUTH_H_
+#include "first.h"
 
 #include "server.h"
 #include "plugin.h"

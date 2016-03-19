@@ -1,5 +1,6 @@
 #ifndef _MOD_SSI_EXPR_H_
 #define _MOD_SSI_EXPR_H_
+#include "first.h"
 
 #include "buffer.h"
 

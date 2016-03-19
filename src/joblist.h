@@ -1,5 +1,6 @@
 #ifndef _JOB_LIST_H_
 #define _JOB_LIST_H_
+#include "first.h"
 
 #include "base.h"
 

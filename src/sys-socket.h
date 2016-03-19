@@ -1,5 +1,6 @@
 #ifndef WIN32_SOCKET_H
 #define WIN32_SOCKET_H
+#include "first.h"
 
 #ifdef __WIN32
 

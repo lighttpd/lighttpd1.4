@@ -1,5 +1,6 @@
 #ifndef ETAG_H
 #define ETAG_H
+#include "first.h"
 
 #include "buffer.h"
 

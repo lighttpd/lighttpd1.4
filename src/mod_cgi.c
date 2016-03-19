@@ -1,3 +1,5 @@
+#include "first.h"
+
 #include "server.h"
 #include "stat_cache.h"
 #include "keyvalue.h"

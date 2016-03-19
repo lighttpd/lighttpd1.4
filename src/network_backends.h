@@ -1,9 +1,7 @@
 #ifndef _NETWORK_BACKENDS_H_
 #define _NETWORK_BACKENDS_H_
+#include "first.h"
 
-#ifdef HAVE_CONFIG_H
-# include "config.h"
-#endif
 #include "settings.h"
 
 #include <sys/types.h>

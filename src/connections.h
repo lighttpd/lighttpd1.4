@@ -1,5 +1,6 @@
 #ifndef _CONNECTIONS_H_
 #define _CONNECTIONS_H_
+#include "first.h"
 
 #include "server.h"
 #include "fdevent.h"

@@ -1,5 +1,6 @@
 #ifndef _MOD_SSI_H_
 #define _MOD_SSI_H_
+#include "first.h"
 
 #include "base.h"
 #include "buffer.h"

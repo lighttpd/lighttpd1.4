@@ -1,3 +1,5 @@
+#include "first.h"
+
 #include "buffer.h"
 #include "log.h"
 #include "mod_ssi.h"

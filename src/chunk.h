@@ -1,5 +1,6 @@
 #ifndef _CHUNK_H_
 #define _CHUNK_H_
+#include "first.h"
 
 #include "buffer.h"
 #include "array.h"

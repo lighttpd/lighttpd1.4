@@ -1,3 +1,5 @@
+#include "first.h"
+
 /*
 ** This file contains all sources (including headers) to the LEMON
 ** LALR(1) parser generator.  The sources have been combined into a
@@ -11,10 +13,6 @@
 #include <string.h>
 #include <ctype.h>
 #include <stdlib.h>
-
-#ifdef HAVE_CONFIG_H
-#include "config.h"
-#endif
 
 #ifdef HAVE_STDINT_H
 # include <stdint.h>

@@ -3,6 +3,7 @@
 */
 /* First off, code is include which follows the "include" declaration
 ** in the input file. */
+#include "first.h"
 #include <stdio.h>
 %%
 /* Next is all token values, in a form suitable for use by makeheaders.

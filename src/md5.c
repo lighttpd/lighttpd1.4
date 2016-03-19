@@ -1,3 +1,5 @@
+#include "first.h"
+
 /* MD5C.C - RSA Data Security, Inc., MD5 message-digest algorithm
  */
 
@@ -23,14 +25,11 @@ These notices must be retained in any copies of any part of this
 documentation and/or software.
  */
 
-#ifdef HAVE_CONFIG_H
-# include "config.h"
-#endif
+
+#include "md5.h"
 
 #ifndef USE_OPENSSL
 #include <string.h>
-
-#include "md5.h"
 
 /* Constants for MD5Transform routine.
  */

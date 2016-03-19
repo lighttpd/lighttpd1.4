@@ -1,5 +1,6 @@
 #ifndef _STATUS_COUNTER_H_
 #define _STATUS_COUNTER_H_
+#include "first.h"
 
 #include "array.h"
 #include "base.h"

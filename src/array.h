@@ -1,9 +1,6 @@
 #ifndef ARRAY_H
 #define ARRAY_H
-
-#ifdef HAVE_CONFIG_H
-# include "config.h"
-#endif
+#include "first.h"
 
 #ifdef HAVE_PCRE_H
 # include <pcre.h>

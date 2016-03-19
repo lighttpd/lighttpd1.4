@@ -1,9 +1,6 @@
 #ifndef _KEY_VALUE_H_
 #define _KEY_VALUE_H_
-
-#ifdef HAVE_CONFIG_H
-# include "config.h"
-#endif
+#include "first.h"
 
 #ifdef HAVE_PCRE_H
 # include <pcre.h>

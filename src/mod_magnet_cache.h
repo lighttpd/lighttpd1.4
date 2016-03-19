@@ -1,5 +1,6 @@
 #ifndef _MOD_MAGNET_CACHE_H_
 #define _MOD_MAGNET_CACHE_H_
+#include "first.h"
 
 #include "buffer.h"
 #include "base.h"

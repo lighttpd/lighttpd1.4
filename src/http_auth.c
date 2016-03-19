@@ -1,3 +1,5 @@
+#include "first.h"
+
 #include "server.h"
 #include "log.h"
 #include "http_auth.h"

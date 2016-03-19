@@ -1,5 +1,6 @@
 #ifndef _BASE64_H_
 #define _BASE64_H_
+#include "first.h"
 
 #include "buffer.h"
 

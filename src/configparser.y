@@ -3,6 +3,7 @@
 %name configparser
 
 %include {
+#include "first.h"
 #include "configfile.h"
 #include "buffer.h"
 #include "array.h"

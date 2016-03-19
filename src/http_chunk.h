@@ -1,5 +1,6 @@
 #ifndef _HTTP_CHUNK_H_
 #define _HTTP_CHUNK_H_
+#include "first.h"
 
 #include "server.h"
 #include <sys/types.h>
