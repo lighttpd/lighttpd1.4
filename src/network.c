@@ -151,6 +151,8 @@ static int network_ssl_servername_callback(SSL *ssl, int *al, server *srv) {
 			NULL
 		);
 		SSL_set_verify_depth(ssl, con->conf.ssl_verifyclient_depth);
+	} else {
+		SSL_set_verify(ssl, SSL_VERIFY_NONE, NULL);
 	}
 
 	return SSL_TLSEXT_ERR_OK;
