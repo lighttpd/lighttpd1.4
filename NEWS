@@ -42,6 +42,7 @@ NEWS
   * [core] fix request_start in keep-alive requests to mark time when received first byte (fixes #2412)
   * [core] truncate pidfile on exit (fixes #2695)
   * consistent inclusion of config.h at top of files (fixes #2073)
+  * [core] add generic vector implementation
 
 - 1.4.39 - 2016-01-02
   * [core] fix memset_s call (fixes #2698)

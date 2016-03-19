@@ -62,6 +62,7 @@ common_src=base64.c buffer.c log.c \
 	stat_cache.c plugin.c joblist.c etag.c array.c \
 	data_string.c data_count.c data_array.c \
 	data_integer.c md5.c data_fastcgi.c \
+	vector.c \
 	fdevent_select.c fdevent_libev.c \
 	fdevent_poll.c fdevent_linux_sysepoll.c \
 	fdevent_solaris_devpoll.c fdevent_solaris_port.c \
@@ -274,7 +275,7 @@ hdr = server.h base64.h buffer.h network.h log.h keyvalue.h \
 	md5.h http_auth.h stream.h \
 	fdevent.h connections.h base.h stat_cache.h \
 	plugin.h mod_auth.h \
-	etag.h joblist.h array.h crc32.h \
+	etag.h joblist.h array.h vector.h crc32.h \
 	network_backends.h configfile.h \
 	mod_ssi.h mod_ssi_expr.h inet_ntop_cache.h \
 	configparser.h mod_ssi_exprparser.h \
