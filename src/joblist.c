@@ -1,3 +1,5 @@
+#include "first.h"
+
 #include "base.h"
 #include "joblist.h"
 #include "log.h"

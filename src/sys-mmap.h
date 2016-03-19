@@ -1,5 +1,6 @@
 #ifndef LI_SYS_MMAP_H
 #define LI_SYS_MMAP_H
+#include "first.h"
 
 #if defined(HAVE_SYS_MMAN_H)
 # include <sys/mman.h>

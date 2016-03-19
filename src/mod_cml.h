@@ -1,5 +1,6 @@
 #ifndef _MOD_CACHE_H_
 #define _MOD_CACHE_H_
+#include "first.h"
 
 #include "buffer.h"
 #include "server.h"

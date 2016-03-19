@@ -1,5 +1,6 @@
 #ifndef _CONFIG_PARSER_H_
 #define _CONFIG_PARSER_H_
+#include "first.h"
 
 #include "array.h"
 #include "buffer.h"

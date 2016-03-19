@@ -1,3 +1,7 @@
+#ifndef LI_MD5_H
+#define LI_MD5_H
+#include "first.h"
+
 /* MD5.H - header file for MD5C.C
  */
 
@@ -22,6 +26,18 @@ without express or implied warranty of any kind.
 These notices must be retained in any copies of any part of this
 documentation and/or software.
  */
+
+#if defined HAVE_LIBSSL && defined HAVE_OPENSSL_SSL_H
+#define USE_OPENSSL
+
+#include <openssl/md5.h>
+#define li_MD5_CTX    MD5_CTX
+#define li_MD5_Init   MD5_Init
+#define li_MD5_Update MD5_Update
+#define li_MD5_Final  MD5_Final
+
+#else
+
 #include <limits.h>
 #ifdef HAVE_STDINT_H
 # include <stdint.h>
@@ -44,3 +60,6 @@ typedef struct {
 void li_MD5_Init (li_MD5_CTX *);
 void li_MD5_Update (li_MD5_CTX *, const void *, unsigned int);
 void li_MD5_Final (unsigned char [16], li_MD5_CTX *);
+
+#endif
+#endif

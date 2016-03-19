@@ -1,5 +1,6 @@
 #ifndef _FILE_CACHE_H_
 #define _FILE_CACHE_H_
+#include "first.h"
 
 #include "base.h"
 
