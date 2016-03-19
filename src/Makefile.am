@@ -270,7 +270,7 @@ mod_accesslog_la_LIBADD = $(common_libadd)
 
 hdr = server.h base64.h buffer.h network.h log.h keyvalue.h \
 	response.h request.h fastcgi.h chunk.h \
-	settings.h http_chunk.h \
+	first.h settings.h http_chunk.h \
 	md5.h http_auth.h stream.h \
 	fdevent.h connections.h base.h stat_cache.h \
 	plugin.h mod_auth.h \
