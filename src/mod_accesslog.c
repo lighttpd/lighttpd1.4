@@ -584,6 +584,8 @@ SETDEFAULTS_FUNC(log_access_open) {
 
 		if (buffer_string_is_empty(s->access_logfile)) continue;
 
+		if (srv->srvconf.preflight_check) continue;
+
 		if (-1 == (s->log_access_fd = open_logfile_or_pipe(srv, s->access_logfile->ptr)))
 			return HANDLER_ERROR;
 

@@ -170,11 +170,11 @@ static int network_server_init(server *srv, buffer *host_token, specific_config 
 	buffer *b;
 	int is_unix_domain_socket = 0;
 	int fd;
+	int err;
 
 #ifdef __WIN32
 	WORD wVersionRequested;
 	WSADATA wsaData;
-	int err;
 
 	wVersionRequested = MAKEWORD( 2, 2 );
 
@@ -185,6 +185,7 @@ static int network_server_init(server *srv, buffer *host_token, specific_config 
 		    return -1;
 	}
 #endif
+	err = -1;
 
 	srv_socket = calloc(1, sizeof(*srv_socket));
 	force_assert(NULL != srv_socket);
@@ -380,6 +381,8 @@ static int network_server_init(server *srv, buffer *host_token, specific_config 
 #endif
 		}
 
+		if (srv->srvconf.preflight_check) break;
+
 		/* check if the socket exists and try to connect to it. */
 		if (-1 != (fd = connect(srv_socket->fd, (struct sockaddr *) &(srv_socket->addr), addr_len))) {
 			close(fd);
@@ -409,6 +412,11 @@ static int network_server_init(server *srv, buffer *host_token, specific_config 
 
 		break;
 	default:
+		goto error_free_socket;
+	}
+
+	if (srv->srvconf.preflight_check) {
+		err = 0;
 		goto error_free_socket;
 	}
 
@@ -501,7 +509,7 @@ error_free_socket:
 
 	buffer_free(b);
 
-	return -1;
+	return err; /* -1 if error; 0 if srv->srvconf.preflight_check successful */
 }
 
 int network_close(server *srv) {

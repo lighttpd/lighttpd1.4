@@ -616,6 +616,7 @@ int main (int argc, char **argv) {
 	i_am_root = 0;
 #endif
 	srv->srvconf.dont_daemonize = 0;
+	srv->srvconf.preflight_check = 0;
 
 	while(-1 != (o = getopt(argc, argv, "f:m:hvVDpt"))) {
 		switch(o) {
@@ -636,7 +637,7 @@ int main (int argc, char **argv) {
 			buffer_copy_string(srv->srvconf.modules_dir, optarg);
 			break;
 		case 'p': print_config = 1; break;
-		case 't': test_config = 1; break;
+		case 't': ++test_config; break;
 		case 'D': srv->srvconf.dont_daemonize = 1; break;
 		case 'v': show_version(); return 0;
 		case 'V': show_features(); return 0;
@@ -668,7 +669,14 @@ int main (int argc, char **argv) {
 	}
 
 	if (test_config) {
-		printf("Syntax OK\n");
+		if (1 == test_config) {
+			printf("Syntax OK\n");
+		} else { /*(test_config > 1)*/
+			test_config = 0;
+			srv->srvconf.preflight_check = 1;
+			srv->srvconf.dont_daemonize = 1;
+			buffer_reset(srv->srvconf.pid_file);
+		}
 	}
 
 	if (test_config || print_config) {
@@ -1049,7 +1057,7 @@ int main (int argc, char **argv) {
 
 	/* Close stderr ASAP in the child process to make sure that nothing
 	 * is being written to that fd which may not be valid anymore. */
-	if (-1 == log_error_open(srv)) {
+	if (!srv->srvconf.preflight_check && -1 == log_error_open(srv)) {
 		log_error_write(srv, __FILE__, __LINE__, "s", "Opening errorlog failed. Going down.");
 
 		plugins_free(srv);
@@ -1106,6 +1114,15 @@ int main (int argc, char **argv) {
 		server_free(srv);
 
 		return -1;
+	}
+
+	if (srv->srvconf.preflight_check) {
+		/*printf("Preflight OK");*//*(stdout reopened to /dev/null)*/
+		plugins_free(srv);
+		network_close(srv);
+		server_free(srv);
+
+		exit(0);
 	}
 
 
