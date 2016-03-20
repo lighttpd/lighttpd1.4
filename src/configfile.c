@@ -110,6 +110,7 @@ static int config_insert(server *srv) {
 		{ "ssl.honor-cipher-order",            NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION }, /* 66 */
 		{ "ssl.empty-fragments",               NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION }, /* 67 */
 		{ "server.upload-temp-file-size",      NULL, T_CONFIG_INT,     T_CONFIG_SCOPE_SERVER     }, /* 68 */
+		{ "mimetype.xattr-name",               NULL, T_CONFIG_STRING,  T_CONFIG_SCOPE_SERVER     }, /* 69 */
 
 		{ "server.host",
 			"use server.bind instead",
@@ -173,6 +174,7 @@ static int config_insert(server *srv) {
 	cv[55].destination = srv->srvconf.breakagelog_file;
 
 	cv[68].destination = &(srv->srvconf.upload_temp_file_size);
+	cv[69].destination = srv->srvconf.xattr_name;
 
 	srv->config_storage = calloc(1, srv->config_context->used * sizeof(specific_config *));
 

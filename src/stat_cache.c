@@ -220,24 +220,24 @@ void stat_cache_free(stat_cache *sc) {
 }
 
 #if defined(HAVE_XATTR)
-static int stat_cache_attr_get(buffer *buf, char *name) {
+static int stat_cache_attr_get(buffer *buf, char *name, char *xattrname) {
 	int attrlen;
 	int ret;
 
 	buffer_string_prepare_copy(buf, 1023);
 	attrlen = buf->size - 1;
-	if(0 == (ret = attr_get(name, "Content-Type", buf->ptr, &attrlen, 0))) {
+	if(0 == (ret = attr_get(name, xattrname, buf->ptr, &attrlen, 0))) {
 		buffer_commit(buf, attrlen);
 	}
 	return ret;
 }
 #elif defined(HAVE_EXTATTR)
-static int stat_cache_attr_get(buffer *buf, char *name) {
+static int stat_cache_attr_get(buffer *buf, char *name, char *xattrname) {
 	ssize_t attrlen;
 
 	buffer_string_prepare_copy(buf, 1023);
 
-	if (-1 != (attrlen = extattr_get_file(name, EXTATTR_NAMESPACE_USER, "Content-Type", buf->ptr, buf->size - 1))) {
+	if (-1 != (attrlen = extattr_get_file(name, EXTATTR_NAMESPACE_USER, xattrname, buf->ptr, buf->size - 1))) {
 		buf->used = attrlen + 1;
 		buf->ptr[attrlen] = '\0';
 		return 0;
@@ -608,7 +608,7 @@ handler_t stat_cache_get_entry(server *srv, connection *con, buffer *name, stat_
 		buffer_reset(sce->content_type);
 #if defined(HAVE_XATTR) || defined(HAVE_EXTATTR)
 		if (con->conf.use_xattr) {
-			stat_cache_attr_get(sce->content_type, name->ptr);
+			stat_cache_attr_get(sce->content_type, name->ptr, srv->srvconf.xattr_name->ptr);
 		}
 #endif
 		/* xattr did not set a content-type. ask the config */

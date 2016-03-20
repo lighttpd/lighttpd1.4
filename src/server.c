@@ -245,6 +245,7 @@ static server *server_init(void) {
 	srv->srvconf.network_backend = buffer_init();
 	srv->srvconf.upload_tempdirs = array_init();
 	srv->srvconf.reject_expect_100_with_417 = 1;
+	srv->srvconf.xattr_name = buffer_init_string("Content-Type");
 
 	/* use syslog */
 	srv->errorlog_fd = STDERR_FILENO;
@@ -285,6 +286,7 @@ static void server_free(server *srv) {
 	CLEAN(srvconf.pid_file);
 	CLEAN(srvconf.modules_dir);
 	CLEAN(srvconf.network_backend);
+	CLEAN(srvconf.xattr_name);
 
 	CLEAN(tmp_chunk_len);
 #undef CLEAN
