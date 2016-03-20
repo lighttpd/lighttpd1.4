@@ -599,6 +599,7 @@ static void show_help (void) {
 "usage:\n" \
 " -f <name>  filename of the config-file\n" \
 " -m <name>  module directory (default: "LIBRARY_DIR")\n" \
+" -i <secs>  graceful shutdown after <secs> of inactivity\n" \
 " -p         print the parsed config-file in internal form, and exit\n" \
 " -t         test the config-file, and exit\n" \
 " -D         don't go to background (default: go to background)\n" \
@@ -621,6 +622,7 @@ int main (int argc, char **argv) {
 	int num_childs = 0;
 	int pid_fd = -1, fd;
 	size_t i;
+	time_t idle_limit = 0, last_active_ts = time(NULL);
 #ifdef HAVE_SIGACTION
 	struct sigaction act;
 #endif
@@ -660,7 +662,7 @@ int main (int argc, char **argv) {
 	srv->srvconf.dont_daemonize = 0;
 	srv->srvconf.preflight_check = 0;
 
-	while(-1 != (o = getopt(argc, argv, "f:m:hvVDpt"))) {
+	while(-1 != (o = getopt(argc, argv, "f:m:i:hvVDpt"))) {
 		switch(o) {
 		case 'f':
 			if (srv->config_storage) {
@@ -678,6 +680,18 @@ int main (int argc, char **argv) {
 		case 'm':
 			buffer_copy_string(srv->srvconf.modules_dir, optarg);
 			break;
+		case 'i': {
+			char *endptr;
+			long timeout = strtol(optarg, &endptr, 0);
+			if (!*optarg || *endptr || timeout < 0) {
+				log_error_write(srv, __FILE__, __LINE__, "ss",
+						"Invalid idle timeout value:", optarg);
+				server_free(srv);
+				return -1;
+			}
+			idle_limit = (time_t)timeout;
+			break;
+		}
 		case 'p': print_config = 1; break;
 		case 't': ++test_config; break;
 		case 'D': srv->srvconf.dont_daemonize = 1; break;
@@ -1180,6 +1194,12 @@ int main (int argc, char **argv) {
 		close(parent_pipe_fd);
 	}
 
+	if (idle_limit && srv->srvconf.max_worker) {
+		srv->srvconf.max_worker = 0;
+		log_error_write(srv, __FILE__, __LINE__, "s",
+				"server idle time limit command line option disables server.max-worker config file option.");
+	}
+
 	/* start watcher and workers */
 	num_childs = srv->srvconf.max_worker;
 	if (num_childs > 0) {
@@ -1403,6 +1423,13 @@ int main (int argc, char **argv) {
 				/* trigger waitpid */
 				srv->cur_ts = min_ts;
 
+				/* check idle time limit, if enabled */
+				if (idle_limit && idle_limit < min_ts - last_active_ts && !graceful_shutdown) {
+					log_error_write(srv, __FILE__, __LINE__, "sDs", "[note] idle timeout", (int)idle_limit,
+							"s exceeded, initiating graceful shutdown");
+					graceful_shutdown = 2; /* value 2 indicates idle timeout */
+				}
+
 				/* cleanup stat-cache */
 				stat_cache_trigger_cleanup(srv);
 				/**
@@ -1597,6 +1624,7 @@ int main (int argc, char **argv) {
 						"polls:", n);
 			}
 #endif
+			last_active_ts = srv->cur_ts;
 			fd_ndx = -1;
 			do {
 				fdevent_handler handler;
@@ -1650,16 +1678,21 @@ int main (int argc, char **argv) {
 		remove_pid_file(srv, &pid_fd);
 	}
 
+	if (2 == graceful_shutdown) { /* value 2 indicates idle timeout */
+		log_error_write(srv, __FILE__, __LINE__, "s",
+				"server stopped after idle timeout");
+	} else {
 #ifdef HAVE_SIGACTION
-	log_error_write(srv, __FILE__, __LINE__, "sdsd", 
-			"server stopped by UID =",
-			last_sigterm_info.si_uid,
-			"PID =",
-			last_sigterm_info.si_pid);
+		log_error_write(srv, __FILE__, __LINE__, "sdsd",
+				"server stopped by UID =",
+				last_sigterm_info.si_uid,
+				"PID =",
+				last_sigterm_info.si_pid);
 #else
-	log_error_write(srv, __FILE__, __LINE__, "s", 
-			"server stopped");
+		log_error_write(srv, __FILE__, __LINE__, "s",
+				"server stopped");
 #endif
+	}
 
 	/* clean-up */
 	log_error_close(srv);
