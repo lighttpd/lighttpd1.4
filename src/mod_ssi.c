@@ -277,6 +277,11 @@ static int build_ssi_cgi_vars(server *srv, connection *con, plugin_data *p) {
 	ssi_env_add(p->ssi_cgi_env, CONST_STRING("DOCUMENT_ROOT"), con->physical.doc_root->ptr);
 
 	ssi_env_add(p->ssi_cgi_env, CONST_STRING("REQUEST_URI"), con->request.uri->ptr);
+
+	if (!buffer_string_is_empty(con->uri.scheme)) {
+		ssi_env_add(p->ssi_cgi_env, CONST_STRING("REQUEST_SCHEME"), con->uri.scheme->ptr);
+	}
+
 	ssi_env_add(p->ssi_cgi_env, CONST_STRING("QUERY_STRING"), buffer_is_empty(con->uri.query) ? "" : con->uri.query->ptr);
 	ssi_env_add(p->ssi_cgi_env, CONST_STRING("REQUEST_METHOD"), get_http_method_name(con->request.http_method));
 	ssi_env_add(p->ssi_cgi_env, CONST_STRING("REDIRECT_STATUS"), "200");
@@ -330,8 +335,10 @@ static int process_ssi_stmt(server *srv, connection *con, plugin_data *p, const 
 
 		struct {
 			const char *var;
-			enum { SSI_ECHO_UNSET, SSI_ECHO_DATE_GMT, SSI_ECHO_DATE_LOCAL, SSI_ECHO_DOCUMENT_NAME, SSI_ECHO_DOCUMENT_URI,
-					SSI_ECHO_LAST_MODIFIED, SSI_ECHO_USER_NAME } type;
+			enum { SSI_ECHO_UNSET, SSI_ECHO_DATE_GMT, SSI_ECHO_DATE_LOCAL,
+					SSI_ECHO_DOCUMENT_NAME, SSI_ECHO_DOCUMENT_URI,
+					SSI_ECHO_LAST_MODIFIED, SSI_ECHO_USER_NAME,
+					SSI_ECHO_SCRIPT_URI, SSI_ECHO_SCRIPT_URL } type;
 		} echovars[] = {
 			{ "DATE_GMT",      SSI_ECHO_DATE_GMT },
 			{ "DATE_LOCAL",    SSI_ECHO_DATE_LOCAL },
@@ -339,6 +346,8 @@ static int process_ssi_stmt(server *srv, connection *con, plugin_data *p, const 
 			{ "DOCUMENT_URI",  SSI_ECHO_DOCUMENT_URI },
 			{ "LAST_MODIFIED", SSI_ECHO_LAST_MODIFIED },
 			{ "USER_NAME",     SSI_ECHO_USER_NAME },
+			{ "SCRIPT_URI",    SSI_ECHO_SCRIPT_URI },
+			{ "SCRIPT_URL",    SSI_ECHO_SCRIPT_URL },
 
 			{ NULL, SSI_ECHO_UNSET }
 		};
@@ -413,7 +422,7 @@ static int process_ssi_stmt(server *srv, connection *con, plugin_data *p, const 
 			buffer_free(b);
 			break;
 		}
-		case SSI_ECHO_LAST_MODIFIED:	{
+		case SSI_ECHO_LAST_MODIFIED: {
 			time_t t = sce->st.st_mtime;
 
 			if (0 == strftime(buf, sizeof(buf), p->timefmt->ptr, localtime(&t))) {
@@ -455,6 +464,27 @@ static int process_ssi_stmt(server *srv, connection *con, plugin_data *p, const 
 		}
 		case SSI_ECHO_DOCUMENT_URI: {
 			chunkqueue_append_mem(con->write_queue, CONST_BUF_LEN(con->uri.path));
+			break;
+		}
+		case SSI_ECHO_SCRIPT_URI: {
+			if (!buffer_string_is_empty(con->uri.scheme) && !buffer_string_is_empty(con->uri.authority)) {
+				chunkqueue_append_mem(con->write_queue, CONST_BUF_LEN(con->uri.scheme));
+				chunkqueue_append_mem(con->write_queue, CONST_STR_LEN("://"));
+				chunkqueue_append_mem(con->write_queue, CONST_BUF_LEN(con->uri.authority));
+				chunkqueue_append_mem(con->write_queue, CONST_BUF_LEN(con->request.uri));
+				if (!buffer_string_is_empty(con->uri.query)) {
+					chunkqueue_append_mem(con->write_queue, CONST_STR_LEN("?"));
+					chunkqueue_append_mem(con->write_queue, CONST_BUF_LEN(con->uri.query));
+				}
+			}
+			break;
+		}
+		case SSI_ECHO_SCRIPT_URL: {
+			chunkqueue_append_mem(con->write_queue, CONST_BUF_LEN(con->request.uri));
+			if (!buffer_string_is_empty(con->uri.query)) {
+				chunkqueue_append_mem(con->write_queue, CONST_STR_LEN("?"));
+				chunkqueue_append_mem(con->write_queue, CONST_BUF_LEN(con->uri.query));
+			}
 			break;
 		}
 		default: {
