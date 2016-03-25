@@ -142,8 +142,8 @@ size_t li_to_base64_no_padding(char* out, size_t out_length, const unsigned char
 	}
 
 	/* check overflows */
-	force_assert(full_tuples < 2*full_tuples);
-	force_assert(full_tuples < 4*full_tuples);
+	force_assert(full_tuples <= 2*full_tuples);
+	force_assert(full_tuples <= 4*full_tuples);
 	force_assert(4*full_tuples <= 4*full_tuples + out_tuple_remainder);
 	force_assert(require_space <= out_length);
 
