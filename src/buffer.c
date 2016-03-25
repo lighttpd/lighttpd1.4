@@ -884,9 +884,15 @@ void buffer_urldecode_query(buffer *url) {
 	buffer_urldecode_internal(url, 1);
 }
 
-/* Remove "/../", "//", "/./" parts from path,
- * strips leading spaces,
- * prepends "/" if not present already
+/* - special case: empty string returns empty string
+ * - on windows or cygwin: replace \ with /
+ * - strip leading spaces
+ * - prepends "/" if not present already
+ * - resolve "/../", "//" and "/./" the usual way:
+ *   the first one removes a preceding component, the other two
+ *   get compressed to "/".
+ * - "/." and "/.." at the end are similar, but always leave a trailing
+ *   "/"
  *
  * /blah/..         gets  /
  * /blah/../foo     gets  /foo
@@ -899,10 +905,9 @@ void buffer_urldecode_query(buffer *url) {
 
 void buffer_path_simplify(buffer *dest, buffer *src)
 {
-	int toklen;
-	char c, pre1;
+	/* current character, the one before, and the one before that from input */
+	char c, pre1, pre2;
 	char *start, *slash, *walk, *out;
-	unsigned short pre;
 
 	force_assert(NULL != dest && NULL != src);
 
@@ -935,53 +940,60 @@ void buffer_path_simplify(buffer *dest, buffer *src)
 	out   = dest->ptr;
 	slash = dest->ptr;
 
-
+	/* skip leading spaces */
 	while (*walk == ' ') {
 		walk++;
 	}
 
-	pre1 = *(walk++);
-	c    = *(walk++);
-	pre  = pre1;
-	if (pre1 != '/') {
-		pre = ('/' << 8) | pre1;
+	pre2 = pre1 = 0;
+	c = *(walk++);
+	/* prefix with '/' if not already present */
+	if (c != '/') {
+		pre1 = '/';
 		*(out++) = '/';
 	}
-	*(out++) = pre1;
 
-	if (pre1 == '\0') {
-		dest->used = (out - start) + 1;
-		return;
-	}
-
-	for (;;) {
-		if (c == '/' || c == '\0') {
-			toklen = out - slash;
-			if (toklen == 3 && pre == (('.' << 8) | '.')) {
-				out = slash;
-				if (out > start) {
-					out--;
-					while (out > start && *out != '/') out--;
-				}
-
-				if (c == '\0') out++;
-			} else if (toklen == 1 || pre == (('/' << 8) | '.')) {
-				out = slash;
-				if (c == '\0') out++;
-			}
-
-			slash = out;
-		}
-
-		if (c == '\0') break;
-
+	while (c != '\0') {
+		/* assert((src != dest || out <= walk) && slash <= out); */
+		/* the following comments about out and walk are only interesting if
+		 * src == dest; otherwise the memory areas don't overlap anyway.
+		 */
+		pre2 = pre1;
 		pre1 = c;
-		pre  = (pre << 8) | pre1;
+
+		/* possibly: out == walk - need to read first */
 		c    = *walk;
 		*out = pre1;
 
 		out++;
 		walk++;
+		/* (out <= walk) still true; also now (slash < out) */
+
+		if (c == '/' || c == '\0') {
+			const size_t toklen = out - slash;
+			if (toklen == 3 && pre2 == '.' && pre1 == '.') {
+				/* "/../" or ("/.." at end of string) */
+				out = slash;
+				/* if there is something before "/..", there is at least one
+				 * component, which needs to be removed */
+				if (out > start) {
+					out--;
+					while (out > start && *out != '/') out--;
+				}
+
+				/* don't kill trailing '/' at end of path */
+				if (c == '\0') out++;
+				/* slash < out before, so out_new <= slash + 1 <= out_before <= walk */
+			} else if (toklen == 1 || (pre2 == '/' && pre1 == '.')) {
+				/* "//" or "/./" or (("/" or "/.") at end of string) */
+				out = slash;
+				/* don't kill trailing '/' at end of path */
+				if (c == '\0') out++;
+				/* slash < out before, so out_new <= slash + 1 <= out_before <= walk */
+			}
+
+			slash = out;
+		}
 	}
 
 	buffer_string_set_length(dest, out - start);

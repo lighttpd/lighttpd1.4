@@ -46,6 +46,7 @@ NEWS
   * [core] replace array weakref with vector
   * [base64] fix crash due to broken force_assert
   * [unittests] add test_buffer and test_base64 unit tests
+  * [buffer] refactor buffer_path_simplify (fixes #2560)
 
 - 1.4.39 - 2016-01-02
   * [core] fix memset_s call (fixes #2698)
