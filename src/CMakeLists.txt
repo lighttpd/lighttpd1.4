@@ -566,6 +566,19 @@ add_and_install_library(mod_userdir mod_userdir.c)
 add_and_install_library(mod_usertrack mod_usertrack.c)
 add_and_install_library(mod_webdav mod_webdav.c)
 
+add_executable(test_buffer
+	test_buffer.c
+	buffer.c
+)
+add_test(NAME test_buffer COMMAND test_buffer)
+
+add_executable(test_base64
+	test_base64.c
+	buffer.c
+	base64.c
+)
+add_test(NAME test_base64 COMMAND test_base64)
+
 if(HAVE_PCRE_H)
 	target_link_libraries(lighttpd ${PCRE_LDFLAGS})
 	add_target_properties(lighttpd COMPILE_FLAGS ${PCRE_CFLAGS})
@@ -685,6 +698,11 @@ endif()
 if(WITH_LIBUNWIND)
 	target_link_libraries(lighttpd ${LIBUNWIND_LDFLAGS})
 	add_target_properties(lighttpd COMPILE_FLAGS ${LIBUNWIND_CFLAGS})
+
+	target_link_libraries(test_buffer ${LIBUNWIND_LDFLAGS})
+	add_target_properties(test_buffer COMPILE_FLAGS ${LIBUNWIND_CFLAGS})
+	target_link_libraries(test_base64 ${LIBUNWIND_LDFLAGS})
+	add_target_properties(test_base64 COMPILE_FLAGS ${LIBUNWIND_CFLAGS})
 endif()
 
 if(NOT WIN32)

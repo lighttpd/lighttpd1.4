@@ -1,8 +1,12 @@
 AM_CFLAGS = $(FAM_CFLAGS) $(LIBUNWIND_CFLAGS)
 
-noinst_PROGRAMS=proc_open lemon # simple-fcgi #graphic evalo bench ajp ssl error_test adserver gen-license
+noinst_PROGRAMS=lemon proc_open test_buffer test_base64
 sbin_PROGRAMS=lighttpd lighttpd-angel
 LEMON=$(top_builddir)/src/lemon$(EXEEXT)
+
+TESTS=\
+	test_buffer$(EXEEXT) \
+	test_base64$(EXEEXT)
 
 lemon_SOURCES=lemon.c
 
@@ -295,6 +299,12 @@ proc_open_SOURCES = proc_open.c buffer.c
 proc_open_LDADD = $(LIBUNWIND_LIBS)
 proc_open_CPPFLAGS= -DDEBUG_PROC_OPEN
 
+test_buffer_SOURCES = test_buffer.c buffer.c
+test_buffer_LDADD = $(LIBUNWIND_LIBS)
+
+test_base64_SOURCES = test_base64.c base64.c buffer.c
+test_base64_LDADD = $(LIBUNWIND_LIBS)
+
 noinst_HEADERS   = $(hdr)
 EXTRA_DIST = \
 	mod_skeleton.c \
@@ -303,3 +313,4 @@ EXTRA_DIST = \
 	lempar.c \
 	SConscript \
 	CMakeLists.txt config.h.cmake
+
