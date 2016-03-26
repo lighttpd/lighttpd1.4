@@ -53,6 +53,7 @@ NEWS
   * [mod_proxy] accept LF delimited headers, not just CRLF (fixes #2594)
   * [core] wait for grandchild to be ready when daemonizing (fixes #2712, thx pasdVn)
   * [core] respond 411 Length Required if request has Transfer-Encoding: chunked (fixes #631)
+  * [core] fixed the loading for default modules if they are specified explicitly
 
 - 1.4.39 - 2016-01-02
   * [core] fix memset_s call (fixes #2698)
