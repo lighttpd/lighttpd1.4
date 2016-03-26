@@ -821,7 +821,7 @@ static int http_list_directory(server *srv, connection *con, plugin_data *p, buf
 		if (con->conf.use_xattr) {
 			memcpy(path_file, DIRLIST_ENT_NAME(tmp), tmp->namelen + 1);
 			attrlen = sizeof(attrval) - 1;
-			if (attr_get(path, "Content-Type", attrval, &attrlen, 0) == 0) {
+			if (attr_get(path, srv->srvconf.xattr_name->ptr, attrval, &attrlen, 0) == 0) {
 				attrval[attrlen] = '\0';
 				content_type = attrval;
 			}
@@ -829,7 +829,7 @@ static int http_list_directory(server *srv, connection *con, plugin_data *p, buf
 #elif defined(HAVE_EXTATTR)
 		if (con->conf.use_xattr) {
 			memcpy(path_file, DIRLIST_ENT_NAME(tmp), tmp->namelen + 1);
-			if(-1 != (attrlen = extattr_get_file(path, EXTATTR_NAMESPACE_USER, "Content-Type", attrval, sizeof(attrval)-1))) {
+			if(-1 != (attrlen = extattr_get_file(path, EXTATTR_NAMESPACE_USER, srv->srvconf.xattr_name->ptr, attrval, sizeof(attrval)-1))) {
 				attrval[attrlen] = '\0';
 				content_type = attrval;
 			}
