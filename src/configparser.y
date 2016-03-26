@@ -9,6 +9,8 @@
 #include "array.h"
 
 #include <assert.h>
+#include <ctype.h>
+#include <errno.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -267,8 +269,16 @@ value(A) ::= STRING(B). {
 }
 
 value(A) ::= INTEGER(B). {
+  char *endptr;
   A = (data_unset *)data_integer_init();
-  ((data_integer *)(A))->value = strtol(B->ptr, NULL, 10);
+  errno = 0;
+  ((data_integer *)(A))->value = strtol(B->ptr, &endptr, 10);
+  /* skip trailing whitespace */
+  if (endptr != B->ptr) while (isspace(*endptr)) endptr++;
+  if (0 != errno || *endptr != '\0') {
+    fprintf(stderr, "error parsing number: '%s'\n", B->ptr);
+    ctx->ok = 0;
+  }
   buffer_free(B);
   B = NULL;
 }
