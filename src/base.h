@@ -510,6 +510,7 @@ typedef struct {
 	buffer *breakagelog_file;
 
 	unsigned short dont_daemonize;
+	unsigned short preflight_check;
 	buffer *changeroot;
 	buffer *username;
 	buffer *groupname;

@@ -54,6 +54,7 @@ NEWS
   * [core] wait for grandchild to be ready when daemonizing (fixes #2712, thx pasdVn)
   * [core] respond 411 Length Required if request has Transfer-Encoding: chunked (fixes #631)
   * [core] fixed the loading for default modules if they are specified explicitly
+  * [core] lighttpd -tt performs preflight startup checks (fixes #411)
 
 - 1.4.39 - 2016-01-02
   * [core] fix memset_s call (fixes #2698)
