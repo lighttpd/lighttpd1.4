@@ -50,6 +50,7 @@ NEWS
   * validate return values from strtol, strtoul (fixes #2564)
   * [mod_ssi] Add SSI vars SCRIPT_{URI,URL} and REQUEST_SCHEME (fixes #2721)
   * [config] warn if server.upload-dirs has non-existent dirs (fixes #2508)
+  * [mod_proxy] accept LF delimited headers, not just CRLF (fixes #2594)
 
 - 1.4.39 - 2016-01-02
   * [core] fix memset_s call (fixes #2698)
