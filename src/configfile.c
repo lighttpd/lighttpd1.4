@@ -1288,6 +1288,31 @@ int config_set_defaults(server *srv) {
 		}
 	}
 
+	if (srv->srvconf.upload_tempdirs->used) {
+		buffer * const b = srv->tmp_buf;
+		size_t len;
+		if (!buffer_string_is_empty(srv->srvconf.changeroot)) {
+			buffer_copy_buffer(b, srv->srvconf.changeroot);
+			buffer_append_slash(b);
+		} else {
+			buffer_copy_string_len(b, "", 0);
+		}
+		len = buffer_string_length(b);
+
+		for (i = 0; i < srv->srvconf.upload_tempdirs->used; ++i) {
+			const data_string * const ds = (data_string *)srv->srvconf.upload_tempdirs->data[i];
+			buffer_string_set_length(b, len); /*(truncate)*/
+			buffer_append_string_buffer(b, ds->value);
+			if (-1 == stat(b->ptr, &st1)) {
+				log_error_write(srv, __FILE__, __LINE__, "sb",
+						"server.upload-dirs doesn't exist:", b);
+			} else if (!S_ISDIR(st1.st_mode)) {
+				log_error_write(srv, __FILE__, __LINE__, "sb",
+						"server.upload-dirs isn't a directory:", b);
+			}
+		}
+	}
+
 	if (buffer_string_is_empty(s->document_root)) {
 		log_error_write(srv, __FILE__, __LINE__, "s",
 				"a default document-root has to be set");
