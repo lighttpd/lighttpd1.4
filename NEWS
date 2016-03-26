@@ -51,6 +51,7 @@ NEWS
   * [mod_ssi] Add SSI vars SCRIPT_{URI,URL} and REQUEST_SCHEME (fixes #2721)
   * [config] warn if server.upload-dirs has non-existent dirs (fixes #2508)
   * [mod_proxy] accept LF delimited headers, not just CRLF (fixes #2594)
+  * [core] wait for grandchild to be ready when daemonizing (fixes #2712, thx pasdVn)
 
 - 1.4.39 - 2016-01-02
   * [core] fix memset_s call (fixes #2698)

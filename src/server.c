@@ -147,7 +147,9 @@ static void signal_handler(int sig) {
 #endif
 
 #ifdef HAVE_FORK
-static void daemonize(void) {
+static int daemonize(void) {
+	int pipefd[2];
+	pid_t pid;
 #ifdef SIGTTOU
 	signal(SIGTTOU, SIG_IGN);
 #endif
@@ -157,7 +159,32 @@ static void daemonize(void) {
 #ifdef SIGTSTP
 	signal(SIGTSTP, SIG_IGN);
 #endif
-	if (0 != fork()) exit(0);
+
+	if (pipe(pipefd) < 0) exit(-1);
+
+	if (0 > (pid = fork())) exit(-1);
+
+	if (0 < pid) {
+		char buf;
+		ssize_t bytes;
+
+		close(pipefd[1]);
+		/* parent waits for grandchild to be ready */
+		do {
+			bytes = read(pipefd[0], &buf, sizeof(buf));
+		} while (bytes < 0 && EINTR == errno);
+		close(pipefd[0]);
+
+		if (bytes <= 0) {
+			/* closed fd (without writing) == failure in grandchild */
+			fputs("daemonized server failed to start; check error log for details\n", stderr);
+			exit(-1);
+		}
+
+		exit(0);
+	}
+
+	close(pipefd[0]);
 
 	if (-1 == setsid()) exit(0);
 
@@ -166,6 +193,9 @@ static void daemonize(void) {
 	if (0 != fork()) exit(0);
 
 	if (0 != chdir("/")) exit(0);
+
+	fd_close_on_exec(pipefd[1]);
+	return pipefd[1];
 }
 #endif
 
@@ -589,6 +619,10 @@ int main (int argc, char **argv) {
 	struct rlimit rlim;
 #endif
 
+#ifdef HAVE_FORK
+	int parent_pipe_fd = -1;
+#endif
+
 #ifdef USE_ALARM
 	struct itimerval interval;
 
@@ -597,7 +631,6 @@ int main (int argc, char **argv) {
 	interval.it_value.tv_sec = 1;
 	interval.it_value.tv_usec = 0;
 #endif
-
 
 	/* for nice %b handling in strfime() */
 	setlocale(LC_TIME, "C");
@@ -982,7 +1015,9 @@ int main (int argc, char **argv) {
 
 #ifdef HAVE_FORK
 	/* network is up, let's deamonize ourself */
-	if (srv->srvconf.dont_daemonize == 0) daemonize();
+	if (srv->srvconf.dont_daemonize == 0) {
+		parent_pipe_fd = daemonize();
+	}
 #endif
 
 
@@ -1110,6 +1145,15 @@ int main (int argc, char **argv) {
 
 
 #ifdef HAVE_FORK
+	/**
+	 * notify daemonize-grandparent of successful startup
+	 * do this before any further forking is done (workers)
+	 */
+	if (srv->srvconf.dont_daemonize == 0) {
+		if (0 > write(parent_pipe_fd, "", 1)) return -1;
+		close(parent_pipe_fd);
+	}
+
 	/* start watcher and workers */
 	num_childs = srv->srvconf.max_worker;
 	if (num_childs > 0) {
