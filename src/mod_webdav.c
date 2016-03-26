@@ -1204,7 +1204,7 @@ URIHANDLER_FUNC(mod_webdav_subrequest_handler) {
 	buffer *b;
 	DIR *dir;
 	data_string *ds;
-	int depth = -1;
+	int depth = -1; /* (Depth: infinity) */
 	struct stat st;
 	buffer *prop_200;
 	buffer *prop_404;
@@ -1218,9 +1218,12 @@ URIHANDLER_FUNC(mod_webdav_subrequest_handler) {
 	if (buffer_is_empty(con->physical.path)) return HANDLER_GO_ON;
 
 	/* PROPFIND need them */
-	if (NULL != (ds = (data_string *)array_get_element(con->request.headers, "Depth"))) {
-		depth = strtol(ds->value->ptr, NULL, 10);
-	}
+	if (NULL != (ds = (data_string *)array_get_element(con->request.headers, "Depth")) && ds->value->used == 2) {
+		if ('0' == *ds->value->ptr)
+			depth = 0;
+		else if ('1' == *ds->value->ptr)
+			depth = 1;
+	}	/* else treat as Depth: infinity */
 
 	switch (con->request.http_method) {
 	case HTTP_METHOD_PROPFIND:
