@@ -533,7 +533,11 @@ context ::= DOLLAR SRVVARNAME(B) LBRACKET stringop(C) RBRACKET cond(E) expressio
         break;
       }
 
-      if (ctx->ok) configparser_push(ctx, dc, 1);
+      if (ctx->ok) {
+        configparser_push(ctx, dc, 1);
+      } else {
+        dc->free((data_unset*) dc);
+      }
     }
 
     buffer_free(b);
