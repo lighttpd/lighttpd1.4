@@ -232,7 +232,7 @@ static int build_ssi_cgi_vars(server *srv, connection *con, plugin_data *p) {
 		     );
 	ssi_env_add(p->ssi_cgi_env, CONST_STRING("GATEWAY_INTERFACE"), "CGI/1.1");
 
-	li_utostr(buf,
+	li_utostrn(buf, sizeof(buf),
 #ifdef HAVE_IPV6
 	       ntohs(srv_sock->addr.plain.sa_family ? srv_sock->addr.ipv6.sin6_port : srv_sock->addr.ipv4.sin_port)
 #else
@@ -248,7 +248,7 @@ static int build_ssi_cgi_vars(server *srv, connection *con, plugin_data *p) {
 	if (con->request.content_length > 0) {
 		/* CGI-SPEC 6.1.2 and FastCGI spec 6.3 */
 
-		li_itostr(buf, con->request.content_length);
+		li_itostrn(buf, sizeof(buf), con->request.content_length);
 		ssi_env_add(p->ssi_cgi_env, CONST_STRING("CONTENT_LENGTH"), buf);
 	}
 

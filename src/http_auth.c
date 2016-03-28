@@ -1099,10 +1099,10 @@ int http_auth_digest_generate_nonce(server *srv, mod_auth_plugin_data *p, buffer
 	li_MD5_Update(&Md5Ctx, CONST_STR_LEN("+"));
 
 	/* we assume sizeof(time_t) == 4 here, but if not it ain't a problem at all */
-	li_itostr(hh, srv->cur_ts);
+	li_itostrn(hh, sizeof(hh), srv->cur_ts);
 	li_MD5_Update(&Md5Ctx, (unsigned char *)hh, strlen(hh));
 	li_MD5_Update(&Md5Ctx, (unsigned char *)srv->entropy, sizeof(srv->entropy));
-	li_itostr(hh, rand());
+	li_itostrn(hh, sizeof(hh), rand());
 	li_MD5_Update(&Md5Ctx, (unsigned char *)hh, strlen(hh));
 
 	li_MD5_Final(h, &Md5Ctx);

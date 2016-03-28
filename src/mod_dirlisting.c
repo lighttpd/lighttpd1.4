@@ -437,7 +437,7 @@ static void http_dirls_sort(dirls_entry_t **ent, int num) {
 /* buffer must be able to hold "999.9K"
  * conversion is simple but not perfect
  */
-static int http_list_directory_sizefmt(char *buf, off_t size) {
+static int http_list_directory_sizefmt(char *buf, size_t outsz, off_t size) {
 	const char unit[] = "KMGTPE";	/* Kilo, Mega, Tera, Peta, Exa */
 	const char *u = unit - 1;		/* u will always increment at least once */
 	int remain;
@@ -465,7 +465,7 @@ static int http_list_directory_sizefmt(char *buf, off_t size) {
 		u++;
 	}
 
-	li_itostr(out, size);
+	li_itostrn(out, outsz, size);
 	out += strlen(out);
 	out[0] = '.';
 	out[1] = remain + '0';
@@ -862,7 +862,7 @@ static int http_list_directory(server *srv, connection *con, plugin_data *p, buf
 #else
 		strftime(datebuf, sizeof(datebuf), "%Y-%b-%d %H:%M:%S", localtime(&(tmp->mtime)));
 #endif
-		http_list_directory_sizefmt(sizebuf, tmp->size);
+		http_list_directory_sizefmt(sizebuf, sizeof(sizebuf), tmp->size);
 
 		buffer_append_string_len(out, CONST_STR_LEN("<tr><td class=\"n\"><a href=\""));
 		buffer_append_string_encoded(out, DIRLIST_ENT_NAME(tmp), tmp->namelen, ENCODING_REL_URI_PART);

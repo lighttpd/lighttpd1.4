@@ -1480,7 +1480,7 @@ static int scgi_create_env(server *srv, handler_ctx *hctx) {
 
 	/* CGI-SPEC 6.1.2, FastCGI spec 6.3 and SCGI spec */
 
-	li_itostr(buf, con->request.content_length);
+	li_itostrn(buf, sizeof(buf), con->request.content_length);
 	scgi_env_add(p->scgi_env, CONST_STR_LEN("CONTENT_LENGTH"), buf, strlen(buf));
 	scgi_env_add(p->scgi_env, CONST_STR_LEN("SCGI"), CONST_STR_LEN("1"));
 
@@ -1519,7 +1519,7 @@ static int scgi_create_env(server *srv, handler_ctx *hctx) {
 
 	scgi_env_add(p->scgi_env, CONST_STR_LEN("GATEWAY_INTERFACE"), CONST_STR_LEN("CGI/1.1"));
 
-	li_utostr(buf,
+	li_utostrn(buf, sizeof(buf),
 #ifdef HAVE_IPV6
 	       ntohs(srv_sock->addr.plain.sa_family ? srv_sock->addr.ipv6.sin6_port : srv_sock->addr.ipv4.sin_port)
 #else
@@ -1540,7 +1540,7 @@ static int scgi_create_env(server *srv, handler_ctx *hctx) {
 	}
 	scgi_env_add(p->scgi_env, CONST_STR_LEN("SERVER_ADDR"), s, strlen(s));
 
-	li_utostr(buf,
+	li_utostrn(buf, sizeof(buf),
 #ifdef HAVE_IPV6
 	       ntohs(con->dst_addr.plain.sa_family ? con->dst_addr.ipv6.sin6_port : con->dst_addr.ipv4.sin_port)
 #else
