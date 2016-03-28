@@ -303,7 +303,7 @@ static handler_t mod_auth_uri_handler(server *srv, connection *con, void *p_d) {
 			response_header_insert(srv, con, CONST_STR_LEN("WWW-Authenticate"), CONST_BUF_LEN(p->tmp_buf));
 		} else if (0 == strcmp(method->value->ptr, "digest")) {
 			char hh[33];
-			http_auth_digest_generate_nonce(srv, p, srv->tmp_buf, hh);
+			http_auth_digest_generate_nonce(srv, p, srv->tmp_buf, hh, sizeof(hh));
 
 			buffer_copy_string_len(p->tmp_buf, CONST_STR_LEN("Digest realm=\""));
 			buffer_append_string_buffer(p->tmp_buf, realm->value);
