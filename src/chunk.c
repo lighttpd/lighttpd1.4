@@ -394,6 +394,7 @@ static chunk *chunkqueue_get_append_tempfile(chunkqueue *cq) {
 	buffer *template = buffer_init_string("/var/tmp/lighttpd-upload-XXXXXX");
 	int fd;
 
+	mode_t usaved = umask(077);
 	if (cq->tempdirs && cq->tempdirs->used) {
 		size_t i;
 
@@ -411,6 +412,7 @@ static chunk *chunkqueue_get_append_tempfile(chunkqueue *cq) {
 	} else {
 		fd = mkstemp(template->ptr);
 	}
+	umask(usaved);
 
 	if (-1 == fd) {
 		buffer_free(template);
