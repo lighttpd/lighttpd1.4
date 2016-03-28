@@ -1532,7 +1532,8 @@ static int scgi_create_env(server *srv, handler_ctx *hctx) {
 	/* get the server-side of the connection to the client */
 	our_addr_len = sizeof(our_addr);
 
-	if (-1 == getsockname(con->fd, &(our_addr.plain), &our_addr_len)) {
+	if (-1 == getsockname(con->fd, (struct sockaddr *)&our_addr, &our_addr_len)
+	    || our_addr_len > sizeof(our_addr)) {
 		s = inet_ntop_cache_get_ip(srv, &(srv_sock->addr));
 	} else {
 		s = inet_ntop_cache_get_ip(srv, &(our_addr));
