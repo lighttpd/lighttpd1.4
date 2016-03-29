@@ -674,9 +674,9 @@ int main (int argc, char **argv) {
 		case 'p': print_config = 1; break;
 		case 't': ++test_config; break;
 		case 'D': srv->srvconf.dont_daemonize = 1; break;
-		case 'v': show_version(); return 0;
-		case 'V': show_features(); return 0;
-		case 'h': show_help(); return 0;
+		case 'v': show_version(); server_free(srv); return 0;
+		case 'V': show_features(); server_free(srv); return 0;
+		case 'h': show_help(); server_free(srv); return 0;
 		default:
 			show_help();
 			server_free(srv);
