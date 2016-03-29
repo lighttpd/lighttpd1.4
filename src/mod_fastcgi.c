@@ -1036,11 +1036,11 @@ static int fcgi_spawn_connection(server *srv,
 					}
 				}
 			} else {
-				for (i = 0; environ[i]; i++) {
+				for (char **e = environ; *e; ++e) {
 					char *eq;
 
-					if (NULL != (eq = strchr(environ[i], '='))) {
-						env_add(&env, environ[i], eq - environ[i], eq+1, strlen(eq+1));
+					if (NULL != (eq = strchr(*e, '='))) {
+						env_add(&env, *e, eq - *e, eq+1, strlen(eq+1));
 					}
 				}
 			}
