@@ -111,6 +111,7 @@ static int config_insert(server *srv) {
 		{ "ssl.empty-fragments",               NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION }, /* 67 */
 		{ "server.upload-temp-file-size",      NULL, T_CONFIG_INT,     T_CONFIG_SCOPE_SERVER     }, /* 68 */
 		{ "mimetype.xattr-name",               NULL, T_CONFIG_STRING,  T_CONFIG_SCOPE_SERVER     }, /* 69 */
+		{ "server.listen-backlog",             NULL, T_CONFIG_INT,     T_CONFIG_SCOPE_CONNECTION }, /* 70 */
 
 		{ "server.host",
 			"use server.bind instead",
@@ -229,6 +230,7 @@ static int config_insert(server *srv) {
 		s->ssl_verifyclient_depth = 9;
 		s->ssl_verifyclient_export_cert = 0;
 		s->ssl_disable_client_renegotiation = 1;
+		s->listen_backlog = (0 == i ? 1024 : srv->config_storage[0]->listen_backlog);
 
 		/* all T_CONFIG_SCOPE_CONNECTION options */
 		cv[2].destination = s->errorfile_prefix;
@@ -285,6 +287,7 @@ static int config_insert(server *srv) {
 		cv[65].destination = &(s->ssl_disable_client_renegotiation);
 		cv[66].destination = &(s->ssl_honor_cipher_order);
 		cv[67].destination = &(s->ssl_empty_fragments);
+		cv[70].destination = &(s->listen_backlog);
 
 		srv->config_storage[i] = s;
 
@@ -355,6 +358,7 @@ int config_setup_connection(server *srv, connection *con) {
 
 	PATCH(range_requests);
 	PATCH(force_lowercase_filenames);
+	/*PATCH(listen_backlog);*//*(not necessary; used only at startup)*/
 	PATCH(ssl_enabled);
 
 	PATCH(ssl_pemfile);
@@ -483,6 +487,10 @@ int config_patch_connection(server *srv, connection *con) {
 				PATCH(allow_http11);
 			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("server.force-lowercase-filenames"))) {
 				PATCH(force_lowercase_filenames);
+		      #if 0 /*(not necessary; used only at startup)*/
+			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("server.listen-backlog"))) {
+				PATCH(listen_backlog);
+		      #endif
 			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("server.kbytes-per-second"))) {
 				PATCH(global_kbytes_per_second);
 				PATCH(global_bytes_per_second_cnt);

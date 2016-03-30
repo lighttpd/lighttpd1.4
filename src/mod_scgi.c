@@ -223,6 +223,8 @@ typedef struct {
 
 	only if a process is killed max_id waits for the process itself
 	to die and decrements its afterwards */
+
+	int listen_backlog;
 } scgi_extension_host;
 
 /*
@@ -786,7 +788,7 @@ static int scgi_spawn_connection(server *srv,
 			return -1;
 		}
 
-		if (-1 == listen(scgi_fd, 1024)) {
+		if (-1 == listen(scgi_fd, host->listen_backlog)) {
 			log_error_write(srv, __FILE__, __LINE__, "ss",
 				"listen failed:", strerror(errno));
 			close(scgi_fd);
@@ -1053,6 +1055,7 @@ SETDEFAULTS_FUNC(mod_scgi_set_defaults) {
 						{ "bin-environment",   NULL, T_CONFIG_ARRAY, T_CONFIG_SCOPE_CONNECTION },        /* 11 */
 						{ "bin-copy-environment", NULL, T_CONFIG_ARRAY, T_CONFIG_SCOPE_CONNECTION },     /* 12 */
 						{ "fix-root-scriptname",  NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION },   /* 13 */
+						{ "listen-backlog",    NULL, T_CONFIG_INT,   T_CONFIG_SCOPE_CONNECTION },        /* 14 */
 
 
 						{ NULL,                NULL, T_CONFIG_UNSET, T_CONFIG_SCOPE_UNSET }
@@ -1076,6 +1079,7 @@ SETDEFAULTS_FUNC(mod_scgi_set_defaults) {
 					df->idle_timeout = 60;
 					df->disable_time = 60;
 					df->fix_root_path_name = 0;
+					df->listen_backlog = 1024;
 
 					fcv[0].destination = df->host;
 					fcv[1].destination = df->docroot;
@@ -1093,6 +1097,7 @@ SETDEFAULTS_FUNC(mod_scgi_set_defaults) {
 					fcv[11].destination = df->bin_env;
 					fcv[12].destination = df->bin_env_copy;
 					fcv[13].destination = &(df->fix_root_path_name);
+					fcv[14].destination = &(df->listen_backlog);
 
 
 					if (0 != config_insert_values_internal(srv, da_host->value, fcv, T_CONFIG_SCOPE_CONNECTION)) {

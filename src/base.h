@@ -294,6 +294,7 @@ typedef struct {
 	unsigned short etag_use_size;
 	unsigned short force_lowercase_filenames; /* if the FS is case-insensitive, force all files to lower-case */
 	unsigned int max_request_size;
+	int listen_backlog;
 
 	unsigned short kbytes_per_second; /* connection kb/s limit */
 

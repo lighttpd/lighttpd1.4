@@ -436,7 +436,7 @@ static int network_server_init(server *srv, buffer *host_token, specific_config 
 		goto error_free_socket;
 	}
 
-	if (-1 == listen(srv_socket->fd, 128 * 8)) {
+	if (-1 == listen(srv_socket->fd, s->listen_backlog)) {
 		log_error_write(srv, __FILE__, __LINE__, "ss", "listen failed: ", strerror(errno));
 		goto error_free_socket;
 	}

@@ -250,6 +250,8 @@ typedef struct {
 				       applications prefer SIGUSR1 while the
 				       rest of the world would use SIGTERM
 				       *sigh* */
+
+	int listen_backlog;
 } fcgi_extension_host;
 
 /*
@@ -991,7 +993,7 @@ static int fcgi_spawn_connection(server *srv,
 			return -1;
 		}
 
-		if (-1 == listen(fcgi_fd, 1024)) {
+		if (-1 == listen(fcgi_fd, host->listen_backlog)) {
 			log_error_write(srv, __FILE__, __LINE__, "ss",
 				"listen failed:", strerror(errno));
 			close(fcgi_fd);
@@ -1288,6 +1290,7 @@ SETDEFAULTS_FUNC(mod_fastcgi_set_defaults) {
 						{ "strip-request-uri",  NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_CONNECTION },      /* 13 */
 						{ "kill-signal",        NULL, T_CONFIG_SHORT, T_CONFIG_SCOPE_CONNECTION },       /* 14 */
 						{ "fix-root-scriptname",   NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION },  /* 15 */
+						{ "listen-backlog",    NULL, T_CONFIG_INT,   T_CONFIG_SCOPE_CONNECTION },        /* 16 */
 
 						{ NULL,                NULL, T_CONFIG_UNSET, T_CONFIG_SCOPE_UNSET }
 					};
@@ -1314,6 +1317,7 @@ SETDEFAULTS_FUNC(mod_fastcgi_set_defaults) {
 					host->allow_xsendfile = 0; /* handle X-LIGHTTPD-send-file */
 					host->kill_signal = SIGTERM;
 					host->fix_root_path_name = 0;
+					host->listen_backlog = 1024;
 
 					fcv[0].destination = host->host;
 					fcv[1].destination = host->docroot;
@@ -1333,6 +1337,7 @@ SETDEFAULTS_FUNC(mod_fastcgi_set_defaults) {
 					fcv[13].destination = host->strip_request_uri;
 					fcv[14].destination = &(host->kill_signal);
 					fcv[15].destination = &(host->fix_root_path_name);
+					fcv[16].destination = &(host->listen_backlog);
 
 					if (0 != config_insert_values_internal(srv, da_host->value, fcv, T_CONFIG_SCOPE_CONNECTION)) {
 						goto error;
