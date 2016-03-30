@@ -203,6 +203,27 @@ void chunkqueue_reset(chunkqueue *cq) {
 	cq->bytes_out = 0;
 }
 
+void chunkqueue_append_file_fd(chunkqueue *cq, buffer *fn, int fd, off_t offset, off_t len) {
+	chunk *c;
+
+	if (0 == len) {
+		close(fd);
+		return;
+	}
+
+	c = chunkqueue_get_unused_chunk(cq);
+
+	c->type = FILE_CHUNK;
+
+	buffer_copy_buffer(c->file.name, fn);
+	c->file.start = offset;
+	c->file.length = len;
+	c->file.fd = fd;
+	c->offset = 0;
+
+	chunkqueue_append_chunk(cq, c);
+}
+
 void chunkqueue_append_file(chunkqueue *cq, buffer *fn, off_t offset, off_t len) {
 	chunk *c;
 

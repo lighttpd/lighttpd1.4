@@ -495,11 +495,11 @@ static int connection_handle_write_prepare(server *srv, connection *con) {
 			buffer_append_int(con->physical.path, con->http_status);
 			buffer_append_string_len(con->physical.path, CONST_STR_LEN(".html"));
 
-			if (HANDLER_ERROR != stat_cache_get_entry(srv, con, con->physical.path, &sce)) {
+			if (0 == http_chunk_append_file(srv, con, con->physical.path)) {
 				con->file_finished = 1;
-
-				http_chunk_append_file(srv, con, con->physical.path, 0, sce->st.st_size);
-				response_header_overwrite(srv, con, CONST_STR_LEN("Content-Type"), CONST_BUF_LEN(sce->content_type));
+				if (HANDLER_ERROR != stat_cache_get_entry(srv, con, con->physical.path, &sce)) {
+					response_header_overwrite(srv, con, CONST_STR_LEN("Content-Type"), CONST_BUF_LEN(sce->content_type));
+				}
 			}
 		}
 

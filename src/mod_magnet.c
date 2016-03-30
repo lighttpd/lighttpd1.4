@@ -3,6 +3,7 @@
 #include "base.h"
 #include "log.h"
 #include "buffer.h"
+#include "http_chunk.h"
 
 #include "plugin.h"
 
@@ -737,29 +738,24 @@ static int magnet_attach_content(server *srv, connection *con, lua_State *L, int
 				lua_getfield(L, -3, "offset"); /* (0-based) start of range */
 
 				if (lua_isstring(L, -3)) { /* filename has to be a string */
-					buffer *fn;
-					stat_cache_entry *sce;
-					handler_t res;
+					buffer *fn = magnet_checkbuffer(L, -3);
+					off_t off = (off_t) luaL_optinteger(L, -1, 0);
+					off_t len = (off_t) luaL_optinteger(L, -2, -1); /*(-1 to http_chunk_append_file_range() uses file size minus offset)*/
+					if (off < 0) {
+						buffer_free(fn);
+						return luaL_error(L, "offset for '%s' is negative", lua_tostring(L, -3));
+					}
 
-					fn = magnet_checkbuffer(L, -3);
+					if (len >= off) {
+						len -= off;
+					} else if (-1 != len) {
+						buffer_free(fn);
+						return luaL_error(L, "offset > length for '%s'", lua_tostring(L, -3));
+					}
 
-					res = stat_cache_get_entry(srv, con, fn, &sce);
-
-					if (HANDLER_GO_ON == res) {
-						off_t off = (off_t) luaL_optinteger(L, -1, 0);
-						off_t end = (off_t) luaL_optinteger(L, -2, (lua_Integer) sce->st.st_size);
-
-						if (off < 0) {
-							buffer_free(fn);
-							return luaL_error(L, "offset for '%s' is negative", lua_tostring(L, -3));
-						}
-
-						if (end < off) {
-							buffer_free(fn);
-							return luaL_error(L, "offset > length for '%s'", lua_tostring(L, -3));
-						}
-
-						chunkqueue_append_file(con->write_queue, fn, off, end - off);
+					if (0 != len && 0 != http_chunk_append_file_range(srv, con, fn, off, len)) {
+						buffer_free(fn);
+						return luaL_error(L, "error opening file content '%s' at offset %lld", lua_tostring(L, -3), (long long)off);
 					}
 
 					buffer_free(fn);

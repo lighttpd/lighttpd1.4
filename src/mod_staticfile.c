@@ -540,10 +540,12 @@ URIHANDLER_FUNC(mod_staticfile_subrequest) {
 	/* we add it here for all requests
 	 * the HEAD request will drop it afterwards again
 	 */
-	http_chunk_append_file(srv, con, con->physical.path, 0, sce->st.st_size);
-
-	con->http_status = 200;
-	con->file_finished = 1;
+	if (0 == sce->st.st_size || 0 == http_chunk_append_file(srv, con, con->physical.path)) {
+		con->http_status = 200;
+		con->file_finished = 1;
+	} else {
+		con->http_status = 403;
+	}
 
 	return HANDLER_FINISHED;
 }

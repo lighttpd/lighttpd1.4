@@ -691,6 +691,38 @@ handler_t stat_cache_get_entry(server *srv, connection *con, buffer *name, stat_
 	return HANDLER_GO_ON;
 }
 
+int stat_cache_open_rdonly_fstat (server *srv, connection *con, buffer *name, struct stat *st) {
+	/*(Note: O_NOFOLLOW affects only the final path segment, the target file,
+	 * not any intermediate symlinks along the path)*/
+	#ifndef O_BINARY
+	#define O_BINARY 0
+	#endif
+	#ifndef O_LARGEFILE
+	#define O_LARGEFILE 0
+	#endif
+	#ifndef O_NOCTTY
+	#define O_NOCTTY 0
+	#endif
+	#ifndef O_NONBLOCK
+	#define O_NONBLOCK 0
+	#endif
+	#ifndef O_NOFOLLOW
+	#define O_NOFOLLOW 0
+	#endif
+	const int oflags = O_BINARY | O_LARGEFILE | O_NOCTTY | O_NONBLOCK
+			 | (con->conf.follow_symlink ? 0 : O_NOFOLLOW);
+	const int fd = open(name->ptr, O_RDONLY | oflags);
+	if (fd >= 0) {
+		if (0 == fstat(fd, st)) {
+			return fd;
+		} else {
+			close(fd);
+		}
+	}
+	UNUSED(srv); /*(might log_error_write(srv, ...) in the future)*/
+	return -1;
+}
+
 /**
  * remove stat() from cache which havn't been stat()ed for
  * more than 10 seconds

@@ -210,7 +210,6 @@ URIHANDLER_FUNC(mod_flv_streaming_path_handler) {
 
 		if (0 == strncmp(con->physical.path->ptr + s_len - ct_len, ds->value->ptr, ct_len)) {
 			data_string *get_param;
-			stat_cache_entry *sce = NULL;
 			int start;
 			char *err = NULL;
 			/* if there is a start=[0-9]+ in the header use it as start,
@@ -235,18 +234,12 @@ URIHANDLER_FUNC(mod_flv_streaming_path_handler) {
 
 			if (start <= 0) return HANDLER_GO_ON;
 
-			/* check if start is > filesize */
-			if (HANDLER_GO_ON != stat_cache_get_entry(srv, con, con->physical.path, &sce)) {
-				return HANDLER_GO_ON;
-			}
-
-			if (start > sce->st.st_size) {
-				return HANDLER_GO_ON;
-			}
-
-			/* we are safe now, let's build a flv header */
+			/* let's build a flv header */
 			http_chunk_append_mem(srv, con, CONST_STR_LEN("FLV\x1\x1\0\0\0\x9\0\0\0\x9"));
-			http_chunk_append_file(srv, con, con->physical.path, start, sce->st.st_size - start);
+			if (0 != http_chunk_append_file_range(srv, con, con->physical.path, start, -1)) {
+				chunkqueue_reset(con->write_queue);
+				return HANDLER_GO_ON;
+			}
 			http_chunk_close(srv, con);
 
 			response_header_overwrite(srv, con, CONST_STR_LEN("Content-Type"), CONST_STR_LEN("video/x-flv"));

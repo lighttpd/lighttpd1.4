@@ -2258,7 +2258,9 @@ range_success: ;
 					range_len = end_range - begin_range + 1;
 					if (range_len < 0) return 502;
 					if (range_len != 0) {
-						http_chunk_append_file(srv, con, srv->tmp_buf, begin_range, range_len);
+						if (0 != http_chunk_append_file_range(srv, con, srv->tmp_buf, begin_range, range_len)) {
+							return 502;
+						}
 					}
 					sendfile2_content_length += range_len;
 
@@ -2507,24 +2509,14 @@ static int fcgi_demux_response(server *srv, handler_ctx *hctx) {
 				if (host->allow_xsendfile && hctx->send_content_body &&
 				    (NULL != (ds = (data_string *) array_get_element(con->response.headers, "X-LIGHTTPD-send-file"))
 					  || NULL != (ds = (data_string *) array_get_element(con->response.headers, "X-Sendfile")))) {
-					stat_cache_entry *sce;
-
-					if (HANDLER_ERROR != stat_cache_get_entry(srv, con, ds->value, &sce)) {
-						data_string *dcls;
-						if (NULL == (dcls = (data_string *)array_get_unused_element(con->response.headers, TYPE_STRING))) {
-							dcls = data_response_init();
-						}
+					if (0 == http_chunk_append_file(srv, con, ds->value)) {
 						/* found */
-						http_chunk_append_file(srv, con, ds->value, 0, sce->st.st_size);
+						data_string *dcls = (data_string *) array_get_element(con->response.headers, "Content-Length");
+						if (dcls) buffer_reset(dcls->value);
+						con->parsed_response &= ~HTTP_CONTENT_LENGTH;
+						con->response.content_length = -1;
 						hctx->send_content_body = 0; /* ignore the content */
 						joblist_append(srv, con);
-
-						buffer_copy_string_len(dcls->key, "Content-Length", sizeof("Content-Length")-1);
-						buffer_copy_int(dcls->value, sce->st.st_size);
-						array_replace(con->response.headers, (data_unset *)dcls);
-
-						con->parsed_response |= HTTP_CONTENT_LENGTH;
-						con->response.content_length = sce->st.st_size;
 					} else {
 						log_error_write(srv, __FILE__, __LINE__, "sb",
 							"send-file error: couldn't get stat_cache entry for:",

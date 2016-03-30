@@ -239,11 +239,12 @@ int cache_parse_lua(server *srv, connection *con, plugin_data *p, buffer *fn) {
 
 		lua_pushnil(L);  /* first key */
 		while (lua_next(L, curelem) != 0) {
-			stat_cache_entry *sce = NULL;
 			/* key' is at index -2 and value' at index -1 */
 
 			if (lua_isstring(L, -1)) {
 				const char *s = lua_tostring(L, -1);
+				struct stat st;
+				int fd;
 
 				/* the file is relative, make it absolute */
 				if (s[0] != '/') {
@@ -253,7 +254,8 @@ int cache_parse_lua(server *srv, connection *con, plugin_data *p, buffer *fn) {
 					buffer_copy_string(b, lua_tostring(L, -1));
 				}
 
-				if (HANDLER_ERROR == stat_cache_get_entry(srv, con, b, &sce)) {
+				fd = stat_cache_open_rdonly_fstat(srv, con, b, &st);
+				if (fd < 0) {
 					/* stat failed */
 
 					switch(errno) {
@@ -280,8 +282,8 @@ int cache_parse_lua(server *srv, connection *con, plugin_data *p, buffer *fn) {
 						break;
 					}
 				} else {
-					chunkqueue_append_file(con->write_queue, b, 0, sce->st.st_size);
-					if (sce->st.st_mtime > mtime) mtime = sce->st.st_mtime;
+					chunkqueue_append_file_fd(con->write_queue, b, fd, 0, st.st_size);
+					if (st.st_mtime > mtime) mtime = st.st_mtime;
 				}
 			} else {
 				/* not a string */

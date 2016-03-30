@@ -9,6 +9,7 @@
 #include "server.h"
 #include "chunk.h"
 #include "http_chunk.h"
+#include "stat_cache.h"
 #include "log.h"
 
 #include <sys/types.h>
@@ -22,7 +23,7 @@
 #include <errno.h>
 #include <string.h>
 
-static void http_chunk_append_len(server *srv, connection *con, size_t len) {
+static void http_chunk_append_len(server *srv, connection *con, uintmax_t len) {
 	buffer *b;
 
 	force_assert(NULL != srv);
@@ -36,25 +37,61 @@ static void http_chunk_append_len(server *srv, connection *con, size_t len) {
 	chunkqueue_append_buffer(con->write_queue, b);
 }
 
-
-void http_chunk_append_file(server *srv, connection *con, buffer *fn, off_t offset, off_t len) {
-	chunkqueue *cq;
-
-	force_assert(NULL != con);
-	if (0 == len) return;
-
-	cq = con->write_queue;
-
-
-	if (con->response.transfer_encoding & HTTP_TRANSFER_ENCODING_CHUNKED) {
-		http_chunk_append_len(srv, con, len);
+static int http_chunk_append_file_open_fstat(server *srv, connection *con, buffer *fn, struct stat *st) {
+	if (!con->conf.follow_symlink) {
+		/*(preserve existing stat_cache symlink checks)*/
+		stat_cache_entry *sce;
+		if (HANDLER_ERROR == stat_cache_get_entry(srv, con, fn, &sce)) return -1;
 	}
 
-	chunkqueue_append_file(cq, fn, offset, len);
+	return stat_cache_open_rdonly_fstat(srv, con, fn, st);
+}
+
+static void http_chunk_append_file_fd_range(server *srv, connection *con, buffer *fn, int fd, off_t offset, off_t len) {
+	chunkqueue *cq = con->write_queue;
+
+	if (con->response.transfer_encoding & HTTP_TRANSFER_ENCODING_CHUNKED) {
+		http_chunk_append_len(srv, con, (uintmax_t)len);
+	}
+
+	chunkqueue_append_file_fd(cq, fn, fd, offset, len);
 
 	if (con->response.transfer_encoding & HTTP_TRANSFER_ENCODING_CHUNKED) {
 		chunkqueue_append_mem(cq, CONST_STR_LEN("\r\n"));
 	}
+}
+
+int http_chunk_append_file_range(server *srv, connection *con, buffer *fn, off_t offset, off_t len) {
+	struct stat st;
+	const int fd = http_chunk_append_file_open_fstat(srv, con, fn, &st);
+	if (fd < 0) return -1;
+
+	if (-1 == len) {
+		if (offset >= st.st_size) {
+			close(fd);
+			return (offset == st.st_size) ? 0 : -1;
+		}
+		len = st.st_size - offset;
+	} else if (st.st_size - offset < len) {
+		close(fd);
+		return -1;
+	}
+
+	http_chunk_append_file_fd_range(srv, con, fn, fd, offset, len);
+	return 0;
+}
+
+int http_chunk_append_file(server *srv, connection *con, buffer *fn) {
+	struct stat st;
+	const int fd = http_chunk_append_file_open_fstat(srv, con, fn, &st);
+	if (fd < 0) return -1;
+
+	if (0 != st.st_size) {
+		http_chunk_append_file_fd_range(srv, con, fn, fd, 0, st.st_size);
+	} else {
+		close(fd);
+	}
+	return 0;
 }
 
 void http_chunk_append_buffer(server *srv, connection *con, buffer *mem) {

@@ -9,6 +9,7 @@ void stat_cache_free(stat_cache *fc);
 
 handler_t stat_cache_get_entry(server *srv, connection *con, buffer *name, stat_cache_entry **fce);
 handler_t stat_cache_handle_fdevent(server *srv, void *_fce, int revent);
+int stat_cache_open_rdonly_fstat (server *srv, connection *con, buffer *name, struct stat *st);
 
 int stat_cache_trigger_cleanup(server *srv);
 #endif
