@@ -1167,6 +1167,24 @@ static int fcgi_spawn_connection(server *srv,
 
 #endif /* HAVE_FORK */
 
+static int unixsocket_is_dup(plugin_data *p, size_t used, buffer *unixsocket) {
+	size_t i, j, n;
+	for (i = 0; i < used; ++i) {
+		fcgi_exts *exts = p->config_storage[i]->exts;
+		for (j = 0; j < exts->used; ++j) {
+			fcgi_extension *ex = exts->exts[j];
+			for (n = 0; n < ex->used; ++n) {
+				fcgi_extension_host *host = ex->hosts[n];
+				if (!buffer_string_is_empty(host->unixsocket)
+				    && buffer_is_equal(host->unixsocket, unixsocket))
+					return 1;
+			}
+		}
+	}
+
+	return 0;
+}
+
 SETDEFAULTS_FUNC(mod_fastcgi_set_defaults) {
 	plugin_data *p = p_d;
 	data_unset *du;
@@ -1342,6 +1360,14 @@ SETDEFAULTS_FUNC(mod_fastcgi_set_defaults) {
 									da_ext->key, " => (",
 									da_host->key, " ( ...");
 
+							goto error;
+						}
+
+						if (!buffer_string_is_empty(host->bin_path)
+						    && unixsocket_is_dup(p, i+1, host->unixsocket)) {
+							log_error_write(srv, __FILE__, __LINE__, "sb",
+									"duplicate unixsocket path:",
+									host->unixsocket);
 							goto error;
 						}
 					} else {
