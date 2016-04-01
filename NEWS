@@ -61,6 +61,7 @@ NEWS
   * pass buf size to li_tohex()
   * use li_[iu]tostrn() instead of li_[iu]tostr()
   * [stream] fstat() after open() to obtain file size
+  * [core] clean up srv before exiting for lighttpd -[vVh]
 
 - 1.4.39 - 2016-01-02
   * [core] fix memset_s call (fixes #2698)
