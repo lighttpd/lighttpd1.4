@@ -487,8 +487,10 @@ int buffer_is_equal_right_len(const buffer *b1, const buffer *b2, size_t len) {
 	return 0 == memcmp(b1->ptr + b1->used - 1 - len, b2->ptr + b2->used - 1 - len, len);
 }
 
-void li_tohex(char *buf, const char *s, size_t s_len) {
+void li_tohex(char *buf, size_t buf_len, const char *s, size_t s_len) {
 	size_t i;
+	force_assert(2 * s_len > s_len);
+	force_assert(2 * s_len < buf_len);
 
 	for (i = 0; i < s_len; i++) {
 		buf[2*i] = hex_chars[(s[i] >> 4) & 0x0F];
@@ -502,7 +504,7 @@ void buffer_copy_string_hex(buffer *b, const char *in, size_t in_len) {
 	force_assert(in_len * 2 > in_len);
 
 	buffer_string_set_length(b, 2 * in_len);
-	li_tohex(b->ptr, in, in_len);
+	li_tohex(b->ptr, buffer_string_space(b)+1, in, in_len);
 }
 
 /* everything except: ! ( ) * - . 0-9 A-Z _ a-z ~ */

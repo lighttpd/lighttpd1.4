@@ -44,9 +44,10 @@
 typedef unsigned char HASH[HASHLEN];
 typedef char HASHHEX[HASHHEXLEN+1];
 
-static void CvtHex(const HASH Bin, char Hex[33]) {
-	li_tohex(Hex, (const char*) Bin, 16);
+static void CvtHex(const HASH Bin, char (*Hex)[33]) {
+	li_tohex(*Hex, sizeof(*Hex), (const char*) Bin, 16);
 }
+
 
 /**
  * the $apr1$ handling is taken from apache 1.3.x
@@ -541,7 +542,7 @@ static int http_auth_basic_password_compare(server *srv, mod_auth_plugin_data *p
 
 		li_MD5_CTX Md5Ctx;
 		HASH HA1;
-		char a1[256];
+		char a1[33];
 
 		li_MD5_Init(&Md5Ctx);
 		li_MD5_Update(&Md5Ctx, CONST_BUF_LEN(username));
@@ -551,7 +552,7 @@ static int http_auth_basic_password_compare(server *srv, mod_auth_plugin_data *p
 		li_MD5_Update(&Md5Ctx, (unsigned char *)pw, strlen(pw));
 		li_MD5_Final(HA1, &Md5Ctx);
 
-		CvtHex(HA1, a1);
+		CvtHex(HA1, &a1);
 
 		if (0 == strcmp(password->ptr, a1)) {
 			return 0;
@@ -819,8 +820,8 @@ typedef struct {
 
 /* return values: -1: error/bad request, 0: failed, 1: success */
 int http_auth_digest_check(server *srv, connection *con, mod_auth_plugin_data *p, array *req, const char *realm_str) {
-	char a1[256];
-	char a2[256];
+	char a1[33];
+	char a2[33];
 
 	char *username = NULL;
 	char *realm = NULL;
@@ -1008,8 +1009,8 @@ int http_auth_digest_check(server *srv, connection *con, mod_auth_plugin_data *p
 	    strcasecmp(algorithm, "md5-sess") == 0) {
 		li_MD5_Init(&Md5Ctx);
 		/* Errata ID 1649: http://www.rfc-editor.org/errata_search.php?rfc=2617 */
-		CvtHex(HA1, a1);
-		li_MD5_Update(&Md5Ctx, (unsigned char *)a1, 32);
+		CvtHex(HA1, &a1);
+		li_MD5_Update(&Md5Ctx, (unsigned char *)a1, HASHHEXLEN);
 		li_MD5_Update(&Md5Ctx, CONST_STR_LEN(":"));
 		li_MD5_Update(&Md5Ctx, (unsigned char *)nonce, strlen(nonce));
 		li_MD5_Update(&Md5Ctx, CONST_STR_LEN(":"));
@@ -1017,7 +1018,7 @@ int http_auth_digest_check(server *srv, connection *con, mod_auth_plugin_data *p
 		li_MD5_Final(HA1, &Md5Ctx);
 	}
 
-	CvtHex(HA1, a1);
+	CvtHex(HA1, &a1);
 
 	/* calculate H(A2) */
 	li_MD5_Init(&Md5Ctx);
@@ -1032,7 +1033,7 @@ int http_auth_digest_check(server *srv, connection *con, mod_auth_plugin_data *p
 	}
 */
 	li_MD5_Final(HA2, &Md5Ctx);
-	CvtHex(HA2, HA2Hex);
+	CvtHex(HA2, &HA2Hex);
 
 	/* calculate response */
 	li_MD5_Init(&Md5Ctx);
@@ -1050,7 +1051,7 @@ int http_auth_digest_check(server *srv, connection *con, mod_auth_plugin_data *p
 	};
 	li_MD5_Update(&Md5Ctx, (unsigned char *)HA2Hex, HASHHEXLEN);
 	li_MD5_Final(RespHash, &Md5Ctx);
-	CvtHex(RespHash, a2);
+	CvtHex(RespHash, &a2);
 
 	if (0 != strcmp(a2, respons)) {
 		/* digest not ok */
@@ -1090,7 +1091,7 @@ int http_auth_digest_check(server *srv, connection *con, mod_auth_plugin_data *p
 }
 
 
-int http_auth_digest_generate_nonce(server *srv, mod_auth_plugin_data *p, buffer *fn, char out[33]) {
+int http_auth_digest_generate_nonce(server *srv, mod_auth_plugin_data *p, buffer *fn, char (*out)[33]) {
 	HASH h;
 	li_MD5_CTX Md5Ctx;
 	char hh[LI_ITOSTRING_LENGTH];

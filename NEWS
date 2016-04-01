@@ -58,6 +58,7 @@ NEWS
   * [stat] mimetype.xattr-name global config option (fixes #2631)
   * [mod_webdav] allow Depth: Infinity lock on file (fixes #2296)
   * [mod_status] use snprintf() instead of sprintf()
+  * pass buf size to li_tohex()
 
 - 1.4.39 - 2016-01-02
   * [core] fix memset_s call (fixes #2698)

@@ -69,7 +69,7 @@ typedef struct {
 
 int http_auth_basic_check(server *srv, connection *con, mod_auth_plugin_data *p, array *req, const char *realm_str);
 int http_auth_digest_check(server *srv, connection *con, mod_auth_plugin_data *p, array *req, const char *realm_str);
-int http_auth_digest_generate_nonce(server *srv, mod_auth_plugin_data *p, buffer *fn, char hh[33]);
+int http_auth_digest_generate_nonce(server *srv, mod_auth_plugin_data *p, buffer *fn, char (*hh)[33]);
 int http_auth_match_rules(server *srv, array *req, const char *username, const char *group, const char *host);
 
 #endif
