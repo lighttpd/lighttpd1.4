@@ -677,6 +677,7 @@ static int scgi_spawn_connection(server *srv,
 				"new proc, socket:", proc->port, proc->socket);
 	}
 
+
 	if (!buffer_string_is_empty(proc->socket)) {
 #ifdef HAVE_SYS_UN_H
 		memset(&scgi_addr_un, 0, sizeof(scgi_addr_un));
@@ -936,6 +937,24 @@ static int scgi_spawn_connection(server *srv,
 
 #endif /* HAVE_FORK */
 
+static int unixsocket_is_dup(plugin_data *p, size_t used, buffer *unixsocket) {
+	size_t i, j, n;
+	for (i = 0; i < used; ++i) {
+		scgi_exts *exts = p->config_storage[i]->exts;
+		for (j = 0; j < exts->used; ++j) {
+			scgi_extension *ex = exts->exts[j];
+			for (n = 0; n < ex->used; ++n) {
+				scgi_extension_host *host = ex->hosts[n];
+				if (!buffer_string_is_empty(host->unixsocket)
+				    && buffer_is_equal(host->unixsocket, unixsocket))
+					return 1;
+			}
+		}
+	}
+
+	return 0;
+}
+
 SETDEFAULTS_FUNC(mod_scgi_set_defaults) {
 	plugin_data *p = p_d;
 	data_unset *du;
@@ -1095,6 +1114,14 @@ SETDEFAULTS_FUNC(mod_scgi_set_defaults) {
 						if (buffer_string_length(df->unixsocket) + 1 > sizeof(un.sun_path) - 2) {
 							log_error_write(srv, __FILE__, __LINE__, "s",
 									"path of the unixdomain socket is too large");
+							goto error;
+						}
+
+						if (!buffer_string_is_empty(df->bin_path)
+						    && unixsocket_is_dup(p, i+1, df->unixsocket)) {
+							log_error_write(srv, __FILE__, __LINE__, "sb",
+									"duplicate unixsocket path:",
+									df->unixsocket);
 							goto error;
 						}
 					} else {
