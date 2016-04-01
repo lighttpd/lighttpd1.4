@@ -355,10 +355,6 @@ void li_itostrn(char *buf, size_t buf_len, intmax_t val) {
 	memcpy(buf, str, p_buf_end - str);
 }
 
-void li_itostr(char *buf, intmax_t val) {
-	li_itostrn(buf, LI_ITOSTRING_LENGTH, val);
-}
-
 void li_utostrn(char *buf, size_t buf_len, uintmax_t val) {
 	char p_buf[LI_ITOSTRING_LENGTH];
 	char* const p_buf_end = p_buf + sizeof(p_buf);
@@ -370,10 +366,6 @@ void li_utostrn(char *buf, size_t buf_len, uintmax_t val) {
 
 	force_assert(buf_len >= (size_t) (p_buf_end - str));
 	memcpy(buf, str, p_buf_end - str);
-}
-
-void li_utostr(char *buf, uintmax_t val) {
-	li_utostrn(buf, LI_ITOSTRING_LENGTH, val);
 }
 
 char int2hex(char c) {
@@ -487,8 +479,11 @@ int buffer_is_equal_right_len(const buffer *b1, const buffer *b2, size_t len) {
 	return 0 == memcmp(b1->ptr + b1->used - 1 - len, b2->ptr + b2->used - 1 - len, len);
 }
 
-void li_tohex(char *buf, const char *s, size_t s_len) {
+void li_tohex(char *buf, size_t bufsz, const char *s, size_t s_len) {
 	size_t i;
+	assert(2 * s_len > s_len);
+	assert(2 * s_len < bufsz);
+	UNUSED(bufsz); /*(cc -DNDEBUG disables assert())*/
 
 	for (i = 0; i < s_len; i++) {
 		buf[2*i] = hex_chars[(s[i] >> 4) & 0x0F];
@@ -502,7 +497,7 @@ void buffer_copy_string_hex(buffer *b, const char *in, size_t in_len) {
 	force_assert(in_len * 2 > in_len);
 
 	buffer_string_set_length(b, 2 * in_len);
-	li_tohex(b->ptr, in, in_len);
+	li_tohex(b->ptr, buffer_string_space(b)+1, in, in_len);
 }
 
 /* everything except: ! ( ) * - . 0-9 A-Z _ a-z ~ */

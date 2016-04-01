@@ -60,7 +60,7 @@ int f_crypto_md5(lua_State *L) {
 	li_MD5_Update(&Md5Ctx, (unsigned char *) s, (unsigned int) s_len);
 	li_MD5_Final(HA1, &Md5Ctx);
 
-	li_tohex(hex, (const char*) HA1, 16);
+	li_tohex(hex, sizeof(hex), (const char*) HA1, 16);
 
 	lua_pushstring(L, hex);
 

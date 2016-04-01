@@ -911,7 +911,7 @@ static int cgi_create_env(server *srv, connection *con, plugin_data *p, buffer *
 		force_assert(s);
 		cgi_env_add(&env, CONST_STR_LEN("SERVER_PROTOCOL"), s, strlen(s));
 
-		li_utostr(buf,
+		li_utostrn(buf, sizeof(buf),
 #ifdef HAVE_IPV6
 			ntohs(srv_sock->addr.plain.sa_family == AF_INET6 ? srv_sock->addr.ipv6.sin6_port : srv_sock->addr.ipv4.sin_port)
 #else
@@ -988,7 +988,7 @@ static int cgi_create_env(server *srv, connection *con, plugin_data *p, buffer *
 		force_assert(s);
 		cgi_env_add(&env, CONST_STR_LEN("REMOTE_ADDR"), s, strlen(s));
 
-		li_utostr(buf,
+		li_utostrn(buf, sizeof(buf),
 #ifdef HAVE_IPV6
 			ntohs(con->dst_addr.plain.sa_family == AF_INET6 ? con->dst_addr.ipv6.sin6_port : con->dst_addr.ipv4.sin_port)
 #else
@@ -1001,7 +1001,7 @@ static int cgi_create_env(server *srv, connection *con, plugin_data *p, buffer *
 			cgi_env_add(&env, CONST_STR_LEN("HTTPS"), CONST_STR_LEN("on"));
 		}
 
-		li_itostr(buf, con->request.content_length);
+		li_itostrn(buf, sizeof(buf), con->request.content_length);
 		cgi_env_add(&env, CONST_STR_LEN("CONTENT_LENGTH"), buf, strlen(buf));
 		cgi_env_add(&env, CONST_STR_LEN("SCRIPT_FILENAME"), CONST_BUF_LEN(con->physical.path));
 		cgi_env_add(&env, CONST_STR_LEN("SCRIPT_NAME"), CONST_BUF_LEN(con->uri.path));
