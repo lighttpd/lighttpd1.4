@@ -1871,7 +1871,7 @@ static int fcgi_create_env(server *srv, handler_ctx *hctx, size_t request_id) {
 
 	FCGI_ENV_ADD_CHECK(fcgi_env_add(p->fcgi_env, CONST_STR_LEN("GATEWAY_INTERFACE"), CONST_STR_LEN("CGI/1.1")),con)
 
-	li_utostr(buf,
+	li_utostrn(buf, sizeof(buf),
 #ifdef HAVE_IPV6
 	       ntohs(srv_sock->addr.plain.sa_family ? srv_sock->addr.ipv6.sin6_port : srv_sock->addr.ipv4.sin_port)
 #else
@@ -1891,7 +1891,7 @@ static int fcgi_create_env(server *srv, handler_ctx *hctx, size_t request_id) {
 	}
 	FCGI_ENV_ADD_CHECK(fcgi_env_add(p->fcgi_env, CONST_STR_LEN("SERVER_ADDR"), s, strlen(s)),con)
 
-	li_utostr(buf,
+	li_utostrn(buf, sizeof(buf),
 #ifdef HAVE_IPV6
 	       ntohs(con->dst_addr.plain.sa_family ? con->dst_addr.ipv6.sin6_port : con->dst_addr.ipv4.sin_port)
 #else
@@ -1907,7 +1907,7 @@ static int fcgi_create_env(server *srv, handler_ctx *hctx, size_t request_id) {
 	if (con->request.content_length > 0 && host->mode != FCGI_AUTHORIZER) {
 		/* CGI-SPEC 6.1.2 and FastCGI spec 6.3 */
 
-		li_itostr(buf, con->request.content_length);
+		li_itostrn(buf, sizeof(buf), con->request.content_length);
 		FCGI_ENV_ADD_CHECK(fcgi_env_add(p->fcgi_env, CONST_STR_LEN("CONTENT_LENGTH"), buf, strlen(buf)),con)
 	}
 

@@ -355,10 +355,6 @@ void li_itostrn(char *buf, size_t buf_len, intmax_t val) {
 	memcpy(buf, str, p_buf_end - str);
 }
 
-void li_itostr(char *buf, intmax_t val) {
-	li_itostrn(buf, LI_ITOSTRING_LENGTH, val);
-}
-
 void li_utostrn(char *buf, size_t buf_len, uintmax_t val) {
 	char p_buf[LI_ITOSTRING_LENGTH];
 	char* const p_buf_end = p_buf + sizeof(p_buf);
@@ -370,10 +366,6 @@ void li_utostrn(char *buf, size_t buf_len, uintmax_t val) {
 
 	force_assert(buf_len >= (size_t) (p_buf_end - str));
 	memcpy(buf, str, p_buf_end - str);
-}
-
-void li_utostr(char *buf, uintmax_t val) {
-	li_utostrn(buf, LI_ITOSTRING_LENGTH, val);
 }
 
 char int2hex(char c) {
