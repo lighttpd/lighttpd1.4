@@ -2218,11 +2218,13 @@ propmatch_cleanup:
 				hdr_if = ds->value;
 			}
 
-			/* we don't support Depth: Infinity on locks */
+			/* we don't support Depth: Infinity on directories */
 			if (hdr_if == NULL && depth == -1) {
-				con->http_status = 409; /* Conflict */
+				if (0 == stat(con->physical.path->ptr, &st) && S_ISDIR(st.st_mode)) {
+					con->http_status = 409; /* Conflict */
 
-				return HANDLER_FINISHED;
+					return HANDLER_FINISHED;
+				}
 			}
 
 			if (1 == webdav_parse_chunkqueue(srv, con, p, con->request_content_queue, &xml)) {
