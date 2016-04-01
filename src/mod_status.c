@@ -368,7 +368,7 @@ static handler_t mod_status_handle_server_status_html(server *srv, connection *c
 
 	mod_status_get_multiplier(&avg, &multiplier, 1024);
 
-	sprintf(buf, "%.2f", avg);
+	snprintf(buf, sizeof(buf), "%.2f", avg);
 	buffer_append_string(b, buf);
 	buffer_append_string_len(b, CONST_STR_LEN(" "));
 	if (multiplier)	buffer_append_string_len(b, &multiplier, 1);
@@ -393,7 +393,7 @@ static handler_t mod_status_handle_server_status_html(server *srv, connection *c
 
 	mod_status_get_multiplier(&avg, &multiplier, 1024);
 
-	sprintf(buf, "%.2f", avg);
+	snprintf(buf, sizeof(buf), "%.2f", avg);
 	buffer_append_string(b, buf);
 	buffer_append_string_len(b, CONST_STR_LEN(" "));
 	if (multiplier)	buffer_append_string_len(b, &multiplier, 1);
@@ -428,7 +428,7 @@ static handler_t mod_status_handle_server_status_html(server *srv, connection *c
 
 	mod_status_get_multiplier(&avg, &multiplier, 1024);
 
-	sprintf(buf, "%.2f", avg);
+	snprintf(buf, sizeof(buf), "%.2f", avg);
 	buffer_append_string(b, buf);
 	buffer_append_string_len(b, CONST_STR_LEN(" "));
 	if (multiplier)	buffer_append_string_len(b, &multiplier, 1);
