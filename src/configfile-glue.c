@@ -10,6 +10,9 @@
 
 #include <string.h>
 #include <stdlib.h>
+#ifndef _WIN32
+#include <arpa/inet.h>
+#endif
 
 /**
  * like all glue code this file contains functions which
@@ -237,6 +240,97 @@ static const char* cond_result_to_string(cond_result_t cond_result) {
 	}
 }
 
+static int config_addrstr_eq_remote_ip_mask(server *srv, const char *addrstr, int nm_bits, sock_addr *rmt) {
+	/* special-case 0 == nm_bits to mean "all bits of the address" in addrstr */
+	sock_addr val;
+#ifdef HAVE_INET_PTON
+	if (1 == inet_pton(AF_INET, addrstr, &val.ipv4.sin_addr))
+#else
+	if (INADDR_NONE != (val.ipv4.sin_addr = inet_addr(addrstr)))
+#endif
+	{
+		/* build netmask */
+		uint32_t nm;
+		if (nm_bits > 32) {
+			log_error_write(srv, __FILE__, __LINE__, "sd", "ERROR: ipv4 netmask too large:", nm_bits);
+			return -1;
+		}
+		nm = htonl(~((1u << (32 - (0 != nm_bits ? nm_bits : 32))) - 1));
+
+		if (rmt->plain.sa_family == AF_INET) {
+			return ((val.ipv4.sin_addr.s_addr & nm) == (rmt->ipv4.sin_addr.s_addr & nm));
+#ifdef HAVE_IPV6
+		} else if (rmt->plain.sa_family == AF_INET6
+			   && IN6_IS_ADDR_V4MAPPED(&rmt->ipv6.sin6_addr)) {
+			in_addr_t x = *(in_addr_t *)(rmt->ipv6.sin6_addr.s6_addr+12);
+			return ((val.ipv4.sin_addr.s_addr & nm) == (x & nm));
+#endif
+		} else {
+			return 0;
+		}
+#if defined(HAVE_INET_PTON) && defined(HAVE_IPV6)
+	} else if (1 == inet_pton(AF_INET6, addrstr, &val.ipv6.sin6_addr)) {
+		if (nm_bits > 128) {
+			log_error_write(srv, __FILE__, __LINE__, "sd", "ERROR: ipv6 netmask too large:", nm_bits);
+			return -1;
+		}
+		if (rmt->plain.sa_family == AF_INET6) {
+			uint8_t *a = (uint8_t *)&val.ipv6.sin6_addr.s6_addr[0];
+			uint8_t *b = (uint8_t *)&rmt->ipv6.sin6_addr.s6_addr[0];
+			int match;
+			do {
+				match = (nm_bits >= 8)
+				  ? *a++ == *b++
+				  : (*a >> (8 - nm_bits)) == (*b >> (8 - nm_bits));
+			} while (match && (nm_bits -= 8) > 0);
+			return match;
+		} else if (rmt->plain.sa_family == AF_INET
+			   && IN6_IS_ADDR_V4MAPPED(&val.ipv6.sin6_addr)) {
+			in_addr_t x = *(in_addr_t *)(val.ipv6.sin6_addr.s6_addr+12);
+			uint32_t nm =
+			  htonl(~((1u << (32 - (0 != nm_bits ? (nm_bits > 96 ? nm_bits - 96 : 0) : 32))) - 1));
+			return ((x & nm) == (rmt->ipv4.sin_addr.s_addr & nm));
+		} else {
+			return 0;
+		}
+#endif
+	} else {
+		log_error_write(srv, __FILE__, __LINE__, "ss", "ERROR: ip addr is invalid:", addrstr);
+		return -1;
+	}
+}
+
+static int config_addrbuf_eq_remote_ip_mask(server *srv, buffer *string, char *nm_slash, sock_addr *rmt) {
+	char *err;
+	int nm_bits = strtol(nm_slash + 1, &err, 10);
+	size_t addrstrlen = (size_t)(nm_slash - string->ptr);
+	char addrstr[64]; /*(larger than INET_ADDRSTRLEN and INET6_ADDRSTRLEN)*/
+
+	if (*err) {
+		log_error_write(srv, __FILE__, __LINE__, "sbs", "ERROR: non-digit found in netmask:", string, err);
+		return -1;
+	}
+
+	if (nm_bits <= 0) {
+		if (*(nm_slash+1) == '\0') {
+			log_error_write(srv, __FILE__, __LINE__, "sb", "ERROR: no number after / ", string);
+		} else {
+			log_error_write(srv, __FILE__, __LINE__, "sbs", "ERROR: invalid netmask <= 0:", string, err);
+		}
+		return -1;
+	}
+
+	if (addrstrlen >= sizeof(addrstr)) {
+		log_error_write(srv, __FILE__, __LINE__, "sb", "ERROR: address string too long:", string);
+		return -1;
+	}
+
+	memcpy(addrstr, string->ptr, addrstrlen);
+	addrstr[addrstrlen] = '\0';
+
+	return config_addrstr_eq_remote_ip_mask(srv, addrstr, nm_bits, rmt);
+}
+
 static cond_result_t config_check_cond_cached(server *srv, connection *con, data_config *dc);
 
 static cond_result_t config_check_cond_nocache(server *srv, connection *con, data_config *dc) {
@@ -370,61 +464,14 @@ static cond_result_t config_check_cond_nocache(server *srv, connection *con, dat
 
 		if ((dc->cond == CONFIG_COND_EQ ||
 		     dc->cond == CONFIG_COND_NE) &&
-		    (con->dst_addr.plain.sa_family == AF_INET) &&
 		    (NULL != (nm_slash = strchr(dc->string->ptr, '/')))) {
-			int nm_bits;
-			long nm;
-			char *err;
-			struct in_addr val_inp;
-
-			if (*(nm_slash+1) == '\0') {
-				log_error_write(srv, __FILE__, __LINE__, "sb", "ERROR: no number after / ", dc->string);
-
-				return COND_RESULT_FALSE;
+			switch (config_addrbuf_eq_remote_ip_mask(srv, dc->string, nm_slash, &con->dst_addr)) {
+			case  1: return (dc->cond == CONFIG_COND_EQ) ? COND_RESULT_TRUE : COND_RESULT_FALSE;
+			case  0: return (dc->cond == CONFIG_COND_EQ) ? COND_RESULT_FALSE : COND_RESULT_TRUE;
+			case -1: return COND_RESULT_FALSE; /*(error parsing configfile entry)*/
 			}
-
-			nm_bits = strtol(nm_slash + 1, &err, 10);
-
-			if (*err) {
-				log_error_write(srv, __FILE__, __LINE__, "sbs", "ERROR: non-digit found in netmask:", dc->string, err);
-
-				return COND_RESULT_FALSE;
-			}
-
-			if (nm_bits > 32 || nm_bits < 0) {
-				log_error_write(srv, __FILE__, __LINE__, "sbs", "ERROR: invalid netmask:", dc->string, err);
-
-				return COND_RESULT_FALSE;
-			}
-
-			/* take IP convert to the native */
-			buffer_copy_string_len(srv->cond_check_buf, dc->string->ptr, nm_slash - dc->string->ptr);
-#ifdef __WIN32
-			if (INADDR_NONE == (val_inp.s_addr = inet_addr(srv->cond_check_buf->ptr))) {
-				log_error_write(srv, __FILE__, __LINE__, "sb", "ERROR: ip addr is invalid:", srv->cond_check_buf);
-
-				return COND_RESULT_FALSE;
-			}
-
-#else
-			if (0 == inet_aton(srv->cond_check_buf->ptr, &val_inp)) {
-				log_error_write(srv, __FILE__, __LINE__, "sb", "ERROR: ip addr is invalid:", srv->cond_check_buf);
-
-				return COND_RESULT_FALSE;
-			}
-#endif
-
-			/* build netmask */
-			nm = nm_bits ? htonl(~((1 << (32 - nm_bits)) - 1)) : 0;
-
-			if ((val_inp.s_addr & nm) == (con->dst_addr.ipv4.sin_addr.s_addr & nm)) {
-				return (dc->cond == CONFIG_COND_EQ) ? COND_RESULT_TRUE : COND_RESULT_FALSE;
-			} else {
-				return (dc->cond == CONFIG_COND_EQ) ? COND_RESULT_FALSE : COND_RESULT_TRUE;
-			}
-		} else {
-			l = con->dst_addr_buf;
 		}
+		l = con->dst_addr_buf;
 		break;
 	}
 	case COMP_HTTP_SCHEME:
