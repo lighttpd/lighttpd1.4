@@ -579,6 +579,16 @@ add_executable(test_base64
 )
 add_test(NAME test_base64 COMMAND test_base64)
 
+add_executable(test_configfile
+	test_configfile.c
+	buffer.c
+	array.c
+	data_string.c
+	keyvalue.c
+	log.c
+)
+add_test(NAME test_configfile COMMAND test_configfile)
+
 if(HAVE_PCRE_H)
 	target_link_libraries(lighttpd ${PCRE_LDFLAGS})
 	add_target_properties(lighttpd COMPILE_FLAGS ${PCRE_CFLAGS})
@@ -703,6 +713,8 @@ if(WITH_LIBUNWIND)
 	add_target_properties(test_buffer COMPILE_FLAGS ${LIBUNWIND_CFLAGS})
 	target_link_libraries(test_base64 ${LIBUNWIND_LDFLAGS})
 	add_target_properties(test_base64 COMPILE_FLAGS ${LIBUNWIND_CFLAGS})
+	target_link_libraries(test_configfile ${PCRE_LDFLAGS} ${LIBUNWIND_LDFLAGS})
+	add_target_properties(test_configfile COMPILE_FLAGS ${PCRE_CFLAGS} ${LIBUNWIND_CFLAGS})
 endif()
 
 if(NOT WIN32)

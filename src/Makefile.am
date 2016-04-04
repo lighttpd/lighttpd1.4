@@ -1,12 +1,13 @@
 AM_CFLAGS = $(FAM_CFLAGS) $(LIBUNWIND_CFLAGS)
 
-noinst_PROGRAMS=lemon proc_open test_buffer test_base64
+noinst_PROGRAMS=lemon proc_open test_buffer test_base64 test_configfile
 sbin_PROGRAMS=lighttpd lighttpd-angel
 LEMON=$(top_builddir)/src/lemon$(EXEEXT)
 
 TESTS=\
 	test_buffer$(EXEEXT) \
-	test_base64$(EXEEXT)
+	test_base64$(EXEEXT) \
+	test_configfile$(EXEEXT)
 
 lemon_SOURCES=lemon.c
 
@@ -304,6 +305,9 @@ test_buffer_LDADD = $(LIBUNWIND_LIBS)
 
 test_base64_SOURCES = test_base64.c base64.c buffer.c
 test_base64_LDADD = $(LIBUNWIND_LIBS)
+
+test_configfile_SOURCES = test_configfile.c buffer.c array.c data_string.c keyvalue.c log.c
+test_configfile_LDADD = $(PCRE_LIB) $(LIBUNWIND_LIBS)
 
 noinst_HEADERS   = $(hdr)
 EXTRA_DIST = \
