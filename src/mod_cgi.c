@@ -606,7 +606,8 @@ static void cgi_connection_close(server *srv, handler_ctx *hctx) {
 #endif
 
 	/* finish response (if not already finished) */
-	if (con->mode == p->id && con->state == CON_STATE_HANDLE_REQUEST) {
+	if (con->mode == p->id
+	    && (con->state == CON_STATE_HANDLE_REQUEST || con->state == CON_STATE_READ_POST)) {
 		/* (not CON_STATE_ERROR and not CON_STATE_RESPONSE_END,
 		 * i.e. not called from cgi_connection_close_callback()) */
 

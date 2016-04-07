@@ -750,6 +750,11 @@ handler_t http_response_prepare(server *srv, connection *con) {
 
 	}
 
+	if (con->state == CON_STATE_READ_POST) {
+		r = connection_handle_read_post_state(srv, con);
+		if (r != HANDLER_GO_ON) return r;
+	}
+
 	switch(r = plugins_call_handle_subrequest(srv, con)) {
 	case HANDLER_GO_ON:
 		/* request was not handled, looks like we are done */
