@@ -39,10 +39,6 @@
 
 #include <stdio.h>
 
-#ifdef HAVE_SYS_FILIO_H
-# include <sys/filio.h>
-#endif
-
 #include "sys-socket.h"
 
 #ifdef HAVE_SYS_UIO_H
@@ -325,7 +321,6 @@ typedef struct {
 
 /* connection specific data */
 typedef enum {
-	FCGI_STATE_UNSET,
 	FCGI_STATE_INIT,
 	FCGI_STATE_CONNECT_DELAYED,
 	FCGI_STATE_PREPARE_WRITE,
@@ -1089,7 +1084,7 @@ static int fcgi_spawn_connection(server *srv,
 			/* log_error_write(srv, __FILE__, __LINE__, "sbs",
 					"execve failed for:", host->bin_path, strerror(errno)); */
 
-			exit(errno);
+			_exit(errno);
 
 			break;
 		}
@@ -1517,8 +1512,6 @@ static void fcgi_connection_close(server *srv, handler_ctx *hctx) {
 	plugin_data *p;
 	connection  *con;
 
-	if (NULL == hctx) return;
-
 	p    = hctx->plugin_data;
 	con  = hctx->remote_conn;
 
@@ -1547,6 +1540,22 @@ static void fcgi_connection_close(server *srv, handler_ctx *hctx) {
 
 	handler_ctx_free(srv, hctx);
 	con->plugin_ctx[p->id] = NULL;
+
+	/* finish response (if not already finished) */
+	if (con->mode == p->id && con->state == CON_STATE_HANDLE_REQUEST) {
+		/* (not CON_STATE_ERROR and not CON_STATE_RESPONSE_END,
+		 *  i.e. not called from fcgi_connection_reset()) */
+
+		/* Send an error if we haven't sent any data yet */
+		if (0 == con->file_started) {
+			con->http_status = 500;
+			con->mode = DIRECT;
+		}
+		else if (!con->file_finished) {
+			http_chunk_close(srv, con);
+			con->file_finished = 1;
+		}
+	}
 }
 
 static int fcgi_reconnect(server *srv, handler_ctx *hctx) {
@@ -1609,8 +1618,8 @@ static int fcgi_reconnect(server *srv, handler_ctx *hctx) {
 
 static handler_t fcgi_connection_reset(server *srv, connection *con, void *p_d) {
 	plugin_data *p = p_d;
-
-	fcgi_connection_close(srv, con->plugin_ctx[p->id]);
+	handler_ctx *hctx = con->plugin_ctx[p->id];
+	if (hctx) fcgi_connection_close(srv, hctx);
 
 	return HANDLER_GO_ON;
 }
@@ -2521,7 +2530,6 @@ static int fcgi_demux_response(server *srv, handler_ctx *hctx) {
 						con->parsed_response &= ~HTTP_CONTENT_LENGTH;
 						con->response.content_length = -1;
 						hctx->send_content_body = 0; /* ignore the content */
-						joblist_append(srv, con);
 					} else {
 						log_error_write(srv, __FILE__, __LINE__, "sb",
 							"send-file error: couldn't get stat_cache entry for:",
@@ -2542,7 +2550,6 @@ static int fcgi_demux_response(server *srv, handler_ctx *hctx) {
 					}
 
 					http_chunk_append_buffer(srv, con, packet.b);
-					joblist_append(srv, con);
 				}
 			} else if (hctx->send_content_body && !buffer_string_is_empty(packet.b)) {
 				if (con->request.http_version == HTTP_VERSION_1_1 &&
@@ -2552,7 +2559,6 @@ static int fcgi_demux_response(server *srv, handler_ctx *hctx) {
 				}
 
 				http_chunk_append_buffer(srv, con, packet.b);
-				joblist_append(srv, con);
 			}
 			break;
 		case FCGI_STDERR:
@@ -2570,7 +2576,6 @@ static int fcgi_demux_response(server *srv, handler_ctx *hctx) {
 			      con->http_status == 200)) {
 				/* send chunk-end if necessary */
 				http_chunk_close(srv, con);
-				joblist_append(srv, con);
 			}
 
 			fin = 1;
@@ -2789,7 +2794,7 @@ static handler_t fcgi_write_request(server *srv, handler_ctx *hctx) {
 	switch(hctx->state) {
 	case FCGI_STATE_CONNECT_DELAYED:
 		/* should never happen */
-		break;
+		return HANDLER_WAIT_FOR_EVENT;
 	case FCGI_STATE_INIT:
 		/* do we have a running process for this host (max-procs) ? */
 		hctx->proc = NULL;
@@ -2972,34 +2977,24 @@ static handler_t fcgi_write_request(server *srv, handler_ctx *hctx) {
 		} else {
 			fdevent_event_set(srv->ev, &(hctx->fde_ndx), hctx->fd, FDEVENT_OUT);
 
-			return HANDLER_WAIT_FOR_EVENT;
 		}
 
-		break;
+		return HANDLER_WAIT_FOR_EVENT;
 	case FCGI_STATE_READ:
 		/* waiting for a response */
-		break;
+		return HANDLER_WAIT_FOR_EVENT;
 	default:
 		log_error_write(srv, __FILE__, __LINE__, "s", "(debug) unknown state");
 		return HANDLER_ERROR;
 	}
-
-	return HANDLER_WAIT_FOR_EVENT;
 }
 
 
 /* might be called on fdevent after a connect() is delay too
  * */
-SUBREQUEST_FUNC(mod_fastcgi_handle_subrequest) {
-	plugin_data *p = p_d;
-
-	handler_ctx *hctx = con->plugin_ctx[p->id];
+static handler_t fcgi_send_request(server *srv, handler_ctx *hctx) {
 	fcgi_extension_host *host;
-
-	if (NULL == hctx) return HANDLER_GO_ON;
-
-	/* not my job */
-	if (con->mode != p->id) return HANDLER_GO_ON;
+	handler_t rc;
 
 	/* we don't have a host yet, choose one
 	 * -> this happens in the first round
@@ -3034,9 +3029,6 @@ SUBREQUEST_FUNC(mod_fastcgi_handle_subrequest) {
 
 			fcgi_connection_close(srv, hctx);
 
-			con->http_status = 500;
-			con->mode = DIRECT;
-
 			return HANDLER_FINISHED;
 		}
 
@@ -3060,8 +3052,13 @@ SUBREQUEST_FUNC(mod_fastcgi_handle_subrequest) {
 	}
 
 	/* ok, create the request */
-	switch(fcgi_write_request(srv, hctx)) {
-	case HANDLER_ERROR:
+	rc = fcgi_write_request(srv, hctx);
+	if (HANDLER_ERROR != rc) {
+		return rc;
+	} else {
+		plugin_data *p  = hctx->plugin_data;
+		connection *con = hctx->remote_conn;
+
 		if (hctx->state == FCGI_STATE_INIT ||
 		    hctx->state == FCGI_STATE_CONNECT_DELAYED) {
 			fcgi_restart_dead_procs(srv, p, host);
@@ -3069,41 +3066,38 @@ SUBREQUEST_FUNC(mod_fastcgi_handle_subrequest) {
 			/* cleanup this request and let the request handler start this request again */
 			if (hctx->reconnects < 5) {
 				fcgi_reconnect(srv, hctx);
-				joblist_append(srv, con); /* in case we come from the event-handler */
 
-				return HANDLER_WAIT_FOR_FD;
+				return HANDLER_COMEBACK;
 			} else {
 				fcgi_connection_close(srv, hctx);
-
-				buffer_reset(con->physical.path);
-				con->mode = DIRECT;
 				con->http_status = 503;
-				joblist_append(srv, con); /* in case we come from the event-handler */
 
 				return HANDLER_FINISHED;
 			}
 		} else {
+			int status = con->http_status;
 			fcgi_connection_close(srv, hctx);
-
-			buffer_reset(con->physical.path);
-			con->mode = DIRECT;
-			if (con->http_status != 400) con->http_status = 503;
-			joblist_append(srv, con); /* really ? */
+			con->http_status = (status == 400) ? 400 : 503; /* see FCGI_ENV_ADD_CHECK() for 400 error */
 
 			return HANDLER_FINISHED;
 		}
-	case HANDLER_WAIT_FOR_EVENT:
-		if (con->file_started == 1) {
-			return HANDLER_FINISHED;
-		} else {
-			return HANDLER_WAIT_FOR_EVENT;
-		}
-	case HANDLER_WAIT_FOR_FD:
-		return HANDLER_WAIT_FOR_FD;
-	default:
-		log_error_write(srv, __FILE__, __LINE__, "s", "subrequest write-req default");
-		return HANDLER_ERROR;
 	}
+}
+
+
+SUBREQUEST_FUNC(mod_fastcgi_handle_subrequest) {
+	plugin_data *p = p_d;
+
+	handler_ctx *hctx = con->plugin_ctx[p->id];
+
+	if (NULL == hctx) return HANDLER_GO_ON;
+
+	/* not my job */
+	if (con->mode != p->id) return HANDLER_GO_ON;
+
+	return (hctx->state != FCGI_STATE_READ)
+	  ? fcgi_send_request(srv, hctx)
+	  : HANDLER_WAIT_FOR_EVENT;
 }
 
 static handler_t fcgi_handle_fdevent(server *srv, void *ctx, int revents) {
@@ -3113,6 +3107,8 @@ static handler_t fcgi_handle_fdevent(server *srv, void *ctx, int revents) {
 
 	fcgi_proc *proc   = hctx->proc;
 	fcgi_extension_host *host= hctx->host;
+
+	joblist_append(srv, con);
 
 	if ((revents & FDEVENT_IN) &&
 	    hctx->state == FCGI_STATE_READ) {
@@ -3135,9 +3131,9 @@ static handler_t fcgi_handle_fdevent(server *srv, void *ctx, int revents) {
 
 				buffer_copy_buffer(con->physical.path, host->docroot);
 				buffer_append_string_buffer(con->physical.path, con->uri.path);
-				fcgi_connection_close(srv, hctx);
 
-				con->mode = DIRECT;
+				con->mode = DIRECT;/*(avoid changing con->state, con->http_status)*/
+				fcgi_connection_close(srv, hctx);
 				con->http_status = 0;
 				con->file_started = 1; /* fcgi_extension won't touch the request afterwards */
 			} else {
@@ -3145,7 +3141,6 @@ static handler_t fcgi_handle_fdevent(server *srv, void *ctx, int revents) {
 				fcgi_connection_close(srv, hctx);
 			}
 
-			joblist_append(srv, con);
 			return HANDLER_FINISHED;
 		case -1:
 			if (proc->pid && proc->state != PROC_STATE_DIED) {
@@ -3199,14 +3194,15 @@ static handler_t fcgi_handle_fdevent(server *srv, void *ctx, int revents) {
 
 				if (hctx->wb->bytes_out == 0 &&
 				    hctx->reconnects < 5) {
-					fcgi_reconnect(srv, hctx);
 
 					log_error_write(srv, __FILE__, __LINE__, "ssbsBSBs",
 						"response not received, request not sent",
 						"on socket:", proc->connection_name,
 						"for", con->uri.path, "?", con->uri.query, ", reconnecting");
 
-					return HANDLER_WAIT_FOR_FD;
+					fcgi_reconnect(srv, hctx);
+
+					return HANDLER_COMEBACK;
 				}
 
 				log_error_write(srv, __FILE__, __LINE__, "sosbsBSBs",
@@ -3215,27 +3211,19 @@ static handler_t fcgi_handle_fdevent(server *srv, void *ctx, int revents) {
 						"for", con->uri.path, "?", con->uri.query, ", closing connection");
 
 				fcgi_connection_close(srv, hctx);
-
-				connection_set_state(srv, con, CON_STATE_HANDLE_REQUEST);
-				buffer_reset(con->physical.path);
-				con->http_status = 500;
-				con->mode = DIRECT;
 			} else {
 				/* response might have been already started, kill the connection */
-				fcgi_connection_close(srv, hctx);
-
 				log_error_write(srv, __FILE__, __LINE__, "ssbsBSBs",
 						"response already sent out, but backend returned error",
 						"on socket:", proc->connection_name,
 						"for", con->uri.path, "?", con->uri.query, ", terminating connection");
 
-				connection_set_state(srv, con, CON_STATE_ERROR);
+				con->keep_alive = 0;
+				con->file_finished = 1;
+				con->mode = DIRECT; /*(avoid sending final chunked block)*/
+				fcgi_connection_close(srv, hctx);
 			}
 
-			/* */
-
-
-			joblist_append(srv, con);
 			return HANDLER_FINISHED;
 		}
 	}
@@ -3248,7 +3236,7 @@ static handler_t fcgi_handle_fdevent(server *srv, void *ctx, int revents) {
 			 * 1. in an unfinished connect() call
 			 * 2. in an unfinished write() call (long POST request)
 			 */
-			return mod_fastcgi_handle_subrequest(srv, con, p);
+			return fcgi_send_request(srv, hctx); /*(might invalidate hctx)*/
 		} else {
 			log_error_write(srv, __FILE__, __LINE__, "sd",
 					"got a FDEVENT_OUT and didn't know why:",
@@ -3268,7 +3256,7 @@ static handler_t fcgi_handle_fdevent(server *srv, void *ctx, int revents) {
 			 * FIXME: as it is a bit ugly.
 			 *
 			 */
-			return mod_fastcgi_handle_subrequest(srv, con, p);
+			fcgi_send_request(srv, hctx);
 		} else if (hctx->state == FCGI_STATE_READ &&
 			   hctx->proc->port == 0) {
 			/* FIXME:
@@ -3283,23 +3271,23 @@ static handler_t fcgi_handle_fdevent(server *srv, void *ctx, int revents) {
 					"(no fastcgi process on socket:", proc->connection_name, "?)",
 					hctx->state);
 
-			connection_set_state(srv, con, CON_STATE_ERROR);
 			fcgi_connection_close(srv, hctx);
-			joblist_append(srv, con);
 		}
 	} else if (revents & FDEVENT_ERR) {
 		log_error_write(srv, __FILE__, __LINE__, "s",
 				"fcgi: got a FDEVENT_ERR. Don't know why.");
-		/* kill all connections to the fastcgi process */
 
-
-		connection_set_state(srv, con, CON_STATE_ERROR);
+		if (con->file_started) {
+			con->keep_alive = 0;
+			con->file_finished = 1;
+			con->mode = DIRECT; /*(avoid sending final chunked block)*/
+		}
 		fcgi_connection_close(srv, hctx);
-		joblist_append(srv, con);
 	}
 
 	return HANDLER_FINISHED;
 }
+
 #define PATCH(x) \
 	p->conf.x = s->x;
 static int fcgi_patch_connection(server *srv, connection *con, plugin_data *p) {
@@ -3445,8 +3433,8 @@ static handler_t fcgi_check_extension(server *srv, connection *con, void *p_d, i
 
 	if (!host) {
 		/* sorry, we don't have a server alive for this ext */
-		buffer_reset(con->physical.path);
 		con->http_status = 500;
+		con->mode = DIRECT;
 
 		/* only send the 'no handler' once */
 		if (!extension->note_is_sent) {
@@ -3602,14 +3590,6 @@ JOBLIST_FUNC(mod_fastcgi_handle_joblist) {
 }
 
 
-static handler_t fcgi_connection_close_callback(server *srv, connection *con, void *p_d) {
-	plugin_data *p = p_d;
-
-	fcgi_connection_close(srv, con->plugin_ctx[p->id]);
-
-	return HANDLER_GO_ON;
-}
-
 TRIGGER_FUNC(mod_fastcgi_handle_trigger) {
 	plugin_data *p = p_d;
 	size_t i, j, n;
@@ -3714,7 +3694,7 @@ int mod_fastcgi_plugin_init(plugin *p) {
 	p->cleanup      = mod_fastcgi_free;
 	p->set_defaults = mod_fastcgi_set_defaults;
 	p->connection_reset        = fcgi_connection_reset;
-	p->handle_connection_close = fcgi_connection_close_callback;
+	p->handle_connection_close = fcgi_connection_reset;
 	p->handle_uri_clean        = fcgi_check_extension_1;
 	p->handle_subrequest_start = fcgi_check_extension_2;
 	p->handle_subrequest       = mod_fastcgi_handle_subrequest;

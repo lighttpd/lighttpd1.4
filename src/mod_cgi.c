@@ -35,10 +35,6 @@
 #include <stdio.h>
 #include <fcntl.h>
 
-#ifdef HAVE_SYS_FILIO_H
-# include <sys/filio.h>
-#endif
-
 #include "version.h"
 
 enum {EOL_UNSET, EOL_N, EOL_RN};
@@ -92,6 +88,7 @@ static handler_ctx * cgi_handler_ctx_init(void) {
 
 	hctx->response = buffer_init();
 	hctx->response_header = buffer_init();
+	hctx->fd = -1;
 
 	return hctx;
 }
@@ -385,7 +382,6 @@ static int cgi_demux_response(server *srv, handler_ctx *hctx) {
 
 			/* send final chunk */
 			http_chunk_close(srv, con);
-			joblist_append(srv, con);
 
 			return FDEVENT_HANDLED_FINISHED;
 		}
@@ -473,7 +469,6 @@ static int cgi_demux_response(server *srv, handler_ctx *hctx) {
 					}
 
 					http_chunk_append_buffer(srv, con, hctx->response_header);
-					joblist_append(srv, con);
 				} else {
 					const char *bstart;
 					size_t blen;
@@ -507,7 +502,6 @@ static int cgi_demux_response(server *srv, handler_ctx *hctx) {
 
 					if (blen > 0) {
 						http_chunk_append_mem(srv, con, bstart, blen);
-						joblist_append(srv, con);
 					}
 				}
 
@@ -515,7 +509,6 @@ static int cgi_demux_response(server *srv, handler_ctx *hctx) {
 			}
 		} else {
 			http_chunk_append_buffer(srv, con, hctx->response);
-			joblist_append(srv, con);
 		}
 
 #if 0
@@ -526,7 +519,7 @@ static int cgi_demux_response(server *srv, handler_ctx *hctx) {
 	return FDEVENT_HANDLED_NOT_FINISHED;
 }
 
-static handler_t cgi_connection_close(server *srv, handler_ctx *hctx) {
+static void cgi_connection_close(server *srv, handler_ctx *hctx) {
 	int status;
 	pid_t pid;
 	plugin_data *p = hctx->plugin_data;
@@ -612,7 +605,8 @@ static handler_t cgi_connection_close(server *srv, handler_ctx *hctx) {
 	}
 #endif
 
-	if (con->state == CON_STATE_HANDLE_REQUEST) {
+	/* finish response (if not already finished) */
+	if (con->mode == p->id && con->state == CON_STATE_HANDLE_REQUEST) {
 		/* (not CON_STATE_ERROR and not CON_STATE_RESPONSE_END,
 		 * i.e. not called from cgi_connection_close_callback()) */
 
@@ -625,18 +619,14 @@ static handler_t cgi_connection_close(server *srv, handler_ctx *hctx) {
 			con->file_finished = 1;
 		}
 	}
-
-	return HANDLER_GO_ON;
 }
 
 static handler_t cgi_connection_close_callback(server *srv, connection *con, void *p_d) {
 	plugin_data *p = p_d;
 	handler_ctx *hctx = con->plugin_ctx[p->id];
+	if (hctx) cgi_connection_close(srv, hctx);
 
-	if (con->mode != p->id) return HANDLER_GO_ON;
-	if (NULL == hctx) return HANDLER_GO_ON;
-
-	return cgi_connection_close(srv, hctx);
+	return HANDLER_GO_ON;
 }
 
 
@@ -805,7 +795,7 @@ static int cgi_write_file_chunk_mmap(server *srv, connection *con, int fd, chunk
 	return 0;
 }
 
-static int cgi_create_env(server *srv, connection *con, plugin_data *p, buffer *cgi_handler) {
+static int cgi_create_env(server *srv, connection *con, plugin_data *p, handler_ctx *hctx, buffer *cgi_handler) {
 	pid_t pid;
 
 #ifdef HAVE_IPV6
@@ -1103,8 +1093,7 @@ static int cgi_create_env(server *srv, connection *con, plugin_data *p, buffer *
 		close(to_cgi_fds[1]);
 		return -1;
 	default: {
-		handler_ctx *hctx;
-		/* parent proces */
+		/* parent process */
 
 		close(from_cgi_fds[1]);
 		close(to_cgi_fds[0]);
@@ -1180,18 +1169,10 @@ static int cgi_create_env(server *srv, connection *con, plugin_data *p, buffer *
 		close(to_cgi_fds[1]);
 
 		/* register PID and wait for them asyncronously */
-		con->mode = p->id;
-		buffer_reset(con->physical.path);
 
-		hctx = cgi_handler_ctx_init();
-
-		hctx->remote_conn = con;
-		hctx->plugin_data = p;
 		hctx->pid = pid;
 		hctx->fd = from_cgi_fds[0];
 		hctx->fde_ndx = -1;
-
-		con->plugin_ctx[p->id] = hctx;
 
 		fdevent_register(srv->ev, hctx->fd, cgi_handle_fdevent, hctx);
 		fdevent_event_set(srv->ev, &(hctx->fde_ndx), hctx->fd, FDEVENT_IN);
@@ -1210,6 +1191,23 @@ static int cgi_create_env(server *srv, connection *con, plugin_data *p, buffer *
 #else
 	return -1;
 #endif
+}
+
+static buffer * cgi_get_handler(array *a, buffer *fn) {
+	size_t k, s_len = buffer_string_length(fn);
+	for (k = 0; k < a->used; ++k) {
+		data_string *ds = (data_string *)a->data[k];
+		size_t ct_len = buffer_string_length(ds->key);
+
+		if (buffer_is_empty(ds->key)) continue;
+		if (s_len < ct_len) continue;
+
+		if (0 == strncmp(fn->ptr + s_len - ct_len, ds->key->ptr, ct_len)) {
+			return ds->value;
+		}
+	}
+
+	return NULL;
 }
 
 #define PATCH(x) \
@@ -1246,7 +1244,6 @@ static int mod_cgi_patch_connection(server *srv, connection *con, plugin_data *p
 #undef PATCH
 
 URIHANDLER_FUNC(cgi_is_handled) {
-	size_t k, s_len;
 	plugin_data *p = p_d;
 	buffer *fn = con->physical.path;
 	stat_cache_entry *sce = NULL;
@@ -1261,26 +1258,12 @@ URIHANDLER_FUNC(cgi_is_handled) {
 	if (!S_ISREG(sce->st.st_mode)) return HANDLER_GO_ON;
 	if (p->conf.execute_x_only == 1 && (sce->st.st_mode & (S_IXUSR | S_IXGRP | S_IXOTH)) == 0) return HANDLER_GO_ON;
 
-	s_len = buffer_string_length(fn);
-
-	for (k = 0; k < p->conf.cgi->used; k++) {
-		data_string *ds = (data_string *)p->conf.cgi->data[k];
-		size_t ct_len = buffer_string_length(ds->key);
-
-		if (buffer_is_empty(ds->key)) continue;
-		if (s_len < ct_len) continue;
-
-		if (0 == strncmp(fn->ptr + s_len - ct_len, ds->key->ptr, ct_len)) {
-			if (cgi_create_env(srv, con, p, ds->value)) {
-				con->mode = DIRECT;
-				con->http_status = 500;
-
-				buffer_reset(con->physical.path);
-				return HANDLER_FINISHED;
-			}
-			/* one handler is enough for the request */
-			break;
-		}
+	if (NULL != cgi_get_handler(p->conf.cgi, fn)) {
+		handler_ctx *hctx = cgi_handler_ctx_init();
+		hctx->remote_conn = con;
+		hctx->plugin_data = p;
+		con->plugin_ctx[p->id] = hctx;
+		con->mode = p->id;
 	}
 
 	return HANDLER_GO_ON;
@@ -1351,10 +1334,20 @@ TRIGGER_FUNC(cgi_trigger) {
 SUBREQUEST_FUNC(mod_cgi_handle_subrequest) {
 	plugin_data *p = p_d;
 	handler_ctx *hctx = con->plugin_ctx[p->id];
-	UNUSED(srv);
 
 	if (con->mode != p->id) return HANDLER_GO_ON;
 	if (NULL == hctx) return HANDLER_GO_ON;
+
+	if (-1 == hctx->fd) {
+		buffer *handler = cgi_get_handler(p->conf.cgi, con->physical.path);
+		if (!handler) return HANDLER_GO_ON; /*(should not happen; checked in cgi_is_handled())*/
+		if (cgi_create_env(srv, con, p, hctx, handler)) {
+			con->http_status = 500;
+			con->mode = DIRECT;
+
+			return HANDLER_FINISHED;
+		}
+	}
 
 #if 0
 	log_error_write(srv, __FILE__, __LINE__, "sdd", "subrequest, pid =", hctx, hctx->pid);

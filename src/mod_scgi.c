@@ -27,10 +27,6 @@
 
 #include <stdio.h>
 
-#ifdef HAVE_SYS_FILIO_H
-# include <sys/filio.h>
-#endif
-
 #include "sys-socket.h"
 
 #ifdef HAVE_SYS_UIO_H
@@ -869,7 +865,7 @@ static int scgi_spawn_connection(server *srv,
 			log_error_write(srv, __FILE__, __LINE__, "sbs",
 					"execl failed for:", host->bin_path, strerror(errno));
 
-			exit(errno);
+			_exit(errno);
 
 			break;
 		}
@@ -1253,11 +1249,9 @@ static int scgi_set_state(server *srv, handler_ctx *hctx, scgi_connection_state_
 }
 
 
-static void scgi_connection_cleanup(server *srv, handler_ctx *hctx) {
+static void scgi_connection_close(server *srv, handler_ctx *hctx) {
 	plugin_data *p;
 	connection  *con;
-
-	if (NULL == hctx) return;
 
 	p    = hctx->plugin_data;
 	con  = hctx->remote_conn;
@@ -1290,6 +1284,22 @@ static void scgi_connection_cleanup(server *srv, handler_ctx *hctx) {
 
 	handler_ctx_free(hctx);
 	con->plugin_ctx[p->id] = NULL;
+
+	/* finish response (if not already finished) */
+	if (con->mode == p->id && con->state == CON_STATE_HANDLE_REQUEST) {
+		/* (not CON_STATE_ERROR and not CON_STATE_RESPONSE_END,
+		 *  i.e. not called from scgi_connection_reset()) */
+
+		/* Send an error if we haven't sent any data yet */
+		if (0 == con->file_started) {
+			con->http_status = 500;
+			con->mode = DIRECT;
+		}
+		else if (!con->file_finished) {
+			http_chunk_close(srv, con);
+			con->file_finished = 1;
+		}
+	}
 }
 
 static int scgi_reconnect(server *srv, handler_ctx *hctx) {
@@ -1340,8 +1350,8 @@ static int scgi_reconnect(server *srv, handler_ctx *hctx) {
 
 static handler_t scgi_connection_reset(server *srv, connection *con, void *p_d) {
 	plugin_data *p = p_d;
-
-	scgi_connection_cleanup(srv, con->plugin_ctx[p->id]);
+	handler_ctx *hctx = con->plugin_ctx[p->id];
+	if (hctx) scgi_connection_close(srv, hctx);
 
 	return HANDLER_GO_ON;
 }
@@ -1813,7 +1823,6 @@ static int scgi_demux_response(server *srv, handler_ctx *hctx) {
 
 			/* send final chunk */
 			http_chunk_close(srv, con);
-			joblist_append(srv, con);
 
 			return 1;
 		}
@@ -1890,7 +1899,6 @@ static int scgi_demux_response(server *srv, handler_ctx *hctx) {
 					}
 
 					http_chunk_append_buffer(srv, con, hctx->response_header);
-					joblist_append(srv, con);
 				} else {
 					size_t blen = buffer_string_length(hctx->response_header) - hlen;
 
@@ -1908,7 +1916,6 @@ static int scgi_demux_response(server *srv, handler_ctx *hctx) {
 
 					if (blen > 0) {
 						http_chunk_append_mem(srv, con, hctx->response_header->ptr + hlen, blen);
-						joblist_append(srv, con);
 					}
 				}
 
@@ -1916,7 +1923,6 @@ static int scgi_demux_response(server *srv, handler_ctx *hctx) {
 			}
 		} else {
 			http_chunk_append_buffer(srv, con, hctx->response);
-			joblist_append(srv, con);
 		}
 
 #if 0
@@ -2320,7 +2326,7 @@ static handler_t scgi_write_request(server *srv, handler_ctx *hctx) {
 
 					scgi_reconnect(srv, hctx);
 
-					return HANDLER_WAIT_FOR_FD;
+					return HANDLER_COMEBACK;
 				}
 
 				/* not reconnected ... why
@@ -2352,38 +2358,28 @@ static handler_t scgi_write_request(server *srv, handler_ctx *hctx) {
 		} else {
 			fdevent_event_set(srv->ev, &(hctx->fde_ndx), hctx->fd, FDEVENT_OUT);
 
-			return HANDLER_WAIT_FOR_EVENT;
 		}
 
-		break;
+		return HANDLER_WAIT_FOR_EVENT;
 	case FCGI_STATE_READ:
 		/* waiting for a response */
-		break;
+		return HANDLER_WAIT_FOR_EVENT;
 	default:
 		log_error_write(srv, __FILE__, __LINE__, "s", "(debug) unknown state");
 		return HANDLER_ERROR;
 	}
-
-	return HANDLER_WAIT_FOR_EVENT;
 }
 
-SUBREQUEST_FUNC(mod_scgi_handle_subrequest) {
-	plugin_data *p = p_d;
-
-	handler_ctx *hctx = con->plugin_ctx[p->id];
-	scgi_proc *proc;
-	scgi_extension_host *host;
-
-	if (NULL == hctx) return HANDLER_GO_ON;
-
-	/* not my job */
-	if (con->mode != p->id) return HANDLER_GO_ON;
-
+static handler_t scgi_send_request(server *srv, handler_ctx *hctx) {
 	/* ok, create the request */
-	switch(scgi_write_request(srv, hctx)) {
-	case HANDLER_ERROR:
-		proc = hctx->proc;
-		host = hctx->host;
+	handler_t rc = scgi_write_request(srv, hctx);
+	if (HANDLER_ERROR != rc) {
+		return rc;
+	} else {
+		scgi_proc *proc = hctx->proc;
+		scgi_extension_host *host = hctx->host;
+		plugin_data *p  = hctx->plugin_data;
+		connection *con = hctx->remote_conn;
 
 		if (proc &&
 		    0 == proc->is_local &&
@@ -2432,55 +2428,33 @@ SUBREQUEST_FUNC(mod_scgi_handle_subrequest) {
 			}
 			scgi_restart_dead_procs(srv, p, host);
 
-			scgi_connection_cleanup(srv, hctx);
+			con->mode = DIRECT;/*(avoid changing con->state, con->http_status)*/
+			scgi_connection_close(srv, hctx);
+			con->mode = p->id;
 
-			buffer_reset(con->physical.path);
-			con->mode = DIRECT;
-			joblist_append(srv, con);
-
-			/* mis-using HANDLER_WAIT_FOR_FD to break out of the loop
-			 * and hope that the childs will be restarted
-			 *
-			 */
-			return HANDLER_WAIT_FOR_FD;
+			return HANDLER_COMEBACK;
 		} else {
-			scgi_connection_cleanup(srv, hctx);
-
-			buffer_reset(con->physical.path);
-			con->mode = DIRECT;
+			scgi_connection_close(srv, hctx);
 			con->http_status = 503;
 
 			return HANDLER_FINISHED;
 		}
-	case HANDLER_WAIT_FOR_EVENT:
-		if (con->file_started == 1) {
-			return HANDLER_FINISHED;
-		} else {
-			return HANDLER_WAIT_FOR_EVENT;
-		}
-	case HANDLER_WAIT_FOR_FD:
-		return HANDLER_WAIT_FOR_FD;
-	default:
-		log_error_write(srv, __FILE__, __LINE__, "s", "subrequest write-req default");
-		return HANDLER_ERROR;
 	}
 }
 
-static handler_t scgi_connection_close(server *srv, handler_ctx *hctx) {
-	connection  *con;
+SUBREQUEST_FUNC(mod_scgi_handle_subrequest) {
+	plugin_data *p = p_d;
+
+	handler_ctx *hctx = con->plugin_ctx[p->id];
 
 	if (NULL == hctx) return HANDLER_GO_ON;
 
-	con  = hctx->remote_conn;
+	/* not my job */
+	if (con->mode != p->id) return HANDLER_GO_ON;
 
-	log_error_write(srv, __FILE__, __LINE__, "ssdsd",
-			"emergency exit: scgi:",
-			"connection-fd:", con->fd,
-			"fcgi-fd:", hctx->fd);
-
-	scgi_connection_cleanup(srv, hctx);
-
-	return HANDLER_FINISHED;
+	return (hctx->state != FCGI_STATE_READ)
+	  ? scgi_send_request(srv, hctx)
+	  : HANDLER_WAIT_FOR_EVENT;
 }
 
 
@@ -2492,6 +2466,8 @@ static handler_t scgi_handle_fdevent(server *srv, void *ctx, int revents) {
 	scgi_proc *proc   = hctx->proc;
 	scgi_extension_host *host= hctx->host;
 
+	joblist_append(srv, con);
+
 	if ((revents & FDEVENT_IN) &&
 	    hctx->state == FCGI_STATE_READ) {
 		switch (scgi_demux_response(srv, hctx)) {
@@ -2499,9 +2475,8 @@ static handler_t scgi_handle_fdevent(server *srv, void *ctx, int revents) {
 			break;
 		case 1:
 			/* we are done */
-			scgi_connection_cleanup(srv, hctx);
+			scgi_connection_close(srv, hctx);
 
-			joblist_append(srv, con);
 			return HANDLER_FINISHED;
 		case -1:
 			if (proc->pid && proc->state != PROC_STATE_DIED) {
@@ -2555,14 +2530,15 @@ static handler_t scgi_handle_fdevent(server *srv, void *ctx, int revents) {
 
 				if (hctx->wb->bytes_out == 0 &&
 				    hctx->reconnects < 5) {
-					scgi_reconnect(srv, hctx);
 
 					log_error_write(srv, __FILE__, __LINE__, "ssdsd",
 						"response not sent, request not sent, reconnection.",
 						"connection-fd:", con->fd,
 						"fcgi-fd:", hctx->fd);
 
-					return HANDLER_WAIT_FOR_FD;
+					scgi_reconnect(srv, hctx);
+
+					return HANDLER_COMEBACK;
 				}
 
 				log_error_write(srv, __FILE__, __LINE__, "sosdsd",
@@ -2570,12 +2546,7 @@ static handler_t scgi_handle_fdevent(server *srv, void *ctx, int revents) {
 						"connection-fd:", con->fd,
 						"fcgi-fd:", hctx->fd);
 
-				scgi_connection_cleanup(srv, hctx);
-
-				connection_set_state(srv, con, CON_STATE_HANDLE_REQUEST);
-				buffer_reset(con->physical.path);
-				con->http_status = 500;
-				con->mode = DIRECT;
+				scgi_connection_close(srv, hctx);
 			} else {
 				/* response might have been already started, kill the connection */
 				log_error_write(srv, __FILE__, __LINE__, "ssdsd",
@@ -2583,15 +2554,12 @@ static handler_t scgi_handle_fdevent(server *srv, void *ctx, int revents) {
 						"connection-fd:", con->fd,
 						"fcgi-fd:", hctx->fd);
 
-				scgi_connection_cleanup(srv, hctx);
-
-				connection_set_state(srv, con, CON_STATE_ERROR);
+				con->keep_alive = 0;
+				con->file_finished = 1;
+				con->mode = DIRECT; /*(avoid sending final chunked block)*/
+				scgi_connection_close(srv, hctx);
 			}
 
-			/* */
-
-
-			joblist_append(srv, con);
 			return HANDLER_FINISHED;
 		}
 	}
@@ -2604,7 +2572,7 @@ static handler_t scgi_handle_fdevent(server *srv, void *ctx, int revents) {
 			 * 1. in a unfinished connect() call
 			 * 2. in a unfinished write() call (long POST request)
 			 */
-			return mod_scgi_handle_subrequest(srv, con, p);
+			return scgi_send_request(srv, hctx); /*(might invalidate hctx)*/
 		} else {
 			log_error_write(srv, __FILE__, __LINE__, "sd",
 					"got a FDEVENT_OUT and didn't know why:",
@@ -2624,7 +2592,7 @@ static handler_t scgi_handle_fdevent(server *srv, void *ctx, int revents) {
 			 * FIXME: as it is a bit ugly.
 			 *
 			 */
-			return mod_scgi_handle_subrequest(srv, con, p);
+			scgi_send_request(srv, hctx);
 		} else if (hctx->state == FCGI_STATE_READ &&
 			   hctx->proc->port == 0) {
 			/* FIXME:
@@ -2643,19 +2611,18 @@ static handler_t scgi_handle_fdevent(server *srv, void *ctx, int revents) {
 					" ?)",
 					hctx->state);
 
-			connection_set_state(srv, con, CON_STATE_ERROR);
 			scgi_connection_close(srv, hctx);
-			joblist_append(srv, con);
 		}
 	} else if (revents & FDEVENT_ERR) {
 		log_error_write(srv, __FILE__, __LINE__, "s",
 				"fcgi: got a FDEVENT_ERR. Don't know why.");
-		/* kill all connections to the scgi process */
 
-
-		connection_set_state(srv, con, CON_STATE_ERROR);
+		if (con->file_started) {
+			con->keep_alive = 0;
+			con->file_finished = 1;
+			con->mode = DIRECT; /*(avoid sending final chunked block)*/
+		}
 		scgi_connection_close(srv, hctx);
-		joblist_append(srv, con);
 	}
 
 	return HANDLER_FINISHED;
@@ -2763,8 +2730,8 @@ static handler_t scgi_check_extension(server *srv, connection *con, void *p_d, i
 
 	if (!host) {
 		/* sorry, we don't have a server alive for this ext */
-		buffer_reset(con->physical.path);
 		con->http_status = 500;
+		con->mode = DIRECT;
 
 		/* only send the 'no handler' once */
 		if (!extension->note_is_sent) {
@@ -2912,12 +2879,6 @@ JOBLIST_FUNC(mod_scgi_handle_joblist) {
 	return HANDLER_GO_ON;
 }
 
-
-static handler_t scgi_connection_close_callback(server *srv, connection *con, void *p_d) {
-	plugin_data *p = p_d;
-
-	return scgi_connection_close(srv, con->plugin_ctx[p->id]);
-}
 
 TRIGGER_FUNC(mod_scgi_handle_trigger) {
 	plugin_data *p = p_d;
@@ -3120,7 +3081,7 @@ int mod_scgi_plugin_init(plugin *p) {
 	p->cleanup      = mod_scgi_free;
 	p->set_defaults = mod_scgi_set_defaults;
 	p->connection_reset        = scgi_connection_reset;
-	p->handle_connection_close = scgi_connection_close_callback;
+	p->handle_connection_close = scgi_connection_reset;
 	p->handle_uri_clean        = scgi_check_extension_1;
 	p->handle_subrequest_start = scgi_check_extension_2;
 	p->handle_subrequest       = mod_scgi_handle_subrequest;
