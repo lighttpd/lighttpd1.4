@@ -46,6 +46,7 @@ typedef struct {
 
 	array *tempdirs;
 	unsigned int upload_temp_file_size;
+	unsigned int tempdir_idx;
 } chunkqueue;
 
 chunkqueue *chunkqueue_init(void);

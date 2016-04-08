@@ -201,6 +201,7 @@ void chunkqueue_reset(chunkqueue *cq) {
 
 	cq->bytes_in = 0;
 	cq->bytes_out = 0;
+	cq->tempdir_idx = 0;
 }
 
 void chunkqueue_append_file_fd(chunkqueue *cq, buffer *fn, int fd, off_t offset, off_t len) {
@@ -358,10 +359,18 @@ void chunkqueue_use_memory(chunkqueue *cq, size_t len) {
 	}
 }
 
+/* default 1MB, upper limit 128MB */
+#define DEFAULT_TEMPFILE_SIZE (1 * 1024 * 1024)
+#define MAX_TEMPFILE_SIZE (128 * 1024 * 1024)
+
 void chunkqueue_set_tempdirs(chunkqueue *cq, array *tempdirs, unsigned int upload_temp_file_size) {
 	force_assert(NULL != cq);
 	cq->tempdirs = tempdirs;
-	cq->upload_temp_file_size = upload_temp_file_size;
+	cq->upload_temp_file_size
+		= (0 == upload_temp_file_size)                ? DEFAULT_TEMPFILE_SIZE
+		: (upload_temp_file_size > MAX_TEMPFILE_SIZE) ? MAX_TEMPFILE_SIZE
+		                                              : upload_temp_file_size;
+	cq->tempdir_idx = 0;
 }
 
 void chunkqueue_steal(chunkqueue *dest, chunkqueue *src, off_t len) {
@@ -416,12 +425,10 @@ static chunk *chunkqueue_get_append_tempfile(chunkqueue *cq) {
 	int fd;
 
 	if (cq->tempdirs && cq->tempdirs->used) {
-		size_t i;
-
 		/* we have several tempdirs, only if all of them fail we jump out */
 
-		for (i = 0; i < cq->tempdirs->used; i++) {
-			data_string *ds = (data_string *)cq->tempdirs->data[i];
+		for (errno = EIO; cq->tempdir_idx < cq->tempdirs->used; ++cq->tempdir_idx) {
+			data_string *ds = (data_string *)cq->tempdirs->data[cq->tempdir_idx];
 
 			buffer_copy_buffer(template, ds->value);
 			buffer_append_slash(template);
@@ -452,79 +459,95 @@ static chunk *chunkqueue_get_append_tempfile(chunkqueue *cq) {
 	return c;
 }
 
-/* default 1MB, upper limit 128MB */
-#define DEFAULT_TEMPFILE_SIZE (1 * 1024 * 1024)
-#define MAX_TEMPFILE_SIZE (128 * 1024 * 1024)
+static void chunkqueue_remove_empty_chunks(chunkqueue *cq);
 
 static int chunkqueue_append_to_tempfile(server *srv, chunkqueue *dest, const char *mem, size_t len) {
-	/* copy everything to max max_tempfile_size sized tempfiles */
-	const off_t max_tempfile_size
-		= (0 == dest->upload_temp_file_size)                ? DEFAULT_TEMPFILE_SIZE
-		: (dest->upload_temp_file_size > MAX_TEMPFILE_SIZE) ? MAX_TEMPFILE_SIZE
-		                                                    : dest->upload_temp_file_size;
-	chunk *dst_c = NULL;
+	chunk *dst_c;
 	ssize_t written;
 
-	/*
-	 * if the last chunk is
-	 * - smaller than max_tempfile_size
-	 * - not read yet (offset == 0)
-	 * -> append to it (so it might actually become larger than max_tempfile_size)
-	 * otherwise
-	 * -> create a new chunk
-	 *
-	 * */
+	do {
+		/*
+		 * if the last chunk is
+		 * - smaller than dest->upload_temp_file_size
+		 * - not read yet (offset == 0)
+		 * -> append to it (so it might actually become larger than dest->upload_temp_file_size)
+		 * otherwise
+		 * -> create a new chunk
+		 *
+		 * */
 
-	if (NULL != dest->last
-		&& FILE_CHUNK == dest->last->type
-		&& dest->last->file.is_temp
-		&& -1 != dest->last->file.fd
-		&& 0 == dest->last->offset) {
-		/* ok, take the last chunk for our job */
 		dst_c = dest->last;
+		if (NULL != dst_c
+			&& FILE_CHUNK == dst_c->type
+			&& dst_c->file.is_temp
+			&& -1 != dst_c->file.fd
+			&& 0 == dst_c->offset) {
+			/* ok, take the last chunk for our job */
 
-		if (dest->last->file.length >= max_tempfile_size) {
-			/* the chunk is too large now, close it */
-			if (-1 != dst_c->file.fd) {
+			if (dst_c->file.length >= (off_t)dest->upload_temp_file_size) {
+				/* the chunk is too large now, close it */
+				close(dst_c->file.fd);
+				dst_c->file.fd = -1;
+				dst_c = NULL;
+			}
+		} else {
+			dst_c = NULL;
+		}
+
+		if (NULL == dst_c && NULL == (dst_c = chunkqueue_get_append_tempfile(dest))) {
+			/* we don't have file to write to,
+			 * EACCES might be one reason.
+			 *
+			 * Instead of sending 500 we send 413 and say the request is too large
+			 */
+
+			log_error_write(srv, __FILE__, __LINE__, "ss",
+				"denying upload as opening temp-file for upload failed:",
+				strerror(errno));
+
+			return -1;
+		}
+
+		written = write(dst_c->file.fd, mem, len);
+
+		if ((size_t) written == len) {
+			dst_c->file.length += len;
+			dest->bytes_in += len;
+
+			return 0;
+		} else if (written >= 0) {
+			/*(assume EINTR if partial write and retry write();
+			 * retry write() might fail with ENOSPC if no more space on volume)*/
+			dest->bytes_in += written;
+			mem += written;
+			len -= (size_t)written;
+			dst_c->file.length += (size_t)written;
+			/* continue; retry */
+		} else if (errno == EINTR) {
+			/* continue; retry */
+		} else {
+			int retry = (errno == ENOSPC && dest->tempdirs && ++dest->tempdir_idx < dest->tempdirs->used);
+			if (!retry) {
+				log_error_write(srv, __FILE__, __LINE__, "sbs",
+						"denying upload as writing to file failed:",
+						dst_c->file.name, strerror(errno));
+			}
+
+			if (0 == chunk_remaining_length(dst_c)) {
+				/*(remove empty chunk and unlink tempfile)*/
+				chunkqueue_remove_empty_chunks(dest);
+			} else {/*(close tempfile; avoid later attempts to append)*/
 				close(dst_c->file.fd);
 				dst_c->file.fd = -1;
 			}
-			dst_c = chunkqueue_get_append_tempfile(dest);
+			if (!retry) return -1;
+
+			/* continue; retry */
 		}
-	} else {
-		dst_c = chunkqueue_get_append_tempfile(dest);
-	}
 
-	if (NULL == dst_c) {
-		/* we don't have file to write to,
-		 * EACCES might be one reason.
-		 *
-		 * Instead of sending 500 we send 413 and say the request is too large
-		 */
+	} while (dst_c);
 
-		log_error_write(srv, __FILE__, __LINE__, "ss",
-			"denying upload as opening temp-file for upload failed:",
-			strerror(errno));
-
-		return -1;
-	}
-
-	if (0 > (written = write(dst_c->file.fd, mem, len)) || (size_t) written != len) {
-		/* write failed for some reason ... disk full ? */
-		log_error_write(srv, __FILE__, __LINE__, "sbs",
-				"denying upload as writing to file failed:",
-				dst_c->file.name, strerror(errno));
-
-		close(dst_c->file.fd);
-		dst_c->file.fd = -1;
-
-		return -1;
-	}
-
-	dst_c->file.length += len;
-	dest->bytes_in += len;
-
-	return 0;
+	return -1; /*(not reached)*/
 }
 
 int chunkqueue_steal_with_tempfiles(server *srv, chunkqueue *dest, chunkqueue *src, off_t len) {
@@ -642,5 +665,21 @@ void chunkqueue_remove_finished_chunks(chunkqueue *cq) {
 		if (c == cq->last) cq->last = NULL;
 
 		chunkqueue_push_unused_chunk(cq, c);
+	}
+}
+
+static void chunkqueue_remove_empty_chunks(chunkqueue *cq) {
+	chunk *c;
+	chunkqueue_remove_finished_chunks(cq);
+	if (chunkqueue_is_empty(cq)) return;
+
+	for (c = cq->first; c->next; c = c->next) {
+		if (0 == chunk_remaining_length(c->next)) {
+			chunk *empty = c->next;
+			c->next = empty->next;
+			if (empty == cq->last) cq->last = c;
+
+			chunkqueue_push_unused_chunk(cq, empty);
+		}
 	}
 }
