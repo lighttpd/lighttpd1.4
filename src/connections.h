@@ -15,6 +15,7 @@ int connection_set_state(server *srv, connection *con, connection_state_t state)
 const char * connection_get_state(connection_state_t state);
 const char * connection_get_short_state(connection_state_t state);
 int connection_state_machine(server *srv, connection *con);
+int connection_handle_read(server *srv, connection *con);
 handler_t connection_handle_read_post_state(server *srv, connection *con);
 
 #endif
