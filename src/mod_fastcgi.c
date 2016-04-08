@@ -3096,6 +3096,11 @@ SUBREQUEST_FUNC(mod_fastcgi_handle_subrequest) {
 	/* not my job */
 	if (con->mode != p->id) return HANDLER_GO_ON;
 
+	if (con->state == CON_STATE_READ_POST) {
+		handler_t r = connection_handle_read_post_state(srv, con);
+		if (r != HANDLER_GO_ON) return r;
+	}
+
 	return (hctx->state != FCGI_STATE_READ)
 	  ? fcgi_send_request(srv, hctx)
 	  : HANDLER_WAIT_FOR_EVENT;

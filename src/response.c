@@ -7,7 +7,6 @@
 #include "chunk.h"
 
 #include "configfile.h"
-#include "connections.h"
 
 #include "plugin.h"
 
@@ -748,11 +747,6 @@ handler_t http_response_prepare(server *srv, connection *con) {
 			return HANDLER_FINISHED;
 		}
 
-	}
-
-	if (con->state == CON_STATE_READ_POST) {
-		r = connection_handle_read_post_state(srv, con);
-		if (r != HANDLER_GO_ON) return r;
 	}
 
 	switch(r = plugins_call_handle_subrequest(srv, con)) {

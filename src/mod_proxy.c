@@ -908,6 +908,11 @@ SUBREQUEST_FUNC(mod_proxy_handle_subrequest) {
 	/* not my job */
 	if (con->mode != p->id) return HANDLER_GO_ON;
 
+	if (con->state == CON_STATE_READ_POST) {
+		handler_t r = connection_handle_read_post_state(srv, con);
+		if (r != HANDLER_GO_ON) return r;
+	}
+
 	return (hctx->state != PROXY_STATE_READ)
 	  ? proxy_send_request(srv, hctx)
 	  : HANDLER_WAIT_FOR_EVENT;

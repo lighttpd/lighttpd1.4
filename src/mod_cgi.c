@@ -1339,6 +1339,11 @@ SUBREQUEST_FUNC(mod_cgi_handle_subrequest) {
 	if (con->mode != p->id) return HANDLER_GO_ON;
 	if (NULL == hctx) return HANDLER_GO_ON;
 
+	if (con->state == CON_STATE_READ_POST) {
+		handler_t r = connection_handle_read_post_state(srv, con);
+		if (r != HANDLER_GO_ON) return r;
+	}
+
 	if (-1 == hctx->fd) {
 		buffer *handler = cgi_get_handler(p->conf.cgi, con->physical.path);
 		if (!handler) return HANDLER_GO_ON; /*(should not happen; checked in cgi_is_handled())*/
