@@ -821,7 +821,7 @@ static handler_t proxy_write_request(server *srv, handler_ctx *hctx) {
 			proxy_set_state(srv, hctx, PROXY_STATE_READ);
 			fdevent_event_set(srv->ev, &(hctx->fde_ndx), hctx->fd, FDEVENT_IN);
 		} else {
-			fdevent_event_set(srv->ev, &(hctx->fde_ndx), hctx->fd, FDEVENT_OUT);
+			fdevent_event_set(srv->ev, &(hctx->fde_ndx), hctx->fd, FDEVENT_IN|FDEVENT_OUT);
 		}
 
 		return HANDLER_WAIT_FOR_EVENT;
