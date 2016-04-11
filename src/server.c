@@ -1529,7 +1529,6 @@ int main (int argc, char **argv) {
 
 				for (i = 0; i < srv->srv_sockets.used; i++) {
 					server_socket *srv_socket = srv->srv_sockets.ptr[i];
-					fdevent_event_del(srv->ev, &(srv_socket->fde_ndx), srv_socket->fd);
 
 					if (graceful_shutdown) {
 						/* we don't want this socket anymore,
@@ -1538,11 +1537,14 @@ int main (int argc, char **argv) {
 						 * the next lighttpd to take over (graceful restart)
 						 *  */
 
+						fdevent_event_del(srv->ev, &(srv_socket->fde_ndx), srv_socket->fd);
 						fdevent_unregister(srv->ev, srv_socket->fd);
 						close(srv_socket->fd);
 						srv_socket->fd = -1;
 
 						/* network_close() will cleanup after us */
+					} else {
+						fdevent_event_set(srv->ev, &(srv_socket->fde_ndx), srv_socket->fd, 0);
 					}
 				}
 

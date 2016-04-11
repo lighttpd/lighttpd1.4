@@ -143,6 +143,7 @@ static int connection_close(server *srv, connection *con) {
 				"(warning) close:", con->fd, strerror(errno));
 	}
 #endif
+	con->fd = -1;
 
 	srv->cur_fds--;
 #if 0
@@ -1377,11 +1378,11 @@ int connection_state_machine(server *srv, connection *con) {
 		    (con->traffic_limit_reached == 0)) {
 			fdevent_event_set(srv->ev, &(con->fde_ndx), con->fd, FDEVENT_OUT);
 		} else {
-			fdevent_event_del(srv->ev, &(con->fde_ndx), con->fd);
+			fdevent_event_set(srv->ev, &(con->fde_ndx), con->fd, 0);
 		}
 		break;
 	default:
-		fdevent_event_del(srv->ev, &(con->fde_ndx), con->fd);
+		fdevent_event_set(srv->ev, &(con->fde_ndx), con->fd, 0);
 		break;
 	}
 

@@ -173,8 +173,8 @@ fdevents *fdevent_init(struct server *srv, size_t maxfds, fdevent_handler_t type
 int fdevent_reset(fdevents *ev); /* "init" after fork() */
 void fdevent_free(fdevents *ev);
 
-int fdevent_event_set(fdevents *ev, int *fde_ndx, int fd, int events); /* events can be FDEVENT_IN, FDEVENT_OUT or FDEVENT_IN | FDEVENT_OUT */
-int fdevent_event_del(fdevents *ev, int *fde_ndx, int fd);
+void fdevent_event_set(fdevents *ev, int *fde_ndx, int fd, int events); /* events can be FDEVENT_IN, FDEVENT_OUT or FDEVENT_IN | FDEVENT_OUT */
+void fdevent_event_del(fdevents *ev, int *fde_ndx, int fd);
 int fdevent_event_get_revent(fdevents *ev, size_t ndx);
 int fdevent_event_get_fd(fdevents *ev, size_t ndx);
 fdevent_handler fdevent_get_handler(fdevents *ev, int fd);

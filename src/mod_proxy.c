@@ -819,8 +819,6 @@ static handler_t proxy_write_request(server *srv, handler_ctx *hctx) {
 
 		if (hctx->wb->bytes_out == hctx->wb->bytes_in) {
 			proxy_set_state(srv, hctx, PROXY_STATE_READ);
-
-			fdevent_event_del(srv->ev, &(hctx->fde_ndx), hctx->fd);
 			fdevent_event_set(srv->ev, &(hctx->fde_ndx), hctx->fd, FDEVENT_IN);
 		} else {
 			fdevent_event_set(srv->ev, &(hctx->fde_ndx), hctx->fd, FDEVENT_OUT);
@@ -966,10 +964,6 @@ static handler_t proxy_handle_fdevent(server *srv, void *ctx, int revents) {
 		if (hctx->state == PROXY_STATE_CONNECT) {
 			int socket_error;
 			socklen_t socket_error_len = sizeof(socket_error);
-
-			/* we don't need it anymore */
-			fdevent_event_del(srv->ev, &(hctx->fde_ndx), hctx->fd);
-			hctx->fde_ndx = -1;
 
 			/* try to finish the connect() */
 			if (0 != getsockopt(hctx->fd, SOL_SOCKET, SO_ERROR, &socket_error, &socket_error_len)) {
