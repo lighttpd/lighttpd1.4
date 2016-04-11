@@ -20,7 +20,6 @@
 #define SIGHUP_FUNC        SERVER_FUNC
 
 #define SUBREQUEST_FUNC    CONNECTION_FUNC
-#define JOBLIST_FUNC       CONNECTION_FUNC
 #define PHYSICALPATH_FUNC  CONNECTION_FUNC
 #define REQUESTDONE_FUNC   CONNECTION_FUNC
 #define URIHANDLER_FUNC    CONNECTION_FUNC
@@ -45,7 +44,6 @@ typedef struct {
 	handler_t (* handle_physical)        (server *srv, connection *con, void *p_d);    /* mapping url to physical path */
 	handler_t (* handle_request_done)    (server *srv, connection *con, void *p_d);    /* at the end of a request */
 	handler_t (* handle_connection_close)(server *srv, connection *con, void *p_d);    /* at the end of a connection */
-	handler_t (* handle_joblist)         (server *srv, connection *con, void *p_d);    /* after all events are handled */
 
 
 
@@ -73,7 +71,6 @@ handler_t plugins_call_handle_request_done(server *srv, connection *con);
 handler_t plugins_call_handle_docroot(server *srv, connection *con);
 handler_t plugins_call_handle_physical(server *srv, connection *con);
 handler_t plugins_call_handle_connection_close(server *srv, connection *con);
-handler_t plugins_call_handle_joblist(server *srv, connection *con);
 handler_t plugins_call_connection_reset(server *srv, connection *con);
 
 handler_t plugins_call_handle_trigger(server *srv);

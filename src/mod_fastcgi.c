@@ -3563,35 +3563,6 @@ static handler_t fcgi_check_extension_2(server *srv, connection *con, void *p_d)
 	return fcgi_check_extension(srv, con, p_d, 0);
 }
 
-JOBLIST_FUNC(mod_fastcgi_handle_joblist) {
-	plugin_data *p = p_d;
-	handler_ctx *hctx = con->plugin_ctx[p->id];
-
-	if (hctx == NULL) return HANDLER_GO_ON;
-
-	if (hctx->fd != -1) {
-		switch (hctx->state) {
-		case FCGI_STATE_READ:
-			fdevent_event_set(srv->ev, &(hctx->fde_ndx), hctx->fd, FDEVENT_IN);
-
-			break;
-		case FCGI_STATE_CONNECT_DELAYED:
-		case FCGI_STATE_WRITE:
-			fdevent_event_set(srv->ev, &(hctx->fde_ndx), hctx->fd, FDEVENT_OUT);
-
-			break;
-		case FCGI_STATE_INIT:
-			/* at reconnect */
-			break;
-		default:
-			log_error_write(srv, __FILE__, __LINE__, "sd", "unhandled fcgi.state", hctx->state);
-			break;
-		}
-	}
-
-	return HANDLER_GO_ON;
-}
-
 
 TRIGGER_FUNC(mod_fastcgi_handle_trigger) {
 	plugin_data *p = p_d;
@@ -3701,7 +3672,6 @@ int mod_fastcgi_plugin_init(plugin *p) {
 	p->handle_uri_clean        = fcgi_check_extension_1;
 	p->handle_subrequest_start = fcgi_check_extension_2;
 	p->handle_subrequest       = mod_fastcgi_handle_subrequest;
-	p->handle_joblist          = mod_fastcgi_handle_joblist;
 	p->handle_trigger          = mod_fastcgi_handle_trigger;
 
 	p->data         = NULL;

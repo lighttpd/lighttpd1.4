@@ -1632,19 +1632,7 @@ int main (int argc, char **argv) {
 
 		for (ndx = 0; ndx < srv->joblist->used; ndx++) {
 			connection *con = srv->joblist->ptr[ndx];
-			handler_t r;
-
 			connection_state_machine(srv, con);
-
-			switch(r = plugins_call_handle_joblist(srv, con)) {
-			case HANDLER_FINISHED:
-			case HANDLER_GO_ON:
-				break;
-			default:
-				log_error_write(srv, __FILE__, __LINE__, "d", r);
-				break;
-			}
-
 			con->in_joblist = 0;
 		}
 
