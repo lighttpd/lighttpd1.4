@@ -733,8 +733,8 @@ static int magnet_attach_content(server *srv, connection *con, lua_State *L, int
 				chunkqueue_append_mem(con->write_queue, data.ptr, data.len);
 			} else if (lua_istable(L, -1)) {
 				lua_getfield(L, -1, "filename");
-				lua_getfield(L, -2, "length");
-				lua_getfield(L, -3, "offset");
+				lua_getfield(L, -2, "length"); /* (0-based) end of range (not actually "length") */
+				lua_getfield(L, -3, "offset"); /* (0-based) start of range */
 
 				if (lua_isstring(L, -3)) { /* filename has to be a string */
 					buffer *fn;
@@ -747,19 +747,19 @@ static int magnet_attach_content(server *srv, connection *con, lua_State *L, int
 
 					if (HANDLER_GO_ON == res) {
 						off_t off = (off_t) luaL_optinteger(L, -1, 0);
-						off_t len = (off_t) luaL_optinteger(L, -2, (lua_Integer) sce->st.st_size);
+						off_t end = (off_t) luaL_optinteger(L, -2, (lua_Integer) sce->st.st_size);
 
 						if (off < 0) {
 							buffer_free(fn);
 							return luaL_error(L, "offset for '%s' is negative", lua_tostring(L, -3));
 						}
 
-						if (len < off) {
+						if (end < off) {
 							buffer_free(fn);
 							return luaL_error(L, "offset > length for '%s'", lua_tostring(L, -3));
 						}
 
-						chunkqueue_append_file(con->write_queue, fn, off, len - off);
+						chunkqueue_append_file(con->write_queue, fn, off, end - off);
 					}
 
 					buffer_free(fn);
