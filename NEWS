@@ -72,6 +72,7 @@ NEWS
   * [mod_status] page refresh option (fixes #2170)
   * [mod_status] table w/ count of con states (fixes #2427)
   * [mod_dirlisting] class for dir <tr> (fixes #2304)
+  * [core] define __STDC_WANT_LIB_EXT1__ (fixes #2722)
 
 - 1.4.39 - 2016-01-02
   * [core] fix memset_s call (fixes #2698)
