@@ -1348,9 +1348,8 @@ URIHANDLER_FUNC(mod_webdav_subrequest_handler) {
 		prop_200 = buffer_init();
 		prop_404 = buffer_init();
 
-		switch(depth) {
-		case 0:
-			/* Depth: 0 */
+		{
+			/* Depth: 0  or  Depth: 1 */
 			webdav_get_props(srv, con, p, &(con->physical), req_props, prop_200, prop_404);
 
 			buffer_append_string_len(b,CONST_STR_LEN("<D:response>\n"));
@@ -1387,9 +1386,10 @@ URIHANDLER_FUNC(mod_webdav_subrequest_handler) {
 			}
 
 			buffer_append_string_len(b,CONST_STR_LEN("</D:response>\n"));
+		}
 
-			break;
-		case 1:
+		if (depth == 1) {
+
 			if (NULL != (dir = opendir(con->physical.path->ptr))) {
 				struct dirent *de;
 				physical d;
@@ -1399,9 +1399,9 @@ URIHANDLER_FUNC(mod_webdav_subrequest_handler) {
 				d.rel_path = buffer_init();
 
 				while(NULL != (de = readdir(dir))) {
-					if (de->d_name[0] == '.' && de->d_name[1] == '.' && de->d_name[2] == '\0') {
+					if (de->d_name[0] == '.' && (de->d_name[1] == '\0' || (de->d_name[1] == '.' && de->d_name[2] == '\0'))) {
 						continue;
-						/* ignore the parent dir */
+						/* ignore the parent and target dir */
 					}
 
 					buffer_copy_buffer(d.path, dst->path);
@@ -1410,12 +1410,8 @@ URIHANDLER_FUNC(mod_webdav_subrequest_handler) {
 					buffer_copy_buffer(d.rel_path, dst->rel_path);
 					buffer_append_slash(d.rel_path);
 
-					if (de->d_name[0] == '.' && de->d_name[1] == '\0') {
-						/* don't append the . */
-					} else {
-						buffer_append_string(d.path, de->d_name);
-						buffer_append_string(d.rel_path, de->d_name);
-					}
+					buffer_append_string(d.path, de->d_name);
+					buffer_append_string(d.rel_path, de->d_name);
 
 					buffer_reset(prop_200);
 					buffer_reset(prop_404);
@@ -1461,7 +1457,7 @@ URIHANDLER_FUNC(mod_webdav_subrequest_handler) {
 				buffer_free(d.path);
 				buffer_free(d.rel_path);
 			}
-			break;
+
 		}
 
 		if (req_props) {
