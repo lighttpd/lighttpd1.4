@@ -954,9 +954,9 @@ int main (int argc, char **argv) {
 		}
 
 		/**
-		 * we are not root can can't increase the fd-limit, but we can reduce it
+		 * we are not root can can't increase the fd-limit above rlim_max, but we can reduce it
 		 */
-		if (srv->srvconf.max_fds && srv->srvconf.max_fds < rlim.rlim_cur) {
+		if (srv->srvconf.max_fds && srv->srvconf.max_fds <= rlim.rlim_max) {
 			/* set rlimits */
 
 			rlim.rlim_cur = srv->srvconf.max_fds;
