@@ -1429,7 +1429,8 @@ SETDEFAULTS_FUNC(mod_fastcgi_set_defaults) {
 										"\n\tcurrent:", pno, "/", host->max_procs);
 							}
 
-							if (fcgi_spawn_connection(srv, p, host, proc)) {
+							if (!srv->srvconf.preflight_check
+							    && fcgi_spawn_connection(srv, p, host, proc)) {
 								log_error_write(srv, __FILE__, __LINE__, "s",
 										"[ERROR]: spawning fcgi failed.");
 								fastcgi_process_free(proc);

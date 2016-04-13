@@ -1191,7 +1191,8 @@ SETDEFAULTS_FUNC(mod_scgi_set_defaults) {
 										"\n\tcurrent:", pno, "/", df->min_procs);
 							}
 
-							if (scgi_spawn_connection(srv, p, df, proc)) {
+							if (!srv->srvconf.preflight_check
+							    && scgi_spawn_connection(srv, p, df, proc)) {
 								log_error_write(srv, __FILE__, __LINE__, "s",
 										"[ERROR]: spawning fcgi failed.");
 								scgi_process_free(proc);
