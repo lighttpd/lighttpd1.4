@@ -567,7 +567,7 @@ static void http_list_directory_header(server *srv, connection *con, plugin_data
 		"</tr>"
 		"</thead>\n"
 		"<tbody>\n"
-		"<tr>"
+		"<tr class=\"d\">"
 			"<td class=\"n\"><a href=\"../\">Parent Directory</a>/</td>"
 			"<td class=\"m\">&nbsp;</td>"
 			"<td class=\"s\">- &nbsp;</td>"
@@ -801,7 +801,7 @@ static int http_list_directory(server *srv, connection *con, plugin_data *p, buf
 		strftime(datebuf, sizeof(datebuf), "%Y-%b-%d %H:%M:%S", localtime(&(tmp->mtime)));
 #endif
 
-		buffer_append_string_len(out, CONST_STR_LEN("<tr><td class=\"n\"><a href=\""));
+		buffer_append_string_len(out, CONST_STR_LEN("<tr class=\"d\"><td class=\"n\"><a href=\""));
 		buffer_append_string_encoded(out, DIRLIST_ENT_NAME(tmp), tmp->namelen, ENCODING_REL_URI_PART);
 		buffer_append_string_len(out, CONST_STR_LEN("/\">"));
 		buffer_append_string_encoded(out, DIRLIST_ENT_NAME(tmp), tmp->namelen, ENCODING_MINIMAL_XML);
