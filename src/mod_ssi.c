@@ -107,6 +107,7 @@ SETDEFAULTS_FUNC(mod_ssi_set_defaults) {
 	config_values_t cv[] = {
 		{ "ssi.extension",              NULL, T_CONFIG_ARRAY, T_CONFIG_SCOPE_CONNECTION },       /* 0 */
 		{ "ssi.content-type",           NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_CONNECTION },      /* 1 */
+		{ "ssi.conditional-requests",   NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION },     /* 2 */
 		{ NULL,                         NULL, T_CONFIG_UNSET, T_CONFIG_SCOPE_UNSET }
 	};
 
@@ -121,9 +122,11 @@ SETDEFAULTS_FUNC(mod_ssi_set_defaults) {
 		s = calloc(1, sizeof(plugin_config));
 		s->ssi_extension  = array_init();
 		s->content_type = buffer_init();
+		s->conditional_requests = 0;
 
 		cv[0].destination = s->ssi_extension;
 		cv[1].destination = s->content_type;
+		cv[2].destination = &(s->conditional_requests);
 
 		p->config_storage[i] = s;
 
@@ -1078,7 +1081,7 @@ static int mod_ssi_handle_request(server *srv, connection *con, plugin_data *p) 
 		response_header_overwrite(srv, con, CONST_STR_LEN("Content-Type"), CONST_BUF_LEN(p->conf.content_type));
 	}
 
-	{
+	if (p->conf.conditional_requests) {
 		/* Generate "ETag" & "Last-Modified" headers */
 		time_t lm_time = 0;
 		buffer *mtime = NULL;
@@ -1093,6 +1096,13 @@ static int mod_ssi_handle_request(server *srv, connection *con, plugin_data *p) 
 
 		mtime = strftime_cache_get(srv, lm_time);
 		response_header_overwrite(srv, con, CONST_STR_LEN("Last-Modified"), CONST_BUF_LEN(mtime));
+
+		if (HANDLER_FINISHED == http_response_handle_cachable(srv, con, mtime)) {
+			/* ok, the client already has our content,
+			 * no need to send it again */
+
+			chunkqueue_reset(con->write_queue);
+		}
 	}
 
 	/* Reset the modified time of included files */
@@ -1112,6 +1122,7 @@ static int mod_ssi_patch_connection(server *srv, connection *con, plugin_data *p
 
 	PATCH(ssi_extension);
 	PATCH(content_type);
+	PATCH(conditional_requests);
 
 	/* skip the first, the global context */
 	for (i = 1; i < srv->config_context->used; i++) {
@@ -1129,6 +1140,8 @@ static int mod_ssi_patch_connection(server *srv, connection *con, plugin_data *p
 				PATCH(ssi_extension);
 			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("ssi.content-type"))) {
 				PATCH(content_type);
+			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("ssi.conditional-requests"))) {
+				PATCH(conditional_requests);
 			}
 		}
 	}

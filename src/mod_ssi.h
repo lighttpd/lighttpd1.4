@@ -17,6 +17,7 @@
 typedef struct {
 	array *ssi_extension;
 	buffer *content_type;
+	unsigned short conditional_requests;
 } plugin_config;
 
 typedef struct {
