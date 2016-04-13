@@ -298,7 +298,7 @@ static handler_t mod_auth_uri_handler(server *srv, connection *con, void *p_d) {
 		if (0 == strcmp(method->value->ptr, "basic")) {
 			buffer_copy_string_len(p->tmp_buf, CONST_STR_LEN("Basic realm=\""));
 			buffer_append_string_buffer(p->tmp_buf, realm->value);
-			buffer_append_string_len(p->tmp_buf, CONST_STR_LEN("\""));
+			buffer_append_string_len(p->tmp_buf, CONST_STR_LEN("\", charset=\"UTF-8\""));
 
 			response_header_insert(srv, con, CONST_STR_LEN("WWW-Authenticate"), CONST_BUF_LEN(p->tmp_buf));
 		} else if (0 == strcmp(method->value->ptr, "digest")) {
@@ -307,7 +307,7 @@ static handler_t mod_auth_uri_handler(server *srv, connection *con, void *p_d) {
 
 			buffer_copy_string_len(p->tmp_buf, CONST_STR_LEN("Digest realm=\""));
 			buffer_append_string_buffer(p->tmp_buf, realm->value);
-			buffer_append_string_len(p->tmp_buf, CONST_STR_LEN("\", nonce=\""));
+			buffer_append_string_len(p->tmp_buf, CONST_STR_LEN("\", charset=\"UTF-8\", nonce=\""));
 			buffer_append_string(p->tmp_buf, hh);
 			buffer_append_string_len(p->tmp_buf, CONST_STR_LEN("\", qop=\"auth\""));
 
