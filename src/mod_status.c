@@ -229,6 +229,21 @@ static handler_t mod_status_handle_server_status_html(server *srv, connection *c
 				   "    span.sortarrow { color: white; text-decoration: none; }\n"
 				   "  </style>\n"));
 
+	if (!buffer_string_is_empty(con->uri.query) && 0 == memcmp(con->uri.query->ptr, CONST_STR_LEN("refresh="))) {
+		/* Note: Refresh is an historical, but non-standard HTTP header
+		 * References (meta http-equiv="refresh" use is deprecated):
+		 *   https://www.w3.org/TR/WCAG10-HTML-TECHS/#meta-element
+		 *   https://www.w3.org/TR/WCAG10-CORE-TECHS/#auto-page-refresh
+		 *   https://www.w3.org/QA/Tips/reback
+		 */
+		const long refresh = strtol(con->uri.query->ptr+sizeof("refresh=")-1, NULL, 10);
+		if (refresh > 0) {
+			buffer_append_string_len(b, CONST_STR_LEN("<meta http-equiv=\"refresh\" content=\""));
+			buffer_append_int(b, refresh < 604800 ? refresh : 604800);
+			buffer_append_string_len(b, CONST_STR_LEN("\">\n"));
+		}
+	}
+
 	if (p->conf.sort) {
 		buffer_append_string_len(b, CONST_STR_LEN(
 					   "<script type=\"text/javascript\">\n"

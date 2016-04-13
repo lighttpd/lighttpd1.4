@@ -69,6 +69,7 @@ NEWS
   * [mod_extforward] reset cond_cache for scheme (fixes #1499)
   * [mod_webdav] readdir POSIX compat (fixes #1826)
   * [mod_expire] reset caching response headers for error docs (fixes #1919)
+  * [mod_status] page refresh option (fixes #2170)
 
 - 1.4.39 - 2016-01-02
   * [core] fix memset_s call (fixes #2698)
