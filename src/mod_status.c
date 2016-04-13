@@ -211,6 +211,10 @@ static handler_t mod_status_handle_server_status_html(server *srv, connection *c
 
 	int days, hours, mins, seconds;
 
+	/*(CON_STATE_CLOSE must be last state in enum connection_state_t)*/
+	int cstates[CON_STATE_CLOSE+3];
+	memset(cstates, 0, sizeof(cstates));
+
 	buffer_copy_string_len(b, CONST_STR_LEN(
 				 "<?xml version=\"1.0\" encoding=\"iso-8859-1\"?>\n"
 				 "<!DOCTYPE html PUBLIC \"-//W3C//DTD XHTML 1.0 Transitional//EN\"\n"
@@ -451,13 +455,7 @@ static handler_t mod_status_handle_server_status_html(server *srv, connection *c
 
 	buffer_append_string_len(b, CONST_STR_LEN("</table>\n"));
 
-
-	buffer_append_string_len(b, CONST_STR_LEN(
-		"<hr />\n<pre><b>legend</b>\n"
-		". = connect, C = close, E = hard error, k = keep-alive\n"
-		"r = read, R = read-POST, W = write, h = handle-request\n"
-		"q = request-start,  Q = request-end\n"
-		"s = response-start, S = response-end\n"));
+	buffer_append_string_len(b, CONST_STR_LEN("<hr />\n<pre>\n"));
 
 	buffer_append_string_len(b, CONST_STR_LEN("<b>"));
 	buffer_append_int(b, srv->conns->used);
@@ -469,8 +467,10 @@ static handler_t mod_status_handle_server_status_html(server *srv, connection *c
 
 		if (CON_STATE_READ == c->state && !buffer_string_is_empty(c->request.orig_uri)) {
 			state = "k";
+			++cstates[CON_STATE_CLOSE+2];
 		} else {
 			state = connection_get_short_state(c->state);
+			++cstates[(c->state <= CON_STATE_CLOSE ? c->state : CON_STATE_CLOSE+1)];
 		}
 
 		buffer_append_string_len(b, state, 1);
@@ -479,6 +479,22 @@ static handler_t mod_status_handle_server_status_html(server *srv, connection *c
 			buffer_append_string_len(b, CONST_STR_LEN("\n"));
 		}
 	}
+	buffer_append_string_len(b, CONST_STR_LEN("\n\n<table>\n"));
+	buffer_append_string_len(b, CONST_STR_LEN("<tr><td style=\"text-align:right\">"));
+	buffer_append_int(b, cstates[CON_STATE_CLOSE+2]);
+	buffer_append_string_len(b, CONST_STR_LEN("<td>&nbsp;&nbsp;k = keep-alive</td></tr>\n"));
+	for (j = 0; j < CON_STATE_CLOSE+2; ++j) {
+		/*(skip "unknown" state if there are none; there should not be any unknown)*/
+		if (0 == cstates[j] && j == CON_STATE_CLOSE+1) continue;
+		buffer_append_string_len(b, CONST_STR_LEN("<tr><td style=\"text-align:right\">"));
+		buffer_append_int(b, cstates[j]);
+		buffer_append_string_len(b, CONST_STR_LEN("</td><td>&nbsp;&nbsp;"));
+		buffer_append_string_len(b, connection_get_short_state(j), 1);
+		buffer_append_string_len(b, CONST_STR_LEN(" = "));
+		buffer_append_string(b, connection_get_state(j));
+		buffer_append_string_len(b, CONST_STR_LEN("</td></tr>\n"));
+	}
+	buffer_append_string_len(b, CONST_STR_LEN("</table>"));
 
 	buffer_append_string_len(b, CONST_STR_LEN("\n</pre><hr />\n<h2>Connections</h2>\n"));
 
