@@ -352,6 +352,7 @@ static void ipstr_to_sockaddr(server *srv, const char *host, sock_addr *sock) {
 
 static void clean_cond_cache(server *srv, connection *con) {
 	config_cond_cache_reset_item(srv, con, COMP_HTTP_REMOTE_IP);
+	config_cond_cache_reset_item(srv, con, COMP_HTTP_SCHEME);
 }
 
 URIHANDLER_FUNC(mod_extforward_uri_handler) {
