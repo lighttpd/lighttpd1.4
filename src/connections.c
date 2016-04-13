@@ -415,6 +415,17 @@ static int connection_handle_read(server *srv, connection *con) {
 	return 0;
 }
 
+static void connection_handle_errdoc_init(connection *con) {
+	/* reset caching response headers potentially added by mod_expire */
+	data_string *ds;
+	if (NULL != (ds = (data_string*) array_get_element(con->response.headers, "Expires"))) {
+		buffer_reset(ds->value); /* Headers with empty values are ignored for output */
+	}
+	if (NULL != (ds = (data_string*) array_get_element(con->response.headers, "Cache-Control"))) {
+		buffer_reset(ds->value); /* Headers with empty values are ignored for output */
+	}
+}
+
 static int connection_handle_write_prepare(server *srv, connection *con) {
 	if (con->mode == DIRECT) {
 		/* static files */
@@ -474,6 +485,7 @@ static int connection_handle_write_prepare(server *srv, connection *con) {
 		con->file_finished = 0;
 
 		buffer_reset(con->physical.path);
+		connection_handle_errdoc_init(con);
 
 		/* try to send static errorfile */
 		if (!buffer_string_is_empty(con->conf.errorfile_prefix)) {
@@ -1309,6 +1321,7 @@ int connection_state_machine(server *srv, connection *con) {
 								buffer_copy_buffer(con->request.uri, con->error_handler);
 							}
 							buffer_reset(con->physical.path);
+							connection_handle_errdoc_init(con);
 
 							con->in_error_handler = 1;
 
