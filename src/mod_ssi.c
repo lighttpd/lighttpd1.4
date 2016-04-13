@@ -108,6 +108,7 @@ SETDEFAULTS_FUNC(mod_ssi_set_defaults) {
 		{ "ssi.extension",              NULL, T_CONFIG_ARRAY, T_CONFIG_SCOPE_CONNECTION },       /* 0 */
 		{ "ssi.content-type",           NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_CONNECTION },      /* 1 */
 		{ "ssi.conditional-requests",   NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION },     /* 2 */
+		{ "ssi.exec",                   NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION },     /* 3 */
 		{ NULL,                         NULL, T_CONFIG_UNSET, T_CONFIG_SCOPE_UNSET }
 	};
 
@@ -123,10 +124,12 @@ SETDEFAULTS_FUNC(mod_ssi_set_defaults) {
 		s->ssi_extension  = array_init();
 		s->content_type = buffer_init();
 		s->conditional_requests = 0;
+		s->ssi_exec = 1;
 
 		cv[0].destination = s->ssi_extension;
 		cv[1].destination = s->content_type;
 		cv[2].destination = &(s->conditional_requests);
+		cv[3].destination = &(s->ssi_exec);
 
 		p->config_storage[i] = s;
 
@@ -715,6 +718,10 @@ static int process_ssi_stmt(server *srv, connection *con, plugin_data *p, const 
 		pid_t pid;
 		int from_exec_fds[2];
 
+		if (!p->conf.ssi_exec) { /* <!--#exec ... --> disabled by config */
+			break;
+		}
+
 		for (i = 2; i < n; i += 2) {
 			if (0 == strcmp(l[i], "cmd")) {
 				cmd = l[i+1];
@@ -1123,6 +1130,7 @@ static int mod_ssi_patch_connection(server *srv, connection *con, plugin_data *p
 	PATCH(ssi_extension);
 	PATCH(content_type);
 	PATCH(conditional_requests);
+	PATCH(ssi_exec);
 
 	/* skip the first, the global context */
 	for (i = 1; i < srv->config_context->used; i++) {
@@ -1142,6 +1150,8 @@ static int mod_ssi_patch_connection(server *srv, connection *con, plugin_data *p
 				PATCH(content_type);
 			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("ssi.conditional-requests"))) {
 				PATCH(conditional_requests);
+			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("ssi.exec"))) {
+				PATCH(ssi_exec);
 			}
 		}
 	}
