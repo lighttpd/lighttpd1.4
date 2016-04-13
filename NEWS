@@ -63,6 +63,7 @@ NEWS
   * [stream] fstat() after open() to obtain file size
   * [core] clean up srv before exiting for lighttpd -[vVh]
   * [mod_fastcgi,mod_scgi] check for spawning on same unix socket (fixes #319)
+  * [mod_cgi] always set QUERY_STRING (fixes #1339)
 
 - 1.4.39 - 2016-01-02
   * [core] fix memset_s call (fixes #2698)
