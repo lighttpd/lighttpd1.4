@@ -209,6 +209,10 @@ static handler_t mod_redirect_uri_handler(server *srv, connection *con, void *p_
 						"execution error while matching: ", n);
 				return HANDLER_ERROR;
 			}
+		} else if (0 == pattern_len) {
+			/* short-circuit if blank replacement pattern
+			 * (do not attempt to match against remaining redirect rules) */
+			return HANDLER_GO_ON;
 		} else {
 			const char **list;
 			size_t start;

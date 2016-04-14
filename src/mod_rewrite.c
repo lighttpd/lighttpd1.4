@@ -383,6 +383,10 @@ static handler_t process_rewrite_rules(server *srv, connection *con, plugin_data
 						"execution error while matching: ", n);
 				return HANDLER_ERROR;
 			}
+		} else if (0 == pattern_len) {
+			/* short-circuit if blank replacement pattern
+			 * (do not attempt to match against remaining rewrite rules) */
+			return HANDLER_GO_ON;
 		} else {
 			const char **list;
 			size_t start;
