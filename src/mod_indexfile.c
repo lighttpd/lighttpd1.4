@@ -193,11 +193,22 @@ URIHANDLER_FUNC(mod_indexfile_subrequest) {
 			continue;
 		}
 
-		/* rewrite uri.path to the real path (/ -> /index.php) */
-		buffer_append_string_buffer(con->uri.path, ds->value);
-		buffer_copy_buffer(con->physical.path, p->tmp_buf);
+		if (ds->value && ds->value->ptr[0] == '/') {
+			/* replace uri.path */
+			buffer_copy_buffer(con->uri.path, ds->value);
 
-		/* fce is already set up a few lines above */
+			if (NULL == (ds = (data_string *)array_get_unused_element(con->environment, TYPE_STRING))) {
+				ds = data_string_init();
+			}
+			buffer_copy_string_len(ds->key, CONST_STR_LEN("PATH_TRANSLATED_DIRINDEX"));
+			buffer_copy_buffer(ds->value, con->physical.path);
+			array_insert_unique(con->environment, (data_unset *)ds);
+		} else {
+			/* append to uri.path the relative path to index file (/ -> /index.php) */
+			buffer_append_string_buffer(con->uri.path, ds->value);
+		}
+
+		buffer_copy_buffer(con->physical.path, p->tmp_buf);
 
 		return HANDLER_GO_ON;
 	}
