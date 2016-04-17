@@ -36,7 +36,22 @@
 # include <bzlib.h>
 #endif
 
+#if defined HAVE_SYS_MMAN_H && defined HAVE_MMAP && defined ENABLE_MMAP
+#define USE_MMAP
+
 #include "sys-mmap.h"
+#include <setjmp.h>
+#include <signal.h>
+
+static volatile int sigbus_jmp_valid;
+static sigjmp_buf sigbus_jmp;
+
+static void sigbus_handler(int sig) {
+	UNUSED(sig);
+	if (sigbus_jmp_valid) siglongjmp(sigbus_jmp, 1);
+	log_failed_assert(__FILE__, __LINE__, "SIGBUS");
+}
+#endif
 
 /* request: accept-encoding */
 #define HTTP_ACCEPT_ENCODING_IDENTITY BV(0)
@@ -420,6 +435,9 @@ static int deflate_file_to_buffer_bzip2(server *srv, connection *con, plugin_dat
 static int deflate_file_to_file(server *srv, connection *con, plugin_data *p, buffer *fn, stat_cache_entry *sce, int type) {
 	int ifd, ofd;
 	int ret;
+#ifdef USE_MMAP
+	volatile int mapped = 0;/* quiet warning: might be clobbered by 'longjmp' */
+#endif
 	void *start;
 	const char *filename = fn->ptr;
 	ssize_t r;
@@ -500,22 +518,30 @@ static int deflate_file_to_file(server *srv, connection *con, plugin_data *p, bu
 	}
 
 #ifdef USE_MMAP
-	if (MAP_FAILED == (start = mmap(NULL, sce->st.st_size, PROT_READ, MAP_SHARED, ifd, 0))) {
-		log_error_write(srv, __FILE__, __LINE__, "sbss", "mmaping", fn, "failed", strerror(errno));
+	if (MAP_FAILED != (start = mmap(NULL, sce->st.st_size, PROT_READ, MAP_SHARED, ifd, 0))) {
+		mapped = 1;
+		signal(SIGBUS, sigbus_handler);
+		sigbus_jmp_valid = 1;
+		if (0 != sigsetjmp(sigbus_jmp, 1)) {
+			sigbus_jmp_valid = 0;
 
-		close(ofd);
-		close(ifd);
+			log_error_write(srv, __FILE__, __LINE__, "sbd", "SIGBUS in mmap:",
+				fn, ifd);
 
-		/* Remove the incomplete cache file, so that later hits aren't served from it */
-		if (-1 == unlink(p->ofn->ptr)) {
-			log_error_write(srv, __FILE__, __LINE__, "sbss", "unlinking incomplete cachefile", p->ofn, "failed:", strerror(errno));
+			munmap(start, sce->st.st_size);
+			close(ofd);
+			close(ifd);
+
+			/* Remove the incomplete cache file, so that later hits aren't served from it */
+			if (-1 == unlink(p->ofn->ptr)) {
+				log_error_write(srv, __FILE__, __LINE__, "sbss", "unlinking incomplete cachefile", p->ofn, "failed:", strerror(errno));
+			}
+
+			return -1;
 		}
-
-		return -1;
-	}
-#else
-	start = malloc(sce->st.st_size);
-	if (NULL == start || sce->st.st_size != read(ifd, start, sce->st.st_size)) {
+	} else
+#endif  /* FIXME: might attempt to read very large file completely into memory; see compress.max-filesize config option */
+	if (NULL == (start = malloc(sce->st.st_size)) || sce->st.st_size != read(ifd, start, sce->st.st_size)) {
 		log_error_write(srv, __FILE__, __LINE__, "sbss", "reading", fn, "failed", strerror(errno));
 
 		close(ofd);
@@ -529,7 +555,6 @@ static int deflate_file_to_file(server *srv, connection *con, plugin_data *p, bu
 
 		return -1;
 	}
-#endif
 
 	ret = -1;
 	switch(type) {
@@ -562,10 +587,12 @@ static int deflate_file_to_file(server *srv, connection *con, plugin_data *p, bu
 	}
 
 #ifdef USE_MMAP
-	munmap(start, sce->st.st_size);
-#else
-	free(start);
+	if (mapped) {
+		sigbus_jmp_valid = 0;
+		munmap(start, sce->st.st_size);
+	} else
 #endif
+		free(start);
 
 	close(ofd);
 	close(ifd);
@@ -587,6 +614,9 @@ static int deflate_file_to_file(server *srv, connection *con, plugin_data *p, bu
 static int deflate_file_to_buffer(server *srv, connection *con, plugin_data *p, buffer *fn, stat_cache_entry *sce, int type) {
 	int ifd;
 	int ret = -1;
+#ifdef USE_MMAP
+	volatile int mapped = 0;/* quiet warning: might be clobbered by 'longjmp' */
+#endif
 	void *start;
 
 	/* overflow */
@@ -607,22 +637,29 @@ static int deflate_file_to_buffer(server *srv, connection *con, plugin_data *p, 
 	}
 
 #ifdef USE_MMAP
-	if (MAP_FAILED == (start = mmap(NULL, sce->st.st_size, PROT_READ, MAP_SHARED, ifd, 0))) {
-		log_error_write(srv, __FILE__, __LINE__, "sbss", "mmaping", fn, "failed", strerror(errno));
+	if (MAP_FAILED != (start = mmap(NULL, sce->st.st_size, PROT_READ, MAP_SHARED, ifd, 0))) {
+		mapped = 1;
+		signal(SIGBUS, sigbus_handler);
+		sigbus_jmp_valid = 1;
+		if (0 != sigsetjmp(sigbus_jmp, 1)) {
+			sigbus_jmp_valid = 0;
 
-		close(ifd);
-		return -1;
-	}
-#else
-	start = malloc(sce->st.st_size);
-	if (NULL == start || sce->st.st_size != read(ifd, start, sce->st.st_size)) {
+			log_error_write(srv, __FILE__, __LINE__, "sbd", "SIGBUS in mmap:",
+				fn, ifd);
+
+			munmap(start, sce->st.st_size);
+			close(ifd);
+			return -1;
+		}
+	} else
+#endif  /* FIXME: might attempt to read very large file completely into memory; see compress.max-filesize config option */
+	if (NULL == (start = malloc(sce->st.st_size)) || sce->st.st_size != read(ifd, start, sce->st.st_size)) {
 		log_error_write(srv, __FILE__, __LINE__, "sbss", "reading", fn, "failed", strerror(errno));
 
 		close(ifd);
 		free(start);
 		return -1;
 	}
-#endif
 
 	switch(type) {
 #ifdef USE_ZLIB
@@ -646,10 +683,13 @@ static int deflate_file_to_buffer(server *srv, connection *con, plugin_data *p, 
 	}
 
 #ifdef USE_MMAP
-	munmap(start, sce->st.st_size);
-#else
-	free(start);
+	if (mapped) {
+		sigbus_jmp_valid = 0;
+		munmap(start, sce->st.st_size);
+	} else
 #endif
+		free(start);
+
 	close(ifd);
 
 	if (ret != 0) return -1;
