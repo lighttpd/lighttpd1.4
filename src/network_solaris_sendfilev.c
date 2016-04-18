@@ -56,6 +56,26 @@ int network_write_file_chunk_sendfile(server *srv, connection *con, int fd, chun
 		case EPIPE:
 		case ENOTCONN:
 			return -2;
+		case EINVAL:
+		case ENOSYS:
+	      #if defined(ENOTSUP) \
+		&& (!defined(EOPNOTSUPP) || EOPNOTSUPP != ENOTSUP)
+		case ENOTSUP:
+	      #endif
+	      #ifdef EOPNOTSUPP
+		case EOPNOTSUPP:
+	      #endif
+	      #ifdef ESOCKTNOSUPPORT
+		case ESOCKTNOSUPPORT:
+	      #endif
+	      #ifdef EAFNOSUPPORT
+		case EAFNOSUPPORT:
+	      #endif
+		      #ifdef USE_MMAP
+			return network_write_file_chunk_mmap(srv, con, fd, cq, p_max_bytes);
+		      #else
+			return network_write_file_chunk_no_mmap(srv, con, fd, cq, p_max_bytes);
+		      #endif
 		default:
 			log_error_write(srv, __FILE__, __LINE__, "ssd", "sendfile: ", strerror(errno), errno);
 			return -1;
