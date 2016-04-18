@@ -1648,7 +1648,11 @@ static int scgi_create_env(server *srv, handler_ctx *hctx) {
 	s = get_http_method_name(con->request.http_method);
 	force_assert(s);
 	scgi_env_add(p->scgi_env, CONST_STR_LEN("REQUEST_METHOD"), s, strlen(s));
-	scgi_env_add(p->scgi_env, CONST_STR_LEN("REDIRECT_STATUS"), CONST_STR_LEN("200")); /* if php is compiled with --force-redirect */
+	/* set REDIRECT_STATUS for php compiled with --force-redirect
+	 * (if REDIRECT_STATUS has not already been set by error handler) */
+	if (0 == con->error_handler_saved_status) {
+		scgi_env_add(p->scgi_env, CONST_STR_LEN("REDIRECT_STATUS"), CONST_STR_LEN("200"));
+	}
 	s = get_http_version_name(con->request.http_version);
 	force_assert(s);
 	scgi_env_add(p->scgi_env, CONST_STR_LEN("SERVER_PROTOCOL"), s, strlen(s));

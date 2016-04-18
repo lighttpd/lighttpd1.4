@@ -290,8 +290,12 @@ static int build_ssi_cgi_vars(server *srv, connection *con, plugin_data *p) {
 
 	ssi_env_add(p->ssi_cgi_env, CONST_STRING("QUERY_STRING"), buffer_is_empty(con->uri.query) ? "" : con->uri.query->ptr);
 	ssi_env_add(p->ssi_cgi_env, CONST_STRING("REQUEST_METHOD"), get_http_method_name(con->request.http_method));
-	ssi_env_add(p->ssi_cgi_env, CONST_STRING("REDIRECT_STATUS"), "200");
 	ssi_env_add(p->ssi_cgi_env, CONST_STRING("SERVER_PROTOCOL"), get_http_version_name(con->request.http_version));
+	/* set REDIRECT_STATUS for php compiled with --force-redirect
+	 * (if REDIRECT_STATUS has not already been set by error handler) */
+	if (0 == con->error_handler_saved_status) {
+		ssi_env_add(p->ssi_cgi_env, CONST_STRING("REDIRECT_STATUS"), "200");
+	}
 
 	ssi_env_add_request_headers(srv, con, p);
 

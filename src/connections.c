@@ -887,6 +887,7 @@ int connection_reset(server *srv, connection *con) {
 
 	con->header_len = 0;
 	con->in_error_handler = 0;
+	con->error_handler_saved_status = 0;
 
 	config_setup_connection(srv, con);
 
@@ -1311,6 +1312,17 @@ int connection_state_machine(server *srv, connection *con) {
 						    (!buffer_string_is_empty(con->conf.error_handler) ||
 						     !buffer_string_is_empty(con->error_handler))) {
 							/* call error-handler */
+
+							/* set REDIRECT_STATUS to save current HTTP status code
+							 * for access by dynamic handlers
+							 * https://redmine.lighttpd.net/issues/1828 */
+							data_string *ds;
+							if (NULL == (ds = (data_string *)array_get_unused_element(con->environment, TYPE_STRING))) {
+								ds = data_string_init();
+							}
+							buffer_copy_string_len(ds->key, CONST_STR_LEN("REDIRECT_STATUS"));
+							buffer_append_int(ds->value, con->http_status);
+							array_insert_unique(con->environment, (data_unset *)ds);
 
 							con->error_handler_saved_status = con->http_status;
 							con->http_status = 0;
