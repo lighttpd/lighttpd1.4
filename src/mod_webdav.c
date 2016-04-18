@@ -660,13 +660,25 @@ static int webdav_delete_dir(server *srv, connection *con, plugin_data *p, physi
 	return have_multi_status;
 }
 
+/* don't want to block when open()ing a fifo */
+#if defined(O_NONBLOCK)
+# define FIFO_NONBLOCK O_NONBLOCK
+#else
+# define FIFO_NONBLOCK 0
+#endif
+
+#ifndef O_BINARY
+#define O_BINARY 0
+#endif
+
 static int webdav_copy_file(server *srv, connection *con, plugin_data *p, physical *src, physical *dst, int overwrite) {
-	stream s;
-	int status = 0, ofd;
+	char *data;
+	ssize_t rd, wr, offset;
+	int status = 0, ifd, ofd;
 	UNUSED(srv);
 	UNUSED(con);
 
-	if (stream_open(&s, src->path)) {
+	if (-1 == (ifd = open(src->path->ptr, O_RDONLY | O_BINARY | FIFO_NONBLOCK))) {
 		return 403;
 	}
 
@@ -687,22 +699,28 @@ static int webdav_copy_file(server *srv, connection *con, plugin_data *p, physic
 			status = 403;
 			break;
 		}
-		stream_close(&s);
+		close(ifd);
 		return status;
 	}
 
-	if (-1 == write(ofd, s.start, s.size)) {
-		switch(errno) {
-		case ENOSPC:
-			status = 507;
-			break;
-		default:
-			status = 403;
+	data = malloc(131072);
+	force_assert(data);
+
+	while (0 < (rd = read(ifd, data, 131072))) {
+		offset = 0;
+		do {
+			wr = write(ofd, data+offset, (size_t)(rd-offset));
+		} while (wr >= 0 ? (offset += wr) != rd : (errno == EINTR));
+		if (-1 == wr) {
+			status = (errno == ENOSPC) ? 507 : 403;
 			break;
 		}
-	}
 
-	stream_close(&s);
+	}
+	if (0 != rd && 0 == status) status = 403;
+
+	free(data);
+	close(ifd);
 	close(ofd);
 
 #ifdef USE_PROPPATCH

@@ -23,13 +23,14 @@
 
 int stream_open(stream *f, buffer *fn) {
 
-#ifdef HAVE_MMAP
+#if !defined(__WIN32)
 
 	struct stat st;
 	int fd;
 
 	f->start = NULL;
 	f->size = 0;
+	f->mapped = 0;
 
 	if (-1 == (fd = open(fn->ptr, O_RDONLY | O_BINARY | FIFO_NONBLOCK))) {
 		return -1;
@@ -48,12 +49,20 @@ int stream_open(stream *f, buffer *fn) {
 
 	f->start = mmap(NULL, st.st_size, PROT_READ, MAP_SHARED, fd, 0);
 
-	close(fd);
-
 	if (MAP_FAILED == f->start) {
-		f->start = NULL;
-		return -1;
+		f->start = malloc((size_t)st.st_size);
+		if (NULL == f->start
+		    || st.st_size != read(fd, f->start, (size_t)st.st_size)) {
+			free(f->start);
+			f->start = NULL;
+			close(fd);
+			return -1;
+		}
+	} else {
+		f->mapped = 1;
 	}
+
+	close(fd);
 
 	f->size = st.st_size;
 	return 0;
@@ -122,15 +131,20 @@ int stream_open(stream *f, buffer *fn) {
 	f->size = (off_t)fsize;
 	return 0;
 
-#else
-# error no mmap found
 #endif
 
 }
 
 int stream_close(stream *f) {
 #ifdef HAVE_MMAP
-	if (f->start) munmap(f->start, f->size);
+	if (f->start) {
+		if (f->mapped) {
+			f->mapped = 0;
+			munmap(f->start, f->size);
+		} else {
+			free(f->start);
+		}
+	}
 #elif defined(__WIN32)
 	if (f->start) UnmapViewOfFile(f->start);
 #endif

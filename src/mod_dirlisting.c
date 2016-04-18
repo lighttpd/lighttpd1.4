@@ -16,6 +16,7 @@
 #include <dirent.h>
 #include <assert.h>
 #include <errno.h>
+#include <fcntl.h>
 #include <stdio.h>
 #include <unistd.h>
 #include <time.h>
@@ -475,6 +476,39 @@ static int http_list_directory_sizefmt(char *buf, off_t size) {
 	return (out + 3 - buf);
 }
 
+/* don't want to block when open()ing a fifo */
+#if defined(O_NONBLOCK)
+# define FIFO_NONBLOCK O_NONBLOCK
+#else
+# define FIFO_NONBLOCK 0
+#endif
+
+static void http_list_directory_include_file(buffer *out, buffer *path, const char *classname, int encode) {
+	int fd = open(path->ptr, O_RDONLY | FIFO_NONBLOCK);
+	ssize_t rd;
+	char buf[8192];
+
+	if (-1 == fd) return;
+
+	if (encode) {
+		buffer_append_string_len(out, CONST_STR_LEN("<pre class=\""));
+		buffer_append_string(out, classname);
+		buffer_append_string_len(out, CONST_STR_LEN("\">"));
+	}
+
+	while ((rd = read(fd, buf, sizeof(buf))) > 0) {
+		if (encode) {
+			buffer_append_string_encoded(out, buf, (size_t)rd, ENCODING_MINIMAL_XML);
+		} else {
+			buffer_append_string_len(out, buf, (size_t)rd);
+		}
+	}
+
+	if (encode) {
+		buffer_append_string_len(out, CONST_STR_LEN("</pre>"));
+	}
+}
+
 static void http_list_directory_header(server *srv, connection *con, plugin_data *p, buffer *out) {
 	UNUSED(srv);
 
@@ -533,23 +567,13 @@ static void http_list_directory_header(server *srv, connection *con, plugin_data
 
 	/* HEADER.txt */
 	if (p->conf.show_header) {
-		stream s;
 		/* if we have a HEADER file, display it in <pre class="header"></pre> */
 
 		buffer_copy_buffer(p->tmp_buf, con->physical.path);
 		buffer_append_slash(p->tmp_buf);
 		buffer_append_string_len(p->tmp_buf, CONST_STR_LEN("HEADER.txt"));
 
-		if (-1 != stream_open(&s, p->tmp_buf)) {
-			if (p->conf.encode_header) {
-				buffer_append_string_len(out, CONST_STR_LEN("<pre class=\"header\">"));
-				buffer_append_string_encoded(out, s.start, s.size, ENCODING_MINIMAL_XML);
-				buffer_append_string_len(out, CONST_STR_LEN("</pre>"));
-			} else {
-				buffer_append_string_len(out, s.start, s.size);
-			}
-		}
-		stream_close(&s);
+		http_list_directory_include_file(out, p->tmp_buf, "header", p->conf.encode_header);
 	}
 
 	buffer_append_string_len(out, CONST_STR_LEN("<h2>Index of "));
@@ -586,23 +610,13 @@ static void http_list_directory_footer(server *srv, connection *con, plugin_data
 	));
 
 	if (p->conf.show_readme) {
-		stream s;
 		/* if we have a README file, display it in <pre class="readme"></pre> */
 
 		buffer_copy_buffer(p->tmp_buf,  con->physical.path);
 		buffer_append_slash(p->tmp_buf);
 		buffer_append_string_len(p->tmp_buf, CONST_STR_LEN("README.txt"));
 
-		if (-1 != stream_open(&s, p->tmp_buf)) {
-			if (p->conf.encode_readme) {
-				buffer_append_string_len(out, CONST_STR_LEN("<pre class=\"readme\">"));
-				buffer_append_string_encoded(out, s.start, s.size, ENCODING_MINIMAL_XML);
-				buffer_append_string_len(out, CONST_STR_LEN("</pre>"));
-			} else {
-				buffer_append_string_len(out, s.start, s.size);
-			}
-		}
-		stream_close(&s);
+		http_list_directory_include_file(out, p->tmp_buf, "readme", p->conf.encode_readme);
 	}
 
 	if(p->conf.auto_layout) {
