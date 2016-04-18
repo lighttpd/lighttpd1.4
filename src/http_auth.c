@@ -67,29 +67,24 @@ static void CvtHex(const HASH Bin, char (*Hex)[33]) {
 handler_t auth_ldap_init(server *srv, mod_auth_plugin_config *s);
 
 static int http_auth_get_password(server *srv, mod_auth_plugin_data *p, buffer *username, buffer *realm, buffer *password) {
-	int ret = -1;
-
 	if (buffer_is_empty(username) || buffer_is_empty(realm)) return -1;
 
 	if (p->conf.auth_backend == AUTH_BACKEND_HTDIGEST) {
-		stream f;
-		char * f_line;
+		FILE *fp;
+		char f_user[1024];
 
 		if (buffer_string_is_empty(p->conf.auth_htdigest_userfile)) return -1;
 
-		if (0 != stream_open(&f, p->conf.auth_htdigest_userfile)) {
+		fp = fopen(p->conf.auth_htdigest_userfile->ptr, "r");
+		if (NULL == fp) {
 			log_error_write(srv, __FILE__, __LINE__, "sbss", "opening digest-userfile", p->conf.auth_htdigest_userfile, "failed:", strerror(errno));
 
 			return -1;
 		}
 
-		f_line = f.start;
-
-		while (f_line - f.start != f.size) {
-			char *f_user, *f_pwd, *e, *f_realm;
-			size_t u_len, pwd_len, r_len;
-
-			f_user = f_line;
+		while (NULL != fgets(f_user, sizeof(f_user), fp)) {
+			char *f_pwd, *f_realm;
+			size_t u_len, r_len;
 
 			/*
 			 * htdigest format
@@ -97,24 +92,20 @@ static int http_auth_get_password(server *srv, mod_auth_plugin_data *p, buffer *
 			 * user:realm:md5(user:realm:password)
 			 */
 
-			if (NULL == (f_realm = memchr(f_user, ':', f.size - (f_user - f.start) ))) {
+			if (NULL == (f_realm = strchr(f_user, ':'))) {
 				log_error_write(srv, __FILE__, __LINE__, "sbs",
 						"parsed error in", p->conf.auth_htdigest_userfile,
 						"expected 'username:realm:hashed password'");
 
-				stream_close(&f);
-
-				return -1;
+				continue; /* skip bad lines */
 			}
 
-			if (NULL == (f_pwd = memchr(f_realm + 1, ':', f.size - (f_realm + 1 - f.start)))) {
+			if (NULL == (f_pwd = strchr(f_realm + 1, ':'))) {
 				log_error_write(srv, __FILE__, __LINE__, "sbs",
 						"parsed error in", p->conf.auth_plain_userfile,
 						"expected 'username:realm:hashed password'");
 
-				stream_close(&f);
-
-				return -1;
+				continue; /* skip bad lines */
 			}
 
 			/* get pointers to the fields */
@@ -123,55 +114,44 @@ static int http_auth_get_password(server *srv, mod_auth_plugin_data *p, buffer *
 			r_len = f_pwd - f_realm;
 			f_pwd++;
 
-			if (NULL != (e = memchr(f_pwd, '\n', f.size - (f_pwd - f.start)))) {
-				pwd_len = e - f_pwd;
-			} else {
-				pwd_len = f.size - (f_pwd - f.start);
-			}
-
 			if (buffer_string_length(username) == u_len &&
 			    (buffer_string_length(realm) == r_len) &&
 			    (0 == strncmp(username->ptr, f_user, u_len)) &&
 			    (0 == strncmp(realm->ptr, f_realm, r_len))) {
 				/* found */
 
+				size_t pwd_len = strlen(f_pwd);
+				if (f_pwd[pwd_len-1] == '\n') --pwd_len;
+
 				buffer_copy_string_len(password, f_pwd, pwd_len);
 
-				ret = 0;
-				break;
+				fclose(fp);
+				return 0;
 			}
-
-			/* EOL */
-			if (!e) break;
-
-			f_line = e + 1;
 		}
 
-		stream_close(&f);
+		fclose(fp);
 	} else if (p->conf.auth_backend == AUTH_BACKEND_HTPASSWD ||
 		   p->conf.auth_backend == AUTH_BACKEND_PLAIN) {
-		stream f;
-		char * f_line;
+		FILE *fp;
+		char f_user[1024];
 		buffer *auth_fn;
 
 		auth_fn = (p->conf.auth_backend == AUTH_BACKEND_HTPASSWD) ? p->conf.auth_htpasswd_userfile : p->conf.auth_plain_userfile;
 
 		if (buffer_string_is_empty(auth_fn)) return -1;
 
-		if (0 != stream_open(&f, auth_fn)) {
+		fp = fopen(auth_fn->ptr, "r");
+		if (NULL == fp) {
 			log_error_write(srv, __FILE__, __LINE__, "sbss",
 					"opening plain-userfile", auth_fn, "failed:", strerror(errno));
 
 			return -1;
 		}
 
-		f_line = f.start;
-
-		while (f_line - f.start != f.size) {
-			char *f_user, *f_pwd, *e;
-			size_t u_len, pwd_len;
-
-			f_user = f_line;
+		while (NULL != fgets(f_user, sizeof(f_user), fp)) {
+			char *f_pwd;
+			size_t u_len;
 
 			/*
 			 * htpasswd format
@@ -179,50 +159,38 @@ static int http_auth_get_password(server *srv, mod_auth_plugin_data *p, buffer *
 			 * user:crypted passwd
 			 */
 
-			if (NULL == (f_pwd = memchr(f_user, ':', f.size - (f_user - f.start) ))) {
+			if (NULL == (f_pwd = strchr(f_user, ':'))) {
 				log_error_write(srv, __FILE__, __LINE__, "sbs",
 						"parsed error in", auth_fn,
 						"expected 'username:hashed password'");
 
-				stream_close(&f);
-
-				return -1;
+				continue; /* skip bad lines */
 			}
 
 			/* get pointers to the fields */
 			u_len = f_pwd - f_user;
 			f_pwd++;
 
-			if (NULL != (e = memchr(f_pwd, '\n', f.size - (f_pwd - f.start)))) {
-				pwd_len = e - f_pwd;
-			} else {
-				pwd_len = f.size - (f_pwd - f.start);
-			}
-
 			if (buffer_string_length(username) == u_len &&
 			    (0 == strncmp(username->ptr, f_user, u_len))) {
 				/* found */
 
+				size_t pwd_len = strlen(f_pwd);
+				if (f_pwd[pwd_len-1] == '\n') --pwd_len;
+
 				buffer_copy_string_len(password, f_pwd, pwd_len);
 
-				ret = 0;
-				break;
+				fclose(fp);
+				return 0;
 			}
-
-			/* EOL */
-			if (!e) break;
-
-			f_line = e + 1;
 		}
 
-		stream_close(&f);
+		fclose(fp);
 	} else if (p->conf.auth_backend == AUTH_BACKEND_LDAP) {
-		ret = 0;
-	} else {
-		return -1;
+		return 0;
 	}
 
-	return ret;
+	return -1;
 }
 
 int http_auth_match_rules(server *srv, array *req, const char *username, const char *group, const char *host) {

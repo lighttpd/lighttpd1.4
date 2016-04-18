@@ -817,7 +817,7 @@ static ssize_t cgi_write_file_chunk_mmap(server *srv, connection *con, int fd, c
 	off_t offset, toSend, file_end;
 	ssize_t r;
 	size_t mmap_offset, mmap_avail;
-	const char *data;
+	char *data;
 
 	force_assert(NULL != c);
 	force_assert(FILE_CHUNK == c->type);
@@ -848,21 +848,39 @@ static ssize_t cgi_write_file_chunk_mmap(server *srv, connection *con, int fd, c
 		c->file.mmap.length = file_end - c->file.mmap.offset;
 
 		if (MAP_FAILED == (c->file.mmap.start = mmap(NULL, c->file.mmap.length, PROT_READ, MAP_PRIVATE, c->file.fd, c->file.mmap.offset))) {
-			log_error_write(srv, __FILE__, __LINE__, "ssbdoo", "mmap failed:",
-				strerror(errno), c->file.name, c->file.fd, c->file.mmap.offset, (off_t) c->file.mmap.length);
-			return -1;
+			if (toSend > 65536) toSend = 65536;
+			data = malloc(toSend);
+			force_assert(data);
+			if (-1 == lseek(c->file.fd, offset, SEEK_SET)
+			    || 0 >= (toSend = read(c->file.fd, data, toSend))) {
+				if (-1 == toSend) {
+					log_error_write(srv, __FILE__, __LINE__, "ssbdo", "lseek/read failed:",
+						strerror(errno), c->file.name, c->file.fd, offset);
+				} else { /*(0 == toSend)*/
+					log_error_write(srv, __FILE__, __LINE__, "sbdo", "unexpected EOF (input truncated?):",
+						c->file.name, c->file.fd, offset);
+				}
+				free(data);
+				return -1;
+			}
 		}
 	}
 
-	force_assert(offset >= c->file.mmap.offset);
-	mmap_offset = offset - c->file.mmap.offset;
-	force_assert(c->file.mmap.length > mmap_offset);
-	mmap_avail = c->file.mmap.length - mmap_offset;
-	force_assert(toSend <= (off_t) mmap_avail);
+	if (MAP_FAILED != c->file.mmap.start) {
+		force_assert(offset >= c->file.mmap.offset);
+		mmap_offset = offset - c->file.mmap.offset;
+		force_assert(c->file.mmap.length > mmap_offset);
+		mmap_avail = c->file.mmap.length - mmap_offset;
+		force_assert(toSend <= (off_t) mmap_avail);
 
-	data = c->file.mmap.start + mmap_offset;
+		data = c->file.mmap.start + mmap_offset;
+	}
 
-	if ((r = write(fd, data, toSend)) < 0) {
+	r = write(fd, data, toSend);
+
+	if (MAP_FAILED == c->file.mmap.start) free(data);
+
+	if (r < 0) {
 		switch (errno) {
 		case EAGAIN:
 		case EINTR:
