@@ -232,7 +232,7 @@ SETDEFAULTS_FUNC(mod_proxy_set_defaults) {
 
 			if (du->type != TYPE_ARRAY) {
 				log_error_write(srv, __FILE__, __LINE__, "sss",
-						"unexpected type for key: ", "proxy.server", "array of strings");
+						"unexpected type for key: ", "proxy.server", "expected ( \"ext\" => ( \"backend-label\" => ( \"key\" => \"value\" )))");
 
 				return HANDLER_ERROR;
 			}
@@ -249,7 +249,7 @@ SETDEFAULTS_FUNC(mod_proxy_set_defaults) {
 				if (da_ext->type != TYPE_ARRAY) {
 					log_error_write(srv, __FILE__, __LINE__, "sssbs",
 							"unexpected type for key: ", "proxy.server",
-							"[", da->value->data[j]->key, "](string)");
+							"[", da->value->data[j]->key, "](string); expected ( \"ext\" => ( \"backend-label\" => ( \"key\" => \"value\" )))");
 
 					return HANDLER_ERROR;
 				}
@@ -278,7 +278,7 @@ SETDEFAULTS_FUNC(mod_proxy_set_defaults) {
 						log_error_write(srv, __FILE__, __LINE__, "ssSBS",
 								"unexpected type for key:",
 								"proxy.server",
-								"[", da_ext->value->data[n]->key, "](string)");
+								"[", da_ext->value->data[n]->key, "](string); expected ( \"ext\" => ( \"backend-label\" => ( \"key\" => \"value\" )))");
 
 						return HANDLER_ERROR;
 					}

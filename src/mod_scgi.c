@@ -996,7 +996,7 @@ SETDEFAULTS_FUNC(mod_scgi_set_defaults) {
 
 			if (du->type != TYPE_ARRAY) {
 				log_error_write(srv, __FILE__, __LINE__, "sss",
-						"unexpected type for key: ", "scgi.server", "array of strings");
+						"unexpected type for key: ", "scgi.server", "expected ( \"ext\" => ( \"backend-label\" => ( \"key\" => \"value\" )))");
 
 				goto error;
 			}
@@ -1014,7 +1014,7 @@ SETDEFAULTS_FUNC(mod_scgi_set_defaults) {
 				if (da->value->data[j]->type != TYPE_ARRAY) {
 					log_error_write(srv, __FILE__, __LINE__, "sssbs",
 							"unexpected type for key: ", "scgi.server",
-							"[", da->value->data[j]->key, "](string)");
+							"[", da->value->data[j]->key, "](string); expected ( \"ext\" => ( \"backend-label\" => ( \"key\" => \"value\" )))");
 
 					goto error;
 				}
@@ -1061,7 +1061,7 @@ SETDEFAULTS_FUNC(mod_scgi_set_defaults) {
 						log_error_write(srv, __FILE__, __LINE__, "ssSBS",
 								"unexpected type for key:",
 								"scgi.server",
-								"[", da_host->key, "](string)");
+								"[", da_host->key, "](string); expected ( \"ext\" => ( \"backend-label\" => ( \"key\" => \"value\" )))");
 
 						goto error;
 					}
