@@ -167,7 +167,8 @@ static void https_add_ssl_entries(connection *con) {
 		buffer_append_string(envds->key, xobjsn);
 		buffer_copy_string_len(
 			envds->value,
-			(const char *)xe->value->data, xe->value->length
+			(const char *)X509_NAME_ENTRY_get_data(xe)->data,
+			X509_NAME_ENTRY_get_data(xe)->length
 		);
 		/* pick one of the exported values as "REMOTE_USER", for example
 		 * ssl.verifyclient.username   = "SSL_CLIENT_S_DN_UID" or "SSL_CLIENT_S_DN_emailAddress"

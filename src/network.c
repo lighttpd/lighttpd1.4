@@ -826,20 +826,28 @@ int network_init(server *srv) {
 				return -1;
 			}
 		} else {
+			BIGNUM *dh_p, *dh_g;
 			/* Default DH parameters from RFC5114 */
 			dh = DH_new();
 			if (dh == NULL) {
 				log_error_write(srv, __FILE__, __LINE__, "s", "SSL: DH_new () failed");
 				return -1;
 			}
-			dh->p = BN_bin2bn(dh1024_p,sizeof(dh1024_p), NULL);
-			dh->g = BN_bin2bn(dh1024_g,sizeof(dh1024_g), NULL);
-			dh->length = 160;
-			if ((dh->p == NULL) || (dh->g == NULL)) {
+			dh_p = BN_bin2bn(dh1024_p,sizeof(dh1024_p), NULL);
+			dh_g = BN_bin2bn(dh1024_g,sizeof(dh1024_g), NULL);
+			if ((dh_p == NULL) || (dh_g == NULL)) {
 				DH_free(dh);
 				log_error_write(srv, __FILE__, __LINE__, "s", "SSL: BN_bin2bn () failed");
 				return -1;
 			}
+		      #if OPENSSL_VERSION_NUMBER < 0x10100000L
+			dh->p = dh_p;
+			dh->g = dh_g;
+			dh->length = 160;
+		      #else
+			DH_set0_pqg(dh, dh_p, NULL, dh_g);
+			DH_set_length(dh, 160);
+		      #endif
 		}
 		SSL_CTX_set_tmp_dh(s->ssl_ctx,dh);
 		SSL_CTX_set_options(s->ssl_ctx,SSL_OP_SINGLE_DH_USE);

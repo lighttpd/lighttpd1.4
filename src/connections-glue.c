@@ -180,9 +180,15 @@ static int connection_handle_read_ssl(server *srv, connection *con) {
 			while((ssl_err = ERR_get_error())) {
 				switch (ERR_GET_REASON(ssl_err)) {
 				case SSL_R_SSL_HANDSHAKE_FAILURE:
+			      #ifdef SSL_R_TLSV1_ALERT_UNKNOWN_CA
 				case SSL_R_TLSV1_ALERT_UNKNOWN_CA:
+			      #endif
+			      #ifdef SSL_R_SSLV3_ALERT_CERTIFICATE_UNKNOWN
 				case SSL_R_SSLV3_ALERT_CERTIFICATE_UNKNOWN:
+			      #endif
+			      #ifdef SSL_R_SSLV3_ALERT_BAD_CERTIFICATE
 				case SSL_R_SSLV3_ALERT_BAD_CERTIFICATE:
+			      #endif
 					if (!con->conf.log_ssl_noise) continue;
 					break;
 				default:
