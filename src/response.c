@@ -448,7 +448,6 @@ handler_t http_response_prepare(server *srv, connection *con) {
 		if (con->physical.rel_path->used > 1) {
 			buffer *b = con->physical.rel_path;
 			size_t len = buffer_string_length(b);
-			size_t i;
 
 			/* strip trailing " /" or "./" once */
 			if (len > 1 &&

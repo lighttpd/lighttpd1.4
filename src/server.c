@@ -835,7 +835,7 @@ int main (int argc, char **argv) {
 		}
 
 		if (srv->event_handler == FDEVENT_HANDLER_SELECT) {
-			srv->max_fds = rlim.rlim_cur < ((int)FD_SETSIZE) - 200 ? rlim.rlim_cur : FD_SETSIZE - 200;
+			srv->max_fds = rlim.rlim_cur < (rlim_t)FD_SETSIZE - 200 ? (int)rlim.rlim_cur : (int)FD_SETSIZE - 200;
 		} else {
 			srv->max_fds = rlim.rlim_cur;
 		}
@@ -970,7 +970,7 @@ int main (int argc, char **argv) {
 		}
 
 		if (srv->event_handler == FDEVENT_HANDLER_SELECT) {
-			srv->max_fds = rlim.rlim_cur < ((int)FD_SETSIZE) - 200 ? rlim.rlim_cur : FD_SETSIZE - 200;
+			srv->max_fds = rlim.rlim_cur < (rlim_t)FD_SETSIZE - 200 ? (int)rlim.rlim_cur : (int)FD_SETSIZE - 200;
 		} else {
 			srv->max_fds = rlim.rlim_cur;
 		}
