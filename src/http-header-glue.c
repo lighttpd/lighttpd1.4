@@ -5,7 +5,9 @@
 #include "buffer.h"
 #include "log.h"
 #include "etag.h"
+#include "http_chunk.h"
 #include "response.h"
+#include "stat_cache.h"
 
 #include <string.h>
 #include <errno.h>
@@ -322,4 +324,344 @@ int http_response_handle_cachable(server *srv, connection *con, buffer *mtime) {
 	}
 
 	return HANDLER_GO_ON;
+}
+
+
+static int http_response_parse_range(server *srv, connection *con, buffer *path, stat_cache_entry *sce) {
+	int multipart = 0;
+	int error;
+	off_t start, end;
+	const char *s, *minus;
+	char *boundary = "fkj49sn38dcn3";
+	data_string *ds;
+	buffer *content_type = NULL;
+
+	start = 0;
+	end = sce->st.st_size - 1;
+
+	con->response.content_length = 0;
+
+	if (NULL != (ds = (data_string *)array_get_element(con->response.headers, "Content-Type"))) {
+		content_type = ds->value;
+	}
+
+	for (s = con->request.http_range, error = 0;
+	     !error && *s && NULL != (minus = strchr(s, '-')); ) {
+		char *err;
+		off_t la, le;
+
+		if (s == minus) {
+			/* -<stop> */
+
+			le = strtoll(s, &err, 10);
+
+			if (le == 0) {
+				/* RFC 2616 - 14.35.1 */
+
+				con->http_status = 416;
+				error = 1;
+			} else if (*err == '\0') {
+				/* end */
+				s = err;
+
+				end = sce->st.st_size - 1;
+				start = sce->st.st_size + le;
+			} else if (*err == ',') {
+				multipart = 1;
+				s = err + 1;
+
+				end = sce->st.st_size - 1;
+				start = sce->st.st_size + le;
+			} else {
+				error = 1;
+			}
+
+		} else if (*(minus+1) == '\0' || *(minus+1) == ',') {
+			/* <start>- */
+
+			la = strtoll(s, &err, 10);
+
+			if (err == minus) {
+				/* ok */
+
+				if (*(err + 1) == '\0') {
+					s = err + 1;
+
+					end = sce->st.st_size - 1;
+					start = la;
+
+				} else if (*(err + 1) == ',') {
+					multipart = 1;
+					s = err + 2;
+
+					end = sce->st.st_size - 1;
+					start = la;
+				} else {
+					error = 1;
+				}
+			} else {
+				/* error */
+				error = 1;
+			}
+		} else {
+			/* <start>-<stop> */
+
+			la = strtoll(s, &err, 10);
+
+			if (err == minus) {
+				le = strtoll(minus+1, &err, 10);
+
+				/* RFC 2616 - 14.35.1 */
+				if (la > le) {
+					error = 1;
+				}
+
+				if (*err == '\0') {
+					/* ok, end*/
+					s = err;
+
+					end = le;
+					start = la;
+				} else if (*err == ',') {
+					multipart = 1;
+					s = err + 1;
+
+					end = le;
+					start = la;
+				} else {
+					/* error */
+
+					error = 1;
+				}
+			} else {
+				/* error */
+
+				error = 1;
+			}
+		}
+
+		if (!error) {
+			if (start < 0) start = 0;
+
+			/* RFC 2616 - 14.35.1 */
+			if (end > sce->st.st_size - 1) end = sce->st.st_size - 1;
+
+			if (start > sce->st.st_size - 1) {
+				error = 1;
+
+				con->http_status = 416;
+			}
+		}
+
+		if (!error) {
+			if (multipart) {
+				/* write boundary-header */
+				buffer *b = buffer_init();
+
+				buffer_copy_string_len(b, CONST_STR_LEN("\r\n--"));
+				buffer_append_string(b, boundary);
+
+				/* write Content-Range */
+				buffer_append_string_len(b, CONST_STR_LEN("\r\nContent-Range: bytes "));
+				buffer_append_int(b, start);
+				buffer_append_string_len(b, CONST_STR_LEN("-"));
+				buffer_append_int(b, end);
+				buffer_append_string_len(b, CONST_STR_LEN("/"));
+				buffer_append_int(b, sce->st.st_size);
+
+				buffer_append_string_len(b, CONST_STR_LEN("\r\nContent-Type: "));
+				buffer_append_string_buffer(b, content_type);
+
+				/* write END-OF-HEADER */
+				buffer_append_string_len(b, CONST_STR_LEN("\r\n\r\n"));
+
+				con->response.content_length += buffer_string_length(b);
+				chunkqueue_append_buffer(con->write_queue, b);
+				buffer_free(b);
+			}
+
+			chunkqueue_append_file(con->write_queue, path, start, end - start + 1);
+			con->response.content_length += end - start + 1;
+		}
+	}
+
+	/* something went wrong */
+	if (error) return -1;
+
+	if (multipart) {
+		/* add boundary end */
+		buffer *b = buffer_init();
+
+		buffer_copy_string_len(b, "\r\n--", 4);
+		buffer_append_string(b, boundary);
+		buffer_append_string_len(b, "--\r\n", 4);
+
+		con->response.content_length += buffer_string_length(b);
+		chunkqueue_append_buffer(con->write_queue, b);
+		buffer_free(b);
+
+		/* set header-fields */
+
+		buffer_copy_string_len(srv->tmp_buf, CONST_STR_LEN("multipart/byteranges; boundary="));
+		buffer_append_string(srv->tmp_buf, boundary);
+
+		/* overwrite content-type */
+		response_header_overwrite(srv, con, CONST_STR_LEN("Content-Type"), CONST_BUF_LEN(srv->tmp_buf));
+	} else {
+		/* add Content-Range-header */
+
+		buffer_copy_string_len(srv->tmp_buf, CONST_STR_LEN("bytes "));
+		buffer_append_int(srv->tmp_buf, start);
+		buffer_append_string_len(srv->tmp_buf, CONST_STR_LEN("-"));
+		buffer_append_int(srv->tmp_buf, end);
+		buffer_append_string_len(srv->tmp_buf, CONST_STR_LEN("/"));
+		buffer_append_int(srv->tmp_buf, sce->st.st_size);
+
+		response_header_insert(srv, con, CONST_STR_LEN("Content-Range"), CONST_BUF_LEN(srv->tmp_buf));
+	}
+
+	/* ok, the file is set-up */
+	return 0;
+}
+
+
+void http_response_send_file (server *srv, connection *con, buffer *path) {
+	stat_cache_entry *sce = NULL;
+	buffer *mtime = NULL;
+	data_string *ds;
+	int allow_caching = 1;
+
+	if (HANDLER_ERROR == stat_cache_get_entry(srv, con, path, &sce)) {
+		con->http_status = (errno == ENOENT) ? 404 : 403;
+
+		log_error_write(srv, __FILE__, __LINE__, "sbsb",
+				"not a regular file:", con->uri.path,
+				"->", path);
+
+		return;
+	}
+
+	/* we only handline regular files */
+#ifdef HAVE_LSTAT
+	if ((sce->is_symlink == 1) && !con->conf.follow_symlink) {
+		con->http_status = 403;
+
+		if (con->conf.log_request_handling) {
+			log_error_write(srv, __FILE__, __LINE__,  "s",  "-- access denied due symlink restriction");
+			log_error_write(srv, __FILE__, __LINE__,  "sb", "Path         :", path);
+		}
+
+		return;
+	}
+#endif
+	if (!S_ISREG(sce->st.st_mode)) {
+		con->http_status = 403;
+
+		if (con->conf.log_file_not_found) {
+			log_error_write(srv, __FILE__, __LINE__, "sbsb",
+					"not a regular file:", con->uri.path,
+					"->", sce->name);
+		}
+
+		return;
+	}
+
+	/* mod_compress might set several data directly, don't overwrite them */
+
+	/* set response content-type, if not set already */
+
+	if (NULL == array_get_element(con->response.headers, "Content-Type")) {
+		if (buffer_string_is_empty(sce->content_type)) {
+			/* we are setting application/octet-stream, but also announce that
+			 * this header field might change in the seconds few requests
+			 *
+			 * This should fix the aggressive caching of FF and the script download
+			 * seen by the first installations
+			 */
+			response_header_overwrite(srv, con, CONST_STR_LEN("Content-Type"), CONST_STR_LEN("application/octet-stream"));
+
+			allow_caching = 0;
+		} else {
+			response_header_overwrite(srv, con, CONST_STR_LEN("Content-Type"), CONST_BUF_LEN(sce->content_type));
+		}
+	}
+
+	if (con->conf.range_requests) {
+		response_header_overwrite(srv, con, CONST_STR_LEN("Accept-Ranges"), CONST_STR_LEN("bytes"));
+	}
+
+	if (allow_caching) {
+		if (con->etag_flags != 0 && !buffer_string_is_empty(sce->etag)) {
+			if (NULL == array_get_element(con->response.headers, "ETag")) {
+				/* generate e-tag */
+				etag_mutate(con->physical.etag, sce->etag);
+
+				response_header_overwrite(srv, con, CONST_STR_LEN("ETag"), CONST_BUF_LEN(con->physical.etag));
+			}
+		}
+
+		/* prepare header */
+		if (NULL == (ds = (data_string *)array_get_element(con->response.headers, "Last-Modified"))) {
+			mtime = strftime_cache_get(srv, sce->st.st_mtime);
+			response_header_overwrite(srv, con, CONST_STR_LEN("Last-Modified"), CONST_BUF_LEN(mtime));
+		} else {
+			mtime = ds->value;
+		}
+
+		if (HANDLER_FINISHED == http_response_handle_cachable(srv, con, mtime)) {
+			return;
+		}
+	}
+
+	if (con->request.http_range && con->conf.range_requests && con->http_status < 300) {
+		int do_range_request = 1;
+		/* check if we have a conditional GET */
+
+		if (NULL != (ds = (data_string *)array_get_element(con->request.headers, "If-Range"))) {
+			/* if the value is the same as our ETag, we do a Range-request,
+			 * otherwise a full 200 */
+
+			if (ds->value->ptr[0] == '"') {
+				/**
+				 * client wants a ETag
+				 */
+				if (!con->physical.etag) {
+					do_range_request = 0;
+				} else if (!buffer_is_equal(ds->value, con->physical.etag)) {
+					do_range_request = 0;
+				}
+			} else if (!mtime) {
+				/**
+				 * we don't have a Last-Modified and can match the If-Range:
+				 *
+				 * sending all
+				 */
+				do_range_request = 0;
+			} else if (!buffer_is_equal(ds->value, mtime)) {
+				do_range_request = 0;
+			}
+		}
+
+		if (do_range_request) {
+			/* content prepared, I'm done */
+			con->file_finished = 1;
+
+			if (0 == http_response_parse_range(srv, con, path, sce)) {
+				con->http_status = 206;
+			}
+			return;
+		}
+	}
+
+	/* if we are still here, prepare body */
+
+	/* we add it here for all requests
+	 * the HEAD request will drop it afterwards again
+	 */
+	if (0 == sce->st.st_size || 0 == http_chunk_append_file(srv, con, path)) {
+		con->http_status = 200;
+		con->file_finished = 1;
+	} else {
+		con->http_status = 403;
+	}
 }
