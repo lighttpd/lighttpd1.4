@@ -212,6 +212,15 @@ typedef struct {
 	 */
 
 	unsigned short fix_root_path_name;
+
+	/*
+	 * If the backend includes X-Sendfile in the response
+	 * we use the value as filename and ignore the content.
+	 *
+	 */
+	unsigned short xsendfile_allow;
+	array *xsendfile_docroot;
+
 	ssize_t load; /* replace by host->load */
 
 	size_t max_id; /* corresponds most of the time to
@@ -416,6 +425,7 @@ static scgi_extension_host *scgi_host_init(void) {
 	f->bin_path = buffer_init();
 	f->bin_env = array_init();
 	f->bin_env_copy = array_init();
+	f->xsendfile_docroot = array_init();
 
 	return f;
 }
@@ -429,6 +439,7 @@ static void scgi_host_free(scgi_extension_host *h) {
 	buffer_free(h->bin_path);
 	array_free(h->bin_env);
 	array_free(h->bin_env_copy);
+	array_free(h->xsendfile_docroot);
 
 	scgi_process_free(h->first);
 	scgi_process_free(h->unused_procs);
@@ -1053,6 +1064,8 @@ SETDEFAULTS_FUNC(mod_scgi_set_defaults) {
 						{ "bin-copy-environment", NULL, T_CONFIG_ARRAY, T_CONFIG_SCOPE_CONNECTION },     /* 12 */
 						{ "fix-root-scriptname",  NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION },   /* 13 */
 						{ "listen-backlog",    NULL, T_CONFIG_INT,   T_CONFIG_SCOPE_CONNECTION },        /* 14 */
+						{ "x-sendfile",        NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION },      /* 15 */
+						{ "x-sendfile-docroot",NULL, T_CONFIG_ARRAY,   T_CONFIG_SCOPE_CONNECTION },      /* 16 */
 
 
 						{ NULL,                NULL, T_CONFIG_UNSET, T_CONFIG_SCOPE_UNSET }
@@ -1077,6 +1090,7 @@ SETDEFAULTS_FUNC(mod_scgi_set_defaults) {
 					df->disable_time = 60;
 					df->fix_root_path_name = 0;
 					df->listen_backlog = 1024;
+					df->xsendfile_allow = 0;
 
 					fcv[0].destination = df->host;
 					fcv[1].destination = df->docroot;
@@ -1095,6 +1109,8 @@ SETDEFAULTS_FUNC(mod_scgi_set_defaults) {
 					fcv[12].destination = df->bin_env_copy;
 					fcv[13].destination = &(df->fix_root_path_name);
 					fcv[14].destination = &(df->listen_backlog);
+					fcv[15].destination = &(df->xsendfile_allow);
+					fcv[16].destination = df->xsendfile_docroot;
 
 
 					if (0 != config_insert_values_internal(srv, da_host->value, fcv, T_CONFIG_SCOPE_CONNECTION)) {
@@ -1225,6 +1241,25 @@ SETDEFAULTS_FUNC(mod_scgi_set_defaults) {
 
 						df->min_procs = 1;
 						df->max_procs = 1;
+					}
+
+					if (df->xsendfile_docroot->used) {
+						size_t k;
+						for (k = 0; k < df->xsendfile_docroot->used; ++k) {
+							data_string *ds = (data_string *)df->xsendfile_docroot->data[k];
+							if (ds->type != TYPE_STRING) {
+								log_error_write(srv, __FILE__, __LINE__, "s",
+									"unexpected type for x-sendfile-docroot; expected: \"x-sendfile-docroot\" => ( \"/allowed/path\", ... )");
+								goto error;
+							}
+							if (ds->value->ptr[0] != '/') {
+								log_error_write(srv, __FILE__, __LINE__, "SBs",
+									"x-sendfile-docroot paths must begin with '/'; invalid: \"", ds->value, "\"");
+								goto error;
+							}
+							buffer_path_simplify(ds->value, ds->value);
+							buffer_append_slash(ds->value);
+						}
 					}
 
 					/* if extension already exists, take it */
@@ -1915,6 +1950,14 @@ static int scgi_demux_response(server *srv, handler_ctx *hctx) {
 
 					/* parse the response header */
 					scgi_response_parse(srv, con, p, hctx->response_header, eol);
+
+					if (hctx->host->xsendfile_allow) {
+						data_string *ds;
+						if (NULL != (ds = (data_string *) array_get_element(con->response.headers, "X-Sendfile"))) {
+							http_response_xsendfile(srv, con, ds->value, hctx->host->xsendfile_docroot);
+							return 1;
+						}
+					}
 
 					/* enable chunked-transfer-encoding */
 					if (con->request.http_version == HTTP_VERSION_1_1 &&
