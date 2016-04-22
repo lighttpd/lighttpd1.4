@@ -107,7 +107,8 @@ fastcgi.server
           "max-procs" => <integer>,   # OPTIONAL
           "broken-scriptfilename" => <boolean>, # OPTIONAL
           "disable-time" => <integer>, # optional
-          "allow-x-send-file" => <boolean>, # optional
+          "x-sendfile" => <boolean>, # optional (replaces "allow-x-send-file")
+          "x-sendfile-docroot" => <boolean>, # optional
           "kill-signal" => <integer>, # OPTIONAL
           "fix-root-scriptname" => <boolean>,
                                       # OPTIONAL
@@ -143,8 +144,10 @@ fastcgi.server
                 PHP can extract PATH_INFO from it (default: disabled)
   :"disable-time": time to wait before a disabled backend is checked
                 again
-  :"allow-x-send-file": controls if X-LIGHTTPD-send-file headers
-                are allowed
+  :"x-sendfile": controls if X-Sendfile backend response header is allowed
+                (deprecated headers: X-Sendfile2 and X-LIGHTTPD-send-file)
+                ("x-sendfile" replaces "allow-x-sendfile")
+  :"x-sendfile-docroot": list of directory trees permitted with X-Sendfile
   :"fix-root-scriptname": fix broken path-info split for "/" extension ("prefix")
 
   If bin-path is set:

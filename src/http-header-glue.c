@@ -529,7 +529,7 @@ void http_response_send_file (server *srv, connection *con, buffer *path) {
 	stat_cache_entry *sce = NULL;
 	buffer *mtime = NULL;
 	data_string *ds;
-	int allow_caching = 1;
+	int allow_caching = (0 == con->http_status || 200 == con->http_status);
 
 	if (HANDLER_ERROR == stat_cache_get_entry(srv, con, path, &sce)) {
 		con->http_status = (errno == ENOENT) ? 404 : 403;
@@ -613,7 +613,9 @@ void http_response_send_file (server *srv, connection *con, buffer *path) {
 		}
 	}
 
-	if (con->request.http_range && con->conf.range_requests && con->http_status < 300) {
+	if (con->request.http_range && con->conf.range_requests
+	    && (200 == con->http_status || 0 == con->http_status)
+	    && NULL == array_get_element(con->response.headers, "Content-Encoding")) {
 		int do_range_request = 1;
 		/* check if we have a conditional GET */
 
@@ -663,5 +665,60 @@ void http_response_send_file (server *srv, connection *con, buffer *path) {
 		con->file_finished = 1;
 	} else {
 		con->http_status = 403;
+	}
+}
+
+void http_response_xsendfile (server *srv, connection *con, buffer *path, const array *xdocroot) {
+	const int status = con->http_status;
+	int valid = 1;
+
+	/* reset Content-Length, if set by backend
+	 * Content-Length might later be set to size of X-Sendfile static file,
+	 * determined by open(), fstat() to reduces race conditions if the file
+	 * is modified between stat() (stat_cache_get_entry()) and open(). */
+	if (con->parsed_response & HTTP_CONTENT_LENGTH) {
+		data_string *ds = (data_string *) array_get_element(con->response.headers, "Content-Length");
+		if (ds) buffer_reset(ds->value);
+		con->parsed_response &= ~HTTP_CONTENT_LENGTH;
+		con->response.content_length = -1;
+	}
+
+	buffer_urldecode_path(path);
+	buffer_path_simplify(path, path);
+	if (con->conf.force_lowercase_filenames) {
+		buffer_to_lower(path);
+	}
+
+	/* check that path is under xdocroot(s)
+	 * - xdocroot should have trailing slash appended at config time
+	 * - con->conf.force_lowercase_filenames is not a server-wide setting,
+	 *   and so can not be definitively applied to xdocroot at config time*/
+	if (xdocroot->used) {
+		size_t i, xlen = buffer_string_length(path);
+		for (i = 0; i < xdocroot->used; ++i) {
+			data_string *ds = (data_string *)xdocroot->data[i];
+			size_t dlen = buffer_string_length(ds->value);
+			if (dlen <= xlen
+			    && (!con->conf.force_lowercase_filenames
+				? 0 == memcmp(path->ptr, ds->value->ptr, dlen)
+				: 0 == strncasecmp(path->ptr, ds->value->ptr, dlen))) {
+				break;
+			}
+		}
+		if (i == xdocroot->used) {
+			log_error_write(srv, __FILE__, __LINE__, "SBs",
+					"X-Sendfile (", path,
+					") not under configured x-sendfile-docroot(s)");
+			con->http_status = 403;
+			valid = 0;
+		}
+	}
+
+	if (valid) http_response_send_file(srv, con, path);
+
+	if (con->http_status >= 400 && status < 300) {
+		con->mode = DIRECT;
+	} else if (0 != status && 200 != status) {
+		con->http_status = status;
 	}
 }
