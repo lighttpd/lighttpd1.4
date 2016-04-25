@@ -86,6 +86,9 @@ static int http_auth_get_password(server *srv, mod_auth_plugin_data *p, buffer *
 			char *f_pwd, *f_realm;
 			size_t u_len, r_len;
 
+			/* skip blank lines and comment lines (beginning '#') */
+			if (f_user[0] == '#' || f_user[0] == '\n' || f_user[0] == '\0') continue;
+
 			/*
 			 * htdigest format
 			 *
@@ -152,6 +155,9 @@ static int http_auth_get_password(server *srv, mod_auth_plugin_data *p, buffer *
 		while (NULL != fgets(f_user, sizeof(f_user), fp)) {
 			char *f_pwd;
 			size_t u_len;
+
+			/* skip blank lines and comment lines (beginning '#') */
+			if (f_user[0] == '#' || f_user[0] == '\n' || f_user[0] == '\0') continue;
 
 			/*
 			 * htpasswd format
