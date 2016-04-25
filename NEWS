@@ -82,6 +82,15 @@ NEWS
   * [config] server.listen-backlog option (fixes #1825, #2116)
   * [core] retry tempdirs on partial write, ENOSPC (fixes #2588)
   * [core] compile with upcoming openssl 1.1.0 release (fixes #2727)
+  * [core] improve dynamic handler control flow logic
+  * [core] defer reading request body until handle subrequest (fixes #2541)
+  * [core] always poll for client POLLHUP/POLLERR events (fixes #399)
+  * [mod_fastcgi,mod_scgi,mod_proxy] handlers can read response before sending req body (fixes #131, #2566)
+  * [mod_cgi] asynchronous send of request body to CGI
+  * [core] compile with upcoming openssl 1.1.0 release (fixes #2727)
+  * [core] set REDIRECT_STATUS to error_handler_saved_status (fixes #1828)
+  * [core] server.error-handler new directive for error pages (fixes #2702)
+  * [core] support IPv6 in $HTTP["remote-ip"] CIDR cond match (fixes #2706)
 
 - 1.4.39 - 2016-01-02
   * [core] fix memset_s call (fixes #2698)
