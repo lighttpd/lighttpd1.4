@@ -1015,6 +1015,12 @@ static handler_t magnet_attract(server *srv, connection *con, plugin_data *p, bu
 
 			result = HANDLER_FINISHED;
 		} else if (MAGNET_RESTART_REQUEST == lua_return_value) {
+			if (!buffer_is_equal(con->request.uri, con->request.orig_uri)
+			    && !array_get_element(con->environment, "REDIRECT_URI")) {
+				array_set_key_value(con->environment,
+						    CONST_STR_LEN("REDIRECT_URI"),
+						    CONST_BUF_LEN(con->request.orig_uri));
+			}
 			result = HANDLER_COMEBACK;
 		}
 
@@ -1027,6 +1033,7 @@ static handler_t magnet_attract(server *srv, connection *con, plugin_data *p, bu
 
 static handler_t magnet_attract_array(server *srv, connection *con, plugin_data *p, array *files) {
 	size_t i;
+	handler_t ret = HANDLER_GO_ON;
 
 	/* no filename set */
 	if (files->used == 0) return HANDLER_GO_ON;
@@ -1034,18 +1041,25 @@ static handler_t magnet_attract_array(server *srv, connection *con, plugin_data 
 	/**
 	 * execute all files and jump out on the first !HANDLER_GO_ON
 	 */
-	for (i = 0; i < files->used; i++) {
+	for (i = 0; i < files->used && ret == HANDLER_GO_ON; i++) {
 		data_string *ds = (data_string *)files->data[i];
-		handler_t ret;
 
 		if (buffer_string_is_empty(ds->value)) continue;
 
 		ret = magnet_attract(srv, con, p, ds->value);
-
-		if (ret != HANDLER_GO_ON) return ret;
 	}
 
-	return HANDLER_GO_ON;
+	if (con->error_handler_saved_status) {
+		/* retrieve (possibly modified) REDIRECT_STATUS and store as number */
+		unsigned long x;
+		data_string * const ds = (data_string *)array_get_element(con->environment, "REDIRECT_STATUS");
+		if (ds && (x = strtoul(ds->value->ptr, NULL, 10)) < 1000)
+			/*(simplified validity check x < 1000)*/
+			con->error_handler_saved_status =
+			  con->error_handler_saved_status > 0 ? (int)x : -(int)x;
+	}
+
+	return ret;
 }
 
 URIHANDLER_FUNC(mod_magnet_uri_handler) {

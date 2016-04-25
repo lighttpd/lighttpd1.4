@@ -1648,9 +1648,10 @@ static int scgi_create_env(server *srv, handler_ctx *hctx) {
 		scgi_env_add(p->scgi_env, CONST_STR_LEN("SCRIPT_FILENAME"), CONST_BUF_LEN(p->path));
 		scgi_env_add(p->scgi_env, CONST_STR_LEN("DOCUMENT_ROOT"), CONST_BUF_LEN(con->physical.basedir));
 	}
-	scgi_env_add(p->scgi_env, CONST_STR_LEN("REQUEST_URI"), CONST_BUF_LEN(con->request.orig_uri));
-	if (!buffer_is_equal(con->request.uri, con->request.orig_uri)) {
-		scgi_env_add(p->scgi_env, CONST_STR_LEN("REDIRECT_URI"), CONST_BUF_LEN(con->request.uri));
+	if (con->error_handler_saved_status >= 0) {
+		scgi_env_add(p->scgi_env, CONST_STR_LEN("REQUEST_URI"), CONST_BUF_LEN(con->request.uri));
+	} else {
+		scgi_env_add(p->scgi_env, CONST_STR_LEN("REQUEST_URI"), CONST_BUF_LEN(con->request.orig_uri));
 	}
 	if (!buffer_string_is_empty(con->uri.query)) {
 		scgi_env_add(p->scgi_env, CONST_STR_LEN("QUERY_STRING"), CONST_BUF_LEN(con->uri.query));
@@ -1661,7 +1662,11 @@ static int scgi_create_env(server *srv, handler_ctx *hctx) {
 	s = get_http_method_name(con->request.http_method);
 	force_assert(s);
 	scgi_env_add(p->scgi_env, CONST_STR_LEN("REQUEST_METHOD"), s, strlen(s));
-	scgi_env_add(p->scgi_env, CONST_STR_LEN("REDIRECT_STATUS"), CONST_STR_LEN("200")); /* if php is compiled with --force-redirect */
+	/* set REDIRECT_STATUS for php compiled with --force-redirect
+	 * (if REDIRECT_STATUS has not already been set by error handler) */
+	if (0 == con->error_handler_saved_status) {
+		scgi_env_add(p->scgi_env, CONST_STR_LEN("REDIRECT_STATUS"), CONST_STR_LEN("200"));
+	}
 	s = get_http_version_name(con->request.http_version);
 	force_assert(s);
 	scgi_env_add(p->scgi_env, CONST_STR_LEN("SERVER_PROTOCOL"), s, strlen(s));

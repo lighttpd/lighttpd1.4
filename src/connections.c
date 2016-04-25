@@ -445,7 +445,6 @@ connection *connection_init(server *srv) {
 	CLEAN(parse_request);
 
 	CLEAN(server_name);
-	CLEAN(error_handler);
 	CLEAN(dst_addr_buf);
 #if defined USE_OPENSSL && ! defined OPENSSL_NO_TLSEXT
 	CLEAN(tlsext_server_name);
@@ -516,7 +515,6 @@ void connections_free(server *srv) {
 		CLEAN(parse_request);
 
 		CLEAN(server_name);
-		CLEAN(error_handler);
 		CLEAN(dst_addr_buf);
 #if defined USE_OPENSSL && ! defined OPENSSL_NO_TLSEXT
 		CLEAN(tlsext_server_name);
@@ -589,7 +587,6 @@ int connection_reset(server *srv, connection *con) {
 	CLEAN(parse_request);
 
 	CLEAN(server_name);
-	CLEAN(error_handler);
 #if defined USE_OPENSSL && ! defined OPENSSL_NO_TLSEXT
 	CLEAN(tlsext_server_name);
 #endif
@@ -634,7 +631,9 @@ int connection_reset(server *srv, connection *con) {
 	/* config_cond_cache_reset(srv, con); */
 
 	con->header_len = 0;
-	con->in_error_handler = 0;
+	con->error_handler_saved_status = 0;
+	/*con->error_handler_saved_method = HTTP_METHOD_UNSET;*/
+	/*(error_handler_saved_method value is not valid unless error_handler_saved_status is set)*/
 
 	config_setup_connection(srv, con);
 
@@ -1024,39 +1023,83 @@ int connection_state_machine(server *srv, connection *con) {
 
 			switch (r = http_response_prepare(srv, con)) {
 			case HANDLER_FINISHED:
+				if (con->error_handler_saved_status > 0) {
+					con->request.http_method = con->error_handler_saved_method;
+				}
 				if (con->mode == DIRECT) {
-					if (con->http_status == 404 ||
-					    con->http_status == 403) {
-						/* 404 error-handler */
+					if (con->error_handler_saved_status) {
+						if (con->error_handler_saved_status > 0) {
+							con->http_status = con->error_handler_saved_status;
+						} else if (con->http_status == 404 || con->http_status == 403) {
+							/* error-handler-404 is a 404 */
+							con->http_status = -con->error_handler_saved_status;
+						} else {
+							/* error-handler-404 is back and has generated content */
+							/* if Status: was set, take it otherwise use 200 */
+						}
+					} else if (con->http_status >= 400) {
+						buffer *error_handler = NULL;
+						if (!buffer_string_is_empty(con->conf.error_handler)) {
+							error_handler = con->conf.error_handler;
+						} else if ((con->http_status == 404 || con->http_status == 403)
+							   && !buffer_string_is_empty(con->conf.error_handler_404)) {
+							error_handler = con->conf.error_handler_404;
+						}
 
-						if (con->in_error_handler == 0 &&
-						    (!buffer_string_is_empty(con->conf.error_handler) ||
-						     !buffer_string_is_empty(con->error_handler))) {
+						if (error_handler) {
 							/* call error-handler */
 
-							con->error_handler_saved_status = con->http_status;
+							/* set REDIRECT_STATUS to save current HTTP status code
+							 * for access by dynamic handlers
+							 * https://redmine.lighttpd.net/issues/1828 */
+							data_string *ds;
+							if (NULL == (ds = (data_string *)array_get_unused_element(con->environment, TYPE_STRING))) {
+								ds = data_string_init();
+							}
+							buffer_copy_string_len(ds->key, CONST_STR_LEN("REDIRECT_STATUS"));
+							buffer_append_int(ds->value, con->http_status);
+							array_insert_unique(con->environment, (data_unset *)ds);
+
+							if (error_handler == con->conf.error_handler) {
+								plugins_call_connection_reset(srv, con);
+
+								if (con->request.content_length) {
+									if ((off_t)con->request.content_length != chunkqueue_length(con->request_content_queue)) {
+										con->keep_alive = 0;
+									}
+									con->request.content_length = 0;
+									chunkqueue_reset(con->request_content_queue);
+								}
+
+								con->is_writable = 1;
+								con->file_finished = 0;
+								con->file_started = 0;
+								con->got_response = 0;
+								con->parsed_response = 0;
+								con->response.keep_alive = 0;
+								con->response.content_length = -1;
+								con->response.transfer_encoding = 0;
+								array_reset(con->response.headers);
+								chunkqueue_reset(con->write_queue);
+
+								array_set_key_value(con->environment, CONST_STR_LEN("REDIRECT_URI"), CONST_BUF_LEN(con->request.orig_uri));
+								con->error_handler_saved_status = con->http_status;
+								con->error_handler_saved_method = con->request.http_method;
+
+								con->request.http_method = HTTP_METHOD_GET;
+							} else { /*(preserve behavior for server.error-handler-404)*/
+								array_set_key_value(con->environment, CONST_STR_LEN("REDIRECT_URI"), CONST_BUF_LEN(error_handler));
+								con->error_handler_saved_status = -con->http_status; /*(negative to flag old behavior)*/
+							}
 							con->http_status = 0;
 
-							if (buffer_string_is_empty(con->error_handler)) {
-								buffer_copy_buffer(con->request.uri, con->conf.error_handler);
-							} else {
-								buffer_copy_buffer(con->request.uri, con->error_handler);
-							}
+							buffer_copy_buffer(con->request.uri, error_handler);
 							buffer_reset(con->physical.path);
 							connection_handle_errdoc_init(con);
 
-							con->in_error_handler = 1;
-
 							done = -1;
 							break;
-						} else if (con->in_error_handler) {
-							/* error-handler is a 404 */
-
-							con->http_status = con->error_handler_saved_status;
 						}
-					} else if (con->in_error_handler) {
-						/* error-handler is back and has generated content */
-						/* if Status: was set, take it otherwise use 200 */
 					}
 				}
 				if (con->http_status == 0) con->http_status = 200;

@@ -18,7 +18,7 @@ BEGIN {
 
 use strict;
 use IO::Socket;
-use Test::More tests => 8;
+use Test::More tests => 9;
 use LightyTest;
 
 my $tf = LightyTest->new();
@@ -57,6 +57,13 @@ EOF
  );
 $t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 404, 'HTTP-Content' => "Not found here\n" } ];
 ok($tf->handle_http($t) == 0, '404 handler => dynamic(404)');
+
+$t->{REQUEST}  = ( <<EOF
+GET /dynamic/redirect_status/ HTTP/1.0
+EOF
+ );
+$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 404, 'HTTP-Content' => "REDIRECT_STATUS\n" } ];
+ok($tf->handle_http($t) == 0, 'error handler => dynamic(REDIRECT_STATUS)');
 
 $t->{REQUEST}  = ( <<EOF
 GET /dynamic/nostatus/notfound HTTP/1.0
