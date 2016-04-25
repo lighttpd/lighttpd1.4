@@ -7,6 +7,7 @@
 typedef struct {
 	char *start;
 	off_t size;
+	int mapped;
 } stream;
 
 int stream_open(stream *f, buffer *fn);
