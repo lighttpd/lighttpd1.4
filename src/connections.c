@@ -118,7 +118,7 @@ static int connection_del(server *srv, connection *con) {
 	return 0;
 }
 
-int connection_close(server *srv, connection *con) {
+static int connection_close(server *srv, connection *con) {
 #ifdef USE_OPENSSL
 	server_socket *srv_sock = con->srv_socket;
 #endif
@@ -143,6 +143,7 @@ int connection_close(server *srv, connection *con) {
 				"(warning) close:", con->fd, strerror(errno));
 	}
 #endif
+	con->fd = -1;
 
 	srv->cur_fds--;
 #if 0
@@ -152,265 +153,6 @@ int connection_close(server *srv, connection *con) {
 
 	connection_del(srv, con);
 	connection_set_state(srv, con, CON_STATE_CONNECT);
-
-	return 0;
-}
-
-#if 0
-static void dump_packet(const unsigned char *data, size_t len) {
-	size_t i, j;
-
-	if (len == 0) return;
-
-	for (i = 0; i < len; i++) {
-		if (i % 16 == 0) fprintf(stderr, "  ");
-
-		fprintf(stderr, "%02x ", data[i]);
-
-		if ((i + 1) % 16 == 0) {
-			fprintf(stderr, "  ");
-			for (j = 0; j <= i % 16; j++) {
-				unsigned char c;
-
-				if (i-15+j >= len) break;
-
-				c = data[i-15+j];
-
-				fprintf(stderr, "%c", c > 32 && c < 128 ? c : '.');
-			}
-
-			fprintf(stderr, "\n");
-		}
-	}
-
-	if (len % 16 != 0) {
-		for (j = i % 16; j < 16; j++) {
-			fprintf(stderr, "   ");
-		}
-
-		fprintf(stderr, "  ");
-		for (j = i & ~0xf; j < len; j++) {
-			unsigned char c;
-
-			c = data[j];
-			fprintf(stderr, "%c", c > 32 && c < 128 ? c : '.');
-		}
-		fprintf(stderr, "\n");
-	}
-}
-#endif
-
-static int connection_handle_read_ssl(server *srv, connection *con) {
-#ifdef USE_OPENSSL
-	int r, ssl_err, len, count = 0;
-	char *mem = NULL;
-	size_t mem_len = 0;
-
-	if (!con->srv_socket->is_ssl) return -1;
-
-	ERR_clear_error();
-	do {
-		chunkqueue_get_memory(con->read_queue, &mem, &mem_len, 0, SSL_pending(con->ssl));
-#if 0
-		/* overwrite everything with 0 */
-		memset(mem, 0, mem_len);
-#endif
-
-		len = SSL_read(con->ssl, mem, mem_len);
-		chunkqueue_use_memory(con->read_queue, len > 0 ? len : 0);
-
-		if (con->renegotiations > 1 && con->conf.ssl_disable_client_renegotiation) {
-			log_error_write(srv, __FILE__, __LINE__, "s", "SSL: renegotiation initiated by client, killing connection");
-			connection_set_state(srv, con, CON_STATE_ERROR);
-			return -1;
-		}
-
-		if (len > 0) {
-			con->bytes_read += len;
-			count += len;
-		}
-	} while (len == (ssize_t) mem_len && count < MAX_READ_LIMIT);
-
-
-	if (len < 0) {
-		int oerrno = errno;
-		switch ((r = SSL_get_error(con->ssl, len))) {
-		case SSL_ERROR_WANT_READ:
-		case SSL_ERROR_WANT_WRITE:
-			con->is_readable = 0;
-
-			/* the manual says we have to call SSL_read with the same arguments next time.
-			 * we ignore this restriction; no one has complained about it in 1.5 yet, so it probably works anyway.
-			 */
-
-			return 0;
-		case SSL_ERROR_SYSCALL:
-			/**
-			 * man SSL_get_error()
-			 *
-			 * SSL_ERROR_SYSCALL
-			 *   Some I/O error occurred.  The OpenSSL error queue may contain more
-			 *   information on the error.  If the error queue is empty (i.e.
-			 *   ERR_get_error() returns 0), ret can be used to find out more about
-			 *   the error: If ret == 0, an EOF was observed that violates the
-			 *   protocol.  If ret == -1, the underlying BIO reported an I/O error
-			 *   (for socket I/O on Unix systems, consult errno for details).
-			 *
-			 */
-			while((ssl_err = ERR_get_error())) {
-				/* get all errors from the error-queue */
-				log_error_write(srv, __FILE__, __LINE__, "sds", "SSL:",
-						r, ERR_error_string(ssl_err, NULL));
-			}
-
-			switch(oerrno) {
-			default:
-				log_error_write(srv, __FILE__, __LINE__, "sddds", "SSL:",
-						len, r, oerrno,
-						strerror(oerrno));
-				break;
-			}
-
-			break;
-		case SSL_ERROR_ZERO_RETURN:
-			/* clean shutdown on the remote side */
-
-			if (r == 0) {
-				/* FIXME: later */
-			}
-
-			/* fall thourgh */
-		default:
-			while((ssl_err = ERR_get_error())) {
-				switch (ERR_GET_REASON(ssl_err)) {
-				case SSL_R_SSL_HANDSHAKE_FAILURE:
-				case SSL_R_TLSV1_ALERT_UNKNOWN_CA:
-				case SSL_R_SSLV3_ALERT_CERTIFICATE_UNKNOWN:
-				case SSL_R_SSLV3_ALERT_BAD_CERTIFICATE:
-					if (!con->conf.log_ssl_noise) continue;
-					break;
-				default:
-					break;
-				}
-				/* get all errors from the error-queue */
-				log_error_write(srv, __FILE__, __LINE__, "sds", "SSL:",
-				                r, ERR_error_string(ssl_err, NULL));
-			}
-			break;
-		}
-
-		connection_set_state(srv, con, CON_STATE_ERROR);
-
-		return -1;
-	} else if (len == 0) {
-		con->is_readable = 0;
-		/* the other end close the connection -> KEEP-ALIVE */
-
-		return -2;
-	} else {
-		joblist_append(srv, con);
-	}
-
-	return 0;
-#else
-	UNUSED(srv);
-	UNUSED(con);
-	return -1;
-#endif
-}
-
-/* 0: everything ok, -1: error, -2: con closed */
-static int connection_handle_read(server *srv, connection *con) {
-	int len;
-	char *mem = NULL;
-	size_t mem_len = 0;
-	int toread;
-
-	if (con->srv_socket->is_ssl) {
-		return connection_handle_read_ssl(srv, con);
-	}
-
-	/* default size for chunks is 4kb; only use bigger chunks if FIONREAD tells
-	 *  us more than 4kb is available
-	 * if FIONREAD doesn't signal a big chunk we fill the previous buffer
-	 *  if it has >= 1kb free
-	 */
-#if defined(__WIN32)
-	chunkqueue_get_memory(con->read_queue, &mem, &mem_len, 0, 4096);
-
-	len = recv(con->fd, mem, mem_len, 0);
-#else /* __WIN32 */
-	if (ioctl(con->fd, FIONREAD, &toread) || toread == 0 || toread <= 4*1024) {
-		toread = 4096;
-	}
-	else if (toread > MAX_READ_LIMIT) {
-		toread = MAX_READ_LIMIT;
-	}
-	chunkqueue_get_memory(con->read_queue, &mem, &mem_len, 0, toread);
-
-	len = read(con->fd, mem, mem_len);
-#endif /* __WIN32 */
-
-	chunkqueue_use_memory(con->read_queue, len > 0 ? len : 0);
-
-	if (len < 0) {
-		con->is_readable = 0;
-
-#if defined(__WIN32)
-		{
-			int lastError = WSAGetLastError();
-			switch (lastError) {
-			case EAGAIN:
-				return 0;
-			case EINTR:
-				/* we have been interrupted before we could read */
-				con->is_readable = 1;
-				return 0;
-			case ECONNRESET:
-				/* suppress logging for this error, expected for keep-alive */
-				break;
-			default:
-				log_error_write(srv, __FILE__, __LINE__, "sd", "connection closed - recv failed: ", lastError);
-				break;
-			}
-		}
-#else /* __WIN32 */
-		switch (errno) {
-		case EAGAIN:
-			return 0;
-		case EINTR:
-			/* we have been interrupted before we could read */
-			con->is_readable = 1;
-			return 0;
-		case ECONNRESET:
-			/* suppress logging for this error, expected for keep-alive */
-			break;
-		default:
-			log_error_write(srv, __FILE__, __LINE__, "ssd", "connection closed - read failed: ", strerror(errno), errno);
-			break;
-		}
-#endif /* __WIN32 */
-
-		connection_set_state(srv, con, CON_STATE_ERROR);
-
-		return -1;
-	} else if (len == 0) {
-		con->is_readable = 0;
-		/* the other end close the connection -> KEEP-ALIVE */
-
-		/* pipelining */
-
-		return -2;
-	} else if (len != (ssize_t) mem_len) {
-		/* we got less then expected, wait for the next fd-event */
-
-		con->is_readable = 0;
-	}
-
-	con->bytes_read += len;
-#if 0
-	dump_packet(b->ptr, len);
-#endif
 
 	return 0;
 }
@@ -607,6 +349,12 @@ static int connection_handle_write_prepare(server *srv, connection *con) {
 				con->keep_alive = 0;
 			}
 		}
+	}
+
+	if (con->request.content_length
+	    && (off_t)con->request.content_length > con->request_content_queue->bytes_in) {
+		/* request body is present and has not been read completely */
+		con->keep_alive = 0;
 	}
 
 	if (con->request.http_method == HTTP_METHOD_HEAD) {
@@ -899,11 +647,9 @@ int connection_reset(server *srv, connection *con) {
  * we get called by the state-engine and by the fdevent-handler
  */
 static int connection_handle_read_state(server *srv, connection *con)  {
-	connection_state_t ostate = con->state;
 	chunk *c, *last_chunk;
 	off_t last_offset;
 	chunkqueue *cq = con->read_queue;
-	chunkqueue *dst_cq = con->request_content_queue;
 	int is_closed = 0; /* the connection got closed, if we don't have a complete header, -> error */
 	/* when in CON_STATE_READ: about to receive first byte for a request: */
 	int is_request_start = chunkqueue_is_empty(cq);
@@ -927,8 +673,6 @@ static int connection_handle_read_state(server *srv, connection *con)  {
 	/* we might have got several packets at once
 	 */
 
-	switch(ostate) {
-	case CON_STATE_READ:
 	/* update request_start timestamp when first byte of
 	 * next request is received on a keep-alive connection */
 	if (con->request_count > 1 && is_request_start) con->request_start = srv->cur_ts;
@@ -1009,33 +753,11 @@ found_header_end:
 			con->http_status = 414; /* Request-URI too large */
 			con->keep_alive = 0;
 			connection_set_state(srv, con, CON_STATE_HANDLE_REQUEST);
+		} else if (is_closed) {
+			/* the connection got closed and we didn't got enough data to leave CON_STATE_READ;
+			 * the only way is to leave here */
+			connection_set_state(srv, con, CON_STATE_ERROR);
 		}
-		break;
-	case CON_STATE_READ_POST:
-		if (con->request.content_length <= 64*1024) {
-			/* don't buffer request bodies <= 64k on disk */
-			chunkqueue_steal(dst_cq, cq, con->request.content_length - dst_cq->bytes_in);
-		}
-		else if (0 != chunkqueue_steal_with_tempfiles(srv, dst_cq, cq, con->request.content_length - dst_cq->bytes_in )) {
-			con->http_status = 413; /* Request-Entity too large */
-			con->keep_alive = 0;
-			connection_set_state(srv, con, CON_STATE_HANDLE_REQUEST);
-		}
-
-		/* Content is ready */
-		if (dst_cq->bytes_in == (off_t)con->request.content_length) {
-			connection_set_state(srv, con, CON_STATE_HANDLE_REQUEST);
-		}
-
-		break;
-	default: break;
-	}
-
-	/* the connection got closed and we didn't got enough data to leave one of the READ states
-	 * the only way is to leave here */
-	if (is_closed && ostate == con->state) {
-		connection_set_state(srv, con, CON_STATE_ERROR);
-	}
 
 	chunkqueue_remove_finished_chunks(cq);
 
@@ -1101,8 +823,7 @@ static handler_t connection_handle_fdevent(server *srv, void *context, int reven
 		}
 	}
 
-	if (con->state == CON_STATE_READ ||
-	    con->state == CON_STATE_READ_POST) {
+	if (con->state == CON_STATE_READ) {
 		connection_handle_read_state(srv, con);
 	}
 
@@ -1285,6 +1006,7 @@ int connection_state_machine(server *srv, connection *con) {
 			connection_set_state(srv, con, CON_STATE_HANDLE_REQUEST);
 
 			break;
+		case CON_STATE_READ_POST:
 		case CON_STATE_HANDLE_REQUEST:
 			/*
 			 * the request is parsed
@@ -1325,8 +1047,6 @@ int connection_state_machine(server *srv, connection *con) {
 
 							con->in_error_handler = 1;
 
-							connection_set_state(srv, con, CON_STATE_HANDLE_REQUEST);
-
 							done = -1;
 							break;
 						} else if (con->in_error_handler) {
@@ -1349,16 +1069,12 @@ int connection_state_machine(server *srv, connection *con) {
 
 				fdwaitqueue_append(srv, con);
 
-				connection_set_state(srv, con, CON_STATE_HANDLE_REQUEST);
-
 				break;
 			case HANDLER_COMEBACK:
 				done = -1;
 				/* fallthrough */
 			case HANDLER_WAIT_FOR_EVENT:
 				/* come back here */
-				connection_set_state(srv, con, CON_STATE_HANDLE_REQUEST);
-
 				break;
 			case HANDLER_ERROR:
 				/* something went wrong */
@@ -1494,7 +1210,6 @@ int connection_state_machine(server *srv, connection *con) {
 			}
 
 			break;
-		case CON_STATE_READ_POST:
 		case CON_STATE_READ:
 			if (srv->srvconf.log_state_handling) {
 				log_error_write(srv, __FILE__, __LINE__, "sds",
@@ -1663,11 +1378,11 @@ int connection_state_machine(server *srv, connection *con) {
 		    (con->traffic_limit_reached == 0)) {
 			fdevent_event_set(srv->ev, &(con->fde_ndx), con->fd, FDEVENT_OUT);
 		} else {
-			fdevent_event_del(srv->ev, &(con->fde_ndx), con->fd);
+			fdevent_event_set(srv->ev, &(con->fde_ndx), con->fd, 0);
 		}
 		break;
 	default:
-		fdevent_event_del(srv->ev, &(con->fde_ndx), con->fd);
+		fdevent_event_set(srv->ev, &(con->fde_ndx), con->fd, 0);
 		break;
 	}
 

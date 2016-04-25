@@ -4,6 +4,7 @@
 #include "log.h"
 #include "buffer.h"
 #include "response.h"
+#include "connections.h"
 
 #include "plugin.h"
 
@@ -1199,7 +1200,8 @@ static int webdav_has_lock(server *srv, connection *con, plugin_data *p, buffer 
 	return has_lock;
 }
 
-URIHANDLER_FUNC(mod_webdav_subrequest_handler) {
+
+SUBREQUEST_FUNC(mod_webdav_subrequest_handler_huge) {
 	plugin_data *p = p_d;
 	buffer *b;
 	DIR *dir;
@@ -1249,6 +1251,11 @@ URIHANDLER_FUNC(mod_webdav_subrequest_handler) {
 		/* any special requests or just allprop ? */
 		if (con->request.content_length) {
 			xmlDocPtr xml;
+
+			if (con->state == CON_STATE_READ_POST) {
+				handler_t r = connection_handle_read_post_state(srv, con);
+				if (r != HANDLER_GO_ON) return r;
+			}
 
 			if (1 == webdav_parse_chunkqueue(srv, con, p, con->request_content_queue, &xml)) {
 				xmlNode *rootnode = xmlDocGetRootElement(xml);
@@ -1616,13 +1623,16 @@ URIHANDLER_FUNC(mod_webdav_subrequest_handler) {
 		}
 
 		/* is a exclusive lock set on the source */
-		if (!webdav_has_lock(srv, con, p, con->uri.path)) {
+		/* (check for lock once before potentially reading large input) */
+		if (0 == cq->bytes_in && !webdav_has_lock(srv, con, p, con->uri.path)) {
 			con->http_status = 423;
 			return HANDLER_FINISHED;
 		}
 
-
-		assert(chunkqueue_length(cq) == (off_t)con->request.content_length);
+		if (con->state == CON_STATE_READ_POST) {
+			handler_t r = connection_handle_read_post_state(srv, con);
+			if (r != HANDLER_GO_ON) return r;
+		}
 
 		/* RFC2616 Section 9.6 PUT requires us to send 501 on all Content-* we don't support
 		 * - most important Content-Range
@@ -2054,6 +2064,11 @@ URIHANDLER_FUNC(mod_webdav_subrequest_handler) {
 		if (con->request.content_length) {
 			xmlDocPtr xml;
 
+			if (con->state == CON_STATE_READ_POST) {
+				handler_t r = connection_handle_read_post_state(srv, con);
+				if (r != HANDLER_GO_ON) return r;
+			}
+
 			if (1 == webdav_parse_chunkqueue(srv, con, p, con->request_content_queue, &xml)) {
 				xmlNode *rootnode = xmlDocGetRootElement(xml);
 
@@ -2209,6 +2224,11 @@ propmatch_cleanup:
 		if (con->request.content_length) {
 			xmlDocPtr xml;
 			buffer *hdr_if = NULL;
+
+			if (con->state == CON_STATE_READ_POST) {
+				handler_t r = connection_handle_read_post_state(srv, con);
+				if (r != HANDLER_GO_ON) return r;
+			}
 
 			if (NULL != (ds = (data_string *)array_get_element(con->request.headers, "If"))) {
 				hdr_if = ds->value;
@@ -2482,6 +2502,46 @@ propmatch_cleanup:
 }
 
 
+SUBREQUEST_FUNC(mod_webdav_subrequest_handler) {
+	handler_t r;
+	plugin_data *p = p_d;
+	if (con->mode != p->id) return HANDLER_GO_ON;
+
+	r = mod_webdav_subrequest_handler_huge(srv, con, p_d);
+	if (con->http_status >= 400) con->mode = DIRECT;
+	return r;
+}
+
+
+PHYSICALPATH_FUNC(mod_webdav_physical_handler) {
+	plugin_data *p = p_d;
+	if (!p->conf.enabled) return HANDLER_GO_ON;
+
+	/* physical path is setup */
+	if (buffer_is_empty(con->physical.path)) return HANDLER_GO_ON;
+
+	UNUSED(srv);
+
+	switch (con->request.http_method) {
+	case HTTP_METHOD_PROPFIND:
+	case HTTP_METHOD_PROPPATCH:
+	case HTTP_METHOD_PUT:
+	case HTTP_METHOD_COPY:
+	case HTTP_METHOD_MOVE:
+	case HTTP_METHOD_MKCOL:
+	case HTTP_METHOD_DELETE:
+	case HTTP_METHOD_LOCK:
+	case HTTP_METHOD_UNLOCK:
+		con->mode = p->id;
+		break;
+	default:
+		break;
+	}
+
+	return HANDLER_GO_ON;
+}
+
+
 /* this function is called at dlopen() time and inits the callbacks */
 
 int mod_webdav_plugin_init(plugin *p);
@@ -2491,7 +2551,8 @@ int mod_webdav_plugin_init(plugin *p) {
 
 	p->init        = mod_webdav_init;
 	p->handle_uri_clean  = mod_webdav_uri_handler;
-	p->handle_physical   = mod_webdav_subrequest_handler;
+	p->handle_physical   = mod_webdav_physical_handler;
+	p->handle_subrequest = mod_webdav_subrequest_handler;
 	p->set_defaults  = mod_webdav_set_defaults;
 	p->cleanup     = mod_webdav_free;
 

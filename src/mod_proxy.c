@@ -28,10 +28,6 @@
 
 #include <stdio.h>
 
-#ifdef HAVE_SYS_FILIO_H
-# include <sys/filio.h>
-#endif
-
 #include "sys-socket.h"
 
 #define data_proxy data_fastcgi
@@ -86,8 +82,7 @@ typedef enum {
 	PROXY_STATE_CONNECT,
 	PROXY_STATE_PREPARE_WRITE,
 	PROXY_STATE_WRITE,
-	PROXY_STATE_READ,
-	PROXY_STATE_ERROR
+	PROXY_STATE_READ
 } proxy_connection_state_t;
 
 enum { PROXY_STDOUT, PROXY_END_REQUEST };
@@ -338,8 +333,6 @@ static void proxy_connection_close(server *srv, handler_ctx *hctx) {
 	plugin_data *p;
 	connection *con;
 
-	if (NULL == hctx) return;
-
 	p    = hctx->plugin_data;
 	con  = hctx->remote_conn;
 
@@ -357,6 +350,23 @@ static void proxy_connection_close(server *srv, handler_ctx *hctx) {
 
 	handler_ctx_free(hctx);
 	con->plugin_ctx[p->id] = NULL;
+
+	/* finish response (if not already finished) */
+	if (con->mode == p->id
+	    && (con->state == CON_STATE_HANDLE_REQUEST || con->state == CON_STATE_READ_POST)) {
+		/* (not CON_STATE_ERROR and not CON_STATE_RESPONSE_END,
+		 *  i.e. not called from proxy_connection_reset()) */
+
+		/* Send an error if we haven't sent any data yet */
+		if (0 == con->file_started) {
+			con->http_status = 500;
+			con->mode = DIRECT;
+		}
+		else if (!con->file_finished) {
+			http_chunk_close(srv, con);
+			con->file_finished = 1;
+		}
+	}
 }
 
 static int proxy_establish_connection(server *srv, handler_ctx *hctx) {
@@ -692,11 +702,9 @@ static int proxy_demux_response(server *srv, handler_ctx *hctx) {
 				con->file_started = 1;
 				if (blen > 0) http_chunk_append_mem(srv, con, c + 4, blen);
 				buffer_reset(hctx->response);
-				joblist_append(srv, con);
 			}
 		} else {
 			http_chunk_append_buffer(srv, con, hctx->response);
-			joblist_append(srv, con);
 			buffer_reset(hctx->response);
 		}
 
@@ -705,7 +713,6 @@ static int proxy_demux_response(server *srv, handler_ctx *hctx) {
 		con->file_finished = 1;
 
 		http_chunk_close(srv, con);
-		joblist_append(srv, con);
 
 		fin = 1;
 	}
@@ -720,7 +727,7 @@ static handler_t proxy_write_request(server *srv, handler_ctx *hctx) {
 
 	int ret;
 
-	if (!host || buffer_string_is_empty(host->host) || !host->port) return -1;
+	if (!host || buffer_string_is_empty(host->host) || !host->port) return HANDLER_ERROR;
 
 	switch(hctx->state) {
 	case PROXY_STATE_CONNECT:
@@ -731,8 +738,6 @@ static handler_t proxy_write_request(server *srv, handler_ctx *hctx) {
 
 		/* wait */
 		return HANDLER_WAIT_FOR_EVENT;
-
-		break;
 
 	case PROXY_STATE_INIT:
 #if defined(HAVE_SYS_UN_H)
@@ -814,13 +819,9 @@ static handler_t proxy_write_request(server *srv, handler_ctx *hctx) {
 
 		if (hctx->wb->bytes_out == hctx->wb->bytes_in) {
 			proxy_set_state(srv, hctx, PROXY_STATE_READ);
-
-			fdevent_event_del(srv->ev, &(hctx->fde_ndx), hctx->fd);
 			fdevent_event_set(srv->ev, &(hctx->fde_ndx), hctx->fd, FDEVENT_IN);
 		} else {
-			fdevent_event_set(srv->ev, &(hctx->fde_ndx), hctx->fd, FDEVENT_OUT);
-
-			return HANDLER_WAIT_FOR_EVENT;
+			fdevent_event_set(srv->ev, &(hctx->fde_ndx), hctx->fd, FDEVENT_IN|FDEVENT_OUT);
 		}
 
 		return HANDLER_WAIT_FOR_EVENT;
@@ -831,8 +832,6 @@ static handler_t proxy_write_request(server *srv, handler_ctx *hctx) {
 		log_error_write(srv, __FILE__, __LINE__, "s", "(debug) unknown state");
 		return HANDLER_ERROR;
 	}
-
-	return HANDLER_GO_ON;
 }
 
 #define PATCH(x) \
@@ -871,24 +870,14 @@ static int mod_proxy_patch_connection(server *srv, connection *con, plugin_data 
 }
 #undef PATCH
 
-SUBREQUEST_FUNC(mod_proxy_handle_subrequest) {
-	plugin_data *p = p_d;
-
-	handler_ctx *hctx = con->plugin_ctx[p->id];
-	data_proxy *host;
-
-	if (NULL == hctx) return HANDLER_GO_ON;
-
-	mod_proxy_patch_connection(srv, con, p);
-
-	host = hctx->host;
-
-	/* not my job */
-	if (con->mode != p->id) return HANDLER_GO_ON;
-
+static handler_t proxy_send_request(server *srv, handler_ctx *hctx) {
 	/* ok, create the request */
-	switch(proxy_write_request(srv, hctx)) {
-	case HANDLER_ERROR:
+	handler_t rc = proxy_write_request(srv, hctx);
+	if (HANDLER_ERROR != rc) {
+		return rc;
+	} else {
+		data_proxy *host = hctx->host;
+		connection *con  = hctx->remote_conn;
 		log_error_write(srv, __FILE__, __LINE__,  "sbdd", "proxy-server disabled:",
 				host->host,
 				host->port,
@@ -898,33 +887,33 @@ SUBREQUEST_FUNC(mod_proxy_handle_subrequest) {
 		host->is_disabled = 1;
 		host->disable_ts = srv->cur_ts;
 
-		proxy_connection_close(srv, hctx);
-
 		/* reset the enviroment and restart the sub-request */
-		buffer_reset(con->physical.path);
-		con->mode = DIRECT;
+		con->mode = DIRECT;/*(avoid changing con->state, con->http_status)*/
+		proxy_connection_close(srv, hctx);
+		con->mode = hctx->plugin_data->id; /* p->id */
 
-		joblist_append(srv, con);
+		return HANDLER_COMEBACK;
+	}
+}
 
-		/* mis-using HANDLER_WAIT_FOR_FD to break out of the loop
-		 * and hope that the childs will be restarted
-		 *
-		 */
+SUBREQUEST_FUNC(mod_proxy_handle_subrequest) {
+	plugin_data *p = p_d;
 
-		return HANDLER_WAIT_FOR_FD;
-	case HANDLER_WAIT_FOR_EVENT:
-		break;
-	case HANDLER_WAIT_FOR_FD:
-		return HANDLER_WAIT_FOR_FD;
-	default:
-		break;
+	handler_ctx *hctx = con->plugin_ctx[p->id];
+
+	if (NULL == hctx) return HANDLER_GO_ON;
+
+	/* not my job */
+	if (con->mode != p->id) return HANDLER_GO_ON;
+
+	if (con->state == CON_STATE_READ_POST) {
+		handler_t r = connection_handle_read_post_state(srv, con);
+		if (r != HANDLER_GO_ON) return r;
 	}
 
-	if (con->file_started == 1) {
-		return HANDLER_FINISHED;
-	} else {
-		return HANDLER_WAIT_FOR_EVENT;
-	}
+	return (hctx->state != PROXY_STATE_READ)
+	  ? proxy_send_request(srv, hctx)
+	  : HANDLER_WAIT_FOR_EVENT;
 }
 
 static handler_t proxy_handle_fdevent(server *srv, void *ctx, int revents) {
@@ -932,6 +921,7 @@ static handler_t proxy_handle_fdevent(server *srv, void *ctx, int revents) {
 	connection  *con  = hctx->remote_conn;
 	plugin_data *p    = hctx->plugin_data;
 
+	joblist_append(srv, con);
 
 	if ((revents & FDEVENT_IN) &&
 	    hctx->state == PROXY_STATE_READ) {
@@ -948,20 +938,19 @@ static handler_t proxy_handle_fdevent(server *srv, void *ctx, int revents) {
 			/* we are done */
 			proxy_connection_close(srv, hctx);
 
-			joblist_append(srv, con);
 			return HANDLER_FINISHED;
 		case -1:
 			if (con->file_started == 0) {
-				/* nothing has been send out yet, send a 500 */
-				connection_set_state(srv, con, CON_STATE_HANDLE_REQUEST);
-				con->http_status = 500;
-				con->mode = DIRECT;
+				/* reading response headers failed */
 			} else {
 				/* response might have been already started, kill the connection */
-				connection_set_state(srv, con, CON_STATE_ERROR);
+				con->keep_alive = 0;
+				con->file_finished = 1;
+				con->mode = DIRECT; /*(avoid sending final chunked block)*/
 			}
 
-			joblist_append(srv, con);
+			proxy_connection_close(srv, hctx);
+
 			return HANDLER_FINISHED;
 		}
 	}
@@ -976,16 +965,11 @@ static handler_t proxy_handle_fdevent(server *srv, void *ctx, int revents) {
 			int socket_error;
 			socklen_t socket_error_len = sizeof(socket_error);
 
-			/* we don't need it anymore */
-			fdevent_event_del(srv->ev, &(hctx->fde_ndx), hctx->fd);
-			hctx->fde_ndx = -1;
-
 			/* try to finish the connect() */
 			if (0 != getsockopt(hctx->fd, SOL_SOCKET, SO_ERROR, &socket_error, &socket_error_len)) {
 				log_error_write(srv, __FILE__, __LINE__, "ss",
 					"getsockopt failed:", strerror(errno));
 
-				joblist_append(srv, con);
 				return HANDLER_FINISHED;
 			}
 			if (socket_error != 0) {
@@ -993,7 +977,6 @@ static handler_t proxy_handle_fdevent(server *srv, void *ctx, int revents) {
 					"establishing connection failed:", strerror(socket_error),
 					"port:", hctx->host->port);
 
-				joblist_append(srv, con);
 				return HANDLER_FINISHED;
 			}
 			if (p->conf.debug) {
@@ -1010,7 +993,7 @@ static handler_t proxy_handle_fdevent(server *srv, void *ctx, int revents) {
 			 * 1. after a just finished connect() call
 			 * 2. in a unfinished write() call (long POST request)
 			 */
-			return mod_proxy_handle_subrequest(srv, con, p);
+			return proxy_send_request(srv, hctx); /*(might invalidate hctx)*/
 		} else {
 			log_error_write(srv, __FILE__, __LINE__, "sd",
 					"proxy: out", hctx->state);
@@ -1044,38 +1027,25 @@ static handler_t proxy_handle_fdevent(server *srv, void *ctx, int revents) {
 				hctx->host->is_disabled = 1;
 				hctx->host->disable_ts = srv->cur_ts;
 
+				/* reset the environment and restart the sub-request */
+				con->mode = DIRECT;/*(avoid changing con->state, con->http_status)*/
 				proxy_connection_close(srv, hctx);
-
-				/* reset the enviroment and restart the sub-request */
-				buffer_reset(con->physical.path);
-				con->mode = DIRECT;
-
-				joblist_append(srv, con);
+				con->mode = p->id;
 			} else {
 				proxy_connection_close(srv, hctx);
-				joblist_append(srv, con);
-
-				con->mode = DIRECT;
 				con->http_status = 503;
 			}
-
-			return HANDLER_FINISHED;
+		} else {
+			proxy_connection_close(srv, hctx);
 		}
-
-		if (!con->file_finished) {
-			http_chunk_close(srv, con);
-		}
-
-		con->file_finished = 1;
-		proxy_connection_close(srv, hctx);
-		joblist_append(srv, con);
 	} else if (revents & FDEVENT_ERR) {
-		/* kill all connections to the proxy process */
-
 		log_error_write(srv, __FILE__, __LINE__, "sd", "proxy-FDEVENT_ERR, but no HUP", revents);
 
-		con->file_finished = 1;
-		joblist_append(srv, con);
+		if (con->file_started) {
+			con->keep_alive = 0;
+			con->file_finished = 1;
+			con->mode = DIRECT; /*(avoid sending final chunked block)*/
+		}
 		proxy_connection_close(srv, hctx);
 	}
 
@@ -1301,10 +1271,10 @@ static handler_t mod_proxy_check_extension(server *srv, connection *con, void *p
 	return HANDLER_GO_ON;
 }
 
-static handler_t mod_proxy_connection_close_callback(server *srv, connection *con, void *p_d) {
+static handler_t mod_proxy_connection_reset(server *srv, connection *con, void *p_d) {
 	plugin_data *p = p_d;
-
-	proxy_connection_close(srv, con->plugin_ctx[p->id]);
+	handler_ctx *hctx = con->plugin_ctx[p->id];
+	if (hctx) proxy_connection_close(srv, hctx);
 
 	return HANDLER_GO_ON;
 }
@@ -1359,8 +1329,8 @@ int mod_proxy_plugin_init(plugin *p) {
 	p->init         = mod_proxy_init;
 	p->cleanup      = mod_proxy_free;
 	p->set_defaults = mod_proxy_set_defaults;
-	p->connection_reset        = mod_proxy_connection_close_callback; /* end of req-resp cycle */
-	p->handle_connection_close = mod_proxy_connection_close_callback; /* end of client connection */
+	p->connection_reset        = mod_proxy_connection_reset; /* end of req-resp cycle */
+	p->handle_connection_close = mod_proxy_connection_reset; /* end of client connection */
 	p->handle_uri_clean        = mod_proxy_check_extension;
 	p->handle_subrequest       = mod_proxy_handle_subrequest;
 	p->handle_trigger          = mod_proxy_trigger;

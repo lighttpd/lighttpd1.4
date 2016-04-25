@@ -150,28 +150,25 @@ int fdevent_unregister(fdevents *ev, int fd) {
 	return 0;
 }
 
-int fdevent_event_del(fdevents *ev, int *fde_ndx, int fd) {
-	int fde = fde_ndx ? *fde_ndx : -1;
+void fdevent_event_del(fdevents *ev, int *fde_ndx, int fd) {
+	if (-1 == fd) return;
+	if (NULL == ev->fdarray[fd]) return;
 
-	if (NULL == ev->fdarray[fd]) return 0;
-
-	if (ev->event_del) fde = ev->event_del(ev, fde, fd);
+	if (ev->event_del) *fde_ndx = ev->event_del(ev, *fde_ndx, fd);
 	ev->fdarray[fd]->events = 0;
-
-	if (fde_ndx) *fde_ndx = fde;
-
-	return 0;
 }
 
-int fdevent_event_set(fdevents *ev, int *fde_ndx, int fd, int events) {
-	int fde = fde_ndx ? *fde_ndx : -1;
+void fdevent_event_set(fdevents *ev, int *fde_ndx, int fd, int events) {
+	if (-1 == fd) return;
 
-	if (ev->event_set) fde = ev->event_set(ev, fde, fd, events);
+	/*(Note: skips registering with kernel if initial events is 0,
+         * so caller should pass non-zero events for initial registration.
+         * If never registered due to never being called with non-zero events,
+         * then FDEVENT_HUP or FDEVENT_ERR will never be returned.) */
+	if (ev->fdarray[fd]->events == events) return;/*(no change; nothing to do)*/
+
+	if (ev->event_set) *fde_ndx = ev->event_set(ev, *fde_ndx, fd, events);
 	ev->fdarray[fd]->events = events;
-
-	if (fde_ndx) *fde_ndx = fde;
-
-	return 0;
 }
 
 int fdevent_poll(fdevents *ev, int timeout_ms) {

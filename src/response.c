@@ -7,7 +7,6 @@
 #include "chunk.h"
 
 #include "configfile.h"
-#include "connections.h"
 
 #include "plugin.h"
 
