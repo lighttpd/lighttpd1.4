@@ -146,6 +146,7 @@ typedef struct {
 	 */
 	buffer *host;
 	unsigned short port;
+	sa_family_t family;
 
 	/*
 	 * Unix Domain Socket
@@ -660,10 +661,13 @@ static int scgi_spawn_connection(server *srv,
                                  scgi_extension_host *host,
                                  scgi_proc *proc) {
 	int scgi_fd;
-	int socket_type, status;
+	int status;
 	struct timeval tv = { 0, 100 * 1000 };
 #ifdef HAVE_SYS_UN_H
 	struct sockaddr_un scgi_addr_un;
+#endif
+#if defined(HAVE_IPV6) && defined(HAVE_INET_PTON)
+	struct sockaddr_in6 scgi_addr_in6;
 #endif
 	struct sockaddr_in scgi_addr_in;
 	struct sockaddr *scgi_addr;
@@ -694,12 +698,20 @@ static int scgi_spawn_connection(server *srv,
 		/* stevens says: */
 		servlen = buffer_string_length(proc->socket) + 1 + sizeof(scgi_addr_un.sun_family);
 #endif
-		socket_type = AF_UNIX;
 		scgi_addr = (struct sockaddr *) &scgi_addr_un;
 #else
 		log_error_write(srv, __FILE__, __LINE__, "s",
 				"ERROR: Unix Domain sockets are not supported.");
 		return -1;
+#endif
+#if defined(HAVE_IPV6) && defined(HAVE_INET_PTON)
+	} else if (host->family == AF_INET6 && !buffer_string_is_empty(host->host)) {
+		memset(&scgi_addr_in6, 0, sizeof(scgi_addr_in6));
+		scgi_addr_in6.sin6_family = AF_INET6;
+		inet_pton(AF_INET6, host->host->ptr, (char *) &scgi_addr_in6.sin6_addr);
+		scgi_addr_in6.sin6_port = htons(proc->port);
+		servlen = sizeof(scgi_addr_in6);
+		scgi_addr = (struct sockaddr *) &scgi_addr_in6;
 #endif
 	} else {
 		memset(&scgi_addr_in, 0, sizeof(scgi_addr_in));
@@ -737,11 +749,10 @@ static int scgi_spawn_connection(server *srv,
 		scgi_addr_in.sin_port = htons(proc->port);
 		servlen = sizeof(scgi_addr_in);
 
-		socket_type = AF_INET;
 		scgi_addr = (struct sockaddr *) &scgi_addr_in;
 	}
 
-	if (-1 == (scgi_fd = socket(socket_type, SOCK_STREAM, 0))) {
+	if (-1 == (scgi_fd = socket(scgi_addr->sa_family, SOCK_STREAM, 0))) {
 		log_error_write(srv, __FILE__, __LINE__, "ss",
 				"failed:", strerror(errno));
 		return -1;
@@ -759,7 +770,7 @@ static int scgi_spawn_connection(server *srv,
 		close(scgi_fd);
 
 		/* reopen socket */
-		if (-1 == (scgi_fd = socket(socket_type, SOCK_STREAM, 0))) {
+		if (-1 == (scgi_fd = socket(scgi_addr->sa_family, SOCK_STREAM, 0))) {
 			log_error_write(srv, __FILE__, __LINE__, "ss",
 				"socket failed:", strerror(errno));
 			return -1;
@@ -1126,6 +1137,8 @@ SETDEFAULTS_FUNC(mod_scgi_set_defaults) {
 									df->unixsocket);
 							goto error;
 						}
+
+						df->family = AF_UNIX;
 					} else {
 						/* tcp/ip */
 
@@ -1148,6 +1161,8 @@ SETDEFAULTS_FUNC(mod_scgi_set_defaults) {
 									"port");
 							goto error;
 						}
+
+						df->family = (!buffer_string_is_empty(df->host) && NULL != strchr(df->host->ptr, ':')) ? AF_INET6 : AF_INET;
 					}
 
 					if (!buffer_string_is_empty(df->bin_path)) {
@@ -1388,6 +1403,9 @@ static int scgi_env_add(buffer *env, const char *key, size_t key_len, const char
 static int scgi_establish_connection(server *srv, handler_ctx *hctx) {
 	struct sockaddr *scgi_addr;
 	struct sockaddr_in scgi_addr_in;
+#if defined(HAVE_IPV6) && defined(HAVE_INET_PTON)
+	struct sockaddr_in6 scgi_addr_in6;
+#endif
 #ifdef HAVE_SYS_UN_H
 	struct sockaddr_un scgi_addr_un;
 #endif
@@ -1419,6 +1437,15 @@ static int scgi_establish_connection(server *srv, handler_ctx *hctx) {
 		scgi_addr = (struct sockaddr *) &scgi_addr_un;
 #else
 		return -1;
+#endif
+#if defined(HAVE_IPV6) && defined(HAVE_INET_PTON)
+	} else if (host->family == AF_INET6 && !buffer_string_is_empty(host->host)) {
+		memset(&scgi_addr_in6, 0, sizeof(scgi_addr_in6));
+		scgi_addr_in6.sin6_family = AF_INET6;
+		inet_pton(AF_INET6, host->host->ptr, (char *) &scgi_addr_in6.sin6_addr);
+		scgi_addr_in6.sin6_port = htons(proc->port);
+		servlen = sizeof(scgi_addr_in6);
+		scgi_addr = (struct sockaddr *) &scgi_addr_in6;
 #endif
 	} else {
 		memset(&scgi_addr_in, 0, sizeof(scgi_addr_in));
@@ -2196,9 +2223,7 @@ static handler_t scgi_write_request(server *srv, handler_ctx *hctx) {
 
 	switch(hctx->state) {
 	case FCGI_STATE_INIT:
-		ret = buffer_string_is_empty(host->unixsocket) ? AF_INET : AF_UNIX;
-
-		if (-1 == (hctx->fd = socket(ret, SOCK_STREAM, 0))) {
+		if (-1 == (hctx->fd = socket(host->family, SOCK_STREAM, 0))) {
 			if (errno == EMFILE ||
 			    errno == EINTR) {
 				log_error_write(srv, __FILE__, __LINE__, "sd",
