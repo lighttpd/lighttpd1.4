@@ -148,6 +148,7 @@ typedef struct {
 	 */
 	buffer *host;
 	unsigned short port;
+	sa_family_t family;
 
 	/*
 	 * Unix Domain Socket
@@ -855,10 +856,13 @@ static int fcgi_spawn_connection(server *srv,
                                  fcgi_extension_host *host,
                                  fcgi_proc *proc) {
 	int fcgi_fd;
-	int socket_type, status;
+	int status;
 	struct timeval tv = { 0, 100 * 1000 };
 #ifdef HAVE_SYS_UN_H
 	struct sockaddr_un fcgi_addr_un;
+#endif
+#if defined(HAVE_IPV6) && defined(HAVE_INET_PTON)
+	struct sockaddr_in6 fcgi_addr_in6;
 #endif
 	struct sockaddr_in fcgi_addr_in;
 	struct sockaddr *fcgi_addr;
@@ -888,7 +892,6 @@ static int fcgi_spawn_connection(server *srv,
 		/* stevens says: */
 		servlen = buffer_string_length(proc->unixsocket) + 1 + sizeof(fcgi_addr_un.sun_family);
 #endif
-		socket_type = AF_UNIX;
 		fcgi_addr = (struct sockaddr *) &fcgi_addr_un;
 
 		buffer_copy_string_len(proc->connection_name, CONST_STR_LEN("unix:"));
@@ -898,6 +901,15 @@ static int fcgi_spawn_connection(server *srv,
 		log_error_write(srv, __FILE__, __LINE__, "s",
 				"ERROR: Unix Domain sockets are not supported.");
 		return -1;
+#endif
+#if defined(HAVE_IPV6) && defined(HAVE_INET_PTON)
+	} else if (host->family == AF_INET6 && !buffer_string_is_empty(host->host)) {
+		memset(&fcgi_addr_in6, 0, sizeof(fcgi_addr_in6));
+		fcgi_addr_in6.sin6_family = AF_INET6;
+		inet_pton(AF_INET6, host->host->ptr, (char *) &fcgi_addr_in6.sin6_addr);
+		fcgi_addr_in6.sin6_port = htons(proc->port);
+		servlen = sizeof(fcgi_addr_in6);
+		fcgi_addr = (struct sockaddr *) &fcgi_addr_in6;
 #endif
 	} else {
 		memset(&fcgi_addr_in, 0, sizeof(fcgi_addr_in));
@@ -935,9 +947,10 @@ static int fcgi_spawn_connection(server *srv,
 		fcgi_addr_in.sin_port = htons(proc->port);
 		servlen = sizeof(fcgi_addr_in);
 
-		socket_type = AF_INET;
 		fcgi_addr = (struct sockaddr *) &fcgi_addr_in;
+	}
 
+	if (buffer_string_is_empty(proc->unixsocket)) {
 		buffer_copy_string_len(proc->connection_name, CONST_STR_LEN("tcp:"));
 		if (!buffer_string_is_empty(host->host)) {
 			buffer_append_string_buffer(proc->connection_name, host->host);
@@ -948,7 +961,7 @@ static int fcgi_spawn_connection(server *srv,
 		buffer_append_int(proc->connection_name, proc->port);
 	}
 
-	if (-1 == (fcgi_fd = socket(socket_type, SOCK_STREAM, 0))) {
+	if (-1 == (fcgi_fd = socket(fcgi_addr->sa_family, SOCK_STREAM, 0))) {
 		log_error_write(srv, __FILE__, __LINE__, "ss",
 				"failed:", strerror(errno));
 		return -1;
@@ -967,7 +980,7 @@ static int fcgi_spawn_connection(server *srv,
 		close(fcgi_fd);
 
 		/* reopen socket */
-		if (-1 == (fcgi_fd = socket(socket_type, SOCK_STREAM, 0))) {
+		if (-1 == (fcgi_fd = socket(fcgi_addr->sa_family, SOCK_STREAM, 0))) {
 			log_error_write(srv, __FILE__, __LINE__, "ss",
 				"socket failed:", strerror(errno));
 			return -1;
@@ -1378,6 +1391,8 @@ SETDEFAULTS_FUNC(mod_fastcgi_set_defaults) {
 									host->unixsocket);
 							goto error;
 						}
+
+						host->family = AF_UNIX;
 					} else {
 						/* tcp/ip */
 
@@ -1399,6 +1414,8 @@ SETDEFAULTS_FUNC(mod_fastcgi_set_defaults) {
 
 							goto error;
 						}
+
+						host->family = (!buffer_string_is_empty(host->host) && NULL != strchr(host->host->ptr, ':')) ? AF_INET6 : AF_INET;
 					}
 
 					if (!buffer_string_is_empty(host->bin_path)) {
@@ -1732,6 +1749,9 @@ typedef enum {
 static connection_result_t fcgi_establish_connection(server *srv, handler_ctx *hctx) {
 	struct sockaddr *fcgi_addr;
 	struct sockaddr_in fcgi_addr_in;
+#if defined(HAVE_IPV6) && defined(HAVE_INET_PTON)
+	struct sockaddr_in6 fcgi_addr_in6;
+#endif
 #ifdef HAVE_SYS_UN_H
 	struct sockaddr_un fcgi_addr_un;
 #endif
@@ -1770,6 +1790,15 @@ static connection_result_t fcgi_establish_connection(server *srv, handler_ctx *h
 #else
 		return CONNECTION_DEAD;
 #endif
+#if defined(HAVE_IPV6) && defined(HAVE_INET_PTON)
+	} else if (host->family == AF_INET6 && !buffer_string_is_empty(host->host)) {
+		memset(&fcgi_addr_in6, 0, sizeof(fcgi_addr_in6));
+		fcgi_addr_in6.sin6_family = AF_INET6;
+		inet_pton(AF_INET6, host->host->ptr, (char *) &fcgi_addr_in6.sin6_addr);
+		fcgi_addr_in6.sin6_port = htons(proc->port);
+		servlen = sizeof(fcgi_addr_in6);
+		fcgi_addr = (struct sockaddr *) &fcgi_addr_in6;
+#endif
 	} else {
 		memset(&fcgi_addr_in, 0, sizeof(fcgi_addr_in));
 		fcgi_addr_in.sin_family = AF_INET;
@@ -1788,7 +1817,9 @@ static connection_result_t fcgi_establish_connection(server *srv, handler_ctx *h
 		servlen = sizeof(fcgi_addr_in);
 
 		fcgi_addr = (struct sockaddr *) &fcgi_addr_in;
+	}
 
+	if (buffer_string_is_empty(proc->unixsocket)) {
 		if (buffer_string_is_empty(proc->connection_name)) {
 			/* on remote spawing we have to set the connection-name now */
 			buffer_copy_string_len(proc->connection_name, CONST_STR_LEN("tcp:"));
@@ -2856,9 +2887,7 @@ static handler_t fcgi_write_request(server *srv, handler_ctx *hctx) {
 			if (proc->load < hctx->proc->load) hctx->proc = proc;
 		}
 
-		ret = buffer_string_is_empty(host->unixsocket) ? AF_INET : AF_UNIX;
-
-		if (-1 == (hctx->fd = socket(ret, SOCK_STREAM, 0))) {
+		if (-1 == (hctx->fd = socket(host->family, SOCK_STREAM, 0))) {
 			if (errno == EMFILE ||
 			    errno == EINTR) {
 				log_error_write(srv, __FILE__, __LINE__, "sd",
