@@ -1920,15 +1920,62 @@ SUBREQUEST_FUNC(mod_webdav_subrequest_handler_huge) {
 			buffer_to_lower(p->physical.rel_path);
 		}
 
-		buffer_copy_buffer(p->physical.path, p->physical.doc_root);
-		buffer_append_slash(p->physical.path);
-		buffer_copy_buffer(p->physical.basedir, p->physical.path);
+		/* Destination physical path
+		 * src con->physical.path might have been remapped with mod_alias.
+		 *   (but mod_alias does not modify con->physical.rel_path)
+		 * Find matching prefix to support use of mod_alias to remap webdav root.
+		 * Aliasing of paths underneath the webdav root might not work.
+		 * Likewise, mod_rewrite URL rewriting might thwart this comparison.
+		 * Use mod_redirect instead of mod_alias to remap paths *under* webdav root.
+		 * Use mod_redirect instead of mod_rewrite on *any* parts of path to webdav.
+		 * (Related, use mod_auth to protect webdav root, but avoid attempting to
+		 *  use mod_auth on paths underneath webdav root, as Destination is not
+		 *  validated with mod_auth)
+		 *
+		 * tl;dr: webdav paths and webdav properties are managed by mod_webdav,
+		 *        so do not modify paths externally or else undefined behavior
+		 *        or corruption may occur
+		 */
+		{
+			/* find matching URI prefix
+			 * check if remaining con->physical.rel_path matches suffix
+			 *   of con->physical.basedir so that we can use it to
+			 *   remap Destination physical path */
+			size_t i, remain;
+			sep = con->uri.path->ptr;
+			sep2 = p->uri.path->ptr;
+			for (i = 0; sep[i] && sep[i] == sep2[i]; ++i) ;
+			if (sep[i] == '\0' && (sep2[i] == '\0' || sep2[i] == '/' || (i > 0 && sep[i-1] == '/'))) {
+				/* src and dst URI match or dst is nested inside src; invalid COPY or MOVE */
+				con->http_status = 403;
+				return HANDLER_FINISHED;
+			}
+			while (i != 0 && sep[--i] != '/') ; /* find matching directory path */
+			remain = buffer_string_length(con->uri.path) - i;
+			if (!con->conf.force_lowercase_filenames
+			    ? buffer_is_equal_right_len(con->physical.path, con->physical.rel_path, remain)
+			    :(buffer_string_length(con->physical.path) >= remain
+			      && 0 == strncasecmp(con->physical.path->ptr+buffer_string_length(con->physical.path)-remain, con->physical.rel_path->ptr+i, remain))) {
+				/* (at this point, p->physical.rel_path is identical to (or lowercased version of) p->uri.path) */
+				buffer_copy_string_len(p->physical.path, con->physical.path->ptr, buffer_string_length(con->physical.path)-remain);
+				buffer_append_string_len(p->physical.path, p->physical.rel_path->ptr+i, buffer_string_length(p->physical.rel_path)-i);
 
-		/* don't add a second / */
-		if (p->physical.rel_path->ptr[0] == '/') {
-			buffer_append_string_len(p->physical.path, p->physical.rel_path->ptr + 1, buffer_string_length(p->physical.rel_path) - 1);
-		} else {
-			buffer_append_string_buffer(p->physical.path, p->physical.rel_path);
+				buffer_copy_buffer(p->physical.basedir, con->physical.basedir);
+				buffer_append_slash(p->physical.basedir);
+			} else {
+				/* unable to perform physical path remap here;
+				 * assume doc_root/rel_path and no remapping */
+				buffer_copy_buffer(p->physical.path, p->physical.doc_root);
+				buffer_append_slash(p->physical.path);
+				buffer_copy_buffer(p->physical.basedir, p->physical.path);
+
+				/* don't add a second / */
+				if (p->physical.rel_path->ptr[0] == '/') {
+					buffer_append_string_len(p->physical.path, p->physical.rel_path->ptr + 1, buffer_string_length(p->physical.rel_path) - 1);
+				} else {
+					buffer_append_string_buffer(p->physical.path, p->physical.rel_path);
+				}
+			}
 		}
 
 		/* let's see if the source is a directory
