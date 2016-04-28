@@ -5,6 +5,8 @@
 #include "joblist.h"
 #include "log.h"
 
+#include <errno.h>
+
 #ifdef USE_OPENSSL
 # include <openssl/ssl.h>
 # include <openssl/err.h>
