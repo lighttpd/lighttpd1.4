@@ -6,6 +6,7 @@
 #include "log.h"
 #include "connections.h"
 #include "joblist.h"
+#include "response.h"
 #include "http_chunk.h"
 #include "network_backends.h"
 
@@ -55,6 +56,8 @@ typedef struct {
 typedef struct {
 	array *cgi;
 	unsigned short execute_x_only;
+	unsigned short xsendfile_allow;
+	array *xsendfile_docroot;
 } plugin_config;
 
 typedef struct {
@@ -133,6 +136,7 @@ FREE_FUNC(mod_cgi_free) {
 			if (NULL == s) continue;
 
 			array_free(s->cgi);
+			array_free(s->xsendfile_docroot);
 
 			free(s);
 		}
@@ -157,6 +161,8 @@ SETDEFAULTS_FUNC(mod_fastcgi_set_defaults) {
 	config_values_t cv[] = {
 		{ "cgi.assign",                  NULL, T_CONFIG_ARRAY, T_CONFIG_SCOPE_CONNECTION },       /* 0 */
 		{ "cgi.execute-x-only",          NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION },     /* 1 */
+		{ "x-sendfile",                  NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION },     /* 2 */
+		{ "x-sendfile-docroot",          NULL, T_CONFIG_ARRAY,   T_CONFIG_SCOPE_CONNECTION },     /* 3 */
 		{ NULL,                          NULL, T_CONFIG_UNSET, T_CONFIG_SCOPE_UNSET}
 	};
 
@@ -174,14 +180,37 @@ SETDEFAULTS_FUNC(mod_fastcgi_set_defaults) {
 
 		s->cgi    = array_init();
 		s->execute_x_only = 0;
+		s->xsendfile_allow= 0;
+		s->xsendfile_docroot = array_init();
 
 		cv[0].destination = s->cgi;
 		cv[1].destination = &(s->execute_x_only);
+		cv[2].destination = &(s->xsendfile_allow);
+		cv[3].destination = s->xsendfile_docroot;
 
 		p->config_storage[i] = s;
 
 		if (0 != config_insert_values_global(srv, config->value, cv, i == 0 ? T_CONFIG_SCOPE_SERVER : T_CONFIG_SCOPE_CONNECTION)) {
 			return HANDLER_ERROR;
+		}
+
+		if (s->xsendfile_docroot->used) {
+			size_t j;
+			for (j = 0; j < s->xsendfile_docroot->used; ++j) {
+				data_string *ds = (data_string *)s->xsendfile_docroot->data[j];
+				if (ds->type != TYPE_STRING) {
+					log_error_write(srv, __FILE__, __LINE__, "s",
+						"unexpected type for key cgi.x-sendfile-docroot; expected: cgi.x-sendfile-docroot = ( \"/allowed/path\", ... )");
+					return HANDLER_ERROR;
+				}
+				if (ds->value->ptr[0] != '/') {
+					log_error_write(srv, __FILE__, __LINE__, "SBs",
+						"cgi.x-sendfile-docroot paths must begin with '/'; invalid: \"", ds->value, "\"");
+					return HANDLER_ERROR;
+				}
+				buffer_path_simplify(ds->value, ds->value);
+				buffer_append_slash(ds->value);
+			}
 		}
 	}
 
@@ -496,6 +525,14 @@ static int cgi_demux_response(server *srv, handler_ctx *hctx) {
 
 					/* parse the response header */
 					cgi_response_parse(srv, con, p, hctx->response_header);
+
+					if (p->conf.xsendfile_allow) {
+						data_string *ds;
+						if (NULL != (ds = (data_string *) array_get_element(con->response.headers, "X-Sendfile"))) {
+							http_response_xsendfile(srv, con, ds->value, p->conf.xsendfile_docroot);
+							return FDEVENT_HANDLED_FINISHED;
+						}
+					}
 
 					/* enable chunked-transfer-encoding */
 					if (con->request.http_version == HTTP_VERSION_1_1 &&
@@ -1307,6 +1344,8 @@ static int mod_cgi_patch_connection(server *srv, connection *con, plugin_data *p
 
 	PATCH(cgi);
 	PATCH(execute_x_only);
+	PATCH(xsendfile_allow);
+	PATCH(xsendfile_docroot);
 
 	/* skip the first, the global context */
 	for (i = 1; i < srv->config_context->used; i++) {
@@ -1324,6 +1363,10 @@ static int mod_cgi_patch_connection(server *srv, connection *con, plugin_data *p
 				PATCH(cgi);
 			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("cgi.execute-x-only"))) {
 				PATCH(execute_x_only);
+			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("cgi.x-sendfile"))) {
+				PATCH(xsendfile_allow);
+			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("cgi.x-sendfile-docroot"))) {
+				PATCH(xsendfile_docroot);
 			}
 		}
 	}

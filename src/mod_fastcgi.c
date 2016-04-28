@@ -226,11 +226,12 @@ typedef struct {
 	unsigned short fix_root_path_name;
 
 	/*
-	 * If the backend includes X-LIGHTTPD-send-file in the response
+	 * If the backend includes X-Sendfile in the response
 	 * we use the value as filename and ignore the content.
 	 *
 	 */
-	unsigned short allow_xsendfile;
+	unsigned short xsendfile_allow;
+	array *xsendfile_docroot;
 
 	ssize_t load; /* replace by host->load */
 
@@ -549,6 +550,7 @@ static fcgi_extension_host *fastcgi_host_init(void) {
 	f->bin_env = array_init();
 	f->bin_env_copy = array_init();
 	f->strip_request_uri = buffer_init();
+	f->xsendfile_docroot = array_init();
 
 	return f;
 }
@@ -564,6 +566,7 @@ static void fastcgi_host_free(fcgi_extension_host *h) {
 	buffer_free(h->strip_request_uri);
 	array_free(h->bin_env);
 	array_free(h->bin_env_copy);
+	array_free(h->xsendfile_docroot);
 
 	fastcgi_process_free(h->first);
 	fastcgi_process_free(h->unused_procs);
@@ -1287,6 +1290,8 @@ SETDEFAULTS_FUNC(mod_fastcgi_set_defaults) {
 						{ "kill-signal",        NULL, T_CONFIG_SHORT, T_CONFIG_SCOPE_CONNECTION },       /* 14 */
 						{ "fix-root-scriptname",   NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION },  /* 15 */
 						{ "listen-backlog",    NULL, T_CONFIG_INT,   T_CONFIG_SCOPE_CONNECTION },        /* 16 */
+						{ "x-sendfile",        NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION },      /* 17 */
+						{ "x-sendfile-docroot",NULL, T_CONFIG_ARRAY,  T_CONFIG_SCOPE_CONNECTION },      /* 18 */
 
 						{ NULL,                NULL, T_CONFIG_UNSET, T_CONFIG_SCOPE_UNSET }
 					};
@@ -1310,7 +1315,7 @@ SETDEFAULTS_FUNC(mod_fastcgi_set_defaults) {
 					host->mode = FCGI_RESPONDER;
 					host->disable_time = 1;
 					host->break_scriptfilename_for_php = 0;
-					host->allow_xsendfile = 0; /* handle X-LIGHTTPD-send-file */
+					host->xsendfile_allow = 0;
 					host->kill_signal = SIGTERM;
 					host->fix_root_path_name = 0;
 					host->listen_backlog = 1024;
@@ -1329,11 +1334,13 @@ SETDEFAULTS_FUNC(mod_fastcgi_set_defaults) {
 					fcv[9].destination = host->bin_env;
 					fcv[10].destination = host->bin_env_copy;
 					fcv[11].destination = &(host->break_scriptfilename_for_php);
-					fcv[12].destination = &(host->allow_xsendfile);
+					fcv[12].destination = &(host->xsendfile_allow);
 					fcv[13].destination = host->strip_request_uri;
 					fcv[14].destination = &(host->kill_signal);
 					fcv[15].destination = &(host->fix_root_path_name);
 					fcv[16].destination = &(host->listen_backlog);
+					fcv[17].destination = &(host->xsendfile_allow);
+					fcv[18].destination = host->xsendfile_docroot;
 
 					if (0 != config_insert_values_internal(srv, da_host->value, fcv, T_CONFIG_SCOPE_CONNECTION)) {
 						goto error;
@@ -1481,6 +1488,25 @@ SETDEFAULTS_FUNC(mod_fastcgi_set_defaults) {
 							log_error_write(srv, __FILE__, __LINE__, "sbs",
 									"WARNING: unknown fastcgi mode:",
 									fcgi_mode, "(ignored, mode set to responder)");
+						}
+					}
+
+					if (host->xsendfile_docroot->used) {
+						size_t k;
+						for (k = 0; k < host->xsendfile_docroot->used; ++k) {
+							data_string *ds = (data_string *)host->xsendfile_docroot->data[k];
+							if (ds->type != TYPE_STRING) {
+								log_error_write(srv, __FILE__, __LINE__, "s",
+									"unexpected type for x-sendfile-docroot; expected: \"x-sendfile-docroot\" => ( \"/allowed/path\", ... )");
+								goto error;
+							}
+							if (ds->value->ptr[0] != '/') {
+								log_error_write(srv, __FILE__, __LINE__, "SBs",
+									"x-sendfile-docroot paths must begin with '/'; invalid: \"", ds->value, "\"");
+								goto error;
+							}
+							buffer_path_simplify(ds->value, ds->value);
+							buffer_append_slash(ds->value);
 						}
 					}
 
@@ -2132,7 +2158,6 @@ static int fcgi_response_parse(server *srv, connection *con, plugin_data *p, buf
 	for (s = in->ptr; NULL != (ns = strchr(s, '\n')); s = ns + 1) {
 		char *key, *value;
 		int key_len;
-		data_string *ds = NULL;
 
 		/* a good day. Someone has read the specs and is sending a \r\n to us */
 
@@ -2162,6 +2187,7 @@ static int fcgi_response_parse(server *srv, connection *con, plugin_data *p, buf
 
 			/* don't forward Status: */
 			if (0 != strncasecmp(key, "Status", key_len)) {
+				data_string *ds;
 				if (NULL == (ds = (data_string *)array_get_unused_element(con->response.headers, TYPE_STRING))) {
 					ds = data_response_init();
 				}
@@ -2201,7 +2227,7 @@ static int fcgi_response_parse(server *srv, connection *con, plugin_data *p, buf
 			}
 			break;
 		case 11:
-			if (host->allow_xsendfile && 0 == strncasecmp(key, "X-Sendfile2", key_len)&& hctx->send_content_body) {
+			if (host->xsendfile_allow && 0 == strncasecmp(key, "X-Sendfile2", key_len) && hctx->send_content_body) {
 				char *pos = value;
 				have_sendfile2 = 1;
 
@@ -2227,6 +2253,30 @@ static int fcgi_response_parse(server *srv, connection *con, plugin_data *p, buf
 					for (pos = ++range; *pos && *pos != ' ' && *pos != ','; pos++) ;
 
 					buffer_urldecode_path(srv->tmp_buf);
+					buffer_path_simplify(srv->tmp_buf, srv->tmp_buf);
+					if (con->conf.force_lowercase_filenames) {
+						buffer_to_lower(srv->tmp_buf);
+					}
+					if (host->xsendfile_docroot->used) {
+						size_t i, xlen = buffer_string_length(srv->tmp_buf);
+						for (i = 0; i < host->xsendfile_docroot->used; ++i) {
+							data_string *ds = (data_string *)host->xsendfile_docroot->data[i];
+							size_t dlen = buffer_string_length(ds->value);
+							if (dlen <= xlen
+							    && (!con->conf.force_lowercase_filenames
+								? 0 == memcmp(srv->tmp_buf->ptr, ds->value->ptr, dlen)
+								: 0 == strncasecmp(srv->tmp_buf->ptr, ds->value->ptr, dlen))) {
+								break;
+							}
+						}
+						if (i == host->xsendfile_docroot->used) {
+							log_error_write(srv, __FILE__, __LINE__, "SBs",
+									"X-Sendfile2 (", srv->tmp_buf,
+									") not under configured x-sendfile-docroot(s)");
+							return 403;
+						}
+					}
+
 					if (HANDLER_ERROR == stat_cache_get_entry(srv, con, srv->tmp_buf, &sce)) {
 						if (p->conf.debug) {
 							log_error_write(srv, __FILE__, __LINE__, "sb",
@@ -2526,44 +2576,26 @@ static int fcgi_demux_response(server *srv, handler_ctx *hctx) {
 					hctx->send_content_body = 0;
 				}
 
-				if (host->allow_xsendfile && hctx->send_content_body &&
+				if (host->xsendfile_allow && hctx->send_content_body &&
 				    (NULL != (ds = (data_string *) array_get_element(con->response.headers, "X-LIGHTTPD-send-file"))
 					  || NULL != (ds = (data_string *) array_get_element(con->response.headers, "X-Sendfile")))) {
-					if (0 == http_chunk_append_file(srv, con, ds->value)) {
-						/* found */
-						data_string *dcls = (data_string *) array_get_element(con->response.headers, "Content-Length");
-						if (dcls) buffer_reset(dcls->value);
-						con->parsed_response &= ~HTTP_CONTENT_LENGTH;
-						con->response.content_length = -1;
-						hctx->send_content_body = 0; /* ignore the content */
-					} else {
-						log_error_write(srv, __FILE__, __LINE__, "sb",
-							"send-file error: couldn't get stat_cache entry for:",
-							ds->value);
-						con->http_status = 404;
-						hctx->send_content_body = 0;
-						con->file_started = 1;
+					http_response_xsendfile(srv, con, ds->value, host->xsendfile_docroot);
+					if (con->mode == DIRECT) {
+						fin = 1;
 						break;
 					}
+
+					hctx->send_content_body = 0; /* ignore the content */
 				}
 
-
-				if (hctx->send_content_body && buffer_string_length(packet.b) > 0) {
-					/* enable chunked-transfer-encoding */
-					if (con->request.http_version == HTTP_VERSION_1_1 &&
-					    !(con->parsed_response & HTTP_CONTENT_LENGTH)) {
-						con->response.transfer_encoding = HTTP_TRANSFER_ENCODING_CHUNKED;
-					}
-
-					http_chunk_append_buffer(srv, con, packet.b);
-				}
-			} else if (hctx->send_content_body && !buffer_string_is_empty(packet.b)) {
+				/* enable chunked-transfer-encoding */
 				if (con->request.http_version == HTTP_VERSION_1_1 &&
 				    !(con->parsed_response & HTTP_CONTENT_LENGTH)) {
-					/* enable chunked-transfer-encoding */
 					con->response.transfer_encoding = HTTP_TRANSFER_ENCODING_CHUNKED;
 				}
+			}
 
+			if (hctx->send_content_body && !buffer_string_is_empty(packet.b)) {
 				http_chunk_append_buffer(srv, con, packet.b);
 			}
 			break;
