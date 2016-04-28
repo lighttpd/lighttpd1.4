@@ -91,6 +91,16 @@ NEWS
   * [core] set REDIRECT_STATUS to error_handler_saved_status (fixes #1828)
   * [core] server.error-handler new directive for error pages (fixes #2702)
   * [core] support IPv6 in $HTTP["remote-ip"] CIDR cond match (fixes #2706)
+  * [core] http_response_send_file() shared code (#2017)
+  * [mod_fastcgi] use http_response_xsendfile() (fixes #799, fixes #851, fixes #2017, fixes #2076)
+  * [mod_scgi] X-Sendfile feature (fixes #2253)
+  * [mod_cgi] X-Sendfile feature (fixes #2313)
+  * [mod_webdav] lseek,read if fs can not mmap (#2666, fixes #962)
+  * [mod_compress] use mmap and trap SIGBUS (#2666, fixes #1879)
+  * fallback to lseek()/read() if mmap() fails (#fixes 2666)
+  * [mod_auth] skip blank lines and comment lines (fixes #2327)
+  * [core] fallback to write if sendfile not supported (fixes #471, #987)
+  * [core] preserve PATH_INFO case on case-insensitive fs (fixes #406)
 
 - 1.4.39 - 2016-01-02
   * [core] fix memset_s call (fixes #2698)
