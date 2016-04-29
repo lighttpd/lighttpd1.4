@@ -10,6 +10,7 @@ int connection_reset(server *srv, connection *con);
 void connections_free(server *srv);
 
 connection * connection_accept(server *srv, server_socket *srv_sock);
+connection * connection_accepted(server *srv, server_socket *srv_socket, sock_addr *cnt_addr, int cnt);
 
 int connection_set_state(server *srv, connection *con, connection_state_t state);
 const char * connection_get_state(connection_state_t state);

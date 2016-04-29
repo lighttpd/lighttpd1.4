@@ -334,6 +334,13 @@ static int network_server_init(server *srv, buffer *host_token, specific_config 
 		goto error_free_socket;
 	}
 
+	if (srv->sockets_disabled) { /* lighttpd -1 (one-shot mode) */
+#ifdef USE_OPENSSL
+		if (s->ssl_enabled) srv_socket->ssl_ctx = s->ssl_ctx;
+#endif
+		goto srv_sockets_append;
+	}
+
 #ifdef HAVE_SYS_UN_H
 	if (AF_UNIX == srv_socket->addr.plain.sa_family) {
 		/* check if the socket exists and try to connect to it. */
@@ -455,6 +462,7 @@ static int network_server_init(server *srv, buffer *host_token, specific_config 
 #endif
 	}
 
+srv_sockets_append:
 	srv_socket->is_ssl = s->ssl_enabled;
 
 	if (srv->srv_sockets.size == 0) {
@@ -1025,6 +1033,8 @@ int network_register_fdevents(server *srv) {
 	if (-1 == fdevent_reset(srv->ev)) {
 		return -1;
 	}
+
+	if (srv->sockets_disabled) return 0; /* lighttpd -1 (one-shot mode) */
 
 	/* register fdevents after reset */
 	for (i = 0; i < srv->srv_sockets.used; i++) {
