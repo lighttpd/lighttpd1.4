@@ -158,14 +158,9 @@ static int connection_close(server *srv, connection *con) {
 }
 
 static void connection_handle_errdoc_init(connection *con) {
-	/* reset caching response headers potentially added by mod_expire */
-	data_string *ds;
-	if (NULL != (ds = (data_string*) array_get_element(con->response.headers, "Expires"))) {
-		buffer_reset(ds->value); /* Headers with empty values are ignored for output */
-	}
-	if (NULL != (ds = (data_string*) array_get_element(con->response.headers, "Cache-Control"))) {
-		buffer_reset(ds->value); /* Headers with empty values are ignored for output */
-	}
+	buffer_reset(con->physical.path);
+	array_reset(con->response.headers);
+	chunkqueue_reset(con->write_queue);
 }
 
 static int connection_handle_write_prepare(server *srv, connection *con) {
@@ -226,7 +221,6 @@ static int connection_handle_write_prepare(server *srv, connection *con) {
 
 		con->file_finished = 0;
 
-		buffer_reset(con->physical.path);
 		connection_handle_errdoc_init(con);
 
 		/* try to send static errorfile */
@@ -1083,8 +1077,6 @@ int connection_state_machine(server *srv, connection *con) {
 								con->response.keep_alive = 0;
 								con->response.content_length = -1;
 								con->response.transfer_encoding = 0;
-								array_reset(con->response.headers);
-								chunkqueue_reset(con->write_queue);
 
 								array_set_key_value(con->environment, CONST_STR_LEN("REDIRECT_URI"), CONST_BUF_LEN(con->request.orig_uri));
 								con->error_handler_saved_status = con->http_status;
@@ -1098,7 +1090,6 @@ int connection_state_machine(server *srv, connection *con) {
 							con->http_status = 0;
 
 							buffer_copy_buffer(con->request.uri, error_handler);
-							buffer_reset(con->physical.path);
 							connection_handle_errdoc_init(con);
 
 							done = -1;
