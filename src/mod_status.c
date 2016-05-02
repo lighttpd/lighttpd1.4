@@ -655,6 +655,92 @@ static handler_t mod_status_handle_server_status_text(server *srv, connection *c
 	return 0;
 }
 
+
+static handler_t mod_status_handle_server_status_json(server *srv, connection *con, void *p_d) {
+	plugin_data *p = p_d;
+	buffer *b = buffer_init();
+	double avg;
+	time_t ts;
+	char buf[32];
+	size_t j;
+	unsigned int jsonp = 0;
+
+	if (buffer_string_length(con->uri.query) >= sizeof("jsonp=")-1
+	   && 0 == memcmp(con->uri.query->ptr, CONST_STR_LEN("jsonp="))) {
+		/* not a full parse of query string for multiple parameters,
+		* not URL-decoding param and not XML-encoding (XSS protection),
+		* so simply ensure that json function name isalnum() or '_' */
+		const char *f = con->uri.query->ptr + sizeof("jsonp=")-1;
+		int len = 0;
+		while (light_isalnum(f[len]) || f[len] == '_') ++len;
+		if (0 != len && light_isalpha(f[0]) && f[len] == '\0') {
+			buffer_append_string_len(b, f, len);
+			buffer_append_string_len(b, CONST_STR_LEN("("));
+			jsonp = 1;
+		}
+	}
+
+	/* output total number of requests */
+	buffer_append_string_len(b, CONST_STR_LEN("{\n\t\"RequestsTotal\": "));
+	avg = p->abs_requests;
+	snprintf(buf, sizeof(buf) - 1, "%.0f", avg);
+	buffer_append_string(b, buf);
+	buffer_append_string_len(b, CONST_STR_LEN(",\n"));
+
+	/* output total traffic out in kbytes */
+	buffer_append_string_len(b, CONST_STR_LEN("\t\"TrafficTotal\": "));
+	avg = p->abs_traffic_out / 1024;
+	snprintf(buf, sizeof(buf) - 1, "%.0f", avg);
+	buffer_append_string(b, buf);
+	buffer_append_string_len(b, CONST_STR_LEN(",\n"));
+
+	/* output uptime */
+	buffer_append_string_len(b, CONST_STR_LEN("\t\"Uptime\": "));
+	ts = srv->cur_ts - srv->startup_ts;
+	buffer_append_int(b, ts);
+	buffer_append_string_len(b, CONST_STR_LEN(",\n"));
+
+	/* output busy servers */
+	buffer_append_string_len(b, CONST_STR_LEN("\t\"BusyServers\": "));
+	buffer_append_int(b, srv->conns->used);
+	buffer_append_string_len(b, CONST_STR_LEN(",\n"));
+
+	buffer_append_string_len(b, CONST_STR_LEN("\t\"IdleServers\": "));
+	buffer_append_int(b, srv->conns->size - srv->conns->used);
+	buffer_append_string_len(b, CONST_STR_LEN(",\n"));
+
+	for (j = 0, avg = 0; j < 5; j++) {
+		avg += p->mod_5s_requests[j];
+	}
+
+	avg /= 5;
+
+	buffer_append_string_len(b, CONST_STR_LEN("\t\"RequestAverage5s\":"));
+	buffer_append_int(b, avg);
+	buffer_append_string_len(b, CONST_STR_LEN(",\n"));
+
+	for (j = 0, avg = 0; j < 5; j++) {
+		avg += p->mod_5s_traffic_out[j];
+	}
+
+	avg /= 5;
+
+	buffer_append_string_len(b, CONST_STR_LEN("\t\"TrafficAverage5s\":"));
+	buffer_append_int(b, avg / 1024); /* kbps */
+	buffer_append_string_len(b, CONST_STR_LEN("\n}"));
+
+	if (jsonp) buffer_append_string_len(b, CONST_STR_LEN(");"));
+
+	chunkqueue_append_buffer(con->write_queue, b);
+	buffer_free(b);
+
+	/* set text/plain output */
+	response_header_overwrite(srv, con, CONST_STR_LEN("Content-Type"), CONST_STR_LEN("application/javascript"));
+
+	return 0;
+}
+
+
 static handler_t mod_status_handle_server_statistics(server *srv, connection *con, void *p_d) {
 	buffer *b;
 	size_t i;
@@ -695,6 +781,9 @@ static handler_t mod_status_handle_server_status(server *srv, connection *con, v
 
 	if (buffer_is_equal_string(con->uri.query, CONST_STR_LEN("auto"))) {
 		mod_status_handle_server_status_text(srv, con, p_d);
+	} else if (buffer_string_length(con->uri.query) >= sizeof("json")-1
+		   && 0 == memcmp(con->uri.query->ptr, CONST_STR_LEN("json"))) {
+		mod_status_handle_server_status_json(srv, con, p_d);
 	} else {
 		mod_status_handle_server_status_html(srv, con, p_d);
 	}
