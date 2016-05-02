@@ -101,6 +101,13 @@ NEWS
   * [mod_auth] skip blank lines and comment lines (fixes #2327)
   * [core] fallback to write if sendfile not supported (fixes #471, #987)
   * [core] preserve PATH_INFO case on case-insensitive fs (fixes #406)
+  * [mod_ssi, mod_cml] set DOCUMENT_ROOT to basedir (fixes #2383)
+  * [core] cmd line opt to shutdown after idle time limit (fixes #2696)
+  * [core] lighttpd -1 handles single request on stdin socket (fixes #1584)
+  * [mod_fastcgi,mod_scgi] IPv6 support (fixes #2372)
+  * [mod_status] add JSON output option (fixed #2432)
+  * [mod_webdav] map COPY/MOVE Destination to aliases (fixes #1787)
+  * [mod_webdav] improve PROPFIND,PROPPATCH (#1818, #1953)
 
 - 1.4.39 - 2016-01-02
   * [core] fix memset_s call (fixes #2698)
