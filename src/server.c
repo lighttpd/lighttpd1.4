@@ -424,6 +424,110 @@ static void remove_pid_file(server *srv, int *pid_fd) {
 	}
 }
 
+
+static server_socket * server_oneshot_getsock(server *srv, sock_addr *cnt_addr) {
+	server_socket *srv_socket, *srv_socket_wild = NULL;
+	size_t i;
+	for (i = 0; i < srv->srv_sockets.used; ++i) {
+		srv_socket = srv->srv_sockets.ptr[i];
+		if (cnt_addr->plain.sa_family != srv_socket->addr.plain.sa_family) continue;
+		switch (cnt_addr->plain.sa_family) {
+		case AF_INET:
+			if (srv_socket->addr.ipv4.sin_port != cnt_addr->ipv4.sin_port) continue;
+			if (srv_socket->addr.ipv4.sin_addr.s_addr == cnt_addr->ipv4.sin_addr.s_addr) {
+				return srv_socket;
+			}
+			if (srv_socket->addr.ipv4.sin_addr.s_addr == htonl(INADDR_ANY)) {
+				srv_socket_wild = srv_socket;
+			}
+			continue;
+		#ifdef HAVE_IPV6
+		case AF_INET6:
+			if (srv_socket->addr.ipv6.sin6_port != cnt_addr->ipv6.sin6_port) continue;
+			if (0 == memcmp(&srv_socket->addr.ipv6.sin6_addr, &cnt_addr->ipv6.sin6_addr, sizeof(struct in6_addr))) {
+				return srv_socket;
+			}
+			if (0 == memcmp(&srv_socket->addr.ipv6.sin6_addr, &in6addr_any, sizeof(struct in6_addr))) {
+				srv_socket_wild = srv_socket;
+			}
+			continue;
+		#endif
+		#ifdef HAVE_SYS_UN_H
+		case AF_UNIX:
+			if (0 == strcmp(srv_socket->addr.un.sun_path, cnt_addr->un.sun_path)) {
+				return srv_socket;
+			}
+			continue;
+		#endif
+		default: continue;
+		}
+	}
+
+	if (NULL != srv_socket_wild) {
+		return srv_socket_wild;
+	} else if (srv->srv_sockets.used) {
+		return srv->srv_sockets.ptr[0];
+	} else {
+		log_error_write(srv, __FILE__, __LINE__, "s", "no sockets configured");
+		return NULL;
+	}
+}
+
+
+static int server_oneshot_init(server *srv, int fd) {
+	/* Note: does not work with netcat due to requirement that fd be socket.
+	 * STDOUT_FILENO was not saved earlier in startup, and that is to where
+	 * netcat expects output to be sent.  Since lighttpd expects connections
+	 * to be sockets, con->fd is where output is sent; separate fds are not
+	 * stored for input and output, but netcat has different fds for stdin
+	 * and * stdout.  To support netcat, would additionally need to avoid
+	 * S_ISSOCK(), getsockname(), and getpeername() below, reconstructing
+	 * addresses from environment variables:
+	 *   NCAT_LOCAL_ADDR   NCAT_LOCAL_PORT
+	 *   NCAT_REMOTE_ADDR  NCAT_REMOTE_PORT
+	 *   NCAT_PROTO
+	 */
+	connection *con;
+	server_socket *srv_socket;
+	sock_addr cnt_addr;
+	socklen_t cnt_len;
+	struct stat st;
+
+	if (0 != fstat(fd, &st)) {
+		log_error_write(srv, __FILE__, __LINE__, "ss", "fstat:", strerror(errno));
+		return 0;
+	}
+
+	if (!S_ISSOCK(st.st_mode)) {
+		/* require that fd is a socket
+		 * (modules might expect STDIN_FILENO and STDOUT_FILENO opened to /dev/null) */
+		log_error_write(srv, __FILE__, __LINE__, "s", "lighttpd -1 stdin is not a socket");
+		return 0;
+	}
+
+	cnt_len = sizeof(cnt_addr);
+	if (0 != getsockname(fd, (struct sockaddr *)&cnt_addr, &cnt_len)) {
+		log_error_write(srv, __FILE__, __LINE__, "ss", "getsockname:", strerror(errno));
+		return 0;
+	}
+
+	srv_socket = server_oneshot_getsock(srv, &cnt_addr);
+	if (NULL == srv_socket) return 0;
+
+	cnt_len = sizeof(cnt_addr);
+	if (0 != getpeername(fd, (struct sockaddr *)&cnt_addr, &cnt_len)) {
+		log_error_write(srv, __FILE__, __LINE__, "ss", "getpeername:", strerror(errno));
+		return 0;
+	}
+
+	con = connection_accepted(srv, srv_socket, &cnt_addr, fd);
+	if (NULL == con) return 0;
+
+	connection_state_machine(srv, con);
+	return 1;
+}
+
+
 static void show_version (void) {
 #ifdef USE_OPENSSL
 # define TEXT_SSL " (ssl)"
@@ -599,6 +703,8 @@ static void show_help (void) {
 "usage:\n" \
 " -f <name>  filename of the config-file\n" \
 " -m <name>  module directory (default: "LIBRARY_DIR")\n" \
+" -i <secs>  graceful shutdown after <secs> of inactivity\n" \
+" -1         process single (one) request on stdin socket, then exit\n" \
 " -p         print the parsed config-file in internal form, and exit\n" \
 " -t         test the config-file, and exit\n" \
 " -D         don't go to background (default: go to background)\n" \
@@ -621,6 +727,7 @@ int main (int argc, char **argv) {
 	int num_childs = 0;
 	int pid_fd = -1, fd;
 	size_t i;
+	time_t idle_limit = 0, last_active_ts = time(NULL);
 #ifdef HAVE_SIGACTION
 	struct sigaction act;
 #endif
@@ -631,6 +738,7 @@ int main (int argc, char **argv) {
 #ifdef HAVE_FORK
 	int parent_pipe_fd = -1;
 #endif
+	int oneshot_fd = 0;
 
 #ifdef USE_ALARM
 	struct itimerval interval;
@@ -660,7 +768,7 @@ int main (int argc, char **argv) {
 	srv->srvconf.dont_daemonize = 0;
 	srv->srvconf.preflight_check = 0;
 
-	while(-1 != (o = getopt(argc, argv, "f:m:hvVDpt"))) {
+	while(-1 != (o = getopt(argc, argv, "f:m:i:hvVD1pt"))) {
 		switch(o) {
 		case 'f':
 			if (srv->config_storage) {
@@ -678,8 +786,21 @@ int main (int argc, char **argv) {
 		case 'm':
 			buffer_copy_string(srv->srvconf.modules_dir, optarg);
 			break;
+		case 'i': {
+			char *endptr;
+			long timeout = strtol(optarg, &endptr, 0);
+			if (!*optarg || *endptr || timeout < 0) {
+				log_error_write(srv, __FILE__, __LINE__, "ss",
+						"Invalid idle timeout value:", optarg);
+				server_free(srv);
+				return -1;
+			}
+			idle_limit = (time_t)timeout;
+			break;
+		}
 		case 'p': print_config = 1; break;
 		case 't': ++test_config; break;
+		case '1': oneshot_fd = dup(STDIN_FILENO); break;
 		case 'D': srv->srvconf.dont_daemonize = 1; break;
 		case 'v': show_version(); server_free(srv); return 0;
 		case 'V': show_features(); server_free(srv); return 0;
@@ -724,6 +845,24 @@ int main (int argc, char **argv) {
 	if (test_config || print_config) {
 		server_free(srv);
 		return 0;
+	}
+
+	if (oneshot_fd) {
+		if (oneshot_fd <= STDERR_FILENO) {
+			log_error_write(srv, __FILE__, __LINE__, "s",
+					"Invalid fds at startup with lighttpd -1");
+			server_free(srv);
+			return -1;
+		}
+		graceful_shutdown = 1;
+		srv->sockets_disabled = 1;
+		srv->srvconf.dont_daemonize = 1;
+		buffer_reset(srv->srvconf.pid_file);
+		if (srv->srvconf.max_worker) {
+			srv->srvconf.max_worker = 0;
+			log_error_write(srv, __FILE__, __LINE__, "s",
+					"server one-shot command line option disables server.max-worker config file option.");
+		}
 	}
 
 	/* close stdin and stdout, as they are not needed */
@@ -1180,6 +1319,12 @@ int main (int argc, char **argv) {
 		close(parent_pipe_fd);
 	}
 
+	if (idle_limit && srv->srvconf.max_worker) {
+		srv->srvconf.max_worker = 0;
+		log_error_write(srv, __FILE__, __LINE__, "s",
+				"server idle time limit command line option disables server.max-worker config file option.");
+	}
+
 	/* start watcher and workers */
 	num_childs = srv->srvconf.max_worker;
 	if (num_childs > 0) {
@@ -1324,10 +1469,15 @@ int main (int argc, char **argv) {
 
 	for (i = 0; i < srv->srv_sockets.used; i++) {
 		server_socket *srv_socket = srv->srv_sockets.ptr[i];
+		if (srv->sockets_disabled) continue; /* lighttpd -1 (one-shot mode) */
 		if (-1 == fdevent_fcntl_set(srv->ev, srv_socket->fd)) {
 			log_error_write(srv, __FILE__, __LINE__, "ss", "fcntl failed:", strerror(errno));
 			return -1;
 		}
+	}
+
+	if (oneshot_fd && !server_oneshot_init(srv, oneshot_fd)) {
+		close(oneshot_fd);
 	}
 
 	/* main-loop */
@@ -1402,6 +1552,13 @@ int main (int argc, char **argv) {
 
 				/* trigger waitpid */
 				srv->cur_ts = min_ts;
+
+				/* check idle time limit, if enabled */
+				if (idle_limit && idle_limit < min_ts - last_active_ts && !graceful_shutdown) {
+					log_error_write(srv, __FILE__, __LINE__, "sDs", "[note] idle timeout", (int)idle_limit,
+							"s exceeded, initiating graceful shutdown");
+					graceful_shutdown = 2; /* value 2 indicates idle timeout */
+				}
 
 				/* cleanup stat-cache */
 				stat_cache_trigger_cleanup(srv);
@@ -1597,6 +1754,7 @@ int main (int argc, char **argv) {
 						"polls:", n);
 			}
 #endif
+			last_active_ts = srv->cur_ts;
 			fd_ndx = -1;
 			do {
 				fdevent_handler handler;
@@ -1650,16 +1808,21 @@ int main (int argc, char **argv) {
 		remove_pid_file(srv, &pid_fd);
 	}
 
+	if (2 == graceful_shutdown) { /* value 2 indicates idle timeout */
+		log_error_write(srv, __FILE__, __LINE__, "s",
+				"server stopped after idle timeout");
+	} else {
 #ifdef HAVE_SIGACTION
-	log_error_write(srv, __FILE__, __LINE__, "sdsd", 
-			"server stopped by UID =",
-			last_sigterm_info.si_uid,
-			"PID =",
-			last_sigterm_info.si_pid);
+		log_error_write(srv, __FILE__, __LINE__, "sdsd",
+				"server stopped by UID =",
+				last_sigterm_info.si_uid,
+				"PID =",
+				last_sigterm_info.si_pid);
 #else
-	log_error_write(srv, __FILE__, __LINE__, "s", 
-			"server stopped");
+		log_error_write(srv, __FILE__, __LINE__, "s",
+				"server stopped");
 #endif
+	}
 
 	/* clean-up */
 	log_error_close(srv);

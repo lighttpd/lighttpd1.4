@@ -157,8 +157,6 @@ static int network_server_init(server *srv, buffer *host_token, specific_config 
 	unsigned int port = 0;
 	const char *host;
 	buffer *b;
-	int is_unix_domain_socket = 0;
-	int fd;
 	int err;
 
 #ifdef __WIN32
@@ -178,6 +176,7 @@ static int network_server_init(server *srv, buffer *host_token, specific_config 
 
 	srv_socket = calloc(1, sizeof(*srv_socket));
 	force_assert(NULL != srv_socket);
+	srv_socket->addr.plain.sa_family = AF_INET; /* default */
 	srv_socket->fd = -1;
 	srv_socket->fde_ndx = -1;
 
@@ -191,7 +190,13 @@ static int network_server_init(server *srv, buffer *host_token, specific_config 
 
 	if (host[0] == '/') {
 		/* host is a unix-domain-socket */
-		is_unix_domain_socket = 1;
+#ifdef HAVE_SYS_UN_H
+		srv_socket->addr.plain.sa_family = AF_UNIX;
+#else
+		log_error_write(srv, __FILE__, __LINE__, "s",
+				"ERROR: Unix Domain sockets are not supported.");
+		goto error_free_socket;
+#endif
 	} else {
 		/* ipv4:port
 		 * [ipv6]:port
@@ -229,52 +234,11 @@ static int network_server_init(server *srv, buffer *host_token, specific_config 
 
 	if (*host == '\0') host = NULL;
 
-	if (is_unix_domain_socket) {
-#ifdef HAVE_SYS_UN_H
-
-		srv_socket->addr.plain.sa_family = AF_UNIX;
-
-		if (-1 == (srv_socket->fd = socket(srv_socket->addr.plain.sa_family, SOCK_STREAM, 0))) {
-			log_error_write(srv, __FILE__, __LINE__, "ss", "socket failed:", strerror(errno));
-			goto error_free_socket;
-		}
-#else
-		log_error_write(srv, __FILE__, __LINE__, "s",
-				"ERROR: Unix Domain sockets are not supported.");
-		goto error_free_socket;
-#endif
-	}
-
 #ifdef HAVE_IPV6
 	if (s->use_ipv6) {
 		srv_socket->addr.plain.sa_family = AF_INET6;
-
-		if (-1 == (srv_socket->fd = socket(srv_socket->addr.plain.sa_family, SOCK_STREAM, IPPROTO_TCP))) {
-			log_error_write(srv, __FILE__, __LINE__, "ss", "socket failed:", strerror(errno));
-			goto error_free_socket;
-		}
 	}
 #endif
-
-	if (srv_socket->fd == -1) {
-		srv_socket->addr.plain.sa_family = AF_INET;
-		if (-1 == (srv_socket->fd = socket(srv_socket->addr.plain.sa_family, SOCK_STREAM, IPPROTO_TCP))) {
-			log_error_write(srv, __FILE__, __LINE__, "ss", "socket failed:", strerror(errno));
-			goto error_free_socket;
-		}
-	}
-
-	/* set FD_CLOEXEC now, fdevent_fcntl_set is called later; needed for pipe-logger forks */
-	fd_close_on_exec(srv_socket->fd);
-
-	/* */
-	srv->cur_fds = srv_socket->fd;
-
-	val = 1;
-	if (setsockopt(srv_socket->fd, SOL_SOCKET, SO_REUSEADDR, &val, sizeof(val)) < 0) {
-		log_error_write(srv, __FILE__, __LINE__, "ss", "socketsockopt(SO_REUSEADDR) failed:", strerror(errno));
-		goto error_free_socket;
-	}
 
 	switch(srv_socket->addr.plain.sa_family) {
 #ifdef HAVE_IPV6
@@ -287,16 +251,6 @@ static int network_server_init(server *srv, buffer *host_token, specific_config 
 		} else {
 			struct addrinfo hints, *res;
 			int r;
-
-			if (s->set_v6only) {
-				val = 1;
-				if (-1 == setsockopt(srv_socket->fd, IPPROTO_IPV6, IPV6_V6ONLY, &val, sizeof(val))) {
-					log_error_write(srv, __FILE__, __LINE__, "ss", "socketsockopt(IPV6_V6ONLY) failed:", strerror(errno));
-					goto error_free_socket;
-				}
-			} else {
-				log_error_write(srv, __FILE__, __LINE__, "s", "warning: server.set-v6only will be removed soon, update your config to have different sockets for ipv4 and ipv6");
-			}
 
 			memset(&hints, 0, sizeof(hints));
 
@@ -347,10 +301,9 @@ static int network_server_init(server *srv, buffer *host_token, specific_config 
 			memcpy(&(srv_socket->addr.ipv4.sin_addr.s_addr), he->h_addr_list[0], he->h_length);
 		}
 		srv_socket->addr.ipv4.sin_port = htons(port);
-
 		addr_len = sizeof(struct sockaddr_in);
-
 		break;
+#ifdef HAVE_SYS_UN_H
 	case AF_UNIX:
 		memset(&srv_socket->addr, 0, sizeof(struct sockaddr_un));
 		srv_socket->addr.un.sun_family = AF_UNIX;
@@ -370,12 +323,32 @@ static int network_server_init(server *srv, buffer *host_token, specific_config 
 #endif
 		}
 
-		if (srv->srvconf.preflight_check) break;
+		break;
+#endif
+	default:
+		goto error_free_socket;
+	}
 
+	if (srv->srvconf.preflight_check) {
+		err = 0;
+		goto error_free_socket;
+	}
+
+	if (srv->sockets_disabled) { /* lighttpd -1 (one-shot mode) */
+#ifdef USE_OPENSSL
+		if (s->ssl_enabled) srv_socket->ssl_ctx = s->ssl_ctx;
+#endif
+		goto srv_sockets_append;
+	}
+
+#ifdef HAVE_SYS_UN_H
+	if (AF_UNIX == srv_socket->addr.plain.sa_family) {
 		/* check if the socket exists and try to connect to it. */
-		if (-1 != (fd = connect(srv_socket->fd, (struct sockaddr *) &(srv_socket->addr), addr_len))) {
-			close(fd);
-
+		if (-1 == (srv_socket->fd = socket(srv_socket->addr.plain.sa_family, SOCK_STREAM, 0))) {
+			log_error_write(srv, __FILE__, __LINE__, "ss", "socket failed:", strerror(errno));
+			goto error_free_socket;
+		}
+		if (0 == connect(srv_socket->fd, (struct sockaddr *) &(srv_socket->addr), addr_len)) {
 			log_error_write(srv, __FILE__, __LINE__, "ss",
 				"server socket is still in use:",
 				host);
@@ -398,14 +371,39 @@ static int network_server_init(server *srv, buffer *host_token, specific_config 
 
 			goto error_free_socket;
 		}
+	} else
+#endif
+	{
+		if (-1 == (srv_socket->fd = socket(srv_socket->addr.plain.sa_family, SOCK_STREAM, IPPROTO_TCP))) {
+			log_error_write(srv, __FILE__, __LINE__, "ss", "socket failed:", strerror(errno));
+			goto error_free_socket;
+		}
 
-		break;
-	default:
-		goto error_free_socket;
+#ifdef HAVE_IPV6
+		if (AF_INET6 == srv_socket->addr.plain.sa_family
+		    && host != NULL) {
+			if (s->set_v6only) {
+				val = 1;
+				if (-1 == setsockopt(srv_socket->fd, IPPROTO_IPV6, IPV6_V6ONLY, &val, sizeof(val))) {
+					log_error_write(srv, __FILE__, __LINE__, "ss", "socketsockopt(IPV6_V6ONLY) failed:", strerror(errno));
+					goto error_free_socket;
+				}
+			} else {
+				log_error_write(srv, __FILE__, __LINE__, "s", "warning: server.set-v6only will be removed soon, update your config to have different sockets for ipv4 and ipv6");
+			}
+		}
+#endif
 	}
 
-	if (srv->srvconf.preflight_check) {
-		err = 0;
+	/* set FD_CLOEXEC now, fdevent_fcntl_set is called later; needed for pipe-logger forks */
+	fd_close_on_exec(srv_socket->fd);
+
+	/* */
+	srv->cur_fds = srv_socket->fd;
+
+	val = 1;
+	if (setsockopt(srv_socket->fd, SOL_SOCKET, SO_REUSEADDR, &val, sizeof(val)) < 0) {
+		log_error_write(srv, __FILE__, __LINE__, "ss", "socketsockopt(SO_REUSEADDR) failed:", strerror(errno));
 		goto error_free_socket;
 	}
 
@@ -464,6 +462,7 @@ static int network_server_init(server *srv, buffer *host_token, specific_config 
 #endif
 	}
 
+srv_sockets_append:
 	srv_socket->is_ssl = s->ssl_enabled;
 
 	if (srv->srv_sockets.size == 0) {
@@ -1034,6 +1033,8 @@ int network_register_fdevents(server *srv) {
 	if (-1 == fdevent_reset(srv->ev)) {
 		return -1;
 	}
+
+	if (srv->sockets_disabled) return 0; /* lighttpd -1 (one-shot mode) */
 
 	/* register fdevents after reset */
 	for (i = 0; i < srv->srv_sockets.used; i++) {

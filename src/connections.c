@@ -894,6 +894,11 @@ connection *connection_accept(server *srv, server_socket *srv_socket) {
 		}
 		return NULL;
 	} else {
+		return connection_accepted(srv, srv_socket, &cnt_addr, cnt);
+	}
+}
+
+connection *connection_accepted(server *srv, server_socket *srv_socket, sock_addr *cnt_addr, int cnt) {
 		connection *con;
 
 		srv->cur_fds++;
@@ -917,7 +922,7 @@ connection *connection_accept(server *srv, server_socket *srv_socket) {
 		connection_set_state(srv, con, CON_STATE_REQUEST_START);
 
 		con->connection_start = srv->cur_ts;
-		con->dst_addr = cnt_addr;
+		con->dst_addr = *cnt_addr;
 		buffer_copy_string(con->dst_addr_buf, inet_ntop_cache_get_ip(srv, &(con->dst_addr)));
 		con->srv_socket = srv_socket;
 
@@ -947,7 +952,6 @@ connection *connection_accept(server *srv, server_socket *srv_socket) {
 		}
 #endif
 		return con;
-	}
 }
 
 
