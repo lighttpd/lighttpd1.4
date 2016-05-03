@@ -215,7 +215,7 @@ SETDEFAULTS_FUNC(mod_webdav_set_defaults) {
 			}
 
 			if (SQLITE_OK != sqlite3_exec(s->sql,
-					"CREATE TABLE properties ("
+					"CREATE TABLE IF NOT EXISTS properties ("
 					"  resource TEXT NOT NULL,"
 					"  prop TEXT NOT NULL,"
 					"  ns TEXT NOT NULL,"
@@ -224,6 +224,27 @@ SETDEFAULTS_FUNC(mod_webdav_set_defaults) {
 					NULL, NULL, &err)) {
 
 				if (0 != strcmp(err, "table properties already exists")) {
+					log_error_write(srv, __FILE__, __LINE__, "ss", "can't open transaction:", err);
+					sqlite3_free(err);
+
+					return HANDLER_ERROR;
+				}
+				sqlite3_free(err);
+			}
+
+			if (SQLITE_OK != sqlite3_exec(s->sql,
+					"CREATE TABLE IF NOT EXISTS locks ("
+					"  locktoken TEXT NOT NULL,"
+					"  resource TEXT NOT NULL,"
+					"  lockscope TEXT NOT NULL,"
+					"  locktype TEXT NOT NULL,"
+					"  owner TEXT NOT NULL,"
+					"  depth INT NOT NULL,"
+					"  timeout TIMESTAMP NOT NULL,"
+					"  PRIMARY KEY(locktoken))",
+					NULL, NULL, &err)) {
+
+				if (0 != strcmp(err, "table locks already exists")) {
 					log_error_write(srv, __FILE__, __LINE__, "ss", "can't open transaction:", err);
 					sqlite3_free(err);
 
@@ -288,7 +309,7 @@ SETDEFAULTS_FUNC(mod_webdav_set_defaults) {
 			}
 
 			if (SQLITE_OK != sqlite3_prepare(s->sql,
-				CONST_STR_LEN("UPDATE properties SET resource = ? WHERE resource = ?"),
+				CONST_STR_LEN("UPDATE OR REPLACE properties SET resource = ? WHERE resource = ?"),
 				&(s->stmt_move_uri), &next_stmt)) {
 				/* prepare failed */
 				log_error_write(srv, __FILE__, __LINE__, "ss", "sqlite3_prepare failed", sqlite3_errmsg(s->sql));
@@ -297,27 +318,6 @@ SETDEFAULTS_FUNC(mod_webdav_set_defaults) {
 			}
 
 			/* LOCKS */
-
-			if (SQLITE_OK != sqlite3_exec(s->sql,
-					"CREATE TABLE locks ("
-					"  locktoken TEXT NOT NULL,"
-					"  resource TEXT NOT NULL,"
-					"  lockscope TEXT NOT NULL,"
-					"  locktype TEXT NOT NULL,"
-					"  owner TEXT NOT NULL,"
-					"  depth INT NOT NULL,"
-					"  timeout TIMESTAMP NOT NULL,"
-					"  PRIMARY KEY(locktoken))",
-					NULL, NULL, &err)) {
-
-				if (0 != strcmp(err, "table locks already exists")) {
-					log_error_write(srv, __FILE__, __LINE__, "ss", "can't open transaction:", err);
-					sqlite3_free(err);
-
-					return HANDLER_ERROR;
-				}
-				sqlite3_free(err);
-			}
 
 			if (SQLITE_OK != sqlite3_prepare(s->sql,
 				CONST_STR_LEN("INSERT INTO locks (locktoken, resource, lockscope, locktype, owner, depth, timeout) VALUES (?,?,?,?,?,?, CURRENT_TIME + 600)"),
@@ -901,6 +901,16 @@ static int webdav_get_live_property(server *srv, connection *con, plugin_data *p
 			buffer_append_string_len(b, CONST_STR_LEN("en"));
 			buffer_append_string_len(b, CONST_STR_LEN("</D:getcontentlanguage>"));
 			found = 1;
+	      #ifdef USE_LOCKS
+		} else if (0 == strcmp(prop_name, "supportedlock")) {
+			buffer_append_string_len(b,CONST_STR_LEN("<D:supportedlock>"));
+			buffer_append_string_len(b,CONST_STR_LEN("<D:lockentry>"));
+			buffer_append_string_len(b,CONST_STR_LEN("<D:lockscope><D:exclusive/></D:lockscope>"));
+			buffer_append_string_len(b,CONST_STR_LEN("<D:locktype><D:write/></D:locktype>"));
+			buffer_append_string_len(b,CONST_STR_LEN("</D:lockentry>"));
+			buffer_append_string_len(b, CONST_STR_LEN("</D:supportedlock>"));
+			found = 1;
+	      #endif
 		}
 	}
 
@@ -965,7 +975,9 @@ static webdav_property live_properties[] = {
 	{ "DAV:", "resourcetype" },
 	{ "DAV:", "lockdiscovery" },
 	{ "DAV:", "source" },
+      #ifdef USE_LOCKS
 	{ "DAV:", "supportedlock" },
+      #endif
 
 	{ NULL, NULL }
 };
@@ -980,7 +992,7 @@ typedef struct {
 static int webdav_get_props(server *srv, connection *con, plugin_data *p, physical *dst, webdav_properties *props, buffer *b_200, buffer *b_404) {
 	size_t i;
 
-	if (props) {
+	if (props && props->used) {
 		for (i = 0; i < props->used; i++) {
 			webdav_property *prop;
 
@@ -1274,6 +1286,10 @@ SUBREQUEST_FUNC(mod_webdav_subrequest_handler_huge) {
 			break;
 		}
 
+		if (S_ISDIR(sce->st.st_mode) && con->physical.path->ptr[buffer_string_length(con->physical.path)-1] != '/') {
+			http_response_redirect_to_directory(srv, con);
+			return HANDLER_FINISHED;
+		}
 
 #ifdef USE_PROPPATCH
 		/* any special requests or just allprop ? */
@@ -1459,6 +1475,10 @@ SUBREQUEST_FUNC(mod_webdav_subrequest_handler_huge) {
 					buffer_append_string_len(b,CONST_STR_LEN("://"));
 					buffer_append_string_buffer(b, con->uri.authority);
 					buffer_append_string_encoded(b, CONST_BUF_LEN(d.rel_path), ENCODING_REL_URI);
+					if (0 == stat(d.path->ptr, &st) && S_ISDIR(st.st_mode)) {
+						/* Append a '/' on subdirectories */
+						buffer_append_string_len(b,CONST_STR_LEN("/"));
+					}
 					buffer_append_string_len(b,CONST_STR_LEN("</D:href>\n"));
 
 					if (!buffer_string_is_empty(prop_200)) {
@@ -1580,7 +1600,14 @@ SUBREQUEST_FUNC(mod_webdav_subrequest_handler_huge) {
 				 break;
 			}
 		} else if (S_ISDIR(st.st_mode)) {
-			buffer *multi_status_resp = buffer_init();
+			buffer *multi_status_resp;
+
+			if (con->physical.path->ptr[buffer_string_length(con->physical.path)-1] != '/') {
+				http_response_redirect_to_directory(srv, con);
+				return HANDLER_FINISHED;
+			}
+
+			multi_status_resp = buffer_init();
 
 			if (webdav_delete_dir(srv, con, p, &(con->physical), multi_status_resp)) {
 				/* we got an error somewhere in between, build a 207 */
@@ -1920,15 +1947,62 @@ SUBREQUEST_FUNC(mod_webdav_subrequest_handler_huge) {
 			buffer_to_lower(p->physical.rel_path);
 		}
 
-		buffer_copy_buffer(p->physical.path, p->physical.doc_root);
-		buffer_append_slash(p->physical.path);
-		buffer_copy_buffer(p->physical.basedir, p->physical.path);
+		/* Destination physical path
+		 * src con->physical.path might have been remapped with mod_alias.
+		 *   (but mod_alias does not modify con->physical.rel_path)
+		 * Find matching prefix to support use of mod_alias to remap webdav root.
+		 * Aliasing of paths underneath the webdav root might not work.
+		 * Likewise, mod_rewrite URL rewriting might thwart this comparison.
+		 * Use mod_redirect instead of mod_alias to remap paths *under* webdav root.
+		 * Use mod_redirect instead of mod_rewrite on *any* parts of path to webdav.
+		 * (Related, use mod_auth to protect webdav root, but avoid attempting to
+		 *  use mod_auth on paths underneath webdav root, as Destination is not
+		 *  validated with mod_auth)
+		 *
+		 * tl;dr: webdav paths and webdav properties are managed by mod_webdav,
+		 *        so do not modify paths externally or else undefined behavior
+		 *        or corruption may occur
+		 */
+		{
+			/* find matching URI prefix
+			 * check if remaining con->physical.rel_path matches suffix
+			 *   of con->physical.basedir so that we can use it to
+			 *   remap Destination physical path */
+			size_t i, remain;
+			sep = con->uri.path->ptr;
+			sep2 = p->uri.path->ptr;
+			for (i = 0; sep[i] && sep[i] == sep2[i]; ++i) ;
+			if (sep[i] == '\0' && (sep2[i] == '\0' || sep2[i] == '/' || (i > 0 && sep[i-1] == '/'))) {
+				/* src and dst URI match or dst is nested inside src; invalid COPY or MOVE */
+				con->http_status = 403;
+				return HANDLER_FINISHED;
+			}
+			while (i != 0 && sep[--i] != '/') ; /* find matching directory path */
+			remain = buffer_string_length(con->uri.path) - i;
+			if (!con->conf.force_lowercase_filenames
+			    ? buffer_is_equal_right_len(con->physical.path, con->physical.rel_path, remain)
+			    :(buffer_string_length(con->physical.path) >= remain
+			      && 0 == strncasecmp(con->physical.path->ptr+buffer_string_length(con->physical.path)-remain, con->physical.rel_path->ptr+i, remain))) {
+				/* (at this point, p->physical.rel_path is identical to (or lowercased version of) p->uri.path) */
+				buffer_copy_string_len(p->physical.path, con->physical.path->ptr, buffer_string_length(con->physical.path)-remain);
+				buffer_append_string_len(p->physical.path, p->physical.rel_path->ptr+i, buffer_string_length(p->physical.rel_path)-i);
 
-		/* don't add a second / */
-		if (p->physical.rel_path->ptr[0] == '/') {
-			buffer_append_string_len(p->physical.path, p->physical.rel_path->ptr + 1, buffer_string_length(p->physical.rel_path) - 1);
-		} else {
-			buffer_append_string_buffer(p->physical.path, p->physical.rel_path);
+				buffer_copy_buffer(p->physical.basedir, con->physical.basedir);
+				buffer_append_slash(p->physical.basedir);
+			} else {
+				/* unable to perform physical path remap here;
+				 * assume doc_root/rel_path and no remapping */
+				buffer_copy_buffer(p->physical.path, p->physical.doc_root);
+				buffer_append_slash(p->physical.path);
+				buffer_copy_buffer(p->physical.basedir, p->physical.path);
+
+				/* don't add a second / */
+				if (p->physical.rel_path->ptr[0] == '/') {
+					buffer_append_string_len(p->physical.path, p->physical.rel_path->ptr + 1, buffer_string_length(p->physical.rel_path) - 1);
+				} else {
+					buffer_append_string_buffer(p->physical.path, p->physical.rel_path);
+				}
+			}
 		}
 
 		/* let's see if the source is a directory
@@ -1947,6 +2021,11 @@ SUBREQUEST_FUNC(mod_webdav_subrequest_handler_huge) {
 		} else if (S_ISDIR(st.st_mode)) {
 			int r;
 			/* src is a directory */
+
+			if (con->physical.path->ptr[buffer_string_length(con->physical.path)-1] != '/') {
+				http_response_redirect_to_directory(srv, con);
+				return HANDLER_FINISHED;
+			}
 
 			if (-1 == stat(p->physical.path->ptr, &st)) {
 				if (-1 == mkdir(p->physical.path->ptr, WEBDAV_DIR_MODE)) {
@@ -2028,21 +2107,6 @@ SUBREQUEST_FUNC(mod_webdav_subrequest_handler_huge) {
 #ifdef USE_PROPPATCH
 					sqlite3_stmt *stmt;
 
-					stmt = p->conf.stmt_delete_uri;
-					if (stmt) {
-
-						sqlite3_reset(stmt);
-
-						/* bind the values to the insert */
-						sqlite3_bind_text(stmt, 1,
-							CONST_BUF_LEN(con->uri.path),
-							SQLITE_TRANSIENT);
-
-						if (SQLITE_DONE != sqlite3_step(stmt)) {
-							log_error_write(srv, __FILE__, __LINE__, "ss", "sql-move(delete old) failed:", sqlite3_errmsg(p->conf.sql));
-						}
-					}
-
 					stmt = p->conf.stmt_move_uri;
 					if (stmt) {
 
@@ -2103,6 +2167,11 @@ SUBREQUEST_FUNC(mod_webdav_subrequest_handler_huge) {
 			}
 		}
 
+		if (S_ISDIR(st.st_mode) && con->physical.path->ptr[buffer_string_length(con->physical.path)-1] != '/') {
+			http_response_redirect_to_directory(srv, con);
+			return HANDLER_FINISHED;
+		}
+
 #ifdef USE_PROPPATCH
 		if (con->request.content_length) {
 			xmlDocPtr xml;
@@ -2145,6 +2214,7 @@ SUBREQUEST_FUNC(mod_webdav_subrequest_handler_huge) {
 							for (props = cmd->children; props; props = props->next) {
 								if (0 == xmlStrcmp(props->name, BAD_CAST "prop")) {
 									xmlNode *prop;
+									char *propval = NULL;
 									int r;
 
 									prop = props->children;
@@ -2183,9 +2253,13 @@ SUBREQUEST_FUNC(mod_webdav_subrequest_handler_huge) {
 											SQLITE_TRANSIENT);
 									}
 									if (stmt == p->conf.stmt_update_prop) {
+										propval = prop->children
+										  ? (char *)xmlNodeListGetString(xml, prop->children, 0)
+										  : NULL;
+
 										sqlite3_bind_text(stmt, 4,
-											(char *)xmlNodeGetContent(prop),
-											strlen((char *)xmlNodeGetContent(prop)),
+											propval ? propval : "",
+											propval ? strlen(propval) : 0,
 											SQLITE_TRANSIENT);
 									}
 
@@ -2193,6 +2267,8 @@ SUBREQUEST_FUNC(mod_webdav_subrequest_handler_huge) {
 										log_error_write(srv, __FILE__, __LINE__, "ss",
 												"sql-set failed:", sqlite3_errmsg(p->conf.sql));
 									}
+
+									if (propval) xmlFree(propval);
 								}
 							}
 							if (empty_ns) break;
