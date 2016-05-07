@@ -161,8 +161,8 @@ SETDEFAULTS_FUNC(mod_fastcgi_set_defaults) {
 	config_values_t cv[] = {
 		{ "cgi.assign",                  NULL, T_CONFIG_ARRAY, T_CONFIG_SCOPE_CONNECTION },       /* 0 */
 		{ "cgi.execute-x-only",          NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION },     /* 1 */
-		{ "x-sendfile",                  NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION },     /* 2 */
-		{ "x-sendfile-docroot",          NULL, T_CONFIG_ARRAY,   T_CONFIG_SCOPE_CONNECTION },     /* 3 */
+		{ "cgi.x-sendfile",              NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION },     /* 2 */
+		{ "cgi.x-sendfile-docroot",      NULL, T_CONFIG_ARRAY,   T_CONFIG_SCOPE_CONNECTION },     /* 3 */
 		{ NULL,                          NULL, T_CONFIG_UNSET, T_CONFIG_SCOPE_UNSET}
 	};
 
