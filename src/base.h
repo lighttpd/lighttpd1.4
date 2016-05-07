@@ -30,6 +30,12 @@
 
 #if defined HAVE_LIBSSL && defined HAVE_OPENSSL_SSL_H
 # define USE_OPENSSL
+# include <openssl/opensslconf.h>
+#  ifndef USE_OPENSSL_KERBEROS
+#   ifndef OPENSSL_NO_KRB5
+#   define OPENSSL_NO_KRB5
+#   endif
+#  endif
 # include <openssl/ssl.h>
 # if ! defined OPENSSL_NO_TLSEXT && ! defined SSL_CTRL_SET_TLSEXT_HOSTNAME
 #  define OPENSSL_NO_TLSEXT

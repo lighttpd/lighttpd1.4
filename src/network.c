@@ -780,7 +780,7 @@ int network_init(server *srv) {
 
 		if (!s->ssl_use_sslv2) {
 			/* disable SSLv2 */
-			if (!(SSL_OP_NO_SSLv2 & SSL_CTX_set_options(s->ssl_ctx, SSL_OP_NO_SSLv2))) {
+			if ((SSL_OP_NO_SSLv2 & SSL_CTX_set_options(s->ssl_ctx, SSL_OP_NO_SSLv2)) != SSL_OP_NO_SSLv2) {
 				log_error_write(srv, __FILE__, __LINE__, "ss", "SSL:",
 						ERR_error_string(ERR_get_error(), NULL));
 				return -1;
@@ -789,7 +789,7 @@ int network_init(server *srv) {
 
 		if (!s->ssl_use_sslv3) {
 			/* disable SSLv3 */
-			if (!(SSL_OP_NO_SSLv3 & SSL_CTX_set_options(s->ssl_ctx, SSL_OP_NO_SSLv3))) {
+			if ((SSL_OP_NO_SSLv3 & SSL_CTX_set_options(s->ssl_ctx, SSL_OP_NO_SSLv3)) != SSL_OP_NO_SSLv3) {
 				log_error_write(srv, __FILE__, __LINE__, "ss", "SSL:",
 						ERR_error_string(ERR_get_error(), NULL));
 				return -1;
@@ -839,7 +839,8 @@ int network_init(server *srv) {
 				log_error_write(srv, __FILE__, __LINE__, "s", "SSL: BN_bin2bn () failed");
 				return -1;
 			}
-		      #if OPENSSL_VERSION_NUMBER < 0x10100000L
+		      #if OPENSSL_VERSION_NUMBER < 0x10100000L \
+			|| defined(LIBRESSL_VERSION_NUMBER)
 			dh->p = dh_p;
 			dh->g = dh_g;
 			dh->length = 160;
