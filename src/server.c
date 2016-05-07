@@ -78,6 +78,7 @@ static int l_issetugid(void) {
 # endif
 #endif
 
+static int oneshot_fd = 0;
 static volatile sig_atomic_t srv_shutdown = 0;
 static volatile sig_atomic_t graceful_shutdown = 0;
 static volatile sig_atomic_t handle_sig_alarm = 1;
@@ -291,6 +292,10 @@ static void server_free(server *srv) {
 
 	for (i = 0; i < FILE_CACHE_MAX; i++) {
 		buffer_free(srv->mtime_cache[i].str);
+	}
+
+	if (oneshot_fd > 0) {
+		close(oneshot_fd);
 	}
 
 #define CLEAN(x) \
@@ -738,7 +743,6 @@ int main (int argc, char **argv) {
 #ifdef HAVE_FORK
 	int parent_pipe_fd = -1;
 #endif
-	int oneshot_fd = 0;
 
 #ifdef USE_ALARM
 	struct itimerval interval;
@@ -1476,8 +1480,8 @@ int main (int argc, char **argv) {
 		}
 	}
 
-	if (oneshot_fd && !server_oneshot_init(srv, oneshot_fd)) {
-		close(oneshot_fd);
+	if (oneshot_fd && server_oneshot_init(srv, oneshot_fd)) {
+		oneshot_fd = -1;
 	}
 
 	/* main-loop */
