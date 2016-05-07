@@ -84,4 +84,4 @@ int main (void) {
 /*
  * stub functions (for linking)
  */
-void fd_close_on_exec(int fd) { UNUSED(fd); };
+void fd_close_on_exec(int fd) { UNUSED(fd); }
