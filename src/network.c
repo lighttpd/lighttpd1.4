@@ -213,8 +213,8 @@ static int network_server_init(server *srv, buffer *host_token, specific_config 
 			sp = b->ptr + len; /* point to '\0' at end of string so end of IPv6 address can be found below */
 		} else {
 			/* found ip:port separator at *sp; port doesn't end in ']', so *sp hopefully doesn't split an IPv6 address */
-			*(sp++) = '\0';
-			port = strtol(sp, NULL, 10);
+			*sp = '\0';
+			port = strtol(sp+1, NULL, 10);
 		}
 
 		/* check for [ and ] */
