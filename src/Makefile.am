@@ -294,10 +294,72 @@ hdr = server.h base64.h buffer.h network.h log.h keyvalue.h \
 
 DEFS= @DEFS@ -DHAVE_VERSION_H -DLIBRARY_DIR="\"$(libdir)\"" -DSBIN_DIR="\"$(sbindir)\""
 
+
+if LIGHTTPD_STATIC
+
+## static lighttpd server (used in conjunction with -DLIGHTTPD_STATIC)
+## (order is not important)
+lighttpd_SOURCES = \
+  $(src) \
+  mod_access.c \
+  mod_accesslog.c \
+  mod_alias.c \
+  mod_auth.c http_auth.c \
+  mod_cgi.c \
+  mod_cml.c mod_cml_lua.c mod_cml_funcs.c \
+  mod_compress.c \
+  mod_dirlisting.c \
+  mod_evasive.c \
+  mod_expire.c \
+  mod_extforward.c \
+  mod_fastcgi.c \
+  mod_flv_streaming.c \
+  mod_indexfile.c \
+  mod_magnet.c mod_magnet_cache.c \
+  mod_mysql_vhost.c \
+  mod_proxy.c \
+  mod_redirect.c \
+  mod_rewrite.c \
+  mod_rrdtool.c \
+  mod_scgi.c \
+  mod_secdownload.c \
+  mod_setenv.c \
+  mod_simple_vhost.c \
+  mod_ssi_exprparser.c mod_ssi_expr.c mod_ssi.c \
+  mod_staticfile.c \
+  mod_status.c \
+  mod_trigger_b4_dl.c \
+  mod_userdir.c \
+  mod_usertrack.c \
+  mod_webdav.c
+lighttpd_CPPFLAGS = \
+  -DLIGHTTPD_STATIC \
+  $(LUA_CFLAGS) \
+  $(MYSQL_INCLUDE) \
+  $(MEMCACHED_CFLAGS) \
+  $(XML_CFLAGS) $(SQLITE_CFLAGS) \
+  $(FAM_CFLAGS) $(LIBEV_CFLAGS) $(LIBUNWIND_CFLAGS)
+lighttpd_LDADD = \
+  $(common_libadd) \
+  $(CRYPT_LIB) $(SSL_LIB) $(LDAP_LIB) $(LBER_LIB) \
+  $(LUA_LIBS) -lm \
+  $(MYSQL_LIBS) \
+  $(MEMCACHED_LIB) \
+  $(GDBM_LIB) \
+  $(XML_LIBS) $(SQLITE_LIBS) $(UUID_LIBS) \
+  $(PCRE_LIB) $(Z_LIB) $(BZ_LIB) $(DL_LIB) $(SENDFILE_LIB) $(ATTR_LIB) \
+  $(FAM_LIBS) $(LIBEV_LIBS) $(LIBUNWIND_LIBS)
+lighttpd_LDFLAGS = -export-dynamic
+
+else
+
+## default lighttpd server
 lighttpd_SOURCES = $(src)
+lighttpd_CPPFLAGS = $(FAM_CFLAGS) $(LIBEV_CFLAGS)
 lighttpd_LDADD = $(PCRE_LIB) $(DL_LIB) $(SENDFILE_LIB) $(ATTR_LIB) $(common_libadd) $(SSL_LIB) $(FAM_LIBS) $(LIBEV_LIBS) $(LIBUNWIND_LIBS)
 lighttpd_LDFLAGS = -export-dynamic
-lighttpd_CCPFLAGS = $(FAM_CFLAGS) $(LIBEV_CFLAGS)
+
+endif
 
 proc_open_SOURCES = proc_open.c buffer.c
 proc_open_LDADD = $(LIBUNWIND_LIBS)

@@ -89,6 +89,11 @@ case $host_os in
 esac
 AM_CONDITIONAL(NO_RDYNAMIC, test x$NO_RDYNAMIC = xyes)
 
+if test -z "$LIGHTTPD_STATIC"; then
+  LIGHTTPD_STATIC=no
+fi
+AM_CONDITIONAL(LIGHTTPD_STATIC, test x$LIGHTTPD_STATIC = xyes)
+
 AC_EXEEXT
 
 dnl libtool

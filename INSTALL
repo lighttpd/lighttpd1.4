@@ -30,3 +30,27 @@ compile and install it with ::
 take look at the configfile in ./doc/lighttpd.conf,
 make your own copy of that file and modify it for your needs.
 
+
+static build using SCons
+------------------------
+
+  $ scons -j 4 build_static=1 build_dynamic=0 prefix=/custom/inst/path install
+
+build_dynamic is enabled by default in SConstruct and needs to be disabled for
+the static build.  See also the BoolVariable() settings in SConstruct for other
+configurable variables that might be set in a customized build.  build_static=1
+can be replaced with build_fullstatic=1 to perform lighttpd static build with
+modules *and* to link statically against external dependencies.
+
+
+static build using make
+-----------------------
+
+* edit src/Makefile.am and, in the section under 'if LIGHTTPD_STATIC',
+  update lighttpd_SOURCES with each module to be included in the static build
+* create src/plugin-static.h with list of modules as PLUGIN_INIT(mod_foo)
+  for each module 'mod_foo' to be included in the static build
+
+  $ LIGHTTPD_STATIC=yes ./configure -C --enable-static=yes
+  $ make
+  $ sudo make install
