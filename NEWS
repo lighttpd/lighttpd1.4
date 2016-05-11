@@ -108,6 +108,11 @@ NEWS
   * [mod_status] add JSON output option (fixed #2432)
   * [mod_webdav] map COPY/MOVE Destination to aliases (fixes #1787)
   * [mod_webdav] improve PROPFIND,PROPPATCH (#1818, #1953)
+  * [core] reset response headers, write_queue for error docs
+  * build with libressl
+  * static build instructions using SCons or make
+  * [mod_auth] preserve WWW-Authenticate for error docs (fixes #2730)
+  * check close() return code after writing to file
 
 - 1.4.39 - 2016-01-02
   * [core] fix memset_s call (fixes #2698)
