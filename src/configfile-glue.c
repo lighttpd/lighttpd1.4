@@ -56,22 +56,13 @@ int config_insert_values_internal(server *srv, array *ca, const config_values_t 
 				data_array *da = (data_array *)du;
 
 				for (j = 0; j < da->value->used; j++) {
-					if (da->value->data[j]->type == TYPE_STRING) {
-						data_string *ds = data_string_init();
-
-						buffer_copy_buffer(ds->value, ((data_string *)(da->value->data[j]))->value);
-						if (!((data_string *)(da->value->data[j]))->is_index_key) {
-							/* the id's were generated automaticly, as we copy now we might have to renumber them
-							 * this is used to prepend server.modules by mod_indexfile as it has to be loaded
-							 * before mod_fastcgi and friends */
-							buffer_copy_buffer(ds->key, ((data_string *)(da->value->data[j]))->key);
-						}
-
-						array_insert_unique(cv[i].destination, (data_unset *)ds);
+					data_unset *ds = da->value->data[j];
+					if (ds->type == TYPE_STRING) {
+						array_insert_unique(cv[i].destination, ds->copy(ds));
 					} else {
 						log_error_write(srv, __FILE__, __LINE__, "sssbsd",
 								"the value of an array can only be a string, variable:",
-								cv[i].key, "[", da->value->data[j]->key, "], type:", da->value->data[j]->type);
+								cv[i].key, "[", ds->key, "], type:", ds->type);
 
 						return -1;
 					}
