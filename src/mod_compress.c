@@ -594,10 +594,13 @@ static int deflate_file_to_file(server *srv, connection *con, plugin_data *p, bu
 #endif
 		free(start);
 
-	close(ofd);
 	close(ifd);
 
-	if (ret != 0) {
+	if (0 != close(ofd) || ret != 0) {
+		if (0 == ret) {
+			log_error_write(srv, __FILE__, __LINE__, "sbss", "writing cachefile", p->ofn, "failed:", strerror(errno));
+		}
+
 		/* Remove the incomplete cache file, so that later hits aren't served from it */
 		if (-1 == unlink(p->ofn->ptr)) {
 			log_error_write(srv, __FILE__, __LINE__, "sbss", "unlinking incomplete cachefile", p->ofn, "failed:", strerror(errno));

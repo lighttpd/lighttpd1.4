@@ -486,9 +486,15 @@ static int chunkqueue_append_to_tempfile(server *srv, chunkqueue *dest, const ch
 
 			if (dst_c->file.length >= (off_t)dest->upload_temp_file_size) {
 				/* the chunk is too large now, close it */
-				close(dst_c->file.fd);
+				int rc = close(dst_c->file.fd);
 				dst_c->file.fd = -1;
 				dst_c = NULL;
+				if (0 != rc) {
+					log_error_write(srv, __FILE__, __LINE__, "sbss",
+						"close() temp-file", dst_c->file.name, "failed:",
+						strerror(errno));
+					return -1;
+				}
 			}
 		} else {
 			dst_c = NULL;
@@ -502,8 +508,7 @@ static int chunkqueue_append_to_tempfile(server *srv, chunkqueue *dest, const ch
 			 */
 
 			log_error_write(srv, __FILE__, __LINE__, "ss",
-				"denying upload as opening temp-file for upload failed:",
-				strerror(errno));
+				"opening temp-file failed:", strerror(errno));
 
 			return -1;
 		}
@@ -529,16 +534,22 @@ static int chunkqueue_append_to_tempfile(server *srv, chunkqueue *dest, const ch
 			int retry = (errno == ENOSPC && dest->tempdirs && ++dest->tempdir_idx < dest->tempdirs->used);
 			if (!retry) {
 				log_error_write(srv, __FILE__, __LINE__, "sbs",
-						"denying upload as writing to file failed:",
-						dst_c->file.name, strerror(errno));
+						"write() temp-file", dst_c->file.name, "failed:",
+						strerror(errno));
 			}
 
 			if (0 == chunk_remaining_length(dst_c)) {
 				/*(remove empty chunk and unlink tempfile)*/
 				chunkqueue_remove_empty_chunks(dest);
 			} else {/*(close tempfile; avoid later attempts to append)*/
-				close(dst_c->file.fd);
+				int rc = close(dst_c->file.fd);
 				dst_c->file.fd = -1;
+				if (0 != rc) {
+					log_error_write(srv, __FILE__, __LINE__, "sbss",
+						"close() temp-file", dst_c->file.name, "failed:",
+						strerror(errno));
+					return -1;
+				}
 			}
 			if (!retry) return -1;
 

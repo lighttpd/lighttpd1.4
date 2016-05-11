@@ -722,7 +722,11 @@ static int webdav_copy_file(server *srv, connection *con, plugin_data *p, physic
 
 	free(data);
 	close(ifd);
-	close(ofd);
+	if (0 != close(ofd)) {
+		if (0 == status) status = (errno == ENOSPC) ? 507 : 403;
+		log_error_write(srv, __FILE__, __LINE__, "sbss",
+				"close ", dst->path, "failed: ", strerror(errno));
+	}
 
 #ifdef USE_PROPPATCH
 	if (0 == status) {
@@ -1848,7 +1852,11 @@ SUBREQUEST_FUNC(mod_webdav_subrequest_handler_huge) {
 				break;
 			}
 		}
-		close(fd);
+		if (0 != close(fd)) {
+			log_error_write(srv, __FILE__, __LINE__, "sbss",
+					"close ", con->physical.path, "failed: ", strerror(errno));
+			return HANDLER_ERROR;
+		}
 
 		return HANDLER_FINISHED;
 	}
