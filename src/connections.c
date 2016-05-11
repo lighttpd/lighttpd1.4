@@ -157,10 +157,26 @@ static int connection_close(server *srv, connection *con) {
 	return 0;
 }
 
-static void connection_handle_errdoc_init(connection *con) {
+static void connection_handle_errdoc_init(server *srv, connection *con) {
+	/* modules that produce headers required with error response should
+	 * typically also produce an error document.  Make an exception for
+	 * mod_auth WWW-Authenticate response header. */
+	buffer *www_auth = NULL;
+	if (401 == con->http_status) {
+		data_string *ds = (data_string *)array_get_element(con->response.headers, "WWW-Authenticate");
+		if (NULL != ds) {
+			www_auth = buffer_init_buffer(ds->value);
+		}
+	}
+
 	buffer_reset(con->physical.path);
 	array_reset(con->response.headers);
 	chunkqueue_reset(con->write_queue);
+
+	if (NULL != www_auth) {
+		response_header_insert(srv, con, CONST_STR_LEN("WWW-Authenticate"), CONST_BUF_LEN(www_auth));
+		buffer_free(www_auth);
+	}
 }
 
 static int connection_handle_write_prepare(server *srv, connection *con) {
@@ -221,7 +237,7 @@ static int connection_handle_write_prepare(server *srv, connection *con) {
 
 		con->file_finished = 0;
 
-		connection_handle_errdoc_init(con);
+		connection_handle_errdoc_init(srv, con);
 
 		/* try to send static errorfile */
 		if (!buffer_string_is_empty(con->conf.errorfile_prefix)) {
@@ -1087,10 +1103,10 @@ int connection_state_machine(server *srv, connection *con) {
 								array_set_key_value(con->environment, CONST_STR_LEN("REDIRECT_URI"), CONST_BUF_LEN(error_handler));
 								con->error_handler_saved_status = -con->http_status; /*(negative to flag old behavior)*/
 							}
-							con->http_status = 0;
 
 							buffer_copy_buffer(con->request.uri, error_handler);
-							connection_handle_errdoc_init(con);
+							connection_handle_errdoc_init(srv, con);
+							con->http_status = 0; /*(after connection_handle_errdoc_init())*/
 
 							done = -1;
 							break;
