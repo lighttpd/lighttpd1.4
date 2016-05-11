@@ -634,7 +634,6 @@ typedef struct server {
 	buffer *ts_date_str;
 
 	/* config-file */
-	array *config;
 	array *config_touched;
 
 	array *config_context;
