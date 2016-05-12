@@ -3,6 +3,7 @@
 #include "base.h"
 #include "log.h"
 #include "buffer.h"
+#include "response.h"
 
 #include "plugin.h"
 
@@ -30,6 +31,7 @@
 typedef struct {
 	unsigned short max_conns;
 	unsigned short silent;
+	buffer *location;
 } plugin_config;
 
 typedef struct {
@@ -62,6 +64,8 @@ FREE_FUNC(mod_evasive_free) {
 
 			if (NULL == s) continue;
 
+			buffer_free(s->location);
+
 			free(s);
 		}
 		free(p->config_storage);
@@ -79,6 +83,7 @@ SETDEFAULTS_FUNC(mod_evasive_set_defaults) {
 	config_values_t cv[] = {
 		{ "evasive.max-conns-per-ip",    NULL, T_CONFIG_SHORT, T_CONFIG_SCOPE_CONNECTION },   /* 0 */
 		{ "evasive.silent",              NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION }, /* 1 */
+		{ "evasive.location",            NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_CONNECTION },  /* 2 */
 		{ NULL,                          NULL, T_CONFIG_UNSET, T_CONFIG_SCOPE_UNSET }
 	};
 
@@ -91,9 +96,11 @@ SETDEFAULTS_FUNC(mod_evasive_set_defaults) {
 		s = calloc(1, sizeof(plugin_config));
 		s->max_conns       = 0;
 		s->silent          = 0;
+		s->location        = buffer_init();
 
 		cv[0].destination = &(s->max_conns);
 		cv[1].destination = &(s->silent);
+		cv[2].destination = s->location;
 
 		p->config_storage[i] = s;
 
@@ -113,6 +120,7 @@ static int mod_evasive_patch_connection(server *srv, connection *con, plugin_dat
 
 	PATCH(max_conns);
 	PATCH(silent);
+	PATCH(location);
 
 	/* skip the first, the global context */
 	for (i = 1; i < srv->config_context->used; i++) {
@@ -130,6 +138,8 @@ static int mod_evasive_patch_connection(server *srv, connection *con, plugin_dat
 				PATCH(max_conns);
 			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("evasive.silent"))) {
 				PATCH(silent);
+			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("evasive.location"))) {
+				PATCH(location);
 			}
 		}
 	}
@@ -190,7 +200,13 @@ URIHANDLER_FUNC(mod_evasive_uri_handler) {
 					"turned away. Too many connections.");
 			}
 
-			con->http_status = 403;
+			if (!buffer_is_empty(p->conf.location)) {
+				response_header_overwrite(srv, con, CONST_STR_LEN("Location"), CONST_BUF_LEN(p->conf.location));
+				con->http_status = 302;
+				con->file_finished = 1;
+			} else {
+				con->http_status = 403;
+			}
 			con->mode = DIRECT;
 			return HANDLER_FINISHED;
 		}
