@@ -21,6 +21,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+#include <strings.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <time.h>
@@ -633,6 +634,7 @@ static int process_ssi_stmt(server *srv, connection *con, plugin_data *p, const 
 			buffer_append_string_buffer(p->stat_fn, srv->tmp_buf);
 		} else {
 			/* virtual */
+			size_t remain;
 
 			if (virt_path[0] == '/') {
 				buffer_copy_string(p->stat_fn, virt_path);
@@ -649,8 +651,46 @@ static int process_ssi_stmt(server *srv, connection *con, plugin_data *p, const 
 
 			/* we have an uri */
 
-			buffer_copy_buffer(p->stat_fn, con->physical.doc_root);
-			buffer_append_string_buffer(p->stat_fn, srv->tmp_buf);
+			/* Destination physical path (similar to code in mod_webdav.c)
+			 * src con->physical.path might have been remapped with mod_alias, mod_userdir.
+			 *   (but neither modifies con->physical.rel_path)
+			 * Find matching prefix to support relative paths to current physical path.
+			 * Aliasing of paths underneath current con->physical.basedir might not work.
+			 * Likewise, mod_rewrite URL rewriting might thwart this comparison.
+			 * Use mod_redirect instead of mod_alias to remap paths *under* this basedir.
+			 * Use mod_redirect instead of mod_rewrite on *any* parts of path to basedir.
+			 * (Related, use mod_auth to protect this basedir, but avoid attempting to
+			 *  use mod_auth on paths underneath this basedir, as target path is not
+			 *  validated with mod_auth)
+			 */
+
+			/* find matching URI prefix
+			 * check if remaining con->physical.rel_path matches suffix
+			 *   of con->physical.basedir so that we can use it to
+			 *   remap Destination physical path */
+			{
+				const char *sep, *sep2;
+				sep = con->uri.path->ptr;
+				sep2 = srv->tmp_buf->ptr;
+				for (i = 0; sep[i] && sep[i] == sep2[i]; ++i) ;
+				while (i != 0 && sep[--i] != '/') ; /* find matching directory path */
+			}
+			if (con->conf.force_lowercase_filenames) {
+				buffer_to_lower(srv->tmp_buf);
+			}
+			remain = buffer_string_length(con->uri.path) - i;
+			if (!con->conf.force_lowercase_filenames
+			    ? buffer_is_equal_right_len(con->physical.path, con->physical.rel_path, remain)
+			    :(buffer_string_length(con->physical.path) >= remain
+			      && 0 == strncasecmp(con->physical.path->ptr+buffer_string_length(con->physical.path)-remain, con->physical.rel_path->ptr+i, remain))) {
+				buffer_copy_string_len(p->stat_fn, con->physical.path->ptr, buffer_string_length(con->physical.path)-remain);
+				buffer_append_string_len(p->stat_fn, srv->tmp_buf->ptr+i, buffer_string_length(srv->tmp_buf)-i);
+			} else {
+				/* unable to perform physical path remap here;
+				 * assume doc_root/rel_path and no remapping */
+				buffer_copy_buffer(p->stat_fn, con->physical.doc_root);
+				buffer_append_string_buffer(p->stat_fn, srv->tmp_buf);
+			}
 		}
 
 		if (0 == stat(p->stat_fn->ptr, &stb)) {
