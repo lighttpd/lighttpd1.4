@@ -1055,6 +1055,7 @@ static int mod_ssi_stmt_len(const char *s, const int len) {
 			break;
 		case '-':
 			if (!sq && !dq && n+2 < len && s[n+1] == '-' && s[n+2] == '>') return n+3; /* found end of stmt */
+			break;
 		case '"':
 			if (!sq && (!dq || !bs)) dq = !dq; break;
 		case '\'':
@@ -1078,7 +1079,7 @@ static void mod_ssi_read_fd(server *srv, connection *con, plugin_data *p, int fd
 		size_t prelen = 0, len;
 		offset += (size_t)rd;
 		for (; (s = memchr(buf+prelen, '<', offset-prelen)); ++prelen) {
-			prelen = buf - s;
+			prelen = s - buf;
 			if (prelen + 5 <= offset) { /*("<!--#" is 5 chars)*/
 				if (0 != memcmp(s+1, CONST_STR_LEN("!--#"))) continue; /* loop to loop for next '<' */
 
@@ -1090,7 +1091,7 @@ static void mod_ssi_read_fd(server *srv, connection *con, plugin_data *p, int fd
 				if (len) { /* num of chars to be consumed */
 					mod_ssi_parse_ssi_stmt(srv, con, p, buf+prelen, len, st);
 					prelen += (len - 1); /* offset to '>' at end of SSI directive; incremented at top of loop */
-					pretag += len;
+					pretag = prelen + 1;
 					if (pretag == offset) {
 						offset = pretag = 0;
 						break;
