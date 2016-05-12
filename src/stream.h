@@ -10,7 +10,7 @@ typedef struct {
 	int mapped;
 } stream;
 
-int stream_open(stream *f, buffer *fn);
+int stream_open(stream *f, const buffer *fn);
 int stream_close(stream *f);
 
 #endif

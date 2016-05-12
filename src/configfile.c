@@ -20,6 +20,7 @@
 #include <ctype.h>
 #include <limits.h>
 #include <assert.h>
+#include <glob.h>
 
 
 static int config_insert(server *srv) {
@@ -1073,31 +1074,67 @@ static int tokenizer_init(tokenizer_t *t, const buffer *source, const char *inpu
 	return 0;
 }
 
-int config_parse_file(server *srv, config_t *context, const char *fn) {
+static int config_parse_file_stream(server *srv, config_t *context, const buffer *filename) {
 	tokenizer_t t;
 	stream s;
 	int ret;
-	buffer *filename;
-
-	if (buffer_string_is_empty(context->basedir) ||
-			(fn[0] == '/' || fn[0] == '\\') ||
-			(fn[0] == '.' && (fn[1] == '/' || fn[1] == '\\'))) {
-		filename = buffer_init_string(fn);
-	} else {
-		filename = buffer_init_buffer(context->basedir);
-		buffer_append_string(filename, fn);
-	}
 
 	if (0 != stream_open(&s, filename)) {
 		log_error_write(srv, __FILE__, __LINE__, "sbss",
 				"opening configfile ", filename, "failed:", strerror(errno));
-		ret = -1;
+		return -1;
 	} else {
 		tokenizer_init(&t, filename, s.start, s.size);
 		ret = config_parse(srv, context, &t);
 	}
 
 	stream_close(&s);
+	return ret;
+}
+
+int config_parse_file(server *srv, config_t *context, const char *fn) {
+	buffer *filename;
+	size_t i;
+	int ret = -1;
+      #ifdef GLOB_BRACE
+	int flags = GLOB_BRACE;
+      #else
+	int flags = 0;
+      #endif
+	glob_t gl;
+
+	if ((fn[0] == '/' || fn[0] == '\\') ||
+	    (fn[0] == '.' && (fn[1] == '/' || fn[1] == '\\')) ||
+	    (fn[0] == '.' && fn[1] == '.' && (fn[2] == '/' || fn[2] == '\\'))) {
+		filename = buffer_init_string(fn);
+	} else {
+		filename = buffer_init_buffer(context->basedir);
+		buffer_append_string(filename, fn);
+	}
+
+	switch (glob(filename->ptr, flags, NULL, &gl)) {
+	case 0:
+		for (i = 0; i < gl.gl_pathc; ++i) {
+			buffer_copy_string(filename, gl.gl_pathv[i]);
+			ret = config_parse_file_stream(srv, context, filename);
+			if (0 != ret) break;
+		}
+		globfree(&gl);
+		break;
+	case GLOB_NOMATCH:
+		if (filename->ptr[strcspn(filename->ptr, "*?[]{}")] != '\0') { /*(contains glob metachars)*/
+			ret = 0; /* not an error if no files match glob pattern */
+		}
+		else {
+			log_error_write(srv, __FILE__, __LINE__, "sb", "include file not found: ", filename);
+		}
+		break;
+	case GLOB_ABORTED:
+	case GLOB_NOSPACE:
+		log_error_write(srv, __FILE__, __LINE__, "sbss", "glob()", filename, "failed:", strerror(errno));
+		break;
+	}
+
 	buffer_free(filename);
 	return ret;
 }
@@ -1194,6 +1231,7 @@ int config_read(server *srv, const char *fn) {
 	data_string *dcwd;
 	int ret;
 	char *pos;
+	buffer *filename;
 
 	context_init(srv, &context);
 	context.all_configs = srv->config_context;
@@ -1205,7 +1243,6 @@ int config_read(server *srv, const char *fn) {
 #endif
 	if (pos) {
 		buffer_copy_string_len(context.basedir, fn, pos - fn + 1);
-		fn = pos + 1;
 	}
 
 	dc = data_config_init();
@@ -1232,7 +1269,9 @@ int config_read(server *srv, const char *fn) {
 		dcwd->free((data_unset*) dcwd);
 	}
 
-	ret = config_parse_file(srv, &context, fn);
+	filename = buffer_init_string(fn);
+	ret = config_parse_file_stream(srv, &context, filename);
+	buffer_free(filename);
 
 	/* remains nothing if parser is ok */
 	force_assert(!(0 == ret && context.ok && 0 != context.configs_stack.used));

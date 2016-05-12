@@ -21,7 +21,7 @@
 # define FIFO_NONBLOCK 0
 #endif
 
-int stream_open(stream *f, buffer *fn) {
+int stream_open(stream *f, const buffer *fn) {
 
 #if !defined(__WIN32)
 
