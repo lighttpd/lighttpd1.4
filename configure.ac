@@ -371,19 +371,25 @@ AC_ARG_WITH(pcre, AC_HELP_STRING([--with-pcre],[Enable pcre support (default yes
 AC_MSG_RESULT([$WITH_PCRE])
 
 if test "$WITH_PCRE" != "no"; then
-  AC_PATH_PROG(PCRECONFIG, pcre-config)
+		if test "$WITH_PCRE" != "yes"; then
+			PCRE_LIB="-L$WITH_PCRE/lib -lpcre"
+			CPPFLAGS="$CPPFLAGS -I$WITH_PCRE/include"
+		else
+			AC_PATH_PROG(PCRECONFIG, pcre-config)
+			if test x"$PCRECONFIG" != x; then
+				PCRE_LIB=`$PCRECONFIG --libs`
+				CPPFLAGS="$CPPFLAGS `$PCRECONFIG --cflags`"
+			fi
+		fi
 
-  if test x"$PCRECONFIG" != x; then
-    PCRE_LIB=`$PCRECONFIG --libs`
-    CPPFLAGS="$CPPFLAGS `$PCRECONFIG --cflags`"
+  if test x"$PCRE_LIB" != x; then
     AC_DEFINE([HAVE_LIBPCRE], [1], [libpcre])
     AC_DEFINE([HAVE_PCRE_H], [1], [pcre.h])
+    AC_SUBST(PCRE_LIB)
   else
-     AC_MSG_ERROR([pcre-config not found, install the pcre-devel package or build with --without-pcre])
+    AC_MSG_ERROR([pcre-config not found, install the pcre-devel package or build with --without-pcre])
   fi
 fi
-
-AC_SUBST(PCRE_LIB)
 
 AC_MSG_CHECKING(for zlib support)
 AC_ARG_WITH(zlib, AC_HELP_STRING([--with-zlib],[Enable zlib support for mod_compress]),
@@ -391,18 +397,23 @@ AC_ARG_WITH(zlib, AC_HELP_STRING([--with-zlib],[Enable zlib support for mod_comp
 AC_MSG_RESULT([$WITH_ZLIB])
 
 if test "$WITH_ZLIB" != "no"; then
-  AC_CHECK_LIB(z, deflate, [
-    AC_CHECK_HEADERS([zlib.h],[
-      Z_LIB=-lz
-      AC_DEFINE([HAVE_LIBZ], [1], [libz])
-      AC_DEFINE([HAVE_ZLIB_H], [1])
-    ])
-  ])
-  if test x$Z_LIB = x; then
-     AC_MSG_ERROR([zlib-headers and/or libs where not found, install them or build with --without-zlib])
+		if test "$WITH_ZLIB" != "yes"; then
+			Z_LIB="-L$WITH_ZLIB -lz"
+			CPPFLAGS="$CPPFLAGS -I$WITH_ZLIB"
+		else
+			AC_CHECK_LIB(z, deflate, [
+			  AC_CHECK_HEADERS([zlib.h],[Z_LIB=-lz])
+			])
+		fi
+
+  if test x"$Z_LIB" != x; then
+    AC_DEFINE([HAVE_LIBZ], [1], [libz])
+    AC_DEFINE([HAVE_ZLIB_H], [1])
+    AC_SUBST(Z_LIB)
+  else
+    AC_MSG_ERROR([zlib-headers and/or libs were not found, install them or build with --without-zlib])
   fi
 fi
-AC_SUBST(Z_LIB)
 
 AC_MSG_CHECKING(for bzip2 support)
 AC_ARG_WITH(bzip2, AC_HELP_STRING([--with-bzip2],[Enable bzip2 support for mod_compress]),
@@ -410,18 +421,23 @@ AC_ARG_WITH(bzip2, AC_HELP_STRING([--with-bzip2],[Enable bzip2 support for mod_c
 AC_MSG_RESULT([$WITH_BZIP2])
 
 if test "$WITH_BZIP2" != "no"; then
-  AC_CHECK_LIB(bz2, BZ2_bzCompress, [
-    AC_CHECK_HEADERS([bzlib.h],[
-      BZ_LIB=-lbz2
-      AC_DEFINE([HAVE_LIBBZ2], [1], [libbz2])
-      AC_DEFINE([HAVE_BZLIB_H], [1])
-    ])
-  ])
-  if test x$BZ_LIB = x; then
-     AC_MSG_ERROR([bzip2-headers and/or libs where not found, install them or build with --without-bzip2])
+		if test "$WITH_BZIP2" != "yes"; then
+			BZ_LIB="-L$WITH_BZIP2 -lbz2"
+			CPPFLAGS="$CPPFLAGS -I$WITH_BZIP2"
+		else
+			AC_CHECK_LIB(bz2, BZ2_bzCompress, [
+			  AC_CHECK_HEADERS([bzlib.h],[BZ_LIB=-lbz2])
+			])
+		fi
+
+  if test x"$BZ_LIB" != x; then
+    AC_DEFINE([HAVE_LIBBZ2], [1], [libbz2])
+    AC_DEFINE([HAVE_BZLIB_H], [1])
+    AC_SUBST(BZ_LIB)
+  else
+    AC_MSG_ERROR([bzip2-headers and/or libs were not found, install them or build with --without-bzip2])
   fi
 fi
-AC_SUBST(BZ_LIB)
 
 dnl Check for gamin
 AC_MSG_CHECKING(for FAM)
@@ -430,26 +446,29 @@ AC_ARG_WITH(fam, AC_HELP_STRING([--with-fam],[fam/gamin for reducing number of s
 AC_MSG_RESULT([$WITH_FAM])
 
 if test "$WITH_FAM" != "no"; then
-  AC_CHECK_LIB(fam, FAMOpen2, [
-    AC_CHECK_HEADERS([fam.h],[
-      FAM_LIBS=-lfam
-      AC_DEFINE([HAVE_LIBFAM], [1], [libfam])
-      AC_DEFINE([HAVE_FAM_H], [1], [fam.h])
-    ])
-  ])
-  if test "x$FAM_LIBS" = x; then
-    PKG_CHECK_MODULES(FAM, gamin >= 0.1.0, [
-      AC_DEFINE([HAVE_LIBFAM], [1], [libfam])
-      AC_DEFINE([HAVE_FAM_H], [1], [fam.h])
-    ])
-  fi
-  OLD_LIBS=$LIBS
-  LIBS=$FAM_LIBS
-  AC_CHECK_FUNCS([FAMNoExists])
-  LIBS=$OLD_LIBS
+		if test "$WITH_FAM" != "yes"; then
+			FAM_LIBS="-L$WITH_FAM -lfam"
+			CPPFLAGS="$CPPFLAGS -I$WITH_FAM"
+		else
+			AC_CHECK_LIB(fam, FAMOpen2, [
+			  AC_CHECK_HEADERS([fam.h],[FAM_LIBS=-lfam])
+			])
+			if test "x$FAM_LIBS" = x; then
+			  PKG_CHECK_MODULES(FAM, gamin >= 0.1.0)
+			fi
+		fi
 
-  if test x$FAM_LIBS = x; then
-     AC_MSG_ERROR([fam/gamin-headers and/or libs where not found, install them or build with --without-fam])
+  if test x"$FAM_LIBS" != x; then
+    OLD_LIBS=$LIBS
+    LIBS=$FAM_LIBS
+    AC_CHECK_FUNCS([FAMNoExists])
+    LIBS=$OLD_LIBS
+
+    AC_DEFINE([HAVE_LIBFAM], [1], [libfam])
+    AC_DEFINE([HAVE_FAM_H], [1], [fam.h])
+    AC_SUBST(FAM_LIBS)
+  else
+     AC_MSG_ERROR([fam/gamin-headers and/or libs were not found, install them or build with --without-fam])
   fi
 fi
 
@@ -459,14 +478,52 @@ AC_ARG_WITH(webdav-props, AC_HELP_STRING([--with-webdav-props],[properties in mo
 AC_MSG_RESULT([$WITH_WEBDAV_PROPS])
 
 if test "$WITH_WEBDAV_PROPS" != "no"; then
-  PKG_CHECK_MODULES(XML, libxml-2.0, [
-    AC_DEFINE([HAVE_LIBXML2], [1], [libxml2])
-    AC_DEFINE([HAVE_LIBXML_H], [1], [libxml.h])
-  ])
-  PKG_CHECK_MODULES(SQLITE, sqlite3, [
-    AC_DEFINE([HAVE_SQLITE3], [1], [libsqlite3])
-    AC_DEFINE([HAVE_SQLITE3_H], [1], [sqlite3.h])
-  ])
+
+  AC_MSG_CHECKING(for libxml2)
+  AC_ARG_WITH(libxml, AC_HELP_STRING([--with-libxml],[libxml2 for properties in mod_webdav]),
+  [WITH_LIBXML=$withval],[WITH_LIBXML=yes])
+  AC_MSG_RESULT([$WITH_LIBXML])
+
+  if test "$WITH_LIBXML" != "no"; then
+		if test "$WITH_LIBXML" != "yes"; then
+			XML_LIBS="-L$WITH_LIBXML/.libs -lxml2"
+			XML_CFLAGS="-I$WITH_LIBXML/include"
+		else
+			PKG_CHECK_MODULES(XML, libxml-2.0)
+		fi
+
+    if test x"$XML_LIBS" != x; then
+      AC_DEFINE([HAVE_LIBXML2], [1], [libxml2])
+      AC_DEFINE([HAVE_LIBXML_H], [1], [libxml.h])
+      AC_SUBST(XML_LIBS)
+      AC_SUBST(XML_CFLAGS)
+    else
+      AC_MSG_ERROR([libxml2-headers and/or libs were not found, install them or build with --without-webdav-props])
+    fi
+  fi
+
+  AC_MSG_CHECKING(for sqlite)
+  AC_ARG_WITH(sqlite, AC_HELP_STRING([--with-sqlite],[sqlite for properties in mod_webdav]),
+  [WITH_SQLITE=$withval],[WITH_SQLITE=yes])
+  AC_MSG_RESULT([$WITH_SQLITE])
+
+  if test "$WITH_SQLITE" != "no"; then
+		if test "$WITH_SQLITE" != "yes"; then
+			SQLITE_LIBS="-L$WITH_SQLITE/.libs -lsqlite3"
+			SQLITE_CFLAGS="-I$WITH_SQLITE"
+		else
+			PKG_CHECK_MODULES(SQLITE, sqlite3)
+		fi
+
+    if test x"$SQLITE_LIBS" != x; then
+      AC_DEFINE([HAVE_SQLITE3], [1], [libsqlite3])
+      AC_DEFINE([HAVE_SQLITE3_H], [1], [sqlite3.h])
+      AC_SUBST(SQLITE_LIBS)
+      AC_SUBST(SQLITE_CFLAGS)
+    else
+      AC_MSG_ERROR([sqlite-headers and/or libs were not found, install them or build with --without-webdav-props])
+    fi
+  fi
 
   AC_MSG_CHECKING(for locks in mod_webdav)
   AC_ARG_WITH(webdav-locks, AC_HELP_STRING([--with-webdav-locks],[locks in mod_webdav]),
@@ -474,16 +531,34 @@ if test "$WITH_WEBDAV_PROPS" != "no"; then
   AC_MSG_RESULT([$WITH_WEBDAV_LOCKS])
 
   if test "$WITH_WEBDAV_LOCKS" != "no"; then
-    AC_CHECK_LIB(uuid, uuid_unparse, [
-      AC_CHECK_HEADERS([uuid/uuid.h],[
-        UUID_LIBS=-luuid
+
+    AC_MSG_CHECKING(for libuuid)
+    AC_ARG_WITH(uuid, AC_HELP_STRING([--with-uuid],[uuid for locks in mod_webdav]),
+    [WITH_UUID=$withval],[WITH_UUID=yes])
+    AC_MSG_RESULT([$WITH_UUID])
+
+    if test "$WITH_UUID" != "no"; then
+		if test "$WITH_UUID" != "yes"; then
+			UUID_LIBS="-L$WITH_UUID -luuid"
+			CPPFLAGS="$CPPFLAGS -I$WITH_UUID"
+		else
+			AC_CHECK_LIB(uuid, uuid_unparse, [
+			  AC_CHECK_HEADERS([uuid/uuid.h],[UUID_LIBS=-luuid])
+			])
+		fi
+
+      if test x"$UUID_LIBS" != x; then
         AC_DEFINE([HAVE_UUID], [1], [libuuid])
         AC_DEFINE([HAVE_UUID_H], [1], [uuid/uuid.h is available])
-      ])
-    ])
+        AC_SUBST(UUID_LIBS)
+      else
+        AC_MSG_ERROR([uuid-headers and/or libs were not found, install them or build with --without-webdav-locks])
+      fi
+    fi
+
   fi
+
 fi
-AC_SUBST(UUID_LIBS)
 
 dnl Check for gdbm
 AC_MSG_CHECKING(for gdbm)
@@ -492,14 +567,22 @@ AC_ARG_WITH(gdbm, AC_HELP_STRING([--with-gdbm],[gdbm storage for mod_trigger_b4_
 AC_MSG_RESULT([$WITH_GDBM])
 
 if test "$WITH_GDBM" != "no"; then
- AC_CHECK_LIB(gdbm, gdbm_open, [
-         AC_CHECK_HEADERS([gdbm.h],[
-                 GDBM_LIB=-lgdbm
-                 AC_DEFINE([HAVE_GDBM], [1], [libgdbm])
-		 AC_DEFINE([HAVE_GDBM_H], [1])
-         ])
- ])
- AC_SUBST(GDBM_LIB)
+		if test "$WITH_GDBM" != "yes"; then
+			GDBM_LIB="-L$WITH_GDBM -lgdbm"
+			CPPFLAGS="$CPPFLAGS -I$WITH_GDBM"
+		else
+			AC_CHECK_LIB(gdbm, gdbm_open, [
+			  AC_CHECK_HEADERS([gdbm.h],[GDBM_LIB=-lgdbm])
+			])
+		fi
+
+  if test x"$GDBM_LIB" != x; then
+    AC_DEFINE([HAVE_GDBM], [1], [libgdbm])
+    AC_DEFINE([HAVE_GDBM_H], [1])
+    AC_SUBST(GDBM_LIB)
+  else
+    AC_MSG_ERROR([gdbm headers and/or libs were not found, install them or build with --without-gdbm])
+  fi
 fi
 
 dnl Check for memcached
@@ -507,14 +590,25 @@ AC_MSG_CHECKING(for memcached)
 AC_ARG_WITH(memcached, AC_HELP_STRING([--with-memcached],[memcached storage for mod_trigger_b4_dl]),
 [WITH_MEMCACHED=$withval],[WITH_MEMCACHED=no])
 AC_MSG_RESULT([$WITH_MEMCACHED])
+
 if test "$WITH_MEMCACHED" != "no"; then
-  AC_CHECK_LIB(memcached, memcached, [
-    AC_CHECK_HEADERS([libmemcached/memcached.h],[
-      MEMCACHED_LIB=-lmemcached
-      AC_DEFINE([USE_MEMCACHED], [1], [libmemcached])
-    ])
-  ])
-  AC_SUBST(MEMCACHED_LIB)
+		if test "$WITH_MEMCACHED" != "yes"; then
+			MEMCACHED_LIB="-L$WITH_MEMCACHED -lMEMCACHED"
+			CPPFLAGS="$CPPFLAGS -I$WITH_MEMCACHED"
+		else
+			AC_CHECK_LIB(memcached, memcached, [
+			  AC_CHECK_HEADERS([libmemcached/memcached.h],[
+			    MEMCACHED_LIB=-lmemcached
+			  ])
+			])
+		fi
+
+  if test x"$MEMCACHED_LIB" != x; then
+    AC_DEFINE([USE_MEMCACHED], [1], [libmemcached])
+    AC_SUBST(MEMCACHED_LIB)
+  else
+    AC_MSG_ERROR([memcached headers and/or libs were not found, install them or build with --without-memcached])
+  fi
 fi
 
 dnl Check for lua
@@ -524,20 +618,21 @@ AC_ARG_WITH(lua, AC_HELP_STRING([--with-lua],[lua engine for mod_cml]),
 
 AC_MSG_RESULT($WITH_LUA)
 if test "$WITH_LUA" != "no"; then
+  found_lua=0
   if test "$WITH_LUA" != "yes"; then
     PKG_CHECK_MODULES(LUA, $WITH_LUA >= 5.1, [
-      AC_DEFINE([HAVE_LUA], [1], [liblua])
-      AC_DEFINE([HAVE_LUA_H], [1], [lua.h])
+      found_lua=1
     ],[
-      AC_MSG_ERROR([Couldn't find requested lua pkg-config module $WITH_LUA])
+      AC_MSG_NOTICE([Couldn't find requested lua pkg-config module $WITH_LUA])
     ])
+    if test "$found_lua" = "0"; then
+      LUA_LIBS="-L$WITH_LUA -llua"
+      LUA_CFLAGS="-I$WITH_LUA"
+    fi
   else
-    found_lua=0
     for luaname in lua5.3 lua-5.3 lua5.2 lua-5.2 lua5.1 lua-5.1 lua; do
       if test "$found_lua" = "0"; then
         PKG_CHECK_MODULES(LUA, $luaname >= 5.1, [
-          AC_DEFINE([HAVE_LUA], [1], [liblua])
-          AC_DEFINE([HAVE_LUA_H], [1], [lua.h])
           found_lua=1
         ], [
           AC_MSG_NOTICE([Couldn't find $luaname])
@@ -549,8 +644,14 @@ if test "$WITH_LUA" != "no"; then
     fi
   fi
 
-  AC_SUBST(LUA_CFLAGS)
-  AC_SUBST(LUA_LIBS)
+  if test x"$LUA_LIBS" != x; then
+    AC_DEFINE([HAVE_LUA], [1], [liblua])
+    AC_DEFINE([HAVE_LUA_H], [1], [lua.h])
+    AC_SUBST(LUA_LIBS)
+    AC_SUBST(LUA_CFLAGS)
+  else
+    AC_MSG_ERROR([lua headers and/or libs were not found, install them or build with --without-lua])
+  fi
 fi
 
 dnl search for crypt_r and (fallback) for crypt
