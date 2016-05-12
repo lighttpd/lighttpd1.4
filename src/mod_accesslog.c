@@ -890,9 +890,14 @@ REQUESTDONE_FUNC(log_access_write) {
 				accesslog_append_escaped(b, con->uri.path_raw);
 				break;
 			case FORMAT_CONNECTION_STATUS:
-				switch(con->keep_alive) {
-				case 0: buffer_append_string_len(b, CONST_STR_LEN("-")); break;
-				default: buffer_append_string_len(b, CONST_STR_LEN("+")); break;
+				if (con->state == CON_STATE_RESPONSE_END) {
+					if (0 == con->keep_alive) {
+						buffer_append_string_len(b, CONST_STR_LEN("-"));
+					} else {
+						buffer_append_string_len(b, CONST_STR_LEN("+"));
+					}
+				} else { /* CON_STATE_ERROR */
+					buffer_append_string_len(b, CONST_STR_LEN("X"));
 				}
 				break;
 			default:
