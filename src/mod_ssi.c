@@ -141,7 +141,7 @@ SETDEFAULTS_FUNC(mod_ssi_set_defaults) {
 
 #ifdef HAVE_PCRE_H
 	/* allow 2 params */
-	if (NULL == (p->ssi_regex = pcre_compile("^<!--#([a-z]+)\\s+(?:([a-z]+)=\"(.*?)(?<!\\\\)\"\\s*)?(?:([a-z]+)=\"(.*?)(?<!\\\\)\"\\s*)?-->$", 0, &errptr, &erroff, NULL))) {
+	if (NULL == (p->ssi_regex = pcre_compile("^<!--#([a-z]+)\\s+(?:([a-z]+)=\"(.*?)(?<!\\\\)\"\\s*)?(?:([a-z]+)=\"(.*?)(?<!\\\\)\"\\s*)?-->$", PCRE_ANCHORED|PCRE_DOLLAR_ENDONLY|PCRE_DOTALL|PCRE_UTF8, &errptr, &erroff, NULL))) {
 		log_error_write(srv, __FILE__, __LINE__, "sds",
 				"ssi: pcre ",
 				erroff, errptr);
@@ -1071,7 +1071,7 @@ static void mod_ssi_parse_ssi_stmt(server *srv, connection *con, plugin_data *p,
 
 #define N 10
 	int ovec[N * 3];
-	int n = pcre_exec(p->ssi_regex, NULL, s, len, 0, 0, ovec, sizeof(ovec)/sizeof(*ovec));
+	int n = pcre_exec(p->ssi_regex, NULL, s, len, 0, PCRE_ANCHORED, ovec, sizeof(ovec)/sizeof(*ovec));
 	if (n > 0) {
 		const char **l;
 		pcre_get_substring_list(s, ovec, n, &l);
