@@ -84,9 +84,6 @@ FREE_FUNC(mod_ssi_free) {
 
 	array_free(p->ssi_vars);
 	array_free(p->ssi_cgi_env);
-#ifdef HAVE_PCRE_H
-	pcre_free(p->ssi_regex);
-#endif
 	buffer_free(p->timefmt);
 	buffer_free(p->stat_fn);
 
@@ -100,10 +97,6 @@ FREE_FUNC(mod_ssi_free) {
 SETDEFAULTS_FUNC(mod_ssi_set_defaults) {
 	plugin_data *p = p_d;
 	size_t i = 0;
-#ifdef HAVE_PCRE_H
-	const char *errptr;
-	int erroff;
-#endif
 
 	config_values_t cv[] = {
 		{ "ssi.extension",              NULL, T_CONFIG_ARRAY, T_CONFIG_SCOPE_CONNECTION },       /* 0 */
@@ -139,25 +132,9 @@ SETDEFAULTS_FUNC(mod_ssi_set_defaults) {
 		}
 	}
 
-#ifdef HAVE_PCRE_H
-	/* allow 2 params */
-	if (NULL == (p->ssi_regex = pcre_compile("^<!--#([a-z]+)\\s+(?:([a-z]+)=\"(.*?)(?<!\\\\)\"\\s*)?(?:([a-z]+)=\"(.*?)(?<!\\\\)\"\\s*)?-->$", PCRE_ANCHORED|PCRE_DOLLAR_ENDONLY|PCRE_DOTALL|PCRE_UTF8, &errptr, &erroff, NULL))) {
-		log_error_write(srv, __FILE__, __LINE__, "sds",
-				"ssi: pcre ",
-				erroff, errptr);
-		return HANDLER_ERROR;
-	}
-#else
-	log_error_write(srv, __FILE__, __LINE__, "s",
-			"mod_ssi: pcre support is missing, please recompile with pcre support or remove mod_ssi from the list of modules");
-	return HANDLER_ERROR;
-#endif
-
 	return HANDLER_GO_ON;
 }
 
-
-#ifdef HAVE_PCRE_H
 
 static int ssi_env_add(array *env, const char *key, const char *val) {
 	data_string *ds;
@@ -471,7 +448,7 @@ static int process_ssi_stmt(server *srv, connection *con, plugin_data *p, const 
 */
 			} else {
 				log_error_write(srv, __FILE__, __LINE__, "sss",
-						"ssi: unknow attribute for ",
+						"ssi: unknown attribute for ",
 						l[1], l[i]);
 			}
 		}
@@ -598,7 +575,7 @@ static int process_ssi_stmt(server *srv, connection *con, plugin_data *p, const 
 				virt_path = l[i+1];
 			} else {
 				log_error_write(srv, __FILE__, __LINE__, "sss",
-						"ssi: unknow attribute for ",
+						"ssi: unknown attribute for ",
 						l[1], l[i]);
 			}
 		}
@@ -747,7 +724,7 @@ static int process_ssi_stmt(server *srv, connection *con, plugin_data *p, const 
 				val = l[i+1];
 			} else {
 				log_error_write(srv, __FILE__, __LINE__, "sss",
-						"ssi: unknow attribute for ",
+						"ssi: unknown attribute for ",
 						l[1], l[i]);
 			}
 		}
@@ -764,10 +741,12 @@ static int process_ssi_stmt(server *srv, connection *con, plugin_data *p, const 
 			buffer_copy_string(ds->value, val);
 
 			array_insert_unique(p->ssi_vars, (data_unset *)ds);
+		} else if (key || val) {
+			log_error_write(srv, __FILE__, __LINE__, "sSSss",
+					"ssi: var and value have to be set in <!--#set", l[1], "=", l[2], "-->");
 		} else {
-			log_error_write(srv, __FILE__, __LINE__, "sss",
-					"ssi: var and value have to be set in",
-					l[0], l[1]);
+			log_error_write(srv, __FILE__, __LINE__, "s",
+					"ssi: var and value have to be set in <!--#set var=... value=... -->");
 		}
 		break;
 	}
@@ -784,14 +763,14 @@ static int process_ssi_stmt(server *srv, connection *con, plugin_data *p, const 
 					p->sizefmt = 0;
 				} else {
 					log_error_write(srv, __FILE__, __LINE__, "sssss",
-							"ssi: unknow value for attribute '",
+							"ssi: unknown value for attribute '",
 							l[i],
 							"' for ",
 							l[1], l[i+1]);
 				}
 			} else {
 				log_error_write(srv, __FILE__, __LINE__, "sss",
-						"ssi: unknow attribute for ",
+						"ssi: unknown attribute for ",
 						l[1], l[i]);
 			}
 		}
@@ -834,7 +813,7 @@ static int process_ssi_stmt(server *srv, connection *con, plugin_data *p, const 
 				cmd = l[i+1];
 			} else {
 				log_error_write(srv, __FILE__, __LINE__, "sss",
-						"ssi: unknow attribute for ",
+						"ssi: unknown attribute for ",
 						l[1], l[i]);
 			}
 		}
@@ -951,7 +930,7 @@ static int process_ssi_stmt(server *srv, connection *con, plugin_data *p, const 
 				expr = l[i+1];
 			} else {
 				log_error_write(srv, __FILE__, __LINE__, "sss",
-						"ssi: unknow attribute for ",
+						"ssi: unknown attribute for ",
 						l[1], l[i]);
 			}
 		}
@@ -1005,7 +984,7 @@ static int process_ssi_stmt(server *srv, connection *con, plugin_data *p, const 
 				expr = l[i+1];
 			} else {
 				log_error_write(srv, __FILE__, __LINE__, "sss",
-						"ssi: unknow attribute for ",
+						"ssi: unknown attribute for ",
 						l[1], l[i]);
 			}
 		}
@@ -1054,7 +1033,7 @@ static int process_ssi_stmt(server *srv, connection *con, plugin_data *p, const 
 		break;
 	default:
 		log_error_write(srv, __FILE__, __LINE__, "ss",
-				"ssi: unknow ssi-command:",
+				"ssi: unknown ssi-command:",
 				l[1]);
 		break;
 	}
@@ -1063,27 +1042,125 @@ static int process_ssi_stmt(server *srv, connection *con, plugin_data *p, const 
 
 }
 
+static int mod_ssi_parse_ssi_stmt_value(const char * const s, const int len) {
+	int n;
+	const int c = (s[0] == '"' ? '"' : s[0] == '\'' ? '\'' : 0);
+	if (0 != c) {
+		for (n = 1; n < len; ++n) {
+			if (s[n] == c) return n+1;
+			if (s[n] == '\\') {
+				if (n+1 == len) return 0; /* invalid */
+				++n;
+			}
+		}
+		return 0; /* invalid */
+	} else {
+		for (n = 0; n < len; ++n) {
+			if (isspace(s[n])) return n;
+			if (s[n] == '\\') {
+				if (n+1 == len) return 0; /* invalid */
+				++n;
+			}
+		}
+		return n;
+	}
+}
+
+static int mod_ssi_parse_ssi_stmt_offlen(int o[10], const char * const s, const int len) {
+
+	/**
+	 * <!--#element attribute=value attribute=value ... -->
+	 */
+
+	/* s must begin "<!--#" and must end with "-->" */
+	int n = 5;
+	o[0] = n;
+	for (; light_isalpha(s[n]); ++n) ; /*(n = 5 to begin after "<!--#")*/
+	o[1] = n - o[0];
+	if (0 == o[1]) return -1; /* empty token */
+
+	if (n+3 == len) return 2; /* token only; no params */
+	if (!isspace(s[n])) return -1;
+	do { ++n; } while (isspace(s[n])); /* string ends "-->", so n < len */
+	if (n+3 == len) return 2; /* token only; no params */
+
+	o[2] = n;
+	for (; light_isalpha(s[n]); ++n) ;
+	o[3] = n - o[2];
+	if (0 == o[3] || s[n++] != '=') return -1;
+
+	o[4] = n;
+	o[5] = mod_ssi_parse_ssi_stmt_value(s+n, len-n-3);
+	if (0 == o[5]) return -1; /* empty or invalid token */
+	n += o[5];
+
+	if (n+3 == len) return 6; /* token and one param */
+	if (!isspace(s[n])) return -1;
+	do { ++n; } while (isspace(s[n])); /* string ends "-->", so n < len */
+	if (n+3 == len) return 6; /* token and one param */
+
+	o[6] = n;
+	for (; light_isalpha(s[n]); ++n) ;
+	o[7] = n - o[6];
+	if (0 == o[7] || s[n++] != '=') return -1;
+
+	o[8] = n;
+	o[9] = mod_ssi_parse_ssi_stmt_value(s+n, len-n-3);
+	if (0 == o[9]) return -1; /* empty or invalid token */
+	n += o[9];
+
+	if (n+3 == len) return 10; /* token and two params */
+	if (!isspace(s[n])) return -1;
+	do { ++n; } while (isspace(s[n])); /* string ends "-->", so n < len */
+	if (n+3 == len) return 10; /* token and two params */
+	return -1;
+}
+
 static void mod_ssi_parse_ssi_stmt(server *srv, connection *con, plugin_data *p, char *s, int len, struct stat *st) {
 
 	/**
 	 * <!--#element attribute=value attribute=value ... -->
 	 */
 
-#define N 10
-	int ovec[N * 3];
-	int n = pcre_exec(p->ssi_regex, NULL, s, len, 0, PCRE_ANCHORED, ovec, sizeof(ovec)/sizeof(*ovec));
-	if (n > 0) {
-		const char **l;
-		pcre_get_substring_list(s, ovec, n, &l);
-		process_ssi_stmt(srv, con, p, l, n, st);
-		pcre_free_substring_list(l);
-	} else {
-		if (n != PCRE_ERROR_NOMATCH) {
-			log_error_write(srv, __FILE__, __LINE__, "sd",
-					"execution error while matching: ", n);
-		}
+	int o[10];
+	int m;
+	const int n = mod_ssi_parse_ssi_stmt_offlen(o, s, len);
+	char *l[6] = { s, NULL, NULL, NULL, NULL, NULL };
+	if (-1 == n) {
+		/* XXX: perhaps emit error comment instead of invalid <!--#...--> code to client */
 		chunkqueue_append_mem(con->write_queue, s, len); /* append stmt as-is */
+		return;
 	}
+
+      #if 0
+	/* dup s and then modify s */
+	/*(l[0] is no longer used; was previously used in only one place for error reporting)*/
+	l[0] = malloc((size_t)(len+1));
+	memcpy(l[0], s, (size_t)len);
+	(l[0])[len] = '\0';
+      #endif
+
+	/* modify s in-place to split string into arg tokens */
+	for (m = 0; m < n; m += 2) {
+		char *ptr = s+o[m];
+		switch (*ptr) {
+		case '"':
+		case '\'': (++ptr)[o[m+1]-2] = '\0'; break;
+		default:       ptr[o[m+1]] = '\0';   break;
+		}
+		l[1+(m>>1)] = ptr;
+		if (m == 4 || m == 8) {
+			/* XXX: removing '\\' escapes from param value would be
+			 * the right thing to do, but would potentially change
+			 * current behavior, e.g. <!--#exec cmd=... --> */
+		}
+	}
+
+	process_ssi_stmt(srv, con, p, (const char **)l, 1+(n>>1), st);
+
+      #if 0
+	free(l[0]);
+      #endif
 }
 
 static int mod_ssi_stmt_len(const char *s, const int len) {
@@ -1184,8 +1261,6 @@ static void mod_ssi_read_fd(server *srv, connection *con, plugin_data *p, int fd
 	}
 }
 
-#endif /* HAVE_PCRE_H */
-
 
 /* don't want to block when open()ing a fifo */
 #if defined(O_NONBLOCK)
@@ -1222,11 +1297,7 @@ static int mod_ssi_handle_request(server *srv, connection *con, plugin_data *p) 
 		return -1;
 	}
 
-      #ifdef HAVE_PCRE_H
 	mod_ssi_read_fd(srv, con, p, fd, &st);
-      #else
-	chunkqueue_append_file(con->write_queue, con->physical.path, 0, st.st_size);
-      #endif
 
 	close(fd);
 	con->file_started  = 1;

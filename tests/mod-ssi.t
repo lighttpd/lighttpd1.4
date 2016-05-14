@@ -37,7 +37,7 @@ $t->{REQUEST}  = ( <<EOF
 GET /ssi-include.shtml HTTP/1.0
 EOF
  );
-$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200, 'HTTP-Content' => "ssi-include\n\nssi-include\n\n" } ];
+$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200, 'HTTP-Content' => "/ssi-include.shtml\n/ssi-include.shtml\n/ssi-include.shtml\nssi-include\n\nssi-include\n\n" } ];
 ok($tf->handle_http($t) == 0, 'ssi - include');
 
 

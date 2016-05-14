@@ -8,10 +8,6 @@
 
 #include "plugin.h"
 
-#ifdef HAVE_PCRE_H
-#include <pcre.h>
-#endif
-
 /* plugin config for all request/connections */
 
 typedef struct {
@@ -24,9 +20,6 @@ typedef struct {
 typedef struct {
 	PLUGIN_DATA;
 
-#ifdef HAVE_PCRE_H
-	pcre *ssi_regex;
-#endif
 	buffer *timefmt;
 	int sizefmt;
 

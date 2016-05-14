@@ -106,7 +106,7 @@ modules = {
 	'mod_mysql_vhost' : { 'src' : [ 'mod_mysql_vhost.c' ], 'lib' : [ env['LIBMYSQL'] ] },
 #	'mod_uploadprogress' : { 'src' : [ 'mod_uploadprogress.c' ] },
 	'mod_evasive' : { 'src' : [ 'mod_evasive.c' ] },
-	'mod_ssi' : { 'src' : [ 'mod_ssi_exprparser.c', 'mod_ssi_expr.c', 'mod_ssi.c' ], 'lib' : [ env['LIBPCRE'] ] },
+	'mod_ssi' : { 'src' : [ 'mod_ssi_exprparser.c', 'mod_ssi_expr.c', 'mod_ssi.c' ] },
 	'mod_flv_streaming' : { 'src' : [ 'mod_flv_streaming.c' ] },
 	'mod_cml': {
 		'src' : [ 'mod_cml_lua.c', 'mod_cml.c', 'mod_cml_funcs.c' ],

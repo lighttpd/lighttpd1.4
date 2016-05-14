@@ -204,7 +204,7 @@ mod_proxy_la_LIBADD = $(common_libadd)
 lib_LTLIBRARIES += mod_ssi.la
 mod_ssi_la_SOURCES = mod_ssi_exprparser.c mod_ssi_expr.c mod_ssi.c
 mod_ssi_la_LDFLAGS = $(common_module_ldflags)
-mod_ssi_la_LIBADD = $(common_libadd) $(PCRE_LIB)
+mod_ssi_la_LIBADD = $(common_libadd)
 
 lib_LTLIBRARIES += mod_secdownload.la
 mod_secdownload_la_SOURCES = mod_secdownload.c
