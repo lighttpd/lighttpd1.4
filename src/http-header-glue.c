@@ -168,9 +168,11 @@ int http_response_redirect_to_directory(server *srv, connection *con) {
 						"SSS", "NOTICE: getnameinfo failed: ",
 						strerror(errno), ", using ip-address instead");
 
+				buffer_append_string_len(o, CONST_STR_LEN("["));
 				buffer_append_string(o,
 						     inet_ntop(AF_INET6, (char *)&our_addr.ipv6.sin6_addr,
 							       dst, sizeof(dst)));
+				buffer_append_string_len(o, CONST_STR_LEN("]"));
 			} else {
 				buffer_append_string(o, hbuf);
 			}
