@@ -1227,16 +1227,16 @@ static void mod_ssi_read_fd(server *srv, connection *con, plugin_data *p, int fd
 					offset = pretag = 0;
 					break;
 				} else { /* incomplete directive "<!--#...-->" */
-					memmove(buf, buf+prelen, offset-prelen);
-					offset = pretag = 0;
+					memmove(buf, buf+prelen, (offset -= prelen));
+					pretag = 0;
 					break;
 				}
 			} else if (prelen + 1 == offset || 0 == memcmp(s+1, "!--", offset - prelen - 1)) {
 				if (prelen - pretag && !p->if_is_false) {
 					chunkqueue_append_mem(con->write_queue, buf+pretag, prelen-pretag);
 				}
-				memcpy(buf, buf+prelen, offset-prelen);
-				offset = pretag = 0;
+				memcpy(buf, buf+prelen, (offset -= prelen));
+				pretag = 0;
 				break;
 			}
 			/* loop to look for next '<' */
