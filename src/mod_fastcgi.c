@@ -2613,10 +2613,10 @@ static int fcgi_demux_response(server *srv, handler_ctx *hctx) {
 					http_response_xsendfile(srv, con, ds->value, host->xsendfile_docroot);
 					if (con->mode == DIRECT) {
 						fin = 1;
-						break;
 					}
 
 					hctx->send_content_body = 0; /* ignore the content */
+					break;
 				}
 
 				/* enable chunked-transfer-encoding */
