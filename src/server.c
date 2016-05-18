@@ -277,6 +277,9 @@ static server *server_init(void) {
 	srv->srvconf.upload_tempdirs = array_init();
 	srv->srvconf.reject_expect_100_with_417 = 1;
 	srv->srvconf.xattr_name = buffer_init_string("Content-Type");
+	srv->srvconf.http_header_strict  = 1;
+	srv->srvconf.http_host_strict    = 1; /*(implies http_host_normalize)*/
+	srv->srvconf.http_host_normalize = 0;
 
 	/* use syslog */
 	srv->errorlog_fd = STDERR_FILENO;

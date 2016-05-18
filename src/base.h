@@ -300,6 +300,7 @@ typedef struct {
 	unsigned short etag_use_mtime;
 	unsigned short etag_use_size;
 	unsigned short force_lowercase_filenames; /* if the FS is case-insensitive, force all files to lower-case */
+	unsigned int http_parseopts;
 	unsigned int max_request_size;
 	int listen_backlog;
 
@@ -550,6 +551,10 @@ typedef struct {
 	unsigned short enable_cores;
 	unsigned short reject_expect_100_with_417;
 	buffer *xattr_name;
+
+	unsigned short http_header_strict;
+	unsigned short http_host_strict;
+	unsigned short http_host_normalize;
 } server_config;
 
 typedef struct server_socket {

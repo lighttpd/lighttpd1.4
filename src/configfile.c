@@ -8,6 +8,7 @@
 #include "configparser.h"
 #include "configfile.h"
 #include "proc_open.h"
+#include "request.h"
 
 #include <sys/stat.h>
 
@@ -114,6 +115,9 @@ static int config_insert(server *srv) {
 		{ "mimetype.xattr-name",               NULL, T_CONFIG_STRING,  T_CONFIG_SCOPE_SERVER     }, /* 69 */
 		{ "server.listen-backlog",             NULL, T_CONFIG_INT,     T_CONFIG_SCOPE_CONNECTION }, /* 70 */
 		{ "server.error-handler-404",          NULL, T_CONFIG_STRING,  T_CONFIG_SCOPE_CONNECTION }, /* 71 */
+		{ "server.http-parseopt-header-strict",NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_SERVER     }, /* 72 */
+		{ "server.http-parseopt-host-strict",  NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_SERVER     }, /* 73 */
+		{ "server.http-parseopt-host-normalize",NULL,T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_SERVER     }, /* 74 */
 
 		{ "server.host",
 			"use server.bind instead",
@@ -178,6 +182,9 @@ static int config_insert(server *srv) {
 
 	cv[68].destination = &(srv->srvconf.upload_temp_file_size);
 	cv[69].destination = srv->srvconf.xattr_name;
+	cv[72].destination = &(srv->srvconf.http_header_strict);
+	cv[73].destination = &(srv->srvconf.http_host_strict);
+	cv[74].destination = &(srv->srvconf.http_host_normalize);
 
 	srv->config_storage = calloc(1, srv->config_context->used * sizeof(specific_config *));
 
@@ -300,6 +307,15 @@ static int config_insert(server *srv) {
 		}
 	}
 
+	{
+		specific_config *s = srv->config_storage[0];
+		s->http_parseopts= /*(global, but stored in con->conf.http_parseopts)*/
+		   (srv->srvconf.http_header_strict  ?(HTTP_PARSEOPT_HEADER_STRICT) :0)
+		  |(srv->srvconf.http_host_strict    ?(HTTP_PARSEOPT_HOST_STRICT
+		                                      |HTTP_PARSEOPT_HOST_NORMALIZE):0)
+		  |(srv->srvconf.http_host_normalize ?(HTTP_PARSEOPT_HOST_NORMALIZE):0);
+	}
+
 	if (buffer_string_is_empty(stat_cache_string)) {
 		srv->srvconf.stat_cache_engine = STAT_CACHE_ENGINE_SIMPLE;
 	} else if (buffer_is_equal_string(stat_cache_string, CONST_STR_LEN("simple"))) {
@@ -390,6 +406,8 @@ static int config_insert(server *srv) {
 #define PATCH(x) con->conf.x = s->x
 int config_setup_connection(server *srv, connection *con) {
 	specific_config *s = srv->config_storage[0];
+
+	PATCH(http_parseopts);
 
 	PATCH(allow_http11);
 	PATCH(mimetypes);
