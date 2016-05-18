@@ -674,6 +674,8 @@ void http_response_xsendfile (server *srv, connection *con, buffer *path, const 
 	const int status = con->http_status;
 	int valid = 1;
 
+	con->file_started = 1;
+
 	/* reset Content-Length, if set by backend
 	 * Content-Length might later be set to size of X-Sendfile static file,
 	 * determined by open(), fstat() to reduces race conditions if the file
