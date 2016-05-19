@@ -7,6 +7,7 @@
 #include "configfile.h"
 #include "buffer.h"
 #include "array.h"
+#include "request.h" /* http_request_host_normalize() */
 
 #include <assert.h>
 #include <ctype.h>
@@ -480,7 +481,57 @@ context ::= DOLLAR SRVVARNAME(B) LBRACKET stringop(C) RBRACKET cond(E) expressio
         fprintf(stderr, "error comp_key %s", dc->comp_key->ptr);
         ctx->ok = 0;
       }
-      else switch(E) {
+      else if (COMP_HTTP_REMOTE_IP == dc->comp
+               && (dc->cond == CONFIG_COND_EQ || dc->cond == CONFIG_COND_NE)) {
+        char * const slash = strchr(rvalue->ptr, '/');
+        if (NULL != slash && slash != rvalue->ptr){/*(skip AF_UNIX /path/file)*/
+          char *nptr;
+          const unsigned long nm_bits = strtoul(slash + 1, &nptr, 10);
+          if (*nptr || 0 == nm_bits
+              || nm_bits > (rvalue->ptr[0] == '[' ? 128 : 32)) {
+            /*(also rejects (slash+1 == nptr) which results in nm_bits = 0)*/
+            fprintf(stderr, "invalid or missing netmask: %s\n", rvalue->ptr);
+            ctx->ok = 0;
+          }
+          else {
+            int rc;
+            buffer_commit(rvalue, (size_t)(slash - rvalue->ptr)); /*(truncate)*/
+            rc = http_request_host_normalize(rvalue);
+            buffer_append_string_len(rvalue, CONST_STR_LEN("/"));
+            buffer_append_int(rvalue, (int)nm_bits);
+            if (0 != rc) {
+              fprintf(stderr, "invalid IP addr: %s\n", rvalue->ptr);
+              ctx->ok = 0;
+            }
+          }
+        }
+        else {
+          if (http_request_host_normalize(rvalue)) {
+            fprintf(stderr, "invalid IP addr: %s\n", rvalue->ptr);
+            ctx->ok = 0;
+          }
+        }
+      }
+      else if (COMP_SERVER_SOCKET == dc->comp) {
+        /*(redundant with parsing in network.c; not actually required here)*/
+        if (rvalue->ptr[0] != ':' /*(network.c special-cases ":" and "[]")*/
+            && !(rvalue->ptr[0] == '[' && rvalue->ptr[1] == ']')) {
+          if (http_request_host_normalize(rvalue)) {
+            fprintf(stderr, "invalid IP addr: %s\n", rvalue->ptr);
+            ctx->ok = 0;
+          }
+        }
+      }
+      else if (COMP_HTTP_HOST == dc->comp) {
+        if (dc->cond == CONFIG_COND_EQ || dc->cond == CONFIG_COND_NE) {
+          if (http_request_host_normalize(rvalue)) {
+            fprintf(stderr, "invalid IP addr: %s\n", rvalue->ptr);
+            ctx->ok = 0;
+          }
+        }
+      }
+
+      if (ctx->ok) switch(E) {
       case CONFIG_COND_NE:
       case CONFIG_COND_EQ:
         dc->string = buffer_init_buffer(rvalue);
