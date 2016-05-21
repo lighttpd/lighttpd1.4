@@ -54,3 +54,25 @@ static build using make
   $ LIGHTTPD_STATIC=yes ./configure -C --enable-static=yes
   $ make
   $ sudo make install
+
+build using CMake and Xcode on Mac OS X with MacPorts
+-----------------------------------------------------
+* upgrade to latest Mac OS X
+* install Xcode from Apple Store (requires latest Mac OS X)
+* install MacPorts from https://www.macports.org/install.php
+
+  $ xcodebuild --license
+  $ xcode-select --install
+  $ sudo port selfupdate
+  $ sudo port install autoconf automake cmake libtool m4 pcre pkgconfig zlib bzip2 openssl libxml sqlite3 openldap fcgi p5-cgi libunwind libunwind-headers mysql57 libev gdbm openldap ossp-uuid
+  # Note: some of the above require more fiddling to configure with CMake...
+
+  # cmake and build
+  # (all -DWITH_... flags below are optional)
+  $ cmake -Wno-dev -DWITH_OPENSSL=1 -DWITH_LUA=1 -DWITH_ZLIB=1 -DWITH_BZIP2=1 -DWITH_WEBDAV_PROPS=1 .
+  $ make -j 4
+  $ make test
+
+  # Note: many tests fail if not built with openssl
+  # lighttpd will not start up with tests/lighttpd.conf
+  #   (mod_secdownload fails to configure hmac-sha1 and hmac-sha256)
