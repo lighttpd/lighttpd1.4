@@ -735,7 +735,7 @@ REQUESTDONE_FUNC(log_access_write) {
 					if (p->conf.append_tz_offset) {
 						buffer_append_string_len(p->conf.ts_accesslog_str, tm.tm_gmtoff >= 0 ? "+" : "-", 1);
 
-						scd = abs(tm.tm_gmtoff);
+						scd = labs(tm.tm_gmtoff);
 						hrs = scd / 3600;
 						min = (scd % 3600) / 60;
 

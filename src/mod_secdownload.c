@@ -146,6 +146,7 @@ static size_t secdl_algorithm_mac_length(secdl_algorithm alg) {
 }
 
 static int secdl_verify_mac(server *srv, plugin_config *config, const char* protected_path, const char* mac, size_t maclen) {
+	UNUSED(srv);
 	if (0 == maclen || secdl_algorithm_mac_length(config->algorithm) != maclen) return 0;
 
 	switch (config->algorithm) {
