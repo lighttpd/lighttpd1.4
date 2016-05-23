@@ -248,7 +248,7 @@ int http_request_host_normalize(buffer *b) {
                     return -1;
                 }
             } /*(else ignore stray colon at string end)*/
-            buffer_commit(b, (size_t)(colon - p)); /*(remove port str)*/
+            buffer_string_set_length(b, (size_t)(colon - p)); /*(remove port str)*/
         }
 
         if (light_isdigit(*p)) {
