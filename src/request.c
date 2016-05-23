@@ -302,7 +302,7 @@ int http_request_host_normalize(buffer *b) {
         if (1 != rc) return -1;
 
         inet_ntop(AF_INET6,(const void *)&addr, buf, sizeof(buf));
-        buffer_commit(b, 1); /* truncate after '[' */
+        buffer_string_set_length(b, 1); /* truncate after '[' */
         buffer_append_string(b, buf);
         buffer_append_string_len(b, CONST_STR_LEN("]"));
 

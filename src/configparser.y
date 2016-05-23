@@ -495,7 +495,7 @@ context ::= DOLLAR SRVVARNAME(B) LBRACKET stringop(C) RBRACKET cond(E) expressio
           }
           else {
             int rc;
-            buffer_commit(rvalue, (size_t)(slash - rvalue->ptr)); /*(truncate)*/
+            buffer_string_set_length(rvalue, (size_t)(slash - rvalue->ptr)); /*(truncate)*/
             rc = http_request_host_normalize(rvalue);
             buffer_append_string_len(rvalue, CONST_STR_LEN("/"));
             buffer_append_int(rvalue, (int)nm_bits);
