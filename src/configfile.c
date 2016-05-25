@@ -186,7 +186,6 @@ static int config_insert(server *srv) {
 	cv[72].destination = &(srv->srvconf.http_header_strict);
 	cv[73].destination = &(srv->srvconf.http_host_strict);
 	cv[74].destination = &(srv->srvconf.http_host_normalize);
-	cv[75].destination = &(s->use_acceptfilter);
 
 	srv->config_storage = calloc(1, srv->config_context->used * sizeof(specific_config *));
 
@@ -306,6 +305,7 @@ static int config_insert(server *srv) {
 		cv[67].destination = &(s->ssl_empty_fragments);
 		cv[70].destination = &(s->listen_backlog);
 		cv[71].destination = s->error_handler_404;
+		cv[75].destination = &(s->use_accept_filter);
 
 		srv->config_storage[i] = s;
 
