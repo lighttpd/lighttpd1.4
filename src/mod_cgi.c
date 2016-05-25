@@ -500,7 +500,9 @@ static int cgi_demux_response(server *srv, handler_ctx *hctx) {
 						con->response.transfer_encoding = HTTP_TRANSFER_ENCODING_CHUNKED;
 					}
 
-					http_chunk_append_buffer(srv, con, hctx->response_header);
+					if (0 != http_chunk_append_buffer(srv, con, hctx->response_header)) {
+						return FDEVENT_HANDLED_ERROR;
+					}
 				} else {
 					const char *bstart;
 					size_t blen;
@@ -541,14 +543,18 @@ static int cgi_demux_response(server *srv, handler_ctx *hctx) {
 					}
 
 					if (blen > 0) {
-						http_chunk_append_mem(srv, con, bstart, blen);
+						if (0 != http_chunk_append_mem(srv, con, bstart, blen)) {
+							return FDEVENT_HANDLED_ERROR;
+						}
 					}
 				}
 
 				con->file_started = 1;
 			}
 		} else {
-			http_chunk_append_buffer(srv, con, hctx->response);
+			if (0 != http_chunk_append_buffer(srv, con, hctx->response)) {
+				return FDEVENT_HANDLED_ERROR;
+			}
 		}
 
 #if 0
@@ -756,7 +762,10 @@ static handler_t cgi_handle_fdevent(server *srv, void *ctx, int revents) {
 		/* check if we still have a unfinished header package which is a body in reality */
 		if (con->file_started == 0 && !buffer_string_is_empty(hctx->response_header)) {
 			con->file_started = 1;
-			http_chunk_append_buffer(srv, con, hctx->response_header);
+			if (0 != http_chunk_append_buffer(srv, con, hctx->response_header)) {
+				cgi_connection_close(srv, hctx);
+				return HANDLER_ERROR;
+			}
 		}
 
 # if 0

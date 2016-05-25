@@ -461,7 +461,7 @@ static chunk *chunkqueue_get_append_tempfile(chunkqueue *cq) {
 
 static void chunkqueue_remove_empty_chunks(chunkqueue *cq);
 
-static int chunkqueue_append_to_tempfile(server *srv, chunkqueue *dest, const char *mem, size_t len) {
+int chunkqueue_append_mem_to_tempfile(server *srv, chunkqueue *dest, const char *mem, size_t len) {
 	chunk *dst_c;
 	ssize_t written;
 
@@ -599,7 +599,7 @@ int chunkqueue_steal_with_tempfiles(server *srv, chunkqueue *dest, chunkqueue *s
 
 		case MEM_CHUNK:
 			/* store "use" bytes from memory chunk in tempfile */
-			if (0 != chunkqueue_append_to_tempfile(srv, dest, c->mem->ptr + c->offset, use)) {
+			if (0 != chunkqueue_append_mem_to_tempfile(srv, dest, c->mem->ptr + c->offset, use)) {
 				return -1;
 			}
 

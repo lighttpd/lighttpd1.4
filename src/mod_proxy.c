@@ -700,11 +700,22 @@ static int proxy_demux_response(server *srv, handler_ctx *hctx) {
 				}
 
 				con->file_started = 1;
-				if (blen > 0) http_chunk_append_mem(srv, con, c + 4, blen);
+				if (blen > 0) {
+					if (0 != http_chunk_append_mem(srv, con, c + 4, blen)) {
+						/* error writing to tempfile;
+						 * truncate response or send 500 if nothing sent yet */
+						fin = 1;
+						con->file_started = 0;
+					}
+				}
 				buffer_reset(hctx->response);
 			}
 		} else {
-			http_chunk_append_buffer(srv, con, hctx->response);
+			if (0 != http_chunk_append_buffer(srv, con, hctx->response)) {
+				/* error writing to tempfile;
+				 * truncate response or send 500 if nothing sent yet */
+				fin = 1;
+			}
 			buffer_reset(hctx->response);
 		}
 

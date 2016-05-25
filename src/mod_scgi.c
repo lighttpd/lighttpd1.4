@@ -1968,7 +1968,11 @@ static int scgi_demux_response(server *srv, handler_ctx *hctx) {
 						con->response.transfer_encoding = HTTP_TRANSFER_ENCODING_CHUNKED;
 					}
 
-					http_chunk_append_buffer(srv, con, hctx->response_header);
+					if (0 != http_chunk_append_buffer(srv, con, hctx->response_header)) {
+						/* error writing to tempfile;
+						 * truncate response or send 500 if nothing sent yet */
+						return 1;
+					}
 				} else {
 					size_t blen = buffer_string_length(hctx->response_header) - hlen;
 
@@ -1993,14 +1997,22 @@ static int scgi_demux_response(server *srv, handler_ctx *hctx) {
 					}
 
 					if (blen > 0) {
-						http_chunk_append_mem(srv, con, hctx->response_header->ptr + hlen, blen);
+						if (0 != http_chunk_append_mem(srv, con, hctx->response_header->ptr + hlen, blen)) {
+							/* error writing to tempfile;
+							 * truncate response or send 500 if nothing sent yet */
+							return 1;
+						}
 					}
 				}
 
 				con->file_started = 1;
 			}
 		} else {
-			http_chunk_append_buffer(srv, con, hctx->response);
+			if (0 != http_chunk_append_buffer(srv, con, hctx->response)) {
+				/* error writing to tempfile;
+				 * truncate response or send 500 if nothing sent yet */
+				return 1;
+			}
 		}
 
 #if 0

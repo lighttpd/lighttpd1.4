@@ -94,45 +94,78 @@ int http_chunk_append_file(server *srv, connection *con, buffer *fn) {
 	return 0;
 }
 
-void http_chunk_append_buffer(server *srv, connection *con, buffer *mem) {
-	chunkqueue *cq;
-
-	force_assert(NULL != con);
-
-	if (buffer_string_is_empty(mem)) return;
-
-	cq = con->write_queue;
+static int http_chunk_append_to_tempfile(server *srv, connection *con, const char * mem, size_t len) {
+	chunkqueue * const cq = con->write_queue;
 
 	if (con->response.transfer_encoding & HTTP_TRANSFER_ENCODING_CHUNKED) {
-		http_chunk_append_len(srv, con, buffer_string_length(mem));
+		/*http_chunk_append_len(srv, con, len);*/
+		buffer *b = srv->tmp_chunk_len;
+
+		buffer_string_set_length(b, 0);
+		buffer_append_uint_hex(b, len);
+		buffer_append_string_len(b, CONST_STR_LEN("\r\n"));
+
+		if (0 != chunkqueue_append_mem_to_tempfile(srv, cq, CONST_BUF_LEN(b))) {
+			return -1;
+		}
 	}
 
-	chunkqueue_append_buffer(cq, mem);
+	if (0 != chunkqueue_append_mem_to_tempfile(srv, cq, mem, len)) {
+		return -1;
+	}
 
 	if (con->response.transfer_encoding & HTTP_TRANSFER_ENCODING_CHUNKED) {
-		chunkqueue_append_mem(cq, CONST_STR_LEN("\r\n"));
+		if (0 != chunkqueue_append_mem_to_tempfile(srv, cq, CONST_STR_LEN("\r\n"))) {
+			return -1;
+		}
 	}
+
+	return 0;
 }
 
-void http_chunk_append_mem(server *srv, connection *con, const char * mem, size_t len) {
-	chunkqueue *cq;
+static int http_chunk_append_data(server *srv, connection *con, buffer *b, const char * mem, size_t len) {
 
-	force_assert(NULL != con);
-	force_assert(NULL != mem || 0 == len);
+	chunkqueue * const cq = con->write_queue;
+	chunk *c = cq->last;
+	if (0 == len) return 0;
 
-	if (NULL == mem || 0 == len) return;
+	/* current usage does not append_mem or append_buffer after appending
+	 * file, so not checking if users of this interface have appended large
+	 * (references to) files to chunkqueue, which would not be in memory */
 
-	cq = con->write_queue;
+	if ((c && c->type == FILE_CHUNK && c->file.is_temp)
+	    || cq->bytes_in - cq->bytes_out + len > 64 * 1024) {
+		return http_chunk_append_to_tempfile(srv, con, b ? b->ptr : mem, len);
+	}
+
+	/* not appending to prior mem chunk just in case using openssl
+	 * and need to resubmit same args as prior call to openssl (required?)*/
 
 	if (con->response.transfer_encoding & HTTP_TRANSFER_ENCODING_CHUNKED) {
 		http_chunk_append_len(srv, con, len);
 	}
 
-	chunkqueue_append_mem(cq, mem, len);
+	/*(chunkqueue_append_buffer() might steal buffer contents)*/
+	b ? chunkqueue_append_buffer(cq, b) : chunkqueue_append_mem(cq, mem, len);
 
 	if (con->response.transfer_encoding & HTTP_TRANSFER_ENCODING_CHUNKED) {
 		chunkqueue_append_mem(cq, CONST_STR_LEN("\r\n"));
 	}
+
+	return 0;
+}
+
+int http_chunk_append_buffer(server *srv, connection *con, buffer *mem) {
+	force_assert(NULL != con);
+
+	return http_chunk_append_data(srv, con, mem, NULL, buffer_string_length(mem));
+}
+
+int http_chunk_append_mem(server *srv, connection *con, const char * mem, size_t len) {
+	force_assert(NULL != con);
+	force_assert(NULL != mem || 0 == len);
+
+	return http_chunk_append_data(srv, con, NULL, mem, len);
 }
 
 void http_chunk_close(server *srv, connection *con) {

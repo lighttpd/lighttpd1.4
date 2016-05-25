@@ -2627,7 +2627,11 @@ static int fcgi_demux_response(server *srv, handler_ctx *hctx) {
 			}
 
 			if (hctx->send_content_body && !buffer_string_is_empty(packet.b)) {
-				http_chunk_append_buffer(srv, con, packet.b);
+				if (0 != http_chunk_append_buffer(srv, con, packet.b)) {
+					/* error writing to tempfile;
+					 * truncate response or send 500 if nothing sent yet */
+					fin = 1;
+				}
 			}
 			break;
 		case FCGI_STDERR:
