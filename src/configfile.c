@@ -118,6 +118,7 @@ static int config_insert(server *srv) {
 		{ "server.http-parseopt-header-strict",NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_SERVER     }, /* 72 */
 		{ "server.http-parseopt-host-strict",  NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_SERVER     }, /* 73 */
 		{ "server.http-parseopt-host-normalize",NULL,T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_SERVER     }, /* 74 */
+		{ "server.use-acceptfilter",           NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION }, /* 75 */
 
 		{ "server.host",
 			"use server.bind instead",
@@ -185,6 +186,7 @@ static int config_insert(server *srv) {
 	cv[72].destination = &(srv->srvconf.http_header_strict);
 	cv[73].destination = &(srv->srvconf.http_host_strict);
 	cv[74].destination = &(srv->srvconf.http_host_normalize);
+	cv[75].destination = &(s->use_acceptfilter);
 
 	srv->config_storage = calloc(1, srv->config_context->used * sizeof(specific_config *));
 
@@ -221,6 +223,11 @@ static int config_insert(server *srv) {
 		s->use_ipv6      = 0;
 		s->set_v6only    = 1;
 		s->defer_accept  = 0;
+#ifdef SO_ACCEPTFILTER
+		s->use_acceptfilter = 1;
+#else
+		s->use_acceptfilter = 0;
+#endif
 #ifdef HAVE_LSTAT
 		s->follow_symlink = 1;
 #endif

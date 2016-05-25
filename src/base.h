@@ -294,6 +294,7 @@ typedef struct {
 
 	unsigned short use_ipv6, set_v6only; /* set_v6only is only a temporary option */
 	unsigned short defer_accept;
+	unsigned short use_acceptfilter; /* Use SO_ACCEPTFILTER, limited to *BSD */
 	unsigned short ssl_enabled; /* only interesting for setting up listening sockets. don't use at runtime */
 	unsigned short allow_http11;
 	unsigned short etag_use_inode;
