@@ -351,21 +351,9 @@ static void proxy_connection_close(server *srv, handler_ctx *hctx) {
 	handler_ctx_free(hctx);
 	con->plugin_ctx[p->id] = NULL;
 
-	/* finish response (if not already finished) */
-	if (con->mode == p->id
-	    && (con->state == CON_STATE_HANDLE_REQUEST || con->state == CON_STATE_READ_POST)) {
-		/* (not CON_STATE_ERROR and not CON_STATE_RESPONSE_END,
-		 *  i.e. not called from proxy_connection_reset()) */
-
-		/* Send an error if we haven't sent any data yet */
-		if (0 == con->file_started) {
-			con->http_status = 500;
-			con->mode = DIRECT;
-		}
-		else if (!con->file_finished) {
-			http_chunk_close(srv, con);
-			con->file_finished = 1;
-		}
+	/* finish response (if not already con->file_started, con->file_finished) */
+	if (con->mode == p->id) {
+		http_response_backend_done(srv, con);
 	}
 }
 
