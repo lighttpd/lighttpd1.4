@@ -359,6 +359,7 @@ handler_t connection_handle_read_post_state(server *srv, connection *con) {
 
 	if (dst_cq->bytes_in == (off_t)con->request.content_length) {
 		/* Content is ready */
+		con->conf.stream_request_body &= ~FDEVENT_STREAM_REQUEST_POLLIN;
 		connection_set_state(srv, con, CON_STATE_HANDLE_REQUEST);
 		return HANDLER_GO_ON;
 	} else if (is_closed) {
@@ -372,6 +373,7 @@ handler_t connection_handle_read_post_state(server *srv, connection *con) {
 	      #endif
 		return HANDLER_ERROR;
 	} else {
+		con->conf.stream_request_body |= FDEVENT_STREAM_REQUEST_POLLIN;
 		return HANDLER_WAIT_FOR_EVENT;
 	}
 }

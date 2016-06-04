@@ -263,6 +263,8 @@ typedef struct {
 	unsigned short use_xattr;
 	unsigned short follow_symlink;
 	unsigned short range_requests;
+	unsigned short stream_request_body;
+	unsigned short stream_response_body;
 
 	/* debug */
 

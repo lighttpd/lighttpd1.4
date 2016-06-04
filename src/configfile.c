@@ -119,6 +119,8 @@ static int config_insert(server *srv) {
 		{ "server.http-parseopt-host-strict",  NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_SERVER     }, /* 73 */
 		{ "server.http-parseopt-host-normalize",NULL,T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_SERVER     }, /* 74 */
 		{ "server.bsd-accept-filter",          NULL, T_CONFIG_STRING,  T_CONFIG_SCOPE_CONNECTION }, /* 75 */
+		{ "server.stream-request-body",        NULL, T_CONFIG_SHORT,   T_CONFIG_SCOPE_CONNECTION }, /* 76 */
+		{ "server.stream-response-body",       NULL, T_CONFIG_SHORT,   T_CONFIG_SCOPE_CONNECTION }, /* 77 */
 
 		{ "server.host",
 			"use server.bind instead",
@@ -248,6 +250,8 @@ static int config_insert(server *srv) {
 		s->ssl_verifyclient_export_cert = 0;
 		s->ssl_disable_client_renegotiation = 1;
 		s->listen_backlog = (0 == i ? 1024 : srv->config_storage[0]->listen_backlog);
+		s->stream_request_body = 0;
+		s->stream_response_body = 0;
 
 		/* all T_CONFIG_SCOPE_CONNECTION options */
 		cv[2].destination = s->errorfile_prefix;
@@ -310,11 +314,20 @@ static int config_insert(server *srv) {
 	       || defined(__OpenBSD__) || defined(__DragonflyBSD__)
 		cv[75].destination = s->bsd_accept_filter;
 	      #endif
+		cv[76].destination = &(s->stream_request_body);
+		cv[77].destination = &(s->stream_response_body);
 
 		srv->config_storage[i] = s;
 
 		if (0 != (ret = config_insert_values_global(srv, config->value, cv, i == 0 ? T_CONFIG_SCOPE_SERVER : T_CONFIG_SCOPE_CONNECTION))) {
 			break;
+		}
+
+		if (s->stream_request_body & FDEVENT_STREAM_REQUEST_BUFMIN) {
+			s->stream_request_body |= FDEVENT_STREAM_REQUEST;
+		}
+		if (s->stream_response_body & FDEVENT_STREAM_RESPONSE_BUFMIN) {
+			s->stream_response_body |= FDEVENT_STREAM_RESPONSE;
 		}
 	}
 
@@ -453,6 +466,9 @@ int config_setup_connection(server *srv, connection *con) {
 	PATCH(range_requests);
 	PATCH(force_lowercase_filenames);
 	/*PATCH(listen_backlog);*//*(not necessary; used only at startup)*/
+	PATCH(stream_request_body);
+	PATCH(stream_response_body);
+
 	PATCH(ssl_enabled);
 
 	PATCH(ssl_pemfile);
@@ -563,6 +579,10 @@ int config_patch_connection(server *srv, connection *con) {
 				buffer_copy_buffer(con->server_name, s->server_name);
 			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("server.tag"))) {
 				PATCH(server_tag);
+			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("server.stream-request-body"))) {
+				PATCH(stream_request_body);
+			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("server.stream-response-body"))) {
+				PATCH(stream_response_body);
 			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("connection.kbytes-per-second"))) {
 				PATCH(kbytes_per_second);
 			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("debug.log-request-handling"))) {

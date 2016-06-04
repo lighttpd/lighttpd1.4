@@ -361,12 +361,6 @@ static int connection_handle_write_prepare(server *srv, connection *con) {
 		}
 	}
 
-	if (con->request.content_length
-	    && (off_t)con->request.content_length > con->request_content_queue->bytes_in) {
-		/* request body is present and has not been read completely */
-		con->keep_alive = 0;
-	}
-
 	if (con->request.http_method == HTTP_METHOD_HEAD) {
 		/**
 		 * a HEAD request has the same as a GET 
@@ -1037,7 +1031,7 @@ int connection_state_machine(server *srv, connection *con) {
 
 			switch (r = http_response_prepare(srv, con)) {
 			case HANDLER_WAIT_FOR_EVENT:
-				if (!con->file_started) break; /* come back here */
+				if (!con->file_started || 0 == con->conf.stream_response_body) break; /* come back here */
 				/* response headers received from backend; fall through to start response */
 			case HANDLER_FINISHED:
 				if (con->error_handler_saved_status > 0) {
@@ -1166,6 +1160,12 @@ int connection_state_machine(server *srv, connection *con) {
 			if (srv->srvconf.log_state_handling) {
 				log_error_write(srv, __FILE__, __LINE__, "sds",
 						"state for fd", con->fd, connection_get_state(con->state));
+			}
+
+			if (con->request.content_length
+			    && (off_t)con->request.content_length > con->request_content_queue->bytes_in) {
+				/* request body is present and has not been read completely */
+				con->keep_alive = 0;
 			}
 
 			plugins_call_handle_request_done(srv, con);
@@ -1441,11 +1441,11 @@ int connection_state_machine(server *srv, connection *con) {
 				connection_get_state(con->state));
 	}
 
+	r = 0;
 	switch(con->state) {
-	case CON_STATE_READ_POST:
 	case CON_STATE_READ:
 	case CON_STATE_CLOSE:
-		fdevent_event_set(srv->ev, &(con->fde_ndx), con->fd, FDEVENT_IN);
+		r = FDEVENT_IN;
 		break;
 	case CON_STATE_WRITE:
 		/* request write-fdevent only if we really need it
@@ -1455,14 +1455,29 @@ int connection_state_machine(server *srv, connection *con) {
 		if (!chunkqueue_is_empty(con->write_queue) &&
 		    (con->is_writable == 0) &&
 		    (con->traffic_limit_reached == 0)) {
-			fdevent_event_set(srv->ev, &(con->fde_ndx), con->fd, FDEVENT_OUT);
-		} else {
-			fdevent_event_set(srv->ev, &(con->fde_ndx), con->fd, 0);
+			r |= FDEVENT_OUT;
+		}
+		/* fall through */
+	case CON_STATE_READ_POST:
+		if (con->conf.stream_request_body & FDEVENT_STREAM_REQUEST_POLLIN) {
+			r |= FDEVENT_IN;
 		}
 		break;
 	default:
-		fdevent_event_set(srv->ev, &(con->fde_ndx), con->fd, 0);
 		break;
+	}
+	if (-1 != con->fd) {
+		const int events = fdevent_event_get_interest(srv->ev, con->fd);
+		if (r != events) {
+			/* update timestamps when enabling interest in events */
+			if ((r & FDEVENT_IN) && !(events & FDEVENT_IN)) {
+				con->read_idle_ts = srv->cur_ts;
+			}
+			if ((r & FDEVENT_OUT) && !(events & FDEVENT_OUT)) {
+				con->write_request_ts = srv->cur_ts;
+			}
+			fdevent_event_set(srv->ev, &con->fde_ndx, con->fd, r);
+		}
 	}
 
 	return 0;

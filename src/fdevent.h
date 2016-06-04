@@ -65,6 +65,13 @@ typedef handler_t (*fdevent_handler)(struct server *srv, void *ctx, int revents)
 #define FDEVENT_HUP    BV(4)
 #define FDEVENT_NVAL   BV(5)
 
+#define FDEVENT_STREAM_REQUEST          BV(0)
+#define FDEVENT_STREAM_REQUEST_BUFMIN   BV(1)
+#define FDEVENT_STREAM_REQUEST_POLLIN   BV(15)
+
+#define FDEVENT_STREAM_RESPONSE         BV(0)
+#define FDEVENT_STREAM_RESPONSE_BUFMIN  BV(1)
+
 typedef enum { FD_EVENT_TYPE_UNSET = -1,
 		FD_EVENT_TYPE_CONNECTION,
 		FD_EVENT_TYPE_FCGI_CONNECTION,
@@ -173,6 +180,8 @@ fdevents *fdevent_init(struct server *srv, size_t maxfds, fdevent_handler_t type
 int fdevent_reset(fdevents *ev); /* "init" after fork() */
 void fdevent_free(fdevents *ev);
 
+#define fdevent_event_get_interest(ev, fd) \
+        (-1 != (fd) ? (ev)->fdarray[(fd)]->events : 0)
 void fdevent_event_set(fdevents *ev, int *fde_ndx, int fd, int events); /* events can be FDEVENT_IN, FDEVENT_OUT or FDEVENT_IN | FDEVENT_OUT */
 void fdevent_event_del(fdevents *ev, int *fde_ndx, int fd);
 int fdevent_event_get_revent(fdevents *ev, size_t ndx);
