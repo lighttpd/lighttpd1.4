@@ -118,6 +118,7 @@ static int config_insert(server *srv) {
 		{ "server.http-parseopt-header-strict",NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_SERVER     }, /* 72 */
 		{ "server.http-parseopt-host-strict",  NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_SERVER     }, /* 73 */
 		{ "server.http-parseopt-host-normalize",NULL,T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_SERVER     }, /* 74 */
+		{ "server.bsd-accept-filter",          NULL, T_CONFIG_STRING,  T_CONFIG_SCOPE_CONNECTION }, /* 75 */
 
 		{ "server.host",
 			"use server.bind instead",
@@ -208,6 +209,12 @@ static int config_insert(server *srv) {
 		s->ssl_dh_file   = buffer_init();
 		s->ssl_ec_curve  = buffer_init();
 		s->errorfile_prefix = buffer_init();
+	      #if defined(__FreeBSD__) || defined(__NetBSD__) \
+	       || defined(__OpenBSD__) || defined(__DragonflyBSD__)
+		s->bsd_accept_filter = (i == 0)
+		  ? buffer_init()
+		  : buffer_init_buffer(srv->config_storage[0]->bsd_accept_filter);
+	      #endif
 		s->max_keep_alive_requests = 16;
 		s->max_keep_alive_idle = 5;
 		s->max_read_idle = 60;
@@ -220,7 +227,7 @@ static int config_insert(server *srv) {
 		s->ssl_use_sslv3 = 0;
 		s->use_ipv6      = 0;
 		s->set_v6only    = 1;
-		s->defer_accept  = 0;
+		s->defer_accept  = (i == 0) ? 0 : srv->config_storage[0]->defer_accept;
 #ifdef HAVE_LSTAT
 		s->follow_symlink = 1;
 #endif
@@ -299,6 +306,10 @@ static int config_insert(server *srv) {
 		cv[67].destination = &(s->ssl_empty_fragments);
 		cv[70].destination = &(s->listen_backlog);
 		cv[71].destination = s->error_handler_404;
+	      #if defined(__FreeBSD__) || defined(__NetBSD__) \
+	       || defined(__OpenBSD__) || defined(__DragonflyBSD__)
+		cv[75].destination = s->bsd_accept_filter;
+	      #endif
 
 		srv->config_storage[i] = s;
 

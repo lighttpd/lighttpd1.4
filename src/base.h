@@ -325,6 +325,11 @@ typedef struct {
 	 */
 	off_t *global_bytes_per_second_cnt_ptr; /*  */
 
+#if defined(__FreeBSD__) || defined(__NetBSD__) \
+ || defined(__OpenBSD__) || defined(__DragonflyBSD__)
+	buffer *bsd_accept_filter;
+#endif
+
 #ifdef USE_OPENSSL
 	SSL_CTX *ssl_ctx; /* not patched */
 	/* SNI per host: with COMP_SERVER_SOCKET, COMP_HTTP_SCHEME, COMP_HTTP_HOST */
