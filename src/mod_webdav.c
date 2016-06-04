@@ -2351,6 +2351,7 @@ propmatch_cleanup:
 		if (con->request.content_length) {
 			xmlDocPtr xml;
 			buffer *hdr_if = NULL;
+			int created = 0;
 
 			if (con->state == CON_STATE_READ_POST) {
 				handler_t r = connection_handle_read_post_state(srv, con);
@@ -2363,7 +2364,21 @@ propmatch_cleanup:
 
 			/* we don't support Depth: Infinity on directories */
 			if (hdr_if == NULL && depth == -1) {
-				if (0 == stat(con->physical.path->ptr, &st) && S_ISDIR(st.st_mode)) {
+				if (0 != stat(con->physical.path->ptr, &st)) {
+					if (errno == ENOENT) {
+						int fd = open(con->physical.path->ptr, O_WRONLY|O_CREAT|O_APPEND|O_BINARY|FIFO_NONBLOCK, WEBDAV_FILE_MODE);
+						if (fd >= 0) {
+							close(fd);
+							created = 1;
+						} else {
+							log_error_write(srv, __FILE__, __LINE__, "sBss",
+									"create file", con->physical.path, ":", strerror(errno));
+							con->http_status = 403; /* Forbidden */
+
+							return HANDLER_FINISHED;
+						}
+					}
+				} else if (S_ISDIR(st.st_mode)) {
 					con->http_status = 409; /* Conflict */
 
 					return HANDLER_FINISHED;
@@ -2508,7 +2523,7 @@ propmatch_cleanup:
 							/* looks like we survived */
 							webdav_lockdiscovery(srv, con, p->tmp_buf, (const char *)lockscope, (const char *)locktype, depth);
 
-							con->http_status = 201;
+							con->http_status = created ? 201 : 200;
 							con->file_finished = 1;
 						}
 					}
