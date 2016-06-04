@@ -113,6 +113,26 @@ NEWS
   * static build instructions using SCons or make
   * [mod_auth] preserve WWW-Authenticate for error docs (fixes #2730)
   * check close() return code after writing to file
+  * adjustments for openssl 1.1.0 pre-release
+  * [config] support include file glob (fixes #1221)
+  * [mod_evasive] 302 redirect option if limit reached (fixes #2199)
+  * [build] enhancements for cross-compiling (fixes #2276)
+  * [mod_accesslog] report aborted con state with %X (fixes #1890)
+  * [mod_ssi] fix SSI statement parser
+  * [mod_ssi] include relative to alias,userdir (fixes #222)
+  * [mod_ssi] add PCRE_* options to constrain regex
+  * [mod_ssi] more flexible quoting (fixes #1768)
+  * [core] wrap IPv6 literal in "[]" in redirect URL
+  * [mod_ssi] fix parse of tag across buf boundary (fixes #2732)
+  * [mod_cgi,mod_scgi] X-Sendfile sets file_started (fixes #2733)
+  * [mod_fastcgi] no chunked response w/ X-Sendfile (fixes #2733)
+  * [config] opts for http header parsing strictness (fixes #551, fixes #1086, f
+ixes #1184, fixes #2143, #2258, #2281, fixes #946, fixes #1330, fixes #602, #101
+6)
+  * [config] normalize IP strings in lighttpd.conf
+  * [build_cmake] use MODULE on Mac OS X (fixes #1761)
+  * [config] server.bsd-accept-filter option
+  * [mod_webdav] create file w/ LOCK request if ENOENT
 
 - 1.4.39 - 2016-01-02
   * [core] fix memset_s call (fixes #2698)
