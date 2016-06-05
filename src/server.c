@@ -347,6 +347,7 @@ static void server_free(server *srv) {
 			buffer_free(s->server_tag);
 			buffer_free(s->ssl_pemfile);
 			buffer_free(s->ssl_ca_file);
+			buffer_free(s->ssl_cadn_file);
 			buffer_free(s->ssl_cipher_list);
 			buffer_free(s->ssl_dh_file);
 			buffer_free(s->ssl_ec_curve);
