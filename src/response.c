@@ -136,16 +136,51 @@ static void https_add_ssl_entries(connection *con) {
 	X509 *xs;
 	X509_NAME *xn;
 	X509_NAME_ENTRY *xe;
+	data_string *ds_cv;
+	char *s_dn;
+	long vr;
 	int i, nentries;
 
+	if (NULL == (ds_cv = (data_string *)array_get_element(con->environment, "SSL_CLIENT_VERIFY"))) {
+		if (NULL == (ds_cv = (data_string *)array_get_unused_element(con->environment, TYPE_STRING))) {
+			ds_cv = data_string_init();
+		}
+		buffer_copy_string(ds_cv->key, "SSL_CLIENT_VERIFY");
+	}
+
 	if (
-		SSL_get_verify_result(con->ssl) != X509_V_OK
+		(vr = SSL_get_verify_result(con->ssl)) != X509_V_OK
 		|| !(xs = SSL_get_peer_certificate(con->ssl))
 	) {
+		buffer_copy_string(ds_cv->value, (vr == X509_V_OK && !xs) ? "NONE" : "FAILED:bad verify result");
+		array_insert_unique(con->environment, (data_unset *)ds_cv);
 		return;
 	}
 
+	buffer_copy_string(ds_cv->value, "SUCCESS");
+	array_insert_unique(con->environment, (data_unset *)ds_cv);
 	xn = X509_get_subject_name(xs);
+	if (NULL != (s_dn = X509_NAME_oneline(xn, NULL, 0))) {
+		data_string *envds;
+		if (NULL == (envds = (data_string *)array_get_unused_element(con->environment, TYPE_STRING))) {
+			envds = data_string_init();
+		}
+		buffer_copy_string(envds->key, "SSL_CLIENT_S_DN");
+		buffer_copy_string(envds->value, s_dn);
+		OPENSSL_free(s_dn);
+		if (buffer_is_equal(con->conf.ssl_verifyclient_username, envds->key)) {
+			data_string *ds;
+			if (NULL == (ds = (data_string *)array_get_element(con->environment, "REMOTE_USER"))) {
+				if (NULL == (ds = (data_string *)array_get_unused_element(con->environment, TYPE_STRING))) {
+					ds = data_string_init();
+				}
+				buffer_copy_string(ds->key, "REMOTE_USER");
+				array_insert_unique(con->environment, (data_unset *)ds);
+			}
+			buffer_copy_buffer(ds->value, envds->value);
+		}
+		array_insert_unique(con->environment, (data_unset *)envds);
+	}
 	for (i = 0, nentries = X509_NAME_entry_count(xn); i < nentries; ++i) {
 		int xobjnid;
 		const char * xobjsn;
