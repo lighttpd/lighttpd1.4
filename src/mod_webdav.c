@@ -338,7 +338,7 @@ SETDEFAULTS_FUNC(mod_webdav_set_defaults) {
 			}
 
 			if (SQLITE_OK != sqlite3_prepare(s->sql,
-				CONST_STR_LEN("SELECT locktoken, resource, lockscope, locktype, owner, depth, timeout FROM locks WHERE locktoken = ?"),
+				CONST_STR_LEN("SELECT locktoken, resource, lockscope, locktype, owner, depth, timeout-CURRENT_TIME FROM locks WHERE locktoken = ?"),
 				&(s->stmt_read_lock), &next_stmt)) {
 				/* prepare failed */
 				log_error_write(srv, __FILE__, __LINE__, "ss", "sqlite3_prepare failed", sqlite3_errmsg(s->sql));
@@ -347,7 +347,7 @@ SETDEFAULTS_FUNC(mod_webdav_set_defaults) {
 			}
 
 			if (SQLITE_OK != sqlite3_prepare(s->sql,
-				CONST_STR_LEN("SELECT locktoken, resource, lockscope, locktype, owner, depth, timeout FROM locks WHERE resource = ?"),
+				CONST_STR_LEN("SELECT locktoken, resource, lockscope, locktype, owner, depth, timeout-CURRENT_TIME FROM locks WHERE resource = ?"),
 				&(s->stmt_read_lock_by_uri), &next_stmt)) {
 				/* prepare failed */
 				log_error_write(srv, __FILE__, __LINE__, "ss", "sqlite3_prepare failed", sqlite3_errmsg(s->sql));
@@ -847,6 +847,84 @@ static int webdav_copy_dir(server *srv, connection *con, plugin_data *p, physica
 	return status;
 }
 
+#ifdef USE_LOCKS
+static void webdav_activelock(buffer *b,
+		const buffer *locktoken, const char *lockscope, const char *locktype, int depth, int timeout) {
+	buffer_append_string_len(b, CONST_STR_LEN("<D:activelock>\n"));
+
+	buffer_append_string_len(b, CONST_STR_LEN("<D:lockscope>"));
+	buffer_append_string_len(b, CONST_STR_LEN("<D:"));
+	buffer_append_string(b, lockscope);
+	buffer_append_string_len(b, CONST_STR_LEN("/>"));
+	buffer_append_string_len(b, CONST_STR_LEN("</D:lockscope>\n"));
+
+	buffer_append_string_len(b, CONST_STR_LEN("<D:locktype>"));
+	buffer_append_string_len(b, CONST_STR_LEN("<D:"));
+	buffer_append_string(b, locktype);
+	buffer_append_string_len(b, CONST_STR_LEN("/>"));
+	buffer_append_string_len(b, CONST_STR_LEN("</D:locktype>\n"));
+
+	buffer_append_string_len(b, CONST_STR_LEN("<D:depth>"));
+	buffer_append_string(b, depth == 0 ? "0" : "infinity");
+	buffer_append_string_len(b, CONST_STR_LEN("</D:depth>\n"));
+
+	buffer_append_string_len(b, CONST_STR_LEN("<D:timeout>"));
+	buffer_append_string_len(b, CONST_STR_LEN("Second-"));
+	buffer_append_int(b, timeout);
+	buffer_append_string_len(b, CONST_STR_LEN("</D:timeout>\n"));
+
+	buffer_append_string_len(b, CONST_STR_LEN("<D:owner>"));
+	buffer_append_string_len(b, CONST_STR_LEN("</D:owner>\n"));
+
+	buffer_append_string_len(b, CONST_STR_LEN("<D:locktoken>"));
+	buffer_append_string_len(b, CONST_STR_LEN("<D:href>"));
+	buffer_append_string_buffer(b, locktoken);
+	buffer_append_string_len(b, CONST_STR_LEN("</D:href>"));
+	buffer_append_string_len(b, CONST_STR_LEN("</D:locktoken>\n"));
+
+	buffer_append_string_len(b, CONST_STR_LEN("</D:activelock>\n"));
+}
+
+static void webdav_get_live_property_lockdiscovery(server *srv, connection *con, plugin_data *p, physical *dst, buffer *b) {
+
+	sqlite3_stmt *stmt = p->conf.stmt_read_lock_by_uri;
+	if (!stmt) { /*(should not happen)*/
+		buffer_append_string_len(b, CONST_STR_LEN("<D:lockdiscovery>\n</D:lockdiscovery>\n"));
+		return;
+	}
+	UNUSED(srv);
+	UNUSED(con);
+
+	/* SELECT locktoken, resource, lockscope, locktype, owner, depth, timeout
+	 *   FROM locks
+	 *  WHERE resource = ? */
+
+	sqlite3_reset(stmt);
+
+	sqlite3_bind_text(stmt, 1,
+		CONST_BUF_LEN(dst->rel_path),
+		SQLITE_TRANSIENT);
+
+	buffer_append_string_len(b, CONST_STR_LEN("<D:lockdiscovery>\n"));
+	while (SQLITE_ROW == sqlite3_step(stmt)) {
+		const char *lockscope = (const char *)sqlite3_column_text(stmt, 2);
+		const char *locktype  = (const char *)sqlite3_column_text(stmt, 3);
+		const int depth       =               sqlite3_column_int(stmt, 5);
+		const int timeout     =               sqlite3_column_int(stmt, 6);
+		buffer locktoken = { NULL, 0, 0 };
+		locktoken.ptr         =       (char *)sqlite3_column_text(stmt, 0);
+		locktoken.used        =               sqlite3_column_bytes(stmt, 0);
+		if (locktoken.used) ++locktoken.used;
+		locktoken.size = locktoken.used;
+
+		if (timeout > 0) {
+			webdav_activelock(b, &locktoken, lockscope, locktype, depth, timeout);
+		}
+	}
+	buffer_append_string_len(b, CONST_STR_LEN("</D:lockdiscovery>\n"));
+}
+#endif
+
 static int webdav_get_live_property(server *srv, connection *con, plugin_data *p, physical *dst, char *prop_name, buffer *b) {
 	stat_cache_entry *sce = NULL;
 	int found = 0;
@@ -905,7 +983,17 @@ static int webdav_get_live_property(server *srv, connection *con, plugin_data *p
 			buffer_append_string_len(b, CONST_STR_LEN("en"));
 			buffer_append_string_len(b, CONST_STR_LEN("</D:getcontentlanguage>"));
 			found = 1;
+		} else if (0 == strcmp(prop_name, "getetag")) {
+			etag_create(con->physical.etag, &sce->st, con->etag_flags);
+			buffer_append_string_len(b, CONST_STR_LEN("<D:getetag>"));
+			buffer_append_string_buffer(b, con->physical.etag);
+			buffer_append_string_len(b, CONST_STR_LEN("</D:getetag>"));
+			buffer_reset(con->physical.etag);
+			found = 1;
 	      #ifdef USE_LOCKS
+		} else if (0 == strcmp(prop_name, "lockdiscovery")) {
+			webdav_get_live_property_lockdiscovery(srv, con, p, dst, b);
+			found = 1;
 		} else if (0 == strcmp(prop_name, "supportedlock")) {
 			buffer_append_string_len(b,CONST_STR_LEN("<D:supportedlock>"));
 			buffer_append_string_len(b,CONST_STR_LEN("<D:lockentry>"));
@@ -970,16 +1058,16 @@ typedef struct {
 
 static webdav_property live_properties[] = {
 	{ "DAV:", "creationdate" },
-	{ "DAV:", "displayname" },
+	/*{ "DAV:", "displayname" },*//*(not implemented)*/
 	{ "DAV:", "getcontentlanguage" },
 	{ "DAV:", "getcontentlength" },
 	{ "DAV:", "getcontenttype" },
 	{ "DAV:", "getetag" },
 	{ "DAV:", "getlastmodified" },
 	{ "DAV:", "resourcetype" },
-	{ "DAV:", "lockdiscovery" },
-	{ "DAV:", "source" },
+	/*{ "DAV:", "source" },*//*(not implemented)*/
       #ifdef USE_LOCKS
+	{ "DAV:", "lockdiscovery" },
 	{ "DAV:", "supportedlock" },
       #endif
 
@@ -1143,38 +1231,7 @@ static int webdav_lockdiscovery(server *srv, connection *con,
 
 	buffer_append_string_len(b,CONST_STR_LEN("<D:prop xmlns:D=\"DAV:\" xmlns:ns0=\"urn:uuid:c2f41010-65b3-11d1-a29f-00aa00c14882/\">\n"));
 	buffer_append_string_len(b,CONST_STR_LEN("<D:lockdiscovery>\n"));
-	buffer_append_string_len(b,CONST_STR_LEN("<D:activelock>\n"));
-
-	buffer_append_string_len(b,CONST_STR_LEN("<D:lockscope>"));
-	buffer_append_string_len(b,CONST_STR_LEN("<D:"));
-	buffer_append_string(b, lockscope);
-	buffer_append_string_len(b, CONST_STR_LEN("/>"));
-	buffer_append_string_len(b,CONST_STR_LEN("</D:lockscope>\n"));
-
-	buffer_append_string_len(b,CONST_STR_LEN("<D:locktype>"));
-	buffer_append_string_len(b,CONST_STR_LEN("<D:"));
-	buffer_append_string(b, locktype);
-	buffer_append_string_len(b, CONST_STR_LEN("/>"));
-	buffer_append_string_len(b,CONST_STR_LEN("</D:locktype>\n"));
-
-	buffer_append_string_len(b,CONST_STR_LEN("<D:depth>"));
-	buffer_append_string(b, depth == 0 ? "0" : "infinity");
-	buffer_append_string_len(b,CONST_STR_LEN("</D:depth>\n"));
-
-	buffer_append_string_len(b,CONST_STR_LEN("<D:timeout>"));
-	buffer_append_string_len(b, CONST_STR_LEN("Second-600"));
-	buffer_append_string_len(b,CONST_STR_LEN("</D:timeout>\n"));
-
-	buffer_append_string_len(b,CONST_STR_LEN("<D:owner>"));
-	buffer_append_string_len(b,CONST_STR_LEN("</D:owner>\n"));
-
-	buffer_append_string_len(b,CONST_STR_LEN("<D:locktoken>"));
-	buffer_append_string_len(b, CONST_STR_LEN("<D:href>"));
-	buffer_append_string_buffer(b, locktoken);
-	buffer_append_string_len(b, CONST_STR_LEN("</D:href>"));
-	buffer_append_string_len(b,CONST_STR_LEN("</D:locktoken>\n"));
-
-	buffer_append_string_len(b,CONST_STR_LEN("</D:activelock>\n"));
+	webdav_activelock(b, locktoken, lockscope, locktype, depth, 600);
 	buffer_append_string_len(b,CONST_STR_LEN("</D:lockdiscovery>\n"));
 	buffer_append_string_len(b,CONST_STR_LEN("</D:prop>\n"));
 
