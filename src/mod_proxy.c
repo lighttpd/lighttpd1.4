@@ -97,6 +97,7 @@ typedef struct {
 	buffer *response_header;
 
 	chunkqueue *wb;
+	off_t wb_reqlen;
 
 	int fd; /* fd to the proxy process */
 	int fde_ndx; /* index into the fd-event buffer */
@@ -124,6 +125,7 @@ static handler_ctx * handler_ctx_init(void) {
 	hctx->response_header = buffer_init();
 
 	hctx->wb = chunkqueue_init();
+	hctx->wb_reqlen = 0;
 
 	hctx->fd = -1;
 	hctx->fde_ndx = -1;
@@ -502,6 +504,7 @@ static int proxy_create_env(server *srv, handler_ctx *hctx) {
 
 	buffer_append_string_len(b, CONST_STR_LEN("Connection: close\r\n\r\n"));
 
+	hctx->wb_reqlen = buffer_string_length(b);
 	chunkqueue_append_buffer(hctx->wb, b);
 	buffer_free(b);
 
@@ -510,7 +513,8 @@ static int proxy_create_env(server *srv, handler_ctx *hctx) {
 	if (con->request.content_length) {
 		chunkqueue *req_cq = con->request_content_queue;
 
-		chunkqueue_steal(hctx->wb, req_cq, req_cq->bytes_in);
+		chunkqueue_steal(hctx->wb, req_cq, req_cq->bytes_in); /*(0 == req_cq->bytes_out)*/
+		hctx->wb_reqlen += con->request.content_length;/* (eventual) total request size */
 	}
 
 	return 0;
@@ -816,11 +820,23 @@ static handler_t proxy_write_request(server *srv, handler_ctx *hctx) {
 			return HANDLER_ERROR;
 		}
 
-		if (hctx->wb->bytes_out == hctx->wb->bytes_in) {
+		if (hctx->wb->bytes_out == hctx->wb_reqlen) {
 			proxy_set_state(srv, hctx, PROXY_STATE_READ);
 			fdevent_event_set(srv->ev, &(hctx->fde_ndx), hctx->fd, FDEVENT_IN);
 		} else {
-			fdevent_event_set(srv->ev, &(hctx->fde_ndx), hctx->fd, FDEVENT_IN|FDEVENT_OUT);
+			off_t wblen = hctx->wb->bytes_in - hctx->wb->bytes_out;
+			if (hctx->wb->bytes_in < hctx->wb_reqlen && wblen < 65536 - 16384) {
+				/*(con->conf.stream_request_body & FDEVENT_STREAM_REQUEST)*/
+				if (!(con->conf.stream_request_body & FDEVENT_STREAM_REQUEST_POLLIN)) {
+					con->conf.stream_request_body |= FDEVENT_STREAM_REQUEST_POLLIN;
+					con->is_readable = 1; /* trigger optimistic read from client */
+				}
+			}
+			if (0 == wblen) {
+				fdevent_event_set(srv->ev, &(hctx->fde_ndx), hctx->fd, FDEVENT_IN);
+			} else {
+				fdevent_event_set(srv->ev, &(hctx->fde_ndx), hctx->fd, FDEVENT_IN|FDEVENT_OUT);
+			}
 		}
 
 		return HANDLER_WAIT_FOR_EVENT;
@@ -905,12 +921,29 @@ SUBREQUEST_FUNC(mod_proxy_handle_subrequest) {
 	/* not my job */
 	if (con->mode != p->id) return HANDLER_GO_ON;
 
-	if (con->state == CON_STATE_READ_POST) {
-		handler_t r = connection_handle_read_post_state(srv, con);
-		if (r != HANDLER_GO_ON) return r;
+	if (0 == hctx->wb->bytes_in
+	    ? con->state == CON_STATE_READ_POST
+	    : hctx->wb->bytes_in < hctx->wb_reqlen) {
+		/*(64k - 4k to attempt to avoid temporary files
+		 * in conjunction with FDEVENT_STREAM_REQUEST_BUFMIN)*/
+		if (hctx->wb->bytes_in - hctx->wb->bytes_out > 65536 - 4096
+		    && (con->conf.stream_request_body & FDEVENT_STREAM_REQUEST_BUFMIN)){
+			con->conf.stream_request_body &= ~FDEVENT_STREAM_REQUEST_POLLIN;
+			if (0 != hctx->wb->bytes_in) return HANDLER_WAIT_FOR_EVENT;
+		} else {
+			handler_t r = connection_handle_read_post_state(srv, con);
+			chunkqueue *req_cq = con->request_content_queue;
+			if (0 != hctx->wb->bytes_in && !chunkqueue_is_empty(req_cq)) {
+				chunkqueue_steal(hctx->wb, req_cq, req_cq->bytes_in - req_cq->bytes_out);
+				if (fdevent_event_get_interest(srv->ev, hctx->fd) & FDEVENT_OUT) {
+					return (r == HANDLER_GO_ON) ? HANDLER_WAIT_FOR_EVENT : r;
+				}
+			}
+			if (r != HANDLER_GO_ON) return r;
+		}
 	}
 
-	return (hctx->state != PROXY_STATE_READ)
+	return (0 == hctx->wb->bytes_in || !chunkqueue_is_empty(hctx->wb))
 	  ? proxy_send_request(srv, hctx)
 	  : HANDLER_WAIT_FOR_EVENT;
 }
@@ -922,8 +955,7 @@ static handler_t proxy_handle_fdevent(server *srv, void *ctx, int revents) {
 
 	joblist_append(srv, con);
 
-	if ((revents & FDEVENT_IN) &&
-	    hctx->state == PROXY_STATE_READ) {
+	if (revents & FDEVENT_IN) {
 
 		if (p->conf.debug) {
 			log_error_write(srv, __FILE__, __LINE__, "sd",
@@ -985,18 +1017,7 @@ static handler_t proxy_handle_fdevent(server *srv, void *ctx, int revents) {
 			proxy_set_state(srv, hctx, PROXY_STATE_PREPARE_WRITE);
 		}
 
-		if (hctx->state == PROXY_STATE_PREPARE_WRITE ||
-		    hctx->state == PROXY_STATE_WRITE) {
-			/* we are allowed to send something out
-			 *
-			 * 1. after a just finished connect() call
-			 * 2. in a unfinished write() call (long POST request)
-			 */
-			return proxy_send_request(srv, hctx); /*(might invalidate hctx)*/
-		} else {
-			log_error_write(srv, __FILE__, __LINE__, "sd",
-					"proxy: out", hctx->state);
-		}
+		return proxy_send_request(srv, hctx); /*(might invalidate hctx)*/
 	}
 
 	/* perhaps this issue is already handled */

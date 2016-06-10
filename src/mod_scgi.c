@@ -304,9 +304,6 @@ typedef enum { FCGI_STATE_INIT, FCGI_STATE_CONNECT, FCGI_STATE_PREPARE_WRITE,
 
 typedef struct {
 	buffer  *response;
-	size_t   response_len;
-	int      response_type;
-	int      response_padding;
 
 	scgi_proc *proc;
 	scgi_extension_host *host;
@@ -314,20 +311,17 @@ typedef struct {
 	scgi_connection_state_t state;
 	time_t   state_timestamp;
 
-	int      reconnects; /* number of reconnect attempts */
-
 	chunkqueue *wb;
+	off_t     wb_reqlen;
 
 	buffer   *response_header;
 
-	int       delayed;   /* flag to mark that the connect() is delayed */
-
-	size_t    request_id;
 	int       fd;        /* fd to the scgi process */
 	int       fde_ndx;   /* index into the fd-event buffer */
 
 	pid_t     pid;
 	int       got_proc;
+	int       reconnects; /* number of reconnect attempts */
 
 	plugin_config conf;
 
@@ -367,18 +361,15 @@ static handler_ctx * handler_ctx_init(void) {
 	hctx->response = buffer_init();
 	hctx->response_header = buffer_init();
 
-	hctx->request_id = 0;
 	hctx->state = FCGI_STATE_INIT;
 	hctx->proc = NULL;
 
-	hctx->response_len = 0;
-	hctx->response_type = 0;
-	hctx->response_padding = 0;
 	hctx->fd = -1;
 
 	hctx->reconnects = 0;
 
 	hctx->wb = chunkqueue_init();
+	hctx->wb_reqlen = 0;
 
 	return hctx;
 }
@@ -1371,7 +1362,6 @@ static int scgi_reconnect(server *srv, handler_ctx *hctx) {
 
 	scgi_set_state(srv, hctx, FCGI_STATE_INIT);
 
-	hctx->request_id = 0;
 	hctx->reconnects++;
 
 	if (p->conf.debug) {
@@ -1736,13 +1726,15 @@ static int scgi_create_env(server *srv, handler_ctx *hctx) {
 	buffer_append_string_buffer(b, p->scgi_env);
 	buffer_append_string_len(b, CONST_STR_LEN(","));
 
+	hctx->wb_reqlen = buffer_string_length(b);
 	chunkqueue_append_buffer(hctx->wb, b);
 	buffer_free(b);
 
 	if (con->request.content_length) {
 		chunkqueue *req_cq = con->request_content_queue;
 
-		chunkqueue_steal(hctx->wb, req_cq, req_cq->bytes_in);
+		chunkqueue_steal(hctx->wb, req_cq, req_cq->bytes_in); /*(0 == req_cq->bytes_out)*/
+		hctx->wb_reqlen += con->request.content_length;/* (eventual) total request size */
 	}
 
 	return 0;
@@ -2426,11 +2418,23 @@ static handler_t scgi_write_request(server *srv, handler_ctx *hctx) {
 			}
 		}
 
-		if (hctx->wb->bytes_out == hctx->wb->bytes_in) {
+		if (hctx->wb->bytes_out == hctx->wb_reqlen) {
 			fdevent_event_set(srv->ev, &(hctx->fde_ndx), hctx->fd, FDEVENT_IN);
 			scgi_set_state(srv, hctx, FCGI_STATE_READ);
 		} else {
-			fdevent_event_set(srv->ev, &(hctx->fde_ndx), hctx->fd, FDEVENT_IN|FDEVENT_OUT);
+			off_t wblen = hctx->wb->bytes_in - hctx->wb->bytes_out;
+			if (hctx->wb->bytes_in < hctx->wb_reqlen && wblen < 65536 - 16384) {
+				/*(con->conf.stream_request_body & FDEVENT_STREAM_REQUEST)*/
+				if (!(con->conf.stream_request_body & FDEVENT_STREAM_REQUEST_POLLIN)) {
+					con->conf.stream_request_body |= FDEVENT_STREAM_REQUEST_POLLIN;
+					con->is_readable = 1; /* trigger optimistic read from client */
+				}
+			}
+			if (0 == wblen) {
+				fdevent_event_set(srv->ev, &(hctx->fde_ndx), hctx->fd, FDEVENT_IN);
+			} else {
+				fdevent_event_set(srv->ev, &(hctx->fde_ndx), hctx->fd, FDEVENT_IN|FDEVENT_OUT);
+			}
 		}
 
 		return HANDLER_WAIT_FOR_EVENT;
@@ -2525,12 +2529,29 @@ SUBREQUEST_FUNC(mod_scgi_handle_subrequest) {
 	/* not my job */
 	if (con->mode != p->id) return HANDLER_GO_ON;
 
-	if (con->state == CON_STATE_READ_POST) {
-		handler_t r = connection_handle_read_post_state(srv, con);
-		if (r != HANDLER_GO_ON) return r;
+	if (0 == hctx->wb->bytes_in
+	    ? con->state == CON_STATE_READ_POST
+	    : hctx->wb->bytes_in < hctx->wb_reqlen) {
+		/*(64k - 4k to attempt to avoid temporary files
+		 * in conjunction with FDEVENT_STREAM_REQUEST_BUFMIN)*/
+		if (hctx->wb->bytes_in - hctx->wb->bytes_out > 65536 - 4096
+		    && (con->conf.stream_request_body & FDEVENT_STREAM_REQUEST_BUFMIN)){
+			con->conf.stream_request_body &= ~FDEVENT_STREAM_REQUEST_POLLIN;
+			if (0 != hctx->wb->bytes_in) return HANDLER_WAIT_FOR_EVENT;
+		} else {
+			handler_t r = connection_handle_read_post_state(srv, con);
+			chunkqueue *req_cq = con->request_content_queue;
+			if (0 != hctx->wb->bytes_in && !chunkqueue_is_empty(req_cq)) {
+				chunkqueue_steal(hctx->wb, req_cq, req_cq->bytes_in - req_cq->bytes_out);
+				if (fdevent_event_get_interest(srv->ev, hctx->fd) & FDEVENT_OUT) {
+					return (r == HANDLER_GO_ON) ? HANDLER_WAIT_FOR_EVENT : r;
+				}
+			}
+			if (r != HANDLER_GO_ON) return r;
+		}
 	}
 
-	return (hctx->state != FCGI_STATE_READ)
+	return (0 == hctx->wb->bytes_in || !chunkqueue_is_empty(hctx->wb))
 	  ? scgi_send_request(srv, hctx)
 	  : HANDLER_WAIT_FOR_EVENT;
 }
@@ -2546,8 +2567,7 @@ static handler_t scgi_handle_fdevent(server *srv, void *ctx, int revents) {
 
 	joblist_append(srv, con);
 
-	if ((revents & FDEVENT_IN) &&
-	    hctx->state == FCGI_STATE_READ) {
+	if (revents & FDEVENT_IN) {
 		switch (scgi_demux_response(srv, hctx)) {
 		case 0:
 			break;
@@ -2643,19 +2663,7 @@ static handler_t scgi_handle_fdevent(server *srv, void *ctx, int revents) {
 	}
 
 	if (revents & FDEVENT_OUT) {
-		if (hctx->state == FCGI_STATE_CONNECT ||
-		    hctx->state == FCGI_STATE_WRITE) {
-			/* we are allowed to send something out
-			 *
-			 * 1. in a unfinished connect() call
-			 * 2. in a unfinished write() call (long POST request)
-			 */
-			return scgi_send_request(srv, hctx); /*(might invalidate hctx)*/
-		} else {
-			log_error_write(srv, __FILE__, __LINE__, "sd",
-					"got a FDEVENT_OUT and didn't know why:",
-					hctx->state);
-		}
+		return scgi_send_request(srv, hctx); /*(might invalidate hctx)*/
 	}
 
 	/* perhaps this issue is already handled */
@@ -2671,13 +2679,6 @@ static handler_t scgi_handle_fdevent(server *srv, void *ctx, int revents) {
 			 *
 			 */
 			scgi_send_request(srv, hctx);
-		} else if (hctx->state == FCGI_STATE_READ &&
-			   hctx->proc->port == 0) {
-			/* FIXME:
-			 *
-			 * ioctl says 8192 bytes to read from PHP and we receive directly a HUP for the socket
-			 * even if the FCGI_FIN packet is not received yet
-			 */
 		} else {
 			log_error_write(srv, __FILE__, __LINE__, "sbSBSDSd",
 					"error: unexpected close of scgi connection for",
@@ -2826,6 +2827,18 @@ static handler_t scgi_check_extension(server *srv, connection *con, void *p_d, i
 
 	/* a note about no handler is not sent yet */
 	extension->note_is_sent = 0;
+
+	/* SCGI requires that Content-Length be set.
+	 * Send 411 Length Required if Content-Length missing.
+	 * (Alternatively, collect full request body before proceeding
+	 *  in mod_scgi_handle_subrequest()) */
+	if (0 == con->request.content_length
+	    && array_get_element(con->request.headers, "Transfer-Encoding")) {
+		con->keep_alive = 0;
+		con->http_status = 411; /* Length Required */
+		con->mode = DIRECT;
+		return HANDLER_FINISHED;
+	}
 
 	/*
 	 * if check-local is disabled, use the uri.path handler

@@ -697,8 +697,13 @@ static handler_t cgi_handle_fdevent_send (server *srv, void *ctx, int revents) {
 
 	if (revents & FDEVENT_HUP) {
 		/* skip sending remaining data to CGI */
-		chunkqueue *cq = con->request_content_queue;
-		chunkqueue_mark_written(cq, chunkqueue_length(cq));
+		if (con->request.content_length) {
+			chunkqueue *cq = con->request_content_queue;
+			chunkqueue_mark_written(cq, chunkqueue_length(cq));
+			if (cq->bytes_in != (off_t)con->request.content_length) {
+				con->keep_alive = 0;
+			}
+		}
 
 		cgi_connection_close_fdtocgi(srv, hctx); /*(closes only hctx->fdtocgi)*/
 	} else if (revents & FDEVENT_ERR) {
@@ -740,10 +745,6 @@ static handler_t cgi_handle_fdevent(server *srv, void *ctx, int revents) {
 			cgi_connection_close(srv, hctx);
 			return HANDLER_FINISHED;
 		}
-	}
-
-	if (revents & FDEVENT_OUT) {
-		/* nothing to do */
 	}
 
 	/* perhaps this issue is already handled */
@@ -960,10 +961,10 @@ static int cgi_write_request(server *srv, handler_ctx *hctx, int fd) {
 		}
 	}
 
-	if (chunkqueue_is_empty(cq)) {
+	if (cq->bytes_out == (off_t)con->request.content_length) {
 		/* sent all request body input */
 		/* close connection to the cgi-script */
-		if (-1 == hctx->fdtocgi) { /*(entire request body sent in initial send to pipe buffer)*/
+		if (-1 == hctx->fdtocgi) { /*(received request body sent in initial send to pipe buffer)*/
 			if (close(fd)) {
 				log_error_write(srv, __FILE__, __LINE__, "sds", "cgi stdin close failed ", fd, strerror(errno));
 			}
@@ -971,11 +972,25 @@ static int cgi_write_request(server *srv, handler_ctx *hctx, int fd) {
 			cgi_connection_close_fdtocgi(srv, hctx); /*(closes only hctx->fdtocgi)*/
 		}
 	} else {
-		/* more request body remains to be sent to CGI so register for fdevents */
+		off_t cqlen = cq->bytes_in - cq->bytes_out;
+		if (cq->bytes_in < (off_t)con->request.content_length && cqlen < 65536 - 16384) {
+			/*(con->conf.stream_request_body & FDEVENT_STREAM_REQUEST)*/
+			if (!(con->conf.stream_request_body & FDEVENT_STREAM_REQUEST_POLLIN)) {
+				con->conf.stream_request_body |= FDEVENT_STREAM_REQUEST_POLLIN;
+				con->is_readable = 1; /* trigger optimistic read from client */
+			}
+		}
 		if (-1 == hctx->fdtocgi) { /*(not registered yet)*/
 			hctx->fdtocgi = fd;
 			hctx->fde_ndx_tocgi = -1;
 			fdevent_register(srv->ev, hctx->fdtocgi, cgi_handle_fdevent_send, hctx);
+		}
+		if (0 == cqlen) { /*(chunkqueue_is_empty(cq))*/
+			if ((fdevent_event_get_interest(srv->ev, hctx->fdtocgi) & FDEVENT_OUT)) {
+				fdevent_event_set(srv->ev, &(hctx->fde_ndx_tocgi), hctx->fdtocgi, 0);
+			}
+		} else {
+			/* more request body remains to be sent to CGI so register for fdevents */
 			fdevent_event_set(srv->ev, &(hctx->fde_ndx_tocgi), hctx->fdtocgi, FDEVENT_OUT);
 		}
 	}
@@ -1482,13 +1497,27 @@ TRIGGER_FUNC(cgi_trigger) {
 SUBREQUEST_FUNC(mod_cgi_handle_subrequest) {
 	plugin_data *p = p_d;
 	handler_ctx *hctx = con->plugin_ctx[p->id];
+	chunkqueue *cq = con->request_content_queue;
 
 	if (con->mode != p->id) return HANDLER_GO_ON;
 	if (NULL == hctx) return HANDLER_GO_ON;
 
-	if (con->state == CON_STATE_READ_POST) {
-		handler_t r = connection_handle_read_post_state(srv, con);
-		if (r != HANDLER_GO_ON) return r;
+	if (cq->bytes_in != (off_t)con->request.content_length) {
+		/*(64k - 4k to attempt to avoid temporary files
+		 * in conjunction with FDEVENT_STREAM_REQUEST_BUFMIN)*/
+		if (cq->bytes_in - cq->bytes_out > 65536 - 4096
+		    && (con->conf.stream_request_body & FDEVENT_STREAM_REQUEST_BUFMIN)){
+			con->conf.stream_request_body &= ~FDEVENT_STREAM_REQUEST_POLLIN;
+			if (-1 != hctx->fd) return HANDLER_WAIT_FOR_EVENT;
+		} else {
+			handler_t r = connection_handle_read_post_state(srv, con);
+			if (!chunkqueue_is_empty(cq)) {
+				if (fdevent_event_get_interest(srv->ev, hctx->fdtocgi) & FDEVENT_OUT) {
+					return (r == HANDLER_GO_ON) ? HANDLER_WAIT_FOR_EVENT : r;
+				}
+			}
+			if (r != HANDLER_GO_ON) return r;
+		}
 	}
 
 	if (-1 == hctx->fd) {
@@ -1500,11 +1529,15 @@ SUBREQUEST_FUNC(mod_cgi_handle_subrequest) {
 
 			return HANDLER_FINISHED;
 		}
-	}
-
 #if 0
 	log_error_write(srv, __FILE__, __LINE__, "sdd", "subrequest, pid =", hctx, hctx->pid);
 #endif
+	} else if (!chunkqueue_is_empty(con->request_content_queue)) {
+		if (0 != cgi_write_request(srv, hctx, hctx->fdtocgi)) {
+			cgi_connection_close(srv, hctx);
+			return HANDLER_ERROR;
+		}
+	}
 
 	/* if not done, wait for CGI to close stdout, so we read EOF on pipe */
 	return con->file_finished ? HANDLER_FINISHED : HANDLER_WAIT_FOR_EVENT;

@@ -338,20 +338,20 @@ typedef struct {
 	fcgi_connection_state_t state;
 	time_t   state_timestamp;
 
-	int      reconnects; /* number of reconnect attempts */
-
 	chunkqueue *rb; /* read queue */
 	chunkqueue *wb; /* write queue */
+	off_t     wb_reqlen;
 
 	buffer   *response_header;
 
-	size_t    request_id;
 	int       fd;        /* fd to the fastcgi process */
 	int       fde_ndx;   /* index into the fd-event buffer */
 
 	pid_t     pid;
 	int       got_proc;
+	int       reconnects; /* number of reconnect attempts */
 
+	int       request_id;
 	int       send_content_body;
 
 	plugin_config conf;
@@ -497,6 +497,7 @@ static handler_ctx * handler_ctx_init(void) {
 
 	hctx->rb = chunkqueue_init();
 	hctx->wb = chunkqueue_init();
+	hctx->wb_reqlen = 0;
 
 	return hctx;
 }
@@ -1712,7 +1713,7 @@ static int fcgi_env_add(buffer *env, const char *key, size_t key_len, const char
 	return 0;
 }
 
-static int fcgi_header(FCGI_Header * header, unsigned char type, size_t request_id, int contentLength, unsigned char paddingLength) {
+static int fcgi_header(FCGI_Header * header, unsigned char type, int request_id, int contentLength, unsigned char paddingLength) {
 	force_assert(contentLength <= FCGI_MAX_LENGTH);
 	
 	header->version = FCGI_VERSION_1;
@@ -1895,7 +1896,42 @@ static int fcgi_env_add_request_headers(server *srv, connection *con, plugin_dat
 	return 0;
 }
 
-static int fcgi_create_env(server *srv, handler_ctx *hctx, size_t request_id) {
+static void fcgi_stdin_append(server *srv, connection *con, handler_ctx *hctx, int request_id) {
+	FCGI_Header header;
+	chunkqueue *req_cq = con->request_content_queue;
+	plugin_data *p     = hctx->plugin_data;
+	off_t offset, weWant;
+	const off_t req_cqlen = req_cq->bytes_in - req_cq->bytes_out;
+
+	/* something to send ? */
+	for (offset = 0; offset != req_cqlen; offset += weWant) {
+		weWant = req_cqlen - offset > FCGI_MAX_LENGTH ? FCGI_MAX_LENGTH : req_cqlen - offset;
+
+		/* we announce toWrite octets
+		 * now take all request_content chunks available
+		 * */
+
+		fcgi_header(&(header), FCGI_STDIN, request_id, weWant, 0);
+		chunkqueue_append_mem(hctx->wb, (const char *)&header, sizeof(header));
+		hctx->wb_reqlen += sizeof(header);
+
+		if (p->conf.debug > 10) {
+			log_error_write(srv, __FILE__, __LINE__, "soso", "tosend:", offset, "/", req_cqlen);
+		}
+
+		chunkqueue_steal(hctx->wb, req_cq, weWant);
+		/*(hctx->wb_reqlen already includes content_length)*/
+	}
+
+	if (hctx->wb->bytes_in == hctx->wb_reqlen) {
+		/* terminate STDIN */
+		fcgi_header(&(header), FCGI_STDIN, request_id, 0, 0);
+		chunkqueue_append_mem(hctx->wb, (const char *)&header, sizeof(header));
+		hctx->wb_reqlen += (int)sizeof(header);
+	}
+}
+
+static int fcgi_create_env(server *srv, handler_ctx *hctx, int request_id) {
 	FCGI_BeginRequestRecord beginRecord;
 	FCGI_Header header;
 
@@ -2127,38 +2163,13 @@ static int fcgi_create_env(server *srv, handler_ctx *hctx, size_t request_id) {
 		fcgi_header(&(header), FCGI_PARAMS, request_id, 0, 0);
 		buffer_append_string_len(b, (const char *)&header, sizeof(header));
 
+		hctx->wb_reqlen = buffer_string_length(b);
 		chunkqueue_append_buffer(hctx->wb, b);
 		buffer_free(b);
 	}
 
-	if (con->request.content_length) {
-		chunkqueue *req_cq = con->request_content_queue;
-		off_t offset;
-
-		/* something to send ? */
-		for (offset = 0; offset != req_cq->bytes_in; ) {
-			off_t weWant = req_cq->bytes_in - offset > FCGI_MAX_LENGTH ? FCGI_MAX_LENGTH : req_cq->bytes_in - offset;
-
-			/* we announce toWrite octets
-			 * now take all the request_content chunks that we need to fill this request
-			 * */
-
-			fcgi_header(&(header), FCGI_STDIN, request_id, weWant, 0);
-			chunkqueue_append_mem(hctx->wb, (const char *)&header, sizeof(header));
-
-			if (p->conf.debug > 10) {
-				log_error_write(srv, __FILE__, __LINE__, "soso", "tosend:", offset, "/", req_cq->bytes_in);
-			}
-
-			chunkqueue_steal(hctx->wb, req_cq, weWant);
-
-			offset += weWant;
-		}
-	}
-
-	/* terminate STDIN */
-	fcgi_header(&(header), FCGI_STDIN, request_id, 0, 0);
-	chunkqueue_append_mem(hctx->wb, (const char *)&header, sizeof(header));
+	hctx->wb_reqlen += con->request.content_length;/* (eventual) (minimal) total request size, not necessarily including all fcgi_headers around content length yet */
+	fcgi_stdin_append(srv, con, hctx, request_id);
 
 	return 0;
 }
@@ -2400,10 +2411,10 @@ range_success: ;
 
 typedef struct {
 	buffer  *b;
-	size_t   len;
+	unsigned int len;
 	int      type;
 	int      padding;
-	size_t   request_id;
+	int      request_id;
 } fastcgi_response_packet;
 
 static int fastcgi_get_packet(server *srv, handler_ctx *hctx, fastcgi_response_packet *packet) {
@@ -3028,11 +3039,23 @@ static handler_t fcgi_write_request(server *srv, handler_ctx *hctx) {
 			}
 		}
 
-		if (hctx->wb->bytes_out == hctx->wb->bytes_in) {
+		if (hctx->wb->bytes_out == hctx->wb_reqlen) {
 			fdevent_event_set(srv->ev, &(hctx->fde_ndx), hctx->fd, FDEVENT_IN);
 			fcgi_set_state(srv, hctx, FCGI_STATE_READ);
 		} else {
-			fdevent_event_set(srv->ev, &(hctx->fde_ndx), hctx->fd, FDEVENT_IN|FDEVENT_OUT);
+			off_t wblen = hctx->wb->bytes_in - hctx->wb->bytes_out;
+			if (hctx->wb->bytes_in < hctx->wb_reqlen && wblen < 65536 - 16384) {
+				/*(con->conf.stream_request_body & FDEVENT_STREAM_REQUEST)*/
+				if (!(con->conf.stream_request_body & FDEVENT_STREAM_REQUEST_POLLIN)) {
+					con->conf.stream_request_body |= FDEVENT_STREAM_REQUEST_POLLIN;
+					con->is_readable = 1; /* trigger optimistic read from client */
+				}
+			}
+			if (0 == wblen) {
+				fdevent_event_set(srv->ev, &(hctx->fde_ndx), hctx->fd, FDEVENT_IN);
+			} else {
+				fdevent_event_set(srv->ev, &(hctx->fde_ndx), hctx->fd, FDEVENT_IN|FDEVENT_OUT);
+			}
 		}
 
 		return HANDLER_WAIT_FOR_EVENT;
@@ -3151,12 +3174,29 @@ SUBREQUEST_FUNC(mod_fastcgi_handle_subrequest) {
 	/* not my job */
 	if (con->mode != p->id) return HANDLER_GO_ON;
 
-	if (con->state == CON_STATE_READ_POST) {
-		handler_t r = connection_handle_read_post_state(srv, con);
-		if (r != HANDLER_GO_ON) return r;
+	if (0 == hctx->wb->bytes_in
+	    ? con->state == CON_STATE_READ_POST
+	    : hctx->wb->bytes_in < hctx->wb_reqlen) {
+		/*(64k - 4k to attempt to avoid temporary files
+		 * in conjunction with FDEVENT_STREAM_REQUEST_BUFMIN)*/
+		if (hctx->wb->bytes_in - hctx->wb->bytes_out > 65536 - 4096
+		    && (con->conf.stream_request_body & FDEVENT_STREAM_REQUEST_BUFMIN)){
+			con->conf.stream_request_body &= ~FDEVENT_STREAM_REQUEST_POLLIN;
+			if (0 != hctx->wb->bytes_in) return HANDLER_WAIT_FOR_EVENT;
+		} else {
+			handler_t r = connection_handle_read_post_state(srv, con);
+			chunkqueue *req_cq = con->request_content_queue;
+			if (0 != hctx->wb->bytes_in && !chunkqueue_is_empty(req_cq)) {
+				fcgi_stdin_append(srv, con, hctx, hctx->request_id);
+				if (fdevent_event_get_interest(srv->ev, hctx->fd) & FDEVENT_OUT) {
+					return (r == HANDLER_GO_ON) ? HANDLER_WAIT_FOR_EVENT : r;
+				}
+			}
+			if (r != HANDLER_GO_ON) return r;
+		}
 	}
 
-	return (hctx->state != FCGI_STATE_READ)
+	return (0 == hctx->wb->bytes_in || !chunkqueue_is_empty(hctx->wb))
 	  ? fcgi_send_request(srv, hctx)
 	  : HANDLER_WAIT_FOR_EVENT;
 }
@@ -3171,8 +3211,7 @@ static handler_t fcgi_handle_fdevent(server *srv, void *ctx, int revents) {
 
 	joblist_append(srv, con);
 
-	if ((revents & FDEVENT_IN) &&
-	    hctx->state == FCGI_STATE_READ) {
+	if (revents & FDEVENT_IN) {
 		switch (fcgi_demux_response(srv, hctx)) {
 		case 0:
 			break;
@@ -3290,19 +3329,7 @@ static handler_t fcgi_handle_fdevent(server *srv, void *ctx, int revents) {
 	}
 
 	if (revents & FDEVENT_OUT) {
-		if (hctx->state == FCGI_STATE_CONNECT_DELAYED ||
-		    hctx->state == FCGI_STATE_WRITE) {
-			/* we are allowed to send something out
-			 *
-			 * 1. in an unfinished connect() call
-			 * 2. in an unfinished write() call (long POST request)
-			 */
-			return fcgi_send_request(srv, hctx); /*(might invalidate hctx)*/
-		} else {
-			log_error_write(srv, __FILE__, __LINE__, "sd",
-					"got a FDEVENT_OUT and didn't know why:",
-					hctx->state);
-		}
+		return fcgi_send_request(srv, hctx); /*(might invalidate hctx)*/
 	}
 
 	/* perhaps this issue is already handled */
@@ -3318,7 +3345,8 @@ static handler_t fcgi_handle_fdevent(server *srv, void *ctx, int revents) {
 			 *
 			 */
 			fcgi_send_request(srv, hctx);
-		} else if (hctx->state == FCGI_STATE_READ &&
+		} else if (chunkqueue_is_empty(hctx->wb) &&
+			   hctx->wb->bytes_in != 0 &&
 			   hctx->proc->port == 0) {
 			/* FIXME:
 			 *
