@@ -2085,6 +2085,7 @@ SUBREQUEST_FUNC(mod_webdav_subrequest_handler_huge) {
 			}
 		} else if (S_ISDIR(st.st_mode)) {
 			int r;
+			int created = 0;
 			/* src is a directory */
 
 			if (con->physical.path->ptr[buffer_string_length(con->physical.path)-1] != '/') {
@@ -2097,6 +2098,7 @@ SUBREQUEST_FUNC(mod_webdav_subrequest_handler_huge) {
 					con->http_status = 403;
 					return HANDLER_FINISHED;
 				}
+				created = 1;
 			} else if (!S_ISDIR(st.st_mode)) {
 				if (overwrite == 0) {
 					/* copying into a non-dir ? */
@@ -2108,6 +2110,7 @@ SUBREQUEST_FUNC(mod_webdav_subrequest_handler_huge) {
 						con->http_status = 403;
 						return HANDLER_FINISHED;
 					}
+					created = 1;
 				}
 			}
 
@@ -2123,11 +2126,12 @@ SUBREQUEST_FUNC(mod_webdav_subrequest_handler_huge) {
 
 				rmdir(con->physical.path->ptr);
 			}
-			con->http_status = 201;
+			con->http_status = created ? 201 : 204;
 			con->file_finished = 1;
 		} else {
 			/* it is just a file, good */
 			int r;
+			int destdir = 0;
 
 			/* does the client have a lock for this connection ? */
 			if (!webdav_has_lock(srv, con, p, p->uri.path)) {
@@ -2140,6 +2144,7 @@ SUBREQUEST_FUNC(mod_webdav_subrequest_handler_huge) {
 				if (S_ISDIR(st.st_mode)) {
 					/* file to dir/
 					 * append basename to physical path */
+					destdir = 1;
 
 					if (NULL != (sep = strrchr(con->physical.path->ptr, '/'))) {
 						buffer_append_string(p->physical.path, sep);
@@ -2149,7 +2154,7 @@ SUBREQUEST_FUNC(mod_webdav_subrequest_handler_huge) {
 			}
 
 			if (-1 == r) {
-				con->http_status = 201; /* we will create a new one */
+				con->http_status = destdir ? 204 : 201; /* we will create a new one */
 				con->file_finished = 1;
 
 				switch(errno) {
@@ -2419,23 +2424,23 @@ propmatch_cleanup:
 				hdr_if = ds->value;
 			}
 
-			/* we don't support Depth: Infinity on directories */
-			if (hdr_if == NULL && depth == -1) {
-				if (0 != stat(con->physical.path->ptr, &st)) {
-					if (errno == ENOENT) {
-						int fd = open(con->physical.path->ptr, O_WRONLY|O_CREAT|O_APPEND|O_BINARY|FIFO_NONBLOCK, WEBDAV_FILE_MODE);
-						if (fd >= 0) {
-							close(fd);
-							created = 1;
-						} else {
-							log_error_write(srv, __FILE__, __LINE__, "sBss",
-									"create file", con->physical.path, ":", strerror(errno));
-							con->http_status = 403; /* Forbidden */
+			if (0 != stat(con->physical.path->ptr, &st)) {
+				if (errno == ENOENT) {
+					int fd = open(con->physical.path->ptr, O_WRONLY|O_CREAT|O_APPEND|O_BINARY|FIFO_NONBLOCK, WEBDAV_FILE_MODE);
+					if (fd >= 0) {
+						close(fd);
+						created = 1;
+					} else {
+						log_error_write(srv, __FILE__, __LINE__, "sBss",
+								"create file", con->physical.path, ":", strerror(errno));
+						con->http_status = 403; /* Forbidden */
 
-							return HANDLER_FINISHED;
-						}
+						return HANDLER_FINISHED;
 					}
-				} else if (S_ISDIR(st.st_mode)) {
+				}
+			} else if (hdr_if == NULL && depth == -1) {
+				/* we don't support Depth: Infinity on directories */
+				if (S_ISDIR(st.st_mode)) {
 					con->http_status = 409; /* Conflict */
 
 					return HANDLER_FINISHED;
