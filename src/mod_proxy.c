@@ -631,6 +631,10 @@ static int proxy_demux_response(server *srv, handler_ctx *hctx) {
 
 	/* check how much we have to read */
 	if (ioctl(hctx->fd, FIONREAD, &b)) {
+		if (errno == EAGAIN) {
+			fdevent_event_add(srv->ev, &(hctx->fde_ndx), hctx->fd, FDEVENT_IN);
+			return 0;
+		}
 		log_error_write(srv, __FILE__, __LINE__, "sd",
 				"ioctl failed: ",
 				proxy_fd);
@@ -644,10 +648,29 @@ static int proxy_demux_response(server *srv, handler_ctx *hctx) {
 	}
 
 	if (b > 0) {
+		if ((con->conf.stream_response_body & FDEVENT_STREAM_RESPONSE_BUFMIN)) {
+			off_t cqlen = chunkqueue_length(con->write_queue);
+			if (cqlen + b > 65536 - 4096) {
+				if (!con->is_writable) {
+					/*(defer removal of FDEVENT_IN interest since
+					 * connection_state_machine() might be able to send data
+					 * immediately, unless !con->is_writable, where
+					 * connection_state_machine() might not loop back to call
+					 * mod_proxy_handle_subrequest())*/
+					fdevent_event_clr(srv->ev, &(hctx->fde_ndx), hctx->fd, FDEVENT_IN);
+				}
+				if (cqlen >= 65536-1) return 0;
+				b = 65536 - 1 - (int)cqlen;
+			}
+		}
+
 		buffer_string_prepare_append(hctx->response, b);
 
 		if (-1 == (r = read(hctx->fd, hctx->response->ptr + buffer_string_length(hctx->response), buffer_string_space(hctx->response)))) {
-			if (errno == EAGAIN) return 0;
+			if (errno == EAGAIN) {
+				fdevent_event_add(srv->ev, &(hctx->fde_ndx), hctx->fd, FDEVENT_IN);
+				return 0;
+			}
 			log_error_write(srv, __FILE__, __LINE__, "sds",
 					"unexpected end-of-file (perhaps the proxy process died):",
 					proxy_fd, strerror(errno));
@@ -701,6 +724,15 @@ static int proxy_demux_response(server *srv, handler_ctx *hctx) {
 					}
 				}
 				buffer_reset(hctx->response);
+			} else {
+				/* no luck, no header found */
+				/*(reuse MAX_HTTP_REQUEST_HEADER as max size for response headers from backends)*/
+				if (buffer_string_length(hctx->response) > MAX_HTTP_REQUEST_HEADER) {
+					log_error_write(srv, __FILE__, __LINE__, "sb", "response headers too large for", con->uri.path);
+					con->http_status = 502; /* Bad Gateway */
+					con->mode = DIRECT;
+					fin = 1;
+				}
 			}
 		} else {
 			if (0 != http_chunk_append_buffer(srv, con, hctx->response)) {
@@ -802,6 +834,7 @@ static handler_t proxy_write_request(server *srv, handler_ctx *hctx) {
 	case PROXY_STATE_PREPARE_WRITE:
 		proxy_create_env(srv, hctx);
 
+		fdevent_event_add(srv->ev, &(hctx->fde_ndx), hctx->fd, FDEVENT_IN);
 		proxy_set_state(srv, hctx, PROXY_STATE_WRITE);
 
 		/* fall through */
@@ -821,8 +854,8 @@ static handler_t proxy_write_request(server *srv, handler_ctx *hctx) {
 		}
 
 		if (hctx->wb->bytes_out == hctx->wb_reqlen) {
+			fdevent_event_clr(srv->ev, &(hctx->fde_ndx), hctx->fd, FDEVENT_OUT);
 			proxy_set_state(srv, hctx, PROXY_STATE_READ);
-			fdevent_event_set(srv->ev, &(hctx->fde_ndx), hctx->fd, FDEVENT_IN);
 		} else {
 			off_t wblen = hctx->wb->bytes_in - hctx->wb->bytes_out;
 			if (hctx->wb->bytes_in < hctx->wb_reqlen && wblen < 65536 - 16384) {
@@ -833,9 +866,9 @@ static handler_t proxy_write_request(server *srv, handler_ctx *hctx) {
 				}
 			}
 			if (0 == wblen) {
-				fdevent_event_set(srv->ev, &(hctx->fde_ndx), hctx->fd, FDEVENT_IN);
+				fdevent_event_clr(srv->ev, &(hctx->fde_ndx), hctx->fd, FDEVENT_OUT);
 			} else {
-				fdevent_event_set(srv->ev, &(hctx->fde_ndx), hctx->fd, FDEVENT_IN|FDEVENT_OUT);
+				fdevent_event_add(srv->ev, &(hctx->fde_ndx), hctx->fd, FDEVENT_OUT);
 			}
 		}
 
@@ -924,6 +957,17 @@ SUBREQUEST_FUNC(mod_proxy_handle_subrequest) {
 
 	/* not my job */
 	if (con->mode != p->id) return HANDLER_GO_ON;
+
+	if ((con->conf.stream_response_body & FDEVENT_STREAM_RESPONSE_BUFMIN)
+	    && con->file_started) {
+		if (chunkqueue_length(con->write_queue) > 65536 - 4096) {
+			fdevent_event_clr(srv->ev, &(hctx->fde_ndx), hctx->fd, FDEVENT_IN);
+		} else if (!(fdevent_event_get_interest(srv->ev, hctx->fd) & FDEVENT_IN)) {
+			/* optimistic read from backend, which might re-enable FDEVENT_IN */
+			handler_t rc = proxy_recv_response(srv, hctx); /*(might invalidate hctx)*/
+			if (rc != HANDLER_GO_ON) return rc;            /*(unless HANDLER_GO_ON)*/
+		}
+	}
 
 	if (0 == hctx->wb->bytes_in
 	    ? con->state == CON_STATE_READ_POST

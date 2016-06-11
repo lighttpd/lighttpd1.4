@@ -400,6 +400,7 @@ static int cgi_demux_response(server *srv, handler_ctx *hctx) {
 		if (-1 == (n = read(hctx->fd, hctx->response->ptr, hctx->response->size - 1))) {
 			if (errno == EAGAIN || errno == EINTR) {
 				/* would block, wait for signal */
+				fdevent_event_add(srv->ev, &(hctx->fde_ndx), hctx->fd, FDEVENT_IN);
 				return FDEVENT_HANDLED_NOT_FINISHED;
 			}
 			/* error */
@@ -550,10 +551,30 @@ static int cgi_demux_response(server *srv, handler_ctx *hctx) {
 				}
 
 				con->file_started = 1;
+			} else {
+				/*(reuse MAX_HTTP_REQUEST_HEADER as max size for response headers from backends)*/
+				if (header_len > MAX_HTTP_REQUEST_HEADER) {
+					log_error_write(srv, __FILE__, __LINE__, "sb", "response headers too large for", con->uri.path);
+					con->http_status = 502; /* Bad Gateway */
+					con->mode = DIRECT;
+					return FDEVENT_HANDLED_FINISHED;
+				}
 			}
 		} else {
 			if (0 != http_chunk_append_buffer(srv, con, hctx->response)) {
 				return FDEVENT_HANDLED_ERROR;
+			}
+			if ((con->conf.stream_response_body & FDEVENT_STREAM_RESPONSE_BUFMIN)
+			    && chunkqueue_length(con->write_queue) > 65536 - 4096) {
+				if (!con->is_writable) {
+					/*(defer removal of FDEVENT_IN interest since
+					 * connection_state_machine() might be able to send data
+					 * immediately, unless !con->is_writable, where
+					 * connection_state_machine() might not loop back to call
+					 * mod_cgi_handle_subrequest())*/
+					fdevent_event_clr(srv->ev, &(hctx->fde_ndx), hctx->fd, FDEVENT_IN);
+				}
+				break;
 			}
 		}
 
@@ -1509,6 +1530,17 @@ SUBREQUEST_FUNC(mod_cgi_handle_subrequest) {
 
 	if (con->mode != p->id) return HANDLER_GO_ON;
 	if (NULL == hctx) return HANDLER_GO_ON;
+
+	if ((con->conf.stream_response_body & FDEVENT_STREAM_RESPONSE_BUFMIN)
+	    && con->file_started) {
+		if (chunkqueue_length(con->write_queue) > 65536 - 4096) {
+			fdevent_event_clr(srv->ev, &(hctx->fde_ndx), hctx->fd, FDEVENT_IN);
+		} else if (!(fdevent_event_get_interest(srv->ev, hctx->fd) & FDEVENT_IN)) {
+			/* optimistic read from backend, which might re-enable FDEVENT_IN */
+			handler_t rc = cgi_recv_response(srv, hctx); /*(might invalidate hctx)*/
+			if (rc != HANDLER_GO_ON) return rc;          /*(unless HANDLER_GO_ON)*/
+		}
+	}
 
 	if (cq->bytes_in != (off_t)con->request.content_length) {
 		/*(64k - 4k to attempt to avoid temporary files

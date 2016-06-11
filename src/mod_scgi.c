@@ -1859,6 +1859,7 @@ static int scgi_demux_response(server *srv, handler_ctx *hctx) {
 		if (-1 == (n = read(hctx->fd, hctx->response->ptr, hctx->response->size - 1))) {
 			if (errno == EAGAIN || errno == EINTR) {
 				/* would block, wait for signal */
+				fdevent_event_add(srv->ev, &(hctx->fde_ndx), hctx->fd, FDEVENT_IN);
 				return 0;
 			}
 			/* error */
@@ -1986,12 +1987,32 @@ static int scgi_demux_response(server *srv, handler_ctx *hctx) {
 				}
 
 				con->file_started = 1;
+			} else {
+				/*(reuse MAX_HTTP_REQUEST_HEADER as max size for response headers from backends)*/
+				if (buffer_string_length(hctx->response_header) > MAX_HTTP_REQUEST_HEADER) {
+					log_error_write(srv, __FILE__, __LINE__, "sb", "response headers too large for", con->uri.path);
+					con->http_status = 502; /* Bad Gateway */
+					con->mode = DIRECT;
+					return 1;
+				}
 			}
 		} else {
 			if (0 != http_chunk_append_buffer(srv, con, hctx->response)) {
 				/* error writing to tempfile;
 				 * truncate response or send 500 if nothing sent yet */
 				return 1;
+			}
+			if ((con->conf.stream_response_body & FDEVENT_STREAM_RESPONSE_BUFMIN)
+			    && chunkqueue_length(con->write_queue) > 65536 - 4096) {
+				if (!con->is_writable) {
+					/*(defer removal of FDEVENT_IN interest since
+					 * connection_state_machine() might be able to send data
+					 * immediately, unless !con->is_writable, where
+					 * connection_state_machine() might not loop back to call
+					 * mod_scgi_handle_subrequest())*/
+					fdevent_event_clr(srv->ev, &(hctx->fde_ndx), hctx->fd, FDEVENT_IN);
+				}
+				break;
 			}
 		}
 
@@ -2370,6 +2391,7 @@ static handler_t scgi_write_request(server *srv, handler_ctx *hctx) {
 	case FCGI_STATE_PREPARE_WRITE:
 		scgi_create_env(srv, hctx);
 
+		fdevent_event_add(srv->ev, &(hctx->fde_ndx), hctx->fd, FDEVENT_IN);
 		scgi_set_state(srv, hctx, FCGI_STATE_WRITE);
 
 		/* fall through */
@@ -2419,7 +2441,7 @@ static handler_t scgi_write_request(server *srv, handler_ctx *hctx) {
 		}
 
 		if (hctx->wb->bytes_out == hctx->wb_reqlen) {
-			fdevent_event_set(srv->ev, &(hctx->fde_ndx), hctx->fd, FDEVENT_IN);
+			fdevent_event_clr(srv->ev, &(hctx->fde_ndx), hctx->fd, FDEVENT_OUT);
 			scgi_set_state(srv, hctx, FCGI_STATE_READ);
 		} else {
 			off_t wblen = hctx->wb->bytes_in - hctx->wb->bytes_out;
@@ -2431,9 +2453,9 @@ static handler_t scgi_write_request(server *srv, handler_ctx *hctx) {
 				}
 			}
 			if (0 == wblen) {
-				fdevent_event_set(srv->ev, &(hctx->fde_ndx), hctx->fd, FDEVENT_IN);
+				fdevent_event_clr(srv->ev, &(hctx->fde_ndx), hctx->fd, FDEVENT_OUT);
 			} else {
-				fdevent_event_set(srv->ev, &(hctx->fde_ndx), hctx->fd, FDEVENT_IN|FDEVENT_OUT);
+				fdevent_event_add(srv->ev, &(hctx->fde_ndx), hctx->fd, FDEVENT_OUT);
 			}
 		}
 
@@ -2532,6 +2554,17 @@ SUBREQUEST_FUNC(mod_scgi_handle_subrequest) {
 
 	/* not my job */
 	if (con->mode != p->id) return HANDLER_GO_ON;
+
+	if ((con->conf.stream_response_body & FDEVENT_STREAM_RESPONSE_BUFMIN)
+	    && con->file_started) {
+		if (chunkqueue_length(con->write_queue) > 65536 - 4096) {
+			fdevent_event_clr(srv->ev, &(hctx->fde_ndx), hctx->fd, FDEVENT_IN);
+		} else if (!(fdevent_event_get_interest(srv->ev, hctx->fd) & FDEVENT_IN)) {
+			/* optimistic read from backend, which might re-enable FDEVENT_IN */
+			handler_t rc = scgi_recv_response(srv, hctx); /*(might invalidate hctx)*/
+			if (rc != HANDLER_GO_ON) return rc;           /*(unless HANDLER_GO_ON)*/
+		}
+	}
 
 	if (0 == hctx->wb->bytes_in
 	    ? con->state == CON_STATE_READ_POST

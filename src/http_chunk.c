@@ -133,8 +133,13 @@ static int http_chunk_append_data(server *srv, connection *con, buffer *b, const
 	 * file, so not checking if users of this interface have appended large
 	 * (references to) files to chunkqueue, which would not be in memory */
 
+	/*(allow slightly larger mem use if FDEVENT_STREAM_RESPONSE_BUFMIN
+	 * to reduce creation of temp files when backend producer will be
+	 * blocked until more data is sent to network to client)*/
+
 	if ((c && c->type == FILE_CHUNK && c->file.is_temp)
-	    || cq->bytes_in - cq->bytes_out + len > 64 * 1024) {
+	    || cq->bytes_in - cq->bytes_out + len
+		> 1024 * ((con->conf.stream_response_body & FDEVENT_STREAM_RESPONSE_BUFMIN) ? 128 : 64)) {
 		return http_chunk_append_to_tempfile(srv, con, b ? b->ptr : mem, len);
 	}
 

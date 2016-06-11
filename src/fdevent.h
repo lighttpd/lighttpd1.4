@@ -183,6 +183,8 @@ void fdevent_free(fdevents *ev);
 #define fdevent_event_get_interest(ev, fd) \
         (-1 != (fd) ? (ev)->fdarray[(fd)]->events : 0)
 void fdevent_event_set(fdevents *ev, int *fde_ndx, int fd, int events); /* events can be FDEVENT_IN, FDEVENT_OUT or FDEVENT_IN | FDEVENT_OUT */
+void fdevent_event_add(fdevents *ev, int *fde_ndx, int fd, int event); /* events can be FDEVENT_IN or FDEVENT_OUT */
+void fdevent_event_clr(fdevents *ev, int *fde_ndx, int fd, int event); /* events can be FDEVENT_IN or FDEVENT_OUT */
 void fdevent_event_del(fdevents *ev, int *fde_ndx, int fd);
 int fdevent_event_get_revent(fdevents *ev, size_t ndx);
 int fdevent_event_get_fd(fdevents *ev, size_t ndx);

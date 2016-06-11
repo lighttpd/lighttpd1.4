@@ -2511,7 +2511,10 @@ static int fcgi_demux_response(server *srv, handler_ctx *hctx) {
 	 * check how much we have to read
 	 */
 	if (ioctl(hctx->fd, FIONREAD, &toread)) {
-		if (errno == EAGAIN) return 0;
+		if (errno == EAGAIN) {
+			fdevent_event_add(srv->ev, &(hctx->fde_ndx), hctx->fd, FDEVENT_IN);
+			return 0;
+		}
 		log_error_write(srv, __FILE__, __LINE__, "sd",
 				"unexpected end-of-file (perhaps the fastcgi process died):",
 				fcgi_fd);
@@ -2522,12 +2525,26 @@ static int fcgi_demux_response(server *srv, handler_ctx *hctx) {
 		char *mem;
 		size_t mem_len;
 
+		if ((con->conf.stream_response_body & FDEVENT_STREAM_RESPONSE_BUFMIN)) {
+			off_t cqlen = chunkqueue_length(hctx->rb);
+			if (cqlen + toread > 65536 + (int)sizeof(FCGI_Header)) { /*(max size of FastCGI packet + 1)*/
+				if (cqlen < 65536 + (int)sizeof(FCGI_Header)) {
+					toread = 65536 + (int)sizeof(FCGI_Header) - cqlen;
+				} else { /* should not happen */
+					toread = toread < 1024 ? toread : 1024;
+				}
+			}
+		}
+
 		chunkqueue_get_memory(hctx->rb, &mem, &mem_len, 0, toread);
 		r = read(hctx->fd, mem, mem_len);
 		chunkqueue_use_memory(hctx->rb, r > 0 ? r : 0);
 
 		if (-1 == r) {
-			if (errno == EAGAIN) return 0;
+			if (errno == EAGAIN) {
+				fdevent_event_add(srv->ev, &(hctx->fde_ndx), hctx->fd, FDEVENT_IN);
+				return 0;
+			}
 			log_error_write(srv, __FILE__, __LINE__, "sds",
 					"unexpected end-of-file (perhaps the fastcgi process died):",
 					fcgi_fd, strerror(errno));
@@ -2586,6 +2603,13 @@ static int fcgi_demux_response(server *srv, handler_ctx *hctx) {
 					buffer_string_set_length(hctx->response_header, hlen);
 				} else {
 					/* no luck, no header found */
+					/*(reuse MAX_HTTP_REQUEST_HEADER as max size for response headers from backends)*/
+					if (buffer_string_length(hctx->response_header) > MAX_HTTP_REQUEST_HEADER) {
+						log_error_write(srv, __FILE__, __LINE__, "sb", "response headers too large for", con->uri.path);
+						con->http_status = 502; /* Bad Gateway */
+						con->mode = DIRECT;
+						fin = 1;
+					}
 					break;
 				}
 
@@ -2630,6 +2654,18 @@ static int fcgi_demux_response(server *srv, handler_ctx *hctx) {
 					/* error writing to tempfile;
 					 * truncate response or send 500 if nothing sent yet */
 					fin = 1;
+					break;
+				}
+				if ((con->conf.stream_response_body & FDEVENT_STREAM_RESPONSE_BUFMIN)
+				    && chunkqueue_length(con->write_queue) > 65536 - 4096) {
+					if (!con->is_writable) {
+						/*(defer removal of FDEVENT_IN interest since
+						 * connection_state_machine() might be able to send data
+						 * immediately, unless !con->is_writable, where
+						 * connection_state_machine() might not loop back to call
+						 * mod_fastcgi_handle_subrequest())*/
+						fdevent_event_clr(srv->ev, &(hctx->fde_ndx), hctx->fd, FDEVENT_IN);
+					}
 				}
 			}
 			break;
@@ -3009,6 +3045,7 @@ static handler_t fcgi_write_request(server *srv, handler_ctx *hctx) {
 
 		if (-1 == fcgi_create_env(srv, hctx, hctx->request_id)) return HANDLER_ERROR;
 
+		fdevent_event_add(srv->ev, &(hctx->fde_ndx), hctx->fd, FDEVENT_IN);
 		fcgi_set_state(srv, hctx, FCGI_STATE_WRITE);
 		/* fall through */
 	case FCGI_STATE_WRITE:
@@ -3040,7 +3077,7 @@ static handler_t fcgi_write_request(server *srv, handler_ctx *hctx) {
 		}
 
 		if (hctx->wb->bytes_out == hctx->wb_reqlen) {
-			fdevent_event_set(srv->ev, &(hctx->fde_ndx), hctx->fd, FDEVENT_IN);
+			fdevent_event_clr(srv->ev, &(hctx->fde_ndx), hctx->fd, FDEVENT_OUT);
 			fcgi_set_state(srv, hctx, FCGI_STATE_READ);
 		} else {
 			off_t wblen = hctx->wb->bytes_in - hctx->wb->bytes_out;
@@ -3052,9 +3089,9 @@ static handler_t fcgi_write_request(server *srv, handler_ctx *hctx) {
 				}
 			}
 			if (0 == wblen) {
-				fdevent_event_set(srv->ev, &(hctx->fde_ndx), hctx->fd, FDEVENT_IN);
+				fdevent_event_clr(srv->ev, &(hctx->fde_ndx), hctx->fd, FDEVENT_OUT);
 			} else {
-				fdevent_event_set(srv->ev, &(hctx->fde_ndx), hctx->fd, FDEVENT_IN|FDEVENT_OUT);
+				fdevent_event_add(srv->ev, &(hctx->fde_ndx), hctx->fd, FDEVENT_OUT);
 			}
 		}
 
@@ -3176,6 +3213,17 @@ SUBREQUEST_FUNC(mod_fastcgi_handle_subrequest) {
 
 	/* not my job */
 	if (con->mode != p->id) return HANDLER_GO_ON;
+
+	if ((con->conf.stream_response_body & FDEVENT_STREAM_RESPONSE_BUFMIN)
+	    && con->file_started) {
+		if (chunkqueue_length(con->write_queue) > 65536 - 4096) {
+			fdevent_event_clr(srv->ev, &(hctx->fde_ndx), hctx->fd, FDEVENT_IN);
+		} else if (!(fdevent_event_get_interest(srv->ev, hctx->fd) & FDEVENT_IN)) {
+			/* optimistic read from backend, which might re-enable FDEVENT_IN */
+			handler_t rc = fcgi_recv_response(srv, hctx); /*(might invalidate hctx)*/
+			if (rc != HANDLER_GO_ON) return rc;           /*(unless HANDLER_GO_ON)*/
+		}
+	}
 
 	if (0 == hctx->wb->bytes_in
 	    ? con->state == CON_STATE_READ_POST
