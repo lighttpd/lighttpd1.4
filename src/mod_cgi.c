@@ -719,13 +719,7 @@ static handler_t cgi_handle_fdevent_send (server *srv, void *ctx, int revents) {
 }
 
 
-static handler_t cgi_handle_fdevent(server *srv, void *ctx, int revents) {
-	handler_ctx *hctx = ctx;
-	connection  *con  = hctx->remote_conn;
-
-	joblist_append(srv, con);
-
-	if (revents & FDEVENT_IN) {
+static int cgi_recv_response(server *srv, handler_ctx *hctx) {
 		switch (cgi_demux_response(srv, hctx)) {
 		case FDEVENT_HANDLED_NOT_FINISHED:
 			break;
@@ -745,6 +739,20 @@ static handler_t cgi_handle_fdevent(server *srv, void *ctx, int revents) {
 			cgi_connection_close(srv, hctx);
 			return HANDLER_FINISHED;
 		}
+
+		return HANDLER_GO_ON;
+}
+
+
+static handler_t cgi_handle_fdevent(server *srv, void *ctx, int revents) {
+	handler_ctx *hctx = ctx;
+	connection  *con  = hctx->remote_conn;
+
+	joblist_append(srv, con);
+
+	if (revents & FDEVENT_IN) {
+		handler_t rc = cgi_recv_response(srv, hctx);/*(might invalidate hctx)*/
+		if (rc != HANDLER_GO_ON) return rc;         /*(unless HANDLER_GO_ON)*/
 	}
 
 	/* perhaps this issue is already handled */

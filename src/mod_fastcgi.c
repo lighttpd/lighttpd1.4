@@ -3164,6 +3164,9 @@ static handler_t fcgi_send_request(server *srv, handler_ctx *hctx) {
 }
 
 
+static handler_t fcgi_recv_response(server *srv, handler_ctx *hctx);
+
+
 SUBREQUEST_FUNC(mod_fastcgi_handle_subrequest) {
 	plugin_data *p = p_d;
 
@@ -3201,17 +3204,14 @@ SUBREQUEST_FUNC(mod_fastcgi_handle_subrequest) {
 	  : HANDLER_WAIT_FOR_EVENT;
 }
 
-static handler_t fcgi_handle_fdevent(server *srv, void *ctx, int revents) {
-	handler_ctx *hctx = ctx;
+
+static handler_t fcgi_recv_response(server *srv, handler_ctx *hctx) {
 	connection  *con  = hctx->remote_conn;
 	plugin_data *p    = hctx->plugin_data;
 
 	fcgi_proc *proc   = hctx->proc;
 	fcgi_extension_host *host= hctx->host;
 
-	joblist_append(srv, con);
-
-	if (revents & FDEVENT_IN) {
 		switch (fcgi_demux_response(srv, hctx)) {
 		case 0:
 			break;
@@ -3326,6 +3326,20 @@ static handler_t fcgi_handle_fdevent(server *srv, void *ctx, int revents) {
 
 			return HANDLER_FINISHED;
 		}
+
+		return HANDLER_GO_ON;
+}
+
+
+static handler_t fcgi_handle_fdevent(server *srv, void *ctx, int revents) {
+	handler_ctx *hctx = ctx;
+	connection  *con  = hctx->remote_conn;
+
+	joblist_append(srv, con);
+
+	if (revents & FDEVENT_IN) {
+		handler_t rc = fcgi_recv_response(srv, hctx);/*(might invalidate hctx)*/
+		if (rc != HANDLER_GO_ON) return rc;          /*(unless HANDLER_GO_ON)*/
 	}
 
 	if (revents & FDEVENT_OUT) {
@@ -3354,6 +3368,7 @@ static handler_t fcgi_handle_fdevent(server *srv, void *ctx, int revents) {
 			 * even if the FCGI_FIN packet is not received yet
 			 */
 		} else {
+			fcgi_proc *proc = hctx->proc;
 			log_error_write(srv, __FILE__, __LINE__, "sBSbsbsd",
 					"error: unexpected close of fastcgi connection for",
 					con->uri.path, "?", con->uri.query,

@@ -2519,6 +2519,10 @@ static handler_t scgi_send_request(server *srv, handler_ctx *hctx) {
 	}
 }
 
+
+static handler_t scgi_recv_response(server *srv, handler_ctx *hctx);
+
+
 SUBREQUEST_FUNC(mod_scgi_handle_subrequest) {
 	plugin_data *p = p_d;
 
@@ -2557,17 +2561,8 @@ SUBREQUEST_FUNC(mod_scgi_handle_subrequest) {
 }
 
 
-static handler_t scgi_handle_fdevent(server *srv, void *ctx, int revents) {
-	handler_ctx *hctx = ctx;
-	connection  *con  = hctx->remote_conn;
-	plugin_data *p    = hctx->plugin_data;
+static handler_t scgi_recv_response(server *srv, handler_ctx *hctx) {
 
-	scgi_proc *proc   = hctx->proc;
-	scgi_extension_host *host= hctx->host;
-
-	joblist_append(srv, con);
-
-	if (revents & FDEVENT_IN) {
 		switch (scgi_demux_response(srv, hctx)) {
 		case 0:
 			break;
@@ -2576,7 +2571,13 @@ static handler_t scgi_handle_fdevent(server *srv, void *ctx, int revents) {
 			scgi_connection_close(srv, hctx);
 
 			return HANDLER_FINISHED;
-		case -1:
+		case -1: {
+			connection  *con  = hctx->remote_conn;
+			plugin_data *p    = hctx->plugin_data;
+
+			scgi_proc *proc   = hctx->proc;
+			scgi_extension_host *host= hctx->host;
+
 			if (proc->pid && proc->state != PROC_STATE_DIED) {
 				int status;
 
@@ -2660,6 +2661,21 @@ static handler_t scgi_handle_fdevent(server *srv, void *ctx, int revents) {
 
 			return HANDLER_FINISHED;
 		}
+		}
+
+		return HANDLER_GO_ON;
+}
+
+
+static handler_t scgi_handle_fdevent(server *srv, void *ctx, int revents) {
+	handler_ctx *hctx = ctx;
+	connection  *con  = hctx->remote_conn;
+
+	joblist_append(srv, con);
+
+	if (revents & FDEVENT_IN) {
+		handler_t rc = scgi_recv_response(srv, hctx);/*(might invalidate hctx)*/
+		if (rc != HANDLER_GO_ON) return rc;          /*(unless HANDLER_GO_ON)*/
 	}
 
 	if (revents & FDEVENT_OUT) {
@@ -2680,6 +2696,7 @@ static handler_t scgi_handle_fdevent(server *srv, void *ctx, int revents) {
 			 */
 			scgi_send_request(srv, hctx);
 		} else {
+			scgi_extension_host *host= hctx->host;
 			log_error_write(srv, __FILE__, __LINE__, "sbSBSDSd",
 					"error: unexpected close of scgi connection for",
 					con->uri.path,

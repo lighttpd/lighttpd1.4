@@ -911,6 +911,10 @@ static handler_t proxy_send_request(server *srv, handler_ctx *hctx) {
 	}
 }
 
+
+static handler_t proxy_recv_response(server *srv, handler_ctx *hctx);
+
+
 SUBREQUEST_FUNC(mod_proxy_handle_subrequest) {
 	plugin_data *p = p_d;
 
@@ -948,6 +952,38 @@ SUBREQUEST_FUNC(mod_proxy_handle_subrequest) {
 	  : HANDLER_WAIT_FOR_EVENT;
 }
 
+
+static handler_t proxy_recv_response(server *srv, handler_ctx *hctx) {
+
+		switch (proxy_demux_response(srv, hctx)) {
+		case 0:
+			break;
+		case 1:
+			/* we are done */
+			proxy_connection_close(srv, hctx);
+
+			return HANDLER_FINISHED;
+		case -1: {
+			connection *con = hctx->remote_conn;
+			if (con->file_started == 0) {
+				/* reading response headers failed */
+			} else {
+				/* response might have been already started, kill the connection */
+				con->keep_alive = 0;
+				con->file_finished = 1;
+				con->mode = DIRECT; /*(avoid sending final chunked block)*/
+			}
+
+			proxy_connection_close(srv, hctx);
+
+			return HANDLER_FINISHED;
+		}
+		}
+
+		return HANDLER_GO_ON;
+}
+
+
 static handler_t proxy_handle_fdevent(server *srv, void *ctx, int revents) {
 	handler_ctx *hctx = ctx;
 	connection  *con  = hctx->remote_conn;
@@ -962,27 +998,9 @@ static handler_t proxy_handle_fdevent(server *srv, void *ctx, int revents) {
 					"proxy: fdevent-in", hctx->state);
 		}
 
-		switch (proxy_demux_response(srv, hctx)) {
-		case 0:
-			break;
-		case 1:
-			/* we are done */
-			proxy_connection_close(srv, hctx);
-
-			return HANDLER_FINISHED;
-		case -1:
-			if (con->file_started == 0) {
-				/* reading response headers failed */
-			} else {
-				/* response might have been already started, kill the connection */
-				con->keep_alive = 0;
-				con->file_finished = 1;
-				con->mode = DIRECT; /*(avoid sending final chunked block)*/
-			}
-
-			proxy_connection_close(srv, hctx);
-
-			return HANDLER_FINISHED;
+		{
+		handler_t rc = proxy_recv_response(srv,hctx);/*(might invalidate hctx)*/
+		if (rc != HANDLER_GO_ON) return rc;          /*(unless HANDLER_GO_ON)*/
 		}
 	}
 
