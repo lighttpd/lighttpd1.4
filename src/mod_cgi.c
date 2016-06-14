@@ -778,20 +778,29 @@ static handler_t cgi_handle_fdevent(server *srv, void *ctx, int revents) {
 
 	/* perhaps this issue is already handled */
 	if (revents & FDEVENT_HUP) {
-		/* check if we still have a unfinished header package which is a body in reality */
-		if (con->file_started == 0 && !buffer_string_is_empty(hctx->response_header)) {
+		if (con->file_started) {
+			/* drain any remaining data from kernel pipe buffers
+			 * even if (con->conf.stream_response_body
+			 *          & FDEVENT_STREAM_RESPONSE_BUFMIN)
+			 * since event loop will spin on fd FDEVENT_HUP event
+			 * until unregistered. */
+			handler_t rc;
+			do {
+				rc = cgi_recv_response(srv,hctx);/*(might invalidate hctx)*/
+			} while (rc == HANDLER_GO_ON);           /*(unless HANDLER_GO_ON)*/
+			return rc; /* HANDLER_FINISHED or HANDLER_ERROR */
+		} else if (!buffer_string_is_empty(hctx->response_header)) {
+			/* unfinished header package which is a body in reality */
 			con->file_started = 1;
 			if (0 != http_chunk_append_buffer(srv, con, hctx->response_header)) {
 				cgi_connection_close(srv, hctx);
 				return HANDLER_ERROR;
 			}
-		}
-
+		} else {
 # if 0
-		log_error_write(srv, __FILE__, __LINE__, "sddd", "got HUP from cgi", con->fd, hctx->fd, revents);
+			log_error_write(srv, __FILE__, __LINE__, "sddd", "got HUP from cgi", con->fd, hctx->fd, revents);
 # endif
-
-		/* rtsigs didn't liked the close */
+		}
 		cgi_connection_close(srv, hctx);
 	} else if (revents & FDEVENT_ERR) {
 		/* kill all connections to the cgi process */

@@ -3407,14 +3407,17 @@ static handler_t fcgi_handle_fdevent(server *srv, void *ctx, int revents) {
 			 *
 			 */
 			fcgi_send_request(srv, hctx);
-		} else if (chunkqueue_is_empty(hctx->wb) &&
-			   hctx->wb->bytes_in != 0 &&
-			   hctx->proc->port == 0) {
-			/* FIXME:
-			 *
-			 * ioctl says 8192 bytes to read from PHP and we receive directly a HUP for the socket
-			 * even if the FCGI_FIN packet is not received yet
-			 */
+		} else if (con->file_started) {
+			/* drain any remaining data from kernel pipe buffers
+			 * even if (con->conf.stream_response_body
+			 *          & FDEVENT_STREAM_RESPONSE_BUFMIN)
+			 * since event loop will spin on fd FDEVENT_HUP event
+			 * until unregistered. */
+			handler_t rc;
+			do {
+				rc = fcgi_recv_response(srv,hctx);/*(might invalidate hctx)*/
+			} while (rc == HANDLER_GO_ON);            /*(unless HANDLER_GO_ON)*/
+			return rc; /* HANDLER_FINISHED or HANDLER_ERROR */
 		} else {
 			fcgi_proc *proc = hctx->proc;
 			log_error_write(srv, __FILE__, __LINE__, "sBSbsbsd",

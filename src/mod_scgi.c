@@ -2442,6 +2442,7 @@ static handler_t scgi_write_request(server *srv, handler_ctx *hctx) {
 
 		if (hctx->wb->bytes_out == hctx->wb_reqlen) {
 			fdevent_event_clr(srv->ev, &(hctx->fde_ndx), hctx->fd, FDEVENT_OUT);
+			shutdown(hctx->fd, SHUT_WR);
 			scgi_set_state(srv, hctx, FCGI_STATE_READ);
 		} else {
 			off_t wblen = hctx->wb->bytes_in - hctx->wb->bytes_out;
@@ -2728,6 +2729,17 @@ static handler_t scgi_handle_fdevent(server *srv, void *ctx, int revents) {
 			 *
 			 */
 			scgi_send_request(srv, hctx);
+		} else if (con->file_started) {
+			/* drain any remaining data from kernel pipe buffers
+			 * even if (con->conf.stream_response_body
+			 *          & FDEVENT_STREAM_RESPONSE_BUFMIN)
+			 * since event loop will spin on fd FDEVENT_HUP event
+			 * until unregistered. */
+			handler_t rc;
+			do {
+				rc = scgi_recv_response(srv,hctx);/*(might invalidate hctx)*/
+			} while (rc == HANDLER_GO_ON);            /*(unless HANDLER_GO_ON)*/
+			return rc; /* HANDLER_FINISHED or HANDLER_ERROR */
 		} else {
 			scgi_extension_host *host= hctx->host;
 			log_error_write(srv, __FILE__, __LINE__, "sbSBSDSd",
