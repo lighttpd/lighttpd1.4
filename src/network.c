@@ -745,8 +745,15 @@ int network_init(server *srv) {
 			if (network_openssl_load_pemfile(srv, i)) return -1;
 		}
 
+		if (!buffer_string_is_empty(s->ssl_cadn_file)) {
+			s->ssl_ca_file_cert_names = SSL_load_client_CA_file(s->ssl_cadn_file->ptr);
+			if (NULL == s->ssl_ca_file_cert_names) {
+				log_error_write(srv, __FILE__, __LINE__, "ssb", "SSL:",
+						ERR_error_string(ERR_get_error(), NULL), s->ssl_cadn_file);
+			}
+		}
 
-		if (!buffer_string_is_empty(s->ssl_ca_file)) {
+		if (NULL == s->ssl_ca_file_cert_names && !buffer_string_is_empty(s->ssl_ca_file)) {
 			s->ssl_ca_file_cert_names = SSL_load_client_CA_file(s->ssl_ca_file->ptr);
 			if (NULL == s->ssl_ca_file_cert_names) {
 				log_error_write(srv, __FILE__, __LINE__, "ssb", "SSL:",

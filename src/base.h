@@ -278,6 +278,7 @@ typedef struct {
 	/* server wide */
 	buffer *ssl_pemfile;
 	buffer *ssl_ca_file;
+	buffer *ssl_cadn_file;
 	buffer *ssl_cipher_list;
 	buffer *ssl_dh_file;
 	buffer *ssl_ec_curve;
