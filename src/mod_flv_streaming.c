@@ -240,7 +240,6 @@ URIHANDLER_FUNC(mod_flv_streaming_path_handler) {
 				chunkqueue_reset(con->write_queue);
 				return HANDLER_GO_ON;
 			}
-			http_chunk_close(srv, con);
 
 			response_header_overwrite(srv, con, CONST_STR_LEN("Content-Type"), CONST_STR_LEN("video/x-flv"));
 

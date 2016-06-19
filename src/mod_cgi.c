@@ -410,12 +410,6 @@ static int cgi_demux_response(server *srv, handler_ctx *hctx) {
 
 		if (n == 0) {
 			/* read finished */
-
-			con->file_finished = 1;
-
-			/* send final chunk */
-			http_chunk_close(srv, con);
-
 			return FDEVENT_HANDLED_FINISHED;
 		}
 
@@ -1589,7 +1583,7 @@ SUBREQUEST_FUNC(mod_cgi_handle_subrequest) {
 	}
 
 	/* if not done, wait for CGI to close stdout, so we read EOF on pipe */
-	return con->file_finished ? HANDLER_FINISHED : HANDLER_WAIT_FOR_EVENT;
+	return HANDLER_WAIT_FOR_EVENT;
 }
 
 

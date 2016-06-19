@@ -1863,7 +1863,6 @@ static connection_result_t fcgi_establish_connection(server *srv, handler_ctx *h
 #define FCGI_ENV_ADD_CHECK(ret, con) \
 	if (ret == -1) { \
 		con->http_status = 400; \
-		con->file_finished = 1; \
 		return -1; \
 	};
 static int fcgi_env_add_request_headers(server *srv, connection *con, plugin_data *p) {
@@ -2677,15 +2676,6 @@ static int fcgi_demux_response(server *srv, handler_ctx *hctx) {
 
 			break;
 		case FCGI_END_REQUEST:
-			con->file_finished = 1;
-
-			if (host->mode != FCGI_AUTHORIZER ||
-			    !(con->http_status == 0 ||
-			      con->http_status == 200)) {
-				/* send chunk-end if necessary */
-				http_chunk_close(srv, con);
-			}
-
 			fin = 1;
 			break;
 		default:
@@ -3357,21 +3347,15 @@ static handler_t fcgi_recv_response(server *srv, handler_ctx *hctx) {
 						"response not received, request sent:", hctx->wb->bytes_out,
 						"on socket:", proc->connection_name,
 						"for", con->uri.path, "?", con->uri.query, ", closing connection");
-
-				fcgi_connection_close(srv, hctx);
 			} else {
-				/* response might have been already started, kill the connection */
 				log_error_write(srv, __FILE__, __LINE__, "ssbsBSBs",
 						"response already sent out, but backend returned error",
 						"on socket:", proc->connection_name,
 						"for", con->uri.path, "?", con->uri.query, ", terminating connection");
-
-				con->keep_alive = 0;
-				con->file_finished = 1;
-				con->mode = DIRECT; /*(avoid sending final chunked block)*/
-				fcgi_connection_close(srv, hctx);
 			}
 
+			http_response_backend_error(srv, con);
+			fcgi_connection_close(srv, hctx);
 			return HANDLER_FINISHED;
 		}
 
@@ -3432,11 +3416,7 @@ static handler_t fcgi_handle_fdevent(server *srv, void *ctx, int revents) {
 		log_error_write(srv, __FILE__, __LINE__, "s",
 				"fcgi: got a FDEVENT_ERR. Don't know why.");
 
-		if (con->file_started) {
-			con->keep_alive = 0;
-			con->file_finished = 1;
-			con->mode = DIRECT; /*(avoid sending final chunked block)*/
-		}
+		http_response_backend_error(srv, con);
 		fcgi_connection_close(srv, hctx);
 	}
 

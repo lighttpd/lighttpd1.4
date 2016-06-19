@@ -169,6 +169,7 @@ static void connection_handle_errdoc_init(server *srv, connection *con) {
 		}
 	}
 
+	con->response.transfer_encoding = 0;
 	buffer_reset(con->physical.path);
 	array_reset(con->response.headers);
 	chunkqueue_reset(con->write_queue);
@@ -291,7 +292,6 @@ static int connection_handle_write_prepare(server *srv, connection *con) {
 
 			http_chunk_append_buffer(srv, con, b);
 			buffer_free(b);
-			http_chunk_close(srv, con);
 
 			response_header_overwrite(srv, con, CONST_STR_LEN("Content-Type"), CONST_STR_LEN("text/html"));
 		}
@@ -1031,7 +1031,9 @@ int connection_state_machine(server *srv, connection *con) {
 
 			switch (r = http_response_prepare(srv, con)) {
 			case HANDLER_WAIT_FOR_EVENT:
-				if (!con->file_started || 0 == con->conf.stream_response_body) break; /* come back here */
+				if (!con->file_finished && (!con->file_started || 0 == con->conf.stream_response_body)) {
+					break; /* come back here */
+				}
 				/* response headers received from backend; fall through to start response */
 			case HANDLER_FINISHED:
 				if (con->error_handler_saved_status > 0) {

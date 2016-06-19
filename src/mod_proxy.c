@@ -742,13 +742,8 @@ static int proxy_demux_response(server *srv, handler_ctx *hctx) {
 			}
 			buffer_reset(hctx->response);
 		}
-
 	} else {
 		/* reading from upstream done */
-		con->file_finished = 1;
-
-		http_chunk_close(srv, con);
-
 		fin = 1;
 	}
 
@@ -1003,26 +998,14 @@ static handler_t proxy_recv_response(server *srv, handler_ctx *hctx) {
 		switch (proxy_demux_response(srv, hctx)) {
 		case 0:
 			break;
+		case -1:
+			http_response_backend_error(srv, hctx->remote_conn);
+			/* fall through */
 		case 1:
 			/* we are done */
 			proxy_connection_close(srv, hctx);
 
 			return HANDLER_FINISHED;
-		case -1: {
-			connection *con = hctx->remote_conn;
-			if (con->file_started == 0) {
-				/* reading response headers failed */
-			} else {
-				/* response might have been already started, kill the connection */
-				con->keep_alive = 0;
-				con->file_finished = 1;
-				con->mode = DIRECT; /*(avoid sending final chunked block)*/
-			}
-
-			proxy_connection_close(srv, hctx);
-
-			return HANDLER_FINISHED;
-		}
 		}
 
 		return HANDLER_GO_ON;
@@ -1135,11 +1118,7 @@ static handler_t proxy_handle_fdevent(server *srv, void *ctx, int revents) {
 	} else if (revents & FDEVENT_ERR) {
 		log_error_write(srv, __FILE__, __LINE__, "sd", "proxy-FDEVENT_ERR, but no HUP", revents);
 
-		if (con->file_started) {
-			con->keep_alive = 0;
-			con->file_finished = 1;
-			con->mode = DIRECT; /*(avoid sending final chunked block)*/
-		}
+		http_response_backend_error(srv, con);
 		proxy_connection_close(srv, hctx);
 	}
 

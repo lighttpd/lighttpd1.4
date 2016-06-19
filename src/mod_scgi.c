@@ -1869,12 +1869,6 @@ static int scgi_demux_response(server *srv, handler_ctx *hctx) {
 
 		if (n == 0) {
 			/* read finished */
-
-			con->file_finished = 1;
-
-			/* send final chunk */
-			http_chunk_close(srv, con);
-
 			return 1;
 		}
 
@@ -2678,21 +2672,15 @@ static handler_t scgi_recv_response(server *srv, handler_ctx *hctx) {
 						"response not sent, request sent:", hctx->wb->bytes_out,
 						"connection-fd:", con->fd,
 						"fcgi-fd:", hctx->fd);
-
-				scgi_connection_close(srv, hctx);
 			} else {
-				/* response might have been already started, kill the connection */
 				log_error_write(srv, __FILE__, __LINE__, "ssdsd",
 						"response already sent out, termination connection",
 						"connection-fd:", con->fd,
 						"fcgi-fd:", hctx->fd);
-
-				con->keep_alive = 0;
-				con->file_finished = 1;
-				con->mode = DIRECT; /*(avoid sending final chunked block)*/
-				scgi_connection_close(srv, hctx);
 			}
 
+			http_response_backend_error(srv, con);
+			scgi_connection_close(srv, hctx);
 			return HANDLER_FINISHED;
 		}
 		}
@@ -2758,11 +2746,7 @@ static handler_t scgi_handle_fdevent(server *srv, void *ctx, int revents) {
 		log_error_write(srv, __FILE__, __LINE__, "s",
 				"fcgi: got a FDEVENT_ERR. Don't know why.");
 
-		if (con->file_started) {
-			con->keep_alive = 0;
-			con->file_finished = 1;
-			con->mode = DIRECT; /*(avoid sending final chunked block)*/
-		}
+		http_response_backend_error(srv, con);
 		scgi_connection_close(srv, hctx);
 	}
 

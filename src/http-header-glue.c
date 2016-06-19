@@ -727,6 +727,17 @@ void http_response_xsendfile (server *srv, connection *con, buffer *path, const 
 	}
 }
 
+void http_response_backend_error (server *srv, connection *con) {
+	UNUSED(srv);
+	if (con->file_started) {
+		/*(response might have been already started, kill the connection)*/
+		/*(mode == DIRECT to avoid later call to http_response_backend_done())*/
+		con->mode = DIRECT;  /*(avoid sending final chunked block)*/
+		con->keep_alive = 0; /*(no keep-alive; final chunked block not sent)*/
+		con->file_finished = 1;
+	} /*(else error status set later by http_response_backend_done())*/
+}
+
 void http_response_backend_done (server *srv, connection *con) {
 	/* (not CON_STATE_ERROR and not CON_STATE_RESPONSE_END,
 	 *  i.e. not called from handle_connection_close or connection_reset
