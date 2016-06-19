@@ -383,18 +383,15 @@ static int connection_handle_write(server *srv, connection *con) {
 		con->write_request_ts = srv->cur_ts;
 		if (con->file_finished) {
 			connection_set_state(srv, con, CON_STATE_RESPONSE_END);
-			joblist_append(srv, con);
 		}
 		break;
 	case -1: /* error on our side */
 		log_error_write(srv, __FILE__, __LINE__, "sd",
 				"connection closed: write failed on fd", con->fd);
 		connection_set_state(srv, con, CON_STATE_ERROR);
-		joblist_append(srv, con);
 		break;
 	case -2: /* remote close */
 		connection_set_state(srv, con, CON_STATE_ERROR);
-		joblist_append(srv, con);
 		break;
 	case 1:
 		con->write_request_ts = srv->cur_ts;

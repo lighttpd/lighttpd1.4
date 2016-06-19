@@ -2383,9 +2383,6 @@ range_success: ;
 	if (have_sendfile2) {
 		data_string *dcls;
 
-		hctx->send_content_body = 0;
-		joblist_append(srv, con);
-
 		/* fix content-length */
 		if (NULL == (dcls = (data_string *)array_get_unused_element(con->response.headers, TYPE_STRING))) {
 			dcls = data_response_init();
@@ -2397,6 +2394,7 @@ range_success: ;
 
 		con->parsed_response |= HTTP_CONTENT_LENGTH;
 		con->response.content_length = sendfile2_content_length;
+		return 200;
 	}
 
 	/* CGI/1.1 rev 03 - 7.2.1.2 */
@@ -2614,9 +2612,13 @@ static int fcgi_demux_response(server *srv, handler_ctx *hctx) {
 
 				/* parse the response header */
 				if ((ret = fcgi_response_parse(srv, con, p, hctx->response_header))) {
-					con->http_status = ret;
-					hctx->send_content_body = 0;
+					if (200 != ret) { /*(200 returned for X-Sendfile2 handled)*/
+						con->http_status = ret;
+						con->mode = DIRECT;
+					}
 					con->file_started = 1;
+					hctx->send_content_body = 0;
+					fin = 1;
 					break;
 				}
 

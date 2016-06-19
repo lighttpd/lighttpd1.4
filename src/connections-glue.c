@@ -212,10 +212,8 @@ static int connection_handle_read_ssl(server *srv, connection *con) {
 
 		return -2;
 	} else {
-		joblist_append(srv, con);
+		return 0;
 	}
-
-	return 0;
 #else
 	UNUSED(srv);
 	UNUSED(con);

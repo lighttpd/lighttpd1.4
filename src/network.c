@@ -1070,9 +1070,7 @@ int network_write_chunkqueue(server *srv, connection *con, chunkqueue *cq, off_t
 		off_t limit = con->conf.global_kbytes_per_second * 1024 - *(con->conf.global_bytes_per_second_cnt_ptr);
 		if (limit <= 0) {
 			/* we reached the global traffic limit */
-
 			con->traffic_limit_reached = 1;
-			joblist_append(srv, con);
 
 			return 1;
 		} else {
@@ -1084,9 +1082,7 @@ int network_write_chunkqueue(server *srv, connection *con, chunkqueue *cq, off_t
 		off_t limit = con->conf.kbytes_per_second * 1024 - con->bytes_written_cur_second;
 		if (limit <= 0) {
 			/* we reached the traffic limit */
-
 			con->traffic_limit_reached = 1;
-			joblist_append(srv, con);
 
 			return 1;
 		} else {

@@ -1781,7 +1781,6 @@ int main (int argc, char **argv) {
 				handler = fdevent_get_handler(srv->ev, fd);
 				context = fdevent_get_context(srv->ev, fd);
 
-				/* connection_handle_fdevent needs a joblist_append */
 #if 0
 				log_error_write(srv, __FILE__, __LINE__, "sdd",
 						"event for", fd, revents);
