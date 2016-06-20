@@ -57,6 +57,9 @@ void chunkqueue_append_mem(chunkqueue *cq, const char *mem, size_t len); /* copi
 void chunkqueue_append_buffer(chunkqueue *cq, buffer *mem); /* may reset "mem" */
 void chunkqueue_prepend_buffer(chunkqueue *cq, buffer *mem); /* may reset "mem" */
 
+struct server; /*(declaration)*/
+int chunkqueue_append_mem_to_tempfile(struct server *srv, chunkqueue *cq, const char *mem, size_t len);
+
 /* functions to handle buffers to read into: */
 /* return a pointer to a buffer in *mem with size *len;
  *  it should be at least min_size big, and use alloc_size if

@@ -212,10 +212,8 @@ static int connection_handle_read_ssl(server *srv, connection *con) {
 
 		return -2;
 	} else {
-		joblist_append(srv, con);
+		return 0;
 	}
-
-	return 0;
 #else
 	UNUSED(srv);
 	UNUSED(con);
@@ -359,7 +357,10 @@ handler_t connection_handle_read_post_state(server *srv, connection *con) {
 
 	if (dst_cq->bytes_in == (off_t)con->request.content_length) {
 		/* Content is ready */
-		connection_set_state(srv, con, CON_STATE_HANDLE_REQUEST);
+		con->conf.stream_request_body &= ~FDEVENT_STREAM_REQUEST_POLLIN;
+		if (con->state == CON_STATE_READ_POST) {
+			connection_set_state(srv, con, CON_STATE_HANDLE_REQUEST);
+		}
 		return HANDLER_GO_ON;
 	} else if (is_closed) {
 	      #if 0
@@ -372,6 +373,9 @@ handler_t connection_handle_read_post_state(server *srv, connection *con) {
 	      #endif
 		return HANDLER_ERROR;
 	} else {
-		return HANDLER_WAIT_FOR_EVENT;
+		con->conf.stream_request_body |= FDEVENT_STREAM_REQUEST_POLLIN;
+		return (con->conf.stream_request_body & FDEVENT_STREAM_REQUEST)
+		  ? HANDLER_GO_ON
+		  : HANDLER_WAIT_FOR_EVENT;
 	}
 }

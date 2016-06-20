@@ -726,3 +726,37 @@ void http_response_xsendfile (server *srv, connection *con, buffer *path, const 
 		con->http_status = status;
 	}
 }
+
+void http_response_backend_error (server *srv, connection *con) {
+	UNUSED(srv);
+	if (con->file_started) {
+		/*(response might have been already started, kill the connection)*/
+		/*(mode == DIRECT to avoid later call to http_response_backend_done())*/
+		con->mode = DIRECT;  /*(avoid sending final chunked block)*/
+		con->keep_alive = 0; /*(no keep-alive; final chunked block not sent)*/
+		con->file_finished = 1;
+	} /*(else error status set later by http_response_backend_done())*/
+}
+
+void http_response_backend_done (server *srv, connection *con) {
+	/* (not CON_STATE_ERROR and not CON_STATE_RESPONSE_END,
+	 *  i.e. not called from handle_connection_close or connection_reset
+	 *  hooks, except maybe from errdoc handler, which later resets state)*/
+	switch (con->state) {
+	case CON_STATE_HANDLE_REQUEST:
+	case CON_STATE_READ_POST:
+		if (!con->file_started) {
+			/* Send an error if we haven't sent any data yet */
+			con->http_status = 500;
+			con->mode = DIRECT;
+			break;
+		} /* else fall through */
+	case CON_STATE_WRITE:
+		if (!con->file_finished) {
+			http_chunk_close(srv, con);
+			con->file_finished = 1;
+		}
+	default:
+		break;
+	}
+}

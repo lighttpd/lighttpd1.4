@@ -171,6 +171,30 @@ void fdevent_event_set(fdevents *ev, int *fde_ndx, int fd, int events) {
 	ev->fdarray[fd]->events = events;
 }
 
+void fdevent_event_add(fdevents *ev, int *fde_ndx, int fd, int event) {
+	int events;
+	if (-1 == fd) return;
+
+	events = ev->fdarray[fd]->events;
+	if ((events & event) || 0 == event) return; /*(no change; nothing to do)*/
+
+	events |= event;
+	if (ev->event_set) *fde_ndx = ev->event_set(ev, *fde_ndx, fd, events);
+	ev->fdarray[fd]->events = events;
+}
+
+void fdevent_event_clr(fdevents *ev, int *fde_ndx, int fd, int event) {
+	int events;
+	if (-1 == fd) return;
+
+	events = ev->fdarray[fd]->events;
+	if (!(events & event)) return; /*(no change; nothing to do)*/
+
+	events &= ~event;
+	if (ev->event_set) *fde_ndx = ev->event_set(ev, *fde_ndx, fd, events);
+	ev->fdarray[fd]->events = events;
+}
+
 int fdevent_poll(fdevents *ev, int timeout_ms) {
 	if (ev->poll == NULL) SEGFAULT();
 	return ev->poll(ev, timeout_ms);

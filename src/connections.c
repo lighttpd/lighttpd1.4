@@ -169,6 +169,7 @@ static void connection_handle_errdoc_init(server *srv, connection *con) {
 		}
 	}
 
+	con->response.transfer_encoding = 0;
 	buffer_reset(con->physical.path);
 	array_reset(con->response.headers);
 	chunkqueue_reset(con->write_queue);
@@ -291,7 +292,6 @@ static int connection_handle_write_prepare(server *srv, connection *con) {
 
 			http_chunk_append_buffer(srv, con, b);
 			buffer_free(b);
-			http_chunk_close(srv, con);
 
 			response_header_overwrite(srv, con, CONST_STR_LEN("Content-Type"), CONST_STR_LEN("text/html"));
 		}
@@ -341,7 +341,21 @@ static int connection_handle_write_prepare(server *srv, connection *con) {
 
 		if (((con->parsed_response & HTTP_CONTENT_LENGTH) == 0) &&
 		    ((con->response.transfer_encoding & HTTP_TRANSFER_ENCODING_CHUNKED) == 0)) {
-			con->keep_alive = 0;
+			if (con->request.http_version == HTTP_VERSION_1_1) {
+				off_t qlen = chunkqueue_length(con->write_queue);
+				con->response.transfer_encoding = HTTP_TRANSFER_ENCODING_CHUNKED;
+				if (qlen) {
+					/* create initial Transfer-Encoding: chunked segment */
+					buffer *b = srv->tmp_chunk_len;
+					buffer_string_set_length(b, 0);
+					buffer_append_uint_hex(b, (uintmax_t)qlen);
+					buffer_append_string_len(b, CONST_STR_LEN("\r\n"));
+					chunkqueue_prepend_buffer(con->write_queue, b);
+					chunkqueue_append_mem(con->write_queue, CONST_STR_LEN("\r\n"));
+				}
+			} else {
+				con->keep_alive = 0;
+			}
 		}
 
 		/**
@@ -359,12 +373,6 @@ static int connection_handle_write_prepare(server *srv, connection *con) {
 				con->keep_alive = 0;
 			}
 		}
-	}
-
-	if (con->request.content_length
-	    && (off_t)con->request.content_length > con->request_content_queue->bytes_in) {
-		/* request body is present and has not been read completely */
-		con->keep_alive = 0;
 	}
 
 	if (con->request.http_method == HTTP_METHOD_HEAD) {
@@ -389,18 +397,15 @@ static int connection_handle_write(server *srv, connection *con) {
 		con->write_request_ts = srv->cur_ts;
 		if (con->file_finished) {
 			connection_set_state(srv, con, CON_STATE_RESPONSE_END);
-			joblist_append(srv, con);
 		}
 		break;
 	case -1: /* error on our side */
 		log_error_write(srv, __FILE__, __LINE__, "sd",
 				"connection closed: write failed on fd", con->fd);
 		connection_set_state(srv, con, CON_STATE_ERROR);
-		joblist_append(srv, con);
 		break;
 	case -2: /* remote close */
 		connection_set_state(srv, con, CON_STATE_ERROR);
-		joblist_append(srv, con);
 		break;
 	case 1:
 		con->write_request_ts = srv->cur_ts;
@@ -1036,6 +1041,11 @@ int connection_state_machine(server *srv, connection *con) {
 			}
 
 			switch (r = http_response_prepare(srv, con)) {
+			case HANDLER_WAIT_FOR_EVENT:
+				if (!con->file_finished && (!con->file_started || 0 == con->conf.stream_response_body)) {
+					break; /* come back here */
+				}
+				/* response headers received from backend; fall through to start response */
 			case HANDLER_FINISHED:
 				if (con->error_handler_saved_status > 0) {
 					con->request.http_method = con->error_handler_saved_method;
@@ -1126,9 +1136,6 @@ int connection_state_machine(server *srv, connection *con) {
 				break;
 			case HANDLER_COMEBACK:
 				done = -1;
-				/* fallthrough */
-			case HANDLER_WAIT_FOR_EVENT:
-				/* come back here */
 				break;
 			case HANDLER_ERROR:
 				/* something went wrong */
@@ -1166,6 +1173,12 @@ int connection_state_machine(server *srv, connection *con) {
 			if (srv->srvconf.log_state_handling) {
 				log_error_write(srv, __FILE__, __LINE__, "sds",
 						"state for fd", con->fd, connection_get_state(con->state));
+			}
+
+			if (con->request.content_length
+			    && (off_t)con->request.content_length > con->request_content_queue->bytes_in) {
+				/* request body is present and has not been read completely */
+				con->keep_alive = 0;
 			}
 
 			plugins_call_handle_request_done(srv, con);
@@ -1278,19 +1291,44 @@ int connection_state_machine(server *srv, connection *con) {
 						"state for fd", con->fd, connection_get_state(con->state));
 			}
 
-			/* only try to write if we have something in the queue */
-			if (!chunkqueue_is_empty(con->write_queue)) {
-				if (con->is_writable) {
-					if (-1 == connection_handle_write(srv, con)) {
-						log_error_write(srv, __FILE__, __LINE__, "ds",
-								con->fd,
-								"handle write failed.");
+			do {
+				/* only try to write if we have something in the queue */
+				if (!chunkqueue_is_empty(con->write_queue)) {
+					if (con->is_writable) {
+						if (-1 == connection_handle_write(srv, con)) {
+							log_error_write(srv, __FILE__, __LINE__, "ds",
+									con->fd,
+									"handle write failed.");
+							connection_set_state(srv, con, CON_STATE_ERROR);
+							break;
+						}
+						if (con->state != CON_STATE_WRITE) break;
+					}
+				} else if (con->file_finished) {
+					connection_set_state(srv, con, CON_STATE_RESPONSE_END);
+					break;
+				}
+
+				if (con->mode != DIRECT && !con->file_finished) {
+					switch(r = plugins_call_handle_subrequest(srv, con)) {
+					case HANDLER_WAIT_FOR_EVENT:
+					case HANDLER_FINISHED:
+					case HANDLER_GO_ON:
+						break;
+					case HANDLER_WAIT_FOR_FD:
+						srv->want_fds++;
+						fdwaitqueue_append(srv, con);
+						break;
+					case HANDLER_COMEBACK:
+					default:
+						log_error_write(srv, __FILE__, __LINE__, "sdd", "unexpected subrequest handler ret-value: ", con->fd, r);
+						/* fall through */
+					case HANDLER_ERROR:
 						connection_set_state(srv, con, CON_STATE_ERROR);
+						break;
 					}
 				}
-			} else if (con->file_finished) {
-				connection_set_state(srv, con, CON_STATE_RESPONSE_END);
-			}
+			} while (con->state == CON_STATE_WRITE && (!chunkqueue_is_empty(con->write_queue) ? con->is_writable : con->file_finished));
 
 			break;
 		case CON_STATE_ERROR: /* transient */
@@ -1416,11 +1454,11 @@ int connection_state_machine(server *srv, connection *con) {
 				connection_get_state(con->state));
 	}
 
+	r = 0;
 	switch(con->state) {
-	case CON_STATE_READ_POST:
 	case CON_STATE_READ:
 	case CON_STATE_CLOSE:
-		fdevent_event_set(srv->ev, &(con->fde_ndx), con->fd, FDEVENT_IN);
+		r = FDEVENT_IN;
 		break;
 	case CON_STATE_WRITE:
 		/* request write-fdevent only if we really need it
@@ -1430,14 +1468,29 @@ int connection_state_machine(server *srv, connection *con) {
 		if (!chunkqueue_is_empty(con->write_queue) &&
 		    (con->is_writable == 0) &&
 		    (con->traffic_limit_reached == 0)) {
-			fdevent_event_set(srv->ev, &(con->fde_ndx), con->fd, FDEVENT_OUT);
-		} else {
-			fdevent_event_set(srv->ev, &(con->fde_ndx), con->fd, 0);
+			r |= FDEVENT_OUT;
+		}
+		/* fall through */
+	case CON_STATE_READ_POST:
+		if (con->conf.stream_request_body & FDEVENT_STREAM_REQUEST_POLLIN) {
+			r |= FDEVENT_IN;
 		}
 		break;
 	default:
-		fdevent_event_set(srv->ev, &(con->fde_ndx), con->fd, 0);
 		break;
+	}
+	if (-1 != con->fd) {
+		const int events = fdevent_event_get_interest(srv->ev, con->fd);
+		if (r != events) {
+			/* update timestamps when enabling interest in events */
+			if ((r & FDEVENT_IN) && !(events & FDEVENT_IN)) {
+				con->read_idle_ts = srv->cur_ts;
+			}
+			if ((r & FDEVENT_OUT) && !(events & FDEVENT_OUT)) {
+				con->write_request_ts = srv->cur_ts;
+			}
+			fdevent_event_set(srv->ev, &con->fde_ndx, con->fd, r);
+		}
 	}
 
 	return 0;

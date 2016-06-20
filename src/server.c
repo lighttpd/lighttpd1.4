@@ -1576,15 +1576,13 @@ int main (int argc, char **argv) {
 				 *
 				 */
 				for (ndx = 0; ndx < conns->used; ndx++) {
+					connection * const con = conns->ptr[ndx];
+					const int waitevents = fdevent_event_get_interest(srv->ev, con->fd);
 					int changed = 0;
-					connection *con;
 					int t_diff;
 
-					con = conns->ptr[ndx];
-
-					if (con->state == CON_STATE_READ ||
-					    con->state == CON_STATE_READ_POST) {
-						if (con->request_count == 1 || con->state == CON_STATE_READ_POST) {
+					if (waitevents & FDEVENT_IN) {
+						if (con->request_count == 1 || con->state != CON_STATE_READ) { /* e.g. CON_STATE_READ_POST || CON_STATE_WRITE */
 							if (srv->cur_ts - con->read_idle_ts > con->conf.max_read_idle) {
 								/* time - out */
 								if (con->conf.log_request_handling) {
@@ -1609,6 +1607,11 @@ int main (int argc, char **argv) {
 						}
 					}
 
+					/* max_write_idle timeout currently functions as backend timeout,
+					 * too, after response has been started.
+					 * future: have separate backend timeout, and then change this
+					 * to check for write interest before checking for timeout */
+					/*if (waitevents & FDEVENT_OUT)*/
 					if ((con->state == CON_STATE_WRITE) &&
 					    (con->write_request_ts != 0)) {
 #if 0
@@ -1778,7 +1781,6 @@ int main (int argc, char **argv) {
 				handler = fdevent_get_handler(srv->ev, fd);
 				context = fdevent_get_context(srv->ev, fd);
 
-				/* connection_handle_fdevent needs a joblist_append */
 #if 0
 				log_error_write(srv, __FILE__, __LINE__, "sdd",
 						"event for", fd, revents);

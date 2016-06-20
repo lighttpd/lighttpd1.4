@@ -97,6 +97,7 @@ typedef struct {
 	buffer *response_header;
 
 	chunkqueue *wb;
+	off_t wb_reqlen;
 
 	int fd; /* fd to the proxy process */
 	int fde_ndx; /* index into the fd-event buffer */
@@ -124,6 +125,7 @@ static handler_ctx * handler_ctx_init(void) {
 	hctx->response_header = buffer_init();
 
 	hctx->wb = chunkqueue_init();
+	hctx->wb_reqlen = 0;
 
 	hctx->fd = -1;
 	hctx->fde_ndx = -1;
@@ -351,21 +353,9 @@ static void proxy_connection_close(server *srv, handler_ctx *hctx) {
 	handler_ctx_free(hctx);
 	con->plugin_ctx[p->id] = NULL;
 
-	/* finish response (if not already finished) */
-	if (con->mode == p->id
-	    && (con->state == CON_STATE_HANDLE_REQUEST || con->state == CON_STATE_READ_POST)) {
-		/* (not CON_STATE_ERROR and not CON_STATE_RESPONSE_END,
-		 *  i.e. not called from proxy_connection_reset()) */
-
-		/* Send an error if we haven't sent any data yet */
-		if (0 == con->file_started) {
-			con->http_status = 500;
-			con->mode = DIRECT;
-		}
-		else if (!con->file_finished) {
-			http_chunk_close(srv, con);
-			con->file_finished = 1;
-		}
+	/* finish response (if not already con->file_started, con->file_finished) */
+	if (con->mode == p->id) {
+		http_response_backend_done(srv, con);
 	}
 }
 
@@ -514,6 +504,7 @@ static int proxy_create_env(server *srv, handler_ctx *hctx) {
 
 	buffer_append_string_len(b, CONST_STR_LEN("Connection: close\r\n\r\n"));
 
+	hctx->wb_reqlen = buffer_string_length(b);
 	chunkqueue_append_buffer(hctx->wb, b);
 	buffer_free(b);
 
@@ -522,7 +513,8 @@ static int proxy_create_env(server *srv, handler_ctx *hctx) {
 	if (con->request.content_length) {
 		chunkqueue *req_cq = con->request_content_queue;
 
-		chunkqueue_steal(hctx->wb, req_cq, req_cq->bytes_in);
+		chunkqueue_steal(hctx->wb, req_cq, req_cq->bytes_in); /*(0 == req_cq->bytes_out)*/
+		hctx->wb_reqlen += con->request.content_length;/* (eventual) total request size */
 	}
 
 	return 0;
@@ -639,6 +631,10 @@ static int proxy_demux_response(server *srv, handler_ctx *hctx) {
 
 	/* check how much we have to read */
 	if (ioctl(hctx->fd, FIONREAD, &b)) {
+		if (errno == EAGAIN) {
+			fdevent_event_add(srv->ev, &(hctx->fde_ndx), hctx->fd, FDEVENT_IN);
+			return 0;
+		}
 		log_error_write(srv, __FILE__, __LINE__, "sd",
 				"ioctl failed: ",
 				proxy_fd);
@@ -652,10 +648,29 @@ static int proxy_demux_response(server *srv, handler_ctx *hctx) {
 	}
 
 	if (b > 0) {
+		if ((con->conf.stream_response_body & FDEVENT_STREAM_RESPONSE_BUFMIN)) {
+			off_t cqlen = chunkqueue_length(con->write_queue);
+			if (cqlen + b > 65536 - 4096) {
+				if (!con->is_writable) {
+					/*(defer removal of FDEVENT_IN interest since
+					 * connection_state_machine() might be able to send data
+					 * immediately, unless !con->is_writable, where
+					 * connection_state_machine() might not loop back to call
+					 * mod_proxy_handle_subrequest())*/
+					fdevent_event_clr(srv->ev, &(hctx->fde_ndx), hctx->fd, FDEVENT_IN);
+				}
+				if (cqlen >= 65536-1) return 0;
+				b = 65536 - 1 - (int)cqlen;
+			}
+		}
+
 		buffer_string_prepare_append(hctx->response, b);
 
 		if (-1 == (r = read(hctx->fd, hctx->response->ptr + buffer_string_length(hctx->response), buffer_string_space(hctx->response)))) {
-			if (errno == EAGAIN) return 0;
+			if (errno == EAGAIN) {
+				fdevent_event_add(srv->ev, &(hctx->fde_ndx), hctx->fd, FDEVENT_IN);
+				return 0;
+			}
 			log_error_write(srv, __FILE__, __LINE__, "sds",
 					"unexpected end-of-file (perhaps the proxy process died):",
 					proxy_fd, strerror(errno));
@@ -693,27 +708,36 @@ static int proxy_demux_response(server *srv, handler_ctx *hctx) {
 				/* parse the response header */
 				proxy_response_parse(srv, con, p, hctx->response_header);
 
-				/* enable chunked-transfer-encoding */
-				if (con->request.http_version == HTTP_VERSION_1_1 &&
-				    !(con->parsed_response & HTTP_CONTENT_LENGTH)) {
-					con->response.transfer_encoding = HTTP_TRANSFER_ENCODING_CHUNKED;
-				}
-
 				con->file_started = 1;
-				if (blen > 0) http_chunk_append_mem(srv, con, c + 4, blen);
+				if (blen > 0) {
+					if (0 != http_chunk_append_mem(srv, con, c + 4, blen)) {
+						/* error writing to tempfile;
+						 * truncate response or send 500 if nothing sent yet */
+						fin = 1;
+						con->file_started = 0;
+					}
+				}
 				buffer_reset(hctx->response);
+			} else {
+				/* no luck, no header found */
+				/*(reuse MAX_HTTP_REQUEST_HEADER as max size for response headers from backends)*/
+				if (buffer_string_length(hctx->response) > MAX_HTTP_REQUEST_HEADER) {
+					log_error_write(srv, __FILE__, __LINE__, "sb", "response headers too large for", con->uri.path);
+					con->http_status = 502; /* Bad Gateway */
+					con->mode = DIRECT;
+					fin = 1;
+				}
 			}
 		} else {
-			http_chunk_append_buffer(srv, con, hctx->response);
+			if (0 != http_chunk_append_buffer(srv, con, hctx->response)) {
+				/* error writing to tempfile;
+				 * truncate response or send 500 if nothing sent yet */
+				fin = 1;
+			}
 			buffer_reset(hctx->response);
 		}
-
 	} else {
 		/* reading from upstream done */
-		con->file_finished = 1;
-
-		http_chunk_close(srv, con);
-
 		fin = 1;
 	}
 
@@ -799,6 +823,7 @@ static handler_t proxy_write_request(server *srv, handler_ctx *hctx) {
 	case PROXY_STATE_PREPARE_WRITE:
 		proxy_create_env(srv, hctx);
 
+		fdevent_event_add(srv->ev, &(hctx->fde_ndx), hctx->fd, FDEVENT_IN);
 		proxy_set_state(srv, hctx, PROXY_STATE_WRITE);
 
 		/* fall through */
@@ -817,11 +842,24 @@ static handler_t proxy_write_request(server *srv, handler_ctx *hctx) {
 			return HANDLER_ERROR;
 		}
 
-		if (hctx->wb->bytes_out == hctx->wb->bytes_in) {
+		if (hctx->wb->bytes_out == hctx->wb_reqlen) {
+			fdevent_event_clr(srv->ev, &(hctx->fde_ndx), hctx->fd, FDEVENT_OUT);
+			shutdown(hctx->fd, SHUT_WR);/* future: remove if HTTP/1.1 request */
 			proxy_set_state(srv, hctx, PROXY_STATE_READ);
-			fdevent_event_set(srv->ev, &(hctx->fde_ndx), hctx->fd, FDEVENT_IN);
 		} else {
-			fdevent_event_set(srv->ev, &(hctx->fde_ndx), hctx->fd, FDEVENT_IN|FDEVENT_OUT);
+			off_t wblen = hctx->wb->bytes_in - hctx->wb->bytes_out;
+			if (hctx->wb->bytes_in < hctx->wb_reqlen && wblen < 65536 - 16384) {
+				/*(con->conf.stream_request_body & FDEVENT_STREAM_REQUEST)*/
+				if (!(con->conf.stream_request_body & FDEVENT_STREAM_REQUEST_POLLIN)) {
+					con->conf.stream_request_body |= FDEVENT_STREAM_REQUEST_POLLIN;
+					con->is_readable = 1; /* trigger optimistic read from client */
+				}
+			}
+			if (0 == wblen) {
+				fdevent_event_clr(srv->ev, &(hctx->fde_ndx), hctx->fd, FDEVENT_OUT);
+			} else {
+				fdevent_event_add(srv->ev, &(hctx->fde_ndx), hctx->fd, FDEVENT_OUT);
+			}
 		}
 
 		return HANDLER_WAIT_FOR_EVENT;
@@ -896,6 +934,10 @@ static handler_t proxy_send_request(server *srv, handler_ctx *hctx) {
 	}
 }
 
+
+static handler_t proxy_recv_response(server *srv, handler_ctx *hctx);
+
+
 SUBREQUEST_FUNC(mod_proxy_handle_subrequest) {
 	plugin_data *p = p_d;
 
@@ -906,15 +948,63 @@ SUBREQUEST_FUNC(mod_proxy_handle_subrequest) {
 	/* not my job */
 	if (con->mode != p->id) return HANDLER_GO_ON;
 
-	if (con->state == CON_STATE_READ_POST) {
-		handler_t r = connection_handle_read_post_state(srv, con);
-		if (r != HANDLER_GO_ON) return r;
+	if ((con->conf.stream_response_body & FDEVENT_STREAM_RESPONSE_BUFMIN)
+	    && con->file_started) {
+		if (chunkqueue_length(con->write_queue) > 65536 - 4096) {
+			fdevent_event_clr(srv->ev, &(hctx->fde_ndx), hctx->fd, FDEVENT_IN);
+		} else if (!(fdevent_event_get_interest(srv->ev, hctx->fd) & FDEVENT_IN)) {
+			/* optimistic read from backend, which might re-enable FDEVENT_IN */
+			handler_t rc = proxy_recv_response(srv, hctx); /*(might invalidate hctx)*/
+			if (rc != HANDLER_GO_ON) return rc;            /*(unless HANDLER_GO_ON)*/
+		}
 	}
 
-	return (hctx->state != PROXY_STATE_READ)
+	if (0 == hctx->wb->bytes_in
+	    ? con->state == CON_STATE_READ_POST
+	    : hctx->wb->bytes_in < hctx->wb_reqlen) {
+		/*(64k - 4k to attempt to avoid temporary files
+		 * in conjunction with FDEVENT_STREAM_REQUEST_BUFMIN)*/
+		if (hctx->wb->bytes_in - hctx->wb->bytes_out > 65536 - 4096
+		    && (con->conf.stream_request_body & FDEVENT_STREAM_REQUEST_BUFMIN)){
+			con->conf.stream_request_body &= ~FDEVENT_STREAM_REQUEST_POLLIN;
+			if (0 != hctx->wb->bytes_in) return HANDLER_WAIT_FOR_EVENT;
+		} else {
+			handler_t r = connection_handle_read_post_state(srv, con);
+			chunkqueue *req_cq = con->request_content_queue;
+			if (0 != hctx->wb->bytes_in && !chunkqueue_is_empty(req_cq)) {
+				chunkqueue_steal(hctx->wb, req_cq, req_cq->bytes_in - req_cq->bytes_out);
+				if (fdevent_event_get_interest(srv->ev, hctx->fd) & FDEVENT_OUT) {
+					return (r == HANDLER_GO_ON) ? HANDLER_WAIT_FOR_EVENT : r;
+				}
+			}
+			if (r != HANDLER_GO_ON) return r;
+		}
+	}
+
+	return (0 == hctx->wb->bytes_in || !chunkqueue_is_empty(hctx->wb))
 	  ? proxy_send_request(srv, hctx)
 	  : HANDLER_WAIT_FOR_EVENT;
 }
+
+
+static handler_t proxy_recv_response(server *srv, handler_ctx *hctx) {
+
+		switch (proxy_demux_response(srv, hctx)) {
+		case 0:
+			break;
+		case -1:
+			http_response_backend_error(srv, hctx->remote_conn);
+			/* fall through */
+		case 1:
+			/* we are done */
+			proxy_connection_close(srv, hctx);
+
+			return HANDLER_FINISHED;
+		}
+
+		return HANDLER_GO_ON;
+}
+
 
 static handler_t proxy_handle_fdevent(server *srv, void *ctx, int revents) {
 	handler_ctx *hctx = ctx;
@@ -923,35 +1013,16 @@ static handler_t proxy_handle_fdevent(server *srv, void *ctx, int revents) {
 
 	joblist_append(srv, con);
 
-	if ((revents & FDEVENT_IN) &&
-	    hctx->state == PROXY_STATE_READ) {
+	if (revents & FDEVENT_IN) {
 
 		if (p->conf.debug) {
 			log_error_write(srv, __FILE__, __LINE__, "sd",
 					"proxy: fdevent-in", hctx->state);
 		}
 
-		switch (proxy_demux_response(srv, hctx)) {
-		case 0:
-			break;
-		case 1:
-			/* we are done */
-			proxy_connection_close(srv, hctx);
-
-			return HANDLER_FINISHED;
-		case -1:
-			if (con->file_started == 0) {
-				/* reading response headers failed */
-			} else {
-				/* response might have been already started, kill the connection */
-				con->keep_alive = 0;
-				con->file_finished = 1;
-				con->mode = DIRECT; /*(avoid sending final chunked block)*/
-			}
-
-			proxy_connection_close(srv, hctx);
-
-			return HANDLER_FINISHED;
+		{
+		handler_t rc = proxy_recv_response(srv,hctx);/*(might invalidate hctx)*/
+		if (rc != HANDLER_GO_ON) return rc;          /*(unless HANDLER_GO_ON)*/
 		}
 	}
 
@@ -986,18 +1057,7 @@ static handler_t proxy_handle_fdevent(server *srv, void *ctx, int revents) {
 			proxy_set_state(srv, hctx, PROXY_STATE_PREPARE_WRITE);
 		}
 
-		if (hctx->state == PROXY_STATE_PREPARE_WRITE ||
-		    hctx->state == PROXY_STATE_WRITE) {
-			/* we are allowed to send something out
-			 *
-			 * 1. after a just finished connect() call
-			 * 2. in a unfinished write() call (long POST request)
-			 */
-			return proxy_send_request(srv, hctx); /*(might invalidate hctx)*/
-		} else {
-			log_error_write(srv, __FILE__, __LINE__, "sd",
-					"proxy: out", hctx->state);
-		}
+		return proxy_send_request(srv, hctx); /*(might invalidate hctx)*/
 	}
 
 	/* perhaps this issue is already handled */
@@ -1035,17 +1095,24 @@ static handler_t proxy_handle_fdevent(server *srv, void *ctx, int revents) {
 				proxy_connection_close(srv, hctx);
 				con->http_status = 503;
 			}
+		} else if (con->file_started) {
+			/* drain any remaining data from kernel pipe buffers
+			 * even if (con->conf.stream_response_body
+			 *          & FDEVENT_STREAM_RESPONSE_BUFMIN)
+			 * since event loop will spin on fd FDEVENT_HUP event
+			 * until unregistered. */
+			handler_t rc;
+			do {
+				rc = proxy_recv_response(srv,hctx);/*(might invalidate hctx)*/
+			} while (rc == HANDLER_GO_ON);             /*(unless HANDLER_GO_ON)*/
+			return rc; /* HANDLER_FINISHED or HANDLER_ERROR */
 		} else {
 			proxy_connection_close(srv, hctx);
 		}
 	} else if (revents & FDEVENT_ERR) {
 		log_error_write(srv, __FILE__, __LINE__, "sd", "proxy-FDEVENT_ERR, but no HUP", revents);
 
-		if (con->file_started) {
-			con->keep_alive = 0;
-			con->file_finished = 1;
-			con->mode = DIRECT; /*(avoid sending final chunked block)*/
-		}
+		http_response_backend_error(srv, con);
 		proxy_connection_close(srv, hctx);
 	}
 

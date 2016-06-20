@@ -2736,6 +2736,7 @@ PHYSICALPATH_FUNC(mod_webdav_physical_handler) {
 	case HTTP_METHOD_DELETE:
 	case HTTP_METHOD_LOCK:
 	case HTTP_METHOD_UNLOCK:
+		con->conf.stream_request_body = 0;
 		con->mode = p->id;
 		break;
 	default:
