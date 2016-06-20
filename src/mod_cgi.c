@@ -490,11 +490,6 @@ static int cgi_demux_response(server *srv, handler_ctx *hctx) {
 			if (is_header_end) {
 				if (!is_header) {
 					/* no header, but a body */
-
-					if (con->request.http_version == HTTP_VERSION_1_1) {
-						con->response.transfer_encoding = HTTP_TRANSFER_ENCODING_CHUNKED;
-					}
-
 					if (0 != http_chunk_append_buffer(srv, con, hctx->response_header)) {
 						return FDEVENT_HANDLED_ERROR;
 					}
@@ -529,12 +524,6 @@ static int cgi_demux_response(server *srv, handler_ctx *hctx) {
 							http_response_xsendfile(srv, con, ds->value, p->conf.xsendfile_docroot);
 							return FDEVENT_HANDLED_FINISHED;
 						}
-					}
-
-					/* enable chunked-transfer-encoding */
-					if (con->request.http_version == HTTP_VERSION_1_1 &&
-					    !(con->parsed_response & HTTP_CONTENT_LENGTH)) {
-						con->response.transfer_encoding = HTTP_TRANSFER_ENCODING_CHUNKED;
 					}
 
 					if (blen > 0) {

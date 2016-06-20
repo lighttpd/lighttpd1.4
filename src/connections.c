@@ -341,7 +341,21 @@ static int connection_handle_write_prepare(server *srv, connection *con) {
 
 		if (((con->parsed_response & HTTP_CONTENT_LENGTH) == 0) &&
 		    ((con->response.transfer_encoding & HTTP_TRANSFER_ENCODING_CHUNKED) == 0)) {
-			con->keep_alive = 0;
+			if (con->request.http_version == HTTP_VERSION_1_1) {
+				off_t qlen = chunkqueue_length(con->write_queue);
+				con->response.transfer_encoding = HTTP_TRANSFER_ENCODING_CHUNKED;
+				if (qlen) {
+					/* create initial Transfer-Encoding: chunked segment */
+					buffer *b = srv->tmp_chunk_len;
+					buffer_string_set_length(b, 0);
+					buffer_append_uint_hex(b, (uintmax_t)qlen);
+					buffer_append_string_len(b, CONST_STR_LEN("\r\n"));
+					chunkqueue_prepend_buffer(con->write_queue, b);
+					chunkqueue_append_mem(con->write_queue, CONST_STR_LEN("\r\n"));
+				}
+			} else {
+				con->keep_alive = 0;
+			}
 		}
 
 		/**

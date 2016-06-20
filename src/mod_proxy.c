@@ -708,12 +708,6 @@ static int proxy_demux_response(server *srv, handler_ctx *hctx) {
 				/* parse the response header */
 				proxy_response_parse(srv, con, p, hctx->response_header);
 
-				/* enable chunked-transfer-encoding */
-				if (con->request.http_version == HTTP_VERSION_1_1 &&
-				    !(con->parsed_response & HTTP_CONTENT_LENGTH)) {
-					con->response.transfer_encoding = HTTP_TRANSFER_ENCODING_CHUNKED;
-				}
-
 				con->file_started = 1;
 				if (blen > 0) {
 					if (0 != http_chunk_append_mem(srv, con, c + 4, blen)) {

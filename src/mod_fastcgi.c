@@ -2642,12 +2642,6 @@ static int fcgi_demux_response(server *srv, handler_ctx *hctx) {
 					hctx->send_content_body = 0; /* ignore the content */
 					break;
 				}
-
-				/* enable chunked-transfer-encoding */
-				if (con->request.http_version == HTTP_VERSION_1_1 &&
-				    !(con->parsed_response & HTTP_CONTENT_LENGTH)) {
-					con->response.transfer_encoding = HTTP_TRANSFER_ENCODING_CHUNKED;
-				}
 			}
 
 			if (hctx->send_content_body && !buffer_string_is_empty(packet.b)) {
