@@ -290,7 +290,7 @@ static int connection_handle_write_prepare(server *srv, connection *con) {
 					     "</html>\n"
 					     ));
 
-			http_chunk_append_buffer(srv, con, b);
+			(void)http_chunk_append_buffer(srv, con, b);
 			buffer_free(b);
 
 			response_header_overwrite(srv, con, CONST_STR_LEN("Content-Type"), CONST_STR_LEN("text/html"));

@@ -1,5 +1,6 @@
 #include "configfile-glue.c"
 
+#include <assert.h>
 #include <stdlib.h>
 #include <stdio.h>
 
@@ -42,6 +43,7 @@ const struct {
 static void test_configfile_addrbuf_eq_remote_ip_mask (void) {
 	int i, m;
 	buffer * const s = buffer_init();
+	char *slash;
 	sock_addr rmt;
 
 	for (i = 0; i < (int)(sizeof(rmtmask)/sizeof(rmtmask[0])); ++i) {
@@ -62,7 +64,8 @@ static void test_configfile_addrbuf_eq_remote_ip_mask (void) {
 		}
 	      #endif
 		buffer_copy_string(s, rmtmask[i].string);
-		m = config_addrbuf_eq_remote_ip_mask(NULL,s,strchr(s->ptr,'/'),&rmt);
+		slash = strchr(s->ptr,'/'); assert(slash);
+		m = config_addrbuf_eq_remote_ip_mask(NULL, s, slash, &rmt);
 		if (m != rmtmask[i].expect) {
 			fprintf(stderr, "failed assertion: %s %s %s\n",
 				rmtmask[i].string,

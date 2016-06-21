@@ -279,7 +279,7 @@ static int config_addrstr_eq_remote_ip_mask(server *srv, const char *addrstr, in
 			   && IN6_IS_ADDR_V4MAPPED(&val.ipv6.sin6_addr)) {
 			in_addr_t x = *(in_addr_t *)(val.ipv6.sin6_addr.s6_addr+12);
 			uint32_t nm =
-			  htonl(~((1u << (32 - (0 != nm_bits ? (nm_bits > 96 ? nm_bits - 96 : 0) : 32))) - 1));
+			  nm_bits < 128 ? htonl(~(~0u >> (nm_bits > 96 ? nm_bits - 96 : 0))) : ~0u;
 			return ((x & nm) == (rmt->ipv4.sin_addr.s_addr & nm));
 		} else {
 			return 0;

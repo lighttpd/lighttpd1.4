@@ -181,7 +181,7 @@ int fdevent_reset(fdevents *ev); /* "init" after fork() */
 void fdevent_free(fdevents *ev);
 
 #define fdevent_event_get_interest(ev, fd) \
-        (-1 != (fd) ? (ev)->fdarray[(fd)]->events : 0)
+        ((fd) >= 0 ? (ev)->fdarray[(fd)]->events : 0)
 void fdevent_event_set(fdevents *ev, int *fde_ndx, int fd, int events); /* events can be FDEVENT_IN, FDEVENT_OUT or FDEVENT_IN | FDEVENT_OUT */
 void fdevent_event_add(fdevents *ev, int *fde_ndx, int fd, int event); /* events can be FDEVENT_IN or FDEVENT_OUT */
 void fdevent_event_clr(fdevents *ev, int *fde_ndx, int fd, int event); /* events can be FDEVENT_IN or FDEVENT_OUT */

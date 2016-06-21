@@ -504,6 +504,7 @@ static void http_list_directory_include_file(buffer *out, buffer *path, const ch
 			buffer_append_string_len(out, buf, (size_t)rd);
 		}
 	}
+	close(fd);
 
 	if (encode) {
 		buffer_append_string_len(out, CONST_STR_LEN("</pre>"));

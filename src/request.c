@@ -279,7 +279,7 @@ int http_request_host_normalize(buffer *b) {
         char *bracket = b->ptr+blen-1;
         int rc;
         char buf[INET6_ADDRSTRLEN];
-        if (blen == 2) return -1; /*(invalid "[]")*/
+        if (blen <= 2) return -1; /*(invalid "[]")*/
         if (*bracket != ']') {
             bracket = (char *)memchr(b->ptr+1, ']', blen-1);
             if (NULL == bracket || bracket[1] != ':'  || bracket - b->ptr == 1){

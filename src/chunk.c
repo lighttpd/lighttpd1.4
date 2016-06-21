@@ -422,7 +422,7 @@ void chunkqueue_steal(chunkqueue *dest, chunkqueue *src, off_t len) {
 static chunk *chunkqueue_get_append_tempfile(chunkqueue *cq) {
 	chunk *c;
 	buffer *template = buffer_init_string("/var/tmp/lighttpd-upload-XXXXXX");
-	int fd;
+	int fd = -1;
 
 	if (cq->tempdirs && cq->tempdirs->used) {
 		/* we have several tempdirs, only if all of them fail we jump out */
@@ -488,13 +488,13 @@ int chunkqueue_append_mem_to_tempfile(server *srv, chunkqueue *dest, const char 
 				/* the chunk is too large now, close it */
 				int rc = close(dst_c->file.fd);
 				dst_c->file.fd = -1;
-				dst_c = NULL;
 				if (0 != rc) {
 					log_error_write(srv, __FILE__, __LINE__, "sbss",
 						"close() temp-file", dst_c->file.name, "failed:",
 						strerror(errno));
 					return -1;
 				}
+				dst_c = NULL;
 			}
 		} else {
 			dst_c = NULL;

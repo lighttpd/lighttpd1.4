@@ -344,6 +344,7 @@ static int network_server_init(server *srv, buffer *host_token, specific_config 
 #ifdef HAVE_SYS_UN_H
 	if (AF_UNIX == srv_socket->addr.plain.sa_family) {
 		/* check if the socket exists and try to connect to it. */
+		force_assert(host); /*(static analysis hint)*/
 		if (-1 == (srv_socket->fd = socket(srv_socket->addr.plain.sa_family, SOCK_STREAM, 0))) {
 			log_error_write(srv, __FILE__, __LINE__, "ss", "socket failed:", strerror(errno));
 			goto error_free_socket;

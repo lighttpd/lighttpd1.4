@@ -916,6 +916,7 @@ static handler_t proxy_send_request(server *srv, handler_ctx *hctx) {
 	} else {
 		data_proxy *host = hctx->host;
 		connection *con  = hctx->remote_conn;
+		plugin_data *p   = hctx->plugin_data;
 		log_error_write(srv, __FILE__, __LINE__,  "sbdd", "proxy-server disabled:",
 				host->host,
 				host->port,
@@ -928,7 +929,7 @@ static handler_t proxy_send_request(server *srv, handler_ctx *hctx) {
 		/* reset the enviroment and restart the sub-request */
 		con->mode = DIRECT;/*(avoid changing con->state, con->http_status)*/
 		proxy_connection_close(srv, hctx);
-		con->mode = hctx->plugin_data->id; /* p->id */
+		con->mode = p->id;
 
 		return HANDLER_COMEBACK;
 	}
