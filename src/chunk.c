@@ -281,6 +281,24 @@ void chunkqueue_append_mem(chunkqueue *cq, const char * mem, size_t len) {
 	chunkqueue_append_chunk(cq, c);
 }
 
+
+void chunkqueue_append_chunkqueue(chunkqueue *cq, chunkqueue *src) {
+	if (src == NULL || NULL == src->first) return;
+
+	if (NULL == cq->first) {
+		cq->first = src->first;
+	} else {
+		cq->last->next = src->first;
+	}
+	cq->last = src->last;
+	cq->bytes_in += (src->bytes_in - src->bytes_out);
+
+	src->first = NULL;
+	src->last = NULL;
+	src->bytes_out = src->bytes_in;
+}
+
+
 void chunkqueue_get_memory(chunkqueue *cq, char **mem, size_t *len, size_t min_size, size_t alloc_size) {
 	static const size_t REALLOC_MAX_SIZE = 256;
 	chunk *c;

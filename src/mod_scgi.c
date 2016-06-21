@@ -1731,9 +1731,7 @@ static int scgi_create_env(server *srv, handler_ctx *hctx) {
 	buffer_free(b);
 
 	if (con->request.content_length) {
-		chunkqueue *req_cq = con->request_content_queue;
-
-		chunkqueue_steal(hctx->wb, req_cq, req_cq->bytes_in); /*(0 == req_cq->bytes_out)*/
+		chunkqueue_append_chunkqueue(hctx->wb, con->request_content_queue);
 		hctx->wb_reqlen += con->request.content_length;/* (eventual) total request size */
 	}
 
@@ -2563,7 +2561,7 @@ SUBREQUEST_FUNC(mod_scgi_handle_subrequest) {
 			handler_t r = connection_handle_read_post_state(srv, con);
 			chunkqueue *req_cq = con->request_content_queue;
 			if (0 != hctx->wb->bytes_in && !chunkqueue_is_empty(req_cq)) {
-				chunkqueue_steal(hctx->wb, req_cq, req_cq->bytes_in - req_cq->bytes_out);
+				chunkqueue_append_chunkqueue(hctx->wb, req_cq);
 				if (fdevent_event_get_interest(srv->ev, hctx->fd) & FDEVENT_OUT) {
 					return (r == HANDLER_GO_ON) ? HANDLER_WAIT_FOR_EVENT : r;
 				}
