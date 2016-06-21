@@ -20,6 +20,8 @@ EXTRA_DIST=\
 	redirect.php \
 	send404.pl \
 	sendfile.php \
+	ssi-include.shtml \
+	ssi-include.txt \
 	ssi.shtml
 SUBDIRS=\
 	expire \
