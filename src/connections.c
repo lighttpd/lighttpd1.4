@@ -298,6 +298,16 @@ static int connection_handle_write_prepare(server *srv, connection *con) {
 		break;
 	}
 
+	/* Allow filter plugins to change response headers before they are written. */
+	switch(plugins_call_handle_response_start(srv, con)) {
+	case HANDLER_GO_ON:
+	case HANDLER_FINISHED:
+		break;
+	default:
+		log_error_write(srv, __FILE__, __LINE__, "s", "response_start plugin failed");
+		return -1;
+	}
+
 	if (con->file_finished) {
 		/* we have all the content and chunked encoding is not used, set a content-length */
 

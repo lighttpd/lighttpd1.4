@@ -53,6 +53,7 @@ typedef struct {
 											    * has to be found
 											    */
 	handler_t (* handle_subrequest)      (server *srv, connection *con, void *p_d);    /* */
+	handler_t (* handle_response_start)  (server *srv, connection *con, void *p_d);    /* before response headers are written */
 	handler_t (* connection_reset)       (server *srv, connection *con, void *p_d);    /* */
 	void *data;
 
@@ -67,6 +68,7 @@ handler_t plugins_call_handle_uri_raw(server *srv, connection *con);
 handler_t plugins_call_handle_uri_clean(server *srv, connection *con);
 handler_t plugins_call_handle_subrequest_start(server *srv, connection *con);
 handler_t plugins_call_handle_subrequest(server *srv, connection *con);
+handler_t plugins_call_handle_response_start(server *srv, connection *con);
 handler_t plugins_call_handle_request_done(server *srv, connection *con);
 handler_t plugins_call_handle_docroot(server *srv, connection *con);
 handler_t plugins_call_handle_physical(server *srv, connection *con);
