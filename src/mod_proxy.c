@@ -628,6 +628,7 @@ static int proxy_demux_response(server *srv, handler_ctx *hctx) {
 	int proxy_fd       = hctx->fd;
 
 	/* check how much we have to read */
+      #if !defined(_WIN32) && !defined(__CYGWIN__)
 	if (ioctl(hctx->fd, FIONREAD, &b)) {
 		if (errno == EAGAIN) {
 			fdevent_event_add(srv->ev, &(hctx->fde_ndx), hctx->fd, FDEVENT_IN);
@@ -638,6 +639,9 @@ static int proxy_demux_response(server *srv, handler_ctx *hctx) {
 				proxy_fd);
 		return -1;
 	}
+      #else
+	b = 4096;
+      #endif
 
 
 	if (p->conf.debug) {
@@ -674,6 +678,10 @@ static int proxy_demux_response(server *srv, handler_ctx *hctx) {
 					proxy_fd, strerror(errno));
 			return -1;
 		}
+
+	      #if defined(_WIN32) || defined(__CYGWIN__)
+		if (0 == r) return 1; /* fin */
+	      #endif
 
 		/* this should be catched by the b > 0 above */
 		force_assert(r);

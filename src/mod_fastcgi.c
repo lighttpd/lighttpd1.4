@@ -2009,7 +2009,7 @@ static int fcgi_create_env(server *srv, handler_ctx *hctx, int request_id) {
 	our_addr_len = sizeof(our_addr);
 
 	if (-1 == getsockname(con->fd, (struct sockaddr *)&our_addr, &our_addr_len)
-	    || our_addr_len > sizeof(our_addr)) {
+	    || our_addr_len > (socklen_t)sizeof(our_addr)) {
 		s = inet_ntop_cache_get_ip(srv, &(srv_sock->addr));
 	} else {
 		s = inet_ntop_cache_get_ip(srv, &(our_addr));
@@ -2496,7 +2496,7 @@ static int fastcgi_get_packet(server *srv, handler_ctx *hctx, fastcgi_response_p
 static int fcgi_demux_response(server *srv, handler_ctx *hctx) {
 	int fin = 0;
 	int toread, ret;
-	ssize_t r;
+	ssize_t r = 0;
 
 	plugin_data *p    = hctx->plugin_data;
 	connection *con   = hctx->remote_conn;
@@ -2507,6 +2507,7 @@ static int fcgi_demux_response(server *srv, handler_ctx *hctx) {
 	/*
 	 * check how much we have to read
 	 */
+      #if !defined(_WIN32) && !defined(__CYGWIN__)
 	if (ioctl(hctx->fd, FIONREAD, &toread)) {
 		if (errno == EAGAIN) {
 			fdevent_event_add(srv->ev, &(hctx->fde_ndx), hctx->fd, FDEVENT_IN);
@@ -2517,6 +2518,9 @@ static int fcgi_demux_response(server *srv, handler_ctx *hctx) {
 				fcgi_fd);
 		return -1;
 	}
+      #else
+	toread = 4096;
+      #endif
 
 	if (toread > 0) {
 		char *mem;
@@ -2547,7 +2551,8 @@ static int fcgi_demux_response(server *srv, handler_ctx *hctx) {
 					fcgi_fd, strerror(errno));
 			return -1;
 		}
-	} else {
+	}
+	if (0 == r) {
 		log_error_write(srv, __FILE__, __LINE__, "ssdsb",
 				"unexpected end-of-file (perhaps the fastcgi process died):",
 				"pid:", proc->pid,

@@ -129,12 +129,16 @@ EOF
 	$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200 } ];
 	ok($tf->handle_http($t) == 0, 'PATHINFO');
 
+    if ($^O ne "cygwin") {
 	$t->{REQUEST}  = ( <<EOF
 GET /cgi.php%20%20%20 HTTP/1.0
 EOF
  );
 	$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 404 } ];
 	ok($tf->handle_http($t) == 0, 'No source retrieval');
+    } else {
+	ok(1, 'No source retrieval; skipped on cygwin; see response.c');
+    }
 
 	$t->{REQUEST}  = ( <<EOF
 GET /www/abc/def HTTP/1.0
