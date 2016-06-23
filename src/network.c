@@ -1099,7 +1099,7 @@ int network_write_chunkqueue(server *srv, connection *con, chunkqueue *cq, off_t
 	 */
 	if (cq->first && cq->first->next) {
 		corked = 1;
-		setsockopt(con->fd, IPPROTO_TCP, TCP_CORK, &corked, sizeof(corked));
+		(void)setsockopt(con->fd, IPPROTO_TCP, TCP_CORK, &corked, sizeof(corked));
 	}
 #endif
 
@@ -1119,7 +1119,7 @@ int network_write_chunkqueue(server *srv, connection *con, chunkqueue *cq, off_t
 #ifdef TCP_CORK
 	if (corked) {
 		corked = 0;
-		setsockopt(con->fd, IPPROTO_TCP, TCP_CORK, &corked, sizeof(corked));
+		(void)setsockopt(con->fd, IPPROTO_TCP, TCP_CORK, &corked, sizeof(corked));
 	}
 #endif
 

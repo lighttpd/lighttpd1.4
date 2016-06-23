@@ -458,7 +458,7 @@ static chunk *chunkqueue_get_append_tempfile(chunkqueue *cq) {
 		fd = mkstemp(template->ptr);
 	}
 
-	if (-1 == fd) {
+	if (fd < 0) {
 		buffer_free(template);
 		return NULL;
 	}
@@ -498,7 +498,7 @@ int chunkqueue_append_mem_to_tempfile(server *srv, chunkqueue *dest, const char 
 		if (NULL != dst_c
 			&& FILE_CHUNK == dst_c->type
 			&& dst_c->file.is_temp
-			&& -1 != dst_c->file.fd
+			&& dst_c->file.fd >= 0
 			&& 0 == dst_c->offset) {
 			/* ok, take the last chunk for our job */
 

@@ -684,9 +684,9 @@ static int http_list_directory(server *srv, connection *con, plugin_data *p, buf
 	name_max = NAME_MAX;
 #endif
 
-	path = malloc(buffer_string_length(dir) + name_max + 1);
+	path = malloc(i + name_max + 1);
 	force_assert(NULL != path);
-	strcpy(path, dir->ptr);
+	memcpy(path, dir->ptr, i+1);
 	path_file = path + i;
 
 	if (NULL == (dp = opendir(path))) {

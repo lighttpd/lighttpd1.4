@@ -270,23 +270,13 @@ static char* utostr(char * const buf_end, uintmax_t val) {
 }
 
 static char* itostr(char * const buf_end, intmax_t val) {
-	char *cur = buf_end;
-	if (val >= 0) return utostr(buf_end, (uintmax_t) val);
-
-	/* can't take absolute value, as it isn't defined for INTMAX_MIN */
-	do {
-		int mod = val % 10;
-		val /= 10;
-		/* val * 10 + mod == orig val, -10 < mod < 10 */
-		/* we want a negative mod */
-		if (mod > 0) {
-			mod -= 10;
-			val += 1;
-		}
-		/* prepend digit abs(mod) */
-		*(--cur) = (char) ('0' + (-mod));
-	} while (0 != val);
-	*(--cur) = '-';
+	/* absolute value not defined for INTMAX_MIN, but can take absolute
+	 * value of any negative number via twos complement cast to unsigned.
+	 * negative sign is prepended after (now unsigned) value is converted
+	 * to string */
+	uintmax_t uval = val >= 0 ? (uintmax_t)val : ((uintmax_t)~val) + 1;
+	char *cur = utostr(buf_end, uval);
+	if (val < 0) *(--cur) = '-';
 
 	return cur;
 }

@@ -16,7 +16,7 @@ static int request_check_hostname(buffer *host) {
 	enum { DOMAINLABEL, TOPLABEL } stage = TOPLABEL;
 	size_t i;
 	int label_len = 0;
-	size_t host_len;
+	size_t host_len, hostport_len;
 	char *colon;
 	int is_ip = -1; /* -1 don't know yet, 0 no, 1 yes */
 	int level = 0;
@@ -31,8 +31,6 @@ static int request_check_hostname(buffer *host) {
 	 *       IPv6address   = "[" ... "]"
 	 *       port          = *digit
 	 */
-
-	host_len = buffer_string_length(host);
 
 	/* IPv6 adress */
 	if (host->ptr[0] == '[') {
@@ -70,6 +68,8 @@ static int request_check_hostname(buffer *host) {
 		return 0;
 	}
 
+	hostport_len = host_len = buffer_string_length(host);
+
 	if (NULL != (colon = memchr(host->ptr, ':', host_len))) {
 		char *c = colon + 1;
 
@@ -88,12 +88,11 @@ static int request_check_hostname(buffer *host) {
 	/* if the hostname ends in a "." strip it */
 	if (host->ptr[host_len-1] == '.') {
 		/* shift port info one left */
-		if (NULL != colon) memmove(colon-1, colon, buffer_string_length(host) - host_len);
-		buffer_string_set_length(host, buffer_string_length(host) - 1);
-		host_len -= 1;
+		if (NULL != colon) memmove(colon-1, colon, hostport_len - host_len);
+		buffer_string_set_length(host, --hostport_len);
+		if (--host_len == 0) return -1;
 	}
 
-	if (host_len == 0) return -1;
 
 	/* scan from the right and skip the \0 */
 	for (i = host_len; i-- > 0; ) {

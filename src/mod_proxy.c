@@ -386,7 +386,7 @@ static int proxy_establish_connection(server *srv, handler_ctx *hctx) {
 
 		memset(&proxy_addr_un, 0, sizeof(proxy_addr_un));
 		proxy_addr_un.sun_family = AF_UNIX;
-		strcpy(proxy_addr_un.sun_path, host->host->ptr);
+		memcpy(proxy_addr_un.sun_path, host->host->ptr, buffer_string_length(host->host) + 1);
 		servlen = sizeof(proxy_addr_un);
 		proxy_addr = (struct sockaddr *) &proxy_addr_un;
 	} else

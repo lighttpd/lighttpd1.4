@@ -208,6 +208,7 @@ int http_auth_match_rules(server *srv, array *req, const char *username, const c
 	UNUSED(host);
 
 	require = (data_string *)array_get_element(req, "require");
+	if (!require) return -1; /*(should not happen; config is validated at startup)*/
 
 	/* if we get here, the user we got a authed user */
 	if (0 == strcmp(require->value->ptr, "valid-user")) {
@@ -721,6 +722,7 @@ int http_auth_basic_check(server *srv, connection *con, mod_auth_plugin_data *p,
 	data_string *realm;
 
 	realm = (data_string *)array_get_element(req, "realm");
+	if (!realm) return 0; /*(should not happen; config is validated at startup)*/
 
 	username = buffer_init();
 

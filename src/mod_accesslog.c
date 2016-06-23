@@ -916,21 +916,23 @@ REQUESTDONE_FUNC(log_access_write) {
 		}
 	}
 
+	if (p->conf.use_syslog) { /* syslog doesn't cache */
+#ifdef HAVE_SYSLOG_H
+		if (!buffer_string_is_empty(b)) {
+			/*(syslog appends a \n on its own)*/
+			syslog(p->conf.syslog_level, "%s", b->ptr);
+			buffer_reset(b);
+		}
+#endif
+		return HANDLER_GO_ON;
+	}
+
 	buffer_append_string_len(b, CONST_STR_LEN("\n"));
 
-	if (p->conf.use_syslog ||  /* syslog doesn't cache */
-	    (!buffer_string_is_empty(p->conf.access_logfile) && p->conf.access_logfile->ptr[0] == '|') || /* pipes don't cache */
+	if ((!buffer_string_is_empty(p->conf.access_logfile) && p->conf.access_logfile->ptr[0] == '|') || /* pipes don't cache */
 	    newts ||
 	    buffer_string_length(b) >= BUFFER_MAX_REUSE_SIZE) {
-		if (p->conf.use_syslog) {
-#ifdef HAVE_SYSLOG_H
-			if (!buffer_string_is_empty(b)) {
-				/* syslog appends a \n on its own */
-				buffer_string_set_length(b, buffer_string_length(b) - 1);
-				syslog(p->conf.syslog_level, "%s", b->ptr);
-			}
-#endif
-		} else if (p->conf.log_access_fd != -1) {
+		if (p->conf.log_access_fd >= 0) {
 			accesslog_write_all(srv, p->conf.access_logfile, p->conf.log_access_fd, CONST_BUF_LEN(b));
 		}
 		buffer_reset(b);

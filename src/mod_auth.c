@@ -295,6 +295,9 @@ static handler_t mod_auth_uri_handler(server *srv, connection *con, void *p_d) {
 		con->http_status = 401;
 		con->mode = DIRECT;
 
+		if (!method) return HANDLER_FINISHED;/*(should not happen; config is validated at startup)*/
+		if (!realm) return HANDLER_FINISHED; /*(should not happen; config is validated at startup)*/
+
 		if (0 == strcmp(method->value->ptr, "basic")) {
 			buffer_copy_string_len(p->tmp_buf, CONST_STR_LEN("Basic realm=\""));
 			buffer_append_string_buffer(p->tmp_buf, realm->value);
