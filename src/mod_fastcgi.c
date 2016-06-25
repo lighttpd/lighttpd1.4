@@ -48,8 +48,6 @@
 #include <sys/wait.h>
 #endif
 
-#include "version.h"
-
 /*
  *
  * TODO:
@@ -1961,12 +1959,7 @@ static int fcgi_create_env(server *srv, handler_ctx *hctx, int request_id) {
 	/* send FCGI_PARAMS */
 	buffer_string_prepare_copy(p->fcgi_env, 1023);
 
-
-	if (buffer_is_empty(con->conf.server_tag)) {
-		FCGI_ENV_ADD_CHECK(fcgi_env_add(p->fcgi_env, CONST_STR_LEN("SERVER_SOFTWARE"), CONST_STR_LEN(PACKAGE_DESC)),con)
-	} else {
-		FCGI_ENV_ADD_CHECK(fcgi_env_add(p->fcgi_env, CONST_STR_LEN("SERVER_SOFTWARE"), CONST_BUF_LEN(con->conf.server_tag)),con)
-	}
+	FCGI_ENV_ADD_CHECK(fcgi_env_add(p->fcgi_env, CONST_STR_LEN("SERVER_SOFTWARE"), CONST_BUF_LEN(con->conf.server_tag)),con)
 
 	if (!buffer_is_empty(con->server_name)) {
 		size_t len = buffer_string_length(con->server_name);

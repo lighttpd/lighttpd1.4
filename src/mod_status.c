@@ -20,8 +20,6 @@
 #include <time.h>
 #include <stdio.h>
 
-#include "version.h"
-
 typedef struct {
 	buffer *config_url;
 	buffer *status_url;
@@ -319,7 +317,9 @@ static handler_t mod_status_handle_server_status_html(server *srv, connection *c
 
 
 	/* connection listing */
-	buffer_append_string_len(b, CONST_STR_LEN("<h1>Server-Status (" PACKAGE_NAME " " PACKAGE_VERSION ")</h1>"));
+	buffer_append_string_len(b, CONST_STR_LEN("<h1>Server-Status ("));
+	buffer_append_string_buffer(b, con->conf.server_tag);
+	buffer_append_string_len(b, CONST_STR_LEN(")</h1>"));
 
 	buffer_append_string_len(b, CONST_STR_LEN("<table summary=\"status\" class=\"status\">"));
 	buffer_append_string_len(b, CONST_STR_LEN("<tr><td>Hostname</td><td class=\"string\">"));
@@ -839,7 +839,10 @@ static handler_t mod_status_handle_server_config(server *srv, connection *con, v
 			   "  <title>Status</title>\n"
 			   " </head>\n"
 			   " <body>\n"
-			   "  <h1>" PACKAGE_DESC "</h1>\n"
+			   "  <h1>"));
+	buffer_append_string_buffer(b, con->conf.server_tag);
+	buffer_append_string_len(b, CONST_STR_LEN(
+			   "</h1>\n"
 			   "  <table summary=\"status\" border=\"1\">\n"));
 
 	mod_status_header_append(b, "Server-Features");

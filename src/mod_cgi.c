@@ -36,8 +36,6 @@
 #include <stdio.h>
 #include <fcntl.h>
 
-#include "version.h"
-
 enum {EOL_UNSET, EOL_N, EOL_RN};
 
 typedef struct {
@@ -1087,11 +1085,7 @@ static int cgi_create_env(server *srv, connection *con, plugin_data *p, handler_
 		env.size = 0;
 		env.used = 0;
 
-		if (buffer_is_empty(con->conf.server_tag)) {
-			cgi_env_add(&env, CONST_STR_LEN("SERVER_SOFTWARE"), CONST_STR_LEN(PACKAGE_DESC));
-		} else {
-			cgi_env_add(&env, CONST_STR_LEN("SERVER_SOFTWARE"), CONST_BUF_LEN(con->conf.server_tag));
-		}
+		cgi_env_add(&env, CONST_STR_LEN("SERVER_SOFTWARE"), CONST_BUF_LEN(con->conf.server_tag));
 
 		if (!buffer_string_is_empty(con->server_name)) {
 			size_t len = buffer_string_length(con->server_name);

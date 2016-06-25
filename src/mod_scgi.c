@@ -37,8 +37,6 @@
 # include <sys/wait.h>
 #endif
 
-#include "version.h"
-
 enum {EOL_UNSET, EOL_N, EOL_RN};
 
 /*
@@ -1569,12 +1567,7 @@ static int scgi_create_env(server *srv, handler_ctx *hctx) {
 	scgi_env_add(p->scgi_env, CONST_STR_LEN("CONTENT_LENGTH"), buf, strlen(buf));
 	scgi_env_add(p->scgi_env, CONST_STR_LEN("SCGI"), CONST_STR_LEN("1"));
 
-
-	if (buffer_is_empty(con->conf.server_tag)) {
-		scgi_env_add(p->scgi_env, CONST_STR_LEN("SERVER_SOFTWARE"), CONST_STR_LEN(PACKAGE_DESC));
-	} else {
-		scgi_env_add(p->scgi_env, CONST_STR_LEN("SERVER_SOFTWARE"), CONST_BUF_LEN(con->conf.server_tag));
-	}
+	scgi_env_add(p->scgi_env, CONST_STR_LEN("SERVER_SOFTWARE"), CONST_BUF_LEN(con->conf.server_tag));
 
 	if (!buffer_is_empty(con->server_name)) {
 		size_t len = buffer_string_length(con->server_name);

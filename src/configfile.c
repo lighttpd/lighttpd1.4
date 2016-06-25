@@ -9,6 +9,7 @@
 #include "configfile.h"
 #include "proc_open.h"
 #include "request.h"
+#include "version.h"
 
 #include <sys/stat.h>
 
@@ -206,7 +207,7 @@ static int config_insert(server *srv) {
 		s->ssl_ca_file   = buffer_init();
 		s->error_handler = buffer_init();
 		s->error_handler_404 = buffer_init();
-		s->server_tag    = buffer_init();
+		s->server_tag    = buffer_init_string(PACKAGE_DESC);
 		s->ssl_cipher_list = buffer_init();
 		s->ssl_dh_file   = buffer_init();
 		s->ssl_ec_curve  = buffer_init();
