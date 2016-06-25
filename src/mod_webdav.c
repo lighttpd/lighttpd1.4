@@ -2671,10 +2671,6 @@ propmatch_cleanup:
 				CONST_BUF_LEN(p->tmp_buf),
 				SQLITE_TRANSIENT);
 
-			sqlite3_bind_text(stmt, 2,
-				CONST_BUF_LEN(con->uri.path),
-				SQLITE_TRANSIENT);
-
 			if (SQLITE_DONE != sqlite3_step(stmt)) {
 				log_error_write(srv, __FILE__, __LINE__, "ss",
 					"remove lock:", sqlite3_errmsg(p->conf.sql));
