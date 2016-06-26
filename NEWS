@@ -133,6 +133,19 @@ ixes #1184, fixes #2143, #2258, #2281, fixes #946, fixes #1330, fixes #602, #101
   * [build_cmake] use MODULE on Mac OS X (fixes #1761)
   * [config] server.bsd-accept-filter option
   * [mod_webdav] create file w/ LOCK request if ENOENT
+  * [core] buffer large responses to tempfiles (fixes #758, fixes #760, fixes #933, fixes #1387, #1283, fixes #2083)
+  * [core] stream response to client (#949)
+  * [TLS] release openssl buffers as used (fixes #1265, fixes #1283, #881)
+  * [config] config options to stream request/response (#949, #376)
+  * [core] option to stream request body to backend (fixes #376)
+  * [core] option to stream response body to client (fixes #949, #760, #1283, #1387)
+  * drain backend socket/pipe bufs upon FDEVENT_HUP
+  * remove excess calls to joblist_append()
+  * defer choosing "Transfer-Encoding: chunked"
+  * asynchronous, bidirectional streaming options
+  * fix errors detected by Coverity Scan
+  * [cygwin] fix mod_proxy and mod_fastcgi ioctl use
+  * [mod_webdav] remove excess SQL param to UNLOCK
 
 - 1.4.39 - 2016-01-02
   * [core] fix memset_s call (fixes #2698)
