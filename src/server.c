@@ -1741,6 +1741,7 @@ int main (int argc, char **argv) {
 			/* we are in graceful shutdown phase and all connections are closed
 			 * we are ready to terminate without harming anyone */
 			srv_shutdown = 1;
+			break;
 		}
 
 		/* we still have some fds to share */
