@@ -199,7 +199,7 @@ int fdevent_poll_init(fdevents *ev) {
 int fdevent_poll_init(fdevents *ev) {
 	UNUSED(ev);
 
-	log_error_write(srv, __FILE__, __LINE__,
+	log_error_write(ev->srv, __FILE__, __LINE__,
 		"s", "poll is not supported, try to set server.event-handler = \"select\"");
 
 	return -1;

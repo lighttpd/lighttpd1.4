@@ -175,7 +175,6 @@ int plugins_load(server *srv) {
 int plugins_load(server *srv) {
 	plugin *p;
 	int (*init)(plugin *pl);
-	const char *error;
 	size_t i, j;
 
 	for (i = 0; i < srv->srvconf.modules->used; i++) {
@@ -263,8 +262,13 @@ int plugins_load(server *srv) {
 #else
 		*(void **)(&init) = dlsym(p->lib, srv->tmp_buf->ptr);
 #endif
-		if ((error = dlerror()) != NULL)  {
-			log_error_write(srv, __FILE__, __LINE__, "s", error);
+		if (NULL == init) {
+			const char *error = dlerror();
+			if (error != NULL) {
+				log_error_write(srv, __FILE__, __LINE__, "ss", "dlsym:", error);
+			} else {
+				log_error_write(srv, __FILE__, __LINE__, "ss", "dlsym symbol not found:", srv->tmp_buf->ptr);
+			}
 
 			plugin_free(p);
 			return -1;
