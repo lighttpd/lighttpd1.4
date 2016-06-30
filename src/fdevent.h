@@ -16,12 +16,14 @@
 
 #if defined(HAVE_EPOLL_CTL) && defined(HAVE_SYS_EPOLL_H)
 # define USE_LINUX_EPOLL
+struct epoll_event;     /* declaration */
 #endif
 
 /* MacOS 10.3.x has poll.h under /usr/include/, all other unixes
  * under /usr/include/sys/ */
 #if defined HAVE_POLL && (defined(HAVE_SYS_POLL_H) || defined(HAVE_POLL_H))
 # define USE_POLL
+struct pollfd;          /* declaration */
 #endif
 
 #if defined HAVE_SELECT
@@ -36,6 +38,7 @@
 
 #if defined HAVE_SYS_DEVPOLL_H && defined(__sun)
 # define USE_SOLARIS_DEVPOLL
+struct pollfd;          /* declaration */
 #endif
 
 #if defined HAVE_PORT_H && defined HAVE_PORT_CREATE && defined(__sun)
@@ -45,13 +48,15 @@
 
 #if defined HAVE_SYS_EVENT_H && defined HAVE_KQUEUE
 # define USE_FREEBSD_KQUEUE
+struct kevent;          /* declaration */
 #endif
 
 #if defined HAVE_LIBEV
 # define USE_LIBEV
+struct ev_loop;         /* declaration */
 #endif
 
-struct server;
+struct server;          /* declaration */
 
 typedef handler_t (*fdevent_handler)(struct server *srv, void *ctx, int revents);
 
