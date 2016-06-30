@@ -530,6 +530,10 @@ static int server_oneshot_init(server *srv, int fd) {
 		return 0;
 	}
 
+	if (cnt_addr.plain.sa_family != AF_UNIX) {
+		network_accept_tcp_nagle_disable(fd);
+	}
+
 	con = connection_accepted(srv, srv_socket, &cnt_addr, fd);
 	if (NULL == con) return 0;
 

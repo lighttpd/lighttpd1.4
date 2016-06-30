@@ -50,6 +50,28 @@ static void ssl_info_callback(const SSL *ssl, int where, int ret) {
 }
 #endif
 
+void
+network_accept_tcp_nagle_disable (const int fd)
+{
+    static int noinherit_tcpnodelay = -1;
+    int opt;
+
+    if (!noinherit_tcpnodelay) /* TCP_NODELAY inherited from listen socket */
+        return;
+
+    if (noinherit_tcpnodelay < 0) {
+        socklen_t optlen = sizeof(opt);
+        if (0 == getsockopt(fd, IPPROTO_TCP, TCP_NODELAY, &opt, &optlen)) {
+            noinherit_tcpnodelay = !opt;
+            if (opt)           /* TCP_NODELAY inherited from listen socket */
+                return;
+        }
+    }
+
+    opt = 1;
+    (void)setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, &opt, sizeof(opt));
+}
+
 static handler_t network_server_handle_fdevent(server *srv, void *context, int revents) {
 	server_socket *srv_socket = (server_socket *)context;
 	connection *con;
@@ -406,6 +428,14 @@ static int network_server_init(server *srv, buffer *host_token, specific_config 
 	if (setsockopt(srv_socket->fd, SOL_SOCKET, SO_REUSEADDR, &val, sizeof(val)) < 0) {
 		log_error_write(srv, __FILE__, __LINE__, "ss", "socketsockopt(SO_REUSEADDR) failed:", strerror(errno));
 		goto error_free_socket;
+	}
+
+	if (srv_socket->addr.plain.sa_family != AF_UNIX) {
+		val = 1;
+		if (setsockopt(srv_socket->fd, IPPROTO_TCP, TCP_NODELAY, &val, sizeof(val)) < 0) {
+			log_error_write(srv, __FILE__, __LINE__, "ss", "socketsockopt(TCP_NODELAY) failed:", strerror(errno));
+			goto error_free_socket;
+		}
 	}
 
 	if (0 != bind(srv_socket->fd, (struct sockaddr *) &(srv_socket->addr), addr_len)) {
