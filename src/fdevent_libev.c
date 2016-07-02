@@ -89,28 +89,15 @@ static void timeout_watcher_cb(struct ev_loop *loop, ev_timer *w, int revents) {
 	UNUSED(loop);
 	UNUSED(w);
 	UNUSED(revents);
-
-	ev_timer_stop(loop, w);
 }
 
+static ev_timer timeout_watcher;
 
 static int fdevent_libev_poll(fdevents *ev, int timeout_ms) {
-	union {
-		struct ev_watcher w;
-		struct ev_timer timer;
-	} timeout_watcher;
+	timeout_watcher.repeat = (timeout_ms > 0) ? timeout_ms/1000.0 : 0.001;
 
-	if (!timeout_ms) timeout_ms = 1;
-
-	ev_init(&timeout_watcher.w, NULL);
-	ev_set_cb(&timeout_watcher.timer, timeout_watcher_cb);
-	timeout_watcher.timer.repeat = ((ev_tstamp) timeout_ms)/1000.0;
-	force_assert(timeout_watcher.timer.repeat);
-	ev_timer_again(ev->libev_loop, &timeout_watcher.timer);
-
-	ev_loop(ev->libev_loop, EVLOOP_ONESHOT);
-
-	ev_timer_stop(ev->libev_loop, &timeout_watcher.timer);
+	ev_timer_again(ev->libev_loop, &timeout_watcher);
+	ev_run(ev->libev_loop, EVRUN_ONCE);
 
 	return 0;
 }
@@ -166,6 +153,8 @@ int fdevent_libev_init(fdevents *ev) {
 
 		return -1;
 	}
+
+	ev_timer_init(&timeout_watcher, timeout_watcher_cb, 0.0, 1.0);
 
 	return 0;
 }
