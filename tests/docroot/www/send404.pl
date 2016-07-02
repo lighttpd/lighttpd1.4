@@ -1,5 +1,6 @@
 #!/usr/bin/env perl
-use CGI qw/:standard/;
-print header ( -status => 404
-               -type   => 'text/plain' );
-print ("send404\n");
+
+print "Status: 404\n",
+      "Content-Type: text/plain\n",
+      "\n",
+      "send404\n";
