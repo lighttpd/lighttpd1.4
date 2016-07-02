@@ -92,6 +92,7 @@ int network_write_chunkqueue_write(server *srv, connection *con, int fd, chunkqu
 	return 0;
 }
 
+#if defined(USE_SENDFILE)
 int network_write_chunkqueue_sendfile(server *srv, connection *con, int fd, chunkqueue *cq, off_t max_bytes) {
 	while (max_bytes > 0 && NULL != cq->first) {
 		int r = -1;
@@ -111,3 +112,4 @@ int network_write_chunkqueue_sendfile(server *srv, connection *con, int fd, chun
 
 	return 0;
 }
+#endif
