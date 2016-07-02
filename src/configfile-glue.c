@@ -253,7 +253,12 @@ static int config_addrstr_eq_remote_ip_mask(server *srv, const char *addrstr, in
 #ifdef HAVE_IPV6
 		} else if (rmt->plain.sa_family == AF_INET6
 			   && IN6_IS_ADDR_V4MAPPED(&rmt->ipv6.sin6_addr)) {
-			in_addr_t x = *(in_addr_t *)(rmt->ipv6.sin6_addr.s6_addr+12);
+		      #ifdef s6_addr32
+			in_addr_t x = rmt->ipv6.sin6_addr.s6_addr32[3];
+		      #else
+			in_addr_t x;
+			memcpy(&x, rmt->ipv6.sin6_addr.s6_addr+12, sizeof(in_addr_t));
+		      #endif
 			return ((val.ipv4.sin_addr.s_addr & nm) == (x & nm));
 #endif
 		} else {
@@ -277,9 +282,14 @@ static int config_addrstr_eq_remote_ip_mask(server *srv, const char *addrstr, in
 			return match;
 		} else if (rmt->plain.sa_family == AF_INET
 			   && IN6_IS_ADDR_V4MAPPED(&val.ipv6.sin6_addr)) {
-			in_addr_t x = *(in_addr_t *)(val.ipv6.sin6_addr.s6_addr+12);
 			uint32_t nm =
 			  nm_bits < 128 ? htonl(~(~0u >> (nm_bits > 96 ? nm_bits - 96 : 0))) : ~0u;
+		      #ifdef s6_addr32
+			in_addr_t x = val.ipv6.sin6_addr.s6_addr32[3];
+		      #else
+			in_addr_t x;
+			memcpy(&x, val.ipv6.sin6_addr.s6_addr+12, sizeof(in_addr_t));
+		      #endif
 			return ((x & nm) == (rmt->ipv4.sin_addr.s_addr & nm));
 		} else {
 			return 0;
