@@ -358,7 +358,7 @@ static void server_free(server *srv) {
 #ifdef USE_OPENSSL
 			SSL_CTX_free(s->ssl_ctx);
 			EVP_PKEY_free(s->ssl_pemfile_pkey);
-			X509_free(s->ssl_pemfile_x509);
+			if (NULL != s->ssl_pemfile_x509s) sk_X509_pop_free(s->ssl_pemfile_x509s, X509_free);
 			if (NULL != s->ssl_ca_file_cert_names) sk_X509_NAME_pop_free(s->ssl_ca_file_cert_names, X509_NAME_free);
 #endif
 			free(s);

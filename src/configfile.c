@@ -474,7 +474,7 @@ int config_setup_connection(server *srv, connection *con) {
 
 	PATCH(ssl_pemfile);
 #ifdef USE_OPENSSL
-	PATCH(ssl_pemfile_x509);
+	PATCH(ssl_pemfile_x509s);
 	PATCH(ssl_pemfile_pkey);
 #endif
 	PATCH(ssl_ca_file);
@@ -548,7 +548,7 @@ int config_patch_connection(server *srv, connection *con) {
 			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("ssl.pemfile"))) {
 				PATCH(ssl_pemfile);
 #ifdef USE_OPENSSL
-				PATCH(ssl_pemfile_x509);
+				PATCH(ssl_pemfile_x509s);
 				PATCH(ssl_pemfile_pkey);
 #endif
 			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("ssl.ca-file"))) {

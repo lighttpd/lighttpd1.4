@@ -126,7 +126,7 @@ static int network_ssl_servername_callback(SSL *ssl, int *al, server *srv) {
 	con->conditional_is_valid[COMP_HTTP_HOST] = 1;
 	config_patch_connection(srv, con);
 
-	if (NULL == con->conf.ssl_pemfile_x509 || NULL == con->conf.ssl_pemfile_pkey) {
+	if (NULL == con->conf.ssl_pemfile_x509s || NULL == con->conf.ssl_pemfile_pkey) {
 		/* x509/pkey available <=> pemfile was set <=> pemfile got patched: so this should never happen, unless you nest $SERVER["socket"] */
 		log_error_write(srv, __FILE__, __LINE__, "ssb", "SSL:",
 			"no certificate/private key for TLS server name", con->tlsext_server_name);
@@ -134,14 +134,14 @@ static int network_ssl_servername_callback(SSL *ssl, int *al, server *srv) {
 	}
 
 	/* first set certificate! setting private key checks whether certificate matches it */
-	if (!SSL_use_certificate(ssl, con->conf.ssl_pemfile_x509)) {
+	if (SSL_use_certificate(ssl, sk_X509_value(con->conf.ssl_pemfile_x509s, 0)) != 1) {
 		log_error_write(srv, __FILE__, __LINE__, "ssb:s", "SSL:",
 			"failed to set certificate for TLS server name", con->tlsext_server_name,
 			ERR_error_string(ERR_get_error(), NULL));
 		return SSL_TLSEXT_ERR_ALERT_FATAL;
 	}
 
-	if (!SSL_use_PrivateKey(ssl, con->conf.ssl_pemfile_pkey)) {
+	if (SSL_use_PrivateKey(ssl, con->conf.ssl_pemfile_pkey) != 1) {
 		log_error_write(srv, __FILE__, __LINE__, "ssb:s", "SSL:",
 			"failed to set private key for TLS server name", con->tlsext_server_name,
 			ERR_error_string(ERR_get_error(), NULL));
@@ -569,13 +569,20 @@ typedef enum {
 } network_backend_t;
 
 #ifdef USE_OPENSSL
-static X509* x509_load_pem_file(server *srv, const char *file) {
+static STACK_OF(X509)* x509s_load_pem_file(server *srv, const char *file) {
 	BIO *in;
 	X509 *x = NULL;
+	STACK_OF(X509) *x509s = NULL;
+	int err = 0;
 
 	in = BIO_new(BIO_s_file());
 	if (NULL == in) {
 		log_error_write(srv, __FILE__, __LINE__, "S", "SSL: BIO_new(BIO_s_file()) failed");
+		goto error;
+	}
+	x509s = sk_X509_new_null();
+	if (NULL == x509s) {
+		log_error_write(srv, __FILE__, __LINE__, "S", "SSL: sk_X509_new() failed");
 		goto error;
 	}
 
@@ -583,19 +590,48 @@ static X509* x509_load_pem_file(server *srv, const char *file) {
 		log_error_write(srv, __FILE__, __LINE__, "SSS", "SSL: BIO_read_filename('", file,"') failed");
 		goto error;
 	}
-	x = PEM_read_bio_X509(in, NULL, NULL, NULL);
+	while (NULL != (x = PEM_read_bio_X509(in, NULL, NULL, NULL))) {
+		if (!sk_X509_push(x509s, x)) {
+			log_error_write(srv, __FILE__, __LINE__, "S", "SSL: sk_X509_push() failed");
+			goto error;
+		}
+	}
+	if (sk_X509_num(x509s) > 0 && (err = ERR_peek_error()) > 0) {
+		if (ERR_GET_LIB(err) == ERR_LIB_PEM && ERR_GET_REASON(err) == PEM_R_NO_START_LINE) {
+			while (ERR_get_error() > 0) {
+				/* discard EOF error */
+			}
+			err = 0;
+		}
+	}
 
-	if (NULL == x) {
-		log_error_write(srv, __FILE__, __LINE__, "SSS", "SSL: couldn't read X509 certificate from '", file,"'");
+	if (sk_X509_num(x509s) < 1 || err > 0) {
+		log_error_write(srv, __FILE__, __LINE__, "SSS", "SSL: couldn't read X509 certificate(s) from '", file,"'");
 		goto error;
 	}
 
 	BIO_free(in);
-	return x;
+	return x509s;
 
 error:
 	if (NULL != in) BIO_free(in);
+	if (NULL != x509s) sk_X509_pop_free(x509s, X509_free);
 	return NULL;
+}
+
+static int SSL_CTX_use_certificate_chain(SSL_CTX *ctx, STACK_OF(X509) *x509s) {
+	int i;
+
+	if (sk_X509_num(x509s) < 1 || SSL_CTX_use_certificate(ctx, sk_X509_value(x509s, 0)) != 1) {
+		return 0;
+	}
+
+	for (i=1; i < sk_X509_num(x509s); ++i) {
+		if (SSL_CTX_add_extra_chain_cert(ctx, X509_dup(sk_X509_value(x509s, i))) != 1)
+			return 0;
+	}
+
+	return 1;
 }
 
 static EVP_PKEY* evp_pkey_load_pem_file(server *srv, const char *file) {
@@ -642,10 +678,10 @@ static int network_openssl_load_pemfile(server *srv, size_t ndx) {
 	}
 #endif
 
-	if (NULL == (s->ssl_pemfile_x509 = x509_load_pem_file(srv, s->ssl_pemfile->ptr))) return -1;
+	if (NULL == (s->ssl_pemfile_x509s = x509s_load_pem_file(srv, s->ssl_pemfile->ptr))) return -1;
 	if (NULL == (s->ssl_pemfile_pkey = evp_pkey_load_pem_file(srv, s->ssl_pemfile->ptr))) return -1;
 
-	if (!X509_check_private_key(s->ssl_pemfile_x509, s->ssl_pemfile_pkey)) {
+	if (!X509_check_private_key(sk_X509_value(s->ssl_pemfile_x509s, 0), s->ssl_pemfile_pkey)) {
 		log_error_write(srv, __FILE__, __LINE__, "sssb", "SSL:",
 				"Private key does not match the certificate public key, reason:",
 				ERR_error_string(ERR_get_error(), NULL),
@@ -951,13 +987,13 @@ int network_init(server *srv) {
 			SSL_CTX_set_verify_depth(s->ssl_ctx, s->ssl_verifyclient_depth);
 		}
 
-		if (SSL_CTX_use_certificate(s->ssl_ctx, s->ssl_pemfile_x509) < 0) {
+		if (SSL_CTX_use_certificate_chain(s->ssl_ctx, s->ssl_pemfile_x509s) != 1) {
 			log_error_write(srv, __FILE__, __LINE__, "ssb", "SSL:",
 					ERR_error_string(ERR_get_error(), NULL), s->ssl_pemfile);
 			return -1;
 		}
 
-		if (SSL_CTX_use_PrivateKey(s->ssl_ctx, s->ssl_pemfile_pkey) < 0) {
+		if (SSL_CTX_use_PrivateKey(s->ssl_ctx, s->ssl_pemfile_pkey) != 1) {
 			log_error_write(srv, __FILE__, __LINE__, "ssb", "SSL:",
 					ERR_error_string(ERR_get_error(), NULL), s->ssl_pemfile);
 			return -1;
@@ -977,8 +1013,8 @@ int network_init(server *srv) {
 					    | SSL_MODE_RELEASE_BUFFERS);
 
 # ifndef OPENSSL_NO_TLSEXT
-		if (!SSL_CTX_set_tlsext_servername_callback(s->ssl_ctx, network_ssl_servername_callback) ||
-		    !SSL_CTX_set_tlsext_servername_arg(s->ssl_ctx, srv)) {
+		if (SSL_CTX_set_tlsext_servername_callback(s->ssl_ctx, network_ssl_servername_callback) != 1 ||
+		    SSL_CTX_set_tlsext_servername_arg(s->ssl_ctx, srv) != 1) {
 			log_error_write(srv, __FILE__, __LINE__, "ss", "SSL:",
 					"failed to initialize TLS servername callback, openssl library does not support TLS servername extension");
 			return -1;

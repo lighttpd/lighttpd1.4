@@ -336,7 +336,7 @@ typedef struct {
 	SSL_CTX *ssl_ctx; /* not patched */
 	/* SNI per host: with COMP_SERVER_SOCKET, COMP_HTTP_SCHEME, COMP_HTTP_HOST */
 	EVP_PKEY *ssl_pemfile_pkey;
-	X509 *ssl_pemfile_x509;
+	STACK_OF(X509) *ssl_pemfile_x509s;
 	STACK_OF(X509_NAME) *ssl_ca_file_cert_names;
 #endif
 } specific_config;
