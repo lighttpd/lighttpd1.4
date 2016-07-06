@@ -173,6 +173,14 @@ check_c_source_compiles("
 		__dummy(x);
 	}
 	" HAVE_WEAK_SYMBOLS)
+check_c_source_compiles("
+	#include <time.h>
+	int main(void) {
+		struct tm t;
+		t.tm_gmtoff = 0;
+		return 0;
+	}
+	" HAVE_STRUCT_TM_GMTOFF)
 
 ## refactor me
 macro(XCONFIG _package _include_DIR _link_DIR _link_FLAGS _cflags)
