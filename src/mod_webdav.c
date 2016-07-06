@@ -939,8 +939,10 @@ static int webdav_get_live_property(server *srv, connection *con, plugin_data *p
 		if (0 == strcmp(prop_name, "resourcetype")) {
 			if (S_ISDIR(sce->st.st_mode)) {
 				buffer_append_string_len(b, CONST_STR_LEN("<D:resourcetype><D:collection/></D:resourcetype>"));
-				found = 1;
+			} else {
+				buffer_append_string_len(b, CONST_STR_LEN("<D:resourcetype/>"));
 			}
+			found = 1;
 		} else if (0 == strcmp(prop_name, "getcontenttype")) {
 			if (S_ISDIR(sce->st.st_mode)) {
 				buffer_append_string_len(b, CONST_STR_LEN("<D:getcontenttype>httpd/unix-directory</D:getcontenttype>"));
@@ -1698,6 +1700,9 @@ SUBREQUEST_FUNC(mod_webdav_subrequest_handler_huge) {
 
 				if (-1 == rmdir(con->physical.path->ptr)) {
 					switch(errno) {
+					case EPERM:
+						con->http_status = 403;
+						break;
 					case ENOENT:
 						con->http_status = 404;
 						break;
@@ -2365,6 +2370,7 @@ SUBREQUEST_FUNC(mod_webdav_subrequest_handler_huge) {
 					}
 					con->file_finished = 1;
 
+					xmlFreeDoc(xml);
 					return HANDLER_FINISHED;
 				}
 
