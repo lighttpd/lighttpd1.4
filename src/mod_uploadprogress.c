@@ -100,8 +100,8 @@ static int connection_map_insert(connection_map *cm, connection *con, buffer *co
 		cme = cm->ptr[cm->used];
 	} else {
 		cme = malloc(sizeof(*cme));
+		cme->con_id = buffer_init();
 	}
-	cme->con_id = buffer_init();
 	buffer_copy_buffer(cme->con_id, con_id);
 	cme->con = con;
 
@@ -276,20 +276,29 @@ static int mod_uploadprogress_patch_connection(server *srv, connection *con, plu
 
 URIHANDLER_FUNC(mod_uploadprogress_uri_handler) {
 	plugin_data *p = p_d;
-	size_t i;
+	size_t i, len;
 	data_string *ds;
 	buffer *b;
 	connection *post_con = NULL;
 
 	UNUSED(srv);
 
-	if (con->uri.path->used == 0) return HANDLER_GO_ON;
+	if (buffer_string_is_empty(con->uri.path)) return HANDLER_GO_ON;
+	switch(con->request.http_method) {
+	case HTTP_METHOD_GET:
+	case HTTP_METHOD_POST: break;
+	default:               return HANDLER_GO_ON;
+	}
 
 	mod_uploadprogress_patch_connection(srv, con, p);
+	if (buffer_string_is_empty(p->conf.progress_url)) return HANDLER_GO_ON;
 
-	/* check if this is a POST request */
-	switch(con->request.http_method) {
-	case HTTP_METHOD_POST:
+	if (con->request.http_method == HTTP_METHOD_GET) {
+		if (!buffer_is_equal(con->uri.path, p->conf.progress_url)) {
+			return HANDLER_GO_ON;
+		}
+	}
+
 		/* the request has to contain a 32byte ID */
 
 		if (NULL == (ds = (data_string *)array_get_element(con->request.headers, "X-Progress-ID"))) {
@@ -303,13 +312,14 @@ URIHANDLER_FUNC(mod_uploadprogress_uri_handler) {
 			b = ds->value;
 		}
 
-		if (b->used != 32 + 1) {
+		len = buffer_string_length(b);
+		if (len != 32) {
 			log_error_write(srv, __FILE__, __LINE__, "sd",
-					"len of progress-id != 32:", b->used - 1);
+					"len of progress-id != 32:", len);
 			return HANDLER_GO_ON;
 		}
 
-		for (i = 0; i < b->used - 1; i++) {
+		for (i = 0; i < len; i++) {
 			char c = b->ptr[i];
 
 			if (!light_isxdigit(c)) {
@@ -318,42 +328,15 @@ URIHANDLER_FUNC(mod_uploadprogress_uri_handler) {
 				return HANDLER_GO_ON;
 			}
 		}
+
+	/* check if this is a POST request */
+	switch(con->request.http_method) {
+	case HTTP_METHOD_POST:
 
 		connection_map_insert(p->con_map, con, b);
 
 		return HANDLER_GO_ON;
 	case HTTP_METHOD_GET:
-		if (!buffer_is_equal(con->uri.path, p->conf.progress_url)) {
-			return HANDLER_GO_ON;
-		}
-
-		if (NULL == (ds = (data_string *)array_get_element(con->request.headers, "X-Progress-ID"))) {
-			if (!buffer_string_is_empty(con->uri.query)) {
-				/* perhaps the GET request is using the querystring to pass the X-Progress-ID */
-				b = con->uri.query;
-			} else {
-				return HANDLER_GO_ON;
-			}
-		} else {
-			b = ds->value;
-		}
-
-		if (b->used != 32 + 1) {
-			log_error_write(srv, __FILE__, __LINE__, "sd",
-					"len of progress-id != 32:", b->used - 1);
-			return HANDLER_GO_ON;
-		}
-
-		for (i = 0; i < b->used - 1; i++) {
-			char c = b->ptr[i];
-
-			if (!light_isxdigit(c)) {
-				log_error_write(srv, __FILE__, __LINE__, "sb",
-						"non-xdigit in progress-id:", b);
-				return HANDLER_GO_ON;
-			}
-		}
-
 		buffer_reset(con->physical.path);
 
 		con->file_started = 1;
@@ -367,7 +350,7 @@ URIHANDLER_FUNC(mod_uploadprogress_uri_handler) {
 			log_error_write(srv, __FILE__, __LINE__, "sb",
 					"ID no known:", b);
 
-			chunkqueue_get_append_mem(con->write_queue, CONST_STR_LEN("starting"));
+			chunkqueue_get_append_mem(con->write_queue, CONST_STR_LEN("not in progress"));
 
 			return HANDLER_FINISHED;
 		}
@@ -415,7 +398,8 @@ REQUESTDONE_FUNC(mod_uploadprogress_request_done) {
 
 	UNUSED(srv);
 
-	if (con->uri.path->used == 0) return HANDLER_GO_ON;
+	if (con->request.http_method != HTTP_METHOD_POST) return HANDLER_GO_ON;
+	if (buffer_string_is_empty(con->uri.path)) return HANDLER_GO_ON;
 
 	if (connection_map_remove_connection(p->con_map, con)) {
 		/* removed */
@@ -434,6 +418,7 @@ int mod_uploadprogress_plugin_init(plugin *p) {
 	p->init        = mod_uploadprogress_init;
 	p->handle_uri_clean  = mod_uploadprogress_uri_handler;
 	p->handle_request_done  = mod_uploadprogress_request_done;
+	p->handle_connection_close  = mod_uploadprogress_request_done;
 	p->set_defaults  = mod_uploadprogress_set_defaults;
 	p->cleanup     = mod_uploadprogress_free;
 
