@@ -141,8 +141,6 @@ int fdevent_unregister(fdevents *ev, int fd) {
 	if (!ev) return 0;
 	fdn = ev->fdarray[fd];
 
-	force_assert(fdn->events == 0);
-
 	fdnode_free(fdn);
 
 	ev->fdarray[fd] = NULL;
