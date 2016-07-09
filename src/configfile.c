@@ -165,7 +165,6 @@ static int config_insert(server *srv) {
 
 	cv[10].destination = srv->srvconf.event_handler;
 	cv[11].destination = srv->srvconf.pid_file;
-	cv[12].destination = &(srv->srvconf.max_request_size);
 	cv[13].destination = &(srv->srvconf.max_worker);
 
 	cv[23].destination = &(srv->srvconf.max_fds);
@@ -222,6 +221,7 @@ static int config_insert(server *srv) {
 		s->max_keep_alive_idle = 5;
 		s->max_read_idle = 60;
 		s->max_write_idle = 360;
+		s->max_request_size = 0;
 		s->use_xattr     = 0;
 		s->ssl_enabled   = 0;
 		s->ssl_honor_cipher_order = 1;
@@ -259,6 +259,7 @@ static int config_insert(server *srv) {
 		cv[7].destination = s->server_tag;
 		cv[8].destination = &(s->use_ipv6);
 
+		cv[12].destination = &(s->max_request_size);
 		cv[14].destination = s->document_root;
 		cv[15].destination = &(s->force_lowercase_filenames);
 		cv[16].destination = &(s->log_condition_handling);
@@ -441,6 +442,7 @@ int config_setup_connection(server *srv, connection *con) {
 	PATCH(max_keep_alive_idle);
 	PATCH(max_read_idle);
 	PATCH(max_write_idle);
+	PATCH(max_request_size);
 	PATCH(use_xattr);
 	PATCH(error_handler);
 	PATCH(error_handler_404);
@@ -537,6 +539,8 @@ int config_patch_connection(server *srv, connection *con) {
 				PATCH(max_write_idle);
 			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("server.max-read-idle"))) {
 				PATCH(max_read_idle);
+			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("server.max-request-size"))) {
+				PATCH(max_request_size);
 			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("mimetype.use-xattr"))) {
 				PATCH(use_xattr);
 			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("etag.use-inode"))) {

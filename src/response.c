@@ -341,6 +341,18 @@ handler_t http_response_prepare(server *srv, connection *con) {
 			log_error_write(srv, __FILE__, __LINE__,  "sb", "URI-query       : ", con->uri.query);
 		}
 
+		/* con->conf.max_request_size is in kBytes */
+		if (0 != con->conf.max_request_size &&
+		    (off_t)con->request.content_length > ((off_t)con->conf.max_request_size << 10)) {
+			log_error_write(srv, __FILE__, __LINE__, "sos",
+					"request-size too long:", (off_t) con->request.content_length, "-> 413");
+			con->keep_alive = 0;
+			con->http_status = 413;
+			con->file_finished = 1;
+
+			return HANDLER_FINISHED;
+		}
+
 
 		/**
 		 *

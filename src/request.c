@@ -1277,22 +1277,6 @@ int http_request_parse(server *srv, connection *con) {
 			return 0;
 		}
 
-		/* srvconf.max_request_size is in kBytes */
-		if (srv->srvconf.max_request_size != 0 &&
-		    (off_t)con->request.content_length > ((off_t)srv->srvconf.max_request_size << 10)) {
-			/* the request body itself is larger then
-			 * our our max_request_size
-			 */
-
-			con->http_status = 413;
-			con->keep_alive = 0;
-
-			log_error_write(srv, __FILE__, __LINE__, "sos",
-					"request-size too long:", (off_t) con->request.content_length, "-> 413");
-			return 0;
-		}
-
-
 		/* we have content */
 		if (con->request.content_length != 0) {
 			return 1;

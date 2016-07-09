@@ -543,7 +543,6 @@ typedef struct {
 	unsigned short max_worker;
 	unsigned short max_fds;
 	unsigned short max_conns;
-	unsigned int max_request_size;
 
 	unsigned short log_request_header_on_error;
 	unsigned short log_state_handling;
