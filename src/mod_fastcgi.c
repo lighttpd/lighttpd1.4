@@ -1194,7 +1194,8 @@ static fcgi_extension_host * unixsocket_is_dup(plugin_data *p, size_t used, buff
 			for (n = 0; n < ex->used; ++n) {
 				fcgi_extension_host *host = ex->hosts[n];
 				if (!buffer_string_is_empty(host->unixsocket)
-				    && buffer_is_equal(host->unixsocket, unixsocket))
+				    && buffer_is_equal(host->unixsocket, unixsocket)
+				    && !buffer_string_is_empty(host->bin_path))
 					return host;
 			}
 		}
@@ -1392,6 +1393,12 @@ SETDEFAULTS_FUNC(mod_fastcgi_set_defaults) {
 						if (!buffer_string_is_empty(host->bin_path)) {
 							fcgi_extension_host *duplicate = unixsocket_is_dup(p, i+1, host->unixsocket);
 							if (NULL != duplicate) {
+								if (!buffer_is_equal(host->bin_path, duplicate->bin_path)) {
+									log_error_write(srv, __FILE__, __LINE__, "sb",
+										"duplicate unixsocket path:",
+										host->unixsocket);
+									goto error;
+								}
 								fastcgi_host_free(host);
 								host = duplicate;
 								++host->refcount;

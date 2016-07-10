@@ -961,7 +961,8 @@ static scgi_extension_host * unixsocket_is_dup(plugin_data *p, size_t used, buff
 			for (n = 0; n < ex->used; ++n) {
 				scgi_extension_host *host = ex->hosts[n];
 				if (!buffer_string_is_empty(host->unixsocket)
-				    && buffer_is_equal(host->unixsocket, unixsocket))
+				    && buffer_is_equal(host->unixsocket, unixsocket)
+				    && !buffer_string_is_empty(host->bin_path))
 					return host;
 			}
 		}
@@ -1144,6 +1145,12 @@ SETDEFAULTS_FUNC(mod_scgi_set_defaults) {
 						if (!buffer_string_is_empty(df->bin_path)) {
 							scgi_extension_host *duplicate = unixsocket_is_dup(p, i+1, df->unixsocket);
 							if (NULL != duplicate) {
+								if (!buffer_is_equal(df->bin_path, duplicate->bin_path)) {
+									log_error_write(srv, __FILE__, __LINE__, "sb",
+										"duplicate unixsocket path:",
+										df->unixsocket);
+									goto error;
+								}
 								scgi_host_free(df);
 								df = duplicate;
 								++df->refcount;
