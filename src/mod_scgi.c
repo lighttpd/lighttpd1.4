@@ -229,6 +229,7 @@ typedef struct {
 	to die and decrements its afterwards */
 
 	int listen_backlog;
+	int refcount;
 } scgi_extension_host;
 
 /*
@@ -422,6 +423,10 @@ static scgi_extension_host *scgi_host_init(void) {
 
 static void scgi_host_free(scgi_extension_host *h) {
 	if (!h) return;
+	if (h->refcount) {
+		--h->refcount;
+		return;
+	}
 
 	buffer_free(h->host);
 	buffer_free(h->unixsocket);
@@ -947,7 +952,7 @@ static int scgi_spawn_connection(server *srv,
 
 #endif /* HAVE_FORK */
 
-static int unixsocket_is_dup(plugin_data *p, size_t used, buffer *unixsocket) {
+static scgi_extension_host * unixsocket_is_dup(plugin_data *p, size_t used, buffer *unixsocket) {
 	size_t i, j, n;
 	for (i = 0; i < used; ++i) {
 		scgi_exts *exts = p->config_storage[i]->exts;
@@ -957,12 +962,12 @@ static int unixsocket_is_dup(plugin_data *p, size_t used, buffer *unixsocket) {
 				scgi_extension_host *host = ex->hosts[n];
 				if (!buffer_string_is_empty(host->unixsocket)
 				    && buffer_is_equal(host->unixsocket, unixsocket))
-					return 1;
+					return host;
 			}
 		}
 	}
 
-	return 0;
+	return NULL;
 }
 
 SETDEFAULTS_FUNC(mod_scgi_set_defaults) {
@@ -1091,6 +1096,7 @@ SETDEFAULTS_FUNC(mod_scgi_set_defaults) {
 					df->fix_root_path_name = 0;
 					df->listen_backlog = 1024;
 					df->xsendfile_allow = 0;
+					df->refcount = 0;
 
 					fcv[0].destination = df->host;
 					fcv[1].destination = df->docroot;
@@ -1135,12 +1141,13 @@ SETDEFAULTS_FUNC(mod_scgi_set_defaults) {
 							goto error;
 						}
 
-						if (!buffer_string_is_empty(df->bin_path)
-						    && unixsocket_is_dup(p, i+1, df->unixsocket)) {
-							log_error_write(srv, __FILE__, __LINE__, "sb",
-									"duplicate unixsocket path:",
-									df->unixsocket);
-							goto error;
+						if (!buffer_string_is_empty(df->bin_path)) {
+							scgi_extension_host *duplicate = unixsocket_is_dup(p, i+1, df->unixsocket);
+							if (NULL != duplicate) {
+								scgi_host_free(df);
+								df = duplicate;
+								++df->refcount;
+							}
 						}
 
 						df->family = AF_UNIX;
@@ -1170,7 +1177,9 @@ SETDEFAULTS_FUNC(mod_scgi_set_defaults) {
 						df->family = (!buffer_string_is_empty(df->host) && NULL != strchr(df->host->ptr, ':')) ? AF_INET6 : AF_INET;
 					}
 
-					if (!buffer_string_is_empty(df->bin_path)) {
+					if (df->refcount) {
+						/* already init'd; skip spawning */
+					} else if (!buffer_string_is_empty(df->bin_path)) {
 						/* a local socket + self spawning */
 						size_t pno;
 

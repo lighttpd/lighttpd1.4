@@ -248,6 +248,7 @@ typedef struct {
 				       *sigh* */
 
 	int listen_backlog;
+	int refcount;
 } fcgi_extension_host;
 
 /*
@@ -557,6 +558,10 @@ static fcgi_extension_host *fastcgi_host_init(void) {
 
 static void fastcgi_host_free(fcgi_extension_host *h) {
 	if (!h) return;
+	if (h->refcount) {
+		--h->refcount;
+		return;
+	}
 
 	buffer_free(h->id);
 	buffer_free(h->host);
@@ -1180,7 +1185,7 @@ static int fcgi_spawn_connection(server *srv,
 
 #endif /* HAVE_FORK */
 
-static int unixsocket_is_dup(plugin_data *p, size_t used, buffer *unixsocket) {
+static fcgi_extension_host * unixsocket_is_dup(plugin_data *p, size_t used, buffer *unixsocket) {
 	size_t i, j, n;
 	for (i = 0; i < used; ++i) {
 		fcgi_exts *exts = p->config_storage[i]->exts;
@@ -1190,12 +1195,12 @@ static int unixsocket_is_dup(plugin_data *p, size_t used, buffer *unixsocket) {
 				fcgi_extension_host *host = ex->hosts[n];
 				if (!buffer_string_is_empty(host->unixsocket)
 				    && buffer_is_equal(host->unixsocket, unixsocket))
-					return 1;
+					return host;
 			}
 		}
 	}
 
-	return 0;
+	return NULL;
 }
 
 SETDEFAULTS_FUNC(mod_fastcgi_set_defaults) {
@@ -1331,6 +1336,7 @@ SETDEFAULTS_FUNC(mod_fastcgi_set_defaults) {
 					host->kill_signal = SIGTERM;
 					host->fix_root_path_name = 0;
 					host->listen_backlog = 1024;
+					host->refcount = 0;
 
 					fcv[0].destination = host->host;
 					fcv[1].destination = host->docroot;
@@ -1383,12 +1389,13 @@ SETDEFAULTS_FUNC(mod_fastcgi_set_defaults) {
 							goto error;
 						}
 
-						if (!buffer_string_is_empty(host->bin_path)
-						    && unixsocket_is_dup(p, i+1, host->unixsocket)) {
-							log_error_write(srv, __FILE__, __LINE__, "sb",
-									"duplicate unixsocket path:",
-									host->unixsocket);
-							goto error;
+						if (!buffer_string_is_empty(host->bin_path)) {
+							fcgi_extension_host *duplicate = unixsocket_is_dup(p, i+1, host->unixsocket);
+							if (NULL != duplicate) {
+								fastcgi_host_free(host);
+								host = duplicate;
+								++host->refcount;
+							}
 						}
 
 						host->family = AF_UNIX;
@@ -1417,7 +1424,9 @@ SETDEFAULTS_FUNC(mod_fastcgi_set_defaults) {
 						host->family = (!buffer_string_is_empty(host->host) && NULL != strchr(host->host->ptr, ':')) ? AF_INET6 : AF_INET;
 					}
 
-					if (!buffer_string_is_empty(host->bin_path)) {
+					if (host->refcount) {
+						/* already init'd; skip spawning */
+					} else if (!buffer_string_is_empty(host->bin_path)) {
 						/* a local socket + self spawning */
 						size_t pno;
 
