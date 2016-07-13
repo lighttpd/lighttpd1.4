@@ -1173,11 +1173,14 @@ static int mod_ssi_stmt_len(const char *s, const int len) {
 			if (!sq && !dq && n+2 < len && s[n+1] == '-' && s[n+2] == '>') return n+3; /* found end of stmt */
 			break;
 		case '"':
-			if (!sq && (!dq || !bs)) dq = !dq; break;
+			if (!sq && (!dq || !bs)) dq = !dq;
+			break;
 		case '\'':
-			if (!dq && (!sq || !bs)) sq = !sq; break;
+			if (!dq && (!sq || !bs)) sq = !sq;
+			break;
 		case '\\':
-			if (sq || dq) bs = !bs; break;
+			if (sq || dq) bs = !bs;
+			break;
 		}
 	}
 	return 0; /* incomplete directive "<!--#...-->" */
