@@ -132,6 +132,8 @@ static int fdevent_libev_reset(fdevents *ev) {
 }
 
 int fdevent_libev_init(fdevents *ev) {
+	struct ev_timer * const timer = &timeout_watcher;
+
 	ev->type = FDEVENT_HANDLER_LIBEV;
 #define SET(x) \
 	ev->x = fdevent_libev_##x;
@@ -154,7 +156,7 @@ int fdevent_libev_init(fdevents *ev) {
 		return -1;
 	}
 
-	ev_timer_init(&timeout_watcher, timeout_watcher_cb, 0.0, 1.0);
+	ev_timer_init(timer, timeout_watcher_cb, 0.0, 1.0);
 
 	return 0;
 }
