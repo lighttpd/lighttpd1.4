@@ -11,6 +11,7 @@
 #include <string.h>
 
 typedef struct {
+	array *access_allow;
 	array *access_deny;
 } plugin_config;
 
@@ -44,6 +45,7 @@ FREE_FUNC(mod_access_free) {
 
 			if (NULL == s) continue;
 
+			array_free(s->access_allow);
 			array_free(s->access_deny);
 
 			free(s);
@@ -62,6 +64,7 @@ SETDEFAULTS_FUNC(mod_access_set_defaults) {
 
 	config_values_t cv[] = {
 		{ "url.access-deny",             NULL, T_CONFIG_ARRAY, T_CONFIG_SCOPE_CONNECTION },
+		{ "url.access-allow",            NULL, T_CONFIG_ARRAY, T_CONFIG_SCOPE_CONNECTION },
 		{ NULL,                          NULL, T_CONFIG_UNSET, T_CONFIG_SCOPE_UNSET }
 	};
 
@@ -73,8 +76,10 @@ SETDEFAULTS_FUNC(mod_access_set_defaults) {
 
 		s = calloc(1, sizeof(plugin_config));
 		s->access_deny    = array_init();
+		s->access_allow   = array_init();
 
 		cv[0].destination = s->access_deny;
+		cv[1].destination = s->access_allow;
 
 		p->config_storage[i] = s;
 
@@ -92,6 +97,7 @@ static int mod_access_patch_connection(server *srv, connection *con, plugin_data
 	size_t i, j;
 	plugin_config *s = p->config_storage[0];
 
+	PATCH(access_allow);
 	PATCH(access_deny);
 
 	/* skip the first, the global context */
@@ -108,6 +114,8 @@ static int mod_access_patch_connection(server *srv, connection *con, plugin_data
 
 			if (buffer_is_equal_string(du->key, CONST_STR_LEN("url.access-deny"))) {
 				PATCH(access_deny);
+			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("url.access-allow"))) {
+				PATCH(access_allow);
 			}
 		}
 	}
@@ -139,6 +147,43 @@ URIHANDLER_FUNC(mod_access_uri_handler) {
 	if (con->conf.log_request_handling) {
 		log_error_write(srv, __FILE__, __LINE__, "s",
 				"-- mod_access_uri_handler called");
+	}
+
+	for (k = 0; k < p->conf.access_allow->used; ++k) {
+		data_string *ds = (data_string *)p->conf.access_allow->data[k];
+		int ct_len = buffer_string_length(ds->value);
+		int allowed = 0;
+
+		if (ct_len > s_len) continue;
+		if (buffer_is_empty(ds->value)) continue;
+
+		/* if we have a case-insensitive FS we have to lower-case the URI here too */
+
+		if (con->conf.force_lowercase_filenames) {
+			if (0 == strncasecmp(con->uri.path->ptr + s_len - ct_len, ds->value->ptr, ct_len)) {
+				allowed = 1;
+			}
+		} else {
+			if (0 == strncmp(con->uri.path->ptr + s_len - ct_len, ds->value->ptr, ct_len)) {
+				allowed = 1;
+			}
+		}
+
+		if (allowed) {
+			return HANDLER_GO_ON;
+		}
+	}
+
+	if (k > 0) { /* have access_allow but none matched */
+		con->http_status = 403;
+		con->mode = DIRECT;
+
+		if (con->conf.log_request_handling) {
+			log_error_write(srv, __FILE__, __LINE__, "sb",
+				"url denied as failed to match any from access_allow", con->uri.path);
+		}
+
+		return HANDLER_FINISHED;
 	}
 
 	for (k = 0; k < p->conf.access_deny->used; k++) {
