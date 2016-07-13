@@ -256,6 +256,7 @@ typedef struct {
 	buffer *dirlist_encoding;
 	buffer *errorfile_prefix;
 
+	unsigned short high_precision_timestamps;
 	unsigned short max_keep_alive_requests;
 	unsigned short max_keep_alive_idle;
 	unsigned short max_read_idle;
@@ -393,8 +394,7 @@ typedef struct {
 
 	time_t connection_start;
 	time_t request_start;
-
-	struct timeval start_tv;
+	struct timespec request_start_hp;
 
 	size_t request_count;        /* number of requests handled in this connection */
 	size_t loops_per_request;    /* to catch endless loops in a single request
@@ -561,6 +561,7 @@ typedef struct {
 	unsigned short http_header_strict;
 	unsigned short http_host_strict;
 	unsigned short http_host_normalize;
+	unsigned short high_precision_timestamps;
 } server_config;
 
 typedef struct server_socket {

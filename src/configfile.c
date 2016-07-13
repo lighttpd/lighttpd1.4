@@ -438,6 +438,7 @@ int config_setup_connection(server *srv, connection *con) {
 	PATCH(allow_http11);
 	PATCH(mimetypes);
 	PATCH(document_root);
+	PATCH(high_precision_timestamps);
 	PATCH(max_keep_alive_requests);
 	PATCH(max_keep_alive_idle);
 	PATCH(max_read_idle);

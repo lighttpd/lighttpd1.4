@@ -689,7 +689,11 @@ static int connection_handle_read_state(server *srv, connection *con)  {
 
 	/* update request_start timestamp when first byte of
 	 * next request is received on a keep-alive connection */
-	if (con->request_count > 1 && is_request_start) con->request_start = srv->cur_ts;
+	if (con->request_count > 1 && is_request_start) {
+		con->request_start = srv->cur_ts;
+		if (con->conf.high_precision_timestamps)
+			clock_gettime(CLOCK_REALTIME, &con->request_start_hp);
+	}
 
 		/* if there is a \r\n\r\n in the chunkqueue
 		 *
@@ -932,9 +936,6 @@ connection *connection_accepted(server *srv, server_socket *srv_socket, sock_add
 
 		con->fd = cnt;
 		con->fde_ndx = -1;
-#if 0
-		gettimeofday(&(con->start_tv), NULL);
-#endif
 		fdevent_register(srv->ev, con->fd, connection_handle_fdevent, con);
 
 		connection_set_state(srv, con, CON_STATE_REQUEST_START);
@@ -998,6 +999,8 @@ int connection_state_machine(server *srv, connection *con) {
 
 			con->request_start = srv->cur_ts;
 			con->read_idle_ts = srv->cur_ts;
+			if (con->conf.high_precision_timestamps)
+				clock_gettime(CLOCK_REALTIME, &con->request_start_hp);
 
 			con->request_count++;
 			con->loops_per_request = 0;

@@ -280,6 +280,7 @@ static server *server_init(void) {
 	srv->srvconf.http_header_strict  = 1;
 	srv->srvconf.http_host_strict    = 1; /*(implies http_host_normalize)*/
 	srv->srvconf.http_host_normalize = 0;
+	srv->srvconf.high_precision_timestamps = 0;
 
 	/* use syslog */
 	srv->errorlog_fd = STDERR_FILENO;
@@ -1271,6 +1272,9 @@ int main (int argc, char **argv) {
 
 		return -1;
 	}
+
+	/* settings might be enabled during module config set defaults */
+	srv->config_storage[0]->high_precision_timestamps = srv->srvconf.high_precision_timestamps;
 
 	/* dump unused config-keys */
 	for (i = 0; i < srv->config_context->used; i++) {
