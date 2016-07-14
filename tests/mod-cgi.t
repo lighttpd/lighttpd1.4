@@ -8,7 +8,7 @@ BEGIN {
 
 use strict;
 use IO::Socket;
-use Test::More tests => 15;
+use Test::More tests => 16;
 use LightyTest;
 
 my $tf = LightyTest->new();
@@ -31,6 +31,13 @@ EOF
  );
 $t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200, 'HTTP-Content' => '/cgi.pl' } ];
 ok($tf->handle_http($t) == 0, 'perl via cgi + pathinfo');
+
+$t->{REQUEST}  = ( <<EOF
+GET /cgi.pl?internal-redir HTTP/1.0
+EOF
+ );
+$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200 } ];
+ok($tf->handle_http($t) == 0, 'perl via cgi and internal redirect from CGI');
 
 $t->{REQUEST}  = ( <<EOF
 GET /cgi-pathinfo.pl/foo HTTP/1.0

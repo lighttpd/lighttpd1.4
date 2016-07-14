@@ -379,3 +379,20 @@ handler_t connection_handle_read_post_state(server *srv, connection *con) {
 		  : HANDLER_WAIT_FOR_EVENT;
 	}
 }
+
+void connection_response_reset(server *srv, connection *con) {
+	UNUSED(srv);
+
+	con->http_status = 0;
+	con->is_writable = 1;
+	con->file_finished = 0;
+	con->file_started = 0;
+	con->got_response = 0;
+	con->parsed_response = 0;
+	con->response.keep_alive = 0;
+	con->response.content_length = -1;
+	con->response.transfer_encoding = 0;
+	buffer_reset(con->physical.path);
+	array_reset(con->response.headers);
+	chunkqueue_reset(con->write_queue);
+}

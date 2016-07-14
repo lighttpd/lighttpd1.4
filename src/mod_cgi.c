@@ -104,7 +104,7 @@ static void cgi_handler_ctx_free(handler_ctx *hctx) {
 	free(hctx);
 }
 
-enum {FDEVENT_HANDLED_UNSET, FDEVENT_HANDLED_FINISHED, FDEVENT_HANDLED_NOT_FINISHED, FDEVENT_HANDLED_ERROR};
+enum {FDEVENT_HANDLED_UNSET, FDEVENT_HANDLED_FINISHED, FDEVENT_HANDLED_NOT_FINISHED, FDEVENT_HANDLED_COMEBACK, FDEVENT_HANDLED_ERROR};
 
 INIT_FUNC(mod_cgi_init) {
 	plugin_data *p;
@@ -516,6 +516,48 @@ static int cgi_demux_response(server *srv, handler_ctx *hctx) {
 					/* parse the response header */
 					cgi_response_parse(srv, con, p, hctx->response_header);
 
+					if (con->http_status >= 300 && con->http_status < 400) {
+						/*(con->parsed_response & HTTP_LOCATION)*/
+						data_string *ds;
+						if (NULL != (ds = (data_string *) array_get_element(con->response.headers, "Location"))
+						    && ds->value->ptr[0] == '/') {
+							if (++con->loops_per_request > 5) {
+								log_error_write(srv, __FILE__, __LINE__, "sb", "too many internal loops while processing request:", con->request.orig_uri);
+								con->http_status = 500; /* Internal Server Error */
+								con->mode = DIRECT;
+								return FDEVENT_HANDLED_FINISHED;
+							}
+
+							if (!buffer_is_equal(con->request.uri, con->request.orig_uri)
+							    && !array_get_element(con->environment, "REDIRECT_URI")) {
+								array_set_key_value(con->environment,
+										    CONST_STR_LEN("REDIRECT_URI"),
+										    CONST_BUF_LEN(con->request.orig_uri));
+							}
+
+							buffer_copy_buffer(con->request.uri, ds->value);
+
+							if (con->request.content_length) {
+								if ((off_t)con->request.content_length != chunkqueue_length(con->request_content_queue)) {
+									con->keep_alive = 0;
+								}
+								con->request.content_length = 0;
+								chunkqueue_reset(con->request_content_queue);
+							}
+
+							if (con->http_status != 307 && con->http_status != 308) {
+								/* Note: request body (if any) sent to initial dynamic handler
+								 * and is not available to the internal redirect */
+								con->request.http_method = HTTP_METHOD_GET;
+							}
+
+							connection_response_reset(srv, con); /*(includes con->http_status = 0)*/
+
+							con->mode = DIRECT;
+							return FDEVENT_HANDLED_COMEBACK;
+						}
+					}
+
 					if (p->conf.xsendfile_allow) {
 						data_string *ds;
 						if (NULL != (ds = (data_string *) array_get_element(con->response.headers, "X-Sendfile"))) {
@@ -735,6 +777,9 @@ static int cgi_recv_response(server *srv, handler_ctx *hctx) {
 
 			/* if we get a IN|HUP and have read everything don't exec the close twice */
 			return HANDLER_FINISHED;
+		case FDEVENT_HANDLED_COMEBACK:
+			cgi_connection_close(srv, hctx);
+			return HANDLER_COMEBACK;
 		case FDEVENT_HANDLED_ERROR:
 			log_error_write(srv, __FILE__, __LINE__, "s", "demuxer failed: ");
 
@@ -769,7 +814,7 @@ static handler_t cgi_handle_fdevent(server *srv, void *ctx, int revents) {
 			do {
 				rc = cgi_recv_response(srv,hctx);/*(might invalidate hctx)*/
 			} while (rc == HANDLER_GO_ON);           /*(unless HANDLER_GO_ON)*/
-			return rc; /* HANDLER_FINISHED or HANDLER_ERROR */
+			return rc; /* HANDLER_FINISHED or HANDLER_COMEBACK or HANDLER_ERROR */
 		} else if (!buffer_string_is_empty(hctx->response_header)) {
 			/* unfinished header package which is a body in reality */
 			con->file_started = 1;
