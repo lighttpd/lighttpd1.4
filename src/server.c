@@ -721,7 +721,8 @@ static void show_help (void) {
 " -i <secs>  graceful shutdown after <secs> of inactivity\n" \
 " -1         process single (one) request on stdin socket, then exit\n" \
 " -p         print the parsed config-file in internal form, and exit\n" \
-" -t         test the config-file, and exit\n" \
+" -t         test config-file syntax, then exit\n" \
+" -tt        test config-file syntax, load and init modules, then exit\n" \
 " -D         don't go to background (default: go to background)\n" \
 " -v         show version\n" \
 " -V         show compile-time features\n" \
