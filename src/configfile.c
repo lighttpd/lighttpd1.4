@@ -123,34 +123,6 @@ static int config_insert(server *srv) {
 		{ "server.stream-request-body",        NULL, T_CONFIG_SHORT,   T_CONFIG_SCOPE_CONNECTION }, /* 76 */
 		{ "server.stream-response-body",       NULL, T_CONFIG_SHORT,   T_CONFIG_SCOPE_CONNECTION }, /* 77 */
 
-		{ "server.host",
-			"use server.bind instead",
-			T_CONFIG_DEPRECATED, T_CONFIG_SCOPE_UNSET },
-		{ "server.docroot",
-			"use server.document-root instead",
-			T_CONFIG_DEPRECATED, T_CONFIG_SCOPE_UNSET },
-		{ "server.virtual-root",
-			"load mod_simple_vhost and use simple-vhost.server-root instead",
-			T_CONFIG_DEPRECATED, T_CONFIG_SCOPE_UNSET },
-		{ "server.virtual-default-host",
-			"load mod_simple_vhost and use simple-vhost.default-host instead",
-			T_CONFIG_DEPRECATED, T_CONFIG_SCOPE_UNSET },
-		{ "server.virtual-docroot",
-			"load mod_simple_vhost and use simple-vhost.document-root instead",
-			T_CONFIG_DEPRECATED, T_CONFIG_SCOPE_UNSET },
-		{ "server.userid",
-			"use server.username instead",
-			T_CONFIG_DEPRECATED, T_CONFIG_SCOPE_UNSET },
-		{ "server.groupid",
-			"use server.groupname instead",
-			T_CONFIG_DEPRECATED, T_CONFIG_SCOPE_UNSET },
-		{ "server.use-keep-alive",
-			"use server.max-keep-alive-requests = 0 instead",
-			T_CONFIG_DEPRECATED, T_CONFIG_SCOPE_UNSET },
-		{ "server.force-lower-case-files",
-			"use server.force-lowercase-filenames instead",
-			T_CONFIG_DEPRECATED, T_CONFIG_SCOPE_UNSET },
-
 		{ NULL,                                NULL, T_CONFIG_UNSET,   T_CONFIG_SCOPE_UNSET      }
 	};
 
