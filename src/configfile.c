@@ -200,8 +200,8 @@ static int config_insert(server *srv) {
 		s->ssl_empty_fragments = 0;
 		s->ssl_use_sslv2 = 0;
 		s->ssl_use_sslv3 = 0;
-		s->use_ipv6      = 0;
-		s->set_v6only    = 1;
+		s->use_ipv6      = (i == 0) ? 0 : srv->config_storage[0]->use_ipv6;
+		s->set_v6only    = (i == 0) ? 1 : srv->config_storage[0]->set_v6only;
 		s->defer_accept  = (i == 0) ? 0 : srv->config_storage[0]->defer_accept;
 #ifdef HAVE_LSTAT
 		s->follow_symlink = 1;
