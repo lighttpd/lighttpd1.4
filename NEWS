@@ -146,6 +146,22 @@ ixes #1184, fixes #2143, #2258, #2281, fixes #946, fixes #1330, fixes #602, #101
   * fix errors detected by Coverity Scan
   * [cygwin] fix mod_proxy and mod_fastcgi ioctl use
   * [mod_webdav] remove excess SQL param to UNLOCK
+  * graceful shutdown without unnecessary 1 sec delay
+  * [core] disable Nagle algorithm (TCP_NODELAY)
+  * [core] add declarations to fdevent.h (#2373)
+  * [tests] remove dependency on CGI.pm
+  * [TLS] fix return value checks during cert init
+  * [core] fix server.max-request-size to be precise (fixes #2131)
+  * [mod_webdav] fix proppatch mem leak, other fixes (#fixes 1334, #fixes 2000)
+  * [autobuild] CMake check for struct tm tm_gmtoff (fixes #2014)
+  * [mod_uploadprogress] fix mem leak (#1858)
+  * [core] make server.max-request-size scopeable (fixes #1901)
+  * [mod_fastcgi,mod_scgi] check for spawning on same unix socket (#319)
+  * [mod_accesslog] %a %A %C %D %k %{}t %{}T (fixes #1145, fixes #1415, fixes #2
+081)
+  * [mod_access] new directive url.access-allow (fixes #1421)
+  * [core] fdevent_libev: update use of ev_timer
+  * [mod_cgi] handle local redirect response (fixes #2108)
 
 - 1.4.39 - 2016-01-02
   * [core] fix memset_s call (fixes #2698)
