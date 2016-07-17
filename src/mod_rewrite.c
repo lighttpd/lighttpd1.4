@@ -495,8 +495,6 @@ URIHANDLER_FUNC(mod_rewrite_uri_handler) {
 	if (!p->conf.rewrite) return HANDLER_GO_ON;
 
 	return process_rewrite_rules(srv, con, p, p->conf.rewrite);
-
-	return HANDLER_GO_ON;
 }
 #endif
 

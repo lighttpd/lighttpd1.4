@@ -1094,7 +1094,7 @@ void print_backtrace(FILE *file) {
 
 void log_failed_assert(const char *filename, unsigned int line, const char *msg) {
 	/* can't use buffer here; could lead to recursive assertions */
-	fprintf(stderr, "%s.%d: %s\n", filename, line, msg);
+	fprintf(stderr, "%s.%u: %s\n", filename, line, msg);
 	print_backtrace(stderr);
 	fflush(stderr);
 	abort();

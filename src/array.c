@@ -353,7 +353,7 @@ int array_print(array *a, int depth) {
 			int j;
 
 			if (i && (i % 5) == 0) {
-				fprintf(stdout, "# %zd\n", i);
+				fprintf(stdout, "# %zu\n", i);
 				array_print_indent(depth + 1);
 			}
 			fprintf(stdout, "\"%s\"", du->key->ptr);
@@ -367,7 +367,7 @@ int array_print(array *a, int depth) {
 	}
 	if (!(i && (i - 1 % 5) == 0)) {
 		array_print_indent(depth + 1);
-		fprintf(stdout, "# %zd\n", i);
+		fprintf(stdout, "# %zu\n", i);
 	}
 	array_print_indent(depth);
 	fprintf(stdout, ")");

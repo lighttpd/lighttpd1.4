@@ -163,25 +163,24 @@ static int mod_skeleton_patch_connection(server *srv, connection *con, plugin_da
 
 URIHANDLER_FUNC(mod_skeleton_uri_handler) {
 	plugin_data *p = p_d;
-	int s_len;
-	size_t k, i;
+	size_t s_len;
+	size_t k;
 
 	UNUSED(srv);
 
 	if (con->mode != DIRECT) return HANDLER_GO_ON;
 
-	if (con->uri.path->used == 0) return HANDLER_GO_ON;
+	s_len = buffer_string_length(con->uri.path);
+	if (0 == s_len) return HANDLER_GO_ON;
 
 	mod_skeleton_patch_connection(srv, con, p);
 
-	s_len = con->uri.path->used - 1;
-
 	for (k = 0; k < p->conf.match->used; k++) {
 		data_string *ds = (data_string *)p->conf.match->data[k];
-		int ct_len = ds->value->used - 1;
+		size_t ct_len = buffer_string_length(ds->value);
 
 		if (ct_len > s_len) continue;
-		if (ds->value->used == 0) continue;
+		if (ct_len == 0) continue;
 
 		if (0 == strncmp(con->uri.path->ptr + s_len - ct_len, ds->value->ptr, ct_len)) {
 			con->http_status = 403;
