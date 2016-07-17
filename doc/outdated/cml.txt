@@ -206,9 +206,9 @@ of sending the big image: ::
 Installation
 ============
 
-You need `lua <http://www.lua.org/>`_ and should install `libmemcache-1.3.x <http://people.freebsd.org/~seanc/libmemcache/>`_ and have to configure lighttpd with: ::
+You need `lua <http://www.lua.org/>`_ and should install `memcached <http://www.memcached.org>`_ and have to configure lighttpd with: ::
 
-  ./configure ... --with-lua --with-memcache
+  ./configure ... --with-lua --with-memcached
 
 To use the plugin you have to load it: ::
 
