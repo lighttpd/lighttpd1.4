@@ -758,7 +758,7 @@ static int process_ssi_stmt(server *srv, connection *con, plugin_data *p, const 
 			} else if (0 == strcmp(l[i], "sizefmt")) {
 				if (0 == strcmp(l[i+1], "abbrev")) {
 					p->sizefmt = 1;
-				} else if (0 == strcmp(l[i+1], "abbrev")) {
+				} else if (0 == strcmp(l[i+1], "bytes")) {
 					p->sizefmt = 0;
 				} else {
 					log_error_write(srv, __FILE__, __LINE__, "sssss",
