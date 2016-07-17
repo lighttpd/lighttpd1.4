@@ -5,7 +5,7 @@ PACKAGE=lighttpd
 BASEDOWNLOADURL="http://download.lighttpd.net/lighttpd/releases-1.4.x"
 SNAPSHOTURL="http://download.lighttpd.net/lighttpd/snapshots-1.4.x"
 
-AUTHOR=stbuehler
+AUTHOR="${AUTHOR:-stbuehler}"
 
 # may take one argument for prereleases like
 # ./packdist.sh [--nopack] rc1-r10
@@ -206,8 +206,8 @@ force sha256sum "${name}.tar."{gz,xz} > "${name}.sha256sum"
 
 rm -f "${name}".tar.*.asc
 
-force gpg -a --output "${name}.tar.gz.asc" --detach-sig "${name}.tar.gz"
-force gpg -a --output "${name}.tar.xz.asc" --detach-sig "${name}.tar.xz"
+force gpg ${KEYID:+-u "${KEYID}"} -a --output "${name}.tar.gz.asc" --detach-sig "${name}.tar.gz"
+force gpg ${KEYID:+-u "${KEYID}"} -a --output "${name}.tar.xz.asc" --detach-sig "${name}.tar.xz"
 
 (
 	echo "* ${BASEDOWNLOADURL}/${name}.tar.gz"
