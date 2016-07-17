@@ -887,6 +887,7 @@ int http_auth_digest_check(server *srv, connection *con, mod_auth_plugin_data *p
 					*(dkv[i].ptr) = c + dkv[i].key_len;
 					c += strlen(c) - 1;
 				}
+				break;
 			}
 		}
 	}
@@ -981,6 +982,22 @@ int http_auth_digest_check(server *srv, connection *con, mod_auth_plugin_data *p
 
 	buffer_free(password);
 
+	/* detect if attacker is attempting to reuse valid digest for one uri
+	 * on a different request uri.  Might also happen if intermediate proxy
+	 * altered client request line.  (Altered request would not result in
+	 * the same digest as that calculated by the client.) */
+	{
+		const size_t ulen = strlen(uri);
+		const size_t rlen = buffer_string_length(con->request.uri);
+		if (!buffer_is_equal_string(con->request.uri, uri, ulen)
+		    && !(rlen < ulen && 0 == memcmp(con->request.uri->ptr, uri, rlen) && uri[rlen] == '?')) {
+			log_error_write(srv, __FILE__, __LINE__, "sbssss",
+					"digest: auth failed: uri mismatch (", con->request.uri, "!=", uri, "), IP:", inet_ntop_cache_get_ip(srv, &(con->dst_addr)));
+			buffer_free(b);
+			return -1;
+		}
+	}
+
 	if (algorithm &&
 	    strcasecmp(algorithm, "md5-sess") == 0) {
 		li_MD5_Init(&Md5Ctx);
@@ -1052,6 +1069,28 @@ int http_auth_digest_check(server *srv, connection *con, mod_auth_plugin_data *p
 				"digest: rules did match");
 
 		return 0;
+	}
+
+	/* check age of nonce.  Note that rand() is used in nonce generation
+	 * in http_auth_digest_generate_nonce().  If that were replaced
+	 * with nanosecond time, then nonce secret would remain unique enough
+	 * for the purposes of Digest auth, and would be reproducible (and
+	 * verifiable) if nanoseconds were inclued with seconds as part of the
+	 * nonce "timestamp:secret".  Since that is not done, timestamp in
+	 * nonce could theoretically be modified and still produce same md5sum,
+	 * but that is highly unlikely within a 10 min (moving) window of valid
+	 * time relative to current time (now) */
+	{
+		time_t ts = 0;
+		const unsigned char * const nonce_uns = (unsigned char *)nonce;
+		for (i = 0; i < 8 && light_isxdigit(nonce_uns[i]); ++i) {
+			ts = (ts << 4) + hex2int(nonce_uns[i]);
+		}
+		if (i != 8 || nonce[8] != ':'
+		    || ts > srv->cur_ts || srv->cur_ts - ts > 600) { /*(10 mins)*/
+			buffer_free(b);
+			return -2; /* nonce is stale; have client regenerate digest */
+		} /*(future: might send nextnonce when expiration is imminent)*/
 	}
 
 	/* remember the username */
