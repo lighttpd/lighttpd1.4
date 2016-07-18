@@ -286,6 +286,9 @@ AC_SEARCH_LIBS(hstrerror,resolv)
 dnl On Haiku accept() and friends are in libnetwork
 AC_SEARCH_LIBS(accept,network)
 
+dnl clock_gettime() needs -lrt with glibc < 2.17, and possibly other platforms
+AC_SEARCH_LIBS([clock_gettime],[rt])
+
 save_LIBS=$LIBS
 AC_SEARCH_LIBS(dlopen,dl,[
   AC_CHECK_HEADERS([dlfcn.h],[
@@ -699,7 +702,7 @@ AC_CHECK_FUNCS([dup2 getcwd inet_ntoa inet_ntop inet_pton issetugid memset mmap 
 		  gethostbyname poll epoll_ctl getrlimit chroot \
 		  getuid select signal pathconf madvise posix_fadvise posix_madvise \
 		  writev sigaction sendfile64 send_file kqueue port_create localtime_r gmtime_r \
-		  memset_s explicit_bzero])
+		  memset_s explicit_bzero clock_gettime])
 
 AC_MSG_CHECKING(if weak symbols are supported)
 AC_LINK_IFELSE([AC_LANG_PROGRAM([[

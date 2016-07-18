@@ -28,6 +28,26 @@
 # define O_LARGEFILE 0
 #endif
 
+#ifndef HAVE_CLOCK_GETTIME
+#ifdef HAVE_SYS_TIME_H
+# include <sys/time.h>  /* gettimeofday() */
+#endif
+#endif
+
+int log_clock_gettime_realtime (struct timespec *ts) {
+      #ifdef HAVE_CLOCK_GETTIME
+	return clock_gettime(CLOCK_REALTIME, ts);
+      #else
+	/* Mac OSX does not provide clock_gettime()
+	 * e.g. defined(__APPLE__) && defined(__MACH__) */
+	struct timeval tv;
+	gettimeofday(&tv, NULL);
+	ts->tv_sec  = tv.tv_sec;
+	ts->tv_nsec = tv.tv_usec * 1000;
+	return 0;
+      #endif
+}
+
 /* retry write on EINTR or when not all data was written */
 ssize_t write_all(int fd, const void* buf, size_t count) {
 	ssize_t written = 0;

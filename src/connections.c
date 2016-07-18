@@ -692,7 +692,7 @@ static int connection_handle_read_state(server *srv, connection *con)  {
 	if (con->request_count > 1 && is_request_start) {
 		con->request_start = srv->cur_ts;
 		if (con->conf.high_precision_timestamps)
-			clock_gettime(CLOCK_REALTIME, &con->request_start_hp);
+			log_clock_gettime_realtime(&con->request_start_hp);
 	}
 
 		/* if there is a \r\n\r\n in the chunkqueue
@@ -1000,7 +1000,7 @@ int connection_state_machine(server *srv, connection *con) {
 			con->request_start = srv->cur_ts;
 			con->read_idle_ts = srv->cur_ts;
 			if (con->conf.high_precision_timestamps)
-				clock_gettime(CLOCK_REALTIME, &con->request_start_hp);
+				log_clock_gettime_realtime(&con->request_start_hp);
 
 			con->request_count++;
 			con->loops_per_request = 0;

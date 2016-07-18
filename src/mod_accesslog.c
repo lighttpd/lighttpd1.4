@@ -765,7 +765,7 @@ REQUESTDONE_FUNC(log_access_write) {
 						off_t t; /*(expected to be 64-bit since large file support enabled)*/
 						long ns;
 						if (!(f->opt & FORMAT_FLAG_TIME_BEGIN)) {
-							if (0 == ts.tv_sec) clock_gettime(CLOCK_REALTIME, &ts);
+							if (0 == ts.tv_sec) log_clock_gettime_realtime(&ts);
 							t = (off_t)ts.tv_sec;
 							ns = ts.tv_nsec;
 						} else {
@@ -787,7 +787,7 @@ REQUESTDONE_FUNC(log_access_write) {
 						long ns;
 						char *ptr;
 						if (!(f->opt & FORMAT_FLAG_TIME_BEGIN)) {
-							if (0 == ts.tv_sec) clock_gettime(CLOCK_REALTIME, &ts);
+							if (0 == ts.tv_sec) log_clock_gettime_realtime(&ts);
 							ns = ts.tv_nsec;
 						} else {
 							ns = con->request_start_hp.tv_nsec;
@@ -880,9 +880,13 @@ REQUESTDONE_FUNC(log_access_write) {
 				} else {
 					const struct timespec * const bs = &con->request_start_hp;
 					off_t tdiff; /*(expected to be 64-bit since large file support enabled)*/
-					if (0 == ts.tv_sec) clock_gettime(CLOCK_REALTIME, &ts);
+					if (0 == ts.tv_sec) log_clock_gettime_realtime(&ts);
 					tdiff = (off_t)(ts.tv_sec - bs->tv_sec)*1000000000 + (ts.tv_nsec - bs->tv_nsec);
-					if (f->opt & FORMAT_FLAG_TIME_MSEC) {
+					if (tdiff <= 0) {
+						/* sanity check for time moving backwards
+						 * (daylight savings adjustment or leap seconds or ?) */
+						tdiff  = -1;
+					} else if (f->opt & FORMAT_FLAG_TIME_MSEC) {
 						tdiff +=  999999; /* ceil */
 						tdiff /= 1000000;
 					} else if (f->opt & FORMAT_FLAG_TIME_USEC) {
