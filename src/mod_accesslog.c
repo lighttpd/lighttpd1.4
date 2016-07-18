@@ -580,15 +580,17 @@ SETDEFAULTS_FUNC(log_access_open) {
 					f->opt |= FORMAT_FLAG_TIME_USEC;
 					srv->srvconf.high_precision_timestamps = 1;
 				} else if (FORMAT_TIME_USED == f->field) {
-					const char * const ptr = f->string->ptr;
-
 					if (f->opt & ~(FORMAT_FLAG_TIME_SEC)) srv->srvconf.high_precision_timestamps = 1;
 
 					if (buffer_string_is_empty(f->string)
-					      || 0 == strcmp(ptr, "s")  || 0 == strcmp(ptr, "sec"))  f->opt |= FORMAT_FLAG_TIME_SEC;
-					else if (0 == strcmp(ptr, "ms") || 0 == strcmp(ptr, "msec")) f->opt |= FORMAT_FLAG_TIME_MSEC;
-					else if (0 == strcmp(ptr, "us") || 0 == strcmp(ptr, "usec")) f->opt |= FORMAT_FLAG_TIME_USEC;
-					else if (0 == strcmp(ptr, "ns") || 0 == strcmp(ptr, "nsec")) f->opt |= FORMAT_FLAG_TIME_NSEC;
+					      || buffer_is_equal_string(f->string, CONST_STR_LEN("s"))
+					      || buffer_is_equal_string(f->string, CONST_STR_LEN("sec")))  f->opt |= FORMAT_FLAG_TIME_SEC;
+					else if (buffer_is_equal_string(f->string, CONST_STR_LEN("ms"))
+					      || buffer_is_equal_string(f->string, CONST_STR_LEN("msec"))) f->opt |= FORMAT_FLAG_TIME_MSEC;
+					else if (buffer_is_equal_string(f->string, CONST_STR_LEN("us"))
+					      || buffer_is_equal_string(f->string, CONST_STR_LEN("usec"))) f->opt |= FORMAT_FLAG_TIME_USEC;
+					else if (buffer_is_equal_string(f->string, CONST_STR_LEN("ns"))
+					      || buffer_is_equal_string(f->string, CONST_STR_LEN("nsec"))) f->opt |= FORMAT_FLAG_TIME_NSEC;
 					else {
 						log_error_write(srv, __FILE__, __LINE__, "sb",
 							"invalid time unit in %{UNIT}T:", s->format);
