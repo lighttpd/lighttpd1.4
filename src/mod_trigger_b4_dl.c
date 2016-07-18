@@ -253,7 +253,7 @@ SETDEFAULTS_FUNC(mod_trigger_b4_dl_set_defaults) {
 
 #if (!defined(HAVE_GDBM_H) && !defined(USE_MEMCACHED)) || !defined(HAVE_PCRE_H)
 		log_error_write(srv, __FILE__, __LINE__, "s",
-				"(either gdbm or libmemcache) and pcre are require, but were not found, aborting");
+				"(either gdbm or libmemcached) and pcre are require, but were not found, aborting");
 		return HANDLER_ERROR;
 #endif
 	}
@@ -608,7 +608,7 @@ int mod_trigger_b4_dl_plugin_init(plugin *p) {
 
 #else
 
-#pragma message("(either gdbm or libmemcache) and pcre are required, but were not found")
+#pragma message("(either gdbm or libmemcached) and pcre are required, but were not found")
 
 int mod_trigger_b4_dl_plugin_init(plugin *p);
 int mod_trigger_b4_dl_plugin_init(plugin *p) {

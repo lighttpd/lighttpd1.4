@@ -437,7 +437,7 @@ static void http_dirls_sort(dirls_entry_t **ent, int num) {
  * conversion is simple but not perfect
  */
 static int http_list_directory_sizefmt(char *buf, size_t bufsz, off_t size) {
-	const char unit[] = " KMGTPE";	/* Kilo, Mega, Tera, Peta, Exa */
+	const char unit[] = " KMGTPE";	/* Kilo, Mega, Giga, Tera, Peta, Exa */
 	const char *u = unit;		/* u will always increment at least once */
 	int remain;
 	size_t buflen;

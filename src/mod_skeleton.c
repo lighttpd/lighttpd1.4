@@ -13,7 +13,7 @@
 /**
  * this is a skeleton for a lighttpd plugin
  *
- * just replaces every occurance of 'skeleton' by your plugin name
+ * just replaces every occurrence of 'skeleton' by your plugin name
  *
  * e.g. in vim:
  *
