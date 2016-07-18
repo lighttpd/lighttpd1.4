@@ -136,7 +136,6 @@ dnl AC_FUNC_REALLOC
 AC_TYPE_SIGNAL
 AC_FUNC_STAT
 AC_FUNC_STRFTIME
-AC_CHECK_FUNCS([issetugid inet_pton])
 
 if test -z "$PKG_CONFIG"; then
   AC_PATH_PROG(PKG_CONFIG, pkg-config, no)
@@ -283,6 +282,9 @@ dnl openssl on solaris needs -lsocket -lnsl
 AC_SEARCH_LIBS(socket,socket)
 AC_SEARCH_LIBS(gethostbyname,nsl socket)
 AC_SEARCH_LIBS(hstrerror,resolv)
+
+dnl On Haiku accept() and friends are in libnetwork
+AC_SEARCH_LIBS(accept,network)
 
 save_LIBS=$LIBS
 AC_SEARCH_LIBS(dlopen,dl,[
@@ -692,7 +694,7 @@ case $host_os in
         * ) ;;
 esac
 
-AC_CHECK_FUNCS([dup2 getcwd inet_ntoa inet_ntop memset mmap munmap strchr \
+AC_CHECK_FUNCS([dup2 getcwd inet_ntoa inet_ntop inet_pton issetugid memset mmap munmap strchr \
 		  strdup strerror strstr strtol sendfile  getopt socket lstat \
 		  gethostbyname poll epoll_ctl getrlimit chroot \
 		  getuid select signal pathconf madvise posix_fadvise posix_madvise \
