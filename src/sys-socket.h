@@ -21,6 +21,11 @@
 #include <arpa/inet.h>
 
 #include <netdb.h>
+
+#ifdef HAVE_SYS_FILIO_H
+#include <sys/filio.h>  /* FIONREAD (for illumos (OpenIndiana)) */
+#endif
+
 #endif
 
 #endif
