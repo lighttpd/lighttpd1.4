@@ -1770,18 +1770,11 @@ int main (int argc, char **argv) {
 			/* n is the number of events */
 			int revents;
 			int fd_ndx;
-#if 0
-			if (n > 0) {
-				log_error_write(srv, __FILE__, __LINE__, "sd",
-						"polls:", n);
-			}
-#endif
 			last_active_ts = srv->cur_ts;
 			fd_ndx = -1;
 			do {
 				fdevent_handler handler;
 				void *context;
-				handler_t r;
 
 				fd_ndx  = fdevent_event_next_fdndx (srv->ev, fd_ndx);
 				if (-1 == fd_ndx) break; /* not all fdevent handlers know how many fds got an event */
@@ -1790,25 +1783,7 @@ int main (int argc, char **argv) {
 				fd      = fdevent_event_get_fd     (srv->ev, fd_ndx);
 				handler = fdevent_get_handler(srv->ev, fd);
 				context = fdevent_get_context(srv->ev, fd);
-
-#if 0
-				log_error_write(srv, __FILE__, __LINE__, "sdd",
-						"event for", fd, revents);
-#endif
-				switch (r = (*handler)(srv, context, revents)) {
-				case HANDLER_FINISHED:
-				case HANDLER_GO_ON:
-				case HANDLER_WAIT_FOR_EVENT:
-				case HANDLER_WAIT_FOR_FD:
-					break;
-				case HANDLER_ERROR:
-					/* should never happen */
-					SEGFAULT();
-					break;
-				default:
-					log_error_write(srv, __FILE__, __LINE__, "d", r);
-					break;
-				}
+				(*handler)(srv, context, revents);
 			} while (--n > 0);
 		} else if (n < 0 && errno != EINTR) {
 			log_error_write(srv, __FILE__, __LINE__, "ss",
