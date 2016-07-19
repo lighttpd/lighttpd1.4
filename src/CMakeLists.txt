@@ -1,6 +1,7 @@
 include(CheckCSourceCompiles)
 include(CheckIncludeFiles)
 include(CheckFunctionExists)
+include(CheckSymbolExists)
 include(CheckVariableExists)
 include(CheckTypeSize)
 include(CheckLibraryExists)
@@ -157,6 +158,10 @@ check_function_exists(issetugid HAVE_ISSETUGID)
 check_function_exists(inet_pton HAVE_INET_PTON)
 check_function_exists(memset_s HAVE_MEMSET_S)
 check_function_exists(explicit_bzero HAVE_EXPLICIT_BZERO)
+check_symbol_exists(clock_gettime "time.h" HAVE_CLOCK_GETTIME)
+if (NOT HAVE_CLOCK_GETTIME)
+	check_library_exists(rt clock_gettime "time.h" HAVE_CLOCK_GETTIME)
+endif()
 check_c_source_compiles("
 	#include <sys/types.h>
 	#include <sys/socket.h>

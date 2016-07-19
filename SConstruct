@@ -210,7 +210,7 @@ if 1:
 			gethostbyname poll epoll_ctl getrlimit chroot \
 			getuid select signal pathconf madvise prctl\
 			writev sigaction sendfile64 send_file kqueue port_create localtime_r posix_fadvise issetugid inet_pton \
-			memset_s explicit_bzero'))
+			memset_s explicit_bzero clock_gettime'))
 
 	checkTypes(autoconf, Split('pid_t size_t off_t'))
 
@@ -231,6 +231,9 @@ if 1:
 		env['LIBS'] = oldlib
 	else:
 		checkFuncs(autoconf, ['crypt', 'crypt_r']);
+
+	if autoconf.CheckLibWithHeader('rt', 'time.h', 'c', 'clock_gettime(CLOCK_MONOTONIC, (struct timespec*)0);'):
+		autoconf.env.Append(CPPFLAGS = [ '-DHAVE_CLOCK_GETTIME' ], LIBS = [ 'rt' ])
 
 	if autoconf.CheckLibWithHeader('uuid', 'uuid/uuid.h', 'C'):
 		autoconf.env.Append(CPPFLAGS = [ '-DHAVE_UUID_UUID_H', '-DHAVE_LIBUUID' ], LIBUUID = 'uuid')
