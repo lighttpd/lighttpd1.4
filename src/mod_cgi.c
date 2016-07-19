@@ -1289,6 +1289,13 @@ static int cgi_create_env(server *srv, connection *con, plugin_data *p, handler_
 			ds = (data_string *)con->request.headers->data[n];
 
 			if (!buffer_is_empty(ds->value) && !buffer_is_empty(ds->key)) {
+				/* Do not emit HTTP_PROXY in environment.
+				 * Some executables use HTTP_PROXY to configure
+				 * outgoing proxy.  See also https://httpoxy.org/ */
+				if (buffer_is_equal_caseless_string(ds->key, CONST_STR_LEN("Proxy"))) {
+					continue;
+				}
+
 				buffer_copy_string_encoded_cgi_varnames(p->tmp_buf, CONST_BUF_LEN(ds->key), 1);
 
 				cgi_env_add(&env, CONST_BUF_LEN(p->tmp_buf), CONST_BUF_LEN(ds->value));

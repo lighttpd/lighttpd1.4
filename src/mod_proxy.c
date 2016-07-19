@@ -494,6 +494,10 @@ static int proxy_create_env(server *srv, handler_ctx *hctx) {
 		if (!buffer_is_empty(ds->value) && !buffer_is_empty(ds->key)) {
 			if (buffer_is_equal_caseless_string(ds->key, CONST_STR_LEN("Connection"))) continue;
 			if (buffer_is_equal_caseless_string(ds->key, CONST_STR_LEN("Proxy-Connection"))) continue;
+			/* Do not emit HTTP_PROXY in environment.
+			 * Some executables use HTTP_PROXY to configure
+			 * outgoing proxy.  See also https://httpoxy.org/ */
+			if (buffer_is_equal_caseless_string(ds->key, CONST_STR_LEN("Proxy"))) continue;
 
 			buffer_append_string_buffer(b, ds->key);
 			buffer_append_string_len(b, CONST_STR_LEN(": "));

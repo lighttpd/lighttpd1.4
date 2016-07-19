@@ -165,7 +165,14 @@ static int ssi_env_add_request_headers(server *srv, connection *con, plugin_data
 
 		if (!buffer_is_empty(ds->value) && !buffer_is_empty(ds->key)) {
 			/* don't forward the Authorization: Header */
-			if (0 == strcasecmp(ds->key->ptr, "AUTHORIZATION")) {
+			if (buffer_is_equal_caseless_string(ds->key, CONST_STR_LEN("Authorization"))) {
+				continue;
+			}
+
+			/* Do not emit HTTP_PROXY in environment.
+			 * Some executables use HTTP_PROXY to configure
+			 * outgoing proxy.  See also https://httpoxy.org/ */
+			if (buffer_is_equal_caseless_string(ds->key, CONST_STR_LEN("Proxy"))) {
 				continue;
 			}
 
