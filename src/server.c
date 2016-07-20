@@ -1590,7 +1590,11 @@ int main (int argc, char **argv) {
 					int changed = 0;
 					int t_diff;
 
-					if (waitevents & FDEVENT_IN) {
+					if (con->state == CON_STATE_CLOSE) {
+						if (srv->cur_ts - con->close_timeout_ts > HTTP_LINGER_TIMEOUT) {
+							changed = 1;
+						}
+					} else if (waitevents & FDEVENT_IN) {
 						if (con->request_count == 1 || con->state != CON_STATE_READ) { /* e.g. CON_STATE_READ_POST || CON_STATE_WRITE */
 							if (srv->cur_ts - con->read_idle_ts > con->conf.max_read_idle) {
 								/* time - out */
@@ -1647,10 +1651,6 @@ int main (int argc, char **argv) {
 							connection_set_state(srv, con, CON_STATE_ERROR);
 							changed = 1;
 						}
-					}
-
-					if (con->state == CON_STATE_CLOSE && (srv->cur_ts - con->close_timeout_ts > HTTP_LINGER_TIMEOUT)) {
-						changed = 1;
 					}
 
 					/* we don't like div by zero */
