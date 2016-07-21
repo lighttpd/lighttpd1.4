@@ -638,7 +638,10 @@ static handler_t mod_status_handle_server_status_text(server *srv, connection *c
 	buffer_append_string_len(b, CONST_STR_LEN("Scoreboard: "));
 	for (k = 0; k < srv->conns->used; k++) {
 		connection *c = srv->conns->ptr[k];
-		const char *state = connection_get_short_state(c->state);
+		const char *state =
+		  (CON_STATE_READ == c->state && !buffer_string_is_empty(c->request.orig_uri))
+		    ? "k"
+		    : connection_get_short_state(c->state);
 		buffer_append_string_len(b, state, 1);
 	}
 	for (l = 0; l < srv->conns->size - srv->conns->used; l++) {
