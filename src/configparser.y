@@ -114,6 +114,34 @@ data_unset *configparser_merge_data(data_unset *op1, const data_unset *op2) {
   return op1;
 }
 
+static int configparser_remoteip_normalize_compat(buffer *rvalue) {
+  /* $HTTP["remoteip"] IPv6 accepted with or without '[]' for config compat
+   * http_request_host_normalize() expects IPv6 with '[]',
+   * and config processing at runtime expects COMP_HTTP_REMOTE_IP
+   * compared without '[]', so strip '[]' after normalization */
+  buffer *b = buffer_init();
+  int rc;
+
+  if (rvalue->ptr[0] != '[') {
+      buffer_append_string_len(b, CONST_STR_LEN("["));
+      buffer_append_string_buffer(b, rvalue);
+      buffer_append_string_len(b, CONST_STR_LEN("]"));
+  } else {
+      buffer_append_string_buffer(b, rvalue);
+  }
+
+  rc = http_request_host_normalize(b);
+
+  if (0 == rc) {
+    /* remove surrounding '[]' */
+    size_t blen = buffer_string_length(b);
+    if (blen > 1) buffer_copy_string_len(rvalue, b->ptr+1, blen-2);
+  }
+
+  buffer_free(b);
+  return rc;
+}
+
 }
 
 %parse_failure {
@@ -483,12 +511,14 @@ context ::= DOLLAR SRVVARNAME(B) LBRACKET stringop(C) RBRACKET cond(E) expressio
       }
       else if (COMP_HTTP_REMOTE_IP == dc->comp
                && (dc->cond == CONFIG_COND_EQ || dc->cond == CONFIG_COND_NE)) {
-        char * const slash = strchr(rvalue->ptr, '/');
-        if (NULL != slash && slash != rvalue->ptr){/*(skip AF_UNIX /path/file)*/
+        char * const slash = strchr(rvalue->ptr, '/'); /* CIDR mask */
+        char * const colon = strchr(rvalue->ptr, ':'); /* IPv6 */
+        if (NULL != slash && slash == rvalue->ptr){/*(skip AF_UNIX /path/file)*/
+        }
+        else if (NULL != slash) {
           char *nptr;
           const unsigned long nm_bits = strtoul(slash + 1, &nptr, 10);
-          if (*nptr || 0 == nm_bits
-              || nm_bits > (rvalue->ptr[0] == '[' ? 128 : 32)) {
+          if (*nptr || 0 == nm_bits || nm_bits > (NULL != colon ? 128 : 32)) {
             /*(also rejects (slash+1 == nptr) which results in nm_bits = 0)*/
             fprintf(stderr, "invalid or missing netmask: %s\n", rvalue->ptr);
             ctx->ok = 0;
@@ -496,7 +526,9 @@ context ::= DOLLAR SRVVARNAME(B) LBRACKET stringop(C) RBRACKET cond(E) expressio
           else {
             int rc;
             buffer_string_set_length(rvalue, (size_t)(slash - rvalue->ptr)); /*(truncate)*/
-            rc = http_request_host_normalize(rvalue);
+            rc = (NULL == colon)
+              ? http_request_host_normalize(rvalue)
+              : configparser_remoteip_normalize_compat(rvalue);
             buffer_append_string_len(rvalue, CONST_STR_LEN("/"));
             buffer_append_int(rvalue, (int)nm_bits);
             if (0 != rc) {
@@ -506,7 +538,10 @@ context ::= DOLLAR SRVVARNAME(B) LBRACKET stringop(C) RBRACKET cond(E) expressio
           }
         }
         else {
-          if (http_request_host_normalize(rvalue)) {
+          int rc = (NULL == colon)
+            ? http_request_host_normalize(rvalue)
+            : configparser_remoteip_normalize_compat(rvalue);
+          if (0 != rc) {
             fprintf(stderr, "invalid IP addr: %s\n", rvalue->ptr);
             ctx->ok = 0;
           }
