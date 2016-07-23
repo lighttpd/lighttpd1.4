@@ -1015,12 +1015,6 @@ static handler_t magnet_attract(server *srv, connection *con, plugin_data *p, bu
 
 			result = HANDLER_FINISHED;
 		} else if (MAGNET_RESTART_REQUEST == lua_return_value) {
-			if (!buffer_is_equal(con->request.uri, con->request.orig_uri)
-			    && !array_get_element(con->environment, "REDIRECT_URI")) {
-				array_set_key_value(con->environment,
-						    CONST_STR_LEN("REDIRECT_URI"),
-						    CONST_BUF_LEN(con->request.orig_uri));
-			}
 			result = HANDLER_COMEBACK;
 		}
 

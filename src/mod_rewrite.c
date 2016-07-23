@@ -444,13 +444,6 @@ static handler_t process_rewrite_rules(server *srv, connection *con, plugin_data
 
 			if (rule->once) hctx->state = REWRITE_STATE_FINISHED;
 
-			if (!buffer_is_equal(con->request.uri, con->request.orig_uri)
-			    && !array_get_element(con->environment, "REDIRECT_URI")) {
-				array_set_key_value(con->environment,
-						    CONST_STR_LEN("REDIRECT_URI"),
-						    CONST_BUF_LEN(con->request.orig_uri));
-			}
-
 			return HANDLER_COMEBACK;
 		}
 #undef N
