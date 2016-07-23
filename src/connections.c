@@ -1110,13 +1110,11 @@ int connection_state_machine(server *srv, connection *con) {
 								con->response.content_length = -1;
 								con->response.transfer_encoding = 0;
 
-								array_set_key_value(con->environment, CONST_STR_LEN("REDIRECT_URI"), CONST_BUF_LEN(con->request.orig_uri));
 								con->error_handler_saved_status = con->http_status;
 								con->error_handler_saved_method = con->request.http_method;
 
 								con->request.http_method = HTTP_METHOD_GET;
 							} else { /*(preserve behavior for server.error-handler-404)*/
-								array_set_key_value(con->environment, CONST_STR_LEN("REDIRECT_URI"), CONST_BUF_LEN(error_handler));
 								con->error_handler_saved_status = -con->http_status; /*(negative to flag old behavior)*/
 							}
 

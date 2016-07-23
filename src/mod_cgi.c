@@ -528,13 +528,6 @@ static int cgi_demux_response(server *srv, handler_ctx *hctx) {
 								return FDEVENT_HANDLED_FINISHED;
 							}
 
-							if (!buffer_is_equal(con->request.uri, con->request.orig_uri)
-							    && !array_get_element(con->environment, "REDIRECT_URI")) {
-								array_set_key_value(con->environment,
-										    CONST_STR_LEN("REDIRECT_URI"),
-										    CONST_BUF_LEN(con->request.orig_uri));
-							}
-
 							buffer_copy_buffer(con->request.uri, ds->value);
 
 							if (con->request.content_length) {
@@ -1211,10 +1204,9 @@ static int cgi_create_env(server *srv, connection *con, plugin_data *p, handler_
 		} else {
 			cgi_env_add(&env, CONST_STR_LEN("QUERY_STRING"), CONST_STR_LEN(""));
 		}
-		if (con->error_handler_saved_status >= 0) {
-			cgi_env_add(&env, CONST_STR_LEN("REQUEST_URI"), CONST_BUF_LEN(con->request.uri));
-		} else {
-			cgi_env_add(&env, CONST_STR_LEN("REQUEST_URI"), CONST_BUF_LEN(con->request.orig_uri));
+		cgi_env_add(&env, CONST_STR_LEN("REQUEST_URI"), CONST_BUF_LEN(con->request.orig_uri));
+		if (!buffer_is_equal(con->request.uri, con->request.orig_uri)) {
+			cgi_env_add(&env, CONST_STR_LEN("REDIRECT_URI"), CONST_BUF_LEN(con->request.uri));
 		}
 		/* set REDIRECT_STATUS for php compiled with --force-redirect
 		 * (if REDIRECT_STATUS has not already been set by error handler) */

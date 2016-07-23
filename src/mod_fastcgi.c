@@ -1965,7 +1965,7 @@ static int fcgi_create_env(server *srv, handler_ctx *hctx, int request_id) {
 	fcgi_extension_host *host= hctx->host;
 
 	connection *con   = hctx->remote_conn;
-	buffer * const req_uri = (con->error_handler_saved_status >= 0) ? con->request.uri : con->request.orig_uri;
+	buffer * const req_uri = con->request.orig_uri;
 	server_socket *srv_sock = con->srv_socket;
 
 	sock_addr our_addr;
@@ -2141,6 +2141,9 @@ static int fcgi_create_env(server *srv, handler_ctx *hctx, int request_id) {
 		}
 	} else {
 		FCGI_ENV_ADD_CHECK(fcgi_env_add(p->fcgi_env, CONST_STR_LEN("REQUEST_URI"), CONST_BUF_LEN(req_uri)),con)
+	}
+	if (!buffer_is_equal(con->request.uri, con->request.orig_uri)) {
+		FCGI_ENV_ADD_CHECK(fcgi_env_add(p->fcgi_env, CONST_STR_LEN("REDIRECT_URI"), CONST_BUF_LEN(con->request.uri)),con);
 	}
 	if (!buffer_string_is_empty(con->uri.query)) {
 		FCGI_ENV_ADD_CHECK(fcgi_env_add(p->fcgi_env, CONST_STR_LEN("QUERY_STRING"), CONST_BUF_LEN(con->uri.query)),con)

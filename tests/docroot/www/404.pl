@@ -1,7 +1,6 @@
 #!/usr/bin/env perl
 
-my $request_uri = $ENV{'REQUEST_URI'};  # server.error-handler-404
-my $redirect_uri= $ENV{'REDIRECT_URI'}; # server.error-handler
+my $request_uri = $ENV{'REQUEST_URI'};
 
 if ($request_uri =~ m/^\/dynamic\/200\// ) {
   print "Status: 200\n",
@@ -29,7 +28,7 @@ elsif ($request_uri =~ m/^\/send404\.pl/ ) {
 elsif ($request_uri =~ m/^\/dynamic\/nostatus\// ) {
   print ("found here\n");
 }
-elsif ($redirect_uri =~ m/^\/dynamic\/redirect_status\// ) {
+elsif ($request_uri =~ m/^\/dynamic\/redirect_status\// ) {
   print "Status: $ENV{'REDIRECT_STATUS'}\n",
         "Content-Type: text/plain\n",
         "\n",
