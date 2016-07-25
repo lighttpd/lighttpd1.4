@@ -276,8 +276,10 @@ int http_request_host_normalize(buffer *b) {
 
         struct in6_addr addr;
         char *bracket = b->ptr+blen-1;
+        char *percent = strchr(b->ptr+1, '%');
+        size_t len;
         int rc;
-        char buf[INET6_ADDRSTRLEN];
+        char buf[INET6_ADDRSTRLEN+16]; /*(+16 for potential %interface name)*/
         if (blen <= 2) return -1; /*(invalid "[]")*/
         if (*bracket != ']') {
             bracket = (char *)memchr(b->ptr+1, ']', blen-1);
@@ -296,13 +298,22 @@ int http_request_host_normalize(buffer *b) {
         }
 
         *bracket = '\0';/*(terminate IPv6 string)*/
+        if (percent) *percent = '\0'; /*(remove %interface from address)*/
         rc = inet_pton(AF_INET6, b->ptr+1, &addr);
+        if (percent) *percent = '%'; /*(restore %interface)*/
         *bracket = ']'; /*(restore bracket)*/
         if (1 != rc) return -1;
 
         inet_ntop(AF_INET6,(const void *)&addr, buf, sizeof(buf));
+        len = strlen(buf);
+        if (percent) {
+            if (percent > bracket) return -1;
+            if (len + (size_t)(bracket - percent) >= sizeof(buf)) return -1;
+            memcpy(buf+len, percent, (size_t)(bracket - percent));
+            len += (size_t)(bracket - percent);
+        }
         buffer_string_set_length(b, 1); /* truncate after '[' */
-        buffer_append_string(b, buf);
+        buffer_append_string_len(b, buf, len);
         buffer_append_string_len(b, CONST_STR_LEN("]"));
 
       #else
