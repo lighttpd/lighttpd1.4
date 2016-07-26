@@ -121,9 +121,6 @@ static int connection_del(server *srv, connection *con) {
 static int connection_close(server *srv, connection *con) {
 #ifdef USE_OPENSSL
 	server_socket *srv_sock = con->srv_socket;
-#endif
-
-#ifdef USE_OPENSSL
 	if (srv_sock->is_ssl) {
 		if (con->ssl) SSL_free(con->ssl);
 		con->ssl = NULL;
@@ -155,6 +152,151 @@ static int connection_close(server *srv, connection *con) {
 	connection_set_state(srv, con, CON_STATE_CONNECT);
 
 	return 0;
+}
+
+static void connection_handle_close_state(server *srv, connection *con) {
+	/* we have to do the linger_on_close stuff regardless
+	 * of con->keep_alive; even non-keepalive sockets may
+	 * still have unread data, and closing before reading
+	 * it will make the client not see all our output.
+	 */
+	int len;
+	char buf[1024];
+
+	len = read(con->fd, buf, sizeof(buf));
+	if (len == 0 || (len < 0 && errno != EAGAIN && errno != EINTR) ) {
+		con->close_timeout_ts = srv->cur_ts - (HTTP_LINGER_TIMEOUT+1);
+	}
+
+	if (srv->cur_ts - con->close_timeout_ts > HTTP_LINGER_TIMEOUT) {
+		connection_close(srv, con);
+
+		if (srv->srvconf.log_state_handling) {
+			log_error_write(srv, __FILE__, __LINE__, "sd",
+					"connection closed for fd", con->fd);
+		}
+	}
+}
+
+static void connection_handle_shutdown(server *srv, connection *con) {
+	int r;
+
+#ifdef USE_OPENSSL
+	server_socket *srv_sock = con->srv_socket;
+	if (srv_sock->is_ssl) {
+		int ret, ssl_r;
+		unsigned long err;
+		ERR_clear_error();
+		switch ((ret = SSL_shutdown(con->ssl))) {
+		case 1:
+			/* ok */
+			break;
+		case 0:
+			/* wait for fd-event
+			 *
+			 * FIXME: wait for fdevent and call SSL_shutdown again
+			 *
+			 */
+			ERR_clear_error();
+			if (-1 != (ret = SSL_shutdown(con->ssl))) break;
+
+			/* fall through */
+		default:
+
+			switch ((ssl_r = SSL_get_error(con->ssl, ret))) {
+			case SSL_ERROR_ZERO_RETURN:
+				break;
+			case SSL_ERROR_WANT_WRITE:
+			case SSL_ERROR_WANT_READ:
+				break;
+			case SSL_ERROR_SYSCALL:
+				/* perhaps we have error waiting in our error-queue */
+				if (0 != (err = ERR_get_error())) {
+					do {
+						log_error_write(srv, __FILE__, __LINE__, "sdds", "SSL:",
+								ssl_r, ret,
+								ERR_error_string(err, NULL));
+					} while((err = ERR_get_error()));
+				} else if (errno != 0) { /* ssl bug (see lighttpd ticket #2213): sometimes errno == 0 */
+					switch(errno) {
+					case EPIPE:
+					case ECONNRESET:
+						break;
+					default:
+						log_error_write(srv, __FILE__, __LINE__, "sddds", "SSL (error):",
+							ssl_r, ret, errno,
+							strerror(errno));
+						break;
+					}
+				}
+
+				break;
+			default:
+				while((err = ERR_get_error())) {
+					log_error_write(srv, __FILE__, __LINE__, "sdds", "SSL:",
+							ssl_r, ret,
+							ERR_error_string(err, NULL));
+				}
+
+				break;
+			}
+		}
+		ERR_clear_error();
+	}
+#endif
+
+	switch(r = plugins_call_handle_connection_close(srv, con)) {
+	case HANDLER_GO_ON:
+	case HANDLER_FINISHED:
+		break;
+	default:
+		log_error_write(srv, __FILE__, __LINE__, "sd", "unhandling return value", r);
+		break;
+	}
+
+	srv->con_closed++;
+	connection_reset(srv, con);
+
+	/* close the connection */
+	if ((0 == shutdown(con->fd, SHUT_WR))) {
+		con->close_timeout_ts = srv->cur_ts;
+		connection_set_state(srv, con, CON_STATE_CLOSE);
+
+		if (srv->srvconf.log_state_handling) {
+			log_error_write(srv, __FILE__, __LINE__, "sd",
+					"shutdown for fd", con->fd);
+		}
+	} else {
+		connection_close(srv, con);
+	}
+}
+
+static void connection_handle_response_end_state(server *srv, connection *con) {
+        /* log the request */
+        /* (even if error, connection dropped, still write to access log if http_status) */
+	if (con->http_status) {
+		plugins_call_handle_request_done(srv, con);
+	}
+
+	if (con->state != CON_STATE_ERROR) srv->con_written++;
+
+	if ((con->request.content_length
+	     && (off_t)con->request.content_length > con->request_content_queue->bytes_in)
+	    || con->state == CON_STATE_ERROR) {
+		/* request body is present and has not been read completely */
+		con->keep_alive = 0;
+	}
+
+        if (con->keep_alive) {
+		connection_reset(srv, con);
+#if 0
+		con->request_start = srv->cur_ts;
+		con->read_idle_ts = srv->cur_ts;
+#endif
+		connection_set_state(srv, con, CON_STATE_REQUEST_START);
+	} else {
+		connection_handle_shutdown(srv, con);
+	}
 }
 
 static void connection_handle_errdoc_init(server *srv, connection *con) {
@@ -976,9 +1118,6 @@ connection *connection_accepted(server *srv, server_socket *srv_socket, sock_add
 
 int connection_state_machine(server *srv, connection *con) {
 	int done = 0, r;
-#ifdef USE_OPENSSL
-	server_socket *srv_sock = con->srv_socket;
-#endif
 
 	if (srv->srvconf.log_state_handling) {
 		log_error_write(srv, __FILE__, __LINE__, "sds",
@@ -990,13 +1129,13 @@ int connection_state_machine(server *srv, connection *con) {
 	while (done == 0) {
 		size_t ostate = con->state;
 
+		if (srv->srvconf.log_state_handling) {
+			log_error_write(srv, __FILE__, __LINE__, "sds",
+					"state for fd", con->fd, connection_get_state(con->state));
+		}
+
 		switch (con->state) {
 		case CON_STATE_REQUEST_START: /* transient */
-			if (srv->srvconf.log_state_handling) {
-				log_error_write(srv, __FILE__, __LINE__, "sds",
-						"state for fd", con->fd, connection_get_state(con->state));
-			}
-
 			con->request_start = srv->cur_ts;
 			con->read_idle_ts = srv->cur_ts;
 			if (con->conf.high_precision_timestamps)
@@ -1009,11 +1148,6 @@ int connection_state_machine(server *srv, connection *con) {
 
 			break;
 		case CON_STATE_REQUEST_END: /* transient */
-			if (srv->srvconf.log_state_handling) {
-				log_error_write(srv, __FILE__, __LINE__, "sds",
-						"state for fd", con->fd, connection_get_state(con->state));
-			}
-
 			buffer_reset(con->uri.authority);
 			buffer_reset(con->uri.path);
 			buffer_reset(con->uri.query);
@@ -1040,11 +1174,6 @@ int connection_state_machine(server *srv, connection *con) {
 			 *
 			 *
 			 */
-
-			if (srv->srvconf.log_state_handling) {
-				log_error_write(srv, __FILE__, __LINE__, "sds",
-						"state for fd", con->fd, connection_get_state(con->state));
-			}
 
 			switch (r = http_response_prepare(srv, con)) {
 			case HANDLER_WAIT_FOR_EVENT:
@@ -1158,11 +1287,6 @@ int connection_state_machine(server *srv, connection *con) {
 			 *
 			 */
 
-			if (srv->srvconf.log_state_handling) {
-				log_error_write(srv, __FILE__, __LINE__, "sds",
-						"state for fd", con->fd, connection_get_state(con->state));
-			}
-
 			if (-1 == connection_handle_write_prepare(srv, con)) {
 				connection_set_state(srv, con, CON_STATE_ERROR);
 
@@ -1172,129 +1296,22 @@ int connection_state_machine(server *srv, connection *con) {
 			connection_set_state(srv, con, CON_STATE_WRITE);
 			break;
 		case CON_STATE_RESPONSE_END: /* transient */
-			/* log the request */
-
-			if (srv->srvconf.log_state_handling) {
-				log_error_write(srv, __FILE__, __LINE__, "sds",
-						"state for fd", con->fd, connection_get_state(con->state));
-			}
-
-			if (con->request.content_length
-			    && (off_t)con->request.content_length > con->request_content_queue->bytes_in) {
-				/* request body is present and has not been read completely */
-				con->keep_alive = 0;
-			}
-
-			plugins_call_handle_request_done(srv, con);
-
-			srv->con_written++;
-
-			if (con->keep_alive) {
-				connection_set_state(srv, con, CON_STATE_REQUEST_START);
-
-#if 0
-				con->request_start = srv->cur_ts;
-				con->read_idle_ts = srv->cur_ts;
-#endif
-			} else {
-				switch(r = plugins_call_handle_connection_close(srv, con)) {
-				case HANDLER_GO_ON:
-				case HANDLER_FINISHED:
-					break;
-				default:
-					log_error_write(srv, __FILE__, __LINE__, "sd", "unhandling return value", r);
-					break;
-				}
-
-#ifdef USE_OPENSSL
-				if (srv_sock->is_ssl) {
-					switch (SSL_shutdown(con->ssl)) {
-					case 1:
-						/* done */
-						break;
-					case 0:
-						/* wait for fd-event
-						 *
-						 * FIXME: wait for fdevent and call SSL_shutdown again
-						 *
-						 */
-
-						break;
-					default:
-						log_error_write(srv, __FILE__, __LINE__, "ss", "SSL:",
-								ERR_error_string(ERR_get_error(), NULL));
-					}
-				}
-#endif
-				if ((0 == shutdown(con->fd, SHUT_WR))) {
-					con->close_timeout_ts = srv->cur_ts;
-					connection_set_state(srv, con, CON_STATE_CLOSE);
-				} else {
-					connection_close(srv, con);
-				}
-
-				srv->con_closed++;
-			}
-
-			connection_reset(srv, con);
-
+		case CON_STATE_ERROR:        /* transient */
+			connection_handle_response_end_state(srv, con);
 			break;
 		case CON_STATE_CONNECT:
-			if (srv->srvconf.log_state_handling) {
-				log_error_write(srv, __FILE__, __LINE__, "sds",
-						"state for fd", con->fd, connection_get_state(con->state));
-			}
-
 			chunkqueue_reset(con->read_queue);
 
 			con->request_count = 0;
 
 			break;
 		case CON_STATE_CLOSE:
-			if (srv->srvconf.log_state_handling) {
-				log_error_write(srv, __FILE__, __LINE__, "sds",
-						"state for fd", con->fd, connection_get_state(con->state));
-			}
-
-			/* we have to do the linger_on_close stuff regardless
-			 * of con->keep_alive; even non-keepalive sockets may
-			 * still have unread data, and closing before reading
-			 * it will make the client not see all our output.
-			 */
-			{
-				int len;
-				char buf[1024];
-
-				len = read(con->fd, buf, sizeof(buf));
-				if (len == 0 || (len < 0 && errno != EAGAIN && errno != EINTR) ) {
-					con->close_timeout_ts = srv->cur_ts - (HTTP_LINGER_TIMEOUT+1);
-				}
-			}
-
-			if (srv->cur_ts - con->close_timeout_ts > HTTP_LINGER_TIMEOUT) {
-				connection_close(srv, con);
-
-				if (srv->srvconf.log_state_handling) {
-					log_error_write(srv, __FILE__, __LINE__, "sd",
-							"connection closed for fd", con->fd);
-				}
-			}
-
+			connection_handle_close_state(srv, con);
 			break;
 		case CON_STATE_READ:
-			if (srv->srvconf.log_state_handling) {
-				log_error_write(srv, __FILE__, __LINE__, "sds",
-						"state for fd", con->fd, connection_get_state(con->state));
-			}
-
 			connection_handle_read_state(srv, con);
 			break;
 		case CON_STATE_WRITE:
-			if (srv->srvconf.log_state_handling) {
-				log_error_write(srv, __FILE__, __LINE__, "sds",
-						"state for fd", con->fd, connection_get_state(con->state));
-			}
-
 			do {
 				/* only try to write if we have something in the queue */
 				if (!chunkqueue_is_empty(con->write_queue)) {
@@ -1333,108 +1350,6 @@ int connection_state_machine(server *srv, connection *con) {
 					}
 				}
 			} while (con->state == CON_STATE_WRITE && (!chunkqueue_is_empty(con->write_queue) ? con->is_writable : con->file_finished));
-
-			break;
-		case CON_STATE_ERROR: /* transient */
-
-			/* even if the connection was drop we still have to write it to the access log */
-			if (con->http_status) {
-				plugins_call_handle_request_done(srv, con);
-			}
-#ifdef USE_OPENSSL
-			if (srv_sock->is_ssl) {
-				int ret, ssl_r;
-				unsigned long err;
-				ERR_clear_error();
-				switch ((ret = SSL_shutdown(con->ssl))) {
-				case 1:
-					/* ok */
-					break;
-				case 0:
-					ERR_clear_error();
-					if (-1 != (ret = SSL_shutdown(con->ssl))) break;
-
-					/* fall through */
-				default:
-
-					switch ((ssl_r = SSL_get_error(con->ssl, ret))) {
-					case SSL_ERROR_WANT_WRITE:
-					case SSL_ERROR_WANT_READ:
-						break;
-					case SSL_ERROR_SYSCALL:
-						/* perhaps we have error waiting in our error-queue */
-						if (0 != (err = ERR_get_error())) {
-							do {
-								log_error_write(srv, __FILE__, __LINE__, "sdds", "SSL:",
-										ssl_r, ret,
-										ERR_error_string(err, NULL));
-							} while((err = ERR_get_error()));
-						} else if (errno != 0) { /* ssl bug (see lighttpd ticket #2213): sometimes errno == 0 */
-							switch(errno) {
-							case EPIPE:
-							case ECONNRESET:
-								break;
-							default:
-								log_error_write(srv, __FILE__, __LINE__, "sddds", "SSL (error):",
-									ssl_r, ret, errno,
-									strerror(errno));
-								break;
-							}
-						}
-
-						break;
-					default:
-						while((err = ERR_get_error())) {
-							log_error_write(srv, __FILE__, __LINE__, "sdds", "SSL:",
-									ssl_r, ret,
-									ERR_error_string(err, NULL));
-						}
-
-						break;
-					}
-				}
-				ERR_clear_error();
-			}
-#endif
-
-			switch(con->mode) {
-			case DIRECT:
-#if 0
-				log_error_write(srv, __FILE__, __LINE__, "sd",
-						"emergency exit: direct",
-						con->fd);
-#endif
-				break;
-			default:
-				switch(r = plugins_call_handle_connection_close(srv, con)) {
-				case HANDLER_GO_ON:
-				case HANDLER_FINISHED:
-					break;
-				default:
-					log_error_write(srv, __FILE__, __LINE__, "sd", "unhandling return value", r);
-					break;
-				}
-				break;
-			}
-
-			connection_reset(srv, con);
-
-			/* close the connection */
-			if ((0 == shutdown(con->fd, SHUT_WR))) {
-				con->close_timeout_ts = srv->cur_ts;
-				connection_set_state(srv, con, CON_STATE_CLOSE);
-
-				if (srv->srvconf.log_state_handling) {
-					log_error_write(srv, __FILE__, __LINE__, "sd",
-							"shutdown for fd", con->fd);
-				}
-			} else {
-				connection_close(srv, con);
-			}
-
-			con->keep_alive = 0;
-
-			srv->con_closed++;
 
 			break;
 		default:
