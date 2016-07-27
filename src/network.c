@@ -281,6 +281,16 @@ static int network_server_init(server *srv, buffer *host_token, specific_config 
 			hints.ai_protocol = IPPROTO_TCP;
 
 			if (0 != (r = getaddrinfo(host, NULL, &hints, &res))) {
+				hints.ai_family = AF_INET;
+				if (EAI_ADDRFAMILY == r && 0 == getaddrinfo(host, NULL, &hints, &res)) {
+					srv_socket->addr.ipv4.sin_family = AF_INET;
+					srv_socket->addr.ipv4.sin_port = htons(port);
+					memcpy(&(srv_socket->addr.ipv4.sin_addr.s_addr), res->ai_addr, res->ai_addrlen);
+					addr_len = sizeof(struct sockaddr_in);
+					freeaddrinfo(res);
+					break;
+				}
+
 				log_error_write(srv, __FILE__, __LINE__,
 						"sssss", "getaddrinfo failed: ",
 						gai_strerror(r), "'", host, "'");
