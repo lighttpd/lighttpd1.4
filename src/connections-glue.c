@@ -133,8 +133,9 @@ static int connection_handle_read_ssl(server *srv, connection *con) {
 	if (len < 0) {
 		int oerrno = errno;
 		switch ((r = SSL_get_error(con->ssl, len))) {
-		case SSL_ERROR_WANT_READ:
 		case SSL_ERROR_WANT_WRITE:
+			con->is_writable = -1;
+		case SSL_ERROR_WANT_READ:
 			con->is_readable = 0;
 
 			/* the manual says we have to call SSL_read with the same arguments next time.

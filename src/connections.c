@@ -207,6 +207,7 @@ static void connection_handle_shutdown(server *srv, connection *con) {
 			case SSL_ERROR_ZERO_RETURN:
 				break;
 			case SSL_ERROR_WANT_WRITE:
+				/*con->is_writable = -1;*//*(no effect; shutdown() called below)*/
 			case SSL_ERROR_WANT_READ:
 				break;
 			case SSL_ERROR_SYSCALL:
@@ -1400,6 +1401,14 @@ int connection_state_machine(server *srv, connection *con) {
 	}
 	if (-1 != con->fd) {
 		const int events = fdevent_event_get_interest(srv->ev, con->fd);
+		if (con->is_readable < 0) {
+			con->is_readable = 0;
+			r |= FDEVENT_IN;
+		}
+		if (con->is_writable < 0) {
+			con->is_writable = 0;
+			r |= FDEVENT_OUT;
+		}
 		if (r != events) {
 			/* update timestamps when enabling interest in events */
 			if ((r & FDEVENT_IN) && !(events & FDEVENT_IN)) {

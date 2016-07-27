@@ -125,7 +125,11 @@ int network_write_chunkqueue_openssl(server *srv, connection *con, SSL *ssl, chu
 			unsigned long err;
 
 			switch ((ssl_r = SSL_get_error(ssl, r))) {
+			case SSL_ERROR_WANT_READ:
+				con->is_readable = -1;
+				return 0; /* try again later */
 			case SSL_ERROR_WANT_WRITE:
+				con->is_writable = -1;
 				return 0; /* try again later */
 			case SSL_ERROR_SYSCALL:
 				/* perhaps we have error waiting in our error-queue */
