@@ -283,10 +283,11 @@ static int network_server_init(server *srv, buffer *host_token, specific_config 
 			if (0 != (r = getaddrinfo(host, NULL, &hints, &res))) {
 				hints.ai_family = AF_INET;
 				if (EAI_ADDRFAMILY == r && 0 == getaddrinfo(host, NULL, &hints, &res)) {
+					memcpy(&srv_socket->addr.ipv4, res->ai_addr, res->ai_addrlen);
 					srv_socket->addr.ipv4.sin_family = AF_INET;
 					srv_socket->addr.ipv4.sin_port = htons(port);
-					memcpy(&(srv_socket->addr.ipv4.sin_addr.s_addr), res->ai_addr, res->ai_addrlen);
 					addr_len = sizeof(struct sockaddr_in);
+					/*assert(addr_len == res->ai_addrlen);*/
 					freeaddrinfo(res);
 					break;
 				}
