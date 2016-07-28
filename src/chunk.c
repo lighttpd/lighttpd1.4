@@ -22,6 +22,13 @@
 #include <errno.h>
 #include <string.h>
 
+/* default 1MB, upper limit 128MB */
+#define DEFAULT_TEMPFILE_SIZE (1 * 1024 * 1024)
+#define MAX_TEMPFILE_SIZE (128 * 1024 * 1024)
+
+static array *chunkqueue_default_tempdirs = NULL;
+static unsigned int chunkqueue_default_tempfile_size = DEFAULT_TEMPFILE_SIZE;
+
 chunkqueue *chunkqueue_init(void) {
 	chunkqueue *cq;
 
@@ -32,6 +39,9 @@ chunkqueue *chunkqueue_init(void) {
 	cq->last = NULL;
 
 	cq->unused = NULL;
+
+	cq->tempdirs              = chunkqueue_default_tempdirs;
+	cq->upload_temp_file_size = chunkqueue_default_tempfile_size;
 
 	return cq;
 }
@@ -377,10 +387,15 @@ void chunkqueue_use_memory(chunkqueue *cq, size_t len) {
 	}
 }
 
-/* default 1MB, upper limit 128MB */
-#define DEFAULT_TEMPFILE_SIZE (1 * 1024 * 1024)
-#define MAX_TEMPFILE_SIZE (128 * 1024 * 1024)
+void chunkqueue_set_tempdirs_default (array *tempdirs, unsigned int upload_temp_file_size) {
+	chunkqueue_default_tempdirs = tempdirs;
+	chunkqueue_default_tempfile_size
+		= (0 == upload_temp_file_size)                ? DEFAULT_TEMPFILE_SIZE
+		: (upload_temp_file_size > MAX_TEMPFILE_SIZE) ? MAX_TEMPFILE_SIZE
+		                                              : upload_temp_file_size;
+}
 
+#if 0
 void chunkqueue_set_tempdirs(chunkqueue *cq, array *tempdirs, unsigned int upload_temp_file_size) {
 	force_assert(NULL != cq);
 	cq->tempdirs = tempdirs;
@@ -390,6 +405,7 @@ void chunkqueue_set_tempdirs(chunkqueue *cq, array *tempdirs, unsigned int uploa
 		                                              : upload_temp_file_size;
 	cq->tempdir_idx = 0;
 }
+#endif
 
 void chunkqueue_steal(chunkqueue *dest, chunkqueue *src, off_t len) {
 	while (len > 0) {

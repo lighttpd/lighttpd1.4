@@ -1363,6 +1363,14 @@ int config_set_defaults(server *srv) {
 		}
 	}
 
+	if (!srv->srvconf.upload_tempdirs->used) {
+		data_string *ds = data_string_init();
+		const char *tmpdir = getenv("TMPDIR");
+		if (NULL == tmpdir) tmpdir = "/tmp";
+		buffer_copy_string(ds->value, tmpdir);
+		array_insert_unique(srv->srvconf.upload_tempdirs, (data_unset *)ds);
+	}
+
 	if (srv->srvconf.upload_tempdirs->used) {
 		buffer * const b = srv->tmp_buf;
 		size_t len;
@@ -1387,6 +1395,10 @@ int config_set_defaults(server *srv) {
 			}
 		}
 	}
+
+	chunkqueue_set_tempdirs_default(
+		srv->srvconf.upload_tempdirs,
+		srv->srvconf.upload_temp_file_size);
 
 	if (buffer_string_is_empty(s->document_root)) {
 		log_error_write(srv, __FILE__, __LINE__, "s",
