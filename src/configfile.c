@@ -1366,7 +1366,7 @@ int config_set_defaults(server *srv) {
 	if (!srv->srvconf.upload_tempdirs->used) {
 		data_string *ds = data_string_init();
 		const char *tmpdir = getenv("TMPDIR");
-		if (NULL == tmpdir) tmpdir = "/tmp";
+		if (NULL == tmpdir) tmpdir = "/var/tmp";
 		buffer_copy_string(ds->value, tmpdir);
 		array_insert_unique(srv->srvconf.upload_tempdirs, (data_unset *)ds);
 	}
