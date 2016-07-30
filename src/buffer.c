@@ -486,7 +486,7 @@ void buffer_copy_string_hex(buffer *b, const char *in, size_t in_len) {
 	force_assert(in_len * 2 > in_len);
 
 	buffer_string_set_length(b, 2 * in_len);
-	li_tohex(b->ptr, buffer_string_space(b)+1, in, in_len);
+	li_tohex(b->ptr, buffer_string_length(b)+1, in, in_len);
 }
 
 /* everything except: ! ( ) * - . 0-9 A-Z _ a-z ~ */
