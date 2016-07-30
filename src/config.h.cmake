@@ -8,6 +8,10 @@
 #define PACKAGE_VERSION "${PACKAGE_VERSION}"
 #define LIBRARY_DIR "${LIGHTTPD_LIBRARY_DIR}"
 
+#ifndef _GNU_SOURCE
+# define _GNU_SOURCE
+#endif
+
 /* System */
 #cmakedefine  HAVE_SYS_DEVPOLL_H
 #cmakedefine  HAVE_SYS_EPOLL_H
