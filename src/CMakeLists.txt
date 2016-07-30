@@ -32,7 +32,7 @@ option(WITH_MEMCACHED "memcached storage for mod_trigger_b4_dl [default: off]")
 option(WITH_LIBEV "libev support for fdevent handlers [default: off]")
 option(WITH_LIBUNWIND "with libunwind to print backtraces in asserts [default: off]")
 
-if(CMAKE_COMPILER_IS_GNUCC)
+if(CMAKE_C_COMPILER_ID MATCHES "GNU" OR CMAKE_C_COMPILER_ID MATCHES "Clang")
 	option(BUILD_EXTRA_WARNINGS "extra warnings")
 
 	if(BUILD_EXTRA_WARNINGS)
@@ -526,6 +526,10 @@ if(WIN32)
 endif()
 
 add_executable(lemon lemon.c)
+if(CMAKE_C_COMPILER_ID MATCHES "GNU" OR CMAKE_C_COMPILER_ID MATCHES "Clang")
+	# yeah, lemon is a mess... but: it only needs to run at compile time
+	add_target_properties(lemon COMPILE_FLAGS -Wno-cast-align)
+endif()
 
 ## Build parsers by using lemon...
 lemon_parser(configparser.y)
@@ -680,7 +684,7 @@ if(WITH_MEMCACHED)
 	target_link_libraries(mod_trigger_b4_dl memcached)
 endif()
 
-if(CMAKE_COMPILER_IS_GNUCC)
+if(CMAKE_C_COMPILER_ID MATCHES "GNU" OR CMAKE_C_COMPILER_ID MATCHES "Clang")
 	set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -std=gnu99 -Wall -g -Wshadow -W -pedantic ${WARN_CFLAGS}")
 	set(CMAKE_C_FLAGS_RELEASE        "${CMAKE_C_FLAGS_RELEASE}     -O2")
 	set(CMAKE_C_FLAGS_DEBUG          "${CMAKE_C_FLAGS_DEBUG}       -O0")
@@ -689,8 +693,8 @@ if(CMAKE_COMPILER_IS_GNUCC)
 	set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} ${WARN_LDFLAGS}")
 endif()
 
-if((NOT APPLE) OR CMAKE_COMPILER_IS_GNUCC)
-add_target_properties(lighttpd LINK_FLAGS "-Wl,-export-dynamic")
+if((NOT APPLE) OR CMAKE_C_COMPILER_ID MATCHES "GNU")
+	add_target_properties(lighttpd LINK_FLAGS "-Wl,-export-dynamic")
 endif()
 
 set_target_properties(lighttpd PROPERTIES CMAKE_INSTALL_PREFIX ${CMAKE_INSTALL_PREFIX})
