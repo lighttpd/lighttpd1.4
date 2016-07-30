@@ -1020,6 +1020,14 @@ int main (int argc, char **argv) {
 
 #ifdef HAVE_PWD_H
 		/* set user and group */
+		if (!buffer_string_is_empty(srv->srvconf.groupname)) {
+			if (NULL == (grp = getgrnam(srv->srvconf.groupname->ptr))) {
+				log_error_write(srv, __FILE__, __LINE__, "sb",
+					"can't find groupname", srv->srvconf.groupname);
+				return -1;
+			}
+		}
+
 		if (!buffer_string_is_empty(srv->srvconf.username)) {
 			if (NULL == (pwd = getpwnam(srv->srvconf.username->ptr))) {
 				log_error_write(srv, __FILE__, __LINE__, "sb",
@@ -1032,14 +1040,15 @@ int main (int argc, char **argv) {
 						"I will not set uid to 0\n");
 				return -1;
 			}
-		}
 
-		if (!buffer_string_is_empty(srv->srvconf.groupname)) {
-			if (NULL == (grp = getgrnam(srv->srvconf.groupname->ptr))) {
-				log_error_write(srv, __FILE__, __LINE__, "sb",
-					"can't find groupname", srv->srvconf.groupname);
+			if (NULL == grp && NULL == (grp = getgrgid(pwd->pw_gid))) {
+				log_error_write(srv, __FILE__, __LINE__, "sd",
+					"can't find group id", pwd->pw_gid);
 				return -1;
 			}
+		}
+
+		if (NULL != grp) {
 			if (grp->gr_gid == 0) {
 				log_error_write(srv, __FILE__, __LINE__, "s",
 						"I will not set gid to 0\n");
