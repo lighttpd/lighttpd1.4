@@ -4,6 +4,33 @@ NEWS
 ====
 
 - 1.4.41
+  * remove long-deprecated, non-functional config opts
+  * [config] inherit server.use-ipv6 and server.set-v6only (fixes #678)
+  * [mod_auth] fix Digest auth to be better than Basic (fixes #1844)
+  * [mod_ssi] fix #config sizefmt="bytes"
+  * [autobuild] move inet_pton detection later
+  * [core] #include <sys/filio.h> for FIONREAD (fixes #2726)
+  * [autobuild] clock_gettime() -lrt with glibc < 2.17
+  * [security] do not emit HTTP_PROXY to CGI env
+  * [build_cmake] clock_gettime() -lrt w/ glibc < 2.17 (fixes #2737)
+  * [core] avoid spurious trace and error abort
+  * [core] stay in CON_STATE_CLOSE until done with req
+  * [core] $HTTP["remoteip"] must handle IPv6 w/o []
+  * [mod_status] show keep-alive status w/ text output (fixes #2740)
+  * do not set REDIRECT_URI in mod_magnet, mod_rewrite (#2738)
+  * revert 1.4.40 swap of REQUEST_URI, REDIRECT_URI (fixes #2738)
+  * [core] permit IPv6 address scope identifier
+  * [TLS] better handling of SSL_ERROR_WANT_READ/WRITE
+  * [TLS] read all available records from SSL_read()
+  * [core] try AF_INET after AF_INET6 if use-ipv6
+  * [core] set chunkqueue tempdirs at startup
+  * [security] ensure gid != 0 if server.username set (fixes #2725)
+  * [security] disable stat_cache if !follow-symlink (fixes #2724)
+  * [core] fix buffer_copy_string_hex() assert (fixes #2742)
+  * [security] encode quoting chars in HTML and XML
+  * [cmake] always define _GNU_SOURCE
+  * [cmake] enable warnings for GCC and Clang
+  * [cmake] set cmake_minimum_required to 2.8.2
 
 - 1.4.40 - 2016-07-16
   * [mod_ssi] enhance support for ssi vars (thx fbrosson)
