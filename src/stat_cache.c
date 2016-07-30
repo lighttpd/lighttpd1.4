@@ -422,7 +422,7 @@ handler_t stat_cache_get_entry(server *srv, connection *con, buffer *name, stat_
 
 		if (buffer_is_equal(name, sce->name)) {
 			if (srv->srvconf.stat_cache_engine == STAT_CACHE_ENGINE_SIMPLE) {
-				if (sce->stat_ts == srv->cur_ts) {
+				if (sce->stat_ts == srv->cur_ts && con->conf.follow_symlink) {
 					*ret_sce = sce;
 					return HANDLER_GO_ON;
 				}
