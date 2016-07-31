@@ -3,7 +3,9 @@
 NEWS
 ====
 
-- 1.4.41
+- 1.4.42
+
+- 1.4.41 - 2016-07-31
   * remove long-deprecated, non-functional config opts
   * [config] inherit server.use-ipv6 and server.set-v6only (fixes #678)
   * [mod_auth] fix Digest auth to be better than Basic (fixes #1844)
