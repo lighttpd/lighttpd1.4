@@ -183,7 +183,7 @@ static void connection_handle_shutdown(server *srv, connection *con) {
 
 #ifdef USE_OPENSSL
 	server_socket *srv_sock = con->srv_socket;
-	if (srv_sock->is_ssl) {
+	if (srv_sock->is_ssl && SSL_is_init_finished(con->ssl)) {
 		int ret, ssl_r;
 		unsigned long err;
 		ERR_clear_error();
