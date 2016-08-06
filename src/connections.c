@@ -943,43 +943,6 @@ static handler_t connection_handle_fdevent(server *srv, void *context, int reven
 	}
 
 
-	if (revents & ~(FDEVENT_IN | FDEVENT_OUT)) {
-		/* looks like an error */
-
-		/* FIXME: revents = 0x19 still means that we should read from the queue */
-		if (revents & FDEVENT_HUP) {
-			if (con->state == CON_STATE_CLOSE) {
-				con->close_timeout_ts = srv->cur_ts - (HTTP_LINGER_TIMEOUT+1);
-			} else {
-				/* sigio reports the wrong event here
-				 *
-				 * there was no HUP at all
-				 */
-#ifdef USE_LINUX_SIGIO
-				if (srv->ev->in_sigio == 1) {
-					log_error_write(srv, __FILE__, __LINE__, "sd",
-						"connection closed: poll() -> HUP", con->fd);
-				} else {
-					connection_set_state(srv, con, CON_STATE_ERROR);
-				}
-#else
-				connection_set_state(srv, con, CON_STATE_ERROR);
-#endif
-
-			}
-		} else if (revents & FDEVENT_ERR) {
-			/* error, connection reset, whatever... we don't want to spam the logfile */
-#if 0
-			log_error_write(srv, __FILE__, __LINE__, "sd",
-					"connection closed: poll() -> ERR", con->fd);
-#endif
-			connection_set_state(srv, con, CON_STATE_ERROR);
-		} else {
-			log_error_write(srv, __FILE__, __LINE__, "sd",
-					"connection closed: poll() -> ???", revents);
-		}
-	}
-
 	if (con->state == CON_STATE_READ) {
 		connection_handle_read_state(srv, con);
 	}
@@ -1005,6 +968,27 @@ static handler_t connection_handle_fdevent(server *srv, void *context, int reven
 		len = read(con->fd, buf, sizeof(buf));
 		if (len == 0 || (len < 0 && errno != EAGAIN && errno != EINTR) ) {
 			con->close_timeout_ts = srv->cur_ts - (HTTP_LINGER_TIMEOUT+1);
+		}
+	}
+
+
+	/* attempt (above) to read data in kernel socket buffers
+	 * prior to handling FDEVENT_HUP and FDEVENT_ERR */
+
+	if ((revents & ~(FDEVENT_IN | FDEVENT_OUT)) && con->state != CON_STATE_ERROR) {
+		if (con->state == CON_STATE_CLOSE) {
+			con->close_timeout_ts = srv->cur_ts - (HTTP_LINGER_TIMEOUT+1);
+		} else if (revents & FDEVENT_HUP) {
+			if (fdevent_is_tcp_half_closed(con->fd)) {
+				con->keep_alive = 0;
+			} else {
+				connection_set_state(srv, con, CON_STATE_ERROR);
+			}
+		} else if (revents & FDEVENT_ERR) { /* error, connection reset */
+			connection_set_state(srv, con, CON_STATE_ERROR);
+		} else {
+			log_error_write(srv, __FILE__, __LINE__, "sd",
+					"connection closed: poll() -> ???", revents);
 		}
 	}
 

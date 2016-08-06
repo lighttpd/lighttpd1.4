@@ -250,3 +250,35 @@ int fdevent_event_next_fdndx(fdevents *ev, int ndx) {
 	return -1;
 }
 
+
+#include <netinet/tcp.h>
+#if (defined(__APPLE__) && defined(__MACH__)) \
+  || defined(__FreeBSD__) || defined(__NetBSD__) \
+  || defined(__OpenBSD__) || defined(__DragonflyBSD__)
+#include <netinet/tcp_fsm.h>
+#endif
+
+/* fd must be TCP socket (AF_INET, AF_INET6), end-of-stream recv() 0 bytes */
+int fdevent_is_tcp_half_closed(int fd) {
+  #ifdef TCP_CONNECTION_INFO     /* Darwin */
+    struct tcp_connection_info tcpi;
+    socklen_t tlen = sizeof(tcpi);
+    return (0 == getsockopt(fd, IPPROTO_TCP, TCP_CONNECTION_INFO, &tcpi, &tlen)
+            && tcpi.tcpi_state == TCPS_CLOSE_WAIT);
+  #elif defined(TCPS_CLOSE_WAIT) /* FreeBSD, NetBSD (not present in OpenBSD) */
+    struct tcp_info tcpi;
+    socklen_t tlen = sizeof(tcpi);
+    return (0 == getsockopt(fd, IPPROTO_TCP, TCP_INFO, &tcpi, &tlen)
+            && tcpi.tcpi_state == TCPS_CLOSE_WAIT);
+  #elif defined(TCP_INFO)        /* Linux */
+    struct tcp_info tcpi;
+    socklen_t tlen = sizeof(tcpi);/*SOL_TCP == IPPROTO_TCP*/
+    return (0 == getsockopt(fd,     SOL_TCP, TCP_INFO, &tcpi, &tlen)
+            && tcpi.tcpi_state == TCP_CLOSE_WAIT);
+  #else
+    UNUSED(fd);
+    /*(0 != getpeername() error might indicate TCP RST, but success
+     * would not differentiate between half-close and full-close)*/
+    return 0; /* false (not half-closed) or TCP state unknown */
+  #endif
+}

@@ -223,6 +223,7 @@ sub handle_http {
 			print $remote $_.$BLANK;
 			diag("\n<< ".$_) if $is_debug;
 		}
+		shutdown($remote, 1) if ($^O ne "openbsd"); # I've stopped writing data
 	} else {
 		diag("\nsending request header to ".$host.":".$self->{PORT}) if $is_debug;
 		foreach(@request) {
