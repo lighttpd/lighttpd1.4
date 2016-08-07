@@ -1005,7 +1005,8 @@ SUBREQUEST_FUNC(mod_proxy_handle_subrequest) {
 		}
 	}
 
-	return (0 == hctx->wb->bytes_in || !chunkqueue_is_empty(hctx->wb))
+	return ((0 == hctx->wb->bytes_in || !chunkqueue_is_empty(hctx->wb))
+		&& hctx->state != PROXY_STATE_CONNECT)
 	  ? proxy_send_request(srv, hctx)
 	  : HANDLER_WAIT_FOR_EVENT;
 }

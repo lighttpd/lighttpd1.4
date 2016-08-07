@@ -2598,7 +2598,8 @@ SUBREQUEST_FUNC(mod_scgi_handle_subrequest) {
 		}
 	}
 
-	return (0 == hctx->wb->bytes_in || !chunkqueue_is_empty(hctx->wb))
+	return ((0 == hctx->wb->bytes_in || !chunkqueue_is_empty(hctx->wb))
+		&& hctx->state != FCGI_STATE_CONNECT)
 	  ? scgi_send_request(srv, hctx)
 	  : HANDLER_WAIT_FOR_EVENT;
 }
