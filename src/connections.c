@@ -1260,6 +1260,9 @@ int connection_state_machine(server *srv, connection *con) {
 				break;
 			}
 
+			if (con->state == CON_STATE_HANDLE_REQUEST && ostate == CON_STATE_READ_POST) {
+				ostate = CON_STATE_HANDLE_REQUEST;
+			}
 			break;
 		case CON_STATE_RESPONSE_START:
 			/*
