@@ -921,10 +921,9 @@ URIHANDLER_FUNC(mod_dirlisting_subrequest) {
 
 	UNUSED(srv);
 
-	/* we only handle GET, POST and HEAD */
+	/* we only handle GET and HEAD */
 	switch(con->request.http_method) {
 	case HTTP_METHOD_GET:
-	case HTTP_METHOD_POST:
 	case HTTP_METHOD_HEAD:
 		break;
 	default:
