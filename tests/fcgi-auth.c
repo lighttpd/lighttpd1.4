@@ -7,26 +7,23 @@
 #include <fcgi_stdio.h>
 #endif
 #include <stdlib.h>
-#include <unistd.h>
 #include <string.h>
 
 int main (void) {
-	char* p;
 
 	while (FCGI_Accept() >= 0) {
-		/* wait for fastcgi authorizer request */
 
-		printf("Content-type: text/html\r\n");
+		/* Status: 200 OK to allow access is implied
+		 * if Status header is not included in response */
 
-		if (((p = getenv("QUERY_STRING")) == NULL) ||
-		    strcmp(p, "ok") != 0) {
-			printf("Status: 403 Forbidden\r\n\r\n");
-		} else {
-			printf("\r\n");
-			/* default Status is 200 - allow access */
+		char *p = getenv("QUERY_STRING");
+		if (p != NULL && 0 == strcmp(p, "var")) {
+			printf("Variable-X-LIGHTTPD-FCGI-AUTH: LighttpdTestContent\r\n");
+		} else if (p == NULL || 0 != strcmp(p, "ok")) {
+			printf("Status: 403 Forbidden\r\n");
 		}
 
-		printf("foobar\r\n");
+		printf("\r\n");
 	}
 
 	return 0;
