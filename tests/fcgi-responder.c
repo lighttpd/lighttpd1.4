@@ -44,6 +44,10 @@ int main (void) {
 			printf("%s", getenv("PATH_INFO"));
 		} else if (0 == strcmp(p, "script_name")) {
 			printf("%s", getenv("SCRIPT_NAME"));
+		} else if (0 == strcmp(p, "var")) {
+			char *test = getenv("LIGHTYTEST");
+			if (test == NULL) test = "(no value)";
+			printf("%s", test);
 		} else {
 			printf("test123");
 		}
