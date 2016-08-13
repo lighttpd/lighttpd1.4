@@ -985,14 +985,18 @@ int http_auth_digest_check(server *srv, connection *con, mod_auth_plugin_data *p
 	/* detect if attacker is attempting to reuse valid digest for one uri
 	 * on a different request uri.  Might also happen if intermediate proxy
 	 * altered client request line.  (Altered request would not result in
-	 * the same digest as that calculated by the client.) */
+	 * the same digest as that calculated by the client.)
+	 * Internal redirects such as with mod_rewrite will modify request uri.
+	 * Reauthentication is done to detect crossing auth realms, but this
+	 * uri validation step is bypassed.  con->request.orig_uri is original
+	 * uri sent in client request. */
 	{
 		const size_t ulen = strlen(uri);
-		const size_t rlen = buffer_string_length(con->request.uri);
-		if (!buffer_is_equal_string(con->request.uri, uri, ulen)
-		    && !(rlen < ulen && 0 == memcmp(con->request.uri->ptr, uri, rlen) && uri[rlen] == '?')) {
+		const size_t rlen = buffer_string_length(con->request.orig_uri);
+		if (!buffer_is_equal_string(con->request.orig_uri, uri, ulen)
+		    && !(rlen < ulen && 0 == memcmp(con->request.orig_uri->ptr, uri, rlen) && uri[rlen] == '?')) {
 			log_error_write(srv, __FILE__, __LINE__, "sbssss",
-					"digest: auth failed: uri mismatch (", con->request.uri, "!=", uri, "), IP:", inet_ntop_cache_get_ip(srv, &(con->dst_addr)));
+					"digest: auth failed: uri mismatch (", con->request.orig_uri, "!=", uri, "), IP:", inet_ntop_cache_get_ip(srv, &(con->dst_addr)));
 			buffer_free(b);
 			return -1;
 		}
