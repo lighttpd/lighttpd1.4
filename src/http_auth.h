@@ -67,9 +67,7 @@ typedef struct {
 	mod_auth_plugin_config conf, *anon_conf; /* this is only used as long as no handler_ctx is setup */
 } mod_auth_plugin_data;
 
-int http_auth_basic_check(server *srv, connection *con, mod_auth_plugin_data *p, array *req, const char *realm_str);
-int http_auth_digest_check(server *srv, connection *con, mod_auth_plugin_data *p, array *req, const char *realm_str);
-int http_auth_digest_generate_nonce(server *srv, mod_auth_plugin_data *p, buffer *fn, char (*hh)[33]);
-int http_auth_match_rules(server *srv, array *req, const char *username, const char *group, const char *host);
+int http_auth_basic_password_compare(server *srv, mod_auth_plugin_data *p, buffer *username, buffer *realm, const char *pw);
+int http_auth_get_password_digest(server *srv, mod_auth_plugin_data *p, const char *username, const char *realm, unsigned char HA1[16]);
 
 #endif
