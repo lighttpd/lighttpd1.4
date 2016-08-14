@@ -39,15 +39,6 @@
 
 #include "safe_memclear.h"
 
-#define HASHLEN 16
-#define HASHHEXLEN 32
-typedef unsigned char HASH[HASHLEN];
-typedef char HASHHEX[HASHHEXLEN+1];
-
-static void CvtHex(const HASH Bin, char (*Hex)[33]) {
-	li_tohex(*Hex, sizeof(*Hex), (const char*) Bin, 16);
-}
-
 
 /**
  * the $apr1$ handling is taken from apache 1.3.x
@@ -64,9 +55,7 @@ static void CvtHex(const HASH Bin, char (*Hex)[33]) {
  * ----------------------------------------------------------------------------
  */
 
-handler_t auth_ldap_init(server *srv, mod_auth_plugin_config *s);
-
-static int http_auth_get_password(server *srv, mod_auth_plugin_data *p, buffer *username, buffer *realm, buffer *password) {
+static int http_auth_get_password(server *srv, mod_auth_plugin_data *p, const buffer *username, const buffer *realm, buffer *password) {
 	if (buffer_is_empty(username) || buffer_is_empty(realm)) return -1;
 
 	if (p->conf.auth_backend == AUTH_BACKEND_HTDIGEST) {
@@ -193,7 +182,9 @@ static int http_auth_get_password(server *srv, mod_auth_plugin_data *p, buffer *
 
 		fclose(fp);
 	} else if (p->conf.auth_backend == AUTH_BACKEND_LDAP) {
-		return 0;
+		return -1; /* should not happen */
+	} else if (p->conf.auth_backend == AUTH_BACKEND_UNSET) {
+		log_error_write(srv, __FILE__, __LINE__, "s", "auth.backend is not set");
 	}
 
 	return -1;
@@ -304,6 +295,44 @@ int http_auth_match_rules(server *srv, array *req, const char *username, const c
 	log_error_write(srv, __FILE__, __LINE__, "s", "nothing matched");
 
 	return -1;
+}
+
+static int http_auth_get_password_digest(server *srv, mod_auth_plugin_data *p, const char *username, const char *realm, unsigned char HA1[16]) {
+	buffer *username_buf = buffer_init_string(username);
+	buffer *realm_buf = buffer_init_string(realm);
+	buffer *password = buffer_init();
+	int rc = 1;
+
+	if (http_auth_get_password(srv, p, username_buf, realm_buf, password)) {
+		rc = 0;
+	} else if (p->conf.auth_backend == AUTH_BACKEND_PLAIN) {
+		/* generate password from plain-text */
+		li_MD5_CTX Md5Ctx;
+		li_MD5_Init(&Md5Ctx);
+		li_MD5_Update(&Md5Ctx, (unsigned char *)username_buf->ptr, buffer_string_length(username_buf));
+		li_MD5_Update(&Md5Ctx, CONST_STR_LEN(":"));
+		li_MD5_Update(&Md5Ctx, (unsigned char *)realm_buf->ptr, buffer_string_length(realm_buf));
+		li_MD5_Update(&Md5Ctx, CONST_STR_LEN(":"));
+		li_MD5_Update(&Md5Ctx, CONST_BUF_LEN(password));
+		li_MD5_Final(HA1, &Md5Ctx);
+	} else if (p->conf.auth_backend == AUTH_BACKEND_HTDIGEST) {
+		/* HA1 */
+		/* transform the 32-byte-hex-md5 to a 16-byte-md5 */
+		int i;
+		for (i = 0; i < 16; i++) {
+			HA1[i] = hex2int(password->ptr[i*2]) << 4;
+			HA1[i] |= hex2int(password->ptr[i*2+1]);
+		}
+	} else {
+		log_error_write(srv, __FILE__, __LINE__, "s",
+				"digest: unsupported backend (only htdigest or plain)");
+		rc = -1;
+	}
+
+	buffer_free(username_buf);
+	buffer_free(realm_buf);
+	buffer_free(password);
+	return rc;
 }
 
 #define APR_MD5_DIGESTSIZE 16
@@ -504,11 +533,25 @@ static void apr_sha_encode(const char *pw, char *result, size_t nbytes) {
  * @param pw       password-string from the client
  */
 
-static int http_auth_basic_password_compare(server *srv, mod_auth_plugin_data *p, array *req, buffer *username, buffer *realm, buffer *password, const char *pw) {
-	UNUSED(srv);
-	UNUSED(req);
+#ifdef USE_LDAP
+static int http_auth_basic_password_compare_ldap(server *srv, mod_auth_plugin_data *p, buffer *username, const char *pw);
+#endif
 
-	if (p->conf.auth_backend == AUTH_BACKEND_HTDIGEST) {
+static int http_auth_basic_password_compare(server *srv, mod_auth_plugin_data *p, buffer *username, buffer *realm, const char *pw) {
+	int rc = -1;
+	buffer *password;
+
+#ifdef USE_LDAP
+	if (p->conf.auth_backend == AUTH_BACKEND_LDAP) {
+		return http_auth_basic_password_compare_ldap(srv, p, username, pw);
+	}
+#endif
+
+	password = buffer_init();
+	if (http_auth_get_password(srv, p, username, realm, password)) {
+		rc = -1;
+	}
+	else if (p->conf.auth_backend == AUTH_BACKEND_HTDIGEST) {
 		/*
 		 * htdigest format
 		 *
@@ -516,7 +559,7 @@ static int http_auth_basic_password_compare(server *srv, mod_auth_plugin_data *p
 		 */
 
 		li_MD5_CTX Md5Ctx;
-		HASH HA1;
+		unsigned char HA1[16];
 		char a1[33];
 
 		li_MD5_Init(&Md5Ctx);
@@ -527,11 +570,9 @@ static int http_auth_basic_password_compare(server *srv, mod_auth_plugin_data *p
 		li_MD5_Update(&Md5Ctx, (unsigned char *)pw, strlen(pw));
 		li_MD5_Final(HA1, &Md5Ctx);
 
-		CvtHex(HA1, &a1);
+		li_tohex(a1, sizeof(a1), (const char *)HA1, sizeof(HA1));
 
-		if (0 == strcmp(password->ptr, a1)) {
-			return 0;
-		}
+		rc = strcmp(password->ptr, a1);
 	} else if (p->conf.auth_backend == AUTH_BACKEND_HTPASSWD) {
 		char sample[120];
 		if (!strncmp(password->ptr, APR1_ID, strlen(APR1_ID))) {
@@ -539,45 +580,44 @@ static int http_auth_basic_password_compare(server *srv, mod_auth_plugin_data *p
 			 * The hash was created using $apr1$ custom algorithm.
 			 */
 			apr_md5_encode(pw, password->ptr, sample, sizeof(sample));
-			return (strcmp(sample, password->ptr) == 0) ? 0 : 1;
+			rc = strcmp(sample, password->ptr);
 #ifdef USE_OPENSSL
 		} else if (0 == strncmp(password->ptr, "{SHA}", 5)) {
 			apr_sha_encode(pw, sample, sizeof(sample));
-			return (strcmp(sample, password->ptr) == 0) ? 0 : 1;
+			rc = strcmp(sample, password->ptr);
 #endif
+		} else if (buffer_string_length(password) < 13) {
+			/* a simple DES password is 2 + 11 characters. everything else should be longer. */
+			rc = -1;
 		} else {
 #if defined(HAVE_CRYPT_R) || defined(HAVE_CRYPT)
 			char *crypted;
 #if defined(HAVE_CRYPT_R)
 			struct crypt_data crypt_tmp_data;
 			crypt_tmp_data.initialized = 0;
-#endif
-
-			/* a simple DES password is 2 + 11 characters. everything else should be longer. */
-			if (buffer_string_length(password) < 13) {
-				return -1;
-			}
-
-#if defined(HAVE_CRYPT_R)
-			if (0 == (crypted = crypt_r(pw, password->ptr, &crypt_tmp_data))) {
+			crypted = crypt_r(pw, password->ptr, &crypt_tmp_data);
 #else
-			if (0 == (crypted = crypt(pw, password->ptr))) {
+			crypted = crypt(pw, password->ptr);
 #endif
-				/* crypt failed. */
-				return -1;
-			}
-
-			if (0 == strcmp(password->ptr, crypted)) {
-				return 0;
+			if (NULL != crypted) {
+				rc = strcmp(password->ptr, crypted);
 			}
 #endif
 		}
 	} else if (p->conf.auth_backend == AUTH_BACKEND_PLAIN) {
-		if (0 == strcmp(password->ptr, pw)) {
-			return 0;
-		}
-	} else if (p->conf.auth_backend == AUTH_BACKEND_LDAP) {
+		rc = strcmp(password->ptr, pw);
+	}
+
+	buffer_free(password);
+
+	return rc;
+}
+
 #ifdef USE_LDAP
+
+handler_t auth_ldap_init(server *srv, mod_auth_plugin_config *s);
+
+static int http_auth_basic_password_compare_ldap(server *srv, mod_auth_plugin_data *p, buffer *username, const char *pw) {
 		LDAP *ldap;
 		LDAPMessage *lm, *first;
 		char *dn;
@@ -710,13 +750,11 @@ static int http_auth_basic_password_compare(server *srv, mod_auth_plugin_data *p
 		/* everything worked, good, access granted */
 
 		return 0;
-#endif
-	}
-	return -1;
 }
+#endif
 
 int http_auth_basic_check(server *srv, connection *con, mod_auth_plugin_data *p, array *req, const char *realm_str) {
-	buffer *username, *password;
+	buffer *username;
 	char *pw;
 
 	data_string *realm;
@@ -744,27 +782,11 @@ int http_auth_basic_check(server *srv, connection *con, mod_auth_plugin_data *p,
 	buffer_string_set_length(username, pw - username->ptr);
 	pw++;
 
-	password = buffer_init();
-	/* copy password to r1 */
-	if (http_auth_get_password(srv, p, username, realm->value, password)) {
-		buffer_free(username);
-		buffer_free(password);
-
-		if (AUTH_BACKEND_UNSET == p->conf.auth_backend) {
-			log_error_write(srv, __FILE__, __LINE__, "s", "auth.backend is not set");
-		} else {
-			log_error_write(srv, __FILE__, __LINE__, "ss", "get_password failed, IP:", inet_ntop_cache_get_ip(srv, &(con->dst_addr)));
-		}
-
-		return 0;
-	}
-
 	/* password doesn't match */
-	if (http_auth_basic_password_compare(srv, p, req, username, realm->value, password, pw)) {
+	if (http_auth_basic_password_compare(srv, p, username, realm->value, pw)) {
 		log_error_write(srv, __FILE__, __LINE__, "sbsBss", "password doesn't match for", con->uri.path, "username:", username, ", IP:", inet_ntop_cache_get_ip(srv, &(con->dst_addr)));
 
 		buffer_free(username);
-		buffer_free(password);
 
 		return 0;
 	}
@@ -772,7 +794,6 @@ int http_auth_basic_check(server *srv, connection *con, mod_auth_plugin_data *p,
 	/* value is our allow-rules */
 	if (http_auth_match_rules(srv, req, username->ptr, NULL, NULL)) {
 		buffer_free(username);
-		buffer_free(password);
 
 		log_error_write(srv, __FILE__, __LINE__, "s", "rules didn't match");
 
@@ -783,9 +804,17 @@ int http_auth_basic_check(server *srv, connection *con, mod_auth_plugin_data *p,
 	buffer_copy_buffer(p->auth_user, username);
 
 	buffer_free(username);
-	buffer_free(password);
 
 	return 1;
+}
+
+#define HASHLEN 16
+#define HASHHEXLEN 32
+typedef unsigned char HASH[HASHLEN];
+typedef char HASHHEX[HASHHEXLEN+1];
+
+static void CvtHex(const HASH Bin, char (*Hex)[33]) {
+	li_tohex(*Hex, sizeof(*Hex), (const char*) Bin, 16);
 }
 
 typedef struct {
@@ -812,7 +841,7 @@ int http_auth_digest_check(server *srv, connection *con, mod_auth_plugin_data *p
 	char *e, *c;
 	const char *m = NULL;
 	int i;
-	buffer *password, *b, *username_buf, *realm_buf;
+	buffer *b;
 
 	li_MD5_CTX Md5Ctx;
 	HASH HA1;
@@ -848,16 +877,6 @@ int http_auth_digest_check(server *srv, connection *con, mod_auth_plugin_data *p
 	dkv[6].ptr = &cnonce;
 	dkv[7].ptr = &nc;
 	dkv[8].ptr = &respons;
-
-	UNUSED(req);
-
-	if (p->conf.auth_backend != AUTH_BACKEND_HTDIGEST &&
-	    p->conf.auth_backend != AUTH_BACKEND_PLAIN) {
-		log_error_write(srv, __FILE__, __LINE__, "s",
-				"digest: unsupported backend (only htdigest or plain)");
-
-		return -1;
-	}
 
 	b = buffer_init_string(realm_str);
 
@@ -944,44 +963,6 @@ int http_auth_digest_check(server *srv, connection *con, mod_auth_plugin_data *p
 	m = get_http_method_name(con->request.http_method);
 	force_assert(m);
 
-	/* password-string == HA1 */
-	password = buffer_init();
-	username_buf = buffer_init_string(username);
-	realm_buf = buffer_init_string(realm);
-	if (http_auth_get_password(srv, p, username_buf, realm_buf, password)) {
-		buffer_free(password);
-		buffer_free(b);
-		buffer_free(username_buf);
-		buffer_free(realm_buf);
-		return 0;
-	}
-
-	buffer_free(username_buf);
-	buffer_free(realm_buf);
-
-	if (p->conf.auth_backend == AUTH_BACKEND_PLAIN) {
-		/* generate password from plain-text */
-		li_MD5_Init(&Md5Ctx);
-		li_MD5_Update(&Md5Ctx, (unsigned char *)username, strlen(username));
-		li_MD5_Update(&Md5Ctx, CONST_STR_LEN(":"));
-		li_MD5_Update(&Md5Ctx, (unsigned char *)realm, strlen(realm));
-		li_MD5_Update(&Md5Ctx, CONST_STR_LEN(":"));
-		li_MD5_Update(&Md5Ctx, CONST_BUF_LEN(password));
-		li_MD5_Final(HA1, &Md5Ctx);
-	} else if (p->conf.auth_backend == AUTH_BACKEND_HTDIGEST) {
-		/* HA1 */
-		/* transform the 32-byte-hex-md5 to a 16-byte-md5 */
-		for (i = 0; i < HASHLEN; i++) {
-			HA1[i] = hex2int(password->ptr[i*2]) << 4;
-			HA1[i] |= hex2int(password->ptr[i*2+1]);
-		}
-	} else {
-		/* we already check that above */
-		SEGFAULT();
-	}
-
-	buffer_free(password);
-
 	/* detect if attacker is attempting to reuse valid digest for one uri
 	 * on a different request uri.  Might also happen if intermediate proxy
 	 * altered client request line.  (Altered request would not result in
@@ -1000,6 +981,13 @@ int http_auth_digest_check(server *srv, connection *con, mod_auth_plugin_data *p
 			buffer_free(b);
 			return -1;
 		}
+	}
+
+	/* password-string == HA1 */
+	i = http_auth_get_password_digest(srv, p, username, realm, HA1);
+	if (1 != i) {
+		buffer_free(b);
+		return i;
 	}
 
 	if (algorithm &&
