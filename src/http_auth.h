@@ -67,7 +67,14 @@ typedef struct {
 	mod_auth_plugin_config conf, *anon_conf; /* this is only used as long as no handler_ctx is setup */
 } mod_auth_plugin_data;
 
-int http_auth_basic_password_compare(server *srv, mod_auth_plugin_data *p, buffer *username, buffer *realm, const char *pw);
-int http_auth_get_password_digest(server *srv, mod_auth_plugin_data *p, const char *username, const char *realm, unsigned char HA1[16]);
+int mod_authn_htdigest_digest(server *srv, connection *con, void *p_d, const char *username, const char *realm, unsigned char HA1[16]);
+int mod_authn_htdigest_basic(server *srv, connection *con, void *p_d, const buffer *username, const buffer *realm, const char *pw);
+int mod_authn_plain_digest(server *srv, connection *con, void *p_d, const char *username, const char *realm, unsigned char HA1[16]);
+int mod_authn_plain_basic(server *srv, connection *con, void *p_d, const buffer *username, const buffer *realm, const char *pw);
+int mod_authn_htpasswd_basic(server *srv, connection *con, void *p_d, const buffer *username, const buffer *realm, const char *pw);
+#ifdef USE_LDAP
+int mod_authn_ldap_basic(server *srv, connection *con, void *p_d, const buffer *username, const buffer *realm, const char *pw);
+handler_t mod_authn_ldap_init(server *srv, mod_auth_plugin_config *s);
+#endif
 
 #endif

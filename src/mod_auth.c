@@ -18,19 +18,8 @@
 #include <fcntl.h>
 #include <unistd.h>
 
-handler_t auth_ldap_init(server *srv, mod_auth_plugin_config *s);
-
-
 /**
  * the basic and digest auth framework
- *
- * - config handling
- * - protocol handling
- *
- * http_auth.c
- * http_auth_digest.c
- *
- * do the real work
  */
 
 INIT_FUNC(mod_auth_init) {
@@ -293,6 +282,7 @@ static int mod_auth_match_rules(server *srv, array *req, const char *username, c
 static int mod_auth_basic_check(server *srv, connection *con, mod_auth_plugin_data *p, array *req, const char *realm_str) {
 	buffer *username;
 	char *pw;
+	int i;
 
 	data_string *realm;
 
@@ -320,7 +310,20 @@ static int mod_auth_basic_check(server *srv, connection *con, mod_auth_plugin_da
 	pw++;
 
 	/* password doesn't match */
-	if (http_auth_basic_password_compare(srv, p, username, realm->value, pw)) {
+	if (p->conf.auth_backend == AUTH_BACKEND_PLAIN) {
+		i = mod_authn_plain_basic(srv, con, p, username, realm->value, pw);
+	} else if (p->conf.auth_backend == AUTH_BACKEND_HTDIGEST) {
+		i = mod_authn_htdigest_basic(srv, con, p, username, realm->value, pw);
+	} else if (p->conf.auth_backend == AUTH_BACKEND_HTPASSWD) {
+		i = mod_authn_htpasswd_basic(srv, con, p, username, realm->value, pw);
+      #ifdef USE_LDAP
+	} else if (p->conf.auth_backend == AUTH_BACKEND_LDAP) {
+		i = mod_authn_ldap_basic(srv, con, p, username, realm->value, pw);
+      #endif
+	} else {
+		i = -1;
+	}
+	if (0 != i) {
 		log_error_write(srv, __FILE__, __LINE__, "sbsBss", "password doesn't match for", con->uri.path, "username:", username, ", IP:", inet_ntop_cache_get_ip(srv, &(con->dst_addr)));
 
 		buffer_free(username);
@@ -521,8 +524,14 @@ static int mod_auth_digest_check(server *srv, connection *con, mod_auth_plugin_d
 	}
 
 	/* password-string == HA1 */
-	i = http_auth_get_password_digest(srv, p, username, realm, HA1);
-	if (1 != i) {
+	if (p->conf.auth_backend == AUTH_BACKEND_PLAIN) {
+		i = mod_authn_plain_digest(srv, con, p, username, realm, HA1);
+	} else if (p->conf.auth_backend == AUTH_BACKEND_HTDIGEST) {
+		i = mod_authn_htdigest_digest(srv, con, p, username, realm, HA1);
+	} else {
+		i = -1;
+	}
+	if (-1 == i) {
 		buffer_free(b);
 		return i;
 	}
@@ -789,6 +798,8 @@ static handler_t mod_auth_uri_handler(server *srv, connection *con, void *p_d) {
 			response_header_insert(srv, con, CONST_STR_LEN("WWW-Authenticate"), CONST_BUF_LEN(p->tmp_buf));
 		} else if (0 == strcmp(method->value->ptr, "digest")) {
 			char hh[33];
+			/* using unknown contents of srv->tmp_buf (modified elsewhere)
+			 * adds dubious amount of randomness.  Remove use of srv->tmp_buf? */
 			mod_auth_digest_generate_nonce(srv, p, srv->tmp_buf, &hh);
 
 			buffer_copy_string_len(p->tmp_buf, CONST_STR_LEN("Digest realm=\""));
@@ -1056,10 +1067,15 @@ SETDEFAULTS_FUNC(mod_auth_set_defaults) {
 
 		switch(s->auth_backend) {
 		case AUTH_BACKEND_LDAP: {
-			handler_t ret = auth_ldap_init(srv, s);
+		      #ifdef USE_LDAP
+			handler_t ret = mod_authn_ldap_init(srv, s);
 			if (ret == HANDLER_ERROR)
 				return (ret);
 			break;
+		      #else
+			log_error_write(srv, __FILE__, __LINE__, "s", "no ldap support available");
+			return HANDLER_ERROR;
+		      #endif
 		}
 		default:
 			break;
@@ -1067,78 +1083,6 @@ SETDEFAULTS_FUNC(mod_auth_set_defaults) {
 	}
 
 	return HANDLER_GO_ON;
-}
-
-handler_t auth_ldap_init(server *srv, mod_auth_plugin_config *s) {
-#ifdef USE_LDAP
-	int ret;
-#if 0
-	if (s->auth_ldap_basedn->used == 0) {
-		log_error_write(srv, __FILE__, __LINE__, "s", "ldap: auth.backend.ldap.base-dn has to be set");
-
-		return HANDLER_ERROR;
-	}
-#endif
-
-	if (!buffer_string_is_empty(s->auth_ldap_hostname)) {
-		/* free old context */
-		if (NULL != s->ldap) ldap_unbind_s(s->ldap);
-
-		if (NULL == (s->ldap = ldap_init(s->auth_ldap_hostname->ptr, LDAP_PORT))) {
-			log_error_write(srv, __FILE__, __LINE__, "ss", "ldap ...", strerror(errno));
-
-			return HANDLER_ERROR;
-		}
-
-		ret = LDAP_VERSION3;
-		if (LDAP_OPT_SUCCESS != (ret = ldap_set_option(s->ldap, LDAP_OPT_PROTOCOL_VERSION, &ret))) {
-			log_error_write(srv, __FILE__, __LINE__, "ss", "ldap:", ldap_err2string(ret));
-
-			return HANDLER_ERROR;
-		}
-
-		if (s->auth_ldap_starttls) {
-			/* if no CA file is given, it is ok, as we will use encryption
-				* if the server requires a CAfile it will tell us */
-			if (!buffer_string_is_empty(s->auth_ldap_cafile)) {
-				if (LDAP_OPT_SUCCESS != (ret = ldap_set_option(NULL, LDAP_OPT_X_TLS_CACERTFILE,
-								s->auth_ldap_cafile->ptr))) {
-					log_error_write(srv, __FILE__, __LINE__, "ss",
-							"Loading CA certificate failed:", ldap_err2string(ret));
-
-					return HANDLER_ERROR;
-				}
-			}
-
-			if (LDAP_OPT_SUCCESS != (ret = ldap_start_tls_s(s->ldap, NULL,  NULL))) {
-				log_error_write(srv, __FILE__, __LINE__, "ss", "ldap startTLS failed:", ldap_err2string(ret));
-
-				return HANDLER_ERROR;
-			}
-		}
-
-
-		/* 1. */
-		if (!buffer_string_is_empty(s->auth_ldap_binddn)) {
-			if (LDAP_SUCCESS != (ret = ldap_simple_bind_s(s->ldap, s->auth_ldap_binddn->ptr, s->auth_ldap_bindpw->ptr))) {
-				log_error_write(srv, __FILE__, __LINE__, "ss", "ldap:", ldap_err2string(ret));
-
-				return HANDLER_ERROR;
-			}
-		} else {
-			if (LDAP_SUCCESS != (ret = ldap_simple_bind_s(s->ldap, NULL, NULL))) {
-				log_error_write(srv, __FILE__, __LINE__, "ss", "ldap:", ldap_err2string(ret));
-
-				return HANDLER_ERROR;
-			}
-		}
-	}
-	return HANDLER_GO_ON;
-#else
-	UNUSED(s);
-	log_error_write(srv, __FILE__, __LINE__, "s", "no ldap support available");
-	return HANDLER_ERROR;
-#endif
 }
 
 int mod_auth_plugin_init(plugin *p);
