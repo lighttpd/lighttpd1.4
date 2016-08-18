@@ -54,6 +54,7 @@ common_src = Split("base64.c buffer.c log.c \
 	connections-glue.c \
 	configfile-glue.c \
 	http-header-glue.c \
+	http_auth.c \
 	splaytree.c network_writev.c \
 	network_write_mmap.c network_write_no_mmap.c \
 	network_write.c network_linux_sendfile.c \
@@ -99,9 +100,9 @@ modules = {
 	'mod_compress' : { 'src' : [ 'mod_compress.c' ], 'lib' : [ env['LIBZ'], env['LIBBZ2'] ] },
 	'mod_redirect' : { 'src' : [ 'mod_redirect.c' ], 'lib' : [ env['LIBPCRE'] ] },
 	'mod_rewrite' : { 'src' : [ 'mod_rewrite.c' ], 'lib' : [ env['LIBPCRE'] ] },
-	'mod_auth' : {
-		'src' : [ 'mod_auth.c', 'http_auth.c' ],
-		'lib' : [ env['LIBCRYPT'], env['LIBLDAP'], env['LIBLBER'] ] },
+	'mod_auth' : { 'src' : [ 'mod_auth.c' ] },
+	'mod_authn_file' : { 'src' : [ 'mod_authn_file.c' ], 'lib' : [ env['LIBCRYPT'] ] },
+	'mod_authn_ldap' : { 'src' : [ 'mod_authn_ldap.c' ], 'lib' : [ env['LIBLDAP'], env['LIBLBER'] ] },
 	'mod_webdav' : { 'src' : [ 'mod_webdav.c' ], 'lib' : [ env['LIBXML2'], env['LIBSQLITE3'], env['LIBUUID'] ] },
 	'mod_mysql_vhost' : { 'src' : [ 'mod_mysql_vhost.c' ], 'lib' : [ env['LIBMYSQL'] ] },
 #	'mod_uploadprogress' : { 'src' : [ 'mod_uploadprogress.c' ] },

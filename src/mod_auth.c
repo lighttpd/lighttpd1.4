@@ -22,17 +22,39 @@
  * the basic and digest auth framework
  */
 
+typedef struct {
+	/* auth */
+	array  *auth_require;
+
+	buffer *auth_plain_groupfile;
+	buffer *auth_plain_userfile;
+
+	buffer *auth_htdigest_userfile;
+	buffer *auth_htpasswd_userfile;
+
+	buffer *auth_backend_conf;
+
+	unsigned short auth_debug;
+
+	/* generated */
+	const http_auth_backend_t *auth_backend;
+} mod_auth_plugin_config;
+
+typedef struct {
+	PLUGIN_DATA;
+	buffer *tmp_buf;
+
+	mod_auth_plugin_config **config_storage;
+
+	mod_auth_plugin_config conf;
+} mod_auth_plugin_data;
+
 INIT_FUNC(mod_auth_init) {
 	mod_auth_plugin_data *p;
 
 	p = calloc(1, sizeof(*p));
 
 	p->tmp_buf = buffer_init();
-
-	p->auth_user = buffer_init();
-#ifdef USE_LDAP
-	p->ldap_filter = buffer_init();
-#endif
 
 	return p;
 }
@@ -45,10 +67,6 @@ FREE_FUNC(mod_auth_free) {
 	if (!p) return HANDLER_GO_ON;
 
 	buffer_free(p->tmp_buf);
-	buffer_free(p->auth_user);
-#ifdef USE_LDAP
-	buffer_free(p->ldap_filter);
-#endif
 
 	if (p->config_storage) {
 		size_t i;
@@ -58,25 +76,7 @@ FREE_FUNC(mod_auth_free) {
 			if (NULL == s) continue;
 
 			array_free(s->auth_require);
-			buffer_free(s->auth_plain_groupfile);
-			buffer_free(s->auth_plain_userfile);
-			buffer_free(s->auth_htdigest_userfile);
-			buffer_free(s->auth_htpasswd_userfile);
 			buffer_free(s->auth_backend_conf);
-
-			buffer_free(s->auth_ldap_hostname);
-			buffer_free(s->auth_ldap_basedn);
-			buffer_free(s->auth_ldap_binddn);
-			buffer_free(s->auth_ldap_bindpw);
-			buffer_free(s->auth_ldap_filter);
-			buffer_free(s->auth_ldap_cafile);
-
-#ifdef USE_LDAP
-			buffer_free(s->ldap_filter_pre);
-			buffer_free(s->ldap_filter_post);
-
-			if (s->ldap) ldap_unbind_s(s->ldap);
-#endif
 
 			free(s);
 		}
@@ -95,25 +95,8 @@ static int mod_auth_patch_connection(server *srv, connection *con, mod_auth_plug
 	mod_auth_plugin_config *s = p->config_storage[0];
 
 	PATCH(auth_backend);
-	PATCH(auth_plain_groupfile);
-	PATCH(auth_plain_userfile);
-	PATCH(auth_htdigest_userfile);
-	PATCH(auth_htpasswd_userfile);
 	PATCH(auth_require);
 	PATCH(auth_debug);
-	PATCH(auth_ldap_hostname);
-	PATCH(auth_ldap_basedn);
-	PATCH(auth_ldap_binddn);
-	PATCH(auth_ldap_bindpw);
-	PATCH(auth_ldap_filter);
-	PATCH(auth_ldap_cafile);
-	PATCH(auth_ldap_starttls);
-	PATCH(auth_ldap_allow_empty_pw);
-#ifdef USE_LDAP
-	p->anon_conf = s;
-	PATCH(ldap_filter_pre);
-	PATCH(ldap_filter_post);
-#endif
 
 	/* skip the first, the global context */
 	for (i = 1; i < srv->config_context->used; i++) {
@@ -129,41 +112,10 @@ static int mod_auth_patch_connection(server *srv, connection *con, mod_auth_plug
 
 			if (buffer_is_equal_string(du->key, CONST_STR_LEN("auth.backend"))) {
 				PATCH(auth_backend);
-			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("auth.backend.plain.groupfile"))) {
-				PATCH(auth_plain_groupfile);
-			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("auth.backend.plain.userfile"))) {
-				PATCH(auth_plain_userfile);
-			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("auth.backend.htdigest.userfile"))) {
-				PATCH(auth_htdigest_userfile);
-			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("auth.backend.htpasswd.userfile"))) {
-				PATCH(auth_htpasswd_userfile);
 			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("auth.require"))) {
 				PATCH(auth_require);
 			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("auth.debug"))) {
 				PATCH(auth_debug);
-			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("auth.backend.ldap.hostname"))) {
-				PATCH(auth_ldap_hostname);
-#ifdef USE_LDAP
-				p->anon_conf = s;
-#endif
-			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("auth.backend.ldap.base-dn"))) {
-				PATCH(auth_ldap_basedn);
-			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("auth.backend.ldap.filter"))) {
-				PATCH(auth_ldap_filter);
-#ifdef USE_LDAP
-				PATCH(ldap_filter_pre);
-				PATCH(ldap_filter_post);
-#endif
-			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("auth.backend.ldap.ca-file"))) {
-				PATCH(auth_ldap_cafile);
-			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("auth.backend.ldap.starttls"))) {
-				PATCH(auth_ldap_starttls);
-			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("auth.backend.ldap.bind-dn"))) {
-				PATCH(auth_ldap_binddn);
-			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("auth.backend.ldap.bind-pw"))) {
-				PATCH(auth_ldap_bindpw);
-			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("auth.backend.ldap.allow-empty-pw"))) {
-				PATCH(auth_ldap_allow_empty_pw);
 			}
 		}
 	}
@@ -279,15 +231,101 @@ static int mod_auth_match_rules(server *srv, array *req, const char *username, c
 	return -1;
 }
 
-static int mod_auth_basic_check(server *srv, connection *con, mod_auth_plugin_data *p, array *req, const char *realm_str) {
+static handler_t mod_auth_send_400_bad_request(server *srv, connection *con) {
+	UNUSED(srv);
+
+	/* a field was missing or invalid */
+	con->http_status = 400; /* Bad Request */
+	con->mode = DIRECT;
+
+	return HANDLER_FINISHED;
+}
+
+static int mod_auth_digest_generate_nonce(server *srv, mod_auth_plugin_data *p, buffer *fn, char (*out)[33]);
+
+static handler_t mod_auth_send_401_unauthorized_basic(server *srv, connection *con, mod_auth_plugin_data *p, array *req) {
+	data_string *realm = (data_string *)array_get_element(req, "realm");
+
+	con->http_status = 401;
+	con->mode = DIRECT;
+
+	if (!realm) return HANDLER_FINISHED; /*(should not happen; config is validated at startup)*/
+
+	buffer_copy_string_len(p->tmp_buf, CONST_STR_LEN("Basic realm=\""));
+	buffer_append_string_buffer(p->tmp_buf, realm->value);
+	buffer_append_string_len(p->tmp_buf, CONST_STR_LEN("\", charset=\"UTF-8\""));
+
+	response_header_insert(srv, con, CONST_STR_LEN("WWW-Authenticate"), CONST_BUF_LEN(p->tmp_buf));
+
+	return HANDLER_FINISHED;
+}
+
+static handler_t mod_auth_send_401_unauthorized_digest(server *srv, connection *con, mod_auth_plugin_data *p, array *req, int nonce_stale) {
+	data_string *realm = (data_string *)array_get_element(req, "realm");
+	char hh[33];
+
+	con->http_status = 401;
+	con->mode = DIRECT;
+
+	if (!realm) return HANDLER_FINISHED; /*(should not happen; config is validated at startup)*/
+
+	/* using unknown contents of srv->tmp_buf (modified elsewhere)
+	 * adds dubious amount of randomness.  Remove use of srv->tmp_buf? */
+	mod_auth_digest_generate_nonce(srv, p, srv->tmp_buf, &hh);
+
+	buffer_copy_string_len(p->tmp_buf, CONST_STR_LEN("Digest realm=\""));
+	buffer_append_string_buffer(p->tmp_buf, realm->value);
+	buffer_append_string_len(p->tmp_buf, CONST_STR_LEN("\", charset=\"UTF-8\", nonce=\""));
+	buffer_append_uint_hex(p->tmp_buf, (uintmax_t)srv->cur_ts);
+	buffer_append_string_len(p->tmp_buf, CONST_STR_LEN(":"));
+	buffer_append_string(p->tmp_buf, hh);
+	buffer_append_string_len(p->tmp_buf, CONST_STR_LEN("\", qop=\"auth\""));
+	if (nonce_stale) {
+		buffer_append_string_len(p->tmp_buf, CONST_STR_LEN(", stale=true"));
+	}
+
+	response_header_insert(srv, con, CONST_STR_LEN("WWW-Authenticate"), CONST_BUF_LEN(p->tmp_buf));
+
+	return HANDLER_FINISHED;
+}
+
+static void mod_auth_setenv(server *srv, connection *con, const char *username, size_t ulen, const char *auth_type, size_t alen) {
+	data_string *ds;
+	UNUSED(srv);
+
+	/* the REMOTE_USER header */
+
+	if (NULL == (ds = (data_string *)array_get_element(con->environment, "REMOTE_USER"))) {
+		if (NULL == (ds = (data_string *)array_get_unused_element(con->environment, TYPE_STRING))) {
+			ds = data_string_init();
+		}
+		buffer_copy_string_len(ds->key, CONST_STR_LEN("REMOTE_USER"));
+		array_insert_unique(con->environment, (data_unset *)ds);
+	}
+	buffer_copy_string_len(ds->value, username, ulen);
+
+	/* AUTH_TYPE environment */
+
+	if (NULL == (ds = (data_string *)array_get_element(con->environment, "AUTH_TYPE"))) {
+		if (NULL == (ds = (data_string *)array_get_unused_element(con->environment, TYPE_STRING))) {
+			ds = data_string_init();
+		}
+		buffer_copy_string_len(ds->key, CONST_STR_LEN("AUTH_TYPE"));
+		array_insert_unique(con->environment, (data_unset *)ds);
+	}
+	buffer_copy_string_len(ds->value, auth_type, alen);
+}
+
+static handler_t mod_auth_basic_check(server *srv, connection *con, mod_auth_plugin_data *p, array *req, const char *realm_str) {
 	buffer *username;
 	char *pw;
-	int i;
 
 	data_string *realm;
 
 	realm = (data_string *)array_get_element(req, "realm");
-	if (!realm) return 0; /*(should not happen; config is validated at startup)*/
+	if (!realm) { /*(should not happen; config is validated at startup)*/
+		return mod_auth_send_400_bad_request(srv, con);
+	}
 
 	username = buffer_init();
 
@@ -295,7 +333,7 @@ static int mod_auth_basic_check(server *srv, connection *con, mod_auth_plugin_da
 		log_error_write(srv, __FILE__, __LINE__, "sb", "decodeing base64-string failed", username);
 
 		buffer_free(username);
-		return 0;
+		return mod_auth_send_400_bad_request(srv, con);
 	}
 
 	/* r2 == user:password */
@@ -303,49 +341,41 @@ static int mod_auth_basic_check(server *srv, connection *con, mod_auth_plugin_da
 		log_error_write(srv, __FILE__, __LINE__, "sb", ": is missing in", username);
 
 		buffer_free(username);
-		return 0;
+		return mod_auth_send_400_bad_request(srv, con);
 	}
 
 	buffer_string_set_length(username, pw - username->ptr);
 	pw++;
 
-	/* password doesn't match */
-	if (p->conf.auth_backend == AUTH_BACKEND_PLAIN) {
-		i = mod_authn_plain_basic(srv, con, p, username, realm->value, pw);
-	} else if (p->conf.auth_backend == AUTH_BACKEND_HTDIGEST) {
-		i = mod_authn_htdigest_basic(srv, con, p, username, realm->value, pw);
-	} else if (p->conf.auth_backend == AUTH_BACKEND_HTPASSWD) {
-		i = mod_authn_htpasswd_basic(srv, con, p, username, realm->value, pw);
-      #ifdef USE_LDAP
-	} else if (p->conf.auth_backend == AUTH_BACKEND_LDAP) {
-		i = mod_authn_ldap_basic(srv, con, p, username, realm->value, pw);
-      #endif
-	} else {
-		i = -1;
-	}
-	if (0 != i) {
-		log_error_write(srv, __FILE__, __LINE__, "sbsBss", "password doesn't match for", con->uri.path, "username:", username, ", IP:", inet_ntop_cache_get_ip(srv, &(con->dst_addr)));
-
+	switch (p->conf.auth_backend->basic(srv, con, p->conf.auth_backend->p_d, username, realm->value, pw)) {
+	case HANDLER_GO_ON:
+		break;
+	case HANDLER_WAIT_FOR_EVENT:
 		buffer_free(username);
-
-		return 0;
+		return HANDLER_WAIT_FOR_EVENT;
+	case HANDLER_FINISHED:
+		buffer_free(username);
+		return HANDLER_FINISHED;
+	case HANDLER_ERROR:
+	default:
+		log_error_write(srv, __FILE__, __LINE__, "sbsBss", "password doesn't match for", con->uri.path, "username:", username, ", IP:", inet_ntop_cache_get_ip(srv, &(con->dst_addr)));
+		buffer_free(username);
+		return mod_auth_send_401_unauthorized_basic(srv, con, p, req);
 	}
 
 	/* value is our allow-rules */
 	if (mod_auth_match_rules(srv, req, username->ptr, NULL, NULL)) {
-		buffer_free(username);
-
 		log_error_write(srv, __FILE__, __LINE__, "s", "rules didn't match");
 
-		return 0;
+		buffer_free(username);
+		return mod_auth_send_401_unauthorized_basic(srv, con, p, req);
 	}
 
-	/* remember the username */
-	buffer_copy_buffer(p->auth_user, username);
+	mod_auth_setenv(srv, con, CONST_BUF_LEN(username), CONST_STR_LEN("Basic"));
 
 	buffer_free(username);
 
-	return 1;
+	return HANDLER_GO_ON;
 }
 
 #define HASHLEN 16
@@ -363,8 +393,7 @@ typedef struct {
 	char **ptr;
 } digest_kv;
 
-/* return values: -1: error/bad request, 0: failed, 1: success */
-static int mod_auth_digest_check(server *srv, connection *con, mod_auth_plugin_data *p, array *req, const char *realm_str) {
+static handler_t mod_auth_digest_check(server *srv, connection *con, mod_auth_plugin_data *p, array *req, const char *realm_str) {
 	char a1[33];
 	char a2[33];
 
@@ -476,7 +505,7 @@ static int mod_auth_digest_check(server *srv, connection *con, mod_auth_plugin_d
 				"digest: missing field");
 
 		buffer_free(b);
-		return -1;
+		return mod_auth_send_400_bad_request(srv, con);
 	}
 
 	/**
@@ -489,7 +518,7 @@ static int mod_auth_digest_check(server *srv, connection *con, mod_auth_plugin_d
 				"digest: (md5-sess: missing field");
 
 		buffer_free(b);
-		return -1;
+		return mod_auth_send_400_bad_request(srv, con);
 	}
 
 	if (qop && strcasecmp(qop, "auth-int") == 0) {
@@ -497,7 +526,7 @@ static int mod_auth_digest_check(server *srv, connection *con, mod_auth_plugin_d
 				"digest: qop=auth-int not supported");
 
 		buffer_free(b);
-		return -1;
+		return mod_auth_send_400_bad_request(srv, con);
 	}
 
 	m = get_http_method_name(con->request.http_method);
@@ -519,21 +548,24 @@ static int mod_auth_digest_check(server *srv, connection *con, mod_auth_plugin_d
 			log_error_write(srv, __FILE__, __LINE__, "sbssss",
 					"digest: auth failed: uri mismatch (", con->request.orig_uri, "!=", uri, "), IP:", inet_ntop_cache_get_ip(srv, &(con->dst_addr)));
 			buffer_free(b);
-			return -1;
+			return mod_auth_send_400_bad_request(srv, con);
 		}
 	}
 
 	/* password-string == HA1 */
-	if (p->conf.auth_backend == AUTH_BACKEND_PLAIN) {
-		i = mod_authn_plain_digest(srv, con, p, username, realm, HA1);
-	} else if (p->conf.auth_backend == AUTH_BACKEND_HTDIGEST) {
-		i = mod_authn_htdigest_digest(srv, con, p, username, realm, HA1);
-	} else {
-		i = -1;
-	}
-	if (-1 == i) {
+	switch (p->conf.auth_backend->digest(srv, con, p->conf.auth_backend->p_d, username, realm, HA1)) {
+	case HANDLER_GO_ON:
+		break;
+	case HANDLER_WAIT_FOR_EVENT:
 		buffer_free(b);
-		return i;
+		return HANDLER_WAIT_FOR_EVENT;
+	case HANDLER_FINISHED:
+		buffer_free(b);
+		return HANDLER_FINISHED;
+	case HANDLER_ERROR:
+	default:
+		buffer_free(b);
+		return mod_auth_send_401_unauthorized_digest(srv, con, p, req, 0);
 	}
 
 	if (algorithm &&
@@ -596,19 +628,19 @@ static int mod_auth_digest_check(server *srv, connection *con, mod_auth_plugin_d
 				"digest: auth failed for ", username, ": wrong password, IP:", inet_ntop_cache_get_ip(srv, &(con->dst_addr)));
 
 		buffer_free(b);
-		return 0;
+		return mod_auth_send_401_unauthorized_digest(srv, con, p, req, 0);
 	}
 
 	/* value is our allow-rules */
 	if (mod_auth_match_rules(srv, req, username, NULL, NULL)) {
-		buffer_free(b);
 
 		if (p->conf.auth_debug) {
 			log_error_write(srv, __FILE__, __LINE__, "s",
 					"digest: rules did match");
 		}
 
-		return 0;
+		buffer_free(b);
+		return mod_auth_send_401_unauthorized_digest(srv, con, p, req, 0);
 	}
 
 	/* check age of nonce.  Note that rand() is used in nonce generation
@@ -628,13 +660,13 @@ static int mod_auth_digest_check(server *srv, connection *con, mod_auth_plugin_d
 		}
 		if (i != 8 || nonce[8] != ':'
 		    || ts > srv->cur_ts || srv->cur_ts - ts > 600) { /*(10 mins)*/
+			/* nonce is stale; have client regenerate digest */
 			buffer_free(b);
-			return -2; /* nonce is stale; have client regenerate digest */
+			return mod_auth_send_401_unauthorized_digest(srv, con, p, req, 1);
 		} /*(future: might send nextnonce when expiration is imminent)*/
 	}
 
-	/* remember the username */
-	buffer_copy_string(p->auth_user, username);
+	mod_auth_setenv(srv, con, username, strlen(username), CONST_STR_LEN("Digest"));
 
 	buffer_free(b);
 
@@ -642,7 +674,8 @@ static int mod_auth_digest_check(server *srv, connection *con, mod_auth_plugin_d
 		log_error_write(srv, __FILE__, __LINE__, "s",
 				"digest: auth ok");
 	}
-	return 1;
+
+	return HANDLER_GO_ON;
 }
 
 static int mod_auth_digest_generate_nonce(server *srv, mod_auth_plugin_data *p, buffer *fn, char (*out)[33]) {
@@ -673,9 +706,8 @@ static int mod_auth_digest_generate_nonce(server *srv, mod_auth_plugin_data *p, 
 
 static handler_t mod_auth_uri_handler(server *srv, connection *con, void *p_d) {
 	size_t k;
-	int auth_required = 0, auth_satisfied = 0;
+	int auth_required;
 	char *http_authorization = NULL;
-	const char *auth_type = NULL;
 	data_string *ds;
 	mod_auth_plugin_data *p = p_d;
 	array *req;
@@ -694,7 +726,6 @@ static handler_t mod_auth_uri_handler(server *srv, connection *con, void *p_d) {
 	/* do we have to ask for auth ? */
 
 	auth_required = 0;
-	auth_satisfied = 0;
 
 	/* search auth-directives for path */
 	for (k = 0; k < p->conf.auth_require->used; k++) {
@@ -740,6 +771,15 @@ static handler_t mod_auth_uri_handler(server *srv, connection *con, void *p_d) {
 		}
 	}
 
+	/* check for configured backend
+	 * (XXX: should try to catch this at config time, if not "extern" method) */
+	if (NULL == p->conf.auth_backend) {
+		log_error_write(srv, __FILE__, __LINE__, "sb", "auth.backend not configured for", con->uri.path);
+		con->http_status = 500;
+		con->mode = DIRECT;
+		return HANDLER_FINISHED;
+	}
+
 	/* try to get Authorization-header */
 
 	if (NULL != (ds = (data_string *)array_get_element(con->request.headers, "Authorization")) && !buffer_is_empty(ds->value)) {
@@ -753,96 +793,35 @@ static handler_t mod_auth_uri_handler(server *srv, connection *con, void *p_d) {
 
 			if ((auth_type_len == 5) &&
 			    (0 == strncasecmp(http_authorization, "Basic", auth_type_len))) {
-				auth_type = "Basic";
-
 				if (0 == strcmp(req_method->value->ptr, "basic")) {
-					auth_satisfied = mod_auth_basic_check(srv, con, p, req, auth_realm+1);
+					return mod_auth_basic_check(srv, con, p, req, auth_realm+1);
 				}
 			} else if ((auth_type_len == 6) &&
 				   (0 == strncasecmp(http_authorization, "Digest", auth_type_len))) {
-				auth_type = "Digest";
 				if (0 == strcmp(req_method->value->ptr, "digest")) {
-					if (-1 == (auth_satisfied = mod_auth_digest_check(srv, con, p, req, auth_realm+1))) {
-						con->http_status = 400;
-						con->mode = DIRECT;
-
-						/* a field was missing */
-
-						return HANDLER_FINISHED;
-					}
+					return mod_auth_digest_check(srv, con, p, req, auth_realm+1);
 				}
 			} else {
 				log_error_write(srv, __FILE__, __LINE__, "ss",
 						"unknown authentication type:",
 						http_authorization);
+				return mod_auth_send_400_bad_request(srv, con);
 			}
+		} else {
+			return mod_auth_send_400_bad_request(srv, con);
 		}
 	}
 
-	if (1 != auth_satisfied) { /*(0 or -2)*/
-		data_string *method, *realm;
-		method = (data_string *)array_get_element(req, "method");
-		realm = (data_string *)array_get_element(req, "realm");
-
+	if (0 == strcmp(req_method->value->ptr, "basic")) {
+		return mod_auth_send_401_unauthorized_basic(srv, con, p, req);
+	} else if (0 == strcmp(req_method->value->ptr, "digest")) {
+		return mod_auth_send_401_unauthorized_digest(srv, con, p, req, 0);
+	} else {
+		/* evil */
 		con->http_status = 401;
 		con->mode = DIRECT;
-
-		if (!method) return HANDLER_FINISHED;/*(should not happen; config is validated at startup)*/
-		if (!realm) return HANDLER_FINISHED; /*(should not happen; config is validated at startup)*/
-
-		if (0 == strcmp(method->value->ptr, "basic")) {
-			buffer_copy_string_len(p->tmp_buf, CONST_STR_LEN("Basic realm=\""));
-			buffer_append_string_buffer(p->tmp_buf, realm->value);
-			buffer_append_string_len(p->tmp_buf, CONST_STR_LEN("\", charset=\"UTF-8\""));
-
-			response_header_insert(srv, con, CONST_STR_LEN("WWW-Authenticate"), CONST_BUF_LEN(p->tmp_buf));
-		} else if (0 == strcmp(method->value->ptr, "digest")) {
-			char hh[33];
-			/* using unknown contents of srv->tmp_buf (modified elsewhere)
-			 * adds dubious amount of randomness.  Remove use of srv->tmp_buf? */
-			mod_auth_digest_generate_nonce(srv, p, srv->tmp_buf, &hh);
-
-			buffer_copy_string_len(p->tmp_buf, CONST_STR_LEN("Digest realm=\""));
-			buffer_append_string_buffer(p->tmp_buf, realm->value);
-			buffer_append_string_len(p->tmp_buf, CONST_STR_LEN("\", charset=\"UTF-8\", nonce=\""));
-			buffer_append_uint_hex(p->tmp_buf, (uintmax_t)srv->cur_ts);
-			buffer_append_string_len(p->tmp_buf, CONST_STR_LEN(":"));
-			buffer_append_string(p->tmp_buf, hh);
-			buffer_append_string_len(p->tmp_buf, CONST_STR_LEN("\", qop=\"auth\""));
-			if (-2 == auth_satisfied) {
-				buffer_append_string_len(p->tmp_buf, CONST_STR_LEN(", stale=true"));
-			}
-
-			response_header_insert(srv, con, CONST_STR_LEN("WWW-Authenticate"), CONST_BUF_LEN(p->tmp_buf));
-		} else {
-			/* evil */
-		}
 		return HANDLER_FINISHED;
-	} else {
-		/* the REMOTE_USER header */
-
-		if (NULL == (ds = (data_string *)array_get_element(con->environment, "REMOTE_USER"))) {
-			if (NULL == (ds = (data_string *)array_get_unused_element(con->environment, TYPE_STRING))) {
-				ds = data_string_init();
-			}
-			buffer_copy_string(ds->key, "REMOTE_USER");
-			array_insert_unique(con->environment, (data_unset *)ds);
-		}
-		buffer_copy_buffer(ds->value, p->auth_user);
-
-		/* AUTH_TYPE environment */
-
-		if (NULL == (ds = (data_string *)array_get_element(con->environment, "AUTH_TYPE"))) {
-			if (NULL == (ds = (data_string *)array_get_unused_element(con->environment, TYPE_STRING))) {
-				ds = data_string_init();
-			}
-			buffer_copy_string(ds->key, "AUTH_TYPE");
-			array_insert_unique(con->environment, (data_unset *)ds);
-		}
-		buffer_copy_string(ds->value, auth_type);
 	}
-
-	return HANDLER_GO_ON;
 }
 
 SETDEFAULTS_FUNC(mod_auth_set_defaults) {
@@ -851,20 +830,8 @@ SETDEFAULTS_FUNC(mod_auth_set_defaults) {
 
 	config_values_t cv[] = {
 		{ "auth.backend",                   NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_CONNECTION }, /* 0 */
-		{ "auth.backend.plain.groupfile",   NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_CONNECTION }, /* 1 */
-		{ "auth.backend.plain.userfile",    NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_CONNECTION }, /* 2 */
-		{ "auth.require",                   NULL, T_CONFIG_LOCAL, T_CONFIG_SCOPE_CONNECTION },  /* 3 */
-		{ "auth.backend.ldap.hostname",     NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_CONNECTION }, /* 4 */
-		{ "auth.backend.ldap.base-dn",      NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_CONNECTION }, /* 5 */
-		{ "auth.backend.ldap.filter",       NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_CONNECTION }, /* 6 */
-		{ "auth.backend.ldap.ca-file",      NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_CONNECTION }, /* 7 */
-		{ "auth.backend.ldap.starttls",     NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION }, /* 8 */
- 		{ "auth.backend.ldap.bind-dn",      NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_CONNECTION }, /* 9 */
- 		{ "auth.backend.ldap.bind-pw",      NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_CONNECTION }, /* 10 */
-		{ "auth.backend.ldap.allow-empty-pw",     NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION }, /* 11 */
-		{ "auth.backend.htdigest.userfile", NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_CONNECTION }, /* 12 */
-		{ "auth.backend.htpasswd.userfile", NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_CONNECTION }, /* 13 */
-		{ "auth.debug",                     NULL, T_CONFIG_SHORT, T_CONFIG_SCOPE_CONNECTION },  /* 14 */
+		{ "auth.require",                   NULL, T_CONFIG_LOCAL, T_CONFIG_SCOPE_CONNECTION },  /* 1 */
+		{ "auth.debug",                     NULL, T_CONFIG_SHORT, T_CONFIG_SCOPE_CONNECTION },  /* 2 */
 		{ NULL,                             NULL, T_CONFIG_UNSET, T_CONFIG_SCOPE_UNSET }
 	};
 
@@ -877,44 +844,15 @@ SETDEFAULTS_FUNC(mod_auth_set_defaults) {
 		data_array *da;
 
 		s = calloc(1, sizeof(mod_auth_plugin_config));
-		s->auth_plain_groupfile = buffer_init();
-		s->auth_plain_userfile = buffer_init();
-		s->auth_htdigest_userfile = buffer_init();
-		s->auth_htpasswd_userfile = buffer_init();
 		s->auth_backend_conf = buffer_init();
 
-		s->auth_ldap_hostname = buffer_init();
-		s->auth_ldap_basedn = buffer_init();
-		s->auth_ldap_binddn = buffer_init();
-		s->auth_ldap_bindpw = buffer_init();
-		s->auth_ldap_filter = buffer_init();
-		s->auth_ldap_cafile = buffer_init();
-		s->auth_ldap_starttls = 0;
 		s->auth_debug = 0;
 
 		s->auth_require = array_init();
 
-#ifdef USE_LDAP
-		s->ldap_filter_pre = buffer_init();
-		s->ldap_filter_post = buffer_init();
-		s->ldap = NULL;
-#endif
-
 		cv[0].destination = s->auth_backend_conf;
-		cv[1].destination = s->auth_plain_groupfile;
-		cv[2].destination = s->auth_plain_userfile;
-		cv[3].destination = s->auth_require;
-		cv[4].destination = s->auth_ldap_hostname;
-		cv[5].destination = s->auth_ldap_basedn;
-		cv[6].destination = s->auth_ldap_filter;
-		cv[7].destination = s->auth_ldap_cafile;
-		cv[8].destination = &(s->auth_ldap_starttls);
-		cv[9].destination = s->auth_ldap_binddn;
-		cv[10].destination = s->auth_ldap_bindpw;
-		cv[11].destination = &(s->auth_ldap_allow_empty_pw);
-		cv[12].destination = s->auth_htdigest_userfile;
-		cv[13].destination = s->auth_htpasswd_userfile;
-		cv[14].destination = &(s->auth_debug);
+		cv[1].destination = s->auth_require;
+		cv[2].destination = &(s->auth_debug);
 
 		p->config_storage[i] = s;
 
@@ -923,37 +861,13 @@ SETDEFAULTS_FUNC(mod_auth_set_defaults) {
 		}
 
 		if (!buffer_string_is_empty(s->auth_backend_conf)) {
-			if (0 == strcmp(s->auth_backend_conf->ptr, "htpasswd")) {
-				s->auth_backend = AUTH_BACKEND_HTPASSWD;
-			} else if (0 == strcmp(s->auth_backend_conf->ptr, "htdigest")) {
-				s->auth_backend = AUTH_BACKEND_HTDIGEST;
-			} else if (0 == strcmp(s->auth_backend_conf->ptr, "plain")) {
-				s->auth_backend = AUTH_BACKEND_PLAIN;
-			} else if (0 == strcmp(s->auth_backend_conf->ptr, "ldap")) {
-				s->auth_backend = AUTH_BACKEND_LDAP;
-			} else {
+			s->auth_backend = http_auth_backend_get(s->auth_backend_conf);
+			if (NULL == s->auth_backend) {
 				log_error_write(srv, __FILE__, __LINE__, "sb", "auth.backend not supported:", s->auth_backend_conf);
 
 				return HANDLER_ERROR;
 			}
 		}
-
-#ifdef USE_LDAP
-		if (!buffer_string_is_empty(s->auth_ldap_filter)) {
-			char *dollar;
-
-			/* parse filter */
-
-			if (NULL == (dollar = strchr(s->auth_ldap_filter->ptr, '$'))) {
-				log_error_write(srv, __FILE__, __LINE__, "s", "ldap: auth.backend.ldap.filter is missing a replace-operator '$'");
-
-				return HANDLER_ERROR;
-			}
-
-			buffer_copy_string_len(s->ldap_filter_pre, s->auth_ldap_filter->ptr, dollar - s->auth_ldap_filter->ptr);
-			buffer_copy_string(s->ldap_filter_post, dollar+1);
-		}
-#endif
 
 		/* no auth.require for this section */
 		if (NULL == (da = (data_array *)array_get_element(config->value, "auth.require"))) continue;
@@ -1063,22 +977,6 @@ SETDEFAULTS_FUNC(mod_auth_set_defaults) {
 
 				array_insert_unique(s->auth_require, (data_unset *)a);
 			}
-		}
-
-		switch(s->auth_backend) {
-		case AUTH_BACKEND_LDAP: {
-		      #ifdef USE_LDAP
-			handler_t ret = mod_authn_ldap_init(srv, s);
-			if (ret == HANDLER_ERROR)
-				return (ret);
-			break;
-		      #else
-			log_error_write(srv, __FILE__, __LINE__, "s", "no ldap support available");
-			return HANDLER_ERROR;
-		      #endif
-		}
-		default:
-			break;
 		}
 	}
 
