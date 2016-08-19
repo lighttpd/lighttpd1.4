@@ -21,7 +21,7 @@ int main (void) {
 		if (((p = getenv("QUERY_STRING")) == NULL) ||
 		    (strcmp(p, "ok") != 0 && strcmp(p, "var") != 0)) {
 			printf("Status: 403 Forbidden\r\n\r\n");
-		} else if (((p = getenv("QUERY_STRING")) != NULL) || strcmp(p, "var") == 0) {
+		} else if (((p = getenv("QUERY_STRING")) != NULL) && strcmp(p, "var") == 0) {
 			printf("Variable-LIGHTYTEST: LighttpdTestContent\r\n");
 			printf("\r\n");
 		} else {
