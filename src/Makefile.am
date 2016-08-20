@@ -77,6 +77,7 @@ common_src=base64.c buffer.c log.c \
 	connections-glue.c \
 	configfile-glue.c \
 	http-header-glue.c \
+	http_auth.c \
 	network_write.c network_linux_sendfile.c \
 	network_write_mmap.c network_write_no_mmap.c \
 	network_freebsd_sendfile.c network_writev.c \
@@ -252,9 +253,19 @@ mod_compress_la_LDFLAGS = $(common_module_ldflags)
 mod_compress_la_LIBADD = $(Z_LIB) $(BZ_LIB) $(common_libadd)
 
 lib_LTLIBRARIES += mod_auth.la
-mod_auth_la_SOURCES = mod_auth.c http_auth.c
+mod_auth_la_SOURCES = mod_auth.c
 mod_auth_la_LDFLAGS = $(common_module_ldflags)
-mod_auth_la_LIBADD = $(CRYPT_LIB) $(SSL_LIB) $(LDAP_LIB) $(LBER_LIB) $(common_libadd)
+mod_auth_la_LIBADD = $(common_libadd)
+
+lib_LTLIBRARIES += mod_authn_file.la
+mod_authn_file_la_SOURCES = mod_authn_file.c
+mod_authn_file_la_LDFLAGS = $(common_module_ldflags)
+mod_authn_file_la_LIBADD = $(CRYPT_LIB) $(SSL_LIB) $(common_libadd)
+
+lib_LTLIBRARIES += mod_authn_ldap.la
+mod_authn_ldap_la_SOURCES = mod_authn_ldap.c
+mod_authn_ldap_la_LDFLAGS = $(common_module_ldflags)
+mod_authn_ldap_la_LIBADD = $(LDAP_LIB) $(LBER_LIB) $(common_libadd)
 
 lib_LTLIBRARIES += mod_rewrite.la
 mod_rewrite_la_SOURCES = mod_rewrite.c
@@ -304,7 +315,9 @@ lighttpd_SOURCES = \
   mod_access.c \
   mod_accesslog.c \
   mod_alias.c \
-  mod_auth.c http_auth.c \
+  mod_auth.c \
+  mod_authn_file.c \
+  mod_authn_ldap.c \
   mod_cgi.c \
   mod_cml.c mod_cml_lua.c mod_cml_funcs.c \
   mod_compress.c \

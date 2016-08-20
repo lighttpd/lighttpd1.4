@@ -512,6 +512,7 @@ set(COMMON_SRC
 	connections-glue.c
 	configfile-glue.c
 	http-header-glue.c
+	http_auth.c
 	splaytree.c network_writev.c
 	network_write_mmap.c network_write_no_mmap.c
 	network_write.c network_linux_sendfile.c
@@ -557,7 +558,9 @@ set(L_INSTALL_TARGETS ${L_INSTALL_TARGETS} lighttpd)
 add_and_install_library(mod_access mod_access.c)
 add_and_install_library(mod_accesslog mod_accesslog.c)
 add_and_install_library(mod_alias mod_alias.c)
-add_and_install_library(mod_auth "mod_auth.c;http_auth.c")
+add_and_install_library(mod_auth "mod_auth.c")
+add_and_install_library(mod_authn_file "mod_authn_file.c")
+add_and_install_library(mod_authn_ldap "mod_authn_ldap.c")
 if(NOT WIN32)
 	add_and_install_library(mod_cgi mod_cgi.c)
 endif()
@@ -654,15 +657,16 @@ endif()
 
 target_link_libraries(mod_webdav ${L_MOD_WEBDAV})
 
-set(L_MOD_AUTH)
+set(L_MOD_AUTHN_FILE)
 if(HAVE_LIBCRYPT)
-	set(L_MOD_AUTH ${L_MOD_AUTH} crypt)
+	set(L_MOD_AUTHN_FILE ${L_MOD_AUTHN_FILE} crypt)
 endif()
+target_link_libraries(mod_authn_file ${L_MOD_AUTHN_FILE})
 
 if(HAVE_LDAP_H)
-	set(L_MOD_AUTH ${L_MOD_AUTH} ldap lber)
+	set(L_MOD_AUTHN_LDAP ${L_MOD_AUTHN_LDAP} ldap lber)
 endif()
-target_link_libraries(mod_auth ${L_MOD_AUTH})
+target_link_libraries(mod_authn_ldap ${L_MOD_AUTHN_LDAP})
 
 if(HAVE_ZLIB_H)
 	if(HAVE_BZLIB_H)

@@ -341,6 +341,9 @@ static int config_insert(server *srv) {
 		int prepend_mod_indexfile = 1;
 		int append_mod_dirlisting = 1;
 		int append_mod_staticfile = 1;
+		int append_mod_authn_file = 1;
+		int append_mod_authn_ldap = 1;
+		int contains_mod_auth = 0;
 
 		/* prepend default modules */
 		for (i = 0; i < srv->srvconf.modules->used; i++) {
@@ -358,9 +361,24 @@ static int config_insert(server *srv) {
 				append_mod_dirlisting = 0;
 			}
 
+			if (buffer_is_equal_string(ds->value, CONST_STR_LEN("mod_authn_file"))) {
+				append_mod_authn_file = 0;
+			}
+
+			if (buffer_is_equal_string(ds->value, CONST_STR_LEN("mod_authn_ldap"))) {
+				append_mod_authn_ldap = 0;
+			}
+
+			if (buffer_is_equal_string(ds->value, CONST_STR_LEN("mod_auth"))) {
+				contains_mod_auth = 1;
+			}
+
 			if (0 == prepend_mod_indexfile &&
 			    0 == append_mod_dirlisting &&
-			    0 == append_mod_staticfile) {
+			    0 == append_mod_staticfile &&
+			    0 == append_mod_authn_file &&
+			    0 == append_mod_authn_ldap &&
+			    1 == contains_mod_auth) {
 				break;
 			}
 		}
@@ -393,6 +411,24 @@ static int config_insert(server *srv) {
 			ds = data_string_init();
 			buffer_copy_string_len(ds->value, CONST_STR_LEN("mod_staticfile"));
 			array_insert_unique(srv->srvconf.modules, (data_unset *)ds);
+		}
+
+		/* mod_auth.c,http_auth.c auth backends were split into separate modules
+		 * Automatically load auth backend modules for compatibility with
+		 * existing lighttpd 1.4.x configs */
+		if (contains_mod_auth) {
+			if (append_mod_authn_file) {
+				ds = data_string_init();
+				buffer_copy_string_len(ds->value, CONST_STR_LEN("mod_authn_file"));
+				array_insert_unique(srv->srvconf.modules, (data_unset *)ds);
+			}
+			if (append_mod_authn_ldap) {
+			      #if defined(HAVE_LDAP_H) && defined(HAVE_LBER_H) && defined(HAVE_LIBLDAP) && defined(HAVE_LIBLBER)
+				ds = data_string_init();
+				buffer_copy_string_len(ds->value, CONST_STR_LEN("mod_authn_ldap"));
+				array_insert_unique(srv->srvconf.modules, (data_unset *)ds);
+			      #endif
+			}
 		}
 	}
 
