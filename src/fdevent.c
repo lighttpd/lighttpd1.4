@@ -254,7 +254,7 @@ int fdevent_event_next_fdndx(fdevents *ev, int ndx) {
 #include <netinet/tcp.h>
 #if (defined(__APPLE__) && defined(__MACH__)) \
   || defined(__FreeBSD__) || defined(__NetBSD__) \
-  || defined(__OpenBSD__) || defined(__DragonflyBSD__)
+  || defined(__OpenBSD__) || defined(__DragonFly__)
 #include <netinet/tcp_fsm.h>
 #endif
 
@@ -265,12 +265,14 @@ int fdevent_is_tcp_half_closed(int fd) {
     socklen_t tlen = sizeof(tcpi);
     return (0 == getsockopt(fd, IPPROTO_TCP, TCP_CONNECTION_INFO, &tcpi, &tlen)
             && tcpi.tcpi_state == TCPS_CLOSE_WAIT);
-  #elif defined(TCPS_CLOSE_WAIT) /* FreeBSD, NetBSD (not present in OpenBSD) */
+  #elif defined(TCP_INFO) && defined(TCPS_CLOSE_WAIT)
+    /* FreeBSD, NetBSD (not present in OpenBSD or DragonFlyBSD) */
     struct tcp_info tcpi;
     socklen_t tlen = sizeof(tcpi);
     return (0 == getsockopt(fd, IPPROTO_TCP, TCP_INFO, &tcpi, &tlen)
             && tcpi.tcpi_state == TCPS_CLOSE_WAIT);
-  #elif defined(TCP_INFO)        /* Linux */
+  #elif defined(TCP_INFO) && defined(__linux__)
+    /* Linux (TCP_CLOSE_WAIT is enum, so can not #ifdef TCP_CLOSE_WAIT) */
     struct tcp_info tcpi;
     socklen_t tlen = sizeof(tcpi);/*SOL_TCP == IPPROTO_TCP*/
     return (0 == getsockopt(fd,     SOL_TCP, TCP_INFO, &tcpi, &tlen)

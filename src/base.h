@@ -329,7 +329,7 @@ typedef struct {
 	off_t *global_bytes_per_second_cnt_ptr; /*  */
 
 #if defined(__FreeBSD__) || defined(__NetBSD__) \
- || defined(__OpenBSD__) || defined(__DragonflyBSD__)
+ || defined(__OpenBSD__) || defined(__DragonFly__)
 	buffer *bsd_accept_filter;
 #endif
 

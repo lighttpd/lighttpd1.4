@@ -184,7 +184,7 @@ static int config_insert(server *srv) {
 		s->ssl_ec_curve  = buffer_init();
 		s->errorfile_prefix = buffer_init();
 	      #if defined(__FreeBSD__) || defined(__NetBSD__) \
-	       || defined(__OpenBSD__) || defined(__DragonflyBSD__)
+	       || defined(__OpenBSD__) || defined(__DragonFly__)
 		s->bsd_accept_filter = (i == 0)
 		  ? buffer_init()
 		  : buffer_init_buffer(srv->config_storage[0]->bsd_accept_filter);
@@ -285,7 +285,7 @@ static int config_insert(server *srv) {
 		cv[70].destination = &(s->listen_backlog);
 		cv[71].destination = s->error_handler_404;
 	      #if defined(__FreeBSD__) || defined(__NetBSD__) \
-	       || defined(__OpenBSD__) || defined(__DragonflyBSD__)
+	       || defined(__OpenBSD__) || defined(__DragonFly__)
 		cv[75].destination = s->bsd_accept_filter;
 	      #endif
 		cv[76].destination = &(s->stream_request_body);

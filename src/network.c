@@ -495,7 +495,7 @@ static int network_server_init(server *srv, buffer *host_token, specific_config 
 		}
 #endif
 #if defined(__FreeBSD__) || defined(__NetBSD__) \
- || defined(__OpenBSD__) || defined(__DragonflyBSD__)
+ || defined(__OpenBSD__) || defined(__DragonFly__)
 	} else if (!buffer_is_empty(s->bsd_accept_filter)
 		   && (buffer_is_equal_string(s->bsd_accept_filter, CONST_STR_LEN("httpready"))
 			|| buffer_is_equal_string(s->bsd_accept_filter, CONST_STR_LEN("dataready")))) {
