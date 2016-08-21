@@ -14,6 +14,8 @@
 # define HAVE_CRYPT
 #endif
 
+#include "base.h"
+
 #ifdef USE_OPENSSL
 #include "base64.h"
 #include <openssl/sha.h>
