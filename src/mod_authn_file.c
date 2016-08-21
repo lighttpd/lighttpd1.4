@@ -18,6 +18,7 @@
 
 #ifdef USE_OPENSSL
 #include "base64.h"
+#include <openssl/md4.h>
 #include <openssl/sha.h>
 #endif
 
@@ -623,7 +624,7 @@ static handler_t mod_authn_file_htpasswd_basic(server *srv, connection *con, voi
     mod_authn_file_patch_connection(srv, con, p);
     rc = mod_authn_file_htpasswd_get(srv, p->conf.auth_htpasswd_userfile, username, password);
     if (0 == rc) {
-        char sample[120];
+        char sample[256];
         rc = -1;
         if (!strncmp(password->ptr, APR1_ID, strlen(APR1_ID))) {
             /*
@@ -645,12 +646,68 @@ static handler_t mod_authn_file_htpasswd_basic(server *srv, connection *con, voi
            #if defined(HAVE_CRYPT_R)
             struct crypt_data crypt_tmp_data;
             crypt_tmp_data.initialized = 0;
-            crypted = crypt_r(pw, password->ptr, &crypt_tmp_data);
-           #else
-            crypted = crypt(pw, password->ptr);
            #endif
-            if (NULL != crypted) {
-                rc = strcmp(password->ptr, crypted);
+           #ifdef USE_OPENSSL /* (for MD4_*() (e.g. MD4_Update())) */
+            if (0 == memcmp(password->ptr, CONST_STR_LEN("$1+ntlm$"))) {
+                /* CRYPT-MD5-NTLM algorithm
+                 * This algorithm allows for the construction of (slight more)
+                 * secure, salted password hashes from an environment where only
+                 * legacy NTLM hashes are available and where it is not feasible
+                 * to re-hash all the passwords with the MD5-based crypt(). */
+                /* Note: originally, LM password were limited to 14 chars.
+                 * NTLM passwords limited to 127 chars, and encoding to UCS-2LE
+                 * requires double that, so sample[256] buf is large enough.
+                 * Prior sample[120] size likely taken from apr_md5_encode(). */
+                char *b = password->ptr+sizeof("$1+ntlm$")-1;
+                char *e = strchr(b, '$');
+                size_t slen = (NULL != e) ? (size_t)(e - b) : sizeof(sample);
+                size_t pwlen = strlen(pw) * 2;
+                if (slen < sizeof(sample) - (sizeof("$1$")-1)
+                    && pwlen < sizeof(sample)) {
+                    /* compute NTLM hash and convert to lowercase hex chars
+                     * (require lc hex chars from li_tohex()) */
+                    char ntlmhash[16];
+                    char ntlmhex[33]; /*(sizeof(ntlmhash)*2 + 1)*/
+                    MD4_CTX c;
+                    MD4_Init(&c);
+                    if (pwlen) {
+                        /*(reuse sample buffer to encode pw into UCS-2LE)
+                         *(Note: assumes pw input in ISO-8859-1) */
+                        /*(buffer sizes checked above)*/
+                        for (int i=0; i < (int)pwlen; i+=2) {
+                            sample[i] = pw[(i >> 1)];
+                            sample[i+1] = 0;
+                        }
+                        MD4_Update(&c, (unsigned char *)sample, pwlen);
+                    }
+                    MD4_Final((unsigned char *)ntlmhash, &c);
+                    li_tohex(ntlmhex,sizeof(ntlmhex),ntlmhash,sizeof(ntlmhash));
+
+                    /*(reuse sample buffer for salt  (FYI: expect slen == 8))*/
+                    memcpy(sample, CONST_STR_LEN("$1$"));
+                    memcpy(sample+sizeof("$1$")-1, b, slen);
+                   #if defined(HAVE_CRYPT_R)
+                    crypted = crypt_r(ntlmhex, sample, &crypt_tmp_data);
+                   #else
+                    crypted = crypt(ntlmhex, sample);
+                   #endif
+                    if (NULL != crypted
+                        && 0 == strncmp(crypted, "$1$", sizeof("$1$")-1)) {
+                        rc = strcmp(b, crypted+3); /*skip crypted "$1$" prefix*/
+                    }
+                }
+            }
+            else
+           #endif
+            {
+               #if defined(HAVE_CRYPT_R)
+                crypted = crypt_r(pw, password->ptr, &crypt_tmp_data);
+               #else
+                crypted = crypt(pw, password->ptr);
+               #endif
+                if (NULL != crypted) {
+                    rc = strcmp(password->ptr, crypted);
+                }
             }
         }
       #endif
