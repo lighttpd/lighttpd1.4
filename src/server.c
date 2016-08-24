@@ -1792,8 +1792,11 @@ int main (int argc, char **argv) {
 				fd      = fdevent_event_get_fd     (srv->ev, fd_ndx);
 				handler = fdevent_get_handler(srv->ev, fd);
 				context = fdevent_get_context(srv->ev, fd);
-				(*handler)(srv, context, revents);
+				if (NULL != handler) {
+					(*handler)(srv, context, revents);
+				}
 			} while (--n > 0);
+			fdevent_sched_run(srv, srv->ev);
 		} else if (n < 0 && errno != EINTR) {
 			log_error_write(srv, __FILE__, __LINE__, "ss",
 					"fdevent_poll failed:",

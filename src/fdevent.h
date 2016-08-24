@@ -125,6 +125,7 @@ typedef struct fdevents {
 
 	fdnode **fdarray;
 	size_t maxfds;
+	int highfd;
 
 #ifdef USE_LINUX_EPOLL
 	int epoll_fd;
@@ -202,6 +203,8 @@ int fdevent_poll(fdevents *ev, int timeout_ms);
 
 int fdevent_register(fdevents *ev, int fd, fdevent_handler handler, void *ctx);
 int fdevent_unregister(fdevents *ev, int fd);
+void fdevent_sched_close(fdevents *ev, int fd, int issock);
+void fdevent_sched_run(struct server *srv, fdevents *ev);
 
 void fd_close_on_exec(int fd);
 int fdevent_fcntl_set(fdevents *ev, int fd);

@@ -606,10 +606,7 @@ static void cgi_connection_close_fdtocgi(server *srv, handler_ctx *hctx) {
 	/*(closes only hctx->fdtocgi)*/
 	fdevent_event_del(srv->ev, &(hctx->fde_ndx_tocgi), hctx->fdtocgi);
 	fdevent_unregister(srv->ev, hctx->fdtocgi);
-
-	if (close(hctx->fdtocgi)) {
-		log_error_write(srv, __FILE__, __LINE__, "sds", "cgi stdin close failed ", hctx->fdtocgi, strerror(errno));
-	}
+	fdevent_sched_close(srv->ev, hctx->fdtocgi, 0);
 	hctx->fdtocgi = -1;
 }
 
@@ -631,10 +628,7 @@ static void cgi_connection_close(server *srv, handler_ctx *hctx) {
 		/* close connection to the cgi-script */
 		fdevent_event_del(srv->ev, &(hctx->fde_ndx), hctx->fd);
 		fdevent_unregister(srv->ev, hctx->fd);
-
-		if (close(hctx->fd)) {
-			log_error_write(srv, __FILE__, __LINE__, "sds", "cgi close failed ", hctx->fd, strerror(errno));
-		}
+		fdevent_sched_close(srv->ev, hctx->fd, 0);
 	}
 
 	if (hctx->fdtocgi != -1) {
@@ -1372,6 +1366,8 @@ static int cgi_create_env(server *srv, connection *con, plugin_data *p, handler_
 		hctx->fd = from_cgi_fds[0];
 		hctx->fde_ndx = -1;
 
+		++srv->cur_fds;
+
 		if (0 == con->request.content_length) {
 			close(to_cgi_fds[1]);
 		} else {
@@ -1388,6 +1384,8 @@ static int cgi_create_env(server *srv, connection *con, plugin_data *p, handler_
 				cgi_connection_close(srv, hctx);
 				return -1;
 			}
+
+			++srv->cur_fds;
 		}
 
 		fdevent_register(srv->ev, hctx->fd, cgi_handle_fdevent, hctx);

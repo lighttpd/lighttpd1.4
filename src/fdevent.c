@@ -23,6 +23,7 @@ fdevents *fdevent_init(server *srv, size_t maxfds, fdevent_handler_t type) {
 	ev->fdarray = calloc(maxfds, sizeof(*ev->fdarray));
 	force_assert(NULL != ev->fdarray);
 	ev->maxfds = maxfds;
+	ev->highfd = -1;
 
 	switch(type) {
 	case FDEVENT_HANDLER_POLL:
@@ -94,7 +95,7 @@ void fdevent_free(fdevents *ev) {
 	if (ev->free) ev->free(ev);
 
 	for (i = 0; i < ev->maxfds; i++) {
-		if (ev->fdarray[i]) free(ev->fdarray[i]);
+		if (ev->fdarray[i] > (fdnode *)0x2) free(ev->fdarray[i]);
 	}
 
 	free(ev->fdarray);
@@ -148,9 +149,42 @@ int fdevent_unregister(fdevents *ev, int fd) {
 	return 0;
 }
 
+void fdevent_sched_close(fdevents *ev, int fd, int issock) {
+	if (!ev) return;
+	ev->fdarray[fd] = (issock ? (fdnode *)0x1 : (fdnode *)0x2);
+	if (ev->highfd < fd) ev->highfd = fd;
+}
+
+void fdevent_sched_run(server *srv, fdevents *ev) {
+	const int highfd = ev->highfd;
+	for (int fd = 0; fd <= highfd; ++fd) {
+		fdnode * const fdn = ev->fdarray[fd];
+		int rc;
+		if (!((uintptr_t)fdn & 0x3)) continue;
+	      #ifdef _WIN32
+		if (fdn == (fdnode *)0x1) {
+			rc = closesocket(fd);
+		}
+		else if (fdn == (fdnode)0x2) {
+			rc = close(fd);
+		}
+	      #else
+		rc = close(fd);
+	      #endif
+
+		if (0 != rc) {
+			log_error_write(srv, __FILE__, __LINE__, "sds", "close failed ", fd, strerror(errno));
+		}
+
+		ev->fdarray[fd] = NULL;
+		--srv->cur_fds;
+	}
+	ev->highfd = -1;
+}
+
 void fdevent_event_del(fdevents *ev, int *fde_ndx, int fd) {
 	if (-1 == fd) return;
-	if (NULL == ev->fdarray[fd]) return;
+	if (ev->fdarray[fd] <= (fdnode *)0x2) return;
 
 	if (ev->event_del) *fde_ndx = ev->event_del(ev, *fde_ndx, fd);
 	ev->fdarray[fd]->events = 0;
@@ -212,6 +246,7 @@ int fdevent_event_get_fd(fdevents *ev, size_t ndx) {
 
 fdevent_handler fdevent_get_handler(fdevents *ev, int fd) {
 	if (ev->fdarray[fd] == NULL) SEGFAULT();
+	if ((uintptr_t)ev->fdarray[fd] & 0x3) return NULL;
 	if (ev->fdarray[fd]->fd != fd) SEGFAULT();
 
 	return ev->fdarray[fd]->handler;
@@ -219,6 +254,7 @@ fdevent_handler fdevent_get_handler(fdevents *ev, int fd) {
 
 void * fdevent_get_context(fdevents *ev, int fd) {
 	if (ev->fdarray[fd] == NULL) SEGFAULT();
+	if ((uintptr_t)ev->fdarray[fd] & 0x3) return NULL;
 	if (ev->fdarray[fd]->fd != fd) SEGFAULT();
 
 	return ev->fdarray[fd]->ctx;

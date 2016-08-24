@@ -1577,8 +1577,7 @@ static void fcgi_connection_close(server *srv, handler_ctx *hctx) {
 	if (hctx->fd != -1) {
 		fdevent_event_del(srv->ev, &(hctx->fde_ndx), hctx->fd);
 		fdevent_unregister(srv->ev, hctx->fd);
-		close(hctx->fd);
-		srv->cur_fds--;
+		fdevent_sched_close(srv->ev, hctx->fd, 1);
 	}
 
 	if (hctx->host && hctx->proc) {
@@ -1631,8 +1630,7 @@ static int fcgi_reconnect(server *srv, handler_ctx *hctx) {
 	if (hctx->fd != -1) {
 		fdevent_event_del(srv->ev, &(hctx->fde_ndx), hctx->fd);
 		fdevent_unregister(srv->ev, hctx->fd);
-		close(hctx->fd);
-		srv->cur_fds--;
+		fdevent_sched_close(srv->ev, hctx->fd, 1);
 		hctx->fd = -1;
 	}
 
