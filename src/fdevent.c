@@ -165,7 +165,7 @@ void fdevent_sched_run(server *srv, fdevents *ev) {
 		if (fdn == (fdnode *)0x1) {
 			rc = closesocket(fd);
 		}
-		else if (fdn == (fdnode)0x2) {
+		else if (fdn == (fdnode *)0x2) {
 			rc = close(fd);
 		}
 	      #else
