@@ -293,7 +293,7 @@ hdr = server.h base64.h buffer.h network.h log.h keyvalue.h \
 	first.h settings.h http_chunk.h \
 	md5.h http_auth.h stream.h \
 	fdevent.h connections.h base.h stat_cache.h \
-	plugin.h mod_auth.h \
+	plugin.h \
 	etag.h joblist.h array.h vector.h crc32.h \
 	network_backends.h configfile.h \
 	mod_ssi.h mod_ssi_expr.h inet_ntop_cache.h \
