@@ -103,6 +103,7 @@ modules = {
 	'mod_auth' : { 'src' : [ 'mod_auth.c' ] },
 	'mod_authn_file' : { 'src' : [ 'mod_authn_file.c' ], 'lib' : [ env['LIBCRYPT'] ] },
 	'mod_authn_ldap' : { 'src' : [ 'mod_authn_ldap.c' ], 'lib' : [ env['LIBLDAP'], env['LIBLBER'] ] },
+	'mod_authn_mysql' : { 'src' : [ 'mod_authn_mysql.c' ], 'lib' : [ env['LIBCRYPT'], env['LIBMYSQL'] ] },
 	'mod_webdav' : { 'src' : [ 'mod_webdav.c' ], 'lib' : [ env['LIBXML2'], env['LIBSQLITE3'], env['LIBUUID'] ] },
 	'mod_mysql_vhost' : { 'src' : [ 'mod_mysql_vhost.c' ], 'lib' : [ env['LIBMYSQL'] ] },
 #	'mod_uploadprogress' : { 'src' : [ 'mod_uploadprogress.c' ] },

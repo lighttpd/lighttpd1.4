@@ -343,6 +343,7 @@ static int config_insert(server *srv) {
 		int append_mod_staticfile = 1;
 		int append_mod_authn_file = 1;
 		int append_mod_authn_ldap = 1;
+		int append_mod_authn_mysql = 1;
 		int contains_mod_auth = 0;
 
 		/* prepend default modules */
@@ -369,6 +370,10 @@ static int config_insert(server *srv) {
 				append_mod_authn_ldap = 0;
 			}
 
+			if (buffer_is_equal_string(ds->value, CONST_STR_LEN("mod_authn_mysql"))) {
+				append_mod_authn_mysql = 0;
+			}
+
 			if (buffer_is_equal_string(ds->value, CONST_STR_LEN("mod_auth"))) {
 				contains_mod_auth = 1;
 			}
@@ -378,6 +383,7 @@ static int config_insert(server *srv) {
 			    0 == append_mod_staticfile &&
 			    0 == append_mod_authn_file &&
 			    0 == append_mod_authn_ldap &&
+			    0 == append_mod_authn_mysql &&
 			    1 == contains_mod_auth) {
 				break;
 			}
@@ -426,6 +432,13 @@ static int config_insert(server *srv) {
 			      #if defined(HAVE_LDAP_H) && defined(HAVE_LBER_H) && defined(HAVE_LIBLDAP) && defined(HAVE_LIBLBER)
 				ds = data_string_init();
 				buffer_copy_string_len(ds->value, CONST_STR_LEN("mod_authn_ldap"));
+				array_insert_unique(srv->srvconf.modules, (data_unset *)ds);
+			      #endif
+			}
+			if (append_mod_authn_mysql) {
+			      #if defined(HAVE_MYSQL)
+				ds = data_string_init();
+				buffer_copy_string_len(ds->value, CONST_STR_LEN("mod_authn_mysql"));
 				array_insert_unique(srv->srvconf.modules, (data_unset *)ds);
 			      #endif
 			}

@@ -267,6 +267,12 @@ mod_authn_ldap_la_SOURCES = mod_authn_ldap.c
 mod_authn_ldap_la_LDFLAGS = $(common_module_ldflags)
 mod_authn_ldap_la_LIBADD = $(LDAP_LIB) $(LBER_LIB) $(common_libadd)
 
+lib_LTLIBRARIES += mod_authn_mysql.la
+mod_authn_mysql_la_SOURCES = mod_authn_mysql.c
+mod_authn_mysql_la_LDFLAGS = $(common_module_ldflags)
+mod_authn_mysql_la_LIBADD = $(CRYPT_LIB) $(MYSQL_LIBS) $(common_libadd)
+mod_authn_mysql_la_CPPFLAGS = $(MYSQL_INCLUDE)
+
 lib_LTLIBRARIES += mod_rewrite.la
 mod_rewrite_la_SOURCES = mod_rewrite.c
 mod_rewrite_la_LDFLAGS = $(common_module_ldflags)
@@ -318,6 +324,7 @@ lighttpd_SOURCES = \
   mod_auth.c \
   mod_authn_file.c \
   mod_authn_ldap.c \
+  mod_authn_mysql.c \
   mod_cgi.c \
   mod_cml.c mod_cml_lua.c mod_cml_funcs.c \
   mod_compress.c \
