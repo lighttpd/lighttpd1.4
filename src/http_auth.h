@@ -14,4 +14,6 @@ typedef struct http_auth_backend_t {
 const http_auth_backend_t * http_auth_backend_get (const buffer *name);
 void http_auth_backend_set (const http_auth_backend_t *backend);
 
+int http_auth_md5_hex2bin (const char *md5hex, size_t len, unsigned char md5bin[16]);
+
 #endif

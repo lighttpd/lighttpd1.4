@@ -259,13 +259,7 @@ static int mod_authn_file_htdigest_get(server *srv, const buffer *auth_fn, const
 
             fclose(fp);
 
-            if (pwd_len != 32) return -1;
-            /* transform the 32-byte-hex-md5 (f_pwd) to a 16-byte-md5 (HA1) */
-            for (int i = 0; i < 16; i++) {
-                HA1[i] = hex2int(f_pwd[i*2]) << 4;
-                HA1[i] |= hex2int(f_pwd[i*2+1]);
-            }
-            return 0;
+            return http_auth_md5_hex2bin(f_pwd, pwd_len, HA1);
         }
     }
 
