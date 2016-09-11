@@ -1467,6 +1467,8 @@ URIHANDLER_FUNC(cgi_is_handled) {
 	plugin_data *p = p_d;
 	buffer *fn = con->physical.path;
 	stat_cache_entry *sce = NULL;
+	struct stat stbuf;
+	struct stat *st;
 
 	if (con->mode != DIRECT) return HANDLER_GO_ON;
 
@@ -1474,9 +1476,17 @@ URIHANDLER_FUNC(cgi_is_handled) {
 
 	mod_cgi_patch_connection(srv, con, p);
 
-	if (HANDLER_ERROR == stat_cache_get_entry(srv, con, con->physical.path, &sce)) return HANDLER_GO_ON;
-	if (!S_ISREG(sce->st.st_mode)) return HANDLER_GO_ON;
-	if (p->conf.execute_x_only == 1 && (sce->st.st_mode & (S_IXUSR | S_IXGRP | S_IXOTH)) == 0) return HANDLER_GO_ON;
+	if (HANDLER_ERROR != stat_cache_get_entry(srv, con, con->physical.path, &sce)) {
+		st = &sce->st;
+	} else {
+		/* CGI might be executable even if it is not readable
+		 * (stat_cache_get_entry() currently checks file is readable)*/
+		if (0 != stat(con->physical.path->ptr, &stbuf)) return HANDLER_GO_ON;
+		st = &stbuf;
+	}
+
+	if (!S_ISREG(st->st_mode)) return HANDLER_GO_ON;
+	if (p->conf.execute_x_only == 1 && (st->st_mode & (S_IXUSR | S_IXGRP | S_IXOTH)) == 0) return HANDLER_GO_ON;
 
 	if (NULL != cgi_get_handler(p->conf.cgi, fn)) {
 		handler_ctx *hctx = cgi_handler_ctx_init();
