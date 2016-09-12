@@ -9,7 +9,6 @@
 #include "response.h"
 #include "stat_cache.h"
 
-#include <ctype.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -350,7 +349,7 @@ URIHANDLER_FUNC(mod_uploadprogress_uri_handler) {
 			log_error_write(srv, __FILE__, __LINE__, "sb",
 					"ID no known:", b);
 
-			chunkqueue_get_append_mem(con->write_queue, CONST_STR_LEN("not in progress"));
+			chunkqueue_append_mem(con->write_queue, CONST_STR_LEN("not in progress"));
 
 			return HANDLER_FINISHED;
 		}

@@ -293,6 +293,11 @@ mod_accesslog_la_SOURCES = mod_accesslog.c
 mod_accesslog_la_LDFLAGS = $(common_module_ldflags)
 mod_accesslog_la_LIBADD = $(common_libadd)
 
+lib_LTLIBRARIES += mod_uploadprogress.la
+mod_uploadprogress_la_SOURCES = mod_uploadprogress.c
+mod_uploadprogress_la_LDFLAGS = $(common_module_ldflags)
+mod_uploadprogress_la_LIBADD = $(common_libadd)
+
 
 hdr = server.h base64.h buffer.h network.h log.h keyvalue.h \
 	response.h request.h fastcgi.h chunk.h \
@@ -349,6 +354,7 @@ lighttpd_SOURCES = \
   mod_staticfile.c \
   mod_status.c \
   mod_trigger_b4_dl.c \
+  mod_uploadprogress.c \
   mod_userdir.c \
   mod_usertrack.c \
   mod_webdav.c
