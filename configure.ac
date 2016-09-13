@@ -590,6 +590,31 @@ if test "$WITH_GDBM" != "no"; then
   fi
 fi
 
+dnl Check for GeoIP
+AC_MSG_CHECKING(for GeoIP)
+AC_ARG_WITH(geoip, AC_HELP_STRING([--with-geoip],[IP-based geolocation lookup]),
+[WITH_GEOIP=$withval],[WITH_GEOIP=no])
+AC_MSG_RESULT([$WITH_GEOIP])
+
+if test "$WITH_GEOIP" != "no"; then
+		if test "$WITH_GEOIP" != "yes"; then
+			GEOIP_LIB="-L$WITH_GEOIP -lGeoIP"
+			CPPFLAGS="$CPPFLAGS -I$WITH_GEOIP"
+		else
+			AC_CHECK_LIB(GeoIP, GeoIP_country_name_by_addr, [
+			  AC_CHECK_HEADERS([GeoIP.h],[GEOIP_LIB=-lGeoIP])
+			])
+		fi
+
+  if test x"$GEOIP_LIB" != x; then
+    AC_DEFINE([HAVE_GEOIP], [1], [libGeoIP])
+    AC_DEFINE([HAVE_GEOIP_H], [1])
+    AC_SUBST(GEOIP_LIB)
+  else
+    AC_MSG_ERROR([GeoIP headers and/or libs were not found, install them or build with --without-geoip])
+  fi
+fi
+
 dnl Check for memcached
 AC_MSG_CHECKING(for memcached)
 AC_ARG_WITH(memcached, AC_HELP_STRING([--with-memcached],[memcached storage for mod_trigger_b4_dl]),

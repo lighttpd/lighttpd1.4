@@ -574,6 +574,7 @@ add_and_install_library(mod_expire mod_expire.c)
 add_and_install_library(mod_extforward mod_extforward.c)
 add_and_install_library(mod_fastcgi mod_fastcgi.c)
 add_and_install_library(mod_flv_streaming mod_flv_streaming.c)
+add_and_install_library(mod_geoip mod_geoip.c)
 add_and_install_library(mod_indexfile mod_indexfile.c)
 add_and_install_library(mod_magnet "mod_magnet.c;mod_magnet_cache.c")
 add_and_install_library(mod_mysql_vhost mod_mysql_vhost.c)
@@ -637,6 +638,10 @@ add_target_properties(mod_magnet COMPILE_FLAGS ${LUA_CFLAGS})
 
 target_link_libraries(mod_cml ${LUA_LDFLAGS})
 add_target_properties(mod_cml COMPILE_FLAGS ${LUA_CFLAGS})
+
+if(HAVE_GEOIP)
+	target_link_libraries(mod_geoip GeoIP)
+endif()
 
 if(HAVE_MYSQL_H AND HAVE_MYSQL)
 	target_link_libraries(mod_mysql_vhost mysqlclient)

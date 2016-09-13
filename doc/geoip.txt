@@ -1,0 +1,148 @@
+{{{
+#!rst
+==============================
+ip based geographic lookups...
+==============================
+
+-----------------
+Module: mod_geoip
+-----------------
+
+
+
+.. contents:: Table of Contents
+
+Requirements
+============
+
+:Packages: GeoIP C API & Library (http://www.maxmind.com/download/geoip/api/c/)
+
+Overview
+========
+
+mod_geoip is a module for fast ip/location lookups. It uses MaxMind GeoIP /
+GeoCity databases.
+If the ip was found in the database the module sets the appropriate
+environments variables to the request, thus making other modules/fcgi be
+informed.
+
+.. note::
+
+  Currently only country/city databases are supported because they have a free
+  version that i can test.
+
+Configuration Options
+========================
+
+mod_geoip uses two configuration options.
+
+1) geoip.db-filename = <path to the geoip or geocity database>
+2) geoip.memory-cache = <enable|disable> : default disabled
+
+if enabled, mod_geoip will load the database binary file to
+memory for very fast lookups. the only penalty is memory usage.
+
+.. note::
+
+ mod_geoip will determine the database type automatically so if you enter
+ GeoCity databse path it will load GeoCity Env.
+
+Environment
+===========
+
+Every database sets it's own ENV:
+
+GeoIP (Country):
+----------------
+
+::
+
+ GEOIP_COUNTRY_CODE
+ GEOIP_COUNTRY_CODE3
+ GEOIP_COUNTRY_NAME
+
+GeoCity:
+--------
+
+::
+
+ GEOIP_COUNTRY_CODE
+ GEOIP_COUNTRY_CODE3
+ GEOIP_COUNTRY_NAME
+ GEOIP_CITY_NAME
+ GEOIP_CITY_POSTAL_CODE
+ GEOIP_CITY_LATITUDE
+ GEOIP_CITY_LONG_LATITUDE
+ GEOIP_CITY_DMA_CODE
+ GEOIP_CITY_AREA_CODE
+
+Examples
+========
+
+mod_geoip + php
+---------------
+
+when using fastcgi (not only php) you can access mod_geoip env and do as you
+please. this example just prints all mod_geoip envs to the client, html.
+
+Config-file ::
+
+ geoip.db-filename = "/your-geoip-db-path/GeoCityLite.dat"
+ geoip.memory-cache = "enable"
+
+index.php ::
+
+ <?php
+         $country_code = $_SERVER['GEOIP_COUNTRY_CODE'];
+         $country_code3 = $_SERVER['GEOIP_COUNTRY_CODE3'];
+         $country_name = $_SERVER['GEOIP_COUNTRY_NAME'];
+
+         $city_region = $_SERVER['GEOIP_CITY_REGION'];
+         $city_name = $_SERVER['GEOIP_CITY_NAME'];
+         $city_postal_code = $_SERVER['GEOIP_CITY_POSTAL_CODE'];
+         $city_latitude = $_SERVER['GEOIP_CITY_LATITUDE'];
+         $city_long_latitude = $_SERVER['GEOIP_CITY_LONG_LATITUDE'];
+         $city_dma_code = $_SERVER['GEOIP_CITY_DMA_CODE'];
+         $city_area_code = $_SERVER['GEOIP_CITY_AREA_CODE'];
+
+         echo "<html>\n<body>\n\t<br>\n";
+         echo 'Country Code: ' . $country_code . '<br>';
+         echo 'Country Code 3: ' . $country_code3 . '<br>';
+         echo 'Country Name: ' . $country_name . '<br>';
+         echo '<br>';
+         echo 'City Region: ' . $city_region . '<br>';
+         echo 'City Name: ' . $city_name . '<br>';
+         echo 'City Postal Code: ' . $city_postal_code . '<br>';
+         echo 'City Latitude: ' . $city_latitude . '<br>';
+         echo 'City Long Latitude: ' . $city_long_latitude . '<br>';
+         echo 'City DMA Code: ' . $city_dma_code . '<br>';
+         echo 'City Area Code: ' . $city_area_code . '<br>';
+         echo "</html>\n</body>";
+ ?>
+
+country based redirect
+----------------------
+
+Config-file ::
+
+ $HTTP["host"] =~ "www.domain.com" {
+     url.rewrite = ( "" => "/redirect.php")
+ }
+
+redirect.php ::
+
+ <?php
+        $country_code = $_SERVER['GEOIP_COUNTRY_CODE'];
+        header ('Location: http://' . $country_code . '.domain.com/');
+ ?>
+
+.. note::
+
+ Currently it is not possible to redirect based on mod_geoip directly in
+lighttpd config file. But i believe with the relase of lighttpd mod_magnet
+it would be. (mod_magnet will be available in lighttpd 1.4.12+)
+
+Downloads
+=========
+mod_geoip.c (http://trac.lighttpd.net/trac/attachment/wiki/Docs/ModGeoip/mod_geoip.c)
+}}}

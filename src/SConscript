@@ -122,6 +122,9 @@ if env['with_memcached']:
 if env['with_lua']:
 	modules['mod_magnet'] = { 'src' : [ 'mod_magnet.c', 'mod_magnet_cache.c' ], 'lib' : [ env['LIBLUA'] ] }
 
+if env['with_geoip']:
+	modules['mod_geoip'] = { 'src' : [ 'mod_geoip.c' ], 'lib' : [ env['LIBGEOIP'] ] },
+
 staticenv = env.Clone(CPPFLAGS=[ env['CPPFLAGS'], '-DLIGHTTPD_STATIC' ])
 
 ## all the core-sources + the modules

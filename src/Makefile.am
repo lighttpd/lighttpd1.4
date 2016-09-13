@@ -113,6 +113,11 @@ mod_flv_streaming_la_SOURCES = mod_flv_streaming.c
 mod_flv_streaming_la_LDFLAGS = $(common_module_ldflags)
 mod_flv_streaming_la_LIBADD = $(common_libadd)
 
+lib_LTLIBRARIES += mod_geoip.la
+mod_geoip_la_SOURCES = mod_geoip.c
+mod_geoip_la_LDFLAGS = $(common_module_ldflags)
+mod_geoip_la_LIBADD = $(common_libadd) $(GEOIP_LIB)
+
 lib_LTLIBRARIES += mod_evasive.la
 mod_evasive_la_SOURCES = mod_evasive.c
 mod_evasive_la_LDFLAGS = $(common_module_ldflags)
@@ -339,6 +344,7 @@ lighttpd_SOURCES = \
   mod_extforward.c \
   mod_fastcgi.c \
   mod_flv_streaming.c \
+  mod_geoip.c \
   mod_indexfile.c \
   mod_magnet.c mod_magnet_cache.c \
   mod_mysql_vhost.c \
@@ -372,6 +378,7 @@ lighttpd_LDADD = \
   $(MYSQL_LIBS) \
   $(MEMCACHED_LIB) \
   $(GDBM_LIB) \
+  $(GEOIP_LIB) \
   $(XML_LIBS) $(SQLITE_LIBS) $(UUID_LIBS) \
   $(PCRE_LIB) $(Z_LIB) $(BZ_LIB) $(DL_LIB) $(SENDFILE_LIB) $(ATTR_LIB) \
   $(FAM_LIBS) $(LIBEV_LIBS) $(LIBUNWIND_LIBS)
