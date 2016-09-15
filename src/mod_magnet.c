@@ -239,7 +239,6 @@ static int magnet_array_next(lua_State *L) {
 					lua_pushnil(L);
 				}
 				break;
-			case TYPE_COUNT:
 			case TYPE_INTEGER:
 				di = (data_integer *)du;
 				lua_pushinteger(L, di->value);

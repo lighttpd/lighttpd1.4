@@ -324,7 +324,6 @@ int array_print(array *a, int depth) {
 		switch (du->type) {
 			case TYPE_INTEGER:
 			case TYPE_STRING:
-			case TYPE_COUNT:
 				break;
 			default:
 				oneline = 0;
@@ -379,7 +378,6 @@ int array_print(array *a, int depth) {
 int main (int argc, char **argv) {
 	array *a;
 	data_string *ds;
-	data_count *dc;
 
 	UNUSED(argc);
 	UNUSED(argv);
@@ -403,16 +401,6 @@ int main (int argc, char **argv) {
 	buffer_copy_string_len(ds->value, CONST_STR_LEN("alfrag"));
 
 	array_insert_unique(a, (data_unset *)ds);
-
-	dc = data_count_init();
-	buffer_copy_string_len(dc->key, CONST_STR_LEN("def"));
-
-	array_insert_unique(a, (data_unset *)dc);
-
-	dc = data_count_init();
-	buffer_copy_string_len(dc->key, CONST_STR_LEN("def"));
-
-	array_insert_unique(a, (data_unset *)dc);
 
 	array_print(a, 0);
 

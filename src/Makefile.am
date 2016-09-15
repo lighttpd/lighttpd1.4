@@ -65,7 +65,7 @@ common_src=base64.c buffer.c log.c \
 	keyvalue.c chunk.c  \
 	http_chunk.c stream.c fdevent.c \
 	stat_cache.c plugin.c joblist.c etag.c array.c \
-	data_string.c data_count.c data_array.c \
+	data_string.c data_array.c \
 	data_integer.c md5.c data_fastcgi.c \
 	vector.c \
 	fdevent_select.c fdevent_libev.c \
