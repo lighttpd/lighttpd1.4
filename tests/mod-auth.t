@@ -24,16 +24,16 @@ $t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 401 } ];
 ok($tf->handle_http($t) == 0, 'Missing Auth-token');
 
 $t->{REQUEST}  = ( <<EOF
-GET /server-status HTTP/1.0
+GET /server-config HTTP/1.0
 Authorization: Basic \x80mFuOmphb
 EOF
  );
-$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 401 } ];
+$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 400 } ];
 ok($tf->handle_http($t) == 0, 'Basic-Auth: Invalid base64 Auth-token');
 
 $t->{REQUEST}  = ( <<EOF
-GET /server-status HTTP/1.0
-Authorization: Basic amFuOmphb
+GET /server-config HTTP/1.0
+Authorization: Basic bm90Oml0Cg==
 EOF
  );
 $t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 401 } ];
@@ -151,11 +151,11 @@ $t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 400 } ];
 ok($tf->handle_http($t) == 0, 'Digest-Auth: missing nc (noncecount instead), no crash');
 
 $t->{REQUEST}  = ( <<EOF
-GET /server-status HTTP/1.0
+GET /server-config HTTP/1.0
 Authorization: Basic =
 EOF
  );
-$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 401 } ];
+$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 400 } ];
 ok($tf->handle_http($t) == 0, 'Basic-Auth: Invalid Base64');
 
 $t->{REQUEST}  = ( <<EOF

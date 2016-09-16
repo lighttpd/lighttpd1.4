@@ -3,75 +3,62 @@
 #include "plugin.h"
 #include "http_auth.h"
 #include "log.h"
-#include "response.h"
-
-#include "inet_ntop_cache.h"
-#include "base64.h"
-#include "md5.h"
-
-#include <sys/types.h>
-#include <sys/stat.h>
 
 #include <stdlib.h>
 #include <string.h>
-#include <errno.h>
-#include <fcntl.h>
-#include <unistd.h>
 
 /**
- * the basic and digest auth framework
+ * auth framework
  */
 
 typedef struct {
 	/* auth */
 	array  *auth_require;
-
-	buffer *auth_plain_groupfile;
-	buffer *auth_plain_userfile;
-
-	buffer *auth_htdigest_userfile;
-	buffer *auth_htpasswd_userfile;
-
 	buffer *auth_backend_conf;
-
-	unsigned short auth_debug;
 
 	/* generated */
 	const http_auth_backend_t *auth_backend;
-} mod_auth_plugin_config;
+} plugin_config;
 
 typedef struct {
 	PLUGIN_DATA;
-	buffer *tmp_buf;
 
-	mod_auth_plugin_config **config_storage;
+	plugin_config **config_storage;
 
-	mod_auth_plugin_config conf;
-} mod_auth_plugin_data;
+	plugin_config conf;
+} plugin_data;
+
+static handler_t mod_auth_check_basic(server *srv, connection *con, void *p_d, const struct http_auth_require_t *require, const struct http_auth_backend_t *backend);
+static handler_t mod_auth_check_digest(server *srv, connection *con, void *p_d, const struct http_auth_require_t *require, const struct http_auth_backend_t *backend);
+static handler_t mod_auth_check_extern(server *srv, connection *con, void *p_d, const struct http_auth_require_t *require, const struct http_auth_backend_t *backend);
 
 INIT_FUNC(mod_auth_init) {
-	mod_auth_plugin_data *p;
+	static const http_auth_scheme_t http_auth_scheme_basic  = { "basic",  mod_auth_check_basic,  NULL };
+	static const http_auth_scheme_t http_auth_scheme_digest = { "digest", mod_auth_check_digest, NULL };
+	static const http_auth_scheme_t http_auth_scheme_extern = { "extern", mod_auth_check_extern, NULL };
+	plugin_data *p;
+
+	/* register http_auth_scheme_* */
+	http_auth_scheme_set(&http_auth_scheme_basic);
+	http_auth_scheme_set(&http_auth_scheme_digest);
+	http_auth_scheme_set(&http_auth_scheme_extern);
 
 	p = calloc(1, sizeof(*p));
-
-	p->tmp_buf = buffer_init();
 
 	return p;
 }
 
 FREE_FUNC(mod_auth_free) {
-	mod_auth_plugin_data *p = p_d;
+	plugin_data *p = p_d;
 
 	UNUSED(srv);
 
 	if (!p) return HANDLER_GO_ON;
 
-	buffer_free(p->tmp_buf);
-
 	if (p->config_storage) {
 		size_t i;
 		for (i = 0; i < srv->config_context->used; i++) {
-			mod_auth_plugin_config *s = p->config_storage[i];
+			plugin_config *s = p->config_storage[i];
 
 			if (NULL == s) continue;
 
@@ -88,15 +75,267 @@ FREE_FUNC(mod_auth_free) {
 	return HANDLER_GO_ON;
 }
 
+/* data type for mod_auth structured data
+ * (parsed from auth.require array of strings) */
+typedef struct {
+    DATA_UNSET;
+    http_auth_require_t *require;
+} data_auth;
+
+static void data_auth_free(data_unset *d)
+{
+    data_auth * const dauth = (data_auth *)d;
+    buffer_free(dauth->key);
+    http_auth_require_free(dauth->require);
+    free(dauth);
+}
+
+static data_auth *data_auth_init(void)
+{
+    data_auth * const dauth = calloc(1, sizeof(*dauth));
+    force_assert(NULL != dauth);
+    dauth->copy       = NULL; /* must not be called on this data */
+    dauth->free       = data_auth_free;
+    dauth->reset      = NULL; /* must not be called on this data */
+    dauth->insert_dup = NULL; /* must not be called on this data */
+    dauth->print      = NULL; /* must not be called on this data */
+    dauth->type       = TYPE_OTHER;
+
+    dauth->key = buffer_init();
+    dauth->require = http_auth_require_init();
+
+    return dauth;
+}
+
+static int mod_auth_require_parse (server *srv, http_auth_require_t * const require, const buffer *b)
+{
+    /* user=name1|user=name2|group=name3|host=name4 */
+
+    const char *str = b->ptr;
+    const char *p;
+
+    if (buffer_is_equal_string(b, CONST_STR_LEN("valid-user"))) {
+        require->valid_user = 1;
+        return 1; /* success */
+    }
+
+    do {
+        const char *eq;
+        size_t len;
+        p = strchr(str, '|');
+        len = NULL != p ? (size_t)(p - str) : strlen(str);
+        eq = memchr(str, '=', len);
+        if (NULL == eq) {
+            log_error_write(srv, __FILE__, __LINE__, "sssbss",
+                            "error parsing auth.require 'require' field: missing '='",
+                            "(expecting \"valid-user\" or \"user=a|user=b|group=g|host=h\").",
+                            "error value:", b, "error near:", str);
+            return 0;
+        }
+        if (p-1  == eq) {
+            log_error_write(srv, __FILE__, __LINE__, "sssbss",
+                            "error parsing auth.require 'require' field: missing token after '='",
+                            "(expecting \"valid-user\" or \"user=a|user=b|group=g|host=h\").",
+                            "error value:", b, "error near:", str);
+            return 0;
+        }
+
+        switch ((int)(eq - str)) {
+          case 4:
+            if (0 == memcmp(str, CONST_STR_LEN("user"))) {
+                data_string *ds = data_string_init();
+                buffer_copy_string_len(ds->key,str+5,len-5); /*("user=" is 5)*/
+                array_insert_unique(require->user, (data_unset *)ds);
+                continue;
+            }
+            else if (0 == memcmp(str, CONST_STR_LEN("host"))) {
+                data_string *ds = data_string_init();
+                buffer_copy_string_len(ds->key,str+5,len-5); /*("host=" is 5)*/
+                array_insert_unique(require->host, (data_unset *)ds);
+                log_error_write(srv, __FILE__, __LINE__, "ssb",
+                                "warning parsing auth.require 'require' field: 'host' not implemented;",
+                                "field value:", b);
+                continue;
+            }
+            break; /* to error */
+          case 5:
+            if (0 == memcmp(str, CONST_STR_LEN("group"))) {
+                data_string *ds = data_string_init();
+                buffer_copy_string_len(ds->key,str+6,len-6); /*("group=" is 6)*/
+                array_insert_unique(require->group, (data_unset *)ds);
+                log_error_write(srv, __FILE__, __LINE__, "ssb",
+                                "warning parsing auth.require 'require' field: 'group' not implemented;",
+                                "field value:", b);
+                continue;
+            }
+            break; /* to error */
+          case 10:
+            if (0 == memcmp(str, CONST_STR_LEN("valid-user"))) {
+                log_error_write(srv, __FILE__, __LINE__, "sssb",
+                                "error parsing auth.require 'require' field: valid user can not be combined with other require rules",
+                                "(expecting \"valid-user\" or \"user=a|user=b|group=g|host=h\").",
+                                "error value:", b);
+                return 0;
+            }
+            break; /* to error */
+          default:
+            break; /* to error */
+        }
+
+        log_error_write(srv, __FILE__, __LINE__, "sssbss",
+                        "error parsing auth.require 'require' field: invalid/unsupported token",
+                        "(expecting \"valid-user\" or \"user=a|user=b|group=g|host=h\").",
+                        "error value:", b, "error near:", str);
+        return 0;
+
+    } while (p && *((str = p+1)));
+
+    return 1; /* success */
+}
+
+SETDEFAULTS_FUNC(mod_auth_set_defaults) {
+	plugin_data *p = p_d;
+	size_t i;
+
+	config_values_t cv[] = {
+		{ "auth.backend",                   NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_CONNECTION }, /* 0 */
+		{ "auth.require",                   NULL, T_CONFIG_LOCAL, T_CONFIG_SCOPE_CONNECTION },  /* 1 */
+		{ NULL,                             NULL, T_CONFIG_UNSET, T_CONFIG_SCOPE_UNSET }
+	};
+
+	p->config_storage = calloc(1, srv->config_context->used * sizeof(plugin_config *));
+
+	for (i = 0; i < srv->config_context->used; i++) {
+		data_config const* config = (data_config const*)srv->config_context->data[i];
+		plugin_config *s;
+		size_t n;
+		data_array *da;
+
+		s = calloc(1, sizeof(plugin_config));
+		s->auth_backend_conf = buffer_init();
+
+		s->auth_require = array_init();
+
+		cv[0].destination = s->auth_backend_conf;
+		cv[1].destination = s->auth_require; /* T_CONFIG_LOCAL; not modified by config_insert_values_global() */
+
+		p->config_storage[i] = s;
+
+		if (0 != config_insert_values_global(srv, config->value, cv, i == 0 ? T_CONFIG_SCOPE_SERVER : T_CONFIG_SCOPE_CONNECTION)) {
+			return HANDLER_ERROR;
+		}
+
+		if (!buffer_string_is_empty(s->auth_backend_conf)) {
+			s->auth_backend = http_auth_backend_get(s->auth_backend_conf);
+			if (NULL == s->auth_backend) {
+				log_error_write(srv, __FILE__, __LINE__, "sb", "auth.backend not supported:", s->auth_backend_conf);
+
+				return HANDLER_ERROR;
+			}
+		}
+
+		/* no auth.require for this section */
+		if (NULL == (da = (data_array *)array_get_element(config->value, "auth.require"))) continue;
+
+		if (da->type != TYPE_ARRAY) continue;
+
+		for (n = 0; n < da->value->used; n++) {
+			size_t m;
+			data_array *da_file = (data_array *)da->value->data[n];
+			const buffer *method = NULL, *realm = NULL, *require = NULL;
+			const http_auth_scheme_t *auth_scheme;
+
+			if (da->value->data[n]->type != TYPE_ARRAY) {
+				log_error_write(srv, __FILE__, __LINE__, "ss",
+						"auth.require should contain an array as in:",
+						"auth.require = ( \"...\" => ( ..., ...) )");
+
+				return HANDLER_ERROR;
+			}
+
+			for (m = 0; m < da_file->value->used; m++) {
+				if (da_file->value->data[m]->type == TYPE_STRING) {
+					data_string *ds = (data_string *)da_file->value->data[m];
+					if (buffer_is_equal_string(ds->key, CONST_STR_LEN("method"))) {
+						method = ds->value;
+					} else if (buffer_is_equal_string(ds->key, CONST_STR_LEN("realm"))) {
+						realm = ds->value;
+					} else if (buffer_is_equal_string(ds->key, CONST_STR_LEN("require"))) {
+						require = ds->value;
+					} else {
+						log_error_write(srv, __FILE__, __LINE__, "ssbs",
+							"the field is unknown in:",
+							"auth.require = ( \"...\" => ( ..., -> \"",
+							da_file->value->data[m]->key,
+							"\" <- => \"...\" ) )");
+
+						return HANDLER_ERROR;
+					}
+				} else {
+					log_error_write(srv, __FILE__, __LINE__, "ssbs",
+						"a string was expected for:",
+						"auth.require = ( \"...\" => ( ..., -> \"",
+						da_file->value->data[m]->key,
+						"\" <- => \"...\" ) )");
+
+					return HANDLER_ERROR;
+				}
+			}
+
+			if (buffer_string_is_empty(method)) {
+				log_error_write(srv, __FILE__, __LINE__, "ss",
+						"the method field is missing or blank in:",
+						"auth.require = ( \"...\" => ( ..., \"method\" => \"...\" ) )");
+				return HANDLER_ERROR;
+			} else {
+				auth_scheme = http_auth_scheme_get(method);
+				if (NULL == auth_scheme) {
+					log_error_write(srv, __FILE__, __LINE__, "sbss",
+							"unknown method", method, "(e.g. \"basic\", \"digest\" or \"extern\") in",
+							"auth.require = ( \"...\" => ( ..., \"method\" => \"...\") )");
+					return HANDLER_ERROR;
+				}
+			}
+
+			if (buffer_is_empty(realm)) {
+				log_error_write(srv, __FILE__, __LINE__, "ss",
+						"the realm field is missing in:",
+						"auth.require = ( \"...\" => ( ..., \"realm\" => \"...\" ) )");
+				return HANDLER_ERROR;
+			}
+
+			if (buffer_string_is_empty(require)) {
+				log_error_write(srv, __FILE__, __LINE__, "ss",
+						"the require field is missing or blank in:",
+						"auth.require = ( \"...\" => ( ..., \"require\" => \"...\" ) )");
+				return HANDLER_ERROR;
+			}
+
+			{
+				data_auth * const dauth = data_auth_init();
+				buffer_copy_buffer(dauth->key, da_file->key);
+				dauth->require->scheme = auth_scheme;
+				buffer_copy_buffer(dauth->require->realm, realm);
+				if (!mod_auth_require_parse(srv, dauth->require, require)) {
+					dauth->free((data_unset *)dauth);
+					return HANDLER_ERROR;
+				}
+				array_insert_unique(s->auth_require, (data_unset *)dauth);
+			}
+		}
+	}
+
+	return HANDLER_GO_ON;
+}
+
 #define PATCH(x) \
 	p->conf.x = s->x;
-static int mod_auth_patch_connection(server *srv, connection *con, mod_auth_plugin_data *p) {
+static int mod_auth_patch_connection(server *srv, connection *con, plugin_data *p) {
 	size_t i, j;
-	mod_auth_plugin_config *s = p->config_storage[0];
+	plugin_config *s = p->config_storage[0];
 
 	PATCH(auth_backend);
 	PATCH(auth_require);
-	PATCH(auth_debug);
 
 	/* skip the first, the global context */
 	for (i = 1; i < srv->config_context->used; i++) {
@@ -114,8 +353,6 @@ static int mod_auth_patch_connection(server *srv, connection *con, mod_auth_plug
 				PATCH(auth_backend);
 			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("auth.require"))) {
 				PATCH(auth_require);
-			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("auth.debug"))) {
-				PATCH(auth_debug);
 			}
 		}
 	}
@@ -124,112 +361,61 @@ static int mod_auth_patch_connection(server *srv, connection *con, mod_auth_plug
 }
 #undef PATCH
 
-static int mod_auth_match_rules(server *srv, array *req, const char *username, const char *group, const char *host) {
-	const char *r = NULL, *rules = NULL;
-	int username_len;
-	data_string *require;
+static handler_t mod_auth_uri_handler(server *srv, connection *con, void *p_d) {
+	size_t k;
+	plugin_data *p = p_d;
 
-	UNUSED(group);
-	UNUSED(host);
+	mod_auth_patch_connection(srv, con, p);
 
-	require = (data_string *)array_get_element(req, "require");
-	if (!require) return -1; /*(should not happen; config is validated at startup)*/
+	if (p->conf.auth_require == NULL) return HANDLER_GO_ON;
 
-	/* if we get here, the user we got a authed user */
-	if (0 == strcmp(require->value->ptr, "valid-user")) {
-		return 0;
+	/* search auth directives for first prefix match against URL path */
+	for (k = 0; k < p->conf.auth_require->used; k++) {
+		const data_auth * const dauth = (data_auth *)p->conf.auth_require->data[k];
+		const buffer *path = dauth->key;
+
+		if (buffer_string_length(con->uri.path) < buffer_string_length(path)) continue;
+
+		/* if we have a case-insensitive FS we have to lower-case the URI here too */
+
+		if (!con->conf.force_lowercase_filenames
+		    ? 0 == strncmp(con->uri.path->ptr, path->ptr, buffer_string_length(path))
+		    : 0 == strncasecmp(con->uri.path->ptr, path->ptr, buffer_string_length(path))) {
+			const http_auth_scheme_t * const scheme = dauth->require->scheme;
+			return scheme->checkfn(srv, con, scheme->p_d, dauth->require, p->conf.auth_backend);
+		}
 	}
 
-	/* user=name1|group=name3|host=name4 */
-
-	/* seperate the string by | */
-#if 0
-	log_error_write(srv, __FILE__, __LINE__, "sb", "rules", require->value);
-#endif
-
-	username_len = username ? strlen(username) : 0;
-
-	r = rules = require->value->ptr;
-
-	while (1) {
-		const char *eq;
-		const char *k, *v, *e;
-		int k_len, v_len, r_len;
-
-		e = strchr(r, '|');
-
-		if (e) {
-			r_len = e - r;
-		} else {
-			r_len = strlen(rules) - (r - rules);
-		}
-
-		/* from r to r + r_len is a rule */
-
-		if (0 == strncmp(r, "valid-user", r_len)) {
-			log_error_write(srv, __FILE__, __LINE__, "sb",
-					"parsing the 'require' section in 'auth.require' failed: valid-user cannot be combined with other require rules",
-					require->value);
-			return -1;
-		}
-
-		/* search for = in the rules */
-		if (NULL == (eq = strchr(r, '='))) {
-			log_error_write(srv, __FILE__, __LINE__, "sb",
-					"parsing the 'require' section in 'auth.require' failed: a = is missing",
-					require->value);
-			return -1;
-		}
-
-		/* = out of range */
-		if (eq > r + r_len) {
-			log_error_write(srv, __FILE__, __LINE__, "sb",
-					"parsing the 'require' section in 'auth.require' failed: = out of range",
-					require->value);
-
-			return -1;
-		}
-
-		/* the part before the = is user|group|host */
-
-		k = r;
-		k_len = eq - r;
-		v = eq + 1;
-		v_len = r_len - k_len - 1;
-
-		if (k_len == 4) {
-			if (0 == strncmp(k, "user", k_len)) {
-				if (username &&
-				    username_len == v_len &&
-				    0 == strncmp(username, v, v_len)) {
-					return 0;
-				}
-			} else if (0 == strncmp(k, "host", k_len)) {
-				log_error_write(srv, __FILE__, __LINE__, "s", "host ... (not implemented)");
-			} else {
-				log_error_write(srv, __FILE__, __LINE__, "s", "unknown key");
-				return -1;
-			}
-		} else if (k_len == 5) {
-			if (0 == strncmp(k, "group", k_len)) {
-				log_error_write(srv, __FILE__, __LINE__, "s", "group ... (not implemented)");
-			} else {
-				log_error_write(srv, __FILE__, __LINE__, "ss", "unknown key", k);
-				return -1;
-			}
-		} else {
-			log_error_write(srv, __FILE__, __LINE__, "s", "unknown  key");
-			return -1;
-		}
-
-		if (!e) break;
-		r = e + 1;
-	}
-
-	log_error_write(srv, __FILE__, __LINE__, "s", "nothing matched");
-
-	return -1;
+	/* nothing to do for us */
+	return HANDLER_GO_ON;
 }
+
+int mod_auth_plugin_init(plugin *p);
+int mod_auth_plugin_init(plugin *p) {
+	p->version     = LIGHTTPD_VERSION_ID;
+	p->name        = buffer_init_string("auth");
+	p->init        = mod_auth_init;
+	p->set_defaults = mod_auth_set_defaults;
+	p->handle_uri_clean = mod_auth_uri_handler;
+	p->cleanup     = mod_auth_free;
+
+	p->data        = NULL;
+
+	return 0;
+}
+
+
+
+
+/*
+ * auth schemes (basic, digest, extern)
+ *
+ * (could be in separate file from mod_auth.c as long as registration occurs)
+ */
+
+#include "response.h"
+#include "base64.h"
+#include "md5.h"
 
 static handler_t mod_auth_send_400_bad_request(server *srv, connection *con) {
 	UNUSED(srv);
@@ -241,96 +427,48 @@ static handler_t mod_auth_send_400_bad_request(server *srv, connection *con) {
 	return HANDLER_FINISHED;
 }
 
-static int mod_auth_digest_generate_nonce(server *srv, mod_auth_plugin_data *p, buffer *fn, char (*out)[33]);
-
-static handler_t mod_auth_send_401_unauthorized_basic(server *srv, connection *con, mod_auth_plugin_data *p, array *req) {
-	data_string *realm = (data_string *)array_get_element(req, "realm");
-
+static handler_t mod_auth_send_401_unauthorized_basic(server *srv, connection *con, buffer *realm) {
 	con->http_status = 401;
 	con->mode = DIRECT;
 
-	if (!realm) return HANDLER_FINISHED; /*(should not happen; config is validated at startup)*/
+	buffer_copy_string_len(srv->tmp_buf, CONST_STR_LEN("Basic realm=\""));
+	buffer_append_string_buffer(srv->tmp_buf, realm);
+	buffer_append_string_len(srv->tmp_buf, CONST_STR_LEN("\", charset=\"UTF-8\""));
 
-	buffer_copy_string_len(p->tmp_buf, CONST_STR_LEN("Basic realm=\""));
-	buffer_append_string_buffer(p->tmp_buf, realm->value);
-	buffer_append_string_len(p->tmp_buf, CONST_STR_LEN("\", charset=\"UTF-8\""));
-
-	response_header_insert(srv, con, CONST_STR_LEN("WWW-Authenticate"), CONST_BUF_LEN(p->tmp_buf));
+	response_header_insert(srv, con, CONST_STR_LEN("WWW-Authenticate"), CONST_BUF_LEN(srv->tmp_buf));
 
 	return HANDLER_FINISHED;
 }
 
-static handler_t mod_auth_send_401_unauthorized_digest(server *srv, connection *con, mod_auth_plugin_data *p, array *req, int nonce_stale) {
-	data_string *realm = (data_string *)array_get_element(req, "realm");
-	char hh[33];
-
-	con->http_status = 401;
-	con->mode = DIRECT;
-
-	if (!realm) return HANDLER_FINISHED; /*(should not happen; config is validated at startup)*/
-
-	/* using unknown contents of srv->tmp_buf (modified elsewhere)
-	 * adds dubious amount of randomness.  Remove use of srv->tmp_buf? */
-	mod_auth_digest_generate_nonce(srv, p, srv->tmp_buf, &hh);
-
-	buffer_copy_string_len(p->tmp_buf, CONST_STR_LEN("Digest realm=\""));
-	buffer_append_string_buffer(p->tmp_buf, realm->value);
-	buffer_append_string_len(p->tmp_buf, CONST_STR_LEN("\", charset=\"UTF-8\", nonce=\""));
-	buffer_append_uint_hex(p->tmp_buf, (uintmax_t)srv->cur_ts);
-	buffer_append_string_len(p->tmp_buf, CONST_STR_LEN(":"));
-	buffer_append_string(p->tmp_buf, hh);
-	buffer_append_string_len(p->tmp_buf, CONST_STR_LEN("\", qop=\"auth\""));
-	if (nonce_stale) {
-		buffer_append_string_len(p->tmp_buf, CONST_STR_LEN(", stale=true"));
-	}
-
-	response_header_insert(srv, con, CONST_STR_LEN("WWW-Authenticate"), CONST_BUF_LEN(p->tmp_buf));
-
-	return HANDLER_FINISHED;
-}
-
-static void mod_auth_setenv(server *srv, connection *con, const char *username, size_t ulen, const char *auth_type, size_t alen) {
-	data_string *ds;
-	UNUSED(srv);
-
-	/* the REMOTE_USER header */
-
-	if (NULL == (ds = (data_string *)array_get_element(con->environment, "REMOTE_USER"))) {
-		if (NULL == (ds = (data_string *)array_get_unused_element(con->environment, TYPE_STRING))) {
-			ds = data_string_init();
-		}
-		buffer_copy_string_len(ds->key, CONST_STR_LEN("REMOTE_USER"));
-		array_insert_unique(con->environment, (data_unset *)ds);
-	}
-	buffer_copy_string_len(ds->value, username, ulen);
-
-	/* AUTH_TYPE environment */
-
-	if (NULL == (ds = (data_string *)array_get_element(con->environment, "AUTH_TYPE"))) {
-		if (NULL == (ds = (data_string *)array_get_unused_element(con->environment, TYPE_STRING))) {
-			ds = data_string_init();
-		}
-		buffer_copy_string_len(ds->key, CONST_STR_LEN("AUTH_TYPE"));
-		array_insert_unique(con->environment, (data_unset *)ds);
-	}
-	buffer_copy_string_len(ds->value, auth_type, alen);
-}
-
-static handler_t mod_auth_basic_check(server *srv, connection *con, mod_auth_plugin_data *p, array *req, const char *realm_str) {
+static handler_t mod_auth_check_basic(server *srv, connection *con, void *p_d, const struct http_auth_require_t *require, const struct http_auth_backend_t *backend) {
+	data_string *ds = (data_string *)array_get_element(con->request.headers, "Authorization");
 	buffer *username;
+	buffer *b;
 	char *pw;
+	handler_t rc = HANDLER_UNSET;
 
-	data_string *realm;
+	UNUSED(p_d);
 
-	realm = (data_string *)array_get_element(req, "realm");
-	if (!realm) { /*(should not happen; config is validated at startup)*/
+	if (NULL == backend) {
+		log_error_write(srv, __FILE__, __LINE__, "sb", "auth.backend not configured for", con->uri.path);
+		con->http_status = 500;
+		con->mode = DIRECT;
+		return HANDLER_FINISHED;
+	}
+
+	if (NULL == ds || buffer_is_empty(ds->value)) {
+		return mod_auth_send_401_unauthorized_basic(srv, con, require->realm);
+	}
+
+	if (0 != strncasecmp(ds->value->ptr, "Basic ", sizeof("Basic ")-1)) {
 		return mod_auth_send_400_bad_request(srv, con);
 	}
 
 	username = buffer_init();
 
-	if (!buffer_append_base64_decode(username, realm_str, strlen(realm_str), BASE64_STANDARD)) {
-		log_error_write(srv, __FILE__, __LINE__, "sb", "decodeing base64-string failed", username);
+	b = ds->value;
+	if (!buffer_append_base64_decode(username, b->ptr+sizeof("Basic ")-1, buffer_string_length(b)-(sizeof("Basic ")-1), BASE64_STANDARD)) {
+		log_error_write(srv, __FILE__, __LINE__, "sb", "decoding base64-string failed", username);
 
 		buffer_free(username);
 		return mod_auth_send_400_bad_request(srv, con);
@@ -338,7 +476,7 @@ static handler_t mod_auth_basic_check(server *srv, connection *con, mod_auth_plu
 
 	/* r2 == user:password */
 	if (NULL == (pw = strchr(username->ptr, ':'))) {
-		log_error_write(srv, __FILE__, __LINE__, "sb", ": is missing in", username);
+		log_error_write(srv, __FILE__, __LINE__, "sb", "missing ':' in", username);
 
 		buffer_free(username);
 		return mod_auth_send_400_bad_request(srv, con);
@@ -347,35 +485,27 @@ static handler_t mod_auth_basic_check(server *srv, connection *con, mod_auth_plu
 	buffer_string_set_length(username, pw - username->ptr);
 	pw++;
 
-	switch (p->conf.auth_backend->basic(srv, con, p->conf.auth_backend->p_d, username, realm->value, pw)) {
+	rc = backend->basic(srv, con, backend->p_d, username, require->realm, pw);
+	switch (rc) {
 	case HANDLER_GO_ON:
+		if (http_auth_match_rules(require, username->ptr, NULL, NULL)) {
+			http_auth_setenv(con->environment, CONST_BUF_LEN(username), CONST_STR_LEN("Basic"));
+		} else {
+			rc = HANDLER_UNSET;
+		}
 		break;
 	case HANDLER_WAIT_FOR_EVENT:
-		buffer_free(username);
-		return HANDLER_WAIT_FOR_EVENT;
 	case HANDLER_FINISHED:
-		buffer_free(username);
-		return HANDLER_FINISHED;
+		break;
 	case HANDLER_ERROR:
 	default:
-		log_error_write(srv, __FILE__, __LINE__, "sbsBss", "password doesn't match for", con->uri.path, "username:", username, ", IP:", inet_ntop_cache_get_ip(srv, &(con->dst_addr)));
-		buffer_free(username);
-		return mod_auth_send_401_unauthorized_basic(srv, con, p, req);
+		log_error_write(srv, __FILE__, __LINE__, "sbsBss", "password doesn't match for", con->uri.path, "username:", username, ", IP:", con->dst_addr_buf);
+		rc = HANDLER_UNSET;
+		break;
 	}
-
-	/* value is our allow-rules */
-	if (mod_auth_match_rules(srv, req, username->ptr, NULL, NULL)) {
-		log_error_write(srv, __FILE__, __LINE__, "s", "rules didn't match");
-
-		buffer_free(username);
-		return mod_auth_send_401_unauthorized_basic(srv, con, p, req);
-	}
-
-	mod_auth_setenv(srv, con, CONST_BUF_LEN(username), CONST_STR_LEN("Basic"));
 
 	buffer_free(username);
-
-	return HANDLER_GO_ON;
+	return (HANDLER_UNSET != rc) ? rc : mod_auth_send_401_unauthorized_basic(srv, con, require->realm);
 }
 
 #define HASHLEN 16
@@ -393,7 +523,11 @@ typedef struct {
 	char **ptr;
 } digest_kv;
 
-static handler_t mod_auth_digest_check(server *srv, connection *con, mod_auth_plugin_data *p, array *req, const char *realm_str) {
+static handler_t mod_auth_send_401_unauthorized_digest(server *srv, connection *con, buffer *realm, int nonce_stale);
+
+static handler_t mod_auth_check_digest(server *srv, connection *con, void *p_d, const struct http_auth_require_t *require, const struct http_auth_backend_t *backend) {
+	data_string *ds = (data_string *)array_get_element(con->request.headers, "Authorization");
+
 	char a1[33];
 	char a2[33];
 
@@ -447,7 +581,25 @@ static handler_t mod_auth_digest_check(server *srv, connection *con, mod_auth_pl
 	dkv[7].ptr = &nc;
 	dkv[8].ptr = &respons;
 
-	b = buffer_init_string(realm_str);
+	UNUSED(p_d);
+
+	if (NULL == backend) {
+		log_error_write(srv, __FILE__, __LINE__, "sb", "auth.backend not configured for", con->uri.path);
+		con->http_status = 500;
+		con->mode = DIRECT;
+		return HANDLER_FINISHED;
+	}
+
+	if (NULL == ds || buffer_is_empty(ds->value)) {
+		return mod_auth_send_401_unauthorized_digest(srv, con, require->realm, 0);
+	}
+
+	if (0 != strncasecmp(ds->value->ptr, "Digest ", sizeof("Digest ")-1)) {
+		return mod_auth_send_400_bad_request(srv, con);
+	}
+
+	b = buffer_init();
+	buffer_copy_string_len(b, ds->value->ptr+sizeof("Digest ")-1, buffer_string_length(ds->value)-(sizeof("Digest ")-1));
 
 	/* parse credentials from client */
 	for (c = b->ptr; *c; c++) {
@@ -478,18 +630,6 @@ static handler_t mod_auth_digest_check(server *srv, connection *con, mod_auth_pl
 				break;
 			}
 		}
-	}
-
-	if (p->conf.auth_debug > 1) {
-		log_error_write(srv, __FILE__, __LINE__, "ss", "username", username);
-		log_error_write(srv, __FILE__, __LINE__, "ss", "realm", realm);
-		log_error_write(srv, __FILE__, __LINE__, "ss", "nonce", nonce);
-		log_error_write(srv, __FILE__, __LINE__, "ss", "uri", uri);
-		log_error_write(srv, __FILE__, __LINE__, "ss", "algorithm", algorithm);
-		log_error_write(srv, __FILE__, __LINE__, "ss", "qop", qop);
-		log_error_write(srv, __FILE__, __LINE__, "ss", "cnonce", cnonce);
-		log_error_write(srv, __FILE__, __LINE__, "ss", "nc", nc);
-		log_error_write(srv, __FILE__, __LINE__, "ss", "response", respons);
 	}
 
 	/* check if everything is transmitted */
@@ -546,14 +686,14 @@ static handler_t mod_auth_digest_check(server *srv, connection *con, mod_auth_pl
 		if (!buffer_is_equal_string(con->request.orig_uri, uri, ulen)
 		    && !(rlen < ulen && 0 == memcmp(con->request.orig_uri->ptr, uri, rlen) && uri[rlen] == '?')) {
 			log_error_write(srv, __FILE__, __LINE__, "sbssss",
-					"digest: auth failed: uri mismatch (", con->request.orig_uri, "!=", uri, "), IP:", inet_ntop_cache_get_ip(srv, &(con->dst_addr)));
+					"digest: auth failed: uri mismatch (", con->request.orig_uri, "!=", uri, "), IP:", con->dst_addr_buf);
 			buffer_free(b);
 			return mod_auth_send_400_bad_request(srv, con);
 		}
 	}
 
 	/* password-string == HA1 */
-	switch (p->conf.auth_backend->digest(srv, con, p->conf.auth_backend->p_d, username, realm, HA1)) {
+	switch (backend->digest(srv, con, backend->p_d, username, realm, HA1)) {
 	case HANDLER_GO_ON:
 		break;
 	case HANDLER_WAIT_FOR_EVENT:
@@ -565,7 +705,7 @@ static handler_t mod_auth_digest_check(server *srv, connection *con, mod_auth_pl
 	case HANDLER_ERROR:
 	default:
 		buffer_free(b);
-		return mod_auth_send_401_unauthorized_digest(srv, con, p, req, 0);
+		return mod_auth_send_401_unauthorized_digest(srv, con, require->realm, 0);
 	}
 
 	if (algorithm &&
@@ -618,33 +758,21 @@ static handler_t mod_auth_digest_check(server *srv, connection *con, mod_auth_pl
 
 	if (0 != strcmp(a2, respons)) {
 		/* digest not ok */
-
-		if (p->conf.auth_debug) {
-			log_error_write(srv, __FILE__, __LINE__, "sss",
-				"digest: digest mismatch", a2, respons);
-		}
-
 		log_error_write(srv, __FILE__, __LINE__, "ssss",
-				"digest: auth failed for ", username, ": wrong password, IP:", inet_ntop_cache_get_ip(srv, &(con->dst_addr)));
+				"digest: auth failed for ", username, ": wrong password, IP:", con->dst_addr_buf);
 
 		buffer_free(b);
-		return mod_auth_send_401_unauthorized_digest(srv, con, p, req, 0);
+		return mod_auth_send_401_unauthorized_digest(srv, con, require->realm, 0);
 	}
 
 	/* value is our allow-rules */
-	if (mod_auth_match_rules(srv, req, username, NULL, NULL)) {
-
-		if (p->conf.auth_debug) {
-			log_error_write(srv, __FILE__, __LINE__, "s",
-					"digest: rules did match");
-		}
-
+	if (!http_auth_match_rules(require, username, NULL, NULL)) {
 		buffer_free(b);
-		return mod_auth_send_401_unauthorized_digest(srv, con, p, req, 0);
+		return mod_auth_send_401_unauthorized_digest(srv, con, require->realm, 0);
 	}
 
 	/* check age of nonce.  Note that rand() is used in nonce generation
-	 * in mod_auth_digest_generate_nonce().  If that were replaced
+	 * in mod_auth_send_401_unauthorized_digest().  If that were replaced
 	 * with nanosecond time, then nonce secret would remain unique enough
 	 * for the purposes of Digest auth, and would be reproducible (and
 	 * verifiable) if nanoseconds were inclued with seconds as part of the
@@ -662,32 +790,32 @@ static handler_t mod_auth_digest_check(server *srv, connection *con, mod_auth_pl
 		    || ts > srv->cur_ts || srv->cur_ts - ts > 600) { /*(10 mins)*/
 			/* nonce is stale; have client regenerate digest */
 			buffer_free(b);
-			return mod_auth_send_401_unauthorized_digest(srv, con, p, req, 1);
+			return mod_auth_send_401_unauthorized_digest(srv, con, require->realm, 1);
 		} /*(future: might send nextnonce when expiration is imminent)*/
 	}
 
-	mod_auth_setenv(srv, con, username, strlen(username), CONST_STR_LEN("Digest"));
+	http_auth_setenv(con->environment, username, strlen(username), CONST_STR_LEN("Digest"));
 
 	buffer_free(b);
-
-	if (p->conf.auth_debug) {
-		log_error_write(srv, __FILE__, __LINE__, "s",
-				"digest: auth ok");
-	}
 
 	return HANDLER_GO_ON;
 }
 
-static int mod_auth_digest_generate_nonce(server *srv, mod_auth_plugin_data *p, buffer *fn, char (*out)[33]) {
-	HASH h;
+static handler_t mod_auth_send_401_unauthorized_digest(server *srv, connection *con, buffer *realm, int nonce_stale) {
 	li_MD5_CTX Md5Ctx;
-	char hh[LI_ITOSTRING_LENGTH];
+	HASH h;
+	char hh[33];
 
-	UNUSED(p);
+	force_assert(33 >= LI_ITOSTRING_LENGTH); /*(buffer used for both li_itostrn() and CvtHex())*/
+
+	/* generate nonce */
+
+	/* using unknown contents of srv->tmp_buf (modified elsewhere)
+	 * adds dubious amount of randomness.  Remove use of srv->tmp_buf in nonce? */
 
 	/* generate shared-secret */
 	li_MD5_Init(&Md5Ctx);
-	li_MD5_Update(&Md5Ctx, CONST_BUF_LEN(fn));
+	li_MD5_Update(&Md5Ctx, CONST_BUF_LEN(srv->tmp_buf)); /*(dubious randomness)*/
 	li_MD5_Update(&Md5Ctx, CONST_STR_LEN("+"));
 
 	/* we assume sizeof(time_t) == 4 here, but if not it ain't a problem at all */
@@ -699,300 +827,40 @@ static int mod_auth_digest_generate_nonce(server *srv, mod_auth_plugin_data *p, 
 
 	li_MD5_Final(h, &Md5Ctx);
 
-	CvtHex(h, out);
+	CvtHex(h, &hh);
 
-	return 0;
+	/* generate WWW-Authenticate */
+
+	con->http_status = 401;
+	con->mode = DIRECT;
+
+	buffer_copy_string_len(srv->tmp_buf, CONST_STR_LEN("Digest realm=\""));
+	buffer_append_string_buffer(srv->tmp_buf, realm);
+	buffer_append_string_len(srv->tmp_buf, CONST_STR_LEN("\", charset=\"UTF-8\", nonce=\""));
+	buffer_append_uint_hex(srv->tmp_buf, (uintmax_t)srv->cur_ts);
+	buffer_append_string_len(srv->tmp_buf, CONST_STR_LEN(":"));
+	buffer_append_string(srv->tmp_buf, hh);
+	buffer_append_string_len(srv->tmp_buf, CONST_STR_LEN("\", qop=\"auth\""));
+	if (nonce_stale) {
+		buffer_append_string_len(srv->tmp_buf, CONST_STR_LEN(", stale=true"));
+	}
+
+	response_header_insert(srv, con, CONST_STR_LEN("WWW-Authenticate"), CONST_BUF_LEN(srv->tmp_buf));
+
+	return HANDLER_FINISHED;
 }
 
-static handler_t mod_auth_uri_handler(server *srv, connection *con, void *p_d) {
-	size_t k;
-	int auth_required;
-	char *http_authorization = NULL;
-	data_string *ds;
-	mod_auth_plugin_data *p = p_d;
-	array *req;
-	data_string *req_method;
-
-	/* select the right config */
-	mod_auth_patch_connection(srv, con, p);
-
-	if (p->conf.auth_require == NULL) return HANDLER_GO_ON;
-
-	/*
-	 * AUTH
-	 *
-	 */
-
-	/* do we have to ask for auth ? */
-
-	auth_required = 0;
-
-	/* search auth-directives for path */
-	for (k = 0; k < p->conf.auth_require->used; k++) {
-		buffer *require = p->conf.auth_require->data[k]->key;
-
-		if (buffer_is_empty(require)) continue;
-		if (buffer_string_length(con->uri.path) < buffer_string_length(require)) continue;
-
-		/* if we have a case-insensitive FS we have to lower-case the URI here too */
-
-		if (con->conf.force_lowercase_filenames) {
-			if (0 == strncasecmp(con->uri.path->ptr, require->ptr, buffer_string_length(require))) {
-				auth_required = 1;
-				break;
-			}
-		} else {
-			if (0 == strncmp(con->uri.path->ptr, require->ptr, buffer_string_length(require))) {
-				auth_required = 1;
-				break;
-			}
-		}
-	}
-
-	/* nothing to do for us */
-	if (auth_required == 0) return HANDLER_GO_ON;
-
-	req = ((data_array *)(p->conf.auth_require->data[k]))->value;
-	req_method = (data_string *)array_get_element(req, "method");
-
-	if (0 == strcmp(req_method->value->ptr, "extern")) {
-		/* require REMOTE_USER to be already set */
-		if (NULL == (ds = (data_string *)array_get_element(con->environment, "REMOTE_USER"))) {
-			con->http_status = 401;
-			con->mode = DIRECT;
-			return HANDLER_FINISHED;
-		} else if (mod_auth_match_rules(srv, req, ds->value->ptr, NULL, NULL)) {
-			log_error_write(srv, __FILE__, __LINE__, "s", "rules didn't match");
-			con->http_status = 401;
-			con->mode = DIRECT;
-			return HANDLER_FINISHED;
-		} else {
-			return HANDLER_GO_ON;
-		}
-	}
-
-	/* check for configured backend
-	 * (XXX: should try to catch this at config time, if not "extern" method) */
-	if (NULL == p->conf.auth_backend) {
-		log_error_write(srv, __FILE__, __LINE__, "sb", "auth.backend not configured for", con->uri.path);
-		con->http_status = 500;
-		con->mode = DIRECT;
-		return HANDLER_FINISHED;
-	}
-
-	/* try to get Authorization-header */
-
-	if (NULL != (ds = (data_string *)array_get_element(con->request.headers, "Authorization")) && !buffer_is_empty(ds->value)) {
-		char *auth_realm;
-
-		http_authorization = ds->value->ptr;
-
-		/* parse auth-header */
-		if (NULL != (auth_realm = strchr(http_authorization, ' '))) {
-			int auth_type_len = auth_realm - http_authorization;
-
-			if ((auth_type_len == 5) &&
-			    (0 == strncasecmp(http_authorization, "Basic", auth_type_len))) {
-				if (0 == strcmp(req_method->value->ptr, "basic")) {
-					return mod_auth_basic_check(srv, con, p, req, auth_realm+1);
-				}
-			} else if ((auth_type_len == 6) &&
-				   (0 == strncasecmp(http_authorization, "Digest", auth_type_len))) {
-				if (0 == strcmp(req_method->value->ptr, "digest")) {
-					return mod_auth_digest_check(srv, con, p, req, auth_realm+1);
-				}
-			} else {
-				log_error_write(srv, __FILE__, __LINE__, "ss",
-						"unknown authentication type:",
-						http_authorization);
-				return mod_auth_send_400_bad_request(srv, con);
-			}
-		} else {
-			return mod_auth_send_400_bad_request(srv, con);
-		}
-	}
-
-	if (0 == strcmp(req_method->value->ptr, "basic")) {
-		return mod_auth_send_401_unauthorized_basic(srv, con, p, req);
-	} else if (0 == strcmp(req_method->value->ptr, "digest")) {
-		return mod_auth_send_401_unauthorized_digest(srv, con, p, req, 0);
+static handler_t mod_auth_check_extern(server *srv, connection *con, void *p_d, const struct http_auth_require_t *require, const struct http_auth_backend_t *backend) {
+	/* require REMOTE_USER already set */
+	data_string *ds = (data_string *)array_get_element(con->environment, "REMOTE_USER");
+	UNUSED(srv);
+	UNUSED(p_d);
+	UNUSED(backend);
+	if (NULL != ds && http_auth_match_rules(require, ds->value->ptr, NULL, NULL)) {
+		return HANDLER_GO_ON;
 	} else {
-		/* evil */
 		con->http_status = 401;
 		con->mode = DIRECT;
 		return HANDLER_FINISHED;
 	}
-}
-
-SETDEFAULTS_FUNC(mod_auth_set_defaults) {
-	mod_auth_plugin_data *p = p_d;
-	size_t i;
-
-	config_values_t cv[] = {
-		{ "auth.backend",                   NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_CONNECTION }, /* 0 */
-		{ "auth.require",                   NULL, T_CONFIG_LOCAL, T_CONFIG_SCOPE_CONNECTION },  /* 1 */
-		{ "auth.debug",                     NULL, T_CONFIG_SHORT, T_CONFIG_SCOPE_CONNECTION },  /* 2 */
-		{ NULL,                             NULL, T_CONFIG_UNSET, T_CONFIG_SCOPE_UNSET }
-	};
-
-	p->config_storage = calloc(1, srv->config_context->used * sizeof(mod_auth_plugin_config *));
-
-	for (i = 0; i < srv->config_context->used; i++) {
-		data_config const* config = (data_config const*)srv->config_context->data[i];
-		mod_auth_plugin_config *s;
-		size_t n;
-		data_array *da;
-
-		s = calloc(1, sizeof(mod_auth_plugin_config));
-		s->auth_backend_conf = buffer_init();
-
-		s->auth_debug = 0;
-
-		s->auth_require = array_init();
-
-		cv[0].destination = s->auth_backend_conf;
-		cv[1].destination = s->auth_require;
-		cv[2].destination = &(s->auth_debug);
-
-		p->config_storage[i] = s;
-
-		if (0 != config_insert_values_global(srv, config->value, cv, i == 0 ? T_CONFIG_SCOPE_SERVER : T_CONFIG_SCOPE_CONNECTION)) {
-			return HANDLER_ERROR;
-		}
-
-		if (!buffer_string_is_empty(s->auth_backend_conf)) {
-			s->auth_backend = http_auth_backend_get(s->auth_backend_conf);
-			if (NULL == s->auth_backend) {
-				log_error_write(srv, __FILE__, __LINE__, "sb", "auth.backend not supported:", s->auth_backend_conf);
-
-				return HANDLER_ERROR;
-			}
-		}
-
-		/* no auth.require for this section */
-		if (NULL == (da = (data_array *)array_get_element(config->value, "auth.require"))) continue;
-
-		if (da->type != TYPE_ARRAY) continue;
-
-		for (n = 0; n < da->value->used; n++) {
-			size_t m;
-			data_array *da_file = (data_array *)da->value->data[n];
-			const char *method, *realm, *require;
-
-			if (da->value->data[n]->type != TYPE_ARRAY) {
-				log_error_write(srv, __FILE__, __LINE__, "ss",
-						"auth.require should contain an array as in:",
-						"auth.require = ( \"...\" => ( ..., ...) )");
-
-				return HANDLER_ERROR;
-			}
-
-			method = realm = require = NULL;
-
-			for (m = 0; m < da_file->value->used; m++) {
-				if (da_file->value->data[m]->type == TYPE_STRING) {
-					if (0 == strcmp(da_file->value->data[m]->key->ptr, "method")) {
-						method = ((data_string *)(da_file->value->data[m]))->value->ptr;
-					} else if (0 == strcmp(da_file->value->data[m]->key->ptr, "realm")) {
-						realm = ((data_string *)(da_file->value->data[m]))->value->ptr;
-					} else if (0 == strcmp(da_file->value->data[m]->key->ptr, "require")) {
-						require = ((data_string *)(da_file->value->data[m]))->value->ptr;
-					} else {
-						log_error_write(srv, __FILE__, __LINE__, "ssbs",
-							"the field is unknown in:",
-							"auth.require = ( \"...\" => ( ..., -> \"",
-							da_file->value->data[m]->key,
-							"\" <- => \"...\" ) )");
-
-						return HANDLER_ERROR;
-					}
-				} else {
-					log_error_write(srv, __FILE__, __LINE__, "ssbs",
-						"a string was expected for:",
-						"auth.require = ( \"...\" => ( ..., -> \"",
-						da_file->value->data[m]->key,
-						"\" <- => \"...\" ) )");
-
-					return HANDLER_ERROR;
-				}
-			}
-
-			if (method == NULL) {
-				log_error_write(srv, __FILE__, __LINE__, "ss",
-						"the method field is missing in:",
-						"auth.require = ( \"...\" => ( ..., \"method\" => \"...\" ) )");
-				return HANDLER_ERROR;
-			} else {
-				if (0 != strcmp(method, "basic") &&
-				    0 != strcmp(method, "digest") &&
-				    0 != strcmp(method, "extern")) {
-					log_error_write(srv, __FILE__, __LINE__, "ss",
-							"method has to be either \"basic\", \"digest\" or \"extern\" in",
-							"auth.require = ( \"...\" => ( ..., \"method\" => \"...\") )");
-					return HANDLER_ERROR;
-				}
-			}
-
-			if (realm == NULL) {
-				log_error_write(srv, __FILE__, __LINE__, "ss",
-						"the realm field is missing in:",
-						"auth.require = ( \"...\" => ( ..., \"realm\" => \"...\" ) )");
-				return HANDLER_ERROR;
-			}
-
-			if (require == NULL) {
-				log_error_write(srv, __FILE__, __LINE__, "ss",
-						"the require field is missing in:",
-						"auth.require = ( \"...\" => ( ..., \"require\" => \"...\" ) )");
-				return HANDLER_ERROR;
-			}
-
-			if (method && realm && require) {
-				data_string *ds;
-				data_array *a;
-
-				a = data_array_init();
-				buffer_copy_buffer(a->key, da_file->key);
-
-				ds = data_string_init();
-
-				buffer_copy_string_len(ds->key, CONST_STR_LEN("method"));
-				buffer_copy_string(ds->value, method);
-
-				array_insert_unique(a->value, (data_unset *)ds);
-
-				ds = data_string_init();
-
-				buffer_copy_string_len(ds->key, CONST_STR_LEN("realm"));
-				buffer_copy_string(ds->value, realm);
-
-				array_insert_unique(a->value, (data_unset *)ds);
-
-				ds = data_string_init();
-
-				buffer_copy_string_len(ds->key, CONST_STR_LEN("require"));
-				buffer_copy_string(ds->value, require);
-
-				array_insert_unique(a->value, (data_unset *)ds);
-
-				array_insert_unique(s->auth_require, (data_unset *)a);
-			}
-		}
-	}
-
-	return HANDLER_GO_ON;
-}
-
-int mod_auth_plugin_init(plugin *p);
-int mod_auth_plugin_init(plugin *p) {
-	p->version     = LIGHTTPD_VERSION_ID;
-	p->name        = buffer_init_string("auth");
-	p->init        = mod_auth_init;
-	p->set_defaults = mod_auth_set_defaults;
-	p->handle_uri_clean = mod_auth_uri_handler;
-	p->cleanup     = mod_auth_free;
-
-	p->data        = NULL;
-
-	return 0;
 }
