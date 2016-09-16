@@ -98,6 +98,7 @@ modules = {
 	'mod_expire' : { 'src' : [ 'mod_expire.c' ] },
 	'mod_status' : { 'src' : [ 'mod_status.c' ] },
 	'mod_compress' : { 'src' : [ 'mod_compress.c' ], 'lib' : [ env['LIBZ'], env['LIBBZ2'] ] },
+	'mod_deflate' : { 'src' : [ 'mod_deflate.c' ], 'lib' : [ env['LIBZ'], env['LIBBZ2'] ] },
 	'mod_redirect' : { 'src' : [ 'mod_redirect.c' ], 'lib' : [ env['LIBPCRE'] ] },
 	'mod_rewrite' : { 'src' : [ 'mod_rewrite.c' ], 'lib' : [ env['LIBPCRE'] ] },
 	'mod_auth' : { 'src' : [ 'mod_auth.c' ] },
