@@ -663,9 +663,14 @@ static void show_features (void) {
       "\t- PCRE support\n"
 #endif
 #ifdef HAVE_MYSQL
-      "\t+ mySQL support\n"
+      "\t+ MySQL support\n"
 #else
-      "\t- mySQL support\n"
+      "\t- MySQL support\n"
+#endif
+#ifdef HAVE_KRB5
+      "\t+ Kerberos support\n"
+#else
+      "\t- Kerberos support\n"
 #endif
 #if defined(HAVE_LDAP_H) && defined(HAVE_LBER_H) && defined(HAVE_LIBLDAP) && defined(HAVE_LIBLBER)
       "\t+ LDAP support\n"

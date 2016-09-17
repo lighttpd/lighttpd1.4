@@ -272,6 +272,11 @@ mod_authn_file_la_SOURCES = mod_authn_file.c
 mod_authn_file_la_LDFLAGS = $(common_module_ldflags)
 mod_authn_file_la_LIBADD = $(CRYPT_LIB) $(SSL_LIB) $(common_libadd)
 
+lib_LTLIBRARIES += mod_authn_gssapi.la
+mod_authn_gssapi_la_SOURCES = mod_authn_gssapi.c
+mod_authn_gssapi_la_LDFLAGS = $(common_module_ldflags)
+mod_authn_gssapi_la_LIBADD = $(KRB5_LIB) $(common_libadd)
+
 lib_LTLIBRARIES += mod_authn_ldap.la
 mod_authn_ldap_la_SOURCES = mod_authn_ldap.c
 mod_authn_ldap_la_LDFLAGS = $(common_module_ldflags)
@@ -338,6 +343,7 @@ lighttpd_SOURCES = \
   mod_alias.c \
   mod_auth.c \
   mod_authn_file.c \
+  mod_authn_gssapi.c \
   mod_authn_ldap.c \
   mod_authn_mysql.c \
   mod_cgi.c \
@@ -380,6 +386,7 @@ lighttpd_CPPFLAGS = \
 lighttpd_LDADD = \
   $(common_libadd) \
   $(CRYPT_LIB) $(SSL_LIB) $(LDAP_LIB) $(LBER_LIB) \
+  $(KRB5_LIB) \
   $(LUA_LIBS) -lm \
   $(MYSQL_LIBS) \
   $(MEMCACHED_LIB) \

@@ -322,6 +322,46 @@ if test "$WITH_LIBUNWIND" != "no"; then
   PKG_CHECK_MODULES(LIBUNWIND, libunwind)
   AC_DEFINE(HAVE_LIBUNWIND, 1, [Have libunwind support])
 fi
+AC_MSG_RESULT([$WITH_LIBUNWIND])
+
+dnl Checking for kerberos5
+AC_MSG_CHECKING(for kerberos5)
+AC_ARG_WITH(krb5,
+	AC_HELP_STRING([--with-krb5@<:@=DIR@:>@],[Use Kerberos 5]),
+	[WITH_KRB5=$withval],[WITH_KRB5=no])
+if test "$WITH_KRB5" != "no"; then
+	use_krb5=yes
+	if test "x$WITH_KRB5" != "xyes"; then
+		CPPFLAGS="$CPPFLAGS -I$WITH_KRB5/include"
+		LDFLAGS="$LDFLAGS -L$WITH_KRB5/lib"
+	fi
+else
+	use_krb5=no
+fi
+AC_MSG_RESULT([$use_krb5])
+
+AC_ARG_WITH(krb5-includes,
+	AC_HELP_STRING([--with-krb5-includes=DIR],[Kerberos includes]),
+	[ use_krb5=yes CPPFLAGS="$CPPFLAGS -I$withval" ]
+)
+
+AC_ARG_WITH(krb5-libs,
+	AC_HELP_STRING([--with-krb5-libs=DIR],[Kerberos libraries]),
+	[ use_krb5=yes LDFLAGS="$LDFLAGS -L$withval" ]
+)
+
+if test "x$use_krb5" = "xyes"; then
+	AC_CHECK_LIB(gssapi_krb5, gss_acquire_cred, [
+		AC_CHECK_HEADERS([gssapi/gssapi_krb5.h],[
+			KRB5_LIB="-lresolv -lkrb5 -lgssapi_krb5"
+			AC_DEFINE(HAVE_KRB5, [1], [libgssapi_krb5])
+		])
+	])
+	if test "x$KRB5_LIB" = x; then
+		AC_MSG_ERROR([gssapi_krb5 headers and/or libs where not found, install them or build with --without-krb5])
+	fi
+fi
+AC_SUBST(KRB5_LIB)
 
 dnl Check for openssl
 AC_MSG_CHECKING(for OpenSSL)
@@ -350,13 +390,8 @@ AC_ARG_WITH(openssl-libs,
     [ use_openssl=yes LDFLAGS="$LDFLAGS -L$withval" ]
 )
 
-AC_ARG_WITH(kerberos5,
-    AC_HELP_STRING([--with-kerberos5],[use Kerberos5 support with OpenSSL]),
-    [ use_kerberos=yes ], [use_kerberos=no]
-)
-
 if test "x$use_openssl" = "xyes"; then
-    if test "x$use_kerberos" = "xyes"; then
+    if test "x$use_krb5" = "xyes"; then
         AC_DEFINE([USE_OPENSSL_KERBEROS], [1], [with kerberos])
     fi
 

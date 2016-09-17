@@ -216,7 +216,8 @@ if 1:
 
 	autoconf.env.Append( LIBSQLITE3 = '', LIBXML2 = '', LIBMYSQL = '', LIBZ = '',
 		LIBBZ2 = '', LIBCRYPT = '', LIBMEMCACHED = '', LIBFCGI = '', LIBPCRE = '',
-		LIBLDAP = '', LIBLBER = '', LIBLUA = '', LIBDL = '', LIBUUID = '')
+		LIBLDAP = '', LIBLBER = '', LIBLUA = '', LIBDL = '', LIBUUID = '',
+		LIBRESOLV = '', LIBKRB5 = '', LIBGSSAPI_KRB5 = '')
 
 	if env['with_fam']:
 		if autoconf.CheckLibWithHeader('fam', 'fam.h', 'C'):
@@ -245,6 +246,14 @@ if 1:
 	if env['with_gzip']:
 		if autoconf.CheckLibWithHeader('z', 'zlib.h', 'C'):
 			autoconf.env.Append(CPPFLAGS = [ '-DHAVE_ZLIB_H', '-DHAVE_LIBZ' ], LIBZ = 'z')
+
+	if env['with_krb5']:
+		if autoconf.CheckLibWithHeader('krb5', 'krb5.h', 'C'):
+			autoconf.env.Append(CPPFLAGS = [ '-DHAVE_KRB5' ], LIBKRB5 = 'krb5')
+		if autoconf.CheckLibWithHeader('resolv', 'resolv.h', 'C'):
+			autoconf.env.Append(LIBRESOLV = 'resolv')
+		if autoconf.CheckLibWithHeader('gssapi_krb5', 'gssapi/gssapi_krb5.h', 'C'):
+			autoconf.env.Append(LIBGSSAPI_KRB5 = 'gssapi_krb5')
 
 	if env['with_ldap']:
 		if autoconf.CheckLibWithHeader('ldap', 'ldap.h', 'C'):
