@@ -45,9 +45,8 @@ int main (void) {
 		} else if (0 == strcmp(p, "script_name")) {
 			printf("%s", getenv("SCRIPT_NAME"));
 		} else if (0 == strcmp(p, "var")) {
-			char *test = getenv("LIGHTYTEST");
-			if (test == NULL) test = "(no value)";
-			printf("%s", test);
+			p = getenv("X_LIGHTTPD_FCGI_AUTH");
+			printf("%s", p ? p : "(no value)");
 		} else {
 			printf("test123");
 		}
