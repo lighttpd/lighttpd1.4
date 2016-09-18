@@ -1511,11 +1511,6 @@ SETDEFAULTS_FUNC(mod_fastcgi_set_defaults) {
 							host->mode = FCGI_RESPONDER;
 						} else if (strcmp(fcgi_mode->ptr, "authorizer") == 0) {
 							host->mode = FCGI_AUTHORIZER;
-							if (buffer_string_is_empty(host->docroot)) {
-								log_error_write(srv, __FILE__, __LINE__, "s",
-										"ERROR: docroot is required for authorizer mode.");
-								goto error;
-							}
 						} else {
 							log_error_write(srv, __FILE__, __LINE__, "sbs",
 									"WARNING: unknown fastcgi mode:",
@@ -2395,6 +2390,19 @@ range_success: ;
 		default:
 			break;
 		}
+
+		if (host->mode == FCGI_AUTHORIZER &&
+		    key_len > 9 &&
+		    0 == strncasecmp(key, CONST_STR_LEN("Variable-"))) {
+			data_string *ds;
+			if (NULL == (ds = (data_string *)array_get_unused_element(con->environment, TYPE_STRING))) {
+				ds = data_response_init();
+			}
+			buffer_copy_string_len(ds->key, key + 9, key_len - 9);
+			buffer_copy_string(ds->value, value);
+
+			array_insert_unique(con->environment, (data_unset *)ds);
+		}
 	}
 
 	if (have_sendfile2) {
@@ -3267,6 +3275,7 @@ static handler_t fcgi_recv_response(server *srv, handler_ctx *hctx) {
 	plugin_data *p    = hctx->plugin_data;
 
 	fcgi_proc *proc   = hctx->proc;
+	fcgi_extension *ext = hctx->ext;
 	fcgi_extension_host *host= hctx->host;
 
 		switch (fcgi_demux_response(srv, hctx)) {
@@ -3283,16 +3292,46 @@ static handler_t fcgi_recv_response(server *srv, handler_ctx *hctx) {
 				 * now to handle authorized request.
 				 */
 
-				buffer_copy_buffer(con->physical.doc_root, host->docroot);
-				buffer_copy_buffer(con->physical.basedir, host->docroot);
+				if (!buffer_is_empty(host->docroot)) {
+					buffer_copy_buffer(con->physical.doc_root, host->docroot);
+					buffer_copy_buffer(con->physical.basedir, host->docroot);
 
-				buffer_copy_buffer(con->physical.path, host->docroot);
-				buffer_append_string_buffer(con->physical.path, con->uri.path);
+					buffer_copy_buffer(con->physical.path, host->docroot);
+					buffer_append_string_buffer(con->physical.path, con->uri.path);
 
-				con->mode = DIRECT;/*(avoid changing con->state, con->http_status)*/
-				fcgi_connection_close(srv, hctx);
-				con->http_status = 0;
-				con->file_started = 1; /* fcgi_extension won't touch the request afterwards */
+					con->mode = DIRECT;/*(avoid changing con->state, con->http_status)*/
+					fcgi_connection_close(srv, hctx);
+					con->http_status = 0;
+					con->file_started = 1; /* fcgi_extension won't touch the request afterwards */
+				} else {
+					/* docroot was not set - restart the request so other handlers can catch it */
+					fcgi_connection_close(srv, hctx);
+
+					connection_response_reset(srv, con); /*(includes con->http_status = 0)*/
+					con->mode = DIRECT;
+
+					/* user was authorized, set the FastCGI authorizer flag */
+					data_string *authorizer_env = NULL;
+					if (NULL == (authorizer_env = (data_string *)array_get_unused_element(con->environment, TYPE_STRING))) {
+						authorizer_env = data_string_init();
+					}
+					buffer_copy_string(authorizer_env->key, "FastCGI-Authorizer");
+					buffer_copy_buffer(authorizer_env->value, ext->key);
+					array_insert_unique(con->environment, (data_unset *)authorizer_env);
+
+					/* don't do more than 6 loops here, that normally shouldn't happen */
+					if (++con->loops_per_request > 5) {
+						authorizer_env = (data_string *)array_get_element(con->environment, "FastCGI-Authorizer");
+						log_error_write(srv, __FILE__, __LINE__, "sb", "too many authorizer loops while processing request:", con->request.orig_uri);
+						if (NULL != authorizer_env) {
+							log_error_write(srv, __FILE__, __LINE__, "sb", "FastCGI-Authorizer: ", authorizer_env->value);
+						}
+						con->http_status = 500; /* Internal Server Error */
+						return HANDLER_FINISHED;
+					}
+
+					return HANDLER_COMEBACK;
+				}
 			} else {
 				/* we are done */
 				fcgi_connection_close(srv, hctx);
@@ -3487,6 +3526,8 @@ static handler_t fcgi_check_extension(server *srv, connection *con, void *p_d, i
 	fcgi_extension *extension = NULL;
 	fcgi_extension_host *host = NULL;
 
+	data_string *authorizer_env = (data_string *)array_get_element(con->environment, "FastCGI-Authorizer");
+
 	if (con->mode != DIRECT) return HANDLER_GO_ON;
 
 	/* Possibly, we processed already this request */
@@ -3549,6 +3590,27 @@ static handler_t fcgi_check_extension(server *srv, connection *con, void *p_d, i
 			fcgi_extension *ext = p->conf.exts->exts[k];
 
 			if (buffer_is_empty(ext->key)) continue;
+
+			/* do not reuse same authorizer, skip if it's in FastCGI-Authorizer env var */
+			if (NULL != authorizer_env) {
+				if (0 == strcmp(authorizer_env->value->ptr, ext->key->ptr)) continue;
+
+				buffer *ext_leading = buffer_init_string(", ");
+				buffer_append_string_buffer(ext_leading, ext->key);
+
+				buffer *ext_trailing = buffer_init_buffer(ext->key);
+				buffer_append_string(ext_trailing, ", ");
+
+				if (NULL != strstr(authorizer_env->value->ptr, ext_leading->ptr) ||
+				    NULL != strstr(authorizer_env->value->ptr, ext_trailing->ptr)) {
+					buffer_free(ext_leading);
+					buffer_free(ext_trailing);
+					continue;
+				} else {
+					buffer_free(ext_leading);
+					buffer_free(ext_trailing);
+				}
+			}
 
 			ct_len = buffer_string_length(ext->key);
 

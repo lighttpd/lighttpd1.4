@@ -11,22 +11,18 @@
 #include <string.h>
 
 int main (void) {
-	char* p;
-
 	while (FCGI_Accept() >= 0) {
 		/* wait for fastcgi authorizer request */
+		char* p = getenv("QUERY_STRING");
 
-		printf("Content-type: text/html\r\n");
-
-		if (((p = getenv("QUERY_STRING")) == NULL) ||
-		    strcmp(p, "ok") != 0) {
-			printf("Status: 403 Forbidden\r\n\r\n");
-		} else {
-			printf("\r\n");
-			/* default Status is 200 - allow access */
+		/* Status: 200 OK to allow access is implied when not included in response */
+		if (p != NULL && 0 == strcmp(p, "var")) {
+			printf("Variable-X-LIGHTTPD-FCGI-AUTH: LighttpdTestContent\r\n");
+		} else if (p == NULL || 0 != strcmp(p, "ok")) {
+			printf("Status: 403 Forbidden\r\n");
 		}
 
-		printf("foobar\r\n");
+		printf("\r\n");
 	}
 
 	return 0;
