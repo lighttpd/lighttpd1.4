@@ -189,14 +189,6 @@ typedef struct {
 	buffer *docroot;
 
 	/*
-	 * fastcgi-mode:
-	 * - responser
-	 * - authorizer
-	 *
-	 */
-	unsigned short mode;
-
-	/*
 	 * check_local tells you if the phys file is stat()ed
 	 * or not. FastCGI doesn't care if the service is
 	 * remote. If the web-server side doesn't contain
@@ -292,6 +284,8 @@ typedef struct {
 
 typedef struct {
 	fcgi_exts *exts;
+	fcgi_exts *exts_auth;
+	fcgi_exts *exts_resp;
 
 	array *ext_mapping;
 
@@ -333,7 +327,8 @@ typedef struct {
 	fcgi_proc *proc;
 	fcgi_extension_host *host;
 	fcgi_extension *ext;
-	fcgi_extension *ext_auth;
+	fcgi_extension *ext_auth; /* (might be used in future to allow multiple authorizers)*/
+	unsigned short fcgi_mode; /* FastCGI mode: FCGI_AUTHORIZER or FCGI_RESPONDER */
 
 	fcgi_connection_state_t state;
 	time_t   state_timestamp;
@@ -485,6 +480,7 @@ static handler_ctx * handler_ctx_init(void) {
 	hctx->response_header = buffer_init();
 
 	hctx->request_id = 0;
+	hctx->fcgi_mode = FCGI_RESPONDER;
 	hctx->state = FCGI_STATE_INIT;
 	hctx->proc = NULL;
 
@@ -516,8 +512,9 @@ static void handler_ctx_clear(handler_ctx *hctx) {
 	hctx->proc = NULL;
 	hctx->host = NULL;
 	hctx->ext  = NULL;
-	/*hctx->ext_auth is intentionally preserved to flag that auth occurred*/
+	/*hctx->ext_auth is intentionally preserved to flag prior authorizer*/
 
+	hctx->fcgi_mode = FCGI_RESPONDER;
 	hctx->state = FCGI_STATE_INIT;
 	/*hctx->state_timestamp = 0;*//*(unused; left as-is)*/
 
@@ -731,6 +728,7 @@ FREE_FUNC(mod_fastcgi_free) {
 
 			exts = s->exts;
 
+		      if (exts) {
 			for (j = 0; j < exts->used; j++) {
 				fcgi_extension *ex;
 
@@ -766,6 +764,9 @@ FREE_FUNC(mod_fastcgi_free) {
 			}
 
 			fastcgi_extensions_free(s->exts);
+			fastcgi_extensions_free(s->exts_auth);
+			fastcgi_extensions_free(s->exts_resp);
+		      }
 			array_free(s->ext_mapping);
 
 			free(s);
@@ -1216,6 +1217,7 @@ static fcgi_extension_host * unixsocket_is_dup(plugin_data *p, size_t used, buff
 	size_t i, j, n;
 	for (i = 0; i < used; ++i) {
 		fcgi_exts *exts = p->config_storage[i]->exts;
+		if (NULL == exts) continue;
 		for (j = 0; j < exts->used; ++j) {
 			fcgi_extension *ex = exts->exts[j];
 			for (n = 0; n < ex->used; ++n) {
@@ -1252,11 +1254,13 @@ SETDEFAULTS_FUNC(mod_fastcgi_set_defaults) {
 		plugin_config *s;
 
 		s = malloc(sizeof(plugin_config));
-		s->exts          = fastcgi_extensions_init();
+		s->exts          = NULL;
+		s->exts_auth     = NULL;
+		s->exts_resp     = NULL;
 		s->debug         = 0;
 		s->ext_mapping   = array_init();
 
-		cv[0].destination = s->exts;
+		cv[0].destination = s->exts; /* not used; T_CONFIG_LOCAL */
 		cv[1].destination = &(s->debug);
 		cv[2].destination = s->ext_mapping;
 
@@ -1281,6 +1285,9 @@ SETDEFAULTS_FUNC(mod_fastcgi_set_defaults) {
 				goto error;
 			}
 
+			s->exts      = fastcgi_extensions_init();
+			s->exts_auth = fastcgi_extensions_init();
+			s->exts_resp = fastcgi_extensions_init();
 
 			/*
 			 * fastcgi.server = ( "<ext>" => ( ... ),
@@ -1340,6 +1347,7 @@ SETDEFAULTS_FUNC(mod_fastcgi_set_defaults) {
 
 						{ NULL,                NULL, T_CONFIG_UNSET, T_CONFIG_SCOPE_UNSET }
 					};
+					unsigned short host_mode = FCGI_RESPONDER;
 
 					if (da_host->type != TYPE_ARRAY) {
 						log_error_write(srv, __FILE__, __LINE__, "ssSBS",
@@ -1357,7 +1365,6 @@ SETDEFAULTS_FUNC(mod_fastcgi_set_defaults) {
 
 					host->check_local  = 1;
 					host->max_procs    = 4;
-					host->mode = FCGI_RESPONDER;
 					host->disable_time = 1;
 					host->break_scriptfilename_for_php = 0;
 					host->xsendfile_allow = 0;
@@ -1535,9 +1542,9 @@ SETDEFAULTS_FUNC(mod_fastcgi_set_defaults) {
 
 					if (!buffer_string_is_empty(fcgi_mode)) {
 						if (strcmp(fcgi_mode->ptr, "responder") == 0) {
-							host->mode = FCGI_RESPONDER;
+							host_mode = FCGI_RESPONDER;
 						} else if (strcmp(fcgi_mode->ptr, "authorizer") == 0) {
-							host->mode = FCGI_AUTHORIZER;
+							host_mode = FCGI_AUTHORIZER;
 						} else {
 							log_error_write(srv, __FILE__, __LINE__, "sbs",
 									"WARNING: unknown fastcgi mode:",
@@ -1564,8 +1571,26 @@ SETDEFAULTS_FUNC(mod_fastcgi_set_defaults) {
 						}
 					}
 
-					/* if extension already exists, take it */
+					/* s->exts is list of exts -> hosts
+					 * s->exts now used as combined list of authorizer and responder hosts (for backend maintenance)
+					 * s->exts_auth is list of exts -> authorizer hosts
+					 * s->exts_resp is list of exts -> responder hosts
+					 * For each path/extension, there may be an independent FCGI_AUTHORIZER and FCGI_RESPONDER
+					 * (The FCGI_AUTHORIZER and FCGI_RESPONDER could be handled by the same host,
+					 *  and an admin might want to do that for large uploads, since FCGI_AUTHORIZER
+					 *  runs prior to receiving (potentially large) request body from client and can
+					 *  authorizer or deny request prior to receiving the full upload)
+					 */
 					fastcgi_extension_insert(s->exts, da_ext->key, host);
+
+					if (host_mode == FCGI_AUTHORIZER) {
+						++host->refcount;
+						fastcgi_extension_insert(s->exts_auth, da_ext->key, host);
+					} else if (host_mode == FCGI_RESPONDER) {
+						++host->refcount;
+						fastcgi_extension_insert(s->exts_resp, da_ext->key, host);
+					} /*(else should have been rejected above)*/
+
 					host = NULL;
 				}
 			}
@@ -1996,7 +2021,7 @@ static int fcgi_create_env(server *srv, handler_ctx *hctx, int request_id) {
 	/* send FCGI_BEGIN_REQUEST */
 
 	fcgi_header(&(beginRecord.header), FCGI_BEGIN_REQUEST, request_id, sizeof(beginRecord.body), 0);
-	beginRecord.body.roleB0 = host->mode;
+	beginRecord.body.roleB0 = hctx->fcgi_mode;
 	beginRecord.body.roleB1 = 0;
 	beginRecord.body.flags = 0;
 	memset(beginRecord.body.reserved, 0, sizeof(beginRecord.body.reserved));
@@ -2067,14 +2092,14 @@ static int fcgi_create_env(server *srv, handler_ctx *hctx, int request_id) {
 	s = inet_ntop_cache_get_ip(srv, &(con->dst_addr));
 	FCGI_ENV_ADD_CHECK(fcgi_env_add(p->fcgi_env, CONST_STR_LEN("REMOTE_ADDR"), s, strlen(s)),con)
 
-	if (con->request.content_length > 0 && host->mode != FCGI_AUTHORIZER) {
+	if (con->request.content_length > 0 && hctx->fcgi_mode != FCGI_AUTHORIZER) {
 		/* CGI-SPEC 6.1.2 and FastCGI spec 6.3 */
 
 		li_itostrn(buf, sizeof(buf), con->request.content_length);
 		FCGI_ENV_ADD_CHECK(fcgi_env_add(p->fcgi_env, CONST_STR_LEN("CONTENT_LENGTH"), buf, strlen(buf)),con)
 	}
 
-	if (host->mode != FCGI_AUTHORIZER) {
+	if (hctx->fcgi_mode != FCGI_AUTHORIZER) {
 		/*
 		 * SCRIPT_NAME, PATH_INFO and PATH_TRANSLATED according to
 		 * http://cgi-spec.golux.com/draft-coar-cgi-v11-03-clean.html
@@ -2250,7 +2275,7 @@ static int fcgi_response_parse(server *srv, connection *con, plugin_data *p, buf
 		/* strip WS */
 		while (*value == ' ' || *value == '\t') value++;
 
-		if (host->mode != FCGI_AUTHORIZER ||
+		if (hctx->fcgi_mode != FCGI_AUTHORIZER ||
 		    !(con->http_status == 0 ||
 		      con->http_status == 200)) {
 			/* authorizers shouldn't affect the response headers sent back to the client */
@@ -2268,7 +2293,7 @@ static int fcgi_response_parse(server *srv, connection *con, plugin_data *p, buf
 			}
 		}
 
-		if (host->mode == FCGI_AUTHORIZER &&
+		if (hctx->fcgi_mode == FCGI_AUTHORIZER &&
 		    key_len > 9 &&
 		    0 == strncasecmp(key, CONST_STR_LEN("Variable-"))) {
 			data_string *ds;
@@ -2683,7 +2708,7 @@ static int fcgi_demux_response(server *srv, handler_ctx *hctx) {
 
 				con->file_started = 1;
 
-				if (host->mode == FCGI_AUTHORIZER &&
+				if (hctx->fcgi_mode == FCGI_AUTHORIZER &&
 				    (con->http_status == 0 ||
 				     con->http_status == 200)) {
 					/* a authorizer with approved the static request, ignore the content here */
@@ -3271,12 +3296,10 @@ SUBREQUEST_FUNC(mod_fastcgi_handle_subrequest) {
 	}
 
 	/* (do not receive request body before FCGI_AUTHORIZER has run or else
-	 *  the request body is discarded with fcgi_connection_close() of the
-	 *  FastCGI Authorizer)
-	 * (hctx->host might not be assigned yet, so check first host in list
-	 *  of potential hosts (hctx->ext->hosts[0]->mode != FCGI_AUTHORIZER))*/
+	 *  the request body is discarded with handler_ctx_clear() after running
+	 *  the FastCGI Authorizer) */
 
-	if (hctx->ext->hosts[0]->mode != FCGI_AUTHORIZER
+	if (hctx->fcgi_mode != FCGI_AUTHORIZER
 	    && (0 == hctx->wb->bytes_in
 	        ? con->state == CON_STATE_READ_POST
 	        : hctx->wb->bytes_in < hctx->wb_reqlen)) {
@@ -3318,7 +3341,7 @@ static handler_t fcgi_recv_response(server *srv, handler_ctx *hctx) {
 			break;
 		case 1:
 
-			if (host->mode == FCGI_AUTHORIZER &&
+			if (hctx->fcgi_mode == FCGI_AUTHORIZER &&
 		   	    (con->http_status == 200 ||
 			     con->http_status == 0)) {
 				/*
@@ -3515,6 +3538,8 @@ static int fcgi_patch_connection(server *srv, connection *con, plugin_data *p) {
 	plugin_config *s = p->config_storage[0];
 
 	PATCH(exts);
+	PATCH(exts_auth);
+	PATCH(exts_resp);
 	PATCH(debug);
 	PATCH(ext_mapping);
 
@@ -3532,6 +3557,8 @@ static int fcgi_patch_connection(server *srv, connection *con, plugin_data *p) {
 
 			if (buffer_is_equal_string(du->key, CONST_STR_LEN("fastcgi.server"))) {
 				PATCH(exts);
+				PATCH(exts_auth);
+				PATCH(exts_resp);
 			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("fastcgi.debug"))) {
 				PATCH(debug);
 			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("fastcgi.map-extensions"))) {
@@ -3553,7 +3580,7 @@ static handler_t fcgi_check_extension(server *srv, connection *con, void *p_d, i
 	fcgi_extension *extension = NULL;
 	fcgi_extension_host *host = NULL;
 	handler_ctx *hctx;
-	fcgi_extension *ext_auth;
+	unsigned short fcgi_mode;
 
 	if (con->mode != DIRECT) return HANDLER_GO_ON;
 
@@ -3564,9 +3591,27 @@ static handler_t fcgi_check_extension(server *srv, connection *con, void *p_d, i
 	s_len = buffer_string_length(fn);
 
 	fcgi_patch_connection(srv, con, p);
+	if (NULL == p->conf.exts) return HANDLER_GO_ON;
 
-	hctx = con->plugin_ctx[p->id]; /*(not NULL if FCGI_AUTHORIZER ran)*/
-	ext_auth = hctx ? hctx->ext_auth : NULL;
+	/* check p->conf.exts_auth list and then p->conf.ext_resp list
+	 * (skip p->conf.exts_auth if array is empty or if FCGI_AUTHORIZER already ran in this request */
+	hctx = con->plugin_ctx[p->id]; /*(not NULL if FCGI_AUTHORIZER ran; hctx->ext-auth check is redundant)*/
+	fcgi_mode = (NULL == hctx || NULL == hctx->ext_auth)
+	  ? 0                /* FCGI_AUTHORIZER p->conf.exts_auth will be searched next */
+	  : FCGI_AUTHORIZER; /* FCGI_RESPONDER p->conf.exts_resp will be searched next */
+
+      do {
+
+	fcgi_exts *exts;
+	if (0 == fcgi_mode) {
+		fcgi_mode = FCGI_AUTHORIZER;
+		exts = p->conf.exts_auth;
+	} else {
+		fcgi_mode = FCGI_RESPONDER;
+		exts = p->conf.exts_resp;
+	}
+
+	if (0 == exts->used) continue;
 
 	/* fastcgi.map-extensions maps extensions to existing fastcgi.server entries
 	 *
@@ -3592,17 +3637,16 @@ static handler_t fcgi_check_extension(server *srv, connection *con, void *p_d, i
 			/* check if we know the extension */
 
 			/* we can reuse k here */
-			for (k = 0; k < p->conf.exts->used; k++) {
-				extension = p->conf.exts->exts[k];
+			for (k = 0; k < exts->used; k++) {
+				extension = exts->exts[k];
 
 				if (buffer_is_equal(ds->value, extension->key)) {
-					/* do not reuse same authorizer; skip if ext matches ext_auth */
-					if (extension != ext_auth) break;
+					break;
 				}
 			}
 
-			if (k == p->conf.exts->used) {
-				/* found nothign */
+			if (k == exts->used) {
+				/* found nothing */
 				extension = NULL;
 			}
 			break;
@@ -3613,14 +3657,11 @@ static handler_t fcgi_check_extension(server *srv, connection *con, void *p_d, i
 		size_t uri_path_len = buffer_string_length(con->uri.path);
 
 		/* check if extension matches */
-		for (k = 0; k < p->conf.exts->used; k++) {
+		for (k = 0; k < exts->used; k++) {
 			size_t ct_len; /* length of the config entry */
-			fcgi_extension *ext = p->conf.exts->exts[k];
+			fcgi_extension *ext = exts->exts[k];
 
 			if (buffer_is_empty(ext->key)) continue;
-
-			/* do not reuse same authorizer; skip if ext matches ext_auth */
-			if (ext == ext_auth) continue;
 
 			ct_len = buffer_string_length(ext->key);
 
@@ -3637,10 +3678,13 @@ static handler_t fcgi_check_extension(server *srv, connection *con, void *p_d, i
 				break;
 			}
 		}
-		/* extension doesn't match */
-		if (NULL == extension) {
-			return HANDLER_GO_ON;
-		}
+	}
+
+      } while (NULL == extension && fcgi_mode != FCGI_RESPONDER);
+
+	/* extension doesn't match */
+	if (NULL == extension) {
+		return HANDLER_GO_ON;
 	}
 
 	/* check if we have at least one server for this extension up and running */
@@ -3689,7 +3733,7 @@ static handler_t fcgi_check_extension(server *srv, connection *con, void *p_d, i
 			return HANDLER_GO_ON;
 		} else {
 			/* do not split path info for authorizer */
-			if (host->mode != FCGI_AUTHORIZER) {
+			if (fcgi_mode != FCGI_AUTHORIZER) {
 				/* the prefix is the SCRIPT_NAME,
 				* everything from start to the next slash
 				* this is important for check-local = "disable"
@@ -3741,12 +3785,16 @@ static handler_t fcgi_check_extension(server *srv, connection *con, void *p_d, i
 	hctx->proc             = NULL;
 	hctx->ext              = extension;
 
-	hctx->conf.exts        = p->conf.exts;
-	hctx->conf.debug       = p->conf.debug;
-
-	if (host->mode == FCGI_AUTHORIZER) {
-		hctx->ext_auth = hctx->ext; /* save pointer to authorizer ext */
+	hctx->fcgi_mode = fcgi_mode;
+	if (fcgi_mode == FCGI_AUTHORIZER) {
+		hctx->ext_auth = hctx->ext;
 	}
+
+	/*hctx->conf.exts        = p->conf.exts;*/
+	/*hctx->conf.exts_auth   = p->conf.exts_auth;*/
+	/*hctx->conf.exts_resp   = p->conf.exts_resp;*/
+	/*hctx->conf.ext_mapping = p->conf.ext_mapping;*/
+	hctx->conf.debug       = p->conf.debug;
 
 	con->plugin_ctx[p->id] = hctx;
 
@@ -3792,6 +3840,7 @@ TRIGGER_FUNC(mod_fastcgi_handle_trigger) {
 		conf = p->config_storage[i];
 
 		exts = conf->exts;
+		if (NULL == exts) continue;
 
 		for (j = 0; j < exts->used; j++) {
 			fcgi_extension *ex;
