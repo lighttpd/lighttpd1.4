@@ -333,6 +333,7 @@ typedef struct {
 	fcgi_proc *proc;
 	fcgi_extension_host *host;
 	fcgi_extension *ext;
+	fcgi_extension *ext_auth;
 
 	fcgi_connection_state_t state;
 	time_t   state_timestamp;
@@ -501,17 +502,45 @@ static handler_ctx * handler_ctx_init(void) {
 	return hctx;
 }
 
-static void handler_ctx_free(server *srv, handler_ctx *hctx) {
-	if (hctx->host) {
-		fcgi_host_reset(srv, hctx);
-	}
-
+static void handler_ctx_free(handler_ctx *hctx) {
+	/* caller MUST have called fcgi_backend_close(srv, hctx) if necessary */
 	buffer_free(hctx->response_header);
 
 	chunkqueue_free(hctx->rb);
 	chunkqueue_free(hctx->wb);
 
 	free(hctx);
+}
+
+static void handler_ctx_clear(handler_ctx *hctx) {
+	/* caller MUST have called fcgi_backend_close(srv, hctx) if necessary */
+
+	hctx->proc = NULL;
+	hctx->host = NULL;
+	hctx->ext  = NULL;
+	/*hctx->ext_auth is intentionally preserved to flag that auth occurred*/
+
+	hctx->state = FCGI_STATE_INIT;
+	/*hctx->state_timestamp = 0;*//*(unused; left as-is)*/
+
+	chunkqueue_reset(hctx->rb);
+	chunkqueue_reset(hctx->wb);
+	hctx->wb_reqlen = 0;
+
+	buffer_reset(hctx->response_header);
+
+	hctx->fd = -1;
+	hctx->fde_ndx = -1;
+	/*hctx->pid = -1;*//*(unused; left as-is)*/
+	hctx->got_proc = 0;
+	hctx->reconnects = 0;
+	hctx->request_id = 0;
+	hctx->send_content_body = 1;
+
+	/*plugin_config conf;*//*(no need to reset for same request)*/
+
+	/*hctx->remote_conn = NULL;*//*(no need to reset for same request)*/
+	/*hctx->plugin_data = NULL;*//*(no need to reset for same request)*/
 }
 
 static fcgi_proc *fastcgi_process_init(void) {
@@ -1511,11 +1540,6 @@ SETDEFAULTS_FUNC(mod_fastcgi_set_defaults) {
 							host->mode = FCGI_RESPONDER;
 						} else if (strcmp(fcgi_mode->ptr, "authorizer") == 0) {
 							host->mode = FCGI_AUTHORIZER;
-							if (buffer_string_is_empty(host->docroot)) {
-								log_error_write(srv, __FILE__, __LINE__, "s",
-										"ERROR: docroot is required for authorizer mode.");
-								goto error;
-							}
 						} else {
 							log_error_write(srv, __FILE__, __LINE__, "sbs",
 									"WARNING: unknown fastcgi mode:",
@@ -1567,25 +1591,20 @@ static int fcgi_set_state(server *srv, handler_ctx *hctx, fcgi_connection_state_
 }
 
 
-static void fcgi_connection_close(server *srv, handler_ctx *hctx) {
-	plugin_data *p;
-	connection  *con;
-
-	p    = hctx->plugin_data;
-	con  = hctx->remote_conn;
-
+static void fcgi_backend_close(server *srv, handler_ctx *hctx) {
 	if (hctx->fd != -1) {
 		fdevent_event_del(srv->ev, &(hctx->fde_ndx), hctx->fd);
 		fdevent_unregister(srv->ev, hctx->fd);
 		fdevent_sched_close(srv->ev, hctx->fd, 1);
+		hctx->fd = -1;
 	}
 
-	if (hctx->host && hctx->proc) {
-		if (hctx->got_proc) {
+	if (hctx->host) {
+		if (hctx->proc && hctx->got_proc) {
 			/* after the connect the process gets a load */
 			fcgi_proc_load_dec(srv, hctx);
 
-			if (p->conf.debug) {
+			if (hctx->plugin_data->conf.debug) {
 				log_error_write(srv, __FILE__, __LINE__, "ssdsbsd",
 						"released proc:",
 						"pid:", hctx->proc->pid,
@@ -1593,10 +1612,20 @@ static void fcgi_connection_close(server *srv, handler_ctx *hctx) {
 						"load:", hctx->proc->load);
 			}
 		}
+
+		fcgi_host_reset(srv, hctx);
 	}
+}
 
+static void fcgi_connection_close(server *srv, handler_ctx *hctx) {
+	plugin_data *p;
+	connection  *con;
 
-	handler_ctx_free(srv, hctx);
+	p    = hctx->plugin_data;
+	con  = hctx->remote_conn;
+
+	fcgi_backend_close(srv, hctx);
+	handler_ctx_free(hctx);
 	con->plugin_ctx[p->id] = NULL;
 
 	/* finish response (if not already con->file_started, con->file_finished) */
@@ -2242,6 +2271,19 @@ static int fcgi_response_parse(server *srv, connection *con, plugin_data *p, buf
 
 				array_insert_unique(con->response.headers, (data_unset *)ds);
 			}
+		}
+
+		if (host->mode == FCGI_AUTHORIZER &&
+		    key_len > 9 &&
+		    0 == strncasecmp(key, CONST_STR_LEN("Variable-"))) {
+			data_string *ds;
+			if (NULL == (ds = (data_string *)array_get_unused_element(con->environment, TYPE_STRING))) {
+				ds = data_response_init();
+			}
+			buffer_copy_string_len(ds->key, key + 9, key_len - 9);
+			buffer_copy_string(ds->value, value);
+
+			array_insert_unique(con->environment, (data_unset *)ds);
 		}
 
 		switch(key_len) {
@@ -3233,9 +3275,16 @@ SUBREQUEST_FUNC(mod_fastcgi_handle_subrequest) {
 		}
 	}
 
-	if (0 == hctx->wb->bytes_in
-	    ? con->state == CON_STATE_READ_POST
-	    : hctx->wb->bytes_in < hctx->wb_reqlen) {
+	/* (do not receive request body before FCGI_AUTHORIZER has run or else
+	 *  the request body is discarded with fcgi_connection_close() of the
+	 *  FastCGI Authorizer)
+	 * (hctx->host might not be assigned yet, so check first host in list
+	 *  of potential hosts (hctx->ext->hosts[0]->mode != FCGI_AUTHORIZER))*/
+
+	if (hctx->ext->hosts[0]->mode != FCGI_AUTHORIZER
+	    && (0 == hctx->wb->bytes_in
+	        ? con->state == CON_STATE_READ_POST
+	        : hctx->wb->bytes_in < hctx->wb_reqlen)) {
 		/*(64k - 4k to attempt to avoid temporary files
 		 * in conjunction with FDEVENT_STREAM_REQUEST_BUFMIN)*/
 		if (hctx->wb->bytes_in - hctx->wb->bytes_out > 65536 - 4096
@@ -3282,17 +3331,39 @@ static handler_t fcgi_recv_response(server *srv, handler_ctx *hctx) {
 				 * was processed already, and status 200 has been returned. We need
 				 * now to handle authorized request.
 				 */
+				buffer *physpath = NULL;
 
-				buffer_copy_buffer(con->physical.doc_root, host->docroot);
-				buffer_copy_buffer(con->physical.basedir, host->docroot);
+				if (!buffer_string_is_empty(host->docroot)) {
+					buffer_copy_buffer(con->physical.doc_root, host->docroot);
+					buffer_copy_buffer(con->physical.basedir, host->docroot);
 
-				buffer_copy_buffer(con->physical.path, host->docroot);
-				buffer_append_string_buffer(con->physical.path, con->uri.path);
+					buffer_copy_buffer(con->physical.path, host->docroot);
+					buffer_append_string_buffer(con->physical.path, con->uri.path);
+					physpath = con->physical.path;
+				}
 
-				con->mode = DIRECT;/*(avoid changing con->state, con->http_status)*/
-				fcgi_connection_close(srv, hctx);
-				con->http_status = 0;
-				con->file_started = 1; /* fcgi_extension won't touch the request afterwards */
+				fcgi_backend_close(srv, hctx);
+				handler_ctx_clear(hctx);
+
+				/* don't do more than 6 loops here, that normally shouldn't happen */
+				if (++con->loops_per_request > 5) {
+					log_error_write(srv, __FILE__, __LINE__, "sb", "too many loops while processing request:", con->request.orig_uri);
+					con->http_status = 500; /* Internal Server Error */
+					con->mode = DIRECT;
+					return HANDLER_FINISHED;
+				}
+
+				/* restart the request so other handlers can process it */
+
+				if (physpath) con->physical.path = NULL;
+				connection_response_reset(srv, con); /*(includes con->http_status = 0)*/
+				if (physpath) con->physical.path = physpath; /* preserve con->physical.path with modified docroot */
+
+				/*(FYI: if multiple FastCGI authorizers were to be supported,
+				 * next one could be started here instead of restarting request)*/
+
+				con->mode = DIRECT;
+				return HANDLER_COMEBACK;
 			} else {
 				/* we are done */
 				fcgi_connection_close(srv, hctx);
@@ -3486,11 +3557,10 @@ static handler_t fcgi_check_extension(server *srv, connection *con, void *p_d, i
 	buffer *fn;
 	fcgi_extension *extension = NULL;
 	fcgi_extension_host *host = NULL;
+	handler_ctx *hctx;
+	fcgi_extension *ext_auth;
 
 	if (con->mode != DIRECT) return HANDLER_GO_ON;
-
-	/* Possibly, we processed already this request */
-	if (con->file_started == 1) return HANDLER_GO_ON;
 
 	fn = uri_path_handler ? con->uri.path : con->physical.path;
 
@@ -3499,6 +3569,9 @@ static handler_t fcgi_check_extension(server *srv, connection *con, void *p_d, i
 	s_len = buffer_string_length(fn);
 
 	fcgi_patch_connection(srv, con, p);
+
+	hctx = con->plugin_ctx[p->id]; /*(not NULL if FCGI_AUTHORIZER ran)*/
+	ext_auth = hctx ? hctx->ext_auth : NULL;
 
 	/* fastcgi.map-extensions maps extensions to existing fastcgi.server entries
 	 *
@@ -3528,7 +3601,8 @@ static handler_t fcgi_check_extension(server *srv, connection *con, void *p_d, i
 				extension = p->conf.exts->exts[k];
 
 				if (buffer_is_equal(ds->value, extension->key)) {
-					break;
+					/* do not reuse same authorizer; skip if ext matches ext_auth */
+					if (extension != ext_auth) break;
 				}
 			}
 
@@ -3549,6 +3623,9 @@ static handler_t fcgi_check_extension(server *srv, connection *con, void *p_d, i
 			fcgi_extension *ext = p->conf.exts->exts[k];
 
 			if (buffer_is_empty(ext->key)) continue;
+
+			/* do not reuse same authorizer; skip if ext matches ext_auth */
+			if (ext == ext_auth) continue;
 
 			ct_len = buffer_string_length(ext->key);
 
@@ -3613,30 +3690,9 @@ static handler_t fcgi_check_extension(server *srv, connection *con, void *p_d, i
 
 	/* init handler-context */
 	if (uri_path_handler) {
-		if (host->check_local == 0) {
-			handler_ctx *hctx;
-			char *pathinfo;
-
-			hctx = handler_ctx_init();
-
-			hctx->remote_conn      = con;
-			hctx->plugin_data      = p;
-			hctx->proc	       = NULL;
-			hctx->ext              = extension;
-
-
-			hctx->conf.exts        = p->conf.exts;
-			hctx->conf.debug       = p->conf.debug;
-
-			con->plugin_ctx[p->id] = hctx;
-
-			con->mode = p->id;
-
-			if (con->conf.log_request_handling) {
-				log_error_write(srv, __FILE__, __LINE__, "s",
-				"handling it in mod_fastcgi");
-			}
-
+		if (host->check_local != 0) {
+			return HANDLER_GO_ON;
+		} else {
 			/* do not split path info for authorizer */
 			if (host->mode != FCGI_AUTHORIZER) {
 				/* the prefix is the SCRIPT_NAME,
@@ -3665,6 +3721,7 @@ static handler_t fcgi_check_extension(server *srv, connection *con, void *p_d, i
 				* PATH_INFO   = /bar
 				*
 				*/
+				char *pathinfo;
 
 				/* the rewrite is only done for /prefix/? matches */
 				if (host->fix_root_path_name && extension->key->ptr[0] == '/' && extension->key->ptr[1] == '\0') {
@@ -3680,25 +3737,28 @@ static handler_t fcgi_check_extension(server *srv, connection *con, void *p_d, i
 				}
 			}
 		}
-	} else {
-		handler_ctx *hctx;
-		hctx = handler_ctx_init();
+	}
 
-		hctx->remote_conn      = con;
-		hctx->plugin_data      = p;
-		hctx->proc             = NULL;
-		hctx->ext              = extension;
+	if (!hctx) hctx = handler_ctx_init();
 
-		hctx->conf.exts        = p->conf.exts;
-		hctx->conf.debug       = p->conf.debug;
+	hctx->remote_conn      = con;
+	hctx->plugin_data      = p;
+	hctx->proc             = NULL;
+	hctx->ext              = extension;
 
-		con->plugin_ctx[p->id] = hctx;
+	hctx->conf.exts        = p->conf.exts;
+	hctx->conf.debug       = p->conf.debug;
 
-		con->mode = p->id;
+	if (host->mode == FCGI_AUTHORIZER) {
+		hctx->ext_auth = hctx->ext; /* save pointer to authorizer ext */
+	}
 
-		if (con->conf.log_request_handling) {
-			log_error_write(srv, __FILE__, __LINE__, "s", "handling it in mod_fastcgi");
-		}
+	con->plugin_ctx[p->id] = hctx;
+
+	con->mode = p->id;
+
+	if (con->conf.log_request_handling) {
+		log_error_write(srv, __FILE__, __LINE__, "s", "handling it in mod_fastcgi");
 	}
 
 	return HANDLER_GO_ON;
