@@ -1,15 +1,16 @@
 AM_CFLAGS = $(FAM_CFLAGS) $(LIBUNWIND_CFLAGS)
 
-noinst_PROGRAMS=lemon proc_open test_buffer test_base64 test_configfile
+noinst_PROGRAMS=proc_open test_buffer test_base64 test_configfile
 sbin_PROGRAMS=lighttpd lighttpd-angel
-LEMON=$(top_builddir)/src/lemon$(EXEEXT)
+LEMON=$(top_builddir)/src/lemon$(BUILD_EXEEXT)
 
 TESTS=\
 	test_buffer$(EXEEXT) \
 	test_base64$(EXEEXT) \
 	test_configfile$(EXEEXT)
 
-lemon_SOURCES=lemon.c
+lemon$(BUILD_EXEEXT): lemon.c
+	$(AM_V_CC)$(CC_FOR_BUILD) $(CPPFLAGS_FOR_BUILD) $(CFLAGS_FOR_BUILD) $(LDFLAGS_FOR_BUILD) -o $@ $^
 
 lighttpd_angel_SOURCES=lighttpd-angel.c
 
@@ -38,28 +39,21 @@ versionstamp:
 		rm versionstamp.h.tmp; \
 	fi
 
-if CROSS_COMPILING
-configparser.c configparser.h:
-mod_ssi_exprparser.c mod_ssi_exprparser.h:
-
-parsers:
-else
 configparser.h: configparser.c
-configparser.c: $(srcdir)/configparser.y $(srcdir)/lempar.c lemon$(EXEEXT)
+configparser.c: $(srcdir)/configparser.y $(srcdir)/lempar.c lemon$(BUILD_EXEEXT)
 	rm -f configparser.h
 	$(LEMON) -q $(srcdir)/configparser.y $(srcdir)/lempar.c
 
 mod_ssi_exprparser.h: mod_ssi_exprparser.c
-mod_ssi_exprparser.c: $(srcdir)/mod_ssi_exprparser.y $(srcdir)/lempar.c lemon$(EXEEXT)
+mod_ssi_exprparser.c: $(srcdir)/mod_ssi_exprparser.y $(srcdir)/lempar.c lemon$(BUILD_EXEEXT)
 	rm -f mod_ssi_exprparser.h
 	$(LEMON) -q $(srcdir)/mod_ssi_exprparser.y $(srcdir)/lempar.c
 
 parsers: configparser.c mod_ssi_exprparser.c
-endif
 
 BUILT_SOURCES = parsers versionstamp
 MAINTAINERCLEANFILES = configparser.c configparser.h mod_ssi_exprparser.c mod_ssi_exprparser.h
-CLEANFILES = versionstamp.h versionstamp.h.tmp
+CLEANFILES = versionstamp.h versionstamp.h.tmp lemon$(BUILD_EXEEXT)
 
 common_src=base64.c buffer.c log.c \
 	keyvalue.c chunk.c  \
