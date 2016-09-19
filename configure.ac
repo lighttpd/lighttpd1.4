@@ -63,6 +63,7 @@ AC_DEFUN([TRY_LDFLAGS],
 dnl Checks for programs.
 AC_PROG_CC
 AM_PROG_CC_C_O
+AX_PROG_CC_FOR_BUILD
 AC_PROG_LD
 AC_PROG_INSTALL
 AC_PROG_AWK
@@ -860,9 +861,6 @@ AC_ARG_ENABLE(mmap,
 if test x$mmap = xtrue; then
   AC_DEFINE(ENABLE_MMAP, [1], [Use mmap if available])
 fi
-
-
-AM_CONDITIONAL(CROSS_COMPILING, test "x$cross_compiling" = xyes)
 
 dnl check for fastcgi lib, for the tests only
 fastcgi_found=no
