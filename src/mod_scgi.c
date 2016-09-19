@@ -1325,7 +1325,7 @@ static void scgi_connection_close(server *srv, handler_ctx *hctx) {
 			/* after the connect the process gets a load */
 			hctx->proc->load--;
 
-			if (p->conf.debug) {
+			if (hctx->conf.debug) {
 				log_error_write(srv, __FILE__, __LINE__, "sddb",
 						"release proc:",
 						hctx->fd,
@@ -1347,8 +1347,6 @@ static void scgi_connection_close(server *srv, handler_ctx *hctx) {
 }
 
 static int scgi_reconnect(server *srv, handler_ctx *hctx) {
-	plugin_data *p    = hctx->plugin_data;
-
 	/* child died
 	 *
 	 * 1.
@@ -1376,7 +1374,7 @@ static int scgi_reconnect(server *srv, handler_ctx *hctx) {
 
 	hctx->reconnects++;
 
-	if (p->conf.debug) {
+	if (hctx->conf.debug) {
 		log_error_write(srv, __FILE__, __LINE__, "sddb",
 				"release proc:",
 				hctx->fd,
@@ -2249,7 +2247,6 @@ static int scgi_restart_dead_procs(server *srv, plugin_data *p, scgi_extension_h
 
 
 static handler_t scgi_write_request(server *srv, handler_ctx *hctx) {
-	plugin_data *p    = hctx->plugin_data;
 	scgi_extension_host *host= hctx->host;
 	connection *con   = hctx->remote_conn;
 
@@ -2349,7 +2346,7 @@ static handler_t scgi_write_request(server *srv, handler_ctx *hctx) {
 				return HANDLER_ERROR;
 			}
 			if (socket_error != 0) {
-				if (!hctx->proc->is_local || p->conf.debug) {
+				if (!hctx->proc->is_local || hctx->conf.debug) {
 					/* local procs get restarted */
 
 					log_error_write(srv, __FILE__, __LINE__, "ss",
@@ -2367,7 +2364,7 @@ static handler_t scgi_write_request(server *srv, handler_ctx *hctx) {
 		hctx->proc->last_used = srv->cur_ts;
 		hctx->got_proc = 1;
 
-		if (p->conf.debug) {
+		if (hctx->conf.debug) {
 			log_error_write(srv, __FILE__, __LINE__, "sddbdd",
 					"got proc:",
 					hctx->fd,
@@ -2497,7 +2494,7 @@ static handler_t scgi_send_request(server *srv, handler_ctx *hctx) {
 			 */
 			if (proc && proc->is_local) {
 
-				if (p->conf.debug) {
+				if (hctx->conf.debug) {
 					log_error_write(srv, __FILE__, __LINE__,  "sbdb", "connect() to scgi failed, restarting the request-handling:",
 							host->host,
 							proc->port,
@@ -2633,7 +2630,7 @@ static handler_t scgi_recv_response(server *srv, handler_ctx *hctx) {
 								status);
 					}
 
-					if (p->conf.debug) {
+					if (hctx->conf.debug) {
 						log_error_write(srv, __FILE__, __LINE__, "ssdsbsdsd",
 								"--- scgi spawning",
 								"\n\tport:", host->port,

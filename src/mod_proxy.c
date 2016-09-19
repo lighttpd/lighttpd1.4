@@ -104,6 +104,8 @@ typedef struct {
 
 	size_t path_info_offset; /* start of path_info in uri.path */
 
+	plugin_config conf;
+
 	connection *remote_conn;  /* dump pointer */
 	plugin_data *plugin_data; /* dump pointer */
 } handler_ctx;
@@ -368,7 +370,6 @@ static int proxy_establish_connection(server *srv, handler_ctx *hctx) {
 #endif
 	socklen_t servlen;
 
-	plugin_data *p    = hctx->plugin_data;
 	data_proxy *host= hctx->host;
 	int proxy_fd       = hctx->fd;
 
@@ -411,7 +412,7 @@ static int proxy_establish_connection(server *srv, handler_ctx *hctx) {
 
 	if (-1 == connect(proxy_fd, proxy_addr, servlen)) {
 		if (errno == EINPROGRESS || errno == EALREADY) {
-			if (p->conf.debug) {
+			if (hctx->conf.debug) {
 				log_error_write(srv, __FILE__, __LINE__, "sd",
 						"connect delayed:", proxy_fd);
 			}
@@ -425,7 +426,7 @@ static int proxy_establish_connection(server *srv, handler_ctx *hctx) {
 			return -1;
 		}
 	}
-	if (p->conf.debug) {
+	if (hctx->conf.debug) {
 		log_error_write(srv, __FILE__, __LINE__, "sd",
 				"connect succeeded: ", proxy_fd);
 	}
@@ -646,7 +647,7 @@ static int proxy_demux_response(server *srv, handler_ctx *hctx) {
       #endif
 
 
-	if (p->conf.debug) {
+	if (hctx->conf.debug) {
 		log_error_write(srv, __FILE__, __LINE__, "sd",
 				"proxy - have to read:", b);
 	}
@@ -1024,7 +1025,7 @@ static handler_t proxy_handle_fdevent(server *srv, void *ctx, int revents) {
 
 	if (revents & FDEVENT_IN) {
 
-		if (p->conf.debug) {
+		if (hctx->conf.debug) {
 			log_error_write(srv, __FILE__, __LINE__, "sd",
 					"proxy: fdevent-in", hctx->state);
 		}
@@ -1036,7 +1037,7 @@ static handler_t proxy_handle_fdevent(server *srv, void *ctx, int revents) {
 	}
 
 	if (revents & FDEVENT_OUT) {
-		if (p->conf.debug) {
+		if (hctx->conf.debug) {
 			log_error_write(srv, __FILE__, __LINE__, "sd",
 					"proxy: fdevent-out", hctx->state);
 		}
@@ -1059,7 +1060,7 @@ static handler_t proxy_handle_fdevent(server *srv, void *ctx, int revents) {
 
 				return HANDLER_FINISHED;
 			}
-			if (p->conf.debug) {
+			if (hctx->conf.debug) {
 				log_error_write(srv, __FILE__, __LINE__,  "s", "proxy - connect - delayed success");
 			}
 
@@ -1071,7 +1072,7 @@ static handler_t proxy_handle_fdevent(server *srv, void *ctx, int revents) {
 
 	/* perhaps this issue is already handled */
 	if (revents & FDEVENT_HUP) {
-		if (p->conf.debug) {
+		if (hctx->conf.debug) {
 			log_error_write(srv, __FILE__, __LINE__, "sd",
 					"proxy: fdevent-hup", hctx->state);
 		}
@@ -1320,6 +1321,8 @@ static handler_t mod_proxy_check_extension(server *srv, connection *con, void *p
 		hctx->remote_conn      = con;
 		hctx->plugin_data      = p;
 		hctx->host             = host;
+
+		hctx->conf.debug       = p->conf.debug;
 
 		con->plugin_ctx[p->id] = hctx;
 

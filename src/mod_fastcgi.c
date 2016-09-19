@@ -436,14 +436,12 @@ static void fcgi_host_reset(server *srv, handler_ctx *hctx) {
 }
 
 static void fcgi_host_disable(server *srv, handler_ctx *hctx) {
-	plugin_data *p    = hctx->plugin_data;
-
 	if (hctx->host->disable_time || hctx->proc->is_local) {
 		if (hctx->proc->state == PROC_STATE_RUNNING) hctx->host->active_procs--;
 		hctx->proc->disabled_until = srv->cur_ts + hctx->host->disable_time;
 		hctx->proc->state = hctx->proc->is_local ? PROC_STATE_DIED_WAIT_FOR_PID : PROC_STATE_DIED;
 
-		if (p->conf.debug) {
+		if (hctx->conf.debug) {
 			log_error_write(srv, __FILE__, __LINE__, "sds",
 				"backend disabled for", hctx->host->disable_time, "seconds");
 		}
@@ -1604,7 +1602,7 @@ static void fcgi_backend_close(server *srv, handler_ctx *hctx) {
 			/* after the connect the process gets a load */
 			fcgi_proc_load_dec(srv, hctx);
 
-			if (hctx->plugin_data->conf.debug) {
+			if (hctx->conf.debug) {
 				log_error_write(srv, __FILE__, __LINE__, "ssdsbsd",
 						"released proc:",
 						"pid:", hctx->proc->pid,
@@ -1635,8 +1633,6 @@ static void fcgi_connection_close(server *srv, handler_ctx *hctx) {
 }
 
 static int fcgi_reconnect(server *srv, handler_ctx *hctx) {
-	plugin_data *p    = hctx->plugin_data;
-
 	/* child died
 	 *
 	 * 1.
@@ -1668,7 +1664,7 @@ static int fcgi_reconnect(server *srv, handler_ctx *hctx) {
 	hctx->request_id = 0;
 	hctx->reconnects++;
 
-	if (p->conf.debug > 2) {
+	if (hctx->conf.debug > 2) {
 		if (hctx->proc) {
 			log_error_write(srv, __FILE__, __LINE__, "sdb",
 					"release proc for reconnect:",
@@ -1946,7 +1942,6 @@ static int fcgi_env_add_request_headers(server *srv, connection *con, plugin_dat
 static void fcgi_stdin_append(server *srv, connection *con, handler_ctx *hctx, int request_id) {
 	FCGI_Header header;
 	chunkqueue *req_cq = con->request_content_queue;
-	plugin_data *p     = hctx->plugin_data;
 	off_t offset, weWant;
 	const off_t req_cqlen = req_cq->bytes_in - req_cq->bytes_out;
 
@@ -1962,7 +1957,7 @@ static void fcgi_stdin_append(server *srv, connection *con, handler_ctx *hctx, i
 		chunkqueue_append_mem(hctx->wb, (const char *)&header, sizeof(header));
 		hctx->wb_reqlen += sizeof(header);
 
-		if (p->conf.debug > 10) {
+		if (hctx->conf.debug > 10) {
 			log_error_write(srv, __FILE__, __LINE__, "soso", "tosend:", offset, "/", req_cqlen);
 		}
 
@@ -2330,7 +2325,7 @@ static int fcgi_response_parse(server *srv, connection *con, plugin_data *p, buf
 					filename = pos;
 					if (NULL == (range = strchr(pos, ' '))) {
 						/* missing range */
-						if (p->conf.debug) {
+						if (hctx->conf.debug) {
 							log_error_write(srv, __FILE__, __LINE__, "ss", "Couldn't find range after filename:", filename);
 						}
 						return 502;
@@ -2366,14 +2361,14 @@ static int fcgi_response_parse(server *srv, connection *con, plugin_data *p, buf
 					}
 
 					if (HANDLER_ERROR == stat_cache_get_entry(srv, con, srv->tmp_buf, &sce)) {
-						if (p->conf.debug) {
+						if (hctx->conf.debug) {
 							log_error_write(srv, __FILE__, __LINE__, "sb",
 								"send-file error: couldn't get stat_cache entry for X-Sendfile2:",
 								srv->tmp_buf);
 						}
 						return 404;
 					} else if (!S_ISREG(sce->st.st_mode)) {
-						if (p->conf.debug) {
+						if (hctx->conf.debug) {
 							log_error_write(srv, __FILE__, __LINE__, "sb",
 								"send-file error: wrong filetype for X-Sendfile2:",
 								srv->tmp_buf);
@@ -2400,7 +2395,7 @@ static int fcgi_response_parse(server *srv, connection *con, plugin_data *p, buf
 						goto range_success;
 
 range_failed:
-						if (p->conf.debug) {
+						if (hctx->conf.debug) {
 							log_error_write(srv, __FILE__, __LINE__, "ss", "Couldn't decode range after filename:", filename);
 						}
 						return 502;
@@ -2503,7 +2498,7 @@ static int fastcgi_get_packet(server *srv, handler_ctx *hctx, fastcgi_response_p
 
 	if (buffer_string_length(packet->b) < sizeof(FCGI_Header)) {
 		/* no header */
-		if (hctx->plugin_data->conf.debug) {
+		if (hctx->conf.debug) {
 			log_error_write(srv, __FILE__, __LINE__, "sdsds", "FastCGI: header too small:", buffer_string_length(packet->b), "bytes <", sizeof(FCGI_Header), "bytes, waiting for more data");
 		}
 
@@ -2923,7 +2918,7 @@ static handler_t fcgi_write_request(server *srv, handler_ctx *hctx) {
 			return HANDLER_ERROR;
 		}
 		if (socket_error != 0) {
-			if (!hctx->proc->is_local || p->conf.debug) {
+			if (!hctx->proc->is_local || hctx->conf.debug) {
 				/* local procs get restarted */
 
 				log_error_write(srv, __FILE__, __LINE__, "sssb",
@@ -3077,7 +3072,7 @@ static handler_t fcgi_write_request(server *srv, handler_ctx *hctx) {
 
 		status_counter_inc(srv, CONST_BUF_LEN(p->statuskey));
 
-		if (p->conf.debug) {
+		if (hctx->conf.debug) {
 			log_error_write(srv, __FILE__, __LINE__, "ssdsbsd",
 				"got proc:",
 				"pid:", hctx->proc->pid,
@@ -3398,7 +3393,7 @@ static handler_t fcgi_recv_response(server *srv, handler_ctx *hctx) {
 								status);
 					}
 
-					if (p->conf.debug) {
+					if (hctx->conf.debug) {
 						log_error_write(srv, __FILE__, __LINE__, "ssbsdsd",
 								"--- fastcgi spawning",
 								"\n\tsocket", proc->connection_name,
