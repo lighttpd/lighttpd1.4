@@ -410,7 +410,7 @@ test_buffer_LDADD = $(LIBUNWIND_LIBS)
 test_base64_SOURCES = test_base64.c base64.c buffer.c
 test_base64_LDADD = $(LIBUNWIND_LIBS)
 
-test_configfile_SOURCES = test_configfile.c buffer.c array.c data_string.c keyvalue.c log.c
+test_configfile_SOURCES = test_configfile.c buffer.c array.c data_string.c keyvalue.c vector.c log.c
 test_configfile_LDADD = $(PCRE_LIB) $(LIBUNWIND_LIBS)
 
 noinst_HEADERS   = $(hdr)
