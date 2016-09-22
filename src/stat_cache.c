@@ -28,17 +28,6 @@
 # include <fam.h>
 #endif
 
-#include "sys-mmap.h"
-
-/* NetBSD 1.3.x needs it */
-#ifndef MAP_FAILED
-# define MAP_FAILED -1
-#endif
-
-#ifndef O_LARGEFILE
-# define O_LARGEFILE 0
-#endif
-
 #ifndef HAVE_LSTAT
 # define lstat stat
 #endif
