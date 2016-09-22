@@ -669,11 +669,13 @@ static void deflate_compress_cleanup(server *srv, connection *con, handler_ctx *
 static int mod_deflate_file_chunk(server *srv, connection *con, handler_ctx *hctx, chunk *c, off_t st_size) {
 	off_t abs_offset;
 	off_t toSend = -1;
-	char *start = NULL;
+	char *start;
 #ifdef USE_MMAP
 	off_t we_want_to_mmap = 2 MByte;
 	off_t we_want_to_send = st_size;
 	volatile int mapped = 0;/* quiet warning: might be clobbered by 'longjmp' */
+#else
+	start = NULL;
 #endif
 
 	if (-1 == c->file.fd) {  /* open the file if not already open */
