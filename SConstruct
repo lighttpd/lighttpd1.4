@@ -123,7 +123,7 @@ vars.AddVariables(
 	BoolVariable('with_gzip', 'enable gzip compression', 'no'),
 	BoolVariable('with_bzip2', 'enable bzip2 compression', 'no'),
 	BoolVariable('with_lua', 'enable lua support for mod_cml', 'no'),
-	BoolVariable('with_ldap', 'enable ldap auth support', 'no'))
+	BoolVariable('with_ldap', 'enable ldap auth support', 'no'),
 	BoolVariable('with_krb5', 'enable krb5 auth support', 'no'))
 
 env = Environment(
