@@ -138,7 +138,7 @@ static handler_t mod_authn_mysql_digest(server *srv, connection *con, void *p_d,
 
 INIT_FUNC(mod_authn_mysql_init) {
     static http_auth_backend_t http_auth_backend_mysql =
-      { "mysql", mod_authn_mysql_basic, mod_authn_mysql_digest, NULL, NULL };
+      { "mysql", mod_authn_mysql_basic, mod_authn_mysql_digest, NULL };
     plugin_data *p = calloc(1, sizeof(*p));
 
     /* register http_auth_backend_mysql */

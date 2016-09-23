@@ -61,7 +61,7 @@ INIT_FUNC(mod_authn_gssapi_init) {
     static http_auth_scheme_t http_auth_scheme_gssapi =
       { "gssapi", mod_authn_gssapi_check, NULL };
     static http_auth_backend_t http_auth_backend_gssapi =
-      { "gssapi", mod_authn_gssapi_basic, NULL, NULL, NULL };
+      { "gssapi", mod_authn_gssapi_basic, NULL, NULL };
     plugin_data *p = calloc(1, sizeof(*p));
 
     /* register http_auth_scheme_gssapi and http_auth_backend_gssapi */
