@@ -331,6 +331,7 @@ int Symbol_insert(/* struct symbol *, char * */);
 struct symbol *Symbol_find(/* char * */);
 struct symbol *Symbol_Nth(/* int */);
 int Symbol_count(/*  */);
+int State_count(void);
 struct symbol **Symbol_arrayof(/*  */);
 
 /* Routines to manage the state table */
@@ -881,12 +882,14 @@ struct lemon *lemp;
 {
   int i;
   struct config *cfp;
+  struct state *stp;
   struct plink *plp;
   int progress;
   int change;
 
   for(i=0; i<lemp->nstate; i++){
-    for(cfp=lemp->sorted[i]->cfp; cfp; cfp=cfp->next){
+    stp = lemp->sorted[i];
+    for(cfp=stp->cfp; cfp; cfp=cfp->next){
       cfp->status = INCOMPLETE;
     }
   }
@@ -894,7 +897,8 @@ struct lemon *lemp;
   do{
     progress = 0;
     for(i=0; i<lemp->nstate; i++){
-      for(cfp=lemp->sorted[i]->cfp; cfp; cfp=cfp->next){
+      stp = lemp->sorted[i];
+      for(cfp=stp->cfp; cfp; cfp=cfp->next){
         if( cfp->status==COMPLETE ) continue;
         for(plp=cfp->fplp; plp; plp=plp->next){
           change = SetUnion(plp->cfp->fws,cfp->fws);
@@ -951,7 +955,11 @@ struct lemon *lemp;
   /* Add to the first state (which is always the starting state of the
   ** finite state machine) an action to ACCEPT if the lookahead is the
   ** start nonterminal.  */
-  Action_add(&lemp->sorted[0]->ap,ACCEPT,sp,0);
+  if (lemp->nstate) { /*(should always be true)*/
+    struct state *stp;
+    stp = lemp->sorted[0];
+    Action_add(&stp->ap,ACCEPT,sp,0);
+  }
 
   /* Resolve conflicts */
   for(i=0; i<lemp->nstate; i++){
@@ -1410,14 +1418,15 @@ char **argv;
   }
 
   /* Count and index the symbols of the grammar */
-  lem.nsymbol = Symbol_count();
   Symbol_new("{default}");
+  lem.nsymbol = Symbol_count();
   lem.symbols = Symbol_arrayof();
-  for(i=0; i<=lem.nsymbol; i++) lem.symbols[i]->index = i;
-  qsort(lem.symbols,lem.nsymbol+1,sizeof(struct symbol*),
+  for(i=0; i<lem.nsymbol; i++) lem.symbols[i]->index = i;
+  qsort(lem.symbols,lem.nsymbol,sizeof(struct symbol*),
         (int(*)())Symbolcmpp);
-  for(i=0; i<=lem.nsymbol; i++) lem.symbols[i]->index = i;
-  for(i=1; isupper(lem.symbols[i]->name[0]); i++);
+  for(i=0; i<lem.nsymbol; i++) lem.symbols[i]->index = i;
+  for(i=1; i<lem.nsymbol && isupper(lem.symbols[i]->name[0]); i++);
+  lem.nsymbol--; /*(do not count "{default}")*/
   lem.nterminal = i;
 
   /* Generate a reprint of the grammar, if requested on the command line */
@@ -1438,6 +1447,7 @@ char **argv;
     ** links so that the follow-set can be computed later */
     lem.nstate = 0;
     FindStates(&lem);
+    lem.nstate = State_count();
     lem.sorted = State_arrayof();
 
     /* Tie up loose ends on the propagation links */
@@ -2851,6 +2861,7 @@ struct lemon *lemp;
   char buf[1000];
   FILE *in;
   char *tpltname;
+  char *tpltname_alloc = NULL;
   char *cp;
 
   cp = strrchr(lemp->filename,'.');
@@ -2864,7 +2875,7 @@ struct lemon *lemp;
   }else if( access(lemp->tmplname,004)==0 ){
     tpltname = lemp->tmplname;
   }else{
-    tpltname = pathsearch(lemp->argv0,lemp->tmplname,0);
+    tpltname = tpltname_alloc = pathsearch(lemp->argv0,lemp->tmplname,0);
   }
   if( tpltname==0 ){
     fprintf(stderr,"Can't find the parser driver template file \"%s\".\n",
@@ -2874,10 +2885,10 @@ struct lemon *lemp;
   }
   in = fopen(tpltname,"r");
   if( in==0 ){
-    fprintf(stderr,"Can't open the template file \"%s\".\n",lemp->tmplname);
+    fprintf(stderr,"Can't open the template file \"%s\".\n",tpltname);
     lemp->errorcnt++;
-    return 0;
   }
+  if (tpltname_alloc) free(tpltname_alloc);
   return in;
 }
 
@@ -3861,7 +3872,8 @@ char *data;
       array.ht[h] = newnp;
     }
     free(x1a->tbl);
-    *x1a = array;
+    /* *x1a = array; *//* copy 'array' */
+    memcpy(x1a, &array, sizeof(array));
   }
   /* Insert the new data */
   h = ph & (x1a->size-1);
@@ -4025,7 +4037,8 @@ char *key;
       array.ht[h] = newnp;
     }
     free(x2a->tbl);
-    *x2a = array;
+    /* *x2a = array; *//* copy 'array' */
+    memcpy(x2a, &array, sizeof(array));
   }
   /* Insert the new data */
   h = ph & (x2a->size-1);
@@ -4231,7 +4244,8 @@ struct config *key;
       array.ht[h] = newnp;
     }
     free(x3a->tbl);
-    *x3a = array;
+    /* *x3a = array; *//* copy 'array' */
+    memcpy(x3a, &array, sizeof(array));
   }
   /* Insert the new data */
   h = ph & (x3a->size-1);
@@ -4261,6 +4275,12 @@ struct config *key;
     np = np->next;
   }
   return np ? np->data : 0;
+}
+
+/* Return the size of the array */
+int State_count(void)
+{
+  return x3a ? x3a->count : 0;
 }
 
 /* Return an array of pointers to all data in the table.
@@ -4375,7 +4395,8 @@ struct config *data;
       array.ht[h] = newnp;
     }
     free(x4a->tbl);
-    *x4a = array;
+    /* *x4a = array; *//* copy 'array' */
+    memcpy(x4a, &array, sizeof(array));
   }
   /* Insert the new data */
   h = ph & (x4a->size-1);
