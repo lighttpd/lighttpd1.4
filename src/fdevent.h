@@ -207,7 +207,14 @@ void fdevent_sched_close(fdevents *ev, int fd, int issock);
 void fdevent_sched_run(struct server *srv, fdevents *ev);
 
 void fd_close_on_exec(int fd);
+int fdevent_fcntl_hook(fdevents *ev, int fd);
 int fdevent_fcntl_set(fdevents *ev, int fd);
+int fdevent_fcntl_sock(fdevents *ev, int fd);
+int fdevent_fcntl_nonblock(fdevents *ev, int fd);
+int fdevent_socket_cloexec(int domain, int type, int protocol);
+int fdevent_socket_nb_cloexec(int domain, int type, int protocol);
+int fdevent_open_cloexec(const char *pathname, int flags);
+int fdevent_open_mode_cloexec(const char *pathname, int flags, mode_t mode);
 
 int fdevent_select_init(fdevents *ev);
 int fdevent_poll_init(fdevents *ev);

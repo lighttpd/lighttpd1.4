@@ -38,11 +38,10 @@ int network_open_file_chunk(server *srv, connection *con, chunkqueue *cq) {
 			return -1;
 		}
 
-		if (-1 == (c->file.fd = open(c->file.name->ptr, O_RDONLY|O_NOCTTY))) {
+		if (-1 == (c->file.fd = fdevent_open_cloexec(c->file.name->ptr, O_RDONLY|O_NOCTTY))) {
 			log_error_write(srv, __FILE__, __LINE__, "ssb", "open failed:", strerror(errno), c->file.name);
 			return -1;
 		}
-		fd_close_on_exec(c->file.fd);
 
 		file_size = sce->st.st_size;
 	} else {
