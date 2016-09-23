@@ -264,7 +264,7 @@ SKIP: {
 }
 
 SKIP: {
-	skip "no fcgi-auth found", 5 unless -x $tf->{BASEDIR}."/tests/fcgi-auth" || -x $tf->{BASEDIR}."/tests/fcgi-auth.exe"; 
+	skip "no fcgi-auth found", 7 unless -x $tf->{BASEDIR}."/tests/fcgi-auth" || -x $tf->{BASEDIR}."/tests/fcgi-auth.exe";
 
 	$tf->{CONFIGFILE} = 'fastcgi-auth.conf';
 	ok($tf->start_proc == 0, "Starting lighttpd with $tf->{CONFIGFILE}") or die();
