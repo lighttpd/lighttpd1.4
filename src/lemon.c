@@ -52,8 +52,7 @@ extern char *getenv();
 #define MAXRHS 1000
 #endif
 
-char *msort();
-extern void *malloc();
+void *msort(void *list, void **next, int(*cmp)(void *, void *));
 
 extern void memory_error() NORETURN;
 
@@ -98,8 +97,8 @@ struct s_options {
   enum { OPT_FLAG=1,  OPT_INT,  OPT_DBL,  OPT_STR,
          OPT_FFLAG, OPT_FINT, OPT_FDBL, OPT_FSTR} type;
   char *label;
-  char *arg;
-  char *message;
+  void *arg;
+  const char *message;
 };
 int    OptInit(/* char**,struct s_options*,FILE* */);
 int    OptNArgs(/* void */);
@@ -395,7 +394,7 @@ struct action *ap2;
 struct action *Action_sort(ap)
 struct action *ap;
 {
-  ap = (struct action *)msort(ap,&ap->next,actioncmp);
+  ap = (struct action *)msort(ap,(void **)&ap->next,actioncmp);
   return ap;
 }
 
@@ -1219,14 +1218,14 @@ struct lemon *lemp;
 
 /* Sort the configuration list */
 void Configlist_sort(){
-  current = (struct config *)msort(current,&(current->next),Configcmp);
+  current = (struct config *)msort(current,(void **)&(current->next),Configcmp);
   currentend = 0;
   return;
 }
 
 /* Sort the basis configuration list */
 void Configlist_sortbasis(){
-  basis = (struct config *)msort(current,&(current->bp),Configcmp);
+  basis = (struct config *)msort(current,(void **)&(current->bp),Configcmp);
   basisend = 0;
   return;
 }
@@ -1580,10 +1579,7 @@ int offset;
 **   The "next" pointers for elements in list are changed.
 */
 #define LISTSIZE 30
-char *msort(list,next,cmp)
-char *list;
-char **next;
-int (*cmp)();
+void *msort(void *list, void **next, int(*cmp)(void *, void *))
 {
   unsigned long offset;
   char *ep;

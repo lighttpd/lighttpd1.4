@@ -527,10 +527,6 @@ if(WIN32)
 endif()
 
 add_executable(lemon lemon.c)
-if(CMAKE_C_COMPILER_ID MATCHES "GNU" OR CMAKE_C_COMPILER_ID MATCHES "Clang")
-	# yeah, lemon is a mess... but: it only needs to run at compile time
-	add_target_properties(lemon COMPILE_FLAGS -Wno-cast-align)
-endif()
 
 ## Build parsers by using lemon...
 lemon_parser(configparser.y)
