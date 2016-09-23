@@ -124,7 +124,9 @@ vars.AddVariables(
 	BoolVariable('with_bzip2', 'enable bzip2 compression', 'no'),
 	BoolVariable('with_lua', 'enable lua support for mod_cml', 'no'),
 	BoolVariable('with_ldap', 'enable ldap auth support', 'no'),
-	BoolVariable('with_krb5', 'enable krb5 auth support', 'no'))
+	BoolVariable('with_krb5', 'enable krb5 auth support', 'no'),
+	BoolVariable('with_geoip', 'enable GeoIP support', 'no')
+)
 
 env = Environment(
 	ENV = os.environ,
@@ -273,6 +275,10 @@ if 1:
 	if env['with_sqlite3']:
 		if autoconf.CheckLibWithHeader('sqlite3', 'sqlite3.h', 'C'):
 			autoconf.env.Append(CPPFLAGS = [ '-DHAVE_SQLITE3_H', '-DHAVE_LIBSQLITE3' ], LIBSQLITE3 = 'sqlite3')
+
+	if env['with_geoip']:
+		if autoconf.CheckLibWithHeader('GeoIP', 'GeoIP.h', 'C'):
+			autoconf.env.Append(CPPFLAGS = [ '-DHAVE_GEOIP' ], LIBGEOIP = 'GeoIP')
 
 	ol = env['LIBS']
 	if autoconf.CheckLibWithHeader('fcgi', 'fastcgi.h', 'C'):
