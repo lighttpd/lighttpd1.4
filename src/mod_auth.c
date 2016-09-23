@@ -467,6 +467,7 @@ static handler_t mod_auth_check_basic(server *srv, connection *con, void *p_d, c
 	username = buffer_init();
 
 	b = ds->value;
+	/* coverity[overflow_sink : FALSE] */
 	if (!buffer_append_base64_decode(username, b->ptr+sizeof("Basic ")-1, buffer_string_length(b)-(sizeof("Basic ")-1), BASE64_STANDARD)) {
 		log_error_write(srv, __FILE__, __LINE__, "sb", "decoding base64-string failed", username);
 
@@ -599,6 +600,7 @@ static handler_t mod_auth_check_digest(server *srv, connection *con, void *p_d, 
 	}
 
 	b = buffer_init();
+	/* coverity[overflow_sink : FALSE] */
 	buffer_copy_string_len(b, ds->value->ptr+sizeof("Digest ")-1, buffer_string_length(ds->value)-(sizeof("Digest ")-1));
 
 	/* parse credentials from client */

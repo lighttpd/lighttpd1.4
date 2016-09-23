@@ -206,13 +206,11 @@ static int connection_handle_read_ssl(server *srv, connection *con) {
 		connection_set_state(srv, con, CON_STATE_ERROR);
 
 		return -1;
-	} else if (len == 0) {
+	} else { /*(len == 0)*/
 		con->is_readable = 0;
 		/* the other end close the connection -> KEEP-ALIVE */
 
 		return -2;
-	} else {
-		return 0;
 	}
 #else
 	UNUSED(srv);

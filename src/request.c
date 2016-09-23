@@ -444,6 +444,7 @@ int http_request_parse(server *srv, connection *con) {
 	    con->request.request->ptr[1] == '\n') {
 		/* we are in keep-alive and might get \r\n after a previous POST request.*/
 
+		/* coverity[overflow_sink : FALSE] */
 		buffer_copy_string_len(con->parse_request, con->request.request->ptr + 2, buffer_string_length(con->request.request) - 2);
 	} else {
 		/* fill the local request buffer */

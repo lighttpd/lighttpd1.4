@@ -684,9 +684,7 @@ static int mod_deflate_file_chunk(server *srv, connection *con, handler_ctx *hct
 
 			return -1;
 		}
-#ifdef FD_CLOEXEC
-		fcntl(c->file.fd, F_SETFD, FD_CLOEXEC);
-#endif
+		fd_close_on_exec(c->file.fd);
 	}
 
 	abs_offset = c->file.start + c->offset;
@@ -1075,8 +1073,7 @@ CONNECTION_FUNC(mod_deflate_handle_response_start) {
 	/* check ETag as is done in http_response_handle_cachable()
 	 * (slightly imperfect (close enough?) match of ETag "000000" to "000000-gzip") */
 	ds = (data_string *)array_get_element(con->response.headers, "ETag");
-	if (buffer_string_is_empty(ds->value)) ds = NULL;
-	if (NULL != ds) {
+	if (!buffer_string_is_empty(ds->value)) {
 		etaglen = buffer_string_length(ds->value);
 		if (etaglen
 		    && con->http_status < 300 /*(want 2xx only)*/

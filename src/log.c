@@ -98,6 +98,7 @@ int openDevNull(int fd) {
 		dup2(tmpfd, fd);
 		close(tmpfd);
 	}
+	/* coverity[leaked_handle : FALSE] */
 	return (tmpfd != -1) ? 0 : -1;
 }
 
