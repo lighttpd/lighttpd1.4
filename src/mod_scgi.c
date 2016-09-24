@@ -28,6 +28,7 @@
 #include <stdio.h>
 
 #include "sys-socket.h"
+#include "sys-endian.h"
 
 #ifdef HAVE_SYS_UIO_H
 # include <sys/uio.h>
@@ -268,10 +269,12 @@ typedef struct {
 	size_t size;
 } scgi_exts;
 
+enum { LI_PROTOCOL_SCGI, LI_PROTOCOL_UWSGI };
 
 typedef struct {
 	scgi_exts *exts;
 
+	int proto;
 	int debug;
 } plugin_config;
 
@@ -984,6 +987,7 @@ SETDEFAULTS_FUNC(mod_scgi_set_defaults) {
 	config_values_t cv[] = {
 		{ "scgi.server",              NULL, T_CONFIG_LOCAL, T_CONFIG_SCOPE_CONNECTION },       /* 0 */
 		{ "scgi.debug",               NULL, T_CONFIG_SHORT, T_CONFIG_SCOPE_CONNECTION },       /* 1 */
+		{ "scgi.protocol",            NULL, T_CONFIG_LOCAL, T_CONFIG_SCOPE_CONNECTION },       /* 2 */
 		{ NULL,                          NULL, T_CONFIG_UNSET, T_CONFIG_SCOPE_UNSET }
 	};
 
@@ -998,9 +1002,11 @@ SETDEFAULTS_FUNC(mod_scgi_set_defaults) {
 		force_assert(s);
 		s->exts          = scgi_extensions_init();
 		s->debug         = 0;
+		s->proto         = LI_PROTOCOL_SCGI;
 
 		cv[0].destination = s->exts;
 		cv[1].destination = &(s->debug);
+		cv[2].destination = NULL; /* T_CONFIG_LOCAL */
 
 		p->config_storage[i] = s;
 
@@ -1011,6 +1017,22 @@ SETDEFAULTS_FUNC(mod_scgi_set_defaults) {
 		/*
 		 * <key> = ( ... )
 		 */
+
+		if (NULL != (du = array_get_element(config->value, "scgi.protocol"))) {
+			data_string *ds = (data_string *)du;
+			if (du->type == TYPE_STRING
+			    && buffer_is_equal_string(ds->value, CONST_STR_LEN("scgi"))) {
+				s->proto = LI_PROTOCOL_SCGI;
+			} else if (du->type == TYPE_STRING
+			           && buffer_is_equal_string(ds->value, CONST_STR_LEN("uwsgi"))) {
+				s->proto = LI_PROTOCOL_UWSGI;
+			} else {
+				log_error_write(srv, __FILE__, __LINE__, "sss",
+						"unexpected type for key: ", "scgi.protocol", "expected \"scgi\" or \"uwsgi\"");
+
+				goto error;
+			}
+		}
 
 		if (NULL != (du = array_get_element(config->value, "scgi.server"))) {
 			size_t j;
@@ -1401,7 +1423,10 @@ static handler_t scgi_connection_reset(server *srv, connection *con, void *p_d) 
 }
 
 
-static int scgi_env_add(buffer *env, const char *key, size_t key_len, const char *val, size_t val_len) {
+typedef int (*scgi_env_add_t)(buffer *env, const char *key, size_t key_len, const char *val, size_t val_len);
+
+
+static int scgi_env_add_scgi(buffer *env, const char *key, size_t key_len, const char *val, size_t val_len) {
 	size_t len;
 
 	if (!key || !val) return -1;
@@ -1414,6 +1439,35 @@ static int scgi_env_add(buffer *env, const char *key, size_t key_len, const char
 	buffer_append_string_len(env, "", 1);
 	buffer_append_string_len(env, val, val_len);
 	buffer_append_string_len(env, "", 1);
+
+	return 0;
+}
+
+
+#ifdef __LITTLE_ENDIAN__
+#define uwsgi_htole16(x) (x)
+#else /* __BIG_ENDIAN__ */
+#define uwsgi_htole16(x) ((uint16_t) (((x) & 0xff) << 8 | ((x) & 0xff00) >> 8))
+#endif
+
+
+static int scgi_env_add_uwsgi(buffer *env, const char *key, size_t key_len, const char *val, size_t val_len) {
+	size_t len;
+	uint16_t uwlen;
+
+	if (!key || !val) return -1;
+	if (key_len > USHRT_MAX || val_len > USHRT_MAX) return -1;
+
+	len = 2 + key_len + 2 + val_len;
+
+	buffer_string_prepare_append(env, len);
+
+	uwlen = uwsgi_htole16((uint16_t)key_len);
+	buffer_append_string_len(env, (char *)&uwlen, 2);
+	buffer_append_string_len(env, key, key_len);
+	uwlen = uwsgi_htole16((uint16_t)val_len);
+	buffer_append_string_len(env, (char *)&uwlen, 2);
+	buffer_append_string_len(env, val, val_len);
 
 	return 0;
 }
@@ -1529,6 +1583,9 @@ static int scgi_establish_connection(server *srv, handler_ctx *hctx) {
 
 static int scgi_env_add_request_headers(server *srv, connection *con, plugin_data *p) {
 	size_t i;
+	scgi_env_add_t scgi_env_add = p->conf.proto == LI_PROTOCOL_SCGI
+	  ? scgi_env_add_scgi
+	  : scgi_env_add_uwsgi;
 
 	for (i = 0; i < con->request.headers->used; i++) {
 		data_string *ds;
@@ -1582,13 +1639,18 @@ static int scgi_create_env(server *srv, handler_ctx *hctx) {
 	sock_addr our_addr;
 	socklen_t our_addr_len;
 
+	scgi_env_add_t scgi_env_add = p->conf.proto == LI_PROTOCOL_SCGI
+	  ? scgi_env_add_scgi
+	  : scgi_env_add_uwsgi;
+
 	buffer_string_prepare_copy(p->scgi_env, 1023);
 
 	/* CGI-SPEC 6.1.2, FastCGI spec 6.3 and SCGI spec */
 
 	li_itostrn(buf, sizeof(buf), con->request.content_length);
 	scgi_env_add(p->scgi_env, CONST_STR_LEN("CONTENT_LENGTH"), buf, strlen(buf));
-	scgi_env_add(p->scgi_env, CONST_STR_LEN("SCGI"), CONST_STR_LEN("1"));
+	if (p->conf.proto == LI_PROTOCOL_SCGI)
+		scgi_env_add(p->scgi_env, CONST_STR_LEN("SCGI"), CONST_STR_LEN("1"));
 
 	scgi_env_add(p->scgi_env, CONST_STR_LEN("SERVER_SOFTWARE"), CONST_BUF_LEN(con->conf.server_tag));
 
@@ -1734,12 +1796,28 @@ static int scgi_create_env(server *srv, handler_ctx *hctx) {
 
 	scgi_env_add_request_headers(srv, con, p);
 
-	b = buffer_init();
-
-	buffer_append_int(b, buffer_string_length(p->scgi_env));
-	buffer_append_string_len(b, CONST_STR_LEN(":"));
-	buffer_append_string_buffer(b, p->scgi_env);
-	buffer_append_string_len(b, CONST_STR_LEN(","));
+	if (p->conf.proto == LI_PROTOCOL_SCGI) {
+		b = buffer_init();
+		buffer_append_int(b, buffer_string_length(p->scgi_env));
+		buffer_append_string_len(b, CONST_STR_LEN(":"));
+		buffer_append_string_buffer(b, p->scgi_env);
+		buffer_append_string_len(b, CONST_STR_LEN(","));
+	} else { /* LI_PROTOCOL_UWSGI */
+		/* http://uwsgi-docs.readthedocs.io/en/latest/Protocol.html */
+		size_t len = buffer_string_length(p->scgi_env);
+		uint32_t uwsgi_header;
+		if (len > USHRT_MAX) {
+			con->http_status = 431; /* Request Header Fields Too Large */
+			con->mode = DIRECT;
+			return -1; /* trigger return of HANDLER_FINISHED */
+		}
+		b = buffer_init();
+		buffer_string_prepare_copy(b, 4 + len);
+		uwsgi_header = ((uint32_t)uwsgi_htole16((uint16_t)len)) << 8;
+		memcpy(b->ptr, (char *)&uwsgi_header, 4);
+		buffer_commit(b, 4);
+		buffer_append_string_buffer(b, p->scgi_env);
+	}
 
 	hctx->wb_reqlen = buffer_string_length(b);
 	chunkqueue_append_buffer(hctx->wb, b);
@@ -2327,7 +2405,7 @@ static handler_t scgi_write_request(server *srv, handler_ctx *hctx) {
 
 				return HANDLER_WAIT_FOR_EVENT;
 			case -1:
-				/* if ECONNREFUSED choose another connection -> FIXME */
+				/* if ECONNREFUSED; choose another connection */
 				hctx->fde_ndx = -1;
 
 				return HANDLER_ERROR;
@@ -2383,7 +2461,9 @@ static handler_t scgi_write_request(server *srv, handler_ctx *hctx) {
 		scgi_set_state(srv, hctx, FCGI_STATE_PREPARE_WRITE);
 		/* fall through */
 	case FCGI_STATE_PREPARE_WRITE:
-		scgi_create_env(srv, hctx);
+		if (0 != scgi_create_env(srv, hctx)) {
+			return HANDLER_FINISHED;
+		}
 
 		fdevent_event_add(srv->ev, &(hctx->fde_ndx), hctx->fd, FDEVENT_IN);
 		scgi_set_state(srv, hctx, FCGI_STATE_WRITE);
@@ -2759,6 +2839,7 @@ static int scgi_patch_connection(server *srv, connection *con, plugin_data *p) {
 	plugin_config *s = p->config_storage[0];
 
 	PATCH(exts);
+	PATCH(proto);
 	PATCH(debug);
 
 	/* skip the first, the global context */
@@ -2775,6 +2856,8 @@ static int scgi_patch_connection(server *srv, connection *con, plugin_data *p) {
 
 			if (buffer_is_equal_string(du->key, CONST_STR_LEN("scgi.server"))) {
 				PATCH(exts);
+			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("scgi.protocol"))) {
+				PATCH(proto);
 			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("scgi.debug"))) {
 				PATCH(debug);
 			}
