@@ -53,7 +53,7 @@ typedef struct {
 } plugin_data;
 
 static handler_t mod_authn_gssapi_check(server *srv, connection *con, void *p_d, const struct http_auth_require_t *require, const struct http_auth_backend_t *backend);
-static handler_t mod_authn_gssapi_basic(server *srv, connection *con, void *p_d, const buffer *username, const buffer *realm, const char *pw);
+static handler_t mod_authn_gssapi_basic(server *srv, connection *con, void *p_d, const http_auth_require_t *require, const buffer *username, const char *pw);
 
 static plugin_data *plugin_data_singleton;
 
@@ -622,7 +622,7 @@ static handler_t mod_authn_gssapi_send_401_unauthorized_basic (server *srv, conn
     return HANDLER_FINISHED;
 }
 
-static handler_t mod_authn_gssapi_basic(server *srv, connection *con, void *p_d, const buffer *username, const buffer *realm, const char *pw)
+static handler_t mod_authn_gssapi_basic(server *srv, connection *con, void *p_d, const http_auth_require_t *require, const buffer *username, const char *pw)
 {
     krb5_context kcontext  = NULL;
     krb5_keytab keytab     = NULL;
@@ -676,7 +676,7 @@ static handler_t mod_authn_gssapi_basic(server *srv, connection *con, void *p_d,
     if (strchr(username->ptr, '@') == NULL) {
         user_at_realm = buffer_init_buffer(username);
         BUFFER_APPEND_STRING_CONST(user_at_realm, "@");
-        buffer_append_string_buffer(user_at_realm, realm);
+        buffer_append_string_buffer(user_at_realm, require->realm);
     }
 
     ret = krb5_parse_name(kcontext, (user_at_realm ? user_at_realm->ptr : username->ptr), &c_princ);
@@ -758,12 +758,12 @@ static handler_t mod_authn_gssapi_basic(server *srv, connection *con, void *p_d,
 
         krb5_free_context(kcontext);
 
-        if (0 == ret) {
+        if (0 == ret && http_auth_match_rules(require,username->ptr,NULL,NULL)){
             return HANDLER_GO_ON;
         }
         else {
-            /* ret == KRB5KDC_ERR_C_PRINCIPAL_UNKNOWN */
-            log_error_write(srv, __FILE__, __LINE__, "sbsb", "password doesn't match for user:", username, "uri:", con->uri.path);
+            /* ret == KRB5KDC_ERR_C_PRINCIPAL_UNKNOWN or no authz rules match */
+            log_error_write(srv, __FILE__, __LINE__, "sbsBss", "password doesn't match for", con->uri.path, "username:", username, ", IP:", con->dst_addr_buf);
             return mod_authn_gssapi_send_401_unauthorized_basic(srv, con);
         }
 }

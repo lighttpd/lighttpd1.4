@@ -39,7 +39,7 @@ typedef struct {
     buffer *ldap_filter;
 } plugin_data;
 
-static handler_t mod_authn_ldap_basic(server *srv, connection *con, void *p_d, const buffer *username, const buffer *realm, const char *pw);
+static handler_t mod_authn_ldap_basic(server *srv, connection *con, void *p_d, const http_auth_require_t *require, const buffer *username, const char *pw);
 
 INIT_FUNC(mod_authn_ldap_init) {
     static http_auth_backend_t http_auth_backend_ldap =
@@ -401,11 +401,10 @@ static char * mod_authn_ldap_get_dn(server *srv, plugin_config *s, char *base, c
     return dn;
 }
 
-static handler_t mod_authn_ldap_basic(server *srv, connection *con, void *p_d, const buffer *username, const buffer *realm, const char *pw) {
+static handler_t mod_authn_ldap_basic(server *srv, connection *con, void *p_d, const http_auth_require_t *require, const buffer *username, const char *pw) {
     plugin_data *p = (plugin_data *)p_d;
     LDAP *ld;
     char *dn;
-    UNUSED(realm);
 
     mod_authn_ldap_patch_connection(srv, con, p);
 
@@ -467,7 +466,9 @@ static handler_t mod_authn_ldap_basic(server *srv, connection *con, void *p_d, c
 
     ldap_unbind_ext_s(ld, NULL, NULL); /* disconnect */
     ldap_memfree(dn);
-    return HANDLER_GO_ON; /* access granted */
+    return http_auth_match_rules(require, username->ptr, NULL, NULL)
+      ? HANDLER_GO_ON  /* access granted */
+      : HANDLER_ERROR;
 }
 
 int mod_authn_ldap_plugin_init(plugin *p);

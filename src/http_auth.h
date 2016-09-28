@@ -23,7 +23,7 @@ int http_auth_match_rules (const http_auth_require_t *require, const char *user,
 
 typedef struct http_auth_backend_t {
     const char *name;
-    handler_t(*basic)(server *srv, connection *con, void *p_d, const buffer *username, const buffer *realm, const char *pw);
+    handler_t(*basic)(server *srv, connection *con, void *p_d, const http_auth_require_t *require, const buffer *username, const char *pw);
     handler_t(*digest)(server *srv, connection *con, void *p_d, const char *username, const char *realm, unsigned char HA1[16]);
     void *p_d;
 } http_auth_backend_t;

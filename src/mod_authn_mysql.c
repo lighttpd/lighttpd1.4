@@ -133,7 +133,7 @@ static void mod_authn_mysql_sock_error(server *srv, plugin_config *pconf) {
     mod_authn_mysql_sock_close(pconf);
 }
 
-static handler_t mod_authn_mysql_basic(server *srv, connection *con, void *p_d, const buffer *username, const buffer *realm, const char *pw);
+static handler_t mod_authn_mysql_basic(server *srv, connection *con, void *p_d, const http_auth_require_t *require, const buffer *username, const char *pw);
 static handler_t mod_authn_mysql_digest(server *srv, connection *con, void *p_d, const char *username, const char *realm, unsigned char HA1[16]);
 
 INIT_FUNC(mod_authn_mysql_init) {
@@ -514,11 +514,16 @@ static handler_t mod_authn_mysql_query(server *srv, connection *con, void *p_d, 
     return (0 == rc) ? HANDLER_GO_ON : HANDLER_ERROR;
 }
 
-static handler_t mod_authn_mysql_basic(server *srv, connection *con, void *p_d, const buffer *username, const buffer *realm, const char *pw) {
+static handler_t mod_authn_mysql_basic(server *srv, connection *con, void *p_d, const http_auth_require_t *require, const buffer *username, const char *pw) {
     /*(HA1 is not written since pw passed should not be NULL;
      * avoid passing NULL since subroutine expects unsigned char HA1[16] arg)*/
     static unsigned char HA1[16];
-    return mod_authn_mysql_query(srv,con,p_d,username->ptr,realm->ptr,pw,HA1);
+    char *realm = require->realm->ptr;
+    handler_t rc =mod_authn_mysql_query(srv,con,p_d,username->ptr,realm,pw,HA1);
+    if (HANDLER_GO_ON != rc) return rc;
+    return http_auth_match_rules(require, username->ptr, NULL, NULL)
+      ? HANDLER_GO_ON  /* access granted */
+      : HANDLER_ERROR;
 }
 
 static handler_t mod_authn_mysql_digest(server *srv, connection *con, void *p_d, const char *username, const char *realm, unsigned char HA1[16]) {

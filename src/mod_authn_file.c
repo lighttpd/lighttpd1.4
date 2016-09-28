@@ -62,10 +62,10 @@ typedef struct {
 } plugin_data;
 
 static handler_t mod_authn_file_htdigest_digest(server *srv, connection *con, void *p_d, const char *username, const char *realm, unsigned char HA1[16]);
-static handler_t mod_authn_file_htdigest_basic(server *srv, connection *con, void *p_d, const buffer *username, const buffer *realm, const char *pw);
+static handler_t mod_authn_file_htdigest_basic(server *srv, connection *con, void *p_d, const http_auth_require_t *require, const buffer *username, const char *pw);
 static handler_t mod_authn_file_plain_digest(server *srv, connection *con, void *p_d, const char *username, const char *realm, unsigned char HA1[16]);
-static handler_t mod_authn_file_plain_basic(server *srv, connection *con, void *p_d, const buffer *username, const buffer *realm, const char *pw);
-static handler_t mod_authn_file_htpasswd_basic(server *srv, connection *con, void *p_d, const buffer *username, const buffer *realm, const char *pw);
+static handler_t mod_authn_file_plain_basic(server *srv, connection *con, void *p_d, const http_auth_require_t *require, const buffer *username, const char *pw);
+static handler_t mod_authn_file_htpasswd_basic(server *srv, connection *con, void *p_d, const http_auth_require_t *require, const buffer *username, const char *pw);
 
 INIT_FUNC(mod_authn_file_init) {
     static http_auth_backend_t http_auth_backend_htdigest =
@@ -280,25 +280,26 @@ static handler_t mod_authn_file_htdigest_digest(server *srv, connection *con, vo
     return (0 == rc) ? HANDLER_GO_ON : HANDLER_ERROR;
 }
 
-static handler_t mod_authn_file_htdigest_basic(server *srv, connection *con, void *p_d, const buffer *username, const buffer *realm, const char *pw) {
+static handler_t mod_authn_file_htdigest_basic(server *srv, connection *con, void *p_d, const http_auth_require_t *require, const buffer *username, const char *pw) {
     plugin_data *p = (plugin_data *)p_d;
     li_MD5_CTX Md5Ctx;
     unsigned char HA1[16];
     unsigned char htdigest[16];
 
     mod_authn_file_patch_connection(srv, con, p);
-    if (mod_authn_file_htdigest_get(srv, p->conf.auth_htdigest_userfile, username, realm, htdigest)) return HANDLER_ERROR;
+    if (mod_authn_file_htdigest_get(srv, p->conf.auth_htdigest_userfile, username, require->realm, htdigest)) return HANDLER_ERROR;
 
     li_MD5_Init(&Md5Ctx);
     li_MD5_Update(&Md5Ctx, CONST_BUF_LEN(username));
     li_MD5_Update(&Md5Ctx, CONST_STR_LEN(":"));
-    li_MD5_Update(&Md5Ctx, CONST_BUF_LEN(realm));
+    li_MD5_Update(&Md5Ctx, CONST_BUF_LEN(require->realm));
     li_MD5_Update(&Md5Ctx, CONST_STR_LEN(":"));
     li_MD5_Update(&Md5Ctx, (unsigned char *)pw, strlen(pw));
     li_MD5_Final(HA1, &Md5Ctx);
 
     UNUSED(con);
-    return (0 == memcmp(HA1, htdigest, sizeof(HA1)))
+    return (0 == memcmp(HA1, htdigest, sizeof(HA1))
+            && http_auth_match_rules(require, username->ptr, NULL, NULL))
       ? HANDLER_GO_ON
       : HANDLER_ERROR;
 }
@@ -388,7 +389,7 @@ static handler_t mod_authn_file_plain_digest(server *srv, connection *con, void 
     return (0 == rc) ? HANDLER_GO_ON : HANDLER_ERROR;
 }
 
-static handler_t mod_authn_file_plain_basic(server *srv, connection *con, void *p_d, const buffer *username, const buffer *realm, const char *pw) {
+static handler_t mod_authn_file_plain_basic(server *srv, connection *con, void *p_d, const http_auth_require_t *require, const buffer *username, const char *pw) {
     plugin_data *p = (plugin_data *)p_d;
     buffer *password_buf = buffer_init();/* password-string from auth-backend */
     int rc;
@@ -399,8 +400,9 @@ static handler_t mod_authn_file_plain_basic(server *srv, connection *con, void *
     }
     buffer_free(password_buf);
     UNUSED(con);
-    UNUSED(realm);
-    return (0 == rc) ? HANDLER_GO_ON : HANDLER_ERROR;
+    return 0 == rc && http_auth_match_rules(require, username->ptr, NULL, NULL)
+      ? HANDLER_GO_ON
+      : HANDLER_ERROR;
 }
 
 
@@ -611,7 +613,7 @@ static void apr_sha_encode(const char *pw, char *result, size_t nbytes) {
 }
 #endif
 
-static handler_t mod_authn_file_htpasswd_basic(server *srv, connection *con, void *p_d, const buffer *username, const buffer *realm, const char *pw) {
+static handler_t mod_authn_file_htpasswd_basic(server *srv, connection *con, void *p_d, const http_auth_require_t *require, const buffer *username, const char *pw) {
     plugin_data *p = (plugin_data *)p_d;
     buffer *password = buffer_init();/* password-string from auth-backend */
     int rc;
@@ -709,8 +711,9 @@ static handler_t mod_authn_file_htpasswd_basic(server *srv, connection *con, voi
     }
     buffer_free(password);
     UNUSED(con);
-    UNUSED(realm);
-    return (0 == rc) ? HANDLER_GO_ON : HANDLER_ERROR;
+    return 0 == rc && http_auth_match_rules(require, username->ptr, NULL, NULL)
+      ? HANDLER_GO_ON
+      : HANDLER_ERROR;
 }
 
 

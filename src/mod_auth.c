@@ -486,14 +486,10 @@ static handler_t mod_auth_check_basic(server *srv, connection *con, void *p_d, c
 	buffer_string_set_length(username, pw - username->ptr);
 	pw++;
 
-	rc = backend->basic(srv, con, backend->p_d, username, require->realm, pw);
+	rc = backend->basic(srv, con, backend->p_d, require, username, pw);
 	switch (rc) {
 	case HANDLER_GO_ON:
-		if (http_auth_match_rules(require, username->ptr, NULL, NULL)) {
-			http_auth_setenv(con->environment, CONST_BUF_LEN(username), CONST_STR_LEN("Basic"));
-		} else {
-			rc = HANDLER_UNSET;
-		}
+		http_auth_setenv(con->environment, CONST_BUF_LEN(username), CONST_STR_LEN("Basic"));
 		break;
 	case HANDLER_WAIT_FOR_EVENT:
 	case HANDLER_FINISHED:
