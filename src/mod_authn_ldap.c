@@ -18,9 +18,6 @@
 typedef struct {
     LDAP *ldap;
 
-    buffer *ldap_filter_pre;
-    buffer *ldap_filter_post;
-
     buffer *auth_ldap_hostname;
     buffer *auth_ldap_basedn;
     buffer *auth_ldap_binddn;
@@ -77,9 +74,6 @@ FREE_FUNC(mod_authn_ldap_free) {
             buffer_free(s->auth_ldap_filter);
             buffer_free(s->auth_ldap_cafile);
 
-            buffer_free(s->ldap_filter_pre);
-            buffer_free(s->ldap_filter_post);
-
             if (NULL != s->ldap) ldap_unbind_ext_s(s->ldap, NULL, NULL);
             free(s);
         }
@@ -121,8 +115,6 @@ config_values_t cv[] = {
         s->auth_ldap_filter = buffer_init();
         s->auth_ldap_cafile = buffer_init();
         s->auth_ldap_starttls = 0;
-        s->ldap_filter_pre = buffer_init();
-        s->ldap_filter_post = buffer_init();
         s->ldap = NULL;
 
         cv[0].destination = s->auth_ldap_hostname;
@@ -141,18 +133,11 @@ config_values_t cv[] = {
         }
 
         if (!buffer_string_is_empty(s->auth_ldap_filter)) {
-            char *dollar;
-
-            /* parse filter */
-
-            if (NULL == (dollar = strchr(s->auth_ldap_filter->ptr, '$'))) {
+            if (NULL == strchr(s->auth_ldap_filter->ptr, '$')) {
                 log_error_write(srv, __FILE__, __LINE__, "s", "ldap: auth.backend.ldap.filter is missing a replace-operator '$'");
 
                 return HANDLER_ERROR;
             }
-
-            buffer_copy_string_len(s->ldap_filter_pre, s->auth_ldap_filter->ptr, dollar - s->auth_ldap_filter->ptr);
-            buffer_copy_string(s->ldap_filter_post, dollar+1);
         }
     }
 
@@ -174,8 +159,6 @@ static int mod_authn_ldap_patch_connection(server *srv, connection *con, plugin_
     PATCH(auth_ldap_starttls);
     PATCH(auth_ldap_allow_empty_pw);
     p->anon_conf = s;
-    PATCH(ldap_filter_pre);
-    PATCH(ldap_filter_post);
 
     /* skip the first, the global context */
     for (i = 1; i < srv->config_context->used; i++) {
@@ -196,8 +179,6 @@ static int mod_authn_ldap_patch_connection(server *srv, connection *con, plugin_
                 PATCH(auth_ldap_basedn);
             } else if (buffer_is_equal_string(du->key, CONST_STR_LEN("auth.backend.ldap.filter"))) {
                 PATCH(auth_ldap_filter);
-                PATCH(ldap_filter_pre);
-                PATCH(ldap_filter_post);
             } else if (buffer_is_equal_string(du->key, CONST_STR_LEN("auth.backend.ldap.ca-file"))) {
                 PATCH(auth_ldap_cafile);
             } else if (buffer_is_equal_string(du->key, CONST_STR_LEN("auth.backend.ldap.starttls"))) {
@@ -439,9 +420,18 @@ static handler_t mod_authn_ldap_basic(server *srv, connection *con, void *p_d, c
     }
 
     /* build filter to get DN for uid = username */
-    buffer_copy_buffer(p->ldap_filter, p->conf.ldap_filter_pre);
-    buffer_append_string_buffer(p->ldap_filter, username);
-    buffer_append_string_buffer(p->ldap_filter, p->conf.ldap_filter_post);
+    buffer_string_set_length(p->ldap_filter, 0);
+    for (char *b = p->conf.auth_ldap_filter->ptr, *d; *b; b = d+1) {
+        if (NULL != (d = strchr(b, '$'))) {
+            buffer_append_string_len(p->ldap_filter, b, (size_t)(d - b));
+            buffer_append_string_buffer(p->ldap_filter, username);
+        } else {
+            d = p->conf.auth_ldap_filter->ptr
+              + buffer_string_length(p->conf.auth_ldap_filter);
+            buffer_append_string_len(p->ldap_filter, b, (size_t)(d - b));
+            break;
+        }
+    }
 
     /* auth against LDAP server */
     /* for now we stay synchronous */
