@@ -80,81 +80,13 @@ FREE_FUNC(mod_authn_ldap_free) {
             buffer_free(s->ldap_filter_pre);
             buffer_free(s->ldap_filter_post);
 
-            if (s->ldap) ldap_unbind_s(s->ldap);
-
+            if (NULL != s->ldap) ldap_unbind_ext_s(s->ldap, NULL, NULL);
             free(s);
         }
         free(p->config_storage);
     }
 
     free(p);
-
-    return HANDLER_GO_ON;
-}
-
-static handler_t mod_authn_ldap_host_init(server *srv, plugin_config *s) {
-    int ret;
-#if 0
-    if (s->auth_ldap_basedn->used == 0) {
-        log_error_write(srv, __FILE__, __LINE__, "s", "ldap: auth.backend.ldap.base-dn has to be set");
-
-        return HANDLER_ERROR;
-    }
-#endif
-
-    if (buffer_string_is_empty(s->auth_ldap_hostname)) return HANDLER_GO_ON;
-
-    /* free old context */
-    if (NULL != s->ldap) ldap_unbind_s(s->ldap);
-
-    if (NULL == (s->ldap = ldap_init(s->auth_ldap_hostname->ptr, LDAP_PORT))) {
-        log_error_write(srv, __FILE__, __LINE__, "ss", "ldap ...", strerror(errno));
-
-        return HANDLER_ERROR;
-    }
-
-    ret = LDAP_VERSION3;
-    if (LDAP_OPT_SUCCESS != (ret = ldap_set_option(s->ldap, LDAP_OPT_PROTOCOL_VERSION, &ret))) {
-        log_error_write(srv, __FILE__, __LINE__, "ss", "ldap:", ldap_err2string(ret));
-
-        return HANDLER_ERROR;
-    }
-
-    if (s->auth_ldap_starttls) {
-        /* if no CA file is given, it is ok, as we will use encryption
-         * if the server requires a CAfile it will tell us */
-        if (!buffer_string_is_empty(s->auth_ldap_cafile)) {
-            if (LDAP_OPT_SUCCESS != (ret = ldap_set_option(NULL, LDAP_OPT_X_TLS_CACERTFILE,
-                            s->auth_ldap_cafile->ptr))) {
-                log_error_write(srv, __FILE__, __LINE__, "ss",
-                        "Loading CA certificate failed:", ldap_err2string(ret));
-
-                return HANDLER_ERROR;
-            }
-        }
-
-        if (LDAP_OPT_SUCCESS != (ret = ldap_start_tls_s(s->ldap, NULL,  NULL))) {
-            log_error_write(srv, __FILE__, __LINE__, "ss", "ldap startTLS failed:", ldap_err2string(ret));
-
-            return HANDLER_ERROR;
-        }
-    }
-
-
-    /* 1. */
-    if (!buffer_string_is_empty(s->auth_ldap_binddn)) {
-        if (LDAP_SUCCESS != (ret = ldap_simple_bind_s(s->ldap, s->auth_ldap_binddn->ptr, s->auth_ldap_bindpw->ptr))) {
-            log_error_write(srv, __FILE__, __LINE__, "ss", "ldap:", ldap_err2string(ret));
-
-            return HANDLER_ERROR;
-        }
-    } else {
-        if (LDAP_SUCCESS != (ret = ldap_simple_bind_s(s->ldap, NULL, NULL))) {
-            log_error_write(srv, __FILE__, __LINE__, "ss", "ldap:", ldap_err2string(ret));
-
-            return HANDLER_ERROR;
-        }
-    }
 
     return HANDLER_GO_ON;
 }
@@ -284,28 +216,201 @@ static int mod_authn_ldap_patch_connection(server *srv, connection *con, plugin_
 }
 #undef PATCH
 
-static handler_t mod_authn_ldap_basic(server *srv, connection *con, void *p_d, const buffer *username, const buffer *realm, const char *pw) {
-    plugin_data *p = (plugin_data *)p_d;
-    LDAP *ldap;
+static void mod_authn_ldap_err(server *srv, const char *file, unsigned long line, const char *fn, int err)
+{
+    log_error_write(srv,file,line,"sSss","ldap:",fn,":",ldap_err2string(err));
+}
+
+static void mod_authn_ldap_opt_err(server *srv, const char *file, unsigned long line, const char *fn, LDAP *ld)
+{
+    int err;
+    ldap_get_option(ld, LDAP_OPT_ERROR_NUMBER, &err);
+    mod_authn_ldap_err(srv, file, line, fn, err);
+}
+
+static LDAP * mod_authn_ldap_host_init(server *srv, plugin_config *s) {
+    LDAP *ld;
+    int ret;
+
+    if (buffer_string_is_empty(s->auth_ldap_hostname)) return NULL;
+
+    ld = ldap_init(s->auth_ldap_hostname->ptr, LDAP_PORT);
+    if (NULL == ld) {
+        log_error_write(srv, __FILE__, __LINE__, "sss", "ldap:", "ldap_init():",
+                        strerror(errno));
+        return NULL;
+    }
+
+    ret = LDAP_VERSION3;
+    ret = ldap_set_option(ld, LDAP_OPT_PROTOCOL_VERSION, &ret);
+    if (LDAP_OPT_SUCCESS != ret) {
+        mod_authn_ldap_err(srv, __FILE__, __LINE__, "ldap_set_options()", ret);
+        ldap_memfree(ld);
+        return NULL;
+    }
+
+    if (s->auth_ldap_starttls) {
+        /* if no CA file is given, it is ok, as we will use encryption
+         * if the server requires a CAfile it will tell us */
+        if (!buffer_string_is_empty(s->auth_ldap_cafile)) {
+            ret = ldap_set_option(NULL, LDAP_OPT_X_TLS_CACERTFILE,
+                                  s->auth_ldap_cafile->ptr);
+            if (LDAP_OPT_SUCCESS != ret) {
+                mod_authn_ldap_err(srv, __FILE__, __LINE__,
+                                   "ldap_set_option(LDAP_OPT_X_TLS_CACERTFILE)",
+                                   ret);
+                ldap_memfree(ld);
+                return NULL;
+            }
+        }
+
+        ret = ldap_start_tls_s(ld, NULL,  NULL);
+        if (LDAP_OPT_SUCCESS != ret) {
+            mod_authn_ldap_err(srv,__FILE__,__LINE__,"ldap_start_tls_s()",ret);
+            ldap_memfree(ld);
+            return NULL;
+        }
+    }
+
+    return ld;
+}
+
+static int mod_authn_ldap_bind(server *srv, LDAP *ld, const char *dn, const char *pw) {
+  #if 0
+    struct berval creds;
+    int ret;
+
+    if (NULL != pw) {
+        *((const char **)&creds.bv_val) = pw; /*(cast away const)*/
+        creds.bv_len = strlen(pw);
+    } else {
+        creds.bv_val = NULL;
+        creds.bv_len = 0;
+    }
+
+    /* RFE: add functionality: LDAP_SASL_EXTERNAL (or GSS-SPNEGO, etc.) */
+
+    ret = ldap_sasl_bind_s(ld,dn,LDAP_SASL_SIMPLE,&creds,NULL,NULL,NULL);
+    if (ret != LDAP_SUCCESS) {
+        mod_authn_ldap_err(srv, __FILE__, __LINE__, "ldap_sasl_bind_s()", ret);
+    }
+  #else
+    int ret = ldap_simple_bind_s(ld, dn, pw);
+    if (ret != LDAP_SUCCESS) {
+        mod_authn_ldap_err(srv, __FILE__, __LINE__, "ldap_simple_bind_s()",ret);
+    }
+  #endif
+
+    return ret;
+}
+
+static LDAPMessage * mod_authn_ldap_search(server *srv, plugin_config *s, char *base, char *filter) {
+    LDAPMessage *lm = NULL;
+    char *attrs[] = { LDAP_NO_ATTRS, NULL };
+    int ret;
+
+    /*
+     * 1. connect anonymously (if not already connected)
+     *    (ldap connection is kept open unless connection-level error occurs)
+     * 2. issue search using filter
+     */
+
+    if (s->ldap != NULL) {
+        ret = ldap_search_ext_s(s->ldap, base, LDAP_SCOPE_SUBTREE, filter,
+                                attrs, 0, NULL, NULL, NULL, 0, &lm);
+        if (LDAP_SUCCESS == ret) {
+            return lm;
+        } else if (LDAP_SERVER_DOWN != ret) {
+            /* try again (or initial request);
+             * ldap lib sometimes fails for the first call but reconnects */
+            ret = ldap_search_ext_s(s->ldap, base, LDAP_SCOPE_SUBTREE, filter,
+                                    attrs, 0, NULL, NULL, NULL, 0, &lm);
+            if (LDAP_SUCCESS == ret) {
+                return lm;
+            }
+        }
+
+        ldap_unbind_ext_s(s->ldap, NULL, NULL);
+    }
+
+    s->ldap = mod_authn_ldap_host_init(srv, s);
+    if (NULL == s->ldap) {
+        return NULL;
+    }
+
+    ret = !buffer_string_is_empty(s->auth_ldap_binddn)
+      ? mod_authn_ldap_bind(srv, s->ldap,
+                            s->auth_ldap_binddn->ptr,
+                            s->auth_ldap_bindpw->ptr)
+      : mod_authn_ldap_bind(srv, s->ldap, NULL, NULL);
+    if (LDAP_SUCCESS != ret) {
+        ldap_memfree(s->ldap);
+        s->ldap = NULL;
+        return NULL;
+    }
+
+    ret = ldap_search_ext_s(s->ldap, base, LDAP_SCOPE_SUBTREE, filter,
+                            attrs, 0, NULL, NULL, NULL, 0, &lm);
+    if (LDAP_SUCCESS != ret) {
+        log_error_write(srv, __FILE__, __LINE__, "sSss",
+                        "ldap:", ldap_err2string(ret), "; filter:", filter);
+        ldap_unbind_ext_s(s->ldap, NULL, NULL);
+        s->ldap = NULL;
+        return NULL;
+    }
+
+    return lm;
+}
+
+static char * mod_authn_ldap_get_dn(server *srv, plugin_config *s, char *base, char *filter) {
+    LDAP *ld;
     LDAPMessage *lm, *first;
     char *dn;
-    int ret;
-    char *attrs[] = { LDAP_NO_ATTRS, NULL };
-    size_t i, len;
+    int count;
+
+    lm = mod_authn_ldap_search(srv, s, base, filter);
+    if (NULL == lm) {
+        return NULL;
+    }
+
+    ld = s->ldap; /*(must be after mod_authn_ldap_search(); might reconnect)*/
+
+    count = ldap_count_entries(ld, lm);
+    if (0 == count) { /*(no entires found)*/
+        ldap_msgfree(lm);
+        return NULL;
+    } else if (count > 1) {
+        log_error_write(srv, __FILE__, __LINE__, "sss",
+                        "ldap:", "more than one record returned.  "
+                        "you might have to refine the filter:", filter);
+    }
+
+    if (NULL == (first = ldap_first_entry(ld, lm))) {
+        mod_authn_ldap_opt_err(srv,__FILE__,__LINE__,"ldap_first_entry()",ld);
+        ldap_msgfree(lm);
+        return NULL;
+    }
+
+    if (NULL == (dn = ldap_get_dn(ld, first))) {
+        mod_authn_ldap_opt_err(srv,__FILE__,__LINE__,"ldap_get_dn()",ld);
+        ldap_msgfree(lm);
+        return NULL;
+    }
+
+    ldap_msgfree(lm);
+    return dn;
+}
+
+static handler_t mod_authn_ldap_basic(server *srv, connection *con, void *p_d, const buffer *username, const buffer *realm, const char *pw) {
+    plugin_data *p = (plugin_data *)p_d;
+    LDAP *ld;
+    char *dn;
     UNUSED(realm);
 
     mod_authn_ldap_patch_connection(srv, con, p);
 
-    /* for now we stay synchronous */
-
-    /*
-     * 1. connect anonymously (done in plugin init)
-     * 2. get DN for uid = username
-     * 3. auth against ldap server
-     * 4. (optional) check a field
-     * 5. disconnect
-     *
-     */
+    if (pw[0] == '\0' && !p->conf.auth_ldap_allow_empty_pw)
+        return HANDLER_ERROR;
 
     /* check username
      *
@@ -313,8 +418,7 @@ static handler_t mod_authn_ldap_basic(server *srv, connection *con, void *p_d, c
      * an unpleasant way
      */
 
-    len = buffer_string_length(username);
-    for (i = 0; i < len; i++) {
+    for (size_t i = 0, len = buffer_string_length(username); i < len; i++) {
         char c = username->ptr[i];
 
         if (!isalpha(c) &&
@@ -325,7 +429,9 @@ static handler_t mod_authn_ldap_basic(server *srv, connection *con, void *p_d, c
             (c != '_') &&
             (c != '.') ) {
 
-            log_error_write(srv, __FILE__, __LINE__, "sbd", "ldap: invalid character (- _.@a-zA-Z0-9 allowed) in username:", username, i);
+            log_error_write(srv, __FILE__, __LINE__, "sbd",
+                            "ldap: invalid character (- _.@a-zA-Z0-9 allowed) "
+                            "in username:", username, i);
 
             con->http_status = 400; /* Bad Request */
             con->mode = DIRECT;
@@ -333,95 +439,35 @@ static handler_t mod_authn_ldap_basic(server *srv, connection *con, void *p_d, c
         }
     }
 
-    if (p->conf.auth_ldap_allow_empty_pw != 1 && pw[0] == '\0')
-        return HANDLER_ERROR;
-
-    /* build filter */
+    /* build filter to get DN for uid = username */
     buffer_copy_buffer(p->ldap_filter, p->conf.ldap_filter_pre);
     buffer_append_string_buffer(p->ldap_filter, username);
     buffer_append_string_buffer(p->ldap_filter, p->conf.ldap_filter_post);
 
+    /* auth against LDAP server */
+    /* for now we stay synchronous */
 
-    /* 2. */
-    if (p->anon_conf->ldap == NULL ||
-        LDAP_SUCCESS != (ret = ldap_search_s(p->anon_conf->ldap, p->conf.auth_ldap_basedn->ptr, LDAP_SCOPE_SUBTREE, p->ldap_filter->ptr, attrs, 0, &lm))) {
-
-        /* try again (or initial request); the ldap library sometimes fails for the first call but reconnects */
-        if (p->anon_conf->ldap == NULL || ret != LDAP_SERVER_DOWN ||
-            LDAP_SUCCESS != (ret = ldap_search_s(p->anon_conf->ldap, p->conf.auth_ldap_basedn->ptr, LDAP_SCOPE_SUBTREE, p->ldap_filter->ptr, attrs, 0, &lm))) {
-
-            if (mod_authn_ldap_host_init(srv, p->anon_conf) != HANDLER_GO_ON)
-                return HANDLER_ERROR;
-
-            if (NULL == p->anon_conf->ldap) return HANDLER_ERROR;
-
-            if (LDAP_SUCCESS != (ret = ldap_search_s(p->anon_conf->ldap, p->conf.auth_ldap_basedn->ptr, LDAP_SCOPE_SUBTREE, p->ldap_filter->ptr, attrs, 0, &lm))) {
-                log_error_write(srv, __FILE__, __LINE__, "sssb",
-                        "ldap:", ldap_err2string(ret), "filter:", p->ldap_filter);
-                return HANDLER_ERROR;
-            }
-        }
-    }
-
-    if (NULL == (first = ldap_first_entry(p->anon_conf->ldap, lm))) {
-        log_error_write(srv, __FILE__, __LINE__, "s", "ldap ...");
-
-        ldap_msgfree(lm);
-
+    dn = mod_authn_ldap_get_dn(srv, p->anon_conf, p->conf.auth_ldap_basedn->ptr,
+                               p->ldap_filter->ptr);
+    if (NULL == dn) {
         return HANDLER_ERROR;
     }
 
-    if (NULL == (dn = ldap_get_dn(p->anon_conf->ldap, first))) {
-        log_error_write(srv, __FILE__, __LINE__, "s", "ldap ...");
-
-        ldap_msgfree(lm);
-
+    ld = mod_authn_ldap_host_init(srv, &p->conf);
+    if (NULL == ld) {
+        ldap_memfree(dn);
         return HANDLER_ERROR;
     }
 
-    ldap_msgfree(lm);
-
-
-    /* 3. */
-    if (NULL == (ldap = ldap_init(p->conf.auth_ldap_hostname->ptr, LDAP_PORT))) {
-        log_error_write(srv, __FILE__, __LINE__, "ss", "ldap ...", strerror(errno));
+    if (LDAP_SUCCESS != mod_authn_ldap_bind(srv, ld, dn, pw)) {
+        ldap_memfree(ld);
+        ldap_memfree(dn);
         return HANDLER_ERROR;
     }
 
-    ret = LDAP_VERSION3;
-    if (LDAP_OPT_SUCCESS != (ret = ldap_set_option(ldap, LDAP_OPT_PROTOCOL_VERSION, &ret))) {
-        log_error_write(srv, __FILE__, __LINE__, "ss", "ldap:", ldap_err2string(ret));
-
-        ldap_unbind_s(ldap);
-
-        return HANDLER_ERROR;
-    }
-
-    if (p->conf.auth_ldap_starttls == 1) {
-        if (LDAP_OPT_SUCCESS != (ret = ldap_start_tls_s(ldap, NULL,  NULL))) {
-            log_error_write(srv, __FILE__, __LINE__, "ss", "ldap startTLS failed:", ldap_err2string(ret));
-
-            ldap_unbind_s(ldap);
-
-            return HANDLER_ERROR;
-        }
-    }
-
-
-    if (LDAP_SUCCESS != (ret = ldap_simple_bind_s(ldap, dn, pw))) {
-        log_error_write(srv, __FILE__, __LINE__, "ss", "ldap:", ldap_err2string(ret));
-
-        ldap_unbind_s(ldap);
-
-        return HANDLER_ERROR;
-    }
-
-    /* 5. */
-    ldap_unbind_s(ldap);
-
-    /* everything worked, good, access granted */
-
-    return HANDLER_GO_ON;
+    ldap_unbind_ext_s(ld, NULL, NULL); /* disconnect */
+    ldap_memfree(dn);
+    return HANDLER_GO_ON; /* access granted */
 }
 
 int mod_authn_ldap_plugin_init(plugin *p);
