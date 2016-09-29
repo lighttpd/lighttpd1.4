@@ -133,7 +133,8 @@ config_values_t cv[] = {
         }
 
         if (!buffer_string_is_empty(s->auth_ldap_filter)) {
-            if (NULL == strchr(s->auth_ldap_filter->ptr, '$')) {
+            if (*s->auth_ldap_filter->ptr != ','
+                && NULL == strchr(s->auth_ldap_filter->ptr, '$')) {
                 log_error_write(srv, __FILE__, __LINE__, "s", "ldap: auth.backend.ldap.filter is missing a replace-operator '$'");
 
                 return HANDLER_ERROR;
@@ -386,6 +387,7 @@ static handler_t mod_authn_ldap_basic(server *srv, connection *con, void *p_d, c
     plugin_data *p = (plugin_data *)p_d;
     LDAP *ld;
     char *dn;
+    buffer *template;
 
     mod_authn_ldap_patch_connection(srv, con, p);
 
@@ -419,43 +421,56 @@ static handler_t mod_authn_ldap_basic(server *srv, connection *con, void *p_d, c
         }
     }
 
-    /* build filter to get DN for uid = username */
-    buffer_string_set_length(p->ldap_filter, 0);
-    for (char *b = p->conf.auth_ldap_filter->ptr, *d; *b; b = d+1) {
-        if (NULL != (d = strchr(b, '$'))) {
-            buffer_append_string_len(p->ldap_filter, b, (size_t)(d - b));
-            buffer_append_string_buffer(p->ldap_filter, username);
-        } else {
-            d = p->conf.auth_ldap_filter->ptr
-              + buffer_string_length(p->conf.auth_ldap_filter);
-            buffer_append_string_len(p->ldap_filter, b, (size_t)(d - b));
-            break;
-        }
-    }
-
-    /* auth against LDAP server */
-    /* for now we stay synchronous */
-
-    dn = mod_authn_ldap_get_dn(srv, p->anon_conf, p->conf.auth_ldap_basedn->ptr,
-                               p->ldap_filter->ptr);
-    if (NULL == dn) {
+    template = p->conf.auth_ldap_filter;
+    if (buffer_string_is_empty(template)) {
         return HANDLER_ERROR;
     }
 
+    /* build filter to get DN for uid = username */
+    buffer_string_set_length(p->ldap_filter, 0);
+    if (*template->ptr == ',') {
+        /* special-case filter template beginning with ',' to be explicit DN */
+        buffer_append_string_len(p->ldap_filter, CONST_STR_LEN("uid="));
+        buffer_append_string_buffer(p->ldap_filter, username);
+        buffer_append_string_buffer(p->ldap_filter, template);
+        dn = p->ldap_filter->ptr;
+    } else {
+        for (char *b = template->ptr, *d; *b; b = d+1) {
+            if (NULL != (d = strchr(b, '$'))) {
+                buffer_append_string_len(p->ldap_filter, b, (size_t)(d - b));
+                buffer_append_string_buffer(p->ldap_filter, username);
+            } else {
+                d = template->ptr + buffer_string_length(template);
+                buffer_append_string_len(p->ldap_filter, b, (size_t)(d - b));
+                break;
+            }
+        }
+
+        /* ldap_search for DN (synchronous; blocking) */
+        dn = mod_authn_ldap_get_dn(srv, p->anon_conf,
+                                   p->conf.auth_ldap_basedn->ptr,
+                                   p->ldap_filter->ptr);
+        if (NULL == dn) {
+            return HANDLER_ERROR;
+        }
+    }
+
+    /* auth against LDAP server (synchronous; blocking) */
+
     ld = mod_authn_ldap_host_init(srv, &p->conf);
     if (NULL == ld) {
-        ldap_memfree(dn);
+        if (dn != p->ldap_filter->ptr) ldap_memfree(dn);
         return HANDLER_ERROR;
     }
 
     if (LDAP_SUCCESS != mod_authn_ldap_bind(srv, ld, dn, pw)) {
         ldap_memfree(ld);
-        ldap_memfree(dn);
+        if (dn != p->ldap_filter->ptr) ldap_memfree(dn);
         return HANDLER_ERROR;
     }
 
     ldap_unbind_ext_s(ld, NULL, NULL); /* disconnect */
-    ldap_memfree(dn);
+    if (dn != p->ldap_filter->ptr) ldap_memfree(dn);
     return http_auth_match_rules(require, username->ptr, NULL, NULL)
       ? HANDLER_GO_ON  /* access granted */
       : HANDLER_ERROR;
