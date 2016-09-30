@@ -905,7 +905,7 @@ AC_CONFIG_FILES([Makefile src/Makefile
 AC_OUTPUT
 
 
-do_build="mod_cgi mod_fastcgi mod_extforward mod_proxy mod_evhost mod_simple_vhost mod_access mod_alias mod_setenv mod_usertrack mod_auth mod_status mod_accesslog"
+do_build="mod_cgi mod_fastcgi mod_extforward mod_proxy mod_evhost mod_simple_vhost mod_access mod_alias mod_setenv mod_usertrack mod_auth mod_authn_file mod_authn_ldap mod_authn_mysql mod_status mod_accesslog"
 do_build="$do_build mod_rrdtool mod_secdownload mod_expire mod_compress mod_dirlisting mod_indexfile mod_userdir mod_webdav mod_staticfile mod_scgi mod_flv_streaming mod_ssi mod_deflate"
 
 plugins="mod_rewrite mod_redirect mod_trigger_b4_dl"
@@ -918,11 +918,14 @@ else
 	disable_feature="$features"
 fi
 
+features="auth-mysql"
 plugins="mod_mysql_vhost"
 if test ! "x$MYSQL_LIBS" = x; then
 	do_build="$do_build $plugins"
+	enable_feature="$enable_feature $features"
 else
 	no_build="$no_build $plugins"
+	disable_feature="$disable_feature $features"
 fi
 
 plugins="mod_cml mod_magnet"
@@ -957,6 +960,16 @@ features="compress-bzip2"
 if test ! "x$BZ_LIB" = x; then
 	enable_feature="$enable_feature $features"
 else
+	disable_feature="$disable_feature $features"
+fi
+
+features="auth-krb5"
+plugins="mod_authn_gssapi"
+if test ! "x$KRB5_LIB" = x; then
+	do_build="$do_build $plugins"
+	enable_feature="$enable_feature $features"
+else
+	no_build="$no_build $plugins"
 	disable_feature="$disable_feature $features"
 fi
 
