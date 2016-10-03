@@ -53,7 +53,7 @@
   #define __BIG_ENDIAN__ 1
   #endif
 #elif defined(__FreeBSD__) || defined(__NetBSD__) \
-   || defined(__OpenBSD__) || defined(__DragonflyBSD__)
+   || defined(__OpenBSD__) || defined(__DragonFly__)
   #include <machine/endian.h>
   #if _BYTE_ORDER == _LITTLE_ENDIAN
   #define __LITTLE_ENDIAN__ 1
