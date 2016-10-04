@@ -763,7 +763,7 @@ static handler_t mod_authn_gssapi_basic(server *srv, connection *con, void *p_d,
         }
         else {
             /* ret == KRB5KDC_ERR_C_PRINCIPAL_UNKNOWN or no authz rules match */
-            log_error_write(srv, __FILE__, __LINE__, "sbsBss", "password doesn't match for", con->uri.path, "username:", username, ", IP:", con->dst_addr_buf);
+            log_error_write(srv, __FILE__, __LINE__, "sbsBsB", "password doesn't match for", con->uri.path, "username:", username, ", IP:", con->dst_addr_buf);
             return mod_authn_gssapi_send_401_unauthorized_basic(srv, con);
         }
 }

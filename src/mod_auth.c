@@ -496,7 +496,7 @@ static handler_t mod_auth_check_basic(server *srv, connection *con, void *p_d, c
 		break;
 	case HANDLER_ERROR:
 	default:
-		log_error_write(srv, __FILE__, __LINE__, "sbsBss", "password doesn't match for", con->uri.path, "username:", username, ", IP:", con->dst_addr_buf);
+		log_error_write(srv, __FILE__, __LINE__, "sbsBsB", "password doesn't match for", con->uri.path, "username:", username, ", IP:", con->dst_addr_buf);
 		rc = HANDLER_UNSET;
 		break;
 	}
@@ -683,7 +683,7 @@ static handler_t mod_auth_check_digest(server *srv, connection *con, void *p_d, 
 		const size_t rlen = buffer_string_length(con->request.orig_uri);
 		if (!buffer_is_equal_string(con->request.orig_uri, uri, ulen)
 		    && !(rlen < ulen && 0 == memcmp(con->request.orig_uri->ptr, uri, rlen) && uri[rlen] == '?')) {
-			log_error_write(srv, __FILE__, __LINE__, "sbssss",
+			log_error_write(srv, __FILE__, __LINE__, "sbsssB",
 					"digest: auth failed: uri mismatch (", con->request.orig_uri, "!=", uri, "), IP:", con->dst_addr_buf);
 			buffer_free(b);
 			return mod_auth_send_400_bad_request(srv, con);
@@ -756,7 +756,7 @@ static handler_t mod_auth_check_digest(server *srv, connection *con, void *p_d, 
 
 	if (0 != strcmp(a2, respons)) {
 		/* digest not ok */
-		log_error_write(srv, __FILE__, __LINE__, "ssss",
+		log_error_write(srv, __FILE__, __LINE__, "sssB",
 				"digest: auth failed for ", username, ": wrong password, IP:", con->dst_addr_buf);
 
 		buffer_free(b);
