@@ -1158,7 +1158,7 @@ CONNECTION_FUNC(mod_deflate_handle_response_start) {
 			buffer_string_set_length(ds->value, etaglen);
 		}
 		ds = (data_string *)array_get_element(con->response.headers, "Content-Encoding");
-		buffer_reset(ds->value); /* headers with empty values are ignored for output */
+		if (ds) buffer_reset(ds->value); /* headers with empty values are ignored for output */
 		return HANDLER_GO_ON;
 	}
 
