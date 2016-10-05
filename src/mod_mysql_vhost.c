@@ -4,7 +4,7 @@
 #include <stdio.h>
 #include <errno.h>
 #include <fcntl.h>
-#include <strings.h>
+#include <string.h>
 
 #ifdef HAVE_MYSQL
 #include <mysql.h>
@@ -29,6 +29,7 @@
 #ifdef HAVE_MYSQL
 typedef struct {
 	MYSQL 	*mysql;
+	buffer  *mysql_query;
 
 	buffer  *mydb;
 	buffer  *myuser;
@@ -37,9 +38,6 @@ typedef struct {
 
 	buffer  *hostname;
 	unsigned short port;
-
-	buffer  *mysql_pre;
-	buffer  *mysql_post;
 } plugin_config;
 
 /* global plugin data */
@@ -91,12 +89,11 @@ SERVER_FUNC(mod_mysql_vhost_cleanup) {
 
 			mysql_close(s->mysql);
 
+			buffer_free(s->mysql_query);
 			buffer_free(s->mydb);
 			buffer_free(s->myuser);
 			buffer_free(s->mypass);
 			buffer_free(s->mysock);
-			buffer_free(s->mysql_pre);
-			buffer_free(s->mysql_post);
 			buffer_free(s->hostname);
 
 			free(s);
@@ -158,10 +155,7 @@ CONNECTION_FUNC(mod_mysql_vhost_handle_connection_close) {
 /* set configuration values */
 SERVER_FUNC(mod_mysql_vhost_set_defaults) {
 	plugin_data *p = p_d;
-
-	char *qmark;
 	size_t i = 0;
-	buffer *sel;
 
 	config_values_t cv[] = {
 		{ "mysql-vhost.db",       NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_CONNECTION }, /* 0 */
@@ -175,13 +169,13 @@ SERVER_FUNC(mod_mysql_vhost_set_defaults) {
 	};
 
 	p->config_storage = calloc(1, srv->config_context->used * sizeof(plugin_config *));
-	sel = buffer_init();
 
 	for (i = 0; i < srv->config_context->used; i++) {
 		data_config const* config = (data_config const*)srv->config_context->data[i];
 		plugin_config *s;
 
 		s = calloc(1, sizeof(plugin_config));
+		s->mysql_query = buffer_init();
 		s->mydb = buffer_init();
 		s->myuser = buffer_init();
 		s->mypass = buffer_init();
@@ -190,15 +184,11 @@ SERVER_FUNC(mod_mysql_vhost_set_defaults) {
 		s->port = 0;               /* default port for mysql */
 		s->mysql = NULL;
 
-		s->mysql_pre = buffer_init();
-		s->mysql_post = buffer_init();
-
 		cv[0].destination = s->mydb;
 		cv[1].destination = s->myuser;
 		cv[2].destination = s->mypass;
 		cv[3].destination = s->mysock;
-		buffer_reset(sel);
-		cv[4].destination = sel;
+		cv[4].destination = s->mysql_query;
 		cv[5].destination = s->hostname;
 		cv[6].destination = &(s->port);
 
@@ -206,17 +196,6 @@ SERVER_FUNC(mod_mysql_vhost_set_defaults) {
 
 		if (config_insert_values_global(srv, config->value, cv, i == 0 ? T_CONFIG_SCOPE_SERVER : T_CONFIG_SCOPE_CONNECTION)) {
 			return HANDLER_ERROR;
-		}
-
-		s->mysql_pre = buffer_init();
-		s->mysql_post = buffer_init();
-
-		if (!buffer_string_is_empty(sel) && (qmark = strchr(sel->ptr, '?'))) {
-			*qmark = '\0';
-			buffer_copy_string(s->mysql_pre, sel->ptr);
-			buffer_copy_string(s->mysql_post, qmark+1);
-		} else {
-			buffer_copy_buffer(s->mysql_pre, sel);
 		}
 
 		/* required:
@@ -237,8 +216,6 @@ SERVER_FUNC(mod_mysql_vhost_set_defaults) {
 
 			if (NULL == (s->mysql = mysql_init(NULL))) {
 				log_error_write(srv, __FILE__, __LINE__, "s", "mysql_init() failed, exiting...");
-
-				buffer_free(sel);
 				return HANDLER_ERROR;
 			}
 
@@ -258,8 +235,6 @@ SERVER_FUNC(mod_mysql_vhost_set_defaults) {
 						FOO(mydb), s->port, FOO(mysock), 0)) {
 #endif
 				log_error_write(srv, __FILE__, __LINE__, "s", mysql_error(s->mysql));
-
-				buffer_free(sel);
 				return HANDLER_ERROR;
 			}
 #undef FOO
@@ -268,7 +243,6 @@ SERVER_FUNC(mod_mysql_vhost_set_defaults) {
 		}
 	}
 
-	buffer_free(sel);
 	return HANDLER_GO_ON;
 }
 
@@ -278,8 +252,7 @@ static int mod_mysql_vhost_patch_connection(server *srv, connection *con, plugin
 	size_t i, j;
 	plugin_config *s = p->config_storage[0];
 
-	PATCH(mysql_pre);
-	PATCH(mysql_post);
+	PATCH(mysql_query);
 #ifdef HAVE_MYSQL
 	PATCH(mysql);
 #endif
@@ -297,8 +270,7 @@ static int mod_mysql_vhost_patch_connection(server *srv, connection *con, plugin
 			data_unset *du = dc->value->data[j];
 
 			if (buffer_is_equal_string(du->key, CONST_STR_LEN("mysql-vhost.sql"))) {
-				PATCH(mysql_pre);
-				PATCH(mysql_post);
+				PATCH(mysql_query);
 			}
 		}
 
@@ -328,7 +300,7 @@ CONNECTION_FUNC(mod_mysql_vhost_handle_docroot) {
 	mod_mysql_vhost_patch_connection(srv, con, p);
 
 	if (!p->conf.mysql) return HANDLER_GO_ON;
-	if (buffer_string_is_empty(p->conf.mysql_pre)) return HANDLER_GO_ON;
+	if (buffer_string_is_empty(p->conf.mysql_query)) return HANDLER_GO_ON;
 
 	/* sets up connection data if not done yet */
 	c = mod_mysql_vhost_connection_data(srv, con, p_d);
@@ -337,19 +309,23 @@ CONNECTION_FUNC(mod_mysql_vhost_handle_docroot) {
 	if (buffer_is_equal(c->server_name, con->uri.authority)) goto GO_ON;
 
 	/* build and run SQL query */
-	buffer_copy_buffer(p->tmp_buf, p->conf.mysql_pre);
-	if (!buffer_is_empty(p->conf.mysql_post)) {
-		/* escape the uri.authority */
-		unsigned long to_len;
-
-		buffer_string_prepare_append(p->tmp_buf, buffer_string_length(con->uri.authority) * 2);
-
-		to_len = mysql_real_escape_string(p->conf.mysql,
-				p->tmp_buf->ptr + buffer_string_length(p->tmp_buf),
-				CONST_BUF_LEN(con->uri.authority));
-		buffer_commit(p->tmp_buf, to_len);
-
-		buffer_append_string_buffer(p->tmp_buf, p->conf.mysql_post);
+	buffer_string_set_length(p->tmp_buf, 0);
+	for (char *b = p->conf.mysql_query->ptr, *d; *b; b = d+1) {
+		if (NULL != (d = strchr(b, '?'))) {
+			/* escape the uri.authority */
+			unsigned long to_len;
+			buffer_append_string_len(p->tmp_buf, b, (size_t)(d - b));
+			buffer_string_prepare_append(p->tmp_buf, buffer_string_length(con->uri.authority) * 2);
+			to_len = mysql_real_escape_string(p->conf.mysql,
+					p->tmp_buf->ptr + buffer_string_length(p->tmp_buf),
+					CONST_BUF_LEN(con->uri.authority));
+			if ((unsigned long)~0 == to_len) goto ERR500;
+			buffer_commit(p->tmp_buf, to_len);
+		} else {
+			d = p->conf.mysql_query->ptr + buffer_string_length(p->conf.mysql_query);
+			buffer_append_string_len(p->tmp_buf, b, (size_t)(d - b));
+			break;
+		}
 	}
 	if (mysql_real_query(p->conf.mysql, CONST_BUF_LEN(p->tmp_buf))) {
 		log_error_write(srv, __FILE__, __LINE__, "s", mysql_error(p->conf.mysql));
