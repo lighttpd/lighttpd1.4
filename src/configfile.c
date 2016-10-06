@@ -122,6 +122,7 @@ static int config_insert(server *srv) {
 		{ "server.bsd-accept-filter",          NULL, T_CONFIG_STRING,  T_CONFIG_SCOPE_CONNECTION }, /* 75 */
 		{ "server.stream-request-body",        NULL, T_CONFIG_SHORT,   T_CONFIG_SCOPE_CONNECTION }, /* 76 */
 		{ "server.stream-response-body",       NULL, T_CONFIG_SHORT,   T_CONFIG_SCOPE_CONNECTION }, /* 77 */
+		{ "server.max-request-field-size",     NULL, T_CONFIG_INT,     T_CONFIG_SCOPE_SERVER     }, /* 78 */
 
 		{ NULL,                                NULL, T_CONFIG_UNSET,   T_CONFIG_SCOPE_UNSET      }
 	};
@@ -160,6 +161,7 @@ static int config_insert(server *srv) {
 	cv[72].destination = &(srv->srvconf.http_header_strict);
 	cv[73].destination = &(srv->srvconf.http_host_strict);
 	cv[74].destination = &(srv->srvconf.http_host_normalize);
+	cv[78].destination = &(srv->srvconf.max_request_field_size);
 
 	srv->config_storage = calloc(1, srv->config_context->used * sizeof(specific_config *));
 

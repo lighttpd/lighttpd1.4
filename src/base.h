@@ -539,6 +539,7 @@ typedef struct {
 	array *modules;
 	array *upload_tempdirs;
 	unsigned int upload_temp_file_size;
+	unsigned int max_request_field_size;
 
 	unsigned short max_worker;
 	unsigned short max_fds;

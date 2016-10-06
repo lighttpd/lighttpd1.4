@@ -281,6 +281,7 @@ static server *server_init(void) {
 	srv->srvconf.http_host_strict    = 1; /*(implies http_host_normalize)*/
 	srv->srvconf.http_host_normalize = 0;
 	srv->srvconf.high_precision_timestamps = 0;
+	srv->srvconf.max_request_field_size = 8192;
 
 	/* use syslog */
 	srv->errorlog_fd = STDERR_FILENO;

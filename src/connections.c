@@ -911,16 +911,18 @@ found_header_end:
 			}
 
 			connection_set_state(srv, con, CON_STATE_REQUEST_END);
-		} else if (chunkqueue_length(cq) > 64 * 1024) {
-			log_error_write(srv, __FILE__, __LINE__, "s", "oversized request-header -> sending Status 414");
-
-			con->http_status = 414; /* Request-URI too large */
-			con->keep_alive = 0;
-			connection_set_state(srv, con, CON_STATE_HANDLE_REQUEST);
 		} else if (is_closed) {
 			/* the connection got closed and we didn't got enough data to leave CON_STATE_READ;
 			 * the only way is to leave here */
 			connection_set_state(srv, con, CON_STATE_ERROR);
+		}
+
+		if ((last_chunk ? buffer_string_length(con->request.request) : (size_t)chunkqueue_length(cq))
+		    > srv->srvconf.max_request_field_size) {
+			log_error_write(srv, __FILE__, __LINE__, "s", "oversized request-header -> sending Status 431");
+			con->http_status = 431; /* Request Header Fields Too Large */
+			con->keep_alive = 0;
+			connection_set_state(srv, con, CON_STATE_HANDLE_REQUEST);
 		}
 
 	chunkqueue_remove_finished_chunks(cq);
