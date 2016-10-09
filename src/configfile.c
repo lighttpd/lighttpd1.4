@@ -166,6 +166,8 @@ static int config_insert(server *srv) {
 	srv->config_storage = calloc(1, srv->config_context->used * sizeof(specific_config *));
 
 	force_assert(srv->config_storage);
+	force_assert(srv->config_context->used); /* static analysis hint for ccc
+-analyzer */
 
 	for (i = 0; i < srv->config_context->used; i++) {
 		data_config const* config = (data_config const*)srv->config_context->data[i];

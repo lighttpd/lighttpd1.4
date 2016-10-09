@@ -929,7 +929,7 @@ void buffer_path_simplify(buffer *dest, buffer *src)
 		walk++;
 	}
 
-	pre2 = pre1 = 0;
+	pre1 = 0;
 	c = *(walk++);
 	/* prefix with '/' if not already present */
 	if (c != '/') {

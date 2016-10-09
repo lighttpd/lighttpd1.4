@@ -590,7 +590,6 @@ static int webdav_delete_dir(server *srv, connection *con, plugin_data *p, physi
 
 		while(NULL != (de = readdir(dir))) {
 			struct stat st;
-			int status = 0;
 
 			if ((de->d_name[0] == '.' && de->d_name[1] == '\0')  ||
 			  (de->d_name[0] == '.' && de->d_name[1] == '.' && de->d_name[2] == '\0')) {
@@ -614,6 +613,7 @@ static int webdav_delete_dir(server *srv, connection *con, plugin_data *p, physi
 
 				/* try to unlink it */
 				if (-1 == rmdir(d.path->ptr)) {
+					int status;
 					switch(errno) {
 					case EACCES:
 					case EPERM:
@@ -630,8 +630,6 @@ static int webdav_delete_dir(server *srv, connection *con, plugin_data *p, physi
 				} else {
 #ifdef USE_PROPPATCH
 					sqlite3_stmt *stmt = p->conf.stmt_delete_uri;
-
-					status = 0;
 
 					if (stmt) {
 						sqlite3_reset(stmt);

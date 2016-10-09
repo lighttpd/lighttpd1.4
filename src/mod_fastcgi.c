@@ -2406,7 +2406,7 @@ static int fcgi_response_parse(server *srv, connection *con, plugin_data *p, buf
 					/* found the file */
 
 					/* parse range */
-					begin_range = 0; end_range = sce->st.st_size - 1;
+					end_range = sce->st.st_size - 1;
 					{
 						char *rpos = NULL;
 						errno = 0;
