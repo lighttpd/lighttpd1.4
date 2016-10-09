@@ -162,6 +162,7 @@ metaline ::= EOL.
 %type       expression             {data_unset *}
 %type       aelement               {data_unset *}
 %type       condline               {data_config *}
+%type       cond_else              {data_config *}
 %type       condlines              {data_config *}
 %type       aelements              {array *}
 %type       array                  {array *}
@@ -410,12 +411,86 @@ condlines(A) ::= condlines(B) eols ELSE condline(C). {
   }
 }
 
+condlines(A) ::= condlines(B) eols ELSE cond_else(C). {
+  A = NULL;
+  if (ctx->ok) {
+    if (B->context_ndx >= C->context_ndx) {
+      fprintf(stderr, "unreachable else condition\n");
+      ctx->ok = 0;
+    }
+    if (B->cond == CONFIG_COND_ELSE) {
+      fprintf(stderr, "unreachable condition following else catch-all\n");
+      ctx->ok = 0;
+    }
+  }
+  if (ctx->ok) {
+    size_t pos;
+    data_config *dc;
+    dc = (data_config *)array_extract_element(ctx->all_configs, C->key->ptr);
+    force_assert(C == dc);
+    buffer_copy_buffer(C->key, B->key);
+    /*buffer_copy_buffer(C->comp_key, B->comp_key);*/
+    /*C->string = buffer_init_buffer(B->string);*/
+    pos = buffer_string_length(C->key)-buffer_string_length(B->string)-2;
+    switch(B->cond) {
+    case CONFIG_COND_NE:
+      C->key->ptr[pos] = '='; /* opposite cond */
+      /*buffer_copy_string_len(C->op, CONST_STR_LEN("=="));*/
+      break;
+    case CONFIG_COND_EQ:
+      C->key->ptr[pos] = '!'; /* opposite cond */
+      /*buffer_copy_string_len(C->op, CONST_STR_LEN("!="));*/
+      break;
+    case CONFIG_COND_NOMATCH:
+      C->key->ptr[pos] = '='; /* opposite cond */
+      /*buffer_copy_string_len(C->op, CONST_STR_LEN("=~"));*/
+      break;
+    case CONFIG_COND_MATCH:
+      C->key->ptr[pos] = '!'; /* opposite cond */
+      /*buffer_copy_string_len(C->op, CONST_STR_LEN("!~"));*/
+      break;
+    default: /* should not happen; CONFIG_COND_ELSE checked further above */
+      force_assert(0);
+    }
+
+    if (NULL == (dc = (data_config *)array_get_element(ctx->all_configs, C->key->ptr))) {
+      /* re-insert into ctx->all_configs with new C->key */
+      array_insert_unique(ctx->all_configs, (data_unset *)C);
+      C->prev = B;
+      B->next = C;
+    } else {
+      fprintf(stderr, "unreachable else condition\n");
+      ctx->ok = 0;
+      C->free((data_unset *)C);
+      C = dc;
+    }
+
+    A = C;
+    B = NULL;
+    C = NULL;
+  }
+}
+
 condlines(A) ::= condline(B). {
   A = B;
   B = NULL;
 }
 
 condline(A) ::= context LCURLY metalines RCURLY. {
+  A = NULL;
+  if (ctx->ok) {
+    data_config *cur;
+
+    cur = ctx->current;
+    configparser_pop(ctx);
+
+    force_assert(cur && ctx->current);
+
+    A = cur;
+  }
+}
+
+cond_else(A) ::= context_else LCURLY metalines RCURLY. {
   A = NULL;
   if (ctx->ok) {
     data_config *cur;
@@ -641,20 +716,14 @@ context ::= DOLLAR SRVVARNAME(B) LBRACKET stringop(C) RBRACKET cond(E) expressio
   }
 }
 
-context ::= . {
+context_else ::= . {
   if (ctx->ok) {
     data_config *dc = data_config_init();
     buffer_copy_buffer(dc->key, ctx->current->key);
     buffer_append_string_len(dc->key, CONST_STR_LEN("/"));
-    buffer_append_string_len(dc->key, CONST_STR_LEN("else"));
+    buffer_append_string_len(dc->key, CONST_STR_LEN("else_tmp_token"));
     dc->cond = CONFIG_COND_ELSE;
-    if (NULL == array_get_element(ctx->all_configs, dc->key->ptr)) {
-      configparser_push(ctx, dc, 1);
-    } else {
-      fprintf(stderr, "repeated else condition\n");
-      ctx->ok = 0;
-      dc->free((data_unset *)dc);
-    }
+    configparser_push(ctx, dc, 1);
   }
 }
 
