@@ -398,6 +398,10 @@ condlines(A) ::= condlines(B) eols ELSE condline(C). {
       fprintf(stderr, "unreachable else condition\n");
       ctx->ok = 0;
     }
+    if (B->cond == CONFIG_COND_ELSE) {
+      fprintf(stderr, "unreachable condition following else catch-all\n");
+      ctx->ok = 0;
+    }
     C->prev = B;
     B->next = C;
     A = C;
@@ -636,6 +640,24 @@ context ::= DOLLAR SRVVARNAME(B) LBRACKET stringop(C) RBRACKET cond(E) expressio
     D = NULL;
   }
 }
+
+context ::= . {
+  if (ctx->ok) {
+    data_config *dc = data_config_init();
+    buffer_copy_buffer(dc->key, ctx->current->key);
+    buffer_append_string_len(dc->key, CONST_STR_LEN("/"));
+    buffer_append_string_len(dc->key, CONST_STR_LEN("else"));
+    dc->cond = CONFIG_COND_ELSE;
+    if (NULL == array_get_element(ctx->all_configs, dc->key->ptr)) {
+      configparser_push(ctx, dc, 1);
+    } else {
+      fprintf(stderr, "repeated else condition\n");
+      ctx->ok = 0;
+      dc->free((data_unset *)dc);
+    }
+  }
+}
+
 cond(A) ::= EQ. {
   A = CONFIG_COND_EQ;
 }

@@ -63,8 +63,12 @@ static void data_config_print(const data_unset *d, int depth) {
 		fprintf(stdout, "config {\n");
 	}
 	else {
-		fprintf(stdout, "$%s %s \"%s\" {\n",
-				ds->comp_key->ptr, ds->op->ptr, ds->string->ptr);
+		if (ds->cond != CONFIG_COND_ELSE) {
+			fprintf(stdout, "$%s %s \"%s\" {\n",
+					ds->comp_key->ptr, ds->op->ptr, ds->string->ptr);
+		} else {
+			fprintf(stdout, "{\n");
+		}
 		array_print_indent(depth + 1);
 		fprintf(stdout, "# block %d\n", ds->context_ndx);
 	}
@@ -103,8 +107,12 @@ static void data_config_print(const data_unset *d, int depth) {
 	array_print_indent(depth);
 	fprintf(stdout, "}");
 	if (0 != ds->context_ndx) {
-		fprintf(stdout, " # end of $%s %s \"%s\"",
-				ds->comp_key->ptr, ds->op->ptr, ds->string->ptr);
+		if (ds->cond != CONFIG_COND_ELSE) {
+			fprintf(stdout, " # end of $%s %s \"%s\"",
+					ds->comp_key->ptr, ds->op->ptr, ds->string->ptr);
+		} else {
+			fprintf(stdout, " # end of else");
+		}
 	}
 
 	if (ds->next) {

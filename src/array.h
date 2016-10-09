@@ -64,7 +64,8 @@ typedef enum {
 	CONFIG_COND_EQ,      /** == */
 	CONFIG_COND_MATCH,   /** =~ */
 	CONFIG_COND_NE,      /** != */
-	CONFIG_COND_NOMATCH  /** !~ */
+	CONFIG_COND_NOMATCH, /** !~ */
+	CONFIG_COND_ELSE     /** (always true if reached) */
 } config_cond_t;
 
 /**

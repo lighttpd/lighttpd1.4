@@ -408,6 +408,8 @@ static cond_result_t config_check_cond_nocache(server *srv, connection *con, dat
 		break;
 	}
 
+	if (CONFIG_COND_ELSE == dc->cond) return COND_RESULT_TRUE;
+
 	/* pass the rules */
 
 	switch (dc->comp) {
