@@ -70,7 +70,6 @@ typedef struct {
 	PLUGIN_DATA;
 	buffer_pid_t cgi_pid;
 
-	buffer *tmp_buf;
 	buffer *parse_response;
 
 	plugin_config **config_storage;
@@ -121,7 +120,6 @@ INIT_FUNC(mod_cgi_init) {
 
 	force_assert(p);
 
-	p->tmp_buf = buffer_init();
 	p->parse_response = buffer_init();
 
 	return p;
@@ -152,7 +150,6 @@ FREE_FUNC(mod_cgi_free) {
 
 	if (r->ptr) free(r->ptr);
 
-	buffer_free(p->tmp_buf);
 	buffer_free(p->parse_response);
 
 	free(p);
@@ -836,7 +833,8 @@ static handler_t cgi_handle_fdevent(server *srv, void *ctx, int revents) {
 }
 
 
-static int cgi_env_add(char_array *env, const char *key, size_t key_len, const char *val, size_t val_len) {
+static int cgi_env_add(void *venv, const char *key, size_t key_len, const char *val, size_t val_len) {
+	char_array *env = venv;
 	char *dst;
 
 	if (!key || !val) return -1;
@@ -1060,13 +1058,10 @@ static int cgi_write_request(server *srv, handler_ctx *hctx, int fd) {
 static int cgi_create_env(server *srv, connection *con, plugin_data *p, handler_ctx *hctx, buffer *cgi_handler) {
 	pid_t pid;
 
-#ifdef HAVE_IPV6
-	char b2[INET6_ADDRSTRLEN + 1];
-#endif
-
 	int to_cgi_fds[2];
 	int from_cgi_fds[2];
 	struct stat st;
+	UNUSED(p);
 
 #ifndef __WIN32
 
@@ -1099,12 +1094,10 @@ static int cgi_create_env(server *srv, connection *con, plugin_data *p, handler_
 		char **args;
 		int argc;
 		int i = 0;
-		char buf[LI_ITOSTRING_LENGTH];
-		size_t n;
 		char_array env;
 		char *c;
 		const char *s;
-		server_socket *srv_sock = con->srv_socket;
+		http_cgi_opts opts = { 0, 0, NULL, NULL };
 
 		/* move stdout to from_cgi_fd[1] */
 		dup2(from_cgi_fds[1], STDOUT_FILENO);
@@ -1127,142 +1120,7 @@ static int cgi_create_env(server *srv, connection *con, plugin_data *p, handler_
 		env.size = 0;
 		env.used = 0;
 
-		cgi_env_add(&env, CONST_STR_LEN("SERVER_SOFTWARE"), CONST_BUF_LEN(con->conf.server_tag));
-
-		if (!buffer_string_is_empty(con->server_name)) {
-			size_t len = buffer_string_length(con->server_name);
-
-			if (con->server_name->ptr[0] == '[') {
-				const char *colon = strstr(con->server_name->ptr, "]:");
-				if (colon) len = (colon + 1) - con->server_name->ptr;
-			} else {
-				const char *colon = strchr(con->server_name->ptr, ':');
-				if (colon) len = colon - con->server_name->ptr;
-			}
-
-			cgi_env_add(&env, CONST_STR_LEN("SERVER_NAME"), con->server_name->ptr, len);
-		} else {
-#ifdef HAVE_IPV6
-			s = inet_ntop(
-				srv_sock->addr.plain.sa_family,
-				srv_sock->addr.plain.sa_family == AF_INET6 ?
-				(const void *) &(srv_sock->addr.ipv6.sin6_addr) :
-				(const void *) &(srv_sock->addr.ipv4.sin_addr),
-				b2, sizeof(b2)-1);
-#else
-			s = inet_ntoa(srv_sock->addr.ipv4.sin_addr);
-#endif
-			force_assert(s);
-			cgi_env_add(&env, CONST_STR_LEN("SERVER_NAME"), s, strlen(s));
-		}
-		cgi_env_add(&env, CONST_STR_LEN("GATEWAY_INTERFACE"), CONST_STR_LEN("CGI/1.1"));
-
-		s = get_http_version_name(con->request.http_version);
-		force_assert(s);
-		cgi_env_add(&env, CONST_STR_LEN("SERVER_PROTOCOL"), s, strlen(s));
-
-		li_utostrn(buf, sizeof(buf),
-#ifdef HAVE_IPV6
-			ntohs(srv_sock->addr.plain.sa_family == AF_INET6 ? srv_sock->addr.ipv6.sin6_port : srv_sock->addr.ipv4.sin_port)
-#else
-			ntohs(srv_sock->addr.ipv4.sin_port)
-#endif
-			);
-		cgi_env_add(&env, CONST_STR_LEN("SERVER_PORT"), buf, strlen(buf));
-
-		switch (srv_sock->addr.plain.sa_family) {
-#ifdef HAVE_IPV6
-		case AF_INET6:
-			s = inet_ntop(
-				srv_sock->addr.plain.sa_family,
-				(const void *) &(srv_sock->addr.ipv6.sin6_addr),
-				b2, sizeof(b2)-1);
-			break;
-		case AF_INET:
-			s = inet_ntop(
-				srv_sock->addr.plain.sa_family,
-				(const void *) &(srv_sock->addr.ipv4.sin_addr),
-				b2, sizeof(b2)-1);
-			break;
-#else
-		case AF_INET:
-			s = inet_ntoa(srv_sock->addr.ipv4.sin_addr);
-			break;
-#endif
-		default:
-			s = "";
-			break;
-		}
-		force_assert(s);
-		cgi_env_add(&env, CONST_STR_LEN("SERVER_ADDR"), s, strlen(s));
-
-		s = get_http_method_name(con->request.http_method);
-		force_assert(s);
-		cgi_env_add(&env, CONST_STR_LEN("REQUEST_METHOD"), s, strlen(s));
-
-		if (!buffer_string_is_empty(con->request.pathinfo)) {
-			cgi_env_add(&env, CONST_STR_LEN("PATH_INFO"), CONST_BUF_LEN(con->request.pathinfo));
-		}
-		if (!buffer_string_is_empty(con->uri.query)) {
-			cgi_env_add(&env, CONST_STR_LEN("QUERY_STRING"), CONST_BUF_LEN(con->uri.query));
-		} else {
-			cgi_env_add(&env, CONST_STR_LEN("QUERY_STRING"), CONST_STR_LEN(""));
-		}
-		cgi_env_add(&env, CONST_STR_LEN("REQUEST_URI"), CONST_BUF_LEN(con->request.orig_uri));
-		if (!buffer_is_equal(con->request.uri, con->request.orig_uri)) {
-			cgi_env_add(&env, CONST_STR_LEN("REDIRECT_URI"), CONST_BUF_LEN(con->request.uri));
-		}
-		/* set REDIRECT_STATUS for php compiled with --force-redirect
-		 * (if REDIRECT_STATUS has not already been set by error handler) */
-		if (0 == con->error_handler_saved_status) {
-			cgi_env_add(&env, CONST_STR_LEN("REDIRECT_STATUS"), CONST_STR_LEN("200"));
-		}
-
-
-		switch (con->dst_addr.plain.sa_family) {
-#ifdef HAVE_IPV6
-		case AF_INET6:
-			s = inet_ntop(
-				con->dst_addr.plain.sa_family,
-				(const void *) &(con->dst_addr.ipv6.sin6_addr),
-				b2, sizeof(b2)-1);
-			break;
-		case AF_INET:
-			s = inet_ntop(
-				con->dst_addr.plain.sa_family,
-				(const void *) &(con->dst_addr.ipv4.sin_addr),
-				b2, sizeof(b2)-1);
-			break;
-#else
-		case AF_INET:
-			s = inet_ntoa(con->dst_addr.ipv4.sin_addr);
-			break;
-#endif
-		default:
-			s = "";
-			break;
-		}
-		force_assert(s);
-		cgi_env_add(&env, CONST_STR_LEN("REMOTE_ADDR"), s, strlen(s));
-
-		li_utostrn(buf, sizeof(buf),
-#ifdef HAVE_IPV6
-			ntohs(con->dst_addr.plain.sa_family == AF_INET6 ? con->dst_addr.ipv6.sin6_port : con->dst_addr.ipv4.sin_port)
-#else
-			ntohs(con->dst_addr.ipv4.sin_port)
-#endif
-			);
-		cgi_env_add(&env, CONST_STR_LEN("REMOTE_PORT"), buf, strlen(buf));
-
-		if (buffer_is_equal_caseless_string(con->uri.scheme, CONST_STR_LEN("https"))) {
-			cgi_env_add(&env, CONST_STR_LEN("HTTPS"), CONST_STR_LEN("on"));
-		}
-
-		li_itostrn(buf, sizeof(buf), con->request.content_length);
-		cgi_env_add(&env, CONST_STR_LEN("CONTENT_LENGTH"), buf, strlen(buf));
-		cgi_env_add(&env, CONST_STR_LEN("SCRIPT_FILENAME"), CONST_BUF_LEN(con->physical.path));
-		cgi_env_add(&env, CONST_STR_LEN("SCRIPT_NAME"), CONST_BUF_LEN(con->uri.path));
-		cgi_env_add(&env, CONST_STR_LEN("DOCUMENT_ROOT"), CONST_BUF_LEN(con->physical.basedir));
+		http_cgi_headers(srv, con, &opts, cgi_env_add, &env);
 
 		/* for valgrind */
 		if (NULL != (s = getenv("LD_PRELOAD"))) {
@@ -1278,37 +1136,6 @@ static int cgi_create_env(server *srv, connection *con, plugin_data *p, handler_
 			cgi_env_add(&env, CONST_STR_LEN("SYSTEMROOT"), s, strlen(s));
 		}
 #endif
-
-		for (n = 0; n < con->request.headers->used; n++) {
-			data_string *ds;
-
-			ds = (data_string *)con->request.headers->data[n];
-
-			if (!buffer_is_empty(ds->value) && !buffer_is_empty(ds->key)) {
-				/* Do not emit HTTP_PROXY in environment.
-				 * Some executables use HTTP_PROXY to configure
-				 * outgoing proxy.  See also https://httpoxy.org/ */
-				if (buffer_is_equal_caseless_string(ds->key, CONST_STR_LEN("Proxy"))) {
-					continue;
-				}
-
-				buffer_copy_string_encoded_cgi_varnames(p->tmp_buf, CONST_BUF_LEN(ds->key), 1);
-
-				cgi_env_add(&env, CONST_BUF_LEN(p->tmp_buf), CONST_BUF_LEN(ds->value));
-			}
-		}
-
-		for (n = 0; n < con->environment->used; n++) {
-			data_string *ds;
-
-			ds = (data_string *)con->environment->data[n];
-
-			if (!buffer_is_empty(ds->value) && !buffer_is_empty(ds->key)) {
-				buffer_copy_string_encoded_cgi_varnames(p->tmp_buf, CONST_BUF_LEN(ds->key), 0);
-
-				cgi_env_add(&env, CONST_BUF_LEN(p->tmp_buf), CONST_BUF_LEN(ds->value));
-			}
-		}
 
 		if (env.size == env.used) {
 			env.size += 16;

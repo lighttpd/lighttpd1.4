@@ -1724,7 +1724,8 @@ static handler_t fcgi_connection_reset(server *srv, connection *con, void *p_d) 
 }
 
 
-static int fcgi_env_add(buffer *env, const char *key, size_t key_len, const char *val, size_t val_len) {
+static int fcgi_env_add(void *venv, const char *key, size_t key_len, const char *val, size_t val_len) {
+	buffer *env = venv;
 	size_t len;
 	char len_enc[8];
 	size_t len_enc_len = 0;
@@ -1925,48 +1926,6 @@ static connection_result_t fcgi_establish_connection(server *srv, handler_ctx *h
 	return CONNECTION_OK;
 }
 
-#define FCGI_ENV_ADD_CHECK(ret, con) \
-	if (ret == -1) { \
-		con->http_status = 400; \
-		return -1; \
-	};
-static int fcgi_env_add_request_headers(server *srv, connection *con, plugin_data *p) {
-	size_t i;
-
-	for (i = 0; i < con->request.headers->used; i++) {
-		data_string *ds;
-
-		ds = (data_string *)con->request.headers->data[i];
-
-		if (!buffer_is_empty(ds->value) && !buffer_is_empty(ds->key)) {
-			/* Do not emit HTTP_PROXY in environment.
-			 * Some executables use HTTP_PROXY to configure
-			 * outgoing proxy.  See also https://httpoxy.org/ */
-			if (buffer_is_equal_caseless_string(ds->key, CONST_STR_LEN("Proxy"))) {
-				continue;
-			}
-
-			buffer_copy_string_encoded_cgi_varnames(srv->tmp_buf, CONST_BUF_LEN(ds->key), 1);
-
-			FCGI_ENV_ADD_CHECK(fcgi_env_add(p->fcgi_env, CONST_BUF_LEN(srv->tmp_buf), CONST_BUF_LEN(ds->value)),con);
-		}
-	}
-
-	for (i = 0; i < con->environment->used; i++) {
-		data_string *ds;
-
-		ds = (data_string *)con->environment->data[i];
-
-		if (!buffer_is_empty(ds->value) && !buffer_is_empty(ds->key)) {
-			buffer_copy_string_encoded_cgi_varnames(srv->tmp_buf, CONST_BUF_LEN(ds->key), 0);
-
-			FCGI_ENV_ADD_CHECK(fcgi_env_add(p->fcgi_env, CONST_BUF_LEN(srv->tmp_buf), CONST_BUF_LEN(ds->value)), con);
-		}
-	}
-
-	return 0;
-}
-
 static void fcgi_stdin_append(server *srv, connection *con, handler_ctx *hctx, int request_id) {
 	FCGI_Header header;
 	chunkqueue *req_cq = con->request_content_queue;
@@ -2005,21 +1964,17 @@ static int fcgi_create_env(server *srv, handler_ctx *hctx, int request_id) {
 	FCGI_BeginRequestRecord beginRecord;
 	FCGI_Header header;
 
-	char buf[LI_ITOSTRING_LENGTH];
-	const char *s;
-#ifdef HAVE_IPV6
-	char b2[INET6_ADDRSTRLEN + 1];
-#endif
-
 	plugin_data *p    = hctx->plugin_data;
 	fcgi_extension_host *host= hctx->host;
 
 	connection *con   = hctx->remote_conn;
-	buffer * const req_uri = con->request.orig_uri;
-	server_socket *srv_sock = con->srv_socket;
 
-	sock_addr our_addr;
-	socklen_t our_addr_len;
+	http_cgi_opts opts = {
+	  (hctx->fcgi_mode == FCGI_AUTHORIZER),
+	  host->break_scriptfilename_for_php,
+	  host->docroot,
+	  host->strip_request_uri
+	};
 
 	/* send FCGI_BEGIN_REQUEST */
 
@@ -2032,194 +1987,10 @@ static int fcgi_create_env(server *srv, handler_ctx *hctx, int request_id) {
 	/* send FCGI_PARAMS */
 	buffer_string_prepare_copy(p->fcgi_env, 1023);
 
-	FCGI_ENV_ADD_CHECK(fcgi_env_add(p->fcgi_env, CONST_STR_LEN("SERVER_SOFTWARE"), CONST_BUF_LEN(con->conf.server_tag)),con)
-
-	if (!buffer_is_empty(con->server_name)) {
-		size_t len = buffer_string_length(con->server_name);
-
-		if (con->server_name->ptr[0] == '[') {
-			const char *colon = strstr(con->server_name->ptr, "]:");
-			if (colon) len = (colon + 1) - con->server_name->ptr;
-		} else {
-			const char *colon = strchr(con->server_name->ptr, ':');
-			if (colon) len = colon - con->server_name->ptr;
-		}
-
-		FCGI_ENV_ADD_CHECK(fcgi_env_add(p->fcgi_env, CONST_STR_LEN("SERVER_NAME"), con->server_name->ptr, len),con)
+	if (0 != http_cgi_headers(srv, con, &opts, fcgi_env_add, p->fcgi_env)) {
+		con->http_status = 400;
+		return -1;
 	} else {
-#ifdef HAVE_IPV6
-		s = inet_ntop(srv_sock->addr.plain.sa_family,
-			      srv_sock->addr.plain.sa_family == AF_INET6 ?
-			      (const void *) &(srv_sock->addr.ipv6.sin6_addr) :
-			      (const void *) &(srv_sock->addr.ipv4.sin_addr),
-			      b2, sizeof(b2)-1);
-#else
-		s = inet_ntoa(srv_sock->addr.ipv4.sin_addr);
-#endif
-		FCGI_ENV_ADD_CHECK(fcgi_env_add(p->fcgi_env, CONST_STR_LEN("SERVER_NAME"), s, strlen(s)),con)
-	}
-
-	FCGI_ENV_ADD_CHECK(fcgi_env_add(p->fcgi_env, CONST_STR_LEN("GATEWAY_INTERFACE"), CONST_STR_LEN("CGI/1.1")),con)
-
-	li_utostrn(buf, sizeof(buf),
-#ifdef HAVE_IPV6
-	       ntohs(srv_sock->addr.plain.sa_family ? srv_sock->addr.ipv6.sin6_port : srv_sock->addr.ipv4.sin_port)
-#else
-	       ntohs(srv_sock->addr.ipv4.sin_port)
-#endif
-	       );
-
-	FCGI_ENV_ADD_CHECK(fcgi_env_add(p->fcgi_env, CONST_STR_LEN("SERVER_PORT"), buf, strlen(buf)),con)
-
-	/* get the server-side of the connection to the client */
-	our_addr_len = sizeof(our_addr);
-
-	if (-1 == getsockname(con->fd, (struct sockaddr *)&our_addr, &our_addr_len)
-	    || our_addr_len > (socklen_t)sizeof(our_addr)) {
-		s = inet_ntop_cache_get_ip(srv, &(srv_sock->addr));
-	} else {
-		s = inet_ntop_cache_get_ip(srv, &(our_addr));
-	}
-	FCGI_ENV_ADD_CHECK(fcgi_env_add(p->fcgi_env, CONST_STR_LEN("SERVER_ADDR"), s, strlen(s)),con)
-
-	li_utostrn(buf, sizeof(buf),
-#ifdef HAVE_IPV6
-	       ntohs(con->dst_addr.plain.sa_family ? con->dst_addr.ipv6.sin6_port : con->dst_addr.ipv4.sin_port)
-#else
-	       ntohs(con->dst_addr.ipv4.sin_port)
-#endif
-	       );
-
-	FCGI_ENV_ADD_CHECK(fcgi_env_add(p->fcgi_env, CONST_STR_LEN("REMOTE_PORT"), buf, strlen(buf)),con)
-
-	s = inet_ntop_cache_get_ip(srv, &(con->dst_addr));
-	FCGI_ENV_ADD_CHECK(fcgi_env_add(p->fcgi_env, CONST_STR_LEN("REMOTE_ADDR"), s, strlen(s)),con)
-
-	if (con->request.content_length > 0 && hctx->fcgi_mode != FCGI_AUTHORIZER) {
-		/* CGI-SPEC 6.1.2 and FastCGI spec 6.3 */
-
-		li_itostrn(buf, sizeof(buf), con->request.content_length);
-		FCGI_ENV_ADD_CHECK(fcgi_env_add(p->fcgi_env, CONST_STR_LEN("CONTENT_LENGTH"), buf, strlen(buf)),con)
-	}
-
-	if (hctx->fcgi_mode != FCGI_AUTHORIZER) {
-		/*
-		 * SCRIPT_NAME, PATH_INFO and PATH_TRANSLATED according to
-		 * http://cgi-spec.golux.com/draft-coar-cgi-v11-03-clean.html
-		 * (6.1.14, 6.1.6, 6.1.7)
-		 * For AUTHORIZER mode these headers should be omitted.
-		 */
-
-		FCGI_ENV_ADD_CHECK(fcgi_env_add(p->fcgi_env, CONST_STR_LEN("SCRIPT_NAME"), CONST_BUF_LEN(con->uri.path)),con)
-
-		if (!buffer_string_is_empty(con->request.pathinfo)) {
-			FCGI_ENV_ADD_CHECK(fcgi_env_add(p->fcgi_env, CONST_STR_LEN("PATH_INFO"), CONST_BUF_LEN(con->request.pathinfo)),con)
-
-			/* PATH_TRANSLATED is only defined if PATH_INFO is set */
-
-			if (!buffer_string_is_empty(host->docroot)) {
-				buffer_copy_buffer(p->path, host->docroot);
-			} else {
-				buffer_copy_buffer(p->path, con->physical.basedir);
-			}
-			buffer_append_string_buffer(p->path, con->request.pathinfo);
-			FCGI_ENV_ADD_CHECK(fcgi_env_add(p->fcgi_env, CONST_STR_LEN("PATH_TRANSLATED"), CONST_BUF_LEN(p->path)),con)
-		} else {
-			FCGI_ENV_ADD_CHECK(fcgi_env_add(p->fcgi_env, CONST_STR_LEN("PATH_INFO"), CONST_STR_LEN("")),con)
-		}
-	}
-
-	/*
-	 * SCRIPT_FILENAME and DOCUMENT_ROOT for php. The PHP manual
-	 * http://www.php.net/manual/en/reserved.variables.php
-	 * treatment of PATH_TRANSLATED is different from the one of CGI specs.
-	 * TODO: this code should be checked against cgi.fix_pathinfo php
-	 * parameter.
-	 */
-
-	if (!buffer_string_is_empty(host->docroot)) {
-		/*
-		 * rewrite SCRIPT_FILENAME
-		 *
-		 */
-
-		buffer_copy_buffer(p->path, host->docroot);
-		buffer_append_string_buffer(p->path, con->uri.path);
-
-		FCGI_ENV_ADD_CHECK(fcgi_env_add(p->fcgi_env, CONST_STR_LEN("SCRIPT_FILENAME"), CONST_BUF_LEN(p->path)),con)
-		FCGI_ENV_ADD_CHECK(fcgi_env_add(p->fcgi_env, CONST_STR_LEN("DOCUMENT_ROOT"), CONST_BUF_LEN(host->docroot)),con)
-	} else {
-		buffer_copy_buffer(p->path, con->physical.path);
-
-		/* cgi.fix_pathinfo need a broken SCRIPT_FILENAME to find out what PATH_INFO is itself
-		 *
-		 * see src/sapi/cgi_main.c, init_request_info()
-		 */
-		if (host->break_scriptfilename_for_php) {
-			buffer_append_string_buffer(p->path, con->request.pathinfo);
-		}
-
-		FCGI_ENV_ADD_CHECK(fcgi_env_add(p->fcgi_env, CONST_STR_LEN("SCRIPT_FILENAME"), CONST_BUF_LEN(p->path)),con)
-		FCGI_ENV_ADD_CHECK(fcgi_env_add(p->fcgi_env, CONST_STR_LEN("DOCUMENT_ROOT"), CONST_BUF_LEN(con->physical.basedir)),con)
-	}
-
-	if (!buffer_string_is_empty(host->strip_request_uri)) {
-		/* we need at least one char to strip off */
-		/**
-		 * /app1/index/list
-		 *
-		 * stripping /app1 or /app1/ should lead to
-		 *
-		 * /index/list
-		 *
-		 */
-
-		if ('/' != host->strip_request_uri->ptr[buffer_string_length(host->strip_request_uri) - 1]) {
-			/* fix the user-input to have / as last char */
-			buffer_append_string_len(host->strip_request_uri, CONST_STR_LEN("/"));
-		}
-
-		if (buffer_string_length(req_uri) >= buffer_string_length(host->strip_request_uri) &&
-		    0 == strncmp(req_uri->ptr, host->strip_request_uri->ptr, buffer_string_length(host->strip_request_uri))) {
-			/* the left is the same */
-
-			FCGI_ENV_ADD_CHECK(fcgi_env_add(p->fcgi_env, CONST_STR_LEN("REQUEST_URI"),
-					req_uri->ptr + (buffer_string_length(host->strip_request_uri) - 1),
-					buffer_string_length(req_uri) - (buffer_string_length(host->strip_request_uri) - 1)), con)
-		} else {
-			FCGI_ENV_ADD_CHECK(fcgi_env_add(p->fcgi_env, CONST_STR_LEN("REQUEST_URI"), CONST_BUF_LEN(req_uri)),con)
-		}
-	} else {
-		FCGI_ENV_ADD_CHECK(fcgi_env_add(p->fcgi_env, CONST_STR_LEN("REQUEST_URI"), CONST_BUF_LEN(req_uri)),con)
-	}
-	if (!buffer_is_equal(con->request.uri, con->request.orig_uri)) {
-		FCGI_ENV_ADD_CHECK(fcgi_env_add(p->fcgi_env, CONST_STR_LEN("REDIRECT_URI"), CONST_BUF_LEN(con->request.uri)),con);
-	}
-	if (!buffer_string_is_empty(con->uri.query)) {
-		FCGI_ENV_ADD_CHECK(fcgi_env_add(p->fcgi_env, CONST_STR_LEN("QUERY_STRING"), CONST_BUF_LEN(con->uri.query)),con)
-	} else {
-		FCGI_ENV_ADD_CHECK(fcgi_env_add(p->fcgi_env, CONST_STR_LEN("QUERY_STRING"), CONST_STR_LEN("")),con)
-	}
-
-	s = get_http_method_name(con->request.http_method);
-	force_assert(s);
-	FCGI_ENV_ADD_CHECK(fcgi_env_add(p->fcgi_env, CONST_STR_LEN("REQUEST_METHOD"), s, strlen(s)),con)
-	/* set REDIRECT_STATUS for php compiled with --force-redirect
-	 * (if REDIRECT_STATUS has not already been set by error handler) */
-	if (0 == con->error_handler_saved_status) {
-		FCGI_ENV_ADD_CHECK(fcgi_env_add(p->fcgi_env, CONST_STR_LEN("REDIRECT_STATUS"), CONST_STR_LEN("200")), con);
-	}
-	s = get_http_version_name(con->request.http_version);
-	force_assert(s);
-	FCGI_ENV_ADD_CHECK(fcgi_env_add(p->fcgi_env, CONST_STR_LEN("SERVER_PROTOCOL"), s, strlen(s)),con)
-
-	if (buffer_is_equal_caseless_string(con->uri.scheme, CONST_STR_LEN("https"))) {
-		FCGI_ENV_ADD_CHECK(fcgi_env_add(p->fcgi_env, CONST_STR_LEN("HTTPS"), CONST_STR_LEN("on")),con)
-	}
-
-	FCGI_ENV_ADD_CHECK(fcgi_env_add_request_headers(srv, con, p), con);
-
-	{
 		buffer *b = buffer_init();
 
 		buffer_copy_string_len(b, (const char *)&beginRecord, sizeof(beginRecord));
@@ -3266,7 +3037,7 @@ static handler_t fcgi_send_request(server *srv, handler_ctx *hctx) {
 		} else {
 			int status = con->http_status;
 			fcgi_connection_close(srv, hctx);
-			con->http_status = (status == 400) ? 400 : 503; /* see FCGI_ENV_ADD_CHECK() for 400 error */
+			con->http_status = (status == 400) ? 400 : 503;
 
 			return HANDLER_FINISHED;
 		}

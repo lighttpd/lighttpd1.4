@@ -135,156 +135,43 @@ SETDEFAULTS_FUNC(mod_ssi_set_defaults) {
 }
 
 
-static int ssi_env_add(array *env, const char *key, const char *val) {
+static int ssi_env_add(void *venv, const char *key, size_t klen, const char *val, size_t vlen) {
+	array *env = venv;
 	data_string *ds;
 
+	/* array_set_key_value() w/o extra lookup to see if key already exists */
 	if (NULL == (ds = (data_string *)array_get_unused_element(env, TYPE_STRING))) {
 		ds = data_string_init();
 	}
-	buffer_copy_string(ds->key,   key);
-	buffer_copy_string(ds->value, val);
+	buffer_copy_string_len(ds->key,   key, klen);
+	buffer_copy_string_len(ds->value, val, vlen);
 
 	array_insert_unique(env, (data_unset *)ds);
 
 	return 0;
 }
 
-/**
- *
- *  the next two functions are take from fcgi.c
- *
- */
-
-static int ssi_env_add_request_headers(server *srv, connection *con, plugin_data *p) {
-	size_t i;
-
-	for (i = 0; i < con->request.headers->used; i++) {
-		data_string *ds;
-
-		ds = (data_string *)con->request.headers->data[i];
-
-		if (!buffer_is_empty(ds->value) && !buffer_is_empty(ds->key)) {
-			/* don't forward the Authorization: Header */
-			if (buffer_is_equal_caseless_string(ds->key, CONST_STR_LEN("Authorization"))) {
-				continue;
-			}
-
-			/* Do not emit HTTP_PROXY in environment.
-			 * Some executables use HTTP_PROXY to configure
-			 * outgoing proxy.  See also https://httpoxy.org/ */
-			if (buffer_is_equal_caseless_string(ds->key, CONST_STR_LEN("Proxy"))) {
-				continue;
-			}
-
-			buffer_copy_string_encoded_cgi_varnames(srv->tmp_buf, CONST_BUF_LEN(ds->key), 1);
-
-			ssi_env_add(p->ssi_cgi_env, srv->tmp_buf->ptr, ds->value->ptr);
-		}
-	}
-
-	for (i = 0; i < con->environment->used; i++) {
-		data_string *ds;
-
-		ds = (data_string *)con->environment->data[i];
-
-		if (!buffer_is_empty(ds->value) && !buffer_is_empty(ds->key)) {
-			buffer_copy_string_encoded_cgi_varnames(srv->tmp_buf, CONST_BUF_LEN(ds->key), 0);
-
-			ssi_env_add(p->ssi_cgi_env, srv->tmp_buf->ptr, ds->value->ptr);
-		}
-	}
-
-	return 0;
-}
-
 static int build_ssi_cgi_vars(server *srv, connection *con, plugin_data *p) {
-	char buf[LI_ITOSTRING_LENGTH];
-
-	server_socket *srv_sock = con->srv_socket;
-
-#ifdef HAVE_IPV6
-	char b2[INET6_ADDRSTRLEN + 1];
-#endif
-
-#define CONST_STRING(x) \
-		x
+	http_cgi_opts opts = { 0, 0, NULL, NULL };
+	/* temporarily remove Authorization from request headers
+	 * so that Authorization does not end up in SSI environment */
+	data_string *ds_auth = (data_string *)array_get_element(con->request.headers, "Authorization");
+	buffer *b_auth = NULL;
+	if (ds_auth) {
+		b_auth = ds_auth->value;
+		ds_auth->value = NULL;
+	}
 
 	array_reset(p->ssi_cgi_env);
 
-	ssi_env_add(p->ssi_cgi_env, CONST_STRING("SERVER_SOFTWARE"), con->conf.server_tag->ptr);
-	ssi_env_add(p->ssi_cgi_env, CONST_STRING("SERVER_NAME"),
-#ifdef HAVE_IPV6
-		     inet_ntop(srv_sock->addr.plain.sa_family,
-			       srv_sock->addr.plain.sa_family == AF_INET6 ?
-			       (const void *) &(srv_sock->addr.ipv6.sin6_addr) :
-			       (const void *) &(srv_sock->addr.ipv4.sin_addr),
-			       b2, sizeof(b2)-1)
-#else
-		     inet_ntoa(srv_sock->addr.ipv4.sin_addr)
-#endif
-		     );
-	ssi_env_add(p->ssi_cgi_env, CONST_STRING("GATEWAY_INTERFACE"), "CGI/1.1");
-
-	li_utostrn(buf, sizeof(buf),
-#ifdef HAVE_IPV6
-	       ntohs(srv_sock->addr.plain.sa_family ? srv_sock->addr.ipv6.sin6_port : srv_sock->addr.ipv4.sin_port)
-#else
-	       ntohs(srv_sock->addr.ipv4.sin_port)
-#endif
-	       );
-
-	ssi_env_add(p->ssi_cgi_env, CONST_STRING("SERVER_PORT"), buf);
-
-	ssi_env_add(p->ssi_cgi_env, CONST_STRING("REMOTE_ADDR"),
-		    inet_ntop_cache_get_ip(srv, &(con->dst_addr)));
-
-	if (con->request.content_length > 0) {
-		/* CGI-SPEC 6.1.2 and FastCGI spec 6.3 */
-
-		li_itostrn(buf, sizeof(buf), con->request.content_length);
-		ssi_env_add(p->ssi_cgi_env, CONST_STRING("CONTENT_LENGTH"), buf);
+	if (0 != http_cgi_headers(srv, con, &opts, ssi_env_add, p->ssi_cgi_env)) {
+		con->http_status = 400;
+		return -1;
 	}
 
-	/*
-	 * SCRIPT_NAME, PATH_INFO and PATH_TRANSLATED according to
-	 * http://cgi-spec.golux.com/draft-coar-cgi-v11-03-clean.html
-	 * (6.1.14, 6.1.6, 6.1.7)
-	 */
-
-	ssi_env_add(p->ssi_cgi_env, CONST_STRING("SCRIPT_NAME"), con->uri.path->ptr);
-	ssi_env_add(p->ssi_cgi_env, CONST_STRING("PATH_INFO"), "");
-
-	/*
-	 * SCRIPT_FILENAME and DOCUMENT_ROOT for php. The PHP manual
-	 * http://www.php.net/manual/en/reserved.variables.php
-	 * treatment of PATH_TRANSLATED is different from the one of CGI specs.
-	 * TODO: this code should be checked against cgi.fix_pathinfo php
-	 * parameter.
-	 */
-
-	if (!buffer_string_is_empty(con->request.pathinfo)) {
-		ssi_env_add(p->ssi_cgi_env, CONST_STRING("PATH_INFO"), con->request.pathinfo->ptr);
+	if (ds_auth) {
+		ds_auth->value = b_auth;
 	}
-
-	ssi_env_add(p->ssi_cgi_env, CONST_STRING("SCRIPT_FILENAME"), con->physical.path->ptr);
-	ssi_env_add(p->ssi_cgi_env, CONST_STRING("DOCUMENT_ROOT"), con->physical.basedir->ptr);
-
-	ssi_env_add(p->ssi_cgi_env, CONST_STRING("REQUEST_URI"), con->request.uri->ptr);
-
-	if (!buffer_string_is_empty(con->uri.scheme)) {
-		ssi_env_add(p->ssi_cgi_env, CONST_STRING("REQUEST_SCHEME"), con->uri.scheme->ptr);
-	}
-
-	ssi_env_add(p->ssi_cgi_env, CONST_STRING("QUERY_STRING"), buffer_is_empty(con->uri.query) ? "" : con->uri.query->ptr);
-	ssi_env_add(p->ssi_cgi_env, CONST_STRING("REQUEST_METHOD"), get_http_method_name(con->request.http_method));
-	ssi_env_add(p->ssi_cgi_env, CONST_STRING("SERVER_PROTOCOL"), get_http_version_name(con->request.http_version));
-	/* set REDIRECT_STATUS for php compiled with --force-redirect
-	 * (if REDIRECT_STATUS has not already been set by error handler) */
-	if (0 == con->error_handler_saved_status) {
-		ssi_env_add(p->ssi_cgi_env, CONST_STRING("REDIRECT_STATUS"), "200");
-	}
-
-	ssi_env_add_request_headers(srv, con, p);
 
 	return 0;
 }

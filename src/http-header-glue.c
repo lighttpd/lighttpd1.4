@@ -760,3 +760,261 @@ void http_response_backend_done (server *srv, connection *con) {
 		break;
 	}
 }
+
+
+int http_cgi_headers (server *srv, connection *con, http_cgi_opts *opts, http_cgi_header_append_cb cb, void *vdata) {
+
+    /* CGI-SPEC 6.1.2, FastCGI spec 6.3 and SCGI spec */
+
+    int rc = 0;
+    unsigned short port;
+    server_socket *srv_sock = con->srv_socket;
+    const char *s;
+    size_t n;
+    char buf[LI_ITOSTRING_LENGTH];
+  #ifdef HAVE_IPV6
+    char b2[INET6_ADDRSTRLEN + 1];
+  #endif
+    sock_addr *addr;
+    sock_addr addrbuf;
+
+    /* (CONTENT_LENGTH must be first for SCGI) */
+    if (!opts->authorizer) {
+        li_itostrn(buf, sizeof(buf), con->request.content_length);
+        rc |= cb(vdata, CONST_STR_LEN("CONTENT_LENGTH"), buf, strlen(buf));
+    }
+
+    if (!buffer_string_is_empty(con->uri.query)) {
+        rc |= cb(vdata, CONST_STR_LEN("QUERY_STRING"),
+                        CONST_BUF_LEN(con->uri.query));
+    } else {
+        rc |= cb(vdata, CONST_STR_LEN("QUERY_STRING"),
+                        CONST_STR_LEN(""));
+    }
+    if (!buffer_string_is_empty(opts->strip_request_uri)) {
+        /**
+         * /app1/index/list
+         *
+         * stripping /app1 or /app1/ should lead to
+         *
+         * /index/list
+         *
+         */
+        size_t len = buffer_string_length(opts->strip_request_uri);
+        if ('/' == opts->strip_request_uri->ptr[len-1]) {
+            --len;
+        }
+
+        if (buffer_string_length(con->request.orig_uri) >= len
+            && 0 == memcmp(con->request.orig_uri->ptr,
+                           opts->strip_request_uri->ptr, len)
+            && con->request.orig_uri->ptr[len] == '/') {
+            rc |= cb(vdata, CONST_STR_LEN("REQUEST_URI"),
+                            con->request.orig_uri->ptr+len,
+                            buffer_string_length(con->request.orig_uri) - len);
+        } else {
+            rc |= cb(vdata, CONST_STR_LEN("REQUEST_URI"),
+                            CONST_BUF_LEN(con->request.orig_uri));
+        }
+    } else {
+        rc |= cb(vdata, CONST_STR_LEN("REQUEST_URI"),
+                        CONST_BUF_LEN(con->request.orig_uri));
+    }
+    if (!buffer_is_equal(con->request.uri, con->request.orig_uri)) {
+        rc |= cb(vdata, CONST_STR_LEN("REDIRECT_URI"),
+                        CONST_BUF_LEN(con->request.uri));
+    }
+    /* set REDIRECT_STATUS for php compiled with --force-redirect
+     * (if REDIRECT_STATUS has not already been set by error handler) */
+    if (0 == con->error_handler_saved_status) {
+        rc |= cb(vdata, CONST_STR_LEN("REDIRECT_STATUS"),
+                        CONST_STR_LEN("200"));
+    }
+
+    /*
+     * SCRIPT_NAME, PATH_INFO and PATH_TRANSLATED according to
+     * http://cgi-spec.golux.com/draft-coar-cgi-v11-03-clean.html
+     * (6.1.14, 6.1.6, 6.1.7)
+     */
+    if (!opts->authorizer) {
+        rc |= cb(vdata, CONST_STR_LEN("SCRIPT_NAME"),
+                        CONST_BUF_LEN(con->uri.path));
+        if (!buffer_string_is_empty(con->request.pathinfo)) {
+            rc |= cb(vdata, CONST_STR_LEN("PATH_INFO"),
+                            CONST_BUF_LEN(con->request.pathinfo));
+            /* PATH_TRANSLATED is only defined if PATH_INFO is set */
+            if (!buffer_string_is_empty(opts->docroot)) {
+                buffer_copy_buffer(srv->tmp_buf, opts->docroot);
+            } else {
+                buffer_copy_buffer(srv->tmp_buf, con->physical.basedir);
+            }
+            buffer_append_string_buffer(srv->tmp_buf, con->request.pathinfo);
+            rc |= cb(vdata, CONST_STR_LEN("PATH_TRANSLATED"),
+                            CONST_BUF_LEN(srv->tmp_buf));
+        }
+    }
+
+   /*
+    * SCRIPT_FILENAME and DOCUMENT_ROOT for php
+    * The PHP manual http://www.php.net/manual/en/reserved.variables.php
+    * treatment of PATH_TRANSLATED is different from the one of CGI specs.
+    * (see php.ini cgi.fix_pathinfo = 1 config parameter)
+    */
+
+    if (!buffer_string_is_empty(opts->docroot)) {
+        /* alternate docroot, e.g. for remote FastCGI or SCGI server */
+        buffer_copy_buffer(srv->tmp_buf, opts->docroot);
+        buffer_append_string_buffer(srv->tmp_buf, con->uri.path);
+        rc |= cb(vdata, CONST_STR_LEN("SCRIPT_FILENAME"),
+                        CONST_BUF_LEN(srv->tmp_buf));
+        rc |= cb(vdata, CONST_STR_LEN("DOCUMENT_ROOT"),
+                        CONST_BUF_LEN(opts->docroot));
+    } else {
+        if (opts->break_scriptfilename_for_php) {
+            /* php.ini config cgi.fix_pathinfo = 1 need a broken SCRIPT_FILENAME
+             * to find out what PATH_INFO is itself
+             *
+             * see src/sapi/cgi_main.c, init_request_info()
+             */
+            buffer_copy_buffer(srv->tmp_buf, con->physical.path);
+            buffer_append_string_buffer(srv->tmp_buf, con->request.pathinfo);
+            rc |= cb(vdata, CONST_STR_LEN("SCRIPT_FILENAME"),
+                            CONST_BUF_LEN(srv->tmp_buf));
+        } else {
+            rc |= cb(vdata, CONST_STR_LEN("SCRIPT_FILENAME"),
+                            CONST_BUF_LEN(con->physical.path));
+        }
+        rc |= cb(vdata, CONST_STR_LEN("DOCUMENT_ROOT"),
+                        CONST_BUF_LEN(con->physical.basedir));
+    }
+
+    s = get_http_method_name(con->request.http_method);
+    force_assert(s);
+    rc |= cb(vdata, CONST_STR_LEN("REQUEST_METHOD"), s, strlen(s));
+
+    s = get_http_version_name(con->request.http_version);
+    force_assert(s);
+    rc |= cb(vdata, CONST_STR_LEN("SERVER_PROTOCOL"), s, strlen(s));
+
+    rc |= cb(vdata, CONST_STR_LEN("SERVER_SOFTWARE"),
+                    CONST_BUF_LEN(con->conf.server_tag));
+
+    rc |= cb(vdata, CONST_STR_LEN("GATEWAY_INTERFACE"),
+                    CONST_STR_LEN("CGI/1.1"));
+
+    if (buffer_is_equal_caseless_string(con->uri.scheme,
+                                        CONST_STR_LEN("https"))) {
+        rc |= cb(vdata, CONST_STR_LEN("HTTPS"), CONST_STR_LEN("on"));
+    }
+
+    addr = &srv_sock->addr;
+  #ifdef HAVE_IPV6
+    port = addr->plain.sa_family == AF_INET6
+         ? addr->ipv6.sin6_port
+         : addr->ipv4.sin_port;
+  #else
+    port = addr->ipv4.sin_port;
+  #endif
+    li_utostrn(buf, sizeof(buf), ntohs(port));
+    rc |= cb(vdata, CONST_STR_LEN("SERVER_PORT"), buf, strlen(buf));
+
+    switch (addr->plain.sa_family) {
+  #ifdef HAVE_IPV6
+    case AF_INET6:
+        if (0 ==memcmp(&addr->ipv6.sin6_addr,&in6addr_any,sizeof(in6addr_any))){
+            socklen_t addrlen = sizeof(addrbuf);
+            if (0 == getsockname(con->fd,(struct sockaddr *)&addrbuf,&addrlen)){
+                addr = &addrbuf;
+            } else {
+                s = "";
+                break;
+            }
+        }
+        s = inet_ntop(AF_INET6, (const void *) &(addr->ipv6.sin6_addr),
+                      b2, sizeof(b2)-1);
+        break;
+  #endif
+    case AF_INET:
+        if (srv_sock->addr.ipv4.sin_addr.s_addr == INADDR_ANY) {
+            socklen_t addrlen = sizeof(addrbuf);
+            if (0 == getsockname(con->fd,(struct sockaddr *)&addrbuf,&addrlen)){
+                addr = &addrbuf;
+            } else {
+                s = "";
+                break;
+            }
+        }
+      #ifdef HAVE_IPV6
+        s = inet_ntop(AF_INET, (const void *) &(addr->ipv4.sin_addr),
+                      b2, sizeof(b2)-1);
+      #else
+        s = inet_ntoa(addr->ipv4.sin_addr);
+      #endif
+        break;
+    default:
+        s = "";
+        break;
+    }
+    force_assert(s);
+    rc |= cb(vdata, CONST_STR_LEN("SERVER_ADDR"), s, strlen(s));
+
+    if (!buffer_string_is_empty(con->server_name)) {
+        size_t len = buffer_string_length(con->server_name);
+
+        if (con->server_name->ptr[0] == '[') {
+            const char *colon = strstr(con->server_name->ptr, "]:");
+            if (colon) len = (colon + 1) - con->server_name->ptr;
+        } else {
+            const char *colon = strchr(con->server_name->ptr, ':');
+            if (colon) len = colon - con->server_name->ptr;
+        }
+
+        rc |= cb(vdata, CONST_STR_LEN("SERVER_NAME"),
+                        con->server_name->ptr, len);
+    } else {
+        /* set to be same as SERVER_ADDR (above) */
+        rc |= cb(vdata, CONST_STR_LEN("SERVER_NAME"), s, strlen(s));
+    }
+
+    rc |= cb(vdata, CONST_STR_LEN("REMOTE_ADDR"),
+                    CONST_BUF_LEN(con->dst_addr_buf));
+
+  #ifdef HAVE_IPV6
+    port = con->dst_addr.plain.sa_family == AF_INET6
+         ? con->dst_addr.ipv6.sin6_port
+         : con->dst_addr.ipv4.sin_port;
+  #else
+    port = con->dst_addr.ipv4.sin_port;
+  #endif
+    li_utostrn(buf, sizeof(buf), ntohs(port));
+    rc |= cb(vdata, CONST_STR_LEN("REMOTE_PORT"), buf, strlen(buf));
+
+    for (n = 0; n < con->request.headers->used; n++) {
+        data_string *ds = (data_string *)con->request.headers->data[n];
+        if (!buffer_is_empty(ds->value) && !buffer_is_empty(ds->key)) {
+            /* Security: Do not emit HTTP_PROXY in environment.
+             * Some executables use HTTP_PROXY to configure
+             * outgoing proxy.  See also https://httpoxy.org/ */
+            if (buffer_is_equal_caseless_string(ds->key,
+                                                CONST_STR_LEN("Proxy"))) {
+                continue;
+            }
+            buffer_copy_string_encoded_cgi_varnames(srv->tmp_buf,
+                                                    CONST_BUF_LEN(ds->key), 1);
+            rc |= cb(vdata, CONST_BUF_LEN(srv->tmp_buf),
+                            CONST_BUF_LEN(ds->value));
+        }
+    }
+
+    for (n = 0; n < con->environment->used; n++) {
+        data_string *ds = (data_string *)con->environment->data[n];
+        if (!buffer_is_empty(ds->value) && !buffer_is_empty(ds->key)) {
+            buffer_copy_string_encoded_cgi_varnames(srv->tmp_buf,
+                                                    CONST_BUF_LEN(ds->key), 0);
+            rc |= cb(vdata, CONST_BUF_LEN(srv->tmp_buf),
+                            CONST_BUF_LEN(ds->value));
+        }
+    }
+
+    return rc;
+}
