@@ -129,6 +129,7 @@ int http_response_write_header(server *srv, connection *con) {
 }
 
 #ifdef USE_OPENSSL
+#include <openssl/bn.h>
 static void https_add_ssl_entries(server *srv, connection *con) {
 	X509 *xs;
 	X509_NAME *xn;
@@ -161,6 +162,16 @@ static void https_add_ssl_entries(server *srv, connection *con) {
 					    (const char *)X509_NAME_ENTRY_get_data(xe)->data,
 					    X509_NAME_ENTRY_get_data(xe)->length);
 		}
+	}
+
+	{
+		ASN1_INTEGER *xsn = X509_get_serialNumber(xs);
+		BIGNUM serialBN;
+		char *serialHex = BN_bn2hex(ASN1_INTEGER_to_BN(xsn, &serialBN));
+		array_set_key_value(con->environment,
+				    CONST_STR_LEN("SSL_CLIENT_M_SERIAL"),
+				    serialHex, strlen(serialHex));
+		OPENSSL_free(serialHex);
 	}
 
 	if (!buffer_string_is_empty(con->conf.ssl_verifyclient_username)) {
