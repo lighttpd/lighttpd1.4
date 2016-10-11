@@ -1006,6 +1006,10 @@ int http_cgi_headers (server *srv, connection *con, http_cgi_opts *opts, http_cg
         }
     }
 
+  #ifdef USE_OPENSSL
+    if (con->ssl) http_cgi_ssl_env(srv, con);
+  #endif
+
     for (n = 0; n < con->environment->used; n++) {
         data_string *ds = (data_string *)con->environment->data[n];
         if (!buffer_is_empty(ds->value) && !buffer_is_empty(ds->key)) {
