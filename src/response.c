@@ -130,16 +130,31 @@ int http_response_write_header(server *srv, connection *con) {
 
 #ifdef USE_OPENSSL
 #include <openssl/bn.h>
-static void https_add_ssl_entries(server *srv, connection *con) {
+#include <openssl/err.h>
+static void https_add_ssl_client_entries(server *srv, connection *con) {
 	X509 *xs;
 	X509_NAME *xn;
 	int i, nentries;
 
-	if (
-		SSL_get_verify_result(con->ssl) != X509_V_OK
-		|| !(xs = SSL_get_peer_certificate(con->ssl))
-	) {
+	long vr = SSL_get_verify_result(con->ssl);
+	if (vr != X509_V_OK) {
+		char errstr[256];
+		ERR_error_string_n(vr, errstr, sizeof(errstr));
+		buffer_copy_string_len(srv->tmp_buf, CONST_STR_LEN("FAILED:"));
+		buffer_append_string(srv->tmp_buf, errstr);
+		array_set_key_value(con->environment,
+				    CONST_STR_LEN("SSL_CLIENT_VERIFY"),
+				    CONST_BUF_LEN(srv->tmp_buf));
 		return;
+	} else if (!(xs = SSL_get_peer_certificate(con->ssl))) {
+		array_set_key_value(con->environment,
+				    CONST_STR_LEN("SSL_CLIENT_VERIFY"),
+				    CONST_STR_LEN("NONE"));
+		return;
+	} else {
+		array_set_key_value(con->environment,
+				    CONST_STR_LEN("SSL_CLIENT_VERIFY"),
+				    CONST_STR_LEN("SUCCESS"));
 	}
 
 	buffer_copy_string_len(srv->tmp_buf, CONST_STR_LEN("SSL_CLIENT_S_DN_"));
@@ -321,7 +336,7 @@ handler_t http_response_prepare(server *srv, connection *con) {
 
 #ifdef USE_OPENSSL
 		if (con->srv_socket->is_ssl && con->conf.ssl_verifyclient) {
-			https_add_ssl_entries(srv, con);
+			https_add_ssl_client_entries(srv, con);
 		}
 #endif
 
