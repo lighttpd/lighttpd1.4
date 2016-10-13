@@ -60,6 +60,7 @@ common_src = Split("base64.c buffer.c log.c \
 	network_write.c network_linux_sendfile.c \
 	network_freebsd_sendfile.c  \
 	network_solaris_sendfilev.c network_openssl.c \
+	rand.c \
 	status_counter.c safe_memclear.c network_darwin_sendfile.c \
 ")
 

@@ -120,16 +120,24 @@ set(CMAKE_EXTRA_INCLUDE_FILES sys/socket.h)
 check_type_size(socklen_t HAVE_SOCKLEN_T)
 set(CMAKE_EXTRA_INCLUDE_FILES)
 
+check_include_files(linux/random.h HAVE_LINUX_RANDOM_H)
+set(CMAKE_EXTRA_INCLUDE_FILES linux/random.h)
+check_function_exists(getrandom HAVE_GETRANDOM)
+set(CMAKE_EXTRA_INCLUDE_FILES)
+
 check_type_size(long SIZEOF_LONG)
 check_type_size(off_t SIZEOF_OFF_T)
 
+check_function_exists(arc4random HAVE_ARC4RANDOM)
 check_function_exists(chroot HAVE_CHROOT)
 check_function_exists(epoll_ctl HAVE_EPOLL_CTL)
 check_function_exists(fork HAVE_FORK)
+check_function_exists(getentropy HAVE_GETENTROPY)
 check_function_exists(getrlimit HAVE_GETRLIMIT)
 check_function_exists(getuid HAVE_GETUID)
 check_function_exists(gmtime_r HAVE_GMTIME_R)
 check_function_exists(inet_ntop HAVE_INET_NTOP)
+check_function_exists(jrand48 HAVE_JRAND48)
 check_function_exists(kqueue HAVE_KQUEUE)
 check_function_exists(localtime_r HAVE_LOCALTIME_R)
 check_function_exists(lstat HAVE_LSTAT)
@@ -519,6 +527,7 @@ set(COMMON_SRC
 	network_write.c network_linux_sendfile.c
 	network_freebsd_sendfile.c
 	network_solaris_sendfilev.c network_openssl.c
+	rand.c
 	status_counter.c safe_memclear.c network_darwin_sendfile.c
 )
 

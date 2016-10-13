@@ -5,6 +5,7 @@
 #include "network.h"
 #include "log.h"
 #include "keyvalue.h"
+#include "rand.h"
 #include "response.h"
 #include "request.h"
 #include "chunk.h"
@@ -202,8 +203,6 @@ static int daemonize(void) {
 
 static server *server_init(void) {
 	int i;
-	FILE *frandom = NULL;
-
 	server *srv = calloc(1, sizeof(*srv));
 	force_assert(srv);
 #define CLEAN(x) \
@@ -244,20 +243,8 @@ static server *server_init(void) {
 		srv->mtime_cache[i].str = buffer_init();
 	}
 
-	if ((NULL != (frandom = fopen("/dev/urandom", "rb")) || NULL != (frandom = fopen("/dev/random", "rb")))
-	            && 1 == fread(srv->entropy, sizeof(srv->entropy), 1, frandom)) {
-		unsigned int e;
-		memcpy(&e, srv->entropy, sizeof(e) < sizeof(srv->entropy) ? sizeof(e) : sizeof(srv->entropy));
-		srand(e);
-		srv->is_real_entropy = 1;
-	} else {
-		unsigned int j;
-		srand(time(NULL) ^ getpid());
-		srv->is_real_entropy = 0;
-		for (j = 0; j < sizeof(srv->entropy); j++)
-			srv->entropy[j] = rand();
-	}
-	if (frandom) fclose(frandom);
+	li_rand_reseed();
+	li_rand_bytes((unsigned char *)srv->entropy, (int)sizeof(srv->entropy));
 
 	srv->cur_ts = time(NULL);
 	srv->startup_ts = srv->cur_ts;
@@ -404,6 +391,7 @@ static void server_free(server *srv) {
 		EVP_cleanup();
 	}
 #endif
+	li_rand_cleanup();
 
 	free(srv);
 }
@@ -1441,6 +1429,8 @@ int main (int argc, char **argv) {
 			pid_fd = -1;
 		}
 		buffer_reset(srv->srvconf.pid_file);
+
+		li_rand_reseed();
 	}
 #endif
 

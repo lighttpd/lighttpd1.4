@@ -641,7 +641,6 @@ typedef struct server {
 	time_t startup_ts;
 
 	char entropy[8]; /* from /dev/[u]random if possible, otherwise rand() */
-	char is_real_entropy; /* whether entropy is from /dev/[u]random */
 
 	buffer *ts_debug_str;
 	buffer *ts_date_str;

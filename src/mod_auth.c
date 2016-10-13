@@ -416,6 +416,7 @@ int mod_auth_plugin_init(plugin *p) {
 #include "response.h"
 #include "base64.h"
 #include "md5.h"
+#include "rand.h"
 
 static handler_t mod_auth_send_400_bad_request(server *srv, connection *con) {
 	UNUSED(srv);
@@ -769,7 +770,7 @@ static handler_t mod_auth_check_digest(server *srv, connection *con, void *p_d, 
 		return mod_auth_send_401_unauthorized_digest(srv, con, require->realm, 0);
 	}
 
-	/* check age of nonce.  Note that rand() is used in nonce generation
+	/* check age of nonce.  Note, random data is used in nonce generation
 	 * in mod_auth_send_401_unauthorized_digest().  If that were replaced
 	 * with nanosecond time, then nonce secret would remain unique enough
 	 * for the purposes of Digest auth, and would be reproducible (and
@@ -820,7 +821,7 @@ static handler_t mod_auth_send_401_unauthorized_digest(server *srv, connection *
 	li_itostrn(hh, sizeof(hh), srv->cur_ts);
 	li_MD5_Update(&Md5Ctx, (unsigned char *)hh, strlen(hh));
 	li_MD5_Update(&Md5Ctx, (unsigned char *)srv->entropy, sizeof(srv->entropy));
-	li_itostrn(hh, sizeof(hh), rand());
+	li_itostrn(hh, sizeof(hh), li_rand());
 	li_MD5_Update(&Md5Ctx, (unsigned char *)hh, strlen(hh));
 
 	li_MD5_Final(h, &Md5Ctx);
