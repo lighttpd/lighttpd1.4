@@ -39,7 +39,12 @@
 #ifdef O_CLOEXEC
 #define pipe_cloexec(pipefd) pipe2((pipefd), O_CLOEXEC)
 #elif defined FD_CLOEXEC
-#define pipe_cloexec(pipefd) (0 == pipe(pipefd) ? fcntl(fd, F_SETFD, FD_CLOEXEC) : -1)
+#define pipe_cloexec(pipefd) \
+  (   0 == pipe(pipefd) \
+   && 0 == fcntl(pipefd[0], F_SETFD, FD_CLOEXEC) \
+   && 0 == fcntl(pipefd[1], F_SETFD, FD_CLOEXEC) \
+    ? 0 \
+    : -1)
 #else
 #define pipe_cloexec(pipefd) pipe(pipefd)
 #endif
