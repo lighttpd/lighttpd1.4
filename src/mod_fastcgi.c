@@ -1065,7 +1065,7 @@ static int fcgi_spawn_connection(server *srv,
 			}
 		      #ifdef SOCK_CLOEXEC
 			else
-				fcntl(fcgi_fd, F_SETFD, 0); /* clear cloexec */
+				(void)fcntl(fcgi_fd, F_SETFD, 0); /* clear cloexec */
 		      #endif
 
 			/* we don't need the client socket */
