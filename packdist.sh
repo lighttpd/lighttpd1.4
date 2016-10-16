@@ -188,7 +188,7 @@ if [ ${dopack} = "1" ]; then
 	# force make
 	# force make check
 
-	force make distcheck
+	force make -j 4 distcheck
 	force fakeroot make dist
 else
 	force cd distbuild
