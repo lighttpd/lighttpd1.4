@@ -207,7 +207,9 @@ SETDEFAULTS_FUNC(mod_compress_setdefaults) {
 		if (encodings_arr->used) {
 			size_t j = 0;
 			for (j = 0; j < encodings_arr->used; j++) {
+#if defined(USE_ZLIB) || defined(USE_BZ2LIB)
 				data_string *ds = (data_string *)encodings_arr->data[j];
+#endif
 #ifdef USE_ZLIB
 				if (NULL != strstr(ds->value->ptr, "gzip"))
 					s->allowed_encodings |= HTTP_ACCEPT_ENCODING_GZIP | HTTP_ACCEPT_ENCODING_X_GZIP;

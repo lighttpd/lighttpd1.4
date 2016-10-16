@@ -318,7 +318,9 @@ SETDEFAULTS_FUNC(mod_deflate_setdefaults) {
 		if (p->encodings->used) {
 			size_t j = 0;
 			for (j = 0; j < p->encodings->used; j++) {
+#if defined(USE_ZLIB) || defined(USE_BZ2LIB)
 				data_string *ds = (data_string *)p->encodings->data[j];
+#endif
 #ifdef USE_ZLIB
 				if (NULL != strstr(ds->value->ptr, "gzip"))
 					s->allowed_encodings |= HTTP_ACCEPT_ENCODING_GZIP | HTTP_ACCEPT_ENCODING_X_GZIP;
@@ -607,6 +609,9 @@ static int mod_deflate_compress(server *srv, connection *con, handler_ctx *hctx,
 		return stream_bzip2_compress(srv, con, hctx, start, st_size);
 #endif
 	default:
+		UNUSED(srv);
+		UNUSED(con);
+		UNUSED(start);
 		return -1;
 	}
 }
@@ -624,6 +629,9 @@ static int mod_deflate_stream_flush(server *srv, connection *con, handler_ctx *h
 		return stream_bzip2_flush(srv, con, hctx, end);
 #endif
 	default:
+		UNUSED(srv);
+		UNUSED(con);
+		UNUSED(end);
 		return -1;
 	}
 }
@@ -640,6 +648,7 @@ static int mod_deflate_stream_end(server *srv, handler_ctx *hctx) {
 		return stream_bzip2_end(srv, hctx);
 #endif
 	default:
+		UNUSED(srv);
 		return -1;
 	}
 }
@@ -936,6 +945,9 @@ static int mod_deflate_patch_connection(server *srv, connection *con, plugin_dat
 static int mod_deflate_choose_encoding (const char *value, plugin_data *p, const char **label) {
 	/* get client side support encodings */
 	int accept_encoding = 0;
+#if !defined(USE_ZLIB) && !defined(USE_BZ2LIB)
+	UNUSED(value);
+#endif
 #ifdef USE_ZLIB
 	if (NULL != strstr(value, "gzip")) accept_encoding |= HTTP_ACCEPT_ENCODING_GZIP;
 	else if (NULL != strstr(value, "x-gzip")) accept_encoding |= HTTP_ACCEPT_ENCODING_X_GZIP;
