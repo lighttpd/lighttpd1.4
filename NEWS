@@ -4,6 +4,69 @@ NEWS
 ====
 
 - 1.4.42
+  * [TLS] SSL_shutdown() only if handshake finished
+  * [mod_proxy,mod_scgi] shutdown remote only if local (#2743)
+  * [core] check if client half-closed TCP if POLLHUP (#2743)
+  * [core] enforce wait for POLLWR after EINPROGRESS (fixes #2744)
+  * [core] do not enter handler twice after read body
+  * [core] proxy,scgi omit shutdown() to backend (fixes #2743)
+  * [mod_dirlisting] dirlist does not handle POST
+  * [mod_dirlisting] js column sort for dirlist table (fixes #613, fixes #2315)
+  * [mod_auth] Digest auth fails after rewrite (fixes #2745)
+  * [mod_auth] refactor out auth backend code
+  * [mod_auth] extensible interface for auth backends
+  * [core] better DragonFlyBSD support (fixes #2746)
+  * [mod_auth] include base.h for USE_OPENSSL def
+  * [mod_auth] support CRYPT-MD5-NTLM algorithm (fixes #1743)
+  * [mod_auth] terminate salt for CRYPT-MD5-NTLM
+  * [core] fix crash if ready events on abandoned fd (fixes #2748)
+  * [mod_auth] http_auth_md5_hex2bin()
+  * [mod_auth] remove empty mod_auth.h
+  * [mod_auth] mod_authn_mysql.c MySQL auth backend (fixes #752, fixes #1845)
+  * [mod_cgi] permit CGI exec of unreadable files (fixes #2374)
+  * [mod_uploadprogress] add to default build
+  * [mod_geoip] add to default build (fixes #2705, fixes #2101, fixes #2092, fixes #2025, fixes #1962, fixes #1938)
+  * [mod_fastcgi] Authorizer support with Responder (fixes #321, fixes #322)
+  * [tests] test coverage for issues (#321, #322)
+  * dynamic handlers store debug flag in handler_ctx
+  * [mod_fastcgi] allow authorizer, responder for same path/ext (#321)
+  * backport mod_deflate to lighttpd 1.4 (fixes #1824, fixes #2753)
+  * [autobuild] test_configfile might need vector.c (fixes #2752)
+  * [mod_deflate] fix longjmp clobber compiler warning
+  * remove unused array type TYPE_COUNT data_count
+  * [mod_auth] structured data, register auth schemes
+  * [mod_auth] mod_authn_gssapi Kerberos auth backend (fixes #1899)
+  * [autobuild] skip two new tests if no fcgi-auth
+  * [SCons] define with_krb5 for SCons build
+  * [SCons] fix syntax error in SConstruct
+  * [SCons] define with_geoip for SCons build
+  * [CMake] fix clang -Wcast-align warnings in lemon.c
+  * remove excess initializers (fix compiler warnings)
+  * fix errors detected by Coverity Scan
+  * performance: use Linux extended syscalls and flags
+  * [mod_scgi] add uwsgi protocol support
+  * [mod_auth] refactor LDAP code into smaller funcs
+  * [mod_auth] HTTP Basic auth backends also do authz (#1817)
+  * [mod_auth] ldap filter subst user for multiple '$' (fixes #1508)
+  * [mod_auth] permit specifying ldap DN; skip search (fixes #1248)
+  * [autobuild] update module/feature report
+  * [cmake] build mod_authn_gssapi if WITH_KRB5
+  * [mod_auth] fix printing of IP in error trace
+  * [mod_mysql_vhost] support multiple '?' replacement (fixes #2163)
+  * [core] make server.max-request-size scopeable (#1901)
+  * [core] server.max-request-field-size (fixes #2130)
+  * [core] optional condition in config "else" clause (fixes #1268)
+  * [core] restrict where config "else" clauses occur (#1268)
+  * silence warnings from clang ccc-analyzer
+  * consistent, shared code to create CGI env
+  * [TLS] replace env entries in https_add_ssl_entries
+  * [TLS] set SSL_CLIENT_M_SERIAL w/ client cert SN (fixes #2268)
+  * [TLS] set SSL_CLIENT_VERIFY w/ client cert (#1288, #2693)
+  * [TLS] set SSL_PROTOCOL, SSL_CIPHER* (fixes #2511)
+  * [core] rand.[ch] to use better RNGs when available
+  * [mod_cgi] fix pipe_cloexec() when no O_CLOEXEC
+  * ignore return value from fcntl() FD_CLOEXEC
+  * build w/o compiler warnings if no zlib or bz2lib
 
 - 1.4.41 - 2016-07-31
   * remove long-deprecated, non-functional config opts
