@@ -257,7 +257,7 @@ SETDEFAULTS_FUNC(mod_authn_mysql_set_defaults) {
         }
     }
 
-    {
+    if (p->config_storage[0]) { /*(always true)*/
         plugin_config *s = p->config_storage[0];
         if (buffer_is_empty(s->auth_mysql_col_user)) {
             s->auth_mysql_col_user = buffer_init_string("user");

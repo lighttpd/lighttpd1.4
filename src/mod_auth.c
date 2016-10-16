@@ -311,7 +311,7 @@ SETDEFAULTS_FUNC(mod_auth_set_defaults) {
 				return HANDLER_ERROR;
 			}
 
-			{
+			if (require) { /*(always true at this point)*/
 				data_auth * const dauth = data_auth_init();
 				buffer_copy_buffer(dauth->key, da_file->key);
 				dauth->require->scheme = auth_scheme;
