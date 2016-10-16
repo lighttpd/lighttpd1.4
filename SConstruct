@@ -16,6 +16,11 @@ def checkCHeaders(autoconf, hdrs):
 		if autoconf.CheckCHeader(_hdr):
 			autoconf.env.Append(CPPFLAGS = [ '-DHAVE_' + p.sub('_', _hdr[-1].upper()) ])
 
+def checkFunc(autoconf, func, header):
+	p = re.compile('[^A-Z0-9]')
+	if autoconf.CheckFunc(func, header):
+		autoconf.env.Append(CPPFLAGS = [ '-DHAVE_' + p.sub('_', func.upper()) ])
+
 def checkFuncs(autoconf, funcs):
 	p = re.compile('[^A-Z0-9]')
 	for func in funcs:
@@ -216,7 +221,7 @@ if 1:
 			writev sigaction sendfile64 send_file kqueue port_create localtime_r posix_fadvise issetugid inet_pton \
 			memset_s explicit_bzero clock_gettime \
 			getentropy arc4random jrand48'))
-	checkFunc(autoconf, getrandom, linux/random.h)
+	checkFunc(autoconf, 'getrandom', 'linux/random.h')
 
 	checkTypes(autoconf, Split('pid_t size_t off_t'))
 
