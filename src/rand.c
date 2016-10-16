@@ -123,19 +123,24 @@ void li_rand_reseed (void)
     unsigned int u;
     if (1 == li_rand_device_bytes((unsigned char *)xsubi, (int)sizeof(xsubi))) {
         u = ((unsigned int)xsubi[0] << 16) | xsubi[1];
-        srand(u); /*(initialize just in case rand() used elsewhere)*/
     }
     else {
       #ifdef HAVE_ARC4RANDOM
-        srand(arc4random()); /*(initialize just in case rand() used elsewhere)*/
+        u = arc4random();
         arc4random_buf(xsubi, sizeof(xsubi));
       #else
         /* NOTE: not cryptographically random !!! */
         srand((unsigned int)(time(NULL) ^ getpid()));
         for (u = 0; u < sizeof(unsigned short); ++u)
+            /* coverity[dont_call : FALSE] */
             xsubi[u] = (unsigned short)(rand() & 0xFFFF);
+        u = ((unsigned int)xsubi[0] << 16) | xsubi[1];
       #endif
     }
+    srand(u);   /*(initialize just in case rand() used elsewhere)*/
+  #ifdef HAVE_SRANDOM
+    srandom(u); /*(initialize just in case random() used elsewhere)*/
+  #endif
   #ifdef USE_OPENSSL
     RAND_poll();
     RAND_seed(xsubi, (int)sizeof(xsubi));
@@ -152,11 +157,15 @@ int li_rand (void)
   #endif
   #ifdef HAVE_ARC4RANDOM
     return (int)arc4random();
-  #endif
-  #ifdef HAVE_JRAND48
+  #elif defined(HAVE_SRANDOM)
+    /* coverity[dont_call : FALSE] */
+    return (int)random();
+  #elif defined(HAVE_JRAND48)
     /*(FYI: jrand48() reentrant, but use of file-scoped static xsubi[] is not)*/
+    /* coverity[dont_call : FALSE] */
     return (int)jrand48(xsubi);
   #else
+    /* coverity[dont_call : FALSE] */
     return rand();
   #endif
 }
