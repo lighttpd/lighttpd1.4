@@ -684,7 +684,7 @@ endif()
 target_link_libraries(mod_authn_file ${L_MOD_AUTHN_FILE})
 
 if(HAVE_KRB5)
-	set(L_MOD_AUTHN_GSSAPI ${L_MOD_AUTHN_GSSAPI} resolv krb5 gssapi_krb5)
+	set(L_MOD_AUTHN_GSSAPI ${L_MOD_AUTHN_GSSAPI} krb5 gssapi_krb5)
 	add_and_install_library(mod_authn_gssapi "mod_authn_gssapi.c")
 	target_link_libraries(mod_authn_gssapi ${L_MOD_AUTHN_GSSAPI})
 endif()

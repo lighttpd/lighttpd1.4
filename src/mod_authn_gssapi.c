@@ -24,7 +24,6 @@
 
 #ifdef HAVE_KRB5
 
-#include <resolv.h>
 #include <krb5.h>
 #include <gssapi.h>
 #include <gssapi/gssapi_krb5.h>

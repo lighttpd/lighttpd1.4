@@ -104,7 +104,7 @@ modules = {
 	'mod_rewrite' : { 'src' : [ 'mod_rewrite.c' ], 'lib' : [ env['LIBPCRE'] ] },
 	'mod_auth' : { 'src' : [ 'mod_auth.c' ] },
 	'mod_authn_file' : { 'src' : [ 'mod_authn_file.c' ], 'lib' : [ env['LIBCRYPT'] ] },
-	'mod_authn_gssapi' : { 'src' : [ 'mod_authn_gssapi.c' ], 'lib' : [ env['LIBRESOLV'], env['LIBKRB5'], env['LIBGSSAPI_KRB5'] ] },
+	'mod_authn_gssapi' : { 'src' : [ 'mod_authn_gssapi.c' ], 'lib' : [ env['LIBKRB5'], env['LIBGSSAPI_KRB5'] ] },
 	'mod_authn_ldap' : { 'src' : [ 'mod_authn_ldap.c' ], 'lib' : [ env['LIBLDAP'], env['LIBLBER'] ] },
 	'mod_authn_mysql' : { 'src' : [ 'mod_authn_mysql.c' ], 'lib' : [ env['LIBCRYPT'], env['LIBMYSQL'] ] },
 	'mod_webdav' : { 'src' : [ 'mod_webdav.c' ], 'lib' : [ env['LIBXML2'], env['LIBSQLITE3'], env['LIBUUID'] ] },

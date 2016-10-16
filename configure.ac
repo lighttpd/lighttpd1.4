@@ -281,7 +281,6 @@ fi
 dnl openssl on solaris needs -lsocket -lnsl
 AC_SEARCH_LIBS(socket,socket)
 AC_SEARCH_LIBS(gethostbyname,nsl socket)
-AC_SEARCH_LIBS(hstrerror,resolv)
 
 dnl On Haiku accept() and friends are in libnetwork
 AC_SEARCH_LIBS(accept,network)
@@ -353,7 +352,7 @@ AC_ARG_WITH(krb5-libs,
 if test "x$use_krb5" = "xyes"; then
 	AC_CHECK_LIB(gssapi_krb5, gss_acquire_cred, [
 		AC_CHECK_HEADERS([gssapi/gssapi_krb5.h],[
-			KRB5_LIB="-lresolv -lkrb5 -lgssapi_krb5"
+			KRB5_LIB="-lkrb5 -lgssapi_krb5"
 			AC_DEFINE(HAVE_KRB5, [1], [libgssapi_krb5])
 		])
 	])
