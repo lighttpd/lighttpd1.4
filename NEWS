@@ -3,7 +3,9 @@
 NEWS
 ====
 
-- 1.4.42
+- 1.4.43
+
+- 1.4.42 - 2016-10-16
   * [TLS] SSL_shutdown() only if handshake finished
   * [mod_proxy,mod_scgi] shutdown remote only if local (#2743)
   * [core] check if client half-closed TCP if POLLHUP (#2743)
