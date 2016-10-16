@@ -1084,7 +1084,7 @@ CONNECTION_FUNC(mod_deflate_handle_response_start) {
 	/* check ETag as is done in http_response_handle_cachable()
 	 * (slightly imperfect (close enough?) match of ETag "000000" to "000000-gzip") */
 	ds = (data_string *)array_get_element(con->response.headers, "ETag");
-	if (!buffer_string_is_empty(ds->value)) {
+	if (NULL != ds) {
 		etaglen = buffer_string_length(ds->value);
 		if (etaglen
 		    && con->http_status < 300 /*(want 2xx only)*/
