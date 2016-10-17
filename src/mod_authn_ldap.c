@@ -1,15 +1,12 @@
 #include "first.h"
 
-#include "plugin.h"
-
-#if defined(HAVE_LDAP_H) && defined(HAVE_LBER_H) && defined(HAVE_LIBLDAP) && defined(HAVE_LIBLBER)
-
 #define USE_LDAP
 #include <ldap.h>
 
 #include "server.h"
 #include "http_auth.h"
 #include "log.h"
+#include "plugin.h"
 
 #include <ctype.h>
 #include <errno.h>
@@ -488,13 +485,3 @@ int mod_authn_ldap_plugin_init(plugin *p) {
 
     return 0;
 }
-
-#else
-
-int mod_authn_ldap_plugin_init(plugin *p);
-int mod_authn_ldap_plugin_init(plugin *p) {
-        UNUSED(p);
-        return -1;
-}
-
-#endif

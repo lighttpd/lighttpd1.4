@@ -5,7 +5,6 @@
 #include "buffer.h"
 #include "base.h"
 
-#ifdef HAVE_LUA_H
 #include <lua.h>
 
 typedef struct {
@@ -30,5 +29,4 @@ void script_cache_free(script_cache *cache);
 lua_State *script_cache_get_script(server *srv, connection *con,
 	       	script_cache *cache, buffer *name);
 
-#endif
 #endif

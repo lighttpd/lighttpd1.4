@@ -19,7 +19,6 @@
 #include <assert.h>
 #include <setjmp.h>
 
-#ifdef HAVE_LUA_H
 #include <lua.h>
 #include <lauxlib.h>
 
@@ -1093,14 +1092,3 @@ int mod_magnet_plugin_init(plugin *p) {
 
 	return 0;
 }
-
-#else
-
-#pragma message("lua is required, but was not found")
-
-int mod_magnet_plugin_init(plugin *p);
-int mod_magnet_plugin_init(plugin *p) {
-	UNUSED(p);
-	return -1;
-}
-#endif

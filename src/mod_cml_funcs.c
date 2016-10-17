@@ -32,8 +32,6 @@ typedef char HASHHEX[HASHHEXLEN+1];
 #endif
 #define OUT
 
-#ifdef HAVE_LUA_H
-
 #include <lauxlib.h>
 
 int f_crypto_md5(lua_State *L) {
@@ -278,6 +276,4 @@ int f_memcache_get_long(lua_State *L) {
 
 	return 1;
 }
-#endif
-
 #endif

@@ -6,9 +6,7 @@
 #include <fcntl.h>
 #include <string.h>
 
-#ifdef HAVE_MYSQL
 #include <mysql.h>
-#endif
 
 #include "plugin.h"
 #include "log.h"
@@ -26,7 +24,6 @@
  * /ada@riksnet.se 2004-12-06
  */
 
-#ifdef HAVE_MYSQL
 typedef struct {
 	MYSQL 	*mysql;
 	buffer  *mysql_query;
@@ -253,9 +250,7 @@ static int mod_mysql_vhost_patch_connection(server *srv, connection *con, plugin
 	plugin_config *s = p->config_storage[0];
 
 	PATCH(mysql_query);
-#ifdef HAVE_MYSQL
 	PATCH(mysql);
-#endif
 
 	/* skip the first, the global context */
 	for (i = 1; i < srv->config_context->used; i++) {
@@ -402,13 +397,3 @@ int mod_mysql_vhost_plugin_init(plugin *p) {
 
 	return 0;
 }
-#else
-/* we don't have mysql support, this plugin does nothing */
-int mod_mysql_vhost_plugin_init(plugin *p);
-int mod_mysql_vhost_plugin_init(plugin *p) {
-	p->version     = LIGHTTPD_VERSION_ID;
-	p->name        = buffer_init_string("mysql_vhost");
-
-	return 0;
-}
-#endif

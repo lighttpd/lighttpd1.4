@@ -7,7 +7,6 @@
 #include <time.h>
 #include <assert.h>
 
-#ifdef HAVE_LUA_H
 #include <lualib.h>
 #include <lauxlib.h>
 
@@ -127,5 +126,3 @@ lua_State *script_cache_get_script(server *srv, connection *con, script_cache *c
 
 	return sc->L;
 }
-
-#endif

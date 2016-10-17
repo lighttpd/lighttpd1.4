@@ -24,8 +24,6 @@ typedef char HASHHEX[HASHHEXLEN+1];
 #endif
 #define OUT
 
-#ifdef HAVE_LUA_H
-
 #include <lua.h>
 #include <lualib.h>
 #include <lauxlib.h>
@@ -347,13 +345,3 @@ error:
 
 	return ret /* cache-error */;
 }
-#else
-int cache_parse_lua(server *srv, connection *con, plugin_data *p, buffer *fn) {
-	UNUSED(srv);
-	UNUSED(con);
-	UNUSED(p);
-	UNUSED(fn);
-	/* error */
-	return -1;
-}
-#endif

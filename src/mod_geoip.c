@@ -1,15 +1,12 @@
 #include "first.h"
 
-#include "plugin.h"
-
-#ifdef HAVE_GEOIP
-
 #include <GeoIP.h>
 #include <GeoIPCity.h>
 
 #include "base.h"
 #include "log.h"
 #include "buffer.h"
+#include "plugin.h"
 
 #include <stdlib.h>
 #include <string.h>
@@ -416,13 +413,3 @@ int mod_geoip_plugin_init(plugin *p) {
 
 	return 0;
 }
-
-#else
-
-int mod_geoip_plugin_init(plugin *p);
-int mod_geoip_plugin_init(plugin *p) {
-    UNUSED(p);
-    return -1;
-}
-
-#endif

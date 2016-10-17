@@ -13,8 +13,6 @@
 #include <fcntl.h>
 #include <string.h>
 
-#if (defined(HAVE_GDBM_H) || defined(USE_MEMCACHED)) && defined(HAVE_PCRE_H)
-
 #if defined(HAVE_GDBM_H)
 # include <gdbm.h>
 #endif
@@ -249,13 +247,6 @@ SETDEFAULTS_FUNC(mod_trigger_b4_dl_set_defaults) {
 			return HANDLER_ERROR;
 #endif
 		}
-
-
-#if (!defined(HAVE_GDBM_H) && !defined(USE_MEMCACHED)) || !defined(HAVE_PCRE_H)
-		log_error_write(srv, __FILE__, __LINE__, "s",
-				"(either gdbm or libmemcached) and pcre are require, but were not found, aborting");
-		return HANDLER_ERROR;
-#endif
 	}
 
 	return HANDLER_GO_ON;
@@ -605,15 +596,3 @@ int mod_trigger_b4_dl_plugin_init(plugin *p) {
 
 	return 0;
 }
-
-#else
-
-#pragma message("(either gdbm or libmemcached) and pcre are required, but were not found")
-
-int mod_trigger_b4_dl_plugin_init(plugin *p);
-int mod_trigger_b4_dl_plugin_init(plugin *p) {
-	UNUSED(p);
-	return -1;
-}
-
-#endif

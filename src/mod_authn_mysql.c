@@ -18,16 +18,13 @@
  *   TODO: db connection pool (if asynchronous requests)
  */
 
-#include "plugin.h"
-
-#ifdef HAVE_MYSQL
-
 #include <mysql.h>
 
 #include "server.h"
 #include "http_auth.h"
 #include "log.h"
 #include "md5.h"
+#include "plugin.h"
 
 #include <ctype.h>
 #include <errno.h>
@@ -542,13 +539,3 @@ int mod_authn_mysql_plugin_init(plugin *p) {
 
     return 0;
 }
-
-#else
-
-int mod_authn_mysql_plugin_init(plugin *p);
-int mod_authn_mysql_plugin_init(plugin *p) {
-    UNUSED(p);
-    return -1;
-}
-
-#endif

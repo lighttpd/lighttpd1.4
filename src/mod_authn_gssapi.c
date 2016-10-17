@@ -22,8 +22,6 @@
 
 #include "plugin.h"
 
-#ifdef HAVE_KRB5
-
 #include <krb5.h>
 #include <gssapi.h>
 #include <gssapi/gssapi_krb5.h>
@@ -794,13 +792,3 @@ int mod_authn_gssapi_plugin_init(plugin *p) {
 
     return 0;
 }
-
-#else
-
-int mod_authn_gssapi_plugin_init(plugin *p);
-int mod_authn_gssapi_plugin_init(plugin *p) {
-    UNUSED(p);
-    return -1;
-}
-
-#endif
