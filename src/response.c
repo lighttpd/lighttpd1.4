@@ -181,12 +181,13 @@ static void https_add_ssl_client_entries(server *srv, connection *con) {
 
 	{
 		ASN1_INTEGER *xsn = X509_get_serialNumber(xs);
-		BIGNUM serialBN;
-		char *serialHex = BN_bn2hex(ASN1_INTEGER_to_BN(xsn, &serialBN));
+		BIGNUM *serialBN = ASN1_INTEGER_to_BN(xsn, NULL);
+		char *serialHex = BN_bn2hex(serialBN);
 		array_set_key_value(con->environment,
 				    CONST_STR_LEN("SSL_CLIENT_M_SERIAL"),
 				    serialHex, strlen(serialHex));
 		OPENSSL_free(serialHex);
+		BN_free(serialBN);
 	}
 
 	if (!buffer_string_is_empty(con->conf.ssl_verifyclient_username)) {
