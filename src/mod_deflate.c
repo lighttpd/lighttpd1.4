@@ -352,6 +352,17 @@ SETDEFAULTS_FUNC(mod_deflate_setdefaults) {
 					     |  HTTP_ACCEPT_ENCODING_X_BZIP2;
 #endif
 		}
+
+		/* mod_deflate matches mimetype as prefix of Content-Type
+		 * so ignore '*' at end of mimetype for end-user flexibility
+		 * in specifying trailing wildcard to grouping of mimetypes */
+		for (size_t m = 0; m < s->mimetypes->used; ++m) {
+			buffer *mimetype = ((data_string *)s->mimetypes->data[m])->value;
+			size_t len = buffer_string_length(mimetype);
+			if (len > 2 && mimetype->ptr[len-1] == '*') {
+				buffer_string_set_length(mimetype, len-1);
+			}
+		}
 	}
 
 	return HANDLER_GO_ON;
