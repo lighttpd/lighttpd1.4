@@ -5,6 +5,11 @@ PACKAGE=lighttpd
 BASEDOWNLOADURL="http://download.lighttpd.net/lighttpd/releases-1.4.x"
 SNAPSHOTURL="http://download.lighttpd.net/lighttpd/snapshots-1.4.x"
 
+if [[ "`id -un`" != "stbuehler" ]] && [[ -z "$AUTHOR" ]]; then
+  export AUTHOR="gstrauss"
+  export KEYID="AF16D0F0"
+fi
+
 AUTHOR="${AUTHOR:-stbuehler}"
 
 # may take one argument for prereleases like
