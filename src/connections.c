@@ -1027,7 +1027,11 @@ connection *connection_accept(server *srv, server_socket *srv_socket) {
 	cnt_len = sizeof(cnt_addr);
 
 #if defined(SOCK_CLOEXEC) && defined(SOCK_NONBLOCK)
+#if defined(__NetBSD__)
+	cnt = paccept(srv_socket->fd, (struct sockaddr *) &cnt_addr, &cnt_len, NULL, SOCK_CLOEXEC | SOCK_NONBLOCK);
+#else
 	cnt = accept4(srv_socket->fd, (struct sockaddr *) &cnt_addr, &cnt_len, SOCK_CLOEXEC | SOCK_NONBLOCK);
+#endif
 #else
 	cnt = accept(srv_socket->fd, (struct sockaddr *) &cnt_addr, &cnt_len);
 #endif
