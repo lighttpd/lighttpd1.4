@@ -177,6 +177,7 @@ fi
 
 AC_SUBST(LIBEV_CFLAGS)
 AC_SUBST(LIBEV_LIBS)
+AC_MSG_RESULT([$WITH_LIBEV])
 
 dnl Checks for database.
 MYSQL_INCLUDE=""
@@ -224,6 +225,7 @@ dnl check for errmsg.h, which isn't installed by some versions of 3.21
 else
   AC_MSG_RESULT(no)
 fi
+AM_CONDITIONAL(BUILD_WITH_MYSQL, test ! $WITH_MYSQL = no)
 
 AC_SUBST(MYSQL_LIBS)
 AC_SUBST(MYSQL_INCLUDE)
@@ -252,6 +254,7 @@ if test "$WITH_LDAP" != "no"; then
  ])
  AC_SUBST(LBER_LIB)
 fi
+AM_CONDITIONAL(BUILD_WITH_LDAP, test ! $WITH_LDAP = no)
 
 dnl Check for xattr
 AC_MSG_CHECKING(for extended attributes support)
@@ -338,6 +341,7 @@ else
 	use_krb5=no
 fi
 AC_MSG_RESULT([$use_krb5])
+AM_CONDITIONAL(BUILD_WITH_KRB5, test ! $WITH_KRB5 = no)
 
 AC_ARG_WITH(krb5-includes,
 	AC_HELP_STRING([--with-krb5-includes=DIR],[Kerberos includes]),
@@ -623,6 +627,7 @@ if test "$WITH_GDBM" != "no"; then
     AC_MSG_ERROR([gdbm headers and/or libs were not found, install them or build with --without-gdbm])
   fi
 fi
+AM_CONDITIONAL(BUILD_WITH_GDBM, test ! $WITH_GDBM = no)
 
 dnl Check for GeoIP
 AC_MSG_CHECKING(for GeoIP)
@@ -648,6 +653,7 @@ if test "$WITH_GEOIP" != "no"; then
     AC_MSG_ERROR([GeoIP headers and/or libs were not found, install them or build with --without-geoip])
   fi
 fi
+AM_CONDITIONAL(BUILD_WITH_GEOIP, test ! $WITH_GEOIP = no)
 
 dnl Check for memcached
 AC_MSG_CHECKING(for memcached)
@@ -674,6 +680,9 @@ if test "$WITH_MEMCACHED" != "no"; then
     AC_MSG_ERROR([memcached headers and/or libs were not found, install them or build with --without-memcached])
   fi
 fi
+AM_CONDITIONAL(BUILD_WITH_MEMCACHED, test ! $WITH_MEMCACHED = no)
+
+AM_CONDITIONAL(BUILD_MOD_TRIGGER_B4_DL, test ! $WITH_MEMCACHED = no || test ! $WITH_GDBM = no)
 
 dnl Check for lua
 AC_MSG_CHECKING(if lua-support is requested)
@@ -717,6 +726,7 @@ if test "$WITH_LUA" != "no"; then
     AC_MSG_ERROR([lua headers and/or libs were not found, install them or build with --without-lua])
   fi
 fi
+AM_CONDITIONAL(BUILD_WITH_LUA, test ! $WITH_LUA = no)
 
 dnl search for crypt_r and (fallback) for crypt
 save_LIBS=$LIBS
@@ -908,10 +918,10 @@ AC_CONFIG_FILES([Makefile src/Makefile
 AC_OUTPUT
 
 
-do_build="mod_cgi mod_fastcgi mod_extforward mod_proxy mod_evhost mod_simple_vhost mod_access mod_alias mod_setenv mod_usertrack mod_auth mod_authn_file mod_authn_ldap mod_authn_mysql mod_status mod_accesslog"
+do_build="mod_cgi mod_fastcgi mod_extforward mod_proxy mod_evhost mod_simple_vhost mod_access mod_alias mod_setenv mod_usertrack mod_auth mod_authn_file mod_status mod_accesslog"
 do_build="$do_build mod_rrdtool mod_secdownload mod_expire mod_compress mod_dirlisting mod_indexfile mod_userdir mod_webdav mod_staticfile mod_scgi mod_flv_streaming mod_ssi mod_deflate"
 
-plugins="mod_rewrite mod_redirect mod_trigger_b4_dl"
+plugins="mod_rewrite mod_redirect"
 features="regex-conditionals"
 if test ! "x$PCRE_LIB" = x; then
 	do_build="$do_build $plugins"
@@ -921,18 +931,31 @@ else
 	disable_feature="$features"
 fi
 
-features="auth-mysql"
-plugins="mod_mysql_vhost"
-if test ! "x$MYSQL_LIBS" = x; then
+plugins="mod_trigger_b4_dl"
+if test ! "x$PCRE_LIB" = x; then
+if test ! "x$WITH_MEMCACHED" = xno || test ! "x$WITH_GDBM" = xno; then
 	do_build="$do_build $plugins"
-	enable_feature="$enable_feature $features"
 else
 	no_build="$no_build $plugins"
-	disable_feature="$disable_feature $features"
+fi
+fi
+
+plugins="mod_authn_mysql mod_mysql_vhost"
+if test ! "x$MYSQL_LIBS" = x; then
+	do_build="$do_build $plugins"
+else
+	no_build="$no_build $plugins"
 fi
 
 plugins="mod_cml mod_magnet"
 if test ! "x$LUA_LIBS" = x; then
+	do_build="$do_build $plugins"
+else
+	no_build="$no_build $plugins"
+fi
+
+plugins="mod_geoip"
+if test ! "x$GEOIP_LIB" = x; then
 	do_build="$do_build $plugins"
 else
 	no_build="$no_build $plugins"
@@ -966,21 +989,18 @@ else
 	disable_feature="$disable_feature $features"
 fi
 
-features="auth-krb5"
 plugins="mod_authn_gssapi"
 if test ! "x$KRB5_LIB" = x; then
 	do_build="$do_build $plugins"
-	enable_feature="$enable_feature $features"
 else
 	no_build="$no_build $plugins"
-	disable_feature="$disable_feature $features"
 fi
 
-features="auth-ldap"
+plugins="mod_authn_ldap"
 if test ! "x$LDAP_LIB" = x; then
-	enable_feature="$enable_feature $features"
+	do_build="$do_build $plugins"
 else
-	disable_feature="$disable_feature $features"
+	no_build="$no_build $plugins"
 fi
 
 features="network-openssl"

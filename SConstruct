@@ -123,6 +123,7 @@ vars.AddVariables(
 	BoolVariable('build_fullstatic', 'enable fullstatic build', 'no'),
 	BoolVariable('with_sqlite3', 'enable sqlite3 support', 'no'),
 	BoolVariable('with_memcached', 'enable memcached support', 'no'),
+	BoolVariable('with_gdbm', 'enable gdbm support', 'no'),
 	BoolVariable('with_fam', 'enable FAM/gamin support', 'no'),
 	BoolVariable('with_openssl', 'enable openssl support', 'no'),
 	BoolVariable('with_gzip', 'enable gzip compression', 'no'),
@@ -228,7 +229,7 @@ if 1:
 	autoconf.env.Append( LIBSQLITE3 = '', LIBXML2 = '', LIBMYSQL = '', LIBZ = '',
 		LIBBZ2 = '', LIBCRYPT = '', LIBMEMCACHED = '', LIBFCGI = '', LIBPCRE = '',
 		LIBLDAP = '', LIBLBER = '', LIBLUA = '', LIBDL = '', LIBUUID = '',
-		LIBKRB5 = '', LIBGSSAPI_KRB5 = '')
+		LIBKRB5 = '', LIBGSSAPI_KRB5 = '', LIBGDBM = '')
 
 	if env['with_fam']:
 		if autoconf.CheckLibWithHeader('fam', 'fam.h', 'C'):
@@ -277,6 +278,10 @@ if 1:
 	if env['with_memcached']:
 		if autoconf.CheckLibWithHeader('memcached', 'libmemcached/memcached.h', 'C'):
 			autoconf.env.Append(CPPFLAGS = [ '-DUSE_MEMCACHED' ], LIBMEMCACHED = 'memcached')
+
+	if env['with_gdbm']:
+		if autoconf.CheckLibWithHeader('gdbm', 'gdbm.h', 'C'):
+			autoconf.env.Append(CPPFLAGS = [ '-DHAVE_GDBM_H', '-DHAVE_GDBM' ], LIBGDBM = 'gdbm')
 
 	if env['with_sqlite3']:
 		if autoconf.CheckLibWithHeader('sqlite3', 'sqlite3.h', 'C'):
