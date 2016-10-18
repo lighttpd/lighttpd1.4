@@ -122,6 +122,7 @@ static int network_ssl_servername_callback(SSL *ssl, int *al, server *srv) {
 	config_setup_connection(srv, con);
 
 	con->conditional_is_valid[COMP_SERVER_SOCKET] = 1;
+	con->conditional_is_valid[COMP_HTTP_REMOTE_IP] = 1;
 	con->conditional_is_valid[COMP_HTTP_SCHEME] = 1;
 	con->conditional_is_valid[COMP_HTTP_HOST] = 1;
 	config_patch_connection(srv, con);
