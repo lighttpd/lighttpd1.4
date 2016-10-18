@@ -1,3 +1,15 @@
+check_include_files(fastcgi.h HAVE_FASTCGI_H)
+check_include_files(fastcgi/fastcgi.h HAVE_FASTCGI_FASTCGI_H)
+if(HAVE_FASTCGI_H OR HAVE_FASTCGI_FASTCGI_H)
+	check_library_exists(fcgi FCGI_Accept "" HAVE_FASTCGI)
+	if(HAVE_FASTCGI)
+		add_executable(fcgi-auth fcgi-auth.c)
+		add_executable(fcgi-responder fcgi-responder.c)
+		target_link_libraries(fcgi-auth fcgi)
+		target_link_libraries(fcgi-responder fcgi)
+	endif()
+endif()
+
 set(T_FILES
 	prepare.sh
 	cachable.t
