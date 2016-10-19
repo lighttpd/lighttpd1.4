@@ -434,6 +434,20 @@ static int deflate_file_to_buffer_bzip2(server *srv, connection *con, plugin_dat
 }
 #endif
 
+static void mod_compress_note_ratio(server *srv, connection *con, off_t in, off_t out) {
+    /* store compression ratio in con->environment
+     * for possible logging by mod_accesslog
+     * (late in response handling, so not seen by most other modules) */
+    /*(should be called only at end of successful response compression)*/
+    char ratio[LI_ITOSTRING_LENGTH];
+    if (0 == in) return;
+    li_itostrn(ratio, sizeof(ratio), out * 100 / in);
+    array_set_key_value(con->environment,
+                        CONST_STR_LEN("ratio"),
+                        ratio, strlen(ratio));
+    UNUSED(srv);
+}
+
 static int deflate_file_to_file(server *srv, connection *con, plugin_data *p, buffer *fn, stat_cache_entry *sce, int type) {
 	int ifd, ofd;
 	int ret;
@@ -442,6 +456,7 @@ static int deflate_file_to_file(server *srv, connection *con, plugin_data *p, bu
 #endif
 	void *start;
 	const char *filename = fn->ptr;
+	stat_cache_entry *sce_ofn;
 	ssize_t r;
 
 	/* overflow */
@@ -483,6 +498,17 @@ static int deflate_file_to_file(server *srv, connection *con, plugin_data *p, bu
 
 	buffer_append_string_buffer(p->ofn, sce->etag);
 
+	if (HANDLER_ERROR != stat_cache_get_entry(srv, con, p->ofn, &sce_ofn)) {
+		if (0 == sce->st.st_size) return -1; /* cache file being created */
+		/* cache-entry exists */
+#if 0
+		log_error_write(srv, __FILE__, __LINE__, "bs", p->ofn, "compress-cache hit");
+#endif
+		mod_compress_note_ratio(srv, con, sce->st.st_size, sce_ofn->st.st_size);
+		buffer_copy_buffer(con->physical.path, p->ofn);
+		return 0;
+	}
+
 	if (-1 == mkdir_for_file(p->ofn->ptr)) {
 		log_error_write(srv, __FILE__, __LINE__, "sb", "couldn't create directory for file", p->ofn);
 		return -1;
@@ -490,13 +516,7 @@ static int deflate_file_to_file(server *srv, connection *con, plugin_data *p, bu
 
 	if (-1 == (ofd = open(p->ofn->ptr, O_WRONLY | O_CREAT | O_EXCL | O_BINARY, 0600))) {
 		if (errno == EEXIST) {
-			/* cache-entry exists */
-#if 0
-			log_error_write(srv, __FILE__, __LINE__, "bs", p->ofn, "compress-cache hit");
-#endif
-			buffer_copy_buffer(con->physical.path, p->ofn);
-
-			return 0;
+			return -1; /* cache file being created */
 		}
 
 		log_error_write(srv, __FILE__, __LINE__, "sbss", "creating cachefile", p->ofn, "failed", strerror(errno));
@@ -612,6 +632,8 @@ static int deflate_file_to_file(server *srv, connection *con, plugin_data *p, bu
 	}
 
 	buffer_copy_buffer(con->physical.path, p->ofn);
+	mod_compress_note_ratio(srv, con, sce->st.st_size,
+				(off_t)buffer_string_length(p->b));
 
 	return 0;
 }
@@ -699,6 +721,8 @@ static int deflate_file_to_buffer(server *srv, connection *con, plugin_data *p, 
 
 	if (ret != 0) return -1;
 
+	mod_compress_note_ratio(srv, con, sce->st.st_size,
+				(off_t)buffer_string_length(p->b));
 	chunkqueue_reset(con->write_queue);
 	chunkqueue_append_buffer(con->write_queue, p->b);
 

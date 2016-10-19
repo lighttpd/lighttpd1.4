@@ -57,7 +57,8 @@ typedef struct {
 			FORMAT_BYTES_OUT,
 
 			FORMAT_KEEPALIVE_COUNT,
-			FORMAT_RESPONSE_HEADER
+			FORMAT_RESPONSE_HEADER,
+			FORMAT_NOTE
 	} type;
 } format_mapping;
 
@@ -90,7 +91,7 @@ static const format_mapping fmap[] =
 	{ 'H', FORMAT_REQUEST_PROTOCOL },
 	{ 'k', FORMAT_KEEPALIVE_COUNT },
 	{ 'm', FORMAT_REQUEST_METHOD },
-	{ 'n', FORMAT_UNSUPPORTED }, /* we have no notes */
+	{ 'n', FORMAT_NOTE },
 	{ 'p', FORMAT_SERVER_PORT },
 	{ 'P', FORMAT_UNSUPPORTED }, /* we are only one process */
 	{ 'q', FORMAT_QUERY_STRING },
@@ -942,6 +943,7 @@ REQUESTDONE_FUNC(log_access_write) {
 				}
 				break;
 			case FORMAT_ENV:
+			case FORMAT_NOTE:
 				if (NULL != (ds = (data_string *)array_get_element(con->environment, f->string->ptr))) {
 					accesslog_append_escaped(b, ds->value);
 				} else {

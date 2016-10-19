@@ -647,6 +647,20 @@ static int mod_deflate_stream_flush(server *srv, connection *con, handler_ctx *h
 	}
 }
 
+static void mod_deflate_note_ratio(server *srv, connection *con, handler_ctx *hctx) {
+    /* store compression ratio in con->environment
+     * for possible logging by mod_accesslog
+     * (late in response handling, so not seen by most other modules) */
+    /*(should be called only at end of successful response compression)*/
+    char ratio[LI_ITOSTRING_LENGTH];
+    if (0 == hctx->bytes_in) return;
+    li_itostrn(ratio, sizeof(ratio), hctx->bytes_out * 100 / hctx->bytes_in);
+    array_set_key_value(con->environment,
+                        CONST_STR_LEN("ratio"),
+                        ratio, strlen(ratio));
+    UNUSED(srv);
+}
+
 static int mod_deflate_stream_end(server *srv, handler_ctx *hctx) {
 	switch(hctx->compression_type) {
 #ifdef USE_ZLIB
@@ -678,9 +692,6 @@ static void deflate_compress_cleanup(server *srv, connection *con, handler_ctx *
 				"uri ", con->uri.path_raw, " in=", hctx->bytes_in, " smaller than out=", hctx->bytes_out);
 	}
       #endif
-
-	/* future: might store ((double)hctx->bytes_out / hctx->bytes_in)
-	 * in con->environment, for possible logging by mod_accesslog */
 
 	handler_ctx_free(hctx);
 }
@@ -1190,6 +1201,9 @@ CONNECTION_FUNC(mod_deflate_handle_response_start) {
 
 	rc = deflate_compress_response(srv, con, hctx);
 	if (HANDLER_GO_ON != rc) {
+		if (HANDLER_FINISHED == rc) {
+			mod_deflate_note_ratio(srv, con, hctx);
+		}
 		deflate_compress_cleanup(srv, con, hctx);
 		if (HANDLER_ERROR == rc) return HANDLER_ERROR;
 	}
