@@ -71,6 +71,7 @@ typedef struct {
 	array  *compress;
 	off_t   compress_max_filesize; /** max filesize in kb */
 	int     allowed_encodings;
+	double  max_loadavg;
 } plugin_config;
 
 typedef struct {
@@ -177,6 +178,7 @@ SETDEFAULTS_FUNC(mod_compress_setdefaults) {
 		{ "compress.filetype",              NULL, T_CONFIG_ARRAY, T_CONFIG_SCOPE_CONNECTION },
 		{ "compress.max-filesize",          NULL, T_CONFIG_SHORT, T_CONFIG_SCOPE_CONNECTION },
 		{ "compress.allowed-encodings",     NULL, T_CONFIG_ARRAY, T_CONFIG_SCOPE_CONNECTION },
+		{ "compress.max-loadavg",           NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_CONNECTION },
 		{ NULL,                             NULL, T_CONFIG_UNSET, T_CONFIG_SCOPE_UNSET }
 	};
 
@@ -192,16 +194,23 @@ SETDEFAULTS_FUNC(mod_compress_setdefaults) {
 		s->compress = array_init();
 		s->compress_max_filesize = 0;
 		s->allowed_encodings = 0;
+		s->max_loadavg = 0.0;
 
 		cv[0].destination = s->compress_cache_dir;
 		cv[1].destination = s->compress;
 		cv[2].destination = &(s->compress_max_filesize);
 		cv[3].destination = encodings_arr; /* temp array for allowed encodings list */
+		cv[4].destination = srv->tmp_buf;
+		buffer_string_set_length(srv->tmp_buf, 0);
 
 		p->config_storage[i] = s;
 
 		if (0 != config_insert_values_global(srv, config->value, cv, i == 0 ? T_CONFIG_SCOPE_SERVER : T_CONFIG_SCOPE_CONNECTION)) {
 			return HANDLER_ERROR;
+		}
+
+		if (!buffer_string_is_empty(srv->tmp_buf)) {
+			s->max_loadavg = strtod(srv->tmp_buf->ptr, NULL);
 		}
 
 		if (encodings_arr->used) {
@@ -509,6 +518,10 @@ static int deflate_file_to_file(server *srv, connection *con, plugin_data *p, bu
 		return 0;
 	}
 
+	if (0.0 < p->conf.max_loadavg && p->conf.max_loadavg < srv->srvconf.loadavg[0]) {
+		return -1;
+	}
+
 	if (-1 == mkdir_for_file(p->ofn->ptr)) {
 		log_error_write(srv, __FILE__, __LINE__, "sb", "couldn't create directory for file", p->ofn);
 		return -1;
@@ -656,6 +669,9 @@ static int deflate_file_to_buffer(server *srv, connection *con, plugin_data *p, 
 
 	if (sce->st.st_size > 128 * 1024 * 1024) return -1;
 
+	if (0.0 < p->conf.max_loadavg && p->conf.max_loadavg < srv->srvconf.loadavg[0]) {
+		return -1;
+	}
 
 	if (-1 == (ifd = open(fn->ptr, O_RDONLY | O_BINARY))) {
 		log_error_write(srv, __FILE__, __LINE__, "sbss", "opening plain-file", fn, "failed", strerror(errno));
@@ -745,6 +761,7 @@ static int mod_compress_patch_connection(server *srv, connection *con, plugin_da
 	PATCH(compress);
 	PATCH(compress_max_filesize);
 	PATCH(allowed_encodings);
+	PATCH(max_loadavg);
 
 	/* skip the first, the global context */
 	for (i = 1; i < srv->config_context->used; i++) {
@@ -766,6 +783,8 @@ static int mod_compress_patch_connection(server *srv, connection *con, plugin_da
 				PATCH(compress_max_filesize);
 			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("compress.allowed-encodings"))) {
 				PATCH(allowed_encodings);
+			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("compress.max-loadavg"))) {
+				PATCH(max_loadavg);
 			}
 		}
 	}

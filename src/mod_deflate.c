@@ -174,6 +174,7 @@ typedef struct {
 	unsigned short	work_block_size;
 	unsigned short	sync_flush;
 	short		compression_level;
+	double		max_loadavg;
 } plugin_config;
 
 typedef struct {
@@ -274,6 +275,7 @@ SETDEFAULTS_FUNC(mod_deflate_setdefaults) {
 		{ "deflate.compression-level",     NULL, T_CONFIG_SHORT, T_CONFIG_SCOPE_CONNECTION },
 		{ "deflate.output-buffer-size",    NULL, T_CONFIG_SHORT, T_CONFIG_SCOPE_CONNECTION },
 		{ "deflate.work-block-size",       NULL, T_CONFIG_SHORT, T_CONFIG_SCOPE_CONNECTION },
+		{ "deflate.max-loadavg",           NULL, T_CONFIG_STRING,T_CONFIG_SCOPE_CONNECTION },
 		{ NULL,                            NULL, T_CONFIG_UNSET, T_CONFIG_SCOPE_UNSET }
 	};
 
@@ -291,6 +293,7 @@ SETDEFAULTS_FUNC(mod_deflate_setdefaults) {
 		s->work_block_size = 2048;
 		s->sync_flush = 0;
 		s->compression_level = -1;
+		s->max_loadavg = 0.0;
 
 		array_reset(p->encodings); /* temp array for allowed encodings list */
 
@@ -301,6 +304,8 @@ SETDEFAULTS_FUNC(mod_deflate_setdefaults) {
 		cv[4].destination = &(s->compression_level);
 		cv[5].destination = &(s->output_buffer_size);
 		cv[6].destination = &(s->work_block_size);
+		cv[7].destination = p->tmp_buf;
+		buffer_string_set_length(p->tmp_buf, 0);
 
 		p->config_storage[i] = s;
 
@@ -313,6 +318,10 @@ SETDEFAULTS_FUNC(mod_deflate_setdefaults) {
 			log_error_write(srv, __FILE__, __LINE__, "sd",
 				"compression-level must be between 1 and 9:", s->compression_level);
 			return HANDLER_ERROR;
+		}
+
+		if (!buffer_string_is_empty(p->tmp_buf)) {
+			s->max_loadavg = strtod(p->tmp_buf->ptr, NULL);
 		}
 
 		if (p->encodings->used) {
@@ -929,6 +938,7 @@ static int mod_deflate_patch_connection(server *srv, connection *con, plugin_dat
 	PATCH(compression_level);
 	PATCH(output_buffer_size);
 	PATCH(work_block_size);
+	PATCH(max_loadavg);
 
 	/* skip the first, the global context */
 	for (i = 1; i < srv->config_context->used; i++) {
@@ -956,6 +966,8 @@ static int mod_deflate_patch_connection(server *srv, connection *con, plugin_dat
 				PATCH(output_buffer_size);
 			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("deflate.work-block-size"))) {
 				PATCH(work_block_size);
+			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("deflate.max-loadavg"))) {
+				PATCH(max_loadavg);
 			}
 		}
 	}
@@ -1140,6 +1152,10 @@ CONNECTION_FUNC(mod_deflate_handle_response_start) {
 			con->mode = DIRECT;
 			return HANDLER_GO_ON;
 		}
+	}
+
+	if (0.0 < p->conf.max_loadavg && p->conf.max_loadavg < srv->srvconf.loadavg[0]) {
+		return HANDLER_GO_ON;
 	}
 
 	/* update ETag, if ETag response header is set */

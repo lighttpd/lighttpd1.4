@@ -221,7 +221,7 @@ if 1:
 			getuid select signal pathconf madvise prctl\
 			writev sigaction sendfile64 send_file kqueue port_create localtime_r posix_fadvise issetugid inet_pton \
 			memset_s explicit_bzero clock_gettime \
-			getentropy arc4random jrand48 srandom'))
+			getentropy arc4random jrand48 srandom getloadavg'))
 	checkFunc(autoconf, 'getrandom', 'linux/random.h')
 
 	checkTypes(autoconf, Split('pid_t size_t off_t'))

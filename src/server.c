@@ -269,6 +269,9 @@ static server *server_init(void) {
 	srv->srvconf.http_host_normalize = 0;
 	srv->srvconf.high_precision_timestamps = 0;
 	srv->srvconf.max_request_field_size = 8192;
+	srv->srvconf.loadavg[0] = 0.0;
+	srv->srvconf.loadavg[1] = 0.0;
+	srv->srvconf.loadavg[2] = 0.0;
 
 	/* use syslog */
 	srv->errorlog_fd = STDERR_FILENO;
@@ -1582,6 +1585,15 @@ int main (int argc, char **argv) {
 							"s exceeded, initiating graceful shutdown");
 					graceful_shutdown = 2; /* value 2 indicates idle timeout */
 				}
+
+			      #ifdef HAVE_GETLOADAVG
+				/* refresh loadavg data every 30 seconds */
+				if (srv->srvconf.loadts + 30 < min_ts) {
+					if (-1 != getloadavg(srv->srvconf.loadavg, 3)) {
+						srv->srvconf.loadts = min_ts;
+					}
+				}
+			      #endif
 
 				/* cleanup stat-cache */
 				stat_cache_trigger_cleanup(srv);
