@@ -13,13 +13,7 @@
 #include <string.h>
 #include <ctype.h>
 #include <stdlib.h>
-
-#ifdef HAVE_STDINT_H
-# include <stdint.h>
-#endif
-#ifdef HAVE_INTTYPES_H
-# include <inttypes.h>
-#endif
+#include <inttypes.h>
 
 #define UNUSED(x) ( (void)(x) )
 
