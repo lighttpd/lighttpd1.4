@@ -1,4 +1,6 @@
-#include "first.h"
+#ifndef _GNU_SOURCE
+#define _GNU_SOURCE
+#endif
 
 /*
 ** This file contains all sources (including headers) to the LEMON
@@ -14,16 +16,9 @@
 #include <ctype.h>
 #include <stdlib.h>
 #include <inttypes.h>
+#include <unistd.h>    /* access() */
 
 #define UNUSED(x) ( (void)(x) )
-
-extern void qsort();
-extern double strtod();
-extern long strtol();
-extern void free();
-extern int access();
-extern int atoi();
-extern char *getenv();
 
 #ifndef __WIN32__
 #   if defined(_WIN32) || defined(WIN32)
@@ -48,7 +43,7 @@ extern char *getenv();
 
 void *msort(void *list, void **next, int(*cmp)(void *, void *));
 
-extern void memory_error() NORETURN;
+static void memory_error() NORETURN;
 
 /******** From the file "action.h" *************************************/
 struct action *Action_new();
@@ -2742,7 +2737,6 @@ struct lemon *lemp;
   return;
 }
 
-  extern int access();
 /* Search for the file "name" which is in the same directory as
 ** the exacutable */
 PRIVATE char *pathsearch(argv0,name,modemask)
