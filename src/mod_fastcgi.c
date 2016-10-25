@@ -1623,6 +1623,7 @@ static void fcgi_backend_close(server *srv, handler_ctx *hctx) {
 		fdevent_unregister(srv->ev, hctx->fd);
 		fdevent_sched_close(srv->ev, hctx->fd, 1);
 		hctx->fd = -1;
+		hctx->fde_ndx = -1;
 	}
 
 	if (hctx->host) {
@@ -1643,6 +1644,53 @@ static void fcgi_backend_close(server *srv, handler_ctx *hctx) {
 	}
 }
 
+static fcgi_extension_host * fcgi_extension_host_get(server *srv, connection *con, plugin_data *p, fcgi_extension *extension) {
+	fcgi_extension_host *host;
+	int ndx = extension->last_used_ndx + 1;
+	if (ndx >= (int) extension->used || ndx < 0) ndx = 0;
+	UNUSED(p);
+
+	/* check if the next server has no load */
+	host = extension->hosts[ndx];
+	if (host->load > 0 || host->active_procs == 0) {
+		/* get backend with the least load */
+		size_t k;
+		int used = -1;
+		for (k = 0, ndx = -1; k < extension->used; k++) {
+			host = extension->hosts[k];
+
+			/* we should have at least one proc that can do something */
+			if (host->active_procs == 0) continue;
+
+			if (used == -1 || host->load < used) {
+				used = host->load;
+				ndx = k;
+			}
+		}
+	}
+
+	if (ndx == -1) {
+		/* all hosts are down */
+		/* sorry, we don't have a server alive for this ext */
+		con->http_status = 503; /* Service Unavailable */
+		con->mode = DIRECT;
+
+		/* only send the 'no handler' once */
+		if (!extension->note_is_sent) {
+			extension->note_is_sent = 1;
+
+			log_error_write(srv, __FILE__, __LINE__, "sBSbsbs",
+					"all handlers for", con->uri.path, "?", con->uri.query,
+					"on", extension->key,
+					"are down.");
+		}
+	}
+
+	/* found a server */
+	extension->last_used_ndx = ndx;
+	return extension->hosts[ndx];
+}
+
 static void fcgi_connection_close(server *srv, handler_ctx *hctx) {
 	plugin_data *p;
 	connection  *con;
@@ -1660,58 +1708,16 @@ static void fcgi_connection_close(server *srv, handler_ctx *hctx) {
 	}
 }
 
-static int fcgi_reconnect(server *srv, handler_ctx *hctx) {
-	/* child died
-	 *
-	 * 1.
-	 *
-	 * connect was ok, connection was accepted
-	 * but the php accept loop checks after the accept if it should die or not.
-	 *
-	 * if yes we can only detect it at a write()
-	 *
-	 * next step is resetting this attemp and setup a connection again
-	 *
-	 * if we have more than 5 reconnects for the same request, die
-	 *
-	 * 2.
-	 *
-	 * we have a connection but the child died by some other reason
-	 *
-	 */
+static handler_t fcgi_reconnect(server *srv, handler_ctx *hctx) {
+	fcgi_backend_close(srv, hctx);
 
-	if (hctx->fd != -1) {
-		fdevent_event_del(srv->ev, &(hctx->fde_ndx), hctx->fd);
-		fdevent_unregister(srv->ev, hctx->fd);
-		fdevent_sched_close(srv->ev, hctx->fd, 1);
-		hctx->fd = -1;
-	}
+	hctx->host = fcgi_extension_host_get(srv, hctx->remote_conn, hctx->plugin_data, hctx->ext);
+	if (NULL == hctx->host) return HANDLER_FINISHED;
 
-	fcgi_set_state(srv, hctx, FCGI_STATE_INIT);
-
+	fcgi_host_assign(srv, hctx, hctx->host);
 	hctx->request_id = 0;
-	hctx->reconnects++;
-
-	if (hctx->conf.debug > 2) {
-		if (hctx->proc) {
-			log_error_write(srv, __FILE__, __LINE__, "sdb",
-					"release proc for reconnect:",
-					hctx->proc->pid, hctx->proc->connection_name);
-		} else {
-			log_error_write(srv, __FILE__, __LINE__, "sb",
-					"release proc for reconnect:",
-					hctx->host->unixsocket);
-		}
-	}
-
-	if (hctx->proc && hctx->got_proc) {
-		fcgi_proc_load_dec(srv, hctx);
-	}
-
-	/* perhaps another host gives us more luck */
-	fcgi_host_reset(srv, hctx);
-
-	return 0;
+	fcgi_set_state(srv, hctx, FCGI_STATE_INIT);
+	return HANDLER_COMEBACK;
 }
 
 
@@ -2687,21 +2693,6 @@ static handler_t fcgi_write_request(server *srv, handler_ctx *hctx) {
 
 	int ret;
 
-	/* sanity check:
-	 *  - host != NULL
-	 *  - either:
-	 *     - tcp socket (do not check host->host->uses, as it may be not set which means INADDR_LOOPBACK)
-	 *     - unix socket
-	 */
-	if (!host) {
-		log_error_write(srv, __FILE__, __LINE__, "s", "fatal error: host = NULL");
-		return HANDLER_ERROR;
-	}
-	if ((!host->port && buffer_string_is_empty(host->unixsocket))) {
-		log_error_write(srv, __FILE__, __LINE__, "s", "fatal error: neither host->port nor host->unixsocket is set");
-		return HANDLER_ERROR;
-	}
-
 	/* we can't handle this in the switch as we have to fall through in it */
 	if (hctx->state == FCGI_STATE_CONNECT_DELAYED) {
 		int socket_error;
@@ -2953,66 +2944,9 @@ static handler_t fcgi_write_request(server *srv, handler_ctx *hctx) {
 /* might be called on fdevent after a connect() is delay too
  * */
 static handler_t fcgi_send_request(server *srv, handler_ctx *hctx) {
-	fcgi_extension_host *host;
-	handler_t rc;
-
-	/* we don't have a host yet, choose one
-	 * -> this happens in the first round
-	 *    and when the host died and we have to select a new one */
-	if (hctx->host == NULL) {
-		size_t k;
-		int ndx, used = -1;
-
-		/* check if the next server has no load. */
-		ndx = hctx->ext->last_used_ndx + 1;
-		if(ndx >= (int) hctx->ext->used || ndx < 0) ndx = 0;
-		host = hctx->ext->hosts[ndx];
-		if (host->load > 0) {
-			/* get backend with the least load. */
-			for (k = 0, ndx = -1; k < hctx->ext->used; k++) {
-				host = hctx->ext->hosts[k];
-
-				/* we should have at least one proc that can do something */
-				if (host->active_procs == 0) continue;
-
-				if (used == -1 || host->load < used) {
-					used = host->load;
-
-					ndx = k;
-				}
-			}
-		}
-
-		/* found a server */
-		if (ndx == -1) {
-			/* all hosts are down */
-
-			fcgi_connection_close(srv, hctx);
-
-			return HANDLER_FINISHED;
-		}
-
-		hctx->ext->last_used_ndx = ndx;
-		host = hctx->ext->hosts[ndx];
-
-		/*
-		 * if check-local is disabled, use the uri.path handler
-		 *
-		 */
-
-		/* init handler-context */
-
-		/* we put a connection on this host, move the other new connections to other hosts
-		 *
-		 * as soon as hctx->host is unassigned, decrease the load again */
-		fcgi_host_assign(srv, hctx, host);
-		hctx->proc = NULL;
-	} else {
-		host = hctx->host;
-	}
-
 	/* ok, create the request */
-	rc = fcgi_write_request(srv, hctx);
+	fcgi_extension_host *host = hctx->host;
+	handler_t rc = fcgi_write_request(srv, hctx);
 	if (HANDLER_ERROR != rc) {
 		return rc;
 	} else {
@@ -3024,10 +2958,8 @@ static handler_t fcgi_send_request(server *srv, handler_ctx *hctx) {
 			fcgi_restart_dead_procs(srv, p, host);
 
 			/* cleanup this request and let the request handler start this request again */
-			if (hctx->reconnects < 5) {
-				fcgi_reconnect(srv, hctx);
-
-				return HANDLER_COMEBACK;
+			if (hctx->reconnects++ < 5) {
+				return fcgi_reconnect(srv, hctx);
 			} else {
 				fcgi_connection_close(srv, hctx);
 				con->http_status = 503;
@@ -3213,16 +3145,14 @@ static handler_t fcgi_recv_response(server *srv, handler_ctx *hctx) {
 				/* nothing has been sent out yet, try to use another child */
 
 				if (hctx->wb->bytes_out == 0 &&
-				    hctx->reconnects < 5) {
+				    hctx->reconnects++ < 5) {
 
 					log_error_write(srv, __FILE__, __LINE__, "ssbsBSBs",
 						"response not received, request not sent",
 						"on socket:", proc->connection_name,
 						"for", con->uri.path, "?", con->uri.query, ", reconnecting");
 
-					fcgi_reconnect(srv, hctx);
-
-					return HANDLER_COMEBACK;
+					return fcgi_reconnect(srv, hctx);
 				}
 
 				log_error_write(srv, __FILE__, __LINE__, "sosbsBSBs",
@@ -3462,34 +3392,8 @@ static handler_t fcgi_check_extension(server *srv, connection *con, void *p_d, i
 	}
 
 	/* check if we have at least one server for this extension up and running */
-	for (k = 0; k < extension->used; k++) {
-		fcgi_extension_host *h = extension->hosts[k];
-
-		/* we should have at least one proc that can do something */
-		if (h->active_procs == 0) {
-			continue;
-		}
-
-		/* we found one host that is alive */
-		host = h;
-		break;
-	}
-
-	if (!host) {
-		/* sorry, we don't have a server alive for this ext */
-		con->http_status = 500;
-		con->mode = DIRECT;
-
-		/* only send the 'no handler' once */
-		if (!extension->note_is_sent) {
-			extension->note_is_sent = 1;
-
-			log_error_write(srv, __FILE__, __LINE__, "sBSbsbs",
-					"all handlers for", con->uri.path, "?", con->uri.query,
-					"on", extension->key,
-					"are down.");
-		}
-
+	host = fcgi_extension_host_get(srv, con, p, extension);
+	if (NULL == host) {
 		return HANDLER_FINISHED;
 	}
 
@@ -3558,6 +3462,7 @@ static handler_t fcgi_check_extension(server *srv, connection *con, void *p_d, i
 	hctx->plugin_data      = p;
 	hctx->proc             = NULL;
 	hctx->ext              = extension;
+	fcgi_host_assign(srv, hctx, host);
 
 	hctx->fcgi_mode = fcgi_mode;
 	if (fcgi_mode == FCGI_AUTHORIZER) {

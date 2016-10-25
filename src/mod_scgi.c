@@ -329,6 +329,7 @@ typedef struct {
 
 	connection *remote_conn;  /* dumb pointer */
 	plugin_data *plugin_data; /* dumb pointer */
+	scgi_extension *ext;
 } handler_ctx;
 
 
@@ -1331,25 +1332,20 @@ static int scgi_set_state(server *srv, handler_ctx *hctx, scgi_connection_state_
 }
 
 
-static void scgi_connection_close(server *srv, handler_ctx *hctx) {
-	plugin_data *p;
-	connection  *con;
-
-	p    = hctx->plugin_data;
-	con  = hctx->remote_conn;
-
+static void scgi_backend_close(server *srv, handler_ctx *hctx) {
 	if (hctx->fd != -1) {
 		fdevent_event_del(srv->ev, &(hctx->fde_ndx), hctx->fd);
 		fdevent_unregister(srv->ev, hctx->fd);
 		fdevent_sched_close(srv->ev, hctx->fd, 1);
+		hctx->fd = -1;
+		hctx->fde_ndx = -1;
 	}
 
-	if (hctx->host && hctx->proc) {
-		hctx->host->load--;
-
-		if (hctx->got_proc) {
+	if (hctx->host) {
+		if (hctx->proc) {
 			/* after the connect the process gets a load */
-			hctx->proc->load--;
+			if (hctx->got_proc) hctx->proc->load--;
+			scgi_proclist_sort_down(srv, hctx->host, hctx->proc);
 
 			if (hctx->conf.debug) {
 				log_error_write(srv, __FILE__, __LINE__, "sddb",
@@ -1359,10 +1355,59 @@ static void scgi_connection_close(server *srv, handler_ctx *hctx) {
 			}
 		}
 
-		scgi_proclist_sort_down(srv, hctx->host, hctx->proc);
+		hctx->host->load--;
+		hctx->host = NULL;
+	}
+}
+
+static scgi_extension_host * scgi_extension_host_get(server *srv, connection *con, plugin_data *p, scgi_extension *extension) {
+	int used = -1;
+	scgi_extension_host *host = NULL;
+	UNUSED(p);
+
+	/* get best server */
+	for (size_t k = 0; k < extension->used; ++k) {
+		scgi_extension_host *h = extension->hosts[k];
+
+		/* we should have at least one proc that can do something */
+		if (h->active_procs == 0) {
+			continue;
+		}
+
+		if (used == -1 || h->load < used) {
+			used = h->load;
+
+			host = h;
+		}
 	}
 
+	if (!host) {
+		/* sorry, we don't have a server alive for this ext */
+		con->http_status = 503; /* Service Unavailable */
+		con->mode = DIRECT;
 
+		/* only send the 'no handler' once */
+		if (!extension->note_is_sent) {
+			extension->note_is_sent = 1;
+
+			log_error_write(srv, __FILE__, __LINE__, "sbsbs",
+					"all handlers for ", con->uri.path,
+					"on", extension->key,
+					"are down.");
+		}
+	}
+
+	return host;
+}
+
+static void scgi_connection_close(server *srv, handler_ctx *hctx) {
+	plugin_data *p;
+	connection  *con;
+
+	p    = hctx->plugin_data;
+	con  = hctx->remote_conn;
+
+	scgi_backend_close(srv, hctx);
 	handler_ctx_free(hctx);
 	con->plugin_ctx[p->id] = NULL;
 
@@ -1372,45 +1417,15 @@ static void scgi_connection_close(server *srv, handler_ctx *hctx) {
 	}
 }
 
-static int scgi_reconnect(server *srv, handler_ctx *hctx) {
-	/* child died
-	 *
-	 * 1.
-	 *
-	 * connect was ok, connection was accepted
-	 * but the php accept loop checks after the accept if it should die or not.
-	 *
-	 * if yes we can only detect it at a write()
-	 *
-	 * next step is resetting this attemp and setup a connection again
-	 *
-	 * if we have more then 5 reconnects for the same request, die
-	 *
-	 * 2.
-	 *
-	 * we have a connection but the child died by some other reason
-	 *
-	 */
+static handler_t scgi_reconnect(server *srv, handler_ctx *hctx) {
+	scgi_backend_close(srv, hctx);
 
-	fdevent_event_del(srv->ev, &(hctx->fde_ndx), hctx->fd);
-	fdevent_unregister(srv->ev, hctx->fd);
-	fdevent_sched_close(srv->ev, hctx->fd, 1);
+	hctx->host = scgi_extension_host_get(srv, hctx->remote_conn, hctx->plugin_data, hctx->ext);
+	if (NULL == hctx->host) return HANDLER_FINISHED;
 
+	hctx->host->load++;
 	scgi_set_state(srv, hctx, FCGI_STATE_INIT);
-
-	hctx->reconnects++;
-
-	if (hctx->conf.debug) {
-		log_error_write(srv, __FILE__, __LINE__, "sddb",
-				"release proc:",
-				hctx->fd,
-				hctx->proc->pid, hctx->proc->socket);
-	}
-
-	hctx->proc->load--;
-	scgi_proclist_sort_down(srv, hctx->host, hctx->proc);
-
-	return 0;
+	return HANDLER_COMEBACK;
 }
 
 
@@ -2141,22 +2156,6 @@ static handler_t scgi_write_request(server *srv, handler_ctx *hctx) {
 
 	int ret;
 
-	/* sanity check */
-	if (!host) {
-		log_error_write(srv, __FILE__, __LINE__, "s", "fatal error: host = NULL");
-		return HANDLER_ERROR;
-	}
-	if (((buffer_string_is_empty(host->host) || !host->port) && buffer_string_is_empty(host->unixsocket))) {
-		log_error_write(srv, __FILE__, __LINE__, "sxddd",
-				"write-req: error",
-				host,
-				buffer_string_length(host->host),
-				host->port,
-				buffer_string_length(host->unixsocket));
-		return HANDLER_ERROR;
-	}
-
-
 	switch(hctx->state) {
 	case FCGI_STATE_INIT:
 		if (-1 == (hctx->fd = fdevent_socket_nb_cloexec(host->family, SOCK_STREAM, 0))) {
@@ -2290,14 +2289,12 @@ static handler_t scgi_write_request(server *srv, handler_ctx *hctx) {
 				 *
 				 */
 				if (hctx->wb->bytes_out == 0 &&
-				    hctx->reconnects < 5) {
+				    hctx->reconnects++ < 5) {
 					usleep(10000); /* take away the load of the webserver
 							* to let the php a chance to restart
 							*/
 
-					scgi_reconnect(srv, hctx);
-
-					return HANDLER_COMEBACK;
+					return scgi_reconnect(srv, hctx);
 				}
 
 				/* not reconnected ... why
@@ -2408,11 +2405,7 @@ static handler_t scgi_send_request(server *srv, handler_ctx *hctx) {
 			}
 			scgi_restart_dead_procs(srv, p, host);
 
-			con->mode = DIRECT;/*(avoid changing con->state, con->http_status)*/
-			scgi_connection_close(srv, hctx);
-			con->mode = p->id;
-
-			return HANDLER_COMEBACK;
+			return scgi_reconnect(srv, hctx);
 		} else {
 			scgi_connection_close(srv, hctx);
 			con->http_status = 503;
@@ -2543,16 +2536,14 @@ static handler_t scgi_recv_response(server *srv, handler_ctx *hctx) {
 				/* nothing has been send out yet, try to use another child */
 
 				if (hctx->wb->bytes_out == 0 &&
-				    hctx->reconnects < 5) {
+				    hctx->reconnects++ < 5) {
 
 					log_error_write(srv, __FILE__, __LINE__, "ssdsd",
 						"response not sent, request not sent, reconnection.",
 						"connection-fd:", con->fd,
 						"fcgi-fd:", hctx->fd);
 
-					scgi_reconnect(srv, hctx);
-
-					return HANDLER_COMEBACK;
+					return scgi_reconnect(srv, hctx);
 				}
 
 				log_error_write(srv, __FILE__, __LINE__, "sosdsd",
@@ -2679,7 +2670,6 @@ static int scgi_patch_connection(server *srv, connection *con, plugin_data *p) {
 static handler_t scgi_check_extension(server *srv, connection *con, void *p_d, int uri_path_handler) {
 	plugin_data *p = p_d;
 	size_t s_len;
-	int used = -1;
 	size_t k;
 	buffer *fn;
 	scgi_extension *extension = NULL;
@@ -2728,36 +2718,8 @@ static handler_t scgi_check_extension(server *srv, connection *con, void *p_d, i
 	}
 
 	/* get best server */
-	for (k = 0; k < extension->used; k++) {
-		scgi_extension_host *h = extension->hosts[k];
-
-		/* we should have at least one proc that can do something */
-		if (h->active_procs == 0) {
-			continue;
-		}
-
-		if (used == -1 || h->load < used) {
-			used = h->load;
-
-			host = h;
-		}
-	}
-
-	if (!host) {
-		/* sorry, we don't have a server alive for this ext */
-		con->http_status = 500;
-		con->mode = DIRECT;
-
-		/* only send the 'no handler' once */
-		if (!extension->note_is_sent) {
-			extension->note_is_sent = 1;
-
-			log_error_write(srv, __FILE__, __LINE__, "sbsbs",
-					"all handlers for ", con->uri.path,
-					"on", extension->key,
-					"are down.");
-		}
-
+	host = scgi_extension_host_get(srv, con, p, extension);
+	if (NULL == host) {
 		return HANDLER_FINISHED;
 	}
 
@@ -2793,8 +2755,9 @@ static handler_t scgi_check_extension(server *srv, connection *con, void *p_d, i
 			hctx->plugin_data      = p;
 			hctx->host             = host;
 			hctx->proc	       = NULL;
+			hctx->ext              = extension;
 
-			hctx->conf.exts        = p->conf.exts;
+			/*hctx->conf.exts        = p->conf.exts;*/
 			hctx->conf.debug       = p->conf.debug;
 
 			con->plugin_ctx[p->id] = hctx;
@@ -2849,8 +2812,9 @@ static handler_t scgi_check_extension(server *srv, connection *con, void *p_d, i
 		hctx->plugin_data      = p;
 		hctx->host             = host;
 		hctx->proc             = NULL;
+		hctx->ext              = extension;
 
-		hctx->conf.exts        = p->conf.exts;
+		/*hctx->conf.exts        = p->conf.exts;*/
 		hctx->conf.debug       = p->conf.debug;
 
 		con->plugin_ctx[p->id] = hctx;

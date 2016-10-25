@@ -102,12 +102,11 @@ typedef struct {
 	int fd; /* fd to the proxy process */
 	int fde_ndx; /* index into the fd-event buffer */
 
-	size_t path_info_offset; /* start of path_info in uri.path */
-
 	plugin_config conf;
 
-	connection *remote_conn;  /* dump pointer */
-	plugin_data *plugin_data; /* dump pointer */
+	connection *remote_conn;  /* dumb pointer */
+	plugin_data *plugin_data; /* dumb pointer */
+	data_array *ext;
 } handler_ctx;
 
 
@@ -333,6 +332,159 @@ SETDEFAULTS_FUNC(mod_proxy_set_defaults) {
 	return HANDLER_GO_ON;
 }
 
+
+static void proxy_backend_close(server *srv, handler_ctx *hctx) {
+	if (hctx->fd != -1) {
+		fdevent_event_del(srv->ev, &(hctx->fde_ndx), hctx->fd);
+		fdevent_unregister(srv->ev, hctx->fd);
+		fdevent_sched_close(srv->ev, hctx->fd, 1);
+		hctx->fd = -1;
+		hctx->fde_ndx = -1;
+	}
+
+	if (hctx->host) {
+		hctx->host->usage--;
+		hctx->host = NULL;
+	}
+}
+
+static data_proxy * mod_proxy_extension_host_get(server *srv, connection *con, plugin_data *p, data_array *extension) {
+	unsigned long last_max = ULONG_MAX;
+	int max_usage = INT_MAX;
+	int ndx = -1;
+	size_t k;
+
+	if (extension->value->used == 1) {
+		if ( ((data_proxy *)extension->value->data[0])->is_disabled ) {
+			ndx = -1;
+		} else {
+			ndx = 0;
+		}
+	} else if (extension->value->used != 0) switch(p->conf.balance) {
+	case PROXY_BALANCE_HASH:
+		/* hash balancing */
+
+		if (p->conf.debug) {
+			log_error_write(srv, __FILE__, __LINE__,  "sd",
+					"proxy - used hash balancing, hosts:", extension->value->used);
+		}
+
+		for (k = 0, ndx = -1, last_max = ULONG_MAX; k < extension->value->used; k++) {
+			data_proxy *host = (data_proxy *)extension->value->data[k];
+			unsigned long cur_max;
+
+			if (host->is_disabled) continue;
+
+			cur_max = generate_crc32c(CONST_BUF_LEN(con->uri.path)) +
+				generate_crc32c(CONST_BUF_LEN(host->host)) + /* we can cache this */
+				generate_crc32c(CONST_BUF_LEN(con->uri.authority));
+
+			if (p->conf.debug) {
+				log_error_write(srv, __FILE__, __LINE__,  "sbbbd",
+						"proxy - election:",
+						con->uri.path,
+						host->host,
+						con->uri.authority,
+						cur_max);
+			}
+
+			if ((last_max == ULONG_MAX) || /* first round */
+			    (cur_max > last_max)) {
+				last_max = cur_max;
+
+				ndx = k;
+			}
+		}
+
+		break;
+	case PROXY_BALANCE_FAIR:
+		/* fair balancing */
+		if (p->conf.debug) {
+			log_error_write(srv, __FILE__, __LINE__,  "s",
+					"proxy - used fair balancing");
+		}
+
+		for (k = 0, ndx = -1, max_usage = INT_MAX; k < extension->value->used; k++) {
+			data_proxy *host = (data_proxy *)extension->value->data[k];
+
+			if (host->is_disabled) continue;
+
+			if (host->usage < max_usage) {
+				max_usage = host->usage;
+
+				ndx = k;
+			}
+		}
+
+		break;
+	case PROXY_BALANCE_RR: {
+		data_proxy *host;
+
+		/* round robin */
+		if (p->conf.debug) {
+			log_error_write(srv, __FILE__, __LINE__,  "s",
+					"proxy - used round-robin balancing");
+		}
+
+		/* just to be sure */
+		force_assert(extension->value->used < INT_MAX);
+
+		host = (data_proxy *)extension->value->data[0];
+
+		/* Use last_used_ndx from first host in list */
+		k = host->last_used_ndx;
+		ndx = k + 1; /* use next host after the last one */
+		if (ndx < 0) ndx = 0;
+
+		/* Search first active host after last_used_ndx */
+		while ( ndx < (int) extension->value->used
+				&& (host = (data_proxy *)extension->value->data[ndx])->is_disabled ) ndx++;
+
+		if (ndx >= (int) extension->value->used) {
+			/* didn't found a higher id, wrap to the start */
+			for (ndx = 0; ndx <= (int) k; ndx++) {
+				host = (data_proxy *)extension->value->data[ndx];
+				if (!host->is_disabled) break;
+			}
+
+			/* No active host found */
+			if (host->is_disabled) ndx = -1;
+		}
+
+		/* Save new index for next round */
+		((data_proxy *)extension->value->data[0])->last_used_ndx = ndx;
+
+		break;
+	}
+	default:
+		break;
+	}
+
+	/* found a server */
+	if (ndx != -1) {
+		data_proxy *host = (data_proxy *)extension->value->data[ndx];
+
+		if (p->conf.debug) {
+			log_error_write(srv, __FILE__, __LINE__,  "sbd",
+					"proxy - found a host",
+					host->host, host->port);
+		}
+
+		host->usage++;
+		return host;
+	} else {
+		/* no handler found */
+		con->http_status = 503; /* Service Unavailable */
+		con->mode = DIRECT;
+
+		log_error_write(srv, __FILE__, __LINE__,  "sb",
+				"no proxy-handler found for:",
+				con->uri.path);
+
+		return NULL;
+	}
+}
+
 static void proxy_connection_close(server *srv, handler_ctx *hctx) {
 	plugin_data *p;
 	connection *con;
@@ -340,16 +492,7 @@ static void proxy_connection_close(server *srv, handler_ctx *hctx) {
 	p    = hctx->plugin_data;
 	con  = hctx->remote_conn;
 
-	if (hctx->fd != -1) {
-		fdevent_event_del(srv->ev, &(hctx->fde_ndx), hctx->fd);
-		fdevent_unregister(srv->ev, hctx->fd);
-		fdevent_sched_close(srv->ev, hctx->fd, 1);
-	}
-
-	if (hctx->host) {
-		hctx->host->usage--;
-	}
-
+	proxy_backend_close(srv, hctx);
 	handler_ctx_free(hctx);
 	con->plugin_ctx[p->id] = NULL;
 
@@ -357,6 +500,16 @@ static void proxy_connection_close(server *srv, handler_ctx *hctx) {
 	if (con->mode == p->id) {
 		http_response_backend_done(srv, con);
 	}
+}
+
+static handler_t proxy_reconnect(server *srv, handler_ctx *hctx) {
+	proxy_backend_close(srv, hctx);
+
+	hctx->host = mod_proxy_extension_host_get(srv, hctx->remote_conn, hctx->plugin_data, hctx->ext);
+	if (NULL == hctx->host) return HANDLER_FINISHED;
+
+	hctx->state = PROXY_STATE_INIT;
+	return HANDLER_COMEBACK;
 }
 
 static int proxy_establish_connection(server *srv, handler_ctx *hctx) {
@@ -760,22 +913,11 @@ static handler_t proxy_write_request(server *srv, handler_ctx *hctx) {
 
 	int ret;
 
-	if (!host || buffer_string_is_empty(host->host) || !host->port) return HANDLER_ERROR;
-
 	switch(hctx->state) {
-	case PROXY_STATE_CONNECT:
-		/* wait for the connect() to finish */
-
-		/* connect failed ? */
-		if (-1 == hctx->fde_ndx) return HANDLER_ERROR;
-
-		/* wait */
-		return HANDLER_WAIT_FOR_EVENT;
-
 	case PROXY_STATE_INIT:
 #if defined(HAVE_SYS_UN_H)
 		if (strstr(host->host->ptr,"/")) {
-			if (-1 == (hctx->fd = socket(AF_UNIX, SOCK_STREAM, 0))) {
+			if (-1 == (hctx->fd = fdevent_socket_nb_cloexec(AF_UNIX, SOCK_STREAM, 0))) {
 				log_error_write(srv, __FILE__, __LINE__, "ss", "socket failed: ", strerror(errno));
 				return HANDLER_ERROR;
 			}
@@ -807,28 +949,54 @@ static handler_t proxy_write_request(server *srv, handler_ctx *hctx) {
 			return HANDLER_ERROR;
 		}
 
-		switch (proxy_establish_connection(srv, hctx)) {
-		case 1:
-			proxy_set_state(srv, hctx, PROXY_STATE_CONNECT);
+		/* fall through */
+	case PROXY_STATE_CONNECT:
+		if (hctx->state == PROXY_STATE_INIT) {
+			switch (proxy_establish_connection(srv, hctx)) {
+			case 1:
+				proxy_set_state(srv, hctx, PROXY_STATE_CONNECT);
 
-			/* connection is in progress, wait for an event and call getsockopt() below */
+				/* connection is in progress, wait for an event and call getsockopt() below */
 
-			fdevent_event_set(srv->ev, &(hctx->fde_ndx), hctx->fd, FDEVENT_OUT);
+				fdevent_event_set(srv->ev, &(hctx->fde_ndx), hctx->fd, FDEVENT_OUT);
 
-			return HANDLER_WAIT_FOR_EVENT;
-		case -1:
-			/* if ECONNREFUSED choose another connection */
-			hctx->fde_ndx = -1;
+				return HANDLER_WAIT_FOR_EVENT;
+			case -1:
+				/* if ECONNREFUSED choose another connection */
+				hctx->fde_ndx = -1;
 
-			return HANDLER_ERROR;
-		default:
-			/* everything is ok, go on */
-			proxy_set_state(srv, hctx, PROXY_STATE_PREPARE_WRITE);
-			break;
+				return HANDLER_ERROR;
+			default:
+				/* everything is ok, go on */
+				break;
+			}
+		} else {
+			int socket_error;
+			socklen_t socket_error_len = sizeof(socket_error);
+
+			/* try to finish the connect() */
+			if (0 != getsockopt(hctx->fd, SOL_SOCKET, SO_ERROR, &socket_error, &socket_error_len)) {
+				log_error_write(srv, __FILE__, __LINE__, "ss",
+						"getsockopt failed:", strerror(errno));
+
+				return HANDLER_ERROR;
+			}
+			if (socket_error != 0) {
+				log_error_write(srv, __FILE__, __LINE__, "ss",
+						"establishing connection failed:", strerror(socket_error),
+						"port:", hctx->host->port);
+
+				return HANDLER_ERROR;
+			}
+			if (hctx->conf.debug) {
+				log_error_write(srv, __FILE__, __LINE__,  "s", "proxy - connect - delayed success");
+			}
 		}
 
-		/* fall through */
+		/* ok, we have the connection */
 
+		proxy_set_state(srv, hctx, PROXY_STATE_PREPARE_WRITE);
+		/* fall through */
 	case PROXY_STATE_PREPARE_WRITE:
 		proxy_create_env(srv, hctx);
 
@@ -923,8 +1091,6 @@ static handler_t proxy_send_request(server *srv, handler_ctx *hctx) {
 		return rc;
 	} else {
 		data_proxy *host = hctx->host;
-		connection *con  = hctx->remote_conn;
-		plugin_data *p   = hctx->plugin_data;
 		log_error_write(srv, __FILE__, __LINE__,  "sbdd", "proxy-server disabled:",
 				host->host,
 				host->port,
@@ -934,12 +1100,8 @@ static handler_t proxy_send_request(server *srv, handler_ctx *hctx) {
 		host->is_disabled = 1;
 		host->disable_ts = srv->cur_ts;
 
-		/* reset the enviroment and restart the sub-request */
-		con->mode = DIRECT;/*(avoid changing con->state, con->http_status)*/
-		proxy_connection_close(srv, hctx);
-		con->mode = p->id;
-
-		return HANDLER_COMEBACK;
+		/* reset the environment and restart the sub-request */
+		return proxy_reconnect(srv, hctx);
 	}
 }
 
@@ -1019,92 +1181,23 @@ static handler_t proxy_recv_response(server *srv, handler_ctx *hctx) {
 static handler_t proxy_handle_fdevent(server *srv, void *ctx, int revents) {
 	handler_ctx *hctx = ctx;
 	connection  *con  = hctx->remote_conn;
-	plugin_data *p    = hctx->plugin_data;
 
 	joblist_append(srv, con);
 
 	if (revents & FDEVENT_IN) {
-
-		if (hctx->conf.debug) {
-			log_error_write(srv, __FILE__, __LINE__, "sd",
-					"proxy: fdevent-in", hctx->state);
-		}
-
-		{
 		handler_t rc = proxy_recv_response(srv,hctx);/*(might invalidate hctx)*/
 		if (rc != HANDLER_GO_ON) return rc;          /*(unless HANDLER_GO_ON)*/
-		}
 	}
 
 	if (revents & FDEVENT_OUT) {
-		if (hctx->conf.debug) {
-			log_error_write(srv, __FILE__, __LINE__, "sd",
-					"proxy: fdevent-out", hctx->state);
-		}
-
-		if (hctx->state == PROXY_STATE_CONNECT) {
-			int socket_error;
-			socklen_t socket_error_len = sizeof(socket_error);
-
-			/* try to finish the connect() */
-			if (0 != getsockopt(hctx->fd, SOL_SOCKET, SO_ERROR, &socket_error, &socket_error_len)) {
-				log_error_write(srv, __FILE__, __LINE__, "ss",
-					"getsockopt failed:", strerror(errno));
-
-				return HANDLER_FINISHED;
-			}
-			if (socket_error != 0) {
-				log_error_write(srv, __FILE__, __LINE__, "ss",
-					"establishing connection failed:", strerror(socket_error),
-					"port:", hctx->host->port);
-
-				return HANDLER_FINISHED;
-			}
-			if (hctx->conf.debug) {
-				log_error_write(srv, __FILE__, __LINE__,  "s", "proxy - connect - delayed success");
-			}
-
-			proxy_set_state(srv, hctx, PROXY_STATE_PREPARE_WRITE);
-		}
-
 		return proxy_send_request(srv, hctx); /*(might invalidate hctx)*/
 	}
 
 	/* perhaps this issue is already handled */
 	if (revents & FDEVENT_HUP) {
-		if (hctx->conf.debug) {
-			log_error_write(srv, __FILE__, __LINE__, "sd",
-					"proxy: fdevent-hup", hctx->state);
-		}
-
 		if (hctx->state == PROXY_STATE_CONNECT) {
 			/* connect() -> EINPROGRESS -> HUP */
-
-			/**
-			 * what is proxy is doing if it can't reach the next hop ?
-			 *
-			 */
-
-			if (hctx->host) {
-				hctx->host->is_disabled = 1;
-				hctx->host->disable_ts = srv->cur_ts;
-				log_error_write(srv, __FILE__, __LINE__,  "sbdd", "proxy-server disabled:",
-						hctx->host->host,
-						hctx->host->port,
-						hctx->fd);
-
-				/* disable this server */
-				hctx->host->is_disabled = 1;
-				hctx->host->disable_ts = srv->cur_ts;
-
-				/* reset the environment and restart the sub-request */
-				con->mode = DIRECT;/*(avoid changing con->state, con->http_status)*/
-				proxy_connection_close(srv, hctx);
-				con->mode = p->id;
-			} else {
-				proxy_connection_close(srv, hctx);
-				con->http_status = 503;
-			}
+			proxy_send_request(srv, hctx); /*(might invalidate hctx)*/
 		} else if (con->file_started) {
 			/* drain any remaining data from kernel pipe buffers
 			 * even if (con->conf.stream_response_body
@@ -1132,13 +1225,10 @@ static handler_t proxy_handle_fdevent(server *srv, void *ctx, int revents) {
 static handler_t mod_proxy_check_extension(server *srv, connection *con, void *p_d) {
 	plugin_data *p = p_d;
 	size_t s_len;
-	unsigned long last_max = ULONG_MAX;
-	int max_usage = INT_MAX;
-	int ndx = -1;
 	size_t k;
 	buffer *fn;
 	data_array *extension = NULL;
-	size_t path_info_offset;
+	data_proxy *host;
 
 	if (con->mode != DIRECT) return HANDLER_GO_ON;
 
@@ -1150,12 +1240,6 @@ static handler_t mod_proxy_check_extension(server *srv, connection *con, void *p
 	fn = con->uri.path;
 	if (buffer_string_is_empty(fn)) return HANDLER_ERROR;
 	s_len = buffer_string_length(fn);
-
-	path_info_offset = 0;
-
-	if (p->conf.debug) {
-		log_error_write(srv, __FILE__, __LINE__,  "s", "proxy - start");
-	}
 
 	/* check if extension matches */
 	for (k = 0; k < p->conf.extensions->used; k++) {
@@ -1173,13 +1257,6 @@ static handler_t mod_proxy_check_extension(server *srv, connection *con, void *p
 		/* check extension in the form "/proxy_pattern" */
 		if (*(ext->key->ptr) == '/') {
 			if (strncmp(fn->ptr, ext->key->ptr, ct_len) == 0) {
-				if (s_len > ct_len + 1) {
-					char *pi_offset;
-
-					if (NULL != (pi_offset = strchr(fn->ptr + ct_len + 1, '/'))) {
-						path_info_offset = pi_offset - fn->ptr;
-					}
-				}
 				extension = ext;
 				break;
 			}
@@ -1194,119 +1271,13 @@ static handler_t mod_proxy_check_extension(server *srv, connection *con, void *p
 		return HANDLER_GO_ON;
 	}
 
-	if (p->conf.debug) {
-		log_error_write(srv, __FILE__, __LINE__,  "s", "proxy - ext found");
-	}
-
-	if (extension->value->used == 1) {
-		if ( ((data_proxy *)extension->value->data[0])->is_disabled ) {
-			ndx = -1;
-		} else {
-			ndx = 0;
-		}
-	} else if (extension->value->used != 0) switch(p->conf.balance) {
-	case PROXY_BALANCE_HASH:
-		/* hash balancing */
-
-		if (p->conf.debug) {
-			log_error_write(srv, __FILE__, __LINE__,  "sd",
-					"proxy - used hash balancing, hosts:", extension->value->used);
-		}
-
-		for (k = 0, ndx = -1, last_max = ULONG_MAX; k < extension->value->used; k++) {
-			data_proxy *host = (data_proxy *)extension->value->data[k];
-			unsigned long cur_max;
-
-			if (host->is_disabled) continue;
-
-			cur_max = generate_crc32c(CONST_BUF_LEN(con->uri.path)) +
-				generate_crc32c(CONST_BUF_LEN(host->host)) + /* we can cache this */
-				generate_crc32c(CONST_BUF_LEN(con->uri.authority));
-
-			if (p->conf.debug) {
-				log_error_write(srv, __FILE__, __LINE__,  "sbbbd",
-						"proxy - election:",
-						con->uri.path,
-						host->host,
-						con->uri.authority,
-						cur_max);
-			}
-
-			if ((last_max == ULONG_MAX) || /* first round */
-		   	    (cur_max > last_max)) {
-				last_max = cur_max;
-
-				ndx = k;
-			}
-		}
-
-		break;
-	case PROXY_BALANCE_FAIR:
-		/* fair balancing */
-		if (p->conf.debug) {
-			log_error_write(srv, __FILE__, __LINE__,  "s",
-					"proxy - used fair balancing");
-		}
-
-		for (k = 0, ndx = -1, max_usage = INT_MAX; k < extension->value->used; k++) {
-			data_proxy *host = (data_proxy *)extension->value->data[k];
-
-			if (host->is_disabled) continue;
-
-			if (host->usage < max_usage) {
-				max_usage = host->usage;
-
-				ndx = k;
-			}
-		}
-
-		break;
-	case PROXY_BALANCE_RR: {
-		data_proxy *host;
-
-		/* round robin */
-		if (p->conf.debug) {
-			log_error_write(srv, __FILE__, __LINE__,  "s",
-					"proxy - used round-robin balancing");
-		}
-
-		/* just to be sure */
-		force_assert(extension->value->used < INT_MAX);
-
-		host = (data_proxy *)extension->value->data[0];
-
-		/* Use last_used_ndx from first host in list */
-		k = host->last_used_ndx;
-		ndx = k + 1; /* use next host after the last one */
-		if (ndx < 0) ndx = 0;
-
-		/* Search first active host after last_used_ndx */
-		while ( ndx < (int) extension->value->used
-				&& (host = (data_proxy *)extension->value->data[ndx])->is_disabled ) ndx++;
-
-		if (ndx >= (int) extension->value->used) {
-			/* didn't found a higher id, wrap to the start */
-			for (ndx = 0; ndx <= (int) k; ndx++) {
-				host = (data_proxy *)extension->value->data[ndx];
-				if (!host->is_disabled) break;
-			}
-
-			/* No active host found */
-			if (host->is_disabled) ndx = -1;
-		}
-
-		/* Save new index for next round */
-		((data_proxy *)extension->value->data[0])->last_used_ndx = ndx;
-
-		break;
-	}
-	default:
-		break;
+	host = mod_proxy_extension_host_get(srv, con, p, extension);
+	if (NULL == host) {
+		return HANDLER_FINISHED;
 	}
 
 	/* found a server */
-	if (ndx != -1) {
-		data_proxy *host = (data_proxy *)extension->value->data[ndx];
+	{
 
 		/*
 		 * if check-local is disabled, use the uri.path handler
@@ -1317,17 +1288,14 @@ static handler_t mod_proxy_check_extension(server *srv, connection *con, void *p
 		handler_ctx *hctx;
 		hctx = handler_ctx_init();
 
-		hctx->path_info_offset = path_info_offset;
 		hctx->remote_conn      = con;
 		hctx->plugin_data      = p;
 		hctx->host             = host;
+		hctx->ext              = extension;
 
 		hctx->conf.debug       = p->conf.debug;
 
 		con->plugin_ctx[p->id] = hctx;
-
-		host->usage++;
-
 		con->mode = p->id;
 
 		if (p->conf.debug) {
@@ -1337,17 +1305,7 @@ static handler_t mod_proxy_check_extension(server *srv, connection *con, void *p
 		}
 
 		return HANDLER_GO_ON;
-	} else {
-		/* no handler found */
-		con->http_status = 500;
-
-		log_error_write(srv, __FILE__, __LINE__,  "sb",
-				"no proxy-handler found for:",
-				fn);
-
-		return HANDLER_FINISHED;
 	}
-	return HANDLER_GO_ON;
 }
 
 static handler_t mod_proxy_connection_reset(server *srv, connection *con, void *p_d) {
