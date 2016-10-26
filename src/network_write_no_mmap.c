@@ -21,7 +21,9 @@
 
 int network_open_file_chunk(server *srv, connection *con, chunkqueue *cq) {
 	chunk* const c = cq->first;
-	off_t file_size, offset, toSend;
+	off_t offset, toSend;
+	struct stat st;
+	UNUSED(con);
 
 	force_assert(NULL != c);
 	force_assert(FILE_CHUNK == c->type);
@@ -31,30 +33,22 @@ int network_open_file_chunk(server *srv, connection *con, chunkqueue *cq) {
 	toSend = c->file.length - c->offset;
 
 	if (-1 == c->file.fd) {
-		stat_cache_entry *sce = NULL;
-
-		if (HANDLER_ERROR == stat_cache_get_entry(srv, con, c->file.name, &sce)) {
-			log_error_write(srv, __FILE__, __LINE__, "ssb", "stat-cache failed:", strerror(errno), c->file.name);
-			return -1;
-		}
-
 		if (-1 == (c->file.fd = fdevent_open_cloexec(c->file.name->ptr, O_RDONLY, 0))) {
 			log_error_write(srv, __FILE__, __LINE__, "ssb", "open failed:", strerror(errno), c->file.name);
 			return -1;
 		}
-
-		file_size = sce->st.st_size;
-	} else {
-		struct stat st;
-		if (-1 == fstat(c->file.fd, &st)) {
-			log_error_write(srv, __FILE__, __LINE__, "ss", "fstat failed:", strerror(errno));
-			return -1;
-		}
-		file_size = st.st_size;
 	}
 
-	if (offset > file_size || toSend > file_size || offset > file_size - toSend) {
-		log_error_write(srv, __FILE__, __LINE__, "sb", "file was shrinked:", c->file.name);
+	/*(skip file size checks if file is temp file created by lighttpd)*/
+	if (c->file.is_temp) return 0;
+
+	if (-1 == fstat(c->file.fd, &st)) {
+		log_error_write(srv, __FILE__, __LINE__, "ss", "fstat failed:", strerror(errno));
+		return -1;
+	}
+
+	if (offset > st.st_size || toSend > st.st_size || offset > st.st_size - toSend) {
+		log_error_write(srv, __FILE__, __LINE__, "sb", "file shrunk:", c->file.name);
 		return -1;
 	}
 
