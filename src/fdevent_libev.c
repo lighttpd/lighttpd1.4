@@ -12,15 +12,17 @@
 
 static void io_watcher_cb(struct ev_loop *loop, ev_io *w, int revents) {
 	fdevents *ev = w->data;
-	fdnode *fdn = ev->fdarray[w->fd];
+	fdevent_handler handler = fdevent_get_handler(ev, w->fd);
+	void *context = fdevent_get_context(ev, w->fd);
 	int r = 0;
 	UNUSED(loop);
+	if (NULL == handler) return;
 
 	if (revents & EV_READ) r |= FDEVENT_IN;
 	if (revents & EV_WRITE) r |= FDEVENT_OUT;
 	if (revents & EV_ERROR) r |= FDEVENT_ERR;
 
-	switch (r = (*fdn->handler)(ev->srv, fdn->ctx, r)) {
+	switch (r = (*handler)(ev->srv, context, r)) {
 	case HANDLER_FINISHED:
 	case HANDLER_GO_ON:
 	case HANDLER_WAIT_FOR_EVENT:
@@ -98,6 +100,7 @@ static int fdevent_libev_poll(fdevents *ev, int timeout_ms) {
 
 	ev_timer_again(ev->libev_loop, &timeout_watcher);
 	ev_run(ev->libev_loop, EVRUN_ONCE);
+	fdevent_sched_run(ev->srv, ev);
 
 	return 0;
 }
