@@ -2669,7 +2669,7 @@ static int scgi_patch_connection(server *srv, connection *con, plugin_data *p) {
 
 static handler_t scgi_check_extension(server *srv, connection *con, void *p_d, int uri_path_handler) {
 	plugin_data *p = p_d;
-	size_t s_len;
+	size_t s_len, uri_path_len;
 	size_t k;
 	buffer *fn;
 	scgi_extension *extension = NULL;
@@ -2685,6 +2685,7 @@ static handler_t scgi_check_extension(server *srv, connection *con, void *p_d, i
 	if (buffer_string_is_empty(fn)) return HANDLER_GO_ON;
 
 	s_len = buffer_string_length(fn);
+	uri_path_len = buffer_string_length(con->uri.path);
 
 	scgi_patch_connection(srv, con, p);
 
@@ -2697,15 +2698,15 @@ static handler_t scgi_check_extension(server *srv, connection *con, void *p_d, i
 
 		ct_len = buffer_string_length(ext->key);
 
-		if (s_len < ct_len) continue;
-
-		/* check extension in the form "/scgi_pattern" */
-		if (*(ext->key->ptr) == '/') {
-			if (strncmp(fn->ptr, ext->key->ptr, ct_len) == 0) {
+		/* check _url_ in the form "/scgi_pattern" */
+		if (extension->key->ptr[0] == '/') {
+			if (ct_len <= uri_path_len
+			    && 0 == strncmp(con->uri.path->ptr, ext->key->ptr, ct_len)) {
 				extension = ext;
 				break;
 			}
-		} else if (0 == strncmp(fn->ptr + s_len - ct_len, ext->key->ptr, ct_len)) {
+		} else if (ct_len <= s_len
+			   && 0 == strncmp(fn->ptr + s_len - ct_len, ext->key->ptr, ct_len)) {
 			/* check extension in the form ".fcg" */
 			extension = ext;
 			break;
