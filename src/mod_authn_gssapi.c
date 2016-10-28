@@ -220,7 +220,8 @@ static int mod_authn_gssapi_create_krb5_ccache(server *srv, connection *con, plu
     buffer * const kccname = buffer_init_string("FILE:/tmp/krb5cc_gssapi_XXXXXX");
     char * const ccname    = kccname->ptr + sizeof("FILE:")-1;
     const size_t ccnamelen = buffer_string_length(kccname)-(sizeof("FILE:")-1);
-     /*(future: might consider using server.upload-dirs instead of /tmp)*/
+    /*(future: might consider using server.upload-dirs instead of /tmp)*/
+    /* coverity[secure_temp : FALSE] */
     int fd = mkstemp(ccname);
     if (fd < 0) {
         log_error_write(srv, __FILE__, __LINE__, "ss", "mkstemp():", strerror(errno));

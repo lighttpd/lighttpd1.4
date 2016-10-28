@@ -468,6 +468,7 @@ static chunk *chunkqueue_get_append_tempfile(chunkqueue *cq) {
 			buffer_append_slash(template);
 			buffer_append_string_len(template, CONST_STR_LEN("lighttpd-upload-XXXXXX"));
 
+			/* coverity[secure_temp : FALSE] */
 			if (-1 != (fd = mkstemp(template->ptr))) break;
 		}
 	} else {
