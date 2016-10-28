@@ -480,6 +480,9 @@ static chunk *chunkqueue_get_append_tempfile(chunkqueue *cq) {
 		return NULL;
 	}
 
+	fd_close_on_exec(fd);
+	(void)fcntl(fd, F_SETFL, fcntl(fd, F_GETFL, 0) | O_APPEND);
+
 	c = chunkqueue_get_unused_chunk(cq);
 	c->type = FILE_CHUNK;
 	c->file.fd = fd;
