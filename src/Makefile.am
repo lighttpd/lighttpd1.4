@@ -454,6 +454,7 @@ EXTRA_DIST = \
 	mod_skeleton.c \
 	configparser.y \
 	mod_ssi_exprparser.y \
+	lemon.c \
 	lempar.c \
 	SConscript \
 	CMakeLists.txt config.h.cmake
