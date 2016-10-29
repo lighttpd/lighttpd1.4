@@ -10,5 +10,6 @@ fi
 
 # old autoreconf/aclocal versions fail hard if m4 doesn't exist
 mkdir -p m4
+cp doc/scripts/ax_prog_cc_for_build.m4 m4/
 autoreconf --force --install
 echo "Now type './configure ...' and 'make' to compile."
