@@ -10,7 +10,7 @@ TESTS=\
 	test_configfile$(EXEEXT)
 
 lemon$(BUILD_EXEEXT): lemon.c
-	$(AM_V_CC)$(CC_FOR_BUILD) $(CPPFLAGS_FOR_BUILD) $(CFLAGS_FOR_BUILD) $(LDFLAGS_FOR_BUILD) -o $@ lemon.c
+	$(AM_V_CC)$(CC_FOR_BUILD) $(CPPFLAGS_FOR_BUILD) $(CFLAGS_FOR_BUILD) $(LDFLAGS_FOR_BUILD) -o $@ $(srcdir)/lemon.c
 
 lighttpd_angel_SOURCES=lighttpd-angel.c
 
