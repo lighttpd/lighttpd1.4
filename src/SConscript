@@ -40,7 +40,8 @@ def WorkaroundFreeBSDLibOrder(libs):
 	# which "on purpose" might conflict with those in libc
 	# => link libc first solves this
 	# (required for FreeBSD11 fullstatic build)
-	if 'c' in libs:
+	import platform
+	if ('c' in libs) and (platform.system() == 'FreeBSD'):
 		return ['c'] + libs
 	return libs
 
