@@ -4,6 +4,29 @@ NEWS
 ====
 
 - 1.4.43
+  * [autobuild] remove mod_authn_gssapi dep on resolv
+  * [mod_deflate] ignore '*' in deflate.mimetypes
+  * [autobuild] omit module stubs when missing deps
+  * [TLS] openssl 1.1.0 hides struct bignum_st
+  * [autobuild] move http_cgi_ssl_env() for Mac OS X (fixes #2757)
+  * [core] use paccept() on NetBSD (replace accept4())
+  * [TLS] remote IP conditions are valid for TLS SNI (fixes #2272)
+  * [doc] lighttpd-angel.8 (fixes #2254)
+  * [cmake] build fcgi-auth, fcgi-responder for tests
+  * [mod_accesslog] %{ratio}n logs compression ratio (fixes #2133)
+  * [mod_deflate] skip deflate if loadavg too high (fixes #1505)
+  * [mod_expire] expire by mimetype (fixes #423)
+  * [mod_evhost] partial matching patterns (fixes #1194)
+  * build: use CC_FOR_BUILD for lemon when cross-compiling
+  * [mod_dirlisting] config header and readme files
+  * [config] warn if mod_authn_ldap,mysql not listed
+  * fix FastCGI, SCGI, proxy reconnect on failure
+  * [core] network_open_file_chunk() temp file opt
+  * [mod_rewrite] add more info in error log msg
+  * [core] fix fd leak when using libev (fixes #2761)
+  * [core] fix potential streaming tempfile corruption (fixes #2760)
+  * [mod_scgi] fix prefix matching to always match url
+  * [autobuild] adjust Makefile.am for FreeBSD
 
 - 1.4.42 - 2016-10-16
   * [TLS] SSL_shutdown() only if handshake finished
