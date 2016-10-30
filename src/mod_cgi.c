@@ -36,7 +36,7 @@
 #include <stdio.h>
 #include <fcntl.h>
 
-#ifdef O_CLOEXEC
+#if defined(O_CLOEXEC) && (!defined(__FreeBSD__) || defined(F_DUPFD_CLOEXEC))
 #define pipe_cloexec(pipefd) pipe2((pipefd), O_CLOEXEC)
 #elif defined FD_CLOEXEC
 #define pipe_cloexec(pipefd) \
