@@ -5,7 +5,6 @@ AC_INIT([lighttpd], [1.4.43], [contact@lighttpd.net])
 AC_CONFIG_SRCDIR([src/server.c])
 AC_CONFIG_HEADER([config.h])
 AC_CONFIG_MACRO_DIR([m4])
-m4_include(ax_prog_cc_for_build.m4)
 
 AC_CANONICAL_HOST
 

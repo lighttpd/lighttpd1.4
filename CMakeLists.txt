@@ -2,7 +2,7 @@ project(lighttpd C)
 
 cmake_minimum_required(VERSION 2.8.2 FATAL_ERROR)
 
-set(CMAKE_MODULE_PATH ${CMAKE_SOURCE_DIR}/cmake)
+set(CMAKE_MODULE_PATH ${CMAKE_SOURCE_DIR}/scripts/cmake)
 
 include(CTest)
 
