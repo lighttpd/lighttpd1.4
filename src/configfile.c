@@ -25,6 +25,7 @@
 #include <glob.h>
 
 
+#if defined(HAVE_MYSQL) || (defined(HAVE_LDAP_H) && defined(HAVE_LBER_H) && defined(HAVE_LIBLDAP) && defined(HAVE_LIBLBER))
 static void config_warn_authn_module (server *srv, const char *module) {
 	size_t len = strlen(module);
 	for (size_t i = 0; i < srv->config_context->used; ++i) {
@@ -39,6 +40,7 @@ static void config_warn_authn_module (server *srv, const char *module) {
 		}
 	}
 }
+#endif
 
 static int config_insert(server *srv) {
 	size_t i;
