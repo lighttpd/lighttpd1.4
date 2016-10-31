@@ -3,7 +3,9 @@
 NEWS
 ====
 
-- 1.4.43
+- 1.4.44
+
+- 1.4.43 - 2016-10-31
   * [autobuild] remove mod_authn_gssapi dep on resolv
   * [mod_deflate] ignore '*' in deflate.mimetypes
   * [autobuild] omit module stubs when missing deps
