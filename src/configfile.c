@@ -34,6 +34,10 @@ static void config_warn_authn_module (server *srv, const char *module) {
 		if (NULL != du && du->type == TYPE_STRING) {
 			data_string *ds = (data_string *)du;
 			if (buffer_is_equal_string(ds->value, module, len)) {
+				ds = data_string_init();
+				buffer_copy_string_len(ds->value, CONST_STR_LEN("mod_authn_"));
+				buffer_append_string(ds->value, module);
+				array_insert_unique(srv->srvconf.modules, (data_unset *)ds);
 				log_error_write(srv, __FILE__, __LINE__, "SSSsSSS", "Warning: please add \"mod_authn_", module, "\" to server.modules list in lighttpd.conf.  A future release of lighttpd 1.4.x will not automatically load mod_authn_", module, "and lighttpd will fail to start up since your lighttpd.conf uses auth.backend = \"", module, "\".");
 				return;
 			}
@@ -451,17 +455,11 @@ static int config_insert(server *srv) {
 			}
 			if (append_mod_authn_ldap) {
 			      #if defined(HAVE_LDAP_H) && defined(HAVE_LBER_H) && defined(HAVE_LIBLDAP) && defined(HAVE_LIBLBER)
-				ds = data_string_init();
-				buffer_copy_string_len(ds->value, CONST_STR_LEN("mod_authn_ldap"));
-				array_insert_unique(srv->srvconf.modules, (data_unset *)ds);
 				config_warn_authn_module(srv, "ldap");
 			      #endif
 			}
 			if (append_mod_authn_mysql) {
 			      #if defined(HAVE_MYSQL)
-				ds = data_string_init();
-				buffer_copy_string_len(ds->value, CONST_STR_LEN("mod_authn_mysql"));
-				array_insert_unique(srv->srvconf.modules, (data_unset *)ds);
 				config_warn_authn_module(srv, "mysql");
 			      #endif
 			}
