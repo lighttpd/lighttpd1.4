@@ -334,7 +334,6 @@ static handler_t mod_authn_gssapi_check_spnego(server *srv, connection *con, plu
 
     /*(future: might modify http_auth_scheme_t to store (void *)p_d
      * and pass to checkfn, similar to http_auth_backend_t) */
-    buffer *ktname;
     buffer *sprinc;
     int ret = 0;
 
@@ -347,15 +346,18 @@ static handler_t mod_authn_gssapi_check_spnego(server *srv, connection *con, plu
 
     mod_authn_gssapi_patch_connection(srv, con, p);
 
-    /* ??? Should code = krb5_kt_resolve(kcontext, p->conf.auth_gssapi_keytab->ptr, &keytab);
-     *     be used, instead of putenv() of KRB5_KTNAME=...?  See mod_authn_gssapi_basic() */
-    /* ??? Should KRB5_KTNAME go into con->environment instead ??? */
-    /* ??? Should KRB5_KTNAME be added to mod_authn_gssapi_basic(), too? */
-    ktname = buffer_init_string("KRB5_KTNAME=");
-    buffer_append_string_buffer(ktname, p->conf.auth_gssapi_keytab);
-    putenv(ktname->ptr);
-    /* ktname becomes part of the environment, do not free */
-    /* buffer_free(ktname); */
+    {
+        /* ??? Should code = krb5_kt_resolve(kcontext, p->conf.auth_gssapi_keytab->ptr, &keytab);
+         *     be used, instead of putenv() of KRB5_KTNAME=...?  See mod_authn_gssapi_basic() */
+        /* ??? Should KRB5_KTNAME go into con->environment instead ??? */
+        /* ??? Should KRB5_KTNAME be added to mod_authn_gssapi_basic(), too? */
+        buffer ktname;
+        memset(&ktname, 0, sizeof(ktname));
+        buffer_copy_string(&ktname, "KRB5_KTNAME=");
+        buffer_append_string_buffer(&ktname, p->conf.auth_gssapi_keytab);
+        putenv(ktname.ptr);
+        /* ktname.ptr becomes part of the environment, do not free */
+    }
 
     sprinc = buffer_init_buffer(p->conf.auth_gssapi_principal);
     if (strchr(sprinc->ptr, '/') == NULL) {
