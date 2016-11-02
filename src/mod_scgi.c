@@ -2699,7 +2699,7 @@ static handler_t scgi_check_extension(server *srv, connection *con, void *p_d, i
 		ct_len = buffer_string_length(ext->key);
 
 		/* check _url_ in the form "/scgi_pattern" */
-		if (extension->key->ptr[0] == '/') {
+		if (ext->key->ptr[0] == '/') {
 			if (ct_len <= uri_path_len
 			    && 0 == strncmp(con->uri.path->ptr, ext->key->ptr, ct_len)) {
 				extension = ext;

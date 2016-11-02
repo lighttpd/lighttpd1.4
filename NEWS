@@ -4,6 +4,7 @@ NEWS
 ====
 
 - 1.4.44
+  * [mod_scgi] fix segfault (fixes #2762)
 
 - 1.4.43 - 2016-10-31
   * [autobuild] remove mod_authn_gssapi dep on resolv
