@@ -667,7 +667,7 @@ static int magnet_cgi_set(lua_State *L) {
 
 	/* __newindex: param 1 is the (empty) table the value is supposed to be set in */
 	const_buffer key = magnet_checkconstbuffer(L, 2);
-	const_buffer val = magnet_checkconstbuffer(L, 2);
+	const_buffer val = magnet_checkconstbuffer(L, 3);
 
 	array_set_key_value(con->environment, key.ptr, key.len, val.ptr, val.len);
 
