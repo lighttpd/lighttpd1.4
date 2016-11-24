@@ -1684,6 +1684,8 @@ static fcgi_extension_host * fcgi_extension_host_get(server *srv, connection *co
 					"on", extension->key,
 					"are down.");
 		}
+
+		return NULL;
 	}
 
 	/* found a server */
