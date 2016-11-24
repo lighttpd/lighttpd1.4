@@ -1028,6 +1028,7 @@ static int cgi_write_request(server *srv, handler_ctx *hctx, int fd) {
 		/* sent all request body input */
 		/* close connection to the cgi-script */
 		if (-1 == hctx->fdtocgi) { /*(received request body sent in initial send to pipe buffer)*/
+			--srv->cur_fds;
 			if (close(fd)) {
 				log_error_write(srv, __FILE__, __LINE__, "sds", "cgi stdin close failed ", fd, strerror(errno));
 			}
