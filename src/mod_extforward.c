@@ -424,6 +424,7 @@ URIHANDLER_FUNC(mod_extforward_uri_handler) {
 	if (real_remote_addr != NULL) { /* parsed */
 		sock_addr sock;
 		data_string *forwarded_proto = (data_string *)array_get_element(con->request.headers, "X-Forwarded-Proto");
+		sock.plain.sa_family = AF_UNSPEC;
 
 		if (NULL != forwarded_proto) {
 			if (buffer_is_equal_caseless_string(forwarded_proto->value, CONST_STR_LEN("https"))) {
