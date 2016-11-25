@@ -680,7 +680,7 @@ static handler_t mod_authn_file_htpasswd_basic(server *srv, connection *con, voi
                     li_tohex(ntlmhex,sizeof(ntlmhex),ntlmhash,sizeof(ntlmhash));
 
                     /*(reuse sample buffer for salt  (FYI: expect slen == 8))*/
-                    memcpy(sample, CONST_STR_LEN("$1$"));
+                    memcpy(sample, "$1$", sizeof("$1$")-1);
                     memcpy(sample+sizeof("$1$")-1, b, slen);
                     sample[sizeof("$1$")-1+slen] = '\0';
                    #if defined(HAVE_CRYPT_R)
