@@ -125,7 +125,7 @@ void li_rand_reseed (void)
         u = ((unsigned int)xsubi[0] << 16) | xsubi[1];
     }
     else {
-      #ifdef HAVE_ARC4RANDOM
+      #ifdef HAVE_ARC4RANDOM_BUF
         u = arc4random();
         arc4random_buf(xsubi, sizeof(xsubi));
       #else
@@ -155,7 +155,7 @@ int li_rand (void)
     int i;
     if (-1 != RAND_pseudo_bytes((unsigned char *)&i, sizeof(i))) return i;
   #endif
-  #ifdef HAVE_ARC4RANDOM
+  #ifdef HAVE_ARC4RANDOM_BUF
     return (int)arc4random();
   #elif defined(HAVE_SRANDOM)
     /* coverity[dont_call : FALSE] */

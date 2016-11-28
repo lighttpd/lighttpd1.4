@@ -129,7 +129,7 @@ set(CMAKE_EXTRA_INCLUDE_FILES)
 check_type_size(long SIZEOF_LONG)
 check_type_size(off_t SIZEOF_OFF_T)
 
-check_function_exists(arc4random HAVE_ARC4RANDOM)
+check_function_exists(arc4random_buf HAVE_ARC4RANDOM_BUF)
 check_function_exists(chroot HAVE_CHROOT)
 check_function_exists(epoll_ctl HAVE_EPOLL_CTL)
 check_function_exists(fork HAVE_FORK)
