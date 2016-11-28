@@ -305,8 +305,6 @@ typedef struct {
 
 	buffer *fcgi_env;
 
-	buffer *path;
-
 	buffer *statuskey;
 
 	plugin_config **config_storage;
@@ -701,8 +699,6 @@ INIT_FUNC(mod_fastcgi_init) {
 
 	p->fcgi_env = buffer_init();
 
-	p->path = buffer_init();
-
 	p->statuskey = buffer_init();
 
 	return p;
@@ -715,7 +711,6 @@ FREE_FUNC(mod_fastcgi_free) {
 	UNUSED(srv);
 
 	buffer_free(p->fcgi_env);
-	buffer_free(p->path);
 	buffer_free(p->statuskey);
 
 	if (p->config_storage) {

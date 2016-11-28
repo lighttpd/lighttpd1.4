@@ -95,6 +95,7 @@ typedef struct {
 
 	buffer *response;
 	buffer *response_header;
+	plugin_config conf;
 } handler_ctx;
 
 static handler_ctx * cgi_handler_ctx_init(void) {
@@ -562,10 +563,10 @@ static int cgi_demux_response(server *srv, handler_ctx *hctx) {
 						}
 					}
 
-					if (p->conf.xsendfile_allow) {
+					if (hctx->conf.xsendfile_allow) {
 						data_string *ds;
 						if (NULL != (ds = (data_string *) array_get_element(con->response.headers, "X-Sendfile"))) {
-							http_response_xsendfile(srv, con, ds->value, p->conf.xsendfile_docroot);
+							http_response_xsendfile(srv, con, ds->value, hctx->conf.xsendfile_docroot);
 							return FDEVENT_HANDLED_FINISHED;
 						}
 					}
@@ -1335,6 +1336,7 @@ URIHANDLER_FUNC(cgi_is_handled) {
 		handler_ctx *hctx = cgi_handler_ctx_init();
 		hctx->remote_conn = con;
 		hctx->plugin_data = p;
+		memcpy(&hctx->conf, &p->conf, sizeof(plugin_config));
 		con->plugin_ctx[p->id] = hctx;
 		con->mode = p->id;
 	}
@@ -1442,7 +1444,7 @@ SUBREQUEST_FUNC(mod_cgi_handle_subrequest) {
 	}
 
 	if (-1 == hctx->fd) {
-		buffer *handler = cgi_get_handler(p->conf.cgi, con->physical.path);
+		buffer *handler = cgi_get_handler(hctx->conf.cgi, con->physical.path);
 		if (!handler) return HANDLER_GO_ON; /*(should not happen; checked in cgi_is_handled())*/
 		if (cgi_create_env(srv, con, p, hctx, handler)) {
 			con->http_status = 500;

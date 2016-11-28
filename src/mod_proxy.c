@@ -348,7 +348,7 @@ static void proxy_backend_close(server *srv, handler_ctx *hctx) {
 	}
 }
 
-static data_proxy * mod_proxy_extension_host_get(server *srv, connection *con, plugin_data *p, data_array *extension) {
+static data_proxy * mod_proxy_extension_host_get(server *srv, connection *con, data_array *extension, proxy_balance_t balance, int debug) {
 	unsigned long last_max = ULONG_MAX;
 	int max_usage = INT_MAX;
 	int ndx = -1;
@@ -360,11 +360,11 @@ static data_proxy * mod_proxy_extension_host_get(server *srv, connection *con, p
 		} else {
 			ndx = 0;
 		}
-	} else if (extension->value->used != 0) switch(p->conf.balance) {
+	} else if (extension->value->used != 0) switch(balance) {
 	case PROXY_BALANCE_HASH:
 		/* hash balancing */
 
-		if (p->conf.debug) {
+		if (debug) {
 			log_error_write(srv, __FILE__, __LINE__,  "sd",
 					"proxy - used hash balancing, hosts:", extension->value->used);
 		}
@@ -379,7 +379,7 @@ static data_proxy * mod_proxy_extension_host_get(server *srv, connection *con, p
 				generate_crc32c(CONST_BUF_LEN(host->host)) + /* we can cache this */
 				generate_crc32c(CONST_BUF_LEN(con->uri.authority));
 
-			if (p->conf.debug) {
+			if (debug) {
 				log_error_write(srv, __FILE__, __LINE__,  "sbbbd",
 						"proxy - election:",
 						con->uri.path,
@@ -399,7 +399,7 @@ static data_proxy * mod_proxy_extension_host_get(server *srv, connection *con, p
 		break;
 	case PROXY_BALANCE_FAIR:
 		/* fair balancing */
-		if (p->conf.debug) {
+		if (debug) {
 			log_error_write(srv, __FILE__, __LINE__,  "s",
 					"proxy - used fair balancing");
 		}
@@ -421,7 +421,7 @@ static data_proxy * mod_proxy_extension_host_get(server *srv, connection *con, p
 		data_proxy *host;
 
 		/* round robin */
-		if (p->conf.debug) {
+		if (debug) {
 			log_error_write(srv, __FILE__, __LINE__,  "s",
 					"proxy - used round-robin balancing");
 		}
@@ -464,7 +464,7 @@ static data_proxy * mod_proxy_extension_host_get(server *srv, connection *con, p
 	if (ndx != -1) {
 		data_proxy *host = (data_proxy *)extension->value->data[ndx];
 
-		if (p->conf.debug) {
+		if (debug) {
 			log_error_write(srv, __FILE__, __LINE__,  "sbd",
 					"proxy - found a host",
 					host->host, host->port);
@@ -505,7 +505,7 @@ static void proxy_connection_close(server *srv, handler_ctx *hctx) {
 static handler_t proxy_reconnect(server *srv, handler_ctx *hctx) {
 	proxy_backend_close(srv, hctx);
 
-	hctx->host = mod_proxy_extension_host_get(srv, hctx->remote_conn, hctx->plugin_data, hctx->ext);
+	hctx->host = mod_proxy_extension_host_get(srv, hctx->remote_conn, hctx->ext, hctx->conf.balance, (int)hctx->conf.debug);
 	if (NULL == hctx->host) return HANDLER_FINISHED;
 
 	hctx->state = PROXY_STATE_INIT;
@@ -1271,7 +1271,7 @@ static handler_t mod_proxy_check_extension(server *srv, connection *con, void *p
 		return HANDLER_GO_ON;
 	}
 
-	host = mod_proxy_extension_host_get(srv, con, p, extension);
+	host = mod_proxy_extension_host_get(srv, con, extension, p->conf.balance, (int)p->conf.debug);
 	if (NULL == host) {
 		return HANDLER_FINISHED;
 	}
@@ -1293,6 +1293,7 @@ static handler_t mod_proxy_check_extension(server *srv, connection *con, void *p
 		hctx->host             = host;
 		hctx->ext              = extension;
 
+		hctx->conf.balance     = p->conf.balance;
 		hctx->conf.debug       = p->conf.debug;
 
 		con->plugin_ctx[p->id] = hctx;

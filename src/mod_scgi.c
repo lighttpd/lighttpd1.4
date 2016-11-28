@@ -291,7 +291,6 @@ typedef struct {
 
 	buffer *scgi_env;
 
-	buffer *path;
 	buffer *parse_response;
 
 	plugin_config **config_storage;
@@ -545,7 +544,6 @@ INIT_FUNC(mod_scgi_init) {
 
 	p->scgi_env = buffer_init();
 
-	p->path = buffer_init();
 	p->parse_response = buffer_init();
 
 	return p;
@@ -558,7 +556,6 @@ FREE_FUNC(mod_scgi_free) {
 	UNUSED(srv);
 
 	buffer_free(p->scgi_env);
-	buffer_free(p->path);
 	buffer_free(p->parse_response);
 
 	if (p->config_storage) {
@@ -1606,7 +1603,7 @@ static int scgi_create_env(server *srv, handler_ctx *hctx) {
 
 	http_cgi_opts opts = { 0, 0, host->docroot, NULL };
 
-	http_cgi_header_append_cb scgi_env_add = p->conf.proto == LI_PROTOCOL_SCGI
+	http_cgi_header_append_cb scgi_env_add = hctx->conf.proto == LI_PROTOCOL_SCGI
 	  ? scgi_env_add_scgi
 	  : scgi_env_add_uwsgi;
 
@@ -1617,7 +1614,7 @@ static int scgi_create_env(server *srv, handler_ctx *hctx) {
 		return -1;
 	}
 
-	if (p->conf.proto == LI_PROTOCOL_SCGI) {
+	if (hctx->conf.proto == LI_PROTOCOL_SCGI) {
 		scgi_env_add(p->scgi_env, CONST_STR_LEN("SCGI"), CONST_STR_LEN("1"));
 		b = buffer_init();
 		buffer_append_int(b, buffer_string_length(p->scgi_env));
@@ -2759,6 +2756,7 @@ static handler_t scgi_check_extension(server *srv, connection *con, void *p_d, i
 			hctx->ext              = extension;
 
 			/*hctx->conf.exts        = p->conf.exts;*/
+			hctx->conf.proto       = p->conf.proto;
 			hctx->conf.debug       = p->conf.debug;
 
 			con->plugin_ctx[p->id] = hctx;
@@ -2816,6 +2814,7 @@ static handler_t scgi_check_extension(server *srv, connection *con, void *p_d, i
 		hctx->ext              = extension;
 
 		/*hctx->conf.exts        = p->conf.exts;*/
+		hctx->conf.proto       = p->conf.proto;
 		hctx->conf.debug       = p->conf.debug;
 
 		con->plugin_ctx[p->id] = hctx;
