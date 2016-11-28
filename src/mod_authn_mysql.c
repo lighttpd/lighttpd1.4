@@ -175,6 +175,7 @@ FREE_FUNC(mod_authn_mysql_free) {
         }
         free(p->config_storage);
     }
+    mod_authn_mysql_sock_close(&p->conf);
 
     free(p);
 
