@@ -574,7 +574,7 @@ static int webdav_delete_file(server *srv, connection *con, handler_ctx *hctx, p
 			}
 		}
 #else
-		UNUSED(p);
+		UNUSED(hctx);
 #endif
 	}
 
@@ -753,7 +753,7 @@ static int webdav_copy_file(server *srv, connection *con, handler_ctx *hctx, phy
 		}
 	}
 #else
-	UNUSED(p);
+	UNUSED(hctx);
 #endif
 	return status;
 }
@@ -1298,7 +1298,7 @@ static int webdav_has_lock(server *srv, connection *con, handler_ctx *hctx, buff
 #else
 	UNUSED(srv);
 	UNUSED(con);
-	UNUSED(pconf);
+	UNUSED(hctx);
 	UNUSED(uri);
 #endif
 
