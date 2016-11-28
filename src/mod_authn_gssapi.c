@@ -46,13 +46,10 @@ typedef struct {
     PLUGIN_DATA;
     plugin_config **config_storage;
     plugin_config conf;
-    buffer *auth_cred;
 } plugin_data;
 
 static handler_t mod_authn_gssapi_check(server *srv, connection *con, void *p_d, const struct http_auth_require_t *require, const struct http_auth_backend_t *backend);
 static handler_t mod_authn_gssapi_basic(server *srv, connection *con, void *p_d, const http_auth_require_t *require, const buffer *username, const char *pw);
-
-static plugin_data *plugin_data_singleton;
 
 INIT_FUNC(mod_authn_gssapi_init) {
     static http_auth_scheme_t http_auth_scheme_gssapi =
@@ -67,7 +64,6 @@ INIT_FUNC(mod_authn_gssapi_init) {
     http_auth_backend_gssapi.p_d = p;
     http_auth_backend_set(&http_auth_backend_gssapi);
 
-    plugin_data_singleton = p;
     return p;
 }
 
@@ -332,8 +328,6 @@ static handler_t mod_authn_gssapi_check_spnego(server *srv, connection *con, plu
     gss_name_t server_name    = GSS_C_NO_NAME;
     gss_name_t client_name    = GSS_C_NO_NAME;
 
-    /*(future: might modify http_auth_scheme_t to store (void *)p_d
-     * and pass to checkfn, similar to http_auth_backend_t) */
     buffer *sprinc;
     int ret = 0;
 
@@ -361,9 +355,14 @@ static handler_t mod_authn_gssapi_check_spnego(server *srv, connection *con, plu
 
     sprinc = buffer_init_buffer(p->conf.auth_gssapi_principal);
     if (strchr(sprinc->ptr, '/') == NULL) {
-        buffer_append_string(sprinc, "/");
         /*(copy HTTP Host, omitting port if port is present)*/
-        buffer_append_string_len(sprinc, con->request.http_host->ptr, strcspn(con->request.http_host->ptr, ":"));
+        /* ??? Should con->server_name be used if http_host not present?
+         * ??? What if con->server_name is not set?
+         * ??? Will this work below if IPv6 provided in Host?  probably not */
+        if (!buffer_is_empty(con->request.http_host)) {
+            buffer_append_string(sprinc, "/");
+            buffer_append_string_len(sprinc, con->request.http_host->ptr, strcspn(con->request.http_host->ptr, ":"));
+        }
     }
     if (strchr(sprinc->ptr, '@') == NULL) {
         buffer_append_string(sprinc, "@");
@@ -412,12 +411,6 @@ static handler_t mod_authn_gssapi_check_spnego(server *srv, connection *con, plu
         goto end;
     }
 
-    /* check the allow-rules */
-    if (!http_auth_match_rules(require, token_out.value, NULL, NULL)) {
-        log_error_write(srv, __FILE__, __LINE__, "s", "rules didn't match");
-        goto end;
-    }
-
     if (!(acc_flags & GSS_C_CONF_FLAG)) {
         log_error_write(srv, __FILE__, __LINE__, "ss", "No confidentiality for user:", token_out.value);
         goto end;
@@ -425,6 +418,11 @@ static handler_t mod_authn_gssapi_check_spnego(server *srv, connection *con, plu
 
     if (!(acc_flags & GSS_C_DELEG_FLAG)) {
         log_error_write(srv, __FILE__, __LINE__, "ss", "Unable to delegate credentials for user:", token_out.value);
+        goto end;
+    }
+
+    /* check the allow-rules */
+    if (!http_auth_match_rules(require, token_out.value, NULL, NULL)) {
         goto end;
     }
 
@@ -524,8 +522,7 @@ static krb5_error_code mod_authn_gssapi_verify_krb5_init_creds(server *srv, krb5
         log_error_write(srv, __FILE__, __LINE__, "s", "krb5_unparse_name() failed when verifying KDC");
         goto end;
     }
-    /* log_error_write(srv, __FILE__, __LINE__, "ss", "Trying to verify authenticity of KDC using principal", server_name); */
-    free(server_name);
+    krb5_free_unparsed_name(context, server_name);
 
     if (!krb5_principal_compare(context, ap_req_server, creds->server)) {
         krb5_creds match_cred;
@@ -658,9 +655,14 @@ static handler_t mod_authn_gssapi_basic(server *srv, connection *con, void *p_d,
 
     sprinc = buffer_init_buffer(p->conf.auth_gssapi_principal);
     if (strchr(sprinc->ptr, '/') == NULL) {
-        buffer_append_string(sprinc, "/");
         /*(copy HTTP Host, omitting port if port is present)*/
-        buffer_append_string_len(sprinc, con->request.http_host->ptr, strcspn(con->request.http_host->ptr, ":"));
+        /* ??? Should con->server_name be used if http_host not present?
+         * ??? What if con->server_name is not set?
+         * ??? Will this work below if IPv6 provided in Host?  probably not */
+        if (!buffer_is_empty(con->request.http_host)) {
+            buffer_append_string(sprinc, "/");
+            buffer_append_string_len(sprinc, con->request.http_host->ptr, strcspn(con->request.http_host->ptr, ":"));
+        }
     }
 
     /*(init c_creds before anything which might krb5_free_cred_contents())*/
@@ -698,8 +700,8 @@ static handler_t mod_authn_gssapi_basic(server *srv, connection *con, void *p_d,
      * ret = krb5_unparse_name(kcontext, c_princ, &name);
      * if (ret == 0) {
      *    log_error_write(srv, __FILE__, __LINE__, "sbss", "Trying to get TGT for user:", username, "password:", pw);
-     *    free(name);
      * }
+     * krb5_free_unparsed_name(kcontext, name);
      */
 
     ret = krb5_get_init_creds_password(kcontext, &c_creds, c_princ, pw, NULL, NULL, 0, NULL, NULL);
@@ -769,7 +771,7 @@ static handler_t mod_authn_gssapi_basic(server *srv, connection *con, void *p_d,
 }
 
 
-REQUESTDONE_FUNC(mod_authn_gssapi_request_done) {
+CONNECTION_FUNC(mod_authn_gssapi_handle_reset) {
     plugin_data *p = (plugin_data *)p_d;
     buffer *kccname = (buffer *)con->plugin_ctx[p->id];
     if (NULL != kccname) {
@@ -789,7 +791,7 @@ int mod_authn_gssapi_plugin_init(plugin *p) {
     p->init        = mod_authn_gssapi_init;
     p->set_defaults= mod_authn_gssapi_set_defaults;
     p->cleanup     = mod_authn_gssapi_free;
-    p->handle_request_done = mod_authn_gssapi_request_done;
+    p->connection_reset = mod_authn_gssapi_handle_reset;
 
     p->data        = NULL;
 
