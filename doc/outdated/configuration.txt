@@ -364,6 +364,7 @@ server.modules
 				"mod_alias",
 			        "mod_access",
 				"mod_auth",
+				"mod_authn_file",
                                 "mod_status",
 				"mod_simple_vhost",
 				"mod_evhost",
