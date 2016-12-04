@@ -59,6 +59,10 @@
 # include <sys/prctl.h>
 #endif
 
+#ifdef HAVE_I2P
+# include "libsam3.h"
+#endif
+
 #ifdef USE_OPENSSL
 # include <openssl/err.h> 
 #endif
@@ -227,6 +231,11 @@ static server *server_init(void) {
 	CLEAN(srvconf.event_handler);
 	CLEAN(srvconf.pid_file);
 
+#ifdef HAVE_I2P
+	CLEAN(srvconf.i2p_sam_host);
+	CLEAN(srvconf.i2p_sam_keydir);
+#endif
+
 	CLEAN(tmp_chunk_len);
 #undef CLEAN
 
@@ -317,6 +326,11 @@ static void server_free(server *srv) {
 	CLEAN(srvconf.modules_dir);
 	CLEAN(srvconf.network_backend);
 	CLEAN(srvconf.xattr_name);
+
+#ifdef HAVE_I2P
+	CLEAN(srvconf.i2p_sam_host);
+	CLEAN(srvconf.i2p_sam_keydir);
+#endif
 
 	CLEAN(tmp_chunk_len);
 #undef CLEAN
@@ -1743,6 +1757,11 @@ int main (int argc, char **argv) {
 						fdevent_unregister(srv->ev, srv_socket->fd);
 						close(srv_socket->fd);
 						srv_socket->fd = -1;
+#ifdef HAVE_I2P
+						if (srv_socket->is_i2p) {
+							sam3CloseSession(&(srv_socket->i2p_ses));
+						}
+#endif
 
 						/* network_close() will cleanup after us */
 					} else {

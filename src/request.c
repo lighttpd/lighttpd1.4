@@ -709,6 +709,44 @@ int http_request_parse(server *srv, connection *con) {
 		con->request.http_host = ds->value;
 	}
 
+#ifdef HAVE_I2P
+	if (!buffer_is_empty(con->i2p_dest)) {
+		data_string *ds;
+
+		if (NULL == (ds = (data_string *)array_get_unused_element(con->request.headers, TYPE_STRING))) {
+			ds = data_string_init();
+		}
+
+		buffer_copy_string_len(ds->key, CONST_STR_LEN("X-I2P-DestB64"));
+		buffer_copy_buffer(ds->value, con->i2p_dest);
+		array_insert_unique(con->request.headers, (data_unset *)ds);
+	}
+
+	if (!buffer_is_empty(con->i2p_dest_hash)) {
+		data_string *ds;
+
+		if (NULL == (ds = (data_string *)array_get_unused_element(con->request.headers, TYPE_STRING))) {
+			ds = data_string_init();
+		}
+
+		buffer_copy_string_len(ds->key, CONST_STR_LEN("X-I2P-DestHash"));
+		buffer_copy_buffer(ds->value, con->i2p_dest_hash);
+		array_insert_unique(con->request.headers, (data_unset *)ds);
+	}
+
+	if (!buffer_is_empty(con->i2p_dest_b32)) {
+		data_string *ds;
+
+		if (NULL == (ds = (data_string *)array_get_unused_element(con->request.headers, TYPE_STRING))) {
+			ds = data_string_init();
+		}
+
+		buffer_copy_string_len(ds->key, CONST_STR_LEN("X-I2P-DestB32"));
+		buffer_copy_buffer(ds->value, con->i2p_dest_b32);
+		array_insert_unique(con->request.headers, (data_unset *)ds);
+	}
+#endif
+
 	for (; i <= ilen && !done; i++) {
 		char *cur = con->parse_request->ptr + i;
 

@@ -11,6 +11,9 @@ int network_write_chunkqueue(server *srv, connection *con, chunkqueue *c, off_t 
 int network_init(server *srv);
 int network_close(server *srv);
 
+#ifdef HAVE_I2P
+int network_register_i2p_fdevent(server *srv, server_socket *srv_socket, i2p_listener *l);
+#endif
 int network_register_fdevents(server *srv);
 
 #endif

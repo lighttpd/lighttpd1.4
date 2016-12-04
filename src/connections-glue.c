@@ -10,6 +10,7 @@
 #ifdef USE_OPENSSL
 # include <openssl/ssl.h>
 # include <openssl/err.h>
+# include <openssl/sha.h>
 #endif
 
 const char *connection_get_state(connection_state_t state) {

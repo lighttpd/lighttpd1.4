@@ -28,6 +28,11 @@
 #include "etag.h"
 
 
+#ifdef HAVE_I2P
+# include "libsam3.h"
+#endif
+
+
 #if defined HAVE_LIBSSL && defined HAVE_OPENSSL_SSL_H
 # define USE_OPENSSL
 # include <openssl/opensslconf.h>
@@ -333,6 +338,10 @@ typedef struct {
 	buffer *bsd_accept_filter;
 #endif
 
+#ifdef HAVE_I2P
+	buffer *i2p_sam_nickname;
+#endif
+
 #ifdef USE_OPENSSL
 	SSL_CTX *ssl_ctx; /* not patched */
 	/* SNI per host: with COMP_SERVER_SOCKET, COMP_HTTP_SCHEME, COMP_HTTP_HOST */
@@ -432,6 +441,12 @@ typedef struct {
 
 	sock_addr dst_addr;
 	buffer *dst_addr_buf;
+
+#ifdef HAVE_I2P
+	buffer *i2p_dest;
+	buffer *i2p_dest_hash;
+	buffer *i2p_dest_b32;
+#endif
 
 	/* request */
 	buffer *parse_request;
@@ -548,6 +563,12 @@ typedef struct {
 	unsigned short log_request_header_on_error;
 	unsigned short log_state_handling;
 
+#ifdef HAVE_I2P
+	buffer *i2p_sam_host;
+	unsigned short i2p_sam_port;
+	buffer *i2p_sam_keydir;
+#endif
+
 	enum { STAT_CACHE_ENGINE_UNSET,
 			STAT_CACHE_ENGINE_NONE,
 			STAT_CACHE_ENGINE_SIMPLE
@@ -567,10 +588,24 @@ typedef struct {
 	double loadavg[3];
 } server_config;
 
+#ifdef HAVE_I2P
+typedef struct i2p_listener {
+	Sam3Connection *conn;
+	int fde_ndx;
+	struct i2p_listener *next;
+} i2p_listener;
+#endif
+
 typedef struct server_socket {
 	sock_addr addr;
 	int       fd;
 	int       fde_ndx;
+
+#ifdef HAVE_I2P
+	unsigned short is_i2p;
+	Sam3Session    i2p_ses;
+	struct i2p_listener *i2p_listeners;
+#endif
 
 	unsigned short is_ssl;
 

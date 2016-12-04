@@ -145,6 +145,30 @@ static int config_insert(server *srv) {
 		{ "server.stream-response-body",       NULL, T_CONFIG_SHORT,   T_CONFIG_SCOPE_CONNECTION }, /* 77 */
 		{ "server.max-request-field-size",     NULL, T_CONFIG_INT,     T_CONFIG_SCOPE_SERVER     }, /* 78 */
 
+#ifdef HAVE_I2P
+		{ "i2p.sam.host",                      NULL, T_CONFIG_STRING,  T_CONFIG_SCOPE_SERVER     }, /* 79 */
+		{ "i2p.sam.port",                      NULL, T_CONFIG_SHORT,   T_CONFIG_SCOPE_SERVER     }, /* 80 */
+		{ "i2p.sam.keydir",                    NULL, T_CONFIG_STRING,  T_CONFIG_SCOPE_SERVER     }, /* 81 */
+		{ "i2p.sam.nickname",                  NULL, T_CONFIG_STRING,  T_CONFIG_SCOPE_CONNECTION }, /* 82 */
+#else
+		{ "i2p.sam.host",
+			"lighttpd has not been built with I2P support."
+			"Please remove i2p.sam.host from your config, or recompile with --enable-i2p.",
+			T_CONFIG_UNSUPPORTED, T_CONFIG_SCOPE_UNSET },
+		{ "i2p.sam.port",
+			"lighttpd has not been built with I2P support."
+			"Please remove i2p.sam.port from your config, or recompile with --enable-i2p.",
+			T_CONFIG_UNSUPPORTED, T_CONFIG_SCOPE_UNSET },
+		{ "i2p.sam.keydir",
+			"lighttpd has not been built with I2P support."
+			"Please remove i2p.sam.keydir from your config, or recompile with --enable-i2p.",
+			T_CONFIG_UNSUPPORTED, T_CONFIG_SCOPE_UNSET },
+		{ "i2p.sam.nickname",
+			"lighttpd has not been built with I2P support."
+			"Please remove i2p.sam.nickname from your config, or recompile with --enable-i2p.",
+			T_CONFIG_UNSUPPORTED, T_CONFIG_SCOPE_UNSET },
+#endif
+
 		{ NULL,                                NULL, T_CONFIG_UNSET,   T_CONFIG_SCOPE_UNSET      }
 	};
 
@@ -183,6 +207,12 @@ static int config_insert(server *srv) {
 	cv[73].destination = &(srv->srvconf.http_host_strict);
 	cv[74].destination = &(srv->srvconf.http_host_normalize);
 	cv[78].destination = &(srv->srvconf.max_request_field_size);
+
+#ifdef HAVE_I2P
+	cv[79].destination = srv->srvconf.i2p_sam_host;
+	cv[80].destination = &(srv->srvconf.i2p_sam_port);
+	cv[81].destination = srv->srvconf.i2p_sam_keydir;
+#endif
 
 	srv->config_storage = calloc(1, srv->config_context->used * sizeof(specific_config *));
 
@@ -251,6 +281,10 @@ static int config_insert(server *srv) {
 		s->stream_request_body = 0;
 		s->stream_response_body = 0;
 
+#ifdef HAVE_I2P
+		s->i2p_sam_nickname = buffer_init();
+#endif
+
 		/* all T_CONFIG_SCOPE_CONNECTION options */
 		cv[2].destination = s->errorfile_prefix;
 		cv[7].destination = s->server_tag;
@@ -315,6 +349,10 @@ static int config_insert(server *srv) {
 	      #endif
 		cv[76].destination = &(s->stream_request_body);
 		cv[77].destination = &(s->stream_response_body);
+
+#ifdef HAVE_I2P
+		cv[82].destination = s->i2p_sam_nickname;
+#endif
 
 		srv->config_storage[i] = s;
 

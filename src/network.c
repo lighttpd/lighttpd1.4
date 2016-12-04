@@ -11,6 +11,10 @@
 #include "network_backends.h"
 #include "sys-mmap.h"
 #include "sys-socket.h"
+#ifdef HAVE_I2P
+# include "libsam3.h"
+# include "i2p-base64.h"
+#endif
 
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -178,6 +182,7 @@ static int network_server_init(server *srv, buffer *host_token, specific_config 
 	socklen_t addr_len;
 	server_socket *srv_socket;
 	unsigned int port = 0;
+	const char *i2p_keyname;
 	const char *host;
 	buffer *b;
 	int err;
@@ -202,6 +207,9 @@ static int network_server_init(server *srv, buffer *host_token, specific_config 
 	srv_socket->addr.plain.sa_family = AF_INET; /* default */
 	srv_socket->fd = -1;
 	srv_socket->fde_ndx = -1;
+#ifdef HAVE_I2P
+	srv_socket->is_i2p = 0;
+#endif
 
 	srv_socket->srv_token = buffer_init();
 	buffer_copy_buffer(srv_socket->srv_token, host_token);
@@ -211,7 +219,33 @@ static int network_server_init(server *srv, buffer *host_token, specific_config 
 
 	host = b->ptr;
 
-	if (host[0] == '/') {
+	if (strncmp(host, "i2p:", 4) == 0) {
+		/* host is an I2P socket */
+		srv_socket->is_i2p = 1;
+#ifdef HAVE_I2P
+		/* i2p:keyname(:port) */
+		i2p_keyname = host + 4;
+		host = b->ptr + buffer_string_length(b); /* point to '\0' at end of string */
+		char *sp = NULL;
+
+		if (NULL == (sp = strchr(i2p_keyname, ':'))) {
+			port = srv->srvconf.port;
+		} else {
+			*sp = '\0';
+			port = strtol(sp+1, NULL, 10);
+		}
+
+		if (port == 0 || port > 65535) {
+			log_error_write(srv, __FILE__, __LINE__, "sd", "port not set or out of range:", port);
+
+			goto error_free_socket;
+		}
+#else
+		log_error_write(srv, __FILE__, __LINE__, "s",
+				"ERROR: I2P sockets are not supported.");
+		goto error_free_socket;
+#endif
+	} else if (host[0] == '/') {
 		/* host is a unix-domain-socket */
 #ifdef HAVE_SYS_UN_H
 		srv_socket->addr.plain.sa_family = AF_UNIX;
@@ -263,6 +297,9 @@ static int network_server_init(server *srv, buffer *host_token, specific_config 
 	}
 #endif
 
+#ifdef HAVE_I2P
+	if (!srv_socket->is_i2p) {
+#endif
 	switch(srv_socket->addr.plain.sa_family) {
 #ifdef HAVE_IPV6
 	case AF_INET6:
@@ -366,6 +403,9 @@ static int network_server_init(server *srv, buffer *host_token, specific_config 
 	default:
 		goto error_free_socket;
 	}
+#ifdef HAVE_I2P
+	} /* !srv_socket->is_i2p */
+#endif
 
 	if (srv->srvconf.preflight_check) {
 		err = 0;
@@ -379,6 +419,9 @@ static int network_server_init(server *srv, buffer *host_token, specific_config 
 		goto srv_sockets_append;
 	}
 
+#ifdef HAVE_I2P
+	if (!srv_socket->is_i2p) {
+#endif
 #ifdef HAVE_SYS_UN_H
 	if (AF_UNIX == srv_socket->addr.plain.sa_family) {
 		/* check if the socket exists and try to connect to it. */
@@ -452,7 +495,18 @@ static int network_server_init(server *srv, buffer *host_token, specific_config 
 			goto error_free_socket;
 		}
 	}
+#ifdef HAVE_I2P
+	} /* !srv_socket->is_i2p */
+#endif
 
+#ifdef HAVE_I2P
+	if (srv_socket->is_i2p) {
+		if (0 != bind_i2p(srv, s, srv_socket, i2p_keyname, port)) {
+			goto error_free_socket;
+		}
+		srv->cur_fds = srv_socket->fd = srv_socket->i2p_ses.fd;
+	} else {
+#endif
 	if (0 != bind(srv_socket->fd, (struct sockaddr *) &(srv_socket->addr), addr_len)) {
 		switch(srv_socket->addr.plain.sa_family) {
 		case AF_UNIX:
@@ -468,11 +522,25 @@ static int network_server_init(server *srv, buffer *host_token, specific_config 
 		}
 		goto error_free_socket;
 	}
+#ifdef HAVE_I2P
+	}
+#endif
 
+#ifdef HAVE_I2P
+	if (srv_socket->is_i2p) {
+		if (-1 == listen_i2p(srv_socket, s->listen_backlog)) {
+			log_error_write(srv, __FILE__, __LINE__, "ss", "listen failed: ", strerror(errno));
+			goto error_free_socket;
+		}
+	} else {
+#endif
 	if (-1 == listen(srv_socket->fd, s->listen_backlog)) {
 		log_error_write(srv, __FILE__, __LINE__, "ss", "listen failed: ", strerror(errno));
 		goto error_free_socket;
 	}
+#ifdef HAVE_I2P
+	}
+#endif
 
 	if (s->ssl_enabled) {
 #ifdef USE_OPENSSL
@@ -489,16 +557,25 @@ static int network_server_init(server *srv, buffer *host_token, specific_config 
 #endif
 #ifdef TCP_DEFER_ACCEPT
 	} else if (s->defer_accept) {
+#ifdef HAVE_I2P
+		if (!srv_socket->is_i2p) {
+#endif
 		int v = s->defer_accept;
 		if (-1 == setsockopt(srv_socket->fd, IPPROTO_TCP, TCP_DEFER_ACCEPT, &v, sizeof(v))) {
 			log_error_write(srv, __FILE__, __LINE__, "ss", "can't set TCP_DEFER_ACCEPT: ", strerror(errno));
 		}
+#ifdef HAVE_I2P
+		}
+#endif
 #endif
 #if defined(__FreeBSD__) || defined(__NetBSD__) \
  || defined(__OpenBSD__) || defined(__DragonFly__)
 	} else if (!buffer_is_empty(s->bsd_accept_filter)
 		   && (buffer_is_equal_string(s->bsd_accept_filter, CONST_STR_LEN("httpready"))
 			|| buffer_is_equal_string(s->bsd_accept_filter, CONST_STR_LEN("dataready")))) {
+#ifdef HAVE_I2P
+		if (!srv_socket->is_i2p) {
+#endif
 #ifdef SO_ACCEPTFILTER
 		/* FreeBSD accf_http filter */
 		struct accept_filter_arg afa;
@@ -509,6 +586,9 @@ static int network_server_init(server *srv, buffer *host_token, specific_config 
 				log_error_write(srv, __FILE__, __LINE__, "SBss", "can't set accept-filter '", s->bsd_accept_filter, "':", strerror(errno));
 			}
 		}
+#ifdef HAVE_I2P
+		}
+#endif
 #endif
 #endif
 	}
@@ -542,6 +622,11 @@ error_free_socket:
 		}
 
 		close(srv_socket->fd);
+#ifdef HAVE_I2P
+		if (srv_socket->is_i2p) {
+			sam3CloseSession(&(srv_socket->i2p_ses));
+		}
+#endif
 	}
 	buffer_free(srv_socket->srv_token);
 	free(srv_socket);
@@ -564,6 +649,11 @@ int network_close(server *srv) {
 			}
 
 			close(srv_socket->fd);
+#ifdef HAVE_I2P
+			if (srv_socket->is_i2p) {
+				sam3CloseSession(&(srv_socket->i2p_ses));
+			}
+#endif
 		}
 
 		buffer_free(srv_socket->srv_token);
@@ -1085,6 +1175,13 @@ int network_init(server *srv) {
 	return 0;
 }
 
+#ifdef HAVE_I2P
+int network_register_i2p_fdevent(server *srv, server_socket *srv_socket, i2p_listener *l) {
+	fdevent_register(srv->ev, l->conn->fd, network_server_handle_fdevent, srv_socket);
+	fdevent_event_set(srv->ev, &(l->fde_ndx), l->conn->fd, FDEVENT_IN);
+}
+#endif
+
 int network_register_fdevents(server *srv) {
 	size_t i;
 
@@ -1100,6 +1197,15 @@ int network_register_fdevents(server *srv) {
 
 		fdevent_register(srv->ev, srv_socket->fd, network_server_handle_fdevent, srv_socket);
 		fdevent_event_set(srv->ev, &(srv_socket->fde_ndx), srv_socket->fd, FDEVENT_IN);
+
+#ifdef HAVE_I2P
+		if (srv_socket->is_i2p) {
+			i2p_listener *l = srv_socket->i2p_listeners;
+			for (; l != NULL; l = l->next) {
+				network_register_i2p_fdevent(srv, srv_socket, l);
+			}
+		}
+#endif
 	}
 	return 0;
 }
