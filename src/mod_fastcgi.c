@@ -1469,6 +1469,18 @@ SETDEFAULTS_FUNC(mod_fastcgi_set_defaults) {
 						/* a local socket + self spawning */
 						size_t pno;
 
+						struct stat st;
+						size_t nchars = strcspn(host->bin_path->ptr, " \t");
+						char c = host->bin_path->ptr[nchars];
+						host->bin_path->ptr[nchars] = '\0';
+						if (0 == nchars || 0 != stat(host->bin_path->ptr, &st) || !S_ISREG(st.st_mode) || !(st.st_mode & (S_IXUSR | S_IXGRP | S_IXOTH))) {
+							host->bin_path->ptr[nchars] = c;
+							log_error_write(srv, __FILE__, __LINE__, "SSs",
+									"invalid \"bin-path\" => \"", host->bin_path->ptr,
+									"\" (check that file exists, is regular file, and is executable by lighttpd)");
+						}
+						host->bin_path->ptr[nchars] = c;
+
 						if (s->debug) {
 							log_error_write(srv, __FILE__, __LINE__, "ssbsdsbsd",
 									"--- fastcgi spawning local",

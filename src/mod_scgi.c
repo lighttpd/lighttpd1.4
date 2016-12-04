@@ -1214,6 +1214,18 @@ SETDEFAULTS_FUNC(mod_scgi_set_defaults) {
 						/* a local socket + self spawning */
 						size_t pno;
 
+						struct stat st;
+						size_t nchars = strcspn(df->bin_path->ptr, " \t");
+						char c = df->bin_path->ptr[nchars];
+						df->bin_path->ptr[nchars] = '\0';
+						if (0 == nchars || 0 != stat(df->bin_path->ptr, &st) || !S_ISREG(st.st_mode) || !(st.st_mode & (S_IXUSR | S_IXGRP | S_IXOTH))) {
+							df->bin_path->ptr[nchars] = c;
+							log_error_write(srv, __FILE__, __LINE__, "SSs",
+									"invalid \"bin-path\" => \"", df->bin_path->ptr,
+									"\" (check that file exists, is regular file, and is executable by lighttpd)");
+						}
+						df->bin_path->ptr[nchars] = c;
+
 						/* HACK:  just to make sure the adaptive spawing is disabled */
 						df->min_procs = df->max_procs;
 
