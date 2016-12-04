@@ -1038,7 +1038,7 @@ connection *connection_accept(server *srv, server_socket *srv_socket) {
 
 #ifdef HAVE_I2P
 	if (srv_socket->is_i2p) {
-		cnt = accept_i2p(srv_socket, (struct sockaddr *) &cnt_addr, &cnt_len);
+		cnt = accept_i2p(srv, srv_socket, (struct sockaddr *) &cnt_addr, &cnt_len);
 	} else {
 #endif
 #if defined(SOCK_CLOEXEC) && defined(SOCK_NONBLOCK)

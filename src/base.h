@@ -591,6 +591,7 @@ typedef struct {
 #ifdef HAVE_I2P
 typedef struct i2p_listener {
 	Sam3Connection *conn;
+	int fde_ndx;
 	struct i2p_listener *next;
 } i2p_listener;
 #endif

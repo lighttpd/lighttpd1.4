@@ -63,7 +63,7 @@
 int bind_i2p(server *srv, specific_config *s, server_socket *srv_socket,
 		const char *i2p_keyname, unsigned int port);
 int listen_i2p(server_socket *srv_socket, int backlog);
-int accept_i2p(server_socket *srv_socket, struct sockaddr *addr, socklen_t *addrlen);
+int accept_i2p(server *srv, server_socket *srv_socket, struct sockaddr *addr, socklen_t *addrlen);
 #endif
 
 /* return values:

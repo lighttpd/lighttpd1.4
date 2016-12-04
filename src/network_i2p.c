@@ -4,8 +4,10 @@
 
 #if defined(HAVE_I2P)
 
+#include "fdevent.h"
 #include "libsam3.h"
 #include "log.h"
+#include "network.h"
 
 #include <errno.h>
 #include <sys/ioctl.h>
@@ -229,7 +231,7 @@ int bind_i2p(server *srv, specific_config *s, server_socket *srv_socket,
 	return 0;
 }
 
-int add_listener(server_socket *srv_socket) {
+int add_listener(server *srv, server_socket *srv_socket) {
 	i2p_listener *l;
 	if ((l = calloc(1, sizeof(i2p_listener))) == NULL) {
 		strcpyseserr(&(srv_socket->i2p_ses), "NO_MEMORY");
@@ -241,8 +243,12 @@ int add_listener(server_socket *srv_socket) {
 		free(l);
 		return -1;
 	}
+	l->fde_ndx = -1;
 	l->next = srv_socket->i2p_listeners;
 	srv_socket->i2p_listeners = l;
+	if (srv != NULL) {
+		network_register_i2p_fdevent(srv, srv_socket, l);
+	}
 	return 0;
 }
 
@@ -250,14 +256,14 @@ int listen_i2p(server_socket *srv_socket, int backlog) {
 	// libsam3 currently only supports SAM v3.0; multi-accept was added in v3.2
 	int v32 = 0;
 	for (int i = 0; i < (v32 ? backlog : 1); i++) {
-		if (0 != add_listener(srv_socket)) {
+		if (0 != add_listener(NULL, srv_socket)) {
 			return -1;
 		}
 	}
 	return 0;
 }
 
-int accept_i2p(server_socket *srv_socket, struct sockaddr *addr, socklen_t *addrlen) {
+int accept_i2p(server *srv, server_socket *srv_socket, struct sockaddr *addr, socklen_t *addrlen) {
 	i2p_listener *l = srv_socket->i2p_listeners;
 	i2p_listener *prev = NULL;
 	while (l != NULL) {
@@ -269,10 +275,14 @@ int accept_i2p(server_socket *srv_socket, struct sockaddr *addr, socklen_t *addr
 			}
 
 			int fd = l->conn->fd;
+			if (l->fde_ndx != -1) {
+				fdevent_event_del(srv->ev, &(l->fde_ndx), fd);
+				fdevent_unregister(srv->ev, fd);
+			}
 			free(l);
 
 			// TODO Should this error-out (dropping the new conn), or log?
-			if (0 != add_listener(srv_socket)) {
+			if (0 != add_listener(srv, srv_socket)) {
 				return -1;
 			}
 

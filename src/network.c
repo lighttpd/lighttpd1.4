@@ -1175,6 +1175,13 @@ int network_init(server *srv) {
 	return 0;
 }
 
+#ifdef HAVE_I2P
+int network_register_i2p_fdevent(server *srv, server_socket *srv_socket, i2p_listener *l) {
+	fdevent_register(srv->ev, l->conn->fd, network_server_handle_fdevent, srv_socket);
+	fdevent_event_set(srv->ev, &(l->fde_ndx), l->conn->fd, FDEVENT_IN);
+}
+#endif
+
 int network_register_fdevents(server *srv) {
 	size_t i;
 
@@ -1190,6 +1197,15 @@ int network_register_fdevents(server *srv) {
 
 		fdevent_register(srv->ev, srv_socket->fd, network_server_handle_fdevent, srv_socket);
 		fdevent_event_set(srv->ev, &(srv_socket->fde_ndx), srv_socket->fd, FDEVENT_IN);
+
+#ifdef HAVE_I2P
+		if (srv_socket->is_i2p) {
+			i2p_listener *l = srv_socket->i2p_listeners;
+			for (; l != NULL; l = l->next) {
+				network_register_i2p_fdevent(srv, srv_socket, l);
+			}
+		}
+#endif
 	}
 	return 0;
 }
