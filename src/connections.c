@@ -1036,6 +1036,11 @@ connection *connection_accept(server *srv, server_socket *srv_socket) {
 
 	cnt_len = sizeof(cnt_addr);
 
+#ifdef HAVE_I2P
+	if (srv_socket->is_i2p) {
+		cnt = accept_i2p(srv_socket, (struct sockaddr *) &cnt_addr, &cnt_len);
+	} else {
+#endif
 #if defined(SOCK_CLOEXEC) && defined(SOCK_NONBLOCK)
 #if defined(__NetBSD__)
 	cnt = paccept(srv_socket->fd, (struct sockaddr *) &cnt_addr, &cnt_len, NULL, SOCK_CLOEXEC | SOCK_NONBLOCK);
@@ -1044,6 +1049,9 @@ connection *connection_accept(server *srv, server_socket *srv_socket) {
 #endif
 #else
 	cnt = accept(srv_socket->fd, (struct sockaddr *) &cnt_addr, &cnt_len);
+#endif
+#ifdef HAVE_I2P
+	}
 #endif
 	if (-1 == cnt) {
 		switch (errno) {
@@ -1087,10 +1095,42 @@ connection *connection_accepted(server *srv, server_socket *srv_socket, sock_add
 
 #ifdef HAVE_I2P
 		if (srv_socket->is_i2p) {
-			con->reading_i2p_dest = 1;
 			buffer_reset(con->i2p_dest);
 			buffer_reset(con->i2p_dest_hash);
 			buffer_reset(con->i2p_dest_b32);
+
+			Sam3Connection *conn = srv_socket->i2p_ses.connlist;
+			int found_conn = 0;
+			for (; conn != NULL; conn = conn->next) {
+				if (conn->fd == cnt) {
+					found_conn = 1;
+					buffer_copy_string(con->i2p_dest, conn->destkey);
+					break;
+				}
+			}
+			if (!found_conn) {
+				log_error_write(srv, __FILE__, __LINE__, "sd", "Could not find Sam3Connection for fd", cnt);
+				connection_close(srv, con);
+				return NULL;
+			}
+#ifdef USE_OPENSSL
+			/* Calculate hash */
+			int raw_dest_len;
+			unsigned char *raw_dest = i2p_unbase64(con->i2p_dest->ptr, strlen(con->i2p_dest->ptr), &raw_dest_len);
+			unsigned char *hash = SHA256(raw_dest, raw_dest_len, 0);
+			free(raw_dest);
+			unsigned char *hash_b64 = i2p_base64(hash, strlen(hash), &raw_dest_len);
+			buffer_copy_string(con->i2p_dest_hash, hash_b64);
+			free(hash_b64);
+
+			/* Calculate B32 */
+			char b32_hash[56];
+			sam3Base32Encode(b32_hash, hash, strlen(hash));
+			char *eq_pos = strchrnul(b32_hash, '=');
+			eq_pos[0] = '\0';
+			buffer_copy_string(con->i2p_dest_b32, b32_hash);
+			buffer_append_string_len(con->i2p_dest_b32, CONST_STR_LEN(".b32.i2p"));
+#endif
 		}
 #endif
 

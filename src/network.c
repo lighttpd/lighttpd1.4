@@ -25,14 +25,12 @@
 #include <unistd.h>
 #include <string.h>
 #include <stdlib.h>
-#include <stdio.h>
 #include <assert.h>
 
 #ifdef USE_OPENSSL
 # include <openssl/ssl.h>
 # include <openssl/err.h>
 # include <openssl/rand.h>
-# include <openssl/sha.h>
 # ifndef OPENSSL_NO_DH
 #  include <openssl/dh.h>
 # endif
@@ -185,14 +183,6 @@ static int network_server_init(server *srv, buffer *host_token, specific_config 
 	server_socket *srv_socket;
 	unsigned int port = 0;
 	const char *i2p_keyname;
-	char *hp;
-#ifdef HAVE_I2P
-	buffer *ob;
-	buffer *kpb;
-	buffer *kb;
-	FILE *fl;
-	char i2p_keybuffer[SAM3_PRIVKEY_SIZE+1];
-#endif
 	const char *host;
 	buffer *b;
 	int err;
@@ -231,135 +221,31 @@ static int network_server_init(server *srv, buffer *host_token, specific_config 
 
 	if (strncmp(host, "i2p:", 4) == 0) {
 		/* host is an I2P socket */
+		srv_socket->is_i2p = 1;
 #ifdef HAVE_I2P
-		/* i2p:keyfile:address:port */
+		/* i2p:keyname(:port) */
 		i2p_keyname = host + 4;
+		host = b->ptr + buffer_string_length(b); /* point to '\0' at end of string */
+		char *sp = NULL;
 
-		if (NULL == (hp = strchr(i2p_keyname, ':'))) {
-			log_error_write(srv, __FILE__, __LINE__, "sb", "value of $SERVER[\"socket\"] has to be \"i2p:keyname:ip:port\".", b);
+		if (NULL == (sp = strchr(i2p_keyname, ':'))) {
+			port = srv->srvconf.port;
+		} else {
+			*sp = '\0';
+			port = strtol(sp+1, NULL, 10);
+		}
+
+		if (port == 0 || port > 65535) {
+			log_error_write(srv, __FILE__, __LINE__, "sd", "port not set or out of range:", port);
 
 			goto error_free_socket;
 		}
-
-		*(hp++) = '\0';
-		host = hp;
-
-		srv_socket->is_i2p = 1;
-
-		/* Prepare SAM options */
-		ob = buffer_init();
-		if (!buffer_is_empty(s->i2p_sam_nickname)) {
-			buffer_copy_string_len(ob, CONST_STR_LEN("inbound.nickname=\""));
-			buffer_append_string_buffer(ob, s->i2p_sam_nickname);
-			buffer_append_string_len(ob, CONST_STR_LEN("\""));
-		} else {
-			buffer_copy_string_len(ob, CONST_STR_LEN("inbound.nickname=lighttpd-"));
-			buffer_append_string(ob, i2p_keyname);
-		}
-
-		/* Prepare keyfile prefix */
-		kpb = buffer_init();
-		if (!buffer_is_empty(srv->srvconf.i2p_sam_keydir)) {
-			buffer_copy_buffer(kpb, srv->srvconf.i2p_sam_keydir);
-			buffer_append_string_len(kpb, CONST_STR_LEN("/"));
-		}
-		buffer_append_string(kpb, i2p_keyname);
-
-		/* Read in the Destination */
-		kb = buffer_init();
-		buffer_copy_buffer(kb, kpb);
-		buffer_append_string_len(kb, CONST_STR_LEN(".privkey"));
-		if (!buffer_is_empty(srv->srvconf.i2p_sam_keydir)) {
-			buffer_path_simplify(kb, kb);
-		}
-
-		if ((fl = fopen(kb->ptr, "rt")) != NULL) {
-			fgets(i2p_keybuffer, SAM3_PRIVKEY_SIZE+1, fl);
-			fclose(fl);
-
-			log_error_write(srv, __FILE__, __LINE__, "ss", "Creating SAMv3 session for", i2p_keyname);
-			if (sam3CreateSession(&(srv_socket->i2p_ses), srv->srvconf.i2p_sam_host, srv->srvconf.i2p_sam_port, i2p_keybuffer, SAM3_SESSION_STREAM, ob->ptr) < 0) {
-				log_error_write(srv, __FILE__, __LINE__, "ss", "SAMv3 SESSION CREATE failed:", strerror(errno));
-				goto error_free_socket;
-			}
-			log_error_write(srv, __FILE__, __LINE__, "s", "Session built");
-		} else {
-			/* No file, so open a transient SAMv3 session and save its key */
-			log_error_write(srv, __FILE__, __LINE__, "sss", "Creating SAMv3 session for", i2p_keyname, "with new Destination");
-			if (sam3CreateSession(&(srv_socket->i2p_ses), srv->srvconf.i2p_sam_host, srv->srvconf.i2p_sam_port, SAM3_DESTINATION_TRANSIENT, SAM3_SESSION_STREAM, ob->ptr) < 0) {
-				log_error_write(srv, __FILE__, __LINE__, "ss", "SAMv3 SESSION CREATE failed:", strerror(errno));
-				goto error_free_socket;
-			}
-			log_error_write(srv, __FILE__, __LINE__, "s", "Session built");
-
-			if ((fl = fopen(kb->ptr, "wt")) != NULL) {
-				fwrite(srv_socket->i2p_ses.privkey, strlen(srv_socket->i2p_ses.privkey), 1, fl);
-				fclose(fl);
-				log_error_write(srv, __FILE__, __LINE__, "ss", "Private key saved to", kb->ptr);
-			} else {
-				log_error_write(srv, __FILE__, __LINE__, "sss", "WARNING: Could not save private key to", kb->ptr, "; Destination will be lost on shutdown.");
-			}
-		}
-		buffer_free(ob);
-		buffer_free(kb);
-
-		/* Export current Destination as B64 */
-		kb = buffer_init();
-		buffer_copy_buffer(kb, kpb);
-		buffer_append_string_len(kb, CONST_STR_LEN(".b64.txt"));
-		if (!buffer_is_empty(srv->srvconf.i2p_sam_keydir)) {
-			buffer_path_simplify(kb, kb);
-		}
-		if ((fl = fopen(kb->ptr, "wt")) != NULL) {
-			fwrite(srv_socket->i2p_ses.pubkey, strlen(srv_socket->i2p_ses.pubkey), 1, fl);
-			fclose(fl);
-			log_error_write(srv, __FILE__, __LINE__, "ss", "Destination B64 saved to", kb->ptr);
-		} else {
-			log_error_write(srv, __FILE__, __LINE__, "ss", "WARNING: Could not save Destination B64 to", kb->ptr);
-		}
-		buffer_free(kb);
-
-#ifdef USE_OPENSSL
-		/* Calculate B32 */
-		int raw_dest_len;
-		unsigned char *raw_dest = i2p_unbase64(srv_socket->i2p_ses.pubkey, strlen(srv_socket->i2p_ses.pubkey), &raw_dest_len);
-		unsigned char *hash = SHA256(raw_dest, raw_dest_len, 0);
-		free(raw_dest);
-		char b32_hash[56];
-		sam3Base32Encode(b32_hash, hash, strlen(hash));
-		char *eq_pos = strchrnul(b32_hash, '=');
-		eq_pos[0] = '\0';
-		buffer *b32;
-		b32 = buffer_init();
-		buffer_copy_string(b32, b32_hash);
-		buffer_append_string_len(b32, CONST_STR_LEN(".b32.i2p"));
-
-		/* Export B32 */
-		kb = buffer_init();
-		buffer_copy_string_buffer(kb, kpb);
-		buffer_append_string_len(kb, CONST_STR_LEN(".b32.txt"));
-		if (!buffer_is_empty(srv->srvconf.i2p_sam_keydir)) {
-			buffer_path_simplify(kb, kb);
-		}
-		if ((fl = fopen(kb->ptr, "wt")) != NULL) {
-			fwrite(b32->ptr, strlen(b32->ptr), 1, fl);
-			fclose(fl);
-			log_error_write(srv, __FILE__, __LINE__, "ss", "Destination B32 saved to", kb->ptr);
-		} else {
-			log_error_write(srv, __FILE__, __LINE__, "ss", "WARNING: Could not save Destination B32 to", kb->ptr);
-		}
-		buffer_free(kb);
-#endif
-
-		buffer_free(kpb);
 #else
 		log_error_write(srv, __FILE__, __LINE__, "s",
 				"ERROR: I2P sockets are not supported.");
 		goto error_free_socket;
 #endif
-	}
-
-	if (host[0] == '/') {
+	} else if (host[0] == '/') {
 		/* host is a unix-domain-socket */
 #ifdef HAVE_SYS_UN_H
 		srv_socket->addr.plain.sa_family = AF_UNIX;
@@ -378,7 +264,7 @@ static int network_server_init(server *srv, buffer *host_token, specific_config 
 			log_error_write(srv, __FILE__, __LINE__, "s", "value of $SERVER[\"socket\"] must not be empty");
 			goto error_free_socket;
 		}
-		if ((host[0] == '[' && b->ptr[len-1] == ']') || NULL == (sp = strrchr(host, ':'))) {
+		if ((b->ptr[0] == '[' && b->ptr[len-1] == ']') || NULL == (sp = strrchr(b->ptr, ':'))) {
 			/* use server.port if set in config, or else default from config_set_defaults() */
 			port = srv->srvconf.port;
 			sp = b->ptr + len; /* point to '\0' at end of string so end of IPv6 address can be found below */
@@ -389,7 +275,7 @@ static int network_server_init(server *srv, buffer *host_token, specific_config 
 		}
 
 		/* check for [ and ] */
-		if (host[0] == '[' && *(sp-1) == ']') {
+		if (b->ptr[0] == '[' && *(sp-1) == ']') {
 			*(sp-1) = '\0';
 			host++;
 
@@ -412,15 +298,8 @@ static int network_server_init(server *srv, buffer *host_token, specific_config 
 #endif
 
 #ifdef HAVE_I2P
-	if (srv_socket->is_i2p) {
-		/* Set up the stream (the listener will be opened below) */
-		if (sam3StreamForward(&(srv_socket->i2p_ses), host, port) < 0) {
-			log_error_write(srv, __FILE__, __LINE__, "ss", "SAMv3 STREAM FORWARD failed:", strerror(errno));
-			goto error_free_socket;
-		}
-	}
+	if (!srv_socket->is_i2p) {
 #endif
-
 	switch(srv_socket->addr.plain.sa_family) {
 #ifdef HAVE_IPV6
 	case AF_INET6:
@@ -524,6 +403,9 @@ static int network_server_init(server *srv, buffer *host_token, specific_config 
 	default:
 		goto error_free_socket;
 	}
+#ifdef HAVE_I2P
+	} /* !srv_socket->is_i2p */
+#endif
 
 	if (srv->srvconf.preflight_check) {
 		err = 0;
@@ -537,6 +419,9 @@ static int network_server_init(server *srv, buffer *host_token, specific_config 
 		goto srv_sockets_append;
 	}
 
+#ifdef HAVE_I2P
+	if (!srv_socket->is_i2p) {
+#endif
 #ifdef HAVE_SYS_UN_H
 	if (AF_UNIX == srv_socket->addr.plain.sa_family) {
 		/* check if the socket exists and try to connect to it. */
@@ -610,7 +495,18 @@ static int network_server_init(server *srv, buffer *host_token, specific_config 
 			goto error_free_socket;
 		}
 	}
+#ifdef HAVE_I2P
+	} /* !srv_socket->is_i2p */
+#endif
 
+#ifdef HAVE_I2P
+	if (srv_socket->is_i2p) {
+		if (0 != bind_i2p(srv, s, srv_socket, i2p_keyname, port)) {
+			goto error_free_socket;
+		}
+		srv->cur_fds = srv_socket->fd = srv_socket->i2p_ses.fd;
+	} else {
+#endif
 	if (0 != bind(srv_socket->fd, (struct sockaddr *) &(srv_socket->addr), addr_len)) {
 		switch(srv_socket->addr.plain.sa_family) {
 		case AF_UNIX:
@@ -626,11 +522,25 @@ static int network_server_init(server *srv, buffer *host_token, specific_config 
 		}
 		goto error_free_socket;
 	}
+#ifdef HAVE_I2P
+	}
+#endif
 
+#ifdef HAVE_I2P
+	if (srv_socket->is_i2p) {
+		if (-1 == listen_i2p(srv_socket, s->listen_backlog)) {
+			log_error_write(srv, __FILE__, __LINE__, "ss", "listen failed: ", strerror(errno));
+			goto error_free_socket;
+		}
+	} else {
+#endif
 	if (-1 == listen(srv_socket->fd, s->listen_backlog)) {
 		log_error_write(srv, __FILE__, __LINE__, "ss", "listen failed: ", strerror(errno));
 		goto error_free_socket;
 	}
+#ifdef HAVE_I2P
+	}
+#endif
 
 	if (s->ssl_enabled) {
 #ifdef USE_OPENSSL
@@ -647,16 +557,25 @@ static int network_server_init(server *srv, buffer *host_token, specific_config 
 #endif
 #ifdef TCP_DEFER_ACCEPT
 	} else if (s->defer_accept) {
+#ifdef HAVE_I2P
+		if (!srv_socket->is_i2p) {
+#endif
 		int v = s->defer_accept;
 		if (-1 == setsockopt(srv_socket->fd, IPPROTO_TCP, TCP_DEFER_ACCEPT, &v, sizeof(v))) {
 			log_error_write(srv, __FILE__, __LINE__, "ss", "can't set TCP_DEFER_ACCEPT: ", strerror(errno));
 		}
+#ifdef HAVE_I2P
+		}
+#endif
 #endif
 #if defined(__FreeBSD__) || defined(__NetBSD__) \
  || defined(__OpenBSD__) || defined(__DragonFly__)
 	} else if (!buffer_is_empty(s->bsd_accept_filter)
 		   && (buffer_is_equal_string(s->bsd_accept_filter, CONST_STR_LEN("httpready"))
 			|| buffer_is_equal_string(s->bsd_accept_filter, CONST_STR_LEN("dataready")))) {
+#ifdef HAVE_I2P
+		if (!srv_socket->is_i2p) {
+#endif
 #ifdef SO_ACCEPTFILTER
 		/* FreeBSD accf_http filter */
 		struct accept_filter_arg afa;
@@ -667,6 +586,9 @@ static int network_server_init(server *srv, buffer *host_token, specific_config 
 				log_error_write(srv, __FILE__, __LINE__, "SBss", "can't set accept-filter '", s->bsd_accept_filter, "':", strerror(errno));
 			}
 		}
+#ifdef HAVE_I2P
+		}
+#endif
 #endif
 #endif
 	}

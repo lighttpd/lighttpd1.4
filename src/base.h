@@ -443,7 +443,6 @@ typedef struct {
 	buffer *dst_addr_buf;
 
 #ifdef HAVE_I2P
-	int reading_i2p_dest;
 	buffer *i2p_dest;
 	buffer *i2p_dest_hash;
 	buffer *i2p_dest_b32;
@@ -589,6 +588,13 @@ typedef struct {
 	double loadavg[3];
 } server_config;
 
+#ifdef HAVE_I2P
+typedef struct i2p_listener {
+	Sam3Connection *conn;
+	struct i2p_listener *next;
+} i2p_listener;
+#endif
+
 typedef struct server_socket {
 	sock_addr addr;
 	int       fd;
@@ -597,6 +603,7 @@ typedef struct server_socket {
 #ifdef HAVE_I2P
 	unsigned short is_i2p;
 	Sam3Session    i2p_ses;
+	struct i2p_listener *i2p_listeners;
 #endif
 
 	unsigned short is_ssl;

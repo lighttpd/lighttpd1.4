@@ -227,47 +227,6 @@ int connection_handle_read(server *srv, connection *con) {
 	size_t mem_len = 0;
 	int toread;
 
-#ifdef HAVE_I2P
-	if (con->srv_socket->is_i2p && con->reading_i2p_dest) {
-		/* Read the first line, containing the remote Destination, before anything else happens */
-		char cur[2];
-		while (con->reading_i2p_dest && (1 == read(con->fd, cur, 1))) {
-			if (cur[0] == '\n') {
-				con->reading_i2p_dest = 0;
-			} else if (cur[0] == ' ') {
-				/* Not an I2P Destination -> not via SAM */
-				log_error_write(srv, __FILE__, __LINE__, "s", "Non-I2P request received on I2P socket");
-				connection_set_state(srv, con, CON_STATE_ERROR);
-				return -1;
-			} else {
-				buffer_append_string_len(con->i2p_dest, cur, 1);
-			}
-		}
-		if (con->reading_i2p_dest) {
-			return 0;
-#ifdef USE_OPENSSL
-		} else {
-			/* Calculate hash */
-			int raw_dest_len;
-			unsigned char *raw_dest = i2p_unbase64(con->i2p_dest->ptr, strlen(con->i2p_dest->ptr), &raw_dest_len);
-			unsigned char *hash = SHA256(raw_dest, raw_dest_len, 0);
-			free(raw_dest);
-			unsigned char *hash_b64 = i2p_base64(hash, strlen(hash), &raw_dest_len);
-			buffer_copy_string(con->i2p_dest_hash, hash_b64);
-			free(hash_b64);
-
-			/* Calculate B32 */
-			char b32_hash[56];
-			sam3Base32Encode(b32_hash, hash, strlen(hash));
-			char *eq_pos = strchrnul(b32_hash, '=');
-			eq_pos[0] = '\0';
-			buffer_copy_string(con->i2p_dest_b32, b32_hash);
-			buffer_append_string_len(con->i2p_dest_b32, CONST_STR_LEN(".b32.i2p"));
-#endif
-		}
-	}
-#endif
-
 	if (con->srv_socket->is_ssl) {
 		return connection_handle_read_ssl(srv, con);
 	}

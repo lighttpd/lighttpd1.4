@@ -76,6 +76,7 @@ common_src=base64.c buffer.c log.c \
 	network_write_mmap.c network_write_no_mmap.c \
 	network_freebsd_sendfile.c network_writev.c \
 	network_solaris_sendfilev.c network_openssl.c \
+	network_i2p.c \
 	rand.c \
 	splaytree.c status_counter.c \
 	safe_memclear.c network_darwin_sendfile.c
@@ -84,7 +85,7 @@ src = server.c response.c connections.c network.c \
 	configfile.c configparser.c request.c proc_open.c
 
 if BUILD_WITH_I2P
-src += libsam3.c
+common_src += libsam3.c
 endif
 
 lib_LTLIBRARIES =

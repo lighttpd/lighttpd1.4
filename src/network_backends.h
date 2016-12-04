@@ -59,6 +59,13 @@
 
 #include "base.h"
 
+#if defined(HAVE_I2P)
+int bind_i2p(server *srv, specific_config *s, server_socket *srv_socket,
+		const char *i2p_keyname, unsigned int port);
+int listen_i2p(server_socket *srv_socket, int backlog);
+int accept_i2p(server_socket *srv_socket, struct sockaddr *addr, socklen_t *addrlen);
+#endif
+
 /* return values:
  * >= 0 : no error
  *   -1 : error (on our side)
