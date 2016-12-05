@@ -151,9 +151,11 @@ int li_rand (void)
 {
     /* randomness *is not* cryptographically strong */
     /* (attempt to use better mechanisms to replace the more portable rand()) */
-  #ifdef USE_OPENSSL
+  #ifdef USE_OPENSSL  /* (RAND_pseudo_bytes() is deprecated in openssl 1.1.0) */
+  #if OPENSSL_VERSION_NUMBER < 0x10100000L || defined(LIBRESSL_VERSION_NUMBER)
     int i;
     if (-1 != RAND_pseudo_bytes((unsigned char *)&i, sizeof(i))) return i;
+  #endif
   #endif
   #ifdef HAVE_ARC4RANDOM_BUF
     return (int)arc4random();
