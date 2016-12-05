@@ -31,7 +31,9 @@
  * block, and are intended to be called only at startup in lighttpd, or
  * immediately after fork() to start lighttpd workers.
  *
- * Note: results from li_rand() are not necessarily cryptographically random.
+ * Note: results from li_rand_pseudo_bytes() are not necessarily
+ * cryptographically random and must not be used for purposes such
+ * as key generation which require cryptographic randomness.
  *
  * https://wiki.openssl.org/index.php/Random_Numbers
  * https://wiki.openssl.org/index.php/Random_fork-safety
@@ -147,7 +149,7 @@ void li_rand_reseed (void)
   #endif
 }
 
-int li_rand (void)
+int li_rand_pseudo_bytes (void)
 {
     /* randomness *is not* cryptographically strong */
     /* (attempt to use better mechanisms to replace the more portable rand()) */
@@ -186,7 +188,7 @@ int li_rand_bytes (unsigned char *buf, int num)
     else {
         /* NOTE: not cryptographically random !!! */
         for (int i = 0; i < num; ++i)
-            buf[i] = li_rand() & 0xFF;
+            buf[i] = li_rand_pseudo_bytes() & 0xFF;
         /*(openssl RAND_pseudo_bytes rc for non-cryptographically random data)*/
         return 0;
     }
