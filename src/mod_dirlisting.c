@@ -8,7 +8,6 @@
 
 #include "response.h"
 #include "stat_cache.h"
-#include "stream.h"
 
 #include <ctype.h>
 #include <stdlib.h>

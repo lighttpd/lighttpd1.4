@@ -8,7 +8,6 @@
 
 #include "plugin.h"
 
-#include "stream.h"
 #include "stat_cache.h"
 
 #include "sys-mmap.h"

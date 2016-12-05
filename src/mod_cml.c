@@ -6,8 +6,6 @@
 #include "plugin.h"
 #include "response.h"
 
-#include "stream.h"
-
 #include "mod_cml.h"
 
 #include <sys/stat.h>

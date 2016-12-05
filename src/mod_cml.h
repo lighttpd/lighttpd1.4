@@ -6,7 +6,6 @@
 #include "server.h"
 #include "response.h"
 
-#include "stream.h"
 #include "plugin.h"
 
 #if defined(USE_MEMCACHED)

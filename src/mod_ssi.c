@@ -5,7 +5,6 @@
 #include "buffer.h"
 
 #include "plugin.h"
-#include "stream.h"
 
 #include "response.h"
 
