@@ -770,9 +770,18 @@ int network_init(server *srv) {
 		if (buffer_string_is_empty(s->ssl_pemfile) && buffer_string_is_empty(s->ssl_ca_file)) continue;
 
 		if (srv->ssl_is_init == 0) {
+		      #if OPENSSL_VERSION_NUMBER >= 0x10100000L \
+		       && !defined(LIBRESSL_VERSION_NUMBER)
+			OPENSSL_init_ssl(OPENSSL_INIT_LOAD_SSL_STRINGS
+					|OPENSSL_INIT_LOAD_CRYPTO_STRINGS,NULL);
+			OPENSSL_init_crypto(OPENSSL_INIT_ADD_ALL_CIPHERS
+					   |OPENSSL_INIT_ADD_ALL_DIGESTS
+					   |OPENSSL_INIT_LOAD_CONFIG, NULL);
+		      #else
 			SSL_load_error_strings();
 			SSL_library_init();
 			OpenSSL_add_all_algorithms();
+		      #endif
 			srv->ssl_is_init = 1;
 
 			if (0 == RAND_status()) {
