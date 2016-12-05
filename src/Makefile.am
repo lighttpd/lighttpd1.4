@@ -72,15 +72,16 @@ common_src=base64.c buffer.c log.c \
 	configfile-glue.c \
 	http-header-glue.c \
 	http_auth.c \
+	rand.c \
+	splaytree.c status_counter.c \
+	safe_memclear.c
+
+src = server.c response.c connections.c network.c \
 	network_write.c network_linux_sendfile.c \
 	network_write_mmap.c network_write_no_mmap.c \
 	network_freebsd_sendfile.c network_writev.c \
 	network_solaris_sendfilev.c network_openssl.c \
-	rand.c \
-	splaytree.c status_counter.c \
-	safe_memclear.c network_darwin_sendfile.c
-
-src = server.c response.c connections.c network.c \
+	network_darwin_sendfile.c \
 	configfile.c configparser.c request.c proc_open.c
 
 lib_LTLIBRARIES =

@@ -529,13 +529,9 @@ set(COMMON_SRC
 	configfile-glue.c
 	http-header-glue.c
 	http_auth.c
-	splaytree.c network_writev.c
-	network_write_mmap.c network_write_no_mmap.c
-	network_write.c network_linux_sendfile.c
-	network_freebsd_sendfile.c
-	network_solaris_sendfilev.c network_openssl.c
+	splaytree.c
 	rand.c
-	status_counter.c safe_memclear.c network_darwin_sendfile.c
+	status_counter.c safe_memclear.c
 )
 
 if(WIN32)
@@ -560,6 +556,15 @@ add_executable(lighttpd
 	response.c
 	connections.c
 	network.c
+	network_darwin_sendfile.c
+	network_freebsd_sendfile.c
+	network_linux_sendfile.c
+	network_openssl.c
+	network_solaris_sendfilev.c
+	network_write.c
+	network_write_mmap.c
+	network_write_no_mmap.c
+	network_writev.c
 	configfile.c
 	configparser.c
 	request.c
