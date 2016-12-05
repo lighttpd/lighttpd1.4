@@ -563,11 +563,6 @@ static void show_features (void) {
 #else
       "\t- poll (Unix)\n"
 #endif
-#ifdef USE_LINUX_SIGIO
-      "\t+ rt-signals (Linux 2.4+)\n"
-#else
-      "\t- rt-signals (Linux 2.4+)\n"
-#endif
 #ifdef USE_LINUX_EPOLL
       "\t+ epoll (Linux 2.6)\n"
 #else

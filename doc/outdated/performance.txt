@@ -69,7 +69,6 @@ OS           Method     Config Value
 ============ ========== ===============
 all          select     select
 Unix         poll       poll
-Linux 2.4+   rt-signals linux-rtsig
 Linux 2.6+   epoll      linux-sysepoll
 Solaris      /dev/poll  solaris-devpoll
 FreeBSD, ... kqueue     freebsd-kqueue
