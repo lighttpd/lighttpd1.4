@@ -1,10 +1,8 @@
 #include "first.h"
 
-#include "mod_cml.h"
-#include "mod_cml_funcs.h"
-#include "log.h"
-
-#include "stat_cache.h"
+#include <lua.h>
+#include <lualib.h>
+#include <lauxlib.h>
 
 #include <assert.h>
 #include <stdio.h>
@@ -12,20 +10,16 @@
 #include <time.h>
 #include <string.h>
 
+#include "mod_cml_funcs.h"
+#include "mod_cml.h"
+
+#include "log.h"
+#include "stat_cache.h"
+
 #define HASHLEN 16
 typedef unsigned char HASH[HASHLEN];
 #define HASHHEXLEN 32
 typedef char HASHHEX[HASHHEXLEN+1];
-#ifdef USE_OPENSSL
-#define IN const
-#else
-#define IN
-#endif
-#define OUT
-
-#include <lua.h>
-#include <lualib.h>
-#include <lauxlib.h>
 
 static int lua_to_c_get_string(lua_State *L, const char *varname, buffer *b) {
 	int curelem = lua_gettop(L);

@@ -1,14 +1,5 @@
 #include "first.h"
 
-#include "buffer.h"
-#include "server.h"
-#include "log.h"
-#include "plugin.h"
-#include "response.h"
-
-#include "mod_cml.h"
-#include "mod_cml_funcs.h"
-
 #include <sys/stat.h>
 #include <time.h>
 
@@ -19,20 +10,23 @@
 #include <dirent.h>
 #include <stdio.h>
 
+#include <lauxlib.h>
+
+#include "mod_cml_funcs.h"
+#include "mod_cml.h"
+
+#include "buffer.h"
+#include "server.h"
+#include "log.h"
+#include "plugin.h"
+#include "response.h"
+
 #include "md5.h"
 
 #define HASHLEN 16
 typedef unsigned char HASH[HASHLEN];
 #define HASHHEXLEN 32
 typedef char HASHHEX[HASHHEXLEN+1];
-#ifdef USE_OPENSSL
-#define IN const
-#else
-#define IN
-#endif
-#define OUT
-
-#include <lauxlib.h>
 
 int f_crypto_md5(lua_State *L) {
 	li_MD5_CTX Md5Ctx;
