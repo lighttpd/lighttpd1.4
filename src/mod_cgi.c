@@ -8,7 +8,6 @@
 #include "joblist.h"
 #include "response.h"
 #include "http_chunk.h"
-#include "network_backends.h"
 
 #include "plugin.h"
 
@@ -868,6 +867,17 @@ static int cgi_env_add(void *venv, const char *key, size_t key_len, const char *
 	return 0;
 }
 
+/*(improved from network_write_mmap.c)*/
+static off_t mmap_align_offset(off_t start) {
+    static off_t pagemask = 0;
+    if (0 == pagemask) {
+        long pagesize = sysconf(_SC_PAGESIZE);
+        if (-1 == pagesize) pagesize = 4096;
+        pagemask = ~((off_t)pagesize - 1); /* pagesize always power-of-2 */
+    }
+    return (start & pagemask);
+}
+
 /* returns: 0: continue, -1: fatal error, -2: connection reset */
 /* similar to network_write_file_chunk_mmap, but doesn't use send on windows (because we're on pipes),
  * also mmaps and sends complete chunk instead of only small parts - the files
@@ -895,7 +905,14 @@ static ssize_t cgi_write_file_chunk_mmap(server *srv, connection *con, int fd, c
 		return 0;
 	}
 
-	if (0 != network_open_file_chunk(srv, con, cq)) return -1;
+	/*(simplified from network_write_no_mmap.c:network_open_file_chunk())*/
+	UNUSED(con);
+	if (-1 == c->file.fd) {
+		if (-1 == (c->file.fd = fdevent_open_cloexec(c->file.name->ptr, O_RDONLY, 0))) {
+			log_error_write(srv, __FILE__, __LINE__, "ssb", "open failed:", strerror(errno), c->file.name);
+			return -1;
+		}
+	}
 
 	/* (re)mmap the buffer if range is not covered completely */
 	if (MAP_FAILED == c->file.mmap.start
