@@ -432,8 +432,7 @@ static handler_t mod_authn_gssapi_check_spnego(server *srv, connection *con, plu
 
     end:
         buffer_free(t_in);
-        if (sprinc)
-            buffer_free(sprinc);
+        buffer_free(sprinc);
 
         if (context != GSS_C_NO_CONTEXT)
             gss_delete_sec_context(&st_minor, &context, GSS_C_NO_BUFFER);
@@ -636,7 +635,7 @@ static handler_t mod_authn_gssapi_basic(server *srv, connection *con, void *p_d,
 
     if (*pw == '\0') {
         log_error_write(srv, __FILE__, __LINE__, "s", "Empty passwords are not accepted");
-        mod_authn_gssapi_send_401_unauthorized_basic(srv, con);
+        return mod_authn_gssapi_send_401_unauthorized_basic(srv, con);
     }
 
     mod_authn_gssapi_patch_connection(srv, con, p);
@@ -644,13 +643,13 @@ static handler_t mod_authn_gssapi_basic(server *srv, connection *con, void *p_d,
     code = krb5_init_context(&kcontext);
     if (code) {
         log_error_write(srv, __FILE__, __LINE__, "sd", "krb5_init_context():", code);
-        mod_authn_gssapi_send_401_unauthorized_basic(srv, con); /*(well, should be 500)*/
+        return mod_authn_gssapi_send_401_unauthorized_basic(srv, con); /*(well, should be 500)*/
     }
 
     code = krb5_kt_resolve(kcontext, p->conf.auth_gssapi_keytab->ptr, &keytab);
     if (code) {
         log_error_write(srv, __FILE__, __LINE__, "sdb", "krb5_kt_resolve():", code, p->conf.auth_gssapi_keytab);
-        mod_authn_gssapi_send_401_unauthorized_basic(srv, con); /*(well, should be 500)*/
+        return mod_authn_gssapi_send_401_unauthorized_basic(srv, con); /*(well, should be 500)*/
     }
 
     sprinc = buffer_init_buffer(p->conf.auth_gssapi_principal);
@@ -747,12 +746,11 @@ static handler_t mod_authn_gssapi_basic(server *srv, connection *con, void *p_d,
             log_error_write(srv, __FILE__, __LINE__, "sb", "mod_authn_gssapi_store_krb5_creds failed for", username);
         }
 
+        buffer_free(sprinc);
         if (c_princ)
             krb5_free_principal(kcontext, c_princ);
         if (s_princ)
             krb5_free_principal(kcontext, s_princ);
-        if (sprinc)
-            buffer_free(sprinc);
         if (c_ccache)
             krb5_cc_destroy(kcontext, c_ccache);
         if (keytab)
