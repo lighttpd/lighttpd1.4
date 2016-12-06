@@ -381,6 +381,7 @@ handler_t connection_handle_read_post_state(server *srv, connection *con) {
 void connection_response_reset(server *srv, connection *con) {
 	UNUSED(srv);
 
+	con->mode = DIRECT;
 	con->http_status = 0;
 	con->is_writable = 1;
 	con->file_finished = 0;
@@ -390,7 +391,13 @@ void connection_response_reset(server *srv, connection *con) {
 	con->response.keep_alive = 0;
 	con->response.content_length = -1;
 	con->response.transfer_encoding = 0;
-	buffer_reset(con->physical.path);
+	if (con->physical.path) { /*(skip for mod_fastcgi authorizer)*/
+		buffer_reset(con->physical.doc_root);
+		buffer_reset(con->physical.path);
+		buffer_reset(con->physical.basedir);
+		buffer_reset(con->physical.rel_path);
+		buffer_reset(con->physical.etag);
+	}
 	array_reset(con->response.headers);
 	chunkqueue_reset(con->write_queue);
 }

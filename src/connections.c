@@ -696,14 +696,8 @@ int connection_reset(server *srv, connection *con) {
 
 	plugins_call_connection_reset(srv, con);
 
+	connection_response_reset(srv, con);
 	con->is_readable = 1;
-	con->is_writable = 1;
-	con->http_status = 0;
-	con->file_finished = 0;
-	con->file_started = 0;
-	con->got_response = 0;
-
-	con->parsed_response = 0;
 
 	con->bytes_written = 0;
 	con->bytes_written_cur_second = 0;
@@ -716,12 +710,6 @@ int connection_reset(server *srv, connection *con) {
 
 	con->request.http_if_modified_since = NULL;
 	con->request.http_if_none_match = NULL;
-
-	con->response.keep_alive = 0;
-	con->response.content_length = -1;
-	con->response.transfer_encoding = 0;
-
-	con->mode = DIRECT;
 
 #define CLEAN(x) \
 	if (con->x) buffer_reset(con->x);
@@ -738,12 +726,6 @@ int connection_reset(server *srv, connection *con) {
 	/* CLEAN(uri.path); */
 	CLEAN(uri.path_raw);
 	/* CLEAN(uri.query); */
-
-	CLEAN(physical.doc_root);
-	CLEAN(physical.path);
-	CLEAN(physical.basedir);
-	CLEAN(physical.rel_path);
-	CLEAN(physical.etag);
 
 	CLEAN(parse_request);
 
@@ -768,10 +750,8 @@ int connection_reset(server *srv, connection *con) {
 	con->request.content_length = 0;
 
 	array_reset(con->request.headers);
-	array_reset(con->response.headers);
 	array_reset(con->environment);
 
-	chunkqueue_reset(con->write_queue);
 	chunkqueue_reset(con->request_content_queue);
 
 	/* the plugins should cleanup themself */
