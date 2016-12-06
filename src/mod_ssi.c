@@ -40,6 +40,21 @@
 
 #include "etag.h"
 
+static handler_ctx * handler_ctx_init(plugin_data *p) {
+	handler_ctx *hctx = calloc(1, sizeof(*hctx));
+	force_assert(hctx);
+	hctx->timefmt = p->timefmt;
+	hctx->stat_fn = p->stat_fn;
+	hctx->ssi_vars = p->ssi_vars;
+	hctx->ssi_cgi_env = p->ssi_cgi_env;
+	memcpy(&hctx->conf, &p->conf, sizeof(plugin_config));
+	return hctx;
+}
+
+static void handler_ctx_free(handler_ctx *hctx) {
+	free(hctx);
+}
+
 /* The newest modified time of included files for include statement */
 static volatile time_t include_file_last_mtime = 0;
 
@@ -150,7 +165,7 @@ static int ssi_env_add(void *venv, const char *key, size_t klen, const char *val
 	return 0;
 }
 
-static int build_ssi_cgi_vars(server *srv, connection *con, plugin_data *p) {
+static int build_ssi_cgi_vars(server *srv, connection *con, handler_ctx *p) {
 	http_cgi_opts opts = { 0, 0, NULL, NULL };
 	/* temporarily remove Authorization from request headers
 	 * so that Authorization does not end up in SSI environment */
@@ -175,7 +190,7 @@ static int build_ssi_cgi_vars(server *srv, connection *con, plugin_data *p) {
 	return 0;
 }
 
-static int process_ssi_stmt(server *srv, connection *con, plugin_data *p, const char **l, size_t n, struct stat *st) {
+static int process_ssi_stmt(server *srv, connection *con, handler_ctx *p, const char **l, size_t n, struct stat *st) {
 
 	/**
 	 * <!--#element attribute=value attribute=value ... -->
@@ -1008,7 +1023,7 @@ static int mod_ssi_parse_ssi_stmt_offlen(int o[10], const char * const s, const 
 	return -1;
 }
 
-static void mod_ssi_parse_ssi_stmt(server *srv, connection *con, plugin_data *p, char *s, int len, struct stat *st) {
+static void mod_ssi_parse_ssi_stmt(server *srv, connection *con, handler_ctx *p, char *s, int len, struct stat *st) {
 
 	/**
 	 * <!--#element attribute=value attribute=value ... -->
@@ -1079,7 +1094,7 @@ static int mod_ssi_stmt_len(const char *s, const int len) {
 	return 0; /* incomplete directive "<!--#...-->" */
 }
 
-static void mod_ssi_read_fd(server *srv, connection *con, plugin_data *p, int fd, struct stat *st) {
+static void mod_ssi_read_fd(server *srv, connection *con, handler_ctx *p, int fd, struct stat *st) {
 	ssize_t rd;
 	size_t offset, pretag;
 	char buf[8192];
@@ -1164,7 +1179,7 @@ static void mod_ssi_read_fd(server *srv, connection *con, plugin_data *p, int fd
 # define FIFO_NONBLOCK 0
 #endif
 
-static int mod_ssi_handle_request(server *srv, connection *con, plugin_data *p) {
+static int mod_ssi_handle_request(server *srv, connection *con, handler_ctx *p) {
 	int fd;
 	struct stat st;
 
@@ -1173,9 +1188,7 @@ static int mod_ssi_handle_request(server *srv, connection *con, plugin_data *p) 
 	array_reset(p->ssi_vars);
 	array_reset(p->ssi_cgi_env);
 	buffer_copy_string_len(p->timefmt, CONST_STR_LEN("%a, %d %b %Y %H:%M:%S %Z"));
-	p->sizefmt = 0;
 	build_ssi_cgi_vars(srv, con, p);
-	p->if_is_false = 0;
 
 	/* Reset the modified time of included files */
 	include_file_last_mtime = 0;
@@ -1197,7 +1210,6 @@ static int mod_ssi_handle_request(server *srv, connection *con, plugin_data *p) 
 	close(fd);
 	con->file_started  = 1;
 	con->file_finished = 1;
-	con->mode = p->id;
 
 	if (buffer_string_is_empty(p->conf.content_type)) {
 		response_header_overwrite(srv, con, CONST_STR_LEN("Content-Type"), CONST_STR_LEN("text/html"));
@@ -1291,19 +1303,46 @@ URIHANDLER_FUNC(mod_ssi_physical_path) {
 		if (buffer_is_empty(ds->value)) continue;
 
 		if (buffer_is_equal_right_len(con->physical.path, ds->value, buffer_string_length(ds->value))) {
+			con->plugin_ctx[p->id] = handler_ctx_init(p);
+			con->mode = p->id;
+			break;
+		}
+	}
+
+	return HANDLER_GO_ON;
+}
+
+SUBREQUEST_FUNC(mod_ssi_handle_subrequest) {
+	plugin_data *p = p_d;
+	handler_ctx *hctx = con->plugin_ctx[p->id];
+	if (NULL == hctx) return HANDLER_GO_ON;
+	if (con->mode != p->id) return HANDLER_GO_ON; /* not my job */
+	/*
+	 * NOTE: if mod_ssi modified to use fdevents, HANDLER_WAIT_FOR_EVENT,
+	 * instead of blocking to completion, then hctx->timefmt, hctx->ssi_vars,
+	 * and hctx->ssi_cgi_env should be allocated and cleaned up per request.
+	 */
+
 			/* handle ssi-request */
 
-			if (mod_ssi_handle_request(srv, con, p)) {
+			if (mod_ssi_handle_request(srv, con, hctx)) {
 				/* on error */
 				con->http_status = 500;
 				con->mode = DIRECT;
 			}
 
 			return HANDLER_FINISHED;
-		}
+}
+
+static handler_t mod_ssi_connection_reset(server *srv, connection *con, void *p_d) {
+	plugin_data *p = p_d;
+	handler_ctx *hctx = con->plugin_ctx[p->id];
+	if (hctx) {
+		handler_ctx_free(hctx);
+		con->plugin_ctx[p->id] = NULL;
 	}
 
-	/* not found */
+	UNUSED(srv);
 	return HANDLER_GO_ON;
 }
 
@@ -1316,6 +1355,8 @@ int mod_ssi_plugin_init(plugin *p) {
 
 	p->init        = mod_ssi_init;
 	p->handle_subrequest_start = mod_ssi_physical_path;
+	p->handle_subrequest       = mod_ssi_handle_subrequest;
+	p->connection_reset        = mod_ssi_connection_reset;
 	p->set_defaults  = mod_ssi_set_defaults;
 	p->cleanup     = mod_ssi_free;
 

@@ -21,6 +21,19 @@ typedef struct {
 	PLUGIN_DATA;
 
 	buffer *timefmt;
+
+	buffer *stat_fn;
+
+	array *ssi_vars;
+	array *ssi_cgi_env;
+
+	plugin_config **config_storage;
+
+	plugin_config conf;
+} plugin_data;
+
+typedef struct {
+	buffer *timefmt;
 	int sizefmt;
 
 	buffer *stat_fn;
@@ -30,11 +43,9 @@ typedef struct {
 
 	int if_level, if_is_false_level, if_is_false, if_is_false_endif;
 
-	plugin_config **config_storage;
-
 	plugin_config conf;
-} plugin_data;
+} handler_ctx;
 
-int ssi_eval_expr(server *srv, connection *con, plugin_data *p, const char *expr);
+int ssi_eval_expr(server *srv, connection *con, handler_ctx *p, const char *expr);
 
 #endif
