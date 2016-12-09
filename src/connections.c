@@ -255,6 +255,16 @@ static void connection_handle_shutdown(server *srv, connection *con) {
 	srv->con_closed++;
 	connection_reset(srv, con);
 
+	/* plugins should have cleaned themselves up */
+	for (size_t i = 0; i < srv->plugins.used; ++i) {
+		plugin *p = ((plugin **)(srv->plugins.ptr))[i];
+		plugin_data *pd = p->data;
+		if (!pd || NULL == con->plugin_ctx[pd->id]) continue;
+		log_error_write(srv, __FILE__, __LINE__, "sb",
+				"missing cleanup in", p->name);
+		con->plugin_ctx[pd->id] = NULL;
+	}
+
 	/* close the connection */
 	if ((0 == shutdown(con->fd, SHUT_WR))) {
 		con->close_timeout_ts = srv->cur_ts;
@@ -692,8 +702,6 @@ void connections_free(server *srv) {
 
 
 int connection_reset(server *srv, connection *con) {
-	size_t i;
-
 	plugins_call_connection_reset(srv, con);
 
 	connection_response_reset(srv, con);
@@ -753,20 +761,6 @@ int connection_reset(server *srv, connection *con) {
 	array_reset(con->environment);
 
 	chunkqueue_reset(con->request_content_queue);
-
-	/* the plugins should cleanup themself */
-	for (i = 0; i < srv->plugins.used; i++) {
-		plugin *p = ((plugin **)(srv->plugins.ptr))[i];
-		plugin_data *pd = p->data;
-
-		if (!pd) continue;
-
-		if (con->plugin_ctx[pd->id] != NULL) {
-			log_error_write(srv, __FILE__, __LINE__, "sb", "missing cleanup in", p->name);
-		}
-
-		con->plugin_ctx[pd->id] = NULL;
-	}
 
 	/* The cond_cache gets reset in response.c */
 	/* config_cond_cache_reset(srv, con); */
