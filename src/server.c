@@ -244,7 +244,6 @@ static server *server_init(void) {
 	}
 
 	li_rand_reseed();
-	li_rand_bytes((unsigned char *)srv->entropy, (int)sizeof(srv->entropy));
 
 	srv->cur_ts = time(NULL);
 	srv->startup_ts = srv->cur_ts;

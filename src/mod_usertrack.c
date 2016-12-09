@@ -227,10 +227,8 @@ URIHANDLER_FUNC(mod_usertrack_uri_handler) {
 	li_MD5_Update(&Md5Ctx, CONST_BUF_LEN(con->uri.path));
 	li_MD5_Update(&Md5Ctx, CONST_STR_LEN("+"));
 
-	/* we assume sizeof(time_t) == 4 here, but if not it ain't a problem at all */
 	li_itostrn(hh, sizeof(hh), srv->cur_ts);
 	li_MD5_Update(&Md5Ctx, (unsigned char *)hh, strlen(hh));
-	li_MD5_Update(&Md5Ctx, (unsigned char *)srv->entropy, sizeof(srv->entropy));
 	li_itostrn(hh, sizeof(hh), li_rand_pseudo_bytes());
 	li_MD5_Update(&Md5Ctx, (unsigned char *)hh, strlen(hh));
 
