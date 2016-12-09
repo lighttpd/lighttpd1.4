@@ -31,6 +31,15 @@
  * block, and are intended to be called only at startup in lighttpd, or
  * immediately after fork() to start lighttpd workers.
  *
+ * Update: li_rand_init() is now deferred until first use so that installations
+ * that do not use modules which use these routines do need to potentially block
+ * at startup.  Current use by core lighttpd modules is in mod_auth HTTP Digest
+ * auth and in mod_usertrack.  Deferring collection of random data until first
+ * use may allow sufficient entropy to be collected by kernel before first use,
+ * helping reduce or avoid situations in low-entropy-generating embedded devices
+ * which might otherwise block lighttpd for minutes at device startup.
+ * Further discussion in https://redmine.lighttpd.net/boards/2/topics/6981
+ *
  * Note: results from li_rand_pseudo_bytes() are not necessarily
  * cryptographically random and must not be used for purposes such
  * as key generation which require cryptographic randomness.
@@ -111,9 +120,10 @@ static int li_rand_device_bytes (unsigned char *buf, int num)
     return 0;
 }
 
+static int li_rand_inited;
 static unsigned short xsubi[3];
 
-void li_rand_reseed (void)
+static void li_rand_init (void)
 {
     /* (intended to be called at init and after fork() in order to re-seed PRNG
      *  so that forked children, grandchildren, etc do not share PRNG seed)
@@ -123,6 +133,7 @@ void li_rand_reseed (void)
      * https://github.com/libressl-portable/portable/commit/32d9eeeecf4e951e1566d5f4a42b36ea37b60f35
      */
     unsigned int u;
+    li_rand_inited = 1;
     if (1 == li_rand_device_bytes((unsigned char *)xsubi, (int)sizeof(xsubi))) {
         u = ((unsigned int)xsubi[0] << 16) | xsubi[1];
     }
@@ -149,6 +160,11 @@ void li_rand_reseed (void)
   #endif
 }
 
+void li_rand_reseed (void)
+{
+    if (li_rand_inited) li_rand_init();
+}
+
 int li_rand_pseudo_bytes (void)
 {
     /* randomness *is not* cryptographically strong */
@@ -159,6 +175,7 @@ int li_rand_pseudo_bytes (void)
     if (-1 != RAND_pseudo_bytes((unsigned char *)&i, sizeof(i))) return i;
   #endif
   #endif
+    if (!li_rand_inited) li_rand_init();
   #ifdef HAVE_ARC4RANDOM_BUF
     return (int)arc4random();
   #elif defined(HAVE_SRANDOM)
