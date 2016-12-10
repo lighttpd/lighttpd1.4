@@ -725,18 +725,24 @@ static void http_list_directory_header(server *srv, connection *con, plugin_data
 
 	if (p->conf.auto_layout) {
 		buffer_append_string_len(out, CONST_STR_LEN(
-			"<!DOCTYPE html PUBLIC \"-//W3C//DTD XHTML 1.1//EN\" \"http://www.w3.org/TR/xhtml11/DTD/xhtml11.dtd\">\n"
-			"<html xmlns=\"http://www.w3.org/1999/xhtml\" xml:lang=\"en\">\n"
+			"<!DOCTYPE html>\n"
+			"<html>\n"
 			"<head>\n"
-			"<title>Index of "
 		));
+		if (!buffer_string_is_empty(p->conf.encoding)) {
+			buffer_append_string_len(out, CONST_STR_LEN("<meta charset=\""));
+			buffer_append_string_buffer(out, p->conf.encoding);
+			buffer_append_string_len(out, CONST_STR_LEN("\">\n"));
+		}
+		buffer_append_string_len(out, CONST_STR_LEN("<title>Index of "));
 		buffer_append_string_encoded(out, CONST_BUF_LEN(con->uri.path), ENCODING_MINIMAL_XML);
 		buffer_append_string_len(out, CONST_STR_LEN("</title>\n"));
 
 		if (!buffer_string_is_empty(p->conf.external_css)) {
+			buffer_append_string_len(out, CONST_STR_LEN("<meta name=\"viewport\" content=\"initial-scale=1\">"));
 			buffer_append_string_len(out, CONST_STR_LEN("<link rel=\"stylesheet\" type=\"text/css\" href=\""));
 			buffer_append_string_buffer(out, p->conf.external_css);
-			buffer_append_string_len(out, CONST_STR_LEN("\" />\n"));
+			buffer_append_string_len(out, CONST_STR_LEN("\">\n"));
 		} else {
 			buffer_append_string_len(out, CONST_STR_LEN(
 				"<style type=\"text/css\">\n"
@@ -831,14 +837,6 @@ static void http_list_directory_footer(server *srv, connection *con, plugin_data
 
 	if(p->conf.auto_layout) {
 
-		if (!buffer_string_is_empty(p->conf.external_js)) {
-			buffer_append_string_len(out, CONST_STR_LEN("<script type=\"text/javascript\" src=\""));
-			buffer_append_string_buffer(out, p->conf.external_js);
-			buffer_append_string_len(out, CONST_STR_LEN("\" />\n"));
-		} else if (buffer_is_empty(p->conf.external_js)) {
-			http_dirlist_append_js_table_resort(out, con);
-		}
-
 		buffer_append_string_len(out, CONST_STR_LEN(
 			"<div class=\"foot\">"
 		));
@@ -851,6 +849,17 @@ static void http_list_directory_footer(server *srv, connection *con, plugin_data
 
 		buffer_append_string_len(out, CONST_STR_LEN(
 			"</div>\n"
+		));
+
+		if (!buffer_string_is_empty(p->conf.external_js)) {
+			buffer_append_string_len(out, CONST_STR_LEN("<script type=\"text/javascript\" src=\""));
+			buffer_append_string_buffer(out, p->conf.external_js);
+			buffer_append_string_len(out, CONST_STR_LEN("\"></script>\n"));
+		} else if (buffer_is_empty(p->conf.external_js)) {
+			http_dirlist_append_js_table_resort(out, con);
+		}
+
+		buffer_append_string_len(out, CONST_STR_LEN(
 			"</body>\n"
 			"</html>\n"
 		));
@@ -1012,13 +1021,6 @@ static int http_list_directory(server *srv, connection *con, plugin_data *p, buf
 	if (files.used) http_dirls_sort(files.ent, files.used);
 
 	out = buffer_init();
-	buffer_copy_string_len(out, CONST_STR_LEN("<?xml version=\"1.0\" encoding=\""));
-	if (buffer_string_is_empty(p->conf.encoding)) {
-		buffer_append_string_len(out, CONST_STR_LEN("iso-8859-1"));
-	} else {
-		buffer_append_string_buffer(out, p->conf.encoding);
-	}
-	buffer_append_string_len(out, CONST_STR_LEN("\"?>\n"));
 	http_list_directory_header(srv, con, p, out);
 
 	/* directories */
