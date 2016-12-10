@@ -62,6 +62,7 @@ typedef enum {
 typedef struct {
 	array *extensions;
 	unsigned short debug;
+	unsigned short replace_http_host;
 
 	proxy_balance_t balance;
 } plugin_config;
@@ -190,6 +191,7 @@ SETDEFAULTS_FUNC(mod_proxy_set_defaults) {
 		{ "proxy.server",              NULL, T_CONFIG_LOCAL, T_CONFIG_SCOPE_CONNECTION },       /* 0 */
 		{ "proxy.debug",               NULL, T_CONFIG_SHORT, T_CONFIG_SCOPE_CONNECTION },       /* 1 */
 		{ "proxy.balance",             NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_CONNECTION },      /* 2 */
+		{ "proxy.replace-http-host",   NULL, T_CONFIG_SHORT, T_CONFIG_SCOPE_CONNECTION },       /* 3 */
 		{ NULL,                        NULL, T_CONFIG_UNSET, T_CONFIG_SCOPE_UNSET }
 	};
 
@@ -202,10 +204,12 @@ SETDEFAULTS_FUNC(mod_proxy_set_defaults) {
 		s = malloc(sizeof(plugin_config));
 		s->extensions    = array_init();
 		s->debug         = 0;
+		s->replace_http_host = 0;
 
 		cv[0].destination = s->extensions;
 		cv[1].destination = &(s->debug);
 		cv[2].destination = p->balance_buf;
+		cv[3].destination = &(s->replace_http_host);
 
 		buffer_reset(p->balance_buf);
 
@@ -617,6 +621,7 @@ static int proxy_create_env(server *srv, handler_ctx *hctx) {
 
 	connection *con   = hctx->remote_conn;
 	buffer *b;
+	int replace_http_host = 0;
 
 	/* build header */
 
@@ -628,6 +633,16 @@ static int proxy_create_env(server *srv, handler_ctx *hctx) {
 
 	buffer_append_string_buffer(b, con->request.uri);
 	buffer_append_string_len(b, CONST_STR_LEN(" HTTP/1.0\r\n"));
+	if (hctx->conf.replace_http_host && !buffer_string_is_empty(hctx->host->key)) {
+		replace_http_host = 1;
+		if (hctx->conf.debug > 1) {
+			log_error_write(srv, __FILE__, __LINE__,  "SBS",
+					"proxy - using \"", hctx->host->key, "\" as HTTP Host");
+		}
+		buffer_append_string_len(b, CONST_STR_LEN("Host: "));
+		buffer_append_string_buffer(b, hctx->host->key);
+		buffer_append_string_len(b, CONST_STR_LEN("\r\n"));
+	}
 
 	proxy_append_header(con, "X-Forwarded-For", (char *)inet_ntop_cache_get_ip(srv, &(con->dst_addr)));
 	/* http_host is NOT is just a pointer to a buffer
@@ -644,6 +659,8 @@ static int proxy_create_env(server *srv, handler_ctx *hctx) {
 		ds = (data_string *)con->request.headers->data[i];
 
 		if (!buffer_is_empty(ds->value) && !buffer_is_empty(ds->key)) {
+			if (replace_http_host &&
+			    buffer_is_equal_caseless_string(ds->key, CONST_STR_LEN("Host"))) continue;
 			if (buffer_is_equal_caseless_string(ds->key, CONST_STR_LEN("Connection"))) continue;
 			if (buffer_is_equal_caseless_string(ds->key, CONST_STR_LEN("Proxy-Connection"))) continue;
 			/* Do not emit HTTP_PROXY in environment.
@@ -1057,6 +1074,7 @@ static int mod_proxy_patch_connection(server *srv, connection *con, plugin_data 
 	PATCH(extensions);
 	PATCH(debug);
 	PATCH(balance);
+	PATCH(replace_http_host);
 
 	/* skip the first, the global context */
 	for (i = 1; i < srv->config_context->used; i++) {
@@ -1076,6 +1094,8 @@ static int mod_proxy_patch_connection(server *srv, connection *con, plugin_data 
 				PATCH(debug);
 			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("proxy.balance"))) {
 				PATCH(balance);
+			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("proxy.replace-http-host"))) {
+				PATCH(replace_http_host);
 			}
 		}
 	}
@@ -1295,6 +1315,7 @@ static handler_t mod_proxy_check_extension(server *srv, connection *con, void *p
 
 		hctx->conf.balance     = p->conf.balance;
 		hctx->conf.debug       = p->conf.debug;
+		hctx->conf.replace_http_host = p->conf.replace_http_host;
 
 		con->plugin_ctx[p->id] = hctx;
 		con->mode = p->id;
