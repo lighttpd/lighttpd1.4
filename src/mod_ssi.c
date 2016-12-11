@@ -116,6 +116,7 @@ SETDEFAULTS_FUNC(mod_ssi_set_defaults) {
 		{ "ssi.content-type",           NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_CONNECTION },      /* 1 */
 		{ "ssi.conditional-requests",   NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION },     /* 2 */
 		{ "ssi.exec",                   NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION },     /* 3 */
+		{ "ssi.recursion-max",          NULL, T_CONFIG_SHORT, T_CONFIG_SCOPE_CONNECTION },     /* 4 */
 		{ NULL,                         NULL, T_CONFIG_UNSET, T_CONFIG_SCOPE_UNSET }
 	};
 
@@ -132,11 +133,13 @@ SETDEFAULTS_FUNC(mod_ssi_set_defaults) {
 		s->content_type = buffer_init();
 		s->conditional_requests = 0;
 		s->ssi_exec = 1;
+		s->ssi_recursion_max = 0;
 
 		cv[0].destination = s->ssi_extension;
 		cv[1].destination = s->content_type;
 		cv[2].destination = &(s->conditional_requests);
 		cv[3].destination = &(s->ssi_exec);
+		cv[4].destination = &(s->ssi_recursion_max);
 
 		p->config_storage[i] = s;
 
@@ -189,6 +192,8 @@ static int build_ssi_cgi_vars(server *srv, connection *con, handler_ctx *p) {
 
 	return 0;
 }
+
+static int mod_ssi_process_file(server *srv, connection *con, handler_ctx *p, struct stat *st);
 
 static int process_ssi_stmt(server *srv, connection *con, handler_ctx *p, const char **l, size_t n, struct stat *st) {
 
@@ -255,7 +260,7 @@ static int process_ssi_stmt(server *srv, connection *con, handler_ctx *p, const 
 	char buf[255];
 	buffer *b = NULL;
 
-	struct {
+	static const struct {
 		const char *var;
 		enum { SSI_UNSET, SSI_ECHO, SSI_FSIZE, SSI_INCLUDE, SSI_FLASTMOD,
 				SSI_CONFIG, SSI_PRINTENV, SSI_SET, SSI_IF, SSI_ELIF,
@@ -291,7 +296,7 @@ static int process_ssi_stmt(server *srv, connection *con, handler_ctx *p, const 
 		/* int enc = 0; */
 		const char *var_val = NULL;
 
-		struct {
+		static const struct {
 			const char *var;
 			enum {
 				SSI_ECHO_UNSET,
@@ -318,7 +323,7 @@ static int process_ssi_stmt(server *srv, connection *con, handler_ctx *p, const 
 		};
 
 /*
-		struct {
+		static const struct {
 			const char *var;
 			enum { SSI_ENC_UNSET, SSI_ENC_URL, SSI_ENC_NONE, SSI_ENC_ENTITY } type;
 		} encvars[] = {
@@ -607,11 +612,55 @@ static int process_ssi_stmt(server *srv, connection *con, handler_ctx *p, const 
 				}
 				break;
 			case SSI_INCLUDE:
-				chunkqueue_append_file(con->write_queue, p->stat_fn, 0, stb.st_size);
-
 				/* Keep the newest mtime of included files */
 				if (stb.st_mtime > include_file_last_mtime)
 					include_file_last_mtime = stb.st_mtime;
+
+				if (file_path || 0 == p->conf.ssi_recursion_max) {
+					/* don't process if #include file="..." is used */
+					chunkqueue_append_file(con->write_queue, p->stat_fn, 0, stb.st_size);
+				} else {
+					buffer *upsave, *ppsave, *prpsave;
+
+					/* only allow predefined recursion depth */
+					if (p->ssi_recursion_depth >= p->conf.ssi_recursion_max) {
+						chunkqueue_append_mem(con->write_queue, CONST_STR_LEN("(error: include directives recurse deeper than pre-defined ssi.recursion-max)"));
+						break;
+					}
+
+					/* prevents simple infinite loop */
+					if (buffer_is_equal(con->physical.path, p->stat_fn)) {
+						chunkqueue_append_mem(con->write_queue, CONST_STR_LEN("(error: include directives create an infinite loop)"));
+						break;
+					}
+
+					/* save and restore con->physical.path, con->physical.rel_path, and con->uri.path around include
+					 *
+					 * srv->tmp_buf contains url-decoded, path-simplified, and lowercased (if con->conf.force_lowercase) uri path of target.
+					 * con->uri.path and con->physical.rel_path are set to the same since we only operate on filenames here,
+					 * not full re-run of all modules for subrequest */
+					upsave = con->uri.path;
+					ppsave = con->physical.path;
+					prpsave = con->physical.rel_path;
+
+					con->physical.path = p->stat_fn;
+					p->stat_fn = buffer_init();
+
+					con->uri.path = con->physical.rel_path = buffer_init_buffer(srv->tmp_buf);
+
+					/*(ignore return value; muddle along as best we can if error occurs)*/
+					++p->ssi_recursion_depth;
+					mod_ssi_process_file(srv, con, p, &stb);
+					--p->ssi_recursion_depth;
+
+					buffer_free(con->uri.path);
+					con->uri.path = upsave;
+					con->physical.rel_path = prpsave;
+
+					buffer_free(p->stat_fn);
+					p->stat_fn = con->physical.path;
+					con->physical.path = ppsave;
+				}
 
 				break;
 			}
@@ -1094,14 +1143,16 @@ static int mod_ssi_stmt_len(const char *s, const int len) {
 	return 0; /* incomplete directive "<!--#...-->" */
 }
 
-static void mod_ssi_read_fd(server *srv, connection *con, handler_ctx *p, int fd, struct stat *st) {
+static void mod_ssi_read_fd(server *srv, connection *con, handler_ctx *p, struct stat *st, int fd) {
 	ssize_t rd;
 	size_t offset, pretag;
-	char buf[8192];
+	size_t bufsz = 8192;
+	char *buf = malloc(bufsz); /* allocate to reduce chance of stack exhaustion upon deep recursion */
+	force_assert(buf);
 
 	offset = 0;
 	pretag = 0;
-	while (0 < (rd = read(fd, buf+offset, sizeof(buf)-offset))) {
+	while (0 < (rd = read(fd, buf+offset, bufsz-offset))) {
 		char *s;
 		size_t prelen = 0, len;
 		offset += (size_t)rd;
@@ -1123,7 +1174,7 @@ static void mod_ssi_read_fd(server *srv, connection *con, handler_ctx *p, int fd
 						offset = pretag = 0;
 						break;
 					}
-				} else if (0 == prelen && offset == sizeof(buf)) { /*(full buf)*/
+				} else if (0 == prelen && offset == bufsz) { /*(full buf)*/
 					/* SSI statement is way too long
 					 * NOTE: skipping this buf will expose *the rest* of this SSI statement */
 					chunkqueue_append_mem(con->write_queue, CONST_STR_LEN("<!-- [an error occurred: directive too long] "));
@@ -1151,7 +1202,7 @@ static void mod_ssi_read_fd(server *srv, connection *con, handler_ctx *p, int fd
 			}
 			/* loop to look for next '<' */
 		}
-		if (offset == sizeof(buf)) {
+		if (offset == bufsz) {
 			if (!p->if_is_false) {
 				chunkqueue_append_mem(con->write_queue, buf+pretag, offset-pretag);
 			}
@@ -1169,6 +1220,8 @@ static void mod_ssi_read_fd(server *srv, connection *con, handler_ctx *p, int fd
 			chunkqueue_append_mem(con->write_queue, buf+pretag, offset-pretag);
 		}
 	}
+
+	free(buf);
 }
 
 
@@ -1179,8 +1232,29 @@ static void mod_ssi_read_fd(server *srv, connection *con, handler_ctx *p, int fd
 # define FIFO_NONBLOCK 0
 #endif
 
+static int mod_ssi_process_file(server *srv, connection *con, handler_ctx *p, struct stat *st) {
+	int fd = open(con->physical.path->ptr, O_RDONLY | FIFO_NONBLOCK);
+	if (-1 == fd) {
+		log_error_write(srv, __FILE__, __LINE__,  "SsB", "open(): ",
+				strerror(errno), con->physical.path);
+		return -1;
+	}
+
+	if (0 != fstat(fd, st)) {
+		log_error_write(srv, __FILE__, __LINE__,  "SsB", "fstat(): ",
+				strerror(errno), con->physical.path);
+		close(fd);
+		return -1;
+	}
+
+	mod_ssi_read_fd(srv, con, p, st, fd);
+
+	close(fd);
+	return 0;
+}
+
+
 static int mod_ssi_handle_request(server *srv, connection *con, handler_ctx *p) {
-	int fd;
 	struct stat st;
 
 	/* get a stream to the file */
@@ -1193,21 +1267,8 @@ static int mod_ssi_handle_request(server *srv, connection *con, handler_ctx *p) 
 	/* Reset the modified time of included files */
 	include_file_last_mtime = 0;
 
-	if (-1 == (fd = open(con->physical.path->ptr, O_RDONLY | FIFO_NONBLOCK))) {
-		log_error_write(srv, __FILE__, __LINE__, "sb",
-				"open: ", con->physical.path);
-		return -1;
-	}
+	mod_ssi_process_file(srv, con, p, &st);
 
-	if (0 != fstat(fd, &st)) {
-		log_error_write(srv, __FILE__, __LINE__,  "SB", "fstat failed: ", con->physical.path);
-		close(fd);
-		return -1;
-	}
-
-	mod_ssi_read_fd(srv, con, p, fd, &st);
-
-	close(fd);
 	con->file_started  = 1;
 	con->file_finished = 1;
 
@@ -1258,6 +1319,7 @@ static int mod_ssi_patch_connection(server *srv, connection *con, plugin_data *p
 	PATCH(content_type);
 	PATCH(conditional_requests);
 	PATCH(ssi_exec);
+	PATCH(ssi_recursion_max);
 
 	/* skip the first, the global context */
 	for (i = 1; i < srv->config_context->used; i++) {
@@ -1279,6 +1341,8 @@ static int mod_ssi_patch_connection(server *srv, connection *con, plugin_data *p
 				PATCH(conditional_requests);
 			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("ssi.exec"))) {
 				PATCH(ssi_exec);
+			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("ssi.recursion-max"))) {
+				PATCH(ssi_recursion_max);
 			}
 		}
 	}

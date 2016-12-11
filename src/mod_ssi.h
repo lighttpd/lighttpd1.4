@@ -15,6 +15,7 @@ typedef struct {
 	buffer *content_type;
 	unsigned short conditional_requests;
 	unsigned short ssi_exec;
+	unsigned short ssi_recursion_max;
 } plugin_config;
 
 typedef struct {
@@ -42,6 +43,7 @@ typedef struct {
 	array *ssi_cgi_env;
 
 	int if_level, if_is_false_level, if_is_false, if_is_false_endif;
+	unsigned short ssi_recursion_depth;
 
 	plugin_config conf;
 } handler_ctx;
