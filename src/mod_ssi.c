@@ -264,7 +264,7 @@ static int process_ssi_stmt(server *srv, connection *con, handler_ctx *p, const 
 		const char *var;
 		enum { SSI_UNSET, SSI_ECHO, SSI_FSIZE, SSI_INCLUDE, SSI_FLASTMOD,
 				SSI_CONFIG, SSI_PRINTENV, SSI_SET, SSI_IF, SSI_ELIF,
-				SSI_ELSE, SSI_ENDIF, SSI_EXEC } type;
+				SSI_ELSE, SSI_ENDIF, SSI_EXEC, SSI_COMMENT } type;
 	} ssicmds[] = {
 		{ "echo",     SSI_ECHO },
 		{ "include",  SSI_INCLUDE },
@@ -278,6 +278,7 @@ static int process_ssi_stmt(server *srv, connection *con, handler_ctx *p, const 
 		{ "endif",    SSI_ENDIF },
 		{ "else",     SSI_ELSE },
 		{ "exec",     SSI_EXEC },
+		{ "comment",  SSI_COMMENT },
 
 		{ NULL, SSI_UNSET }
 	};
@@ -987,6 +988,8 @@ static int process_ssi_stmt(server *srv, connection *con, handler_ctx *p, const 
 		}
 
 		break;
+	case SSI_COMMENT:
+		break;
 	default:
 		log_error_write(srv, __FILE__, __LINE__, "ss",
 				"ssi: unknown ssi-command:",
@@ -1083,6 +1086,11 @@ static void mod_ssi_parse_ssi_stmt(server *srv, connection *con, handler_ctx *p,
 	const int n = mod_ssi_parse_ssi_stmt_offlen(o, s, len);
 	char *l[6] = { s, NULL, NULL, NULL, NULL, NULL };
 	if (-1 == n) {
+		/* ignore <!--#comment ... --> */
+		if (len >= 16
+		    && 0 == memcmp(s+5, "comment", sizeof("comment")-1)
+		    && (s[12] == ' ' || s[12] == '\t'))
+			return;
 		/* XXX: perhaps emit error comment instead of invalid <!--#...--> code to client */
 		chunkqueue_append_mem(con->write_queue, s, len); /* append stmt as-is */
 		return;
