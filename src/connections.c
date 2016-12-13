@@ -144,6 +144,10 @@ static int connection_close(server *srv, connection *con) {
 		srv->cur_fds--;
 	}
 
+	if (srv->srvconf.log_state_handling) {
+		log_error_write(srv, __FILE__, __LINE__, "sd",
+				"connection closed for fd", con->fd);
+	}
 	con->fd = -1;
 	connection_del(srv, con);
 	connection_set_state(srv, con, CON_STATE_CONNECT);
@@ -151,27 +155,33 @@ static int connection_close(server *srv, connection *con) {
 	return 0;
 }
 
-static void connection_handle_close_state(server *srv, connection *con) {
+static void connection_read_for_eos(server *srv, connection *con) {
 	/* we have to do the linger_on_close stuff regardless
 	 * of con->keep_alive; even non-keepalive sockets may
 	 * still have unread data, and closing before reading
 	 * it will make the client not see all our output.
 	 */
-	int len;
-	char buf[1024];
+	ssize_t len;
+	char buf[4096];
 
-	len = read(con->fd, buf, sizeof(buf));
-	if (len == 0 || (len < 0 && errno != EAGAIN && errno != EINTR) ) {
+	do {
+		len = read(con->fd, buf, sizeof(buf));
+	} while (len > 0 || (len < 0 && errno == EINTR));
+
+	if (len < 0 && errno == EAGAIN) return;
+      #if defined(EWOULDBLOCK) && EWOULDBLOCK != EAGAIN
+	if (len < 0 && errno == EWOULDBLOCK) return;
+      #endif
+
+	/* 0 == len || (len < 0 && (errno is a non-recoverable error)) */
 		con->close_timeout_ts = srv->cur_ts - (HTTP_LINGER_TIMEOUT+1);
-	}
+}
+
+static void connection_handle_close_state(server *srv, connection *con) {
+	connection_read_for_eos(srv, con);
 
 	if (srv->cur_ts - con->close_timeout_ts > HTTP_LINGER_TIMEOUT) {
 		connection_close(srv, con);
-
-		if (srv->srvconf.log_state_handling) {
-			log_error_write(srv, __FILE__, __LINE__, "sd",
-					"connection closed for fd", con->fd);
-		}
 	}
 }
 
@@ -945,13 +955,7 @@ static handler_t connection_handle_fdevent(server *srv, void *context, int reven
 
 	if (con->state == CON_STATE_CLOSE) {
 		/* flush the read buffers */
-		int len;
-		char buf[1024];
-
-		len = read(con->fd, buf, sizeof(buf));
-		if (len == 0 || (len < 0 && errno != EAGAIN && errno != EINTR) ) {
-			con->close_timeout_ts = srv->cur_ts - (HTTP_LINGER_TIMEOUT+1);
-		}
+		connection_read_for_eos(srv, con);
 	}
 
 
