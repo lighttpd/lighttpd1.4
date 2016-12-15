@@ -79,7 +79,7 @@ int config_insert_values_internal(server *srv, array *ca, const config_values_t 
 
 				buffer_copy_buffer(cv[i].destination, ds->value);
 			} else {
-				log_error_write(srv, __FILE__, __LINE__, "ssss", cv[i].key, "should have been a string like ... = \"...\"");
+				log_error_write(srv, __FILE__, __LINE__, "ss", cv[i].key, "should have been a string like ... = \"...\"");
 
 				return -1;
 			}
