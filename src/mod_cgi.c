@@ -94,6 +94,7 @@ typedef struct {
 
 	buffer *response;
 	buffer *response_header;
+	buffer *cgi_handler;      /* dumb pointer */
 	plugin_config conf;
 } handler_ctx;
 
@@ -542,7 +543,7 @@ static int cgi_demux_response(server *srv, handler_ctx *hctx) {
 							buffer_copy_buffer(con->request.uri, ds->value);
 
 							if (con->request.content_length) {
-								if ((off_t)con->request.content_length != chunkqueue_length(con->request_content_queue)) {
+								if (con->request.content_length != con->request_content_queue->bytes_in) {
 									con->keep_alive = 0;
 								}
 								con->request.content_length = 0;
@@ -1055,7 +1056,7 @@ static int cgi_write_request(server *srv, handler_ctx *hctx, int fd) {
 		}
 	} else {
 		off_t cqlen = cq->bytes_in - cq->bytes_out;
-		if (cq->bytes_in < (off_t)con->request.content_length && cqlen < 65536 - 16384) {
+		if (cq->bytes_in != con->request.content_length && cqlen < 65536 - 16384) {
 			/*(con->conf.stream_request_body & FDEVENT_STREAM_REQUEST)*/
 			if (!(con->conf.stream_request_body & FDEVENT_STREAM_REQUEST_POLLIN)) {
 				con->conf.stream_request_body |= FDEVENT_STREAM_REQUEST_POLLIN;
@@ -1330,6 +1331,7 @@ URIHANDLER_FUNC(cgi_is_handled) {
 	stat_cache_entry *sce = NULL;
 	struct stat stbuf;
 	struct stat *st;
+	buffer *cgi_handler;
 
 	if (con->mode != DIRECT) return HANDLER_GO_ON;
 
@@ -1349,10 +1351,11 @@ URIHANDLER_FUNC(cgi_is_handled) {
 	if (!S_ISREG(st->st_mode)) return HANDLER_GO_ON;
 	if (p->conf.execute_x_only == 1 && (st->st_mode & (S_IXUSR | S_IXGRP | S_IXOTH)) == 0) return HANDLER_GO_ON;
 
-	if (NULL != cgi_get_handler(p->conf.cgi, fn)) {
+	if (NULL != (cgi_handler = cgi_get_handler(p->conf.cgi, fn))) {
 		handler_ctx *hctx = cgi_handler_ctx_init();
 		hctx->remote_conn = con;
 		hctx->plugin_data = p;
+		hctx->cgi_handler = cgi_handler;
 		memcpy(&hctx->conf, &p->conf, sizeof(plugin_config));
 		con->plugin_ctx[p->id] = hctx;
 		con->mode = p->id;
@@ -1457,13 +1460,19 @@ SUBREQUEST_FUNC(mod_cgi_handle_subrequest) {
 				}
 			}
 			if (r != HANDLER_GO_ON) return r;
+
+			/* CGI environment requires that Content-Length be set.
+			 * Send 411 Length Required if Content-Length missing.
+			 * (occurs here if client sends Transfer-Encoding: chunked
+			 *  and module is flagged to stream request body to backend) */
+			if (-1 == con->request.content_length) {
+				return connection_handle_read_post_error(srv, con, 411);
+			}
 		}
 	}
 
 	if (-1 == hctx->fd) {
-		buffer *handler = cgi_get_handler(hctx->conf.cgi, con->physical.path);
-		if (!handler) return HANDLER_GO_ON; /*(should not happen; checked in cgi_is_handled())*/
-		if (cgi_create_env(srv, con, p, hctx, handler)) {
+		if (cgi_create_env(srv, con, p, hctx, hctx->cgi_handler)) {
 			con->http_status = 500;
 			con->mode = DIRECT;
 

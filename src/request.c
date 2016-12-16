@@ -954,7 +954,7 @@ int http_request_parse(server *srv, connection *con) {
 
 							} else if (cmp > 0 && 0 == (cmp = buffer_caseless_compare(CONST_BUF_LEN(ds->key), CONST_STR_LEN("Content-Length")))) {
 								char *err;
-								unsigned long int r;
+								off_t r;
 								size_t j, jlen;
 
 								if (con_length_set) {
@@ -987,9 +987,9 @@ int http_request_parse(server *srv, connection *con) {
 									}
 								}
 
-								r = strtoul(ds->value->ptr, &err, 10);
+								r = strtoll(ds->value->ptr, &err, 10);
 
-								if (*err == '\0') {
+								if (*err == '\0' && r >= 0) {
 									con_length_set = 1;
 									con->request.content_length = r;
 								} else {
@@ -1236,6 +1236,38 @@ int http_request_parse(server *srv, connection *con) {
 		return 0;
 	}
 
+	{
+		data_string *ds = (data_string *)array_get_element(con->request.headers, "Transfer-Encoding");
+		if (NULL != ds) {
+			if (con->request.http_version == HTTP_VERSION_1_0) {
+				log_error_write(srv, __FILE__, __LINE__, "s",
+						"HTTP/1.0 with Transfer-Encoding (bad HTTP/1.0 proxy?) -> 400");
+				con->keep_alive = 0;
+				con->http_status = 400; /* Bad Request */
+				return 0;
+			}
+
+			if (0 != strcasecmp(ds->value->ptr, "chunked")) {
+				/* Transfer-Encoding might contain additional encodings,
+				 * which are not currently supported by lighttpd */
+				con->keep_alive = 0;
+				con->http_status = 501; /* Not Implemented */
+				return 0;
+			}
+
+			/* reset value for Transfer-Encoding, a hop-by-hop header,
+			 * which must not be blindly forwarded to backends */
+			buffer_reset(ds->value); /* headers with empty values are ignored */
+
+			con_length_set = 1;
+			con->request.content_length = -1;
+
+			/*(note: ignore whether or not Content-Length was provided)*/
+			ds = (data_string *)array_get_element(con->request.headers, "Content-Length");
+			if (NULL != ds) buffer_reset(ds->value); /* headers with empty values are ignored */
+		}
+	}
+
 	switch(con->request.http_method) {
 	case HTTP_METHOD_GET:
 	case HTTP_METHOD_HEAD:
@@ -1264,31 +1296,12 @@ int http_request_parse(server *srv, connection *con) {
 		}
 		break;
 	default:
-		/* require Content-Length if request contains request body */
-		if (array_get_element(con->request.headers, "Transfer-Encoding")) {
-			/* presence of Transfer-Encoding in request headers requires "chunked"
-			 * be final encoding in HTTP/1.1.  Return 411 Length Required as
-			 * lighttpd does not support request input transfer-encodings */
-			con->keep_alive = 0;
-			con->http_status = 411; /* 411 Length Required */
-			return 0;
-		}
 		break;
 	}
 
 
 	/* check if we have read post data */
 	if (con_length_set) {
-		/* don't handle more the SSIZE_MAX bytes in content-length */
-		if (con->request.content_length > SSIZE_MAX) {
-			con->http_status = 413;
-			con->keep_alive = 0;
-
-			log_error_write(srv, __FILE__, __LINE__, "sos",
-					"request-size too long:", (off_t) con->request.content_length, "-> 413");
-			return 0;
-		}
-
 		/* we have content */
 		if (con->request.content_length != 0) {
 			return 1;

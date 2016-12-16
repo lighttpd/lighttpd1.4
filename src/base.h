@@ -170,7 +170,8 @@ typedef struct {
 	array  *headers;
 
 	/* CONTENT */
-	size_t content_length; /* returned by strtoul() */
+	off_t content_length; /* returned by strtoll() */
+	off_t te_chunked;
 
 	/* internal representation */
 	int     accept_encoding;

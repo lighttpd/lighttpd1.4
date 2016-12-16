@@ -315,6 +315,221 @@ int connection_handle_read(server *srv, connection *con) {
 	return 0;
 }
 
+static int connection_handle_read_post_cq_compact(chunkqueue *cq) {
+    /* combine first mem chunk with next non-empty mem chunk
+     * (loop if next chunk is empty) */
+    chunk *c;
+    while (NULL != (c = cq->first) && NULL != c->next) {
+        buffer *mem = c->next->mem;
+        off_t offset = c->next->offset;
+        size_t blen = buffer_string_length(mem) - (size_t)offset;
+        force_assert(c->type == MEM_CHUNK);
+        force_assert(c->next->type == MEM_CHUNK);
+        buffer_append_string_len(c->mem, mem->ptr+offset, blen);
+        c->next->offset = c->offset;
+        c->next->mem = c->mem;
+        c->mem = mem;
+        c->offset = offset + (off_t)blen;
+        chunkqueue_remove_finished_chunks(cq);
+        if (0 != blen) return 1;
+    }
+    return 0;
+}
+
+static int connection_handle_read_post_chunked_crlf(chunkqueue *cq) {
+    /* caller might check chunkqueue_length(cq) >= 2 before calling here
+     * to limit return value to either 1 for good or -1 for error */
+    chunk *c;
+    buffer *b;
+    char *p;
+    size_t len;
+
+    /* caller must have called chunkqueue_remove_finished_chunks(cq), so if
+     * chunkqueue is not empty, it contains chunk with at least one char */
+    if (chunkqueue_is_empty(cq)) return 0;
+
+    c = cq->first;
+    b = c->mem;
+    p = b->ptr+c->offset;
+    if (p[0] != '\r') return -1; /* error */
+    if (p[1] == '\n') return 1;
+    len = buffer_string_length(b) - (size_t)c->offset;
+    if (1 != len) return -1; /* error */
+
+    while (NULL != (c = c->next)) {
+        b = c->mem;
+        len = buffer_string_length(b) - (size_t)c->offset;
+        if (0 == len) continue;
+        p = b->ptr+c->offset;
+        return (p[0] == '\n') ? 1 : -1; /* error if not '\n' */
+    }
+    return 0;
+}
+
+handler_t connection_handle_read_post_error(server *srv, connection *con, int http_status) {
+    UNUSED(srv);
+
+    con->keep_alive = 0;
+
+    /*(do not change status if response headers already set and possibly sent)*/
+    if (0 != con->bytes_header) return HANDLER_ERROR;
+
+    con->http_status = http_status;
+    con->mode = DIRECT;
+    chunkqueue_reset(con->write_queue);
+    return HANDLER_FINISHED;
+}
+
+static handler_t connection_handle_read_post_chunked(server *srv, connection *con, chunkqueue *cq, chunkqueue *dst_cq) {
+
+    /* con->conf.max_request_size is in kBytes */
+    const off_t max_request_size = (off_t)con->conf.max_request_size << 10;
+    off_t te_chunked = con->request.te_chunked;
+    do {
+        off_t len = cq->bytes_in - cq->bytes_out;
+
+        while (0 == te_chunked) {
+            char *p;
+            chunk *c = cq->first;
+            force_assert(c->type == MEM_CHUNK);
+            p = strchr(c->mem->ptr+c->offset, '\n');
+            if (NULL != p) { /* found HTTP chunked header line */
+                off_t hsz = p + 1 - (c->mem->ptr+c->offset);
+                unsigned char *s = (unsigned char *)c->mem->ptr+c->offset;
+                for (unsigned char u;(u=(unsigned char)hex2int(*s))!=0xFF;++s) {
+                    if (te_chunked > (~((off_t)-1) >> 4)) {
+                        log_error_write(srv, __FILE__, __LINE__, "s",
+                                        "chunked data size too large -> 400");
+                        /* 400 Bad Request */
+                        return connection_handle_read_post_error(srv, con, 400);
+                    }
+                    te_chunked <<= 4;
+                    te_chunked |= u;
+                }
+                while (*s == ' ' || *s == '\t') ++s;
+                if (*s != '\r' && *s != ';') {
+                    log_error_write(srv, __FILE__, __LINE__, "s",
+                                    "chunked header invalid chars -> 400");
+                    /* 400 Bad Request */
+                    return connection_handle_read_post_error(srv, con, 400);
+                }
+
+                if (hsz >= 1024) {
+                    /* prevent theoretical integer overflow
+                     * casting to (size_t) and adding 2 (for "\r\n") */
+                    log_error_write(srv, __FILE__, __LINE__, "s",
+                                    "chunked header line too long -> 400");
+                    /* 400 Bad Request */
+                    return connection_handle_read_post_error(srv, con, 400);
+                }
+
+                if (0 == te_chunked) {
+                    /* do not consume final chunked header until
+                     * (optional) trailers received along with
+                     * request-ending blank line "\r\n" */
+                    if (p[0] == '\r' && p[1] == '\n') {
+                        /*(common case with no trailers; final \r\n received)*/
+                        hsz += 2;
+                    }
+                    else {
+                        /* trailers or final CRLF crosses into next cq chunk */
+                        hsz -= 2;
+                        do {
+                            c = cq->first;
+                            p = strstr(c->mem->ptr+c->offset+hsz, "\r\n\r\n");
+                        } while (NULL == p
+                                 && connection_handle_read_post_cq_compact(cq));
+                        if (NULL == p) {
+                            /*(effectively doubles max request field size
+                             * potentially received by backend, if in the future
+                             * these trailers are added to request headers)*/
+                            if ((off_t)buffer_string_length(c->mem) - c->offset
+                                < srv->srvconf.max_request_field_size) {
+                                break;
+                            }
+                            else {
+                                /* ignore excessively long trailers;
+                                 * disable keep-alive on connection */
+                                con->keep_alive = 0;
+                            }
+                        }
+                        hsz = p + 4 - (c->mem->ptr+c->offset);
+                        /* trailers currently ignored, but could be processed
+                         * here if 0 == con->conf.stream_request_body, taking
+                         * care to reject any fields forbidden in trailers,
+                         * making trailers available to CGI and other backends*/
+                    }
+                    chunkqueue_mark_written(cq, (size_t)hsz);
+                    con->request.content_length = dst_cq->bytes_in;
+                    break; /* done reading HTTP chunked request body */
+                }
+
+                /* consume HTTP chunked header */
+                chunkqueue_mark_written(cq, (size_t)hsz);
+                len = cq->bytes_in - cq->bytes_out;
+
+                if (0 !=max_request_size
+                    && (max_request_size < te_chunked
+                     || max_request_size - te_chunked < dst_cq->bytes_in)) {
+                    log_error_write(srv, __FILE__, __LINE__, "sos",
+                                    "request-size too long:",
+                                    dst_cq->bytes_in + te_chunked, "-> 413");
+                    /* 413 Payload Too Large */
+                    return connection_handle_read_post_error(srv, con, 413);
+                }
+
+                te_chunked += 2; /*(for trailing "\r\n" after chunked data)*/
+
+                break; /* read HTTP chunked header */
+            }
+
+            /*(likely better ways to handle chunked header crossing chunkqueue
+             * chunks, but this situation is not expected to occur frequently)*/
+            if ((off_t)buffer_string_length(c->mem) - c->offset >= 1024) {
+                log_error_write(srv, __FILE__, __LINE__, "s",
+                                "chunked header line too long -> 400");
+                /* 400 Bad Request */
+                return connection_handle_read_post_error(srv, con, 400);
+            }
+            else if (!connection_handle_read_post_cq_compact(cq)) {
+                break;
+            }
+        }
+        if (0 == te_chunked) break;
+
+        if (te_chunked > 2) {
+            if (len > te_chunked-2) len = te_chunked-2;
+            if (dst_cq->bytes_in + te_chunked <= 64*1024) {
+                /* avoid buffering request bodies <= 64k on disk */
+                chunkqueue_steal(dst_cq, cq, len);
+            }
+            else if (0 != chunkqueue_steal_with_tempfiles(srv,dst_cq,cq,len)) {
+                /* 500 Internal Server Error */
+                return connection_handle_read_post_error(srv, con, 500);
+            }
+            te_chunked -= len;
+            len = cq->bytes_in - cq->bytes_out;
+        }
+
+        if (len < te_chunked) break;
+
+        if (2 == te_chunked) {
+            if (-1 == connection_handle_read_post_chunked_crlf(cq)) {
+                log_error_write(srv, __FILE__, __LINE__, "s",
+                                "chunked data missing end CRLF -> 400");
+                /* 400 Bad Request */
+                return connection_handle_read_post_error(srv, con, 400);
+            }
+            chunkqueue_mark_written(cq, 2);/*consume \r\n at end of chunk data*/
+            te_chunked -= 2;
+        }
+
+    } while (!chunkqueue_is_empty(cq));
+
+    con->request.te_chunked = te_chunked;
+    return HANDLER_GO_ON;
+}
+
 handler_t connection_handle_read_post_state(server *srv, connection *con) {
 	chunkqueue *cq = con->read_queue;
 	chunkqueue *dst_cq = con->request_content_queue;
@@ -337,18 +552,17 @@ handler_t connection_handle_read_post_state(server *srv, connection *con) {
 
 	chunkqueue_remove_finished_chunks(cq);
 
-	if (con->request.content_length <= 64*1024) {
+	if (-1 == con->request.content_length) { /*(Transfer-Encoding: chunked)*/
+		handler_t rc = connection_handle_read_post_chunked(srv, con, cq, dst_cq);
+		if (HANDLER_GO_ON != rc) return rc;
+	}
+	else if (con->request.content_length <= 64*1024) {
 		/* don't buffer request bodies <= 64k on disk */
 		chunkqueue_steal(dst_cq, cq, (off_t)con->request.content_length - dst_cq->bytes_in);
 	}
 	else if (0 != chunkqueue_steal_with_tempfiles(srv, dst_cq, cq, (off_t)con->request.content_length - dst_cq->bytes_in)) {
 		/* writing to temp file failed */
-		con->http_status = 500; /* Internal Server Error */
-		con->keep_alive = 0;
-		con->mode = DIRECT;
-		chunkqueue_reset(con->write_queue);
-
-		return HANDLER_FINISHED;
+		return connection_handle_read_post_error(srv, con, 500); /* Internal Server Error */
 	}
 
 	chunkqueue_remove_finished_chunks(cq);
@@ -362,12 +576,7 @@ handler_t connection_handle_read_post_state(server *srv, connection *con) {
 		return HANDLER_GO_ON;
 	} else if (is_closed) {
 	      #if 0
-		con->http_status = 400; /* Bad Request */
-		con->keep_alive = 0;
-		con->mode = DIRECT;
-		chunkqueue_reset(con->write_queue);
-
-		return HANDLER_FINISHED;
+		return connection_handle_read_post_error(srv, con, 400); /* Bad Request */
 	      #endif
 		return HANDLER_ERROR;
 	} else {

@@ -1169,6 +1169,15 @@ SUBREQUEST_FUNC(mod_proxy_handle_subrequest) {
 				}
 			}
 			if (r != HANDLER_GO_ON) return r;
+
+			/* mod_proxy sends HTTP/1.0 request and ideally should send
+			 * Content-Length with request if request body is present, so
+			 * send 411 Length Required if Content-Length missing.
+			 * (occurs here if client sends Transfer-Encoding: chunked
+			 *  and module is flagged to stream request body to backend) */
+			if (-1 == con->request.content_length) {
+				return connection_handle_read_post_error(srv, con, 411);
+			}
 		}
 	}
 

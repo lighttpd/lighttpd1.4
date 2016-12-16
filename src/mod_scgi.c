@@ -2468,6 +2468,14 @@ SUBREQUEST_FUNC(mod_scgi_handle_subrequest) {
 				}
 			}
 			if (r != HANDLER_GO_ON) return r;
+
+			/* SCGI requires that Content-Length be set.
+			 * Send 411 Length Required if Content-Length missing.
+			 * (occurs here if client sends Transfer-Encoding: chunked
+			 *  and module is flagged to stream request body to backend) */
+			if (-1 == con->request.content_length) {
+				return connection_handle_read_post_error(srv, con, 411);
+			}
 		}
 	}
 
@@ -2735,18 +2743,6 @@ static handler_t scgi_check_extension(server *srv, connection *con, void *p_d, i
 
 	/* a note about no handler is not sent yet */
 	extension->note_is_sent = 0;
-
-	/* SCGI requires that Content-Length be set.
-	 * Send 411 Length Required if Content-Length missing.
-	 * (Alternatively, collect full request body before proceeding
-	 *  in mod_scgi_handle_subrequest()) */
-	if (0 == con->request.content_length
-	    && array_get_element(con->request.headers, "Transfer-Encoding")) {
-		con->keep_alive = 0;
-		con->http_status = 411; /* Length Required */
-		con->mode = DIRECT;
-		return HANDLER_FINISHED;
-	}
 
 	/*
 	 * if check-local is disabled, use the uri.path handler

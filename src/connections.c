@@ -298,8 +298,7 @@ static void connection_handle_response_end_state(server *srv, connection *con) {
 
 	if (con->state != CON_STATE_ERROR) srv->con_written++;
 
-	if ((con->request.content_length
-	     && (off_t)con->request.content_length > con->request_content_queue->bytes_in)
+	if (con->request.content_length != con->request_content_queue->bytes_in
 	    || con->state == CON_STATE_ERROR) {
 		/* request body is present and has not been read completely */
 		con->keep_alive = 0;
@@ -766,6 +765,7 @@ int connection_reset(server *srv, connection *con) {
 	CLEAN(http_content_type);
 #undef CLEAN
 	con->request.content_length = 0;
+	con->request.te_chunked = 0;
 
 	array_reset(con->request.headers);
 	array_reset(con->environment);
@@ -1203,7 +1203,7 @@ int connection_state_machine(server *srv, connection *con) {
 								plugins_call_connection_reset(srv, con);
 
 								if (con->request.content_length) {
-									if ((off_t)con->request.content_length != chunkqueue_length(con->request_content_queue)) {
+									if (con->request.content_length != con->request_content_queue->bytes_in) {
 										con->keep_alive = 0;
 									}
 									con->request.content_length = 0;
