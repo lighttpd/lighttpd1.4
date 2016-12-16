@@ -85,7 +85,7 @@ AC_MINIX
 
 dnl AC_CANONICAL_HOST
 case $host_os in
-	*darwin*|*cygwin*|*aix*|*mingw* ) NO_RDYNAMIC=yes;;
+	*darwin*|*cygwin*|*aix*|*mingw*|*midipix* ) NO_RDYNAMIC=yes;;
 	* ) NO_RDYNAMIC=no;;
 esac
 AM_CONDITIONAL(NO_RDYNAMIC, test x$NO_RDYNAMIC = xyes)
