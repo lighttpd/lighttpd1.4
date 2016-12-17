@@ -56,7 +56,8 @@ typedef enum {
 	PROXY_BALANCE_UNSET,
 	PROXY_BALANCE_FAIR,
 	PROXY_BALANCE_HASH,
-	PROXY_BALANCE_RR
+	PROXY_BALANCE_RR,
+	PROXY_BALANCE_STICKY
 } proxy_balance_t;
 
 typedef struct {
@@ -227,9 +228,11 @@ SETDEFAULTS_FUNC(mod_proxy_set_defaults) {
 			s->balance = PROXY_BALANCE_RR;
 		} else if (buffer_is_equal_string(p->balance_buf, CONST_STR_LEN("hash"))) {
 			s->balance = PROXY_BALANCE_HASH;
+		} else if (buffer_is_equal_string(p->balance_buf, CONST_STR_LEN("sticky"))) {
+					s->balance = PROXY_BALANCE_STICKY;
 		} else {
 			log_error_write(srv, __FILE__, __LINE__, "sb",
-				        "proxy.balance has to be one of: fair, round-robin, hash, but not:", p->balance_buf);
+				        "proxy.balance has to be one of: fair, round-robin, hash, sticky, but not:", p->balance_buf);
 			return HANDLER_ERROR;
 		}
 
@@ -460,6 +463,42 @@ static data_proxy * mod_proxy_extension_host_get(server *srv, connection *con, d
 
 		break;
 	}
+	case PROXY_BALANCE_STICKY:
+		/* source sticky balancing */
+
+		if (debug) {
+			log_error_write(srv, __FILE__, __LINE__,  "sd",
+					"proxy - used sticky balancing, hosts:", extension->value->used);
+		}
+
+		for (k = 0, ndx = -1, last_max = ULONG_MAX; k < extension->value->used; k++) {
+			data_proxy *host = (data_proxy *)extension->value->data[k];
+			unsigned long cur_max;
+
+			if (host->is_disabled) continue;
+
+			cur_max = generate_crc32c(CONST_BUF_LEN(con->dst_addr_buf)) +
+				generate_crc32c(CONST_BUF_LEN(host->host)) +
+				host->port;
+
+			if (debug) {
+				log_error_write(srv, __FILE__, __LINE__,  "sbbdd",
+						"proxy - election:",
+						con->dst_addr_buf,
+						host->host,
+						host->port,
+						cur_max);
+			}
+
+			if ((last_max == ULONG_MAX) || /* first round */
+				(cur_max > last_max)) {
+				last_max = cur_max;
+
+				ndx = k;
+			}
+		}
+
+		break;
 	default:
 		break;
 	}
