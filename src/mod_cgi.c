@@ -36,7 +36,7 @@
 #include <fcntl.h>
 
 #if defined(O_CLOEXEC) && (!defined(__FreeBSD__) || defined(SOCK_CLOEXEC)) \
- && !(defined(__APPLE__) && defined(__MACH__))
+ && !defined(_AIX) && !(defined(__APPLE__) && defined(__MACH__))
 #define pipe_cloexec(pipefd) pipe2((pipefd), O_CLOEXEC)
 #elif defined FD_CLOEXEC
 #define pipe_cloexec(pipefd) \

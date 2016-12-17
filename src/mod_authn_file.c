@@ -641,7 +641,11 @@ static handler_t mod_authn_file_htpasswd_basic(server *srv, connection *con, voi
             char *crypted;
            #if defined(HAVE_CRYPT_R)
             struct crypt_data crypt_tmp_data;
+            #ifdef _AIX
+            memset(&crypt_tmp_data, 0, sizeof(crypt_tmp_data));
+            #else
             crypt_tmp_data.initialized = 0;
+            #endif
            #endif
            #ifdef USE_OPENSSL /* (for MD4_*() (e.g. MD4_Update())) */
             if (0 == memcmp(password->ptr, CONST_STR_LEN("$1+ntlm$"))) {
