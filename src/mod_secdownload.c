@@ -324,8 +324,6 @@ SETDEFAULTS_FUNC(mod_secdownload_set_defaults) {
 				log_error_write(srv, __FILE__, __LINE__, "sb",
 					"unsupported secdownload.algorithm:",
 					algorithm);
-				buffer_free(algorithm);
-				return HANDLER_ERROR;
 #endif
 			default:
 				break;
