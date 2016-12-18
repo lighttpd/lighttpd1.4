@@ -223,11 +223,19 @@ for libs in staticlib:
 			fullstaticlib += [ aword ]
 		f.close
 
+## glibc pthread needs to be linked completely (especially nptl-init.o)
+## or not at all, or else pthread structures may not be initialized correctly
+import platform
+fullstatic_libs = GatherLibs(env, fullstaticlib)
+fullstatic_linkflags = [staticenv['LINKFLAGS'], '-static']
+if (('pthread' in fullstatic_libs) or ('pcre' in fullstatic_libs)) and (platform.system() == 'Linux'):
+	fullstatic_linkflags += ['-Wl,--whole-archive','-lpthread','-Wl,--no-whole-archive']
+
 ## includes all modules, linked statically
 fullstaticbin = staticenv.Program('../fullstatic/build/lighttpd',
 	staticobj,
-	LIBS = GatherLibs(env, fullstaticlib),
-	LINKFLAGS= [staticenv['LINKFLAGS'], '-static']
+	LIBS = fullstatic_libs,
+	LINKFLAGS= fullstatic_linkflags
 	)
 
 Alias('static', staticbin)
