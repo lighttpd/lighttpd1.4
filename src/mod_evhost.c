@@ -173,7 +173,7 @@ SETDEFAULTS_FUNC(mod_evhost_set_defaults) {
 
 		if (!buffer_string_is_empty(s->path_pieces_raw)) {
 			if (0 != mod_evhost_parse_pattern(s)) {
-				log_error_write(srv, __FILE__, __LINE__, "sb", "invalid evhost.path-pattern:");
+				log_error_write(srv, __FILE__, __LINE__, "sb", "invalid evhost.path-pattern:", s->path_pieces_raw);
 				return HANDLER_ERROR;
 			}
 		}
