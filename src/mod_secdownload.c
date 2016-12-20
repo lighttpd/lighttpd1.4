@@ -11,7 +11,11 @@
 #include <stdlib.h>
 #include <string.h>
 
-#if defined(USE_OPENSSL)
+#if defined HAVE_LIBSSL && defined HAVE_OPENSSL_SSL_H
+#define USE_OPENSSL_CRYPTO
+#endif
+
+#ifdef USE_OPENSSL_CRYPTO
 #include <openssl/evp.h>
 #include <openssl/hmac.h>
 #endif
@@ -181,7 +185,7 @@ static int secdl_verify_mac(server *srv, plugin_config *config, const char* prot
 			return (32 == maclen) && const_time_memeq(mac, hexmd5, 32);
 		}
 	case SECDL_HMAC_SHA1:
-#if defined(USE_OPENSSL)
+#ifdef USE_OPENSSL_CRYPTO
 		{
 			unsigned char digest[20];
 			char base64_digest[27];
@@ -203,7 +207,7 @@ static int secdl_verify_mac(server *srv, plugin_config *config, const char* prot
 #endif
 		break;
 	case SECDL_HMAC_SHA256:
-#if defined(USE_OPENSSL)
+#ifdef USE_OPENSSL_CRYPTO
 		{
 			unsigned char digest[32];
 			char base64_digest[43];
@@ -318,7 +322,7 @@ SETDEFAULTS_FUNC(mod_secdownload_set_defaults) {
 					algorithm);
 				buffer_free(algorithm);
 				return HANDLER_ERROR;
-#if !defined(USE_OPENSSL)
+#ifndef USE_OPENSSL_CRYPTO
 			case SECDL_HMAC_SHA1:
 			case SECDL_HMAC_SHA256:
 				log_error_write(srv, __FILE__, __LINE__, "sb",

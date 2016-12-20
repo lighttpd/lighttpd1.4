@@ -14,9 +14,11 @@
 # define HAVE_CRYPT
 #endif
 
-#include "base.h"
+#if defined HAVE_LIBSSL && defined HAVE_OPENSSL_SSL_H
+#define USE_OPENSSL_CRYPTO
+#endif
 
-#ifdef USE_OPENSSL
+#ifdef USE_OPENSSL_CRYPTO
 #include "base64.h"
 #include <openssl/md4.h>
 #include <openssl/sha.h>
@@ -26,6 +28,7 @@
 /*(htpasswd)*/
 
 
+#include "base.h"
 #include "plugin.h"
 #include "http_auth.h"
 #include "log.h"
@@ -594,7 +597,7 @@ static void apr_md5_encode(const char *pw, const char *salt, char *result, size_
     apr_cpystrn(result, passwd, nbytes - 1);
 }
 
-#ifdef USE_OPENSSL
+#ifdef USE_OPENSSL_CRYPTO
 static void apr_sha_encode(const char *pw, char *result, size_t nbytes) {
     unsigned char digest[20];
     size_t base64_written;
@@ -629,7 +632,7 @@ static handler_t mod_authn_file_htpasswd_basic(server *srv, connection *con, voi
             apr_md5_encode(pw, password->ptr, sample, sizeof(sample));
             rc = strcmp(sample, password->ptr);
         }
-      #ifdef USE_OPENSSL
+      #ifdef USE_OPENSSL_CRYPTO
         else if (0 == strncmp(password->ptr, "{SHA}", 5)) {
             apr_sha_encode(pw, sample, sizeof(sample));
             rc = strcmp(sample, password->ptr);
@@ -647,7 +650,7 @@ static handler_t mod_authn_file_htpasswd_basic(server *srv, connection *con, voi
             crypt_tmp_data.initialized = 0;
             #endif
            #endif
-           #ifdef USE_OPENSSL /* (for MD4_*() (e.g. MD4_Update())) */
+           #ifdef USE_OPENSSL_CRYPTO /* (for MD4_*() (e.g. MD4_Update())) */
             if (0 == memcmp(password->ptr, CONST_STR_LEN("$1+ntlm$"))) {
                 /* CRYPT-MD5-NTLM algorithm
                  * This algorithm allows for the construction of (slight more)
