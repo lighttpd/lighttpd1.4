@@ -560,7 +560,6 @@ add_executable(lighttpd
 	network_darwin_sendfile.c
 	network_freebsd_sendfile.c
 	network_linux_sendfile.c
-	network_openssl.c
 	network_solaris_sendfilev.c
 	network_write.c
 	network_write_mmap.c

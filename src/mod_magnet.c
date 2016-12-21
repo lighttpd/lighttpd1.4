@@ -1031,9 +1031,6 @@ static handler_t magnet_attract_array(server *srv, connection *con, plugin_data 
 	if (files->used == 0) return HANDLER_GO_ON;
 
 	srv->request_env(srv, con);
-      #ifdef USE_OPENSSL
-	if (con->ssl) http_cgi_ssl_env(srv, con);
-      #endif
 
 	/**
 	 * execute all files and jump out on the first !HANDLER_GO_ON

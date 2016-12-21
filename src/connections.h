@@ -17,7 +17,6 @@ const char * connection_get_state(connection_state_t state);
 const char * connection_get_short_state(connection_state_t state);
 int connection_state_machine(server *srv, connection *con);
 int connection_read_cq(server *srv, connection *con, chunkqueue *cq, off_t max_bytes);
-int connection_read_cq_ssl(server *srv, connection *con, chunkqueue *cq, off_t max_bytes);
 handler_t connection_handle_read_post_state(server *srv, connection *con);
 handler_t connection_handle_read_post_error(server *srv, connection *con, int http_status);
 void connection_response_reset(server *srv, connection *con);

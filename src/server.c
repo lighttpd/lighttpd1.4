@@ -59,10 +59,6 @@
 # include <sys/prctl.h>
 #endif
 
-#ifdef USE_OPENSSL
-# include <openssl/err.h> 
-#endif
-
 #ifndef __sgi
 /* IRIX doesn't like the alarm based time() optimization */
 /* #define USE_ALARM */
@@ -337,22 +333,10 @@ static void server_free(server *srv) {
 			buffer_free(s->document_root);
 			buffer_free(s->server_name);
 			buffer_free(s->server_tag);
-			buffer_free(s->ssl_pemfile);
-			buffer_free(s->ssl_ca_file);
-			buffer_free(s->ssl_cipher_list);
-			buffer_free(s->ssl_dh_file);
-			buffer_free(s->ssl_ec_curve);
 			buffer_free(s->error_handler);
 			buffer_free(s->error_handler_404);
 			buffer_free(s->errorfile_prefix);
 			array_free(s->mimetypes);
-			buffer_free(s->ssl_verifyclient_username);
-#ifdef USE_OPENSSL
-			SSL_CTX_free(s->ssl_ctx);
-			EVP_PKEY_free(s->ssl_pemfile_pkey);
-			X509_free(s->ssl_pemfile_x509);
-			if (NULL != s->ssl_ca_file_cert_names) sk_X509_NAME_pop_free(s->ssl_ca_file_cert_names, X509_NAME_free);
-#endif
 			free(s);
 		}
 		free(srv->config_storage);
@@ -378,24 +362,6 @@ static void server_free(server *srv) {
 	array_free(srv->srvconf.modules);
 	array_free(srv->split_vals);
 
-#ifdef USE_OPENSSL
-	if (srv->ssl_is_init) {
-	      #if   OPENSSL_VERSION_NUMBER >= 0x10100000L \
-		&& !defined(LIBRESSL_VERSION_NUMBER)
-		/*(OpenSSL libraries handle thread init and deinit)
-		 * https://github.com/openssl/openssl/pull/1048 */
-	      #else
-		CRYPTO_cleanup_all_ex_data();
-		ERR_free_strings();
-	       #if OPENSSL_VERSION_NUMBER >= 0x10000000L
-		ERR_remove_thread_state(NULL);
-	       #else
-		ERR_remove_state(0);
-	       #endif
-		EVP_cleanup();
-	      #endif
-	}
-#endif
 	li_rand_cleanup();
 
 	free(srv);

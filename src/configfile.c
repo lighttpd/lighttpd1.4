@@ -350,6 +350,15 @@ static int config_insert(server *srv) {
 		if (s->stream_response_body & FDEVENT_STREAM_RESPONSE_BUFMIN) {
 			s->stream_response_body |= FDEVENT_STREAM_RESPONSE;
 		}
+
+#ifndef USE_OPENSSL
+		if (s->ssl_enabled) {
+			log_error_write(srv, __FILE__, __LINE__, "s",
+					"ssl support is missing, recompile with --with-openssl");
+			ret = HANDLER_ERROR;
+			break;
+		}
+#endif
 	}
 
 	{
@@ -1592,23 +1601,6 @@ int config_set_defaults(server *srv) {
 
 			return -1;
 		}
-	}
-
-	if (s->ssl_enabled) {
-		if (buffer_string_is_empty(s->ssl_pemfile)) {
-			/* PEM file is require */
-
-			log_error_write(srv, __FILE__, __LINE__, "s",
-					"ssl.pemfile has to be set");
-			return -1;
-		}
-
-#ifndef USE_OPENSSL
-		log_error_write(srv, __FILE__, __LINE__, "s",
-				"ssl support is missing, recompile with --with-openssl");
-
-		return -1;
-#endif
 	}
 
 	return 0;

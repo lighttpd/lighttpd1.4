@@ -22,9 +22,6 @@ typedef struct http_cgi_opts_t {
 
 typedef int (*http_cgi_header_append_cb)(void *vdata, const char *k, size_t klen, const char *v, size_t vlen);
 int http_cgi_headers(server *srv, connection *con, http_cgi_opts *opts, http_cgi_header_append_cb cb, void *vdata);
-#ifdef USE_OPENSSL
-void http_cgi_ssl_env(server *srv, connection *con);
-#endif
 
 handler_t http_response_prepare(server *srv, connection *con);
 int http_response_redirect_to_directory(server *srv, connection *con);
