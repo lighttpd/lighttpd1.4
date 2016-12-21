@@ -3094,7 +3094,6 @@ int mod_scgi_plugin_init(plugin *p) {
 	p->cleanup      = mod_scgi_free;
 	p->set_defaults = mod_scgi_set_defaults;
 	p->connection_reset        = scgi_connection_reset;
-	p->handle_connection_close = scgi_connection_reset;
 	p->handle_uri_clean        = scgi_check_extension_1;
 	p->handle_subrequest_start = scgi_check_extension_2;
 	p->handle_subrequest       = mod_scgi_handle_subrequest;

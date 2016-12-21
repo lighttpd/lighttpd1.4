@@ -1245,7 +1245,6 @@ int mod_deflate_plugin_init(plugin *p) {
 	p->cleanup	= mod_deflate_free;
 	p->set_defaults	= mod_deflate_setdefaults;
 	p->connection_reset	= mod_deflate_cleanup;
-	p->handle_connection_close	= mod_deflate_cleanup;
 	p->handle_response_start	= mod_deflate_handle_response_start;
 
 	p->data        = NULL;

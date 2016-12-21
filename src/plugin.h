@@ -54,7 +54,7 @@ typedef struct {
 											    */
 	handler_t (* handle_subrequest)      (server *srv, connection *con, void *p_d);    /* */
 	handler_t (* handle_response_start)  (server *srv, connection *con, void *p_d);    /* before response headers are written */
-	handler_t (* connection_reset)       (server *srv, connection *con, void *p_d);    /* */
+	handler_t (* connection_reset)       (server *srv, connection *con, void *p_d);    /* after request done or request abort */
 	void *data;
 
 	/* dlopen handle */

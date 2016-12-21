@@ -1437,7 +1437,6 @@ int mod_proxy_plugin_init(plugin *p) {
 	p->cleanup      = mod_proxy_free;
 	p->set_defaults = mod_proxy_set_defaults;
 	p->connection_reset        = mod_proxy_connection_reset; /* end of req-resp cycle */
-	p->handle_connection_close = mod_proxy_connection_reset; /* end of client connection */
 	p->handle_uri_clean        = mod_proxy_check_extension;
 	p->handle_subrequest       = mod_proxy_handle_subrequest;
 	p->handle_trigger          = mod_proxy_trigger;

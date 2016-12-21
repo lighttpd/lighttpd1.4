@@ -3662,7 +3662,6 @@ int mod_fastcgi_plugin_init(plugin *p) {
 	p->cleanup      = mod_fastcgi_free;
 	p->set_defaults = mod_fastcgi_set_defaults;
 	p->connection_reset        = fcgi_connection_reset;
-	p->handle_connection_close = fcgi_connection_reset;
 	p->handle_uri_clean        = fcgi_check_extension_1;
 	p->handle_subrequest_start = fcgi_check_extension_2;
 	p->handle_subrequest       = mod_fastcgi_handle_subrequest;
