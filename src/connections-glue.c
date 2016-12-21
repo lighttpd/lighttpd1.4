@@ -2,7 +2,6 @@
 
 #include "base.h"
 #include "connections.h"
-#include "joblist.h"
 #include "log.h"
 
 #include <errno.h>
@@ -98,11 +97,14 @@ static void dump_packet(const unsigned char *data, size_t len) {
 }
 #endif
 
-static int connection_handle_read_ssl(server *srv, connection *con) {
+int connection_read_cq_ssl(server *srv, connection *con, chunkqueue *cq, off_t max_bytes) {
 #ifdef USE_OPENSSL
 	int r, ssl_err, len;
 	char *mem = NULL;
 	size_t mem_len = 0;
+
+	force_assert(cq == con->read_queue); /*(code transform assumption; minimize diff)*/
+	UNUSED(max_bytes);
 
 	if (!con->srv_socket->is_ssl) return -1;
 
@@ -217,20 +219,20 @@ static int connection_handle_read_ssl(server *srv, connection *con) {
 #else
 	UNUSED(srv);
 	UNUSED(con);
+	UNUSED(cq);
+	UNUSED(max_bytes);
 	return -1;
 #endif
 }
 
 /* 0: everything ok, -1: error, -2: con closed */
-int connection_handle_read(server *srv, connection *con) {
+int connection_read_cq(server *srv, connection *con, chunkqueue *cq, off_t max_bytes) {
 	int len;
 	char *mem = NULL;
 	size_t mem_len = 0;
 	int toread;
-
-	if (con->srv_socket->is_ssl) {
-		return connection_handle_read_ssl(srv, con);
-	}
+	force_assert(cq == con->read_queue);       /*(code transform assumption; minimize diff)*/
+	force_assert(max_bytes == MAX_READ_LIMIT); /*(code transform assumption; minimize diff)*/
 
 	/* default size for chunks is 4kb; only use bigger chunks if FIONREAD tells
 	 *  us more than 4kb is available
@@ -541,7 +543,7 @@ handler_t connection_handle_read_post_state(server *srv, connection *con) {
 	if (con->is_readable) {
 		con->read_idle_ts = srv->cur_ts;
 
-		switch(connection_handle_read(srv, con)) {
+		switch(con->network_read(srv, con, con->read_queue, MAX_READ_LIMIT)) {
 		case -1:
 			return HANDLER_ERROR;
 		case -2:

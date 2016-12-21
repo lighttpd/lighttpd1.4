@@ -801,7 +801,7 @@ static int connection_handle_read_state(server *srv, connection *con)  {
 	if (con->is_readable) {
 		con->read_idle_ts = srv->cur_ts;
 
-		switch(connection_handle_read(srv, con)) {
+		switch(con->network_read(srv, con, con->read_queue, MAX_READ_LIMIT)) {
 		case -1:
 			return -1;
 		case -2:
@@ -1039,6 +1039,15 @@ connection *connection_accept(server *srv, server_socket *srv_socket) {
 	}
 }
 
+static int connection_write_cq(server *srv, connection *con, chunkqueue *cq, off_t max_bytes) {
+	return srv->network_backend_write(srv, con, con->fd, cq, max_bytes);
+}
+
+#include "network_backends.h" /* network_write_chunkqueue_openssl() */
+static int connection_write_cq_ssl(server *srv, connection *con, chunkqueue *cq, off_t max_bytes) {
+	return network_write_chunkqueue_openssl(srv, con, con->ssl, cq, max_bytes);
+}
+
 connection *connection_accepted(server *srv, server_socket *srv_socket, sock_addr *cnt_addr, int cnt) {
 		connection *con;
 
@@ -1056,6 +1065,8 @@ connection *connection_accepted(server *srv, server_socket *srv_socket, sock_add
 		con->fd = cnt;
 		con->fde_ndx = -1;
 		fdevent_register(srv->ev, con->fd, connection_handle_fdevent, con);
+		con->network_read = connection_read_cq;
+		con->network_write = connection_write_cq;
 
 		connection_set_state(srv, con, CON_STATE_REQUEST_START);
 
@@ -1080,6 +1091,8 @@ connection *connection_accepted(server *srv, server_socket *srv_socket, sock_add
 				return NULL;
 			}
 
+			con->network_read = connection_read_cq_ssl;
+			con->network_write = connection_write_cq_ssl;
 			con->renegotiations = 0;
 			SSL_set_app_data(con->ssl, con);
 			SSL_set_accept_state(con->ssl);

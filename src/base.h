@@ -386,7 +386,7 @@ typedef struct {
 	buffer *comp_value; /* just a pointer */
 } cond_cache_t;
 
-typedef struct {
+typedef struct connection {
 	connection_state_t state;
 
 	/* timestamps */
@@ -467,6 +467,8 @@ typedef struct {
 	http_method_t error_handler_saved_method;
 
 	struct server_socket *srv_socket;   /* reference to the server-socket */
+	int (* network_write)(struct server *srv, struct connection *con, chunkqueue *cq, off_t max_bytes);
+	int (* network_read)(struct server *srv, struct connection *con, chunkqueue *cq, off_t max_bytes);
 
 #ifdef USE_OPENSSL
 	SSL *ssl;
@@ -682,9 +684,6 @@ typedef struct server {
 	fdevent_handler_t event_handler;
 
 	int (* network_backend_write)(struct server *srv, connection *con, int fd, chunkqueue *cq, off_t max_bytes);
-#ifdef USE_OPENSSL
-	int (* network_ssl_backend_write)(struct server *srv, connection *con, SSL *ssl, chunkqueue *cq, off_t max_bytes);
-#endif
 
 	uid_t uid;
 	gid_t gid;
