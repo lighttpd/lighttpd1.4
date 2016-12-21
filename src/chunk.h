@@ -87,6 +87,8 @@ void chunkqueue_steal(chunkqueue *dest, chunkqueue *src, off_t len);
 struct server;
 int chunkqueue_steal_with_tempfiles(struct server *srv, chunkqueue *dest, chunkqueue *src, off_t len);
 
+int chunkqueue_open_file_chunk(struct server *srv, chunkqueue *cq);
+
 off_t chunkqueue_length(chunkqueue *cq);
 void chunkqueue_free(chunkqueue *cq);
 void chunkqueue_reset(chunkqueue *cq);

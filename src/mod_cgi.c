@@ -909,7 +909,7 @@ static ssize_t cgi_write_file_chunk_mmap(server *srv, connection *con, int fd, c
 		return 0;
 	}
 
-	/*(simplified from network_write_no_mmap.c:network_open_file_chunk())*/
+	/*(simplified from chunk.c:chunkqueue_open_file_chunk())*/
 	UNUSED(con);
 	if (-1 == c->file.fd) {
 		if (-1 == (c->file.fd = fdevent_open_cloexec(c->file.name->ptr, O_RDONLY, 0))) {

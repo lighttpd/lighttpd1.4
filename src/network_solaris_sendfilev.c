@@ -4,7 +4,6 @@
 
 #if defined(USE_SOLARIS_SENDFILEV)
 
-#include "network.h"
 #include "log.h"
 
 #include <sys/sendfile.h>
@@ -38,7 +37,7 @@ int network_write_file_chunk_sendfile(server *srv, connection *con, int fd, chun
 		return 0;
 	}
 
-	if (0 != network_open_file_chunk(srv, con, cq)) return -1;
+	if (0 != chunkqueue_open_file_chunk(srv, cq)) return -1;
 
 	fvec.sfv_fd = c->file.fd;
 	fvec.sfv_flag = 0;

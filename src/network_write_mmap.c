@@ -2,7 +2,6 @@
 
 #include "network_backends.h"
 
-#include "network.h"
 #include "log.h"
 #include "sys-mmap.h"
 
@@ -47,6 +46,7 @@ int network_write_file_chunk_mmap(server *srv, connection *con, int fd, chunkque
 	ssize_t r;
 	size_t mmap_offset, mmap_avail;
 	const char *data;
+	UNUSED(con);
 
 	force_assert(NULL != c);
 	force_assert(FILE_CHUNK == c->type);
@@ -62,7 +62,7 @@ int network_write_file_chunk_mmap(server *srv, connection *con, int fd, chunkque
 		return 0;
 	}
 
-	if (0 != network_open_file_chunk(srv, con, cq)) return -1;
+	if (0 != chunkqueue_open_file_chunk(srv, cq)) return -1;
 
 	/* setup SIGBUS handler, but don't activate sigbus_jmp_valid yet */
 	if (0 != sigsetjmp(sigbus_jmp, 1)) {

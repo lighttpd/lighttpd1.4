@@ -739,3 +739,38 @@ static void chunkqueue_remove_empty_chunks(chunkqueue *cq) {
 		}
 	}
 }
+
+int chunkqueue_open_file_chunk(server *srv, chunkqueue *cq) {
+	chunk* const c = cq->first;
+	off_t offset, toSend;
+	struct stat st;
+
+	force_assert(NULL != c);
+	force_assert(FILE_CHUNK == c->type);
+	force_assert(c->offset >= 0 && c->offset <= c->file.length);
+
+	offset = c->file.start + c->offset;
+	toSend = c->file.length - c->offset;
+
+	if (-1 == c->file.fd) {
+		if (-1 == (c->file.fd = fdevent_open_cloexec(c->file.name->ptr, O_RDONLY, 0))) {
+			log_error_write(srv, __FILE__, __LINE__, "ssb", "open failed:", strerror(errno), c->file.name);
+			return -1;
+		}
+	}
+
+	/*(skip file size checks if file is temp file created by lighttpd)*/
+	if (c->file.is_temp) return 0;
+
+	if (-1 == fstat(c->file.fd, &st)) {
+		log_error_write(srv, __FILE__, __LINE__, "ss", "fstat failed:", strerror(errno));
+		return -1;
+	}
+
+	if (offset > st.st_size || toSend > st.st_size || offset > st.st_size - toSend) {
+		log_error_write(srv, __FILE__, __LINE__, "sb", "file shrunk:", c->file.name);
+		return -1;
+	}
+
+	return 0;
+}

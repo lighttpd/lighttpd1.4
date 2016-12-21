@@ -29,6 +29,7 @@ static int load_next_chunk(server *srv, connection *con, chunkqueue *cq, off_t m
 	 * -> we expect a 64k block to 'leak' in valgrind
 	 * */
 	static char *local_send_buffer = NULL;
+	UNUSED(con);
 
 	force_assert(NULL != c);
 
@@ -53,7 +54,7 @@ static int load_next_chunk(server *srv, connection *con, chunkqueue *cq, off_t m
 			force_assert(NULL != local_send_buffer);
 		}
 
-		if (0 != network_open_file_chunk(srv, con, cq)) return -1;
+		if (0 != chunkqueue_open_file_chunk(srv, cq)) return -1;
 
 		{
 			off_t offset, toSend;

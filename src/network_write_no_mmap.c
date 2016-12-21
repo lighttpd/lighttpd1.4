@@ -1,64 +1,18 @@
 #include "first.h"
 
 #include "network_backends.h"
-
-#include "network.h"
-#include "fdevent.h"
 #include "log.h"
-#include "stat_cache.h"
-
 #include "sys-socket.h"
 
-#include <sys/time.h>
-#include <stdlib.h>
-
-#include <fcntl.h>
-#include <sys/stat.h>
 #include <unistd.h>
-
 #include <errno.h>
 #include <string.h>
-
-int network_open_file_chunk(server *srv, connection *con, chunkqueue *cq) {
-	chunk* const c = cq->first;
-	off_t offset, toSend;
-	struct stat st;
-	UNUSED(con);
-
-	force_assert(NULL != c);
-	force_assert(FILE_CHUNK == c->type);
-	force_assert(c->offset >= 0 && c->offset <= c->file.length);
-
-	offset = c->file.start + c->offset;
-	toSend = c->file.length - c->offset;
-
-	if (-1 == c->file.fd) {
-		if (-1 == (c->file.fd = fdevent_open_cloexec(c->file.name->ptr, O_RDONLY, 0))) {
-			log_error_write(srv, __FILE__, __LINE__, "ssb", "open failed:", strerror(errno), c->file.name);
-			return -1;
-		}
-	}
-
-	/*(skip file size checks if file is temp file created by lighttpd)*/
-	if (c->file.is_temp) return 0;
-
-	if (-1 == fstat(c->file.fd, &st)) {
-		log_error_write(srv, __FILE__, __LINE__, "ss", "fstat failed:", strerror(errno));
-		return -1;
-	}
-
-	if (offset > st.st_size || toSend > st.st_size || offset > st.st_size - toSend) {
-		log_error_write(srv, __FILE__, __LINE__, "sb", "file shrunk:", c->file.name);
-		return -1;
-	}
-
-	return 0;
-}
 
 int network_write_file_chunk_no_mmap(server *srv, connection *con, int fd, chunkqueue *cq, off_t *p_max_bytes) {
 	chunk* const c = cq->first;
 	off_t offset, toSend;
 	ssize_t r;
+	UNUSED(con);
 
 	force_assert(NULL != c);
 	force_assert(FILE_CHUNK == c->type);
@@ -74,7 +28,7 @@ int network_write_file_chunk_no_mmap(server *srv, connection *con, int fd, chunk
 		return 0;
 	}
 
-	if (0 != network_open_file_chunk(srv, con, cq)) return -1;
+	if (0 != chunkqueue_open_file_chunk(srv, cq)) return -1;
 
 	buffer_string_prepare_copy(srv->tmp_buf, toSend);
 
