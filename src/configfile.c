@@ -46,6 +46,25 @@ static void config_warn_authn_module (server *srv, const char *module) {
 }
 #endif
 
+#if defined HAVE_LIBSSL && defined HAVE_OPENSSL_SSL_H
+static void config_warn_openssl_module (server *srv) {
+	for (size_t i = 0; i < srv->config_context->used; ++i) {
+		const data_config *config = (data_config const*)srv->config_context->data[i];
+		for (size_t j = 0; j < config->value->used; ++j) {
+			data_unset *du = config->value->data[j];
+			if (0 == strncmp(du->key->ptr, "ssl.", sizeof("ssl.")-1)) {
+				/* mod_openssl should be loaded after mod_extforward */
+				data_string *ds = data_string_init();
+				buffer_copy_string_len(ds->value, CONST_STR_LEN("mod_openssl"));
+				array_insert_unique(srv->srvconf.modules, (data_unset *)ds);
+				log_error_write(srv, __FILE__, __LINE__, "S", "Warning: please add \"mod_openssl\" to server.modules list in lighttpd.conf.  A future release of lighttpd 1.4.x *will not* automatically load mod_openssl and lighttpd *will not* use SSL/TLS where your lighttpd.conf contains ssl.* directives");
+				return;
+			}
+		}
+	}
+}
+#endif
+
 static int config_insert(server *srv) {
 	size_t i;
 	int ret = 0;
@@ -372,6 +391,7 @@ static int config_insert(server *srv) {
 		int append_mod_authn_file = 1;
 		int append_mod_authn_ldap = 1;
 		int append_mod_authn_mysql = 1;
+		int append_mod_openssl = 1;
 		int contains_mod_auth = 0;
 
 		/* prepend default modules */
@@ -388,6 +408,10 @@ static int config_insert(server *srv) {
 
 			if (buffer_is_equal_string(ds->value, CONST_STR_LEN("mod_dirlisting"))) {
 				append_mod_dirlisting = 0;
+			}
+
+			if (buffer_is_equal_string(ds->value, CONST_STR_LEN("mod_openssl"))) {
+				append_mod_openssl = 0;
 			}
 
 			if (buffer_is_equal_string(ds->value, CONST_STR_LEN("mod_authn_file"))) {
@@ -409,6 +433,7 @@ static int config_insert(server *srv) {
 			if (0 == prepend_mod_indexfile &&
 			    0 == append_mod_dirlisting &&
 			    0 == append_mod_staticfile &&
+			    0 == append_mod_openssl &&
 			    0 == append_mod_authn_file &&
 			    0 == append_mod_authn_ldap &&
 			    0 == append_mod_authn_mysql &&
@@ -445,6 +470,12 @@ static int config_insert(server *srv) {
 			ds = data_string_init();
 			buffer_copy_string_len(ds->value, CONST_STR_LEN("mod_staticfile"));
 			array_insert_unique(srv->srvconf.modules, (data_unset *)ds);
+		}
+
+		if (append_mod_openssl) {
+		      #if defined HAVE_LIBSSL && defined HAVE_OPENSSL_SSL_H
+			config_warn_openssl_module(srv);
+		      #endif
 		}
 
 		/* mod_auth.c,http_auth.c auth backends were split into separate modules

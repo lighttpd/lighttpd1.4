@@ -383,6 +383,7 @@ else
     use_openssl=no
 fi
 AC_MSG_RESULT([$use_openssl])
+AM_CONDITIONAL(BUILD_WITH_OPENSSL, test ! $WITH_OPENSSL = no)
 
 AC_ARG_WITH(openssl-includes,
     AC_HELP_STRING([--with-openssl-includes=DIR],[OpenSSL includes]),
@@ -403,10 +404,12 @@ if test "x$use_openssl" = "xyes"; then
     OLDLIBS="$LIBS"
     AC_CHECK_LIB(crypto, BIO_f_base64, [
       AC_CHECK_LIB(ssl, SSL_new, [ SSL_LIB="-lssl -lcrypto"
+				 CRYPTO_LIB="-lcrypto"
 				 AC_DEFINE(HAVE_LIBSSL, [], [Have libssl]) ], [], [ -lcrypto "$DL_LIB" ])
     ], [], [])
     LIBS="$OLDLIBS"
     AC_SUBST(SSL_LIB)
+    AC_SUBST(CRYPTO_LIB)
 fi
 
 AC_MSG_CHECKING(for perl regular expressions support)

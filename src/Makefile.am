@@ -300,6 +300,13 @@ mod_authn_mysql_la_LIBADD = $(CRYPT_LIB) $(MYSQL_LIBS) $(common_libadd)
 mod_authn_mysql_la_CPPFLAGS = $(MYSQL_INCLUDE)
 endif
 
+if BUILD_WITH_OPENSSL
+lib_LTLIBRARIES += mod_openssl.la
+mod_openssl_la_SOURCES = mod_openssl.c
+mod_openssl_la_LDFLAGS = $(common_module_ldflags)
+mod_openssl_la_LIBADD = $(SSL_LIB) $(common_libadd)
+endif
+
 lib_LTLIBRARIES += mod_rewrite.la
 mod_rewrite_la_SOURCES = mod_rewrite.c
 mod_rewrite_la_LDFLAGS = $(common_module_ldflags)
@@ -415,6 +422,10 @@ if BUILD_WITH_MYSQL
 lighttpd_SOURCES += mod_authn_mysql.c mod_mysql_vhost.c
 lighttpd_CPPFLAGS += $(MYSQL_INCLUDE)
 lighttpd_LDADD += $(MYSQL_LIBS)
+endif
+if BUILD_WITH_OPENSSL
+lighttpd_SOURCES += mod_openssl.c
+lighttpd_LDADD += $(SSL_LIB)
 endif
 if BUILD_WITH_MEMCACHED
 lighttpd_CPPFLAGS += $(MEMCACHED_CFLAGS)

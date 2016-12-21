@@ -229,7 +229,7 @@ if 1:
 	autoconf.env.Append( LIBSQLITE3 = '', LIBXML2 = '', LIBMYSQL = '', LIBZ = '',
 		LIBBZ2 = '', LIBCRYPT = '', LIBMEMCACHED = '', LIBFCGI = '', LIBPCRE = '',
 		LIBLDAP = '', LIBLBER = '', LIBLUA = '', LIBDL = '', LIBUUID = '',
-		LIBKRB5 = '', LIBGSSAPI_KRB5 = '', LIBGDBM = '')
+		LIBKRB5 = '', LIBGSSAPI_KRB5 = '', LIBGDBM = '', LIBSSL = '', LIBCRYPTO = '')
 
 	if env['with_fam']:
 		if autoconf.CheckLibWithHeader('fam', 'fam.h', 'C'):
@@ -253,7 +253,7 @@ if 1:
 
 	if env['with_openssl']:
 		if autoconf.CheckLibWithHeader('ssl', 'openssl/ssl.h', 'C'):
-			autoconf.env.Append(CPPFLAGS = [ '-DHAVE_OPENSSL_SSL_H', '-DHAVE_LIBSSL'] , LIBS = [ 'ssl', 'crypto' ])
+			autoconf.env.Append(CPPFLAGS = [ '-DHAVE_OPENSSL_SSL_H', '-DHAVE_LIBSSL'] , LIBSSL = 'ssl', LIBCRYPTO = 'crypto', LIBS = [ 'ssl', 'crypto' ])
 
 	if env['with_gzip']:
 		if autoconf.CheckLibWithHeader('z', 'zlib.h', 'C'):
