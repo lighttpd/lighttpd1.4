@@ -684,6 +684,7 @@ typedef struct server {
 	fdevent_handler_t event_handler;
 
 	int (* network_backend_write)(struct server *srv, connection *con, int fd, chunkqueue *cq, off_t max_bytes);
+	handler_t (* request_env)(struct server *srv, connection *con);
 
 	uid_t uid;
 	gid_t gid;

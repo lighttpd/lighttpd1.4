@@ -126,6 +126,7 @@ static int connection_close(server *srv, connection *con) {
 		con->ssl = NULL;
 	}
 #endif
+	plugins_call_handle_connection_close(srv, con);
 
 	fdevent_event_del(srv->ev, &(con->fde_ndx), con->fd);
 	fdevent_unregister(srv->ev, con->fd);
@@ -186,8 +187,6 @@ static void connection_handle_close_state(server *srv, connection *con) {
 }
 
 static void connection_handle_shutdown(server *srv, connection *con) {
-	int r;
-
 #ifdef USE_OPENSSL
 	server_socket *srv_sock = con->srv_socket;
 	if (srv_sock->is_ssl && SSL_is_init_finished(con->ssl)) {
@@ -252,15 +251,7 @@ static void connection_handle_shutdown(server *srv, connection *con) {
 		ERR_clear_error();
 	}
 #endif
-
-	switch(r = plugins_call_handle_connection_close(srv, con)) {
-	case HANDLER_GO_ON:
-	case HANDLER_FINISHED:
-		break;
-	default:
-		log_error_write(srv, __FILE__, __LINE__, "sd", "unhandling return value", r);
-		break;
-	}
+	plugins_call_handle_connection_shut_wr(srv, con);
 
 	srv->con_closed++;
 	connection_reset(srv, con);
@@ -1105,6 +1096,10 @@ connection *connection_accepted(server *srv, server_socket *srv_socket, sock_add
 			}
 		}
 #endif
+		if (HANDLER_GO_ON != plugins_call_handle_connection_accept(srv, con)) {
+			connection_close(srv, con);
+			return NULL;
+		}
 		return con;
 }
 

@@ -277,6 +277,7 @@ static server *server_init(void) {
 	srv->errorlog_mode = ERRORLOG_FD;
 
 	srv->split_vals = array_init();
+	srv->request_env = plugins_call_handle_request_env;
 
 	return srv;
 }

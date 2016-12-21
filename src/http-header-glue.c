@@ -1006,6 +1006,7 @@ int http_cgi_headers (server *srv, connection *con, http_cgi_opts *opts, http_cg
         }
     }
 
+    srv->request_env(srv, con);
   #ifdef USE_OPENSSL
     if (con->ssl) http_cgi_ssl_env(srv, con);
   #endif

@@ -42,8 +42,11 @@ typedef struct {
 	handler_t (* handle_uri_clean)       (server *srv, connection *con, void *p_d);    /* after uri is set */
 	handler_t (* handle_docroot)         (server *srv, connection *con, void *p_d);    /* getting the document-root */
 	handler_t (* handle_physical)        (server *srv, connection *con, void *p_d);    /* mapping url to physical path */
+	handler_t (* handle_request_env)     (server *srv, connection *con, void *p_d);    /* (deferred env populate) */
 	handler_t (* handle_request_done)    (server *srv, connection *con, void *p_d);    /* at the end of a request */
-	handler_t (* handle_connection_close)(server *srv, connection *con, void *p_d);    /* at the end of a connection */
+	handler_t (* handle_connection_accept) (server *srv, connection *con, void *p_d);  /* after accept() socket */
+	handler_t (* handle_connection_shut_wr)(server *srv, connection *con, void *p_d);  /* done writing to socket */
+	handler_t (* handle_connection_close)  (server *srv, connection *con, void *p_d);  /* before close() of socket */
 
 
 
@@ -69,9 +72,12 @@ handler_t plugins_call_handle_uri_clean(server *srv, connection *con);
 handler_t plugins_call_handle_subrequest_start(server *srv, connection *con);
 handler_t plugins_call_handle_subrequest(server *srv, connection *con);
 handler_t plugins_call_handle_response_start(server *srv, connection *con);
+handler_t plugins_call_handle_request_env(server *srv, connection *con);
 handler_t plugins_call_handle_request_done(server *srv, connection *con);
 handler_t plugins_call_handle_docroot(server *srv, connection *con);
 handler_t plugins_call_handle_physical(server *srv, connection *con);
+handler_t plugins_call_handle_connection_accept(server *srv, connection *con);
+handler_t plugins_call_handle_connection_shut_wr(server *srv, connection *con);
 handler_t plugins_call_handle_connection_close(server *srv, connection *con);
 handler_t plugins_call_connection_reset(server *srv, connection *con);
 
