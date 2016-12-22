@@ -211,12 +211,7 @@ static int mod_geoip_patch_connection(server *srv, connection *con, plugin_data 
 }
 #undef PATCH
 
-URIHANDLER_FUNC(mod_geoip_subrequest) {
-	plugin_data *p = p_d;
-
-	mod_geoip_patch_connection(srv, con, p);
-
-	if (!buffer_is_empty(p->conf.db_name)) {
+static handler_t mod_geoip_query (connection *con, plugin_data *p) {
 		const char *remote_ip;
 		data_string *ds;
 		GeoIPRecord *gir;
@@ -391,10 +386,16 @@ URIHANDLER_FUNC(mod_geoip_subrequest) {
 
 			GeoIPRecord_delete(gir);
 		}
-	}
 
-	/* keep walking... (johnnie walker style ;) */
 	return HANDLER_GO_ON;
+}
+
+CONNECTION_FUNC(mod_geoip_handle_request_env) {
+	plugin_data *p = p_d;
+	mod_geoip_patch_connection(srv, con, p);
+	if (buffer_is_empty(p->conf.db_name)) return HANDLER_GO_ON;
+
+	return mod_geoip_query(con, p);
 }
 
 /* this function is called at dlopen() time and inits the callbacks */
@@ -405,7 +406,7 @@ int mod_geoip_plugin_init(plugin *p) {
 	p->name        = buffer_init_string("geoip");
 
 	p->init        = mod_geoip_init;
-	p->handle_subrequest_start = mod_geoip_subrequest;
+	p->handle_request_env = mod_geoip_handle_request_env;
 	p->set_defaults  = mod_geoip_set_defaults;
 	p->cleanup     = mod_geoip_free;
 
