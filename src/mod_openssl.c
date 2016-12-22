@@ -1501,6 +1501,7 @@ CONNECTION_FUNC(mod_openssl_handle_uri_raw)
     handler_ctx *hctx = con->plugin_ctx[p->id];
     if (NULL == hctx) return HANDLER_GO_ON;
 
+    mod_openssl_patch_connection(srv, con, hctx);
     if (hctx->conf.ssl_verifyclient) {
         mod_openssl_handle_request_env(srv, con, p);
     }
