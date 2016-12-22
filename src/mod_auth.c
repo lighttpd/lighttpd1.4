@@ -15,6 +15,7 @@ typedef struct {
 	/* auth */
 	array  *auth_require;
 	buffer *auth_backend_conf;
+	unsigned short auth_extern_authn;
 
 	/* generated */
 	const http_auth_backend_t *auth_backend;
@@ -200,6 +201,7 @@ SETDEFAULTS_FUNC(mod_auth_set_defaults) {
 	config_values_t cv[] = {
 		{ "auth.backend",                   NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_CONNECTION }, /* 0 */
 		{ "auth.require",                   NULL, T_CONFIG_LOCAL, T_CONFIG_SCOPE_CONNECTION },  /* 1 */
+		{ "auth.extern-authn",              NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION },/* 2 */
 		{ NULL,                             NULL, T_CONFIG_UNSET, T_CONFIG_SCOPE_UNSET }
 	};
 
@@ -218,6 +220,7 @@ SETDEFAULTS_FUNC(mod_auth_set_defaults) {
 
 		cv[0].destination = s->auth_backend_conf;
 		cv[1].destination = s->auth_require; /* T_CONFIG_LOCAL; not modified by config_insert_values_global() */
+		cv[2].destination = &s->auth_extern_authn;
 
 		p->config_storage[i] = s;
 
@@ -336,6 +339,7 @@ static int mod_auth_patch_connection(server *srv, connection *con, plugin_data *
 
 	PATCH(auth_backend);
 	PATCH(auth_require);
+	PATCH(auth_extern_authn);
 
 	/* skip the first, the global context */
 	for (i = 1; i < srv->config_context->used; i++) {
@@ -353,6 +357,8 @@ static int mod_auth_patch_connection(server *srv, connection *con, plugin_data *
 				PATCH(auth_backend);
 			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("auth.require"))) {
 				PATCH(auth_require);
+			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("auth.extern-authn"))) {
+				PATCH(auth_extern_authn);
 			}
 		}
 	}
@@ -382,6 +388,12 @@ static handler_t mod_auth_uri_handler(server *srv, connection *con, void *p_d) {
 		    ? 0 == strncmp(con->uri.path->ptr, path->ptr, buffer_string_length(path))
 		    : 0 == strncasecmp(con->uri.path->ptr, path->ptr, buffer_string_length(path))) {
 			const http_auth_scheme_t * const scheme = dauth->require->scheme;
+			if (p->conf.auth_extern_authn) {
+				data_string *ds = (data_string *)array_get_element(con->environment, "REMOTE_USER");
+				if (NULL != ds && http_auth_match_rules(dauth->require, ds->value->ptr, NULL, NULL)) {
+					return HANDLER_GO_ON;
+				}
+			}
 			return scheme->checkfn(srv, con, scheme->p_d, dauth->require, p->conf.auth_backend);
 		}
 	}
