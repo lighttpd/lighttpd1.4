@@ -991,7 +991,7 @@ int http_cgi_headers (server *srv, connection *con, http_cgi_opts *opts, http_cg
 
     for (n = 0; n < con->request.headers->used; n++) {
         data_string *ds = (data_string *)con->request.headers->data[n];
-        if (!buffer_is_empty(ds->value) && !buffer_is_empty(ds->key)) {
+        if (!buffer_string_is_empty(ds->value) && !buffer_is_empty(ds->key)) {
             /* Security: Do not emit HTTP_PROXY in environment.
              * Some executables use HTTP_PROXY to configure
              * outgoing proxy.  See also https://httpoxy.org/ */

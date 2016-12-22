@@ -70,7 +70,7 @@ int http_response_write_header(server *srv, connection *con) {
 
 		ds = (data_string *)con->response.headers->data[i];
 
-		if (!buffer_is_empty(ds->value) && !buffer_is_empty(ds->key) &&
+		if (!buffer_string_is_empty(ds->value) && !buffer_is_empty(ds->key) &&
 		    0 != strncasecmp(ds->key->ptr, CONST_STR_LEN("X-LIGHTTPD-")) &&
 			0 != strncasecmp(ds->key->ptr, CONST_STR_LEN("X-Sendfile"))) {
 			if (0 == strcasecmp(ds->key->ptr, "Date")) have_date = 1;

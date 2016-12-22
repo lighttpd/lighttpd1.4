@@ -697,7 +697,7 @@ static int proxy_create_env(server *srv, handler_ctx *hctx) {
 
 		ds = (data_string *)con->request.headers->data[i];
 
-		if (!buffer_is_empty(ds->value) && !buffer_is_empty(ds->key)) {
+		if (!buffer_string_is_empty(ds->value) && !buffer_is_empty(ds->key)) {
 			if (replace_http_host &&
 			    buffer_is_equal_caseless_string(ds->key, CONST_STR_LEN("Host"))) continue;
 			if (buffer_is_equal_caseless_string(ds->key, CONST_STR_LEN("Connection"))) continue;
