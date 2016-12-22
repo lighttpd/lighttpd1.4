@@ -545,9 +545,7 @@ connection *connection_init(server *srv) {
 
 	CLEAN(server_name);
 	CLEAN(dst_addr_buf);
-#if defined USE_OPENSSL && ! defined OPENSSL_NO_TLSEXT
 	CLEAN(tlsext_server_name);
-#endif
 
 #undef CLEAN
 	con->write_queue = chunkqueue_init();
@@ -611,9 +609,7 @@ void connections_free(server *srv) {
 
 		CLEAN(server_name);
 		CLEAN(dst_addr_buf);
-#if defined USE_OPENSSL && ! defined OPENSSL_NO_TLSEXT
 		CLEAN(tlsext_server_name);
-#endif
 #undef CLEAN
 		free(con->plugin_ctx);
 		free(con->cond_cache);
@@ -662,9 +658,7 @@ int connection_reset(server *srv, connection *con) {
 	CLEAN(parse_request);
 
 	CLEAN(server_name);
-#if defined USE_OPENSSL && ! defined OPENSSL_NO_TLSEXT
 	CLEAN(tlsext_server_name);
-#endif
 #undef CLEAN
 
 #define CLEAN(x) \
@@ -985,6 +979,10 @@ connection *connection_accepted(server *srv, server_socket *srv_socket, sock_add
 		con->dst_addr = *cnt_addr;
 		buffer_copy_string(con->dst_addr_buf, inet_ntop_cache_get_ip(srv, &(con->dst_addr)));
 		con->srv_socket = srv_socket;
+
+		config_cond_cache_reset(srv, con);
+		con->conditional_is_valid[COMP_SERVER_SOCKET] = 1;
+		con->conditional_is_valid[COMP_HTTP_REMOTE_IP] = 1;
 
 		if (-1 == fdevent_fcntl_set_nb_cloexec_sock(srv->ev, con->fd)) {
 			log_error_write(srv, __FILE__, __LINE__, "ss", "fcntl failed: ", strerror(errno));

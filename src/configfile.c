@@ -109,18 +109,18 @@ static int config_insert(server *srv) {
 		{ "connection.kbytes-per-second",      NULL, T_CONFIG_SHORT,   T_CONFIG_SCOPE_CONNECTION }, /* 26 */
 		{ "mimetype.use-xattr",                NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION }, /* 27 */
 		{ "mimetype.assign",                   NULL, T_CONFIG_ARRAY,   T_CONFIG_SCOPE_CONNECTION }, /* 28 */
-		{ "ssl.pemfile",                       NULL, T_CONFIG_STRING,  T_CONFIG_SCOPE_CONNECTION }, /* 29 */
+		{ "unused-slot-moved-to-mod-openssl",  NULL, T_CONFIG_STRING,  T_CONFIG_SCOPE_CONNECTION }, /* 29 */
 
 		{ "ssl.engine",                        NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION }, /* 30 */
 		{ "debug.log-file-not-found",          NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION }, /* 31 */
 		{ "debug.log-request-handling",        NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION }, /* 32 */
 		{ "debug.log-response-header",         NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION }, /* 33 */
 		{ "debug.log-request-header",          NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION }, /* 34 */
-		{ "debug.log-ssl-noise",               NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION }, /* 35 */
+		{ "unused-slot-moved-to-mod-openssl",  NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION }, /* 35 */
 		{ "server.protocol-http11",            NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION }, /* 36 */
 		{ "debug.log-request-header-on-error", NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_SERVER     }, /* 37 */
 		{ "debug.log-state-handling",          NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_SERVER     }, /* 38 */
-		{ "ssl.ca-file",                       NULL, T_CONFIG_STRING,  T_CONFIG_SCOPE_CONNECTION }, /* 39 */
+		{ "unused-slot-moved-to-mod-openssl",  NULL, T_CONFIG_STRING,  T_CONFIG_SCOPE_CONNECTION }, /* 39 */
 
 		{ "server.errorlog-use-syslog",        NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_SERVER     }, /* 40 */
 		{ "server.range-requests",             NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION }, /* 41 */
@@ -129,8 +129,8 @@ static int config_insert(server *srv) {
 		{ "server.network-backend",            NULL, T_CONFIG_STRING,  T_CONFIG_SCOPE_SERVER     }, /* 44 */
 		{ "server.upload-dirs",                NULL, T_CONFIG_ARRAY,   T_CONFIG_SCOPE_SERVER     }, /* 45 */
 		{ "server.core-files",                 NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_SERVER     }, /* 46 */
-		{ "ssl.cipher-list",                   NULL, T_CONFIG_STRING,  T_CONFIG_SCOPE_CONNECTION }, /* 47 */
-		{ "ssl.use-sslv2",                     NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION }, /* 48 */
+		{ "unused-slot-moved-to-mod-openssl",  NULL, T_CONFIG_STRING,  T_CONFIG_SCOPE_CONNECTION }, /* 47 */
+		{ "unused-slot-moved-to-mod-openssl",  NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION }, /* 48 */
 		{ "etag.use-inode",                    NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION }, /* 49 */
 
 		{ "etag.use-mtime",                    NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION }, /* 50 */
@@ -139,19 +139,19 @@ static int config_insert(server *srv) {
 		{ "debug.log-timeouts",                NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION }, /* 53 */
 		{ "server.defer-accept",               NULL, T_CONFIG_SHORT,   T_CONFIG_SCOPE_CONNECTION }, /* 54 */
 		{ "server.breakagelog",                NULL, T_CONFIG_STRING,  T_CONFIG_SCOPE_SERVER     }, /* 55 */
-		{ "ssl.verifyclient.activate",         NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION }, /* 56 */
-		{ "ssl.verifyclient.enforce",          NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION }, /* 57 */
-		{ "ssl.verifyclient.depth",            NULL, T_CONFIG_SHORT,   T_CONFIG_SCOPE_CONNECTION }, /* 58 */
-		{ "ssl.verifyclient.username",         NULL, T_CONFIG_STRING,  T_CONFIG_SCOPE_CONNECTION }, /* 59 */
+		{ "unused-slot-moved-to-mod-openssl",  NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION }, /* 56 */
+		{ "unused-slot-moved-to-mod-openssl",  NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION }, /* 57 */
+		{ "unused-slot-moved-to-mod-openssl",  NULL, T_CONFIG_SHORT,   T_CONFIG_SCOPE_CONNECTION }, /* 58 */
+		{ "unused-slot-moved-to-mod-openssl",  NULL, T_CONFIG_STRING,  T_CONFIG_SCOPE_CONNECTION }, /* 59 */
 
-		{ "ssl.verifyclient.exportcert",       NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION }, /* 60 */
+		{ "unused-slot-moved-to-mod-openssl",  NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION }, /* 60 */
 		{ "server.set-v6only",                 NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION }, /* 61 */
-		{ "ssl.use-sslv3",                     NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION }, /* 62 */
-		{ "ssl.dh-file",                       NULL, T_CONFIG_STRING,  T_CONFIG_SCOPE_CONNECTION }, /* 63 */
-		{ "ssl.ec-curve",                      NULL, T_CONFIG_STRING,  T_CONFIG_SCOPE_CONNECTION }, /* 64 */
-		{ "ssl.disable-client-renegotiation",  NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION }, /* 65 */
-		{ "ssl.honor-cipher-order",            NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION }, /* 66 */
-		{ "ssl.empty-fragments",               NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION }, /* 67 */
+		{ "unused-slot-moved-to-mod-openssl",  NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION }, /* 62 */
+		{ "unused-slot-moved-to-mod-openssl",  NULL, T_CONFIG_STRING,  T_CONFIG_SCOPE_CONNECTION }, /* 63 */
+		{ "unused-slot-moved-to-mod-openssl",  NULL, T_CONFIG_STRING,  T_CONFIG_SCOPE_CONNECTION }, /* 64 */
+		{ "unused-slot-moved-to-mod-openssl",  NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION }, /* 65 */
+		{ "unused-slot-moved-to-mod-openssl",  NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION }, /* 66 */
+		{ "unused-slot-moved-to-mod-openssl",  NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION }, /* 67 */
 		{ "server.upload-temp-file-size",      NULL, T_CONFIG_INT,     T_CONFIG_SCOPE_SERVER     }, /* 68 */
 		{ "mimetype.xattr-name",               NULL, T_CONFIG_STRING,  T_CONFIG_SCOPE_SERVER     }, /* 69 */
 		{ "server.listen-backlog",             NULL, T_CONFIG_INT,     T_CONFIG_SCOPE_CONNECTION }, /* 70 */
@@ -163,7 +163,6 @@ static int config_insert(server *srv) {
 		{ "server.stream-request-body",        NULL, T_CONFIG_SHORT,   T_CONFIG_SCOPE_CONNECTION }, /* 76 */
 		{ "server.stream-response-body",       NULL, T_CONFIG_SHORT,   T_CONFIG_SCOPE_CONNECTION }, /* 77 */
 		{ "server.max-request-field-size",     NULL, T_CONFIG_INT,     T_CONFIG_SCOPE_SERVER     }, /* 78 */
-		{ "ssl.read-ahead",                    NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION }, /* 79 */
 
 		{ NULL,                                NULL, T_CONFIG_UNSET,   T_CONFIG_SCOPE_UNSET      }
 	};
@@ -219,14 +218,9 @@ static int config_insert(server *srv) {
 		s->document_root = buffer_init();
 		s->mimetypes     = array_init();
 		s->server_name   = buffer_init();
-		s->ssl_pemfile   = buffer_init();
-		s->ssl_ca_file   = buffer_init();
 		s->error_handler = buffer_init();
 		s->error_handler_404 = buffer_init();
 		s->server_tag    = buffer_init_string(PACKAGE_DESC);
-		s->ssl_cipher_list = buffer_init();
-		s->ssl_dh_file   = buffer_init();
-		s->ssl_ec_curve  = buffer_init();
 		s->errorfile_prefix = buffer_init();
 	      #if defined(__FreeBSD__) || defined(__NetBSD__) \
 	       || defined(__OpenBSD__) || defined(__DragonFly__)
@@ -241,10 +235,6 @@ static int config_insert(server *srv) {
 		s->max_request_size = 0;
 		s->use_xattr     = 0;
 		s->ssl_enabled   = 0;
-		s->ssl_honor_cipher_order = 1;
-		s->ssl_empty_fragments = 0;
-		s->ssl_use_sslv2 = 0;
-		s->ssl_use_sslv3 = 0;
 		s->use_ipv6      = (i == 0) ? 0 : srv->config_storage[0]->use_ipv6;
 		s->set_v6only    = (i == 0) ? 1 : srv->config_storage[0]->set_v6only;
 		s->defer_accept  = (i == 0) ? 0 : srv->config_storage[0]->defer_accept;
@@ -261,13 +251,6 @@ static int config_insert(server *srv) {
 		s->global_kbytes_per_second = 0;
 		s->global_bytes_per_second_cnt = 0;
 		s->global_bytes_per_second_cnt_ptr = &s->global_bytes_per_second_cnt;
-		s->ssl_verifyclient = 0;
-		s->ssl_verifyclient_enforce = 1;
-		s->ssl_verifyclient_username = buffer_init();
-		s->ssl_verifyclient_depth = 9;
-		s->ssl_verifyclient_export_cert = 0;
-		s->ssl_disable_client_renegotiation = 1;
-		s->ssl_read_ahead = (0 == i ? 1 : srv->config_storage[0]->ssl_read_ahead);
 		s->listen_backlog = (0 == i ? 1024 : srv->config_storage[0]->listen_backlog);
 		s->stream_request_body = 0;
 		s->stream_response_body = 0;
@@ -295,39 +278,39 @@ static int config_insert(server *srv) {
 		cv[26].destination = &(s->kbytes_per_second);
 		cv[27].destination = &(s->use_xattr);
 		cv[28].destination = s->mimetypes;
-		cv[29].destination = s->ssl_pemfile;
+		/*cv[29].destination = s->unused;*/
 
 		cv[30].destination = &(s->ssl_enabled);
 		cv[31].destination = &(s->log_file_not_found);
 		cv[32].destination = &(s->log_request_handling);
 		cv[33].destination = &(s->log_response_header);
 		cv[34].destination = &(s->log_request_header);
-		cv[35].destination = &(s->log_ssl_noise);
+		/*cv[35].destination = &(s->unused);*/
 		cv[36].destination = &(s->allow_http11);
-		cv[39].destination = s->ssl_ca_file;
+		/*cv[39].destination = s->unused;*/
 
 		cv[41].destination = &(s->range_requests);
-		cv[47].destination = s->ssl_cipher_list;
-		cv[48].destination = &(s->ssl_use_sslv2);
+		/*cv[47].destination = s->unused;*/
+		/*cv[48].destination = &(s->unused);*/
 		cv[49].destination = &(s->etag_use_inode);
 
 		cv[50].destination = &(s->etag_use_mtime);
 		cv[51].destination = &(s->etag_use_size);
 		cv[53].destination = &(s->log_timeouts);
 		cv[54].destination = &(s->defer_accept);
-		cv[56].destination = &(s->ssl_verifyclient);
-		cv[57].destination = &(s->ssl_verifyclient_enforce);
-		cv[58].destination = &(s->ssl_verifyclient_depth);
-		cv[59].destination = s->ssl_verifyclient_username;
+		/*cv[56].destination = &(s->unused);*/
+		/*cv[57].destination = &(s->unused);*/
+		/*cv[58].destination = &(s->unused);*/
+		/*cv[59].destination = s->unused;*/
 
-		cv[60].destination = &(s->ssl_verifyclient_export_cert);
+		/*cv[60].destination = &(s->unused);*/
 		cv[61].destination = &(s->set_v6only);
-		cv[62].destination = &(s->ssl_use_sslv3);
-		cv[63].destination = s->ssl_dh_file;
-		cv[64].destination = s->ssl_ec_curve;
-		cv[65].destination = &(s->ssl_disable_client_renegotiation);
-		cv[66].destination = &(s->ssl_honor_cipher_order);
-		cv[67].destination = &(s->ssl_empty_fragments);
+		/*cv[62].destination = &(s->unused);*/
+		/*cv[63].destination = s->unused;*/
+		/*cv[64].destination = s->unused;*/
+		/*cv[65].destination = &(s->unused);*/
+		/*cv[66].destination = &(s->unused);*/
+		/*cv[67].destination = &(s->unused);*/
 		cv[70].destination = &(s->listen_backlog);
 		cv[71].destination = s->error_handler_404;
 	      #if defined(__FreeBSD__) || defined(__NetBSD__) \
@@ -336,7 +319,6 @@ static int config_insert(server *srv) {
 	      #endif
 		cv[76].destination = &(s->stream_request_body);
 		cv[77].destination = &(s->stream_response_body);
-		cv[79].destination = &(s->ssl_read_ahead);
 
 		srv->config_storage[i] = s;
 
@@ -351,7 +333,7 @@ static int config_insert(server *srv) {
 			s->stream_response_body |= FDEVENT_STREAM_RESPONSE;
 		}
 
-#ifndef USE_OPENSSL
+#if !(defined HAVE_LIBSSL && defined HAVE_OPENSSL_SSL_H)
 		if (s->ssl_enabled) {
 			log_error_write(srv, __FILE__, __LINE__, "s",
 					"ssl support is missing, recompile with --with-openssl");
@@ -549,7 +531,6 @@ int config_setup_connection(server *srv, connection *con) {
 	PATCH(log_request_handling);
 	PATCH(log_condition_handling);
 	PATCH(log_file_not_found);
-	PATCH(log_ssl_noise);
 	PATCH(log_timeouts);
 
 	PATCH(range_requests);
@@ -558,35 +539,9 @@ int config_setup_connection(server *srv, connection *con) {
 	PATCH(stream_request_body);
 	PATCH(stream_response_body);
 
-	PATCH(ssl_enabled);
-
-	PATCH(ssl_pemfile);
-#ifdef USE_OPENSSL
-	PATCH(ssl_pemfile_x509);
-	PATCH(ssl_pemfile_pkey);
-#endif
-	PATCH(ssl_ca_file);
-#ifdef USE_OPENSSL
-	PATCH(ssl_ca_file_cert_names);
-#endif
-	PATCH(ssl_cipher_list);
-	PATCH(ssl_dh_file);
-	PATCH(ssl_ec_curve);
-	PATCH(ssl_honor_cipher_order);
-	PATCH(ssl_empty_fragments);
-	PATCH(ssl_use_sslv2);
-	PATCH(ssl_use_sslv3);
 	PATCH(etag_use_inode);
 	PATCH(etag_use_mtime);
 	PATCH(etag_use_size);
-
-	PATCH(ssl_verifyclient);
-	PATCH(ssl_verifyclient_enforce);
-	PATCH(ssl_verifyclient_depth);
-	PATCH(ssl_verifyclient_username);
-	PATCH(ssl_verifyclient_export_cert);
-	PATCH(ssl_disable_client_renegotiation);
-	PATCH(ssl_read_ahead);
 
 	return 0;
 }
@@ -636,33 +591,6 @@ int config_patch_connection(server *srv, connection *con) {
 				PATCH(etag_use_mtime);
 			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("etag.use-size"))) {
 				PATCH(etag_use_size);
-			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("ssl.pemfile"))) {
-				PATCH(ssl_pemfile);
-#ifdef USE_OPENSSL
-				PATCH(ssl_pemfile_x509);
-				PATCH(ssl_pemfile_pkey);
-#endif
-			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("ssl.ca-file"))) {
-				PATCH(ssl_ca_file);
-#ifdef USE_OPENSSL
-				PATCH(ssl_ca_file_cert_names);
-#endif
-			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("ssl.honor-cipher-order"))) {
-				PATCH(ssl_honor_cipher_order);
-			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("ssl.empty-fragments"))) {
-				PATCH(ssl_empty_fragments);
-			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("ssl.use-sslv2"))) {
-				PATCH(ssl_use_sslv2);
-			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("ssl.use-sslv3"))) {
-				PATCH(ssl_use_sslv3);
-			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("ssl.cipher-list"))) {
-				PATCH(ssl_cipher_list);
-			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("ssl.engine"))) {
-				PATCH(ssl_enabled);
-			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("ssl.dh-file"))) {
-				PATCH(ssl_dh_file);
-			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("ssl.ec-curve"))) {
-				PATCH(ssl_ec_curve);
 #ifdef HAVE_LSTAT
 			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("server.follow-symlink"))) {
 				PATCH(follow_symlink);
@@ -687,8 +615,6 @@ int config_patch_connection(server *srv, connection *con) {
 				PATCH(log_condition_handling);
 			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("debug.log-file-not-found"))) {
 				PATCH(log_file_not_found);
-			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("debug.log-ssl-noise"))) {
-				PATCH(log_ssl_noise);
 			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("debug.log-timeouts"))) {
 				PATCH(log_timeouts);
 			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("server.protocol-http11"))) {
@@ -703,20 +629,6 @@ int config_patch_connection(server *srv, connection *con) {
 				PATCH(global_kbytes_per_second);
 				PATCH(global_bytes_per_second_cnt);
 				con->conf.global_bytes_per_second_cnt_ptr = &s->global_bytes_per_second_cnt;
-			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("ssl.verifyclient.activate"))) {
-				PATCH(ssl_verifyclient);
-			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("ssl.verifyclient.enforce"))) {
-				PATCH(ssl_verifyclient_enforce);
-			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("ssl.verifyclient.depth"))) {
-				PATCH(ssl_verifyclient_depth);
-			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("ssl.verifyclient.username"))) {
-				PATCH(ssl_verifyclient_username);
-			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("ssl.verifyclient.exportcert"))) {
-				PATCH(ssl_verifyclient_export_cert);
-			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("ssl.disable-client-renegotiation"))) {
-				PATCH(ssl_disable_client_renegotiation);
-			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("ssl.read-ahead"))) {
-				PATCH(ssl_read_ahead);
 			}
 		}
 	}
