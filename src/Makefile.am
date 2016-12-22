@@ -95,7 +95,7 @@ lib_LTLIBRARIES += liblightcomp.la
 liblightcomp_la_SOURCES=$(common_src)
 liblightcomp_la_CFLAGS=$(AM_CFLAGS) $(LIBEV_CFLAGS)
 liblightcomp_la_LDFLAGS = $(common_ldflags)
-liblightcomp_la_LIBADD = $(PCRE_LIB) $(SSL_LIB) $(FAM_LIBS) $(LIBEV_LIBS) $(ATTR_LIB)
+liblightcomp_la_LIBADD = $(PCRE_LIB) $(CRYPTO_LIB) $(FAM_LIBS) $(LIBEV_LIBS) $(ATTR_LIB)
 common_libadd = liblightcomp.la
 else
 src += $(common_src)
@@ -221,7 +221,7 @@ mod_ssi_la_LIBADD = $(common_libadd)
 lib_LTLIBRARIES += mod_secdownload.la
 mod_secdownload_la_SOURCES = mod_secdownload.c
 mod_secdownload_la_LDFLAGS = $(common_module_ldflags)
-mod_secdownload_la_LIBADD = $(common_libadd)
+mod_secdownload_la_LIBADD = $(common_libadd) $(CRYPTO_LIB)
 
 #lib_LTLIBRARIES += mod_httptls.la
 #mod_httptls_la_SOURCES = mod_httptls.c
@@ -276,7 +276,7 @@ mod_auth_la_LIBADD = $(common_libadd)
 lib_LTLIBRARIES += mod_authn_file.la
 mod_authn_file_la_SOURCES = mod_authn_file.c
 mod_authn_file_la_LDFLAGS = $(common_module_ldflags)
-mod_authn_file_la_LIBADD = $(CRYPT_LIB) $(SSL_LIB) $(common_libadd)
+mod_authn_file_la_LIBADD = $(CRYPT_LIB) $(CRYPTO_LIB) $(common_libadd)
 
 if BUILD_WITH_KRB5
 lib_LTLIBRARIES += mod_authn_gssapi.la
@@ -394,7 +394,7 @@ lighttpd_CPPFLAGS = \
   $(FAM_CFLAGS) $(LIBEV_CFLAGS) $(LIBUNWIND_CFLAGS)
 lighttpd_LDADD = \
   $(common_libadd) \
-  $(CRYPT_LIB) $(SSL_LIB) \
+  $(CRYPT_LIB) $(CRYPTO_LIB) \
   $(XML_LIBS) $(SQLITE_LIBS) $(UUID_LIBS) \
   $(PCRE_LIB) $(Z_LIB) $(BZ_LIB) $(DL_LIB) $(SENDFILE_LIB) $(ATTR_LIB) \
   $(FAM_LIBS) $(LIBEV_LIBS) $(LIBUNWIND_LIBS)
@@ -443,7 +443,7 @@ else
 ## default lighttpd server
 lighttpd_SOURCES = $(src)
 lighttpd_CPPFLAGS = $(FAM_CFLAGS) $(LIBEV_CFLAGS)
-lighttpd_LDADD = $(PCRE_LIB) $(DL_LIB) $(SENDFILE_LIB) $(ATTR_LIB) $(common_libadd) $(SSL_LIB) $(FAM_LIBS) $(LIBEV_LIBS) $(LIBUNWIND_LIBS)
+lighttpd_LDADD = $(PCRE_LIB) $(DL_LIB) $(SENDFILE_LIB) $(ATTR_LIB) $(common_libadd) $(CRYPTO_LIB) $(FAM_LIBS) $(LIBEV_LIBS) $(LIBUNWIND_LIBS)
 lighttpd_LDFLAGS = -export-dynamic
 
 endif

@@ -253,7 +253,7 @@ if 1:
 
 	if env['with_openssl']:
 		if autoconf.CheckLibWithHeader('ssl', 'openssl/ssl.h', 'C'):
-			autoconf.env.Append(CPPFLAGS = [ '-DHAVE_OPENSSL_SSL_H', '-DHAVE_LIBSSL'] , LIBSSL = 'ssl', LIBCRYPTO = 'crypto', LIBS = [ 'ssl', 'crypto' ])
+			autoconf.env.Append(CPPFLAGS = [ '-DHAVE_OPENSSL_SSL_H', '-DHAVE_LIBSSL'] , LIBSSL = 'ssl', LIBCRYPTO = 'crypto', LIBS = [ 'crypto' ])
 
 	if env['with_gzip']:
 		if autoconf.CheckLibWithHeader('z', 'zlib.h', 'C'):
@@ -362,7 +362,7 @@ if env['with_mysql']:
 	env.Append(CPPFLAGS = [ '-DHAVE_MYSQL_H', '-DHAVE_LIBMYSQL' ], LIBMYSQL = 'mysqlclient')
 	env['LIBS'] = oldlib
 
-if re.compile("cygwin|mingw").search(env['PLATFORM']):
+if re.compile("cygwin|mingw|midipix").search(env['PLATFORM']):
 	env.Append(COMMON_LIB = 'bin')
 elif re.compile("darwin|aix").search(env['PLATFORM']):
 	env.Append(COMMON_LIB = 'lib')
