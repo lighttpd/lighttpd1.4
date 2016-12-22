@@ -949,9 +949,102 @@ connection *connection_accept(server *srv, server_socket *srv_socket) {
 	}
 }
 
+
+/* 0: everything ok, -1: error, -2: con closed */
+static int connection_read_cq(server *srv, connection *con, chunkqueue *cq, off_t max_bytes) {
+	int len;
+	char *mem = NULL;
+	size_t mem_len = 0;
+	int toread;
+	force_assert(cq == con->read_queue);       /*(code transform assumption; minimize diff)*/
+	force_assert(max_bytes == MAX_READ_LIMIT); /*(code transform assumption; minimize diff)*/
+
+	/* default size for chunks is 4kb; only use bigger chunks if FIONREAD tells
+	 *  us more than 4kb is available
+	 * if FIONREAD doesn't signal a big chunk we fill the previous buffer
+	 *  if it has >= 1kb free
+	 */
+#if defined(__WIN32)
+	chunkqueue_get_memory(con->read_queue, &mem, &mem_len, 0, 4096);
+
+	len = recv(con->fd, mem, mem_len, 0);
+#else /* __WIN32 */
+	if (ioctl(con->fd, FIONREAD, &toread) || toread <= 4*1024) {
+		toread = 4096;
+	}
+	else if (toread > MAX_READ_LIMIT) {
+		toread = MAX_READ_LIMIT;
+	}
+	chunkqueue_get_memory(con->read_queue, &mem, &mem_len, 0, toread);
+
+	len = read(con->fd, mem, mem_len);
+#endif /* __WIN32 */
+
+	chunkqueue_use_memory(con->read_queue, len > 0 ? len : 0);
+
+	if (len < 0) {
+		con->is_readable = 0;
+
+#if defined(__WIN32)
+		{
+			int lastError = WSAGetLastError();
+			switch (lastError) {
+			case EAGAIN:
+				return 0;
+			case EINTR:
+				/* we have been interrupted before we could read */
+				con->is_readable = 1;
+				return 0;
+			case ECONNRESET:
+				/* suppress logging for this error, expected for keep-alive */
+				break;
+			default:
+				log_error_write(srv, __FILE__, __LINE__, "sd", "connection closed - recv failed: ", lastError);
+				break;
+			}
+		}
+#else /* __WIN32 */
+		switch (errno) {
+		case EAGAIN:
+			return 0;
+		case EINTR:
+			/* we have been interrupted before we could read */
+			con->is_readable = 1;
+			return 0;
+		case ECONNRESET:
+			/* suppress logging for this error, expected for keep-alive */
+			break;
+		default:
+			log_error_write(srv, __FILE__, __LINE__, "ssd", "connection closed - read failed: ", strerror(errno), errno);
+			break;
+		}
+#endif /* __WIN32 */
+
+		connection_set_state(srv, con, CON_STATE_ERROR);
+
+		return -1;
+	} else if (len == 0) {
+		con->is_readable = 0;
+		/* the other end close the connection -> KEEP-ALIVE */
+
+		/* pipelining */
+
+		return -2;
+	} else if (len != (ssize_t) mem_len) {
+		/* we got less then expected, wait for the next fd-event */
+
+		con->is_readable = 0;
+	}
+
+	con->bytes_read += len;
+	return 0;
+}
+
+
 static int connection_write_cq(server *srv, connection *con, chunkqueue *cq, off_t max_bytes) {
 	return srv->network_backend_write(srv, con, con->fd, cq, max_bytes);
 }
+
 
 connection *connection_accepted(server *srv, server_socket *srv_socket, sock_addr *cnt_addr, int cnt) {
 		connection *con;
