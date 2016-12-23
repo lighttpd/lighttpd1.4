@@ -8,7 +8,7 @@ BEGIN {
 
 use strict;
 use IO::Socket;
-use Test::More tests => 15;
+use Test::More tests => 16;
 use LightyTest;
 use Digest::MD5 qw(md5_hex);
 use Digest::SHA qw(hmac_sha1 hmac_sha256);
@@ -141,6 +141,20 @@ EOF
 $t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200 } ];
 
 ok($tf->handle_http($t) == 0, 'secdownload (hmac-sha256)');
+
+## HMAC-SHA256
+$f = "/index.html?qs=1";
+$thex = sprintf("%08x", time);
+$m = encode_base64url(hmac_sha256("/$thex$f", $secret));
+
+$t->{REQUEST}  = ( <<EOF
+GET /sec/$m/$thex$f HTTP/1.0
+Host: vvv-sha256.example.org
+EOF
+ );
+$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200 } ];
+
+ok($tf->handle_http($t) == 0, 'secdownload (hmac-sha256) with hash-querystr');
 
 $thex = sprintf("%08x", time - 1800);
 $m = encode_base64url(hmac_sha256("/$thex$f", $secret));
