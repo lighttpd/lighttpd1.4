@@ -35,18 +35,18 @@
 #include <stdio.h>
 #include <fcntl.h>
 
-#ifdef HAVE_PIPE2
-#define pipe_cloexec(pipefd) pipe2((pipefd), O_CLOEXEC)
-#elif defined FD_CLOEXEC
-#define pipe_cloexec(pipefd) \
-  (   0 == pipe(pipefd) \
-   && 0 == fcntl(pipefd[0], F_SETFD, FD_CLOEXEC) \
-   && 0 == fcntl(pipefd[1], F_SETFD, FD_CLOEXEC) \
-    ? 0 \
-    : -1)
-#else
-#define pipe_cloexec(pipefd) pipe(pipefd)
-#endif
+static int pipe_cloexec(int pipefd[2]) {
+  #ifdef HAVE_PIPE2
+    if (0 == pipe2(pipefd, O_CLOEXEC)) return 0;
+  #endif
+    return 0 == pipe(pipefd)
+       #ifdef FD_CLOEXEC
+        && 0 == fcntl(pipefd[0], F_SETFD, FD_CLOEXEC)
+        && 0 == fcntl(pipefd[1], F_SETFD, FD_CLOEXEC)
+       #endif
+      ?  0
+      : -1;
+}
 
 enum {EOL_UNSET, EOL_N, EOL_RN};
 
