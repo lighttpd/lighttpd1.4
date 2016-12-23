@@ -841,7 +841,7 @@ int network_init(server *srv) {
 		SSL_CTX_set_options(s->ssl_ctx, ssloptions);
 		SSL_CTX_set_info_callback(s->ssl_ctx, ssl_info_callback);
 
-		if (!s->ssl_use_sslv2) {
+		if (!s->ssl_use_sslv2 && 0 != SSL_OP_NO_SSLv2) {
 			/* disable SSLv2 */
 			if ((SSL_OP_NO_SSLv2 & SSL_CTX_set_options(s->ssl_ctx, SSL_OP_NO_SSLv2)) != SSL_OP_NO_SSLv2) {
 				log_error_write(srv, __FILE__, __LINE__, "ss", "SSL:",
@@ -850,7 +850,7 @@ int network_init(server *srv) {
 			}
 		}
 
-		if (!s->ssl_use_sslv3) {
+		if (!s->ssl_use_sslv3 && 0 != SSL_OP_NO_SSLv3) {
 			/* disable SSLv3 */
 			if ((SSL_OP_NO_SSLv3 & SSL_CTX_set_options(s->ssl_ctx, SSL_OP_NO_SSLv3)) != SSL_OP_NO_SSLv3) {
 				log_error_write(srv, __FILE__, __LINE__, "ss", "SSL:",
