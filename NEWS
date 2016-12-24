@@ -3,7 +3,9 @@
 NEWS
 ====
 
-- 1.4.44
+- 1.4.45
+
+- 1.4.44 - 2016-12-24
   * [mod_scgi] fix segfault (fixes #2762)
   * [mod_authn_gssapi] fix memory leak
   * [config] warn if mod_authn_ldap,mysql not listed
