@@ -339,6 +339,53 @@ int connection_write_chunkqueue(server *srv, connection *con, chunkqueue *cq, of
 	return ret;
 }
 
+static int connection_write_100_continue(server *srv, connection *con) {
+	/* Make best effort to send all or none of "HTTP/1.1 100 Continue" */
+	/* (Note: also choosing not to update con->write_request_ts
+	 *  which differs from connections.c:connection_handle_write()) */
+	static const char http_100_continue[] = "HTTP/1.1 100 Continue\r\n\r\n";
+	chunkqueue *cq;
+	off_t written;
+	int rc;
+
+	off_t max_bytes =
+	  connection_write_throttle(srv, con, sizeof(http_100_continue)-1);
+	if (max_bytes < (off_t)sizeof(http_100_continue)-1) {
+		return 1; /* success; skip sending if throttled to partial */
+	}
+
+	cq = con->write_queue;
+	written = cq->bytes_out;
+
+	chunkqueue_append_mem(cq,http_100_continue,sizeof(http_100_continue)-1);
+	rc = con->network_write(srv, con, cq, sizeof(http_100_continue)-1);
+
+	written = cq->bytes_out - written;
+	con->bytes_written += written;
+	con->bytes_written_cur_second += written;
+	*(con->conf.global_bytes_per_second_cnt_ptr) += written;
+
+	if (rc < 0) {
+		connection_set_state(srv, con, CON_STATE_ERROR);
+		return 0; /* error */
+	}
+
+	if (written == sizeof(http_100_continue)-1) {
+		chunkqueue_remove_finished_chunks(cq);
+	} else if (0 == written) {
+		/* skip sending 100 Continue if send would block */
+		chunkqueue_mark_written(cq, sizeof(http_100_continue)-1);
+		con->is_writable = 0;
+	}
+	/* else partial write (unlikely), which can cause corrupt
+	 * response if response is later cleared, e.g. sending errdoc.
+	 * However, situation of partial write can occur here only on
+	 * keep-alive request where client has sent pipelined request,
+	 * and more than 0 chars were written, but fewer than 25 chars */
+
+	return 1; /* success; sent all or none of "HTTP/1.1 100 Continue" */
+}
+
 handler_t connection_handle_read_post_state(server *srv, connection *con) {
 	chunkqueue *cq = con->read_queue;
 	chunkqueue *dst_cq = con->request_content_queue;
@@ -361,6 +408,20 @@ handler_t connection_handle_read_post_state(server *srv, connection *con) {
 	}
 
 	chunkqueue_remove_finished_chunks(cq);
+
+	/* Check for Expect: 100-continue in request headers
+	 * if no request body received yet */
+	if (chunkqueue_is_empty(cq) && 0 == dst_cq->bytes_in
+	    && con->request.http_version != HTTP_VERSION_1_0
+	    && chunkqueue_is_empty(con->write_queue) && con->is_writable) {
+		data_string *ds = (data_string *)array_get_element(con->request.headers, "Expect");
+		if (NULL != ds && 0 == buffer_caseless_compare(CONST_BUF_LEN(ds->value), CONST_STR_LEN("100-continue"))) {
+			buffer_reset(ds->value); /* unset value in request headers */
+			if (!connection_write_100_continue(srv, con)) {
+				return HANDLER_ERROR;
+			}
+		}
+	}
 
 	if (-1 == con->request.content_length) { /*(Transfer-Encoding: chunked)*/
 		handler_t rc = connection_handle_read_post_chunked(srv, con, cq, dst_cq);

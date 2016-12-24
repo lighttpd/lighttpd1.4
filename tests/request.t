@@ -110,13 +110,20 @@ EOF
 $t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 404, '-HTTP-Content' => '' } ];
 ok($tf->handle_http($t) == 0, 'HEAD request, file-not-found, query-string');
 
+# (expect 200 OK instead of 100 Continue since request body sent with request)
+# (if we waited to send request body, would expect 100 Continue, first)
 $t->{REQUEST}  = ( <<EOF
-GET / HTTP/1.1
+POST /get-post-len.pl HTTP/1.1
+Host: www.example.org
 Connection: close
+Content-Type: application/x-www-form-urlencoded
+Content-Length: 4
 Expect: 100-continue
+
+123
 EOF
  );
-$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.1', 'HTTP-Status' => 417 } ];
+$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.1', 'HTTP-Status' => 200 } ];
 ok($tf->handle_http($t) == 0, 'Continue, Expect');
 
 # note Transfer-Encoding: chunked tests will fail with 411 Length Required if

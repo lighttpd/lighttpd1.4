@@ -1020,28 +1020,6 @@ int http_request_parse(server *srv, connection *con) {
 									array_insert_unique(con->request.headers, (data_unset *)ds);
 									return 0;
 								}
-							} else if (cmp > 0 && 0 == (cmp = buffer_caseless_compare(CONST_BUF_LEN(ds->key), CONST_STR_LEN("Expect")))) {
-								/* HTTP 2616 8.2.3
-								 * Expect: 100-continue
-								 *
-								 *   -> (10.1.1)  100 (read content, process request, send final status-code)
-								 *   -> (10.4.18) 417 (close)
-								 *
-								 * (not handled at all yet, we always send 417 here)
-								 *
-								 * What has to be added ?
-								 * 1. handling of chunked request body
-								 * 2. out-of-order sending from the HTTP/1.1 100 Continue
-								 *    header
-								 *
-								 */
-
-								if (srv->srvconf.reject_expect_100_with_417 && 0 == buffer_caseless_compare(CONST_BUF_LEN(ds->value), CONST_STR_LEN("100-continue"))) {
-									con->http_status = 417;
-									con->keep_alive = 0;
-									array_insert_unique(con->request.headers, (data_unset *)ds);
-									return 0;
-								}
 							} else if (cmp > 0 && 0 == (cmp = buffer_caseless_compare(CONST_BUF_LEN(ds->key), CONST_STR_LEN("Host")))) {
 								if (reqline_host) {
 									/* ignore all host: headers as we got the host in the request line */
