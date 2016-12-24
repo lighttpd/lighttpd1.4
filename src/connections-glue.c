@@ -1,5 +1,6 @@
 #include "first.h"
 
+#include "sys-socket.h"
 #include "base.h"
 #include "connections.h"
 #include "log.h"
@@ -261,6 +262,81 @@ static handler_t connection_handle_read_post_chunked(server *srv, connection *co
 
     con->request.te_chunked = te_chunked;
     return HANDLER_GO_ON;
+}
+
+static off_t connection_write_throttle(server *srv, connection *con, off_t max_bytes) {
+	UNUSED(srv);
+	if (con->conf.global_kbytes_per_second) {
+		off_t limit = con->conf.global_kbytes_per_second * 1024 - *(con->conf.global_bytes_per_second_cnt_ptr);
+		if (limit <= 0) {
+			/* we reached the global traffic limit */
+			con->traffic_limit_reached = 1;
+
+			return 0;
+		} else {
+			if (max_bytes > limit) max_bytes = limit;
+		}
+	}
+
+	if (con->conf.kbytes_per_second) {
+		off_t limit = con->conf.kbytes_per_second * 1024 - con->bytes_written_cur_second;
+		if (limit <= 0) {
+			/* we reached the traffic limit */
+			con->traffic_limit_reached = 1;
+
+			return 0;
+		} else {
+			if (max_bytes > limit) max_bytes = limit;
+		}
+	}
+
+	return max_bytes;
+}
+
+int connection_write_chunkqueue(server *srv, connection *con, chunkqueue *cq, off_t max_bytes) {
+	int ret = -1;
+	off_t written = 0;
+      #ifdef TCP_CORK
+	int corked = 0;
+      #endif
+
+	max_bytes = connection_write_throttle(srv, con, max_bytes);
+	if (0 == max_bytes) return 1;
+
+	written = cq->bytes_out;
+
+      #ifdef TCP_CORK
+	/* Linux: put a cork into the socket as we want to combine the write() calls
+	 * but only if we really have multiple chunks, and only if TCP socket
+	 */
+	if (cq->first && cq->first->next) {
+		const int sa_family = con->srv_socket->addr.plain.sa_family;
+		if (sa_family == AF_INET || sa_family == AF_INET6) {
+			corked = 1;
+			(void)setsockopt(con->fd, IPPROTO_TCP, TCP_CORK, &corked, sizeof(corked));
+		}
+	}
+      #endif
+
+	ret = con->network_write(srv, con, cq, max_bytes);
+	if (ret >= 0) {
+		chunkqueue_remove_finished_chunks(cq);
+		ret = chunkqueue_is_empty(cq) ? 0 : 1;
+	}
+
+      #ifdef TCP_CORK
+	if (corked) {
+		corked = 0;
+		(void)setsockopt(con->fd, IPPROTO_TCP, TCP_CORK, &corked, sizeof(corked));
+	}
+      #endif
+
+	written = cq->bytes_out - written;
+	con->bytes_written += written;
+	con->bytes_written_cur_second += written;
+	*(con->conf.global_bytes_per_second_cnt_ptr) += written;
+
+	return ret;
 }
 
 handler_t connection_handle_read_post_state(server *srv, connection *con) {

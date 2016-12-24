@@ -476,7 +476,7 @@ static int connection_handle_write_prepare(server *srv, connection *con) {
 }
 
 static int connection_handle_write(server *srv, connection *con) {
-	switch(network_write_chunkqueue(srv, con, con->write_queue, MAX_WRITE_LIMIT)) {
+	switch(connection_write_chunkqueue(srv, con, con->write_queue, MAX_WRITE_LIMIT)) {
 	case 0:
 		con->write_request_ts = srv->cur_ts;
 		if (con->file_finished) {
