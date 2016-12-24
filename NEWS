@@ -6,6 +6,54 @@ NEWS
 - 1.4.44
   * [mod_scgi] fix segfault (fixes #2762)
   * [mod_authn_gssapi] fix memory leak
+  * [config] warn if mod_authn_ldap,mysql not listed
+  * [mod_magnet] fix magnet_cgi_set() set of env vars (fixes #2763)
+  * [mod_cgi] FreeBSD 9.3/MacOSX does not have pipe2() (fixes #2765)
+  * [mod_extforward] fix crash on invalid IP (fixes #2766)
+  * [mod_fastcgi] fix segfault if all backends down (fixes #2768)
+  * [mod_cgi] fix out of sockets error for POST to CGI (fixes #2771)
+  * [mod_auth] compile fix for Mac OS X XCode (fixes #2772)
+  * [mod_authn_gssapi] better resource cleanup
+  * [core] compile fix for Mac OS X 10.6 (old) (fixes #2773)
+  * fix race in dynamic handler configs (reentrancy) (fixes #2774)
+  * [mod_authn_mysql] close mysql_conn in cleanup
+  * [mod_webdav] compile fix when locking not enabled
+  * load mod_auth & mod_authn_file in sample/test.conf
+  * comment out auth.backend.ldap.* in tests/*.conf
+  * [mod_fastcgi,mod_scgi] warn if invalid "bin-path"
+  * RAND_pseudo_bytes() is deprecated in openssl 1.1.0
+  * openssl 1.1.0 init and cleanup
+  * [mod_cgi] remove direct calls to network_backend*
+  * [build] build network_*.c into lighttpd executable
+  * suggest inclusion of mod_geoip... before mod_ssi.
+  * set systemd settings similar to lighttpd2
+  * [doc] remove reference to Linux rt-signals
+  * [mod_authn_gssapi] fix missing error ret, coverity
+  * [core] rename li_rand() to li_rand_pseudo_bytes()
+  * remove #include "stream.h" where not used
+  * [mod_cml] include lua headers before base.h
+  * [core] combine duplicated connection reset code
+  * [mod_ssi] produce content in subrequest hook
+  * [core] remove srv->entropy[]
+  * [core] defer li_rand_init() until first use
+  * [core] permit connection-level state in modules
+  * [mod_dirlisting] render dirlisting as HTML (fixes #2767)
+  * [mod_proxy] replace HTTP Host sent to backend (fixes #2770)
+  * [mod_ssi] basic recursive SSI include virtual (fixes #536)
+  * [mod_ssi] implement, ignore <!--#comment ... -->
+  * [core] consolidate duplicated read-to-close code
+  * [core] fix segfault when parsing a bad config file
+  * [core] support Transfer-Encoding: chunked req body (fixes #2156)
+  * [autobuild] set NO_RDYNAMIC=yes for midipix
+  * [mod_proxy] proxy.balance = "sticky" option (fixes #2117)
+  * [mod_secdownload] warn if SHA used w/o SSL crypto
+  * [build] compile fixes for AIX
+  * [build] check for pipe2() at configure time
+  * [mod_evhost] fix an incorrect error trace
+  * [tests] mark tests/docroot/www/*.pl scripts a+x
+  * [mod_cgi] fall back to pipe() if pipe2() fails
+  * fix SCons fullstatic build with glibc pthreads
+  * [TLS] openssl 1.1.0 makes SSL_OP_NO_SSLv2 no-op
 
 - 1.4.43 - 2016-10-31
   * [autobuild] remove mod_authn_gssapi dep on resolv
@@ -31,6 +79,8 @@ NEWS
   * [core] fix potential streaming tempfile corruption (fixes #2760)
   * [mod_scgi] fix prefix matching to always match url
   * [autobuild] adjust Makefile.am for FreeBSD
+  * [build] move some build scripts to scripts/
+  * [autotools] fix configure.ac for opensuse 13.2
 
 - 1.4.42 - 2016-10-16
   * [TLS] SSL_shutdown() only if handshake finished
