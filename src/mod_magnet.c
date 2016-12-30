@@ -12,6 +12,7 @@
 #include "stat_cache.h"
 #include "status_counter.h"
 #include "etag.h"
+#include "network_backends.h"
 
 #include <ctype.h>
 #include <stdlib.h>
@@ -1030,9 +1031,7 @@ static handler_t magnet_attract_array(server *srv, connection *con, plugin_data 
 	/* no filename set */
 	if (files->used == 0) return HANDLER_GO_ON;
 
-      #ifdef USE_OPENSSL
-	if (con->ssl) http_cgi_ssl_env(srv, con);
-      #endif
+	if (con->srv_socket->is_ssl) https_cgi_env_openssl(srv, con);
 
 	/**
 	 * execute all files and jump out on the first !HANDLER_GO_ON

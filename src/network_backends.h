@@ -78,6 +78,7 @@ int network_write_chunkqueue_sendfile(server *srv, connection *con, int fd, chun
 #if defined(USE_OPENSSL)
 int network_init_openssl(server *srv);
 int network_write_chunkqueue_openssl(server *srv, connection *con, SSL *ssl, chunkqueue *cq, off_t max_bytes);
+void https_cgi_env_openssl(server *srv, connection *con);
 #else
 # include "log.h"
 static inline int network_init_openssl(server *srv)
@@ -92,6 +93,10 @@ static inline int network_write_chunkqueue_openssl(server *srv, connection *con,
 			"ssl support is missing, recompile with --with-openssl");
 
 	return -1;
+}
+static inline void https_cgi_env_openssl(server *srv, connection *con)
+{
+	UNUSED(srv); UNUSED(con);
 }
 #endif
 

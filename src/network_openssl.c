@@ -682,4 +682,35 @@ int network_write_chunkqueue_openssl(server *srv, connection *con, SSL *ssl, chu
 
 	return 0;
 }
+
+void https_cgi_env_openssl(server *srv, connection *con) {
+    const char *s;
+    const SSL_CIPHER *cipher;
+    UNUSED(srv);
+
+    if (!con->ssl) return;
+
+    s = SSL_get_version(con->ssl);
+    array_set_key_value(con->environment,
+                        CONST_STR_LEN("SSL_PROTOCOL"),
+                        s, strlen(s));
+
+    if ((cipher = SSL_get_current_cipher(con->ssl))) {
+        int usekeysize, algkeysize;
+        char buf[LI_ITOSTRING_LENGTH];
+        s = SSL_CIPHER_get_name(cipher);
+        array_set_key_value(con->environment,
+                            CONST_STR_LEN("SSL_CIPHER"),
+                            s, strlen(s));
+        usekeysize = SSL_CIPHER_get_bits(cipher, &algkeysize);
+        li_itostrn(buf, sizeof(buf), usekeysize);
+        array_set_key_value(con->environment,
+                            CONST_STR_LEN("SSL_CIPHER_USEKEYSIZE"),
+                            buf, strlen(buf));
+        li_itostrn(buf, sizeof(buf), algkeysize);
+        array_set_key_value(con->environment,
+                            CONST_STR_LEN("SSL_CIPHER_ALGKEYSIZE"),
+                            buf, strlen(buf));
+    }
+}
 #endif /* USE_OPENSSL */
