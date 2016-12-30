@@ -582,6 +582,39 @@ int network_init_openssl(server *srv)
 	return 0;
 }
 
+void network_free_openssl(server *srv)
+{
+	size_t i;
+	if (srv->config_storage) {
+		for (i = 0; i < srv->config_context->used; i++) {
+			specific_config *s = srv->config_storage[i];
+
+			if (!s) continue;
+
+			SSL_CTX_free(s->ssl_ctx);
+			EVP_PKEY_free(s->ssl_pemfile_pkey);
+			X509_free(s->ssl_pemfile_x509);
+			if (NULL != s->ssl_ca_file_cert_names) sk_X509_NAME_pop_free(s->ssl_ca_file_cert_names, X509_NAME_free);
+		}
+	}
+	if (srv->ssl_is_init) {
+	      #if   OPENSSL_VERSION_NUMBER >= 0x10100000L \
+		&& !defined(LIBRESSL_VERSION_NUMBER)
+		/*(OpenSSL libraries handle thread init and deinit)
+		 * https://github.com/openssl/openssl/pull/1048 */
+	      #else
+		CRYPTO_cleanup_all_ex_data();
+		ERR_free_strings();
+	       #if OPENSSL_VERSION_NUMBER >= 0x10000000L
+		ERR_remove_thread_state(NULL);
+	       #else
+		ERR_remove_state(0);
+	       #endif
+		EVP_cleanup();
+	      #endif
+	}
+}
+
 int network_write_chunkqueue_openssl(server *srv, connection *con, SSL *ssl, chunkqueue *cq, off_t max_bytes) {
 	/* the remote side closed the connection before without shutdown request
 	 * - IE

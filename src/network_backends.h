@@ -77,6 +77,7 @@ int network_write_chunkqueue_sendfile(server *srv, connection *con, int fd, chun
 
 #if defined(USE_OPENSSL)
 int network_init_openssl(server *srv);
+void network_free_openssl(server *srv);
 int network_write_chunkqueue_openssl(server *srv, connection *con, SSL *ssl, chunkqueue *cq, off_t max_bytes);
 void https_cgi_env_openssl(server *srv, connection *con);
 void https_response_prepare_openssl(server *srv, connection *con);
@@ -86,6 +87,10 @@ static inline int network_init_openssl(server *srv)
 {
 	UNUSED(srv);
 	return 0;
+}
+static inline void network_free_openssl(server *srv)
+{
+	UNUSED(srv);
 }
 static inline int network_write_chunkqueue_openssl(server *srv, connection *con, SSL *ssl, chunkqueue *cq, off_t max_bytes)
 {
