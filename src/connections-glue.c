@@ -8,6 +8,14 @@
 #include <errno.h>
 
 #ifdef USE_OPENSSL
+#  ifndef USE_OPENSSL_KERBEROS
+#   ifndef OPENSSL_NO_KRB5
+#   define OPENSSL_NO_KRB5
+#   endif
+#  endif
+# if ! defined OPENSSL_NO_TLSEXT && ! defined SSL_CTRL_SET_TLSEXT_HOSTNAME
+#  define OPENSSL_NO_TLSEXT
+# endif
 # include <openssl/ssl.h>
 # include <openssl/err.h>
 #endif
@@ -99,18 +107,27 @@ static void dump_packet(const unsigned char *data, size_t len) {
 #endif
 
 #ifdef USE_OPENSSL
+typedef struct {
+	SSL_CTX *ssl_ctx; /* not patched */
+	/* SNI per host: with COMP_SERVER_SOCKET, COMP_HTTP_SCHEME, COMP_HTTP_HOST */
+	EVP_PKEY *ssl_pemfile_pkey;
+	X509 *ssl_pemfile_x509;
+	STACK_OF(X509_NAME) *ssl_ca_file_cert_names;
+} openssl_config;
+
 int connection_accepted_openssl(server *srv, connection *con) {
 	specific_config *s = con->srv_socket->conf;
+	openssl_config *sslconf = s->ssl_conf;
 
-	if (NULL == (con->ssl = SSL_new(s->ssl_ctx))) {
+	if (NULL == (con->ssl = (void *)SSL_new(sslconf->ssl_ctx))) {
 		log_error_write(srv, __FILE__, __LINE__, "ss", "SSL:",
 				ERR_error_string(ERR_get_error(), NULL));
 		return -1;
 	}
 
 	con->renegotiations = 0;
-	SSL_set_app_data(con->ssl, con);
-	SSL_set_accept_state(con->ssl);
+	SSL_set_app_data((SSL *)con->ssl, con);
+	SSL_set_accept_state((SSL *)con->ssl);
 #ifndef OPENSSL_NO_TLSEXT
 	if (con->tlsext_server_name)
 		buffer_reset(con->tlsext_server_name);
@@ -119,7 +136,7 @@ int connection_accepted_openssl(server *srv, connection *con) {
 #endif
 
 
-	if (1 != (SSL_set_fd(con->ssl, con->fd))) {
+	if (1 != (SSL_set_fd((SSL *)con->ssl, con->fd))) {
 		log_error_write(srv, __FILE__, __LINE__, "ss", "SSL:",
 				ERR_error_string(ERR_get_error(), NULL));
 		return -1;
@@ -129,7 +146,7 @@ int connection_accepted_openssl(server *srv, connection *con) {
 
 int connection_close_openssl(server *srv, connection *con) {
 	UNUSED(srv);
-	if (con->ssl) SSL_free(con->ssl);
+	if (con->ssl) SSL_free((SSL *)con->ssl);
 	con->ssl = NULL;
 	return 0;
 }
@@ -143,13 +160,13 @@ static int connection_handle_read_openssl(server *srv, connection *con) {
 
 	ERR_clear_error();
 	do {
-		chunkqueue_get_memory(con->read_queue, &mem, &mem_len, 0, SSL_pending(con->ssl));
+		chunkqueue_get_memory(con->read_queue, &mem, &mem_len, 0, SSL_pending((SSL *)con->ssl));
 #if 0
 		/* overwrite everything with 0 */
 		memset(mem, 0, mem_len);
 #endif
 
-		len = SSL_read(con->ssl, mem, mem_len);
+		len = SSL_read((SSL *)con->ssl, mem, mem_len);
 		if (len > 0) {
 			chunkqueue_use_memory(con->read_queue, len);
 			con->bytes_read += len;
@@ -166,7 +183,7 @@ static int connection_handle_read_openssl(server *srv, connection *con) {
 
 	if (len < 0) {
 		int oerrno = errno;
-		switch ((r = SSL_get_error(con->ssl, len))) {
+		switch ((r = SSL_get_error((SSL *)con->ssl, len))) {
 		case SSL_ERROR_WANT_WRITE:
 			con->is_writable = -1;
 		case SSL_ERROR_WANT_READ:
@@ -250,11 +267,11 @@ static int connection_handle_read_openssl(server *srv, connection *con) {
 }
 
 void connection_shutdown_openssl(server *srv, connection *con) {
-	if (SSL_is_init_finished(con->ssl)) {
+	if (SSL_is_init_finished((SSL *)con->ssl)) {
 		int ret, ssl_r;
 		unsigned long err;
 		ERR_clear_error();
-		switch ((ret = SSL_shutdown(con->ssl))) {
+		switch ((ret = SSL_shutdown((SSL *)con->ssl))) {
 		case 1:
 			/* ok */
 			break;
@@ -265,12 +282,12 @@ void connection_shutdown_openssl(server *srv, connection *con) {
 			 *
 			 */
 			ERR_clear_error();
-			if (-1 != (ret = SSL_shutdown(con->ssl))) break;
+			if (-1 != (ret = SSL_shutdown((SSL *)con->ssl))) break;
 
 			/* fall through */
 		default:
 
-			switch ((ssl_r = SSL_get_error(con->ssl, ret))) {
+			switch ((ssl_r = SSL_get_error((SSL *)con->ssl, ret))) {
 			case SSL_ERROR_ZERO_RETURN:
 				break;
 			case SSL_ERROR_WANT_WRITE:

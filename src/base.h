@@ -30,19 +30,8 @@
 #if defined HAVE_LIBSSL && defined HAVE_OPENSSL_SSL_H
 # define USE_OPENSSL
 # define TEXT_SSL " (ssl)"
-# include <openssl/opensslconf.h>
-#  ifndef USE_OPENSSL_KERBEROS
-#   ifndef OPENSSL_NO_KRB5
-#   define OPENSSL_NO_KRB5
-#   endif
-#  endif
-# include <openssl/ssl.h>
-# if ! defined OPENSSL_NO_TLSEXT && ! defined SSL_CTRL_SET_TLSEXT_HOSTNAME
-#  define OPENSSL_NO_TLSEXT
-# endif
 #else
 # define TEXT_SSL
-typedef void SSL;
 #endif
 
 #ifdef HAVE_FAM_H
@@ -337,13 +326,7 @@ typedef struct {
 	buffer *bsd_accept_filter;
 #endif
 
-#ifdef USE_OPENSSL
-	SSL_CTX *ssl_ctx; /* not patched */
-	/* SNI per host: with COMP_SERVER_SOCKET, COMP_HTTP_SCHEME, COMP_HTTP_HOST */
-	EVP_PKEY *ssl_pemfile_pkey;
-	X509 *ssl_pemfile_x509;
-	STACK_OF(X509_NAME) *ssl_ca_file_cert_names;
-#endif
+	void *ssl_conf;
 } specific_config;
 
 /* the order of the items should be the same as they are processed
@@ -470,7 +453,7 @@ typedef struct {
 
 	struct server_socket *srv_socket;   /* reference to the server-socket */
 
-	SSL *ssl;
+	void *ssl;
 	buffer *tlsext_server_name;
 	unsigned int renegotiations; /* count of SSL_CB_HANDSHAKE_START */
 	/* etag handling */
@@ -679,7 +662,7 @@ typedef struct server {
 
 	int (* network_backend_write)(struct server *srv, connection *con, int fd, chunkqueue *cq, off_t max_bytes);
 
-	int (* network_ssl_backend_write)(struct server *srv, connection *con, SSL *ssl, chunkqueue *cq, off_t max_bytes);
+	int (* network_ssl_backend_write)(struct server *srv, connection *con, void *ssl, chunkqueue *cq, off_t max_bytes);
 
 	uid_t uid;
 	gid_t gid;
