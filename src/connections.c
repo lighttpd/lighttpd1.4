@@ -119,13 +119,10 @@ static int connection_del(server *srv, connection *con) {
 }
 
 static int connection_close(server *srv, connection *con) {
-#ifdef USE_OPENSSL
 	server_socket *srv_sock = con->srv_socket;
 	if (srv_sock->is_ssl) {
-		if (con->ssl) SSL_free(con->ssl);
-		con->ssl = NULL;
+		connection_close_openssl(srv, con);
 	}
-#endif
 
 	fdevent_event_del(srv->ev, &(con->fde_ndx), con->fd);
 	fdevent_unregister(srv->ev, con->fd);

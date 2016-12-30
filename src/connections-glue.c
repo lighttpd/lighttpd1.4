@@ -99,6 +99,13 @@ static void dump_packet(const unsigned char *data, size_t len) {
 #endif
 
 #ifdef USE_OPENSSL
+int connection_close_openssl(server *srv, connection *con) {
+	UNUSED(srv);
+	if (con->ssl) SSL_free(con->ssl);
+	con->ssl = NULL;
+	return 0;
+}
+
 static int connection_handle_read_openssl(server *srv, connection *con) {
 	int r, ssl_err, len;
 	char *mem = NULL;
@@ -215,6 +222,11 @@ static int connection_handle_read_openssl(server *srv, connection *con) {
 }
 #else
 static inline int connection_handle_read_openssl(server *srv, connection *con) {
+	UNUSED(srv);
+	UNUSED(con);
+	return -1;
+}
+int connection_close_openssl(server *srv, connection *con) {
 	UNUSED(srv);
 	UNUSED(con);
 	return -1;
