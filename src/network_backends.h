@@ -76,9 +76,15 @@ int network_write_chunkqueue_sendfile(server *srv, connection *con, int fd, chun
 #endif
 
 #if defined(USE_OPENSSL)
+int network_init_openssl(server *srv);
 int network_write_chunkqueue_openssl(server *srv, connection *con, SSL *ssl, chunkqueue *cq, off_t max_bytes);
 #else
 # include "log.h"
+static inline int network_init_openssl(server *srv)
+{
+	UNUSED(srv);
+	return 0;
+}
 static inline int network_write_chunkqueue_openssl(server *srv, connection *con, SSL *ssl, chunkqueue *cq, off_t max_bytes)
 {
 	UNUSED(srv);UNUSED(con);UNUSED(ssl);UNUSED(cq);UNUSED(max_bytes);
