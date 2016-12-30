@@ -77,6 +77,16 @@ int network_write_chunkqueue_sendfile(server *srv, connection *con, int fd, chun
 
 #if defined(USE_OPENSSL)
 int network_write_chunkqueue_openssl(server *srv, connection *con, SSL *ssl, chunkqueue *cq, off_t max_bytes);
+#else
+# include "log.h"
+static inline int network_write_chunkqueue_openssl(server *srv, connection *con, SSL *ssl, chunkqueue *cq, off_t max_bytes)
+{
+	UNUSED(srv);UNUSED(con);UNUSED(ssl);UNUSED(cq);UNUSED(max_bytes);
+	log_error_write(srv, __FILE__, __LINE__, "s",
+			"ssl support is missing, recompile with --with-openssl");
+
+	return -1;
+}
 #endif
 
 /* write next chunk(s); finished chunks are removed afterwards after successful writes.

@@ -40,6 +40,8 @@
 # if ! defined OPENSSL_NO_TLSEXT && ! defined SSL_CTRL_SET_TLSEXT_HOSTNAME
 #  define OPENSSL_NO_TLSEXT
 # endif
+#else
+typedef void SSL;
 #endif
 
 #ifdef HAVE_FAM_H
@@ -467,8 +469,8 @@ typedef struct {
 
 	struct server_socket *srv_socket;   /* reference to the server-socket */
 
-#ifdef USE_OPENSSL
 	SSL *ssl;
+#ifdef USE_OPENSSL
 # ifndef OPENSSL_NO_TLSEXT
 	buffer *tlsext_server_name;
 # endif
@@ -681,9 +683,8 @@ typedef struct server {
 	fdevent_handler_t event_handler;
 
 	int (* network_backend_write)(struct server *srv, connection *con, int fd, chunkqueue *cq, off_t max_bytes);
-#ifdef USE_OPENSSL
+
 	int (* network_ssl_backend_write)(struct server *srv, connection *con, SSL *ssl, chunkqueue *cq, off_t max_bytes);
-#endif
 
 	uid_t uid;
 	gid_t gid;

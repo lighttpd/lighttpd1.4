@@ -1023,9 +1023,7 @@ int network_init(server *srv) {
 	}
 	buffer_free(b);
 
-#ifdef USE_OPENSSL
 	srv->network_ssl_backend_write = network_write_chunkqueue_openssl;
-#endif
 
 	/* get a usefull default */
 	backend = network_backends[0].nb;
@@ -1158,9 +1156,7 @@ int network_write_chunkqueue(server *srv, connection *con, chunkqueue *cq, off_t
 #endif
 
 	if (srv_socket->is_ssl) {
-#ifdef USE_OPENSSL
 		ret = srv->network_ssl_backend_write(srv, con, con->ssl, cq, max_bytes);
-#endif
 	} else {
 		ret = srv->network_backend_write(srv, con, con->fd, cq, max_bytes);
 	}
