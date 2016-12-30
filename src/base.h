@@ -575,13 +575,11 @@ typedef struct server_socket {
 	int       fd;
 	int       fde_ndx;
 
+	specific_config *conf;
 	unsigned short is_ssl;
 
 	buffer *srv_token;
 
-#ifdef USE_OPENSSL
-	SSL_CTX *ssl_ctx;
-#endif
 } server_socket;
 
 typedef struct {

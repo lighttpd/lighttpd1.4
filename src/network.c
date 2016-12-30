@@ -269,9 +269,6 @@ static int network_server_init(server *srv, buffer *host_token, specific_config 
 	}
 
 	if (srv->sockets_disabled) { /* lighttpd -1 (one-shot mode) */
-#ifdef USE_OPENSSL
-		if (s->ssl_enabled) srv_socket->ssl_ctx = s->ssl_ctx;
-#endif
 		goto srv_sockets_append;
 	}
 
@@ -370,21 +367,8 @@ static int network_server_init(server *srv, buffer *host_token, specific_config 
 		goto error_free_socket;
 	}
 
-	if (s->ssl_enabled) {
-#ifdef USE_OPENSSL
-		if (NULL == (srv_socket->ssl_ctx = s->ssl_ctx)) {
-			log_error_write(srv, __FILE__, __LINE__, "s", "ssl.pemfile has to be set");
-			goto error_free_socket;
-		}
-#else
-
-		log_error_write(srv, __FILE__, __LINE__, "ss", "SSL:",
-				"ssl requested but openssl support is not compiled in");
-
-		goto error_free_socket;
-#endif
 #ifdef TCP_DEFER_ACCEPT
-	} else if (s->defer_accept) {
+	if (s->defer_accept) {
 		int v = s->defer_accept;
 		if (-1 == setsockopt(srv_socket->fd, IPPROTO_TCP, TCP_DEFER_ACCEPT, &v, sizeof(v))) {
 			log_error_write(srv, __FILE__, __LINE__, "ss", "can't set TCP_DEFER_ACCEPT: ", strerror(errno));
@@ -410,6 +394,7 @@ static int network_server_init(server *srv, buffer *host_token, specific_config 
 	}
 
 srv_sockets_append:
+	srv_socket->conf = s;
 	srv_socket->is_ssl = s->ssl_enabled;
 
 	if (srv->srv_sockets.size == 0) {

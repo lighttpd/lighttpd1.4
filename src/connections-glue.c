@@ -100,9 +100,9 @@ static void dump_packet(const unsigned char *data, size_t len) {
 
 #ifdef USE_OPENSSL
 int connection_accepted_openssl(server *srv, connection *con) {
-	server_socket *srv_sock = con->srv_socket;
+	specific_config *s = con->srv_socket->conf;
 
-	if (NULL == (con->ssl = SSL_new(srv_sock->ssl_ctx))) {
+	if (NULL == (con->ssl = SSL_new(s->ssl_ctx))) {
 		log_error_write(srv, __FILE__, __LINE__, "ss", "SSL:",
 				ERR_error_string(ERR_get_error(), NULL));
 		return -1;
@@ -243,7 +243,6 @@ static int connection_handle_read_openssl(server *srv, connection *con) {
 }
 
 void connection_shutdown_openssl(server *srv, connection *con) {
-	server_socket *srv_sock = con->srv_socket;
 	if (SSL_is_init_finished(con->ssl)) {
 		int ret, ssl_r;
 		unsigned long err;
