@@ -713,4 +713,95 @@ void https_cgi_env_openssl(server *srv, connection *con) {
                             buf, strlen(buf));
     }
 }
+
+void https_response_prepare_openssl(server *srv, connection *con) {
+	X509 *xs;
+	X509_NAME *xn;
+	int i, nentries;
+
+	long vr = SSL_get_verify_result(con->ssl);
+	if (vr != X509_V_OK) {
+		char errstr[256];
+		ERR_error_string_n(vr, errstr, sizeof(errstr));
+		buffer_copy_string_len(srv->tmp_buf, CONST_STR_LEN("FAILED:"));
+		buffer_append_string(srv->tmp_buf, errstr);
+		array_set_key_value(con->environment,
+				    CONST_STR_LEN("SSL_CLIENT_VERIFY"),
+				    CONST_BUF_LEN(srv->tmp_buf));
+		return;
+	} else if (!(xs = SSL_get_peer_certificate(con->ssl))) {
+		array_set_key_value(con->environment,
+				    CONST_STR_LEN("SSL_CLIENT_VERIFY"),
+				    CONST_STR_LEN("NONE"));
+		return;
+	} else {
+		array_set_key_value(con->environment,
+				    CONST_STR_LEN("SSL_CLIENT_VERIFY"),
+				    CONST_STR_LEN("SUCCESS"));
+	}
+
+	buffer_copy_string_len(srv->tmp_buf, CONST_STR_LEN("SSL_CLIENT_S_DN_"));
+	xn = X509_get_subject_name(xs);
+	for (i = 0, nentries = X509_NAME_entry_count(xn); i < nentries; ++i) {
+		int xobjnid;
+		const char * xobjsn;
+		X509_NAME_ENTRY *xe;
+
+		if (!(xe = X509_NAME_get_entry(xn, i))) {
+			continue;
+		}
+		xobjnid = OBJ_obj2nid((ASN1_OBJECT*)X509_NAME_ENTRY_get_object(xe));
+		xobjsn = OBJ_nid2sn(xobjnid);
+		if (xobjsn) {
+			buffer_string_set_length(srv->tmp_buf, sizeof("SSL_CLIENT_S_DN_")-1);
+			buffer_append_string(srv->tmp_buf, xobjsn);
+			array_set_key_value(con->environment,
+					    CONST_BUF_LEN(srv->tmp_buf),
+					    (const char *)X509_NAME_ENTRY_get_data(xe)->data,
+					    X509_NAME_ENTRY_get_data(xe)->length);
+		}
+	}
+
+	{
+		ASN1_INTEGER *xsn = X509_get_serialNumber(xs);
+		BIGNUM *serialBN = ASN1_INTEGER_to_BN(xsn, NULL);
+		char *serialHex = BN_bn2hex(serialBN);
+		array_set_key_value(con->environment,
+				    CONST_STR_LEN("SSL_CLIENT_M_SERIAL"),
+				    serialHex, strlen(serialHex));
+		OPENSSL_free(serialHex);
+		BN_free(serialBN);
+	}
+
+	if (!buffer_string_is_empty(con->conf.ssl_verifyclient_username)) {
+		/* pick one of the exported values as "REMOTE_USER", for example
+		 * ssl.verifyclient.username   = "SSL_CLIENT_S_DN_UID" or "SSL_CLIENT_S_DN_emailAddress"
+		 */
+		data_string *ds = (data_string *)array_get_element(con->environment, con->conf.ssl_verifyclient_username->ptr);
+		if (ds) array_set_key_value(con->environment, CONST_STR_LEN("REMOTE_USER"), CONST_BUF_LEN(ds->value));
+	}
+
+	if (con->conf.ssl_verifyclient_export_cert) {
+		BIO *bio;
+		if (NULL != (bio = BIO_new(BIO_s_mem()))) {
+			data_string *envds;
+			int n;
+
+			PEM_write_bio_X509(bio, xs);
+			n = BIO_pending(bio);
+
+			if (NULL == (envds = (data_string *)array_get_unused_element(con->environment, TYPE_STRING))) {
+				envds = data_string_init();
+			}
+
+			buffer_copy_string_len(envds->key, CONST_STR_LEN("SSL_CLIENT_CERT"));
+			buffer_string_prepare_copy(envds->value, n);
+			BIO_read(bio, envds->value->ptr, n);
+			BIO_free(bio);
+			buffer_commit(envds->value, n);
+			array_replace(con->environment, (data_unset *)envds);
+		}
+	}
+	X509_free(xs);
+}
 #endif /* USE_OPENSSL */
