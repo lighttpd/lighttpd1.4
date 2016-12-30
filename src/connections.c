@@ -1004,29 +1004,13 @@ connection *connection_accepted(server *srv, server_socket *srv_socket, sock_add
 			connection_close(srv, con);
 			return NULL;
 		}
-#ifdef USE_OPENSSL
 		/* connect FD to SSL */
 		if (srv_socket->is_ssl) {
-			if (NULL == (con->ssl = SSL_new(srv_socket->ssl_ctx))) {
-				log_error_write(srv, __FILE__, __LINE__, "ss", "SSL:",
-						ERR_error_string(ERR_get_error(), NULL));
-
-				connection_close(srv, con);
-				return NULL;
-			}
-
-			con->renegotiations = 0;
-			SSL_set_app_data(con->ssl, con);
-			SSL_set_accept_state(con->ssl);
-
-			if (1 != (SSL_set_fd(con->ssl, cnt))) {
-				log_error_write(srv, __FILE__, __LINE__, "ss", "SSL:",
-						ERR_error_string(ERR_get_error(), NULL));
+			if (connection_accepted_openssl(srv, con)) {
 				connection_close(srv, con);
 				return NULL;
 			}
 		}
-#endif
 		return con;
 }
 

@@ -99,6 +99,27 @@ static void dump_packet(const unsigned char *data, size_t len) {
 #endif
 
 #ifdef USE_OPENSSL
+int connection_accepted_openssl(server *srv, connection *con) {
+	server_socket *srv_sock = con->srv_socket;
+
+	if (NULL == (con->ssl = SSL_new(srv_sock->ssl_ctx))) {
+		log_error_write(srv, __FILE__, __LINE__, "ss", "SSL:",
+				ERR_error_string(ERR_get_error(), NULL));
+		return -1;
+	}
+
+	con->renegotiations = 0;
+	SSL_set_app_data(con->ssl, con);
+	SSL_set_accept_state(con->ssl);
+
+	if (1 != (SSL_set_fd(con->ssl, con->fd))) {
+		log_error_write(srv, __FILE__, __LINE__, "ss", "SSL:",
+				ERR_error_string(ERR_get_error(), NULL));
+		return -1;
+	}
+	return 0;
+}
+
 int connection_close_openssl(server *srv, connection *con) {
 	UNUSED(srv);
 	if (con->ssl) SSL_free(con->ssl);
@@ -286,6 +307,11 @@ void connection_shutdown_openssl(server *srv, connection *con) {
 	}
 }
 #else
+int connection_accepted_openssl(server *srv, connection *con) {
+	UNUSED(srv);
+	UNUSED(con);
+	return -1;
+}
 static inline int connection_handle_read_openssl(server *srv, connection *con) {
 	UNUSED(srv);
 	UNUSED(con);
