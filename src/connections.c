@@ -5,6 +5,7 @@
 #include "log.h"
 #include "connections.h"
 #include "fdevent.h"
+#include "network_openssl.h"
 
 #include "configfile.h"
 #include "request.h"

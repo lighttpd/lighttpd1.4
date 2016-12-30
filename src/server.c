@@ -16,6 +16,7 @@
 #include "plugin.h"
 #include "joblist.h"
 #include "network_backends.h"
+#include "network_openssl.h"
 #include "version.h"
 
 #include <sys/types.h>

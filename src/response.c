@@ -8,6 +8,7 @@
 
 #include "configfile.h"
 #include "network_backends.h"
+#include "network_openssl.h"
 
 #include "plugin.h"
 

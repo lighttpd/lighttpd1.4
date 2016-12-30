@@ -9,6 +9,7 @@
 #include "response.h"
 #include "stat_cache.h"
 #include "network_backends.h"
+#include "network_openssl.h"
 
 #include <string.h>
 #include <errno.h>
