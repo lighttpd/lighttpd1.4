@@ -27,9 +27,9 @@
 #include "splaytree.h"
 #include "etag.h"
 
-
 #if defined HAVE_LIBSSL && defined HAVE_OPENSSL_SSL_H
 # define USE_OPENSSL
+# define TEXT_SSL " (ssl)"
 # include <openssl/opensslconf.h>
 #  ifndef USE_OPENSSL_KERBEROS
 #   ifndef OPENSSL_NO_KRB5
@@ -41,6 +41,7 @@
 #  define OPENSSL_NO_TLSEXT
 # endif
 #else
+# define TEXT_SSL
 typedef void SSL;
 #endif
 

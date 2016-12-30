@@ -511,16 +511,10 @@ static int server_oneshot_init(server *srv, int fd) {
 
 
 static void show_version (void) {
-#ifdef USE_OPENSSL
-# define TEXT_SSL " (ssl)"
-#else
-# define TEXT_SSL
-#endif
 	char *b = PACKAGE_DESC TEXT_SSL \
 " - a light and fast webserver\n" \
 "Build-Date: " __DATE__ " " __TIME__ "\n";
 ;
-#undef TEXT_SSL
 	write_all(STDOUT_FILENO, b, strlen(b));
 }
 
@@ -614,7 +608,7 @@ static void show_features (void) {
 #else
       "\t- crypt support\n"
 #endif
-#ifdef USE_OPENSSL
+#ifdef HAVE_LIBSSL
       "\t+ SSL Support\n"
 #else
       "\t- SSL Support\n"
@@ -675,11 +669,6 @@ static void show_features (void) {
 }
 
 static void show_help (void) {
-#ifdef USE_OPENSSL
-# define TEXT_SSL " (ssl)"
-#else
-# define TEXT_SSL
-#endif
 	char *b = PACKAGE_DESC TEXT_SSL " ("__DATE__ " " __TIME__ ")" \
 " - a light and fast webserver\n" \
 "usage:\n" \
@@ -696,7 +685,6 @@ static void show_help (void) {
 " -h         show this help\n" \
 "\n"
 ;
-#undef TEXT_SSL
 #undef TEXT_IPV6
 	write_all(STDOUT_FILENO, b, strlen(b));
 }
