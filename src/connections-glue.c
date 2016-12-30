@@ -111,6 +111,13 @@ int connection_accepted_openssl(server *srv, connection *con) {
 	con->renegotiations = 0;
 	SSL_set_app_data(con->ssl, con);
 	SSL_set_accept_state(con->ssl);
+#ifndef OPENSSL_NO_TLSEXT
+	if (con->tlsext_server_name)
+		buffer_reset(con->tlsext_server_name);
+	else
+		con->tlsext_server_name = buffer_init();
+#endif
+
 
 	if (1 != (SSL_set_fd(con->ssl, con->fd))) {
 		log_error_write(srv, __FILE__, __LINE__, "ss", "SSL:",
@@ -304,6 +311,13 @@ void connection_shutdown_openssl(server *srv, connection *con) {
 		}
 		ERR_clear_error();
 	}
+#ifndef OPENSSL_NO_TLSEXT
+	if (con->tlsext_server_name) {
+		buffer_reset(con->tlsext_server_name);
+		buffer_free(con->tlsext_server_name);
+		con->tlsext_server_name = NULL;
+	}
+#endif
 }
 #else
 int connection_accepted_openssl(server *srv, connection *con) {

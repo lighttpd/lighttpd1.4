@@ -470,12 +470,8 @@ typedef struct {
 	struct server_socket *srv_socket;   /* reference to the server-socket */
 
 	SSL *ssl;
-#ifdef USE_OPENSSL
-# ifndef OPENSSL_NO_TLSEXT
 	buffer *tlsext_server_name;
-# endif
 	unsigned int renegotiations; /* count of SSL_CB_HANDSHAKE_START */
-#endif
 	/* etag handling */
 	etag_flags_t etag_flags;
 
