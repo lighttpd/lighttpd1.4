@@ -7,6 +7,7 @@
 #include "network.h"
 #include "log.h"
 #include "configfile.h"
+#include "plugin.h"
 
 #include <unistd.h>
 #include <stdlib.h>
@@ -191,6 +192,45 @@ static int network_openssl_load_pemfile(server *srv, size_t ndx) {
 	return 0;
 }
 
+#define PATCH(x) con->conf.x = s->x
+static int openssl_setup_connection(server *srv, connection *con) {
+	specific_config *s = srv->config_storage[0];
+
+	PATCH(ssl_pemfile_x509);
+	PATCH(ssl_pemfile_pkey);
+	PATCH(ssl_ca_file_cert_names);
+
+	return 0;
+}
+
+static int openssl_patch_connection(server *srv, connection *con) {
+	size_t i, j;
+
+	/* skip the first, the global context */
+	for (i = 1; i < srv->config_context->used; i++) {
+		data_config *dc = (data_config *)srv->config_context->data[i];
+		specific_config *s = srv->config_storage[i];
+
+		/* condition didn't match */
+		if (!config_check_cond(srv, con, dc)) continue;
+
+		/* merge config */
+		for (j = 0; j < dc->value->used; j++) {
+			data_unset *du = dc->value->data[j];
+
+			if (buffer_is_equal_string(du->key, CONST_STR_LEN("ssl.pemfile"))) {
+				PATCH(ssl_pemfile_x509);
+				PATCH(ssl_pemfile_pkey);
+			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("ssl.ca-file"))) {
+				PATCH(ssl_ca_file_cert_names);
+			}
+		}
+	}
+
+	return 0;
+}
+#undef PATCH
+
 #ifndef OPENSSL_NO_TLSEXT
 static int network_ssl_servername_callback(SSL *ssl, int *al, server *srv) {
 	const char *servername;
@@ -215,12 +255,14 @@ static int network_ssl_servername_callback(SSL *ssl, int *al, server *srv) {
 
 	config_cond_cache_reset(srv, con);
 	config_setup_connection(srv, con);
+	openssl_setup_connection(srv, con);
 
 	con->conditional_is_valid[COMP_SERVER_SOCKET] = 1;
 	con->conditional_is_valid[COMP_HTTP_REMOTE_IP] = 1;
 	con->conditional_is_valid[COMP_HTTP_SCHEME] = 1;
 	con->conditional_is_valid[COMP_HTTP_HOST] = 1;
 	config_patch_connection(srv, con);
+	openssl_patch_connection(srv, con);
 
 	if (NULL == con->conf.ssl_pemfile_x509 || NULL == con->conf.ssl_pemfile_pkey) {
 		/* x509/pkey available <=> pemfile was set <=> pemfile got patched: so this should never happen, unless you nest $SERVER["socket"] */
@@ -751,6 +793,8 @@ void https_response_prepare_openssl(server *srv, connection *con) {
 	X509 *xs;
 	X509_NAME *xn;
 	int i, nentries;
+
+	openssl_patch_connection(srv, con);
 
 	long vr = SSL_get_verify_result(con->ssl);
 	if (vr != X509_V_OK) {
