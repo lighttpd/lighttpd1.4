@@ -518,14 +518,7 @@ int config_setup_connection(server *srv, connection *con) {
 	PATCH(ssl_enabled);
 
 	PATCH(ssl_pemfile);
-#ifdef USE_OPENSSL
-	PATCH(ssl_pemfile_x509);
-	PATCH(ssl_pemfile_pkey);
-#endif
 	PATCH(ssl_ca_file);
-#ifdef USE_OPENSSL
-	PATCH(ssl_ca_file_cert_names);
-#endif
 	PATCH(ssl_cipher_list);
 	PATCH(ssl_dh_file);
 	PATCH(ssl_ec_curve);
@@ -594,15 +587,8 @@ int config_patch_connection(server *srv, connection *con) {
 				PATCH(etag_use_size);
 			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("ssl.pemfile"))) {
 				PATCH(ssl_pemfile);
-#ifdef USE_OPENSSL
-				PATCH(ssl_pemfile_x509);
-				PATCH(ssl_pemfile_pkey);
-#endif
 			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("ssl.ca-file"))) {
 				PATCH(ssl_ca_file);
-#ifdef USE_OPENSSL
-				PATCH(ssl_ca_file_cert_names);
-#endif
 			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("ssl.honor-cipher-order"))) {
 				PATCH(ssl_honor_cipher_order);
 			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("ssl.empty-fragments"))) {
@@ -1565,13 +1551,6 @@ int config_set_defaults(server *srv) {
 					"ssl.pemfile has to be set");
 			return -1;
 		}
-
-#ifndef USE_OPENSSL
-		log_error_write(srv, __FILE__, __LINE__, "s",
-				"ssl support is missing, recompile with --with-openssl");
-
-		return -1;
-#endif
 	}
 
 	return 0;

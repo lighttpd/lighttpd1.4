@@ -5,6 +5,7 @@
 #include "log.h"
 #include "connections.h"
 #include "fdevent.h"
+#include "network_openssl.h"
 
 #include "configfile.h"
 #include "request.h"
@@ -27,11 +28,6 @@
 #include <string.h>
 #include <fcntl.h>
 #include <assert.h>
-
-#ifdef USE_OPENSSL
-# include <openssl/ssl.h>
-# include <openssl/err.h>
-#endif
 
 #ifdef HAVE_SYS_FILIO_H
 # include <sys/filio.h>
@@ -119,13 +115,10 @@ static int connection_del(server *srv, connection *con) {
 }
 
 static int connection_close(server *srv, connection *con) {
-#ifdef USE_OPENSSL
 	server_socket *srv_sock = con->srv_socket;
 	if (srv_sock->is_ssl) {
-		if (con->ssl) SSL_free(con->ssl);
-		con->ssl = NULL;
+		connection_close_openssl(srv, con);
 	}
-#endif
 
 	fdevent_event_del(srv->ev, &(con->fde_ndx), con->fd);
 	fdevent_unregister(srv->ev, con->fd);
@@ -188,70 +181,8 @@ static void connection_handle_close_state(server *srv, connection *con) {
 static void connection_handle_shutdown(server *srv, connection *con) {
 	int r;
 
-#ifdef USE_OPENSSL
 	server_socket *srv_sock = con->srv_socket;
-	if (srv_sock->is_ssl && SSL_is_init_finished(con->ssl)) {
-		int ret, ssl_r;
-		unsigned long err;
-		ERR_clear_error();
-		switch ((ret = SSL_shutdown(con->ssl))) {
-		case 1:
-			/* ok */
-			break;
-		case 0:
-			/* wait for fd-event
-			 *
-			 * FIXME: wait for fdevent and call SSL_shutdown again
-			 *
-			 */
-			ERR_clear_error();
-			if (-1 != (ret = SSL_shutdown(con->ssl))) break;
-
-			/* fall through */
-		default:
-
-			switch ((ssl_r = SSL_get_error(con->ssl, ret))) {
-			case SSL_ERROR_ZERO_RETURN:
-				break;
-			case SSL_ERROR_WANT_WRITE:
-				/*con->is_writable = -1;*//*(no effect; shutdown() called below)*/
-			case SSL_ERROR_WANT_READ:
-				break;
-			case SSL_ERROR_SYSCALL:
-				/* perhaps we have error waiting in our error-queue */
-				if (0 != (err = ERR_get_error())) {
-					do {
-						log_error_write(srv, __FILE__, __LINE__, "sdds", "SSL:",
-								ssl_r, ret,
-								ERR_error_string(err, NULL));
-					} while((err = ERR_get_error()));
-				} else if (errno != 0) { /* ssl bug (see lighttpd ticket #2213): sometimes errno == 0 */
-					switch(errno) {
-					case EPIPE:
-					case ECONNRESET:
-						break;
-					default:
-						log_error_write(srv, __FILE__, __LINE__, "sddds", "SSL (error):",
-							ssl_r, ret, errno,
-							strerror(errno));
-						break;
-					}
-				}
-
-				break;
-			default:
-				while((err = ERR_get_error())) {
-					log_error_write(srv, __FILE__, __LINE__, "sdds", "SSL:",
-							ssl_r, ret,
-							ERR_error_string(err, NULL));
-				}
-
-				break;
-			}
-		}
-		ERR_clear_error();
-	}
-#endif
+	if (srv_sock->is_ssl) connection_shutdown_openssl(srv, con);
 
 	switch(r = plugins_call_handle_connection_close(srv, con)) {
 	case HANDLER_GO_ON:
@@ -630,10 +561,6 @@ connection *connection_init(server *srv) {
 
 	CLEAN(server_name);
 	CLEAN(dst_addr_buf);
-#if defined USE_OPENSSL && ! defined OPENSSL_NO_TLSEXT
-	CLEAN(tlsext_server_name);
-#endif
-
 #undef CLEAN
 	con->write_queue = chunkqueue_init();
 	con->read_queue = chunkqueue_init();
@@ -696,9 +623,6 @@ void connections_free(server *srv) {
 
 		CLEAN(server_name);
 		CLEAN(dst_addr_buf);
-#if defined USE_OPENSSL && ! defined OPENSSL_NO_TLSEXT
-		CLEAN(tlsext_server_name);
-#endif
 #undef CLEAN
 		free(con->plugin_ctx);
 		free(con->cond_cache);
@@ -747,9 +671,6 @@ int connection_reset(server *srv, connection *con) {
 	CLEAN(parse_request);
 
 	CLEAN(server_name);
-#if defined USE_OPENSSL && ! defined OPENSSL_NO_TLSEXT
-	CLEAN(tlsext_server_name);
-#endif
 #undef CLEAN
 
 #define CLEAN(x) \
@@ -1069,29 +990,13 @@ connection *connection_accepted(server *srv, server_socket *srv_socket, sock_add
 			connection_close(srv, con);
 			return NULL;
 		}
-#ifdef USE_OPENSSL
 		/* connect FD to SSL */
 		if (srv_socket->is_ssl) {
-			if (NULL == (con->ssl = SSL_new(srv_socket->ssl_ctx))) {
-				log_error_write(srv, __FILE__, __LINE__, "ss", "SSL:",
-						ERR_error_string(ERR_get_error(), NULL));
-
-				connection_close(srv, con);
-				return NULL;
-			}
-
-			con->renegotiations = 0;
-			SSL_set_app_data(con->ssl, con);
-			SSL_set_accept_state(con->ssl);
-
-			if (1 != (SSL_set_fd(con->ssl, cnt))) {
-				log_error_write(srv, __FILE__, __LINE__, "ss", "SSL:",
-						ERR_error_string(ERR_get_error(), NULL));
+			if (connection_accepted_openssl(srv, con)) {
 				connection_close(srv, con);
 				return NULL;
 			}
 		}
-#endif
 		return con;
 }
 

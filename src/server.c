@@ -16,6 +16,7 @@
 #include "plugin.h"
 #include "joblist.h"
 #include "network_backends.h"
+#include "network_openssl.h"
 #include "version.h"
 
 #include <sys/types.h>
@@ -57,10 +58,6 @@
 
 #ifdef HAVE_SYS_PRCTL_H
 # include <sys/prctl.h>
-#endif
-
-#ifdef USE_OPENSSL
-# include <openssl/err.h> 
 #endif
 
 #ifndef __sgi
@@ -327,6 +324,8 @@ static void server_free(server *srv) {
 
 	free(srv->conns);
 
+	network_free_openssl(srv);
+
 	if (srv->config_storage) {
 		for (i = 0; i < srv->config_context->used; i++) {
 			specific_config *s = srv->config_storage[i];
@@ -346,12 +345,6 @@ static void server_free(server *srv) {
 			buffer_free(s->errorfile_prefix);
 			array_free(s->mimetypes);
 			buffer_free(s->ssl_verifyclient_username);
-#ifdef USE_OPENSSL
-			SSL_CTX_free(s->ssl_ctx);
-			EVP_PKEY_free(s->ssl_pemfile_pkey);
-			X509_free(s->ssl_pemfile_x509);
-			if (NULL != s->ssl_ca_file_cert_names) sk_X509_NAME_pop_free(s->ssl_ca_file_cert_names, X509_NAME_free);
-#endif
 			free(s);
 		}
 		free(srv->config_storage);
@@ -377,24 +370,6 @@ static void server_free(server *srv) {
 	array_free(srv->srvconf.modules);
 	array_free(srv->split_vals);
 
-#ifdef USE_OPENSSL
-	if (srv->ssl_is_init) {
-	      #if   OPENSSL_VERSION_NUMBER >= 0x10100000L \
-		&& !defined(LIBRESSL_VERSION_NUMBER)
-		/*(OpenSSL libraries handle thread init and deinit)
-		 * https://github.com/openssl/openssl/pull/1048 */
-	      #else
-		CRYPTO_cleanup_all_ex_data();
-		ERR_free_strings();
-	       #if OPENSSL_VERSION_NUMBER >= 0x10000000L
-		ERR_remove_thread_state(NULL);
-	       #else
-		ERR_remove_state(0);
-	       #endif
-		EVP_cleanup();
-	      #endif
-	}
-#endif
 	li_rand_cleanup();
 
 	free(srv);
@@ -537,16 +512,10 @@ static int server_oneshot_init(server *srv, int fd) {
 
 
 static void show_version (void) {
-#ifdef USE_OPENSSL
-# define TEXT_SSL " (ssl)"
-#else
-# define TEXT_SSL
-#endif
 	char *b = PACKAGE_DESC TEXT_SSL \
 " - a light and fast webserver\n" \
 "Build-Date: " __DATE__ " " __TIME__ "\n";
 ;
-#undef TEXT_SSL
 	write_all(STDOUT_FILENO, b, strlen(b));
 }
 
@@ -640,7 +609,7 @@ static void show_features (void) {
 #else
       "\t- crypt support\n"
 #endif
-#ifdef USE_OPENSSL
+#ifdef HAVE_LIBSSL
       "\t+ SSL Support\n"
 #else
       "\t- SSL Support\n"
@@ -701,11 +670,6 @@ static void show_features (void) {
 }
 
 static void show_help (void) {
-#ifdef USE_OPENSSL
-# define TEXT_SSL " (ssl)"
-#else
-# define TEXT_SSL
-#endif
 	char *b = PACKAGE_DESC TEXT_SSL " ("__DATE__ " " __TIME__ ")" \
 " - a light and fast webserver\n" \
 "usage:\n" \
@@ -722,7 +686,6 @@ static void show_help (void) {
 " -h         show this help\n" \
 "\n"
 ;
-#undef TEXT_SSL
 #undef TEXT_IPV6
 	write_all(STDOUT_FILENO, b, strlen(b));
 }

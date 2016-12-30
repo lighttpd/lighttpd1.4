@@ -27,19 +27,11 @@
 #include "splaytree.h"
 #include "etag.h"
 
-
 #if defined HAVE_LIBSSL && defined HAVE_OPENSSL_SSL_H
 # define USE_OPENSSL
-# include <openssl/opensslconf.h>
-#  ifndef USE_OPENSSL_KERBEROS
-#   ifndef OPENSSL_NO_KRB5
-#   define OPENSSL_NO_KRB5
-#   endif
-#  endif
-# include <openssl/ssl.h>
-# if ! defined OPENSSL_NO_TLSEXT && ! defined SSL_CTRL_SET_TLSEXT_HOSTNAME
-#  define OPENSSL_NO_TLSEXT
-# endif
+# define TEXT_SSL " (ssl)"
+#else
+# define TEXT_SSL
 #endif
 
 #ifdef HAVE_FAM_H
@@ -334,13 +326,7 @@ typedef struct {
 	buffer *bsd_accept_filter;
 #endif
 
-#ifdef USE_OPENSSL
-	SSL_CTX *ssl_ctx; /* not patched */
-	/* SNI per host: with COMP_SERVER_SOCKET, COMP_HTTP_SCHEME, COMP_HTTP_HOST */
-	EVP_PKEY *ssl_pemfile_pkey;
-	X509 *ssl_pemfile_x509;
-	STACK_OF(X509_NAME) *ssl_ca_file_cert_names;
-#endif
+	void *ssl_conf;
 } specific_config;
 
 /* the order of the items should be the same as they are processed
@@ -467,13 +453,9 @@ typedef struct {
 
 	struct server_socket *srv_socket;   /* reference to the server-socket */
 
-#ifdef USE_OPENSSL
-	SSL *ssl;
-# ifndef OPENSSL_NO_TLSEXT
+	void *ssl;
 	buffer *tlsext_server_name;
-# endif
 	unsigned int renegotiations; /* count of SSL_CB_HANDSHAKE_START */
-#endif
 	/* etag handling */
 	etag_flags_t etag_flags;
 
@@ -573,13 +555,11 @@ typedef struct server_socket {
 	int       fd;
 	int       fde_ndx;
 
+	specific_config *conf;
 	unsigned short is_ssl;
 
 	buffer *srv_token;
 
-#ifdef USE_OPENSSL
-	SSL_CTX *ssl_ctx;
-#endif
 } server_socket;
 
 typedef struct {
@@ -681,9 +661,8 @@ typedef struct server {
 	fdevent_handler_t event_handler;
 
 	int (* network_backend_write)(struct server *srv, connection *con, int fd, chunkqueue *cq, off_t max_bytes);
-#ifdef USE_OPENSSL
-	int (* network_ssl_backend_write)(struct server *srv, connection *con, SSL *ssl, chunkqueue *cq, off_t max_bytes);
-#endif
+
+	int (* network_ssl_backend_write)(struct server *srv, connection *con, void *ssl, chunkqueue *cq, off_t max_bytes);
 
 	uid_t uid;
 	gid_t gid;

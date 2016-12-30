@@ -75,10 +75,6 @@ int network_write_chunkqueue_writev(server *srv, connection *con, int fd, chunkq
 int network_write_chunkqueue_sendfile(server *srv, connection *con, int fd, chunkqueue *cq, off_t max_bytes); /* fallback to write */
 #endif
 
-#if defined(USE_OPENSSL)
-int network_write_chunkqueue_openssl(server *srv, connection *con, SSL *ssl, chunkqueue *cq, off_t max_bytes);
-#endif
-
 /* write next chunk(s); finished chunks are removed afterwards after successful writes.
  * return values: similar as backends (0 succes, -1 error, -2 remote close, -3 try again later (EINTR/EAGAIN)) */
 /* next chunk must be MEM_CHUNK. use write()/send() */

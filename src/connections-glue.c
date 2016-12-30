@@ -4,13 +4,9 @@
 #include "connections.h"
 #include "joblist.h"
 #include "log.h"
+#include "network_openssl.h"
 
 #include <errno.h>
-
-#ifdef USE_OPENSSL
-# include <openssl/ssl.h>
-# include <openssl/err.h>
-#endif
 
 const char *connection_get_state(connection_state_t state) {
 	switch (state) {
@@ -98,127 +94,6 @@ static void dump_packet(const unsigned char *data, size_t len) {
 }
 #endif
 
-static int connection_handle_read_ssl(server *srv, connection *con) {
-#ifdef USE_OPENSSL
-	int r, ssl_err, len;
-	char *mem = NULL;
-	size_t mem_len = 0;
-
-	if (!con->srv_socket->is_ssl) return -1;
-
-	ERR_clear_error();
-	do {
-		chunkqueue_get_memory(con->read_queue, &mem, &mem_len, 0, SSL_pending(con->ssl));
-#if 0
-		/* overwrite everything with 0 */
-		memset(mem, 0, mem_len);
-#endif
-
-		len = SSL_read(con->ssl, mem, mem_len);
-		if (len > 0) {
-			chunkqueue_use_memory(con->read_queue, len);
-			con->bytes_read += len;
-		} else {
-			chunkqueue_use_memory(con->read_queue, 0);
-		}
-
-		if (con->renegotiations > 1 && con->conf.ssl_disable_client_renegotiation) {
-			log_error_write(srv, __FILE__, __LINE__, "s", "SSL: renegotiation initiated by client, killing connection");
-			connection_set_state(srv, con, CON_STATE_ERROR);
-			return -1;
-		}
-	} while (len > 0);
-
-	if (len < 0) {
-		int oerrno = errno;
-		switch ((r = SSL_get_error(con->ssl, len))) {
-		case SSL_ERROR_WANT_WRITE:
-			con->is_writable = -1;
-		case SSL_ERROR_WANT_READ:
-			con->is_readable = 0;
-
-			/* the manual says we have to call SSL_read with the same arguments next time.
-			 * we ignore this restriction; no one has complained about it in 1.5 yet, so it probably works anyway.
-			 */
-
-			return 0;
-		case SSL_ERROR_SYSCALL:
-			/**
-			 * man SSL_get_error()
-			 *
-			 * SSL_ERROR_SYSCALL
-			 *   Some I/O error occurred.  The OpenSSL error queue may contain more
-			 *   information on the error.  If the error queue is empty (i.e.
-			 *   ERR_get_error() returns 0), ret can be used to find out more about
-			 *   the error: If ret == 0, an EOF was observed that violates the
-			 *   protocol.  If ret == -1, the underlying BIO reported an I/O error
-			 *   (for socket I/O on Unix systems, consult errno for details).
-			 *
-			 */
-			while((ssl_err = ERR_get_error())) {
-				/* get all errors from the error-queue */
-				log_error_write(srv, __FILE__, __LINE__, "sds", "SSL:",
-						r, ERR_error_string(ssl_err, NULL));
-			}
-
-			switch(oerrno) {
-			default:
-				log_error_write(srv, __FILE__, __LINE__, "sddds", "SSL:",
-						len, r, oerrno,
-						strerror(oerrno));
-				break;
-			}
-
-			break;
-		case SSL_ERROR_ZERO_RETURN:
-			/* clean shutdown on the remote side */
-
-			if (r == 0) {
-				/* FIXME: later */
-			}
-
-			/* fall thourgh */
-		default:
-			while((ssl_err = ERR_get_error())) {
-				switch (ERR_GET_REASON(ssl_err)) {
-				case SSL_R_SSL_HANDSHAKE_FAILURE:
-			      #ifdef SSL_R_TLSV1_ALERT_UNKNOWN_CA
-				case SSL_R_TLSV1_ALERT_UNKNOWN_CA:
-			      #endif
-			      #ifdef SSL_R_SSLV3_ALERT_CERTIFICATE_UNKNOWN
-				case SSL_R_SSLV3_ALERT_CERTIFICATE_UNKNOWN:
-			      #endif
-			      #ifdef SSL_R_SSLV3_ALERT_BAD_CERTIFICATE
-				case SSL_R_SSLV3_ALERT_BAD_CERTIFICATE:
-			      #endif
-					if (!con->conf.log_ssl_noise) continue;
-					break;
-				default:
-					break;
-				}
-				/* get all errors from the error-queue */
-				log_error_write(srv, __FILE__, __LINE__, "sds", "SSL:",
-				                r, ERR_error_string(ssl_err, NULL));
-			}
-			break;
-		}
-
-		connection_set_state(srv, con, CON_STATE_ERROR);
-
-		return -1;
-	} else { /*(len == 0)*/
-		con->is_readable = 0;
-		/* the other end close the connection -> KEEP-ALIVE */
-
-		return -2;
-	}
-#else
-	UNUSED(srv);
-	UNUSED(con);
-	return -1;
-#endif
-}
-
 /* 0: everything ok, -1: error, -2: con closed */
 int connection_handle_read(server *srv, connection *con) {
 	int len;
@@ -227,7 +102,7 @@ int connection_handle_read(server *srv, connection *con) {
 	int toread;
 
 	if (con->srv_socket->is_ssl) {
-		return connection_handle_read_ssl(srv, con);
+		return connection_handle_read_openssl(srv, con);
 	}
 
 	/* default size for chunks is 4kb; only use bigger chunks if FIONREAD tells
