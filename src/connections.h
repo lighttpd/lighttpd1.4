@@ -22,4 +22,5 @@ handler_t connection_handle_read_post_error(server *srv, connection *con, int ht
 void connection_response_reset(server *srv, connection *con);
 
 int connection_close_openssl(server *srv, connection *con);
+void connection_shutdown_openssl(server *srv, connection *con);
 #endif
