@@ -98,8 +98,8 @@ static void dump_packet(const unsigned char *data, size_t len) {
 }
 #endif
 
-static int connection_handle_read_ssl(server *srv, connection *con) {
 #ifdef USE_OPENSSL
+static int connection_handle_read_openssl(server *srv, connection *con) {
 	int r, ssl_err, len;
 	char *mem = NULL;
 	size_t mem_len = 0;
@@ -212,12 +212,14 @@ static int connection_handle_read_ssl(server *srv, connection *con) {
 
 		return -2;
 	}
+}
 #else
+static inline int connection_handle_read_openssl(server *srv, connection *con) {
 	UNUSED(srv);
 	UNUSED(con);
 	return -1;
-#endif
 }
+#endif
 
 /* 0: everything ok, -1: error, -2: con closed */
 int connection_handle_read(server *srv, connection *con) {
@@ -227,7 +229,7 @@ int connection_handle_read(server *srv, connection *con) {
 	int toread;
 
 	if (con->srv_socket->is_ssl) {
-		return connection_handle_read_ssl(srv, con);
+		return connection_handle_read_openssl(srv, con);
 	}
 
 	/* default size for chunks is 4kb; only use bigger chunks if FIONREAD tells
