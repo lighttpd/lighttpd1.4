@@ -9,9 +9,12 @@ use strict;
 # text/html IS NOT INCLUDED: html has its own method for defining charset
 #   (<meta>), but the standards specify that content-type in HTTP wins over
 #   the setting in the html document.
+# text/markdown doesn't have an official default charset, but requires
+#   one being specified - it seems reasonable to hardcode it to UTF-8
 my %text_utf8 = map { $_ => 1 } qw(
 	css
 	csv
+	markdown
 	plain
 	x-bibtex
 	x-boo
