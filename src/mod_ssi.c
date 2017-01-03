@@ -759,7 +759,7 @@ static int process_ssi_stmt(server *srv, connection *con, handler_ctx *p, const 
 	case SSI_EXEC: {
 		const char *cmd = NULL;
 		pid_t pid;
-		int from_exec_fds[2];
+		chunk *c;
 
 		if (!p->conf.ssi_exec) { /* <!--#exec ... --> disabled by config */
 			break;
@@ -777,28 +777,22 @@ static int process_ssi_stmt(server *srv, connection *con, handler_ctx *p, const 
 
 		if (p->if_is_false) break;
 
-		/* create a return pipe and send output to the html-page
-		 *
+		/*
 		 * as exec is assumed evil it is implemented synchronously
 		 */
 
 		if (!cmd) break;
 #ifdef HAVE_FORK
-		if (pipe(from_exec_fds)) {
-			log_error_write(srv, __FILE__, __LINE__, "ss",
-					"pipe failed: ", strerror(errno));
-			return -1;
-		}
+		/* send cmd output to a temporary file */
+		if (0 != chunkqueue_append_mem_to_tempfile(srv, con->write_queue, "", 0)) break;
+		c = con->write_queue->last;
 
 		/* fork, execve */
 		switch (pid = fork()) {
 		case 0: {
-			/* move stdout to from_rrdtool_fd[1] */
 			close(STDOUT_FILENO);
-			dup2(from_exec_fds[1], STDOUT_FILENO);
-			close(from_exec_fds[1]);
-			/* not needed */
-			close(from_exec_fds[0]);
+			dup2(c->file.fd, STDOUT_FILENO);
+			close(c->file.fd);
 
 			/* close stdin */
 			close(STDIN_FILENO);
@@ -806,74 +800,41 @@ static int process_ssi_stmt(server *srv, connection *con, handler_ctx *p, const 
 			execl("/bin/sh", "sh", "-c", cmd, (char *)NULL);
 
 			log_error_write(srv, __FILE__, __LINE__, "sss", "spawing exec failed:", strerror(errno), cmd);
-
-			/* */
-			SEGFAULT();
-			break;
+			_exit(errno);
 		}
 		case -1:
 			/* error */
 			log_error_write(srv, __FILE__, __LINE__, "ss", "fork failed:", strerror(errno));
 			break;
 		default: {
-			/* father */
+			struct stat stb;
 			int status;
-			ssize_t r;
-			int was_interrupted = 0;
-
-			close(from_exec_fds[1]);
 
 			/* wait for the client to end */
+			/* NOTE: synchronous; blocks entire lighttpd server */
 
 			/*
 			 * OpenBSD and Solaris send a EINTR on SIGCHILD even if we ignore it
 			 */
-			do {
-				if (-1 == waitpid(pid, &status, 0)) {
-					if (errno == EINTR) {
-						was_interrupted++;
-					} else {
-						was_interrupted = 0;
-						log_error_write(srv, __FILE__, __LINE__, "ss", "waitpid failed:", strerror(errno));
-					}
-				} else if (WIFEXITED(status)) {
-					int toread;
-					/* read everything from client and paste it into the output */
-					was_interrupted = 0;
-
-					while(1) {
-						if (ioctl(from_exec_fds[0], FIONREAD, &toread)) {
-							log_error_write(srv, __FILE__, __LINE__, "s",
-								"unexpected end-of-file (perhaps the ssi-exec process died)");
-							return -1;
-						}
-
-						if (toread > 0) {
-							char *mem;
-							size_t mem_len;
-
-							chunkqueue_get_memory(con->write_queue, &mem, &mem_len, 0, toread);
-							r = read(from_exec_fds[0], mem, mem_len);
-							chunkqueue_use_memory(con->write_queue, r > 0 ? r : 0);
-
-							if (r < 0) break; /* read failed */
-						} else {
-							break;
-						}
-					}
-				} else {
-					was_interrupted = 0;
-					log_error_write(srv, __FILE__, __LINE__, "s", "process exited abnormally");
+			while (-1 == waitpid(pid, &status, 0)) {
+				if (errno != EINTR) {
+					log_error_write(srv, __FILE__, __LINE__, "ss", "waitpid failed:", strerror(errno));
+					break;
 				}
-			} while (was_interrupted > 0 && was_interrupted < 4); /* if waitpid() gets interrupted, retry, but max 4 times */
-
-			close(from_exec_fds[0]);
+			}
+			if (!WIFEXITED(status)) {
+				log_error_write(srv, __FILE__, __LINE__, "ss", "process exited abnormally:", cmd);
+			}
+			if (0 == fstat(c->file.fd, &stb)) {
+				c->file.length = stb.st_size;
+			}
 
 			break;
 		}
 		}
 #else
-
+		UNUSED(pid);
+		UNUSED(c);
 		return -1;
 #endif
 
