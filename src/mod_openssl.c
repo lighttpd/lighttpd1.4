@@ -75,7 +75,6 @@ static plugin_data *plugin_data_singleton;
 typedef struct {
     SSL *ssl;
     connection *con;
-    buffer *tlsext_server_name;
     unsigned int renegotiations; /* count of SSL_CB_HANDSHAKE_START */
     int request_env_patched;
     plugin_config conf;
@@ -95,7 +94,6 @@ static void
 handler_ctx_free (handler_ctx *hctx)
 {
     if (hctx->ssl) SSL_free(hctx->ssl);
-    buffer_free(hctx->tlsext_server_name);
     free(hctx);
 }
 
@@ -193,19 +191,17 @@ network_ssl_servername_callback (SSL *ssl, int *al, server *srv)
 #endif
         return SSL_TLSEXT_ERR_NOACK;
     }
-    if (NULL == hctx->tlsext_server_name) {
-        hctx->tlsext_server_name = buffer_init();
-    }
-    buffer_copy_string(hctx->tlsext_server_name, servername);
-    buffer_to_lower(hctx->tlsext_server_name);
-    buffer_copy_buffer(con->tlsext_server_name, hctx->tlsext_server_name);
-
-    /* Sometimes this is still set, confusing COMP_HTTP_HOST */
-    buffer_reset(con->uri.authority);
+    /* use SNI to patch mod_openssl config and then reset COMP_HTTP_HOST */
+    buffer_copy_string(con->uri.authority, servername);
+    buffer_to_lower(con->uri.authority);
 
     con->conditional_is_valid[COMP_HTTP_SCHEME] = 1;
     con->conditional_is_valid[COMP_HTTP_HOST] = 1;
     mod_openssl_patch_connection(srv, con, hctx);
+    /* reset COMP_HTTP_HOST so that conditions re-run after request hdrs read */
+    /*(done in response.c:config_cond_cache_reset() after request hdrs read)*/
+    /*config_cond_cache_reset_item(con, COMP_HTTP_HOST);*/
+    /*buffer_reset(con->uri.authority);*/
 
     if (NULL == hctx->conf.ssl_pemfile_x509
         || NULL == hctx->conf.ssl_pemfile_pkey) {
@@ -213,7 +209,7 @@ network_ssl_servername_callback (SSL *ssl, int *al, server *srv)
          * so this should never happen, unless you nest $SERVER["socket"] */
         log_error_write(srv, __FILE__, __LINE__, "ssb", "SSL:",
                         "no certificate/private key for TLS server name",
-                        hctx->tlsext_server_name);
+                        con->uri.authority);
         return SSL_TLSEXT_ERR_ALERT_FATAL;
     }
 
@@ -222,7 +218,7 @@ network_ssl_servername_callback (SSL *ssl, int *al, server *srv)
     if (!SSL_use_certificate(ssl, hctx->conf.ssl_pemfile_x509)) {
         log_error_write(srv, __FILE__, __LINE__, "ssb:s", "SSL:",
                         "failed to set certificate for TLS server name",
-                        hctx->tlsext_server_name,
+                        con->uri.authority,
                         ERR_error_string(ERR_get_error(), NULL));
         return SSL_TLSEXT_ERR_ALERT_FATAL;
     }
@@ -230,7 +226,7 @@ network_ssl_servername_callback (SSL *ssl, int *al, server *srv)
     if (!SSL_use_PrivateKey(ssl, hctx->conf.ssl_pemfile_pkey)) {
         log_error_write(srv, __FILE__, __LINE__, "ssb:s", "SSL:",
                         "failed to set private key for TLS server name",
-                        hctx->tlsext_server_name,
+                        con->uri.authority,
                         ERR_error_string(ERR_get_error(), NULL));
         return SSL_TLSEXT_ERR_ALERT_FATAL;
     }
@@ -240,7 +236,7 @@ network_ssl_servername_callback (SSL *ssl, int *al, server *srv)
         if (NULL == hctx->conf.ssl_ca_file_cert_names) {
             log_error_write(srv, __FILE__, __LINE__, "ssb:s", "SSL:",
                             "can't verify client without ssl.ca-file "
-                            "for TLS server name", hctx->tlsext_server_name,
+                            "for TLS server name", con->uri.authority,
                             ERR_error_string(ERR_get_error(), NULL));
             return SSL_TLSEXT_ERR_ALERT_FATAL;
         }
@@ -1516,15 +1512,6 @@ CONNECTION_FUNC(mod_openssl_handle_request_reset)
     handler_ctx *hctx = con->plugin_ctx[p->id];
     if (NULL == hctx) return HANDLER_GO_ON;
 
-    /*
-     * XXX: preserve (for now) lighttpd historical behavior which resets
-     * tlsext_server_name after each request, meaning SNI is valid only for
-     * initial request, prior to reading request headers.  Probably should
-     * instead validate that Host header (or authority in request line)
-     * matches SNI server name for all requests on the connection on which
-     * SNI extension has been provided.
-     */
-    buffer_reset(hctx->tlsext_server_name);
     hctx->request_env_patched = 0;
 
     UNUSED(srv);

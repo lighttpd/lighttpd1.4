@@ -421,7 +421,6 @@ typedef struct connection {
 	cond_cache_t *cond_cache;
 
 	buffer *server_name;
-	buffer *tlsext_server_name;
 
 	/* error-handler */
 	int error_handler_saved_status;

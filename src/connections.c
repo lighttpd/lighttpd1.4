@@ -545,7 +545,6 @@ connection *connection_init(server *srv) {
 
 	CLEAN(server_name);
 	CLEAN(dst_addr_buf);
-	CLEAN(tlsext_server_name);
 
 #undef CLEAN
 	con->write_queue = chunkqueue_init();
@@ -609,7 +608,6 @@ void connections_free(server *srv) {
 
 		CLEAN(server_name);
 		CLEAN(dst_addr_buf);
-		CLEAN(tlsext_server_name);
 #undef CLEAN
 		free(con->plugin_ctx);
 		free(con->cond_cache);
@@ -658,7 +656,6 @@ int connection_reset(server *srv, connection *con) {
 	CLEAN(parse_request);
 
 	CLEAN(server_name);
-	CLEAN(tlsext_server_name);
 #undef CLEAN
 
 #define CLEAN(x) \

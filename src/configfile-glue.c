@@ -445,8 +445,6 @@ static cond_result_t config_check_cond_nocache(server *srv, connection *con, dat
 			default:
 				break;
 			}
-		} else if (!buffer_string_is_empty(con->tlsext_server_name)) {
-			l = con->tlsext_server_name;
 		} else {
 			l = srv->empty_string;
 		}
