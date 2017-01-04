@@ -35,6 +35,7 @@ extra_dist = Split('fastcgi-10.conf \
 
 fcgi_auth = None
 fcgi_responder = None
+scgi_responder = env.Program("scgi-responder", "scgi-responder.c")
 
 if env['LIBFCGI']:
 	fcgi_auth = env.Program("fcgi-auth", "fcgi-auth.c", LIBS=[env['LIBFCGI'], env['APPEND_LIBS']])

@@ -9,6 +9,7 @@ if(HAVE_FASTCGI_H OR HAVE_FASTCGI_FASTCGI_H)
 		target_link_libraries(fcgi-responder fcgi)
 	endif()
 endif()
+add_executable(scgi-responder scgi-responder.c)
 
 set(T_FILES
 	prepare.sh
