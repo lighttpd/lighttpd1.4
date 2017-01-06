@@ -529,9 +529,13 @@ static int cgi_demux_response(server *srv, handler_ctx *hctx) {
 
 					if (con->http_status >= 300 && con->http_status < 400) {
 						/*(con->parsed_response & HTTP_LOCATION)*/
+						size_t ulen = buffer_string_length(con->uri.path);
 						data_string *ds;
 						if (NULL != (ds = (data_string *) array_get_element(con->response.headers, "Location"))
-						    && ds->value->ptr[0] == '/') {
+						    && ds->value->ptr[0] == '/'
+						    && (0 != strncmp(ds->value->ptr, con->uri.path->ptr, ulen)
+							|| (ds->value->ptr[ulen] != '\0' && ds->value->ptr[ulen] != '/' && ds->value->ptr[ulen] != '?'))
+						    && NULL == array_get_element(con->response.headers, "Set-Cookie")) {
 							if (++con->loops_per_request > 5) {
 								log_error_write(srv, __FILE__, __LINE__, "sb", "too many internal loops while processing request:", con->request.orig_uri);
 								con->http_status = 500; /* Internal Server Error */

@@ -1,7 +1,7 @@
 #!/usr/bin/env perl
 
 if ($ENV{"QUERY_STRING"} eq "internal-redir") {
-    print "Location: /cgi.pl\r\n\r\n";
+    print "Location: /cgi-pathinfo.pl/foo\r\n\r\n";
     exit 0;
 }
 
