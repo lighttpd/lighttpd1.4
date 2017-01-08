@@ -2758,7 +2758,10 @@ PHYSICALPATH_FUNC(mod_webdav_physical_handler) {
 static handler_t mod_webdav_connection_reset(server *srv, connection *con, void *p_d) {
 	plugin_data *p = p_d;
 	handler_ctx *hctx = con->plugin_ctx[p->id];
-	if (hctx) free(hctx);
+	if (hctx) {
+		free(hctx);
+		con->plugin_ctx[p->id] = NULL;
+	}
 
 	UNUSED(srv);
 	return HANDLER_GO_ON;
