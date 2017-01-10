@@ -11,7 +11,7 @@
 #include <string.h>
 
 int main (void) {
-	int num_requests = 2;
+	int num_requests = 1;
 
 	while (num_requests > 0 &&
 	       FCGI_Accept() >= 0) {

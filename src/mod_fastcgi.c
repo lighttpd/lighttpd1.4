@@ -3550,6 +3550,49 @@ TRIGGER_FUNC(mod_fastcgi_handle_trigger) {
 
 				host = ex->hosts[n];
 
+				for (proc = host->first; proc; proc = proc->next) {
+					int status;
+
+					if (proc->pid == 0) continue;
+
+					switch (waitpid(proc->pid, &status, WNOHANG)) {
+					case 0:
+						/* child still running after timeout, good */
+						break;
+					case -1:
+						if (errno != EINTR) {
+							/* no PID found ? should never happen */
+							log_error_write(srv, __FILE__, __LINE__, "sddss",
+									"pid ", proc->pid, proc->state,
+									"not found:", strerror(errno));
+						}
+						break;
+					default:
+						/* the child should not terminate at all */
+						if (WIFEXITED(status)) {
+							if (proc->state != PROC_STATE_KILLED) {
+								log_error_write(srv, __FILE__, __LINE__, "sdb",
+										"child exited:",
+										WEXITSTATUS(status), proc->connection_name);
+							}
+						} else if (WIFSIGNALED(status)) {
+							if (WTERMSIG(status) != SIGTERM) {
+								log_error_write(srv, __FILE__, __LINE__, "sd",
+										"child signaled:",
+										WTERMSIG(status));
+							}
+						} else {
+							log_error_write(srv, __FILE__, __LINE__, "sd",
+									"child died somehow:",
+									status);
+						}
+						proc->pid = 0;
+						if (proc->state == PROC_STATE_RUNNING) host->active_procs--;
+						proc->state = PROC_STATE_DIED;
+						host->max_id--;
+					}
+				}
+
 				fcgi_restart_dead_procs(srv, p, host);
 
 				for (proc = host->unused_procs; proc; proc = proc->next) {
