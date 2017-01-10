@@ -4,6 +4,11 @@ NEWS
 ====
 
 - 1.4.45
+  * [mod_cgi] skip local-redir handling if to self (fixes #2779, #2108)
+  * [mod_webdav] fix crash when plugin_ctx cleaned up (fixes #2780)
+  * [mod_fastcgi] detect child exit, restart proactively
+  * [mod_scgi] detect child exit, restart proactively
+  * [TLS] ssl.read-ahead = "disable" for low mem (fixes #2778)
 
 - 1.4.44 - 2016-12-24
   * [mod_scgi] fix segfault (fixes #2762)
