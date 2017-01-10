@@ -164,9 +164,11 @@ static int mod_auth_require_parse (server *srv, http_auth_require_t * const requ
                 data_string *ds = data_string_init();
                 buffer_copy_string_len(ds->key,str+6,len-6); /*("group=" is 6)*/
                 array_insert_unique(require->group, (data_unset *)ds);
+              #if 0/*(supported by mod_authn_ldap, but not all other backends)*/
                 log_error_write(srv, __FILE__, __LINE__, "ssb",
                                 "warning parsing auth.require 'require' field: 'group' not implemented;",
                                 "field value:", b);
+              #endif
                 continue;
             }
             break; /* to error */

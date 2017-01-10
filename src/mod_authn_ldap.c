@@ -21,6 +21,7 @@ typedef struct {
     buffer *auth_ldap_bindpw;
     buffer *auth_ldap_filter;
     buffer *auth_ldap_cafile;
+    buffer *auth_ldap_groupmember;
     unsigned short auth_ldap_starttls;
     unsigned short auth_ldap_allow_empty_pw;
 } plugin_config;
@@ -70,6 +71,7 @@ FREE_FUNC(mod_authn_ldap_free) {
             buffer_free(s->auth_ldap_bindpw);
             buffer_free(s->auth_ldap_filter);
             buffer_free(s->auth_ldap_cafile);
+            buffer_free(s->auth_ldap_groupmember);
 
             if (NULL != s->ldap) ldap_unbind_ext_s(s->ldap, NULL, NULL);
             free(s);
@@ -94,6 +96,7 @@ config_values_t cv[] = {
         { "auth.backend.ldap.bind-dn",      NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_CONNECTION }, /* 5 */
         { "auth.backend.ldap.bind-pw",      NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_CONNECTION }, /* 6 */
         { "auth.backend.ldap.allow-empty-pw",     NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION }, /* 7 */
+        { "auth.backend.ldap.groupmember",  NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_CONNECTION }, /* 8 */
         { NULL,                             NULL, T_CONFIG_UNSET, T_CONFIG_SCOPE_UNSET }
     };
 
@@ -111,6 +114,7 @@ config_values_t cv[] = {
         s->auth_ldap_bindpw = buffer_init();
         s->auth_ldap_filter = buffer_init();
         s->auth_ldap_cafile = buffer_init();
+        s->auth_ldap_groupmember = buffer_init_string("memberUid");
         s->auth_ldap_starttls = 0;
         s->ldap = NULL;
 
@@ -122,6 +126,7 @@ config_values_t cv[] = {
         cv[5].destination = s->auth_ldap_binddn;
         cv[6].destination = s->auth_ldap_bindpw;
         cv[7].destination = &(s->auth_ldap_allow_empty_pw);
+        cv[8].destination = s->auth_ldap_groupmember;
 
         p->config_storage[i] = s;
 
@@ -156,6 +161,7 @@ static int mod_authn_ldap_patch_connection(server *srv, connection *con, plugin_
     PATCH(auth_ldap_cafile);
     PATCH(auth_ldap_starttls);
     PATCH(auth_ldap_allow_empty_pw);
+    PATCH(auth_ldap_groupmember);
     p->anon_conf = s;
 
     /* skip the first, the global context */
@@ -187,6 +193,8 @@ static int mod_authn_ldap_patch_connection(server *srv, connection *con, plugin_
                 PATCH(auth_ldap_bindpw);
             } else if (buffer_is_equal_string(du->key, CONST_STR_LEN("auth.backend.ldap.allow-empty-pw"))) {
                 PATCH(auth_ldap_allow_empty_pw);
+            } else if (buffer_is_equal_string(du->key, CONST_STR_LEN("auth.backend.ldap.groupmember"))) {
+                PATCH(auth_ldap_groupmember);
             }
         }
     }
@@ -380,11 +388,45 @@ static char * mod_authn_ldap_get_dn(server *srv, plugin_config *s, char *base, c
     return dn;
 }
 
+static handler_t mod_authn_ldap_memberOf(server *srv, plugin_config *s, const http_auth_require_t *require, const buffer *username, const char *userdn) {
+    array *groups = require->group;
+    buffer *filter = buffer_init();
+    handler_t rc = HANDLER_ERROR;
+
+    buffer_copy_string_len(filter, CONST_STR_LEN("("));
+    buffer_append_string_buffer(filter, s->auth_ldap_groupmember);
+    buffer_append_string_len(filter, CONST_STR_LEN("="));
+    if (buffer_is_equal_string(s->auth_ldap_groupmember,
+                               CONST_STR_LEN("member"))) {
+        buffer_append_string(filter, userdn);
+    } else { /*(assume "memberUid"; consider validating in SETDEFAULTS_FUNC)*/
+        buffer_append_string_buffer(filter, username);
+    }
+    buffer_append_string_len(filter, CONST_STR_LEN(")"));
+
+    for (size_t i = 0; i < groups->used; ++i) {
+        char *base = groups->data[i]->key->ptr;
+        LDAPMessage *lm = mod_authn_ldap_search(srv, s, base, filter->ptr);
+        if (NULL != lm) {
+            int count = ldap_count_entries(s->ldap, lm);
+            ldap_msgfree(lm);
+            if (count > 0) {
+                rc = HANDLER_GO_ON;
+                break;
+            }
+        }
+    }
+
+    buffer_free(filter);
+    return rc;
+}
+
 static handler_t mod_authn_ldap_basic(server *srv, connection *con, void *p_d, const http_auth_require_t *require, const buffer *username, const char *pw) {
     plugin_data *p = (plugin_data *)p_d;
     LDAP *ld;
     char *dn;
     buffer *template;
+    handler_t rc;
 
     mod_authn_ldap_patch_connection(srv, con, p);
 
@@ -467,10 +509,19 @@ static handler_t mod_authn_ldap_basic(server *srv, connection *con, void *p_d, c
     }
 
     ldap_unbind_ext_s(ld, NULL, NULL); /* disconnect */
+
+    if (http_auth_match_rules(require, username->ptr, NULL, NULL)) {
+        rc = HANDLER_GO_ON; /* access granted */
+    } else {
+        rc = HANDLER_ERROR;
+        if (require->group->used) {
+            /*(must not re-use p->ldap_filter, since it might be used for dn)*/
+            rc = mod_authn_ldap_memberOf(srv, &p->conf, require, username, dn);
+        }
+    }
+
     if (dn != p->ldap_filter->ptr) ldap_memfree(dn);
-    return http_auth_match_rules(require, username->ptr, NULL, NULL)
-      ? HANDLER_GO_ON  /* access granted */
-      : HANDLER_ERROR;
+    return rc;
 }
 
 int mod_authn_ldap_plugin_init(plugin *p);
