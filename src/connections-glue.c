@@ -127,7 +127,7 @@ static int connection_handle_read_ssl(server *srv, connection *con) {
 			connection_set_state(srv, con, CON_STATE_ERROR);
 			return -1;
 		}
-	} while (len > 0);
+	} while (len > 0 && (con->conf.ssl_read_ahead || SSL_pending(con->ssl) > 0));
 
 	if (len < 0) {
 		int oerrno = errno;
@@ -206,11 +206,13 @@ static int connection_handle_read_ssl(server *srv, connection *con) {
 		connection_set_state(srv, con, CON_STATE_ERROR);
 
 		return -1;
-	} else { /*(len == 0)*/
+	} else if (len == 0) {
 		con->is_readable = 0;
 		/* the other end close the connection -> KEEP-ALIVE */
 
 		return -2;
+	} else {
+		return 0;
 	}
 #else
 	UNUSED(srv);

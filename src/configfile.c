@@ -144,6 +144,7 @@ static int config_insert(server *srv) {
 		{ "server.stream-request-body",        NULL, T_CONFIG_SHORT,   T_CONFIG_SCOPE_CONNECTION }, /* 76 */
 		{ "server.stream-response-body",       NULL, T_CONFIG_SHORT,   T_CONFIG_SCOPE_CONNECTION }, /* 77 */
 		{ "server.max-request-field-size",     NULL, T_CONFIG_INT,     T_CONFIG_SCOPE_SERVER     }, /* 78 */
+		{ "ssl.read-ahead",                    NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION }, /* 79 */
 
 		{ NULL,                                NULL, T_CONFIG_UNSET,   T_CONFIG_SCOPE_UNSET      }
 	};
@@ -247,6 +248,7 @@ static int config_insert(server *srv) {
 		s->ssl_verifyclient_depth = 9;
 		s->ssl_verifyclient_export_cert = 0;
 		s->ssl_disable_client_renegotiation = 1;
+		s->ssl_read_ahead = (0 == i ? 1 : srv->config_storage[0]->ssl_read_ahead);
 		s->listen_backlog = (0 == i ? 1024 : srv->config_storage[0]->listen_backlog);
 		s->stream_request_body = 0;
 		s->stream_response_body = 0;
@@ -315,6 +317,7 @@ static int config_insert(server *srv) {
 	      #endif
 		cv[76].destination = &(s->stream_request_body);
 		cv[77].destination = &(s->stream_response_body);
+		cv[79].destination = &(s->ssl_read_ahead);
 
 		srv->config_storage[i] = s;
 
@@ -543,6 +546,7 @@ int config_setup_connection(server *srv, connection *con) {
 	PATCH(ssl_verifyclient_username);
 	PATCH(ssl_verifyclient_export_cert);
 	PATCH(ssl_disable_client_renegotiation);
+	PATCH(ssl_read_ahead);
 
 	return 0;
 }
@@ -671,6 +675,8 @@ int config_patch_connection(server *srv, connection *con) {
 				PATCH(ssl_verifyclient_export_cert);
 			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("ssl.disable-client-renegotiation"))) {
 				PATCH(ssl_disable_client_renegotiation);
+			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("ssl.read-ahead"))) {
+				PATCH(ssl_read_ahead);
 			}
 		}
 	}

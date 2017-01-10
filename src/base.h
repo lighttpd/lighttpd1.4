@@ -295,6 +295,7 @@ typedef struct {
 	buffer *ssl_verifyclient_username;
 	unsigned short ssl_verifyclient_export_cert;
 	unsigned short ssl_disable_client_renegotiation;
+	unsigned short ssl_read_ahead;
 
 	unsigned short use_ipv6, set_v6only; /* set_v6only is only a temporary option */
 	unsigned short defer_accept;
