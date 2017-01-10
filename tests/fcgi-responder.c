@@ -50,6 +50,8 @@ int main (void) {
 		} else {
 			printf("test123");
 		}
+
+		if (0 == num_requests) FCGI_Finish();
 	}
 
 	return 0;
