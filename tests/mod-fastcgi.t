@@ -409,6 +409,8 @@ EOF
 	$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200, 'HTTP-Content' => 'test123' } ];
 	ok($tf->handle_http($t) == 0, 'killing fastcgi and wait for restart');
 
+	# (might take lighttpd 1 sec to detect backend exit)
+	select(undef, undef, undef, .9);
 	select(undef, undef, undef, .1) while (!$tf->listening_on(10000));
 	$t->{REQUEST}  = ( <<EOF
 GET /index.fcgi?crlf HTTP/1.0
