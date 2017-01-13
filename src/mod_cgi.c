@@ -398,7 +398,7 @@ static int cgi_demux_response(server *srv, handler_ctx *hctx) {
 #if defined(__WIN32)
 		buffer_string_prepare_copy(hctx->response, 4 * 1024);
 #else
-		if (ioctl(con->fd, FIONREAD, &toread) || toread <= 4*1024) {
+		if (ioctl(hctx->fd, FIONREAD, &toread) || toread <= 4*1024) {
 			buffer_string_prepare_copy(hctx->response, 4 * 1024);
 		} else {
 			if (toread > MAX_READ_LIMIT) toread = MAX_READ_LIMIT;
