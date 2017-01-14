@@ -3,6 +3,7 @@ EXTRA_DIST=access_log.conf \
 	cgi.conf \
 	cml.conf \
 	compress.conf \
+	csrf.conf \
 	debug.conf \
 	dirlisting.conf \
 	evhost.conf \
