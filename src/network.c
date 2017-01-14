@@ -216,6 +216,24 @@ static int network_server_init(server *srv, buffer *host_token, size_t sidx) {
 		if (host == NULL) {
 			srv_socket->addr.ipv4.sin_addr.s_addr = htonl(INADDR_ANY);
 		} else {
+#ifdef HAVE_INET_PTON /*(reuse HAVE_INET_PTON for presence of getaddrinfo())*/
+			struct addrinfo hints, *res;
+			int r;
+			memset(&hints, 0, sizeof(hints));
+			hints.ai_family   = AF_INET;
+			hints.ai_socktype = SOCK_STREAM;
+			hints.ai_protocol = IPPROTO_TCP;
+
+			if (0 != (r = getaddrinfo(host, NULL, &hints, &res))) {
+				log_error_write(srv, __FILE__, __LINE__,
+						"sssss", "getaddrinfo failed: ",
+						gai_strerror(r), "'", host, "'");
+				goto error_free_socket;
+			}
+
+			memcpy(&(srv_socket->addr.ipv4), res->ai_addr, res->ai_addrlen);
+			freeaddrinfo(res);
+#else
 			struct hostent *he;
 			if (NULL == (he = gethostbyname(host))) {
 				log_error_write(srv, __FILE__, __LINE__,
@@ -235,6 +253,7 @@ static int network_server_init(server *srv, buffer *host_token, size_t sidx) {
 			}
 
 			memcpy(&(srv_socket->addr.ipv4.sin_addr.s_addr), he->h_addr_list[0], he->h_length);
+#endif
 		}
 		srv_socket->addr.ipv4.sin_port = htons(port);
 		addr_len = sizeof(struct sockaddr_in);

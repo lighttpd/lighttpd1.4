@@ -929,8 +929,15 @@ static int fcgi_spawn_connection(server *srv,
 				"ERROR: Unix Domain sockets are not supported.");
 		return -1;
 #endif
+	} else if (buffer_string_is_empty(host->host)) {
+		memset(&fcgi_addr_in, 0, sizeof(fcgi_addr_in));
+		fcgi_addr_in.sin_family = AF_INET;
+		fcgi_addr_in.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+		fcgi_addr_in.sin_port = htons(proc->port);
+		servlen = sizeof(fcgi_addr_in);
+		fcgi_addr = (struct sockaddr *) &fcgi_addr_in;
 #if defined(HAVE_IPV6) && defined(HAVE_INET_PTON)
-	} else if (host->family == AF_INET6 && !buffer_string_is_empty(host->host)) {
+	} else if (host->family == AF_INET6) {
 		memset(&fcgi_addr_in6, 0, sizeof(fcgi_addr_in6));
 		fcgi_addr_in6.sin6_family = AF_INET6;
 		inet_pton(AF_INET6, host->host->ptr, (char *) &fcgi_addr_in6.sin6_addr);
@@ -941,15 +948,14 @@ static int fcgi_spawn_connection(server *srv,
 	} else {
 		memset(&fcgi_addr_in, 0, sizeof(fcgi_addr_in));
 		fcgi_addr_in.sin_family = AF_INET;
-
-		if (buffer_string_is_empty(host->host)) {
-			fcgi_addr_in.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
-		} else {
+#if defined(HAVE_INET_PTON)
+		inet_pton(AF_INET, host->host->ptr, (char *) &fcgi_addr_in.sin_addr);
+#else
+		{
 			struct hostent *he;
 
 			/* set a useful default */
 			fcgi_addr_in.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
-
 
 			if (NULL == (he = gethostbyname(host->host->ptr))) {
 				log_error_write(srv, __FILE__, __LINE__,
@@ -971,6 +977,7 @@ static int fcgi_spawn_connection(server *srv,
 			memcpy(&(fcgi_addr_in.sin_addr.s_addr), he->h_addr_list[0], he->h_length);
 
 		}
+#endif
 		fcgi_addr_in.sin_port = htons(proc->port);
 		servlen = sizeof(fcgi_addr_in);
 
