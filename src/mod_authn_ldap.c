@@ -215,6 +215,137 @@ static void mod_authn_ldap_opt_err(server *srv, const char *file, unsigned long 
     mod_authn_ldap_err(srv, file, line, fn, err);
 }
 
+static void mod_authn_append_ldap_dn_escape(buffer * const filter, const buffer * const raw) {
+    /* [RFC4514] 2.4 Converting an AttributeValue from ASN.1 to a String
+     *
+     * https://www.ldap.com/ldap-dns-and-rdns
+     * http://social.technet.microsoft.com/wiki/contents/articles/5312.active-directory-characters-to-escape.aspx
+     */
+    const char * const b = raw->ptr;
+    const size_t rlen = buffer_string_length(raw);
+    if (0 == rlen) return;
+
+    if (b[0] == ' ') { /* || b[0] == '#' handled below for MS Active Directory*/
+        /* escape leading ' ' */
+        buffer_append_string_len(filter, CONST_STR_LEN("\\"));
+    }
+
+    for (size_t i = 0; i < rlen; ++i) {
+        size_t len = i;
+        int bs = 0;
+        do {
+            /* encode all UTF-8 chars with high bit set
+             * (instead of validating UTF-8 and escaping only invalid UTF-8) */
+            if (((unsigned char *)b)[len] > 0x7f)
+                break;
+            switch (b[len]) {
+              default:
+                continue;
+              case '"': case '+': case ',': case ';': case '\\':
+              case '<': case '>':
+              case '=': case '#': /* (for MS Active Directory) */
+                bs = 1;
+                break;
+              case '\0':
+                break;
+            }
+            break;
+        } while (++len < rlen);
+        len -= i;
+
+        if (len) {
+            buffer_append_string_len(filter, b+i, len);
+            if ((i += len) == rlen) break;
+        }
+
+        if (bs) {
+            buffer_append_string_len(filter, CONST_STR_LEN("\\"));
+            buffer_append_string_len(filter, b+i, 1);
+        }
+        else {
+            /* escape NUL ('\0') (and all UTF-8 chars with high bit set) */
+            char *f;
+            buffer_string_prepare_append(filter, 3);
+            f = filter->ptr + buffer_string_length(filter);
+            f[0] = '\\';
+            f[1] = "0123456789abcdef"[(((unsigned char *)b)[i] >> 4) & 0xf];
+            f[2] = "0123456789abcdef"[(((unsigned char *)b)[i]     ) & 0xf];
+            buffer_commit(filter, 3);
+        }
+    }
+
+    if (rlen > 1 && b[rlen-1] == ' ') {
+        /* escape trailing ' ' */
+        filter->ptr[buffer_string_length(filter)-1] = '\\';
+        buffer_append_string_len(filter, CONST_STR_LEN(" "));
+    }
+}
+
+static void mod_authn_append_ldap_filter_escape(buffer * const filter, const buffer * const raw) {
+    /* [RFC4515] 3. String Search Filter Definition
+     *
+     * [...]
+     *
+     * The <valueencoding> rule ensures that the entire filter string is a
+     * valid UTF-8 string and provides that the octets that represent the
+     * ASCII characters "*" (ASCII 0x2a), "(" (ASCII 0x28), ")" (ASCII
+     * 0x29), "\" (ASCII 0x5c), and NUL (ASCII 0x00) are represented as a
+     * backslash "\" (ASCII 0x5c) followed by the two hexadecimal digits
+     * representing the value of the encoded octet.
+     *
+     * [...]
+     *
+     * As indicated by the <valueencoding> rule, implementations MUST escape
+     * all octets greater than 0x7F that are not part of a valid UTF-8
+     * encoding sequence when they generate a string representation of a
+     * search filter.  Implementations SHOULD accept as input strings that
+     * are not valid UTF-8 strings.  This is necessary because RFC 2254 did
+     * not clearly define the term "string representation" (and in
+     * particular did not mention that the string representation of an LDAP
+     * search filter is a string of UTF-8-encoded Unicode characters).
+     *
+     *
+     * https://www.ldap.com/ldap-filters
+     * Although not required, you may escape any other characters that you want
+     * in the assertion value (or substring component) of a filter. This may be
+     * accomplished by prefixing the hexadecimal representation of each byte of
+     * the UTF-8 encoding of the character to escape with a backslash character.
+     */
+    const char * const b = raw->ptr;
+    const size_t rlen = buffer_string_length(raw);
+    for (size_t i = 0; i < rlen; ++i) {
+        size_t len = i;
+        char *f;
+        do {
+            /* encode all UTF-8 chars with high bit set
+             * (instead of validating UTF-8 and escaping only invalid UTF-8) */
+            if (((unsigned char *)b)[len] > 0x7f)
+                break;
+            switch (b[len]) {
+              default:
+                continue;
+              case '\0': case '(': case ')': case '*': case '\\':
+                break;
+            }
+            break;
+        } while (++len < rlen);
+        len -= i;
+
+        if (len) {
+            buffer_append_string_len(filter, b+i, len);
+            if ((i += len) == rlen) break;
+        }
+
+        /* escape * ( ) \ NUL ('\0') (and all UTF-8 chars with high bit set) */
+        buffer_string_prepare_append(filter, 3);
+        f = filter->ptr + buffer_string_length(filter);
+        f[0] = '\\';
+        f[1] = "0123456789abcdef"[(((unsigned char *)b)[i] >> 4) & 0xf];
+        f[2] = "0123456789abcdef"[(((unsigned char *)b)[i]     ) & 0xf];
+        buffer_commit(filter, 3);
+    }
+}
+
 static LDAP * mod_authn_ldap_host_init(server *srv, plugin_config *s) {
     LDAP *ld;
     int ret;
@@ -400,7 +531,7 @@ static handler_t mod_authn_ldap_memberOf(server *srv, plugin_config *s, const ht
                                CONST_STR_LEN("member"))) {
         buffer_append_string(filter, userdn);
     } else { /*(assume "memberUid"; consider validating in SETDEFAULTS_FUNC)*/
-        buffer_append_string_buffer(filter, username);
+        mod_authn_append_ldap_filter_escape(filter, username);
     }
     buffer_append_string_len(filter, CONST_STR_LEN(")"));
 
@@ -433,33 +564,6 @@ static handler_t mod_authn_ldap_basic(server *srv, connection *con, void *p_d, c
     if (pw[0] == '\0' && !p->conf.auth_ldap_allow_empty_pw)
         return HANDLER_ERROR;
 
-    /* check username
-     *
-     * we have to protect againt username which modifies our filter in
-     * an unpleasant way
-     */
-
-    for (size_t i = 0, len = buffer_string_length(username); i < len; i++) {
-        char c = username->ptr[i];
-
-        if (!isalpha(c) &&
-            !isdigit(c) &&
-            (c != ' ') &&
-            (c != '@') &&
-            (c != '-') &&
-            (c != '_') &&
-            (c != '.') ) {
-
-            log_error_write(srv, __FILE__, __LINE__, "sbd",
-                            "ldap: invalid character (- _.@a-zA-Z0-9 allowed) "
-                            "in username:", username, i);
-
-            con->http_status = 400; /* Bad Request */
-            con->mode = DIRECT;
-            return HANDLER_FINISHED;
-        }
-    }
-
     template = p->conf.auth_ldap_filter;
     if (buffer_string_is_empty(template)) {
         return HANDLER_ERROR;
@@ -470,14 +574,14 @@ static handler_t mod_authn_ldap_basic(server *srv, connection *con, void *p_d, c
     if (*template->ptr == ',') {
         /* special-case filter template beginning with ',' to be explicit DN */
         buffer_append_string_len(p->ldap_filter, CONST_STR_LEN("uid="));
-        buffer_append_string_buffer(p->ldap_filter, username);
+        mod_authn_append_ldap_dn_escape(p->ldap_filter, username);
         buffer_append_string_buffer(p->ldap_filter, template);
         dn = p->ldap_filter->ptr;
     } else {
         for (char *b = template->ptr, *d; *b; b = d+1) {
             if (NULL != (d = strchr(b, '$'))) {
                 buffer_append_string_len(p->ldap_filter, b, (size_t)(d - b));
-                buffer_append_string_buffer(p->ldap_filter, username);
+                mod_authn_append_ldap_filter_escape(p->ldap_filter, username);
             } else {
                 d = template->ptr + buffer_string_length(template);
                 buffer_append_string_len(p->ldap_filter, b, (size_t)(d - b));
