@@ -135,11 +135,14 @@ config_values_t cv[] = {
         }
 
         if (!buffer_string_is_empty(s->auth_ldap_filter)) {
-            if (*s->auth_ldap_filter->ptr != ','
-                && NULL == strchr(s->auth_ldap_filter->ptr, '$')) {
-                log_error_write(srv, __FILE__, __LINE__, "s", "ldap: auth.backend.ldap.filter is missing a replace-operator '$'");
-
-                return HANDLER_ERROR;
+            if (*s->auth_ldap_filter->ptr != ',') {
+                /*(translate '$' to '?' for consistency with other modules)*/
+                char *d = s->auth_ldap_filter->ptr;
+                for (; NULL != (d = strchr(d, '$')); ++d) *d = '?';
+                if (NULL == strchr(s->auth_ldap_filter->ptr, '?')) {
+                    log_error_write(srv, __FILE__, __LINE__, "s", "ldap: auth.backend.ldap.filter is missing a replace-operator '?'");
+                    return HANDLER_ERROR;
+                }
             }
         }
     }
@@ -579,7 +582,7 @@ static handler_t mod_authn_ldap_basic(server *srv, connection *con, void *p_d, c
         dn = p->ldap_filter->ptr;
     } else {
         for (char *b = template->ptr, *d; *b; b = d+1) {
-            if (NULL != (d = strchr(b, '$'))) {
+            if (NULL != (d = strchr(b, '?'))) {
                 buffer_append_string_len(p->ldap_filter, b, (size_t)(d - b));
                 mod_authn_append_ldap_filter_escape(p->ldap_filter, username);
             } else {
