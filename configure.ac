@@ -231,6 +231,88 @@ AM_CONDITIONAL(BUILD_WITH_MYSQL, test ! $WITH_MYSQL = no)
 AC_SUBST(MYSQL_LIBS)
 AC_SUBST(MYSQL_INCLUDE)
 
+
+dnl Checks for database.
+PGSQL_INCLUDE=""
+PGSQL_LIBS=""
+
+AC_MSG_CHECKING(for PgSQL support)
+AC_ARG_WITH(pgsql,
+    AC_HELP_STRING([--with-pgsql@<:@=PATH@:>@],[Include PgSQL support. PATH is the path to 'pg_config']),
+    [WITH_PGSQL=$withval],[WITH_PGSQL=no])
+
+if test "$WITH_PGSQL" != "no"; then
+  AC_MSG_RESULT(yes)
+  if test "$WITH_PGSQL" = "yes"; then
+    AC_PATH_PROG(PGSQL_CONFIG, pg_config)
+  else
+    PGSQL_CONFIG=$WITH_PGSQL
+  fi
+
+  if test "$PGSQL_CONFIG" = ""; then
+    AC_MSG_ERROR(pg_config is not found)
+  fi
+  if test \! -x $PGSQL_CONFIG; then
+    AC_MSG_ERROR(pg_config not exists or not executable, use --with-pgsql=path-to-pg_config)
+  fi
+
+  PGSQL_INCLUDE="-I`$PGSQL_CONFIG --includedir`"
+  PGSQL_LIBS="-L`$PGSQL_CONFIG --libdir` -lpq"
+
+  AC_MSG_CHECKING(for PgSQL includes at)
+  AC_MSG_RESULT($PGSQL_INCLUDE)
+
+  AC_MSG_CHECKING(for PgSQL libraries at)
+  AC_MSG_RESULT($PGSQL_LIBS)
+
+  AC_DEFINE([HAVE_PGSQL], [1], [pgsql support])
+else
+  AC_MSG_RESULT(no)
+fi
+AM_CONDITIONAL(BUILD_WITH_PGSQL, test ! $WITH_PGSQL = no)
+
+AC_SUBST(PGSQL_LIBS)
+AC_SUBST(PGSQL_INCLUDE)
+
+
+dnl Checks for libdbi library
+DBI_INCLUDE=""
+DBI_LIBS=""
+
+AC_MSG_CHECKING(for LibDBI support)
+AC_ARG_WITH(dbi,
+    AC_HELP_STRING([--with-dbi@<:@=PATH@:>@],[Include DBI support in PATH/include/dbi.h and PATH/lib]),
+    [WITH_DBI=$withval],[WITH_DBI=no])
+
+if test "$WITH_DBI" != "no"; then
+       AC_MSG_RESULT(yes)
+       if test "$WITH_DBI" != "yes"; then
+               DBI_CFLAGS="-I$WITH_LIBDBI/include"
+               DBI_LIBS="-L$WITH_LIBDBI/lib -ldbi"
+       else
+               AC_CHECK_HEADERS([dbi/dbi.h],[
+                       AC_CHECK_LIB([dbi], [dbi_version], [
+                                       DBI_CFLAGS=""
+                                       DBI_LIBS="-ldbi"
+                               ],[
+                               AC_MSG_ERROR([LibDBI not found])
+                               ]
+                       )],[
+                               AC_MSG_ERROR([LibDBI not found])
+                       ]
+               )
+       fi
+
+       AC_DEFINE([HAVE_DBI], [1], [LibDBI support])
+else
+       AC_MSG_RESULT(no)
+fi
+AM_CONDITIONAL(BUILD_WITH_DBI, test ! $WITH_DBI = no)
+
+AC_SUBST(DBI_LIBS)
+AC_SUBST(DBI_CFLAGS)
+
+
 dnl Check for LDAP
 AC_MSG_CHECKING(for LDAP support)
 AC_ARG_WITH(ldap, AC_HELP_STRING([--with-ldap],[enable LDAP support]),
@@ -921,6 +1003,7 @@ AC_OUTPUT
 
 do_build="mod_cgi mod_fastcgi mod_extforward mod_proxy mod_evhost mod_simple_vhost mod_access mod_alias mod_setenv mod_usertrack mod_auth mod_authn_file mod_status mod_accesslog"
 do_build="$do_build mod_rrdtool mod_secdownload mod_expire mod_compress mod_dirlisting mod_indexfile mod_userdir mod_webdav mod_staticfile mod_scgi mod_flv_streaming mod_ssi mod_deflate"
+do_build="$do_build mod_vhostdb"
 
 plugins="mod_rewrite mod_redirect"
 features="regex-conditionals"
@@ -941,8 +1024,22 @@ else
 fi
 fi
 
-plugins="mod_authn_mysql mod_mysql_vhost"
+plugins="mod_authn_mysql mod_mysql_vhost mod_vhostdb_mysql"
 if test ! "x$MYSQL_LIBS" = x; then
+	do_build="$do_build $plugins"
+else
+	no_build="$no_build $plugins"
+fi
+
+plugins="mod_vhostdb_pgsql"
+if test ! "x$PGSQL_LIBS" = x; then
+	do_build="$do_build $plugins"
+else
+	no_build="$no_build $plugins"
+fi
+
+plugins="mod_vhostdb_dbi"
+if test ! "x$DBI_LIBS" = x; then
 	do_build="$do_build $plugins"
 else
 	no_build="$no_build $plugins"
@@ -997,7 +1094,7 @@ else
 	no_build="$no_build $plugins"
 fi
 
-plugins="mod_authn_ldap"
+plugins="mod_authn_ldap mod_vhostdb_ldap"
 if test ! "x$LDAP_LIB" = x; then
 	do_build="$do_build $plugins"
 else

@@ -14,19 +14,19 @@ include(LighttpdMacros)
 add_definitions(-D_FILE_OFFSET_BITS=64 -D_LARGEFILE_SOURCE -D_LARGE_FILES)
 
 option(WITH_XATTR "with xattr-support for the stat-cache [default: off]")
-option(WITH_MYSQL "with mysql-support for the mod_sql_vhost [default: off]")
-# option(WITH_POSTGRESQL "with postgress-support for the mod_sql_vhost [default: off]")
+option(WITH_MYSQL "with mysql-support for mod_vhostdb_mysql [default: off]")
+option(WITH_PGSQL "with postgres-support for mod_vhostdb_pgsql [default: off]")
+option(WITH_DBI "with dbi-support for mod_vhostdb_dbi [default: off]")
 option(WITH_OPENSSL "with openssl-support [default: off]")
 option(WITH_PCRE "with regex support [default: on]" ON)
 option(WITH_WEBDAV_PROPS "with property-support for mod_webdav [default: off]")
 option(WITH_WEBDAV_LOCKS "locks in webdav [default: off]")
 option(WITH_BZIP "with bzip2-support for mod_compress [default: off]")
 option(WITH_ZLIB "with deflate-support for mod_compress [default: on]" ON)
-option(WITH_KRB5 "with Kerberos5-support for the mod_auth [default: off]")
-option(WITH_LDAP "with LDAP-support for the mod_auth [default: off]")
+option(WITH_KRB5 "with Kerberos5-support for mod_auth [default: off]")
+option(WITH_LDAP "with LDAP-support for mod_auth mod_vhostdb_ldap [default: off]")
 option(WITH_LUA "with lua 5.1 for mod_magnet [default: off]")
 # option(WITH_VALGRIND "with internal support for valgrind [default: off]")
-# option(WITH_KERBEROS5 "use Kerberos5 support with OpenSSL [default: off]")
 option(WITH_FAM "fam/gamin for reducing number of stat() calls [default: off]")
 option(WITH_GDBM "gdbm storage for mod_trigger_b4_dl [default: off]")
 option(WITH_MEMCACHED "memcached storage for mod_trigger_b4_dl [default: off]")
@@ -246,6 +246,28 @@ if(WITH_MYSQL)
 else()
 	unset(HAVE_MYSQL_H)
 	unset(HAVE_MYSQL)
+endif()
+
+if(WITH_PGSQL)
+	xconfig(pg_config PGSQL_INCDIR PGSQL_LIBDIR PGSQL_LDFLAGS PGSQL_CFLAGS)
+
+	check_include_files(libpq-fe.h HAVE_PGSQL_H)
+	if(HAVE_PGSQL_H)
+		check_library_exists(pq PQsetdbLogin "" HAVE_PGSQL)
+	endif()
+else()
+	unset(HAVE_PGSQL_H)
+	unset(HAVE_PGSQL)
+endif()
+
+if(WITH_DBI)
+	check_include_files(dbi/dbi.h HAVE_DBI_H)
+	if(HAVE_DBI_H)
+		check_library_exists(dbi dbi_conn_connect "" HAVE_DBI)
+	endif()
+else()
+	unset(HAVE_DBI_H)
+	unset(HAVE_DBI)
 endif()
 
 if(WITH_OPENSSL)
@@ -530,6 +552,7 @@ set(COMMON_SRC
 	configfile-glue.c
 	http-header-glue.c
 	http_auth.c
+	http_vhostdb.c
 	splaytree.c
 	rand.c
 	status_counter.c safe_memclear.c
@@ -605,6 +628,7 @@ add_and_install_library(mod_status mod_status.c)
 add_and_install_library(mod_uploadprogress mod_uploadprogress.c)
 add_and_install_library(mod_userdir mod_userdir.c)
 add_and_install_library(mod_usertrack mod_usertrack.c)
+add_and_install_library(mod_vhostdb mod_vhostdb.c)
 add_and_install_library(mod_webdav mod_webdav.c)
 
 add_executable(test_buffer
@@ -668,6 +692,8 @@ endif()
 if(HAVE_MYSQL_H AND HAVE_MYSQL)
 	add_and_install_library(mod_mysql_vhost "mod_mysql_vhost.c")
 	target_link_libraries(mod_mysql_vhost mysqlclient)
+	add_and_install_library(mod_vhostdb_mysql "mod_vhostdb_mysql.c")
+	target_link_libraries(mod_vhostdb_mysql mysqlclient)
 	include_directories(/usr/include/mysql)
 
 	add_and_install_library(mod_authn_mysql "mod_authn_mysql.c")
@@ -676,6 +702,16 @@ if(HAVE_MYSQL_H AND HAVE_MYSQL)
 		set(L_MOD_AUTHN_MYSQL ${L_MOD_AUTHN_MYSQL} crypt)
 	endif()
 	target_link_libraries(mod_authn_mysql ${L_MOD_AUTHN_MYSQL} mysqlclient)
+endif()
+
+if(HAVE_PGSQL_H AND HAVE_PGSQL)
+	add_and_install_library(mod_vhostdb_pgsql "mod_vhostdb_pgsql.c")
+	target_link_libraries(mod_vhostdb_pgsql pq)
+endif()
+
+if(HAVE_DBI_H AND HAVE_DBI)
+	add_and_install_library(mod_vhostdb_dbi "mod_vhostdb_dbi.c")
+	target_link_libraries(mod_vhostdb_dbi dbi)
 endif()
 
 set(L_MOD_WEBDAV)
@@ -707,9 +743,11 @@ if(WITH_KRB5)
 endif()
 
 if(WITH_LDAP)
-	add_and_install_library(mod_authn_ldap "mod_authn_ldap.c")
 	set(L_MOD_AUTHN_LDAP ${L_MOD_AUTHN_LDAP} ldap lber)
+	add_and_install_library(mod_authn_ldap "mod_authn_ldap.c")
 	target_link_libraries(mod_authn_ldap ${L_MOD_AUTHN_LDAP})
+	add_and_install_library(mod_vhostdb_ldap "mod_vhostdb_ldap.c")
+	target_link_libraries(mod_vhostdb_ldap ${L_MOD_AUTHN_LDAP})
 endif()
 
 if(HAVE_ZLIB_H)

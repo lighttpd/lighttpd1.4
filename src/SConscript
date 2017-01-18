@@ -66,6 +66,7 @@ common_src = Split("base64.c buffer.c log.c \
 	configfile-glue.c \
 	http-header-glue.c \
 	http_auth.c \
+	http_vhostdb.c \
 	splaytree.c \
 	rand.c \
 	status_counter.c safe_memclear.c \
@@ -122,6 +123,7 @@ modules = {
 	'mod_evasive' : { 'src' : [ 'mod_evasive.c' ] },
 	'mod_ssi' : { 'src' : [ 'mod_ssi_exprparser.c', 'mod_ssi_expr.c', 'mod_ssi.c' ] },
 	'mod_flv_streaming' : { 'src' : [ 'mod_flv_streaming.c' ] },
+	'mod_vhostdb' : { 'src' : [ 'mod_vhostdb.c' ] },
 }
 
 if env['with_geoip']:
@@ -132,6 +134,7 @@ if env['with_krb5']:
 
 if env['with_ldap']:
 	modules['mod_authn_ldap'] = { 'src' : [ 'mod_authn_ldap.c' ], 'lib' : [ env['LIBLDAP'], env['LIBLBER'] ] }
+	modules['mod_vhostdb_ldap'] = { 'src' : [ 'mod_vhostdb_ldap.c' ], 'lib' : [ env['LIBLDAP'], env['LIBLBER'] ] }
 
 if env['with_lua']:
 	modules['mod_magnet'] = { 'src' : [ 'mod_magnet.c', 'mod_magnet_cache.c' ], 'lib' : [ env['LIBLUA'] ] }
@@ -146,6 +149,13 @@ if env['with_pcre'] and (env['with_memcached'] or env['with_gdbm']):
 if env['with_mysql']:
 	modules['mod_authn_mysql'] = { 'src' : [ 'mod_authn_mysql.c' ], 'lib' : [ env['LIBCRYPT'], env['LIBMYSQL'] ] }
 	modules['mod_mysql_vhost'] = { 'src' : [ 'mod_mysql_vhost.c' ], 'lib' : [ env['LIBMYSQL'] ] }
+	modules['mod_vhostdb_mysql'] = { 'src' : [ 'mod_vhostdb_mysql.c' ], 'lib' : [ env['LIBMYSQL'] ] }
+
+if env['with_pgsql']:
+	modules['mod_vhostdb_pgsql'] = { 'src' : [ 'mod_vhostdb_pgsql.c' ], 'lib' : [ env['LIBPGSQL'] ] }
+
+if env['with_dbi']:
+	modules['mod_vhostdb_dbi'] = { 'src' : [ 'mod_vhostdb_dbi.c' ], 'lib' : [ env['LIBDBI'] ] }
 
 if env['with_openssl']:
 	modules['mod_openssl'] = { 'src' : [ 'mod_openssl.c' ], 'lib' : [ env['LIBSSL'], env['LIBCRYPTO'] ] }

@@ -72,6 +72,7 @@ common_src=base64.c buffer.c log.c \
 	configfile-glue.c \
 	http-header-glue.c \
 	http_auth.c \
+	http_vhostdb.c \
 	rand.c \
 	splaytree.c status_counter.c \
 	safe_memclear.c
@@ -150,12 +151,48 @@ mod_trigger_b4_dl_la_LDFLAGS = $(common_module_ldflags)
 mod_trigger_b4_dl_la_LIBADD = $(GDBM_LIB) $(MEMCACHED_LIB) $(PCRE_LIB) $(common_libadd)
 endif
 
+lib_LTLIBRARIES += mod_vhostdb.la
+mod_vhostdb_la_SOURCES = mod_vhostdb.c
+mod_vhostdb_la_LDFLAGS = $(common_module_ldflags)
+mod_vhostdb_la_LIBADD = $(common_libadd)
+
+if BUILD_WITH_LDAP
+lib_LTLIBRARIES += mod_vhostdb_ldap.la
+mod_vhostdb_ldap_la_SOURCES = mod_vhostdb_ldap.c
+mod_vhostdb_ldap_la_LDFLAGS = $(common_module_ldflags)
+mod_vhostdb_ldap_la_LIBADD = $(LDAP_LIB) $(LBER_LIB) $(common_libadd)
+endif
+
 if BUILD_WITH_MYSQL
 lib_LTLIBRARIES += mod_mysql_vhost.la
 mod_mysql_vhost_la_SOURCES = mod_mysql_vhost.c
 mod_mysql_vhost_la_LDFLAGS = $(common_module_ldflags)
 mod_mysql_vhost_la_LIBADD = $(MYSQL_LIBS) $(common_libadd)
 mod_mysql_vhost_la_CPPFLAGS = $(MYSQL_INCLUDE)
+endif
+
+if BUILD_WITH_MYSQL
+lib_LTLIBRARIES += mod_vhostdb_mysql.la
+mod_vhostdb_mysql_la_SOURCES = mod_vhostdb_mysql.c
+mod_vhostdb_mysql_la_LDFLAGS = $(common_module_ldflags)
+mod_vhostdb_mysql_la_LIBADD = $(MYSQL_LIBS) $(common_libadd)
+mod_vhostdb_mysql_la_CPPFLAGS = $(MYSQL_INCLUDE)
+endif
+
+if BUILD_WITH_PGSQL
+lib_LTLIBRARIES += mod_vhostdb_pgsql.la
+mod_vhostdb_pgsql_la_SOURCES = mod_vhostdb_pgsql.c
+mod_vhostdb_pgsql_la_LDFLAGS = $(common_module_ldflags)
+mod_vhostdb_pgsql_la_LIBADD = $(PGSQL_LIBS) $(common_libadd)
+mod_vhostdb_pgsql_la_CPPFLAGS = $(PGSQL_INCLUDE)
+endif
+
+if BUILD_WITH_DBI
+lib_LTLIBRARIES += mod_vhostdb_dbi.la
+mod_vhostdb_dbi_la_SOURCES = mod_vhostdb_dbi.c
+mod_vhostdb_dbi_la_LDFLAGS = $(common_module_ldflags)
+mod_vhostdb_dbi_la_LIBADD = $(DBI_LIBS) $(common_libadd)
+mod_vhostdb_dbi_la_CPPFLAGS = $(DBI_CFLAGS)
 endif
 
 lib_LTLIBRARIES += mod_cgi.la
@@ -336,7 +373,7 @@ mod_uploadprogress_la_LIBADD = $(common_libadd)
 hdr = server.h base64.h buffer.h network.h log.h keyvalue.h \
 	response.h request.h fastcgi.h chunk.h \
 	first.h settings.h http_chunk.h \
-	md5.h http_auth.h stream.h \
+	md5.h http_auth.h http_vhostdb.h stream.h \
 	fdevent.h connections.h base.h stat_cache.h \
 	plugin.h \
 	etag.h joblist.h array.h vector.h crc32.h \
@@ -387,6 +424,7 @@ lighttpd_SOURCES = \
   mod_uploadprogress.c \
   mod_userdir.c \
   mod_usertrack.c \
+  mod_vhostdb.c \
   mod_webdav.c
 lighttpd_CPPFLAGS = \
   -DLIGHTTPD_STATIC \
@@ -415,13 +453,23 @@ lighttpd_SOURCES += mod_authn_gssapi.c
 lighttpd_LDADD += $(KRB5_LIB)
 endif
 if BUILD_WITH_LDAP
-lighttpd_SOURCES += mod_authn_ldap.c
+lighttpd_SOURCES += mod_authn_ldap.c mod_vhostdb_ldap.c
 lighttpd_LDADD += $(LDAP_LIB) $(LBER_LIB)
 endif
 if BUILD_WITH_MYSQL
-lighttpd_SOURCES += mod_authn_mysql.c mod_mysql_vhost.c
+lighttpd_SOURCES += mod_authn_mysql.c mod_mysql_vhost.c mod_vhostdb_mysql.c
 lighttpd_CPPFLAGS += $(MYSQL_INCLUDE)
 lighttpd_LDADD += $(MYSQL_LIBS)
+endif
+if BUILD_WITH_PGSQL
+lighttpd_SOURCES += mod_vhostdb_pgsql.c
+lighttpd_CPPFLAGS += $(PGSQL_INCLUDE)
+lighttpd_LDADD += $(PGSQL_LIBS)
+endif
+if BUILD_WITH_DBI
+lighttpd_SOURCES += mod_vhostdb_dbi.c
+lighttpd_CPPFLAGS += $(DBI_CFLAGS)
+lighttpd_LDADD += $(DBI_LIBS)
 endif
 if BUILD_WITH_OPENSSL
 lighttpd_SOURCES += mod_openssl.c

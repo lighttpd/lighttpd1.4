@@ -623,6 +623,16 @@ static void show_features (void) {
 #else
       "\t- MySQL support\n"
 #endif
+#ifdef HAVE_PGSQL
+      "\t+ PgSQL support\n"
+#else
+      "\t- PgSQL support\n"
+#endif
+#ifdef HAVE_DBI
+      "\t+ DBI support\n"
+#else
+      "\t- DBI support\n"
+#endif
 #ifdef HAVE_KRB5
       "\t+ Kerberos support\n"
 #else
