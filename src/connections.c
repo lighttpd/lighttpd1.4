@@ -138,6 +138,17 @@ static int connection_close(server *srv, connection *con) {
 				"connection closed for fd", con->fd);
 	}
 	con->fd = -1;
+
+	/* plugins should have cleaned themselves up */
+	for (size_t i = 0; i < srv->plugins.used; ++i) {
+		plugin *p = ((plugin **)(srv->plugins.ptr))[i];
+		plugin_data *pd = p->data;
+		if (!pd || NULL == con->plugin_ctx[pd->id]) continue;
+		log_error_write(srv, __FILE__, __LINE__, "sb",
+				"missing cleanup in", p->name);
+		con->plugin_ctx[pd->id] = NULL;
+	}
+
 	connection_del(srv, con);
 	connection_set_state(srv, con, CON_STATE_CONNECT);
 
@@ -179,16 +190,6 @@ static void connection_handle_shutdown(server *srv, connection *con) {
 
 	srv->con_closed++;
 	connection_reset(srv, con);
-
-	/* plugins should have cleaned themselves up */
-	for (size_t i = 0; i < srv->plugins.used; ++i) {
-		plugin *p = ((plugin **)(srv->plugins.ptr))[i];
-		plugin_data *pd = p->data;
-		if (!pd || NULL == con->plugin_ctx[pd->id]) continue;
-		log_error_write(srv, __FILE__, __LINE__, "sb",
-				"missing cleanup in", p->name);
-		con->plugin_ctx[pd->id] = NULL;
-	}
 
 	/* close the connection */
 	if ((0 == shutdown(con->fd, SHUT_WR))) {
