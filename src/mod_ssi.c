@@ -799,7 +799,7 @@ static int process_ssi_stmt(server *srv, connection *con, handler_ctx *p, const 
 
 			execl("/bin/sh", "sh", "-c", cmd, (char *)NULL);
 
-			log_error_write(srv, __FILE__, __LINE__, "sss", "spawing exec failed:", strerror(errno), cmd);
+			log_error_write(srv, __FILE__, __LINE__, "sss", "spawning exec failed:", strerror(errno), cmd);
 			_exit(errno);
 		}
 		case -1:

@@ -1594,7 +1594,7 @@ static int scgi_establish_connection(server *srv, handler_ctx *hctx) {
 				/* this is Linux only */
 
 				log_error_write(srv, __FILE__, __LINE__, "s",
-						"If this happend on Linux: You have been run out of local ports. "
+						"If this happened on Linux: You have been run out of local ports. "
 						"Check the manual, section Performance how to handle this.");
 			}
 
