@@ -19,6 +19,7 @@
 #define USE_OPENSSL_CRYPTO
 #endif
 #ifdef USE_OPENSSL_CRYPTO
+#include <openssl/opensslv.h> /* OPENSSL_VERSION_NUMBER */
 #include <openssl/rand.h>
 #endif
 #ifdef HAVE_LINUX_RANDOM_H
