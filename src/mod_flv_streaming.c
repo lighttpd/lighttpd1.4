@@ -210,33 +210,39 @@ URIHANDLER_FUNC(mod_flv_streaming_path_handler) {
 
 		if (0 == strncmp(con->physical.path->ptr + s_len - ct_len, ds->value->ptr, ct_len)) {
 			data_string *get_param;
-			int start;
+			off_t start = 0, len = -1;
 			char *err = NULL;
 			/* if there is a start=[0-9]+ in the header use it as start,
-			 * otherwise send the full file */
+			 * otherwise set start to beginning of file */
+			/* if there is a end=[0-9]+ in the header use it as end pos,
+			 * otherwise send rest of file, starting from start */
 
 			array_reset(p->get_params);
 			buffer_copy_buffer(p->query_str, con->uri.query);
 			split_get_params(p->get_params, p->query_str);
 
-			if (NULL == (get_param = (data_string *)array_get_element(p->get_params, "start"))) {
-				return HANDLER_GO_ON;
+			if (NULL != (get_param = (data_string *)array_get_element(p->get_params, "start"))) {
+				if (buffer_string_is_empty(get_param->value)) return HANDLER_GO_ON;
+				start = strtoll(get_param->value->ptr, &err, 10);
+				if (*err != '\0') return HANDLER_GO_ON;
+				if (start < 0) return HANDLER_GO_ON;
 			}
 
-			/* too short */
-			if (buffer_string_is_empty(get_param->value)) return HANDLER_GO_ON;
-
-			/* check if it is a number */
-			start = strtol(get_param->value->ptr, &err, 10);
-			if (*err != '\0') {
+			if (NULL != (get_param = (data_string *)array_get_element(p->get_params, "end"))) {
+				off_t end;
+				if (buffer_string_is_empty(get_param->value)) return HANDLER_GO_ON;
+				end = strtoll(get_param->value->ptr, &err, 10);
+				if (*err != '\0') return HANDLER_GO_ON;
+				if (end < 0) return HANDLER_GO_ON;
+				len = (start < end ? end - start : start - end) + 1;
+			}
+			else if (0 == start) {
 				return HANDLER_GO_ON;
 			}
-
-			if (start <= 0) return HANDLER_GO_ON;
 
 			/* let's build a flv header */
 			http_chunk_append_mem(srv, con, CONST_STR_LEN("FLV\x1\x1\0\0\0\x9\0\0\0\x9"));
-			if (0 != http_chunk_append_file_range(srv, con, con->physical.path, start, -1)) {
+			if (0 != http_chunk_append_file_range(srv, con, con->physical.path, start, len)) {
 				chunkqueue_reset(con->write_queue);
 				return HANDLER_GO_ON;
 			}
