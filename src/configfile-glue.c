@@ -489,28 +489,9 @@ static cond_result_t config_check_cond_nocache(server *srv, connection *con, dat
 		l = srv_sock->srv_token;
 		break;
 
-	case COMP_HTTP_REFERER: {
+	case COMP_HTTP_REQUEST_HEADER: {
 		data_string *ds;
-
-		if (NULL != (ds = (data_string *)array_get_element(con->request.headers, "Referer"))) {
-			l = ds->value;
-		} else {
-			l = srv->empty_string;
-		}
-		break;
-	}
-	case COMP_HTTP_COOKIE: {
-		data_string *ds;
-		if (NULL != (ds = (data_string *)array_get_element(con->request.headers, "Cookie"))) {
-			l = ds->value;
-		} else {
-			l = srv->empty_string;
-		}
-		break;
-	}
-	case COMP_HTTP_USER_AGENT: {
-		data_string *ds;
-		if (NULL != (ds = (data_string *)array_get_element(con->request.headers, "User-Agent"))) {
+		if (NULL != (ds = (data_string *)array_get_element(con->request.headers, dc->comp_tag->ptr))) {
 			l = ds->value;
 		} else {
 			l = srv->empty_string;
@@ -526,15 +507,6 @@ static cond_result_t config_check_cond_nocache(server *srv, connection *con, dat
 
 		l = srv->tmp_buf;
 
-		break;
-	}
-	case COMP_HTTP_LANGUAGE: {
-		data_string *ds;
-		if (NULL != (ds = (data_string *)array_get_element(con->request.headers, "Accept-Language"))) {
-			l = ds->value;
-		} else {
-			l = srv->empty_string;
-		}
 		break;
 	}
 	default:

@@ -552,11 +552,11 @@ context ::= DOLLAR SRVVARNAME(B) LBRACKET stringop(C) RBRACKET cond(E) expressio
         { COMP_SERVER_SOCKET,      CONST_STR_LEN("SERVER[\"socket\"]"   ) },
         { COMP_HTTP_URL,           CONST_STR_LEN("HTTP[\"url\"]"        ) },
         { COMP_HTTP_HOST,          CONST_STR_LEN("HTTP[\"host\"]"       ) },
-        { COMP_HTTP_REFERER,       CONST_STR_LEN("HTTP[\"referer\"]"    ) },
+        { COMP_HTTP_REQUEST_HEADER,CONST_STR_LEN("HTTP[\"referer\"]"    ) },
         { COMP_HTTP_USER_AGENT,    CONST_STR_LEN("HTTP[\"useragent\"]"  ) },
-        { COMP_HTTP_USER_AGENT,    CONST_STR_LEN("HTTP[\"user-agent\"]"  ) },
+        { COMP_HTTP_REQUEST_HEADER,CONST_STR_LEN("HTTP[\"user-agent\"]" ) },
         { COMP_HTTP_LANGUAGE,      CONST_STR_LEN("HTTP[\"language\"]"   ) },
-        { COMP_HTTP_COOKIE,        CONST_STR_LEN("HTTP[\"cookie\"]"     ) },
+        { COMP_HTTP_REQUEST_HEADER,CONST_STR_LEN("HTTP[\"cookie\"]"     ) },
         { COMP_HTTP_REMOTE_IP,     CONST_STR_LEN("HTTP[\"remoteip\"]"   ) },
         { COMP_HTTP_REMOTE_IP,     CONST_STR_LEN("HTTP[\"remote-ip\"]"   ) },
         { COMP_HTTP_QUERY_STRING,  CONST_STR_LEN("HTTP[\"querystring\"]") },
@@ -571,6 +571,7 @@ context ::= DOLLAR SRVVARNAME(B) LBRACKET stringop(C) RBRACKET cond(E) expressio
 
       buffer_copy_buffer(dc->key, b);
       buffer_copy_buffer(dc->op, op);
+      buffer_copy_buffer(dc->comp_tag, C);
       buffer_copy_buffer(dc->comp_key, B);
       buffer_append_string_len(dc->comp_key, CONST_STR_LEN("[\""));
       buffer_append_string_buffer(dc->comp_key, C);
@@ -585,8 +586,21 @@ context ::= DOLLAR SRVVARNAME(B) LBRACKET stringop(C) RBRACKET cond(E) expressio
         }
       }
       if (COMP_UNSET == dc->comp) {
-        fprintf(stderr, "error comp_key %s", dc->comp_key->ptr);
-        ctx->ok = 0;
+        if (buffer_is_equal_string(B, CONST_STR_LEN("REQUEST_HEADER"))) {
+          dc->comp = COMP_HTTP_REQUEST_HEADER;
+        }
+        else {
+          fprintf(stderr, "error comp_key %s", dc->comp_key->ptr);
+          ctx->ok = 0;
+        }
+      }
+      else if (COMP_HTTP_LANGUAGE == dc->comp) {
+        dc->comp = COMP_HTTP_REQUEST_HEADER;
+        buffer_copy_string_len(dc->comp_tag, CONST_STR_LEN("Accept-Language"));
+      }
+      else if (COMP_HTTP_USER_AGENT == dc->comp) {
+        dc->comp = COMP_HTTP_REQUEST_HEADER;
+        buffer_copy_string_len(dc->comp_tag, CONST_STR_LEN("User-Agent"));
       }
       else if (COMP_HTTP_REMOTE_IP == dc->comp
                && (dc->cond == CONFIG_COND_EQ || dc->cond == CONFIG_COND_NE)) {

@@ -76,14 +76,15 @@ typedef enum {
 	COMP_SERVER_SOCKET,
 	COMP_HTTP_URL,
 	COMP_HTTP_HOST,
-	COMP_HTTP_REFERER,
+	COMP_HTTP_REFERER,        /*(subsumed by COMP_HTTP_REQUEST_HEADER)*/
 	COMP_HTTP_USER_AGENT,
 	COMP_HTTP_LANGUAGE,
-	COMP_HTTP_COOKIE,
+	COMP_HTTP_COOKIE,         /*(subsumed by COMP_HTTP_REQUEST_HEADER)*/
 	COMP_HTTP_REMOTE_IP,
 	COMP_HTTP_QUERY_STRING,
 	COMP_HTTP_SCHEME,
 	COMP_HTTP_REQUEST_METHOD,
+	COMP_HTTP_REQUEST_HEADER,
 
 	COMP_LAST_ELEMENT
 } comp_key_t;
@@ -101,6 +102,7 @@ struct data_config {
 
 	array *value;
 
+	buffer *comp_tag;
 	buffer *comp_key;
 	comp_key_t comp;
 

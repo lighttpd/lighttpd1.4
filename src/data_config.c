@@ -10,7 +10,9 @@ static data_unset *data_config_copy(const data_unset *s) {
 	data_config *src = (data_config *)s;
 	data_config *ds = data_config_init();
 
+	ds->comp = src->comp;
 	buffer_copy_buffer(ds->key, src->key);
+	buffer_copy_buffer(ds->comp_tag, src->comp_tag);
 	buffer_copy_buffer(ds->comp_key, src->comp_key);
 	array_free(ds->value);
 	ds->value = array_init_array(src->value);
@@ -22,6 +24,7 @@ static void data_config_free(data_unset *d) {
 
 	buffer_free(ds->key);
 	buffer_free(ds->op);
+	buffer_free(ds->comp_tag);
 	buffer_free(ds->comp_key);
 
 	array_free(ds->value);
@@ -41,6 +44,7 @@ static void data_config_reset(data_unset *d) {
 
 	/* reused array elements */
 	buffer_reset(ds->key);
+	buffer_reset(ds->comp_tag);
 	buffer_reset(ds->comp_key);
 	array_reset(ds->value);
 }
@@ -130,6 +134,7 @@ data_config *data_config_init(void) {
 
 	ds->key = buffer_init();
 	ds->op = buffer_init();
+	ds->comp_tag = buffer_init();
 	ds->comp_key = buffer_init();
 	ds->value = array_init();
 	vector_config_weak_init(&ds->children);
