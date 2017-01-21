@@ -70,9 +70,21 @@ int http_response_write_header(server *srv, connection *con) {
 
 		ds = (data_string *)con->response.headers->data[i];
 
-		if (!buffer_string_is_empty(ds->value) && !buffer_is_empty(ds->key) &&
-		    0 != strncasecmp(ds->key->ptr, CONST_STR_LEN("X-LIGHTTPD-")) &&
-			0 != strncasecmp(ds->key->ptr, CONST_STR_LEN("X-Sendfile"))) {
+		if (buffer_string_is_empty(ds->value) || buffer_string_is_empty(ds->key)) continue;
+		if (0 == strncasecmp(ds->key->ptr, CONST_STR_LEN("X-Sendfile"))) continue;
+		if (0 == strncasecmp(ds->key->ptr, CONST_STR_LEN("X-LIGHTTPD-"))) {
+			if (0 == strncasecmp(ds->key->ptr+sizeof("X-LIGHTTPD-")-1, CONST_STR_LEN("KBytes-per-second"))) {
+				/* "X-LIGHTTPD-KBytes-per-second" */
+				long limit = strtol(ds->value->ptr, NULL, 10);
+				if (limit > 0
+				    && (limit < con->conf.kbytes_per_second
+				        || 0 == con->conf.kbytes_per_second)) {
+					if (limit > USHRT_MAX) limit= USHRT_MAX;
+					con->conf.kbytes_per_second = limit;
+				}
+			}
+			continue;
+		} else {
 			if (0 == strcasecmp(ds->key->ptr, "Date")) have_date = 1;
 			if (0 == strcasecmp(ds->key->ptr, "Server")) have_server = 1;
 			if (0 == strcasecmp(ds->key->ptr, "Content-Encoding") && 304 == con->http_status) continue;
