@@ -698,6 +698,42 @@ static void show_help (void) {
 	write_all(STDOUT_FILENO, b, strlen(b));
 }
 
+static void server_graceful_shutdown_maint (server *srv) {
+    connections *conns = srv->conns;
+    for (size_t ndx = 0; ndx < conns->used; ++ndx) {
+        connection * const con = conns->ptr[ndx];
+        int changed = 0;
+
+        if (con->state == CON_STATE_CLOSE) {
+            /* reduce remaining linger timeout to be
+             * (from zero) *up to* one more second, but no more */
+            if (HTTP_LINGER_TIMEOUT > 1)
+                con->close_timeout_ts -= (HTTP_LINGER_TIMEOUT - 1);
+            if (srv->cur_ts - con->close_timeout_ts > HTTP_LINGER_TIMEOUT)
+                changed = 1;
+        }
+        else if (con->state == CON_STATE_READ && con->request_count > 1
+                 && chunkqueue_is_empty(con->read_queue)) {
+            /* close connections in keep-alive waiting for next request */
+            connection_set_state(srv, con, CON_STATE_ERROR);
+            changed = 1;
+        }
+
+        con->keep_alive = 0;                    /* disable keep-alive */
+
+        con->conf.kbytes_per_second = 0;        /* disable rate limit */
+        con->conf.global_kbytes_per_second = 0; /* disable rate limit */
+        if (con->traffic_limit_reached) {
+            con->traffic_limit_reached = 0;
+            changed = 1;
+        }
+
+        if (changed) {
+            connection_state_machine(srv, con);
+        }
+    }
+}
+
 int main (int argc, char **argv) {
 	server *srv = NULL;
 	int print_config = 0;
@@ -1568,6 +1604,8 @@ int main (int argc, char **argv) {
 				for (i = 0; i < srv->config_context->used; ++i) {
 					srv->config_storage[i]->global_bytes_per_second_cnt = 0;
 				}
+				/* if graceful_shutdown, accelerate cleanup of recently completed request/responses */
+				if (graceful_shutdown && !srv_shutdown) server_graceful_shutdown_maint(srv);
 				/**
 				 * check all connections for timeouts
 				 *
@@ -1724,6 +1762,7 @@ int main (int argc, char **argv) {
 				if (graceful_shutdown) {
 					remove_pid_file(srv, &pid_fd);
 					log_error_write(srv, __FILE__, __LINE__, "s", "[note] graceful shutdown started");
+					if (!srv_shutdown) server_graceful_shutdown_maint(srv);
 				} else if (srv->conns->used >= srv->max_conns) {
 					log_error_write(srv, __FILE__, __LINE__, "s", "[note] sockets disabled, connection limit reached");
 				} else {
