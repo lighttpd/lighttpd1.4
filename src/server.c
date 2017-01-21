@@ -1564,6 +1564,10 @@ int main (int argc, char **argv) {
 
 				/* cleanup stat-cache */
 				stat_cache_trigger_cleanup(srv);
+				/* reset global/aggregate rate limit counters */
+				for (i = 0; i < srv->config_context->used; ++i) {
+					srv->config_storage[i]->global_bytes_per_second_cnt = 0;
+				}
 				/**
 				 * check all connections for timeouts
 				 *
@@ -1649,11 +1653,11 @@ int main (int argc, char **argv) {
 						changed = 1;
 					}
 
+					con->bytes_written_cur_second = 0;
+
 					if (changed) {
 						connection_state_machine(srv, con);
 					}
-					con->bytes_written_cur_second = 0;
-					*(con->conf.global_bytes_per_second_cnt_ptr) = 0;
 
 #if DEBUG_CONNECTION_STATES
 					if (cs == 0) {
