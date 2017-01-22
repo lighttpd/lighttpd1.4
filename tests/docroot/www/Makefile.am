@@ -1,5 +1,4 @@
 EXTRA_DIST=\
-	404.fcgi \
 	404.html \
 	404.pl \
 	cgi-pathinfo.pl \
