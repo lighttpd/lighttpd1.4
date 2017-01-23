@@ -736,9 +736,6 @@ int main (int argc, char **argv) {
 #ifdef HAVE_SIGACTION
 	struct sigaction act;
 #endif
-#ifdef HAVE_GETRLIMIT
-	struct rlimit rlim;
-#endif
 
 #ifdef HAVE_FORK
 	int parent_pipe_fd = -1;
@@ -755,7 +752,7 @@ int main (int argc, char **argv) {
 
 #ifdef HAVE_GETUID
 #ifndef HAVE_ISSETUGID
-#define issetugid (geteuid() != getuid() || getegid() != getgid())
+#define issetugid() (geteuid() != getuid() || getegid() != getgid())
 #endif
 	i_am_root = (0 == getuid());
 	if (!i_am_root && issetugid()) { /* check as early as possible in main() */
@@ -945,16 +942,14 @@ int main (int argc, char **argv) {
 		srv->max_fds = 4096;
 	}
 
-	if (i_am_root) {
-		struct group *grp = NULL;
-		struct passwd *pwd = NULL;
+	{
+#ifdef HAVE_GETRLIMIT
+		struct rlimit rlim;
 		int use_rlimit = 1;
-
 #ifdef HAVE_VALGRIND_VALGRIND_H
 		if (RUNNING_ON_VALGRIND) use_rlimit = 0;
 #endif
 
-#ifdef HAVE_GETRLIMIT
 		if (0 != getrlimit(RLIMIT_NOFILE, &rlim)) {
 			log_error_write(srv, __FILE__, __LINE__,
 					"ss", "couldn't get 'max filedescriptors'",
@@ -962,11 +957,15 @@ int main (int argc, char **argv) {
 			return -1;
 		}
 
-		if (use_rlimit && srv->srvconf.max_fds) {
+		/**
+		 * if we are not root can can't increase the fd-limit above rlim_max, but we can reduce it
+		 */
+		if (use_rlimit && srv->srvconf.max_fds
+		    && (i_am_root || srv->srvconf.max_fds <= rlim.rlim_max)) {
 			/* set rlimits */
 
 			rlim.rlim_cur = srv->srvconf.max_fds;
-			rlim.rlim_max = srv->srvconf.max_fds;
+			if (i_am_root) rlim.rlim_max = srv->srvconf.max_fds;
 
 			if (0 != setrlimit(RLIMIT_NOFILE, &rlim)) {
 				log_error_write(srv, __FILE__, __LINE__,
@@ -997,10 +996,22 @@ int main (int argc, char **argv) {
 				return -1;
 			}
 		}
+	}
 
+	/* we need root-perms for port < 1024 */
+	if (0 != network_init(srv)) {
+		plugins_free(srv);
+		server_free(srv);
 
+		return -1;
+	}
+
+	if (i_am_root) {
 #ifdef HAVE_PWD_H
 		/* set user and group */
+		struct group *grp = NULL;
+		struct passwd *pwd = NULL;
+
 		if (!buffer_string_is_empty(srv->srvconf.groupname)) {
 			if (NULL == (grp = getgrnam(srv->srvconf.groupname->ptr))) {
 				log_error_write(srv, __FILE__, __LINE__, "sb",
@@ -1036,15 +1047,7 @@ int main (int argc, char **argv) {
 				return -1;
 			}
 		}
-#endif
-		/* we need root-perms for port < 1024 */
-		if (0 != network_init(srv)) {
-			plugins_free(srv);
-			server_free(srv);
 
-			return -1;
-		}
-#ifdef HAVE_PWD_H
 		/* 
 		 * Change group before chroot, when we have access
 		 * to /etc/group
@@ -1094,61 +1097,6 @@ int main (int argc, char **argv) {
 			prctl(PR_SET_DUMPABLE, 1, 0, 0, 0);
 		}
 #endif
-	} else {
-
-#ifdef HAVE_GETRLIMIT
-		if (0 != getrlimit(RLIMIT_NOFILE, &rlim)) {
-			log_error_write(srv, __FILE__, __LINE__,
-					"ss", "couldn't get 'max filedescriptors'",
-					strerror(errno));
-			return -1;
-		}
-
-		/**
-		 * we are not root can can't increase the fd-limit above rlim_max, but we can reduce it
-		 */
-		if (srv->srvconf.max_fds && srv->srvconf.max_fds <= rlim.rlim_max) {
-			/* set rlimits */
-
-			rlim.rlim_cur = srv->srvconf.max_fds;
-
-			if (0 != setrlimit(RLIMIT_NOFILE, &rlim)) {
-				log_error_write(srv, __FILE__, __LINE__,
-						"ss", "couldn't set 'max filedescriptors'",
-						strerror(errno));
-				return -1;
-			}
-		}
-
-		if (srv->event_handler == FDEVENT_HANDLER_SELECT) {
-			srv->max_fds = rlim.rlim_cur < (rlim_t)FD_SETSIZE - 200 ? (int)rlim.rlim_cur : (int)FD_SETSIZE - 200;
-		} else {
-			srv->max_fds = rlim.rlim_cur;
-		}
-
-		/* set core file rlimit, if enable_cores is set */
-		if (srv->srvconf.enable_cores && getrlimit(RLIMIT_CORE, &rlim) == 0) {
-			rlim.rlim_cur = rlim.rlim_max;
-			setrlimit(RLIMIT_CORE, &rlim);
-		}
-
-#endif
-		if (srv->event_handler == FDEVENT_HANDLER_SELECT) {
-			/* don't raise the limit above FD_SET_SIZE */
-			if (srv->max_fds > ((int)FD_SETSIZE) - 200) {
-				log_error_write(srv, __FILE__, __LINE__, "sd",
-						"can't raise max filedescriptors above",  FD_SETSIZE - 200,
-						"if event-handler is 'select'. Use 'poll' or something else or reduce server.max-fds.");
-				return -1;
-			}
-		}
-
-		if (0 != network_init(srv)) {
-			plugins_free(srv);
-			server_free(srv);
-
-			return -1;
-		}
 	}
 
 	/* set max-conns */
