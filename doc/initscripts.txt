@@ -1,0 +1,40 @@
+* lighttpd responds to the following signals:
+
+SIGINT  - shut down gracefully  (finish serving existing connections and exit)
+SIGTERM - shut down immediately (terminate existing connections and exit)
+SIGHUP  - re-open log files     (NOTE: does not reload lighttpd configuration)
+
+
+* lighttpd graceful restart
+
+https://blog.lighttpd.net/articles/2005/09/02/graceful-restart/
+The current recommended way to reload lighttpd config is to gracefully stop
+and then to restart lighttpd.
+
+
+* lighttpd initscripts
+
+Depending on the operating system and distribution brand, there are many
+ways to set up lighttpd to run as a daemon when the system starts up, and
+to send signals to lighttpd for start/stop/restart/etc.
+
+Rather than attempting to maintain scripts for an unknown number of distros,
+here are links to a few, which can be used as examples.
+
+Arch:
+https://git.archlinux.org/svntogit/packages.git/tree/trunk?h=packages/lighttpd
+
+Debian:
+https://anonscm.debian.org/cgit/pkg-lighttpd/lighttpd.git/tree/debian
+
+Fedora:
+http://pkgs.fedoraproject.org/cgit/rpms/lighttpd.git/tree/
+
+Gentoo:
+https://gitweb.gentoo.org/repo/gentoo.git/tree/www-servers/lighttpd/files
+
+openSUSE:
+https://build.opensuse.org/package/show/server:http/lighttpd
+
+Additional, updated information may be found at
+https://redmine.lighttpd.net/projects/lighttpd/wiki/InstallFromSource
