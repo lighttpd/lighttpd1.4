@@ -71,17 +71,6 @@
 /* #define USE_ALARM */
 #endif
 
-#ifdef HAVE_GETUID
-# ifndef HAVE_ISSETUGID
-
-static int l_issetugid(void) {
-	return (geteuid() != getuid() || getegid() != getgid());
-}
-
-#  define issetugid l_issetugid
-# endif
-#endif
-
 static int oneshot_fd = 0;
 static volatile sig_atomic_t srv_shutdown = 0;
 static volatile sig_atomic_t graceful_shutdown = 0;
@@ -738,7 +727,7 @@ int main (int argc, char **argv) {
 	server *srv = NULL;
 	int print_config = 0;
 	int test_config = 0;
-	int i_am_root;
+	int i_am_root = 0;
 	int o;
 	int num_childs = 0;
 	int pid_fd = -1, fd;
@@ -764,6 +753,17 @@ int main (int argc, char **argv) {
 	interval.it_value.tv_usec = 0;
 #endif
 
+#ifdef HAVE_GETUID
+#ifndef HAVE_ISSETUGID
+#define issetugid (geteuid() != getuid() || getegid() != getgid())
+#endif
+	i_am_root = (0 == getuid());
+	if (!i_am_root && issetugid()) { /* check as early as possible in main() */
+		fprintf(stderr, "Are you nuts ? Don't apply a SUID bit to this binary\n");
+		return -1;
+	}
+#endif
+
 	/* for nice %b handling in strfime() */
 	setlocale(LC_TIME, "C");
 
@@ -775,11 +775,6 @@ int main (int argc, char **argv) {
 	/* init structs done */
 
 	srv->srvconf.port = 0;
-#ifdef HAVE_GETUID
-	i_am_root = (getuid() == 0);
-#else
-	i_am_root = 0;
-#endif
 	srv->srvconf.dont_daemonize = 0;
 	srv->srvconf.preflight_check = 0;
 
@@ -890,19 +885,6 @@ int main (int argc, char **argv) {
 		server_free(srv);
 		return -1;
 	}
-
-	/* UID handling */
-#ifdef HAVE_GETUID
-	if (!i_am_root && issetugid()) {
-		/* we are setuid-root */
-
-		log_error_write(srv, __FILE__, __LINE__, "s",
-				"Are you nuts ? Don't apply a SUID bit to this binary");
-
-		server_free(srv);
-		return -1;
-	}
-#endif
 
 	/* check document-root */
 	if (buffer_string_is_empty(srv->config_storage[0]->document_root)) {
