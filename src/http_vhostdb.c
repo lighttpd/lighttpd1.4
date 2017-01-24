@@ -7,6 +7,11 @@
 
 static http_vhostdb_backend_t http_vhostdb_backends[8];
 
+void http_vhostdb_dumbdata_reset (void)
+{
+    memset(http_vhostdb_backends, 0, sizeof(http_vhostdb_backends));
+}
+
 const http_vhostdb_backend_t * http_vhostdb_backend_get (const buffer *name)
 {
     int i = 0;

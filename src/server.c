@@ -9,7 +9,9 @@
 #include "response.h"
 #include "request.h"
 #include "chunk.h"
+#include "http_auth.h"
 #include "http_chunk.h"
+#include "http_vhostdb.h"
 #include "fdevent.h"
 #include "connections.h"
 #include "stat_cache.h"
@@ -752,6 +754,17 @@ int main (int argc, char **argv) {
 	}
 #endif
 
+	/* initialize globals (including file-scoped static globals) */
+	oneshot_fd = 0;
+	srv_shutdown = 0;
+	graceful_shutdown = 0;
+	handle_sig_alarm = 1;
+	handle_sig_hup = 0;
+	forwarded_sig_hup = 0;
+	chunkqueue_set_tempdirs_default_reset();
+	http_auth_dumbdata_reset();
+	http_vhostdb_dumbdata_reset();
+
 	/* for nice %b handling in strfime() */
 	setlocale(LC_TIME, "C");
 
@@ -1127,6 +1140,10 @@ int main (int argc, char **argv) {
 	sigaction(SIGPIPE, &act, NULL);
 	sigaction(SIGUSR1, &act, NULL);
 # if defined(SA_SIGINFO)
+	last_sighup_info.si_uid = 0,
+	last_sighup_info.si_pid = 0;
+	last_sigterm_info.si_uid = 0,
+	last_sigterm_info.si_pid = 0;
 	act.sa_sigaction = sigaction_handler;
 	sigemptyset(&act.sa_mask);
 	act.sa_flags = SA_SIGINFO;

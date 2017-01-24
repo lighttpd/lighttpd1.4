@@ -4,6 +4,8 @@
 
 #include "base.h"
 
+void http_auth_dumbdata_reset (void);
+
 struct http_auth_scheme_t;
 struct http_auth_require_t;
 struct http_auth_backend_t;

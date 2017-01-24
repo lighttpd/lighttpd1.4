@@ -29,6 +29,12 @@
 static array *chunkqueue_default_tempdirs = NULL;
 static unsigned int chunkqueue_default_tempfile_size = DEFAULT_TEMPFILE_SIZE;
 
+void chunkqueue_set_tempdirs_default_reset (void)
+{
+    chunkqueue_default_tempdirs = NULL;
+    chunkqueue_default_tempfile_size = DEFAULT_TEMPFILE_SIZE;
+}
+
 chunkqueue *chunkqueue_init(void) {
 	chunkqueue *cq;
 

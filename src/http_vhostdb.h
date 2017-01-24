@@ -4,6 +4,8 @@
 
 #include "base.h"
 
+void http_vhostdb_dumbdata_reset (void);
+
 struct http_vhostdb_backend_t;
 
 typedef struct http_vhostdb_backend_t {
