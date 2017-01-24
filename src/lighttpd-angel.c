@@ -38,12 +38,15 @@ static void sigaction_handler(int sig, siginfo_t *si, void *context) {
 	switch (sig) {
 	case SIGINT: 
 	case SIGTERM:
+	case SIGUSR1:
+		if (pid <= 0) break;
 		memcpy(&last_sigterm_info, si, sizeof(*si));
 
 		/** forward the sig to the child */
 		kill(pid, sig);
 		break;
 	case SIGHUP: /** do a graceful restart */
+		if (pid <= 0) break;
 		memcpy(&last_sighup_info, si, sizeof(*si));
 
 		/** do a graceful shutdown on the main process and start a new child */
@@ -81,6 +84,7 @@ int main(int argc, char **argv) {
 
 	sigaction(SIGINT,  &act, NULL);
 	sigaction(SIGTERM, &act, NULL);
+	sigaction(SIGUSR1, &act, NULL);
 	sigaction(SIGHUP,  &act, NULL);
 	sigaction(SIGALRM, &act, NULL);
 	sigaction(SIGCHLD, &act, NULL);

@@ -1,8 +1,11 @@
 * lighttpd responds to the following signals:
 
-SIGINT  - shut down gracefully  (finish serving existing connections and exit)
-SIGTERM - shut down immediately (terminate existing connections and exit)
+SIGTERM - shut down immediately (terminate existing connections, then exit)
+SIGINT  - shut down gracefully  (serve existing connections, then exit)
+SIGUSR1 - reload gracefully     (serve existing connections, then reload config)
 SIGHUP  - re-open log files     (NOTE: does not reload lighttpd configuration)
+
+(Note: SIGUSR1 behavior is available in lighttpd 1.4.46 and later)
 
 
 * lighttpd graceful restart
@@ -10,6 +13,10 @@ SIGHUP  - re-open log files     (NOTE: does not reload lighttpd configuration)
 https://blog.lighttpd.net/articles/2005/09/02/graceful-restart/
 The current recommended way to reload lighttpd config is to gracefully stop
 and then to restart lighttpd.
+
+With lighttpd 1.4.46 and later, SIGUSR1 is the recommended method to gracefully
+handle configuration reloads and log rotation, though a graceful stop and then
+restart of lighttpd is still required for lighttpd configurations which chroot.
 
 
 * lighttpd initscripts
@@ -35,6 +42,8 @@ https://gitweb.gentoo.org/repo/gentoo.git/tree/www-servers/lighttpd/files
 
 openSUSE:
 https://build.opensuse.org/package/show/server:http/lighttpd
+
+sample systemd unit script: doc/systemd/lighttpd.service
 
 Additional, updated information may be found at
 https://redmine.lighttpd.net/projects/lighttpd/wiki/InstallFromSource
