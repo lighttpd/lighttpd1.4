@@ -258,13 +258,13 @@ SETDEFAULTS_FUNC(mod_authn_mysql_set_defaults) {
     if (p->config_storage[0]) { /*(always true)*/
         plugin_config *s = p->config_storage[0];
         if (buffer_is_empty(s->auth_mysql_col_user)) {
-            s->auth_mysql_col_user = buffer_init_string("user");
+            buffer_copy_string_len(s->auth_mysql_col_user, CONST_STR_LEN("user"));
         }
         if (buffer_is_empty(s->auth_mysql_col_pass)) {
-            s->auth_mysql_col_pass = buffer_init_string("password");
+            buffer_copy_string_len(s->auth_mysql_col_pass, CONST_STR_LEN("password"));
         }
         if (buffer_is_empty(s->auth_mysql_col_realm)) {
-            s->auth_mysql_col_realm = buffer_init_string("realm");
+            buffer_copy_string_len(s->auth_mysql_col_realm, CONST_STR_LEN("realm"));
         }
     }
 
