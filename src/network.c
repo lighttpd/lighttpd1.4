@@ -437,12 +437,7 @@ srv_sockets_append:
 
 error_free_socket:
 	if (srv_socket->fd != -1) {
-		/* check if server fd are already registered */
-		if (srv_socket->fde_ndx != -1) {
-			fdevent_event_del(srv->ev, &(srv_socket->fde_ndx), srv_socket->fd);
-			fdevent_unregister(srv->ev, srv_socket->fd);
-		}
-
+		network_unregister_sock(srv, srv_socket);
 		close(srv_socket->fd);
 	}
 	buffer_free(srv_socket->srv_token);
@@ -457,14 +452,8 @@ int network_close(server *srv) {
 	size_t i;
 	for (i = 0; i < srv->srv_sockets.used; i++) {
 		server_socket *srv_socket = srv->srv_sockets.ptr[i];
-
 		if (srv_socket->fd != -1) {
-			/* check if server fd are already registered */
-			if (srv_socket->fde_ndx != -1) {
-				fdevent_event_del(srv->ev, &(srv_socket->fde_ndx), srv_socket->fd);
-				fdevent_unregister(srv->ev, srv_socket->fd);
-			}
-
+			network_unregister_sock(srv, srv_socket);
 			close(srv_socket->fd);
 		}
 
@@ -474,6 +463,9 @@ int network_close(server *srv) {
 	}
 
 	free(srv->srv_sockets.ptr);
+	srv->srv_sockets.ptr = NULL;
+	srv->srv_sockets.used = 0;
+	srv->srv_sockets.size = 0;
 
 	return 0;
 }
@@ -520,9 +512,17 @@ int network_init(server *srv) {
 	buffer_append_string_len(b, CONST_STR_LEN(":"));
 	buffer_append_int(b, srv->srvconf.port);
 
-	if (0 != network_server_init(srv, b, 0)) {
-		buffer_free(b);
-		return -1;
+	/* check if we already know this socket, and if yes, don't init it */
+	for (j = 0; j < srv->srv_sockets.used; j++) {
+		if (buffer_is_equal(srv->srv_sockets.ptr[j]->srv_token, b)) {
+			break;
+		}
+	}
+	if (j == srv->srv_sockets.used) {
+		if (0 != network_server_init(srv, b, 0)) {
+			buffer_free(b);
+			return -1;
+		}
 	}
 	buffer_free(b);
 
@@ -590,6 +590,12 @@ int network_init(server *srv) {
 	}
 
 	return 0;
+}
+
+void network_unregister_sock(server *srv, server_socket *srv_socket) {
+	if (-1 == srv_socket->fd || -1 == srv_socket->fde_ndx) return;
+	fdevent_event_del(srv->ev, &srv_socket->fde_ndx, srv_socket->fd);
+	fdevent_unregister(srv->ev, srv_socket->fd);
 }
 
 int network_register_fdevents(server *srv) {

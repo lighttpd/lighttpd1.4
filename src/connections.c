@@ -572,6 +572,8 @@ void connections_free(server *srv) {
 	connections *conns = srv->conns;
 	size_t i;
 
+	if (NULL == conns) return;
+
 	for (i = 0; i < conns->size; i++) {
 		connection *con = conns->ptr[i];
 
@@ -617,6 +619,8 @@ void connections_free(server *srv) {
 	}
 
 	free(conns->ptr);
+	free(conns);
+	srv->conns = NULL;
 }
 
 

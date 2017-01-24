@@ -10,5 +10,6 @@ int network_init(server *srv);
 int network_close(server *srv);
 
 int network_register_fdevents(server *srv);
+void network_unregister_sock(server *srv, server_socket *srv_socket);
 
 #endif
