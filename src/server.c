@@ -741,15 +741,6 @@ int main (int argc, char **argv) {
 	int parent_pipe_fd = -1;
 #endif
 
-#ifdef USE_ALARM
-	struct itimerval interval;
-
-	interval.it_interval.tv_sec = 1;
-	interval.it_interval.tv_usec = 0;
-	interval.it_value.tv_sec = 1;
-	interval.it_value.tv_usec = 0;
-#endif
-
 #ifdef HAVE_GETUID
 #ifndef HAVE_ISSETUGID
 #define issetugid() (geteuid() != getuid() || getegid() != getgid())
@@ -1164,18 +1155,6 @@ int main (int argc, char **argv) {
 	signal(SIGINT,  signal_handler);
 #endif
 
-#ifdef USE_ALARM
-	signal(SIGALRM, signal_handler);
-
-	/* setup periodic timer (1 second) */
-	if (setitimer(ITIMER_REAL, &interval, NULL)) {
-		log_error_write(srv, __FILE__, __LINE__, "s", "setting timer failed");
-		return -1;
-	}
-
-	getitimer(ITIMER_REAL, &interval);
-#endif
-
 
 	srv->gid = getgid();
 	srv->uid = getuid();
@@ -1418,6 +1397,21 @@ int main (int argc, char **argv) {
 		fd_close_on_exec(FAMCONNECTION_GETFD(&srv->stat_cache->fam));
 		fdevent_register(srv->ev, FAMCONNECTION_GETFD(&srv->stat_cache->fam), stat_cache_handle_fdevent, NULL);
 		fdevent_event_set(srv->ev, &(srv->stat_cache->fam_fcce_ndx), FAMCONNECTION_GETFD(&srv->stat_cache->fam), FDEVENT_IN);
+	}
+#endif
+
+#ifdef USE_ALARM
+	{
+		/* setup periodic timer (1 second) */
+		struct itimerval interval;
+		interval.it_interval.tv_sec = 1;
+		interval.it_interval.tv_usec = 0;
+		interval.it_value.tv_sec = 1;
+		interval.it_value.tv_usec = 0;
+		if (setitimer(ITIMER_REAL, &interval, NULL)) {
+			log_error_write(srv, __FILE__, __LINE__, "s", "setting timer failed");
+			return -1;
+		}
 	}
 #endif
 
