@@ -339,6 +339,7 @@ static int mod_rrd_patch_connection(server *srv, connection *con, plugin_data *p
 SETDEFAULTS_FUNC(mod_rrd_set_defaults) {
 	plugin_data *p = p_d;
 	size_t i;
+	int activate = 0;
 
 	config_values_t cv[] = {
 		{ "rrdtool.binary",  NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_CONNECTION }, /* 0 */
@@ -380,10 +381,13 @@ SETDEFAULTS_FUNC(mod_rrd_set_defaults) {
 			return HANDLER_ERROR;
 		}
 
+		if (!buffer_string_is_empty(s->path_rrd)) activate = 1;
 	}
 
 	p->conf.path_rrdtool_bin = p->config_storage[0]->path_rrdtool_bin;
 	p->rrdtool_running = 0;
+
+	if (!activate) return HANDLER_GO_ON;
 
 	/* check for dir */
 
@@ -475,6 +479,7 @@ REQUESTDONE_FUNC(mod_rrd_account) {
 	plugin_data *p = p_d;
 
 	mod_rrd_patch_connection(srv, con, p);
+	if (!p->rrdtool_running) return HANDLER_GO_ON;
 
 	*(p->conf.requests_ptr)      += 1;
 	*(p->conf.bytes_written_ptr) += con->bytes_written;
