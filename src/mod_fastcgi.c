@@ -2077,7 +2077,7 @@ static int fcgi_response_parse(server *srv, connection *con, plugin_data *p, buf
 			/* authorizers shouldn't affect the response headers sent back to the client */
 
 			/* don't forward Status: */
-			if (0 != strncasecmp(key, "Status", key_len)) {
+			if (key_len != sizeof("Status")-1 || 0 != strncasecmp(key, "Status", key_len)) {
 				data_string *ds;
 				if (NULL == (ds = (data_string *)array_get_unused_element(con->response.headers, TYPE_STRING))) {
 					ds = data_response_init();

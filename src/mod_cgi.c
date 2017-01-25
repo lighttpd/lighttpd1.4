@@ -352,6 +352,8 @@ static int cgi_response_parse(server *srv, connection *con, plugin_data *p, buff
 					} else {
 						con->http_status = 502;
 					}
+					/* do not send Status to client */
+					buffer_reset(ds->value);
 				}
 				break;
 			case 8:

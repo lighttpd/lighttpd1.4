@@ -1742,6 +1742,8 @@ static int scgi_response_parse(server *srv, connection *con, plugin_data *p, buf
 					} else {
 						con->http_status = 502;
 					}
+					/* do not send Status to client */
+					buffer_reset(ds->value);
 				}
 				break;
 			case 8:
