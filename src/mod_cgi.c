@@ -527,6 +527,27 @@ static int cgi_demux_response(server *srv, handler_ctx *hctx) {
 					/* parse the response header */
 					cgi_response_parse(srv, con, p, hctx->response_header);
 
+					/* [RFC3875] 6.2.2 Local Redirect Response
+					 *
+					 *    The CGI script can return a URI path and query-string
+					 *    ('local-pathquery') for a local resource in a Location header field.
+					 *    This indicates to the server that it should reprocess the request
+					 *    using the path specified.
+					 *
+					 *      local-redir-response = local-Location NL
+					 *
+					 *    The script MUST NOT return any other header fields or a message-body,
+					 *    and the server MUST generate the response that it would have produced
+					 *    in response to a request containing the URL
+					 *
+					 *      scheme "://" server-name ":" server-port local-pathquery
+					 *
+					 * (Might not have begun to receive body yet, but do skip local-redir
+					 *  if we already have started receiving a response body (blen > 0))
+					 * (Also, while not required by the RFC, do not send local-redir back
+					 *  to same URL, since CGI should have handled it internally if it
+					 *  really wanted to do that internally)
+					 */
 					if (con->http_status >= 300 && con->http_status < 400) {
 						/*(con->parsed_response & HTTP_LOCATION)*/
 						size_t ulen = buffer_string_length(con->uri.path);
@@ -535,7 +556,9 @@ static int cgi_demux_response(server *srv, handler_ctx *hctx) {
 						    && ds->value->ptr[0] == '/'
 						    && (0 != strncmp(ds->value->ptr, con->uri.path->ptr, ulen)
 							|| (ds->value->ptr[ulen] != '\0' && ds->value->ptr[ulen] != '/' && ds->value->ptr[ulen] != '?'))
-						    && NULL == array_get_element(con->response.headers, "Set-Cookie")) {
+						    && 0 == blen
+						    && !(con->parsed_response & HTTP_STATUS) /* no "Status" or NPH response line */
+						    && 1 == con->response.headers->used) {
 							if (++con->loops_per_request > 5) {
 								log_error_write(srv, __FILE__, __LINE__, "sb", "too many internal loops while processing request:", con->request.orig_uri);
 								con->http_status = 500; /* Internal Server Error */
