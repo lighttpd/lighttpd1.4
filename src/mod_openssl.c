@@ -113,12 +113,14 @@ FREE_FUNC(mod_openssl_free)
     if (p->config_storage) {
         for (size_t i = 0; i < srv->config_context->used; ++i) {
             plugin_config *s = p->config_storage[i];
+            int copy = s->ssl_enabled && buffer_string_is_empty(s->ssl_pemfile);
             buffer_free(s->ssl_pemfile);
             buffer_free(s->ssl_ca_file);
             buffer_free(s->ssl_cipher_list);
             buffer_free(s->ssl_dh_file);
             buffer_free(s->ssl_ec_curve);
             buffer_free(s->ssl_verifyclient_username);
+            if (copy) continue;
             SSL_CTX_free(s->ssl_ctx);
             EVP_PKEY_free(s->ssl_pemfile_pkey);
             X509_free(s->ssl_pemfile_x509);
@@ -433,6 +435,12 @@ network_init_ssl (server *srv, void *p_d)
 
         if (s->ssl_enabled) {
             if (buffer_string_is_empty(s->ssl_pemfile)) {
+                /* inherit ssl settings from global scope
+                 * (if only ssl.engine = "enable" and no other ssl.* settings)*/
+                if (0 != i && p->config_storage[0]->ssl_enabled) {
+                    s->ssl_ctx = p->config_storage[0]->ssl_ctx;
+                    continue;
+                }
                 /* PEM file is require */
                 log_error_write(srv, __FILE__, __LINE__, "s",
                                 "ssl.pemfile has to be set");
@@ -797,6 +805,23 @@ SETDEFAULTS_FUNC(mod_openssl_set_defaults)
 
         if (0 != config_insert_values_global(srv, config->value, cv, i == 0 ? T_CONFIG_SCOPE_SERVER : T_CONFIG_SCOPE_CONNECTION)) {
             return HANDLER_ERROR;
+        }
+
+        if (0 != i && s->ssl_enabled && buffer_string_is_empty(s->ssl_pemfile)){
+            /* inherit ssl settings from global scope (in network_init_ssl())
+             * (if only ssl.engine = "enable" and no other ssl.* settings)*/
+            for (size_t j = 0; j < config->value->used; ++j) {
+                buffer *k = config->value->data[j]->key;
+                if (0 == strncmp(k->ptr, "ssl.", sizeof("ssl.")-1)
+                    && !buffer_is_equal_string(k, CONST_STR_LEN("ssl.engine"))){
+                    log_error_write(srv, __FILE__, __LINE__, "sb",
+                                    "ssl.pemfile has to be set in same scope "
+                                    "as other ssl.* directives, unless only "
+                                    "ssl.engine is set, inheriting ssl.* from "
+                                    "global scope", k);
+                    return HANDLER_ERROR;
+                }
+            }
         }
     }
 
