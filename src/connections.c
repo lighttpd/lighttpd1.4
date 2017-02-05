@@ -386,8 +386,7 @@ static int connection_handle_write_prepare(server *srv, connection *con) {
 	if (con->file_finished) {
 		/* we have all the content and chunked encoding is not used, set a content-length */
 
-		if ((!(con->parsed_response & HTTP_CONTENT_LENGTH)) &&
-		    (con->response.transfer_encoding & HTTP_TRANSFER_ENCODING_CHUNKED) == 0) {
+		if (!(con->parsed_response & (HTTP_CONTENT_LENGTH|HTTP_TRANSFER_ENCODING))) {
 			off_t qlen = chunkqueue_length(con->write_queue);
 
 			/**
@@ -424,8 +423,7 @@ static int connection_handle_write_prepare(server *srv, connection *con) {
 		 * - Transfer-Encoding: chunked (HTTP/1.1)
 		 */
 
-		if (((con->parsed_response & HTTP_CONTENT_LENGTH) == 0) &&
-		    ((con->response.transfer_encoding & HTTP_TRANSFER_ENCODING_CHUNKED) == 0)) {
+		if (!(con->parsed_response & (HTTP_CONTENT_LENGTH|HTTP_TRANSFER_ENCODING))) {
 			if (con->request.http_version == HTTP_VERSION_1_1) {
 				off_t qlen = chunkqueue_length(con->write_queue);
 				con->response.transfer_encoding = HTTP_TRANSFER_ENCODING_CHUNKED;
@@ -438,6 +436,7 @@ static int connection_handle_write_prepare(server *srv, connection *con) {
 					chunkqueue_prepend_buffer(con->write_queue, b);
 					chunkqueue_append_mem(con->write_queue, CONST_STR_LEN("\r\n"));
 				}
+				response_header_append(srv, con, CONST_STR_LEN("Transfer-Encoding"), CONST_STR_LEN("chunked"));
 			} else {
 				con->keep_alive = 0;
 			}
@@ -469,6 +468,12 @@ static int connection_handle_write_prepare(server *srv, connection *con) {
 
 		chunkqueue_reset(con->write_queue);
 		con->response.transfer_encoding &= ~HTTP_TRANSFER_ENCODING_CHUNKED;
+		if (con->parsed_response & HTTP_TRANSFER_ENCODING) {
+			data_string *ds;
+			if (NULL != (ds = (data_string*) array_get_element(con->response.headers, "Transfer-Encoding"))) {
+				buffer_reset(ds->value); /* Headers with empty values are ignored for output */
+			}
+		}
 	}
 
 	http_response_write_header(srv, con);

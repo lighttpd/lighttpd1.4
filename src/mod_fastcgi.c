@@ -2250,6 +2250,11 @@ range_success: ;
 				if (con->response.content_length < 0) con->response.content_length = 0;
 			}
 			break;
+		case 17:
+			if (0 == strncasecmp(key, "Transfer-Encoding", key_len)) {
+				con->parsed_response |= HTTP_TRANSFER_ENCODING;
+			}
+			break;
 		default:
 			break;
 		}

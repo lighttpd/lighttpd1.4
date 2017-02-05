@@ -59,11 +59,6 @@ int http_response_write_header(server *srv, connection *con) {
 		}
 	}
 
-	if (con->response.transfer_encoding & HTTP_TRANSFER_ENCODING_CHUNKED) {
-		response_header_overwrite(srv, con, CONST_STR_LEN("Transfer-Encoding"), CONST_STR_LEN("chunked"));
-	}
-
-
 	/* add all headers */
 	for (i = 0; i < con->response.headers->used; i++) {
 		data_string *ds;

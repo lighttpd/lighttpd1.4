@@ -811,6 +811,11 @@ static int proxy_response_parse(server *srv, connection *con, plugin_data *p, bu
 				con->parsed_response |= HTTP_CONTENT_LENGTH;
 			}
 			break;
+		case 17:
+			if (0 == strncasecmp(key, "Transfer-Encoding", key_len)) {
+				con->parsed_response |= HTTP_TRANSFER_ENCODING;
+			}
+			break;
 		default:
 			break;
 		}

@@ -1036,7 +1036,7 @@ CONNECTION_FUNC(mod_deflate_handle_response_start) {
 	/*(current implementation requires response be complete)*/
 	if (!con->file_finished) return HANDLER_GO_ON;
 	if (con->request.http_method == HTTP_METHOD_HEAD) return HANDLER_GO_ON;
-	if (con->parsed_response & HTTP_TRANSFER_ENCODING_CHUNKED) return HANDLER_GO_ON;
+	if (con->parsed_response & HTTP_TRANSFER_ENCODING) return HANDLER_GO_ON;
 
 	/* disable compression for some http status types. */
 	switch(con->http_status) {
