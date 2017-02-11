@@ -75,14 +75,14 @@ static int fdevent_freebsd_kqueue_event_set(fdevents *ev, int fde_ndx, int fd, i
 	if (events == oevents) return fd;
 
 	if (addevents & FDEVENT_IN)  {
-		EV_SET(&kev[n], fd, EVFILT_READ, EV_ADD|EV_CLEAR, 0, 0, NULL);
+		EV_SET(&kev[n], fd, EVFILT_READ, EV_ADD, 0, 0, NULL);
 		n++;
 	} else if (delevents & FDEVENT_IN) {
 		EV_SET(&kev[n], fd, EVFILT_READ, EV_DELETE, 0, 0, NULL);
 		n++;
 	}
 	if (addevents & FDEVENT_OUT)  {
-		EV_SET(&kev[n], fd, EVFILT_WRITE, EV_ADD|EV_CLEAR, 0, 0, NULL);
+		EV_SET(&kev[n], fd, EVFILT_WRITE, EV_ADD, 0, 0, NULL);
 		n++;
 	} else if (delevents & FDEVENT_OUT) {
 		EV_SET(&kev[n], fd, EVFILT_WRITE, EV_DELETE, 0, 0, NULL);
