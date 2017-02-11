@@ -771,7 +771,10 @@ static int scgi_spawn_connection(server *srv,
 		return -1;
 	}
 
-	if (-1 == connect(scgi_fd, scgi_addr, servlen)) {
+	do {
+		status = connect(scgi_fd, scgi_addr, servlen);
+	} while (-1 == status && errno == EINTR);
+	if (-1 == status) {
 		/* server is not up, spawn in  */
 		pid_t child;
 		int val;
