@@ -253,6 +253,7 @@ typedef struct {
 	unsigned short range_requests;
 	unsigned short stream_request_body;
 	unsigned short stream_response_body;
+	unsigned short error_intercept;
 
 	/* debug */
 

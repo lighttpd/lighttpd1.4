@@ -306,10 +306,10 @@ static int connection_handle_write_prepare(server *srv, connection *con) {
 		con->file_finished = 1;
 		break;
 	default: /* class: header + body */
-		if (con->mode != DIRECT) break;
-
 		/* only custom body for 4xx and 5xx */
 		if (con->http_status < 400 || con->http_status >= 600) break;
+
+		if (con->mode != DIRECT && (!con->conf.error_intercept || con->error_handler_saved_status)) break;
 
 		con->file_finished = 0;
 
@@ -1166,7 +1166,7 @@ int connection_state_machine(server *srv, connection *con) {
 				if (con->error_handler_saved_status > 0) {
 					con->request.http_method = con->error_handler_saved_method;
 				}
-				if (con->mode == DIRECT) {
+				if (con->mode == DIRECT || con->conf.error_intercept) {
 					if (con->error_handler_saved_status) {
 						if (con->error_handler_saved_status > 0) {
 							con->http_status = con->error_handler_saved_status;

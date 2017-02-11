@@ -163,6 +163,7 @@ static int config_insert(server *srv) {
 		{ "server.stream-request-body",        NULL, T_CONFIG_SHORT,   T_CONFIG_SCOPE_CONNECTION }, /* 76 */
 		{ "server.stream-response-body",       NULL, T_CONFIG_SHORT,   T_CONFIG_SCOPE_CONNECTION }, /* 77 */
 		{ "server.max-request-field-size",     NULL, T_CONFIG_INT,     T_CONFIG_SCOPE_SERVER     }, /* 78 */
+		{ "server.error-intercept",            NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION }, /* 79 */
 
 		{ NULL,                                NULL, T_CONFIG_UNSET,   T_CONFIG_SCOPE_UNSET      }
 	};
@@ -254,6 +255,7 @@ static int config_insert(server *srv) {
 		s->listen_backlog = (0 == i ? 1024 : srv->config_storage[0]->listen_backlog);
 		s->stream_request_body = 0;
 		s->stream_response_body = 0;
+		s->error_intercept = 0;
 
 		/* all T_CONFIG_SCOPE_CONNECTION options */
 		cv[2].destination = s->errorfile_prefix;
@@ -319,6 +321,7 @@ static int config_insert(server *srv) {
 	      #endif
 		cv[76].destination = &(s->stream_request_body);
 		cv[77].destination = &(s->stream_response_body);
+		cv[79].destination = &(s->error_intercept);
 
 		srv->config_storage[i] = s;
 
@@ -514,6 +517,7 @@ int config_setup_connection(server *srv, connection *con) {
 	PATCH(use_xattr);
 	PATCH(error_handler);
 	PATCH(error_handler_404);
+	PATCH(error_intercept);
 	PATCH(errorfile_prefix);
 #ifdef HAVE_LSTAT
 	PATCH(follow_symlink);
@@ -569,6 +573,8 @@ int config_patch_connection(server *srv, connection *con) {
 				PATCH(error_handler);
 			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("server.error-handler-404"))) {
 				PATCH(error_handler_404);
+			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("server.error-intercept"))) {
+				PATCH(error_intercept);
 			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("server.errorfile-prefix"))) {
 				PATCH(errorfile_prefix);
 			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("mimetype.assign"))) {
