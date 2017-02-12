@@ -1263,6 +1263,10 @@ static int server_main (server * const srv, int argc, char **argv) {
 		return -1;
 	}
 
+	if (buffer_is_empty(srv->config_storage[0]->server_tag)) {
+		buffer_copy_string_len(srv->config_storage[0]->server_tag, CONST_STR_LEN(PACKAGE_DESC));
+	}
+
 	if (HANDLER_GO_ON != plugins_call_set_defaults(srv)) {
 		log_error_write(srv, __FILE__, __LINE__, "s", "Configuration of plugins failed. Going down.");
 		return -1;
