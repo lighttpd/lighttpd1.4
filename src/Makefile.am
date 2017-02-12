@@ -383,10 +383,10 @@ hdr = server.h base64.h buffer.h network.h log.h keyvalue.h \
 	rand.h \
 	sys-endian.h sys-mmap.h sys-socket.h mod_cml.h mod_cml_funcs.h \
 	safe_memclear.h splaytree.h proc_open.h status_counter.h \
-	mod_magnet_cache.h \
-	version.h
+	mod_magnet_cache.h
 
-DEFS= @DEFS@ -DHAVE_VERSION_H -DLIBRARY_DIR="\"$(libdir)\"" -DSBIN_DIR="\"$(sbindir)\""
+
+DEFS= @DEFS@ -DHAVE_VERSIONSTAMP_H -DLIBRARY_DIR="\"$(libdir)\"" -DSBIN_DIR="\"$(sbindir)\""
 
 
 if LIGHTTPD_STATIC

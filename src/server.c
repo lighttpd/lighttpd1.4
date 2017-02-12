@@ -18,7 +18,14 @@
 #include "plugin.h"
 #include "joblist.h"
 #include "network_backends.h"
-#include "version.h"
+
+#ifdef HAVE_VERSIONSTAMP_H
+# include "versionstamp.h"
+#else
+# define REPO_VERSION ""
+#endif
+
+#define PACKAGE_DESC PACKAGE_NAME "/" PACKAGE_VERSION REPO_VERSION
 
 #include <sys/types.h>
 #include <sys/time.h>
