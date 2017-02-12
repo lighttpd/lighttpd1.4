@@ -1258,9 +1258,12 @@ static int server_main (server * const srv, int argc, char **argv) {
 
 	/* Close stderr ASAP in the child process to make sure that nothing
 	 * is being written to that fd which may not be valid anymore. */
-	if (!srv->srvconf.preflight_check && -1 == log_error_open(srv)) {
-		log_error_write(srv, __FILE__, __LINE__, "s", "Opening errorlog failed. Going down.");
-		return -1;
+	if (!srv->srvconf.preflight_check) {
+		if (-1 == log_error_open(srv)) {
+			log_error_write(srv, __FILE__, __LINE__, "s", "Opening errorlog failed. Going down.");
+			return -1;
+		}
+		log_error_write(srv, __FILE__, __LINE__, "s", "server started (" PACKAGE_DESC ")");
 	}
 
 	if (buffer_is_empty(srv->config_storage[0]->server_tag)) {

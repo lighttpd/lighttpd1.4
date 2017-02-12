@@ -214,8 +214,6 @@ int log_error_open(server *srv) {
 		srv->errorlog_mode = (logfile[0] == '|') ? ERRORLOG_PIPE : ERRORLOG_FILE;
 	}
 
-	log_error_write(srv, __FILE__, __LINE__, "s", "server started");
-
 	if (srv->errorlog_mode == ERRORLOG_FD && !srv->srvconf.dont_daemonize) {
 		/* We can only log to stderr in dont-daemonize mode;
 		 * if we do daemonize and no errorlog file is specified, we log into /dev/null
