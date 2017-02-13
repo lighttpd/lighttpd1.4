@@ -21,7 +21,12 @@ fdevents *fdevent_init(server *srv, size_t maxfds, fdevent_handler_t type) {
 	force_assert(NULL != ev);
 	ev->srv = srv;
 	ev->fdarray = calloc(maxfds, sizeof(*ev->fdarray));
-	force_assert(NULL != ev->fdarray);
+	if (NULL == ev->fdarray) {
+		log_error_write(srv, __FILE__, __LINE__, "SDS",
+				"server.max-fds too large? (", maxfds, ")");
+		free(ev);
+		return NULL;
+	}
 	ev->maxfds = maxfds;
 	ev->highfd = -1;
 
