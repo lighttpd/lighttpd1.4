@@ -536,6 +536,47 @@ static int scgi_extension_insert(scgi_exts *ext, buffer *key, scgi_extension_hos
 
 }
 
+static int scgi_proc_waitpid(server *srv, scgi_extension_host *host, scgi_proc *proc) {
+	int rc, status;
+
+	if (!proc->is_local) return 0;
+	if (proc->pid <= 0) return 0;
+
+	do {
+		rc = waitpid(proc->pid, &status, WNOHANG);
+	} while (-1 == rc && errno == EINTR);
+	if (0 == rc) return 0; /* child still running */
+
+	/* child terminated */
+	if (-1 == rc) {
+		/* EINVAL or ECHILD no child processes */
+		/* should not happen; someone else has cleaned up for us */
+		log_error_write(srv, __FILE__, __LINE__, "sddss",
+				"pid ", proc->pid, proc->state,
+				"not found:", strerror(errno));
+	} else if (WIFEXITED(status)) {
+		if (proc->state != PROC_STATE_KILLED) {
+			log_error_write(srv, __FILE__, __LINE__, "sdb",
+					"child exited:",
+					WEXITSTATUS(status), host->bin_path);
+		}
+	} else if (WIFSIGNALED(status)) {
+		if (WTERMSIG(status) != SIGTERM && WTERMSIG(status) != SIGINT) {
+			log_error_write(srv, __FILE__, __LINE__, "sd",
+					"child signalled:", WTERMSIG(status));
+		}
+	} else {
+		log_error_write(srv, __FILE__, __LINE__, "sd",
+				"child died somehow:", status);
+	}
+
+	proc->pid = 0;
+	if (proc->state == PROC_STATE_RUNNING) --host->active_procs;
+	if (proc->state != PROC_STATE_UNSET)   --host->max_id;
+	proc->state = PROC_STATE_DIED;
+	return 1;
+}
+
 INIT_FUNC(mod_scgi_init) {
 	plugin_data *p;
 
@@ -774,16 +815,21 @@ static int scgi_spawn_connection(server *srv,
 	do {
 		status = connect(scgi_fd, scgi_addr, servlen);
 	} while (-1 == status && errno == EINTR);
+
+	if (-1 == status && errno != ENOENT
+	    && !buffer_string_is_empty(proc->socket)) {
+		log_error_write(srv, __FILE__, __LINE__, "sbss",
+				"unlink", proc->socket,
+				"after connect failed:", strerror(errno));
+		unlink(proc->socket->ptr);
+	}
+
+	close(scgi_fd);
+
 	if (-1 == status) {
 		/* server is not up, spawn in  */
 		pid_t child;
 		int val;
-
-		if (!buffer_string_is_empty(proc->socket)) {
-			unlink(proc->socket->ptr);
-		}
-
-		close(scgi_fd);
 
 		/* reopen socket */
 		if (-1 == (scgi_fd = fdevent_socket_cloexec(scgi_addr->sa_family, SOCK_STREAM, 0))) {
@@ -909,46 +955,23 @@ static int scgi_spawn_connection(server *srv,
 			/* father */
 			close(scgi_fd);
 
+			/* register process */
+			proc->last_used = srv->cur_ts;
+			proc->is_local = 1;
+			proc->pid = child;
+
 			/* wait */
 			select(0, NULL, NULL, NULL, &tv);
 
-			switch (waitpid(child, &status, WNOHANG)) {
-			case 0:
-				/* child still running after timeout, good */
-				break;
-			case -1:
-				/* no PID found ? should never happen */
-				log_error_write(srv, __FILE__, __LINE__, "ss",
-						"pid not found:", strerror(errno));
-				return -1;
-			default:
-				/* the child should not terminate at all */
-				if (WIFEXITED(status)) {
-					log_error_write(srv, __FILE__, __LINE__, "sd",
-							"child exited (is this a SCGI binary ?):",
-							WEXITSTATUS(status));
-				} else if (WIFSIGNALED(status)) {
-					log_error_write(srv, __FILE__, __LINE__, "sd",
-							"child signaled:",
-							WTERMSIG(status));
-				} else {
-					log_error_write(srv, __FILE__, __LINE__, "sd",
-							"child died somehow:",
-							status);
-				}
+			if (0 != scgi_proc_waitpid(srv, host, proc)) {
+				log_error_write(srv, __FILE__, __LINE__, "sb",
+						"scgi-backend failed to start:", host->bin_path);
 				return -1;
 			}
-
-			/* register process */
-			proc->pid = child;
-			proc->last_used = srv->cur_ts;
-			proc->is_local = 1;
 
 			break;
 		}
 	} else {
-		close(scgi_fd);
-
 		proc->is_local = 0;
 		proc->pid = 0;
 
@@ -2095,15 +2118,9 @@ static int scgi_restart_dead_procs(server *srv, plugin_data *p, scgi_extension_h
 					proc->pid);
 		}
 
-		if (0 == proc->is_local) {
-			/*
-			 * external servers might get disabled
-			 *
-			 * enable the server again, perhaps it is back again
-			 */
-
-			if ((proc->state == PROC_STATE_DISABLED) &&
-			    (srv->cur_ts - proc->disable_ts > host->disable_time)) {
+			if (0 == scgi_proc_waitpid(srv, host, proc)
+			    && proc->state == PROC_STATE_DISABLED
+			    && srv->cur_ts - proc->disable_ts > host->disable_time) {
 				proc->state = PROC_STATE_RUNNING;
 				host->active_procs++;
 
@@ -2112,46 +2129,9 @@ static int scgi_restart_dead_procs(server *srv, plugin_data *p, scgi_extension_h
 						host->host, host->port,
 						host->unixsocket);
 			}
-		} else {
-			/* the child should not terminate at all */
-			int status;
 
-			if (proc->state == PROC_STATE_DIED_WAIT_FOR_PID) {
-				switch(waitpid(proc->pid, &status, WNOHANG)) {
-				case 0:
-					/* child is still alive */
-					break;
-				case -1:
-					break;
-				default:
-					if (WIFEXITED(status)) {
-#if 0
-						log_error_write(srv, __FILE__, __LINE__, "sdsd",
-								"child exited, pid:", proc->pid,
-								"status:", WEXITSTATUS(status));
-#endif
-					} else if (WIFSIGNALED(status)) {
-						log_error_write(srv, __FILE__, __LINE__, "sd",
-								"child signaled:",
-								WTERMSIG(status));
-					} else {
-						log_error_write(srv, __FILE__, __LINE__, "sd",
-								"child died somehow:",
-								status);
-					}
-
-					proc->state = PROC_STATE_DIED;
-					break;
-				}
-			}
-
-			/*
-			 * local servers might died, but we restart them
-			 *
-			 */
-			if (proc->state == PROC_STATE_DIED &&
-			    proc->load == 0) {
-				/* restart the child */
+			if (proc->state == PROC_STATE_DIED && proc->is_local && 0 == proc->load) {
+				/* restart local servers */
 
 				if (p->conf.debug) {
 					log_error_write(srv, __FILE__, __LINE__, "ssdsbsdsd",
@@ -2169,7 +2149,6 @@ static int scgi_restart_dead_procs(server *srv, plugin_data *p, scgi_extension_h
 
 				scgi_proclist_sort_down(srv, host, proc);
 			}
-		}
 	}
 
 	return 0;
@@ -2521,32 +2500,7 @@ static handler_t scgi_recv_response(server *srv, handler_ctx *hctx) {
 			scgi_extension_host *host= hctx->host;
 
 			if (proc->pid && proc->state != PROC_STATE_DIED) {
-				int status;
-
-				/* only fetch the zombie if it is not already done */
-
-				switch(waitpid(proc->pid, &status, WNOHANG)) {
-				case 0:
-					/* child is still alive */
-					break;
-				case -1:
-					break;
-				default:
-					/* the child should not terminate at all */
-					if (WIFEXITED(status)) {
-						log_error_write(srv, __FILE__, __LINE__, "sdsd",
-								"child exited, pid:", proc->pid,
-								"status:", WEXITSTATUS(status));
-					} else if (WIFSIGNALED(status)) {
-						log_error_write(srv, __FILE__, __LINE__, "sd",
-								"child signaled:",
-								WTERMSIG(status));
-					} else {
-						log_error_write(srv, __FILE__, __LINE__, "sd",
-								"child died somehow:",
-								status);
-					}
-
+				if (0 != scgi_proc_waitpid(srv, host, proc)) {
 					if (hctx->conf.debug) {
 						log_error_write(srv, __FILE__, __LINE__, "ssdsbsdsd",
 								"--- scgi spawning",
@@ -2555,10 +2509,7 @@ static handler_t scgi_recv_response(server *srv, handler_ctx *hctx) {
 								"\n\tcurrent:", 1, "/", host->min_procs);
 					}
 
-					if (scgi_spawn_connection(srv, p, host, proc)) {
-						/* child died */
-						proc->state = PROC_STATE_DIED;
-					} else {
+					if (0 == scgi_spawn_connection(srv, p, host, proc)) {
 						scgi_proclist_sort_down(srv, host, proc);
 					}
 
@@ -2904,46 +2855,7 @@ TRIGGER_FUNC(mod_scgi_handle_trigger) {
 				host = ex->hosts[n];
 
 				for (proc = host->first; proc; proc = proc->next) {
-					int status;
-
-					if (proc->pid == 0) continue;
-
-					switch (waitpid(proc->pid, &status, WNOHANG)) {
-					case 0:
-						/* child still running after timeout, good */
-						break;
-					case -1:
-						if (errno != EINTR) {
-							/* no PID found ? should never happen */
-							log_error_write(srv, __FILE__, __LINE__, "sddss",
-									"pid ", proc->pid, proc->state,
-									"not found:", strerror(errno));
-						}
-						break;
-					default:
-						/* the child should not terminate at all */
-						if (WIFEXITED(status)) {
-							if (proc->state != PROC_STATE_KILLED) {
-								log_error_write(srv, __FILE__, __LINE__, "sdb",
-										"child exited:",
-										WEXITSTATUS(status), proc->socket);
-							}
-						} else if (WIFSIGNALED(status)) {
-							if (WTERMSIG(status) != SIGTERM) {
-								log_error_write(srv, __FILE__, __LINE__, "sd",
-										"child signaled:",
-										WTERMSIG(status));
-							}
-						} else {
-							log_error_write(srv, __FILE__, __LINE__, "sd",
-									"child died somehow:",
-									status);
-						}
-						proc->pid = 0;
-						if (proc->state == PROC_STATE_RUNNING) host->active_procs--;
-						proc->state = PROC_STATE_DIED;
-						host->max_id--;
-					}
+					scgi_proc_waitpid(srv, host, proc);
 				}
 
 				scgi_restart_dead_procs(srv, p, host);
@@ -3046,52 +2958,8 @@ TRIGGER_FUNC(mod_scgi_handle_trigger) {
 				}
 
 				for (proc = host->unused_procs; proc; proc = proc->next) {
-					int status;
-
-					if (proc->pid == 0) continue;
-
-					switch (waitpid(proc->pid, &status, WNOHANG)) {
-					case 0:
-						/* child still running after timeout, good */
-						break;
-					case -1:
-						if (errno != EINTR) {
-							/* no PID found ? should never happen */
-							log_error_write(srv, __FILE__, __LINE__, "sddss",
-									"pid ", proc->pid, proc->state,
-									"not found:", strerror(errno));
-
-#if 0
-							if (errno == ECHILD) {
-								/* someone else has cleaned up for us */
-								proc->pid = 0;
-								proc->state = PROC_STATE_UNSET;
-							}
-#endif
-						}
-						break;
-					default:
-						/* the child should not terminate at all */
-						if (WIFEXITED(status)) {
-							if (proc->state != PROC_STATE_KILLED) {
-								log_error_write(srv, __FILE__, __LINE__, "sdb",
-										"child exited:",
-										WEXITSTATUS(status), proc->socket);
-							}
-						} else if (WIFSIGNALED(status)) {
-							if (WTERMSIG(status) != SIGTERM) {
-								log_error_write(srv, __FILE__, __LINE__, "sd",
-										"child signaled:",
-										WTERMSIG(status));
-							}
-						} else {
-							log_error_write(srv, __FILE__, __LINE__, "sd",
-									"child died somehow:",
-									status);
-						}
-						proc->pid = 0;
+					if (0 != scgi_proc_waitpid(srv, host, proc)) {
 						proc->state = PROC_STATE_UNSET;
-						host->max_id--;
 					}
 				}
 			}

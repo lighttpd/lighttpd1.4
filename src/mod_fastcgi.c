@@ -692,6 +692,47 @@ static int fastcgi_extension_insert(fcgi_exts *ext, buffer *key, fcgi_extension_
 
 }
 
+static int fcgi_proc_waitpid(server *srv, fcgi_extension_host *host, fcgi_proc *proc) {
+	int rc, status;
+
+	if (!proc->is_local) return 0;
+	if (proc->pid <= 0) return 0;
+
+	do {
+		rc = waitpid(proc->pid, &status, WNOHANG);
+	} while (-1 == rc && errno == EINTR);
+	if (0 == rc) return 0; /* child still running */
+
+	/* child terminated */
+	if (-1 == rc) {
+		/* EINVAL or ECHILD no child processes */
+		/* should not happen; someone else has cleaned up for us */
+		log_error_write(srv, __FILE__, __LINE__, "sddss",
+				"pid ", proc->pid, proc->state,
+				"not found:", strerror(errno));
+	} else if (WIFEXITED(status)) {
+		if (proc->state != PROC_STATE_KILLED) {
+			log_error_write(srv, __FILE__, __LINE__, "sdb",
+					"child exited:",
+					WEXITSTATUS(status), proc->connection_name);
+		}
+	} else if (WIFSIGNALED(status)) {
+		if (WTERMSIG(status) != SIGTERM && WTERMSIG(status) != SIGINT) {
+			log_error_write(srv, __FILE__, __LINE__, "sd",
+					"child signalled:", WTERMSIG(status));
+		}
+	} else {
+		log_error_write(srv, __FILE__, __LINE__, "sd",
+				"child died somehow:", status);
+	}
+
+	proc->pid = 0;
+	if (proc->state == PROC_STATE_RUNNING) --host->active_procs;
+	if (proc->state != PROC_STATE_UNSET)   --host->max_id;
+	proc->state = PROC_STATE_DIED;
+	return 1;
+}
+
 INIT_FUNC(mod_fastcgi_init) {
 	plugin_data *p;
 
@@ -1004,17 +1045,21 @@ static int fcgi_spawn_connection(server *srv,
 	do {
 		status = connect(fcgi_fd, fcgi_addr, servlen);
 	} while (-1 == status && errno == EINTR);
+
+	if (-1 == status && errno != ENOENT
+	    && !buffer_string_is_empty(proc->unixsocket)) {
+		log_error_write(srv, __FILE__, __LINE__, "sbss",
+				"unlink", proc->unixsocket,
+				"after connect failed:", strerror(errno));
+		unlink(proc->unixsocket->ptr);
+	}
+
+	close(fcgi_fd);
+
 	if (-1 == status) {
 		/* server is not up, spawn it  */
 		pid_t child;
 		int val;
-
-		if (errno != ENOENT &&
-		    !buffer_string_is_empty(proc->unixsocket)) {
-			unlink(proc->unixsocket->ptr);
-		}
-
-		close(fcgi_fd);
 
 		/* reopen socket */
 		if (-1 == (fcgi_fd = fdevent_socket_cloexec(fcgi_addr->sa_family, SOCK_STREAM, 0))) {
@@ -1153,56 +1198,26 @@ static int fcgi_spawn_connection(server *srv,
 			/* father */
 			close(fcgi_fd);
 
+			/* register process */
+			proc->is_local = 1;
+			proc->pid = child;
+
 			/* wait */
 			select(0, NULL, NULL, NULL, &tv);
 
-			switch (waitpid(child, &status, WNOHANG)) {
-			case 0:
-				/* child still running after timeout, good */
-				break;
-			case -1:
-				/* no PID found ? should never happen */
-				log_error_write(srv, __FILE__, __LINE__, "ss",
-						"pid not found:", strerror(errno));
-				return -1;
-			default:
-				log_error_write(srv, __FILE__, __LINE__, "sbs",
-						"the fastcgi-backend", host->bin_path, "failed to start:");
-				/* the child should not terminate at all */
-				if (WIFEXITED(status)) {
-					log_error_write(srv, __FILE__, __LINE__, "sdb",
-							"child exited with status",
-							WEXITSTATUS(status), host->bin_path);
-					log_error_write(srv, __FILE__, __LINE__, "s",
-							"If you're trying to run your app as a FastCGI backend, make sure you're using the FastCGI-enabled version.\n"
-							"If this is PHP on Gentoo, add 'fastcgi' to the USE flags.");
-				} else if (WIFSIGNALED(status)) {
-					log_error_write(srv, __FILE__, __LINE__, "sd",
-							"terminated by signal:",
-							WTERMSIG(status));
-
-					if (WTERMSIG(status) == 11) {
-						log_error_write(srv, __FILE__, __LINE__, "s",
-								"to be exact: it segfaulted, crashed, died, ... you get the idea." );
-						log_error_write(srv, __FILE__, __LINE__, "s",
-								"If this is PHP, try removing the bytecode caches for now and try again.");
-					}
-				} else {
-					log_error_write(srv, __FILE__, __LINE__, "sd",
-							"child died somehow:",
-							status);
-				}
+			if (0 != fcgi_proc_waitpid(srv, host, proc)) {
+				log_error_write(srv, __FILE__, __LINE__, "sb",
+						"fastcgi-backend failed to start:", host->bin_path);
+				log_error_write(srv, __FILE__, __LINE__, "s",
+						"If you're trying to run your app as a FastCGI backend, make sure you're using the FastCGI-enabled version.  "
+						"If this is PHP on Gentoo, add 'fastcgi' to the USE flags.  "
+						"If this is PHP, try removing the bytecode caches for now and try again.");
 				return -1;
 			}
-
-			/* register process */
-			proc->pid = child;
-			proc->is_local = 1;
 
 			break;
 		}
 	} else {
-		close(fcgi_fd);
 		proc->is_local = 0;
 		proc->pid = 0;
 
@@ -2577,8 +2592,6 @@ static int fcgi_restart_dead_procs(server *srv, plugin_data *p, fcgi_extension_h
 	fcgi_proc *proc;
 
 	for (proc = host->first; proc; proc = proc->next) {
-		int status;
-
 		if (p->conf.debug > 2) {
 			log_error_write(srv, __FILE__, __LINE__,  "sbdddd",
 					"proc:",
@@ -2603,67 +2616,16 @@ static int fcgi_restart_dead_procs(server *srv, plugin_data *p, fcgi_extension_h
 		case PROC_STATE_RUNNING:
 			break;
 		case PROC_STATE_OVERLOADED:
-			if (srv->cur_ts <= proc->disabled_until) break;
-
-			proc->state = PROC_STATE_RUNNING;
-			host->active_procs++;
-
-			log_error_write(srv, __FILE__, __LINE__,  "sbdb",
-					"fcgi-server re-enabled:",
-					host->host, host->port,
-					host->unixsocket);
-			break;
 		case PROC_STATE_DIED_WAIT_FOR_PID:
-			/* non-local procs don't have PIDs to wait for */
-			if (!proc->is_local) {
-				proc->state = PROC_STATE_DIED;
-			} else {
-				/* the child should not terminate at all */
+			if (0 == fcgi_proc_waitpid(srv, host, proc)
+			    && srv->cur_ts > proc->disabled_until) {
+				proc->state = PROC_STATE_RUNNING;
+				host->active_procs++;
 
-				for ( ;; ) {
-					switch(waitpid(proc->pid, &status, WNOHANG)) {
-					case 0:
-						/* child is still alive */
-						if (srv->cur_ts <= proc->disabled_until) break;
-
-						proc->state = PROC_STATE_RUNNING;
-						host->active_procs++;
-
-						log_error_write(srv, __FILE__, __LINE__,  "sbdb",
-							"fcgi-server re-enabled:",
-							host->host, host->port,
-							host->unixsocket);
-						break;
-					case -1:
-						if (errno == EINTR) continue;
-
-						log_error_write(srv, __FILE__, __LINE__, "sd",
-							"child died somehow, waitpid failed:",
-							errno);
-						proc->state = PROC_STATE_DIED;
-						break;
-					default:
-						if (WIFEXITED(status)) {
-#if 0
-							log_error_write(srv, __FILE__, __LINE__, "sdsd",
-								"child exited, pid:", proc->pid,
-								"status:", WEXITSTATUS(status));
-#endif
-						} else if (WIFSIGNALED(status)) {
-							log_error_write(srv, __FILE__, __LINE__, "sd",
-								"child signaled:",
-								WTERMSIG(status));
-						} else {
-							log_error_write(srv, __FILE__, __LINE__, "sd",
-								"child died somehow:",
-								status);
-						}
-
-						proc->state = PROC_STATE_DIED;
-						break;
-					}
-					break;
-				}
+				log_error_write(srv, __FILE__, __LINE__,  "sbdb",
+						"fcgi-server re-enabled:",
+						host->host, host->port,
+						host->unixsocket);
 			}
 
 			/* fall through if we have a dead proc now */
@@ -3128,32 +3090,7 @@ static handler_t fcgi_recv_response(server *srv, handler_ctx *hctx) {
 			return HANDLER_FINISHED;
 		case -1:
 			if (proc->pid && proc->state != PROC_STATE_DIED) {
-				int status;
-
-				/* only fetch the zombie if it is not already done */
-
-				switch(waitpid(proc->pid, &status, WNOHANG)) {
-				case 0:
-					/* child is still alive */
-					break;
-				case -1:
-					break;
-				default:
-					/* the child should not terminate at all */
-					if (WIFEXITED(status)) {
-						log_error_write(srv, __FILE__, __LINE__, "sdsd",
-								"child exited, pid:", proc->pid,
-								"status:", WEXITSTATUS(status));
-					} else if (WIFSIGNALED(status)) {
-						log_error_write(srv, __FILE__, __LINE__, "sd",
-								"child signaled:",
-								WTERMSIG(status));
-					} else {
-						log_error_write(srv, __FILE__, __LINE__, "sd",
-								"child died somehow:",
-								status);
-					}
-
+				if (0 != fcgi_proc_waitpid(srv, host, proc)) {
 					if (hctx->conf.debug) {
 						log_error_write(srv, __FILE__, __LINE__, "ssbsdsd",
 								"--- fastcgi spawning",
@@ -3168,8 +3105,6 @@ static handler_t fcgi_recv_response(server *srv, handler_ctx *hctx) {
 						log_error_write(srv, __FILE__, __LINE__, "s",
 								"respawning failed, will retry later");
 					}
-
-					break;
 				}
 			}
 
@@ -3566,98 +3501,14 @@ TRIGGER_FUNC(mod_fastcgi_handle_trigger) {
 				host = ex->hosts[n];
 
 				for (proc = host->first; proc; proc = proc->next) {
-					int status;
-
-					if (proc->pid == 0) continue;
-
-					switch (waitpid(proc->pid, &status, WNOHANG)) {
-					case 0:
-						/* child still running after timeout, good */
-						break;
-					case -1:
-						if (errno != EINTR) {
-							/* no PID found ? should never happen */
-							log_error_write(srv, __FILE__, __LINE__, "sddss",
-									"pid ", proc->pid, proc->state,
-									"not found:", strerror(errno));
-						}
-						break;
-					default:
-						/* the child should not terminate at all */
-						if (WIFEXITED(status)) {
-							if (proc->state != PROC_STATE_KILLED) {
-								log_error_write(srv, __FILE__, __LINE__, "sdb",
-										"child exited:",
-										WEXITSTATUS(status), proc->connection_name);
-							}
-						} else if (WIFSIGNALED(status)) {
-							if (WTERMSIG(status) != SIGTERM) {
-								log_error_write(srv, __FILE__, __LINE__, "sd",
-										"child signaled:",
-										WTERMSIG(status));
-							}
-						} else {
-							log_error_write(srv, __FILE__, __LINE__, "sd",
-									"child died somehow:",
-									status);
-						}
-						proc->pid = 0;
-						if (proc->state == PROC_STATE_RUNNING) host->active_procs--;
-						proc->state = PROC_STATE_DIED;
-						host->max_id--;
-					}
+					fcgi_proc_waitpid(srv, host, proc);
 				}
 
 				fcgi_restart_dead_procs(srv, p, host);
 
 				for (proc = host->unused_procs; proc; proc = proc->next) {
-					int status;
-
-					if (proc->pid == 0) continue;
-
-					switch (waitpid(proc->pid, &status, WNOHANG)) {
-					case 0:
-						/* child still running after timeout, good */
-						break;
-					case -1:
-						if (errno != EINTR) {
-							/* no PID found ? should never happen */
-							log_error_write(srv, __FILE__, __LINE__, "sddss",
-									"pid ", proc->pid, proc->state,
-									"not found:", strerror(errno));
-
-#if 0
-							if (errno == ECHILD) {
-								/* someone else has cleaned up for us */
-								proc->pid = 0;
-								proc->state = PROC_STATE_UNSET;
-							}
-#endif
-						}
-						break;
-					default:
-						/* the child should not terminate at all */
-						if (WIFEXITED(status)) {
-							if (proc->state != PROC_STATE_KILLED) {
-								log_error_write(srv, __FILE__, __LINE__, "sdb",
-										"child exited:",
-										WEXITSTATUS(status), proc->connection_name);
-							}
-						} else if (WIFSIGNALED(status)) {
-							if (WTERMSIG(status) != SIGTERM) {
-								log_error_write(srv, __FILE__, __LINE__, "sd",
-										"child signaled:",
-										WTERMSIG(status));
-							}
-						} else {
-							log_error_write(srv, __FILE__, __LINE__, "sd",
-									"child died somehow:",
-									status);
-						}
-						proc->pid = 0;
-						if (proc->state == PROC_STATE_RUNNING) host->active_procs--;
+					if (0 != fcgi_proc_waitpid(srv, host, proc)) {
 						proc->state = PROC_STATE_UNSET;
-						host->max_id--;
 					}
 				}
 			}
