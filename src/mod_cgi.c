@@ -590,8 +590,7 @@ static int cgi_demux_response(server *srv, handler_ctx *hctx) {
 							}
 
 							connection_response_reset(srv, con); /*(includes con->http_status = 0)*/
-
-							con->mode = DIRECT;
+							plugins_call_connection_reset(srv, con);
 							return FDEVENT_HANDLED_COMEBACK;
 						}
 					}
@@ -810,7 +809,7 @@ static int cgi_recv_response(server *srv, handler_ctx *hctx) {
 			/* if we get a IN|HUP and have read everything don't exec the close twice */
 			return HANDLER_FINISHED;
 		case FDEVENT_HANDLED_COMEBACK:
-			cgi_connection_close(srv, hctx);
+			/*cgi_connection_close(srv, hctx);*//*(already cleaned up and hctx is now invalid)*/
 			return HANDLER_COMEBACK;
 		case FDEVENT_HANDLED_ERROR:
 			log_error_write(srv, __FILE__, __LINE__, "s", "demuxer failed: ");
