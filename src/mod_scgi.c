@@ -2879,8 +2879,9 @@ TRIGGER_FUNC(mod_scgi_handle_trigger) {
 
 					if (fp) {
 						if (fp == host->unused_procs) host->unused_procs = fp->next;
+						else fp->prev->next = fp->next;
 
-						if (fp->next) fp->next->prev = NULL;
+						if (fp->next) fp->next->prev = fp->prev;
 
 						host->max_id++;
 					} else {
