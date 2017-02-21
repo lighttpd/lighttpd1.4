@@ -223,11 +223,7 @@ typedef struct {
 
 	ssize_t load; /* replace by host->load */
 
-	size_t max_id; /* corresponds most of the time to
-	num_procs.
-
-	only if a process is killed max_id waits for the process itself
-	to die and decrements its afterwards */
+	size_t max_id; /* corresponds most of the time to num_procs */
 
 	int listen_backlog;
 	int refcount;
@@ -572,7 +568,6 @@ static int scgi_proc_waitpid(server *srv, scgi_extension_host *host, scgi_proc *
 
 	proc->pid = 0;
 	if (proc->state == PROC_STATE_RUNNING) --host->active_procs;
-	if (proc->state != PROC_STATE_UNSET)   --host->max_id;
 	proc->state = PROC_STATE_DIED;
 	return 1;
 }
@@ -2882,8 +2877,7 @@ TRIGGER_FUNC(mod_scgi_handle_trigger) {
 						else fp->prev->next = fp->next;
 
 						if (fp->next) fp->next->prev = fp->prev;
-
-						host->max_id++;
+						fp->prev = NULL;
 					} else {
 						fp = scgi_process_init();
 						fp->id = host->max_id++;
@@ -2902,16 +2896,15 @@ TRIGGER_FUNC(mod_scgi_handle_trigger) {
 					if (scgi_spawn_connection(srv, p, host, fp)) {
 						log_error_write(srv, __FILE__, __LINE__, "s",
 								"ERROR: spawning fcgi failed.");
-						scgi_process_free(fp);
-						return HANDLER_ERROR;
+						fp->next = host->unused_procs;
+						if (host->unused_procs) host->unused_procs->prev = fp;
+						host->unused_procs = fp;
+						fp->state = PROC_STATE_UNSET;
+					} else {
+						fp->next = host->first;
+						if (host->first) host->first->prev = fp;
+						host->first = fp;
 					}
-
-					fp->prev = NULL;
-					fp->next = host->first;
-					if (host->first) {
-						host->first->prev = fp;
-					}
-					host->first = fp;
 				}
 
 				for (proc = host->first; proc; proc = proc->next) {

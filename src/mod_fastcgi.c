@@ -226,11 +226,7 @@ typedef struct {
 
 	ssize_t load; /* replace by host->load */
 
-	size_t max_id; /* corresponds most of the time to
-	num_procs.
-
-	only if a process is killed max_id waits for the process itself
-	to die and decrements it afterwards */
+	size_t max_id; /* corresponds most of the time to num_procs */
 
 	buffer *strip_request_uri;
 
@@ -728,7 +724,6 @@ static int fcgi_proc_waitpid(server *srv, fcgi_extension_host *host, fcgi_proc *
 
 	proc->pid = 0;
 	if (proc->state == PROC_STATE_RUNNING) --host->active_procs;
-	if (proc->state != PROC_STATE_UNSET)   --host->max_id;
 	proc->state = PROC_STATE_DIED;
 	return 1;
 }
