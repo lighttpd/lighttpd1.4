@@ -509,6 +509,7 @@ static int cgi_demux_response(server *srv, handler_ctx *hctx) {
 					if (0 != http_chunk_append_buffer(srv, con, hctx->response_header)) {
 						return FDEVENT_HANDLED_ERROR;
 					}
+					if (0 == con->http_status) con->http_status = 200; /* OK */
 				} else {
 					const char *bstart;
 					size_t blen;
@@ -853,6 +854,7 @@ static handler_t cgi_handle_fdevent(server *srv, void *ctx, int revents) {
 				cgi_connection_close(srv, hctx);
 				return HANDLER_ERROR;
 			}
+			if (0 == con->http_status) con->http_status = 200; /* OK */
 		} else {
 # if 0
 			log_error_write(srv, __FILE__, __LINE__, "sddd", "got HUP from cgi", con->fd, hctx->fd, revents);
