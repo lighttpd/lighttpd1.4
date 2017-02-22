@@ -77,7 +77,6 @@ typedef struct fcgi_proc {
 	int is_local;
 
 	enum {
-		PROC_STATE_UNSET,    /* init-phase */
 		PROC_STATE_RUNNING,  /* alive */
 		PROC_STATE_OVERLOADED, /* listen-queue is full,
 					  don't send anything to this proc for the next 2 seconds */
@@ -424,19 +423,6 @@ static void fcgi_host_reset(server *srv, handler_ctx *hctx) {
 	hctx->host = NULL;
 }
 
-static void fcgi_host_disable(server *srv, handler_ctx *hctx) {
-	if (hctx->host->disable_time || hctx->proc->is_local) {
-		if (hctx->proc->state == PROC_STATE_RUNNING) hctx->host->active_procs--;
-		hctx->proc->disabled_until = srv->cur_ts + hctx->host->disable_time;
-		hctx->proc->state = hctx->proc->is_local ? PROC_STATE_DIED_WAIT_FOR_PID : PROC_STATE_DIED;
-
-		if (hctx->conf.debug) {
-			log_error_write(srv, __FILE__, __LINE__, "sds",
-				"backend disabled for", hctx->host->disable_time, "seconds");
-		}
-	}
-}
-
 static int fastcgi_status_init(server *srv, buffer *b, fcgi_extension_host *host, fcgi_proc *proc) {
 #define CLEAN(x) \
 	fastcgi_status_copy_procname(b, host, proc); \
@@ -520,7 +506,6 @@ static void handler_ctx_clear(handler_ctx *hctx) {
 
 	hctx->fd = -1;
 	hctx->fde_ndx = -1;
-	/*hctx->pid = -1;*//*(unused; left as-is)*/
 	hctx->got_proc = 0;
 	hctx->reconnects = 0;
 	hctx->request_id = 0;
@@ -541,6 +526,7 @@ static fcgi_proc *fastcgi_process_init(void) {
 
 	f->prev = NULL;
 	f->next = NULL;
+	f->state = PROC_STATE_DIED;
 
 	return f;
 }
@@ -688,6 +674,39 @@ static int fastcgi_extension_insert(fcgi_exts *ext, buffer *key, fcgi_extension_
 
 }
 
+static void fcgi_proc_set_state(fcgi_extension_host *host, fcgi_proc *proc, int state) {
+	if ((int)proc->state == state) return;
+	if (proc->state == PROC_STATE_RUNNING) {
+		--host->active_procs;
+	} else if (state == PROC_STATE_RUNNING) {
+		++host->active_procs;
+	}
+	proc->state = state;
+}
+
+static void fcgi_proc_disable(server *srv, fcgi_extension_host *host, fcgi_proc *proc, handler_ctx *hctx) {
+	if (host->disable_time || (proc->is_local && proc->pid == hctx->pid)) {
+		proc->disabled_until = srv->cur_ts + host->disable_time;
+		fcgi_proc_set_state(host, proc, proc->is_local ? PROC_STATE_DIED_WAIT_FOR_PID : PROC_STATE_DIED);
+
+		if (hctx->conf.debug) {
+			log_error_write(srv, __FILE__, __LINE__, "sds",
+					"backend disabled for", host->disable_time, "seconds");
+		}
+	}
+}
+
+static void fcgi_proc_check_enable(server *srv, fcgi_extension_host *host, fcgi_proc *proc) {
+	if (srv->cur_ts <= proc->disabled_until) return;
+	if (proc->state == PROC_STATE_RUNNING) return;
+
+	fcgi_proc_set_state(host, proc, PROC_STATE_RUNNING);
+
+	log_error_write(srv, __FILE__, __LINE__,  "sbbdb",
+			"fcgi-server re-enabled:", proc->connection_name,
+			host->host, host->port, host->unixsocket);
+}
+
 static int fcgi_proc_waitpid(server *srv, fcgi_extension_host *host, fcgi_proc *proc) {
 	int rc, status;
 
@@ -723,8 +742,7 @@ static int fcgi_proc_waitpid(server *srv, fcgi_extension_host *host, fcgi_proc *
 	}
 
 	proc->pid = 0;
-	if (proc->state == PROC_STATE_RUNNING) --host->active_procs;
-	proc->state = PROC_STATE_DIED;
+	fcgi_proc_set_state(host, proc, PROC_STATE_DIED);
 	return 1;
 }
 
@@ -1223,9 +1241,7 @@ static int fcgi_spawn_connection(server *srv,
 		}
 	}
 
-	proc->state = PROC_STATE_RUNNING;
-	host->active_procs++;
-
+	fcgi_proc_set_state(host, proc, PROC_STATE_RUNNING);
 	return 0;
 }
 
@@ -1554,8 +1570,7 @@ SETDEFAULTS_FUNC(mod_fastcgi_set_defaults) {
 						proc = fastcgi_process_init();
 						proc->id = host->num_procs++;
 						host->max_id++;
-						host->active_procs++;
-						proc->state = PROC_STATE_RUNNING;
+						fcgi_proc_set_state(host, proc, PROC_STATE_RUNNING);
 
 						if (buffer_string_is_empty(host->unixsocket)) {
 							proc->port = host->port;
@@ -1860,7 +1875,7 @@ static connection_result_t fcgi_establish_connection(server *srv, handler_ctx *h
 			log_error_write(srv, __FILE__, __LINE__, "sB",
 					"ERROR: Unix Domain socket filename too long:",
 					proc->unixsocket);
-			return -1;
+			return CONNECTION_DEAD;
 		}
 		memcpy(fcgi_addr_un.sun_path, proc->unixsocket->ptr, buffer_string_length(proc->unixsocket) + 1);
 
@@ -2603,7 +2618,6 @@ static int fcgi_restart_dead_procs(server *srv, plugin_data *p, fcgi_extension_h
 		 */
 		switch (proc->state) {
 		case PROC_STATE_KILLED:
-		case PROC_STATE_UNSET:
 			/* this should never happen as long as adaptive spawing is disabled */
 			force_assert(0);
 
@@ -2612,15 +2626,8 @@ static int fcgi_restart_dead_procs(server *srv, plugin_data *p, fcgi_extension_h
 			break;
 		case PROC_STATE_OVERLOADED:
 		case PROC_STATE_DIED_WAIT_FOR_PID:
-			if (0 == fcgi_proc_waitpid(srv, host, proc)
-			    && srv->cur_ts > proc->disabled_until) {
-				proc->state = PROC_STATE_RUNNING;
-				host->active_procs++;
-
-				log_error_write(srv, __FILE__, __LINE__,  "sbdb",
-						"fcgi-server re-enabled:",
-						host->host, host->port,
-						host->unixsocket);
+			if (0 == fcgi_proc_waitpid(srv, host, proc)) {
+				fcgi_proc_check_enable(srv, host, proc);
 			}
 
 			/* fall through if we have a dead proc now */
@@ -2650,14 +2657,7 @@ static int fcgi_restart_dead_procs(server *srv, plugin_data *p, fcgi_extension_h
 					return HANDLER_ERROR;
 				}
 			} else {
-				if (srv->cur_ts <= proc->disabled_until) break;
-
-				proc->state = PROC_STATE_RUNNING;
-				host->active_procs++;
-
-				log_error_write(srv, __FILE__, __LINE__,  "sb",
-						"fcgi-server re-enabled:",
-						proc->connection_name);
+				fcgi_proc_check_enable(srv, host, proc);
 			}
 			break;
 		}
@@ -2684,7 +2684,7 @@ static handler_t fcgi_write_request(server *srv, handler_ctx *hctx) {
 			log_error_write(srv, __FILE__, __LINE__, "ss",
 					"getsockopt failed:", strerror(errno));
 
-			fcgi_host_disable(srv, hctx);
+			fcgi_proc_disable(srv, hctx->host, hctx->proc, hctx);
 
 			return HANDLER_ERROR;
 		}
@@ -2697,7 +2697,7 @@ static handler_t fcgi_write_request(server *srv, handler_ctx *hctx) {
 						"socket:", hctx->proc->connection_name);
 			}
 
-			fcgi_host_disable(srv, hctx);
+			fcgi_proc_disable(srv, hctx->host, hctx->proc, hctx);
 			log_error_write(srv, __FILE__, __LINE__, "sdssdsd",
 				"backend is overloaded; we'll disable it for", hctx->host->disable_time, "seconds and send the request to another backend instead:",
 				"reconnects:", hctx->reconnects,
@@ -2791,8 +2791,7 @@ static handler_t fcgi_write_request(server *srv, handler_ctx *hctx) {
 					"load:", host->load);
 
 				hctx->proc->disabled_until = srv->cur_ts + hctx->host->disable_time;
-				if (hctx->proc->state == PROC_STATE_RUNNING) hctx->host->active_procs--;
-				hctx->proc->state = PROC_STATE_OVERLOADED;
+				fcgi_proc_set_state(hctx->host, hctx->proc, PROC_STATE_OVERLOADED);
 			}
 
 			fastcgi_status_copy_procname(p->statuskey, hctx->host, hctx->proc);
@@ -2809,7 +2808,7 @@ static handler_t fcgi_write_request(server *srv, handler_ctx *hctx) {
 			 * for check if the host is back in hctx->host->disable_time seconds
 			 *  */
 
-			fcgi_host_disable(srv, hctx);
+			fcgi_proc_disable(srv, hctx->host, hctx->proc, hctx);
 
 			log_error_write(srv, __FILE__, __LINE__, "sdssdsd",
 				"backend died; we'll disable it for", hctx->host->disable_time, "seconds and send the request to another backend instead:",
@@ -3084,7 +3083,7 @@ static handler_t fcgi_recv_response(server *srv, handler_ctx *hctx) {
 
 			return HANDLER_FINISHED;
 		case -1:
-			if (proc->pid && proc->state != PROC_STATE_DIED) {
+			if (proc->is_local && 1 == proc->load && proc->pid == hctx->pid && proc->state != PROC_STATE_DIED) {
 				if (0 != fcgi_proc_waitpid(srv, host, proc)) {
 					if (hctx->conf.debug) {
 						log_error_write(srv, __FILE__, __LINE__, "ssbsdsd",
@@ -3094,9 +3093,6 @@ static handler_t fcgi_recv_response(server *srv, handler_ctx *hctx) {
 					}
 
 					if (fcgi_spawn_connection(srv, p, host, proc)) {
-						/* respawning failed, retry later */
-						proc->state = PROC_STATE_DIED;
-
 						log_error_write(srv, __FILE__, __LINE__, "s",
 								"respawning failed, will retry later");
 					}
@@ -3502,9 +3498,7 @@ TRIGGER_FUNC(mod_fastcgi_handle_trigger) {
 				fcgi_restart_dead_procs(srv, p, host);
 
 				for (proc = host->unused_procs; proc; proc = proc->next) {
-					if (0 != fcgi_proc_waitpid(srv, host, proc)) {
-						proc->state = PROC_STATE_UNSET;
-					}
+					fcgi_proc_waitpid(srv, host, proc);
 				}
 			}
 		}

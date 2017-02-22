@@ -67,7 +67,7 @@ typedef struct scgi_proc {
 
 	int is_local;
 
-	enum { PROC_STATE_UNSET,            /* init-phase */
+	enum {
 			PROC_STATE_RUNNING, /* alive */
 			PROC_STATE_DIED_WAIT_FOR_PID,
 			PROC_STATE_KILLED,  /* was killed as we don't have the load anymore */
@@ -390,6 +390,7 @@ static scgi_proc *scgi_process_init(void) {
 
 	f->prev = NULL;
 	f->next = NULL;
+	f->state = PROC_STATE_DIED;
 
 	return f;
 }
@@ -532,6 +533,16 @@ static int scgi_extension_insert(scgi_exts *ext, buffer *key, scgi_extension_hos
 
 }
 
+static void scgi_proc_set_state(scgi_extension_host *host, scgi_proc *proc, int state) {
+	if ((int)proc->state == state) return;
+	if (proc->state == PROC_STATE_RUNNING) {
+		--host->active_procs;
+	} else if (state == PROC_STATE_RUNNING) {
+		++host->active_procs;
+	}
+	proc->state = state;
+}
+
 static int scgi_proc_waitpid(server *srv, scgi_extension_host *host, scgi_proc *proc) {
 	int rc, status;
 
@@ -567,8 +578,7 @@ static int scgi_proc_waitpid(server *srv, scgi_extension_host *host, scgi_proc *
 	}
 
 	proc->pid = 0;
-	if (proc->state == PROC_STATE_RUNNING) --host->active_procs;
-	proc->state = PROC_STATE_DIED;
+	scgi_proc_set_state(host, proc, PROC_STATE_DIED);
 	return 1;
 }
 
@@ -977,9 +987,7 @@ static int scgi_spawn_connection(server *srv,
 		}
 	}
 
-	proc->state = PROC_STATE_RUNNING;
-	host->active_procs++;
-
+	scgi_proc_set_state(host, proc, PROC_STATE_RUNNING);
 	return 0;
 }
 
@@ -1312,8 +1320,7 @@ SETDEFAULTS_FUNC(mod_scgi_set_defaults) {
 						fp = scgi_process_init();
 						fp->id = df->num_procs++;
 						df->max_id++;
-						df->active_procs++;
-						fp->state = PROC_STATE_RUNNING;
+						scgi_proc_set_state(df, fp, PROC_STATE_RUNNING);
 
 						if (buffer_string_is_empty(df->unixsocket)) {
 							fp->port = df->port;
@@ -2116,8 +2123,7 @@ static int scgi_restart_dead_procs(server *srv, plugin_data *p, scgi_extension_h
 			if (0 == scgi_proc_waitpid(srv, host, proc)
 			    && proc->state == PROC_STATE_DISABLED
 			    && srv->cur_ts - proc->disable_ts > host->disable_time) {
-				proc->state = PROC_STATE_RUNNING;
-				host->active_procs++;
+				scgi_proc_set_state(host, proc, PROC_STATE_RUNNING);
 
 				log_error_write(srv, __FILE__, __LINE__,  "sbdb",
 						"fcgi-server re-enabled:",
@@ -2370,8 +2376,7 @@ static handler_t scgi_send_request(server *srv, handler_ctx *hctx) {
 
 			/* disable this server */
 			proc->disable_ts = srv->cur_ts;
-			proc->state = PROC_STATE_DISABLED;
-			host->active_procs--;
+			scgi_proc_set_state(host, proc, PROC_STATE_DISABLED);
 		}
 
 		if (hctx->state == FCGI_STATE_INIT ||
@@ -2400,7 +2405,7 @@ static handler_t scgi_send_request(server *srv, handler_ctx *hctx) {
 				 */
 				if (proc->state == PROC_STATE_RUNNING &&
 				    hctx->pid == proc->pid) {
-					proc->state = PROC_STATE_DIED_WAIT_FOR_PID;
+					scgi_proc_set_state(host, proc, PROC_STATE_DIED_WAIT_FOR_PID);
 				}
 			}
 			scgi_restart_dead_procs(srv, p, host);
@@ -2494,7 +2499,7 @@ static handler_t scgi_recv_response(server *srv, handler_ctx *hctx) {
 			scgi_proc *proc   = hctx->proc;
 			scgi_extension_host *host= hctx->host;
 
-			if (proc->pid && proc->state != PROC_STATE_DIED) {
+			if (proc->is_local && 1 == proc->load && proc->pid == hctx->pid && proc->state != PROC_STATE_DIED) {
 				if (0 != scgi_proc_waitpid(srv, host, proc)) {
 					if (hctx->conf.debug) {
 						log_error_write(srv, __FILE__, __LINE__, "ssdsbsdsd",
@@ -2899,7 +2904,6 @@ TRIGGER_FUNC(mod_scgi_handle_trigger) {
 						fp->next = host->unused_procs;
 						if (host->unused_procs) host->unused_procs->prev = fp;
 						host->unused_procs = fp;
-						fp->state = PROC_STATE_UNSET;
 					} else {
 						fp->next = host->first;
 						if (host->first) host->first->prev = fp;
@@ -2937,7 +2941,7 @@ TRIGGER_FUNC(mod_scgi_handle_trigger) {
 
 						kill(proc->pid, SIGTERM);
 
-						proc->state = PROC_STATE_KILLED;
+						scgi_proc_set_state(host, proc, PROC_STATE_KILLED);
 
 						log_error_write(srv, __FILE__, __LINE__, "ssbsd",
 									"killed:",
@@ -2952,9 +2956,7 @@ TRIGGER_FUNC(mod_scgi_handle_trigger) {
 				}
 
 				for (proc = host->unused_procs; proc; proc = proc->next) {
-					if (0 != scgi_proc_waitpid(srv, host, proc)) {
-						proc->state = PROC_STATE_UNSET;
-					}
+					scgi_proc_waitpid(srv, host, proc);
 				}
 			}
 		}
