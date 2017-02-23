@@ -603,8 +603,17 @@ static void config_cond_clear_node(server *srv, connection *con, data_config *dc
 	if (con->cond_cache[dc->context_ndx].result != COND_RESULT_UNSET) {
 		size_t i;
 
-		con->cond_cache[dc->context_ndx].patterncount = 0;
-		con->cond_cache[dc->context_ndx].comp_value = NULL;
+	      #if 0
+		/* (redundant; matches not relevant unless COND_RESULT_TRUE) */
+		switch (con->cond_cache[dc->context_ndx].local_result) {
+		case COND_RESULT_TRUE:
+		case COND_RESULT_FALSE:
+			break;
+		default:
+			con->cond_cache[dc->context_ndx].patterncount = 0;
+			con->cond_cache[dc->context_ndx].comp_value = NULL;
+		}
+	      #endif
 		con->cond_cache[dc->context_ndx].result = COND_RESULT_UNSET;
 
 		for (i = 0; i < dc->children.used; ++i) {
