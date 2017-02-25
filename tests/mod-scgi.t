@@ -14,7 +14,7 @@ my $tf = LightyTest->new();
 my $t;
 
 SKIP: {
-	skip "no scgi-responder found", 11 unless -x $tf->{BASEDIR}."/tests/scgi-responder" || -x $tf->{BASEDIR}."/tests/scgi-responder.exe";
+	skip "no scgi-responder found", 10 unless -x $tf->{BASEDIR}."/tests/scgi-responder" || -x $tf->{BASEDIR}."/tests/scgi-responder.exe";
 
 	$tf->{CONFIGFILE} = 'scgi-responder.conf';
 	ok($tf->start_proc == 0, "Starting lighttpd with $tf->{CONFIGFILE}") or die();
