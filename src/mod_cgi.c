@@ -66,6 +66,7 @@ typedef struct {
 typedef struct {
 	array *cgi;
 	unsigned short execute_x_only;
+	unsigned short local_redir;
 	unsigned short xsendfile_allow;
 	array *xsendfile_docroot;
 } plugin_config;
@@ -172,6 +173,7 @@ SETDEFAULTS_FUNC(mod_fastcgi_set_defaults) {
 		{ "cgi.execute-x-only",          NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION },     /* 1 */
 		{ "cgi.x-sendfile",              NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION },     /* 2 */
 		{ "cgi.x-sendfile-docroot",      NULL, T_CONFIG_ARRAY,   T_CONFIG_SCOPE_CONNECTION },     /* 3 */
+		{ "cgi.local-redir",             NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION },     /* 4 */
 		{ NULL,                          NULL, T_CONFIG_UNSET, T_CONFIG_SCOPE_UNSET}
 	};
 
@@ -189,6 +191,7 @@ SETDEFAULTS_FUNC(mod_fastcgi_set_defaults) {
 
 		s->cgi    = array_init();
 		s->execute_x_only = 0;
+		s->local_redir    = 0;
 		s->xsendfile_allow= 0;
 		s->xsendfile_docroot = array_init();
 
@@ -196,6 +199,7 @@ SETDEFAULTS_FUNC(mod_fastcgi_set_defaults) {
 		cv[1].destination = &(s->execute_x_only);
 		cv[2].destination = &(s->xsendfile_allow);
 		cv[3].destination = s->xsendfile_docroot;
+		cv[4].destination = &(s->local_redir);
 
 		p->config_storage[i] = s;
 
@@ -556,7 +560,7 @@ static int cgi_demux_response(server *srv, handler_ctx *hctx) {
 					 *  to same URL, since CGI should have handled it internally if it
 					 *  really wanted to do that internally)
 					 */
-					if (con->http_status >= 300 && con->http_status < 400) {
+					if (hctx->conf.local_redir && con->http_status >= 300 && con->http_status < 400) {
 						/*(con->parsed_response & HTTP_LOCATION)*/
 						size_t ulen = buffer_string_length(con->uri.path);
 						data_string *ds;
@@ -1328,6 +1332,7 @@ static int mod_cgi_patch_connection(server *srv, connection *con, plugin_data *p
 
 	PATCH(cgi);
 	PATCH(execute_x_only);
+	PATCH(local_redir);
 	PATCH(xsendfile_allow);
 	PATCH(xsendfile_docroot);
 
@@ -1347,6 +1352,8 @@ static int mod_cgi_patch_connection(server *srv, connection *con, plugin_data *p
 				PATCH(cgi);
 			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("cgi.execute-x-only"))) {
 				PATCH(execute_x_only);
+			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("cgi.local-redir"))) {
+				PATCH(local_redir);
 			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("cgi.x-sendfile"))) {
 				PATCH(xsendfile_allow);
 			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("cgi.x-sendfile-docroot"))) {
