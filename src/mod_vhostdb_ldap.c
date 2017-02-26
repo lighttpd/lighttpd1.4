@@ -394,7 +394,7 @@ static int mod_vhostdb_ldap_query(server *srv, connection *con, void *p_d, buffe
         return -1;
     }
 
-    if (NULL == (vals = ldap_get_values_len(ld, first, dbconf->attr))) {
+    if (NULL != (vals = ldap_get_values_len(ld, first, dbconf->attr))) {
         buffer_copy_string_len(docroot, vals[0]->bv_val, vals[0]->bv_len);
         ldap_value_free_len(vals);
     }

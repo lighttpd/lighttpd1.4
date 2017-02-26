@@ -899,7 +899,8 @@ static int server_main (server * const srv, int argc, char **argv) {
 		}
 		case 'p': print_config = 1; break;
 		case 't': ++test_config; break;
-		case '1': oneshot_fd = dup(STDIN_FILENO); break;
+		case '1': if (0 == oneshot_fd) oneshot_fd = dup(STDIN_FILENO);
+			  break;
 		case 'D': srv->srvconf.dont_daemonize = 1; break;
 		case 'v': show_version(); return 0;
 		case 'V': show_features(); return 0;

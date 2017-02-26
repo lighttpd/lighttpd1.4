@@ -86,7 +86,7 @@ FREE_FUNC(mod_rrd_free) {
 		close(p->write_fd);
 #ifdef HAVE_FORK
 		/* collect status */
-		waitpid(p->rrdtool_pid, &status, 0);
+		while (-1 == waitpid(p->rrdtool_pid, &status, 0) && errno == EINTR) ;
 #endif
 	}
 
