@@ -237,10 +237,6 @@ handler_t http_response_prepare(server *srv, connection *con) {
 		con->conditional_is_valid[COMP_HTTP_SCHEME] = 1;         /* Scheme:      */
 		con->conditional_is_valid[COMP_HTTP_HOST] = 1;           /* Host:        */
 		con->conditional_is_valid[COMP_HTTP_REMOTE_IP] = 1;      /* Client-IP */
-		con->conditional_is_valid[COMP_HTTP_REFERER] = 1;        /* Referer:     */
-		con->conditional_is_valid[COMP_HTTP_USER_AGENT] =        /* User-Agent:  */
-		con->conditional_is_valid[COMP_HTTP_LANGUAGE] = 1;       /* Accept-Language:  */
-		con->conditional_is_valid[COMP_HTTP_COOKIE] = 1;         /* Cookie:  */
 		con->conditional_is_valid[COMP_HTTP_REQUEST_METHOD] = 1; /* REQUEST_METHOD */
 		con->conditional_is_valid[COMP_HTTP_URL] = 1;            /* HTTPurl */
 		con->conditional_is_valid[COMP_HTTP_QUERY_STRING] = 1;   /* HTTPqs */
