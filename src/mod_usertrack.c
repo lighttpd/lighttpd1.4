@@ -17,6 +17,7 @@
 
 typedef struct {
 	buffer *cookie_name;
+	buffer *cookie_attrs;
 	buffer *cookie_domain;
 	unsigned int cookie_max_age;
 } plugin_config;
@@ -54,6 +55,7 @@ FREE_FUNC(mod_usertrack_free) {
 			if (NULL == s) continue;
 
 			buffer_free(s->cookie_name);
+			buffer_free(s->cookie_attrs);
 			buffer_free(s->cookie_domain);
 
 			free(s);
@@ -76,6 +78,7 @@ SETDEFAULTS_FUNC(mod_usertrack_set_defaults) {
 		{ "usertrack.cookie-name",       NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_CONNECTION },       /* 0 */
 		{ "usertrack.cookie-max-age",    NULL, T_CONFIG_INT, T_CONFIG_SCOPE_CONNECTION },          /* 1 */
 		{ "usertrack.cookie-domain",     NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_CONNECTION },       /* 2 */
+		{ "usertrack.cookie-attrs",      NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_CONNECTION },       /* 3 */
 
 		{ NULL,                          NULL, T_CONFIG_UNSET, T_CONFIG_SCOPE_UNSET }
 	};
@@ -90,12 +93,14 @@ SETDEFAULTS_FUNC(mod_usertrack_set_defaults) {
 
 		s = calloc(1, sizeof(plugin_config));
 		s->cookie_name    = buffer_init();
+		s->cookie_attrs   = buffer_init();
 		s->cookie_domain  = buffer_init();
 		s->cookie_max_age = 0;
 
 		cv[0].destination = s->cookie_name;
 		cv[1].destination = &(s->cookie_max_age);
 		cv[2].destination = s->cookie_domain;
+		cv[3].destination = s->cookie_attrs;
 
 		p->config_storage[i] = s;
 
@@ -144,6 +149,7 @@ static int mod_usertrack_patch_connection(server *srv, connection *con, plugin_d
 	plugin_config *s = p->config_storage[0];
 
 	PATCH(cookie_name);
+	PATCH(cookie_attrs);
 	PATCH(cookie_domain);
 	PATCH(cookie_max_age);
 
@@ -161,6 +167,8 @@ static int mod_usertrack_patch_connection(server *srv, connection *con, plugin_d
 
 			if (buffer_is_equal_string(du->key, CONST_STR_LEN("usertrack.cookie-name"))) {
 				PATCH(cookie_name);
+			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("usertrack.cookie-attrs"))) {
+				PATCH(cookie_attrs);
 			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("usertrack.cookie-max-age"))) {
 				PATCH(cookie_max_age);
 			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("usertrack.cookie-domain"))) {
@@ -235,6 +243,14 @@ URIHANDLER_FUNC(mod_usertrack_uri_handler) {
 	li_MD5_Final(h, &Md5Ctx);
 
 	buffer_append_string_encoded(ds->value, (char *)h, 16, ENCODING_HEX);
+
+	/* usertrack.cookie-attrs, if set, replaces all other attrs */
+	if (!buffer_string_is_empty(p->conf.cookie_attrs)) {
+		buffer_append_string_buffer(ds->value, p->conf.cookie_attrs);
+		array_insert_unique(con->response.headers, (data_unset *)ds);
+		return HANDLER_GO_ON;
+	}
+
 	buffer_append_string_len(ds->value, CONST_STR_LEN("; Path=/"));
 	buffer_append_string_len(ds->value, CONST_STR_LEN("; Version=1"));
 
