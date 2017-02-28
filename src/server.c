@@ -1063,6 +1063,9 @@ static int server_main (server * const srv, int argc, char **argv) {
 			srv->max_fds = rlim.rlim_cur < (rlim_t)FD_SETSIZE - 200 ? (int)rlim.rlim_cur : (int)FD_SETSIZE - 200;
 		} else {
 			srv->max_fds = rlim.rlim_cur;
+			/*(default upper limit of 4k if server.max-fds not specified)*/
+			if (i_am_root && 0 == srv->srvconf.max_fds && rlim.rlim_cur > 4096)
+				srv->max_fds = 4096;
 		}
 
 		/* set core file rlimit, if enable_cores is set */
