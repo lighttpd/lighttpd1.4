@@ -43,7 +43,7 @@ static connection *connections_get_new_connection(server *srv) {
 	size_t i;
 
 	if (conns->size == 0) {
-		conns->size = 128;
+		conns->size = srv->max_conns >= 128 ? 128 : srv->max_conns > 16 ? 16 : srv->max_conns;
 		conns->ptr = NULL;
 		conns->ptr = malloc(sizeof(*conns->ptr) * conns->size);
 		force_assert(NULL != conns->ptr);
@@ -51,7 +51,7 @@ static connection *connections_get_new_connection(server *srv) {
 			conns->ptr[i] = connection_init(srv);
 		}
 	} else if (conns->size == conns->used) {
-		conns->size += 128;
+		conns->size += srv->max_conns >= 128 ? 128 : 16;
 		conns->ptr = realloc(conns->ptr, sizeof(*conns->ptr) * conns->size);
 		force_assert(NULL != conns->ptr);
 
