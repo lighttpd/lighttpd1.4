@@ -207,6 +207,12 @@ SETDEFAULTS_FUNC(mod_fastcgi_set_defaults) {
 			return HANDLER_ERROR;
 		}
 
+		if (!array_is_kvstring(s->cgi)) {
+			log_error_write(srv, __FILE__, __LINE__, "s",
+					"unexpected value for cgi.assign; expected list of \"ext\" => \"exepath\"");
+			return HANDLER_ERROR;
+		}
+
 		if (s->xsendfile_docroot->used) {
 			size_t j;
 			for (j = 0; j < s->xsendfile_docroot->used; ++j) {

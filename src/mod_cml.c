@@ -111,6 +111,12 @@ SETDEFAULTS_FUNC(mod_cml_set_defaults) {
 			return HANDLER_ERROR;
 		}
 
+		if (!array_is_vlist(s->mc_hosts)) {
+			log_error_write(srv, __FILE__, __LINE__, "s",
+					"unexpected value for cml.memcache-hosts; expected list of \"host\"");
+			return HANDLER_ERROR;
+		}
+
 		if (s->mc_hosts->used) {
 #if defined(USE_MEMCACHED)
 			buffer *option_string = buffer_init();

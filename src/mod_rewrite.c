@@ -171,25 +171,15 @@ static int parse_config_entry(server *srv, array *ca, rewrite_rule_buffer *kvb, 
 		data_array *da;
 		size_t j;
 
-		if (du->type != TYPE_ARRAY) {
-			log_error_write(srv, __FILE__, __LINE__, "sss",
-					"unexpected type for key: ", option, "array of strings");
+		da = (data_array *)du;
 
+		if (du->type != TYPE_ARRAY || !array_is_kvstring(da->value)) {
+			log_error_write(srv, __FILE__, __LINE__, "SSS",
+					"unexpected value for ", option, "; expected list of \"regex\" => \"subst\"");
 			return HANDLER_ERROR;
 		}
 
-		da = (data_array *)du;
-
 		for (j = 0; j < da->value->used; j++) {
-			if (da->value->data[j]->type != TYPE_STRING) {
-				log_error_write(srv, __FILE__, __LINE__, "sssbs",
-						"unexpected type for key: ",
-						option,
-						"[", da->value->data[j]->key, "](string)");
-
-				return HANDLER_ERROR;
-			}
-
 			if (0 != rewrite_rule_buffer_append(kvb,
 							    ((data_string *)(da->value->data[j]))->key,
 							    ((data_string *)(da->value->data[j]))->value,

@@ -102,6 +102,12 @@ SETDEFAULTS_FUNC(mod_flv_streaming_set_defaults) {
 		if (0 != config_insert_values_global(srv, config->value, cv, i == 0 ? T_CONFIG_SCOPE_SERVER : T_CONFIG_SCOPE_CONNECTION)) {
 			return HANDLER_ERROR;
 		}
+
+		if (!array_is_vlist(s->extensions)) {
+			log_error_write(srv, __FILE__, __LINE__, "s",
+					"unexpected value for flv-streaming.extensions; expected list of \"ext\"");
+			return HANDLER_ERROR;
+		}
 	}
 
 	return HANDLER_GO_ON;

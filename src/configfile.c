@@ -335,6 +335,11 @@ static int config_insert(server *srv) {
 			s->stream_response_body |= FDEVENT_STREAM_RESPONSE;
 		}
 
+		if (!array_is_kvstring(s->mimetypes)) {
+			log_error_write(srv, __FILE__, __LINE__, "s",
+					"unexpected value for mimetype.assign; expected list of \"ext\" => \"mimetype\"");
+		}
+
 #if !(defined HAVE_LIBSSL && defined HAVE_OPENSSL_SSL_H)
 		if (s->ssl_enabled) {
 			log_error_write(srv, __FILE__, __LINE__, "s",
@@ -375,6 +380,18 @@ static int config_insert(server *srv) {
 	}
 
 	buffer_free(stat_cache_string);
+
+	if (!array_is_vlist(srv->srvconf.upload_tempdirs)) {
+		log_error_write(srv, __FILE__, __LINE__, "s",
+				"unexpected value for server.upload-dirs; expected list of \"path\" strings");
+		ret = HANDLER_ERROR;
+	}
+
+	if (!array_is_vlist(srv->srvconf.modules)) {
+		log_error_write(srv, __FILE__, __LINE__, "s",
+				"unexpected value for server.modules; expected list of \"mod_xxxxxx\" strings");
+		ret = HANDLER_ERROR;
+	}
 
 	{
 		data_string *ds;

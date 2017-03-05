@@ -242,7 +242,13 @@ SETDEFAULTS_FUNC(mod_auth_set_defaults) {
 		/* no auth.require for this section */
 		if (NULL == (da = (data_array *)array_get_element(config->value, "auth.require"))) continue;
 
-		if (da->type != TYPE_ARRAY) continue;
+		if (da->type != TYPE_ARRAY || !array_is_kvarray(da->value)) {
+			log_error_write(srv, __FILE__, __LINE__, "ss",
+					"unexpected value for auth.require; expected ",
+					"auth.require = ( \"urlpath\" => ( \"option\" => \"value\" ) )");
+			return HANDLER_ERROR;
+		}
+
 
 		for (n = 0; n < da->value->used; n++) {
 			size_t m;
@@ -250,10 +256,10 @@ SETDEFAULTS_FUNC(mod_auth_set_defaults) {
 			const buffer *method = NULL, *realm = NULL, *require = NULL;
 			const http_auth_scheme_t *auth_scheme;
 
-			if (da->value->data[n]->type != TYPE_ARRAY) {
+			if (!array_is_kvstring(da_file->value)) {
 				log_error_write(srv, __FILE__, __LINE__, "ss",
-						"auth.require should contain an array as in:",
-						"auth.require = ( \"...\" => ( ..., ...) )");
+						"unexpected value for auth.require; expected ",
+						"auth.require = ( \"urlpath\" => ( \"option\" => \"value\" ) )");
 
 				return HANDLER_ERROR;
 			}

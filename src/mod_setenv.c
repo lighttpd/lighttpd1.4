@@ -135,6 +135,18 @@ SETDEFAULTS_FUNC(mod_setenv_set_defaults) {
 		if (0 != config_insert_values_global(srv, config->value, cv, i == 0 ? T_CONFIG_SCOPE_SERVER : T_CONFIG_SCOPE_CONNECTION)) {
 			return HANDLER_ERROR;
 		}
+
+		if (   !array_is_kvstring(s->request_header)
+		    || !array_is_kvstring(s->response_header)
+		    || !array_is_kvstring(s->environment)
+		    || !array_is_kvstring(s->set_request_header)
+		    || !array_is_kvstring(s->set_response_header)
+		    || !array_is_kvstring(s->set_environment)) {
+			log_error_write(srv, __FILE__, __LINE__, "s",
+					"unexpected value for setenv.xxxxxx; expected list of \"envvar\" => \"value\"");
+			return HANDLER_ERROR;
+		}
+
 	}
 
 	return HANDLER_GO_ON;

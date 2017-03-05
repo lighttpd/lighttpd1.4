@@ -285,6 +285,38 @@ void array_insert_unique(array *a, data_unset *entry) {
 	}
 }
 
+int array_is_vlist(array *a) {
+	for (size_t i = 0; i < a->used; ++i) {
+		data_unset *du = a->data[i];
+		if (!du->is_index_key || du->type != TYPE_STRING) return 0;
+	}
+	return 1;
+}
+
+int array_is_kvany(array *a) {
+	for (size_t i = 0; i < a->used; ++i) {
+		data_unset *du = a->data[i];
+		if (du->is_index_key) return 0;
+	}
+	return 1;
+}
+
+int array_is_kvarray(array *a) {
+	for (size_t i = 0; i < a->used; ++i) {
+		data_unset *du = a->data[i];
+		if (du->is_index_key || du->type != TYPE_ARRAY) return 0;
+	}
+	return 1;
+}
+
+int array_is_kvstring(array *a) {
+	for (size_t i = 0; i < a->used; ++i) {
+		data_unset *du = a->data[i];
+		if (du->is_index_key || du->type != TYPE_STRING) return 0;
+	}
+	return 1;
+}
+
 void array_print_indent(int depth) {
 	int i;
 	for (i = 0; i < depth; i ++) {

@@ -324,6 +324,18 @@ SETDEFAULTS_FUNC(mod_deflate_setdefaults) {
 			s->max_loadavg = strtod(p->tmp_buf->ptr, NULL);
 		}
 
+		if (!array_is_vlist(s->mimetypes)) {
+			log_error_write(srv, __FILE__, __LINE__, "s",
+					"unexpected value for deflate.mimetypes; expected list of \"mimetype\"");
+			return HANDLER_ERROR;
+		}
+
+		if (!array_is_vlist(p->encodings)) {
+			log_error_write(srv, __FILE__, __LINE__, "s",
+					"unexpected value for deflate.allowed-encodings; expected list of \"encoding\"");
+			return HANDLER_ERROR;
+		}
+
 		if (p->encodings->used) {
 			size_t j = 0;
 			for (j = 0; j < p->encodings->used; j++) {

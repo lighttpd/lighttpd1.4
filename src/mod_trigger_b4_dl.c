@@ -212,6 +212,12 @@ SETDEFAULTS_FUNC(mod_trigger_b4_dl_set_defaults) {
 		}
 #endif
 
+		if (!array_is_vlist(s->mc_hosts)) {
+			log_error_write(srv, __FILE__, __LINE__, "s",
+					"unexpected value for trigger-before-download.memcache-hosts; expected list of \"host\"");
+			return HANDLER_ERROR;
+		}
+
 		if (s->mc_hosts->used) {
 #if defined(USE_MEMCACHED)
 			buffer *option_string = buffer_init();

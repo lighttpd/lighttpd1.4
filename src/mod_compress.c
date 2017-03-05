@@ -213,6 +213,18 @@ SETDEFAULTS_FUNC(mod_compress_setdefaults) {
 			s->max_loadavg = strtod(srv->tmp_buf->ptr, NULL);
 		}
 
+		if (!array_is_vlist(s->compress)) {
+			log_error_write(srv, __FILE__, __LINE__, "s",
+					"unexpected value for compress.filetype; expected list of \"mimetype\"");
+			return HANDLER_ERROR;
+		}
+
+		if (!array_is_vlist(encodings_arr)) {
+			log_error_write(srv, __FILE__, __LINE__, "s",
+					"unexpected value for compress.allowed-encodings; expected list of \"encoding\"");
+			return HANDLER_ERROR;
+		}
+
 		if (encodings_arr->used) {
 			size_t j = 0;
 			for (j = 0; j < encodings_arr->used; j++) {
@@ -881,12 +893,6 @@ PHYSICALPATH_FUNC(mod_compress_physical) {
 
 	for (m = 0; m < p->conf.compress->used; m++) {
 		data_string *compress_ds = (data_string *)p->conf.compress->data[m];
-
-		if (!compress_ds) {
-			log_error_write(srv, __FILE__, __LINE__, "sbb", "evil", con->physical.path, con->uri.path);
-
-			return HANDLER_GO_ON;
-		}
 
 		if (buffer_is_equal(compress_ds->value, sce->content_type)
 		    || (content_type && buffer_is_equal(compress_ds->value, content_type))) {

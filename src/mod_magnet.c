@@ -126,6 +126,18 @@ SETDEFAULTS_FUNC(mod_magnet_set_defaults) {
 		if (0 != config_insert_values_global(srv, config->value, cv, i == 0 ? T_CONFIG_SCOPE_SERVER : T_CONFIG_SCOPE_CONNECTION)) {
 			return HANDLER_ERROR;
 		}
+
+		if (!array_is_vlist(s->url_raw)) {
+			log_error_write(srv, __FILE__, __LINE__, "s",
+					"unexpected value for magnet.attract-raw-url-to; expected list of \"scriptpath\"");
+			return HANDLER_ERROR;
+		}
+
+		if (!array_is_vlist(s->physical_path)) {
+			log_error_write(srv, __FILE__, __LINE__, "s",
+					"unexpected value for magnet.attract-physical-path-to; expected list \"scriptpath\"");
+			return HANDLER_ERROR;
+		}
 	}
 
 	return HANDLER_GO_ON;

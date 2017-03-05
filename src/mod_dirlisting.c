@@ -292,13 +292,13 @@ SETDEFAULTS_FUNC(mod_dirlisting_set_defaults) {
 			array *excludes_list;
 			size_t j;
 
-			if (du_excludes->type != TYPE_ARRAY) {
-				log_error_write(srv, __FILE__, __LINE__, "sss",
-					"unexpected type for key: ", CONFIG_EXCLUDE, "array of strings");
+			excludes_list = ((data_array*)du_excludes)->value;
+
+			if (du_excludes->type != TYPE_ARRAY || !array_is_vlist(excludes_list)) {
+				log_error_write(srv, __FILE__, __LINE__, "s",
+					"unexpected type for " CONFIG_EXCLUDE "; expected list of \"regex\"");
 				return HANDLER_ERROR;
 			}
-
-			excludes_list = ((data_array*)du_excludes)->value;
 
 #ifndef HAVE_PCRE_H
 			if (excludes_list->used > 0) {

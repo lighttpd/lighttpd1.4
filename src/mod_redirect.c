@@ -107,25 +107,15 @@ SETDEFAULTS_FUNC(mod_redirect_set_defaults) {
 			continue;
 		}
 
-		if (du->type != TYPE_ARRAY) {
-			log_error_write(srv, __FILE__, __LINE__, "sss",
-					"unexpected type for key: ", "url.redirect", "array of strings");
+		da = (data_array *)du;
 
+		if (du->type != TYPE_ARRAY || !array_is_kvstring(da->value)) {
+			log_error_write(srv, __FILE__, __LINE__, "s",
+					"unexpected value for url.redirect; expected list of \"regex\" => \"redirect\"");
 			return HANDLER_ERROR;
 		}
 
-		da = (data_array *)du;
-
 		for (j = 0; j < da->value->used; j++) {
-			if (da->value->data[j]->type != TYPE_STRING) {
-				log_error_write(srv, __FILE__, __LINE__, "sssbs",
-						"unexpected type for key: ",
-						"url.redirect",
-						"[", da->value->data[j]->key, "](string)");
-
-				return HANDLER_ERROR;
-			}
-
 			if (0 != pcre_keyvalue_buffer_append(srv, s->redirect,
 							     ((data_string *)(da->value->data[j]))->key->ptr,
 							     ((data_string *)(da->value->data[j]))->value->ptr)) {

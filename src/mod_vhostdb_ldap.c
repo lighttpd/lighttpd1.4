@@ -461,6 +461,12 @@ SETDEFAULTS_FUNC(mod_vhostdb_set_defaults) {
             return HANDLER_ERROR;
         }
 
+	if (!array_is_kvstring(s->options)) {
+		log_error_write(srv, __FILE__, __LINE__, "s",
+				"unexpected value for vhostdb.ldap; expected list of \"option\" => \"value\"");
+		return HANDLER_ERROR;
+	}
+
         if (s->options->used
             && 0 != mod_vhostdb_dbconf_setup(srv, s->options, &s->vdata)) {
             return HANDLER_ERROR;
