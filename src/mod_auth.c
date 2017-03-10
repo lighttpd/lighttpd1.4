@@ -805,7 +805,7 @@ static handler_t mod_auth_check_digest(server *srv, connection *con, void *p_d, 
 		for (i = 0; i < 8 && light_isxdigit(nonce_uns[i]); ++i) {
 			ts = (ts << 4) + hex2int(nonce_uns[i]);
 		}
-		if (i != 8 || nonce[8] != ':'
+		if (nonce[i] != ':'
 		    || ts > srv->cur_ts || srv->cur_ts - ts > 600) { /*(10 mins)*/
 			/* nonce is stale; have client regenerate digest */
 			buffer_free(b);
