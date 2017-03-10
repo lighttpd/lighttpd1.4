@@ -1814,7 +1814,6 @@ static int scgi_demux_response(server *srv, handler_ctx *hctx) {
 		if (-1 == (n = read(hctx->fd, hctx->response->ptr, hctx->response->size - 1))) {
 			if (errno == EAGAIN || errno == EINTR) {
 				/* would block, wait for signal */
-				fdevent_event_add(srv->ev, &(hctx->fde_ndx), hctx->fd, FDEVENT_IN);
 				return 0;
 			}
 			/* error */
@@ -2430,9 +2429,10 @@ SUBREQUEST_FUNC(mod_scgi_handle_subrequest) {
 		if (chunkqueue_length(con->write_queue) > 65536 - 4096) {
 			fdevent_event_clr(srv->ev, &(hctx->fde_ndx), hctx->fd, FDEVENT_IN);
 		} else if (!(fdevent_event_get_interest(srv->ev, hctx->fd) & FDEVENT_IN)) {
-			/* optimistic read from backend, which might re-enable FDEVENT_IN */
+			/* optimistic read from backend */
 			handler_t rc = scgi_recv_response(srv, hctx); /*(might invalidate hctx)*/
 			if (rc != HANDLER_GO_ON) return rc;           /*(unless HANDLER_GO_ON)*/
+			fdevent_event_add(srv->ev, &(hctx->fde_ndx), hctx->fd, FDEVENT_IN);
 		}
 	}
 

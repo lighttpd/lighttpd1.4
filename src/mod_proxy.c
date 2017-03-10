@@ -839,7 +839,6 @@ static int proxy_demux_response(server *srv, handler_ctx *hctx) {
       #if !defined(_WIN32) && !defined(__CYGWIN__)
 	if (ioctl(hctx->fd, FIONREAD, &b)) {
 		if (errno == EAGAIN) {
-			fdevent_event_add(srv->ev, &(hctx->fde_ndx), hctx->fd, FDEVENT_IN);
 			return 0;
 		}
 		log_error_write(srv, __FILE__, __LINE__, "sd",
@@ -878,7 +877,6 @@ static int proxy_demux_response(server *srv, handler_ctx *hctx) {
 
 		if (-1 == (r = read(hctx->fd, hctx->response->ptr + buffer_string_length(hctx->response), buffer_string_space(hctx->response)))) {
 			if (errno == EAGAIN) {
-				fdevent_event_add(srv->ev, &(hctx->fde_ndx), hctx->fd, FDEVENT_IN);
 				return 0;
 			}
 			log_error_write(srv, __FILE__, __LINE__, "sds",
@@ -951,6 +949,7 @@ static int proxy_demux_response(server *srv, handler_ctx *hctx) {
 			buffer_reset(hctx->response);
 		}
 	} else {
+		if (!(fdevent_event_get_interest(srv->ev, hctx->fd) & FDEVENT_IN)) return 0;
 		/* reading from upstream done */
 		fin = 1;
 	}
@@ -1179,9 +1178,10 @@ SUBREQUEST_FUNC(mod_proxy_handle_subrequest) {
 		if (chunkqueue_length(con->write_queue) > 65536 - 4096) {
 			fdevent_event_clr(srv->ev, &(hctx->fde_ndx), hctx->fd, FDEVENT_IN);
 		} else if (!(fdevent_event_get_interest(srv->ev, hctx->fd) & FDEVENT_IN)) {
-			/* optimistic read from backend, which might re-enable FDEVENT_IN */
+			/* optimistic read from backend */
 			handler_t rc = proxy_recv_response(srv, hctx); /*(might invalidate hctx)*/
 			if (rc != HANDLER_GO_ON) return rc;            /*(unless HANDLER_GO_ON)*/
+			fdevent_event_add(srv->ev, &(hctx->fde_ndx), hctx->fd, FDEVENT_IN);
 		}
 	}
 
