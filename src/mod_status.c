@@ -85,6 +85,7 @@ FREE_FUNC(mod_status_free) {
 		size_t i;
 		for (i = 0; i < srv->config_context->used; i++) {
 			plugin_config *s = p->config_storage[i];
+			if (NULL == s) continue;
 
 			buffer_free(s->status_url);
 			buffer_free(s->statistics_url);

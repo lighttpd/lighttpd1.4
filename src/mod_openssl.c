@@ -113,7 +113,9 @@ FREE_FUNC(mod_openssl_free)
     if (p->config_storage) {
         for (size_t i = 0; i < srv->config_context->used; ++i) {
             plugin_config *s = p->config_storage[i];
-            int copy = s->ssl_enabled && buffer_string_is_empty(s->ssl_pemfile);
+            int copy;
+            if (NULL == s) continue;
+            copy = s->ssl_enabled && buffer_string_is_empty(s->ssl_pemfile);
             buffer_free(s->ssl_pemfile);
             buffer_free(s->ssl_ca_file);
             buffer_free(s->ssl_cipher_list);

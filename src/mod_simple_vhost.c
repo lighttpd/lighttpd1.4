@@ -55,6 +55,7 @@ FREE_FUNC(mod_simple_vhost_free) {
 		size_t i;
 		for (i = 0; i < srv->config_context->used; i++) {
 			plugin_config *s = p->config_storage[i];
+			if (NULL == s) continue;
 
 			buffer_free(s->document_root);
 			buffer_free(s->default_host);
