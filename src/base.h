@@ -413,8 +413,6 @@ typedef struct connection {
 	/* response */
 	int    got_response;
 
-	int    in_joblist;
-
 	connection_type mode;
 
 	void **plugin_ctx;           /* plugin connection specific config */

@@ -1812,7 +1812,6 @@ static int server_main (server * const srv, int argc, char **argv) {
 		for (ndx = 0; ndx < srv->joblist->used; ndx++) {
 			connection *con = srv->joblist->ptr[ndx];
 			connection_state_machine(srv, con);
-			con->in_joblist = 0;
 		}
 
 		srv->joblist->used = 0;
