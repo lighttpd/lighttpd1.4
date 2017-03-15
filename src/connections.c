@@ -1214,7 +1214,6 @@ int connection_state_machine(server *srv, connection *con) {
 								con->is_writable = 1;
 								con->file_finished = 0;
 								con->file_started = 0;
-								con->got_response = 0;
 								con->parsed_response = 0;
 								con->response.keep_alive = 0;
 								con->response.content_length = -1;

@@ -899,11 +899,6 @@ static int proxy_demux_response(server *srv, handler_ctx *hctx) {
 				"demux: Response buffer len", hctx->response->used, ":", hctx->response, ":");
 #endif
 
-		if (0 == con->got_response) {
-			con->got_response = 1;
-			buffer_string_prepare_copy(hctx->response_header, 1023);
-		}
-
 		if (0 == con->file_started) {
 			char *c;
 
@@ -913,6 +908,9 @@ static int proxy_demux_response(server *srv, handler_ctx *hctx) {
 				size_t blen = buffer_string_length(hctx->response) - hlen;
 				/* found */
 
+				if (buffer_is_empty(hctx->response_header)) {
+					buffer_string_prepare_copy(hctx->response_header, 1023);
+				}
 				buffer_append_string_len(hctx->response_header, hctx->response->ptr, hlen);
 #if 0
 				log_error_write(srv, __FILE__, __LINE__, "sb", "Header:", hctx->response_header);

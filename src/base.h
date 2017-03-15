@@ -410,9 +410,6 @@ typedef struct connection {
 
 	array  *environment; /* used to pass lighttpd internal stuff to the FastCGI/CGI apps, setenv does that */
 
-	/* response */
-	int    got_response;
-
 	connection_type mode;
 
 	void **plugin_ctx;           /* plugin connection specific config */
