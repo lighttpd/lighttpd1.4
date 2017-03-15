@@ -190,15 +190,8 @@ varline ::= key(A) ASSIGN expression(B). {
           ctx->current->context_ndx,
           ctx->current->key->ptr, A->ptr);
       ctx->ok = 0;
-    } else if (NULL == array_get_element(ctx->current->value, B->key->ptr)) {
-      array_insert_unique(ctx->current->value, B);
-      B = NULL;
     } else {
-      fprintf(stderr, "Duplicate config variable in conditional %d %s: %s\n",
-              ctx->current->context_ndx,
-              ctx->current->key->ptr, B->key->ptr);
-      ctx->ok = 0;
-      B->free(B);
+      array_replace(ctx->current->value, B);
       B = NULL;
     }
   }
