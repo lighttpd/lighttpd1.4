@@ -377,22 +377,6 @@ char hex2int(unsigned char hex) {
 	return value;
 }
 
-char * buffer_search_string_len(buffer *b, const char *needle, size_t len) {
-	size_t i;
-	force_assert(NULL != b);
-	force_assert(0 != len && NULL != needle); /* empty needles not allowed */
-
-	if (b->used < len) return NULL;
-
-	for(i = 0; i < b->used - len; i++) {
-		if (0 == memcmp(b->ptr + i, needle, len)) {
-			return b->ptr + i;
-		}
-	}
-
-	return NULL;
-}
-
 int buffer_is_empty(const buffer *b) {
 	return NULL == b || 0 == b->used;
 }

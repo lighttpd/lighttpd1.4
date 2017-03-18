@@ -101,8 +101,6 @@ void li_utostrn(char *buf, size_t buf_len, uintmax_t val);
 /* buf must be (at least) 2*s_len + 1 big. uses lower-case hex letters. */
 void li_tohex(char *buf, size_t buf_len, const char *s, size_t s_len);
 
-char * buffer_search_string_len(buffer *b, const char *needle, size_t len);
-
 /* NULL buffer or empty buffer (used == 0);
  * unset "string" (buffer) config options are initialized to used == 0,
  * while setting an empty string leads to used == 1
