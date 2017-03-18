@@ -546,7 +546,7 @@ static ssize_t cgi_write_file_chunk_mmap(server *srv, connection *con, int fd, c
 	off_t offset, toSend, file_end;
 	ssize_t r;
 	size_t mmap_offset, mmap_avail;
-	char *data;
+	char *data = NULL;
 
 	force_assert(NULL != c);
 	force_assert(FILE_CHUNK == c->type);
