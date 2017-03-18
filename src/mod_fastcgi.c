@@ -342,6 +342,7 @@ typedef struct {
 	int       request_id;
 	int       send_content_body;
 
+	http_response_opts opts;
 	plugin_config conf;
 
 	connection *remote_conn;  /* dumb pointer */
@@ -457,7 +458,7 @@ static handler_ctx * handler_ctx_init(void) {
 
 	hctx->fde_ndx = -1;
 
-	hctx->response_header = buffer_init();
+	/*hctx->response_header = buffer_init();*//*(allocated when needed)*/
 
 	hctx->request_id = 0;
 	hctx->fcgi_mode = FCGI_RESPONDER;
@@ -1751,6 +1752,8 @@ static handler_t fcgi_reconnect(server *srv, handler_ctx *hctx) {
 
 	fcgi_host_assign(srv, hctx, hctx->host);
 	hctx->request_id = 0;
+	hctx->opts.xsendfile_allow = hctx->host->xsendfile_allow;
+	hctx->opts.xsendfile_docroot = hctx->host->xsendfile_docroot;
 	fcgi_set_state(srv, hctx, FCGI_STATE_INIT);
 	return HANDLER_COMEBACK;
 }
@@ -2054,257 +2057,6 @@ static int fcgi_create_env(server *srv, handler_ctx *hctx, int request_id) {
 	return 0;
 }
 
-static int fcgi_response_parse(server *srv, connection *con, plugin_data *p, buffer *in) {
-	char *s, *ns;
-
-	handler_ctx *hctx = con->plugin_ctx[p->id];
-	fcgi_extension_host *host= hctx->host;
-	int have_sendfile2 = 0;
-	off_t sendfile2_content_length = 0;
-
-	UNUSED(srv);
-
-	/* search for \n */
-	for (s = in->ptr; NULL != (ns = strchr(s, '\n')); s = ns + 1) {
-		char *key, *value;
-		int key_len;
-
-		/* a good day. Someone has read the specs and is sending a \r\n to us */
-
-		if (ns > in->ptr &&
-		    *(ns-1) == '\r') {
-			*(ns-1) = '\0';
-		}
-
-		ns[0] = '\0';
-
-		key = s;
-		if (NULL == (value = strchr(s, ':'))) {
-			/* we expect: "<key>: <value>\n" */
-			continue;
-		}
-
-		key_len = value - key;
-
-		value++;
-		/* strip WS */
-		while (*value == ' ' || *value == '\t') value++;
-
-		if (hctx->fcgi_mode != FCGI_AUTHORIZER ||
-		    !(con->http_status == 0 ||
-		      con->http_status == 200)) {
-			/* authorizers shouldn't affect the response headers sent back to the client */
-
-			/* don't forward Status: */
-			if (key_len != sizeof("Status")-1 || 0 != strncasecmp(key, "Status", key_len)) {
-				data_string *ds;
-				if (NULL == (ds = (data_string *)array_get_unused_element(con->response.headers, TYPE_STRING))) {
-					ds = data_response_init();
-				}
-				buffer_copy_string_len(ds->key, key, key_len);
-				buffer_copy_string(ds->value, value);
-
-				array_insert_unique(con->response.headers, (data_unset *)ds);
-			}
-		}
-
-		if (hctx->fcgi_mode == FCGI_AUTHORIZER &&
-		    key_len > 9 &&
-		    0 == strncasecmp(key, CONST_STR_LEN("Variable-"))) {
-			data_string *ds;
-			if (NULL == (ds = (data_string *)array_get_unused_element(con->environment, TYPE_STRING))) {
-				ds = data_response_init();
-			}
-			buffer_copy_string_len(ds->key, key + 9, key_len - 9);
-			buffer_copy_string(ds->value, value);
-
-			array_insert_unique(con->environment, (data_unset *)ds);
-		}
-
-		switch(key_len) {
-		case 4:
-			if (0 == strncasecmp(key, "Date", key_len)) {
-				con->parsed_response |= HTTP_DATE;
-			}
-			break;
-		case 6:
-			if (0 == strncasecmp(key, "Status", key_len)) {
-				int status = strtol(value, NULL, 10);
-				if (status >= 100 && status < 1000) {
-					con->http_status = status;
-					con->parsed_response |= HTTP_STATUS;
-				} else {
-					con->http_status = 502;
-				}
-			}
-			break;
-		case 8:
-			if (0 == strncasecmp(key, "Location", key_len)) {
-				con->parsed_response |= HTTP_LOCATION;
-			}
-			break;
-		case 10:
-			if (0 == strncasecmp(key, "Connection", key_len)) {
-				con->response.keep_alive = (0 == strcasecmp(value, "Keep-Alive")) ? 1 : 0;
-				con->parsed_response |= HTTP_CONNECTION;
-			}
-			break;
-		case 11:
-			if (host->xsendfile_allow && 0 == strncasecmp(key, "X-Sendfile2", key_len) && hctx->send_content_body) {
-				char *pos = value;
-				have_sendfile2 = 1;
-
-				while (*pos) {
-					char *filename, *range;
-					stat_cache_entry *sce;
-					off_t begin_range, end_range, range_len;
-
-					while (' ' == *pos) pos++;
-					if (!*pos) break;
-
-					filename = pos;
-					if (NULL == (range = strchr(pos, ' '))) {
-						/* missing range */
-						if (hctx->conf.debug) {
-							log_error_write(srv, __FILE__, __LINE__, "ss", "Couldn't find range after filename:", filename);
-						}
-						return 502;
-					}
-					buffer_copy_string_len(srv->tmp_buf, filename, range - filename);
-
-					/* find end of range */
-					for (pos = ++range; *pos && *pos != ' ' && *pos != ','; pos++) ;
-
-					buffer_urldecode_path(srv->tmp_buf);
-					buffer_path_simplify(srv->tmp_buf, srv->tmp_buf);
-					if (con->conf.force_lowercase_filenames) {
-						buffer_to_lower(srv->tmp_buf);
-					}
-					if (host->xsendfile_docroot->used) {
-						size_t i, xlen = buffer_string_length(srv->tmp_buf);
-						for (i = 0; i < host->xsendfile_docroot->used; ++i) {
-							data_string *ds = (data_string *)host->xsendfile_docroot->data[i];
-							size_t dlen = buffer_string_length(ds->value);
-							if (dlen <= xlen
-							    && (!con->conf.force_lowercase_filenames
-								? 0 == memcmp(srv->tmp_buf->ptr, ds->value->ptr, dlen)
-								: 0 == strncasecmp(srv->tmp_buf->ptr, ds->value->ptr, dlen))) {
-								break;
-							}
-						}
-						if (i == host->xsendfile_docroot->used) {
-							log_error_write(srv, __FILE__, __LINE__, "SBs",
-									"X-Sendfile2 (", srv->tmp_buf,
-									") not under configured x-sendfile-docroot(s)");
-							return 403;
-						}
-					}
-
-					if (HANDLER_ERROR == stat_cache_get_entry(srv, con, srv->tmp_buf, &sce)) {
-						if (hctx->conf.debug) {
-							log_error_write(srv, __FILE__, __LINE__, "sb",
-								"send-file error: couldn't get stat_cache entry for X-Sendfile2:",
-								srv->tmp_buf);
-						}
-						return 404;
-					} else if (!S_ISREG(sce->st.st_mode)) {
-						if (hctx->conf.debug) {
-							log_error_write(srv, __FILE__, __LINE__, "sb",
-								"send-file error: wrong filetype for X-Sendfile2:",
-								srv->tmp_buf);
-						}
-						return 502;
-					}
-					/* found the file */
-
-					/* parse range */
-					end_range = sce->st.st_size - 1;
-					{
-						char *rpos = NULL;
-						errno = 0;
-						begin_range = strtoll(range, &rpos, 10);
-						if (errno != 0 || begin_range < 0 || rpos == range) goto range_failed;
-						if ('-' != *rpos++) goto range_failed;
-						if (rpos != pos) {
-							range = rpos;
-							end_range = strtoll(range, &rpos, 10);
-							if (errno != 0 || end_range < 0 || rpos == range) goto range_failed;
-						}
-						if (rpos != pos) goto range_failed;
-
-						goto range_success;
-
-range_failed:
-						if (hctx->conf.debug) {
-							log_error_write(srv, __FILE__, __LINE__, "ss", "Couldn't decode range after filename:", filename);
-						}
-						return 502;
-
-range_success: ;
-					}
-
-					/* no parameters accepted */
-
-					while (*pos == ' ') pos++;
-					if (*pos != '\0' && *pos != ',') return 502;
-
-					range_len = end_range - begin_range + 1;
-					if (range_len < 0) return 502;
-					if (range_len != 0) {
-						if (0 != http_chunk_append_file_range(srv, con, srv->tmp_buf, begin_range, range_len)) {
-							return 502;
-						}
-					}
-					sendfile2_content_length += range_len;
-
-					if (*pos == ',') pos++;
-				}
-			}
-			break;
-		case 14:
-			if (0 == strncasecmp(key, "Content-Length", key_len)) {
-				con->response.content_length = strtoul(value, NULL, 10);
-				con->parsed_response |= HTTP_CONTENT_LENGTH;
-
-				if (con->response.content_length < 0) con->response.content_length = 0;
-			}
-			break;
-		case 17:
-			if (0 == strncasecmp(key, "Transfer-Encoding", key_len)) {
-				con->parsed_response |= HTTP_TRANSFER_ENCODING;
-			}
-			break;
-		default:
-			break;
-		}
-	}
-
-	if (have_sendfile2) {
-		data_string *dcls;
-
-		/* fix content-length */
-		if (NULL == (dcls = (data_string *)array_get_unused_element(con->response.headers, TYPE_STRING))) {
-			dcls = data_response_init();
-		}
-
-		buffer_copy_string_len(dcls->key, "Content-Length", sizeof("Content-Length")-1);
-		buffer_copy_int(dcls->value, sendfile2_content_length);
-		array_replace(con->response.headers, (data_unset *)dcls);
-
-		con->parsed_response |= HTTP_CONTENT_LENGTH;
-		con->response.content_length = sendfile2_content_length;
-		return 200;
-	}
-
-	/* CGI/1.1 rev 03 - 7.2.1.2 */
-	if ((con->parsed_response & HTTP_LOCATION) &&
-	    !(con->parsed_response & HTTP_STATUS)) {
-		con->http_status = 302;
-	}
-
-	return 0;
-}
-
 typedef struct {
 	buffer  *b;
 	unsigned int len;
@@ -2394,13 +2146,11 @@ static int fastcgi_get_packet(server *srv, handler_ctx *hctx, fastcgi_response_p
 
 static int fcgi_demux_response(server *srv, handler_ctx *hctx) {
 	int fin = 0;
-	int toread, ret;
+	int toread;
 	ssize_t r = 0;
 
-	plugin_data *p    = hctx->plugin_data;
 	connection *con   = hctx->remote_conn;
 	int fcgi_fd       = hctx->fd;
-	fcgi_extension_host *host= hctx->host;
 	fcgi_proc *proc   = hctx->proc;
 
 	/*
@@ -2415,6 +2165,10 @@ static int fcgi_demux_response(server *srv, handler_ctx *hctx) {
 				"unexpected end-of-file (perhaps the fastcgi process died):",
 				fcgi_fd);
 		return -1;
+	} else if (0 == toread) {
+		if (!(fdevent_event_get_interest(srv->ev, hctx->fd) & FDEVENT_IN))
+			return HANDLER_GO_ON; /* optimistic read; data not ready */
+		toread = 4096; /* let read() below indicate if EOF or EAGAIN */
 	}
       #else
 	toread = 4096;
@@ -2478,76 +2232,28 @@ static int fcgi_demux_response(server *srv, handler_ctx *hctx) {
 
 			/* is the header already finished */
 			if (0 == con->file_started) {
-				char *c;
-				data_string *ds;
-
-				/* search for header terminator
-				 *
-				 * if we start with \r\n check if last packet terminated with \r\n
-				 * if we start with \n check if last packet terminated with \n
-				 * search for \r\n\r\n
-				 * search for \n\n
-				 */
-
-				buffer_append_string_buffer(hctx->response_header, packet.b);
-
-				if (NULL != (c = buffer_search_string_len(hctx->response_header, CONST_STR_LEN("\r\n\r\n")))) {
-					char *hend = c + 4; /* header end == body start */
-					size_t hlen = hend - hctx->response_header->ptr;
-					buffer_copy_string_len(packet.b, hend, buffer_string_length(hctx->response_header) - hlen);
-					buffer_string_set_length(hctx->response_header, hlen);
-				} else if (NULL != (c = buffer_search_string_len(hctx->response_header, CONST_STR_LEN("\n\n")))) {
-					char *hend = c + 2; /* header end == body start */
-					size_t hlen = hend - hctx->response_header->ptr;
-					buffer_copy_string_len(packet.b, hend, buffer_string_length(hctx->response_header) - hlen);
-					buffer_string_set_length(hctx->response_header, hlen);
-				} else {
-					/* no luck, no header found */
-					/*(reuse MAX_HTTP_REQUEST_HEADER as max size for response headers from backends)*/
-					if (buffer_string_length(hctx->response_header) > MAX_HTTP_REQUEST_HEADER) {
-						log_error_write(srv, __FILE__, __LINE__, "sb", "response headers too large for", con->uri.path);
-						con->http_status = 502; /* Bad Gateway */
-						con->mode = DIRECT;
-						fin = 1;
-					}
-					break;
-				}
-
-				/* parse the response header */
-				if ((ret = fcgi_response_parse(srv, con, p, hctx->response_header))) {
-					if (200 != ret) { /*(200 returned for X-Sendfile2 handled)*/
-						con->http_status = ret;
-						con->mode = DIRECT;
-					}
-					con->file_started = 1;
+				/* split header from body */
+				buffer *hdrs = (!hctx->response_header)
+				  ? packet.b
+				  : (buffer_append_string_buffer(hctx->response_header, packet.b), hctx->response_header);
+				handler_t rc = http_response_parse_headers(srv, con, &hctx->opts, hdrs);
+				if (rc != HANDLER_GO_ON) {
 					hctx->send_content_body = 0;
 					fin = 1;
 					break;
 				}
-
-				con->file_started = 1;
-
-				if (hctx->fcgi_mode == FCGI_AUTHORIZER &&
-				    (con->http_status == 0 ||
-				     con->http_status == 200)) {
-					/* a authorizer with approved the static request, ignore the content here */
+				if (0 == con->file_started) {
+					if (!hctx->response_header) {
+						hctx->response_header = packet.b;
+						packet.b = NULL;
+					}
+				}
+				else if (hctx->fcgi_mode == FCGI_AUTHORIZER &&
+					 (con->http_status == 0 || con->http_status == 200)) {
+					/* authorizer approved request; ignore the content here */
 					hctx->send_content_body = 0;
 				}
-
-				if (host->xsendfile_allow && hctx->send_content_body &&
-				    (NULL != (ds = (data_string *) array_get_element(con->response.headers, "X-LIGHTTPD-send-file"))
-					  || NULL != (ds = (data_string *) array_get_element(con->response.headers, "X-Sendfile")))) {
-					http_response_xsendfile(srv, con, ds->value, host->xsendfile_docroot);
-					if (con->mode == DIRECT) {
-						fin = 1;
-					}
-
-					hctx->send_content_body = 0; /* ignore the content */
-					break;
-				}
-			}
-
-			if (hctx->send_content_body && !buffer_string_is_empty(packet.b)) {
+			} else if (hctx->send_content_body && !buffer_string_is_empty(packet.b)) {
 				if (0 != http_chunk_append_buffer(srv, con, packet.b)) {
 					/* error writing to tempfile;
 					 * truncate response or send 500 if nothing sent yet */
@@ -3423,6 +3129,12 @@ static handler_t fcgi_check_extension(server *srv, connection *con, void *p_d, i
 	/*hctx->conf.exts_resp   = p->conf.exts_resp;*/
 	/*hctx->conf.ext_mapping = p->conf.ext_mapping;*/
 	hctx->conf.debug       = p->conf.debug;
+
+	hctx->opts.backend = BACKEND_FASTCGI;
+	hctx->opts.authorizer = (fcgi_mode == FCGI_AUTHORIZER);
+	hctx->opts.local_redir = 0;
+	hctx->opts.xsendfile_allow = host->xsendfile_allow;
+	hctx->opts.xsendfile_docroot = host->xsendfile_docroot;
 
 	con->plugin_ctx[p->id] = hctx;
 

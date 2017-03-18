@@ -37,21 +37,12 @@
 
 /**
  *
- * the proxy module is based on the fastcgi module
+ * HTTP reverse proxy
  *
- * 28.06.2004 Jan Kneschke     The first release
- * 01.07.2004 Evgeny Rodichev  Several bugfixes and cleanups
- *            - co-ordinate up- and downstream flows correctly (proxy_demux_response
- *              and proxy_handle_fdevent)
- *            - correctly transfer upstream http_response_status;
- *            - some unused structures removed.
- *
- * TODO:      - delay upstream read if write_queue is too large
- *              (to prevent memory eating, like in apache). Shoud be
- *              configurable).
- *            - persistent connection with upstream servers
- *            - HTTP/1.1
+ * TODO:      - HTTP/1.1
+ *            - HTTP/1.1 persistent connection with upstream servers
  */
+
 typedef enum {
 	PROXY_BALANCE_UNSET,
 	PROXY_BALANCE_FAIR,
@@ -71,7 +62,6 @@ typedef struct {
 typedef struct {
 	PLUGIN_DATA;
 
-	buffer *parse_response;
 	buffer *balance_buf;
 
 	plugin_config **config_storage;
@@ -96,7 +86,6 @@ typedef struct {
 	data_proxy *host;
 
 	buffer *response;
-	buffer *response_header;
 
 	chunkqueue *wb;
 	off_t wb_reqlen;
@@ -104,6 +93,7 @@ typedef struct {
 	int fd; /* fd to the proxy process */
 	int fde_ndx; /* index into the fd-event buffer */
 
+	http_response_opts opts;
 	plugin_config conf;
 
 	connection *remote_conn;  /* dumb pointer */
@@ -125,7 +115,6 @@ static handler_ctx * handler_ctx_init(void) {
 	hctx->host = NULL;
 
 	hctx->response = buffer_init();
-	hctx->response_header = buffer_init();
 
 	hctx->wb = chunkqueue_init();
 	hctx->wb_reqlen = 0;
@@ -138,7 +127,6 @@ static handler_ctx * handler_ctx_init(void) {
 
 static void handler_ctx_free(handler_ctx *hctx) {
 	buffer_free(hctx->response);
-	buffer_free(hctx->response_header);
 	chunkqueue_free(hctx->wb);
 
 	free(hctx);
@@ -149,7 +137,6 @@ INIT_FUNC(mod_proxy_init) {
 
 	p = calloc(1, sizeof(*p));
 
-	p->parse_response = buffer_init();
 	p->balance_buf = buffer_init();
 
 	return p;
@@ -161,7 +148,6 @@ FREE_FUNC(mod_proxy_free) {
 
 	UNUSED(srv);
 
-	buffer_free(p->parse_response);
 	buffer_free(p->balance_buf);
 
 	if (p->config_storage) {
@@ -729,233 +715,6 @@ static int proxy_set_state(server *srv, handler_ctx *hctx, proxy_connection_stat
 }
 
 
-static int proxy_response_parse(server *srv, connection *con, plugin_data *p, buffer *in) {
-	char *s, *ns;
-	int http_response_status = -1;
-
-	UNUSED(srv);
-
-	/* [\r]\n -> [\0]\0 */
-
-	buffer_copy_buffer(p->parse_response, in);
-
-	for (s = p->parse_response->ptr; NULL != (ns = strchr(s, '\n')); s = ns + 1) {
-		char *key, *value;
-		int key_len;
-		data_string *ds;
-		int copy_header;
-
-		ns[0] = '\0';
-		if (s != ns && ns[-1] == '\r') ns[-1] = '\0';
-
-		if (-1 == http_response_status) {
-			/* The first line of a Response message is the Status-Line */
-
-			for (key=s; *key && *key != ' '; key++);
-
-			if (*key) {
-				http_response_status = (int) strtol(key, NULL, 10);
-				if (http_response_status < 100 || http_response_status >= 1000) http_response_status = 502;
-			} else {
-				http_response_status = 502;
-			}
-
-			con->http_status = http_response_status;
-			con->parsed_response |= HTTP_STATUS;
-			continue;
-		}
-
-		if (NULL == (value = strchr(s, ':'))) {
-			/* now we expect: "<key>: <value>\n" */
-
-			continue;
-		}
-
-		key = s;
-		key_len = value - key;
-
-		value++;
-		/* strip WS */
-		while (*value == ' ' || *value == '\t') value++;
-
-		copy_header = 1;
-
-		switch(key_len) {
-		case 4:
-			if (0 == strncasecmp(key, "Date", key_len)) {
-				con->parsed_response |= HTTP_DATE;
-			}
-			break;
-		case 8:
-			if (0 == strncasecmp(key, "Location", key_len)) {
-				con->parsed_response |= HTTP_LOCATION;
-			}
-			break;
-		case 10:
-			if (0 == strncasecmp(key, "Connection", key_len)) {
-				copy_header = 0;
-			}
-			break;
-		case 14:
-			if (0 == strncasecmp(key, "Content-Length", key_len)) {
-				con->response.content_length = strtoul(value, NULL, 10);
-				con->parsed_response |= HTTP_CONTENT_LENGTH;
-			}
-			break;
-		case 17:
-			if (0 == strncasecmp(key, "Transfer-Encoding", key_len)) {
-				con->parsed_response |= HTTP_TRANSFER_ENCODING;
-			}
-			break;
-		default:
-			break;
-		}
-
-		if (copy_header) {
-			if (NULL == (ds = (data_string *)array_get_unused_element(con->response.headers, TYPE_STRING))) {
-				ds = data_response_init();
-			}
-			buffer_copy_string_len(ds->key, key, key_len);
-			buffer_copy_string(ds->value, value);
-
-			array_insert_unique(con->response.headers, (data_unset *)ds);
-		}
-	}
-
-	return 0;
-}
-
-
-static int proxy_demux_response(server *srv, handler_ctx *hctx) {
-	int fin = 0;
-	int b;
-	ssize_t r;
-
-	plugin_data *p    = hctx->plugin_data;
-	connection *con   = hctx->remote_conn;
-	int proxy_fd       = hctx->fd;
-
-	/* check how much we have to read */
-      #if !defined(_WIN32) && !defined(__CYGWIN__)
-	if (ioctl(hctx->fd, FIONREAD, &b)) {
-		if (errno == EAGAIN) {
-			return 0;
-		}
-		log_error_write(srv, __FILE__, __LINE__, "sd",
-				"ioctl failed: ",
-				proxy_fd);
-		return -1;
-	}
-      #else
-	b = 4096;
-      #endif
-
-
-	if (hctx->conf.debug) {
-		log_error_write(srv, __FILE__, __LINE__, "sd",
-				"proxy - have to read:", b);
-	}
-
-	if (b > 0) {
-		if ((con->conf.stream_response_body & FDEVENT_STREAM_RESPONSE_BUFMIN)) {
-			off_t cqlen = chunkqueue_length(con->write_queue);
-			if (cqlen + b > 65536 - 4096) {
-				if (!con->is_writable) {
-					/*(defer removal of FDEVENT_IN interest since
-					 * connection_state_machine() might be able to send data
-					 * immediately, unless !con->is_writable, where
-					 * connection_state_machine() might not loop back to call
-					 * mod_proxy_handle_subrequest())*/
-					fdevent_event_clr(srv->ev, &(hctx->fde_ndx), hctx->fd, FDEVENT_IN);
-				}
-				if (cqlen >= 65536-1) return 0;
-				b = 65536 - 1 - (int)cqlen;
-			}
-		}
-
-		buffer_string_prepare_append(hctx->response, b);
-
-		if (-1 == (r = read(hctx->fd, hctx->response->ptr + buffer_string_length(hctx->response), buffer_string_space(hctx->response)))) {
-			if (errno == EAGAIN) {
-				return 0;
-			}
-			log_error_write(srv, __FILE__, __LINE__, "sds",
-					"unexpected end-of-file (perhaps the proxy process died):",
-					proxy_fd, strerror(errno));
-			return -1;
-		}
-
-	      #if defined(_WIN32) || defined(__CYGWIN__)
-		if (0 == r) return 1; /* fin */
-	      #endif
-
-		/* this should be catched by the b > 0 above */
-		force_assert(r);
-
-		buffer_commit(hctx->response, r);
-
-#if 0
-		log_error_write(srv, __FILE__, __LINE__, "sdsbs",
-				"demux: Response buffer len", hctx->response->used, ":", hctx->response, ":");
-#endif
-
-		if (0 == con->file_started) {
-			char *c;
-
-			/* search for the \r\n\r\n in the string */
-			if (NULL != (c = buffer_search_string_len(hctx->response, CONST_STR_LEN("\r\n\r\n")))) {
-				size_t hlen = c - hctx->response->ptr + 4;
-				size_t blen = buffer_string_length(hctx->response) - hlen;
-				/* found */
-
-				if (buffer_is_empty(hctx->response_header)) {
-					buffer_string_prepare_copy(hctx->response_header, 1023);
-				}
-				buffer_append_string_len(hctx->response_header, hctx->response->ptr, hlen);
-#if 0
-				log_error_write(srv, __FILE__, __LINE__, "sb", "Header:", hctx->response_header);
-#endif
-				/* parse the response header */
-				proxy_response_parse(srv, con, p, hctx->response_header);
-
-				con->file_started = 1;
-				if (blen > 0) {
-					if (0 != http_chunk_append_mem(srv, con, c + 4, blen)) {
-						/* error writing to tempfile;
-						 * truncate response or send 500 if nothing sent yet */
-						fin = 1;
-						con->file_started = 0;
-					}
-				}
-				buffer_reset(hctx->response);
-			} else {
-				/* no luck, no header found */
-				/*(reuse MAX_HTTP_REQUEST_HEADER as max size for response headers from backends)*/
-				if (buffer_string_length(hctx->response) > MAX_HTTP_REQUEST_HEADER) {
-					log_error_write(srv, __FILE__, __LINE__, "sb", "response headers too large for", con->uri.path);
-					con->http_status = 502; /* Bad Gateway */
-					con->mode = DIRECT;
-					fin = 1;
-				}
-			}
-		} else {
-			if (0 != http_chunk_append_buffer(srv, con, hctx->response)) {
-				/* error writing to tempfile;
-				 * truncate response or send 500 if nothing sent yet */
-				fin = 1;
-			}
-			buffer_reset(hctx->response);
-		}
-	} else {
-		if (!(fdevent_event_get_interest(srv->ev, hctx->fd) & FDEVENT_IN)) return 0;
-		/* reading from upstream done */
-		fin = 1;
-	}
-
-	return fin;
-}
-
-
 static handler_t proxy_write_request(server *srv, handler_ctx *hctx) {
 	data_proxy *host= hctx->host;
 	connection *con   = hctx->remote_conn;
@@ -1222,21 +981,18 @@ SUBREQUEST_FUNC(mod_proxy_handle_subrequest) {
 
 
 static handler_t proxy_recv_response(server *srv, handler_ctx *hctx) {
-
-		switch (proxy_demux_response(srv, hctx)) {
-		case 0:
-			break;
-		case -1:
-			http_response_backend_error(srv, hctx->remote_conn);
-			/* fall through */
-		case 1:
-			/* we are done */
-			proxy_connection_close(srv, hctx);
-
-			return HANDLER_FINISHED;
-		}
-
+	switch (http_response_read(srv, hctx->remote_conn, &hctx->opts,
+				   hctx->response, hctx->fd, &hctx->fde_ndx)) {
+	default:
 		return HANDLER_GO_ON;
+	case HANDLER_ERROR:
+	case HANDLER_COMEBACK: /*(not expected; treat as error)*/
+		http_response_backend_error(srv, hctx->remote_conn);
+		/* fall through */
+	case HANDLER_FINISHED:
+		proxy_connection_close(srv, hctx);
+		return HANDLER_FINISHED;
+	}
 }
 
 
@@ -1358,6 +1114,12 @@ static handler_t mod_proxy_check_extension(server *srv, connection *con, void *p
 		hctx->conf.balance     = p->conf.balance;
 		hctx->conf.debug       = p->conf.debug;
 		hctx->conf.replace_http_host = p->conf.replace_http_host;
+
+		hctx->opts.backend = BACKEND_PROXY;
+		hctx->opts.authorizer = 0;
+		hctx->opts.local_redir = 0;
+		hctx->opts.xsendfile_allow = 0;
+		hctx->opts.xsendfile_docroot = NULL;
 
 		con->plugin_ctx[p->id] = hctx;
 		con->mode = p->id;

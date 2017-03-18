@@ -670,11 +670,10 @@ void http_response_send_file (server *srv, connection *con, buffer *path) {
 	}
 }
 
-void http_response_xsendfile (server *srv, connection *con, buffer *path, const array *xdocroot) {
+
+static void http_response_xsendfile (server *srv, connection *con, buffer *path, const array *xdocroot) {
 	const int status = con->http_status;
 	int valid = 1;
-
-	con->file_started = 1;
 
 	/* reset Content-Length, if set by backend
 	 * Content-Length might later be set to size of X-Sendfile static file,
@@ -727,6 +726,143 @@ void http_response_xsendfile (server *srv, connection *con, buffer *path, const 
 	}
 }
 
+
+static void http_response_xsendfile2(server *srv, connection *con, const buffer *value, const array *xdocroot) {
+    const char *pos = value->ptr;
+    buffer *b = srv->tmp_buf;
+    const int status = con->http_status;
+
+    /* reset Content-Length, if set by backend */
+    if (con->parsed_response & HTTP_CONTENT_LENGTH) {
+        data_string *ds = (data_string *)
+          array_get_element(con->response.headers, "Content-Length");
+        if (ds) buffer_reset(ds->value);
+        con->parsed_response &= ~HTTP_CONTENT_LENGTH;
+        con->response.content_length = -1;
+    }
+
+    while (*pos) {
+        const char *filename, *range;
+        stat_cache_entry *sce;
+        off_t begin_range, end_range, range_len;
+
+        while (' ' == *pos) pos++;
+        if (!*pos) break;
+
+        filename = pos;
+        if (NULL == (range = strchr(pos, ' '))) {
+            /* missing range */
+            log_error_write(srv, __FILE__, __LINE__, "ss",
+                            "Couldn't find range after filename:", filename);
+            con->http_status = 502;
+            break;
+        }
+        buffer_copy_string_len(b, filename, range - filename);
+
+        /* find end of range */
+        for (pos = ++range; *pos && *pos != ' ' && *pos != ','; pos++) ;
+
+        buffer_urldecode_path(b);
+        buffer_path_simplify(b, b);
+        if (con->conf.force_lowercase_filenames) {
+            buffer_to_lower(b);
+        }
+        if (xdocroot->used) {
+            size_t i, xlen = buffer_string_length(b);
+            for (i = 0; i < xdocroot->used; ++i) {
+                data_string *ds = (data_string *)xdocroot->data[i];
+                size_t dlen = buffer_string_length(ds->value);
+                if (dlen <= xlen
+                    && (!con->conf.force_lowercase_filenames
+                    ? 0 == memcmp(b->ptr, ds->value->ptr, dlen)
+                    : 0 == strncasecmp(b->ptr, ds->value->ptr, dlen))) {
+                    break;
+                }
+            }
+            if (i == xdocroot->used) {
+                log_error_write(srv, __FILE__, __LINE__, "SBs",
+                                "X-Sendfile2 (", b,
+                                ") not under configured x-sendfile-docroot(s)");
+                con->http_status = 403;
+                break;
+            }
+        }
+
+        if (HANDLER_ERROR == stat_cache_get_entry(srv, con, b, &sce)) {
+            log_error_write(srv, __FILE__, __LINE__, "sb", "send-file error: "
+                            "couldn't get stat_cache entry for X-Sendfile2:",
+                            b);
+            con->http_status = 404;
+            break;
+        } else if (!S_ISREG(sce->st.st_mode)) {
+            log_error_write(srv, __FILE__, __LINE__, "sb",
+                            "send-file error: wrong filetype for X-Sendfile2:",
+                            b);
+            con->http_status = 502;
+            break;
+        }
+        /* found the file */
+
+        /* parse range */
+        end_range = sce->st.st_size - 1;
+        {
+            char *rpos = NULL;
+            errno = 0;
+            begin_range = strtoll(range, &rpos, 10);
+            if (errno != 0 || begin_range < 0 || rpos == range)
+                goto range_failed;
+            if ('-' != *rpos++) goto range_failed;
+            if (rpos != pos) {
+                range = rpos;
+                end_range = strtoll(range, &rpos, 10);
+                if (errno != 0 || end_range < 0 || rpos == range)
+                    goto range_failed;
+            }
+            if (rpos != pos) goto range_failed;
+
+            goto range_success;
+
+range_failed:
+            log_error_write(srv, __FILE__, __LINE__, "ss",
+                            "Couldn't decode range after filename:", filename);
+            con->http_status = 502;
+            break;
+
+range_success: ;
+        }
+
+        /* no parameters accepted */
+
+        while (*pos == ' ') pos++;
+        if (*pos != '\0' && *pos != ',') {
+            con->http_status = 502;
+            break;
+        }
+
+        range_len = end_range - begin_range + 1;
+        if (range_len < 0) {
+            con->http_status = 502;
+            break;
+        }
+        if (range_len != 0) {
+            if (0 != http_chunk_append_file_range(srv, con, b,
+                                                  begin_range, range_len)) {
+                con->http_status = 502;
+                break;
+            }
+        }
+
+        if (*pos == ',') pos++;
+    }
+
+    if (con->http_status >= 400 && status < 300) {
+        con->mode = DIRECT;
+    } else if (0 != status && 200 != status) {
+        con->http_status = status;
+    }
+}
+
+
 void http_response_backend_error (server *srv, connection *con) {
 	UNUSED(srv);
 	if (con->file_started) {
@@ -759,6 +895,471 @@ void http_response_backend_done (server *srv, connection *con) {
 	default:
 		break;
 	}
+}
+
+
+static handler_t http_response_process_local_redir(server *srv, connection *con, size_t blen) {
+    /* [RFC3875] The Common Gateway Interface (CGI) Version 1.1
+     * [RFC3875] 6.2.2 Local Redirect Response
+     *
+     *    The CGI script can return a URI path and query-string
+     *    ('local-pathquery') for a local resource in a Location header field.
+     *    This indicates to the server that it should reprocess the request
+     *    using the path specified.
+     *
+     *      local-redir-response = local-Location NL
+     *
+     *    The script MUST NOT return any other header fields or a message-body,
+     *    and the server MUST generate the response that it would have produced
+     *    in response to a request containing the URL
+     *
+     *      scheme "://" server-name ":" server-port local-pathquery
+     *
+     * (Might not have begun to receive body yet, but do skip local-redir
+     *  if we already have started receiving a response body (blen > 0))
+     * (Also, while not required by the RFC, do not send local-redir back
+     *  to same URL, since CGI should have handled it internally if it
+     *  really wanted to do that internally)
+     */
+
+    /* con->http_status >= 300 && con->http_status < 400) */
+    size_t ulen = buffer_string_length(con->uri.path);
+    data_string *ds = (data_string *)
+      array_get_element(con->response.headers, "Location");
+    if (NULL != ds
+        && ds->value->ptr[0] == '/'
+        && (0 != strncmp(ds->value->ptr, con->uri.path->ptr, ulen)
+            || (ds->value->ptr[ulen] != '\0'
+                && ds->value->ptr[ulen] != '/'
+                && ds->value->ptr[ulen] != '?'))
+        && 0 == blen
+        && !(con->parsed_response & HTTP_STATUS) /*no "Status" or NPH response*/
+        && 1 == con->response.headers->used) {
+        if (++con->loops_per_request > 5) {
+            log_error_write(srv, __FILE__, __LINE__, "sb",
+                            "too many internal loops while processing request:",
+                            con->request.orig_uri);
+            con->http_status = 500; /* Internal Server Error */
+            con->mode = DIRECT;
+            return HANDLER_FINISHED;
+        }
+
+        buffer_copy_buffer(con->request.uri, ds->value);
+
+        if (con->request.content_length) {
+            if (con->request.content_length
+                != con->request_content_queue->bytes_in) {
+                con->keep_alive = 0;
+            }
+            con->request.content_length = 0;
+            chunkqueue_reset(con->request_content_queue);
+        }
+
+        if (con->http_status != 307 && con->http_status != 308) {
+            /* Note: request body (if any) sent to initial dynamic handler
+             * and is not available to the internal redirect */
+            con->request.http_method = HTTP_METHOD_GET;
+        }
+
+        /*(caller must reset request as follows)*/
+        /*connection_response_reset(srv, con);*/ /*(sets con->http_status = 0)*/
+        /*plugins_call_connection_reset(srv, con);*/
+
+        return HANDLER_COMEBACK;
+    }
+
+    return HANDLER_GO_ON;
+}
+
+
+static int http_response_process_headers(server *srv, connection *con, http_response_opts *opts, buffer *hdrs) {
+    char *ns;
+    const char *s;
+    int line = 0;
+
+    for (s = hdrs->ptr; NULL != (ns = strchr(s, '\n')); s = ns + 1, ++line) {
+        const char *key, *value;
+        int key_len;
+        data_string *ds;
+
+        /* strip the \n */
+        ns[0] = '\0';
+        if (ns > s && ns[-1] == '\r') ns[-1] = '\0';
+
+        if (0 == line && 0 == strncmp(s, "HTTP/1.", 7)) {
+            /* non-parsed headers ... we parse them anyway */
+            if ((s[7] == '1' || s[7] == '0') && s[8] == ' ') {
+                /* after the space should be a status code for us */
+                int status = strtol(s+9, NULL, 10);
+                if (status >= 100 && status < 1000) {
+                    con->parsed_response |= HTTP_STATUS;
+                    con->http_status = status;
+                } /* else we expected 3 digits and didn't get them */
+            }
+
+            if (0 == con->http_status) {
+                log_error_write(srv, __FILE__, __LINE__, "ss",
+                                "invalid HTTP status line:", s);
+                con->http_status = 502; /* Bad Gateway */
+                con->mode = DIRECT;
+                return -1;
+            }
+
+            continue;
+        }
+
+        /* parse the headers */
+        key = s;
+        if (NULL == (value = strchr(s, ':'))) {
+            /* we expect: "<key>: <value>\r\n" */
+            continue;
+        }
+
+        key_len = value - key;
+        do { ++value; } while (*value == ' ' || *value == '\t'); /* skip LWS */
+
+        if (opts->authorizer) {
+            if (0 == con->http_status || 200 == con->http_status) {
+                if (key_len == 6 && 0 == strncasecmp(key, "Status", key_len)) {
+                    int status = strtol(value, NULL, 10);
+                    if (status >= 100 && status < 1000) {
+                        con->http_status = status;
+                    } else {
+                        con->http_status = 502; /* Bad Gateway */
+                        break;
+                    }
+                } else if (key_len > 9
+                           && 0==strncasecmp(key, CONST_STR_LEN("Variable-"))) {
+                    ds = (data_string *)
+                      array_get_unused_element(con->environment, TYPE_STRING);
+                    if (NULL == ds) ds = data_string_init();
+                    buffer_copy_string_len(ds->key, key + 9, key_len - 9);
+                    buffer_copy_string(ds->value, value);
+
+                    array_insert_unique(con->environment, (data_unset *)ds);
+                }
+                continue;
+            }
+        }
+
+        switch(key_len) {
+        case 4:
+            if (0 == strncasecmp(key, "Date", key_len)) {
+                con->parsed_response |= HTTP_DATE;
+            }
+            break;
+        case 6:
+            if (0 == strncasecmp(key, "Status", key_len)) {
+                int status;
+                if (opts->backend == BACKEND_PROXY) break; /*(pass w/o parse)*/
+                status = strtol(value, NULL, 10);
+                if (status >= 100 && status < 1000) {
+                    con->http_status = status;
+                    con->parsed_response |= HTTP_STATUS;
+                } else {
+                    con->http_status = 502;
+                    con->mode = DIRECT;
+                }
+                continue; /* do not send Status to client */
+            }
+            break;
+        case 8:
+            if (0 == strncasecmp(key, "Location", key_len)) {
+                con->parsed_response |= HTTP_LOCATION;
+            }
+            break;
+        case 10:
+            if (0 == strncasecmp(key, "Connection", key_len)) {
+                if (opts->backend == BACKEND_PROXY) continue;
+                con->response.keep_alive =
+                  (0 == strcasecmp(value, "Keep-Alive")) ? 1 : 0;
+                con->parsed_response |= HTTP_CONNECTION;
+            }
+            break;
+        case 14:
+            if (0 == strncasecmp(key, "Content-Length", key_len)) {
+                con->response.content_length = strtoul(value, NULL, 10);
+                con->parsed_response |= HTTP_CONTENT_LENGTH;
+            }
+            break;
+        case 17:
+            if (0 == strncasecmp(key, "Transfer-Encoding", key_len)) {
+                if (opts->backend == BACKEND_PROXY) continue;
+                con->parsed_response |= HTTP_TRANSFER_ENCODING;
+            }
+            break;
+        default:
+            break;
+        }
+
+        ds = (data_string *)
+          array_get_unused_element(con->response.headers, TYPE_STRING);
+        if (NULL == ds) ds = data_response_init();
+        buffer_copy_string_len(ds->key, key, key_len);
+        buffer_copy_string(ds->value, value);
+
+        array_insert_unique(con->response.headers, (data_unset *)ds);
+    }
+
+    /* CGI/1.1 rev 03 - 7.2.1.2 */
+    /* (proxy requires Status-Line, so never true for proxy)*/
+    if ((con->parsed_response & HTTP_LOCATION) &&
+        !(con->parsed_response & HTTP_STATUS)) {
+        con->http_status = 302;
+    }
+
+    return 0;
+}
+
+
+handler_t http_response_parse_headers(server *srv, connection *con, http_response_opts *opts, buffer *b) {
+    /**
+     * possible formats of response headers:
+     *
+     * proxy or NPH (non-parsed headers):
+     *
+     *   HTTP/1.0 200 Ok\n
+     *   Header: Value\n
+     *   \n
+     *
+     * CGI:
+     *
+     *   Header: Value\n
+     *   Status: 200\n
+     *   \n
+     *
+     * and different mixes of \n and \r\n combinations
+     *
+     * Some users also forget about CGI and just send a response
+     * and hope we handle it. No headers, no header-content separator
+     */
+
+    int is_nph = (0 == strncmp(b->ptr, "HTTP/1.", 7)); /*nph (non-parsed hdrs)*/
+    int is_header_end = 0;
+    size_t last_eol = 0;
+    size_t i = 0, header_len = buffer_string_length(b);
+    const char *bstart;
+    size_t blen;
+
+    if (b->ptr[0] == '\n' || (b->ptr[0] == '\r' && b->ptr[1] == '\n')) {
+        /* no HTTP headers */
+        i = (b->ptr[0] == '\n') ? 1 : 2;
+        is_header_end = 1;
+    } else if (is_nph || b->ptr[(i = strcspn(b->ptr, ":\n"))] == ':') {
+        /* HTTP headers */
+        ++i;
+        for (char *c; NULL != (c = strchr(b->ptr+i, '\n')); ++i) {
+            i = (uintptr_t)(c - b->ptr);
+            /**
+             * check if we saw a \n(\r)?\n sequence
+             */
+            if (last_eol > 0 &&
+                ((i - last_eol == 1) ||
+                 (i - last_eol == 2 && b->ptr[i - 1] == '\r'))) {
+                is_header_end = 1;
+                break;
+            }
+
+            last_eol = i;
+        }
+    } else if (opts->backend == BACKEND_CGI) {
+        /* no HTTP headers, but a body (special-case for CGI compat) */
+        /* no colon found; does not appear to be HTTP headers */
+        if (0 != http_chunk_append_buffer(srv, con, b)) {
+            return HANDLER_ERROR;
+        }
+        con->http_status = 200; /* OK */
+        con->file_started = 1;
+        return HANDLER_GO_ON;
+    } else {
+        /* invalid response headers */
+        con->http_status = 502; /* Bad Gateway */
+        con->mode = DIRECT;
+        return HANDLER_FINISHED;
+    }
+
+    if (!is_header_end) {
+        /*(reuse MAX_HTTP_REQUEST_HEADER as max size
+         * for response headers from backends)*/
+        if (header_len > MAX_HTTP_REQUEST_HEADER) {
+            log_error_write(srv, __FILE__, __LINE__, "sb",
+                            "response headers too large for", con->uri.path);
+            con->http_status = 502; /* Bad Gateway */
+            con->mode = DIRECT;
+            return HANDLER_FINISHED;
+        }
+        return HANDLER_GO_ON;
+    }
+
+    /* the body starts after the EOL */
+    bstart = b->ptr + (i + 1);
+    blen = header_len - (i + 1);
+
+    /* strip the last \r?\n */
+    if (i > 0 && (b->ptr[i - 1] == '\r')) {
+        i--;
+    }
+
+    buffer_string_set_length(b, i);
+
+    if (opts->backend == BACKEND_PROXY && !is_nph) {
+        /* invalid response Status-Line from HTTP proxy */
+        con->http_status = 502; /* Bad Gateway */
+        con->mode = DIRECT;
+        return HANDLER_FINISHED;
+    }
+
+    if (0 != http_response_process_headers(srv, con, opts, b)) {
+        return HANDLER_ERROR;
+    }
+
+    con->file_started = 1;
+
+    if (opts->authorizer
+        && (con->http_status == 0 || con->http_status == 200)) {
+        return HANDLER_GO_ON;
+    }
+
+    if (con->mode == DIRECT) {
+        return HANDLER_FINISHED;
+    }
+
+    if (opts->local_redir && con->http_status >= 300 && con->http_status < 400){
+        /*(con->parsed_response & HTTP_LOCATION)*/
+        handler_t rc = http_response_process_local_redir(srv, con, blen);
+        if (rc != HANDLER_GO_ON) return rc;
+    }
+
+    if (opts->xsendfile_allow) {
+        data_string *ds;
+        /* X-Sendfile2 is deprecated; historical for fastcgi */
+        if (opts->backend == BACKEND_FASTCGI
+            && NULL != (ds = (data_string *) array_get_element(con->response.headers, "X-Sendfile2"))) {
+            http_response_xsendfile2(srv, con, ds->value, opts->xsendfile_docroot);
+            buffer_reset(ds->value); /*(do not send to client)*/
+            return HANDLER_FINISHED;
+        } else if (NULL != (ds = (data_string *) array_get_element(con->response.headers, "X-Sendfile"))
+                   || (opts->backend == BACKEND_FASTCGI /* X-LIGHTTPD-send-file is deprecated; historical for fastcgi */
+                       && NULL != (ds = (data_string *) array_get_element(con->response.headers, "X-LIGHTTPD-send-file")))) {
+            http_response_xsendfile(srv, con, ds->value, opts->xsendfile_docroot);
+            buffer_reset(ds->value); /*(do not send to client)*/
+            return HANDLER_FINISHED;
+        }
+    }
+
+    if (blen > 0) {
+        if (0 != http_chunk_append_mem(srv, con, bstart, blen)) {
+            return HANDLER_ERROR;
+        }
+    }
+
+    return HANDLER_GO_ON;
+}
+
+
+handler_t http_response_read(server *srv, connection *con, http_response_opts *opts, buffer *b, int fd, int *fde_ndx) {
+    while (1) {
+        ssize_t n;
+        size_t avail = buffer_string_space(b);
+        unsigned int toread = 4096;
+
+      #if !defined(_WIN32) && !defined(__CYGWIN__)
+        if (0 == ioctl(fd, FIONREAD, (int *)&toread)) {
+            if (avail < toread) {
+                if (toread < 4096)
+                    toread = 4096;
+                else if (toread > MAX_READ_LIMIT)
+                    toread = MAX_READ_LIMIT;
+            }
+            else if (0 == toread) {
+              #if 0
+                return (fdevent_event_get_interest(srv->ev, fd) & FDEVENT_IN)
+                  ? HANDLER_FINISHED  /* read finished */
+                  : HANDLER_GO_ON;    /* optimistic read; data not ready */
+              #else
+                if (!(fdevent_event_get_interest(srv->ev, fd) & FDEVENT_IN))
+                    return HANDLER_GO_ON; /* optimistic read; data not ready */
+                toread = 4096; /* let read() below indicate if EOF or EAGAIN */
+              #endif
+            }
+        }
+      #endif
+
+        if (con->conf.stream_response_body & FDEVENT_STREAM_RESPONSE_BUFMIN) {
+            off_t cqlen = chunkqueue_length(con->write_queue);
+            if (cqlen + (off_t)toread > 65536 - 4096) {
+                if (!con->is_writable) {
+                    /*(defer removal of FDEVENT_IN interest since
+                     * connection_state_machine() might be able to send data
+                     * immediately, unless !con->is_writable, where
+                     * connection_state_machine() might not loop back to call
+                     * mod_proxy_handle_subrequest())*/
+                    fdevent_event_clr(srv->ev, fde_ndx, fd, FDEVENT_IN);
+                }
+                if (cqlen >= 65536-1) return HANDLER_GO_ON;
+                toread = 65536 - 1 - (unsigned int)cqlen;
+            }
+        }
+
+        if (avail < toread) {
+            avail = toread;
+            buffer_string_prepare_append(b, avail);
+        }
+
+        n = read(fd, b->ptr+buffer_string_length(b), avail);
+
+        if (0 == n) {
+            return HANDLER_FINISHED; /* read finished */
+        }
+        else if (n < 0) {
+            switch (errno) {
+              case EAGAIN:
+             #ifdef EWOULDBLOCK
+             #if EWOULDBLOCK != EAGAIN
+              case EWOULDBLOCK:
+             #endif
+             #endif
+              case EINTR:
+                return HANDLER_GO_ON;
+              default:
+                log_error_write(srv, __FILE__, __LINE__, "ssdd",
+                                "read():", strerror(errno), con->fd, fd);
+                return HANDLER_ERROR;
+            }
+        }
+
+        buffer_commit(b, (size_t)n);
+
+        if (con->file_started == 0) {
+            /* split header from body */
+            handler_t rc = http_response_parse_headers(srv, con, opts, b);
+            if (rc != HANDLER_GO_ON) return rc;
+            /* accumulate response in b until headers completed (or error) */
+            if (con->file_started) buffer_string_set_length(b, 0);
+        } else {
+            if (0 != http_chunk_append_buffer(srv, con, b)) {
+                /* error writing to tempfile;
+                 * truncate response or send 500 if nothing sent yet */
+                return HANDLER_ERROR;
+            }
+            buffer_string_set_length(b, 0);
+        }
+
+        if ((con->conf.stream_response_body & FDEVENT_STREAM_RESPONSE_BUFMIN)
+            && chunkqueue_length(con->write_queue) > 65536 - 4096) {
+            if (!con->is_writable) {
+                /*(defer removal of FDEVENT_IN interest since
+                 * connection_state_machine() might be able to send
+                 * data immediately, unless !con->is_writable, where
+                 * connection_state_machine() might not loop back to
+                 * call the subrequest handler)*/
+                fdevent_event_clr(srv->ev, fde_ndx, fd, FDEVENT_IN);
+            }
+            break;
+        }
+    }
+
+    return HANDLER_GO_ON;
 }
 
 

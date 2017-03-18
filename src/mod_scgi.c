@@ -311,8 +311,6 @@ typedef struct {
 	chunkqueue *wb;
 	off_t     wb_reqlen;
 
-	buffer   *response_header;
-
 	int       fd;        /* fd to the scgi process */
 	int       fde_ndx;   /* index into the fd-event buffer */
 
@@ -320,6 +318,7 @@ typedef struct {
 	int       got_proc;
 	int       reconnects; /* number of reconnect attempts */
 
+	http_response_opts opts;
 	plugin_config conf;
 
 	connection *remote_conn;  /* dumb pointer */
@@ -357,7 +356,6 @@ static handler_ctx * handler_ctx_init(void) {
 	hctx->fde_ndx = -1;
 
 	hctx->response = buffer_init();
-	hctx->response_header = buffer_init();
 
 	hctx->state = FCGI_STATE_INIT;
 	hctx->proc = NULL;
@@ -374,10 +372,7 @@ static handler_ctx * handler_ctx_init(void) {
 
 static void handler_ctx_free(handler_ctx *hctx) {
 	buffer_free(hctx->response);
-	buffer_free(hctx->response_header);
-
 	chunkqueue_free(hctx->wb);
-
 	free(hctx);
 }
 
@@ -1459,6 +1454,8 @@ static handler_t scgi_reconnect(server *srv, handler_ctx *hctx) {
 	if (NULL == hctx->host) return HANDLER_FINISHED;
 
 	hctx->host->load++;
+	hctx->opts.xsendfile_allow = hctx->host->xsendfile_allow;
+	hctx->opts.xsendfile_docroot = hctx->host->xsendfile_docroot;
 	scgi_set_state(srv, hctx, FCGI_STATE_INIT);
 	return HANDLER_COMEBACK;
 }
@@ -1683,279 +1680,6 @@ static int scgi_create_env(server *srv, handler_ctx *hctx) {
 	if (con->request.content_length) {
 		chunkqueue_append_chunkqueue(hctx->wb, con->request_content_queue);
 		hctx->wb_reqlen += con->request.content_length;/* (eventual) total request size */
-	}
-
-	return 0;
-}
-
-static int scgi_response_parse(server *srv, connection *con, plugin_data *p, buffer *in, int eol) {
-	char *ns;
-	const char *s;
-	int line = 0;
-
-	UNUSED(srv);
-
-	buffer_copy_buffer(p->parse_response, in);
-
-	for (s = p->parse_response->ptr;
-	     NULL != (ns = (eol == EOL_RN ? strstr(s, "\r\n") : strchr(s, '\n')));
-	     s = ns + (eol == EOL_RN ? 2 : 1), line++) {
-		const char *key, *value;
-		int key_len;
-		data_string *ds;
-
-		ns[0] = '\0';
-
-		if (line == 0 &&
-		    0 == strncmp(s, "HTTP/1.", 7)) {
-			/* non-parsed header ... we parse them anyway */
-
-			if ((s[7] == '1' ||
-			     s[7] == '0') &&
-			    s[8] == ' ') {
-				int status;
-				/* after the space should be a status code for us */
-
-				status = strtol(s+9, NULL, 10);
-
-				if (status >= 100 && status < 1000) {
-					/* we expected 3 digits got them */
-					con->parsed_response |= HTTP_STATUS;
-					con->http_status = status;
-				}
-			}
-		} else {
-
-			key = s;
-			if (NULL == (value = strchr(s, ':'))) {
-				/* we expect: "<key>: <value>\r\n" */
-				continue;
-			}
-
-			key_len = value - key;
-			value += 1;
-
-			/* skip LWS */
-			while (*value == ' ' || *value == '\t') value++;
-
-			if (NULL == (ds = (data_string *)array_get_unused_element(con->response.headers, TYPE_STRING))) {
-				ds = data_response_init();
-			}
-			buffer_copy_string_len(ds->key, key, key_len);
-			buffer_copy_string(ds->value, value);
-
-			array_insert_unique(con->response.headers, (data_unset *)ds);
-
-			switch(key_len) {
-			case 4:
-				if (0 == strncasecmp(key, "Date", key_len)) {
-					con->parsed_response |= HTTP_DATE;
-				}
-				break;
-			case 6:
-				if (0 == strncasecmp(key, "Status", key_len)) {
-					int status = strtol(value, NULL, 10);
-					if (status >= 100 && status < 1000) {
-						con->http_status = status;
-						con->parsed_response |= HTTP_STATUS;
-					} else {
-						con->http_status = 502;
-					}
-					/* do not send Status to client */
-					buffer_reset(ds->value);
-				}
-				break;
-			case 8:
-				if (0 == strncasecmp(key, "Location", key_len)) {
-					con->parsed_response |= HTTP_LOCATION;
-				}
-				break;
-			case 10:
-				if (0 == strncasecmp(key, "Connection", key_len)) {
-					con->response.keep_alive = (0 == strcasecmp(value, "Keep-Alive")) ? 1 : 0;
-					con->parsed_response |= HTTP_CONNECTION;
-				}
-				break;
-			case 14:
-				if (0 == strncasecmp(key, "Content-Length", key_len)) {
-					con->response.content_length = strtoul(value, NULL, 10);
-					con->parsed_response |= HTTP_CONTENT_LENGTH;
-				}
-				break;
-			case 17:
-				if (0 == strncasecmp(key, "Transfer-Encoding", key_len)) {
-					con->parsed_response |= HTTP_TRANSFER_ENCODING;
-				}
-				break;
-			default:
-				break;
-			}
-		}
-	}
-
-	/* CGI/1.1 rev 03 - 7.2.1.2 */
-	if ((con->parsed_response & HTTP_LOCATION) &&
-	    !(con->parsed_response & HTTP_STATUS)) {
-		con->http_status = 302;
-	}
-
-	return 0;
-}
-
-
-static int scgi_demux_response(server *srv, handler_ctx *hctx) {
-	plugin_data *p    = hctx->plugin_data;
-	connection  *con  = hctx->remote_conn;
-
-	while(1) {
-		int n;
-
-		buffer_string_prepare_copy(hctx->response, 1023);
-		if (-1 == (n = read(hctx->fd, hctx->response->ptr, hctx->response->size - 1))) {
-			if (errno == EAGAIN || errno == EINTR) {
-				/* would block, wait for signal */
-				return 0;
-			}
-			/* error */
-			log_error_write(srv, __FILE__, __LINE__, "sdd", strerror(errno), con->fd, hctx->fd);
-			return -1;
-		}
-
-		if (n == 0) {
-			/* read finished */
-			return 1;
-		}
-
-		buffer_commit(hctx->response, n);
-
-		/* split header from body */
-
-		if (con->file_started == 0) {
-			char *c;
-			int in_header = 0;
-			int header_end = 0;
-			int cp, eol = EOL_UNSET;
-			size_t used = 0;
-			size_t hlen = 0;
-
-			buffer_append_string_buffer(hctx->response_header, hctx->response);
-
-			/* nph (non-parsed headers) */
-			if (0 == strncmp(hctx->response_header->ptr, "HTTP/1.", 7)) in_header = 1;
-
-			/* search for the \r\n\r\n or \n\n in the string */
-			for (c = hctx->response_header->ptr, cp = 0, used = buffer_string_length(hctx->response_header); used; c++, cp++, used--) {
-				if (*c == ':') in_header = 1;
-				else if (*c == '\n') {
-					if (in_header == 0) {
-						/* got a response without a response header */
-
-						c = NULL;
-						header_end = 1;
-						break;
-					}
-
-					if (eol == EOL_UNSET) eol = EOL_N;
-
-					if (*(c+1) == '\n') {
-						header_end = 1;
-						hlen = cp + 2;
-						break;
-					}
-
-				} else if (used > 1 && *c == '\r' && *(c+1) == '\n') {
-					if (in_header == 0) {
-						/* got a response without a response header */
-
-						c = NULL;
-						header_end = 1;
-						break;
-					}
-
-					if (eol == EOL_UNSET) eol = EOL_RN;
-
-					if (used > 3 &&
-					    *(c+2) == '\r' &&
-					    *(c+3) == '\n') {
-						header_end = 1;
-						hlen = cp + 4;
-						break;
-					}
-
-					/* skip the \n */
-					c++;
-					cp++;
-					used--;
-				}
-			}
-
-			if (header_end) {
-				if (c == NULL) {
-					/* no header, but a body */
-					if (0 != http_chunk_append_buffer(srv, con, hctx->response_header)) {
-						/* error writing to tempfile;
-						 * truncate response or send 500 if nothing sent yet */
-						return 1;
-					}
-				} else {
-					size_t blen = buffer_string_length(hctx->response_header) - hlen;
-
-					/* a small hack: terminate after at the second \r */
-					buffer_string_set_length(hctx->response_header, hlen - 1);
-
-					/* parse the response header */
-					scgi_response_parse(srv, con, p, hctx->response_header, eol);
-
-					if (hctx->host->xsendfile_allow) {
-						data_string *ds;
-						if (NULL != (ds = (data_string *) array_get_element(con->response.headers, "X-Sendfile"))) {
-							http_response_xsendfile(srv, con, ds->value, hctx->host->xsendfile_docroot);
-							return 1;
-						}
-					}
-
-					if (blen > 0) {
-						if (0 != http_chunk_append_mem(srv, con, hctx->response_header->ptr + hlen, blen)) {
-							/* error writing to tempfile;
-							 * truncate response or send 500 if nothing sent yet */
-							return 1;
-						}
-					}
-				}
-
-				con->file_started = 1;
-			} else {
-				/*(reuse MAX_HTTP_REQUEST_HEADER as max size for response headers from backends)*/
-				if (buffer_string_length(hctx->response_header) > MAX_HTTP_REQUEST_HEADER) {
-					log_error_write(srv, __FILE__, __LINE__, "sb", "response headers too large for", con->uri.path);
-					con->http_status = 502; /* Bad Gateway */
-					con->mode = DIRECT;
-					return 1;
-				}
-			}
-		} else {
-			if (0 != http_chunk_append_buffer(srv, con, hctx->response)) {
-				/* error writing to tempfile;
-				 * truncate response or send 500 if nothing sent yet */
-				return 1;
-			}
-			if ((con->conf.stream_response_body & FDEVENT_STREAM_RESPONSE_BUFMIN)
-			    && chunkqueue_length(con->write_queue) > 65536 - 4096) {
-				if (!con->is_writable) {
-					/*(defer removal of FDEVENT_IN interest since
-					 * connection_state_machine() might be able to send data
-					 * immediately, unless !con->is_writable, where
-					 * connection_state_machine() might not loop back to call
-					 * mod_scgi_handle_subrequest())*/
-					fdevent_event_clr(srv->ev, &(hctx->fde_ndx), hctx->fd, FDEVENT_IN);
-				}
-				break;
-			}
-		}
-
-#if 0
-		log_error_write(srv, __FILE__, __LINE__, "ddss", con->fd, hctx->fd, connection_get_state(con->state), b->ptr);
-#endif
 	}
 
 	return 0;
@@ -2475,15 +2199,15 @@ SUBREQUEST_FUNC(mod_scgi_handle_subrequest) {
 
 static handler_t scgi_recv_response(server *srv, handler_ctx *hctx) {
 
-		switch (scgi_demux_response(srv, hctx)) {
-		case 0:
-			break;
-		case 1:
-			/* we are done */
+		switch (http_response_read(srv, hctx->remote_conn, &hctx->opts,
+					   hctx->response, hctx->fd, &hctx->fde_ndx)) {
+		default:
+			return HANDLER_GO_ON;
+		case HANDLER_FINISHED:
 			scgi_connection_close(srv, hctx);
-
 			return HANDLER_FINISHED;
-		case -1: {
+		case HANDLER_COMEBACK: /*(not expected; treat as error)*/
+		case HANDLER_ERROR: {
 			connection  *con  = hctx->remote_conn;
 			plugin_data *p    = hctx->plugin_data;
 
@@ -2711,31 +2435,7 @@ static handler_t scgi_check_extension(server *srv, connection *con, void *p_d, i
 	/* init handler-context */
 	if (uri_path_handler) {
 		if (host->check_local == 0) {
-			handler_ctx *hctx;
 			char *pathinfo;
-
-			hctx = handler_ctx_init();
-
-			hctx->remote_conn      = con;
-			hctx->plugin_data      = p;
-			hctx->host             = host;
-			hctx->proc	       = NULL;
-			hctx->ext              = extension;
-
-			/*hctx->conf.exts        = p->conf.exts;*/
-			hctx->conf.proto       = p->conf.proto;
-			hctx->conf.debug       = p->conf.debug;
-
-			con->plugin_ctx[p->id] = hctx;
-
-			host->load++;
-
-			con->mode = p->id;
-
-			if (con->conf.log_request_handling) {
-				log_error_write(srv, __FILE__, __LINE__, "s",
-				"handling it in mod_scgi");
-			}
 
 			/* the prefix is the SCRIPT_NAME,
 			 * everything from start to the next slash
@@ -2769,8 +2469,12 @@ static handler_t scgi_check_extension(server *srv, connection *con, void *p_d, i
 				buffer_copy_string(con->request.pathinfo, pathinfo);
 				buffer_string_set_length(con->uri.path, buffer_string_length(con->uri.path) - buffer_string_length(con->request.pathinfo));
 			}
+		} else {
+			return HANDLER_GO_ON;
 		}
-	} else {
+	}
+
+	{
 		handler_ctx *hctx;
 		hctx = handler_ctx_init();
 
@@ -2783,6 +2487,12 @@ static handler_t scgi_check_extension(server *srv, connection *con, void *p_d, i
 		/*hctx->conf.exts        = p->conf.exts;*/
 		hctx->conf.proto       = p->conf.proto;
 		hctx->conf.debug       = p->conf.debug;
+
+		hctx->opts.backend = BACKEND_SCGI;
+		hctx->opts.authorizer = 0;
+		hctx->opts.local_redir = 0;
+		hctx->opts.xsendfile_allow = host->xsendfile_allow;
+		hctx->opts.xsendfile_docroot = host->xsendfile_docroot;
 
 		con->plugin_ctx[p->id] = hctx;
 
