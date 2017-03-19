@@ -246,6 +246,7 @@ static server *server_init(void) {
 	CLEAN(srvconf.bindhost);
 	CLEAN(srvconf.event_handler);
 	CLEAN(srvconf.pid_file);
+	CLEAN(srvconf.syslog_facility);
 
 	CLEAN(tmp_chunk_len);
 #undef CLEAN
@@ -337,6 +338,7 @@ static void server_free(server *srv) {
 	CLEAN(srvconf.modules_dir);
 	CLEAN(srvconf.network_backend);
 	CLEAN(srvconf.xattr_name);
+	CLEAN(srvconf.syslog_facility);
 
 	CLEAN(tmp_chunk_len);
 #undef CLEAN

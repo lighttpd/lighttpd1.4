@@ -519,6 +519,7 @@ typedef struct {
 	unsigned short high_precision_timestamps;
 	time_t loadts;
 	double loadavg[3];
+	buffer *syslog_facility;
 } server_config;
 
 typedef struct server_socket {
