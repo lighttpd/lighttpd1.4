@@ -2003,30 +2003,13 @@ static handler_t scgi_write_request(server *srv, handler_ctx *hctx) {
 		if (ret < 0) {
 			if (errno == ENOTCONN || ret == -2) {
 				/* the connection got dropped after accept()
-				 *
-				 * this is most of the time a PHP which dies
-				 * after PHP_FCGI_MAX_REQUESTS
-				 *
-				 */
-				if (hctx->wb->bytes_out == 0 &&
-				    hctx->reconnects++ < 5) {
-					usleep(10000); /* take away the load of the webserver
-							* to let the php a chance to restart
-							*/
-
-					return scgi_reconnect(srv, hctx);
-				}
-
-				/* not reconnected ... why
-				 *
-				 * far@#lighttpd report this for FreeBSD
-				 *
+				 * we don't care about that - if you accept() it, you have to handle it.
 				 */
 
-				log_error_write(srv, __FILE__, __LINE__, "ssosd",
-						"connection was dropped after accept(). reconnect() denied:",
+				log_error_write(srv, __FILE__, __LINE__, "ssosdb",
+						"connection was dropped after accept() (perhaps the scgi process died),",
 						"write-offset:", hctx->wb->bytes_out,
-						"reconnect attempts:", hctx->reconnects);
+						"socket:", hctx->proc->port, hctx->proc->socket);
 
 				return HANDLER_ERROR;
 			} else {
