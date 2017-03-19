@@ -939,7 +939,7 @@ static int fcgi_spawn_connection(server *srv,
                                  fcgi_proc *proc) {
 	int fcgi_fd;
 	int status;
-	struct timeval tv = { 0, 100 * 1000 };
+	struct timeval tv = { 0, 10 * 1000 };
 #ifdef HAVE_SYS_UN_H
 	struct sockaddr_un fcgi_addr_un;
 #endif

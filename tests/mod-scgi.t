@@ -76,8 +76,10 @@ EOF
 	ok($tf->handle_http($t) == 0, 'killing scgi and wait for restart');
 
 	# (might take lighttpd 1 sec to detect backend exit)
-	select(undef, undef, undef, .9);
-	select(undef, undef, undef, .1) while (!$tf->listening_on(10000));
+	select(undef, undef, undef, .5);
+	for (my $c = 2*20; $c && 0 == $tf->listening_on(10000); --$c) {
+		select(undef, undef, undef, 0.05);
+	}
 	$t->{REQUEST}  = ( <<EOF
 GET /index.scgi?crlf HTTP/1.0
 Host: www.example.org

@@ -709,7 +709,7 @@ static int scgi_spawn_connection(server *srv,
                                  scgi_proc *proc) {
 	int scgi_fd;
 	int status;
-	struct timeval tv = { 0, 100 * 1000 };
+	struct timeval tv = { 0, 10 * 1000 };
 #ifdef HAVE_SYS_UN_H
 	struct sockaddr_un scgi_addr_un;
 #endif
