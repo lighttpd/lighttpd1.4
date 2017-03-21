@@ -197,7 +197,7 @@ int open_logfile_or_pipe(server *srv, const char* logfile) {
 int log_error_open(server *srv) {
 #ifdef HAVE_SYSLOG_H
 	/* perhaps someone wants to use syslog() */
-	int facility = 0;
+	int facility = -1;
 	if (!buffer_string_is_empty(srv->srvconf.syslog_facility)) {
 		static const struct facility_name_st {
 		  const char *name;
@@ -253,14 +253,14 @@ int log_error_open(server *srv) {
 				break;
 			}
 		}
-		if (0 == facility) {
+		if (-1 == facility) {
 			log_error_write(srv, __FILE__, __LINE__, "SBS",
 					"unrecognized server.syslog-facility: \"",
 					srv->srvconf.syslog_facility,
 					"\"; defaulting to \"daemon\" facility");
 		}
 	}
-	openlog("lighttpd", LOG_CONS | LOG_PID, facility ? facility : LOG_DAEMON);
+	openlog("lighttpd", LOG_CONS | LOG_PID, -1 == facility ? LOG_DAEMON : facility);
 #endif
 
 	srv->errorlog_mode = ERRORLOG_FD;
