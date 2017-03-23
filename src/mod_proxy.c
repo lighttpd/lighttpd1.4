@@ -668,6 +668,23 @@ static int proxy_create_env(server *srv, handler_ctx *hctx) {
 	}
 	proxy_set_header(con, "X-Forwarded-Proto", con->uri.scheme->ptr);
 
+	if (HTTP_METHOD_GET != con->request.http_method
+	    && HTTP_METHOD_HEAD != con->request.http_method
+	    && con->request.content_length >= 0) {
+		/* set Content-Length if client sent Transfer-Encoding: chunked
+		 * and not streaming to backend (request body has been fully received) */
+		data_string *ds = (data_string *) array_get_element(con->request.headers, "Content-Length");
+		if (NULL == ds || buffer_string_is_empty(ds->value)) {
+			char buf[LI_ITOSTRING_LENGTH];
+			li_itostrn(buf, sizeof(buf), con->request.content_length);
+			if (NULL == ds) {
+				proxy_set_header(con, "Content-Length", buf);
+			} else {
+				buffer_copy_string(ds->value, buf);
+			}
+		}
+	}
+
 	/* request header */
 	for (i = 0; i < con->request.headers->used; i++) {
 		data_string *ds;
