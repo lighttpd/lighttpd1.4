@@ -206,6 +206,23 @@ varline ::= key(A) ASSIGN expression(B). {
   A = NULL;
 }
 
+varline ::= key(A) FORCE_ASSIGN expression(B). {
+  if (ctx->ok) {
+    if (strncmp(A->ptr, "env.", sizeof("env.") - 1) == 0) {
+      fprintf(stderr, "Setting env variable is not supported in conditional %d %s: %s\n",
+              ctx->current->context_ndx,
+              ctx->current->key->ptr, A->ptr);
+      ctx->ok = 0;
+    } else {
+      buffer_copy_buffer(B->key, A);
+      array_replace(ctx->current->value, B);
+      B = NULL;
+    }
+  }
+  buffer_free(A);
+  A = NULL;
+}
+
 varline ::= key(A) APPEND expression(B). {
   if (ctx->ok) {
     array *vars = ctx->current->value;

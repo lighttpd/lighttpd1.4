@@ -967,6 +967,14 @@ static int config_tokenizer(server *srv, tokenizer_t *t, int *token_id, buffer *
 			}
 			break;
 
+		case ':':
+			if (t->input[t->offset+1] == '=') {
+				t->offset += 2;
+				tid = TK_FORCE_ASSIGN;
+				buffer_copy_string_len(token, CONST_STR_LEN(":="));
+			}
+			break;
+
 		case '{':
 			t->offset++;
 
