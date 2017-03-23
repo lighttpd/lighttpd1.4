@@ -665,6 +665,7 @@ static int proxy_create_env(server *srv, handler_ctx *hctx) {
 	 * which is NULL if it is not set */
 	if (!buffer_string_is_empty(con->request.http_host)) {
 		proxy_set_header(con, "X-Host", con->request.http_host->ptr);
+		proxy_set_header(con, "X-Forwarded-Host", con->request.http_host->ptr);
 	}
 	proxy_set_header(con, "X-Forwarded-Proto", con->uri.scheme->ptr);
 
