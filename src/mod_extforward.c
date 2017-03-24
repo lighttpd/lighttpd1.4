@@ -422,16 +422,7 @@ URIHANDLER_FUNC(mod_extforward_uri_handler) {
 
 	if (real_remote_addr != NULL) { /* parsed */
 		sock_addr sock;
-		data_string *forwarded_proto = (data_string *)array_get_element(con->request.headers, "X-Forwarded-Proto");
 		sock.plain.sa_family = AF_UNSPEC;
-
-		if (NULL != forwarded_proto) {
-			if (buffer_is_equal_caseless_string(forwarded_proto->value, CONST_STR_LEN("https"))) {
-				buffer_copy_string_len(con->uri.scheme, CONST_STR_LEN("https"));
-			} else if (buffer_is_equal_caseless_string(forwarded_proto->value, CONST_STR_LEN("http"))) {
-				buffer_copy_string_len(con->uri.scheme, CONST_STR_LEN("http"));
-			}
-		}
 
 		if (con->conf.log_request_handling) {
 			log_error_write(srv, __FILE__, __LINE__, "ss", "using address:", real_remote_addr);
@@ -458,6 +449,32 @@ URIHANDLER_FUNC(mod_extforward_uri_handler) {
 				log_error_write(srv, __FILE__, __LINE__, "ss",
 						"patching con->dst_addr_buf for the accesslog:", real_remote_addr);
 			}
+
+			{
+				/* update scheme if X-Forwarded-Proto is set
+				 * Limitations:
+				 * - X-Forwarded-Proto may or may not be set by proxies, even if X-Forwarded-For is set
+				 * - X-Forwarded-Proto may be a comma-separated list if there are multiple proxies,
+				 *   but the historical behavior of the code below only honored it if there was exactly one value
+				 * - Only "http" or "https" are currently accepted since the request to lighttpd currently has to
+				 *   be HTTP/1.0 or HTTP/1.1 using http or https.  If this is changed, then the scheme from this
+				 *   untrusted header must be checked to contain only alphanumeric characters, and to be a
+				 *   reasonable length, e.g. < 256 chars.
+				 * - con->uri.scheme is not reset in mod_extforward_restore() but is currently not an issues since
+				 *   con->uri.scheme will be reset by next request.  If a new module uses con->uri.scheme in the
+				 *   handle_request_done hook, then should evaluate if that module should use the forwarded value
+				 *   (probably) or the original value.
+				 */
+				data_string *forwarded_proto = (data_string *)array_get_element(con->request.headers, "X-Forwarded-Proto");
+				if (NULL != forwarded_proto && !buffer_is_equal_caseless_string(forwarded_proto->value, CONST_BUF_LEN(con->uri.scheme))) {
+					if (buffer_is_equal_caseless_string(forwarded_proto->value, CONST_STR_LEN("https"))) {
+						buffer_copy_string_len(con->uri.scheme, CONST_STR_LEN("https"));
+					} else if (buffer_is_equal_caseless_string(forwarded_proto->value, CONST_STR_LEN("http"))) {
+						buffer_copy_string_len(con->uri.scheme, CONST_STR_LEN("http"));
+					}
+				}
+			}
+
 			/* Now, clean the conf_cond cache, because we may have changed the results of tests */
 			clean_cond_cache(srv, con);
 		}
