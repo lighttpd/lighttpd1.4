@@ -193,6 +193,17 @@ SETDEFAULTS_FUNC(mod_extforward_set_defaults) {
 					"unexpected value for extforward.headers; expected list of \"headername\"");
 			return HANDLER_ERROR;
 		}
+
+		/* default to "X-Forwarded-For" or "Forwarded-For" if extforward.headers not specified or empty */
+		if (0 == s->headers->used && (0 == i || NULL != array_get_element(config->value, "extforward.headers"))) {
+			data_string *ds;
+			ds = data_string_init();
+			buffer_copy_string_len(ds->value, CONST_STR_LEN("X-Forwarded-For"));
+			array_insert_unique(s->headers, (data_unset *)ds);
+			ds = data_string_init();
+			buffer_copy_string_len(ds->value, CONST_STR_LEN("Forwarded-For"));
+			array_insert_unique(s->headers, (data_unset *)ds);
+		}
 	}
 
 	return HANDLER_GO_ON;
@@ -380,19 +391,9 @@ URIHANDLER_FUNC(mod_extforward_uri_handler) {
 			"-- mod_extforward_uri_handler called");
 	}
 
-	if (p->conf.headers->used) {
-		data_string *ds;
-		size_t k;
-
-		for(k = 0; k < p->conf.headers->used; k++) {
-			ds = (data_string *) p->conf.headers->data[k];
-			if (NULL != (forwarded = (data_string*) array_get_element(con->request.headers, ds->value->ptr))) break;
-		}
-	} else {
-		forwarded = (data_string *) array_get_element(con->request.headers,"X-Forwarded-For");
-		if (NULL == forwarded) forwarded = (data_string *) array_get_element(con->request.headers,  "Forwarded-For");
+	for (size_t k = 0; k < p->conf.headers->used && NULL == forwarded; ++k) {
+		forwarded = (data_string *) array_get_element(con->request.headers, ((data_string *)p->conf.headers->data[k])->value->ptr);
 	}
-
 	if (NULL == forwarded) {
 		if (con->conf.log_request_handling) {
 			log_error_write(srv, __FILE__, __LINE__, "s", "no forward header found, skipping");
