@@ -326,8 +326,8 @@ static const char *last_not_in_array(array *a, plugin_data *p)
 	return NULL;
 }
 
-#ifdef HAVE_IPV6
 static void ipstr_to_sockaddr(server *srv, const char *host, sock_addr *sock) {
+#ifdef HAVE_IPV6
 	struct addrinfo hints, *addrlist = NULL;
 	int result;
 
@@ -370,8 +370,12 @@ static void ipstr_to_sockaddr(server *srv, const char *host, sock_addr *sock) {
 	}
 
 	freeaddrinfo(addrlist);
-}
+#else
+	UNUSED(srv);
+	sock->ipv4.sin_addr.s_addr = inet_addr(host);
+	sock->plain.sa_family = (sock->ipv4.sin_addr.s_addr == 0xFFFFFFFF) ? AF_UNSPEC : AF_INET;
 #endif
+}
 
 static void clean_cond_cache(server *srv, connection *con) {
 	config_cond_cache_reset_item(srv, con, COMP_HTTP_REMOTE_IP);
@@ -432,12 +436,7 @@ URIHANDLER_FUNC(mod_extforward_uri_handler) {
 		if (con->conf.log_request_handling) {
 			log_error_write(srv, __FILE__, __LINE__, "ss", "using address:", real_remote_addr);
 		}
-#ifdef HAVE_IPV6
 		ipstr_to_sockaddr(srv, real_remote_addr, &sock);
-#else
-		sock.ipv4.sin_addr.s_addr = inet_addr(real_remote_addr);
-		sock.plain.sa_family = (sock.ipv4.sin_addr.s_addr == 0xFFFFFFFF) ? AF_UNSPEC : AF_INET;
-#endif
 		if (sock.plain.sa_family != AF_UNSPEC) {
 			/* we found the remote address, modify current connection and save the old address */
 			if (con->plugin_ctx[p->id]) {
