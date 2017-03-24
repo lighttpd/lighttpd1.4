@@ -955,7 +955,6 @@ int http_request_parse(server *srv, connection *con) {
 							} else if (cmp > 0 && 0 == (cmp = buffer_caseless_compare(CONST_BUF_LEN(ds->key), CONST_STR_LEN("Content-Length")))) {
 								char *err;
 								off_t r;
-								size_t j, jlen;
 
 								if (con_length_set) {
 									con->http_status = 400;
@@ -970,21 +969,6 @@ int http_request_parse(server *srv, connection *con) {
 									}
 									array_insert_unique(con->request.headers, (data_unset *)ds);
 									return 0;
-								}
-
-								jlen = buffer_string_length(ds->value);
-								for (j = 0; j < jlen; j++) {
-									char c = ds->value->ptr[j];
-									if (!isdigit((unsigned char)c)) {
-										log_error_write(srv, __FILE__, __LINE__, "sbs",
-												"content-length broken:", ds->value, "-> 400");
-
-										con->http_status = 400;
-										con->keep_alive = 0;
-
-										array_insert_unique(con->request.headers, (data_unset *)ds);
-										return 0;
-									}
 								}
 
 								r = strtoll(ds->value->ptr, &err, 10);
