@@ -6,7 +6,6 @@
 
 #include "plugin.h"
 #include "response.h"
-#include "inet_ntop_cache.h"
 
 #include <stdlib.h>
 #include <string.h>
@@ -361,7 +360,7 @@ URIHANDLER_FUNC(mod_trigger_b4_dl_uri_handler) {
 
 		/* memcache can't handle spaces */
 	} else {
-		remote_ip = inet_ntop_cache_get_ip(srv, &(con->dst_addr));
+		remote_ip = con->dst_addr_buf->ptr;
 	}
 
 	if (p->conf.debug) {

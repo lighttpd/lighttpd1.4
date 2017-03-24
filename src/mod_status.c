@@ -8,8 +8,6 @@
 
 #include "plugin.h"
 
-#include "inet_ntop_cache.h"
-
 #include <sys/types.h>
 
 #include <fcntl.h>
@@ -516,7 +514,7 @@ static handler_t mod_status_handle_server_status_html(server *srv, connection *c
 
 		buffer_append_string_len(b, CONST_STR_LEN("<tr><td class=\"string\">"));
 
-		buffer_append_string(b, inet_ntop_cache_get_ip(srv, &(c->dst_addr)));
+		buffer_append_string_buffer(b, c->dst_addr_buf);
 
 		buffer_append_string_len(b, CONST_STR_LEN("</td><td class=\"int\">"));
 

@@ -13,7 +13,6 @@
 
 #include "plugin.h"
 
-#include "inet_ntop_cache.h"
 #include "crc32.h"
 
 #include <sys/types.h>
@@ -656,7 +655,7 @@ static int proxy_create_env(server *srv, handler_ctx *hctx) {
 		buffer_append_string_len(b, CONST_STR_LEN("\r\n"));
 	}
 
-	proxy_append_header(con, "X-Forwarded-For", (char *)inet_ntop_cache_get_ip(srv, &(con->dst_addr)));
+	proxy_append_header(con, "X-Forwarded-For", con->dst_addr_buf->ptr);
 	/* http_host is NOT is just a pointer to a buffer
 	 * which is NULL if it is not set */
 	if (!buffer_string_is_empty(con->request.http_host)) {

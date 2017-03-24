@@ -366,16 +366,8 @@ static void clean_cond_cache(server *srv, connection *con) {
 URIHANDLER_FUNC(mod_extforward_uri_handler) {
 	plugin_data *p = p_d;
 	data_string *forwarded = NULL;
-#ifdef HAVE_IPV6
-	char b2[INET6_ADDRSTRLEN + 1];
-#endif
-	const char *dst_addr_str = NULL;
 	array *forward_array = NULL;
 	const char *real_remote_addr = NULL;
-#ifdef HAVE_IPV6
-#endif
-
-	if (!con->request.headers) return HANDLER_GO_ON;
 
 	mod_extforward_patch_connection(srv, con, p);
 
@@ -405,21 +397,11 @@ URIHANDLER_FUNC(mod_extforward_uri_handler) {
 		return HANDLER_GO_ON;
 	}
 
-#ifdef HAVE_IPV6
-	dst_addr_str = inet_ntop(con->dst_addr.plain.sa_family,
-		con->dst_addr.plain.sa_family == AF_INET6 ?
-			(struct sockaddr *)&(con->dst_addr.ipv6.sin6_addr) :
-			(struct sockaddr *)&(con->dst_addr.ipv4.sin_addr),
-		b2, (sizeof b2) - 1);
-#else
-	dst_addr_str = inet_ntoa(con->dst_addr.ipv4.sin_addr);
-#endif
-
 	/* if the remote ip itself is not trusted, then do nothing */
-	if (IP_UNTRUSTED == is_proxy_trusted(dst_addr_str, p)) {
+	if (IP_UNTRUSTED == is_proxy_trusted(con->dst_addr_buf->ptr, p)) {
 		if (con->conf.log_request_handling) {
-			log_error_write(srv, __FILE__, __LINE__, "sss",
-					"remote address", dst_addr_str, "is NOT a trusted proxy, skipping");
+			log_error_write(srv, __FILE__, __LINE__, "sbs",
+					"remote address", con->dst_addr_buf, "is NOT a trusted proxy, skipping");
 		}
 
 		return HANDLER_GO_ON;

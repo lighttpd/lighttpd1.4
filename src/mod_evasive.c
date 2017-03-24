@@ -7,8 +7,6 @@
 
 #include "plugin.h"
 
-#include "inet_ntop_cache.h"
-
 #include <stdlib.h>
 #include <string.h>
 
@@ -194,8 +192,8 @@ URIHANDLER_FUNC(mod_evasive_uri_handler) {
 
 		if (conns_by_ip > p->conf.max_conns) {
 			if (!p->conf.silent) {
-				log_error_write(srv, __FILE__, __LINE__, "ss",
-					inet_ntop_cache_get_ip(srv, &(con->dst_addr)),
+				log_error_write(srv, __FILE__, __LINE__, "bs",
+					con->dst_addr_buf,
 					"turned away. Too many connections.");
 			}
 
