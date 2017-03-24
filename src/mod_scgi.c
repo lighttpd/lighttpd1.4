@@ -13,19 +13,14 @@
 
 #include "plugin.h"
 
-#include "inet_ntop_cache.h"
-
 #include <sys/types.h>
 #include <unistd.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <limits.h>
 #include <string.h>
 #include <stdlib.h>
-#include <ctype.h>
-#include <assert.h>
 #include <signal.h>
-
-#include <stdio.h>
 
 #include "sys-socket.h"
 #include "sys-endian.h"

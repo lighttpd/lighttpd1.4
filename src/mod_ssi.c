@@ -10,15 +10,12 @@
 
 #include "mod_ssi.h"
 
-#include "inet_ntop_cache.h"
-
 #include "sys-socket.h"
 
 #include <sys/types.h>
 
 #include <ctype.h>
 #include <stdlib.h>
-#include <stdio.h>
 #include <string.h>
 #include <strings.h>
 #include <errno.h>

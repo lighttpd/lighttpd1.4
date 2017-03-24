@@ -6,8 +6,6 @@
 #include <string.h>
 #include <stdlib.h>
 
-#include <stdio.h>
-
 #ifdef HAVE_VALGRIND_VALGRIND_H
 # include <valgrind/valgrind.h>
 #endif

@@ -21,7 +21,6 @@
 #include <unistd.h>
 #include <string.h>
 #include <stdlib.h>
-#include <assert.h>
 
 void
 network_accept_tcp_nagle_disable (const int fd)

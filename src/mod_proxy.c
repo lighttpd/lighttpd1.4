@@ -20,13 +20,9 @@
 
 #include <unistd.h>
 #include <errno.h>
-#include <fcntl.h>
+#include <limits.h>
 #include <string.h>
 #include <stdlib.h>
-#include <ctype.h>
-#include <assert.h>
-
-#include <stdio.h>
 
 #include "sys-socket.h"
 

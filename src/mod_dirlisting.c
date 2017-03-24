@@ -9,14 +9,11 @@
 #include "response.h"
 #include "stat_cache.h"
 
-#include <ctype.h>
 #include <stdlib.h>
 #include <string.h>
 #include <dirent.h>
-#include <assert.h>
 #include <errno.h>
 #include <fcntl.h>
-#include <stdio.h>
 #include <unistd.h>
 #include <time.h>
 

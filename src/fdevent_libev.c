@@ -4,8 +4,6 @@
 #include "buffer.h"
 #include "log.h"
 
-#include <assert.h>
-
 #ifdef USE_LIBEV
 
 # include <ev.h>

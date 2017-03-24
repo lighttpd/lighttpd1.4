@@ -11,9 +11,6 @@
 #include <stdlib.h>
 #include <string.h>
 #include <errno.h>
-#include <signal.h>
-#include <fcntl.h>
-#include <assert.h>
 
 #ifdef USE_SELECT
 

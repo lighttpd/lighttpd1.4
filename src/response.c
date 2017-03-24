@@ -15,15 +15,10 @@
 
 #include <limits.h>
 #include <errno.h>
-#include <fcntl.h>
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
 #include <unistd.h>
-#include <ctype.h>
-#include <assert.h>
-
-#include <stdio.h>
 
 #include "sys-socket.h"
 

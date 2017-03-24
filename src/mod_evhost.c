@@ -7,7 +7,6 @@
 
 #include <string.h>
 #include <errno.h>
-#include <ctype.h>
 
 typedef struct {
 	/* unparsed pieces */

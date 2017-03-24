@@ -39,7 +39,6 @@
 #include <stdlib.h>
 #include <time.h>
 #include <signal.h>
-#include <assert.h>
 #include <locale.h>
 
 #include <stdio.h>

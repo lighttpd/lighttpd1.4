@@ -14,13 +14,10 @@
 
 #include <sys/types.h>
 #include <sys/stat.h>
-#include <ctype.h>
 #include <stdlib.h>
 #include <string.h>
 #include <errno.h>
 #include <fcntl.h>
-#include <stdio.h>
-#include <assert.h>
 
 #include <unistd.h>
 #include <dirent.h>

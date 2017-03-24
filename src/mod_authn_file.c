@@ -34,7 +34,6 @@
 #include "log.h"
 #include "response.h"
 
-#include "inet_ntop_cache.h"
 #include "base64.h"
 #include "md5.h"
 
@@ -42,6 +41,7 @@
 #include <sys/stat.h>
 
 #include <stdlib.h>
+#include <stdio.h>
 #include <string.h>
 #include <errno.h>
 #include <fcntl.h>

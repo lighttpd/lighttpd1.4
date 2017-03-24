@@ -13,7 +13,6 @@
 
 #include "plugin.h"
 
-#include "inet_ntop_cache.h"
 #include "stat_cache.h"
 #include "status_counter.h"
 
@@ -23,8 +22,6 @@
 #include <fcntl.h>
 #include <string.h>
 #include <stdlib.h>
-#include <ctype.h>
-#include <assert.h>
 #include <signal.h>
 
 #ifdef HAVE_FASTCGI_FASTCGI_H
@@ -36,8 +33,6 @@
 #  include "fastcgi.h"
 # endif
 #endif /* HAVE_FASTCGI_FASTCGI_H */
-
-#include <stdio.h>
 
 #include "sys-socket.h"
 

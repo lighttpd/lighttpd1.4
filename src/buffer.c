@@ -5,10 +5,6 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include <stdio.h>
-#include <assert.h>
-#include <ctype.h>
-
 static const char hex_chars[] = "0123456789abcdef";
 
 /**
@@ -1006,11 +1002,14 @@ void buffer_to_upper(buffer *b) {
 	}
 }
 
+
+#include <stdio.h>
+
 #ifdef HAVE_LIBUNWIND
 # define UNW_LOCAL_ONLY
 # include <libunwind.h>
 
-void print_backtrace(FILE *file) {
+static void print_backtrace(FILE *file) {
 	unw_cursor_t cursor;
 	unw_context_t context;
 	int ret;
@@ -1071,7 +1070,7 @@ error:
 	fprintf(file, "Error while generating backtrace: unwind error %i\n", (int) -ret);
 }
 #else
-void print_backtrace(FILE *file) {
+static void print_backtrace(FILE *file) {
 	UNUSED(file);
 }
 #endif

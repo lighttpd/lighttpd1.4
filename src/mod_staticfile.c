@@ -11,9 +11,7 @@
 #include "http_chunk.h"
 #include "response.h"
 
-#include <ctype.h>
 #include <stdlib.h>
-#include <stdio.h>
 #include <string.h>
 
 /**

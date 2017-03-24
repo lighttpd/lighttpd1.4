@@ -9,15 +9,12 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 
-#include <ctype.h>
 #include <stdlib.h>
 #include <string.h>
 #include <fcntl.h>
 #include <unistd.h>
 #include <errno.h>
 #include <time.h>
-
-#include <stdio.h>
 
 #ifdef HAVE_SYSLOG_H
 # include <syslog.h>

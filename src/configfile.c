@@ -20,7 +20,6 @@
 #include <stdio.h>
 #include <ctype.h>
 #include <limits.h>
-#include <assert.h>
 #include <glob.h>
 
 

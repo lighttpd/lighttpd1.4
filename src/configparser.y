@@ -9,7 +9,6 @@
 #include "array.h"
 #include "request.h" /* http_request_host_normalize() */
 
-#include <assert.h>
 #include <ctype.h>
 #include <errno.h>
 #include <stdio.h>

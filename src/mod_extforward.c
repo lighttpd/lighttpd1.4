@@ -6,15 +6,11 @@
 
 #include "plugin.h"
 
-#include "inet_ntop_cache.h"
 #include "configfile.h"
 
-#include <assert.h>
-#include <ctype.h>
+#include "sys-socket.h"
 #include <stdlib.h>
 #include <string.h>
-#include <stdio.h>
-#include <netinet/in.h>
 #include <errno.h>
 
 /**

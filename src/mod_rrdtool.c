@@ -9,10 +9,8 @@
 #include "plugin.h"
 #include <sys/types.h>
 
-#include <assert.h>
 #include <fcntl.h>
 #include <stdlib.h>
-#include <stdio.h>
 #include <string.h>
 #include <unistd.h>
 #include <errno.h>

@@ -6,10 +6,8 @@
 
 #include "plugin.h"
 
-#include <ctype.h>
 #include <stdlib.h>
 #include <string.h>
-#include <stdio.h>
 
 /* plugin config for all request/connections */
 typedef struct {

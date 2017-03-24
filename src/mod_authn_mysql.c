@@ -26,8 +26,8 @@
 #include "md5.h"
 #include "plugin.h"
 
-#include <ctype.h>
 #include <errno.h>
+#include <stdio.h>
 #include <string.h>
 
 #ifdef HAVE_CRYPT_H

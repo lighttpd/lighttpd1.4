@@ -5,7 +5,6 @@
 
 #include <stdlib.h>
 #include <time.h>
-#include <assert.h>
 
 #include <lualib.h>
 #include <lauxlib.h>

@@ -6,7 +6,6 @@
 
 #include <stdlib.h>
 #include <string.h>
-#include <stdio.h>
 
 static keyvalue http_versions[] = {
 	{ HTTP_VERSION_1_1, "HTTP/1.1" },

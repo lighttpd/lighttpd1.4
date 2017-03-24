@@ -9,9 +9,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <errno.h>
-#include <stdio.h>
 #include <fcntl.h>
-#include <assert.h>
 
 
 fdevents *fdevent_init(server *srv, size_t maxfds, fdevent_handler_t type) {

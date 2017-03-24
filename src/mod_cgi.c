@@ -13,15 +13,8 @@
 
 #include <sys/types.h>
 #include "sys-mmap.h"
-
-#ifdef __WIN32
-# include <winsock2.h>
-#else
-# include <sys/socket.h>
+#include "sys-socket.h"
 # include <sys/wait.h>
-# include <netinet/in.h>
-# include <arpa/inet.h>
-#endif
 
 #include <unistd.h>
 #include <errno.h>
@@ -29,8 +22,6 @@
 #include <string.h>
 #include <fdevent.h>
 #include <signal.h>
-#include <ctype.h>
-#include <assert.h>
 
 #include <stdio.h>
 #include <fcntl.h>

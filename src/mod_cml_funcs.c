@@ -8,7 +8,6 @@
 #include <errno.h>
 #include <unistd.h>
 #include <dirent.h>
-#include <stdio.h>
 
 #include <lauxlib.h>
 

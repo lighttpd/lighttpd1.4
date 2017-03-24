@@ -4,8 +4,6 @@
 #include <lualib.h>
 #include <lauxlib.h>
 
-#include <assert.h>
-#include <stdio.h>
 #include <errno.h>
 #include <time.h>
 #include <string.h>

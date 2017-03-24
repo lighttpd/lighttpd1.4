@@ -1,9 +1,7 @@
 #include "first.h"
 
 #include <unistd.h>
-#include <stdio.h>
 #include <errno.h>
-#include <fcntl.h>
 #include <string.h>
 
 #include <mysql.h>

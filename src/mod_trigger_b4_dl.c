@@ -8,9 +8,7 @@
 #include "response.h"
 #include "inet_ntop_cache.h"
 
-#include <ctype.h>
 #include <stdlib.h>
-#include <fcntl.h>
 #include <string.h>
 
 #if defined(HAVE_GDBM_H)

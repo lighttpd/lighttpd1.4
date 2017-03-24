@@ -8,7 +8,6 @@
 #include "mod_ssi_expr.h"
 #include "buffer.h"
 
-#include <assert.h>
 #include <string.h>
 }
 

@@ -21,12 +21,9 @@
 #include <sys/stat.h>
 
 #include <stdlib.h>
-#include <stdio.h>
 #include <unistd.h>
 #include <errno.h>
 #include <string.h>
-#include <fcntl.h>
-#include <assert.h>
 
 #ifdef HAVE_SYS_FILIO_H
 # include <sys/filio.h>

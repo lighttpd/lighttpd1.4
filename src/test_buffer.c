@@ -1,5 +1,8 @@
 #include "first.h"
 
+#include <stdio.h>
+#include <stdlib.h>
+
 #include "buffer.h"
 
 static void run_buffer_path_simplify(buffer *psrc, buffer *pdest, const char *in, size_t in_len, const char *out, size_t out_len) {

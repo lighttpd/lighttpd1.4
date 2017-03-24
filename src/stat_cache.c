@@ -12,9 +12,7 @@
 #include <string.h>
 #include <errno.h>
 #include <unistd.h>
-#include <stdio.h>
 #include <fcntl.h>
-#include <assert.h>
 
 #ifdef HAVE_ATTR_ATTRIBUTES_H
 # include <attr/attributes.h>

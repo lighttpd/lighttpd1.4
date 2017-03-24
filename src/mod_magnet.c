@@ -13,10 +13,8 @@
 #include "status_counter.h"
 #include "etag.h"
 
-#include <ctype.h>
 #include <stdlib.h>
 #include <string.h>
-#include <assert.h>
 #include <setjmp.h>
 
 #include <lua.h>

@@ -15,7 +15,6 @@
 #include <string.h>
 #include <errno.h>
 #include <unistd.h>
-#include <stdio.h>
 
 /* init the plugin data */
 INIT_FUNC(mod_cml_init) {
