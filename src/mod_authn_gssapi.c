@@ -220,7 +220,7 @@ static int mod_authn_gssapi_create_krb5_ccache(server *srv, connection *con, plu
     /* coverity[secure_temp : FALSE] */
     int fd = mkstemp(ccname);
     if (fd < 0) {
-        log_error_write(srv, __FILE__, __LINE__, "ss", "mkstemp():", strerror(errno));
+        log_error_write(srv, __FILE__, __LINE__, "sss", "mkstemp():", ccname, strerror(errno));
         buffer_free(kccname);
         return -1;
     }

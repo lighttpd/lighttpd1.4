@@ -459,7 +459,7 @@ void chunkqueue_steal(chunkqueue *dest, chunkqueue *src, off_t len) {
 	}
 }
 
-static chunk *chunkqueue_get_append_tempfile(chunkqueue *cq) {
+static chunk *chunkqueue_get_append_tempfile(server *srv, chunkqueue *cq) {
 	chunk *c;
 	buffer *template = buffer_init_string("/var/tmp/lighttpd-upload-XXXXXX");
 	int fd = -1;
@@ -483,11 +483,19 @@ static chunk *chunkqueue_get_append_tempfile(chunkqueue *cq) {
 	}
 
 	if (fd < 0) {
+		/* (report only the last error to mkstemp()
+		 *  if multiple temp dirs attempted) */
+		log_error_write(srv, __FILE__, __LINE__, "sbs",
+				"opening temp-file failed:",
+				template, strerror(errno));
 		buffer_free(template);
 		return NULL;
 	}
 
 	if (0 != fcntl(fd, F_SETFL, fcntl(fd, F_GETFL, 0) | O_APPEND)) {
+		/* (should not happen; fd is regular file) */
+		log_error_write(srv, __FILE__, __LINE__, "sbs",
+				"fcntl():", template, strerror(errno));
 		close(fd);
 		buffer_free(template);
 		return NULL;
@@ -549,16 +557,7 @@ int chunkqueue_append_mem_to_tempfile(server *srv, chunkqueue *dest, const char 
 			dst_c = NULL;
 		}
 
-		if (NULL == dst_c && NULL == (dst_c = chunkqueue_get_append_tempfile(dest))) {
-			/* we don't have file to write to,
-			 * EACCES might be one reason.
-			 *
-			 * Instead of sending 500 we send 413 and say the request is too large
-			 */
-
-			log_error_write(srv, __FILE__, __LINE__, "ss",
-				"opening temp-file failed:", strerror(errno));
-
+		if (NULL == dst_c && NULL == (dst_c = chunkqueue_get_append_tempfile(srv, dest))) {
 			return -1;
 		}
 
