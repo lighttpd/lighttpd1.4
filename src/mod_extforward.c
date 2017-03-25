@@ -60,19 +60,6 @@
  *       mod_accesslog,
  *       mod_extforward
  *    )
- *
- * Known issues:
- *      seems causing segfault with mod_ssl and $HTTP{"socket"} directives
- *      LEM 2006.05.26: Fixed segfault $SERVER["socket"] directive. Untested with SSL.
- *
- * ChangeLog:
- *     2005.12.19   Initial Version
- *     2005.12.19   fixed conflict with conditional directives
- *     2006.05.26   LEM: IPv6 support
- *     2006.05.26   LEM: Fix a segfault with $SERVER["socket"] directive.
- *     2006.05.26   LEM: Run at uri_raw time, as we don't need to see the URI
- *                       In this manner, we run before mod_access and $HTTP["remoteip"] directives work!
- *     2006.05.26   LEM: Clean config_cond cache of tests whose result we probably change.
  */
 
 
@@ -100,11 +87,9 @@ typedef struct {
 } handler_ctx;
 
 
-static handler_ctx * handler_ctx_init(sock_addr oldaddr, buffer *oldaddr_buf) {
+static handler_ctx * handler_ctx_init(void) {
 	handler_ctx * hctx;
 	hctx = calloc(1, sizeof(*hctx));
-	hctx->saved_remote_addr = oldaddr;
-	hctx->saved_remote_addr_buf = oldaddr_buf;
 	return hctx;
 }
 
@@ -382,11 +367,92 @@ static void clean_cond_cache(server *srv, connection *con) {
 	config_cond_cache_reset_item(srv, con, COMP_HTTP_SCHEME);
 }
 
+static int mod_extforward_set_addr(server *srv, connection *con, plugin_data *p, const char *addr) {
+	sock_addr sock;
+	handler_ctx *hctx;
+
+	if (con->conf.log_request_handling) {
+		log_error_write(srv, __FILE__, __LINE__, "ss", "using address:", addr);
+	}
+
+	sock.plain.sa_family = AF_UNSPEC;
+	ipstr_to_sockaddr(srv, addr, &sock);
+	if (sock.plain.sa_family == AF_UNSPEC) return 0;
+
+	/* we found the remote address, modify current connection and save the old address */
+	if (con->plugin_ctx[p->id]) {
+		if (con->conf.log_request_handling) {
+			log_error_write(srv, __FILE__, __LINE__, "s",
+				"-- mod_extforward_uri_handler already patched this connection, resetting state");
+		}
+		handler_ctx_free(con->plugin_ctx[p->id]);
+		con->plugin_ctx[p->id] = NULL;
+	}
+	/* save old address */
+	con->plugin_ctx[p->id] = hctx = handler_ctx_init();
+	hctx->saved_remote_addr = con->dst_addr;
+	hctx->saved_remote_addr_buf = con->dst_addr_buf;
+	/* patch connection address */
+	con->dst_addr = sock;
+	con->dst_addr_buf = buffer_init_string(addr);
+
+	if (con->conf.log_request_handling) {
+		log_error_write(srv, __FILE__, __LINE__, "ss",
+				"patching con->dst_addr_buf for the accesslog:", addr);
+	}
+
+	/* Now, clean the conf_cond cache, because we may have changed the results of tests */
+	clean_cond_cache(srv, con);
+
+	return 1;
+}
+
+static void mod_extforward_set_proto(connection *con, const char *proto, size_t protolen) {
+	if (0 != protolen && !buffer_is_equal_caseless_string(con->uri.scheme, proto, protolen)) {
+		/* update scheme if X-Forwarded-Proto is set
+		 * Limitations:
+		 * - Only "http" or "https" are currently accepted since the request to lighttpd currently has to
+		 *   be HTTP/1.0 or HTTP/1.1 using http or https.  If this is changed, then the scheme from this
+		 *   untrusted header must be checked to contain only alphanumeric characters, and to be a
+		 *   reasonable length, e.g. < 256 chars.
+		 * - con->uri.scheme is not reset in mod_extforward_restore() but is currently not an issues since
+		 *   con->uri.scheme will be reset by next request.  If a new module uses con->uri.scheme in the
+		 *   handle_request_done hook, then should evaluate if that module should use the forwarded value
+		 *   (probably) or the original value.
+		 */
+		if (0 == buffer_caseless_compare(proto, protolen, CONST_STR_LEN("https"))) {
+			buffer_copy_string_len(con->uri.scheme, CONST_STR_LEN("https"));
+		} else if (0 == buffer_caseless_compare(proto, protolen, CONST_STR_LEN("http"))) {
+			buffer_copy_string_len(con->uri.scheme, CONST_STR_LEN("http"));
+		}
+	}
+}
+
+static handler_t mod_extforward_X_Forwarded_For(server *srv, connection *con, plugin_data *p, buffer *x_forwarded_for) {
+	/* build forward_array from forwarded data_string */
+	array *forward_array = extract_forward_array(x_forwarded_for);
+	const char *real_remote_addr = last_not_in_array(forward_array, p);
+	if (real_remote_addr != NULL) { /* parsed */
+		/* get scheme if X-Forwarded-Proto is set
+		 * Limitations:
+		 * - X-Forwarded-Proto may or may not be set by proxies, even if X-Forwarded-For is set
+		 * - X-Forwarded-Proto may be a comma-separated list if there are multiple proxies,
+		 *   but the historical behavior of the code below only honored it if there was exactly one value
+		 *   (not done: walking backwards in X-Forwarded-Proto the same num of steps
+		 *    as in X-Forwarded-For to find proto set by last trusted proxy)
+		 */
+		data_string *x_forwarded_proto = (data_string *)array_get_element(con->request.headers, "X-Forwarded-Proto");
+		if (mod_extforward_set_addr(srv, con, p, real_remote_addr) && NULL != x_forwarded_proto) {
+			mod_extforward_set_proto(con, CONST_BUF_LEN(x_forwarded_proto->value));
+		}
+	}
+	array_free(forward_array);
+	return HANDLER_GO_ON;
+}
+
 URIHANDLER_FUNC(mod_extforward_uri_handler) {
 	plugin_data *p = p_d;
 	data_string *forwarded = NULL;
-	array *forward_array = NULL;
-	const char *real_remote_addr = NULL;
 
 	mod_extforward_patch_connection(srv, con, p);
 
@@ -416,73 +482,7 @@ URIHANDLER_FUNC(mod_extforward_uri_handler) {
 		return HANDLER_GO_ON;
 	}
 
-	/* build forward_array from forwarded data_string */
-	forward_array = extract_forward_array(forwarded->value);
-	real_remote_addr = last_not_in_array(forward_array, p);
-
-	if (real_remote_addr != NULL) { /* parsed */
-		sock_addr sock;
-		sock.plain.sa_family = AF_UNSPEC;
-
-		if (con->conf.log_request_handling) {
-			log_error_write(srv, __FILE__, __LINE__, "ss", "using address:", real_remote_addr);
-		}
-		ipstr_to_sockaddr(srv, real_remote_addr, &sock);
-		if (sock.plain.sa_family != AF_UNSPEC) {
-			/* we found the remote address, modify current connection and save the old address */
-			if (con->plugin_ctx[p->id]) {
-				if (con->conf.log_request_handling) {
-					log_error_write(srv, __FILE__, __LINE__, "s",
-						"-- mod_extforward_uri_handler already patched this connection, resetting state");
-				}
-				handler_ctx_free(con->plugin_ctx[p->id]);
-				con->plugin_ctx[p->id] = NULL;
-			}
-			/* save old address */
-			con->plugin_ctx[p->id] = handler_ctx_init(con->dst_addr, con->dst_addr_buf);
-			/* patch connection address */
-			con->dst_addr = sock;
-			con->dst_addr_buf = buffer_init();
-			buffer_copy_string(con->dst_addr_buf, real_remote_addr);
-
-			if (con->conf.log_request_handling) {
-				log_error_write(srv, __FILE__, __LINE__, "ss",
-						"patching con->dst_addr_buf for the accesslog:", real_remote_addr);
-			}
-
-			{
-				/* update scheme if X-Forwarded-Proto is set
-				 * Limitations:
-				 * - X-Forwarded-Proto may or may not be set by proxies, even if X-Forwarded-For is set
-				 * - X-Forwarded-Proto may be a comma-separated list if there are multiple proxies,
-				 *   but the historical behavior of the code below only honored it if there was exactly one value
-				 * - Only "http" or "https" are currently accepted since the request to lighttpd currently has to
-				 *   be HTTP/1.0 or HTTP/1.1 using http or https.  If this is changed, then the scheme from this
-				 *   untrusted header must be checked to contain only alphanumeric characters, and to be a
-				 *   reasonable length, e.g. < 256 chars.
-				 * - con->uri.scheme is not reset in mod_extforward_restore() but is currently not an issues since
-				 *   con->uri.scheme will be reset by next request.  If a new module uses con->uri.scheme in the
-				 *   handle_request_done hook, then should evaluate if that module should use the forwarded value
-				 *   (probably) or the original value.
-				 */
-				data_string *forwarded_proto = (data_string *)array_get_element(con->request.headers, "X-Forwarded-Proto");
-				if (NULL != forwarded_proto && !buffer_is_equal_caseless_string(forwarded_proto->value, CONST_BUF_LEN(con->uri.scheme))) {
-					if (buffer_is_equal_caseless_string(forwarded_proto->value, CONST_STR_LEN("https"))) {
-						buffer_copy_string_len(con->uri.scheme, CONST_STR_LEN("https"));
-					} else if (buffer_is_equal_caseless_string(forwarded_proto->value, CONST_STR_LEN("http"))) {
-						buffer_copy_string_len(con->uri.scheme, CONST_STR_LEN("http"));
-					}
-				}
-			}
-
-			/* Now, clean the conf_cond cache, because we may have changed the results of tests */
-			clean_cond_cache(srv, con);
-		}
-	}
-	array_free(forward_array);
-
-	/* not found */
-	return HANDLER_GO_ON;
+	return mod_extforward_X_Forwarded_For(srv, con, p, forwarded->value);
 }
 
 CONNECTION_FUNC(mod_extforward_restore) {
