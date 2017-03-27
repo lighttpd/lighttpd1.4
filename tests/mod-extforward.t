@@ -8,7 +8,7 @@ BEGIN {
 
 use strict;
 use IO::Socket;
-use Test::More tests => 5;
+use Test::More tests => 6;
 use LightyTest;
 
 my $tf = LightyTest->new();
@@ -40,6 +40,15 @@ $t->{REQUEST} = ( <<EOF
 GET /ip.pl HTTP/1.0
 Host: www.example.org
 X-Forwarded-For: 127.0.10.1, 127.0.20.1, 127.0.30.1
+EOF
+);
+$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200, 'HTTP-Content' => '127.0.20.1' } ];
+ok($tf->handle_http($t) == 0, 'expect 127.0.20.1, from chained proxies');
+
+$t->{REQUEST} = ( <<EOF
+GET /ip.pl HTTP/1.0
+Host: www.example.org
+Forwarded: for=127.0.10.1, for=127.0.20.1;proto=https, for=127.0.30.1;proto=http
 EOF
 );
 $t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200, 'HTTP-Content' => '127.0.20.1' } ];

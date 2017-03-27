@@ -3,6 +3,7 @@
 #include "base.h"
 #include "log.h"
 #include "buffer.h"
+#include "request.h"
 
 #include "plugin.h"
 
@@ -65,9 +66,20 @@
 
 /* plugin config for all request/connections */
 
+typedef enum {
+	PROXY_FORWARDED_NONE         = 0x00,
+	PROXY_FORWARDED_FOR          = 0x01,
+	PROXY_FORWARDED_PROTO        = 0x02,
+	PROXY_FORWARDED_HOST         = 0x04,
+	PROXY_FORWARDED_BY           = 0x08,
+	PROXY_FORWARDED_REMOTE_USER  = 0x10
+} proxy_forwarded_t;
+
 typedef struct {
 	array *forwarder;
 	array *headers;
+	array *opts_params;
+	unsigned int opts;
 } plugin_config;
 
 typedef struct {
@@ -77,6 +89,8 @@ typedef struct {
 
 	plugin_config conf;
 } plugin_data;
+
+static int extforward_check_proxy;
 
 
 /* context , used for restore remote ip */
@@ -122,6 +136,7 @@ FREE_FUNC(mod_extforward_free) {
 
 			array_free(s->forwarder);
 			array_free(s->headers);
+			array_free(s->opts_params);
 
 			free(s);
 		}
@@ -143,6 +158,7 @@ SETDEFAULTS_FUNC(mod_extforward_set_defaults) {
 	config_values_t cv[] = {
 		{ "extforward.forwarder",       NULL, T_CONFIG_ARRAY, T_CONFIG_SCOPE_CONNECTION },       /* 0 */
 		{ "extforward.headers",         NULL, T_CONFIG_ARRAY, T_CONFIG_SCOPE_CONNECTION },       /* 1 */
+		{ "extforward.params",          NULL, T_CONFIG_ARRAY, T_CONFIG_SCOPE_CONNECTION },       /* 2 */
 		{ NULL,                         NULL, T_CONFIG_UNSET, T_CONFIG_SCOPE_UNSET }
 	};
 
@@ -157,9 +173,12 @@ SETDEFAULTS_FUNC(mod_extforward_set_defaults) {
 		s = calloc(1, sizeof(plugin_config));
 		s->forwarder    = array_init();
 		s->headers      = array_init();
+		s->opts_params  = array_init();
+		s->opts         = PROXY_FORWARDED_NONE;
 
 		cv[0].destination = s->forwarder;
 		cv[1].destination = s->headers;
+		cv[2].destination = s->opts_params;
 
 		p->config_storage[i] = s;
 
@@ -189,6 +208,61 @@ SETDEFAULTS_FUNC(mod_extforward_set_defaults) {
 			buffer_copy_string_len(ds->value, CONST_STR_LEN("Forwarded-For"));
 			array_insert_unique(s->headers, (data_unset *)ds);
 		}
+
+		if (!array_is_kvany(s->opts_params)) {
+			log_error_write(srv, __FILE__, __LINE__, "s",
+					"unexpected value for extforward.params; expected ( \"param\" => \"value\" )");
+			return HANDLER_ERROR;
+		}
+		for (size_t j = 0, used = s->opts_params->used; j < used; ++j) {
+			proxy_forwarded_t param;
+			data_unset *du = s->opts_params->data[j];
+		      #if 0  /*("for" and "proto" historical behavior: always enabled)*/
+			if (buffer_is_equal_string(du->key, CONST_STR_LEN("by"))) {
+				param = PROXY_FORWARDED_BY;
+			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("for"))) {
+				param = PROXY_FORWARDED_FOR;
+			} else
+		      #endif
+			if (buffer_is_equal_string(du->key, CONST_STR_LEN("host"))) {
+				param = PROXY_FORWARDED_HOST;
+		      #if 0
+			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("proto"))) {
+				param = PROXY_FORWARDED_PROTO;
+		      #endif
+			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("remote_user"))) {
+				param = PROXY_FORWARDED_REMOTE_USER;
+			} else {
+				log_error_write(srv, __FILE__, __LINE__, "sb",
+					        "extforward.params keys must be one of: host, remote_user, but not:", du->key);
+				return HANDLER_ERROR;
+			}
+			if (du->type == TYPE_STRING) {
+				data_string *ds = (data_string *)du;
+				if (buffer_is_equal_string(ds->value, CONST_STR_LEN("enable"))) {
+					s->opts |= param;
+				} else if (!buffer_is_equal_string(ds->value, CONST_STR_LEN("disable"))) {
+					log_error_write(srv, __FILE__, __LINE__, "sb",
+						        "extforward.params values must be one of: 0, 1, enable, disable; error for key:", du->key);
+					return HANDLER_ERROR;
+				}
+			} else if (du->type == TYPE_INTEGER) {
+				data_integer *di = (data_integer *)du;
+				if (di->value) s->opts |= param;
+			} else {
+				log_error_write(srv, __FILE__, __LINE__, "sb",
+					        "extforward.params values must be one of: 0, 1, enable, disable; error for key:", du->key);
+				return HANDLER_ERROR;
+			}
+		}
+	}
+
+	for (i = 0; i < srv->srvconf.modules->used; i++) {
+		data_string *ds = (data_string *)srv->srvconf.modules->data[i];
+		if (buffer_is_equal_string(ds->value, CONST_STR_LEN("mod_proxy"))) {
+			extforward_check_proxy = 1;
+			break;
+		}
 	}
 
 	return HANDLER_GO_ON;
@@ -202,6 +276,7 @@ static int mod_extforward_patch_connection(server *srv, connection *con, plugin_
 
 	PATCH(forwarder);
 	PATCH(headers);
+	PATCH(opts);
 
 	/* skip the first, the global context */
 	for (i = 1; i < srv->config_context->used; i++) {
@@ -219,6 +294,8 @@ static int mod_extforward_patch_connection(server *srv, connection *con, plugin_
 				PATCH(forwarder);
 			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("extforward.headers"))) {
 				PATCH(headers);
+			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("extforward.params"))) {
+				PATCH(opts);
 			}
 		}
 	}
@@ -362,11 +439,6 @@ static void ipstr_to_sockaddr(server *srv, const char *host, sock_addr *sock) {
 #endif
 }
 
-static void clean_cond_cache(server *srv, connection *con) {
-	config_cond_cache_reset_item(srv, con, COMP_HTTP_REMOTE_IP);
-	config_cond_cache_reset_item(srv, con, COMP_HTTP_SCHEME);
-}
-
 static int mod_extforward_set_addr(server *srv, connection *con, plugin_data *p, const char *addr) {
 	sock_addr sock;
 	handler_ctx *hctx;
@@ -389,6 +461,9 @@ static int mod_extforward_set_addr(server *srv, connection *con, plugin_data *p,
 		con->plugin_ctx[p->id] = NULL;
 	}
 	/* save old address */
+	if (extforward_check_proxy) {
+		array_set_key_value(con->environment, CONST_STR_LEN("_L_EXTFORWARD_ACTUAL_FOR"), CONST_BUF_LEN(con->dst_addr_buf));
+	}
 	con->plugin_ctx[p->id] = hctx = handler_ctx_init();
 	hctx->saved_remote_addr = con->dst_addr;
 	hctx->saved_remote_addr_buf = con->dst_addr_buf;
@@ -402,12 +477,12 @@ static int mod_extforward_set_addr(server *srv, connection *con, plugin_data *p,
 	}
 
 	/* Now, clean the conf_cond cache, because we may have changed the results of tests */
-	clean_cond_cache(srv, con);
+	config_cond_cache_reset_item(srv, con, COMP_HTTP_REMOTE_IP);
 
 	return 1;
 }
 
-static void mod_extforward_set_proto(connection *con, const char *proto, size_t protolen) {
+static void mod_extforward_set_proto(server *srv, connection *con, const char *proto, size_t protolen) {
 	if (0 != protolen && !buffer_is_equal_caseless_string(con->uri.scheme, proto, protolen)) {
 		/* update scheme if X-Forwarded-Proto is set
 		 * Limitations:
@@ -420,10 +495,15 @@ static void mod_extforward_set_proto(connection *con, const char *proto, size_t 
 		 *   handle_request_done hook, then should evaluate if that module should use the forwarded value
 		 *   (probably) or the original value.
 		 */
+		if (extforward_check_proxy) {
+			array_set_key_value(con->environment, CONST_STR_LEN("_L_EXTFORWARD_ACTUAL_PROTO"), CONST_BUF_LEN(con->uri.scheme));
+		}
 		if (0 == buffer_caseless_compare(proto, protolen, CONST_STR_LEN("https"))) {
 			buffer_copy_string_len(con->uri.scheme, CONST_STR_LEN("https"));
+			config_cond_cache_reset_item(srv, con, COMP_HTTP_SCHEME);
 		} else if (0 == buffer_caseless_compare(proto, protolen, CONST_STR_LEN("http"))) {
 			buffer_copy_string_len(con->uri.scheme, CONST_STR_LEN("http"));
+			config_cond_cache_reset_item(srv, con, COMP_HTTP_SCHEME);
 		}
 	}
 }
@@ -443,11 +523,371 @@ static handler_t mod_extforward_X_Forwarded_For(server *srv, connection *con, pl
 		 */
 		data_string *x_forwarded_proto = (data_string *)array_get_element(con->request.headers, "X-Forwarded-Proto");
 		if (mod_extforward_set_addr(srv, con, p, real_remote_addr) && NULL != x_forwarded_proto) {
-			mod_extforward_set_proto(con, CONST_BUF_LEN(x_forwarded_proto->value));
+			mod_extforward_set_proto(srv, con, CONST_BUF_LEN(x_forwarded_proto->value));
 		}
 	}
 	array_free(forward_array);
 	return HANDLER_GO_ON;
+}
+
+static int find_end_quoted_string (const char * const s, int i) {
+    do {
+        ++i;
+    } while (s[i] != '"' && s[i] != '\0' && (s[i] != '\\' || s[++i] != '\0'));
+    return i;
+}
+
+static int find_next_semicolon_or_comma_or_eq (const char * const s, int i) {
+    for (; s[i] != '=' && s[i] != ';' && s[i] != ',' && s[i] != '\0'; ++i) {
+        if (s[i] == '"') {
+            i = find_end_quoted_string(s, i);
+            if (s[i] == '\0') return -1;
+        }
+    }
+    return i;
+}
+
+static int find_next_semicolon_or_comma (const char * const s, int i) {
+    for (; s[i] != ';' && s[i] != ',' && s[i] != '\0'; ++i) {
+        if (s[i] == '"') {
+            i = find_end_quoted_string(s, i);
+            if (s[i] == '\0') return -1;
+        }
+    }
+    return i;
+}
+
+static int buffer_backslash_unescape (buffer * const b) {
+    /* (future: might move to buffer.c) */
+    size_t j = 0;
+    size_t len = buffer_string_length(b);
+    char *p = memchr(b->ptr, '\\', len);
+
+    if (NULL == p) return 1; /*(nothing to do)*/
+
+    len -= (size_t)(p - b->ptr);
+    for (size_t i = 0; i < len; ++i) {
+        if (p[i] == '\\') {
+            if (++i == len) return 0; /*(invalid trailing backslash)*/
+        }
+        p[j++] = p[i];
+    }
+    buffer_string_set_length(b, (size_t)(p+j - b->ptr));
+    return 1;
+}
+
+static handler_t mod_extforward_Forwarded (server *srv, connection *con, plugin_data *p, buffer *forwarded) {
+    /* HTTP list need not consist of param=value tokens,
+     * but this routine expect such for HTTP Forwarded header
+     * Since info in each set of params is only used if from
+     * admin-specified trusted proxy:
+     * - invalid param=value tokens are ignored and skipped
+     * - not checking "for" exists in each set of params
+     * - not checking for duplicated params in each set of params
+     * - not checking canonical form of addr (also might be obfuscated)
+     * - obfuscated tokens permitted in chain, though end of trust is expected
+     *   to be non-obfuscated IP for mod_extforward to masquerade as remote IP
+     * future: since (potentially) trusted proxies begin at end of string,
+     *   it might be better to parse from end of string rather than parsing from
+     *   beginning.  Doing so would also allow reducing arbitrary param limit
+     *   to number of params permitted per proxy.
+     */
+    char * const s = forwarded->ptr;
+    int i = 0, j = -1, v, vlen, k, klen;
+    int used = (int)buffer_string_length(forwarded);
+    int ofor = -1, oproto, ohost, oby, oremote_user;
+    int offsets[256];/*(~50 params is more than reasonably expected to handle)*/
+    while (i < used) {
+        while (s[i] == ' ' || s[i] == '\t') ++i;
+        if (s[i] == ';') { ++i; continue; }
+        if (s[i] == ',') {
+            if (j >= (int)(sizeof(offsets)/sizeof(int))) break;
+            offsets[++j] = -1; /*("offset" separating params from next proxy)*/
+            ++i;
+            continue;
+        }
+        if (s[i] == '\0') break;
+
+        k = i;
+        i = find_next_semicolon_or_comma_or_eq(s, i);
+        if (i < 0) {
+            /*(reject IP spoofing if attacker sets improper quoted-string)*/
+            log_error_write(srv, __FILE__, __LINE__, "s",
+                            "invalid quoted-string in Forwarded header");
+            con->http_status = 400; /* Bad Request */
+            con->mode = DIRECT;
+            return HANDLER_FINISHED;
+        }
+        if (s[i] != '=') continue;
+        klen = i - k;
+        v = ++i;
+        i = find_next_semicolon_or_comma(s, i);
+        if (i < 0) {
+            /*(reject IP spoofing if attacker sets improper quoted-string)*/
+            log_error_write(srv, __FILE__, __LINE__, "s",
+                            "invalid quoted-string in Forwarded header");
+            con->http_status = 400; /* Bad Request */
+            con->mode = DIRECT;
+            return HANDLER_FINISHED;
+        }
+        vlen = i - v;              /* might be 0 */
+
+        /* have k, klen, v, vlen
+         * (might contain quoted string) (contents not validated or decoded)
+         * (might be repeated k)
+         */
+        if (0 == klen) continue;   /* invalid k */
+        if (j >= (int)(sizeof(offsets)/sizeof(int))-4) break;
+        offsets[j+1] = k;
+        offsets[j+2] = klen;
+        offsets[j+3] = v;
+        offsets[j+4] = vlen;
+        j += 4;
+    }
+
+    if (j >= (int)(sizeof(offsets)/sizeof(int))-4) {
+        /* error processing Forwarded; too many params; fail closed */
+        log_error_write(srv, __FILE__, __LINE__, "s",
+                        "Too many params in Forwarded header");
+        con->http_status = 400; /* Bad Request */
+        con->mode = DIRECT;
+        return HANDLER_FINISHED;
+    }
+
+    if (-1 == j) return HANDLER_GO_ON;  /* make no changes */
+    used = j+1;
+    offsets[used] = -1; /* mark end of last set of params */
+
+    while (j > 0) { /*(param=value pairs, so j > 0, not j >= 0)*/
+        if (-1 == offsets[j]) { --j; continue; }
+        do {
+            j -= 3; /*(k, klen, v, vlen come in sets of 4)*/
+        } while ((3 != offsets[j+1]  /* 3 == sizeof("for")-1 */
+                  || 0 != buffer_caseless_compare(s+offsets[j], 3, "for", 3))
+                 && 0 != j-- && -1 != offsets[j]);
+        if (j < 0) break;
+        if (-1 == offsets[j]) { --j; continue; }
+
+        /* remove trailing spaces/tabs and double-quotes from string
+         * (note: not unescaping backslash escapes in quoted string) */
+        v = offsets[j+2];
+        vlen = v + offsets[j+3];
+        while (vlen > v && (s[vlen-1] == ' ' || s[vlen-1] == '\t')) --vlen;
+        if (vlen > v+1 && s[v] == '"' && s[vlen-1] == '"') {
+            offsets[j+2] = ++v;
+            --vlen;
+            if (s[v] == '[') {
+                /* remove "[]" surrounding IPv6, as well as (optional) port
+                 * (assumes properly formatted IPv6 addr from trusted proxy) */
+                ++v;
+                do { --vlen; } while (vlen > v && s[vlen] != ']');
+                if (v == vlen) {
+                    log_error_write(srv, __FILE__, __LINE__, "s",
+                                    "Invalid IPv6 addr in Forwarded header");
+                    con->http_status = 400; /* Bad Request */
+                    con->mode = DIRECT;
+                    return HANDLER_FINISHED;
+                }
+            }
+            else if (s[v] != '_' && s[v] != '/' && s[v] != 'u') {
+                /* remove (optional) port from non-obfuscated IPv4 */
+                for (klen=vlen, vlen=v; vlen < klen && s[vlen] != ':'; ++vlen) ;
+            }
+            offsets[j+2] = v;
+        }
+        offsets[j+3] = vlen - v;
+
+        /* obfuscated ipstr and obfuscated port are also accepted here, as
+         * is path to unix domain socket, but note that backslash escapes
+         * in quoted-string were not unescaped above.  Also, if obfuscated
+         * identifiers are rotated by proxies as recommended by RFC, then
+         * maintaining list of trusted identifiers is non-trivial and is not
+         * attempted by this module. */
+
+        if (v != vlen) {
+            char *ipend = s+vlen;
+            int trusted;
+            char c = *ipend;
+            *ipend = '\0';
+            trusted = (NULL != array_get_element(p->conf.forwarder, s+v));
+            *ipend = c;
+
+            if (s[v] != '_' && s[v] != '/'
+                && (7 != (vlen - v) || 0 != memcmp(s+v, "unknown", 7))) {
+                ofor = j; /* save most recent non-obfuscated ipstr */
+            }
+
+            if (!trusted) break;
+        }
+
+        do { --j; } while (j > 0 && -1 != offsets[j]);
+        if (j <= 0) break;
+        --j;
+    }
+
+    if (-1 != ofor) {
+        /* C funcs getaddrinfo(), inet_addr() require '\0'-terminated IP str */
+        char *ipend = s+offsets[ofor+2]+offsets[ofor+3];
+        char c = *ipend;
+        int rc;
+        *ipend = '\0';
+        rc = mod_extforward_set_addr(srv, con, p, s+offsets[ofor+2]);
+        *ipend = c;
+        if (!rc) return HANDLER_GO_ON; /* invalid addr; make no changes */
+    }
+    else {
+        return HANDLER_GO_ON; /* make no changes */
+    }
+
+    /* parse out params associated with for=<ip> addr set above */
+    oproto = ohost = oby = oremote_user = -1;
+    j = ofor;
+    if (j > 0) { do { --j; } while (j > 0 && -1 != offsets[j]); }
+    if (-1 == offsets[j]) ++j;
+    if (j == ofor) j += 4;
+    for (; -1 != offsets[j]; j+=4) { /*(k, klen, v, vlen come in sets of 4)*/
+        switch (offsets[j+1]) {
+         #if 0
+          case 2:
+            if (0 == buffer_caseless_compare(s+offsets[j],2,"by",2))
+                oproto = j;
+            break;
+         #endif
+         #if 0
+          /*(already handled above to find IP prior to earliest trusted proxy)*/
+          case 3:
+            if (0 == buffer_caseless_compare(s+offsets[j],3,"for",3))
+                ofor = j;
+            break;
+         #endif
+          case 4:
+            if (0 == buffer_caseless_compare(s+offsets[j],4,"host",4))
+                ohost = j;
+            break;
+          case 5:
+            if (0 == buffer_caseless_compare(s+offsets[j],5,"proto",5))
+                oproto = j;
+            break;
+          case 11:
+            if (0 == buffer_caseless_compare(s+offsets[j],11,"remote_user",11))
+                oremote_user = j;
+            break;
+          default:
+            break;
+        }
+    }
+    i = ++j;
+
+    if (-1 != oproto) {
+        /* remove trailing spaces/tabs, and double-quotes from proto
+         * (note: not unescaping backslash escapes in quoted string) */
+        v = offsets[oproto+2];
+        vlen = v + offsets[oproto+3];
+        while (vlen > v && (s[vlen-1] == ' ' || s[vlen-1] == '\t')) --vlen;
+        if (vlen > v+1 && s[v] == '"' && s[vlen-1] == '"') { ++v; --vlen; }
+        mod_extforward_set_proto(srv, con, s+v, vlen-v);
+    }
+
+    if (p->conf.opts & PROXY_FORWARDED_HOST) {
+        /* Limitations:
+         * - con->request.http_host is not reset in mod_extforward_restore()
+         *   but is currently not an issues since con->request.http_host will be
+         *   reset by next request.  If a new module uses con->request.http_host
+         *   in the handle_request_done hook, then should evaluate if that
+         *   module should use the forwarded value (probably) or original value.
+         * - due to need to decode and unescape host=..., some extra work is
+         *   done in the case where host matches current Host header.
+         *   future: might add code to check if Host has actually changed or not
+         */
+
+        /* find host param set by earliest trusted proxy in proxy chain
+         * (host might be changed anywhere along the chain) */
+        for (j = i; j < used && -1 == ohost; ) {
+            if (-1 == offsets[j]) { ++j; continue; }
+            if (4 == offsets[j+1]
+                && 0 == buffer_caseless_compare(s+offsets[j], 4, "host", 4))
+                ohost = j;
+            j += 4; /*(k, klen, v, vlen come in sets of 4)*/
+        }
+        if (-1 != ohost) {
+            if (extforward_check_proxy
+                && !buffer_string_is_empty(con->request.http_host)) {
+                array_set_key_value(con->environment,
+                                    CONST_STR_LEN("_L_EXTFORWARD_ACTUAL_HOST"),
+                                    CONST_BUF_LEN(con->request.http_host));
+            }
+            /* remove trailing spaces/tabs, and double-quotes from host */
+            v = offsets[ohost+2];
+            vlen = v + offsets[ohost+3];
+            while (vlen > v && (s[vlen-1] == ' ' || s[vlen-1] == '\t')) --vlen;
+            if (vlen > v+1 && s[v] == '"' && s[vlen-1] == '"') {
+                ++v; --vlen;
+                buffer_copy_string_len(con->request.http_host, s+v, vlen-v);
+                if (!buffer_backslash_unescape(con->request.http_host)) {
+                    log_error_write(srv, __FILE__, __LINE__, "s",
+                                    "invalid host= value in Forwarded header");
+                    con->http_status = 400; /* Bad Request */
+                    con->mode = DIRECT;
+                    return HANDLER_FINISHED;
+                }
+            }
+            else {
+                buffer_copy_string_len(con->request.http_host, s+v, vlen-v);
+            }
+
+            if (0 != http_request_host_policy(con, con->request.http_host)) {
+                /*(reject invalid chars in Host)*/
+                log_error_write(srv, __FILE__, __LINE__, "s",
+                                "invalid host= value in Forwarded header");
+                con->http_status = 400; /* Bad Request */
+                con->mode = DIRECT;
+                return HANDLER_FINISHED;
+            }
+
+	    config_cond_cache_reset_item(srv, con, COMP_HTTP_HOST);
+        }
+    }
+
+    if (p->conf.opts & PROXY_FORWARDED_REMOTE_USER) {
+        /* find remote_user param set by closest proxy
+         * (auth may have been handled by any trusted proxy in proxy chain) */
+        for (j = i; j < used; ) {
+            if (-1 == offsets[j]) { ++j; continue; }
+            if (11 == offsets[j+1]
+                && 0==buffer_caseless_compare(s+offsets[j],11,"remote_user",11))
+                oremote_user = j;
+            j += 4; /*(k, klen, v, vlen come in sets of 4)*/
+        }
+        if (-1 != oremote_user) {
+            /* ???: should we also support param for auth_type ??? */
+            /* remove trailing spaces/tabs, and double-quotes from remote_user*/
+            v = offsets[oproto+2];
+            vlen = v + offsets[oproto+3];
+            while (vlen > v && (s[vlen-1] == ' ' || s[vlen-1] == '\t')) --vlen;
+            if (vlen > v+1 && s[v] == '"' && s[vlen-1] == '"') {
+                data_string *dsuser;
+                ++v; --vlen;
+                array_set_key_value(con->environment,
+                                    CONST_STR_LEN("REMOTE_USER"), s+v, vlen-v);
+                dsuser = (data_string *)
+                  array_get_element(con->environment, "REMOTE_USER");
+                force_assert(NULL != dsuser);
+                if (!buffer_backslash_unescape(dsuser->value)) {
+                    log_error_write(srv, __FILE__, __LINE__, "s",
+                      "invalid remote_user= value in Forwarded header");
+                    con->http_status = 400; /* Bad Request */
+                    con->mode = DIRECT;
+                    return HANDLER_FINISHED;
+                }
+            }
+            else {
+                array_set_key_value(con->environment,
+                                    CONST_STR_LEN("REMOTE_USER"), s+v, vlen-v);
+            }
+        }
+    }
+
+    return HANDLER_GO_ON;
 }
 
 URIHANDLER_FUNC(mod_extforward_uri_handler) {
@@ -482,6 +922,10 @@ URIHANDLER_FUNC(mod_extforward_uri_handler) {
 		return HANDLER_GO_ON;
 	}
 
+	if (buffer_is_equal_caseless_string(forwarded->key, CONST_STR_LEN("Forwarded"))) {
+		return mod_extforward_Forwarded(srv, con, p, forwarded->value);
+	}
+
 	return mod_extforward_X_Forwarded_For(srv, con, p, forwarded->value);
 }
 
@@ -501,7 +945,7 @@ CONNECTION_FUNC(mod_extforward_restore) {
 	con->plugin_ctx[p->id] = NULL;
 
 	/* Now, clean the conf_cond cache, because we may have changed the results of tests */
-	clean_cond_cache(srv, con);
+	config_cond_cache_reset_item(srv, con, COMP_HTTP_REMOTE_IP);
 
 	return HANDLER_GO_ON;
 }
