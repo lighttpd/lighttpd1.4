@@ -15,6 +15,11 @@
 
 #include <time.h>
 
+#include "sys-socket.h"
+#ifndef _WIN32
+#include <netdb.h>
+#endif
+
 /*
  * This was 'borrowed' from tcpdump.
  *

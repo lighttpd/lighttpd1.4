@@ -11,6 +11,9 @@
 #include "network_backends.h"
 #include "sys-mmap.h"
 #include "sys-socket.h"
+#ifndef _WIN32
+#include <netdb.h>
+#endif
 
 #include <sys/types.h>
 #include <sys/stat.h>

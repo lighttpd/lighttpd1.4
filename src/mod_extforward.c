@@ -8,10 +8,14 @@
 
 #include "configfile.h"
 
-#include "sys-socket.h"
 #include <stdlib.h>
 #include <string.h>
 #include <errno.h>
+
+#include "sys-socket.h"
+#ifndef _WIN32
+#include <netdb.h>
+#endif
 
 /**
  * mod_extforward.c for lighttpd, by comman.kang <at> gmail <dot> com

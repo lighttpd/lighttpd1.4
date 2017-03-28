@@ -16,9 +16,6 @@
 #include <netinet/tcp.h>
 #include <sys/un.h>
 #include <arpa/inet.h>
-
-#include <netdb.h>
-
 #endif
 
 #endif
