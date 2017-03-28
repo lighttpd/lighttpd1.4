@@ -2466,6 +2466,7 @@ static handler_t scgi_check_extension(server *srv, connection *con, void *p_d, i
 		hctx->conf.proto       = p->conf.proto;
 		hctx->conf.debug       = p->conf.debug;
 
+		hctx->opts.fdfmt = S_IFSOCK;
 		hctx->opts.backend = BACKEND_SCGI;
 		hctx->opts.authorizer = 0;
 		hctx->opts.local_redir = 0;

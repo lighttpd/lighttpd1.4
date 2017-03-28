@@ -2151,8 +2151,8 @@ static int fcgi_demux_response(server *srv, handler_ctx *hctx) {
 	/*
 	 * check how much we have to read
 	 */
-      #if !defined(_WIN32) && !defined(__CYGWIN__)
-	if (ioctl(hctx->fd, FIONREAD, &toread)) {
+      #ifndef __CYGWIN__ /*(cygwin does not support FIONREAD on sockets)*/
+	if (0 != fdevent_ioctl_fionread(hctx->fd, S_IFSOCK, &toread)) {
 		if (errno == EAGAIN) {
 			return 0;
 		}
@@ -3125,6 +3125,7 @@ static handler_t fcgi_check_extension(server *srv, connection *con, void *p_d, i
 	/*hctx->conf.ext_mapping = p->conf.ext_mapping;*/
 	hctx->conf.debug       = p->conf.debug;
 
+	hctx->opts.fdfmt = S_IFSOCK;
 	hctx->opts.backend = BACKEND_FASTCGI;
 	hctx->opts.authorizer = (fcgi_mode == FCGI_AUTHORIZER);
 	hctx->opts.local_redir = 0;

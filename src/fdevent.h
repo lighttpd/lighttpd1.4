@@ -223,6 +223,8 @@ int fdevent_solaris_port_init(fdevents *ev);
 int fdevent_freebsd_kqueue_init(fdevents *ev);
 int fdevent_libev_init(fdevents *ev);
 
+int fdevent_ioctl_fionread (int fd, int fdfmt, int *toread);
+
 /* fd must be TCP socket (AF_INET, AF_INET6), end-of-stream recv() 0 bytes */
 int fdevent_is_tcp_half_closed(int fd);
 

@@ -1006,6 +1006,7 @@ URIHANDLER_FUNC(cgi_is_handled) {
 		hctx->plugin_data = p;
 		hctx->cgi_handler = cgi_handler;
 		memcpy(&hctx->conf, &p->conf, sizeof(plugin_config));
+		hctx->opts.fdfmt = S_IFIFO;
 		hctx->opts.backend = BACKEND_CGI;
 		hctx->opts.authorizer = 0;
 		hctx->opts.local_redir = hctx->conf.local_redir;

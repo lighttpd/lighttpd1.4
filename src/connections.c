@@ -968,12 +968,7 @@ static int connection_read_cq(server *srv, connection *con, chunkqueue *cq, off_
 	 * if FIONREAD doesn't signal a big chunk we fill the previous buffer
 	 *  if it has >= 1kb free
 	 */
-#if defined(__WIN32)
-	chunkqueue_get_memory(con->read_queue, &mem, &mem_len, 0, 4096);
-
-	len = recv(con->fd, mem, mem_len, 0);
-#else /* __WIN32 */
-	if (ioctl(con->fd, FIONREAD, &toread) || toread <= 4*1024) {
+	if (0 != fdevent_ioctl_fionread(con->fd, S_IFSOCK, &toread) || toread <= 4096) {
 		toread = 4096;
 	}
 	else if (toread > MAX_READ_LIMIT) {
@@ -981,6 +976,9 @@ static int connection_read_cq(server *srv, connection *con, chunkqueue *cq, off_
 	}
 	chunkqueue_get_memory(con->read_queue, &mem, &mem_len, 0, toread);
 
+#if defined(__WIN32)
+	len = recv(con->fd, mem, mem_len, 0);
+#else
 	len = read(con->fd, mem, mem_len);
 #endif /* __WIN32 */
 

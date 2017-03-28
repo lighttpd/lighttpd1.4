@@ -1128,6 +1128,7 @@ static handler_t mod_proxy_check_extension(server *srv, connection *con, void *p
 		hctx->conf.debug       = p->conf.debug;
 		hctx->conf.replace_http_host = p->conf.replace_http_host;
 
+		hctx->opts.fdfmt = S_IFSOCK;
 		hctx->opts.backend = BACKEND_PROXY;
 		hctx->opts.authorizer = 0;
 		hctx->opts.local_redir = 0;

@@ -29,6 +29,7 @@ enum {
 };
 
 typedef struct http_response_opts_t {
+  int fdfmt;
   int backend;
   int authorizer;
   unsigned short local_redir;

@@ -12,7 +12,6 @@
 #include <errno.h>
 #include <fcntl.h>
 
-
 fdevents *fdevent_init(server *srv, size_t maxfds, int type) {
 	fdevents *ev;
 
@@ -353,6 +352,29 @@ int fdevent_event_next_fdndx(fdevents *ev, int ndx) {
 	if (ev->event_next_fdndx) return ev->event_next_fdndx(ev, ndx);
 
 	return -1;
+}
+
+
+#include <sys/ioctl.h>
+#ifdef HAVE_SYS_FILIO_H
+#include <sys/filio.h>  /* FIONREAD (for illumos (OpenIndiana)) */
+#endif
+#ifdef _WIN32
+#include <winsock2.h>
+#endif
+int fdevent_ioctl_fionread (int fd, int fdfmt, int *toread) {
+  #ifdef _WIN32
+    if (fdfmt != S_IFSOCK) { errno = ENOTSOCK; return -1; }
+    return ioctlsocket(fd, FIONREAD, toread);
+  #else
+   #ifdef __CYGWIN__
+    /*(cygwin supports FIONREAD on pipes, not sockets)*/
+    if (fdfmt != S_IFIFO) { errno = EOPNOTSUPP; return -1; }
+   #else
+    UNUSED(fdfmt);
+   #endif
+    return ioctl(fd, FIONREAD, toread);
+  #endif
 }
 
 

@@ -1264,8 +1264,7 @@ handler_t http_response_read(server *srv, connection *con, http_response_opts *o
         size_t avail = buffer_string_space(b);
         unsigned int toread = 4096;
 
-      #if !defined(_WIN32) && !defined(__CYGWIN__)
-        if (0 == ioctl(fd, FIONREAD, (int *)&toread)) {
+        if (0 == fdevent_ioctl_fionread(fd, opts->fdfmt, (int *)&toread)) {
             if (avail < toread) {
                 if (toread < 4096)
                     toread = 4096;
@@ -1284,7 +1283,6 @@ handler_t http_response_read(server *srv, connection *con, http_response_opts *o
               #endif
             }
         }
-      #endif
 
         if (con->conf.stream_response_body & FDEVENT_STREAM_RESPONSE_BUFMIN) {
             off_t cqlen = chunkqueue_length(con->write_queue);
@@ -1303,7 +1301,8 @@ handler_t http_response_read(server *srv, connection *con, http_response_opts *o
         }
 
         if (avail < toread) {
-            avail = toread;
+            /*(add avail+toread to reduce allocations when ioctl EOPNOTSUPP)*/
+            avail = avail ? avail - 1 + toread : toread;
             buffer_string_prepare_append(b, avail);
         }
 
