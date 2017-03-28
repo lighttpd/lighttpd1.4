@@ -23,14 +23,10 @@
 #include "chunk.h"
 #include "keyvalue.h"
 #include "sys-socket.h"
-#include "splaytree.h"
 #include "etag.h"
 
 struct fdevents;        /* declaration */
-
-#ifdef HAVE_FAM_H
-# include <fam.h>
-#endif
+struct stat_cache;      /* declaration */
 
 #ifndef O_BINARY
 # define O_BINARY 0
@@ -218,19 +214,6 @@ typedef struct {
 
 	buffer *content_type;
 } stat_cache_entry;
-
-typedef struct {
-	splay_tree *files; /* the nodes of the tree are stat_cache_entry's */
-
-	buffer *dir_name; /* for building the dirname from the filename */
-#ifdef HAVE_FAM_H
-	splay_tree *dirs; /* the nodes of the tree are fam_dir_entry */
-
-	FAMConnection fam;
-	int    fam_fcce_ndx;
-#endif
-	buffer *hash_key;  /* temp-store for the hash-key */
-} stat_cache;
 
 typedef struct {
 	array *mimetypes;
@@ -611,7 +594,7 @@ typedef struct server {
 	connections *joblist;
 	connections *fdwaitqueue;
 
-	stat_cache  *stat_cache;
+	struct stat_cache *stat_cache;
 
 	/**
 	 * The status array can carry all the status information you want

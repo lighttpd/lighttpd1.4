@@ -4,6 +4,7 @@
 #include "stat_cache.h"
 #include "fdevent.h"
 #include "etag.h"
+#include "splaytree.h"
 
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -93,7 +94,22 @@ typedef struct {
 static fake_keys ctrl;
 #endif
 
-stat_cache *stat_cache_init(void) {
+typedef struct stat_cache {
+	splay_tree *files; /* the nodes of the tree are stat_cache_entry's */
+
+	buffer *dir_name; /* for building the dirname from the filename */
+#ifdef HAVE_FAM_H
+	splay_tree *dirs; /* the nodes of the tree are fam_dir_entry */
+
+	FAMConnection fam;
+	int    fam_fcce_ndx;
+#endif
+	buffer *hash_key;  /* temp-store for the hash-key */
+} stat_cache;
+
+static handler_t stat_cache_handle_fdevent(server *srv, void *_fce, int revent);
+
+stat_cache *stat_cache_init(server *srv) {
 	stat_cache *sc = NULL;
 
 	sc = calloc(1, sizeof(*sc));
@@ -108,6 +124,24 @@ stat_cache *stat_cache_init(void) {
 
 #ifdef DEBUG_STAT_CACHE
 	ctrl.size = 0;
+#endif
+
+#ifdef HAVE_FAM_H
+	/* setup FAM */
+	if (srv->srvconf.stat_cache_engine == STAT_CACHE_ENGINE_FAM) {
+		if (0 != FAMOpen2(&srv->stat_cache->fam, "lighttpd")) {
+			log_error_write(srv, __FILE__, __LINE__, "s",
+					"could not open a fam connection, dieing.");
+			return NULL;
+		}
+#ifdef HAVE_FAMNOEXISTS
+		FAMNoExists(&srv->stat_cache->fam);
+#endif
+
+		fd_close_on_exec(FAMCONNECTION_GETFD(&srv->stat_cache->fam));
+		fdevent_register(srv->ev, FAMCONNECTION_GETFD(&srv->stat_cache->fam), stat_cache_handle_fdevent, NULL);
+		fdevent_event_set(srv->ev, &(srv->stat_cache->fam_fcce_ndx), FAMCONNECTION_GETFD(&srv->stat_cache->fam), FDEVENT_IN);
+	}
 #endif
 
 	return sc;
@@ -247,7 +281,7 @@ static uint32_t hashme(buffer *str) {
 }
 
 #ifdef HAVE_FAM_H
-handler_t stat_cache_handle_fdevent(server *srv, void *_fce, int revent) {
+static handler_t stat_cache_handle_fdevent(server *srv, void *_fce, int revent) {
 	size_t i;
 	stat_cache *sc = srv->stat_cache;
 	size_t events;

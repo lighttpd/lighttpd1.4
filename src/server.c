@@ -1469,29 +1469,11 @@ static int server_main (server * const srv, int argc, char **argv) {
 	}
 
 	/* might fail if user is using fam (not gamin) and famd isn't running */
-	if (NULL == (srv->stat_cache = stat_cache_init())) {
+	if (NULL == (srv->stat_cache = stat_cache_init(srv))) {
 		log_error_write(srv, __FILE__, __LINE__, "s",
 			"stat-cache could not be setup, dieing.");
 		return -1;
 	}
-
-#ifdef HAVE_FAM_H
-	/* setup FAM */
-	if (srv->srvconf.stat_cache_engine == STAT_CACHE_ENGINE_FAM) {
-		if (0 != FAMOpen2(&srv->stat_cache->fam, "lighttpd")) {
-			log_error_write(srv, __FILE__, __LINE__, "s",
-					 "could not open a fam connection, dieing.");
-			return -1;
-		}
-#ifdef HAVE_FAMNOEXISTS
-		FAMNoExists(&srv->stat_cache->fam);
-#endif
-
-		fd_close_on_exec(FAMCONNECTION_GETFD(&srv->stat_cache->fam));
-		fdevent_register(srv->ev, FAMCONNECTION_GETFD(&srv->stat_cache->fam), stat_cache_handle_fdevent, NULL);
-		fdevent_event_set(srv->ev, &(srv->stat_cache->fam_fcce_ndx), FAMCONNECTION_GETFD(&srv->stat_cache->fam), FDEVENT_IN);
-	}
-#endif
 
 #ifdef USE_ALARM
 	{
