@@ -182,7 +182,7 @@ typedef struct fdevents {
 	int (*fcntl_set)(struct fdevents *ev, int fd);
 } fdevents;
 
-fdevents *fdevent_init(struct server *srv, size_t maxfds, fdevent_handler_t type);
+fdevents *fdevent_init(struct server *srv, size_t maxfds, int type);
 int fdevent_reset(fdevents *ev); /* "init" after fork() */
 void fdevent_free(fdevents *ev);
 

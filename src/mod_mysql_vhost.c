@@ -7,6 +7,7 @@
 #include <mysql.h>
 
 #include "plugin.h"
+#include "fdevent.h"
 #include "log.h"
 
 #include "stat_cache.h"

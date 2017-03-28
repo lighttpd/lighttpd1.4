@@ -7,6 +7,7 @@
 
 #include "base.h"
 #include "http_vhostdb.h"
+#include "fdevent.h"
 #include "log.h"
 #include "plugin.h"
 

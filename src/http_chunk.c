@@ -10,6 +10,7 @@
 #include "chunk.h"
 #include "http_chunk.h"
 #include "stat_cache.h"
+#include "fdevent.h"
 #include "log.h"
 
 #include <sys/types.h>

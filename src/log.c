@@ -1,6 +1,7 @@
 #include "first.h"
 
 #include "base.h"
+#include "fdevent.h"
 #include "log.h"
 #include "array.h"
 

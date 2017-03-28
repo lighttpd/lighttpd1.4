@@ -1,6 +1,7 @@
 #include "first.h"
 
 #include "server.h"
+#include "fdevent.h"
 #include "log.h"
 #include "stream.h"
 #include "plugin.h"

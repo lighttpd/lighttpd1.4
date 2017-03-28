@@ -109,6 +109,7 @@
 #include <time.h>
 
 #include "base.h"
+#include "fdevent.h"
 #include "log.h"
 #include "buffer.h"
 #include "etag.h"

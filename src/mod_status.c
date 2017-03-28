@@ -4,6 +4,7 @@
 #include "connections.h"
 #include "response.h"
 #include "connections.h"
+#include "fdevent.h"
 #include "log.h"
 
 #include "plugin.h"
@@ -803,7 +804,7 @@ static handler_t mod_status_handle_server_config(server *srv, connection *con, v
 	buffer *m = p->module_list;
 	size_t i;
 
-	struct ev_map { fdevent_handler_t et; const char *name; } event_handlers[] =
+	struct ev_map { int et; const char *name; } event_handlers[] =
 	{
 		/* - epoll is most reliable
 		 * - select works everywhere

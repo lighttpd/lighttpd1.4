@@ -22,10 +22,11 @@
 #include "array.h"
 #include "chunk.h"
 #include "keyvalue.h"
-#include "fdevent.h"
 #include "sys-socket.h"
 #include "splaytree.h"
 #include "etag.h"
+
+struct fdevents;        /* declaration */
 
 #ifdef HAVE_FAM_H
 # include <fam.h>
@@ -548,7 +549,7 @@ typedef struct server {
 	enum { ERRORLOG_FILE, ERRORLOG_FD, ERRORLOG_SYSLOG, ERRORLOG_PIPE } errorlog_mode;
 	buffer *errorlog_buf;
 
-	fdevents *ev, *ev_ins;
+	struct fdevents *ev;
 
 	buffer_plugin plugins;
 	void *plugin_slots;
@@ -627,7 +628,7 @@ typedef struct server {
 	 */
 	array *status;
 
-	fdevent_handler_t event_handler;
+	int event_handler;
 
 	int (* network_backend_write)(struct server *srv, connection *con, int fd, chunkqueue *cq, off_t max_bytes);
 	handler_t (* request_env)(struct server *srv, connection *con);

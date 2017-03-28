@@ -8,6 +8,7 @@
 
 #include "chunk.h"
 #include "base.h"
+#include "fdevent.h"
 #include "log.h"
 
 #include <sys/types.h>

@@ -3,6 +3,7 @@
 #include "base.h"
 #include "array.h"
 #include "buffer.h"
+#include "fdevent.h"
 #include "log.h"
 #include "etag.h"
 #include "http_chunk.h"

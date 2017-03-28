@@ -1,6 +1,7 @@
 #include "first.h"
 
 #include "base.h"
+#include "fdevent.h"
 #include "log.h"
 
 #include <sys/types.h>
@@ -12,7 +13,7 @@
 #include <fcntl.h>
 
 
-fdevents *fdevent_init(server *srv, size_t maxfds, fdevent_handler_t type) {
+fdevents *fdevent_init(server *srv, size_t maxfds, int type) {
 	fdevents *ev;
 
 	ev = calloc(1, sizeof(*ev));
@@ -79,6 +80,7 @@ fdevents *fdevent_init(server *srv, size_t maxfds, fdevent_handler_t type) {
 		}
 		return ev;
 	case FDEVENT_HANDLER_UNSET:
+	default:
 		break;
 	}
 
