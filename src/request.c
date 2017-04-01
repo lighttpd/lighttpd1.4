@@ -329,6 +329,13 @@ int http_request_host_normalize(buffer *b) {
     return 0;
 }
 
+int http_request_host_policy (connection *con, buffer *b) {
+    return (((con->conf.http_parseopts & HTTP_PARSEOPT_HOST_STRICT)
+             && 0 != request_check_hostname(b))
+            || ((con->conf.http_parseopts & HTTP_PARSEOPT_HOST_NORMALIZE)
+                && 0 != http_request_host_normalize(b)));
+}
+
 #if 0
 #define DUMP_HEADER
 #endif
@@ -1176,10 +1183,7 @@ int http_request_parse(server *srv, connection *con) {
 
 	/* check hostname field if it is set */
 	if (!buffer_is_empty(con->request.http_host) &&
-	    (((con->conf.http_parseopts & HTTP_PARSEOPT_HOST_STRICT) &&
-	      0 != request_check_hostname(con->request.http_host))
-	     || ((con->conf.http_parseopts & HTTP_PARSEOPT_HOST_NORMALIZE) &&
-		 0 != http_request_host_normalize(con->request.http_host)))) {
+	    0 != http_request_host_policy(con, con->request.http_host)) {
 
 		if (srv->srvconf.log_request_header_on_error) {
 			log_error_write(srv, __FILE__, __LINE__, "s",
