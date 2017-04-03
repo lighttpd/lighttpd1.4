@@ -7,6 +7,7 @@
 #include "log.h"
 #include "etag.h"
 #include "http_chunk.h"
+#include "inet_ntop_cache.h"
 #include "response.h"
 #include "stat_cache.h"
 
@@ -1536,8 +1537,8 @@ int http_cgi_headers (server *srv, connection *con, http_cgi_opts *opts, http_cg
                 break;
             }
         }
-        s = inet_ntop(AF_INET6, (const void *) &(addr->ipv6.sin6_addr),
-                      b2, sizeof(b2)-1);
+        s = sock_addr_inet_ntop(addr, b2, sizeof(b2)-1);
+        if (NULL == s) s = "";
         break;
   #endif
     case AF_INET:
@@ -1550,12 +1551,8 @@ int http_cgi_headers (server *srv, connection *con, http_cgi_opts *opts, http_cg
                 break;
             }
         }
-      #ifdef HAVE_IPV6
-        s = inet_ntop(AF_INET, (const void *) &(addr->ipv4.sin_addr),
-                      b2, sizeof(b2)-1);
-      #else
-        s = inet_ntoa(addr->ipv4.sin_addr);
-      #endif
+        s = sock_addr_inet_ntop(addr, b2, sizeof(b2)-1);
+        if (NULL == s) s = "";
         break;
     default:
         s = "";

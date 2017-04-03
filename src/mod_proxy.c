@@ -7,6 +7,7 @@
 
 #include "http_chunk.h"
 #include "fdevent.h"
+#include "inet_ntop_cache.h"
 #include "connections.h"
 #include "response.h"
 #include "joblist.h"
@@ -809,31 +810,15 @@ static void proxy_set_Forwarded(connection *con, const unsigned int flags) {
         buffer_append_string_len(ds->value, CONST_STR_LEN("\""));
         if (addr->plain.sa_family == AF_INET) {
             if (0==getsockname(con->fd,(struct sockaddr *)&addrbuf,&addrlen)) {
-              #if defined(HAVE_INET_PTON)/*(expect inet_ntop if inet_pton)*/
-               #ifndef INET_ADDRSTRLEN
-               #define INET_ADDRSTRLEN 16
-               #endif
-                char buf[INET_ADDRSTRLEN];
-                buf[0] = '\0';
-                inet_ntop(AF_INET, (const void *)&addrbuf.ipv4.sin_addr,
-                          buf, sizeof(buf));
-                buffer_append_string(ds->value, buf);
-              #else
-                buffer_append_string(ds->value,/*(inet_ntoa() not thread-safe)*/
-                                     inet_ntoa(addrbuf.ipv4.sin_addr));
-              #endif
+                sock_addr_inet_ntop_append_buffer(ds->value, &addrbuf);
             }
             buffer_append_string_len(ds->value, CONST_STR_LEN(":"));
             buffer_append_int(ds->value, ntohs(addr->ipv4.sin_port));
       #ifdef HAVE_IPV6
         } else if (addr->plain.sa_family == AF_INET6) {
             if (0 == getsockname(con->fd,(struct sockaddr *)&addrbuf,&addrlen)){
-                char buf[INET6_ADDRSTRLEN];
-                buf[0] = '\0';
-                inet_ntop(AF_INET6, (const void *)&addrbuf.ipv6.sin6_addr,
-                          buf, sizeof(buf));
                 buffer_append_string_len(ds->value, CONST_STR_LEN("["));
-                buffer_append_string(ds->value, buf);
+                sock_addr_inet_ntop_append_buffer(ds->value, &addrbuf);
                 buffer_append_string_len(ds->value, CONST_STR_LEN("]"));
                 buffer_append_string_len(ds->value, CONST_STR_LEN(":"));
                 buffer_append_int(ds->value, ntohs(addr->ipv6.sin6_port));

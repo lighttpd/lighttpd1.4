@@ -3,6 +3,7 @@
 #include "request.h"
 #include "keyvalue.h"
 #include "log.h"
+#include "inet_ntop_cache.h"
 
 #include <sys/stat.h>
 
@@ -250,29 +251,15 @@ int http_request_host_normalize(buffer *b) {
 
         if (light_isdigit(*p)) {
             /* (IPv4 address literal or domain starting w/ digit (e.g. 3com))*/
-            struct in_addr addr;
-          #if defined(HAVE_INET_ATON) /*(Windows does not provide inet_aton())*/
-            if (0 != inet_aton(p, &addr))
-          #else
-            if ((addr.s_addr = inet_addr(p)) != INADDR_NONE)
-          #endif
-            {
-              #if defined(HAVE_INET_PTON)/*(expect inet_ntop() if inet_pton())*/
-               #ifndef INET_ADDRSTRLEN
-               #define INET_ADDRSTRLEN 16
-               #endif
-                char buf[INET_ADDRSTRLEN];
-                inet_ntop(AF_INET, (const void *)&addr, buf, sizeof(buf));
-                buffer_copy_string(b, buf);
-              #else
-                buffer_copy_string(b, inet_ntoa(addr)); /*(not thread-safe)*/
-              #endif
+            sock_addr addr;
+            if (1 == sock_addr_inet_pton(&addr, p, AF_INET, 0)) {
+                sock_addr_inet_ntop_copy_buffer(b, &addr);
             }
         }
     } else { /* IPv6 addr */
       #if defined(HAVE_IPV6) && defined(HAVE_INET_PTON)
 
-        struct in6_addr addr;
+        sock_addr addr;
         char *bracket = b->ptr+blen-1;
         char *percent = strchr(b->ptr+1, '%');
         size_t len;
@@ -297,12 +284,12 @@ int http_request_host_normalize(buffer *b) {
 
         *bracket = '\0';/*(terminate IPv6 string)*/
         if (percent) *percent = '\0'; /*(remove %interface from address)*/
-        rc = inet_pton(AF_INET6, b->ptr+1, &addr);
+        rc = sock_addr_inet_pton(&addr, b->ptr+1, AF_INET6, 0);
         if (percent) *percent = '%'; /*(restore %interface)*/
         *bracket = ']'; /*(restore bracket)*/
         if (1 != rc) return -1;
 
-        inet_ntop(AF_INET6,(const void *)&addr, buf, sizeof(buf));
+        sock_addr_inet_ntop(&addr, buf, sizeof(buf));
         len = strlen(buf);
         if (percent) {
             if (percent > bracket) return -1;
