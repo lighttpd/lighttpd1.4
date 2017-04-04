@@ -4,6 +4,7 @@
 #include "log.h"
 #include "buffer.h"
 #include "request.h"
+#include "inet_ntop_cache.h"
 
 #include "plugin.h"
 
@@ -80,6 +81,7 @@ typedef struct {
 	array *headers;
 	array *opts_params;
 	unsigned int opts;
+	unsigned int hap_PROXY;
 } plugin_config;
 
 typedef struct {
@@ -90,14 +92,23 @@ typedef struct {
 	plugin_config conf;
 } plugin_data;
 
+static plugin_data *mod_extforward_plugin_data_singleton;
 static int extforward_check_proxy;
 
 
 /* context , used for restore remote ip */
 
 typedef struct {
+	/* per-request state */
 	sock_addr saved_remote_addr;
 	buffer *saved_remote_addr_buf;
+
+	/* hap-PROXY protocol prior to receiving first request */
+	int(*saved_network_read)(server *, connection *, chunkqueue *, off_t);
+
+	/* connection-level state applied to requests in handle_request_env */
+	array *env;
+	int ssl_client_verify;
 } handler_ctx;
 
 
@@ -115,6 +126,7 @@ static void handler_ctx_free(handler_ctx *hctx) {
 INIT_FUNC(mod_extforward_init) {
 	plugin_data *p;
 	p = calloc(1, sizeof(*p));
+	mod_extforward_plugin_data_singleton = p;
 	return p;
 }
 
@@ -159,6 +171,7 @@ SETDEFAULTS_FUNC(mod_extforward_set_defaults) {
 		{ "extforward.forwarder",       NULL, T_CONFIG_ARRAY, T_CONFIG_SCOPE_CONNECTION },       /* 0 */
 		{ "extforward.headers",         NULL, T_CONFIG_ARRAY, T_CONFIG_SCOPE_CONNECTION },       /* 1 */
 		{ "extforward.params",          NULL, T_CONFIG_ARRAY, T_CONFIG_SCOPE_CONNECTION },       /* 2 */
+		{ "extforward.hap-PROXY",       NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION },     /* 3 */
 		{ NULL,                         NULL, T_CONFIG_UNSET, T_CONFIG_SCOPE_UNSET }
 	};
 
@@ -179,6 +192,7 @@ SETDEFAULTS_FUNC(mod_extforward_set_defaults) {
 		cv[0].destination = s->forwarder;
 		cv[1].destination = s->headers;
 		cv[2].destination = s->opts_params;
+		cv[3].destination = &s->hap_PROXY;
 
 		p->config_storage[i] = s;
 
@@ -199,7 +213,7 @@ SETDEFAULTS_FUNC(mod_extforward_set_defaults) {
 		}
 
 		/* default to "X-Forwarded-For" or "Forwarded-For" if extforward.headers not specified or empty */
-		if (0 == s->headers->used && (0 == i || NULL != array_get_element(config->value, "extforward.headers"))) {
+		if (!s->hap_PROXY && 0 == s->headers->used && (0 == i || NULL != array_get_element(config->value, "extforward.headers"))) {
 			data_string *ds;
 			ds = data_string_init();
 			buffer_copy_string_len(ds->value, CONST_STR_LEN("X-Forwarded-For"));
@@ -257,6 +271,35 @@ SETDEFAULTS_FUNC(mod_extforward_set_defaults) {
 		}
 	}
 
+	/* attempt to warn if mod_extforward is not last module loaded to hook
+	 * handle_connection_accept.  (Nice to have, but remove this check if
+	 * it reaches to far into internals and prevents other code changes.)
+	 * While it would be nice to check connection_handle_accept plugin slot
+	 * to make sure mod_extforward is last, that info is private to plugin.c
+	 * so merely warn if mod_openssl is loaded after mod_extforward, though
+	 * future modules which hook connection_handle_accept might be missed.*/
+	for (i = 0; i < srv->config_context->used; ++i) {
+		plugin_config *s = p->config_storage[i];
+		if (s->hap_PROXY) {
+			size_t j;
+			for (j = 0; j < srv->srvconf.modules->used; ++j) {
+				data_string *ds = (data_string *)srv->srvconf.modules->data[j];
+				if (buffer_is_equal_string(ds->value, CONST_STR_LEN("mod_extforward"))) {
+					break;
+				}
+			}
+			for (; j < srv->srvconf.modules->used; ++j) {
+				data_string *ds = (data_string *)srv->srvconf.modules->data[j];
+				if (buffer_is_equal_string(ds->value, CONST_STR_LEN("mod_openssl"))) {
+					log_error_write(srv, __FILE__, __LINE__, "s",
+						        "mod_extforward must be loaded after mod_openssl in server.modules when extforward.hap-PROXY = \"enable\"");
+					break;
+				}
+			}
+			break;
+		}
+	}
+
 	for (i = 0; i < srv->srvconf.modules->used; i++) {
 		data_string *ds = (data_string *)srv->srvconf.modules->data[i];
 		if (buffer_is_equal_string(ds->value, CONST_STR_LEN("mod_proxy"))) {
@@ -277,6 +320,7 @@ static int mod_extforward_patch_connection(server *srv, connection *con, plugin_
 	PATCH(forwarder);
 	PATCH(headers);
 	PATCH(opts);
+	PATCH(hap_PROXY);
 
 	/* skip the first, the global context */
 	for (i = 1; i < srv->config_context->used; i++) {
@@ -296,6 +340,8 @@ static int mod_extforward_patch_connection(server *srv, connection *con, plugin_
 				PATCH(headers);
 			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("extforward.params"))) {
 				PATCH(opts);
+			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("extforward.hap-PROXY"))) {
+				PATCH(hap_PROXY);
 			}
 		}
 	}
@@ -441,7 +487,7 @@ static void ipstr_to_sockaddr(server *srv, const char *host, sock_addr *sock) {
 
 static int mod_extforward_set_addr(server *srv, connection *con, plugin_data *p, const char *addr) {
 	sock_addr sock;
-	handler_ctx *hctx;
+	handler_ctx *hctx = con->plugin_ctx[p->id];
 
 	if (con->conf.log_request_handling) {
 		log_error_write(srv, __FILE__, __LINE__, "ss", "using address:", addr);
@@ -452,19 +498,24 @@ static int mod_extforward_set_addr(server *srv, connection *con, plugin_data *p,
 	if (sock.plain.sa_family == AF_UNSPEC) return 0;
 
 	/* we found the remote address, modify current connection and save the old address */
-	if (con->plugin_ctx[p->id]) {
-		if (con->conf.log_request_handling) {
-			log_error_write(srv, __FILE__, __LINE__, "s",
-				"-- mod_extforward_uri_handler already patched this connection, resetting state");
+	if (hctx) {
+		if (hctx->saved_remote_addr_buf) {
+			if (con->conf.log_request_handling) {
+				log_error_write(srv, __FILE__, __LINE__, "s",
+					"-- mod_extforward_uri_handler already patched this connection, resetting state");
+			}
+			con->dst_addr = hctx->saved_remote_addr;
+			buffer_free(con->dst_addr_buf);
+			con->dst_addr_buf = hctx->saved_remote_addr_buf;
+			hctx->saved_remote_addr_buf = NULL;
 		}
-		handler_ctx_free(con->plugin_ctx[p->id]);
-		con->plugin_ctx[p->id] = NULL;
+	} else {
+		con->plugin_ctx[p->id] = hctx = handler_ctx_init();
 	}
 	/* save old address */
 	if (extforward_check_proxy) {
 		array_set_key_value(con->environment, CONST_STR_LEN("_L_EXTFORWARD_ACTUAL_FOR"), CONST_BUF_LEN(con->dst_addr_buf));
 	}
-	con->plugin_ctx[p->id] = hctx = handler_ctx_init();
 	hctx->saved_remote_addr = con->dst_addr;
 	hctx->saved_remote_addr_buf = con->dst_addr_buf;
 	/* patch connection address */
@@ -893,12 +944,38 @@ static handler_t mod_extforward_Forwarded (server *srv, connection *con, plugin_
 URIHANDLER_FUNC(mod_extforward_uri_handler) {
 	plugin_data *p = p_d;
 	data_string *forwarded = NULL;
+	handler_ctx *hctx = con->plugin_ctx[p->id];
 
 	mod_extforward_patch_connection(srv, con, p);
 
 	if (con->conf.log_request_handling) {
 		log_error_write(srv, __FILE__, __LINE__, "s",
 			"-- mod_extforward_uri_handler called");
+	}
+
+	if (NULL != hctx) {
+		/* XXX: future: add config option to enable
+		 *      and replace above with: if (p->conf.???)
+		 *      similar to ssl.verifyclient.username */
+	      #if 0
+		data_string *ds;
+		if (NULL != hctx && hctx->ssl_client_verify && NULL != hctx->env
+		    && NULL != (ds = (data_string *)array_get_element(hctx->env, "SSL_CLIENT_S_DN_CN"))) {
+			array_set_key_value(con->environment,
+					    CONST_STR_LEN("SSL_CLIENT_VERIFY"),
+					    CONST_STR_LEN("SUCCESS"));
+			array_set_key_value(con->environment,
+					    CONST_STR_LEN("REMOTE_USER"),
+					    CONST_BUF_LEN(ds->value));
+			array_set_key_value(con->environment,
+					    CONST_STR_LEN("AUTH_TYPE"),
+					    CONST_STR_LEN("SSL_CLIENT_VERIFY"));
+		} else {
+			array_set_key_value(con->environment,
+					    CONST_STR_LEN("SSL_CLIENT_VERIFY"),
+					    CONST_STR_LEN("NONE"));
+		}
+	      #endif
 	}
 
 	for (size_t k = 0; k < p->conf.headers->used && NULL == forwarded; ++k) {
@@ -929,25 +1006,98 @@ URIHANDLER_FUNC(mod_extforward_uri_handler) {
 	return mod_extforward_X_Forwarded_For(srv, con, p, forwarded->value);
 }
 
+
+CONNECTION_FUNC(mod_extforward_handle_request_env) {
+    plugin_data *p = p_d;
+    handler_ctx *hctx = con->plugin_ctx[p->id];
+    UNUSED(srv);
+    if (NULL == hctx || NULL == hctx->env) return HANDLER_GO_ON;
+    for (size_t i=0; i < hctx->env->used; ++i) {
+        /* note: replaces values which may have been set by mod_openssl
+         * (when mod_extforward is listed after mod_openssl in server.modules)*/
+        data_string *ds = (data_string *)hctx->env->data[i];
+        array_set_key_value(con->environment,
+                            CONST_BUF_LEN(ds->key), CONST_BUF_LEN(ds->value));
+    }
+    return HANDLER_GO_ON;
+}
+
+
 CONNECTION_FUNC(mod_extforward_restore) {
 	plugin_data *p = p_d;
 	handler_ctx *hctx = con->plugin_ctx[p->id];
 
 	if (!hctx) return HANDLER_GO_ON;
-	
-	con->dst_addr = hctx->saved_remote_addr;
-	buffer_free(con->dst_addr_buf);
 
-	con->dst_addr_buf = hctx->saved_remote_addr_buf;
-	
-	handler_ctx_free(hctx);
+	if (NULL != hctx->saved_network_read) {
+		con->network_read = hctx->saved_network_read;
+		hctx->saved_network_read = NULL;
+	}
 
-	con->plugin_ctx[p->id] = NULL;
+	if (NULL != hctx->saved_remote_addr_buf) {
+		con->dst_addr = hctx->saved_remote_addr;
+		buffer_free(con->dst_addr_buf);
+		con->dst_addr_buf = hctx->saved_remote_addr_buf;
+		hctx->saved_remote_addr_buf = NULL;
+		/* Now, clean the conf_cond cache, because we may have changed the results of tests */
+		config_cond_cache_reset_item(srv, con, COMP_HTTP_REMOTE_IP);
+	}
 
-	/* Now, clean the conf_cond cache, because we may have changed the results of tests */
-	config_cond_cache_reset_item(srv, con, COMP_HTTP_REMOTE_IP);
+	if (NULL == hctx->env) {
+		handler_ctx_free(hctx);
+		con->plugin_ctx[p->id] = NULL;
+	}
 
 	return HANDLER_GO_ON;
+}
+
+
+CONNECTION_FUNC(mod_extforward_handle_con_close)
+{
+    plugin_data *p = p_d;
+    handler_ctx *hctx = con->plugin_ctx[p->id];
+    UNUSED(srv);
+    if (NULL != hctx) {
+        if (NULL != hctx->saved_network_read) {
+            con->network_read = hctx->saved_network_read;
+        }
+        if (NULL != hctx->saved_remote_addr_buf) {
+            con->dst_addr = hctx->saved_remote_addr;
+            buffer_free(con->dst_addr_buf);
+            con->dst_addr_buf = hctx->saved_remote_addr_buf;
+        }
+        if (NULL != hctx->env) {
+            array_free(hctx->env);
+        }
+        handler_ctx_free(hctx);
+        con->plugin_ctx[p->id] = NULL;
+    }
+
+    return HANDLER_GO_ON;
+}
+
+
+static int mod_extforward_network_read (server *srv, connection *con, chunkqueue *cq, off_t max_bytes);
+
+CONNECTION_FUNC(mod_extforward_handle_con_accept)
+{
+    plugin_data *p = p_d;
+    mod_extforward_patch_connection(srv, con, p);
+    if (!p->conf.hap_PROXY) return HANDLER_GO_ON;
+    if (IP_TRUSTED == is_proxy_trusted(con->dst_addr_buf->ptr, p)) {
+        handler_ctx *hctx = handler_ctx_init();
+        con->plugin_ctx[p->id] = hctx;
+        hctx->saved_network_read = con->network_read;
+        con->network_read = mod_extforward_network_read;
+    }
+    else {
+        if (con->conf.log_request_handling) {
+            log_error_write(srv, __FILE__, __LINE__, "sbs",
+                    "remote address", con->dst_addr_buf,
+                    "is NOT a trusted proxy, skipping");
+        }
+    }
+    return HANDLER_GO_ON;
 }
 
 
@@ -959,9 +1109,12 @@ int mod_extforward_plugin_init(plugin *p) {
 	p->name        = buffer_init_string("extforward");
 
 	p->init        = mod_extforward_init;
+	p->handle_connection_accept = mod_extforward_handle_con_accept;
 	p->handle_uri_raw = mod_extforward_uri_handler;
+	p->handle_request_env = mod_extforward_handle_request_env;
 	p->handle_request_done = mod_extforward_restore;
 	p->connection_reset = mod_extforward_restore;
+	p->handle_connection_close = mod_extforward_handle_con_close;
 	p->set_defaults  = mod_extforward_set_defaults;
 	p->cleanup     = mod_extforward_free;
 
@@ -970,3 +1123,444 @@ int mod_extforward_plugin_init(plugin *p) {
 	return 0;
 }
 
+
+
+
+/* Modified from:
+ *   http://www.haproxy.org/download/1.8/doc/proxy-protocol.txt
+ *
+9. Sample code
+
+The code below is an example of how a receiver may deal with both versions of
+the protocol header for TCP over IPv4 or IPv6. The function is supposed to be
+called upon a read event. Addresses may be directly copied into their final
+memory location since they're transported in network byte order. The sending
+side is even simpler and can easily be deduced from this sample code.
+ *
+ */
+
+union hap_PROXY_hdr {
+    struct {
+        char line[108];
+    } v1;
+    struct {
+        uint8_t sig[12];
+        uint8_t ver_cmd;
+        uint8_t fam;
+        uint16_t len;
+        union {
+            struct {  /* for TCP/UDP over IPv4, len = 12 */
+                uint32_t src_addr;
+                uint32_t dst_addr;
+                uint16_t src_port;
+                uint16_t dst_port;
+            } ip4;
+            struct {  /* for TCP/UDP over IPv6, len = 36 */
+                 uint8_t  src_addr[16];
+                 uint8_t  dst_addr[16];
+                 uint16_t src_port;
+                 uint16_t dst_port;
+            } ip6;
+            struct {  /* for AF_UNIX sockets, len = 216 */
+                 uint8_t src_addr[108];
+                 uint8_t dst_addr[108];
+            } unx;
+        } addr;
+    } v2;
+};
+
+/*
+If the length specified in the PROXY protocol header indicates that additional
+bytes are part of the header beyond the address information, a receiver may
+choose to skip over and ignore those bytes, or attempt to interpret those
+bytes.
+
+The information in those bytes will be arranged in Type-Length-Value (TLV
+vectors) in the following format.  The first byte is the Type of the vector.
+The second two bytes represent the length in bytes of the value (not included
+the Type and Length bytes), and following the length field is the number of
+bytes specified by the length.
+ */
+struct pp2_tlv {
+    uint8_t type;
+    uint8_t length_hi;
+    uint8_t length_lo;
+    /*uint8_t value[0];*//* C99 zero-length array */
+};
+
+/*
+The following types have already been registered for the <type> field :
+ */
+
+#define PP2_TYPE_ALPN             0x01
+#define PP2_TYPE_AUTHORITY        0x02
+#define PP2_TYPE_CRC32C           0x03
+#define PP2_TYPE_NOOP             0x04
+#define PP2_TYPE_SSL              0x20
+#define PP2_SUBTYPE_SSL_VERSION   0x21
+#define PP2_SUBTYPE_SSL_CN        0x22
+#define PP2_SUBTYPE_SSL_CIPHER    0x23
+#define PP2_SUBTYPE_SSL_SIG_ALG   0x24
+#define PP2_SUBTYPE_SSL_KEY_ALG   0x25
+#define PP2_TYPE_NETNS            0x30
+
+/*
+For the type PP2_TYPE_SSL, the value is itselv a defined like this :
+ */
+
+struct pp2_tlv_ssl {
+    uint8_t  client;
+    uint32_t verify;
+    /*struct pp2_tlv sub_tlv[0];*//* C99 zero-length array */
+};
+
+/*
+And the <client> field is made of a bit field from the following values,
+indicating which element is present :
+ */
+
+#define PP2_CLIENT_SSL            0x01
+#define PP2_CLIENT_CERT_CONN      0x02
+#define PP2_CLIENT_CERT_SESS      0x04
+
+
+
+
+#ifndef MSG_DONTWAIT
+#define MSG_DONTWAIT
+#endif
+#ifndef MSG_NOSIGNAL
+#define MSG_NOSIGNAL
+#endif
+
+/* returns 0 if needs to poll, <0 upon error or >0 is protocol vers (success) */
+static int hap_PROXY_recv (const int fd, union hap_PROXY_hdr * const hdr)
+{
+    static const char v2sig[12] =
+        "\x0D\x0A\x0D\x0A\x00\x0D\x0A\x51\x55\x49\x54\x0A";
+
+    ssize_t ret;
+    size_t sz;
+    int ver;
+
+    do {
+        ret = recv(fd, hdr, sizeof(*hdr), MSG_PEEK|MSG_DONTWAIT|MSG_NOSIGNAL);
+    } while (-1 == ret && errno == EINTR);
+
+    if (-1 == ret)
+        return (errno == EAGAIN
+                #ifdef EWOULDBLOCK
+                #if EAGAIN != EWOULDBLOCK
+                || errno == EWOULDBLOCK
+                #endif
+                #endif
+               ) ? 0 : -1;
+
+    if (ret >= 16 && 0 == memcmp(&hdr->v2, v2sig, 12)
+        && (hdr->v2.ver_cmd & 0xF0) == 0x20) {
+        ver = 2;
+        sz = 16 + (size_t)ntohs(hdr->v2.len);
+        if ((size_t)ret < sz)
+            return -2; /* truncated or too large header */
+
+        switch (hdr->v2.ver_cmd & 0xF) {
+          case 0x01: break; /* PROXY command */
+          case 0x00: break; /* LOCAL command */
+          default:   return -2; /* not a supported command */
+        }
+    }
+    else if (ret >= 8 && 0 == memcmp(hdr->v1.line, "PROXY", 5)) {
+        const char *end = memchr(hdr->v1.line, '\r', ret - 1);
+        if (!end || end[1] != '\n')
+            return -2; /* partial or invalid header */
+        ver = 1;
+        sz = (size_t)(end + 2 - hdr->v1.line); /* skip header + CRLF */
+    }
+    else {
+        /* Wrong protocol */
+        return -2;
+    }
+
+    /* we need to consume the appropriate amount of data from the socket
+     * (overwrites existing contents of hdr with same data) */
+    do {
+        ret = recv(fd, hdr, sz, MSG_DONTWAIT|MSG_NOSIGNAL);
+    } while (-1 == ret && errno == EINTR);
+    if (ret < 0) return -1;
+    if (1 == ver) hdr->v1.line[sz-2] = '\0'; /*terminate str to ease parsing*/
+    return ver;
+}
+
+
+static int mod_extforward_hap_PROXY_v1 (connection * const con,
+                                        union hap_PROXY_hdr * const hdr)
+{
+    /* samples
+     *   "PROXY TCP4 255.255.255.255 255.255.255.255 65535 65535\r\n"
+     *   "PROXY TCP6 ffff:f...f:ffff ffff:f...f:ffff 65535 65535\r\n"
+     *   "PROXY UNKNOWN\r\n"
+     *   "PROXY UNKNOWN ffff:f...f:ffff ffff:f...f:ffff 65535 65535\r\n"
+     */
+    char *s = hdr->v1.line + sizeof("PROXY")-1; /*checked in hap_PROXY_recv()*/
+    char *src_addr, *dst_addr, *src_port, *dst_port, *e;
+    int family;
+    long src_lport, dst_lport;
+    if (*s != ' ') return -1;
+    ++s;
+    if (s[0] == 'T' && s[1] == 'C' && s[2] == 'P' && s[4] == ' ') {
+        if (s[3] == '4') {
+            family = AF_INET;
+        } else if (s[3] == '6') {
+            family = AF_INET6;
+        }
+        else {
+            return -1;
+        }
+        s += 5;
+    }
+    else if (0 == memcmp(s, "UNKNOWN", sizeof("UNKNOWN")-1)
+             && (s[7] == '\0' || s[7] == ' ')) {
+        return 0;     /* keep local connection address */
+    }
+    else {
+        return -1;
+    }
+
+    /*(strsep() should be fairly portable, but is not standard)*/
+    src_addr = s;
+    dst_addr = strchr(src_addr, ' ');
+    if (NULL == dst_addr) return -1;
+    *dst_addr++ = '\0';
+    src_port = strchr(dst_addr, ' ');
+    if (NULL == src_port) return -1;
+    *src_port++ = '\0';
+    dst_port = strchr(src_port, ' ');
+    if (NULL == dst_port) return -1;
+    *dst_port++ = '\0';
+
+    src_lport = strtol(src_port, &e, 10);
+    if (src_lport <= 0 || src_lport > USHRT_MAX || *e != '\0') return -1;
+    dst_lport = strtol(dst_port, &e, 10);
+    if (dst_lport <= 0 || dst_lport > USHRT_MAX || *e != '\0') return -1;
+
+    if (1 != sock_addr_inet_pton(&con->dst_addr,
+                                 src_addr, family, (unsigned short)src_lport))
+        return -1;
+    /* Forwarded by=... could be saved here.
+     * (see additional comments in mod_extforward_hap_PROXY_v2()) */
+
+    /* re-parse addr to string to normalize
+     * (instead of trusting PROXY to provide canonicalized src_addr string)
+     * (should prefer PROXY v2 protocol if concerned about performance) */
+    sock_addr_inet_ntop_copy_buffer(con->dst_addr_buf, &con->dst_addr);
+
+    return 0;
+}
+
+
+static int mod_extforward_hap_PROXY_v2 (connection * const con,
+                                        union hap_PROXY_hdr * const hdr)
+{
+    /* If HAProxy-PROXY protocol used, then lighttpd acts as transparent proxy,
+     * masquerading as servicing the client IP provided in by HAProxy-PROXY hdr.
+     * The connecting con->dst_addr and con->dst_addr_buf are not saved here,
+     * so that info is lost unless getsockname() and getpeername() are used.
+     * One result is that mod_proxy will use the masqueraded IP instead of the
+     * actual IP when updated Forwarded and X-Forwarded-For (but if actual
+     * connection IPs needed, better to save the info here rather than use
+     * syscalls to retrieve the info later).
+     * (Exception: con->dst_addr can be further changed if mod_extforward parses
+     *  Forwaded or X-Forwarded-For request headers later, after request headers
+     *  have been received.)
+     */
+
+    /* Forwarded by=... could be saved here.  The by param is for backends to be
+     * able to construct URIs for that interface (interface on server which
+     * received request and made PROXY connection here), though that server
+     * should provide that information in updated Forwarded or X-Forwarded-For
+     * HTTP headers */
+    /*struct sockaddr_storage by;*/
+
+    /* Addresses provided by HAProxy-PROXY protocol are in network byte order.
+     * Note: addr info is not validated, so do not accept HAProxy-PROXY
+     * protocol from untrusted servers.  For example, untrusted servers from
+     * which HAProxy-PROXY protocol is accepted (don't do that) could pretend
+     * to be from the internal network and might thereby bypass security policy.
+     */
+
+    /* (Clear con->dst_addr with memset() in case actual and proxies IPs
+     *  are different domains, e.g. one is IPv4 and the other is IPv6) */
+
+    struct pp2_tlv *tlv;
+    uint32_t sz = ntohs(hdr->v2.len);
+    uint32_t len = 0;
+
+    switch (hdr->v2.ver_cmd & 0xF) {
+      case 0x01: break;    /* PROXY command */
+      case 0x00: return  0;/* LOCAL command; keep local connection address */
+      default:   return -1;/* should not happen; validated in hap_PROXY_recv()*/
+    }
+
+    /* PROXY command */
+
+    switch (hdr->v2.fam) {
+      case 0x11:  /* TCPv4 */
+        memset(&con->dst_addr.ipv4, 0, sizeof(struct sockaddr_in));
+        con->dst_addr.ipv4.sin_family      = AF_INET;
+        con->dst_addr.ipv4.sin_port        = hdr->v2.addr.ip4.src_port;
+        con->dst_addr.ipv4.sin_addr.s_addr = hdr->v2.addr.ip4.src_addr;
+        sock_addr_inet_ntop_copy_buffer(con->dst_addr_buf, &con->dst_addr);
+       #if 0
+        ((struct sockaddr_in *)&by)->sin_family = AF_INET;
+        ((struct sockaddr_in *)&by)->sin_addr.s_addr =
+            hdr->v2.addr.ip4.dst_addr;
+        ((struct sockaddr_in *)&by)->sin_port =
+            hdr->v2.addr.ip4.dst_port;
+       #endif
+        len = (uint32_t)sizeof(hdr->v2.addr.ip4);
+        break;
+     #ifdef HAVE_IPV6
+      case 0x21:  /* TCPv6 */
+        memset(&con->dst_addr.ipv6, 0, sizeof(struct sockaddr_in6));
+        con->dst_addr.ipv6.sin6_family      = AF_INET6;
+        con->dst_addr.ipv6.sin6_port        = hdr->v2.addr.ip6.src_port;
+        memcpy(&con->dst_addr.ipv6.sin6_addr, hdr->v2.addr.ip6.src_addr, 16);
+        sock_addr_inet_ntop_copy_buffer(con->dst_addr_buf, &con->dst_addr);
+       #if 0
+        ((struct sockaddr_in6 *)&by)->sin6_family = AF_INET6;
+        memcpy(&((struct sockaddr_in6 *)&by)->sin6_addr,
+            hdr->v2.addr.ip6.dst_addr, 16);
+        ((struct sockaddr_in6 *)&by)->sin6_port =
+            hdr->v2.addr.ip6.dst_port;
+       #endif
+        len = (uint32_t)sizeof(hdr->v2.addr.ip6);
+        break;
+     #endif
+     #ifdef HAVE_SYS_UN_H
+      case 0x31:  /* UNIX domain socket */
+        {
+            char *src_addr = (char *)hdr->v2.addr.unx.src_addr;
+            char *z = memchr(src_addr, '\0', UNIX_PATH_MAX);
+            if (NULL == z) return -1; /* invalid addr; too long */
+            len = (uint32_t)(z - src_addr + 1); /*(+1 for '\0')*/
+            memset(&con->dst_addr.un, 0, sizeof(struct sockaddr_un));
+            con->dst_addr.un.sun_family = AF_UNIX;
+            memcpy(&con->dst_addr.un.sun_path, src_addr, len);
+            buffer_copy_string_len(con->dst_addr_buf, src_addr, len);
+        }
+       #if 0 /*(dst_addr should be identical to src_addr for AF_UNIX)*/
+        ((struct sockaddr_un *)&by)->sun_family = AF_UNIX;
+        memcpy(&((struct sockaddr_un *)&by)->sun_path,
+            hdr->v2.addr.unx.dst_addr, 108);
+       #endif
+        len = (uint32_t)sizeof(hdr->v2.addr.unx);
+        break;
+     #endif
+      default:    /* keep local connection address; unsupported protocol */
+        return 0;
+    }
+
+    /* (optional) Type-Length-Value (TLV vectors) follow addresses */
+
+    tlv = (struct pp2_tlv *)((char *)hdr + 16);
+    for (sz -= len, len -= 3; sz >= 3; sz -= 3 + len) {
+        tlv = (struct pp2_tlv *)((char *)tlv + 3 + len);
+        len = ((uint32_t)tlv->length_hi << 8) | tlv->length_lo;
+        if (3 + len > sz) break; /*(invalid TLV)*/
+        switch (tlv->type) {
+         #if 0 /*(not implemented here)*/
+          case PP2_TYPE_ALPN:
+          case PP2_TYPE_AUTHORITY:
+          case PP2_TYPE_CRC32C:
+         #endif
+          case PP2_TYPE_SSL: {
+            static const uint32_t zero = 0;
+            handler_ctx *hctx =
+              con->plugin_ctx[mod_extforward_plugin_data_singleton->id];
+            struct pp2_tlv_ssl *tlv_ssl = (struct pp2_tlv_ssl *)((char *)tlv+3);
+            struct pp2_tlv *subtlv = tlv;
+            if (tlv_ssl->client & PP2_CLIENT_SSL) {
+                buffer_copy_string_len(con->proto, CONST_STR_LEN("https"));
+            }
+            if ((tlv_ssl->client & (PP2_CLIENT_CERT_CONN|PP2_CLIENT_CERT_SESS))
+                && 0 == memcmp(&tlv_ssl->verify, &zero, 4)) { /* misaligned */
+                hctx->ssl_client_verify = 1;
+            }
+            for (uint32_t subsz = len-5, n = 5; subsz >= 3; subsz -= 3 + n) {
+                subtlv = (struct pp2_tlv *)((char *)subtlv + 3 + n);
+                n = ((uint32_t)subtlv->length_hi << 8) | subtlv->length_lo;
+                if (3 + n > subsz) break; /*(invalid TLV)*/
+                if (NULL == hctx->env) hctx->env = array_init();
+                switch (subtlv->type) {
+                  case PP2_SUBTYPE_SSL_VERSION:
+                    array_set_key_value(hctx->env,
+                                        CONST_STR_LEN("SSL_PROTOCOL"),
+                                        (char *)subtlv+3, n);
+                    break;
+                  case PP2_SUBTYPE_SSL_CN:
+                    /* (tlv_ssl->client & PP2_CLIENT_CERT_CONN)
+                     *   or
+                     * (tlv_ssl->client & PP2_CLIENT_CERT_SESS) */
+                    array_set_key_value(hctx->env,
+                                        CONST_STR_LEN("SSL_CLIENT_S_DN_CN"),
+                                        (char *)subtlv+3, n);
+                    break;
+                  case PP2_SUBTYPE_SSL_CIPHER:
+                    array_set_key_value(hctx->env,
+                                        CONST_STR_LEN("SSL_CIPHER"),
+                                        (char *)subtlv+3, n);
+                    break;
+                  case PP2_SUBTYPE_SSL_SIG_ALG:
+                    array_set_key_value(hctx->env,
+                                        CONST_STR_LEN("SSL_SERVER_A_SIG"),
+                                        (char *)subtlv+3, n);
+                    break;
+                  case PP2_SUBTYPE_SSL_KEY_ALG:
+                    array_set_key_value(hctx->env,
+                                        CONST_STR_LEN("SSL_SERVER_A_KEY"),
+                                        (char *)subtlv+3, n);
+                    break;
+                  default:
+                    break;
+                }
+            }
+            break;
+          }
+         #if 0 /*(not implemented here)*/
+          case PP2_TYPE_NETNS:
+         #endif
+          /*case PP2_TYPE_NOOP:*//* no-op */
+          default:
+            break;
+        }
+    }
+
+    return 0;
+}
+
+
+static int mod_extforward_network_read (server *srv, connection *con,
+                                        chunkqueue *cq, off_t max_bytes)
+{
+    /* XXX: when using hap-PROXY protocol, currently avoid overhead of setting
+     * _L_ environment variables for mod_proxy to accurately set Forwarded hdr
+     * In the future, might add config switch to enable doing this extra work */
+
+    union hap_PROXY_hdr hdr;
+    int rc;
+    switch (hap_PROXY_recv(con->fd, &hdr)) {
+      case  2: rc = mod_extforward_hap_PROXY_v2(con, &hdr); break;
+      case  1: rc = mod_extforward_hap_PROXY_v1(con, &hdr); break;
+      case  0: return  0; /*(errno == EAGAIN || errno == EWOULDBLOCK)*/
+      case -1: log_error_write(srv, __FILE__, __LINE__, "ss",
+                               "hap-PROXY recv()", strerror(errno));
+               rc = -1; break;
+      case -2: log_error_write(srv, __FILE__, __LINE__, "s",
+                               "hap-PROXY proto received "
+                               "invalid/unsupported request");
+      default: rc = -1; break;
+    }
+
+    mod_extforward_restore(srv, con, mod_extforward_plugin_data_singleton);
+    return (0 == rc) ? con->network_read(srv, con, cq, max_bytes) : rc;
+}

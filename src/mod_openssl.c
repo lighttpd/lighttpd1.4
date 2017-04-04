@@ -1520,7 +1520,9 @@ CONNECTION_FUNC(mod_openssl_handle_uri_raw)
      * if mod_openssl is configured to set REMOTE_USER based on client cert */
     /* mod_openssl must be loaded after mod_extforward
      * if mod_openssl config is based on lighttpd.conf remote IP conditional
-     * using remote IP address set by mod_extforward */
+     * using remote IP address set by mod_extforward, *unless* PROXY protocol
+     * is enabled with extforward.hap-PROXY = "enable", in which case the
+     * reverse is true: mod_extforward must be loaded after mod_openssl */
     plugin_data *p = p_d;
     handler_ctx *hctx = con->plugin_ctx[p->id];
     if (NULL == hctx) return HANDLER_GO_ON;
