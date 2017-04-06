@@ -189,12 +189,10 @@ handler_t http_response_prepare(server *srv, connection *con) {
 		 *
 		 */
 
-		/* initial scheme value. can be overwritten for example by mod_extforward later */
-		if (con->srv_socket->is_ssl) {
-			buffer_copy_string_len(con->uri.scheme, CONST_STR_LEN("https"));
-		} else {
-			buffer_copy_string_len(con->uri.scheme, CONST_STR_LEN("http"));
-		}
+		/* take initial scheme value from connection-level state
+		 * (request con->uri.scheme can be overwritten for later,
+		 *  for example by mod_extforward or mod_magnet) */
+		buffer_copy_buffer(con->uri.scheme, con->proto);
 		buffer_copy_buffer(con->uri.authority, con->request.http_host);
 		buffer_to_lower(con->uri.authority);
 

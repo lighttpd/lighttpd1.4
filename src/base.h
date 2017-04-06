@@ -402,6 +402,7 @@ typedef struct connection {
 	cond_cache_t *cond_cache;
 
 	buffer *server_name;
+	buffer *proto;
 
 	/* error-handler */
 	int error_handler_saved_status;

@@ -841,8 +841,10 @@ static void proxy_set_Forwarded(connection *con, const unsigned int flags) {
         buffer_append_string_len(ds->value, CONST_STR_LEN("proto="));
         if (NULL != dsproto) {
             buffer_append_string_buffer(ds->value, dsproto->value);
+        } else if (con->srv_socket->is_ssl) {
+            buffer_append_string_len(ds->value, CONST_STR_LEN("https"));
         } else {
-            buffer_append_string_buffer(ds->value, con->uri.scheme);
+            buffer_append_string_len(ds->value, CONST_STR_LEN("http"));
         }
         semicolon = 1;
     }

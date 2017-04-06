@@ -1255,6 +1255,7 @@ CONNECTION_FUNC(mod_openssl_handle_con_accept)
         return HANDLER_ERROR;
     }
 
+    buffer_copy_string_len(con->proto, CONST_STR_LEN("https"));
     con->network_read = connection_read_cq_ssl;
     con->network_write = connection_write_cq_ssl;
     SSL_set_app_data(hctx->ssl, hctx);

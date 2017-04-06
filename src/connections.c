@@ -547,6 +547,7 @@ connection *connection_init(server *srv) {
 	CLEAN(parse_request);
 
 	CLEAN(server_name);
+	CLEAN(proto);
 	CLEAN(dst_addr_buf);
 
 #undef CLEAN
@@ -612,6 +613,7 @@ void connections_free(server *srv) {
 		CLEAN(parse_request);
 
 		CLEAN(server_name);
+		CLEAN(proto);
 		CLEAN(dst_addr_buf);
 #undef CLEAN
 		free(con->plugin_ctx);
@@ -663,6 +665,7 @@ int connection_reset(server *srv, connection *con) {
 	CLEAN(parse_request);
 
 	CLEAN(server_name);
+	/*CLEAN(proto);*//* set to default in connection_accepted() */
 #undef CLEAN
 
 #define CLEAN(x) \
@@ -1084,6 +1087,7 @@ connection *connection_accepted(server *srv, server_socket *srv_socket, sock_add
 			connection_close(srv, con);
 			return NULL;
 		}
+		buffer_copy_string_len(con->proto, CONST_STR_LEN("http"));
 		if (HANDLER_GO_ON != plugins_call_handle_connection_accept(srv, con)) {
 			connection_close(srv, con);
 			return NULL;
