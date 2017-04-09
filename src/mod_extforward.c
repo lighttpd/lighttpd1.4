@@ -801,7 +801,7 @@ static handler_t mod_extforward_Forwarded (server *srv, connection *con, plugin_
          #if 0
           case 2:
             if (0 == buffer_caseless_compare(s+offsets[j],2,"by",2))
-                oproto = j;
+                oby = j;
             break;
          #endif
          #if 0
@@ -895,7 +895,7 @@ static handler_t mod_extforward_Forwarded (server *srv, connection *con, plugin_
                 return HANDLER_FINISHED;
             }
 
-	    config_cond_cache_reset_item(srv, con, COMP_HTTP_HOST);
+            config_cond_cache_reset_item(srv, con, COMP_HTTP_HOST);
         }
     }
 
@@ -912,8 +912,8 @@ static handler_t mod_extforward_Forwarded (server *srv, connection *con, plugin_
         if (-1 != oremote_user) {
             /* ???: should we also support param for auth_type ??? */
             /* remove trailing spaces/tabs, and double-quotes from remote_user*/
-            v = offsets[oproto+2];
-            vlen = v + offsets[oproto+3];
+            v = offsets[oremote_user+2];
+            vlen = v + offsets[oremote_user+3];
             while (vlen > v && (s[vlen-1] == ' ' || s[vlen-1] == '\t')) --vlen;
             if (vlen > v+1 && s[v] == '"' && s[vlen-1] == '"') {
                 data_string *dsuser;
@@ -937,6 +937,51 @@ static handler_t mod_extforward_Forwarded (server *srv, connection *con, plugin_
             }
         }
     }
+
+  #if 0
+    if ((p->conf.opts & PROXY_FORWARDED_CREATE_XFF)
+        && NULL == array_get_element(con->request.headers, "X-Forwarded-For")) {
+        /* create X-Forwarded-For if not present
+         * (and at least original connecting IP is a trusted proxy) */
+        buffer *xff;
+        data_string *dsxff = (data_string *)
+          array_get_unused_element(con->request.headers, TYPE_STRING);
+        if (NULL == dsxff) dsxff = data_string_init();
+        buffer_copy_string_len(dsxff->key, CONST_STR_LEN("X-Forwarded-For"));
+        array_insert_unique(con->request.headers, (data_unset *)dsxff);
+        xff = dsxff->value;
+        for (j = 0; j < used; ) {
+            if (-1 == offsets[j]) { ++j; continue; }
+            if (3 == offsets[j+1]
+                && 0 == buffer_caseless_compare(s+offsets[j], 3, "for", 3)) {
+                if (!buffer_string_is_empty(xff))
+                    buffer_append_string_len(xff, CONST_STR_LEN(", "));
+                /* quoted-string, IPv6 brackets, and :port already removed */
+                v = offsets[j+2];
+                vlen = offsets[j+3];
+                buffer_append_string_len(xff, s+v, vlen);
+                if (s[v-1] != '=') { /*(must have been quoted-string)*/
+                    char *x =
+                      memchr(xff->ptr+buffer_string_length(xff)-vlen,'\\',vlen);
+                    if (NULL != x) { /* backslash unescape in-place */
+                        for (v = 0; x[v]; ++x) {
+                            if (x[v] == '\\' && x[++v] == '\0')
+                                break; /*(invalid trailing backslash)*/
+                            *x = x[v];
+                        }
+                        buffer_string_set_length(xff, x - xff->ptr);
+                    }
+                }
+                /* skip to next group; take first "for=..." in group
+                 * (should be 0 or 1 "for=..." per group, but not trusted) */
+                do { j += 4; } while (-1 != offsets[j]);
+                ++j;
+                continue;
+            }
+            j += 4; /*(k, klen, v, vlen come in sets of 4)*/
+        }
+    }
+  #endif
 
     return HANDLER_GO_ON;
 }
