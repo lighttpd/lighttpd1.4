@@ -932,7 +932,6 @@ static int webdav_get_live_property(server *srv, connection *con, handler_ctx *h
 	if (HANDLER_ERROR != (stat_cache_get_entry(srv, con, dst->path, &sce))) {
 		char ctime_buf[] = "2005-08-18T07:27:16Z";
 		char mtime_buf[] = "Thu, 18 Aug 2005 07:27:16 GMT";
-		size_t k;
 
 		if (0 == strcmp(prop_name, "resourcetype")) {
 			if (S_ISDIR(sce->st.st_mode)) {
@@ -946,19 +945,12 @@ static int webdav_get_live_property(server *srv, connection *con, handler_ctx *h
 				buffer_append_string_len(b, CONST_STR_LEN("<D:getcontenttype>httpd/unix-directory</D:getcontenttype>"));
 				found = 1;
 			} else if(S_ISREG(sce->st.st_mode)) {
-				for (k = 0; k < con->conf.mimetypes->used; k++) {
-					data_string *ds = (data_string *)con->conf.mimetypes->data[k];
-
-					if (buffer_is_empty(ds->key)) continue;
-
-					if (buffer_is_equal_right_len(dst->path, ds->key, buffer_string_length(ds->key))) {
-						buffer_append_string_len(b,CONST_STR_LEN("<D:getcontenttype>"));
-						buffer_append_string_buffer(b, ds->value);
-						buffer_append_string_len(b, CONST_STR_LEN("</D:getcontenttype>"));
-						found = 1;
-
-						break;
-					}
+				const buffer *type = stat_cache_mimetype_by_ext(con, CONST_BUF_LEN(dst->path));
+				if (NULL != type) {
+					buffer_append_string_len(b, CONST_STR_LEN("<D:getcontenttype>"));
+					buffer_append_string_buffer(b, type);
+					buffer_append_string_len(b, CONST_STR_LEN("</D:getcontenttype>"));
+					found = 1;
 				}
 			}
 		} else if (0 == strcmp(prop_name, "creationdate")) {

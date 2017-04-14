@@ -268,6 +268,42 @@ static int stat_cache_attr_get(buffer *buf, char *name, char *xattrname) {
 }
 #endif
 
+const buffer * stat_cache_mimetype_by_ext(const connection *con, const char *name, size_t nlen)
+{
+    const char *end = name + nlen; /*(end of string)*/
+    const size_t used = con->conf.mimetypes->used;
+    if (used < 16) {
+        for (size_t i = 0; i < used; ++i) {
+            /* suffix match */
+            const data_string *ds = (data_string *)con->conf.mimetypes->data[i];
+            const size_t klen = buffer_string_length(ds->key);
+            if (klen <= nlen && 0 == strncasecmp(end-klen, ds->key->ptr, klen))
+                return ds->value;
+        }
+    }
+    else {
+        const char *s;
+        const data_string *ds;
+        if (nlen) {
+            for (s = end-1; s != name && *s != '/'; --s) ; /*(like memrchr())*/
+            if (*s == '/') ++s;
+        }
+        else {
+            s = name;
+        }
+        /* search for basename, then longest .ext2.ext1, then .ext1, then "" */
+        ds = (data_string *)array_get_element(con->conf.mimetypes, s);
+        if (NULL != ds) return ds->value;
+        while (++s < end) {
+            while (*s != '.' && ++s != end) ;
+            ds = (data_string *)array_get_element(con->conf.mimetypes, s);
+            if (NULL != ds) return ds->value;
+        }
+    }
+
+    return NULL;
+}
+
 /* the famous DJB hash function for strings */
 static uint32_t hashme(buffer *str) {
 	uint32_t hash = 5381;
@@ -400,7 +436,6 @@ handler_t stat_cache_get_entry(server *srv, connection *con, buffer *name, stat_
 	stat_cache_entry *sce = NULL;
 	stat_cache *sc;
 	struct stat st;
-	size_t k;
 	int fd;
 	struct stat lst;
 #ifdef DEBUG_STAT_CACHE
@@ -635,22 +670,9 @@ handler_t stat_cache_get_entry(server *srv, connection *con, buffer *name, stat_
 #endif
 		/* xattr did not set a content-type. ask the config */
 		if (buffer_string_is_empty(sce->content_type)) {
-			size_t namelen = buffer_string_length(name);
-
-			for (k = 0; k < con->conf.mimetypes->used; k++) {
-				data_string *ds = (data_string *)con->conf.mimetypes->data[k];
-				buffer *type = ds->key;
-				size_t typelen = buffer_string_length(type);
-
-				if (buffer_is_empty(type)) continue;
-
-				/* check if the right side is the same */
-				if (typelen > namelen) continue;
-
-				if (0 == strncasecmp(name->ptr + namelen - typelen, type->ptr, typelen)) {
-					buffer_copy_buffer(sce->content_type, ds->value);
-					break;
-				}
+			const buffer *type = stat_cache_mimetype_by_ext(con, CONST_BUF_LEN(name));
+			if (NULL != type) {
+				buffer_copy_buffer(sce->content_type, type);
 			}
 		}
 		etag_create(sce->etag, &(sce->st), con->etag_flags);

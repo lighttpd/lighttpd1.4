@@ -875,7 +875,6 @@ static int http_list_directory(server *srv, connection *con, plugin_data *p, buf
 	dirls_entry_t *tmp;
 	char sizebuf[sizeof("999.9K")];
 	char datebuf[sizeof("2005-Jan-01 22:23:24")];
-	size_t k;
 	const char *content_type;
 	long name_max;
 #if defined(HAVE_XATTR) || defined(HAVE_EXTATTR)
@@ -1067,23 +1066,8 @@ static int http_list_directory(server *srv, connection *con, plugin_data *p, buf
 #endif
 
 		if (content_type == NULL) {
-			content_type = "application/octet-stream";
-			for (k = 0; k < con->conf.mimetypes->used; k++) {
-				data_string *ds = (data_string *)con->conf.mimetypes->data[k];
-				size_t ct_len;
-
-				if (buffer_is_empty(ds->key))
-					continue;
-
-				ct_len = buffer_string_length(ds->key);
-				if (tmp->namelen < ct_len)
-					continue;
-
-				if (0 == strncasecmp(DIRLIST_ENT_NAME(tmp) + tmp->namelen - ct_len, ds->key->ptr, ct_len)) {
-					content_type = ds->value->ptr;
-					break;
-				}
-			}
+			const buffer *type = stat_cache_mimetype_by_ext(con, DIRLIST_ENT_NAME(tmp), tmp->namelen);
+			content_type = NULL != type ? type->ptr : "application/octet-stream";
 		}
 
 #ifdef HAVE_LOCALTIME_R
