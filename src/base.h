@@ -425,19 +425,6 @@ typedef struct {
 } connections;
 
 
-#ifdef HAVE_IPV6
-typedef struct {
-	int family;
-	union {
-		struct in6_addr ipv6;
-		struct in_addr  ipv4;
-	} addr;
-	char b2[INET6_ADDRSTRLEN + 1];
-	time_t ts;
-} inet_ntop_cache_type;
-#endif
-
-
 typedef struct {
 	buffer *uri;
 	time_t mtime;
@@ -564,9 +551,6 @@ typedef struct server {
 	buffer *cond_check_buf;
 
 	/* caches */
-#ifdef HAVE_IPV6
-	inet_ntop_cache_type inet_ntop_cache[INET_NTOP_CACHE_MAX];
-#endif
 	mtime_cache_type mtime_cache[FILE_CACHE_MAX];
 
 	array *split_vals;

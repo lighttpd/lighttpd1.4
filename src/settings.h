@@ -12,7 +12,6 @@
 
 #define BV(x) (1 << x)
 
-#define INET_NTOP_CACHE_MAX 4
 #define FILE_CACHE_MAX      16
 
 /**
