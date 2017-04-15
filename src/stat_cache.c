@@ -296,9 +296,21 @@ const buffer * stat_cache_mimetype_by_ext(const connection *con, const char *nam
         if (NULL != ds) return ds->value;
         while (++s < end) {
             while (*s != '.' && ++s != end) ;
+            if (s == end) break;
+            /* search ".ext" then "ext" */
             ds = (data_string *)array_get_element(con->conf.mimetypes, s);
             if (NULL != ds) return ds->value;
+            /* repeat search without leading '.' to handle situation where
+             * admin configured mimetype.assign keys without leading '.' */
+            if (++s < end) {
+                if (*s == '.') { --s; continue; }
+                ds = (data_string *)array_get_element(con->conf.mimetypes, s);
+                if (NULL != ds) return ds->value;
+            }
         }
+        /* search for ""; catchall */
+        ds = (data_string *)array_get_element(con->conf.mimetypes, "");
+        if (NULL != ds) return ds->value;
     }
 
     return NULL;
