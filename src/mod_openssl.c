@@ -71,6 +71,8 @@ static int ssl_is_init;
 /* need assigned p->id for deep access of module handler_ctx for connection
  *   i.e. handler_ctx *hctx = con->plugin_ctx[plugin_data_singleton->id]; */
 static plugin_data *plugin_data_singleton;
+#define LOCAL_SEND_BUFSIZE (64 * 1024)
+static char *local_send_buffer;
 
 typedef struct {
     SSL *ssl;
@@ -153,6 +155,8 @@ FREE_FUNC(mod_openssl_free)
        #endif
         EVP_cleanup();
       #endif
+
+        free(local_send_buffer);
     }
 
     free(p);
@@ -473,6 +477,9 @@ network_init_ssl (server *srv, void *p_d)
                                 "not enough entropy in the pool");
                 return -1;
             }
+
+            local_send_buffer = malloc(LOCAL_SEND_BUFSIZE);
+            force_assert(NULL != local_send_buffer);
         }
 
         if (!buffer_string_is_empty(s->ssl_pemfile)) {
@@ -932,16 +939,16 @@ load_next_chunk (server *srv, chunkqueue *cq, off_t max_bytes,
 {
     chunk * const c = cq->first;
 
-#define LOCAL_SEND_BUFSIZE (64 * 1024)
-    /* this is a 64k sendbuffer
+    /* local_send_buffer is a 64k sendbuffer (LOCAL_SEND_BUFSIZE)
      *
      * it has to stay at the same location all the time to satisfy the needs
      * of SSL_write to pass the SAME parameter in case of a _WANT_WRITE
      *
-     * buffer is allocated once, is NOT realloced and is NOT freed at shutdown
-     * -> we expect a 64k block to 'leak' in valgrind
+     * buffer is allocated once, is NOT realloced
+     *
+     * (Note: above restriction no longer true since SSL_CTX_set_mode() is
+     *        called with SSL_MODE_ACCEPT_MOVING_WRITE_BUFFER)
      * */
-    static char *local_send_buffer = NULL;
 
     force_assert(NULL != c);
 
@@ -962,11 +969,6 @@ load_next_chunk (server *srv, chunkqueue *cq, off_t max_bytes,
         return 0;
 
     case FILE_CHUNK:
-        if (NULL == local_send_buffer) {
-            local_send_buffer = malloc(LOCAL_SEND_BUFSIZE);
-            force_assert(NULL != local_send_buffer);
-        }
-
         if (0 != chunkqueue_open_file_chunk(srv, cq)) return -1;
 
         {
