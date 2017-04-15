@@ -876,10 +876,9 @@ static int scgi_spawn_connection(server *srv,
 				dup2(scgi_fd, 0);
 				close(scgi_fd);
 			}
-		      #ifdef SOCK_CLOEXEC
-			else
-				(void)fcntl(scgi_fd, F_SETFD, 0); /* clear cloexec */
-		      #endif
+			else {
+				fdevent_clrfd_cloexec(scgi_fd);
+			}
 
 			/* we don't need the client socket */
 			for (fd = 3; fd < 256; fd++) {

@@ -901,13 +901,9 @@ static handler_t connection_handle_fdevent(server *srv, void *context, int reven
 
 
 connection *connection_accept(server *srv, server_socket *srv_socket) {
-	/* accept everything */
-
-	/* search an empty place */
 	int cnt;
 	sock_addr cnt_addr;
-	socklen_t cnt_len;
-	/* accept it and register the fd */
+	size_t cnt_len = sizeof(cnt_addr); /*(size_t intentional; not socklen_t)*/
 
 	/**
 	 * check if we can still open a new connections
@@ -919,17 +915,7 @@ connection *connection_accept(server *srv, server_socket *srv_socket) {
 		return NULL;
 	}
 
-	cnt_len = sizeof(cnt_addr);
-
-#if defined(SOCK_CLOEXEC) && defined(SOCK_NONBLOCK)
-#if defined(__NetBSD__)
-	cnt = paccept(srv_socket->fd, (struct sockaddr *) &cnt_addr, &cnt_len, NULL, SOCK_CLOEXEC | SOCK_NONBLOCK);
-#else
-	cnt = accept4(srv_socket->fd, (struct sockaddr *) &cnt_addr, &cnt_len, SOCK_CLOEXEC | SOCK_NONBLOCK);
-#endif
-#else
-	cnt = accept(srv_socket->fd, (struct sockaddr *) &cnt_addr, &cnt_len);
-#endif
+	cnt = fdevent_accept_listenfd(srv_socket->fd, (struct sockaddr *) &cnt_addr, &cnt_len);
 	if (-1 == cnt) {
 		switch (errno) {
 		case EAGAIN:

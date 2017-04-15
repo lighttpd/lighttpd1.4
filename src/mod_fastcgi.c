@@ -1122,10 +1122,9 @@ static int fcgi_spawn_connection(server *srv,
 				dup2(fcgi_fd, FCGI_LISTENSOCK_FILENO);
 				close(fcgi_fd);
 			}
-		      #ifdef SOCK_CLOEXEC
-			else
-				(void)fcntl(fcgi_fd, F_SETFD, 0); /* clear cloexec */
-		      #endif
+			else {
+				fdevent_clrfd_cloexec(fcgi_fd);
+			}
 
 			/* we don't need the client socket */
 			for (i = 3; i < 256; i++) {

@@ -206,7 +206,9 @@ int fdevent_unregister(fdevents *ev, int fd);
 void fdevent_sched_close(fdevents *ev, int fd, int issock);
 void fdevent_sched_run(struct server *srv, fdevents *ev);
 
-void fd_close_on_exec(int fd);
+#define fd_close_on_exec(fd) fdevent_setfd_cloexec(fd)
+void fdevent_setfd_cloexec(int fd);
+void fdevent_clrfd_cloexec(int fd);
 int fdevent_fcntl_set(fdevents *ev, int fd);
 int fdevent_fcntl_set_nb(fdevents *ev, int fd);
 int fdevent_fcntl_set_nb_cloexec(fdevents *ev, int fd);
@@ -214,6 +216,9 @@ int fdevent_fcntl_set_nb_cloexec_sock(fdevents *ev, int fd);
 int fdevent_socket_cloexec(int domain, int type, int protocol);
 int fdevent_socket_nb_cloexec(int domain, int type, int protocol);
 int fdevent_open_cloexec(const char *pathname, int flags, mode_t mode);
+
+struct sockaddr;
+int fdevent_accept_listenfd(int listenfd, struct sockaddr *addr, size_t *addrlen);
 
 int fdevent_select_init(fdevents *ev);
 int fdevent_poll_init(fdevents *ev);
