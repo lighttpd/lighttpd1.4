@@ -189,6 +189,7 @@ if 1:
 			stdint.h
 			stdlib.h
 			string.h
+			strings.h
 			sys/devpoll.h
 			sys/epoll.h
 			sys/event.h

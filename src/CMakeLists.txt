@@ -93,6 +93,7 @@ check_include_files(poll.h HAVE_POLL_H)
 check_include_files(pwd.h HAVE_PWD_H)
 check_include_files(stddef.h HAVE_STDDEF_H)
 check_include_files(stdint.h HAVE_STDINT_H)
+check_include_files(strings.h HAVE_STRINGS_H)
 check_include_files(syslog.h HAVE_SYSLOG_H)
 
 # check for fastcgi lib, for the tests only

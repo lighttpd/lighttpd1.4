@@ -16,6 +16,7 @@
 
 #include <time.h>
 
+#include "sys-strings.h"
 #include "sys-socket.h"
 #ifndef _WIN32
 #include <netdb.h>

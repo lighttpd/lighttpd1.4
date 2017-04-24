@@ -13,12 +13,12 @@
 
 #include <sys/types.h>
 #include <sys/stat.h>
+#include "sys-strings.h"
 
 #include <fcntl.h>
 #include <unistd.h>
 #include <stdlib.h>
 #include <string.h>
-#include <strings.h>
 #include <errno.h>
 #include <time.h>
 
