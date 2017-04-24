@@ -103,9 +103,9 @@ void li_tohex(char *buf, size_t buf_len, const char *s, size_t s_len);
  * unset "string" (buffer) config options are initialized to used == 0,
  * while setting an empty string leads to used == 1
  */
-int buffer_is_empty(const buffer *b);
+static inline int buffer_is_empty(const buffer *b);
 /* NULL buffer, empty buffer (used == 0) or empty string (used == 1) */
-int buffer_string_is_empty(const buffer *b);
+static inline int buffer_string_is_empty(const buffer *b);
 
 int buffer_is_equal(const buffer *a, const buffer *b);
 int buffer_is_equal_right_len(const buffer *a, const buffer *b, size_t len);
@@ -166,6 +166,13 @@ void log_failed_assert(const char *filename, unsigned int line, const char *msg)
 #define SEGFAULT() log_failed_assert(__FILE__, __LINE__, "aborted");
 
 /* inline implementations */
+
+static inline int buffer_is_empty(const buffer *b) {
+	return NULL == b || 0 == b->used;
+}
+static inline int buffer_string_is_empty(const buffer *b) {
+	return NULL == b || b->used < 2;
+}
 
 static inline size_t buffer_string_length(const buffer *b) {
 	return NULL != b && 0 != b->used ? b->used - 1 : 0;

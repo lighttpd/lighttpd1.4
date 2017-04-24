@@ -373,14 +373,6 @@ char hex2int(unsigned char hex) {
 	return value;
 }
 
-int buffer_is_empty(const buffer *b) {
-	return NULL == b || 0 == b->used;
-}
-
-int buffer_string_is_empty(const buffer *b) {
-	return 0 == buffer_string_length(b);
-}
-
 /**
  * check if two buffer contain the same data
  *
