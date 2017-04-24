@@ -113,6 +113,8 @@ int buffer_is_equal_string(const buffer *a, const char *s, size_t b_len);
 int buffer_is_equal_caseless_string(const buffer *a, const char *s, size_t b_len);
 int buffer_caseless_compare(const char *a, size_t a_len, const char *b, size_t b_len);
 
+void buffer_substr_replace (buffer *b, size_t offset, size_t len, const buffer *replace);
+
 typedef enum {
 	ENCODING_REL_URI, /* for coding a rel-uri (/with space/and%percent) nicely as part of a href */
 	ENCODING_REL_URI_PART, /* same as ENC_REL_URL plus coding / too as %2F */

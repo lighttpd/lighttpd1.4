@@ -461,6 +461,27 @@ void buffer_copy_string_hex(buffer *b, const char *in, size_t in_len) {
 	li_tohex(b->ptr, buffer_string_length(b)+1, in, in_len);
 }
 
+
+void buffer_substr_replace (buffer * const b, const size_t offset,
+                            const size_t len, const buffer * const replace)
+{
+    const size_t blen = buffer_string_length(b);
+    const size_t rlen = buffer_string_length(replace);
+
+    if (rlen > len) {
+        buffer_string_set_length(b, blen-len+rlen);
+        memmove(b->ptr+offset+rlen, b->ptr+offset+len, blen-offset-len);
+    }
+
+    memcpy(b->ptr+offset, replace->ptr, rlen);
+
+    if (rlen < len) {
+        memmove(b->ptr+offset+rlen, b->ptr+offset+len, blen-offset-len);
+        buffer_string_set_length(b, blen-len+rlen);
+    }
+}
+
+
 /* everything except: ! ( ) * - . 0-9 A-Z _ a-z */
 static const char encoded_chars_rel_uri_part[] = {
 	/*
