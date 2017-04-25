@@ -691,10 +691,10 @@ static void buffer_append_string_backslash_escaped(buffer *b, const char *s, siz
     p = b->ptr + buffer_string_length(b);
 
     for (size_t i = 0; i < len; ++i) {
-        int c = p[j];
+        int c = s[i];
         if (c == '"' || c == '\\' || c == 0x7F || (c < 0x20 && c != '\t'))
             p[j++] = '\\';
-        p[j++] = s[i];
+        p[j++] = c;
     }
 
     buffer_commit(b, j);
