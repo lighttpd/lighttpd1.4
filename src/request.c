@@ -201,7 +201,7 @@ static int request_check_hostname(buffer *host) {
 	return 0;
 }
 
-int http_request_host_normalize(buffer *b) {
+int http_request_host_normalize(buffer *b, int scheme_port) {
     /*
      * check for and canonicalize numeric IP address and portnum (optional)
      * (IP address may be followed by ":portnum" (optional))
@@ -308,7 +308,7 @@ int http_request_host_normalize(buffer *b) {
       #endif
     }
 
-    if (port) {
+    if (0 != port && port != scheme_port) {
         buffer_append_string_len(b, CONST_STR_LEN(":"));
         buffer_append_int(b, (int)port);
     }
@@ -316,11 +316,16 @@ int http_request_host_normalize(buffer *b) {
     return 0;
 }
 
-int http_request_host_policy (connection *con, buffer *b) {
+static int scheme_port (const buffer *scheme)
+{
+    return buffer_is_equal_string(scheme, CONST_STR_LEN("https")) ? 443 : 80;
+}
+
+int http_request_host_policy (connection *con, buffer *b, const buffer *scheme) {
     return (((con->conf.http_parseopts & HTTP_PARSEOPT_HOST_STRICT)
              && 0 != request_check_hostname(b))
             || ((con->conf.http_parseopts & HTTP_PARSEOPT_HOST_NORMALIZE)
-                && 0 != http_request_host_normalize(b)));
+                && 0 != http_request_host_normalize(b, scheme_port(scheme))));
 }
 
 #if 0
@@ -1170,7 +1175,7 @@ int http_request_parse(server *srv, connection *con) {
 
 	/* check hostname field if it is set */
 	if (!buffer_is_empty(con->request.http_host) &&
-	    0 != http_request_host_policy(con, con->request.http_host)) {
+	    0 != http_request_host_policy(con, con->request.http_host, con->proto)) {
 
 		if (srv->srvconf.log_request_header_on_error) {
 			log_error_write(srv, __FILE__, __LINE__, "s",

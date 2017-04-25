@@ -849,6 +849,10 @@ static handler_t mod_extforward_Forwarded (server *srv, connection *con, plugin_
          * - due to need to decode and unescape host=..., some extra work is
          *   done in the case where host matches current Host header.
          *   future: might add code to check if Host has actually changed or not
+         *
+         * note: change host after mod_extforward_set_proto() since that may
+         *       affect scheme port used in http_request_host_policy() host
+         *       normalization
          */
 
         /* find host param set by earliest trusted proxy in proxy chain
@@ -886,7 +890,8 @@ static handler_t mod_extforward_Forwarded (server *srv, connection *con, plugin_
                 buffer_copy_string_len(con->request.http_host, s+v, vlen-v);
             }
 
-            if (0 != http_request_host_policy(con, con->request.http_host)) {
+            if (0 != http_request_host_policy(con, con->request.http_host,
+                                              con->uri.scheme)) {
                 /*(reject invalid chars in Host)*/
                 log_error_write(srv, __FILE__, __LINE__, "s",
                                 "invalid host= value in Forwarded header");

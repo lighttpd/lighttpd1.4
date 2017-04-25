@@ -129,7 +129,7 @@ static int configparser_remoteip_normalize_compat(buffer *rvalue) {
       buffer_append_string_buffer(b, rvalue);
   }
 
-  rc = http_request_host_normalize(b);
+  rc = http_request_host_normalize(b, 0);
 
   if (0 == rc) {
     /* remove surrounding '[]' */
@@ -636,7 +636,7 @@ context ::= DOLLAR SRVVARNAME(B) LBRACKET stringop(C) RBRACKET cond(E) expressio
             int rc;
             buffer_string_set_length(rvalue, (size_t)(slash - rvalue->ptr)); /*(truncate)*/
             rc = (NULL == colon)
-              ? http_request_host_normalize(rvalue)
+              ? http_request_host_normalize(rvalue, 0)
               : configparser_remoteip_normalize_compat(rvalue);
             buffer_append_string_len(rvalue, CONST_STR_LEN("/"));
             buffer_append_int(rvalue, (int)nm_bits);
@@ -648,7 +648,7 @@ context ::= DOLLAR SRVVARNAME(B) LBRACKET stringop(C) RBRACKET cond(E) expressio
         }
         else {
           int rc = (NULL == colon)
-            ? http_request_host_normalize(rvalue)
+            ? http_request_host_normalize(rvalue, 0)
             : configparser_remoteip_normalize_compat(rvalue);
           if (0 != rc) {
             fprintf(stderr, "invalid IP addr: %s\n", rvalue->ptr);
@@ -660,7 +660,7 @@ context ::= DOLLAR SRVVARNAME(B) LBRACKET stringop(C) RBRACKET cond(E) expressio
         /*(redundant with parsing in network.c; not actually required here)*/
         if (rvalue->ptr[0] != ':' /*(network.c special-cases ":" and "[]")*/
             && !(rvalue->ptr[0] == '[' && rvalue->ptr[1] == ']')) {
-          if (http_request_host_normalize(rvalue)) {
+          if (http_request_host_normalize(rvalue, 0)) {
             fprintf(stderr, "invalid IP addr: %s\n", rvalue->ptr);
             ctx->ok = 0;
           }
@@ -668,7 +668,7 @@ context ::= DOLLAR SRVVARNAME(B) LBRACKET stringop(C) RBRACKET cond(E) expressio
       }
       else if (COMP_HTTP_HOST == dc->comp) {
         if (dc->cond == CONFIG_COND_EQ || dc->cond == CONFIG_COND_NE) {
-          if (http_request_host_normalize(rvalue)) {
+          if (http_request_host_normalize(rvalue, 0)) {
             fprintf(stderr, "invalid IP addr: %s\n", rvalue->ptr);
             ctx->ok = 0;
           }
