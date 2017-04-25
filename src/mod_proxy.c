@@ -264,15 +264,12 @@ SETDEFAULTS_FUNC(mod_proxy_set_defaults) {
 					s->forwarded |= param;
 				} else if (!buffer_is_equal_string(ds->value, CONST_STR_LEN("disable"))) {
 					log_error_write(srv, __FILE__, __LINE__, "sb",
-						        "proxy.forwarded values must be one of: 0, 1, enable, disable; error for key:", du->key);
+						        "proxy.forwarded values must be one of: enable, disable; error for key:", du->key);
 					return HANDLER_ERROR;
 				}
-			} else if (du->type == TYPE_INTEGER) {
-				data_integer *di = (data_integer *)du;
-				if (di->value) s->forwarded |= param;
 			} else {
 				log_error_write(srv, __FILE__, __LINE__, "sb",
-					        "proxy.forwarded values must be one of: 0, 1, enable, disable; error for key:", du->key);
+					        "proxy.forwarded values must be one of: enable, disable; error for key:", du->key);
 				return HANDLER_ERROR;
 			}
 		}
