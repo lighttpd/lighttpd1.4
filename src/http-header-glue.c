@@ -1382,6 +1382,8 @@ int http_cgi_headers (server *srv, connection *con, http_cgi_opts *opts, http_cg
     char buf[LI_ITOSTRING_LENGTH];
   #ifdef HAVE_IPV6
     char b2[INET6_ADDRSTRLEN + 1];
+  #else
+    char b2[INET_ADDRSTRLEN + 1];
   #endif
     sock_addr *addr;
     sock_addr addrbuf;
