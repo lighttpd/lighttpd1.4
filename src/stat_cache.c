@@ -107,10 +107,13 @@ typedef struct stat_cache {
 	buffer *hash_key;  /* temp-store for the hash-key */
 } stat_cache;
 
+#ifdef HAVE_FAM_H
 static handler_t stat_cache_handle_fdevent(server *srv, void *_fce, int revent);
+#endif
 
 stat_cache *stat_cache_init(server *srv) {
 	stat_cache *sc = NULL;
+	UNUSED(srv);
 
 	sc = calloc(1, sizeof(*sc));
 	force_assert(NULL != sc);
