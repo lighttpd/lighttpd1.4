@@ -327,6 +327,7 @@ static handler_t scgi_handle_fdevent(server *srv, void *ctx, int revents);
 
 int scgi_proclist_sort_down(server *srv, scgi_extension_host *host, scgi_proc *proc);
 
+#ifdef HAVE_FORK
 static void reset_signals(void) {
 #ifdef SIGTTOU
 	signal(SIGTTOU, SIG_DFL);
@@ -341,6 +342,7 @@ static void reset_signals(void) {
 	signal(SIGPIPE, SIG_DFL);
 	signal(SIGUSR1, SIG_DFL);
 }
+#endif /* HAVE_FORK */
 
 static handler_ctx * handler_ctx_init(void) {
 	handler_ctx * hctx;
@@ -647,6 +649,7 @@ FREE_FUNC(mod_scgi_free) {
 	return HANDLER_GO_ON;
 }
 
+#ifdef HAVE_FORK
 static int env_add(char_array *env, const char *key, size_t key_len, const char *val, size_t val_len) {
 	char *dst;
 	size_t i;
@@ -683,6 +686,7 @@ static int env_add(char_array *env, const char *key, size_t key_len, const char 
 
 	return 0;
 }
+#endif /* HAVE_FORK */
 
 #if !defined(HAVE_FORK)
 static int scgi_spawn_connection(server *srv,
