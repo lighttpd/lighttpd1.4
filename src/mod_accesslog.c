@@ -579,8 +579,6 @@ SETDEFAULTS_FUNC(log_access_open) {
 					f->opt |= FORMAT_FLAG_TIME_USEC;
 					srv->srvconf.high_precision_timestamps = 1;
 				} else if (FORMAT_TIME_USED == f->field) {
-					if (f->opt & ~(FORMAT_FLAG_TIME_SEC)) srv->srvconf.high_precision_timestamps = 1;
-
 					if (buffer_string_is_empty(f->string)
 					      || buffer_is_equal_string(f->string, CONST_STR_LEN("s"))
 					      || buffer_is_equal_string(f->string, CONST_STR_LEN("sec")))  f->opt |= FORMAT_FLAG_TIME_SEC;
@@ -596,6 +594,8 @@ SETDEFAULTS_FUNC(log_access_open) {
 
 						return HANDLER_ERROR;
 					}
+
+					if (f->opt & ~(FORMAT_FLAG_TIME_SEC)) srv->srvconf.high_precision_timestamps = 1;
 				} else if (FORMAT_COOKIE == f->field) {
 					if (buffer_string_is_empty(f->string)) f->type = FIELD_STRING; /*(blank)*/
 				}
