@@ -837,7 +837,9 @@ static int server_main (server * const srv, int argc, char **argv) {
 	int test_config = 0;
 	int i_am_root = 0;
 	int o;
+#ifdef HAVE_FORK
 	int num_childs = 0;
+#endif
 	int fd;
 	size_t i;
 	time_t idle_limit = 0, last_active_ts = time(NULL);
