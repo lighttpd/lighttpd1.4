@@ -57,7 +57,7 @@ int config_insert_values_internal(server *srv, array *ca, const config_values_t 
 
 				for (j = 0; j < da->value->used; j++) {
 					data_unset *ds = da->value->data[j];
-					if (ds->type == TYPE_STRING) {
+					if (ds->type == TYPE_STRING || ds->type == TYPE_INTEGER) {
 						array_insert_unique(cv[i].destination, ds->copy(ds));
 					} else {
 						log_error_write(srv, __FILE__, __LINE__, "sssbsd",
