@@ -1083,11 +1083,19 @@ static int http_response_process_headers(server *srv, connection *con, http_resp
                   (0 == strcasecmp(value, "Keep-Alive")) ? 1 : 0;
                 con->parsed_response |= HTTP_CONNECTION;
             }
+            else if (0 == strncasecmp(key, "Set-Cookie", key_len)) {
+                con->parsed_response |= HTTP_SET_COOKIE;
+            }
             break;
         case 14:
             if (0 == strncasecmp(key, "Content-Length", key_len)) {
                 con->response.content_length = strtoul(value, NULL, 10);
                 con->parsed_response |= HTTP_CONTENT_LENGTH;
+            }
+            break;
+        case 16:
+            if (0 == strncasecmp(key, "Content-Location", key_len)) {
+                con->parsed_response |= HTTP_CONTENT_LOCATION;
             }
             break;
         case 17:

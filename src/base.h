@@ -129,6 +129,8 @@ typedef union {
 #define HTTP_DATE           BV(3)
 #define HTTP_LOCATION       BV(4)
 #define HTTP_TRANSFER_ENCODING BV(5)
+#define HTTP_CONTENT_LOCATION  BV(6)
+#define HTTP_SET_COOKIE        BV(7)
 
 typedef struct {
 	/** HEADER */
