@@ -1282,7 +1282,7 @@ SETDEFAULTS_FUNC(mod_fastcgi_set_defaults) {
 		data_config const* config = (data_config const*)srv->config_context->data[i];
 		plugin_config *s;
 
-		s = malloc(sizeof(plugin_config));
+		s = calloc(1, sizeof(plugin_config));
 		s->exts          = NULL;
 		s->exts_auth     = NULL;
 		s->exts_resp     = NULL;

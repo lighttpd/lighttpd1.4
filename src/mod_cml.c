@@ -90,7 +90,7 @@ SETDEFAULTS_FUNC(mod_cml_set_defaults) {
 		data_config const* config = (data_config const*)srv->config_context->data[i];
 		plugin_config *s;
 
-		s = malloc(sizeof(plugin_config));
+		s = calloc(1, sizeof(plugin_config));
 		s->ext    = buffer_init();
 		s->mc_hosts       = array_init();
 		s->mc_namespace   = buffer_init();

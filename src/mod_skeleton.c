@@ -46,6 +46,7 @@ static handler_ctx * handler_ctx_init() {
 	handler_ctx * hctx;
 
 	hctx = calloc(1, sizeof(*hctx));
+	force_assert(hctx);
 
 	return hctx;
 }
@@ -60,6 +61,7 @@ INIT_FUNC(mod_skeleton_init) {
 	plugin_data *p;
 
 	p = calloc(1, sizeof(*p));
+	force_assert(p);
 
 	p->match_buf = buffer_init();
 
@@ -110,12 +112,12 @@ SETDEFAULTS_FUNC(mod_skeleton_set_defaults) {
 	if (!p) return HANDLER_ERROR;
 
 	p->config_storage = calloc(1, srv->config_context->used * sizeof(plugin_config *));
+	force_assert(p->config_storage);
 
 	for (i = 0; i < srv->config_context->used; i++) {
 		data_config const* config = (data_config const*)srv->config_context->data[i];
-		plugin_config *s;
-
-		s = calloc(1, sizeof(plugin_config));
+		plugin_config *s = calloc(1, sizeof(plugin_config));
+		force_assert(s);
 		s->match    = array_init();
 
 		cv[0].destination = s->match;

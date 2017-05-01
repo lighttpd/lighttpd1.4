@@ -198,7 +198,7 @@ SETDEFAULTS_FUNC(mod_proxy_set_defaults) {
 		data_config const* config = (data_config const*)srv->config_context->data[i];
 		plugin_config *s;
 
-		s = malloc(sizeof(plugin_config));
+		s = calloc(1, sizeof(plugin_config));
 		s->extensions    = array_init();
 		s->debug         = 0;
 		s->replace_http_host = 0;
