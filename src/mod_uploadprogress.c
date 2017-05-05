@@ -76,7 +76,7 @@ static void connection_map_free(connection_map *cm) {
 	free(cm);
 }
 
-static int connection_map_insert(connection_map *cm, connection *con, buffer *con_id) {
+static int connection_map_insert(connection_map *cm, connection *con, const char *con_id, size_t idlen) {
 	connection_map_entry *cme;
 	size_t i;
 
@@ -101,7 +101,7 @@ static int connection_map_insert(connection_map *cm, connection *con, buffer *co
 		cme = malloc(sizeof(*cme));
 		cme->con_id = buffer_init();
 	}
-	buffer_copy_buffer(cme->con_id, con_id);
+	buffer_copy_string_len(cme->con_id, con_id, idlen);
 	cme->con = con;
 
 	cm->ptr[cm->used++] = cme;
@@ -109,13 +109,13 @@ static int connection_map_insert(connection_map *cm, connection *con, buffer *co
 	return 0;
 }
 
-static connection *connection_map_get_connection(connection_map *cm, buffer *con_id) {
+static connection *connection_map_get_connection(connection_map *cm, const char *con_id, size_t idlen) {
 	size_t i;
 
 	for (i = 0; i < cm->used; i++) {
 		connection_map_entry *cme = cm->ptr[i];
 
-		if (buffer_is_equal(cme->con_id, con_id)) {
+		if (buffer_is_equal_string(cme->con_id, con_id, idlen)) {
 			/* found connection */
 
 			return cme->con;
@@ -275,12 +275,12 @@ static int mod_uploadprogress_patch_connection(server *srv, connection *con, plu
 
 URIHANDLER_FUNC(mod_uploadprogress_uri_handler) {
 	plugin_data *p = p_d;
-	size_t i, len;
+	size_t len;
+	char *id;
 	data_string *ds;
 	buffer *b;
 	connection *post_con = NULL;
-
-	UNUSED(srv);
+	int pathinfo = 0;
 
 	if (buffer_string_is_empty(con->uri.path)) return HANDLER_GO_ON;
 	switch(con->request.http_method) {
@@ -298,41 +298,39 @@ URIHANDLER_FUNC(mod_uploadprogress_uri_handler) {
 		}
 	}
 
-		/* the request has to contain a 32byte ID */
-
-		if (NULL == (ds = (data_string *)array_get_element(con->request.headers, "X-Progress-ID"))) {
-			if (!buffer_string_is_empty(con->uri.query)) {
-				/* perhaps the POST request is using the querystring to pass the X-Progress-ID */
-				b = con->uri.query;
-			} else {
-				return HANDLER_GO_ON;
-			}
+	if (NULL != (ds = (data_string *)array_get_element(con->request.headers, "X-Progress-ID"))) {
+		id = ds->value->ptr;
+	} else if (!buffer_string_is_empty(con->uri.query)
+		   && (id = strstr(con->uri.query->ptr, "X-Progress-ID="))) {
+		/* perhaps the POST request is using the query-string to pass the X-Progress-ID */
+		id += sizeof("X-Progress-ID=")-1;
+	} else {
+		/*(path-info is not known at this point in request)*/
+		id = con->uri.path->ptr;
+		len = buffer_string_length(con->uri.path);
+		if (len >= 33 && id[len-33] == '/') {
+			id += len - 32;
+			pathinfo = 1;
 		} else {
-			b = ds->value;
-		}
-
-		len = buffer_string_length(b);
-		if (len != 32) {
-			log_error_write(srv, __FILE__, __LINE__, "sd",
-					"len of progress-id != 32:", len);
 			return HANDLER_GO_ON;
 		}
+	}
 
-		for (i = 0; i < len; i++) {
-			char c = b->ptr[i];
-
-			if (!light_isxdigit(c)) {
-				log_error_write(srv, __FILE__, __LINE__, "sb",
-						"non-xdigit in progress-id:", b);
-				return HANDLER_GO_ON;
-			}
+	/* the request has to contain a 32byte ID */
+	for (len = 0; light_isxdigit(id[len]); ++len) ;
+	if (len != 32) {
+		if (!pathinfo) { /*(reduce false positive noise in error log)*/
+			log_error_write(srv, __FILE__, __LINE__, "ss",
+					"invalid progress-id; non-xdigit or len != 32:", id);
 		}
+		return HANDLER_GO_ON;
+	}
 
 	/* check if this is a POST request */
 	switch(con->request.http_method) {
 	case HTTP_METHOD_POST:
 
-		connection_map_insert(p->con_map, con, b);
+		connection_map_insert(p->con_map, con, id, len);
 
 		return HANDLER_GO_ON;
 	case HTTP_METHOD_GET:
@@ -345,9 +343,9 @@ URIHANDLER_FUNC(mod_uploadprogress_uri_handler) {
 		con->mode = DIRECT;
 
 		/* get the connection */
-		if (NULL == (post_con = connection_map_get_connection(p->con_map, b))) {
-			log_error_write(srv, __FILE__, __LINE__, "sb",
-					"ID no known:", b);
+		if (NULL == (post_con = connection_map_get_connection(p->con_map, id, len))) {
+			log_error_write(srv, __FILE__, __LINE__, "ss",
+					"ID not known:", id);
 
 			chunkqueue_append_mem(con->write_queue, CONST_STR_LEN("not in progress"));
 
