@@ -35,6 +35,8 @@ typedef struct http_response_opts_t {
   unsigned short local_redir;
   unsigned short xsendfile_allow;
   array *xsendfile_docroot;
+  handler_t(*parse)(server *, connection *, struct http_response_opts_t *, buffer *, size_t);
+  void *pdata;
 } http_response_opts;
 
 typedef int (*http_cgi_header_append_cb)(void *vdata, const char *k, size_t klen, const char *v, size_t vlen);

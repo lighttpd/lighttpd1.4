@@ -1312,6 +1312,11 @@ handler_t http_response_read(server *srv, connection *con, http_response_opts *o
                 }
                 if (cqlen >= 65536-1) return HANDLER_GO_ON;
                 toread = 65536 - 1 - (unsigned int)cqlen;
+                /* Note: heuristic is fuzzy in that it limits how much to read
+                 * from backend based on how much is pending to write to client.
+                 * Modules where data from backend is framed (e.g. FastCGI) may
+                 * want to limit how much is buffered from backend while waiting
+                 * for a complete data frame or data packet from backend. */
             }
         }
 
@@ -1323,10 +1328,7 @@ handler_t http_response_read(server *srv, connection *con, http_response_opts *o
 
         n = read(fd, b->ptr+buffer_string_length(b), avail);
 
-        if (0 == n) {
-            return HANDLER_FINISHED; /* read finished */
-        }
-        else if (n < 0) {
+        if (n < 0) {
             switch (errno) {
               case EAGAIN:
              #ifdef EWOULDBLOCK
@@ -1345,7 +1347,16 @@ handler_t http_response_read(server *srv, connection *con, http_response_opts *o
 
         buffer_commit(b, (size_t)n);
 
-        if (con->file_started == 0) {
+        if (NULL != opts->parse) {
+            handler_t rc = opts->parse(srv, con, opts, b, (size_t)n);
+            if (rc != HANDLER_GO_ON) return rc;
+        } else if (0 == n) {
+            /* note: no further data is sent to backend after read EOF on socket
+             * (not checking for half-closed TCP socket)
+             * (backend should read all data desired prior to closing socket,
+             *  though might send app-level close data frame, if applicable) */
+            return HANDLER_FINISHED; /* read finished */
+        } else if (0 == con->file_started) {
             /* split header from body */
             handler_t rc = http_response_parse_headers(srv, con, opts, b);
             if (rc != HANDLER_GO_ON) return rc;

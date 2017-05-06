@@ -2138,74 +2138,21 @@ static int fastcgi_get_packet(server *srv, handler_ctx *hctx, fastcgi_response_p
 	return 0;
 }
 
-static int fcgi_demux_response(server *srv, handler_ctx *hctx) {
+static handler_t fcgi_recv_parse(server *srv, connection *con, struct http_response_opts_t *opts, buffer *b, size_t n) {
+	handler_ctx *hctx = (handler_ctx *)opts->pdata;
 	int fin = 0;
-	int toread;
-	ssize_t r = 0;
 
-	connection *con   = hctx->remote_conn;
-	int fcgi_fd       = hctx->fd;
-	fcgi_proc *proc   = hctx->proc;
-
-	/*
-	 * check how much we have to read
-	 */
-      #ifndef __CYGWIN__ /*(cygwin does not support FIONREAD on sockets)*/
-	if (0 != fdevent_ioctl_fionread(hctx->fd, S_IFSOCK, &toread)) {
-		if (errno == EAGAIN) {
-			return 0;
-		}
-		log_error_write(srv, __FILE__, __LINE__, "sd",
-				"unexpected end-of-file (perhaps the fastcgi process died):",
-				fcgi_fd);
-		return -1;
-	} else if (0 == toread) {
-		if (!(fdevent_event_get_interest(srv->ev, hctx->fd) & FDEVENT_IN))
-			return HANDLER_GO_ON; /* optimistic read; data not ready */
-		toread = 4096; /* let read() below indicate if EOF or EAGAIN */
-	}
-      #else
-	toread = 4096;
-      #endif
-
-	if (toread > 0) {
-		char *mem;
-		size_t mem_len;
-
-		if ((con->conf.stream_response_body & FDEVENT_STREAM_RESPONSE_BUFMIN)) {
-			off_t cqlen = chunkqueue_length(hctx->rb);
-			if (cqlen + toread > 65536 + (int)sizeof(FCGI_Header)) { /*(max size of FastCGI packet + 1)*/
-				if (cqlen < 65536 + (int)sizeof(FCGI_Header)) {
-					toread = 65536 + (int)sizeof(FCGI_Header) - cqlen;
-				} else { /* should not happen */
-					toread = toread < 1024 ? toread : 1024;
-				}
-			}
-		}
-
-		chunkqueue_get_memory(hctx->rb, &mem, &mem_len, 0, toread);
-		r = read(hctx->fd, mem, mem_len);
-		chunkqueue_use_memory(hctx->rb, r > 0 ? r : 0);
-
-		if (-1 == r) {
-			if (errno == EAGAIN) {
-				return 0;
-			}
-			log_error_write(srv, __FILE__, __LINE__, "sds",
-					"unexpected end-of-file (perhaps the fastcgi process died):",
-					fcgi_fd, strerror(errno));
-			return -1;
-		}
-	}
-	if (0 == r) {
+	if (0 == n) {
 		if (!(fdevent_event_get_interest(srv->ev, hctx->fd) & FDEVENT_IN)) return 0;
 		log_error_write(srv, __FILE__, __LINE__, "ssdsb",
 				"unexpected end-of-file (perhaps the fastcgi process died):",
-				"pid:", proc->pid,
-				"socket:", proc->connection_name);
+				"pid:", hctx->proc->pid,
+				"socket:", hctx->proc->connection_name);
 
-		return -1;
+		return HANDLER_ERROR;
 	}
+
+	chunkqueue_append_buffer(hctx->rb, b);
 
 	/*
 	 * parse the fastcgi packets and forward the content to the write-queue
@@ -2254,17 +2201,6 @@ static int fcgi_demux_response(server *srv, handler_ctx *hctx) {
 					fin = 1;
 					break;
 				}
-				if ((con->conf.stream_response_body & FDEVENT_STREAM_RESPONSE_BUFMIN)
-				    && chunkqueue_length(con->write_queue) > 65536 - 4096) {
-					if (!con->is_writable) {
-						/*(defer removal of FDEVENT_IN interest since
-						 * connection_state_machine() might be able to send data
-						 * immediately, unless !con->is_writable, where
-						 * connection_state_machine() might not loop back to call
-						 * mod_fastcgi_handle_subrequest())*/
-						fdevent_event_clr(srv->ev, &(hctx->fde_ndx), hctx->fd, FDEVENT_IN);
-					}
-				}
 			}
 			break;
 		case FCGI_STDERR:
@@ -2285,7 +2221,7 @@ static int fcgi_demux_response(server *srv, handler_ctx *hctx) {
 		buffer_free(packet.b);
 	}
 
-	return fin;
+	return 0 == fin ? HANDLER_GO_ON : HANDLER_FINISHED;
 }
 
 static int fcgi_restart_dead_procs(server *srv, plugin_data *p, fcgi_extension_host *host) {
@@ -2720,12 +2656,14 @@ static handler_t fcgi_recv_response(server *srv, handler_ctx *hctx) {
 
 	fcgi_proc *proc   = hctx->proc;
 	fcgi_extension_host *host= hctx->host;
+	buffer *b = buffer_init();
 
-		switch (fcgi_demux_response(srv, hctx)) {
-		case 0:
+		switch (http_response_read(srv, hctx->remote_conn, &hctx->opts,
+					   b, hctx->fd, &hctx->fde_ndx)) {
+		default:
 			break;
-		case 1:
-
+		case HANDLER_FINISHED:
+			buffer_free(b);
 			if (hctx->fcgi_mode == FCGI_AUTHORIZER &&
 		   	    (con->http_status == 200 ||
 			     con->http_status == 0)) {
@@ -2773,7 +2711,9 @@ static handler_t fcgi_recv_response(server *srv, handler_ctx *hctx) {
 			}
 
 			return HANDLER_FINISHED;
-		case -1:
+		case HANDLER_COMEBACK: /*(not expected; treat as error)*/
+		case HANDLER_ERROR:
+			buffer_free(b);
 			if (proc->is_local && 1 == proc->load && proc->pid == hctx->pid && proc->state != PROC_STATE_DIED) {
 				if (0 != fcgi_proc_waitpid(srv, host, proc)) {
 					if (hctx->conf.debug) {
@@ -2820,6 +2760,7 @@ static handler_t fcgi_recv_response(server *srv, handler_ctx *hctx) {
 			return HANDLER_FINISHED;
 		}
 
+		buffer_free(b);
 		return HANDLER_GO_ON;
 }
 
@@ -3130,6 +3071,8 @@ static handler_t fcgi_check_extension(server *srv, connection *con, void *p_d, i
 	hctx->opts.local_redir = 0;
 	hctx->opts.xsendfile_allow = host->xsendfile_allow;
 	hctx->opts.xsendfile_docroot = host->xsendfile_docroot;
+	hctx->opts.parse = fcgi_recv_parse;
+	hctx->opts.pdata = hctx;
 
 	con->plugin_ctx[p->id] = hctx;
 
