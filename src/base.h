@@ -131,6 +131,7 @@ typedef union {
 #define HTTP_TRANSFER_ENCODING BV(5)
 #define HTTP_CONTENT_LOCATION  BV(6)
 #define HTTP_SET_COOKIE        BV(7)
+#define HTTP_UPGRADE           BV(8)
 
 typedef struct {
 	/** HEADER */

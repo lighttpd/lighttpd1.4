@@ -906,6 +906,21 @@ void http_response_backend_done (server *srv, connection *con) {
 }
 
 
+void http_response_upgrade_read_body_unknown(server *srv, connection *con) {
+    /* act as transparent proxy */
+    UNUSED(srv);
+    if (!(con->conf.stream_request_body & FDEVENT_STREAM_REQUEST))
+        con->conf.stream_request_body |=
+          (FDEVENT_STREAM_REQUEST_BUFMIN | FDEVENT_STREAM_REQUEST);
+    if (!(con->conf.stream_response_body & FDEVENT_STREAM_RESPONSE))
+        con->conf.stream_response_body |=
+          (FDEVENT_STREAM_RESPONSE_BUFMIN | FDEVENT_STREAM_RESPONSE);
+    con->conf.stream_request_body |= FDEVENT_STREAM_REQUEST_POLLIN;
+    con->request.content_length = -2;
+    con->keep_alive = 0;
+}
+
+
 static handler_t http_response_process_local_redir(server *srv, connection *con, size_t blen) {
     /* [RFC3875] The Common Gateway Interface (CGI) Version 1.1
      * [RFC3875] 6.2.2 Local Redirect Response
@@ -1069,6 +1084,13 @@ static int http_response_process_headers(server *srv, connection *con, http_resp
                     con->mode = DIRECT;
                 }
                 continue; /* do not send Status to client */
+            }
+            break;
+        case 7:
+            if (0 == strncasecmp(key, "Upgrade", key_len)) {
+                /*(technically, should also verify Connection: upgrade)*/
+                /*(flag only for mod_proxy (for now))*/
+                if (opts->backend == BACKEND_PROXY) con->parsed_response |= HTTP_UPGRADE;
             }
             break;
         case 8:

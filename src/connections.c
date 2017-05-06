@@ -420,9 +420,10 @@ static int connection_handle_write_prepare(server *srv, connection *con) {
 		 * to get keep-alive we either need:
 		 * - Content-Length: ... (HTTP/1.0 and HTTP/1.0) or
 		 * - Transfer-Encoding: chunked (HTTP/1.1)
+		 * - Upgrade: ... (lighttpd then acts as transparent proxy)
 		 */
 
-		if (!(con->parsed_response & (HTTP_CONTENT_LENGTH|HTTP_TRANSFER_ENCODING))) {
+		if (!(con->parsed_response & (HTTP_CONTENT_LENGTH|HTTP_TRANSFER_ENCODING|HTTP_UPGRADE))) {
 			if (con->request.http_version == HTTP_VERSION_1_1) {
 				off_t qlen = chunkqueue_length(con->write_queue);
 				con->response.transfer_encoding = HTTP_TRANSFER_ENCODING_CHUNKED;

@@ -264,6 +264,19 @@ static handler_t connection_handle_read_post_chunked(server *srv, connection *co
     return HANDLER_GO_ON;
 }
 
+static handler_t connection_handle_read_body_unknown(server *srv, connection *con, chunkqueue *cq, chunkqueue *dst_cq) {
+    /* con->conf.max_request_size is in kBytes */
+    const off_t max_request_size = (off_t)con->conf.max_request_size << 10;
+    chunkqueue_append_chunkqueue(dst_cq, cq);
+    if (0 != max_request_size && dst_cq->bytes_in > max_request_size) {
+        log_error_write(srv, __FILE__, __LINE__, "sos",
+                        "request-size too long:", dst_cq->bytes_in, "-> 413");
+        /* 413 Payload Too Large */
+        return connection_handle_read_post_error(srv, con, 413);
+    }
+    return HANDLER_GO_ON;
+}
+
 static off_t connection_write_throttle(server *srv, connection *con, off_t max_bytes) {
 	UNUSED(srv);
 	if (con->conf.global_kbytes_per_second) {
@@ -423,8 +436,11 @@ handler_t connection_handle_read_post_state(server *srv, connection *con) {
 		}
 	}
 
-	if (-1 == con->request.content_length) { /*(Transfer-Encoding: chunked)*/
-		handler_t rc = connection_handle_read_post_chunked(srv, con, cq, dst_cq);
+	if (con->request.content_length < 0) {
+		/*(-1: Transfer-Encoding: chunked, -2: unspecified length)*/
+		handler_t rc = (-1 == con->request.content_length)
+                  ? connection_handle_read_post_chunked(srv, con, cq, dst_cq)
+                  : connection_handle_read_body_unknown(srv, con, cq, dst_cq);
 		if (HANDLER_GO_ON != rc) return rc;
 	}
 	else if (con->request.content_length <= 64*1024) {

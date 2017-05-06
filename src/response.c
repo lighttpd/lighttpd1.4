@@ -1,6 +1,7 @@
 #include "first.h"
 
 #include "response.h"
+#include "fdevent.h"
 #include "keyvalue.h"
 #include "log.h"
 #include "stat_cache.h"
@@ -46,12 +47,12 @@ int http_response_write_header(server *srv, connection *con) {
 		con->keep_alive_idle = con->conf.max_keep_alive_idle;
 	}
 
-	if (con->request.http_version != HTTP_VERSION_1_1 || con->keep_alive == 0) {
-		if (con->keep_alive) {
-			response_header_overwrite(srv, con, CONST_STR_LEN("Connection"), CONST_STR_LEN("keep-alive"));
-		} else {
-			response_header_overwrite(srv, con, CONST_STR_LEN("Connection"), CONST_STR_LEN("close"));
-		}
+	if ((con->parsed_response & HTTP_UPGRADE) && con->request.http_version == HTTP_VERSION_1_1) {
+		response_header_overwrite(srv, con, CONST_STR_LEN("Connection"), CONST_STR_LEN("upgrade"));
+	} else if (0 == con->keep_alive) {
+		response_header_overwrite(srv, con, CONST_STR_LEN("Connection"), CONST_STR_LEN("close"));
+	} else if (con->request.http_version == HTTP_VERSION_1_0) {/*(&& con->keep_alive != 0)*/
+		response_header_overwrite(srv, con, CONST_STR_LEN("Connection"), CONST_STR_LEN("keep-alive"));
 	}
 
 	/* add all headers */
