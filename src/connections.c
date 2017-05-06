@@ -111,6 +111,8 @@ static int connection_del(server *srv, connection *con) {
 }
 
 static int connection_close(server *srv, connection *con) {
+	if (con->fd < 0) con->fd = -con->fd;
+
 	plugins_call_handle_connection_close(srv, con);
 
 	fdevent_event_del(srv->ev, &(con->fde_ndx), con->fd);
@@ -189,7 +191,7 @@ static void connection_handle_shutdown(server *srv, connection *con) {
 	connection_reset(srv, con);
 
 	/* close the connection */
-	if ((0 == shutdown(con->fd, SHUT_WR))) {
+	if (con->fd >= 0 && 0 == shutdown(con->fd, SHUT_WR)) {
 		con->close_timeout_ts = srv->cur_ts;
 		connection_set_state(srv, con, CON_STATE_CLOSE);
 
@@ -1366,7 +1368,7 @@ int connection_state_machine(server *srv, connection *con) {
 	default:
 		break;
 	}
-	if (-1 != con->fd) {
+	if (con->fd >= 0) {
 		const int events = fdevent_event_get_interest(srv->ev, con->fd);
 		if (con->is_readable < 0) {
 			con->is_readable = 0;
