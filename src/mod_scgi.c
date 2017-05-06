@@ -1950,7 +1950,7 @@ static handler_t scgi_write_request(server *srv, handler_ctx *hctx) {
 				if (!hctx->proc->is_local || hctx->conf.debug) {
 					/* local procs get restarted */
 
-					log_error_write(srv, __FILE__, __LINE__, "ss",
+					log_error_write(srv, __FILE__, __LINE__, "sssd",
 							"establishing connection failed:", strerror(socket_error),
 							"port:", hctx->proc->port);
 				}

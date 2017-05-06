@@ -1386,7 +1386,7 @@ static handler_t proxy_write_request(server *srv, handler_ctx *hctx) {
 				return HANDLER_ERROR;
 			}
 			if (socket_error != 0) {
-				log_error_write(srv, __FILE__, __LINE__, "ss",
+				log_error_write(srv, __FILE__, __LINE__, "sssd",
 						"establishing connection failed:", strerror(socket_error),
 						"port:", hctx->host->port);
 
