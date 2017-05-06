@@ -1885,7 +1885,6 @@ static handler_t scgi_write_request(server *srv, handler_ctx *hctx) {
 					"socket failed:", strerror(errno), srv->cur_fds, srv->max_fds);
 			return HANDLER_ERROR;
 		}
-		hctx->fde_ndx = -1;
 
 		srv->cur_fds++;
 
@@ -1906,8 +1905,6 @@ static handler_t scgi_write_request(server *srv, handler_ctx *hctx) {
 
 			/* all childs are dead */
 			if (hctx->proc == NULL) {
-				hctx->fde_ndx = -1;
-
 				return HANDLER_ERROR;
 			}
 
@@ -1926,8 +1923,6 @@ static handler_t scgi_write_request(server *srv, handler_ctx *hctx) {
 				return HANDLER_WAIT_FOR_EVENT;
 			case -1:
 				/* if ECONNREFUSED; choose another connection */
-				hctx->fde_ndx = -1;
-
 				return HANDLER_ERROR;
 			default:
 				/* everything is ok, go on */

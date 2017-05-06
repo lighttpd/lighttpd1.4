@@ -2355,8 +2355,6 @@ static handler_t fcgi_write_request(server *srv, handler_ctx *hctx) {
 
 		/* all children are dead */
 		if (proc == NULL) {
-			hctx->fde_ndx = -1;
-
 			return HANDLER_ERROR;
 		}
 
@@ -2381,7 +2379,6 @@ static handler_t fcgi_write_request(server *srv, handler_ctx *hctx) {
 					"socket failed:", strerror(errno), srv->cur_fds, srv->max_fds);
 			return HANDLER_ERROR;
 		}
-		hctx->fde_ndx = -1;
 
 		srv->cur_fds++;
 
