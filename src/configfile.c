@@ -393,9 +393,7 @@ static int config_insert(server *srv) {
 		log_error_write(srv, __FILE__, __LINE__, "s",
 				"unexpected value for server.modules; expected list of \"mod_xxxxxx\" strings");
 		ret = HANDLER_ERROR;
-	}
-
-	{
+	} else {
 		data_string *ds;
 		int prepend_mod_indexfile = 1;
 		int append_mod_dirlisting = 1;
