@@ -45,6 +45,7 @@ typedef struct http_header_remap_opts {
     const array *hosts_request;
     const array *hosts_response;
     int https_remap;
+    int upgrade;
     /*(not used in plugin_config, but used in handler_ctx)*/
     const buffer *http_host;
     const buffer *forwarded_host;
@@ -312,6 +313,17 @@ SETDEFAULTS_FUNC(mod_proxy_set_defaults) {
 				}
 				s->header.https_remap = !buffer_is_equal_string(ds->value, CONST_STR_LEN("disable"))
 						     && !buffer_is_equal_string(ds->value, CONST_STR_LEN("0"));
+				continue;
+			}
+			else if (buffer_is_equal_string(da->key, CONST_STR_LEN("upgrade"))) {
+				data_string *ds = (data_string *)da;
+				if (ds->type != TYPE_STRING) {
+					log_error_write(srv, __FILE__, __LINE__, "s",
+							"unexpected value for proxy.header; expected \"upgrade\" => \"enable\" or \"disable\"");
+					return HANDLER_ERROR;
+				}
+				s->header.upgrade = !buffer_is_equal_string(ds->value, CONST_STR_LEN("disable"))
+						 && !buffer_is_equal_string(ds->value, CONST_STR_LEN("0"));
 				continue;
 			}
 			if (da->type != TYPE_ARRAY || !array_is_kvstring(da->value)) {
@@ -1173,6 +1185,8 @@ static int proxy_create_env(server *srv, handler_ctx *hctx) {
 	buffer *b = buffer_init();
 	const int remap_headers = (NULL != hctx->remap_hdrs.urlpaths
 				   || NULL != hctx->remap_hdrs.hosts_request);
+	const int upgrade = hctx->remap_hdrs.upgrade
+			    && (NULL != array_get_element(con->request.headers, "Upgrade"));
 	buffer_string_prepare_copy(b, 8192-1);
 
 	/* build header */
@@ -1183,7 +1197,10 @@ static int proxy_create_env(server *srv, handler_ctx *hctx) {
 	buffer_append_string_buffer(b, con->request.uri);
 	if (remap_headers)
 		http_header_remap_uri(b, buffer_string_length(b) - buffer_string_length(con->request.uri), &hctx->remap_hdrs, 1);
-	buffer_append_string_len(b, CONST_STR_LEN(" HTTP/1.0\r\n"));
+	if (!upgrade)
+		buffer_append_string_len(b, CONST_STR_LEN(" HTTP/1.0\r\n"));
+	else
+		buffer_append_string_len(b, CONST_STR_LEN(" HTTP/1.1\r\n"));
 
 	if (hctx->conf.replace_http_host && !buffer_string_is_empty(hctx->host->key)) {
 		if (hctx->conf.debug > 1) {
@@ -1287,7 +1304,10 @@ static int proxy_create_env(server *srv, handler_ctx *hctx) {
 		http_header_remap_uri(b, buffer_string_length(b) - vlen - 2, &hctx->remap_hdrs, 1);
 	}
 
-	buffer_append_string_len(b, CONST_STR_LEN("Connection: close\r\n\r\n"));
+	if (!upgrade)
+		buffer_append_string_len(b, CONST_STR_LEN("Connection: close\r\n\r\n"));
+	else
+		buffer_append_string_len(b, CONST_STR_LEN("Connection: close, upgrade\r\n\r\n"));
 
 	hctx->wb_reqlen = buffer_string_length(b);
 	chunkqueue_append_buffer(hctx->wb, b);
@@ -1597,6 +1617,25 @@ static handler_t proxy_response_read(server *srv, handler_ctx *hctx) {
 
     /* response headers just completed */
 
+    if (con->parsed_response & HTTP_UPGRADE) {
+        if (hctx->remap_hdrs.upgrade && con->http_status == 101) {
+            /* 101 Switching Protocols; transition to transparent proxy */
+            hctx->wb_reqlen = -1;
+            proxy_set_state(srv, hctx, PROXY_STATE_WRITE);
+            http_response_upgrade_read_body_unknown(srv, con);
+        }
+        else {
+            con->parsed_response &= ~HTTP_UPGRADE;
+          #if 0
+            /* preserve prior questionable behavior; likely broken behavior
+             * anyway if backend thinks connection is being upgraded but client
+             * does not receive Connection: upgrade */
+            response_header_overwrite(srv, con, CONST_STR_LEN("Upgrade"),
+                                                CONST_STR_LEN(""));
+          #endif
+        }
+    }
+
     /* rewrite paths, if needed */
 
     if (NULL == hctx->remap_hdrs.urlpaths
@@ -1766,6 +1805,7 @@ static handler_t mod_proxy_check_extension(server *srv, connection *con, void *p
 
 		hctx->remap_hdrs           = p->conf.header; /*(copies struct)*/
 		hctx->remap_hdrs.http_host = con->request.http_host;
+		hctx->remap_hdrs.upgrade  &= (con->request.http_version == HTTP_VERSION_1_1);
 		/* mod_proxy currently sends all backend requests as http.
 		 * https-remap is a flag since it might not be needed if backend
 		 * honors Forwarded or X-Forwarded-Proto headers, e.g. by using
