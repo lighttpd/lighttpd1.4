@@ -691,6 +691,9 @@ static int cgi_write_request(server *srv, handler_ctx *hctx, int fd) {
 
 	if (cq->bytes_out == (off_t)con->request.content_length) {
 		/* sent all request body input */
+		/* (future: must defer close()
+		 *  if might later upgrade protocols
+		 *  and then have more data to send) */
 		/* close connection to the cgi-script */
 		if (-1 == hctx->fdtocgi) { /*(received request body sent in initial send to pipe buffer)*/
 			--srv->cur_fds;

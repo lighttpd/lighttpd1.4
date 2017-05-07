@@ -1980,7 +1980,13 @@ static void fcgi_stdin_append(server *srv, connection *con, handler_ctx *hctx, i
 
 		fcgi_header(&(header), FCGI_STDIN, request_id, weWant, 0);
 		chunkqueue_append_mem(hctx->wb, (const char *)&header, sizeof(header));
-		hctx->wb_reqlen += sizeof(header);
+		if (-1 != hctx->wb_reqlen) {
+			if (hctx->wb_reqlen >= 0) {
+				hctx->wb_reqlen += sizeof(header);
+			} else {
+				hctx->wb_reqlen -= sizeof(header);
+			}
+		}
 
 		if (hctx->conf.debug > 10) {
 			log_error_write(srv, __FILE__, __LINE__, "soso", "tosend:", offset, "/", req_cqlen);
@@ -1992,6 +1998,9 @@ static void fcgi_stdin_append(server *srv, connection *con, handler_ctx *hctx, i
 
 	if (hctx->wb->bytes_in == hctx->wb_reqlen) {
 		/* terminate STDIN */
+		/* (future: must defer ending FCGI_STDIN
+		 *  if might later upgrade protocols
+		 *  and then have more data to send) */
 		fcgi_header(&(header), FCGI_STDIN, request_id, 0, 0);
 		chunkqueue_append_mem(hctx->wb, (const char *)&header, sizeof(header));
 		hctx->wb_reqlen += (int)sizeof(header);
@@ -2045,7 +2054,13 @@ static int fcgi_create_env(server *srv, handler_ctx *hctx, int request_id) {
 		buffer_free(b);
 	}
 
-	hctx->wb_reqlen += con->request.content_length;/* (eventual) (minimal) total request size, not necessarily including all fcgi_headers around content length yet */
+	if (con->request.content_length) {
+		/*chunkqueue_append_chunkqueue(hctx->wb, con->request_content_queue);*/
+		if (con->request.content_length > 0)
+			hctx->wb_reqlen += con->request.content_length;/* (eventual) (minimal) total request size, not necessarily including all fcgi_headers around content length yet */
+		else /* as-yet-unknown total request size (Transfer-Encoding: chunked)*/
+			hctx->wb_reqlen = -hctx->wb_reqlen;
+	}
 	fcgi_stdin_append(srv, con, hctx, request_id);
 
 	return 0;
@@ -2519,7 +2534,7 @@ static handler_t fcgi_write_request(server *srv, handler_ctx *hctx) {
 			fcgi_set_state(srv, hctx, FCGI_STATE_READ);
 		} else {
 			off_t wblen = hctx->wb->bytes_in - hctx->wb->bytes_out;
-			if (hctx->wb->bytes_in < hctx->wb_reqlen && wblen < 65536 - 16384) {
+			if ((hctx->wb->bytes_in < hctx->wb_reqlen || hctx->wb_reqlen < 0) && wblen < 65536 - 16384) {
 				/*(con->conf.stream_request_body & FDEVENT_STREAM_REQUEST)*/
 				if (!(con->conf.stream_request_body & FDEVENT_STREAM_REQUEST_POLLIN)) {
 					con->conf.stream_request_body |= FDEVENT_STREAM_REQUEST_POLLIN;
@@ -2612,7 +2627,7 @@ SUBREQUEST_FUNC(mod_fastcgi_handle_subrequest) {
 	if (hctx->fcgi_mode != FCGI_AUTHORIZER
 	    && (0 == hctx->wb->bytes_in
 	        ? con->state == CON_STATE_READ_POST
-	        : hctx->wb->bytes_in < hctx->wb_reqlen)) {
+	        : (hctx->wb->bytes_in < hctx->wb_reqlen || hctx->wb_reqlen < 0))) {
 		/*(64k - 4k to attempt to avoid temporary files
 		 * in conjunction with FDEVENT_STREAM_REQUEST_BUFMIN)*/
 		if (hctx->wb->bytes_in - hctx->wb->bytes_out > 65536 - 4096
@@ -2622,6 +2637,13 @@ SUBREQUEST_FUNC(mod_fastcgi_handle_subrequest) {
 		} else {
 			handler_t r = connection_handle_read_post_state(srv, con);
 			chunkqueue *req_cq = con->request_content_queue;
+		      #if 0 /*(not reached since we send 411 Length Required below)*/
+			if (hctx->wb_reqlen < -1 && con->request.content_length >= 0) {
+				/* (completed receiving Transfer-Encoding: chunked) */
+				hctx->wb_reqlen = -hctx->wb_reqlen + con->request.content_length;
+				fcgi_stdin_append(srv, con, hctx, hctx->request_id);
+			}
+		      #endif
 			if (0 != hctx->wb->bytes_in && !chunkqueue_is_empty(req_cq)) {
 				fcgi_stdin_append(srv, con, hctx, hctx->request_id);
 				if (fdevent_event_get_interest(srv->ev, hctx->fd) & FDEVENT_OUT) {

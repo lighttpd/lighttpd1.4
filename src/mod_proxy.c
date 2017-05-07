@@ -1293,11 +1293,12 @@ static int proxy_create_env(server *srv, handler_ctx *hctx) {
 	chunkqueue_append_buffer(hctx->wb, b);
 	buffer_free(b);
 
-	/* body */
-
 	if (con->request.content_length) {
 		chunkqueue_append_chunkqueue(hctx->wb, con->request_content_queue);
-		hctx->wb_reqlen += con->request.content_length;/* (eventual) total request size */
+		if (con->request.content_length > 0)
+			hctx->wb_reqlen += con->request.content_length; /* total req size */
+		else /* as-yet-unknown total request size (Transfer-Encoding: chunked)*/
+			hctx->wb_reqlen = -hctx->wb_reqlen;
 	}
 
 	return 0;
@@ -1425,7 +1426,7 @@ static handler_t proxy_write_request(server *srv, handler_ctx *hctx) {
 			proxy_set_state(srv, hctx, PROXY_STATE_READ);
 		} else {
 			off_t wblen = hctx->wb->bytes_in - hctx->wb->bytes_out;
-			if (hctx->wb->bytes_in < hctx->wb_reqlen && wblen < 65536 - 16384) {
+			if ((hctx->wb->bytes_in < hctx->wb_reqlen || hctx->wb_reqlen < 0) && wblen < 65536 - 16384) {
 				/*(con->conf.stream_request_body & FDEVENT_STREAM_REQUEST)*/
 				if (!(con->conf.stream_request_body & FDEVENT_STREAM_REQUEST_POLLIN)) {
 					con->conf.stream_request_body |= FDEVENT_STREAM_REQUEST_POLLIN;
@@ -1543,7 +1544,7 @@ SUBREQUEST_FUNC(mod_proxy_handle_subrequest) {
 
 	if (0 == hctx->wb->bytes_in
 	    ? con->state == CON_STATE_READ_POST
-	    : hctx->wb->bytes_in < hctx->wb_reqlen) {
+	    : (hctx->wb->bytes_in < hctx->wb_reqlen || hctx->wb_reqlen < 0)) {
 		/*(64k - 4k to attempt to avoid temporary files
 		 * in conjunction with FDEVENT_STREAM_REQUEST_BUFMIN)*/
 		if (hctx->wb->bytes_in - hctx->wb->bytes_out > 65536 - 4096
@@ -1553,6 +1554,12 @@ SUBREQUEST_FUNC(mod_proxy_handle_subrequest) {
 		} else {
 			handler_t r = connection_handle_read_post_state(srv, con);
 			chunkqueue *req_cq = con->request_content_queue;
+		      #if 0 /*(not reached since we send 411 Length Required below)*/
+			if (hctx->wb_reqlen < -1 && con->request.content_length >= 0) {
+				/* (completed receiving Transfer-Encoding: chunked) */
+				hctx->wb_reqlen = -hctx->wb_reqlen + con->request.content_length;
+			}
+		      #endif
 			if (0 != hctx->wb->bytes_in && !chunkqueue_is_empty(req_cq)) {
 				chunkqueue_append_chunkqueue(hctx->wb, req_cq);
 				if (fdevent_event_get_interest(srv->ev, hctx->fd) & FDEVENT_OUT) {
