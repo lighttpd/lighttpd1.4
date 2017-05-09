@@ -219,7 +219,7 @@ verify_callback(int preverify_ok, X509_STORE_CTX *ctx)
     }
 
     if (preverify_ok) {
-	return preverify_ok;
+        return preverify_ok;
     }
 
     err_cert = X509_STORE_CTX_get_current_cert(ctx);
@@ -235,8 +235,7 @@ verify_callback(int preverify_ok, X509_STORE_CTX *ctx)
      */
     if (!preverify_ok && (err == X509_V_ERR_UNABLE_TO_GET_ISSUER_CERT_LOCALLY ||
                           err == X509_V_ERR_UNABLE_TO_GET_ISSUER_CERT)) {
-        X509_NAME_oneline(X509_get_issuer_name(ctx->current_cert), buf,
-                          sizeof(buf));
+        X509_NAME_oneline(X509_get_issuer_name(err_cert), buf, sizeof(buf));
         log_error_write(srv, __FILE__, __LINE__, "SS", "SSL: issuer=", buf);
     }
 
