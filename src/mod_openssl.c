@@ -82,6 +82,7 @@ typedef struct {
     unsigned int renegotiations; /* count of SSL_CB_HANDSHAKE_START */
     int request_env_patched;
     plugin_config conf;
+    server *srv;
 } handler_ctx;
 
 
@@ -180,6 +181,67 @@ ssl_info_callback (const SSL *ssl, int where, int ret)
     }
 }
 
+/* https://wiki.openssl.org/index.php/Manual:SSL_CTX_set_verify(3)#EXAMPLES */
+static int
+verify_callback(int preverify_ok, X509_STORE_CTX *ctx)
+{
+    char buf[256];
+    X509 *err_cert;
+    int err, depth;
+    SSL *ssl;
+    handler_ctx *hctx;
+    server *srv;
+
+    err = X509_STORE_CTX_get_error(ctx);
+    depth = X509_STORE_CTX_get_error_depth(ctx);
+
+    /*
+     * Retrieve the pointer to the SSL of the connection currently treated
+     * and the application specific data stored into the SSL object.
+     */
+    ssl = X509_STORE_CTX_get_ex_data(ctx, SSL_get_ex_data_X509_STORE_CTX_idx());
+    hctx = (handler_ctx *) SSL_get_app_data(ssl);
+    srv = hctx->srv;
+
+    /*
+     * Catch a too long certificate chain. The depth limit set using
+     * SSL_CTX_set_verify_depth() is by purpose set to "limit+1" so
+     * that whenever the "depth>verify_depth" condition is met, we
+     * have violated the limit and want to log this error condition.
+     * We must do it here, because the CHAIN_TOO_LONG error would not
+     * be found explicitly; only errors introduced by cutting off the
+     * additional certificates would be logged.
+     */
+    if (depth > hctx->conf.ssl_verifyclient_depth) {
+        preverify_ok = 0;
+        err = X509_V_ERR_CERT_CHAIN_TOO_LONG;
+        X509_STORE_CTX_set_error(ctx, err);
+    }
+
+    if (preverify_ok) {
+	return preverify_ok;
+    }
+
+    err_cert = X509_STORE_CTX_get_current_cert(ctx);
+    X509_NAME_oneline(X509_get_subject_name(err_cert), buf, sizeof(buf));
+    log_error_write(srv, __FILE__, __LINE__, "SDSSSDSS",
+                        "SSL: verify error:num=", err, ":",
+                        X509_verify_cert_error_string(err), ":depth=", depth,
+                        ":subject=", buf);
+
+    /*
+     * At this point, err contains the last verification error. We can use
+     * it for something special
+     */
+    if (!preverify_ok && (err == X509_V_ERR_UNABLE_TO_GET_ISSUER_CERT_LOCALLY ||
+                          err == X509_V_ERR_UNABLE_TO_GET_ISSUER_CERT)) {
+        X509_NAME_oneline(X509_get_issuer_name(ctx->current_cert), buf,
+                          sizeof(buf));
+        log_error_write(srv, __FILE__, __LINE__, "SS", "SSL: issuer=", buf);
+    }
+
+    return !hctx->conf.ssl_verifyclient_enforce;
+}
 
 #ifndef OPENSSL_NO_TLSEXT
 static int mod_openssl_patch_connection (server *srv, connection *con, handler_ctx *hctx);
@@ -261,8 +323,8 @@ network_ssl_servername_callback (SSL *ssl, int *al, server *srv)
         if (hctx->conf.ssl_verifyclient_enforce) {
             mode |= SSL_VERIFY_FAIL_IF_NO_PEER_CERT;
         }
-        SSL_set_verify(ssl, mode, NULL);
-        SSL_set_verify_depth(ssl, hctx->conf.ssl_verifyclient_depth);
+        SSL_set_verify(ssl, mode, verify_callback);
+        SSL_set_verify_depth(ssl, hctx->conf.ssl_verifyclient_depth + 1);
     } else {
         SSL_set_verify(ssl, SSL_VERIFY_NONE, NULL);
     }
@@ -706,8 +768,8 @@ network_init_ssl (server *srv, void *p_d)
             if (s->ssl_verifyclient_enforce) {
                 mode |= SSL_VERIFY_FAIL_IF_NO_PEER_CERT;
             }
-            SSL_CTX_set_verify(s->ssl_ctx, mode, NULL);
-            SSL_CTX_set_verify_depth(s->ssl_ctx, s->ssl_verifyclient_depth);
+            SSL_CTX_set_verify(s->ssl_ctx, mode, verify_callback);
+            SSL_CTX_set_verify_depth(s->ssl_ctx, s->ssl_verifyclient_depth + 1);
             if (!buffer_string_is_empty(s->ssl_ca_crl_file)) {
                 X509_STORE *store = SSL_CTX_get_cert_store(s->ssl_ctx);
                 if (1 != X509_STORE_load_locations(store, s->ssl_ca_crl_file->ptr, NULL)) {
@@ -1284,6 +1346,7 @@ CONNECTION_FUNC(mod_openssl_handle_con_accept)
 
     hctx = handler_ctx_init();
     hctx->con = con;
+    hctx->srv = srv;
     con->plugin_ctx[p->id] = hctx;
     mod_openssl_patch_connection(srv, con, hctx);
 
