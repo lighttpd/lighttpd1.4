@@ -348,6 +348,7 @@ typedef struct {
 /* ok, we need a prototype */
 static handler_t fcgi_handle_fdevent(server *srv, void *ctx, int revents);
 
+#ifdef HAVE_FORK
 static void reset_signals(void) {
 #ifdef SIGTTOU
 	signal(SIGTTOU, SIG_DFL);
@@ -362,6 +363,7 @@ static void reset_signals(void) {
 	signal(SIGPIPE, SIG_DFL);
 	signal(SIGUSR1, SIG_DFL);
 }
+#endif /* HAVE_FORK */
 
 static void fastcgi_status_copy_procname(buffer *b, fcgi_extension_host *host, fcgi_proc *proc) {
 	buffer_copy_string_len(b, CONST_STR_LEN("fastcgi.backend."));
@@ -824,6 +826,7 @@ FREE_FUNC(mod_fastcgi_free) {
 	return HANDLER_GO_ON;
 }
 
+#ifdef HAVE_FORK
 static int env_add(char_array *env, const char *key, size_t key_len, const char *val, size_t val_len) {
 	char *dst;
 	size_t i;
@@ -913,6 +916,7 @@ static int parse_binpath(char_array *env, buffer *b) {
 
 	return 0;
 }
+#endif /* HAVE_FORK */
 
 #if !defined(HAVE_FORK)
 static int fcgi_spawn_connection(server *srv,
