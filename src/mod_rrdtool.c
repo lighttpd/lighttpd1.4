@@ -79,12 +79,11 @@ FREE_FUNC(mod_rrd_free) {
 	free(p->config_storage);
 
 	if (p->rrdtool_pid) {
-		int status;
 		close(p->read_fd);
 		close(p->write_fd);
 #ifdef HAVE_FORK
 		/* collect status */
-		while (-1 == waitpid(p->rrdtool_pid, &status, 0) && errno == EINTR) ;
+		while (-1 == waitpid(p->rrdtool_pid, NULL, 0) && errno == EINTR) ;
 #endif
 	}
 
@@ -181,6 +180,8 @@ static int mod_rrd_create_pipe(server *srv, plugin_data *p) {
 
 	return 0;
 #else
+	UNUSED(srv);
+	UNUSED(p);
 	return -1;
 #endif
 }
