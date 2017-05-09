@@ -1277,10 +1277,10 @@ indicating which element is present :
 
 
 #ifndef MSG_DONTWAIT
-#define MSG_DONTWAIT
+#define MSG_DONTWAIT 0
 #endif
 #ifndef MSG_NOSIGNAL
-#define MSG_NOSIGNAL
+#define MSG_NOSIGNAL 0
 #endif
 
 /* returns 0 if needs to poll, <0 upon error or >0 is protocol vers (success) */
