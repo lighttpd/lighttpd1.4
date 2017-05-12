@@ -57,6 +57,7 @@ typedef struct {
     unsigned short ssl_use_sslv3;
     buffer *ssl_pemfile;
     buffer *ssl_ca_file;
+    buffer *ssl_ca_crl_file;
     buffer *ssl_cipher_list;
     buffer *ssl_dh_file;
     buffer *ssl_ec_curve;
@@ -120,6 +121,7 @@ FREE_FUNC(mod_openssl_free)
             copy = s->ssl_enabled && buffer_string_is_empty(s->ssl_pemfile);
             buffer_free(s->ssl_pemfile);
             buffer_free(s->ssl_ca_file);
+            buffer_free(s->ssl_ca_crl_file);
             buffer_free(s->ssl_cipher_list);
             buffer_free(s->ssl_dh_file);
             buffer_free(s->ssl_ec_curve);
@@ -693,6 +695,15 @@ network_init_ssl (server *srv, void *p_d)
             }
             SSL_CTX_set_verify(s->ssl_ctx, mode, NULL);
             SSL_CTX_set_verify_depth(s->ssl_ctx, s->ssl_verifyclient_depth);
+            if (!buffer_string_is_empty(s->ssl_ca_crl_file)) {
+                X509_STORE *store = SSL_CTX_get_cert_store(s->ssl_ctx);
+                if (1 != X509_STORE_load_locations(store, s->ssl_ca_crl_file->ptr, NULL)) {
+                    log_error_write(srv, __FILE__, __LINE__, "ssb", "SSL:",
+                    ERR_error_string(ERR_get_error(), NULL), s->ssl_ca_crl_file);
+                    return -1;
+                }
+                X509_STORE_set_flags(store, X509_V_FLAG_CRL_CHECK | X509_V_FLAG_CRL_CHECK_ALL);
+            }
         }
 
         if (1 != SSL_CTX_use_certificate(s->ssl_ctx, s->ssl_pemfile_x509)) {
@@ -762,6 +773,7 @@ SETDEFAULTS_FUNC(mod_openssl_set_defaults)
         { "ssl.verifyclient.exportcert",       NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION }, /* 15 */
         { "ssl.use-sslv2",                     NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION }, /* 16 */
         { "ssl.use-sslv3",                     NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION }, /* 17 */
+        { "ssl.ca-crl-file",                   NULL, T_CONFIG_STRING,  T_CONFIG_SCOPE_CONNECTION }, /* 18 */
         { NULL,                         NULL, T_CONFIG_UNSET, T_CONFIG_SCOPE_UNSET }
     };
 
@@ -776,6 +788,7 @@ SETDEFAULTS_FUNC(mod_openssl_set_defaults)
         s->ssl_enabled   = 0;
         s->ssl_pemfile   = buffer_init();
         s->ssl_ca_file   = buffer_init();
+        s->ssl_ca_crl_file = buffer_init();
         s->ssl_cipher_list = buffer_init();
         s->ssl_dh_file   = buffer_init();
         s->ssl_ec_curve  = buffer_init();
@@ -790,6 +803,7 @@ SETDEFAULTS_FUNC(mod_openssl_set_defaults)
         s->ssl_verifyclient_export_cert = 0;
         s->ssl_disable_client_renegotiation = 1;
         s->ssl_read_ahead = (0 == i ? 1 : p->config_storage[0]->ssl_read_ahead);
+        if (0 != i) buffer_copy_buffer(s->ssl_ca_crl_file, p->config_storage[0]->ssl_ca_crl_file);
 
         cv[0].destination = &(s->ssl_log_noise);
         cv[1].destination = &(s->ssl_enabled);
@@ -809,6 +823,7 @@ SETDEFAULTS_FUNC(mod_openssl_set_defaults)
         cv[15].destination = &(s->ssl_verifyclient_export_cert);
         cv[16].destination = &(s->ssl_use_sslv2);
         cv[17].destination = &(s->ssl_use_sslv3);
+        cv[18].destination = s->ssl_ca_crl_file;
 
         p->config_storage[i] = s;
 
@@ -852,6 +867,7 @@ mod_openssl_patch_connection (server *srv, connection *con, handler_ctx *hctx)
     PATCH(ssl_pemfile_x509);
     PATCH(ssl_pemfile_pkey);
     /*PATCH(ssl_ca_file);*//*(not patched)*/
+    /*PATCH(ssl_ca_crl_file);*//*(not patched)*/
     PATCH(ssl_ca_file_cert_names);
     /*PATCH(ssl_cipher_list);*//*(not patched)*/
     /*PATCH(ssl_dh_file);*//*(not patched)*/
@@ -907,6 +923,8 @@ mod_openssl_patch_connection (server *srv, connection *con, handler_ctx *hctx)
             } else if (buffer_is_equal_string(du->key, CONST_STR_LEN("debug.log-ssl-noise"))) {
                 PATCH(ssl_log_noise);
           #if 0 /*(not patched)*/
+            } else if (buffer_is_equal_string(du->key, CONST_STR_LEN("ssl.ca-crl-file"))) {
+                PATCH(ssl_ca_crl_file);
             } else if (buffer_is_equal_string(du->key, CONST_STR_LEN("ssl.honor-cipher-order"))) {
                 PATCH(ssl_honor_cipher_order);
             } else if (buffer_is_equal_string(du->key, CONST_STR_LEN("ssl.empty-fragments"))) {
