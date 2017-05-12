@@ -456,6 +456,7 @@ condlines(A) ::= condlines(B) eols ELSE cond_else(C). {
     dc = (data_config *)array_extract_element_klen(ctx->all_configs, CONST_BUF_LEN(C->key));
     force_assert(C == dc);
     buffer_copy_buffer(C->key, B->key);
+    C->comp = B->comp;
     /*buffer_copy_buffer(C->comp_key, B->comp_key);*/
     /*C->string = buffer_init_buffer(B->string);*/
     pos = buffer_string_length(C->key)-buffer_string_length(B->string)-2;
