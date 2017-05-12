@@ -1303,7 +1303,7 @@ static int server_main (server * const srv, int argc, char **argv) {
 				continue;
 			}
 
-			if (NULL == array_get_element(srv->config_touched, du->key->ptr)) {
+			if (NULL == array_get_element_klen(srv->config_touched, CONST_BUF_LEN(du->key))) {
 				log_error_write(srv, __FILE__, __LINE__, "sbs",
 						"WARNING: unknown config-key:",
 						du->key,

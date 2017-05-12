@@ -425,9 +425,10 @@ static int magnet_reqhdr_get(lua_State *L) {
 	data_string *ds;
 
 	/* __index: param 1 is the (empty) table the value was not found in */
-	const char *key = luaL_checkstring(L, 2);
+	size_t klen;
+	const char *key = luaL_checklstring(L, 2, &klen);
 
-	if (NULL != (ds = (data_string *)array_get_element(con->request.headers, key))) {
+	if (NULL != (ds = (data_string *)array_get_element_klen(con->request.headers, key, klen))) {
 		if (!buffer_is_empty(ds->value)) {
 			lua_pushlstring(L, CONST_BUF_LEN(ds->value));
 		} else {
@@ -661,9 +662,10 @@ static int magnet_cgi_get(lua_State *L) {
 	data_string *ds;
 
 	/* __index: param 1 is the (empty) table the value was not found in */
-	const char *key = luaL_checkstring(L, 2);
+	size_t klen;
+	const char *key = luaL_checklstring(L, 2, &klen);
 
-	ds = (data_string *)array_get_element(con->environment, key);
+	ds = (data_string *)array_get_element_klen(con->environment, key, klen);
 	if (NULL != ds && !buffer_is_empty(ds->value))
 		lua_pushlstring(L, CONST_BUF_LEN(ds->value));
 	else

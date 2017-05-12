@@ -423,7 +423,7 @@ SETDEFAULTS_FUNC(mod_proxy_set_defaults) {
 
 					/* if extension already exists, take it */
 
-					if (NULL == (dfa = (data_array *)array_get_element(s->extensions, da_ext->key->ptr))) {
+					if (NULL == (dfa = (data_array *)array_get_element_klen(s->extensions, CONST_BUF_LEN(da_ext->key)))) {
 						dfa = data_array_init();
 
 						buffer_copy_buffer(dfa->key, da_ext->key);

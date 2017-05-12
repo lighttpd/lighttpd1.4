@@ -328,7 +328,7 @@ static handler_t mod_evhost_uri_handler(server *srv, connection *con, void *p_d)
 			} else if (ptr[1] == '{' ) {
 				char s[3] = "% ";
 				s[1] = ptr[2]; /*(assumes single digit before '.', and, optionally, '.' and single digit after '.')*/
-				if (NULL != (ds = (data_string *)array_get_element(parsed_host, s))) {
+				if (NULL != (ds = (data_string *)array_get_element_klen(parsed_host, s, 2))) {
 					if (ptr[3] != '.' || ptr[4] == '0') {
 						buffer_append_string_buffer(p->tmp_buf, ds->value);
 					} else {
@@ -339,7 +339,7 @@ static handler_t mod_evhost_uri_handler(server *srv, connection *con, void *p_d)
 				} else {
 					/* unhandled %-sequence */
 				}
-			} else if (NULL != (ds = (data_string *)array_get_element(parsed_host,p->conf.path_pieces[i]->ptr))) {
+			} else if (NULL != (ds = (data_string *)array_get_element_klen(parsed_host, CONST_BUF_LEN(p->conf.path_pieces[i])))) {
 				buffer_append_string_buffer(p->tmp_buf,ds->value);
 			} else {
 				/* unhandled %-sequence */

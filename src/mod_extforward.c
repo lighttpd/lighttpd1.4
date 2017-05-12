@@ -399,7 +399,7 @@ static array *extract_forward_array(buffer *pbuffer)
 /*
  * check whether ip is trusted, return 1 for trusted , 0 for untrusted
  */
-static int is_proxy_trusted(const char *ipstr, plugin_data *p)
+static int is_proxy_trusted(const buffer *ipstr, plugin_data *p)
 {
 	data_string* allds = (data_string *)array_get_element(p->conf.forwarder, "all");
 
@@ -411,11 +411,11 @@ static int is_proxy_trusted(const char *ipstr, plugin_data *p)
 		}
 	}
 
-	return (data_string *)array_get_element(p->conf.forwarder, ipstr) ? IP_TRUSTED : IP_UNTRUSTED;
+	return (data_string *)array_get_element_klen(p->conf.forwarder, CONST_BUF_LEN(ipstr)) ? IP_TRUSTED : IP_UNTRUSTED;
 }
 
 /*
- * Return char *ip of last address of proxy that is not trusted.
+ * Return last address of proxy that is not trusted.
  * Do not accept "all" keyword here.
  */
 static const char *last_not_in_array(array *a, plugin_data *p)
@@ -425,10 +425,8 @@ static const char *last_not_in_array(array *a, plugin_data *p)
 
 	for (i = a->used - 1; i >= 0; i--) {
 		data_string *ds = (data_string *)a->data[i];
-		const char *ip = ds->value->ptr;
-
-		if (!array_get_element(forwarder, ip)) {
-			return ip;
+		if (!array_get_element_klen(forwarder, CONST_BUF_LEN(ds->value))) {
+			return ds->value->ptr;
 		}
 	}
 	return NULL;
@@ -756,12 +754,7 @@ static handler_t mod_extforward_Forwarded (server *srv, connection *con, plugin_
          * attempted by this module. */
 
         if (v != vlen) {
-            char *ipend = s+vlen;
-            int trusted;
-            char c = *ipend;
-            *ipend = '\0';
-            trusted = (NULL != array_get_element(p->conf.forwarder, s+v));
-            *ipend = c;
+            int trusted = (NULL != array_get_element_klen(p->conf.forwarder, s+v, vlen-v));
 
             if (s[v] != '_' && s[v] != '/'
                 && (7 != (vlen - v) || 0 != memcmp(s+v, "unknown", 7))) {
@@ -1029,7 +1022,7 @@ URIHANDLER_FUNC(mod_extforward_uri_handler) {
 	}
 
 	for (size_t k = 0; k < p->conf.headers->used && NULL == forwarded; ++k) {
-		forwarded = (data_string *) array_get_element(con->request.headers, ((data_string *)p->conf.headers->data[k])->value->ptr);
+		forwarded = (data_string *) array_get_element_klen(con->request.headers, CONST_BUF_LEN(((data_string *)p->conf.headers->data[k])->value));
 	}
 	if (NULL == forwarded) {
 		if (con->conf.log_request_handling) {
@@ -1040,7 +1033,7 @@ URIHANDLER_FUNC(mod_extforward_uri_handler) {
 	}
 
 	/* if the remote ip itself is not trusted, then do nothing */
-	if (IP_UNTRUSTED == is_proxy_trusted(con->dst_addr_buf->ptr, p)) {
+	if (IP_UNTRUSTED == is_proxy_trusted(con->dst_addr_buf, p)) {
 		if (con->conf.log_request_handling) {
 			log_error_write(srv, __FILE__, __LINE__, "sbs",
 					"remote address", con->dst_addr_buf, "is NOT a trusted proxy, skipping");
@@ -1134,7 +1127,7 @@ CONNECTION_FUNC(mod_extforward_handle_con_accept)
     plugin_data *p = p_d;
     mod_extforward_patch_connection(srv, con, p);
     if (!p->conf.hap_PROXY) return HANDLER_GO_ON;
-    if (IP_TRUSTED == is_proxy_trusted(con->dst_addr_buf->ptr, p)) {
+    if (IP_TRUSTED == is_proxy_trusted(con->dst_addr_buf, p)) {
         handler_ctx *hctx = handler_ctx_init();
         con->plugin_ctx[p->id] = hctx;
         hctx->saved_network_read = con->network_read;

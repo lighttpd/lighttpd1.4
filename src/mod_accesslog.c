@@ -927,14 +927,14 @@ REQUESTDONE_FUNC(log_access_write) {
 				}
 				break;
 			case FORMAT_HEADER:
-				if (NULL != (ds = (data_string *)array_get_element(con->request.headers, f->string->ptr))) {
+				if (NULL != (ds = (data_string *)array_get_element_klen(con->request.headers, CONST_BUF_LEN(f->string)))) {
 					accesslog_append_escaped(b, ds->value);
 				} else {
 					buffer_append_string_len(b, CONST_STR_LEN("-"));
 				}
 				break;
 			case FORMAT_RESPONSE_HEADER:
-				if (NULL != (ds = (data_string *)array_get_element(con->response.headers, f->string->ptr))) {
+				if (NULL != (ds = (data_string *)array_get_element_klen(con->response.headers, CONST_BUF_LEN(f->string)))) {
 					accesslog_append_escaped(b, ds->value);
 				} else {
 					buffer_append_string_len(b, CONST_STR_LEN("-"));
@@ -942,7 +942,7 @@ REQUESTDONE_FUNC(log_access_write) {
 				break;
 			case FORMAT_ENV:
 			case FORMAT_NOTE:
-				if (NULL != (ds = (data_string *)array_get_element(con->environment, f->string->ptr))) {
+				if (NULL != (ds = (data_string *)array_get_element_klen(con->environment, CONST_BUF_LEN(f->string)))) {
 					accesslog_append_escaped(b, ds->value);
 				} else {
 					buffer_append_string_len(b, CONST_STR_LEN("-"));

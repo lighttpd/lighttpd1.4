@@ -860,7 +860,6 @@ int http_request_parse(server *srv, connection *con) {
 					con->parse_request->ptr[i+1] = '\0';
 
 					if (in_folding) {
-						buffer *key_b;
 						/**
 						 * we use a evil hack to handle the line-folding
 						 * 
@@ -888,14 +887,9 @@ int http_request_parse(server *srv, connection *con) {
 							return 0;
 						}
 
-						key_b = buffer_init();
-						buffer_copy_string_len(key_b, key, key_len);
-
-						if (NULL != (ds = (data_string *)array_get_element(con->request.headers, key_b->ptr))) {
+						if (NULL != (ds = (data_string *)array_get_element_klen(con->request.headers, key, key_len))) {
 							buffer_append_string(ds->value, value);
 						}
-
-						buffer_free(key_b);
 					} else {
 						int s_len;
 						key = con->parse_request->ptr + first;

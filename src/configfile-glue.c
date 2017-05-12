@@ -35,7 +35,7 @@ int config_insert_values_internal(server *srv, array *ca, const config_values_t 
 
 	for (i = 0; cv[i].key; i++) {
 
-		if (NULL == (du = array_get_element(ca, cv[i].key))) {
+		if (NULL == (du = array_get_element_klen(ca, cv[i].key, strlen(cv[i].key)))) {
 			/* no found */
 
 			continue;
@@ -195,7 +195,7 @@ int config_insert_values_global(server *srv, array *ca, const config_values_t cv
 	for (i = 0; cv[i].key; i++) {
 		data_string *touched;
 
-		if (NULL == (du = array_get_element(ca, cv[i].key))) {
+		if (NULL == (du = array_get_element_klen(ca, cv[i].key, strlen(cv[i].key)))) {
 			/* no found */
 
 			continue;
@@ -491,7 +491,7 @@ static cond_result_t config_check_cond_nocache(server *srv, connection *con, dat
 
 	case COMP_HTTP_REQUEST_HEADER: {
 		data_string *ds;
-		if (NULL != (ds = (data_string *)array_get_element(con->request.headers, dc->comp_tag->ptr))) {
+		if (NULL != (ds = (data_string *)array_get_element_klen(con->request.headers, CONST_BUF_LEN(dc->comp_tag)))) {
 			l = ds->value;
 		} else {
 			l = srv->empty_string;

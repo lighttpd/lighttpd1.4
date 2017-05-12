@@ -21,7 +21,7 @@
 data_integer *status_counter_get_counter(server *srv, const char *s, size_t len) {
 	data_integer *di;
 
-	if (NULL == (di = (data_integer *)array_get_element(srv->status, s))) {
+	if (NULL == (di = (data_integer *)array_get_element_klen(srv->status, s, len))) {
 		/* not found, create it */
 
 		if (NULL == (di = (data_integer *)array_get_unused_element(srv->status, TYPE_INTEGER))) {

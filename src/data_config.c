@@ -81,7 +81,7 @@ static void data_config_print(const data_unset *d, int depth) {
 	maxlen = array_get_max_key_length(a);
 	for (i = 0; i < a->used; i ++) {
 		data_unset *du = a->data[i];
-		size_t len = strlen(du->key->ptr);
+		size_t len = buffer_string_length(du->key);
 		size_t j;
 
 		array_print_indent(depth);

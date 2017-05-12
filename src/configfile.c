@@ -1347,7 +1347,7 @@ int config_read(server *srv, const char *fn) {
 	dcwd = data_string_init();
 	buffer_string_prepare_copy(dcwd->value, 1023);
 	if (NULL != getcwd(dcwd->value->ptr, dcwd->value->size - 1)) {
-		buffer_commit(dcwd->value, strlen(dcwd->value->ptr));
+		buffer_commit(dcwd->value, buffer_string_length(dcwd->value));
 		buffer_copy_string_len(dcwd->key, CONST_STR_LEN("var.CWD"));
 		array_insert_unique(dc->value, (data_unset *)dcwd);
 	} else {

@@ -49,7 +49,7 @@ static data_unset *configparser_get_variable(config_t *ctx, const buffer *key) {
     fprintf(stderr, "get var on block: %s\n", dc->key->ptr);
     array_print(dc->value, 0);
 #endif
-    if (NULL != (du = array_get_element(dc->value, key->ptr))) {
+    if (NULL != (du = array_get_element_klen(dc->value, CONST_BUF_LEN(key)))) {
       return du->copy(du);
     }
   }
@@ -95,7 +95,7 @@ data_unset *configparser_merge_data(data_unset *op1, const data_unset *op2) {
       for (i = 0; i < src->used; i ++) {
         du = (data_unset *)src->data[i];
         if (du) {
-          if (du->is_index_key || buffer_is_empty(du->key) || !array_get_element(dst, du->key->ptr)) {
+          if (du->is_index_key || buffer_is_empty(du->key) || !array_get_element_klen(dst, CONST_BUF_LEN(du->key))) {
             array_insert_unique(dst, du->copy(du));
           } else {
             fprintf(stderr, "Duplicate array-key '%s'\n", du->key->ptr);
@@ -189,7 +189,7 @@ varline ::= key(A) ASSIGN expression(B). {
           ctx->current->context_ndx,
           ctx->current->key->ptr, A->ptr);
       ctx->ok = 0;
-    } else if (NULL == array_get_element(ctx->current->value, B->key->ptr)) {
+    } else if (NULL == array_get_element_klen(ctx->current->value, CONST_BUF_LEN(B->key))) {
       array_insert_unique(ctx->current->value, B);
       B = NULL;
     } else {
@@ -234,7 +234,7 @@ varline ::= key(A) APPEND expression(B). {
           ctx->current->context_ndx,
           ctx->current->key->ptr, A->ptr);
       ctx->ok = 0;
-    } else if (NULL != (du = array_extract_element(vars, A->ptr)) || NULL != (du = configparser_get_variable(ctx, A))) {
+    } else if (NULL != (du = array_extract_element_klen(vars, CONST_BUF_LEN(A))) || NULL != (du = configparser_get_variable(ctx, A))) {
       du = configparser_merge_data(du, B);
       if (NULL == du) {
         ctx->ok = 0;
@@ -351,7 +351,7 @@ aelements(A) ::= aelements(C) COMMA aelement(B). {
   A = NULL;
   if (ctx->ok) {
     if (buffer_is_empty(B->key) ||
-        NULL == array_get_element(C, B->key->ptr)) {
+        NULL == array_get_element_klen(C, CONST_BUF_LEN(B->key))) {
       array_insert_unique(C, B);
       B = NULL;
     } else {
@@ -408,7 +408,7 @@ eols ::= .
 
 globalstart ::= GLOBAL. {
   data_config *dc;
-  dc = (data_config *)array_get_element(ctx->srv->config_context, "global");
+  dc = (data_config *)array_get_element_klen(ctx->srv->config_context, CONST_STR_LEN("global"));
   force_assert(dc);
   configparser_push(ctx, dc, 0);
 }
@@ -453,7 +453,7 @@ condlines(A) ::= condlines(B) eols ELSE cond_else(C). {
   if (ctx->ok) {
     size_t pos;
     data_config *dc;
-    dc = (data_config *)array_extract_element(ctx->all_configs, C->key->ptr);
+    dc = (data_config *)array_extract_element_klen(ctx->all_configs, CONST_BUF_LEN(C->key));
     force_assert(C == dc);
     buffer_copy_buffer(C->key, B->key);
     /*buffer_copy_buffer(C->comp_key, B->comp_key);*/
@@ -480,7 +480,7 @@ condlines(A) ::= condlines(B) eols ELSE cond_else(C). {
       force_assert(0);
     }
 
-    if (NULL == (dc = (data_config *)array_get_element(ctx->all_configs, C->key->ptr))) {
+    if (NULL == (dc = (data_config *)array_get_element_klen(ctx->all_configs, CONST_BUF_LEN(C->key)))) {
       /* re-insert into ctx->all_configs with new C->key */
       array_insert_unique(ctx->all_configs, (data_unset *)C);
       C->prev = B;
@@ -568,7 +568,7 @@ context ::= DOLLAR SRVVARNAME(B) LBRACKET stringop(C) RBRACKET cond(E) expressio
     rvalue = ((data_string*)D)->value;
     buffer_append_string_buffer(b, rvalue);
 
-    if (NULL != (dc = (data_config *)array_get_element(ctx->all_configs, b->ptr))) {
+    if (NULL != (dc = (data_config *)array_get_element_klen(ctx->all_configs, CONST_BUF_LEN(b)))) {
       configparser_push(ctx, dc, 0);
     } else {
       static const struct {

@@ -120,11 +120,11 @@ static size_t array_get_index(array *a, const char *key, size_t keylen, size_t *
 	return ARRAY_NOT_FOUND;
 }
 
-data_unset *array_get_element(array *a, const char *key) {
+data_unset *array_get_element_klen(array *a, const char *key, size_t klen) {
 	size_t ndx;
 	force_assert(NULL != key);
 
-	if (ARRAY_NOT_FOUND != (ndx = array_get_index(a, key, strlen(key), NULL))) {
+	if (ARRAY_NOT_FOUND != (ndx = array_get_index(a, key, klen, NULL))) {
 		/* found, return it */
 		return a->data[ndx];
 	}
@@ -132,11 +132,11 @@ data_unset *array_get_element(array *a, const char *key) {
 	return NULL;
 }
 
-data_unset *array_extract_element(array *a, const char *key) {
+data_unset *array_extract_element_klen(array *a, const char *key, size_t klen) {
 	size_t ndx, pos;
 	force_assert(NULL != key);
 
-	if (ARRAY_NOT_FOUND != (ndx = array_get_index(a, key, strlen(key), &pos))) {
+	if (ARRAY_NOT_FOUND != (ndx = array_get_index(a, key, klen, &pos))) {
 		/* found */
 		const size_t last_ndx = a->used - 1;
 		data_unset *entry = a->data[ndx];
@@ -193,7 +193,7 @@ data_unset *array_get_unused_element(array *a, data_type_t t) {
 void array_set_key_value(array *hdrs, const char *key, size_t key_len, const char *value, size_t val_len) {
 	data_string *ds_dst;
 
-	if (NULL != (ds_dst = (data_string *)array_get_element(hdrs, key))) {
+	if (NULL != (ds_dst = (data_string *)array_get_element_klen(hdrs, key, key_len))) {
 		buffer_copy_string_len(ds_dst->value, value, val_len);
 		return;
 	}
@@ -330,7 +330,7 @@ size_t array_get_max_key_length(array *a) {
 	maxlen = 0;
 	for (i = 0; i < a->used; i ++) {
 		data_unset *du = a->data[i];
-		size_t len = strlen(du->key->ptr);
+		size_t len = buffer_string_length(du->key);
 
 		if (len > maxlen) {
 			maxlen = len;
@@ -388,7 +388,7 @@ int array_print(array *a, int depth) {
 				array_print_indent(depth + 1);
 			}
 			fprintf(stdout, "\"%s\"", du->key->ptr);
-			for (j = maxlen - strlen(du->key->ptr); j > 0; j --) {
+			for (j = maxlen - buffer_string_length(du->key); j > 0; j--) {
 				fprintf(stdout, " ");
 			}
 			fprintf(stdout, " => ");

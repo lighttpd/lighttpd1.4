@@ -106,8 +106,8 @@ int response_header_overwrite(server *srv, connection *con, const char *key, siz
 	UNUSED(srv);
 
 	/* if there already is a key by this name overwrite the value */
-	if (NULL != (ds = (data_string *)array_get_element(con->response.headers, key))) {
-		buffer_copy_string(ds->value, value);
+	if (NULL != (ds = (data_string *)array_get_element_klen(con->response.headers, key, keylen))) {
+		buffer_copy_string_len(ds->value, value, vallen);
 
 		return 0;
 	}
@@ -121,7 +121,7 @@ int response_header_append(server *srv, connection *con, const char *key, size_t
 	UNUSED(srv);
 
 	/* if there already is a key by this name append the value */
-	if (NULL != (ds = (data_string *)array_get_element(con->response.headers, key))) {
+	if (NULL != (ds = (data_string *)array_get_element_klen(con->response.headers, key, keylen))) {
 		buffer_append_string_len(ds->value, CONST_STR_LEN(", "));
 		buffer_append_string_len(ds->value, value, vallen);
 		return 0;

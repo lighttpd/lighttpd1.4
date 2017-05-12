@@ -3051,7 +3051,7 @@ static handler_t fcgi_check_extension(server *srv, connection *con, void *p_d, i
 
 				/* the rewrite is only done for /prefix/? matches */
 				if (host->fix_root_path_name && extension->key->ptr[0] == '/' && extension->key->ptr[1] == '\0') {
-					buffer_copy_string(con->request.pathinfo, con->uri.path->ptr);
+					buffer_copy_buffer(con->request.pathinfo, con->uri.path);
 					buffer_string_set_length(con->uri.path, 0);
 				} else if (extension->key->ptr[0] == '/' &&
 					buffer_string_length(con->uri.path) > buffer_string_length(extension->key) &&
