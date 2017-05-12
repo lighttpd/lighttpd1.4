@@ -230,7 +230,7 @@ static int config_insert(server *srv) {
 		  ? buffer_init()
 		  : buffer_init_buffer(srv->config_storage[0]->bsd_accept_filter);
 	      #endif
-		s->max_keep_alive_requests = 16;
+		s->max_keep_alive_requests = 100;
 		s->max_keep_alive_idle = 5;
 		s->max_read_idle = 60;
 		s->max_write_idle = 360;
