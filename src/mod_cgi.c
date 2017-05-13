@@ -59,6 +59,7 @@ typedef struct {
 	unsigned short execute_x_only;
 	unsigned short local_redir;
 	unsigned short xsendfile_allow;
+	unsigned short upgrade;
 	array *xsendfile_docroot;
 } plugin_config;
 
@@ -154,6 +155,7 @@ SETDEFAULTS_FUNC(mod_fastcgi_set_defaults) {
 		{ "cgi.x-sendfile",              NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION },     /* 2 */
 		{ "cgi.x-sendfile-docroot",      NULL, T_CONFIG_ARRAY,   T_CONFIG_SCOPE_CONNECTION },     /* 3 */
 		{ "cgi.local-redir",             NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION },     /* 4 */
+		{ "cgi.upgrade",                 NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION },     /* 5 */
 		{ NULL,                          NULL, T_CONFIG_UNSET, T_CONFIG_SCOPE_UNSET}
 	};
 
@@ -174,12 +176,14 @@ SETDEFAULTS_FUNC(mod_fastcgi_set_defaults) {
 		s->local_redir    = 0;
 		s->xsendfile_allow= 0;
 		s->xsendfile_docroot = array_init();
+		s->upgrade        = 0;
 
 		cv[0].destination = s->cgi;
 		cv[1].destination = &(s->execute_x_only);
 		cv[2].destination = &(s->xsendfile_allow);
 		cv[3].destination = s->xsendfile_docroot;
 		cv[4].destination = &(s->local_redir);
+		cv[5].destination = &(s->upgrade);
 
 		p->config_storage[i] = s;
 
@@ -414,9 +418,48 @@ static handler_t cgi_handle_fdevent_send (server *srv, void *ctx, int revents) {
 }
 
 
+static handler_t cgi_response_read(server *srv, handler_ctx *hctx) {
+    connection * const con = hctx->remote_conn;
+    const int file_started = con->file_started;
+    const handler_t rc =
+      http_response_read(srv, con, &hctx->opts,
+                         hctx->response, hctx->fd, &hctx->fde_ndx);
+
+    if (file_started || !con->file_started || con->mode == DIRECT) return rc;
+
+    /* response headers just completed */
+
+    if (con->parsed_response & HTTP_UPGRADE) {
+        if (hctx->conf.upgrade && con->http_status == 101) {
+            /* 101 Switching Protocols; transition to transparent proxy */
+            http_response_upgrade_read_body_unknown(srv, con);
+        }
+        else {
+            con->parsed_response &= ~HTTP_UPGRADE;
+          #if 0
+            /* preserve prior questionable behavior; likely broken behavior
+             * anyway if backend thinks connection is being upgraded but client
+             * does not receive Connection: upgrade */
+            response_header_overwrite(srv, con, CONST_STR_LEN("Upgrade"),
+                                                CONST_STR_LEN(""));
+          #endif
+        }
+    }
+
+    if (hctx->conf.upgrade && !(con->parsed_response & HTTP_UPGRADE)) {
+        chunkqueue *cq = con->request_content_queue;
+        hctx->conf.upgrade = 0;
+        if (cq->bytes_out == (off_t)con->request.content_length) {
+            cgi_connection_close_fdtocgi(srv, hctx); /*(closes hctx->fdtocgi)*/
+        }
+    }
+
+    return rc;
+}
+
+
 static int cgi_recv_response(server *srv, handler_ctx *hctx) {
-		switch (http_response_read(srv, hctx->remote_conn, &hctx->opts,
-					   hctx->response, hctx->fd, &hctx->fde_ndx)) {
+		switch (cgi_response_read(srv, hctx)) {
 		default:
 			return HANDLER_GO_ON;
 		case HANDLER_ERROR:
@@ -689,11 +732,8 @@ static int cgi_write_request(server *srv, handler_ctx *hctx, int fd) {
 		}
 	}
 
-	if (cq->bytes_out == (off_t)con->request.content_length) {
+	if (cq->bytes_out == (off_t)con->request.content_length && !hctx->conf.upgrade) {
 		/* sent all request body input */
-		/* (future: must defer close()
-		 *  if might later upgrade protocols
-		 *  and then have more data to send) */
 		/* close connection to the cgi-script */
 		if (-1 == hctx->fdtocgi) { /*(received request body sent in initial send to pipe buffer)*/
 			--srv->cur_fds;
@@ -944,6 +984,7 @@ static int mod_cgi_patch_connection(server *srv, connection *con, plugin_data *p
 	PATCH(cgi);
 	PATCH(execute_x_only);
 	PATCH(local_redir);
+	PATCH(upgrade);
 	PATCH(xsendfile_allow);
 	PATCH(xsendfile_docroot);
 
@@ -965,6 +1006,8 @@ static int mod_cgi_patch_connection(server *srv, connection *con, plugin_data *p
 				PATCH(execute_x_only);
 			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("cgi.local-redir"))) {
 				PATCH(local_redir);
+			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("cgi.upgrade"))) {
+				PATCH(upgrade);
 			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("cgi.x-sendfile"))) {
 				PATCH(xsendfile_allow);
 			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("cgi.x-sendfile-docroot"))) {
@@ -1009,6 +1052,10 @@ URIHANDLER_FUNC(cgi_is_handled) {
 		hctx->plugin_data = p;
 		hctx->cgi_handler = cgi_handler;
 		memcpy(&hctx->conf, &p->conf, sizeof(plugin_config));
+		hctx->conf.upgrade =
+		  hctx->conf.upgrade
+		  && con->request.http_version == HTTP_VERSION_1_1
+		  && NULL != array_get_element_klen(con->request.headers, CONST_STR_LEN("Upgrade"));
 		hctx->opts.fdfmt = S_IFIFO;
 		hctx->opts.backend = BACKEND_CGI;
 		hctx->opts.authorizer = 0;

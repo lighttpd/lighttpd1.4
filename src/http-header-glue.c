@@ -1089,8 +1089,11 @@ static int http_response_process_headers(server *srv, connection *con, http_resp
         case 7:
             if (0 == strncasecmp(key, "Upgrade", key_len)) {
                 /*(technically, should also verify Connection: upgrade)*/
-                /*(flag only for mod_proxy (for now))*/
-                if (opts->backend == BACKEND_PROXY) con->parsed_response |= HTTP_UPGRADE;
+                /*(flag only for mod_proxy and mod_cgi (for now))*/
+                if (opts->backend == BACKEND_PROXY
+                    || opts->backend == BACKEND_CGI) {
+                    con->parsed_response |= HTTP_UPGRADE;
+                }
             }
             break;
         case 8:
