@@ -971,14 +971,19 @@ fi
 AC_ARG_ENABLE(extra-warnings,
  AC_HELP_STRING([--enable-extra-warnings],[enable extra warnings (gcc specific)]),
  [case "${enableval}" in
+ error) extrawarnings=error ;;
    yes) extrawarnings=true ;;
     no) extrawarnings=false ;;
      *) AC_MSG_ERROR(bad value ${enableval} for --enable-extra-warnings) ;;
   esac],[extrawarnings=false])
 
-if test x$extrawarnings = xtrue; then
+if test x$extrawarnings = xtrue || test x$extrawarnings = xerror; then
   TRY_CFLAGS([-g -O2 -g2 -Wall -Wmissing-declarations -Wdeclaration-after-statement -Wcast-align -Wsign-compare -Wnested-externs -Wpointer-arith -D_FORTIFY_SOURCE=2 -fstack-protector --param=ssp-buffer-size=4 -Wformat -Werror=format-security])
   TRY_LDFLAGS([-Wl,--as-needed])
+  if test x$extrawarnings = xerror; then
+    AS_VAR_APPEND([CFLAGS], [" -Werror"])
+    AS_VAR_APPEND([LDFLAGS], [" -Wl,--fatal-warnings"])
+  fi
 fi
 
 dnl build version-id
