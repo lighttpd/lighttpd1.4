@@ -2138,11 +2138,14 @@ SUBREQUEST_FUNC(mod_scgi_handle_subrequest) {
 	if (0 == hctx->wb->bytes_in
 	    ? con->state == CON_STATE_READ_POST
 	    : (hctx->wb->bytes_in < hctx->wb_reqlen || hctx->wb_reqlen < 0)) {
+		/* leave excess data in con->request_content_queue, which is
+		 * buffered to disk if too large and backend can not keep up */
 		/*(64k - 4k to attempt to avoid temporary files
 		 * in conjunction with FDEVENT_STREAM_REQUEST_BUFMIN)*/
-		if (hctx->wb->bytes_in - hctx->wb->bytes_out > 65536 - 4096
-		    && (con->conf.stream_request_body & FDEVENT_STREAM_REQUEST_BUFMIN)){
-			con->conf.stream_request_body &= ~FDEVENT_STREAM_REQUEST_POLLIN;
+		if (hctx->wb->bytes_in - hctx->wb->bytes_out > 65536 - 4096) {
+			if (con->conf.stream_request_body & FDEVENT_STREAM_REQUEST_BUFMIN) {
+				con->conf.stream_request_body &= ~FDEVENT_STREAM_REQUEST_POLLIN;
+			}
 			if (0 != hctx->wb->bytes_in) return HANDLER_WAIT_FOR_EVENT;
 		} else {
 			handler_t r = connection_handle_read_post_state(srv, con);
