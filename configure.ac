@@ -62,6 +62,7 @@ AC_DEFUN([TRY_LDFLAGS],
 
 dnl Checks for programs.
 AC_PROG_CC
+AC_PROG_CC_STDC
 AX_PROG_CC_FOR_BUILD
 AM_PROG_CC_C_O
 AC_PROG_LD
@@ -965,7 +966,6 @@ AM_CONDITIONAL(CHECK_WITH_FASTCGI, test "x$fastcgi_found" = xyes)
 dnl check for extra compiler options (warning options)
 if test "${GCC}" = "yes"; then
   TRY_CFLAGS([-Wall -W -Wshadow -pedantic])
-  TRY_CFLAGS([-std=gnu99])
 fi
 
 AC_ARG_ENABLE(extra-warnings,
