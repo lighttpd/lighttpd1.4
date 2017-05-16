@@ -58,6 +58,7 @@ typedef struct {
     buffer *ssl_pemfile;
     buffer *ssl_ca_file;
     buffer *ssl_ca_crl_file;
+    buffer *ssl_ca_dn_file;
     buffer *ssl_cipher_list;
     buffer *ssl_dh_file;
     buffer *ssl_ec_curve;
@@ -122,6 +123,7 @@ FREE_FUNC(mod_openssl_free)
             buffer_free(s->ssl_pemfile);
             buffer_free(s->ssl_ca_file);
             buffer_free(s->ssl_ca_crl_file);
+            buffer_free(s->ssl_ca_dn_file);
             buffer_free(s->ssl_cipher_list);
             buffer_free(s->ssl_dh_file);
             buffer_free(s->ssl_ec_curve);
@@ -499,7 +501,18 @@ network_init_ssl (server *srv, void *p_d)
         }
 
 
-        if (!buffer_string_is_empty(s->ssl_ca_file)) {
+        if (!buffer_string_is_empty(s->ssl_ca_dn_file)) {
+            s->ssl_ca_file_cert_names =
+              SSL_load_client_CA_file(s->ssl_ca_dn_file->ptr);
+            if (NULL == s->ssl_ca_file_cert_names) {
+                log_error_write(srv, __FILE__, __LINE__, "ssb", "SSL:",
+                                ERR_error_string(ERR_get_error(), NULL),
+                                s->ssl_ca_dn_file);
+            }
+        }
+
+        if (NULL == s->ssl_ca_file_cert_names
+	    && !buffer_string_is_empty(s->ssl_ca_file)) {
             s->ssl_ca_file_cert_names =
               SSL_load_client_CA_file(s->ssl_ca_file->ptr);
             if (NULL == s->ssl_ca_file_cert_names) {
@@ -774,6 +787,7 @@ SETDEFAULTS_FUNC(mod_openssl_set_defaults)
         { "ssl.use-sslv2",                     NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION }, /* 16 */
         { "ssl.use-sslv3",                     NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION }, /* 17 */
         { "ssl.ca-crl-file",                   NULL, T_CONFIG_STRING,  T_CONFIG_SCOPE_CONNECTION }, /* 18 */
+        { "ssl.ca-dn-file",                    NULL, T_CONFIG_STRING,  T_CONFIG_SCOPE_CONNECTION }, /* 19 */
         { NULL,                         NULL, T_CONFIG_UNSET, T_CONFIG_SCOPE_UNSET }
     };
 
@@ -789,6 +803,7 @@ SETDEFAULTS_FUNC(mod_openssl_set_defaults)
         s->ssl_pemfile   = buffer_init();
         s->ssl_ca_file   = buffer_init();
         s->ssl_ca_crl_file = buffer_init();
+        s->ssl_ca_dn_file = buffer_init();
         s->ssl_cipher_list = buffer_init();
         s->ssl_dh_file   = buffer_init();
         s->ssl_ec_curve  = buffer_init();
@@ -804,6 +819,7 @@ SETDEFAULTS_FUNC(mod_openssl_set_defaults)
         s->ssl_disable_client_renegotiation = 1;
         s->ssl_read_ahead = (0 == i ? 1 : p->config_storage[0]->ssl_read_ahead);
         if (0 != i) buffer_copy_buffer(s->ssl_ca_crl_file, p->config_storage[0]->ssl_ca_crl_file);
+        if (0 != i) buffer_copy_buffer(s->ssl_ca_dn_file, p->config_storage[0]->ssl_ca_dn_file);
 
         cv[0].destination = &(s->ssl_log_noise);
         cv[1].destination = &(s->ssl_enabled);
@@ -824,6 +840,7 @@ SETDEFAULTS_FUNC(mod_openssl_set_defaults)
         cv[16].destination = &(s->ssl_use_sslv2);
         cv[17].destination = &(s->ssl_use_sslv3);
         cv[18].destination = s->ssl_ca_crl_file;
+        cv[19].destination = s->ssl_ca_dn_file;
 
         p->config_storage[i] = s;
 
@@ -868,6 +885,7 @@ mod_openssl_patch_connection (server *srv, connection *con, handler_ctx *hctx)
     PATCH(ssl_pemfile_pkey);
     /*PATCH(ssl_ca_file);*//*(not patched)*/
     /*PATCH(ssl_ca_crl_file);*//*(not patched)*/
+    /*PATCH(ssl_ca_dn_file);*//*(not patched)*/
     PATCH(ssl_ca_file_cert_names);
     /*PATCH(ssl_cipher_list);*//*(not patched)*/
     /*PATCH(ssl_dh_file);*//*(not patched)*/
@@ -925,6 +943,8 @@ mod_openssl_patch_connection (server *srv, connection *con, handler_ctx *hctx)
           #if 0 /*(not patched)*/
             } else if (buffer_is_equal_string(du->key, CONST_STR_LEN("ssl.ca-crl-file"))) {
                 PATCH(ssl_ca_crl_file);
+            } else if (buffer_is_equal_string(du->key, CONST_STR_LEN("ssl.ca-dn-file"))) {
+                PATCH(ssl_ca_dn_file);
             } else if (buffer_is_equal_string(du->key, CONST_STR_LEN("ssl.honor-cipher-order"))) {
                 PATCH(ssl_honor_cipher_order);
             } else if (buffer_is_equal_string(du->key, CONST_STR_LEN("ssl.empty-fragments"))) {
