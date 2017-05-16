@@ -909,7 +909,7 @@ static void http_header_remap_setcookie (buffer *b, size_t off, http_header_rema
         }
         for (char *e = s; NULL != (s = memchr(e, ';', len)); ) {
             do { ++s; } while (*s == ' ' || *s == '\t');
-            if ('\0' == s) return;
+            if ('\0' == *s) return;
             /*(interested only in Domain and Path attributes)*/
             e = memchr(s, '=', len - (size_t)(s - e));
             if (NULL == e) { e = s+1; continue; }

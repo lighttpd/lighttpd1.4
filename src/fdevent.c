@@ -330,7 +330,7 @@ int fdevent_socket_cloexec(int domain, int type, int protocol) {
 #endif
 	if (-1 != (fd = socket(domain, type, protocol))) {
 #ifdef FD_CLOEXEC
-		fcntl(fd, F_SETFD, FD_CLOEXEC);
+		force_assert(-1 != fcntl(fd, F_SETFD, FD_CLOEXEC));
 #endif
 	}
 	return fd;
@@ -344,10 +344,10 @@ int fdevent_socket_nb_cloexec(int domain, int type, int protocol) {
 #endif
 	if (-1 != (fd = socket(domain, type, protocol))) {
 #ifdef FD_CLOEXEC
-		fcntl(fd, F_SETFD, FD_CLOEXEC);
+		force_assert(-1 != fcntl(fd, F_SETFD, FD_CLOEXEC));
 #endif
 #ifdef O_NONBLOCK
-		fcntl(fd, F_SETFL, O_NONBLOCK | O_RDWR);
+		force_assert(-1 != fcntl(fd, F_SETFL, O_NONBLOCK | O_RDWR));
 #endif
 	}
 	return fd;
@@ -364,7 +364,7 @@ int fdevent_open_cloexec(const char *pathname, int flags, mode_t mode) {
 	int fd = open(pathname, flags | O_NOCTTY, mode);
 #ifdef FD_CLOEXEC
 	if (fd != -1)
-		fcntl(fd, F_SETFD, FD_CLOEXEC);
+		force_assert(-1 != fcntl(fd, F_SETFD, FD_CLOEXEC));
 #endif
 	return fd;
 #endif
