@@ -219,10 +219,15 @@ verify_callback(int preverify_ok, X509_STORE_CTX *ctx)
     }
 
     if (preverify_ok) {
-	return preverify_ok;
+        return preverify_ok;
     }
 
+  #if OPENSSL_VERSION_NUMBER >= 0x10002000L
     err_cert = X509_STORE_CTX_get_current_cert(ctx);
+  #else
+    err_cert = ctx->current_cert;
+  #endif
+    if (NULL == err_cert) return !hctx->conf.ssl_verifyclient_enforce;
     X509_NAME_oneline(X509_get_subject_name(err_cert), buf, sizeof(buf));
     log_error_write(srv, __FILE__, __LINE__, "SDSSSDSS",
                         "SSL: verify error:num=", err, ":",
@@ -235,8 +240,7 @@ verify_callback(int preverify_ok, X509_STORE_CTX *ctx)
      */
     if (!preverify_ok && (err == X509_V_ERR_UNABLE_TO_GET_ISSUER_CERT_LOCALLY ||
                           err == X509_V_ERR_UNABLE_TO_GET_ISSUER_CERT)) {
-        X509_NAME_oneline(X509_get_issuer_name(ctx->current_cert), buf,
-                          sizeof(buf));
+        X509_NAME_oneline(X509_get_issuer_name(err_cert), buf, sizeof(buf));
         log_error_write(srv, __FILE__, __LINE__, "SS", "SSL: issuer=", buf);
     }
 
@@ -574,7 +578,7 @@ network_init_ssl (server *srv, void *p_d)
         }
 
         if (NULL == s->ssl_ca_file_cert_names
-	    && !buffer_string_is_empty(s->ssl_ca_file)) {
+            && !buffer_string_is_empty(s->ssl_ca_file)) {
             s->ssl_ca_file_cert_names =
               SSL_load_client_CA_file(s->ssl_ca_file->ptr);
             if (NULL == s->ssl_ca_file_cert_names) {
