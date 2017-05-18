@@ -1520,7 +1520,8 @@ static int mod_extforward_hap_PROXY_v2 (connection * const con,
             static const uint32_t zero = 0;
             handler_ctx *hctx =
               con->plugin_ctx[mod_extforward_plugin_data_singleton->id];
-            struct pp2_tlv_ssl *tlv_ssl = (struct pp2_tlv_ssl *)((char *)tlv+3);
+            struct pp2_tlv_ssl *tlv_ssl =
+              (struct pp2_tlv_ssl *)(void *)((char *)tlv+3);
             struct pp2_tlv *subtlv = tlv;
             if (tlv_ssl->client & PP2_CLIENT_SSL) {
                 buffer_copy_string_len(con->proto, CONST_STR_LEN("https"));
