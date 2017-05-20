@@ -595,6 +595,10 @@ static const char js_simple_table_resort[] = \
 " var at = get_inner_text(a.cells[sort_column]);\n" \
 " var bt = get_inner_text(b.cells[sort_column]);\n" \
 " var cmp;\n" \
+" if (sort_column == name_column) {\n" \
+"  if (at == '..') return -1;\n" \
+"  if (bt == '..') return  1;\n" \
+" }\n" \
 " if (a.cells[sort_column].className == 'int') {\n" \
 "  cmp = parseInt(at)-parseInt(bt);\n" \
 " } else if (sort_column == date_column) {\n" \
@@ -804,13 +808,17 @@ static void http_list_directory_header(server *srv, connection *con, plugin_data
 		"</tr>"
 		"</thead>\n"
 		"<tbody>\n"
+	));
+	if (!buffer_is_equal_string(con->uri.path, CONST_STR_LEN("/"))) {
+		buffer_append_string_len(out, CONST_STR_LEN(
 		"<tr class=\"d\">"
 			"<td class=\"n\"><a href=\"../\">..</a>/</td>"
 			"<td class=\"m\">&nbsp;</td>"
 			"<td class=\"s\">- &nbsp;</td>"
 			"<td class=\"t\">Directory</td>"
 		"</tr>\n"
-	));
+		));
+	}
 }
 
 static void http_list_directory_footer(server *srv, connection *con, plugin_data *p, buffer *out) {
