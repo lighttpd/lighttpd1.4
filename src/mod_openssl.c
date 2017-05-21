@@ -170,6 +170,23 @@ FREE_FUNC(mod_openssl_free)
 }
 
 
+static int
+safer_X509_NAME_oneline(X509_NAME *name, char *buf, size_t sz)
+{
+    BIO *bio = BIO_new(BIO_s_mem());
+    if (bio) {
+        int len = X509_NAME_print_ex(bio, name, 0, XN_FLAG_ONELINE);
+        BIO_gets(bio, buf, (int)sz); /*(may be truncated if len >= sz)*/
+        BIO_free(bio);
+        return len; /*return value has similar semantics to that of snprintf()*/
+    }
+    else {
+        buf[0] = '\0';
+        return -1;
+    }
+}
+
+
 static void
 ssl_info_callback (const SSL *ssl, int where, int ret)
 {
@@ -228,7 +245,7 @@ verify_callback(int preverify_ok, X509_STORE_CTX *ctx)
     err_cert = ctx->current_cert;
   #endif
     if (NULL == err_cert) return !hctx->conf.ssl_verifyclient_enforce;
-    X509_NAME_oneline(X509_get_subject_name(err_cert), buf, sizeof(buf));
+    safer_X509_NAME_oneline(X509_get_subject_name(err_cert),buf,sizeof(buf));
     log_error_write(srv, __FILE__, __LINE__, "SDSSSDSS",
                         "SSL: verify error:num=", err, ":",
                         X509_verify_cert_error_string(err), ":depth=", depth,
@@ -240,7 +257,7 @@ verify_callback(int preverify_ok, X509_STORE_CTX *ctx)
      */
     if (!preverify_ok && (err == X509_V_ERR_UNABLE_TO_GET_ISSUER_CERT_LOCALLY ||
                           err == X509_V_ERR_UNABLE_TO_GET_ISSUER_CERT)) {
-        X509_NAME_oneline(X509_get_issuer_name(err_cert), buf, sizeof(buf));
+        safer_X509_NAME_oneline(X509_get_issuer_name(err_cert),buf,sizeof(buf));
         log_error_write(srv, __FILE__, __LINE__, "SS", "SSL: issuer=", buf);
     }
 
@@ -1493,8 +1510,18 @@ https_add_ssl_client_entries (server *srv, connection *con, handler_ctx *hctx)
                             CONST_STR_LEN("SUCCESS"));
     }
 
-    buffer_copy_string_len(srv->tmp_buf, CONST_STR_LEN("SSL_CLIENT_S_DN_"));
     xn = X509_get_subject_name(xs);
+    {
+        char buf[256];
+        int len = safer_X509_NAME_oneline(xn, buf, sizeof(buf));
+        if (len > 0) {
+            if (len >= (int)sizeof(buf)) len = (int)sizeof(buf)-1;
+            array_set_key_value(con->environment,
+                                CONST_STR_LEN("SSL_CLIENT_S_DN"),
+                                buf, (size_t)len);
+        }
+    }
+    buffer_copy_string_len(srv->tmp_buf, CONST_STR_LEN("SSL_CLIENT_S_DN_"));
     for (i = 0, nentries = X509_NAME_entry_count(xn); i < nentries; ++i) {
         int xobjnid;
         const char * xobjsn;
