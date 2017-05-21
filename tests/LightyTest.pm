@@ -78,7 +78,7 @@ sub new {
 		$self->{MODULES_PATH} = $self->{BASEDIR}.'/build';
 	}
 	$self->{LIGHTTPD_PATH} = $self->{BINDIR}.'/lighttpd';
-	$self->{PORT} = 2048;
+	$self->{PORT} = $ENV{LIGHTTPD_TEST_PORT} ? int($ENV{LIGHTTPD_TEST_PORT}) : 2048;
 
 	my ($name, $aliases, $addrtype, $net) = gethostbyaddr(inet_aton("127.0.0.1"), AF_INET);
 
