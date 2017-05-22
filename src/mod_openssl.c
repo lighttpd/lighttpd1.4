@@ -1690,7 +1690,7 @@ int mod_openssl_plugin_init (plugin *p)
     p->name         = buffer_init_string("openssl");
     p->init         = mod_openssl_init;
     p->cleanup      = mod_openssl_free;
-    p->set_defaults = mod_openssl_set_defaults;
+    p->priv_defaults= mod_openssl_set_defaults;
 
     p->handle_connection_accept  = mod_openssl_handle_con_accept;
     p->handle_connection_shut_wr = mod_openssl_handle_con_shut_wr;

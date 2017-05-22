@@ -32,6 +32,7 @@ typedef struct {
 	buffer *name; /* name of the plugin */
 
 	void *(* init)                       ();
+	handler_t (* priv_defaults)          (server *srv, void *p_d);
 	handler_t (* set_defaults)           (server *srv, void *p_d);
 	handler_t (* cleanup)                (server *srv, void *p_d);
 	                                                                                   /* is called ... */

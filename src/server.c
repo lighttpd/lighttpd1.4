@@ -990,6 +990,11 @@ static int server_main (server * const srv, int argc, char **argv) {
 		return -1;
 	}
 
+	if (HANDLER_GO_ON != plugins_call_init(srv)) {
+		log_error_write(srv, __FILE__, __LINE__, "s", "Initialization of plugins failed. Going down.");
+		return -1;
+	}
+
 	/* open pid file BEFORE chroot */
 	if (-1 == pid_fd && !buffer_string_is_empty(srv->srvconf.pid_file)) {
 		if (-1 == (pid_fd = fdevent_open_cloexec(srv->srvconf.pid_file->ptr, O_WRONLY | O_CREAT | O_EXCL | O_TRUNC, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH))) {
@@ -1197,11 +1202,6 @@ static int server_main (server * const srv, int argc, char **argv) {
 	} else {
 		/* or use the default: we really don't want to hit max-fds */
 		srv->max_conns = srv->max_fds/3;
-	}
-
-	if (HANDLER_GO_ON != plugins_call_init(srv)) {
-		log_error_write(srv, __FILE__, __LINE__, "s", "Initialization of plugins failed. Going down.");
-		return -1;
 	}
 
 #ifdef HAVE_FORK

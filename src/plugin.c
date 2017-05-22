@@ -497,6 +497,10 @@ handler_t plugins_call_init(server *srv) {
 		} else {
 			p->data = NULL;
 		}
+
+		if (p->priv_defaults && HANDLER_ERROR==p->priv_defaults(srv, p->data)) {
+			return HANDLER_ERROR;
+		}
 	}
 
 	return HANDLER_GO_ON;
