@@ -235,6 +235,35 @@ verify_callback(int preverify_ok, X509_STORE_CTX *ctx)
         X509_STORE_CTX_set_error(ctx, err);
     }
 
+    if (preverify_ok && 0 == depth
+        && !buffer_string_is_empty(hctx->conf.ssl_ca_dn_file)
+        && !buffer_string_is_empty(hctx->conf.ssl_ca_file)) {
+        /* verify that client cert is issued by CA in ssl.ca-dn-file
+         * if both ssl.ca-dn-file and ssl.ca-file were configured */
+        STACK_OF(X509_NAME) * const names = hctx->conf.ssl_ca_file_cert_names;
+        X509_NAME *issuer;
+      #if OPENSSL_VERSION_NUMBER >= 0x10002000L
+        err_cert = X509_STORE_CTX_get_current_cert(ctx);
+      #else
+        err_cert = ctx->current_cert;
+      #endif
+        if (NULL == err_cert) return !hctx->conf.ssl_verifyclient_enforce;
+        issuer = X509_get_issuer_name(err_cert);
+      #if 0 /*(?desirable/undesirable to have ssl_ca_file_cert_names sorted?)*/
+        if (-1 != sk_X509_NAME_find(names, issuer))
+            return preverify_ok; /* match */
+      #else
+        for (int i = 0, len = sk_X509_NAME_num(names); i < len; ++i) {
+            if (0 == X509_NAME_cmp(sk_X509_NAME_value(names, i), issuer))
+                return preverify_ok; /* match */
+        }
+      #endif
+
+        preverify_ok = 0;
+        err = X509_V_ERR_CERT_REJECTED;
+        X509_STORE_CTX_set_error(ctx, err);
+    }
+
     if (preverify_ok) {
         return preverify_ok;
     }
@@ -331,7 +360,8 @@ network_ssl_servername_callback (SSL *ssl, int *al, server *srv)
         if (NULL == hctx->conf.ssl_ca_file_cert_names) {
             log_error_write(srv, __FILE__, __LINE__, "ssb:s", "SSL:",
                             "can't verify client without ssl.ca-file "
-                            "for TLS server name", con->uri.authority,
+                            "or ssl.ca-dn-file for TLS server name",
+                            con->uri.authority,
                             ERR_error_string(ERR_get_error(), NULL));
             return SSL_TLSEXT_ERR_ALERT_FATAL;
         }
@@ -542,6 +572,7 @@ network_init_ssl (server *srv, void *p_d)
         }
 
         if (buffer_string_is_empty(s->ssl_pemfile)
+            && buffer_string_is_empty(s->ssl_ca_dn_file)
             && buffer_string_is_empty(s->ssl_ca_file)) continue;
 
         if (ssl_is_init == 0) {
@@ -764,6 +795,15 @@ network_init_ssl (server *srv, void *p_d)
         for (size_t j = 0; j < srv->config_context->used; ++j) {
             plugin_config *s1 = p->config_storage[j];
 
+            if (!buffer_string_is_empty(s1->ssl_ca_dn_file)) {
+                if (1 != SSL_CTX_load_verify_locations(
+                           s->ssl_ctx, s1->ssl_ca_dn_file->ptr, NULL)) {
+                    log_error_write(srv, __FILE__, __LINE__, "ssb", "SSL:",
+                                    ERR_error_string(ERR_get_error(), NULL),
+                                    s1->ssl_ca_dn_file);
+                    return -1;
+                }
+            }
             if (!buffer_string_is_empty(s1->ssl_ca_file)) {
                 if (1 != SSL_CTX_load_verify_locations(
                            s->ssl_ctx, s1->ssl_ca_file->ptr, NULL)) {
@@ -780,7 +820,7 @@ network_init_ssl (server *srv, void *p_d)
             if (NULL == s->ssl_ca_file_cert_names) {
                 log_error_write(srv, __FILE__, __LINE__, "s",
                                 "SSL: You specified ssl.verifyclient.activate "
-                                "but no ca_file");
+                                "but no ssl.ca-file or ssl.ca-dn-file");
                 return -1;
             }
             SSL_CTX_set_client_CA_list(
@@ -966,9 +1006,9 @@ mod_openssl_patch_connection (server *srv, connection *con, handler_ctx *hctx)
     /*PATCH(ssl_pemfile);*//*(not patched)*/
     PATCH(ssl_pemfile_x509);
     PATCH(ssl_pemfile_pkey);
-    /*PATCH(ssl_ca_file);*//*(not patched)*/
+    PATCH(ssl_ca_file);
     /*PATCH(ssl_ca_crl_file);*//*(not patched)*/
-    /*PATCH(ssl_ca_dn_file);*//*(not patched)*/
+    PATCH(ssl_ca_dn_file);
     PATCH(ssl_ca_file_cert_names);
     /*PATCH(ssl_cipher_list);*//*(not patched)*/
     /*PATCH(ssl_dh_file);*//*(not patched)*/
@@ -1005,7 +1045,10 @@ mod_openssl_patch_connection (server *srv, connection *con, handler_ctx *hctx)
                 PATCH(ssl_pemfile_x509);
                 PATCH(ssl_pemfile_pkey);
             } else if (buffer_is_equal_string(du->key, CONST_STR_LEN("ssl.ca-file"))) {
-                /*PATCH(ssl_ca_file);*//*(not patched)*/
+                PATCH(ssl_ca_file);
+                PATCH(ssl_ca_file_cert_names);
+            } else if (buffer_is_equal_string(du->key, CONST_STR_LEN("ssl.ca-dn-file"))) {
+                PATCH(ssl_ca_dn_file);
                 PATCH(ssl_ca_file_cert_names);
             } else if (buffer_is_equal_string(du->key, CONST_STR_LEN("ssl.verifyclient.activate"))) {
                 PATCH(ssl_verifyclient);
@@ -1026,8 +1069,6 @@ mod_openssl_patch_connection (server *srv, connection *con, handler_ctx *hctx)
           #if 0 /*(not patched)*/
             } else if (buffer_is_equal_string(du->key, CONST_STR_LEN("ssl.ca-crl-file"))) {
                 PATCH(ssl_ca_crl_file);
-            } else if (buffer_is_equal_string(du->key, CONST_STR_LEN("ssl.ca-dn-file"))) {
-                PATCH(ssl_ca_dn_file);
             } else if (buffer_is_equal_string(du->key, CONST_STR_LEN("ssl.honor-cipher-order"))) {
                 PATCH(ssl_honor_cipher_order);
             } else if (buffer_is_equal_string(du->key, CONST_STR_LEN("ssl.empty-fragments"))) {
