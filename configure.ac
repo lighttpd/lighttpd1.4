@@ -863,7 +863,10 @@ AC_CHECK_FUNCS([dup2 getcwd inet_ntoa inet_ntop inet_pton issetugid memset mmap 
 		  getuid select signal pathconf madvise posix_fadvise posix_madvise \
 		  writev sigaction sendfile64 send_file kqueue port_create localtime_r gmtime_r \
 		  memset_s explicit_bzero clock_gettime pipe2 \
-		  getentropy arc4random_buf jrand48 srandom getloadavg])
+		  arc4random_buf jrand48 srandom getloadavg])
+AC_CHECK_HEADERS([sys/random.h],[
+  AC_CHECK_FUNC([getentropy], AC_DEFINE([HAVE_GETENTROPY], [1], [getentropy]))
+])
 AC_CHECK_HEADERS([linux/random.h],[
   AC_CHECK_FUNC([getrandom], AC_DEFINE([HAVE_GETRANDOM], [1], [getrandom]))
 ])

@@ -13,7 +13,9 @@
 #include <errno.h>
 #include <fcntl.h>
 
+#ifdef SOCK_CLOEXEC
 static int use_sock_cloexec;
+#endif
 
 fdevents *fdevent_init(server *srv, size_t maxfds, int type) {
 	fdevents *ev;

@@ -21,6 +21,9 @@
 #include <openssl/opensslv.h> /* OPENSSL_VERSION_NUMBER */
 #include <openssl/rand.h>
 #endif
+#ifdef HAVE_GETENTROPY
+#include <sys/random.h>
+#endif
 #ifdef HAVE_LINUX_RANDOM_H
 #include <sys/syscall.h>
 #include <linux/random.h>
