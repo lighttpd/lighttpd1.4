@@ -361,6 +361,7 @@ static void server_free(server *srv) {
 			buffer_free(s->error_handler);
 			buffer_free(s->error_handler_404);
 			buffer_free(s->errorfile_prefix);
+			buffer_free(s->socket_perms);
 			array_free(s->mimetypes);
 			free(s);
 		}

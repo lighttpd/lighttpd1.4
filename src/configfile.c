@@ -164,6 +164,7 @@ static int config_insert(server *srv) {
 		{ "server.max-request-field-size",     NULL, T_CONFIG_INT,     T_CONFIG_SCOPE_SERVER     }, /* 78 */
 		{ "server.error-intercept",            NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION }, /* 79 */
 		{ "server.syslog-facility",            NULL, T_CONFIG_STRING,  T_CONFIG_SCOPE_SERVER     }, /* 80 */
+		{ "server.socket-perms",               NULL, T_CONFIG_STRING,  T_CONFIG_SCOPE_CONNECTION }, /* 81 */
 
 		{ NULL,                                NULL, T_CONFIG_UNSET,   T_CONFIG_SCOPE_UNSET      }
 	};
@@ -230,6 +231,9 @@ static int config_insert(server *srv) {
 		  ? buffer_init()
 		  : buffer_init_buffer(srv->config_storage[0]->bsd_accept_filter);
 	      #endif
+		s->socket_perms = (i == 0 || buffer_string_is_empty(srv->config_storage[0]->socket_perms))
+		  ? buffer_init()
+		  : buffer_init_buffer(srv->config_storage[0]->socket_perms);
 		s->max_keep_alive_requests = 100;
 		s->max_keep_alive_idle = 5;
 		s->max_read_idle = 60;
@@ -323,6 +327,7 @@ static int config_insert(server *srv) {
 		cv[76].destination = &(s->stream_request_body);
 		cv[77].destination = &(s->stream_response_body);
 		cv[79].destination = &(s->error_intercept);
+		cv[81].destination = s->socket_perms;
 
 		srv->config_storage[i] = s;
 
@@ -558,6 +563,7 @@ int config_setup_connection(server *srv, connection *con) {
 	/*PATCH(listen_backlog);*//*(not necessary; used only at startup)*/
 	PATCH(stream_request_body);
 	PATCH(stream_response_body);
+	PATCH(socket_perms);
 
 	PATCH(etag_use_inode);
 	PATCH(etag_use_mtime);
@@ -651,6 +657,8 @@ int config_patch_connection(server *srv, connection *con) {
 				PATCH(global_kbytes_per_second);
 				PATCH(global_bytes_per_second_cnt);
 				con->conf.global_bytes_per_second_cnt_ptr = &s->global_bytes_per_second_cnt;
+			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("server.socket-perms"))) {
+				PATCH(socket_perms);
 			}
 		}
 	}

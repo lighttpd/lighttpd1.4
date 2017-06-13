@@ -229,6 +229,7 @@ typedef struct {
 	buffer *server_tag;
 	buffer *dirlist_encoding;
 	buffer *errorfile_prefix;
+	buffer *socket_perms;
 
 	unsigned short high_precision_timestamps;
 	unsigned short max_keep_alive_requests;
