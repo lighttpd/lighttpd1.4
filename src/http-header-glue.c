@@ -1419,7 +1419,6 @@ int http_cgi_headers (server *srv, connection *con, http_cgi_opts *opts, http_cg
     /* CGI-SPEC 6.1.2, FastCGI spec 6.3 and SCGI spec */
 
     int rc = 0;
-    unsigned short port;
     server_socket *srv_sock = con->srv_socket;
     const char *s;
     size_t n;
@@ -1562,14 +1561,7 @@ int http_cgi_headers (server *srv, connection *con, http_cgi_opts *opts, http_cg
     }
 
     addr = &srv_sock->addr;
-  #ifdef HAVE_IPV6
-    port = addr->plain.sa_family == AF_INET6
-         ? addr->ipv6.sin6_port
-         : addr->ipv4.sin_port;
-  #else
-    port = addr->ipv4.sin_port;
-  #endif
-    li_utostrn(buf, sizeof(buf), ntohs(port));
+    li_utostrn(buf, sizeof(buf), sock_addr_get_port(addr));
     rc |= cb(vdata, CONST_STR_LEN("SERVER_PORT"), buf, strlen(buf));
 
     switch (addr->plain.sa_family) {
@@ -1629,14 +1621,7 @@ int http_cgi_headers (server *srv, connection *con, http_cgi_opts *opts, http_cg
     rc |= cb(vdata, CONST_STR_LEN("REMOTE_ADDR"),
                     CONST_BUF_LEN(con->dst_addr_buf));
 
-  #ifdef HAVE_IPV6
-    port = con->dst_addr.plain.sa_family == AF_INET6
-         ? con->dst_addr.ipv6.sin6_port
-         : con->dst_addr.ipv4.sin_port;
-  #else
-    port = con->dst_addr.ipv4.sin_port;
-  #endif
-    li_utostrn(buf, sizeof(buf), ntohs(port));
+    li_utostrn(buf, sizeof(buf), sock_addr_get_port(&con->dst_addr));
     rc |= cb(vdata, CONST_STR_LEN("REMOTE_PORT"), buf, strlen(buf));
 
     for (n = 0; n < con->request.headers->used; n++) {

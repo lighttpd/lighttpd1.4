@@ -4,6 +4,8 @@
 
 #include "base.h"
 
+unsigned short sock_addr_get_port (const sock_addr *addr);
+
 int sock_addr_inet_pton(sock_addr *addr, const char *str, int family, unsigned short port);
 
 const char * sock_addr_inet_ntop(const sock_addr *addr, char *buf, socklen_t sz);

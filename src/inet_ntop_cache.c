@@ -9,6 +9,21 @@
 #include <string.h>
 
 
+unsigned short sock_addr_get_port (const sock_addr *addr)
+{
+    switch (addr->plain.sa_family) {
+      case AF_INET:
+        return ntohs(addr->ipv4.sin_port);
+     #ifdef HAVE_IPV6
+      case AF_INET6:
+        return ntohs(addr->ipv6.sin6_port);
+     #endif
+      default: /* case AF_UNIX: */
+        return 0;
+    }
+}
+
+
 int sock_addr_inet_pton(sock_addr *addr, const char *str,
                         int family, unsigned short port)
 {

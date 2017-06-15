@@ -213,14 +213,6 @@ int config_insert_values_global(server *srv, array *ca, const config_values_t cv
 	return config_insert_values_internal(srv, ca, cv, scope);
 }
 
-static unsigned short sock_addr_get_port(sock_addr *addr) {
-#ifdef HAVE_IPV6
-	return ntohs(addr->plain.sa_family ? addr->ipv6.sin6_port : addr->ipv4.sin_port);
-#else
-	return ntohs(addr->ipv4.sin_port);
-#endif
-}
-
 static const char* cond_result_to_string(cond_result_t cond_result) {
 	switch (cond_result) {
 	case COND_RESULT_UNSET: return "unset";
@@ -415,6 +407,7 @@ static cond_result_t config_check_cond_nocache(server *srv, connection *con, dat
 	switch (dc->comp) {
 	case COMP_HTTP_HOST: {
 		char *ck_colon = NULL, *val_colon = NULL;
+		unsigned short port;
 
 		if (!buffer_string_is_empty(con->uri.authority)) {
 
@@ -427,6 +420,19 @@ static cond_result_t config_check_cond_nocache(server *srv, connection *con, dat
 			switch(dc->cond) {
 			case CONFIG_COND_NE:
 			case CONFIG_COND_EQ:
+				switch (srv_sock->addr.plain.sa_family) {
+				  case AF_INET:
+					port = ntohs(srv_sock->addr.ipv4.sin_port);
+					break;
+				 #ifdef HAVE_IPV6
+				  case AF_INET6:
+					port = ntohs(srv_sock->addr.ipv6.sin6_port);
+					break;
+				 #endif
+				  default:
+					port = 0;
+				}
+				if (0 == port) break;
 				ck_colon = strchr(dc->string->ptr, ':');
 				val_colon = strchr(l->ptr, ':');
 
@@ -434,7 +440,7 @@ static cond_result_t config_check_cond_nocache(server *srv, connection *con, dat
 					/* condition "host:port" but client send "host" */
 					buffer_copy_buffer(srv->cond_check_buf, l);
 					buffer_append_string_len(srv->cond_check_buf, CONST_STR_LEN(":"));
-					buffer_append_int(srv->cond_check_buf, sock_addr_get_port(&(srv_sock->addr)));
+					buffer_append_int(srv->cond_check_buf, port);
 					l = srv->cond_check_buf;
 				} else if (NULL != val_colon && NULL == ck_colon) {
 					/* condition "host" but client send "host:port" */
