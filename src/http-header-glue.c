@@ -1268,6 +1268,7 @@ handler_t http_response_parse_headers(server *srv, connection *con, http_respons
     if (opts->local_redir && con->http_status >= 300 && con->http_status < 400){
         /*(con->parsed_response & HTTP_LOCATION)*/
         handler_t rc = http_response_process_local_redir(srv, con, blen);
+        if (con->mode == DIRECT) con->file_started = 0;
         if (rc != HANDLER_GO_ON) return rc;
     }
 
@@ -1278,12 +1279,14 @@ handler_t http_response_parse_headers(server *srv, connection *con, http_respons
             && NULL != (ds = (data_string *) array_get_element(con->response.headers, "X-Sendfile2"))) {
             http_response_xsendfile2(srv, con, ds->value, opts->xsendfile_docroot);
             buffer_reset(ds->value); /*(do not send to client)*/
+            if (con->mode == DIRECT) con->file_started = 0;
             return HANDLER_FINISHED;
         } else if (NULL != (ds = (data_string *) array_get_element(con->response.headers, "X-Sendfile"))
                    || (opts->backend == BACKEND_FASTCGI /* X-LIGHTTPD-send-file is deprecated; historical for fastcgi */
                        && NULL != (ds = (data_string *) array_get_element(con->response.headers, "X-LIGHTTPD-send-file")))) {
             http_response_xsendfile(srv, con, ds->value, opts->xsendfile_docroot);
             buffer_reset(ds->value); /*(do not send to client)*/
+            if (con->mode == DIRECT) con->file_started = 0;
             return HANDLER_FINISHED;
         }
     }
