@@ -630,13 +630,20 @@ SETDEFAULTS_FUNC(log_access_open) {
 
 		if (srv->srvconf.preflight_check) continue;
 
-		if (-1 == (s->log_access_fd = open_logfile_or_pipe(srv, s->access_logfile->ptr)))
+		if (-1 == (s->log_access_fd = fdevent_open_logger(s->access_logfile->ptr))) {
+			log_error_write(srv, __FILE__, __LINE__, "SBSS",
+					"opening log '", s->access_logfile,
+					"' failed: ", strerror(errno));
 			return HANDLER_ERROR;
-
+		}
 	}
 
 	return HANDLER_GO_ON;
 }
+
+#ifndef O_LARGEFILE
+#define O_LARGEFILE 0
+#endif
 
 SIGHUP_FUNC(log_access_cycle) {
 	plugin_data *p = p_d;

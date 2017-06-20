@@ -1,6 +1,7 @@
 #include "first.h"
 
 #include "base.h"
+#include "fdevent.h"
 #include "log.h"
 #include "buffer.h"
 
@@ -14,6 +15,7 @@
 
 #include <sys/types.h>
 #include "sys-strings.h"
+#include <sys/wait.h>
 
 #include <ctype.h>
 #include <stdlib.h>
@@ -25,10 +27,6 @@
 
 #ifdef HAVE_PWD_H
 # include <pwd.h>
-#endif
-
-#ifdef HAVE_FORK
-# include <sys/wait.h>
 #endif
 
 #ifdef HAVE_SYS_FILIO_H
@@ -763,6 +761,7 @@ static int process_ssi_stmt(server *srv, connection *con, handler_ctx *p, const 
 		const char *cmd = NULL;
 		pid_t pid;
 		chunk *c;
+		char *args[4];
 
 		if (!p->conf.ssi_exec) { /* <!--#exec ... --> disabled by config */
 			break;
@@ -785,31 +784,21 @@ static int process_ssi_stmt(server *srv, connection *con, handler_ctx *p, const 
 		 */
 
 		if (!cmd) break;
-#ifdef HAVE_FORK
+
 		/* send cmd output to a temporary file */
 		if (0 != chunkqueue_append_mem_to_tempfile(srv, con->write_queue, "", 0)) break;
 		c = con->write_queue->last;
 
-		/* fork, execve */
-		switch (pid = fork()) {
-		case 0: {
-			close(STDOUT_FILENO);
-			dup2(c->file.fd, STDOUT_FILENO);
-			close(c->file.fd);
+		*(const char **)&args[0] = "/bin/sh";
+		*(const char **)&args[1] = "-c";
+		*(const char **)&args[2] = cmd;
+		args[3] = NULL;
 
-			/* close stdin */
-			close(STDIN_FILENO);
-
-			execl("/bin/sh", "sh", "-c", cmd, (char *)NULL);
-
+		/*(expects STDIN_FILENO open to /dev/null)*/
+		pid = fdevent_fork_execve(args[0], args, NULL, -1, c->file.fd, -1, -1);
+		if (-1 == pid) {
 			log_error_write(srv, __FILE__, __LINE__, "sss", "spawning exec failed:", strerror(errno), cmd);
-			_exit(errno);
-		}
-		case -1:
-			/* error */
-			log_error_write(srv, __FILE__, __LINE__, "ss", "fork failed:", strerror(errno));
-			break;
-		default: {
+		} else {
 			struct stat stb;
 			int status;
 
@@ -831,15 +820,7 @@ static int process_ssi_stmt(server *srv, connection *con, handler_ctx *p, const 
 			if (0 == fstat(c->file.fd, &stb)) {
 				c->file.length = stb.st_size;
 			}
-
-			break;
 		}
-		}
-#else
-		UNUSED(pid);
-		UNUSED(c);
-		return -1;
-#endif
 
 		break;
 	}

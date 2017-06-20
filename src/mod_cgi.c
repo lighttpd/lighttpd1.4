@@ -21,9 +21,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <fdevent.h>
-#include <signal.h>
 
-#include <stdio.h>
 #include <fcntl.h>
 
 static int pipe_cloexec(int pipefd[2]) {
@@ -284,8 +282,6 @@ static void cgi_connection_close(server *srv, handler_ctx *hctx) {
 	plugin_data *p = hctx->plugin_data;
 	connection *con = hctx->remote_conn;
 
-#ifndef __WIN32
-
 	/* the connection to the browser went away, but we still have a connection
 	 * to the CGI script
 	 *
@@ -310,7 +306,7 @@ static void cgi_connection_close(server *srv, handler_ctx *hctx) {
 	cgi_handler_ctx_free(hctx);
 
 	/* if waitpid hasn't been called by response.c yet, do it here */
-	if (pid) {
+	if (pid > 0) {
 		/* check if the CGI-script is already gone */
 		switch(waitpid(pid, &status, WNOHANG)) {
 		case 0:
@@ -359,7 +355,6 @@ static void cgi_connection_close(server *srv, handler_ctx *hctx) {
 			cgi_pid_add(srv, p, pid);
 		}
 	}
-#endif
 
 	/* finish response (if not already con->file_started, con->file_finished) */
 	if (con->mode == p->id) {
@@ -771,17 +766,16 @@ static int cgi_write_request(server *srv, handler_ctx *hctx, int fd) {
 }
 
 static int cgi_create_env(server *srv, connection *con, plugin_data *p, handler_ctx *hctx, buffer *cgi_handler) {
-	pid_t pid;
-
+	char_array env;
+	char *args[3];
 	int to_cgi_fds[2];
 	int from_cgi_fds[2];
-	struct stat st;
+	int dfd = -1;
 	UNUSED(p);
-
-#ifndef __WIN32
 
 	if (!buffer_string_is_empty(cgi_handler)) {
 		/* stat the exec file */
+		struct stat st;
 		if (-1 == (stat(cgi_handler->ptr, &st))) {
 			log_error_write(srv, __FILE__, __LINE__, "sbss",
 					"stat for cgi-handler", cgi_handler,
@@ -794,41 +788,19 @@ static int cgi_create_env(server *srv, connection *con, plugin_data *p, handler_
 		log_error_write(srv, __FILE__, __LINE__, "ss", "pipe failed:", strerror(errno));
 		return -1;
 	}
-
 	if (pipe_cloexec(from_cgi_fds)) {
 		close(to_cgi_fds[0]);
 		close(to_cgi_fds[1]);
 		log_error_write(srv, __FILE__, __LINE__, "ss", "pipe failed:", strerror(errno));
 		return -1;
 	}
+	fdevent_setfd_cloexec(to_cgi_fds[1]);
+	fdevent_setfd_cloexec(from_cgi_fds[0]);
 
-	/* fork, execve */
-	switch (pid = fork()) {
-	case 0: {
-		/* child */
-		char **args;
-		int argc;
+	{
 		int i = 0;
-		char_array env;
-		char *c;
 		const char *s;
 		http_cgi_opts opts = { 0, 0, NULL, NULL };
-
-		/* move stdout to from_cgi_fd[1] */
-		dup2(from_cgi_fds[1], STDOUT_FILENO);
-	      #ifndef FD_CLOEXEC
-		close(from_cgi_fds[1]);
-		/* not needed */
-		close(from_cgi_fds[0]);
-	      #endif
-
-		/* move the stdin to to_cgi_fd[0] */
-		dup2(to_cgi_fds[0], STDIN_FILENO);
-	      #ifndef FD_CLOEXEC
-		close(to_cgi_fds[0]);
-		/* not needed */
-		close(to_cgi_fds[1]);
-	      #endif
 
 		/* create environment */
 		env.ptr = NULL;
@@ -860,9 +832,6 @@ static int cgi_create_env(server *srv, connection *con, plugin_data *p, handler_
 		env.ptr[env.used] = NULL;
 
 		/* set up args */
-		argc = 3;
-		args = malloc(sizeof(*args) * argc);
-		force_assert(args);
 		i = 0;
 
 		if (!buffer_string_is_empty(cgi_handler)) {
@@ -870,51 +839,34 @@ static int cgi_create_env(server *srv, connection *con, plugin_data *p, handler_
 		}
 		args[i++] = con->physical.path->ptr;
 		args[i  ] = NULL;
-
-		/* search for the last / */
-		if (NULL != (c = strrchr(con->physical.path->ptr, '/'))) {
-			/* handle special case of file in root directory */
-			const char* physdir = (c == con->physical.path->ptr) ? "/" : con->physical.path->ptr;
-
-			/* temporarily shorten con->physical.path to directory without terminating '/' */
-			*c = '\0';
-			/* change to the physical directory */
-			if (-1 == chdir(physdir)) {
-				log_error_write(srv, __FILE__, __LINE__, "ssb", "chdir failed:", strerror(errno), con->physical.path);
-			}
-			*c = '/';
-		}
-
-		/* we don't need the client socket */
-		for (i = 3; i < 256; i++) {
-			if (i != srv->errorlog_fd) close(i);
-		}
-
-		/* exec the cgi */
-		execve(args[0], args, env.ptr);
-
-		/* most log files may have been closed/redirected by this point,
-		 * though stderr might still point to lighttpd.breakage.log */
-		perror(args[0]);
-		_exit(1);
 	}
-	case -1:
-		/* error */
+
+	dfd = fdevent_open_dirname(con->physical.path->ptr);
+	if (-1 == dfd) {
+		log_error_write(srv, __FILE__, __LINE__, "ssb", "open dirname failed:", strerror(errno), con->physical.path);
+	}
+
+	hctx->pid = (dfd >= 0) ? fdevent_fork_execve(con->physical.path->ptr, args, env.ptr, to_cgi_fds[0], from_cgi_fds[1], -1, dfd) : -1;
+
+	for (size_t i = 0; i < env.used; ++i) free(env.ptr[i]);
+	free(env.ptr);
+
+	if (-1 == hctx->pid) {
+		/* log error with errno prior to calling close() (might change errno) */
 		log_error_write(srv, __FILE__, __LINE__, "ss", "fork failed:", strerror(errno));
+		if (-1 != dfd) close(dfd);
 		close(from_cgi_fds[0]);
 		close(from_cgi_fds[1]);
 		close(to_cgi_fds[0]);
 		close(to_cgi_fds[1]);
 		return -1;
-	default: {
-		/* parent process */
-
+	} else {
+		if (-1 != dfd) close(dfd);
 		close(from_cgi_fds[1]);
 		close(to_cgi_fds[0]);
 
 		/* register PID and wait for them asynchronously */
 
-		hctx->pid = pid;
 		hctx->fd = from_cgi_fds[0];
 		hctx->fde_ndx = -1;
 
@@ -948,14 +900,8 @@ static int cgi_create_env(server *srv, connection *con, plugin_data *p, handler_
 		}
 		fdevent_event_set(srv->ev, &(hctx->fde_ndx), hctx->fd, FDEVENT_IN);
 
-		break;
+		return 0;
 	}
-	}
-
-	return 0;
-#else
-	return -1;
-#endif
 }
 
 static buffer * cgi_get_handler(array *a, buffer *fn) {
@@ -1073,7 +1019,6 @@ TRIGGER_FUNC(cgi_trigger) {
 	plugin_data *p = p_d;
 	size_t ndx;
 	/* the trigger handle only cares about lonely PID which we have to wait for */
-#ifndef __WIN32
 
 	for (ndx = 0; ndx < p->cgi_pid.used; ndx++) {
 		int status;
@@ -1122,7 +1067,7 @@ TRIGGER_FUNC(cgi_trigger) {
 			ndx--;
 		}
 	}
-#endif
+
 	return HANDLER_GO_ON;
 }
 

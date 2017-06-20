@@ -348,23 +348,6 @@ typedef struct {
 /* ok, we need a prototype */
 static handler_t fcgi_handle_fdevent(server *srv, void *ctx, int revents);
 
-#ifdef HAVE_FORK
-static void reset_signals(void) {
-#ifdef SIGTTOU
-	signal(SIGTTOU, SIG_DFL);
-#endif
-#ifdef SIGTTIN
-	signal(SIGTTIN, SIG_DFL);
-#endif
-#ifdef SIGTSTP
-	signal(SIGTSTP, SIG_DFL);
-#endif
-	signal(SIGHUP, SIG_DFL);
-	signal(SIGPIPE, SIG_DFL);
-	signal(SIGUSR1, SIG_DFL);
-}
-#endif /* HAVE_FORK */
-
 static void fastcgi_status_copy_procname(buffer *b, fcgi_extension_host *host, fcgi_proc *proc) {
 	buffer_copy_string_len(b, CONST_STR_LEN("fastcgi.backend."));
 	buffer_append_string_buffer(b, host->id);
@@ -788,7 +771,7 @@ FREE_FUNC(mod_fastcgi_free) {
 					host = ex->hosts[n];
 
 					for (proc = host->first; proc; proc = proc->next) {
-						if (proc->pid != 0) {
+						if (proc->pid > 0) {
 							kill(proc->pid, host->kill_signal);
 						}
 
@@ -799,7 +782,7 @@ FREE_FUNC(mod_fastcgi_free) {
 					}
 
 					for (proc = host->unused_procs; proc; proc = proc->next) {
-						if (proc->pid != 0) {
+						if (proc->pid > 0) {
 							kill(proc->pid, host->kill_signal);
 						}
 						if (proc->is_local &&
@@ -826,7 +809,6 @@ FREE_FUNC(mod_fastcgi_free) {
 	return HANDLER_GO_ON;
 }
 
-#ifdef HAVE_FORK
 static int env_add(char_array *env, const char *key, size_t key_len, const char *val, size_t val_len) {
 	char *dst;
 	size_t i;
@@ -841,8 +823,7 @@ static int env_add(char_array *env, const char *key, size_t key_len, const char 
 
 	for (i = 0; i < env->used; i++) {
 		if (0 == strncmp(dst, env->ptr[i], key_len + 1)) {
-			/* don't care about free as we are in a forked child which is going to exec(...) */
-			/* free(env->ptr[i]); */
+			free(env->ptr[i]);
 			env->ptr[i] = dst;
 			return 0;
 		}
@@ -916,21 +897,6 @@ static int parse_binpath(char_array *env, buffer *b) {
 
 	return 0;
 }
-#endif /* HAVE_FORK */
-
-#if !defined(HAVE_FORK)
-static int fcgi_spawn_connection(server *srv,
-                                 plugin_data *p,
-                                 fcgi_extension_host *host,
-                                 fcgi_proc *proc) {
-	UNUSED(srv);
-	UNUSED(p);
-	UNUSED(host);
-	UNUSED(proc);
-	return -1;
-}
-
-#else /* -> defined(HAVE_FORK) */
 
 static int fcgi_spawn_connection(server *srv,
                                  plugin_data *p,
@@ -1071,8 +1037,12 @@ static int fcgi_spawn_connection(server *srv,
 
 	if (-1 == status) {
 		/* server is not up, spawn it  */
-		pid_t child;
+		char_array env;
+		char_array arg;
+		buffer *bin_path = NULL;
+		size_t i;
 		int val;
+		int dfd = -1;
 
 		/* reopen socket */
 		if (-1 == (fcgi_fd = fdevent_socket_cloexec(fcgi_addr->sa_family, SOCK_STREAM, 0))) {
@@ -1106,13 +1076,7 @@ static int fcgi_spawn_connection(server *srv,
 			return -1;
 		}
 
-		switch ((child = fork())) {
-		case 0: {
-			size_t i = 0;
-			char *c;
-			char_array env;
-			char_array arg;
-
+		{
 			/* create environment */
 			env.ptr = NULL;
 			env.size = 0;
@@ -1121,19 +1085,6 @@ static int fcgi_spawn_connection(server *srv,
 			arg.ptr = NULL;
 			arg.size = 0;
 			arg.used = 0;
-
-			if(fcgi_fd != FCGI_LISTENSOCK_FILENO) {
-				dup2(fcgi_fd, FCGI_LISTENSOCK_FILENO);
-				close(fcgi_fd);
-			}
-			else {
-				fdevent_clrfd_cloexec(fcgi_fd);
-			}
-
-			/* we don't need the client socket */
-			for (i = 3; i < 256; i++) {
-				close(i);
-			}
 
 			/* build clean environment */
 			if (host->bin_env_copy->used) {
@@ -1175,44 +1126,35 @@ static int fcgi_spawn_connection(server *srv,
 
 			env.ptr[env.used] = NULL;
 
-			parse_binpath(&arg, host->bin_path);
-
-			/* chdir into the base of the bin-path,
-			 * search for the last / */
-			if (NULL != (c = strrchr(arg.ptr[0], '/'))) {
-				*c = '\0';
-
-				/* change to the physical directory */
-				if (-1 == chdir(arg.ptr[0])) {
-					*c = '/';
-					log_error_write(srv, __FILE__, __LINE__, "sss", "chdir failed:", strerror(errno), arg.ptr[0]);
-				}
-				*c = '/';
-			}
-
-			reset_signals();
-
-			/* exec the cgi */
-			execve(arg.ptr[0], arg.ptr, env.ptr);
-
-			/* log_error_write(srv, __FILE__, __LINE__, "sbs",
-					"execve failed for:", host->bin_path, strerror(errno)); */
-
-			_exit(errno);
-
-			break;
+			bin_path = buffer_init_buffer(host->bin_path);
+			parse_binpath(&arg, bin_path);
 		}
-		case -1:
-			/* error */
-			close(fcgi_fd);
-			break;
-		default:
-			/* father */
-			close(fcgi_fd);
+
+		dfd = fdevent_open_dirname(arg.ptr[0]);
+		if (-1 == dfd) {
+			log_error_write(srv, __FILE__, __LINE__, "sss", "open dirname failed:", strerror(errno), arg.ptr[0]);
+		}
+
+		/*(FCGI_LISTENSOCK_FILENO == STDIN_FILENO == 0)*/
+		proc->pid = (dfd >= 0) ? fdevent_fork_execve(arg.ptr[0], arg.ptr, env.ptr, fcgi_fd, -1, -1, dfd) : -1;
+
+		for (i = 0; i < env.used; ++i) free(env.ptr[i]);
+		free(env.ptr);
+		/*(arg[] contains string references into bin_path)*/
+		/*for (i = 0; i < arg.used; ++i) free(arg.ptr[i]);*/
+		free(arg.ptr);
+		buffer_free(bin_path);
+		if (-1 != dfd) close(dfd);
+		close(fcgi_fd);
+
+		if (-1 == proc->pid) {
+			log_error_write(srv, __FILE__, __LINE__, "sb",
+					"fastcgi-backend failed to start:", host->bin_path);
+			return -1;
+		}
 
 			/* register process */
 			proc->is_local = 1;
-			proc->pid = child;
 
 			/* wait */
 			select(0, NULL, NULL, NULL, &tv);
@@ -1226,9 +1168,6 @@ static int fcgi_spawn_connection(server *srv,
 						"If this is PHP, try removing the bytecode caches for now and try again.");
 				return -1;
 			}
-
-			break;
-		}
 	} else {
 		proc->is_local = 0;
 		proc->pid = 0;
@@ -1243,8 +1182,6 @@ static int fcgi_spawn_connection(server *srv,
 	fcgi_proc_set_state(host, proc, PROC_STATE_RUNNING);
 	return 0;
 }
-
-#endif /* HAVE_FORK */
 
 static fcgi_extension_host * unixsocket_is_dup(plugin_data *p, size_t used, buffer *unixsocket) {
 	size_t i, j, n;

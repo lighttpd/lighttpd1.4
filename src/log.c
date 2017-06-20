@@ -3,30 +3,16 @@
 #include "base.h"
 #include "fdevent.h"
 #include "log.h"
-#include "array.h"
 
 #include <sys/types.h>
-
 #include <errno.h>
-#include <fcntl.h>
 #include <time.h>
 #include <unistd.h>
 #include <string.h>
-#include <stdlib.h>
-
 #include <stdarg.h>
-#include <stdio.h>
 
 #ifdef HAVE_SYSLOG_H
 # include <syslog.h>
-#endif
-
-#ifdef HAVE_VALGRIND_VALGRIND_H
-# include <valgrind/valgrind.h>
-#endif
-
-#ifndef O_LARGEFILE
-# define O_LARGEFILE 0
 #endif
 
 #ifndef HAVE_CLOCK_GETTIME
@@ -79,109 +65,6 @@ ssize_t write_all(int fd, const void* buf, size_t count) {
 	return written;
 }
 
-/* Close fd and _try_ to get a /dev/null for it instead.
- * close() alone may trigger some bugs when a
- * process opens another file and gets fd = STDOUT_FILENO or STDERR_FILENO
- * and later tries to just print on stdout/stderr
- *
- * Returns 0 on success and -1 on failure (fd gets closed in all cases)
- */
-int openDevNull(int fd) {
-	int tmpfd;
-	close(fd);
-#if defined(__WIN32)
-	/* Cygwin should work with /dev/null */
-	tmpfd = open("nul", O_RDWR);
-#else
-	tmpfd = open("/dev/null", O_RDWR);
-#endif
-	if (tmpfd != -1 && tmpfd != fd) {
-		dup2(tmpfd, fd);
-		close(tmpfd);
-	}
-	/* coverity[leaked_handle : FALSE] */
-	return (tmpfd != -1) ? 0 : -1;
-}
-
-int open_logfile_or_pipe(server *srv, const char* logfile) {
-	int fd;
-
-	if (logfile[0] == '|') {
-#ifdef HAVE_FORK
-		/* create write pipe and spawn process */
-
-		int to_log_fds[2];
-
-		if (pipe(to_log_fds)) {
-			log_error_write(srv, __FILE__, __LINE__, "ss", "pipe failed: ", strerror(errno));
-			return -1;
-		}
-
-		/* fork, execve */
-		switch (fork()) {
-		case 0:
-			/* child */
-			close(STDIN_FILENO);
-
-			/* dup the filehandle to STDIN */
-			if (to_log_fds[0] != STDIN_FILENO) {
-				if (STDIN_FILENO != dup2(to_log_fds[0], STDIN_FILENO)) {
-					log_error_write(srv, __FILE__, __LINE__, "ss",
-						"dup2 failed: ", strerror(errno));
-					exit(-1);
-				}
-				close(to_log_fds[0]);
-			}
-			close(to_log_fds[1]);
-
-#ifndef FD_CLOEXEC
-			{
-				int i;
-				/* we don't need the client socket */
-				for (i = 3; i < 256; i++) {
-					close(i);
-				}
-			}
-#endif
-
-			/* close old stderr */
-			openDevNull(STDERR_FILENO);
-
-			/* exec the log-process (skip the | ) */
-			execl("/bin/sh", "sh", "-c", logfile + 1, NULL);
-			log_error_write(srv, __FILE__, __LINE__, "sss",
-					"spawning log process failed: ", strerror(errno),
-					logfile + 1);
-
-			exit(-1);
-			break;
-		case -1:
-			/* error */
-			log_error_write(srv, __FILE__, __LINE__, "ss", "fork failed: ", strerror(errno));
-			return -1;
-		default:
-			close(to_log_fds[0]);
-			fd = to_log_fds[1];
-			break;
-		}
-
-#else
-		return -1;
-#endif
-	} else if (-1 == (fd = open(logfile, O_APPEND | O_WRONLY | O_CREAT | O_LARGEFILE, 0644))) {
-		log_error_write(srv, __FILE__, __LINE__, "SSSS",
-				"opening errorlog '", logfile,
-				"' failed: ", strerror(errno));
-
-		return -1;
-	}
-
-	fd_close_on_exec(fd);
-
-	return fd;
-}
-
-
 /**
  * open the errorlog
  *
@@ -196,6 +79,7 @@ int open_logfile_or_pipe(server *srv, const char* logfile) {
  */
 
 int log_error_open(server *srv) {
+	int errfd;
 #ifdef HAVE_SYSLOG_H
 	/* perhaps someone wants to use syslog() */
 	int facility = -1;
@@ -272,7 +156,10 @@ int log_error_open(server *srv) {
 	} else if (!buffer_string_is_empty(srv->srvconf.errorlog_file)) {
 		const char *logfile = srv->srvconf.errorlog_file->ptr;
 
-		if (-1 == (srv->errorlog_fd = open_logfile_or_pipe(srv, logfile))) {
+		if (-1 == (srv->errorlog_fd = fdevent_open_logger(logfile))) {
+			log_error_write(srv, __FILE__, __LINE__, "SSSS",
+					"opening errorlog '", logfile,
+					"' failed: ", strerror(errno));
 			return -1;
 		}
 		srv->errorlog_mode = (logfile[0] == '|') ? ERRORLOG_PIPE : ERRORLOG_FILE;
@@ -286,7 +173,6 @@ int log_error_open(server *srv) {
 	}
 
 	if (!buffer_string_is_empty(srv->srvconf.breakagelog_file)) {
-		int breakage_fd;
 		const char *logfile = srv->srvconf.breakagelog_file->ptr;
 
 		if (srv->errorlog_mode == ERRORLOG_FD) {
@@ -294,18 +180,32 @@ int log_error_open(server *srv) {
 			fd_close_on_exec(srv->errorlog_fd);
 		}
 
-		if (-1 == (breakage_fd = open_logfile_or_pipe(srv, logfile))) {
+		if (-1 == (errfd = fdevent_open_logger(logfile))) {
+			log_error_write(srv, __FILE__, __LINE__, "SSSS",
+					"opening errorlog '", logfile,
+					"' failed: ", strerror(errno));
 			return -1;
 		}
-
-		if (STDERR_FILENO != breakage_fd) {
-			dup2(breakage_fd, STDERR_FILENO);
-			close(breakage_fd);
-		}
 	} else if (!srv->srvconf.dont_daemonize) {
-		/* move stderr to /dev/null */
-		openDevNull(STDERR_FILENO);
+		/* move STDERR_FILENO to /dev/null */
+		if (-1 == (errfd = fdevent_open_devnull())) {
+			log_error_write(srv, __FILE__, __LINE__, "ss",
+					"opening /dev/null failed:", strerror(errno));
+			return -1;
+		}
+	} else {
+		/*(leave STDERR_FILENO as-is)*/
+		errfd = -1;
 	}
+
+	if (0 != fdevent_set_stdin_stdout_stderr(-1, -1, errfd)) {
+		log_error_write(srv, __FILE__, __LINE__, "ss",
+				"setting stderr failed:", strerror(errno));
+		close(errfd);
+		return -1;
+	}
+
+	if (-1 != errfd) close(errfd);
 	return 0;
 }
 
@@ -326,7 +226,7 @@ int log_error_cycle(server *srv) {
 
 		int new_fd;
 
-		if (-1 == (new_fd = open_logfile_or_pipe(srv, logfile))) {
+		if (-1 == (new_fd = fdevent_open_logger(logfile))) {
 			/* write to old log */
 			log_error_write(srv, __FILE__, __LINE__, "SSSSS",
 					"cycling errorlog '", logfile,

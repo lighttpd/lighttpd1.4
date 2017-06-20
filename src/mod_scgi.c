@@ -20,7 +20,6 @@
 #include <limits.h>
 #include <string.h>
 #include <stdlib.h>
-#include <signal.h>
 
 #include "sys-socket.h"
 #include "sys-endian.h"
@@ -327,23 +326,6 @@ static handler_t scgi_handle_fdevent(server *srv, void *ctx, int revents);
 
 int scgi_proclist_sort_down(server *srv, scgi_extension_host *host, scgi_proc *proc);
 
-#ifdef HAVE_FORK
-static void reset_signals(void) {
-#ifdef SIGTTOU
-	signal(SIGTTOU, SIG_DFL);
-#endif
-#ifdef SIGTTIN
-	signal(SIGTTIN, SIG_DFL);
-#endif
-#ifdef SIGTSTP
-	signal(SIGTSTP, SIG_DFL);
-#endif
-	signal(SIGHUP, SIG_DFL);
-	signal(SIGPIPE, SIG_DFL);
-	signal(SIGUSR1, SIG_DFL);
-}
-#endif /* HAVE_FORK */
-
 static handler_ctx * handler_ctx_init(void) {
 	handler_ctx * hctx;
 
@@ -618,7 +600,7 @@ FREE_FUNC(mod_scgi_free) {
 					host = ex->hosts[n];
 
 					for (proc = host->first; proc; proc = proc->next) {
-						if (proc->pid != 0) kill(proc->pid, SIGTERM);
+						if (proc->pid > 0) kill(proc->pid, SIGTERM);
 
 						if (proc->is_local &&
 						    !buffer_string_is_empty(proc->socket)) {
@@ -627,7 +609,7 @@ FREE_FUNC(mod_scgi_free) {
 					}
 
 					for (proc = host->unused_procs; proc; proc = proc->next) {
-						if (proc->pid != 0) kill(proc->pid, SIGTERM);
+						if (proc->pid > 0) kill(proc->pid, SIGTERM);
 
 						if (proc->is_local &&
 						    !buffer_string_is_empty(proc->socket)) {
@@ -649,7 +631,6 @@ FREE_FUNC(mod_scgi_free) {
 	return HANDLER_GO_ON;
 }
 
-#ifdef HAVE_FORK
 static int env_add(char_array *env, const char *key, size_t key_len, const char *val, size_t val_len) {
 	char *dst;
 	size_t i;
@@ -665,8 +646,7 @@ static int env_add(char_array *env, const char *key, size_t key_len, const char 
 
 	for (i = 0; i < env->used; i++) {
 		if (0 == strncmp(dst, env->ptr[i], key_len + 1)) {
-			/* don't care about free as we are in a forked child which is going to exec(...) */
-			/* free(env->ptr[i]); */
+			free(env->ptr[i]);
 			env->ptr[i] = dst;
 			return 0;
 		}
@@ -686,21 +666,6 @@ static int env_add(char_array *env, const char *key, size_t key_len, const char 
 
 	return 0;
 }
-#endif /* HAVE_FORK */
-
-#if !defined(HAVE_FORK)
-static int scgi_spawn_connection(server *srv,
-                                 plugin_data *p,
-                                 scgi_extension_host *host,
-                                 scgi_proc *proc) {
-	UNUSED(srv);
-	UNUSED(p);
-	UNUSED(host);
-	UNUSED(proc);
-	return -1;
-}
-
-#else /* -> defined(HAVE_FORK) */
 
 static int scgi_spawn_connection(server *srv,
                                  plugin_data *p,
@@ -827,7 +792,10 @@ static int scgi_spawn_connection(server *srv,
 
 	if (-1 == status) {
 		/* server is not up, spawn in  */
-		pid_t child;
+		char_array env;
+		char *args[4];
+		buffer *b;
+		size_t i;
 		int val;
 
 		/* reopen socket */
@@ -863,31 +831,11 @@ static int scgi_spawn_connection(server *srv,
 			return -1;
 		}
 
-		switch ((child = fork())) {
-		case 0: {
-			buffer *b;
-			size_t i = 0;
-			int fd = 0;
-			char_array env;
-
-
+		{
 			/* create environment */
 			env.ptr = NULL;
 			env.size = 0;
 			env.used = 0;
-
-			if (scgi_fd != 0) {
-				dup2(scgi_fd, 0);
-				close(scgi_fd);
-			}
-			else {
-				fdevent_clrfd_cloexec(scgi_fd);
-			}
-
-			/* we don't need the client socket */
-			for (fd = 3; fd < 256; fd++) {
-				close(fd);
-			}
 
 			/* build clean environment */
 			if (host->bin_env_copy->used) {
@@ -928,35 +876,34 @@ static int scgi_spawn_connection(server *srv,
 			}
 
 			env.ptr[env.used] = NULL;
-
-			b = buffer_init();
-			buffer_copy_string_len(b, CONST_STR_LEN("exec "));
-			buffer_append_string_buffer(b, host->bin_path);
-
-			reset_signals();
-
-			/* exec the cgi */
-			execle("/bin/sh", "sh", "-c", b->ptr, (char *)NULL, env.ptr);
-
-			log_error_write(srv, __FILE__, __LINE__, "sbs",
-					"execl failed for:", host->bin_path, strerror(errno));
-
-			_exit(errno);
-
-			break;
 		}
-		case -1:
-			/* error */
-			close(scgi_fd);
-			break;
-		default:
-			/* father */
-			close(scgi_fd);
+
+		/*(preserve prior behavior for exec of command)*/
+		/*(admin should really prefer to put any complex command into script)*/
+		b = buffer_init();
+		buffer_copy_string_len(b, CONST_STR_LEN("exec "));
+		buffer_append_string_buffer(b, host->bin_path);
+		*(const char **)&args[0] = "/bin/sh";
+		*(const char **)&args[1] = "-c";
+		*(const char **)&args[2] = b->ptr;
+		args[3] = NULL;
+
+		proc->pid = fdevent_fork_execve(args[0], args, env.ptr, scgi_fd, -1, -1, -1);
+
+		for (i = 0; i < env.used; ++i) free(env.ptr[i]);
+		free(env.ptr);
+		buffer_free(b);
+		close(scgi_fd);
+
+		if (-1 == proc->pid) {
+			log_error_write(srv, __FILE__, __LINE__, "sb",
+					"scgi-backend failed to start:", host->bin_path);
+			return -1;
+		}
 
 			/* register process */
 			proc->last_used = srv->cur_ts;
 			proc->is_local = 1;
-			proc->pid = child;
 
 			/* wait */
 			select(0, NULL, NULL, NULL, &tv);
@@ -966,9 +913,6 @@ static int scgi_spawn_connection(server *srv,
 						"scgi-backend failed to start:", host->bin_path);
 				return -1;
 			}
-
-			break;
-		}
 	} else {
 		proc->is_local = 0;
 		proc->pid = 0;
@@ -983,8 +927,6 @@ static int scgi_spawn_connection(server *srv,
 	scgi_proc_set_state(host, proc, PROC_STATE_RUNNING);
 	return 0;
 }
-
-#endif /* HAVE_FORK */
 
 static scgi_extension_host * unixsocket_is_dup(plugin_data *p, size_t used, buffer *unixsocket) {
 	size_t i, j, n;
@@ -2604,7 +2546,7 @@ TRIGGER_FUNC(mod_scgi_handle_trigger) {
 				for (proc = host->first; proc; proc = proc->next) {
 					if (proc->load != 0) break;
 					if (host->num_procs <= host->min_procs) break;
-					if (proc->pid == 0) continue;
+					if (proc->pid <= 0) continue;
 
 					if (srv->cur_ts - proc->last_used > host->idle_timeout) {
 						/* a proc is idling for a long time now,

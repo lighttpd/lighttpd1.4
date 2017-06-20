@@ -1,13 +1,12 @@
 #include "first.h"
 
-#include "server.h"
-#include "connections.h"
-#include "response.h"
-#include "connections.h"
+#include "base.h"
+#include "fdevent.h"
 #include "log.h"
 
 #include "plugin.h"
 #include <sys/types.h>
+#include <sys/wait.h>
 
 #include <fcntl.h>
 #include <stdlib.h>
@@ -16,10 +15,6 @@
 #include <errno.h>
 #include <time.h>
 
-#ifdef HAVE_FORK
-/* no need for waitpid if we don't have fork */
-#include <sys/wait.h>
-#endif
 typedef struct {
 	buffer *path_rrdtool_bin;
 	buffer *path_rrd;
@@ -78,13 +73,11 @@ FREE_FUNC(mod_rrd_free) {
 
 	free(p->config_storage);
 
-	if (p->rrdtool_pid) {
+	if (p->rrdtool_pid > 0) {
 		close(p->read_fd);
 		close(p->write_fd);
-#ifdef HAVE_FORK
 		/* collect status */
 		while (-1 == waitpid(p->rrdtool_pid, NULL, 0) && errno == EINTR) ;
-#endif
 	}
 
 	free(p);
@@ -93,9 +86,7 @@ FREE_FUNC(mod_rrd_free) {
 }
 
 static int mod_rrd_create_pipe(server *srv, plugin_data *p) {
-#ifdef HAVE_FORK
-	pid_t pid;
-
+	char *args[3];
 	int to_rrdtool_fds[2];
 	int from_rrdtool_fds[2];
 	if (pipe(to_rrdtool_fds)) {
@@ -103,87 +94,33 @@ static int mod_rrd_create_pipe(server *srv, plugin_data *p) {
 				"pipe failed: ", strerror(errno));
 		return -1;
 	}
-
 	if (pipe(from_rrdtool_fds)) {
 		log_error_write(srv, __FILE__, __LINE__, "ss",
 				"pipe failed: ", strerror(errno));
 		return -1;
 	}
+	fdevent_setfd_cloexec(to_rrdtool_fds[1]);
+	fdevent_setfd_cloexec(from_rrdtool_fds[0]);
+	*(const char **)&args[0] = p->conf.path_rrdtool_bin->ptr;
+	*(const char **)&args[1] = "-";
+	args[2] = NULL;
 
-	/* fork, execve */
-	switch (pid = fork()) {
-	case 0: {
-		/* child */
-		char **args;
-		int argc;
-		int i = 0;
-		char *dash = "-";
+	p->rrdtool_pid = fdevent_fork_execve(args[0], args, NULL, to_rrdtool_fds[0], from_rrdtool_fds[1], -1, -1);
 
-		/* move stdout to from_rrdtool_fd[1] */
-		close(STDOUT_FILENO);
-		dup2(from_rrdtool_fds[1], STDOUT_FILENO);
-		close(from_rrdtool_fds[1]);
-		/* not needed */
-		close(from_rrdtool_fds[0]);
-
-		/* move the stdin to to_rrdtool_fd[0] */
-		close(STDIN_FILENO);
-		dup2(to_rrdtool_fds[0], STDIN_FILENO);
-		close(to_rrdtool_fds[0]);
-		/* not needed */
-		close(to_rrdtool_fds[1]);
-
-		/* set up args */
-		argc = 3;
-		args = malloc(sizeof(*args) * argc);
-		i = 0;
-
-		args[i++] = p->conf.path_rrdtool_bin->ptr;
-		args[i++] = dash;
-		args[i  ] = NULL;
-
-		/* we don't need the client socket */
-		for (i = 3; i < 256; i++) {
-			close(i);
-		}
-
-		/* exec the cgi */
-		execv(args[0], args);
-
-		/* log_error_write(srv, __FILE__, __LINE__, "sss", "spawing rrdtool failed: ", strerror(errno), args[0]); */
-
-		/* */
-		SEGFAULT();
-		break;
-	}
-	case -1:
-		/* error */
-		log_error_write(srv, __FILE__, __LINE__, "ss", "fork failed: ", strerror(errno));
-		break;
-	default: {
-		/* father */
-
+	if (-1 != p->rrdtool_pid) {
 		close(from_rrdtool_fds[1]);
 		close(to_rrdtool_fds[0]);
-
-		/* register PID and wait for them asyncronously */
 		p->write_fd = to_rrdtool_fds[1];
 		p->read_fd = from_rrdtool_fds[0];
-		p->rrdtool_pid = pid;
-
-		fd_close_on_exec(p->write_fd);
-		fd_close_on_exec(p->read_fd);
-
-		break;
+		return 0;
+	} else {
+		log_error_write(srv, __FILE__, __LINE__, "SBss", "fork/exec(", p->conf.path_rrdtool_bin, "):", strerror(errno));
+		close(to_rrdtool_fds[0]);
+		close(to_rrdtool_fds[1]);
+		close(from_rrdtool_fds[0]);
+		close(from_rrdtool_fds[1]);
+		return -1;
 	}
-	}
-
-	return 0;
-#else
-	UNUSED(srv);
-	UNUSED(p);
-	return -1;
-#endif
 }
 
 /* read/write wrappers to catch EINTR */

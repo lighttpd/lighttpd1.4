@@ -373,6 +373,31 @@ int fdevent_open_cloexec(const char *pathname, int flags, mode_t mode) {
 }
 
 
+int fdevent_open_devnull(void) {
+  #if defined(_WIN32)
+    return fdevent_open_cloexec("nul", O_RDWR, 0);
+  #else
+    return fdevent_open_cloexec("/dev/null", O_RDWR, 0);
+  #endif
+}
+
+
+int fdevent_open_dirname(char *path) {
+    /*(handle special cases of no dirname or dirname is root directory)*/
+    char * const c = strrchr(path, '/');
+    const char * const dname = (NULL != c ? c == path ? "/" : path : ".");
+    int dfd;
+    int flags = O_RDONLY;
+  #ifdef O_DIRECTORY
+    flags |= O_DIRECTORY;
+  #endif
+    if (NULL != c) *c = '\0';
+    dfd = fdevent_open_cloexec(dname, flags, 0);
+    if (NULL != c) *c = '/';
+    return dfd;
+}
+
+
 int fdevent_accept_listenfd(int listenfd, struct sockaddr *addr, size_t *addrlen) {
 	int fd;
 	socklen_t len = (socklen_t) *addrlen;
@@ -398,6 +423,174 @@ int fdevent_event_next_fdndx(fdevents *ev, int ndx) {
 	if (ev->event_next_fdndx) return ev->event_next_fdndx(ev, ndx);
 
 	return -1;
+}
+
+
+#ifdef FD_CLOEXEC
+static int fdevent_dup2_close_clrfd_cloexec(int oldfd, int newfd) {
+    if (oldfd >= 0) {
+        if (oldfd != newfd) {
+            force_assert(oldfd > STDERR_FILENO);
+            if (newfd != dup2(oldfd, newfd)) return -1;
+        }
+        else {
+            fdevent_clrfd_cloexec(newfd);
+        }
+    }
+    return newfd;
+}
+#else
+static int fdevent_dup2_close_clrfd_cloexec(int oldfd, int newfd, int reuse) {
+    if (oldfd >= 0) {
+        if (oldfd != newfd) {
+            force_assert(oldfd > STDERR_FILENO);
+            if (newfd != dup2(oldfd, newfd)) return -1;
+            if (!reuse) close(oldfd);
+        }
+    }
+    return newfd;
+}
+#endif
+
+
+int fdevent_set_stdin_stdout_stderr(int fdin, int fdout, int fderr) {
+  #ifdef FD_CLOEXEC
+    if (STDIN_FILENO != fdevent_dup2_close_clrfd_cloexec(fdin, STDIN_FILENO))
+        return -1;
+    if (STDOUT_FILENO != fdevent_dup2_close_clrfd_cloexec(fdout, STDOUT_FILENO))
+        return -1;
+    if (STDERR_FILENO != fdevent_dup2_close_clrfd_cloexec(fderr, STDERR_FILENO))
+        return -1;
+  #else
+    if (STDIN_FILENO != fdevent_dup2_close_clrfd_cloexec(fdin, STDIN_FILENO,
+                                                         fdin == fdout
+                                                         || fdin == fderr))
+        return -1;
+    if (STDOUT_FILENO != fdevent_dup2_close_clrfd_cloexec(fdout, STDOUT_FILENO,
+                                                          fdout == fderr))
+        return -1;
+    if (STDERR_FILENO != fdevent_dup2_close_clrfd_cloexec(fderr, STDERR_FILENO,
+                                                          0))
+        return -1;
+  #endif
+
+    return 0;
+}
+
+
+#include <stdio.h>      /* perror() */
+#include <signal.h>     /* signal() */
+
+pid_t fdevent_fork_execve(const char *name, char *argv[], char *envp[], int fdin, int fdout, int fderr, int dfd) {
+ #ifdef HAVE_FORK
+
+    pid_t pid = fork();
+    if (0 != pid) return pid; /* parent (pid > 0) or fork() error (-1 == pid) */
+
+    /* child (0 == pid) */
+
+    if (-1 != dfd) {
+        if (0 != fchdir(dfd))
+            _exit(errno);
+        close(dfd);
+    }
+
+    if (0 != fdevent_set_stdin_stdout_stderr(fdin, fdout, fderr)) _exit(errno);
+  #ifdef FD_CLOEXEC
+    /*(might not be sufficient for open fds, but modern OS have FD_CLOEXEC)*/
+    for (int i = 3; i < 256; ++i) close(i);
+  #endif
+
+    /* reset_signals which may have been ignored (SIG_IGN) */
+  #ifdef SIGTTOU
+    signal(SIGTTOU, SIG_DFL);
+  #endif
+  #ifdef SIGTTIN
+    signal(SIGTTIN, SIG_DFL);
+  #endif
+  #ifdef SIGTSTP
+    signal(SIGTSTP, SIG_DFL);
+  #endif
+    signal(SIGPIPE, SIG_DFL);
+
+    execve(name, argv, envp ? envp : environ);
+
+    if (0 == memcmp(argv[0], "/bin/sh", sizeof("/bin/sh")-1)
+        && argv[1] && 0 == memcmp(argv[1], "-c", sizeof("-c")-1))
+        perror(argv[2]);
+    else
+        perror(argv[0]);
+    _exit(errno);
+
+ #else
+
+    UNUSED(name);
+    UNUSED(argv);
+    UNUSED(envp);
+    UNUSED(fdin);
+    UNUSED(fdout);
+    UNUSED(fderr);
+    UNUSED(dfd);
+    return (pid_t)-1;
+
+ #endif
+}
+
+
+static int fdevent_open_logger_pipe(const char *logger) {
+    /* create write pipe and spawn process */
+    char *args[4];
+    int to_log_fds[2];
+    int devnull = fdevent_open_devnull();
+    pid_t pid;
+
+    if (-1 == devnull) {
+        return -1;
+    }
+
+    if (pipe(to_log_fds)) {
+        close(devnull);
+        return -1;
+    }
+    fdevent_setfd_cloexec(to_log_fds[0]);
+    fdevent_setfd_cloexec(to_log_fds[1]);
+
+    *(const char **)&args[0] = "/bin/sh";
+    *(const char **)&args[1] = "-c";
+    *(const char **)&args[2] = logger;
+    args[3] = NULL;
+
+    pid = fdevent_fork_execve(args[0], args, NULL, to_log_fds[0], devnull, devnull, -1);
+
+    if (pid > 0) {
+        /*(future: save pipe fds, pid, and command line to restart if child exits)*/
+        close(devnull);
+        close(to_log_fds[0]);
+        return to_log_fds[1];
+    }
+    else {
+        int errnum = errno;
+        close(devnull);
+        close(to_log_fds[0]);
+        close(to_log_fds[1]);
+        errno = errnum;
+        return -1;
+    }
+}
+
+
+#ifndef O_LARGEFILE
+#define O_LARGEFILE 0
+#endif
+
+int fdevent_open_logger(const char *logger) {
+    if (logger[0] != '|') {
+        int flags = O_APPEND | O_WRONLY | O_CREAT | O_LARGEFILE;
+        return fdevent_open_cloexec(logger, flags, 0644);
+    }
+    else {
+        return fdevent_open_logger_pipe(logger+1); /*(skip the '|')*/
+    }
 }
 
 

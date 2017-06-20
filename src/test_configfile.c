@@ -89,3 +89,27 @@ int main (void) {
  */
 void fdevent_setfd_cloexec(int fd);
 void fdevent_setfd_cloexec(int fd) { UNUSED(fd); }
+int fdevent_open_cloexec(const char *pathname);
+int fdevent_open_cloexec(const char *pathname) { UNUSED(pathname); return 0; }
+int fdevent_open_devnull(void);
+int fdevent_open_devnull(void) { return -1; }
+int fdevent_open_logger(const char *logfile);
+int fdevent_open_logger(const char *logfile) { UNUSED(logfile); return -1; }
+int fdevent_set_stdin_stdout_stderr(int fdin, int fdout, int fderr);
+int fdevent_set_stdin_stdout_stderr(int fdin, int fdout, int fderr) {
+    UNUSED(fdin);
+    UNUSED(fdout);
+    UNUSED(fderr);
+    return -1;
+}
+pid_t fdevent_fork_execve(const char *name, char *argv[], char *envp[], int fdin, int fdout, int fderr, int dfd);
+pid_t fdevent_fork_execve(const char *name, char *argv[], char *envp[], int fdin, int fdout, int fderr, int dfd) {
+    UNUSED(name);
+    UNUSED(argv);
+    UNUSED(envp);
+    UNUSED(fdin);
+    UNUSED(fdout);
+    UNUSED(fderr);
+    UNUSED(dfd);
+    return (pid_t)-1;
+}

@@ -220,6 +220,12 @@ int fdevent_open_cloexec(const char *pathname, int flags, mode_t mode);
 struct sockaddr;
 int fdevent_accept_listenfd(int listenfd, struct sockaddr *addr, size_t *addrlen);
 
+int fdevent_open_devnull(void);
+int fdevent_open_dirname(char *path);
+int fdevent_set_stdin_stdout_stderr(int fdin, int fdout, int fderr);
+pid_t fdevent_fork_execve(const char *name, char *argv[], char *envp[], int fdin, int fdout, int fderr, int dfd);
+int fdevent_open_logger(const char *logger);
+
 int fdevent_select_init(fdevents *ev);
 int fdevent_poll_init(fdevents *ev);
 int fdevent_linux_sysepoll_init(fdevents *ev);

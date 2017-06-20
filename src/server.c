@@ -841,7 +841,6 @@ static int server_main (server * const srv, int argc, char **argv) {
 #ifdef HAVE_FORK
 	int num_childs = 0;
 #endif
-	int fd;
 	size_t i;
 	time_t idle_limit = 0, last_active_ts = time(NULL);
 #ifdef HAVE_SIGACTION
@@ -965,11 +964,32 @@ static int server_main (server * const srv, int argc, char **argv) {
 	}
 
 	/* close stdin and stdout, as they are not needed */
-	openDevNull(STDIN_FILENO);
-	openDevNull(STDOUT_FILENO);
 	{
 		struct stat st;
-		if (0 != fstat(STDERR_FILENO, &st)) openDevNull(STDERR_FILENO);
+		int devnull;
+		int errfd;
+		do {
+			devnull = fdevent_open_devnull();
+		} while (-1 != devnull && devnull <= STDERR_FILENO);
+		if (-1 == devnull) {
+			log_error_write(srv, __FILE__, __LINE__, "ss",
+					"opening /dev/null failed:", strerror(errno));
+			return -1;
+		}
+		errfd = (0 == fstat(STDERR_FILENO, &st)) ? -1 : devnull;
+		if (0 != fdevent_set_stdin_stdout_stderr(devnull, devnull, errfd)) {
+			log_error_write(srv, __FILE__, __LINE__, "ss",
+					"setting default fds failed:", strerror(errno));
+		      #ifdef FD_CLOEXEC
+			if (-1 != errfd) close(errfd);
+			if (devnull != errfd) close(devnull);
+		      #endif
+			return -1;
+		}
+	      #ifdef FD_CLOEXEC
+		if (-1 != errfd) close(errfd);
+		if (devnull != errfd) close(devnull);
+	      #endif
 	}
 
 	if (0 != config_set_defaults(srv)) {
@@ -1495,8 +1515,13 @@ static int server_main (server * const srv, int argc, char **argv) {
 
 
 	/* get the current number of FDs */
-	srv->cur_fds = open("/dev/null", O_RDONLY);
-	close(srv->cur_fds);
+	{
+		int fd = fdevent_open_devnull();
+		if (fd >= 0) {
+			srv->cur_fds = fd;
+			close(fd);
+		}
+	}
 
 	if (0 != server_sockets_set_nb_cloexec(srv)) {
 		return -1;
@@ -1769,6 +1794,7 @@ static int server_main (server * const srv, int argc, char **argv) {
 
 		if ((n = fdevent_poll(srv->ev, 1000)) > 0) {
 			/* n is the number of events */
+			int fd;
 			int revents;
 			int fd_ndx;
 			last_active_ts = srv->cur_ts;
