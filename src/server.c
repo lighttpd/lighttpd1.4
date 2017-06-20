@@ -60,6 +60,10 @@
 # include <pwd.h>
 #endif
 
+#ifdef HAVE_SYSLOG_H
+# include <syslog.h>
+#endif
+
 #ifdef HAVE_SYS_RESOURCE_H
 # include <sys/resource.h>
 #endif
@@ -215,7 +219,7 @@ static int daemonize(void) {
 
 	if (0 != chdir("/")) exit(0);
 
-	fd_close_on_exec(pipefd[1]);
+	fdevent_setfd_cloexec(pipefd[1]);
 	return pipefd[1];
 }
 #endif
@@ -716,6 +720,214 @@ static void show_help (void) {
 "\n"
 ;
 	write_all(STDOUT_FILENO, b, strlen(b));
+}
+
+/**
+ * open the errorlog
+ *
+ * we have 4 possibilities:
+ * - stderr (default)
+ * - syslog
+ * - logfile
+ * - pipe
+ *
+ */
+
+static int log_error_open(server *srv) {
+    int errfd;
+  #ifdef HAVE_SYSLOG_H
+    /* perhaps someone wants to use syslog() */
+    int facility = -1;
+    if (!buffer_string_is_empty(srv->srvconf.syslog_facility)) {
+        static const struct facility_name_st {
+          const char *name;
+          int val;
+        } facility_names[] = {
+            { "auth",     LOG_AUTH }
+          #ifdef LOG_AUTHPRIV
+           ,{ "authpriv", LOG_AUTHPRIV }
+          #endif
+          #ifdef LOG_CRON
+           ,{ "cron",     LOG_CRON }
+          #endif
+           ,{ "daemon",   LOG_DAEMON }
+          #ifdef LOG_FTP
+           ,{ "ftp",      LOG_FTP }
+          #endif
+          #ifdef LOG_KERN
+           ,{ "kern",     LOG_KERN }
+          #endif
+          #ifdef LOG_LPR
+           ,{ "lpr",      LOG_LPR }
+          #endif
+          #ifdef LOG_MAIL
+           ,{ "mail",     LOG_MAIL }
+          #endif
+          #ifdef LOG_NEWS
+           ,{ "news",     LOG_NEWS }
+          #endif
+           ,{ "security", LOG_AUTH }           /* DEPRECATED */
+          #ifdef LOG_SYSLOG
+           ,{ "syslog",   LOG_SYSLOG }
+          #endif
+          #ifdef LOG_USER
+           ,{ "user",     LOG_USER }
+          #endif
+          #ifdef LOG_UUCP
+           ,{ "uucp",     LOG_UUCP }
+          #endif
+           ,{ "local0",   LOG_LOCAL0 }
+           ,{ "local1",   LOG_LOCAL1 }
+           ,{ "local2",   LOG_LOCAL2 }
+           ,{ "local3",   LOG_LOCAL3 }
+           ,{ "local4",   LOG_LOCAL4 }
+           ,{ "local5",   LOG_LOCAL5 }
+           ,{ "local6",   LOG_LOCAL6 }
+           ,{ "local7",   LOG_LOCAL7 }
+        };
+        unsigned int i;
+        for (i = 0; i < sizeof(facility_names)/sizeof(facility_names[0]); ++i) {
+            const struct facility_name_st *f = facility_names+i;
+            if (0 == strcmp(srv->srvconf.syslog_facility->ptr, f->name)) {
+                facility = f->val;
+                break;
+            }
+        }
+        if (-1 == facility) {
+            log_error_write(srv, __FILE__, __LINE__, "SBS",
+                            "unrecognized server.syslog-facility: \"",
+                            srv->srvconf.syslog_facility,
+                            "\"; defaulting to \"daemon\" facility");
+        }
+    }
+    openlog("lighttpd", LOG_CONS|LOG_PID, -1==facility ? LOG_DAEMON : facility);
+  #endif
+
+    srv->errorlog_mode = ERRORLOG_FD;
+    srv->errorlog_fd = STDERR_FILENO;
+
+    if (srv->srvconf.errorlog_use_syslog) {
+        srv->errorlog_mode = ERRORLOG_SYSLOG;
+    }
+    else if (!buffer_string_is_empty(srv->srvconf.errorlog_file)) {
+        const char *logfile = srv->srvconf.errorlog_file->ptr;
+
+        if (-1 == (srv->errorlog_fd = fdevent_open_logger(logfile))) {
+            log_error_write(srv, __FILE__, __LINE__, "SSSS",
+                            "opening errorlog '", logfile,
+                            "' failed: ", strerror(errno));
+            return -1;
+        }
+        srv->errorlog_mode = logfile[0] == '|' ? ERRORLOG_PIPE : ERRORLOG_FILE;
+    }
+
+    if (srv->errorlog_mode == ERRORLOG_FD && !srv->srvconf.dont_daemonize) {
+        /* We can only log to stderr in dont-daemonize mode;
+         * if we do daemonize and no errorlog file is specified,
+         * we log into /dev/null
+         */
+        srv->errorlog_fd = -1;
+    }
+
+    if (!buffer_string_is_empty(srv->srvconf.breakagelog_file)) {
+        const char *logfile = srv->srvconf.breakagelog_file->ptr;
+
+        if (srv->errorlog_mode == ERRORLOG_FD) {
+            srv->errorlog_fd = dup(STDERR_FILENO);
+            fdevent_setfd_cloexec(srv->errorlog_fd);
+        }
+
+        if (-1 == (errfd = fdevent_open_logger(logfile))) {
+            log_error_write(srv, __FILE__, __LINE__, "SSSS",
+                            "opening errorlog '", logfile,
+                            "' failed: ", strerror(errno));
+            return -1;
+        }
+    }
+    else if (!srv->srvconf.dont_daemonize) {
+        /* move STDERR_FILENO to /dev/null */
+        if (-1 == (errfd = fdevent_open_devnull())) {
+            log_error_write(srv, __FILE__, __LINE__, "ss",
+                            "opening /dev/null failed:", strerror(errno));
+            return -1;
+        }
+    }
+    else {
+        /*(leave STDERR_FILENO as-is)*/
+        errfd = -1;
+    }
+
+    if (0 != fdevent_set_stdin_stdout_stderr(-1, -1, errfd)) {
+        log_error_write(srv, __FILE__, __LINE__, "ss",
+                        "setting stderr failed:", strerror(errno));
+      #ifdef FD_CLOEXEC
+        if (-1 != errfd) close(errfd);
+      #endif
+        return -1;
+    }
+  #ifdef FD_CLOEXEC
+    if (-1 != errfd) close(errfd);
+  #endif
+
+    return 0;
+}
+
+/**
+ * cycle the errorlog
+ *
+ */
+
+static int log_error_cycle(server *srv) {
+    /* cycle only if the error log is a file */
+
+    if (srv->errorlog_mode == ERRORLOG_FILE) {
+        const char *logfile = srv->srvconf.errorlog_file->ptr;
+        int new_fd;
+
+        if (-1 == (new_fd = fdevent_open_logger(logfile))) {
+            /* write to old log */
+            log_error_write(srv, __FILE__, __LINE__, "SSSSS",
+                            "cycling errorlog '", logfile,
+                            "' failed: ", strerror(errno),
+                            ", falling back to syslog()");
+
+            close(srv->errorlog_fd);
+            srv->errorlog_fd = -1;
+          #ifdef HAVE_SYSLOG_H
+            srv->errorlog_mode = ERRORLOG_SYSLOG;
+          #endif
+        }
+        else {
+            /* ok, new log is open, close the old one */
+            close(srv->errorlog_fd);
+            srv->errorlog_fd = new_fd;
+            fdevent_setfd_cloexec(srv->errorlog_fd);
+        }
+    }
+
+    return 0;
+}
+
+static int log_error_close(server *srv) {
+    switch(srv->errorlog_mode) {
+    case ERRORLOG_PIPE:
+    case ERRORLOG_FILE:
+    case ERRORLOG_FD:
+        if (-1 != srv->errorlog_fd) {
+            /* don't close STDERR */
+            if (STDERR_FILENO != srv->errorlog_fd)
+                close(srv->errorlog_fd);
+            srv->errorlog_fd = -1;
+        }
+        break;
+    case ERRORLOG_SYSLOG:
+      #ifdef HAVE_SYSLOG_H
+        closelog();
+      #endif
+        break;
+    }
+
+    return 0;
 }
 
 static void server_sockets_save (server *srv) {    /* graceful_restart */
