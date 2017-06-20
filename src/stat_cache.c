@@ -142,7 +142,7 @@ stat_cache *stat_cache_init(server *srv) {
 		FAMNoExists(&sc->fam);
 #endif
 
-		fd_close_on_exec(FAMCONNECTION_GETFD(&sc->fam));
+		fdevent_setfd_cloexec(FAMCONNECTION_GETFD(&sc->fam));
 		fdevent_register(srv->ev, FAMCONNECTION_GETFD(&sc->fam), stat_cache_handle_fdevent, NULL);
 		fdevent_event_set(srv->ev, &(sc->fam_fcce_ndx), FAMCONNECTION_GETFD(&sc->fam), FDEVENT_IN);
 	}

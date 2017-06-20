@@ -49,7 +49,7 @@ static void mod_vhostdb_dbi_error_callback (dbi_conn dbconn, void *vdata)
 
     while (++dbconf->reconnect_count <= 3) { /* retry */
         if (0 == dbi_conn_connect(dbconn)) {
-            fd_close_on_exec(dbi_conn_get_socket(dbconn));
+            fdevent_setfd_cloexec(dbi_conn_get_socket(dbconn));
             return;
         }
     }

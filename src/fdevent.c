@@ -312,7 +312,7 @@ int fdevent_fcntl_set_nb(fdevents *ev, int fd) {
 }
 
 int fdevent_fcntl_set_nb_cloexec(fdevents *ev, int fd) {
-	fd_close_on_exec(fd);
+	fdevent_setfd_cloexec(fd);
 	return fdevent_fcntl_set_nb(ev, fd);
 }
 

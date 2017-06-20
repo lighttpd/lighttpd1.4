@@ -206,7 +206,6 @@ int fdevent_unregister(fdevents *ev, int fd);
 void fdevent_sched_close(fdevents *ev, int fd, int issock);
 void fdevent_sched_run(struct server *srv, fdevents *ev);
 
-#define fd_close_on_exec(fd) fdevent_setfd_cloexec(fd)
 void fdevent_setfd_cloexec(int fd);
 void fdevent_clrfd_cloexec(int fd);
 int fdevent_fcntl_set(fdevents *ev, int fd);

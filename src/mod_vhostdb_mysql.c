@@ -110,7 +110,7 @@ static int mod_vhostdb_dbconf_setup (server *srv, array *opts, void **vdata)
             return -1;
         }
 
-        fd_close_on_exec(dbconn->net.fd);
+        fdevent_setfd_cloexec(dbconn->net.fd);
 
         dbconf = (vhostdb_config *)calloc(1, sizeof(*dbconf));
         dbconf->dbconn = dbconn;

@@ -122,7 +122,7 @@ int fdevent_solaris_devpoll_reset(fdevents *ev) {
 		return -1;
 	}
 
-	fd_close_on_exec(ev->devpoll_fd);
+	fdevent_setfd_cloexec(ev->devpoll_fd);
 	return 0;
 }
 int fdevent_solaris_devpoll_init(fdevents *ev) {

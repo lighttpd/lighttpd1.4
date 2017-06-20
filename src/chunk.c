@@ -500,7 +500,7 @@ static chunk *chunkqueue_get_append_tempfile(server *srv, chunkqueue *cq) {
 		buffer_free(template);
 		return NULL;
 	}
-	fd_close_on_exec(fd);
+	fdevent_setfd_cloexec(fd);
 
 	c = chunkqueue_get_unused_chunk(cq);
 	c->type = FILE_CHUNK;

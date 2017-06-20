@@ -182,7 +182,7 @@ SETDEFAULTS_FUNC(mod_trigger_b4_dl_set_defaults) {
 						"gdbm-open failed");
 				return HANDLER_ERROR;
 			}
-			fd_close_on_exec(gdbm_fdesc(s->db));
+			fdevent_setfd_cloexec(gdbm_fdesc(s->db));
 		}
 #endif
 #if defined(HAVE_PCRE_H)

@@ -218,7 +218,7 @@ SERVER_FUNC(mod_mysql_vhost_set_defaults) {
 			}
 #undef FOO
 
-			fd_close_on_exec(s->mysql->net.fd);
+			fdevent_setfd_cloexec(s->mysql->net.fd);
 		}
 	}
 
