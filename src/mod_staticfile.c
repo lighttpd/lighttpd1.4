@@ -6,7 +6,6 @@
 
 #include "plugin.h"
 
-#include "stat_cache.h"
 #include "etag.h"
 #include "http_chunk.h"
 #include "response.h"

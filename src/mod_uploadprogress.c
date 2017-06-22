@@ -7,7 +7,6 @@
 #include "plugin.h"
 
 #include "response.h"
-#include "stat_cache.h"
 
 #include <stdlib.h>
 #include <string.h>

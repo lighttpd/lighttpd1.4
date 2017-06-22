@@ -5,7 +5,6 @@
 #include "buffer.h"
 #include "response.h"
 #include "http_chunk.h"
-#include "stat_cache.h"
 
 #include "plugin.h"
 

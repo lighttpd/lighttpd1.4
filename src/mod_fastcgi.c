@@ -13,7 +13,6 @@
 
 #include "plugin.h"
 
-#include "stat_cache.h"
 #include "status_counter.h"
 
 #include <sys/types.h>
