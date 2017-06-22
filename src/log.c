@@ -8,6 +8,7 @@
 #include <time.h>
 #include <string.h>
 #include <stdarg.h>
+#include <unistd.h>
 
 #ifdef HAVE_SYSLOG_H
 # include <syslog.h>

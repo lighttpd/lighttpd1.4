@@ -2,7 +2,6 @@
 
 #include "base.h"
 #include "joblist.h"
-#include "log.h"
 
 #include <stdlib.h>
 #include <string.h>

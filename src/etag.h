@@ -5,8 +5,7 @@
 #include "buffer.h"
 
 #include <sys/types.h>
-#include <sys/stat.h>
-#include <unistd.h>
+struct stat;            /* declaration */
 
 typedef enum { ETAG_USE_INODE = 1, ETAG_USE_MTIME = 2, ETAG_USE_SIZE = 4 } etag_flags_t;
 

@@ -18,6 +18,7 @@
 
 #include "sys-strings.h"
 #include "sys-socket.h"
+#include <unistd.h>
 #ifndef _WIN32
 #include <netdb.h>
 #endif

@@ -36,6 +36,7 @@
 #include <errno.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 
 typedef struct {
     buffer *auth_gssapi_keytab;

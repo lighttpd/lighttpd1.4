@@ -19,9 +19,6 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
-#include <unistd.h>
-
-#include "sys-socket.h"
 
 int http_response_write_header(server *srv, connection *con) {
 	buffer *b;

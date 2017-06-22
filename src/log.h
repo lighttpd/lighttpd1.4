@@ -1,8 +1,12 @@
 #ifndef _LOG_H_
 #define _LOG_H_
 #include "first.h"
+#include <sys/types.h>
 
-#include "server.h"
+#include "buffer.h"
+
+struct server;   /* declaration */
+typedef struct server server;
 
 struct timespec; /* declaration */
 int log_clock_gettime_realtime (struct timespec *ts);
