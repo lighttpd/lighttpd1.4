@@ -15,9 +15,6 @@
 #include <errno.h>
 
 #include "sys-socket.h"
-#ifndef _WIN32
-#include <netdb.h>
-#endif
 
 /**
  * mod_extforward.c for lighttpd, by comman.kang <at> gmail <dot> com
@@ -432,57 +429,6 @@ static const char *last_not_in_array(array *a, plugin_data *p)
 	return NULL;
 }
 
-static void ipstr_to_sockaddr(server *srv, const char *host, sock_addr *sock) {
-#ifdef HAVE_IPV6
-	struct addrinfo hints, *addrlist = NULL;
-	int result;
-
-	memset(&hints, 0, sizeof(hints));
-	sock->plain.sa_family = AF_UNSPEC;
-
-#ifndef AI_NUMERICSERV
-	/**
-	  * quoting $ man getaddrinfo
-	  *
-	  * NOTES
-	  *        AI_ADDRCONFIG, AI_ALL, and AI_V4MAPPED are available since glibc 2.3.3.
-	  *        AI_NUMERICSERV is available since glibc 2.3.4.
-	  */
-#define AI_NUMERICSERV 0
-#endif
-	hints.ai_flags = AI_NUMERICHOST | AI_NUMERICSERV;
-
-	errno = 0;
-	result = getaddrinfo(host, NULL, &hints, &addrlist);
-
-	if (result != 0) {
-		log_error_write(srv, __FILE__, __LINE__, "SSSs(S)",
-			"could not parse ip address ", host, " because ", gai_strerror(result), strerror(errno));
-	} else if (addrlist == NULL) {
-		log_error_write(srv, __FILE__, __LINE__, "SSS",
-			"Problem in parsing ip address ", host, ": succeeded, but no information returned");
-	} else switch (addrlist->ai_family) {
-	case AF_INET:
-		memcpy(&sock->ipv4, addrlist->ai_addr, sizeof(sock->ipv4));
-		force_assert(AF_INET == sock->plain.sa_family);
-		break;
-	case AF_INET6:
-		memcpy(&sock->ipv6, addrlist->ai_addr, sizeof(sock->ipv6));
-		force_assert(AF_INET6 == sock->plain.sa_family);
-		break;
-	default:
-		log_error_write(srv, __FILE__, __LINE__, "SSS",
-			"Problem in parsing ip address ", host, ": succeeded, but unknown family");
-	}
-
-	freeaddrinfo(addrlist);
-#else
-	UNUSED(srv);
-	sock->ipv4.sin_addr.s_addr = inet_addr(host);
-	sock->plain.sa_family = (sock->ipv4.sin_addr.s_addr == 0xFFFFFFFF) ? AF_UNSPEC : AF_INET;
-#endif
-}
-
 static int mod_extforward_set_addr(server *srv, connection *con, plugin_data *p, const char *addr) {
 	sock_addr sock;
 	handler_ctx *hctx = con->plugin_ctx[p->id];
@@ -492,7 +438,7 @@ static int mod_extforward_set_addr(server *srv, connection *con, plugin_data *p,
 	}
 
 	sock.plain.sa_family = AF_UNSPEC;
-	ipstr_to_sockaddr(srv, addr, &sock);
+	if (1 != sock_addr_from_str_numeric(srv, &sock, addr)) return 0;
 	if (sock.plain.sa_family == AF_UNSPEC) return 0;
 
 	/* we found the remote address, modify current connection and save the old address */

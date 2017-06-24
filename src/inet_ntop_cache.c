@@ -248,6 +248,68 @@ int sock_addr_from_str_hints(server *srv, sock_addr *addr, socklen_t *len, const
 }
 
 
+int sock_addr_from_str_numeric(server *srv, sock_addr *addr, const char *str)
+{
+    /*(note: does not handle port if getaddrinfo() is not available)*/
+    /*(note: getaddrinfo() is stricter than inet_aton() in what is accepted)*/
+    /*(this routine originates from mod_extforward.c:ipstr_to_sockaddr()*/
+  #ifdef HAVE_IPV6
+    struct addrinfo hints, *addrlist = NULL;
+    int result;
+
+    /**
+      * quoting $ man getaddrinfo
+      *
+      * NOTES
+      *  AI_ADDRCONFIG, AI_ALL, and AI_V4MAPPED are available since glibc 2.3.3.
+      *  AI_NUMERICSERV is available since glibc 2.3.4.
+      */
+   #ifndef AI_NUMERICSERV
+   #define AI_NUMERICSERV 0
+   #endif
+    memset(&hints, 0, sizeof(hints));
+    hints.ai_flags = AI_NUMERICHOST | AI_NUMERICSERV;
+
+    errno = 0;
+    result = getaddrinfo(str, NULL, &hints, &addrlist);
+
+    if (result != 0) {
+        log_error_write(srv, __FILE__, __LINE__, "SSSs(S)",
+                        "could not parse ip address ", str, " because ",
+                        gai_strerror(result), strerror(errno));
+    } else if (addrlist == NULL) {
+        log_error_write(srv, __FILE__, __LINE__, "SSS",
+                        "Problem in parsing ip address ", str,
+                        ": succeeded, but no information returned");
+        result = -1;
+    } else switch (addrlist->ai_family) {
+    case AF_INET:
+        memcpy(&addr->ipv4, addrlist->ai_addr, sizeof(addr->ipv4));
+        force_assert(AF_INET == addr->plain.sa_family);
+        break;
+    case AF_INET6:
+        memcpy(&addr->ipv6, addrlist->ai_addr, sizeof(addr->ipv6));
+        force_assert(AF_INET6 == addr->plain.sa_family);
+        break;
+    default:
+        log_error_write(srv, __FILE__, __LINE__, "SSS",
+                        "Problem in parsing ip address ", str,
+                        ": succeeded, but unknown family");
+        result = -1;
+        break;
+    }
+
+    freeaddrinfo(addrlist);
+    return (0 == result);
+  #else
+    UNUSED(srv);
+    addr->ipv4.sin_addr.s_addr = inet_addr(str);
+    addr->plain.sa_family = AF_INET;
+    return (addr->ipv4.sin_addr.s_addr != 0xFFFFFFFF);
+  #endif
+}
+
+
 const char * inet_ntop_cache_get_ip(server *srv, sock_addr *addr) {
 #ifdef HAVE_IPV6
 	typedef struct {

@@ -20,6 +20,7 @@ int sock_addr_inet_ntop_copy_buffer(buffer *b, const sock_addr *addr);
 int sock_addr_inet_ntop_append_buffer(buffer *b, const sock_addr *addr);
 
 int sock_addr_from_str_hints(server *srv, sock_addr *addr, socklen_t *len, const char *str, int family, unsigned short port);
+int sock_addr_from_str_numeric(server *srv, sock_addr *addr, const char *str);
 
 const char * inet_ntop_cache_get_ip(server *srv, sock_addr *addr);
 
