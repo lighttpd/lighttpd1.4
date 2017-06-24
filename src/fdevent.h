@@ -235,6 +235,8 @@ int fdevent_libev_init(fdevents *ev);
 
 int fdevent_ioctl_fionread (int fd, int fdfmt, int *toread);
 
+int fdevent_connect_status(int fd);
+
 /* fd must be TCP socket (AF_INET, AF_INET6), end-of-stream recv() 0 bytes */
 int fdevent_is_tcp_half_closed(int fd);
 

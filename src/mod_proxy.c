@@ -1368,16 +1368,7 @@ static handler_t proxy_write_request(server *srv, handler_ctx *hctx) {
 				break;
 			}
 		} else {
-			int socket_error;
-			socklen_t socket_error_len = sizeof(socket_error);
-
-			/* try to finish the connect() */
-			if (0 != getsockopt(hctx->fd, SOL_SOCKET, SO_ERROR, &socket_error, &socket_error_len)) {
-				log_error_write(srv, __FILE__, __LINE__, "ss",
-						"getsockopt failed:", strerror(errno));
-
-				return HANDLER_ERROR;
-			}
+			int socket_error = fdevent_connect_status(hctx->fd);
 			if (socket_error != 0) {
 				log_error_write(srv, __FILE__, __LINE__, "sssd",
 						"establishing connection failed:", strerror(socket_error),

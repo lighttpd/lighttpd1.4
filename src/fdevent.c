@@ -618,6 +618,15 @@ int fdevent_ioctl_fionread (int fd, int fdfmt, int *toread) {
 }
 
 
+int fdevent_connect_status(int fd) {
+    /* try to finish the connect() */
+    /*(should be called after connect() only when fd is writable (POLLOUT))*/
+    int opt;
+    socklen_t len = sizeof(opt);
+    return (0 == getsockopt(fd,SOL_SOCKET,SO_ERROR,&opt,&len)) ? opt : errno;
+}
+
+
 #include <netinet/tcp.h>
 #if (defined(__APPLE__) && defined(__MACH__)) \
   || defined(__FreeBSD__) || defined(__NetBSD__) \

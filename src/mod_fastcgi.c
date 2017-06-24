@@ -2133,18 +2133,7 @@ static handler_t fcgi_write_request(server *srv, handler_ctx *hctx) {
 
 	/* we can't handle this in the switch as we have to fall through in it */
 	if (hctx->state == FCGI_STATE_CONNECT_DELAYED) {
-		int socket_error;
-		socklen_t socket_error_len = sizeof(socket_error);
-
-		/* try to finish the connect() */
-		if (0 != getsockopt(hctx->fd, SOL_SOCKET, SO_ERROR, &socket_error, &socket_error_len)) {
-			log_error_write(srv, __FILE__, __LINE__, "ss",
-					"getsockopt failed:", strerror(errno));
-
-			fcgi_proc_disable(srv, hctx->host, hctx->proc, hctx);
-
-			return HANDLER_ERROR;
-		}
+		int socket_error = fdevent_connect_status(hctx->fd);
 		if (socket_error != 0) {
 			if (!hctx->proc->is_local || hctx->conf.debug) {
 				/* local procs get restarted */
