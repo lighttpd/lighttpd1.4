@@ -65,7 +65,7 @@ typedef enum { HTTP_VERSION_UNSET = -1, HTTP_VERSION_1_0, HTTP_VERSION_1_1 } htt
 typedef struct {
 	int key;
 
-	char *value;
+	const char *value;
 } keyvalue;
 
 typedef struct {
@@ -90,8 +90,8 @@ const char *get_http_status_body_name(int i);
 int get_http_version_key(const char *s);
 http_method_t get_http_method_key(const char *s);
 
-const char *keyvalue_get_value(keyvalue *kv, int k);
-int keyvalue_get_key(keyvalue *kv, const char *s);
+const char *keyvalue_get_value(const keyvalue *kv, int k);
+int keyvalue_get_key(const keyvalue *kv, const char *s);
 
 pcre_keyvalue_buffer *pcre_keyvalue_buffer_init(void);
 int pcre_keyvalue_buffer_append(struct server *srv, pcre_keyvalue_buffer *kvb, const char *key, const char *value);
