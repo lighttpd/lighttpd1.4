@@ -7,13 +7,11 @@
 #include "plugin.h"
 #include "joblist.h"
 #include "configfile.h"
+#include "inet_ntop_cache.h"
 
 #include "network_backends.h"
 #include "sys-mmap.h"
 #include "sys-socket.h"
-#ifndef _WIN32
-#include <netdb.h>
-#endif
 
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -107,7 +105,7 @@ static int network_server_init(server *srv, buffer *host_token, size_t sidx) {
 	buffer_copy_buffer(srv_socket->srv_token, host_token);
 
 	b = buffer_init();
-	buffer_copy_buffer(b, host_token);
+	buffer_copy_buffer(b, host_token); /*(allocates b->ptr even if host_token is NULL)*/
 
 	host = b->ptr;
 
@@ -155,134 +153,22 @@ static int network_server_init(server *srv, buffer *host_token, size_t sidx) {
 		}
 	}
 
-	if (*host == '\0') host = NULL;
-
 #ifdef HAVE_IPV6
 	if (s->use_ipv6) {
 		srv_socket->addr.plain.sa_family = AF_INET6;
 	}
 #endif
 
-	switch(srv_socket->addr.plain.sa_family) {
-#ifdef HAVE_IPV6
-	case AF_INET6:
-		memset(&srv_socket->addr, 0, sizeof(struct sockaddr_in6));
-		srv_socket->addr.ipv6.sin6_family = AF_INET6;
-		if (host == NULL) {
-			srv_socket->addr.ipv6.sin6_addr = in6addr_any;
+	if (*host == '\0') {
+		if (srv_socket->addr.plain.sa_family == AF_INET6) {
 			log_error_write(srv, __FILE__, __LINE__, "s", "warning: please use server.use-ipv6 only for hostnames, not without server.bind / empty address; your config will break if the kernel default for IPV6_V6ONLY changes");
-		} else {
-			struct addrinfo hints, *res;
-			int r;
-
-			memset(&hints, 0, sizeof(hints));
-
-			hints.ai_family   = AF_INET6;
-			hints.ai_socktype = SOCK_STREAM;
-			hints.ai_protocol = IPPROTO_TCP;
-
-			if (0 != (r = getaddrinfo(host, NULL, &hints, &res))) {
-				hints.ai_family = AF_INET;
-				if (
-				  #ifdef EAI_ADDRFAMILY
-				    EAI_ADDRFAMILY == r &&
-				  #endif
-				    0 == getaddrinfo(host, NULL, &hints, &res)) {
-					memcpy(&srv_socket->addr.ipv4, res->ai_addr, res->ai_addrlen);
-					srv_socket->addr.ipv4.sin_family = AF_INET;
-					srv_socket->addr.ipv4.sin_port = htons(port);
-					addr_len = sizeof(struct sockaddr_in);
-					/*assert(addr_len == res->ai_addrlen);*/
-					freeaddrinfo(res);
-					break;
-				}
-
-				log_error_write(srv, __FILE__, __LINE__,
-						"sssss", "getaddrinfo failed: ",
-						gai_strerror(r), "'", host, "'");
-
-				goto error_free_socket;
-			}
-
-			memcpy(&(srv_socket->addr), res->ai_addr, res->ai_addrlen);
-
-			freeaddrinfo(res);
+			host = "::";
+		} else if (srv_socket->addr.plain.sa_family == AF_INET) {
+			host = "0.0.0.0";
 		}
-		srv_socket->addr.ipv6.sin6_port = htons(port);
-		addr_len = sizeof(struct sockaddr_in6);
-		break;
-#endif
-	case AF_INET:
-		memset(&srv_socket->addr, 0, sizeof(struct sockaddr_in));
-		srv_socket->addr.ipv4.sin_family = AF_INET;
-		if (host == NULL) {
-			srv_socket->addr.ipv4.sin_addr.s_addr = htonl(INADDR_ANY);
-		} else {
-#ifdef HAVE_INET_PTON /*(reuse HAVE_INET_PTON for presence of getaddrinfo())*/
-			struct addrinfo hints, *res;
-			int r;
-			memset(&hints, 0, sizeof(hints));
-			hints.ai_family   = AF_INET;
-			hints.ai_socktype = SOCK_STREAM;
-			hints.ai_protocol = IPPROTO_TCP;
+	}
 
-			if (0 != (r = getaddrinfo(host, NULL, &hints, &res))) {
-				log_error_write(srv, __FILE__, __LINE__,
-						"sssss", "getaddrinfo failed: ",
-						gai_strerror(r), "'", host, "'");
-				goto error_free_socket;
-			}
-
-			memcpy(&(srv_socket->addr.ipv4), res->ai_addr, res->ai_addrlen);
-			freeaddrinfo(res);
-#else
-			struct hostent *he;
-			if (NULL == (he = gethostbyname(host))) {
-				log_error_write(srv, __FILE__, __LINE__,
-						"sds", "gethostbyname failed: ",
-						h_errno, host);
-				goto error_free_socket;
-			}
-
-			if (he->h_addrtype != AF_INET) {
-				log_error_write(srv, __FILE__, __LINE__, "sd", "addr-type != AF_INET: ", he->h_addrtype);
-				goto error_free_socket;
-			}
-
-			if (he->h_length != sizeof(struct in_addr)) {
-				log_error_write(srv, __FILE__, __LINE__, "sd", "addr-length != sizeof(in_addr): ", he->h_length);
-				goto error_free_socket;
-			}
-
-			memcpy(&(srv_socket->addr.ipv4.sin_addr.s_addr), he->h_addr_list[0], he->h_length);
-#endif
-		}
-		srv_socket->addr.ipv4.sin_port = htons(port);
-		addr_len = sizeof(struct sockaddr_in);
-		break;
-#ifdef HAVE_SYS_UN_H
-	case AF_UNIX:
-		memset(&srv_socket->addr, 0, sizeof(struct sockaddr_un));
-		srv_socket->addr.un.sun_family = AF_UNIX;
-		{
-			size_t hostlen = strlen(host) + 1;
-			if (hostlen > sizeof(srv_socket->addr.un.sun_path)) {
-				log_error_write(srv, __FILE__, __LINE__, "sS", "unix socket filename too long:", host);
-				goto error_free_socket;
-			}
-			memcpy(srv_socket->addr.un.sun_path, host, hostlen);
-
-#if defined(SUN_LEN)
-			addr_len = SUN_LEN(&srv_socket->addr.un);
-#else
-			/* stevens says: */
-			addr_len = hostlen + sizeof(srv_socket->addr.un.sun_family);
-#endif
-		}
-
-		break;
-#endif
-	default:
+	if (1 != sock_addr_from_str_hints(srv, &srv_socket->addr, &addr_len, host, srv_socket->addr.plain.sa_family, port)) {
 		goto error_free_socket;
 	}
 

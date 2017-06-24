@@ -111,7 +111,7 @@ typedef struct {
 } fcgi_connections;
 
 
-typedef union {
+typedef union sock_addr {
 #ifdef HAVE_IPV6
 	struct sockaddr_in6 ipv6;
 #endif

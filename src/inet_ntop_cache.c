@@ -2,11 +2,15 @@
 
 #include "inet_ntop_cache.h"
 #include "base.h"
+#include "log.h"
 
 #include "sys-socket.h"
 #include <sys/types.h>
 #include <errno.h>
 #include <string.h>
+#ifndef _WIN32
+#include <netdb.h>
+#endif
 
 
 unsigned short sock_addr_get_port (const sock_addr *addr)
@@ -97,6 +101,150 @@ int sock_addr_inet_ntop_append_buffer(buffer *b, const sock_addr *addr)
     if (NULL == s) return -1; /*(buffer not modified if any error occurs)*/
     buffer_append_string(b, s);
     return 0;
+}
+
+
+int sock_addr_from_str_hints(server *srv, sock_addr *addr, socklen_t *len, const char *str, int family, unsigned short port)
+{
+    /*(note: name resolution here is *blocking*)*/
+    switch(family) {
+     #ifdef HAVE_IPV6
+      case AF_INET6:
+        memset(addr, 0, sizeof(struct sockaddr_in6));
+        addr->ipv6.sin6_family = AF_INET6;
+        if (0 == strcmp(str, "::")) {
+            addr->ipv6.sin6_addr = in6addr_any;
+        }
+        else if (0 == strcmp(str, "::1")) {
+            addr->ipv6.sin6_addr = in6addr_loopback;
+        }
+        else {
+            struct addrinfo hints, *res;
+            int r;
+
+            memset(&hints, 0, sizeof(hints));
+
+            hints.ai_family   = AF_INET6;
+            hints.ai_socktype = SOCK_STREAM;
+            hints.ai_protocol = IPPROTO_TCP;
+
+            if (0 != (r = getaddrinfo(str, NULL, &hints, &res))) {
+                hints.ai_family = AF_INET;
+                if (
+                  #ifdef EAI_ADDRFAMILY
+                    EAI_ADDRFAMILY == r &&
+                  #endif
+                    0 == getaddrinfo(str, NULL, &hints, &res)) {
+                    memcpy(addr, res->ai_addr, res->ai_addrlen);
+                    addr->ipv4.sin_family = AF_INET;
+                    addr->ipv4.sin_port = htons(port);
+                    *len = sizeof(struct sockaddr_in);
+                    /*assert(*len == res->ai_addrlen);*/
+                    freeaddrinfo(res);
+                    return 1;
+                }
+
+                log_error_write(srv, __FILE__, __LINE__,
+                                "sssss", "getaddrinfo failed: ",
+                                gai_strerror(r), "'", str, "'");
+
+                return 0;
+            }
+
+            memcpy(addr, res->ai_addr, res->ai_addrlen);
+            freeaddrinfo(res);
+        }
+        addr->ipv6.sin6_port = htons(port);
+        *len = sizeof(struct sockaddr_in6);
+        return 1;
+     #endif
+      case AF_INET:
+        memset(addr, 0, sizeof(struct sockaddr_in));
+        addr->ipv4.sin_family = AF_INET;
+        if (0 == strcmp(str, "0.0.0.0")) {
+            addr->ipv4.sin_addr.s_addr = htonl(INADDR_ANY);
+        }
+        else if (0 == strcmp(str, "127.0.0.1")) {
+            addr->ipv4.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+        }
+        else {
+          #ifdef HAVE_INET_PTON
+            /*(reuse HAVE_INET_PTON for presence of getaddrinfo())*/
+            struct addrinfo hints, *res;
+            int r;
+            memset(&hints, 0, sizeof(hints));
+            hints.ai_family   = AF_INET;
+            hints.ai_socktype = SOCK_STREAM;
+            hints.ai_protocol = IPPROTO_TCP;
+
+            if (0 != (r = getaddrinfo(str, NULL, &hints, &res))) {
+                log_error_write(srv, __FILE__, __LINE__,
+                                "sssss", "getaddrinfo failed: ",
+                                gai_strerror(r), "'", str, "'");
+                return 0;
+            }
+
+            memcpy(addr, res->ai_addr, res->ai_addrlen);
+            freeaddrinfo(res);
+          #else
+            struct hostent *he = gethostbyname(str);
+            if (NULL == he) {
+                log_error_write(srv, __FILE__, __LINE__, "sds",
+                                "gethostbyname failed:", h_errno, str);
+                return 0;
+            }
+
+            if (he->h_addrtype != AF_INET) {
+                log_error_write(srv, __FILE__, __LINE__, "sd",
+                                "addr-type != AF_INET:", he->h_addrtype);
+                return 0;
+            }
+
+            if (he->h_length != sizeof(struct in_addr)) {
+                log_error_write(srv, __FILE__, __LINE__, "sd",
+                                "addr-length != sizeof(in_addr):",he->h_length);
+                return 0;
+            }
+
+            memcpy(&addr->ipv4.sin_addr.s_addr,he->h_addr_list[0],he->h_length);
+          #endif
+        }
+        addr->ipv4.sin_port = htons(port);
+        *len = sizeof(struct sockaddr_in);
+        return 1;
+     #ifdef HAVE_SYS_UN_H
+      case AF_UNIX:
+        memset(addr, 0, sizeof(struct sockaddr_un));
+        addr->un.sun_family = AF_UNIX;
+        {
+            size_t hostlen = strlen(str) + 1;
+            if (hostlen > sizeof(addr->un.sun_path)) {
+                log_error_write(srv, __FILE__, __LINE__, "sS",
+                                "unix socket filename too long:", str);
+                /*errno = ENAMETOOLONG;*/
+                return 0;
+            }
+            memcpy(addr->un.sun_path, str, hostlen);
+          #if defined(SUN_LEN)
+            *len = SUN_LEN(&addr->un);
+          #else
+            /* stevens says: */
+            *len = hostlen + sizeof(addr->un.sun_family);
+          #endif
+        }
+        return 1;
+     #else
+      case AF_UNIX:
+        log_error_write(srv, __FILE__, __LINE__, "s",
+                        "unix domain sockets are not supported.");
+        return 0;
+     #endif
+      default:
+        log_error_write(srv, __FILE__, __LINE__, "sd",
+                        "address family unsupported:", family);
+        /*errno = EAFNOSUPPORT;*/
+        return 0;
+    }
 }
 
 
