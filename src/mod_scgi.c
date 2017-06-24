@@ -10,6 +10,7 @@
 #include "connections.h"
 #include "response.h"
 #include "joblist.h"
+#include "inet_ntop_cache.h"
 
 #include "plugin.h"
 
@@ -674,15 +675,8 @@ static int scgi_spawn_connection(server *srv,
 	int scgi_fd;
 	int status;
 	struct timeval tv = { 0, 10 * 1000 };
-#ifdef HAVE_SYS_UN_H
-	struct sockaddr_un scgi_addr_un;
-#endif
-#if defined(HAVE_IPV6) && defined(HAVE_INET_PTON)
-	struct sockaddr_in6 scgi_addr_in6;
-#endif
-	struct sockaddr_in scgi_addr_in;
-	struct sockaddr *scgi_addr;
-
+	sock_addr addr;
+	struct sockaddr *scgi_addr = (struct sockaddr *)&addr;
 	socklen_t servlen;
 
 	if (p->conf.debug) {
@@ -690,84 +684,14 @@ static int scgi_spawn_connection(server *srv,
 				"new proc, socket:", proc->port, proc->socket);
 	}
 
-
 	if (!buffer_string_is_empty(proc->socket)) {
-#ifdef HAVE_SYS_UN_H
-		memset(&scgi_addr_un, 0, sizeof(scgi_addr_un));
-		scgi_addr_un.sun_family = AF_UNIX;
-		if (buffer_string_length(proc->socket) + 1 > sizeof(scgi_addr_un.sun_path)) {
-			log_error_write(srv, __FILE__, __LINE__, "sB",
-					"ERROR: Unix Domain socket filename too long:",
-					proc->socket);
+		if (1 != sock_addr_from_str_hints(srv, &addr, &servlen, proc->socket->ptr, AF_UNIX, 0)) {
 			return -1;
 		}
-		memcpy(scgi_addr_un.sun_path, proc->socket->ptr, buffer_string_length(proc->socket) + 1);
-
-#ifdef SUN_LEN
-		servlen = SUN_LEN(&scgi_addr_un);
-#else
-		/* stevens says: */
-		servlen = buffer_string_length(proc->socket) + 1 + sizeof(scgi_addr_un.sun_family);
-#endif
-		scgi_addr = (struct sockaddr *) &scgi_addr_un;
-#else
-		log_error_write(srv, __FILE__, __LINE__, "s",
-				"ERROR: Unix Domain sockets are not supported.");
-		return -1;
-#endif
-	} else if (buffer_string_is_empty(host->host)) {
-		memset(&scgi_addr_in, 0, sizeof(scgi_addr_in));
-		scgi_addr_in.sin_family = AF_INET;
-		scgi_addr_in.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
-		scgi_addr_in.sin_port = htons(proc->port);
-		servlen = sizeof(scgi_addr_in);
-		scgi_addr = (struct sockaddr *) &scgi_addr_in;
-#if defined(HAVE_IPV6) && defined(HAVE_INET_PTON)
-	} else if (host->family == AF_INET6) {
-		memset(&scgi_addr_in6, 0, sizeof(scgi_addr_in6));
-		scgi_addr_in6.sin6_family = AF_INET6;
-		inet_pton(AF_INET6, host->host->ptr, (char *) &scgi_addr_in6.sin6_addr);
-		scgi_addr_in6.sin6_port = htons(proc->port);
-		servlen = sizeof(scgi_addr_in6);
-		scgi_addr = (struct sockaddr *) &scgi_addr_in6;
-#endif
 	} else {
-		memset(&scgi_addr_in, 0, sizeof(scgi_addr_in));
-		scgi_addr_in.sin_family = AF_INET;
-#if defined(HAVE_INET_PTON)
-		inet_pton(AF_INET, host->host->ptr, (char *) &scgi_addr_in.sin_addr);
-#else
-		{
-			struct hostent *he;
-
-			/* set a useful default */
-			scgi_addr_in.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
-
-			if (NULL == (he = gethostbyname(host->host->ptr))) {
-				log_error_write(srv, __FILE__, __LINE__,
-						"sdb", "gethostbyname failed: ",
-						h_errno, host->host);
-				return -1;
-			}
-
-			if (he->h_addrtype != AF_INET) {
-				log_error_write(srv, __FILE__, __LINE__, "sd", "addr-type != AF_INET: ", he->h_addrtype);
-				return -1;
-			}
-
-			if (he->h_length != sizeof(struct in_addr)) {
-				log_error_write(srv, __FILE__, __LINE__, "sd", "addr-length != sizeof(in_addr): ", he->h_length);
-				return -1;
-			}
-
-			memcpy(&(scgi_addr_in.sin_addr.s_addr), he->h_addr_list[0], he->h_length);
-
+		if (1 != sock_addr_from_buffer_hints_numeric(srv, &addr, &servlen, host->host, host->family, proc->port)) {
+			return -1;
 		}
-#endif
-		scgi_addr_in.sin_port = htons(proc->port);
-		servlen = sizeof(scgi_addr_in);
-
-		scgi_addr = (struct sockaddr *) &scgi_addr_in;
 	}
 
 	if (-1 == (scgi_fd = fdevent_socket_cloexec(scgi_addr->sa_family, SOCK_STREAM, 0))) {
@@ -1468,14 +1392,8 @@ static int scgi_env_add_uwsgi(void *venv, const char *key, size_t key_len, const
  */
 
 static int scgi_establish_connection(server *srv, handler_ctx *hctx) {
-	struct sockaddr *scgi_addr;
-	struct sockaddr_in scgi_addr_in;
-#if defined(HAVE_IPV6) && defined(HAVE_INET_PTON)
-	struct sockaddr_in6 scgi_addr_in6;
-#endif
-#ifdef HAVE_SYS_UN_H
-	struct sockaddr_un scgi_addr_un;
-#endif
+	sock_addr addr;
+	struct sockaddr *scgi_addr = (struct sockaddr *)&addr;
 	socklen_t servlen;
 
 	scgi_extension_host *host = hctx->host;
@@ -1483,51 +1401,13 @@ static int scgi_establish_connection(server *srv, handler_ctx *hctx) {
 	int scgi_fd       = hctx->fd;
 
 	if (!buffer_string_is_empty(proc->socket)) {
-#ifdef HAVE_SYS_UN_H
-		/* use the unix domain socket */
-		memset(&scgi_addr_un, 0, sizeof(scgi_addr_un));
-		scgi_addr_un.sun_family = AF_UNIX;
-		if (buffer_string_length(proc->socket) + 1 > sizeof(scgi_addr_un.sun_path)) {
-			log_error_write(srv, __FILE__, __LINE__, "sB",
-					"ERROR: Unix Domain socket filename too long:",
-					proc->socket);
+		if (1 != sock_addr_from_str_hints(srv, &addr, &servlen, proc->socket->ptr, AF_UNIX, 0)) {
 			return -1;
 		}
-		memcpy(scgi_addr_un.sun_path, proc->socket->ptr, buffer_string_length(proc->socket) + 1);
-
-#ifdef SUN_LEN
-		servlen = SUN_LEN(&scgi_addr_un);
-#else
-		/* stevens says: */
-		servlen = buffer_string_length(proc->socket) + 1 + sizeof(scgi_addr_un.sun_family);
-#endif
-		scgi_addr = (struct sockaddr *) &scgi_addr_un;
-#else
-		return -1;
-#endif
-#if defined(HAVE_IPV6) && defined(HAVE_INET_PTON)
-	} else if (host->family == AF_INET6 && !buffer_string_is_empty(host->host)) {
-		memset(&scgi_addr_in6, 0, sizeof(scgi_addr_in6));
-		scgi_addr_in6.sin6_family = AF_INET6;
-		inet_pton(AF_INET6, host->host->ptr, (char *) &scgi_addr_in6.sin6_addr);
-		scgi_addr_in6.sin6_port = htons(proc->port);
-		servlen = sizeof(scgi_addr_in6);
-		scgi_addr = (struct sockaddr *) &scgi_addr_in6;
-#endif
 	} else {
-		memset(&scgi_addr_in, 0, sizeof(scgi_addr_in));
-		scgi_addr_in.sin_family = AF_INET;
-		if (0 == inet_aton(host->host->ptr, &(scgi_addr_in.sin_addr))) {
-			log_error_write(srv, __FILE__, __LINE__, "sbs",
-					"converting IP-adress failed for", host->host,
-					"\nBe sure to specify an IP address here");
-
+		if (1 != sock_addr_from_buffer_hints_numeric(srv, &addr, &servlen, host->host, host->family, proc->port)) {
 			return -1;
 		}
-		scgi_addr_in.sin_port = htons(proc->port);
-		servlen = sizeof(scgi_addr_in);
-
-		scgi_addr = (struct sockaddr *) &scgi_addr_in;
 	}
 
 	if (-1 == connect(scgi_fd, scgi_addr, servlen)) {

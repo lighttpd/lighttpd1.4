@@ -310,6 +310,67 @@ int sock_addr_from_str_numeric(server *srv, sock_addr *addr, const char *str)
 }
 
 
+int sock_addr_from_buffer_hints_numeric(server *srv, sock_addr *addr, socklen_t *len, const buffer *b, int family, unsigned short port)
+{
+    /*(this routine originates from mod_fastcgi.c and mod_scgi.c)*/
+    if (buffer_string_is_empty(b)) {
+        /*(preserve existing behavior (for now))*/
+        /*(would be better if initialized default when reading config)*/
+        memset(&addr->ipv4, 0, sizeof(struct sockaddr_in));
+        addr->ipv4.sin_family = AF_INET;
+        addr->ipv4.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+        addr->ipv4.sin_port = htons(port);
+        *len = sizeof(struct sockaddr_in);
+        return 1;
+    }
+    else if (1 == sock_addr_inet_pton(addr, b->ptr, family, port)) {
+        *len = (family == AF_INET)
+          ? sizeof(struct sockaddr_in)   /* family == AF_INET */
+          : sizeof(struct sockaddr_in6); /* family == AF_INET6 */
+        return 1;
+    }
+  #if defined(HAVE_IPV6) && defined(HAVE_INET_PTON)
+    else if (family == AF_INET6) {
+        log_error_write(srv, __FILE__, __LINE__, "sb",
+                        "invalid IPv6 address literal:", b);
+        return 0;
+    }
+  #endif
+  #ifndef HAVE_INET_PTON /*(preserve existing behavior (for now))*/
+    else {
+        struct hostent *he = gethostbyname(b->ptr);
+        if (NULL == he) {
+            log_error_write(srv, __FILE__, __LINE__, "sdb",
+                            "gethostbyname failed:", h_errno, b);
+            return 0;
+        }
+
+        if (he->h_addrtype != AF_INET) {
+            log_error_write(srv, __FILE__, __LINE__, "sd",
+                            "addr-type != AF_INET:", he->h_addrtype);
+            return 0;
+        }
+
+        if (he->h_length != sizeof(struct in_addr)) {
+            log_error_write(srv, __FILE__, __LINE__, "sd",
+                            "addr-length != sizeof(in_addr):",he->h_length);
+            return 0;
+        }
+
+        memset(&addr->ipv4, 0, sizeof(struct sockaddr_in));
+        memcpy(&addr->ipv4.sin_addr.s_addr, he->h_addr_list[0], he->h_length);
+        addr->ipv4.sin_family = AF_INET;
+        addr->ipv4.sin_port = htons(port);
+        *len = sizeof(struct sockaddr_in);
+    }
+  #else
+    UNUSED(srv);
+  #endif
+
+    return 0;
+}
+
+
 const char * inet_ntop_cache_get_ip(server *srv, sock_addr *addr) {
 #ifdef HAVE_IPV6
 	typedef struct {

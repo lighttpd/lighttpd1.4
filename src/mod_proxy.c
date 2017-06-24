@@ -666,55 +666,30 @@ static handler_t proxy_reconnect(server *srv, handler_ctx *hctx) {
 }
 
 static int proxy_establish_connection(server *srv, handler_ctx *hctx) {
-	struct sockaddr *proxy_addr;
-	struct sockaddr_in proxy_addr_in;
-#if defined(HAVE_SYS_UN_H)
-	struct sockaddr_un proxy_addr_un;
-#endif
-#if defined(HAVE_IPV6) && defined(HAVE_INET_PTON)
-	struct sockaddr_in6 proxy_addr_in6;
-#endif
+	sock_addr addr;
+	struct sockaddr *proxy_addr = (struct sockaddr *)&addr;
 	socklen_t servlen;
 
 	data_proxy *host= hctx->host;
 	int proxy_fd       = hctx->fd;
 
-
-#if defined(HAVE_SYS_UN_H)
 	if (strstr(host->host->ptr, "/")) {
-		if (buffer_string_length(host->host) + 1 > sizeof(proxy_addr_un.sun_path)) {
-			log_error_write(srv, __FILE__, __LINE__, "sB",
-				"ERROR: Unix Domain socket filename too long:",
-				host->host);
+		if (1 != sock_addr_from_str_hints(srv, &addr, &servlen, host->host->ptr, AF_UNIX, 0)) {
 			return -1;
 		}
-
-		memset(&proxy_addr_un, 0, sizeof(proxy_addr_un));
-		proxy_addr_un.sun_family = AF_UNIX;
-		memcpy(proxy_addr_un.sun_path, host->host->ptr, buffer_string_length(host->host) + 1);
-		servlen = sizeof(proxy_addr_un);
-		proxy_addr = (struct sockaddr *) &proxy_addr_un;
-	} else
-#endif
-#if defined(HAVE_IPV6) && defined(HAVE_INET_PTON)
-	if (strstr(host->host->ptr, ":")) {
-		memset(&proxy_addr_in6, 0, sizeof(proxy_addr_in6));
-		proxy_addr_in6.sin6_family = AF_INET6;
-		inet_pton(AF_INET6, host->host->ptr, (char *) &proxy_addr_in6.sin6_addr);
-		proxy_addr_in6.sin6_port = htons(host->port);
-		servlen = sizeof(proxy_addr_in6);
-		proxy_addr = (struct sockaddr *) &proxy_addr_in6;
-	} else
-#endif
-	{
-		memset(&proxy_addr_in, 0, sizeof(proxy_addr_in));
-		proxy_addr_in.sin_family = AF_INET;
-		proxy_addr_in.sin_addr.s_addr = inet_addr(host->host->ptr);
-		proxy_addr_in.sin_port = htons(host->port);
-		servlen = sizeof(proxy_addr_in);
-		proxy_addr = (struct sockaddr *) &proxy_addr_in;
 	}
-
+      #if defined(HAVE_IPV6)
+        else if (strstr(host->host->ptr, ":")) {
+		if (1 != sock_addr_from_buffer_hints_numeric(srv, &addr, &servlen, host->host, AF_INET6, host->port)) {
+			return -1;
+		}
+	}
+      #endif
+        else {
+		if (1 != sock_addr_from_buffer_hints_numeric(srv, &addr, &servlen, host->host, AF_INET, host->port)) {
+			return -1;
+		}
+	}
 
 	if (-1 == connect(proxy_fd, proxy_addr, servlen)) {
 		if (errno == EINPROGRESS || errno == EALREADY) {
