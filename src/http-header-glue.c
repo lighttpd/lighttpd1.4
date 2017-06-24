@@ -19,70 +19,6 @@
 #include "sys-strings.h"
 #include "sys-socket.h"
 #include <unistd.h>
-#ifndef _WIN32
-#include <netdb.h>
-#endif
-
-/*
- * This was 'borrowed' from tcpdump.
- *
- *
- * This is fun.
- *
- * In older BSD systems, socket addresses were fixed-length, and
- * "sizeof (struct sockaddr)" gave the size of the structure.
- * All addresses fit within a "struct sockaddr".
- *
- * In newer BSD systems, the socket address is variable-length, and
- * there's an "sa_len" field giving the length of the structure;
- * this allows socket addresses to be longer than 2 bytes of family
- * and 14 bytes of data.
- *
- * Some commercial UNIXes use the old BSD scheme, some use the RFC 2553
- * variant of the old BSD scheme (with "struct sockaddr_storage" rather
- * than "struct sockaddr"), and some use the new BSD scheme.
- *
- * Some versions of GNU libc use neither scheme, but has an "SA_LEN()"
- * macro that determines the size based on the address family.  Other
- * versions don't have "SA_LEN()" (as it was in drafts of RFC 2553
- * but not in the final version).  On the latter systems, we explicitly
- * check the AF_ type to determine the length; we assume that on
- * all those systems we have "struct sockaddr_storage".
- */
-
-#ifdef HAVE_IPV6
-# ifndef SA_LEN
-#  ifdef HAVE_SOCKADDR_SA_LEN
-#   define SA_LEN(addr)   ((addr)->sa_len)
-#  else /* HAVE_SOCKADDR_SA_LEN */
-#   ifdef HAVE_STRUCT_SOCKADDR_STORAGE
-static size_t get_sa_len(const struct sockaddr *addr) {
-	switch (addr->sa_family) {
-
-#    ifdef AF_INET
-	case AF_INET:
-		return (sizeof (struct sockaddr_in));
-#    endif
-
-#    ifdef AF_INET6
-	case AF_INET6:
-		return (sizeof (struct sockaddr_in6));
-#    endif
-
-	default:
-		return (sizeof (struct sockaddr));
-
-	}
-}
-#    define SA_LEN(addr)   (get_sa_len(addr))
-#   else /* HAVE_SOCKADDR_STORAGE */
-#    define SA_LEN(addr)   (sizeof (struct sockaddr))
-#   endif /* HAVE_SOCKADDR_STORAGE */
-#  endif /* HAVE_SOCKADDR_SA_LEN */
-# endif /* SA_LEN */
-#endif
-
-
 
 
 int response_header_insert(server *srv, connection *con, const char *key, size_t keylen, const char *value, size_t vallen) {
@@ -142,10 +78,6 @@ int http_response_redirect_to_directory(server *srv, connection *con) {
 		buffer_append_string_buffer(o, con->uri.authority);
 	} else {
 		/* get the name of the currently connected socket */
-		struct hostent *he;
-#ifdef HAVE_IPV6
-		char hbuf[256];
-#endif
 		sock_addr our_addr;
 		socklen_t our_addr_len;
 
@@ -162,51 +94,12 @@ int http_response_redirect_to_directory(server *srv, connection *con) {
 			return 0;
 		}
 
-
 		/* Lookup name: secondly try to get hostname for bind address */
-		switch(our_addr.plain.sa_family) {
-#ifdef HAVE_IPV6
-		case AF_INET6:
-			if (0 != getnameinfo((const struct sockaddr *)(&our_addr.ipv6),
-					     SA_LEN((const struct sockaddr *)&our_addr.ipv6),
-					     hbuf, sizeof(hbuf), NULL, 0, 0)) {
-
-				char dst[INET6_ADDRSTRLEN];
-
-				log_error_write(srv, __FILE__, __LINE__,
-						"SSS", "NOTICE: getnameinfo failed: ",
-						strerror(errno), ", using ip-address instead");
-
-				buffer_append_string_len(o, CONST_STR_LEN("["));
-				buffer_append_string(o,
-						     inet_ntop(AF_INET6, (char *)&our_addr.ipv6.sin6_addr,
-							       dst, sizeof(dst)));
-				buffer_append_string_len(o, CONST_STR_LEN("]"));
-			} else {
-				buffer_append_string(o, hbuf);
-			}
-			break;
-#endif
-		case AF_INET:
-			if (NULL == (he = gethostbyaddr((char *)&our_addr.ipv4.sin_addr, sizeof(struct in_addr), AF_INET))) {
-				log_error_write(srv, __FILE__, __LINE__,
-						"SdS", "NOTICE: gethostbyaddr failed: ",
-						h_errno, ", using ip-address instead");
-
-				buffer_append_string(o, inet_ntoa(our_addr.ipv4.sin_addr));
-			} else {
-				buffer_append_string(o, he->h_name);
-			}
-			break;
-		default:
-			log_error_write(srv, __FILE__, __LINE__,
-					"S", "ERROR: unsupported address-type");
-
+		if (0 != sock_addr_nameinfo_append_buffer(srv, o, &our_addr)) {
+			con->http_status = 500;
 			buffer_free(o);
 			return -1;
-		}
-
-		{
+		} else {
 			unsigned short default_port = 80;
 			if (buffer_is_equal_caseless_string(con->uri.scheme, CONST_STR_LEN("https"))) {
 				default_port = 443;

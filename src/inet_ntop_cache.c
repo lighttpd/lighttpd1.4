@@ -104,6 +104,52 @@ int sock_addr_inet_ntop_append_buffer(buffer *b, const sock_addr *addr)
 }
 
 
+int sock_addr_nameinfo_append_buffer(server *srv, buffer *b, const sock_addr *addr)
+{
+    /*(this routine originates from
+     * http-header-glue.c:http_response_redirect_to_directory())*/
+    /*(note: name resolution here is *blocking*)*/
+    if (AF_INET == addr->plain.sa_family) {
+        struct hostent *he = gethostbyaddr((char *)&addr->ipv4.sin_addr,
+                                           sizeof(struct in_addr), AF_INET);
+        if (NULL == he) {
+            log_error_write(srv, __FILE__, __LINE__,
+                            "SdS", "NOTICE: gethostbyaddr failed: ",
+                            h_errno, ", using ip-address instead");
+
+            sock_addr_inet_ntop_append_buffer(b, addr);
+        } else {
+            buffer_append_string(b, he->h_name);
+        }
+    }
+  #ifdef HAVE_IPV6
+    else if (AF_INET6 == addr->plain.sa_family) {
+        char hbuf[256];
+        if (0 != getnameinfo((const struct sockaddr *)(&addr->ipv6),
+                             sizeof(&addr->ipv6),
+                             hbuf, sizeof(hbuf), NULL, 0, 0)) {
+            log_error_write(srv, __FILE__, __LINE__,
+                            "SSS", "NOTICE: getnameinfo failed: ",
+                            strerror(errno), ", using ip-address instead");
+
+            buffer_append_string_len(b, CONST_STR_LEN("["));
+            sock_addr_inet_ntop_append_buffer(b, addr);
+            buffer_append_string_len(b, CONST_STR_LEN("]"));
+        } else {
+            buffer_append_string(b, hbuf);
+        }
+    }
+  #endif
+    else {
+        log_error_write(srv, __FILE__, __LINE__,
+                        "S", "ERROR: unsupported address-type");
+        return -1;
+    }
+
+    return 0;
+}
+
+
 int sock_addr_from_str_hints(server *srv, sock_addr *addr, socklen_t *len, const char *str, int family, unsigned short port)
 {
     /*(note: name resolution here is *blocking*)*/
