@@ -40,6 +40,7 @@ typedef struct {
 	buffer *host;
 
 	unsigned short port;
+	unsigned short family;
 
 	time_t disable_ts;
 	int is_disabled;
@@ -105,6 +106,7 @@ static data_fastcgi *data_fastcgi_init(void) {
 	ds->key = buffer_init();
 	ds->host = buffer_init();
 	ds->port = 0;
+	ds->family = 0;
 	ds->is_disabled = 0;
 
 	ds->copy = data_fastcgi_copy;
@@ -512,6 +514,18 @@ SETDEFAULTS_FUNC(mod_proxy_set_defaults) {
 						return HANDLER_ERROR;
 					}
 
+					df->family = AF_INET;
+				      #ifdef HAVE_SYS_UN_H
+					if (strchr(df->host->ptr, '/')) {
+						df->family = AF_UNIX;
+					}
+				      #endif
+				      #if defined(HAVE_IPV6)
+				        if (strchr(df->host->ptr, ':')) {
+						df->family = AF_INET6;
+					}
+				      #endif
+
 					/* if extension already exists, take it */
 
 					if (NULL == (dfa = (data_array *)array_get_element_klen(s->extensions, CONST_BUF_LEN(da_ext->key)))) {
@@ -764,20 +778,13 @@ static int proxy_establish_connection(server *srv, handler_ctx *hctx) {
 	data_proxy *host= hctx->host;
 	int proxy_fd       = hctx->fd;
 
-	if (strstr(host->host->ptr, "/")) {
-		if (1 != sock_addr_from_str_hints(srv, &addr, &servlen, host->host->ptr, AF_UNIX, 0)) {
+	if (host->family == AF_UNIX) {
+		if (1 != sock_addr_from_str_hints(srv, &addr, &servlen, host->host->ptr, host->family, 0)) {
 			return -1;
 		}
 	}
-      #if defined(HAVE_IPV6)
-        else if (strstr(host->host->ptr, ":")) {
-		if (1 != sock_addr_from_buffer_hints_numeric(srv, &addr, &servlen, host->host, AF_INET6, host->port)) {
-			return -1;
-		}
-	}
-      #endif
         else {
-		if (1 != sock_addr_from_buffer_hints_numeric(srv, &addr, &servlen, host->host, AF_INET, host->port)) {
+		if (1 != sock_addr_from_buffer_hints_numeric(srv, &addr, &servlen, host->host, host->family, host->port)) {
 			return -1;
 		}
 	}
@@ -1406,24 +1413,8 @@ static handler_t proxy_write_request(server *srv, handler_ctx *hctx) {
 
 	switch(hctx->state) {
 	case PROXY_STATE_INIT:
-#if defined(HAVE_SYS_UN_H)
-		if (strstr(host->host->ptr,"/")) {
-			if (-1 == (hctx->fd = fdevent_socket_nb_cloexec(AF_UNIX, SOCK_STREAM, 0))) {
-				log_error_write(srv, __FILE__, __LINE__, "ss", "socket failed: ", strerror(errno));
-				return HANDLER_ERROR;
-			}
-		} else
-#endif
-#if defined(HAVE_IPV6) && defined(HAVE_INET_PTON)
-		if (strstr(host->host->ptr,":")) {
-			if (-1 == (hctx->fd = fdevent_socket_nb_cloexec(AF_INET6, SOCK_STREAM, 0))) {
-				log_error_write(srv, __FILE__, __LINE__, "ss", "socket failed: ", strerror(errno));
-				return HANDLER_ERROR;
-			}
-		} else
-#endif
 		{
-			if (-1 == (hctx->fd = fdevent_socket_nb_cloexec(AF_INET, SOCK_STREAM, 0))) {
+			if (-1 == (hctx->fd = fdevent_socket_nb_cloexec(host->family, SOCK_STREAM, 0))) {
 				log_error_write(srv, __FILE__, __LINE__, "ss", "socket failed: ", strerror(errno));
 				return HANDLER_ERROR;
 			}
