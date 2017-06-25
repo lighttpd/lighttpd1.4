@@ -13,7 +13,7 @@
 
 #define DATA_IS_STRING(x) (x->type == TYPE_STRING)
 
-typedef enum { TYPE_UNSET, TYPE_STRING, TYPE_OTHER, TYPE_ARRAY, TYPE_INTEGER, TYPE_FASTCGI, TYPE_CONFIG } data_type_t;
+typedef enum { TYPE_UNSET, TYPE_STRING, TYPE_OTHER, TYPE_ARRAY, TYPE_INTEGER, TYPE_DONOTUSE, TYPE_CONFIG } data_type_t;
 #define DATA_UNSET \
 	data_type_t type; \
 	buffer *key; \
@@ -133,23 +133,6 @@ typedef struct {
 } data_integer;
 
 data_integer *data_integer_init(void);
-
-typedef struct {
-	DATA_UNSET;
-
-	buffer *host;
-
-	unsigned short port;
-
-	time_t disable_ts;
-	int is_disabled;
-	size_t balance;
-
-	int usage; /* fair-balancing needs the no. of connections active on this host */
-	int last_used_ndx; /* round robin */
-} data_fastcgi;
-
-data_fastcgi *data_fastcgi_init(void);
 
 array *array_init(void);
 array *array_init_array(array *a);
