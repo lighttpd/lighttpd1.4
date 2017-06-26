@@ -1,8 +1,7 @@
 #include "first.h"
 
 #include "status_counter.h"
-
-#include <stdlib.h>
+#include "base.h"
 
 /**
  * The status array can carry all the status information you want

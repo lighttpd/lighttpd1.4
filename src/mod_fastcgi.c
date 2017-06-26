@@ -14,8 +14,6 @@
 
 #include "plugin.h"
 
-#include "status_counter.h"
-
 #include <sys/types.h>
 #include <unistd.h>
 #include <errno.h>
@@ -295,8 +293,6 @@ typedef struct {
 
 	buffer *fcgi_env;
 
-	buffer *statuskey;
-
 	plugin_config **config_storage;
 
 	plugin_config conf; /* this is only used as long as no handler_ctx is setup */
@@ -345,90 +341,65 @@ typedef struct {
 } handler_ctx;
 
 
-/* ok, we need a prototype */
-static handler_t fcgi_handle_fdevent(server *srv, void *ctx, int revents);
+#include "status_counter.h"
 
-static void fastcgi_status_copy_procname(buffer *b, fcgi_extension_host *host, fcgi_proc *proc) {
+static data_integer * fastcgi_status_get_di(server *srv, fcgi_extension_host *host, fcgi_proc *proc, const char *tag, size_t len) {
+	buffer *b = srv->tmp_buf;
 	buffer_copy_string_len(b, CONST_STR_LEN("fastcgi.backend."));
 	buffer_append_string_buffer(b, host->id);
 	if (proc) {
 		buffer_append_string_len(b, CONST_STR_LEN("."));
 		buffer_append_int(b, proc->id);
 	}
+	buffer_append_string_len(b, tag, len);
+	return status_counter_get_counter(srv, CONST_BUF_LEN(b));
+}
+
+static void fcgi_proc_tag_inc(server *srv, handler_ctx *hctx, const char *tag, size_t len) {
+	data_integer *di = fastcgi_status_get_di(srv, hctx->host, hctx->proc, tag, len);
+	++di->value;
 }
 
 static void fcgi_proc_load_inc(server *srv, handler_ctx *hctx) {
-	plugin_data *p = hctx->plugin_data;
-	hctx->proc->load++;
+	data_integer *di = fastcgi_status_get_di(srv, hctx->host, hctx->proc, CONST_STR_LEN(".load"));
+	di->value = ++hctx->proc->load;
 
 	status_counter_inc(srv, CONST_STR_LEN("fastcgi.active-requests"));
-
-	fastcgi_status_copy_procname(p->statuskey, hctx->host, hctx->proc);
-	buffer_append_string_len(p->statuskey, CONST_STR_LEN(".load"));
-
-	status_counter_set(srv, CONST_BUF_LEN(p->statuskey), hctx->proc->load);
 }
 
 static void fcgi_proc_load_dec(server *srv, handler_ctx *hctx) {
-	plugin_data *p = hctx->plugin_data;
-	hctx->proc->load--;
+	data_integer *di = fastcgi_status_get_di(srv, hctx->host, hctx->proc, CONST_STR_LEN(".load"));
+	di->value = --hctx->proc->load;
 
 	status_counter_dec(srv, CONST_STR_LEN("fastcgi.active-requests"));
-
-	fastcgi_status_copy_procname(p->statuskey, hctx->host, hctx->proc);
-	buffer_append_string_len(p->statuskey, CONST_STR_LEN(".load"));
-
-	status_counter_set(srv, CONST_BUF_LEN(p->statuskey), hctx->proc->load);
 }
 
-static void fcgi_host_assign(server *srv, handler_ctx *hctx, fcgi_extension_host *host) {
-	plugin_data *p = hctx->plugin_data;
-	hctx->host = host;
-	hctx->host->load++;
-
-	fastcgi_status_copy_procname(p->statuskey, hctx->host, NULL);
-	buffer_append_string_len(p->statuskey, CONST_STR_LEN(".load"));
-
-	status_counter_set(srv, CONST_BUF_LEN(p->statuskey), hctx->host->load);
+static void fcgi_host_assign(server *srv, handler_ctx *hctx) {
+	data_integer *di = fastcgi_status_get_di(srv, hctx->host, NULL, CONST_STR_LEN(".load"));
+	di->value = ++hctx->host->load;
 }
 
 static void fcgi_host_reset(server *srv, handler_ctx *hctx) {
-	plugin_data *p = hctx->plugin_data;
-	hctx->host->load--;
-
-	fastcgi_status_copy_procname(p->statuskey, hctx->host, NULL);
-	buffer_append_string_len(p->statuskey, CONST_STR_LEN(".load"));
-
-	status_counter_set(srv, CONST_BUF_LEN(p->statuskey), hctx->host->load);
-
-	hctx->host = NULL;
+	data_integer *di = fastcgi_status_get_di(srv, hctx->host, NULL, CONST_STR_LEN(".load"));
+	di->value = --hctx->host->load;
 }
 
-static int fastcgi_status_init(server *srv, buffer *b, fcgi_extension_host *host, fcgi_proc *proc) {
-#define CLEAN(x) \
-	fastcgi_status_copy_procname(b, host, proc); \
-	buffer_append_string_len(b, CONST_STR_LEN(x)); \
-	status_counter_set(srv, CONST_BUF_LEN(b), 0);
+static int fastcgi_status_init(server *srv, fcgi_extension_host *host, fcgi_proc *proc) {
+	fastcgi_status_get_di(srv, host, proc, CONST_STR_LEN(".disabled"))->value = 0;
+	fastcgi_status_get_di(srv, host, proc, CONST_STR_LEN(".died"))->value = 0;
+	fastcgi_status_get_di(srv, host, proc, CONST_STR_LEN(".overloaded"))->value = 0;
+	fastcgi_status_get_di(srv, host, proc, CONST_STR_LEN(".connected"))->value = 0;
+	fastcgi_status_get_di(srv, host, proc, CONST_STR_LEN(".load"))->value = 0;
 
-	CLEAN(".disabled");
-	CLEAN(".died");
-	CLEAN(".overloaded");
-	CLEAN(".connected");
-	CLEAN(".load");
-
-#undef CLEAN
-
-#define CLEAN(x) \
-	fastcgi_status_copy_procname(b, host, NULL); \
-	buffer_append_string_len(b, CONST_STR_LEN(x)); \
-	status_counter_set(srv, CONST_BUF_LEN(b), 0);
-
-	CLEAN(".load");
-
-#undef CLEAN
+	fastcgi_status_get_di(srv, host, NULL, CONST_STR_LEN(".load"))->value = 0;
 
 	return 0;
 }
+
+
+/* ok, we need a prototype */
+static handler_t fcgi_handle_fdevent(server *srv, void *ctx, int revents);
+
 
 static handler_ctx * handler_ctx_init(void) {
 	handler_ctx * hctx;
@@ -734,8 +705,6 @@ INIT_FUNC(mod_fastcgi_init) {
 
 	p->fcgi_env = buffer_init();
 
-	p->statuskey = buffer_init();
-
 	return p;
 }
 
@@ -746,7 +715,6 @@ FREE_FUNC(mod_fastcgi_free) {
 	UNUSED(srv);
 
 	buffer_free(p->fcgi_env);
-	buffer_free(p->statuskey);
 
 	if (p->config_storage) {
 		size_t i, j, n;
@@ -1407,7 +1375,7 @@ SETDEFAULTS_FUNC(mod_fastcgi_set_defaults) {
 								goto error;
 							}
 
-							fastcgi_status_init(srv, p->statuskey, host, proc);
+							fastcgi_status_init(srv, host, proc);
 
 							proc->next = host->first;
 							if (host->first) host->first->prev = proc;
@@ -1428,7 +1396,7 @@ SETDEFAULTS_FUNC(mod_fastcgi_set_defaults) {
 							buffer_copy_buffer(proc->unixsocket, host->unixsocket);
 						}
 
-						fastcgi_status_init(srv, p->statuskey, host, proc);
+						fastcgi_status_init(srv, host, proc);
 
 						host->first = proc;
 
@@ -1530,9 +1498,13 @@ static void fcgi_backend_close(server *srv, handler_ctx *hctx) {
 						"socket:", hctx->proc->connection_name,
 						"load:", hctx->proc->load);
 			}
+
+			hctx->proc = NULL;
+			hctx->got_proc = 0;
 		}
 
 		fcgi_host_reset(srv, hctx);
+		hctx->host = NULL;
 	}
 }
 
@@ -1608,7 +1580,7 @@ static handler_t fcgi_reconnect(server *srv, handler_ctx *hctx) {
 	hctx->host = fcgi_extension_host_get(srv, hctx->remote_conn, hctx->plugin_data, hctx->ext);
 	if (NULL == hctx->host) return HANDLER_FINISHED;
 
-	fcgi_host_assign(srv, hctx, hctx->host);
+	fcgi_host_assign(srv, hctx);
 	hctx->request_id = 0;
 	hctx->opts.xsendfile_allow = hctx->host->xsendfile_allow;
 	hctx->opts.xsendfile_docroot = hctx->host->xsendfile_docroot;
@@ -2124,7 +2096,6 @@ static int fcgi_restart_dead_procs(server *srv, plugin_data *p, fcgi_extension_h
 }
 
 static handler_t fcgi_write_request(server *srv, handler_ctx *hctx) {
-	plugin_data *p    = hctx->plugin_data;
 	fcgi_extension_host *host= hctx->host;
 	connection *con   = hctx->remote_conn;
 	fcgi_proc  *proc;
@@ -2149,11 +2120,7 @@ static handler_t fcgi_write_request(server *srv, handler_ctx *hctx) {
 				"reconnects:", hctx->reconnects,
 				"load:", host->load);
 
-			fastcgi_status_copy_procname(p->statuskey, hctx->host, hctx->proc);
-			buffer_append_string_len(p->statuskey, CONST_STR_LEN(".died"));
-
-			status_counter_inc(srv, CONST_BUF_LEN(p->statuskey));
-
+			fcgi_proc_tag_inc(srv, hctx, CONST_STR_LEN(".died"));
 			return HANDLER_ERROR;
 		}
 		/* go on with preparing the request */
@@ -2237,11 +2204,7 @@ static handler_t fcgi_write_request(server *srv, handler_ctx *hctx) {
 				fcgi_proc_set_state(hctx->host, hctx->proc, PROC_STATE_OVERLOADED);
 			}
 
-			fastcgi_status_copy_procname(p->statuskey, hctx->host, hctx->proc);
-			buffer_append_string_len(p->statuskey, CONST_STR_LEN(".overloaded"));
-
-			status_counter_inc(srv, CONST_BUF_LEN(p->statuskey));
-
+			fcgi_proc_tag_inc(srv, hctx, CONST_STR_LEN(".overloaded"));
 			return HANDLER_ERROR;
 		case CONNECTION_DEAD:
 			/* we got a hard error from the backend like
@@ -2258,11 +2221,7 @@ static handler_t fcgi_write_request(server *srv, handler_ctx *hctx) {
 				"reconnects:", hctx->reconnects,
 				"load:", host->load);
 
-			fastcgi_status_copy_procname(p->statuskey, hctx->host, hctx->proc);
-			buffer_append_string_len(p->statuskey, CONST_STR_LEN(".died"));
-
-			status_counter_inc(srv, CONST_BUF_LEN(p->statuskey));
-
+			fcgi_proc_tag_inc(srv, hctx, CONST_STR_LEN(".died"));
 			return HANDLER_ERROR;
 		case CONNECTION_OK:
 			/* everything is ok, go on */
@@ -2279,11 +2238,7 @@ static handler_t fcgi_write_request(server *srv, handler_ctx *hctx) {
 		hctx->got_proc = 1;
 
 		status_counter_inc(srv, CONST_STR_LEN("fastcgi.requests"));
-
-		fastcgi_status_copy_procname(p->statuskey, hctx->host, hctx->proc);
-		buffer_append_string_len(p->statuskey, CONST_STR_LEN(".connected"));
-
-		status_counter_inc(srv, CONST_BUF_LEN(p->statuskey));
+		fcgi_proc_tag_inc(srv, hctx, CONST_STR_LEN(".connected"));
 
 		if (hctx->conf.debug) {
 			log_error_write(srv, __FILE__, __LINE__, "ssdsbsd",
@@ -2877,9 +2832,10 @@ static handler_t fcgi_check_extension(server *srv, connection *con, void *p_d, i
 
 	hctx->remote_conn      = con;
 	hctx->plugin_data      = p;
+	hctx->host             = host;
 	hctx->proc             = NULL;
 	hctx->ext              = extension;
-	fcgi_host_assign(srv, hctx, host);
+	fcgi_host_assign(srv, hctx);
 
 	hctx->fcgi_mode = fcgi_mode;
 	if (fcgi_mode == FCGI_AUTHORIZER) {
