@@ -636,16 +636,43 @@ static void fcgi_proc_set_state(fcgi_extension_host *host, fcgi_proc *proc, int 
 	proc->state = state;
 }
 
-static void fcgi_proc_disable(server *srv, fcgi_extension_host *host, fcgi_proc *proc, handler_ctx *hctx) {
-	if (host->disable_time || (proc->is_local && proc->pid == hctx->pid)) {
-		proc->disabled_until = srv->cur_ts + host->disable_time;
-		fcgi_proc_set_state(host, proc, proc->is_local ? PROC_STATE_DIED_WAIT_FOR_PID : PROC_STATE_DIED);
+static void fcgi_proc_connect_error(server *srv, fcgi_extension_host *host, fcgi_proc *proc, handler_ctx *hctx, int errnum) {
+    log_error_write(srv, __FILE__, __LINE__, "sssb",
+                    "establishing connection failed:", strerror(errnum),
+                    "socket:", proc->connection_name);
 
-		if (hctx->conf.debug) {
-			log_error_write(srv, __FILE__, __LINE__, "sds",
-					"backend disabled for", host->disable_time, "seconds");
-		}
-	}
+    if (host->disable_time || (proc->is_local && proc->pid == hctx->pid)) {
+        log_error_write(srv, __FILE__, __LINE__, "sdssdsd",
+                        "backend error; we'll disable it for", host->disable_time,
+                        "seconds and send the request to another backend instead:",
+                        "reconnects:", hctx->reconnects,
+                        "load:", host->load);
+        proc->disabled_until = srv->cur_ts + host->disable_time;
+        if (EAGAIN == errnum) {
+            /* - EAGAIN: cool down the backend; it is overloaded */
+            if (hctx->conf.debug) {
+                log_error_write(srv, __FILE__, __LINE__, "sbsd",
+                                "This means that you have more incoming requests than your FastCGI backend can handle in parallel."
+                                "It might help to spawn more FastCGI backends or PHP children; if not, decrease server.max-connections."
+                                "The load for this FastCGI backend", proc->connection_name, "is", proc->load);
+            }
+            fcgi_proc_set_state(host, proc, PROC_STATE_OVERLOADED);
+        }
+        else {
+            /* we got a hard error from the backend like
+             * - ECONNREFUSED for tcp-ip sockets
+             * - ENOENT for unix-domain-sockets
+             */
+            fcgi_proc_set_state(host, proc, proc->is_local ? PROC_STATE_DIED_WAIT_FOR_PID : PROC_STATE_DIED);
+        }
+    }
+
+    if (EAGAIN == errnum) {
+        fcgi_proc_tag_inc(srv, hctx, CONST_STR_LEN(".overloaded"));
+    }
+    else {
+        fcgi_proc_tag_inc(srv, hctx, CONST_STR_LEN(".died"));
+    }
 }
 
 static void fcgi_proc_check_enable(server *srv, fcgi_extension_host *host, fcgi_proc *proc) {
@@ -1668,14 +1695,7 @@ static int fcgi_header(FCGI_Header * header, unsigned char type, int request_id,
 	return 0;
 }
 
-typedef enum {
-	CONNECTION_OK,
-	CONNECTION_DELAYED, /* retry after event, take same host */
-	CONNECTION_OVERLOADED, /* disable for 1 second, take another backend */
-	CONNECTION_DEAD /* disable for 60 seconds, take another backend */
-} connection_result_t;
-
-static connection_result_t fcgi_establish_connection(server *srv, handler_ctx *hctx) {
+static int fcgi_establish_connection(server *srv, handler_ctx *hctx) {
 	sock_addr addr;
 	struct sockaddr *fcgi_addr = (struct sockaddr *)&addr;
 	socklen_t servlen;
@@ -1686,11 +1706,13 @@ static connection_result_t fcgi_establish_connection(server *srv, handler_ctx *h
 
 	if (!buffer_string_is_empty(proc->unixsocket)) {
 		if (1 != sock_addr_from_str_hints(srv, &addr, &servlen, proc->unixsocket->ptr, AF_UNIX, 0)) {
-			return CONNECTION_DEAD;
+			errno = EINVAL;
+			return -1;
 		}
 	} else {
 		if (1 != sock_addr_from_buffer_hints_numeric(srv, &addr, &servlen, host->host, host->family, proc->port)) {
-			return CONNECTION_DEAD;
+			errno = EINVAL;
+			return -1;
 		}
 	}
 
@@ -1723,23 +1745,10 @@ static connection_result_t fcgi_establish_connection(server *srv, handler_ctx *h
 					"connect delayed; will continue later:", proc->connection_name);
 			}
 
-			return CONNECTION_DELAYED;
-		} else if (errno == EAGAIN) {
-			if (hctx->conf.debug) {
-				log_error_write(srv, __FILE__, __LINE__, "sbsd",
-					"This means that you have more incoming requests than your FastCGI backend can handle in parallel."
-					"It might help to spawn more FastCGI backends or PHP children; if not, decrease server.max-connections."
-					"The load for this FastCGI backend", proc->connection_name, "is", proc->load);
-			}
-
-			return CONNECTION_OVERLOADED;
+			return 1;
 		} else {
-			log_error_write(srv, __FILE__, __LINE__, "sssb",
-					"connect failed:",
-					strerror(errno), "on",
-					proc->connection_name);
-
-			return CONNECTION_DEAD;
+			fcgi_proc_connect_error(srv, host, proc, hctx, errno);
+			return -1;
 		}
 	}
 
@@ -1749,7 +1758,7 @@ static connection_result_t fcgi_establish_connection(server *srv, handler_ctx *h
 				"connect succeeded: ", fcgi_fd);
 	}
 
-	return CONNECTION_OK;
+	return 0;
 }
 
 static void fcgi_stdin_append(server *srv, connection *con, handler_ctx *hctx, int request_id) {
@@ -2106,21 +2115,7 @@ static handler_t fcgi_write_request(server *srv, handler_ctx *hctx) {
 	if (hctx->state == FCGI_STATE_CONNECT_DELAYED) {
 		int socket_error = fdevent_connect_status(hctx->fd);
 		if (socket_error != 0) {
-			if (!hctx->proc->is_local || hctx->conf.debug) {
-				/* local procs get restarted */
-
-				log_error_write(srv, __FILE__, __LINE__, "sssb",
-						"establishing connection failed:", strerror(socket_error),
-						"socket:", hctx->proc->connection_name);
-			}
-
-			fcgi_proc_disable(srv, hctx->host, hctx->proc, hctx);
-			log_error_write(srv, __FILE__, __LINE__, "sdssdsd",
-				"backend is overloaded; we'll disable it for", hctx->host->disable_time, "seconds and send the request to another backend instead:",
-				"reconnects:", hctx->reconnects,
-				"load:", host->load);
-
-			fcgi_proc_tag_inc(srv, hctx, CONST_STR_LEN(".died"));
+			fcgi_proc_connect_error(srv, hctx->host, hctx->proc, hctx, socket_error);
 			return HANDLER_ERROR;
 		}
 		/* go on with preparing the request */
@@ -2183,53 +2178,17 @@ static handler_t fcgi_write_request(server *srv, handler_ctx *hctx) {
 		}
 
 		switch (fcgi_establish_connection(srv, hctx)) {
-		case CONNECTION_DELAYED:
-			/* connection is in progress, wait for an event and call getsockopt() below */
-
+		case 1: /* connection is in progress */
 			fdevent_event_set(srv->ev, &(hctx->fde_ndx), hctx->fd, FDEVENT_OUT);
-
 			fcgi_set_state(srv, hctx, FCGI_STATE_CONNECT_DELAYED);
 			return HANDLER_WAIT_FOR_EVENT;
-		case CONNECTION_OVERLOADED:
-			/* cool down the backend, it is overloaded
-			 * -> EAGAIN */
-
-			if (hctx->host->disable_time) {
-				log_error_write(srv, __FILE__, __LINE__, "sdssdsd",
-					"backend is overloaded; we'll disable it for", hctx->host->disable_time, "seconds and send the request to another backend instead:",
-					"reconnects:", hctx->reconnects,
-					"load:", host->load);
-
-				hctx->proc->disabled_until = srv->cur_ts + hctx->host->disable_time;
-				fcgi_proc_set_state(hctx->host, hctx->proc, PROC_STATE_OVERLOADED);
-			}
-
-			fcgi_proc_tag_inc(srv, hctx, CONST_STR_LEN(".overloaded"));
+		case -1:/* connection error */
 			return HANDLER_ERROR;
-		case CONNECTION_DEAD:
-			/* we got a hard error from the backend like
-			 * - ECONNREFUSED for tcp-ip sockets
-			 * - ENOENT for unix-domain-sockets
-			 *
-			 * for check if the host is back in hctx->host->disable_time seconds
-			 *  */
-
-			fcgi_proc_disable(srv, hctx->host, hctx->proc, hctx);
-
-			log_error_write(srv, __FILE__, __LINE__, "sdssdsd",
-				"backend died; we'll disable it for", hctx->host->disable_time, "seconds and send the request to another backend instead:",
-				"reconnects:", hctx->reconnects,
-				"load:", host->load);
-
-			fcgi_proc_tag_inc(srv, hctx, CONST_STR_LEN(".died"));
-			return HANDLER_ERROR;
-		case CONNECTION_OK:
-			/* everything is ok, go on */
-
-			fcgi_set_state(srv, hctx, FCGI_STATE_PREPARE_WRITE);
-
+		case 0: /* everything is ok, go on */
 			break;
 		}
+
+		fcgi_set_state(srv, hctx, FCGI_STATE_PREPARE_WRITE);
 		/* fallthrough */
 	case FCGI_STATE_PREPARE_WRITE:
 		/* ok, we have the connection */
