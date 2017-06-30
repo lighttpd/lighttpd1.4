@@ -29,12 +29,9 @@
 #ifdef HAVE_SYS_UIO_H
 # include <sys/uio.h>
 #endif
-
 #ifdef HAVE_SYS_WAIT_H
 # include <sys/wait.h>
 #endif
-
-enum {EOL_UNSET, EOL_N, EOL_RN};
 
 /*
  *
@@ -75,6 +72,9 @@ typedef struct scgi_proc {
 } scgi_proc;
 
 typedef struct {
+	/* the key that is used to reference this value */
+	buffer *id;
+
 	/* list of processes handling this extension
 	 * sorted by lowest load
 	 *
@@ -201,6 +201,8 @@ typedef struct {
 	 *
 	 */
 
+	unsigned short break_scriptfilename_for_php;
+
 	/*
 	 * workaround for program when prefix="/"
 	 *
@@ -219,9 +221,16 @@ typedef struct {
 	unsigned short xsendfile_allow;
 	array *xsendfile_docroot;
 
-	ssize_t load; /* replace by host->load */
+	ssize_t load;
 
 	size_t max_id; /* corresponds most of the time to num_procs */
+
+	buffer *strip_request_uri;
+
+	unsigned short kill_signal; /* we need a setting for this as libfcgi
+				       applications prefer SIGUSR1 while the
+				       rest of the world would use SIGTERM
+				       *sigh* */
 
 	int listen_backlog;
 	int refcount;
@@ -250,6 +259,8 @@ typedef struct {
 	buffer *key; /* like .php */
 
 	int note_is_sent;
+	int last_used_ndx;
+
 	scgi_extension_host **hosts;
 
 	size_t used;
@@ -291,21 +302,29 @@ typedef struct {
 } plugin_data;
 
 /* connection specific data */
-typedef enum { FCGI_STATE_INIT, FCGI_STATE_CONNECT, FCGI_STATE_PREPARE_WRITE,
-		FCGI_STATE_WRITE, FCGI_STATE_READ
+typedef enum {
+	FCGI_STATE_INIT,
+	FCGI_STATE_CONNECT,
+	FCGI_STATE_PREPARE_WRITE,
+	FCGI_STATE_WRITE,
+	FCGI_STATE_READ
 } scgi_connection_state_t;
 
 typedef struct {
-	buffer  *response;
-
 	scgi_proc *proc;
 	scgi_extension_host *host;
+	scgi_extension *ext;
+	scgi_extension *ext_auth;
+	unsigned short scgi_mode;
 
 	scgi_connection_state_t state;
 	time_t   state_timestamp;
 
+	chunkqueue *rb;
 	chunkqueue *wb;
 	off_t     wb_reqlen;
+
+	buffer  *response;
 
 	int       fd;        /* fd to the scgi process */
 	int       fde_ndx;   /* index into the fd-event buffer */
@@ -314,12 +333,14 @@ typedef struct {
 	int       got_proc;
 	int       reconnects; /* number of reconnect attempts */
 
+	int       request_id;
+	int       send_content_body;
+
 	http_response_opts opts;
 	plugin_config conf;
 
 	connection *remote_conn;  /* dumb pointer */
 	plugin_data *plugin_data; /* dumb pointer */
-	scgi_extension *ext;
 } handler_ctx;
 
 

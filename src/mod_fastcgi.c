@@ -62,6 +62,7 @@ typedef struct fcgi_proc {
 
 	size_t load; /* number of requests waiting on this process */
 
+	time_t last_used; /* see idle_timeout */
 	size_t requests;  /* see max_requests */
 	struct fcgi_proc *prev, *next; /* see first */
 
@@ -103,9 +104,22 @@ typedef struct {
 	 *
 	 */
 
+	unsigned short min_procs;
 	unsigned short max_procs;
 	size_t num_procs;    /* how many procs are started */
 	size_t active_procs; /* how many of them are really running, i.e. state = PROC_STATE_RUNNING */
+
+	unsigned short max_load_per_proc;
+
+	/*
+	 * kick the process from the list if it was not
+	 * used for idle_timeout until min_procs is
+	 * reached. this helps to get the processlist
+	 * small again we had a small peak load.
+	 *
+	 */
+
+	unsigned short idle_timeout;
 
 	/*
 	 * time after a disabled remote connection is tried to be re-enabled
@@ -216,7 +230,7 @@ typedef struct {
 	unsigned short xsendfile_allow;
 	array *xsendfile_docroot;
 
-	ssize_t load; /* replace by host->load */
+	ssize_t load;
 
 	size_t max_id; /* corresponds most of the time to num_procs */
 
