@@ -641,13 +641,26 @@ static void fcgi_proc_connect_error(server *srv, fcgi_extension_host *host, fcgi
                     "establishing connection failed:", strerror(errnum),
                     "socket:", proc->connection_name);
 
-    if (host->disable_time || (proc->is_local && proc->pid == hctx->pid)) {
+    if (!proc->is_local) {
+        proc->disabled_until = srv->cur_ts + host->disable_time;
+        fcgi_proc_set_state(host, proc, PROC_STATE_OVERLOADED);
+    }
+    else if (proc->pid == hctx->pid && proc->state == PROC_STATE_RUNNING) {
+        /*
+         * several hctx might reference the same proc
+         *
+         * Only one of them should mark the proc
+         * and all other ones should just take a new one.
+         *
+         * If a new proc was started with the old struct this might lead
+         * the mark a perfect proc as dead otherwise
+         *
+         */
         log_error_write(srv, __FILE__, __LINE__, "sdssdsd",
                         "backend error; we'll disable it for", host->disable_time,
                         "seconds and send the request to another backend instead:",
                         "reconnects:", hctx->reconnects,
                         "load:", host->load);
-        proc->disabled_until = srv->cur_ts + host->disable_time;
         if (EAGAIN == errnum) {
             /* - EAGAIN: cool down the backend; it is overloaded */
             if (hctx->conf.debug) {
@@ -656,6 +669,7 @@ static void fcgi_proc_connect_error(server *srv, fcgi_extension_host *host, fcgi
                                 "It might help to spawn more FastCGI backends or PHP children; if not, decrease server.max-connections."
                                 "The load for this FastCGI backend", proc->connection_name, "is", proc->load);
             }
+            proc->disabled_until = srv->cur_ts + host->disable_time;
             fcgi_proc_set_state(host, proc, PROC_STATE_OVERLOADED);
         }
         else {
@@ -663,7 +677,7 @@ static void fcgi_proc_connect_error(server *srv, fcgi_extension_host *host, fcgi
              * - ECONNREFUSED for tcp-ip sockets
              * - ENOENT for unix-domain-sockets
              */
-            fcgi_proc_set_state(host, proc, proc->is_local ? PROC_STATE_DIED_WAIT_FOR_PID : PROC_STATE_DIED);
+            fcgi_proc_set_state(host, proc, PROC_STATE_DIED_WAIT_FOR_PID);
         }
     }
 
@@ -677,7 +691,7 @@ static void fcgi_proc_connect_error(server *srv, fcgi_extension_host *host, fcgi
 
 static void fcgi_proc_check_enable(server *srv, fcgi_extension_host *host, fcgi_proc *proc) {
 	if (srv->cur_ts <= proc->disabled_until) return;
-	if (proc->state == PROC_STATE_RUNNING) return;
+	if (proc->state != PROC_STATE_OVERLOADED) return;
 
 	fcgi_proc_set_state(host, proc, PROC_STATE_RUNNING);
 
@@ -2273,40 +2287,27 @@ static handler_t fcgi_write_request(server *srv, handler_ctx *hctx) {
 	}
 }
 
+static handler_t fcgi_write_error(server *srv, handler_ctx *hctx) {
+    connection *con = hctx->remote_conn;
+    int status = con->http_status;
 
-/* might be called on fdevent after a connect() is delay too
- * */
+    if (hctx->state == FCGI_STATE_INIT ||
+        hctx->state == FCGI_STATE_CONNECT_DELAYED) {
+
+        fcgi_restart_dead_procs(srv, hctx->plugin_data, hctx->host);
+
+        /* cleanup this request and let request handler start request again */
+        if (hctx->reconnects++ < 5) return fcgi_reconnect(srv, hctx);
+    }
+
+    fcgi_connection_close(srv, hctx);
+    con->http_status = (status == 400) ? 400 : 503;
+    return HANDLER_FINISHED;
+}
+
 static handler_t fcgi_send_request(server *srv, handler_ctx *hctx) {
-	/* ok, create the request */
-	fcgi_extension_host *host = hctx->host;
-	handler_t rc = fcgi_write_request(srv, hctx);
-	if (HANDLER_ERROR != rc) {
-		return rc;
-	} else {
-		plugin_data *p  = hctx->plugin_data;
-		connection *con = hctx->remote_conn;
-
-		if (hctx->state == FCGI_STATE_INIT ||
-		    hctx->state == FCGI_STATE_CONNECT_DELAYED) {
-			fcgi_restart_dead_procs(srv, p, host);
-
-			/* cleanup this request and let the request handler start this request again */
-			if (hctx->reconnects++ < 5) {
-				return fcgi_reconnect(srv, hctx);
-			} else {
-				fcgi_connection_close(srv, hctx);
-				con->http_status = 503;
-
-				return HANDLER_FINISHED;
-			}
-		} else {
-			int status = con->http_status;
-			fcgi_connection_close(srv, hctx);
-			con->http_status = (status == 400) ? 400 : 503;
-
-			return HANDLER_FINISHED;
-		}
-	}
+    handler_t rc = fcgi_write_request(srv, hctx);
+    return (HANDLER_ERROR != rc) ? rc : fcgi_write_error(srv, hctx);
 }
 
 

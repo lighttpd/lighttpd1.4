@@ -21,6 +21,7 @@
 #include <limits.h>
 #include <string.h>
 #include <stdlib.h>
+#include <signal.h>
 
 #include "sys-socket.h"
 #include "sys-endian.h"
@@ -49,6 +50,8 @@ typedef struct scgi_proc {
 	buffer *socket; /* config.socket + "-" + id */
 	unsigned port;  /* config.port + pno */
 
+	buffer *connection_name; /* either tcp:<host>:<port> or unix:<socket> for debugging purposes */
+
 	pid_t pid;   /* PID of the spawned process (0 if not spawned locally) */
 
 
@@ -58,16 +61,16 @@ typedef struct scgi_proc {
 	size_t requests;  /* see max_requests */
 	struct scgi_proc *prev, *next; /* see first */
 
-	time_t disable_ts; /* replace by host->something */
+	time_t disabled_until; /* this proc is disabled until, use something else until then */
 
 	int is_local;
 
 	enum {
 			PROC_STATE_RUNNING, /* alive */
+			PROC_STATE_DISABLED,/* proc disabled as it resulted in an error */
 			PROC_STATE_DIED_WAIT_FOR_PID,
-			PROC_STATE_KILLED,  /* was killed as we don't have the load anymore */
 			PROC_STATE_DIED,    /* marked as dead, should be restarted */
-			PROC_STATE_DISABLED /* proc disabled as it resulted in an error */
+			PROC_STATE_KILLED   /* was killed as we don't have the load anymore */
 	} state;
 } scgi_proc;
 
@@ -516,6 +519,63 @@ static void scgi_proc_set_state(scgi_extension_host *host, scgi_proc *proc, int 
 		++host->active_procs;
 	}
 	proc->state = state;
+}
+
+static void scgi_proc_connect_error(server *srv, scgi_extension_host *host, scgi_proc *proc, handler_ctx *hctx, int errnum) {
+    log_error_write(srv, __FILE__, __LINE__, "sdsdbdb",
+                    "establishing connection failed:",
+                    hctx->fd, strerror(errnum), errnum,
+                    host->host, proc->port, proc->socket);
+
+    if (!proc->is_local) {
+        proc->disabled_until = srv->cur_ts + host->disable_time;
+        scgi_proc_set_state(host, proc, PROC_STATE_DISABLED);
+    }
+    else if (proc->pid == hctx->pid && proc->state == PROC_STATE_RUNNING) {
+        /*
+         * several hctx might reference the same proc
+         *
+         * Only one of them should mark the proc
+         * and all other ones should just take a new one.
+         *
+         * If a new proc was started with the old struct this might lead
+         * the mark a perfect proc as dead otherwise
+         *
+         */
+        log_error_write(srv, __FILE__, __LINE__, "sdssdsd",
+                        "backend error; we'll disable it for", host->disable_time,
+                        "seconds and send the request to another backend instead:",
+                        "reconnects:", hctx->reconnects,
+                        "load:", host->load);
+        if (EAGAIN == errnum) {
+            /* - EAGAIN: cool down the backend; it is overloaded */
+          #ifdef __linux__
+            log_error_write(srv, __FILE__, __LINE__, "s",
+                            "If this happened on Linux: You have been run out of local ports. "
+                            "Check the manual, section Performance how to handle this.");
+          #endif
+            proc->disabled_until = srv->cur_ts + host->disable_time;
+            scgi_proc_set_state(host, proc, PROC_STATE_DISABLED);
+        }
+        else {
+            /* we got a hard error from the backend like
+             * - ECONNREFUSED for tcp-ip sockets
+             * - ENOENT for unix-domain-sockets
+             */
+            scgi_proc_set_state(host, proc, PROC_STATE_DIED_WAIT_FOR_PID);
+        }
+    }
+}
+
+static void scgi_proc_check_enable(server *srv, scgi_extension_host *host, scgi_proc *proc) {
+	if (srv->cur_ts <= proc->disabled_until) return;
+	if (proc->state != PROC_STATE_DISABLED) return;
+
+	scgi_proc_set_state(host, proc, PROC_STATE_RUNNING);
+
+	log_error_write(srv, __FILE__, __LINE__,  "sbbdb",
+			"fcgi-server re-enabled:", proc->connection_name,
+			host->host, host->port, host->unixsocket);
 }
 
 static int scgi_proc_waitpid(server *srv, scgi_extension_host *host, scgi_proc *proc) {
@@ -1003,7 +1063,7 @@ SETDEFAULTS_FUNC(mod_scgi_set_defaults) {
 					df->max_procs    = 4;
 					df->max_load_per_proc = 1;
 					df->idle_timeout = 60;
-					df->disable_time = 60;
+					df->disable_time = 1;
 					df->fix_root_path_name = 0;
 					df->listen_backlog = 1024;
 					df->xsendfile_allow = 0;
@@ -1421,22 +1481,12 @@ static int scgi_establish_connection(server *srv, handler_ctx *hctx) {
 
 			return 1;
 		} else {
-			log_error_write(srv, __FILE__, __LINE__, "sdsddb",
-					"connect failed:", scgi_fd,
-					strerror(errno), errno,
-					proc->port, proc->socket);
-
-			if (errno == EAGAIN) {
-				/* this is Linux only */
-
-				log_error_write(srv, __FILE__, __LINE__, "s",
-						"If this happened on Linux: You have been run out of local ports. "
-						"Check the manual, section Performance how to handle this.");
-			}
-
+			scgi_proc_connect_error(srv, host, proc, hctx, errno);
 			return -1;
 		}
 	}
+
+	hctx->reconnects = 0;
 	if (hctx->conf.debug > 1) {
 		log_error_write(srv, __FILE__, __LINE__, "sd",
 				"connect succeeded: ", scgi_fd);
@@ -1657,15 +1707,8 @@ static int scgi_restart_dead_procs(server *srv, plugin_data *p, scgi_extension_h
 					proc->pid);
 		}
 
-			if (0 == scgi_proc_waitpid(srv, host, proc)
-			    && proc->state == PROC_STATE_DISABLED
-			    && srv->cur_ts - proc->disable_ts > host->disable_time) {
-				scgi_proc_set_state(host, proc, PROC_STATE_RUNNING);
-
-				log_error_write(srv, __FILE__, __LINE__,  "sbdb",
-						"fcgi-server re-enabled:",
-						host->host, host->port,
-						host->unixsocket);
+			if (0 == scgi_proc_waitpid(srv, host, proc)) {
+				scgi_proc_check_enable(srv, host, proc);
 			}
 
 			if (proc->state == PROC_STATE_DIED && proc->is_local && 0 == proc->load) {
@@ -1762,14 +1805,7 @@ static handler_t scgi_write_request(server *srv, handler_ctx *hctx) {
 		} else {
 			int socket_error = fdevent_connect_status(hctx->fd);
 			if (socket_error != 0) {
-				if (!hctx->proc->is_local || hctx->conf.debug) {
-					/* local procs get restarted */
-
-					log_error_write(srv, __FILE__, __LINE__, "sssd",
-							"establishing connection failed:", strerror(socket_error),
-							"port:", hctx->proc->port);
-				}
-
+				scgi_proc_connect_error(srv, host, hctx->proc, hctx, socket_error);
 				return HANDLER_ERROR;
 			}
 		}
@@ -1859,71 +1895,27 @@ static handler_t scgi_write_request(server *srv, handler_ctx *hctx) {
 	}
 }
 
+static handler_t scgi_write_error(server *srv, handler_ctx *hctx) {
+    connection *con = hctx->remote_conn;
+    int status = con->http_status;
+
+    if (hctx->state == FCGI_STATE_INIT ||
+        hctx->state == FCGI_STATE_CONNECT) {
+
+        scgi_restart_dead_procs(srv, hctx->plugin_data, hctx->host);
+
+        /* cleanup this request and let request handler start request again */
+        if (hctx->reconnects++ < 5) return scgi_reconnect(srv, hctx);
+    }
+
+    scgi_connection_close(srv, hctx);
+    con->http_status = (status == 400) ? 400 : 503;
+    return HANDLER_FINISHED;
+}
+
 static handler_t scgi_send_request(server *srv, handler_ctx *hctx) {
-	/* ok, create the request */
-	handler_t rc = scgi_write_request(srv, hctx);
-	if (HANDLER_ERROR != rc) {
-		return rc;
-	} else {
-		scgi_proc *proc = hctx->proc;
-		scgi_extension_host *host = hctx->host;
-		plugin_data *p  = hctx->plugin_data;
-		connection *con = hctx->remote_conn;
-
-		if (proc &&
-		    0 == proc->is_local &&
-		    proc->state != PROC_STATE_DISABLED) {
-			/* only disable remote servers as we don't manage them*/
-
-			log_error_write(srv, __FILE__, __LINE__,  "sbdb", "fcgi-server disabled:",
-					host->host,
-					proc->port,
-					proc->socket);
-
-			/* disable this server */
-			proc->disable_ts = srv->cur_ts;
-			scgi_proc_set_state(host, proc, PROC_STATE_DISABLED);
-		}
-
-		if (hctx->state == FCGI_STATE_INIT ||
-		    hctx->state == FCGI_STATE_CONNECT) {
-			/* connect() or getsockopt() failed,
-			 * restart the request-handling
-			 */
-			if (proc && proc->is_local) {
-
-				if (hctx->conf.debug) {
-					log_error_write(srv, __FILE__, __LINE__,  "sbdb", "connect() to scgi failed, restarting the request-handling:",
-							host->host,
-							proc->port,
-							proc->socket);
-				}
-
-				/*
-				 * several hctx might reference the same proc
-				 *
-				 * Only one of them should mark the proc as dead all the other
-				 * ones should just take a new one.
-				 *
-				 * If a new proc was started with the old struct this might lead
-				 * the mark a perfect proc as dead otherwise
-				 *
-				 */
-				if (proc->state == PROC_STATE_RUNNING &&
-				    hctx->pid == proc->pid) {
-					scgi_proc_set_state(host, proc, PROC_STATE_DIED_WAIT_FOR_PID);
-				}
-			}
-			scgi_restart_dead_procs(srv, p, host);
-
-			return scgi_reconnect(srv, hctx);
-		} else {
-			scgi_connection_close(srv, hctx);
-			con->http_status = 503;
-
-			return HANDLER_FINISHED;
-		}
-	}
+    handler_t rc = scgi_write_request(srv, hctx);
+    return (HANDLER_ERROR != rc) ? rc : scgi_write_error(srv, hctx);
 }
 
 
