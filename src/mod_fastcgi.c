@@ -1804,9 +1804,10 @@ static void fcgi_stdin_append(server *srv, connection *con, handler_ctx *hctx, i
 	}
 }
 
-static int fcgi_create_env(server *srv, handler_ctx *hctx, int request_id) {
+static int fcgi_create_env(server *srv, handler_ctx *hctx) {
 	FCGI_BeginRequestRecord beginRecord;
 	FCGI_Header header;
+	int request_id;
 
 	plugin_data *p    = hctx->plugin_data;
 	fcgi_extension_host *host= hctx->host;
@@ -1821,6 +1822,14 @@ static int fcgi_create_env(server *srv, handler_ctx *hctx, int request_id) {
 	};
 
 	/* send FCGI_BEGIN_REQUEST */
+
+	if (hctx->request_id == 0) {
+		hctx->request_id = 1; /* always use id 1 as we don't use multiplexing */
+	} else {
+		log_error_write(srv, __FILE__, __LINE__, "sd",
+				"fcgi-request is already in use:", hctx->request_id);
+	}
+	request_id = hctx->request_id;
 
 	fcgi_header(&(beginRecord.header), FCGI_BEGIN_REQUEST, request_id, sizeof(beginRecord.body), 0);
 	beginRecord.body.roleB0 = hctx->fcgi_mode;
@@ -2207,15 +2216,7 @@ static handler_t fcgi_write_request(server *srv, handler_ctx *hctx) {
 				"load:", hctx->proc->load);
 		}
 
-		/* move the proc-list entry down the list */
-		if (hctx->request_id == 0) {
-			hctx->request_id = 1; /* always use id 1 as we don't use multiplexing */
-		} else {
-			log_error_write(srv, __FILE__, __LINE__, "sd",
-					"fcgi-request is already in use:", hctx->request_id);
-		}
-
-		if (-1 == fcgi_create_env(srv, hctx, hctx->request_id)) return HANDLER_ERROR;
+		if (-1 == fcgi_create_env(srv, hctx)) return HANDLER_ERROR;
 
 		fdevent_event_add(srv->ev, &(hctx->fde_ndx), hctx->fd, FDEVENT_IN);
 		fcgi_set_state(srv, hctx, FCGI_STATE_WRITE);
