@@ -2120,22 +2120,7 @@ static handler_t fcgi_write_request(server *srv, handler_ctx *hctx) {
 
 	int ret;
 
-	/* we can't handle this in the switch as we have to fall through in it */
-	if (hctx->state == FCGI_STATE_CONNECT_DELAYED) {
-		int socket_error = fdevent_connect_status(hctx->fd);
-		if (socket_error != 0) {
-			fcgi_proc_connect_error(srv, hctx->host, hctx->proc, hctx, socket_error);
-			return HANDLER_ERROR;
-		}
-		/* go on with preparing the request */
-		hctx->state = FCGI_STATE_PREPARE_WRITE;
-	}
-
-
 	switch(hctx->state) {
-	case FCGI_STATE_CONNECT_DELAYED:
-		/* should never happen */
-		return HANDLER_WAIT_FOR_EVENT;
 	case FCGI_STATE_INIT:
 		/* do we have a running process for this host (max-procs) ? */
 		hctx->proc = NULL;
@@ -2195,6 +2180,16 @@ static handler_t fcgi_write_request(server *srv, handler_ctx *hctx) {
 			return HANDLER_ERROR;
 		case 0: /* everything is ok, go on */
 			break;
+		}
+		/* fallthrough */
+	case FCGI_STATE_CONNECT_DELAYED:
+		if (hctx->state == FCGI_STATE_CONNECT_DELAYED) { /*(not FCGI_STATE_INIT)*/
+			int socket_error = fdevent_connect_status(hctx->fd);
+			if (socket_error != 0) {
+				fcgi_proc_connect_error(srv, hctx->host, hctx->proc, hctx, socket_error);
+				return HANDLER_ERROR;
+			}
+			/* go on with preparing the request */
 		}
 
 		fcgi_set_state(srv, hctx, FCGI_STATE_PREPARE_WRITE);
