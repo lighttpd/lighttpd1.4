@@ -285,8 +285,6 @@ typedef struct {
 
 	buffer *scgi_env;
 
-	buffer *parse_response;
-
 	plugin_config **config_storage;
 
 	plugin_config conf; /* this is only used as long as no handler_ctx is setup */
@@ -625,8 +623,6 @@ INIT_FUNC(mod_scgi_init) {
 
 	p->scgi_env = buffer_init();
 
-	p->parse_response = buffer_init();
-
 	return p;
 }
 
@@ -637,7 +633,6 @@ FREE_FUNC(mod_scgi_free) {
 	UNUSED(srv);
 
 	buffer_free(p->scgi_env);
-	buffer_free(p->parse_response);
 
 	if (p->config_storage) {
 		size_t i, j, n;
