@@ -42,6 +42,13 @@
  *
  */
 
+typedef struct {
+	char **ptr;
+
+	size_t size;
+	size_t used;
+} char_array;
+
 typedef struct scgi_proc {
 	size_t id; /* id will be between 1 and max_procs */
 	buffer *socket; /* config.socket + "-" + id */
@@ -234,6 +241,8 @@ typedef struct {
 
 	int listen_backlog;
 	int refcount;
+
+	char_array args;
 } scgi_extension_host;
 
 /*
@@ -282,13 +291,6 @@ typedef struct {
 	int proto;
 	int debug;
 } plugin_config;
-
-typedef struct {
-	char **ptr;
-
-	size_t size;
-	size_t used;
-} char_array;
 
 /* generic plugin data, shared between all connections */
 typedef struct {
@@ -436,8 +438,9 @@ static void scgi_host_free(scgi_extension_host *h) {
 	scgi_process_free(h->first);
 	scgi_process_free(h->unused_procs);
 
+	for (size_t i = 0; i < h->args.used; ++i) free(h->args.ptr[i]);
+	free(h->args.ptr);
 	free(h);
-
 }
 
 static scgi_exts *scgi_extensions_init(void) {
@@ -793,8 +796,6 @@ static int scgi_spawn_connection(server *srv,
 	if (-1 == status) {
 		/* server is not up, spawn in  */
 		char_array env;
-		char *args[4];
-		buffer *b;
 		size_t i;
 		int val;
 
@@ -878,21 +879,10 @@ static int scgi_spawn_connection(server *srv,
 			env.ptr[env.used] = NULL;
 		}
 
-		/*(preserve prior behavior for exec of command)*/
-		/*(admin should really prefer to put any complex command into script)*/
-		b = buffer_init();
-		buffer_copy_string_len(b, CONST_STR_LEN("exec "));
-		buffer_append_string_buffer(b, host->bin_path);
-		*(const char **)&args[0] = "/bin/sh";
-		*(const char **)&args[1] = "-c";
-		*(const char **)&args[2] = b->ptr;
-		args[3] = NULL;
-
-		proc->pid = fdevent_fork_execve(args[0], args, env.ptr, scgi_fd, -1, -1, -1);
+		proc->pid = fdevent_fork_execve(host->args.ptr[0], host->args.ptr, env.ptr, scgi_fd, -1, -1, -1);
 
 		for (i = 0; i < env.used; ++i) free(env.ptr[i]);
 		free(env.ptr);
-		buffer_free(b);
 		close(scgi_fd);
 
 		if (-1 == proc->pid) {
@@ -1187,6 +1177,24 @@ SETDEFAULTS_FUNC(mod_scgi_set_defaults) {
 									"\" (check that file exists, is regular file, and is executable by lighttpd)");
 						}
 						df->bin_path->ptr[nchars] = c;
+
+						/*(preserve prior behavior for exec of command)*/
+						/*(admin should really prefer to put any complex command into script)*/
+						df->args.ptr = calloc(4, sizeof(char *));
+						force_assert(df->args.ptr);
+						df->args.used = 3;
+						df->args.size = 4;
+						df->args.ptr[0] = malloc(sizeof("/bin/sh"));
+						force_assert(df->args.ptr[0]);
+						memcpy(df->args.ptr[0], "/bin/sh", sizeof("/bin/sh"));
+						df->args.ptr[1] = malloc(sizeof("-c"));
+						force_assert(df->args.ptr[1]);
+						memcpy(df->args.ptr[1], "-c", sizeof("-c"));
+						df->args.ptr[2] = malloc(sizeof("exec ")-1+buffer_string_length(df->bin_path)+1);
+						force_assert(df->args.ptr[2]);
+						memcpy(df->args.ptr[2], "exec ", sizeof("exec ")-1);
+						memcpy(df->args.ptr[2]+sizeof("exec ")-1, df->bin_path->ptr, buffer_string_length(df->bin_path)+1);
+						df->args.ptr[3] = NULL;
 
 						/* HACK:  just to make sure the adaptive spawing is disabled */
 						df->min_procs = df->max_procs;

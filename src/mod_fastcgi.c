@@ -50,6 +50,13 @@
  *
  */
 
+typedef struct {
+	char **ptr;
+
+	size_t size;
+	size_t used;
+} char_array;
+
 typedef struct fcgi_proc {
 	size_t id; /* id will be between 1 and max_procs */
 	buffer *unixsocket; /* config.socket + "-" + id */
@@ -243,6 +250,8 @@ typedef struct {
 
 	int listen_backlog;
 	int refcount;
+
+	char_array args;
 } fcgi_extension_host;
 
 /*
@@ -293,13 +302,6 @@ typedef struct {
 
 	unsigned int debug;
 } plugin_config;
-
-typedef struct {
-	char **ptr;
-
-	size_t size;
-	size_t used;
-} char_array;
 
 /* generic plugin data, shared between all connections */
 typedef struct {
@@ -546,8 +548,9 @@ static void fastcgi_host_free(fcgi_extension_host *h) {
 	fastcgi_process_free(h->first);
 	fastcgi_process_free(h->unused_procs);
 
+	for (size_t i = 0; i < h->args.used; ++i) free(h->args.ptr[i]);
+	free(h->args.ptr);
 	free(h);
-
 }
 
 static fcgi_exts *fastcgi_extensions_init(void) {
@@ -868,6 +871,7 @@ static int env_add(char_array *env, const char *key, size_t key_len, const char 
 static int parse_binpath(char_array *env, buffer *b) {
 	char *start;
 	size_t i;
+	char c;
 	/* search for spaces */
 
 	start = b->ptr;
@@ -885,9 +889,10 @@ static int parse_binpath(char_array *env, buffer *b) {
 				env->ptr = realloc(env->ptr, env->size * sizeof(*env->ptr));
 			}
 
+			c = b->ptr[i];
 			b->ptr[i] = '\0';
-
-			env->ptr[env->used++] = start;
+			env->ptr[env->used++] = strdup(start);
+			b->ptr[i] = c;
 
 			start = b->ptr + i + 1;
 			break;
@@ -905,7 +910,7 @@ static int parse_binpath(char_array *env, buffer *b) {
 	}
 
 	/* the rest */
-	env->ptr[env->used++] = start;
+	env->ptr[env->used++] = strdup(start);
 
 	if (env->size == 0) {
 		env->size = 16;
@@ -984,8 +989,6 @@ static int fcgi_spawn_connection(server *srv,
 	if (-1 == status) {
 		/* server is not up, spawn it  */
 		char_array env;
-		char_array arg;
-		buffer *bin_path = NULL;
 		size_t i;
 		int val;
 		int dfd = -1;
@@ -1028,10 +1031,6 @@ static int fcgi_spawn_connection(server *srv,
 			env.size = 0;
 			env.used = 0;
 
-			arg.ptr = NULL;
-			arg.size = 0;
-			arg.used = 0;
-
 			/* build clean environment */
 			if (host->bin_env_copy->used) {
 				for (i = 0; i < host->bin_env_copy->used; i++) {
@@ -1071,25 +1070,18 @@ static int fcgi_spawn_connection(server *srv,
 			}
 
 			env.ptr[env.used] = NULL;
-
-			bin_path = buffer_init_buffer(host->bin_path);
-			parse_binpath(&arg, bin_path);
 		}
 
-		dfd = fdevent_open_dirname(arg.ptr[0]);
+		dfd = fdevent_open_dirname(host->args.ptr[0]);
 		if (-1 == dfd) {
-			log_error_write(srv, __FILE__, __LINE__, "sss", "open dirname failed:", strerror(errno), arg.ptr[0]);
+			log_error_write(srv, __FILE__, __LINE__, "sss", "open dirname failed:", strerror(errno), host->args.ptr[0]);
 		}
 
 		/*(FCGI_LISTENSOCK_FILENO == STDIN_FILENO == 0)*/
-		proc->pid = (dfd >= 0) ? fdevent_fork_execve(arg.ptr[0], arg.ptr, env.ptr, fcgi_fd, -1, -1, dfd) : -1;
+		proc->pid = (dfd >= 0) ? fdevent_fork_execve(host->args.ptr[0], host->args.ptr, env.ptr, fcgi_fd, -1, -1, dfd) : -1;
 
 		for (i = 0; i < env.used; ++i) free(env.ptr[i]);
 		free(env.ptr);
-		/*(arg[] contains string references into bin_path)*/
-		/*for (i = 0; i < arg.used; ++i) free(arg.ptr[i]);*/
-		free(arg.ptr);
-		buffer_free(bin_path);
 		if (-1 != dfd) close(dfd);
 		close(fcgi_fd);
 
@@ -1379,16 +1371,13 @@ SETDEFAULTS_FUNC(mod_fastcgi_set_defaults) {
 						size_t pno;
 
 						struct stat st;
-						size_t nchars = strcspn(host->bin_path->ptr, " \t");
-						char c = host->bin_path->ptr[nchars];
-						host->bin_path->ptr[nchars] = '\0';
-						if (0 == nchars || 0 != stat(host->bin_path->ptr, &st) || !S_ISREG(st.st_mode) || !(st.st_mode & (S_IXUSR | S_IXGRP | S_IXOTH))) {
-							host->bin_path->ptr[nchars] = c;
+
+						parse_binpath(&host->args, host->bin_path);
+						if (0 != stat(host->args.ptr[0], &st) || !S_ISREG(st.st_mode) || !(st.st_mode & (S_IXUSR | S_IXGRP | S_IXOTH))) {
 							log_error_write(srv, __FILE__, __LINE__, "SSs",
 									"invalid \"bin-path\" => \"", host->bin_path->ptr,
 									"\" (check that file exists, is regular file, and is executable by lighttpd)");
 						}
-						host->bin_path->ptr[nchars] = c;
 
 						if (s->debug) {
 							log_error_write(srv, __FILE__, __LINE__, "ssbsdsbsd",
