@@ -296,8 +296,6 @@ typedef struct {
 typedef struct {
 	PLUGIN_DATA;
 
-	buffer *scgi_env;
-
 	plugin_config **config_storage;
 
 	plugin_config conf; /* this is only used as long as no handler_ctx is setup */
@@ -645,8 +643,6 @@ INIT_FUNC(mod_scgi_init) {
 	p = calloc(1, sizeof(*p));
 	force_assert(p);
 
-	p->scgi_env = buffer_init();
-
 	return p;
 }
 
@@ -655,8 +651,6 @@ FREE_FUNC(mod_scgi_free) {
 	plugin_data *p = p_d;
 
 	UNUSED(srv);
-
-	buffer_free(p->scgi_env);
 
 	if (p->config_storage) {
 		size_t i, j, n;
@@ -1525,7 +1519,7 @@ static int scgi_establish_connection(server *srv, handler_ctx *hctx) {
 static int scgi_create_env(server *srv, handler_ctx *hctx) {
 	buffer *b;
 
-	plugin_data *p    = hctx->plugin_data;
+	buffer *scgi_env = buffer_init();
 	scgi_extension_host *host= hctx->host;
 
 	connection *con   = hctx->remote_conn;
@@ -1536,25 +1530,28 @@ static int scgi_create_env(server *srv, handler_ctx *hctx) {
 	  ? scgi_env_add_scgi
 	  : scgi_env_add_uwsgi;
 
-	buffer_string_prepare_copy(p->scgi_env, 1023);
+	buffer_string_prepare_copy(scgi_env, 1023);
 
-	if (0 != http_cgi_headers(srv, con, &opts, scgi_env_add, p->scgi_env)) {
+	if (0 != http_cgi_headers(srv, con, &opts, scgi_env_add, scgi_env)) {
+		buffer_free(scgi_env);
 		con->http_status = 400;
 		return -1;
 	}
 
 	if (hctx->conf.proto == LI_PROTOCOL_SCGI) {
-		scgi_env_add(p->scgi_env, CONST_STR_LEN("SCGI"), CONST_STR_LEN("1"));
+		scgi_env_add(scgi_env, CONST_STR_LEN("SCGI"), CONST_STR_LEN("1"));
 		b = buffer_init();
-		buffer_append_int(b, buffer_string_length(p->scgi_env));
+		buffer_append_int(b, buffer_string_length(scgi_env));
 		buffer_append_string_len(b, CONST_STR_LEN(":"));
-		buffer_append_string_buffer(b, p->scgi_env);
+		buffer_append_string_buffer(b, scgi_env);
 		buffer_append_string_len(b, CONST_STR_LEN(","));
+		buffer_free(scgi_env);
 	} else { /* LI_PROTOCOL_UWSGI */
 		/* http://uwsgi-docs.readthedocs.io/en/latest/Protocol.html */
-		size_t len = buffer_string_length(p->scgi_env);
+		size_t len = buffer_string_length(scgi_env);
 		uint32_t uwsgi_header;
 		if (len > USHRT_MAX) {
+			buffer_free(scgi_env);
 			con->http_status = 431; /* Request Header Fields Too Large */
 			con->mode = DIRECT;
 			return -1; /* trigger return of HANDLER_FINISHED */
@@ -1564,7 +1561,8 @@ static int scgi_create_env(server *srv, handler_ctx *hctx) {
 		uwsgi_header = ((uint32_t)uwsgi_htole16((uint16_t)len)) << 8;
 		memcpy(b->ptr, (char *)&uwsgi_header, 4);
 		buffer_commit(b, 4);
-		buffer_append_string_buffer(b, p->scgi_env);
+		buffer_append_string_buffer(b, scgi_env);
+		buffer_free(scgi_env);
 	}
 
 	hctx->wb_reqlen = buffer_string_length(b);

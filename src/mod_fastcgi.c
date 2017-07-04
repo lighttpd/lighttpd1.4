@@ -307,8 +307,6 @@ typedef struct {
 typedef struct {
 	PLUGIN_DATA;
 
-	buffer *fcgi_env;
-
 	plugin_config **config_storage;
 
 	plugin_config conf; /* this is only used as long as no handler_ctx is setup */
@@ -761,8 +759,6 @@ INIT_FUNC(mod_fastcgi_init) {
 
 	p = calloc(1, sizeof(*p));
 
-	p->fcgi_env = buffer_init();
-
 	return p;
 }
 
@@ -771,8 +767,6 @@ FREE_FUNC(mod_fastcgi_free) {
 	plugin_data *p = p_d;
 
 	UNUSED(srv);
-
-	buffer_free(p->fcgi_env);
 
 	if (p->config_storage) {
 		size_t i, j, n;
@@ -1826,7 +1820,7 @@ static int fcgi_create_env(server *srv, handler_ctx *hctx) {
 	FCGI_Header header;
 	int request_id;
 
-	plugin_data *p    = hctx->plugin_data;
+	buffer *fcgi_env = buffer_init();
 	fcgi_extension_host *host= hctx->host;
 
 	connection *con   = hctx->remote_conn;
@@ -1855,19 +1849,21 @@ static int fcgi_create_env(server *srv, handler_ctx *hctx) {
 	memset(beginRecord.body.reserved, 0, sizeof(beginRecord.body.reserved));
 
 	/* send FCGI_PARAMS */
-	buffer_string_prepare_copy(p->fcgi_env, 1023);
+	buffer_string_prepare_copy(fcgi_env, 1023);
 
-	if (0 != http_cgi_headers(srv, con, &opts, fcgi_env_add, p->fcgi_env)) {
+	if (0 != http_cgi_headers(srv, con, &opts, fcgi_env_add, fcgi_env)) {
 		con->http_status = 400;
+		buffer_free(fcgi_env);
 		return -1;
 	} else {
 		buffer *b = buffer_init();
 
 		buffer_copy_string_len(b, (const char *)&beginRecord, sizeof(beginRecord));
 
-		fcgi_header(&(header), FCGI_PARAMS, request_id, buffer_string_length(p->fcgi_env), 0);
+		fcgi_header(&(header), FCGI_PARAMS, request_id, buffer_string_length(fcgi_env), 0);
 		buffer_append_string_len(b, (const char *)&header, sizeof(header));
-		buffer_append_string_buffer(b, p->fcgi_env);
+		buffer_append_string_buffer(b, fcgi_env);
+		buffer_free(fcgi_env);
 
 		fcgi_header(&(header), FCGI_PARAMS, request_id, 0, 0);
 		buffer_append_string_len(b, (const char *)&header, sizeof(header));
