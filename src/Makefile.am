@@ -57,7 +57,7 @@ CLEANFILES = versionstamp.h versionstamp.h.tmp lemon$(BUILD_EXEEXT)
 
 common_src=base64.c buffer.c log.c \
 	keyvalue.c chunk.c  \
-	http_chunk.c stream.c fdevent.c \
+	http_chunk.c stream.c fdevent.c gw_backend.c \
 	stat_cache.c plugin.c joblist.c etag.c array.c \
 	data_string.c data_array.c \
 	data_integer.c md5.c \
@@ -375,7 +375,7 @@ hdr = server.h base64.h buffer.h network.h log.h keyvalue.h \
 	response.h request.h fastcgi.h chunk.h \
 	first.h settings.h http_chunk.h \
 	md5.h http_auth.h http_vhostdb.h stream.h \
-	fdevent.h connections.h base.h stat_cache.h \
+	fdevent.h gw_backend.h connections.h base.h stat_cache.h \
 	plugin.h \
 	etag.h joblist.h array.h vector.h crc32.h \
 	network_backends.h configfile.h \

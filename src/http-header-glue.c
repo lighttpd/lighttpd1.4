@@ -1191,7 +1191,8 @@ handler_t http_response_parse_headers(server *srv, connection *con, http_respons
         }
     }
 
-    return HANDLER_GO_ON;
+    /* (callback for response headers complete) */
+    return (opts->headers) ? opts->headers(srv, con, opts) : HANDLER_GO_ON;
 }
 
 

@@ -37,8 +37,6 @@ static int pipe_cloexec(int pipefd[2]) {
       : -1;
 }
 
-enum {EOL_UNSET, EOL_N, EOL_RN};
-
 typedef struct {
 	char **ptr;
 
@@ -413,16 +411,9 @@ static handler_t cgi_handle_fdevent_send (server *srv, void *ctx, int revents) {
 }
 
 
-static handler_t cgi_response_read(server *srv, handler_ctx *hctx) {
-    connection * const con = hctx->remote_conn;
-    const int file_started = con->file_started;
-    const handler_t rc =
-      http_response_read(srv, con, &hctx->opts,
-                         hctx->response, hctx->fd, &hctx->fde_ndx);
-
-    if (file_started || !con->file_started || con->mode == DIRECT) return rc;
-
+static handler_t cgi_response_headers(server *srv, connection *con, struct http_response_opts_t *opts) {
     /* response headers just completed */
+    handler_ctx *hctx = (handler_ctx *)opts->pdata;
 
     if (con->parsed_response & HTTP_UPGRADE) {
         if (hctx->conf.upgrade && con->http_status == 101) {
@@ -449,12 +440,13 @@ static handler_t cgi_response_read(server *srv, handler_ctx *hctx) {
         }
     }
 
-    return rc;
+    return HANDLER_GO_ON;
 }
 
 
 static int cgi_recv_response(server *srv, handler_ctx *hctx) {
-		switch (cgi_response_read(srv, hctx)) {
+		switch (http_response_read(srv, hctx->remote_conn, &hctx->opts,
+					   hctx->response, hctx->fd, &hctx->fde_ndx)) {
 		default:
 			return HANDLER_GO_ON;
 		case HANDLER_ERROR:
@@ -1008,6 +1000,8 @@ URIHANDLER_FUNC(cgi_is_handled) {
 		hctx->opts.local_redir = hctx->conf.local_redir;
 		hctx->opts.xsendfile_allow = hctx->conf.xsendfile_allow;
 		hctx->opts.xsendfile_docroot = hctx->conf.xsendfile_docroot;
+		hctx->opts.pdata = hctx;
+		hctx->opts.headers = cgi_response_headers;
 		con->plugin_ctx[p->id] = hctx;
 		con->mode = p->id;
 	}
