@@ -154,6 +154,47 @@ int sock_addr_from_str_hints(server *srv, sock_addr *addr, socklen_t *len, const
 {
     /*(note: name resolution here is *blocking*)*/
     switch(family) {
+      case AF_UNSPEC:
+        if (0 == strcmp(str, "localhost")) {
+            /*(special-case "localhost" to IPv4 127.0.0.1)*/
+            memset(addr, 0, sizeof(struct sockaddr_in));
+            addr->ipv4.sin_family = AF_INET;
+            addr->ipv4.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+            addr->ipv4.sin_port = htons(port);
+            *len = sizeof(struct sockaddr_in);
+            return 1;
+        }
+       #ifdef HAVE_IPV6
+        else {
+            struct addrinfo hints, *res;
+            int r;
+            memset(&hints, 0, sizeof(hints));
+            hints.ai_family   = AF_UNSPEC;
+            hints.ai_socktype = SOCK_STREAM;
+            hints.ai_protocol = IPPROTO_TCP;
+
+            if (0 != (r = getaddrinfo(str, NULL, &hints, &res))) {
+                log_error_write(srv, __FILE__, __LINE__,
+                                "sssss", "getaddrinfo failed: ",
+                                gai_strerror(r), "'", str, "'");
+                return 0;
+            }
+
+            memcpy(addr, res->ai_addr, res->ai_addrlen);
+            freeaddrinfo(res);
+            if (AF_INET6 == addr->plain.sa_family) {
+                addr->ipv6.sin6_port = htons(port);
+                *len = sizeof(struct sockaddr_in6);
+            }
+            else { /* AF_INET */
+                addr->ipv4.sin_port = htons(port);
+                *len = sizeof(struct sockaddr_in);
+            }
+            return 1;
+        }
+       #else
+        /* fall through */
+       #endif
      #ifdef HAVE_IPV6
       case AF_INET6:
         memset(addr, 0, sizeof(struct sockaddr_in6));

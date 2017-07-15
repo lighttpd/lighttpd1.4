@@ -369,20 +369,22 @@ static int gw_proc_sockaddr_init(server *srv, gw_host *host, gw_proc *proc) {
         }
         buffer_copy_string_len(proc->connection_name, CONST_STR_LEN("unix:"));
         buffer_append_string_buffer(proc->connection_name, proc->unixsocket);
-    } else {
-        if (1 != sock_addr_from_buffer_hints_numeric(srv, &addr, &addrlen,
-                                                     host->host, host->family,
-                                                     proc->port)) {
+    }
+    else {
+        /*(note: name resolution here is *blocking* if IP string not supplied)*/
+        if (1 != sock_addr_from_str_hints(srv, &addr, &addrlen,
+                                          host->host->ptr, 0, proc->port)) {
             errno = EINVAL;
             return -1;
         }
-        buffer_copy_string_len(proc->connection_name, CONST_STR_LEN("tcp:"));
-        if (!buffer_string_is_empty(host->host)) {
-            buffer_append_string_buffer(proc->connection_name, host->host);
-        } else {
-            buffer_append_string_len(proc->connection_name,
-                                     CONST_STR_LEN("localhost"));
+        else {
+            /* overwrite host->host buffer with IP addr string so that
+             * any further use of gw_host does not block on DNS lookup */
+            sock_addr_inet_ntop_copy_buffer(host->host, &addr);
+            host->family = addr.plain.sa_family;
         }
+        buffer_copy_string_len(proc->connection_name, CONST_STR_LEN("tcp:"));
+        buffer_append_string_buffer(proc->connection_name, host->host);
         buffer_append_string_len(proc->connection_name, CONST_STR_LEN(":"));
         buffer_append_int(proc->connection_name, proc->port);
     }
