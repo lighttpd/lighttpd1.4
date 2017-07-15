@@ -226,7 +226,6 @@ static int gw_extension_insert(gw_exts *ext, buffer *key, gw_host *fh) {
 }
 
 static void gw_proc_connect_success(server *srv, gw_host *host, gw_proc *proc, int debug) {
-    gw_proc_load_inc(srv, host, proc);
     gw_proc_tag_inc(srv, host, proc, CONST_STR_LEN(".connected"));
 
     if (debug) {
@@ -1105,7 +1104,6 @@ static void handler_ctx_clear(gw_handler_ctx *hctx) {
 
     hctx->fd = -1;
     hctx->fde_ndx = -1;
-    hctx->got_proc = 0;
     hctx->reconnects = 0;
     hctx->request_id = 0;
     hctx->send_content_body = 1;
@@ -1628,11 +1626,7 @@ static void gw_backend_close(server *srv, gw_handler_ctx *hctx) {
 
     if (hctx->host) {
         if (hctx->proc) {
-            if (hctx->got_proc) {
-                /* after the connect the process gets a load */
-                hctx->got_proc = 0;
-                gw_proc_release(srv, hctx->host, hctx->proc, hctx->conf.debug);
-            }
+            gw_proc_release(srv, hctx->host, hctx->proc, hctx->conf.debug);
             hctx->proc = NULL;
         }
 
@@ -1703,6 +1697,8 @@ static handler_t gw_write_request(server *srv, gw_handler_ctx *hctx) {
             if (proc->load < hctx->proc->load) hctx->proc = proc;
         }
 
+        gw_proc_load_inc(srv, hctx->host, hctx->proc);
+
         hctx->fd = fdevent_socket_nb_cloexec(hctx->host->family,SOCK_STREAM,0);
         if (-1 == hctx->fd) {
             if (errno == EMFILE || errno == EINTR) {
@@ -1757,7 +1753,6 @@ static handler_t gw_write_request(server *srv, gw_handler_ctx *hctx) {
         }
 
         gw_proc_connect_success(srv, hctx->host, hctx->proc, hctx->conf.debug);
-        hctx->got_proc = 1;
 
         gw_set_state(srv, hctx, GW_STATE_PREPARE_WRITE);
         /* fall through */

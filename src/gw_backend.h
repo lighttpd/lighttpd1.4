@@ -309,7 +309,6 @@ typedef struct gw_handler_ctx {
     int       fde_ndx;   /* index into the fd-event buffer */
 
     pid_t     pid;
-    int       got_proc;
     int       reconnects; /* number of reconnect attempts */
 
     int       request_id;
