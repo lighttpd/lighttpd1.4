@@ -119,6 +119,7 @@ static void gw_proc_free(gw_proc *f) {
 
     buffer_free(f->unixsocket);
     buffer_free(f->connection_name);
+    free(f->saddr);
 
     free(f);
 }
@@ -356,6 +357,49 @@ static int gw_proc_waitpid(server *srv, gw_host *host, gw_proc *proc) {
     return 1;
 }
 
+static int gw_proc_sockaddr_init(server *srv, gw_host *host, gw_proc *proc) {
+    sock_addr addr;
+    socklen_t addrlen;
+
+    if (!buffer_string_is_empty(proc->unixsocket)) {
+        if (1 != sock_addr_from_str_hints(srv, &addr, &addrlen,
+                                          proc->unixsocket->ptr, AF_UNIX, 0)) {
+            errno = EINVAL;
+            return -1;
+        }
+        buffer_copy_string_len(proc->connection_name, CONST_STR_LEN("unix:"));
+        buffer_append_string_buffer(proc->connection_name, proc->unixsocket);
+    } else {
+        if (1 != sock_addr_from_buffer_hints_numeric(srv, &addr, &addrlen,
+                                                     host->host, host->family,
+                                                     proc->port)) {
+            errno = EINVAL;
+            return -1;
+        }
+        buffer_copy_string_len(proc->connection_name, CONST_STR_LEN("tcp:"));
+        if (!buffer_string_is_empty(host->host)) {
+            buffer_append_string_buffer(proc->connection_name, host->host);
+        } else {
+            buffer_append_string_len(proc->connection_name,
+                                     CONST_STR_LEN("localhost"));
+        }
+        buffer_append_string_len(proc->connection_name, CONST_STR_LEN(":"));
+        buffer_append_int(proc->connection_name, proc->port);
+    }
+
+    if (NULL != proc->saddr && proc->saddrlen < addrlen) {
+        free(proc->saddr);
+        proc->saddr = NULL;
+    }
+    if (NULL == proc->saddr) {
+        proc->saddr = (struct sockaddr *)malloc(addrlen);
+        force_assert(proc->saddr);
+    }
+    proc->saddrlen = addrlen;
+    memcpy(proc->saddr, &addr, addrlen);
+    return 0;
+}
+
 static int env_add(char_array *env, const char *key, size_t key_len, const char *val, size_t val_len) {
     char *dst;
 
@@ -394,44 +438,13 @@ static int gw_spawn_connection(server *srv, gw_host *host, gw_proc *proc, int de
     int gw_fd;
     int status;
     struct timeval tv = { 0, 10 * 1000 };
-    sock_addr addr;
-    struct sockaddr *gw_addr = (struct sockaddr *)&addr;
-    socklen_t servlen;
 
     if (debug) {
         log_error_write(srv, __FILE__, __LINE__, "sdb",
                         "new proc, socket:", proc->port, proc->unixsocket);
     }
 
-    if (!buffer_string_is_empty(proc->unixsocket)) {
-        if (1 != sock_addr_from_str_hints(srv, &addr, &servlen,
-                                          proc->unixsocket->ptr, AF_UNIX, 0)) {
-            return -1;
-        }
-    } else {
-        if (1 != sock_addr_from_buffer_hints_numeric(srv, &addr, &servlen,
-                                                     host->host, host->family,
-                                                     proc->port)) {
-            return -1;
-        }
-    }
-
-    if (!buffer_string_is_empty(proc->unixsocket)) {
-        buffer_copy_string_len(proc->connection_name, CONST_STR_LEN("unix:"));
-        buffer_append_string_buffer(proc->connection_name, proc->unixsocket);
-    } else {
-        buffer_copy_string_len(proc->connection_name, CONST_STR_LEN("tcp:"));
-        if (!buffer_string_is_empty(host->host)) {
-            buffer_append_string_buffer(proc->connection_name, host->host);
-        } else {
-            buffer_append_string_len(proc->connection_name,
-                                     CONST_STR_LEN("localhost"));
-        }
-        buffer_append_string_len(proc->connection_name, CONST_STR_LEN(":"));
-        buffer_append_int(proc->connection_name, proc->port);
-    }
-
-    gw_fd = fdevent_socket_cloexec(gw_addr->sa_family, SOCK_STREAM, 0);
+    gw_fd = fdevent_socket_cloexec(proc->saddr->sa_family, SOCK_STREAM, 0);
     if (-1 == gw_fd) {
         log_error_write(srv, __FILE__, __LINE__, "ss",
                         "failed:", strerror(errno));
@@ -439,7 +452,7 @@ static int gw_spawn_connection(server *srv, gw_host *host, gw_proc *proc, int de
     }
 
     do {
-        status = connect(gw_fd, gw_addr, servlen);
+        status = connect(gw_fd, proc->saddr, proc->saddrlen);
     } while (-1 == status && errno == EINTR);
 
     if (-1 == status && errno != ENOENT
@@ -460,7 +473,7 @@ static int gw_spawn_connection(server *srv, gw_host *host, gw_proc *proc, int de
         int dfd = -1;
 
         /* reopen socket */
-        gw_fd = fdevent_socket_cloexec(gw_addr->sa_family, SOCK_STREAM, 0);
+        gw_fd = fdevent_socket_cloexec(proc->saddr->sa_family, SOCK_STREAM, 0);
         if (-1 == gw_fd) {
             log_error_write(srv, __FILE__, __LINE__, "ss",
                             "socket failed:", strerror(errno));
@@ -476,7 +489,7 @@ static int gw_spawn_connection(server *srv, gw_host *host, gw_proc *proc, int de
         }
 
         /* create socket */
-        if (-1 == bind(gw_fd, gw_addr, servlen)) {
+        if (-1 == bind(gw_fd, proc->saddr, proc->saddrlen)) {
             log_error_write(srv, __FILE__, __LINE__, "sbs",
                             "bind failed for:",
                             proc->connection_name,
@@ -629,7 +642,15 @@ static void gw_proc_spawn(server *srv, gw_host *host, int debug) {
         buffer_append_int(proc->unixsocket, proc->id);
     }
 
-    if (gw_spawn_connection(srv, host, proc, debug)) {
+    if (0 != gw_proc_sockaddr_init(srv, host, proc)) {
+        /*(should not happen if host->host validated at startup,
+         * and translated from name to IP address at startup)*/
+        log_error_write(srv, __FILE__, __LINE__, "s",
+                        "ERROR: spawning backend failed.");
+        --host->num_procs;
+        if (proc->id == host->max_id-1) --host->max_id;
+        gw_proc_free(proc);
+    } else if (gw_spawn_connection(srv, host, proc, debug)) {
         log_error_write(srv, __FILE__, __LINE__, "s",
                         "ERROR: spawning backend failed.");
         proc->next = host->unused_procs;
@@ -908,48 +929,7 @@ static gw_host * gw_host_get(server *srv, connection *con, gw_extension *extensi
 }
 
 static int gw_establish_connection(server *srv, gw_host *host, gw_proc *proc, pid_t pid, int gw_fd, int debug) {
-    sock_addr addr;
-    struct sockaddr *gw_addr = (struct sockaddr *)&addr;
-    socklen_t servlen;
-
-    if (!buffer_string_is_empty(proc->unixsocket)) {
-        if (1 != sock_addr_from_str_hints(srv, &addr, &servlen,
-                                          proc->unixsocket->ptr, AF_UNIX, 0)) {
-            errno = EINVAL;
-            return -1;
-        }
-    } else {
-        if (1 != sock_addr_from_buffer_hints_numeric(srv, &addr, &servlen,
-                                                     host->host, host->family,
-                                                     proc->port)) {
-            errno = EINVAL;
-            return -1;
-        }
-    }
-
-    if (!buffer_string_is_empty(proc->unixsocket)) {
-        if (buffer_string_is_empty(proc->connection_name)) {
-            /* on remote spawning we have to set the connection-name now */
-            buffer_copy_string_len(proc->connection_name,
-                                   CONST_STR_LEN("unix:"));
-            buffer_append_string_buffer(proc->connection_name,proc->unixsocket);
-        }
-    } else {
-        if (buffer_string_is_empty(proc->connection_name)) {
-            /* on remote spawning we have to set the connection-name now */
-            buffer_copy_string_len(proc->connection_name,CONST_STR_LEN("tcp:"));
-            if (!buffer_string_is_empty(host->host)) {
-                buffer_append_string_buffer(proc->connection_name, host->host);
-            } else {
-                buffer_append_string_len(proc->connection_name,
-                                         CONST_STR_LEN("localhost"));
-            }
-            buffer_append_string_len(proc->connection_name, CONST_STR_LEN(":"));
-            buffer_append_int(proc->connection_name, proc->port);
-        }
-    }
-
-    if (-1 == connect(gw_fd, gw_addr, servlen)) {
+    if (-1 == connect(gw_fd, proc->saddr, proc->saddrlen)) {
         if (errno == EINPROGRESS ||
             errno == EALREADY ||
             errno == EINTR) {
@@ -1460,6 +1440,11 @@ int gw_set_defaults_backend(server *srv, gw_plugin_data *p, data_unset *du, size
                           "\n\tcurrent:", pno, "/", host->max_procs);
                     }
 
+                    if (0 != gw_proc_sockaddr_init(srv, host, proc)) {
+                        gw_proc_free(proc);
+                        goto error;
+                    }
+
                     if (!srv->srvconf.preflight_check
                         && gw_spawn_connection(srv, host, proc, s->debug)) {
                         log_error_write(srv, __FILE__, __LINE__, "s",
@@ -1495,6 +1480,8 @@ int gw_set_defaults_backend(server *srv, gw_plugin_data *p, data_unset *du, size
 
                 host->min_procs = 1;
                 host->max_procs = 1;
+
+                if (0 != gw_proc_sockaddr_init(srv, host, proc)) goto error;
             }
 
             if (!buffer_string_is_empty(gw_mode)) {

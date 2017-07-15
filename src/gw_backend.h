@@ -4,6 +4,7 @@
 #include "first.h"
 
 #include <sys/types.h>
+#include "sys-socket.h"
 
 #include "array.h"
 #include "buffer.h"
@@ -19,6 +20,8 @@ typedef struct gw_proc {
     size_t id; /* id will be between 1 and max_procs */
     buffer *unixsocket; /* config.socket + "-" + id */
     unsigned port;  /* config.port + pno */
+    socklen_t saddrlen;
+    struct sockaddr *saddr;
 
     /* either tcp:<host>:<port> or unix:<socket> for debugging purposes */
     buffer *connection_name;
