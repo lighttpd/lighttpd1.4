@@ -1150,6 +1150,7 @@ int connection_state_machine(server *srv, connection *con) {
 					break; /* come back here */
 				}
 				/* response headers received from backend; fall through to start response */
+				/* fall through */
 			case HANDLER_FINISHED:
 				if (con->error_handler_saved_status > 0) {
 					con->request.http_method = con->error_handler_saved_method;

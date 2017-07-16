@@ -1317,6 +1317,7 @@ connection_read_cq_ssl (server *srv, connection *con,
         switch ((r = SSL_get_error(hctx->ssl, len))) {
         case SSL_ERROR_WANT_WRITE:
             con->is_writable = -1;
+            /* fall through */
         case SSL_ERROR_WANT_READ:
             con->is_readable = 0;
 

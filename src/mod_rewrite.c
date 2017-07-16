@@ -464,6 +464,7 @@ URIHANDLER_FUNC(mod_rewrite_physical) {
 	switch(r = process_rewrite_rules(srv, con, p, p->conf.rewrite_NF)) {
 	case HANDLER_COMEBACK:
 		buffer_reset(con->physical.path);
+		/* fall through */
 	default:
 		return r;
 	}
