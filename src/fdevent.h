@@ -224,6 +224,7 @@ int fdevent_open_dirname(char *path);
 int fdevent_set_stdin_stdout_stderr(int fdin, int fdout, int fderr);
 pid_t fdevent_fork_execve(const char *name, char *argv[], char *envp[], int fdin, int fdout, int fderr, int dfd);
 int fdevent_open_logger(const char *logger);
+int fdevent_cycle_logger(const char *logger, int *curfd);
 
 int fdevent_select_init(fdevents *ev);
 int fdevent_poll_init(fdevents *ev);

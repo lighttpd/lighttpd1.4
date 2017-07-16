@@ -882,26 +882,11 @@ static int log_error_cycle(server *srv) {
 
     if (srv->errorlog_mode == ERRORLOG_FILE) {
         const char *logfile = srv->srvconf.errorlog_file->ptr;
-        int new_fd;
-
-        if (-1 == (new_fd = fdevent_open_logger(logfile))) {
+        if (-1 == fdevent_cycle_logger(logfile, &srv->errorlog_fd)) {
             /* write to old log */
-            log_error_write(srv, __FILE__, __LINE__, "SSSSS",
+            log_error_write(srv, __FILE__, __LINE__, "SSSS",
                             "cycling errorlog '", logfile,
-                            "' failed: ", strerror(errno),
-                            ", falling back to syslog()");
-
-            close(srv->errorlog_fd);
-            srv->errorlog_fd = -1;
-          #ifdef HAVE_SYSLOG_H
-            srv->errorlog_mode = ERRORLOG_SYSLOG;
-          #endif
-        }
-        else {
-            /* ok, new log is open, close the old one */
-            close(srv->errorlog_fd);
-            srv->errorlog_fd = new_fd;
-            fdevent_setfd_cloexec(srv->errorlog_fd);
+                            "' failed: ", strerror(errno));
         }
     }
 

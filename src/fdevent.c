@@ -594,6 +594,16 @@ int fdevent_open_logger(const char *logger) {
     }
 }
 
+int fdevent_cycle_logger(const char *logger, int *curfd) {
+    if (logger[0] != '|') {
+        int fd = fdevent_open_logger(logger);
+        if (-1 == fd) return -1; /*(error; leave *curfd as-is)*/
+        if (-1 != *curfd) close(*curfd);
+        *curfd = fd;
+    }
+    return *curfd;
+}
+
 
 #include <sys/ioctl.h>
 #ifdef HAVE_SYS_FILIO_H
