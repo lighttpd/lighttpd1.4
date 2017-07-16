@@ -228,6 +228,7 @@ static int gw_extension_insert(gw_exts *ext, buffer *key, gw_host *fh) {
 
 static void gw_proc_connect_success(server *srv, gw_host *host, gw_proc *proc, int debug) {
     gw_proc_tag_inc(srv, host, proc, CONST_STR_LEN(".connected"));
+    proc->last_used = srv->cur_ts;
 
     if (debug) {
         log_error_write(srv, __FILE__, __LINE__, "ssdsbsd",
@@ -912,6 +913,16 @@ static gw_host * gw_host_get(server *srv, connection *con, gw_extension *extensi
         }
 
         return host;
+    } else if (0 == srv->srvconf.max_worker) {
+        /* special-case adaptive spawning and 0 == host->min_procs */
+        for (k = 0; k < extension->used; ++k) {
+            host = extension->hosts[k];
+            if (0 == host->min_procs && 0 == host->num_procs
+                && !buffer_string_is_empty(host->bin_path)) {
+                gw_proc_spawn(srv, host, debug);
+                if (host->num_procs) return host;
+            }
+        }
     }
 
     /* all hosts are down */
@@ -1214,7 +1225,7 @@ int gw_set_defaults_backend(server *srv, gw_plugin_data *p, data_unset *du, size
 
                 { "check-local",       NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION },      /* 5 */
                 { "port",              NULL, T_CONFIG_SHORT, T_CONFIG_SCOPE_CONNECTION },        /* 6 */
-                { "min-procs-not-working",         NULL, T_CONFIG_SHORT, T_CONFIG_SCOPE_CONNECTION },        /* 7 this is broken for now */
+                { "min-procs",         NULL, T_CONFIG_SHORT, T_CONFIG_SCOPE_CONNECTION },        /* 7 */
                 { "max-procs",         NULL, T_CONFIG_SHORT, T_CONFIG_SCOPE_CONNECTION },        /* 8 */
                 { "max-load-per-proc", NULL, T_CONFIG_SHORT, T_CONFIG_SCOPE_CONNECTION },        /* 9 */
                 { "idle-timeout",      NULL, T_CONFIG_SHORT, T_CONFIG_SCOPE_CONNECTION },        /* 10 */
@@ -1402,11 +1413,15 @@ int gw_set_defaults_backend(server *srv, gw_plugin_data *p, data_unset *du, size
                     host->args.ptr[3] = NULL;
                 }
 
-                /* HACK:  just to make sure the adaptive spawing is disabled */
-                host->min_procs = host->max_procs;
-
                 if (host->min_procs > host->max_procs)
-                    host->max_procs = host->min_procs;
+                    host->min_procs = host->max_procs;
+                if (host->min_procs!= host->max_procs
+                    && 0 != srv->srvconf.max_worker) {
+                    host->min_procs = host->max_procs;
+                    log_error_write(srv, __FILE__, __LINE__, "s",
+                                    "adaptive backend spawning disabled "
+                                    "(server.max_worker is non-zero)");
+                }
                 if (host->max_load_per_proc < 1)
                     host->max_load_per_proc = 0;
 
@@ -1420,7 +1435,7 @@ int gw_set_defaults_backend(server *srv, gw_plugin_data *p, data_unset *du, size
                                     "\n\tmax-procs:", host->max_procs);
                 }
 
-                for (size_t pno = 0; pno < host->max_procs; ++pno) {
+                for (size_t pno = 0; pno < host->min_procs; ++pno) {
                     gw_proc *proc = gw_proc_init();
                     proc->id = host->num_procs++;
                     host->max_id++;
@@ -1975,6 +1990,7 @@ static handler_t gw_recv_response(server *srv, gw_handler_ctx *hctx) {
                 physpath = con->physical.path;
             }
 
+            proc->last_used = srv->cur_ts;
             gw_backend_close(srv, hctx);
             handler_ctx_clear(hctx);
 
@@ -2358,7 +2374,7 @@ static void gw_handle_trigger_host(server *srv, gw_host *host, int debug) {
 
     gw_proc *proc;
     time_t idle_timestamp;
-    unsigned long sum_load = 0;
+    int overload = 1;
 
     for (proc = host->first; proc; proc = proc->next) {
         gw_proc_waitpid(srv, host, proc);
@@ -2366,14 +2382,18 @@ static void gw_handle_trigger_host(server *srv, gw_host *host, int debug) {
 
     gw_restart_dead_procs(srv, host, debug);
 
+    /* check if adaptive spawning enabled */
+    if (host->min_procs == host->max_procs) return;
     if (buffer_string_is_empty(host->bin_path)) return;
 
     for (proc = host->first; proc; proc = proc->next) {
-        sum_load += proc->load;
+        if (proc->load <= host->max_load_per_proc) {
+            overload = 0;
+            break;
+        }
     }
 
-    if (host->num_procs && host->num_procs < host->max_procs
-        && (sum_load / host->num_procs) > host->max_load_per_proc) {
+    if (overload && host->num_procs && host->num_procs < host->max_procs) {
         /* overload, spawn new child */
         if (debug) {
             log_error_write(srv, __FILE__, __LINE__, "s",
