@@ -7,10 +7,6 @@ lighttpd
 a light httpd
 -------------
 
-:author: Jan Kneschke
-:Date: $Date: 2004/11/03 22:25:54 $
-:Revision: $Revision: 1.8 $
-
 :abstract:
   lighttpd a secure, fast, compliant and very flexible web-server
   which has been optimized for high-performance environments. It has a very
@@ -137,12 +133,11 @@ lighttpd has been verified to compile and work on
 - Linux
 - FreeBSD
 - NetBSD
+- OpenBSD
 - Solaris 8 + 9
 - SGI IRIX 6.5
-
-missing for HTTP/1.1 compliance
--------------------------------
-- parsing chunked POST request
+- Windows (when compiled under cygwin)
+(and will likely compile and run on most unix-like systems with C99 compiler)
 
 -----------------
 Starting lighttpd
