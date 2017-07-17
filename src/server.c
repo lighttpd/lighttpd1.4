@@ -843,6 +843,8 @@ static int log_error_open(server *srv) {
                             "' failed: ", strerror(errno));
             return -1;
         }
+
+        if (*logfile == '|') fdevent_breakagelog_logger_pipe(errfd);
     }
     else if (!srv->srvconf.dont_daemonize) {
         /* move STDERR_FILENO to /dev/null */
@@ -900,8 +902,11 @@ static int log_error_close(server *srv) {
     case ERRORLOG_FD:
         if (-1 != srv->errorlog_fd) {
             /* don't close STDERR */
-            if (STDERR_FILENO != srv->errorlog_fd)
+            /* fdevent_close_logger_pipes() closes ERRORLOG_PIPE */
+            if (STDERR_FILENO != srv->errorlog_fd
+                && srv->errorlog_mode != ERRORLOG_PIPE) {
                 close(srv->errorlog_fd);
+            }
             srv->errorlog_fd = -1;
         }
         break;
@@ -1598,6 +1603,11 @@ static int server_main (server * const srv, int argc, char **argv) {
 				int status;
 
 				if (-1 != (pid = wait(&status))) {
+					switch (fdevent_reaped_logger_pipe(pid)) {
+					  default: break;
+					  case -1: alarm(5); /* fall through */
+					  case  1: continue;
+					}
 					/** 
 					 * check if one of our workers went away
 					 */
@@ -1629,6 +1639,10 @@ static int server_main (server * const srv, int argc, char **argv) {
 								forwarded_sig_hup = 1;
 								kill(0, SIGHUP);
 							}
+						}
+						if (handle_sig_alarm) {
+							handle_sig_alarm = 0;
+							fdevent_waitpid_logger_pipes(time(NULL));
 						}
 						break;
 					default:
@@ -1844,6 +1858,8 @@ static int server_main (server * const srv, int argc, char **argv) {
 				for (i = 0; i < srv->config_context->used; ++i) {
 					srv->config_storage[i]->global_bytes_per_second_cnt = 0;
 				}
+				/* check piped-loggers and restart, unless shutting down */
+				if (!graceful_shutdown && !srv_shutdown && 0 == srv->srvconf.max_worker) fdevent_waitpid_logger_pipes(min_ts);
 				/* if graceful_shutdown, accelerate cleanup of recently completed request/responses */
 				if (graceful_shutdown && !srv_shutdown) server_graceful_shutdown_maint(srv);
 				/**
@@ -2095,6 +2111,7 @@ int main (int argc, char **argv) {
         /* clean-up */
         remove_pid_file(srv);
         log_error_close(srv);
+        fdevent_close_logger_pipes();
         if (graceful_restart)
             server_sockets_save(srv);
         else

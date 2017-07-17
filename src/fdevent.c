@@ -6,6 +6,7 @@
 #include "log.h"
 
 #include <sys/types.h>
+#include <sys/wait.h>
 #include "sys-socket.h"
 
 #include <unistd.h>
@@ -13,6 +14,7 @@
 #include <string.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <time.h>
 
 #ifdef SOCK_CLOEXEC
 static int use_sock_cloexec;
@@ -538,10 +540,24 @@ pid_t fdevent_fork_execve(const char *name, char *argv[], char *envp[], int fdin
 }
 
 
-static int fdevent_open_logger_pipe(const char *logger) {
-    /* create write pipe and spawn process */
+typedef struct fdevent_cmd_pipe {
+    pid_t pid;
+    int fds[2];
+    const char *cmd;
+    time_t start;
+} fdevent_cmd_pipe;
+
+typedef struct fdevent_cmd_pipes {
+    fdevent_cmd_pipe *ptr;
+    size_t used;
+    size_t size;
+} fdevent_cmd_pipes;
+
+static fdevent_cmd_pipes cmd_pipes;
+
+
+static pid_t fdevent_open_logger_pipe_spawn(const char *logger, int rfd) {
     char *args[4];
-    int to_log_fds[2];
     int devnull = fdevent_open_devnull();
     pid_t pid;
 
@@ -549,31 +565,129 @@ static int fdevent_open_logger_pipe(const char *logger) {
         return -1;
     }
 
-    if (pipe(to_log_fds)) {
-        close(devnull);
-        return -1;
-    }
-    fdevent_setfd_cloexec(to_log_fds[0]);
-    fdevent_setfd_cloexec(to_log_fds[1]);
-
     *(const char **)&args[0] = "/bin/sh";
     *(const char **)&args[1] = "-c";
     *(const char **)&args[2] = logger;
     args[3] = NULL;
 
-    pid = fdevent_fork_execve(args[0], args, NULL, to_log_fds[0], devnull, devnull, -1);
+    pid = fdevent_fork_execve(args[0], args, NULL, rfd, devnull, devnull, -1);
 
     if (pid > 0) {
-        /*(future: save pipe fds, pid, and command line to restart if child exits)*/
         close(devnull);
-        close(to_log_fds[0]);
-        return to_log_fds[1];
     }
     else {
         int errnum = errno;
         close(devnull);
-        close(to_log_fds[0]);
-        close(to_log_fds[1]);
+        errno = errnum;
+    }
+    return pid;
+}
+
+
+static void fdevent_waitpid_logger_pipe(fdevent_cmd_pipe *fcp, time_t ts) {
+    pid_t pid = fcp->pid;
+    if (pid > 0) {
+        switch (waitpid(pid, NULL, WNOHANG)) {
+          case 0:  return;
+          case -1: if (errno == EINTR) return; /* fall through */
+          default: break;
+        }
+        fcp->pid = -1;
+    }
+    if (fcp->start + 5 < ts) { /* limit restart to once every 5 sec */
+        /* restart child process using existing pipe fds */
+        fcp->start = ts;
+        fcp->pid = fdevent_open_logger_pipe_spawn(fcp->cmd, fcp->fds[0]);
+    }
+}
+
+
+void fdevent_waitpid_logger_pipes(time_t ts) {
+    for (size_t i = 0; i < cmd_pipes.used; ++i) {
+        fdevent_waitpid_logger_pipe(cmd_pipes.ptr+i, ts);
+    }
+}
+
+
+int fdevent_reaped_logger_pipe(pid_t pid) {
+    for (size_t i = 0; i < cmd_pipes.used; ++i) {
+        fdevent_cmd_pipe *fcp = cmd_pipes.ptr+i;
+        if (fcp->pid == pid) {
+            time_t ts = time(NULL);
+            if (fcp->start + 5 < ts) { /* limit restart to once every 5 sec */
+                fcp->start = ts;
+                fcp->pid = fdevent_open_logger_pipe_spawn(fcp->cmd,fcp->fds[0]);
+                return 1;
+            }
+            else {
+                fcp->pid = -1;
+                return -1;
+            }
+        }
+    }
+    return 0;
+}
+
+
+void fdevent_close_logger_pipes(void) {
+    for (size_t i = 0; i < cmd_pipes.used; ++i) {
+        fdevent_cmd_pipe *fcp = cmd_pipes.ptr+i;
+        close(fcp->fds[0]);
+        if (fcp->fds[1] != STDERR_FILENO) close(fcp->fds[1]);
+    }
+    free(cmd_pipes.ptr);
+    cmd_pipes.ptr = NULL;
+    cmd_pipes.used = 0;
+    cmd_pipes.size = 0;
+}
+
+
+void fdevent_breakagelog_logger_pipe(int fd) {
+    for (size_t i = 0; i < cmd_pipes.used; ++i) {
+        fdevent_cmd_pipe *fcp = cmd_pipes.ptr+i;
+        if (fcp->fds[1] != fd) continue;
+        fcp->fds[1] = STDERR_FILENO;
+        break;
+    }
+}
+
+
+static void fdevent_init_logger_pipe(const char *cmd, int fds[2], pid_t pid) {
+    fdevent_cmd_pipe *fcp;
+    if (cmd_pipes.used == cmd_pipes.size) {
+        cmd_pipes.size += 4;
+        cmd_pipes.ptr =
+          realloc(cmd_pipes.ptr, cmd_pipes.size * sizeof(fdevent_cmd_pipe));
+        force_assert(cmd_pipes.ptr);
+    }
+    fcp = cmd_pipes.ptr + cmd_pipes.used++;
+    fcp->cmd = cmd; /* note: cmd must persist in memory (or else copy here) */
+    fcp->fds[0] = fds[0];
+    fcp->fds[1] = fds[1];
+    fcp->pid = pid;
+    fcp->start = time(NULL);
+}
+
+
+static int fdevent_open_logger_pipe(const char *logger) {
+    int fds[2];
+    pid_t pid;
+    if (pipe(fds)) {
+        return -1;
+    }
+    fdevent_setfd_cloexec(fds[0]);
+    fdevent_setfd_cloexec(fds[1]);
+
+    pid = fdevent_open_logger_pipe_spawn(logger, fds[0]);
+
+    if (pid > 0) {
+        fdevent_init_logger_pipe(logger, fds, pid);
+        return fds[1];
+    }
+    else {
+        int errnum = errno;
+        close(fds[0]);
+        close(fds[1]);
         errno = errnum;
         return -1;
     }

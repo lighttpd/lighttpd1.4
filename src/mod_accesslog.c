@@ -445,7 +445,11 @@ FREE_FUNC(mod_accesslog_free) {
 				}
 			}
 
-			if (s->log_access_fd != -1) close(s->log_access_fd);
+			if (s->log_access_fd != -1) {
+				if (buffer_string_is_empty(s->access_logfile) || *s->access_logfile->ptr != '|') {
+					close(s->log_access_fd);
+				} /*(else piped loggers closed in fdevent_close_logger_pipes())*/
+			}
 
 			buffer_free(s->ts_accesslog_str);
 			buffer_free(s->access_logbuffer);
