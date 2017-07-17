@@ -1571,10 +1571,14 @@ static int server_main (server * const srv, int argc, char **argv) {
 	/* start watcher and workers */
 	num_childs = srv->srvconf.max_worker;
 	if (num_childs > 0) {
+		pid_t pids[num_childs];
+		pid_t pid;
+		const int npids = num_childs;
 		int child = 0;
+		for (int n = 0; n < npids; ++n) pids[n] = -1;
 		while (!child && !srv_shutdown && !graceful_shutdown) {
 			if (num_childs > 0) {
-				switch (fork()) {
+				switch ((pid = fork())) {
 				case -1:
 					return -1;
 				case 0:
@@ -1582,16 +1586,28 @@ static int server_main (server * const srv, int argc, char **argv) {
 					break;
 				default:
 					num_childs--;
+					for (int n = 0; n < npids; ++n) {
+						if (-1 == pids[n]) {
+							pids[n] = pid;
+							break;
+						}
+					}
 					break;
 				}
 			} else {
 				int status;
 
-				if (-1 != wait(&status)) {
+				if (-1 != (pid = wait(&status))) {
 					/** 
-					 * one of our workers went away 
+					 * check if one of our workers went away
 					 */
-					num_childs++;
+					for (int n = 0; n < npids; ++n) {
+						if (pid == pids[n]) {
+							pids[n] = -1;
+							num_childs++;
+							break;
+						}
+					}
 				} else {
 					switch (errno) {
 					case EINTR:
