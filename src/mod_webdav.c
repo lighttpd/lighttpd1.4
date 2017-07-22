@@ -978,6 +978,7 @@ static int webdav_get_live_property(server *srv, connection *con, handler_ctx *h
 			found = 1;
 		} else if (0 == strcmp(prop_name, "getetag")) {
 			etag_create(con->physical.etag, &sce->st, con->etag_flags);
+			etag_mutate(con->physical.etag, con->physical.etag);
 			buffer_append_string_len(b, CONST_STR_LEN("<D:getetag>"));
 			buffer_append_string_buffer(b, con->physical.etag);
 			buffer_append_string_len(b, CONST_STR_LEN("</D:getetag>"));

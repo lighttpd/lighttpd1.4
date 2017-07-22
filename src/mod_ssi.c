@@ -1240,6 +1240,7 @@ static int mod_ssi_handle_request(server *srv, connection *con, handler_ctx *p) 
 			st.st_mtime = include_file_last_mtime;
 
 		etag_create(con->physical.etag, &st, con->etag_flags);
+		etag_mutate(con->physical.etag, con->physical.etag);
 		response_header_overwrite(srv, con, CONST_STR_LEN("ETag"), CONST_BUF_LEN(con->physical.etag));
 
 		mtime = strftime_cache_get(srv, st.st_mtime);
