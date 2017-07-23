@@ -154,6 +154,12 @@ static void sigaction_handler(int sig, siginfo_t *si, void *context) {
 static void signal_handler(int sig) {
 	switch (sig) {
 	case SIGTERM: srv_shutdown = 1; break;
+	case SIGUSR1:
+		if (!graceful_shutdown) {
+			graceful_restart = 1;
+			graceful_shutdown = 1;
+		}
+		break;
 	case SIGINT:
 		if (graceful_shutdown) {
 			if (2 == graceful_restart)
@@ -165,7 +171,20 @@ static void signal_handler(int sig) {
 		}
 		break;
 	case SIGALRM: handle_sig_alarm = 1; break;
-	case SIGHUP:  handle_sig_hup = 1; break;
+	case SIGHUP:
+		/**
+		 * we send the SIGHUP to all procs in the process-group
+		 * this includes ourself
+		 *
+		 * make sure we only send it once and don't create a
+		 * infinite loop
+		 */
+		if (!forwarded_sig_hup) {
+			handle_sig_hup = 1;
+		} else {
+			forwarded_sig_hup = 0;
+		}
+		break;
 	case SIGCHLD:  break;
 	}
 }
@@ -1239,7 +1258,7 @@ static int server_main (server * const srv, int argc, char **argv) {
 				return -1;
 			}
 
-			if (-1 == (pid_fd = open(srv->srvconf.pid_file->ptr, O_WRONLY | O_CREAT | O_TRUNC, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH))) {
+			if (-1 == (pid_fd = fdevent_open_cloexec(srv->srvconf.pid_file->ptr, O_WRONLY | O_CREAT | O_TRUNC, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH))) {
 				log_error_write(srv, __FILE__, __LINE__, "sbs",
 						"opening pid-file failed:", srv->srvconf.pid_file, strerror(errno));
 				return -1;
