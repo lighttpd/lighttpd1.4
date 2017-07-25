@@ -124,6 +124,7 @@ modules = {
 	'mod_ssi' : { 'src' : [ 'mod_ssi_exprparser.c', 'mod_ssi_expr.c', 'mod_ssi.c' ] },
 	'mod_flv_streaming' : { 'src' : [ 'mod_flv_streaming.c' ] },
 	'mod_vhostdb' : { 'src' : [ 'mod_vhostdb.c' ] },
+	'mod_wstunnel' : { 'src' : [ 'mod_wstunnel.c' ], 'lib' : [ env['LIBCRYPTO'] ] },
 }
 
 if env['with_geoip']:

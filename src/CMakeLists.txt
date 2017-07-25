@@ -635,6 +635,7 @@ add_and_install_library(mod_userdir mod_userdir.c)
 add_and_install_library(mod_usertrack mod_usertrack.c)
 add_and_install_library(mod_vhostdb mod_vhostdb.c)
 add_and_install_library(mod_webdav mod_webdav.c)
+add_and_install_library(mod_wstunnel mod_wstunnel.c)
 
 add_executable(test_buffer
 	test_buffer.c
@@ -822,6 +823,7 @@ if(HAVE_LIBSSL AND HAVE_LIBCRYPTO)
 	set(L_MOD_AUTHN_FILE ${L_MOD_AUTHN_FILE} crypto)
 	target_link_libraries(mod_authn_file ${L_MOD_AUTHN_FILE})
 	target_link_libraries(mod_secdownload crypto)
+	target_link_libraries(mod_wstunnel crypto)
 endif()
 
 if(WITH_LIBEV)

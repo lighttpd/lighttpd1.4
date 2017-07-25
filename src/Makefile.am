@@ -370,6 +370,11 @@ mod_uploadprogress_la_SOURCES = mod_uploadprogress.c
 mod_uploadprogress_la_LDFLAGS = $(common_module_ldflags)
 mod_uploadprogress_la_LIBADD = $(common_libadd)
 
+lib_LTLIBRARIES += mod_wstunnel.la
+mod_wstunnel_la_SOURCES = mod_wstunnel.c
+mod_wstunnel_la_LDFLAGS = $(common_module_ldflags)
+mod_wstunnel_la_LIBADD = $(common_libadd) $(CRYPTO_LIB)
+
 
 hdr = server.h base64.h buffer.h network.h log.h keyvalue.h \
 	response.h request.h fastcgi.h chunk.h \
