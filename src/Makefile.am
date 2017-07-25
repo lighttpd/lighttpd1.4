@@ -60,7 +60,7 @@ common_src=base64.c buffer.c log.c \
 	http_chunk.c stream.c fdevent.c gw_backend.c \
 	stat_cache.c plugin.c joblist.c etag.c array.c \
 	data_string.c data_array.c \
-	data_integer.c md5.c \
+	data_integer.c algo_sha1.c md5.c \
 	vector.c \
 	fdevent_select.c fdevent_libev.c \
 	fdevent_poll.c fdevent_linux_sysepoll.c \
@@ -374,7 +374,7 @@ mod_uploadprogress_la_LIBADD = $(common_libadd)
 hdr = server.h base64.h buffer.h network.h log.h keyvalue.h \
 	response.h request.h fastcgi.h chunk.h \
 	first.h settings.h http_chunk.h \
-	md5.h http_auth.h http_vhostdb.h stream.h \
+	algo_sha1.h md5.h http_auth.h http_vhostdb.h stream.h \
 	fdevent.h gw_backend.h connections.h base.h stat_cache.h \
 	plugin.h \
 	etag.h joblist.h array.h vector.h crc32.h \

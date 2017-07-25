@@ -545,7 +545,7 @@ set(COMMON_SRC
 	http_chunk.c stream.c fdevent.c gw_backend.c
 	stat_cache.c plugin.c joblist.c etag.c array.c
 	data_string.c data_array.c
-	data_integer.c md5.c
+	data_integer.c algo_sha1.c md5.c
 	vector.c
 	fdevent_select.c fdevent_libev.c
 	fdevent_poll.c fdevent_linux_sysepoll.c

@@ -19,9 +19,7 @@
 #endif
 
 #ifdef USE_OPENSSL_CRYPTO
-#include "base64.h"
 #include <openssl/md4.h>
-#include <openssl/sha.h>
 #endif
 
 #include "safe_memclear.h"
@@ -34,6 +32,7 @@
 #include "log.h"
 #include "response.h"
 
+#include "algo_sha1.h"
 #include "base64.h"
 #include "md5.h"
 
@@ -597,7 +596,6 @@ static void apr_md5_encode(const char *pw, const char *salt, char *result, size_
     apr_cpystrn(result, passwd, nbytes - 1);
 }
 
-#ifdef USE_OPENSSL_CRYPTO
 static void apr_sha_encode(const char *pw, char *result, size_t nbytes) {
     unsigned char digest[20];
     size_t base64_written;
@@ -614,7 +612,6 @@ static void apr_sha_encode(const char *pw, char *result, size_t nbytes) {
     force_assert(base64_written == 28);
     result[5 + base64_written] = '\0'; /* terminate string */
 }
-#endif
 
 static handler_t mod_authn_file_htpasswd_basic(server *srv, connection *con, void *p_d, const http_auth_require_t *require, const buffer *username, const char *pw) {
     plugin_data *p = (plugin_data *)p_d;
@@ -632,12 +629,10 @@ static handler_t mod_authn_file_htpasswd_basic(server *srv, connection *con, voi
             apr_md5_encode(pw, password->ptr, sample, sizeof(sample));
             rc = strcmp(sample, password->ptr);
         }
-      #ifdef USE_OPENSSL_CRYPTO
         else if (0 == strncmp(password->ptr, "{SHA}", 5)) {
             apr_sha_encode(pw, sample, sizeof(sample));
             rc = strcmp(sample, password->ptr);
         }
-      #endif
       #if defined(HAVE_CRYPT_R) || defined(HAVE_CRYPT)
         /* a simple DES password is 2 + 11 characters. everything else should be longer. */
         else if (buffer_string_length(password) >= 13) {
