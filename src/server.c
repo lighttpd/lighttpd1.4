@@ -85,7 +85,7 @@
 #endif
 
 static int oneshot_fd = 0;
-static volatile int pid_fd = -1;
+static volatile int pid_fd = -2;
 static server_socket_array graceful_sockets;
 static volatile sig_atomic_t graceful_restart = 0;
 static volatile sig_atomic_t graceful_shutdown = 0;
@@ -417,7 +417,7 @@ static void server_free(server *srv) {
 }
 
 static void remove_pid_file(server *srv) {
-	if (pid_fd < -2) return;
+	if (pid_fd <= -2) return;
 	if (!buffer_string_is_empty(srv->srvconf.pid_file) && 0 <= pid_fd) {
 		if (0 != ftruncate(pid_fd, 0)) {
 			log_error_write(srv, __FILE__, __LINE__, "sbds",
@@ -1153,13 +1153,13 @@ static int server_main (server * const srv, int argc, char **argv) {
 	}
 
 	if (test_config) {
+		buffer_reset(srv->srvconf.pid_file);
 		if (1 == test_config) {
 			printf("Syntax OK\n");
 		} else { /*(test_config > 1)*/
 			test_config = 0;
 			srv->srvconf.preflight_check = 1;
 			srv->srvconf.dont_daemonize = 1;
-			buffer_reset(srv->srvconf.pid_file);
 		}
 	}
 
@@ -1238,6 +1238,7 @@ static int server_main (server * const srv, int argc, char **argv) {
 	}
 
 	/* open pid file BEFORE chroot */
+	if (-2 == pid_fd) pid_fd = -1; /*(initial startup state)*/
 	if (-1 == pid_fd && !buffer_string_is_empty(srv->srvconf.pid_file)) {
 		if (-1 == (pid_fd = fdevent_open_cloexec(srv->srvconf.pid_file->ptr, O_WRONLY | O_CREAT | O_EXCL | O_TRUNC, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH))) {
 			struct stat st;
