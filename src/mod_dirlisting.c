@@ -786,11 +786,15 @@ static void http_list_directory_header(server *srv, connection *con, plugin_data
 	if (!buffer_string_is_empty(p->conf.show_header)) {
 		/* if we have a HEADER file, display it in <pre class="header"></pre> */
 
-		buffer_copy_buffer(p->tmp_buf, con->physical.path);
-		buffer_append_slash(p->tmp_buf);
-		buffer_append_string_buffer(p->tmp_buf, p->conf.show_header);
+		buffer *hb = p->conf.show_header;
+		if (hb->ptr[0] != '/') {
+			buffer_copy_buffer(p->tmp_buf, con->physical.path);
+			buffer_append_slash(p->tmp_buf);
+			buffer_append_string_buffer(p->tmp_buf, p->conf.show_header);
+			hb = p->tmp_buf;
+		}
 
-		http_list_directory_include_file(out, p->tmp_buf, "header", p->conf.encode_header);
+		http_list_directory_include_file(out, hb, "header", p->conf.encode_header);
 	}
 
 	buffer_append_string_len(out, CONST_STR_LEN("<h2>Index of "));
@@ -833,11 +837,15 @@ static void http_list_directory_footer(server *srv, connection *con, plugin_data
 	if (!buffer_string_is_empty(p->conf.show_readme)) {
 		/* if we have a README file, display it in <pre class="readme"></pre> */
 
-		buffer_copy_buffer(p->tmp_buf,  con->physical.path);
-		buffer_append_slash(p->tmp_buf);
-		buffer_append_string_buffer(p->tmp_buf, p->conf.show_readme);
+		buffer *rb = p->conf.show_readme;
+		if (rb->ptr[0] != '/') {
+			buffer_copy_buffer(p->tmp_buf,  con->physical.path);
+			buffer_append_slash(p->tmp_buf);
+			buffer_append_string_buffer(p->tmp_buf, p->conf.show_readme);
+			rb = p->tmp_buf;
+		}
 
-		http_list_directory_include_file(out, p->tmp_buf, "readme", p->conf.encode_readme);
+		http_list_directory_include_file(out, rb, "readme", p->conf.encode_readme);
 	}
 
 	if(p->conf.auto_layout) {
