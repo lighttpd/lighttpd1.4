@@ -92,7 +92,6 @@ static volatile sig_atomic_t graceful_shutdown = 0;
 static volatile sig_atomic_t srv_shutdown = 0;
 static volatile sig_atomic_t handle_sig_alarm = 1;
 static volatile sig_atomic_t handle_sig_hup = 0;
-static volatile sig_atomic_t forwarded_sig_hup = 0;
 
 #if defined(HAVE_SIGACTION) && defined(SA_SIGINFO)
 static volatile siginfo_t last_sigterm_info;
@@ -132,19 +131,8 @@ static void sigaction_handler(int sig, siginfo_t *si, void *context) {
 		handle_sig_alarm = 1; 
 		break;
 	case SIGHUP:
-		/** 
-		 * we send the SIGHUP to all procs in the process-group
-		 * this includes ourself
-		 * 
-		 * make sure we only send it once and don't create a 
-		 * infinite loop
-		 */
-		if (!forwarded_sig_hup) {
-			handle_sig_hup = 1;
-			last_sighup_info = *si;
-		} else {
-			forwarded_sig_hup = 0;
-		}
+		handle_sig_hup = 1;
+		last_sighup_info = *si;
 		break;
 	case SIGCHLD:
 		break;
@@ -171,20 +159,7 @@ static void signal_handler(int sig) {
 		}
 		break;
 	case SIGALRM: handle_sig_alarm = 1; break;
-	case SIGHUP:
-		/**
-		 * we send the SIGHUP to all procs in the process-group
-		 * this includes ourself
-		 *
-		 * make sure we only send it once and don't create a
-		 * infinite loop
-		 */
-		if (!forwarded_sig_hup) {
-			handle_sig_hup = 1;
-		} else {
-			forwarded_sig_hup = 0;
-		}
-		break;
+	case SIGHUP:  handle_sig_hup = 1; break;
 	case SIGCHLD:  break;
 	}
 }
@@ -1082,7 +1057,6 @@ static int server_main (server * const srv, int argc, char **argv) {
 	graceful_shutdown = 0;
 	handle_sig_alarm = 1;
 	handle_sig_hup = 0;
-	forwarded_sig_hup = 0;
 	chunkqueue_set_tempdirs_default_reset();
 	http_auth_dumbdata_reset();
 	http_vhostdb_dumbdata_reset();
@@ -1650,14 +1624,9 @@ static int server_main (server * const srv, int argc, char **argv) {
 
 							log_error_cycle(srv);
 
-							/**
-							 * forward to all procs in the process-group
-							 * 
-							 * we also send it ourself
-							 */
-							if (!forwarded_sig_hup && 0 != srv->srvconf.max_worker) {
-								forwarded_sig_hup = 1;
-								kill(0, SIGHUP);
+							/* forward SIGHUP to workers */
+							for (int n = 0; n < npids; ++n) {
+								if (pids[n] > 0) kill(pids[n], SIGHUP);
 							}
 						}
 						if (handle_sig_alarm) {
