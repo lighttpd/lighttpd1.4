@@ -178,8 +178,6 @@ typedef struct fdevents {
 	int (*event_next_fdndx)(struct fdevents *ev, int ndx);
 
 	int (*poll)(struct fdevents *ev, int timeout_ms);
-
-	int (*fcntl_set)(struct fdevents *ev, int fd);
 } fdevents;
 
 fdevents *fdevent_init(struct server *srv, size_t maxfds, int type);
@@ -208,7 +206,6 @@ void fdevent_sched_run(struct server *srv, fdevents *ev);
 
 void fdevent_setfd_cloexec(int fd);
 void fdevent_clrfd_cloexec(int fd);
-int fdevent_fcntl_set(fdevents *ev, int fd);
 int fdevent_fcntl_set_nb(fdevents *ev, int fd);
 int fdevent_fcntl_set_nb_cloexec(fdevents *ev, int fd);
 int fdevent_fcntl_set_nb_cloexec_sock(fdevents *ev, int fd);

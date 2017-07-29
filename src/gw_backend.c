@@ -1722,12 +1722,6 @@ static handler_t gw_write_request(server *srv, gw_handler_ctx *hctx) {
 
         fdevent_register(srv->ev, hctx->fd, gw_handle_fdevent, hctx);
 
-        if (-1 == fdevent_fcntl_set(srv->ev, hctx->fd)) {
-            log_error_write(srv, __FILE__, __LINE__, "ss",
-                            "fcntl failed:", strerror(errno));
-            return HANDLER_ERROR;
-        }
-
         if (hctx->proc->is_local) {
             hctx->pid = hctx->proc->pid;
         }

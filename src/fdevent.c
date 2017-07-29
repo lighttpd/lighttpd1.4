@@ -301,15 +301,12 @@ void fdevent_clrfd_cloexec(int fd) {
 #endif
 }
 
-int fdevent_fcntl_set(fdevents *ev, int fd) {
-	return ((ev) && (ev->fcntl_set)) ? ev->fcntl_set(ev, fd) : 0;
-}
-
 int fdevent_fcntl_set_nb(fdevents *ev, int fd) {
-	if ((ev) && (ev->fcntl_set)) return ev->fcntl_set(ev, fd);
+	UNUSED(ev);
 #ifdef O_NONBLOCK
 	return fcntl(fd, F_SETFL, O_NONBLOCK | O_RDWR);
 #else
+	UNUSED(fd);
 	return 0;
 #endif
 }
@@ -322,7 +319,7 @@ int fdevent_fcntl_set_nb_cloexec(fdevents *ev, int fd) {
 int fdevent_fcntl_set_nb_cloexec_sock(fdevents *ev, int fd) {
 #if defined(SOCK_CLOEXEC) && defined(SOCK_NONBLOCK)
 	if (use_sock_cloexec)
-		return ((ev) && (ev->fcntl_set)) ? ev->fcntl_set(ev, fd) : 0;
+		return 0;
 #endif
 	return fdevent_fcntl_set_nb_cloexec(ev, fd);
 }
