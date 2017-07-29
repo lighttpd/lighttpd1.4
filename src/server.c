@@ -516,6 +516,9 @@ static int server_oneshot_init(server *srv, int fd) {
 		return 0;
 	}
 
+	/*(must set flags; fd did not pass through fdevent accept() logic)*/
+	fdevent_fcntl_set_nb_cloexec(srv->ev, fd);
+
 	if (cnt_addr.plain.sa_family != AF_UNIX) {
 		network_accept_tcp_nagle_disable(fd);
 	}
