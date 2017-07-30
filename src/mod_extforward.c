@@ -270,7 +270,7 @@ SETDEFAULTS_FUNC(mod_extforward_set_defaults) {
 
 	/* attempt to warn if mod_extforward is not last module loaded to hook
 	 * handle_connection_accept.  (Nice to have, but remove this check if
-	 * it reaches to far into internals and prevents other code changes.)
+	 * it reaches too far into internals and prevents other code changes.)
 	 * While it would be nice to check connection_handle_accept plugin slot
 	 * to make sure mod_extforward is last, that info is private to plugin.c
 	 * so merely warn if mod_openssl is loaded after mod_extforward, though
