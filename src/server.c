@@ -517,7 +517,10 @@ static int server_oneshot_init(server *srv, int fd) {
 	}
 
 	/*(must set flags; fd did not pass through fdevent accept() logic)*/
-	fdevent_fcntl_set_nb_cloexec(srv->ev, fd);
+	if (-1 == fdevent_fcntl_set_nb_cloexec(srv->ev, fd)) {
+		log_error_write(srv, __FILE__, __LINE__, "ss", "fcntl:", strerror(errno));
+		return 0;
+	}
 
 	if (cnt_addr.plain.sa_family != AF_UNIX) {
 		network_accept_tcp_nagle_disable(fd);
@@ -1167,6 +1170,7 @@ static int server_main (server * const srv, int argc, char **argv) {
 		int devnull;
 		int errfd;
 		do {
+			/* coverity[resource_leak : FALSE] */
 			devnull = fdevent_open_devnull();
 		} while (-1 != devnull && devnull <= STDERR_FILENO);
 		if (-1 == devnull) {

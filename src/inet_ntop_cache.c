@@ -126,7 +126,7 @@ int sock_addr_nameinfo_append_buffer(server *srv, buffer *b, const sock_addr *ad
     else if (AF_INET6 == addr->plain.sa_family) {
         char hbuf[256];
         if (0 != getnameinfo((const struct sockaddr *)(&addr->ipv6),
-                             sizeof(&addr->ipv6),
+                             sizeof(addr->ipv6),
                              hbuf, sizeof(hbuf), NULL, 0, 0)) {
             log_error_write(srv, __FILE__, __LINE__,
                             "SSS", "NOTICE: getnameinfo failed: ",
