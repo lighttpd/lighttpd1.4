@@ -3,10 +3,8 @@
 #include "first.h"
 #include <sys/types.h>
 
+#include "base_decls.h"
 #include "buffer.h"
-
-struct server;   /* declaration */
-typedef struct server server;
 
 struct timespec; /* declaration */
 int log_clock_gettime_realtime (struct timespec *ts);

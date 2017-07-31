@@ -4,9 +4,8 @@
 
 #include <sys/types.h>
 
+#include "base_decls.h"
 #include "array.h"
-struct server;
-typedef struct server server;
 
 data_integer *status_counter_get_counter(server *srv, const char *s, size_t len);
 int status_counter_inc(server *srv, const char *s, size_t len);

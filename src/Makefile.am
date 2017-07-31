@@ -380,7 +380,7 @@ hdr = server.h base64.h buffer.h network.h log.h keyvalue.h \
 	response.h request.h fastcgi.h chunk.h \
 	first.h settings.h http_chunk.h \
 	algo_sha1.h md5.h http_auth.h http_vhostdb.h stream.h \
-	fdevent.h gw_backend.h connections.h base.h stat_cache.h \
+	fdevent.h gw_backend.h connections.h base.h base_decls.h stat_cache.h \
 	plugin.h \
 	etag.h joblist.h array.h vector.h crc32.h \
 	network_backends.h configfile.h \

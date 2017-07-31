@@ -4,12 +4,8 @@
 
 #include <sys/types.h>
 #include "sys-socket.h"
+#include "base_decls.h"
 #include "buffer.h"
-
-struct server;
-typedef struct server server;
-union sock_addr;
-typedef union sock_addr sock_addr;
 
 unsigned short sock_addr_get_port (const sock_addr *addr);
 

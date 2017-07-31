@@ -18,6 +18,7 @@
 # include <inttypes.h>
 #endif
 
+#include "base_decls.h"
 #include "buffer.h"
 #include "array.h"
 #include "chunk.h"
@@ -102,16 +103,8 @@ typedef struct {
 	char *value;
 } request_handler;
 
-typedef struct {
-	char *key;
-	char *host;
-	unsigned short port;
-	int used;
-	short factor;
-} fcgi_connections;
 
-
-typedef union sock_addr {
+union sock_addr {
 #ifdef HAVE_IPV6
 	struct sockaddr_in6 ipv6;
 #endif
@@ -120,7 +113,7 @@ typedef union sock_addr {
 	struct sockaddr_un un;
 #endif
 	struct sockaddr plain;
-} sock_addr;
+};
 
 /* fcgi_response_header contains ... */
 #define HTTP_STATUS         BV(0)
@@ -336,7 +329,7 @@ typedef struct {
 	buffer *comp_value; /* just a pointer */
 } cond_cache_t;
 
-typedef struct connection {
+struct connection {
 	connection_state_t state;
 
 	/* timestamps */
@@ -420,7 +413,7 @@ typedef struct connection {
 	etag_flags_t etag_flags;
 
 	int conditional_is_valid[COMP_LAST_ELEMENT]; 
-} connection;
+};
 
 typedef struct {
 	connection **ptr;
@@ -516,7 +509,7 @@ typedef struct {
 	size_t used;
 } server_socket_array;
 
-typedef struct server {
+struct server {
 	server_socket_array srv_sockets;
 
 	/* the errorlog */
@@ -607,7 +600,7 @@ typedef struct server {
 
 	uid_t uid;
 	gid_t gid;
-} server;
+};
 
 
 #endif
