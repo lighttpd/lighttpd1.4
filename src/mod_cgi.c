@@ -23,6 +23,7 @@
 #include <fdevent.h>
 
 #include <fcntl.h>
+#include <signal.h>
 
 static int pipe_cloexec(int pipefd[2]) {
   #ifdef HAVE_PIPE2
