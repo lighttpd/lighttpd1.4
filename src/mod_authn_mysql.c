@@ -30,6 +30,9 @@
 #include <stdio.h>
 #include <string.h>
 
+#if defined(HAVE_CRYPT_R) || defined(HAVE_CRYPT)
+#include <unistd.h>     /* crypt() */
+#endif
 #ifdef HAVE_CRYPT_H
 #include <crypt.h>
 #endif

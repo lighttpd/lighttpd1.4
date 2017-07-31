@@ -107,6 +107,7 @@
 #include <string.h>
 #include <errno.h>
 #include <time.h>
+#include <unistd.h>     /* read() */
 
 #include "base.h"
 #include "fdevent.h"
