@@ -271,11 +271,6 @@ static int network_server_init(server *srv, buffer *host_token, size_t sidx) {
 		goto error_free_socket;
 	}
 
-	if (-1 == listen(srv_socket->fd, s->listen_backlog)) {
-		log_error_write(srv, __FILE__, __LINE__, "ss", "listen failed: ", strerror(errno));
-		goto error_free_socket;
-	}
-
 	if (srv_socket->addr.plain.sa_family == AF_UNIX && !buffer_string_is_empty(s->socket_perms)) {
 		mode_t m = 0;
 		for (char *str = s->socket_perms->ptr; *str; ++str) {
@@ -285,6 +280,11 @@ static int network_server_init(server *srv, buffer *host_token, size_t sidx) {
 		if (0 != m && -1 == chmod(host, m)) {
 			log_error_write(srv, __FILE__, __LINE__, "sssbss", "chmod(\"", host, "\", ", s->socket_perms, "):", strerror(errno));
 		}
+	}
+
+	if (-1 == listen(srv_socket->fd, s->listen_backlog)) {
+		log_error_write(srv, __FILE__, __LINE__, "ss", "listen failed: ", strerror(errno));
+		goto error_free_socket;
 	}
 
 	if (s->ssl_enabled) {
