@@ -78,7 +78,8 @@ typedef struct {
 	array *headers;
 	array *opts_params;
 	unsigned int opts;
-	unsigned int hap_PROXY;
+	unsigned short int hap_PROXY;
+	unsigned short int hap_PROXY_ssl_client_verify;
 } plugin_config;
 
 typedef struct {
@@ -169,6 +170,7 @@ SETDEFAULTS_FUNC(mod_extforward_set_defaults) {
 		{ "extforward.headers",         NULL, T_CONFIG_ARRAY, T_CONFIG_SCOPE_CONNECTION },       /* 1 */
 		{ "extforward.params",          NULL, T_CONFIG_ARRAY, T_CONFIG_SCOPE_CONNECTION },       /* 2 */
 		{ "extforward.hap-PROXY",       NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION },     /* 3 */
+		{ "extforward.hap-PROXY-ssl-client-verify", NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION }, /* 4 */
 		{ NULL,                         NULL, T_CONFIG_UNSET, T_CONFIG_SCOPE_UNSET }
 	};
 
@@ -190,6 +192,7 @@ SETDEFAULTS_FUNC(mod_extforward_set_defaults) {
 		cv[1].destination = s->headers;
 		cv[2].destination = s->opts_params;
 		cv[3].destination = &s->hap_PROXY;
+		cv[4].destination = &s->hap_PROXY_ssl_client_verify;
 
 		p->config_storage[i] = s;
 
@@ -318,6 +321,7 @@ static int mod_extforward_patch_connection(server *srv, connection *con, plugin_
 	PATCH(headers);
 	PATCH(opts);
 	PATCH(hap_PROXY);
+	PATCH(hap_PROXY_ssl_client_verify);
 
 	/* skip the first, the global context */
 	for (i = 1; i < srv->config_context->used; i++) {
@@ -339,6 +343,8 @@ static int mod_extforward_patch_connection(server *srv, connection *con, plugin_
 				PATCH(opts);
 			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("extforward.hap-PROXY"))) {
 				PATCH(hap_PROXY);
+			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("extforward.hap-PROXY-ssl-client-verify"))) {
+				PATCH(hap_PROXY_ssl_client_verify);
 			}
 		}
 	}
@@ -942,11 +948,7 @@ URIHANDLER_FUNC(mod_extforward_uri_handler) {
 			"-- mod_extforward_uri_handler called");
 	}
 
-	if (NULL != hctx) {
-		/* XXX: future: add config option to enable
-		 *      and replace above with: if (p->conf.???)
-		 *      similar to ssl.verifyclient.username */
-	      #if 0
+	if (p->conf.hap_PROXY_ssl_client_verify) {
 		data_string *ds;
 		if (NULL != hctx && hctx->ssl_client_verify && NULL != hctx->env
 		    && NULL != (ds = (data_string *)array_get_element(hctx->env, "SSL_CLIENT_S_DN_CN"))) {
@@ -964,7 +966,6 @@ URIHANDLER_FUNC(mod_extforward_uri_handler) {
 					    CONST_STR_LEN("SSL_CLIENT_VERIFY"),
 					    CONST_STR_LEN("NONE"));
 		}
-	      #endif
 	}
 
 	for (size_t k = 0; k < p->conf.headers->used && NULL == forwarded; ++k) {
