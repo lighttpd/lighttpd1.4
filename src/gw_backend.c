@@ -1302,6 +1302,14 @@ int gw_set_defaults_backend(server *srv, gw_plugin_data *p, data_unset *du, size
                 goto error;
             }
 
+            for (size_t m = 0; m < da_host->value->used; ++m) {
+                if (NULL != strchr(da_host->value->data[m]->key->ptr, '_')) {
+                    log_error_write(srv, __FILE__, __LINE__, "sb",
+                      "incorrect directive contains underscore ('_') instead of dash ('-'):",
+                      da_host->value->data[m]->key);
+                }
+            }
+
             if ((!buffer_string_is_empty(host->host) || host->port)
                 && !buffer_string_is_empty(host->unixsocket)) {
                 log_error_write(srv, __FILE__, __LINE__, "sbsbsbs",
