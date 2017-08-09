@@ -2,6 +2,10 @@
 #define _CHUNK_H_
 #include "first.h"
 
+#ifdef _AIX  /*(AIX might #define mmap mmap64)*/
+#include "sys-mmap.h"
+#endif
+
 #include "buffer.h"
 #include "array.h"
 
