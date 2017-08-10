@@ -649,11 +649,9 @@ SETDEFAULTS_FUNC(log_access_open) {
 #define O_LARGEFILE 0
 #endif
 
-SIGHUP_FUNC(log_access_cycle) {
+static void log_access_flush(server *srv, void *p_d) {
 	plugin_data *p = p_d;
 	size_t i;
-
-	if (!p->config_storage) return HANDLER_GO_ON;
 
 	for (i = 0; i < srv->config_context->used; i++) {
 		plugin_config *s = p->config_storage[i];
@@ -665,7 +663,25 @@ SIGHUP_FUNC(log_access_cycle) {
 
 			buffer_reset(s->access_logbuffer);
 		}
+	}
+}
 
+TRIGGER_FUNC(log_access_periodic_flush) {
+	/* flush buffered access logs every 4 seconds */
+	if (0 == (srv->cur_ts & 3)) log_access_flush(srv, p_d);
+	return HANDLER_GO_ON;
+}
+
+SIGHUP_FUNC(log_access_cycle) {
+	plugin_data *p = p_d;
+	size_t i;
+
+	if (!p->config_storage) return HANDLER_GO_ON;
+
+	log_access_flush(srv, p);
+
+	for (i = 0; i < srv->config_context->used; i++) {
+		plugin_config *s = p->config_storage[i];
 		if (s->use_syslog == 0
 			&& !buffer_string_is_empty(s->access_logfile)
 			&& s->access_logfile->ptr[0] != '|') {
@@ -1126,6 +1142,7 @@ int mod_accesslog_plugin_init(plugin *p) {
 	p->cleanup     = mod_accesslog_free;
 
 	p->handle_request_done  = log_access_write;
+	p->handle_trigger       = log_access_periodic_flush;
 	p->handle_sighup        = log_access_cycle;
 
 	p->data        = NULL;
