@@ -839,7 +839,7 @@ static int cgi_create_env(server *srv, connection *con, plugin_data *p, handler_
 		log_error_write(srv, __FILE__, __LINE__, "ssb", "open dirname failed:", strerror(errno), con->physical.path);
 	}
 
-	hctx->pid = (dfd >= 0) ? fdevent_fork_execve(con->physical.path->ptr, args, env.ptr, to_cgi_fds[0], from_cgi_fds[1], -1, dfd) : -1;
+	hctx->pid = (dfd >= 0) ? fdevent_fork_execve(args[0], args, env.ptr, to_cgi_fds[0], from_cgi_fds[1], -1, dfd) : -1;
 
 	for (size_t i = 0; i < env.used; ++i) free(env.ptr[i]);
 	free(env.ptr);
