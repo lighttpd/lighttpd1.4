@@ -149,24 +149,21 @@ static ssize_t safe_write(int fd, const void *buf, size_t count) {
 }
 
 /* this assumes we get enough data on a successful read */
-static ssize_t safe_read(int fd, void *buf, size_t count) {
+static ssize_t safe_read(int fd, buffer *b) {
 	ssize_t res;
 
-	for (;;) {
-		res = read(fd, buf, count);
-		if (res >= 0) return res;
-		switch (errno) {
-		case EINTR:
-			continue;
-		default:
-			return -1;
-		}
-	}
+	buffer_string_prepare_copy(b, 4095);
+
+	do {
+		res = read(fd, b->ptr, b->size-1);
+	} while (-1 == res && errno == EINTR);
+
+	if (res >= 0) buffer_commit(b, res);
+	return res;
 }
 
 static int mod_rrdtool_create_rrd(server *srv, plugin_data *p, plugin_config *s) {
 	struct stat st;
-	int r;
 
 	/* check if DB already exists */
 	if (0 == stat(s->path_rrd->ptr, &st)) {
@@ -211,15 +208,12 @@ static int mod_rrdtool_create_rrd(server *srv, plugin_data *p, plugin_config *s)
 		return HANDLER_ERROR;
 	}
 
-	buffer_string_prepare_copy(p->resp, 4095);
-	if (-1 == (r = safe_read(p->read_fd, p->resp->ptr, p->resp->size - 1))) {
+	if (-1 == safe_read(p->read_fd, p->resp)) {
 		log_error_write(srv, __FILE__, __LINE__, "ss",
 			"rrdtool-read: failed", strerror(errno));
 
 		return HANDLER_ERROR;
 	}
-
-	buffer_commit(p->resp, r);
 
 	if (p->resp->ptr[0] != 'O' ||
 		p->resp->ptr[1] != 'K') {
@@ -352,7 +346,6 @@ TRIGGER_FUNC(mod_rrd_trigger) {
 
 	for (i = 0; i < srv->config_context->used; i++) {
 		plugin_config *s = p->config_storage[i];
-		int r;
 
 		if (buffer_string_is_empty(s->path_rrd)) continue;
 
@@ -370,7 +363,7 @@ TRIGGER_FUNC(mod_rrd_trigger) {
 		buffer_append_int(p->cmd, s->requests);
 		buffer_append_string_len(p->cmd, CONST_STR_LEN("\n"));
 
-		if (-1 == (r = safe_write(p->write_fd, CONST_BUF_LEN(p->cmd)))) {
+		if (-1 == safe_write(p->write_fd, CONST_BUF_LEN(p->cmd))) {
 			p->rrdtool_running = 0;
 
 			log_error_write(srv, __FILE__, __LINE__, "ss",
@@ -379,8 +372,7 @@ TRIGGER_FUNC(mod_rrd_trigger) {
 			return HANDLER_ERROR;
 		}
 
-		buffer_string_prepare_copy(p->resp, 4095);
-		if (-1 == (r = safe_read(p->read_fd, p->resp->ptr, p->resp->size - 1))) {
+		if (-1 == safe_read(p->read_fd, p->resp)) {
 			p->rrdtool_running = 0;
 
 			log_error_write(srv, __FILE__, __LINE__, "ss",
@@ -388,8 +380,6 @@ TRIGGER_FUNC(mod_rrd_trigger) {
 
 			return HANDLER_ERROR;
 		}
-
-		buffer_commit(p->resp, r);
 
 		if (p->resp->ptr[0] != 'O' ||
 		    p->resp->ptr[1] != 'K') {

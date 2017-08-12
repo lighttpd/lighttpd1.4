@@ -105,6 +105,8 @@ int main(int argc, char **argv) {
 
 				argv[0] = BINPATH;
 
+				/* intentionally pass argv params */
+				/* coverity[tainted_string : FALSE] */
 				execvp(BINPATH, argv);
 
 				exit(1);

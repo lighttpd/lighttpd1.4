@@ -1170,7 +1170,7 @@ static int server_main (server * const srv, int argc, char **argv) {
 		int devnull;
 		int errfd;
 		do {
-			/* coverity[resource_leak : FALSE] */
+			/* coverity[overwrite_var : FALSE] */
 			devnull = fdevent_open_devnull();
 		} while (-1 != devnull && devnull <= STDERR_FILENO);
 		if (-1 == devnull) {

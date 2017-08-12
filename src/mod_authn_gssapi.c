@@ -218,6 +218,10 @@ static int mod_authn_gssapi_create_krb5_ccache(server *srv, connection *con, plu
     char * const ccname    = kccname->ptr + sizeof("FILE:")-1;
     const size_t ccnamelen = buffer_string_length(kccname)-(sizeof("FILE:")-1);
     /*(future: might consider using server.upload-dirs instead of /tmp)*/
+  #ifdef __COVERITY__
+    /* POSIX-2008 requires mkstemp create file with 0600 perms */
+    umask(0600);
+  #endif
     /* coverity[secure_temp : FALSE] */
     int fd = mkstemp(ccname);
     if (fd < 0) {

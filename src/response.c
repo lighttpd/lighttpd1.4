@@ -425,6 +425,9 @@ handler_t http_response_prepare(server *srv, connection *con) {
 		buffer_append_slash(con->physical.path);
 		if (!buffer_string_is_empty(con->physical.rel_path) &&
 		    con->physical.rel_path->ptr[0] == '/') {
+		      #ifdef __COVERITY__
+			if (buffer_string_length(con->physical.rel_path) < 1) return HANDLER_ERROR;
+		      #endif
 			/* coverity[overflow_sink : FALSE] */
 			buffer_append_string_len(con->physical.path, con->physical.rel_path->ptr + 1, buffer_string_length(con->physical.rel_path) - 1);
 		} else {

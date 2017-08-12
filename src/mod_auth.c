@@ -484,6 +484,11 @@ static handler_t mod_auth_check_basic(server *srv, connection *con, void *p_d, c
 	if (0 != strncasecmp(ds->value->ptr, "Basic ", sizeof("Basic ")-1)) {
 		return mod_auth_send_400_bad_request(srv, con);
 	}
+      #ifdef __COVERITY__
+	if (buffer_string_length(ds->value) < sizeof("Basic ")-1) {
+		return mod_auth_send_400_bad_request(srv, con);
+	}
+      #endif
 
 	username = buffer_init();
 
@@ -615,6 +620,11 @@ static handler_t mod_auth_check_digest(server *srv, connection *con, void *p_d, 
 	if (0 != strncasecmp(ds->value->ptr, "Digest ", sizeof("Digest ")-1)) {
 		return mod_auth_send_400_bad_request(srv, con);
 	}
+      #ifdef __COVERITY__
+	if (buffer_string_length(ds->value) < sizeof("Digest ")-1) {
+		return mod_auth_send_400_bad_request(srv, con);
+	}
+      #endif
 
 	b = buffer_init();
 	/* coverity[overflow_sink : FALSE] */

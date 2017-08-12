@@ -1538,8 +1538,11 @@ static int mod_extforward_network_read (server *srv, connection *con,
      * In the future, might add config switch to enable doing this extra work */
 
     union hap_PROXY_hdr hdr;
-    int rc;
-    switch (hap_PROXY_recv(con->fd, &hdr)) {
+    int rc = hap_PROXY_recv(con->fd, &hdr);
+  #ifdef __COVERITY__
+    __coverity_tainted_data_sanitize__(&hdr);
+  #endif /*(mod_extforward_hap_PROXY_v*() parse the tainted data)*/
+    switch (rc) {
       case  2: rc = mod_extforward_hap_PROXY_v2(con, &hdr); break;
       case  1: rc = mod_extforward_hap_PROXY_v1(con, &hdr); break;
       case  0: return  0; /*(errno == EAGAIN || errno == EWOULDBLOCK)*/

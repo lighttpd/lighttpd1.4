@@ -474,10 +474,18 @@ static chunk *chunkqueue_get_append_tempfile(server *srv, chunkqueue *cq) {
 			buffer_append_slash(template);
 			buffer_append_string_len(template, CONST_STR_LEN("lighttpd-upload-XXXXXX"));
 
+		      #ifdef __COVERITY__
+			/* POSIX-2008 requires mkstemp create file with 0600 perms */
+			umask(0600);
+		      #endif
 			/* coverity[secure_temp : FALSE] */
 			if (-1 != (fd = mkstemp(template->ptr))) break;
 		}
 	} else {
+	      #ifdef __COVERITY__
+		/* POSIX-2008 requires mkstemp create file with 0600 perms */
+		umask(0600);
+	      #endif
 		/* coverity[secure_temp : FALSE] */
 		fd = mkstemp(template->ptr);
 	}
@@ -560,6 +568,9 @@ int chunkqueue_append_mem_to_tempfile(server *srv, chunkqueue *dest, const char 
 		if (NULL == dst_c && NULL == (dst_c = chunkqueue_get_append_tempfile(srv, dest))) {
 			return -1;
 		}
+	      #ifdef __COVERITY__
+		if (dst_c->file.fd < 0) return -1;
+	      #endif
 
 		/* (dst_c->file.fd >= 0) */
 		/* coverity[negative_returns : FALSE] */

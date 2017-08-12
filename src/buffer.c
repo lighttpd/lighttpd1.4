@@ -247,7 +247,7 @@ void buffer_append_uint_hex(buffer *b, uintmax_t value) {
 	buf = buffer_string_prepare_append(b, shift);
 	buffer_commit(b, shift); /* will fill below */
 
-	shift <<= 2; /* count bits now */
+	shift *= 4; /* count bits now */
 	while (shift > 0) {
 		shift -= 4;
 		*(buf++) = hex_chars[(value >> shift) & 0x0F];
