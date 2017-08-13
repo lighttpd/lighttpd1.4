@@ -1172,6 +1172,9 @@ static int server_main (server * const srv, int argc, char **argv) {
 		do {
 			/* coverity[overwrite_var : FALSE] */
 			devnull = fdevent_open_devnull();
+		      #ifdef __COVERITY__
+			__coverity_escape__(devnull);
+		      #endif
 		} while (-1 != devnull && devnull <= STDERR_FILENO);
 		if (-1 == devnull) {
 			log_error_write(srv, __FILE__, __LINE__, "ss",

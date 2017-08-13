@@ -1285,6 +1285,10 @@ static int hap_PROXY_recv (const int fd, union hap_PROXY_hdr * const hdr)
 static int mod_extforward_hap_PROXY_v1 (connection * const con,
                                         union hap_PROXY_hdr * const hdr)
 {
+  #ifdef __COVERITY__
+    __coverity_tainted_data_sink__(hdr);
+  #endif
+
     /* samples
      *   "PROXY TCP4 255.255.255.255 255.255.255.255 65535 65535\r\n"
      *   "PROXY TCP6 ffff:f...f:ffff ffff:f...f:ffff 65535 65535\r\n"
@@ -1351,6 +1355,10 @@ static int mod_extforward_hap_PROXY_v1 (connection * const con,
 static int mod_extforward_hap_PROXY_v2 (connection * const con,
                                         union hap_PROXY_hdr * const hdr)
 {
+  #ifdef __COVERITY__
+    __coverity_tainted_data_sink__(hdr);
+  #endif
+
     /* If HAProxy-PROXY protocol used, then lighttpd acts as transparent proxy,
      * masquerading as servicing the client IP provided in by HAProxy-PROXY hdr.
      * The connecting con->dst_addr and con->dst_addr_buf are not saved here,
@@ -1539,9 +1547,6 @@ static int mod_extforward_network_read (server *srv, connection *con,
 
     union hap_PROXY_hdr hdr;
     int rc = hap_PROXY_recv(con->fd, &hdr);
-  #ifdef __COVERITY__
-    __coverity_tainted_data_sanitize__(&hdr);
-  #endif /*(mod_extforward_hap_PROXY_v*() parse the tainted data)*/
     switch (rc) {
       case  2: rc = mod_extforward_hap_PROXY_v2(con, &hdr); break;
       case  1: rc = mod_extforward_hap_PROXY_v1(con, &hdr); break;

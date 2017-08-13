@@ -234,20 +234,19 @@ void buffer_append_string_buffer(buffer *b, const buffer *src) {
 
 void buffer_append_uint_hex(buffer *b, uintmax_t value) {
 	char *buf;
-	int shift = 0;
+	unsigned int shift = 0;
 
 	{
 		uintmax_t copy = value;
 		do {
 			copy >>= 8;
-			shift += 2; /* counting nibbles (4 bits) */
+			shift += 8; /* counting bits */
 		} while (0 != copy);
 	}
 
-	buf = buffer_string_prepare_append(b, shift);
-	buffer_commit(b, shift); /* will fill below */
+	buf = buffer_string_prepare_append(b, shift >> 2); /*nibbles (4 bits)*/
+	buffer_commit(b, shift >> 2); /* will fill below */
 
-	shift *= 4; /* count bits now */
 	while (shift > 0) {
 		shift -= 4;
 		*(buf++) = hex_chars[(value >> shift) & 0x0F];

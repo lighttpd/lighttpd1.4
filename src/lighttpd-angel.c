@@ -68,6 +68,10 @@ int main(int argc, char **argv) {
 	struct sigaction act;
 
 	UNUSED(argc);
+	*(const char **)&argv[0] = BINPATH;
+      #ifdef __COVERITY__
+	__coverity_tainted_data_sanitize__(argv);
+      #endif
 
 	/**
 	 * we are running as root BEWARE
@@ -103,13 +107,10 @@ int main(int argc, char **argv) {
 			if (0 == pid) {
 				/* i'm the child */
 
-				argv[0] = BINPATH;
-
 				/* intentionally pass argv params */
 				/* coverity[tainted_string : FALSE] */
-				execvp(BINPATH, argv);
-
-				exit(1);
+				execvp(argv[0], argv);
+				_exit(1);
 			} else if (-1 == pid) {
 				/** error */
 

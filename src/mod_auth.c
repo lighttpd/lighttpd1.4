@@ -619,16 +619,17 @@ static handler_t mod_auth_check_digest(server *srv, connection *con, void *p_d, 
 
 	if (0 != strncasecmp(ds->value->ptr, "Digest ", sizeof("Digest ")-1)) {
 		return mod_auth_send_400_bad_request(srv, con);
+	} else {
+		size_t n = buffer_string_length(ds->value);
+	      #ifdef __COVERITY__
+		if (n < sizeof("Digest ")-1) {
+			return mod_auth_send_400_bad_request(srv, con);
+		}
+	      #endif
+		n -= (sizeof("Digest ")-1);
+		b = buffer_init();
+		buffer_copy_string_len(b,ds->value->ptr+sizeof("Digest ")-1,n);
 	}
-      #ifdef __COVERITY__
-	if (buffer_string_length(ds->value) < sizeof("Digest ")-1) {
-		return mod_auth_send_400_bad_request(srv, con);
-	}
-      #endif
-
-	b = buffer_init();
-	/* coverity[overflow_sink : FALSE] */
-	buffer_copy_string_len(b, ds->value->ptr+sizeof("Digest ")-1, buffer_string_length(ds->value)-(sizeof("Digest ")-1));
 
 	/* parse credentials from client */
 	for (c = b->ptr; *c; c++) {
