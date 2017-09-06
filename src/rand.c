@@ -113,7 +113,8 @@ static int li_rand_device_bytes (unsigned char *buf, int num)
             ssize_t rd = 0;
           #ifdef RNDGETENTCNT
             int entropy;
-            if (0 == ioctl(fd, RNDGETENTCNT, &entropy) && entropy >= num*8)
+            if (0 == ioctl(fd, (unsigned long)(RNDGETENTCNT), &entropy)
+                && entropy >= num*8)
           #endif
                 rd = read(fd, buf, (size_t)num);
             close(fd);
