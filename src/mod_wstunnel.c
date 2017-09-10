@@ -630,6 +630,7 @@ int mod_wstunnel_plugin_init(plugin *p) {
     p->handle_uri_clean  = mod_wstunnel_check_extension;
     p->handle_subrequest = gw_handle_subrequest;
     p->handle_trigger    = mod_wstunnel_handle_trigger;
+    p->handle_waitpid    = gw_handle_waitpid_cb;
     p->data              = NULL;
     return 0;
 }

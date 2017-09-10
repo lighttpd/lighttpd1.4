@@ -39,6 +39,7 @@ typedef enum {
 	PLUGIN_FUNC_HANDLE_CONNECTION_CLOSE,
 	PLUGIN_FUNC_HANDLE_TRIGGER,
 	PLUGIN_FUNC_HANDLE_SIGHUP,
+	PLUGIN_FUNC_HANDLE_WAITPID,
 	PLUGIN_FUNC_HANDLE_SUBREQUEST,
 	PLUGIN_FUNC_HANDLE_SUBREQUEST_START,
 	PLUGIN_FUNC_HANDLE_RESPONSE_START,
@@ -297,7 +298,6 @@ int plugins_load(server *srv) {
 	handler_t plugins_call_##y(server *srv, connection *con) {\
 		plugin **slot;\
 		size_t j;\
-		if (!srv->plugin_slots) return HANDLER_GO_ON;\
 		slot = ((plugin ***)(srv->plugin_slots))[x];\
 		if (!slot) return HANDLER_GO_ON;\
 		for (j = 0; j < srv->plugins.used && slot[j]; j++) { \
@@ -385,6 +385,18 @@ PLUGIN_TO_SLOT(PLUGIN_FUNC_SET_DEFAULTS, set_defaults)
 
 #undef PLUGIN_TO_SLOT
 
+handler_t plugins_call_handle_waitpid(server *srv, pid_t pid, int status) {
+	plugin ** const slot =
+	  ((plugin ***)(srv->plugin_slots))[PLUGIN_FUNC_HANDLE_WAITPID];
+	if (!slot) return HANDLER_GO_ON;
+	for (size_t i = 0; i < srv->plugins.used && slot[i]; ++i) {
+		plugin *p = slot[i];
+		handler_t r = p->handle_waitpid(srv, p->data, pid, status);
+		if (r != HANDLER_GO_ON) return r;
+	}
+	return HANDLER_GO_ON;
+}
+
 #if 0
 /**
  *
@@ -469,6 +481,7 @@ handler_t plugins_call_init(server *srv) {
 		PLUGIN_TO_SLOT(PLUGIN_FUNC_HANDLE_CONNECTION_CLOSE, handle_connection_close);
 		PLUGIN_TO_SLOT(PLUGIN_FUNC_HANDLE_TRIGGER, handle_trigger);
 		PLUGIN_TO_SLOT(PLUGIN_FUNC_HANDLE_SIGHUP, handle_sighup);
+		PLUGIN_TO_SLOT(PLUGIN_FUNC_HANDLE_WAITPID, handle_waitpid);
 		PLUGIN_TO_SLOT(PLUGIN_FUNC_HANDLE_SUBREQUEST, handle_subrequest);
 		PLUGIN_TO_SLOT(PLUGIN_FUNC_HANDLE_SUBREQUEST_START, handle_subrequest_start);
 		PLUGIN_TO_SLOT(PLUGIN_FUNC_HANDLE_RESPONSE_START, handle_response_start);

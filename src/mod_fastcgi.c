@@ -538,6 +538,7 @@ int mod_fastcgi_plugin_init(plugin *p) {
 	p->handle_subrequest_start = fcgi_check_extension_2;
 	p->handle_subrequest       = gw_handle_subrequest;
 	p->handle_trigger          = gw_handle_trigger;
+	p->handle_waitpid          = gw_handle_waitpid_cb;
 
 	p->data         = NULL;
 

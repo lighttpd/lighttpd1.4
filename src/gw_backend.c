@@ -284,7 +284,12 @@ static void gw_proc_connect_error(server *srv, gw_host *host, gw_proc *proc, pid
              * - ECONNREFUSED for tcp-ip sockets
              * - ENOENT for unix-domain-sockets
              */
+          #if 0
             gw_proc_set_state(host, proc, PROC_STATE_DIED_WAIT_FOR_PID);
+          #else  /* treat as overloaded (future: unless we send kill() signal)*/
+            proc->disabled_until = srv->cur_ts + host->disable_time;
+            gw_proc_set_state(host, proc, PROC_STATE_OVERLOADED);
+          #endif
         }
     }
 
@@ -319,6 +324,25 @@ static void gw_proc_check_enable(server *srv, gw_host *host, gw_proc *proc) {
                     host->host, host->port, host->unixsocket);
 }
 
+static void gw_proc_waitpid_log(server *srv, gw_host *host, gw_proc *proc, int status) {
+    UNUSED(host);
+    if (WIFEXITED(status)) {
+        if (proc->state != PROC_STATE_KILLED) {
+            log_error_write(srv, __FILE__, __LINE__, "sdb",
+                            "child exited:",
+                            WEXITSTATUS(status), proc->connection_name);
+        }
+    } else if (WIFSIGNALED(status)) {
+        if (WTERMSIG(status) != SIGTERM && WTERMSIG(status) != SIGINT) {
+            log_error_write(srv, __FILE__, __LINE__, "sd",
+                            "child signalled:", WTERMSIG(status));
+        }
+    } else {
+        log_error_write(srv, __FILE__, __LINE__, "sd",
+                        "child died somehow:", status);
+    }
+}
+
 static int gw_proc_waitpid(server *srv, gw_host *host, gw_proc *proc) {
     int rc, status;
 
@@ -337,23 +361,14 @@ static int gw_proc_waitpid(server *srv, gw_host *host, gw_proc *proc) {
         log_error_write(srv, __FILE__, __LINE__, "sddss",
                         "pid ", proc->pid, proc->state,
                         "not found:", strerror(errno));
-    } else if (WIFEXITED(status)) {
-        if (proc->state != PROC_STATE_KILLED) {
-            log_error_write(srv, __FILE__, __LINE__, "sdb",
-                            "child exited:",
-                            WEXITSTATUS(status), proc->connection_name);
-        }
-    } else if (WIFSIGNALED(status)) {
-        if (WTERMSIG(status) != SIGTERM && WTERMSIG(status) != SIGINT) {
-            log_error_write(srv, __FILE__, __LINE__, "sd",
-                            "child signalled:", WTERMSIG(status));
-        }
-    } else {
-        log_error_write(srv, __FILE__, __LINE__, "sd",
-                        "child died somehow:", status);
+    }
+    else {
+        gw_proc_waitpid_log(srv, host, proc, status);
     }
 
     proc->pid = 0;
+    if (proc->state != PROC_STATE_KILLED)
+        proc->disabled_until = srv->cur_ts;
     gw_proc_set_state(host, proc, PROC_STATE_DIED);
     return 1;
 }
@@ -580,6 +595,8 @@ static int gw_spawn_connection(server *srv, gw_host *host, gw_proc *proc, int de
         if (-1 == proc->pid) {
             log_error_write(srv, __FILE__, __LINE__, "sb",
                             "gw-backend failed to start:", host->bin_path);
+            proc->pid = 0;
+            proc->disabled_until = srv->cur_ts;
             return -1;
         }
 
@@ -617,7 +634,13 @@ static int gw_spawn_connection(server *srv, gw_host *host, gw_proc *proc, int de
 
 static void gw_proc_spawn(server *srv, gw_host *host, int debug) {
     gw_proc *proc;
-    for (proc=host->unused_procs; proc && proc->pid != 0; proc=proc->next);
+    for (proc = host->unused_procs; proc; proc = proc->next) {
+        /* (proc->pid <= 0 indicates PROC_STATE_DIED, not PROC_STATE_KILLED) */
+        if (proc->pid > 0) continue;
+        /* (do not attempt to spawn another proc if a proc just exited) */
+        if (proc->disabled_until >= srv->cur_ts) return;
+        break;
+    }
     if (proc) {
         if (proc == host->unused_procs)
             host->unused_procs = proc->next;
@@ -677,6 +700,7 @@ static void gw_proc_kill(server *srv, gw_host *host, gw_proc *proc) {
 
     proc->prev = NULL;
     proc->next = host->unused_procs;
+    proc->disabled_until = 0;
 
     if (host->unused_procs)
         host->unused_procs->prev = proc;
@@ -975,20 +999,20 @@ static void gw_restart_dead_procs(server *srv, gw_host *host, int debug) {
                             proc->is_local, proc->load, proc->pid);
         }
 
-        /*
-         * if the remote side is overloaded, we check back after <n> seconds
-         *
-         */
         switch (proc->state) {
-        case PROC_STATE_KILLED:
-            /* should never happen as long as adaptive spawing is disabled */
-            force_assert(0);
-
-            break;
         case PROC_STATE_RUNNING:
             break;
         case PROC_STATE_OVERLOADED:
+            gw_proc_check_enable(srv, host, proc);
+            break;
+        case PROC_STATE_KILLED:
+            break;
         case PROC_STATE_DIED_WAIT_FOR_PID:
+            /*(state should not happen in workers if server.max-worker > 0)*/
+            /*(if PROC_STATE_DIED_WAIT_FOR_PID is used in future, might want
+             * to save proc->disabled_until before gw_proc_waitpid() since
+             * gw_proc_waitpid will set proc->disabled_until to srv->cur_ts,
+             * and so process will not be restarted below until one sec later)*/
             if (0 == gw_proc_waitpid(srv, host, proc)) {
                 gw_proc_check_enable(srv, host, proc);
             }
@@ -1004,6 +1028,9 @@ static void gw_restart_dead_procs(server *srv, gw_host *host, int debug) {
                 /* we still have connections bound to this proc,
                  * let them terminate first */
                 if (proc->load != 0) break;
+
+                /* avoid spinning if child exits too quickly */
+                if (proc->disabled_until >= srv->cur_ts) break;
 
                 /* restart the child */
 
@@ -1185,6 +1212,8 @@ int gw_set_defaults_backend(server *srv, gw_plugin_data *p, data_unset *du, size
           "( \"ext\" => ( \"backend-label\" => ( \"key\" => \"value\" )))");
         return 0;
     }
+
+    p->srv_pid = srv->pid;
 
     gw_mode = buffer_init();
 
@@ -1852,7 +1881,10 @@ static handler_t gw_write_error(server *srv, gw_handler_ctx *hctx) {
     if (hctx->state == GW_STATE_INIT ||
         hctx->state == GW_STATE_CONNECT_DELAYED) {
 
-        gw_restart_dead_procs(srv, hctx->host, hctx->conf.debug);
+        /* (optimization to detect backend process exit while processing a
+         *  large number of ready events; (this block could be removed)) */
+        if (0 == srv->srvconf.max_worker)
+            gw_restart_dead_procs(srv, hctx->host, hctx->conf.debug);
 
         /* cleanup this request and let request handler start request again */
         if (hctx->reconnects++ < 5) return gw_reconnect(srv, hctx);
@@ -2027,9 +2059,13 @@ static handler_t gw_recv_response(server *srv, gw_handler_ctx *hctx) {
     case HANDLER_COMEBACK: /*(not expected; treat as error)*/
     case HANDLER_ERROR:
         if (b != hctx->response) buffer_free(b);
+        /* (optimization to detect backend process exit while processing a
+         *  large number of ready events; (this block could be removed)) */
         if (proc->is_local && 1 == proc->load && proc->pid == hctx->pid
-            && proc->state != PROC_STATE_DIED) {
-            if (0 != gw_proc_waitpid(srv, host, proc)) {
+            && proc->state != PROC_STATE_DIED && 0 == srv->srvconf.max_worker) {
+            /* intentionally check proc->disabed_until before gw_proc_waitpid */
+            if (proc->disabled_until < srv->cur_ts
+                && 0 != gw_proc_waitpid(srv, host, proc)) {
                 if (hctx->conf.debug) {
                     log_error_write(srv, __FILE__, __LINE__, "ssbsdsd",
                                     "--- gw spawning",
@@ -2430,7 +2466,7 @@ static void gw_handle_trigger_host(server *srv, gw_host *host, int debug) {
     }
 }
 
-void gw_handle_trigger_exts(server *srv, gw_exts *exts, int debug) {
+static void gw_handle_trigger_exts(server *srv, gw_exts *exts, int debug) {
     for (size_t j = 0; j < exts->used; ++j) {
         gw_extension *ex = exts->exts[j];
         for (size_t n = 0; n < ex->used; ++n) {
@@ -2441,12 +2477,66 @@ void gw_handle_trigger_exts(server *srv, gw_exts *exts, int debug) {
 
 handler_t gw_handle_trigger(server *srv, void *p_d) {
     gw_plugin_data *p = p_d;
+    if (0 != srv->srvconf.max_worker && p->srv_pid != srv->pid)
+        return HANDLER_GO_ON;
+
     for (size_t i = 0; i < srv->config_context->used; i++) {
         gw_plugin_config *conf = p->config_storage[i];
         gw_exts *exts = conf->exts;
         int debug = conf->debug ? conf->debug : p->config_storage[0]->debug;
         if (NULL == exts) continue;
         gw_handle_trigger_exts(srv, exts, debug);
+    }
+
+    return HANDLER_GO_ON;
+}
+
+handler_t gw_handle_waitpid_cb(server *srv, void *p_d, pid_t pid, int status) {
+    gw_plugin_data *p = p_d;
+    if (0 != srv->srvconf.max_worker && p->srv_pid != srv->pid)
+        return HANDLER_GO_ON;
+
+    for (size_t i = 0; i < srv->config_context->used; ++i) {
+        gw_plugin_config *conf = p->config_storage[i];
+        gw_exts *exts = conf->exts;
+        int debug = conf->debug ? conf->debug : p->config_storage[0]->debug;
+        if (NULL == exts) continue;
+        for (size_t j = 0; j < exts->used; ++j) {
+            gw_extension *ex = exts->exts[j];
+            for (size_t n = 0; n < ex->used; ++n) {
+                gw_host *host = ex->hosts[n];
+                gw_proc *proc;
+                for (proc = host->first; proc; proc = proc->next) {
+                    if (!proc->is_local || proc->pid != pid) continue;
+
+                    gw_proc_waitpid_log(srv, host, proc, status);
+                    gw_proc_set_state(host, proc, PROC_STATE_DIED);
+                    proc->pid = 0;
+
+                    /* restart, but avoid spinning if child exits too quickly */
+                    if (proc->disabled_until < srv->cur_ts) {
+                        if (proc->state != PROC_STATE_KILLED)
+                            proc->disabled_until = srv->cur_ts;
+                        if (gw_spawn_connection(srv, host, proc, debug)) {
+                            log_error_write(srv, __FILE__, __LINE__, "s",
+                                            "ERROR: spawning gw failed.");
+                        }
+                    }
+
+                    return HANDLER_FINISHED;
+                }
+                for (proc = host->unused_procs; proc; proc = proc->next) {
+                    if (!proc->is_local || proc->pid != pid) continue;
+
+                    gw_proc_waitpid_log(srv, host, proc, status);
+                    if (proc->state != PROC_STATE_KILLED)
+                        proc->disabled_until = srv->cur_ts;
+                    gw_proc_set_state(host, proc, PROC_STATE_DIED);
+                    proc->pid = 0;
+                    return HANDLER_FINISHED;
+                }
+            }
+        }
     }
 
     return HANDLER_GO_ON;

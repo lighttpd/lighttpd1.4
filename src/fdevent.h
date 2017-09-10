@@ -223,9 +223,11 @@ pid_t fdevent_fork_execve(const char *name, char *argv[], char *envp[], int fdin
 int fdevent_open_logger(const char *logger);
 int fdevent_cycle_logger(const char *logger, int *curfd);
 int fdevent_reaped_logger_pipe(pid_t pid);
-void fdevent_waitpid_logger_pipes(time_t ts);
+int fdevent_waitpid_logger_pipe_pid(pid_t pid, time_t ts);
+void fdevent_restart_logger_pipes(time_t ts);
 void fdevent_close_logger_pipes(void);
 void fdevent_breakagelog_logger_pipe(int fd);
+void fdevent_clr_logger_pipe_pids(void);
 
 int fdevent_select_init(fdevents *ev);
 int fdevent_poll_init(fdevents *ev);

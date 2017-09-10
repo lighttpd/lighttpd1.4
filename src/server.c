@@ -90,6 +90,7 @@ static server_socket_array graceful_sockets;
 static volatile sig_atomic_t graceful_restart = 0;
 static volatile sig_atomic_t graceful_shutdown = 0;
 static volatile sig_atomic_t srv_shutdown = 0;
+static volatile sig_atomic_t handle_sig_child = 0;
 static volatile sig_atomic_t handle_sig_alarm = 1;
 static volatile sig_atomic_t handle_sig_hup = 0;
 
@@ -135,6 +136,7 @@ static void sigaction_handler(int sig, siginfo_t *si, void *context) {
 		last_sighup_info = *si;
 		break;
 	case SIGCHLD:
+		handle_sig_child = 1;
 		break;
 	}
 }
@@ -160,7 +162,7 @@ static void signal_handler(int sig) {
 		break;
 	case SIGALRM: handle_sig_alarm = 1; break;
 	case SIGHUP:  handle_sig_hup = 1; break;
-	case SIGCHLD:  break;
+	case SIGCHLD: handle_sig_child = 1; break;
 	}
 }
 #endif
@@ -1482,10 +1484,11 @@ static int server_main (server * const srv, int argc, char **argv) {
 
 	srv->gid = getgid();
 	srv->uid = getuid();
+	srv->pid = getpid();
 
 	/* write pid file */
 	if (pid_fd > 2) {
-		buffer_copy_int(srv->tmp_buf, getpid());
+		buffer_copy_int(srv->tmp_buf, srv->pid);
 		buffer_append_string_len(srv->tmp_buf, CONST_STR_LEN("\n"));
 		if (-1 == write_all(pid_fd, CONST_BUF_LEN(srv->tmp_buf))) {
 			log_error_write(srv, __FILE__, __LINE__, "ss", "Couldn't write pid file:", strerror(errno));
@@ -1584,6 +1587,7 @@ static int server_main (server * const srv, int argc, char **argv) {
 		pid_t pid;
 		const int npids = num_childs;
 		int child = 0;
+		unsigned int timer = 0;
 		for (int n = 0; n < npids; ++n) pids[n] = -1;
 		while (!child && !srv_shutdown && !graceful_shutdown) {
 			if (num_childs > 0) {
@@ -1592,6 +1596,7 @@ static int server_main (server * const srv, int argc, char **argv) {
 					return -1;
 				case 0:
 					child = 1;
+					alarm(0);
 					break;
 				default:
 					num_childs--;
@@ -1607,9 +1612,15 @@ static int server_main (server * const srv, int argc, char **argv) {
 				int status;
 
 				if (-1 != (pid = wait(&status))) {
+					srv->cur_ts = time(NULL);
+					if (plugins_call_handle_waitpid(srv, pid, status) != HANDLER_GO_ON) {
+						if (!timer) alarm((timer = 5));
+						continue;
+					}
 					switch (fdevent_reaped_logger_pipe(pid)) {
 					  default: break;
-					  case -1: alarm(5); /* fall through */
+					  case -1: if (!timer) alarm((timer = 5));
+						   /* fall through */
 					  case  1: continue;
 					}
 					/** 
@@ -1625,6 +1636,7 @@ static int server_main (server * const srv, int argc, char **argv) {
 				} else {
 					switch (errno) {
 					case EINTR:
+						srv->cur_ts = time(NULL);
 						/**
 						 * if we receive a SIGHUP we have to close our logs ourself as we don't 
 						 * have the mainloop who can help us here
@@ -1641,7 +1653,9 @@ static int server_main (server * const srv, int argc, char **argv) {
 						}
 						if (handle_sig_alarm) {
 							handle_sig_alarm = 0;
-							fdevent_waitpid_logger_pipes(time(NULL));
+							timer = 0;
+							plugins_call_handle_trigger(srv);
+							fdevent_restart_logger_pipes(srv->cur_ts);
 						}
 						break;
 					default:
@@ -1691,6 +1705,8 @@ static int server_main (server * const srv, int argc, char **argv) {
 		}
 		buffer_reset(srv->srvconf.pid_file);
 
+		fdevent_clr_logger_pipe_pids();
+		srv->pid = getpid();
 		li_rand_reseed();
 	}
 #endif
@@ -1827,7 +1843,6 @@ static int server_main (server * const srv, int argc, char **argv) {
 					break;
 				}
 
-				/* trigger waitpid */
 				srv->cur_ts = min_ts;
 
 				/* check idle time limit, if enabled */
@@ -1857,8 +1872,6 @@ static int server_main (server * const srv, int argc, char **argv) {
 				for (i = 0; i < srv->config_context->used; ++i) {
 					srv->config_storage[i]->global_bytes_per_second_cnt = 0;
 				}
-				/* check piped-loggers and restart, unless shutting down */
-				if (!graceful_shutdown && !srv_shutdown && 0 == srv->srvconf.max_worker) fdevent_waitpid_logger_pipes(min_ts);
 				/* if graceful_shutdown, accelerate cleanup of recently completed request/responses */
 				if (graceful_shutdown && !srv_shutdown) server_graceful_shutdown_maint(srv);
 				/**
@@ -1969,6 +1982,26 @@ static int server_main (server * const srv, int argc, char **argv) {
 				if (cs == 1) fprintf(stderr, "\n");
 #endif
 			}
+		}
+
+		if (handle_sig_child) {
+			pid_t pid;
+			handle_sig_child = 0;
+			do {
+				int status;
+				pid = waitpid(-1, &status, WNOHANG);
+				if (pid > 0) {
+					if (plugins_call_handle_waitpid(srv, pid, status) != HANDLER_GO_ON) {
+						continue;
+					}
+					if (0 == srv->srvconf.max_worker) {
+						/* check piped-loggers and restart, even if shutting down */
+						if (fdevent_waitpid_logger_pipe_pid(pid, srv->cur_ts)) {
+							continue;
+						}
+					}
+				}
+			} while (pid > 0 || (-1 == pid && errno == EINTR));
 		}
 
 		if (graceful_shutdown) {

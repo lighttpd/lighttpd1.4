@@ -46,7 +46,7 @@ typedef struct {
 } char_array;
 
 typedef struct {
-	pid_t *ptr;
+	struct { pid_t pid; void *ctx; } *ptr;
 	size_t used;
 	size_t size;
 } buffer_pid_t;
@@ -218,16 +218,8 @@ SETDEFAULTS_FUNC(mod_fastcgi_set_defaults) {
 }
 
 
-static int cgi_pid_add(server *srv, plugin_data *p, pid_t pid) {
-	int m = -1;
-	size_t i;
+static void cgi_pid_add(plugin_data *p, pid_t pid, void *ctx) {
 	buffer_pid_t *r = &(p->cgi_pid);
-
-	UNUSED(srv);
-
-	for (i = 0; i < r->used; i++) {
-		if (r->ptr[i] > m) m = r->ptr[i];
-	}
 
 	if (r->size == 0) {
 		r->size = 16;
@@ -239,31 +231,29 @@ static int cgi_pid_add(server *srv, plugin_data *p, pid_t pid) {
 		force_assert(r->ptr);
 	}
 
-	r->ptr[r->used++] = pid;
-
-	return m;
+	r->ptr[r->used].pid = pid;
+	r->ptr[r->used].ctx = ctx;
+	++r->used;
 }
 
-static int cgi_pid_del(server *srv, plugin_data *p, pid_t pid) {
-	size_t i;
+static void cgi_pid_kill(plugin_data *p, pid_t pid) {
+    buffer_pid_t *r = &(p->cgi_pid);
+    for (size_t i = 0; i < r->used; ++i) {
+        if (r->ptr[i].pid == pid) {
+            r->ptr[i].ctx = NULL;
+            kill(pid, SIGTERM);
+            return;
+        }
+    }
+}
+
+static void cgi_pid_del(plugin_data *p, size_t i) {
 	buffer_pid_t *r = &(p->cgi_pid);
-
-	UNUSED(srv);
-
-	for (i = 0; i < r->used; i++) {
-		if (r->ptr[i] == pid) break;
-	}
-
-	if (i != r->used) {
-		/* found */
 
 		if (i != r->used - 1) {
 			r->ptr[i] = r->ptr[r->used - 1];
 		}
 		r->used--;
-	}
-
-	return 0;
 }
 
 
@@ -276,8 +266,6 @@ static void cgi_connection_close_fdtocgi(server *srv, handler_ctx *hctx) {
 }
 
 static void cgi_connection_close(server *srv, handler_ctx *hctx) {
-	int status;
-	pid_t pid;
 	plugin_data *p = hctx->plugin_data;
 	connection *con = hctx->remote_conn;
 
@@ -298,62 +286,13 @@ static void cgi_connection_close(server *srv, handler_ctx *hctx) {
 		cgi_connection_close_fdtocgi(srv, hctx); /*(closes only hctx->fdtocgi)*/
 	}
 
-	pid = hctx->pid;
+	if (hctx->pid > 0) {
+		cgi_pid_kill(p, hctx->pid);
+	}
 
 	con->plugin_ctx[p->id] = NULL;
 
 	cgi_handler_ctx_free(hctx);
-
-	/* if waitpid hasn't been called by response.c yet, do it here */
-	if (pid > 0) {
-		/* check if the CGI-script is already gone */
-		switch(waitpid(pid, &status, WNOHANG)) {
-		case 0:
-			/* not finished yet */
-#if 0
-			log_error_write(srv, __FILE__, __LINE__, "sd", "(debug) child isn't done yet, pid:", pid);
-#endif
-			break;
-		case -1:
-			/* */
-			if (errno == EINTR) break;
-
-			/*
-			 * errno == ECHILD happens if _subrequest catches the process-status before
-			 * we have read the response of the cgi process
-			 *
-			 * -> catch status
-			 * -> WAIT_FOR_EVENT
-			 * -> read response
-			 * -> we get here with waitpid == ECHILD
-			 *
-			 */
-			if (errno != ECHILD) {
-				log_error_write(srv, __FILE__, __LINE__, "ss", "waitpid failed: ", strerror(errno));
-			}
-			/* anyway: don't wait for it anymore */
-			pid = 0;
-			break;
-		default:
-			if (WIFEXITED(status)) {
-#if 0
-				log_error_write(srv, __FILE__, __LINE__, "sd", "(debug) cgi exited fine, pid:", pid);
-#endif
-			} else {
-				log_error_write(srv, __FILE__, __LINE__, "sd", "cgi died, pid:", pid);
-			}
-
-			pid = 0;
-			break;
-		}
-
-		if (pid) {
-			kill(pid, SIGTERM);
-
-			/* cgi-script is still alive, queue the PID for removal */
-			cgi_pid_add(srv, p, pid);
-		}
-	}
 
 	/* finish response (if not already con->file_started, con->file_finished) */
 	if (con->mode == p->id) {
@@ -498,18 +437,11 @@ static handler_t cgi_handle_fdevent(server *srv, void *ctx, int revents) {
 				return HANDLER_ERROR;
 			}
 			if (0 == con->http_status) con->http_status = 200; /* OK */
-		} else {
-# if 0
-			log_error_write(srv, __FILE__, __LINE__, "sddd", "got HUP from cgi", con->fd, hctx->fd, revents);
-# endif
 		}
 		cgi_connection_close(srv, hctx);
 	} else if (revents & FDEVENT_ERR) {
 		/* kill all connections to the cgi process */
 		cgi_connection_close(srv, hctx);
-#if 1
-		log_error_write(srv, __FILE__, __LINE__, "s", "cgi-FDEVENT_ERR");
-#endif
 		return HANDLER_ERROR;
 	}
 
@@ -858,12 +790,12 @@ static int cgi_create_env(server *srv, connection *con, plugin_data *p, handler_
 		close(from_cgi_fds[1]);
 		close(to_cgi_fds[0]);
 
-		/* register PID and wait for them asynchronously */
-
 		hctx->fd = from_cgi_fds[0];
 		hctx->fde_ndx = -1;
 
 		++srv->cur_fds;
+
+		cgi_pid_add(p, hctx->pid, hctx);
 
 		if (0 == con->request.content_length) {
 			close(to_cgi_fds[1]);
@@ -1010,62 +942,6 @@ URIHANDLER_FUNC(cgi_is_handled) {
 	return HANDLER_GO_ON;
 }
 
-TRIGGER_FUNC(cgi_trigger) {
-	plugin_data *p = p_d;
-	size_t ndx;
-	/* the trigger handle only cares about lonely PID which we have to wait for */
-
-	for (ndx = 0; ndx < p->cgi_pid.used; ndx++) {
-		int status;
-
-		switch(waitpid(p->cgi_pid.ptr[ndx], &status, WNOHANG)) {
-		case 0:
-			/* not finished yet */
-#if 0
-			log_error_write(srv, __FILE__, __LINE__, "sd", "(debug) child isn't done yet, pid:", p->cgi_pid.ptr[ndx]);
-#endif
-			break;
-		case -1:
-			if (errno == ECHILD) {
-				/* someone else called waitpid... remove the pid to stop looping the error each time */
-				log_error_write(srv, __FILE__, __LINE__, "s", "cgi child vanished, probably someone else called waitpid");
-
-				cgi_pid_del(srv, p, p->cgi_pid.ptr[ndx]);
-				ndx--;
-				continue;
-			}
-
-			log_error_write(srv, __FILE__, __LINE__, "ss", "waitpid failed: ", strerror(errno));
-
-			return HANDLER_ERROR;
-		default:
-
-			if (WIFEXITED(status)) {
-#if 0
-				log_error_write(srv, __FILE__, __LINE__, "sd", "(debug) cgi exited fine, pid:", p->cgi_pid.ptr[ndx]);
-#endif
-			} else if (WIFSIGNALED(status)) {
-				/* FIXME: what if we killed the CGI script with a kill(..., SIGTERM) ?
-				 */
-				if (WTERMSIG(status) != SIGTERM) {
-					log_error_write(srv, __FILE__, __LINE__, "sd", "cleaning up CGI: process died with signal", WTERMSIG(status));
-				}
-			} else {
-				log_error_write(srv, __FILE__, __LINE__, "s", "cleaning up CGI: ended unexpectedly");
-			}
-
-			cgi_pid_del(srv, p, p->cgi_pid.ptr[ndx]);
-			/* del modified the buffer structure
-			 * and copies the last entry to the current one
-			 * -> recheck the current index
-			 */
-			ndx--;
-		}
-	}
-
-	return HANDLER_GO_ON;
-}
-
 /*
  * - HANDLER_GO_ON : not our job
  * - HANDLER_FINISHED: got response
@@ -1124,9 +1000,6 @@ SUBREQUEST_FUNC(mod_cgi_handle_subrequest) {
 
 			return HANDLER_FINISHED;
 		}
-#if 0
-	log_error_write(srv, __FILE__, __LINE__, "sdd", "subrequest, pid =", hctx, hctx->pid);
-#endif
 	} else if (!chunkqueue_is_empty(con->request_content_queue)) {
 		if (0 != cgi_write_request(srv, hctx, hctx->fdtocgi)) {
 			cgi_connection_close(srv, hctx);
@@ -1139,6 +1012,42 @@ SUBREQUEST_FUNC(mod_cgi_handle_subrequest) {
 }
 
 
+static handler_t cgi_waitpid_cb(server *srv, void *p_d, pid_t pid, int status) {
+    plugin_data *p = (plugin_data *)p_d;
+    for (size_t i = 0; i < p->cgi_pid.used; ++i) {
+        handler_ctx *hctx;
+        if (pid != p->cgi_pid.ptr[i].pid) continue;
+
+        hctx = (handler_ctx *)p->cgi_pid.ptr[i].ctx;
+        cgi_pid_del(p, i);
+
+        if (WIFEXITED(status)) {
+            /* (skip logging (non-zero) CGI exit; might be very noisy) */
+        }
+        else if (WIFSIGNALED(status)) {
+            /* ignore SIGTERM if sent by cgi_connection_close() (NULL == hctx)*/
+            if (WTERMSIG(status) != SIGTERM || NULL == hctx) {
+                log_error_write(srv, __FILE__, __LINE__, "sdsd", "CGI pid", pid,
+                                "died with signal", WTERMSIG(status));
+            }
+        }
+        else {
+            log_error_write(srv, __FILE__, __LINE__, "sds",
+                            "CGI pid", pid, "ended unexpectedly");
+        }
+
+        if (hctx) {
+            hctx->pid = -1;
+            cgi_handle_fdevent(srv, hctx, FDEVENT_HUP);
+        }
+
+        return HANDLER_FINISHED;
+    }
+
+    return HANDLER_GO_ON;
+}
+
+
 int mod_cgi_plugin_init(plugin *p);
 int mod_cgi_plugin_init(plugin *p) {
 	p->version     = LIGHTTPD_VERSION_ID;
@@ -1147,7 +1056,7 @@ int mod_cgi_plugin_init(plugin *p) {
 	p->connection_reset = cgi_connection_close_callback;
 	p->handle_subrequest_start = cgi_is_handled;
 	p->handle_subrequest = mod_cgi_handle_subrequest;
-	p->handle_trigger = cgi_trigger;
+	p->handle_waitpid = cgi_waitpid_cb;
 	p->init           = mod_cgi_init;
 	p->cleanup        = mod_cgi_free;
 	p->set_defaults   = mod_fastcgi_set_defaults;

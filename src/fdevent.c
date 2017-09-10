@@ -581,16 +581,8 @@ static pid_t fdevent_open_logger_pipe_spawn(const char *logger, int rfd) {
 }
 
 
-static void fdevent_waitpid_logger_pipe(fdevent_cmd_pipe *fcp, time_t ts) {
-    pid_t pid = fcp->pid;
-    if (pid > 0) {
-        switch (waitpid(pid, NULL, WNOHANG)) {
-          case 0:  return;
-          case -1: if (errno == EINTR) return; /* fall through */
-          default: break;
-        }
-        fcp->pid = -1;
-    }
+static void fdevent_restart_logger_pipe(fdevent_cmd_pipe *fcp, time_t ts) {
+    if (fcp->pid > 0) return;  /* assert */
     if (fcp->start + 5 < ts) { /* limit restart to once every 5 sec */
         /* restart child process using existing pipe fds */
         fcp->start = ts;
@@ -599,9 +591,31 @@ static void fdevent_waitpid_logger_pipe(fdevent_cmd_pipe *fcp, time_t ts) {
 }
 
 
-void fdevent_waitpid_logger_pipes(time_t ts) {
+void fdevent_restart_logger_pipes(time_t ts) {
     for (size_t i = 0; i < cmd_pipes.used; ++i) {
-        fdevent_waitpid_logger_pipe(cmd_pipes.ptr+i, ts);
+        fdevent_cmd_pipe * const fcp = cmd_pipes.ptr+i;
+        if (fcp->pid > 0) continue;
+        fdevent_restart_logger_pipe(fcp, ts);
+    }
+}
+
+
+int fdevent_waitpid_logger_pipe_pid(pid_t pid, time_t ts) {
+    for (size_t i = 0; i < cmd_pipes.used; ++i) {
+        fdevent_cmd_pipe * const fcp = cmd_pipes.ptr+i;
+        if (pid != fcp->pid) continue;
+        fcp->pid = -1;
+        fdevent_restart_logger_pipe(fcp, ts);
+        return 1;
+    }
+    return 0;
+}
+
+
+void fdevent_clr_logger_pipe_pids(void) {
+    for (size_t i = 0; i < cmd_pipes.used; ++i) {
+        fdevent_cmd_pipe *fcp = cmd_pipes.ptr+i;
+        fcp->pid = -1;
     }
 }
 

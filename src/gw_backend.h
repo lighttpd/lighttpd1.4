@@ -277,6 +277,7 @@ typedef struct gw_plugin_data {
     gw_plugin_config **config_storage;
 
     gw_plugin_config conf; /* used only as long as no gw_handler_ctx is setup */
+    pid_t srv_pid;
 } gw_plugin_data;
 
 /* connection specific data */
@@ -337,8 +338,8 @@ int gw_set_defaults_balance(server *srv, gw_plugin_config *s, data_unset *du);
 handler_t gw_check_extension(server *srv, connection *con, gw_plugin_data *p, int uri_path_handler, size_t hctx_sz);
 handler_t gw_connection_reset(server *srv, connection *con, void *p_d);
 handler_t gw_handle_subrequest(server *srv, connection *con, void *p_d);
-void gw_handle_trigger_exts(server *srv, gw_exts *exts, int debug);
 handler_t gw_handle_trigger(server *srv, void *p_d);
+handler_t gw_handle_waitpid_cb(server *srv, void *p_d, pid_t pid, int status);
 
 void gw_set_transparent(server *srv, gw_handler_ctx *hctx);
 
