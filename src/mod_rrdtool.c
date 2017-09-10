@@ -385,7 +385,7 @@ TRIGGER_FUNC(mod_rrd_trigger) {
 
 		/* write the data down every minute */
 
-		if (HANDLER_GO_ON != mod_rrdtool_create_rrd(srv, p, s)) return HANDLER_ERROR;
+		if (HANDLER_GO_ON != mod_rrdtool_create_rrd(srv, p, s)) return HANDLER_GO_ON;
 
 		buffer_copy_string_len(p->cmd, CONST_STR_LEN("update "));
 		buffer_append_string_buffer(p->cmd, s->path_rrd);
@@ -402,7 +402,7 @@ TRIGGER_FUNC(mod_rrd_trigger) {
 					"rrdtool-write: failed", strerror(errno));
 
 			mod_rrd_fatal_error(srv, p);
-			return HANDLER_ERROR;
+			return HANDLER_GO_ON;
 		}
 
 		if (-1 == safe_read(p->read_fd, p->resp)) {
@@ -410,7 +410,7 @@ TRIGGER_FUNC(mod_rrd_trigger) {
 					"rrdtool-read: failed", strerror(errno));
 
 			mod_rrd_fatal_error(srv, p);
-			return HANDLER_ERROR;
+			return HANDLER_GO_ON;
 		}
 
 		if (p->resp->ptr[0] != 'O' ||
@@ -421,7 +421,7 @@ TRIGGER_FUNC(mod_rrd_trigger) {
 					"rrdtool-response:", p->cmd, p->resp);
 
 				mod_rrd_fatal_error(srv, p);
-				return HANDLER_ERROR;
+				return HANDLER_GO_ON;
 			}
 		}
 		s->requests = 0;
