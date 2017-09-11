@@ -1019,6 +1019,7 @@ static handler_t cgi_waitpid_cb(server *srv, void *p_d, pid_t pid, int status) {
         if (pid != p->cgi_pid.ptr[i].pid) continue;
 
         hctx = (handler_ctx *)p->cgi_pid.ptr[i].ctx;
+        if (hctx) hctx->pid = -1;
         cgi_pid_del(p, i);
 
         if (WIFEXITED(status)) {
@@ -1034,11 +1035,6 @@ static handler_t cgi_waitpid_cb(server *srv, void *p_d, pid_t pid, int status) {
         else {
             log_error_write(srv, __FILE__, __LINE__, "sds",
                             "CGI pid", pid, "ended unexpectedly");
-        }
-
-        if (hctx) {
-            hctx->pid = -1;
-            cgi_handle_fdevent(srv, hctx, FDEVENT_IN|FDEVENT_HUP);
         }
 
         return HANDLER_FINISHED;
