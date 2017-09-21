@@ -236,7 +236,7 @@ URIHANDLER_FUNC(mod_usertrack_uri_handler) {
 
 	li_itostrn(hh, sizeof(hh), srv->cur_ts);
 	li_MD5_Update(&Md5Ctx, (unsigned char *)hh, strlen(hh));
-	li_itostrn(hh, sizeof(hh), li_rand_pseudo_bytes());
+	li_itostrn(hh, sizeof(hh), li_rand_pseudo());
 	li_MD5_Update(&Md5Ctx, (unsigned char *)hh, strlen(hh));
 
 	li_MD5_Final(h, &Md5Ctx);

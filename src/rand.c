@@ -172,7 +172,7 @@ void li_rand_reseed (void)
     if (li_rand_inited) li_rand_init();
 }
 
-int li_rand_pseudo_bytes (void)
+int li_rand_pseudo (void)
 {
     /* randomness *is not* cryptographically strong */
     /* (attempt to use better mechanisms to replace the more portable rand()) */
@@ -198,6 +198,12 @@ int li_rand_pseudo_bytes (void)
   #endif
 }
 
+void li_rand_pseudo_bytes (unsigned char *buf, int num)
+{
+    for (int i = 0; i < num; ++i)
+        buf[i] = li_rand_pseudo() & 0xFF;
+}
+
 int li_rand_bytes (unsigned char *buf, int num)
 {
   #ifdef USE_OPENSSL_CRYPTO
@@ -211,8 +217,7 @@ int li_rand_bytes (unsigned char *buf, int num)
     }
     else {
         /* NOTE: not cryptographically random !!! */
-        for (int i = 0; i < num; ++i)
-            buf[i] = li_rand_pseudo_bytes() & 0xFF;
+        li_rand_pseudo_bytes(buf, num);
         /*(openssl RAND_pseudo_bytes rc for non-cryptographically random data)*/
         return 0;
     }
