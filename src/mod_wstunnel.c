@@ -259,7 +259,8 @@ SETDEFAULTS_FUNC(mod_wstunnel_set_defaults) {
         }
 
         /* error if "mode" = "authorizer"; wstunnel can not act as authorizer */
-        if (s->gw.exts_auth->used) { /*(check after gw_set_defaults_backend())*/
+        /*(check after gw_set_defaults_backend())*/
+        if (s->gw.exts_auth && s->gw.exts_auth->used) {
             log_error_write(srv, __FILE__, __LINE__, "s",
                             "wstunnel.server must not define any hosts "
                             "with attribute \"mode\" = \"authorizer\"");
@@ -273,7 +274,7 @@ SETDEFAULTS_FUNC(mod_wstunnel_set_defaults) {
             buffer_reset(s->frame_type);
         }
 
-        if (array_is_vlist(s->origins)) {
+        if (!array_is_vlist(s->origins)) {
             log_error_write(srv, __FILE__, __LINE__, "s",
                             "unexpected value for wstunnel.origins; expected wstunnel.origins = ( \"...\", \"...\" )");
             return HANDLER_ERROR;
