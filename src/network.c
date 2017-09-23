@@ -70,7 +70,6 @@ static handler_t network_server_handle_fdevent(server *srv, void *context, int r
 }
 
 static int network_server_init(server *srv, buffer *host_token, size_t sidx) {
-	int val;
 	socklen_t addr_len;
 	server_socket *srv_socket;
 	unsigned int port = 0;
@@ -226,9 +225,9 @@ static int network_server_init(server *srv, buffer *host_token, size_t sidx) {
 		if (AF_INET6 == srv_socket->addr.plain.sa_family
 		    && host != NULL) {
 			if (s->set_v6only) {
-				val = 1;
+				int val = 1;
 				if (-1 == setsockopt(srv_socket->fd, IPPROTO_IPV6, IPV6_V6ONLY, &val, sizeof(val))) {
-					log_error_write(srv, __FILE__, __LINE__, "ss", "socketsockopt(IPV6_V6ONLY) failed:", strerror(errno));
+					log_error_write(srv, __FILE__, __LINE__, "ss", "setsockopt(IPV6_V6ONLY) failed:", strerror(errno));
 					goto error_free_socket;
 				}
 			} else {
@@ -241,16 +240,14 @@ static int network_server_init(server *srv, buffer *host_token, size_t sidx) {
 	/* */
 	srv->cur_fds = srv_socket->fd;
 
-	val = 1;
-	if (setsockopt(srv_socket->fd, SOL_SOCKET, SO_REUSEADDR, &val, sizeof(val)) < 0) {
-		log_error_write(srv, __FILE__, __LINE__, "ss", "socketsockopt(SO_REUSEADDR) failed:", strerror(errno));
+	if (fdevent_set_so_reuseaddr(srv_socket->fd, 1) < 0) {
+		log_error_write(srv, __FILE__, __LINE__, "ss", "setsockopt(SO_REUSEADDR) failed:", strerror(errno));
 		goto error_free_socket;
 	}
 
 	if (srv_socket->addr.plain.sa_family != AF_UNIX) {
-		val = 1;
-		if (setsockopt(srv_socket->fd, IPPROTO_TCP, TCP_NODELAY, &val, sizeof(val)) < 0) {
-			log_error_write(srv, __FILE__, __LINE__, "ss", "socketsockopt(TCP_NODELAY) failed:", strerror(errno));
+		if (fdevent_set_tcp_nodelay(srv_socket->fd, 1) < 0) {
+			log_error_write(srv, __FILE__, __LINE__, "ss", "setsockopt(TCP_NODELAY) failed:", strerror(errno));
 			goto error_free_socket;
 		}
 	}

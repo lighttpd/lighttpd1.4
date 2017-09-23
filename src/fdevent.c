@@ -795,3 +795,15 @@ int fdevent_is_tcp_half_closed(int fd) {
     return 0; /* false (not half-closed) or TCP state unknown */
   #endif
 }
+
+
+int fdevent_set_tcp_nodelay (const int fd, const int opt)
+{
+    return setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, &opt, sizeof(opt));
+}
+
+
+int fdevent_set_so_reuseaddr (const int fd, const int opt)
+{
+    return setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
+}

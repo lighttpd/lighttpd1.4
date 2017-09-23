@@ -487,7 +487,6 @@ static int gw_spawn_connection(server *srv, gw_host *host, gw_proc *proc, int de
         /* server is not up, spawn it  */
         char_array env;
         size_t i;
-        int val;
         int dfd = -1;
 
         /* reopen socket */
@@ -498,8 +497,7 @@ static int gw_spawn_connection(server *srv, gw_host *host, gw_proc *proc, int de
             return -1;
         }
 
-        val = 1;
-        if (setsockopt(gw_fd,SOL_SOCKET,SO_REUSEADDR,&val,sizeof(val)) < 0) {
+        if (fdevent_set_so_reuseaddr(gw_fd, 1) < 0) {
             log_error_write(srv, __FILE__, __LINE__, "ss",
                             "socketsockopt failed:", strerror(errno));
             close(gw_fd);
@@ -1646,8 +1644,7 @@ static void gw_set_state(server *srv, gw_handler_ctx *hctx, gw_connection_state_
 
 void gw_set_transparent(server *srv, gw_handler_ctx *hctx) {
     if (AF_UNIX != hctx->host->family) {
-        int v = 1;
-        if (-1 == setsockopt(hctx->fd,IPPROTO_TCP,TCP_NODELAY,&v,sizeof(v))) {
+        if (-1 == fdevent_set_tcp_nodelay(hctx->fd, 1)) {
             /*(error, but not critical)*/
         }
     }
