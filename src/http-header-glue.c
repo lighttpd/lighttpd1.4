@@ -128,23 +128,19 @@ int http_response_redirect_to_directory(server *srv, connection *con) {
 }
 
 buffer * strftime_cache_get(server *srv, time_t last_mod) {
+	static int i;
 	struct tm *tm;
-	size_t i;
 
-	for (i = 0; i < FILE_CACHE_MAX; i++) {
-		/* found cache-entry */
-		if (srv->mtime_cache[i].mtime == last_mod) return srv->mtime_cache[i].str;
-
-		/* found empty slot */
-		if (srv->mtime_cache[i].mtime == 0) break;
+	for (int j = 0; j < FILE_CACHE_MAX; ++j) {
+		if (srv->mtime_cache[j].mtime == last_mod)
+			return srv->mtime_cache[j].str; /* found cache-entry */
 	}
 
-	if (i == FILE_CACHE_MAX) {
+	if (++i == FILE_CACHE_MAX) {
 		i = 0;
 	}
 
 	srv->mtime_cache[i].mtime = last_mod;
-	buffer_string_prepare_copy(srv->mtime_cache[i].str, 1023);
 	tm = gmtime(&(srv->mtime_cache[i].mtime));
 	buffer_append_strftime(srv->mtime_cache[i].str, "%a, %d %b %Y %H:%M:%S GMT", tm);
 
