@@ -1796,6 +1796,16 @@ static handler_t gw_write_request(server *srv, gw_handler_ctx *hctx) {
             if (HANDLER_GO_ON != rc) return rc;
         }
 
+        /*(disable Nagle algorithm if streaming and content-length unknown)*/
+        if (AF_UNIX != hctx->host->family) {
+            connection *con = hctx->remote_conn;
+            if (-1 == con->request.content_length) {
+                if (-1 == fdevent_set_tcp_nodelay(hctx->fd, 1)) {
+                    /*(error, but not critical)*/
+                }
+            }
+        }
+
         fdevent_event_add(srv->ev, &(hctx->fde_ndx), hctx->fd, FDEVENT_IN);
         gw_set_state(srv, hctx, GW_STATE_WRITE);
         /* fall through */
