@@ -125,6 +125,7 @@ static handler_t connection_handle_read_post_chunked(server *srv, connection *co
         while (0 == te_chunked) {
             char *p;
             chunk *c = cq->first;
+            if (NULL == c) break;
             force_assert(c->type == MEM_CHUNK);
             p = strchr(c->mem->ptr+c->offset, '\n');
             if (NULL != p) { /* found HTTP chunked header line */
