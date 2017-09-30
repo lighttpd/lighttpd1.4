@@ -381,7 +381,9 @@ static void mod_wstunnel_patch_connection(server *srv, connection *con, plugin_d
 
             if (buffer_is_equal_string(du->key, CONST_STR_LEN("wstunnel.server"))) {
                 PATCH_GW(exts);
-                /*PATCH_GW(exts_auth);*//*(wstunnel can not act as authorizer)*/
+                /*(wstunnel can not act as authorizer,
+                 * but p->conf.exts_auth must not be NULL)*/
+                PATCH_GW(exts_auth);
                 PATCH_GW(exts_resp);
             } else if (buffer_is_equal_string(du->key, CONST_STR_LEN("wstunnel.debug"))) {
                 PATCH_GW(debug);
