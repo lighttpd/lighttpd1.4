@@ -1941,7 +1941,7 @@ struct pstate *psp;
       psp->preccounter = 0;
       psp->firstrule = psp->lastrule = 0;
       psp->gp->nrule = 0;
-      /* Fall thru to next case */
+      /* Fall through */
     case WAITING_FOR_DECL_OR_RULE:
       if( x[0]=='%' ){
         psp->state = WAITING_FOR_DECL_KEYWORD;
