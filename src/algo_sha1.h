@@ -44,6 +44,7 @@ extern "C" {
 #ifdef HAVE_INTTYPES_H
 # include <inttypes.h>
 #endif
+#include <sys/types.h>
 
 /* Make sure you define these types for your architecture: */
 typedef uint32_t sha1_quadbyte;         /* 4 byte type */
@@ -63,7 +64,7 @@ typedef struct _SHA_CTX {
 
 #ifndef NOPROTO
 void SHA1_Init(SHA_CTX *context);
-void SHA1_Update(SHA_CTX *context, sha1_byte *data, unsigned int len);
+void SHA1_Update(SHA_CTX *context, const sha1_byte *data, unsigned int len);
 void SHA1_Final(sha1_byte digest[SHA1_DIGEST_LENGTH], SHA_CTX *context);
 /*(added for lighttpd)*/
 unsigned char *SHA1(const unsigned char *d, size_t n, unsigned char *md);

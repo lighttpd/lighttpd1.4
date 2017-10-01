@@ -69,7 +69,7 @@ typedef union _BYTE64QUAD16 {
 } BYTE64QUAD16;
 
 /* Hash a single 512-bit block. This is the core of the algorithm. */
-void SHA1_Transform(sha1_quadbyte state[5], sha1_byte buffer[64]) {
+void SHA1_Transform(sha1_quadbyte state[5], const sha1_byte buffer[64]) {
     sha1_quadbyte a, b, c, d, e;
     BYTE64QUAD16 src;
     BYTE64QUAD16 *block;
@@ -127,7 +127,7 @@ void SHA1_Init(SHA_CTX* context) {
 }
 
 /* Run your data through this. */
-void SHA1_Update(SHA_CTX *context, sha1_byte *data, unsigned int len) {
+void SHA1_Update(SHA_CTX *context, const sha1_byte *data, unsigned int len) {
     unsigned int i, j;
 
     j = (context->count[0] >> 3) & 63;
