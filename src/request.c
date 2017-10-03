@@ -587,13 +587,16 @@ int http_request_parse(server *srv, connection *con) {
 					return 0;
 				}
 
-				if (0 == strncmp(uri, "http://", 7) &&
+				if (*uri == '/') {
+					/* (common case) */
+					buffer_copy_string_len(con->request.uri, uri, proto - uri - 1);
+				} else if (0 == strncasecmp(uri, "http://", 7) &&
 				    NULL != (nuri = strchr(uri + 7, '/'))) {
 					reqline_host = uri + 7;
 					reqline_hostlen = nuri - reqline_host;
 
 					buffer_copy_string_len(con->request.uri, nuri, proto - nuri - 1);
-				} else if (0 == strncmp(uri, "https://", 8) &&
+				} else if (0 == strncasecmp(uri, "https://", 8) &&
 				    NULL != (nuri = strchr(uri + 8, '/'))) {
 					reqline_host = uri + 8;
 					reqline_hostlen = nuri - reqline_host;
