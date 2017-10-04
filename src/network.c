@@ -405,8 +405,10 @@ int network_init(server *srv) {
 	b = buffer_init();
 
 	buffer_copy_buffer(b, srv->srvconf.bindhost);
-	buffer_append_string_len(b, CONST_STR_LEN(":"));
-	buffer_append_int(b, srv->srvconf.port);
+	if (b->ptr[0] != '/') { /*(skip adding port if unix socket path)*/
+		buffer_append_string_len(b, CONST_STR_LEN(":"));
+		buffer_append_int(b, srv->srvconf.port);
+	}
 
 	/* check if we already know this socket, and if yes, don't init it */
 	for (j = 0; j < srv->srv_sockets.used; j++) {
