@@ -474,6 +474,9 @@ const char * inet_ntop_cache_get_ip(server *srv, sock_addr *addr) {
 
 	int i;
 	UNUSED(srv);
+      #ifdef HAVE_SYS_UN_H
+	if (addr->plain.sa_family == AF_UNIX) return addr->un.sun_path;
+      #endif
 	for (i = 0; i < INET_NTOP_CACHE_MAX; i++) {
 		if (inet_ntop_cache[i].family == addr->plain.sa_family) {
 			if (inet_ntop_cache[i].family == AF_INET6 &&
@@ -515,6 +518,10 @@ const char * inet_ntop_cache_get_ip(server *srv, sock_addr *addr) {
 	return inet_ntop_cache[i].b2;
 #else
 	UNUSED(srv);
-	return inet_ntoa(addr->ipv4.sin_addr);
+	if (addr->plain.sa_family == AF_INET) return inet_ntoa(addr->ipv4.sin_addr);
+      #ifdef HAVE_SYS_UN_H
+	if (addr->plain.sa_family == AF_UNIX) return addr->un.sun_path;
+      #endif
+	return "";
 #endif
 }
