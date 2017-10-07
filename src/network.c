@@ -75,10 +75,9 @@ static int network_server_init(server *srv, buffer *host_token, size_t sidx) {
 	unsigned int port = 0;
 	const char *host;
 	specific_config *s = srv->config_storage[sidx];
-	buffer *b;
-	int err;
 
 #ifdef __WIN32
+	int err;
 	WORD wVersionRequested;
 	WSADATA wsaData;
 
@@ -91,7 +90,6 @@ static int network_server_init(server *srv, buffer *host_token, size_t sidx) {
 		    return -1;
 	}
 #endif
-	err = -1;
 
 	srv_socket = calloc(1, sizeof(*srv_socket));
 	force_assert(NULL != srv_socket);
@@ -99,14 +97,26 @@ static int network_server_init(server *srv, buffer *host_token, size_t sidx) {
 	srv_socket->fd = -1;
 	srv_socket->fde_ndx = -1;
 	srv_socket->sidx = sidx;
+	srv_socket->is_ssl = s->ssl_enabled;
 
 	srv_socket->srv_token = buffer_init();
 	buffer_copy_buffer(srv_socket->srv_token, host_token);
 
-	b = buffer_init();
-	buffer_copy_buffer(b, host_token); /*(allocates b->ptr even if host_token is NULL)*/
+	if (srv->srv_sockets.size == 0) {
+		srv->srv_sockets.size = 4;
+		srv->srv_sockets.used = 0;
+		srv->srv_sockets.ptr = malloc(srv->srv_sockets.size * sizeof(server_socket*));
+		force_assert(NULL != srv->srv_sockets.ptr);
+	} else if (srv->srv_sockets.used == srv->srv_sockets.size) {
+		srv->srv_sockets.size += 4;
+		srv->srv_sockets.ptr = realloc(srv->srv_sockets.ptr, srv->srv_sockets.size * sizeof(server_socket*));
+		force_assert(NULL != srv->srv_sockets.ptr);
+	}
 
-	host = b->ptr;
+	srv->srv_sockets.ptr[srv->srv_sockets.used++] = srv_socket;
+
+	buffer_copy_buffer(srv->tmp_buf, host_token); /*(allocates ->ptr even if host_token is NULL)*/
+	host = srv->tmp_buf->ptr;
 
 	if (host[0] == '/') {
 		/* host is a unix-domain-socket */
@@ -115,17 +125,18 @@ static int network_server_init(server *srv, buffer *host_token, size_t sidx) {
 #else
 		log_error_write(srv, __FILE__, __LINE__, "s",
 				"ERROR: Unix Domain sockets are not supported.");
-		goto error_free_socket;
+		return -1;
 #endif
 	} else {
 		/* ipv4:port
 		 * [ipv6]:port
 		 */
+		buffer *b = srv->tmp_buf;
 		size_t len = buffer_string_length(b);
 		char *sp = NULL;
 		if (0 == len) {
 			log_error_write(srv, __FILE__, __LINE__, "s", "value of $SERVER[\"socket\"] must not be empty");
-			goto error_free_socket;
+			return -1;
 		}
 		if ((b->ptr[0] == '[' && b->ptr[len-1] == ']') || NULL == (sp = strrchr(b->ptr, ':'))) {
 			/* use server.port if set in config, or else default from config_set_defaults() */
@@ -148,7 +159,7 @@ static int network_server_init(server *srv, buffer *host_token, size_t sidx) {
 		if (port == 0 || port > 65535) {
 			log_error_write(srv, __FILE__, __LINE__, "sd", "port not set or out of range:", port);
 
-			goto error_free_socket;
+			return -1;
 		}
 	}
 
@@ -168,16 +179,15 @@ static int network_server_init(server *srv, buffer *host_token, size_t sidx) {
 	}
 
 	if (1 != sock_addr_from_str_hints(srv, &srv_socket->addr, &addr_len, host, srv_socket->addr.plain.sa_family, port)) {
-		goto error_free_socket;
+		return -1;
 	}
 
 	if (srv->srvconf.preflight_check) {
-		err = 0;
-		goto error_free_socket;
+		return 0;
 	}
 
 	if (srv->sockets_disabled) { /* lighttpd -1 (one-shot mode) */
-		goto srv_sockets_append;
+		return 0;
 	}
 
 #ifdef HAVE_SYS_UN_H
@@ -186,7 +196,7 @@ static int network_server_init(server *srv, buffer *host_token, size_t sidx) {
 		force_assert(host); /*(static analysis hint)*/
 		if (-1 == (srv_socket->fd = fdevent_socket_cloexec(srv_socket->addr.plain.sa_family, SOCK_STREAM, 0))) {
 			log_error_write(srv, __FILE__, __LINE__, "ss", "socket failed:", strerror(errno));
-			goto error_free_socket;
+			return -1;
 		}
 		if (0 == connect(srv_socket->fd, (struct sockaddr *) &(srv_socket->addr), addr_len)) {
 			log_error_write(srv, __FILE__, __LINE__, "ss",
@@ -194,7 +204,7 @@ static int network_server_init(server *srv, buffer *host_token, size_t sidx) {
 				host);
 
 
-			goto error_free_socket;
+			return -1;
 		}
 
 		/* connect failed */
@@ -209,7 +219,7 @@ static int network_server_init(server *srv, buffer *host_token, size_t sidx) {
 				"testing socket failed:",
 				host, strerror(errno));
 
-			goto error_free_socket;
+			return -1;
 		}
 
 		fdevent_fcntl_set_nb(srv->ev, srv_socket->fd);
@@ -218,7 +228,7 @@ static int network_server_init(server *srv, buffer *host_token, size_t sidx) {
 	{
 		if (-1 == (srv_socket->fd = fdevent_socket_nb_cloexec(srv_socket->addr.plain.sa_family, SOCK_STREAM, IPPROTO_TCP))) {
 			log_error_write(srv, __FILE__, __LINE__, "ss", "socket failed:", strerror(errno));
-			goto error_free_socket;
+			return -1;
 		}
 
 #ifdef HAVE_IPV6
@@ -228,7 +238,7 @@ static int network_server_init(server *srv, buffer *host_token, size_t sidx) {
 				int val = 1;
 				if (-1 == setsockopt(srv_socket->fd, IPPROTO_IPV6, IPV6_V6ONLY, &val, sizeof(val))) {
 					log_error_write(srv, __FILE__, __LINE__, "ss", "setsockopt(IPV6_V6ONLY) failed:", strerror(errno));
-					goto error_free_socket;
+					return -1;
 				}
 			} else {
 				log_error_write(srv, __FILE__, __LINE__, "s", "warning: server.set-v6only will be removed soon, update your config to have different sockets for ipv4 and ipv6");
@@ -242,13 +252,13 @@ static int network_server_init(server *srv, buffer *host_token, size_t sidx) {
 
 	if (fdevent_set_so_reuseaddr(srv_socket->fd, 1) < 0) {
 		log_error_write(srv, __FILE__, __LINE__, "ss", "setsockopt(SO_REUSEADDR) failed:", strerror(errno));
-		goto error_free_socket;
+		return -1;
 	}
 
 	if (srv_socket->addr.plain.sa_family != AF_UNIX) {
 		if (fdevent_set_tcp_nodelay(srv_socket->fd, 1) < 0) {
 			log_error_write(srv, __FILE__, __LINE__, "ss", "setsockopt(TCP_NODELAY) failed:", strerror(errno));
-			goto error_free_socket;
+			return -1;
 		}
 	}
 
@@ -265,7 +275,7 @@ static int network_server_init(server *srv, buffer *host_token, size_t sidx) {
 					host, port, strerror(errno));
 			break;
 		}
-		goto error_free_socket;
+		return -1;
 	}
 
 	if (srv_socket->addr.plain.sa_family == AF_UNIX && !buffer_string_is_empty(s->socket_perms)) {
@@ -281,7 +291,7 @@ static int network_server_init(server *srv, buffer *host_token, size_t sidx) {
 
 	if (-1 == listen(srv_socket->fd, s->listen_backlog)) {
 		log_error_write(srv, __FILE__, __LINE__, "ss", "listen failed: ", strerror(errno));
-		goto error_free_socket;
+		return -1;
 	}
 
 	if (s->ssl_enabled) {
@@ -311,37 +321,7 @@ static int network_server_init(server *srv, buffer *host_token, size_t sidx) {
 #endif
 	}
 
-srv_sockets_append:
-	srv_socket->is_ssl = s->ssl_enabled;
-
-	if (srv->srv_sockets.size == 0) {
-		srv->srv_sockets.size = 4;
-		srv->srv_sockets.used = 0;
-		srv->srv_sockets.ptr = malloc(srv->srv_sockets.size * sizeof(server_socket*));
-		force_assert(NULL != srv->srv_sockets.ptr);
-	} else if (srv->srv_sockets.used == srv->srv_sockets.size) {
-		srv->srv_sockets.size += 4;
-		srv->srv_sockets.ptr = realloc(srv->srv_sockets.ptr, srv->srv_sockets.size * sizeof(server_socket*));
-		force_assert(NULL != srv->srv_sockets.ptr);
-	}
-
-	srv->srv_sockets.ptr[srv->srv_sockets.used++] = srv_socket;
-
-	buffer_free(b);
-
 	return 0;
-
-error_free_socket:
-	if (srv_socket->fd != -1) {
-		network_unregister_sock(srv, srv_socket);
-		close(srv_socket->fd);
-	}
-	buffer_free(srv_socket->srv_token);
-	free(srv_socket);
-
-	buffer_free(b);
-
-	return err; /* -1 if error; 0 if srv->srvconf.preflight_check successful */
 }
 
 int network_close(server *srv) {
