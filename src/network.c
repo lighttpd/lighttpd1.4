@@ -75,6 +75,8 @@ static int network_server_init(server *srv, buffer *host_token, size_t sidx, int
 	unsigned int port = 0;
 	const char *host;
 	specific_config *s = srv->config_storage[sidx];
+	sa_family_t family = AF_INET; /* default */
+	sock_addr addr;
 
 #ifdef __WIN32
 	int err;
@@ -91,55 +93,22 @@ static int network_server_init(server *srv, buffer *host_token, size_t sidx, int
 	}
 #endif
 
-	srv_socket = calloc(1, sizeof(*srv_socket));
-	force_assert(NULL != srv_socket);
-	srv_socket->addr.plain.sa_family = AF_INET; /* default */
-	srv_socket->fd = -1;
-	srv_socket->fde_ndx = -1;
-	srv_socket->sidx = sidx;
-	srv_socket->is_ssl = s->ssl_enabled;
-
-	srv_socket->srv_token = buffer_init();
-	buffer_copy_buffer(srv_socket->srv_token, host_token);
-
-	if (srv->srv_sockets.size == 0) {
-		srv->srv_sockets.size = 4;
-		srv->srv_sockets.used = 0;
-		srv->srv_sockets.ptr = malloc(srv->srv_sockets.size * sizeof(server_socket*));
-		force_assert(NULL != srv->srv_sockets.ptr);
-	} else if (srv->srv_sockets.used == srv->srv_sockets.size) {
-		srv->srv_sockets.size += 4;
-		srv->srv_sockets.ptr = realloc(srv->srv_sockets.ptr, srv->srv_sockets.size * sizeof(server_socket*));
-		force_assert(NULL != srv->srv_sockets.ptr);
+	/* check if we already know this socket, and if yes, don't init it
+	 * (optimization: check strings here to filter out exact matches;
+	 *  binary addresses are matched further below) */
+	for (size_t i = 0; i < srv->srv_sockets.used; ++i) {
+		if (buffer_is_equal(srv->srv_sockets.ptr[i]->srv_token, host_token))
+			return 0;
 	}
-
-	srv->srv_sockets.ptr[srv->srv_sockets.used++] = srv_socket;
 
 	buffer_copy_buffer(srv->tmp_buf, host_token); /*(allocates ->ptr even if host_token is NULL)*/
 	host = srv->tmp_buf->ptr;
 
-	if (-1 != stdin_fd) {
-		addr_len = sizeof(sock_addr);
-		if (-1 == getsockname(stdin_fd, (struct sockaddr *)&srv_socket->addr, &addr_len)) {
-			log_error_write(srv, __FILE__, __LINE__, "ss",
-					"getsockname()", strerror(errno));
-			return -1;
-		}
-		srv_socket->fd = stdin_fd;
-		fdevent_fcntl_set_nb_cloexec(srv->ev, stdin_fd);
-		/* srv_socket->srv_token is left as "/dev/stdin" so that it
-		 * matches config if lighttpd undergoes graceful restart.
-		 * Also, comparison in conditions in lighttpd config will
-		 * compare with "/dev/stdin".  mod_accesslog will report
-		 * "/dev/stdin" for local address, if printed in log.
-		 * This might change in future, if recommendation for use
-		 * with inetd or systemd socket activation is to do graceful
-		 * stop, and let the parent process restart lighttpd */
-	} else
+	if (-1 != stdin_fd) { } else
 	if (host[0] == '/') {
 		/* host is a unix-domain-socket */
 #ifdef HAVE_SYS_UN_H
-		srv_socket->addr.plain.sa_family = AF_UNIX;
+		family = AF_UNIX;
 #else
 		log_error_write(srv, __FILE__, __LINE__, "s",
 				"ERROR: Unix Domain sockets are not supported.");
@@ -184,21 +153,32 @@ static int network_server_init(server *srv, buffer *host_token, size_t sidx, int
 #ifdef HAVE_IPV6
 	if (-1 != stdin_fd) { } else
 	if (s->use_ipv6) {
-		srv_socket->addr.plain.sa_family = AF_INET6;
+		family = AF_INET6;
 	}
 #endif
 
 	if (*host == '\0') {
-		if (srv_socket->addr.plain.sa_family == AF_INET6) {
+		if (family == AF_INET6) {
 			log_error_write(srv, __FILE__, __LINE__, "s", "warning: please use server.use-ipv6 only for hostnames, not without server.bind / empty address; your config will break if the kernel default for IPV6_V6ONLY changes");
 			host = "::";
-		} else if (srv_socket->addr.plain.sa_family == AF_INET) {
+		} else if (family == AF_INET) {
 			host = "0.0.0.0";
 		}
 	}
 
-	if (-1 != stdin_fd) { } else
-	if (1 != sock_addr_from_str_hints(srv, &srv_socket->addr, &addr_len, host, srv_socket->addr.plain.sa_family, port)) {
+	memset(&addr, 0, sizeof(addr));
+	if (-1 != stdin_fd) {
+		if (0 == sidx && srv->srv_sockets.used > 0) {
+			close(stdin_fd);/*(graceful restart listening to "/dev/stdin")*/
+			return 0;
+		}
+		addr_len = sizeof(sock_addr);
+		if (-1 == getsockname(stdin_fd, (struct sockaddr *)&addr, &addr_len)) {
+			log_error_write(srv, __FILE__, __LINE__, "ss",
+					"getsockname()", strerror(errno));
+			return -1;
+		}
+	} else if (1 != sock_addr_from_str_hints(srv, &addr, &addr_len, host, family, port)) {
 		return -1;
 	}
 
@@ -206,12 +186,45 @@ static int network_server_init(server *srv, buffer *host_token, size_t sidx, int
 		return 0;
 	}
 
+	/* check if we already know this socket (after potential DNS resolution), and if yes, don't init it */
+	for (size_t i = 0; i < srv->srv_sockets.used; ++i) {
+		if (0 == memcmp(&srv->srv_sockets.ptr[i]->addr, &addr, sizeof(addr)))
+			return 0;
+	}
+
+	srv_socket = calloc(1, sizeof(*srv_socket));
+	force_assert(NULL != srv_socket);
+	memcpy(&srv_socket->addr, &addr, addr_len);
+	srv_socket->fd = -1;
+	srv_socket->fde_ndx = -1;
+	srv_socket->sidx = sidx;
+	srv_socket->is_ssl = s->ssl_enabled;
+
+	srv_socket->srv_token = buffer_init();
+	buffer_copy_buffer(srv_socket->srv_token, host_token);
+
+	if (srv->srv_sockets.size == 0) {
+		srv->srv_sockets.size = 4;
+		srv->srv_sockets.used = 0;
+		srv->srv_sockets.ptr = malloc(srv->srv_sockets.size * sizeof(server_socket*));
+		force_assert(NULL != srv->srv_sockets.ptr);
+	} else if (srv->srv_sockets.used == srv->srv_sockets.size) {
+		srv->srv_sockets.size += 4;
+		srv->srv_sockets.ptr = realloc(srv->srv_sockets.ptr, srv->srv_sockets.size * sizeof(server_socket*));
+		force_assert(NULL != srv->srv_sockets.ptr);
+	}
+	srv->srv_sockets.ptr[srv->srv_sockets.used++] = srv_socket;
+
 	if (srv->sockets_disabled) { /* lighttpd -1 (one-shot mode) */
 		return 0;
 	}
 
+	if (-1 != stdin_fd) {
+		srv_socket->fd = stdin_fd;
+		fdevent_fcntl_set_nb_cloexec(srv->ev, stdin_fd);
+		sock_addr_inet_ntop_copy_buffer(srv_socket->srv_token, &srv_socket->addr);
+	} else
 #ifdef HAVE_SYS_UN_H
-	if (-1 != stdin_fd) { } else
 	if (AF_UNIX == srv_socket->addr.plain.sa_family) {
 		/* check if the socket exists and try to connect to it. */
 		force_assert(host); /*(static analysis hint)*/
@@ -378,8 +391,7 @@ typedef enum {
 } network_backend_t;
 
 int network_init(server *srv, int stdin_fd) {
-	buffer *b;
-	size_t i, j;
+	size_t i;
 	network_backend_t backend;
 
 	struct nb_map {
@@ -406,31 +418,7 @@ int network_init(server *srv, int stdin_fd) {
 		{ NETWORK_BACKEND_UNSET,       NULL }
 	};
 
-	b = buffer_init();
-
-	buffer_copy_buffer(b, srv->srvconf.bindhost);
-	if (b->ptr[0] != '/') { /*(skip adding port if unix socket path)*/
-		buffer_append_string_len(b, CONST_STR_LEN(":"));
-		buffer_append_int(b, srv->srvconf.port);
-	}
-
-	/* check if we already know this socket, and if yes, don't init it */
-	for (j = 0; j < srv->srv_sockets.used; j++) {
-		if (buffer_is_equal(srv->srv_sockets.ptr[j]->srv_token, b)) {
-			break;
-		}
-	}
-	if (j == srv->srv_sockets.used) {
-		if (0 != network_server_init(srv, b, 0, stdin_fd)) {
-			buffer_free(b);
-			return -1;
-		}
-	} else if (buffer_is_equal_string(b, CONST_STR_LEN("/dev/stdin"))) {
-		close(stdin_fd);/*(graceful restart listening to "/dev/stdin")*/
-	}
-	buffer_free(b);
-
-	/* get a usefull default */
+	/* get a useful default */
 	backend = network_backends[0].nb;
 
 	/* match name against known types */
@@ -471,6 +459,20 @@ int network_init(server *srv, int stdin_fd) {
 		return -1;
 	}
 
+	{
+		int rc;
+		buffer *b = buffer_init();
+		buffer_copy_buffer(b, srv->srvconf.bindhost);
+		if (b->ptr[0] != '/') { /*(skip adding port if unix socket path)*/
+			buffer_append_string_len(b, CONST_STR_LEN(":"));
+			buffer_append_int(b, srv->srvconf.port);
+		}
+
+		rc = network_server_init(srv, b, 0, stdin_fd);
+		buffer_free(b);
+		if (0 != rc) return -1;
+	}
+
 	/* check for $SERVER["socket"] */
 	for (i = 1; i < srv->config_context->used; i++) {
 		data_config *dc = (data_config *)srv->config_context->data[i];
@@ -480,17 +482,7 @@ int network_init(server *srv, int stdin_fd) {
 
 		if (dc->cond != CONFIG_COND_EQ) continue;
 
-		/* check if we already know this socket,
-		 * if yes, don't init it */
-		for (j = 0; j < srv->srv_sockets.used; j++) {
-			if (buffer_is_equal(srv->srv_sockets.ptr[j]->srv_token, dc->string)) {
-				break;
-			}
-		}
-
-		if (j == srv->srv_sockets.used) {
 			if (0 != network_server_init(srv, dc->string, i, -1)) return -1;
-		}
 	}
 
 	return 0;
