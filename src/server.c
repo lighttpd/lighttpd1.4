@@ -1054,6 +1054,7 @@ static int server_main (server * const srv, int argc, char **argv) {
 #ifdef HAVE_FORK
 	int parent_pipe_fd = -1;
 #endif
+	int stdin_fd = -1;
 
 #ifdef HAVE_GETUID
 	i_am_root = (0 == getuid());
@@ -1163,6 +1164,15 @@ static int server_main (server * const srv, int argc, char **argv) {
 			srv->srvconf.max_worker = 0;
 			log_error_write(srv, __FILE__, __LINE__, "s",
 					"server one-shot command line option disables server.max-worker config file option.");
+		}
+	}
+
+	if (buffer_is_equal_string(srv->srvconf.bindhost, CONST_STR_LEN("/dev/stdin"))) {
+		stdin_fd = dup(STDIN_FILENO);
+		if (stdin_fd <= STDERR_FILENO) {
+			log_error_write(srv, __FILE__, __LINE__, "s",
+					"Invalid fds at startup");
+			return -1;
 		}
 	}
 
@@ -1323,7 +1333,7 @@ static int server_main (server * const srv, int argc, char **argv) {
 	}
 
 	/* we need root-perms for port < 1024 */
-	if (0 != network_init(srv)) {
+	if (0 != network_init(srv, stdin_fd)) {
 		return -1;
 	}
 

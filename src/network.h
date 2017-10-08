@@ -6,7 +6,7 @@
 
 void network_accept_tcp_nagle_disable(int fd);
 
-int network_init(server *srv);
+int network_init(server *srv, int stdin_fd);
 int network_close(server *srv);
 
 int network_register_fdevents(server *srv);

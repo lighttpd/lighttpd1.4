@@ -69,7 +69,7 @@ static handler_t network_server_handle_fdevent(server *srv, void *context, int r
 	return HANDLER_GO_ON;
 }
 
-static int network_server_init(server *srv, buffer *host_token, size_t sidx) {
+static int network_server_init(server *srv, buffer *host_token, size_t sidx, int stdin_fd) {
 	socklen_t addr_len;
 	server_socket *srv_socket;
 	unsigned int port = 0;
@@ -118,6 +118,24 @@ static int network_server_init(server *srv, buffer *host_token, size_t sidx) {
 	buffer_copy_buffer(srv->tmp_buf, host_token); /*(allocates ->ptr even if host_token is NULL)*/
 	host = srv->tmp_buf->ptr;
 
+	if (-1 != stdin_fd) {
+		addr_len = sizeof(sock_addr);
+		if (-1 == getsockname(stdin_fd, (struct sockaddr *)&srv_socket->addr, &addr_len)) {
+			log_error_write(srv, __FILE__, __LINE__, "ss",
+					"getsockname()", strerror(errno));
+			return -1;
+		}
+		srv_socket->fd = stdin_fd;
+		fdevent_fcntl_set_nb_cloexec(srv->ev, stdin_fd);
+		/* srv_socket->srv_token is left as "/dev/stdin" so that it
+		 * matches config if lighttpd undergoes graceful restart.
+		 * Also, comparison in conditions in lighttpd config will
+		 * compare with "/dev/stdin".  mod_accesslog will report
+		 * "/dev/stdin" for local address, if printed in log.
+		 * This might change in future, if recommendation for use
+		 * with inetd or systemd socket activation is to do graceful
+		 * stop, and let the parent process restart lighttpd */
+	} else
 	if (host[0] == '/') {
 		/* host is a unix-domain-socket */
 #ifdef HAVE_SYS_UN_H
@@ -164,6 +182,7 @@ static int network_server_init(server *srv, buffer *host_token, size_t sidx) {
 	}
 
 #ifdef HAVE_IPV6
+	if (-1 != stdin_fd) { } else
 	if (s->use_ipv6) {
 		srv_socket->addr.plain.sa_family = AF_INET6;
 	}
@@ -178,6 +197,7 @@ static int network_server_init(server *srv, buffer *host_token, size_t sidx) {
 		}
 	}
 
+	if (-1 != stdin_fd) { } else
 	if (1 != sock_addr_from_str_hints(srv, &srv_socket->addr, &addr_len, host, srv_socket->addr.plain.sa_family, port)) {
 		return -1;
 	}
@@ -191,6 +211,7 @@ static int network_server_init(server *srv, buffer *host_token, size_t sidx) {
 	}
 
 #ifdef HAVE_SYS_UN_H
+	if (-1 != stdin_fd) { } else
 	if (AF_UNIX == srv_socket->addr.plain.sa_family) {
 		/* check if the socket exists and try to connect to it. */
 		force_assert(host); /*(static analysis hint)*/
@@ -230,6 +251,7 @@ static int network_server_init(server *srv, buffer *host_token, size_t sidx) {
 			log_error_write(srv, __FILE__, __LINE__, "ss", "socket failed:", strerror(errno));
 			return -1;
 		}
+	}
 
 #ifdef HAVE_IPV6
 		if (AF_INET6 == srv_socket->addr.plain.sa_family
@@ -245,7 +267,6 @@ static int network_server_init(server *srv, buffer *host_token, size_t sidx) {
 			}
 		}
 #endif
-	}
 
 	/* */
 	srv->cur_fds = srv_socket->fd;
@@ -262,6 +283,7 @@ static int network_server_init(server *srv, buffer *host_token, size_t sidx) {
 		}
 	}
 
+	if (-1 != stdin_fd) { } else
 	if (0 != bind(srv_socket->fd, (struct sockaddr *) &(srv_socket->addr), addr_len)) {
 		switch(srv_socket->addr.plain.sa_family) {
 		case AF_UNIX:
@@ -278,6 +300,7 @@ static int network_server_init(server *srv, buffer *host_token, size_t sidx) {
 		return -1;
 	}
 
+	if (-1 != stdin_fd) { } else
 	if (srv_socket->addr.plain.sa_family == AF_UNIX && !buffer_string_is_empty(s->socket_perms)) {
 		mode_t m = 0;
 		for (char *str = s->socket_perms->ptr; *str; ++str) {
@@ -289,6 +312,7 @@ static int network_server_init(server *srv, buffer *host_token, size_t sidx) {
 		}
 	}
 
+	if (-1 != stdin_fd) { } else
 	if (-1 == listen(srv_socket->fd, s->listen_backlog)) {
 		log_error_write(srv, __FILE__, __LINE__, "ss", "listen failed: ", strerror(errno));
 		return -1;
@@ -353,7 +377,7 @@ typedef enum {
 	NETWORK_BACKEND_SENDFILE,
 } network_backend_t;
 
-int network_init(server *srv) {
+int network_init(server *srv, int stdin_fd) {
 	buffer *b;
 	size_t i, j;
 	network_backend_t backend;
@@ -397,10 +421,12 @@ int network_init(server *srv) {
 		}
 	}
 	if (j == srv->srv_sockets.used) {
-		if (0 != network_server_init(srv, b, 0)) {
+		if (0 != network_server_init(srv, b, 0, stdin_fd)) {
 			buffer_free(b);
 			return -1;
 		}
+	} else if (buffer_is_equal_string(b, CONST_STR_LEN("/dev/stdin"))) {
+		close(stdin_fd);/*(graceful restart listening to "/dev/stdin")*/
 	}
 	buffer_free(b);
 
@@ -463,7 +489,7 @@ int network_init(server *srv) {
 		}
 
 		if (j == srv->srv_sockets.used) {
-			if (0 != network_server_init(srv, dc->string, i)) return -1;
+			if (0 != network_server_init(srv, dc->string, i, -1)) return -1;
 		}
 	}
 
