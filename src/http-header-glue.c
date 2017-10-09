@@ -1302,6 +1302,9 @@ handler_t http_response_read(server *srv, connection *con, http_response_opts *o
             }
             break;
         }
+
+        if ((size_t)n < avail)
+            break; /* emptied kernel read buffer or partial read */
     }
 
     return HANDLER_GO_ON;
