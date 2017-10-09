@@ -320,14 +320,19 @@ int connection_write_chunkqueue(server *srv, connection *con, chunkqueue *cq, of
 	written = cq->bytes_out;
 
       #ifdef TCP_CORK
-	/* Linux: put a cork into the socket as we want to combine the write() calls
-	 * but only if we really have multiple chunks, and only if TCP socket
+	/* Linux: put a cork into socket as we want to combine write() calls
+	 * but only if we really have multiple chunks including non-MEM_CHUNK,
+	 * and only if TCP socket
 	 */
 	if (cq->first && cq->first->next) {
 		const int sa_family = con->srv_socket->addr.plain.sa_family;
 		if (sa_family == AF_INET || sa_family == AF_INET6) {
-			corked = 1;
-			(void)setsockopt(con->fd, IPPROTO_TCP, TCP_CORK, &corked, sizeof(corked));
+			chunk *c = cq->first;
+			while (c->type == MEM_CHUNK && NULL != (c = c->next)) ;
+			if (NULL != c) {
+				corked = 1;
+				(void)setsockopt(con->fd, IPPROTO_TCP, TCP_CORK, &corked, sizeof(corked));
+			}
 		}
 	}
       #endif
