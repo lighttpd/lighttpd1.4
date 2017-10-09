@@ -62,6 +62,7 @@
  * - attribute "proto" removed; mod_proxy can proxy to backend websocket server
  * - attribute "subproto" should be replaced with mod_setenv directive
  *     setenv.set-response-header = ( "Sec-WebSocket-Protocol" => "..." )
+ *     if header is required
  *
  * not reviewed:
  * - websocket protocol compliance has not been reviewed
@@ -501,6 +502,7 @@ static void wstunnel_handler_ctx_free(void *gwhctx) {
 
 static handler_t wstunnel_handler_setup (server *srv, connection *con, plugin_data *p) {
     handler_ctx *hctx = con->plugin_ctx[p->id];
+    int binary;
     int hybivers;
     hctx->srv = srv; /*(for mod_wstunnel module-specific DEBUG_LOG() macro)*/
     hctx->conf.frame_type     = p->conf.frame_type;
@@ -529,7 +531,16 @@ static handler_t wstunnel_handler_setup (server *srv, connection *con, plugin_da
     hctx->frame.ctl.siz       = 0;
     hctx->frame.payload       = buffer_init();
 
-    if (!buffer_is_empty(hctx->conf.frame_type)) { /*("binary")*/
+    binary = !buffer_is_empty(hctx->conf.frame_type); /*("binary")*/
+    if (!binary) {
+        data_string *ds = (data_string *)
+          array_get_element(con->request.headers, "Sec-WebSocket-Protocol");
+        binary = (NULL != ds
+                  && buffer_is_equal_caseless_string(ds->value,
+                                                     CONST_STR_LEN("binary")));
+    }
+
+    if (binary) {
         DEBUG_LOG(MOD_WEBSOCKET_LOG_INFO, "s",
                   "will recv binary data from backend");
         hctx->frame.type         = MOD_WEBSOCKET_FRAME_TYPE_BIN;
@@ -829,7 +840,9 @@ static int create_response_rfc_6455(handler_ctx *hctx) {
     buffer_append_base64_encode(ds->value, sha_digest, SHA_DIGEST_LENGTH, BASE64_STANDARD);
     array_insert_unique(hdrs, (data_unset *)ds);
 
-    /*(admin can set "Sec-WebSocket-Protocol" response hdr using mod_setenv)*/
+    if (hctx->frame.type == MOD_WEBSOCKET_FRAME_TYPE_BIN)
+        array_set_key_value(hdrs, CONST_STR_LEN("Sec-WebSocket-Protocol"),
+                                  CONST_STR_LEN("binary"));
 
     return 0;
 }
