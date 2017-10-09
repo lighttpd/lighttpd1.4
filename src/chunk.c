@@ -694,10 +694,6 @@ off_t chunkqueue_length(chunkqueue *cq) {
 	return len;
 }
 
-int chunkqueue_is_empty(chunkqueue *cq) {
-	return NULL == cq->first;
-}
-
 void chunkqueue_mark_written(chunkqueue *cq, off_t len) {
 	off_t written = len;
 	chunk *c;

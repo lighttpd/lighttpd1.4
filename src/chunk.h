@@ -98,6 +98,9 @@ off_t chunkqueue_length(chunkqueue *cq);
 void chunkqueue_free(chunkqueue *cq);
 void chunkqueue_reset(chunkqueue *cq);
 
-int chunkqueue_is_empty(chunkqueue *cq);
+static inline int chunkqueue_is_empty(const chunkqueue *cq);
+static inline int chunkqueue_is_empty(const chunkqueue *cq) {
+	return NULL == cq->first;
+}
 
 #endif
