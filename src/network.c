@@ -221,7 +221,10 @@ static int network_server_init(server *srv, buffer *host_token, size_t sidx, int
 
 	if (-1 != stdin_fd) {
 		srv_socket->fd = stdin_fd;
-		fdevent_fcntl_set_nb_cloexec(srv->ev, stdin_fd);
+		if (-1 == fdevent_fcntl_set_nb_cloexec(srv->ev, stdin_fd)) {
+			log_error_write(srv, __FILE__, __LINE__, "ss", "fcntl:", strerror(errno));
+			return -1;
+		}
 		sock_addr_inet_ntop_copy_buffer(srv_socket->srv_token, &srv_socket->addr);
 	} else
 #ifdef HAVE_SYS_UN_H
