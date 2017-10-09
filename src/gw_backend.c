@@ -1938,7 +1938,7 @@ handler_t gw_handle_subrequest(server *srv, connection *con, void *p_d) {
 
     if (hctx->gw_mode != GW_AUTHORIZER
         && (0 == hctx->wb->bytes_in
-            ? con->state == CON_STATE_READ_POST
+            ? (con->state == CON_STATE_READ_POST || -1 == hctx->wb_reqlen)
             : (hctx->wb->bytes_in < hctx->wb_reqlen || hctx->wb_reqlen < 0))) {
         /* leave excess data in con->request_content_queue, which is
          * buffered to disk if too large and backend can not keep up */
@@ -1963,7 +1963,8 @@ handler_t gw_handle_subrequest(server *srv, connection *con, void *p_d) {
                 }
             }
           #endif
-            if (0 != hctx->wb->bytes_in && !chunkqueue_is_empty(req_cq)) {
+            if ((0 != hctx->wb->bytes_in || -1 == hctx->wb_reqlen)
+                && !chunkqueue_is_empty(req_cq)) {
                 if (hctx->stdin_append) {
                     handler_t rc = hctx->stdin_append(srv, hctx);
                     if (HANDLER_GO_ON != rc) return rc;
