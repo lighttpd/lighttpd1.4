@@ -946,9 +946,8 @@ static int send_ietf_00(handler_ctx *hctx, mod_wstunnel_frame_type_t type, const
         DEBUG_LOG(MOD_WEBSOCKET_LOG_ERR, "s", "invalid frame type");
         return -1;
     }
-    http_chunk_append_mem(srv, con, "", 1); /* needs '\0' to send */
     DEBUG_LOG(MOD_WEBSOCKET_LOG_DEBUG, "sdsx",
-              "send data to client ( fd =", con->fd, "), frame size =", len+1);
+              "send data to client ( fd =", con->fd, "), frame size =", len);
     return 0;
 }
 
@@ -1017,12 +1016,11 @@ static int recv_ietf_00(handler_ctx *hctx) {
                     && !buffer_is_empty(payload)) {
                     size_t len;
                     hctx->frame.ctl.siz = 0;
-                    len = buffer_string_length(payload)+1;
+                    len = buffer_string_length(payload);
                     chunkqueue_get_memory(hctx->gw.wb, &mem, &len, len, 0);
-                    len = buffer_string_length(payload)+1;
+                    len = buffer_string_length(payload);
                     memcpy(mem, payload->ptr, len);
-                    mem[len] = '\0'; /* needs '\0' char to send */
-                    chunkqueue_use_memory(hctx->gw.wb, len+1);
+                    chunkqueue_use_memory(hctx->gw.wb, len);
                     buffer_reset(payload);
                 }
                 else {
@@ -1041,8 +1039,6 @@ static int recv_ietf_00(handler_ctx *hctx) {
                                       "fail to base64-decode");
                             return -1;
                         }
-                        /* needs '\0' char to send */
-                        buffer_append_string_len(b, CONST_STR_LEN(""));
                         buffer_reset(payload);
                         /*chunkqueue_use_memory()*/
                         hctx->gw.wb->bytes_in += buffer_string_length(b)-len;
@@ -1055,7 +1051,9 @@ static int recv_ietf_00(handler_ctx *hctx) {
             }
         }
     }
-    chunkqueue_reset(cq);
+    /* XXX: should add ability to handle and preserve partial frames above */
+    /*(not chunkqueue_reset(); do not reset cq->bytes_in, cq->bytes_out)*/
+    chunkqueue_mark_written(cq, chunkqueue_length(cq));
     return 0;
 }
 
@@ -1138,9 +1136,8 @@ static int send_rfc_6455(handler_ctx *hctx, mod_wstunnel_frame_type_t type, cons
     }
     http_chunk_append_mem(srv, con, mem, len);
     if (siz) http_chunk_append_mem(srv, con, payload, siz);
-    http_chunk_append_mem(srv, con, "", 1); /* needs '\0' to send */
     DEBUG_LOG(MOD_WEBSOCKET_LOG_DEBUG, "sdsx",
-              "send data to client ( fd =",con->fd,"), frame size =",len+siz+1);
+              "send data to client ( fd =",con->fd,"), frame size =",len+siz);
     return 0;
 }
 
@@ -1305,12 +1302,11 @@ static int recv_rfc_6455(handler_ctx *hctx) {
                     char *mem;
                     size_t len;
                     unmask_payload(hctx);
-                    len = buffer_string_length(payload)+1;
+                    len = buffer_string_length(payload);
                     chunkqueue_get_memory(hctx->gw.wb, &mem, &len, len, 0);
-                    len = buffer_string_length(payload)+1;
+                    len = buffer_string_length(payload);
                     memcpy(mem, payload->ptr, len);
-                    mem[len] = '\0'; /* needs '\0' char to send */
-                    chunkqueue_use_memory(hctx->gw.wb, len+1);
+                    chunkqueue_use_memory(hctx->gw.wb, len);
                     buffer_reset(payload);
                     break;
                   }
@@ -1319,7 +1315,7 @@ static int recv_rfc_6455(handler_ctx *hctx) {
                         unmask_payload(hctx);
                         mod_wstunnel_frame_send(hctx,
                           MOD_WEBSOCKET_FRAME_TYPE_PONG,
-                          payload->ptr, buffer_string_length(payload)+1);
+                          payload->ptr, buffer_string_length(payload));
                         buffer_reset(payload);
                     }
                     break;
@@ -1339,7 +1335,9 @@ static int recv_rfc_6455(handler_ctx *hctx) {
             }
         }
     }
-    chunkqueue_reset(cq);
+    /* XXX: should add ability to handle and preserve partial frames above */
+    /*(not chunkqueue_reset(); do not reset cq->bytes_in, cq->bytes_out)*/
+    chunkqueue_mark_written(cq, chunkqueue_length(cq));
     return 0;
 }
 
