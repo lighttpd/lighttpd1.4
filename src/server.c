@@ -2085,12 +2085,13 @@ static int server_main (server * const srv, int argc, char **argv) {
 					(*handler)(srv, context, revents);
 				}
 			} while (--n > 0);
-			fdevent_sched_run(srv, srv->ev);
 		} else if (n < 0 && errno != EINTR) {
 			log_error_write(srv, __FILE__, __LINE__, "ss",
 					"fdevent_poll failed:",
 					strerror(errno));
 		}
+
+		if (n >= 0) fdevent_sched_run(srv, srv->ev);
 
 		for (ndx = 0; ndx < srv->joblist->used; ndx++) {
 			connection *con = srv->joblist->ptr[ndx];
