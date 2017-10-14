@@ -586,6 +586,27 @@ static const char js_simple_table_resort[] = \
 "      : (unit=='E') ? 1000000000000000000 : 1;\n" \
 "}\n" \
 "\n" \
+"var li_date_regex=/(\\d{4})-(\\w{3})-(\\d{2}) (\\d{2}):(\\d{2}):(\\d{2})/;\n" \
+"\n" \
+"var li_mon = ['Jan','Feb','Mar','Apr','May','Jun',\n" \
+"              'Jul','Aug','Sep','Oct','Nov','Dec'];\n" \
+"\n" \
+"function li_mon_num(mon) {\n" \
+" var i; for (i = 0; i < 12 && mon != li_mon[i]; ++i); return i;\n" \
+"}\n" \
+"\n" \
+"function li_date_cmp(s1, s2) {\n" \
+" var dp1 = li_date_regex.exec(s1)\n" \
+" var dp2 = li_date_regex.exec(s2)\n" \
+" for (var i = 1; i < 7; ++i) {\n" \
+"  var cmp = (2 != i)\n" \
+"   ? parseInt(dp1[i]) - parseInt(dp2[i])\n" \
+"   : li_mon_num(dp1[2]) - li_mon_num(dp2[2]);\n" \
+"  if (0 != cmp) return cmp;\n" \
+" }\n" \
+" return 0;\n" \
+"}\n" \
+"\n" \
 "function sortfn_then_by_name(a,b,sort_column) {\n" \
 " if (sort_column == name_column || sort_column == type_column) {\n" \
 "  var ad = (a.cells[type_column].innerHTML === 'Directory');\n" \
@@ -602,11 +623,10 @@ static const char js_simple_table_resort[] = \
 " if (a.cells[sort_column].className == 'int') {\n" \
 "  cmp = parseInt(at)-parseInt(bt);\n" \
 " } else if (sort_column == date_column) {\n" \
-"  cmp = Date.parse(at.replace(/-/g, '/'))\n" \
-"      - Date.parse(bt.replace(/-/g, '/'));\n" \
 "  var ad = isdigit(at.substr(0,1));\n" \
 "  var bd = isdigit(bt.substr(0,1));\n" \
 "  if (ad != bd) return (!ad ? -1 : 1);\n" \
+"  cmp = li_date_cmp(at,bt);\n" \
 " } else if (sort_column == size_column) {\n" \
 "  var ai = parseInt(at, 10) * unit_multiplier(at.substr(-1,1));\n" \
 "  var bi = parseInt(bt, 10) * unit_multiplier(bt.substr(-1,1));\n" \
