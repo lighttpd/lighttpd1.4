@@ -1024,7 +1024,7 @@ static int config_tokenizer(server *srv, tokenizer_t *t, int *token_id, buffer *
 			if (t->in_cond) {
 				for (i = 0; t->input[t->offset + i] &&
 				     (isalpha((unsigned char)t->input[t->offset + i])
-				      ); i++);
+				      || t->input[t->offset + i] == '_'); ++i);
 
 				if (i && t->input[t->offset + i]) {
 					tid = TK_SRVVARNAME;
