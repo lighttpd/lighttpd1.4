@@ -790,6 +790,28 @@ static int connection_handle_read_state(server *srv, connection *con)  {
 							}
 						}
 					}
+				} else if ('\n' == ch) {
+					/* check if \n follows */
+					if (i+1 < len) {
+						if (b[i+1] == '\n') {
+							last_chunk = c;
+							last_offset = i+2;
+							break;
+						} /* else goto reset_search; */
+					} else {
+						for (chunk *cc = c->next; cc; cc = cc->next) {
+							size_t bblen = buffer_string_length(cc->mem) - cc->offset;
+							const char *bb = cc->mem->ptr + cc->offset;
+							if (0 == bblen) continue;
+							if (bb[0] == '\n') {
+								last_chunk = cc;
+								last_offset = 1;
+								goto found_header_end;
+							} else {
+								goto reset_search;
+							}
+						}
+					}
 				}
 reset_search: ;
 			}

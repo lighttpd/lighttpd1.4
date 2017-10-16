@@ -406,6 +406,18 @@ static int request_uri_is_valid_char(unsigned char c) {
 	return 1;
 }
 
+static int http_request_missing_CR_before_LF(server *srv, connection *con) {
+	if (srv->srvconf.log_request_header_on_error) {
+		log_error_write(srv, __FILE__, __LINE__, "s", "missing CR before LF in header -> 400");
+		log_error_write(srv, __FILE__, __LINE__, "Sb", "request-header:\n", con->request.request);
+	}
+
+	con->http_status = 400;
+	con->keep_alive = 0;
+	con->response.keep_alive = 0;
+	return 0;
+}
+
 int http_request_parse(server *srv, connection *con) {
 	char *uri = NULL, *proto = NULL, *method = NULL, con_length_set;
 	int is_key = 1, key_len = 0, is_ws_after_key = 0, in_folding;
@@ -450,6 +462,19 @@ int http_request_parse(server *srv, connection *con) {
 	      #endif
 		/* coverity[overflow_sink : FALSE] */
 		buffer_copy_string_len(con->parse_request, con->request.request->ptr + 2, buffer_string_length(con->request.request) - 2);
+	} else if (con->request_count > 0 &&
+	    con->request.request->ptr[1] == '\n') {
+		/* we are in keep-alive and might get \n after a previous POST request.*/
+		if (http_header_strict) return http_request_missing_CR_before_LF(srv, con);
+	      #ifdef __COVERITY__
+		if (buffer_string_length(con->request.request) < 1) {
+			con->keep_alive = 0;
+			con->http_status = 400;
+			return 0;
+		}
+	      #endif
+		/* coverity[overflow_sink : FALSE] */
+		buffer_copy_string_len(con->parse_request, con->request.request->ptr + 1, buffer_string_length(con->request.request) - 1);
 	} else {
 		/* fill the local request buffer */
 		buffer_copy_buffer(con->parse_request, con->request.request);
@@ -468,16 +493,24 @@ int http_request_parse(server *srv, connection *con) {
 	for (i = 0, first = 0; i < ilen && line == 0; i++) {
 		switch(con->parse_request->ptr[i]) {
 		case '\r':
-			if (con->parse_request->ptr[i+1] == '\n') {
+			if (con->parse_request->ptr[i+1] != '\n') break;
+			/* fall through */
+		case '\n':
+			{
 				http_method_t r;
 				char *nuri = NULL;
 				size_t j, jlen;
 
-				/* \r\n -> \0\0 */
-				con->parse_request->ptr[i] = '\0';
-				con->parse_request->ptr[i+1] = '\0';
-
 				buffer_copy_string_len(con->request.request_line, con->parse_request->ptr, i);
+
+				/* \r\n -> \0\0 */
+				if (con->parse_request->ptr[i] == '\r') {
+					con->parse_request->ptr[i] = '\0';
+					++i;
+				} else if (http_header_strict) { /* '\n' */
+					return http_request_missing_CR_before_LF(srv, con);
+				}
+				con->parse_request->ptr[i] = '\0';
 
 				if (request_line_stage != 2) {
 					con->http_status = 400;
@@ -649,7 +682,6 @@ int http_request_parse(server *srv, connection *con) {
 
 				con->http_status = 0;
 
-				i++;
 				line++;
 				first = i+1;
 			}
@@ -839,6 +871,15 @@ int http_request_parse(server *srv, connection *con) {
 					return 0;
 				}
 				break;
+			case '\n':
+				if (http_header_strict) {
+					return http_request_missing_CR_before_LF(srv, con);
+				} else if (i == first) {
+					con->parse_request->ptr[i] = '\0';
+					done = 1;
+					break;
+				}
+				/* fall through */
 			default:
 				if (http_header_strict ? (*cur < 32 || ((unsigned char)*cur) >= 127) : *cur == '\0') {
 					con->http_status = 400;
@@ -862,12 +903,18 @@ int http_request_parse(server *srv, connection *con) {
 		} else {
 			switch(*cur) {
 			case '\r':
-				if (con->parse_request->ptr[i+1] == '\n') {
+			case '\n':
+				if (*cur == '\n' || con->parse_request->ptr[i+1] == '\n') {
 					data_string *ds = NULL;
+					if (*cur == '\n') {
+						if (http_header_strict) return http_request_missing_CR_before_LF(srv, con);
+					} else { /* (con->parse_request->ptr[i+1] == '\n') */
+						con->parse_request->ptr[i] = '\0';
+						++i;
+					}
 
 					/* End of Headerline */
 					con->parse_request->ptr[i] = '\0';
-					con->parse_request->ptr[i+1] = '\0';
 
 					if (in_folding) {
 						/**
@@ -1092,7 +1139,6 @@ int http_request_parse(server *srv, connection *con) {
 						}
 					}
 
-					i++;
 					first = i+1;
 					is_key = 1;
 					value = NULL;
