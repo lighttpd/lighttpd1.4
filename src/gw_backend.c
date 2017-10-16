@@ -1793,7 +1793,12 @@ static handler_t gw_write_request(server *srv, gw_handler_ctx *hctx) {
 
         {
             handler_t rc = hctx->create_env(srv, hctx);
-            if (HANDLER_GO_ON != rc) return rc;
+            if (HANDLER_GO_ON != rc) {
+                if (HANDLER_FINISHED != rc && HANDLER_ERROR != rc)
+                    fdevent_event_clr(srv->ev, &(hctx->fde_ndx), hctx->fd,
+                                      FDEVENT_OUT);
+                return rc;
+            }
         }
 
         /*(disable Nagle algorithm if streaming and content-length unknown)*/
