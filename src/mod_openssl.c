@@ -1101,14 +1101,14 @@ static int
 load_next_chunk (server *srv, chunkqueue *cq, off_t max_bytes,
                  const char **data, size_t *data_len)
 {
-    chunk * const c = cq->first;
+    chunk *c = cq->first;
 
     /* local_send_buffer is a 64k sendbuffer (LOCAL_SEND_BUFSIZE)
      *
      * it has to stay at the same location all the time to satisfy the needs
      * of SSL_write to pass the SAME parameter in case of a _WANT_WRITE
      *
-     * buffer is allocated once, is NOT realloced
+     * buffer is allocated once, is NOT realloced (note: not thread-safe)
      *
      * (Note: above restriction no longer true since SSL_CTX_set_mode() is
      *        called with SSL_MODE_ACCEPT_MOVING_WRITE_BUFFER)
@@ -1118,18 +1118,41 @@ load_next_chunk (server *srv, chunkqueue *cq, off_t max_bytes,
 
     switch (c->type) {
     case MEM_CHUNK:
-        {
+        *data = NULL;
+        *data_len = 0;
+        do {
             size_t have;
 
             force_assert(c->offset >= 0
                          && c->offset <= (off_t)buffer_string_length(c->mem));
 
             have = buffer_string_length(c->mem) - c->offset;
+
+            /* copy small mem chunks into single large buffer before SSL_write()
+             * to reduce number times write() called underneath SSL_write() and
+             * potentially reduce number of packets generated if TCP_NODELAY */
+            if (*data_len) {
+                size_t space = LOCAL_SEND_BUFSIZE - *data_len;
+                if (have > space)
+                    have = space;
+                if (have > (size_t)max_bytes - *data_len)
+                    have = (size_t)max_bytes - *data_len;
+                if (*data != local_send_buffer) {
+                    memcpy(local_send_buffer, *data, *data_len);
+                    *data = local_send_buffer;
+                }
+                memcpy(local_send_buffer+*data_len,c->mem->ptr+c->offset,have);
+                *data_len += have;
+                continue;
+            }
+
             if ((off_t) have > max_bytes) have = max_bytes;
 
             *data = c->mem->ptr + c->offset;
             *data_len = have;
-        }
+        } while ((c = c->next) && c->type == MEM_CHUNK
+                 && *data_len < LOCAL_SEND_BUFSIZE
+                 && (off_t) *data_len < max_bytes);
         return 0;
 
     case FILE_CHUNK:
@@ -1365,7 +1388,7 @@ connection_read_cq_ssl (server *srv, connection *con,
                 /* FIXME: later */
             }
 
-            /* fall thourgh */
+            /* fall through */
         default:
             while((ssl_err = ERR_get_error())) {
                 switch (ERR_GET_REASON(ssl_err)) {
