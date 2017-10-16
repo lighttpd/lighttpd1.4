@@ -1193,16 +1193,8 @@ static int
 connection_write_cq_ssl (server *srv, connection *con,
                          chunkqueue *cq, off_t max_bytes)
 {
-    /* the remote side closed the connection before without shutdown request
-     * - IE
-     * - wget
-     * if keep-alive is disabled */
     handler_ctx *hctx = con->plugin_ctx[plugin_data_singleton->id];
     SSL *ssl = hctx->ssl;
-
-    if (con->keep_alive == 0) {
-        SSL_set_shutdown(ssl, SSL_RECEIVED_SHUTDOWN);
-    }
 
     chunkqueue_remove_finished_chunks(cq);
 
