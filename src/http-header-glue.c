@@ -1452,6 +1452,9 @@ int http_cgi_headers (server *srv, connection *con, http_cgi_opts *opts, http_cg
     rc |= cb(vdata, CONST_STR_LEN("GATEWAY_INTERFACE"),
                     CONST_STR_LEN("CGI/1.1"));
 
+    rc |= cb(vdata, CONST_STR_LEN("REQUEST_SCHEME"),
+                    CONST_BUF_LEN(con->uri.scheme));
+
     if (buffer_is_equal_caseless_string(con->uri.scheme,
                                         CONST_STR_LEN("https"))) {
         rc |= cb(vdata, CONST_STR_LEN("HTTPS"), CONST_STR_LEN("on"));
