@@ -100,7 +100,6 @@ static int fdevent_libev_poll(fdevents *ev, int timeout_ms) {
 
 	ev_timer_again(ev->libev_loop, &timeout_watcher);
 	ev_run(ev->libev_loop, EVRUN_ONCE);
-	fdevent_sched_run(ev->srv, ev);
 
 	return 0;
 }
