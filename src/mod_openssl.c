@@ -941,7 +941,7 @@ SETDEFAULTS_FUNC(mod_openssl_set_defaults)
         s->ssl_verifyclient_export_cert = 0;
         s->ssl_disable_client_renegotiation = 1;
         s->ssl_read_ahead = (0 == i)
-	  ? !srv->config_storage[0]->stream_request_body
+	  ? 0
 	  : p->config_storage[0]->ssl_read_ahead;
         if (0 != i) buffer_copy_buffer(s->ssl_ca_crl_file, p->config_storage[0]->ssl_ca_crl_file);
         if (0 != i) buffer_copy_buffer(s->ssl_ca_dn_file, p->config_storage[0]->ssl_ca_dn_file);
