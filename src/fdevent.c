@@ -46,7 +46,6 @@ fdevents *fdevent_init(server *srv, size_t maxfds, int type) {
 		return NULL;
 	}
 	ev->maxfds = maxfds;
-	ev->highfd = -1;
 
 	switch(type) {
 	case FDEVENT_HANDLER_POLL:
@@ -119,7 +118,10 @@ void fdevent_free(fdevents *ev) {
 	if (ev->free) ev->free(ev);
 
 	for (i = 0; i < ev->maxfds; i++) {
-		if (ev->fdarray[i] > (fdnode *)0x2) free(ev->fdarray[i]);
+		/* (fdevent_sched_run() should already have been run,
+		 *  but take reasonable precautions anyway) */
+		if (ev->fdarray[i])
+			free((fdnode *)((uintptr_t)ev->fdarray[i] & ~0x3));
 	}
 
 	free(ev->fdarray);
@@ -165,6 +167,7 @@ int fdevent_unregister(fdevents *ev, int fd) {
 
 	if (!ev) return 0;
 	fdn = ev->fdarray[fd];
+	if ((uintptr_t)fdn & 0x3) return 0; /*(should not happen)*/
 
 	fdnode_free(fdn);
 
@@ -174,22 +177,29 @@ int fdevent_unregister(fdevents *ev, int fd) {
 }
 
 void fdevent_sched_close(fdevents *ev, int fd, int issock) {
+	fdnode *fdn;
 	if (!ev) return;
-	ev->fdarray[fd] = (issock ? (fdnode *)0x1 : (fdnode *)0x2);
-	if (ev->highfd < fd) ev->highfd = fd;
+	fdn = ev->fdarray[fd];
+	if ((uintptr_t)fdn & 0x3) return;
+	ev->fdarray[fd] = (fdnode *)((uintptr_t)fdn | (issock ? 0x1 : 0x2));
+	fdn->ctx = ev->pendclose;
+	ev->pendclose = fdn;
 }
 
 void fdevent_sched_run(server *srv, fdevents *ev) {
-	const int highfd = ev->highfd;
-	for (int fd = 0; fd <= highfd; ++fd) {
-		fdnode * const fdn = ev->fdarray[fd];
-		int rc;
-		if (!((uintptr_t)fdn & 0x3)) continue;
+	for (fdnode *fdn = ev->pendclose; fdn; ) {
+		int fd, rc;
+		fdnode *fdn_tmp;
 	      #ifdef _WIN32
-		if (fdn == (fdnode *)0x1) {
+		rc = (uintptr_t)fdn & 0x3;
+	      #endif
+		fdn = (fdnode *)((uintptr_t)fdn & ~0x3);
+		fd = fdn->fd;
+	      #ifdef _WIN32
+		if (rc == 0x1) {
 			rc = closesocket(fd);
 		}
-		else if (fdn == (fdnode *)0x2) {
+		else if (rc == 0x2) {
 			rc = close(fd);
 		}
 	      #else
@@ -199,16 +209,22 @@ void fdevent_sched_run(server *srv, fdevents *ev) {
 		if (0 != rc) {
 			log_error_write(srv, __FILE__, __LINE__, "sds", "close failed ", fd, strerror(errno));
 		}
+		else {
+			--srv->cur_fds;
+		}
 
+		fdn_tmp = fdn;
+		fdn = (fdnode *)fdn->ctx; /* next */
+		/*(fdevent_unregister)*/
+		fdnode_free(fdn_tmp);
 		ev->fdarray[fd] = NULL;
-		--srv->cur_fds;
 	}
-	ev->highfd = -1;
+	ev->pendclose = NULL;
 }
 
 void fdevent_event_del(fdevents *ev, int *fde_ndx, int fd) {
 	if (-1 == fd) return;
-	if (ev->fdarray[fd] <= (fdnode *)0x2) return;
+	if ((uintptr_t)ev->fdarray[fd] & 0x3) return;
 
 	if (ev->event_del) *fde_ndx = ev->event_del(ev, *fde_ndx, fd);
 	ev->fdarray[fd]->events = 0;

@@ -124,8 +124,8 @@ typedef struct fdevents {
 	fdevent_handler_t type;
 
 	fdnode **fdarray;
+	fdnode *pendclose;
 	size_t maxfds;
-	int highfd;
 
 #ifdef USE_LINUX_EPOLL
 	int epoll_fd;

@@ -260,7 +260,7 @@ static void cgi_pid_del(plugin_data *p, size_t i) {
 static void cgi_connection_close_fdtocgi(server *srv, handler_ctx *hctx) {
 	/*(closes only hctx->fdtocgi)*/
 	fdevent_event_del(srv->ev, &(hctx->fde_ndx_tocgi), hctx->fdtocgi);
-	fdevent_unregister(srv->ev, hctx->fdtocgi);
+	/*fdevent_unregister(srv->ev, hctx->fdtocgi);*//*(handled below)*/
 	fdevent_sched_close(srv->ev, hctx->fdtocgi, 0);
 	hctx->fdtocgi = -1;
 }
@@ -278,7 +278,7 @@ static void cgi_connection_close(server *srv, handler_ctx *hctx) {
 	if (hctx->fd != -1) {
 		/* close connection to the cgi-script */
 		fdevent_event_del(srv->ev, &(hctx->fde_ndx), hctx->fd);
-		fdevent_unregister(srv->ev, hctx->fd);
+		/*fdevent_unregister(srv->ev, hctx->fd);*//*(handled below)*/
 		fdevent_sched_close(srv->ev, hctx->fd, 0);
 	}
 

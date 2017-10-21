@@ -1656,7 +1656,7 @@ void gw_set_transparent(server *srv, gw_handler_ctx *hctx) {
 static void gw_backend_close(server *srv, gw_handler_ctx *hctx) {
     if (hctx->fd >= 0) {
         fdevent_event_del(srv->ev, &(hctx->fde_ndx), hctx->fd);
-        fdevent_unregister(srv->ev, hctx->fd);
+        /*fdevent_unregister(srv->ev, hctx->fd);*//*(handled below)*/
         fdevent_sched_close(srv->ev, hctx->fd, 1);
         hctx->fd = -1;
         hctx->fde_ndx = -1;
