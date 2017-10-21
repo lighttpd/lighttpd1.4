@@ -67,6 +67,9 @@ endif()
 if(WITH_WEBDAV_PROPS)
 	set(WITH_XML 1)
 	set(WITH_SQLITE3 1)
+endif()
+
+if(WITH_WEBDAV_LOCKS)
 	set(WITH_UUID 1)
 endif()
 
