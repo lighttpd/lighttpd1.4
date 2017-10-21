@@ -1338,7 +1338,7 @@ void memory_error() {
   exit(1);
 }
 
-
+static const char* out_dir = ".";
 /* The main program.  Parse the command line and do it... */
 int main(argc,argv)
 int argc;
@@ -1359,6 +1359,7 @@ char **argv;
     {OPT_FLAG, "q", (char*)&quiet, "(Quiet) Don't print the report file."},
     {OPT_FLAG, "s", (char*)&statistics, "Print parser stats to standard output."},
     {OPT_FLAG, "x", (char*)&version, "Print the version number."},
+    {OPT_STR, "o", (char*)&out_dir, "Customize output directory."},
     {OPT_FLAG,0,0,0}
   };
   int i;
@@ -2528,7 +2529,7 @@ char *suffix;
   char *name;
   char *cp;
 
-  name = malloc( strlen(lemp->filename) + strlen(suffix) + 5 );
+  name = malloc( strlen(out_dir) + strlen(lemp->filename) + strlen(suffix) + 6 );
   if( name==0 ){
     fprintf(stderr,"Can't allocate space for a filename.\n");
     exit(1);
@@ -2539,7 +2540,9 @@ char *suffix;
 	} else {
 		cp++;
 	}
-  strcpy(name,cp);
+  strcpy(name,out_dir);
+  strcat(name,"/");
+  strcat(name,cp);
   cp = strrchr(name,'.');
   if( cp ) *cp = 0;
   strcat(name,suffix);

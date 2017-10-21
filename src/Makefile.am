@@ -524,5 +524,5 @@ EXTRA_DIST = \
 	lemon.c \
 	lempar.c \
 	SConscript \
-	CMakeLists.txt config.h.cmake
-
+	CMakeLists.txt config.h.cmake \
+	meson.build

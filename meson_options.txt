@@ -1,0 +1,123 @@
+option('with_bzip',
+	type: 'boolean',
+	value: false,
+	description: 'with bzip2-support for mod_compress [default: off]',
+)
+option('with_dbi',
+	type: 'boolean',
+	value: false,
+	description: 'with dbi-support for mod_vhostdb_dbi [default: off]',
+)
+option('with_fam',
+	type: 'boolean',
+	value: false,
+	description: 'fam/gamin for reducing number of stat() calls [default: off]',
+)
+option('with_gdbm',
+	type: 'boolean',
+	value: false,
+	description: 'gdbm storage for mod_trigger_b4_dl [default: off]',
+)
+option('with_geoip',
+	type: 'boolean',
+	value: false,
+	description: 'with GeoIP-support mod_geoip [default: off]',
+)
+option('with_krb5',
+	type: 'boolean',
+	value: false,
+	description: 'with Kerberos5-support for mod_auth [default: off]',
+)
+option('with_ldap',
+	type: 'boolean',
+	value: false,
+	description: 'with LDAP-support for mod_auth mod_vhostdb_ldap [default: off]',
+)
+option('with_libev',
+	type: 'boolean',
+	value: false,
+	description: 'libev support for fdevent handlers [default: off]',
+)
+option('with_libunwind',
+	type: 'boolean',
+	value: false,
+	description: 'with libunwind to print backtraces in asserts [default: off]',
+)
+option('with_lua',
+	type: 'boolean',
+	value: false,
+	description: 'with lua 5.1 for mod_magnet [default: off]',
+)
+option('with_memcached',
+	type: 'boolean',
+	value: false,
+	description: 'memcached storage for mod_trigger_b4_dl [default: off]',
+)
+option('with_mysql',
+	type: 'boolean',
+	value: false,
+	description: 'with mysql-support for mod_vhostdb_mysql [default: off]',
+)
+option('with_openssl',
+	type: 'boolean',
+	value: false,
+	description: 'with openssl-support [default: off]',
+)
+option('with_pcre',
+	type: 'boolean',
+	value: true,
+	description: 'with regex support [default: on]',
+)
+option('with_pgsql',
+	type: 'boolean',
+	value: false,
+	description: 'with postgres-support for mod_vhostdb_pgsql [default: off]',
+)
+#option('with_valgrind',
+#	type: 'boolean',
+#	value: false,
+#	description: 'with internal support for valgrind [default: off]',
+#)
+option('with_webdav_locks',
+	type: 'boolean',
+	value: false,
+	description: 'locks in webdav [default: off]',
+)
+option('with_webdav_props',
+	type: 'boolean',
+	value: false,
+	description: 'with property-support for mod_webdav [default: off]',
+)
+option('with_xattr',
+	type: 'boolean',
+	value: false,
+	description: 'with xattr-support for the stat-cache [default: off]',
+)
+option('with_zlib',
+	type: 'boolean',
+	value: true,
+	description: 'with deflate-support for mod_compress [default: on]',
+)
+
+option('build_extra_warnings',
+	type: 'boolean',
+	value: false,
+	description: 'extra warnings (only enabled with gcc/clang)',
+)
+option('warn_cflags',
+	type: 'string',
+	value: '-g -g2 -Wall -Wmissing-declarations -Wdeclaration-after-statement -Wcast-align -Wsign-compare -Wnested-externs -Wpointer-arith -D_FORTIFY_SOURCE=2 -fstack-protector --param=ssp-buffer-size=4 -Wformat -Werror=format-security',
+	description: 'CFLAGS to use when build_extra_warnings is active',
+)
+
+option('build_static',
+	type: 'boolean',
+	value: false,
+	description: 'build a static lighttpd with all modules added',
+)
+
+option('moduledir',
+	type: 'string',
+	value: 'lib/lighttpd',
+	description: 'Location to install modules to (relative to prefix)',
+)

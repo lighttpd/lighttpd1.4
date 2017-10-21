@@ -70,6 +70,7 @@ EXTRA_DIST=\
 	$(CONFS) \
 	$(TESTS) \
 	CMakeLists.txt \
+	meson.build \
 	lighttpd.conf \
 	lighttpd.htpasswd \
 	lighttpd.user \
