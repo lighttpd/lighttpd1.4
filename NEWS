@@ -3,7 +3,9 @@
 NEWS
 ====
 
-- 1.4.46
+- 1.4.47
+
+- 1.4.46 - 2017-10-21
   * [TLS] mark code that uses -lcrypto but not -lssl
   * remove redundant calls to end-of-request hooks
   * [mod_mysql_vhost] remove dev debug code
