@@ -538,8 +538,10 @@ static int server_oneshot_init(server *srv, int fd) {
 
 static void show_version (void) {
 	char *b = PACKAGE_DESC TEXT_SSL \
-" - a light and fast webserver\n" \
+" - a light and fast webserver\n"
+#ifdef NONREPRODUCIBLE_BUILD
 "Build-Date: " __DATE__ " " __TIME__ "\n";
+#endif
 ;
 	write_all(STDOUT_FILENO, b, strlen(b));
 }
@@ -705,7 +707,10 @@ static void show_features (void) {
 }
 
 static void show_help (void) {
-	char *b = PACKAGE_DESC TEXT_SSL " ("__DATE__ " " __TIME__ ")" \
+	char *b = PACKAGE_DESC TEXT_SSL
+#ifdef NONREPRODUCIBLE_BUILD
+" ("__DATE__ " " __TIME__ ")"
+#endif
 " - a light and fast webserver\n" \
 "usage:\n" \
 " -f <name>  filename of the config-file\n" \
