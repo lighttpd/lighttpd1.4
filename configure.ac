@@ -448,7 +448,7 @@ if test "x$use_krb5" = "xyes"; then
 		AC_MSG_ERROR([gssapi_krb5 headers and/or libs where not found, install them or build with --without-krb5])
 	fi
 	case $host_os in
-		*cygwin* ) KRB5_LIB="$KRB5_LIB -lcom_err";;
+		*darwin*|*cygwin* ) KRB5_LIB="$KRB5_LIB -lcom_err";;
 	        * ) ;;
 	esac
 fi
