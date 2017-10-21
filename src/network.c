@@ -97,8 +97,10 @@ static int network_server_init(server *srv, buffer *host_token, size_t sidx, int
 	 * (optimization: check strings here to filter out exact matches;
 	 *  binary addresses are matched further below) */
 	for (size_t i = 0; i < srv->srv_sockets.used; ++i) {
-		if (buffer_is_equal(srv->srv_sockets.ptr[i]->srv_token, host_token))
+		if (buffer_is_equal(srv->srv_sockets.ptr[i]->srv_token, host_token)) {
+			buffer_copy_buffer(host_token, srv->srv_sockets.ptr[i]->srv_token);
 			return 0;
+		}
 	}
 
 	buffer_copy_buffer(srv->tmp_buf, host_token); /*(allocates ->ptr even if host_token is NULL)*/
@@ -188,8 +190,10 @@ static int network_server_init(server *srv, buffer *host_token, size_t sidx, int
 
 	/* check if we already know this socket (after potential DNS resolution), and if yes, don't init it */
 	for (size_t i = 0; i < srv->srv_sockets.used; ++i) {
-		if (0 == memcmp(&srv->srv_sockets.ptr[i]->addr, &addr, sizeof(addr)))
+		if (0 == memcmp(&srv->srv_sockets.ptr[i]->addr, &addr, sizeof(addr))) {
+			buffer_copy_buffer(host_token, srv->srv_sockets.ptr[i]->srv_token);
 			return 0;
+		}
 	}
 
 	srv_socket = calloc(1, sizeof(*srv_socket));
@@ -201,7 +205,9 @@ static int network_server_init(server *srv, buffer *host_token, size_t sidx, int
 	srv_socket->is_ssl = s->ssl_enabled;
 
 	srv_socket->srv_token = buffer_init();
-	buffer_copy_buffer(srv_socket->srv_token, host_token);
+	sock_addr_inet_ntop_copy_buffer(srv_socket->srv_token, &srv_socket->addr);
+	/* update host_token (dc->string) for consistent string comparison in lighttpd.conf conditions */
+	buffer_copy_buffer(host_token, srv_socket->srv_token);
 
 	if (srv->srv_sockets.size == 0) {
 		srv->srv_sockets.size = 4;
@@ -225,7 +231,6 @@ static int network_server_init(server *srv, buffer *host_token, size_t sidx, int
 			log_error_write(srv, __FILE__, __LINE__, "ss", "fcntl:", strerror(errno));
 			return -1;
 		}
-		sock_addr_inet_ntop_copy_buffer(srv_socket->srv_token, &srv_socket->addr);
 	} else
 #ifdef HAVE_SYS_UN_H
 	if (AF_UNIX == srv_socket->addr.plain.sa_family) {
