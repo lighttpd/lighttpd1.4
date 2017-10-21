@@ -50,7 +50,9 @@ static data_unset *configparser_get_variable(config_t *ctx, const buffer *key) {
     array_print(dc->value, 0);
 #endif
     if (NULL != (du = array_get_element_klen(dc->value, CONST_BUF_LEN(key)))) {
-      return du->copy(du);
+      du = du->copy(du);
+      buffer_reset(du->key);
+      return du;
     }
   }
   return NULL;
