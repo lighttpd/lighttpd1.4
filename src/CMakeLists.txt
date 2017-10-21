@@ -233,7 +233,7 @@ macro(XCONFIG _package _include_DIR _link_DIR _link_FLAGS _cflags)
 endmacro(XCONFIG _package _include_DIR _link_DIR _link_FLAGS _cflags)
 
 if(WITH_XATTR)
-	check_include_files(attr/attributes.h HAVE_ATTR_ATTRIBUTES_H)
+	check_include_files("sys/types.h;attr/attributes.h" HAVE_ATTR_ATTRIBUTES_H)
 	if(HAVE_ATTR_ATTRIBUTES_H)
 		check_library_exists(attr attr_get "" HAVE_XATTR)
 	endif()
@@ -779,6 +779,10 @@ endif()
 
 if(WITH_MEMCACHED)
 	target_link_libraries(mod_trigger_b4_dl memcached)
+endif()
+
+if(HAVE_XATTR)
+	target_link_libraries(lighttpd attr)
 endif()
 
 if(CMAKE_C_COMPILER_ID MATCHES "GNU" OR CMAKE_C_COMPILER_ID MATCHES "Clang")
