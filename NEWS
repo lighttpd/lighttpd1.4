@@ -4,6 +4,269 @@ NEWS
 ====
 
 - 1.4.46
+  * [TLS] mark code that uses -lcrypto but not -lssl
+  * remove redundant calls to end-of-request hooks
+  * [mod_mysql_vhost] remove dev debug code
+  * [core] con interface for read/write; isolate SSL
+  * [core] new plugin hooks to help isolate SSL
+  * [mod_openssl] new module (preliminary layout)
+  * [core] move network_open_file_chunk() to chunk.c
+  * [mod_openssl] move openssl code into mod_openssl
+  * [mod_openssl] move openssl config into mod_openssl
+  * [core] move connection_read_cq() to connections.c
+  * [mod_geoip] call from handle_request_env hook
+  * [build] only mod_openssl depends on -lssl
+  * [mod_auth] enable optional authz if extern authn (fixes #2481)
+  * [mod_openssl] allow ssl.verifyclient on url paths (fixes #2245)
+  * [core] do not emit req/response hdrs w/ blank val
+  * [mod_setenv] directives to overwrite/remove hdrs (fixes #650, fixes #2295)
+  * [mod_secdownload] new directives modify hash path (fixes #646, fixes #1904)
+  * [core] move con throttling to connections-glue.c
+  * [core] support Expect: 100-continue with HTTP/1.1 (fixes #377, #1017, #1953, #2438)
+  * [mod_openssl] use TLS SNI to set host-based certs
+  * [mod_ssi] send #exec cmd="..." output to temp file
+  * [mod_scgi] tests/mod-scgi.t unit tests
+  * [mod_auth] support LDAP groups for HTTP auth (fixes #1817)
+  * [core] use getaddrinfo,inet_pton vs gethostbyname (fixes #2783)
+  * [mod_auth] LDAP escape username in DN and filters
+  * mod_vhostdb* (dbi,mysql,pgsql,ldap) (fixes #485, fixes #1936, fixes #2297)
+  * [mod_auth] have LDAP template replace '?'
+  * apply debian/patches/spelling.patch
+  * [core] permit connection-level state in modules
+  * [TLS] include <openssl/opensslv.h> in rand.c
+  * [core] config match w/ arbitrary HTTP request hdrs (fixes #1556)
+  * [mod_flv_streaming] add end pos param (fixes #1887)
+  * [core] X-LIGHTTPD-KBytes-per-second from backends (fixes #954)
+  * [core] improve accuracy of bandwidth write limits
+  * [core] quicker graceful shutdown
+  * [tests] remove unused file depending on CGI.pm
+  * [doc] doc/initscripts.txt (fixes #2782)
+  * [core] check issetugid() early in main()
+  * [core] combine duplicated getrlimit, network_init
+  * [core] move interval timer near worker event loop
+  * [core] initialize globals at top of main()
+  * [core] graceful restart with SIGUSR1 (fixes #2785)
+  * [mod_authn_mysql] fix minor memleak at shutdown
+  * [mod_rrdtool] no error if loaded but no config
+  * [doc] SIGUSR1 doc and lighttpd-angel SIGUSR1
+  * [mime.conf] add text/markdown to utf-8 list, regenerate mime.conf
+  * [mod_cgi] RFC3875 CGI local-redir strict adherence (#2108)
+  * [mod_cgi] do not send "Status" back to client
+  * [core] add label for 308 Permanent Redirect
+  * [mod_openssl] inherit ssl.* from global scope
+  * [core] handle if backend sends Transfer-Encoding (#2786)
+  * [core] use kqueue in level-triggered mode (fixes #2788)
+  * [mod_fastcgi,mod_scgi] backend spawn EINTR retry (#2788)
+  * [core] config opt to intercept dynamic handler err (fixes #974)
+  * [core] set default server_tag in server.c
+  * [core] include lighttpd vers in server started msg
+  * [core] move version.h logic into server.c
+  * [core] issue trace if max-fds too large (fixes #2789)
+  * [mod_fastcgi,mod_scgi] consistent waitpid handling (fixes #2791)
+  * [mod_cgi] fix CGI local-redir w/ url.rewrite-once (fixes #2793)
+  * [mod_scgi] fix unused_procs bidirectional-links
+  * [mod_scgi] fix potential repeated use of proc->id
+  * [mod_fastcgi,mod_scgi] consolidate backend process accounting (#2788)
+  * [mod_cgi] status 200 OK if no hdrs (deprecated) (#2786)
+  * [core] fix regex condition subst w/ mod_extforward (fixes #2794)
+  * [tests] correct skip count for mod-scgi.t
+  * [mod_vhostdb_ldap] fix inverted logic (coverity)
+  * [mod_cgi] cgi.local-redir = [enable|disable] (#2108, #2793)
+  * [core] $REQUEST_HEADER[...] subsumes other config (#1556)
+  * [mod_usertrack] usertrack.cookie-attrs config opt (fixes #2795)
+  * [core] default server.max-fds=4096 if unspecified (#2789)
+  * update .gitignore, add .gitattributes
+  * [core] reduce con allocation for small max_conns
+  * [config] more specific checks for array lists
+  * [mod_authn_gssapi] needs -lcom_err under cygwin
+  * [mod_cgi,fastcgi,scgi,proxy] fix streaming response (fixes #2796)
+  * [mod_auth] Digest nonce on system with time <=1978
+  * [doc] simple-vhost.debug takes an integer value (fixes #2797)
+  * [core] fix crash if invalid config file (fixes #2798)
+  * [core] remove unused member con->in_joblist
+  * [mod_proxy] remove use of con->got_response
+  * [core] consolidate dynamic handler response parse
+  * [core] remove now-unused buffer_search_string_len
+  * [mod_cgi] eliminate warning when compiled -Os
+  * [mod_scgi] do not reconnect after connect succeeds
+  * [tests] reduce time waiting for backends to start
+  * [core] server.syslog-facility (fixes #2800)
+  * [core] server.syslog-facility (use -1 for unset) (#2800)
+  * [core] allow overriding prior config values (fixes #2799)
+  * [mod_proxy] set Content-Length, if available
+  * [mod_proxy] set X-Forwarded-Host (fixes #418)
+  * [core] remove redundant Content-Length digit check
+  * [core] remove some unused header includes
+  * [core] use con->dst_addr_buf instead of ip recalc
+  * [core] include "fdevent.h" where needed
+  * [core] make stat_cache private to stat_cache.c
+  * [core] collect ioctl FIONREAD code
+  * [core] include <netdb.h> where needed
+  * [core] report file path when mkstemp() fails (fixes #2802)
+  * [core] export http_request_host_policy() for reuse
+  * [mod_extforward] simplify header search
+  * [mod_extforward] consolidate ipstr_to_sockaddr()
+  * [mod_extforward] upd scheme after ipstr validated
+  * [mod_extforward] rearrange code; prep Forwarded
+  * [mod_extforward] support Forwarded HTTP Extension (#2703)
+  * [mod_proxy] support Forwarded HTTP Extension (fixes #2703)
+  * [core] inet_pton(), inet_ntop() on (sock_addr *)
+  * [core] save connection-level proto in con->proto
+  * [mod_extforward] support HAProxy "PROXY" protocol (fixes #2804)
+  * [mod_extforward] fix typos in Forwarded handling
+  * [core] fix stat_cache initialization error
+  * [core] perf: stat_cache_mimetype_by_ext()
+  * [core] inet_ntop_cache now 4-element cache
+  * [mod_openssl] free local_send_buffer at exit
+  * [core] extend mimetype search w/o leading '.'
+  * [core] no SOCK_CLOEXEC on Linux kernel < 2.6.27
+  * [core] inline simple buffer is empty checks
+  * [core] buffer_substr_replace()
+  * [core] sys-strings.h abstraction for strings.h
+  * [mod_proxy] fix backslash escaping
+  * [core] omit default port from normalized host str
+  * [core] fix build issue without ipv6 support
+  * [core] permit strings and integers in config array
+  * [mod_accesslog] flag high precision ts for %T (fixes #2807)
+  * [core] permit strings,ints,arrays in config array
+  * [core] calloc plugin_config for consistent init
+  * [mod_proxy] simple host/url mapping in headers (fixes #152)
+  * [mod_uploadprogress] handle query str progress ID (fixes #2808)
+  * [mod_fastcgi] consolidate backend read code
+  * [mod_proxy,mod_scgi] fix truncated error trace
+  * [core] skip socket shutdown() if con->fd negative
+  * [core] act as transparent proxy after con Upgrade
+  * [core] remove redundant resets of fde_ndx
+  * [core] configparser: fix resource handling in error cases (fixes #2809)
+  * [core] fix crash for invalid syntax in config file (fixes #2810)
+  * [core] prep mod transitions to transparent proxy
+  * [mod_proxy] basic support for Upgrade: websocket (fixes #2811)
+  * [mod_extforward] compile on OSX
+  * [core] set server.max-keep-alive-requests = 100 (fixes #2205)
+  * [core] perf: skip redundant strlen() if len known
+  * [core] optional condition in config "else" clause (fixes #1268)
+  * [mod_cgi] basic support for Upgrade: websocket
+  * [core] buffer to disk streaming to slow backends
+  * [core] silence compiler warnings if !HAVE_FORK
+  * [build] -Werror if --enable-extra-warnings=error
+  * [build] autotools use AC_PROG_CC_STDC macro
+  * [mod_openssl] ssl.ca-crl-file for CRL (fixes #2319)
+  * [mod_openssl] ssl.ca-dn-file (fixes #2694)
+  * [mod_proxy] fix typo identified by coverity
+  * [mod_openssl] ignore client verification error if not enforced
+  * [mod_openssl] fix compile with openssl 1.1.0
+  * [mod_extforward] quiet clang compiler warning
+  * [mod_dirlisting] sort "../" to top of names
+  * [mod_openssl] safer_X509_NAME_oneline() (fixes #2693)
+  * [core] allow earlier plugin init for SSL/TLS
+  * [mod_openssl] adjust use of ssl.ca-dn-file
+  * [core] fix compiler warnings on Mac OS X
+  * [core] server.socket-perms to set perms on unix (fixes #656)
+  * [core] get port from sock_addr if AF_INET,AF_INET6
+  * [core] server.error_handler_404 X-Sendfile ENOENT (#2474)
+  * [core] consolidate fork()/execve() code (#1393)
+  * [core] mv log_error_{open,cycle.close} to server.c
+  * [core] rename fd_close_on_exec()
+  * [core] remove unused includes of stat_cache.h
+  * [core] add missing include of stdlib.h
+  * [core] reduce exposure of unistd.h, other includes
+  * [core] sock_addr_from_str_hints reusable name res
+  * [core] continue collecting use of netdb.h
+  * [core] continue collecting use of netdb.h
+  * [core] continue collecting use of netdb.h
+  * [core] fdevent_connect_status() shared code
+  * [core] add const to reduce .data segment size
+  * [mod_proxy] move data_fastcgi into mod_proxy.c
+  * [mod_proxy] store address family at config time
+  * [mod_fastcgi] slightly simplify counters
+  * [mod_fastcgi] consolidate connect() error handling
+  * [mod_fastcgi] set request_id in fcgi_create_env()
+  * [mod_fastcgi] move delayed connect() into switch()
+  * [mod_fastcgi,mod_scgi] consistent connect() error
+  * [mod_scgi] remove unused parse_response member
+  * [mod_fastcgi,mod_scgi] struct member consistency
+  * [mod_fastcgi,mod_scgi] parse bin_path at startup
+  * [mod_fastcgi,mod_scgi] use temp buffer for cgi_env
+  * [core] shared code for socket backends
+  * [core] spread load on socket backend procs
+  * [core] store sockaddr for socket backend procs
+  * [core] resolve DNS at startup for socket backends
+  * [core] adaptive spawning for socket backend procs (fixes #1162)
+  * quell compiler warnings for -Wimplicit-fallthrough
+  * [doc] update README
+  * [core] fdevent_cycle_logger()
+  * [core] reap lighttpd worker pids precisely
+  * [core] restart piped loggers if they exit (fixes #1393)
+  * [mod_webdav] PROPFIND getetag attr must match GET
+  * [core] consistent behavior w/ and w/o SA_SIGINFO
+  * [core] do not remove pid-file in test mode
+  * [core] add public domain SHA1() if no crypto
+  * [mod_wstunnel] websocket tunnel to other protocol
+  * [core] forward SIGHUP only to lighttpd workers
+  * [mod_dirlisting] treat README and HEADER as paths (fixes #2818)
+  * [core] set one-shot mode fd O_NONBLOCK, FD_CLOEXEC
+  * [core] remove fdevent fcntl_set hook
+  * [mod_extforward] typo in comment
+  * [mod_cgi] add missing #include
+  * [core] fix invalid sizeof() identified by coverity
+  * [core] add missing #include
+  * [core] base_decls.h to quiet compiler warnings
+  * [core] set socket perms after bind, before listen
+  * [core] warn if backend server config contains '_'
+  * [mod_extforward] PROXY proto and SSL_CLIENT_VERIFY
+  * [core] workaround for AIX mmap define
+  * [mod_accesslog] flush access logs every 4 seconds
+  * [mod_cgi] fix bug to properly exec interpreter
+  * [mod_fastcgi] fix return when streaming min buffer
+  * [core] attempt to quiet coverity false positives
+  * [core] attempt to quiet coverity false positives
+  * [core] attempt to quiet compiler warning in LEDE
+  * [core] SIGCHLD handle_waitpid hook for modules
+  * [mod_rrdtool] handle_trigger returns HANDLER_GO_ON
+  * [mod_openssl] ssl.read-ahead="disable" for stream
+  * [mod_cgi] add FDEVENT_IN upon CGI exit
+  * [mod_cgi] omit cgi_handle_fdevent after proc exit
+  * [mod_webdav] check HAVE_UUID for -luuid
+  * [core] adjust li_rand_pseudo* interfaces
+  * [mod_wstunnel] fix config parsing bug
+  * [core] fdevent setsockopt() helper functions
+  * [core] make strftime_cache_get() 16-element cache
+  * [core] disable Nagle if streaming to backend
+  * [core] fix triggered assert on HTTP chunked input (fixes #2822)
+  * [mod_wstunnel] fix NULL ptr deref
+  * [algo_sha1] fix compile break and warnings
+  * [lemon] fix gcc implicit-fallthrough warning
+  * [core] URI scheme is case-insensitive
+  * [network] do not append port to unix socket paths
+  * [unittests] consolidate base64 test code
+  * [core] use sun_path for addr string for AF_UNIX (fixes #2826)
+  * [core] cleaner code; remove goto from network.c
+  * [core] /dev/stdin listener for inetd wait yes
+  * [core] compare listen addrs after DNS resolution
+  * [core] inline chunkqueue_is_empty()
+  * [core] limit use of TCP_CORK
+  * [core] return from http_response_read if small rd
+  * [core] gateways might Upgrade con before body read
+  * [mod_wstunnel] set Sec-WebSocket-Protocol if bin
+  * [mod_wstunnel] remove invalid appended '\0'
+  * [core] quiet coverity warning
+  * [core] handle fds pending close after poll timeout (fixes #2827)
+  * [core] fix $REQUEST_HEADER[...] parsing in config (#1556)
+  * [mod_dirlisting] custom js date parse func (fixes #2823)
+  * [core] remove fd interest if create_env returns
+  * [mod_openssl] copy data for larger SSL packets
+  * [mod_openssl] remove erroneous SSL_set_shutdown()
+  * [core] permit LF to end lines if !header-strict
+  * [core] add back REQUEST_SCHEME for backends
+  * [core] remove fdevent_sched_run from fdevent_libev (#2827)
+  * [mod_openssl] ssl.read-ahead="disable" by default
+  * [core] adjust parser for valid variable expansion
+  * [cmake] handle WITH_WEBDAV_LOCKS option
+  * [cmake] fix attr header detection and linking
+  * [cmake] link mod_cml with memcached
+  * [core] reproducible build: hide __DATE__ __TIME__ (fixes #2828)
+  * [core] perf: more efficient fdevent_sched_run()
+  * [core] translate DNS to IP str for cond socket cmp
 
 - 1.4.45 - 2017-01-14
   * [mod_cgi] skip local-redir handling if to self (fixes #2779, #2108)
