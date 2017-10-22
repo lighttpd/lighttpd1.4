@@ -205,7 +205,14 @@ static int network_server_init(server *srv, buffer *host_token, size_t sidx, int
 	srv_socket->is_ssl = s->ssl_enabled;
 
 	srv_socket->srv_token = buffer_init();
-	sock_addr_inet_ntop_copy_buffer(srv_socket->srv_token, &srv_socket->addr);
+	if (addr.plain.sa_family == AF_INET6) buffer_append_string_len(srv_socket->srv_token, CONST_STR_LEN("["));
+	sock_addr_inet_ntop_append_buffer(srv_socket->srv_token, &srv_socket->addr);
+	if (addr.plain.sa_family == AF_INET6) buffer_append_string_len(srv_socket->srv_token, CONST_STR_LEN("]"));
+	if (addr.plain.sa_family != AF_UNIX) {
+		port = addr.plain.sa_family == AF_INET ? ntohs(addr.ipv4.sin_port) : ntohs(addr.ipv6.sin6_port);
+		buffer_append_string_len(srv_socket->srv_token, CONST_STR_LEN(":"));
+		buffer_append_int(srv_socket->srv_token, (int)port);
+	}
 	/* update host_token (dc->string) for consistent string comparison in lighttpd.conf conditions */
 	buffer_copy_buffer(host_token, srv_socket->srv_token);
 
