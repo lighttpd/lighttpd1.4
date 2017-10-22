@@ -3,7 +3,9 @@
 NEWS
 ====
 
-- 1.4.47
+- 1.4.48
+
+- 1.4.47 - 2017-10-22
   * [mod_authn_gssapi] needs -lcom_err under Darwin
   * [core] stricter validation of request-URI begin
   * [core] fix 1.4.46 regression in config match (fixes #2830)
