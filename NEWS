@@ -4,6 +4,13 @@ NEWS
 ====
 
 - 1.4.47
+  * [mod_authn_gssapi] needs -lcom_err under Darwin
+  * [core] stricter validation of request-URI begin
+  * [core] fix 1.4.46 regression in config match (fixes #2830)
+  * [core] normalize config addrs for != match (#2830)
+  * [core] normalize config addrs for eq and ne (#2830)
+  * [doc] use https:// URLs to .lighttpd.net resources
+  * [core] fix 1.4.46 regression in Last-Modified
 
 - 1.4.46 - 2017-10-21
   * [TLS] mark code that uses -lcrypto but not -lssl
