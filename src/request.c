@@ -635,9 +635,15 @@ int http_request_parse(server *srv, connection *con) {
 					reqline_hostlen = nuri - reqline_host;
 
 					buffer_copy_string_len(con->request.uri, nuri, proto - nuri - 1);
-				} else {
+				} else if (!http_header_strict
+					   || (HTTP_METHOD_OPTIONS == con->request.http_method && uri[0] == '*' && uri[1] == '\0')) {
 					/* everything looks good so far */
 					buffer_copy_string_len(con->request.uri, uri, proto - uri - 1);
+				} else {
+					con->http_status = 400;
+					con->keep_alive = 0;
+					log_error_write(srv, __FILE__, __LINE__, "ss", "request-URI parse error -> 400 for:", uri);
+					return 0;
 				}
 
 				/* check uri for invalid characters */
