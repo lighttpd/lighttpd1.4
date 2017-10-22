@@ -834,7 +834,7 @@ ixes #1184, fixes #2143, #2258, #2281, fixes #946, fixes #1330, fixes #602, #101
   * add libev fdevent handler: server.event-handler = "libev"
   * mod_proxy: return response as soon as it is available (fixes #2196)
   * don't overwrite global server.force-lowercase-filenames setting (fixes #2042)
-  * bind to IPV6-only if ipv6 address was specified (http://redmine.lighttpd.net/projects/lighttpd/wiki/IPv6-Config)
+  * bind to IPV6-only if ipv6 address was specified (https://redmine.lighttpd.net/projects/lighttpd/wiki/IPv6-Config)
 
 - 1.4.26 - 2010-02-07
   * Fix request parser to handle packets with splitted \r\n\r\n (fixes #2105)

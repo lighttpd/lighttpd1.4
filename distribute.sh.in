@@ -11,7 +11,7 @@ FILES="${RPMS}	${NAME}.tar.gz \
 	ChangeLog \
 	release-news.${VERSION}.txt \
 	${NAME}.tar.gz.sig"
-DLURL="http://www.lighttpd.net/download"
+DLURL="https://www.lighttpd.net/download"
 pack=0
 echo $1
 case "$1" in

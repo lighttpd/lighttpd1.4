@@ -121,7 +121,7 @@ another backend set: ::
 
 You can find more information about network backend in:
 
-  http://blog.lighttpd.net/articles/2005/11/11/optimizing-lighty-for-high-concurrent-large-file-downloads
+  https://blog.lighttpd.net/articles/2005/11/11/optimizing-lighty-for-high-concurrent-large-file-downloads
 
 
 Max Connections

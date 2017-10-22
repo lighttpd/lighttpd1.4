@@ -2,8 +2,8 @@
 
 SRCTEST=src/server.c
 PACKAGE=lighttpd
-BASEDOWNLOADURL="http://download.lighttpd.net/lighttpd/releases-1.4.x"
-SNAPSHOTURL="http://download.lighttpd.net/lighttpd/snapshots-1.4.x"
+BASEDOWNLOADURL="https://download.lighttpd.net/lighttpd/releases-1.4.x"
+SNAPSHOTURL="https://download.lighttpd.net/lighttpd/snapshots-1.4.x"
 
 if [[ "`id -un`" != "stbuehler" ]] && [[ -z "$AUTHOR" ]]; then
   export AUTHOR="gstrauss"
@@ -70,26 +70,26 @@ genchanges() {
 # genereate links in old textile format "text":url
 genlinks_changes() {
 	local repourl ticketurl inf out
-	repourl="http://redmine.lighttpd.net/projects/lighttpd/repository/revisions/"
-	ticketurl="http://redmine.lighttpd.net/issues/"
+	repourl="https://redmine.lighttpd.net/projects/lighttpd/repository/revisions/"
+	ticketurl="https://redmine.lighttpd.net/issues/"
 	inf="$1"
 	outf="$1".links
 	(
-		sed -e 's%\(http://[a-zA-Z0-9.:_/\-]\+\)%"\1":\1%g' |
+		sed -e 's%\(https://[a-zA-Z0-9.:_/\-]\+\)%"\1":\1%g' |
 		sed -e 's%#\([0-9]\+\)%"#\1":'"${ticketurl}"'\1%g' |
 		sed -e 's%r\([0-9]\+\)%"r\1":'"${repourl}"'\1%g' |
-		sed -e 's%\(CVE-[0-9\-]\+\)%"\1":http://cve.mitre.org/cgi-bin/cvename.cgi?name=\1%g' |
+		sed -e 's%\(CVE-[0-9\-]\+\)%"\1":https://cve.mitre.org/cgi-bin/cvename.cgi?name=\1%g' |
 		cat
 	) < "$inf" > "$outf"
 }
 genlinks_downloads() {
 	local repourl ticketurl inf out
-	repourl="http://redmine.lighttpd.net/projects/lighttpd/repository/revisions/"
-	ticketurl="http://redmine.lighttpd.net/issues/"
+	repourl="https://redmine.lighttpd.net/projects/lighttpd/repository/revisions/"
+	ticketurl="https://redmine.lighttpd.net/issues/"
 	inf="$1"
 	outf="$1".links
 	(
-		sed -e 's%\(http://[a-zA-Z0-9.:_/\-]\+\)%"\1":\1%g' |
+		sed -e 's%\(https://[a-zA-Z0-9.:_/\-]\+\)%"\1":\1%g' |
 		cat
 	) < "$inf" > "$outf"
 }
@@ -166,10 +166,10 @@ EOF
 		cat <<EOF
 
 If you want to get the latest source for any branch, you can get it from our svn repository.
-Documentation to do so can be obtained from this page: "DevelSubversion":http://redmine.lighttpd.net/projects/lighttpd/wiki/DevelSubversion
-Bug reports or feature requests can be filed in our ticket system: "New Issue":http://redmine.lighttpd.net/projects/lighttpd/issues/new
-Please make sure to check if there isn't a ticket already here: "Issues":http://redmine.lighttpd.net/projects/lighttpd/issues
-Perhaps you also want to have a look at our "download site":http://download.lighttpd.net/lighttpd/
+Documentation to do so can be obtained from this page: "DevelSubversion":https://redmine.lighttpd.net/projects/lighttpd/wiki/DevelSubversion
+Bug reports or feature requests can be filed in our ticket system: "New Issue":https://redmine.lighttpd.net/projects/lighttpd/issues/new
+Please make sure to check if there isn't a ticket already here: "Issues":https://redmine.lighttpd.net/projects/lighttpd/issues
+Perhaps you also want to have a look at our "download site":https://download.lighttpd.net/lighttpd/
 
 Thank you for flying light.
 EOF
@@ -270,7 +270,7 @@ EOF
 
 h1. External references
 
-* http://www.lighttpd.net/$(date +"%Y/%-m/%-d")/${version}
+* https://www.lighttpd.net/$(date +"%Y/%-m/%-d")/${version}
 
 EOF
 	) > "Release-${version//./_}.page"

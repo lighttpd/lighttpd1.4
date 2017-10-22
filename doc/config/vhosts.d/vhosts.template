@@ -2,7 +2,7 @@
 ##
 ## For more examples check:
 ##
-## http://www.lighttpd.net/documentation/configuration.html#conditional-configuration
+## https://redmine.lighttpd.net/projects/lighttpd/wiki/Docs_Configuration
 ##
 $HTTP["host"] == "download.example.com" {
   var.server_name = "download.example.com"
