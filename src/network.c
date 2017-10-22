@@ -137,12 +137,10 @@ static int network_host_parse_addr(server *srv, sock_addr *addr, socklen_t *addr
 }
 
 static int network_server_init(server *srv, buffer *host_token, size_t sidx, int stdin_fd) {
-	socklen_t addr_len;
 	server_socket *srv_socket;
-	unsigned int port = 0;
 	const char *host;
 	specific_config *s = srv->config_storage[sidx];
-	sa_family_t family = AF_INET; /* default */
+	socklen_t addr_len = sizeof(sock_addr);
 	sock_addr addr;
 
 #ifdef __WIN32
@@ -160,6 +158,11 @@ static int network_server_init(server *srv, buffer *host_token, size_t sidx, int
 	}
 #endif
 
+	if (buffer_string_is_empty(host_token)) {
+		log_error_write(srv, __FILE__, __LINE__, "s", "value of $SERVER[\"socket\"] must not be empty");
+		return -1;
+	}
+
 	/* check if we already know this socket, and if yes, don't init it
 	 * (optimization: check strings here to filter out exact matches;
 	 *  binary addresses are matched further below) */
@@ -170,70 +173,11 @@ static int network_server_init(server *srv, buffer *host_token, size_t sidx, int
 		}
 	}
 
-	buffer_copy_buffer(srv->tmp_buf, host_token); /*(allocates ->ptr even if host_token is NULL)*/
-	host = srv->tmp_buf->ptr;
-
-	if (-1 != stdin_fd) { } else
-	if (host[0] == '/') {
-		/* host is a unix-domain-socket */
-#ifdef HAVE_SYS_UN_H
-		family = AF_UNIX;
-#else
-		log_error_write(srv, __FILE__, __LINE__, "s",
-				"ERROR: Unix Domain sockets are not supported.");
-		return -1;
-#endif
-	} else {
-		/* ipv4:port
-		 * [ipv6]:port
-		 */
-		buffer *b = srv->tmp_buf;
-		size_t len = buffer_string_length(b);
-		char *sp = NULL;
-		if (0 == len) {
-			log_error_write(srv, __FILE__, __LINE__, "s", "value of $SERVER[\"socket\"] must not be empty");
-			return -1;
-		}
-		if ((b->ptr[0] == '[' && b->ptr[len-1] == ']') || NULL == (sp = strrchr(b->ptr, ':'))) {
-			/* use server.port if set in config, or else default from config_set_defaults() */
-			port = srv->srvconf.port;
-			sp = b->ptr + len; /* point to '\0' at end of string so end of IPv6 address can be found below */
-		} else {
-			/* found ip:port separator at *sp; port doesn't end in ']', so *sp hopefully doesn't split an IPv6 address */
-			*sp = '\0';
-			port = strtol(sp+1, NULL, 10);
-		}
-
-		/* check for [ and ] */
-		if (b->ptr[0] == '[' && *(sp-1) == ']') {
-			*(sp-1) = '\0';
-			host++;
-
-			s->use_ipv6 = 1;
-		}
-
-		if (port == 0 || port > 65535) {
-			log_error_write(srv, __FILE__, __LINE__, "sd", "port not set or out of range:", port);
-
-			return -1;
-		}
-	}
-
-#ifdef HAVE_IPV6
-	if (-1 != stdin_fd) { } else
-	if (s->use_ipv6) {
-		family = AF_INET6;
-	}
-#endif
-
-	if (*host == '\0') {
-		if (family == AF_INET6) {
+	host = host_token->ptr;
+	if ((s->use_ipv6 && (*host == '\0' || *host == ':')) || (host[0] == '[' && host[1] == ']')) {
 			log_error_write(srv, __FILE__, __LINE__, "s", "warning: please use server.use-ipv6 only for hostnames, not without server.bind / empty address; your config will break if the kernel default for IPV6_V6ONLY changes");
-			host = "::";
-		} else if (family == AF_INET) {
-			host = "0.0.0.0";
-		}
 	}
+	if (*host == '[') s->use_ipv6 = 1;
 
 	memset(&addr, 0, sizeof(addr));
 	if (-1 != stdin_fd) {
@@ -241,15 +185,16 @@ static int network_server_init(server *srv, buffer *host_token, size_t sidx, int
 			close(stdin_fd);/*(graceful restart listening to "/dev/stdin")*/
 			return 0;
 		}
-		addr_len = sizeof(sock_addr);
 		if (-1 == getsockname(stdin_fd, (struct sockaddr *)&addr, &addr_len)) {
 			log_error_write(srv, __FILE__, __LINE__, "ss",
 					"getsockname()", strerror(errno));
 			return -1;
 		}
-	} else if (1 != sock_addr_from_str_hints(srv, &addr, &addr_len, host, family, port)) {
+	} else if (0 != network_host_parse_addr(srv, &addr, &addr_len, host_token, s->use_ipv6)) {
 		return -1;
 	}
+	network_host_normalize_addr_str(host_token, &addr);
+	host = host_token->ptr;
 
 	if (srv->srvconf.preflight_check) {
 		return 0;
@@ -258,7 +203,6 @@ static int network_server_init(server *srv, buffer *host_token, size_t sidx, int
 	/* check if we already know this socket (after potential DNS resolution), and if yes, don't init it */
 	for (size_t i = 0; i < srv->srv_sockets.used; ++i) {
 		if (0 == memcmp(&srv->srv_sockets.ptr[i]->addr, &addr, sizeof(addr))) {
-			buffer_copy_buffer(host_token, srv->srv_sockets.ptr[i]->srv_token);
 			return 0;
 		}
 	}
@@ -270,18 +214,7 @@ static int network_server_init(server *srv, buffer *host_token, size_t sidx, int
 	srv_socket->fde_ndx = -1;
 	srv_socket->sidx = sidx;
 	srv_socket->is_ssl = s->ssl_enabled;
-
-	srv_socket->srv_token = buffer_init();
-	if (addr.plain.sa_family == AF_INET6) buffer_append_string_len(srv_socket->srv_token, CONST_STR_LEN("["));
-	sock_addr_inet_ntop_append_buffer(srv_socket->srv_token, &srv_socket->addr);
-	if (addr.plain.sa_family == AF_INET6) buffer_append_string_len(srv_socket->srv_token, CONST_STR_LEN("]"));
-	if (addr.plain.sa_family != AF_UNIX) {
-		port = addr.plain.sa_family == AF_INET ? ntohs(addr.ipv4.sin_port) : ntohs(addr.ipv6.sin6_port);
-		buffer_append_string_len(srv_socket->srv_token, CONST_STR_LEN(":"));
-		buffer_append_int(srv_socket->srv_token, (int)port);
-	}
-	/* update host_token (dc->string) for consistent string comparison in lighttpd.conf conditions */
-	buffer_copy_buffer(host_token, srv_socket->srv_token);
+	srv_socket->srv_token = buffer_init_buffer(host_token);
 
 	if (srv->srv_sockets.size == 0) {
 		srv->srv_sockets.size = 4;
@@ -380,18 +313,8 @@ static int network_server_init(server *srv, buffer *host_token, size_t sidx, int
 
 	if (-1 != stdin_fd) { } else
 	if (0 != bind(srv_socket->fd, (struct sockaddr *) &(srv_socket->addr), addr_len)) {
-		switch(srv_socket->addr.plain.sa_family) {
-		case AF_UNIX:
-			log_error_write(srv, __FILE__, __LINE__, "sds",
-					"can't bind to socket:",
-					host, strerror(errno));
-			break;
-		default:
-			log_error_write(srv, __FILE__, __LINE__, "ssds",
-					"can't bind to port:",
-					host, port, strerror(errno));
-			break;
-		}
+		log_error_write(srv, __FILE__, __LINE__, "sss",
+				"can't bind to socket:", host, strerror(errno));
 		return -1;
 	}
 
