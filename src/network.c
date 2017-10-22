@@ -69,6 +69,73 @@ static handler_t network_server_handle_fdevent(server *srv, void *context, int r
 	return HANDLER_GO_ON;
 }
 
+static void network_host_normalize_addr_str(buffer *host, sock_addr *addr) {
+    buffer_reset(host);
+    if (addr->plain.sa_family == AF_INET6)
+        buffer_append_string_len(host, CONST_STR_LEN("["));
+    sock_addr_inet_ntop_append_buffer(host, addr);
+    if (addr->plain.sa_family == AF_INET6)
+        buffer_append_string_len(host, CONST_STR_LEN("]"));
+    if (addr->plain.sa_family != AF_UNIX) {
+        unsigned short port = (addr->plain.sa_family == AF_INET)
+          ? ntohs(addr->ipv4.sin_port)
+          : ntohs(addr->ipv6.sin6_port);
+        buffer_append_string_len(host, CONST_STR_LEN(":"));
+        buffer_append_int(host, (int)port);
+    }
+}
+
+static int network_host_parse_addr(server *srv, sock_addr *addr, socklen_t *addr_len, buffer *host, int use_ipv6) {
+    char *h;
+    char *colon = NULL;
+    const char *chost;
+    sa_family_t family = use_ipv6 ? AF_INET6 : AF_INET;
+    unsigned int port = srv->srvconf.port;
+    if (buffer_string_is_empty(host)) {
+        log_error_write(srv, __FILE__, __LINE__, "s", "value of $SERVER[\"socket\"] must not be empty");
+        return -1;
+    }
+    h = host->ptr;
+    if (h[0] == '/') {
+      #ifdef HAVE_SYS_UN_H
+        return (1 == sock_addr_from_str_hints(srv,addr,addr_len,h,AF_UNIX,0))
+          ? 0
+          : -1;
+      #else
+        log_error_write(srv, __FILE__, __LINE__, "s",
+                        "ERROR: Unix Domain sockets are not supported.");
+        return -1;
+      #endif
+    }
+    buffer_copy_buffer(srv->tmp_buf, host);
+    h = srv->tmp_buf->ptr;
+    if (h[0] == '[') {
+        family = AF_INET6;
+        if ((h = strchr(h, ']'))) {
+            *h++ = '\0';
+            if (*h == ':') colon = h;
+        } /*(else should not happen; validated in configparser.y)*/
+        h = srv->tmp_buf->ptr+1;
+    }
+    else {
+        colon = strrchr(h, ':');
+    }
+    if (colon) {
+        *colon++ = '\0';
+        port = strtol(colon, NULL, 10);
+        if (port == 0 || port > 65535) {
+            log_error_write(srv, __FILE__, __LINE__, "sd",
+                            "port not set or out of range:", port);
+            return -1;
+        }
+    }
+    chost = *h ? h : family == AF_INET ? "0.0.0.0" : "::";
+    if (1 != sock_addr_from_str_hints(srv,addr,addr_len,chost,family,port)) {
+        return -1;
+    }
+    return 0;
+}
+
 static int network_server_init(server *srv, buffer *host_token, size_t sidx, int stdin_fd) {
 	socklen_t addr_len;
 	server_socket *srv_socket;
@@ -494,6 +561,16 @@ int network_init(server *srv, int stdin_fd) {
 
 		/* not our stage */
 		if (COMP_SERVER_SOCKET != dc->comp) continue;
+
+		if (dc->cond == CONFIG_COND_NE) {
+			socklen_t addr_len = sizeof(sock_addr);
+			sock_addr addr;
+			if (0 != network_host_parse_addr(srv, &addr, &addr_len, dc->string, srv->config_storage[i]->use_ipv6)) {
+				return -1;
+			}
+			network_host_normalize_addr_str(dc->string, &addr);
+			continue;
+		}
 
 		if (dc->cond != CONFIG_COND_EQ) continue;
 
