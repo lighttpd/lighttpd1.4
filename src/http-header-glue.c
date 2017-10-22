@@ -142,6 +142,7 @@ buffer * strftime_cache_get(server *srv, time_t last_mod) {
 
 	srv->mtime_cache[i].mtime = last_mod;
 	tm = gmtime(&(srv->mtime_cache[i].mtime));
+	buffer_string_set_length(srv->mtime_cache[i].str, 0);
 	buffer_append_strftime(srv->mtime_cache[i].str, "%a, %d %b %Y %H:%M:%S GMT", tm);
 
 	return srv->mtime_cache[i].str;
