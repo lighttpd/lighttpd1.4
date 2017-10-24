@@ -292,6 +292,30 @@ if 1:
 	else:
 		autoconf.env.Append(APPEND_LIBS = '')
 
+	autoconf.env.Append(
+		LIBBZ2 = '',
+		LIBCRYPT = '',
+		LIBCRYPTO = '',
+		LIBDBI = '',
+		LIBDL = '',
+		LIBFCGI = '',
+		LIBGDBM = '',
+		LIBGSSAPI_KRB5 = '',
+		LIBKRB5 = '',
+		LIBLBER = '',
+		LIBLDAP = '',
+		LIBLUA = '',
+		LIBMEMCACHED = '',
+		LIBMYSQL = '',
+		LIBPCRE = '',
+		LIBPGSQL = '',
+		LIBSQLITE3 = '',
+		LIBSSL = '',
+		LIBUUID = '',
+		LIBXML2 = '',
+		LIBZ = '',
+	)
+
 	autoconf.haveCHeaders([
 		'arpa/inet.h',
 		'crypt.h',
@@ -391,30 +415,6 @@ if 1:
 	autoconf.haveFunc('getrandom', 'linux/random.h')
 
 	autoconf.haveTypes(Split('pid_t size_t off_t'))
-
-	autoconf.env.Append(
-		LIBBZ2 = '',
-		LIBCRYPT = '',
-		LIBCRYPTO = '',
-		LIBDBI = '',
-		LIBDL = '',
-		LIBFCGI = '',
-		LIBGDBM = '',
-		LIBGSSAPI_KRB5 = '',
-		LIBKRB5 = '',
-		LIBLBER = '',
-		LIBLDAP = '',
-		LIBLUA = '',
-		LIBMEMCACHED = '',
-		LIBMYSQL = '',
-		LIBPCRE = '',
-		LIBPGSQL = '',
-		LIBSQLITE3 = '',
-		LIBSSL = '',
-		LIBUUID = '',
-		LIBXML2 = '',
-		LIBZ = '',
-	)
 
 	# have crypt_r/crypt, and is -lcrypt needed?
 	if autoconf.CheckLib('crypt'):
