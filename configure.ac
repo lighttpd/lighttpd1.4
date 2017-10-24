@@ -1,6 +1,6 @@
 dnl                                               -*- Autoconf -*-
 dnl Process this file with autoconf to produce a configure script.
-AC_PREREQ(2.57)
+AC_PREREQ(2.60)
 AC_INIT([lighttpd], [1.4.48], [contact@lighttpd.net])
 AC_CONFIG_SRCDIR([src/server.c])
 AC_CONFIG_HEADER([config.h])
@@ -8,21 +8,7 @@ AC_CONFIG_MACRO_DIR([m4])
 
 AC_CANONICAL_HOST
 
-dnl HOW FUCKING BROKEN IS AUTOMAKE...
-dnl serial-tests is not recognized before 1.12, and required for serial tests with 1.13, sane version checks "impossible"
-dnl if you don't use the default (symlinked) automake on your box, set AUTOMAKE to the path you're using
-m4_define([serial_tests], [
-    m4_esyscmd([case `${AUTOMAKE:-automake} --version | head -n 1` in
-      *1.11.*|*1.10.*|*1.9.*);;
-      *) echo serial-tests;;
-      esac])
-])
-
-AM_INIT_AUTOMAKE([-Wall -Wno-portability -Wno-override foreign dist-xz tar-ustar] serial_tests)
-
-dnl enable with --enable-silent-rules or make V=0 (needs automake >= 1.11)
-m4_ifdef([AM_SILENT_RULES], [AM_SILENT_RULES])
-
+AM_INIT_AUTOMAKE([1.14 -Wall -Wno-portability -Wno-override foreign dist-xz tar-ustar serial-tests silent-rules])
 
 dnl @synopsis TRY_CFLAGS [compiler flags]
 dnl @summary check whether compiler supports given flags and adds them to CFLAGS
@@ -64,25 +50,14 @@ dnl Checks for programs.
 AC_PROG_CC
 AC_PROG_CC_STDC
 AX_PROG_CC_FOR_BUILD
-AM_PROG_CC_C_O
 AC_PROG_LD
 AC_PROG_INSTALL
 AC_PROG_AWK
 AC_PROG_CPP
-dnl AC_PROG_CXX
-AC_PROG_LN_S
 AC_PROG_MAKE_SET
 
-dnl AM_PROG_AR is needed for some linker stuff
-dnl AC_USE_SYSTEM_EXTENSIONS requires autoconf 2.60
-m4_ifdef([AC_USE_SYSTEM_EXTENSIONS], [AC_USE_SYSTEM_EXTENSIONS])
-dnl AM_PROG_AR requires automake 1.11 (and uses AC_COMPILE_IFELSE which wants AC_USE_SYSTEM_EXTENSIONS)
-m4_ifdef([AM_PROG_AR], [AM_PROG_AR])
-
-dnl check environment
-AC_AIX
-AC_ISC_POSIX
-AC_MINIX
+AC_USE_SYSTEM_EXTENSIONS
+AM_PROG_AR
 
 dnl AC_CANONICAL_HOST
 case $host_os in
@@ -106,7 +81,7 @@ AC_LIBTOOL_DLOPEN
 AC_PROG_LIBTOOL
 
 dnl for solaris
-CPPFLAGS="${CPPFLAGS} -D_REENTRANT -D__EXTENSIONS__"
+CPPFLAGS="${CPPFLAGS} -D_REENTRANT"
 
 dnl Checks for header files.
 AC_HEADER_STDC
