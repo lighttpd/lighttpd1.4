@@ -163,6 +163,13 @@ if env['CC'] == 'gcc':
 	## we need x-open 6 and bsd 4.3 features
 	env.Append(CCFLAGS = Split('-Wall -O2 -g -W -pedantic -Wunused -Wshadow -std=gnu99'))
 
+env.Append(CPPFLAGS = [
+	'-D_FILE_OFFSET_BITS=64',
+	'-D_LARGEFILE_SOURCE',
+	'-D_LARGE_FILES',
+	'-D_GNU_SOURCE',
+])
+
 if env['with_all']:
 	for feature in vars.keys():
 		# only enable 'with_*' flags
@@ -428,7 +435,6 @@ env.Append(CPPFLAGS = [
 		'-DPACKAGE_NAME=\\"' + package + '\\"',
 		'-DPACKAGE_VERSION=\\"' + version + '\\"',
 		'-DLIBRARY_DIR="\\"${libdir}\\""',
-		'-D_FILE_OFFSET_BITS=64', '-D_LARGEFILE_SOURCE', '-D_LARGE_FILES'
 		] )
 
 SConscript('src/SConscript', exports = 'env', variant_dir = 'sconsbuild/build', duplicate = 0)
