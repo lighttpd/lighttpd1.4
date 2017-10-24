@@ -329,6 +329,7 @@ if 1:
 			fail("Couldn't find ldap")
 		if not autoconf.CheckLibWithHeader('lber', 'lber.h', 'C', autoadd = 0):
 			fail("Couldn't find lber")
+		autoconf.env.Append(CPPFLAGS = [ '-DLDAP_DEPRECATED=1' ])
 		autoconf.env.Append(CPPFLAGS = [ '-DHAVE_LDAP_H', '-DHAVE_LIBLDAP' ], LIBLDAP = 'ldap')
 		autoconf.env.Append(CPPFLAGS = [ '-DHAVE_LBER_H', '-DHAVE_LIBLBER' ], LIBLBER = 'lber')
 
