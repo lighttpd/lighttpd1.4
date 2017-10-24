@@ -1,7 +1,8 @@
 import os
-import sys
 import re
 import string
+import sys
+from copy import copy
 from stat import *
 
 package = 'lighttpd'
@@ -254,74 +255,70 @@ if 1:
 		LIBKRB5 = '', LIBGSSAPI_KRB5 = '', LIBGDBM = '', LIBSSL = '', LIBCRYPTO = '')
 
 	if env['with_fam']:
-		if autoconf.CheckLibWithHeader('fam', 'fam.h', 'C'):
-			autoconf.env.Append(CPPFLAGS = [ '-DHAVE_FAM_H', '-DHAVE_LIBFAM' ], LIBS = 'fam')
+		if autoconf.CheckLibWithHeader('fam', 'fam.h', 'C', autoadd = 0):
+			autoconf.env.Append(CPPFLAGS = [ '-DHAVE_FAM_H', '-DHAVE_LIBFAM' ], LIBS = [ 'fam' ])
 			checkFuncs(autoconf, ['FAMNoExists']);
 
-	if autoconf.CheckLib('crypt'):
+	if autoconf.CheckLib('crypt', autoadd = 0):
 		autoconf.env.Append(CPPFLAGS = [ '-DHAVE_LIBCRYPT' ], LIBCRYPT = 'crypt')
 		oldlib = env['LIBS']
-		env['LIBS'] += ['crypt']
-		checkFuncs(autoconf, ['crypt', 'crypt_r']);
+		env['LIBS'] = ['crypt']
+		checkFuncs(autoconf, ['crypt', 'crypt_r'])
 		env['LIBS'] = oldlib
 	else:
-		checkFuncs(autoconf, ['crypt', 'crypt_r']);
+		checkFuncs(autoconf, ['crypt', 'crypt_r'])
 
-	if autoconf.CheckLibWithHeader('rt', 'time.h', 'c', 'clock_gettime(CLOCK_MONOTONIC, (struct timespec*)0);'):
+	if autoconf.CheckLibWithHeader('rt', 'time.h', 'c', 'clock_gettime(CLOCK_MONOTONIC, (struct timespec*)0);', autoadd = 0):
 		autoconf.env.Append(CPPFLAGS = [ '-DHAVE_CLOCK_GETTIME' ], LIBS = [ 'rt' ])
 
-	if autoconf.CheckLibWithHeader('uuid', 'uuid/uuid.h', 'C'):
+	if autoconf.CheckLibWithHeader('uuid', 'uuid/uuid.h', 'C', autoadd = 0):
 		autoconf.env.Append(CPPFLAGS = [ '-DHAVE_UUID_UUID_H', '-DHAVE_LIBUUID' ], LIBUUID = 'uuid')
 
 	if env['with_openssl']:
-		if autoconf.CheckLibWithHeader('ssl', 'openssl/ssl.h', 'C'):
-			autoconf.env.Append(CPPFLAGS = [ '-DHAVE_OPENSSL_SSL_H', '-DHAVE_LIBSSL'] , LIBSSL = 'ssl', LIBCRYPTO = 'crypto', LIBS = [ 'crypto' ])
+		if autoconf.CheckLibWithHeader('ssl', 'openssl/ssl.h', 'C', autoadd = 0):
+			autoconf.env.Append(CPPFLAGS = [ '-DHAVE_OPENSSL_SSL_H', '-DHAVE_LIBSSL'] , LIBSSL = 'ssl', LIBCRYPTO = 'crypto')
 
 	if env['with_zlib']:
-		if autoconf.CheckLibWithHeader('z', 'zlib.h', 'C'):
+		if autoconf.CheckLibWithHeader('z', 'zlib.h', 'C', autoadd = 0):
 			autoconf.env.Append(CPPFLAGS = [ '-DHAVE_ZLIB_H', '-DHAVE_LIBZ' ], LIBZ = 'z')
 
 	if env['with_krb5']:
-		if autoconf.CheckLibWithHeader('krb5', 'krb5.h', 'C'):
+		if autoconf.CheckLibWithHeader('krb5', 'krb5.h', 'C', autoadd = 0):
 			autoconf.env.Append(CPPFLAGS = [ '-DHAVE_KRB5' ], LIBKRB5 = 'krb5')
-		if autoconf.CheckLibWithHeader('gssapi_krb5', 'gssapi/gssapi_krb5.h', 'C'):
+		if autoconf.CheckLibWithHeader('gssapi_krb5', 'gssapi/gssapi_krb5.h', 'C', autoadd = 0):
 			autoconf.env.Append(LIBGSSAPI_KRB5 = 'gssapi_krb5')
 
 	if env['with_ldap']:
-		if autoconf.CheckLibWithHeader('ldap', 'ldap.h', 'C'):
+		if autoconf.CheckLibWithHeader('ldap', 'ldap.h', 'C', autoadd = 0):
 			autoconf.env.Append(CPPFLAGS = [ '-DHAVE_LDAP_H', '-DHAVE_LIBLDAP' ], LIBLDAP = 'ldap')
-		if autoconf.CheckLibWithHeader('lber', 'lber.h', 'C'):
+		if autoconf.CheckLibWithHeader('lber', 'lber.h', 'C', autoadd = 0):
 			autoconf.env.Append(CPPFLAGS = [ '-DHAVE_LBER_H', '-DHAVE_LIBLBER' ], LIBLBER = 'lber')
 
 	if env['with_bzip2']:
-		if autoconf.CheckLibWithHeader('bz2', 'bzlib.h', 'C'):
+		if autoconf.CheckLibWithHeader('bz2', 'bzlib.h', 'C', autoadd = 0):
 			autoconf.env.Append(CPPFLAGS = [ '-DHAVE_BZLIB_H', '-DHAVE_LIBBZ2' ], LIBBZ2 = 'bz2')
 
 	if env['with_memcached']:
-		if autoconf.CheckLibWithHeader('memcached', 'libmemcached/memcached.h', 'C'):
+		if autoconf.CheckLibWithHeader('memcached', 'libmemcached/memcached.h', 'C', autoadd = 0):
 			autoconf.env.Append(CPPFLAGS = [ '-DUSE_MEMCACHED' ], LIBMEMCACHED = 'memcached')
 
 	if env['with_gdbm']:
-		if autoconf.CheckLibWithHeader('gdbm', 'gdbm.h', 'C'):
+		if autoconf.CheckLibWithHeader('gdbm', 'gdbm.h', 'C', autoadd = 0):
 			autoconf.env.Append(CPPFLAGS = [ '-DHAVE_GDBM_H', '-DHAVE_GDBM' ], LIBGDBM = 'gdbm')
 
 	if env['with_sqlite3']:
-		if autoconf.CheckLibWithHeader('sqlite3', 'sqlite3.h', 'C'):
+		if autoconf.CheckLibWithHeader('sqlite3', 'sqlite3.h', 'C', autoadd = 0):
 			autoconf.env.Append(CPPFLAGS = [ '-DHAVE_SQLITE3_H', '-DHAVE_LIBSQLITE3' ], LIBSQLITE3 = 'sqlite3')
 
 	if env['with_geoip']:
-		if autoconf.CheckLibWithHeader('GeoIP', 'GeoIP.h', 'C'):
+		if autoconf.CheckLibWithHeader('GeoIP', 'GeoIP.h', 'C', autoadd = 0):
 			autoconf.env.Append(CPPFLAGS = [ '-DHAVE_GEOIP' ], LIBGEOIP = 'GeoIP')
 
-	ol = env['LIBS']
-	if autoconf.CheckLibWithHeader('fcgi', 'fastcgi.h', 'C'):
+	if autoconf.CheckLibWithHeader('fcgi', 'fastcgi.h', 'C', autoadd = 0):
 		autoconf.env.Append(LIBFCGI = 'fcgi')
-	env['LIBS'] = ol
 
-	ol = env['LIBS']
-	if autoconf.CheckLibWithHeader('dl', 'dlfcn.h', 'C'):
+	if autoconf.CheckLibWithHeader('dl', 'dlfcn.h', 'C', autoadd = 0):
 		autoconf.env.Append(LIBDL = 'dl')
-	env['LIBS'] = ol
 
 	if autoconf.CheckType('socklen_t', '#include <unistd.h>\n#include <sys/socket.h>\n#include <sys/types.h>'):
 		autoconf.env.Append(CPPFLAGS = [ '-DHAVE_SOCKLEN_T' ])
@@ -342,7 +339,7 @@ if 1:
 
 def TryLua(env, name):
 	result = False
-	oldlibs = env['LIBS']
+	oldlibs = copy(env['LIBS'])
 	try:
 		print("Searching for lua: " + name + " >= 5.0")
 		env.ParseConfig("pkg-config '" + name + " >= 5.0' --cflags --libs")
@@ -365,8 +362,11 @@ if env['with_lua']:
 
 if env['with_pcre']:
 	pcre_config = checkProgram(env, 'pcre', 'pcre-config')
+	oldlib = env['LIBS']
+	env['LIBS'] = []
 	env.ParseConfig(pcre_config + ' --cflags --libs')
-	env.Append(CPPFLAGS = [ '-DHAVE_PCRE_H', '-DHAVE_LIBPCRE' ], LIBPCRE = 'pcre')
+	env.Append(CPPFLAGS = [ '-DHAVE_PCRE_H', '-DHAVE_LIBPCRE' ], LIBPCRE = env['LIBS'])
+	env['LIBS'] = oldlib
 
 if env['with_xml']:
 	xml2_config = checkProgram(env, 'xml', 'xml2-config')

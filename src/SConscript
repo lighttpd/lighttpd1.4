@@ -1,8 +1,9 @@
+import itertools
 import os
 import re
 import types
-import itertools
 from collections import OrderedDict
+from copy import copy
 
 # search any file, not just executables
 def WhereIsFile(file, paths):
@@ -166,7 +167,7 @@ staticenv = env.Clone(CPPFLAGS=[ env['CPPFLAGS'], '-DLIGHTTPD_STATIC' ])
 ## all the core-sources + the modules
 staticsrc = src + common_src
 
-staticlib = env['LIBS']
+staticlib = copy(env['LIBS'])
 staticinit = ''
 for module in modules.keys():
 	staticsrc += modules[module]['src']
