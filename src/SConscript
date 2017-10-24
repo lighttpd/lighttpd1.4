@@ -141,11 +141,11 @@ if env['with_lua']:
 	modules['mod_magnet'] = { 'src' : [ 'mod_magnet.c', 'mod_magnet_cache.c' ], 'lib' : [ env['LIBLUA'] ] }
 	modules['mod_cml'] = {
 		'src' : [ 'mod_cml_lua.c', 'mod_cml.c', 'mod_cml_funcs.c' ],
-		'lib' : [ env['LIBPCRE'], env['LIBMEMCACHED'], env['LIBLUA'] ]
+		'lib' : [ env['LIBMEMCACHED'], env['LIBLUA'] ]
 	}
 
 if env['with_pcre'] and (env['with_memcached'] or env['with_gdbm']):
-	modules['mod_trigger_b4_dl'] = { 'src' : [ 'mod_trigger_b4_dl.c' ], 'lib' : [ env['LIBPCRE'], env['LIBMEMCACHED'] ] }
+	modules['mod_trigger_b4_dl'] = { 'src' : [ 'mod_trigger_b4_dl.c' ], 'lib' : [ env['LIBPCRE'], env['LIBMEMCACHED'], env['LIBGDBM'] ] }
 
 if env['with_mysql']:
 	modules['mod_authn_mysql'] = { 'src' : [ 'mod_authn_mysql.c' ], 'lib' : [ env['LIBCRYPT'], env['LIBMYSQL'] ] }
@@ -269,7 +269,15 @@ else:
 	else:
 		bin_linkflags += [ '-Wl,--export-dynamic' ]
 
-instbin = env.Program(bin_targets, src, LINKFLAGS = bin_linkflags, LIBS = GatherLibs(env, env['LIBS'], common_lib, env['LIBDL']))
+instbin = env.Program(bin_targets, src, LINKFLAGS = bin_linkflags,
+	LIBS = GatherLibs(
+		env,
+		common_lib,
+		env['LIBCRYPTO'],
+		env['LIBDL'],
+		env['LIBPCRE'],
+	)
+)
 env.Depends(instbin, configparser)
 
 if env['COMMON_LIB'] == 'bin':
