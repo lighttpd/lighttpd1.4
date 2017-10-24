@@ -8,6 +8,10 @@ from stat import *
 package = 'lighttpd'
 version = '1.4.48'
 
+def fail(*args, **kwargs):
+	print(*args, file=sys.stderr, **kwargs)
+	env.Exit(-1)
+
 def checkCHeaders(autoconf, hdrs):
 	p = re.compile('[^A-Z0-9]')
 	for hdr in hdrs:
@@ -94,15 +98,12 @@ def checkProgram(env, withname, progname):
 	if binpath:
 		mode = os.stat(binpath)[ST_MODE]
 		if S_ISDIR(mode):
-			print >> sys.stderr, "* error: path `%s' is a directory" % (binpath)
-			env.Exit(-1)
+			fail("* error: path `%s' is a directory" % (binpath))
 		if not S_ISREG(mode):
-			print >> sys.stderr, "* error: path `%s' is not a file or not exists" % (binpath)
-			env.Exit(-1)
+			fail("* error: path `%s' is not a file or not exists" % (binpath))
 
 	if not binpath:
-		print >> sys.stderr, "* error: can't find program `%s'" % (progname)
-		env.Exit(-1)
+		fail("* error: can't find program `%s'" % (progname))
 
 	return binpath
 
@@ -290,37 +291,46 @@ if 1:
 		autoconf.env.Append(LIBFCGI = 'fcgi')
 
 	if env['with_bzip2']:
-		if autoconf.CheckLibWithHeader('bz2', 'bzlib.h', 'C', autoadd = 0):
-			autoconf.env.Append(CPPFLAGS = [ '-DHAVE_BZLIB_H', '-DHAVE_LIBBZ2' ], LIBBZ2 = 'bz2')
+		if not autoconf.CheckLibWithHeader('bz2', 'bzlib.h', 'C', autoadd = 0):
+			fail("Couldn't find bz2")
+		autoconf.env.Append(CPPFLAGS = [ '-DHAVE_BZLIB_H', '-DHAVE_LIBBZ2' ], LIBBZ2 = 'bz2')
 
 	if env['with_dbi']:
-		if autoconf.CheckLibWithHeader('dbi', 'dbi/dbi.h', 'C', autoadd = 0):
-			env.Append(CPPFLAGS = [ '-DHAVE_DBI_H', '-DHAVE_LIBDBI' ], LIBDBI = 'dbi')
+		if not autoconf.CheckLibWithHeader('dbi', 'dbi/dbi.h', 'C', autoadd = 0):
+			fail("Couldn't find dbi")
+		env.Append(CPPFLAGS = [ '-DHAVE_DBI_H', '-DHAVE_LIBDBI' ], LIBDBI = 'dbi')
 
 	if env['with_fam']:
-		if autoconf.CheckLibWithHeader('fam', 'fam.h', 'C', autoadd = 0):
-			autoconf.env.Append(CPPFLAGS = [ '-DHAVE_FAM_H', '-DHAVE_LIBFAM' ], LIBS = [ 'fam' ])
-			checkFuncs(autoconf, ['FAMNoExists']);
+		if not autoconf.CheckLibWithHeader('fam', 'fam.h', 'C', autoadd = 0):
+			fail("Couldn't find fam")
+		autoconf.env.Append(CPPFLAGS = [ '-DHAVE_FAM_H', '-DHAVE_LIBFAM' ], LIBS = [ 'fam' ])
+		checkFuncs(autoconf, ['FAMNoExists']);
 
 	if env['with_gdbm']:
-		if autoconf.CheckLibWithHeader('gdbm', 'gdbm.h', 'C', autoadd = 0):
-			autoconf.env.Append(CPPFLAGS = [ '-DHAVE_GDBM_H', '-DHAVE_GDBM' ], LIBGDBM = 'gdbm')
+		if not autoconf.CheckLibWithHeader('gdbm', 'gdbm.h', 'C', autoadd = 0):
+			fail("Couldn't find gdbm")
+		autoconf.env.Append(CPPFLAGS = [ '-DHAVE_GDBM_H', '-DHAVE_GDBM' ], LIBGDBM = 'gdbm')
 
 	if env['with_geoip']:
-		if autoconf.CheckLibWithHeader('GeoIP', 'GeoIP.h', 'C', autoadd = 0):
-			autoconf.env.Append(CPPFLAGS = [ '-DHAVE_GEOIP' ], LIBGEOIP = 'GeoIP')
+		if not autoconf.CheckLibWithHeader('GeoIP', 'GeoIP.h', 'C', autoadd = 0):
+			fail("Couldn't find geoip")
+		autoconf.env.Append(CPPFLAGS = [ '-DHAVE_GEOIP' ], LIBGEOIP = 'GeoIP')
 
 	if env['with_krb5']:
-		if autoconf.CheckLibWithHeader('krb5', 'krb5.h', 'C', autoadd = 0):
-			autoconf.env.Append(CPPFLAGS = [ '-DHAVE_KRB5' ], LIBKRB5 = 'krb5')
-		if autoconf.CheckLibWithHeader('gssapi_krb5', 'gssapi/gssapi_krb5.h', 'C', autoadd = 0):
-			autoconf.env.Append(LIBGSSAPI_KRB5 = 'gssapi_krb5')
+		if not autoconf.CheckLibWithHeader('krb5', 'krb5.h', 'C', autoadd = 0):
+			fail("Couldn't find krb5")
+		if not autoconf.CheckLibWithHeader('gssapi_krb5', 'gssapi/gssapi_krb5.h', 'C', autoadd = 0):
+			fail("Couldn't find gssapi_krb5")
+		autoconf.env.Append(CPPFLAGS = [ '-DHAVE_KRB5' ], LIBKRB5 = 'krb5')
+		autoconf.env.Append(LIBGSSAPI_KRB5 = 'gssapi_krb5')
 
 	if env['with_ldap']:
-		if autoconf.CheckLibWithHeader('ldap', 'ldap.h', 'C', autoadd = 0):
-			autoconf.env.Append(CPPFLAGS = [ '-DHAVE_LDAP_H', '-DHAVE_LIBLDAP' ], LIBLDAP = 'ldap')
-		if autoconf.CheckLibWithHeader('lber', 'lber.h', 'C', autoadd = 0):
-			autoconf.env.Append(CPPFLAGS = [ '-DHAVE_LBER_H', '-DHAVE_LIBLBER' ], LIBLBER = 'lber')
+		if not autoconf.CheckLibWithHeader('ldap', 'ldap.h', 'C', autoadd = 0):
+			fail("Couldn't find ldap")
+		if not autoconf.CheckLibWithHeader('lber', 'lber.h', 'C', autoadd = 0):
+			fail("Couldn't find lber")
+		autoconf.env.Append(CPPFLAGS = [ '-DHAVE_LDAP_H', '-DHAVE_LIBLDAP' ], LIBLDAP = 'ldap')
+		autoconf.env.Append(CPPFLAGS = [ '-DHAVE_LBER_H', '-DHAVE_LIBLBER' ], LIBLBER = 'lber')
 
 	if env['with_lua']:
 		def TryLua(env, name):
@@ -343,11 +353,12 @@ if 1:
 				found_lua = True
 				break
 		if not found_lua:
-			raise RuntimeError("Couldn't find any lua implementation")
+			fail("Couldn't find any lua implementation")
 
 	if env['with_memcached']:
-		if autoconf.CheckLibWithHeader('memcached', 'libmemcached/memcached.h', 'C', autoadd = 0):
-			autoconf.env.Append(CPPFLAGS = [ '-DUSE_MEMCACHED' ], LIBMEMCACHED = 'memcached')
+		if not autoconf.CheckLibWithHeader('memcached', 'libmemcached/memcached.h', 'C', autoadd = 0):
+			fail("Couldn't find memcached")
+		autoconf.env.Append(CPPFLAGS = [ '-DUSE_MEMCACHED' ], LIBMEMCACHED = 'memcached')
 
 	if env['with_mysql']:
 		mysql_config = checkProgram(env, 'mysql', 'mysql_config')
@@ -358,8 +369,9 @@ if 1:
 		env['LIBS'] = oldlib
 
 	if env['with_openssl']:
-		if autoconf.CheckLibWithHeader('ssl', 'openssl/ssl.h', 'C', autoadd = 0):
-			autoconf.env.Append(CPPFLAGS = [ '-DHAVE_OPENSSL_SSL_H', '-DHAVE_LIBSSL'] , LIBSSL = 'ssl', LIBCRYPTO = 'crypto')
+		if not autoconf.CheckLibWithHeader('ssl', 'openssl/ssl.h', 'C', autoadd = 0):
+			fail("Couldn't find openssl")
+		autoconf.env.Append(CPPFLAGS = [ '-DHAVE_OPENSSL_SSL_H', '-DHAVE_LIBSSL'] , LIBSSL = 'ssl', LIBCRYPTO = 'crypto')
 
 	if env['with_pcre']:
 		pcre_config = checkProgram(env, 'pcre', 'pcre-config')
@@ -377,12 +389,14 @@ if 1:
 		env['LIBS'] = oldlib
 
 	if env['with_sqlite3']:
-		if autoconf.CheckLibWithHeader('sqlite3', 'sqlite3.h', 'C', autoadd = 0):
-			autoconf.env.Append(CPPFLAGS = [ '-DHAVE_SQLITE3_H', '-DHAVE_LIBSQLITE3' ], LIBSQLITE3 = 'sqlite3')
+		if not autoconf.CheckLibWithHeader('sqlite3', 'sqlite3.h', 'C', autoadd = 0):
+			fail("Couldn't find sqlite3")
+		autoconf.env.Append(CPPFLAGS = [ '-DHAVE_SQLITE3_H', '-DHAVE_LIBSQLITE3' ], LIBSQLITE3 = 'sqlite3')
 
 	if env['with_uuid']:
-		if autoconf.CheckLibWithHeader('uuid', 'uuid/uuid.h', 'C', autoadd = 0):
-			autoconf.env.Append(CPPFLAGS = [ '-DHAVE_UUID_UUID_H', '-DHAVE_LIBUUID' ], LIBUUID = 'uuid')
+		if not autoconf.CheckLibWithHeader('uuid', 'uuid/uuid.h', 'C', autoadd = 0):
+			fail("Couldn't find uuid")
+		autoconf.env.Append(CPPFLAGS = [ '-DHAVE_UUID_UUID_H', '-DHAVE_LIBUUID' ], LIBUUID = 'uuid')
 
 	if env['with_xml']:
 		xml2_config = checkProgram(env, 'xml', 'xml2-config')
@@ -393,8 +407,9 @@ if 1:
 		env['LIBS'] = oldlib
 
 	if env['with_zlib']:
-		if autoconf.CheckLibWithHeader('z', 'zlib.h', 'C', autoadd = 0):
-			autoconf.env.Append(CPPFLAGS = [ '-DHAVE_ZLIB_H', '-DHAVE_LIBZ' ], LIBZ = 'z')
+		if not autoconf.CheckLibWithHeader('z', 'zlib.h', 'C', autoadd = 0):
+			fail("Couldn't find zlib")
+		autoconf.env.Append(CPPFLAGS = [ '-DHAVE_ZLIB_H', '-DHAVE_LIBZ' ], LIBZ = 'z')
 
 	env = autoconf.Finish()
 
