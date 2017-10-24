@@ -135,11 +135,11 @@ vars.AddVariables(
 	BoolVariable('with_openssl', 'enable openssl support', 'no'),
 	PackageVariable('with_pcre', 'enable pcre support', 'yes'),
 	PackageVariable('with_pgsql', 'enable pgsql support', 'no'),
-	BoolVariable('with_sqlite3', 'enable sqlite3 support', 'no'),
-	# with_uuid not supported
+	BoolVariable('with_sqlite3', 'enable sqlite3 support (required for webdav props)', 'no'),
+	BoolVariable('with_uuid', 'enable uuid support (required for webdav locks)', 'no'),
 	# with_valgrind not supported
 	# with_xattr not supported
-	PackageVariable('with_xml', 'enable xml support', 'no'),
+	PackageVariable('with_xml', 'enable xml support (required for webdav props)', 'no'),
 	BoolVariable('with_zlib', 'enable deflate/gzip compression', 'no'),
 
 	BoolVariable('with_all', 'enable all with_* features', 'no'),
@@ -271,8 +271,9 @@ if 1:
 	if autoconf.CheckLibWithHeader('rt', 'time.h', 'c', 'clock_gettime(CLOCK_MONOTONIC, (struct timespec*)0);', autoadd = 0):
 		autoconf.env.Append(CPPFLAGS = [ '-DHAVE_CLOCK_GETTIME' ], LIBS = [ 'rt' ])
 
-	if autoconf.CheckLibWithHeader('uuid', 'uuid/uuid.h', 'C', autoadd = 0):
-		autoconf.env.Append(CPPFLAGS = [ '-DHAVE_UUID_UUID_H', '-DHAVE_LIBUUID' ], LIBUUID = 'uuid')
+	if env['with_uuid']:
+		if autoconf.CheckLibWithHeader('uuid', 'uuid/uuid.h', 'C', autoadd = 0):
+			autoconf.env.Append(CPPFLAGS = [ '-DHAVE_UUID_UUID_H', '-DHAVE_LIBUUID' ], LIBUUID = 'uuid')
 
 	if env['with_openssl']:
 		if autoconf.CheckLibWithHeader('ssl', 'openssl/ssl.h', 'C', autoadd = 0):
