@@ -314,6 +314,10 @@ if 1:
 		if autoconf.CheckLibWithHeader('GeoIP', 'GeoIP.h', 'C', autoadd = 0):
 			autoconf.env.Append(CPPFLAGS = [ '-DHAVE_GEOIP' ], LIBGEOIP = 'GeoIP')
 
+	if env['with_dbi']:
+		if autoconf.CheckLibWithHeader('dbi', 'dbi/dbi.h', 'C', autoadd = 0):
+			env.Append(CPPFLAGS = [ '-DHAVE_DBI_H', '-DHAVE_LIBDBI' ], LIBDBI = 'dbi')
+
 	if autoconf.CheckLibWithHeader('fcgi', 'fastcgi.h', 'C', autoadd = 0):
 		autoconf.env.Append(LIBFCGI = 'fcgi')
 
@@ -390,10 +394,6 @@ if env['with_pgsql']:
 	env.ParseConfig('pkg-config libpq --cflags --libs')
 	env.Append(CPPFLAGS = [ '-DHAVE_PGSQL_H', '-DHAVE_LIBPGSQL' ], LIBPGSQL = 'pq')
 	env['LIBS'] = oldlib
-
-if env['with_dbi']:
-	if autoconf.CheckLibWithHeader('dbi', 'dbi/dbi.h', 'C'):
-		env.Append(CPPFLAGS = [ '-DHAVE_DBI_H', '-DHAVE_LIBDBI' ], LIBDBI = 'dbi')
 
 if re.compile("cygwin|mingw|midipix").search(env['PLATFORM']):
 	env.Append(COMMON_LIB = 'bin')
