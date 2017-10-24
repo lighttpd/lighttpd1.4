@@ -93,37 +93,37 @@ mod_ssi_exprparser = Lemon(env, 'mod_ssi_exprparser.y')
 ## the modules and how they are built
 modules = {
 	'mod_access' : { 'src' : [ 'mod_access.c' ] },
-	'mod_alias' : { 'src' : [ 'mod_alias.c' ] },
-	'mod_cgi' : { 'src' : [ 'mod_cgi.c' ] },
-	'mod_fastcgi' : { 'src' : [ 'mod_fastcgi.c' ] },
-	'mod_scgi' : { 'src' : [ 'mod_scgi.c' ] },
-	'mod_extforward' : { 'src' : [ 'mod_extforward.c' ] },
-	'mod_staticfile' : { 'src' : [ 'mod_staticfile.c' ] },
-	'mod_dirlisting' : { 'src' : [ 'mod_dirlisting.c' ], 'lib' : [ env['LIBPCRE'] ] },
-	'mod_indexfile' : { 'src' : [ 'mod_indexfile.c' ] },
-	'mod_setenv' : { 'src' : [ 'mod_setenv.c' ] },
-	'mod_rrdtool' : { 'src' : [ 'mod_rrdtool.c' ] },
-	'mod_usertrack' : { 'src' : [ 'mod_usertrack.c' ] },
-	'mod_proxy' : { 'src' : [ 'mod_proxy.c' ] },
-	'mod_userdir' : { 'src' : [ 'mod_userdir.c' ] },
-	'mod_secdownload' : { 'src' : [ 'mod_secdownload.c' ], 'lib' : [ env['LIBCRYPTO'] ] },
 	'mod_accesslog' : { 'src' : [ 'mod_accesslog.c' ] },
-	'mod_simple_vhost' : { 'src' : [ 'mod_simple_vhost.c' ] },
-	'mod_evhost' : { 'src' : [ 'mod_evhost.c' ] },
-	'mod_expire' : { 'src' : [ 'mod_expire.c' ] },
-	'mod_status' : { 'src' : [ 'mod_status.c' ] },
-	'mod_compress' : { 'src' : [ 'mod_compress.c' ], 'lib' : [ env['LIBZ'], env['LIBBZ2'] ] },
-	'mod_deflate' : { 'src' : [ 'mod_deflate.c' ], 'lib' : [ env['LIBZ'], env['LIBBZ2'] ] },
-	'mod_redirect' : { 'src' : [ 'mod_redirect.c' ], 'lib' : [ env['LIBPCRE'] ] },
-	'mod_rewrite' : { 'src' : [ 'mod_rewrite.c' ], 'lib' : [ env['LIBPCRE'] ] },
+	'mod_alias' : { 'src' : [ 'mod_alias.c' ] },
 	'mod_auth' : { 'src' : [ 'mod_auth.c' ] },
 	'mod_authn_file' : { 'src' : [ 'mod_authn_file.c' ], 'lib' : [ env['LIBCRYPT'], env['LIBCRYPTO'] ] },
-	'mod_webdav' : { 'src' : [ 'mod_webdav.c' ], 'lib' : [ env['LIBXML2'], env['LIBSQLITE3'], env['LIBUUID'] ] },
-	'mod_uploadprogress' : { 'src' : [ 'mod_uploadprogress.c' ] },
+	'mod_cgi' : { 'src' : [ 'mod_cgi.c' ] },
+	'mod_compress' : { 'src' : [ 'mod_compress.c' ], 'lib' : [ env['LIBZ'], env['LIBBZ2'] ] },
+	'mod_deflate' : { 'src' : [ 'mod_deflate.c' ], 'lib' : [ env['LIBZ'], env['LIBBZ2'] ] },
+	'mod_dirlisting' : { 'src' : [ 'mod_dirlisting.c' ], 'lib' : [ env['LIBPCRE'] ] },
 	'mod_evasive' : { 'src' : [ 'mod_evasive.c' ] },
-	'mod_ssi' : { 'src' : [ 'mod_ssi_exprparser.c', 'mod_ssi_expr.c', 'mod_ssi.c' ] },
+	'mod_evhost' : { 'src' : [ 'mod_evhost.c' ] },
+	'mod_expire' : { 'src' : [ 'mod_expire.c' ] },
+	'mod_extforward' : { 'src' : [ 'mod_extforward.c' ] },
+	'mod_fastcgi' : { 'src' : [ 'mod_fastcgi.c' ] },
 	'mod_flv_streaming' : { 'src' : [ 'mod_flv_streaming.c' ] },
+	'mod_indexfile' : { 'src' : [ 'mod_indexfile.c' ] },
+	'mod_proxy' : { 'src' : [ 'mod_proxy.c' ] },
+	'mod_redirect' : { 'src' : [ 'mod_redirect.c' ], 'lib' : [ env['LIBPCRE'] ] },
+	'mod_rewrite' : { 'src' : [ 'mod_rewrite.c' ], 'lib' : [ env['LIBPCRE'] ] },
+	'mod_rrdtool' : { 'src' : [ 'mod_rrdtool.c' ] },
+	'mod_scgi' : { 'src' : [ 'mod_scgi.c' ] },
+	'mod_secdownload' : { 'src' : [ 'mod_secdownload.c' ], 'lib' : [ env['LIBCRYPTO'] ] },
+	'mod_setenv' : { 'src' : [ 'mod_setenv.c' ] },
+	'mod_simple_vhost' : { 'src' : [ 'mod_simple_vhost.c' ] },
+	'mod_ssi' : { 'src' : [ 'mod_ssi_exprparser.c', 'mod_ssi_expr.c', 'mod_ssi.c' ] },
+	'mod_staticfile' : { 'src' : [ 'mod_staticfile.c' ] },
+	'mod_status' : { 'src' : [ 'mod_status.c' ] },
+	'mod_uploadprogress' : { 'src' : [ 'mod_uploadprogress.c' ] },
+	'mod_userdir' : { 'src' : [ 'mod_userdir.c' ] },
+	'mod_usertrack' : { 'src' : [ 'mod_usertrack.c' ] },
 	'mod_vhostdb' : { 'src' : [ 'mod_vhostdb.c' ] },
+	'mod_webdav' : { 'src' : [ 'mod_webdav.c' ], 'lib' : [ env['LIBXML2'], env['LIBSQLITE3'], env['LIBUUID'] ] },
 	'mod_wstunnel' : { 'src' : [ 'mod_wstunnel.c' ], 'lib' : [ env['LIBCRYPTO'] ] },
 }
 
@@ -281,7 +281,7 @@ for module in modules.keys():
 	libs = [ common_lib ]
 	if modules[module].has_key('lib'):
 		libs +=  modules[module]['lib']
-	instlib += env.SharedLibrary(module, modules[module]['src'], LIBS= GatherLibs(env, libs))
+	instlib += env.SharedLibrary(module, modules[module]['src'], LIBS = GatherLibs(env, libs))
 env.Alias('modules', instlib)
 
 inst = []
