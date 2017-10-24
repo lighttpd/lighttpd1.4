@@ -1339,6 +1339,14 @@ SUBREQUEST_FUNC(mod_webdav_subrequest_handler_huge) {
 				con->http_status = 404;
 				return HANDLER_FINISHED;
 			}
+			else if (errno == EACCES) {
+				con->http_status = 403;
+				return HANDLER_FINISHED;
+			}
+			else {
+				con->http_status = 500;
+				return HANDLER_FINISHED;
+			}
 			break;
 		default:
 			break;
