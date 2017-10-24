@@ -337,23 +337,84 @@ if 1:
 		['sys/types.h', 'sys/un.h'],
 	])
 
-	autoconf.haveFuncs(Split('fork stat lstat strftime dup2 getcwd inet_ntoa inet_ntop memset mmap munmap strchr \
-			strdup strerror strstr strtol sendfile getopt socket \
-			gethostbyname poll epoll_ctl getrlimit chroot \
-			getuid select signal pathconf madvise prctl\
-			writev sigaction sendfile64 send_file kqueue port_create localtime_r posix_fadvise issetugid inet_pton \
-			memset_s explicit_bzero clock_gettime pipe2 \
-			arc4random_buf jrand48 srandom getloadavg'))
+	autoconf.haveFuncs([
+		'arc4random_buf',
+		'chroot',
+		'clock_gettime',
+		'dup2',
+		'epoll_ctl',
+		'explicit_bzero',
+		'fork',
+		'getcwd',
+		'gethostbyname',
+		'getloadavg',
+		'getopt',
+		'getrlimit',
+		'getuid',
+		'inet_ntoa',
+		'inet_ntop',
+		'inet_pton',
+		'issetugid',
+		'jrand48',
+		'kqueue',
+		'localtime_r',
+		'lstat',
+		'madvise',
+		'memset_s',
+		'memset',
+		'mmap',
+		'munmap',
+		'pathconf',
+		'pipe2',
+		'poll',
+		'port_create',
+		'posix_fadvise',
+		'prctl',
+		'select',
+		'send_file',
+		'sendfile',
+		'sendfile64',
+		'sigaction',
+		'signal',
+		'socket',
+		'srandom',
+		'stat',
+		'strchr',
+		'strdup',
+		'strerror',
+		'strftime',
+		'strstr',
+		'strtol',
+		'writev',
+	])
 	autoconf.haveFunc('getentropy', 'sys/random.h')
 	autoconf.haveFunc('getrandom', 'linux/random.h')
 
 	autoconf.haveTypes(Split('pid_t size_t off_t'))
 
-	autoconf.env.Append( LIBSQLITE3 = '', LIBXML2 = '', LIBMYSQL = '', LIBZ = '',
-		LIBPGSQL = '', LIBDBI = '',
-		LIBBZ2 = '', LIBCRYPT = '', LIBMEMCACHED = '', LIBFCGI = '', LIBPCRE = '',
-		LIBLDAP = '', LIBLBER = '', LIBLUA = '', LIBDL = '', LIBUUID = '',
-		LIBKRB5 = '', LIBGSSAPI_KRB5 = '', LIBGDBM = '', LIBSSL = '', LIBCRYPTO = '')
+	autoconf.env.Append(
+		LIBBZ2 = '',
+		LIBCRYPT = '',
+		LIBCRYPTO = '',
+		LIBDBI = '',
+		LIBDL = '',
+		LIBFCGI = '',
+		LIBGDBM = '',
+		LIBGSSAPI_KRB5 = '',
+		LIBKRB5 = '',
+		LIBLBER = '',
+		LIBLDAP = '',
+		LIBLUA = '',
+		LIBMEMCACHED = '',
+		LIBMYSQL = '',
+		LIBPCRE = '',
+		LIBPGSQL = '',
+		LIBSQLITE3 = '',
+		LIBSSL = '',
+		LIBUUID = '',
+		LIBXML2 = '',
+		LIBZ = '',
+	)
 
 	# have crypt_r/crypt, and is -lcrypt needed?
 	if autoconf.CheckLib('crypt'):
