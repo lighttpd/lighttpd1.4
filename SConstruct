@@ -385,14 +385,11 @@ if env['with_mysql']:
 	env['LIBS'] = oldlib
 
 if env['with_pgsql']:
-	pg_config = checkProgram(env, 'pgsql', 'pg_config')
 	oldlib = env['LIBS']
 	env['LIBS'] = []
-	env.ParseConfig(pg_config + ' --includedir --libdir')
+	env.ParseConfig('pkg-config libpq --cflags --libs')
 	env.Append(CPPFLAGS = [ '-DHAVE_PGSQL_H', '-DHAVE_LIBPGSQL' ], LIBPGSQL = 'pq')
 	env['LIBS'] = oldlib
-	#if autoconf.CheckLibWithHeader('pq', 'libpq-fe.h', 'C'):
-	#	env.Append(CPPFLAGS = [ '-DHAVE_PGSQL_H', '-DHAVE_LIBPGSQL' ], LIBPGSQL = 'pq')
 
 if env['with_dbi']:
 	if autoconf.CheckLibWithHeader('dbi', 'dbi/dbi.h', 'C'):
