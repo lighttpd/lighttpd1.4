@@ -140,6 +140,8 @@ vars.AddVariables(
 	# with_xattr not supported
 	PackageVariable('with_xml', 'enable xml support', 'no'),
 	BoolVariable('with_zlib', 'enable deflate/gzip compression', 'no'),
+
+	BoolVariable('with_all', 'enable all with_* features', 'no'),
 )
 
 env = Environment(
@@ -158,6 +160,15 @@ env['version'] = version
 if env['CC'] == 'gcc':
 	## we need x-open 6 and bsd 4.3 features
 	env.Append(CCFLAGS = Split('-Wall -O2 -g -W -pedantic -Wunused -Wshadow -std=gnu99'))
+
+if env['with_all']:
+	for feature in vars.keys():
+		# only enable 'with_*' flags
+		if not feature.startswith('with_'): continue
+		# don't overwrite manual arguments
+		if feature in vars.args: continue
+		# now activate
+		env[feature] = True
 
 # cache configure checks
 if 1:
