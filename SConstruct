@@ -8,38 +8,131 @@ from stat import *
 package = 'lighttpd'
 version = '1.4.48'
 
+underscorify_reg = re.compile('[^A-Z0-9]')
+def underscorify(id):
+	return underscorify_reg.sub('_', id.upper())
+
 def fail(*args, **kwargs):
 	print(*args, file=sys.stderr, **kwargs)
 	env.Exit(-1)
 
-def checkCHeaders(autoconf, hdrs):
-	p = re.compile('[^A-Z0-9]')
-	for hdr in hdrs:
-		if not hdr:
-			continue
-		_hdr = Split(hdr)
-		if autoconf.CheckCHeader(_hdr):
-			autoconf.env.Append(CPPFLAGS = [ '-DHAVE_' + p.sub('_', _hdr[-1].upper()) ])
+class Autoconf:
+	class RestoreEnvLibs:
+		def __init__(self, env):
+			self.env = env
+			self.active = False
 
-def checkFunc(autoconf, func, header):
-	p = re.compile('[^A-Z0-9]')
-	if autoconf.CheckFunc(func, header):
-		autoconf.env.Append(CPPFLAGS = [ '-DHAVE_' + p.sub('_', func.upper()) ])
+		def __enter__(self):
+			if self.active:
+				raise Exception('entered twice')
+			self.active = True
+			if 'LIBS' in self.env:
+				#print("Backup LIBS: " + repr(self.env['LIBS']))
+				self.empty = False
+				self.backup_libs = copy(self.env['LIBS'])
+			else:
+				#print("No LIBS to backup")
+				self.empty = True
 
-def checkFuncs(autoconf, funcs):
-	p = re.compile('[^A-Z0-9]')
-	for func in funcs:
-		if autoconf.CheckFunc(func):
-			autoconf.env.Append(CPPFLAGS = [ '-DHAVE_' + p.sub('_', func.upper()) ])
+		def __exit__(self, type, value, traceback):
+			if not self.active:
+				raise Exception('exited twice')
+			self.active = False
+			if self.empty:
+				if 'LIBS' in self.env:
+					del self.env['LIBS']
+			else:
+				#print("Restoring LIBS, now: " + repr(self.env['LIBS']))
+				self.env['LIBS'] = self.backup_libs
+				#print("Restoring LIBS, to: " + repr(self.env['LIBS']))
 
-def checkTypes(autoconf, types):
-	p = re.compile('[^A-Z0-9]')
-	for type in types:
-		if autoconf.CheckType(type, '#include <sys/types.h>'):
-			autoconf.env.Append(CPPFLAGS = [ '-DHAVE_' + p.sub('_', type.upper()) ])
+	def __init__(self, env):
+		self.conf = Configure(env, custom_tests = {
+			'CheckGmtOffInStructTm': Autoconf.__checkGmtOffInStructTm,
+			'CheckIPv6': Autoconf.__checkIPv6,
+			'CheckWeakSymbols': Autoconf.__checkWeakSymbols,
+		})
 
-def checkGmtOffInStructTm(context):
-	source = """
+	def append(self, *args, **kw):
+		return self.conf.env.Append(*args, **kw)
+
+	def Finish(self):
+		return self.conf.Finish()
+
+	@property
+	def env(self):
+		return self.conf.env
+
+	def restoreEnvLibs(self):
+		return Autoconf.RestoreEnvLibs(self.conf.env)
+
+	def CheckType(self, *args, **kw):
+		return self.conf.CheckType(*args, **kw)
+
+	def CheckLib(self, *args, **kw):
+		return self.conf.CheckLib(*args, autoadd = 0, **kw)
+
+	def CheckLibWithHeader(self, *args, **kw):
+		return self.conf.CheckLibWithHeader(*args, autoadd = 0, **kw)
+
+	def CheckGmtOffInStructTm(self):
+		return self.conf.CheckGmtOffInStructTm()
+
+	def CheckIPv6(self):
+		return self.conf.CheckIPv6()
+
+	def CheckWeakSymbols(self):
+		return self.conf.CheckWeakSymbols()
+
+	def CheckCHeader(self, hdr):
+		return self.conf.CheckCHeader(hdr)
+
+	def haveCHeader(self, hdr):
+		if self.CheckCHeader(hdr):
+			# if we have a list of headers define HAVE_ only for last one
+			target = hdr
+			if not isinstance(target, basestring):
+				target = target[-1]
+			self.conf.env.Append(CPPFLAGS = [ '-DHAVE_' + underscorify(target) ])
+			return True
+		return False
+
+	def haveCHeaders(self, hdrs):
+		for hdr in hdrs:
+			self.haveCHeader(hdr)
+
+	def CheckFunc(self, func, header = None, libs = []):
+		with self.restoreEnvLibs():
+			self.env.Append(LIBS = libs)
+			return self.conf.CheckFunc(func, header = header)
+
+	def CheckFuncInLib(self, func, lib):
+		return self.CheckFunc(func, libs = [lib])
+
+	def haveFuncInLib(self, func, lib):
+		if self.CheckFuncInLib(func, lib):
+			self.conf.env.Append(CPPFLAGS = [ '-DHAVE_' + underscorify(func) ])
+			return True
+		return False
+
+	def haveFunc(self, func, header = None, libs = []):
+		if self.CheckFunc(func, header = header, libs = libs):
+			self.conf.env.Append(CPPFLAGS = [ '-DHAVE_' + underscorify(func) ])
+			return True
+		return False
+
+	def haveFuncs(self, funcs):
+		for func in funcs:
+			self.haveFunc(func)
+
+	def haveTypes(self, types):
+		for type in types:
+			if self.conf.CheckType(type, '#include <sys/types.h>'):
+				self.conf.env.Append(CPPFLAGS = [ '-DHAVE_' + underscorify(type) ])
+
+	@staticmethod
+	def __checkGmtOffInStructTm(context):
+		source = """
 #include <time.h>
 int main() {
 	struct tm a;
@@ -47,14 +140,15 @@ int main() {
 	return 0;
 }
 """
-	context.Message('Checking for tm_gmtoff in struct tm...')
-	result = context.TryLink(source, '.c')
-	context.Result(result)
+		context.Message('Checking for tm_gmtoff in struct tm...')
+		result = context.TryLink(source, '.c')
+		context.Result(result)
 
-	return result
+		return result
 
-def checkIPv6(context):
-	source = """
+	@staticmethod
+	def __checkIPv6(context):
+		source = """
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
@@ -64,48 +158,49 @@ int main() {
 	return 0;
 }
 """
-	context.Message('Checking for IPv6 support...')
-	result = context.TryLink(source, '.c')
-	context.Result(result)
+		context.Message('Checking for IPv6 support...')
+		result = context.TryLink(source, '.c')
+		context.Result(result)
 
-	return result
+		return result
 
-def checkWeakSymbols(context):
-	source = """
+	@staticmethod
+	def __checkWeakSymbols(context):
+		source = """
 __attribute__((weak)) void __dummy(void *x) { }
 int main() {
 	void *x;
 	__dummy(x);
 }
 """
-	context.Message('Checking for weak symbol support...')
-	result = context.TryLink(source, '.c')
-	context.Result(result)
+		context.Message('Checking for weak symbol support...')
+		result = context.TryLink(source, '.c')
+		context.Result(result)
 
-	return result
+		return result
 
-def checkProgram(env, withname, progname):
-	withname = 'with_' + withname
-	binpath = None
+	def checkProgram(self, withname, progname):
+		withname = 'with_' + withname
+		binpath = None
 
-	if env[withname] != 1:
-		binpath = env[withname]
-	else:
-		prog = env.Detect(progname)
-		if prog:
-			binpath = env.WhereIs(prog)
+		if self.env[withname] != 1:
+			binpath = self.env[withname]
+		else:
+			prog = self.env.Detect(progname)
+			if prog:
+				binpath = self.env.WhereIs(prog)
 
-	if binpath:
-		mode = os.stat(binpath)[ST_MODE]
-		if S_ISDIR(mode):
-			fail("* error: path `%s' is a directory" % (binpath))
-		if not S_ISREG(mode):
-			fail("* error: path `%s' is not a file or not exists" % (binpath))
+		if binpath:
+			mode = os.stat(binpath)[ST_MODE]
+			if S_ISDIR(mode):
+				fail("* error: path `%s' is a directory" % (binpath))
+			if not S_ISREG(mode):
+				fail("* error: path `%s' is not a file or not exists" % (binpath))
 
-	if not binpath:
-		fail("* error: can't find program `%s'" % (progname))
+		if not binpath:
+			fail("* error: can't find program `%s'" % (progname))
 
-	return binpath
+		return binpath
 
 VariantDir('sconsbuild/build', 'src', duplicate = 0)
 VariantDir('sconsbuild/tests', 'tests', duplicate = 0)
@@ -181,11 +276,7 @@ if env['with_all']:
 
 # cache configure checks
 if 1:
-	autoconf = Configure(env, custom_tests = {
-		'CheckGmtOffInStructTm': checkGmtOffInStructTm,
-		'CheckIPv6': checkIPv6,
-		'CheckWeakSymbols': checkWeakSymbols,
-	})
+	autoconf = Autoconf(env)
 
 	if 'CFLAGS' in os.environ:
 		autoconf.env.Append(CCFLAGS = os.environ['CFLAGS'])
@@ -201,60 +292,62 @@ if 1:
 	else:
 		autoconf.env.Append(APPEND_LIBS = '')
 
-	autoconf.headerfile = "foo.h"
-	checkCHeaders(autoconf, string.split("""
-			arpa/inet.h
-			crypt.h
-			fcntl.h
-			getopt.h
-			inttypes.h
-			linux/random.h
-			netinet/in.h
-			poll.h
-			pwd.h
-			stdint.h
-			stdlib.h
-			string.h
-			strings.h
-			sys/devpoll.h
-			sys/epoll.h
-			sys/event.h
-			sys/filio.h
-			sys/mman.h
-			sys/poll.h
-			sys/port.h
-			sys/prctl.h
-			sys/resource.h
-			sys/select.h
-			sys/sendfile.h
-			sys/socket.h
-			sys/time.h
-			sys/time.h sys/types.h sys/resource.h
-			sys/types.h netinet/in.h
-			sys/types.h sys/event.h
-			sys/types.h sys/mman.h
-			sys/types.h sys/select.h
-			sys/types.h sys/socket.h
-			sys/types.h sys/uio.h
-			sys/types.h sys/un.h
-			sys/uio.h
-			sys/un.h
-			sys/wait.h
-			syslog.h
-			unistd.h
-			winsock2.h""", "\n"))
+	autoconf.haveCHeaders([
+		'arpa/inet.h',
+		'crypt.h',
+		'fcntl.h',
+		'getopt.h',
+		'inttypes.h',
+		'linux/random.h',
+		'netinet/in.h',
+		'poll.h',
+		'pwd.h',
+		'stdint.h',
+		'stdlib.h',
+		'string.h',
+		'strings.h',
+		'sys/devpoll.h',
+		'sys/epoll.h',
+		'sys/event.h',
+		'sys/filio.h',
+		'sys/mman.h',
+		'sys/poll.h',
+		'sys/port.h',
+		'sys/prctl.h',
+		'sys/resource.h',
+		'sys/select.h',
+		'sys/sendfile.h',
+		'sys/socket.h',
+		'sys/time.h',
+		'sys/uio.h',
+		'sys/un.h',
+		'sys/wait.h',
+		'syslog.h',
+		'unistd.h',
+		'winsock2.h',
 
-	checkFuncs(autoconf, Split('fork stat lstat strftime dup2 getcwd inet_ntoa inet_ntop memset mmap munmap strchr \
+		# "have" the last header if we include others before?
+		['sys/time.h', 'sys/types.h', 'sys/resource.h'],
+		['sys/types.h', 'netinet/in.h'],
+		['sys/types.h', 'sys/event.h'],
+		['sys/types.h', 'sys/mman.h'],
+		['sys/types.h', 'sys/select.h'],
+		['sys/types.h', 'sys/socket.h'],
+		['sys/types.h', 'sys/uio.h'],
+		['sys/types.h', 'sys/un.h'],
+	])
+
+	autoconf.haveFuncs(Split('fork stat lstat strftime dup2 getcwd inet_ntoa inet_ntop memset mmap munmap strchr \
 			strdup strerror strstr strtol sendfile getopt socket \
 			gethostbyname poll epoll_ctl getrlimit chroot \
 			getuid select signal pathconf madvise prctl\
 			writev sigaction sendfile64 send_file kqueue port_create localtime_r posix_fadvise issetugid inet_pton \
 			memset_s explicit_bzero clock_gettime pipe2 \
 			arc4random_buf jrand48 srandom getloadavg'))
-	checkFunc(autoconf, 'getentropy', 'sys/random.h')
-	checkFunc(autoconf, 'getrandom', 'linux/random.h')
+	autoconf.haveFunc('getentropy', 'sys/random.h')
+	autoconf.haveFunc('getrandom', 'linux/random.h')
 
-	checkTypes(autoconf, Split('pid_t size_t off_t'))
+	autoconf.haveTypes(Split('pid_t size_t off_t'))
 
 	autoconf.env.Append( LIBSQLITE3 = '', LIBXML2 = '', LIBMYSQL = '', LIBZ = '',
 		LIBPGSQL = '', LIBDBI = '',
@@ -263,14 +356,13 @@ if 1:
 		LIBKRB5 = '', LIBGSSAPI_KRB5 = '', LIBGDBM = '', LIBSSL = '', LIBCRYPTO = '')
 
 	# have crypt_r/crypt, and is -lcrypt needed?
-	if autoconf.CheckLib('crypt', autoadd = 0):
+	if autoconf.CheckLib('crypt'):
 		autoconf.env.Append(CPPFLAGS = [ '-DHAVE_LIBCRYPT' ], LIBCRYPT = 'crypt')
-		oldlib = env['LIBS']
-		env['LIBS'] = ['crypt']
-		checkFuncs(autoconf, ['crypt', 'crypt_r'])
-		env['LIBS'] = oldlib
+		with autoconf.restoreEnvLibs():
+			autoconf.env['LIBS'] = ['crypt']
+			autoconf.haveFuncs(['crypt', 'crypt_r'])
 	else:
-		checkFuncs(autoconf, ['crypt', 'crypt_r'])
+		autoconf.haveFuncs(['crypt', 'crypt_r'])
 
 	if autoconf.CheckType('socklen_t', '#include <unistd.h>\n#include <sys/socket.h>\n#include <sys/types.h>'):
 		autoconf.env.Append(CPPFLAGS = [ '-DHAVE_SOCKLEN_T' ])
@@ -278,7 +370,7 @@ if 1:
 	if autoconf.CheckType('struct sockaddr_storage', '#include <sys/socket.h>\n'):
 		autoconf.env.Append(CPPFLAGS = [ '-DHAVE_STRUCT_SOCKADDR_STORAGE' ])
 
-	if autoconf.CheckLibWithHeader('rt', 'time.h', 'c', 'clock_gettime(CLOCK_MONOTONIC, (struct timespec*)0);', autoadd = 0):
+	if autoconf.CheckLibWithHeader('rt', 'time.h', 'c', 'clock_gettime(CLOCK_MONOTONIC, (struct timespec*)0);'):
 		autoconf.env.Append(CPPFLAGS = [ '-DHAVE_CLOCK_GETTIME' ], LIBS = [ 'rt' ])
 
 	if autoconf.CheckIPv6():
@@ -290,132 +382,127 @@ if 1:
 	if autoconf.CheckGmtOffInStructTm():
 		autoconf.env.Append(CPPFLAGS = [ '-DHAVE_STRUCT_TM_GMTOFF' ])
 
-	if autoconf.CheckLibWithHeader('dl', 'dlfcn.h', 'C', autoadd = 0):
+	if autoconf.CheckLibWithHeader('dl', 'dlfcn.h', 'C'):
 		autoconf.env.Append(LIBDL = 'dl')
 
 	# used in tests if present
-	if autoconf.CheckLibWithHeader('fcgi', 'fastcgi.h', 'C', autoadd = 0):
+	if autoconf.CheckLibWithHeader('fcgi', 'fastcgi.h', 'C'):
 		autoconf.env.Append(LIBFCGI = 'fcgi')
 
 	if env['with_bzip2']:
-		if not autoconf.CheckLibWithHeader('bz2', 'bzlib.h', 'C', autoadd = 0):
+		if not autoconf.CheckLibWithHeader('bz2', 'bzlib.h', 'C'):
 			fail("Couldn't find bz2")
 		autoconf.env.Append(CPPFLAGS = [ '-DHAVE_BZLIB_H', '-DHAVE_LIBBZ2' ], LIBBZ2 = 'bz2')
 
 	if env['with_dbi']:
-		if not autoconf.CheckLibWithHeader('dbi', 'dbi/dbi.h', 'C', autoadd = 0):
+		if not autoconf.CheckLibWithHeader('dbi', 'dbi/dbi.h', 'C'):
 			fail("Couldn't find dbi")
-		env.Append(CPPFLAGS = [ '-DHAVE_DBI_H', '-DHAVE_LIBDBI' ], LIBDBI = 'dbi')
+		autoconf.env.Append(CPPFLAGS = [ '-DHAVE_DBI_H', '-DHAVE_LIBDBI' ], LIBDBI = 'dbi')
 
 	if env['with_fam']:
-		if not autoconf.CheckLibWithHeader('fam', 'fam.h', 'C', autoadd = 0):
+		if not autoconf.CheckLibWithHeader('fam', 'fam.h', 'C'):
 			fail("Couldn't find fam")
 		autoconf.env.Append(CPPFLAGS = [ '-DHAVE_FAM_H', '-DHAVE_LIBFAM' ], LIBS = [ 'fam' ])
-		checkFuncs(autoconf, ['FAMNoExists']);
+		autoconf.haveFunc('FAMNoExists')
 
 	if env['with_gdbm']:
-		if not autoconf.CheckLibWithHeader('gdbm', 'gdbm.h', 'C', autoadd = 0):
+		if not autoconf.CheckLibWithHeader('gdbm', 'gdbm.h', 'C'):
 			fail("Couldn't find gdbm")
 		autoconf.env.Append(CPPFLAGS = [ '-DHAVE_GDBM_H', '-DHAVE_GDBM' ], LIBGDBM = 'gdbm')
 
 	if env['with_geoip']:
-		if not autoconf.CheckLibWithHeader('GeoIP', 'GeoIP.h', 'C', autoadd = 0):
+		if not autoconf.CheckLibWithHeader('GeoIP', 'GeoIP.h', 'C'):
 			fail("Couldn't find geoip")
 		autoconf.env.Append(CPPFLAGS = [ '-DHAVE_GEOIP' ], LIBGEOIP = 'GeoIP')
 
 	if env['with_krb5']:
-		if not autoconf.CheckLibWithHeader('krb5', 'krb5.h', 'C', autoadd = 0):
+		if not autoconf.CheckLibWithHeader('krb5', 'krb5.h', 'C'):
 			fail("Couldn't find krb5")
-		if not autoconf.CheckLibWithHeader('gssapi_krb5', 'gssapi/gssapi_krb5.h', 'C', autoadd = 0):
+		if not autoconf.CheckLibWithHeader('gssapi_krb5', 'gssapi/gssapi_krb5.h', 'C'):
 			fail("Couldn't find gssapi_krb5")
 		autoconf.env.Append(CPPFLAGS = [ '-DHAVE_KRB5' ], LIBKRB5 = 'krb5')
 		autoconf.env.Append(LIBGSSAPI_KRB5 = 'gssapi_krb5')
 
 	if env['with_ldap']:
-		if not autoconf.CheckLibWithHeader('ldap', 'ldap.h', 'C', autoadd = 0):
+		if not autoconf.CheckLibWithHeader('ldap', 'ldap.h', 'C'):
 			fail("Couldn't find ldap")
-		if not autoconf.CheckLibWithHeader('lber', 'lber.h', 'C', autoadd = 0):
+		if not autoconf.CheckLibWithHeader('lber', 'lber.h', 'C'):
 			fail("Couldn't find lber")
 		autoconf.env.Append(CPPFLAGS = [ '-DLDAP_DEPRECATED=1' ])
 		autoconf.env.Append(CPPFLAGS = [ '-DHAVE_LDAP_H', '-DHAVE_LIBLDAP' ], LIBLDAP = 'ldap')
 		autoconf.env.Append(CPPFLAGS = [ '-DHAVE_LBER_H', '-DHAVE_LIBLBER' ], LIBLBER = 'lber')
 
 	if env['with_lua']:
-		def TryLua(env, name):
-			result = False
-			oldlibs = copy(env['LIBS'])
-			try:
-				print("Searching for lua: " + name + " >= 5.0")
-				env.ParseConfig("pkg-config '" + name + " >= 5.0' --cflags --libs")
-				env.Append(LIBLUA = env['LIBS'][len(oldlibs):])
-				env.Append(CPPFLAGS = [ '-DHAVE_LUA_H' ])
-				result = True
-			except:
-				pass
-			env['LIBS'] = oldlibs
-			return result
+		def TryLua(autoconf, name):
+			with autoconf.restoreEnvLibs():
+				autoconf.env['LIBS'] = []
+				try:
+					print("Searching for lua: " + name + " >= 5.0")
+					autoconf.env.ParseConfig("pkg-config '" + name + " >= 5.0' --cflags --libs")
+				except Exception as e:
+					print("Failed: ", e, file = sys.stderr)
+					return False
+				autoconf.env.Append(LIBLUA = autoconf.env['LIBS'])
+				autoconf.env.Append(CPPFLAGS = [ '-DHAVE_LUA_H' ])
+				return True
 
 		found_lua = False
 		for lua_name in ['lua5.3', 'lua-5.3', 'lua5.2', 'lua-5.2', 'lua5.1', 'lua-5.1', 'lua']:
-			if TryLua(env, lua_name):
+			if TryLua(autoconf, lua_name):
 				found_lua = True
 				break
 		if not found_lua:
 			fail("Couldn't find any lua implementation")
 
 	if env['with_memcached']:
-		if not autoconf.CheckLibWithHeader('memcached', 'libmemcached/memcached.h', 'C', autoadd = 0):
+		if not autoconf.CheckLibWithHeader('memcached', 'libmemcached/memcached.h', 'C'):
 			fail("Couldn't find memcached")
 		autoconf.env.Append(CPPFLAGS = [ '-DUSE_MEMCACHED' ], LIBMEMCACHED = 'memcached')
 
 	if env['with_mysql']:
-		mysql_config = checkProgram(env, 'mysql', 'mysql_config')
-		oldlib = env['LIBS']
-		env['LIBS'] = []
-		env.ParseConfig(mysql_config + ' --cflags --libs')
-		env.Append(CPPFLAGS = [ '-DHAVE_MYSQL_H', '-DHAVE_LIBMYSQL' ], LIBMYSQL = 'mysqlclient')
-		env['LIBS'] = oldlib
+		mysql_config = autoconf.checkProgram('mysql', 'mysql_config')
+		with autoconf.restoreEnvLibs():
+			autoconf.env['LIBS'] = []
+			autoconf.env.ParseConfig(mysql_config + ' --cflags --libs')
+			autoconf.env.Append(CPPFLAGS = [ '-DHAVE_MYSQL_H', '-DHAVE_LIBMYSQL' ], LIBMYSQL = 'mysqlclient')
 
 	if env['with_openssl']:
-		if not autoconf.CheckLibWithHeader('ssl', 'openssl/ssl.h', 'C', autoadd = 0):
+		if not autoconf.CheckLibWithHeader('ssl', 'openssl/ssl.h', 'C'):
 			fail("Couldn't find openssl")
 		autoconf.env.Append(CPPFLAGS = [ '-DHAVE_OPENSSL_SSL_H', '-DHAVE_LIBSSL'] , LIBSSL = 'ssl', LIBCRYPTO = 'crypto')
 
 	if env['with_pcre']:
-		pcre_config = checkProgram(env, 'pcre', 'pcre-config')
-		oldlib = env['LIBS']
-		env['LIBS'] = []
-		env.ParseConfig(pcre_config + ' --cflags --libs')
-		env.Append(CPPFLAGS = [ '-DHAVE_PCRE_H', '-DHAVE_LIBPCRE' ], LIBPCRE = env['LIBS'])
-		env['LIBS'] = oldlib
+		pcre_config = autoconf.checkProgram('pcre', 'pcre-config')
+		with autoconf.restoreEnvLibs():
+			autoconf.env['LIBS'] = []
+			autoconf.env.ParseConfig(pcre_config + ' --cflags --libs')
+			autoconf.env.Append(CPPFLAGS = [ '-DHAVE_PCRE_H', '-DHAVE_LIBPCRE' ], LIBPCRE = autoconf.env['LIBS'])
 
 	if env['with_pgsql']:
-		oldlib = env['LIBS']
-		env['LIBS'] = []
-		env.ParseConfig('pkg-config libpq --cflags --libs')
-		env.Append(CPPFLAGS = [ '-DHAVE_PGSQL_H', '-DHAVE_LIBPGSQL' ], LIBPGSQL = 'pq')
-		env['LIBS'] = oldlib
+		with autoconf.restoreEnvLibs():
+			autoconf.env['LIBS'] = []
+			autoconf.env.ParseConfig('pkg-config libpq --cflags --libs')
+			autoconf.env.Append(CPPFLAGS = [ '-DHAVE_PGSQL_H', '-DHAVE_LIBPGSQL' ], LIBPGSQL = 'pq')
 
 	if env['with_sqlite3']:
-		if not autoconf.CheckLibWithHeader('sqlite3', 'sqlite3.h', 'C', autoadd = 0):
+		if not autoconf.CheckLibWithHeader('sqlite3', 'sqlite3.h', 'C'):
 			fail("Couldn't find sqlite3")
 		autoconf.env.Append(CPPFLAGS = [ '-DHAVE_SQLITE3_H', '-DHAVE_LIBSQLITE3' ], LIBSQLITE3 = 'sqlite3')
 
 	if env['with_uuid']:
-		if not autoconf.CheckLibWithHeader('uuid', 'uuid/uuid.h', 'C', autoadd = 0):
+		if not autoconf.CheckLibWithHeader('uuid', 'uuid/uuid.h', 'C'):
 			fail("Couldn't find uuid")
 		autoconf.env.Append(CPPFLAGS = [ '-DHAVE_UUID_UUID_H', '-DHAVE_LIBUUID' ], LIBUUID = 'uuid')
 
 	if env['with_xml']:
-		xml2_config = checkProgram(env, 'xml', 'xml2-config')
-		oldlib = env['LIBS']
-		env['LIBS'] = []
-		env.ParseConfig(xml2_config + ' --cflags --libs')
-		env.Append(CPPFLAGS = [ '-DHAVE_LIBXML_H', '-DHAVE_LIBXML2' ], LIBXML2 = env['LIBS'])
-		env['LIBS'] = oldlib
+		xml2_config = autoconf.checkProgram('xml', 'xml2-config')
+		with autoconf.restoreEnvLibs():
+			autoconf.env['LIBS'] = []
+			autoconf.env.ParseConfig(xml2_config + ' --cflags --libs')
+			autoconf.env.Append(CPPFLAGS = [ '-DHAVE_LIBXML_H', '-DHAVE_LIBXML2' ], LIBXML2 = autoconf.env['LIBS'])
 
 	if env['with_zlib']:
-		if not autoconf.CheckLibWithHeader('z', 'zlib.h', 'C', autoadd = 0):
+		if not autoconf.CheckLibWithHeader('z', 'zlib.h', 'C'):
 			fail("Couldn't find zlib")
 		autoconf.env.Append(CPPFLAGS = [ '-DHAVE_ZLIB_H', '-DHAVE_LIBZ' ], LIBZ = 'z')
 
