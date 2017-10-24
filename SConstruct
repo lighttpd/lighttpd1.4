@@ -114,26 +114,32 @@ vars.AddVariables(
 	('bindir', 'binary directory', '${prefix}/bin'),
 	('sbindir', 'binary directory', '${prefix}/sbin'),
 	('libdir', 'library directory', '${prefix}/lib'),
-	PackageVariable('with_mysql', 'enable mysql support', 'no'),
-	PackageVariable('with_pgsql', 'enable pgsql support', 'no'),
-	PackageVariable('with_dbi', 'enable dbi support', 'no'),
-	PackageVariable('with_xml', 'enable xml support', 'no'),
-	PackageVariable('with_pcre', 'enable pcre support', 'yes'),
 	PathVariable('CC', 'path to the c-compiler', None),
 	BoolVariable('build_dynamic', 'enable dynamic build', 'yes'),
 	BoolVariable('build_static', 'enable static build', 'no'),
 	BoolVariable('build_fullstatic', 'enable fullstatic build', 'no'),
-	BoolVariable('with_sqlite3', 'enable sqlite3 support', 'no'),
-	BoolVariable('with_memcached', 'enable memcached support', 'no'),
-	BoolVariable('with_gdbm', 'enable gdbm support', 'no'),
-	BoolVariable('with_fam', 'enable FAM/gamin support', 'no'),
-	BoolVariable('with_openssl', 'enable openssl support', 'no'),
-	BoolVariable('with_gzip', 'enable gzip compression', 'no'),
+
 	BoolVariable('with_bzip2', 'enable bzip2 compression', 'no'),
-	BoolVariable('with_lua', 'enable lua support for mod_cml', 'no'),
-	BoolVariable('with_ldap', 'enable ldap auth support', 'no'),
+	PackageVariable('with_dbi', 'enable dbi support', 'no'),
+	BoolVariable('with_fam', 'enable FAM/gamin support', 'no'),
+	BoolVariable('with_gdbm', 'enable gdbm support', 'no'),
+	BoolVariable('with_geoip', 'enable GeoIP support', 'no'),
+	BoolVariable('with_gzip', 'enable gzip compression', 'no'),
 	BoolVariable('with_krb5', 'enable krb5 auth support', 'no'),
-	BoolVariable('with_geoip', 'enable GeoIP support', 'no')
+	BoolVariable('with_ldap', 'enable ldap auth support', 'no'),
+	# with_libev not supported
+	# with_libunwind not supported
+	BoolVariable('with_lua', 'enable lua support for mod_cml', 'no'),
+	BoolVariable('with_memcached', 'enable memcached support', 'no'),
+	PackageVariable('with_mysql', 'enable mysql support', 'no'),
+	BoolVariable('with_openssl', 'enable openssl support', 'no'),
+	PackageVariable('with_pcre', 'enable pcre support', 'yes'),
+	PackageVariable('with_pgsql', 'enable pgsql support', 'no'),
+	BoolVariable('with_sqlite3', 'enable sqlite3 support', 'no'),
+	# with_uuid not supported
+	# with_valgrind not supported
+	# with_xattr not supported
+	PackageVariable('with_xml', 'enable xml support', 'no'),
 )
 
 env = Environment(
