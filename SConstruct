@@ -254,11 +254,7 @@ if 1:
 		LIBLDAP = '', LIBLBER = '', LIBLUA = '', LIBDL = '', LIBUUID = '',
 		LIBKRB5 = '', LIBGSSAPI_KRB5 = '', LIBGDBM = '', LIBSSL = '', LIBCRYPTO = '')
 
-	if env['with_fam']:
-		if autoconf.CheckLibWithHeader('fam', 'fam.h', 'C', autoadd = 0):
-			autoconf.env.Append(CPPFLAGS = [ '-DHAVE_FAM_H', '-DHAVE_LIBFAM' ], LIBS = [ 'fam' ])
-			checkFuncs(autoconf, ['FAMNoExists']);
-
+	# have crypt_r/crypt, and is -lcrypt needed?
 	if autoconf.CheckLib('crypt', autoadd = 0):
 		autoconf.env.Append(CPPFLAGS = [ '-DHAVE_LIBCRYPT' ], LIBCRYPT = 'crypt')
 		oldlib = env['LIBS']
@@ -268,20 +264,51 @@ if 1:
 	else:
 		checkFuncs(autoconf, ['crypt', 'crypt_r'])
 
+	if autoconf.CheckType('socklen_t', '#include <unistd.h>\n#include <sys/socket.h>\n#include <sys/types.h>'):
+		autoconf.env.Append(CPPFLAGS = [ '-DHAVE_SOCKLEN_T' ])
+
+	if autoconf.CheckType('struct sockaddr_storage', '#include <sys/socket.h>\n'):
+		autoconf.env.Append(CPPFLAGS = [ '-DHAVE_STRUCT_SOCKADDR_STORAGE' ])
+
 	if autoconf.CheckLibWithHeader('rt', 'time.h', 'c', 'clock_gettime(CLOCK_MONOTONIC, (struct timespec*)0);', autoadd = 0):
 		autoconf.env.Append(CPPFLAGS = [ '-DHAVE_CLOCK_GETTIME' ], LIBS = [ 'rt' ])
 
-	if env['with_uuid']:
-		if autoconf.CheckLibWithHeader('uuid', 'uuid/uuid.h', 'C', autoadd = 0):
-			autoconf.env.Append(CPPFLAGS = [ '-DHAVE_UUID_UUID_H', '-DHAVE_LIBUUID' ], LIBUUID = 'uuid')
+	if autoconf.CheckIPv6():
+		autoconf.env.Append(CPPFLAGS = [ '-DHAVE_IPV6' ])
 
-	if env['with_openssl']:
-		if autoconf.CheckLibWithHeader('ssl', 'openssl/ssl.h', 'C', autoadd = 0):
-			autoconf.env.Append(CPPFLAGS = [ '-DHAVE_OPENSSL_SSL_H', '-DHAVE_LIBSSL'] , LIBSSL = 'ssl', LIBCRYPTO = 'crypto')
+	if autoconf.CheckWeakSymbols():
+		autoconf.env.Append(CPPFLAGS = [ '-DHAVE_WEAK_SYMBOLS' ])
 
-	if env['with_zlib']:
-		if autoconf.CheckLibWithHeader('z', 'zlib.h', 'C', autoadd = 0):
-			autoconf.env.Append(CPPFLAGS = [ '-DHAVE_ZLIB_H', '-DHAVE_LIBZ' ], LIBZ = 'z')
+	if autoconf.CheckGmtOffInStructTm():
+		autoconf.env.Append(CPPFLAGS = [ '-DHAVE_STRUCT_TM_GMTOFF' ])
+
+	if autoconf.CheckLibWithHeader('dl', 'dlfcn.h', 'C', autoadd = 0):
+		autoconf.env.Append(LIBDL = 'dl')
+
+	# used in tests if present
+	if autoconf.CheckLibWithHeader('fcgi', 'fastcgi.h', 'C', autoadd = 0):
+		autoconf.env.Append(LIBFCGI = 'fcgi')
+
+	if env['with_bzip2']:
+		if autoconf.CheckLibWithHeader('bz2', 'bzlib.h', 'C', autoadd = 0):
+			autoconf.env.Append(CPPFLAGS = [ '-DHAVE_BZLIB_H', '-DHAVE_LIBBZ2' ], LIBBZ2 = 'bz2')
+
+	if env['with_dbi']:
+		if autoconf.CheckLibWithHeader('dbi', 'dbi/dbi.h', 'C', autoadd = 0):
+			env.Append(CPPFLAGS = [ '-DHAVE_DBI_H', '-DHAVE_LIBDBI' ], LIBDBI = 'dbi')
+
+	if env['with_fam']:
+		if autoconf.CheckLibWithHeader('fam', 'fam.h', 'C', autoadd = 0):
+			autoconf.env.Append(CPPFLAGS = [ '-DHAVE_FAM_H', '-DHAVE_LIBFAM' ], LIBS = [ 'fam' ])
+			checkFuncs(autoconf, ['FAMNoExists']);
+
+	if env['with_gdbm']:
+		if autoconf.CheckLibWithHeader('gdbm', 'gdbm.h', 'C', autoadd = 0):
+			autoconf.env.Append(CPPFLAGS = [ '-DHAVE_GDBM_H', '-DHAVE_GDBM' ], LIBGDBM = 'gdbm')
+
+	if env['with_geoip']:
+		if autoconf.CheckLibWithHeader('GeoIP', 'GeoIP.h', 'C', autoadd = 0):
+			autoconf.env.Append(CPPFLAGS = [ '-DHAVE_GEOIP' ], LIBGEOIP = 'GeoIP')
 
 	if env['with_krb5']:
 		if autoconf.CheckLibWithHeader('krb5', 'krb5.h', 'C', autoadd = 0):
@@ -295,106 +322,81 @@ if 1:
 		if autoconf.CheckLibWithHeader('lber', 'lber.h', 'C', autoadd = 0):
 			autoconf.env.Append(CPPFLAGS = [ '-DHAVE_LBER_H', '-DHAVE_LIBLBER' ], LIBLBER = 'lber')
 
-	if env['with_bzip2']:
-		if autoconf.CheckLibWithHeader('bz2', 'bzlib.h', 'C', autoadd = 0):
-			autoconf.env.Append(CPPFLAGS = [ '-DHAVE_BZLIB_H', '-DHAVE_LIBBZ2' ], LIBBZ2 = 'bz2')
+	if env['with_lua']:
+		def TryLua(env, name):
+			result = False
+			oldlibs = copy(env['LIBS'])
+			try:
+				print("Searching for lua: " + name + " >= 5.0")
+				env.ParseConfig("pkg-config '" + name + " >= 5.0' --cflags --libs")
+				env.Append(LIBLUA = env['LIBS'][len(oldlibs):])
+				env.Append(CPPFLAGS = [ '-DHAVE_LUA_H' ])
+				result = True
+			except:
+				pass
+			env['LIBS'] = oldlibs
+			return result
+
+		found_lua = False
+		for lua_name in ['lua5.3', 'lua-5.3', 'lua5.2', 'lua-5.2', 'lua5.1', 'lua-5.1', 'lua']:
+			if TryLua(env, lua_name):
+				found_lua = True
+				break
+		if not found_lua:
+			raise RuntimeError("Couldn't find any lua implementation")
 
 	if env['with_memcached']:
 		if autoconf.CheckLibWithHeader('memcached', 'libmemcached/memcached.h', 'C', autoadd = 0):
 			autoconf.env.Append(CPPFLAGS = [ '-DUSE_MEMCACHED' ], LIBMEMCACHED = 'memcached')
 
-	if env['with_gdbm']:
-		if autoconf.CheckLibWithHeader('gdbm', 'gdbm.h', 'C', autoadd = 0):
-			autoconf.env.Append(CPPFLAGS = [ '-DHAVE_GDBM_H', '-DHAVE_GDBM' ], LIBGDBM = 'gdbm')
+	if env['with_mysql']:
+		mysql_config = checkProgram(env, 'mysql', 'mysql_config')
+		oldlib = env['LIBS']
+		env['LIBS'] = []
+		env.ParseConfig(mysql_config + ' --cflags --libs')
+		env.Append(CPPFLAGS = [ '-DHAVE_MYSQL_H', '-DHAVE_LIBMYSQL' ], LIBMYSQL = 'mysqlclient')
+		env['LIBS'] = oldlib
+
+	if env['with_openssl']:
+		if autoconf.CheckLibWithHeader('ssl', 'openssl/ssl.h', 'C', autoadd = 0):
+			autoconf.env.Append(CPPFLAGS = [ '-DHAVE_OPENSSL_SSL_H', '-DHAVE_LIBSSL'] , LIBSSL = 'ssl', LIBCRYPTO = 'crypto')
+
+	if env['with_pcre']:
+		pcre_config = checkProgram(env, 'pcre', 'pcre-config')
+		oldlib = env['LIBS']
+		env['LIBS'] = []
+		env.ParseConfig(pcre_config + ' --cflags --libs')
+		env.Append(CPPFLAGS = [ '-DHAVE_PCRE_H', '-DHAVE_LIBPCRE' ], LIBPCRE = env['LIBS'])
+		env['LIBS'] = oldlib
+
+	if env['with_pgsql']:
+		oldlib = env['LIBS']
+		env['LIBS'] = []
+		env.ParseConfig('pkg-config libpq --cflags --libs')
+		env.Append(CPPFLAGS = [ '-DHAVE_PGSQL_H', '-DHAVE_LIBPGSQL' ], LIBPGSQL = 'pq')
+		env['LIBS'] = oldlib
 
 	if env['with_sqlite3']:
 		if autoconf.CheckLibWithHeader('sqlite3', 'sqlite3.h', 'C', autoadd = 0):
 			autoconf.env.Append(CPPFLAGS = [ '-DHAVE_SQLITE3_H', '-DHAVE_LIBSQLITE3' ], LIBSQLITE3 = 'sqlite3')
 
-	if env['with_geoip']:
-		if autoconf.CheckLibWithHeader('GeoIP', 'GeoIP.h', 'C', autoadd = 0):
-			autoconf.env.Append(CPPFLAGS = [ '-DHAVE_GEOIP' ], LIBGEOIP = 'GeoIP')
+	if env['with_uuid']:
+		if autoconf.CheckLibWithHeader('uuid', 'uuid/uuid.h', 'C', autoadd = 0):
+			autoconf.env.Append(CPPFLAGS = [ '-DHAVE_UUID_UUID_H', '-DHAVE_LIBUUID' ], LIBUUID = 'uuid')
 
-	if env['with_dbi']:
-		if autoconf.CheckLibWithHeader('dbi', 'dbi/dbi.h', 'C', autoadd = 0):
-			env.Append(CPPFLAGS = [ '-DHAVE_DBI_H', '-DHAVE_LIBDBI' ], LIBDBI = 'dbi')
+	if env['with_xml']:
+		xml2_config = checkProgram(env, 'xml', 'xml2-config')
+		oldlib = env['LIBS']
+		env['LIBS'] = []
+		env.ParseConfig(xml2_config + ' --cflags --libs')
+		env.Append(CPPFLAGS = [ '-DHAVE_LIBXML_H', '-DHAVE_LIBXML2' ], LIBXML2 = env['LIBS'])
+		env['LIBS'] = oldlib
 
-	if autoconf.CheckLibWithHeader('fcgi', 'fastcgi.h', 'C', autoadd = 0):
-		autoconf.env.Append(LIBFCGI = 'fcgi')
-
-	if autoconf.CheckLibWithHeader('dl', 'dlfcn.h', 'C', autoadd = 0):
-		autoconf.env.Append(LIBDL = 'dl')
-
-	if autoconf.CheckType('socklen_t', '#include <unistd.h>\n#include <sys/socket.h>\n#include <sys/types.h>'):
-		autoconf.env.Append(CPPFLAGS = [ '-DHAVE_SOCKLEN_T' ])
-
-	if autoconf.CheckType('struct sockaddr_storage', '#include <sys/socket.h>\n'):
-		autoconf.env.Append(CPPFLAGS = [ '-DHAVE_STRUCT_SOCKADDR_STORAGE' ])
-
-	if autoconf.CheckGmtOffInStructTm():
-		autoconf.env.Append(CPPFLAGS = [ '-DHAVE_STRUCT_TM_GMTOFF' ])
-
-	if autoconf.CheckIPv6():
-		autoconf.env.Append(CPPFLAGS = [ '-DHAVE_IPV6' ])
-
-	if autoconf.CheckWeakSymbols():
-		autoconf.env.Append(CPPFLAGS = [ '-DHAVE_WEAK_SYMBOLS' ])
+	if env['with_zlib']:
+		if autoconf.CheckLibWithHeader('z', 'zlib.h', 'C', autoadd = 0):
+			autoconf.env.Append(CPPFLAGS = [ '-DHAVE_ZLIB_H', '-DHAVE_LIBZ' ], LIBZ = 'z')
 
 	env = autoconf.Finish()
-
-def TryLua(env, name):
-	result = False
-	oldlibs = copy(env['LIBS'])
-	try:
-		print("Searching for lua: " + name + " >= 5.0")
-		env.ParseConfig("pkg-config '" + name + " >= 5.0' --cflags --libs")
-		env.Append(LIBLUA = env['LIBS'][len(oldlibs):])
-		env.Append(CPPFLAGS = [ '-DHAVE_LUA_H' ])
-		result = True
-	except:
-		pass
-	env['LIBS'] = oldlibs
-	return result
-
-if env['with_lua']:
-	found_lua = False
-	for lua_name in ['lua5.3', 'lua-5.3', 'lua5.2', 'lua-5.2', 'lua5.1', 'lua-5.1', 'lua']:
-		if TryLua(env, lua_name):
-			found_lua = True
-			break
-	if not found_lua:
-		raise RuntimeError("Couldn't find any lua implementation")
-
-if env['with_pcre']:
-	pcre_config = checkProgram(env, 'pcre', 'pcre-config')
-	oldlib = env['LIBS']
-	env['LIBS'] = []
-	env.ParseConfig(pcre_config + ' --cflags --libs')
-	env.Append(CPPFLAGS = [ '-DHAVE_PCRE_H', '-DHAVE_LIBPCRE' ], LIBPCRE = env['LIBS'])
-	env['LIBS'] = oldlib
-
-if env['with_xml']:
-	xml2_config = checkProgram(env, 'xml', 'xml2-config')
-	oldlib = env['LIBS']
-	env['LIBS'] = []
-	env.ParseConfig(xml2_config + ' --cflags --libs')
-	env.Append(CPPFLAGS = [ '-DHAVE_LIBXML_H', '-DHAVE_LIBXML2' ], LIBXML2 = env['LIBS'])
-	env['LIBS'] = oldlib
-
-if env['with_mysql']:
-	mysql_config = checkProgram(env, 'mysql', 'mysql_config')
-	oldlib = env['LIBS']
-	env['LIBS'] = []
-	env.ParseConfig(mysql_config + ' --cflags --libs')
-	env.Append(CPPFLAGS = [ '-DHAVE_MYSQL_H', '-DHAVE_LIBMYSQL' ], LIBMYSQL = 'mysqlclient')
-	env['LIBS'] = oldlib
-
-if env['with_pgsql']:
-	oldlib = env['LIBS']
-	env['LIBS'] = []
-	env.ParseConfig('pkg-config libpq --cflags --libs')
-	env.Append(CPPFLAGS = [ '-DHAVE_PGSQL_H', '-DHAVE_LIBPGSQL' ], LIBPGSQL = 'pq')
-	env['LIBS'] = oldlib
 
 if re.compile("cygwin|mingw|midipix").search(env['PLATFORM']):
 	env.Append(COMMON_LIB = 'bin')
