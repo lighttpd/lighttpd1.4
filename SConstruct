@@ -108,7 +108,7 @@ def checkProgram(env, withname, progname):
 VariantDir('sconsbuild/build', 'src', duplicate = 0)
 VariantDir('sconsbuild/tests', 'tests', duplicate = 0)
 
-vars = Variables() #('config.py')
+vars = Variables()
 vars.AddVariables(
 	('prefix', 'prefix', '/usr/local'),
 	('bindir', 'binary directory', '${prefix}/bin'),
