@@ -124,7 +124,6 @@ vars.AddVariables(
 	BoolVariable('with_fam', 'enable FAM/gamin support', 'no'),
 	BoolVariable('with_gdbm', 'enable gdbm support', 'no'),
 	BoolVariable('with_geoip', 'enable GeoIP support', 'no'),
-	BoolVariable('with_gzip', 'enable gzip compression', 'no'),
 	BoolVariable('with_krb5', 'enable krb5 auth support', 'no'),
 	BoolVariable('with_ldap', 'enable ldap auth support', 'no'),
 	# with_libev not supported
@@ -140,6 +139,7 @@ vars.AddVariables(
 	# with_valgrind not supported
 	# with_xattr not supported
 	PackageVariable('with_xml', 'enable xml support', 'no'),
+	BoolVariable('with_zlib', 'enable deflate/gzip compression', 'no'),
 )
 
 env = Environment(
@@ -266,7 +266,7 @@ if 1:
 		if autoconf.CheckLibWithHeader('ssl', 'openssl/ssl.h', 'C'):
 			autoconf.env.Append(CPPFLAGS = [ '-DHAVE_OPENSSL_SSL_H', '-DHAVE_LIBSSL'] , LIBSSL = 'ssl', LIBCRYPTO = 'crypto', LIBS = [ 'crypto' ])
 
-	if env['with_gzip']:
+	if env['with_zlib']:
 		if autoconf.CheckLibWithHeader('z', 'zlib.h', 'C'):
 			autoconf.env.Append(CPPFLAGS = [ '-DHAVE_ZLIB_H', '-DHAVE_LIBZ' ], LIBZ = 'z')
 
