@@ -245,6 +245,9 @@ fullstatic_linkflags = [staticenv['LINKFLAGS'], '-static']
 if (('pthread' in fullstatic_libs) or ('pcre' in fullstatic_libs)) and (platform.system() == 'Linux'):
 	fullstatic_linkflags += ['-Wl,--whole-archive','-lpthread','-Wl,--no-whole-archive']
 	fullstatic_libs.remove('pthread')
+if 'gcc_s' in fullstatic_libs:
+	fullstatic_linkflags += ['-static-libgcc']
+	fullstatic_libs.remove('gcc_s')
 
 ## includes all modules, linked statically
 fullstaticbin = staticenv.Program('../fullstatic/build/lighttpd',
