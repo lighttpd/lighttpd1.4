@@ -79,9 +79,6 @@ case "$host_os" in
 esac
 AM_CONDITIONAL([NO_RDYNAMIC], [test "$NO_RDYNAMIC" = yes])
 
-if test -z "$LIGHTTPD_STATIC"; then
-  LIGHTTPD_STATIC=no
-fi
 AM_CONDITIONAL([LIGHTTPD_STATIC], [test "$LIGHTTPD_STATIC" = yes])
 
 AC_EXEEXT
@@ -106,15 +103,11 @@ AC_HEADER_STDC
 dnl checks for sys/wait.h => HAVE_SYS_WAIT_H
 AC_HEADER_SYS_WAIT
 AC_CHECK_HEADERS([\
-  arpa/inet.h \
-  fcntl.h \
   getopt.h \
-  netinet/in.h \
   poll.h \
   port.h \
   pwd.h \
   stdlib.h \
-  string.h \
   strings.h \
   sys/devpoll.h \
   sys/epoll.h \
@@ -126,19 +119,16 @@ AC_CHECK_HEADERS([\
   sys/resource.h \
   sys/select.h \
   sys/sendfile.h \
-  sys/socket.h \
   sys/time.h \
   sys/uio.h \
   sys/un.h \
   syslog.h \
-  unistd.h \
   uuid/uuid.h \
 ])
 
 dnl Checks for typedefs, structures, and compiler characteristics.
 AC_C_CONST
 AC_C_INLINE
-AC_C_CHAR_UNSIGNED
 AC_TYPE_OFF_T
 AC_TYPE_PID_T
 AC_TYPE_SIZE_T
@@ -147,11 +137,6 @@ AC_CHECK_MEMBER([struct tm.tm_gmtoff],
   [AC_DEFINE([HAVE_STRUCT_TM_GMTOFF], [1], [gmtoff in struct tm])],
   [],
   [#include <time.h>]
-)
-AC_CHECK_TYPES([struct sockaddr_storage],
-  [],
-  [],
-  [#include <sys/socket.h>]
 )
 AC_CHECK_TYPES([socklen_t],
   [], dnl defines HAVE_SOCKLEN_T
@@ -164,18 +149,15 @@ AC_CHECK_TYPES([socklen_t],
 
 dnl Checks for library functions.
 AC_FUNC_FORK
-dnl AC_FUNC_MALLOC
-dnl AC_FUNC_MMAP
-dnl AC_FUNC_REALLOC
-AC_TYPE_SIGNAL
-AC_FUNC_STAT
-AC_FUNC_STRFTIME
 
+dnl prepare pkg-config usage below
 if test -z "$PKG_CONFIG"; then
   AC_PATH_PROG([PKG_CONFIG], [pkg-config], [no])
 fi
+PKG_PROG_PKG_CONFIG
 
 dnl checking for libev
+AC_MSG_NOTICE([----------------------------------------])
 AC_MSG_CHECKING([for libev support])
 AC_ARG_WITH([libev],
   [AC_HELP_STRING([--with-libev@<:@=PATH@:>@],
@@ -184,6 +166,7 @@ AC_ARG_WITH([libev],
   [WITH_LIBEV=$withval],
   [WITH_LIBEV=no]
 )
+AC_MSG_RESULT([$WITH_LIBEV])
 
 LIBEV_CFLAGS=
 LIBEV_LIBS=
@@ -204,7 +187,7 @@ if test "$WITH_LIBEV" != no; then
           ],
           [AC_MSG_ERROR([libev not found])]
         )],
-        [AC_MSG_ERROR([libev not found])]
+        [AC_MSG_ERROR([libev header not found])]
       )
     fi
   ])
@@ -214,12 +197,9 @@ fi
 
 AC_SUBST([LIBEV_CFLAGS])
 AC_SUBST([LIBEV_LIBS])
-AC_MSG_RESULT([$WITH_LIBEV])
 
-dnl Checks for database.
-MYSQL_INCLUDE=
-MYSQL_LIBS=
-
+dnl Checks for mysql
+AC_MSG_NOTICE([----------------------------------------])
 AC_MSG_CHECKING([for MySQL support])
 AC_ARG_WITH([mysql],
   [AC_HELP_STRING([--with-mysql@<:@=PATH@:>@],
@@ -228,9 +208,12 @@ AC_ARG_WITH([mysql],
   [WITH_MYSQL=$withval],
   [WITH_MYSQL=no]
 )
+AC_MSG_RESULT([$WITH_MYSQL])
+
+MYSQL_INCLUDE=
+MYSQL_LIBS=
 
 if test "$WITH_MYSQL" != no; then
-  AC_MSG_RESULT([yes])
   if test "$WITH_MYSQL" = yes; then
     AC_PATH_PROG([MYSQL_CONFIG], [mysql_config])
   else
@@ -256,26 +239,16 @@ if test "$WITH_MYSQL" != no; then
 
   AC_MSG_CHECKING([for MySQL libraries at])
   AC_MSG_RESULT([$MYSQL_LIBS])
-  dnl check for errmsg.h, which isn't installed by some versions of 3.21
-  old_CPPFLAGS="$CPPFLAGS"
-  CPPFLAGS="$CPPFLAGS $MYSQL_INCLUDE"
-  AC_CHECK_HEADERS([errmsg.h mysql.h])
-  CPPFLAGS="$old_CPPFLAGS"
 
   AC_DEFINE([HAVE_MYSQL], [1], [mysql support])
-else
-  AC_MSG_RESULT([no])
 fi
 AM_CONDITIONAL([BUILD_WITH_MYSQL], [test "$WITH_MYSQL" != no])
 
 AC_SUBST([MYSQL_LIBS])
 AC_SUBST([MYSQL_INCLUDE])
 
-
-dnl Checks for database.
-PGSQL_INCLUDE=
-PGSQL_LIBS=
-
+dnl Checks for pgsql
+AC_MSG_NOTICE([----------------------------------------])
 AC_MSG_CHECKING([for PgSQL support])
 AC_ARG_WITH([pgsql],
   [AC_HELP_STRING([--with-pgsql@<:@=PATH@:>@],
@@ -284,9 +257,12 @@ AC_ARG_WITH([pgsql],
   [WITH_PGSQL=$withval],
   [WITH_PGSQL=no]
 )
+AC_MSG_RESULT([$WITH_PGSQL])
+
+PGSQL_INCLUDE=
+PGSQL_LIBS=
 
 if test "$WITH_PGSQL" != no; then
-  AC_MSG_RESULT([yes])
   if test "$WITH_PGSQL" = yes; then
     AC_PATH_PROG([PGSQL_CONFIG], [pg_config])
   else
@@ -310,19 +286,14 @@ if test "$WITH_PGSQL" != no; then
   AC_MSG_RESULT([$PGSQL_LIBS])
 
   AC_DEFINE([HAVE_PGSQL], [1], [pgsql support])
-else
-  AC_MSG_RESULT([no])
 fi
 AM_CONDITIONAL([BUILD_WITH_PGSQL], [test "$WITH_PGSQL" != no])
 
 AC_SUBST([PGSQL_LIBS])
 AC_SUBST([PGSQL_INCLUDE])
 
-
 dnl Checks for libdbi library
-DBI_INCLUDE=
-DBI_LIBS=
-
+AC_MSG_NOTICE([----------------------------------------])
 AC_MSG_CHECKING([for LibDBI support])
 AC_ARG_WITH([dbi],
   [AC_HELP_STRING([--with-dbi@<:@=PATH@:>@],
@@ -331,9 +302,12 @@ AC_ARG_WITH([dbi],
   [WITH_DBI=$withval],
   [WITH_DBI=no]
 )
+AC_MSG_RESULT([$WITH_DBI])
+
+DBI_INCLUDE=
+DBI_LIBS=
 
 if test "$WITH_DBI" != no; then
-  AC_MSG_RESULT(yes)
   if test "$WITH_DBI" != yes; then
     DBI_CFLAGS="-I$WITH_LIBDBI/include"
     DBI_LIBS="-L$WITH_LIBDBI/lib -ldbi"
@@ -346,13 +320,11 @@ if test "$WITH_DBI" != no; then
         ],
         [AC_MSG_ERROR([LibDBI not found])]
       )],
-      [AC_MSG_ERROR([LibDBI not found])]
+      [AC_MSG_ERROR([LibDBI header not found])]
     )
   fi
 
   AC_DEFINE([HAVE_DBI], [1], [LibDBI support])
-else
-  AC_MSG_RESULT([no])
 fi
 AM_CONDITIONAL([BUILD_WITH_DBI], [test "$WITH_DBI" != no])
 
@@ -361,49 +333,63 @@ AC_SUBST([DBI_CFLAGS])
 
 
 dnl Check for LDAP
+AC_MSG_NOTICE([----------------------------------------])
 AC_MSG_CHECKING([for LDAP support])
 AC_ARG_WITH([ldap],
   [AC_HELP_STRING([--with-ldap], [enable LDAP support])],
   [WITH_LDAP=$withval],
   [WITH_LDAP=no]
 )
-AC_MSG_RESULT([$withval])
+AC_MSG_RESULT([$WITH_LDAP])
+
 if test "$WITH_LDAP" != no; then
   AC_CHECK_LIB([ldap], [ldap_bind],
-    [AC_CHECK_HEADERS([ldap.h], [
-      LDAP_LIB=-lldap
-      AC_DEFINE([HAVE_LIBLDAP], [1], [libldap])
-      AC_DEFINE([HAVE_LDAP_H], [1])
-      AC_DEFINE([LDAP_DEPRECATED], [1], [Using deprecated ldap api])
-    ])]
+    [AC_CHECK_HEADERS([ldap.h],
+      [
+        LDAP_LIB=-lldap
+        AC_DEFINE([HAVE_LIBLDAP], [1], [libldap])
+        AC_DEFINE([HAVE_LDAP_H], [1])
+        AC_DEFINE([LDAP_DEPRECATED], [1], [Using deprecated ldap api])
+      ],
+      [AC_MSG_ERROR([ldap headers not found, install them or build without --with-ldap])]
+    )],
+    [AC_MSG_ERROR([ldap library not found, install it or build without --with-ldap])]
   )
   AC_SUBST([LDAP_LIB])
   AC_CHECK_LIB([lber], [ber_printf],
-    [AC_CHECK_HEADERS([lber.h], [
-      LBER_LIB=-llber
-      AC_DEFINE([HAVE_LIBLBER], [1], [liblber])
-      AC_DEFINE([HAVE_LBER_H], [1])
-    ])]
+    [AC_CHECK_HEADERS([lber.h],
+      [
+        LBER_LIB=-llber
+        AC_DEFINE([HAVE_LIBLBER], [1], [liblber])
+        AC_DEFINE([HAVE_LBER_H], [1])
+      ],
+      [AC_MSG_ERROR([lber headers not found, install them or build without --with-ldap])]
+    )],
+    [AC_MSG_ERROR([lber library not found, install it or build without --with-ldap])]
   )
   AC_SUBST([LBER_LIB])
 fi
 AM_CONDITIONAL([BUILD_WITH_LDAP], [test "$WITH_LDAP" != no])
 
 dnl Check for xattr
+AC_MSG_NOTICE([----------------------------------------])
 AC_MSG_CHECKING([for extended attributes support])
 AC_ARG_WITH([attr],
   [AC_HELP_STRING([--with-attr], [enable extended attribute support])],
   [WITH_ATTR=$withval],
   [WITH_ATTR=no]
 )
-AC_MSG_RESULT([$withval])
+AC_MSG_RESULT([$WITH_ATTR])
+
 if test "$WITH_ATTR" != no; then
+  have_xattr=no
   # libattr (linux only?)
   AC_CHECK_LIB([attr], [attr_get], [
     AC_CHECK_HEADERS([attr/attributes.h], [
       ATTR_LIB=-lattr
       AC_DEFINE([HAVE_XATTR], [1], [libattr])
       AC_DEFINE([HAVE_ATTR_ATTRIBUTES_H], [1])
+      have_xattr=yes
     ])
   ])
   AC_SUBST([ATTR_LIB])
@@ -413,8 +399,13 @@ if test "$WITH_ATTR" != no; then
     AC_CHECK_HEADERS([sys/extattr.h], [
       AC_DEFINE([HAVE_EXTATTR], [1], [BSD extended attributes])
       AC_DEFINE([HAVE_SYS_EXTATTR_H], [1])
+      have_xattr=yes
     ])
   ])
+
+  if test "$have_xattr" = no; then
+    AC_MSG_ERROR([no backend found implementing extended attributes])
+  fi
 fi
 
 dnl openssl on solaris needs -lsocket -lnsl
@@ -442,6 +433,7 @@ LIBS=$save_LIBS
 AC_SUBST([DL_LIB])
 
 dnl Check for valgrind
+AC_MSG_NOTICE([----------------------------------------])
 AC_MSG_CHECKING([for valgrind])
 AC_ARG_WITH([valgrind],
   [AC_HELP_STRING([--with-valgrind],
@@ -451,11 +443,15 @@ AC_ARG_WITH([valgrind],
   [WITH_VALGRIND=no]
 )
 AC_MSG_RESULT([$WITH_VALGRIND])
+
 if test "$WITH_VALGRIND" != no; then
-  AC_CHECK_HEADERS([valgrind/valgrind.h])
+  AC_CHECK_HEADERS([valgrind/valgrind.h], [], [
+    AC_MSG_ERROR([valgrind headers not found. install them or build without --with-valgrind])
+  ])
 fi
 
 dnl Checking for libunwind
+AC_MSG_NOTICE([----------------------------------------])
 AC_MSG_CHECKING([for libunwind])
 AC_ARG_WITH([libunwind],
   [AC_HELP_STRING([--with-libunwind],
@@ -464,20 +460,25 @@ AC_ARG_WITH([libunwind],
   [WITH_LIBUNWIND=$withval],
   [WITH_LIBUNWIND=no]
 )
-
-if test "$WITH_LIBUNWIND" != no; then
-  PKG_CHECK_MODULES([LIBUNWIND], [libunwind])
-  AC_DEFINE([HAVE_LIBUNWIND], [1], [Have libunwind support])
-fi
 AC_MSG_RESULT([$WITH_LIBUNWIND])
 
+if test "$WITH_LIBUNWIND" != no; then
+  PKG_CHECK_MODULES([LIBUNWIND], [libunwind], [], [
+    AC_MSG_ERROR([libunwind not found. install it or build without --with-libunwind])
+  ])
+  AC_DEFINE([HAVE_LIBUNWIND], [1], [Have libunwind support])
+fi
+
 dnl Checking for kerberos5
+AC_MSG_NOTICE([----------------------------------------])
 AC_MSG_CHECKING([for kerberos5])
 AC_ARG_WITH([krb5],
   [AC_HELP_STRING([--with-krb5@<:@=DIR@:>@], [Use Kerberos 5])],
   [WITH_KRB5=$withval],
   [WITH_KRB5=no]
 )
+AC_MSG_RESULT([$WITH_KRB5])
+
 if test "$WITH_KRB5" != no; then
   use_krb5=yes
   if test "$WITH_KRB5" != yes; then
@@ -487,7 +488,6 @@ if test "$WITH_KRB5" != no; then
 else
   use_krb5=no
 fi
-AC_MSG_RESULT([$use_krb5])
 AM_CONDITIONAL([BUILD_WITH_KRB5], [test "$WITH_KRB5" != no])
 
 AC_ARG_WITH([krb5-includes],
@@ -526,6 +526,7 @@ fi
 AC_SUBST([KRB5_LIB])
 
 dnl Check for openssl
+AC_MSG_NOTICE([----------------------------------------])
 AC_MSG_CHECKING([for OpenSSL])
 AC_ARG_WITH([openssl],
   [AC_HELP_STRING([--with-openssl@<:@=DIR@:>@],
@@ -534,6 +535,7 @@ AC_ARG_WITH([openssl],
   [WITH_OPENSSL=$withval],
   [WITH_OPENSSL=no]
 )
+AC_MSG_RESULT([$WITH_OPENSSL])
 
 if test "$WITH_OPENSSL" != no; then
   use_openssl=yes
@@ -544,7 +546,6 @@ if test "$WITH_OPENSSL" != no; then
 else
   use_openssl=no
 fi
-AC_MSG_RESULT([$use_openssl])
 AM_CONDITIONAL([BUILD_WITH_OPENSSL], [test "$WITH_OPENSSL" != no])
 
 AC_ARG_WITH([openssl-includes],
@@ -588,6 +589,8 @@ if test "$use_openssl" = yes; then
   AC_SUBST([CRYPTO_LIB])
 fi
 
+dnl pcre support
+AC_MSG_NOTICE([----------------------------------------])
 AC_MSG_CHECKING([for perl regular expressions support])
 AC_ARG_WITH([pcre],
   [AC_HELP_STRING([--with-pcre], [Enable pcre support (default yes)])],
@@ -608,15 +611,17 @@ if test "$WITH_PCRE" != no; then
     fi
   fi
 
-  if test -n "$PCRE_LIB"; then
-    AC_DEFINE([HAVE_LIBPCRE], [1], [libpcre])
-    AC_DEFINE([HAVE_PCRE_H], [1], [pcre.h])
-    AC_SUBST([PCRE_LIB])
-  else
+  if test -z "$PCRE_LIB"; then
     AC_MSG_ERROR([pcre-config not found, install the pcre-devel package or build with --without-pcre])
   fi
+
+  AC_DEFINE([HAVE_LIBPCRE], [1], [libpcre])
+  AC_DEFINE([HAVE_PCRE_H], [1], [pcre.h])
+  AC_SUBST([PCRE_LIB])
 fi
 
+dnl zlib
+AC_MSG_NOTICE([----------------------------------------])
 AC_MSG_CHECKING([for zlib support])
 AC_ARG_WITH([zlib],
   [AC_HELP_STRING([--with-zlib],
@@ -632,20 +637,22 @@ if test "$WITH_ZLIB" != no; then
     Z_LIB="-L$WITH_ZLIB -lz"
     CPPFLAGS="$CPPFLAGS -I$WITH_ZLIB"
   else
-    AC_CHECK_LIB([z], [deflate], [
-      AC_CHECK_HEADERS([zlib.h], [Z_LIB=-lz])
-    ])
+    AC_CHECK_HEADERS([zlib.h], [],
+      [AC_MSG_ERROR([zlib headers not found, install them or build without --with-zlib])]
+    )
+    AC_CHECK_LIB([z], [deflate],
+      [Z_LIB=-lz],
+      [AC_MSG_ERROR([zlib library not found, install it or build without --with-zlib])]
+    )
   fi
 
-  if test x"$Z_LIB" != x; then
-    AC_DEFINE([HAVE_LIBZ], [1], [libz])
-    AC_DEFINE([HAVE_ZLIB_H], [1])
-    AC_SUBST([Z_LIB])
-  else
-    AC_MSG_ERROR([zlib-headers and/or libs were not found, install them or build with --without-zlib])
-  fi
+  AC_DEFINE([HAVE_LIBZ], [1], [libz])
+  AC_DEFINE([HAVE_ZLIB_H], [1])
+  AC_SUBST([Z_LIB])
 fi
 
+dnl bzip2
+AC_MSG_NOTICE([----------------------------------------])
 AC_MSG_CHECKING([for bzip2 support])
 AC_ARG_WITH([bzip2],
   [AC_HELP_STRING([--with-bzip2],
@@ -661,21 +668,22 @@ if test "$WITH_BZIP2" != no; then
     BZ_LIB="-L$WITH_BZIP2 -lbz2"
     CPPFLAGS="$CPPFLAGS -I$WITH_BZIP2"
   else
-    AC_CHECK_LIB([bz2], [BZ2_bzCompress], [
-      AC_CHECK_HEADERS([bzlib.h], [BZ_LIB=-lbz2])
+    AC_CHECK_HEADERS([bzlib.h], [], [
+      AC_MSG_ERROR([bzip2 headers not found, install them or build without --with-bzip2])
     ])
+    AC_CHECK_LIB([bz2], [BZ2_bzCompress],
+      [BZ_LIB=-lbz2],
+      [AC_MSG_ERROR([bzip2 library not found, install it or build without --with-bzip2])]
+    )
   fi
 
-  if test x"$BZ_LIB" != x; then
-    AC_DEFINE([HAVE_LIBBZ2], [1], [libbz2])
-    AC_DEFINE([HAVE_BZLIB_H], [1])
-    AC_SUBST([BZ_LIB])
-  else
-    AC_MSG_ERROR([bzip2-headers and/or libs were not found, install them or build with --without-bzip2])
-  fi
+  AC_DEFINE([HAVE_LIBBZ2], [1], [libbz2])
+  AC_DEFINE([HAVE_BZLIB_H], [1])
+  AC_SUBST([BZ_LIB])
 fi
 
-dnl Check for gamin
+dnl Check for fam/gamin
+AC_MSG_NOTICE([----------------------------------------])
 AC_MSG_CHECKING([for FAM])
 AC_ARG_WITH([fam],
   [AC_HELP_STRING([--with-fam],
@@ -694,25 +702,29 @@ if test "$WITH_FAM" != no; then
     AC_CHECK_LIB([fam], [FAMOpen2], [
       AC_CHECK_HEADERS([fam.h], [FAM_LIBS=-lfam])
     ])
+    dnl fam has no pkg-config so far, so just search for gamin as fallback
     if test -z "$FAM_LIBS"; then
       PKG_CHECK_MODULES([FAM], [gamin >= 0.1.0])
     fi
   fi
 
-  if test x"$FAM_LIBS" != x; then
-    OLD_LIBS=$LIBS
-    LIBS=$FAM_LIBS
-    AC_CHECK_FUNCS([FAMNoExists])
-    LIBS=$OLD_LIBS
-
-    AC_DEFINE([HAVE_LIBFAM], [1], [libfam])
-    AC_DEFINE([HAVE_FAM_H], [1], [fam.h])
-    AC_SUBST([FAM_LIBS])
-  else
-     AC_MSG_ERROR([fam/gamin-headers and/or libs were not found, install them or build with --without-fam])
+  if test -z "$FAM_LIBS"; then
+    AC_MSG_ERROR([fam/gamin headers and/or libs were not found, install them or build without --with-fam])
   fi
+
+  OLD_LIBS=$LIBS
+  LIBS=$FAM_LIBS
+  AC_CHECK_FUNCS([FAMNoExists])
+  LIBS=$OLD_LIBS
+
+  AC_DEFINE([HAVE_LIBFAM], [1], [libfam])
+  AC_DEFINE([HAVE_FAM_H], [1], [fam.h])
+  AC_SUBST([FAM_LIBS])
 fi
 
+
+dnl webdav props (xml2 and sqlite3)
+AC_MSG_NOTICE([----------------------------------------])
 AC_MSG_CHECKING([for properties in mod_webdav])
 AC_ARG_WITH([webdav-props],
   [AC_HELP_STRING([--with-webdav-props], [properties in mod_webdav])],
@@ -732,23 +744,23 @@ if test "$WITH_WEBDAV_PROPS" != no; then
   )
   AC_MSG_RESULT([$WITH_LIBXML])
 
-  if test "$WITH_LIBXML" != no; then
-    if test "$WITH_LIBXML" != yes; then
-      XML_LIBS="-L$WITH_LIBXML/.libs -lxml2"
-      XML_CFLAGS="-I$WITH_LIBXML/include"
-    else
-      PKG_CHECK_MODULES([XML], [libxml-2.0])
-    fi
-
-    if test x"$XML_LIBS" != x; then
-      AC_DEFINE([HAVE_LIBXML2], [1], [libxml2])
-      AC_DEFINE([HAVE_LIBXML_H], [1], [libxml.h])
-      AC_SUBST([XML_LIBS])
-      AC_SUBST([XML_CFLAGS])
-    else
-      AC_MSG_ERROR([libxml2-headers and/or libs were not found, install them or build with --without-webdav-props])
-    fi
+  if test "$WITH_LIBXML" = no; then
+    AC_MSG_ERROR([--with-webdav-props requires libxml])
   fi
+
+  if test "$WITH_LIBXML" != yes; then
+    XML_LIBS="-L$WITH_LIBXML/.libs -lxml2"
+    XML_CFLAGS="-I$WITH_LIBXML/include"
+  else
+    PKG_CHECK_MODULES([XML], [libxml-2.0], [], [
+      AC_MSG_ERROR([libxml2 not found, install it or build without --with-webdav-props])
+    ])
+  fi
+
+  AC_DEFINE([HAVE_LIBXML2], [1], [libxml2])
+  AC_DEFINE([HAVE_LIBXML_H], [1], [libxml.h])
+  AC_SUBST([XML_LIBS])
+  AC_SUBST([XML_CFLAGS])
 
   AC_MSG_CHECKING([for sqlite])
   AC_ARG_WITH([sqlite],
@@ -760,63 +772,75 @@ if test "$WITH_WEBDAV_PROPS" != no; then
   )
   AC_MSG_RESULT([$WITH_SQLITE])
 
-  if test "$WITH_SQLITE" != no; then
-    if test "$WITH_SQLITE" != yes; then
-      SQLITE_LIBS="-L$WITH_SQLITE/.libs -lsqlite3"
-      SQLITE_CFLAGS="-I$WITH_SQLITE"
-    else
-      PKG_CHECK_MODULES([SQLITE], [sqlite3])
-    fi
-
-    if test x"$SQLITE_LIBS" != x; then
-      AC_DEFINE([HAVE_SQLITE3], [1], [libsqlite3])
-      AC_DEFINE([HAVE_SQLITE3_H], [1], [sqlite3.h])
-      AC_SUBST([SQLITE_LIBS])
-      AC_SUBST([SQLITE_CFLAGS])
-    else
-      AC_MSG_ERROR([sqlite-headers and/or libs were not found, install them or build with --without-webdav-props])
-    fi
+  if test "$WITH_SQLITE" = no; then
+    AC_MSG_ERROR([--with-webdav-props requires sqlite])
   fi
 
-  AC_MSG_CHECKING([for locks in mod_webdav])
-  AC_ARG_WITH([webdav-locks],
-    [AC_HELP_STRING([--with-webdav-locks], [locks in mod_webdav])],
-    [WITH_WEBDAV_LOCKS=$withval],
-    [WITH_WEBDAV_LOCKS=no]
+  if test "$WITH_SQLITE" != yes; then
+    SQLITE_LIBS="-L$WITH_SQLITE/.libs -lsqlite3"
+    SQLITE_CFLAGS="-I$WITH_SQLITE"
+  else
+    PKG_CHECK_MODULES([SQLITE], [sqlite3], [], [
+      AC_MSG_ERROR([sqlite3 not found, install it or build without --with-webdav-props])
+    ])
+  fi
+
+  AC_DEFINE([HAVE_SQLITE3], [1], [libsqlite3])
+  AC_DEFINE([HAVE_SQLITE3_H], [1], [sqlite3.h])
+  AC_SUBST([SQLITE_LIBS])
+  AC_SUBST([SQLITE_CFLAGS])
+fi
+
+
+dnl webdav locks (uuid)
+AC_MSG_NOTICE([----------------------------------------])
+AC_MSG_CHECKING([for locks in mod_webdav])
+AC_ARG_WITH([webdav-locks],
+  [AC_HELP_STRING([--with-webdav-locks],
+    [locks in mod_webdav (requires webdav properties)]
+  )],
+  [WITH_WEBDAV_LOCKS=$withval],
+  [WITH_WEBDAV_LOCKS=no]
+)
+AC_MSG_RESULT([$WITH_WEBDAV_LOCKS])
+
+if test "$WITH_WEBDAV_LOCKS" != no; then
+  if test "$WITH_WEBDAV_PROPS" = no; then
+    AC_MSG_ERROR([--with-webdav-locks requires --with-webdav-props])
+  fi
+
+  AC_MSG_CHECKING([for libuuid])
+  AC_ARG_WITH([uuid],
+    [AC_HELP_STRING([--with-uuid], [uuid for locks in mod_webdav])],
+    [WITH_UUID=$withval],
+    [WITH_UUID=yes]
   )
-  AC_MSG_RESULT([$WITH_WEBDAV_LOCKS])
+  AC_MSG_RESULT([$WITH_UUID])
 
-  if test "$WITH_WEBDAV_LOCKS" != no; then
-    AC_MSG_CHECKING([for libuuid])
-    AC_ARG_WITH([uuid],
-      [AC_HELP_STRING([--with-uuid], [uuid for locks in mod_webdav])],
-      [WITH_UUID=$withval],
-      [WITH_UUID=yes]
-    )
-    AC_MSG_RESULT([$WITH_UUID])
-
-    if test "$WITH_UUID" != no; then
-      if test "$WITH_UUID" != yes; then
-        UUID_LIBS="-L$WITH_UUID -luuid"
-        CPPFLAGS="$CPPFLAGS -I$WITH_UUID"
-      else
-        AC_CHECK_LIB([uuid], [uuid_unparse], [
-          AC_CHECK_HEADERS([uuid/uuid.h], [UUID_LIBS=-luuid])
-        ])
-      fi
-
-      if test x"$UUID_LIBS" != x; then
-        AC_DEFINE([HAVE_UUID], [1], [libuuid])
-        AC_DEFINE([HAVE_UUID_H], [1], [uuid/uuid.h is available])
-        AC_SUBST([UUID_LIBS])
-      else
-        AC_MSG_ERROR([uuid-headers and/or libs were not found, install them or build with --without-webdav-locks])
-      fi
-    fi
+  if test "$WITH_UUID" = no; then
+    AC_MSG_ERROR([--with-webdav-locks requires uuid])
   fi
+
+  if test "$WITH_UUID" != yes; then
+    UUID_LIBS="-L$WITH_UUID -luuid"
+    CPPFLAGS="$CPPFLAGS -I$WITH_UUID"
+  else
+    AC_CHECK_LIB([uuid], [uuid_unparse],
+      [UUID_LIBS=-luuid],
+      [AC_MSG_ERROR([uuid lib not found, install it or build without --with-webdav-locks])]
+    )
+    AC_CHECK_HEADERS([uuid/uuid.h], [],
+      [AC_MSG_ERROR([uuid headers not found, install them or build without --with-webdav-locks])]
+    )
+  fi
+
+  AC_DEFINE([HAVE_UUID], [1], [libuuid])
+  AC_DEFINE([HAVE_UUID_H], [1], [uuid/uuid.h is available])
+  AC_SUBST([UUID_LIBS])
 fi
 
 dnl Check for gdbm
+AC_MSG_NOTICE([----------------------------------------])
 AC_MSG_CHECKING([for gdbm])
 AC_ARG_WITH([gdbm],
   [AC_HELP_STRING([--with-gdbm], [gdbm storage for mod_trigger_b4_dl])],
@@ -830,22 +854,23 @@ if test "$WITH_GDBM" != no; then
     GDBM_LIB="-L$WITH_GDBM -lgdbm"
     CPPFLAGS="$CPPFLAGS -I$WITH_GDBM"
   else
-    AC_CHECK_LIB([gdbm], [gdbm_open], [
-      AC_CHECK_HEADERS([gdbm.h], [GDBM_LIB=-lgdbm])
-    ])
+    AC_CHECK_LIB([gdbm], [gdbm_open],
+      [GDBM_LIB=-lgdbm],
+      [AC_MSG_ERROR([gdbm lib not found, install it or build without --with-gdbm])]
+    )
+    AC_CHECK_HEADERS([gdbm.h], [],
+      [AC_MSG_ERROR([gdbm headers not found, install them or build without --with-gdbm])]
+    )
   fi
 
-  if test x"$GDBM_LIB" != x; then
-    AC_DEFINE([HAVE_GDBM], [1], [libgdbm])
-    AC_DEFINE([HAVE_GDBM_H], [1])
-    AC_SUBST([GDBM_LIB])
-  else
-    AC_MSG_ERROR([gdbm headers and/or libs were not found, install them or build with --without-gdbm])
-  fi
+  AC_DEFINE([HAVE_GDBM], [1], [libgdbm])
+  AC_DEFINE([HAVE_GDBM_H], [1])
+  AC_SUBST([GDBM_LIB])
 fi
 AM_CONDITIONAL([BUILD_WITH_GDBM], [test "$WITH_GDBM" != no])
 
 dnl Check for GeoIP
+AC_MSG_NOTICE([----------------------------------------])
 AC_MSG_CHECKING([for GeoIP])
 AC_ARG_WITH([geoip],
   [AC_HELP_STRING([--with-geoip], [IP-based geolocation lookup])],
@@ -859,26 +884,27 @@ if test "$WITH_GEOIP" != no; then
     GEOIP_LIB="-L$WITH_GEOIP -lGeoIP"
     CPPFLAGS="$CPPFLAGS -I$WITH_GEOIP"
   else
-    AC_CHECK_LIB([GeoIP], [GeoIP_country_name_by_addr], [
-      AC_CHECK_HEADERS([GeoIP.h], [GEOIP_LIB=-lGeoIP])
-    ])
+    AC_CHECK_LIB([GeoIP], [GeoIP_country_name_by_addr],
+      [GEOIP_LIB=-lGeoIP],
+      [AC_MSG_ERROR([GeoIP lib not found, install it or build without --with-geoip])]
+    )
+    AC_CHECK_HEADERS([GeoIP.h], [],
+      [AC_MSG_ERROR([GeoIP headers not found, install them or build without --with-geoip])]
+    )
   fi
 
-  if test x"$GEOIP_LIB" != x; then
-    AC_DEFINE([HAVE_GEOIP], [1], [libGeoIP])
-    AC_DEFINE([HAVE_GEOIP_H], [1])
-    AC_SUBST([GEOIP_LIB])
-  else
-    AC_MSG_ERROR([GeoIP headers and/or libs were not found, install them or build with --without-geoip])
-  fi
+  AC_DEFINE([HAVE_GEOIP], [1], [libGeoIP])
+  AC_DEFINE([HAVE_GEOIP_H], [1])
+  AC_SUBST([GEOIP_LIB])
 fi
 AM_CONDITIONAL([BUILD_WITH_GEOIP], [test "$WITH_GEOIP" != no])
 
 dnl Check for memcached
+AC_MSG_NOTICE([----------------------------------------])
 AC_MSG_CHECKING([for memcached])
 AC_ARG_WITH([memcached],
   [AC_HELP_STRING([--with-memcached],
-    [memcached storage for mod_trigger_b4_dl]
+    [memcached storage for mod_trigger_b4_dl/mod_cml]
   )],
   [WITH_MEMCACHED=$withval],
   [WITH_MEMCACHED=no]
@@ -890,33 +916,37 @@ if test "$WITH_MEMCACHED" != no; then
     MEMCACHED_LIB="-L$WITH_MEMCACHED -lMEMCACHED"
     CPPFLAGS="$CPPFLAGS -I$WITH_MEMCACHED"
   else
-    AC_CHECK_LIB([memcached], [memcached], [
-      AC_CHECK_HEADERS([libmemcached/memcached.h], [
-        MEMCACHED_LIB=-lmemcached
-      ])
-    ])
+    AC_CHECK_LIB([memcached], [memcached],
+      [ MEMCACHED_LIB=-lmemcached ],
+      [AC_MSG_ERROR([memcached lib not found, install it or build without --with-memcached])]
+    )
+    AC_CHECK_HEADERS([libmemcached/memcached.h], [],
+      [AC_MSG_ERROR([memcached headers not found, install them or build without --with-memcached])]
+    )
   fi
 
-  if test x"$MEMCACHED_LIB" != x; then
-    AC_DEFINE([USE_MEMCACHED], [1], [libmemcached])
-    AC_SUBST([MEMCACHED_LIB])
-  else
-    AC_MSG_ERROR([memcached headers and/or libs were not found, install them or build with --without-memcached])
-  fi
+  AC_DEFINE([USE_MEMCACHED], [1], [libmemcached])
+  AC_SUBST([MEMCACHED_LIB])
 fi
 AM_CONDITIONAL([BUILD_WITH_MEMCACHED], [test "$WITH_MEMCACHED" != no])
 
-AM_CONDITIONAL([BUILD_MOD_TRIGGER_B4_DL], [test "$WITH_MEMCACHED" != no || test "$WITH_GDBM" != no])
+BUILD_MOD_TRIGGER_B4_DL=no
+if test "$WITH_MEMCACHED" != no || test "$WITH_GDBM" != no ; then
+  BUILD_MOD_TRIGGER_B4_DL=yes
+fi
+
+AM_CONDITIONAL([BUILD_MOD_TRIGGER_B4_DL], [test "$BUILD_MOD_TRIGGER_B4_DL" != no])
 
 dnl Check for lua
+AC_MSG_NOTICE([----------------------------------------])
 AC_MSG_CHECKING([if lua-support is requested])
 AC_ARG_WITH([lua],
-  [AC_HELP_STRING([--with-lua], [lua engine for mod_cml])],
+  [AC_HELP_STRING([--with-lua], [lua engine for mod_magnet/mod_cml])],
   [WITH_LUA=$withval],
   [WITH_LUA=no]
 )
+AC_MSG_RESULT([$WITH_LUA])
 
-AC_MSG_RESULT($WITH_LUA)
 if test "$WITH_LUA" != no; then
   found_lua=0
   if test "$WITH_LUA" != yes; then
@@ -942,16 +972,15 @@ if test "$WITH_LUA" != no; then
     fi
   fi
 
-  if test x"$LUA_LIBS" != x; then
-    AC_DEFINE([HAVE_LUA], [1], [liblua])
-    AC_DEFINE([HAVE_LUA_H], [1], [lua.h])
-    AC_SUBST([LUA_LIBS])
-    AC_SUBST([LUA_CFLAGS])
-  else
-    AC_MSG_ERROR([lua headers and/or libs were not found, install them or build with --without-lua])
-  fi
+  AC_DEFINE([HAVE_LUA], [1], [liblua])
+  AC_DEFINE([HAVE_LUA_H], [1], [lua.h])
+  AC_SUBST([LUA_LIBS])
+  AC_SUBST([LUA_CFLAGS])
 fi
 AM_CONDITIONAL([BUILD_WITH_LUA], [test "$WITH_LUA" != no])
+
+dnl "--with-FEATURE" blocks end
+AC_MSG_NOTICE([----------------------------------------])
 
 dnl search for crypt_r and (fallback) for crypt
 save_LIBS=$LIBS
@@ -979,15 +1008,27 @@ AC_SEARCH_LIBS([crypt_r], [crypt],
 LIBS=$save_LIBS
 AC_SUBST([CRYPT_LIB])
 
+dnl check whether sendfilev needs -lsendfile
+AC_MSG_NOTICE([----------------------------------------])
 save_LIBS=$LIBS
+LIBS=
+have_sendfilev=no
 AC_SEARCH_LIBS([sendfilev], [sendfile], [
-  if test "$ac_cv_search_sendfilev" != no; then
-    test "$ac_cv_search_sendfilev" = "none required" || SENDFILE_LIB="$ac_cv_search_sendfilev"
-    AC_DEFINE([HAVE_SENDFILEV], [1], [solaris sendfilev])
+  if test -z "$LIBS"; then
+    have_sendfilev=yes
+  else
+    have_sendfilev=$LIBS
   fi
+  SENDFILE_LIB=$LIBS
+  AC_DEFINE([HAVE_SENDFILEV], [1], [solaris sendfilev])
 ])
 LIBS=$save_LIBS
 AC_SUBST([SENDFILE_LIB])
+
+AC_MSG_CHECKING([solaris sendfilev present])
+AC_MSG_RESULT([$have_sendfilev])
+
+AC_MSG_NOTICE([----------------------------------------])
 
 case "$host_os" in
 *mingw* ) LIBS="$LIBS -lwsock32" ;;
@@ -998,18 +1039,12 @@ AC_CHECK_FUNCS([\
   arc4random_buf \
   chroot \
   clock_gettime \
-  dup2 \
   epoll_ctl \
   explicit_bzero \
-  getcwd \
-  gethostbyname \
   getloadavg \
-  getopt \
   getrlimit \
   getuid \
   gmtime_r \
-  inet_ntoa \
-  inet_ntop \
   inet_pton \
   issetugid \
   jrand48 \
@@ -1020,35 +1055,23 @@ AC_CHECK_FUNCS([\
   memset \
   memset_s \
   mmap \
-  munmap \
   pathconf \
   pipe2 \
   poll \
   port_create \
-  posix_fadvise \
-  posix_madvise \
   select \
   send_file \
   sendfile \
   sendfile64 \
   sigaction \
   signal \
-  socket \
   srandom \
-  strchr \
-  strdup \
-  strerror \
-  strstr \
-  strtol \
   writev \
 ])
-AC_CHECK_HEADERS([sys/random.h], [
-  AC_CHECK_FUNC([getentropy], [AC_DEFINE([HAVE_GETENTROPY], [1], [getentropy])])
-])
-AC_CHECK_HEADERS([linux/random.h], [
-  AC_CHECK_FUNC([getrandom], [AC_DEFINE([HAVE_GETRANDOM], [1], [getrandom])])
-])
+AC_CHECK_HEADERS([sys/random.h], [AC_CHECK_FUNCS([getentropy])])
+AC_CHECK_HEADERS([linux/random.h], [AC_CHECK_FUNCS([getrandom])])
 
+AC_MSG_NOTICE([----------------------------------------])
 AC_MSG_CHECKING([if weak symbols are supported])
 AC_LINK_IFELSE(
   [AC_LANG_PROGRAM([[
@@ -1062,6 +1085,7 @@ AC_LINK_IFELSE(
   [AC_MSG_RESULT([no])]
 )
 
+AC_MSG_NOTICE([----------------------------------------])
 AC_MSG_CHECKING([for Large File System support])
 AC_ARG_ENABLE([lfs],
   [AC_HELP_STRING([--enable-lfs],
@@ -1069,23 +1093,21 @@ AC_ARG_ENABLE([lfs],
   )],
   [
     case "${enableval}" in
-    yes) CPPFLAGS="${CPPFLAGS} -D_FILE_OFFSET_BITS=64 -D_LARGEFILE_SOURCE -D_LARGE_FILES" ;;
-    no) ;;
+    yes) ENABLE_LFS=yes ;;
+    no) ENABLE_LFS=no ;;
     *) AC_MSG_ERROR([bad value ${enableval} for --enable-lfs]) ;;
     esac
   ],
-  [
-    CPPFLAGS="${CPPFLAGS} -D_FILE_OFFSET_BITS=64 -D_LARGEFILE_SOURCE -D_LARGE_FILES"
-    enable_lfs=yes
-  ]
+  [ ENABLE_LFS=yes ]
 )
-AC_MSG_RESULT([$enableval])
+AC_MSG_RESULT([$ENABLE_LFS])
+if test "$ENABLE_LFS" = yes; then
+  CPPFLAGS="${CPPFLAGS} -D_FILE_OFFSET_BITS=64 -D_LARGEFILE_SOURCE -D_LARGE_FILES"
+fi
 
-AC_CHECK_SIZEOF([long])
-AC_CHECK_SIZEOF([off_t])
-
+dnl check if sendfile works
 if test "$ac_cv_func_sendfile" = yes; then
-  dnl check if sendfile works
+  AC_MSG_NOTICE([----------------------------------------])
   AC_MSG_CHECKING([if sendfile works])
   if test "$cross_compiling" = no; then
     AC_TRY_RUN(
@@ -1113,7 +1135,7 @@ if test "$ac_cv_func_sendfile" = yes; then
 fi
 
 dnl Check for IPv6 support
-
+AC_MSG_NOTICE([----------------------------------------])
 AC_ARG_ENABLE([ipv6],
   [AC_HELP_STRING([--disable-ipv6], [disable IPv6 support])],
   [
@@ -1144,12 +1166,16 @@ if test "$ipv6" = true; then
 
   if test "$ac_cv_ipv6_support" = yes; then
     AC_DEFINE([HAVE_IPV6], [1], [Whether to enable IPv6 support])
+  else
+    AC_MSG_ERROR([IPv6 seems broken.  Fix it or build with --disable-ipv6])
   fi
 fi
 
 # disable mmap by default; if a mmapped file gets truncated, the process gets a SIGBUS signal
 # on reading the truncated area which we can't handle (yet).
 # lighttpd may always use mmap with files it owns (created tmp files)
+AC_MSG_NOTICE([----------------------------------------])
+AC_MSG_CHECKING([use mmap if available (dangerous)])
 AC_ARG_ENABLE([mmap],
   [AC_HELP_STRING([--enable-mmap],
     [use mmap if available (DANGEROUS, allows local users to trigger SIGBUS crashes)]
@@ -1163,12 +1189,14 @@ AC_ARG_ENABLE([mmap],
   ],
   [mmap=false]
 )
+AC_MSG_RESULT([$mmap])
 
 if test "$mmap" = true; then
   AC_DEFINE([ENABLE_MMAP], [1], [Use mmap if available])
 fi
 
 dnl check for fastcgi lib, for the tests only
+AC_MSG_NOTICE([----------------------------------------])
 fastcgi_found=no
 AC_CHECK_LIB([fcgi], [FCGI_Accept], [
   AC_CHECK_HEADERS([fastcgi.h fastcgi/fastcgi.h], [
@@ -1179,6 +1207,7 @@ AC_CHECK_LIB([fcgi], [FCGI_Accept], [
 AM_CONDITIONAL([CHECK_WITH_FASTCGI], [test "$fastcgi_found" = yes])
 
 
+AC_MSG_NOTICE([----------------------------------------])
 dnl check for extra compiler options (warning options)
 if test "${GCC}" = yes; then
   TRY_CFLAGS([-Wall -W -Wshadow -pedantic])
