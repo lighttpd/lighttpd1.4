@@ -147,9 +147,6 @@ AC_CHECK_TYPES([socklen_t],
   ]
 )
 
-dnl Checks for library functions.
-AC_FUNC_FORK
-
 dnl openssl on solaris needs -lsocket -lnsl
 AC_SEARCH_LIBS([socket], [socket])
 AC_SEARCH_LIBS([gethostbyname], [nsl socket])
@@ -1057,6 +1054,7 @@ AC_CHECK_FUNCS([\
   clock_gettime \
   epoll_ctl \
   explicit_bzero \
+  fork \
   getloadavg \
   getrlimit \
   getuid \
