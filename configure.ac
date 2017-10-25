@@ -479,49 +479,59 @@ AC_ARG_WITH([krb5],
 AC_MSG_RESULT([$WITH_KRB5])
 
 if test "$WITH_KRB5" != no; then
-  use_krb5=yes
   if test "$WITH_KRB5" != yes; then
-    CPPFLAGS="$CPPFLAGS -I$WITH_KRB5/include"
-    LDFLAGS="$LDFLAGS -L$WITH_KRB5/lib"
+    krb5_append_CPPFLAGS=" -I$WITH_KRB5/include"
+    krb5_append_LDFLAGS=" -L$WITH_KRB5/lib"
   fi
-else
-  use_krb5=no
 fi
-AM_CONDITIONAL([BUILD_WITH_KRB5], [test "$WITH_KRB5" != no])
 
+AC_MSG_CHECKING([custom include directory for kerberos5])
 AC_ARG_WITH([krb5-includes],
   [AC_HELP_STRING([--with-krb5-includes=DIR], [Kerberos includes])],
   [
-    use_krb5=yes
-    CPPFLAGS="$CPPFLAGS -I$withval"
-  ]
+    if test "$WITH_KRB5" = no; then
+      AC_MSG_ERROR([build --with-krb5 to use --with-krb5-includes])
+    fi
+    krb5_append_CPPFLAGS=" -I$withval"
+    AC_MSG_RESULT([$withval])
+  ],
+  [AC_MSG_RESULT([no])]
 )
 
+AC_MSG_CHECKING([custom lib directory for kerberos5])
 AC_ARG_WITH([krb5-libs],
   [AC_HELP_STRING([--with-krb5-libs=DIR], [Kerberos libraries])],
   [
-    use_krb5=yes
-    LDFLAGS="$LDFLAGS -L$withval"
-  ]
+    if test "$WITH_KRB5" = no; then
+      AC_MSG_ERROR([build --with-krb5 to use --with-krb5-libs])
+    fi
+    krb5_append_LDFLAGS=" -L$withval"
+    AC_MSG_RESULT([$withval])
+  ],
+  [AC_MSG_RESULT([no])]
 )
 
-if test "$use_krb5" = yes; then
+if test "$WITH_KRB5" != no; then
+  CPPFLAGS="${CPPFLAGS}${krb5_append_CPPFLAGS}"
+  LDFLAGS="${LDFLAGS}${krb5_append_LDFLAGS}"
+
   AC_CHECK_LIB([gssapi_krb5], [gss_acquire_cred],
     [AC_CHECK_HEADERS([gssapi/gssapi_krb5.h],
       [
         KRB5_LIB="-lkrb5 -lgssapi_krb5"
         AC_DEFINE([HAVE_KRB5], [1], [libgssapi_krb5])
-      ]
-    )]
+      ],
+      [AC_MSG_ERROR([gssapi_krb5 headers were not found, install them or build without --with-krb5])]
+    )],
+    [AC_MSG_ERROR([gssapi_krb5 libs were not found, install them or build without --with-krb5])]
   )
-  if test -z "$KRB5_LIB"; then
-    AC_MSG_ERROR([gssapi_krb5 headers and/or libs where not found, install them or build with --without-krb5])
-  fi
   case "$host_os" in
   *darwin*|*cygwin* ) KRB5_LIB="$KRB5_LIB -lcom_err" ;;
   * ) ;;
   esac
 fi
+
+AM_CONDITIONAL([BUILD_WITH_KRB5], [test "$WITH_KRB5" != no])
 AC_SUBST([KRB5_LIB])
 
 dnl Check for openssl
@@ -564,7 +574,7 @@ AC_ARG_WITH([openssl-libs],
 )
 
 if test "$use_openssl" = yes; then
-  if test "$use_krb5" = yes; then
+  if test "$WITH_KRB5" != no; then
     AC_DEFINE([USE_OPENSSL_KERBEROS], [1], [with kerberos])
   fi
 
