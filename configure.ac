@@ -1003,28 +1003,26 @@ AC_MSG_NOTICE([----------------------------------------])
 dnl search for crypt_r and (fallback) for crypt
 save_LIBS=$LIBS
 LIBS=
+found_crypt=no
 AC_SEARCH_LIBS([crypt_r], [crypt],
   [
     AC_DEFINE([HAVE_CRYPT_R], [1], [crypt_r])
-    AC_CHECK_HEADERS([crypt.h], [
-      AC_DEFINE([HAVE_CRYPT_H], [1], [crypt.h])
-    ])
-
+    AC_CHECK_HEADERS([crypt.h])
     CRYPT_LIB=$LIBS
+    found_crypt=crypt_r
   ],
-  [
-    AC_SEARCH_LIBS([crypt], [crypt], [
-      AC_DEFINE([HAVE_CRYPT], [1], [crypt])
-      AC_CHECK_HEADERS([crypt.h], [
-        AC_DEFINE([HAVE_CRYPT_H], [1], [crypt.h])
-      ])
-
-      CRYPT_LIB=$LIBS
-    ])
-  ]
+  [AC_SEARCH_LIBS([crypt], [crypt], [
+    AC_DEFINE([HAVE_CRYPT], [1], [crypt])
+    AC_CHECK_HEADERS([crypt.h])
+    CRYPT_LIB=$LIBS
+    found_crypt=crypt
+  ])]
 )
 LIBS=$save_LIBS
 AC_SUBST([CRYPT_LIB])
+
+AC_MSG_CHECKING([crypt_r/crypt support])
+AC_MSG_RESULT([$found_crypt])
 
 dnl check whether sendfilev needs -lsendfile
 AC_MSG_NOTICE([----------------------------------------])
