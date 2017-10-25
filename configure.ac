@@ -150,6 +150,29 @@ AC_CHECK_TYPES([socklen_t],
 dnl Checks for library functions.
 AC_FUNC_FORK
 
+dnl openssl on solaris needs -lsocket -lnsl
+AC_SEARCH_LIBS([socket], [socket])
+AC_SEARCH_LIBS([gethostbyname], [nsl socket])
+
+dnl On Haiku accept() and friends are in libnetwork
+AC_SEARCH_LIBS([accept], [network])
+
+dnl clock_gettime() needs -lrt with glibc < 2.17, and possibly other platforms
+AC_SEARCH_LIBS([clock_gettime], [rt])
+
+dnl need dlopen/-ldl to load plugins (when not on windows)
+save_LIBS=$LIBS
+LIBS=
+AC_SEARCH_LIBS([dlopen], [dl], [
+  AC_CHECK_HEADERS([dlfcn.h], [
+    DL_LIB=$LIBS
+    AC_DEFINE([HAVE_LIBDL], [1], [libdl])
+    AC_DEFINE([HAVE_DLFCN_H], [1])
+  ])
+])
+LIBS=$save_LIBS
+AC_SUBST([DL_LIB])
+
 dnl prepare pkg-config usage below
 if test -z "$PKG_CONFIG"; then
   AC_PATH_PROG([PKG_CONFIG], [pkg-config], [no])
@@ -407,30 +430,6 @@ if test "$WITH_ATTR" != no; then
     AC_MSG_ERROR([no backend found implementing extended attributes])
   fi
 fi
-
-dnl openssl on solaris needs -lsocket -lnsl
-AC_SEARCH_LIBS([socket], [socket])
-AC_SEARCH_LIBS([gethostbyname], [nsl socket])
-
-dnl On Haiku accept() and friends are in libnetwork
-AC_SEARCH_LIBS([accept], [network])
-
-dnl clock_gettime() needs -lrt with glibc < 2.17, and possibly other platforms
-AC_SEARCH_LIBS([clock_gettime], [rt])
-
-save_LIBS=$LIBS
-AC_SEARCH_LIBS([dlopen], [dl], [
-  AC_CHECK_HEADERS([dlfcn.h], [
-    if test "$ac_cv_search_dlopen" != no; then
-      test "$ac_cv_search_dlopen" = "none required" || DL_LIB="$ac_cv_search_dlopen"
-    fi
-
-    AC_DEFINE([HAVE_LIBDL], [1], [libdl])
-    AC_DEFINE([HAVE_DLFCN_H], [1])
-  ])
-])
-LIBS=$save_LIBS
-AC_SUBST([DL_LIB])
 
 dnl Check for valgrind
 AC_MSG_NOTICE([----------------------------------------])
