@@ -1293,6 +1293,8 @@ do_build="\
   mod_flv_streaming \
   mod_indexfile \
   mod_proxy \
+  mod_redirect \
+  mod_rewrite \
   mod_rrdtool \
   mod_scgi \
   mod_secdownload \
@@ -1308,152 +1310,75 @@ do_build="\
   mod_wstunnel \
 "
 
-plugins="mod_rewrite mod_redirect"
-features="regex-conditionals"
-if test -n "$PCRE_LIB"; then
-  do_build="$do_build $plugins"
-  enable_feature="$features"
-else
-  no_build="$no_build $plugins"
-  disable_feature="$features"
-fi
-
-plugins="mod_trigger_b4_dl"
-if test -n "$PCRE_LIB"; then
-  if test "$WITH_MEMCACHED" != no || test "$WITH_GDBM" != no; then
-    do_build="$do_build $plugins"
+lighty_track_feature() {
+  if eval "$3"; then
+    enable_feature="$enable_feature $1"
+    do_build="$do_build $2"
   else
-    no_build="$no_build $plugins"
+    disable_feature="$disable_feature $1"
+    no_build="$no_build $2"
   fi
-fi
+}
 
-plugins="mod_authn_mysql mod_mysql_vhost mod_vhostdb_mysql"
-if test -n "$MYSQL_LIBS"; then
-  do_build="$do_build $plugins"
-else
-  no_build="$no_build $plugins"
-fi
+lighty_track_feature "regex-conditionals" "" \
+  'test "$WITH_PCRE" != no'
 
-plugins="mod_vhostdb_pgsql"
-if test -n "$PGSQL_LIBS"; then
-  do_build="$do_build $plugins"
-else
-  no_build="$no_build $plugins"
-fi
+lighty_track_feature "storage-gdbm" "" \
+  'test "$WITH_GDBM" != no'
 
-plugins="mod_vhostdb_dbi"
-if test -n "$DBI_LIBS"; then
-  do_build="$do_build $plugins"
-else
-  no_build="$no_build $plugins"
-fi
+lighty_track_feature "storage-memcached" "" \
+  'test "$WITH_MEMCACHED" != no'
 
-plugins="mod_cml mod_magnet"
-if test -n "$LUA_LIBS"; then
-  do_build="$do_build $plugins"
-else
-  no_build="$no_build $plugins"
-fi
+lighty_track_feature "" "mod_trigger_b4_dl" \
+  'test "$BUILD_MOD_TRIGGER_B4_DL" != no'
 
-plugins="mod_geoip"
-if test -n "$GEOIP_LIB"; then
-  do_build="$do_build $plugins"
-else
-  no_build="$no_build $plugins"
-fi
+lighty_track_feature "mysql" "mod_authn_mysql mod_mysql_vhost mod_vhostdb_mysql" \
+  'test "$WITH_MYSQL" != no'
 
-features="storage-gdbm"
-if test -n "$GDBM_LIB"; then
-  enable_feature="$enable_feature $features"
-else
-  disable_feature="$disable_feature $features"
-fi
+lighty_track_feature "postgresql" "mod_vhostdb_pgsql" \
+  'test "$WITH_PGSQL" != no'
 
-features="storage-memcached"
-if test -n "$MEMCACHED_LIB"; then
-  enable_feature="$enable_feature $features"
-else
-  disable_feature="$disable_feature $features"
-fi
+lighty_track_feature "dbi" "mod_vhostdb_dbi" \
+  'test "$WITH_DBI" != no'
 
-features="compress-gzip compress-deflate"
-if test -n "$Z_LIB"; then
-  enable_feature="$enable_feature $features"
-else
-  disable_feature="$disable_feature $features"
-fi
+lighty_track_feature "lua" "mod_cml mod_magnet" \
+  'test "$WITH_LUA" != no'
 
-features="compress-bzip2"
-if test -n "$BZ_LIB"; then
-  enable_feature="$enable_feature $features"
-else
-  disable_feature="$disable_feature $features"
-fi
+lighty_track_feature "geoip" "mod_geoip" \
+  'test "$WITH_GEOIP" != no'
 
-plugins="mod_authn_gssapi"
-if test -n "$KRB5_LIB"; then
-  do_build="$do_build $plugins"
-else
-  no_build="$no_build $plugins"
-fi
+lighty_track_feature "compress-gzip compress-deflate" "" \
+  'test "$WITH_ZLIB" != no'
 
-plugins="mod_authn_ldap mod_vhostdb_ldap"
-if test -n "$LDAP_LIB"; then
-  do_build="$do_build $plugins"
-else
-  no_build="$no_build $plugins"
-fi
+lighty_track_feature "compress-bzip2" "" \
+  'test "$WITH_BZIP2" != no'
 
-features="network-openssl"
-if test -n "$SSL_LIB"; then
-  enable_feature="$enable_feature $features"
-else
-  disable_feature="$disable_feature $features"
-fi
+lighty_track_feature "kerberos" "mod_authn_gssapi" \
+  'test "$WITH_KRB5" != no'
 
-dnl no crypt call
-features="auth-crypt"
-if test "$ac_cv_search_crypt" = no; then
-  disable_feature="$disable_feature $features"
-else
-  enable_feature="$enable_feature $features"
-fi
+lighty_track_feature "ldap" "mod_authn_ldap mod_vhostdb_ldap" \
+  'test "$WITH_LDAP" != no'
 
-features="network-ipv6"
-if test "$ac_cv_ipv6_support" = yes; then
-  enable_feature="$enable_feature $features"
-else
-  disable_feature="$disable_feature $features"
-fi
+lighty_track_feature "network-openssl" "mod_openssl" \
+  'test "$WITH_OPENSSL" != no'
 
-features="large-files"
-if test "$enable_lfs" = yes; then
-  enable_feature="$enable_feature $features"
-else
-  disable_feature="$disable_feature $features"
-fi
+lighty_track_feature "auth-crypt" "" \
+  'test "$found_crypt" != no'
 
-features="stat-cache-fam"
-if test -n "$FAM_LIBS"; then
-  enable_feature="$enable_feature $features"
-else
-  disable_feature="$disable_feature $features"
-fi
+lighty_track_feature "network-ipv6" "" \
+  'test "$ac_cv_ipv6_support" != no'
 
-features="webdav-properties"
-if test -n "$XML_LIBS" && test -n "$SQLITE_LIBS"; then
-  enable_feature="$enable_feature $features"
-else
-  disable_feature="$disable_feature $features"
-fi
+lighty_track_feature "large-files" "" \
+  'test "$ENABLE_LFS" = yes'
 
-features="webdav-locks"
-if test -n "$UUID_LIBS"; then
-  enable_feature="$enable_feature $features"
-else
-  disable_feature="$disable_feature $features"
-fi
+lighty_track_feature "stat-cache-fam" "" \
+  'test "$WITH_FAM" != no'
 
+lighty_track_feature "webdav-properties" "" \
+  'test "$WITH_WEBDAV_PROPS" != no'
+
+lighty_track_feature "webdav-locks" "" \
+  'test "$WITH_WEBDAV_LOCKS" != no'
 
 dnl output
 
