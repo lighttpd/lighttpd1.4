@@ -130,6 +130,22 @@ class Autoconf:
 			if self.conf.CheckType(type, '#include <sys/types.h>'):
 				self.conf.env.Append(CPPFLAGS = [ '-DHAVE_' + underscorify(type) ])
 
+	def CheckParseConfig(self, *args, **kw):
+		try:
+			self.conf.env.ParseConfig(*args, **kw)
+			return True
+		except Exception as e:
+			print(e.message, file=sys.stderr)
+			return False
+
+	def CheckParseConfigForLib(self, lib, *args, **kw):
+		with self.restoreEnvLibs():
+			self.env['LIBS'] = []
+			if not self.CheckParseConfig(*args, **kw):
+				return False
+			self.env.Append(**{lib: self.env['LIBS']})
+			return True
+
 	@staticmethod
 	def __checkGmtOffInStructTm(context):
 		source = """
@@ -524,24 +540,11 @@ if 1:
 		)
 
 	if env['with_lua']:
-		def TryLua(autoconf, name):
-			with autoconf.restoreEnvLibs():
-				autoconf.env['LIBS'] = []
-				try:
-					print("Searching for lua: " + name + " >= 5.0")
-					autoconf.env.ParseConfig("pkg-config '" + name + " >= 5.0' --cflags --libs")
-				except Exception as e:
-					print("Failed: ", e, file = sys.stderr)
-					return False
-				autoconf.env.Append(
-					LIBLUA = autoconf.env['LIBS'],
-					CPPFLAGS = [ '-DHAVE_LUA_H' ],
-				)
-				return True
-
 		found_lua = False
 		for lua_name in ['lua5.3', 'lua-5.3', 'lua5.2', 'lua-5.2', 'lua5.1', 'lua-5.1', 'lua']:
-			if TryLua(autoconf, lua_name):
+			print("Searching for lua: " + lua_name + " >= 5.0")
+			if autoconf.CheckParseConfigForLib('LIBLUA', "pkg-config '" + lua_name + " >= 5.0' --cflags --libs"):
+				autoconf.env.Append(CPPFLAGS = [ '-DHAVE_LUA_H' ])
 				found_lua = True
 				break
 		if not found_lua:
@@ -557,13 +560,9 @@ if 1:
 
 	if env['with_mysql']:
 		mysql_config = autoconf.checkProgram('mysql', 'mysql_config')
-		with autoconf.restoreEnvLibs():
-			autoconf.env['LIBS'] = []
-			autoconf.env.ParseConfig(mysql_config + ' --cflags --libs')
-			autoconf.env.Append(
-				CPPFLAGS = [ '-DHAVE_MYSQL_H', '-DHAVE_LIBMYSQL' ],
-				LIBMYSQL = 'mysqlclient',
-			)
+		if not autoconf.CheckParseConfigForLib('LIBMYSQL', mysql_config + ' --cflags --libs'):
+			fail("Couldn't find mysql")
+		autoconf.env.Append(CPPFLAGS = [ '-DHAVE_MYSQL_H', '-DHAVE_LIBMYSQL' ])
 
 	if env['with_openssl']:
 		if not autoconf.CheckLibWithHeader('ssl', 'openssl/ssl.h', 'C'):
@@ -576,22 +575,14 @@ if 1:
 
 	if env['with_pcre']:
 		pcre_config = autoconf.checkProgram('pcre', 'pcre-config')
-		with autoconf.restoreEnvLibs():
-			autoconf.env['LIBS'] = []
-			autoconf.env.ParseConfig(pcre_config + ' --cflags --libs')
-			autoconf.env.Append(
-				CPPFLAGS = [ '-DHAVE_PCRE_H', '-DHAVE_LIBPCRE' ],
-				LIBPCRE = autoconf.env['LIBS'],
-			)
+		if not autoconf.CheckParseConfigForLib('LIBPCRE', pcre_config + ' --cflags --libs'):
+			fail("Couldn't find pcre")
+		autoconf.env.Append(CPPFLAGS = [ '-DHAVE_PCRE_H', '-DHAVE_LIBPCRE' ])
 
 	if env['with_pgsql']:
-		with autoconf.restoreEnvLibs():
-			autoconf.env['LIBS'] = []
-			autoconf.env.ParseConfig('pkg-config libpq --cflags --libs')
-			autoconf.env.Append(
-				CPPFLAGS = [ '-DHAVE_PGSQL_H', '-DHAVE_LIBPGSQL' ],
-				LIBPGSQL = 'pq',
-			)
+		if not autoconf.CheckParseConfigForLib('LIBPGSQL', 'pkg-config libpq --cflags --libs'):
+			fail("Couldn't find libpq")
+		autoconf.env.Append(CPPFLAGS = [ '-DHAVE_PGSQL_H', '-DHAVE_LIBPGSQL' ])
 
 	if env['with_sqlite3']:
 		if not autoconf.CheckLibWithHeader('sqlite3', 'sqlite3.h', 'C'):
@@ -611,13 +602,9 @@ if 1:
 
 	if env['with_xml']:
 		xml2_config = autoconf.checkProgram('xml', 'xml2-config')
-		with autoconf.restoreEnvLibs():
-			autoconf.env['LIBS'] = []
-			autoconf.env.ParseConfig(xml2_config + ' --cflags --libs')
-			autoconf.env.Append(
-				CPPFLAGS = [ '-DHAVE_LIBXML_H', '-DHAVE_LIBXML2' ],
-				LIBXML2 = autoconf.env['LIBS'],
-			)
+		if not autoconf.CheckParseConfigForLib('LIBXML2', xml2_config + ' --cflags --libs'):
+			fail("Couldn't find xml2")
+		autoconf.env.Append(CPPFLAGS = [ '-DHAVE_LIBXML_H', '-DHAVE_LIBXML2' ])
 
 	if env['with_zlib']:
 		if not autoconf.CheckLibWithHeader('z', 'zlib.h', 'C'):
