@@ -547,53 +547,62 @@ AC_ARG_WITH([openssl],
 AC_MSG_RESULT([$WITH_OPENSSL])
 
 if test "$WITH_OPENSSL" != no; then
-  use_openssl=yes
   if test "$WITH_OPENSSL" != yes; then
-    CPPFLAGS="$CPPFLAGS -I$WITH_OPENSSL/include"
-    LDFLAGS="$LDFLAGS -L$WITH_OPENSSL/lib"
+    openssl_append_CPPFLAGS=" -I$WITH_OPENSSL/include"
+    openssl_append_LDFLAGS=" -L$WITH_OPENSSL/lib"
   fi
-else
-  use_openssl=no
 fi
-AM_CONDITIONAL([BUILD_WITH_OPENSSL], [test "$WITH_OPENSSL" != no])
 
+AC_MSG_CHECKING([custom include directory for openssl])
 AC_ARG_WITH([openssl-includes],
   [AC_HELP_STRING([--with-openssl-includes=DIR], [OpenSSL includes])],
   [
-    use_openssl=yes
-    CPPFLAGS="$CPPFLAGS -I$withval"
-  ]
+    if test "$WITH_OPENSSL" = no; then
+      AC_MSG_ERROR([build --with-openssl to use --with-openssl-includes])
+    fi
+    openssl_append_CPPFLAGS=" -I$withval"
+    AC_MSG_RESULT([$withval])
+  ],
+  [AC_MSG_RESULT([no])]
 )
 
+AC_MSG_CHECKING([custom lib directory for openssl])
 AC_ARG_WITH([openssl-libs],
   [AC_HELP_STRING([--with-openssl-libs=DIR], [OpenSSL libraries])],
   [
-    use_openssl=yes
-    LDFLAGS="$LDFLAGS -L$withval"
-  ]
+    if test "$WITH_OPENSSL" = no; then
+      AC_MSG_ERROR([build --with-openssl to use --with-openssl-libs])
+    fi
+    openssl_append_LDFLAGS=" -L$withval"
+    AC_MSG_RESULT([$withval])
+  ],
+  [AC_MSG_RESULT([no])]
 )
 
-if test "$use_openssl" = yes; then
+AM_CONDITIONAL([BUILD_WITH_OPENSSL], [test "$WITH_OPENSSL" != no])
+
+if test "$WITH_OPENSSL" != no; then
   if test "$WITH_KRB5" != no; then
     AC_DEFINE([USE_OPENSSL_KERBEROS], [1], [with kerberos])
   fi
 
-  AC_CHECK_HEADERS([openssl/ssl.h])
-  OLDLIBS="$LIBS"
+  CPPFLAGS="${CPPFLAGS}${openssl_append_CPPFLAGS}"
+  LDFLAGS="${LDFLAGS}${openssl_append_LDFLAGS}"
+
+  AC_CHECK_HEADERS([openssl/ssl.h], [], [
+    AC_MSG_ERROR([openssl headers not found. install them or build without --with-openssl])
+  ])
   AC_CHECK_LIB([crypto], [BIO_f_base64],
-    [AC_CHECK_LIB([ssl], [SSL_new],
-      [
-        SSL_LIB="-lssl -lcrypto"
-        CRYPTO_LIB="-lcrypto"
-        AC_DEFINE([HAVE_LIBSSL], [], [Have libssl])
-      ],
-      [],
-      [ -lcrypto "$DL_LIB" ]
-    )],
-    [],
-    []
+    [CRYPTO_LIB="-lcrypto"],
+    [AC_MSG_ERROR([openssl crypto library not found. install it or build without --with-openssl])]
   )
-  LIBS="$OLDLIBS"
+  AC_CHECK_LIB([ssl], [SSL_new],
+    [SSL_LIB="-lssl -lcrypto"],
+    [AC_MSG_ERROR([openssl ssl library not found. install it or build without --with-openssl])],
+    [ -lcrypto "$DL_LIB" ]
+  )
+
+  AC_DEFINE([HAVE_LIBSSL], [], [Have libssl])
   AC_SUBST([SSL_LIB])
   AC_SUBST([CRYPTO_LIB])
 fi
