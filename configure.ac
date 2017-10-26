@@ -65,7 +65,6 @@ AC_PROG_CC_STDC
 AX_PROG_CC_FOR_BUILD
 AC_PROG_LD
 AC_PROG_INSTALL
-AC_PROG_AWK
 AC_PROG_CPP
 AC_PROG_MAKE_SET
 
@@ -1252,7 +1251,7 @@ if test "$extrawarnings" = true || test "$extrawarnings" = error; then
 fi
 
 dnl build version-id
-LIGHTTPD_VERSION_ID=`echo "$PACKAGE_VERSION" | $AWK -F '.' '{print "(" $1 " << 16 | " $2 " << 8 | " $3 ")"}'`
+LIGHTTPD_VERSION_ID=m4_format([0x%x%02x%02x], m4_unquote(m4_split(AC_PACKAGE_VERSION, [\.])))
 AC_DEFINE_UNQUOTED([LIGHTTPD_VERSION_ID], [$LIGHTTPD_VERSION_ID], [lighttpd-version-id])
 
 AC_CONFIG_FILES([\
