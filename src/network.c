@@ -146,6 +146,7 @@ static int network_server_init(server *srv, buffer *host_token, size_t sidx, int
 	specific_config *s = srv->config_storage[sidx];
 	socklen_t addr_len = sizeof(sock_addr);
 	sock_addr addr;
+	int set_v6only = 0;
 
 #ifdef __WIN32
 	int err;
@@ -197,6 +198,17 @@ static int network_server_init(server *srv, buffer *host_token, size_t sidx, int
 	} else if (0 != network_host_parse_addr(srv, &addr, &addr_len, host_token, s->use_ipv6)) {
 		return -1;
 	}
+
+      #ifdef HAVE_IPV6
+	if (*host != '\0' && AF_INET6 == addr.plain.sa_family) {
+		if (s->set_v6only) {
+			set_v6only = 1;
+		} else {
+			log_error_write(srv, __FILE__, __LINE__, "s", "warning: server.set-v6only will be removed soon, update your config to have different sockets for ipv4 and ipv6");
+		}
+	}
+      #endif
+
 	network_host_normalize_addr_str(host_token, &addr);
 	host = host_token->ptr;
 
@@ -286,17 +298,12 @@ static int network_server_init(server *srv, buffer *host_token, size_t sidx, int
 	}
 
 #ifdef HAVE_IPV6
-		if (AF_INET6 == srv_socket->addr.plain.sa_family
-		    && host != NULL) {
-			if (s->set_v6only) {
+		if (set_v6only && -1 == stdin_fd) {
 				int val = 1;
 				if (-1 == setsockopt(srv_socket->fd, IPPROTO_IPV6, IPV6_V6ONLY, &val, sizeof(val))) {
 					log_error_write(srv, __FILE__, __LINE__, "ss", "setsockopt(IPV6_V6ONLY) failed:", strerror(errno));
 					return -1;
 				}
-			} else {
-				log_error_write(srv, __FILE__, __LINE__, "s", "warning: server.set-v6only will be removed soon, update your config to have different sockets for ipv4 and ipv6");
-			}
 		}
 #endif
 
