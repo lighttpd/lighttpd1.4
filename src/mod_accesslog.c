@@ -645,10 +645,6 @@ SETDEFAULTS_FUNC(log_access_open) {
 	return HANDLER_GO_ON;
 }
 
-#ifndef O_LARGEFILE
-#define O_LARGEFILE 0
-#endif
-
 static void log_access_flush(server *srv, void *p_d) {
 	plugin_data *p = p_d;
 	size_t i;

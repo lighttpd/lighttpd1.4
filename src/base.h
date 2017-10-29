@@ -33,10 +33,6 @@ struct stat_cache;      /* declaration */
 # define O_BINARY 0
 #endif
 
-#ifndef O_LARGEFILE
-# define O_LARGEFILE 0
-#endif
-
 #ifndef SIZE_MAX
 # ifdef SIZE_T_MAX
 #  define SIZE_MAX SIZE_T_MAX
