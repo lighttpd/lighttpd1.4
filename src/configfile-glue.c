@@ -5,14 +5,12 @@
 #include "array.h"
 #include "log.h"
 #include "plugin.h"
+#include "sock_addr.h"
 
 #include "configfile.h"
 
 #include <string.h>
 #include <stdlib.h>
-#ifndef _WIN32
-#include <arpa/inet.h>
-#endif
 
 /**
  * like all glue code this file contains functions which
@@ -225,72 +223,22 @@ static const char* cond_result_to_string(cond_result_t cond_result) {
 
 static int config_addrstr_eq_remote_ip_mask(server *srv, const char *addrstr, int nm_bits, sock_addr *rmt) {
 	/* special-case 0 == nm_bits to mean "all bits of the address" in addrstr */
-	sock_addr val;
-#ifdef HAVE_INET_PTON
-	if (1 == inet_pton(AF_INET, addrstr, &val.ipv4.sin_addr))
-#else
-	if (INADDR_NONE != (val.ipv4.sin_addr = inet_addr(addrstr)))
-#endif
-	{
-		/* build netmask */
-		uint32_t nm;
+	sock_addr addr;
+	if (1 == sock_addr_inet_pton(&addr, addrstr, AF_INET, 0)) {
 		if (nm_bits > 32) {
 			log_error_write(srv, __FILE__, __LINE__, "sd", "ERROR: ipv4 netmask too large:", nm_bits);
 			return -1;
 		}
-		nm = htonl(~((1u << (32 - (0 != nm_bits ? nm_bits : 32))) - 1));
-
-		if (rmt->plain.sa_family == AF_INET) {
-			return ((val.ipv4.sin_addr.s_addr & nm) == (rmt->ipv4.sin_addr.s_addr & nm));
-#ifdef HAVE_IPV6
-		} else if (rmt->plain.sa_family == AF_INET6
-			   && IN6_IS_ADDR_V4MAPPED(&rmt->ipv6.sin6_addr)) {
-		      #ifdef s6_addr32
-			in_addr_t x = rmt->ipv6.sin6_addr.s6_addr32[3];
-		      #else
-			in_addr_t x;
-			memcpy(&x, rmt->ipv6.sin6_addr.s6_addr+12, sizeof(in_addr_t));
-		      #endif
-			return ((val.ipv4.sin_addr.s_addr & nm) == (x & nm));
-#endif
-		} else {
-			return 0;
-		}
-#if defined(HAVE_INET_PTON) && defined(HAVE_IPV6)
-	} else if (1 == inet_pton(AF_INET6, addrstr, &val.ipv6.sin6_addr)) {
+	} else if (1 == sock_addr_inet_pton(&addr, addrstr, AF_INET6, 0)) {
 		if (nm_bits > 128) {
 			log_error_write(srv, __FILE__, __LINE__, "sd", "ERROR: ipv6 netmask too large:", nm_bits);
 			return -1;
 		}
-		if (rmt->plain.sa_family == AF_INET6) {
-			uint8_t *a = (uint8_t *)&val.ipv6.sin6_addr.s6_addr[0];
-			uint8_t *b = (uint8_t *)&rmt->ipv6.sin6_addr.s6_addr[0];
-			int match;
-			do {
-				match = (nm_bits >= 8)
-				  ? *a++ == *b++
-				  : (*a >> (8 - nm_bits)) == (*b >> (8 - nm_bits));
-			} while (match && (nm_bits -= 8) > 0);
-			return match;
-		} else if (rmt->plain.sa_family == AF_INET
-			   && IN6_IS_ADDR_V4MAPPED(&val.ipv6.sin6_addr)) {
-			uint32_t nm =
-			  nm_bits < 128 ? htonl(~(~0u >> (nm_bits > 96 ? nm_bits - 96 : 0))) : ~0u;
-		      #ifdef s6_addr32
-			in_addr_t x = val.ipv6.sin6_addr.s6_addr32[3];
-		      #else
-			in_addr_t x;
-			memcpy(&x, val.ipv6.sin6_addr.s6_addr+12, sizeof(in_addr_t));
-		      #endif
-			return ((x & nm) == (rmt->ipv4.sin_addr.s_addr & nm));
-		} else {
-			return 0;
-		}
-#endif
 	} else {
 		log_error_write(srv, __FILE__, __LINE__, "ss", "ERROR: ip addr is invalid:", addrstr);
 		return -1;
 	}
+	return sock_addr_is_addr_eq_bits(&addr, rmt, nm_bits);
 }
 
 static int config_addrbuf_eq_remote_ip_mask(server *srv, buffer *string, char *nm_slash, sock_addr *rmt) {
@@ -420,18 +368,7 @@ static cond_result_t config_check_cond_nocache(server *srv, connection *con, dat
 			switch(dc->cond) {
 			case CONFIG_COND_NE:
 			case CONFIG_COND_EQ:
-				switch (srv_sock->addr.plain.sa_family) {
-				  case AF_INET:
-					port = ntohs(srv_sock->addr.ipv4.sin_port);
-					break;
-				 #ifdef HAVE_IPV6
-				  case AF_INET6:
-					port = ntohs(srv_sock->addr.ipv6.sin6_port);
-					break;
-				 #endif
-				  default:
-					port = 0;
-				}
+				port = sock_addr_get_port(&srv_sock->addr);
 				if (0 == port) break;
 				ck_colon = strchr(dc->string->ptr, ':');
 				val_colon = strchr(l->ptr, ':');

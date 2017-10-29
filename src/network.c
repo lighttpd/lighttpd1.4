@@ -5,12 +5,10 @@
 #include "log.h"
 #include "connections.h"
 #include "plugin.h"
-#include "joblist.h"
 #include "configfile.h"
-#include "inet_ntop_cache.h"
+#include "sock_addr.h"
 
 #include "network_backends.h"
-#include "sys-mmap.h"
 #include "sys-socket.h"
 
 #include <sys/types.h>
@@ -71,22 +69,7 @@ static handler_t network_server_handle_fdevent(server *srv, void *context, int r
 
 static void network_host_normalize_addr_str(buffer *host, sock_addr *addr) {
     buffer_reset(host);
-    if (addr->plain.sa_family == AF_INET6)
-        buffer_append_string_len(host, CONST_STR_LEN("["));
-    sock_addr_inet_ntop_append_buffer(host, addr);
-    if (addr->plain.sa_family == AF_INET6)
-        buffer_append_string_len(host, CONST_STR_LEN("]"));
-    if (addr->plain.sa_family != AF_UNIX) {
-      #ifdef HAVE_IPV6
-        unsigned short port = (addr->plain.sa_family == AF_INET)
-          ? ntohs(addr->ipv4.sin_port)
-          : ntohs(addr->ipv6.sin6_port);
-      #else
-        unsigned short port = ntohs(addr->ipv4.sin_port);
-      #endif
-        buffer_append_string_len(host, CONST_STR_LEN(":"));
-        buffer_append_int(host, (int)port);
-    }
+    sock_addr_stringify_append_buffer(host, addr);
 }
 
 static int network_host_parse_addr(server *srv, sock_addr *addr, socklen_t *addr_len, buffer *host, int use_ipv6) {
@@ -146,6 +129,7 @@ static int network_server_init(server *srv, buffer *host_token, size_t sidx, int
 	specific_config *s = srv->config_storage[sidx];
 	socklen_t addr_len = sizeof(sock_addr);
 	sock_addr addr;
+	int family = 0;
 	int set_v6only = 0;
 
 #ifdef __WIN32
@@ -199,8 +183,10 @@ static int network_server_init(server *srv, buffer *host_token, size_t sidx, int
 		return -1;
 	}
 
+	family = sock_addr_get_family(&addr);
+
       #ifdef HAVE_IPV6
-	if (*host != '\0' && AF_INET6 == addr.plain.sa_family) {
+	if (*host != '\0' && AF_INET6 == family) {
 		if (s->set_v6only) {
 			set_v6only = 1;
 		} else {
@@ -256,10 +242,10 @@ static int network_server_init(server *srv, buffer *host_token, size_t sidx, int
 		}
 	} else
 #ifdef HAVE_SYS_UN_H
-	if (AF_UNIX == srv_socket->addr.plain.sa_family) {
+	if (AF_UNIX == family) {
 		/* check if the socket exists and try to connect to it. */
 		force_assert(host); /*(static analysis hint)*/
-		if (-1 == (srv_socket->fd = fdevent_socket_cloexec(srv_socket->addr.plain.sa_family, SOCK_STREAM, 0))) {
+		if (-1 == (srv_socket->fd = fdevent_socket_cloexec(AF_UNIX, SOCK_STREAM, 0))) {
 			log_error_write(srv, __FILE__, __LINE__, "ss", "socket failed:", strerror(errno));
 			return -1;
 		}
@@ -291,7 +277,7 @@ static int network_server_init(server *srv, buffer *host_token, size_t sidx, int
 	} else
 #endif
 	{
-		if (-1 == (srv_socket->fd = fdevent_socket_nb_cloexec(srv_socket->addr.plain.sa_family, SOCK_STREAM, IPPROTO_TCP))) {
+		if (-1 == (srv_socket->fd = fdevent_socket_nb_cloexec(family, SOCK_STREAM, IPPROTO_TCP))) {
 			log_error_write(srv, __FILE__, __LINE__, "ss", "socket failed:", strerror(errno));
 			return -1;
 		}
@@ -315,7 +301,7 @@ static int network_server_init(server *srv, buffer *host_token, size_t sidx, int
 		return -1;
 	}
 
-	if (srv_socket->addr.plain.sa_family != AF_UNIX) {
+	if (family != AF_UNIX) {
 		if (fdevent_set_tcp_nodelay(srv_socket->fd, 1) < 0) {
 			log_error_write(srv, __FILE__, __LINE__, "ss", "setsockopt(TCP_NODELAY) failed:", strerror(errno));
 			return -1;
@@ -330,7 +316,7 @@ static int network_server_init(server *srv, buffer *host_token, size_t sidx, int
 	}
 
 	if (-1 != stdin_fd) { } else
-	if (srv_socket->addr.plain.sa_family == AF_UNIX && !buffer_string_is_empty(s->socket_perms)) {
+	if (AF_UNIX == family && !buffer_string_is_empty(s->socket_perms)) {
 		mode_t m = 0;
 		for (char *str = s->socket_perms->ptr; *str; ++str) {
 			m <<= 3;

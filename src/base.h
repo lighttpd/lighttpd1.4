@@ -23,7 +23,7 @@
 #include "array.h"
 #include "chunk.h"
 #include "keyvalue.h"
-#include "sys-socket.h"
+#include "sock_addr.h"
 #include "etag.h"
 
 struct fdevents;        /* declaration */
@@ -103,17 +103,6 @@ typedef struct {
 	char *value;
 } request_handler;
 
-
-union sock_addr {
-#ifdef HAVE_IPV6
-	struct sockaddr_in6 ipv6;
-#endif
-	struct sockaddr_in ipv4;
-#ifdef HAVE_SYS_UN_H
-	struct sockaddr_un un;
-#endif
-	struct sockaddr plain;
-};
 
 /* fcgi_response_header contains ... */
 #define HTTP_STATUS         BV(0)

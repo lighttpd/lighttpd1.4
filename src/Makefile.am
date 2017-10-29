@@ -67,7 +67,7 @@ common_src=base64.c buffer.c log.c \
 	fdevent_solaris_devpoll.c fdevent_solaris_port.c \
 	fdevent_freebsd_kqueue.c \
 	data_config.c \
-	inet_ntop_cache.c crc32.c \
+	crc32.c \
 	connections-glue.c \
 	configfile-glue.c \
 	http-header-glue.c \
@@ -75,10 +75,13 @@ common_src=base64.c buffer.c log.c \
 	http_vhostdb.c \
 	rand.c \
 	request.c \
+	sock_addr.c \
 	splaytree.c status_counter.c \
 	safe_memclear.c
 
-src = server.c response.c connections.c network.c \
+src = server.c response.c connections.c \
+	inet_ntop_cache.c \
+	network.c \
 	network_write.c network_linux_sendfile.c \
 	network_write_mmap.c network_write_no_mmap.c \
 	network_freebsd_sendfile.c network_writev.c \
@@ -389,7 +392,7 @@ hdr = server.h base64.h buffer.h network.h log.h keyvalue.h \
 	rand.h \
 	sys-endian.h sys-mmap.h sys-socket.h sys-strings.h \
 	mod_cml.h mod_cml_funcs.h \
-	safe_memclear.h splaytree.h proc_open.h status_counter.h \
+	safe_memclear.h sock_addr.h splaytree.h proc_open.h status_counter.h \
 	mod_magnet_cache.h
 
 
@@ -513,7 +516,7 @@ test_buffer_LDADD = $(LIBUNWIND_LIBS)
 test_base64_SOURCES = test_base64.c base64.c buffer.c
 test_base64_LDADD = $(LIBUNWIND_LIBS)
 
-test_configfile_SOURCES = test_configfile.c buffer.c array.c data_string.c keyvalue.c vector.c log.c
+test_configfile_SOURCES = test_configfile.c buffer.c array.c data_string.c keyvalue.c vector.c log.c sock_addr.c
 test_configfile_LDADD = $(PCRE_LIB) $(LIBUNWIND_LIBS)
 
 noinst_HEADERS   = $(hdr)

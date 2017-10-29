@@ -4,7 +4,7 @@
 #include "log.h"
 #include "buffer.h"
 #include "request.h"
-#include "inet_ntop_cache.h"
+#include "sock_addr.h"
 
 #include "plugin.h"
 
@@ -1403,10 +1403,8 @@ static int mod_extforward_hap_PROXY_v2 (connection * const con,
 
     switch (hdr->v2.fam) {
       case 0x11:  /* TCPv4 */
-        memset(&con->dst_addr.ipv4, 0, sizeof(struct sockaddr_in));
-        con->dst_addr.ipv4.sin_family      = AF_INET;
-        con->dst_addr.ipv4.sin_port        = hdr->v2.addr.ip4.src_port;
-        con->dst_addr.ipv4.sin_addr.s_addr = hdr->v2.addr.ip4.src_addr;
+        sock_addr_assign(&con->dst_addr, AF_INET, hdr->v2.addr.ip4.src_port,
+                                                 &hdr->v2.addr.ip4.src_addr);
         sock_addr_inet_ntop_copy_buffer(con->dst_addr_buf, &con->dst_addr);
        #if 0
         ((struct sockaddr_in *)&by)->sin_family = AF_INET;
@@ -1419,10 +1417,8 @@ static int mod_extforward_hap_PROXY_v2 (connection * const con,
         break;
      #ifdef HAVE_IPV6
       case 0x21:  /* TCPv6 */
-        memset(&con->dst_addr.ipv6, 0, sizeof(struct sockaddr_in6));
-        con->dst_addr.ipv6.sin6_family      = AF_INET6;
-        con->dst_addr.ipv6.sin6_port        = hdr->v2.addr.ip6.src_port;
-        memcpy(&con->dst_addr.ipv6.sin6_addr, hdr->v2.addr.ip6.src_addr, 16);
+        sock_addr_assign(&con->dst_addr, AF_INET6, hdr->v2.addr.ip6.src_port,
+                                                  &hdr->v2.addr.ip6.src_addr);
         sock_addr_inet_ntop_copy_buffer(con->dst_addr_buf, &con->dst_addr);
        #if 0
         ((struct sockaddr_in6 *)&by)->sin6_family = AF_INET6;
@@ -1441,9 +1437,7 @@ static int mod_extforward_hap_PROXY_v2 (connection * const con,
             char *z = memchr(src_addr, '\0', UNIX_PATH_MAX);
             if (NULL == z) return -1; /* invalid addr; too long */
             len = (uint32_t)(z - src_addr + 1); /*(+1 for '\0')*/
-            memset(&con->dst_addr.un, 0, sizeof(struct sockaddr_un));
-            con->dst_addr.un.sun_family = AF_UNIX;
-            memcpy(&con->dst_addr.un.sun_path, src_addr, len);
+            sock_addr_assign(&con->dst_addr, AF_UNIX, 0, src_addr);
             buffer_copy_string_len(con->dst_addr_buf, src_addr, len);
         }
        #if 0 /*(dst_addr should be identical to src_addr for AF_UNIX)*/

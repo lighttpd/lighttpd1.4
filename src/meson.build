@@ -550,7 +550,6 @@ common_src = [
 	'http_chunk.c',
 	'http_vhostdb.c',
 	'http-header-glue.c',
-	'inet_ntop_cache.c',
 	'joblist.c',
 	'keyvalue.c',
 	'log.c',
@@ -558,6 +557,7 @@ common_src = [
 	'plugin.c',
 	'rand.c',
 	'safe_memclear.c',
+	'sock_addr.c',
 	'splaytree.c',
 	'stat_cache.c',
 	'status_counter.c',
@@ -570,6 +570,7 @@ endif
 main_src = [
 	'configfile.c',
 	'connections.c',
+	'inet_ntop_cache.c',
 	'network_darwin_sendfile.c',
 	'network_freebsd_sendfile.c',
 	'network_linux_sendfile.c',

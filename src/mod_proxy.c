@@ -7,10 +7,10 @@
 #include "base.h"
 #include "array.h"
 #include "buffer.h"
-#include "inet_ntop_cache.h"
 #include "keyvalue.h"
 #include "log.h"
 #include "plugin.h"
+#include "sock_addr.h"
 #include "status_counter.h"
 
 /**
@@ -572,6 +572,7 @@ static void proxy_set_Forwarded(connection *con, const unsigned int flags) {
     }
 
     if (flags & PROXY_FORWARDED_FOR) {
+        int family = sock_addr_get_family(&con->dst_addr);
         buffer_append_string_len(ds->value, CONST_STR_LEN("for="));
         if (NULL != dsfor) {
             /* over-simplified test expecting only IPv4 or IPv6 addresses,
@@ -587,16 +588,14 @@ static void proxy_set_Forwarded(connection *con, const unsigned int flags) {
               ds->value, CONST_BUF_LEN(dsfor->value));
             if (ipv6) buffer_append_string_len(ds->value, CONST_STR_LEN("]"));
             buffer_append_string_len(ds->value, CONST_STR_LEN("\""));
-        } else if (con->dst_addr.plain.sa_family == AF_INET) {
+        } else if (family == AF_INET) {
             /*(Note: if :port is added, then must be quoted-string:
              * e.g. for="...:port")*/
             buffer_append_string_buffer(ds->value, con->dst_addr_buf);
-      #ifdef HAVE_IPV6
-        } else if (con->dst_addr.plain.sa_family == AF_INET6) {
+        } else if (family == AF_INET6) {
             buffer_append_string_len(ds->value, CONST_STR_LEN("\"["));
             buffer_append_string_buffer(ds->value, con->dst_addr_buf);
             buffer_append_string_len(ds->value, CONST_STR_LEN("]\""));
-      #endif
         } else {
             buffer_append_string_len(ds->value, CONST_STR_LEN("\""));
             buffer_append_string_backslash_escaped(
@@ -607,39 +606,30 @@ static void proxy_set_Forwarded(connection *con, const unsigned int flags) {
     }
 
     if (flags & PROXY_FORWARDED_BY) {
+        int family = sock_addr_get_family(&con->srv_socket->addr);
         /* Note: getsockname() and inet_ntop() are expensive operations.
          * (recommendation: do not to enable by=... unless required)
          * future: might use con->srv_socket->srv_token if addr is not
          *   INADDR_ANY or in6addr_any, but must omit optional :port
          *   from con->srv_socket->srv_token for consistency */
-        sock_addr *addr = &con->srv_socket->addr;
-        sock_addr addrbuf;
-        socklen_t addrlen = sizeof(addrbuf);
 
         if (semicolon) buffer_append_string_len(ds->value, CONST_STR_LEN(";"));
         buffer_append_string_len(ds->value, CONST_STR_LEN("by="));
         buffer_append_string_len(ds->value, CONST_STR_LEN("\""));
-        if (addr->plain.sa_family == AF_INET) {
-            if (0==getsockname(con->fd,(struct sockaddr *)&addrbuf,&addrlen)) {
-                sock_addr_inet_ntop_append_buffer(ds->value, &addrbuf);
-            }
-            buffer_append_string_len(ds->value, CONST_STR_LEN(":"));
-            buffer_append_int(ds->value, ntohs(addr->ipv4.sin_port));
-      #ifdef HAVE_IPV6
-        } else if (addr->plain.sa_family == AF_INET6) {
-            if (0 == getsockname(con->fd,(struct sockaddr *)&addrbuf,&addrlen)){
-                buffer_append_string_len(ds->value, CONST_STR_LEN("["));
-                sock_addr_inet_ntop_append_buffer(ds->value, &addrbuf);
-                buffer_append_string_len(ds->value, CONST_STR_LEN("]"));
-                buffer_append_string_len(ds->value, CONST_STR_LEN(":"));
-                buffer_append_int(ds->value, ntohs(addr->ipv6.sin6_port));
-            }
-      #endif
       #ifdef HAVE_SYS_UN_H
-        } else if (addr->plain.sa_family == AF_UNIX) {
+        /* special-case: might need to encode unix domain socket path */
+        if (family == AF_UNIX) {
             buffer_append_string_backslash_escaped(
               ds->value, CONST_BUF_LEN(con->srv_socket->srv_token));
+        }
+        else
       #endif
+        {
+            sock_addr addr;
+            socklen_t addrlen = sizeof(addr);
+            if (0 == getsockname(con->fd,(struct sockaddr *)&addr, &addrlen)) {
+                sock_addr_stringify_append_buffer(ds->value, &addr);
+            }
         }
         buffer_append_string_len(ds->value, CONST_STR_LEN("\""));
         semicolon = 1;

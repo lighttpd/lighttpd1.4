@@ -23,8 +23,8 @@
 #include "buffer.h"
 #include "crc32.h"
 #include "fdevent.h"
-#include "inet_ntop_cache.h"
 #include "log.h"
+#include "sock_addr.h"
 
 
 
@@ -397,7 +397,7 @@ static int gw_proc_sockaddr_init(server *srv, gw_host *host, gw_proc *proc) {
             /* overwrite host->host buffer with IP addr string so that
              * any further use of gw_host does not block on DNS lookup */
             sock_addr_inet_ntop_copy_buffer(host->host, &addr);
-            host->family = addr.plain.sa_family;
+            host->family = sock_addr_get_family(&addr);
         }
         buffer_copy_string_len(proc->connection_name, CONST_STR_LEN("tcp:"));
         buffer_append_string_buffer(proc->connection_name, host->host);

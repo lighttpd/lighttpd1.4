@@ -16,8 +16,9 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <netinet/tcp.h>
+#ifdef HAVE_SYS_UN_H
 #include <sys/un.h>
-#include <arpa/inet.h>
+#endif
 
 #endif
 

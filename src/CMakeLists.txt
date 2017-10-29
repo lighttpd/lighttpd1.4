@@ -555,12 +555,13 @@ set(COMMON_SRC
 	fdevent_solaris_devpoll.c fdevent_solaris_port.c
 	fdevent_freebsd_kqueue.c
 	data_config.c
-	inet_ntop_cache.c crc32.c
+	crc32.c
 	connections-glue.c
 	configfile-glue.c
 	http-header-glue.c
 	http_auth.c
 	http_vhostdb.c
+	sock_addr.c
 	splaytree.c
 	rand.c
 	status_counter.c safe_memclear.c
@@ -587,6 +588,7 @@ add_executable(lighttpd
 	server.c
 	response.c
 	connections.c
+	inet_ntop_cache.c
 	network.c
 	network_darwin_sendfile.c
 	network_freebsd_sendfile.c

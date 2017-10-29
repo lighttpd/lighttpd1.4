@@ -960,7 +960,7 @@ connection *connection_accept(server *srv, server_socket *srv_socket) {
 		}
 		return NULL;
 	} else {
-		if (cnt_addr.plain.sa_family != AF_UNIX) {
+		if (sock_addr_get_family(&cnt_addr) != AF_UNIX) {
 			network_accept_tcp_nagle_disable(cnt);
 		}
 		return connection_accepted(srv, srv_socket, &cnt_addr, cnt);

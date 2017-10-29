@@ -14,6 +14,7 @@
 #include "http_vhostdb.h"
 #include "fdevent.h"
 #include "connections.h"
+#include "sock_addr.h"
 #include "stat_cache.h"
 #include "plugin.h"
 #include "joblist.h"
@@ -428,36 +429,12 @@ static server_socket * server_oneshot_getsock(server *srv, sock_addr *cnt_addr) 
 	size_t i;
 	for (i = 0; i < srv->srv_sockets.used; ++i) {
 		srv_socket = srv->srv_sockets.ptr[i];
-		if (cnt_addr->plain.sa_family != srv_socket->addr.plain.sa_family) continue;
-		switch (cnt_addr->plain.sa_family) {
-		case AF_INET:
-			if (srv_socket->addr.ipv4.sin_port != cnt_addr->ipv4.sin_port) continue;
-			if (srv_socket->addr.ipv4.sin_addr.s_addr == cnt_addr->ipv4.sin_addr.s_addr) {
-				return srv_socket;
-			}
-			if (srv_socket->addr.ipv4.sin_addr.s_addr == htonl(INADDR_ANY)) {
-				srv_socket_wild = srv_socket;
-			}
-			continue;
-		#ifdef HAVE_IPV6
-		case AF_INET6:
-			if (srv_socket->addr.ipv6.sin6_port != cnt_addr->ipv6.sin6_port) continue;
-			if (0 == memcmp(&srv_socket->addr.ipv6.sin6_addr, &cnt_addr->ipv6.sin6_addr, sizeof(struct in6_addr))) {
-				return srv_socket;
-			}
-			if (0 == memcmp(&srv_socket->addr.ipv6.sin6_addr, &in6addr_any, sizeof(struct in6_addr))) {
-				srv_socket_wild = srv_socket;
-			}
-			continue;
-		#endif
-		#ifdef HAVE_SYS_UN_H
-		case AF_UNIX:
-			if (0 == strcmp(srv_socket->addr.un.sun_path, cnt_addr->un.sun_path)) {
-				return srv_socket;
-			}
-			continue;
-		#endif
-		default: continue;
+		if (!sock_addr_is_port_eq(&srv_socket->addr,cnt_addr)) continue;
+		if (sock_addr_is_addr_eq(&srv_socket->addr,cnt_addr)) return srv_socket;
+
+		if (NULL != srv_socket_wild) continue;
+		if (sock_addr_is_addr_wildcard(&srv_socket->addr)) {
+			srv_socket_wild = srv_socket;
 		}
 	}
 
@@ -524,7 +501,7 @@ static int server_oneshot_init(server *srv, int fd) {
 		return 0;
 	}
 
-	if (cnt_addr.plain.sa_family != AF_UNIX) {
+	if (sock_addr_get_family(&cnt_addr) != AF_UNIX) {
 		network_accept_tcp_nagle_disable(fd);
 	}
 

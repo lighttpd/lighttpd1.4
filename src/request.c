@@ -3,7 +3,7 @@
 #include "request.h"
 #include "keyvalue.h"
 #include "log.h"
-#include "inet_ntop_cache.h"
+#include "sock_addr.h"
 
 #include <sys/stat.h>
 

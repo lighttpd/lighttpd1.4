@@ -325,7 +325,7 @@ int connection_write_chunkqueue(server *srv, connection *con, chunkqueue *cq, of
 	 * and only if TCP socket
 	 */
 	if (cq->first && cq->first->next) {
-		const int sa_family = con->srv_socket->addr.plain.sa_family;
+		const int sa_family = sock_addr_get_family(&con->srv_socket->addr);
 		if (sa_family == AF_INET || sa_family == AF_INET6) {
 			chunk *c = cq->first;
 			while (c->type == MEM_CHUNK && NULL != (c = c->next)) ;

@@ -7,8 +7,8 @@
 #include "log.h"
 #include "etag.h"
 #include "http_chunk.h"
-#include "inet_ntop_cache.h"
 #include "response.h"
+#include "sock_addr.h"
 #include "stat_cache.h"
 
 #include <string.h>
@@ -1321,13 +1321,9 @@ int http_cgi_headers (server *srv, connection *con, http_cgi_opts *opts, http_cg
     const char *s;
     size_t n;
     char buf[LI_ITOSTRING_LENGTH];
-  #ifdef HAVE_IPV6
-    char b2[INET6_ADDRSTRLEN + 1];
-  #else
-    char b2[INET_ADDRSTRLEN + 1];
-  #endif
     sock_addr *addr;
     sock_addr addrbuf;
+    char b2[INET6_ADDRSTRLEN + 1];
 
     /* (CONTENT_LENGTH must be first for SCGI) */
     if (!opts->authorizer) {
@@ -1466,23 +1462,9 @@ int http_cgi_headers (server *srv, connection *con, http_cgi_opts *opts, http_cg
     rc |= cb(vdata, CONST_STR_LEN("SERVER_PORT"), buf, strlen(buf));
 
     switch (addr->plain.sa_family) {
-  #ifdef HAVE_IPV6
-    case AF_INET6:
-        if (0 ==memcmp(&addr->ipv6.sin6_addr,&in6addr_any,sizeof(in6addr_any))){
-            socklen_t addrlen = sizeof(addrbuf);
-            if (0 == getsockname(con->fd,(struct sockaddr *)&addrbuf,&addrlen)){
-                addr = &addrbuf;
-            } else {
-                s = "";
-                break;
-            }
-        }
-        s = sock_addr_inet_ntop(addr, b2, sizeof(b2)-1);
-        if (NULL == s) s = "";
-        break;
-  #endif
     case AF_INET:
-        if (srv_sock->addr.ipv4.sin_addr.s_addr == INADDR_ANY) {
+    case AF_INET6:
+        if (sock_addr_is_addr_wildcard(addr)) {
             socklen_t addrlen = sizeof(addrbuf);
             if (0 == getsockname(con->fd,(struct sockaddr *)&addrbuf,&addrlen)){
                 addr = &addrbuf;
