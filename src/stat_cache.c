@@ -31,11 +31,6 @@
 # define lstat stat
 #endif
 
-#if 0
-/* enables debug code for testing if all nodes in the stat-cache as accessable */
-#define DEBUG_STAT_CACHE
-#endif
-
 /*
  * stat-cache
  *
@@ -83,17 +78,6 @@ typedef struct {
  * - if we don't have a stat-cache entry for a directory, release it from the monitor
  */
 
-#ifdef DEBUG_STAT_CACHE
-typedef struct {
-	int *ptr;
-
-	size_t used;
-	size_t size;
-} fake_keys;
-
-static fake_keys ctrl;
-#endif
-
 typedef struct stat_cache {
 	splay_tree *files; /* the nodes of the tree are stat_cache_entry's */
 
@@ -123,13 +107,7 @@ stat_cache *stat_cache_init(server *srv) {
 
 #ifdef HAVE_FAM_H
 	sc->fam_fcce_ndx = -1;
-#endif
 
-#ifdef DEBUG_STAT_CACHE
-	ctrl.size = 0;
-#endif
-
-#ifdef HAVE_FAM_H
 	/* setup FAM */
 	if (srv->srvconf.stat_cache_engine == STAT_CACHE_ENGINE_FAM) {
 		if (0 != FAMOpen2(&sc->fam, "lighttpd")) {
@@ -453,10 +431,6 @@ handler_t stat_cache_get_entry(server *srv, connection *con, buffer *name, stat_
 	struct stat st;
 	int fd;
 	struct stat lst;
-#ifdef DEBUG_STAT_CACHE
-	size_t i;
-#endif
-
 	int file_ndx;
 
 	*ret_sce = NULL;
@@ -473,18 +447,7 @@ handler_t stat_cache_get_entry(server *srv, connection *con, buffer *name, stat_
 	file_ndx = hashme(sc->hash_key);
 	sc->files = splaytree_splay(sc->files, file_ndx);
 
-#ifdef DEBUG_STAT_CACHE
-	for (i = 0; i < ctrl.used; i++) {
-		if (ctrl.ptr[i] == file_ndx) break;
-	}
-#endif
-
 	if (sc->files && (sc->files->key == file_ndx)) {
-#ifdef DEBUG_STAT_CACHE
-		/* it was in the cache */
-		force_assert(i < ctrl.used);
-#endif
-
 		/* we have seen this file already and
 		 * don't stat() it again in the same second */
 
@@ -503,14 +466,6 @@ handler_t stat_cache_get_entry(server *srv, connection *con, buffer *name, stat_
 			/* collision, forget about the entry */
 			sce = NULL;
 		}
-	} else {
-#ifdef DEBUG_STAT_CACHE
-		if (i != ctrl.used) {
-			log_error_write(srv, __FILE__, __LINE__, "xSB",
-				file_ndx, "was already inserted but not found in cache, ", name);
-		}
-		force_assert(i == ctrl.used);
-#endif
 	}
 
 #ifdef HAVE_FAM_H
@@ -589,21 +544,6 @@ handler_t stat_cache_get_entry(server *srv, connection *con, buffer *name, stat_
 
 			sc->files = splaytree_insert(sc->files, file_ndx, sce);
 			force_assert(osize + 1 == splaytree_size(sc->files));
-
-#ifdef DEBUG_STAT_CACHE
-			if (ctrl.size == 0) {
-				ctrl.size = 16;
-				ctrl.used = 0;
-				ctrl.ptr = malloc(ctrl.size * sizeof(*ctrl.ptr));
-				force_assert(NULL != ctrl.ptr);
-			} else if (ctrl.size == ctrl.used) {
-				ctrl.size += 16;
-				ctrl.ptr = realloc(ctrl.ptr, ctrl.size * sizeof(*ctrl.ptr));
-				force_assert(NULL != ctrl.ptr);
-			}
-
-			ctrl.ptr[ctrl.used++] = file_ndx;
-#endif
 		}
 		force_assert(sc->files);
 		force_assert(sc->files->data == sce);
@@ -631,10 +571,6 @@ handler_t stat_cache_get_entry(server *srv, connection *con, buffer *name, stat_
 	 */
 	if (!con->conf.follow_symlink) {
 		if (stat_cache_lstat(srv, name, &lst)  == 0) {
-#ifdef DEBUG_STAT_CACHE
-				log_error_write(srv, __FILE__, __LINE__, "sb",
-						"found symlink", name);
-#endif
 				sce->is_symlink = 1;
 		}
 
@@ -652,21 +588,10 @@ handler_t stat_cache_get_entry(server *srv, connection *con, buffer *name, stat_
 			while ((s_cur = strrchr(dname->ptr, '/'))) {
 				buffer_string_set_length(dname, s_cur - dname->ptr);
 				if (dname->ptr == s_cur) {
-#ifdef DEBUG_STAT_CACHE
-					log_error_write(srv, __FILE__, __LINE__, "s", "reached /");
-#endif
 					break;
 				}
-#ifdef DEBUG_STAT_CACHE
-				log_error_write(srv, __FILE__, __LINE__, "sbs",
-						"checking if", dname, "is a symlink");
-#endif
 				if (stat_cache_lstat(srv, dname, &lst)  == 0) {
 					sce->is_symlink = 1;
-#ifdef DEBUG_STAT_CACHE
-					log_error_write(srv, __FILE__, __LINE__, "sb",
-							"found symlink", dname);
-#endif
 					break;
 				};
 			};
@@ -831,24 +756,8 @@ int stat_cache_trigger_cleanup(server *srv) {
 		node = sc->files;
 
 		if (node && (node->key == ndx)) {
-#ifdef DEBUG_STAT_CACHE
-			size_t j;
-			int osize = splaytree_size(sc->files);
-			stat_cache_entry *sce = node->data;
-#endif
 			stat_cache_entry_free(node->data);
 			sc->files = splaytree_delete(sc->files, ndx);
-
-#ifdef DEBUG_STAT_CACHE
-			for (j = 0; j < ctrl.used; j++) {
-				if (ctrl.ptr[j] == ndx) {
-					ctrl.ptr[j] = ctrl.ptr[--ctrl.used];
-					break;
-				}
-			}
-
-			force_assert(osize - 1 == splaytree_size(sc->files));
-#endif
 		}
 	}
 
