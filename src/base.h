@@ -456,13 +456,7 @@ typedef struct {
 	unsigned short log_request_header_on_error;
 	unsigned short log_state_handling;
 
-	enum { STAT_CACHE_ENGINE_UNSET,
-			STAT_CACHE_ENGINE_NONE,
-			STAT_CACHE_ENGINE_SIMPLE
-#ifdef HAVE_FAM_H
-			, STAT_CACHE_ENGINE_FAM
-#endif
-	} stat_cache_engine;
+	int stat_cache_engine;
 	unsigned short enable_cores;
 	unsigned short reject_expect_100_with_417;
 	buffer *xattr_name;

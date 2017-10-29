@@ -6,6 +6,7 @@
 
 struct stat_cache;      /* declaration */
 
+int stat_cache_choose_engine (server *srv, const buffer *stat_cache_string);
 struct stat_cache *stat_cache_init(server *srv);
 void stat_cache_free(struct stat_cache *fc);
 

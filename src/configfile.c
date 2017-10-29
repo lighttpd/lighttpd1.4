@@ -10,6 +10,7 @@
 #include "configfile.h"
 #include "proc_open.h"
 #include "request.h"
+#include "stat_cache.h"
 
 #include <sys/stat.h>
 
@@ -366,26 +367,9 @@ static int config_insert(server *srv) {
 		  |(srv->srvconf.http_host_normalize ?(HTTP_PARSEOPT_HOST_NORMALIZE):0);
 	}
 
-	if (buffer_string_is_empty(stat_cache_string)) {
-		srv->srvconf.stat_cache_engine = STAT_CACHE_ENGINE_SIMPLE;
-	} else if (buffer_is_equal_string(stat_cache_string, CONST_STR_LEN("simple"))) {
-		srv->srvconf.stat_cache_engine = STAT_CACHE_ENGINE_SIMPLE;
-#ifdef HAVE_FAM_H
-	} else if (buffer_is_equal_string(stat_cache_string, CONST_STR_LEN("fam"))) {
-		srv->srvconf.stat_cache_engine = STAT_CACHE_ENGINE_FAM;
-#endif
-	} else if (buffer_is_equal_string(stat_cache_string, CONST_STR_LEN("disable"))) {
-		srv->srvconf.stat_cache_engine = STAT_CACHE_ENGINE_NONE;
-	} else {
-		log_error_write(srv, __FILE__, __LINE__, "sb",
-				"server.stat-cache-engine can be one of \"disable\", \"simple\","
-#ifdef HAVE_FAM_H
-				" \"fam\","
-#endif
-				" but not:", stat_cache_string);
+	if (0 != stat_cache_choose_engine(srv, stat_cache_string)) {
 		ret = HANDLER_ERROR;
 	}
-
 	buffer_free(stat_cache_string);
 
 	if (!array_is_vlist(srv->srvconf.upload_tempdirs)) {
