@@ -82,11 +82,7 @@ common_src=base64.c buffer.c log.c \
 src = server.c response.c connections.c \
 	inet_ntop_cache.c \
 	network.c \
-	network_write.c network_linux_sendfile.c \
-	network_write_mmap.c network_write_no_mmap.c \
-	network_freebsd_sendfile.c network_writev.c \
-	network_solaris_sendfilev.c \
-	network_darwin_sendfile.c \
+	network_write.c \
 	configfile.c configparser.c proc_open.c
 
 lib_LTLIBRARIES =
@@ -386,7 +382,7 @@ hdr = server.h base64.h buffer.h network.h log.h keyvalue.h \
 	fdevent.h gw_backend.h connections.h base.h base_decls.h stat_cache.h \
 	plugin.h \
 	etag.h joblist.h array.h vector.h crc32.h \
-	network_backends.h configfile.h \
+	network_write.h configfile.h \
 	mod_ssi.h mod_ssi_expr.h inet_ntop_cache.h \
 	configparser.h mod_ssi_exprparser.h \
 	rand.h \

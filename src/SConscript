@@ -77,12 +77,7 @@ common_src = Split("base64.c buffer.c log.c \
 src = Split("server.c response.c connections.c \
 	inet_ntop_cache.c \
 	network.c \
-	network_writev.c \
-	network_write_mmap.c network_write_no_mmap.c \
-	network_write.c network_linux_sendfile.c \
-	network_freebsd_sendfile.c \
-	network_solaris_sendfilev.c \
-	network_darwin_sendfile.c \
+	network_write.c \
 	configfile.c configparser.c request.c proc_open.c")
 
 lemon = env.Program('lemon', 'lemon.c', LIBS = GatherLibs(env))

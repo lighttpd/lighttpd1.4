@@ -574,7 +574,7 @@ struct server {
 
 	int event_handler;
 
-	int (* network_backend_write)(struct server *srv, connection *con, int fd, chunkqueue *cq, off_t max_bytes);
+	int (* network_backend_write)(struct server *srv, int fd, chunkqueue *cq, off_t max_bytes);
 	handler_t (* request_env)(struct server *srv, connection *con);
 
 	uid_t uid;

@@ -1058,7 +1058,7 @@ static int connection_read_cq(server *srv, connection *con, chunkqueue *cq, off_
 
 
 static int connection_write_cq(server *srv, connection *con, chunkqueue *cq, off_t max_bytes) {
-	return srv->network_backend_write(srv, con, con->fd, cq, max_bytes);
+	return srv->network_backend_write(srv, con->fd, cq, max_bytes);
 }
 
 

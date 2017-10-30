@@ -18,7 +18,7 @@
 #include "stat_cache.h"
 #include "plugin.h"
 #include "joblist.h"
-#include "network_backends.h"
+#include "network_write.h"
 
 #ifdef HAVE_VERSIONSTAMP_H
 # include "versionstamp.h"
@@ -524,7 +524,8 @@ static void show_version (void) {
 }
 
 static void show_features (void) {
-  const char features[] = ""
+  static const char event_handlers[] = ""
+      "\nEvent Handlers:\n\n"
 #ifdef USE_SELECT
       "\t+ select (generic)\n"
 #else
@@ -560,38 +561,9 @@ static void show_features (void) {
 #else
       "\t- libev (generic)\n"
 #endif
-      "\nNetwork handler:\n\n"
-#if defined USE_LINUX_SENDFILE
-      "\t+ linux-sendfile\n"
-#else
-      "\t- linux-sendfile\n"
-#endif
-#if defined USE_FREEBSD_SENDFILE
-      "\t+ freebsd-sendfile\n"
-#else
-      "\t- freebsd-sendfile\n"
-#endif
-#if defined USE_DARWIN_SENDFILE
-      "\t+ darwin-sendfile\n"
-#else
-      "\t- darwin-sendfile\n"
-#endif
-#if defined USE_SOLARIS_SENDFILEV
-      "\t+ solaris-sendfilev\n"
-#else
-      "\t- solaris-sendfilev\n"
-#endif
-#if defined USE_WRITEV
-      "\t+ writev\n"
-#else
-      "\t- writev\n"
-#endif
-      "\t+ write\n"
-#ifdef USE_MMAP
-      "\t+ mmap support\n"
-#else
-      "\t- mmap support\n"
-#endif
+      ;
+
+  static const char features[] =
       "\nFeatures:\n\n"
 #ifdef HAVE_IPV6
       "\t+ IPv6 support\n"
@@ -678,9 +650,9 @@ static void show_features (void) {
 #else
       "\t- GDBM support\n"
 #endif
-      "\n";
+      ;
   show_version();
-  printf("\nEvent Handlers:\n\n%s", features);
+  printf("%s%s%s\n", event_handlers, network_write_show_handlers(), features);
 }
 
 static void show_help (void) {

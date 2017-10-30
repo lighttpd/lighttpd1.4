@@ -590,14 +590,7 @@ add_executable(lighttpd
 	connections.c
 	inet_ntop_cache.c
 	network.c
-	network_darwin_sendfile.c
-	network_freebsd_sendfile.c
-	network_linux_sendfile.c
-	network_solaris_sendfilev.c
 	network_write.c
-	network_write_mmap.c
-	network_write_no_mmap.c
-	network_writev.c
 	configfile.c
 	configparser.c
 	request.c

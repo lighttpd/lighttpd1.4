@@ -8,7 +8,7 @@
 #include "configfile.h"
 #include "sock_addr.h"
 
-#include "network_backends.h"
+#include "network_write.h"
 #include "sys-socket.h"
 
 #include <sys/types.h>
@@ -385,81 +385,9 @@ int network_close(server *srv) {
 	return 0;
 }
 
-typedef enum {
-	NETWORK_BACKEND_UNSET,
-	NETWORK_BACKEND_WRITE,
-	NETWORK_BACKEND_WRITEV,
-	NETWORK_BACKEND_SENDFILE,
-} network_backend_t;
-
 int network_init(server *srv, int stdin_fd) {
 	size_t i;
-	network_backend_t backend;
-
-	struct nb_map {
-		network_backend_t nb;
-		const char *name;
-	} network_backends[] = {
-		/* lowest id wins */
-#if defined USE_SENDFILE
-		{ NETWORK_BACKEND_SENDFILE,   "sendfile" },
-#endif
-#if defined USE_LINUX_SENDFILE
-		{ NETWORK_BACKEND_SENDFILE,   "linux-sendfile" },
-#endif
-#if defined USE_FREEBSD_SENDFILE
-		{ NETWORK_BACKEND_SENDFILE,   "freebsd-sendfile" },
-#endif
-#if defined USE_SOLARIS_SENDFILEV
-		{ NETWORK_BACKEND_SENDFILE,   "solaris-sendfilev" },
-#endif
-#if defined USE_WRITEV
-		{ NETWORK_BACKEND_WRITEV,     "writev" },
-#endif
-		{ NETWORK_BACKEND_WRITE,      "write" },
-		{ NETWORK_BACKEND_UNSET,       NULL }
-	};
-
-	/* get a useful default */
-	backend = network_backends[0].nb;
-
-	/* match name against known types */
-	if (!buffer_string_is_empty(srv->srvconf.network_backend)) {
-		for (i = 0; network_backends[i].name; i++) {
-			/**/
-			if (buffer_is_equal_string(srv->srvconf.network_backend, network_backends[i].name, strlen(network_backends[i].name))) {
-				backend = network_backends[i].nb;
-				break;
-			}
-		}
-		if (NULL == network_backends[i].name) {
-			/* we don't know it */
-
-			log_error_write(srv, __FILE__, __LINE__, "sb",
-					"server.network-backend has a unknown value:",
-					srv->srvconf.network_backend);
-
-			return -1;
-		}
-	}
-
-	switch(backend) {
-	case NETWORK_BACKEND_WRITE:
-		srv->network_backend_write = network_write_chunkqueue_write;
-		break;
-#if defined(USE_WRITEV)
-	case NETWORK_BACKEND_WRITEV:
-		srv->network_backend_write = network_write_chunkqueue_writev;
-		break;
-#endif
-#if defined(USE_SENDFILE)
-	case NETWORK_BACKEND_SENDFILE:
-		srv->network_backend_write = network_write_chunkqueue_sendfile;
-		break;
-#endif
-	default:
-		return -1;
-	}
+	if (0 != network_write_init(srv)) return -1;
 
 	{
 		int rc;

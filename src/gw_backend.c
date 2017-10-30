@@ -1816,7 +1816,6 @@ static handler_t gw_write_request(server *srv, gw_handler_ctx *hctx) {
         /* fall through */
     case GW_STATE_WRITE:
         if (!chunkqueue_is_empty(hctx->wb)) {
-            connection *con = hctx->remote_conn;
             int ret;
           #if 0
             if (hctx->conf.debug > 1) {
@@ -1825,7 +1824,7 @@ static handler_t gw_write_request(server *srv, gw_handler_ctx *hctx) {
                                 "), size =", chunkqueue_length(hctx->wb));
             }
           #endif
-            ret = srv->network_backend_write(srv, con, hctx->fd, hctx->wb,
+            ret = srv->network_backend_write(srv, hctx->fd, hctx->wb,
                                              MAX_WRITE_LIMIT);
 
             chunkqueue_remove_finished_chunks(hctx->wb);
