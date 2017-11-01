@@ -301,7 +301,7 @@ typedef enum {
 
 	/* actually evaluated the condition itself */
 	COND_RESULT_FALSE, /* not active */
-	COND_RESULT_TRUE, /* active */
+	COND_RESULT_TRUE   /* active */
 } cond_result_t;
 
 typedef struct {
