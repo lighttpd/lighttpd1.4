@@ -1141,9 +1141,6 @@ if test "$ac_cv_func_sendfile" = yes; then
         AC_DEFINE([HAVE_SENDFILE_BROKEN], [1], [broken sendfile])
       ]
     )
-  else
-    AC_MSG_RESULT([no, cross-compiling])
-    AC_DEFINE([HAVE_SENDFILE_BROKEN], [1], [broken sendfile])
   fi
 fi
 
