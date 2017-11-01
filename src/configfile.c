@@ -1370,35 +1370,7 @@ int config_set_defaults(server *srv) {
 	specific_config *s = srv->config_storage[0];
 	struct stat st1, st2;
 
-	struct ev_map { fdevent_handler_t et; const char *name; } event_handlers[] =
-	{
-		/* - epoll is most reliable
-		 * - select works everywhere
-		 */
-#ifdef USE_LINUX_EPOLL
-		{ FDEVENT_HANDLER_LINUX_SYSEPOLL, "linux-sysepoll" },
-#endif
-#ifdef USE_POLL
-		{ FDEVENT_HANDLER_POLL,           "poll" },
-#endif
-#ifdef USE_SELECT
-		{ FDEVENT_HANDLER_SELECT,         "select" },
-#endif
-#ifdef USE_LIBEV
-		{ FDEVENT_HANDLER_LIBEV,          "libev" },
-#endif
-#ifdef USE_SOLARIS_DEVPOLL
-		{ FDEVENT_HANDLER_SOLARIS_DEVPOLL,"solaris-devpoll" },
-#endif
-#ifdef USE_SOLARIS_PORT
-		{ FDEVENT_HANDLER_SOLARIS_PORT,   "solaris-eventports" },
-#endif
-#ifdef USE_FREEBSD_KQUEUE
-		{ FDEVENT_HANDLER_FREEBSD_KQUEUE, "freebsd-kqueue" },
-		{ FDEVENT_HANDLER_FREEBSD_KQUEUE, "kqueue" },
-#endif
-		{ FDEVENT_HANDLER_UNSET,          NULL }
-	};
+	if (0 != fdevent_config(srv)) return -1;
 
 	if (!buffer_string_is_empty(srv->srvconf.changeroot)) {
 		if (-1 == stat(srv->srvconf.changeroot->ptr, &st1)) {
@@ -1500,41 +1472,6 @@ int config_set_defaults(server *srv) {
 
 	if (srv->srvconf.port == 0) {
 		srv->srvconf.port = s->ssl_enabled ? 443 : 80;
-	}
-
-	if (buffer_string_is_empty(srv->srvconf.event_handler)) {
-		/* choose a good default
-		 *
-		 * the event_handler list is sorted by 'goodness'
-		 * taking the first available should be the best solution
-		 */
-		srv->event_handler = event_handlers[0].et;
-
-		if (FDEVENT_HANDLER_UNSET == srv->event_handler) {
-			log_error_write(srv, __FILE__, __LINE__, "s",
-					"sorry, there is no event handler for this system");
-
-			return -1;
-		}
-	} else {
-		/*
-		 * User override
-		 */
-
-		for (i = 0; event_handlers[i].name; i++) {
-			if (0 == strcmp(event_handlers[i].name, srv->srvconf.event_handler->ptr)) {
-				srv->event_handler = event_handlers[i].et;
-				break;
-			}
-		}
-
-		if (FDEVENT_HANDLER_UNSET == srv->event_handler) {
-			log_error_write(srv, __FILE__, __LINE__, "sb",
-					"the selected event-handler in unknown or not supported:",
-					srv->srvconf.event_handler );
-
-			return -1;
-		}
 	}
 
 	return 0;

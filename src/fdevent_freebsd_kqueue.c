@@ -1,5 +1,6 @@
 #include "first.h"
 
+#include "fdevent_impl.h"
 #include "fdevent.h"
 #include "buffer.h"
 #include "log.h"
@@ -12,7 +13,7 @@
 #include <errno.h>
 #include <fcntl.h>
 
-#ifdef USE_FREEBSD_KQUEUE
+#ifdef FDEVENT_USE_FREEBSD_KQUEUE
 # include <sys/event.h>
 # include <sys/time.h>
 

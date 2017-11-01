@@ -524,45 +524,6 @@ static void show_version (void) {
 }
 
 static void show_features (void) {
-  static const char event_handlers[] = ""
-      "\nEvent Handlers:\n\n"
-#ifdef USE_SELECT
-      "\t+ select (generic)\n"
-#else
-      "\t- select (generic)\n"
-#endif
-#ifdef USE_POLL
-      "\t+ poll (Unix)\n"
-#else
-      "\t- poll (Unix)\n"
-#endif
-#ifdef USE_LINUX_EPOLL
-      "\t+ epoll (Linux 2.6)\n"
-#else
-      "\t- epoll (Linux 2.6)\n"
-#endif
-#ifdef USE_SOLARIS_DEVPOLL
-      "\t+ /dev/poll (Solaris)\n"
-#else
-      "\t- /dev/poll (Solaris)\n"
-#endif
-#ifdef USE_SOLARIS_PORT
-      "\t+ eventports (Solaris)\n"
-#else
-      "\t- eventports (Solaris)\n"
-#endif
-#ifdef USE_FREEBSD_KQUEUE
-      "\t+ kqueue (FreeBSD)\n"
-#else
-      "\t- kqueue (FreeBSD)\n"
-#endif
-#ifdef USE_LIBEV
-      "\t+ libev (generic)\n"
-#else
-      "\t- libev (generic)\n"
-#endif
-      ;
-
   static const char features[] =
       "\nFeatures:\n\n"
 #ifdef HAVE_IPV6
@@ -652,7 +613,7 @@ static void show_features (void) {
 #endif
       ;
   show_version();
-  printf("%s%s%s\n", event_handlers, network_write_show_handlers(), features);
+  printf("%s%s%s\n", fdevent_show_event_handlers(), network_write_show_handlers(), features);
 }
 
 static void show_help (void) {
@@ -1217,16 +1178,6 @@ static int server_main (server * const srv, int argc, char **argv) {
 		}
 	}
 
-	if (srv->event_handler == FDEVENT_HANDLER_SELECT) {
-		/* select limits itself
-		 *
-		 * as it is a hard limit and will lead to a segfault we add some safety
-		 * */
-		srv->max_fds = FD_SETSIZE - 200;
-	} else {
-		srv->max_fds = 4096;
-	}
-
 	{
 #ifdef HAVE_GETRLIMIT
 		struct rlimit rlim;
@@ -1260,14 +1211,10 @@ static int server_main (server * const srv, int argc, char **argv) {
 			}
 		}
 
-		if (srv->event_handler == FDEVENT_HANDLER_SELECT) {
-			srv->max_fds = rlim.rlim_cur < (rlim_t)FD_SETSIZE - 200 ? (int)rlim.rlim_cur : (int)FD_SETSIZE - 200;
-		} else {
 			srv->max_fds = rlim.rlim_cur;
 			/*(default upper limit of 4k if server.max-fds not specified)*/
 			if (i_am_root && 0 == srv->srvconf.max_fds && rlim.rlim_cur > 4096)
 				srv->max_fds = 4096;
-		}
 
 		/* set core file rlimit, if enable_cores is set */
 		if (use_rlimit && srv->srvconf.enable_cores && getrlimit(RLIMIT_CORE, &rlim) == 0) {
@@ -1275,15 +1222,6 @@ static int server_main (server * const srv, int argc, char **argv) {
 			setrlimit(RLIMIT_CORE, &rlim);
 		}
 #endif
-		if (srv->event_handler == FDEVENT_HANDLER_SELECT) {
-			/* don't raise the limit above FD_SET_SIZE */
-			if (srv->max_fds > ((int)FD_SETSIZE) - 200) {
-				log_error_write(srv, __FILE__, __LINE__, "sd",
-						"can't raise max filedescriptors above",  FD_SETSIZE - 200,
-						"if event-handler is 'select'. Use 'poll' or something else or reduce server.max-fds.");
-				return -1;
-			}
-		}
 	}
 
 	/* we need root-perms for port < 1024 */
@@ -1675,7 +1613,7 @@ static int server_main (server * const srv, int argc, char **argv) {
 	}
 #endif
 
-	if (NULL == (srv->ev = fdevent_init(srv, srv->max_fds + 1, srv->event_handler))) {
+	if (NULL == (srv->ev = fdevent_init(srv))) {
 		log_error_write(srv, __FILE__, __LINE__,
 				"s", "fdevent_init failed");
 		return -1;

@@ -2,11 +2,12 @@
 
 #include <stdlib.h>
 
+#include "fdevent_impl.h"
 #include "fdevent.h"
 #include "buffer.h"
 #include "log.h"
 
-#ifdef USE_LIBEV
+#ifdef FDEVENT_USE_LIBEV
 
 # include <ev.h>
 

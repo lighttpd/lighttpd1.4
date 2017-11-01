@@ -1,7 +1,8 @@
 #include "first.h"
 
-#include "base.h"
+#include "fdevent_impl.h"
 #include "fdevent.h"
+#include "base.h"
 #include "buffer.h"
 #include "log.h"
 
@@ -20,8 +21,137 @@
 static int use_sock_cloexec;
 #endif
 
-fdevents *fdevent_init(server *srv, size_t maxfds, int type) {
+int fdevent_config(server *srv) {
+	static const struct ev_map { fdevent_handler_t et; const char *name; } event_handlers[] =
+	{
+		/* - epoll is most reliable
+		 * - select works everywhere
+		 */
+#ifdef FDEVENT_USE_LINUX_EPOLL
+		{ FDEVENT_HANDLER_LINUX_SYSEPOLL, "linux-sysepoll" },
+		{ FDEVENT_HANDLER_LINUX_SYSEPOLL, "epoll" },
+#endif
+#ifdef FDEVENT_USE_SOLARIS_PORT
+		{ FDEVENT_HANDLER_SOLARIS_PORT,   "solaris-eventports" },
+#endif
+#ifdef FDEVENT_USE_SOLARIS_DEVPOLL
+		{ FDEVENT_HANDLER_SOLARIS_DEVPOLL,"solaris-devpoll" },
+#endif
+#ifdef FDEVENT_USE_FREEBSD_KQUEUE
+		{ FDEVENT_HANDLER_FREEBSD_KQUEUE, "freebsd-kqueue" },
+		{ FDEVENT_HANDLER_FREEBSD_KQUEUE, "kqueue" },
+#endif
+#ifdef FDEVENT_USE_POLL
+		{ FDEVENT_HANDLER_POLL,           "poll" },
+#endif
+#ifdef FDEVENT_USE_SELECT
+		{ FDEVENT_HANDLER_SELECT,         "select" },
+#endif
+#ifdef FDEVENT_USE_LIBEV
+		{ FDEVENT_HANDLER_LIBEV,          "libev" },
+#endif
+		{ FDEVENT_HANDLER_UNSET,          NULL }
+	};
+
+	if (buffer_string_is_empty(srv->srvconf.event_handler)) {
+		/* choose a good default
+		 *
+		 * the event_handler list is sorted by 'goodness'
+		 * taking the first available should be the best solution
+		 */
+		srv->event_handler = event_handlers[0].et;
+
+		if (FDEVENT_HANDLER_UNSET == srv->event_handler) {
+			log_error_write(srv, __FILE__, __LINE__, "s",
+					"sorry, there is no event handler for this system");
+
+			return -1;
+		}
+
+		buffer_copy_string(srv->srvconf.event_handler, event_handlers[0].name);
+	} else {
+		/*
+		 * User override
+		 */
+
+		for (size_t i = 0; event_handlers[i].name; i++) {
+			if (0 == strcmp(event_handlers[i].name, srv->srvconf.event_handler->ptr)) {
+				srv->event_handler = event_handlers[i].et;
+				break;
+			}
+		}
+
+		if (FDEVENT_HANDLER_UNSET == srv->event_handler) {
+			log_error_write(srv, __FILE__, __LINE__, "sb",
+					"the selected event-handler in unknown or not supported:",
+					srv->srvconf.event_handler );
+
+			return -1;
+		}
+	}
+
+      #ifdef FDEVENT_USE_SELECT
+	if (srv->event_handler == FDEVENT_HANDLER_SELECT) {
+		/* select limits itself
+		 *
+		 * as it is a hard limit and will lead to a segfault we add some safety
+		 * */
+		srv->max_fds = FD_SETSIZE - 200;
+	}
+	else
+      #endif
+	{
+		srv->max_fds = 4096;
+	}
+
+	return 0;
+}
+
+const char * fdevent_show_event_handlers(void) {
+    return
+      "\nEvent Handlers:\n\n"
+#ifdef FDEVENT_USE_SELECT
+      "\t+ select (generic)\n"
+#else
+      "\t- select (generic)\n"
+#endif
+#ifdef FDEVENT_USE_POLL
+      "\t+ poll (Unix)\n"
+#else
+      "\t- poll (Unix)\n"
+#endif
+#ifdef FDEVENT_USE_LINUX_EPOLL
+      "\t+ epoll (Linux)\n"
+#else
+      "\t- epoll (Linux)\n"
+#endif
+#ifdef FDEVENT_USE_SOLARIS_DEVPOLL
+      "\t+ /dev/poll (Solaris)\n"
+#else
+      "\t- /dev/poll (Solaris)\n"
+#endif
+#ifdef FDEVENT_USE_SOLARIS_PORT
+      "\t+ eventports (Solaris)\n"
+#else
+      "\t- eventports (Solaris)\n"
+#endif
+#ifdef FDEVENT_USE_FREEBSD_KQUEUE
+      "\t+ kqueue (FreeBSD)\n"
+#else
+      "\t- kqueue (FreeBSD)\n"
+#endif
+#ifdef FDEVENT_USE_LIBEV
+      "\t+ libev (generic)\n"
+#else
+      "\t- libev (generic)\n"
+#endif
+      ;
+}
+
+fdevents *fdevent_init(server *srv) {
 	fdevents *ev;
+	int type = srv->event_handler;
+	size_t maxfds;
 
       #ifdef SOCK_CLOEXEC
 	/* Test if SOCK_CLOEXEC is supported by kernel.
@@ -34,6 +164,15 @@ fdevents *fdevent_init(server *srv, size_t maxfds, int type) {
 		close(fd);
 	}
       #endif
+
+      #ifdef FDEVENT_USE_SELECT
+	if (type == FDEVENT_HANDLER_SELECT) {
+		if (srv->max_fds > (int)FD_SETSIZE - 200) {
+			srv->max_fds = (int)FD_SETSIZE - 200;
+		}
+	}
+      #endif
+	maxfds = srv->max_fds + 1; /*(+1 for event-handler fd)*/
 
 	ev = calloc(1, sizeof(*ev));
 	force_assert(NULL != ev);
@@ -220,6 +359,10 @@ void fdevent_sched_run(server *srv, fdevents *ev) {
 		ev->fdarray[fd] = NULL;
 	}
 	ev->pendclose = NULL;
+}
+
+int fdevent_event_get_interest(const fdevents *ev, int fd) {
+	return fd >= 0 ? ev->fdarray[fd]->events : 0;
 }
 
 void fdevent_event_del(fdevents *ev, int *fde_ndx, int fd) {

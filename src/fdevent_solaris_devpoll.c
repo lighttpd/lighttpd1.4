@@ -1,5 +1,6 @@
 #include "first.h"
 
+#include "fdevent_impl.h"
 #include "fdevent.h"
 #include "buffer.h"
 #include "log.h"
@@ -12,7 +13,7 @@
 #include <errno.h>
 #include <fcntl.h>
 
-#ifdef USE_SOLARIS_DEVPOLL
+#ifdef FDEVENT_USE_SOLARIS_DEVPOLL
 
 # include <sys/devpoll.h>
 # include <sys/ioctl.h>

@@ -803,35 +803,6 @@ static handler_t mod_status_handle_server_config(server *srv, connection *con, v
 	buffer *m = p->module_list;
 	size_t i;
 
-	struct ev_map { int et; const char *name; } event_handlers[] =
-	{
-		/* - epoll is most reliable
-		 * - select works everywhere
-		 */
-#ifdef USE_LINUX_EPOLL
-		{ FDEVENT_HANDLER_LINUX_SYSEPOLL, "linux-sysepoll" },
-#endif
-#ifdef USE_POLL
-		{ FDEVENT_HANDLER_POLL,           "poll" },
-#endif
-#ifdef USE_SELECT
-		{ FDEVENT_HANDLER_SELECT,         "select" },
-#endif
-#ifdef USE_LIBEV
-		{ FDEVENT_HANDLER_LIBEV,          "libev" },
-#endif
-#ifdef USE_SOLARIS_DEVPOLL
-		{ FDEVENT_HANDLER_SOLARIS_DEVPOLL,"solaris-devpoll" },
-#endif
-#ifdef USE_SOLARIS_PORT
-		{ FDEVENT_HANDLER_SOLARIS_PORT,   "solaris-eventports" },
-#endif
-#ifdef USE_FREEBSD_KQUEUE
-		{ FDEVENT_HANDLER_FREEBSD_KQUEUE, "freebsd-kqueue" },
-#endif
-		{ FDEVENT_HANDLER_UNSET,          NULL }
-	};
-
 	buffer_copy_string_len(b, CONST_STR_LEN(
 			   "<?xml version=\"1.0\" encoding=\"iso-8859-1\"?>\n"
 			   "<!DOCTYPE html PUBLIC \"-//W3C//DTD XHTML 1.0 Transitional//EN\"\n"
@@ -855,12 +826,7 @@ static handler_t mod_status_handle_server_config(server *srv, connection *con, v
 #endif
 	mod_status_header_append(b, "Network Engine");
 
-	for (i = 0; event_handlers[i].name; i++) {
-		if (event_handlers[i].et == srv->event_handler) {
-			mod_status_row_append(b, "fd-Event-Handler", event_handlers[i].name);
-			break;
-		}
-	}
+	mod_status_row_append(b, "fd-Event-Handler", srv->srvconf.event_handler->ptr);
 
 	mod_status_header_append(b, "Config-File-Settings");
 

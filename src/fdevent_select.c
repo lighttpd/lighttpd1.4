@@ -1,5 +1,6 @@
 #include "first.h"
 
+#include "fdevent_impl.h"
 #include "fdevent.h"
 #include "buffer.h"
 #include "log.h"
@@ -12,7 +13,7 @@
 #include <string.h>
 #include <errno.h>
 
-#ifdef USE_SELECT
+#ifdef FDEVENT_USE_SELECT
 
 static int fdevent_select_reset(fdevents *ev) {
 	FD_ZERO(&(ev->select_set_read));

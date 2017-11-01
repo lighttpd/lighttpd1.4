@@ -382,7 +382,7 @@ hdr = server.h base64.h buffer.h network.h log.h keyvalue.h \
 	fdevent.h gw_backend.h connections.h base.h base_decls.h stat_cache.h \
 	plugin.h \
 	etag.h joblist.h array.h vector.h crc32.h \
-	network_write.h configfile.h \
+	fdevent_impl.h network_write.h configfile.h \
 	mod_ssi.h mod_ssi_expr.h inet_ntop_cache.h \
 	configparser.h mod_ssi_exprparser.h \
 	rand.h \
