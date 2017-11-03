@@ -566,7 +566,8 @@ network_init_ssl (server *srv, void *p_d)
                 }
                 /* PEM file is require */
                 log_error_write(srv, __FILE__, __LINE__, "s",
-                                "ssl.pemfile has to be set");
+                                "ssl.pemfile has to be set "
+                                "when ssl.engine = \"enable\"");
                 return -1;
             }
         }
@@ -988,6 +989,12 @@ SETDEFAULTS_FUNC(mod_openssl_set_defaults)
                     return HANDLER_ERROR;
                 }
             }
+        }
+
+        if (0 != i && s->ssl_enabled && config->comp != COMP_SERVER_SOCKET) {
+            log_error_write(srv, __FILE__, __LINE__, "s",
+                            "ssl.engine is valid only in global scope "
+                            "or $SERVER[\"socket\"] condition");
         }
     }
 
