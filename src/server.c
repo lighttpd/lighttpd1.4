@@ -1342,7 +1342,7 @@ static int server_main (server * const srv, int argc, char **argv) {
 	}
 #endif
 	graceful_restart = 0;/*(reset here after avoiding further daemonizing)*/
-	graceful_shutdown= 0;
+	if (0 == oneshot_fd) graceful_shutdown = 0;
 
 
 #ifdef HAVE_SIGACTION
