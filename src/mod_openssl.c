@@ -843,7 +843,8 @@ network_init_ssl (server *srv, void *p_d)
             }
         }
 
-        if (1 != SSL_CTX_use_certificate(s->ssl_ctx, s->ssl_pemfile_x509)) {
+        if (1 != SSL_CTX_use_certificate_chain_file(s->ssl_ctx,
+                                                    s->ssl_pemfile->ptr)) {
             log_error_write(srv, __FILE__, __LINE__, "ssb", "SSL:",
                             ERR_error_string(ERR_get_error(), NULL),
                             s->ssl_pemfile);
