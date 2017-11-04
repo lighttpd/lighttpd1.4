@@ -656,6 +656,7 @@ add_executable(test_configfile
 	keyvalue.c
 	vector.c
 	log.c
+	sock_addr.c
 )
 add_test(NAME test_configfile COMMAND test_configfile)
 
