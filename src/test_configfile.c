@@ -47,7 +47,7 @@ static void test_configfile_addrbuf_eq_remote_ip_mask (void) {
 	sock_addr rmt;
 
 	for (i = 0; i < (int)(sizeof(rmtmask)/sizeof(rmtmask[0])); ++i) {
-		sock_addr_inet_pton(&rmt, rmtmask[i].rmtstr, rmtmask[i].rmtfamily, 0);
+		if (1 != sock_addr_inet_pton(&rmt, rmtmask[i].rmtstr, rmtmask[i].rmtfamily, 0)) exit(-1); /*(bad test)*/
 		buffer_copy_string(s, rmtmask[i].string);
 		slash = strchr(s->ptr,'/'); assert(slash);
 		m = config_addrbuf_eq_remote_ip_mask(NULL, s, slash, &rmt);
