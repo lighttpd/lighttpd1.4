@@ -339,7 +339,7 @@ network_ssl_servername_callback (SSL *ssl, int *al, server *srv)
 
     /* first set certificate!
      * setting private key checks whether certificate matches it */
-    if (!SSL_use_certificate(ssl, hctx->conf.ssl_pemfile_x509)) {
+    if (1 != SSL_use_certificate(ssl, hctx->conf.ssl_pemfile_x509)) {
         log_error_write(srv, __FILE__, __LINE__, "ssb:s", "SSL:",
                         "failed to set certificate for TLS server name",
                         con->uri.authority,
@@ -347,7 +347,7 @@ network_ssl_servername_callback (SSL *ssl, int *al, server *srv)
         return SSL_TLSEXT_ERR_ALERT_FATAL;
     }
 
-    if (!SSL_use_PrivateKey(ssl, hctx->conf.ssl_pemfile_pkey)) {
+    if (1 != SSL_use_PrivateKey(ssl, hctx->conf.ssl_pemfile_pkey)) {
         log_error_write(srv, __FILE__, __LINE__, "ssb:s", "SSL:",
                         "failed to set private key for TLS server name",
                         con->uri.authority,
@@ -942,8 +942,8 @@ SETDEFAULTS_FUNC(mod_openssl_set_defaults)
         s->ssl_verifyclient_export_cert = 0;
         s->ssl_disable_client_renegotiation = 1;
         s->ssl_read_ahead = (0 == i)
-	  ? 0
-	  : p->config_storage[0]->ssl_read_ahead;
+          ? 0
+          : p->config_storage[0]->ssl_read_ahead;
         if (0 != i) buffer_copy_buffer(s->ssl_ca_crl_file, p->config_storage[0]->ssl_ca_crl_file);
         if (0 != i) buffer_copy_buffer(s->ssl_ca_dn_file, p->config_storage[0]->ssl_ca_dn_file);
 
