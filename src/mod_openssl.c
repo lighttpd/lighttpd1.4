@@ -55,6 +55,9 @@ typedef struct {
     unsigned short ssl_empty_fragments; /* whether to not set SSL_OP_DONT_INSERT_EMPTY_FRAGMENTS */
     unsigned short ssl_use_sslv2;
     unsigned short ssl_use_sslv3;
+    unsigned short ssl_use_tlsv10;
+    unsigned short ssl_use_tlsv11;
+    unsigned short ssl_use_tlsv12;
     buffer *ssl_pemfile;
     buffer *ssl_ca_file;
     buffer *ssl_ca_crl_file;
@@ -691,6 +694,39 @@ network_init_ssl (server *srv, void *p_d)
             }
         }
 
+        if (!s->ssl_use_tlsv10 && 0 != SSL_OP_NO_TLSv1) {
+            /* disable TLSv1.0 */
+            if ((SSL_OP_NO_TLSv1
+                 & SSL_CTX_set_options(s->ssl_ctx, SSL_OP_NO_TLSv1))
+                != SSL_OP_NO_TLSv1) {
+                log_error_write(srv, __FILE__, __LINE__, "ss", "TLS:",
+                                ERR_error_string(ERR_get_error(), NULL));
+                return -1;
+            }
+        }
+
+        if (!s->ssl_use_tlsv11 && 0 != SSL_OP_NO_TLSv1_1) {
+            /* disable TLSv1.1 */
+            if ((SSL_OP_NO_TLSv1_1
+                 & SSL_CTX_set_options(s->ssl_ctx, SSL_OP_NO_TLSv1_1))
+                != SSL_OP_NO_TLSv1_1) {
+                log_error_write(srv, __FILE__, __LINE__, "ss", "TLS:",
+                                ERR_error_string(ERR_get_error(), NULL));
+                return -1;
+            }
+        }
+
+        if (!s->ssl_use_tlsv12 && 0 != SSL_OP_NO_TLSv1_2) {
+            /* disable TLSv1.2 */
+            if ((SSL_OP_NO_TLSv1_2
+                 & SSL_CTX_set_options(s->ssl_ctx, SSL_OP_NO_TLSv1_2))
+                != SSL_OP_NO_TLSv1_2) {
+                log_error_write(srv, __FILE__, __LINE__, "ss", "TLS:",
+                                ERR_error_string(ERR_get_error(), NULL));
+                return -1;
+            }
+        }
+
         if (!buffer_string_is_empty(s->ssl_cipher_list)) {
             /* Disable support for low encryption ciphers */
             if (SSL_CTX_set_cipher_list(s->ssl_ctx,s->ssl_cipher_list->ptr)!=1){
@@ -910,8 +946,11 @@ SETDEFAULTS_FUNC(mod_openssl_set_defaults)
         { "ssl.verifyclient.exportcert",       NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION }, /* 15 */
         { "ssl.use-sslv2",                     NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION }, /* 16 */
         { "ssl.use-sslv3",                     NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION }, /* 17 */
-        { "ssl.ca-crl-file",                   NULL, T_CONFIG_STRING,  T_CONFIG_SCOPE_CONNECTION }, /* 18 */
-        { "ssl.ca-dn-file",                    NULL, T_CONFIG_STRING,  T_CONFIG_SCOPE_CONNECTION }, /* 19 */
+        { "ssl.use-tlsv10",                     NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION }, /* 18 */
+        { "ssl.use-tlsv11",                     NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION }, /* 19 */
+        { "ssl.use-tlsv12",                     NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION }, /* 20 */
+        { "ssl.ca-crl-file",                   NULL, T_CONFIG_STRING,  T_CONFIG_SCOPE_CONNECTION }, /* 21 */
+        { "ssl.ca-dn-file",                    NULL, T_CONFIG_STRING,  T_CONFIG_SCOPE_CONNECTION }, /* 22 */
         { NULL,                         NULL, T_CONFIG_UNSET, T_CONFIG_SCOPE_UNSET }
     };
 
@@ -935,6 +974,9 @@ SETDEFAULTS_FUNC(mod_openssl_set_defaults)
         s->ssl_empty_fragments = 0;
         s->ssl_use_sslv2 = 0;
         s->ssl_use_sslv3 = 0;
+        s->ssl_use_tlsv10 = 0;
+        s->ssl_use_tlsv11 = 1;
+        s->ssl_use_tlsv12 = 1;
         s->ssl_verifyclient = 0;
         s->ssl_verifyclient_enforce = 1;
         s->ssl_verifyclient_username = buffer_init();
@@ -965,8 +1007,11 @@ SETDEFAULTS_FUNC(mod_openssl_set_defaults)
         cv[15].destination = &(s->ssl_verifyclient_export_cert);
         cv[16].destination = &(s->ssl_use_sslv2);
         cv[17].destination = &(s->ssl_use_sslv3);
-        cv[18].destination = s->ssl_ca_crl_file;
-        cv[19].destination = s->ssl_ca_dn_file;
+        cv[18].destination = &(s->ssl_use_tlsv10);
+        cv[19].destination = &(s->ssl_use_tlsv11);
+        cv[20].destination = &(s->ssl_use_tlsv12);
+        cv[21].destination = s->ssl_ca_crl_file;
+        cv[22].destination = s->ssl_ca_dn_file;
 
         p->config_storage[i] = s;
 
@@ -1026,6 +1071,9 @@ mod_openssl_patch_connection (server *srv, connection *con, handler_ctx *hctx)
     /*PATCH(ssl_empty_fragments);*//*(not patched)*/
     /*PATCH(ssl_use_sslv2);*//*(not patched)*/
     /*PATCH(ssl_use_sslv3);*//*(not patched)*/
+    /*PATCH(ssl_use_tlsv10);*//*(not patched)*/
+    /*PATCH(ssl_use_tlsv11);*//*(not patched)*/
+    /*PATCH(ssl_use_tlsv12);*//*(not patched)*/
 
     PATCH(ssl_verifyclient);
     PATCH(ssl_verifyclient_enforce);
@@ -1086,6 +1134,12 @@ mod_openssl_patch_connection (server *srv, connection *con, handler_ctx *hctx)
                 PATCH(ssl_use_sslv2);
             } else if (buffer_is_equal_string(du->key, CONST_STR_LEN("ssl.use-sslv3"))) {
                 PATCH(ssl_use_sslv3);
+            }else if (buffer_is_equal_string(du->key, CONST_STR_LEN("ssl.use-tlsv10"))) {
+                PATCH(ssl_use_tlsv10);
+            }else if (buffer_is_equal_string(du->key, CONST_STR_LEN("ssl.use-tlsv11"))) {
+                PATCH(ssl_use_tlsv11);
+            }else if (buffer_is_equal_string(du->key, CONST_STR_LEN("ssl.use-tlsv12"))) {
+                PATCH(ssl_use_tlsv12);
             } else if (buffer_is_equal_string(du->key, CONST_STR_LEN("ssl.cipher-list"))) {
                 PATCH(ssl_cipher_list);
             } else if (buffer_is_equal_string(du->key, CONST_STR_LEN("ssl.dh-file"))) {
