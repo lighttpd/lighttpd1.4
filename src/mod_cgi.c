@@ -1027,7 +1027,7 @@ static handler_t cgi_waitpid_cb(server *srv, void *p_d, pid_t pid, int status) {
         }
         else if (WIFSIGNALED(status)) {
             /* ignore SIGTERM if sent by cgi_connection_close() (NULL == hctx)*/
-            if (WTERMSIG(status) != SIGTERM || NULL == hctx) {
+            if (WTERMSIG(status) != SIGTERM || NULL != hctx) {
                 log_error_write(srv, __FILE__, __LINE__, "sdsd", "CGI pid", pid,
                                 "died with signal", WTERMSIG(status));
             }
