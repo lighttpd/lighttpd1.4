@@ -531,7 +531,6 @@ if 1:
 			fail("Couldn't find lber")
 		autoconf.env.Append(
 			CPPFLAGS = [
-				'-DLDAP_DEPRECATED=1',
 				'-DHAVE_LDAP_H', '-DHAVE_LIBLDAP',
 				'-DHAVE_LBER_H', '-DHAVE_LIBLBER',
 			],

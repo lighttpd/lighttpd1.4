@@ -451,7 +451,6 @@ if(WITH_LDAP)
 	check_library_exists(ldap ldap_bind "" HAVE_LIBLDAP)
 	check_include_files(lber.h HAVE_LBER_H)
 	check_library_exists(lber ber_printf "" HAVE_LIBLBER)
-	set(LDAP_DEPRECATED 1) # Using deprecated ldap api
 else()
 	unset(HAVE_LDAP_H)
 	unset(HAVE_LIBLDAP)

@@ -47,6 +47,39 @@ static void mod_vhostdb_dbconf_free (void *vdata)
     free(dbconf);
 }
 
+/*(copied from mod_authn_ldap.c)*/
+static void mod_vhostdb_dbconf_add_scheme (server *srv, buffer *host)
+{
+    if (!buffer_string_is_empty(host)) {
+        /* reformat hostname(s) as LDAP URIs (scheme://host:port) */
+        static const char *schemes[] = {
+          "ldap://", "ldaps://", "ldapi://", "cldap://"
+        };
+        char *b, *e = host->ptr;
+        buffer_string_set_length(srv->tmp_buf, 0);
+        while (*(b = e)) {
+            unsigned int j;
+            while (*b==' '||*b=='\t'||*b=='\r'||*b=='\n'||*b==',') ++b;
+            if (*b == '\0') break;
+            e = b;
+            while (*e!=' '&&*e!='\t'&&*e!='\r'&&*e!='\n'&&*e!=','&&*e!='\0')
+                ++e;
+            if (!buffer_string_is_empty(srv->tmp_buf))
+                buffer_append_string_len(srv->tmp_buf, CONST_STR_LEN(","));
+            for (j = 0; j < sizeof(schemes)/sizeof(char *); ++j) {
+                if (0 == strncasecmp(b, schemes[j], strlen(schemes[j]))) {
+                    break;
+                }
+            }
+            if (j == sizeof(schemes)/sizeof(char *))
+                buffer_append_string_len(srv->tmp_buf,
+                                         CONST_STR_LEN("ldap://"));
+            buffer_append_string_len(srv->tmp_buf, b, (size_t)(e - b));
+        }
+        buffer_copy_buffer(host, srv->tmp_buf);
+    }
+}
+
 static int mod_vhostdb_dbconf_setup (server *srv, array *opts, void **vdata)
 {
     buffer *filter = NULL;
@@ -62,6 +95,7 @@ static int mod_vhostdb_dbconf_setup (server *srv, array *opts, void **vdata)
             } else if (buffer_is_equal_caseless_string(ds->key, CONST_STR_LEN("attr"))) {
                 if (!buffer_string_is_empty(ds->value)) attr   = ds->value->ptr;
             } else if (buffer_is_equal_caseless_string(ds->key, CONST_STR_LEN("host"))) {
+                mod_vhostdb_dbconf_add_scheme(srv, ds->value);
                 host   = ds->value->ptr;
             } else if (buffer_is_equal_caseless_string(ds->key, CONST_STR_LEN("base-dn"))) {
                 if (!buffer_string_is_empty(ds->value)) basedn = ds->value->ptr;
@@ -206,10 +240,10 @@ static LDAP * mod_authn_ldap_host_init(server *srv, vhostdb_config *s) {
     LDAP *ld;
     int ret;
 
-    ld = ldap_init(s->host, LDAP_PORT);
-    if (NULL == ld) {
-        log_error_write(srv, __FILE__, __LINE__, "sss", "ldap:", "ldap_init():",
-                        strerror(errno));
+    ret = ldap_initialize(&ld, s->host);
+    if (LDAP_SUCCESS != ret) {
+        log_error_write(srv, __FILE__, __LINE__, "sss", "ldap:",
+                        "ldap_initialize():", strerror(errno));
         return NULL;
     }
 
@@ -247,7 +281,6 @@ static LDAP * mod_authn_ldap_host_init(server *srv, vhostdb_config *s) {
 }
 
 static int mod_authn_ldap_bind(server *srv, LDAP *ld, const char *dn, const char *pw) {
-  #if 0
     struct berval creds;
     int ret;
 
@@ -265,12 +298,6 @@ static int mod_authn_ldap_bind(server *srv, LDAP *ld, const char *dn, const char
     if (ret != LDAP_SUCCESS) {
         mod_authn_ldap_err(srv, __FILE__, __LINE__, "ldap_sasl_bind_s()", ret);
     }
-  #else
-    int ret = ldap_simple_bind_s(ld, dn, pw);
-    if (ret != LDAP_SUCCESS) {
-        mod_authn_ldap_err(srv, __FILE__, __LINE__, "ldap_simple_bind_s()",ret);
-    }
-  #endif
 
     return ret;
 }

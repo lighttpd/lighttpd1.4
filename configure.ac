@@ -362,13 +362,12 @@ AC_ARG_WITH([ldap],
 AC_MSG_RESULT([$WITH_LDAP])
 
 if test "$WITH_LDAP" != no; then
-  AC_CHECK_LIB([ldap], [ldap_bind],
+  AC_CHECK_LIB([ldap], [ldap_sasl_bind_s],
     [AC_CHECK_HEADERS([ldap.h],
       [
         LDAP_LIB=-lldap
         AC_DEFINE([HAVE_LIBLDAP], [1], [libldap])
         AC_DEFINE([HAVE_LDAP_H], [1])
-        AC_DEFINE([LDAP_DEPRECATED], [1], [Using deprecated ldap api])
       ],
       [AC_MSG_ERROR([ldap headers not found, install them or build without --with-ldap])]
     )],

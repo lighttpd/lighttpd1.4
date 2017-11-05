@@ -297,11 +297,10 @@ libldap = []
 liblber = []
 if get_option('with_ldap')
 	libldap = [ compiler.find_library('ldap') ]
-	if not(compiler.has_function('ldap_bind',
+	if not(compiler.has_function('ldap_sasl_bind_s',
 		args: defs,
 		dependencies: libldap,
 		prefix: '''
-			#define LDAP_DEPRECATED 1
 			#include <ldap.h>
 		'''
 	))
@@ -315,7 +314,6 @@ if get_option('with_ldap')
 	endif
 	conf_data.set('HAVE_LBER_H', true)
 	conf_data.set('HAVE_LIBLBER', true)
-	conf_data.set('LDAP_DEPRECATED', 1, comment: 'Using deprecated ldap api')
 endif
 
 libev = []

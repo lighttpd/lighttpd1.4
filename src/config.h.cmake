@@ -64,7 +64,6 @@
 #cmakedefine  HAVE_LIBLDAP
 #cmakedefine  HAVE_LBER_H
 #cmakedefine  HAVE_LIBLBER
-#cmakedefine  LDAP_DEPRECATED 1
 
 /* XML */
 #cmakedefine  HAVE_LIBXML_H
