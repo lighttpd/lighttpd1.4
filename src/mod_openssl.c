@@ -62,6 +62,7 @@ typedef struct {
     buffer *ssl_cipher_list;
     buffer *ssl_dh_file;
     buffer *ssl_ec_curve;
+    array *ssl_conf_cmd;
 } plugin_config;
 
 typedef struct {
@@ -129,6 +130,8 @@ FREE_FUNC(mod_openssl_free)
             buffer_free(s->ssl_dh_file);
             buffer_free(s->ssl_ec_curve);
             buffer_free(s->ssl_verifyclient_username);
+            array_free(s->ssl_conf_cmd);
+
             if (copy) continue;
             SSL_CTX_free(s->ssl_ctx);
             EVP_PKEY_free(s->ssl_pemfile_pkey);
@@ -485,6 +488,62 @@ network_openssl_load_pemfile (server *srv, plugin_config *s, size_t ndx)
     }
 
     return 0;
+}
+
+
+static int
+network_openssl_ssl_conf_cmd (server *srv, plugin_config *s)
+{
+  #ifdef SSL_CONF_FLAG_CMDLINE
+
+    int rc = 0;
+    data_string *ds;
+    SSL_CONF_CTX * const cctx = SSL_CONF_CTX_new();
+    SSL_CONF_CTX_set_ssl_ctx(cctx, s->ssl_ctx);
+    SSL_CONF_CTX_set_flags(cctx, SSL_CONF_FLAG_FILE
+                               | SSL_CONF_FLAG_SERVER
+                               | SSL_CONF_FLAG_SHOW_ERRORS
+                               | SSL_CONF_FLAG_CERTIFICATE);
+
+    /* always disable null and export ciphers */
+    ds = (data_string *)
+      array_get_element_klen(s->ssl_conf_cmd,
+                             CONST_STR_LEN("CipherString"));
+    if (NULL != ds) {
+        buffer_append_string_len(ds->value,
+                                 CONST_STR_LEN(":!aNULL:!eNULL:!EXP"));
+    }
+
+    for (size_t i = 0; i < s->ssl_conf_cmd->used; ++i) {
+        ds = (data_string *)s->ssl_conf_cmd->data[i];
+        ERR_clear_error();
+        if (SSL_CONF_cmd(cctx, ds->key->ptr, ds->value->ptr) <= 0) {
+            log_error_write(srv, __FILE__, __LINE__, "ssbbss", "SSL:",
+                            "SSL_CONF_cmd", ds->key, ds->value, ":",
+                            ERR_error_string(ERR_get_error(), NULL));
+            rc = -1;
+            break;
+        }
+    }
+
+    if (0 == rc && 1 != SSL_CONF_CTX_finish(cctx)) {
+        log_error_write(srv, __FILE__, __LINE__, "sss", "SSL:",
+                        "SSL_CONF_CTX_finish():",
+                        ERR_error_string(ERR_get_error(), NULL));
+        rc = -1;
+    }
+
+    SSL_CONF_CTX_free(cctx);
+    return rc;
+
+  #else
+
+    UNUSED(s);
+    log_error_write(srv, __FILE__, __LINE__, "ss", "SSL:",
+                    "ssl.openssl.ssl-conf-cmd not available; ignored");
+    return 0;
+
+  #endif
 }
 
 
@@ -883,6 +942,10 @@ network_init_ssl (server *srv, void *p_d)
             return -1;
         }
       #endif
+
+        if (s->ssl_conf_cmd->used) {
+            if (0 != network_openssl_ssl_conf_cmd(srv, s)) return -1;
+        }
     }
 
     return 0;
@@ -913,6 +976,7 @@ SETDEFAULTS_FUNC(mod_openssl_set_defaults)
         { "ssl.use-sslv3",                     NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION }, /* 17 */
         { "ssl.ca-crl-file",                   NULL, T_CONFIG_STRING,  T_CONFIG_SCOPE_CONNECTION }, /* 18 */
         { "ssl.ca-dn-file",                    NULL, T_CONFIG_STRING,  T_CONFIG_SCOPE_CONNECTION }, /* 19 */
+        { "ssl.openssl.ssl-conf-cmd",          NULL, T_CONFIG_ARRAY,   T_CONFIG_SCOPE_CONNECTION }, /* 20 */
         { NULL,                         NULL, T_CONFIG_UNSET, T_CONFIG_SCOPE_UNSET }
     };
 
@@ -947,6 +1011,9 @@ SETDEFAULTS_FUNC(mod_openssl_set_defaults)
           : p->config_storage[0]->ssl_read_ahead;
         if (0 != i) buffer_copy_buffer(s->ssl_ca_crl_file, p->config_storage[0]->ssl_ca_crl_file);
         if (0 != i) buffer_copy_buffer(s->ssl_ca_dn_file, p->config_storage[0]->ssl_ca_dn_file);
+        s->ssl_conf_cmd = (0 == i)
+          ? array_init()
+          : array_init_array(p->config_storage[0]->ssl_conf_cmd);
 
         cv[0].destination = &(s->ssl_log_noise);
         cv[1].destination = &(s->ssl_enabled);
@@ -968,6 +1035,7 @@ SETDEFAULTS_FUNC(mod_openssl_set_defaults)
         cv[17].destination = &(s->ssl_use_sslv3);
         cv[18].destination = s->ssl_ca_crl_file;
         cv[19].destination = s->ssl_ca_dn_file;
+        cv[20].destination = s->ssl_conf_cmd;
 
         p->config_storage[i] = s;
 
@@ -996,6 +1064,12 @@ SETDEFAULTS_FUNC(mod_openssl_set_defaults)
             log_error_write(srv, __FILE__, __LINE__, "s",
                             "ssl.engine is valid only in global scope "
                             "or $SERVER[\"socket\"] condition");
+        }
+
+        if (!array_is_kvstring(s->ssl_conf_cmd)) {
+            log_error_write(srv, __FILE__, __LINE__, "s",
+                            "ssl.openssl.ssl-conf-cmd must be array "
+                            "of \"key\" => \"value\" strings");
         }
     }
 
@@ -1027,6 +1101,7 @@ mod_openssl_patch_connection (server *srv, connection *con, handler_ctx *hctx)
     /*PATCH(ssl_empty_fragments);*//*(not patched)*/
     /*PATCH(ssl_use_sslv2);*//*(not patched)*/
     /*PATCH(ssl_use_sslv3);*//*(not patched)*/
+    /*PATCH(ssl_conf_cmd);*//*(not patched)*/
 
     PATCH(ssl_verifyclient);
     PATCH(ssl_verifyclient_enforce);
@@ -1095,6 +1170,8 @@ mod_openssl_patch_connection (server *srv, connection *con, handler_ctx *hctx)
                 PATCH(ssl_ec_curve);
             } else if (buffer_is_equal_string(du->key, CONST_STR_LEN("ssl.engine"))) {
                 PATCH(ssl_enabled);
+            } else if (buffer_is_equal_string(du->key, CONST_STR_LEN("ssl.openssl.ssl-conf-cmd"))) {
+                PATCH(ssl_conf_cmd);
           #endif
             }
         }
