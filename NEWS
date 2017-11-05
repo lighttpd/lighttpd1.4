@@ -582,9 +582,7 @@ NEWS
   * [mod_ssi] fix parse of tag across buf boundary (fixes #2732)
   * [mod_cgi,mod_scgi] X-Sendfile sets file_started (fixes #2733)
   * [mod_fastcgi] no chunked response w/ X-Sendfile (fixes #2733)
-  * [config] opts for http header parsing strictness (fixes #551, fixes #1086, f
-ixes #1184, fixes #2143, #2258, #2281, fixes #946, fixes #1330, fixes #602, #101
-6)
+  * [config] opts for http header parsing strictness (fixes #551, fixes #1086, fixes #1184, fixes #2143, #2258, #2281, fixes #946, fixes #1330, fixes #602, #1016)
   * [config] normalize IP strings in lighttpd.conf
   * [build_cmake] use MODULE on Mac OS X (fixes #1761)
   * [config] server.bsd-accept-filter option
@@ -613,8 +611,7 @@ ixes #1184, fixes #2143, #2258, #2281, fixes #946, fixes #1330, fixes #602, #101
   * [mod_uploadprogress] fix mem leak (#1858)
   * [core] make server.max-request-size scopeable (fixes #1901)
   * [mod_fastcgi,mod_scgi] check for spawning on same unix socket (#319)
-  * [mod_accesslog] %a %A %C %D %k %{}t %{}T (fixes #1145, fixes #1415, fixes #2
-081)
+  * [mod_accesslog] %a %A %C %D %k %{}t %{}T (fixes #1145, fixes #1415, fixes #2081)
   * [mod_access] new directive url.access-allow (fixes #1421)
   * [core] fdevent_libev: update use of ev_timer
   * [mod_cgi] handle local redirect response (fixes #2108)
