@@ -400,6 +400,19 @@ if get_option('with_pgsql')
 	conf_data.set('HAVE_PGSQL', true)
 endif
 
+if get_option('with_sasl')
+	libsasl = dependency('sasl2', required: false)
+	if libsasl.found()
+		libsasl = [ libsasl2 ]
+	else
+		libsasl = [ compiler.find_library('sasl2') ]
+		if not(compiler.has_function('sasl_server_init', args: defs, dependencies: libsasl, prefix: '#include <sasl/sasl.h>'))
+			error('Couldn\'t find sasl/sasl.h or sasl_server_init in libsasl2')
+		endif
+	endif
+	conf_data.set('HAVE_SASL', true)
+endif
+
 #if get_option('with_valgrind')
 #endif
 
@@ -796,6 +809,12 @@ endif
 if get_option('with_openssl')
 	modules += [
 		[ 'mod_openssl', [ 'mod_openssl.c' ], libssl + libcrypto ],
+	]
+endif
+
+if get_option('with_sasl')
+	modules += [
+		[ 'mod_authn_sasl', [ 'mod_authn_sasl.c' ], libsasl2 ],
 	]
 endif
 

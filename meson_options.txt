@@ -73,6 +73,11 @@ option('with_pgsql',
 	value: false,
 	description: 'with postgres-support for mod_vhostdb_pgsql [default: off]',
 )
+option('with_sasl',
+	type: 'boolean',
+	value: false,
+	description: 'with SASL support for mod_authn_sasl [default: off]',
+)
 #option('with_valgrind',
 #	type: 'boolean',
 #	value: false,

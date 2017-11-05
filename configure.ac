@@ -328,8 +328,8 @@ DBI_LIBS=
 
 if test "$WITH_DBI" != no; then
   if test "$WITH_DBI" != yes; then
-    DBI_CFLAGS="-I$WITH_LIBDBI/include"
-    DBI_LIBS="-L$WITH_LIBDBI/lib -ldbi"
+    DBI_CFLAGS="-I$WITH_DBI/include"
+    DBI_LIBS="-L$WITH_DBI/lib -ldbi"
   else
     AC_CHECK_HEADERS([dbi/dbi.h],
       [AC_CHECK_LIB([dbi], [dbi_version],
@@ -349,6 +349,45 @@ AM_CONDITIONAL([BUILD_WITH_DBI], [test "$WITH_DBI" != no])
 
 AC_SUBST([DBI_LIBS])
 AC_SUBST([DBI_CFLAGS])
+
+dnl Checks for libsasl2 library
+AC_MSG_NOTICE([----------------------------------------])
+AC_MSG_CHECKING([for LibSASL support])
+AC_ARG_WITH([sasl],
+  [AC_HELP_STRING([--with-sasl@<:@=PATH@:>@],
+    [Include SASL support in PATH/include/sasl/sasl.h and PATH/lib]
+  )],
+  [WITH_SASL=$withval],
+  [WITH_SASL=no]
+)
+AC_MSG_RESULT([$WITH_SASL])
+
+SASL_INCLUDE=
+SASL_LIBS=
+
+if test "$WITH_SASL" != no; then
+  if test "$WITH_SASL" != yes; then
+    SASL_CFLAGS="-I$WITH_SASL/include"
+    SASL_LIBS="-L$WITH_SASL/lib -lsasl2"
+  else
+    AC_CHECK_HEADERS([sasl/sasl.h],
+      [AC_CHECK_LIB([sasl2], [sasl_server_init],
+        [
+          SASL_CFLAGS=
+          SASL_LIBS="-lsasl2"
+        ],
+        [AC_MSG_ERROR([libsasl2 not found])]
+      )],
+      [AC_MSG_ERROR([SASL header not found])]
+    )
+  fi
+
+  AC_DEFINE([HAVE_SASL], [1], [LibSASL support])
+fi
+AM_CONDITIONAL([BUILD_WITH_SASL], [test "$WITH_SASL" != no])
+
+AC_SUBST([SASL_LIBS])
+AC_SUBST([SASL_CFLAGS])
 
 
 dnl Check for LDAP

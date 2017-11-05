@@ -247,6 +247,7 @@ vars.AddVariables(
 	BoolVariable('with_openssl', 'enable openssl support', 'no'),
 	PackageVariable('with_pcre', 'enable pcre support', 'yes'),
 	PackageVariable('with_pgsql', 'enable pgsql support', 'no'),
+	PackageVariable('with_sasl', 'enable SASL support', 'no'),
 	BoolVariable('with_sqlite3', 'enable sqlite3 support (required for webdav props)', 'no'),
 	BoolVariable('with_uuid', 'enable uuid support (required for webdav locks)', 'no'),
 	# with_valgrind not supported
@@ -325,6 +326,7 @@ if 1:
 		LIBMYSQL = '',
 		LIBPCRE = '',
 		LIBPGSQL = '',
+		LIBSASL = '',
 		LIBSQLITE3 = '',
 		LIBSSL = '',
 		LIBUUID = '',
@@ -582,6 +584,14 @@ if 1:
 		if not autoconf.CheckParseConfigForLib('LIBPGSQL', 'pkg-config libpq --cflags --libs'):
 			fail("Couldn't find libpq")
 		autoconf.env.Append(CPPFLAGS = [ '-DHAVE_PGSQL_H', '-DHAVE_LIBPGSQL' ])
+
+	if env['with_sasl']:
+		if not autoconf.CheckLibWithHeader('sasl2', 'sasl/sasl.h', 'C'):
+			fail("Couldn't find libsasl2")
+		autoconf.env.Append(
+			CPPFLAGS = [ '-DHAVE_SASL' ],
+			LIBSASL = 'sasl2',
+		)
 
 	if env['with_sqlite3']:
 		if not autoconf.CheckLibWithHeader('sqlite3', 'sqlite3.h', 'C'):

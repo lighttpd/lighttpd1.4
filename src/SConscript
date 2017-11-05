@@ -157,6 +157,9 @@ if env['with_pgsql']:
 if env['with_dbi']:
 	modules['mod_vhostdb_dbi'] = { 'src' : [ 'mod_vhostdb_dbi.c' ], 'lib' : [ env['LIBDBI'] ] }
 
+if env['with_sasl']:
+	modules['mod_authn_sasl'] = { 'src' : [ 'mod_authn_sasl.c' ], 'lib' : [ env['LIBSASL'] ] }
+
 if env['with_openssl']:
 	modules['mod_openssl'] = { 'src' : [ 'mod_openssl.c' ], 'lib' : [ env['LIBSSL'], env['LIBCRYPTO'] ] }
 
