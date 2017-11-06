@@ -1,9 +1,14 @@
 import itertools
 import os
 import re
-import types
 from collections import OrderedDict
 from copy import copy
+
+try:
+	string_types = basestring
+except NameError:
+	string_types = str
+
 
 # search any file, not just executables
 def WhereIsFile(file, paths):
@@ -22,7 +27,7 @@ def WhereIsFile(file, paths):
 	return None
 
 def FlattenLibs(libs):
-	if isinstance(libs, basestring):
+	if isinstance(libs, string_types):
 		return [libs]
 	else:
 		return [item for sublibs in libs for item in FlattenLibs(sublibs)]
@@ -173,7 +178,7 @@ staticinit = ''
 for module in modules.keys():
 	staticsrc += modules[module]['src']
 	staticinit += "PLUGIN_INIT(%s)\n"%module
-	if modules[module].has_key('lib'):
+	if 'lib' in modules[module]:
 		staticlib += modules[module]['lib']
 
 def WriteStaticPluginHeader(target, source, env):
@@ -227,7 +232,7 @@ f.close
 
 lddre = re.compile(r'^\s+lib([^=-]+)(?:-[\.0-9]+)?\.so\.[0-9]+ =>', re.MULTILINE)
 for libs in staticlib:
-	if type(libs) is types.StringType: libs = [ libs ]
+	if isinstance(libs, string_types): libs = [ libs ]
 	for lib in libs:
 		fullstaticlib += [ lib ]
 		solibpath = WhereIsFile('lib' + lib + '.so', paths = searchlibs)
@@ -293,7 +298,7 @@ env['SHLIBPREFIX'] = ''
 instlib = []
 for module in modules.keys():
 	libs = [ common_lib ]
-	if modules[module].has_key('lib'):
+	if 'lib' in modules[module]:
 		libs +=  modules[module]['lib']
 	instlib += env.SharedLibrary(module, modules[module]['src'], LIBS = GatherLibs(env, libs))
 env.Alias('modules', instlib)

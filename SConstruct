@@ -1,9 +1,15 @@
+from __future__ import print_function
 import os
 import re
 import string
 import sys
 from copy import copy
 from stat import *
+
+try:
+	string_types = basestring
+except NameError:
+	string_types = str
 
 package = 'lighttpd'
 version = '1.4.48'
@@ -14,7 +20,7 @@ def underscorify(id):
 
 def fail(*args, **kwargs):
 	print(*args, file=sys.stderr, **kwargs)
-	env.Exit(-1)
+	sys.exit(-1)
 
 class Autoconf:
 	class RestoreEnvLibs:
@@ -91,7 +97,7 @@ class Autoconf:
 		if self.CheckCHeader(hdr):
 			# if we have a list of headers define HAVE_ only for last one
 			target = hdr
-			if not isinstance(target, basestring):
+			if not isinstance(target, string_types):
 				target = target[-1]
 			self.conf.env.Append(CPPFLAGS = [ '-DHAVE_' + underscorify(target) ])
 			return True
@@ -632,7 +638,7 @@ elif re.compile("darwin|aix").search(env['PLATFORM']):
 else:
 	env.Append(COMMON_LIB = False)
 
-versions = string.split(version, '.')
+versions = version.split('.')
 version_id = int(versions[0]) << 16 | int(versions[1]) << 8 | int(versions[2])
 env.Append(CPPFLAGS = [
 		'-DLIGHTTPD_VERSION_ID=' + hex(version_id),
