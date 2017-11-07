@@ -1451,6 +1451,14 @@ connection_read_cq_ssl (server *srv, connection *con,
 
             switch(oerrno) {
             default:
+                /* (oerrno should be something like ECONNABORTED not 0
+                 *  if client disconnected before anything was sent
+                 *  (e.g. TCP connection probe), but it does not appear
+                 *  that openssl provides such notification, not even
+                 *  something like SSL_R_SSL_HANDSHAKE_FAILURE) */
+                if (0==oerrno && 0==cq->bytes_in && !hctx->conf.ssl_log_noise)
+                    break;
+
                 log_error_write(srv, __FILE__, __LINE__, "sddds", "SSL:",
                         len, r, oerrno,
                         strerror(oerrno));
