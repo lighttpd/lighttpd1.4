@@ -48,6 +48,7 @@ struct ev_loop;         /* declaration */
 
 #include "base_decls.h"
 #include "settings.h"   /* (handler_t) */
+#include "fdevent.h"    /* (*fdevent_handler) */
 
 typedef enum {
     FDEVENT_HANDLER_UNSET,
@@ -59,8 +60,6 @@ typedef enum {
     FDEVENT_HANDLER_FREEBSD_KQUEUE,
     FDEVENT_HANDLER_LIBEV
 } fdevent_handler_t;
-
-typedef handler_t (*fdevent_handler)(struct server *srv, void *ctx, int revents);
 
 typedef struct _fdnode {
     fdevent_handler handler;
