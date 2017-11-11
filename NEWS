@@ -4,6 +4,37 @@ NEWS
 ====
 
 - 1.4.48
+  * [mod_webdav] fix crash if stat fails, not ENOENT
+  * [core] fix build --disable-ipv6 (fixes #2832)
+  * [scons] Merge branch 'personal/stbuehler/scons-cleanup'
+  * [autobuild] Merge branch 'personal/stbuehler/autobuild-cleanup'
+  * [meson] new build system
+  * [core] fix var.CWD (regression in 1.4.46) (fixes #2835)
+  * [core] fix implicit wildcard IPv4 and IPv6 listen
+  * [autobuild] remove obsolete warning about mmap use
+  * [core] isolate sock_addr manipulation
+  * [stat_cache] remove debug code littered in file
+  * [core] cleanup unused ifndef
+  * [core] cleanup: consolidate FAM code in stat_cache
+  * [core] consolidate backend network write handlers
+  * [autobuild] allow sendfile() in cross-compile (fixes #2836)
+  * [core] quiet pedantic cc warning for excess comma
+  * [core] isolate backend fdevent handler defs
+  * [mod_openssl] error if ssl.engine in wrong section (fixes #2837)
+  * [core] fix lighttpd -1 one-shot graceful shutdown
+  * [mod_cgi] quiet trace if mod_cgi sends SIGTERM (fixes #2838)
+  * [build] fix link of test_configfile.c
+  * [core] quiet coverity false positive
+  * [mod_openssl] more pedantic check of return values
+  * [mod_openssl] allow specifying server cert chain (fixes #2692)
+  * [mod_openssl] ssl.openssl.ssl-conf-cmd (fixes #2758)
+  * [doc] NEWS - fix improper format line breaks
+  * [mod_authn_ldap] replace use of deprecated funcs
+  * [mod_authn_sasl] SASL auth (new) (fixes #2275)
+  * [mod_openssl] quiet trace from TCP probes (#2784)
+  * [core] fix dup typedef compiler warning
+  * [scons] fix various python2/3 incompatibilities
+  * [doc] fix doc/config/conf.d/fastcgi.conf example
 
 - 1.4.47 - 2017-10-22
   * [mod_authn_gssapi] needs -lcom_err under Darwin
