@@ -1075,7 +1075,7 @@ handler_t http_response_parse_headers(server *srv, connection *con, http_respons
 
     if (b->ptr[0] == '\n' || (b->ptr[0] == '\r' && b->ptr[1] == '\n')) {
         /* no HTTP headers */
-        i = (b->ptr[0] == '\n') ? 1 : 2;
+        i = (b->ptr[0] == '\n') ? 0 : 1;
         is_header_end = 1;
     } else if (is_nph || b->ptr[(i = strcspn(b->ptr, ":\n"))] == ':') {
         /* HTTP headers */
