@@ -4,6 +4,7 @@
 #include "fdevent.h"
 #include "log.h"
 #include "buffer.h"
+#include "sock_addr.h"
 
 #include "plugin.h"
 
@@ -119,6 +120,11 @@ enum e_optflags_time {
 	FORMAT_FLAG_TIME_MSEC_FRAC = 0x20,/* request time msec fraction */
 	FORMAT_FLAG_TIME_USEC_FRAC = 0x40,/* request time usec fraction */
 	FORMAT_FLAG_TIME_NSEC_FRAC = 0x80 /* request time nsec fraction */
+};
+
+enum e_optflags_port {
+	FORMAT_FLAG_PORT_LOCAL     = 0x01,/* (default) */
+	FORMAT_FLAG_PORT_REMOTE    = 0x02
 };
 
 
@@ -334,7 +340,7 @@ static int accesslog_parse_format(server *srv, format_fields *fields, buffer *fo
 				}
 
 				if (k == i + 2) {
-					log_error_write(srv, __FILE__, __LINE__, "s", "%{...} has to be contain a string");
+					log_error_write(srv, __FILE__, __LINE__, "s", "%{...} has to contain a string");
 					return -1;
 				}
 
@@ -602,6 +608,21 @@ SETDEFAULTS_FUNC(log_access_open) {
 					if (f->opt & ~(FORMAT_FLAG_TIME_SEC)) srv->srvconf.high_precision_timestamps = 1;
 				} else if (FORMAT_COOKIE == f->field) {
 					if (buffer_string_is_empty(f->string)) f->type = FIELD_STRING; /*(blank)*/
+				} else if (FORMAT_SERVER_PORT == f->field) {
+					if (buffer_string_is_empty(f->string))
+						f->opt |= FORMAT_FLAG_PORT_LOCAL;
+					else if (buffer_is_equal_string(f->string, CONST_STR_LEN("canonical")))
+						f->opt |= FORMAT_FLAG_PORT_LOCAL;
+					else if (buffer_is_equal_string(f->string, CONST_STR_LEN("local")))
+						f->opt |= FORMAT_FLAG_PORT_LOCAL;
+					else if (buffer_is_equal_string(f->string, CONST_STR_LEN("remote")))
+						f->opt |= FORMAT_FLAG_PORT_REMOTE;
+					else {
+						log_error_write(srv, __FILE__, __LINE__, "sb",
+								"invalid format %{canonical,local,remote}p:", s->format);
+
+						return HANDLER_ERROR;
+					}
 				}
 			}
 
@@ -1030,7 +1051,9 @@ REQUESTDONE_FUNC(log_access_write) {
 				}
 				break;
 			case FORMAT_SERVER_PORT:
-				{
+				if (f->opt & FORMAT_FLAG_PORT_REMOTE) {
+					buffer_append_int(b, sock_addr_get_port(&con->dst_addr));
+				} else { /* if (f->opt & FORMAT_FLAG_PORT_LOCAL) *//*(default)*/
 					const char *colon;
 					buffer *srvtoken = ((server_socket*)(con->srv_socket))->srv_token;
 					if (srvtoken->ptr[0] == '[') {
