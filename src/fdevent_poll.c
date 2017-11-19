@@ -20,6 +20,10 @@
 #  include <sys/poll.h>
 # endif
 
+#ifndef POLLRDHUP
+#define POLLRDHUP 0
+#endif
+
 static void fdevent_poll_free(fdevents *ev) {
 	free(ev->pollfds);
 	if (ev->unused.ptr) free(ev->unused.ptr);
@@ -79,6 +83,7 @@ static int fdevent_poll_event_set(fdevents *ev, int fde_ndx, int fd, int events)
 	int pevents = 0;
 	if (events & FDEVENT_IN)  pevents |= POLLIN;
 	if (events & FDEVENT_OUT) pevents |= POLLOUT;
+	if (events & FDEVENT_RDHUP) pevents |= POLLRDHUP;
 
 	/* known index */
 
@@ -153,6 +158,7 @@ static int fdevent_poll_event_get_revent(fdevents *ev, size_t ndx) {
 	if (poll_r & POLLHUP) r |= FDEVENT_HUP;
 	if (poll_r & POLLNVAL) r |= FDEVENT_NVAL;
 	if (poll_r & POLLPRI) r |= FDEVENT_PRI;
+	if (poll_r & POLLRDHUP) r |= FDEVENT_RDHUP;
 
 	return r;
 }

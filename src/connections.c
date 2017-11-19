@@ -908,9 +908,26 @@ static handler_t connection_handle_fdevent(server *srv, void *context, int reven
 		if (con->state == CON_STATE_CLOSE) {
 			con->close_timeout_ts = srv->cur_ts - (HTTP_LINGER_TIMEOUT+1);
 		} else if (revents & FDEVENT_HUP) {
-			if (fdevent_is_tcp_half_closed(con->fd)) {
+			connection_set_state(srv, con, CON_STATE_ERROR);
+		} else if (revents & FDEVENT_RDHUP) {
+			if (sock_addr_get_family(&con->dst_addr) == AF_UNIX) {
+				/* future: will getpeername() on AF_UNIX properly check if still connected? */
+				fdevent_event_clr(srv->ev, &con->fde_ndx, con->fd, FDEVENT_RDHUP);
+				con->keep_alive = 0;
+			} else if (fdevent_is_tcp_half_closed(con->fd)) {
+				/* Success of fdevent_is_tcp_half_closed() after FDEVENT_RDHUP indicates TCP FIN received,
+				 * but does not distinguish between client shutdown(fd, SHUT_WR) and client close(fd).
+				 * Remove FDEVENT_RDHUP so that we do not spin on the ready event.
+				 * However, a later TCP RST will not be detected until next write to socket.
+				 * future: might getpeername() to check for TCP RST on half-closed sockets
+				 * (without FDEVENT_RDHUP interest) when checking for write timeouts
+				 * once a second in server.c, though getpeername() on Windows might not indicate this */
+				fdevent_event_clr(srv->ev, &con->fde_ndx, con->fd, FDEVENT_RDHUP);
 				con->keep_alive = 0;
 			} else {
+				/* Failure of fdevent_is_tcp_half_closed() indicates TCP RST
+				 * (or unable to tell (unsupported OS), though should not
+				 * be setting FDEVENT_RDHUP in that case) */
 				connection_set_state(srv, con, CON_STATE_ERROR);
 			}
 		} else if (revents & FDEVENT_ERR) { /* error, connection reset */
@@ -1370,8 +1387,7 @@ int connection_state_machine(server *srv, connection *con) {
 	r = 0;
 	switch(con->state) {
 	case CON_STATE_READ:
-	case CON_STATE_CLOSE:
-		r = FDEVENT_IN;
+		r = FDEVENT_IN | FDEVENT_RDHUP;
 		break;
 	case CON_STATE_WRITE:
 		/* request write-fdevent only if we really need it
@@ -1386,8 +1402,11 @@ int connection_state_machine(server *srv, connection *con) {
 		/* fall through */
 	case CON_STATE_READ_POST:
 		if (con->conf.stream_request_body & FDEVENT_STREAM_REQUEST_POLLIN) {
-			r |= FDEVENT_IN;
+			r |= FDEVENT_IN | FDEVENT_RDHUP;
 		}
+		break;
+	case CON_STATE_CLOSE:
+		r = FDEVENT_IN;
 		break;
 	default:
 		break;
@@ -1401,6 +1420,9 @@ int connection_state_machine(server *srv, connection *con) {
 		if (con->is_writable < 0) {
 			con->is_writable = 0;
 			r |= FDEVENT_OUT;
+		}
+		if (events & FDEVENT_RDHUP) {
+			r |= FDEVENT_RDHUP;
 		}
 		if (r != events) {
 			/* update timestamps when enabling interest in events */

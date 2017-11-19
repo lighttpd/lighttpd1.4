@@ -205,7 +205,7 @@ static handler_t stat_cache_handle_fdevent(server *srv, void *_fce, int revent) 
 		}
 	}
 
-	if (revent & FDEVENT_HUP) {
+	if (revent & (FDEVENT_HUP|FDEVENT_RDHUP)) {
 		/* fam closed the connection */
 		fdevent_event_del(srv->ev, &(scf->fam_fcce_ndx), FAMCONNECTION_GETFD(&scf->fam));
 		fdevent_unregister(srv->ev, FAMCONNECTION_GETFD(&scf->fam));
@@ -234,7 +234,7 @@ static stat_cache_fam * stat_cache_init_fam(server *srv) {
 
 	fdevent_setfd_cloexec(FAMCONNECTION_GETFD(&scf->fam));
 	fdevent_register(srv->ev, FAMCONNECTION_GETFD(&scf->fam), stat_cache_handle_fdevent, NULL);
-	fdevent_event_set(srv->ev, &(scf->fam_fcce_ndx), FAMCONNECTION_GETFD(&scf->fam), FDEVENT_IN);
+	fdevent_event_set(srv->ev, &(scf->fam_fcce_ndx), FAMCONNECTION_GETFD(&scf->fam), FDEVENT_IN | FDEVENT_RDHUP);
 
 	return scf;
 }

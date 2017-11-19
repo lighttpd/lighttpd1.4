@@ -1811,7 +1811,8 @@ static handler_t gw_write_request(server *srv, gw_handler_ctx *hctx) {
             }
         }
 
-        fdevent_event_add(srv->ev, &(hctx->fde_ndx), hctx->fd, FDEVENT_IN);
+        fdevent_event_add(srv->ev, &hctx->fde_ndx, hctx->fd,
+                          FDEVENT_IN | FDEVENT_RDHUP);
         gw_set_state(srv, hctx, GW_STATE_WRITE);
         /* fall through */
     case GW_STATE_WRITE:
@@ -2144,7 +2145,7 @@ static handler_t gw_handle_fdevent(server *srv, void *ctx, int revents) {
     }
 
     /* perhaps this issue is already handled */
-    if (revents & FDEVENT_HUP) {
+    if (revents & (FDEVENT_HUP|FDEVENT_RDHUP)) {
         if (hctx->state == GW_STATE_CONNECT_DELAYED) {
             /* getoptsock will catch this one (right ?)
              *

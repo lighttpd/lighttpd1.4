@@ -16,6 +16,10 @@
 
 # include <sys/epoll.h>
 
+#ifndef EPOLLRDHUP
+#define EPOLLRDHUP 0
+#endif
+
 static void fdevent_linux_sysepoll_free(fdevents *ev) {
 	close(ev->epoll_fd);
 	free(ev->epoll_events);
@@ -56,6 +60,7 @@ static int fdevent_linux_sysepoll_event_set(fdevents *ev, int fde_ndx, int fd, i
 
 	if (events & FDEVENT_IN)  ep.events |= EPOLLIN;
 	if (events & FDEVENT_OUT) ep.events |= EPOLLOUT;
+	if (events & FDEVENT_RDHUP) ep.events |= EPOLLRDHUP;
 
 	/**
 	 *
@@ -95,6 +100,7 @@ static int fdevent_linux_sysepoll_event_get_revent(fdevents *ev, size_t ndx) {
 	if (e & EPOLLERR) events |= FDEVENT_ERR;
 	if (e & EPOLLHUP) events |= FDEVENT_HUP;
 	if (e & EPOLLPRI) events |= FDEVENT_PRI;
+	if (e & EPOLLRDHUP) events |= FDEVENT_RDHUP;
 
 	return events;
 }

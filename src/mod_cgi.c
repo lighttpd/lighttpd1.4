@@ -417,7 +417,7 @@ static handler_t cgi_handle_fdevent(server *srv, void *ctx, int revents) {
 	}
 
 	/* perhaps this issue is already handled */
-	if (revents & FDEVENT_HUP) {
+	if (revents & (FDEVENT_HUP|FDEVENT_RDHUP)) {
 		if (con->file_started) {
 			/* drain any remaining data from kernel pipe buffers
 			 * even if (con->conf.stream_response_body
@@ -823,7 +823,7 @@ static int cgi_create_env(server *srv, connection *con, plugin_data *p, handler_
 			cgi_connection_close(srv, hctx);
 			return -1;
 		}
-		fdevent_event_set(srv->ev, &(hctx->fde_ndx), hctx->fd, FDEVENT_IN);
+		fdevent_event_set(srv->ev, &(hctx->fde_ndx), hctx->fd, FDEVENT_IN | FDEVENT_RDHUP);
 
 		return 0;
 	}

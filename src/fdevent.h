@@ -19,6 +19,7 @@ typedef handler_t (*fdevent_handler)(struct server *srv, void *ctx, int revents)
 #define FDEVENT_ERR    BV(3)
 #define FDEVENT_HUP    BV(4)
 #define FDEVENT_NVAL   BV(5)
+#define FDEVENT_RDHUP  BV(13)
 
 #define FDEVENT_STREAM_REQUEST          BV(0)
 #define FDEVENT_STREAM_REQUEST_BUFMIN   BV(1)

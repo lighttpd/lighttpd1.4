@@ -391,7 +391,7 @@ void fdevent_event_add(fdevents *ev, int *fde_ndx, int fd, int event) {
 	if (-1 == fd) return;
 
 	events = ev->fdarray[fd]->events;
-	if ((events & event) || 0 == event) return; /*(no change; nothing to do)*/
+	if ((events & event) == event) return; /*(no change; nothing to do)*/
 
 	events |= event;
 	if (ev->event_set) *fde_ndx = ev->event_set(ev, *fde_ndx, fd, events);

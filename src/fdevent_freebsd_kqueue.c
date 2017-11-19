@@ -138,7 +138,7 @@ static int fdevent_freebsd_kqueue_poll(fdevents *ev, int timeout_ms) {
 static int fdevent_freebsd_kqueue_event_get_revent(fdevents *ev, size_t ndx) {
 	int events = 0, e;
 
-	e = ev->kq_results[ndx].filter;
+	int filt = e = ev->kq_results[ndx].filter;
 
 	if (e == EVFILT_READ) {
 		events |= FDEVENT_IN;
@@ -149,7 +149,11 @@ static int fdevent_freebsd_kqueue_event_get_revent(fdevents *ev, size_t ndx) {
 	e = ev->kq_results[ndx].flags;
 
 	if (e & EV_EOF) {
-		events |= FDEVENT_HUP;
+		if (filt == EVFILT_READ) {
+			events |= FDEVENT_RDHUP;
+		} else {
+			events |= FDEVENT_HUP;
+		}
 	}
 
 	if (e & EV_ERROR) {
