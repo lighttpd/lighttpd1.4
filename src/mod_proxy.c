@@ -28,6 +28,7 @@ typedef struct http_header_remap_opts {
     const array *hosts_response;
     int https_remap;
     int upgrade;
+    int connect_method;
     /*(not used in plugin_config, but used in handler_ctx)*/
     const buffer *http_host;
     const buffer *forwarded_host;
@@ -239,6 +240,17 @@ SETDEFAULTS_FUNC(mod_proxy_set_defaults) {
 				}
 				s->header.upgrade = !buffer_is_equal_string(ds->value, CONST_STR_LEN("disable"))
 						 && !buffer_is_equal_string(ds->value, CONST_STR_LEN("0"));
+				continue;
+			}
+			else if (buffer_is_equal_string(da->key, CONST_STR_LEN("connect"))) {
+				data_string *ds = (data_string *)da;
+				if (ds->type != TYPE_STRING) {
+					log_error_write(srv, __FILE__, __LINE__, "s",
+							"unexpected value for proxy.header; expected \"connect\" => \"enable\" or \"disable\"");
+					return HANDLER_ERROR;
+				}
+				s->header.connect_method = !buffer_is_equal_string(ds->value, CONST_STR_LEN("disable"))
+							&& !buffer_is_equal_string(ds->value, CONST_STR_LEN("0"));
 				continue;
 			}
 			if (da->type != TYPE_ARRAY || !array_is_kvstring(da->value)) {
@@ -850,6 +862,20 @@ static handler_t proxy_create_env(server *srv, gw_handler_ctx *gwhctx) {
 	return HANDLER_GO_ON;
 }
 
+
+static handler_t proxy_create_env_connect(server *srv, gw_handler_ctx *gwhctx) {
+	handler_ctx *hctx = (handler_ctx *)gwhctx;
+	connection *con = hctx->gw.remote_conn;
+	con->http_status = 200; /* OK */
+	con->file_started = 1;
+	gw_set_transparent(srv, &hctx->gw);
+	http_response_upgrade_read_body_unknown(srv, con);
+
+	status_counter_inc(srv, CONST_STR_LEN("proxy.requests"));
+	return HANDLER_GO_ON;
+}
+
+
 #define PATCH(x) \
 	p->conf.x = s->x;
 #define PATCH_GW(x) \
@@ -982,6 +1008,19 @@ static handler_t mod_proxy_check_extension(server *srv, connection *con, void *p
 		if (hctx->remap_hdrs.https_remap) {
 			hctx->remap_hdrs.https_remap =
 			  buffer_is_equal_string(con->uri.scheme, CONST_STR_LEN("https"));
+		}
+
+		if (con->request.http_method == HTTP_METHOD_CONNECT) {
+			/*(note: not requiring HTTP/1.1 due to too many non-compliant
+			 * clients such as 'openssl s_client')*/
+			if (hctx->remap_hdrs.connect_method) {
+				hctx->gw.create_env = proxy_create_env_connect;
+			}
+			else {
+				con->http_status = 405; /* Method Not Allowed */
+				con->mode = DIRECT;
+				return HANDLER_FINISHED;
+			}
 		}
 	}
 

@@ -218,6 +218,8 @@ handler_t http_response_prepare(server *srv, connection *con) {
 		    con->uri.path_raw->ptr[0] == '*' && con->uri.path_raw->ptr[1] == '\0') {
 			/* OPTIONS * ... */
 			buffer_copy_buffer(con->uri.path, con->uri.path_raw);
+		} else if (con->request.http_method == HTTP_METHOD_CONNECT) {
+			buffer_copy_buffer(con->uri.path, con->uri.path_raw);
 		} else {
 			buffer_copy_buffer(srv->tmp_buf, con->uri.path_raw);
 			buffer_urldecode_path(srv->tmp_buf);

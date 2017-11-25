@@ -424,7 +424,10 @@ static int connection_handle_write_prepare(server *srv, connection *con) {
 		 */
 
 		if (!(con->parsed_response & (HTTP_CONTENT_LENGTH|HTTP_TRANSFER_ENCODING|HTTP_UPGRADE))) {
-			if (con->request.http_version == HTTP_VERSION_1_1) {
+			if (con->request.http_method == HTTP_METHOD_CONNECT
+			    && con->http_status == 200) {
+				/*(no transfer-encoding if successful CONNECT)*/
+			} else if (con->request.http_version == HTTP_VERSION_1_1) {
 				off_t qlen = chunkqueue_length(con->write_queue);
 				con->response.transfer_encoding = HTTP_TRANSFER_ENCODING_CHUNKED;
 				if (qlen) {
