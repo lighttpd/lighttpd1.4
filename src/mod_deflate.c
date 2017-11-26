@@ -841,6 +841,7 @@ static int mod_deflate_file_chunk(server *srv, connection *con, handler_ctx *hct
 			free(start);
 			return -1;
 		}
+		abs_offset = 0;
 	}
 
 #ifdef USE_MMAP
