@@ -741,7 +741,7 @@ static void chunkqueue_remove_empty_chunks(chunkqueue *cq) {
 	chunkqueue_remove_finished_chunks(cq);
 	if (chunkqueue_is_empty(cq)) return;
 
-	for (c = cq->first; c->next; c = c->next) {
+	for (c = cq->first; c && c->next; c = c->next) {
 		if (0 == chunk_remaining_length(c->next)) {
 			chunk *empty = c->next;
 			c->next = empty->next;
