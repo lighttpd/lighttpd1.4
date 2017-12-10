@@ -563,7 +563,8 @@ static int deflate_file_to_file(server *srv, connection *con, plugin_data *p, bu
 	}
 
 #ifdef USE_MMAP
-	if (MAP_FAILED != (start = mmap(NULL, sce->st.st_size, PROT_READ, MAP_SHARED, ifd, 0))) {
+	if (MAP_FAILED != (start = mmap(NULL, sce->st.st_size, PROT_READ, MAP_SHARED, ifd, 0))
+	    || (errno == EINVAL && MAP_FAILED != (start = mmap(NULL, sce->st.st_size, PROT_READ, MAP_PRIVATE, ifd, 0)))) {
 		mapped = 1;
 		signal(SIGBUS, sigbus_handler);
 		sigbus_jmp_valid = 1;
@@ -690,7 +691,8 @@ static int deflate_file_to_buffer(server *srv, connection *con, plugin_data *p, 
 	}
 
 #ifdef USE_MMAP
-	if (MAP_FAILED != (start = mmap(NULL, sce->st.st_size, PROT_READ, MAP_SHARED, ifd, 0))) {
+	if (MAP_FAILED != (start = mmap(NULL, sce->st.st_size, PROT_READ, MAP_SHARED, ifd, 0))
+	    || (errno == EINVAL && MAP_FAILED != (start = mmap(NULL, sce->st.st_size, PROT_READ, MAP_PRIVATE, ifd, 0)))) {
 		mapped = 1;
 		signal(SIGBUS, sigbus_handler);
 		sigbus_jmp_valid = 1;

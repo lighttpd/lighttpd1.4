@@ -792,9 +792,8 @@ static int mod_deflate_file_chunk(server *srv, connection *con, handler_ctx *hct
 		/* we have more to send than we can mmap() at once */
 		if (we_want_to_send > to_mmap) we_want_to_send = to_mmap;
 
-		if (MAP_FAILED == (c->file.mmap.start = mmap(0, (size_t)to_mmap, PROT_READ, MAP_SHARED, c->file.fd, c->file.mmap.offset))) {
-			/* close it here, otherwise we'd have to set FD_CLOEXEC */
-
+		if (MAP_FAILED == (c->file.mmap.start = mmap(0, (size_t)to_mmap, PROT_READ, MAP_SHARED, c->file.fd, c->file.mmap.offset))
+		    && (errno != EINVAL || MAP_FAILED == (c->file.mmap.start = mmap(0, (size_t)to_mmap, PROT_READ, MAP_PRIVATE, c->file.fd, c->file.mmap.offset)))) {
 			log_error_write(srv, __FILE__, __LINE__, "ssbd", "mmap failed:",
 					strerror(errno), c->file.name, c->file.fd);
 
