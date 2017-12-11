@@ -161,10 +161,11 @@ static void connection_read_for_eos(server *srv, connection *con) {
 	 * it will make the client not see all our output.
 	 */
 	ssize_t len;
-	char buf[4096];
-
+	const int type = con->dst_addr.plain.sa_family;
+	char buf[16384];
 	do {
-		len = read(con->fd, buf, sizeof(buf));
+		len = fdevent_socket_read_discard(con->fd, buf, sizeof(buf),
+						  type, SOCK_STREAM);
 	} while (len > 0 || (len < 0 && errno == EINTR));
 
 	if (len < 0 && errno == EAGAIN) return;

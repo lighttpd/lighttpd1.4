@@ -78,6 +78,8 @@ void fdevent_close_logger_pipes(void);
 void fdevent_breakagelog_logger_pipe(int fd);
 void fdevent_clr_logger_pipe_pids(void);
 
+ssize_t fdevent_socket_read_discard (int fd, char *buf, size_t sz, int family, int so_type);
+
 int fdevent_ioctl_fionread (int fd, int fdfmt, int *toread);
 
 int fdevent_connect_status(int fd);

@@ -889,6 +889,28 @@ int fdevent_cycle_logger(const char *logger, int *curfd) {
 }
 
 
+#ifndef MSG_DONTWAIT
+#define MSG_DONTWAIT 0
+#endif
+#ifndef MSG_NOSIGNAL
+#define MSG_NOSIGNAL 0
+#endif
+
+
+ssize_t fdevent_socket_read_discard (int fd, char *buf, size_t sz, int family, int so_type) {
+  #if defined(MSG_TRUNC) && defined(__linux__)
+    if ((family == AF_INET || family == AF_INET6) && so_type == SOCK_STREAM) {
+        ssize_t len = recv(fd, buf, sz, MSG_TRUNC|MSG_DONTWAIT|MSG_NOSIGNAL);
+        if (len >= 0 || errno != EINVAL) return len;
+    }
+  #else
+    UNUSED(family);
+    UNUSED(so_type);
+  #endif
+    return read(fd, buf, sz);
+}
+
+
 #include <sys/ioctl.h>
 #ifdef HAVE_SYS_FILIO_H
 #include <sys/filio.h>  /* FIONREAD (for illumos (OpenIndiana)) */

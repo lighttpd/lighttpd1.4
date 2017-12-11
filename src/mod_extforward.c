@@ -1224,7 +1224,7 @@ indicating which element is present :
 #endif
 
 /* returns 0 if needs to poll, <0 upon error or >0 is protocol vers (success) */
-static int hap_PROXY_recv (const int fd, union hap_PROXY_hdr * const hdr)
+static int hap_PROXY_recv (const int fd, union hap_PROXY_hdr * const hdr, const int family, const int so_type)
 {
     static const char v2sig[12] =
         "\x0D\x0A\x0D\x0A\x00\x0D\x0A\x51\x55\x49\x54\x0A";
@@ -1273,10 +1273,22 @@ static int hap_PROXY_recv (const int fd, union hap_PROXY_hdr * const hdr)
 
     /* we need to consume the appropriate amount of data from the socket
      * (overwrites existing contents of hdr with same data) */
+    UNUSED(family);
+    UNUSED(so_type);
     do {
+      #if defined(MSG_TRUNC) && defined(__linux__)
+        if ((family==AF_INET || family==AF_INET6) && so_type == SOCK_STREAM) {
+            ret = recv(fd, hdr, sz, MSG_TRUNC|MSG_DONTWAIT|MSG_NOSIGNAL);
+            if (ret >= 0 || errno != EINVAL) continue;
+        }
+      #endif
         ret = recv(fd, hdr, sz, MSG_DONTWAIT|MSG_NOSIGNAL);
     } while (-1 == ret && errno == EINTR);
     if (ret < 0) return -1;
+    if (ret != (ssize_t)sz) {
+        errno = EIO; /*(partial read; valid but unexpected; not handled)*/
+        return -1;
+    }
     if (1 == ver) hdr->v1.line[sz-2] = '\0'; /*terminate str to ease parsing*/
     return ver;
 }
@@ -1540,7 +1552,8 @@ static int mod_extforward_network_read (server *srv, connection *con,
      * In the future, might add config switch to enable doing this extra work */
 
     union hap_PROXY_hdr hdr;
-    int rc = hap_PROXY_recv(con->fd, &hdr);
+    int rc = hap_PROXY_recv(con->fd, &hdr,
+                            con->dst_addr.plain.sa_family, SOCK_STREAM);
     switch (rc) {
       case  2: rc = mod_extforward_hap_PROXY_v2(con, &hdr); break;
       case  1: rc = mod_extforward_hap_PROXY_v1(con, &hdr); break;
