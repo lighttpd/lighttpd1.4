@@ -728,13 +728,14 @@ static int log_error_open(server *srv) {
     }
     else if (!buffer_string_is_empty(srv->srvconf.errorlog_file)) {
         const char *logfile = srv->srvconf.errorlog_file->ptr;
-
-        if (-1 == (srv->errorlog_fd = fdevent_open_logger(logfile))) {
+        int fd = fdevent_open_logger(logfile);
+        if (-1 == fd) {
             log_error_write(srv, __FILE__, __LINE__, "SSSS",
                             "opening errorlog '", logfile,
                             "' failed: ", strerror(errno));
             return -1;
         }
+        srv->errorlog_fd = fd;
         srv->errorlog_mode = logfile[0] == '|' ? ERRORLOG_PIPE : ERRORLOG_FILE;
     }
 
