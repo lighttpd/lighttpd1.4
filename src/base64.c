@@ -11,7 +11,7 @@
 
 /* BASE64_STANDARD: "A-Z a-z 0-9 + /" maps to 0-63, pad with "=" */
 static const char base64_standard_table[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=";
-static const char base64_standard_reverse_table[] = {
+static const signed char base64_standard_reverse_table[] = {
 /*	 0   1   2   3   4   5   6   7   8   9   A   B   C   D   E   F */
 	-1, -2, -2, -2, -2, -2, -2, -2, -2, -2, -2, -2, -2, -2, -2, -2, /* 0x00 - 0x0F */
 	-2, -2, -2, -2, -2, -2, -2, -2, -2, -2, -2, -2, -2, -2, -2, -2, /* 0x10 - 0x1F */
@@ -25,7 +25,7 @@ static const char base64_standard_reverse_table[] = {
 
 /* BASE64_URL: "A-Z a-z 0-9 - _" maps to 0-63, pad with "." */
 static const char base64_url_table[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_.";
-static const char base64_url_reverse_table[] = {
+static const signed char base64_url_reverse_table[] = {
 /*	 0   1   2   3   4   5   6   7   8   9   A   B   C   D   E   F */
 	-1, -2, -2, -2, -2, -2, -2, -2, -2, -2, -2, -2, -2, -2, -2, -2, /* 0x00 - 0x0F */
 	-2, -2, -2, -2, -2, -2, -2, -2, -2, -2, -2, -2, -2, -2, -2, -2, /* 0x10 - 0x1F */
@@ -42,7 +42,7 @@ unsigned char* buffer_append_base64_decode(buffer *out, const char* in, size_t i
 	size_t out_pos = 0; /* current output character (position) that is decoded. can contain partial result */
 	unsigned int group = 0; /* how many base64 digits in the current group were decoded already. each group has up to 4 digits */
 	size_t i;
-	const char *base64_reverse_table;
+	const signed char *base64_reverse_table;
 
 	switch (charset) {
 	case BASE64_STANDARD:
