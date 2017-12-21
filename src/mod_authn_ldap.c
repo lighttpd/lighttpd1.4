@@ -398,7 +398,7 @@ static LDAP * mod_authn_ldap_host_init(server *srv, plugin_config *s) {
     ret = ldap_set_option(ld, LDAP_OPT_PROTOCOL_VERSION, &ret);
     if (LDAP_OPT_SUCCESS != ret) {
         mod_authn_ldap_err(srv, __FILE__, __LINE__, "ldap_set_options()", ret);
-        ldap_memfree(ld);
+        ldap_destroy(ld);
         return NULL;
     }
 
@@ -412,7 +412,7 @@ static LDAP * mod_authn_ldap_host_init(server *srv, plugin_config *s) {
                 mod_authn_ldap_err(srv, __FILE__, __LINE__,
                                    "ldap_set_option(LDAP_OPT_X_TLS_CACERTFILE)",
                                    ret);
-                ldap_memfree(ld);
+                ldap_destroy(ld);
                 return NULL;
             }
         }
@@ -420,7 +420,7 @@ static LDAP * mod_authn_ldap_host_init(server *srv, plugin_config *s) {
         ret = ldap_start_tls_s(ld, NULL,  NULL);
         if (LDAP_OPT_SUCCESS != ret) {
             mod_authn_ldap_err(srv,__FILE__,__LINE__,"ldap_start_tls_s()",ret);
-            ldap_memfree(ld);
+            ldap_destroy(ld);
             return NULL;
         }
     }
@@ -490,7 +490,7 @@ static LDAPMessage * mod_authn_ldap_search(server *srv, plugin_config *s, char *
                             s->auth_ldap_bindpw->ptr)
       : mod_authn_ldap_bind(srv, s->ldap, NULL, NULL);
     if (LDAP_SUCCESS != ret) {
-        ldap_memfree(s->ldap);
+        ldap_destroy(s->ldap);
         s->ldap = NULL;
         return NULL;
     }
@@ -635,7 +635,7 @@ static handler_t mod_authn_ldap_basic(server *srv, connection *con, void *p_d, c
     }
 
     if (LDAP_SUCCESS != mod_authn_ldap_bind(srv, ld, dn, pw)) {
-        ldap_memfree(ld);
+        ldap_destroy(ld);
         if (dn != p->ldap_filter->ptr) ldap_memfree(dn);
         return HANDLER_ERROR;
     }
