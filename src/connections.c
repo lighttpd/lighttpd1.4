@@ -699,6 +699,7 @@ int connection_reset(server *srv, connection *con) {
 	/* config_cond_cache_reset(srv, con); */
 
 	con->header_len = 0;
+	con->async_callback = 0;
 	con->error_handler_saved_status = 0;
 	/*con->error_handler_saved_method = HTTP_METHOD_UNSET;*/
 	/*(error_handler_saved_method value is not valid unless error_handler_saved_status is set)*/

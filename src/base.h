@@ -377,6 +377,7 @@ struct connection {
 	array  *environment; /* used to pass lighttpd internal stuff to the FastCGI/CGI apps, setenv does that */
 
 	connection_type mode;
+	int async_callback;
 
 	void **plugin_ctx;           /* plugin connection specific config */
 

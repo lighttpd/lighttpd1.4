@@ -144,6 +144,11 @@ handler_t http_response_prepare(server *srv, connection *con) {
 
 	/* no decision yet, build conf->filename */
 	if (con->mode == DIRECT && buffer_is_empty(con->physical.path)) {
+
+
+	    if (!con->async_callback) {
+
+
 		char *qstr;
 
 		/* we only come here when we have the parse the full request again
@@ -262,6 +267,10 @@ handler_t http_response_prepare(server *srv, connection *con) {
 
 			return HANDLER_FINISHED;
 		}
+
+
+	    }
+	    con->async_callback = 0; /* reset */
 
 
 		/**
