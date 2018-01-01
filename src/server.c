@@ -1149,6 +1149,16 @@ static int server_main (server * const srv, int argc, char **argv) {
 		return -1;
 	}
 
+	/* mod_indexfile should be listed in server.modules prior to dynamic handlers */
+	for (i = 0; i < srv->plugins.used; ++i) {
+		plugin *p = ((plugin **)srv->plugins.ptr)[i];
+		if (buffer_is_equal_string(p->name, CONST_STR_LEN("indexfile"))) break;
+		if (p->handle_subrequest_start && p->handle_subrequest) {
+			log_error_write(srv, __FILE__, __LINE__, "SB",
+					"Warning: mod_indexfile should be listed in server.modules prior to mod_", p->name);
+		}
+	}
+
 	/* open pid file BEFORE chroot */
 	if (-2 == pid_fd) pid_fd = -1; /*(initial startup state)*/
 	if (-1 == pid_fd && !buffer_string_is_empty(srv->srvconf.pid_file)) {
