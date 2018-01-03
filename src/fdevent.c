@@ -847,6 +847,8 @@ static int fdevent_open_logger_pipe(const char *logger) {
     }
     fdevent_setfd_cloexec(fds[0]);
     fdevent_setfd_cloexec(fds[1]);
+    /*(nonblocking write() from lighttpd)*/
+    if (0 != fdevent_fcntl_set_nb(NULL, fds[1])) { /*(ignore)*/ }
 
     pid = fdevent_open_logger_pipe_spawn(logger, fds[0]);
 
