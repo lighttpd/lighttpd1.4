@@ -831,8 +831,16 @@ network_init_ssl (server *srv, void *p_d)
                 return -1;
             }
         } else {
+          #if OPENSSL_VERSION_NUMBER < 0x10002000
             /* Default curve */
             nid = OBJ_sn2nid("prime256v1");
+          #elif OPENSSL_VERSION_NUMBER < 0x10100000L \
+             || defined(LIBRESSL_VERSION_NUMBER)
+            if (!SSL_CTX_set_ecdh_auto(s->ssl_ctx, 1)) {
+                log_error_write(srv, __FILE__, __LINE__, "s",
+                                "SSL: SSL_CTX_set_ecdh_auto() failed");
+            }
+          #endif
         }
         if (nid) {
             EC_KEY *ecdh;
