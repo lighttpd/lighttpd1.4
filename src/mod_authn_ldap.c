@@ -12,6 +12,7 @@
 
 typedef struct {
     LDAP *ldap;
+    server *srv;
 
     buffer *auth_ldap_hostname;
     buffer *auth_ldap_basedn;
@@ -397,7 +398,7 @@ static LDAP * mod_authn_ldap_host_init(server *srv, plugin_config *s) {
     ret = LDAP_VERSION3;
     ret = ldap_set_option(ld, LDAP_OPT_PROTOCOL_VERSION, &ret);
     if (LDAP_OPT_SUCCESS != ret) {
-        mod_authn_ldap_err(srv, __FILE__, __LINE__, "ldap_set_options()", ret);
+        mod_authn_ldap_err(srv, __FILE__, __LINE__, "ldap_set_option()", ret);
         ldap_destroy(ld);
         return NULL;
     }
@@ -450,6 +451,18 @@ static int mod_authn_ldap_bind(server *srv, LDAP *ld, const char *dn, const char
     return ret;
 }
 
+static int mod_authn_ldap_rebind_proc (LDAP *ld, LDAP_CONST char *url, ber_tag_t ldap_request, ber_int_t msgid, void *params) {
+    plugin_config *s = (plugin_config *)params;
+    UNUSED(url);
+    UNUSED(ldap_request);
+    UNUSED(msgid);
+    return !buffer_string_is_empty(s->auth_ldap_binddn)
+      ? mod_authn_ldap_bind(s->srv, ld,
+                            s->auth_ldap_binddn->ptr,
+                            s->auth_ldap_bindpw->ptr)
+      : mod_authn_ldap_bind(s->srv, ld, NULL, NULL);
+}
+
 static LDAPMessage * mod_authn_ldap_search(server *srv, plugin_config *s, char *base, char *filter) {
     LDAPMessage *lm = NULL;
     char *attrs[] = { LDAP_NO_ATTRS, NULL };
@@ -484,11 +497,8 @@ static LDAPMessage * mod_authn_ldap_search(server *srv, plugin_config *s, char *
         return NULL;
     }
 
-    ret = !buffer_string_is_empty(s->auth_ldap_binddn)
-      ? mod_authn_ldap_bind(srv, s->ldap,
-                            s->auth_ldap_binddn->ptr,
-                            s->auth_ldap_bindpw->ptr)
-      : mod_authn_ldap_bind(srv, s->ldap, NULL, NULL);
+    ldap_set_rebind_proc(s->ldap, mod_authn_ldap_rebind_proc, s);
+    ret = mod_authn_ldap_rebind_proc(s->ldap, NULL, 0, 0, s);
     if (LDAP_SUCCESS != ret) {
         ldap_destroy(s->ldap);
         s->ldap = NULL;
@@ -588,6 +598,8 @@ static handler_t mod_authn_ldap_basic(server *srv, connection *con, void *p_d, c
     handler_t rc;
 
     mod_authn_ldap_patch_connection(srv, con, p);
+    p->anon_conf->srv = srv;
+    p->conf.srv = srv;
 
     if (pw[0] == '\0' && !p->conf.auth_ldap_allow_empty_pw)
         return HANDLER_ERROR;
@@ -632,6 +644,17 @@ static handler_t mod_authn_ldap_basic(server *srv, connection *con, void *p_d, c
     if (NULL == ld) {
         if (dn != p->ldap_filter->ptr) ldap_memfree(dn);
         return HANDLER_ERROR;
+    }
+
+    /* Disable referral tracking.  Target user should be in provided scope */
+    {
+        int ret = ldap_set_option(ld, LDAP_OPT_REFERRALS, LDAP_OPT_OFF);
+        if (LDAP_OPT_SUCCESS != ret) {
+            mod_authn_ldap_err(srv,__FILE__,__LINE__,"ldap_set_option()",ret);
+            ldap_destroy(ld);
+            if (dn != p->ldap_filter->ptr) ldap_memfree(dn);
+            return HANDLER_ERROR;
+        }
     }
 
     if (LDAP_SUCCESS != mod_authn_ldap_bind(srv, ld, dn, pw)) {

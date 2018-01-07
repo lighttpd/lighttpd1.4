@@ -18,6 +18,7 @@
 typedef struct {
     LDAP *ldap;
     buffer *filter;
+    server *srv;
 
     const char *attr;
     const char *host;
@@ -302,6 +303,14 @@ static int mod_authn_ldap_bind(server *srv, LDAP *ld, const char *dn, const char
     return ret;
 }
 
+static int mod_authn_ldap_rebind_proc (LDAP *ld, LDAP_CONST char *url, ber_tag_t ldap_request, ber_int_t msgid, void *params) {
+    vhostdb_config *s = (vhostdb_config *)params;
+    UNUSED(url);
+    UNUSED(ldap_request);
+    UNUSED(msgid);
+    return mod_authn_ldap_bind(s->srv, ld, s->binddn, s->bindpw);
+}
+
 static LDAPMessage * mod_authn_ldap_search(server *srv, vhostdb_config *s, char *base, char *filter) {
     LDAPMessage *lm = NULL;
     char *attrs[] = { LDAP_NO_ATTRS, NULL };
@@ -336,6 +345,7 @@ static LDAPMessage * mod_authn_ldap_search(server *srv, vhostdb_config *s, char 
         return NULL;
     }
 
+    ldap_set_rebind_proc(s->ldap, mod_authn_ldap_rebind_proc, s);
     ret = mod_authn_ldap_bind(srv, s->ldap, s->binddn, s->bindpw);
     if (LDAP_SUCCESS != ret) {
         ldap_destroy(s->ldap);
@@ -376,6 +386,7 @@ static int mod_vhostdb_ldap_query(server *srv, connection *con, void *p_d, buffe
     mod_vhostdb_patch_connection(srv, con, p);
     if (NULL == p->conf.vdata) return 0; /*(after resetting docroot)*/
     dbconf = (vhostdb_config *)p->conf.vdata;
+    dbconf->srv = srv;
 
     template = dbconf->filter;
     for (char *b = template->ptr, *d; *b; b = d+1) {
