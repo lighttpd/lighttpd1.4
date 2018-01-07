@@ -481,9 +481,7 @@ handler_t http_response_prepare(server *srv, connection *con) {
 	 */
 
 	if (con->mode == DIRECT) {
-		char *slash = NULL;
 		char *pathinfo = NULL;
-		int found = 0;
 		stat_cache_entry *sce = NULL;
 
 		if (con->conf.log_request_handling) {
@@ -570,34 +568,24 @@ handler_t http_response_prepare(server *srv, connection *con) {
 
 			/* not found, perhaps PATHINFO */
 
-			buffer_copy_buffer(srv->tmp_buf, con->physical.path);
+			{
+				/*(might check at startup that s->document_root does not end in '/')*/
+				size_t len = buffer_string_length(con->physical.basedir);
+				if (len > 0 && '/' == con->physical.basedir->ptr[len-1]) --len;
+				pathinfo = con->physical.path->ptr + len;
+				if ('/' != *pathinfo) pathinfo = NULL;
+			}
 
-			do {
-				if (slash) {
-					buffer_copy_string_len(con->physical.path, srv->tmp_buf->ptr, slash - srv->tmp_buf->ptr);
-				} else {
-					buffer_copy_buffer(con->physical.path, srv->tmp_buf);
-				}
+			for (; pathinfo; pathinfo = strchr(pathinfo+1, '/')) {
+				handler_t rc;
+				*pathinfo = '\0';
+				rc = stat_cache_get_entry(srv, con, con->physical.path, &sce);
+				*pathinfo = '/';
+				if (HANDLER_ERROR == rc) { pathinfo = NULL; break; }
+				if (!S_ISDIR(sce->st.st_mode)) break;
+			}
 
-				if (HANDLER_ERROR != stat_cache_get_entry(srv, con, con->physical.path, &sce)) {
-					found = S_ISREG(sce->st.st_mode);
-					break;
-				}
-
-				if (pathinfo != NULL) {
-					*pathinfo = '\0';
-				}
-				slash = strrchr(srv->tmp_buf->ptr, '/');
-
-				if (pathinfo != NULL) {
-					/* restore '/' */
-					*pathinfo = '/';
-				}
-
-				if (slash) pathinfo = slash;
-			} while ((found == 0) && (slash != NULL) && ((size_t)(slash - srv->tmp_buf->ptr) > (buffer_string_length(con->physical.basedir) - 1)));
-
-			if (found == 0) {
+			if (NULL == pathinfo || !S_ISREG(sce->st.st_mode)) {
 				/* no it really doesn't exists */
 				con->http_status = 404;
 
@@ -646,6 +634,7 @@ handler_t http_response_prepare(server *srv, connection *con) {
 				 */
 
 				buffer_string_set_length(con->uri.path, buffer_string_length(con->uri.path) - len);
+				buffer_string_set_length(con->physical.path, (size_t)(pathinfo - con->physical.path->ptr));
 			}
 
 			if (con->conf.log_request_handling) {
