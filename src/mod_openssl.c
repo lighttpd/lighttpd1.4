@@ -551,18 +551,8 @@ static int
 network_init_ssl (server *srv, void *p_d)
 {
     plugin_data *p = p_d;
-  #if OPENSSL_VERSION_NUMBER >= 0x0090800fL
-  #ifndef OPENSSL_NO_ECDH
-    EC_KEY *ecdh;
-    int nid;
-  #endif
-  #endif
 
   #ifndef OPENSSL_NO_DH
-    DH *dh;
-  #endif
-    BIO *bio;
-
    /* 1024-bit MODP Group with 160-bit prime order subgroup (RFC5114)
     * -----BEGIN DH PARAMETERS-----
     * MIIBDAKBgQCxC4+WoIDgHd6S3l6uXVTsUsmfvPsGo8aaap3KUtI7YWBz4oZ1oj0Y
@@ -601,6 +591,7 @@ network_init_ssl (server *srv, void *p_d)
         0x18,0xD0,0x8B,0xC8,0x85,0x8F,0x4D,0xCE,0xF9,0x7C,0x2A,0x24,
         0x85,0x5E,0x6E,0xEB,0x22,0xB3,0xB2,0xE5,
     };
+  #endif
 
     /* load SSL certificates */
     for (size_t i = 0; i < srv->config_context->used; ++i) {
@@ -764,9 +755,12 @@ network_init_ssl (server *srv, void *p_d)
         }
 
       #ifndef OPENSSL_NO_DH
+      {
+        DH *dh;
         /* Support for Diffie-Hellman key exchange */
         if (!buffer_string_is_empty(s->ssl_dh_file)) {
             /* DH parameters from file */
+            BIO *bio;
             bio = BIO_new_file((char *) s->ssl_dh_file->ptr, "r");
             if (bio == NULL) {
                 log_error_write(srv, __FILE__, __LINE__, "ss",
@@ -812,6 +806,7 @@ network_init_ssl (server *srv, void *p_d)
         SSL_CTX_set_tmp_dh(s->ssl_ctx,dh);
         SSL_CTX_set_options(s->ssl_ctx,SSL_OP_SINGLE_DH_USE);
         DH_free(dh);
+      }
       #else
         if (!buffer_string_is_empty(s->ssl_dh_file)) {
             log_error_write(srv, __FILE__, __LINE__, "ss",
@@ -822,6 +817,8 @@ network_init_ssl (server *srv, void *p_d)
 
       #if OPENSSL_VERSION_NUMBER >= 0x0090800fL
       #ifndef OPENSSL_NO_ECDH
+      {
+        int nid = 0;
         /* Support for Elliptic-Curve Diffie-Hellman key exchange */
         if (!buffer_string_is_empty(s->ssl_ec_curve)) {
             /* OpenSSL only supports the "named curves"
@@ -837,16 +834,20 @@ network_init_ssl (server *srv, void *p_d)
             /* Default curve */
             nid = OBJ_sn2nid("prime256v1");
         }
-        ecdh = EC_KEY_new_by_curve_name(nid);
-        if (ecdh == NULL) {
-            log_error_write(srv, __FILE__, __LINE__, "ss",
-                            "SSL: Unable to create curve",
-                            s->ssl_ec_curve->ptr);
-            return -1;
+        if (nid) {
+            EC_KEY *ecdh;
+            ecdh = EC_KEY_new_by_curve_name(nid);
+            if (ecdh == NULL) {
+                log_error_write(srv, __FILE__, __LINE__, "ss",
+                                "SSL: Unable to create curve",
+                                s->ssl_ec_curve->ptr);
+                return -1;
+            }
+            SSL_CTX_set_tmp_ecdh(s->ssl_ctx,ecdh);
+            SSL_CTX_set_options(s->ssl_ctx,SSL_OP_SINGLE_ECDH_USE);
+            EC_KEY_free(ecdh);
         }
-        SSL_CTX_set_tmp_ecdh(s->ssl_ctx,ecdh);
-        SSL_CTX_set_options(s->ssl_ctx,SSL_OP_SINGLE_ECDH_USE);
-        EC_KEY_free(ecdh);
+      }
       #endif
       #endif
 
