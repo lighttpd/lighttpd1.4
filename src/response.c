@@ -128,6 +128,142 @@ int http_response_write_header(server *srv, connection *con) {
 	return 0;
 }
 
+static handler_t http_response_physical_path_check(server *srv, connection *con) {
+	stat_cache_entry *sce = NULL;
+
+	if (HANDLER_ERROR != stat_cache_get_entry(srv, con, con->physical.path, &sce)) {
+		/* file exists */
+	} else {
+		char *pathinfo = NULL;
+		switch (errno) {
+		case EACCES:
+			con->http_status = 403;
+
+			if (con->conf.log_request_handling) {
+				log_error_write(srv, __FILE__, __LINE__,  "s",  "-- access denied");
+				log_error_write(srv, __FILE__, __LINE__,  "sb", "Path         :", con->physical.path);
+			}
+
+			buffer_reset(con->physical.path);
+			return HANDLER_FINISHED;
+		case ENAMETOOLONG:
+			/* file name to be read was too long. return 404 */
+		case ENOENT:
+			con->http_status = 404;
+
+			if (con->conf.log_request_handling) {
+				log_error_write(srv, __FILE__, __LINE__,  "s",  "-- file not found");
+				log_error_write(srv, __FILE__, __LINE__,  "sb", "Path         :", con->physical.path);
+			}
+
+			buffer_reset(con->physical.path);
+			return HANDLER_FINISHED;
+		case ENOTDIR:
+			/* PATH_INFO ! :) */
+			break;
+		default:
+			/* we have no idea what happend. let's tell the user so. */
+			con->http_status = 500;
+			buffer_reset(con->physical.path);
+
+			log_error_write(srv, __FILE__, __LINE__, "ssbsb",
+					"file not found ... or so: ", strerror(errno),
+					con->uri.path,
+					"->", con->physical.path);
+
+			return HANDLER_FINISHED;
+		}
+
+		/* not found, perhaps PATHINFO */
+
+		{
+			/*(might check at startup that s->document_root does not end in '/')*/
+			size_t len = buffer_string_length(con->physical.basedir);
+			if (len > 0 && '/' == con->physical.basedir->ptr[len-1]) --len;
+			pathinfo = con->physical.path->ptr + len;
+			if ('/' != *pathinfo) pathinfo = NULL;
+		}
+
+		for (; pathinfo; pathinfo = strchr(pathinfo+1, '/')) {
+			handler_t rc;
+			*pathinfo = '\0';
+			rc = stat_cache_get_entry(srv, con, con->physical.path, &sce);
+			*pathinfo = '/';
+			if (HANDLER_ERROR == rc) { pathinfo = NULL; break; }
+			if (!S_ISDIR(sce->st.st_mode)) break;
+		}
+
+		if (NULL == pathinfo || !S_ISREG(sce->st.st_mode)) {
+			/* no it really doesn't exists */
+			con->http_status = 404;
+
+			if (con->conf.log_file_not_found) {
+				log_error_write(srv, __FILE__, __LINE__, "sbsb",
+						"file not found:", con->uri.path,
+						"->", con->physical.path);
+			}
+
+			buffer_reset(con->physical.path);
+
+			return HANDLER_FINISHED;
+		}
+
+		/* we have a PATHINFO */
+		if (pathinfo) {
+			size_t len = strlen(pathinfo), reqlen;
+			if (con->conf.force_lowercase_filenames
+			    && len <= (reqlen = buffer_string_length(con->request.uri))
+			    && 0 == strncasecmp(con->request.uri->ptr + reqlen - len, pathinfo, len)) {
+				/* attempt to preserve case-insensitive PATH_INFO
+				 * (works in common case where mod_alias, mod_magnet, and other modules
+				 *  have not modified the PATH_INFO portion of request URI, or did so
+				 *  with exactly the PATH_INFO desired) */
+				buffer_copy_string_len(con->request.pathinfo, con->request.uri->ptr + reqlen - len, len);
+			} else {
+				buffer_copy_string_len(con->request.pathinfo, pathinfo, len);
+			}
+
+			/*
+			 * shorten uri.path
+			 */
+
+			buffer_string_set_length(con->uri.path, buffer_string_length(con->uri.path) - len);
+			buffer_string_set_length(con->physical.path, (size_t)(pathinfo - con->physical.path->ptr));
+		}
+	}
+
+#ifdef HAVE_LSTAT
+	if ((sce->is_symlink != 0) && !con->conf.follow_symlink) {
+		con->http_status = 403;
+
+		if (con->conf.log_request_handling) {
+			log_error_write(srv, __FILE__, __LINE__,  "s",  "-- access denied due symlink restriction");
+			log_error_write(srv, __FILE__, __LINE__,  "sb", "Path         :", con->physical.path);
+		}
+
+		buffer_reset(con->physical.path);
+		return HANDLER_FINISHED;
+	};
+#endif
+	if (S_ISDIR(sce->st.st_mode)) {
+		if (con->uri.path->ptr[buffer_string_length(con->uri.path) - 1] != '/') {
+			/* redirect to .../ */
+
+			http_response_redirect_to_directory(srv, con);
+
+			return HANDLER_FINISHED;
+		}
+#ifdef HAVE_LSTAT
+	} else if (!S_ISREG(sce->st.st_mode) && !sce->is_symlink) {
+#else
+	} else if (!S_ISREG(sce->st.st_mode)) {
+#endif
+		/* any special handling of non-reg files ?*/
+	}
+
+	return HANDLER_GO_ON;
+}
+
 handler_t http_response_prepare(server *srv, connection *con) {
 	handler_t r;
 
@@ -481,220 +617,39 @@ handler_t http_response_prepare(server *srv, connection *con) {
 	 */
 
 	if (con->mode == DIRECT) {
-		char *pathinfo = NULL;
-		stat_cache_entry *sce = NULL;
-
 		if (con->conf.log_request_handling) {
 			log_error_write(srv, __FILE__, __LINE__,  "s",  "-- handling physical path");
 			log_error_write(srv, __FILE__, __LINE__,  "sb", "Path         :", con->physical.path);
 		}
 
-		if (HANDLER_ERROR != stat_cache_get_entry(srv, con, con->physical.path, &sce)) {
-			/* file exists */
-
-			if (con->conf.log_request_handling) {
-				log_error_write(srv, __FILE__, __LINE__,  "s",  "-- file found");
-				log_error_write(srv, __FILE__, __LINE__,  "sb", "Path         :", con->physical.path);
-			}
-#ifdef HAVE_LSTAT
-			if ((sce->is_symlink != 0) && !con->conf.follow_symlink) {
-				con->http_status = 403;
-
-				if (con->conf.log_request_handling) {
-					log_error_write(srv, __FILE__, __LINE__,  "s",  "-- access denied due symlink restriction");
-					log_error_write(srv, __FILE__, __LINE__,  "sb", "Path         :", con->physical.path);
-				}
-
-				buffer_reset(con->physical.path);
-				return HANDLER_FINISHED;
-			};
-#endif
-			if (S_ISDIR(sce->st.st_mode)) {
-				if (con->uri.path->ptr[buffer_string_length(con->uri.path) - 1] != '/') {
-					/* redirect to .../ */
-
-					http_response_redirect_to_directory(srv, con);
-
-					return HANDLER_FINISHED;
-				}
-#ifdef HAVE_LSTAT
-			} else if (!S_ISREG(sce->st.st_mode) && !sce->is_symlink) {
-#else
-			} else if (!S_ISREG(sce->st.st_mode)) {
-#endif
-				/* any special handling of non-reg files ?*/
-
-
-			}
-		} else {
-			switch (errno) {
-			case EACCES:
-				con->http_status = 403;
-
-				if (con->conf.log_request_handling) {
-					log_error_write(srv, __FILE__, __LINE__,  "s",  "-- access denied");
-					log_error_write(srv, __FILE__, __LINE__,  "sb", "Path         :", con->physical.path);
-				}
-
-				buffer_reset(con->physical.path);
-				return HANDLER_FINISHED;
-			case ENAMETOOLONG:
-				/* file name to be read was too long. return 404 */
-			case ENOENT:
-				con->http_status = 404;
-
-				if (con->conf.log_request_handling) {
-					log_error_write(srv, __FILE__, __LINE__,  "s",  "-- file not found");
-					log_error_write(srv, __FILE__, __LINE__,  "sb", "Path         :", con->physical.path);
-				}
-
-				buffer_reset(con->physical.path);
-				return HANDLER_FINISHED;
-			case ENOTDIR:
-				/* PATH_INFO ! :) */
-				break;
-			default:
-				/* we have no idea what happend. let's tell the user so. */
-				con->http_status = 500;
-				buffer_reset(con->physical.path);
-
-				log_error_write(srv, __FILE__, __LINE__, "ssbsb",
-						"file not found ... or so: ", strerror(errno),
-						con->uri.path,
-						"->", con->physical.path);
-
-				return HANDLER_FINISHED;
-			}
-
-			/* not found, perhaps PATHINFO */
-
-			{
-				/*(might check at startup that s->document_root does not end in '/')*/
-				size_t len = buffer_string_length(con->physical.basedir);
-				if (len > 0 && '/' == con->physical.basedir->ptr[len-1]) --len;
-				pathinfo = con->physical.path->ptr + len;
-				if ('/' != *pathinfo) pathinfo = NULL;
-			}
-
-			for (; pathinfo; pathinfo = strchr(pathinfo+1, '/')) {
-				handler_t rc;
-				*pathinfo = '\0';
-				rc = stat_cache_get_entry(srv, con, con->physical.path, &sce);
-				*pathinfo = '/';
-				if (HANDLER_ERROR == rc) { pathinfo = NULL; break; }
-				if (!S_ISDIR(sce->st.st_mode)) break;
-			}
-
-			if (NULL == pathinfo || !S_ISREG(sce->st.st_mode)) {
-				/* no it really doesn't exists */
-				con->http_status = 404;
-
-				if (con->conf.log_file_not_found) {
-					log_error_write(srv, __FILE__, __LINE__, "sbsb",
-							"file not found:", con->uri.path,
-							"->", con->physical.path);
-				}
-
-				buffer_reset(con->physical.path);
-
-				return HANDLER_FINISHED;
-			}
-
-#ifdef HAVE_LSTAT
-			if ((sce->is_symlink != 0) && !con->conf.follow_symlink) {
-				con->http_status = 403;
-
-				if (con->conf.log_request_handling) {
-					log_error_write(srv, __FILE__, __LINE__,  "s",  "-- access denied due symlink restriction");
-					log_error_write(srv, __FILE__, __LINE__,  "sb", "Path         :", con->physical.path);
-				}
-
-				buffer_reset(con->physical.path);
-				return HANDLER_FINISHED;
-			};
-#endif
-
-			/* we have a PATHINFO */
-			if (pathinfo) {
-				size_t len = strlen(pathinfo), reqlen;
-				if (con->conf.force_lowercase_filenames
-				    && len <= (reqlen = buffer_string_length(con->request.uri))
-				    && 0 == strncasecmp(con->request.uri->ptr + reqlen - len, pathinfo, len)) {
-					/* attempt to preserve case-insensitive PATH_INFO
-					 * (works in common case where mod_alias, mod_magnet, and other modules
-					 *  have not modified the PATH_INFO portion of request URI, or did so
-					 *  with exactly the PATH_INFO desired) */
-					buffer_copy_string_len(con->request.pathinfo, con->request.uri->ptr + reqlen - len, len);
-				} else {
-					buffer_copy_string_len(con->request.pathinfo, pathinfo, len);
-				}
-
-				/*
-				 * shorten uri.path
-				 */
-
-				buffer_string_set_length(con->uri.path, buffer_string_length(con->uri.path) - len);
-				buffer_string_set_length(con->physical.path, (size_t)(pathinfo - con->physical.path->ptr));
-			}
-
-			if (con->conf.log_request_handling) {
-				log_error_write(srv, __FILE__, __LINE__,  "s",  "-- after pathinfo check");
-				log_error_write(srv, __FILE__, __LINE__,  "sb", "Path         :", con->physical.path);
-				log_error_write(srv, __FILE__, __LINE__,  "sb", "URI          :", con->uri.path);
-				log_error_write(srv, __FILE__, __LINE__,  "sb", "Pathinfo     :", con->request.pathinfo);
-			}
-		}
+		r = http_response_physical_path_check(srv, con);
+		if (HANDLER_GO_ON != r) return r;
 
 		if (con->conf.log_request_handling) {
 			log_error_write(srv, __FILE__, __LINE__,  "s",  "-- handling subrequest");
 			log_error_write(srv, __FILE__, __LINE__,  "sb", "Path         :", con->physical.path);
+			log_error_write(srv, __FILE__, __LINE__,  "sb", "URI          :", con->uri.path);
+			log_error_write(srv, __FILE__, __LINE__,  "sb", "Pathinfo     :", con->request.pathinfo);
 		}
 
 		/* call the handlers */
-		switch(r = plugins_call_handle_subrequest_start(srv, con)) {
-		case HANDLER_GO_ON:
-			/* request was not handled */
-			break;
-		case HANDLER_FINISHED:
-		default:
+		r = plugins_call_handle_subrequest_start(srv, con);
+		if (HANDLER_GO_ON != r) {
 			if (con->conf.log_request_handling) {
 				log_error_write(srv, __FILE__, __LINE__,  "s",  "-- subrequest finished");
 			}
-
-			/* something strange happend */
 			return r;
 		}
 
 		/* if we are still here, no one wanted the file, status 403 is ok I think */
-
 		if (con->mode == DIRECT && con->http_status == 0) {
-			switch (con->request.http_method) {
-			case HTTP_METHOD_OPTIONS:
-				con->http_status = 200;
-				break;
-			default:
-				con->http_status = 403;
-			}
-
+			con->http_status = (con->request.http_method != HTTP_METHOD_OPTIONS) ? 403 : 200;
 			return HANDLER_FINISHED;
 		}
 
 	}
 
-	switch(r = plugins_call_handle_subrequest(srv, con)) {
-	case HANDLER_GO_ON:
-		/* request was not handled, looks like we are done */
-		return HANDLER_FINISHED;
-	case HANDLER_FINISHED:
-		/* request is finished */
-	default:
-		/* something strange happend */
-		return r;
-	}
-
-	/* can't happen */
-	return HANDLER_COMEBACK;
+	r = plugins_call_handle_subrequest(srv, con);
+	if (HANDLER_GO_ON == r) r = HANDLER_FINISHED; /* request was not handled, looks like we are done */
+	return r;
 }
-
-
-
