@@ -126,7 +126,7 @@ static const keyvalue http_status_body[] = {
 };
 
 
-const char *keyvalue_get_value(const keyvalue *kv, int k) {
+static const char *keyvalue_get_value(const keyvalue *kv, int k) {
 	int i;
 	for (i = 0; kv[i].value; i++) {
 		if (kv[i].key == k) return kv[i].value;
@@ -134,7 +134,7 @@ const char *keyvalue_get_value(const keyvalue *kv, int k) {
 	return NULL;
 }
 
-int keyvalue_get_key(const keyvalue *kv, const char *s) {
+static int keyvalue_get_key(const keyvalue *kv, const char *s) {
 	int i;
 	for (i = 0; kv[i].value; i++) {
 		if (0 == strcmp(kv[i].value, s)) return kv[i].key;
@@ -257,4 +257,51 @@ void pcre_keyvalue_buffer_free(pcre_keyvalue_buffer *kvb) {
 #endif
 
 	free(kvb);
+}
+
+void pcre_keyvalue_buffer_subst(buffer *b, const buffer *patternb, const char **list, int n, struct cond_cache_t *cache) {
+	const char *pattern = patternb->ptr;
+	const size_t pattern_len = buffer_string_length(patternb);
+	size_t start = 0;
+
+	/* search for $... or %... pattern substitutions */
+
+	buffer_reset(b);
+
+	for (size_t k = 0; k + 1 < pattern_len; ++k) {
+		if (pattern[k] == '$' || pattern[k] == '%') {
+			size_t num = pattern[k + 1] - '0';
+
+			buffer_append_string_len(b, pattern + start, k - start);
+
+			if (!light_isdigit((unsigned char)pattern[k + 1])) {
+				/* enable escape: "%%" => "%", "%a" => "%a", "$$" => "$" */
+				buffer_append_string_len(b, pattern+k, pattern[k] == pattern[k+1] ? 1 : 2);
+			} else if (pattern[k] == '$') {
+				/* n is always > 0 */
+				if (num < (size_t)n) {
+					buffer_append_string(b, list[num]);
+				}
+			} else if (cache) {
+				if (num < (size_t)cache->patterncount) {
+					num <<= 1; /* n *= 2 */
+					buffer_append_string_len(b,
+						cache->comp_value->ptr + cache->matches[num],
+						cache->matches[num + 1] - cache->matches[num]);
+				}
+			} else {
+			      #if 0
+				/* we have no context, we are global */
+				log_error_write(srv, __FILE__, __LINE__, "ss",
+						"used a redirect/rewrite containing a %[0-9]+ in the global scope, ignored:",
+						pattern);
+			      #endif
+			}
+
+			k++;
+			start = k + 1;
+		}
+	}
+
+	buffer_append_string_len(b, pattern + start, pattern_len - start);
 }

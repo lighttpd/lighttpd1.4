@@ -20,7 +20,6 @@ typedef struct {
 
 typedef struct {
 	PLUGIN_DATA;
-	buffer *match_buf;
 	buffer *location;
 
 	plugin_config **config_storage;
@@ -33,7 +32,6 @@ INIT_FUNC(mod_redirect_init) {
 
 	p = calloc(1, sizeof(*p));
 
-	p->match_buf = buffer_init();
 	p->location = buffer_init();
 
 	return p;
@@ -59,7 +57,6 @@ FREE_FUNC(mod_redirect_free) {
 	}
 
 
-	buffer_free(p->match_buf);
 	buffer_free(p->location);
 
 	free(p);
@@ -165,6 +162,7 @@ static int mod_redirect_patch_connection(server *srv, connection *con, plugin_da
 static handler_t mod_redirect_uri_handler(server *srv, connection *con, void *p_data) {
 #ifdef HAVE_PCRE_H
 	plugin_data *p = p_data;
+	cond_cache_t *cache;
 	size_t i;
 
 	/*
@@ -175,78 +173,31 @@ static handler_t mod_redirect_uri_handler(server *srv, connection *con, void *p_
 	 */
 
 	mod_redirect_patch_connection(srv, con, p);
-
-	buffer_copy_buffer(p->match_buf, con->request.uri);
+	cache = p->conf.context ? &con->cond_cache[p->conf.context->context_ndx] : NULL;
 
 	for (i = 0; i < p->conf.redirect->used; i++) {
-		pcre *match;
-		pcre_extra *extra;
-		const char *pattern;
-		size_t pattern_len;
-		int n;
 		pcre_keyvalue *kv = p->conf.redirect->kv[i];
 # define N 10
 		int ovec[N * 3];
+		int n = pcre_exec(kv->key, kv->key_extra, CONST_BUF_LEN(con->request.uri), 0, 0, ovec, 3 * N);
 
-		match       = kv->key;
-		extra       = kv->key_extra;
-		pattern     = kv->value->ptr;
-		pattern_len = buffer_string_length(kv->value);
-
-		if ((n = pcre_exec(match, extra, CONST_BUF_LEN(p->match_buf), 0, 0, ovec, 3 * N)) < 0) {
+		if (n < 0) {
 			if (n != PCRE_ERROR_NOMATCH) {
 				log_error_write(srv, __FILE__, __LINE__, "sd",
 						"execution error while matching: ", n);
 				return HANDLER_ERROR;
 			}
-		} else if (0 == pattern_len) {
+		} else if (0 == buffer_string_length(kv->value)) {
 			/* short-circuit if blank replacement pattern
 			 * (do not attempt to match against remaining redirect rules) */
 			return HANDLER_GO_ON;
 		} else {
 			const char **list;
-			size_t start;
-			size_t k;
 
 			/* it matched */
-			pcre_get_substring_list(p->match_buf->ptr, ovec, n, &list);
+			pcre_get_substring_list(con->request.uri->ptr, ovec, n, &list);
 
-			/* search for $[0-9] */
-
-			buffer_reset(p->location);
-
-			start = 0;
-			for (k = 0; k + 1 < pattern_len; k++) {
-				if (pattern[k] == '$' || pattern[k] == '%') {
-					/* got one */
-
-					size_t num = pattern[k + 1] - '0';
-
-					buffer_append_string_len(p->location, pattern + start, k - start);
-
-					if (!isdigit((unsigned char)pattern[k + 1])) {
-						/* enable escape: "%%" => "%", "%a" => "%a", "$$" => "$" */
-						buffer_append_string_len(p->location, pattern+k, pattern[k] == pattern[k+1] ? 1 : 2);
-					} else if (pattern[k] == '$') {
-						/* n is always > 0 */
-						if (num < (size_t)n) {
-							buffer_append_string(p->location, list[num]);
-						}
-					} else if (p->conf.context == NULL) {
-						/* we have no context, we are global */
-						log_error_write(srv, __FILE__, __LINE__, "sb",
-								"used a rewrite containing a %[0-9]+ in the global scope, ignored:",
-								kv->value);
-					} else {
-						config_append_cond_match_buffer(con, p->conf.context, p->location, num);
-					}
-
-					k++;
-					start = k + 1;
-				}
-			}
-
-			buffer_append_string_len(p->location, pattern + start, pattern_len - start);
+			pcre_keyvalue_buffer_subst(p->location, kv->value, list, n, cache);
 
 			pcre_free(list);
 

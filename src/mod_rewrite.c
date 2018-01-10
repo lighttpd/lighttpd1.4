@@ -337,6 +337,7 @@ URIHANDLER_FUNC(mod_rewrite_con_reset) {
 
 static handler_t process_rewrite_rules(server *srv, connection *con, plugin_data *p, rewrite_rule_buffer *kvb) {
 	size_t i;
+	cond_cache_t *cache;
 	handler_ctx *hctx;
 
 	if (con->plugin_ctx[p->id]) {
@@ -353,11 +354,11 @@ static handler_t process_rewrite_rules(server *srv, connection *con, plugin_data
 		if (hctx->state == REWRITE_STATE_FINISHED) return HANDLER_GO_ON;
 	}
 
+	cache = p->conf.context ? &con->cond_cache[p->conf.context->context_ndx] : NULL;
 	buffer_copy_buffer(p->match_buf, con->request.uri);
 
 	for (i = 0; i < kvb->used; i++) {
 		pcre *match;
-		const char *pattern;
 		size_t pattern_len;
 		int n;
 		rewrite_rule *rule = kvb->ptr[i];
@@ -365,7 +366,6 @@ static handler_t process_rewrite_rules(server *srv, connection *con, plugin_data
 		int ovec[N * 3];
 
 		match       = rule->key;
-		pattern     = rule->value->ptr;
 		pattern_len = buffer_string_length(rule->value);
 
 		if ((n = pcre_exec(match, NULL, CONST_BUF_LEN(p->match_buf), 0, 0, ovec, 3 * N)) < 0) {
@@ -380,49 +380,11 @@ static handler_t process_rewrite_rules(server *srv, connection *con, plugin_data
 			return HANDLER_GO_ON;
 		} else {
 			const char **list;
-			size_t start;
-			size_t k;
 
 			/* it matched */
 			pcre_get_substring_list(p->match_buf->ptr, ovec, n, &list);
 
-			/* search for $[0-9] */
-
-			buffer_reset(con->request.uri);
-
-			start = 0;
-			for (k = 0; k+1 < pattern_len; k++) {
-				if (pattern[k] == '$' || pattern[k] == '%') {
-					/* got one */
-
-					size_t num = pattern[k + 1] - '0';
-
-					buffer_append_string_len(con->request.uri, pattern + start, k - start);
-
-					if (!isdigit((unsigned char)pattern[k + 1])) {
-						/* enable escape: "%%" => "%", "%a" => "%a", "$$" => "$" */
-						buffer_append_string_len(con->request.uri, pattern+k, pattern[k] == pattern[k+1] ? 1 : 2);
-					} else if (pattern[k] == '$') {
-						/* n is always > 0 */
-						if (num < (size_t)n) {
-							buffer_append_string(con->request.uri, list[num]);
-						}
-					} else if (p->conf.context == NULL) {
-						/* we have no context, we are global */
-						log_error_write(srv, __FILE__, __LINE__, "sb",
-								"used a redirect containing a %[0-9]+ in the global scope, ignored:",
-								rule->value);
-
-					} else {
-						config_append_cond_match_buffer(con, p->conf.context, con->request.uri, num);
-					}
-
-					k++;
-					start = k + 1;
-				}
-			}
-
-			buffer_append_string_len(con->request.uri, pattern + start, pattern_len - start);
+			pcre_keyvalue_buffer_subst(con->request.uri, rule->value, list, n, cache);
 
 			pcre_free(list);
 

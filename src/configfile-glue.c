@@ -615,17 +615,3 @@ int config_check_cond(server *srv, connection *con, data_config *dc) {
 	}
 	return (config_check_cond_cached(srv, con, dc) == COND_RESULT_TRUE);
 }
-
-int config_append_cond_match_buffer(connection *con, data_config *dc, buffer *buf, int n)
-{
-	cond_cache_t *cache = &con->cond_cache[dc->context_ndx];
-	if (n >= cache->patterncount) {
-		return 0;
-	}
-
-	n <<= 1; /* n *= 2 */
-	buffer_append_string_len(buf,
-			cache->comp_value->ptr + cache->matches[n],
-			cache->matches[n + 1] - cache->matches[n]);
-	return 1;
-}

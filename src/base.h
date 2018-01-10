@@ -304,7 +304,7 @@ typedef enum {
 	COND_RESULT_TRUE   /* active */
 } cond_result_t;
 
-typedef struct {
+typedef struct cond_cache_t {
 	/* current result (with preconditions) */
 	cond_result_t result;
 	/* result without preconditions (must never be "skip") */

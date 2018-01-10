@@ -7,6 +7,7 @@
 #endif
 
 struct server;
+struct cond_cache_t;
 
 /* sources:
  * - [RFC2616], Section 9
@@ -90,11 +91,9 @@ const char *get_http_status_body_name(int i);
 int get_http_version_key(const char *s);
 http_method_t get_http_method_key(const char *s);
 
-const char *keyvalue_get_value(const keyvalue *kv, int k);
-int keyvalue_get_key(const keyvalue *kv, const char *s);
-
 pcre_keyvalue_buffer *pcre_keyvalue_buffer_init(void);
 int pcre_keyvalue_buffer_append(struct server *srv, pcre_keyvalue_buffer *kvb, const char *key, const char *value);
 void pcre_keyvalue_buffer_free(pcre_keyvalue_buffer *kvb);
+void pcre_keyvalue_buffer_subst(buffer *b, const buffer *patternb, const char **list, int n, struct cond_cache_t *cache);
 
 #endif
