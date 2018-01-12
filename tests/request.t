@@ -8,7 +8,7 @@ BEGIN {
 
 use strict;
 use IO::Socket;
-use Test::More tests => 59;
+use Test::More tests => 60;
 use LightyTest;
 
 my $tf = LightyTest->new();
@@ -159,6 +159,22 @@ EOF
  );
 $t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.1', 'HTTP-Status' => 200 } ];
 ok($tf->handle_http($t) == 0, 'POST via Transfer-Encoding: chunked, uc hex');
+
+$t->{REQUEST}  = ( <<EOF
+POST /get-post-len.pl HTTP/1.1
+Host: www.example.org
+Connection: close
+Content-Type: application/x-www-form-urlencoded
+Transfer-Encoding: chunked
+
+10
+0123456789abcdef
+0
+
+EOF
+ );
+$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.1', 'HTTP-Status' => 200 } ];
+ok($tf->handle_http($t) == 0, 'POST via Transfer-Encoding: chunked, two hex');
 
 $t->{REQUEST}  = ( <<EOF
 POST /get-post-len.pl HTTP/1.1

@@ -132,7 +132,7 @@ static handler_t connection_handle_read_post_chunked(server *srv, connection *co
                 off_t hsz = p + 1 - (c->mem->ptr+c->offset);
                 unsigned char *s = (unsigned char *)c->mem->ptr+c->offset;
                 for (unsigned char u;(u=(unsigned char)hex2int(*s))!=0xFF;++s) {
-                    if (te_chunked > (~((off_t)-1) >> 4)) {
+                    if (te_chunked > (off_t)(1uL<<(8*sizeof(off_t)-5))-1) {
                         log_error_write(srv, __FILE__, __LINE__, "s",
                                         "chunked data size too large -> 400");
                         /* 400 Bad Request */
