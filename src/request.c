@@ -1322,14 +1322,3 @@ int http_request_parse(server *srv, connection *con) {
 
 	return 0;
 }
-
-int http_request_header_finished(server *srv, connection *con) {
-	UNUSED(srv);
-
-	if (buffer_string_length(con->request.request) < 4) return 0;
-
-	if (0 == memcmp(con->request.request->ptr + buffer_string_length(con->request.request) - 4, CONST_STR_LEN("\r\n\r\n"))) return 1;
-	if (NULL != strstr(con->request.request->ptr, "\r\n\r\n")) return 1;
-
-	return 0;
-}

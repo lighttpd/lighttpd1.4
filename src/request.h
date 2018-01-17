@@ -11,7 +11,6 @@ typedef enum {
 } http_parseopts_e;
 
 int http_request_parse(server *srv, connection *con);
-int http_request_header_finished(server *srv, connection *con);
 int http_request_host_normalize(buffer *b, int scheme_port);
 int http_request_host_policy(connection *con, buffer *b, const buffer *scheme);
 
