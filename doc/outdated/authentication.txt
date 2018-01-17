@@ -140,10 +140,6 @@ Configuration
 
 ::
 
-  ## debugging
-  # 0 for off, 1 for 'auth-ok' messages, 2 for verbose debugging
-  auth.debug                 = 0
-
   ## type of backend
   # plain, htpasswd, ldap or htdigest
   auth.backend               = "htpasswd"
