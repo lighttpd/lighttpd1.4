@@ -21,6 +21,11 @@ Module: mod_auth
 Description
 ===========
 
+
+NOTE: latest documentation can be found at:
+https://redmine.lighttpd.net/projects/lighttpd/wiki/Docs_ModAuth
+
+
 Supported Methods
 -----------------
 
@@ -140,10 +145,6 @@ Configuration
 
 ::
 
-  ## debugging
-  # 0 for off, 1 for 'auth-ok' messages, 2 for verbose debugging
-  auth.debug                 = 0
-
   ## type of backend
   # plain, htpasswd, ldap or htdigest
   auth.backend               = "htpasswd"
@@ -197,11 +198,3 @@ Configuration
 		     "require" => "valid-user"
 		   )
                  )
-
-Limitations
-============
-
-- The implementation of digest method is currently not
-  completely compliant with the standard as it still allows
-  a replay attack.
-
