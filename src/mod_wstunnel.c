@@ -1122,7 +1122,6 @@ static int send_rfc_6455(handler_ctx *hctx, mod_wstunnel_frame_type_t type, cons
         len = 1+MOD_WEBSOCKET_FRAME_LEN16_CNT+1;
     }
     else {
-        memset(mem, 0, sizeof(mem));
         mem[1] = MOD_WEBSOCKET_FRAME_LEN63;
         mem[2] = 0;
         mem[3] = 0;
