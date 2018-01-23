@@ -15,6 +15,7 @@
 
 #ifdef FDEVENT_USE_SOLARIS_PORT
 
+#include <sys/poll.h>
 static const int SOLARIS_PORT_POLL_READ       = POLLIN;
 static const int SOLARIS_PORT_POLL_WRITE      = POLLOUT;
 static const int SOLARIS_PORT_POLL_READ_WRITE = POLLIN & POLLOUT;
