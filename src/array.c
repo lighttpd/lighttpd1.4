@@ -88,7 +88,7 @@ data_unset *array_pop(array *a) {
  * if rndx != NULL it stores the position in a->sorted[] where the key needs
  * to be inserted
  */
-static size_t array_get_index(array *a, const char *key, size_t keylen, size_t *rndx) {
+static size_t array_get_index(const array *a, const char *key, size_t keylen, size_t *rndx) {
 	/* invariant: [lower-1] < key < [upper]
 	 * "virtual elements": [-1] = -INFTY, [a->used] = +INFTY
 	 * also an invariant: 0 <= lower <= upper <= a->used
@@ -120,7 +120,7 @@ static size_t array_get_index(array *a, const char *key, size_t keylen, size_t *
 	return ARRAY_NOT_FOUND;
 }
 
-data_unset *array_get_element_klen(array *a, const char *key, size_t klen) {
+data_unset *array_get_element_klen(const array *a, const char *key, size_t klen) {
 	size_t ndx;
 	force_assert(NULL != key);
 

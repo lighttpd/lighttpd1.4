@@ -147,7 +147,7 @@ int array_is_kvstring(array *a);
 int array_print(array *a, int depth);
 data_unset *array_get_unused_element(array *a, data_type_t t);
 #define array_get_element(a, key) array_get_element_klen((a), (key), sizeof(key)-1)
-data_unset *array_get_element_klen(array *a, const char *key, size_t klen);
+data_unset *array_get_element_klen(const array *a, const char *key, size_t klen);
 data_unset *array_extract_element_klen(array *a, const char *key, size_t klen); /* removes found entry from array */
 void array_set_key_value(array *hdrs, const char *key, size_t key_len, const char *value, size_t val_len);
 void array_replace(array *a, data_unset *entry);
