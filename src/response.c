@@ -184,12 +184,14 @@ static handler_t http_response_physical_path_check(server *srv, connection *con)
 			if ('/' != *pathinfo) pathinfo = NULL;
 		}
 
-		for (; pathinfo; pathinfo = strchr(pathinfo+1, '/')) {
-			handler_t rc;
-			*pathinfo = '\0';
-			rc = stat_cache_get_entry(srv, con, con->physical.path, &sce);
-			*pathinfo = '/';
-			if (HANDLER_ERROR == rc) { pathinfo = NULL; break; }
+		for (char *pprev = pathinfo; pathinfo; pprev = pathinfo, pathinfo = strchr(pathinfo+1, '/')) {
+			stat_cache_entry *nsce = NULL;
+			buffer_copy_string_len(srv->tmp_buf, con->physical.path->ptr, pathinfo - con->physical.path->ptr);
+			if (HANDLER_ERROR == stat_cache_get_entry(srv, con, srv->tmp_buf, &nsce)) {
+				pathinfo = pathinfo != pprev ? pprev : NULL;
+				break;
+			}
+			sce = nsce;
 			if (!S_ISDIR(sce->st.st_mode)) break;
 		}
 
