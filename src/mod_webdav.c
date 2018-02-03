@@ -1132,7 +1132,7 @@ static int webdav_parse_chunkqueue(server *srv, connection *con, handler_ctx *hc
 				data = c->file.mmap.start + c->offset;
 			} else {
 				if (-1 == c->file.fd &&  /* open the file if not already open */
-				    -1 == (c->file.fd = open(c->file.name->ptr, O_RDONLY))) {
+				    -1 == (c->file.fd = fdevent_open_cloexec(c->file.name->ptr, O_RDONLY, 0))) {
 					log_error_write(srv, __FILE__, __LINE__, "ss", "open failed: ", strerror(errno));
 
 					return -1;
@@ -1853,7 +1853,7 @@ SUBREQUEST_FUNC(mod_webdav_subrequest_handler_huge) {
 					data = c->file.mmap.start + c->offset;
 				} else {
 					if (-1 == c->file.fd &&  /* open the file if not already open */
-					    -1 == (c->file.fd = open(c->file.name->ptr, O_RDONLY))) {
+					    -1 == (c->file.fd = fdevent_open_cloexec(c->file.name->ptr, O_RDONLY, 0))) {
 						log_error_write(srv, __FILE__, __LINE__, "ss", "open failed: ", strerror(errno));
 						close(fd);
 						return HANDLER_ERROR;

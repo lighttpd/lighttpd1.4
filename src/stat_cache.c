@@ -2,6 +2,7 @@
 
 #include "log.h"
 #include "stat_cache.h"
+#include "fdevent.h"
 #include "etag.h"
 #include "splaytree.h"
 
@@ -100,7 +101,6 @@ static uint32_t hashme(buffer *str) {
 
 #ifdef HAVE_FAM_H
 
-#include "fdevent.h"
 #include <fam.h>
 
 typedef struct {
@@ -797,7 +797,7 @@ int stat_cache_open_rdonly_fstat (server *srv, connection *con, buffer *name, st
 	#endif
 	const int oflags = O_BINARY | O_LARGEFILE | O_NOCTTY | O_NONBLOCK
 			 | (con->conf.follow_symlink ? 0 : O_NOFOLLOW);
-	const int fd = open(name->ptr, O_RDONLY | oflags);
+	const int fd = fdevent_open_cloexec(name->ptr, O_RDONLY | oflags, 0);
 	if (fd >= 0) {
 		if (0 == fstat(fd, st)) {
 			return fd;
