@@ -472,6 +472,7 @@ void http_response_send_file (server *srv, connection *con, buffer *path) {
 	/* set response content-type, if not set already */
 
 	if (NULL == array_get_element(con->response.headers, "Content-Type")) {
+		stat_cache_content_type_get(srv, con, path, sce);
 		if (buffer_string_is_empty(sce->content_type)) {
 			/* we are setting application/octet-stream, but also announce that
 			 * this header field might change in the seconds few requests
@@ -492,7 +493,7 @@ void http_response_send_file (server *srv, connection *con, buffer *path) {
 	}
 
 	if (allow_caching) {
-		if (con->etag_flags != 0 && !buffer_string_is_empty(sce->etag)) {
+		if (con->etag_flags != 0 && !buffer_string_is_empty(stat_cache_etag_get(sce, con->etag_flags))) {
 			if (NULL == array_get_element(con->response.headers, "ETag")) {
 				/* generate e-tag */
 				etag_mutate(con->physical.etag, sce->etag);

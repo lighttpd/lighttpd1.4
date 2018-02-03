@@ -326,6 +326,7 @@ static int connection_handle_write_prepare(server *srv, connection *con) {
 			if (0 == http_chunk_append_file(srv, con, con->physical.path)) {
 				con->file_finished = 1;
 				if (HANDLER_ERROR != stat_cache_get_entry(srv, con, con->physical.path, &sce)) {
+					stat_cache_content_type_get(srv, con, con->physical.path, sce);
 					response_header_overwrite(srv, con, CONST_STR_LEN("Content-Type"), CONST_BUF_LEN(sce->content_type));
 				}
 			}

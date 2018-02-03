@@ -881,8 +881,11 @@ PHYSICALPATH_FUNC(mod_compress_physical) {
 	 */
 	if (sce->st.st_size < 128) return HANDLER_GO_ON;
 
+	stat_cache_etag_get(sce, con->etag_flags);
+
 	/* check if mimetype is in compress-config */
 	content_type = NULL;
+	stat_cache_content_type_get(srv, con, con->physical.path, sce);
 	if (sce->content_type->ptr) {
 		char *c;
 		if ( (c = strchr(sce->content_type->ptr, ';')) != NULL) {

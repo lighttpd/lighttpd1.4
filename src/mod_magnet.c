@@ -334,6 +334,7 @@ static int magnet_stat(lua_State *L) {
 	handler_t res;
 
 	res = stat_cache_get_entry(srv, con, sb, &sce);
+	stat_cache_content_type_get(srv, con, sb, sce);
 	buffer_free(sb);
 
 	if (HANDLER_GO_ON != res) {
@@ -385,7 +386,7 @@ static int magnet_stat(lua_State *L) {
 	lua_pushinteger(L, sce->st.st_ino);
 	lua_setfield(L, -2, "st_ino");
 
-	if (!buffer_string_is_empty(sce->etag)) {
+	if (!buffer_string_is_empty(stat_cache_etag_get(sce, con->etag_flags))) {
 		/* we have to mutate the etag */
 		buffer *b = buffer_init();
 		etag_mutate(b, sce->etag);
