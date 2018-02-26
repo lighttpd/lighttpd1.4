@@ -636,6 +636,7 @@ int http_request_parse(server *srv, connection *con) {
 
 					buffer_copy_string_len(con->request.uri, nuri, proto - nuri - 1);
 				} else if (!http_header_strict
+					   || (HTTP_METHOD_CONNECT == con->request.http_method && (uri[0] == ':' || light_isdigit(uri[0])))
 					   || (HTTP_METHOD_OPTIONS == con->request.http_method && uri[0] == '*' && uri[1] == '\0')) {
 					/* everything looks good so far */
 					buffer_copy_string_len(con->request.uri, uri, proto - uri - 1);
