@@ -73,13 +73,26 @@ typedef enum {
 	PROXY_FORWARDED_REMOTE_USER  = 0x10
 } proxy_forwarded_t;
 
+struct sock_addr_mask {
+  sock_addr addr;
+  int bits;
+};
+
+struct sock_addr_masks {
+  struct sock_addr_mask *addrs;
+  size_t used;
+  size_t sz;
+};
+
 typedef struct {
 	array *forwarder;
+	struct sock_addr_masks *forward_masks;
 	array *headers;
 	array *opts_params;
 	unsigned int opts;
 	unsigned short int hap_PROXY;
 	unsigned short int hap_PROXY_ssl_client_verify;
+	short int forward_all;
 } plugin_config;
 
 typedef struct {
@@ -148,6 +161,11 @@ FREE_FUNC(mod_extforward_free) {
 			array_free(s->headers);
 			array_free(s->opts_params);
 
+			if (s->forward_masks) {
+				free(s->forward_masks->addrs);
+				free(s->forward_masks);
+			}
+
 			free(s);
 		}
 		free(p->config_storage);
@@ -204,6 +222,39 @@ SETDEFAULTS_FUNC(mod_extforward_set_defaults) {
 			log_error_write(srv, __FILE__, __LINE__, "s",
 					"unexpected value for extforward.forwarder; expected list of \"IPaddr\" => \"trust\"");
 			return HANDLER_ERROR;
+		}
+
+		if (array_get_element(config->value, "extforward.forwarder")) {
+			const data_string * const allds = (data_string *)array_get_element(s->forwarder, "all");
+			s->forward_all = (NULL == allds) ? 0 : (0 == strcasecmp(allds->value->ptr, "trust")) ? 1 : -1;
+			for (size_t j = 0; j < s->forwarder->used; ++j) {
+				data_string * const ds = (data_string *)s->forwarder->data[j];
+				char * const nm_slash = strchr(ds->key->ptr, '/');
+				if (NULL != nm_slash) {
+					struct sock_addr_mask *sm;
+					char *err;
+					const int nm_bits = strtol(nm_slash + 1, &err, 10);
+					int rc;
+					if (*err || nm_bits <= 0) {
+						log_error_write(srv, __FILE__, __LINE__, "sbs", "ERROR: invalid netmask:", ds->key, err);
+						return HANDLER_ERROR;
+					}
+					if (NULL == s->forward_masks)
+						s->forward_masks = calloc(1, sizeof(struct sock_addr_masks));
+					force_assert(s->forward_masks);
+					if (s->forward_masks->used == s->forward_masks->sz) {
+						s->forward_masks->sz += 2;
+						s->forward_masks->addrs = realloc(s->forward_masks->addrs, s->forward_masks->sz * sizeof(struct sock_addr_mask));
+						force_assert(s->forward_masks->addrs);
+					}
+					sm = s->forward_masks->addrs + s->forward_masks->used++;
+					sm->bits = nm_bits;
+					*nm_slash = '\0';
+					rc = sock_addr_from_str_numeric(srv, &sm->addr, ds->key->ptr);
+					*nm_slash = '/';
+					if (1 != rc) return HANDLER_ERROR;
+				}
+			}
 		}
 
 		if (!array_is_vlist(s->headers)) {
@@ -318,10 +369,12 @@ static int mod_extforward_patch_connection(server *srv, connection *con, plugin_
 	plugin_config *s = p->config_storage[0];
 
 	PATCH(forwarder);
+	PATCH(forward_masks);
 	PATCH(headers);
 	PATCH(opts);
 	PATCH(hap_PROXY);
 	PATCH(hap_PROXY_ssl_client_verify);
+	PATCH(forward_all);
 
 	/* skip the first, the global context */
 	for (i = 1; i < srv->config_context->used; i++) {
@@ -337,6 +390,8 @@ static int mod_extforward_patch_connection(server *srv, connection *con, plugin_
 
 			if (buffer_is_equal_string(du->key, CONST_STR_LEN("extforward.forwarder"))) {
 				PATCH(forwarder);
+				PATCH(forward_masks);
+				PATCH(forward_all);
 			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("extforward.headers"))) {
 				PATCH(headers);
 			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("extforward.params"))) {
@@ -397,24 +452,40 @@ static array *extract_forward_array(buffer *pbuffer)
 	return result;
 }
 
-#define IP_TRUSTED 1
-#define IP_UNTRUSTED 0
 /*
  * check whether ip is trusted, return 1 for trusted , 0 for untrusted
  */
-static int is_proxy_trusted(const buffer *ipstr, plugin_data *p)
+static int is_proxy_trusted(plugin_data *p, const char * const ip, size_t iplen)
 {
-	data_string* allds = (data_string *)array_get_element(p->conf.forwarder, "all");
+    if (NULL != array_get_element_klen(p->conf.forwarder, ip, iplen))
+        return 1;
 
-	if (allds) {
-		if (strcasecmp(allds->value->ptr, "trust") == 0) {
-			return IP_TRUSTED;
-		} else {
-			return IP_UNTRUSTED;
-		}
-	}
+    if (p->conf.forward_masks) {
+        const struct sock_addr_mask * const addrs =p->conf.forward_masks->addrs;
+        const size_t aused = p->conf.forward_masks->used;
+        sock_addr addr;
+        /* C funcs inet_aton(), inet_pton() require '\0'-terminated IP str */
+        char addrstr[64]; /*(larger than INET_ADDRSTRLEN and INET6_ADDRSTRLEN)*/
+        if (iplen >= sizeof(addrstr)) return 0;
+        memcpy(addrstr, ip, iplen);
+        addrstr[iplen] = '\0';
 
-	return (data_string *)array_get_element_klen(p->conf.forwarder, CONST_BUF_LEN(ipstr)) ? IP_TRUSTED : IP_UNTRUSTED;
+        if (1 != sock_addr_inet_pton(&addr, addrstr, AF_INET,  0)
+         && 1 != sock_addr_inet_pton(&addr, addrstr, AF_INET6, 0)) return 0;
+
+        for (size_t i = 0; i < aused; ++i) {
+            if (sock_addr_is_addr_eq_bits(&addr, &addrs[i].addr, addrs[i].bits))
+                return 1;
+        }
+    }
+
+    return 0;
+}
+
+static int is_connection_trusted(connection * const con, plugin_data *p)
+{
+    if (p->conf.forward_all) return (1 == p->conf.forward_all);
+    return is_proxy_trusted(p, CONST_BUF_LEN(con->dst_addr_buf));
 }
 
 /*
@@ -423,12 +494,11 @@ static int is_proxy_trusted(const buffer *ipstr, plugin_data *p)
  */
 static const char *last_not_in_array(array *a, plugin_data *p)
 {
-	array *forwarder = p->conf.forwarder;
 	int i;
 
 	for (i = a->used - 1; i >= 0; i--) {
 		data_string *ds = (data_string *)a->data[i];
-		if (!array_get_element_klen(forwarder, CONST_BUF_LEN(ds->value))) {
+		if (!is_proxy_trusted(p, CONST_BUF_LEN(ds->value))) {
 			return ds->value->ptr;
 		}
 	}
@@ -706,7 +776,7 @@ static handler_t mod_extforward_Forwarded (server *srv, connection *con, plugin_
          * attempted by this module. */
 
         if (v != vlen) {
-            int trusted = (NULL != array_get_element_klen(p->conf.forwarder, s+v, vlen-v));
+            int trusted = is_proxy_trusted(p, s+v, vlen-v);
 
             if (s[v] != '_' && s[v] != '/'
                 && (7 != (vlen - v) || 0 != memcmp(s+v, "unknown", 7))) {
@@ -980,7 +1050,7 @@ URIHANDLER_FUNC(mod_extforward_uri_handler) {
 	}
 
 	/* if the remote ip itself is not trusted, then do nothing */
-	if (IP_UNTRUSTED == is_proxy_trusted(con->dst_addr_buf, p)) {
+	if (!is_connection_trusted(con, p)) {
 		if (con->conf.log_request_handling) {
 			log_error_write(srv, __FILE__, __LINE__, "sbs",
 					"remote address", con->dst_addr_buf, "is NOT a trusted proxy, skipping");
@@ -1074,7 +1144,7 @@ CONNECTION_FUNC(mod_extforward_handle_con_accept)
     plugin_data *p = p_d;
     mod_extforward_patch_connection(srv, con, p);
     if (!p->conf.hap_PROXY) return HANDLER_GO_ON;
-    if (IP_TRUSTED == is_proxy_trusted(con->dst_addr_buf, p)) {
+    if (is_connection_trusted(con, p)) {
         handler_ctx *hctx = handler_ctx_init();
         con->plugin_ctx[p->id] = hctx;
         hctx->saved_network_read = con->network_read;
