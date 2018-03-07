@@ -21,7 +21,7 @@ AC_CONFIG_MACRO_DIR([m4])
 
 AC_CANONICAL_HOST
 
-AM_INIT_AUTOMAKE([1.14 -Wall -Wno-portability -Wno-override foreign dist-xz tar-ustar serial-tests silent-rules])
+AM_INIT_AUTOMAKE([1.13 -Wall -Wno-portability -Wno-override foreign dist-xz tar-ustar serial-tests silent-rules])
 
 dnl @synopsis TRY_CFLAGS [compiler flags]
 dnl @summary check whether compiler supports given flags and adds them to CFLAGS
