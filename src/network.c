@@ -306,6 +306,7 @@ typedef struct {
     unsigned char set_v6only; /* set_v6only is only a temporary option */
     unsigned char defer_accept;
     int8_t v4mapped;
+    int8_t ip_transparent;
     const buffer *socket_perms;
     const buffer *bsd_accept_filter;
 } network_socket_config;
@@ -341,6 +342,9 @@ static void network_merge_config_cpv(network_socket_config * const pconf, const 
         break;
       case 7: /* server.v4mapped */
         pconf->v4mapped = (0 != cpv->v.u);
+        break;
+      case 8: /* server.ip-transparent */
+        pconf->ip_transparent = (0 != cpv->v.u);
         break;
       default:/* should not happen */
         return;
@@ -579,6 +583,36 @@ static int network_server_init(server *srv, const network_socket_config *s, buff
 				}
 		}
 #endif
+
+	  #ifdef __linux__
+		if (s->ip_transparent) {
+			int opt = 1;
+			switch (family) {
+			  case AF_INET:
+				#ifndef IP_TRANSPARENT
+				#define IP_TRANSPARENT 19
+				#endif
+				if (-1 == setsockopt(srv_socket->fd, IPPROTO_IP, IP_TRANSPARENT, &opt, sizeof(opt))) {
+					log_serror(srv->errh, __FILE__, __LINE__, "setsockopt(IP_TRANSPARENT)");
+					return -1;
+				}
+				break;
+			#ifdef HAVE_IPV6
+			  case AF_INET6:
+				#ifndef IPV6_TRANSPARENT
+				#define IPV6_TRANSPARENT 75
+				#endif
+				if (-1 == setsockopt(srv_socket->fd, IPPROTO_IPV6, IPV6_TRANSPARENT, &opt, sizeof(opt))) {
+					log_serror(srv->errh, __FILE__, __LINE__, "setsockopt(IPV6_TRANSPARENT)");
+					return -1;
+				}
+				break;
+			#endif
+			  default:
+				break;
+			}
+		}
+	  #endif
 	}
 
   #ifdef _WIN32
@@ -806,6 +840,9 @@ int network_init(server *srv, int stdin_fd) {
         T_CONFIG_BOOL,
         T_CONFIG_SCOPE_SOCKET }
      ,{ CONST_STR_LEN("server.v4mapped"),
+        T_CONFIG_BOOL,
+        T_CONFIG_SCOPE_SOCKET }
+     ,{ CONST_STR_LEN("server.ip-transparent"),
         T_CONFIG_BOOL,
         T_CONFIG_SCOPE_SOCKET }
      ,{ NULL, 0,
