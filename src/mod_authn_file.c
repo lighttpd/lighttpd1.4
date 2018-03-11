@@ -398,7 +398,7 @@ static handler_t mod_authn_file_plain_basic(server *srv, connection *con, void *
     mod_authn_file_patch_connection(srv, con, p);
     rc = mod_authn_file_htpasswd_get(srv, p->conf.auth_plain_userfile, username, password_buf);
     if (0 == rc) {
-        rc = buffer_is_equal_string(password_buf, pw, strlen(pw)) ? 0 : -1;
+        rc = http_auth_const_time_memeq(CONST_BUF_LEN(password_buf), pw, strlen(pw)) ? 0 : -1;
     }
     buffer_free(password_buf);
     UNUSED(con);

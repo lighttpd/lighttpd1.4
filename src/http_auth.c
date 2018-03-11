@@ -49,6 +49,23 @@ void http_auth_backend_set (const http_auth_backend_t *backend)
 }
 
 
+int http_auth_const_time_memeq (const char *a, const size_t alen, const char *b, const size_t blen)
+{
+    /* constant time memory compare, unless compiler figures it out
+     * (similar to mod_secdownload.c:const_time_memeq()) */
+    /* round to next multiple of 64 to avoid potentially leaking exact
+     * password length when subject to high precision timing attacks) */
+    size_t lim = ((alen >= blen ? alen : blen) + 0xFFFFF) & ~0xFFFFF;
+    int diff = 0;
+    for (size_t i = 0, j = 0; lim; --lim) {
+        diff |= (a[i] ^ b[j]);
+        i += (i < alen);
+        j += (j < blen);
+    }
+    return (0 == diff);
+}
+
+
 void http_auth_dumbdata_reset (void)
 {
     memset(http_auth_schemes, 0, sizeof(http_auth_schemes));
