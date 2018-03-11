@@ -88,9 +88,8 @@ typedef struct stat_cache {
 /* the famous DJB hash function for strings */
 static uint32_t hashme(buffer *str) {
 	uint32_t hash = 5381;
-	const char *s;
-	for (s = str->ptr; *s; s++) {
-		hash = ((hash << 5) + hash) + *s;
+	for (const unsigned char *s = (unsigned char *)str->ptr; *s; ++s) {
+		hash = ((hash << 5) + hash) ^ *s;
 	}
 
 	hash &= ~(((uint32_t)1) << 31); /* strip the highest bit */
