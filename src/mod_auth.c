@@ -678,6 +678,13 @@ static handler_t mod_auth_check_digest(server *srv, connection *con, void *p_d, 
 		return mod_auth_send_400_bad_request(srv, con);
 	}
 
+	if (!buffer_is_equal_string(require->realm, realm, strlen(realm))) {
+		log_error_write(srv, __FILE__, __LINE__, "s",
+				"digest: realm mismatch");
+		buffer_free(b);
+		return mod_auth_send_401_unauthorized_digest(srv, con, require->realm, 0);
+	}
+
 	/**
 	 * protect the md5-sess against missing cnonce and nonce
 	 */
