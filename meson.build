@@ -1,4 +1,4 @@
-project('lighttpd', 'c', version: '1.4.49', default_options : ['c_std=c11'])
+project('lighttpd', 'c', version: '1.4.50', default_options : ['c_std=c11'])
 
 subdir('src')
 subdir('tests')

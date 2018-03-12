@@ -3,6 +3,8 @@
 NEWS
 ====
 
+- 1.4.50
+
 - 1.4.49 - 2018-03-11
   * [core] adjust offset if response header blank line
   * [mod_accesslog] %{canonical,local,remote}p (fixes #2840)
