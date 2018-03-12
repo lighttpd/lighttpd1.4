@@ -3,7 +3,44 @@
 NEWS
 ====
 
-- 1.4.49
+- 1.4.49 - 2018-03-11
+  * [core] adjust offset if response header blank line
+  * [mod_accesslog] %{canonical,local,remote}p (fixes #2840)
+  * [core] support POLLRDHUP, where available (#2743)
+  * [mod_proxy] basic support for HTTP CONNECT method (#2060)
+  * [mod_deflate] fix deflate of file > 2MB w/o mmap
+  * [core] fix segfault if tempdirs fill up (fixes #2843)
+  * [mod_compress,mod_deflate] try mmap MAP_PRIVATE
+  * [core] discard from socket using recv MSG_TRUNC
+  * [core] report to stderr if errorlog path ENOENT (fixes #2847)
+  * [core] fix base64 decode when char is unsigned (fixes #2848)
+  * [mod_authn_ldap] fix mem leak when ldap auth fails (fixes #2849)
+  * [core] warn if mod_indexfile after dynamic handler
+  * [core] do not reparse request if async cb
+  * [core] non-blocking write() to piped loggers
+  * [mod_openssl] minor code cleanup; reduce var scope
+  * [mod_openssl] elliptic curve auto selection (fixes #2833)
+  * [core] check for path-info forward down path
+  * [mod_authn_ldap] auth with ldap referrals (fixes #2846)
+  * [core] code cleanup: separate physical path sub
+  * [core] merge redirect/rewrite pattern substitution
+  * [core] fix POST with chunked request body (fixes #2854)
+  * [core] remove unused func
+  * [doc] minor update to *outdated* doc
+  * [mod_wstunnel] fix for frames larger than 64k (fixes #2858)
+  * [core] fix 32-bit compile POST w/ chunked request body (#2854)
+  * [core] add include sys/poll.h on Solaris (fixes #2859)
+  * [core] fix path-info calculation in git master (fixes #2861)
+  * [core] pass array_get_element_klen() const array *
+  * [core] increase stat_cache abstraction
+  * [core] open additional fds O_CLOEXEC
+  * [core] fix CONNECT w strict header parsing enabled
+  * [mod_extforward] CIDR support for trusted proxies (fixes #2860)
+  * [core] re-enable overloaded backends w/ multi wkrs
+  * [autoconf] reduce minimum automake version to 1.13
+  * [mod_auth] constant time compare plain passwords
+  * [mod_auth] check that digest realm matches config
+  * [core] fix incorrect hash algorithm impl
 
 - 1.4.48 - 2017-11-11
   * [mod_webdav] fix crash if stat fails, not ENOENT
