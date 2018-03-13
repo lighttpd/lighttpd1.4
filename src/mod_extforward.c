@@ -230,6 +230,16 @@ SETDEFAULTS_FUNC(mod_extforward_set_defaults) {
 			for (size_t j = 0; j < s->forwarder->used; ++j) {
 				data_string * const ds = (data_string *)s->forwarder->data[j];
 				char * const nm_slash = strchr(ds->key->ptr, '/');
+				if (0 != strcasecmp(ds->value->ptr, "trust")) {
+					if (0 != strcasecmp(ds->value->ptr, "untrusted")) {
+						log_error_write(srv, __FILE__, __LINE__, "sbsbs", "ERROR: expect \"trust\", not \"", ds->key, "\" => \"", ds->value, "\"; treating as untrusted");
+					}
+					if (NULL != nm_slash) {
+						log_error_write(srv, __FILE__, __LINE__, "sbsbs", "ERROR: untrusted CIDR masks are ignored (\"", ds->key, "\" => \"", ds->value, "\")");
+					}
+					buffer_reset(ds->value); /* empty is untrusted */
+					continue;
+				}
 				if (NULL != nm_slash) {
 					struct sock_addr_mask *sm;
 					char *err;
@@ -239,9 +249,10 @@ SETDEFAULTS_FUNC(mod_extforward_set_defaults) {
 						log_error_write(srv, __FILE__, __LINE__, "sbs", "ERROR: invalid netmask:", ds->key, err);
 						return HANDLER_ERROR;
 					}
-					if (NULL == s->forward_masks)
+					if (NULL == s->forward_masks) {
 						s->forward_masks = calloc(1, sizeof(struct sock_addr_masks));
-					force_assert(s->forward_masks);
+						force_assert(s->forward_masks);
+					}
 					if (s->forward_masks->used == s->forward_masks->sz) {
 						s->forward_masks->sz += 2;
 						s->forward_masks->addrs = realloc(s->forward_masks->addrs, s->forward_masks->sz * sizeof(struct sock_addr_mask));
@@ -253,6 +264,7 @@ SETDEFAULTS_FUNC(mod_extforward_set_defaults) {
 					rc = sock_addr_from_str_numeric(srv, &sm->addr, ds->key->ptr);
 					*nm_slash = '/';
 					if (1 != rc) return HANDLER_ERROR;
+					buffer_reset(ds->value); /* empty is untrusted, e.g. if subnet (incorrectly) appears in X-Forwarded-For */
 				}
 			}
 		}
@@ -457,8 +469,9 @@ static array *extract_forward_array(buffer *pbuffer)
  */
 static int is_proxy_trusted(plugin_data *p, const char * const ip, size_t iplen)
 {
-    if (NULL != array_get_element_klen(p->conf.forwarder, ip, iplen))
-        return 1;
+    data_string *ds =
+      (data_string *)array_get_element_klen(p->conf.forwarder, ip, iplen);
+    if (NULL != ds) return !buffer_string_is_empty(ds->value);
 
     if (p->conf.forward_masks) {
         const struct sock_addr_mask * const addrs =p->conf.forward_masks->addrs;
