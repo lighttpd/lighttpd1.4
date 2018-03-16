@@ -1399,8 +1399,12 @@ int gw_set_defaults_backend(server *srv, gw_plugin_data *p, data_unset *du, size
                     host->port = 80;
                 }
 
-                host->family = (!buffer_string_is_empty(host->host)
-                                && NULL != strchr(host->host->ptr, ':'))
+                if (buffer_string_is_empty(host->host)) {
+                    buffer_copy_string_len(host->host,
+                                           CONST_STR_LEN("127.0.0.1"));
+                }
+
+                host->family = (NULL != strchr(host->host->ptr, ':'))
                   ? AF_INET6
                   : AF_INET;
             }
