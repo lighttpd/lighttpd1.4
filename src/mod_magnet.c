@@ -334,13 +334,15 @@ static int magnet_stat(lua_State *L) {
 	handler_t res;
 
 	res = stat_cache_get_entry(srv, con, sb, &sce);
-	stat_cache_content_type_get(srv, con, sb, sce);
-	buffer_free(sb);
 
 	if (HANDLER_GO_ON != res) {
+		buffer_free(sb);
 		lua_pushnil(L);
 		return 1;
 	}
+
+	stat_cache_content_type_get(srv, con, sb, sce);
+	buffer_free(sb);
 
 	lua_newtable(L); // return value
 
