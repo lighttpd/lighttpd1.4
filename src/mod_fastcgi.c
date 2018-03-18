@@ -368,7 +368,10 @@ static handler_t fcgi_recv_parse(server *srv, connection *con, struct http_respo
 	int fin = 0;
 
 	if (0 == n) {
-		if (!(fdevent_event_get_interest(srv->ev, hctx->fd) & FDEVENT_IN)) return HANDLER_GO_ON;
+		if (-1 == hctx->request_id) return HANDLER_FINISHED; /*(flag request ended)*/
+		if (!(fdevent_event_get_interest(srv->ev, hctx->fd) & FDEVENT_IN)
+		    && !(con->conf.stream_response_body & FDEVENT_STREAM_RESPONSE_POLLRDHUP))
+			return HANDLER_GO_ON;
 		log_error_write(srv, __FILE__, __LINE__, "ssdsb",
 				"unexpected end-of-file (perhaps the fastcgi process died):",
 				"pid:", hctx->proc->pid,
@@ -436,6 +439,7 @@ static handler_t fcgi_recv_parse(server *srv, connection *con, struct http_respo
 
 			break;
 		case FCGI_END_REQUEST:
+			hctx->request_id = -1; /*(flag request ended)*/
 			fin = 1;
 			break;
 		default:

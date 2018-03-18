@@ -25,8 +25,9 @@ typedef handler_t (*fdevent_handler)(struct server *srv, void *ctx, int revents)
 #define FDEVENT_STREAM_REQUEST_BUFMIN   BV(1)
 #define FDEVENT_STREAM_REQUEST_POLLIN   BV(15)
 
-#define FDEVENT_STREAM_RESPONSE         BV(0)
-#define FDEVENT_STREAM_RESPONSE_BUFMIN  BV(1)
+#define FDEVENT_STREAM_RESPONSE           BV(0)
+#define FDEVENT_STREAM_RESPONSE_BUFMIN    BV(1)
+#define FDEVENT_STREAM_RESPONSE_POLLRDHUP BV(15)
 
 int fdevent_config(server *srv);
 const char * fdevent_show_event_handlers(void);

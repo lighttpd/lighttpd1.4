@@ -425,9 +425,13 @@ static handler_t cgi_handle_fdevent(server *srv, void *ctx, int revents) {
 			 * since event loop will spin on fd FDEVENT_HUP event
 			 * until unregistered. */
 			handler_t rc;
+			const unsigned short flags = con->conf.stream_response_body;
+			con->conf.stream_response_body &= ~FDEVENT_STREAM_RESPONSE_BUFMIN;
+			con->conf.stream_response_body |= FDEVENT_STREAM_RESPONSE_POLLRDHUP;
 			do {
 				rc = cgi_recv_response(srv,hctx);/*(might invalidate hctx)*/
 			} while (rc == HANDLER_GO_ON);           /*(unless HANDLER_GO_ON)*/
+			con->conf.stream_response_body = flags;
 			return rc; /* HANDLER_FINISHED or HANDLER_COMEBACK or HANDLER_ERROR */
 		} else if (!buffer_string_is_empty(hctx->response)) {
 			/* unfinished header package which is a body in reality */
