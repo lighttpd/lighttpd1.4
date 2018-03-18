@@ -2017,12 +2017,15 @@ static handler_t gw_recv_response(server *srv, gw_handler_ctx *hctx) {
       ? buffer_init()
       : hctx->response;
 
-    switch (http_response_read(srv, hctx->remote_conn, &hctx->opts,
-                               b, hctx->fd, &hctx->fde_ndx)) {
+    handler_t rc = http_response_read(srv, hctx->remote_conn, &hctx->opts,
+                                      b, hctx->fd, &hctx->fde_ndx);
+
+    if (b != hctx->response) buffer_free(b);
+
+    switch (rc) {
     default:
-        break;
+        return HANDLER_GO_ON;
     case HANDLER_FINISHED:
-        if (b != hctx->response) buffer_free(b);
         if (hctx->gw_mode == GW_AUTHORIZER
             && (200 == con->http_status || 0 == con->http_status)) {
             /*
@@ -2075,7 +2078,6 @@ static handler_t gw_recv_response(server *srv, gw_handler_ctx *hctx) {
         return HANDLER_FINISHED;
     case HANDLER_COMEBACK: /*(not expected; treat as error)*/
     case HANDLER_ERROR:
-        if (b != hctx->response) buffer_free(b);
         /* (optimization to detect backend process exit while processing a
          *  large number of ready events; (this block could be removed)) */
         if (proc->is_local && 1 == proc->load && proc->pid == hctx->pid
@@ -2127,9 +2129,6 @@ static handler_t gw_recv_response(server *srv, gw_handler_ctx *hctx) {
         gw_connection_close(srv, hctx);
         return HANDLER_FINISHED;
     }
-
-    if (b != hctx->response) buffer_free(b);
-    return HANDLER_GO_ON;
 }
 
 
