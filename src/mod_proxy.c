@@ -341,7 +341,7 @@ static size_t http_header_remap_host (buffer *b, size_t off, http_header_remap_o
 
 
 /* (future: might move to http-header-glue.c) */
-static void http_header_remap_urlpath (buffer *b, size_t off, http_header_remap_opts *remap_hdrs, int is_req)
+static size_t http_header_remap_urlpath (buffer *b, size_t off, http_header_remap_opts *remap_hdrs, int is_req)
 {
     const array *urlpaths = remap_hdrs->urlpaths;
     if (urlpaths) {
@@ -355,7 +355,7 @@ static void http_header_remap_urlpath (buffer *b, size_t off, http_header_remap_
                     if (NULL == remap_hdrs->forwarded_urlpath)
                         remap_hdrs->forwarded_urlpath = ds;
                     buffer_substr_replace(b, off, mlen, ds->value);
-                    break;
+                    return buffer_string_length(ds->value);/*(replacement len)*/
                 }
             }
         }
@@ -365,7 +365,7 @@ static void http_header_remap_urlpath (buffer *b, size_t off, http_header_remap_
                 const size_t mlen = buffer_string_length(ds->value);
                 if (mlen <= plen && 0 == memcmp(s, ds->value->ptr, mlen)) {
                     buffer_substr_replace(b, off, mlen, ds->key);
-                    return;
+                    return buffer_string_length(ds->key); /*(replacement len)*/
                 }
             }
             for (size_t i = 0, used = urlpaths->used; i < used; ++i) {
@@ -373,11 +373,12 @@ static void http_header_remap_urlpath (buffer *b, size_t off, http_header_remap_
                 const size_t mlen = buffer_string_length(ds->value);
                 if (mlen <= plen && 0 == memcmp(s, ds->value->ptr, mlen)) {
                     buffer_substr_replace(b, off, mlen, ds->key);
-                    break;
+                    return buffer_string_length(ds->key); /*(replacement len)*/
                 }
             }
         }
     }
+    return 0;
 }
 
 
@@ -443,22 +444,22 @@ static void http_header_remap_setcookie (buffer *b, size_t off, http_header_rema
      * entire string in b from offset to end of string.  In response headers,
      * lighttpd may concatenate multiple Set-Cookie headers into single entry
      * in con->response.headers, separated by "\r\nSet-Cookie: " */
-    for (char *s, *n = b->ptr+off; (s = n); ) {
+    for (char *s = b->ptr+off, *e; *s; s = e) {
         size_t len;
-        n = strchr(s, '\n');
-        if (NULL == n) {
-            len = (size_t)(b->ptr + buffer_string_length(b) - s);
-        }
-        else {
-            len = (size_t)(n - s);
-            n += sizeof("Set-Cookie: "); /*(include +1 for '\n')*/
-        }
-        for (char *e = s; NULL != (s = memchr(e, ';', len)); ) {
+        {
+            while (*s != ';' && *s != '\n' && *s != '\0') ++s;
+            if (*s == '\n') {
+                /*(include +1 for '\n', but leave ' ' for ++s below)*/
+                s += sizeof("Set-Cookie:");
+            }
+            if ('\0' == *s) return;
             do { ++s; } while (*s == ' ' || *s == '\t');
             if ('\0' == *s) return;
+            e = s+1;
+            if ('=' == *s) continue;
             /*(interested only in Domain and Path attributes)*/
-            e = memchr(s, '=', len - (size_t)(s - e));
-            if (NULL == e) { e = s+1; continue; }
+            while (*e != '=' && *e != '\0') ++e;
+            if ('\0' == *e) return;
             ++e;
             switch ((int)(e - s - 1)) {
               case 4:
@@ -466,8 +467,8 @@ static void http_header_remap_setcookie (buffer *b, size_t off, http_header_rema
                     if (*e == '"') ++e;
                     if (*e != '/') continue;
                     off = (size_t)(e - b->ptr);
-                    http_header_remap_urlpath(b, off, remap_hdrs, 0);
-                    e = b->ptr+off; /*(b may have been reallocated)*/
+                    len = http_header_remap_urlpath(b, off, remap_hdrs, 0);
+                    e = b->ptr+off+len; /*(b may have been reallocated)*/
                     continue;
                 }
                 break;
