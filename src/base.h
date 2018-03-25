@@ -6,17 +6,6 @@
 
 #include <sys/types.h>
 #include <sys/time.h>
-#include <sys/stat.h>
-
-#include <limits.h>
-
-#ifdef HAVE_STDINT_H
-# include <stdint.h>
-#endif
-
-#ifdef HAVE_INTTYPES_H
-# include <inttypes.h>
-#endif
 
 #include "base_decls.h"
 #include "buffer.h"
@@ -29,75 +18,7 @@
 struct fdevents;        /* declaration */
 struct stat_cache;      /* declaration */
 
-#ifndef O_BINARY
-# define O_BINARY 0
-#endif
-
-#ifndef SIZE_MAX
-# ifdef SIZE_T_MAX
-#  define SIZE_MAX SIZE_T_MAX
-# else
-#  define SIZE_MAX ((size_t)~0)
-# endif
-#endif
-
-#ifndef SSIZE_MAX
-# define SSIZE_MAX ((size_t)~0 >> 1)
-#endif
-
-#ifdef __APPLE__
-#include <crt_externs.h>
-#define environ (* _NSGetEnviron())
-#else
-extern char **environ;
-#endif
-
-/* for solaris 2.5 and NetBSD 1.3.x */
-#ifndef HAVE_SOCKLEN_T
-typedef int socklen_t;
-#endif
-
-/* solaris and NetBSD 1.3.x again */
-#if (!defined(HAVE_STDINT_H)) && (!defined(HAVE_INTTYPES_H)) && (!defined(uint32_t))
-# define uint32_t u_int32_t
-#endif
-
-
-#ifndef SHUT_WR
-# define SHUT_WR 1
-#endif
-
-typedef enum { T_CONFIG_UNSET,
-		T_CONFIG_STRING,
-		T_CONFIG_SHORT,
-		T_CONFIG_INT,
-		T_CONFIG_BOOLEAN,
-		T_CONFIG_ARRAY,
-		T_CONFIG_LOCAL,
-		T_CONFIG_DEPRECATED,
-		T_CONFIG_UNSUPPORTED
-} config_values_type_t;
-
-typedef enum { T_CONFIG_SCOPE_UNSET,
-		T_CONFIG_SCOPE_SERVER,
-		T_CONFIG_SCOPE_CONNECTION
-} config_scope_type_t;
-
-typedef struct {
-	const char *key;
-	void *destination;
-
-	config_values_type_t type;
-	config_scope_type_t scope;
-} config_values_t;
-
-typedef enum { DIRECT, EXTERNAL } connection_type;
-
-typedef struct {
-	char *key;
-	connection_type type;
-	char *value;
-} request_handler;
+#define DIRECT 0        /* con->mode */
 
 
 /* fcgi_response_header contains ... */
@@ -176,25 +97,6 @@ typedef struct {
 
 	buffer *etag;
 } physical;
-
-typedef struct {
-	buffer *name;
-	buffer *etag;
-
-	struct stat st;
-
-	time_t stat_ts;
-
-#ifdef HAVE_LSTAT
-	char is_symlink;
-#endif
-
-#ifdef HAVE_FAM_H
-	int    dir_version;
-#endif
-
-	buffer *content_type;
-} stat_cache_entry;
 
 typedef struct {
 	array *mimetypes;
@@ -376,7 +278,7 @@ struct connection {
 
 	array  *environment; /* used to pass lighttpd internal stuff to the FastCGI/CGI apps, setenv does that */
 
-	connection_type mode;
+	unsigned int mode;           /* DIRECT (0) or plugin id */
 	int async_callback;
 
 	void **plugin_ctx;           /* plugin connection specific config */
@@ -398,7 +300,7 @@ struct connection {
 	/* etag handling */
 	etag_flags_t etag_flags;
 
-	int conditional_is_valid[COMP_LAST_ELEMENT]; 
+	int8_t conditional_is_valid[16]; /* MUST be >= COMP_LAST_ELEMENT] */
 };
 
 typedef struct {
@@ -406,13 +308,6 @@ typedef struct {
 	size_t size;
 	size_t used;
 } connections;
-
-
-typedef struct {
-	buffer *uri;
-	time_t mtime;
-	int http_status;
-} realpath_cache_type;
 
 typedef struct {
 	time_t  mtime;  /* the key */

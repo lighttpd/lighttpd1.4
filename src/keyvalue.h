@@ -2,12 +2,10 @@
 #define _KEY_VALUE_H_
 #include "first.h"
 
-#ifdef HAVE_PCRE_H
-# include <pcre.h>
-#endif
+#include "base_decls.h"
+#include "buffer.h"
 
-struct server;
-struct cond_cache_t;
+struct cond_cache_t;    /* declaration */
 
 /* sources:
  * - [RFC2616], Section 9
@@ -69,10 +67,15 @@ typedef struct {
 	const char *value;
 } keyvalue;
 
+
+#ifdef HAVE_PCRE_H
+struct pcre_extra;      /* declaration */
+#endif
+
 typedef struct {
 #ifdef HAVE_PCRE_H
-	pcre *key;
-	pcre_extra *key_extra;
+	void *key;
+	struct pcre_extra *key_extra;
 #endif
 
 	buffer *value;

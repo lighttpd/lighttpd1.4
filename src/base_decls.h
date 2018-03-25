@@ -3,8 +3,6 @@
 
 #include "first.h"
 
-#include <sys/types.h>
-
 struct server;
 typedef struct server server;
 
@@ -13,6 +11,20 @@ typedef struct connection connection;
 
 union sock_addr;
 typedef union sock_addr sock_addr;
+
+
+enum handler_t {
+  HANDLER_UNSET,
+  HANDLER_GO_ON,
+  HANDLER_FINISHED,
+  HANDLER_COMEBACK,
+  HANDLER_WAIT_FOR_EVENT,
+  HANDLER_ERROR,
+  HANDLER_WAIT_FOR_FD
+};
+typedef enum handler_t handler_t;
+
+#define BV(x) (1 << x)
 
 
 #endif

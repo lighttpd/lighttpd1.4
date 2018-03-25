@@ -20,7 +20,7 @@
 
 #include <mysql.h>
 
-#include "server.h"
+#include "base.h"
 #include "http_auth.h"
 #include "log.h"
 #include "md5.h"
@@ -28,6 +28,7 @@
 
 #include <errno.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 #if defined(HAVE_CRYPT_R) || defined(HAVE_CRYPT)

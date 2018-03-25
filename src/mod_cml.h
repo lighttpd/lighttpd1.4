@@ -2,9 +2,8 @@
 #define _MOD_CACHE_H_
 #include "first.h"
 
+#include "base_decls.h"
 #include "buffer.h"
-#include "server.h"
-#include "response.h"
 
 #include "plugin.h"
 

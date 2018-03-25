@@ -3,7 +3,6 @@
 #include "first.h"
 
 #include "base_decls.h"
-#include "settings.h"   /* (handler_t) */
 
 struct fdevents;        /* declaration */
 typedef struct fdevents fdevents;
@@ -66,6 +65,7 @@ int fdevent_open_cloexec(const char *pathname, int flags, mode_t mode);
 struct sockaddr;
 int fdevent_accept_listenfd(int listenfd, struct sockaddr *addr, size_t *addrlen);
 
+char ** fdevent_environ(void);
 int fdevent_open_devnull(void);
 int fdevent_open_dirname(char *path);
 int fdevent_set_stdin_stdout_stderr(int fdin, int fdout, int fderr);

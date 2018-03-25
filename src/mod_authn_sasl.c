@@ -20,6 +20,7 @@
 
 #include <sys/utsname.h>
 #include <errno.h>
+#include <stdlib.h>
 #include <string.h>
 
 typedef struct {

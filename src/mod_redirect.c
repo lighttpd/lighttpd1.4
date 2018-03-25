@@ -11,6 +11,10 @@
 #include <stdlib.h>
 #include <string.h>
 
+#ifdef HAVE_PCRE_H
+#include <pcre.h>
+#endif
+
 typedef struct {
 	pcre_keyvalue_buffer *redirect;
 	data_config *context; /* to which apply me */

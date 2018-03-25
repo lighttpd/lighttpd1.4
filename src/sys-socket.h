@@ -33,4 +33,13 @@
 #define UNIX_PATH_MAX    108
 #endif
 
+/* for solaris 2.5 and NetBSD 1.3.x */
+#ifndef HAVE_SOCKLEN_T
+typedef int socklen_t;
+#endif
+
+#ifndef SHUT_WR
+#define SHUT_WR 1
+#endif
+
 #endif

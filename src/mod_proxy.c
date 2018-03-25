@@ -9,7 +9,6 @@
 #include "buffer.h"
 #include "keyvalue.h"
 #include "log.h"
-#include "plugin.h"
 #include "sock_addr.h"
 #include "status_counter.h"
 

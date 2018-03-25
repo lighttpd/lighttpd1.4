@@ -1,7 +1,7 @@
 #include "first.h"
 
+#include "base.h"
 #include "buffer.h"
-#include "server.h"
 #include "log.h"
 #include "connections.h"
 #include "fdevent.h"

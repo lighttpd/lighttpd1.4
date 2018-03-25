@@ -3,6 +3,7 @@
 #include "gw_backend.h"
 
 #include <sys/types.h>
+#include <sys/stat.h>
 #include "sys-socket.h"
 #ifdef HAVE_SYS_UIO_H
 #include <sys/uio.h>
@@ -19,6 +20,7 @@
 #include <string.h>
 #include <unistd.h>
 
+#include "base.h"
 #include "array.h"
 #include "buffer.h"
 #include "crc32.h"
@@ -538,7 +540,7 @@ static int gw_spawn_connection(server *srv, gw_host *host, gw_proc *proc, int de
                     }
                 }
             } else {
-                char ** const e = environ;
+                char ** const e = fdevent_environ();
                 for (i = 0; e[i]; ++i) {
                     char *eq;
 
@@ -1058,7 +1060,6 @@ static void gw_restart_dead_procs(server *srv, gw_host *host, int debug) {
 #include "connections.h"
 #include "joblist.h"
 #include "keyvalue.h"
-#include "plugin.h"
 #include "response.h"
 
 

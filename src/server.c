@@ -16,6 +16,7 @@
 #include "connections.h"
 #include "sock_addr.h"
 #include "stat_cache.h"
+#include "configfile.h"
 #include "plugin.h"
 #include "joblist.h"
 #include "network_write.h"

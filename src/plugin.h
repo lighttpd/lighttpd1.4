@@ -2,8 +2,10 @@
 #define _PLUGIN_H_
 #include "first.h"
 
-#include "base.h"
+#include "base_decls.h"
 #include "buffer.h"
+#include "array.h"
+#include "configfile.h"
 
 #define SERVER_FUNC(x) \
 		static handler_t x(server *srv, void *p_d)
@@ -90,9 +92,5 @@ handler_t plugins_call_handle_waitpid(server *srv, pid_t pid, int status);
 handler_t plugins_call_init(server *srv);
 handler_t plugins_call_set_defaults(server *srv);
 handler_t plugins_call_cleanup(server *srv);
-
-int config_insert_values_global(server *srv, array *ca, const config_values_t *cv, config_scope_type_t scope);
-int config_insert_values_internal(server *srv, array *ca, const config_values_t *cv, config_scope_type_t scope);
-int config_check_cond(server *srv, connection *con, data_config *dc);
 
 #endif

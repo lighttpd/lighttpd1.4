@@ -6,7 +6,7 @@
  *
  */
 
-#include "server.h"
+#include "base.h"
 #include "chunk.h"
 #include "http_chunk.h"
 #include "stat_cache.h"

@@ -1,5 +1,6 @@
 #include "first.h"
 
+#include "base.h"
 #include "plugin.h"
 #include "http_auth.h"
 #include "log.h"

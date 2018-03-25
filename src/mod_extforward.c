@@ -10,6 +10,7 @@
 
 #include "configfile.h"
 
+#include <limits.h>
 #include <stdlib.h>
 #include <string.h>
 #include <errno.h>

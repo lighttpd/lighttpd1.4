@@ -4,13 +4,17 @@
 #include "buffer.h"
 #include "array.h"
 #include "log.h"
-#include "plugin.h"
+#include "fdevent.h"
 #include "sock_addr.h"
 
 #include "configfile.h"
 
 #include <string.h>
 #include <stdlib.h>
+
+#ifdef HAVE_PCRE_H
+#include <pcre.h>
+#endif
 
 /**
  * like all glue code this file contains functions which

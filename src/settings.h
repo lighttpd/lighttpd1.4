@@ -2,16 +2,6 @@
 #define _LIGHTTPD_SETTINGS_H_
 #include "first.h"
 
-#ifdef __GNUC__
-# define LI_NORETURN __attribute__((noreturn))
-#else
-# define LI_NORETURN
-#endif
-
-#define UNUSED(x) ( (void)(x) )
-
-#define BV(x) (1 << x)
-
 #define FILE_CACHE_MAX      16
 
 /**
@@ -33,15 +23,6 @@
  *
  */
 #define MAX_HTTP_REQUEST_HEADER  (32 * 1024)
-
-typedef enum { HANDLER_UNSET,
-		HANDLER_GO_ON,
-		HANDLER_FINISHED,
-		HANDLER_COMEBACK,
-		HANDLER_WAIT_FOR_EVENT,
-		HANDLER_ERROR,
-		HANDLER_WAIT_FOR_FD
-} handler_t;
 
 #define HTTP_LINGER_TIMEOUT 5
 

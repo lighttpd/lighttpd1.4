@@ -28,6 +28,10 @@ documentation and/or software.
 
 #include "md5.h"
 
+#define UINT4 uint32_t
+#define UINT2 uint16_t
+#define POINTER unsigned char *
+
 #if 0 /* Note: not defined here or in lighttpd local "md5.h" */
 #if defined HAVE_LIBSSL && defined HAVE_OPENSSL_SSL_H
 #define USE_OPENSSL_CRYPTO

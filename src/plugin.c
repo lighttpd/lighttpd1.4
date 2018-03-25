@@ -1,6 +1,7 @@
 #include "first.h"
 
 #include "plugin.h"
+#include "base.h"
 #include "log.h"
 
 #include <string.h>

@@ -4,6 +4,7 @@
 
 %include {
 #include "first.h"
+#include "base.h"
 #include "configfile.h"
 #include "buffer.h"
 #include "array.h"
@@ -13,6 +14,10 @@
 #include <errno.h>
 #include <stdio.h>
 #include <string.h>
+
+#ifdef HAVE_PCRE_H
+#include <pcre.h>
+#endif
 
 static void configparser_push(config_t *ctx, data_config *dc, int isnew) {
   if (isnew) {

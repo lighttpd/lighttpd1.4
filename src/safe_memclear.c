@@ -1,7 +1,5 @@
 #include "first.h"
 
-#include "settings.h"
-
 #include "safe_memclear.h"
 
 #include <string.h>

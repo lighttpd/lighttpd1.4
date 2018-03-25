@@ -2,6 +2,7 @@
 
 #include <sys/types.h>
 #include <errno.h>
+#include <stdlib.h>
 #include <string.h>
 
 #include "gw_backend.h"
@@ -14,7 +15,6 @@ typedef gw_handler_ctx   handler_ctx;
 #include "fdevent.h"
 #include "http_chunk.h"
 #include "log.h"
-#include "plugin.h"
 #include "status_counter.h"
 
 #ifdef HAVE_FASTCGI_FASTCGI_H

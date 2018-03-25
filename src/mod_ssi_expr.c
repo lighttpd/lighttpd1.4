@@ -7,6 +7,7 @@
 #include "mod_ssi_exprparser.h"
 
 #include <ctype.h>
+#include <stdlib.h>
 #include <string.h>
 
 typedef struct {

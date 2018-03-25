@@ -1,10 +1,9 @@
 #include "first.h"
 
-#include "server.h"
+#include "base.h"
 #include "fdevent.h"
 #include "log.h"
 #include "stream.h"
-#include "plugin.h"
 
 #include "configparser.h"
 #include "configfile.h"
@@ -1369,6 +1368,8 @@ int config_set_defaults(server *srv) {
 	size_t i;
 	specific_config *s = srv->config_storage[0];
 	struct stat st1, st2;
+
+	force_assert(sizeof(((connection *)0)->conditional_is_valid) >= COMP_LAST_ELEMENT);
 
 	if (0 != fdevent_config(srv)) return -1;
 

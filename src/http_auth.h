@@ -2,7 +2,9 @@
 #define _HTTP_AUTH_H_
 #include "first.h"
 
-#include "base.h"
+#include "base_decls.h"
+#include "buffer.h"
+#include "array.h"
 
 void http_auth_dumbdata_reset (void);
 

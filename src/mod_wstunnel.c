@@ -77,6 +77,7 @@
 #include "first.h"
 
 #include <sys/types.h>
+#include <limits.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -89,7 +90,6 @@
 #include "fdevent.h"
 #include "joblist.h"
 #include "log.h"
-#include "plugin.h"
 
 #define MOD_WEBSOCKET_LOG_NONE  0
 #define MOD_WEBSOCKET_LOG_ERR   1

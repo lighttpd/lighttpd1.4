@@ -2,16 +2,7 @@
 #define ARRAY_H
 #include "first.h"
 
-#ifdef HAVE_PCRE_H
-# include <pcre.h>
-#endif
-
 #include "buffer.h"
-#include "vector.h"
-
-#include <stdlib.h>
-
-#define DATA_IS_STRING(x) (x->type == TYPE_STRING)
 
 typedef enum { TYPE_UNSET, TYPE_STRING, TYPE_OTHER, TYPE_ARRAY, TYPE_INTEGER, TYPE_DONOTUSE, TYPE_CONFIG } data_type_t;
 #define DATA_UNSET \
@@ -55,76 +46,6 @@ typedef struct {
 } data_array;
 
 data_array *data_array_init(void);
-
-/**
- * possible compare ops in the configfile parser
- */
-typedef enum {
-	CONFIG_COND_UNSET,
-	CONFIG_COND_EQ,      /** == */
-	CONFIG_COND_MATCH,   /** =~ */
-	CONFIG_COND_NE,      /** != */
-	CONFIG_COND_NOMATCH, /** !~ */
-	CONFIG_COND_ELSE     /** (always true if reached) */
-} config_cond_t;
-
-/**
- * possible fields to match against
- */
-typedef enum {
-	COMP_UNSET,
-	COMP_SERVER_SOCKET,
-	COMP_HTTP_URL,
-	COMP_HTTP_HOST,
-	COMP_HTTP_REFERER,        /*(subsumed by COMP_HTTP_REQUEST_HEADER)*/
-	COMP_HTTP_USER_AGENT,     /*(subsumed by COMP_HTTP_REQUEST_HEADER)*/
-	COMP_HTTP_LANGUAGE,       /*(subsumed by COMP_HTTP_REQUEST_HEADER)*/
-	COMP_HTTP_COOKIE,         /*(subsumed by COMP_HTTP_REQUEST_HEADER)*/
-	COMP_HTTP_REMOTE_IP,
-	COMP_HTTP_QUERY_STRING,
-	COMP_HTTP_SCHEME,
-	COMP_HTTP_REQUEST_METHOD,
-	COMP_HTTP_REQUEST_HEADER,
-
-	COMP_LAST_ELEMENT
-} comp_key_t;
-
-/* $HTTP["host"] ==    "incremental.home.kneschke.de" { ... }
- * for print:   comp_key      op    string
- * for compare: comp          cond  string/regex
- */
-
-typedef struct data_config data_config;
-DEFINE_TYPED_VECTOR_NO_RELEASE(config_weak, data_config*);
-
-struct data_config {
-	DATA_UNSET;
-
-	array *value;
-
-	buffer *comp_tag;
-	buffer *comp_key;
-	comp_key_t comp;
-
-	config_cond_t cond;
-	buffer *op;
-
-	int context_ndx; /* more or less like an id */
-	vector_config_weak children;
-	/* nested */
-	data_config *parent;
-	/* for chaining only */
-	data_config *prev;
-	data_config *next;
-
-	buffer *string;
-#ifdef HAVE_PCRE_H
-	pcre   *regex;
-	pcre_extra *regex_study;
-#endif
-};
-
-data_config *data_config_init(void);
 
 typedef struct {
 	DATA_UNSET;

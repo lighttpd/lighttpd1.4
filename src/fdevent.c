@@ -601,6 +601,15 @@ int fdevent_event_next_fdndx(fdevents *ev, int ndx) {
 }
 
 
+#ifdef __APPLE__
+#include <crt_externs.h>
+#define environ (* _NSGetEnviron())
+#else
+extern char **environ;
+#endif
+char ** fdevent_environ (void) { return environ; }
+
+
 #ifdef FD_CLOEXEC
 static int fdevent_dup2_close_clrfd_cloexec(int oldfd, int newfd) {
     if (oldfd >= 0) {

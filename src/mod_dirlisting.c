@@ -17,6 +17,10 @@
 #include <unistd.h>
 #include <time.h>
 
+#ifdef HAVE_PCRE_H
+#include <pcre.h>
+#endif
+
 /**
  * this is a dirlisting for a lighttpd plugin
  */

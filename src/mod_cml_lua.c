@@ -11,7 +11,10 @@
 #include "mod_cml_funcs.h"
 #include "mod_cml.h"
 
+#include "base.h"
+#include "chunk.h"
 #include "log.h"
+#include "response.h"
 #include "stat_cache.h"
 
 #define HASHLEN 16

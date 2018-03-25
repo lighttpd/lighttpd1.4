@@ -2,22 +2,15 @@
 #define LI_VECTOR_H
 #include "first.h"
 
-#ifndef SIZE_MAX
-# ifdef SIZE_T_MAX
-#  define SIZE_MAX SIZE_T_MAX
-# else
-#  define SIZE_MAX ((size_t)~0)
-# endif
-#endif
-
-#include <stdlib.h>
-#include <string.h>
+#include "buffer.h"     /* force_assert() */
 
 static inline size_t vector_align_size(size_t s) {
 	size_t a = (s + 16) & ((size_t)~15);
 	return (a < s) ? s : a;
 }
 
+void vector_free(void *data);
+void *vector_malloc(size_t sz);
 void *vector_realloc(void *data, size_t elem_size, size_t size, size_t used);
 
 #define DEFINE_TYPED_VECTOR(name, entry, release) \
@@ -31,7 +24,7 @@ void *vector_realloc(void *data, size_t elem_size, size_t size, size_t used);
 		v->used = v->size = 0; \
 	} \
 	static inline vector_ ## name *vector_ ## name ## _alloc() { \
-		vector_ ## name *v = malloc(sizeof(*v)); \
+		vector_ ## name *v = vector_malloc(sizeof(*v)); \
 		force_assert(NULL != v); \
 		vector_ ## name ## _init(v); \
 		return v; \
@@ -41,12 +34,12 @@ void *vector_realloc(void *data, size_t elem_size, size_t size, size_t used);
 		vector_ ## name vcopy = *v; \
 		vector_ ## name ## _init(v); \
 		if (release) for (ndx = 0; ndx < vcopy.used; ++ndx) release(vcopy.data[ndx]); \
-		free(vcopy.data); \
+		vector_free(vcopy.data); \
 	} \
 	static inline void vector_ ## name ## _free(vector_ ## name *v) { \
 		if (NULL != v) { \
 			vector_ ## name ## _clear(v); \
-			free(v); \
+			vector_free(v); \
 		} \
 	} \
 	static inline void vector_ ## name ## _reserve(vector_ ## name *v, size_t p) { \

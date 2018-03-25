@@ -2,7 +2,7 @@
 #define _JOB_LIST_H_
 #include "first.h"
 
-#include "base.h"
+#include "base_decls.h"
 
 int joblist_append(server *srv, connection *con);
 void joblist_free(server *srv, connections *joblist);

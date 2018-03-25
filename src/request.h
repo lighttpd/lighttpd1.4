@@ -2,7 +2,8 @@
 #define _REQUEST_H_
 #include "first.h"
 
-#include "server.h"
+#include "base_decls.h"
+#include "buffer.h"
 
 typedef enum {
   HTTP_PARSEOPT_HEADER_STRICT  = 1

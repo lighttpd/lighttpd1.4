@@ -1,6 +1,7 @@
 #include "first.h"
 
 #include "request.h"
+#include "base.h"
 #include "keyvalue.h"
 #include "log.h"
 #include "sock_addr.h"

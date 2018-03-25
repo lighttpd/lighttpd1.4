@@ -1,6 +1,6 @@
 #include "first.h"
 
-#include "server.h"
+#include "base.h"
 #include "stat_cache.h"
 #include "keyvalue.h"
 #include "log.h"

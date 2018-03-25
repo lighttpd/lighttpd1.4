@@ -2,8 +2,7 @@
 #define _CONNECTIONS_H_
 #include "first.h"
 
-#include "server.h"
-#include "fdevent.h"
+#include "base.h"
 
 connection *connection_init(server *srv);
 int connection_reset(server *srv, connection *con);

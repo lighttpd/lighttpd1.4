@@ -1,7 +1,7 @@
 #include "first.h"
 
-#include "server.h"
 #include "keyvalue.h"
+#include "base.h"
 #include "log.h"
 
 #include <stdlib.h>
@@ -169,6 +169,10 @@ http_method_t get_http_method_key(const char *s) {
 
 
 
+
+#ifdef HAVE_PCRE_H
+#include <pcre.h>
+#endif
 
 pcre_keyvalue_buffer *pcre_keyvalue_buffer_init(void) {
 	pcre_keyvalue_buffer *kvb;

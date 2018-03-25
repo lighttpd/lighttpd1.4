@@ -1,7 +1,8 @@
 #include "first.h"
 
-#include "log.h"
 #include "stat_cache.h"
+#include "base.h"
+#include "log.h"
 #include "fdevent.h"
 #include "etag.h"
 #include "splaytree.h"

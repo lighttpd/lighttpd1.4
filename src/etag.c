@@ -4,13 +4,6 @@
 #include "etag.h"
 
 #include <sys/stat.h>
-
-#if defined HAVE_STDINT_H
-# include <stdint.h>
-#elif defined HAVE_INTTYPES_H
-# include <inttypes.h>
-#endif
-
 #include <string.h>
 
 int etag_is_equal(buffer *etag, const char *line, int weak_ok) {

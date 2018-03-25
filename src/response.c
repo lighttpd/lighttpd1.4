@@ -1,6 +1,7 @@
 #include "first.h"
 
 #include "response.h"
+#include "base.h"
 #include "fdevent.h"
 #include "keyvalue.h"
 #include "log.h"

@@ -3,6 +3,7 @@
 #include "base.h"
 #include "log.h"
 #include "buffer.h"
+#include "fdevent.h"
 #include "response.h"
 #include "connections.h"
 

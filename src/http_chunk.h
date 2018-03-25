@@ -2,8 +2,7 @@
 #define _HTTP_CHUNK_H_
 #include "first.h"
 
-#include "server.h"
-#include <sys/types.h>
+#include "base_decls.h"
 
 int http_chunk_append_mem(server *srv, connection *con, const char * mem, size_t len); /* copies memory */
 int http_chunk_append_buffer(server *srv, connection *con, buffer *mem); /* may reset "mem" */

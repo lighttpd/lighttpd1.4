@@ -14,6 +14,7 @@
 #include "sys-socket.h"
 
 #include <sys/types.h>
+#include <sys/stat.h>
 #include "sys-strings.h"
 #include <sys/wait.h>
 

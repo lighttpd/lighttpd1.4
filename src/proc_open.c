@@ -15,6 +15,10 @@
 # include <unistd.h>
 #endif
 
+#ifndef O_BINARY
+#define O_BINARY 0
+#endif
+
 
 #ifdef WIN32
 /* {{{ win32 stuff */

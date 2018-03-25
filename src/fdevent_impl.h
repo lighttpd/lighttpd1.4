@@ -47,7 +47,6 @@ struct ev_loop;         /* declaration */
 #endif
 
 #include "base_decls.h"
-#include "settings.h"   /* (handler_t) */
 #include "fdevent.h"    /* (*fdevent_handler) */
 
 typedef enum {

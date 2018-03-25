@@ -2,12 +2,13 @@
 
 #include <ldap.h>
 
-#include "server.h"
+#include "base.h"
 #include "http_auth.h"
 #include "log.h"
 #include "plugin.h"
 
 #include <errno.h>
+#include <stdlib.h>
 #include <string.h>
 
 typedef struct {

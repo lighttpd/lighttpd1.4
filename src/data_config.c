@@ -1,10 +1,15 @@
 #include "first.h"
 
 #include "array.h"
+#include "configfile.h"
 
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
+
+#ifdef HAVE_PCRE_H
+#include <pcre.h>
+#endif
 
 static data_unset *data_config_copy(const data_unset *s) {
 	data_config *src = (data_config *)s;

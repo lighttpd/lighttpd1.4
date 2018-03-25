@@ -2,10 +2,12 @@
 
 #include <unistd.h>
 #include <errno.h>
+#include <stdlib.h>
 #include <string.h>
 
 #include <mysql.h>
 
+#include "base.h"
 #include "plugin.h"
 #include "fdevent.h"
 #include "log.h"

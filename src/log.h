@@ -1,7 +1,6 @@
 #ifndef _LOG_H_
 #define _LOG_H_
 #include "first.h"
-#include <sys/types.h>
 
 #include "base_decls.h"
 #include "buffer.h"

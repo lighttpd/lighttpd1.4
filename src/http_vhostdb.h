@@ -2,7 +2,8 @@
 #define _HTTP_VHOST_H_
 #include "first.h"
 
-#include "base.h"
+#include "base_decls.h"
+#include "buffer.h"
 
 void http_vhostdb_dumbdata_reset (void);
 

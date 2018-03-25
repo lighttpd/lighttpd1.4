@@ -2,6 +2,7 @@
 
 #include "http_auth.h"
 
+#include <stdlib.h>
 #include <string.h>
 
 

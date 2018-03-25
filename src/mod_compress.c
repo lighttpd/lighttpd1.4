@@ -22,6 +22,10 @@
 #include <errno.h>
 #include <time.h>
 
+#ifndef O_BINARY
+#define O_BINARY 0
+#endif
+
 #if defined HAVE_ZLIB_H && defined HAVE_LIBZ
 # define USE_ZLIB
 # include <zlib.h>

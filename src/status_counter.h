@@ -2,8 +2,6 @@
 #define _STATUS_COUNTER_H_
 #include "first.h"
 
-#include <sys/types.h>
-
 #include "base_decls.h"
 #include "array.h"
 

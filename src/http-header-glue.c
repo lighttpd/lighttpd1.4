@@ -11,6 +11,7 @@
 #include "sock_addr.h"
 #include "stat_cache.h"
 
+#include <stdlib.h>
 #include <string.h>
 #include <errno.h>
 

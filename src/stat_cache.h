@@ -2,9 +2,34 @@
 #define _FILE_CACHE_H_
 #include "first.h"
 
-#include "base.h"
+#include "base_decls.h"
+#include "buffer.h"
+#include "etag.h"
+
+#include <sys/types.h>
+#include <sys/time.h>
+#include <sys/stat.h>
 
 struct stat_cache;      /* declaration */
+
+typedef struct {
+	buffer *name;
+	buffer *etag;
+
+	struct stat st;
+
+	time_t stat_ts;
+
+#ifdef HAVE_LSTAT
+	char is_symlink;
+#endif
+
+#ifdef HAVE_FAM_H
+	int    dir_version;
+#endif
+
+	buffer *content_type;
+} stat_cache_entry;
 
 int stat_cache_choose_engine (server *srv, const buffer *stat_cache_string);
 struct stat_cache *stat_cache_init(server *srv);

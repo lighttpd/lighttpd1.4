@@ -2,7 +2,9 @@
 #define _RESPONSE_H_
 #include "first.h"
 
-#include "server.h"
+#include "base_decls.h"
+#include "buffer.h"
+#include "array.h"
 
 #include <time.h>
 

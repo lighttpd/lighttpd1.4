@@ -3,6 +3,7 @@
 #include <sys/types.h>
 #include <errno.h>
 #include <limits.h>
+#include <stdlib.h>
 #include <string.h>
 
 #include "gw_backend.h"
@@ -13,7 +14,6 @@ typedef gw_handler_ctx   handler_ctx;
 #include "base.h"
 #include "buffer.h"
 #include "log.h"
-#include "plugin.h"
 #include "status_counter.h"
 
 #include "sys-endian.h"

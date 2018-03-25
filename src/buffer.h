@@ -2,16 +2,7 @@
 #define _BUFFER_H_
 #include "first.h"
 
-#include "settings.h"
-
-#include <sys/types.h>
-#include <time.h>
-
-#if defined HAVE_STDINT_H
-# include <stdint.h>
-#elif defined HAVE_INTTYPES_H
-# include <inttypes.h>
-#endif
+struct tm;              /* declaration */
 
 /* generic string + binary data container; contains a terminating 0 in both
  * cases
@@ -162,6 +153,12 @@ static inline void buffer_append_slash(buffer *b); /* append '/' no non-empty st
 #define CONST_STR_LEN(x) x, (x) ? sizeof(x) - 1 : 0
 #define CONST_BUF_LEN(x) ((x) ? (x)->ptr : NULL), buffer_string_length(x)
 
+
+#ifdef __GNUC__
+# define LI_NORETURN __attribute__((noreturn))
+#else
+# define LI_NORETURN
+#endif
 
 void log_failed_assert(const char *filename, unsigned int line, const char *msg) LI_NORETURN;
 #define force_assert(x) do { if (!(x)) log_failed_assert(__FILE__, __LINE__, "assertion failed: " #x); } while(0)

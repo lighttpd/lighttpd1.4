@@ -3,6 +3,7 @@
 #include "sys-socket.h"
 #include "base.h"
 #include "connections.h"
+#include "fdevent.h"
 #include "log.h"
 
 #include <errno.h>

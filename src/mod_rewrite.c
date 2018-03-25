@@ -12,6 +12,9 @@
 #include <string.h>
 
 #ifdef HAVE_PCRE_H
+
+#include <pcre.h>
+
 typedef struct {
 	pcre *key;
 

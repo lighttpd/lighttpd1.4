@@ -255,7 +255,8 @@ typedef struct {
 
 
 
-#include "base.h"
+#include "base_decls.h"
+#include "chunk.h"
 #include "plugin.h"
 #include "response.h"
 

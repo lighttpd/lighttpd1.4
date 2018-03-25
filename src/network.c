@@ -1,10 +1,10 @@
 #include "first.h"
 
 #include "network.h"
+#include "base.h"
 #include "fdevent.h"
 #include "log.h"
 #include "connections.h"
-#include "plugin.h"
 #include "configfile.h"
 #include "sock_addr.h"
 
