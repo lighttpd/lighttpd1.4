@@ -1116,11 +1116,6 @@ connection *connection_accepted(server *srv, server_socket *srv_socket, sock_add
 		con->conditional_is_valid[COMP_SERVER_SOCKET] = 1;
 		con->conditional_is_valid[COMP_HTTP_REMOTE_IP] = 1;
 
-		if (-1 == fdevent_fcntl_set_nb_cloexec_sock(srv->ev, con->fd)) {
-			log_error_write(srv, __FILE__, __LINE__, "ss", "fcntl failed: ", strerror(errno));
-			connection_close(srv, con);
-			return NULL;
-		}
 		buffer_copy_string_len(con->proto, CONST_STR_LEN("http"));
 		if (HANDLER_GO_ON != plugins_call_handle_connection_accept(srv, con)) {
 			connection_close(srv, con);

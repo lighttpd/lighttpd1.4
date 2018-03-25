@@ -563,17 +563,33 @@ int fdevent_accept_listenfd(int listenfd, struct sockaddr *addr, size_t *addrlen
 
       #if defined(SOCK_CLOEXEC) && defined(SOCK_NONBLOCK)
        #if defined(__NetBSD__)
+	const int sock_cloexec = 1;
 	fd = paccept(listenfd, addr, &len, NULL, SOCK_CLOEXEC | SOCK_NONBLOCK);
        #else
-	fd = (use_sock_cloexec)
-	  ? accept4(listenfd, addr, &len, SOCK_CLOEXEC | SOCK_NONBLOCK)
-	  : accept(listenfd, addr, &len);
+	int sock_cloexec = use_sock_cloexec;
+	if (sock_cloexec) {
+		fd = accept4(listenfd, addr, &len, SOCK_CLOEXEC | SOCK_NONBLOCK);
+		if (fd < 0 && (errno == ENOSYS || errno == ENOTSUP)) {
+			fd = accept(listenfd, addr, &len);
+			sock_cloexec = 0;
+		}
+	}
+	else {
+		fd = accept(listenfd, addr, &len);
+	}
        #endif
       #else
+	const int sock_cloexec = 0;
 	fd = accept(listenfd, addr, &len);
       #endif
 
-	if (fd >= 0) *addrlen = (size_t)len;
+	if (fd >= 0) {
+		*addrlen = (size_t)len;
+		if (!sock_cloexec && 0 != fdevent_fcntl_set_nb_cloexec(NULL, fd)) {
+			close(fd);
+			fd = -1;
+		}
+	}
 	return fd;
 }
 
