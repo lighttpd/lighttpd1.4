@@ -170,9 +170,6 @@ LIBS=$save_LIBS
 AC_SUBST([DL_LIB])
 
 dnl prepare pkg-config usage below
-if test -z "$PKG_CONFIG"; then
-  AC_PATH_PROG([PKG_CONFIG], [pkg-config], [no])
-fi
 PKG_PROG_PKG_CONFIG
 
 dnl checking for libev
