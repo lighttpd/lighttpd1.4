@@ -164,6 +164,7 @@ typedef struct {
 
     int hybivers;
     time_t ping_ts;
+    int subproto;
 
     server *srv;  /*(for mod_wstunnel module-specific DEBUG_LOG() macro)*/
     plugin_config conf;
@@ -535,9 +536,30 @@ static handler_t wstunnel_handler_setup (server *srv, connection *con, plugin_da
     if (!binary) {
         data_string *ds = (data_string *)
           array_get_element(con->request.headers, "Sec-WebSocket-Protocol");
-        binary = (NULL != ds
-                  && buffer_is_equal_caseless_string(ds->value,
-                                                     CONST_STR_LEN("binary")));
+        if (NULL != ds) {
+            for (const char *s = ds->value->ptr; *s; ++s) {
+                while (*s==' '||*s=='\t'||*s=='\r'||*s=='\n') ++s;
+                if (0 == strncasecmp(s, "binary", sizeof("binary")-1)) {
+                    s += sizeof("binary")-1;
+                    while (*s==' '||*s=='\t'||*s=='\r'||*s=='\n') ++s;
+                    if (*s==','||*s=='\0') {
+                        hctx->subproto = 1;
+                        binary = 1;
+                        break;
+                    }
+                }
+                else if (0 == strncasecmp(s, "base64", sizeof("base64")-1)) {
+                    s += sizeof("base64")-1;
+                    while (*s==' '||*s=='\t'||*s=='\r'||*s=='\n') ++s;
+                    if (*s==','||*s=='\0') {
+                        hctx->subproto = -1;
+                        break;
+                    }
+                }
+                s = strchr(s, ',');
+                if (NULL == s) break;
+            }
+        }
     }
 
     if (binary) {
@@ -843,6 +865,9 @@ static int create_response_rfc_6455(handler_ctx *hctx) {
     if (hctx->frame.type == MOD_WEBSOCKET_FRAME_TYPE_BIN)
         array_set_key_value(hdrs, CONST_STR_LEN("Sec-WebSocket-Protocol"),
                                   CONST_STR_LEN("binary"));
+    else if (-1 == hctx->subproto)
+        array_set_key_value(hdrs, CONST_STR_LEN("Sec-WebSocket-Protocol"),
+                                  CONST_STR_LEN("base64"));
 
     return 0;
 }
