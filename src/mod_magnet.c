@@ -41,8 +41,6 @@ typedef struct {
 
 	script_cache *cache;
 
-	buffer *encode_buf;
-
 	plugin_config **config_storage;
 
 	plugin_config conf;
@@ -55,7 +53,6 @@ INIT_FUNC(mod_magnet_init) {
 	p = calloc(1, sizeof(*p));
 
 	p->cache = script_cache_init();
-	p->encode_buf = buffer_init();
 
 	return p;
 }
@@ -85,7 +82,6 @@ FREE_FUNC(mod_magnet_free) {
 	}
 
 	script_cache_free(p->cache);
-	buffer_free(p->encode_buf);
 
 	free(p);
 
@@ -327,22 +323,18 @@ static buffer* magnet_checkbuffer(lua_State *L, int index) {
 }
 
 static int magnet_print(lua_State *L) {
-	buffer *b = magnet_checkbuffer(L, 1);
-
-	log_error_write(magnet_get_server(L), __FILE__, __LINE__, "sB",
-		"(lua-print)",
-		b);
-
-	buffer_free(b);
-
+	const_buffer cb = magnet_checkconstbuffer(L, 1);
+	log_error_write(magnet_get_server(L), __FILE__, __LINE__, "ss",
+			"(lua-print)", cb.ptr);
 	return 0;
 }
 
 static int magnet_stat(lua_State *L) {
-	buffer *sb = magnet_checkbuffer(L, 1);
 	server *srv = magnet_get_server(L);
 	connection *con = magnet_get_connection(L);
 	stat_cache_entry *sce = NULL;
+    {
+	buffer *sb = magnet_checkbuffer(L, 1);
 	handler_t res;
 
 	res = stat_cache_get_entry(srv, con, sb, &sce);
@@ -355,6 +347,7 @@ static int magnet_stat(lua_State *L) {
 
 	stat_cache_content_type_get(srv, con, sb, sce);
 	buffer_free(sb);
+    }
 
 	lua_newtable(L); // return value
 
@@ -402,11 +395,8 @@ static int magnet_stat(lua_State *L) {
 
 	if (!buffer_string_is_empty(stat_cache_etag_get(sce, con->etag_flags))) {
 		/* we have to mutate the etag */
-		buffer *b = buffer_init();
-		etag_mutate(b, sce->etag);
-
-		lua_pushlstring(L, CONST_BUF_LEN(b));
-		buffer_free(b);
+		etag_mutate(srv->tmp_buf, sce->etag);
+		lua_pushlstring(L, CONST_BUF_LEN(srv->tmp_buf));
 	} else {
 		lua_pushnil(L);
 	}
@@ -424,14 +414,9 @@ static int magnet_stat(lua_State *L) {
 
 
 static int magnet_atpanic(lua_State *L) {
-	buffer *b = magnet_checkbuffer(L, 1);
-
-	log_error_write(magnet_get_server(L), __FILE__, __LINE__, "sB",
-		"(lua-atpanic)",
-		b);
-
-	buffer_free(b);
-
+	const_buffer cb = magnet_checkconstbuffer(L, 1);
+	log_error_write(magnet_get_server(L), __FILE__, __LINE__, "ss",
+			"(lua-atpanic)", cb.ptr);
 	longjmp(exceptionjmp, 1);
 }
 
@@ -719,27 +704,26 @@ static int magnet_attach_content(server *srv, connection *con, lua_State *L, int
 				lua_getfield(L, -3, "offset"); /* (0-based) start of range */
 
 				if (lua_isstring(L, -3)) { /* filename has to be a string */
-					buffer *fn = magnet_checkbuffer(L, -3);
 					off_t off = (off_t) luaL_optinteger(L, -1, 0);
 					off_t len = (off_t) luaL_optinteger(L, -2, -1); /*(-1 to http_chunk_append_file_range() uses file size minus offset)*/
 					if (off < 0) {
-						buffer_free(fn);
 						return luaL_error(L, "offset for '%s' is negative", lua_tostring(L, -3));
 					}
 
 					if (len >= off) {
 						len -= off;
 					} else if (-1 != len) {
-						buffer_free(fn);
 						return luaL_error(L, "offset > length for '%s'", lua_tostring(L, -3));
 					}
 
-					if (0 != len && 0 != http_chunk_append_file_range(srv, con, fn, off, len)) {
+					if (0 != len) {
+						buffer *fn = magnet_checkbuffer(L, -3);
+						int rc = http_chunk_append_file_range(srv, con, fn, off, len);
 						buffer_free(fn);
-						return luaL_error(L, "error opening file content '%s' at offset %lld", lua_tostring(L, -3), (long long)off);
+						if (0 != rc) {
+							return luaL_error(L, "error opening file content '%s' at offset %lld", lua_tostring(L, -3), (long long)off);
+						}
 					}
-
-					buffer_free(fn);
 				} else {
 					return luaL_error(L, "content[%d] is a table and requires the field \"filename\"", i);
 				}
