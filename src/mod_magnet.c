@@ -225,6 +225,22 @@ static int magnet_pairs(lua_State *L) {
 }
 #endif
 
+static void magnet_push_buffer(lua_State *L, const buffer *b) {
+    if (!buffer_is_empty(b))
+        lua_pushlstring(L, CONST_BUF_LEN(b));
+    else
+        lua_pushnil(L);
+}
+
+static int magnet_array_get_element(lua_State *L, const array *a) {
+    /* __index: param 1 is the (empty) table the value was not found in */
+    size_t klen;
+    const char * const k = luaL_checklstring(L, 2, &klen);
+    data_string * const ds = (data_string *)array_get_element_klen(a, k, klen);
+    magnet_push_buffer(L, NULL != ds ? ds->value : NULL);
+    return 1;
+}
+
 /* Define a function that will iterate over an array* (in upval 1) using current position (upval 2) */
 static int magnet_array_next(lua_State *L) {
 	data_unset *du;
@@ -242,11 +258,7 @@ static int magnet_array_next(lua_State *L) {
 		switch (du->type) {
 			case TYPE_STRING:
 				ds = (data_string *)du;
-				if (!buffer_is_empty(ds->value)) {
-					lua_pushlstring(L, CONST_BUF_LEN(ds->value));
-				} else {
-					lua_pushnil(L);
-				}
+				magnet_push_buffer(L, ds->value);
 				break;
 			case TYPE_INTEGER:
 				di = (data_integer *)du;
@@ -425,27 +437,11 @@ static int magnet_atpanic(lua_State *L) {
 
 static int magnet_reqhdr_get(lua_State *L) {
 	connection *con = magnet_get_connection(L);
-	data_string *ds;
-
-	/* __index: param 1 is the (empty) table the value was not found in */
-	size_t klen;
-	const char *key = luaL_checklstring(L, 2, &klen);
-
-	if (NULL != (ds = (data_string *)array_get_element_klen(con->request.headers, key, klen))) {
-		if (!buffer_is_empty(ds->value)) {
-			lua_pushlstring(L, CONST_BUF_LEN(ds->value));
-		} else {
-			lua_pushnil(L);
-		}
-	} else {
-		lua_pushnil(L);
-	}
-	return 1;
+	return magnet_array_get_element(L, con->request.headers);
 }
 
 static int magnet_reqhdr_pairs(lua_State *L) {
 	connection *con = magnet_get_connection(L);
-
 	return magnet_array_pairs(L, con->request.headers);
 }
 
@@ -585,16 +581,7 @@ static int magnet_env_get(lua_State *L) {
 
 	/* __index: param 1 is the (empty) table the value was not found in */
 	const char *key = luaL_checkstring(L, 2);
-	buffer *dest = NULL;
-
-	dest = magnet_env_get_buffer(srv, con, key);
-
-	if (!buffer_is_empty(dest)) {
-		lua_pushlstring(L, CONST_BUF_LEN(dest));
-	} else {
-		lua_pushnil(L);
-	}
-
+	magnet_push_buffer(L, magnet_env_get_buffer(srv, con, key));
 	return 1;
 }
 
@@ -629,8 +616,6 @@ static int magnet_env_next(lua_State *L) {
 	connection *con = magnet_get_connection(L);
 	const int pos = lua_tointeger(L, lua_upvalueindex(1));
 
-	buffer *dest;
-
 	/* ignore previous key: use upvalue for current pos */
 	lua_settop(L, 0);
 
@@ -643,12 +628,7 @@ static int magnet_env_next(lua_State *L) {
 	lua_pushstring(L, magnet_env[pos].name);
 
 	/* get value */
-	dest = magnet_env_get_buffer_by_id(srv, con, magnet_env[pos].type);
-	if (!buffer_is_empty(dest)) {
-		lua_pushlstring(L, CONST_BUF_LEN(dest));
-	} else {
-		lua_pushnil(L);
-	}
+	magnet_push_buffer(L, magnet_env_get_buffer_by_id(srv, con, magnet_env[pos].type));
 
 	/* return 2 items on the stack (key, value) */
 	return 2;
@@ -662,19 +642,7 @@ static int magnet_env_pairs(lua_State *L) {
 
 static int magnet_cgi_get(lua_State *L) {
 	connection *con = magnet_get_connection(L);
-	data_string *ds;
-
-	/* __index: param 1 is the (empty) table the value was not found in */
-	size_t klen;
-	const char *key = luaL_checklstring(L, 2, &klen);
-
-	ds = (data_string *)array_get_element_klen(con->environment, key, klen);
-	if (NULL != ds && !buffer_is_empty(ds->value))
-		lua_pushlstring(L, CONST_BUF_LEN(ds->value));
-	else
-		lua_pushnil(L);
-
-	return 1;
+	return magnet_array_get_element(L, con->environment);
 }
 
 static int magnet_cgi_set(lua_State *L) {
@@ -1061,7 +1029,7 @@ static handler_t magnet_attract_array(server *srv, connection *con, plugin_data 
 	if (con->error_handler_saved_status) {
 		/* retrieve (possibly modified) REDIRECT_STATUS and store as number */
 		unsigned long x;
-		data_string * const ds = (data_string *)array_get_element(con->environment, "REDIRECT_STATUS");
+		data_string * const ds = (data_string *)array_get_element_klen(con->environment, CONST_STR_LEN("REDIRECT_STATUS"));
 		if (ds && (x = strtoul(ds->value->ptr, NULL, 10)) < 1000)
 			/*(simplified validity check x < 1000)*/
 			con->error_handler_saved_status =
