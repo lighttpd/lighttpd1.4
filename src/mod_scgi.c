@@ -217,6 +217,7 @@ static int scgi_patch_connection(server *srv, connection *con, plugin_data *p) {
 	PATCH(exts_resp);
 	PATCH(proto);
 	PATCH(debug);
+	PATCH(balance);
 	PATCH(ext_mapping);
 
 	/* skip the first, the global context */
@@ -237,6 +238,8 @@ static int scgi_patch_connection(server *srv, connection *con, plugin_data *p) {
 				PATCH(exts_resp);
 			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("scgi.protocol"))) {
 				PATCH(proto);
+			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("scgi.balance"))) {
+				PATCH(balance);
 			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("scgi.debug"))) {
 				PATCH(debug);
 			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("scgi.map-extensions"))) {
