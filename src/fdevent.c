@@ -20,6 +20,9 @@
 #ifdef SOCK_CLOEXEC
 static int use_sock_cloexec;
 #endif
+#ifdef SOCK_NONBLOCK
+static int use_sock_nonblock;
+#endif
 
 int fdevent_config(server *srv) {
 	static const struct ev_map { fdevent_handler_t et; const char *name; } event_handlers[] =
@@ -157,9 +160,15 @@ fdevents *fdevent_init(server *srv) {
 	/* Test if SOCK_CLOEXEC is supported by kernel.
 	 * Linux kernels < 2.6.27 might return EINVAL if SOCK_CLOEXEC used
 	 * https://bugs.debian.org/cgi-bin/bugreport.cgi?bug=529929
-	 * http://www.linksysinfo.org/index.php?threads/lighttpd-no-longer-starts-toastman-1-28-0510-7.73132/ */
-	int fd = socket(AF_INET, SOCK_STREAM | SOCK_CLOEXEC, 0);
+	 * http://www.linksysinfo.org/index.php?threads/lighttpd-no-longer-starts-toastman-1-28-0510-7.73132/
+	 * Test if SOCK_NONBLOCK is ignored by kernel on sockets.
+	 * (reported on Android running a custom ROM)
+	 * https://redmine.lighttpd.net/issues/2883
+	 */
+	int fd = socket(AF_INET, SOCK_STREAM | SOCK_CLOEXEC | SOCK_NONBLOCK, 0);
 	if (fd >= 0) {
+		int flags = fcntl(fd, F_GETFL, 0);
+		use_sock_nonblock = (-1 != flags && (flags & O_NONBLOCK));
 		use_sock_cloexec = 1;
 		close(fd);
 	}
@@ -477,7 +486,7 @@ int fdevent_fcntl_set_nb_cloexec(fdevents *ev, int fd) {
 
 int fdevent_fcntl_set_nb_cloexec_sock(fdevents *ev, int fd) {
 #if defined(SOCK_CLOEXEC) && defined(SOCK_NONBLOCK)
-	if (use_sock_cloexec)
+	if (use_sock_cloexec && use_sock_nonblock)
 		return 0;
 #endif
 	return fdevent_fcntl_set_nb_cloexec(ev, fd);
@@ -500,7 +509,7 @@ int fdevent_socket_cloexec(int domain, int type, int protocol) {
 int fdevent_socket_nb_cloexec(int domain, int type, int protocol) {
 	int fd;
 #ifdef SOCK_CLOEXEC
-	if (use_sock_cloexec)
+	if (use_sock_cloexec && use_sock_nonblock)
 		return socket(domain, type | SOCK_CLOEXEC | SOCK_NONBLOCK, protocol);
 #endif
 	if (-1 != (fd = socket(domain, type, protocol))) {
@@ -569,7 +578,14 @@ int fdevent_accept_listenfd(int listenfd, struct sockaddr *addr, size_t *addrlen
 	int sock_cloexec = use_sock_cloexec;
 	if (sock_cloexec) {
 		fd = accept4(listenfd, addr, &len, SOCK_CLOEXEC | SOCK_NONBLOCK);
-		if (fd < 0 && (errno == ENOSYS || errno == ENOTSUP)) {
+		if (fd >= 0) {
+			if (!use_sock_nonblock) {
+				if (0 != fdevent_fcntl_set_nb(NULL, fd)) {
+					close(fd);
+					fd = -1;
+				}
+			}
+		} else if (errno == ENOSYS || errno == ENOTSUP) {
 			fd = accept(listenfd, addr, &len);
 			sock_cloexec = 0;
 		}
