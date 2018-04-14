@@ -106,12 +106,14 @@ int buffer_caseless_compare(const char *a, size_t a_len, const char *b, size_t b
 
 void buffer_substr_replace (buffer *b, size_t offset, size_t len, const buffer *replace);
 
+void buffer_append_string_encoded_hex_lc(buffer *b, const char *s, size_t len);
+void buffer_append_string_encoded_hex_uc(buffer *b, const char *s, size_t len);
+
 typedef enum {
 	ENCODING_REL_URI, /* for coding a rel-uri (/with space/and%percent) nicely as part of a href */
 	ENCODING_REL_URI_PART, /* same as ENC_REL_URL plus coding / too as %2F */
 	ENCODING_HTML,         /* & becomes &amp; and so on */
 	ENCODING_MINIMAL_XML,  /* minimal encoding for xml */
-	ENCODING_HEX,          /* encode string as hex */
 	ENCODING_HTTP_HEADER   /* encode \n with \t\n */
 } buffer_encoding_t;
 

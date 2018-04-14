@@ -241,7 +241,7 @@ URIHANDLER_FUNC(mod_usertrack_uri_handler) {
 
 	li_MD5_Final(h, &Md5Ctx);
 
-	buffer_append_string_encoded(ds->value, (char *)h, 16, ENCODING_HEX);
+	buffer_append_string_encoded_hex_lc(ds->value, (char *)h, 16);
 
 	/* usertrack.cookie-attrs, if set, replaces all other attrs */
 	if (!buffer_string_is_empty(p->conf.cookie_attrs)) {

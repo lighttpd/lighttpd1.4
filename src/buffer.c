@@ -8,6 +8,8 @@
 #include <time.h>       /* strftime() */
 
 static const char hex_chars[] = "0123456789abcdef";
+static const char hex_chars_lc[] = "0123456789abcdef";
+static const char hex_chars_uc[] = "0123456789ABCDEF";
 
 /**
  * init the buffer
@@ -483,6 +485,27 @@ void buffer_substr_replace (buffer * const b, const size_t offset,
 }
 
 
+void buffer_append_string_encoded_hex_lc(buffer *b, const char *s, size_t len) {
+    unsigned char * const p =
+      (unsigned char*) buffer_string_prepare_append(b, len*2);
+    buffer_commit(b, len*2); /* fill below */
+    for (size_t i = 0; i < len; ++i) {
+        p[(i<<1)]   = hex_chars_lc[(s[i] >> 4) & 0x0F];
+        p[(i<<1)+1] = hex_chars_lc[(s[i])      & 0x0F];
+    }
+}
+
+void buffer_append_string_encoded_hex_uc(buffer *b, const char *s, size_t len) {
+    unsigned char * const p =
+      (unsigned char*) buffer_string_prepare_append(b, len*2);
+    buffer_commit(b, len*2); /* fill below */
+    for (size_t i = 0; i < len; ++i) {
+        p[(i<<1)]   = hex_chars_uc[(s[i] >> 4) & 0x0F];
+        p[(i<<1)+1] = hex_chars_uc[(s[i])      & 0x0F];
+    }
+}
+
+
 /* everything except: ! ( ) * - . 0-9 A-Z _ a-z */
 static const char encoded_chars_rel_uri_part[] = {
 	/*
@@ -573,28 +596,6 @@ static const char encoded_chars_minimal_xml[] = {
 	0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,  /*  F0 -  FF */
 };
 
-static const char encoded_chars_hex[] = {
-	/*
-	0  1  2  3  4  5  6  7  8  9  A  B  C  D  E  F
-	*/
-	1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,  /*  00 -  0F control chars */
-	1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,  /*  10 -  1F */
-	1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,  /*  20 -  2F */
-	1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,  /*  30 -  3F */
-	1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,  /*  40 -  4F */
-	1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,  /*  50 -  5F */
-	1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,  /*  60 -  6F */
-	1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,  /*  70 -  7F */
-	1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,  /*  80 -  8F */
-	1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,  /*  90 -  9F */
-	1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,  /*  A0 -  AF */
-	1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,  /*  B0 -  BF */
-	1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,  /*  C0 -  CF */
-	1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,  /*  D0 -  DF */
-	1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,  /*  E0 -  EF */
-	1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,  /*  F0 -  FF */
-};
-
 static const char encoded_chars_http_header[] = {
 	/*
 	0  1  2  3  4  5  6  7  8  9  A  B  C  D  E  F
@@ -642,9 +643,6 @@ void buffer_append_string_encoded(buffer *b, const char *s, size_t s_len, buffer
 	case ENCODING_MINIMAL_XML:
 		map = encoded_chars_minimal_xml;
 		break;
-	case ENCODING_HEX:
-		map = encoded_chars_hex;
-		break;
 	case ENCODING_HTTP_HEADER:
 		map = encoded_chars_http_header;
 		break;
@@ -665,7 +663,6 @@ void buffer_append_string_encoded(buffer *b, const char *s, size_t s_len, buffer
 				d_len += 6;
 				break;
 			case ENCODING_HTTP_HEADER:
-			case ENCODING_HEX:
 				d_len += 2;
 				break;
 			}
@@ -695,10 +692,6 @@ void buffer_append_string_encoded(buffer *b, const char *s, size_t s_len, buffer
 				d[d_len++] = hex_chars[((*ds) >> 4) & 0x0F];
 				d[d_len++] = hex_chars[(*ds) & 0x0F];
 				d[d_len++] = ';';
-				break;
-			case ENCODING_HEX:
-				d[d_len++] = hex_chars[((*ds) >> 4) & 0x0F];
-				d[d_len++] = hex_chars[(*ds) & 0x0F];
 				break;
 			case ENCODING_HTTP_HEADER:
 				d[d_len++] = *ds;
