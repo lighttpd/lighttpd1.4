@@ -357,23 +357,23 @@ void li_utostrn(char *buf, size_t buf_len, uintmax_t val) {
 	memcpy(buf, str, p_buf_end - str);
 }
 
+#define li_ntox_lc(n) ((n) <= 9 ? (n) + '0' : (n) + 'a' - 10)
+
 char int2hex(char c) {
-	return hex_chars[(c & 0x0F)];
+	/*return li_ntox_lc(c & 0xF);*/
+	return hex_chars_lc[(c & 0x0F)];
 }
+
+/* c (char) and n (nibble) MUST be unsigned integer types */
+#define li_cton(c,n) \
+  (((n) = (c) - '0') <= 9 || (((n) = ((c)&0xdf) - 'A') <= 5 ? ((n) += 10) : 0))
 
 /* converts hex char (0-9, A-Z, a-z) to decimal.
  * returns 0xFF on invalid input.
  */
 char hex2int(unsigned char hex) {
-	unsigned char value = hex - '0';
-	if (value > 9) {
-		hex |= 0x20; /* to lower case */
-		value = hex - 'a' + 10;
-		if (value < 10) value = 0xff;
-	}
-	if (value > 15) value = 0xff;
-
-	return value;
+	unsigned char n;
+	return li_cton(hex,n) ? (char)n : 0xFF;
 }
 
 /**
