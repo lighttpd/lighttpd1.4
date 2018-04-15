@@ -7,7 +7,6 @@
 #include <string.h>
 #include <time.h>       /* strftime() */
 
-static const char hex_chars[] = "0123456789abcdef";
 static const char hex_chars_lc[] = "0123456789abcdef";
 static const char hex_chars_uc[] = "0123456789ABCDEF";
 
@@ -684,16 +683,16 @@ void buffer_append_string_encoded(buffer *b, const char *s, size_t s_len, buffer
 			case ENCODING_REL_URI:
 			case ENCODING_REL_URI_PART:
 				d[d_len++] = '%';
-				d[d_len++] = hex_chars[((*ds) >> 4) & 0x0F];
-				d[d_len++] = hex_chars[(*ds) & 0x0F];
+				d[d_len++] = hex_chars_uc[((*ds) >> 4) & 0x0F];
+				d[d_len++] = hex_chars_uc[(*ds) & 0x0F];
 				break;
 			case ENCODING_HTML:
 			case ENCODING_MINIMAL_XML:
 				d[d_len++] = '&';
 				d[d_len++] = '#';
 				d[d_len++] = 'x';
-				d[d_len++] = hex_chars[((*ds) >> 4) & 0x0F];
-				d[d_len++] = hex_chars[(*ds) & 0x0F];
+				d[d_len++] = hex_chars_uc[((*ds) >> 4) & 0x0F];
+				d[d_len++] = hex_chars_uc[(*ds) & 0x0F];
 				d[d_len++] = ';';
 				break;
 			case ENCODING_HTTP_HEADER:
@@ -755,8 +754,8 @@ void buffer_append_string_c_escaped(buffer *b, const char *s, size_t s_len) {
 				break;
 			default:
 				d[d_len++] = 'x';
-				d[d_len++] = hex_chars[((*ds) >> 4) & 0x0F];
-				d[d_len++] = hex_chars[(*ds) & 0x0F];
+				d[d_len++] = hex_chars_lc[((*ds) >> 4) & 0x0F];
+				d[d_len++] = hex_chars_lc[(*ds) & 0x0F];
 				break;
 			}
 		} else {
