@@ -236,7 +236,7 @@ void buffer_append_string_buffer(buffer *b, const buffer *src) {
 	}
 }
 
-void buffer_append_uint_hex(buffer *b, uintmax_t value) {
+void buffer_append_uint_hex_lc(buffer *b, uintmax_t value) {
 	char *buf;
 	unsigned int shift = 0;
 
@@ -253,7 +253,7 @@ void buffer_append_uint_hex(buffer *b, uintmax_t value) {
 
 	while (shift > 0) {
 		shift -= 4;
-		*(buf++) = hex_chars[(value >> shift) & 0x0F];
+		*(buf++) = hex_chars_lc[(value >> shift) & 0x0F];
 	}
 }
 
