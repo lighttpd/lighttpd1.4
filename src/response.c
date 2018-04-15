@@ -81,14 +81,7 @@ int http_response_write_header(server *srv, connection *con) {
 			buffer_append_string_len(b, CONST_STR_LEN("\r\n"));
 			buffer_append_string_buffer(b, ds->key);
 			buffer_append_string_len(b, CONST_STR_LEN(": "));
-#if 0
-			/** 
-			 * the value might contain newlines, encode them with at least one white-space
-			 */
-			buffer_append_string_encoded(b, CONST_BUF_LEN(ds->value), ENCODING_HTTP_HEADER);
-#else
 			buffer_append_string_buffer(b, ds->value);
-#endif
 		}
 	}
 
@@ -111,7 +104,7 @@ int http_response_write_header(server *srv, connection *con) {
 	if (!have_server) {
 		if (!buffer_string_is_empty(con->conf.server_tag)) {
 			buffer_append_string_len(b, CONST_STR_LEN("\r\nServer: "));
-			buffer_append_string_encoded(b, CONST_BUF_LEN(con->conf.server_tag), ENCODING_HTTP_HEADER);
+			buffer_append_string_len(b, CONST_BUF_LEN(con->conf.server_tag));
 		}
 	}
 

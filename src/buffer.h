@@ -114,8 +114,7 @@ typedef enum {
 	ENCODING_REL_URI, /* for coding a rel-uri (/with space/and%percent) nicely as part of a href */
 	ENCODING_REL_URI_PART, /* same as ENC_REL_URL plus coding / too as %2F */
 	ENCODING_HTML,         /* & becomes &amp; and so on */
-	ENCODING_MINIMAL_XML,  /* minimal encoding for xml */
-	ENCODING_HTTP_HEADER   /* encode \n with \t\n */
+	ENCODING_MINIMAL_XML   /* minimal encoding for xml */
 } buffer_encoding_t;
 
 void buffer_append_string_encoded(buffer *b, const char *s, size_t s_len, buffer_encoding_t encoding);

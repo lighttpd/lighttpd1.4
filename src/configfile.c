@@ -347,6 +347,23 @@ static int config_insert(server *srv) {
 					"unexpected value for mimetype.assign; expected list of \"ext\" => \"mimetype\"");
 		}
 
+		if (!buffer_string_is_empty(s->server_tag)) {
+			for (char *t = strchr(s->server_tag->ptr,'\n'); NULL != t; t = strchr(t+2,'\n')) {
+				/* not expecting admin to define multi-line server.tag,
+				 * but ensure server_tag has proper header continuation,
+				 * if needed */
+				off_t off = t - s->server_tag->ptr;
+				size_t len;
+				if (t[1] == ' ' || t[1] == '\t') continue;
+				len = buffer_string_length(s->server_tag);
+				buffer_string_prepare_append(s->server_tag, 1);
+				t = s->server_tag->ptr+off;
+				memmove(t+2, t+1, len - off - 1);
+				t[1] = ' ';
+				buffer_commit(s->server_tag, 1);
+			}
+		}
+
 #if !(defined HAVE_LIBSSL && defined HAVE_OPENSSL_SSL_H)
 		if (s->ssl_enabled) {
 			log_error_write(srv, __FILE__, __LINE__, "s",

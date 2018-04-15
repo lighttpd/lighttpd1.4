@@ -598,28 +598,6 @@ static const char encoded_chars_minimal_xml[] = {
 	0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,  /*  F0 -  FF */
 };
 
-static const char encoded_chars_http_header[] = {
-	/*
-	0  1  2  3  4  5  6  7  8  9  A  B  C  D  E  F
-	*/
-	0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0,  /*  00 -  0F */
-	0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,  /*  10 -  1F */
-	0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,  /*  20 -  2F */
-	0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,  /*  30 -  3F */
-	0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,  /*  40 -  4F */
-	0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,  /*  50 -  5F */
-	0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,  /*  60 -  6F */
-	0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,  /*  70 -  7F */
-	0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,  /*  80 -  8F */
-	0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,  /*  90 -  9F */
-	0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,  /*  A0 -  AF */
-	0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,  /*  B0 -  BF */
-	0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,  /*  C0 -  CF */
-	0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,  /*  D0 -  DF */
-	0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,  /*  E0 -  EF */
-	0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,  /*  F0 -  FF */
-};
-
 
 
 void buffer_append_string_encoded(buffer *b, const char *s, size_t s_len, buffer_encoding_t encoding) {
@@ -645,9 +623,6 @@ void buffer_append_string_encoded(buffer *b, const char *s, size_t s_len, buffer
 	case ENCODING_MINIMAL_XML:
 		map = encoded_chars_minimal_xml;
 		break;
-	case ENCODING_HTTP_HEADER:
-		map = encoded_chars_http_header;
-		break;
 	}
 
 	force_assert(NULL != map);
@@ -663,9 +638,6 @@ void buffer_append_string_encoded(buffer *b, const char *s, size_t s_len, buffer
 			case ENCODING_HTML:
 			case ENCODING_MINIMAL_XML:
 				d_len += 6;
-				break;
-			case ENCODING_HTTP_HEADER:
-				d_len += 2;
 				break;
 			}
 		} else {
@@ -694,10 +666,6 @@ void buffer_append_string_encoded(buffer *b, const char *s, size_t s_len, buffer
 				d[d_len++] = hex_chars_uc[((*ds) >> 4) & 0x0F];
 				d[d_len++] = hex_chars_uc[(*ds) & 0x0F];
 				d[d_len++] = ';';
-				break;
-			case ENCODING_HTTP_HEADER:
-				d[d_len++] = *ds;
-				d[d_len++] = '\t';
 				break;
 			}
 		} else {
