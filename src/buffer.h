@@ -68,8 +68,6 @@ void buffer_string_set_length(buffer *b, size_t len);
 void buffer_copy_string(buffer *b, const char *s);
 void buffer_copy_string_len(buffer *b, const char *s, size_t s_len);
 void buffer_copy_buffer(buffer *b, const buffer *src);
-/* convert input to hex and store in buffer */
-void buffer_copy_string_hex(buffer *b, const char *in, size_t in_len);
 
 void buffer_append_string(buffer *b, const char *s);
 void buffer_append_string_len(buffer *b, const char *s, size_t s_len);
@@ -88,7 +86,9 @@ void li_itostrn(char *buf, size_t buf_len, intmax_t val);
 void li_utostrn(char *buf, size_t buf_len, uintmax_t val);
 
 /* buf must be (at least) 2*s_len + 1 big. uses lower-case hex letters. */
-void li_tohex(char *buf, size_t buf_len, const char *s, size_t s_len);
+#define li_tohex(buf,buf_len,s,s_len) li_tohex_lc((buf),(buf_len),(s),(s_len))
+void li_tohex_lc(char *buf, size_t buf_len, const char *s, size_t s_len);
+void li_tohex_uc(char *buf, size_t buf_len, const char *s, size_t s_len);
 
 /* NULL buffer or empty buffer (used == 0);
  * unset "string" (buffer) config options are initialized to used == 0,
