@@ -38,7 +38,7 @@ static void check_all_len_2 (const base64_charset enc) {
 
 static void check_all_len_3 (const base64_charset enc) {
 	unsigned int c1, c2, c3;
-	for (c1 = 0; c1 < 256; ++c1) for (c2 = 0; c2 < 256; ++c2) for (c3 = 0; c3 < 256; ++c3) {
+	for (c1 = 0; c1 < 256; c1+=255) for (c2 = 0; c2 < 256; ++c2) for (c3 = 0; c3 < 256; ++c3) {
 			unsigned char in[] = { c1, c2, c3 };
 			char out[4] = { 0, 0, 0, 0 };
 			check_base64(out, sizeof(out), (char *)in, sizeof(in), enc);
