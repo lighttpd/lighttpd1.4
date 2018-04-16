@@ -459,6 +459,13 @@ handler_t http_response_prepare(server *srv, connection *con) {
 			return HANDLER_FINISHED;
 		}
 
+		if (con->request.http_method == HTTP_METHOD_CONNECT && con->mode == DIRECT) {
+			con->keep_alive = 0;
+			con->http_status = 405; /* Method Not Allowed */
+			con->file_finished = 1;
+			return HANDLER_FINISHED;
+		}
+
 		/***
 		 *
 		 * border
@@ -584,6 +591,13 @@ handler_t http_response_prepare(server *srv, connection *con) {
 			log_error_write(srv, __FILE__, __LINE__,  "sb", "Path         :", con->physical.path);
 		}
 
+		if (con->request.http_method == HTTP_METHOD_CONNECT) {
+			/* do not permit CONNECT requests to hit filesystem hooks
+			 * since the CONNECT URI bypassed path normalization */
+			/* (This check is located here so that con->physical.path
+			 *  is filled in above to avoid repeating work next time
+			 *  http_response_prepare() is called while processing request) */
+		} else
 		switch(r = plugins_call_handle_physical(srv, con)) {
 		case HANDLER_GO_ON:
 			break;
