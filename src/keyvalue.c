@@ -174,6 +174,14 @@ http_method_t get_http_method_key(const char *s) {
 #include <pcre.h>
 #endif
 
+typedef struct pcre_keyvalue {
+#ifdef HAVE_PCRE_H
+	pcre *key;
+	pcre_extra *key_extra;
+#endif
+	buffer *value;
+} pcre_keyvalue;
+
 pcre_keyvalue_buffer *pcre_keyvalue_buffer_init(void) {
 	pcre_keyvalue_buffer *kvb;
 
@@ -183,17 +191,15 @@ pcre_keyvalue_buffer *pcre_keyvalue_buffer_init(void) {
 	return kvb;
 }
 
-int pcre_keyvalue_buffer_append(server *srv, pcre_keyvalue_buffer *kvb, const char *key, const char *value) {
+int pcre_keyvalue_buffer_append(server *srv, pcre_keyvalue_buffer *kvb, buffer *key, buffer *value) {
 #ifdef HAVE_PCRE_H
 	size_t i;
 	const char *errptr;
 	int erroff;
 	pcre_keyvalue *kv;
-#endif
 
 	if (!key) return -1;
 
-#ifdef HAVE_PCRE_H
 	if (kvb->size == 0) {
 		kvb->size = 4;
 		kvb->used = 0;
@@ -218,7 +224,7 @@ int pcre_keyvalue_buffer_append(server *srv, pcre_keyvalue_buffer *kvb, const ch
 	}
 
 	kv = kvb->kv[kvb->used];
-	if (NULL == (kv->key = pcre_compile(key,
+	if (NULL == (kv->key = pcre_compile(key->ptr,
 					  0, &errptr, &erroff, NULL))) {
 
 		log_error_write(srv, __FILE__, __LINE__, "SS",
@@ -231,17 +237,22 @@ int pcre_keyvalue_buffer_append(server *srv, pcre_keyvalue_buffer *kvb, const ch
 		return -1;
 	}
 
-	kv->value = buffer_init_string(value);
+	kv->value = buffer_init_buffer(value);
 
 	kvb->used++;
 
-	return 0;
 #else
+	static int logged_message = 0;
+	if (logged_message) return 0;
+	logged_message = 1;
+	log_error_write(srv, __FILE__, __LINE__, "s",
+			"pcre support is missing, please install libpcre and the headers");
 	UNUSED(kvb);
+	UNUSED(key);
 	UNUSED(value);
-
-	return -1;
 #endif
+
+	return 0;
 }
 
 void pcre_keyvalue_buffer_free(pcre_keyvalue_buffer *kvb) {
@@ -263,7 +274,8 @@ void pcre_keyvalue_buffer_free(pcre_keyvalue_buffer *kvb) {
 	free(kvb);
 }
 
-void pcre_keyvalue_buffer_subst(buffer *b, const buffer *patternb, const char **list, int n, struct cond_cache_t *cache) {
+#ifdef HAVE_PCRE_H
+static void pcre_keyvalue_buffer_subst(buffer *b, const buffer *patternb, const char **list, int n, pcre_keyvalue_ctx *ctx) {
 	const char *pattern = patternb->ptr;
 	const size_t pattern_len = buffer_string_length(patternb);
 	size_t start = 0;
@@ -286,7 +298,8 @@ void pcre_keyvalue_buffer_subst(buffer *b, const buffer *patternb, const char **
 				if (num < (size_t)n) {
 					buffer_append_string(b, list[num]);
 				}
-			} else if (cache) {
+			} else if (ctx->cache) {
+				const struct cond_cache_t * const cache = ctx->cache;
 				if (num < (size_t)cache->patterncount) {
 					num <<= 1; /* n *= 2 */
 					buffer_append_string_len(b,
@@ -309,3 +322,44 @@ void pcre_keyvalue_buffer_subst(buffer *b, const buffer *patternb, const char **
 
 	buffer_append_string_len(b, pattern + start, pattern_len - start);
 }
+
+handler_t pcre_keyvalue_buffer_process(pcre_keyvalue_buffer *kvb, pcre_keyvalue_ctx *ctx, buffer *input, buffer *result) {
+    for (int i = 0, used = (int)kvb->used; i < used; ++i) {
+        pcre_keyvalue * const kv = kvb->kv[i];
+        #define N 10
+        int ovec[N * 3];
+        #undef N
+        int n = pcre_exec(kv->key, kv->key_extra, CONST_BUF_LEN(input),
+                          0, 0, ovec, sizeof(ovec)/sizeof(int));
+        if (n < 0) {
+            if (n != PCRE_ERROR_NOMATCH) {
+                return HANDLER_ERROR;
+            }
+        }
+        else if (buffer_string_is_empty(kv->value)) {
+            /* short-circuit if blank replacement pattern
+             * (do not attempt to match against remaining kvb rules) */
+            ctx->m = i;
+            return HANDLER_GO_ON;
+        }
+        else { /* it matched */
+            const char **list;
+            ctx->m = i;
+            pcre_get_substring_list(input->ptr, ovec, n, &list);
+            pcre_keyvalue_buffer_subst(result, kv->value, list, n, ctx);
+            pcre_free(list);
+            return HANDLER_FINISHED;
+        }
+    }
+
+    return HANDLER_GO_ON;
+}
+#else
+handler_t pcre_keyvalue_buffer_process(pcre_keyvalue_buffer *kvb, pcre_keyvalue_ctx *ctx, buffer *input, buffer *result) {
+    UNUSED(kvb);
+    UNUSED(ctx);
+    UNUSED(input);
+    UNUSED(result);
+    return HANDLER_GO_ON;
+}
+#endif

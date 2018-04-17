@@ -63,26 +63,18 @@ typedef enum { HTTP_VERSION_UNSET = -1, HTTP_VERSION_1_0, HTTP_VERSION_1_1 } htt
 
 typedef struct {
 	int key;
-
 	const char *value;
 } keyvalue;
 
+struct pcre_keyvalue;   /* declaration */
 
-#ifdef HAVE_PCRE_H
-struct pcre_extra;      /* declaration */
-#endif
-
-typedef struct {
-#ifdef HAVE_PCRE_H
-	void *key;
-	struct pcre_extra *key_extra;
-#endif
-
-	buffer *value;
-} pcre_keyvalue;
+typedef struct pcre_keyvalue_ctx {
+  struct cond_cache_t *cache;
+  int m;
+} pcre_keyvalue_ctx;
 
 typedef struct {
-	pcre_keyvalue **kv;
+	struct pcre_keyvalue **kv;
 	size_t used;
 	size_t size;
 } pcre_keyvalue_buffer;
@@ -95,8 +87,8 @@ int get_http_version_key(const char *s);
 http_method_t get_http_method_key(const char *s);
 
 pcre_keyvalue_buffer *pcre_keyvalue_buffer_init(void);
-int pcre_keyvalue_buffer_append(struct server *srv, pcre_keyvalue_buffer *kvb, const char *key, const char *value);
+int pcre_keyvalue_buffer_append(struct server *srv, pcre_keyvalue_buffer *kvb, buffer *key, buffer *value);
 void pcre_keyvalue_buffer_free(pcre_keyvalue_buffer *kvb);
-void pcre_keyvalue_buffer_subst(buffer *b, const buffer *patternb, const char **list, int n, struct cond_cache_t *cache);
+handler_t pcre_keyvalue_buffer_process(pcre_keyvalue_buffer *kvb, pcre_keyvalue_ctx *ctx, buffer *input, buffer *result);
 
 #endif
