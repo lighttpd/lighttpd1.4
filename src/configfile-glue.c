@@ -12,10 +12,6 @@
 #include <string.h>
 #include <stdlib.h>
 
-#ifdef HAVE_PCRE_H
-#include <pcre.h>
-#endif
-
 /**
  * like all glue code this file contains functions which
  * are the external interface of lighttpd. The functions
@@ -480,29 +476,15 @@ static cond_result_t config_check_cond_nocache(server *srv, connection *con, dat
 		} else {
 			return (dc->cond == CONFIG_COND_EQ) ? COND_RESULT_FALSE : COND_RESULT_TRUE;
 		}
-		break;
-#ifdef HAVE_PCRE_H
 	case CONFIG_COND_NOMATCH:
 	case CONFIG_COND_MATCH: {
-		int n;
-
-#ifndef elementsof
-#define elementsof(x) (sizeof(x) / sizeof(x[0]))
-#endif
-		n = pcre_exec(dc->regex, dc->regex_study, CONST_BUF_LEN(l), 0, 0,
-				cache->matches, elementsof(cache->matches));
-
-		cache->patterncount = n;
-		if (n > 0) {
-			cache->comp_value = l;
+		if (data_config_pcre_exec(dc, cache, l) > 0) {
 			return (dc->cond == CONFIG_COND_MATCH) ? COND_RESULT_TRUE : COND_RESULT_FALSE;
 		} else {
 			/* cache is already cleared */
 			return (dc->cond == CONFIG_COND_MATCH) ? COND_RESULT_FALSE : COND_RESULT_TRUE;
 		}
-		break;
 	}
-#endif
 	default:
 		/* no way */
 		break;

@@ -1,5 +1,6 @@
 #include "first.h"
 
+#include "base.h"       /* (cond_cache_t) */
 #include "array.h"
 #include "configfile.h"
 
@@ -152,4 +153,63 @@ data_config *data_config_init(void) {
 	ds->type = TYPE_CONFIG;
 
 	return ds;
+}
+
+int data_config_pcre_compile(data_config *dc) {
+#ifdef HAVE_PCRE_H
+    /* (use fprintf() on error, as this is called from configparser.y) */
+    const char *errptr;
+    int erroff, captures;
+
+    if (dc->regex) pcre_free(dc->regex);
+    if (dc->regex_study) pcre_free(dc->regex_study);
+
+    dc->regex = pcre_compile(dc->string->ptr, 0, &errptr, &erroff, NULL);
+    if (NULL == dc->regex) {
+        fprintf(stderr, "parsing regex failed: %s -> %s at offset %d\n",
+                dc->string->ptr, errptr, erroff);
+        return 0;
+    }
+
+    dc->regex_study = pcre_study(dc->regex, 0, &errptr);
+    if (NULL == dc->regex_study && errptr != NULL) {
+        fprintf(stderr, "studying regex failed: %s -> %s\n",
+                dc->string->ptr, errptr);
+        return 0;
+    }
+
+    erroff = pcre_fullinfo(dc->regex, dc->regex_study, PCRE_INFO_CAPTURECOUNT,
+                           &captures);
+    if (0 != erroff) {
+        fprintf(stderr, "getting capture count for regex failed: %s\n",
+                dc->string->ptr);
+        return 0;
+    } else if (captures > 9) {
+        fprintf(stderr, "Too many captures in regex, use (?:...) instead of (...): %s\n",
+                dc->string->ptr);
+        return 0;
+    }
+    return 1;
+#else
+    fprintf(stderr, "can't handle '$%s[%s] =~ ...' as you compiled without pcre support. \n"
+                    "(perhaps just a missing pcre-devel package ?) \n",
+                    dc->comp_key->ptr, dc->comp_tag->ptr);
+    return 0;
+#endif
+}
+
+int data_config_pcre_exec(data_config *dc, cond_cache_t *cache, buffer *b) {
+#ifdef HAVE_PCRE_H
+    #ifndef elementsof
+    #define elementsof(x) (sizeof(x) / sizeof(x[0]))
+    #endif
+    cache->patterncount =
+      pcre_exec(dc->regex, dc->regex_study, CONST_BUF_LEN(b), 0, 0,
+                cache->matches, elementsof(cache->matches));
+    if (cache->patterncount > 0)
+        cache->comp_value = b; /* holds pointer to b (!) for pattern subst */
+    return cache->patterncount;
+#else
+    return 0;
+#endif
 }

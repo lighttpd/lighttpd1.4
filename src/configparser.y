@@ -12,12 +12,9 @@
 
 #include <ctype.h>
 #include <errno.h>
+#include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
-
-#ifdef HAVE_PCRE_H
-#include <pcre.h>
-#endif
 
 static void configparser_push(config_t *ctx, data_config *dc, int isnew) {
   if (isnew) {
@@ -694,49 +691,17 @@ context ::= DOLLAR SRVVARNAME(B) LBRACKET stringop(C) RBRACKET cond(E) expressio
         }
       }
 
+      dc->string = buffer_init_buffer(rvalue);
+
       if (ctx->ok) switch(E) {
       case CONFIG_COND_NE:
       case CONFIG_COND_EQ:
-        dc->string = buffer_init_buffer(rvalue);
         break;
       case CONFIG_COND_NOMATCH:
       case CONFIG_COND_MATCH: {
-#ifdef HAVE_PCRE_H
-        const char *errptr;
-        int erroff, captures;
-
-        if (NULL == (dc->regex =
-            pcre_compile(rvalue->ptr, 0, &errptr, &erroff, NULL))) {
-          dc->string = buffer_init_string(errptr);
-          dc->cond = CONFIG_COND_UNSET;
-
-          fprintf(stderr, "parsing regex failed: %s -> %s at offset %d\n",
-              rvalue->ptr, errptr, erroff);
-
+        if (!data_config_pcre_compile(dc)) {
           ctx->ok = 0;
-        } else if (NULL == (dc->regex_study =
-            pcre_study(dc->regex, 0, &errptr)) &&
-                   errptr != NULL) {
-          fprintf(stderr, "studying regex failed: %s -> %s\n",
-              rvalue->ptr, errptr);
-          ctx->ok = 0;
-        } else if (0 != (pcre_fullinfo(dc->regex, dc->regex_study, PCRE_INFO_CAPTURECOUNT, &captures))) {
-          fprintf(stderr, "getting capture count for regex failed: %s\n",
-              rvalue->ptr);
-          ctx->ok = 0;
-        } else if (captures > 9) {
-          fprintf(stderr, "Too many captures in regex, use (?:...) instead of (...): %s\n",
-              rvalue->ptr);
-          ctx->ok = 0;
-        } else {
-          dc->string = buffer_init_buffer(rvalue);
         }
-#else
-        fprintf(stderr, "can't handle '$%s[%s] =~ ...' as you compiled without pcre support. \n"
-                        "(perhaps just a missing pcre-devel package ?) \n",
-                        B->ptr, C->ptr);
-        ctx->ok = 0;
- #endif
         break;
       }
 

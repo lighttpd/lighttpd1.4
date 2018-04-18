@@ -79,7 +79,11 @@ struct data_config {
 #endif
 };
 
+struct cond_cache_t;    /* declaration */
+
 data_config *data_config_init(void);
+int data_config_pcre_compile(data_config *dc);
+int data_config_pcre_exec(data_config *dc, struct cond_cache_t *cache, buffer *b);
 
 typedef struct {
 	server *srv;

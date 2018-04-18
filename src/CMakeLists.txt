@@ -662,6 +662,7 @@ add_executable(test_configfile
 	test_configfile.c
 	buffer.c
 	array.c
+	data_config.c
 	data_string.c
 	keyvalue.c
 	vector.c
