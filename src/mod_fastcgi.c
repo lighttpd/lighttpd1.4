@@ -463,6 +463,7 @@ static int fcgi_patch_connection(server *srv, connection *con, plugin_data *p) {
 	PATCH(exts_auth);
 	PATCH(exts_resp);
 	PATCH(debug);
+	PATCH(balance);
 	PATCH(ext_mapping);
 
 	/* skip the first, the global context */
@@ -483,6 +484,8 @@ static int fcgi_patch_connection(server *srv, connection *con, plugin_data *p) {
 				PATCH(exts_resp);
 			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("fastcgi.debug"))) {
 				PATCH(debug);
+			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("fastcgi.balance"))) {
+				PATCH(balance);
 			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("fastcgi.map-extensions"))) {
 				PATCH(ext_mapping);
 			}
