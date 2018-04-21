@@ -50,4 +50,5 @@ stamp-h1
 test_base64
 test_buffer
 test_configfile
+test_request
 versionstamp.h

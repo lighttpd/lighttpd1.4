@@ -29,7 +29,6 @@ tests = [
 	'core-request.t',
 	'core-response.t',
 	'core-var-include.t',
-	'core.t',
 	'lowercase.t',
 	'mod-access.t',
 	'mod-auth.t',

@@ -30,7 +30,6 @@ CONFS=\
 	core-request.t \
 	core-response.t \
 	core-var-include.t \
-	core.t \
 	fastcgi-10.conf \
 	fastcgi-13.conf \
 	fastcgi-auth.conf \

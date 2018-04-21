@@ -714,6 +714,21 @@ test('test_configfile', executable('test_configfile',
 	build_by_default: false,
 ))
 
+test('test_request', executable('test_request',
+	sources: [
+		'test_request.c',
+		'request.c',
+		'buffer.c',
+		'array.c',
+		'data_string.c',
+		'keyvalue.c',
+		'log.c',
+		'sock_addr.c',
+	],
+	dependencies: common_flags + libpcre + libunwind,
+	build_by_default: false,
+))
+
 modules = [
 	[ 'mod_access', [ 'mod_access.c' ] ],
 	[ 'mod_accesslog', [ 'mod_accesslog.c' ] ],
