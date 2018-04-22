@@ -112,21 +112,6 @@ static const keyvalue http_status[] = {
 	{ -1, NULL }
 };
 
-static const keyvalue http_status_body[] = {
-	{ 400, "400.html" },
-	{ 401, "401.html" },
-	{ 403, "403.html" },
-	{ 404, "404.html" },
-	{ 411, "411.html" },
-	{ 416, "416.html" },
-	{ 500, "500.html" },
-	{ 501, "501.html" },
-	{ 503, "503.html" },
-	{ 505, "505.html" },
-
-	{ -1, NULL }
-};
-
 
 static const char *keyvalue_get_value(const keyvalue *kv, int k) {
 	int i;
@@ -155,10 +140,6 @@ const char *get_http_status_name(int i) {
 
 const char *get_http_method_name(http_method_t i) {
 	return keyvalue_get_value(http_methods, i);
-}
-
-const char *get_http_status_body_name(int i) {
-	return keyvalue_get_value(http_status_body, i);
 }
 
 int get_http_version_key(const char *s) {
