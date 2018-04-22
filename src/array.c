@@ -4,7 +4,6 @@
 #include "buffer.h"
 
 #include <string.h>
-#include <stdio.h>
 #include <stdlib.h>
 #include <limits.h>
 
@@ -316,6 +315,10 @@ int array_is_kvstring(array *a) {
 	}
 	return 1;
 }
+
+
+
+#include <stdio.h>
 
 void array_print_indent(int depth) {
 	int i;

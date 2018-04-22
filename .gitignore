@@ -43,7 +43,6 @@ m4/
 missing
 mod_ssi_exprparser.c
 mod_ssi_exprparser.h
-proc_open
 scgi-responder
 sconsbuild/
 stamp-h1

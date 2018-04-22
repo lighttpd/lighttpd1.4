@@ -7,7 +7,6 @@
 
 #include "configparser.h"
 #include "configfile.h"
-#include "proc_open.h"
 #include "request.h"
 #include "stat_cache.h"
 
@@ -1103,9 +1102,7 @@ static int config_tokenizer(server *srv, tokenizer_t *t, int *token_id, buffer *
 
 		return 1;
 	} else if (t->offset < t->size) {
-		fprintf(stderr, "%s.%d: %d, %s\n",
-			__FILE__, __LINE__,
-			tid, token->ptr);
+		log_error_write(srv, __FILE__, __LINE__, "Dsb", tid, ",", token);
 	}
 	return 0;
 }
@@ -1261,9 +1258,10 @@ static char* getCWD(void) {
 
 int config_parse_cmd(server *srv, config_t *context, const char *cmd) {
 	tokenizer_t t;
-	int ret;
+	int ret = 0;
+	FILE *fp;
 	buffer *source;
-	buffer *out;
+	buffer *out = srv->tmp_buf;
 	char *oldpwd;
 
 	if (NULL == (oldpwd = getCWD())) {
@@ -1282,19 +1280,38 @@ int config_parse_cmd(server *srv, config_t *context, const char *cmd) {
 	}
 
 	source = buffer_init_string(cmd);
-	out = buffer_init();
 
-	if (0 != proc_open_buffer(cmd, NULL, out, NULL)) {
-		log_error_write(srv, __FILE__, __LINE__, "sbss",
-			"opening", source, "failed:", strerror(errno));
+	fp = popen(cmd, "r");
+	if (NULL == fp) {
+		log_error_write(srv, __FILE__, __LINE__, "SSss",
+				"popen \"", cmd, "\"failed:", strerror(errno));
 		ret = -1;
-	} else {
+	}
+	else {
+		size_t rd;
+		buffer_string_set_length(out, 0);
+		do {
+			rd = fread(buffer_string_prepare_append(out, 1023), 1, 1023, fp);
+			buffer_commit(out, rd);
+		} while (0 != rd && !ferror(fp));
+		if (0 != rd || !feof(fp)) {
+			log_error_write(srv, __FILE__, __LINE__, "SSss",
+					"fread \"", cmd, "\"failed:", strerror(errno));
+			ret = -1;
+		}
+		if (0 != pclose(fp)) {
+			log_error_write(srv, __FILE__, __LINE__, "SSss",
+					"pclose \"", cmd, "\"failed:", strerror(errno));
+			ret = -1;
+		}
+	}
+
+	if (-1 != ret) {
 		tokenizer_init(&t, source, CONST_BUF_LEN(out));
 		ret = config_parse(srv, context, &t);
 	}
 
 	buffer_free(source);
-	buffer_free(out);
 	if (0 != chdir(oldpwd)) {
 		log_error_write(srv, __FILE__, __LINE__, "sss",
 			"cannot change directory to", oldpwd, strerror(errno));

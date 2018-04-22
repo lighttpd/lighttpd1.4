@@ -3,7 +3,6 @@
 #include "array.h"
 
 #include <string.h>
-#include <stdio.h>
 #include <stdlib.h>
 
 static data_unset *data_array_copy(const data_unset *s) {

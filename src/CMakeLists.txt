@@ -604,7 +604,6 @@ add_executable(lighttpd
 	configfile.c
 	configparser.c
 	request.c
-	proc_open.c
 	${COMMON_SRC}
 )
 set(L_INSTALL_TARGETS ${L_INSTALL_TARGETS} lighttpd)

@@ -83,7 +83,7 @@ src = Split("server.c response.c connections.c \
 	inet_ntop_cache.c \
 	network.c \
 	network_write.c \
-	configfile.c configparser.c request.c proc_open.c")
+	configfile.c configparser.c request.c")
 
 lemon = env.Program('lemon', 'lemon.c', LIBS = GatherLibs(env))
 

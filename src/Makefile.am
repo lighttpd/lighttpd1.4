@@ -1,6 +1,6 @@
 AM_CFLAGS = $(FAM_CFLAGS) $(LIBUNWIND_CFLAGS)
 
-noinst_PROGRAMS=proc_open test_buffer test_base64 test_configfile test_request
+noinst_PROGRAMS=test_buffer test_base64 test_configfile test_request
 sbin_PROGRAMS=lighttpd lighttpd-angel
 LEMON=$(top_builddir)/src/lemon$(BUILD_EXEEXT)
 
@@ -84,7 +84,7 @@ src = server.c response.c connections.c \
 	inet_ntop_cache.c \
 	network.c \
 	network_write.c \
-	configfile.c configparser.c proc_open.c
+	configfile.c configparser.c
 
 lib_LTLIBRARIES =
 
@@ -397,7 +397,7 @@ hdr = server.h base64.h buffer.h network.h log.h http_kv.h keyvalue.h \
 	rand.h \
 	sys-endian.h sys-mmap.h sys-socket.h sys-strings.h \
 	mod_cml.h mod_cml_funcs.h \
-	safe_memclear.h sock_addr.h splaytree.h proc_open.h status_counter.h \
+	safe_memclear.h sock_addr.h splaytree.h status_counter.h \
 	mod_magnet_cache.h
 
 
@@ -510,10 +510,6 @@ lighttpd_LDADD = $(PCRE_LIB) $(DL_LIB) $(SENDFILE_LIB) $(ATTR_LIB) $(common_liba
 lighttpd_LDFLAGS = -export-dynamic
 
 endif
-
-proc_open_SOURCES = proc_open.c buffer.c
-proc_open_LDADD = $(LIBUNWIND_LIBS)
-proc_open_CPPFLAGS= -DDEBUG_PROC_OPEN
 
 test_buffer_SOURCES = test_buffer.c buffer.c
 test_buffer_LDADD = $(LIBUNWIND_LIBS)

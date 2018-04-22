@@ -585,7 +585,6 @@ main_src = [
 	'inet_ntop_cache.c',
 	'network_write.c',
 	'network.c',
-	'proc_open.c',
 	'request.c',
 	'response.c',
 	'server.c',
