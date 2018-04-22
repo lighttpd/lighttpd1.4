@@ -554,7 +554,7 @@ include_directories(${CMAKE_CURRENT_BINARY_DIR} ${CMAKE_CURRENT_SOURCE_DIR})
 
 set(COMMON_SRC
 	base64.c buffer.c log.c
-	keyvalue.c chunk.c
+	http_kv.c keyvalue.c chunk.c
 	http_chunk.c stream.c fdevent.c gw_backend.c
 	stat_cache.c plugin.c joblist.c etag.c array.c
 	data_string.c data_array.c
@@ -664,7 +664,7 @@ add_executable(test_configfile
 	array.c
 	data_config.c
 	data_string.c
-	keyvalue.c
+	http_kv.c
 	vector.c
 	log.c
 	sock_addr.c
@@ -677,7 +677,7 @@ add_executable(test_request
 	buffer.c
 	array.c
 	data_string.c
-	keyvalue.c
+	http_kv.c
 	log.c
 	sock_addr.c
 )
@@ -694,8 +694,6 @@ if(HAVE_PCRE_H)
 	add_target_properties(mod_redirect COMPILE_FLAGS ${PCRE_CFLAGS})
 	target_link_libraries(test_configfile ${PCRE_LDFLAGS})
 	add_target_properties(test_configfile COMPILE_FLAGS ${PCRE_CFLAGS})
-	target_link_libraries(test_request ${PCRE_LDFLAGS})
-	add_target_properties(test_request COMPILE_FLAGS ${PCRE_CFLAGS})
 endif()
 
 if(WITH_PCRE AND (WITH_MEMCACHED OR WITH_GDBM))
@@ -878,8 +876,8 @@ if(WITH_LIBUNWIND)
 	add_target_properties(test_base64 COMPILE_FLAGS ${LIBUNWIND_CFLAGS})
 	target_link_libraries(test_configfile ${PCRE_LDFLAGS} ${LIBUNWIND_LDFLAGS})
 	add_target_properties(test_configfile COMPILE_FLAGS ${PCRE_CFLAGS} ${LIBUNWIND_CFLAGS})
-	target_link_libraries(test_request ${PCRE_LDFLAGS} ${LIBUNWIND_LDFLAGS})
-	add_target_properties(test_request COMPILE_FLAGS ${PCRE_CFLAGS} ${LIBUNWIND_CFLAGS})
+	target_link_libraries(test_request ${LIBUNWIND_LDFLAGS})
+	add_target_properties(test_request COMPILE_FLAGS ${LIBUNWIND_CFLAGS})
 endif()
 
 if(NOT WIN32)

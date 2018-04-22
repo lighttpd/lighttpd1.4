@@ -1059,7 +1059,6 @@ static void gw_restart_dead_procs(server *srv, gw_host *host, int debug) {
 #include "base.h"
 #include "connections.h"
 #include "joblist.h"
-#include "keyvalue.h"
 #include "response.h"
 
 

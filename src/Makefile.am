@@ -57,7 +57,7 @@ MAINTAINERCLEANFILES = configparser.c configparser.h mod_ssi_exprparser.c mod_ss
 CLEANFILES = versionstamp.h versionstamp.h.tmp lemon$(BUILD_EXEEXT)
 
 common_src=base64.c buffer.c log.c \
-	keyvalue.c chunk.c  \
+	http_kv.c keyvalue.c chunk.c  \
 	http_chunk.c stream.c fdevent.c gw_backend.c \
 	stat_cache.c plugin.c joblist.c etag.c array.c \
 	data_string.c data_array.c \
@@ -384,7 +384,7 @@ mod_wstunnel_la_LDFLAGS = $(common_module_ldflags)
 mod_wstunnel_la_LIBADD = $(common_libadd) $(CRYPTO_LIB)
 
 
-hdr = server.h base64.h buffer.h network.h log.h keyvalue.h \
+hdr = server.h base64.h buffer.h network.h log.h http_kv.h keyvalue.h \
 	response.h request.h fastcgi.h chunk.h \
 	first.h settings.h http_chunk.h \
 	algo_sha1.h md5.h http_auth.h http_vhostdb.h stream.h \
@@ -521,11 +521,11 @@ test_buffer_LDADD = $(LIBUNWIND_LIBS)
 test_base64_SOURCES = test_base64.c base64.c buffer.c
 test_base64_LDADD = $(LIBUNWIND_LIBS)
 
-test_configfile_SOURCES = test_configfile.c buffer.c array.c data_config.c data_string.c keyvalue.c vector.c log.c sock_addr.c
+test_configfile_SOURCES = test_configfile.c buffer.c array.c data_config.c data_string.c http_kv.c vector.c log.c sock_addr.c
 test_configfile_LDADD = $(PCRE_LIB) $(LIBUNWIND_LIBS)
 
-test_request_SOURCES = test_request.c request.c buffer.c array.c data_string.c keyvalue.c log.c sock_addr.c
-test_request_LDADD = $(PCRE_LIB) $(LIBUNWIND_LIBS)
+test_request_SOURCES = test_request.c request.c buffer.c array.c data_string.c http_kv.c log.c sock_addr.c
+test_request_LDADD = $(LIBUNWIND_LIBS)
 
 noinst_HEADERS   = $(hdr)
 EXTRA_DIST = \

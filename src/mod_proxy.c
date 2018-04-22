@@ -7,7 +7,7 @@
 #include "base.h"
 #include "array.h"
 #include "buffer.h"
-#include "keyvalue.h"
+#include "http_kv.h"
 #include "log.h"
 #include "sock_addr.h"
 #include "status_counter.h"

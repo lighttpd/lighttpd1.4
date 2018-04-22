@@ -3,7 +3,7 @@
 #include "response.h"
 #include "base.h"
 #include "fdevent.h"
-#include "keyvalue.h"
+#include "http_kv.h"
 #include "log.h"
 #include "stat_cache.h"
 #include "chunk.h"

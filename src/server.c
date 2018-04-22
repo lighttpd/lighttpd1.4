@@ -4,7 +4,6 @@
 #include "buffer.h"
 #include "network.h"
 #include "log.h"
-#include "keyvalue.h"
 #include "rand.h"
 #include "response.h"
 #include "request.h"

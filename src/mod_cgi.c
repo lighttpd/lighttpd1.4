@@ -2,7 +2,7 @@
 
 #include "base.h"
 #include "stat_cache.h"
-#include "keyvalue.h"
+#include "http_kv.h"
 #include "log.h"
 #include "connections.h"
 #include "joblist.h"

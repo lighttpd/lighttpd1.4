@@ -11,7 +11,7 @@
 #include "buffer.h"
 #include "array.h"
 #include "chunk.h"
-#include "keyvalue.h"
+#include "http_kv.h"
 #include "sock_addr.h"
 #include "etag.h"
 
