@@ -3,6 +3,7 @@
 *.exe
 *~
 .deps/
+.dirstamp
 .libs/
 .sconf_temp
 .sconsign.dblite

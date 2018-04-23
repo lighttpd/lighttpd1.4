@@ -1,14 +1,14 @@
 AM_CFLAGS = $(FAM_CFLAGS) $(LIBUNWIND_CFLAGS)
 
-noinst_PROGRAMS=test_buffer test_base64 test_configfile test_request
+noinst_PROGRAMS=t/test_buffer t/test_base64 t/test_configfile t/test_request
 sbin_PROGRAMS=lighttpd lighttpd-angel
 LEMON=$(top_builddir)/src/lemon$(BUILD_EXEEXT)
 
 TESTS=\
-	test_buffer$(EXEEXT) \
-	test_base64$(EXEEXT) \
-	test_configfile$(EXEEXT) \
-	test_request$(EXEEXT)
+	t/test_buffer$(EXEEXT) \
+	t/test_base64$(EXEEXT) \
+	t/test_configfile$(EXEEXT) \
+	t/test_request$(EXEEXT)
 
 lemon$(BUILD_EXEEXT): lemon.c
 	$(AM_V_CC)$(CC_FOR_BUILD) $(CPPFLAGS_FOR_BUILD) $(CFLAGS_FOR_BUILD) $(LDFLAGS_FOR_BUILD) -o $@ $(srcdir)/lemon.c
@@ -511,17 +511,17 @@ lighttpd_LDFLAGS = -export-dynamic
 
 endif
 
-test_buffer_SOURCES = test_buffer.c buffer.c
-test_buffer_LDADD = $(LIBUNWIND_LIBS)
+t_test_buffer_SOURCES = t/test_buffer.c buffer.c
+t_test_buffer_LDADD = $(LIBUNWIND_LIBS)
 
-test_base64_SOURCES = test_base64.c base64.c buffer.c
-test_base64_LDADD = $(LIBUNWIND_LIBS)
+t_test_base64_SOURCES = t/test_base64.c base64.c buffer.c
+t_test_base64_LDADD = $(LIBUNWIND_LIBS)
 
-test_configfile_SOURCES = test_configfile.c buffer.c array.c data_config.c data_string.c http_kv.c vector.c log.c sock_addr.c
-test_configfile_LDADD = $(PCRE_LIB) $(LIBUNWIND_LIBS)
+t_test_configfile_SOURCES = t/test_configfile.c buffer.c array.c data_config.c data_string.c http_kv.c vector.c log.c sock_addr.c
+t_test_configfile_LDADD = $(PCRE_LIB) $(LIBUNWIND_LIBS)
 
-test_request_SOURCES = test_request.c request.c buffer.c array.c data_string.c http_kv.c log.c sock_addr.c
-test_request_LDADD = $(LIBUNWIND_LIBS)
+t_test_request_SOURCES = t/test_request.c request.c buffer.c array.c data_string.c http_kv.c log.c sock_addr.c
+t_test_request_LDADD = $(LIBUNWIND_LIBS)
 
 noinst_HEADERS   = $(hdr)
 EXTRA_DIST = \

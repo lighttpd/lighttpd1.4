@@ -645,20 +645,20 @@ add_and_install_library(mod_webdav mod_webdav.c)
 add_and_install_library(mod_wstunnel mod_wstunnel.c)
 
 add_executable(test_buffer
-	test_buffer.c
+	t/test_buffer.c
 	buffer.c
 )
 add_test(NAME test_buffer COMMAND test_buffer)
 
 add_executable(test_base64
-	test_base64.c
+	t/test_base64.c
 	buffer.c
 	base64.c
 )
 add_test(NAME test_base64 COMMAND test_base64)
 
 add_executable(test_configfile
-	test_configfile.c
+	t/test_configfile.c
 	buffer.c
 	array.c
 	data_config.c
@@ -671,7 +671,7 @@ add_executable(test_configfile
 add_test(NAME test_configfile COMMAND test_configfile)
 
 add_executable(test_request
-	test_request.c
+	t/test_request.c
 	request.c
 	buffer.c
 	array.c

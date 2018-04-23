@@ -19,7 +19,6 @@ set(T_FILES
 	core-keepalive.t
 	core-request.t
 	core-response.t
-	core.t
 	core-var-include.t
 	lowercase.t
 	mod-access.t

@@ -687,20 +687,20 @@ executable('lighttpd', configparser,
 )
 
 test('test_buffer', executable('test_buffer',
-	sources: ['test_buffer.c', 'buffer.c'],
+	sources: ['t/test_buffer.c', 'buffer.c'],
 	dependencies: common_flags + libunwind,
 	build_by_default: false,
 ))
 
 test('test_base64', executable('test_base64',
-	sources: ['test_base64.c', 'buffer.c', 'base64.c'],
+	sources: ['t/test_base64.c', 'buffer.c', 'base64.c'],
 	dependencies: common_flags + libunwind,
 	build_by_default: false,
 ))
 
 test('test_configfile', executable('test_configfile',
 	sources: [
-		'test_configfile.c',
+		't/test_configfile.c',
 		'buffer.c',
 		'array.c',
 		'data_config.c',
@@ -716,7 +716,7 @@ test('test_configfile', executable('test_configfile',
 
 test('test_request', executable('test_request',
 	sources: [
-		'test_request.c',
+		't/test_request.c',
 		'request.c',
 		'buffer.c',
 		'array.c',
