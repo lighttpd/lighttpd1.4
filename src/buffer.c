@@ -940,26 +940,6 @@ void buffer_path_simplify(buffer *dest, buffer *src)
 	buffer_string_set_length(dest, out - start);
 }
 
-int light_isdigit(int c) {
-	return (c >= '0' && c <= '9');
-}
-
-int light_isxdigit(int c) {
-	if (light_isdigit(c)) return 1;
-
-	c |= 32;
-	return (c >= 'a' && c <= 'f');
-}
-
-int light_isalpha(int c) {
-	c |= 32;
-	return (c >= 'a' && c <= 'z');
-}
-
-int light_isalnum(int c) {
-	return light_isdigit(c) || light_isalpha(c);
-}
-
 void buffer_to_lower(buffer *b) {
 	size_t i;
 

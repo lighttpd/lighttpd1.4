@@ -137,10 +137,27 @@ void buffer_to_upper(buffer *b);
 char hex2int(unsigned char c);
 char int2hex(char i);
 
-int light_isdigit(int c);
-int light_isxdigit(int c);
-int light_isalpha(int c);
-int light_isalnum(int c);
+static inline int light_isdigit(int c);
+static inline int light_isxdigit(int c);
+static inline int light_isalpha(int c);
+static inline int light_isalnum(int c);
+
+static inline int light_isdigit(int c) {
+	return (c >= '0' && c <= '9');
+}
+
+static inline int light_isxdigit(int c) {
+	return light_isdigit(c) || (c |= 32, c >= 'a' && c <= 'f');
+}
+
+static inline int light_isalpha(int c) {
+	return (c |= 32, c >= 'a' && c <= 'z');
+}
+
+static inline int light_isalnum(int c) {
+	return light_isdigit(c) || light_isalpha(c);
+}
+
 
 static inline size_t buffer_string_length(const buffer *b); /* buffer string length without terminating 0 */
 static inline size_t buffer_string_space(const buffer *b); /* maximum length of string that can be stored without reallocating */
