@@ -259,6 +259,7 @@ static handler_t process_rewrite_rules(server *srv, connection *con, plugin_data
 			hctx = con->plugin_ctx[p->id];
 		}
 		if (ctx.m < repeat_idx) hctx->state = REWRITE_STATE_FINISHED;
+		buffer_reset(con->physical.path);
 		rc = HANDLER_COMEBACK;
 	}
 	else if (HANDLER_ERROR == rc) {
@@ -271,15 +272,13 @@ static handler_t process_rewrite_rules(server *srv, connection *con, plugin_data
 
 URIHANDLER_FUNC(mod_rewrite_physical) {
 	plugin_data *p = p_d;
-	handler_t r;
 	stat_cache_entry *sce;
 
 	if (con->mode != DIRECT) return HANDLER_GO_ON;
 
 	mod_rewrite_patch_connection(srv, con, p);
 	p->conf.context = p->conf.context_NF;
-
-	if (!p->conf.rewrite_NF) return HANDLER_GO_ON;
+	if (!p->conf.rewrite_NF->used) return HANDLER_GO_ON;
 
 	/* skip if physical.path is a regular file */
 	sce = NULL;
@@ -287,23 +286,14 @@ URIHANDLER_FUNC(mod_rewrite_physical) {
 		if (S_ISREG(sce->st.st_mode)) return HANDLER_GO_ON;
 	}
 
-	switch(r = process_rewrite_rules(srv, con, p, p->conf.rewrite_NF, p->conf.rewrite_NF_repeat_idx)) {
-	case HANDLER_COMEBACK:
-		buffer_reset(con->physical.path);
-		/* fall through */
-	default:
-		return r;
-	}
-
-	return HANDLER_GO_ON;
+	return process_rewrite_rules(srv, con, p, p->conf.rewrite_NF, p->conf.rewrite_NF_repeat_idx);
 }
 
 URIHANDLER_FUNC(mod_rewrite_uri_handler) {
 	plugin_data *p = p_d;
 
 	mod_rewrite_patch_connection(srv, con, p);
-
-	if (!p->conf.rewrite) return HANDLER_GO_ON;
+	if (!p->conf.rewrite->used) return HANDLER_GO_ON;
 
 	return process_rewrite_rules(srv, con, p, p->conf.rewrite, p->conf.rewrite_repeat_idx);
 }

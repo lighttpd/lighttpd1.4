@@ -151,6 +151,7 @@ URIHANDLER_FUNC(mod_redirect_uri_handler) {
     handler_t rc;
 
     mod_redirect_patch_connection(srv, con, p);
+    if (!p->conf.redirect->used) return HANDLER_GO_ON;
     ctx.cache = p->conf.context
       ? &con->cond_cache[p->conf.context->context_ndx]
       : NULL;
