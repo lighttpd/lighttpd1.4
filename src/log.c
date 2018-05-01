@@ -73,49 +73,28 @@ static void log_buffer_append_printf(buffer *out, const char *fmt, va_list ap) {
 		off_t o;
 
 		switch(*fmt) {
-		case 's':           /* string */
-			s = va_arg(ap, char *);
-			buffer_append_string_c_escaped(out, s, (NULL != s) ? strlen(s) : 0);
-			buffer_append_string_len(out, CONST_STR_LEN(" "));
-			break;
-		case 'b':           /* buffer */
-			b = va_arg(ap, buffer *);
-			buffer_append_string_c_escaped(out, CONST_BUF_LEN(b));
-			buffer_append_string_len(out, CONST_STR_LEN(" "));
-			break;
-		case 'd':           /* int */
-			d = va_arg(ap, int);
-			buffer_append_int(out, d);
-			buffer_append_string_len(out, CONST_STR_LEN(" "));
-			break;
-		case 'o':           /* off_t */
-			o = va_arg(ap, off_t);
-			buffer_append_int(out, o);
-			buffer_append_string_len(out, CONST_STR_LEN(" "));
-			break;
-		case 'x':           /* int (hex) */
-			d = va_arg(ap, int);
-			buffer_append_string_len(out, CONST_STR_LEN("0x"));
-			buffer_append_uint_hex(out, d);
-			buffer_append_string_len(out, CONST_STR_LEN(" "));
-			break;
 		case 'S':           /* string */
+		case 's':           /* string */
 			s = va_arg(ap, char *);
 			buffer_append_string_c_escaped(out, s, (NULL != s) ? strlen(s) : 0);
 			break;
 		case 'B':           /* buffer */
+		case 'b':           /* buffer */
 			b = va_arg(ap, buffer *);
 			buffer_append_string_c_escaped(out, CONST_BUF_LEN(b));
 			break;
 		case 'D':           /* int */
+		case 'd':           /* int */
 			d = va_arg(ap, int);
 			buffer_append_int(out, d);
 			break;
 		case 'O':           /* off_t */
+		case 'o':           /* off_t */
 			o = va_arg(ap, off_t);
 			buffer_append_int(out, o);
 			break;
 		case 'X':           /* int (hex) */
+		case 'x':           /* int (hex) */
 			d = va_arg(ap, int);
 			buffer_append_string_len(out, CONST_STR_LEN("0x"));
 			buffer_append_uint_hex(out, d);
@@ -128,6 +107,10 @@ static void log_buffer_append_printf(buffer *out, const char *fmt, va_list ap) {
 		case ' ':
 			buffer_append_string_len(out, fmt, 1);
 			break;
+		}
+
+		if (*fmt >= 'a') { /* 's' 'b' 'd' 'o' 'x' */
+			buffer_append_string_len(out, CONST_STR_LEN(" "));
 		}
 	}
 }
