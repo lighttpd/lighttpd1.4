@@ -200,3 +200,122 @@ handler_t pcre_keyvalue_buffer_process(pcre_keyvalue_buffer *kvb, pcre_keyvalue_
     return HANDLER_GO_ON;
 }
 #endif
+
+
+/* modified from burl_normalize_basic() to handle %% extra encoding layer */
+
+/* c (char) and n (nibble) MUST be unsigned integer types */
+#define li_cton(c,n) \
+  (((n) = (c) - '0') <= 9 || (((n) = ((c)&0xdf) - 'A') <= 5 ? ((n) += 10) : 0))
+
+static void pcre_keyvalue_burl_percent_toupper (buffer *b)
+{
+    const unsigned char * const s = (unsigned char *)b->ptr;
+    const int used = (int)buffer_string_length(b);
+    unsigned int n1, n2;
+    for (int i = 0; i < used; ++i) {
+        if (s[i]=='%' && li_cton(s[i+1],n1) && li_cton(s[i+2],n2)) {
+            if (s[i+1] >= 'a') b->ptr[i+1] &= 0xdf; /* uppercase hex */
+            if (s[i+2] >= 'a') b->ptr[i+2] &= 0xdf; /* uppercase hex */
+            i+=2;
+        }
+    }
+}
+
+static void pcre_keyvalue_burl_percent_percent_toupper (buffer *b)
+{
+    const unsigned char * const s = (unsigned char *)b->ptr;
+    const int used = (int)buffer_string_length(b);
+    unsigned int n1, n2;
+    for (int i = 0; i < used; ++i) {
+        if (s[i] == '%' && s[i+1]=='%'
+            && li_cton(s[i+2],n1) && li_cton(s[i+3],n2)) {
+            if (s[i+2] >= 'a') b->ptr[i+2] &= 0xdf; /* uppercase hex */
+            if (s[i+3] >= 'a') b->ptr[i+3] &= 0xdf; /* uppercase hex */
+            i+=3;
+        }
+    }
+}
+
+static const char hex_chars_uc[] = "0123456789ABCDEF";
+
+static void pcre_keyvalue_burl_percent_high_UTF8 (buffer *b, buffer *t)
+{
+    const unsigned char * const s = (unsigned char *)b->ptr;
+    unsigned char *p;
+    const int used = (int)buffer_string_length(b);
+    unsigned int count = 0, j = 0;
+    for (int i = 0; i < used; ++i) {
+        if (s[i] > 0x7F) ++count;
+    }
+    if (0 == count) return;
+
+    p = (unsigned char *)buffer_string_prepare_copy(t, used+(count*2));
+    for (int i = 0; i < used; ++i, ++j) {
+        if (s[i] <= 0x7F)
+            p[j] = s[i];
+        else {
+            p[j]   = '%';
+            p[++j] = hex_chars_uc[(s[i] >> 4) & 0xF];
+            p[++j] = hex_chars_uc[s[i] & 0xF];
+        }
+    }
+    buffer_commit(t, j);
+    buffer_copy_buffer(b, t);
+}
+
+static void pcre_keyvalue_burl_percent_percent_high_UTF8 (buffer *b, buffer *t)
+{
+    const unsigned char * const s = (unsigned char *)b->ptr;
+    unsigned char *p;
+    const int used = (int)buffer_string_length(b);
+    unsigned int count = 0, j = 0;
+    for (int i = 0; i < used; ++i) {
+        if (s[i] > 0x7F) ++count;
+    }
+    if (0 == count) return;
+
+    p = (unsigned char *)buffer_string_prepare_copy(t, used+(count*3));
+    for (int i = 0; i < used; ++i, ++j) {
+        if (s[i] <= 0x7F)
+            p[j] = s[i];
+        else {
+            p[j]   = '%';
+            p[++j] = '%';
+            p[++j] = hex_chars_uc[(s[i] >> 4) & 0xF];
+            p[++j] = hex_chars_uc[s[i] & 0xF];
+        }
+    }
+    buffer_commit(t, j);
+    buffer_copy_buffer(b, t);
+}
+
+/* Basic normalization of regex and regex replacement to mirror some of
+ * the normalizations performed on request URI (for better compatibility).
+ * Note: not currently attempting to replace unnecessary percent-encoding
+ * (would need to know if regex was intended to match url-path or
+ *  query-string or both, and then would have to regex-escape if those
+ *  chars where special regex chars such as . * + ? ( ) [ ] | and more)
+ * Not attempting to percent-encode chars which should be encoded, again
+ * since regex might target url-path, query-string, or both, and we would
+ * have to avoid percent-encoding special regex chars.
+ * Also not attempting to detect unnecessarily regex-escape in, e.g. %\x\x
+ * Preserve improper %-encoded sequences which are not %XX (using hex chars)
+ * Intentionally not performing path simplification (e.g. ./ ../)
+ * If regex-specific normalizations begin to be made to k here,
+ * must revisit callers, e.g. one configfile.c use on non-regex string.
+ * "%%" (percent_percent) is used in regex replacement strings since
+ * otherwise "%n" is used to indicate regex backreference where n is number.
+ */
+
+void pcre_keyvalue_burl_normalize_key (buffer *k, buffer *t)
+{
+    pcre_keyvalue_burl_percent_toupper(k);
+    pcre_keyvalue_burl_percent_high_UTF8(k, t);
+}
+
+void pcre_keyvalue_burl_normalize_value (buffer *v, buffer *t)
+{
+    pcre_keyvalue_burl_percent_percent_toupper(v);
+    pcre_keyvalue_burl_percent_percent_high_UTF8(v, t);
+}

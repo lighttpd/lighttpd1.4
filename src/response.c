@@ -2,6 +2,7 @@
 
 #include "response.h"
 #include "base.h"
+#include "burl.h"
 #include "fdevent.h"
 #include "http_kv.h"
 #include "log.h"
@@ -277,12 +278,6 @@ handler_t http_response_prepare(server *srv, connection *con) {
 	/* no decision yet, build conf->filename */
 	if (con->mode == DIRECT && buffer_is_empty(con->physical.path)) {
 
-
-	    if (!con->async_callback) {
-
-
-		char *qstr;
-
 		/* we only come here when we have the parse the full request again
 		 *
 		 * a HANDLER_COMEBACK from mod_rewrite and mod_fastcgi might be a
@@ -295,6 +290,8 @@ handler_t http_response_prepare(server *srv, connection *con) {
 		 *
 		 *  */
 
+	    if (!con->async_callback) {
+
 		config_cond_cache_reset(srv, con);
 		config_setup_connection(srv, con); /* Perhaps this could be removed at other places. */
 
@@ -306,7 +303,7 @@ handler_t http_response_prepare(server *srv, connection *con) {
 		 * prepare strings
 		 *
 		 * - uri.path_raw
-		 * - uri.path (secure)
+		 * - uri.path
 		 * - uri.query
 		 *
 		 */
@@ -331,36 +328,79 @@ handler_t http_response_prepare(server *srv, connection *con) {
 		buffer_copy_buffer(con->uri.authority, con->request.http_host);
 		buffer_to_lower(con->uri.authority);
 
-		/** their might be a fragment which has to be cut away */
-		if (NULL != (qstr = strchr(con->request.uri->ptr, '#'))) {
-			buffer_string_set_length(con->request.uri, qstr - con->request.uri->ptr);
-		}
-
-		/** extract query string from request.uri */
-		if (NULL != (qstr = strchr(con->request.uri->ptr, '?'))) {
-			buffer_copy_string    (con->uri.query, qstr + 1);
-			buffer_copy_string_len(con->uri.path_raw, con->request.uri->ptr, qstr - con->request.uri->ptr);
-		} else {
-			buffer_reset     (con->uri.query);
+		if (con->request.http_method == HTTP_METHOD_CONNECT
+		    || (con->request.http_method == HTTP_METHOD_OPTIONS
+			&& con->request.uri->ptr[0] == '*'
+			&& con->request.uri->ptr[1] == '\0')) {
+			/* CONNECT ... (or) OPTIONS * ... */
 			buffer_copy_buffer(con->uri.path_raw, con->request.uri);
-		}
-
-		/* decode url to path
-		 *
-		 * - decode url-encodings  (e.g. %20 -> ' ')
-		 * - remove path-modifiers (e.g. /../)
-		 */
-
-		if (con->request.http_method == HTTP_METHOD_OPTIONS &&
-		    con->uri.path_raw->ptr[0] == '*' && con->uri.path_raw->ptr[1] == '\0') {
-			/* OPTIONS * ... */
 			buffer_copy_buffer(con->uri.path, con->uri.path_raw);
-		} else if (con->request.http_method == HTTP_METHOD_CONNECT) {
-			buffer_copy_buffer(con->uri.path, con->uri.path_raw);
+			buffer_reset(con->uri.query);
 		} else {
-			buffer_copy_buffer(srv->tmp_buf, con->uri.path_raw);
-			buffer_urldecode_path(srv->tmp_buf);
-			buffer_path_simplify(con->uri.path, srv->tmp_buf);
+			char *qstr;
+			if (con->conf.http_parseopts & HTTP_PARSEOPT_URL_NORMALIZE) {
+				/*size_t len = buffer_string_length(con->request.uri);*/
+				int qs = burl_normalize(con->request.uri, srv->tmp_buf, con->conf.http_parseopts);
+				if (-2 == qs) {
+					log_error_write(srv, __FILE__, __LINE__, "sb",
+							"invalid character in URI -> 400",
+							con->request.uri);
+					con->keep_alive = 0;
+					con->http_status = 400; /* Bad Request */
+					con->file_finished = 1;
+					return HANDLER_FINISHED;
+				}
+				qstr = (-1 == qs) ? NULL : con->request.uri->ptr+qs;
+			      #if 0  /* future: might enable here, or below for all requests */
+				/* (Note: total header size not recalculated on HANDLER_COMEBACK
+				 *  even if other request headers changed during processing)
+				 * (If (0 != con->loops_per_request), then the generated request
+				 *  is too large.  Should a different error be returned?) */
+				con->header_len -= len;
+				len = buffer_string_length(con->request.uri);
+				con->header_len += len;
+				if (len > MAX_HTTP_REQUEST_URI) {
+					con->keep_alive = 0;
+					con->http_status = 414; /* Request-URI Too Long */
+					con->file_finished = 1;
+					return HANDLER_FINISHED;
+				}
+				if (con->header_len > MAX_HTTP_REQUEST_HEADER) {
+					log_error_write(srv, __FILE__, __LINE__, "sds",
+							"request header fields too large:", con->header_len, "-> 431");
+					con->keep_alive = 0;
+					con->http_status = 431; /* Request Header Fields Too Large */
+					con->file_finished = 1;
+					return HANDLER_FINISHED;
+				}
+			      #endif
+			} else {
+				qstr = strchr(con->request.uri->ptr, '#');/* discard fragment */
+				if (qstr) buffer_string_set_length(con->request.uri, qstr - con->request.uri->ptr);
+				qstr = strchr(con->request.uri->ptr, '?');
+			}
+
+			/** extract query string from request.uri */
+			if (NULL != qstr) {
+				const char * const pstr = con->request.uri->ptr;
+				const size_t plen = (size_t)(qstr - pstr);
+				const size_t rlen = buffer_string_length(con->request.uri);
+				buffer_copy_string_len(con->uri.query, qstr + 1, rlen - plen - 1);
+				buffer_copy_string_len(con->uri.path_raw, pstr, plen);
+			} else {
+				buffer_reset(con->uri.query);
+				buffer_copy_buffer(con->uri.path_raw, con->request.uri);
+			}
+
+			/* decode url to path
+			 *
+			 * - decode url-encodings  (e.g. %20 -> ' ')
+			 * - remove path-modifiers (e.g. /../)
+			 */
+
+			buffer_copy_buffer(con->uri.path, con->uri.path_raw);
+			buffer_urldecode_path(con->uri.path);
+			buffer_path_simplify(con->uri.path, con->uri.path);
 		}
 
 		con->conditional_is_valid[COMP_SERVER_SOCKET] = 1;       /* SERVERsocket */

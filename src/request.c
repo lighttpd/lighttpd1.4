@@ -2,6 +2,7 @@
 
 #include "request.h"
 #include "base.h"
+#include "burl.h"
 #include "http_kv.h"
 #include "log.h"
 #include "sock_addr.h"
@@ -650,7 +651,9 @@ int http_request_parse(server *srv, connection *con) {
 
 				/* check uri for invalid characters */
 				jlen = buffer_string_length(con->request.uri);
-				if (http_header_strict) {
+				if ((con->conf.http_parseopts & HTTP_PARSEOPT_URL_NORMALIZE_CTRLS_REJECT)) {
+					j = jlen; /* URI will be checked in http_response_prepare() */
+				} else if (http_header_strict) {
 					for (j = 0; j < jlen && request_uri_is_valid_char(con->request.uri->ptr[j]); j++) ;
 				} else {
 					char *z = memchr(con->request.uri->ptr, '\0', jlen);

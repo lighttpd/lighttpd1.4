@@ -55,7 +55,7 @@ def GatherLibs(env, *libs):
 	libs = RemoveDuplicateLibs(env['LIBS'] + list(libs) + [env['APPEND_LIBS']])
 	return WorkaroundFreeBSDLibOrder(libs)
 
-common_src = Split("base64.c buffer.c log.c \
+common_src = Split("base64.c buffer.c burl.c log.c \
 	http_kv.c keyvalue.c chunk.c  \
 	http_chunk.c stream.c fdevent.c gw_backend.c \
 	stat_cache.c plugin.c joblist.c etag.c array.c \

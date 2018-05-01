@@ -5,12 +5,6 @@
 #include "base_decls.h"
 #include "buffer.h"
 
-typedef enum {
-  HTTP_PARSEOPT_HEADER_STRICT  = 1
- ,HTTP_PARSEOPT_HOST_STRICT    = 2
- ,HTTP_PARSEOPT_HOST_NORMALIZE = 4
-} http_parseopts_e;
-
 int http_request_parse(server *srv, connection *con);
 int http_request_host_normalize(buffer *b, int scheme_port);
 int http_request_host_policy(connection *con, buffer *b, const buffer *scheme);

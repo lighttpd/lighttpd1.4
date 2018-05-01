@@ -1,11 +1,18 @@
 AM_CFLAGS = $(FAM_CFLAGS) $(LIBUNWIND_CFLAGS)
 
-noinst_PROGRAMS=t/test_buffer t/test_base64 t/test_configfile t/test_request
+noinst_PROGRAMS=\
+	t/test_buffer \
+	t/test_burl \
+	t/test_base64 \
+	t/test_configfile \
+	t/test_request
+
 sbin_PROGRAMS=lighttpd lighttpd-angel
 LEMON=$(top_builddir)/src/lemon$(BUILD_EXEEXT)
 
 TESTS=\
 	t/test_buffer$(EXEEXT) \
+	t/test_burl$(EXEEXT) \
 	t/test_base64$(EXEEXT) \
 	t/test_configfile$(EXEEXT) \
 	t/test_request$(EXEEXT)
@@ -56,7 +63,7 @@ BUILT_SOURCES = parsers versionstamp
 MAINTAINERCLEANFILES = configparser.c configparser.h mod_ssi_exprparser.c mod_ssi_exprparser.h
 CLEANFILES = versionstamp.h versionstamp.h.tmp lemon$(BUILD_EXEEXT)
 
-common_src=base64.c buffer.c log.c \
+common_src=base64.c buffer.c burl.c log.c \
 	http_kv.c keyvalue.c chunk.c  \
 	http_chunk.c stream.c fdevent.c gw_backend.c \
 	stat_cache.c plugin.c joblist.c etag.c array.c \
@@ -384,7 +391,7 @@ mod_wstunnel_la_LDFLAGS = $(common_module_ldflags)
 mod_wstunnel_la_LIBADD = $(common_libadd) $(CRYPTO_LIB)
 
 
-hdr = server.h base64.h buffer.h network.h log.h http_kv.h keyvalue.h \
+hdr = server.h base64.h buffer.h burl.h network.h log.h http_kv.h keyvalue.h \
 	response.h request.h fastcgi.h chunk.h \
 	first.h settings.h http_chunk.h \
 	algo_sha1.h md5.h http_auth.h http_vhostdb.h stream.h \
@@ -516,6 +523,9 @@ t_test_buffer_LDADD = $(LIBUNWIND_LIBS)
 
 t_test_base64_SOURCES = t/test_base64.c base64.c buffer.c
 t_test_base64_LDADD = $(LIBUNWIND_LIBS)
+
+t_test_burl_SOURCES = t/test_burl.c burl.c buffer.c
+t_test_burl_LDADD = $(LIBUNWIND_LIBS)
 
 t_test_configfile_SOURCES = t/test_configfile.c buffer.c array.c data_config.c data_string.c http_kv.c vector.c log.c sock_addr.c
 t_test_configfile_LDADD = $(PCRE_LIB) $(LIBUNWIND_LIBS)

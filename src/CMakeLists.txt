@@ -553,7 +553,7 @@ add_definitions(-DHAVE_CONFIG_H)
 include_directories(${CMAKE_CURRENT_BINARY_DIR} ${CMAKE_CURRENT_SOURCE_DIR})
 
 set(COMMON_SRC
-	base64.c buffer.c log.c
+	base64.c buffer.c burl.c log.c
 	http_kv.c keyvalue.c chunk.c
 	http_chunk.c stream.c fdevent.c gw_backend.c
 	stat_cache.c plugin.c joblist.c etag.c array.c
@@ -649,6 +649,13 @@ add_executable(test_buffer
 	buffer.c
 )
 add_test(NAME test_buffer COMMAND test_buffer)
+
+add_executable(test_burl
+	t/test_burl.c
+	burl.c
+	buffer.c
+)
+add_test(NAME test_burl COMMAND test_burl)
 
 add_executable(test_base64
 	t/test_base64.c
@@ -871,6 +878,8 @@ if(WITH_LIBUNWIND)
 
 	target_link_libraries(test_buffer ${LIBUNWIND_LDFLAGS})
 	add_target_properties(test_buffer COMPILE_FLAGS ${LIBUNWIND_CFLAGS})
+	target_link_libraries(test_burl ${LIBUNWIND_LDFLAGS})
+	add_target_properties(test_burl COMPILE_FLAGS ${LIBUNWIND_CFLAGS})
 	target_link_libraries(test_base64 ${LIBUNWIND_LDFLAGS})
 	add_target_properties(test_base64 COMPILE_FLAGS ${LIBUNWIND_CFLAGS})
 	target_link_libraries(test_configfile ${PCRE_LDFLAGS} ${LIBUNWIND_LDFLAGS})

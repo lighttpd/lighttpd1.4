@@ -49,6 +49,7 @@ sconsbuild/
 stamp-h1
 test_base64
 test_buffer
+test_burl
 test_configfile
 test_request
 versionstamp.h

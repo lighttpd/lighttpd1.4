@@ -23,5 +23,7 @@ pcre_keyvalue_buffer *pcre_keyvalue_buffer_init(void);
 int pcre_keyvalue_buffer_append(struct server *srv, pcre_keyvalue_buffer *kvb, buffer *key, buffer *value);
 void pcre_keyvalue_buffer_free(pcre_keyvalue_buffer *kvb);
 handler_t pcre_keyvalue_buffer_process(pcre_keyvalue_buffer *kvb, pcre_keyvalue_ctx *ctx, buffer *input, buffer *result);
+void pcre_keyvalue_burl_normalize_key(buffer *k, buffer *t);
+void pcre_keyvalue_burl_normalize_value(buffer *v, buffer *t);
 
 #endif

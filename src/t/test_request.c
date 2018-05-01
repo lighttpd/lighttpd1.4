@@ -5,6 +5,7 @@
 #include <stdio.h>
 
 #include "base.h"
+#include "burl.h"
 
 static void test_request_connection_reset(connection *con)
 {

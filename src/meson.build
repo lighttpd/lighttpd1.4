@@ -539,6 +539,7 @@ common_src = [
 	'array.c',
 	'base64.c',
 	'buffer.c',
+	'burl.c',
 	'chunk.c',
 	'configfile-glue.c',
 	'connections-glue.c',
@@ -688,6 +689,12 @@ executable('lighttpd', configparser,
 
 test('test_buffer', executable('test_buffer',
 	sources: ['t/test_buffer.c', 'buffer.c'],
+	dependencies: common_flags + libunwind,
+	build_by_default: false,
+))
+
+test('test_burl', executable('test_burl',
+	sources: ['t/test_burl.c', 'burl.c', 'buffer.c'],
 	dependencies: common_flags + libunwind,
 	build_by_default: false,
 ))

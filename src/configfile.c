@@ -1,13 +1,14 @@
 #include "first.h"
 
 #include "base.h"
+#include "burl.h"
 #include "fdevent.h"
+#include "keyvalue.h"
 #include "log.h"
 #include "stream.h"
 
 #include "configparser.h"
 #include "configfile.h"
-#include "request.h"
 #include "stat_cache.h"
 
 #include <sys/stat.h>
@@ -63,10 +64,103 @@ static void config_warn_openssl_module (server *srv) {
 }
 #endif
 
+static int config_http_parseopts (server *srv, array *a) {
+    unsigned short int opts = srv->srvconf.http_url_normalize;
+    unsigned short int decode_2f = 1;
+    int rc = 1;
+    if (!array_is_kvstring(a)) {
+        log_error_write(srv, __FILE__, __LINE__, "s",
+                        "unexpected value for server.http-parseopts; "
+                        "expected list of \"key\" => \"[enable|disable]\"");
+        return 0;
+    }
+    for (size_t i = 0; i < a->used; ++i) {
+        const data_string * const ds = (data_string *)a->data[i];
+        unsigned short int opt;
+        if (buffer_is_equal_string(ds->key, CONST_STR_LEN("url-normalize")))
+            opt = HTTP_PARSEOPT_URL_NORMALIZE;
+        else if (buffer_is_equal_string(ds->key, CONST_STR_LEN("url-normalize-unreserved")))
+            opt = HTTP_PARSEOPT_URL_NORMALIZE_UNRESERVED;
+        else if (buffer_is_equal_string(ds->key, CONST_STR_LEN("url-normalize-required")))
+            opt = HTTP_PARSEOPT_URL_NORMALIZE_REQUIRED;
+        else if (buffer_is_equal_string(ds->key, CONST_STR_LEN("url-ctrls-reject")))
+            opt = HTTP_PARSEOPT_URL_NORMALIZE_CTRLS_REJECT;
+        else if (buffer_is_equal_string(ds->key, CONST_STR_LEN("url-path-backslash-trans")))
+            opt = HTTP_PARSEOPT_URL_NORMALIZE_PATH_BACKSLASH_TRANS;
+        else if (buffer_is_equal_string(ds->key, CONST_STR_LEN("url-path-2f-decode")))
+            opt = HTTP_PARSEOPT_URL_NORMALIZE_PATH_2F_DECODE;
+        else if (buffer_is_equal_string(ds->key, CONST_STR_LEN("url-path-2f-reject")))
+            opt = HTTP_PARSEOPT_URL_NORMALIZE_PATH_2F_REJECT;
+        else if (buffer_is_equal_string(ds->key, CONST_STR_LEN("url-path-dotseg-remove")))
+            opt = HTTP_PARSEOPT_URL_NORMALIZE_PATH_DOTSEG_REMOVE;
+        else if (buffer_is_equal_string(ds->key, CONST_STR_LEN("url-path-dotseg-reject")))
+            opt = HTTP_PARSEOPT_URL_NORMALIZE_PATH_DOTSEG_REJECT;
+        else if (buffer_is_equal_string(ds->key, CONST_STR_LEN("url-query-20-plus")))
+            opt = HTTP_PARSEOPT_URL_NORMALIZE_QUERY_20_PLUS;
+        else {
+            log_error_write(srv, __FILE__, __LINE__, "sb",
+                            "unrecognized key for server.http-parseopts:",
+                            ds->key);
+            rc = 0;
+            continue;
+        }
+        if (buffer_is_equal_string(ds->value, CONST_STR_LEN("enable")))
+            opts |= opt;
+        else if (buffer_is_equal_string(ds->value, CONST_STR_LEN("disable"))) {
+            opts &= ~opt;
+            if (opt == HTTP_PARSEOPT_URL_NORMALIZE) {
+                opts = 0;
+                break;
+            }
+            if (opt == HTTP_PARSEOPT_URL_NORMALIZE_PATH_2F_DECODE) {
+                decode_2f = 0;
+            }
+        }
+        else {
+            log_error_write(srv, __FILE__, __LINE__, "sbsbs",
+                            "unrecognized value for server.http-parseopts:",
+                            ds->key, "=>", ds->value,
+                            "(expect \"[enable|disable]\")");
+            rc = 0;
+        }
+    }
+    if (opts != 0) {
+        opts |= HTTP_PARSEOPT_URL_NORMALIZE;
+        if ((opts & (HTTP_PARSEOPT_URL_NORMALIZE_PATH_2F_DECODE
+                    |HTTP_PARSEOPT_URL_NORMALIZE_PATH_2F_REJECT))
+                 == (HTTP_PARSEOPT_URL_NORMALIZE_PATH_2F_DECODE
+                    |HTTP_PARSEOPT_URL_NORMALIZE_PATH_2F_REJECT)) {
+            log_error_write(srv, __FILE__, __LINE__, "s",
+                            "conflicting options in server.http-parseopts:"
+                            "url-path-2f-decode, url-path-2f-reject");
+            rc = 0;
+        }
+        if ((opts & (HTTP_PARSEOPT_URL_NORMALIZE_PATH_DOTSEG_REMOVE
+                    |HTTP_PARSEOPT_URL_NORMALIZE_PATH_DOTSEG_REJECT))
+                 == (HTTP_PARSEOPT_URL_NORMALIZE_PATH_DOTSEG_REMOVE
+                    |HTTP_PARSEOPT_URL_NORMALIZE_PATH_DOTSEG_REJECT)) {
+            log_error_write(srv, __FILE__, __LINE__, "s",
+                            "conflicting options in server.http-parseopts:"
+                            "url-path-dotseg-remove, url-path-dotseg-reject");
+            rc = 0;
+        }
+        if (!(opts & (HTTP_PARSEOPT_URL_NORMALIZE_UNRESERVED
+                     |HTTP_PARSEOPT_URL_NORMALIZE_REQUIRED))) {
+            opts |= HTTP_PARSEOPT_URL_NORMALIZE_UNRESERVED;
+            if (decode_2f
+                && !(opts & HTTP_PARSEOPT_URL_NORMALIZE_PATH_2F_REJECT))
+                opts |= HTTP_PARSEOPT_URL_NORMALIZE_PATH_2F_DECODE;
+        }
+    }
+    srv->srvconf.http_url_normalize = opts;
+    return rc;
+}
+
 static int config_insert(server *srv) {
 	size_t i;
 	int ret = 0;
 	buffer *stat_cache_string;
+	array *http_parseopts;
 
 	config_values_t cv[] = {
 		{ "server.bind",                       NULL, T_CONFIG_STRING,  T_CONFIG_SCOPE_SERVER     }, /* 0 */
@@ -164,6 +258,7 @@ static int config_insert(server *srv) {
 		{ "server.error-intercept",            NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION }, /* 79 */
 		{ "server.syslog-facility",            NULL, T_CONFIG_STRING,  T_CONFIG_SCOPE_SERVER     }, /* 80 */
 		{ "server.socket-perms",               NULL, T_CONFIG_STRING,  T_CONFIG_SCOPE_CONNECTION }, /* 81 */
+		{ "server.http-parseopts",             NULL, T_CONFIG_ARRAY,   T_CONFIG_SCOPE_SERVER     }, /* 82 */
 
 		{ NULL,                                NULL, T_CONFIG_UNSET,   T_CONFIG_SCOPE_UNSET      }
 	};
@@ -204,6 +299,8 @@ static int config_insert(server *srv) {
 	cv[74].destination = &(srv->srvconf.http_host_normalize);
 	cv[78].destination = &(srv->srvconf.max_request_field_size);
 	cv[80].destination = srv->srvconf.syslog_facility;
+	http_parseopts = array_init();
+	cv[82].destination = http_parseopts;
 
 	srv->config_storage = calloc(1, srv->config_context->used * sizeof(specific_config *));
 
@@ -212,7 +309,7 @@ static int config_insert(server *srv) {
 -analyzer */
 
 	for (i = 0; i < srv->config_context->used; i++) {
-		data_config const* config = (data_config const*)srv->config_context->data[i];
+		data_config * const config = (data_config *)srv->config_context->data[i];
 		specific_config *s;
 
 		s = calloc(1, sizeof(specific_config));
@@ -363,6 +460,35 @@ static int config_insert(server *srv) {
 			}
 		}
 
+		if (0 == i) {
+                    if (!config_http_parseopts(srv, http_parseopts)) {
+			ret = HANDLER_ERROR;
+			break;
+                    }
+                }
+
+		if (srv->srvconf.http_url_normalize
+		    && COMP_HTTP_QUERY_STRING == config->comp) {
+			switch(config->cond) {
+			case CONFIG_COND_NE:
+			case CONFIG_COND_EQ:
+				/* (can use this routine as long as it does not perform
+				 *  any regex-specific normalization of first arg) */
+				pcre_keyvalue_burl_normalize_key(config->string, srv->tmp_buf);
+				break;
+			case CONFIG_COND_NOMATCH:
+			case CONFIG_COND_MATCH:
+				pcre_keyvalue_burl_normalize_key(config->string, srv->tmp_buf);
+				if (!data_config_pcre_compile(config)) {
+					ret = HANDLER_ERROR;
+				}
+				break;
+			default:
+				break;
+			}
+			if (HANDLER_ERROR == ret) break;
+		}
+
 #if !(defined HAVE_LIBSSL && defined HAVE_OPENSSL_SSL_H)
 		if (s->ssl_enabled) {
 			log_error_write(srv, __FILE__, __LINE__, "s",
@@ -372,6 +498,7 @@ static int config_insert(server *srv) {
 		}
 #endif
 	}
+	array_free(http_parseopts);
 
 	{
 		specific_config *s = srv->config_storage[0];
@@ -380,6 +507,7 @@ static int config_insert(server *srv) {
 		  |(srv->srvconf.http_host_strict    ?(HTTP_PARSEOPT_HOST_STRICT
 		                                      |HTTP_PARSEOPT_HOST_NORMALIZE):0)
 		  |(srv->srvconf.http_host_normalize ?(HTTP_PARSEOPT_HOST_NORMALIZE):0);
+		s->http_parseopts |= srv->srvconf.http_url_normalize;
 	}
 
 	if (0 != stat_cache_choose_engine(srv, stat_cache_string)) {
