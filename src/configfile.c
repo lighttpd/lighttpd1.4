@@ -508,6 +508,9 @@ static int config_insert(server *srv) {
 		                                      |HTTP_PARSEOPT_HOST_NORMALIZE):0)
 		  |(srv->srvconf.http_host_normalize ?(HTTP_PARSEOPT_HOST_NORMALIZE):0);
 		s->http_parseopts |= srv->srvconf.http_url_normalize;
+
+		if (s->log_request_handling || s->log_request_header)
+			srv->srvconf.log_request_header_on_error = 1;
 	}
 
 	if (0 != stat_cache_choose_engine(srv, stat_cache_string)) {
