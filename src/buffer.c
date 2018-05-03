@@ -955,7 +955,7 @@ void buffer_to_upper(buffer *b) {
 
 	for (i = 0; i < b->used; ++i) {
 		char c = b->ptr[i];
-		if (c >= 'A' && c <= 'Z') b->ptr[i] &= ~0x20;
+		if (c >= 'a' && c <= 'z') b->ptr[i] &= ~0x20;
 	}
 }
 

@@ -1,5 +1,6 @@
 #include "first.h"
 
+#include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -83,8 +84,25 @@ static void test_buffer_path_simplify(void) {
 	buffer_free(pdest);
 }
 
+static void test_buffer_to_lower_upper(void) {
+	buffer *psrc = buffer_init();
+
+	buffer_copy_string_len(psrc, CONST_STR_LEN("0123456789abcdefghijklmnopqrstuvwxyz"));
+	buffer_to_lower(psrc);
+	assert(buffer_is_equal_string(psrc, CONST_STR_LEN("0123456789abcdefghijklmnopqrstuvwxyz")));
+	buffer_to_upper(psrc);
+	assert(buffer_is_equal_string(psrc, CONST_STR_LEN("0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ")));
+	buffer_to_upper(psrc);
+	assert(buffer_is_equal_string(psrc, CONST_STR_LEN("0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ")));
+	buffer_to_lower(psrc);
+	assert(buffer_is_equal_string(psrc, CONST_STR_LEN("0123456789abcdefghijklmnopqrstuvwxyz")));
+
+	buffer_free(psrc);
+}
+
 int main() {
 	test_buffer_path_simplify();
+	test_buffer_to_lower_upper();
 
 	return 0;
 }
