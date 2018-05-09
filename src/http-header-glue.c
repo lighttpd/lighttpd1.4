@@ -1096,6 +1096,7 @@ handler_t http_response_parse_headers(server *srv, connection *con, http_respons
 
             last_eol = i;
         }
+    } else if (i == header_len) { /* (no newline yet; partial header line?) */
     } else if (opts->backend == BACKEND_CGI) {
         /* no HTTP headers, but a body (special-case for CGI compat) */
         /* no colon found; does not appear to be HTTP headers */
