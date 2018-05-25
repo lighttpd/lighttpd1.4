@@ -4,6 +4,7 @@
 #include "fdevent.h"
 #include "log.h"
 #include "buffer.h"
+#include "rand.h"
 #include "sock_addr.h"
 
 #include "plugin.h"
@@ -17,6 +18,14 @@
 #include <unistd.h>
 #include <errno.h>
 #include <time.h>
+
+#if defined HAVE_LIBSSL && defined HAVE_OPENSSL_SSL_H
+#define USE_OPENSSL_CRYPTO
+#endif
+
+#ifdef USE_OPENSSL_CRYPTO
+#include <openssl/sha.h>
+#endif
 
 #ifdef HAVE_SYSLOG_H
 # include <syslog.h>
@@ -155,6 +164,11 @@ typedef struct {
 
 	time_t last_generated_accesslog_ts;
 	time_t *last_generated_accesslog_ts_ptr;
+
+	time_t last_ip_randomization;
+	time_t* last_ip_randomization_ptr;
+	int ip_randomize_interval;
+	unsigned char *ip_randomize_salt;
 
 	buffer *ts_accesslog_str;
 
@@ -461,6 +475,7 @@ FREE_FUNC(mod_accesslog_free) {
 			buffer_free(s->access_logbuffer);
 			buffer_free(s->format);
 			buffer_free(s->access_logfile);
+			free(s->ip_randomize_salt);
 
 			if (s->parsed_format) {
 				size_t j;
@@ -493,6 +508,7 @@ SETDEFAULTS_FUNC(log_access_open) {
 		{ "accesslog.use-syslog",           NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION },
 		{ "accesslog.format",               NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_CONNECTION },
 		{ "accesslog.syslog-level",         NULL, T_CONFIG_SHORT, T_CONFIG_SCOPE_CONNECTION },
+		{ "accesslog.ip-randomize-interval",NULL, T_CONFIG_INT, T_CONFIG_SCOPE_CONNECTION },
 		{ NULL,                             NULL, T_CONFIG_UNSET, T_CONFIG_SCOPE_UNSET }
 	};
 
@@ -512,6 +528,13 @@ SETDEFAULTS_FUNC(log_access_open) {
 		s->log_access_fd = -1;
 		s->last_generated_accesslog_ts = 0;
 		s->last_generated_accesslog_ts_ptr = &(s->last_generated_accesslog_ts);
+
+		s->last_ip_randomization = 0;
+		s->last_ip_randomization_ptr = &(s->last_ip_randomization);
+		s->ip_randomize_interval = 0;
+		s->ip_randomize_salt = malloc(16);
+		memset(s->ip_randomize_salt, 0, 16);
+
 		s->syslog_level = LOG_INFO;
 
 
@@ -519,12 +542,22 @@ SETDEFAULTS_FUNC(log_access_open) {
 		cv[1].destination = &(s->use_syslog);
 		cv[2].destination = s->format;
 		cv[3].destination = &(s->syslog_level);
+		cv[4].destination = &(s->ip_randomize_interval);
 
 		p->config_storage[i] = s;
 
 		if (0 != config_insert_values_global(srv, config->value, cv, i == 0 ? T_CONFIG_SCOPE_SERVER : T_CONFIG_SCOPE_CONNECTION)) {
 			return HANDLER_ERROR;
 		}
+
+#ifndef USE_OPENSSL_CRYPTO
+		// fail if openssl is not available but user selected IP randomization
+		if (s->ip_randomize_interval > 0) {
+			log_error_write(srv, __FILE__, __LINE__, "sb",
+							"IP randomization is not supported with this build (no openssl)", s->format);
+			return HANDLER_ERROR;
+		}
+#endif
 
 		if (i == 0 && buffer_string_is_empty(s->format)) {
 			/* set a default logfile string */
@@ -728,6 +761,10 @@ static int mod_accesslog_patch_connection(server *srv, connection *con, plugin_d
 	PATCH(use_syslog);
 	PATCH(syslog_level);
 
+	PATCH(last_ip_randomization_ptr);
+	PATCH(ip_randomize_salt);
+	PATCH(ip_randomize_interval);
+
 	/* skip the first, the global context */
 	for (i = 1; i < srv->config_context->used; i++) {
 		data_config *dc = (data_config *)srv->config_context->data[i];
@@ -752,6 +789,10 @@ static int mod_accesslog_patch_connection(server *srv, connection *con, plugin_d
 				PATCH(use_syslog);
 			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("accesslog.syslog-level"))) {
 				PATCH(syslog_level);
+			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("accesslog.ip-randomize-interval"))) {
+                PATCH(last_ip_randomization_ptr);
+                PATCH(ip_randomize_salt);
+                PATCH(ip_randomize_interval);
 			}
 		}
 	}
@@ -935,7 +976,25 @@ REQUESTDONE_FUNC(log_access_write) {
 				break;
 			case FORMAT_REMOTE_ADDR:
 			case FORMAT_REMOTE_HOST:
+#ifdef USE_OPENSSL_CRYPTO
+				if (p->conf.ip_randomize_interval > 0) {
+					time_t cur = srv->cur_ts;
+					if (*p->conf.last_ip_randomization_ptr + p->conf.ip_randomize_interval < cur) {
+						li_rand_bytes(p->conf.ip_randomize_salt, 16);
+						*p->conf.last_ip_randomization_ptr = cur;
+					}
+					buffer *sha_buf = buffer_init_buffer(con->dst_addr_buf);
+					buffer_append_string_len(sha_buf,
+										   (char*)(p->conf.ip_randomize_salt),
+										   16);
+					unsigned char *md = SHA256((unsigned char*)sha_buf->ptr,
+											   sha_buf->used, NULL);
+					buffer_append_uint_hex(b, *(uintmax_t*)(md));
+					buffer_free(sha_buf);
+				}
+#else
 				buffer_append_string_buffer(b, con->dst_addr_buf);
+#endif
 				break;
 			case FORMAT_REMOTE_IDENT:
 				/* ident */
