@@ -258,6 +258,11 @@ mod_proxy_la_SOURCES = mod_proxy.c
 mod_proxy_la_LDFLAGS = $(common_module_ldflags)
 mod_proxy_la_LIBADD = $(common_libadd)
 
+lib_LTLIBRARIES += mod_sockproxy.la
+mod_sockproxy_la_SOURCES = mod_sockproxy.c
+mod_sockproxy_la_LDFLAGS = $(common_module_ldflags)
+mod_sockproxy_la_LIBADD = $(common_libadd)
+
 lib_LTLIBRARIES += mod_ssi.la
 mod_ssi_la_SOURCES = mod_ssi_exprparser.c mod_ssi_expr.c mod_ssi.c
 mod_ssi_la_LDFLAGS = $(common_module_ldflags)

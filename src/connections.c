@@ -1128,6 +1128,7 @@ connection *connection_accepted(server *srv, server_socket *srv_socket, sock_add
 			connection_close(srv, con);
 			return NULL;
 		}
+		if (con->http_status < 0) connection_set_state(srv, con, CON_STATE_WRITE);
 		return con;
 }
 
