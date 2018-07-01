@@ -4,6 +4,7 @@
 #include "keyvalue.h"
 #include "log.h"
 #include "buffer.h"
+#include "burl.h"
 
 #include "plugin.h"
 #include "response.h"
@@ -147,6 +148,7 @@ static int mod_redirect_patch_connection(server *srv, connection *con, plugin_da
 
 URIHANDLER_FUNC(mod_redirect_uri_handler) {
     plugin_data *p = p_d;
+    struct burl_parts_t burl;
     pcre_keyvalue_ctx ctx;
     handler_t rc;
 
@@ -155,6 +157,11 @@ URIHANDLER_FUNC(mod_redirect_uri_handler) {
     ctx.cache = p->conf.context
       ? &con->cond_cache[p->conf.context->context_ndx]
       : NULL;
+    ctx.burl = &burl;
+    burl.scheme    = con->uri.scheme;
+    burl.authority = con->uri.authority;
+    burl.path      = con->uri.path_raw;
+    burl.query     = con->uri.query;
 
     /* redirect URL on match
      * e.g. redirect /base/ to /index.php?section=base

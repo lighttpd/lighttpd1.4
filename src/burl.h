@@ -4,6 +4,13 @@
 
 #include "buffer.h"
 
+struct burl_parts_t {
+  buffer *scheme;
+  buffer *authority;
+  buffer *path;
+  buffer *query;
+};
+
 enum burl_opts_e {
   HTTP_PARSEOPT_HEADER_STRICT  = 0x1
  ,HTTP_PARSEOPT_HOST_STRICT    = 0x2

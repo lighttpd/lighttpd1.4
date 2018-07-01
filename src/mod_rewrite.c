@@ -4,6 +4,7 @@
 #include "keyvalue.h"
 #include "log.h"
 #include "buffer.h"
+#include "burl.h"
 
 #include "plugin.h"
 #include "stat_cache.h"
@@ -230,6 +231,7 @@ URIHANDLER_FUNC(mod_rewrite_con_reset) {
 
 static handler_t process_rewrite_rules(server *srv, connection *con, plugin_data *p, pcre_keyvalue_buffer *kvb, int repeat_idx) {
 	handler_ctx *hctx;
+	struct burl_parts_t burl;
 	pcre_keyvalue_ctx ctx;
 	handler_t rc;
 
@@ -248,6 +250,11 @@ static handler_t process_rewrite_rules(server *srv, connection *con, plugin_data
 	}
 
 	ctx.cache = p->conf.context ? &con->cond_cache[p->conf.context->context_ndx] : NULL;
+	ctx.burl = &burl;
+	burl.scheme    = con->uri.scheme;
+	burl.authority = con->uri.authority;
+	burl.path      = con->uri.path_raw;
+	burl.query     = con->uri.query;
 
 	rc = pcre_keyvalue_buffer_process(kvb, &ctx, con->request.uri, srv->tmp_buf);
 	if (HANDLER_FINISHED == rc) {
