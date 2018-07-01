@@ -424,7 +424,7 @@ static int wstunnel_is_allowed_origin(connection *con, handler_ctx *hctx) {
      * Note that origin provided in request header has not been normalized, so
      * change in case or other non-normal forms might not match allowed list */
     const array * const allowed_origins = hctx->conf.origins;
-    buffer *origin;
+    buffer *origin = NULL;
     size_t olen;
     data_string *dsorigin;
 
@@ -644,7 +644,7 @@ TRIGGER_FUNC(mod_wstunnel_handle_trigger) {
 
         if (0 != hctx->hybivers
             && hctx->conf.ping_interval > 0
-            && hctx->conf.ping_interval + hctx->ping_ts < cur_ts) {
+            && (time_t)hctx->conf.ping_interval + hctx->ping_ts < cur_ts) {
             hctx->ping_ts = cur_ts;
             mod_wstunnel_frame_send(hctx, MOD_WEBSOCKET_FRAME_TYPE_PING, CONST_STR_LEN("ping"));
             joblist_append(srv, con);
