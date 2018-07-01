@@ -515,7 +515,12 @@ static handler_t fcgi_check_extension(server *srv, connection *con, void *p_d, i
 		hctx->opts.pdata = hctx;
 		hctx->stdin_append = fcgi_stdin_append;
 		hctx->create_env = fcgi_create_env;
-		hctx->rb = chunkqueue_init();
+		if (!hctx->rb) {
+			hctx->rb = chunkqueue_init();
+		}
+		else {
+			chunkqueue_reset(hctx->rb);
+		}
 	}
 
 	return HANDLER_GO_ON;
