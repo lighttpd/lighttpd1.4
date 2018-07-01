@@ -2,6 +2,7 @@
 
 #include "keyvalue.h"
 #include "base.h"
+#include "burl.h"
 #include "log.h"
 
 #include <stdlib.h>
@@ -112,6 +113,146 @@ void pcre_keyvalue_buffer_free(pcre_keyvalue_buffer *kvb) {
 }
 
 #ifdef HAVE_PCRE_H
+static void pcre_keyvalue_buffer_append_match(buffer *b, const char **list, int n, unsigned int num, int flags) {
+    if (num < (unsigned int)n) { /* n is always > 0 */
+        burl_append(b, list[num], strlen(list[num]), flags);
+    }
+}
+
+static void pcre_keyvalue_buffer_append_ctxmatch(buffer *b, pcre_keyvalue_ctx *ctx, unsigned int num, int flags) {
+    const struct cond_cache_t * const cache = ctx->cache;
+    if (!cache) return; /* no enclosing match context */
+    if (num < (unsigned int)cache->patterncount) {
+        const int off = cache->matches[(num <<= 1)]; /*(num *= 2)*/
+        const int len = cache->matches[num+1] - off;
+        burl_append(b, cache->comp_value->ptr + off, (size_t)len, flags);
+    }
+}
+
+static int pcre_keyvalue_buffer_subst_ext(buffer *b, const char *pattern, const char **list, int n, pcre_keyvalue_ctx *ctx) {
+    const unsigned char *p = (unsigned char *)pattern+2;/* +2 past ${} or %{} */
+    int flags = 0;
+    while (!light_isdigit(*p) && *p != '}' && *p != '\0') {
+        if (0) {
+        }
+        else if (p[0] == 'e' && p[1] == 's' && p[2] == 'c') {
+            p+=3;
+            if (p[0] == ':') {
+                flags |= BURL_ENCODE_ALL;
+                p+=1;
+            }
+            else if (0 == strncmp((const char *)p, "ape:", 4)) {
+                flags |= BURL_ENCODE_ALL;
+                p+=4;
+            }
+            else if (0 == strncmp((const char *)p, "nde:", 4)) {
+                flags |= BURL_ENCODE_NDE;
+                p+=4;
+            }
+            else if (0 == strncmp((const char *)p, "psnde:", 6)) {
+                flags |= BURL_ENCODE_PSNDE;
+                p+=6;
+            }
+            else { /* skip unrecognized esc... */
+                p = (const unsigned char *)strchr((const char *)p, ':');
+                if (NULL == p) return -1;
+                ++p;
+            }
+        }
+        else if (p[0] == 'n' && p[1] == 'o') {
+            p+=2;
+            if (0 == strncmp((const char *)p, "esc:", 4)) {
+                flags |= BURL_ENCODE_NONE;
+                p+=4;
+            }
+            else if (0 == strncmp((const char *)p, "escape:", 7)) {
+                flags |= BURL_ENCODE_NONE;
+                p+=7;
+            }
+            else { /* skip unrecognized no... */
+                p = (const unsigned char *)strchr((const char *)p, ':');
+                if (NULL == p) return -1;
+                ++p;
+            }
+        }
+        else if (p[0] == 't' && p[1] == 'o') {
+            p+=2;
+            if (0 == strncmp((const char *)p, "lower:", 6)) {
+                flags |= BURL_TOLOWER;
+                p+=6;
+            }
+            else if (0 == strncmp((const char *)p, "upper:", 6)) {
+                flags |= BURL_TOLOWER;
+                p+=6;
+            }
+            else { /* skip unrecognized to... */
+                p = (const unsigned char *)strchr((const char *)p, ':');
+                if (NULL == p) return -1;
+                ++p;
+            }
+        }
+        else if (p[0] == 'u' && p[1] == 'r' && p[2] == 'l' && p[3] == '.') {
+            p+=4;
+            if (0 == strncmp((const char *)p, "scheme}", 7)) {
+                burl_append(b, CONST_BUF_LEN(ctx->burl->scheme), flags);
+                p+=6;
+            }
+            else if (0 == strncmp((const char *)p, "authority}", 10)) {
+                burl_append(b, CONST_BUF_LEN(ctx->burl->authority), flags);
+                p+=9;
+            }
+            else if (0 == strncmp((const char *)p, "port}", 5)) {
+                buffer_append_int(b, (int)ctx->burl->port);
+                p+=4;
+            }
+            else if (0 == strncmp((const char *)p, "path}", 5)) {
+                burl_append(b, CONST_BUF_LEN(ctx->burl->path), flags);
+                p+=4;
+            }
+            else if (0 == strncmp((const char *)p, "query}", 6)) {
+                burl_append(b, CONST_BUF_LEN(ctx->burl->query), flags);
+                p+=5;
+            }
+            else { /* skip unrecognized url.* */
+                p = (const unsigned char *)strchr((const char *)p, '}');
+                if (NULL == p) return -1;
+            }
+            break;
+        }
+        else if (p[0] == 'q' && p[1] == 's' && p[2] == 'a' && p[3] == '}') {
+            const buffer *qs = ctx->burl->query;
+            if (!buffer_is_empty(qs)) {
+                if (NULL != strchr(b->ptr, '?')) {
+                    if (!buffer_string_is_empty(qs))
+                        buffer_append_string_len(b, CONST_STR_LEN("&"));
+                }
+                else {
+                    buffer_append_string_len(b, CONST_STR_LEN("?"));
+                }
+                burl_append(b, CONST_BUF_LEN(qs), flags);
+            }
+            p+=3;
+            break;
+        }
+        else ++p;  /* skip unrecognized char */
+    }
+    if (*p == '\0') return -1;
+    if (*p != '}') { /* light_isdigit(*p) */
+        unsigned int num = *p - '0';
+        ++p;
+        if (light_isdigit(*p)) num = num * 10 + (*p++ - '0');
+        if (*p != '}') {
+            p = (const unsigned char *)strchr((const char *)p, '}');
+            if (NULL == p) return -1;
+        }
+        if (0 == flags) flags = BURL_ENCODE_PSNDE; /* default */
+        pattern[0] == '$' /*(else '%')*/
+          ? pcre_keyvalue_buffer_append_match(b, list, n, num, flags)
+          : pcre_keyvalue_buffer_append_ctxmatch(b, ctx, num, flags);
+    }
+    return (int)(p + 1 - (unsigned char *)pattern - 2);
+}
+
 static void pcre_keyvalue_buffer_subst(buffer *b, const buffer *patternb, const char **list, int n, pcre_keyvalue_ctx *ctx) {
 	const char *pattern = patternb->ptr;
 	const size_t pattern_len = buffer_string_length(patternb);
@@ -119,37 +260,25 @@ static void pcre_keyvalue_buffer_subst(buffer *b, const buffer *patternb, const 
 
 	/* search for $... or %... pattern substitutions */
 
-	buffer_reset(b);
+	buffer_string_set_length(b, 0);
 
 	for (size_t k = 0; k + 1 < pattern_len; ++k) {
 		if (pattern[k] == '$' || pattern[k] == '%') {
-			size_t num = pattern[k + 1] - '0';
 
 			buffer_append_string_len(b, pattern + start, k - start);
 
-			if (!light_isdigit((unsigned char)pattern[k + 1])) {
+			if (pattern[k + 1] == '{') {
+				int num = pcre_keyvalue_buffer_subst_ext(b, pattern+k, list, n, ctx);
+				if (num < 0) return; /* error; truncate result */
+				k += (size_t)num;
+			} else if (light_isdigit(((unsigned char *)pattern)[k + 1])) {
+				unsigned int num = (unsigned int)pattern[k + 1] - '0';
+				pattern[k] == '$' /*(else '%')*/
+				  ? pcre_keyvalue_buffer_append_match(b, list, n, num, 0)
+				  : pcre_keyvalue_buffer_append_ctxmatch(b, ctx, num, 0);
+			} else {
 				/* enable escape: "%%" => "%", "%a" => "%a", "$$" => "$" */
 				buffer_append_string_len(b, pattern+k, pattern[k] == pattern[k+1] ? 1 : 2);
-			} else if (pattern[k] == '$') {
-				/* n is always > 0 */
-				if (num < (size_t)n) {
-					buffer_append_string(b, list[num]);
-				}
-			} else if (ctx->cache) {
-				const struct cond_cache_t * const cache = ctx->cache;
-				if (num < (size_t)cache->patterncount) {
-					num <<= 1; /* n *= 2 */
-					buffer_append_string_len(b,
-						cache->comp_value->ptr + cache->matches[num],
-						cache->matches[num + 1] - cache->matches[num]);
-				}
-			} else {
-			      #if 0
-				/* we have no context, we are global */
-				log_error_write(srv, __FILE__, __LINE__, "ss",
-						"used a redirect/rewrite containing a %[0-9]+ in the global scope, ignored:",
-						pattern);
-			      #endif
 			}
 
 			k++;

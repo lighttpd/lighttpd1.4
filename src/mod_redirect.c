@@ -160,6 +160,7 @@ URIHANDLER_FUNC(mod_redirect_uri_handler) {
     ctx.burl = &burl;
     burl.scheme    = con->uri.scheme;
     burl.authority = con->uri.authority;
+    burl.port      = sock_addr_get_port(&con->srv_socket->addr);
     burl.path      = con->uri.path_raw;
     burl.query     = con->uri.query;
 

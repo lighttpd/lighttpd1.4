@@ -7,6 +7,7 @@
 struct burl_parts_t {
   buffer *scheme;
   buffer *authority;
+  unsigned short port;
   buffer *path;
   buffer *query;
 };
@@ -28,5 +29,16 @@ enum burl_opts_e {
 };
 
 int burl_normalize (buffer *b, buffer *t, int flags);
+
+enum burl_recoding_e {
+  BURL_TOLOWER         = 0x0001
+ ,BURL_TOUPPER         = 0x0002
+ ,BURL_ENCODE_NONE     = 0x0004
+ ,BURL_ENCODE_ALL      = 0x0008
+ ,BURL_ENCODE_NDE      = 0x0010 /* encode delims, but no-double-encode (NDE) */
+ ,BURL_ENCODE_PSNDE    = 0x0020 /* similar to NDE, but preserve literal slash */
+};
+
+void burl_append (buffer * const b, const char * const str, const size_t len, const int flags);
 
 #endif

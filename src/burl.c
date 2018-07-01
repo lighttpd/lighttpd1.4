@@ -355,3 +355,150 @@ int burl_normalize (buffer *b, buffer *t, int flags)
 
     return qs;
 }
+
+
+static void burl_append_encode_nde (buffer * const b, const char * const str, const size_t len)
+{
+    /* percent-encodes everything except unreserved  - . 0-9 A-Z _ a-z ~
+     * unless already percent-encoded (does not double-encode) */
+    /* Note: not checking for invalid UTF-8 */
+    char * const p = buffer_string_prepare_append(b, len*3);
+    unsigned int n1, n2;
+    int j = 0;
+    for (unsigned int i = 0; i < len; ++i, ++j) {
+        if (str[i]=='%' && li_cton(str[i+1], n1) && li_cton(str[i+2], n2)) {
+            const unsigned int x = (n1 << 4) | n2;
+            if (burl_is_unreserved((int)x)) {
+                p[j] = (char)x;
+            }
+            else { /* leave UTF-8, control chars, and required chars encoded */
+                p[j]   = '%';
+                p[++j] = str[i+1];
+                p[++j] = str[i+2];
+            }
+            i+=2;
+        }
+        else if (burl_is_unreserved(str[i])) {
+            p[j] = str[i];
+        }
+        else {
+            p[j]   = '%';
+            p[++j] = hex_chars_uc[(str[i] >> 4) & 0xF];
+            p[++j] = hex_chars_uc[str[i] & 0xF];
+        }
+    }
+    buffer_commit(b, j);
+}
+
+
+static void burl_append_encode_psnde (buffer * const b, const char * const str, const size_t len)
+{
+    /* percent-encodes everything except unreserved  - . 0-9 A-Z _ a-z ~ plus /
+     * unless already percent-encoded (does not double-encode) */
+    /* Note: not checking for invalid UTF-8 */
+    char * const p = buffer_string_prepare_append(b, len*3);
+    unsigned int n1, n2;
+    int j = 0;
+    for (unsigned int i = 0; i < len; ++i, ++j) {
+        if (str[i]=='%' && li_cton(str[i+1], n1) && li_cton(str[i+2], n2)) {
+            const unsigned int x = (n1 << 4) | n2;
+            if (burl_is_unreserved((int)x)) {
+                p[j] = (char)x;
+            }
+            else { /* leave UTF-8, control chars, and required chars encoded */
+                p[j]   = '%';
+                p[++j] = str[i+1];
+                p[++j] = str[i+2];
+            }
+            i+=2;
+        }
+        else if (burl_is_unreserved(str[i]) || str[i] == '/') {
+            p[j] = str[i];
+        }
+        else {
+            p[j]   = '%';
+            p[++j] = hex_chars_uc[(str[i] >> 4) & 0xF];
+            p[++j] = hex_chars_uc[str[i] & 0xF];
+        }
+    }
+    buffer_commit(b, j);
+}
+
+
+static void burl_append_encode_all (buffer * const b, const char * const str, const size_t len)
+{
+    /* percent-encodes everything except unreserved  - . 0-9 A-Z _ a-z ~
+     * Note: double-encodes any existing '%') */
+    /* Note: not checking for invalid UTF-8 */
+    char * const p = buffer_string_prepare_append(b, len*3);
+    int j = 0;
+    for (unsigned int i = 0; i < len; ++i, ++j) {
+        if (burl_is_unreserved(str[i])) {
+            p[j] = str[i];
+        }
+        else {
+            p[j]   = '%';
+            p[++j] = hex_chars_uc[(str[i] >> 4) & 0xF];
+            p[++j] = hex_chars_uc[str[i] & 0xF];
+        }
+    }
+    buffer_commit(b, j);
+}
+
+
+static void burl_offset_tolower (buffer * const b, const size_t off)
+{
+    /*(skips over all percent-encodings, including encoding of alpha chars)*/
+    for (char *p = b->ptr+off; p[0]; ++p) {
+        if (p[0] >= 'A' && p[0] <= 'Z') p[0] |= 0x20;
+        else if (p[0]=='%' && light_isxdigit(p[1]) && light_isxdigit(p[2]))
+            p+=2;
+    }
+}
+
+
+static void burl_offset_toupper (buffer * const b, const size_t off)
+{
+    /*(skips over all percent-encodings, including encoding of alpha chars)*/
+    for (char *p = b->ptr+off; p[0]; ++p) {
+        if (p[0] >= 'a' && p[0] <= 'z') p[0] &= 0xdf;
+        else if (p[0]=='%' && light_isxdigit(p[1]) && light_isxdigit(p[2]))
+            p+=2;
+    }
+}
+
+
+void burl_append (buffer * const b, const char * const str, const size_t len, const int flags)
+{
+    size_t off = 0;
+
+    if (0 == len) return;
+
+    if (0 == flags) {
+        buffer_append_string_len(b, str, len);
+        return;
+    }
+
+    if (flags & (BURL_TOUPPER|BURL_TOLOWER)) off = buffer_string_length(b);
+
+    if (flags & BURL_ENCODE_NONE) {
+        buffer_append_string_len(b, str, len);
+    }
+    else if (flags & BURL_ENCODE_ALL) {
+        burl_append_encode_all(b, str, len);
+    }
+    else if (flags & BURL_ENCODE_NDE) {
+        burl_append_encode_nde(b, str, len);
+    }
+    else if (flags & BURL_ENCODE_PSNDE) {
+        burl_append_encode_psnde(b, str, len);
+    }
+
+    /* note: not normalizing str, which could come from arbitrary header,
+     * so it is possible that alpha chars are percent-encoded upper/lowercase */
+    if (flags & (BURL_TOLOWER|BURL_TOUPPER)) {
+        (flags & BURL_TOLOWER)
+          ? burl_offset_tolower(b, off)  /*(flags & BURL_TOLOWER)*/
+          : burl_offset_toupper(b, off); /*(flags & BURL_TOUPPER)*/
+    }
+}
