@@ -292,7 +292,7 @@ static void pcre_keyvalue_buffer_subst(buffer *b, const buffer *patternb, const 
 handler_t pcre_keyvalue_buffer_process(pcre_keyvalue_buffer *kvb, pcre_keyvalue_ctx *ctx, buffer *input, buffer *result) {
     for (int i = 0, used = (int)kvb->used; i < used; ++i) {
         pcre_keyvalue * const kv = kvb->kv[i];
-        #define N 10
+        #define N 20
         int ovec[N * 3];
         #undef N
         int n = pcre_exec(kv->key, kv->key_extra, CONST_BUF_LEN(input),
