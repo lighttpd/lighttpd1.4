@@ -1808,7 +1808,7 @@ static handler_t gw_write_request(server *srv, gw_handler_ctx *hctx) {
         /*(disable Nagle algorithm if streaming and content-length unknown)*/
         if (AF_UNIX != hctx->host->family) {
             connection *con = hctx->remote_conn;
-            if (-1 == con->request.content_length) {
+            if (con->request.content_length < 0) {
                 if (-1 == fdevent_set_tcp_nodelay(hctx->fd, 1)) {
                     /*(error, but not critical)*/
                 }
