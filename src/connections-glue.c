@@ -7,6 +7,7 @@
 #include "log.h"
 
 #include <errno.h>
+#include <string.h>
 
 const char *connection_get_state(connection_state_t state) {
 	switch (state) {
