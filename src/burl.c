@@ -4,6 +4,7 @@
 #include <string.h>
 
 #include "buffer.h"
+#include "base64.h"
 
 static const char hex_chars_uc[] = "0123456789ABCDEF";
 
@@ -492,6 +493,13 @@ void burl_append (buffer * const b, const char * const str, const size_t len, co
     }
     else if (flags & BURL_ENCODE_PSNDE) {
         burl_append_encode_psnde(b, str, len);
+    }
+    else if (flags & BURL_ENCODE_B64U) {
+        const unsigned char *s = (const unsigned char *)str;
+        buffer_append_base64_encode_no_padding(b, s, len, BASE64_URL);
+    }
+    else if (flags & BURL_DECODE_B64U) {
+        buffer_append_base64_decode(b, str, len, BASE64_URL);
     }
 
     /* note: not normalizing str, which could come from arbitrary header,

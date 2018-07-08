@@ -234,6 +234,16 @@ static int pcre_keyvalue_buffer_subst_ext(buffer *b, const char *pattern, const 
             p+=3;
             break;
         }
+        else if (p[0] == 'e' && p[1] == 'n' && p[2] == 'c'
+                 && 0 == strncmp((const char *)p+3, "b64u:", 5)) {
+            flags |= BURL_ENCODE_B64U;
+            p+=8;
+        }
+        else if (p[0] == 'd' && p[1] == 'e' && p[2] == 'c'
+                 && 0 == strncmp((const char *)p+3, "b64u:", 5)) {
+            flags |= BURL_DECODE_B64U;
+            p+=8;
+        }
         else ++p;  /* skip unrecognized char */
     }
     if (*p == '\0') return -1;

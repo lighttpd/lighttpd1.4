@@ -37,6 +37,8 @@ enum burl_recoding_e {
  ,BURL_ENCODE_ALL      = 0x0008
  ,BURL_ENCODE_NDE      = 0x0010 /* encode delims, but no-double-encode (NDE) */
  ,BURL_ENCODE_PSNDE    = 0x0020 /* similar to NDE, but preserve literal slash */
+ ,BURL_ENCODE_B64U     = 0x0040
+ ,BURL_DECODE_B64U     = 0x0080
 };
 
 void burl_append (buffer * const b, const char * const str, const size_t len, const int flags);
