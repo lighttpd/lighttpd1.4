@@ -258,7 +258,7 @@ static handler_t process_rewrite_rules(server *srv, connection *con, plugin_data
 	burl.query     = con->uri.query;
 
 	rc = pcre_keyvalue_buffer_process(kvb, &ctx, con->request.uri, srv->tmp_buf);
-	if (HANDLER_FINISHED == rc) {
+	if (HANDLER_FINISHED == rc && !buffer_is_empty(srv->tmp_buf) && srv->tmp_buf->ptr[0] == '/') {
 		buffer_copy_buffer(con->request.uri, srv->tmp_buf);
 		if (con->plugin_ctx[p->id] == NULL) {
 			hctx = handler_ctx_init();
@@ -269,6 +269,12 @@ static handler_t process_rewrite_rules(server *srv, connection *con, plugin_data
 		if (ctx.m < repeat_idx) hctx->state = REWRITE_STATE_FINISHED;
 		buffer_reset(con->physical.path);
 		rc = HANDLER_COMEBACK;
+	}
+	else if (HANDLER_FINISHED == rc) {
+		rc = HANDLER_ERROR;
+		log_error_write(srv, __FILE__, __LINE__, "sb",
+				"mod_rewrite invalid result (not beginning with '/') while processing uri:",
+				con->request.uri);
 	}
 	else if (HANDLER_ERROR == rc) {
 		log_error_write(srv, __FILE__, __LINE__, "sb",
