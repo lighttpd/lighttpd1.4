@@ -13,7 +13,6 @@ static void test_request_connection_reset(connection *con)
     con->request.http_method = HTTP_METHOD_UNSET;
     con->request.http_version = HTTP_VERSION_UNSET;
     con->request.http_host = NULL;
-    con->request.http_range = NULL;
     con->request.http_content_type = NULL;
     con->request.http_if_modified_since = NULL;
     con->request.http_if_none_match = NULL;
@@ -372,11 +371,38 @@ static void test_request_http_request_parse(server *srv, connection *con)
                     "Content-Type: 4\r\n"
                     "\r\n"));
 
-    run_http_request_parse(srv, con, __LINE__, 400,
-      "Duplicate Range headers",
+    /* (not actually testing Range here anymore; parsing deferred until use) */
+
+    run_http_request_parse(srv, con, __LINE__, 0,
+      "Duplicate Range headers (get appended)",
       CONST_STR_LEN("GET / HTTP/1.0\r\n"
                     "Range: bytes=5-6\r\n"
                     "Range: bytes=5-9\r\n"
+                    "\r\n"));
+
+    run_http_request_parse(srv, con, __LINE__, 0,
+      "Duplicate Range headers with invalid range (a)",
+      CONST_STR_LEN("GET / HTTP/1.0\r\n"
+                    "Range: bytes=0\r\n"
+                    "Range: bytes=5-9\r\n"
+                    "\r\n"));
+    run_http_request_parse(srv, con, __LINE__, 0,
+      "Duplicate Range headers with invalid range (b)",
+      CONST_STR_LEN("GET / HTTP/1.0\r\n"
+                    "Range: bytes=5-9\r\n"
+                    "Range: bytes=0\r\n"
+                    "\r\n"));
+    run_http_request_parse(srv, con, __LINE__, 0,
+      "Duplicate Range headers with invalid range (c)",
+      CONST_STR_LEN("GET / HTTP/1.0\r\n"
+                    "Range: 0\r\n"
+                    "Range: bytes=5-9\r\n"
+                    "\r\n"));
+    run_http_request_parse(srv, con, __LINE__, 0,
+      "Duplicate Range headers with invalid range (d)",
+      CONST_STR_LEN("GET / HTTP/1.0\r\n"
+                    "Range: bytes=5-9\r\n"
+                    "Range: 0\r\n"
                     "\r\n"));
 
     run_http_request_parse(srv, con, __LINE__, 0,

@@ -47,7 +47,6 @@ typedef struct {
 
 	/* strings to the header */
 	buffer *http_host; /* not alloced */
-	const char   *http_range;
 	const char   *http_content_type;
 	const char   *http_if_modified_since;
 	const char   *http_if_none_match;
@@ -57,9 +56,6 @@ typedef struct {
 	/* CONTENT */
 	off_t content_length; /* returned by strtoll() */
 	off_t te_chunked;
-
-	/* internal representation */
-	int     accept_encoding;
 
 	/* internal */
 	buffer *pathinfo;

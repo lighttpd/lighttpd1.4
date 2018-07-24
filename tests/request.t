@@ -8,7 +8,7 @@ BEGIN {
 
 use strict;
 use IO::Socket;
-use Test::More tests => 50;
+use Test::More tests => 52;
 use LightyTest;
 
 my $tf = LightyTest->new();
@@ -390,6 +390,26 @@ EOF
  );
 $t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200 } ];
 ok($tf->handle_http($t) == 0, 'GET, Range with range-requests-disabled');
+
+$t->{REQUEST}  = ( <<EOF
+GET /12345.txt HTTP/1.0
+Host: 123.example.org
+Range: 0
+Range: bytes=0-3
+EOF
+ );
+$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200, 'HTTP-Content' => "12345\n" } ];
+ok($tf->handle_http($t) == 0, 'GET, Range invalid range-unit (first)');
+
+$t->{REQUEST}  = ( <<EOF
+GET /12345.txt HTTP/1.0
+Host: 123.example.org
+Range: bytes=0-3
+Range: 0
+EOF
+ );
+$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 206 } ];
+ok($tf->handle_http($t) == 0, 'GET, Range ignore invalid range (second)');
 
 $t->{REQUEST}  = ( <<EOF
 OPTIONS / HTTP/1.0

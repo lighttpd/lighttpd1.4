@@ -685,7 +685,6 @@ int connection_reset(server *srv, connection *con) {
 		con->request.x = NULL;
 
 	CLEAN(http_host);
-	CLEAN(http_range);
 	CLEAN(http_content_type);
 #undef CLEAN
 	con->request.content_length = 0;

@@ -229,7 +229,7 @@ int http_response_handle_cachable(server *srv, connection *con, buffer *mtime) {
 }
 
 
-static int http_response_parse_range(server *srv, connection *con, buffer *path, stat_cache_entry *sce) {
+static int http_response_parse_range(server *srv, connection *con, buffer *path, stat_cache_entry *sce, const char *range) {
 	int multipart = 0;
 	int error;
 	off_t start, end;
@@ -247,10 +247,25 @@ static int http_response_parse_range(server *srv, connection *con, buffer *path,
 		content_type = ds->value;
 	}
 
-	for (s = con->request.http_range, error = 0;
+	for (s = range, error = 0;
 	     !error && *s && NULL != (minus = strchr(s, '-')); ) {
 		char *err;
 		off_t la, le;
+
+		if (s != minus) {
+			la = strtoll(s, &err, 10);
+			if (err != minus) {
+				/* should not have multiple range-unit in Range, but
+				 * handle just in case multiple Range headers merged */
+				while (*s == ' ' || *s == '\t') ++s;
+				if (0 != strncmp(s, "bytes=", 6)) return -1;
+				s += 6;
+				if (s != minus) {
+					la = strtoll(s, &err, 10);
+					if (err != minus) return -1;
+				}
+			}
+		}
 
 		if (s == minus) {
 			/* -<stop> */
@@ -281,9 +296,6 @@ static int http_response_parse_range(server *srv, connection *con, buffer *path,
 		} else if (*(minus+1) == '\0' || *(minus+1) == ',') {
 			/* <start>- */
 
-			la = strtoll(s, &err, 10);
-
-			if (err == minus) {
 				/* ok */
 
 				if (*(err + 1) == '\0') {
@@ -301,16 +313,9 @@ static int http_response_parse_range(server *srv, connection *con, buffer *path,
 				} else {
 					error = 1;
 				}
-			} else {
-				/* error */
-				error = 1;
-			}
 		} else {
 			/* <start>-<stop> */
 
-			la = strtoll(s, &err, 10);
-
-			if (err == minus) {
 				le = strtoll(minus+1, &err, 10);
 
 				/* RFC 2616 - 14.35.1 */
@@ -335,11 +340,6 @@ static int http_response_parse_range(server *srv, connection *con, buffer *path,
 
 					error = 1;
 				}
-			} else {
-				/* error */
-
-				error = 1;
-			}
 		}
 
 		if (!error) {
@@ -516,9 +516,11 @@ void http_response_send_file (server *srv, connection *con, buffer *path) {
 		}
 	}
 
-	if (con->request.http_range && con->conf.range_requests
+	if (con->conf.range_requests
 	    && (200 == con->http_status || 0 == con->http_status)
+	    && NULL != (ds = (data_string *)array_get_element(con->request.headers, "Range"))
 	    && NULL == array_get_element(con->response.headers, "Content-Encoding")) {
+		buffer *range = ds->value;
 		int do_range_request = 1;
 		/* check if we have a conditional GET */
 
@@ -547,11 +549,14 @@ void http_response_send_file (server *srv, connection *con, buffer *path) {
 			}
 		}
 
-		if (do_range_request) {
+		if (do_range_request
+		    && !buffer_string_is_empty(range)
+		    && 0 == strncmp(range->ptr, "bytes=", 6)) {
+			/* support only "bytes" byte-unit */
 			/* content prepared, I'm done */
 			con->file_finished = 1;
 
-			if (0 == http_response_parse_range(srv, con, path, sce)) {
+			if (0 == http_response_parse_range(srv, con, path, sce, range->ptr+6)) {
 				con->http_status = 206;
 			}
 			return;
