@@ -1269,6 +1269,7 @@ int gw_set_defaults_backend(server *srv, gw_plugin_data *p, data_unset *du, size
                 { "listen-backlog",    NULL, T_CONFIG_INT,   T_CONFIG_SCOPE_CONNECTION },        /* 19 */
                 { "x-sendfile",        NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION },      /* 20 */
                 { "x-sendfile-docroot",NULL, T_CONFIG_ARRAY,  T_CONFIG_SCOPE_CONNECTION },       /* 21 */
+                { "tcp-fin-propagate", NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION },      /* 22 */
 
                 { NULL,                NULL, T_CONFIG_UNSET, T_CONFIG_SCOPE_UNSET }
             };
@@ -1324,6 +1325,7 @@ int gw_set_defaults_backend(server *srv, gw_plugin_data *p, data_unset *du, size
             fcv[19].destination = &(host->listen_backlog);
             fcv[20].destination = &(host->xsendfile_allow);
             fcv[21].destination = host->xsendfile_docroot;
+            fcv[22].destination = &(host->tcp_fin_propagate);
 
             if (0 != config_insert_values_internal(srv, da_host->value, fcv, T_CONFIG_SCOPE_CONNECTION)) {
                 goto error;
@@ -1715,6 +1717,23 @@ handler_t gw_connection_reset(server *srv, connection *con, void *p_d) {
 }
 
 
+static void gw_conditional_tcp_fin(server *srv, gw_handler_ctx *hctx) {
+    connection *con = hctx->remote_conn;
+    /*assert(con->conf.stream_request_body & FDEVENT_STREAM_REQUEST_TCP_FIN);*/
+    if (!chunkqueue_is_empty(hctx->wb)) return;
+    if (!hctx->host->tcp_fin_propagate) return;
+    if (hctx->gw_mode == GW_AUTHORIZER) return;
+    if (con->conf.stream_request_body & FDEVENT_STREAM_REQUEST_BACKEND_SHUT_WR)
+        return;
+
+    /* propagate shutdown SHUT_WR to backend if TCP half-close on con->fd */
+    con->conf.stream_request_body |= FDEVENT_STREAM_REQUEST_BACKEND_SHUT_WR;
+    con->conf.stream_request_body &= ~FDEVENT_STREAM_REQUEST_POLLIN;
+    con->is_readable = 0;
+    shutdown(hctx->fd, SHUT_WR);
+    fdevent_event_clr(srv->ev, &hctx->fde_ndx, hctx->fd, FDEVENT_OUT);
+}
+
 static handler_t gw_write_request(server *srv, gw_handler_ctx *hctx) {
     switch(hctx->state) {
     case GW_STATE_INIT:
@@ -1880,6 +1899,10 @@ static handler_t gw_write_request(server *srv, gw_handler_ctx *hctx) {
             }
         }
 
+        if (hctx->remote_conn->conf.stream_request_body
+            & FDEVENT_STREAM_REQUEST_TCP_FIN)
+            gw_conditional_tcp_fin(srv, hctx);
+
         return HANDLER_WAIT_FOR_EVENT;
     case GW_STATE_READ:
         /* waiting for a response */
@@ -2001,10 +2024,18 @@ handler_t gw_handle_subrequest(server *srv, connection *con, void *p_d) {
         }
     }
 
-    return ((0 == hctx->wb->bytes_in || !chunkqueue_is_empty(hctx->wb))
-        && hctx->state != GW_STATE_CONNECT_DELAYED)
-      ? gw_send_request(srv, hctx)
-      : HANDLER_WAIT_FOR_EVENT;
+    {
+        handler_t rc =((0==hctx->wb->bytes_in || !chunkqueue_is_empty(hctx->wb))
+                       && hctx->state != GW_STATE_CONNECT_DELAYED)
+          ? gw_send_request(srv, hctx)
+          : HANDLER_WAIT_FOR_EVENT;
+        if (HANDLER_WAIT_FOR_EVENT != rc) return rc;
+    }
+
+    if (con->conf.stream_request_body & FDEVENT_STREAM_REQUEST_TCP_FIN)
+        gw_conditional_tcp_fin(srv, hctx);
+
+    return HANDLER_WAIT_FOR_EVENT;
 }
 
 

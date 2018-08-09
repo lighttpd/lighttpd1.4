@@ -918,6 +918,7 @@ static handler_t connection_handle_fdevent(server *srv, void *context, int reven
 			int events = fdevent_event_get_interest(srv->ev, con->fd);
 			events &= ~(FDEVENT_IN|FDEVENT_RDHUP);
 			con->conf.stream_request_body &= ~(FDEVENT_STREAM_REQUEST_BUFMIN|FDEVENT_STREAM_REQUEST_POLLIN);
+			con->conf.stream_request_body |= FDEVENT_STREAM_REQUEST_POLLRDHUP;
 			con->is_readable = 1; /*(can read 0 for end-of-stream)*/
 			con->keep_alive = 0;
 			if (con->request.content_length < -1) { /*(transparent proxy mode; no more data to read)*/
@@ -934,6 +935,7 @@ static handler_t connection_handle_fdevent(server *srv, void *context, int reven
 				 * future: might getpeername() to check for TCP RST on half-closed sockets
 				 * (without FDEVENT_RDHUP interest) when checking for write timeouts
 				 * once a second in server.c, though getpeername() on Windows might not indicate this */
+				con->conf.stream_request_body |= FDEVENT_STREAM_REQUEST_TCP_FIN;
 				fdevent_event_set(srv->ev, &con->fde_ndx, con->fd, events);
 			} else {
 				/* Failure of fdevent_is_tcp_half_closed() indicates TCP RST
