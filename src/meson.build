@@ -694,7 +694,7 @@ test('test_buffer', executable('test_buffer',
 ))
 
 test('test_burl', executable('test_burl',
-	sources: ['t/test_burl.c', 'burl.c', 'buffer.c'],
+	sources: ['t/test_burl.c', 'burl.c', 'buffer.c', 'base64.c'],
 	dependencies: common_flags + libunwind,
 	build_by_default: false,
 ))

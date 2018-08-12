@@ -654,6 +654,7 @@ add_executable(test_burl
 	t/test_burl.c
 	burl.c
 	buffer.c
+	base64.c
 )
 add_test(NAME test_burl COMMAND test_burl)
 
