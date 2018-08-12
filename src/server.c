@@ -285,12 +285,14 @@ static server *server_init(void) {
 	srv->srvconf.http_header_strict  = 1;
 	srv->srvconf.http_host_strict    = 1; /*(implies http_host_normalize)*/
 	srv->srvconf.http_host_normalize = 0;
+      #if 0
 	srv->srvconf.http_url_normalize = HTTP_PARSEOPT_URL_NORMALIZE
 					| HTTP_PARSEOPT_URL_NORMALIZE_UNRESERVED
 					| HTTP_PARSEOPT_URL_NORMALIZE_CTRLS_REJECT
 					| HTTP_PARSEOPT_URL_NORMALIZE_PATH_BACKSLASH_TRANS
 					| HTTP_PARSEOPT_URL_NORMALIZE_PATH_2F_DECODE
 					| HTTP_PARSEOPT_URL_NORMALIZE_PATH_DOTSEG_REMOVE;
+      #endif
 	srv->srvconf.http_url_normalize = 0; /* temporary; change in future */
 	srv->srvconf.high_precision_timestamps = 0;
 	srv->srvconf.max_request_field_size = 8192;
