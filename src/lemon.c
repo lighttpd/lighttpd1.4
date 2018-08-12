@@ -2,6 +2,14 @@
 #define _GNU_SOURCE
 #endif
 
+#ifdef __COVERITY__
+#define _Float128 long double
+#define _Float64x long double
+#define _Float64  double
+#define _Float32x double
+#define _Float32  float
+#endif
+
 /*
 ** This file contains all sources (including headers) to the LEMON
 ** LALR(1) parser generator.  The sources have been combined into a
