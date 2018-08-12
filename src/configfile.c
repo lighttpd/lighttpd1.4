@@ -77,6 +77,18 @@ static int config_http_parseopts (server *srv, array *a) {
     for (size_t i = 0; i < a->used; ++i) {
         const data_string * const ds = (data_string *)a->data[i];
         unsigned short int opt;
+        int val = 0;
+        if (buffer_is_equal_string(ds->value, CONST_STR_LEN("enable")))
+            val = 1;
+        else if (buffer_is_equal_string(ds->value, CONST_STR_LEN("disable")))
+            val = 0;
+        else {
+            log_error_write(srv, __FILE__, __LINE__, "sbsbs",
+                            "unrecognized value for server.http-parseopts:",
+                            ds->key, "=>", ds->value,
+                            "(expect \"[enable|disable]\")");
+            rc = 0;
+        }
         if (buffer_is_equal_string(ds->key, CONST_STR_LEN("url-normalize")))
             opt = HTTP_PARSEOPT_URL_NORMALIZE;
         else if (buffer_is_equal_string(ds->key, CONST_STR_LEN("url-normalize-unreserved")))
@@ -97,6 +109,18 @@ static int config_http_parseopts (server *srv, array *a) {
             opt = HTTP_PARSEOPT_URL_NORMALIZE_PATH_DOTSEG_REJECT;
         else if (buffer_is_equal_string(ds->key, CONST_STR_LEN("url-query-20-plus")))
             opt = HTTP_PARSEOPT_URL_NORMALIZE_QUERY_20_PLUS;
+        else if (buffer_is_equal_string(ds->key, CONST_STR_LEN("header-strict"))) {
+            srv->srvconf.http_header_strict = val;
+            continue;
+        }
+        else if (buffer_is_equal_string(ds->key, CONST_STR_LEN("host-strict"))) {
+            srv->srvconf.http_host_strict = val;
+            continue;
+        }
+        else if (buffer_is_equal_string(ds->key, CONST_STR_LEN("host-normalize"))) {
+            srv->srvconf.http_host_normalize = val;
+            continue;
+        }
         else {
             log_error_write(srv, __FILE__, __LINE__, "sb",
                             "unrecognized key for server.http-parseopts:",
@@ -104,9 +128,9 @@ static int config_http_parseopts (server *srv, array *a) {
             rc = 0;
             continue;
         }
-        if (buffer_is_equal_string(ds->value, CONST_STR_LEN("enable")))
+        if (val)
             opts |= opt;
-        else if (buffer_is_equal_string(ds->value, CONST_STR_LEN("disable"))) {
+        else {
             opts &= ~opt;
             if (opt == HTTP_PARSEOPT_URL_NORMALIZE) {
                 opts = 0;
@@ -115,13 +139,6 @@ static int config_http_parseopts (server *srv, array *a) {
             if (opt == HTTP_PARSEOPT_URL_NORMALIZE_PATH_2F_DECODE) {
                 decode_2f = 0;
             }
-        }
-        else {
-            log_error_write(srv, __FILE__, __LINE__, "sbsbs",
-                            "unrecognized value for server.http-parseopts:",
-                            ds->key, "=>", ds->value,
-                            "(expect \"[enable|disable]\")");
-            rc = 0;
         }
     }
     if (opts != 0) {
