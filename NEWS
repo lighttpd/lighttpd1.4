@@ -3,7 +3,64 @@
 NEWS
 ====
 
-- 1.4.50
+- 1.4.50 - 2018-08-13
+  * [mod_extforward] allow explict IPs to be untrusted (#2860)
+  * [core] fix crash if 'host' empty in config (fixes #2876)
+  * [mod_magnet] fix regression in lighty.stat (fixes #2877)
+  * [core] minor code cleanup in gw_recv_response()
+  * [core] fix rare race condition from backends (fixes #2878)
+  * [mod_proxy] fix segfault in Set-Cookie reverse map (fixes #2879)
+  * [core] fdevent_accept_listenfd() nonblock cloexec
+  * [build] remove m4 AC_PATH_PROG for PKG_CONFIG
+  * [core] some header cleanup
+  * [mod_wstunnel] better Sec-WebSocket-Protocol parse
+  * [mod_magnet] code reuse
+  * [mod_magnet] reduce buffer copies
+  * [mod_fastcgi,mod_scgi] fastcgi.balance,scgi.balance (fixes #2882)
+  * [core] check if SOCK_NONBLOCK is ignored (fixes #2883)
+  * [core] buffer_append_string_encoded_hex_lc()
+  * [core] more efficient hex2int()
+  * [mod_secdownload] compare bin MAC instead of hex
+  * [core] li_tohex_lc() explicitly uses lc hex chars
+  * [core] buffer_append_uint_hex_lc() uses lc hex
+  * [core] buffer_append_string_encoded() uc hex
+  * [tests] reduce test_base64 brute force tests
+  * [tests] remove test_buffer output, except on error
+  * [core] check for continuation in server.tag
+  * [core] CONNECT must be handled before fs hooks
+  * [mod_redirect, mod_rewrite] code reuse (sharing)
+  * [core] data_config_pcre_compile,exec()
+  * [tests] test_request unit tests
+  * [core] http_kv.[ch] method, status, version str
+  * [core] remove unused get_http_status_body_name()
+  * [core] remove proc_open.[ch], reduce stdio.h use
+  * [tests] move src/test_*.c to src/t/
+  * [core] server.http-parseopts URL normalization opt (fixes #1720)
+  * [core] inline some buffer.[ch] routines
+  * [core] remove some duplicative code in log.c
+  * [core] debug server.log-request-header-on-error
+  * [mod_redirect,mod_rewrite] short-circuit earlier
+  * [core] fix buffer_to_upper()
+  * [mod_cgi] handle CGI partial response header write
+  * [mod_redirect,mod_rewrite] pass request URI info
+  * [mod_redirect,mod_rewrite] encoding options (fixes #443, fixes #911)
+  * [mod_redirect,mod_rewrite] fix segfault w/ invalid syntax (fixes #2892)
+  * [mod_fastcgi] fix memleak with FastCGI auth,resp (fixes #2894)
+  * [mod_alias] security: potential path traversal with specific configs
+  * [mod_wstunnel] quiet 32-bit compiler warnings
+  * [core] POLLRDHUP handling for transparent proxying
+  * [mod_redirect,mod_rewrite] support up to 19 match
+  * [core] add missing includes to quiet compiler warn
+  * [mod_redirect,mod_rewrite] base64url encoding opt
+  * [mod_rewrite] require rewrite result to begin '/'
+  * [core] security: use-after-free invalid Range req
+  * [core] reset var if FAMMonitorDirectory() fails
+  * [core] option to propagate TCP FIN to backend host
+  * mod_sockproxy - socket forwarding
+  * [core] workaround Coverity cov-build bug with gcc7
+  * [build] add missing file for test_burl
+  * [core] quell insignificant coverity warning
+  * [core] extend server.http-parseopts
 
 - 1.4.49 - 2018-03-11
   * [core] adjust offset if response header blank line
