@@ -3,6 +3,8 @@
 NEWS
 ====
 
+- 1.4.51
+
 - 1.4.50 - 2018-08-13
   * [mod_extforward] allow explict IPs to be untrusted (#2860)
   * [core] fix crash if 'host' empty in config (fixes #2876)
@@ -61,6 +63,8 @@ NEWS
   * [build] add missing file for test_burl
   * [core] quell insignificant coverity warning
   * [core] extend server.http-parseopts
+  * [mod_alias] security: path traversal in mod_alias (in some use cases) (fixes #2898)
+  * [core] security: use-after-free after invalid Range request (fixes #2899)
 
 - 1.4.49 - 2018-03-11
   * [core] adjust offset if response header blank line
