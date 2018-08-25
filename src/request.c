@@ -444,6 +444,11 @@ static void init_parse_header_state(parse_header_state* state) {
 static int parse_single_header(server *srv, connection *con, parse_header_state *state, data_string *ds) {
 	int cmp = 0;
 
+	/* empty header-fields are not allowed by HTTP-RFC, we just ignore them */
+	if (buffer_string_is_empty(ds->value)) {
+		goto drop_header;
+	}
+
 	/* retreive values
 	 *
 	 *
@@ -575,6 +580,7 @@ int http_request_parse(server *srv, connection *con) {
 	char *uri = NULL, *proto = NULL, *method = NULL;
 	int is_key = 1, key_len = 0, is_ws_after_key = 0, in_folding;
 	char *value = NULL, *key = NULL;
+	data_string *current_header = NULL;
 
 	int line = 0;
 
@@ -1024,7 +1030,8 @@ int http_request_parse(server *srv, connection *con) {
 			case '\r':
 			case '\n':
 				if (*cur == '\n' || con->parse_request->ptr[i+1] == '\n') {
-					data_string *ds = NULL;
+					int value_len;
+
 					if (*cur == '\n') {
 						if (http_header_strict) {
 							http_request_missing_CR_before_LF(srv, con);
@@ -1038,17 +1045,15 @@ int http_request_parse(server *srv, connection *con) {
 					/* End of Headerline */
 					con->parse_request->ptr[i] = '\0';
 
-					if (in_folding) {
-						/**
-						 * we use a evil hack to handle the line-folding
-						 * 
-						 * As array_insert_unique() deletes 'ds' in the case of a duplicate
-						 * ds points somewhere and we get a evil crash. As a solution we keep the old
-						 * "key" and get the current value from the hash and append us
-						 *
-						 * */
+					value_len = cur - value;
 
-						if (!key || !key_len) {
+					/* strip trailing white-spaces */
+					while (value_len > 0 && (value[value_len - 1] == ' ' || value[value_len - 1] == '\t')) {
+						--value_len;
+					}
+
+					if (in_folding) {
+						if (!current_header) {
 							/* 400 */
 
 							if (srv->srvconf.log_request_header_on_error) {
@@ -1062,47 +1067,32 @@ int http_request_parse(server *srv, connection *con) {
 							goto failure;
 						}
 
-						if (NULL != (ds = (data_string *)array_get_element_klen(con->request.headers, key, key_len))) {
-							buffer_append_string(ds->value, value);
-						}
+						buffer_append_string_len(current_header->value, value, value_len);
 					} else {
-						int s_len;
-						key = con->parse_request->ptr + first;
-
-						s_len = cur - value;
-
-						/* strip trailing white-spaces */
-						for (; s_len > 0 && 
-								(value[s_len - 1] == ' ' || 
-									value[s_len - 1] == '\t'); s_len--);
-
-						value[s_len] = '\0';
-
-						if (s_len > 0) {
-							if (NULL == (ds = (data_string *)array_get_unused_element(con->request.headers, TYPE_STRING))) {
-								ds = data_string_init();
-							}
-							buffer_copy_string_len(ds->key, key, key_len);
-							buffer_copy_string_len(ds->value, value, s_len);
-
+						/* process previous header */
+						if (current_header) {
+							data_string *ds = current_header;
+							current_header = NULL;
 							if (!parse_single_header(srv, con, &state, ds)) {
 								/* parse_single_header should already have logged it */
 								goto failure;
 							}
-						} else {
-							/* empty header-fields are not allowed by HTTP-RFC, we just ignore them */
 						}
+
+						key = con->parse_request->ptr + first;
+
+						if (NULL == (current_header = (data_string *)array_get_unused_element(con->request.headers, TYPE_STRING))) {
+							current_header = data_string_init();
+						}
+
+						buffer_copy_string_len(current_header->key, key, key_len);
+						buffer_copy_string_len(current_header->value, value, value_len);
 					}
 
 					first = i+1;
 					is_key = 1;
 					value = NULL;
-#if 0
-					/**
-					 * for Bug 1230 keep the key_len a live
-					 */
 					key_len = 0; 
-#endif
 					in_folding = 0;
 				} else {
 					if (srv->srvconf.log_request_header_on_error) {
@@ -1129,6 +1119,16 @@ int http_request_parse(server *srv, connection *con) {
 				}
 				break;
 			}
+		}
+	}
+
+	/* process last header */
+	if (current_header) {
+		data_string* ds = current_header;
+		current_header = NULL;
+		if (!parse_single_header(srv, con, &state, ds)) {
+			/* parse_single_header should already have logged it */
+			goto failure;
 		}
 	}
 
@@ -1252,6 +1252,8 @@ int http_request_parse(server *srv, connection *con) {
 	return 0;
 
 failure:
+	if (current_header) current_header->free((data_unset *)current_header);
+
 	con->keep_alive = 0;
 	con->response.keep_alive = 0;
 	if (!con->http_status) con->http_status = 400;
