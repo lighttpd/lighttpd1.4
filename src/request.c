@@ -1067,7 +1067,18 @@ int http_request_parse(server *srv, connection *con) {
 							goto failure;
 						}
 
-						buffer_append_string_len(current_header->value, value, value_len);
+						if (value_len > 0) {
+							/* strip leading whitespace; trailing was already removed, so can't be empty */
+							while (value_len > 0 && (value[0] == ' ' || value[0] == '\t')) {
+								value++;
+								--value_len;
+							}
+
+							if (buffer_string_length(current_header->value) > 0) {
+								buffer_append_string_len(current_header->value, CONST_STR_LEN(" "));
+							}
+							buffer_append_string_len(current_header->value, value, value_len);
+						}
 					} else {
 						/* process previous header */
 						if (current_header) {
