@@ -408,7 +408,7 @@ static int request_uri_is_valid_char(unsigned char c) {
 	return 1;
 }
 
-static int http_request_missing_CR_before_LF(server *srv, connection *con) {
+static void http_request_missing_CR_before_LF(server *srv, connection *con) {
 	if (srv->srvconf.log_request_header_on_error) {
 		log_error_write(srv, __FILE__, __LINE__, "s", "missing CR before LF in header -> 400");
 		log_error_write(srv, __FILE__, __LINE__, "Sb", "request-header:\n", con->request.request);
@@ -417,7 +417,6 @@ static int http_request_missing_CR_before_LF(server *srv, connection *con) {
 	con->http_status = 400;
 	con->keep_alive = 0;
 	con->response.keep_alive = 0;
-	return 0;
 }
 
 enum keep_alive_set {
@@ -622,7 +621,10 @@ int http_request_parse(server *srv, connection *con) {
 	} else if (con->request_count > 0 &&
 	    con->request.request->ptr[1] == '\n') {
 		/* we are in keep-alive and might get \n after a previous POST request.*/
-		if (http_header_strict) return http_request_missing_CR_before_LF(srv, con);
+		if (http_header_strict) {
+			http_request_missing_CR_before_LF(srv, con);
+			return 0;
+		}
 	      #ifdef __COVERITY__
 		if (buffer_string_length(con->request.request) < 1) {
 			con->keep_alive = 0;
@@ -662,7 +664,8 @@ int http_request_parse(server *srv, connection *con) {
 					con->parse_request->ptr[i] = '\0';
 					++i;
 				} else if (http_header_strict) { /* '\n' */
-					return http_request_missing_CR_before_LF(srv, con);
+					http_request_missing_CR_before_LF(srv, con);
+					return 0;
 				}
 				con->parse_request->ptr[i] = '\0';
 
@@ -1036,7 +1039,8 @@ int http_request_parse(server *srv, connection *con) {
 				break;
 			case '\n':
 				if (http_header_strict) {
-					return http_request_missing_CR_before_LF(srv, con);
+					http_request_missing_CR_before_LF(srv, con);
+					return 0;
 				} else if (i == first) {
 					con->parse_request->ptr[i] = '\0';
 					done = 1;
@@ -1070,7 +1074,10 @@ int http_request_parse(server *srv, connection *con) {
 				if (*cur == '\n' || con->parse_request->ptr[i+1] == '\n') {
 					data_string *ds = NULL;
 					if (*cur == '\n') {
-						if (http_header_strict) return http_request_missing_CR_before_LF(srv, con);
+						if (http_header_strict) {
+							http_request_missing_CR_before_LF(srv, con);
+							return 0;
+						}
 					} else { /* (con->parse_request->ptr[i+1] == '\n') */
 						con->parse_request->ptr[i] = '\0';
 						++i;
