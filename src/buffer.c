@@ -131,10 +131,8 @@ char* buffer_string_prepare_append(buffer *b, size_t size) {
 	if (buffer_string_is_empty(b)) {
 		return buffer_string_prepare_copy(b, size);
 	} else {
-		size_t req_size = b->used + size;
-
 		/* not empty, b->used already includes a terminating 0 */
-		force_assert(req_size >= b->used);
+		size_t req_size = b->used + size;
 
 		/* check for overflow: unsigned overflow is defined to wrap around */
 		force_assert(req_size >= b->used);
