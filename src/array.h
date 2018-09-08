@@ -37,7 +37,6 @@ typedef struct {
 } data_string;
 
 data_string *data_string_init(void);
-data_string *data_response_init(void);
 
 typedef struct {
 	DATA_UNSET;

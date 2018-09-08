@@ -759,8 +759,7 @@ static int create_MD5_sum(connection *con) {
 
 static int create_response_ietf_00(handler_ctx *hctx) {
     connection *con = hctx->gw.remote_conn;
-    array * const hdrs = con->response.headers;
-    data_string *ds;
+    buffer *value = hctx->srv->tmp_buf;
 
     /* "Origin" header is preferred
      * ("Sec-WebSocket-Origin" is from older drafts of websocket spec) */
@@ -803,16 +802,13 @@ static int create_response_ietf_00(handler_ctx *hctx) {
                               CONST_BUF_LEN(origin->value));
   #endif
 
-    ds = (data_string *)array_get_unused_element(hdrs, TYPE_STRING);
-    if (NULL == ds) ds = data_string_init();
-    buffer_copy_string_len(ds->key, CONST_STR_LEN("Sec-WebSocket-Location"));
     if (buffer_is_equal_string(con->uri.scheme, CONST_STR_LEN("https")))
-        buffer_copy_string_len(ds->value, CONST_STR_LEN("wss://"));
+        buffer_copy_string_len(value, CONST_STR_LEN("wss://"));
     else
-        buffer_copy_string_len(ds->value, CONST_STR_LEN("ws://"));
-    buffer_append_string_buffer(ds->value, con->request.http_host);
-    buffer_append_string_buffer(ds->value, con->uri.path);
-    array_insert_unique(hdrs, (data_unset *)ds);
+        buffer_copy_string_len(value, CONST_STR_LEN("ws://"));
+    buffer_append_string_buffer(value, con->request.http_host);
+    buffer_append_string_buffer(value, con->uri.path);
+    response_header_insert(hctx->srv, con, CONST_STR_LEN("Sec-WebSocket-Location"), CONST_BUF_LEN(value));
 
     return 0;
 }
@@ -827,6 +823,7 @@ static int create_response_ietf_00(handler_ctx *hctx) {
 
 static int create_response_rfc_6455(handler_ctx *hctx) {
     connection *con = hctx->gw.remote_conn;
+    buffer *value = hctx->srv->tmp_buf;
     array * const hdrs = con->response.headers;
     data_string *ds;
     SHA_CTX sha;
@@ -856,11 +853,9 @@ static int create_response_rfc_6455(handler_ctx *hctx) {
                            CONST_STR_LEN("upgrade"));
   #endif
 
-    ds = (data_string *)array_get_unused_element(hdrs, TYPE_STRING);
-    if (NULL == ds) ds = data_string_init();
-    buffer_copy_string_len(ds->key, CONST_STR_LEN("Sec-WebSocket-Accept"));
-    buffer_append_base64_encode(ds->value, sha_digest, SHA_DIGEST_LENGTH, BASE64_STANDARD);
-    array_insert_unique(hdrs, (data_unset *)ds);
+    buffer_string_set_length(value, 0);
+    buffer_append_base64_encode(value, sha_digest, SHA_DIGEST_LENGTH, BASE64_STANDARD);
+    response_header_insert(hctx->srv, con, CONST_STR_LEN("Sec-WebSocket-Accept"), CONST_BUF_LEN(value));
 
     if (hctx->frame.type == MOD_WEBSOCKET_FRAME_TYPE_BIN)
         array_set_key_value(hdrs, CONST_STR_LEN("Sec-WebSocket-Protocol"),

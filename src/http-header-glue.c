@@ -27,14 +27,18 @@ int response_header_insert(server *srv, connection *con, const char *key, size_t
 
 	UNUSED(srv);
 
-	if (NULL == (ds = (data_string *)array_get_unused_element(con->response.headers, TYPE_STRING))) {
-		ds = data_response_init();
+	if (0 == vallen) return 0;
+
+	/* if there already is a key by this name append the value */
+	if (NULL != (ds = (data_string *)array_get_element_klen(con->response.headers, key, keylen))) {
+		buffer_append_string_len(ds->value, CONST_STR_LEN("\r\n"));
+		buffer_append_string_len(ds->value, key, keylen);
+		buffer_append_string_len(ds->value, CONST_STR_LEN(": "));
+		buffer_append_string_len(ds->value, value, vallen);
+		return 0;
 	}
-	buffer_copy_string_len(ds->key, key, keylen);
-	buffer_copy_string_len(ds->value, value, vallen);
 
-	array_insert_unique(con->response.headers, (data_unset *)ds);
-
+	array_set_key_value(con->response.headers, key, keylen, value, vallen);
 	return 0;
 }
 
@@ -1031,13 +1035,7 @@ static int http_response_process_headers(server *srv, connection *con, http_resp
             break;
         }
 
-        ds = (data_string *)
-          array_get_unused_element(con->response.headers, TYPE_STRING);
-        if (NULL == ds) ds = data_response_init();
-        buffer_copy_string_len(ds->key, key, key_len);
-        buffer_copy_string(ds->value, value);
-
-        array_insert_unique(con->response.headers, (data_unset *)ds);
+        response_header_insert(srv, con, key, key_len, value, strlen(value));
     }
 
     /* CGI/1.1 rev 03 - 7.2.1.2 */
