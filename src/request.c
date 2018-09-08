@@ -441,8 +441,26 @@ static void init_parse_header_state(parse_header_state* state) {
  *
  * returns 0 on error
  */
-static int parse_single_header(server *srv, connection *con, parse_header_state *state, data_string *ds) {
+static int parse_single_header(server *srv, connection *con, parse_header_state *state, char *k, size_t klen, char *v, size_t vlen) {
 	int cmp = 0;
+	data_string *ds;
+
+	/* strip leading whitespace */
+	while (vlen > 0 && (v[0] == ' ' || v[0] == '\t')) {
+		++v;
+		--vlen;
+	}
+
+	/* strip trailing whitespace */
+	while (vlen > 0 && (v[vlen - 1] == ' ' || v[vlen - 1] == '\t')) {
+		--vlen;
+	}
+
+	if (NULL == (ds = (data_string *)array_get_unused_element(con->request.headers, TYPE_STRING))) {
+		ds = data_string_init();
+	}
+	buffer_copy_string_len(ds->key, k, klen);
+	buffer_copy_string_len(ds->value, v, vlen);
 
 	/* empty header-fields are not allowed by HTTP-RFC, we just ignore them */
 	if (buffer_string_is_empty(ds->value)) {
@@ -578,9 +596,8 @@ invalid_header:
 
 int http_request_parse(server *srv, connection *con) {
 	char *uri = NULL, *proto = NULL, *method = NULL;
-	int is_key = 1, key_len = 0, is_ws_after_key = 0, in_folding;
-	char *value = NULL, *key = NULL;
-	data_string *current_header = NULL;
+	int is_key = 1, key_len = 0, is_ws_after_key = 0;
+	char *value = NULL;
 
 	int line = 0;
 
@@ -861,8 +878,6 @@ int http_request_parse(server *srv, connection *con) {
 		}
 	}
 
-	in_folding = 0;
-
 	if (buffer_string_is_empty(con->request.uri)) {
 		if (srv->srvconf.log_request_header_on_error) {
 			log_error_write(srv, __FILE__, __LINE__, "s", "no uri specified -> 400");
@@ -885,6 +900,14 @@ int http_request_parse(server *srv, connection *con) {
 		buffer_copy_string_len(ds->value, state.reqline_host, state.reqline_hostlen);
 		array_insert_unique(con->request.headers, (data_unset *)ds);
 		con->request.http_host = ds->value;
+	}
+
+	if (con->parse_request->ptr[i] == ' ' || con->parse_request->ptr[i] == '\t') {
+		if (srv->srvconf.log_request_header_on_error) {
+			log_error_write(srv, __FILE__, __LINE__, "s", "WS at the start of first line -> 400");
+			log_error_write(srv, __FILE__, __LINE__, "Sb", "request-header:\n", con->request.request);
+		}
+		goto failure;
 	}
 
 	for (; i <= ilen && !done; i++) {
@@ -938,15 +961,6 @@ int http_request_parse(server *srv, connection *con) {
 				goto failure;
 			case ' ':
 			case '\t':
-				if (i == first) {
-					is_key = 0;
-					in_folding = 1;
-					value = cur;
-
-					break;
-				}
-
-
 				key_len = i - first;
 
 				/* skip every thing up to the : */
@@ -1028,84 +1042,7 @@ int http_request_parse(server *srv, connection *con) {
 		} else {
 			switch(*cur) {
 			case '\r':
-			case '\n':
-				if (*cur == '\n' || con->parse_request->ptr[i+1] == '\n') {
-					int value_len;
-
-					if (*cur == '\n') {
-						if (http_header_strict) {
-							http_request_missing_CR_before_LF(srv, con);
-							goto failure;
-						}
-					} else { /* (con->parse_request->ptr[i+1] == '\n') */
-						con->parse_request->ptr[i] = '\0';
-						++i;
-					}
-
-					/* End of Headerline */
-					con->parse_request->ptr[i] = '\0';
-
-					value_len = cur - value;
-
-					/* strip trailing white-spaces */
-					while (value_len > 0 && (value[value_len - 1] == ' ' || value[value_len - 1] == '\t')) {
-						--value_len;
-					}
-
-					if (in_folding) {
-						if (!current_header) {
-							/* 400 */
-
-							if (srv->srvconf.log_request_header_on_error) {
-								log_error_write(srv, __FILE__, __LINE__, "s", "WS at the start of first line -> 400");
-
-								log_error_write(srv, __FILE__, __LINE__, "Sb",
-									"request-header:\n",
-									con->request.request);
-							}
-
-							goto failure;
-						}
-
-						if (value_len > 0) {
-							/* strip leading whitespace; trailing was already removed, so can't be empty */
-							while (value_len > 0 && (value[0] == ' ' || value[0] == '\t')) {
-								value++;
-								--value_len;
-							}
-
-							if (buffer_string_length(current_header->value) > 0) {
-								buffer_append_string_len(current_header->value, CONST_STR_LEN(" "));
-							}
-							buffer_append_string_len(current_header->value, value, value_len);
-						}
-					} else {
-						/* process previous header */
-						if (current_header) {
-							data_string *ds = current_header;
-							current_header = NULL;
-							if (!parse_single_header(srv, con, &state, ds)) {
-								/* parse_single_header should already have logged it */
-								goto failure;
-							}
-						}
-
-						key = con->parse_request->ptr + first;
-
-						if (NULL == (current_header = (data_string *)array_get_unused_element(con->request.headers, TYPE_STRING))) {
-							current_header = data_string_init();
-						}
-
-						buffer_copy_string_len(current_header->key, key, key_len);
-						buffer_copy_string_len(current_header->value, value, value_len);
-					}
-
-					first = i+1;
-					is_key = 1;
-					value = NULL;
-					key_len = 0; 
-					in_folding = 0;
-				} else {
+				if (cur[1] != '\n') {
 					if (srv->srvconf.log_request_header_on_error) {
 						log_error_write(srv, __FILE__, __LINE__, "sbs",
 								"CR without LF", con->request.request, "-> 400");
@@ -1113,11 +1050,41 @@ int http_request_parse(server *srv, connection *con) {
 
 					goto failure;
 				}
+				if (cur[2] == ' ' || cur[2] == '\t') { /* header line folding */
+					cur[0] = ' ';
+					cur[1] = ' ';
+					i += 2;
+					continue;
+				}
+				++i;
+				/* fall through */
+			case '\n':
+					if (*cur == '\n') {
+						if (http_header_strict) {
+							http_request_missing_CR_before_LF(srv, con);
+							goto failure;
+						}
+						if (cur[1] == ' ' || cur[1] == '\t') { /* header line folding */
+							cur[0] = ' ';
+							i += 1;
+							continue;
+						}
+					}
+
+					/* End of Headerline */
+					*cur = '\0'; /*(for if value is further parsed and '\0' is expected at end of string)*/
+
+					if (!parse_single_header(srv, con, &state, con->parse_request->ptr + first, key_len, value, cur - value)) {
+						/* parse_single_header should already have logged it */
+						goto failure;
+					}
+
+					first = i+1;
+					is_key = 1;
+					value = NULL;
 				break;
 			case ' ':
 			case '\t':
-				/* strip leading WS */
-				if (value == cur) value = cur+1;
 				break;
 			default:
 				if (http_header_strict ? (*cur >= 0 && *cur < 32) : *cur == '\0') {
@@ -1130,16 +1097,6 @@ int http_request_parse(server *srv, connection *con) {
 				}
 				break;
 			}
-		}
-	}
-
-	/* process last header */
-	if (current_header) {
-		data_string* ds = current_header;
-		current_header = NULL;
-		if (!parse_single_header(srv, con, &state, ds)) {
-			/* parse_single_header should already have logged it */
-			goto failure;
 		}
 	}
 
@@ -1263,8 +1220,6 @@ int http_request_parse(server *srv, connection *con) {
 	return 0;
 
 failure:
-	if (current_header) current_header->free((data_unset *)current_header);
-
 	con->keep_alive = 0;
 	con->response.keep_alive = 0;
 	if (!con->http_status) con->http_status = 400;

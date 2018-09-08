@@ -229,7 +229,7 @@ static void test_request_http_request_parse(server *srv, connection *con)
       array_get_element_klen(con->request.headers, CONST_STR_LEN("Location"));
     assert(ds
            && buffer_is_equal_string(ds->value,
-                                     CONST_STR_LEN("foo, foobar baz")));
+                                     CONST_STR_LEN("foo, foobar    baz")));
 
     run_http_request_parse(srv, con, __LINE__, 0,
       "#1232 - duplicate headers with line-wrapping - test 2",
@@ -241,7 +241,7 @@ static void test_request_http_request_parse(server *srv, connection *con)
     ds = (data_string *)
       array_get_element_klen(con->request.headers, CONST_STR_LEN("Location"));
     assert(ds
-           && buffer_is_equal_string(ds->value, CONST_STR_LEN("foobar baz")));
+           && buffer_is_equal_string(ds->value, CONST_STR_LEN("foobar    baz")));
 
     run_http_request_parse(srv, con, __LINE__, 0,
       "#1232 - duplicate headers with line-wrapping - test 3",
@@ -253,7 +253,7 @@ static void test_request_http_request_parse(server *srv, connection *con)
     ds = (data_string *)
       array_get_element_klen(con->request.headers, CONST_STR_LEN("Location"));
     assert(ds
-           && buffer_is_equal_string(ds->value, CONST_STR_LEN("foobar baz")));
+           && buffer_is_equal_string(ds->value, CONST_STR_LEN("foobar    baz")));
 
     run_http_request_parse(srv, con, __LINE__, 400,
       "missing protocol",
@@ -343,7 +343,7 @@ static void test_request_http_request_parse(server *srv, connection *con)
                     "\r\n"));
     ds = (data_string *)
       array_get_element_klen(con->request.headers, CONST_STR_LEN("ABC"));
-    assert(ds && buffer_is_equal_string(ds->value, CONST_STR_LEN("foo bc")));
+    assert(ds && buffer_is_equal_string(ds->value, CONST_STR_LEN("foo    bc")));
 
     run_http_request_parse(srv, con, __LINE__, 411,
       "POST request, no Content-Length",
