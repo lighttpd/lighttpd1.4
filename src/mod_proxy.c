@@ -494,15 +494,7 @@ static void http_header_remap_setcookie (buffer *b, size_t off, http_header_rema
 
 
 static void proxy_append_header(connection *con, const char *key, const size_t klen, const char *value, const size_t vlen) {
-	data_string *ds_dst;
-
-	if (NULL == (ds_dst = (data_string *)array_get_unused_element(con->request.headers, TYPE_STRING))) {
-		ds_dst = data_string_init();
-	}
-
-	buffer_copy_string_len(ds_dst->key, key, klen);
-	buffer_copy_string_len(ds_dst->value, value, vlen);
-	array_insert_unique(con->request.headers, (data_unset *)ds_dst);
+	array_insert_key_value(con->request.headers, key, klen, value, vlen);
 }
 
 static void buffer_append_string_backslash_escaped(buffer *b, const char *s, size_t len) {
@@ -545,11 +537,10 @@ static void proxy_set_Forwarded(connection *con, const unsigned int flags) {
 
     if (flags && NULL == ds) {
         data_string *xff;
+        array_insert_key_value(con->request.headers, CONST_STR_LEN("Forwarded"),
+                                                     CONST_STR_LEN(""));
         ds = (data_string *)
-          array_get_unused_element(con->request.headers, TYPE_STRING);
-        if (NULL == ds) ds = data_string_init();
-        buffer_copy_string_len(ds->key, CONST_STR_LEN("Forwarded"));
-        array_insert_unique(con->request.headers, (data_unset *)ds);
+          array_get_element(con->request.headers, "Forwarded");
         xff = (data_string *)
           array_get_element(con->request.headers, "X-Forwarded-For");
         if (NULL != xff && !buffer_string_is_empty(xff->value)) {

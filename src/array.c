@@ -170,7 +170,7 @@ data_unset *array_extract_element_klen(array *a, const char *key, size_t klen) {
 	return NULL;
 }
 
-data_unset *array_get_unused_element(array *a, data_type_t t) {
+static data_unset *array_get_unused_element(array *a, data_type_t t) {
 	data_unset *ds = NULL;
 	unsigned int i;
 
@@ -190,20 +190,37 @@ data_unset *array_get_unused_element(array *a, data_type_t t) {
 }
 
 void array_set_key_value(array *hdrs, const char *key, size_t key_len, const char *value, size_t val_len) {
-	data_string *ds_dst;
+	data_string *ds;
 
-	if (NULL != (ds_dst = (data_string *)array_get_element_klen(hdrs, key, key_len))) {
-		buffer_copy_string_len(ds_dst->value, value, val_len);
+	if (NULL != (ds = (data_string *)array_get_element_klen(hdrs, key, key_len))) {
+		buffer_copy_string_len(ds->value, value, val_len);
 		return;
 	}
 
-	if (NULL == (ds_dst = (data_string *)array_get_unused_element(hdrs, TYPE_STRING))) {
-		ds_dst = data_string_init();
+	array_insert_key_value(hdrs, key, key_len, value, val_len);
+}
+
+void array_insert_key_value(array *hdrs, const char *key, size_t key_len, const char *value, size_t val_len) {
+	data_string *ds;
+
+	if (NULL == (ds = (data_string *)array_get_unused_element(hdrs, TYPE_STRING))) {
+		ds = data_string_init();
 	}
 
-	buffer_copy_string_len(ds_dst->key, key, key_len);
-	buffer_copy_string_len(ds_dst->value, value, val_len);
-	array_insert_unique(hdrs, (data_unset *)ds_dst);
+	buffer_copy_string_len(ds->key, key, key_len);
+	buffer_copy_string_len(ds->value, value, val_len);
+	array_insert_unique(hdrs, (data_unset *)ds);
+}
+
+void array_insert_value(array *hdrs, const char *value, size_t val_len) {
+	data_string *ds;
+
+	if (NULL == (ds = (data_string *)array_get_unused_element(hdrs, TYPE_STRING))) {
+		ds = data_string_init();
+	}
+
+	buffer_copy_string_len(ds->value, value, val_len);
+	array_insert_unique(hdrs, (data_unset *)ds);
 }
 
 /* if entry already exists return pointer to existing entry, otherwise insert entry and return NULL */

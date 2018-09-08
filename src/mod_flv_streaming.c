@@ -165,19 +165,12 @@ static int split_get_params(array *get_params, buffer *qrystr) {
 		case '&':
 		case '\0': /* fin symbol */
 			if (!is_key) {
-				data_string *ds;
 				/* we need at least a = since the last & */
 
 				/* terminate the value */
 				qrystr->ptr[i] = '\0';
 
-				if (NULL == (ds = (data_string *)array_get_unused_element(get_params, TYPE_STRING))) {
-					ds = data_string_init();
-				}
-				buffer_copy_string_len(ds->key, key, strlen(key));
-				buffer_copy_string_len(ds->value, val, strlen(val));
-
-				array_insert_unique(get_params, (data_unset *)ds);
+				array_insert_key_value(get_params, key, strlen(key), val, strlen(val));
 			}
 
 			key = qrystr->ptr + i + 1;

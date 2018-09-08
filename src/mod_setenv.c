@@ -221,16 +221,7 @@ URIHANDLER_FUNC(mod_setenv_uri_handler) {
 
 	for (k = 0; k < p->conf.request_header->used; k++) {
 		data_string *ds = (data_string *)p->conf.request_header->data[k];
-		data_string *ds_dst;
-
-		if (NULL == (ds_dst = (data_string *)array_get_unused_element(con->request.headers, TYPE_STRING))) {
-			ds_dst = data_string_init();
-		}
-
-		buffer_copy_buffer(ds_dst->key, ds->key);
-		buffer_copy_buffer(ds_dst->value, ds->value);
-
-		array_insert_unique(con->request.headers, (data_unset *)ds_dst);
+		array_insert_key_value(con->request.headers, CONST_BUF_LEN(ds->key), CONST_BUF_LEN(ds->value));
 	}
 
 	for (k = 0; k < hctx->conf.set_request_header->used; ++k) {
@@ -251,16 +242,7 @@ CONNECTION_FUNC(mod_setenv_handle_request_env) {
 
 	for (size_t k = 0; k < hctx->conf.environment->used; ++k) {
 		data_string *ds = (data_string *)hctx->conf.environment->data[k];
-		data_string *ds_dst;
-
-		if (NULL == (ds_dst = (data_string *)array_get_unused_element(con->environment, TYPE_STRING))) {
-			ds_dst = data_string_init();
-		}
-
-		buffer_copy_buffer(ds_dst->key, ds->key);
-		buffer_copy_buffer(ds_dst->value, ds->value);
-
-		array_insert_unique(con->environment, (data_unset *)ds_dst);
+		array_insert_key_value(con->environment, CONST_BUF_LEN(ds->key), CONST_BUF_LEN(ds->value));
 	}
 
 	for (size_t k = 0; k < hctx->conf.set_environment->used; ++k) {

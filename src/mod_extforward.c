@@ -977,13 +977,8 @@ static handler_t mod_extforward_Forwarded (server *srv, connection *con, plugin_
         && NULL == array_get_element(con->request.headers, "X-Forwarded-For")) {
         /* create X-Forwarded-For if not present
          * (and at least original connecting IP is a trusted proxy) */
-        buffer *xff;
-        data_string *dsxff = (data_string *)
-          array_get_unused_element(con->request.headers, TYPE_STRING);
-        if (NULL == dsxff) dsxff = data_string_init();
-        buffer_copy_string_len(dsxff->key, CONST_STR_LEN("X-Forwarded-For"));
-        array_insert_unique(con->request.headers, (data_unset *)dsxff);
-        xff = dsxff->value;
+        buffer *xff = srv->tmp_buf;
+        buffer_string_set_length(xff, 0);
         for (j = 0; j < used; ) {
             if (-1 == offsets[j]) { ++j; continue; }
             if (3 == offsets[j+1]
@@ -1014,6 +1009,7 @@ static handler_t mod_extforward_Forwarded (server *srv, connection *con, plugin_
             }
             j += 4; /*(k, klen, v, vlen come in sets of 4)*/
         }
+        array_insert_key_value(con->request.headers, CONST_STR_LEN("X-Forwarded-For"), CONST_BUF_LEN(xff));
     }
   #endif
 

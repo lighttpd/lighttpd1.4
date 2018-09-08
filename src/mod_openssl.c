@@ -1736,24 +1736,17 @@ https_add_ssl_client_entries (server *srv, connection *con, handler_ctx *hctx)
     if (hctx->conf.ssl_verifyclient_export_cert) {
         BIO *bio;
         if (NULL != (bio = BIO_new(BIO_s_mem()))) {
-            data_string *envds;
+            buffer *cert = srv->tmp_buf;
             int n;
 
             PEM_write_bio_X509(bio, xs);
             n = BIO_pending(bio);
 
-            envds = (data_string *)
-              array_get_unused_element(con->environment, TYPE_STRING);
-            if (NULL == envds) {
-                envds = data_string_init();
-            }
-
-            buffer_copy_string_len(envds->key,CONST_STR_LEN("SSL_CLIENT_CERT"));
-            buffer_string_prepare_copy(envds->value, n);
-            BIO_read(bio, envds->value->ptr, n);
+            buffer_string_prepare_copy(cert, n);
+            BIO_read(bio, cert->ptr, n);
             BIO_free(bio);
-            buffer_commit(envds->value, n);
-            array_replace(con->environment, (data_unset *)envds);
+            buffer_commit(cert, n);
+            array_set_key_value(con->environment, CONST_STR_LEN("SSL_CLIENT_CERT"), CONST_BUF_LEN(cert));
         }
     }
     X509_free(xs);

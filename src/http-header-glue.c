@@ -905,7 +905,6 @@ static int http_response_process_headers(server *srv, connection *con, http_resp
     for (s = hdrs->ptr; NULL != (ns = strchr(s, '\n')); s = ns + 1, ++line) {
         const char *key, *value;
         int key_len;
-        data_string *ds;
 
         /* strip the \n */
         ns[0] = '\0';
@@ -955,13 +954,7 @@ static int http_response_process_headers(server *srv, connection *con, http_resp
                     }
                 } else if (key_len > 9
                            && 0==strncasecmp(key, CONST_STR_LEN("Variable-"))) {
-                    ds = (data_string *)
-                      array_get_unused_element(con->environment, TYPE_STRING);
-                    if (NULL == ds) ds = data_string_init();
-                    buffer_copy_string_len(ds->key, key + 9, key_len - 9);
-                    buffer_copy_string(ds->value, value);
-
-                    array_insert_unique(con->environment, (data_unset *)ds);
+                    array_insert_key_value(con->environment, key + 9, key_len - 9, value, strlen(value));
                 }
                 continue;
             }

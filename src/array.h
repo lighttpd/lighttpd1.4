@@ -65,13 +65,13 @@ int array_is_kvany(array *a);
 int array_is_kvarray(array *a);
 int array_is_kvstring(array *a);
 int array_print(array *a, int depth);
-data_unset *array_get_unused_element(array *a, data_type_t t);
 #define array_get_element(a, key) array_get_element_klen((a), (key), sizeof(key)-1)
 data_unset *array_get_element_klen(const array *a, const char *key, size_t klen);
 data_unset *array_extract_element_klen(array *a, const char *key, size_t klen); /* removes found entry from array */
 void array_set_key_value(array *hdrs, const char *key, size_t key_len, const char *value, size_t val_len);
+void array_insert_key_value(array *hdrs, const char *key, size_t key_len, const char *value, size_t val_len);
+void array_insert_value(array *hdrs, const char *value, size_t val_len);
 void array_replace(array *a, data_unset *entry);
-int array_strcasecmp(const char *a, size_t a_len, const char *b, size_t b_len);
 void array_print_indent(int depth);
 size_t array_get_max_key_length(array *a);
 

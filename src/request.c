@@ -371,13 +371,7 @@ static int http_request_split_value(array *vals, const char *current, size_t len
 				break;
 			case ',':
 			case '\0': /* end of string also marks the end of a token */
-				if (NULL == (ds = (data_string *)array_get_unused_element(vals, TYPE_STRING))) {
-					ds = data_string_init();
-				}
-
-				buffer_copy_string_len(ds->value, token_start, token_end-token_start+1);
-				array_insert_unique(vals, (data_unset *)ds);
-
+				array_insert_value(vals, token_start, token_end-token_start+1);
 				state = 0;
 				break;
 			default:
@@ -435,7 +429,6 @@ static void init_parse_header_state(parse_header_state* state) {
  */
 static int parse_single_header(server *srv, connection *con, parse_header_state *state, char *k, size_t klen, char *v, size_t vlen) {
 	int cmp = 1;
-	data_string *dsh;
 	const char **save = NULL;
 	buffer **saveb = NULL;
 
@@ -571,12 +564,7 @@ static int parse_single_header(server *srv, connection *con, parse_header_state 
 		}
 	}
 
-	if (NULL == (dsh = (data_string *)array_get_unused_element(con->request.headers, TYPE_STRING))) {
-		dsh = data_string_init();
-	}
-	buffer_copy_string_len(dsh->key, k, klen);
-	buffer_copy_string_len(dsh->value, v, vlen);
-	array_insert_unique(con->request.headers, (data_unset *)dsh);
+	array_insert_key_value(con->request.headers, k, klen, v, vlen);
 
 	if (save) {
 		data_string *ds = (data_string *)array_get_element_klen(con->request.headers, k, klen);
@@ -886,16 +874,8 @@ int http_request_parse(server *srv, connection *con) {
 
 	if (state.reqline_host) {
 		/* Insert as host header */
-		data_string *ds;
-
-		if (NULL == (ds = (data_string *)array_get_unused_element(con->request.headers, TYPE_STRING))) {
-			ds = data_string_init();
-		}
-
-		buffer_copy_string_len(ds->key, CONST_STR_LEN("Host"));
-		buffer_copy_string_len(ds->value, state.reqline_host, state.reqline_hostlen);
-		array_insert_unique(con->request.headers, (data_unset *)ds);
-		con->request.http_host = ds->value;
+		array_insert_key_value(con->request.headers, CONST_STR_LEN("Host"), state.reqline_host, state.reqline_hostlen);
+		con->request.http_host = ((data_string *)array_get_element_klen(con->request.headers, CONST_STR_LEN("Host")))->value;
 	}
 
 	if (con->parse_request->ptr[i] == ' ' || con->parse_request->ptr[i] == '\t') {

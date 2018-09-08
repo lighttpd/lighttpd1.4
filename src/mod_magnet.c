@@ -431,15 +431,13 @@ static int magnet_reqhdr_pairs(lua_State *L) {
 }
 
 static int magnet_status_get(lua_State *L) {
-	data_integer *di;
+	int *i;
 	server *srv = magnet_get_server(L);
 
 	/* __index: param 1 is the (empty) table the value was not found in */
 	const_buffer key = magnet_checkconstbuffer(L, 2);
-
-	di = status_counter_get_counter(srv, key.ptr, key.len);
-
-	lua_pushinteger(L, (lua_Integer)di->value);
+	i = status_counter_get_counter(srv, key.ptr, key.len);
+	lua_pushinteger(L, (lua_Integer)*i);
 
 	return 1;
 }

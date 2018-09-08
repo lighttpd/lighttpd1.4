@@ -33,7 +33,7 @@
 
 #include "status_counter.h"
 
-static data_integer * gw_status_get_di(server *srv, gw_host *host, gw_proc *proc, const char *tag, size_t len) {
+static int * gw_status_get_counter(server *srv, gw_host *host, gw_proc *proc, const char *tag, size_t len) {
     buffer *b = srv->tmp_buf;
     buffer_copy_string_len(b, CONST_STR_LEN("gw.backend."));
     buffer_append_string_buffer(b, host->id);
@@ -46,42 +46,37 @@ static data_integer * gw_status_get_di(server *srv, gw_host *host, gw_proc *proc
 }
 
 static void gw_proc_tag_inc(server *srv, gw_host *host, gw_proc *proc, const char *tag, size_t len) {
-    data_integer *di = gw_status_get_di(srv, host, proc, tag, len);
-    ++di->value;
+    ++(*gw_status_get_counter(srv, host, proc, tag, len));
 }
 
 static void gw_proc_load_inc(server *srv, gw_host *host, gw_proc *proc) {
-    data_integer *di = gw_status_get_di(srv,host,proc,CONST_STR_LEN(".load"));
-    di->value = ++proc->load;
+    *gw_status_get_counter(srv,host,proc,CONST_STR_LEN(".load")) = ++proc->load;
 
     status_counter_inc(srv, CONST_STR_LEN("gw.active-requests"));
 }
 
 static void gw_proc_load_dec(server *srv, gw_host *host, gw_proc *proc) {
-    data_integer *di = gw_status_get_di(srv,host,proc,CONST_STR_LEN(".load"));
-    di->value = --proc->load;
+    *gw_status_get_counter(srv,host,proc,CONST_STR_LEN(".load")) = --proc->load;
 
     status_counter_dec(srv, CONST_STR_LEN("gw.active-requests"));
 }
 
 static void gw_host_assign(server *srv, gw_host *host) {
-    data_integer *di = gw_status_get_di(srv,host,NULL,CONST_STR_LEN(".load"));
-    di->value = ++host->load;
+    *gw_status_get_counter(srv,host,NULL,CONST_STR_LEN(".load")) = ++host->load;
 }
 
 static void gw_host_reset(server *srv, gw_host *host) {
-    data_integer *di = gw_status_get_di(srv,host,NULL,CONST_STR_LEN(".load"));
-    di->value = --host->load;
+    *gw_status_get_counter(srv,host,NULL,CONST_STR_LEN(".load")) = --host->load;
 }
 
 static int gw_status_init(server *srv, gw_host *host, gw_proc *proc) {
-    gw_status_get_di(srv, host, proc, CONST_STR_LEN(".disabled"))->value = 0;
-    gw_status_get_di(srv, host, proc, CONST_STR_LEN(".died"))->value = 0;
-    gw_status_get_di(srv, host, proc, CONST_STR_LEN(".overloaded"))->value = 0;
-    gw_status_get_di(srv, host, proc, CONST_STR_LEN(".connected"))->value = 0;
-    gw_status_get_di(srv, host, proc, CONST_STR_LEN(".load"))->value = 0;
+    *gw_status_get_counter(srv, host, proc, CONST_STR_LEN(".disabled")) = 0;
+    *gw_status_get_counter(srv, host, proc, CONST_STR_LEN(".died")) = 0;
+    *gw_status_get_counter(srv, host, proc, CONST_STR_LEN(".overloaded")) = 0;
+    *gw_status_get_counter(srv, host, proc, CONST_STR_LEN(".connected")) = 0;
+    *gw_status_get_counter(srv, host, proc, CONST_STR_LEN(".load")) = 0;
 
-    gw_status_get_di(srv, host, NULL, CONST_STR_LEN(".load"))->value = 0;
+    *gw_status_get_counter(srv, host, NULL, CONST_STR_LEN(".load")) = 0;
 
     return 0;
 }

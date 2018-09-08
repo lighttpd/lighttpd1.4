@@ -132,29 +132,8 @@ int http_auth_match_rules (const http_auth_require_t * const require, const char
 }
 
 void http_auth_setenv(array *env, const char *username, size_t ulen, const char *auth_type, size_t alen) {
-    data_string *ds;
-
-    /* REMOTE_USER */
-
-    if (NULL == (ds = (data_string *)array_get_element(env, "REMOTE_USER"))) {
-        if (NULL == (ds = (data_string *)array_get_unused_element(env, TYPE_STRING))) {
-            ds = data_string_init();
-        }
-        buffer_copy_string_len(ds->key, CONST_STR_LEN("REMOTE_USER"));
-        array_insert_unique(env, (data_unset *)ds);
-    }
-    buffer_copy_string_len(ds->value, username, ulen);
-
-    /* AUTH_TYPE */
-
-    if (NULL == (ds = (data_string *)array_get_element(env, "AUTH_TYPE"))) {
-        if (NULL == (ds = (data_string *)array_get_unused_element(env, TYPE_STRING))) {
-            ds = data_string_init();
-        }
-        buffer_copy_string_len(ds->key, CONST_STR_LEN("AUTH_TYPE"));
-        array_insert_unique(env, (data_unset *)ds);
-    }
-    buffer_copy_string_len(ds->value, auth_type, alen);
+    array_set_key_value(env, CONST_STR_LEN("REMOTE_USER"), username, ulen);
+    array_set_key_value(env, CONST_STR_LEN("AUTH_TYPE"), auth_type, alen);
 }
 
 int http_auth_md5_hex2bin (const char *md5hex, size_t len, unsigned char md5bin[16])

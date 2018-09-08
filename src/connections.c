@@ -1229,13 +1229,8 @@ int connection_state_machine(server *srv, connection *con) {
 							/* set REDIRECT_STATUS to save current HTTP status code
 							 * for access by dynamic handlers
 							 * https://redmine.lighttpd.net/issues/1828 */
-							data_string *ds;
-							if (NULL == (ds = (data_string *)array_get_unused_element(con->environment, TYPE_STRING))) {
-								ds = data_string_init();
-							}
-							buffer_copy_string_len(ds->key, CONST_STR_LEN("REDIRECT_STATUS"));
-							buffer_append_int(ds->value, con->http_status);
-							array_insert_unique(con->environment, (data_unset *)ds);
+							buffer_copy_int(srv->tmp_buf, con->http_status);
+							array_insert_key_value(con->environment, CONST_STR_LEN("REDIRECT_STATUS"), CONST_BUF_LEN(srv->tmp_buf));
 
 							if (error_handler == con->conf.error_handler) {
 								plugins_call_connection_reset(srv, con);
