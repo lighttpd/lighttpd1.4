@@ -11,10 +11,6 @@
 int http_response_parse(server *srv, connection *con);
 int http_response_write_header(server *srv, connection *con);
 
-int response_header_insert(server *srv, connection *con, const char *key, size_t keylen, const char *value, size_t vallen);
-int response_header_overwrite(server *srv, connection *con, const char *key, size_t keylen, const char *value, size_t vallen);
-int response_header_append(server *srv, connection *con, const char *key, size_t keylen, const char *value, size_t vallen);
-
 typedef struct http_cgi_opts_t {
   int authorizer;
   int break_scriptfilename_for_php;

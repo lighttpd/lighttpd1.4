@@ -4,11 +4,11 @@
 #include "log.h"
 #include "buffer.h"
 #include "http_chunk.h"
+#include "http_header.h"
 
 #include "plugin.h"
 
 #include "mod_magnet_cache.h"
-#include "response.h"
 #include "stat_cache.h"
 #include "status_counter.h"
 #include "etag.h"
@@ -228,6 +228,7 @@ static void magnet_push_buffer(lua_State *L, const buffer *b) {
         lua_pushnil(L);
 }
 
+#if 0
 static int magnet_array_get_element(lua_State *L, const array *a) {
     /* __index: param 1 is the (empty) table the value was not found in */
     size_t klen;
@@ -236,6 +237,7 @@ static int magnet_array_get_element(lua_State *L, const array *a) {
     magnet_push_buffer(L, NULL != ds ? ds->value : NULL);
     return 1;
 }
+#endif
 
 /* Define a function that will iterate over an array* (in upval 1) using current position (upval 2) */
 static int magnet_array_next(lua_State *L) {
@@ -421,8 +423,14 @@ static int magnet_atpanic(lua_State *L) {
 }
 
 static int magnet_reqhdr_get(lua_State *L) {
-	connection *con = magnet_get_connection(L);
-	return magnet_array_get_element(L, con->request.headers);
+    /* __index: param 1 is the (empty) table the value was not found in */
+    connection *con = magnet_get_connection(L);
+    size_t klen;
+    const char * const k = luaL_checklstring(L, 2, &klen);
+    buffer * const vb =
+      http_header_request_get(con, HTTP_HEADER_UNSPECIFIED, k, klen);
+    magnet_push_buffer(L, NULL != vb ? vb : NULL);
+    return 1;
 }
 
 static int magnet_reqhdr_pairs(lua_State *L) {
@@ -624,20 +632,22 @@ static int magnet_env_pairs(lua_State *L) {
 }
 
 static int magnet_cgi_get(lua_State *L) {
-	connection *con = magnet_get_connection(L);
-	return magnet_array_get_element(L, con->environment);
+    /* __index: param 1 is the (empty) table the value was not found in */
+    connection *con = magnet_get_connection(L);
+    size_t klen;
+    const char * const k = luaL_checklstring(L, 2, &klen);
+    buffer * const vb = http_header_env_get(con, k, klen);
+    magnet_push_buffer(L, NULL != vb ? vb : NULL);
+    return 1;
 }
 
 static int magnet_cgi_set(lua_State *L) {
-	connection *con = magnet_get_connection(L);
-
-	/* __newindex: param 1 is the (empty) table the value is supposed to be set in */
-	const_buffer key = magnet_checkconstbuffer(L, 2);
-	const_buffer val = magnet_checkconstbuffer(L, 3);
-
-	array_set_key_value(con->environment, key.ptr, key.len, val.ptr, val.len);
-
-	return 0;
+    /* __newindex: param 1 is the (empty) table the value is supposed to be set in */
+    connection *con = magnet_get_connection(L);
+    const_buffer key = magnet_checkconstbuffer(L, 2);
+    const_buffer val = magnet_checkconstbuffer(L, 3);
+    http_header_env_set(con, key.ptr, key.len, val.ptr, val.len);
+    return 0;
 }
 
 static int magnet_cgi_pairs(lua_State *L) {
@@ -647,7 +657,7 @@ static int magnet_cgi_pairs(lua_State *L) {
 }
 
 
-static int magnet_copy_response_header(server *srv, connection *con, lua_State *L, int lighty_table_ndx) {
+static int magnet_copy_response_header(connection *con, lua_State *L, int lighty_table_ndx) {
 	force_assert(lua_istable(L, lighty_table_ndx));
 
 	lua_getfield(L, lighty_table_ndx, "header"); /* lighty.header */
@@ -659,8 +669,9 @@ static int magnet_copy_response_header(server *srv, connection *con, lua_State *
 			if (lua_isstring(L, -1) && lua_isstring(L, -2)) {
 				const_buffer key = magnet_checkconstbuffer(L, -2);
 				const_buffer val = magnet_checkconstbuffer(L, -1);
+				enum http_header_e id = http_header_hkey_get(key.ptr, key.len);
 
-				response_header_overwrite(srv, con, key.ptr, key.len, val.ptr, val.len);
+				http_header_response_set(con, id, key.ptr, key.len, val.ptr, val.len);
 			}
 
 			lua_pop(L, 1);
@@ -954,7 +965,7 @@ static handler_t magnet_attract(server *srv, connection *con, plugin_data *p, bu
 	lua_return_value = (int) luaL_optinteger(L, -1, -1);
 	lua_pop(L, 1); /* pop return value */
 
-	magnet_copy_response_header(srv, con, L, lighty_table_ndx);
+	magnet_copy_response_header(con, L, lighty_table_ndx);
 
 	{
 		handler_t result = HANDLER_GO_ON;
@@ -1011,8 +1022,8 @@ static handler_t magnet_attract_array(server *srv, connection *con, plugin_data 
 	if (con->error_handler_saved_status) {
 		/* retrieve (possibly modified) REDIRECT_STATUS and store as number */
 		unsigned long x;
-		data_string * const ds = (data_string *)array_get_element_klen(con->environment, CONST_STR_LEN("REDIRECT_STATUS"));
-		if (ds && (x = strtoul(ds->value->ptr, NULL, 10)) < 1000)
+		buffer * const vb = http_header_env_get(con, CONST_STR_LEN("REDIRECT_STATUS"));
+		if (vb && (x = strtoul(vb->ptr, NULL, 10)) < 1000)
 			/*(simplified validity check x < 1000)*/
 			con->error_handler_saved_status =
 			  con->error_handler_saved_status > 0 ? (int)x : -(int)x;

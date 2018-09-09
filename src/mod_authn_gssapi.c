@@ -27,11 +27,11 @@
 #include <gssapi/gssapi_krb5.h>
 
 #include "http_auth.h"
+#include "http_header.h"
 #include "base.h"
 #include "log.h"
 #include "md5.h"
 #include "base64.h"
-#include "response.h"
 
 #include <errno.h>
 #include <stdlib.h>
@@ -248,8 +248,8 @@ static int mod_authn_gssapi_create_krb5_ccache(server *srv, connection *con, plu
 
         con->plugin_ctx[p->id] = kccname;
 
-        array_set_key_value(con->environment, CONST_STR_LEN("KRB5CCNAME"), ccname, ccnamelen);
-        array_set_key_value(con->request.headers, CONST_STR_LEN("X-Forwarded-Keytab"), ccname, ccnamelen);
+        http_header_env_set(con, CONST_STR_LEN("KRB5CCNAME"), ccname, ccnamelen);
+        http_header_request_set(con, HTTP_HEADER_OTHER, CONST_STR_LEN("X-Forwarded-Keytab"), ccname, ccnamelen);
 
         return 0;
 
@@ -269,11 +269,11 @@ static int mod_authn_gssapi_create_krb5_ccache(server *srv, connection *con, plu
  * HTTP auth Negotiate
  */
 
-static handler_t mod_authn_gssapi_send_401_unauthorized_negotiate (server *srv, connection *con)
+static handler_t mod_authn_gssapi_send_401_unauthorized_negotiate (connection *con)
 {
     con->http_status = 401;
     con->mode = DIRECT;
-    response_header_insert(srv, con, CONST_STR_LEN("WWW-Authenticate"), CONST_STR_LEN("Negotiate"));
+    http_header_response_set(con, HTTP_HEADER_OTHER, CONST_STR_LEN("WWW-Authenticate"), CONST_STR_LEN("Negotiate"));
     return HANDLER_FINISHED;
 }
 
@@ -433,7 +433,7 @@ static handler_t mod_authn_gssapi_check_spnego(server *srv, connection *con, plu
 
     ret = mod_authn_gssapi_store_gss_creds(srv, con, p, token_out.value, client_cred);
     if (ret)
-        http_auth_setenv(con->environment, token_out.value, token_out.length, CONST_STR_LEN("GSSAPI"));
+        http_auth_setenv(con, token_out.value, token_out.length, CONST_STR_LEN("GSSAPI"));
 
     end:
         buffer_free(t_in);
@@ -459,24 +459,23 @@ static handler_t mod_authn_gssapi_check_spnego(server *srv, connection *con, plu
         if (token_out.length)
             gss_release_buffer(&st_minor, &token_out);
 
-        return ret ? HANDLER_GO_ON : mod_authn_gssapi_send_401_unauthorized_negotiate(srv, con);
+        return ret ? HANDLER_GO_ON : mod_authn_gssapi_send_401_unauthorized_negotiate(con);
 }
 
 static handler_t mod_authn_gssapi_check (server *srv, connection *con, void *p_d, const struct http_auth_require_t *require, const struct http_auth_backend_t *backend)
 {
-    data_string * const ds =
-      (data_string *)array_get_element(con->request.headers, "Authorization");
+    buffer *vb = http_header_request_get(con, HTTP_HEADER_AUTHORIZATION, CONST_STR_LEN("Authorization"));
 
     UNUSED(backend);
-    if (NULL == ds || buffer_is_empty(ds->value)) {
-        return mod_authn_gssapi_send_401_unauthorized_negotiate(srv, con);
+    if (NULL == vb) {
+        return mod_authn_gssapi_send_401_unauthorized_negotiate(con);
     }
 
-    if (0 != strncasecmp(ds->value->ptr, "Negotiate ", sizeof("Negotiate ")-1)) {
+    if (0 != strncasecmp(vb->ptr, "Negotiate ", sizeof("Negotiate ")-1)) {
         return mod_authn_gssapi_send_400_bad_request(srv, con);
     }
 
-    return mod_authn_gssapi_check_spnego(srv, con, (plugin_data *)p_d, require, ds->value->ptr+sizeof("Negotiate ")-1);
+    return mod_authn_gssapi_check_spnego(srv, con, (plugin_data *)p_d, require, vb->ptr+sizeof("Negotiate ")-1);
 }
 
 /*
@@ -615,11 +614,11 @@ static int mod_authn_gssapi_store_krb5_creds(server *srv, connection *con, plugi
         return -1;
 }
 
-static handler_t mod_authn_gssapi_send_401_unauthorized_basic (server *srv, connection *con)
+static handler_t mod_authn_gssapi_send_401_unauthorized_basic (connection *con)
 {
     con->http_status = 401;
     con->mode = DIRECT;
-    response_header_insert(srv, con, CONST_STR_LEN("WWW-Authenticate"), CONST_STR_LEN("Basic realm=\"Kerberos\""));
+    http_header_response_set(con, HTTP_HEADER_OTHER, CONST_STR_LEN("WWW-Authenticate"), CONST_STR_LEN("Basic realm=\"Kerberos\""));
     return HANDLER_FINISHED;
 }
 
@@ -640,7 +639,7 @@ static handler_t mod_authn_gssapi_basic(server *srv, connection *con, void *p_d,
 
     if (*pw == '\0') {
         log_error_write(srv, __FILE__, __LINE__, "s", "Empty passwords are not accepted");
-        return mod_authn_gssapi_send_401_unauthorized_basic(srv, con);
+        return mod_authn_gssapi_send_401_unauthorized_basic(con);
     }
 
     mod_authn_gssapi_patch_connection(srv, con, p);
@@ -648,13 +647,13 @@ static handler_t mod_authn_gssapi_basic(server *srv, connection *con, void *p_d,
     code = krb5_init_context(&kcontext);
     if (code) {
         log_error_write(srv, __FILE__, __LINE__, "sd", "krb5_init_context():", code);
-        return mod_authn_gssapi_send_401_unauthorized_basic(srv, con); /*(well, should be 500)*/
+        return mod_authn_gssapi_send_401_unauthorized_basic(con); /*(well, should be 500)*/
     }
 
     code = krb5_kt_resolve(kcontext, p->conf.auth_gssapi_keytab->ptr, &keytab);
     if (code) {
         log_error_write(srv, __FILE__, __LINE__, "sdb", "krb5_kt_resolve():", code, p->conf.auth_gssapi_keytab);
-        return mod_authn_gssapi_send_401_unauthorized_basic(srv, con); /*(well, should be 500)*/
+        return mod_authn_gssapi_send_401_unauthorized_basic(con); /*(well, should be 500)*/
     }
 
     sprinc = buffer_init_buffer(p->conf.auth_gssapi_principal);
@@ -769,7 +768,7 @@ static handler_t mod_authn_gssapi_basic(server *srv, connection *con, void *p_d,
         else {
             /* ret == KRB5KDC_ERR_C_PRINCIPAL_UNKNOWN or no authz rules match */
             log_error_write(srv, __FILE__, __LINE__, "sbsBsB", "password doesn't match for", con->uri.path, "username:", username, ", IP:", con->dst_addr_buf);
-            return mod_authn_gssapi_send_401_unauthorized_basic(srv, con);
+            return mod_authn_gssapi_send_401_unauthorized_basic(con);
         }
 }
 

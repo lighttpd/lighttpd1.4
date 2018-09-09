@@ -3,10 +3,9 @@
 #include "base.h"
 #include "log.h"
 #include "buffer.h"
+#include "http_header.h"
 
 #include "plugin.h"
-
-#include "response.h"
 
 #include <stdlib.h>
 #include <string.h>
@@ -221,12 +220,14 @@ URIHANDLER_FUNC(mod_setenv_uri_handler) {
 
 	for (k = 0; k < p->conf.request_header->used; k++) {
 		data_string *ds = (data_string *)p->conf.request_header->data[k];
-		array_insert_key_value(con->request.headers, CONST_BUF_LEN(ds->key), CONST_BUF_LEN(ds->value));
+		enum http_header_e id = http_header_hkey_get(CONST_BUF_LEN(ds->key));
+		http_header_request_append(con, id, CONST_BUF_LEN(ds->key), CONST_BUF_LEN(ds->value));
 	}
 
 	for (k = 0; k < hctx->conf.set_request_header->used; ++k) {
 		data_string *ds = (data_string *)hctx->conf.set_request_header->data[k];
-		array_set_key_value(con->request.headers, CONST_BUF_LEN(ds->key), CONST_BUF_LEN(ds->value));
+		enum http_header_e id = http_header_hkey_get(CONST_BUF_LEN(ds->key));
+		http_header_request_set(con, id, CONST_BUF_LEN(ds->key), CONST_BUF_LEN(ds->value));
 	}
 
 	return HANDLER_GO_ON;
@@ -242,12 +243,12 @@ CONNECTION_FUNC(mod_setenv_handle_request_env) {
 
 	for (size_t k = 0; k < hctx->conf.environment->used; ++k) {
 		data_string *ds = (data_string *)hctx->conf.environment->data[k];
-		array_insert_key_value(con->environment, CONST_BUF_LEN(ds->key), CONST_BUF_LEN(ds->value));
+		http_header_env_append(con, CONST_BUF_LEN(ds->key), CONST_BUF_LEN(ds->value));
 	}
 
 	for (size_t k = 0; k < hctx->conf.set_environment->used; ++k) {
 		data_string *ds = (data_string *)hctx->conf.set_environment->data[k];
-		array_set_key_value(con->environment, CONST_BUF_LEN(ds->key), CONST_BUF_LEN(ds->value));
+		http_header_env_set(con, CONST_BUF_LEN(ds->key), CONST_BUF_LEN(ds->value));
 	}
 
 	return HANDLER_GO_ON;
@@ -257,15 +258,18 @@ CONNECTION_FUNC(mod_setenv_handle_response_start) {
 	plugin_data *p = p_d;
 	handler_ctx *hctx = con->plugin_ctx[p->id];
 	if (NULL == hctx) return HANDLER_GO_ON;
+	UNUSED(srv);
 
 	for (size_t k = 0; k < hctx->conf.response_header->used; ++k) {
 		data_string *ds = (data_string *)hctx->conf.response_header->data[k];
-		response_header_insert(srv, con, CONST_BUF_LEN(ds->key), CONST_BUF_LEN(ds->value));
+		enum http_header_e id = http_header_hkey_get(CONST_BUF_LEN(ds->key));
+		http_header_response_insert(con, id, CONST_BUF_LEN(ds->key), CONST_BUF_LEN(ds->value));
 	}
 
 	for (size_t k = 0; k < hctx->conf.set_response_header->used; ++k) {
 		data_string *ds = (data_string *)hctx->conf.set_response_header->data[k];
-		response_header_overwrite(srv, con, CONST_BUF_LEN(ds->key), CONST_BUF_LEN(ds->value));
+		enum http_header_e id = http_header_hkey_get(CONST_BUF_LEN(ds->key));
+		http_header_response_set(con, id, CONST_BUF_LEN(ds->key), CONST_BUF_LEN(ds->value));
 	}
 
 	return HANDLER_GO_ON;

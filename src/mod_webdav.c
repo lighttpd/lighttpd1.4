@@ -4,6 +4,7 @@
 #include "log.h"
 #include "buffer.h"
 #include "fdevent.h"
+#include "http_header.h"
 #include "response.h"
 #include "connections.h"
 
@@ -462,13 +463,13 @@ URIHANDLER_FUNC(mod_webdav_uri_handler) {
 	switch (con->request.http_method) {
 	case HTTP_METHOD_OPTIONS:
 		/* we fake a little bit but it makes MS W2k happy and it let's us mount the volume */
-		response_header_overwrite(srv, con, CONST_STR_LEN("DAV"), CONST_STR_LEN("1,2"));
-		response_header_overwrite(srv, con, CONST_STR_LEN("MS-Author-Via"), CONST_STR_LEN("DAV"));
+		http_header_response_set(con, HTTP_HEADER_OTHER, CONST_STR_LEN("DAV"), CONST_STR_LEN("1,2"));
+		http_header_response_set(con, HTTP_HEADER_OTHER, CONST_STR_LEN("MS-Author-Via"), CONST_STR_LEN("DAV"));
 
 		if (p->conf.is_readonly) {
-			response_header_insert(srv, con, CONST_STR_LEN("Allow"), CONST_STR_LEN("PROPFIND"));
+			http_header_response_append(con, HTTP_HEADER_OTHER, CONST_STR_LEN("Allow"), CONST_STR_LEN("PROPFIND"));
 		} else {
-			response_header_insert(srv, con, CONST_STR_LEN("Allow"), CONST_STR_LEN("PROPFIND, DELETE, MKCOL, PUT, MOVE, COPY, PROPPATCH, LOCK, UNLOCK"));
+			http_header_response_append(con, HTTP_HEADER_OTHER, CONST_STR_LEN("Allow"), CONST_STR_LEN("PROPFIND, DELETE, MKCOL, PUT, MOVE, COPY, PROPPATCH, LOCK, UNLOCK"));
 		}
 		break;
 	default:
@@ -1212,16 +1213,15 @@ static int webdav_parse_chunkqueue(server *srv, connection *con, handler_ctx *hc
 #endif
 
 #ifdef USE_LOCKS
-static int webdav_lockdiscovery(server *srv, connection *con,
-		buffer *locktoken, const char *lockscope, const char *locktype, int depth) {
+static int webdav_lockdiscovery(connection *con, buffer *locktoken, const char *lockscope, const char *locktype, int depth) {
 
 	buffer *b = buffer_init();
 
-	response_header_overwrite(srv, con, CONST_STR_LEN("Lock-Token"), CONST_BUF_LEN(locktoken));
+	http_header_response_set(con, HTTP_HEADER_OTHER, CONST_STR_LEN("Lock-Token"), CONST_BUF_LEN(locktoken));
 
-	response_header_overwrite(srv, con,
-		CONST_STR_LEN("Content-Type"),
-		CONST_STR_LEN("text/xml; charset=\"utf-8\""));
+	http_header_response_set(con, HTTP_HEADER_CONTENT_TYPE,
+				 CONST_STR_LEN("Content-Type"),
+				 CONST_STR_LEN("text/xml; charset=\"utf-8\""));
 
 	buffer_copy_string_len(b, CONST_STR_LEN("<?xml version=\"1.0\" encoding=\"utf-8\"?>\n"));
 
@@ -1248,7 +1248,7 @@ static int webdav_has_lock(server *srv, connection *con, handler_ctx *hctx, buff
 	int has_lock = 1;
 
 #ifdef USE_LOCKS
-	data_string *ds;
+	buffer *vb;
 	UNUSED(srv);
 
 	/**
@@ -1266,7 +1266,7 @@ static int webdav_has_lock(server *srv, connection *con, handler_ctx *hctx, buff
 	 * - untagged:
 	 *   go on if the resource has the etag [...] and the lock
 	 */
-	if (NULL != (ds = (data_string *)array_get_element(con->request.headers, "If"))) {
+	if (NULL != (vb = http_header_request_get(con, HTTP_HEADER_OTHER, CONST_STR_LEN("If")))) {
 		/* Ooh, ooh. A if tag, now the fun begins.
 		 *
 		 * this can only work with a real parser
@@ -1303,7 +1303,6 @@ SUBREQUEST_FUNC(mod_webdav_subrequest_handler_huge) {
 	handler_ctx *hctx = con->plugin_ctx[p->id];
 	buffer *b;
 	DIR *dir;
-	data_string *ds;
 	int depth = -1; /* (Depth: infinity) */
 	struct stat st;
 	buffer *prop_200;
@@ -1319,10 +1318,10 @@ SUBREQUEST_FUNC(mod_webdav_subrequest_handler_huge) {
 	if (buffer_is_empty(con->physical.path)) return HANDLER_GO_ON;
 
 	/* PROPFIND need them */
-	if (NULL != (ds = (data_string *)array_get_element(con->request.headers, "Depth")) && 1 == buffer_string_length(ds->value)) {
-		if ('0' == *ds->value->ptr) {
+	if (NULL != (b = http_header_request_get(con, HTTP_HEADER_OTHER, CONST_STR_LEN("Depth"))) && 1 == buffer_string_length(b)) {
+		if ('0' == *b->ptr) {
 			depth = 0;
-		} else if ('1' == *ds->value->ptr) {
+		} else if ('1' == *b->ptr) {
 			depth = 1;
 		}
 	} /* else treat as Depth: infinity */
@@ -1453,7 +1452,7 @@ SUBREQUEST_FUNC(mod_webdav_subrequest_handler_huge) {
 #endif
 		con->http_status = 207;
 
-		response_header_overwrite(srv, con, CONST_STR_LEN("Content-Type"), CONST_STR_LEN("text/xml; charset=\"utf-8\""));
+		http_header_response_set(con, HTTP_HEADER_CONTENT_TYPE, CONST_STR_LEN("Content-Type"), CONST_STR_LEN("text/xml; charset=\"utf-8\""));
 
 		b = buffer_init();
 
@@ -1678,7 +1677,7 @@ SUBREQUEST_FUNC(mod_webdav_subrequest_handler_huge) {
 
 			if (webdav_delete_dir(srv, con, hctx, &(con->physical), multi_status_resp)) {
 				/* we got an error somewhere in between, build a 207 */
-				response_header_overwrite(srv, con, CONST_STR_LEN("Content-Type"), CONST_STR_LEN("text/xml; charset=\"utf-8\""));
+				http_header_response_set(con, HTTP_HEADER_CONTENT_TYPE, CONST_STR_LEN("Content-Type"), CONST_STR_LEN("text/xml; charset=\"utf-8\""));
 
 				b = buffer_init();
 
@@ -1740,7 +1739,6 @@ SUBREQUEST_FUNC(mod_webdav_subrequest_handler_huge) {
 		int fd;
 		chunkqueue *cq = con->request_content_queue;
 		chunk *c;
-		data_string *ds_range;
 
 		if (p->conf.is_readonly) {
 			con->http_status = 403;
@@ -1765,8 +1763,8 @@ SUBREQUEST_FUNC(mod_webdav_subrequest_handler_huge) {
 		 *
 		 * Example: Content-Range: bytes 100-1037/1038 */
 
-		if (NULL != (ds_range = (data_string *)array_get_element(con->request.headers, "Content-Range"))) {
-			const char *num = ds_range->value->ptr;
+		if (NULL != (b = http_header_request_get(con, HTTP_HEADER_OTHER, CONST_STR_LEN("Content-Range")))) {
+			const char *num = b->ptr;
 			off_t offset;
 			char *err = NULL;
 
@@ -1945,21 +1943,19 @@ SUBREQUEST_FUNC(mod_webdav_subrequest_handler_huge) {
 			}
 		}
 
-		if (NULL != (ds = (data_string *)array_get_element(con->request.headers, "Destination"))) {
-			destination = ds->value;
-		} else {
+		if (NULL == (destination = http_header_request_get(con, HTTP_HEADER_OTHER, CONST_STR_LEN("Destination")))) {
 			con->http_status = 400;
 			return HANDLER_FINISHED;
 		}
 
-		if (NULL != (ds = (data_string *)array_get_element(con->request.headers, "Overwrite"))) {
-			if (buffer_string_length(ds->value) != 1 ||
-			    (ds->value->ptr[0] != 'F' &&
-			     ds->value->ptr[0] != 'T') )  {
+		if (NULL != (b = http_header_request_get(con, HTTP_HEADER_OTHER, CONST_STR_LEN("Overwrite")))) {
+			if (buffer_string_length(b) != 1 ||
+			    (b->ptr[0] != 'F' &&
+			     b->ptr[0] != 'T') )  {
 				con->http_status = 400;
 				return HANDLER_FINISHED;
 			}
-			overwrite = (ds->value->ptr[0] == 'F' ? 0 : 1);
+			overwrite = (b->ptr[0] == 'F' ? 0 : 1);
 		}
 		/* let's parse the Destination
 		 *
@@ -2430,9 +2426,7 @@ propmatch_cleanup:
 				if (r != HANDLER_GO_ON) return r;
 			}
 
-			if (NULL != (ds = (data_string *)array_get_element(con->request.headers, "If"))) {
-				hdr_if = ds->value;
-			}
+			hdr_if = http_header_request_get(con, HTTP_HEADER_OTHER, CONST_STR_LEN("If"));
 
 			if (0 != stat(con->physical.path->ptr, &st)) {
 				if (errno == ENOENT) {
@@ -2593,7 +2587,7 @@ propmatch_cleanup:
 							}
 
 							/* looks like we survived */
-							webdav_lockdiscovery(srv, con, p->tmp_buf, (const char *)lockscope, (const char *)locktype, depth);
+							webdav_lockdiscovery(con, p->tmp_buf, (const char *)lockscope, (const char *)locktype, depth);
 
 							con->http_status = created ? 201 : 200;
 							con->file_finished = 1;
@@ -2609,8 +2603,8 @@ propmatch_cleanup:
 			}
 		} else {
 
-			if (NULL != (ds = (data_string *)array_get_element(con->request.headers, "If"))) {
-				buffer *locktoken = ds->value;
+			if (NULL != (b = http_header_request_get(con, HTTP_HEADER_OTHER, CONST_STR_LEN("If")))) {
+				buffer *locktoken = b;
 				sqlite3_stmt *stmt = p->conf.stmt_refresh_lock;
 
 				/* remove the < > around the token */
@@ -2633,7 +2627,7 @@ propmatch_cleanup:
 						"refresh lock:", sqlite3_errmsg(p->conf.sql));
 				}
 
-				webdav_lockdiscovery(srv, con, p->tmp_buf, "exclusive", "write", 0);
+				webdav_lockdiscovery(con, p->tmp_buf, "exclusive", "write", 0);
 
 				con->http_status = 200;
 				con->file_finished = 1;
@@ -2652,8 +2646,8 @@ propmatch_cleanup:
 #endif
 	case HTTP_METHOD_UNLOCK:
 #ifdef USE_LOCKS
-		if (NULL != (ds = (data_string *)array_get_element(con->request.headers, "Lock-Token"))) {
-			buffer *locktoken = ds->value;
+		if (NULL != (b = http_header_request_get(con, HTTP_HEADER_OTHER, CONST_STR_LEN("Lock-Token")))) {
+			buffer *locktoken = b;
 			sqlite3_stmt *stmt = p->conf.stmt_remove_lock;
 
 			/* remove the < > around the token */

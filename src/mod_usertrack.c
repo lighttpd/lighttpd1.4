@@ -4,7 +4,7 @@
 #include "log.h"
 #include "buffer.h"
 #include "rand.h"
-#include "response.h"
+#include "http_header.h"
 
 #include "plugin.h"
 
@@ -184,7 +184,7 @@ static int mod_usertrack_patch_connection(server *srv, connection *con, plugin_d
 URIHANDLER_FUNC(mod_usertrack_uri_handler) {
 	plugin_data *p = p_d;
 	buffer *cookie;
-	data_string *ds;
+	buffer *b;
 	unsigned char h[16];
 	li_MD5_CTX Md5Ctx;
 	char hh[LI_ITOSTRING_LENGTH];
@@ -193,7 +193,7 @@ URIHANDLER_FUNC(mod_usertrack_uri_handler) {
 
 	mod_usertrack_patch_connection(srv, con, p);
 
-	if (NULL != (ds = (data_string *)array_get_element(con->request.headers, "Cookie"))) {
+	if (NULL != (b = http_header_request_get(con, HTTP_HEADER_COOKIE, CONST_STR_LEN("Cookie")))) {
 		char *g;
 		/* we have a cookie, does it contain a valid name ? */
 
@@ -203,7 +203,7 @@ URIHANDLER_FUNC(mod_usertrack_uri_handler) {
 		 *
 		 */
 
-		if (NULL != (g = strstr(ds->value->ptr, p->conf.cookie_name->ptr))) {
+		if (NULL != (g = strstr(b->ptr, p->conf.cookie_name->ptr))) {
 			char *nc;
 
 			/* skip WS */
@@ -245,7 +245,7 @@ URIHANDLER_FUNC(mod_usertrack_uri_handler) {
 	/* usertrack.cookie-attrs, if set, replaces all other attrs */
 	if (!buffer_string_is_empty(p->conf.cookie_attrs)) {
 		buffer_append_string_buffer(cookie, p->conf.cookie_attrs);
-		response_header_insert(srv, con, CONST_STR_LEN("Set-Cookie"), CONST_BUF_LEN(cookie));
+		http_header_response_insert(con, HTTP_HEADER_SET_COOKIE, CONST_STR_LEN("Set-Cookie"), CONST_BUF_LEN(cookie));
 		return HANDLER_GO_ON;
 	}
 
@@ -262,7 +262,7 @@ URIHANDLER_FUNC(mod_usertrack_uri_handler) {
 		buffer_append_int(cookie, p->conf.cookie_max_age);
 	}
 
-	response_header_insert(srv, con, CONST_STR_LEN("Set-Cookie"), CONST_BUF_LEN(cookie));
+	http_header_response_insert(con, HTTP_HEADER_SET_COOKIE, CONST_STR_LEN("Set-Cookie"), CONST_BUF_LEN(cookie));
 
 	return HANDLER_GO_ON;
 }

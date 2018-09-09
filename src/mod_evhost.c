@@ -3,7 +3,6 @@
 #include "base.h"
 #include "plugin.h"
 #include "log.h"
-#include "response.h"
 #include "stat_cache.h"
 
 #include <stdlib.h>

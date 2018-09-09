@@ -4,6 +4,7 @@
 #include "fdevent.h"
 #include "log.h"
 #include "buffer.h"
+#include "http_header.h"
 
 #include "plugin.h"
 
@@ -163,11 +164,11 @@ static int build_ssi_cgi_vars(server *srv, connection *con, handler_ctx *p) {
 	http_cgi_opts opts = { 0, 0, NULL, NULL };
 	/* temporarily remove Authorization from request headers
 	 * so that Authorization does not end up in SSI environment */
-	data_string *ds_auth = (data_string *)array_get_element(con->request.headers, "Authorization");
-	buffer *b_auth = NULL;
-	if (ds_auth) {
-		b_auth = ds_auth->value;
-		ds_auth->value = NULL;
+	buffer *vb_auth = http_header_request_get(con, HTTP_HEADER_AUTHORIZATION, CONST_STR_LEN("Authorization"));
+	buffer b_auth;
+	if (vb_auth) {
+		memcpy(&b_auth, vb_auth, sizeof(buffer));
+		memset(vb_auth, 0, sizeof(buffer));
 	}
 
 	array_reset(p->ssi_cgi_env);
@@ -177,8 +178,8 @@ static int build_ssi_cgi_vars(server *srv, connection *con, handler_ctx *p) {
 		return -1;
 	}
 
-	if (ds_auth) {
-		ds_auth->value = b_auth;
+	if (vb_auth) {
+		memcpy(vb_auth, &b_auth, sizeof(buffer));
 	}
 
 	return 0;
@@ -1208,9 +1209,9 @@ static int mod_ssi_handle_request(server *srv, connection *con, handler_ctx *p) 
 	con->file_finished = 1;
 
 	if (buffer_string_is_empty(p->conf.content_type)) {
-		response_header_overwrite(srv, con, CONST_STR_LEN("Content-Type"), CONST_STR_LEN("text/html"));
+		http_header_response_set(con, HTTP_HEADER_CONTENT_TYPE, CONST_STR_LEN("Content-Type"), CONST_STR_LEN("text/html"));
 	} else {
-		response_header_overwrite(srv, con, CONST_STR_LEN("Content-Type"), CONST_BUF_LEN(p->conf.content_type));
+		http_header_response_set(con, HTTP_HEADER_CONTENT_TYPE, CONST_STR_LEN("Content-Type"), CONST_BUF_LEN(p->conf.content_type));
 	}
 
 	if (p->conf.conditional_requests) {
@@ -1223,10 +1224,10 @@ static int mod_ssi_handle_request(server *srv, connection *con, handler_ctx *p) 
 
 		etag_create(con->physical.etag, &st, con->etag_flags);
 		etag_mutate(con->physical.etag, con->physical.etag);
-		response_header_overwrite(srv, con, CONST_STR_LEN("ETag"), CONST_BUF_LEN(con->physical.etag));
+		http_header_response_set(con, HTTP_HEADER_ETAG, CONST_STR_LEN("ETag"), CONST_BUF_LEN(con->physical.etag));
 
 		mtime = strftime_cache_get(srv, st.st_mtime);
-		response_header_overwrite(srv, con, CONST_STR_LEN("Last-Modified"), CONST_BUF_LEN(mtime));
+		http_header_response_set(con, HTTP_HEADER_LAST_MODIFIED, CONST_STR_LEN("Last-Modified"), CONST_BUF_LEN(mtime));
 
 		if (HANDLER_FINISHED == http_response_handle_cachable(srv, con, mtime)) {
 			/* ok, the client already has our content,

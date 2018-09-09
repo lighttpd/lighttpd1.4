@@ -30,7 +30,6 @@
 #include "plugin.h"
 #include "http_auth.h"
 #include "log.h"
-#include "response.h"
 
 #include "algo_sha1.h"
 #include "base64.h"

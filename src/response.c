@@ -4,6 +4,7 @@
 #include "base.h"
 #include "burl.h"
 #include "fdevent.h"
+#include "http_header.h"
 #include "http_kv.h"
 #include "log.h"
 #include "stat_cache.h"
@@ -23,12 +24,7 @@
 #include <time.h>
 
 int http_response_write_header(server *srv, connection *con) {
-	buffer *b;
-	size_t i;
-	int have_date = 0;
-	int have_server = 0;
-
-	b = buffer_init();
+	buffer * const b = buffer_init();
 
 	if (con->request.http_version == HTTP_VERSION_1_1) {
 		buffer_copy_string_len(b, CONST_STR_LEN("HTTP/1.1 "));
@@ -46,47 +42,48 @@ int http_response_write_header(server *srv, connection *con) {
 		con->keep_alive_idle = con->conf.max_keep_alive_idle;
 	}
 
-	if ((con->parsed_response & HTTP_UPGRADE) && con->request.http_version == HTTP_VERSION_1_1) {
-		response_header_overwrite(srv, con, CONST_STR_LEN("Connection"), CONST_STR_LEN("upgrade"));
+	if ((con->response.htags & HTTP_HEADER_UPGRADE) && con->request.http_version == HTTP_VERSION_1_1) {
+		http_header_response_set(con, HTTP_HEADER_CONNECTION, CONST_STR_LEN("Connection"), CONST_STR_LEN("upgrade"));
 	} else if (0 == con->keep_alive) {
-		response_header_overwrite(srv, con, CONST_STR_LEN("Connection"), CONST_STR_LEN("close"));
+		http_header_response_set(con, HTTP_HEADER_CONNECTION, CONST_STR_LEN("Connection"), CONST_STR_LEN("close"));
 	} else if (con->request.http_version == HTTP_VERSION_1_0) {/*(&& con->keep_alive != 0)*/
-		response_header_overwrite(srv, con, CONST_STR_LEN("Connection"), CONST_STR_LEN("keep-alive"));
+		http_header_response_set(con, HTTP_HEADER_CONNECTION, CONST_STR_LEN("Connection"), CONST_STR_LEN("keep-alive"));
+	}
+
+	if (304 == con->http_status && (con->response.htags & HTTP_HEADER_CONTENT_ENCODING)) {
+		buffer *vb = http_header_response_get(con, HTTP_HEADER_CONTENT_ENCODING, CONST_STR_LEN("Content-Encoding"));
+		if (NULL != vb) buffer_reset(vb);
 	}
 
 	/* add all headers */
-	for (i = 0; i < con->response.headers->used; i++) {
-		data_string *ds;
-
-		ds = (data_string *)con->response.headers->data[i];
+	for (size_t i = 0; i < con->response.headers->used; ++i) {
+		const data_string * const ds = (data_string *)con->response.headers->data[i];
 
 		if (buffer_string_is_empty(ds->value) || buffer_string_is_empty(ds->key)) continue;
-		if (0 == strncasecmp(ds->key->ptr, CONST_STR_LEN("X-Sendfile"))) continue;
-		if (0 == strncasecmp(ds->key->ptr, CONST_STR_LEN("X-LIGHTTPD-"))) {
-			if (0 == strncasecmp(ds->key->ptr+sizeof("X-LIGHTTPD-")-1, CONST_STR_LEN("KBytes-per-second"))) {
-				/* "X-LIGHTTPD-KBytes-per-second" */
-				long limit = strtol(ds->value->ptr, NULL, 10);
-				if (limit > 0
-				    && (limit < con->conf.kbytes_per_second
-				        || 0 == con->conf.kbytes_per_second)) {
-					if (limit > USHRT_MAX) limit= USHRT_MAX;
-					con->conf.kbytes_per_second = limit;
+		if ((ds->key->ptr[0] & 0xdf) == 'X') {
+			if (0 == strncasecmp(ds->key->ptr, CONST_STR_LEN("X-Sendfile"))) continue;
+			if (0 == strncasecmp(ds->key->ptr, CONST_STR_LEN("X-LIGHTTPD-"))) {
+				if (0 == strncasecmp(ds->key->ptr+sizeof("X-LIGHTTPD-")-1, CONST_STR_LEN("KBytes-per-second"))) {
+					/* "X-LIGHTTPD-KBytes-per-second" */
+					long limit = strtol(ds->value->ptr, NULL, 10);
+					if (limit > 0
+					    && (limit < con->conf.kbytes_per_second
+					        || 0 == con->conf.kbytes_per_second)) {
+						if (limit > USHRT_MAX) limit= USHRT_MAX;
+						con->conf.kbytes_per_second = limit;
+					}
 				}
+				continue;
 			}
-			continue;
-		} else {
-			if (0 == strcasecmp(ds->key->ptr, "Date")) have_date = 1;
-			if (0 == strcasecmp(ds->key->ptr, "Server")) have_server = 1;
-			if (0 == strcasecmp(ds->key->ptr, "Content-Encoding") && 304 == con->http_status) continue;
-
-			buffer_append_string_len(b, CONST_STR_LEN("\r\n"));
-			buffer_append_string_buffer(b, ds->key);
-			buffer_append_string_len(b, CONST_STR_LEN(": "));
-			buffer_append_string_buffer(b, ds->value);
 		}
+
+		buffer_append_string_len(b, CONST_STR_LEN("\r\n"));
+		buffer_append_string_buffer(b, ds->key);
+		buffer_append_string_len(b, CONST_STR_LEN(": "));
+		buffer_append_string_buffer(b, ds->value);
 	}
 
-	if (!have_date) {
+	if (!(con->response.htags & HTTP_HEADER_DATE)) {
 		/* HTTP/1.1 requires a Date: header */
 		buffer_append_string_len(b, CONST_STR_LEN("\r\nDate: "));
 
@@ -102,7 +99,7 @@ int http_response_write_header(server *srv, connection *con) {
 		buffer_append_string_buffer(b, srv->ts_date_str);
 	}
 
-	if (!have_server) {
+	if (!(con->response.htags & HTTP_HEADER_SERVER)) {
 		if (!buffer_string_is_empty(con->conf.server_tag)) {
 			buffer_append_string_len(b, CONST_STR_LEN("\r\nServer: "));
 			buffer_append_string_len(b, CONST_BUF_LEN(con->conf.server_tag));
@@ -491,7 +488,7 @@ handler_t http_response_prepare(server *srv, connection *con) {
 		    con->uri.path->ptr[0] == '*' && con->uri.path_raw->ptr[1] == '\0') {
 			/* option requests are handled directly without checking of the path */
 
-			response_header_insert(srv, con, CONST_STR_LEN("Allow"), CONST_STR_LEN("OPTIONS, GET, HEAD, POST"));
+			http_header_response_append(con, HTTP_HEADER_OTHER, CONST_STR_LEN("Allow"), CONST_STR_LEN("OPTIONS, GET, HEAD, POST"));
 
 			con->http_status = 200;
 			con->file_finished = 1;

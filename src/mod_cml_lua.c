@@ -14,6 +14,7 @@
 #include "base.h"
 #include "chunk.h"
 #include "log.h"
+#include "http_header.h"
 #include "response.h"
 #include "stat_cache.h"
 
@@ -200,7 +201,7 @@ int cache_parse_lua(server *srv, connection *con, plugin_data *p, buffer *fn) {
 	lua_to_c_get_string(L, "trigger_handler", p->trigger_handler);
 
 	if (0 == lua_to_c_get_string(L, "output_contenttype", b)) {
-		response_header_overwrite(srv, con, CONST_STR_LEN("Content-Type"), CONST_BUF_LEN(b));
+		http_header_response_set(con, HTTP_HEADER_CONTENT_TYPE, CONST_STR_LEN("Content-Type"), CONST_BUF_LEN(b));
 	}
 
 	if (ret == 0) {
@@ -291,25 +292,19 @@ int cache_parse_lua(server *srv, connection *con, plugin_data *p, buffer *fn) {
 		lua_settop(L, curelem - 1);
 
 		if (ret == 0) {
-			data_string *ds;
-			char timebuf[sizeof("Sat, 23 Jul 2005 21:20:01 GMT")];
+			buffer *vb = http_header_response_get(con, HTTP_HEADER_LAST_MODIFIED, CONST_STR_LEN("Last-Modified"));
+			if (NULL == vb) { /* no Last-Modified specified */
+				char timebuf[sizeof("Sat, 23 Jul 2005 21:20:01 GMT")];
+				if (0 == mtime) mtime = time(NULL); /* default last-modified to now */
+				strftime(timebuf, sizeof(timebuf), "%a, %d %b %Y %H:%M:%S GMT", gmtime(&mtime));
+				http_header_response_set(con, HTTP_HEADER_LAST_MODIFIED, CONST_STR_LEN("Last-Modified"), timebuf, sizeof(timebuf) - 1);
+				vb = http_header_response_get(con, HTTP_HEADER_LAST_MODIFIED, CONST_STR_LEN("Last-Modified"));
+				force_assert(NULL != vb);
+			}
 
 			con->file_finished = 1;
 
-			ds = (data_string *)array_get_element(con->response.headers, "Last-Modified");
-			if (0 == mtime) mtime = time(NULL); /* default last-modified to now */
-
-			/* no Last-Modified specified */
-			if (NULL == ds) {
-
-				strftime(timebuf, sizeof(timebuf), "%a, %d %b %Y %H:%M:%S GMT", gmtime(&mtime));
-
-				response_header_overwrite(srv, con, CONST_STR_LEN("Last-Modified"), timebuf, sizeof(timebuf) - 1);
-				ds = (data_string *)array_get_element(con->response.headers, "Last-Modified");
-				force_assert(NULL != ds);
-			}
-
-			if (HANDLER_FINISHED == http_response_handle_cachable(srv, con, ds->value)) {
+			if (HANDLER_FINISHED == http_response_handle_cachable(srv, con, vb)) {
 				/* ok, the client already has our content,
 				 * no need to send it again */
 

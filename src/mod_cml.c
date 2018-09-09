@@ -6,7 +6,6 @@
 #include "buffer.h"
 #include "log.h"
 #include "plugin.h"
-#include "response.h"
 
 #include <sys/stat.h>
 #include <time.h>

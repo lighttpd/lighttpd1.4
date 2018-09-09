@@ -3,10 +3,9 @@
 #include "base.h"
 #include "log.h"
 #include "buffer.h"
+#include "http_header.h"
 
 #include "plugin.h"
-
-#include "response.h"
 
 #include <stdlib.h>
 #include <string.h>
@@ -276,7 +275,6 @@ URIHANDLER_FUNC(mod_uploadprogress_uri_handler) {
 	plugin_data *p = p_d;
 	size_t len;
 	char *id;
-	data_string *ds;
 	buffer *b;
 	connection *post_con = NULL;
 	int pathinfo = 0;
@@ -297,8 +295,8 @@ URIHANDLER_FUNC(mod_uploadprogress_uri_handler) {
 		}
 	}
 
-	if (NULL != (ds = (data_string *)array_get_element(con->request.headers, "X-Progress-ID"))) {
-		id = ds->value->ptr;
+	if (NULL != (b = http_header_request_get(con, HTTP_HEADER_OTHER, CONST_STR_LEN("X-Progress-ID")))) {
+		id = b->ptr;
 	} else if (!buffer_string_is_empty(con->uri.query)
 		   && (id = strstr(con->uri.query->ptr, "X-Progress-ID="))) {
 		/* perhaps the POST request is using the query-string to pass the X-Progress-ID */
@@ -351,12 +349,12 @@ URIHANDLER_FUNC(mod_uploadprogress_uri_handler) {
 			return HANDLER_FINISHED;
 		}
 
-		response_header_overwrite(srv, con, CONST_STR_LEN("Content-Type"), CONST_STR_LEN("text/xml"));
+		http_header_response_set(con, HTTP_HEADER_CONTENT_TYPE, CONST_STR_LEN("Content-Type"), CONST_STR_LEN("text/xml"));
 
 		/* just an attempt the force the IE/proxies to NOT cache the request ... doesn't help :( */
-		response_header_overwrite(srv, con, CONST_STR_LEN("Pragma"), CONST_STR_LEN("no-cache"));
-		response_header_overwrite(srv, con, CONST_STR_LEN("Expires"), CONST_STR_LEN("Thu, 19 Nov 1981 08:52:00 GMT"));
-		response_header_overwrite(srv, con, CONST_STR_LEN("Cache-Control"), CONST_STR_LEN("no-store, no-cache, must-revalidate, post-check=0, pre-check=0"));
+		http_header_response_set(con, HTTP_HEADER_OTHER, CONST_STR_LEN("Pragma"), CONST_STR_LEN("no-cache"));
+		http_header_response_set(con, HTTP_HEADER_OTHER, CONST_STR_LEN("Expires"), CONST_STR_LEN("Thu, 19 Nov 1981 08:52:00 GMT"));
+		http_header_response_set(con, HTTP_HEADER_CACHE_CONTROL, CONST_STR_LEN("Cache-Control"), CONST_STR_LEN("no-store, no-cache, must-revalidate, post-check=0, pre-check=0"));
 
 		b = buffer_init();
 

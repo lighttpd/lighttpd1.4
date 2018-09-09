@@ -29,6 +29,7 @@
 #endif
 
 #include "base.h"
+#include "http_header.h"
 #include "log.h"
 #include "plugin.h"
 
@@ -1656,17 +1657,17 @@ https_add_ssl_client_entries (server *srv, connection *con, handler_ctx *hctx)
         ERR_error_string_n(vr, errstr, sizeof(errstr));
         buffer_copy_string_len(srv->tmp_buf, CONST_STR_LEN("FAILED:"));
         buffer_append_string(srv->tmp_buf, errstr);
-        array_set_key_value(con->environment,
+        http_header_env_set(con,
                             CONST_STR_LEN("SSL_CLIENT_VERIFY"),
                             CONST_BUF_LEN(srv->tmp_buf));
         return;
     } else if (!(xs = SSL_get_peer_certificate(hctx->ssl))) {
-        array_set_key_value(con->environment,
+        http_header_env_set(con,
                             CONST_STR_LEN("SSL_CLIENT_VERIFY"),
                             CONST_STR_LEN("NONE"));
         return;
     } else {
-        array_set_key_value(con->environment,
+        http_header_env_set(con,
                             CONST_STR_LEN("SSL_CLIENT_VERIFY"),
                             CONST_STR_LEN("SUCCESS"));
     }
@@ -1677,7 +1678,7 @@ https_add_ssl_client_entries (server *srv, connection *con, handler_ctx *hctx)
         int len = safer_X509_NAME_oneline(xn, buf, sizeof(buf));
         if (len > 0) {
             if (len >= (int)sizeof(buf)) len = (int)sizeof(buf)-1;
-            array_set_key_value(con->environment,
+            http_header_env_set(con,
                                 CONST_STR_LEN("SSL_CLIENT_S_DN"),
                                 buf, (size_t)len);
         }
@@ -1696,7 +1697,7 @@ https_add_ssl_client_entries (server *srv, connection *con, handler_ctx *hctx)
         if (xobjsn) {
             buffer_string_set_length(srv->tmp_buf,sizeof("SSL_CLIENT_S_DN_")-1);
             buffer_append_string(srv->tmp_buf, xobjsn);
-            array_set_key_value(con->environment,
+            http_header_env_set(con,
                                 CONST_BUF_LEN(srv->tmp_buf),
                                 (const char*)X509_NAME_ENTRY_get_data(xe)->data,
                                 X509_NAME_ENTRY_get_data(xe)->length);
@@ -1707,7 +1708,7 @@ https_add_ssl_client_entries (server *srv, connection *con, handler_ctx *hctx)
         ASN1_INTEGER *xsn = X509_get_serialNumber(xs);
         BIGNUM *serialBN = ASN1_INTEGER_to_BN(xsn, NULL);
         char *serialHex = BN_bn2hex(serialBN);
-        array_set_key_value(con->environment,
+        http_header_env_set(con,
                             CONST_STR_LEN("SSL_CLIENT_M_SERIAL"),
                             serialHex, strlen(serialHex));
         OPENSSL_free(serialHex);
@@ -1720,14 +1721,13 @@ https_add_ssl_client_entries (server *srv, connection *con, handler_ctx *hctx)
          * or
          *   ssl.verifyclient.username = "SSL_CLIENT_S_DN_emailAddress"
          */
-        data_string *ds = (data_string *)
-          array_get_element_klen(con->environment,
-                           CONST_BUF_LEN(hctx->conf.ssl_verifyclient_username));
-        if (ds) { /* same as http_auth.c:http_auth_setenv() */
-            array_set_key_value(con->environment,
+        buffer *varname = hctx->conf.ssl_verifyclient_username;
+        buffer *vb = http_header_env_get(con, CONST_BUF_LEN(varname));
+        if (vb) { /* same as http_auth.c:http_auth_setenv() */
+            http_header_env_set(con,
                                 CONST_STR_LEN("REMOTE_USER"),
-                                CONST_BUF_LEN(ds->value));
-            array_set_key_value(con->environment,
+                                CONST_BUF_LEN(vb));
+            http_header_env_set(con,
                                 CONST_STR_LEN("AUTH_TYPE"),
                                 CONST_STR_LEN("SSL_CLIENT_VERIFY"));
         }
@@ -1746,7 +1746,9 @@ https_add_ssl_client_entries (server *srv, connection *con, handler_ctx *hctx)
             BIO_read(bio, cert->ptr, n);
             BIO_free(bio);
             buffer_commit(cert, n);
-            array_set_key_value(con->environment, CONST_STR_LEN("SSL_CLIENT_CERT"), CONST_BUF_LEN(cert));
+            http_header_env_set(con,
+                                CONST_STR_LEN("SSL_CLIENT_CERT"),
+                                CONST_BUF_LEN(cert));
         }
     }
     X509_free(xs);
@@ -1761,7 +1763,7 @@ http_cgi_ssl_env (server *srv, connection *con, handler_ctx *hctx)
     UNUSED(srv);
 
     s = SSL_get_version(hctx->ssl);
-    array_set_key_value(con->environment,
+    http_header_env_set(con,
                         CONST_STR_LEN("SSL_PROTOCOL"),
                         s, strlen(s));
 
@@ -1769,16 +1771,16 @@ http_cgi_ssl_env (server *srv, connection *con, handler_ctx *hctx)
         int usekeysize, algkeysize;
         char buf[LI_ITOSTRING_LENGTH];
         s = SSL_CIPHER_get_name(cipher);
-        array_set_key_value(con->environment,
+        http_header_env_set(con,
                             CONST_STR_LEN("SSL_CIPHER"),
                             s, strlen(s));
         usekeysize = SSL_CIPHER_get_bits(cipher, &algkeysize);
         li_itostrn(buf, sizeof(buf), usekeysize);
-        array_set_key_value(con->environment,
+        http_header_env_set(con,
                             CONST_STR_LEN("SSL_CIPHER_USEKEYSIZE"),
                             buf, strlen(buf));
         li_itostrn(buf, sizeof(buf), algkeysize);
-        array_set_key_value(con->environment,
+        http_header_env_set(con,
                             CONST_STR_LEN("SSL_CIPHER_ALGKEYSIZE"),
                             buf, strlen(buf));
     }

@@ -5,6 +5,7 @@
 #include "log.h"
 #include "connections.h"
 #include "fdevent.h"
+#include "http_header.h"
 
 #include "configfile.h"
 #include "request.h"
@@ -232,16 +233,14 @@ static void connection_handle_response_end_state(server *srv, connection *con) {
 	}
 }
 
-static void connection_handle_errdoc_init(server *srv, connection *con) {
+static void connection_handle_errdoc_init(connection *con) {
 	/* modules that produce headers required with error response should
 	 * typically also produce an error document.  Make an exception for
 	 * mod_auth WWW-Authenticate response header. */
 	buffer *www_auth = NULL;
 	if (401 == con->http_status) {
-		data_string *ds = (data_string *)array_get_element(con->response.headers, "WWW-Authenticate");
-		if (NULL != ds) {
-			www_auth = buffer_init_buffer(ds->value);
-		}
+		buffer *vb = http_header_response_get(con, HTTP_HEADER_OTHER, CONST_STR_LEN("WWW-Authenticate"));
+		if (NULL != vb) www_auth = buffer_init_buffer(vb);
 	}
 
 	con->response.transfer_encoding = 0;
@@ -250,7 +249,7 @@ static void connection_handle_errdoc_init(server *srv, connection *con) {
 	chunkqueue_reset(con->write_queue);
 
 	if (NULL != www_auth) {
-		response_header_insert(srv, con, CONST_STR_LEN("WWW-Authenticate"), CONST_BUF_LEN(www_auth));
+		http_header_response_set(con, HTTP_HEADER_OTHER, CONST_STR_LEN("WWW-Authenticate"), CONST_BUF_LEN(www_auth));
 		buffer_free(www_auth);
 	}
 }
@@ -271,10 +270,12 @@ static int connection_handle_write_prepare(server *srv, connection *con) {
 			 * */
 			if ((!con->http_status || con->http_status == 200) && !buffer_string_is_empty(con->uri.path) &&
 			    con->uri.path->ptr[0] != '*') {
-				response_header_insert(srv, con, CONST_STR_LEN("Allow"), CONST_STR_LEN("OPTIONS, GET, HEAD, POST"));
+				http_header_response_append(con, HTTP_HEADER_OTHER, CONST_STR_LEN("Allow"), CONST_STR_LEN("OPTIONS, GET, HEAD, POST"));
 
 				con->response.transfer_encoding &= ~HTTP_TRANSFER_ENCODING_CHUNKED;
-				con->parsed_response &= ~HTTP_CONTENT_LENGTH;
+				if (con->response.htags & HTTP_HEADER_CONTENT_LENGTH) {
+					http_header_response_set(con, HTTP_HEADER_CONTENT_LENGTH, CONST_STR_LEN("Content-Length"), CONST_STR_LEN(""));
+				}
 
 				con->http_status = 200;
 				con->file_finished = 1;
@@ -300,7 +301,9 @@ static int connection_handle_write_prepare(server *srv, connection *con) {
 	case 304:
 		/* disable chunked encoding again as we have no body */
 		con->response.transfer_encoding &= ~HTTP_TRANSFER_ENCODING_CHUNKED;
-		con->parsed_response &= ~HTTP_CONTENT_LENGTH;
+		if (con->response.htags & HTTP_HEADER_CONTENT_LENGTH) {
+			http_header_response_set(con, HTTP_HEADER_CONTENT_LENGTH, CONST_STR_LEN("Content-Length"), CONST_STR_LEN(""));
+		}
 		chunkqueue_reset(con->write_queue);
 
 		con->file_finished = 1;
@@ -313,7 +316,7 @@ static int connection_handle_write_prepare(server *srv, connection *con) {
 
 		con->file_finished = 0;
 
-		connection_handle_errdoc_init(srv, con);
+		connection_handle_errdoc_init(con);
 
 		/* try to send static errorfile */
 		if (!buffer_string_is_empty(con->conf.errorfile_prefix)) {
@@ -327,7 +330,7 @@ static int connection_handle_write_prepare(server *srv, connection *con) {
 				con->file_finished = 1;
 				if (HANDLER_ERROR != stat_cache_get_entry(srv, con, con->physical.path, &sce)) {
 					stat_cache_content_type_get(srv, con, con->physical.path, sce);
-					response_header_overwrite(srv, con, CONST_STR_LEN("Content-Type"), CONST_BUF_LEN(sce->content_type));
+					http_header_response_set(con, HTTP_HEADER_CONTENT_TYPE, CONST_STR_LEN("Content-Type"), CONST_BUF_LEN(sce->content_type));
 				}
 			}
 		}
@@ -369,7 +372,7 @@ static int connection_handle_write_prepare(server *srv, connection *con) {
 			(void)http_chunk_append_buffer(srv, con, b);
 			buffer_free(b);
 
-			response_header_overwrite(srv, con, CONST_STR_LEN("Content-Type"), CONST_STR_LEN("text/html"));
+			http_header_response_set(con, HTTP_HEADER_CONTENT_TYPE, CONST_STR_LEN("Content-Type"), CONST_STR_LEN("text/html"));
 		}
 		break;
 	}
@@ -387,7 +390,7 @@ static int connection_handle_write_prepare(server *srv, connection *con) {
 	if (con->file_finished) {
 		/* we have all the content and chunked encoding is not used, set a content-length */
 
-		if (!(con->parsed_response & (HTTP_CONTENT_LENGTH|HTTP_TRANSFER_ENCODING))) {
+		if (!(con->response.htags & (HTTP_HEADER_CONTENT_LENGTH|HTTP_HEADER_TRANSFER_ENCODING))) {
 			off_t qlen = chunkqueue_length(con->write_queue);
 
 			/**
@@ -401,18 +404,15 @@ static int connection_handle_write_prepare(server *srv, connection *con) {
 			if ((con->http_status >= 100 && con->http_status < 200) ||
 			    con->http_status == 204 ||
 			    con->http_status == 304) {
-				data_string *ds;
 				/* no Content-Body, no Content-Length */
-				if (NULL != (ds = (data_string*) array_get_element(con->response.headers, "Content-Length"))) {
-					buffer_reset(ds->value); /* Headers with empty values are ignored for output */
-				}
+				buffer *vb = http_header_response_get(con, HTTP_HEADER_CONTENT_LENGTH, CONST_STR_LEN("Content-Length"));
+				if (NULL != vb) buffer_reset(vb); /* Headers with empty values are ignored for output */
 			} else if (qlen > 0 || con->request.http_method != HTTP_METHOD_HEAD) {
 				/* qlen = 0 is important for Redirects (301, ...) as they MAY have
 				 * a content. Browsers are waiting for a Content otherwise
 				 */
 				buffer_copy_int(srv->tmp_buf, qlen);
-
-				response_header_overwrite(srv, con, CONST_STR_LEN("Content-Length"), CONST_BUF_LEN(srv->tmp_buf));
+				http_header_response_set(con, HTTP_HEADER_CONTENT_LENGTH, CONST_STR_LEN("Content-Length"), CONST_BUF_LEN(srv->tmp_buf));
 			}
 		}
 	} else {
@@ -425,7 +425,7 @@ static int connection_handle_write_prepare(server *srv, connection *con) {
 		 * - Upgrade: ... (lighttpd then acts as transparent proxy)
 		 */
 
-		if (!(con->parsed_response & (HTTP_CONTENT_LENGTH|HTTP_TRANSFER_ENCODING|HTTP_UPGRADE))) {
+		if (!(con->response.htags & (HTTP_HEADER_CONTENT_LENGTH|HTTP_HEADER_TRANSFER_ENCODING|HTTP_HEADER_UPGRADE))) {
 			if (con->request.http_method == HTTP_METHOD_CONNECT
 			    && con->http_status == 200) {
 				/*(no transfer-encoding if successful CONNECT)*/
@@ -441,7 +441,7 @@ static int connection_handle_write_prepare(server *srv, connection *con) {
 					chunkqueue_prepend_buffer(con->write_queue, b);
 					chunkqueue_append_mem(con->write_queue, CONST_STR_LEN("\r\n"));
 				}
-				response_header_append(srv, con, CONST_STR_LEN("Transfer-Encoding"), CONST_STR_LEN("chunked"));
+				http_header_response_append(con, HTTP_HEADER_TRANSFER_ENCODING, CONST_STR_LEN("Transfer-Encoding"), CONST_STR_LEN("chunked"));
 			} else {
 				con->keep_alive = 0;
 			}
@@ -456,7 +456,7 @@ static int connection_handle_write_prepare(server *srv, connection *con) {
 		 *
 		 * FIXME: to be nice we should remove the Connection: ... 
 		 */
-		if (con->parsed_response & HTTP_CONNECTION) {
+		if (con->response.htags & HTTP_HEADER_CONNECTION) {
 			/* a subrequest disable keep-alive although the client wanted it */
 			if (con->keep_alive && !con->response.keep_alive) {
 				con->keep_alive = 0;
@@ -473,11 +473,8 @@ static int connection_handle_write_prepare(server *srv, connection *con) {
 
 		chunkqueue_reset(con->write_queue);
 		con->response.transfer_encoding &= ~HTTP_TRANSFER_ENCODING_CHUNKED;
-		if (con->parsed_response & HTTP_TRANSFER_ENCODING) {
-			data_string *ds;
-			if (NULL != (ds = (data_string*) array_get_element(con->response.headers, "Transfer-Encoding"))) {
-				buffer_reset(ds->value); /* Headers with empty values are ignored for output */
-			}
+		if (con->response.htags & HTTP_HEADER_TRANSFER_ENCODING) {
+			http_header_response_set(con, HTTP_HEADER_TRANSFER_ENCODING, CONST_STR_LEN("Transfer-Encoding"), CONST_STR_LEN(""));
 		}
 	}
 
@@ -651,9 +648,6 @@ int connection_reset(server *srv, connection *con) {
 	con->request.http_method = HTTP_METHOD_UNSET;
 	con->request.http_version = HTTP_VERSION_UNSET;
 
-	con->request.http_if_modified_since = NULL;
-	con->request.http_if_none_match = NULL;
-
 #define CLEAN(x) \
 	if (con->x) buffer_reset(con->x);
 
@@ -685,10 +679,10 @@ int connection_reset(server *srv, connection *con) {
 		con->request.x = NULL;
 
 	CLEAN(http_host);
-	CLEAN(http_content_type);
 #undef CLEAN
 	con->request.content_length = 0;
 	con->request.te_chunked = 0;
+	con->request.htags = 0;
 
 	array_reset(con->request.headers);
 	array_reset(con->environment);
@@ -1230,7 +1224,7 @@ int connection_state_machine(server *srv, connection *con) {
 							 * for access by dynamic handlers
 							 * https://redmine.lighttpd.net/issues/1828 */
 							buffer_copy_int(srv->tmp_buf, con->http_status);
-							array_insert_key_value(con->environment, CONST_STR_LEN("REDIRECT_STATUS"), CONST_BUF_LEN(srv->tmp_buf));
+							http_header_env_set(con, CONST_STR_LEN("REDIRECT_STATUS"), CONST_BUF_LEN(srv->tmp_buf));
 
 							if (error_handler == con->conf.error_handler) {
 								plugins_call_connection_reset(srv, con);
@@ -1246,7 +1240,7 @@ int connection_state_machine(server *srv, connection *con) {
 								con->is_writable = 1;
 								con->file_finished = 0;
 								con->file_started = 0;
-								con->parsed_response = 0;
+								con->response.htags = 0;
 								con->response.keep_alive = 0;
 								con->response.content_length = -1;
 								con->response.transfer_encoding = 0;
@@ -1260,7 +1254,7 @@ int connection_state_machine(server *srv, connection *con) {
 							}
 
 							buffer_copy_buffer(con->request.uri, error_handler);
-							connection_handle_errdoc_init(srv, con);
+							connection_handle_errdoc_init(con);
 							con->http_status = 0; /*(after connection_handle_errdoc_init())*/
 
 							done = -1;

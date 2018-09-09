@@ -554,7 +554,7 @@ include_directories(${CMAKE_CURRENT_BINARY_DIR} ${CMAKE_CURRENT_SOURCE_DIR})
 
 set(COMMON_SRC
 	base64.c buffer.c burl.c log.c
-	http_kv.c keyvalue.c chunk.c
+	http_header.c http_kv.c keyvalue.c chunk.c
 	http_chunk.c stream.c fdevent.c gw_backend.c
 	stat_cache.c plugin.c joblist.c etag.c array.c
 	data_string.c data_array.c
@@ -671,6 +671,7 @@ add_executable(test_configfile
 	array.c
 	data_config.c
 	data_string.c
+	http_header.c
 	http_kv.c
 	vector.c
 	log.c
@@ -684,6 +685,7 @@ add_executable(test_request
 	buffer.c
 	array.c
 	data_string.c
+	http_header.c
 	http_kv.c
 	log.c
 	sock_addr.c

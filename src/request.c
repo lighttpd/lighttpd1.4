@@ -3,6 +3,7 @@
 #include "request.h"
 #include "base.h"
 #include "burl.h"
+#include "http_header.h"
 #include "http_kv.h"
 #include "log.h"
 #include "sock_addr.h"
@@ -421,161 +422,145 @@ static void init_parse_header_state(parse_header_state* state) {
 	state->reqline_hostlen = 0;
 }
 
-/* add a header to the list of headers; certain headers are also parsed in this state.
- *
- * Also might drop a header if deemed unnecessary/broken.
+/* add header to list of headers
+ * certain headers are also parsed
+ * might drop a header if deemed unnecessary/broken
  *
  * returns 0 on error
  */
 static int parse_single_header(server *srv, connection *con, parse_header_state *state, char *k, size_t klen, char *v, size_t vlen) {
-	int cmp = 1;
-	const char **save = NULL;
-	buffer **saveb = NULL;
+    const enum http_header_e id = http_header_hkey_get(k, klen);
+    buffer **saveb = NULL;
 
-	/* strip leading whitespace */
-	while (vlen > 0 && (v[0] == ' ' || v[0] == '\t')) {
-		++v;
-		--vlen;
-	}
+    /* strip leading whitespace */
+    for (; vlen > 0 && (v[0] == ' ' || v[0] == '\t'); ++v, --vlen) ;
 
-	/* strip trailing whitespace */
-	while (vlen > 0 && (v[vlen - 1] == ' ' || v[vlen - 1] == '\t')) {
-		--vlen;
-	}
+    /* strip trailing whitespace */
+    while (vlen > 0 && (v[vlen - 1] == ' ' || v[vlen - 1] == '\t')) --vlen;
 
-	/* empty header-fields are not allowed by HTTP-RFC, we just ignore them */
-	if (0 == vlen) {
-		return 1; /* ignore header */
-	}
+    /* empty header-fields are not allowed by HTTP-RFC, we just ignore them */
+    if (0 == vlen) return 1; /* ignore header */
 
-	/* retrieve values
-	 *
-	 *
-	 * the list of options is sorted to simplify the search
-	 * Note: k is not '\0'-terminated
-	 */
+    /*
+     * Note: k might not be '\0'-terminated
+     */
 
-	if (10 == klen && 0 == (cmp = strncasecmp(k, "Connection", 10))) {
-		array *vals;
-		size_t vi;
+    switch (id) {
+      /*case HTTP_HEADER_OTHER:*/
+      default:
+        break;
+      case HTTP_HEADER_HOST:
+        if (!(con->request.htags & HTTP_HEADER_HOST)) {
+            saveb = &con->request.http_host;
+        }
+        else if (state->reqline_host) {
+            /* ignore all Host: headers as we got Host in request line */
+            return 1; /* ignore header */
+        }
+        else {
+            if (srv->srvconf.log_request_header_on_error) {
+                log_error_write(srv, __FILE__, __LINE__, "s",
+                                "duplicate Host-header -> 400");
+                log_error_write(srv, __FILE__, __LINE__, "Sb",
+                                "request-header:\n", con->request.request);
+            }
+            return 0; /* invalid header */
+        }
+        break;
+      case HTTP_HEADER_CONNECTION:
+        {
+            array * const vals = srv->split_vals;
+            array_reset(vals);
+            http_request_split_value(vals, v, vlen); /* split on , */
+            for (size_t vi = 0; vi < vals->used; ++vi) {
+                data_string *dsv = (data_string *)vals->data[vi];
+                if (0 == buffer_caseless_compare(CONST_BUF_LEN(dsv->value),
+                                                 CONST_STR_LEN("keep-alive"))) {
+                    state->keep_alive_set = HTTP_CONNECTION_KEEPALIVE;
+                    break;
+                }
+                else if (0 == buffer_caseless_compare(CONST_BUF_LEN(dsv->value),
+                                                      CONST_STR_LEN("close"))) {
+                    state->keep_alive_set = HTTP_CONNECTION_CLOSE;
+                    break;
+                }
+            }
+        }
+        break;
+      case HTTP_HEADER_CONTENT_TYPE:
+        if (con->request.htags & HTTP_HEADER_CONTENT_TYPE) {
+            if (srv->srvconf.log_request_header_on_error) {
+                log_error_write(srv, __FILE__, __LINE__, "s",
+                                "duplicate Content-Type-header -> 400");
+                log_error_write(srv, __FILE__, __LINE__, "Sb",
+                                "request-header:\n", con->request.request);
+            }
+            return 0; /* invalid header */
+        }
+        break;
+      case HTTP_HEADER_IF_NONE_MATCH:
+        /* if dup, only the first one will survive */
+        if (con->request.htags & HTTP_HEADER_IF_NONE_MATCH) {
+            return 1; /* ignore header */
+        }
+        break;
+      case HTTP_HEADER_CONTENT_LENGTH:
+        if (!(con->request.htags & HTTP_HEADER_CONTENT_LENGTH)) {
+            char *err;
+            off_t r = strtoll(v, &err, 10);
 
-		/* split on , */
+            if (*err == '\0' && r >= 0) {
+                con->request.content_length = r;
+            }
+            else {
+                log_error_write(srv, __FILE__, __LINE__, "sss",
+                                "content-length broken:", v, "-> 400");
+                return 0; /* invalid header */
+            }
+        }
+        else {
+            if (srv->srvconf.log_request_header_on_error) {
+                log_error_write(srv, __FILE__, __LINE__, "s",
+                                "duplicate Content-Length-header -> 400");
+                log_error_write(srv, __FILE__, __LINE__, "Sb",
+                                "request-header:\n", con->request.request);
+            }
+            return 0; /* invalid header */
+        }
+        break;
+      case HTTP_HEADER_IF_MODIFIED_SINCE:
+        if (con->request.htags & HTTP_HEADER_IF_MODIFIED_SINCE) {
+            /* Proxies sometimes send dup headers
+             * if they are the same we ignore the second
+             * if not, we raise an error */
+            buffer *vb =
+              http_header_request_get(con, HTTP_HEADER_IF_MODIFIED_SINCE,
+                                      CONST_STR_LEN("If-Modified-Since"));
+            if (vb && buffer_is_equal_caseless_string(vb, v, vlen)) {
+                /* ignore it if they are the same */
+                return 1; /* ignore header */
+            }
+            else {
+                if (srv->srvconf.log_request_header_on_error) {
+                    log_error_write(srv, __FILE__, __LINE__, "s",
+                                    "duplicate If-Modified-Since header -> 400");
+                    log_error_write(srv, __FILE__, __LINE__, "Sb",
+                                    "request-header:\n", con->request.request);
+                }
+                return 0; /* invalid header */
+            }
+        }
+        break;
+    }
 
-		vals = srv->split_vals;
+    con->request.htags |= id;
+    http_header_request_append(con, id, k, klen, v, vlen);
 
-		array_reset(vals);
+    if (saveb) {
+        *saveb = http_header_request_get(con, id, k, klen);
+    }
 
-		http_request_split_value(vals, v, vlen);
-
-		for (vi = 0; vi < vals->used; vi++) {
-			data_string *dsv = (data_string *)vals->data[vi];
-
-			if (0 == buffer_caseless_compare(CONST_BUF_LEN(dsv->value), CONST_STR_LEN("keep-alive"))) {
-				state->keep_alive_set = HTTP_CONNECTION_KEEPALIVE;
-
-				break;
-			} else if (0 == buffer_caseless_compare(CONST_BUF_LEN(dsv->value), CONST_STR_LEN("close"))) {
-				state->keep_alive_set = HTTP_CONNECTION_CLOSE;
-
-				break;
-			}
-		}
-
-	} else if (cmp > 0 && 14 == klen && 0 == (cmp = strncasecmp(k, "Content-Length", 14))) {
-		char *err;
-		off_t r;
-
-		if (state->con_length_set) {
-			if (srv->srvconf.log_request_header_on_error) {
-				log_error_write(srv, __FILE__, __LINE__, "s",
-						"duplicate Content-Length-header -> 400");
-				log_error_write(srv, __FILE__, __LINE__, "Sb",
-						"request-header:\n",
-						con->request.request);
-			}
-			return 0; /* invalid header */
-		}
-
-		r = strtoll(v, &err, 10);
-
-		if (*err == '\0' && r >= 0) {
-			state->con_length_set = 1;
-			con->request.content_length = r;
-		} else {
-			log_error_write(srv, __FILE__, __LINE__, "sss",
-					"content-length broken:", v, "-> 400");
-			return 0; /* invalid header */
-		}
-	} else if (cmp > 0 && 12 == klen && 0 == (cmp = strncasecmp(k, "Content-Type", 12))) {
-		/* if dup, only the first one will survive */
-		if (!con->request.http_content_type) {
-			save = &con->request.http_content_type;
-		} else {
-			if (srv->srvconf.log_request_header_on_error) {
-				log_error_write(srv, __FILE__, __LINE__, "s",
-						"duplicate Content-Type-header -> 400");
-				log_error_write(srv, __FILE__, __LINE__, "Sb",
-						"request-header:\n",
-						con->request.request);
-			}
-			return 0; /* invalid header */
-		}
-	} else if (cmp > 0 && 4 == klen && 0 == (cmp = strncasecmp(k, "Host", 4))) {
-		if (state->reqline_host) {
-			/* ignore all host: headers as we got the host in the request line */
-			return 1; /* ignore header */
-		} else if (!con->request.http_host) {
-			saveb = &con->request.http_host;
-		} else {
-			if (srv->srvconf.log_request_header_on_error) {
-				log_error_write(srv, __FILE__, __LINE__, "s",
-						"duplicate Host-header -> 400");
-				log_error_write(srv, __FILE__, __LINE__, "Sb",
-						"request-header:\n",
-						con->request.request);
-			}
-			return 0; /* invalid header */
-		}
-	} else if (cmp > 0 && 17 == klen && 0 == (cmp = strncasecmp(k, "If-Modified-Since", 17))) {
-		/* Proxies sometimes send dup headers
-		 * if they are the same we ignore the second
-		 * if not, we raise an error */
-		if (!con->request.http_if_modified_since) {
-			save = &con->request.http_if_modified_since;
-		} else if (0 == strcasecmp(con->request.http_if_modified_since, v)) {
-			/* ignore it if they are the same */
-			return 1; /* ignore header */
-		} else {
-			if (srv->srvconf.log_request_header_on_error) {
-				log_error_write(srv, __FILE__, __LINE__, "s",
-						"duplicate If-Modified-Since header -> 400");
-				log_error_write(srv, __FILE__, __LINE__, "Sb",
-						"request-header:\n",
-						con->request.request);
-			}
-			return 0; /* invalid header */
-		}
-	} else if (cmp > 0 && 13 == klen && 0 == (cmp = strncasecmp(k, "If-None-Match", 13))) {
-		/* if dup, only the first one will survive */
-		if (!con->request.http_if_none_match) {
-			save = &con->request.http_if_none_match;
-		} else {
-			return 1; /* ignore header */
-		}
-	}
-
-	array_insert_key_value(con->request.headers, k, klen, v, vlen);
-
-	if (save) {
-		data_string *ds = (data_string *)array_get_element_klen(con->request.headers, k, klen);
-		if (ds) *save = ds->value->ptr;
-	}
-	if (saveb) {
-		data_string *ds = (data_string *)array_get_element_klen(con->request.headers, k, klen);
-		if (ds) *saveb = ds->value;
-	}
-
-	return 1;
+    return 1;
 }
 
 static size_t http_request_parse_reqline(server *srv, connection *con, parse_header_state *state) {
@@ -759,13 +744,13 @@ static size_t http_request_parse_reqline(server *srv, connection *con, parse_hea
 				if (*uri == '/') {
 					/* (common case) */
 					buffer_copy_string_len(con->request.uri, uri, proto - uri - 1);
-				} else if (0 == strncasecmp(uri, "http://", 7) &&
+				} else if (0 == buffer_caseless_compare(uri, 7, "http://", 7) &&
 				    NULL != (nuri = strchr(uri + 7, '/'))) {
 					state->reqline_host = uri + 7;
 					state->reqline_hostlen = nuri - state->reqline_host;
 
 					buffer_copy_string_len(con->request.uri, nuri, proto - nuri - 1);
-				} else if (0 == strncasecmp(uri, "https://", 8) &&
+				} else if (0 == buffer_caseless_compare(uri, 8, "https://", 8) &&
 				    NULL != (nuri = strchr(uri + 8, '/'))) {
 					state->reqline_host = uri + 8;
 					state->reqline_hostlen = nuri - state->reqline_host;
@@ -866,8 +851,8 @@ static size_t http_request_parse_reqline(server *srv, connection *con, parse_hea
 
 	if (state->reqline_host) {
 		/* Insert as host header */
-		array_insert_key_value(con->request.headers, CONST_STR_LEN("Host"), state->reqline_host, state->reqline_hostlen);
-		con->request.http_host = ((data_string *)array_get_element_klen(con->request.headers, CONST_STR_LEN("Host")))->value;
+		http_header_request_set(con, HTTP_HEADER_HOST, CONST_STR_LEN("Host"), state->reqline_host, state->reqline_hostlen);
+		con->request.http_host = http_header_request_get(con, HTTP_HEADER_HOST, CONST_STR_LEN("Host"));
 	}
 
 	return i;
@@ -1108,16 +1093,16 @@ int http_request_parse(server *srv, connection *con) {
 		goto failure;
 	}
 
-	{
-		data_string *ds = (data_string *)array_get_element(con->request.headers, "Transfer-Encoding");
-		if (NULL != ds) {
+        if (con->request.htags & HTTP_HEADER_TRANSFER_ENCODING) {
+		buffer *vb = http_header_request_get(con, HTTP_HEADER_TRANSFER_ENCODING, CONST_STR_LEN("Transfer-Encoding"));
+		if (NULL != vb) {
 			if (con->request.http_version == HTTP_VERSION_1_0) {
 				log_error_write(srv, __FILE__, __LINE__, "s",
 						"HTTP/1.0 with Transfer-Encoding (bad HTTP/1.0 proxy?) -> 400");
 				goto failure;
 			}
 
-			if (0 != strcasecmp(ds->value->ptr, "chunked")) {
+			if (0 != strcasecmp(vb->ptr, "chunked")) {
 				/* Transfer-Encoding might contain additional encodings,
 				 * which are not currently supported by lighttpd */
 				con->http_status = 501; /* Not Implemented */
@@ -1126,15 +1111,20 @@ int http_request_parse(server *srv, connection *con) {
 
 			/* reset value for Transfer-Encoding, a hop-by-hop header,
 			 * which must not be blindly forwarded to backends */
-			buffer_reset(ds->value); /* headers with empty values are ignored */
+			buffer_reset(vb); /* headers with empty values are ignored */
+
+			/*(note: ignore whether or not Content-Length was provided)*/
+		        if (con->request.htags & HTTP_HEADER_CONTENT_LENGTH) {
+				vb = http_header_request_get(con, HTTP_HEADER_CONTENT_LENGTH, CONST_STR_LEN("Content-Length"));
+				if (NULL != vb) buffer_reset(vb); /* headers with empty values are ignored */
+			}
 
 			state.con_length_set = 1;
 			con->request.content_length = -1;
-
-			/*(note: ignore whether or not Content-Length was provided)*/
-			ds = (data_string *)array_get_element(con->request.headers, "Content-Length");
-			if (NULL != ds) buffer_reset(ds->value); /* headers with empty values are ignored */
 		}
+	}
+        else if (con->request.htags & HTTP_HEADER_CONTENT_LENGTH) {
+		state.con_length_set = 1;
 	}
 
 	switch(con->request.http_method) {

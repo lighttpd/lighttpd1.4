@@ -3,8 +3,8 @@
 #include "base.h"
 #include "log.h"
 #include "buffer.h"
-#include "response.h"
 #include "http_chunk.h"
+#include "http_header.h"
 
 #include "plugin.h"
 
@@ -244,7 +244,7 @@ URIHANDLER_FUNC(mod_flv_streaming_path_handler) {
 				return HANDLER_GO_ON;
 			}
 
-			response_header_overwrite(srv, con, CONST_STR_LEN("Content-Type"), CONST_STR_LEN("video/x-flv"));
+			http_header_response_set(con, HTTP_HEADER_CONTENT_TYPE, CONST_STR_LEN("Content-Type"), CONST_STR_LEN("video/x-flv"));
 
 			con->file_finished = 1;
 

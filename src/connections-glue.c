@@ -4,6 +4,7 @@
 #include "base.h"
 #include "connections.h"
 #include "fdevent.h"
+#include "http_header.h"
 #include "log.h"
 
 #include <errno.h>
@@ -435,9 +436,9 @@ handler_t connection_handle_read_post_state(server *srv, connection *con) {
 	if (chunkqueue_is_empty(cq) && 0 == dst_cq->bytes_in
 	    && con->request.http_version != HTTP_VERSION_1_0
 	    && chunkqueue_is_empty(con->write_queue) && con->is_writable) {
-		data_string *ds = (data_string *)array_get_element(con->request.headers, "Expect");
-		if (NULL != ds && 0 == buffer_caseless_compare(CONST_BUF_LEN(ds->value), CONST_STR_LEN("100-continue"))) {
-			buffer_reset(ds->value); /* unset value in request headers */
+		buffer *vb = http_header_request_get(con, HTTP_HEADER_EXPECT, CONST_STR_LEN("Expect"));
+		if (NULL != vb && 0 == buffer_caseless_compare(CONST_BUF_LEN(vb), CONST_STR_LEN("100-continue"))) {
+			buffer_reset(vb); /* unset value in request headers */
 			if (!connection_write_100_continue(srv, con)) {
 				return HANDLER_ERROR;
 			}
@@ -490,7 +491,7 @@ void connection_response_reset(server *srv, connection *con) {
 	con->is_writable = 1;
 	con->file_finished = 0;
 	con->file_started = 0;
-	con->parsed_response = 0;
+	con->response.htags = 0;
 	con->response.keep_alive = 0;
 	con->response.content_length = -1;
 	con->response.transfer_encoding = 0;

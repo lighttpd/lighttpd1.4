@@ -115,7 +115,7 @@
 #include "buffer.h"
 #include "etag.h"
 #include "http_chunk.h"
-#include "response.h"
+#include "http_header.h"
 
 #include "plugin.h"
 
@@ -671,16 +671,14 @@ static int mod_deflate_stream_flush(server *srv, connection *con, handler_ctx *h
 }
 
 static void mod_deflate_note_ratio(server *srv, connection *con, handler_ctx *hctx) {
-    /* store compression ratio in con->environment
+    /* store compression ratio in environment
      * for possible logging by mod_accesslog
      * (late in response handling, so not seen by most other modules) */
     /*(should be called only at end of successful response compression)*/
     char ratio[LI_ITOSTRING_LENGTH];
     if (0 == hctx->bytes_in) return;
     li_itostrn(ratio, sizeof(ratio), hctx->bytes_out * 100 / hctx->bytes_in);
-    array_set_key_value(con->environment,
-                        CONST_STR_LEN("ratio"),
-                        ratio, strlen(ratio));
+    http_header_env_set(con, CONST_STR_LEN("ratio"), ratio, strlen(ratio));
     UNUSED(srv);
 }
 
@@ -1039,7 +1037,7 @@ static int mod_deflate_choose_encoding (const char *value, plugin_data *p, const
 
 CONNECTION_FUNC(mod_deflate_handle_response_start) {
 	plugin_data *p = p_d;
-	data_string *ds;
+	buffer *vb;
 	handler_ctx *hctx;
 	const char *label;
 	off_t len;
@@ -1050,7 +1048,7 @@ CONNECTION_FUNC(mod_deflate_handle_response_start) {
 	/*(current implementation requires response be complete)*/
 	if (!con->file_finished) return HANDLER_GO_ON;
 	if (con->request.http_method == HTTP_METHOD_HEAD) return HANDLER_GO_ON;
-	if (con->parsed_response & HTTP_TRANSFER_ENCODING) return HANDLER_GO_ON;
+	if (con->response.htags & HTTP_HEADER_TRANSFER_ENCODING) return HANDLER_GO_ON;
 
 	/* disable compression for some http status types. */
 	switch(con->http_status) {
@@ -1080,24 +1078,24 @@ CONNECTION_FUNC(mod_deflate_handle_response_start) {
 	}
 
 	/* Check if response has a Content-Encoding. */
-	ds = (data_string *)array_get_element(con->response.headers, "Content-Encoding");
-	if (NULL != ds) return HANDLER_GO_ON;
+	vb = http_header_response_get(con, HTTP_HEADER_CONTENT_ENCODING, CONST_STR_LEN("Content-Encoding"));
+	if (NULL != vb) return HANDLER_GO_ON;
 
 	/* Check Accept-Encoding for supported encoding. */
-	ds = (data_string *)array_get_element(con->request.headers, "Accept-Encoding");
-	if (NULL == ds) return HANDLER_GO_ON;
+	vb = http_header_request_get(con, HTTP_HEADER_ACCEPT_ENCODING, CONST_STR_LEN("Accept-Encoding"));
+	if (NULL == vb) return HANDLER_GO_ON;
 
 	/* find matching encodings */
-	compression_type = mod_deflate_choose_encoding(ds->value->ptr, p, &label);
+	compression_type = mod_deflate_choose_encoding(vb->ptr, p, &label);
 	if (!compression_type) return HANDLER_GO_ON;
 
 	/* Check mimetype in response header "Content-Type" */
-	if (NULL != (ds = (data_string *)array_get_element(con->response.headers, "Content-Type"))) {
+	if (NULL != (vb = http_header_response_get(con, HTTP_HEADER_CONTENT_TYPE, CONST_STR_LEN("Content-Type")))) {
 		int found = 0;
 		size_t m;
 		for (m = 0; m < p->conf.mimetypes->used; ++m) {
 			data_string *mimetype = (data_string *)p->conf.mimetypes->data[m];
-			if (0 == strncmp(mimetype->value->ptr, ds->value->ptr, buffer_string_length(mimetype->value))) {
+			if (0 == strncmp(mimetype->value->ptr, vb->ptr, buffer_string_length(mimetype->value))) {
 				/* mimetype found */
 				found = 1;
 				break;
@@ -1106,7 +1104,7 @@ CONNECTION_FUNC(mod_deflate_handle_response_start) {
 		if (!found) return HANDLER_GO_ON;
 
 #if 0
-		if (0 == strncasecmp(ds->value->ptr, "application/x-javascript", 24)) {
+		if (0 == strncasecmp(vb->ptr, "application/x-javascript", 24)) {
 			/*reset compress type to deflate for javascript
 			 * prevent buggy IE6 SP1 doesn't work for js in IFrame
 			 */
@@ -1120,34 +1118,35 @@ CONNECTION_FUNC(mod_deflate_handle_response_start) {
 	}
 
 	/* Vary: Accept-Encoding (response might change according to request Accept-Encoding) */
-	if (NULL != (ds = (data_string *)array_get_element(con->response.headers, "Vary"))) {
-		if (NULL == strstr(ds->value->ptr, "Accept-Encoding")) {
-			buffer_append_string_len(ds->value, CONST_STR_LEN(",Accept-Encoding"));
+	if (NULL != (vb = http_header_response_get(con, HTTP_HEADER_VARY, CONST_STR_LEN("Vary")))) {
+		if (NULL == strstr(vb->ptr, "Accept-Encoding")) {
+			buffer_append_string_len(vb, CONST_STR_LEN(",Accept-Encoding"));
 		}
 	} else {
-		response_header_insert(srv, con, CONST_STR_LEN("Vary"),
-				CONST_STR_LEN("Accept-Encoding"));
+		http_header_response_append(con, HTTP_HEADER_VARY,
+					    CONST_STR_LEN("Vary"),
+					    CONST_STR_LEN("Accept-Encoding"));
 	}
 
 	/* check ETag as is done in http_response_handle_cachable()
 	 * (slightly imperfect (close enough?) match of ETag "000000" to "000000-gzip") */
-	ds = (data_string *)array_get_element(con->response.headers, "ETag");
-	if (NULL != ds) {
-		etaglen = buffer_string_length(ds->value);
+	vb = http_header_response_get(con, HTTP_HEADER_ETAG, CONST_STR_LEN("ETag"));
+	if (NULL != vb && (con->request.htags & HTTP_HEADER_IF_NONE_MATCH)) {
+		buffer *if_none_match = http_header_response_get(con, HTTP_HEADER_IF_NONE_MATCH, CONST_STR_LEN("If-None-Match"));
+		etaglen = buffer_string_length(vb);
 		if (etaglen
 		    && con->http_status < 300 /*(want 2xx only)*/
-		    && con->request.http_if_none_match
-		    && 0 == strncmp(con->request.http_if_none_match, ds->value->ptr, etaglen-1)
-		    && con->request.http_if_none_match[etaglen-1] == '-'
-		    && 0 == strncmp(con->request.http_if_none_match+etaglen, label, strlen(label))) {
+		    && 0 == strncmp(if_none_match->ptr, vb->ptr, etaglen-1)
+		    && if_none_match->ptr[etaglen-1] == '-'
+		    && 0 == strncmp(if_none_match->ptr+etaglen, label, strlen(label))) {
 
 			if (   HTTP_METHOD_GET  == con->request.http_method
 			    || HTTP_METHOD_HEAD == con->request.http_method) {
 				/* modify ETag response header in-place to remove '"' and append '-label"' */
-				ds->value->ptr[etaglen-1] = '-'; /*(overwrite end '"')*/
-				buffer_append_string(ds->value, label);
-				buffer_append_string_len(ds->value, CONST_STR_LEN("\""));
-				/*buffer_copy_buffer(con->physical.etag, ds->value);*//*(keep in sync?)*/
+				vb->ptr[etaglen-1] = '-'; /*(overwrite end '"')*/
+				buffer_append_string(vb, label);
+				buffer_append_string_len(vb, CONST_STR_LEN("\""));
+				/*buffer_copy_buffer(con->physical.etag, vb);*//*(keep in sync?)*/
 				con->http_status = 304;
 			} else {
 				con->http_status = 412;
@@ -1159,7 +1158,9 @@ CONNECTION_FUNC(mod_deflate_handle_response_start) {
 			 * might be run again if response_start hooks return with
 			 * changed http_status and con->mode = DIRECT */
 			con->response.transfer_encoding &= ~HTTP_TRANSFER_ENCODING_CHUNKED;
-			con->parsed_response &= ~HTTP_CONTENT_LENGTH;
+			if (con->response.htags & HTTP_HEADER_CONTENT_LENGTH) {
+				http_header_response_set(con, HTTP_HEADER_CONTENT_LENGTH, CONST_STR_LEN("Content-Length"), CONST_STR_LEN(""));
+			}
 			chunkqueue_reset(con->write_queue);
 			con->file_finished = 1;
 
@@ -1175,14 +1176,14 @@ CONNECTION_FUNC(mod_deflate_handle_response_start) {
 	/* update ETag, if ETag response header is set */
 	if (etaglen) {
 		/* modify ETag response header in-place to remove '"' and append '-label"' */
-		ds->value->ptr[etaglen-1] = '-'; /*(overwrite end '"')*/
-		buffer_append_string(ds->value, label);
-		buffer_append_string_len(ds->value, CONST_STR_LEN("\""));
-		/*buffer_copy_buffer(con->physical.etag, ds->value);*//*(keep in sync?)*/
+		vb->ptr[etaglen-1] = '-'; /*(overwrite end '"')*/
+		buffer_append_string(vb, label);
+		buffer_append_string_len(vb, CONST_STR_LEN("\""));
+		/*buffer_copy_buffer(con->physical.etag, vb);*//*(keep in sync?)*/
 	}
 
 	/* set Content-Encoding to show selected compression type */
-	response_header_overwrite(srv, con, CONST_STR_LEN("Content-Encoding"), label, strlen(label));
+	http_header_response_set(con, HTTP_HEADER_CONTENT_ENCODING, CONST_STR_LEN("Content-Encoding"), label, strlen(label));
 
 	/* clear Content-Length and con->write_queue if HTTP HEAD request
 	 * (alternatively, could return original Content-Length with HEAD
@@ -1190,11 +1191,8 @@ CONNECTION_FUNC(mod_deflate_handle_response_start) {
 	if (HTTP_METHOD_HEAD == con->request.http_method) {
 		/* ensure that uncompressed Content-Length is not sent in HEAD response */
 		chunkqueue_reset(con->write_queue);
-		if (con->parsed_response & HTTP_CONTENT_LENGTH) {
-			con->parsed_response &= ~HTTP_CONTENT_LENGTH;
-			if (NULL != (ds = (data_string*) array_get_element(con->response.headers, "Content-Length"))) {
-				buffer_reset(ds->value); /* headers with empty values are ignored for output */
-			}
+		if (con->response.htags & HTTP_HEADER_CONTENT_LENGTH) {
+			http_header_response_set(con, HTTP_HEADER_CONTENT_LENGTH, CONST_STR_LEN("Content-Length"), CONST_STR_LEN(""));
 		}
 		return HANDLER_GO_ON;
 	}
@@ -1218,15 +1216,17 @@ CONNECTION_FUNC(mod_deflate_handle_response_start) {
 				"Failed to initialize compression", label);
 		/* restore prior Etag and unset Content-Encoding */
 		if (etaglen) {
-			ds->value->ptr[etaglen-1] = '"'; /*(overwrite '-')*/
-			buffer_string_set_length(ds->value, etaglen);
+			vb->ptr[etaglen-1] = '"'; /*(overwrite '-')*/
+			buffer_string_set_length(vb, etaglen);
 		}
-		ds = (data_string *)array_get_element(con->response.headers, "Content-Encoding");
-		if (ds) buffer_reset(ds->value); /* headers with empty values are ignored for output */
+		vb = http_header_response_get(con, HTTP_HEADER_CONTENT_ENCODING, CONST_STR_LEN("Content-Encoding"));
+		if (vb) buffer_reset(vb); /* headers with empty values are ignored for output */
 		return HANDLER_GO_ON;
 	}
 
-	con->parsed_response &= ~HTTP_CONTENT_LENGTH;
+	if (con->response.htags & HTTP_HEADER_CONTENT_LENGTH) {
+		http_header_response_set(con, HTTP_HEADER_CONTENT_LENGTH, CONST_STR_LEN("Content-Length"), CONST_STR_LEN(""));
+	}
 	con->plugin_ctx[p->id] = hctx;
 
 	rc = deflate_compress_response(srv, con, hctx);

@@ -2,9 +2,8 @@
 
 #include "base.h"
 #include "connections.h"
-#include "response.h"
-#include "connections.h"
 #include "fdevent.h"
+#include "http_header.h"
 #include "log.h"
 
 #include "plugin.h"
@@ -589,7 +588,7 @@ static handler_t mod_status_handle_server_status_html(server *srv, connection *c
 	chunkqueue_append_buffer(con->write_queue, b);
 	buffer_free(b);
 
-	response_header_overwrite(srv, con, CONST_STR_LEN("Content-Type"), CONST_STR_LEN("text/html"));
+	http_header_response_set(con, HTTP_HEADER_CONTENT_TYPE, CONST_STR_LEN("Content-Type"), CONST_STR_LEN("text/html"));
 
 	return 0;
 }
@@ -652,7 +651,7 @@ static handler_t mod_status_handle_server_status_text(server *srv, connection *c
 	buffer_free(b);
 
 	/* set text/plain output */
-	response_header_overwrite(srv, con, CONST_STR_LEN("Content-Type"), CONST_STR_LEN("text/plain"));
+	http_header_response_set(con, HTTP_HEADER_CONTENT_TYPE, CONST_STR_LEN("Content-Type"), CONST_STR_LEN("text/plain"));
 
 	return 0;
 }
@@ -737,7 +736,7 @@ static handler_t mod_status_handle_server_status_json(server *srv, connection *c
 	buffer_free(b);
 
 	/* set text/plain output */
-	response_header_overwrite(srv, con, CONST_STR_LEN("Content-Type"), CONST_STR_LEN("application/javascript"));
+	http_header_response_set(con, HTTP_HEADER_CONTENT_TYPE, CONST_STR_LEN("Content-Type"), CONST_STR_LEN("application/javascript"));
 
 	return 0;
 }
@@ -770,7 +769,7 @@ static handler_t mod_status_handle_server_statistics(server *srv, connection *co
 	chunkqueue_append_buffer(con->write_queue, b);
 	buffer_free(b);
 
-	response_header_overwrite(srv, con, CONST_STR_LEN("Content-Type"), CONST_STR_LEN("text/plain"));
+	http_header_response_set(con, HTTP_HEADER_CONTENT_TYPE, CONST_STR_LEN("Content-Type"), CONST_STR_LEN("text/plain"));
 
 	con->http_status = 200;
 	con->file_finished = 1;
@@ -855,7 +854,7 @@ static handler_t mod_status_handle_server_config(server *srv, connection *con, v
 	chunkqueue_append_buffer(con->write_queue, b);
 	buffer_free(b);
 
-	response_header_overwrite(srv, con, CONST_STR_LEN("Content-Type"), CONST_STR_LEN("text/html"));
+	http_header_response_set(con, HTTP_HEADER_CONTENT_TYPE, CONST_STR_LEN("Content-Type"), CONST_STR_LEN("text/html"));
 
 	con->http_status = 200;
 	con->file_finished = 1;

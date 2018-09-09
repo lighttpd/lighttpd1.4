@@ -8,6 +8,7 @@
 #include "joblist.h"
 #include "response.h"
 #include "http_chunk.h"
+#include "http_header.h"
 
 #include "plugin.h"
 
@@ -355,24 +356,25 @@ static handler_t cgi_response_headers(server *srv, connection *con, struct http_
     /* response headers just completed */
     handler_ctx *hctx = (handler_ctx *)opts->pdata;
 
-    if (con->parsed_response & HTTP_UPGRADE) {
+    if (con->response.htags & HTTP_HEADER_UPGRADE) {
         if (hctx->conf.upgrade && con->http_status == 101) {
             /* 101 Switching Protocols; transition to transparent proxy */
             http_response_upgrade_read_body_unknown(srv, con);
         }
         else {
-            con->parsed_response &= ~HTTP_UPGRADE;
+            con->response.htags &= ~HTTP_HEADER_UPGRADE;
           #if 0
             /* preserve prior questionable behavior; likely broken behavior
              * anyway if backend thinks connection is being upgraded but client
              * does not receive Connection: upgrade */
-            response_header_overwrite(srv, con, CONST_STR_LEN("Upgrade"),
-                                                CONST_STR_LEN(""));
+            http_header_response_set(con, HTTP_HEADER_UPGRADE,
+                                     CONST_STR_LEN("Upgrade"),
+                                     CONST_STR_LEN(""));
           #endif
         }
     }
 
-    if (hctx->conf.upgrade && !(con->parsed_response & HTTP_UPGRADE)) {
+    if (hctx->conf.upgrade && !(con->response.htags & HTTP_HEADER_UPGRADE)) {
         chunkqueue *cq = con->request_content_queue;
         hctx->conf.upgrade = 0;
         if (cq->bytes_out == (off_t)con->request.content_length) {
@@ -930,7 +932,7 @@ URIHANDLER_FUNC(cgi_is_handled) {
 		hctx->conf.upgrade =
 		  hctx->conf.upgrade
 		  && con->request.http_version == HTTP_VERSION_1_1
-		  && NULL != array_get_element_klen(con->request.headers, CONST_STR_LEN("Upgrade"));
+		  && NULL != http_header_request_get(con, HTTP_HEADER_UPGRADE, CONST_STR_LEN("Upgrade"));
 		hctx->opts.fdfmt = S_IFIFO;
 		hctx->opts.backend = BACKEND_CGI;
 		hctx->opts.authorizer = 0;

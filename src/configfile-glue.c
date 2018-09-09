@@ -5,6 +5,7 @@
 #include "array.h"
 #include "log.h"
 #include "fdevent.h"
+#include "http_header.h"
 #include "sock_addr.h"
 
 #include "configfile.h"
@@ -432,15 +433,10 @@ static cond_result_t config_check_cond_nocache(server *srv, connection *con, dat
 		l = srv_sock->srv_token;
 		break;
 
-	case COMP_HTTP_REQUEST_HEADER: {
-		data_string *ds;
-		if (NULL != (ds = (data_string *)array_get_element_klen(con->request.headers, CONST_BUF_LEN(dc->comp_tag)))) {
-			l = ds->value;
-		} else {
-			l = srv->empty_string;
-		}
+	case COMP_HTTP_REQUEST_HEADER:
+		l = http_header_request_get(con, HTTP_HEADER_UNSPECIFIED, CONST_BUF_LEN(dc->comp_tag));
+		if (NULL == l) l = srv->empty_string;
 		break;
-	}
 	case COMP_HTTP_REQUEST_METHOD: {
 		const char *method = get_http_method_name(con->request.http_method);
 

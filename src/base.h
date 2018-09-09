@@ -21,17 +21,6 @@ struct stat_cache;      /* declaration */
 #define DIRECT 0        /* con->mode */
 
 
-/* fcgi_response_header contains ... */
-#define HTTP_STATUS         BV(0)
-#define HTTP_CONNECTION     BV(1)
-#define HTTP_CONTENT_LENGTH BV(2)
-#define HTTP_DATE           BV(3)
-#define HTTP_LOCATION       BV(4)
-#define HTTP_TRANSFER_ENCODING BV(5)
-#define HTTP_CONTENT_LOCATION  BV(6)
-#define HTTP_SET_COOKIE        BV(7)
-#define HTTP_UPGRADE           BV(8)
-
 typedef struct {
 	/** HEADER */
 	/* the request-line */
@@ -47,10 +36,8 @@ typedef struct {
 
 	/* strings to the header */
 	buffer *http_host; /* not alloced */
-	const char   *http_content_type;
-	const char   *http_if_modified_since;
-	const char   *http_if_none_match;
 
+	unsigned int htags; /* bitfield of flagged headers present in request */
 	array  *headers;
 
 	/* CONTENT */
@@ -65,6 +52,7 @@ typedef struct {
 	off_t   content_length;
 	int     keep_alive;               /* used by  the subrequests in proxy, cgi and fcgi to say the subrequest was keep-alive or not */
 
+	unsigned int htags; /* bitfield of flagged headers present in response */
 	array  *headers;
 
 	enum {
@@ -263,7 +251,6 @@ struct connection {
 
 	/* request */
 	buffer *parse_request;
-	unsigned int parsed_response; /* bitfield which contains the important header-fields of the parsed response header */
 
 	request  request;
 	request_uri uri;

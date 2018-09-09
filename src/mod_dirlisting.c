@@ -3,10 +3,10 @@
 #include "base.h"
 #include "log.h"
 #include "buffer.h"
+#include "http_header.h"
 
 #include "plugin.h"
 
-#include "response.h"
 #include "stat_cache.h"
 
 #include <stdlib.h>
@@ -1141,11 +1141,11 @@ static int http_list_directory(server *srv, connection *con, plugin_data *p, buf
 
 	/* Insert possible charset to Content-Type */
 	if (buffer_string_is_empty(p->conf.encoding)) {
-		response_header_overwrite(srv, con, CONST_STR_LEN("Content-Type"), CONST_STR_LEN("text/html"));
+		http_header_response_set(con, HTTP_HEADER_CONTENT_TYPE, CONST_STR_LEN("Content-Type"), CONST_STR_LEN("text/html"));
 	} else {
 		buffer_copy_string_len(p->content_charset, CONST_STR_LEN("text/html; charset="));
 		buffer_append_string_buffer(p->content_charset, p->conf.encoding);
-		response_header_overwrite(srv, con, CONST_STR_LEN("Content-Type"), CONST_BUF_LEN(p->content_charset));
+		http_header_response_set(con, HTTP_HEADER_CONTENT_TYPE, CONST_STR_LEN("Content-Type"), CONST_BUF_LEN(p->content_charset));
 	}
 
 	con->file_finished = 1;

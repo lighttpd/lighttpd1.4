@@ -3,7 +3,7 @@
 #include "base.h"
 #include "log.h"
 #include "buffer.h"
-#include "response.h"
+#include "http_header.h"
 #include "sock_addr.h"
 
 #include "plugin.h"
@@ -177,7 +177,7 @@ URIHANDLER_FUNC(mod_evasive_uri_handler) {
 			}
 
 			if (!buffer_is_empty(p->conf.location)) {
-				response_header_overwrite(srv, con, CONST_STR_LEN("Location"), CONST_BUF_LEN(p->conf.location));
+				http_header_response_set(con, HTTP_HEADER_LOCATION, CONST_STR_LEN("Location"), CONST_BUF_LEN(p->conf.location));
 				con->http_status = 302;
 				con->file_finished = 1;
 			} else {

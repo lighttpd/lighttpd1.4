@@ -3,6 +3,7 @@
 #include "base.h"
 #include "log.h"
 #include "buffer.h"
+#include "http_header.h"
 
 #include "plugin.h"
 
@@ -201,7 +202,7 @@ URIHANDLER_FUNC(mod_indexfile_subrequest) {
 		if (ds->value && ds->value->ptr[0] == '/') {
 			/* replace uri.path */
 			buffer_copy_buffer(con->uri.path, ds->value);
-			array_insert_key_value(con->environment, CONST_STR_LEN("PATH_TRANSLATED_DIRINDEX"), CONST_BUF_LEN(con->physical.path));
+			http_header_env_set(con, CONST_STR_LEN("PATH_TRANSLATED_DIRINDEX"), CONST_BUF_LEN(con->physical.path));
 		} else {
 			/* append to uri.path the relative path to index file (/ -> /index.php) */
 			buffer_append_string_buffer(con->uri.path, ds->value);

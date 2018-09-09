@@ -5,9 +5,9 @@
 #include "log.h"
 #include "buffer.h"
 #include "burl.h"
+#include "http_header.h"
 
 #include "plugin.h"
-#include "response.h"
 
 #include <stdlib.h>
 #include <string.h>
@@ -170,8 +170,9 @@ URIHANDLER_FUNC(mod_redirect_uri_handler) {
     rc = pcre_keyvalue_buffer_process(p->conf.redirect, &ctx,
                                       con->request.uri, srv->tmp_buf);
     if (HANDLER_FINISHED == rc) {
-        response_header_insert(srv, con, CONST_STR_LEN("Location"),
-                                         CONST_BUF_LEN(srv->tmp_buf));
+        http_header_response_set(con, HTTP_HEADER_LOCATION,
+                                 CONST_STR_LEN("Location"),
+                                 CONST_BUF_LEN(srv->tmp_buf));
         con->http_status = p->conf.redirect_code;
         con->mode = DIRECT;
         con->file_finished = 1;

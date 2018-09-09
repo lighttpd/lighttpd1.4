@@ -3,6 +3,7 @@
 #include "base.h"
 #include "plugin.h"
 #include "http_auth.h"
+#include "http_header.h"
 #include "log.h"
 
 #include <stdlib.h>
@@ -398,8 +399,8 @@ static handler_t mod_auth_uri_handler(server *srv, connection *con, void *p_d) {
 		    : 0 == strncasecmp(con->uri.path->ptr, path->ptr, buffer_string_length(path))) {
 			const http_auth_scheme_t * const scheme = dauth->require->scheme;
 			if (p->conf.auth_extern_authn) {
-				data_string *ds = (data_string *)array_get_element(con->environment, "REMOTE_USER");
-				if (NULL != ds && http_auth_match_rules(dauth->require, ds->value->ptr, NULL, NULL)) {
+				buffer *vb = http_header_env_get(con, CONST_STR_LEN("REMOTE_USER"));
+				if (NULL != vb && http_auth_match_rules(dauth->require, vb->ptr, NULL, NULL)) {
 					return HANDLER_GO_ON;
 				}
 			}
@@ -434,10 +435,10 @@ int mod_auth_plugin_init(plugin *p) {
  * (could be in separate file from mod_auth.c as long as registration occurs)
  */
 
-#include "response.h"
 #include "base64.h"
 #include "md5.h"
 #include "rand.h"
+#include "http_header.h"
 
 static handler_t mod_auth_send_400_bad_request(server *srv, connection *con) {
 	UNUSED(srv);
@@ -457,15 +458,14 @@ static handler_t mod_auth_send_401_unauthorized_basic(server *srv, connection *c
 	buffer_append_string_buffer(srv->tmp_buf, realm);
 	buffer_append_string_len(srv->tmp_buf, CONST_STR_LEN("\", charset=\"UTF-8\""));
 
-	response_header_insert(srv, con, CONST_STR_LEN("WWW-Authenticate"), CONST_BUF_LEN(srv->tmp_buf));
+	http_header_response_set(con, HTTP_HEADER_OTHER, CONST_STR_LEN("WWW-Authenticate"), CONST_BUF_LEN(srv->tmp_buf));
 
 	return HANDLER_FINISHED;
 }
 
 static handler_t mod_auth_check_basic(server *srv, connection *con, void *p_d, const struct http_auth_require_t *require, const struct http_auth_backend_t *backend) {
-	data_string *ds = (data_string *)array_get_element(con->request.headers, "Authorization");
+	buffer *b = http_header_request_get(con, HTTP_HEADER_AUTHORIZATION, CONST_STR_LEN("Authorization"));
 	buffer *username;
-	buffer *b;
 	char *pw;
 	handler_t rc = HANDLER_UNSET;
 
@@ -478,22 +478,21 @@ static handler_t mod_auth_check_basic(server *srv, connection *con, void *p_d, c
 		return HANDLER_FINISHED;
 	}
 
-	if (NULL == ds || buffer_is_empty(ds->value)) {
+	if (NULL == b) {
 		return mod_auth_send_401_unauthorized_basic(srv, con, require->realm);
 	}
 
-	if (0 != strncasecmp(ds->value->ptr, "Basic ", sizeof("Basic ")-1)) {
+	if (0 != strncasecmp(b->ptr, "Basic ", sizeof("Basic ")-1)) {
 		return mod_auth_send_400_bad_request(srv, con);
 	}
       #ifdef __COVERITY__
-	if (buffer_string_length(ds->value) < sizeof("Basic ")-1) {
+	if (buffer_string_length(b) < sizeof("Basic ")-1) {
 		return mod_auth_send_400_bad_request(srv, con);
 	}
       #endif
 
 	username = buffer_init();
 
-	b = ds->value;
 	/* coverity[overflow_sink : FALSE] */
 	if (!buffer_append_base64_decode(username, b->ptr+sizeof("Basic ")-1, buffer_string_length(b)-(sizeof("Basic ")-1), BASE64_STANDARD)) {
 		log_error_write(srv, __FILE__, __LINE__, "sb", "decoding base64-string failed", username);
@@ -516,7 +515,7 @@ static handler_t mod_auth_check_basic(server *srv, connection *con, void *p_d, c
 	rc = backend->basic(srv, con, backend->p_d, require, username, pw);
 	switch (rc) {
 	case HANDLER_GO_ON:
-		http_auth_setenv(con->environment, CONST_BUF_LEN(username), CONST_STR_LEN("Basic"));
+		http_auth_setenv(con, CONST_BUF_LEN(username), CONST_STR_LEN("Basic"));
 		break;
 	case HANDLER_WAIT_FOR_EVENT:
 	case HANDLER_FINISHED:
@@ -550,7 +549,7 @@ typedef struct {
 static handler_t mod_auth_send_401_unauthorized_digest(server *srv, connection *con, buffer *realm, int nonce_stale);
 
 static handler_t mod_auth_check_digest(server *srv, connection *con, void *p_d, const struct http_auth_require_t *require, const struct http_auth_backend_t *backend) {
-	data_string *ds = (data_string *)array_get_element(con->request.headers, "Authorization");
+	buffer *vb = http_header_request_get(con, HTTP_HEADER_AUTHORIZATION, CONST_STR_LEN("Authorization"));
 
 	char a1[33];
 	char a2[33];
@@ -614,14 +613,14 @@ static handler_t mod_auth_check_digest(server *srv, connection *con, void *p_d, 
 		return HANDLER_FINISHED;
 	}
 
-	if (NULL == ds || buffer_is_empty(ds->value)) {
+	if (NULL == vb) {
 		return mod_auth_send_401_unauthorized_digest(srv, con, require->realm, 0);
 	}
 
-	if (0 != strncasecmp(ds->value->ptr, "Digest ", sizeof("Digest ")-1)) {
+	if (0 != strncasecmp(vb->ptr, "Digest ", sizeof("Digest ")-1)) {
 		return mod_auth_send_400_bad_request(srv, con);
 	} else {
-		size_t n = buffer_string_length(ds->value);
+		size_t n = buffer_string_length(vb);
 	      #ifdef __COVERITY__
 		if (n < sizeof("Digest ")-1) {
 			return mod_auth_send_400_bad_request(srv, con);
@@ -629,7 +628,7 @@ static handler_t mod_auth_check_digest(server *srv, connection *con, void *p_d, 
 	      #endif
 		n -= (sizeof("Digest ")-1);
 		b = buffer_init();
-		buffer_copy_string_len(b,ds->value->ptr+sizeof("Digest ")-1,n);
+		buffer_copy_string_len(b,vb->ptr+sizeof("Digest ")-1,n);
 	}
 
 	/* parse credentials from client */
@@ -832,7 +831,7 @@ static handler_t mod_auth_check_digest(server *srv, connection *con, void *p_d, 
 		} /*(future: might send nextnonce when expiration is imminent)*/
 	}
 
-	http_auth_setenv(con->environment, username, strlen(username), CONST_STR_LEN("Digest"));
+	http_auth_setenv(con, username, strlen(username), CONST_STR_LEN("Digest"));
 
 	buffer_free(b);
 
@@ -876,18 +875,18 @@ static handler_t mod_auth_send_401_unauthorized_digest(server *srv, connection *
 		buffer_append_string_len(srv->tmp_buf, CONST_STR_LEN(", stale=true"));
 	}
 
-	response_header_insert(srv, con, CONST_STR_LEN("WWW-Authenticate"), CONST_BUF_LEN(srv->tmp_buf));
+	http_header_response_set(con, HTTP_HEADER_OTHER, CONST_STR_LEN("WWW-Authenticate"), CONST_BUF_LEN(srv->tmp_buf));
 
 	return HANDLER_FINISHED;
 }
 
 static handler_t mod_auth_check_extern(server *srv, connection *con, void *p_d, const struct http_auth_require_t *require, const struct http_auth_backend_t *backend) {
 	/* require REMOTE_USER already set */
-	data_string *ds = (data_string *)array_get_element(con->environment, "REMOTE_USER");
+	buffer *vb = http_header_env_get(con, CONST_STR_LEN("REMOTE_USER"));
 	UNUSED(srv);
 	UNUSED(p_d);
 	UNUSED(backend);
-	if (NULL != ds && http_auth_match_rules(require, ds->value->ptr, NULL, NULL)) {
+	if (NULL != vb && http_auth_match_rules(require, vb->ptr, NULL, NULL)) {
 		return HANDLER_GO_ON;
 	} else {
 		con->http_status = 401;

@@ -4,9 +4,9 @@
 #include "fdevent.h"
 #include "log.h"
 #include "buffer.h"
+#include "http_header.h"
 
 #include "plugin.h"
-#include "response.h"
 
 #include <sys/stat.h>
 #include <stdlib.h>
@@ -325,7 +325,7 @@ static int mod_trigger_b4_dl_patch_connection(server *srv, connection *con, plug
 URIHANDLER_FUNC(mod_trigger_b4_dl_uri_handler) {
 	plugin_data *p = p_d;
 	const char *remote_ip;
-	data_string *ds;
+	buffer *vb;
 
 #if defined(HAVE_PCRE_H)
 	int n;
@@ -355,10 +355,10 @@ URIHANDLER_FUNC(mod_trigger_b4_dl_uri_handler) {
 	if (!p->conf.memc) return HANDLER_GO_ON;
 # endif
 
-	if (NULL != (ds = (data_string *)array_get_element(con->request.headers, "X-Forwarded-For"))) {
+	if (NULL != (vb = http_header_request_get(con, HTTP_HEADER_X_FORWARDED_FOR, CONST_STR_LEN("X-Forwarded-For")))) {
 		/* X-Forwarded-For contains the ip behind the proxy */
 
-		remote_ip = ds->value->ptr;
+		remote_ip = vb->ptr;
 
 		/* memcache can't handle spaces */
 	} else {
@@ -443,7 +443,7 @@ URIHANDLER_FUNC(mod_trigger_b4_dl_uri_handler) {
 			if (val.dptr == NULL) {
 				/* not found, redirect */
 
-				response_header_insert(srv, con, CONST_STR_LEN("Location"), CONST_BUF_LEN(p->conf.deny_url));
+				http_header_response_set(con, HTTP_HEADER_LOCATION, CONST_STR_LEN("Location"), CONST_BUF_LEN(p->conf.deny_url));
 				con->http_status = 307;
 				con->file_finished = 1;
 
@@ -457,7 +457,7 @@ URIHANDLER_FUNC(mod_trigger_b4_dl_uri_handler) {
 			if (srv->cur_ts - last_hit > p->conf.trigger_timeout) {
 				/* found, but timeout, redirect */
 
-				response_header_insert(srv, con, CONST_STR_LEN("Location"), CONST_BUF_LEN(p->conf.deny_url));
+				http_header_response_set(con, HTTP_HEADER_LOCATION, CONST_STR_LEN("Location"), CONST_BUF_LEN(p->conf.deny_url));
 				con->http_status = 307;
 				con->file_finished = 1;
 
@@ -504,7 +504,7 @@ URIHANDLER_FUNC(mod_trigger_b4_dl_uri_handler) {
 			 *
 			 */
 			if (MEMCACHED_SUCCESS != memcached_exist(p->conf.memc, CONST_BUF_LEN(p->tmp_buf))) {
-				response_header_insert(srv, con, CONST_STR_LEN("Location"), CONST_BUF_LEN(p->conf.deny_url));
+				http_header_response_set(con, HTTP_HEADER_LOCATION, CONST_STR_LEN("Location"), CONST_BUF_LEN(p->conf.deny_url));
 
 				con->http_status = 307;
 				con->file_finished = 1;
