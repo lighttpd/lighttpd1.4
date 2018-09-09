@@ -578,21 +578,13 @@ static int parse_single_header(server *srv, connection *con, parse_header_state 
 	return 1;
 }
 
-int http_request_parse(server *srv, connection *con) {
+static size_t http_request_parse_reqline(server *srv, connection *con, parse_header_state *state) {
 	char *uri = NULL, *proto = NULL, *method = NULL;
-	int is_key = 1, key_len = 0;
-	char *value = NULL;
-
 	int line = 0;
 
 	int request_line_stage = 0;
 	size_t i, first, ilen;
-
-	int done = 0;
 	const unsigned int http_header_strict = (con->conf.http_parseopts & HTTP_PARSEOPT_HEADER_STRICT);
-
-	parse_header_state state;
-	init_parse_header_state(&state);
 
 	/*
 	 * Request: "^(GET|POST|HEAD) ([^ ]+(\\?[^ ]+|)) (HTTP/1\\.[01])$"
@@ -614,7 +606,7 @@ int http_request_parse(server *srv, connection *con) {
 
 	      #ifdef __COVERITY__
 		if (buffer_string_length(con->request.request) < 2) {
-			goto failure;
+			return 0;
 		}
 	      #endif
 		/* coverity[overflow_sink : FALSE] */
@@ -624,11 +616,11 @@ int http_request_parse(server *srv, connection *con) {
 		/* we are in keep-alive and might get \n after a previous POST request.*/
 		if (http_header_strict) {
 			http_request_missing_CR_before_LF(srv, con);
-			goto failure;
+			return 0;
 		}
 	      #ifdef __COVERITY__
 		if (buffer_string_length(con->request.request) < 1) {
-			goto failure;
+			return 0;
 		}
 	      #endif
 		/* coverity[overflow_sink : FALSE] */
@@ -664,7 +656,7 @@ int http_request_parse(server *srv, connection *con) {
 					++i;
 				} else if (http_header_strict) { /* '\n' */
 					http_request_missing_CR_before_LF(srv, con);
-					goto failure;
+					return 0;
 				}
 				con->parse_request->ptr[i] = '\0';
 
@@ -675,7 +667,7 @@ int http_request_parse(server *srv, connection *con) {
 								"request-header:\n",
 								con->request.request);
 					}
-					goto failure;
+					return 0;
 				}
 
 				proto = con->parse_request->ptr + first;
@@ -694,7 +686,7 @@ int http_request_parse(server *srv, connection *con) {
 								con->request.request);
 					}
 
-					goto failure;
+					return 0;
 				}
 
 				con->request.http_method = r;
@@ -736,7 +728,7 @@ int http_request_parse(server *srv, connection *con) {
 									"request-header:\n",
 									con->request.request);
 						}
-						goto failure;
+						return 0;
 					}
 
 					if (major_num == 1 && minor_num == 1) {
@@ -752,7 +744,7 @@ int http_request_parse(server *srv, connection *con) {
 									"request-header:\n",
 									con->request.request);
 						}
-						goto failure;
+						return 0;
 					}
 				} else {
 					if (srv->srvconf.log_request_header_on_error) {
@@ -761,7 +753,7 @@ int http_request_parse(server *srv, connection *con) {
 								"request-header:\n",
 								con->request.request);
 					}
-					goto failure;
+					return 0;
 				}
 
 				if (*uri == '/') {
@@ -769,14 +761,14 @@ int http_request_parse(server *srv, connection *con) {
 					buffer_copy_string_len(con->request.uri, uri, proto - uri - 1);
 				} else if (0 == strncasecmp(uri, "http://", 7) &&
 				    NULL != (nuri = strchr(uri + 7, '/'))) {
-					state.reqline_host = uri + 7;
-					state.reqline_hostlen = nuri - state.reqline_host;
+					state->reqline_host = uri + 7;
+					state->reqline_hostlen = nuri - state->reqline_host;
 
 					buffer_copy_string_len(con->request.uri, nuri, proto - nuri - 1);
 				} else if (0 == strncasecmp(uri, "https://", 8) &&
 				    NULL != (nuri = strchr(uri + 8, '/'))) {
-					state.reqline_host = uri + 8;
-					state.reqline_hostlen = nuri - state.reqline_host;
+					state->reqline_host = uri + 8;
+					state->reqline_hostlen = nuri - state->reqline_host;
 
 					buffer_copy_string_len(con->request.uri, nuri, proto - nuri - 1);
 				} else if (!http_header_strict
@@ -786,7 +778,7 @@ int http_request_parse(server *srv, connection *con) {
 					buffer_copy_string_len(con->request.uri, uri, proto - uri - 1);
 				} else {
 					log_error_write(srv, __FILE__, __LINE__, "ss", "request-URI parse error -> 400 for:", uri);
-					goto failure;
+					return 0;
 				}
 
 				/* check uri for invalid characters */
@@ -823,7 +815,7 @@ int http_request_parse(server *srv, connection *con) {
 								con->request.request);
 					}
 
-					goto failure;
+					return 0;
 				}
 
 				buffer_copy_buffer(con->request.orig_uri, con->request.uri);
@@ -854,7 +846,7 @@ int http_request_parse(server *srv, connection *con) {
 							"request-header:\n",
 							con->request.request);
 				}
-				goto failure;
+				return 0;
 			}
 
 			request_line_stage++;
@@ -869,14 +861,28 @@ int http_request_parse(server *srv, connection *con) {
 							"request-header:\n",
 							con->request.request);
 		}
-		goto failure;
+		return 0;
 	}
 
-	if (state.reqline_host) {
+	if (state->reqline_host) {
 		/* Insert as host header */
-		array_insert_key_value(con->request.headers, CONST_STR_LEN("Host"), state.reqline_host, state.reqline_hostlen);
+		array_insert_key_value(con->request.headers, CONST_STR_LEN("Host"), state->reqline_host, state->reqline_hostlen);
 		con->request.http_host = ((data_string *)array_get_element_klen(con->request.headers, CONST_STR_LEN("Host")))->value;
 	}
+
+	return i;
+}
+
+int http_request_parse(server *srv, connection *con) {
+	char *value = NULL;
+	size_t i, first, ilen;
+	const unsigned int http_header_strict = (con->conf.http_parseopts & HTTP_PARSEOPT_HEADER_STRICT);
+
+	parse_header_state state;
+	init_parse_header_state(&state);
+
+	i = first = http_request_parse_reqline(srv, con, &state);
+	if (0 == i) goto failure;
 
 	if (con->parse_request->ptr[i] == ' ' || con->parse_request->ptr[i] == '\t') {
 		if (srv->srvconf.log_request_header_on_error) {
@@ -886,7 +892,8 @@ int http_request_parse(server *srv, connection *con) {
 		goto failure;
 	}
 
-	for (; i <= ilen && !done; i++) {
+	ilen = buffer_string_length(con->parse_request);
+	for (int is_key = 1, key_len = 0, done = 0; i <= ilen && !done; ++i) {
 		char *cur = con->parse_request->ptr + i;
 
 		if (is_key) {
