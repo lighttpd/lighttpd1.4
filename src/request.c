@@ -580,7 +580,7 @@ static int parse_single_header(server *srv, connection *con, parse_header_state 
 
 int http_request_parse(server *srv, connection *con) {
 	char *uri = NULL, *proto = NULL, *method = NULL;
-	int is_key = 1, key_len = 0, is_ws_after_key = 0;
+	int is_key = 1, key_len = 0;
 	char *value = NULL;
 
 	int line = 0;
@@ -890,25 +890,32 @@ int http_request_parse(server *srv, connection *con) {
 		char *cur = con->parse_request->ptr + i;
 
 		if (is_key) {
-			size_t j;
-			int got_colon = 0;
-
 			/**
 			 * 1*<any CHAR except CTLs or separators>
 			 * CTLs == 0-31 + 127, CHAR = 7-bit ascii (0..127)
 			 *
 			 */
 			switch(*cur) {
+			case ' ':
+			case '\t':
+				/* skip every thing up to the : */
+				do { ++cur; } while (*cur == ' ' || *cur == '\t');
+				if (*cur != ':') {
+						if (srv->srvconf.log_request_header_on_error) {
+							log_error_write(srv, __FILE__, __LINE__, "s", "WS character in key -> 400");
+							log_error_write(srv, __FILE__, __LINE__, "Sb",
+								"request-header:\n",
+								con->request.request);
+						}
+
+						goto failure;
+				}
+				/* fall through */
 			case ':':
 				is_key = 0;
-
+				key_len = i - first;
 				value = cur + 1;
-
-				if (is_ws_after_key == 0) {
-					key_len = i - first;
-				}
-				is_ws_after_key = 0;
-
+				i = cur - con->parse_request->ptr;
 				break;
 			case '(':
 			case ')':
@@ -935,40 +942,6 @@ int http_request_parse(server *srv, connection *con) {
 						con->request.request);
 				}
 				goto failure;
-			case ' ':
-			case '\t':
-				key_len = i - first;
-
-				/* skip every thing up to the : */
-				for (j = 1; !got_colon; j++) {
-					switch(con->parse_request->ptr[j + i]) {
-					case ' ':
-					case '\t':
-						/* skip WS */
-						continue;
-					case ':':
-						/* ok, done; handle the colon the usual way */
-
-						i += j - 1;
-						got_colon = 1;
-						is_ws_after_key = 1; /* we already know the key length */
-
-						break;
-					default:
-						/* error */
-
-						if (srv->srvconf.log_request_header_on_error) {
-							log_error_write(srv, __FILE__, __LINE__, "s", "WS character in key -> 400");
-							log_error_write(srv, __FILE__, __LINE__, "Sb",
-								"request-header:\n",
-								con->request.request);
-						}
-
-						goto failure;
-					}
-				}
-
-				break;
 			case '\r':
 				if (con->parse_request->ptr[i+1] == '\n' && i == first) {
 					/* End of Header */
