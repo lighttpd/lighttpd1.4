@@ -10,6 +10,9 @@
  * of this file, and for a DISCLAIMER OF ALL WARRANTIES.
  *
  * $Id: fastcgi.h,v 1.1.1.1 2003/10/18 09:54:10 weigon Exp $
+ *
+ * License: Open Market License (OML)
+ * https://fedoraproject.org/wiki/Licensing/Open_Market_License (LICENSE.TERMS)
  */
 
 #ifndef _FASTCGI_H
