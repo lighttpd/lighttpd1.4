@@ -504,9 +504,7 @@ static handler_t wstunnel_handler_setup (server *srv, connection *con, plugin_da
     int binary;
     int hybivers;
     hctx->srv = srv; /*(for mod_wstunnel module-specific DEBUG_LOG() macro)*/
-    hctx->conf.frame_type     = p->conf.frame_type;
-    hctx->conf.origins        = p->conf.origins;
-    hctx->conf.ping_interval  = p->conf.ping_interval;
+    hctx->conf = p->conf; /*(copies struct)*/
     hybivers = wstunnel_check_request(con, hctx);
     if (hybivers < 0) return HANDLER_FINISHED;
     hctx->hybivers = hybivers;

@@ -66,7 +66,6 @@ static int proxy_check_extforward;
 typedef struct {
 	gw_handler_ctx gw;
 	http_response_opts opts;
-	http_header_remap_opts remap_hdrs;
 	plugin_config conf;
 } handler_ctx;
 
@@ -710,9 +709,9 @@ static handler_t proxy_create_env(server *srv, gw_handler_ctx *gwhctx) {
 	handler_ctx *hctx = (handler_ctx *)gwhctx;
 	connection *con = hctx->gw.remote_conn;
 	buffer *b = buffer_init();
-	const int remap_headers = (NULL != hctx->remap_hdrs.urlpaths
-				   || NULL != hctx->remap_hdrs.hosts_request);
-	const int upgrade = hctx->remap_hdrs.upgrade
+	const int remap_headers = (NULL != hctx->conf.header.urlpaths
+				   || NULL != hctx->conf.header.hosts_request);
+	const int upgrade = hctx->conf.header.upgrade
 	    && (NULL != http_header_request_get(con, HTTP_HEADER_UPGRADE, CONST_STR_LEN("Upgrade")));
 	buffer_string_prepare_copy(b, 8192-1);
 
@@ -723,7 +722,7 @@ static handler_t proxy_create_env(server *srv, gw_handler_ctx *gwhctx) {
 	buffer_append_string_len(b, CONST_STR_LEN(" "));
 	buffer_append_string_buffer(b, con->request.uri);
 	if (remap_headers)
-		http_header_remap_uri(b, buffer_string_length(b) - buffer_string_length(con->request.uri), &hctx->remap_hdrs, 1);
+		http_header_remap_uri(b, buffer_string_length(b) - buffer_string_length(con->request.uri), &hctx->conf.header, 1);
 	if (!upgrade)
 		buffer_append_string_len(b, CONST_STR_LEN(" HTTP/1.0\r\n"));
 	else
@@ -742,7 +741,7 @@ static handler_t proxy_create_env(server *srv, gw_handler_ctx *gwhctx) {
 		buffer_append_string_buffer(b, con->request.http_host);
 		if (remap_headers) {
 			size_t alen = buffer_string_length(con->request.http_host);
-			http_header_remap_host(b, buffer_string_length(b) - alen, &hctx->remap_hdrs, 1, alen);
+			http_header_remap_host(b, buffer_string_length(b) - alen, &hctx->conf.header, 1, alen);
 		}
 		buffer_append_string_len(b, CONST_STR_LEN("\r\n"));
 	}
@@ -824,7 +823,7 @@ static handler_t proxy_create_env(server *srv, gw_handler_ctx *gwhctx) {
 			continue;
 		}
 
-		http_header_remap_uri(b, buffer_string_length(b) - vlen - 2, &hctx->remap_hdrs, 1);
+		http_header_remap_uri(b, buffer_string_length(b) - vlen - 2, &hctx->conf.header, 1);
 	}
 
 	if (!upgrade)
@@ -922,7 +921,7 @@ static handler_t proxy_response_headers(server *srv, connection *con, struct htt
     handler_ctx *hctx = (handler_ctx *)opts->pdata;
 
     if (con->response.htags & HTTP_HEADER_UPGRADE) {
-        if (hctx->remap_hdrs.upgrade && con->http_status == 101) {
+        if (hctx->conf.header.upgrade && con->http_status == 101) {
             /* 101 Switching Protocols; transition to transparent proxy */
             gw_set_transparent(srv, &hctx->gw);
             http_response_upgrade_read_body_unknown(srv, con);
@@ -942,21 +941,21 @@ static handler_t proxy_response_headers(server *srv, connection *con, struct htt
 
     /* rewrite paths, if needed */
 
-    if (NULL == hctx->remap_hdrs.urlpaths
-        && NULL == hctx->remap_hdrs.hosts_response)
+    if (NULL == hctx->conf.header.urlpaths
+        && NULL == hctx->conf.header.hosts_response)
         return HANDLER_GO_ON;
 
     if (con->response.htags & HTTP_HEADER_LOCATION) {
         buffer *vb = http_header_response_get(con, HTTP_HEADER_LOCATION, CONST_STR_LEN("Location"));
-        if (vb) http_header_remap_uri(vb, 0, &hctx->remap_hdrs, 0);
+        if (vb) http_header_remap_uri(vb, 0, &hctx->conf.header, 0);
     }
     if (con->response.htags & HTTP_HEADER_CONTENT_LOCATION) {
         buffer *vb = http_header_response_get(con, HTTP_HEADER_CONTENT_LOCATION, CONST_STR_LEN("Content-Location"));
-        if (vb) http_header_remap_uri(vb, 0, &hctx->remap_hdrs, 0);
+        if (vb) http_header_remap_uri(vb, 0, &hctx->conf.header, 0);
     }
     if (con->response.htags & HTTP_HEADER_SET_COOKIE) {
         buffer *vb = http_header_response_get(con, HTTP_HEADER_SET_COOKIE, CONST_STR_LEN("Set-Cookie"));
-        if (vb) http_header_remap_setcookie(vb, 0, &hctx->remap_hdrs);
+        if (vb) http_header_remap_setcookie(vb, 0, &hctx->conf.header);
     }
 
     return HANDLER_GO_ON;
@@ -982,24 +981,22 @@ static handler_t mod_proxy_check_extension(server *srv, connection *con, void *p
 		hctx->gw.opts.pdata = hctx;
 		hctx->gw.opts.headers = proxy_response_headers;
 
-		hctx->conf.replace_http_host = p->conf.replace_http_host;
-		hctx->conf.forwarded       = p->conf.forwarded;
-		hctx->remap_hdrs           = p->conf.header; /*(copies struct)*/
-		hctx->remap_hdrs.http_host = con->request.http_host;
-		hctx->remap_hdrs.upgrade  &= (con->request.http_version == HTTP_VERSION_1_1);
+		hctx->conf = p->conf; /*(copies struct)*/
+		hctx->conf.header.http_host = con->request.http_host;
+		hctx->conf.header.upgrade  &= (con->request.http_version == HTTP_VERSION_1_1);
 		/* mod_proxy currently sends all backend requests as http.
 		 * https-remap is a flag since it might not be needed if backend
 		 * honors Forwarded or X-Forwarded-Proto headers, e.g. by using
 		 * lighttpd mod_extforward or similar functionality in backend*/
-		if (hctx->remap_hdrs.https_remap) {
-			hctx->remap_hdrs.https_remap =
+		if (hctx->conf.header.https_remap) {
+			hctx->conf.header.https_remap =
 			  buffer_is_equal_string(con->uri.scheme, CONST_STR_LEN("https"));
 		}
 
 		if (con->request.http_method == HTTP_METHOD_CONNECT) {
 			/*(note: not requiring HTTP/1.1 due to too many non-compliant
 			 * clients such as 'openssl s_client')*/
-			if (hctx->remap_hdrs.connect_method) {
+			if (hctx->conf.header.connect_method) {
 				hctx->gw.create_env = proxy_create_env_connect;
 			}
 			else {
