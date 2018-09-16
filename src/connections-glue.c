@@ -6,6 +6,7 @@
 #include "fdevent.h"
 #include "http_header.h"
 #include "log.h"
+#include "response.h"
 
 #include <errno.h>
 #include <string.h>
@@ -111,9 +112,9 @@ handler_t connection_handle_read_post_error(server *srv, connection *con, int ht
     /*(do not change status if response headers already set and possibly sent)*/
     if (0 != con->bytes_header) return HANDLER_ERROR;
 
+    http_response_body_clear(con, 0);
     con->http_status = http_status;
     con->mode = DIRECT;
-    chunkqueue_reset(con->write_queue);
     return HANDLER_FINISHED;
 }
 
@@ -491,10 +492,7 @@ void connection_response_reset(server *srv, connection *con) {
 	con->is_writable = 1;
 	con->file_finished = 0;
 	con->file_started = 0;
-	con->response.htags = 0;
 	con->response.keep_alive = 0;
-	con->response.content_length = -1;
-	con->response.transfer_encoding = 0;
 	if (con->physical.path) { /*(skip for mod_fastcgi authorizer)*/
 		buffer_reset(con->physical.doc_root);
 		buffer_reset(con->physical.path);
@@ -502,6 +500,7 @@ void connection_response_reset(server *srv, connection *con) {
 		buffer_reset(con->physical.rel_path);
 		buffer_reset(con->physical.etag);
 	}
+	con->response.htags = 0;
 	array_reset(con->response.headers);
-	chunkqueue_reset(con->write_queue);
+	http_response_body_clear(con, 0);
 }

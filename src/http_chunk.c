@@ -49,13 +49,13 @@ static int http_chunk_append_file_open_fstat(server *srv, connection *con, buffe
 static void http_chunk_append_file_fd_range(server *srv, connection *con, buffer *fn, int fd, off_t offset, off_t len) {
 	chunkqueue *cq = con->write_queue;
 
-	if (con->response.transfer_encoding & HTTP_TRANSFER_ENCODING_CHUNKED) {
+	if (con->response.send_chunked) {
 		http_chunk_append_len(srv, con, (uintmax_t)len);
 	}
 
 	chunkqueue_append_file_fd(cq, fn, fd, offset, len);
 
-	if (con->response.transfer_encoding & HTTP_TRANSFER_ENCODING_CHUNKED) {
+	if (con->response.send_chunked) {
 		chunkqueue_append_mem(cq, CONST_STR_LEN("\r\n"));
 	}
 }
@@ -96,7 +96,7 @@ int http_chunk_append_file(server *srv, connection *con, buffer *fn) {
 static int http_chunk_append_to_tempfile(server *srv, connection *con, const char * mem, size_t len) {
 	chunkqueue * const cq = con->write_queue;
 
-	if (con->response.transfer_encoding & HTTP_TRANSFER_ENCODING_CHUNKED) {
+	if (con->response.send_chunked) {
 		/*http_chunk_append_len(srv, con, len);*/
 		buffer *b = srv->tmp_chunk_len;
 
@@ -113,7 +113,7 @@ static int http_chunk_append_to_tempfile(server *srv, connection *con, const cha
 		return -1;
 	}
 
-	if (con->response.transfer_encoding & HTTP_TRANSFER_ENCODING_CHUNKED) {
+	if (con->response.send_chunked) {
 		if (0 != chunkqueue_append_mem_to_tempfile(srv, cq, CONST_STR_LEN("\r\n"))) {
 			return -1;
 		}
@@ -145,14 +145,14 @@ static int http_chunk_append_data(server *srv, connection *con, buffer *b, const
 	/* not appending to prior mem chunk just in case using openssl
 	 * and need to resubmit same args as prior call to openssl (required?)*/
 
-	if (con->response.transfer_encoding & HTTP_TRANSFER_ENCODING_CHUNKED) {
+	if (con->response.send_chunked) {
 		http_chunk_append_len(srv, con, len);
 	}
 
 	/*(chunkqueue_append_buffer() might steal buffer contents)*/
 	b ? chunkqueue_append_buffer(cq, b) : chunkqueue_append_mem(cq, mem, len);
 
-	if (con->response.transfer_encoding & HTTP_TRANSFER_ENCODING_CHUNKED) {
+	if (con->response.send_chunked) {
 		chunkqueue_append_mem(cq, CONST_STR_LEN("\r\n"));
 	}
 
@@ -176,7 +176,7 @@ void http_chunk_close(server *srv, connection *con) {
 	UNUSED(srv);
 	force_assert(NULL != con);
 
-	if (con->response.transfer_encoding & HTTP_TRANSFER_ENCODING_CHUNKED) {
+	if (con->response.send_chunked) {
 		chunkqueue_append_mem(con->write_queue, CONST_STR_LEN("0\r\n\r\n"));
 	}
 }

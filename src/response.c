@@ -266,7 +266,7 @@ handler_t http_response_prepare(server *srv, connection *con) {
 	    (con->http_status != 0 && con->http_status != 200)) {
 		/* remove a packets in the queue */
 		if (con->file_finished == 0) {
-			chunkqueue_reset(con->write_queue);
+			http_response_body_clear(con, 0);
 		}
 
 		return HANDLER_FINISHED;

@@ -243,10 +243,10 @@ static void connection_handle_errdoc_init(connection *con) {
 		if (NULL != vb) www_auth = buffer_init_buffer(vb);
 	}
 
-	con->response.transfer_encoding = 0;
 	buffer_reset(con->physical.path);
+	con->response.htags = 0;
 	array_reset(con->response.headers);
-	chunkqueue_reset(con->write_queue);
+	http_response_body_clear(con, 0);
 
 	if (NULL != www_auth) {
 		http_header_response_set(con, HTTP_HEADER_OTHER, CONST_STR_LEN("WWW-Authenticate"), CONST_BUF_LEN(www_auth));
@@ -270,17 +270,11 @@ static int connection_handle_write_prepare(server *srv, connection *con) {
 			 * */
 			if ((!con->http_status || con->http_status == 200) && !buffer_string_is_empty(con->uri.path) &&
 			    con->uri.path->ptr[0] != '*') {
+				http_response_body_clear(con, 0);
 				http_header_response_append(con, HTTP_HEADER_OTHER, CONST_STR_LEN("Allow"), CONST_STR_LEN("OPTIONS, GET, HEAD, POST"));
-
-				con->response.transfer_encoding &= ~HTTP_TRANSFER_ENCODING_CHUNKED;
-				if (con->response.htags & HTTP_HEADER_CONTENT_LENGTH) {
-					http_header_response_set(con, HTTP_HEADER_CONTENT_LENGTH, CONST_STR_LEN("Content-Length"), CONST_STR_LEN(""));
-				}
-
 				con->http_status = 200;
 				con->file_finished = 1;
 
-				chunkqueue_reset(con->write_queue);
 			}
 			break;
 		default:
@@ -300,12 +294,7 @@ static int connection_handle_write_prepare(server *srv, connection *con) {
 	case 205:
 	case 304:
 		/* disable chunked encoding again as we have no body */
-		con->response.transfer_encoding &= ~HTTP_TRANSFER_ENCODING_CHUNKED;
-		if (con->response.htags & HTTP_HEADER_CONTENT_LENGTH) {
-			http_header_response_set(con, HTTP_HEADER_CONTENT_LENGTH, CONST_STR_LEN("Content-Length"), CONST_STR_LEN(""));
-		}
-		chunkqueue_reset(con->write_queue);
-
+		http_response_body_clear(con, 1);
 		con->file_finished = 1;
 		break;
 	default: /* class: header + body */
@@ -431,7 +420,7 @@ static int connection_handle_write_prepare(server *srv, connection *con) {
 				/*(no transfer-encoding if successful CONNECT)*/
 			} else if (con->request.http_version == HTTP_VERSION_1_1) {
 				off_t qlen = chunkqueue_length(con->write_queue);
-				con->response.transfer_encoding = HTTP_TRANSFER_ENCODING_CHUNKED;
+				con->response.send_chunked = 1;
 				if (qlen) {
 					/* create initial Transfer-Encoding: chunked segment */
 					buffer *b = srv->tmp_chunk_len;
@@ -469,13 +458,8 @@ static int connection_handle_write_prepare(server *srv, connection *con) {
 		 * a HEAD request has the same as a GET 
 		 * without the content
 		 */
+		http_response_body_clear(con, 1);
 		con->file_finished = 1;
-
-		chunkqueue_reset(con->write_queue);
-		con->response.transfer_encoding &= ~HTTP_TRANSFER_ENCODING_CHUNKED;
-		if (con->response.htags & HTTP_HEADER_TRANSFER_ENCODING) {
-			http_header_response_set(con, HTTP_HEADER_TRANSFER_ENCODING, CONST_STR_LEN("Transfer-Encoding"), CONST_STR_LEN(""));
-		}
 	}
 
 	http_response_write_header(srv, con);
@@ -1240,10 +1224,7 @@ int connection_state_machine(server *srv, connection *con) {
 								con->is_writable = 1;
 								con->file_finished = 0;
 								con->file_started = 0;
-								con->response.htags = 0;
 								con->response.keep_alive = 0;
-								con->response.content_length = -1;
-								con->response.transfer_encoding = 0;
 
 								con->error_handler_saved_status = con->http_status;
 								con->error_handler_saved_method = con->request.http_method;

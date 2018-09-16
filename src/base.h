@@ -54,10 +54,7 @@ typedef struct {
 
 	unsigned int htags; /* bitfield of flagged headers present in response */
 	array  *headers;
-
-	enum {
-		HTTP_TRANSFER_ENCODING_IDENTITY, HTTP_TRANSFER_ENCODING_CHUNKED
-	} transfer_encoding;
+	int send_chunked;
 } response;
 
 typedef struct {

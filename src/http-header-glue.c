@@ -186,6 +186,21 @@ int http_response_handle_cachable(server *srv, connection *con, buffer *mtime) {
 }
 
 
+void http_response_body_clear (connection *con, int preserve_length) {
+    con->response.send_chunked = 0;
+    if (con->response.htags & HTTP_HEADER_TRANSFER_ENCODING) {
+        http_header_response_set(con, HTTP_HEADER_TRANSFER_ENCODING, CONST_STR_LEN("Transfer-Encoding"), CONST_STR_LEN(""));
+    }
+    if (!preserve_length) { /* preserve for HEAD responses and no-content responses (204, 205, 304) */
+        con->response.content_length = -1;
+        if (con->response.htags & HTTP_HEADER_CONTENT_LENGTH) {
+            http_header_response_set(con, HTTP_HEADER_CONTENT_LENGTH, CONST_STR_LEN("Content-Length"), CONST_STR_LEN(""));
+        }
+    }
+    chunkqueue_reset(con->write_queue);
+}
+
+
 static int http_response_parse_range(server *srv, connection *con, buffer *path, stat_cache_entry *sce, const char *range) {
 	int multipart = 0;
 	int error;

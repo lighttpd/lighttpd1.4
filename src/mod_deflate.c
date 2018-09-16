@@ -116,6 +116,7 @@
 #include "etag.h"
 #include "http_chunk.h"
 #include "http_header.h"
+#include "response.h"
 
 #include "plugin.h"
 
@@ -1157,13 +1158,10 @@ CONNECTION_FUNC(mod_deflate_handle_response_start) {
 			 * In the future, might extract the error doc code so that it
 			 * might be run again if response_start hooks return with
 			 * changed http_status and con->mode = DIRECT */
-			con->response.transfer_encoding &= ~HTTP_TRANSFER_ENCODING_CHUNKED;
-			if (con->response.htags & HTTP_HEADER_CONTENT_LENGTH) {
-				http_header_response_set(con, HTTP_HEADER_CONTENT_LENGTH, CONST_STR_LEN("Content-Length"), CONST_STR_LEN(""));
-			}
-			chunkqueue_reset(con->write_queue);
-			con->file_finished = 1;
+			/* clear content length even if 304 since compressed length unknown */
+			http_response_body_clear(con, 0);
 
+			con->file_finished = 1;
 			con->mode = DIRECT;
 			return HANDLER_GO_ON;
 		}
@@ -1190,10 +1188,7 @@ CONNECTION_FUNC(mod_deflate_handle_response_start) {
 	 *  request if ETag not modified and Content-Encoding not added) */
 	if (HTTP_METHOD_HEAD == con->request.http_method) {
 		/* ensure that uncompressed Content-Length is not sent in HEAD response */
-		chunkqueue_reset(con->write_queue);
-		if (con->response.htags & HTTP_HEADER_CONTENT_LENGTH) {
-			http_header_response_set(con, HTTP_HEADER_CONTENT_LENGTH, CONST_STR_LEN("Content-Length"), CONST_STR_LEN(""));
-		}
+		http_response_body_clear(con, 0);
 		return HANDLER_GO_ON;
 	}
 
