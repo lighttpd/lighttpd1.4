@@ -982,6 +982,8 @@ static handler_t mod_proxy_check_extension(server *srv, connection *con, void *p
 		hctx->gw.opts.pdata = hctx;
 		hctx->gw.opts.headers = proxy_response_headers;
 
+		hctx->conf.replace_http_host = p->conf.replace_http_host;
+		hctx->conf.forwarded       = p->conf.forwarded;
 		hctx->remap_hdrs           = p->conf.header; /*(copies struct)*/
 		hctx->remap_hdrs.http_host = con->request.http_host;
 		hctx->remap_hdrs.upgrade  &= (con->request.http_version == HTTP_VERSION_1_1);
