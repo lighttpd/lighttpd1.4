@@ -75,4 +75,16 @@ void array_replace(array *a, data_unset *entry);
 void array_print_indent(int depth);
 size_t array_get_max_key_length(array *a);
 
+data_unset * array_match_key_prefix_klen (const array * const a, const char * const s, const size_t slen);
+data_unset * array_match_key_prefix_nc_klen (const array * const a, const char * const s, const size_t slen);
+data_unset * array_match_key_prefix (const array * const a, const buffer * const b);
+data_unset * array_match_key_prefix_nc (const array * const a, const buffer * const b);
+const buffer * array_match_value_prefix (const array * const a, const buffer * const b);
+const buffer * array_match_value_prefix_nc (const array * const a, const buffer * const b);
+data_unset * array_match_key_suffix (const array * const a, const buffer * const b);
+data_unset * array_match_key_suffix_nc (const array * const a, const buffer * const b);
+const buffer * array_match_value_suffix (const array * const a, const buffer * const b);
+const buffer * array_match_value_suffix_nc (const array * const a, const buffer * const b);
+data_unset * array_match_path_or_ext (const array * const a, const buffer * const b);
+
 #endif

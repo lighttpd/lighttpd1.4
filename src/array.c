@@ -333,6 +333,155 @@ int array_is_kvstring(array *a) {
 	return 1;
 }
 
+/* array_match_*() routines follow very similar pattern, but operate on slightly
+ * different data: array key/value, prefix/suffix match, case-insensitive or not
+ * While these could be combined into fewer routines with flags to modify the
+ * behavior, the interface distinctions are useful to add clarity to the code,
+ * and the specialized routines run slightly faster */
+
+data_unset *
+array_match_key_prefix_klen (const array * const a, const char * const s, const size_t slen)
+{
+    for (size_t i = 0; i < a->used; ++i) {
+        const buffer * const key = a->data[i]->key;
+        const size_t klen = buffer_string_length(key);
+        if (klen <= slen && 0 == memcmp(s, key->ptr, klen))
+            return a->data[i];
+    }
+    return NULL;
+}
+
+data_unset *
+array_match_key_prefix_nc_klen (const array * const a, const char * const s, const size_t slen)
+{
+    for (size_t i = 0; i < a->used; ++i) {
+        const buffer * const key = a->data[i]->key;
+        const size_t klen = buffer_string_length(key);
+        if (klen <= slen && 0 == strncasecmp(s, key->ptr, klen))
+            return a->data[i];
+    }
+    return NULL;
+}
+
+data_unset *
+array_match_key_prefix (const array * const a, const buffer * const b)
+{
+    return array_match_key_prefix_klen(a, CONST_BUF_LEN(b));
+}
+
+data_unset *
+array_match_key_prefix_nc (const array * const a, const buffer * const b)
+{
+    return array_match_key_prefix_nc_klen(a, CONST_BUF_LEN(b));
+}
+
+const buffer *
+array_match_value_prefix (const array * const a, const buffer * const b)
+{
+    const size_t blen = buffer_string_length(b);
+
+    for (size_t i = 0; i < a->used; ++i) {
+        const buffer * const value = ((data_string *)a->data[i])->value;
+        const size_t vlen = buffer_string_length(value);
+        if (vlen <= blen && 0 == memcmp(b->ptr, value->ptr, vlen))
+            return value;
+    }
+    return NULL;
+}
+
+const buffer *
+array_match_value_prefix_nc (const array * const a, const buffer * const b)
+{
+    const size_t blen = buffer_string_length(b);
+
+    for (size_t i = 0; i < a->used; ++i) {
+        const buffer * const value = ((data_string *)a->data[i])->value;
+        const size_t vlen = buffer_string_length(value);
+        if (vlen <= blen && 0 == strncasecmp(b->ptr, value->ptr, vlen))
+            return value;
+    }
+    return NULL;
+}
+
+data_unset *
+array_match_key_suffix (const array * const a, const buffer * const b)
+{
+    const size_t blen = buffer_string_length(b);
+    const char * const end = b->ptr + blen;
+
+    for (size_t i = 0; i < a->used; ++i) {
+        const buffer * const key = a->data[i]->key;
+        const size_t klen = buffer_string_length(key);
+        if (klen <= blen && 0 == memcmp(end - klen, key->ptr, klen))
+            return a->data[i];
+    }
+    return NULL;
+}
+
+data_unset *
+array_match_key_suffix_nc (const array * const a, const buffer * const b)
+{
+    const size_t blen = buffer_string_length(b);
+    const char * const end = b->ptr + blen;
+
+    for (size_t i = 0; i < a->used; ++i) {
+        const buffer * const key = a->data[i]->key;
+        const size_t klen = buffer_string_length(key);
+        if (klen <= blen && 0 == strncasecmp(end - klen, key->ptr, klen))
+            return a->data[i];
+    }
+    return NULL;
+}
+
+const buffer *
+array_match_value_suffix (const array * const a, const buffer * const b)
+{
+    const size_t blen = buffer_string_length(b);
+    const char * const end = b->ptr + blen;
+
+    for (size_t i = 0; i < a->used; ++i) {
+        const buffer * const value = ((data_string *)a->data[i])->value;
+        const size_t vlen = buffer_string_length(value);
+        if (vlen <= blen && 0 == memcmp(end - vlen, value->ptr, vlen))
+            return value;
+    }
+    return NULL;
+}
+
+const buffer *
+array_match_value_suffix_nc (const array * const a, const buffer * const b)
+{
+    const size_t blen = buffer_string_length(b);
+    const char * const end = b->ptr + blen;
+
+    for (size_t i = 0; i < a->used; ++i) {
+        const buffer * const value = ((data_string *)a->data[i])->value;
+        const size_t vlen = buffer_string_length(value);
+        if (vlen <= blen && 0 == strncasecmp(end - vlen, value->ptr, vlen))
+            return value;
+    }
+    return NULL;
+}
+
+data_unset *
+array_match_path_or_ext (const array * const a, const buffer * const b)
+{
+    const size_t blen = buffer_string_length(b);
+
+    for (size_t i = 0; i < a->used; ++i) {
+        /* check extension in the form "^/path" or ".ext$" */
+        const buffer * const key = a->data[i]->key;
+        const size_t klen = buffer_string_length(key);
+        if (klen <= blen
+            && 0 == memcmp((*(key->ptr) == '/' ? b->ptr : b->ptr + blen - klen),
+                           key->ptr, klen))
+            return a->data[i];
+    }
+    return NULL;
+}
+
+
+
 
 
 #include <stdio.h>
