@@ -1,13 +1,14 @@
 #include "first.h"
 
-#include "base.h"
-#include "log.h"
-#include "buffer.h"
+#include <stdlib.h>
+#include <string.h>
 
 #include "plugin.h"
 
-#include <stdlib.h>
-#include <string.h>
+#include "base.h"
+#include "log.h"
+#include "buffer.h"
+#include "array.h"
 
 /**
  * this is a skeleton for a lighttpd plugin
@@ -21,7 +22,6 @@
  */
 
 
-
 /* plugin config for all request/connections */
 
 typedef struct {
@@ -30,76 +30,54 @@ typedef struct {
 
 typedef struct {
 	PLUGIN_DATA;
-
-	buffer *match_buf;
-
 	plugin_config **config_storage;
-
 	plugin_config conf;
 } plugin_data;
+
+
+#if 0 /* (needed if module keeps state for request) */
 
 typedef struct {
 	size_t foo;
 } handler_ctx;
 
 static handler_ctx * handler_ctx_init() {
-	handler_ctx * hctx;
-
-	hctx = calloc(1, sizeof(*hctx));
+	handler_ctx * hctx = calloc(1, sizeof(*hctx));
 	force_assert(hctx);
-
 	return hctx;
 }
 
 static void handler_ctx_free(handler_ctx *hctx) {
-
 	free(hctx);
 }
 
+#endif
+
+
 /* init the plugin data */
 INIT_FUNC(mod_skeleton_init) {
-	plugin_data *p;
-
-	p = calloc(1, sizeof(*p));
-	force_assert(p);
-
-	p->match_buf = buffer_init();
-
-	return p;
+	return calloc(1, sizeof(plugin_data));
 }
 
 /* destroy the plugin data */
 FREE_FUNC(mod_skeleton_free) {
 	plugin_data *p = p_d;
-
 	UNUSED(srv);
-
 	if (!p) return HANDLER_GO_ON;
-
 	if (p->config_storage) {
-		size_t i;
-
-		for (i = 0; i < srv->config_context->used; i++) {
+		for (size_t i = 0; i < srv->config_context->used; i++) {
 			plugin_config *s = p->config_storage[i];
-
 			if (NULL == s) continue;
-
 			array_free(s->match);
-
 			free(s);
 		}
 		free(p->config_storage);
 	}
-
-	buffer_free(p->match_buf);
-
 	free(p);
-
 	return HANDLER_GO_ON;
 }
 
 /* handle plugin config and check values */
-
 SETDEFAULTS_FUNC(mod_skeleton_set_defaults) {
 	plugin_data *p = p_d;
 	size_t i = 0;
@@ -141,13 +119,12 @@ SETDEFAULTS_FUNC(mod_skeleton_set_defaults) {
 #define PATCH(x) \
 	p->conf.x = s->x;
 static int mod_skeleton_patch_connection(server *srv, connection *con, plugin_data *p) {
-	size_t i, j;
 	plugin_config *s = p->config_storage[0];
 
 	PATCH(match);
 
 	/* skip the first, the global context */
-	for (i = 1; i < srv->config_context->used; i++) {
+	for (size_t i = 1; i < srv->config_context->used; ++i) {
 		data_config *dc = (data_config *)srv->config_context->data[i];
 		s = p->config_storage[i];
 
@@ -155,7 +132,7 @@ static int mod_skeleton_patch_connection(server *srv, connection *con, plugin_da
 		if (!config_check_cond(srv, con, dc)) continue;
 
 		/* merge config */
-		for (j = 0; j < dc->value->used; j++) {
+		for (size_t j = 0; j < dc->value->used; ++j) {
 			data_unset *du = dc->value->data[j];
 
 			if (buffer_is_equal_string(du->key, CONST_STR_LEN("skeleton.array"))) {
@@ -170,48 +147,37 @@ static int mod_skeleton_patch_connection(server *srv, connection *con, plugin_da
 
 URIHANDLER_FUNC(mod_skeleton_uri_handler) {
 	plugin_data *p = p_d;
-	size_t s_len;
-	size_t k;
-
 	UNUSED(srv);
 
+	/* determine whether or not module participates in request */
+
 	if (con->mode != DIRECT) return HANDLER_GO_ON;
+	if (buffer_string_is_empty(con->uri.path)) return HANDLER_GO_ON;
 
-	s_len = buffer_string_length(con->uri.path);
-	if (0 == s_len) return HANDLER_GO_ON;
-
+	/* get module config for request */
 	mod_skeleton_patch_connection(srv, con, p);
 
-	for (k = 0; k < p->conf.match->used; k++) {
-		data_string *ds = (data_string *)p->conf.match->data[k];
-		size_t ct_len = buffer_string_length(ds->value);
-
-		if (ct_len > s_len) continue;
-		if (ct_len == 0) continue;
-
-		if (0 == strncmp(con->uri.path->ptr + s_len - ct_len, ds->value->ptr, ct_len)) {
-			con->http_status = 403;
-
-			return HANDLER_FINISHED;
-		}
+	if (NULL == array_match_value_suffix(p->conf.match, con->uri.path)) {
+		return HANDLER_GO_ON;
 	}
 
-	/* not found */
-	return HANDLER_GO_ON;
+	/* module participates in request; business logic here */
+
+	con->http_status = 403; /* example: reject request with 403 Forbidden */
+	return HANDLER_FINISHED;
 }
 
 /* this function is called at dlopen() time and inits the callbacks */
-
+int mod_skeleton_plugin_init(plugin *p);
 int mod_skeleton_plugin_init(plugin *p) {
 	p->version     = LIGHTTPD_VERSION_ID;
 	p->name        = buffer_init_string("skeleton");
-
-	p->init        = mod_skeleton_init;
-	p->handle_uri_clean  = mod_skeleton_uri_handler;
-	p->set_defaults  = mod_skeleton_set_defaults;
-	p->cleanup     = mod_skeleton_free;
-
 	p->data        = NULL;
+	p->init        = mod_skeleton_init;
+	p->cleanup     = mod_skeleton_free;
+	p->set_defaults= mod_skeleton_set_defaults;
+
+	p->handle_uri_clean = mod_skeleton_uri_handler;
 
 	return 0;
 }
