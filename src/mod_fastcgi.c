@@ -243,6 +243,7 @@ static handler_t fcgi_create_env(server *srv, handler_ctx *hctx) {
 
 	if (0 != http_cgi_headers(srv, con, &opts, fcgi_env_add, fcgi_env)) {
 		con->http_status = 400;
+		con->mode = DIRECT;
 		buffer_free(fcgi_env);
 		return HANDLER_FINISHED;
 	} else {

@@ -160,6 +160,7 @@ static handler_t scgi_create_env(server *srv, handler_ctx *hctx) {
 	if (0 != http_cgi_headers(srv, con, &opts, scgi_env_add, scgi_env)) {
 		buffer_free(scgi_env);
 		con->http_status = 400;
+		con->mode = DIRECT;
 		return HANDLER_FINISHED;
 	}
 
