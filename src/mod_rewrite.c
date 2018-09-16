@@ -196,11 +196,11 @@ static int mod_rewrite_patch_connection(server *srv, connection *con, plugin_dat
 			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("url.rewrite-repeat"))) {
 				PATCH(rewrite);
 				p->conf.context = dc;
-				PATCH(rewrite_NF_repeat_idx);
+				PATCH(rewrite_repeat_idx);
 			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("url.rewrite-if-not-file"))) {
 				PATCH(rewrite_NF);
 				p->conf.context_NF = dc;
-				PATCH(rewrite_repeat_idx);
+				PATCH(rewrite_NF_repeat_idx);
 			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("url.rewrite-repeat-if-not-file"))) {
 				PATCH(rewrite_NF);
 				p->conf.context_NF = dc;
