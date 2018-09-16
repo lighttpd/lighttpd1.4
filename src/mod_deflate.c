@@ -1092,26 +1092,7 @@ CONNECTION_FUNC(mod_deflate_handle_response_start) {
 
 	/* Check mimetype in response header "Content-Type" */
 	if (NULL != (vb = http_header_response_get(con, HTTP_HEADER_CONTENT_TYPE, CONST_STR_LEN("Content-Type")))) {
-		int found = 0;
-		size_t m;
-		for (m = 0; m < p->conf.mimetypes->used; ++m) {
-			data_string *mimetype = (data_string *)p->conf.mimetypes->data[m];
-			if (0 == strncmp(mimetype->value->ptr, vb->ptr, buffer_string_length(mimetype->value))) {
-				/* mimetype found */
-				found = 1;
-				break;
-			}
-		}
-		if (!found) return HANDLER_GO_ON;
-
-#if 0
-		if (0 == strncasecmp(vb->ptr, "application/x-javascript", 24)) {
-			/*reset compress type to deflate for javascript
-			 * prevent buggy IE6 SP1 doesn't work for js in IFrame
-			 */
-			compression_type = HTTP_ACCEPT_ENCODING_DEFLATE;
-		}
-#endif
+		if (NULL == array_match_value_prefix(p->conf.mimetypes, vb)) return HANDLER_GO_ON;
 	} else {
 		/* If no Content-Type set, compress only if first p->conf.mimetypes value is "" */
 		data_string *mimetype = (data_string *)p->conf.mimetypes->data[0];

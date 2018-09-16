@@ -1290,24 +1290,15 @@ static int mod_ssi_patch_connection(server *srv, connection *con, plugin_data *p
 
 URIHANDLER_FUNC(mod_ssi_physical_path) {
 	plugin_data *p = p_d;
-	size_t k;
 
 	if (con->mode != DIRECT) return HANDLER_GO_ON;
-
 	if (buffer_is_empty(con->physical.path)) return HANDLER_GO_ON;
 
 	mod_ssi_patch_connection(srv, con, p);
 
-	for (k = 0; k < p->conf.ssi_extension->used; k++) {
-		data_string *ds = (data_string *)p->conf.ssi_extension->data[k];
-
-		if (buffer_is_empty(ds->value)) continue;
-
-		if (buffer_is_equal_right_len(con->physical.path, ds->value, buffer_string_length(ds->value))) {
+	if (array_match_value_suffix(p->conf.ssi_extension, con->physical.path)) {
 			con->plugin_ctx[p->id] = handler_ctx_init(p);
 			con->mode = p->id;
-			break;
-		}
 	}
 
 	return HANDLER_GO_ON;

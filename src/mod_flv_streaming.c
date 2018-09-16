@@ -185,8 +185,6 @@ static int split_get_params(array *get_params, buffer *qrystr) {
 
 URIHANDLER_FUNC(mod_flv_streaming_path_handler) {
 	plugin_data *p = p_d;
-	int s_len;
-	size_t k;
 
 	UNUSED(srv);
 
@@ -196,16 +194,7 @@ URIHANDLER_FUNC(mod_flv_streaming_path_handler) {
 
 	mod_flv_streaming_patch_connection(srv, con, p);
 
-	s_len = buffer_string_length(con->physical.path);
-
-	for (k = 0; k < p->conf.extensions->used; k++) {
-		data_string *ds = (data_string *)p->conf.extensions->data[k];
-		int ct_len = buffer_string_length(ds->value);
-
-		if (ct_len > s_len) continue;
-		if (buffer_is_empty(ds->value)) continue;
-
-		if (0 == strncmp(con->physical.path->ptr + s_len - ct_len, ds->value->ptr, ct_len)) {
+	if (array_match_value_suffix(p->conf.extensions, con->physical.path)) {
 			data_string *get_param;
 			off_t start = 0, len = -1;
 			char *err = NULL;
@@ -249,7 +238,6 @@ URIHANDLER_FUNC(mod_flv_streaming_path_handler) {
 			con->file_finished = 1;
 
 			return HANDLER_FINISHED;
-		}
 	}
 
 	/* not found */

@@ -378,25 +378,21 @@ static int mod_auth_patch_connection(server *srv, connection *con, plugin_data *
 #undef PATCH
 
 static handler_t mod_auth_uri_handler(server *srv, connection *con, void *p_d) {
-	size_t k;
 	plugin_data *p = p_d;
+	data_auth *dauth;
 
 	mod_auth_patch_connection(srv, con, p);
 
 	if (p->conf.auth_require == NULL) return HANDLER_GO_ON;
 
 	/* search auth directives for first prefix match against URL path */
-	for (k = 0; k < p->conf.auth_require->used; k++) {
-		const data_auth * const dauth = (data_auth *)p->conf.auth_require->data[k];
-		const buffer *path = dauth->key;
+	/* if we have a case-insensitive FS we have to lower-case the URI here too */
+	dauth = (!con->conf.force_lowercase_filenames)
+	   ? (data_auth *)array_match_key_prefix(p->conf.auth_require, con->uri.path)
+	   : (data_auth *)array_match_key_prefix_nc(p->conf.auth_require, con->uri.path);
+	if (NULL == dauth) return HANDLER_GO_ON;
 
-		if (buffer_string_length(con->uri.path) < buffer_string_length(path)) continue;
-
-		/* if we have a case-insensitive FS we have to lower-case the URI here too */
-
-		if (!con->conf.force_lowercase_filenames
-		    ? 0 == strncmp(con->uri.path->ptr, path->ptr, buffer_string_length(path))
-		    : 0 == strncasecmp(con->uri.path->ptr, path->ptr, buffer_string_length(path))) {
+	{
 			const http_auth_scheme_t * const scheme = dauth->require->scheme;
 			if (p->conf.auth_extern_authn) {
 				buffer *vb = http_header_env_get(con, CONST_STR_LEN("REMOTE_USER"));
@@ -405,11 +401,7 @@ static handler_t mod_auth_uri_handler(server *srv, connection *con, void *p_d) {
 				}
 			}
 			return scheme->checkfn(srv, con, scheme->p_d, dauth->require, p->conf.auth_backend);
-		}
 	}
-
-	/* nothing to do for us */
-	return HANDLER_GO_ON;
 }
 
 int mod_auth_plugin_init(plugin *p);

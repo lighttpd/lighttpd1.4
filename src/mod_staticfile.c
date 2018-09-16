@@ -156,8 +156,6 @@ static int mod_staticfile_patch_connection(server *srv, connection *con, plugin_
 
 URIHANDLER_FUNC(mod_staticfile_subrequest) {
 	plugin_data *p = p_d;
-	size_t k;
-	data_string *ds;
 
 	/* someone else has done a decision for us */
 	if (con->http_status != 0) return HANDLER_GO_ON;
@@ -187,17 +185,11 @@ URIHANDLER_FUNC(mod_staticfile_subrequest) {
 	}
 
 	/* ignore certain extensions */
-	for (k = 0; k < p->conf.exclude_ext->used; k++) {
-		ds = (data_string *)p->conf.exclude_ext->data[k];
-
-		if (buffer_is_empty(ds->value)) continue;
-
-		if (buffer_is_equal_right_len(con->physical.path, ds->value, buffer_string_length(ds->value))) {
+	if (array_match_value_suffix(p->conf.exclude_ext, con->physical.path)) {
 			if (con->conf.log_request_handling) {
 				log_error_write(srv, __FILE__, __LINE__,  "s",  "-- NOT handling file as static file, extension forbidden");
 			}
 			return HANDLER_GO_ON;
-		}
 	}
 
 

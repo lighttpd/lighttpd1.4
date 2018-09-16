@@ -2271,16 +2271,12 @@ handler_t gw_check_extension(server *srv, connection *con, gw_plugin_data *p, in
 
         /* check if extension-mapping matches */
         if (p->conf.ext_mapping) {
-            for (size_t k = 0; k < p->conf.ext_mapping->used; ++k) {
-                data_string *ds = (data_string *)p->conf.ext_mapping->data[k];
-                size_t ct_len = buffer_string_length(ds->key);
-                if (s_len < ct_len) continue;
-
+            data_string *ds =
+              (data_string *)array_match_key_suffix(p->conf.ext_mapping, fn);
+            if (NULL != ds) {
                 /* found a mapping */
-                if (0 == memcmp(fn->ptr+s_len-ct_len, ds->key->ptr, ct_len)) {
                     /* check if we know the extension */
-
-                    /* we can reuse k here */
+                    size_t k;
                     for (k = 0; k < exts->used; ++k) {
                         extension = exts->exts[k];
 
@@ -2293,8 +2289,6 @@ handler_t gw_check_extension(server *srv, connection *con, gw_plugin_data *p, in
                         /* found nothing */
                         extension = NULL;
                     }
-                    break;
-                }
             }
         }
 

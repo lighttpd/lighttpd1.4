@@ -270,6 +270,13 @@ SETDEFAULTS_FUNC(mod_expire_set_defaults) {
 
 		for (k = 0; k < s->expire_mimetypes->used; k++) {
 			data_string *ds = (data_string *)s->expire_mimetypes->data[k];
+			size_t klen = buffer_string_length(ds->key);
+
+			/*(omit trailing '*', if present, from prefix match)*/
+			/*(not usually a good idea to modify array keys
+			 * since doing so might break array_get_element_klen() search,
+			 * but array use in this module only walks array)*/
+			if (klen && ds->key->ptr[klen-1] == '*') buffer_string_set_length(ds->key, klen-1);
 
 			/* parse lines */
 			if (-1 == mod_expire_get_offset(srv, p, ds->value, NULL)) {
@@ -320,8 +327,7 @@ static int mod_expire_patch_connection(server *srv, connection *con, plugin_data
 CONNECTION_FUNC(mod_expire_handler) {
 	plugin_data *p = p_d;
 	buffer *vb;
-	size_t s_len;
-	size_t k;
+	data_string *ds;
 
 	/* Add caching headers only to http_status 200 OK or 206 Partial Content */
 	if (con->http_status != 200 && con->http_status != 206) return HANDLER_GO_ON;
@@ -336,52 +342,19 @@ CONNECTION_FUNC(mod_expire_handler) {
 
 	mod_expire_patch_connection(srv, con, p);
 
-	s_len = buffer_string_length(con->uri.path);
-
 	/* check expire.url */
-	for (k = 0; k < p->conf.expire_url->used; k++) {
-		size_t ct_len;
-		data_string *ds = (data_string *)p->conf.expire_url->data[k];
-		ct_len = buffer_string_length(ds->key);
-
-		if (ct_len > s_len) continue;
-		if (buffer_is_empty(ds->key)) continue;
-
-		if (0 == strncmp(con->uri.path->ptr, ds->key->ptr, ct_len)) {
-			vb = ds->value;
-			break;
-		}
+	ds = (data_string *)array_match_key_prefix(p->conf.expire_url, con->uri.path);
+	if (NULL != ds) {
+		vb = ds->value;
 	}
-	/* check expire.mimetypes (if no match with expire.url) */
-	if (k == p->conf.expire_url->used) {
-		const char *mimetype;
+	else {
+		/* check expire.mimetypes (if no match with expire.url) */
 		vb = http_header_response_get(con, HTTP_HEADER_CONTENT_TYPE, CONST_STR_LEN("Content-Type"));
-		if (NULL != vb) {
-			mimetype = vb->ptr;
-			s_len = buffer_string_length(vb);
-		} else {
-			mimetype = "";
-			s_len = 0;
-		}
-		for (k = 0; k < p->conf.expire_mimetypes->used; k++) {
-			size_t ct_len;
-			data_string *ds = (data_string *)p->conf.expire_mimetypes->data[k];
-			ct_len = buffer_string_length(ds->key);
-
-			if (ct_len > s_len) continue;
-			if (buffer_is_empty(ds->key)) continue;
-
-			/*(omit trailing '*', if present, from prefix match)*/
-			if (ds->key->ptr[ct_len-1] == '*') --ct_len;
-
-			if (0 == strncmp(mimetype, ds->key->ptr, ct_len)) {
-				vb = ds->value;
-				break;
-			}
-		}
-		if (k == p->conf.expire_mimetypes->used) {
-			vb = NULL;
-		}
+		ds = (NULL != vb)
+		   ? (data_string *)array_match_key_prefix(p->conf.expire_mimetypes, vb)
+		   : (data_string *)array_match_key_prefix_klen(p->conf.expire_mimetypes, CONST_STR_LEN(""));
+		if (NULL == ds) return HANDLER_GO_ON;
+		vb = ds->value;
 	}
 
 	if (NULL != vb) {
