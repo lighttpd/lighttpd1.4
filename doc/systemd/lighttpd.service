@@ -1,6 +1,6 @@
 [Unit]
 Description=Lighttpd Daemon
-After=network.target
+After=network-online.target
 
 [Service]
 Type=simple
