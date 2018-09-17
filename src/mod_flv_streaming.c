@@ -19,55 +19,31 @@ typedef struct {
 
 typedef struct {
 	PLUGIN_DATA;
-
-	buffer *query_str;
-	array *get_params;
-
 	plugin_config **config_storage;
-
 	plugin_config conf;
 } plugin_data;
 
 /* init the plugin data */
 INIT_FUNC(mod_flv_streaming_init) {
-	plugin_data *p;
-
-	p = calloc(1, sizeof(*p));
-
-	p->query_str = buffer_init();
-	p->get_params = array_init();
-
-	return p;
+	return calloc(1, sizeof(plugin_data));
 }
 
 /* detroy the plugin data */
 FREE_FUNC(mod_flv_streaming_free) {
 	plugin_data *p = p_d;
-
-	UNUSED(srv);
-
 	if (!p) return HANDLER_GO_ON;
 
 	if (p->config_storage) {
-		size_t i;
-
-		for (i = 0; i < srv->config_context->used; i++) {
+		for (size_t i = 0; i < srv->config_context->used; ++i) {
 			plugin_config *s = p->config_storage[i];
-
 			if (NULL == s) continue;
-
 			array_free(s->extensions);
-
 			free(s);
 		}
 		free(p->config_storage);
 	}
-
-	buffer_free(p->query_str);
-	array_free(p->get_params);
-
 	free(p);
-
+	UNUSED(srv);
 	return HANDLER_GO_ON;
 }
 
@@ -142,22 +118,15 @@ static int mod_flv_streaming_patch_connection(server *srv, connection *con, plug
 #undef PATCH
 
 static int split_get_params(array *get_params, buffer *qrystr) {
-	size_t is_key = 1;
-	size_t i, len;
-	char *key = NULL, *val = NULL;
+	size_t is_key = 1, klen = 0;
+	char *key = qrystr->ptr, *val = NULL;
 
-	key = qrystr->ptr;
-
-	/* we need the \0 */
-	len = buffer_string_length(qrystr);
-	for (i = 0; i <= len; i++) {
+	for (size_t i = 0, len = buffer_string_length(qrystr); i <= len; ++i) {
 		switch(qrystr->ptr[i]) {
 		case '=':
 			if (is_key) {
 				val = qrystr->ptr + i + 1;
-
-				qrystr->ptr[i] = '\0';
-
+				klen = (size_t)(qrystr->ptr + i - key);
 				is_key = 0;
 			}
 
@@ -166,11 +135,7 @@ static int split_get_params(array *get_params, buffer *qrystr) {
 		case '\0': /* fin symbol */
 			if (!is_key) {
 				/* we need at least a = since the last & */
-
-				/* terminate the value */
-				qrystr->ptr[i] = '\0';
-
-				array_insert_key_value(get_params, key, strlen(key), val, strlen(val));
+				array_insert_key_value(get_params, key, klen, val, qrystr->ptr + i - val);
 			}
 
 			key = qrystr->ptr + i + 1;
@@ -186,15 +151,17 @@ static int split_get_params(array *get_params, buffer *qrystr) {
 URIHANDLER_FUNC(mod_flv_streaming_path_handler) {
 	plugin_data *p = p_d;
 
-	UNUSED(srv);
-
 	if (con->mode != DIRECT) return HANDLER_GO_ON;
-
 	if (buffer_string_is_empty(con->physical.path)) return HANDLER_GO_ON;
 
 	mod_flv_streaming_patch_connection(srv, con, p);
 
-	if (array_match_value_suffix(p->conf.extensions, con->physical.path)) {
+	if (!array_match_value_suffix(p->conf.extensions, con->physical.path)) {
+		/* not found */
+		return HANDLER_GO_ON;
+	}
+
+	{
 			data_string *get_param;
 			off_t start = 0, len = -1;
 			char *err = NULL;
@@ -203,18 +170,17 @@ URIHANDLER_FUNC(mod_flv_streaming_path_handler) {
 			/* if there is a end=[0-9]+ in the header use it as end pos,
 			 * otherwise send rest of file, starting from start */
 
-			array_reset(p->get_params);
-			buffer_copy_buffer(p->query_str, con->uri.query);
-			split_get_params(p->get_params, p->query_str);
+			array_reset(srv->split_vals);
+			split_get_params(srv->split_vals, con->uri.query);
 
-			if (NULL != (get_param = (data_string *)array_get_element(p->get_params, "start"))) {
+			if (NULL != (get_param = (data_string *)array_get_element_klen(srv->split_vals, CONST_STR_LEN("start")))) {
 				if (buffer_string_is_empty(get_param->value)) return HANDLER_GO_ON;
 				start = strtoll(get_param->value->ptr, &err, 10);
 				if (*err != '\0') return HANDLER_GO_ON;
 				if (start < 0) return HANDLER_GO_ON;
 			}
 
-			if (NULL != (get_param = (data_string *)array_get_element(p->get_params, "end"))) {
+			if (NULL != (get_param = (data_string *)array_get_element_klen(srv->split_vals, CONST_STR_LEN("end")))) {
 				off_t end;
 				if (buffer_string_is_empty(get_param->value)) return HANDLER_GO_ON;
 				end = strtoll(get_param->value->ptr, &err, 10);
@@ -234,14 +200,9 @@ URIHANDLER_FUNC(mod_flv_streaming_path_handler) {
 			}
 
 			http_header_response_set(con, HTTP_HEADER_CONTENT_TYPE, CONST_STR_LEN("Content-Type"), CONST_STR_LEN("video/x-flv"));
-
 			con->file_finished = 1;
-
 			return HANDLER_FINISHED;
 	}
-
-	/* not found */
-	return HANDLER_GO_ON;
 }
 
 /* this function is called at dlopen() time and inits the callbacks */
