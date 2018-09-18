@@ -63,6 +63,11 @@ option('with_openssl',
 	value: false,
 	description: 'with openssl-support [default: off]',
 )
+option('with_pam',
+	type: 'boolean',
+	value: false,
+	description: 'with PAM-support for mod_auth [default: off]',
+)
 option('with_pcre',
 	type: 'boolean',
 	value: true,

@@ -148,6 +148,9 @@ if env['with_lua']:
 		'lib' : [ env['LIBMEMCACHED'], env['LIBLUA'] ]
 	}
 
+if env['with_pam']:
+	modules['mod_authn_pam'] = { 'src' : [ 'mod_authn_pam.c' ], 'lib' : [ env['LIBPAM'] ] }
+
 if env['with_pcre'] and (env['with_memcached'] or env['with_gdbm']):
 	modules['mod_trigger_b4_dl'] = { 'src' : [ 'mod_trigger_b4_dl.c' ], 'lib' : [ env['LIBPCRE'], env['LIBMEMCACHED'], env['LIBGDBM'] ] }
 

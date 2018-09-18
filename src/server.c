@@ -588,6 +588,11 @@ static void show_features (void) {
 #else
       "\t- LDAP support\n"
 #endif
+#ifdef HAVE_PAM
+      "\t+ PAM support\n"
+#else
+      "\t- PAM support\n"
+#endif
 #ifdef USE_MEMCACHED
       "\t+ memcached support\n"
 #else

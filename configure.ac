@@ -425,6 +425,31 @@ if test "$WITH_LDAP" != no; then
 fi
 AM_CONDITIONAL([BUILD_WITH_LDAP], [test "$WITH_LDAP" != no])
 
+dnl Check for PAM
+AC_MSG_NOTICE([----------------------------------------])
+AC_MSG_CHECKING(for PAM support)
+AC_ARG_WITH([pam],
+  [AC_HELP_STRING([--with-pam],[enable PAM support])],
+  [WITH_PAM=$withval],
+  [WITH_PAM=no]
+)
+AC_MSG_RESULT([$withval])
+
+if test "$WITH_PAM" != "no"; then
+  AC_CHECK_LIB([pam], [pam_start],
+    [AC_CHECK_HEADERS([security/pam_appl.h],[
+      PAM_LIB=-lpam
+      AC_DEFINE([HAVE_PAM], [1], [libpam])
+      AC_DEFINE([HAVE_SECURITY_PAM_APPL_H], [1])
+      ],
+      [AC_MSG_ERROR([pam headers not found, install them or build without --with-pam])]
+    )],
+    [AC_MSG_ERROR([pam library not found, install it or build without --with-pam])]
+  )
+  AC_SUBST(PAM_LIB)
+fi
+AM_CONDITIONAL([BUILD_WITH_PAM], [test "$WITH_PAM" != no])
+
 dnl Check for xattr
 AC_MSG_NOTICE([----------------------------------------])
 AC_MSG_CHECKING([for extended attributes support])
@@ -1388,6 +1413,9 @@ lighty_track_feature "kerberos" "mod_authn_gssapi" \
 
 lighty_track_feature "ldap" "mod_authn_ldap mod_vhostdb_ldap" \
   'test "$WITH_LDAP" != no'
+
+lighty_track_feature "pam" "mod_authn_pam" \
+  'test "$WITH_PAM" != no'
 
 lighty_track_feature "network-openssl" "mod_openssl" \
   'test "$WITH_OPENSSL" != no'

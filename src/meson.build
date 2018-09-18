@@ -316,6 +316,21 @@ if get_option('with_ldap')
 	conf_data.set('HAVE_LIBLBER', true)
 endif
 
+libpam = []
+if get_option('with_pam')
+	libpam = [ compiler.find_library('pam') ]
+	if not(compiler.has_function('pam_start',
+		args: defs,
+		dependencies: libpam,
+		prefix: '''
+			#include <security/pam_appl.h>
+		'''
+	))
+		error('Couldn\'t find security/pam_appl.h or pam_start in lib libpam')
+	endif
+	conf_data.set('HAVE_PAM', true)
+endif
+
 libev = []
 if get_option('with_libev')
 	libev = dependency('ev', required: false)
@@ -835,6 +850,12 @@ endif
 if get_option('with_openssl')
 	modules += [
 		[ 'mod_openssl', [ 'mod_openssl.c' ], libssl + libcrypto ],
+	]
+endif
+
+if get_option('with_pam')
+	modules += [
+		[ 'mod_authn_pam', [ 'mod_authn_pam.c' ], libpam ],
 	]
 endif
 

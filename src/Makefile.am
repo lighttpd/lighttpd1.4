@@ -342,6 +342,13 @@ mod_authn_ldap_la_LDFLAGS = $(common_module_ldflags)
 mod_authn_ldap_la_LIBADD = $(LDAP_LIB) $(LBER_LIB) $(common_libadd)
 endif
 
+if BUILD_WITH_PAM
+lib_LTLIBRARIES += mod_authn_pam.la
+mod_authn_pam_la_SOURCES = mod_authn_pam.c
+mod_authn_pam_la_LDFLAGS = $(common_module_ldflags)
+mod_authn_pam_la_LIBADD = $(PAM_LIB) $(common_libadd)
+endif
+
 if BUILD_WITH_MYSQL
 lib_LTLIBRARIES += mod_authn_mysql.la
 mod_authn_mysql_la_SOURCES = mod_authn_mysql.c
@@ -482,6 +489,10 @@ endif
 if BUILD_WITH_LDAP
 lighttpd_SOURCES += mod_authn_ldap.c mod_vhostdb_ldap.c
 lighttpd_LDADD += $(LDAP_LIB) $(LBER_LIB)
+endif
+if BUILD_WITH_PAM
+lighttpd_SOURCES += mod_authn_pam.c
+lighttpd_LDADD += $(PAM_LIB)
 endif
 if BUILD_WITH_MYSQL
 lighttpd_SOURCES += mod_authn_mysql.c mod_mysql_vhost.c mod_vhostdb_mysql.c

@@ -330,6 +330,7 @@ if 1:
 		LIBLUA = '',
 		LIBMEMCACHED = '',
 		LIBMYSQL = '',
+		LIBPAM = '',
 		LIBPCRE = '',
 		LIBPGSQL = '',
 		LIBSASL = '',
@@ -578,6 +579,14 @@ if 1:
 			CPPFLAGS = [ '-DHAVE_OPENSSL_SSL_H', '-DHAVE_LIBSSL'],
 			LIBSSL = 'ssl',
 			LIBCRYPTO = 'crypto',
+		)
+
+	if env['with_pam']:
+		if not autoconf.CheckLibWithHeader('pam', 'security/pam_appl.h', 'C'):
+			fail("Couldn't find pam")
+		autoconf.env.Append(
+			CPPFLAGS = [ '-DHAVE_PAM' ],
+			LIBPAM = 'pam',
 		)
 
 	if env['with_pcre']:
