@@ -1355,6 +1355,7 @@ do_build="\
   mod_secdownload \
   mod_setenv \
   mod_simple_vhost \
+  mod_sockproxy \
   mod_ssi \
   mod_staticfile \
   mod_status \

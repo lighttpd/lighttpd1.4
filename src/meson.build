@@ -778,6 +778,7 @@ modules = [
 	[ 'mod_secdownload', [ 'mod_secdownload.c' ], libcrypto ],
 	[ 'mod_setenv', [ 'mod_setenv.c' ] ],
 	[ 'mod_simple_vhost', [ 'mod_simple_vhost.c' ] ],
+	[ 'mod_sockproxy', [ 'mod_sockproxy.c' ] ],
 	[ 'mod_ssi', [ ssi_exprparser, 'mod_ssi_expr.c', 'mod_ssi.c' ], libws2_32 ],
 	[ 'mod_staticfile', [ 'mod_staticfile.c' ] ],
 	[ 'mod_status', [ 'mod_status.c' ] ],
