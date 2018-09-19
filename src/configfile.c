@@ -12,13 +12,13 @@
 #include "stat_cache.h"
 
 #include <sys/stat.h>
+#include <sys/wait.h>
 
 #include <stdlib.h>
 #include <fcntl.h>
 #include <unistd.h>
 #include <errno.h>
 #include <string.h>
-#include <stdio.h>
 #include <ctype.h>
 #include <limits.h>
 #include <glob.h>
@@ -1405,12 +1405,9 @@ static char* getCWD(void) {
 }
 
 int config_parse_cmd(server *srv, config_t *context, const char *cmd) {
-	tokenizer_t t;
 	int ret = 0;
-	FILE *fp;
-	buffer *source;
-	buffer *out = srv->tmp_buf;
 	char *oldpwd;
+	int fds[2];
 
 	if (NULL == (oldpwd = getCWD())) {
 		log_error_write(srv, __FILE__, __LINE__, "s",
@@ -1427,44 +1424,74 @@ int config_parse_cmd(server *srv, config_t *context, const char *cmd) {
 		}
 	}
 
-	source = buffer_init_string(cmd);
-
-	fp = popen(cmd, "r");
-	if (NULL == fp) {
-		log_error_write(srv, __FILE__, __LINE__, "SSss",
-				"popen \"", cmd, "\"failed:", strerror(errno));
+	if (pipe(fds)) {
+		log_error_write(srv, __FILE__, __LINE__, "ss",
+				"pipe failed: ", strerror(errno));
 		ret = -1;
 	}
 	else {
-		size_t rd;
-		buffer_string_set_length(out, 0);
-		do {
-			rd = fread(buffer_string_prepare_append(out, 1023), 1, 1023, fp);
-			buffer_commit(out, rd);
-		} while (0 != rd && !ferror(fp));
-		if (0 != rd || !feof(fp)) {
+		char *shell = getenv("SHELL");
+		char *args[4];
+		pid_t pid;
+		*(const char **)&args[0] = shell ? shell : "/bin/sh";
+		*(const char **)&args[1] = "-c";
+		*(const char **)&args[2] = cmd;
+		args[3] = NULL;
+
+		fdevent_setfd_cloexec(fds[0]);
+		pid = fdevent_fork_execve(args[0], args, NULL, -1, fds[1], -1, -1);
+		if (-1 == pid) {
 			log_error_write(srv, __FILE__, __LINE__, "SSss",
-					"fread \"", cmd, "\"failed:", strerror(errno));
+					"fork/exec(", cmd, "):", strerror(errno));
 			ret = -1;
 		}
-		if (0 != pclose(fp)) {
-			log_error_write(srv, __FILE__, __LINE__, "SSss",
-					"pclose \"", cmd, "\"failed:", strerror(errno));
-			ret = -1;
+		else {
+			ssize_t rd;
+			pid_t wpid;
+			int wstatus;
+			buffer *out = srv->tmp_buf;
+			buffer_string_set_length(out, 0);
+			close(fds[1]);
+			fds[1] = -1;
+			do {
+				rd = read(fds[0], buffer_string_prepare_append(out, 1023), 1023);
+				if (rd >= 0) buffer_commit(out, (size_t)rd);
+			} while (rd > 0 || (-1 == rd && errno == EINTR));
+			if (0 != rd) {
+				log_error_write(srv, __FILE__, __LINE__, "SSss",
+						"read \"", cmd, "\" failed:", strerror(errno));
+				ret = -1;
+			}
+			close(fds[0]);
+			fds[0] = -1;
+			while (-1 == (wpid = waitpid(pid, &wstatus, 0)) && errno == EINTR) ;
+			if (wpid != pid) {
+				log_error_write(srv, __FILE__, __LINE__, "SSss",
+						"waitpid \"", cmd, "\" failed:", strerror(errno));
+				ret = -1;
+			}
+			if (0 != wstatus) {
+				log_error_write(srv, __FILE__, __LINE__, "SSsd",
+						"commaned \"", cmd, "\" exited non-zero:", WEXITSTATUS(wstatus));
+				ret = -1;
+			}
+
+			if (-1 != ret) {
+				buffer *source = buffer_init_string(cmd);
+				tokenizer_t t;
+				tokenizer_init(&t, source, CONST_BUF_LEN(out));
+				ret = config_parse(srv, context, &t);
+				buffer_free(source);
+			}
 		}
+		if (-1 != fds[0]) close(fds[0]);
+		if (-1 != fds[1]) close(fds[1]);
 	}
 
-	if (-1 != ret) {
-		tokenizer_init(&t, source, CONST_BUF_LEN(out));
-		ret = config_parse(srv, context, &t);
-	}
-
-	buffer_free(source);
 	if (0 != chdir(oldpwd)) {
 		log_error_write(srv, __FILE__, __LINE__, "sss",
 			"cannot change directory to", oldpwd, strerror(errno));
-		free(oldpwd);
-		return -1;
+		ret = -1;
 	}
 	free(oldpwd);
 	return ret;
