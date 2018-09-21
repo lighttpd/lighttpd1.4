@@ -191,11 +191,10 @@ SETDEFAULTS_FUNC(mod_evhost_set_defaults) {
  * - ...
  */
 
-static int mod_evhost_parse_host(connection *con,array *host) {
+static int mod_evhost_parse_host(connection *con, array *host, buffer *key) {
 	register char *ptr = con->uri.authority->ptr + buffer_string_length(con->uri.authority);
 	char *colon = ptr; /* needed to filter out the colon (if exists) */
 	int first = 1;
-	data_string *ds;
 	int i;
 
 	/* first, find the domain + tld */
@@ -209,14 +208,9 @@ static int mod_evhost_parse_host(connection *con,array *host) {
 		}
 	}
 
-	ds = data_string_init();
-	buffer_copy_string_len(ds->key,CONST_STR_LEN("%0"));
-
 	/* if we stopped at a dot, skip the dot */
 	if (*ptr == '.') ptr++;
-	buffer_copy_string_len(ds->value, ptr, colon-ptr);
-
-	array_insert_unique(host,(data_unset *)ds);
+	array_insert_key_value(host, CONST_STR_LEN("%0"), ptr, colon-ptr);
 
 	/* if the : is not the start of the authority, go on parsing the hostname */
 
@@ -225,12 +219,9 @@ static int mod_evhost_parse_host(connection *con,array *host) {
 			if(*ptr == '.') {
 				if (ptr != colon - 1) {
 					/* is something between the dots */
-					ds = data_string_init();
-					buffer_copy_string_len(ds->key,CONST_STR_LEN("%"));
-					buffer_append_int(ds->key, i++);
-					buffer_copy_string_len(ds->value,ptr+1,colon-ptr-1);
-
-					array_insert_unique(host,(data_unset *)ds);
+					buffer_copy_string_len(key, CONST_STR_LEN("%"));
+					buffer_append_int(key, i++);
+					array_insert_key_value(host, CONST_BUF_LEN(key), ptr+1, colon-ptr-1);
 				}
 				colon = ptr;
 			}
@@ -238,12 +229,9 @@ static int mod_evhost_parse_host(connection *con,array *host) {
 
 		/* if the . is not the first charactor of the hostname */
 		if (colon != ptr) {
-			ds = data_string_init();
-			buffer_copy_string_len(ds->key,CONST_STR_LEN("%"));
-			buffer_append_int(ds->key, i /* ++ */);
-			buffer_copy_string_len(ds->value,ptr,colon-ptr);
-
-			array_insert_unique(host,(data_unset *)ds);
+			buffer_copy_string_len(key, CONST_STR_LEN("%"));
+			buffer_append_int(key, i /* ++ */);
+			array_insert_key_value(host, CONST_BUF_LEN(key), ptr, colon-ptr);
 		}
 	}
 
@@ -303,7 +291,7 @@ static handler_t mod_evhost_uri_handler(server *srv, connection *con, void *p_d)
 
 	parsed_host = array_init();
 
-	mod_evhost_parse_host(con, parsed_host);
+	mod_evhost_parse_host(con, parsed_host, p->tmp_buf);
 
 	/* build document-root */
 	buffer_reset(p->tmp_buf);

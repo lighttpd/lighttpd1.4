@@ -146,15 +146,13 @@ static int mod_auth_require_parse (server *srv, http_auth_require_t * const requ
         switch ((int)(eq - str)) {
           case 4:
             if (0 == memcmp(str, CONST_STR_LEN("user"))) {
-                data_string *ds = data_string_init();
-                buffer_copy_string_len(ds->key,str+5,len-5); /*("user=" is 5)*/
-                array_insert_unique(require->user, (data_unset *)ds);
+                /*("user=" is 5)*/
+                array_set_key_value(require->user, str+5, len-5, CONST_STR_LEN(""));
                 continue;
             }
             else if (0 == memcmp(str, CONST_STR_LEN("host"))) {
-                data_string *ds = data_string_init();
-                buffer_copy_string_len(ds->key,str+5,len-5); /*("host=" is 5)*/
-                array_insert_unique(require->host, (data_unset *)ds);
+                /*("host=" is 5)*/
+                array_set_key_value(require->host, str+5, len-5, CONST_STR_LEN(""));
                 log_error_write(srv, __FILE__, __LINE__, "ssb",
                                 "warning parsing auth.require 'require' field: 'host' not implemented;",
                                 "field value:", b);
@@ -163,9 +161,8 @@ static int mod_auth_require_parse (server *srv, http_auth_require_t * const requ
             break; /* to error */
           case 5:
             if (0 == memcmp(str, CONST_STR_LEN("group"))) {
-                data_string *ds = data_string_init();
-                buffer_copy_string_len(ds->key,str+6,len-6); /*("group=" is 6)*/
-                array_insert_unique(require->group, (data_unset *)ds);
+                /*("group=" is 6)*/
+                array_set_key_value(require->group, str+6, len-6, CONST_STR_LEN(""));
               #if 0/*(supported by mod_authn_ldap, but not all other backends)*/
                 log_error_write(srv, __FILE__, __LINE__, "ssb",
                                 "warning parsing auth.require 'require' field: 'group' not implemented;",

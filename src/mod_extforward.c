@@ -279,13 +279,8 @@ SETDEFAULTS_FUNC(mod_extforward_set_defaults) {
 
 		/* default to "X-Forwarded-For" or "Forwarded-For" if extforward.headers not specified or empty */
 		if (!s->hap_PROXY && 0 == s->headers->used && (0 == i || NULL != array_get_element(config->value, "extforward.headers"))) {
-			data_string *ds;
-			ds = data_string_init();
-			buffer_copy_string_len(ds->value, CONST_STR_LEN("X-Forwarded-For"));
-			array_insert_unique(s->headers, (data_unset *)ds);
-			ds = data_string_init();
-			buffer_copy_string_len(ds->value, CONST_STR_LEN("Forwarded-For"));
-			array_insert_unique(s->headers, (data_unset *)ds);
+			array_insert_value(s->headers, CONST_STR_LEN("X-Forwarded-For"));
+			array_insert_value(s->headers, CONST_STR_LEN("Forwarded-For"));
 		}
 
 		if (!array_is_kvany(s->opts_params)) {
@@ -423,15 +418,6 @@ static int mod_extforward_patch_connection(server *srv, connection *con, plugin_
 #undef PATCH
 
 
-static void put_string_into_array_len(array *ary, const char *str, int len)
-{
-	data_string *tempdata;
-	if (len == 0)
-		return;
-	tempdata = data_string_init();
-	buffer_copy_string_len(tempdata->value,str,len);
-	array_insert_unique(ary,(data_unset *)tempdata);
-}
 /*
    extract a forward array from the environment
 */
@@ -446,7 +432,7 @@ static array *extract_forward_array(buffer *pbuffer)
 			if (in_str) {
 				if ((*curr > '9' || *curr < '0') && *curr != '.' && *curr != ':' && (*curr < 'a' || *curr > 'f') && (*curr < 'A' || *curr > 'F')) {
 					/* found an separator , insert value into result array */
-					put_string_into_array_len(result, base, curr - base);
+					array_insert_value(result, base, curr - base);
 					/* change state to not in string */
 					in_str = 0;
 				}
@@ -460,7 +446,7 @@ static array *extract_forward_array(buffer *pbuffer)
 		}
 		/* if breaking out while in str, we got to the end of string, so add it */
 		if (in_str) {
-			put_string_into_array_len(result, base, curr - base);
+			array_insert_value(result, base, curr - base);
 		}
 	}
 	return result;

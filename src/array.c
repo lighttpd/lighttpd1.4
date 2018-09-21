@@ -578,30 +578,15 @@ int array_print(array *a, int depth) {
 #ifdef DEBUG_ARRAY
 int main (int argc, char **argv) {
 	array *a;
-	data_string *ds;
 
 	UNUSED(argc);
 	UNUSED(argv);
 
 	a = array_init();
 
-	ds = data_string_init();
-	buffer_copy_string_len(ds->key, CONST_STR_LEN("abc"));
-	buffer_copy_string_len(ds->value, CONST_STR_LEN("alfrag"));
-
-	array_insert_unique(a, (data_unset *)ds);
-
-	ds = data_string_init();
-	buffer_copy_string_len(ds->key, CONST_STR_LEN("abc"));
-	buffer_copy_string_len(ds->value, CONST_STR_LEN("hameplman"));
-
-	array_insert_unique(a, (data_unset *)ds);
-
-	ds = data_string_init();
-	buffer_copy_string_len(ds->key, CONST_STR_LEN("123"));
-	buffer_copy_string_len(ds->value, CONST_STR_LEN("alfrag"));
-
-	array_insert_unique(a, (data_unset *)ds);
+	array_insert_key_value(a, CONST_STR_LEN("abc"), CONST_STR_LEN("alfrag"));
+	array_insert_key_value(a, CONST_STR_LEN("abc"), CONST_STR_LEN("hameplman"));
+	array_insert_key_value(a, CONST_STR_LEN("123"), CONST_STR_LEN("alfrag"));
 
 	array_print(a, 0);
 

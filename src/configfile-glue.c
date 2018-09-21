@@ -192,21 +192,12 @@ int config_insert_values_global(server *srv, array *ca, const config_values_t cv
 	data_unset *du;
 
 	for (i = 0; cv[i].key; i++) {
-		data_string *touched;
-
 		if (NULL == (du = array_get_element_klen(ca, cv[i].key, strlen(cv[i].key)))) {
 			/* no found */
 
 			continue;
 		}
-
-		/* touched */
-		touched = data_string_init();
-
-		buffer_copy_string_len(touched->value, CONST_STR_LEN(""));
-		buffer_copy_buffer(touched->key, du->key);
-
-		array_insert_unique(srv->config_touched, (data_unset *)touched);
+		array_set_key_value(srv->config_touched, CONST_BUF_LEN(du->key), CONST_STR_LEN(""));
 	}
 
 	return config_insert_values_internal(srv, ca, cv, scope);

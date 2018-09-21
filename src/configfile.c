@@ -25,18 +25,16 @@
 
 
 #if defined(HAVE_MYSQL) || (defined(HAVE_LDAP_H) && defined(HAVE_LBER_H) && defined(HAVE_LIBLDAP) && defined(HAVE_LIBLBER))
-static void config_warn_authn_module (server *srv, const char *module) {
-	size_t len = strlen(module);
+static void config_warn_authn_module (server *srv, const char *module, size_t len) {
 	for (size_t i = 0; i < srv->config_context->used; ++i) {
 		const data_config *config = (data_config const*)srv->config_context->data[i];
 		const data_unset *du = array_get_element(config->value, "auth.backend");
 		if (NULL != du && du->type == TYPE_STRING) {
 			data_string *ds = (data_string *)du;
 			if (buffer_is_equal_string(ds->value, module, len)) {
-				ds = data_string_init();
-				buffer_copy_string_len(ds->value, CONST_STR_LEN("mod_authn_"));
-				buffer_append_string(ds->value, module);
-				array_insert_unique(srv->srvconf.modules, (data_unset *)ds);
+				buffer_copy_string_len(srv->tmp_buf, CONST_STR_LEN("mod_authn_"));
+				buffer_append_string_len(srv->tmp_buf, module, len);
+				array_insert_value(srv->srvconf.modules, CONST_BUF_LEN(srv->tmp_buf));
 				log_error_write(srv, __FILE__, __LINE__, "SSSsSSS", "Warning: please add \"mod_authn_", module, "\" to server.modules list in lighttpd.conf.  A future release of lighttpd 1.4.x will not automatically load mod_authn_", module, "and lighttpd will fail to start up since your lighttpd.conf uses auth.backend = \"", module, "\".");
 				return;
 			}
@@ -53,9 +51,7 @@ static void config_warn_openssl_module (server *srv) {
 			data_unset *du = config->value->data[j];
 			if (0 == strncmp(du->key->ptr, "ssl.", sizeof("ssl.")-1)) {
 				/* mod_openssl should be loaded after mod_extforward */
-				data_string *ds = data_string_init();
-				buffer_copy_string_len(ds->value, CONST_STR_LEN("mod_openssl"));
-				array_insert_unique(srv->srvconf.modules, (data_unset *)ds);
+				array_insert_value(srv->srvconf.modules, CONST_STR_LEN("mod_openssl"));
 				log_error_write(srv, __FILE__, __LINE__, "S", "Warning: please add \"mod_openssl\" to server.modules list in lighttpd.conf.  A future release of lighttpd 1.4.x *will not* automatically load mod_openssl and lighttpd *will not* use SSL/TLS where your lighttpd.conf contains ssl.* directives");
 				return;
 			}
@@ -607,14 +603,11 @@ static int config_insert(server *srv) {
 		if (prepend_mod_indexfile) {
 			/* mod_indexfile has to be loaded before mod_fastcgi and friends */
 			array *modules = array_init();
-
-			ds = data_string_init();
-			buffer_copy_string_len(ds->value, CONST_STR_LEN("mod_indexfile"));
-			array_insert_unique(modules, (data_unset *)ds);
+			array_insert_value(modules, CONST_STR_LEN("mod_indexfile"));
 
 			for (i = 0; i < srv->srvconf.modules->used; i++) {
-				data_unset *du = srv->srvconf.modules->data[i];
-				array_insert_unique(modules, du->copy(du));
+				ds = (data_string *)srv->srvconf.modules->data[i];
+				array_insert_value(modules, CONST_BUF_LEN(ds->value));
 			}
 
 			array_free(srv->srvconf.modules);
@@ -623,15 +616,11 @@ static int config_insert(server *srv) {
 
 		/* append default modules */
 		if (append_mod_dirlisting) {
-			ds = data_string_init();
-			buffer_copy_string_len(ds->value, CONST_STR_LEN("mod_dirlisting"));
-			array_insert_unique(srv->srvconf.modules, (data_unset *)ds);
+			array_insert_value(srv->srvconf.modules, CONST_STR_LEN("mod_dirlisting"));
 		}
 
 		if (append_mod_staticfile) {
-			ds = data_string_init();
-			buffer_copy_string_len(ds->value, CONST_STR_LEN("mod_staticfile"));
-			array_insert_unique(srv->srvconf.modules, (data_unset *)ds);
+			array_insert_value(srv->srvconf.modules, CONST_STR_LEN("mod_staticfile"));
 		}
 
 		if (append_mod_openssl) {
@@ -645,18 +634,16 @@ static int config_insert(server *srv) {
 		 * existing lighttpd 1.4.x configs */
 		if (contains_mod_auth) {
 			if (append_mod_authn_file) {
-				ds = data_string_init();
-				buffer_copy_string_len(ds->value, CONST_STR_LEN("mod_authn_file"));
-				array_insert_unique(srv->srvconf.modules, (data_unset *)ds);
+				array_insert_value(srv->srvconf.modules, CONST_STR_LEN("mod_authn_file"));
 			}
 			if (append_mod_authn_ldap) {
 			      #if defined(HAVE_LDAP_H) && defined(HAVE_LBER_H) && defined(HAVE_LIBLDAP) && defined(HAVE_LIBLBER)
-				config_warn_authn_module(srv, "ldap");
+				config_warn_authn_module(srv, CONST_STR_LEN("ldap"));
 			      #endif
 			}
 			if (append_mod_authn_mysql) {
 			      #if defined(HAVE_MYSQL)
-				config_warn_authn_module(srv, "mysql");
+				config_warn_authn_module(srv, CONST_STR_LEN("mysql"));
 			      #endif
 			}
 		}
@@ -1513,7 +1500,7 @@ int config_read(server *srv, const char *fn) {
 	config_t context;
 	data_config *dc;
 	data_integer *dpid;
-	data_string *dcwd;
+	buffer *dcwd;
 	int ret;
 	char *pos;
 	buffer *filename;
@@ -1544,14 +1531,11 @@ int config_read(server *srv, const char *fn) {
 	buffer_copy_string_len(dpid->key, CONST_STR_LEN("var.PID"));
 	array_insert_unique(dc->value, (data_unset *)dpid);
 
-	dcwd = data_string_init();
-	buffer_string_prepare_copy(dcwd->value, 1023);
-	if (NULL != getcwd(dcwd->value->ptr, dcwd->value->size - 1)) {
-		buffer_commit(dcwd->value, strlen(dcwd->value->ptr));
-		buffer_copy_string_len(dcwd->key, CONST_STR_LEN("var.CWD"));
-		array_insert_unique(dc->value, (data_unset *)dcwd);
-	} else {
-		dcwd->free((data_unset*) dcwd);
+	dcwd = srv->tmp_buf;
+	buffer_string_prepare_copy(dcwd, 4095);
+	if (NULL != getcwd(dcwd->ptr, 4095)) {
+		buffer_commit(dcwd, strlen(dcwd->ptr));
+		array_set_key_value(dc->value, CONST_STR_LEN("var.CWD"), CONST_BUF_LEN(dcwd));
 	}
 
 	filename = buffer_init_string(fn);
@@ -1596,11 +1580,9 @@ int config_set_defaults(server *srv) {
 	}
 
 	if (!srv->srvconf.upload_tempdirs->used) {
-		data_string *ds = data_string_init();
 		const char *tmpdir = getenv("TMPDIR");
 		if (NULL == tmpdir) tmpdir = "/var/tmp";
-		buffer_copy_string(ds->value, tmpdir);
-		array_insert_unique(srv->srvconf.upload_tempdirs, (data_unset *)ds);
+		array_insert_value(srv->srvconf.upload_tempdirs, tmpdir, strlen(tmpdir));
 	}
 
 	if (srv->srvconf.upload_tempdirs->used) {
