@@ -1,6 +1,7 @@
 AM_CFLAGS = $(FAM_CFLAGS) $(LIBUNWIND_CFLAGS)
 
 noinst_PROGRAMS=\
+	t/test_array \
 	t/test_buffer \
 	t/test_burl \
 	t/test_base64 \
@@ -11,6 +12,7 @@ sbin_PROGRAMS=lighttpd lighttpd-angel
 LEMON=$(top_builddir)/src/lemon$(BUILD_EXEEXT)
 
 TESTS=\
+	t/test_array$(EXEEXT) \
 	t/test_buffer$(EXEEXT) \
 	t/test_burl$(EXEEXT) \
 	t/test_base64$(EXEEXT) \
@@ -533,6 +535,9 @@ lighttpd_LDADD = $(PCRE_LIB) $(DL_LIB) $(SENDFILE_LIB) $(ATTR_LIB) $(common_liba
 lighttpd_LDFLAGS = -export-dynamic
 
 endif
+
+t_test_array_SOURCES = t/test_array.c array.c data_array.c data_integer.c data_string.c buffer.c
+t_test_array_LDADD = $(LIBUNWIND_LIBS)
 
 t_test_buffer_SOURCES = t/test_buffer.c buffer.c
 t_test_buffer_LDADD = $(LIBUNWIND_LIBS)

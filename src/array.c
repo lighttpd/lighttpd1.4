@@ -574,27 +574,3 @@ int array_print(array *a, int depth) {
 
 	return 0;
 }
-
-#ifdef DEBUG_ARRAY
-int main (int argc, char **argv) {
-	array *a;
-
-	UNUSED(argc);
-	UNUSED(argv);
-
-	a = array_init();
-
-	array_insert_key_value(a, CONST_STR_LEN("abc"), CONST_STR_LEN("alfrag"));
-	array_insert_key_value(a, CONST_STR_LEN("abc"), CONST_STR_LEN("hameplman"));
-	array_insert_key_value(a, CONST_STR_LEN("123"), CONST_STR_LEN("alfrag"));
-
-	array_print(a, 0);
-
-	array_free(a);
-
-	fprintf(stderr, "%d\n",
-	       buffer_caseless_compare(CONST_STR_LEN("Content-Type"), CONST_STR_LEN("Content-type")));
-
-	return 0;
-}
-#endif

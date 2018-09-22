@@ -703,6 +703,12 @@ executable('lighttpd', configparser,
 	install_dir: sbinddir,
 )
 
+test('test_array', executable('test_array',
+	sources: ['t/test_array.c', 'array.c', 'data_array.c', 'data_integer.c', 'data_string.c', 'buffer.c'],
+	dependencies: common_flags + libunwind,
+	build_by_default: false,
+))
+
 test('test_buffer', executable('test_buffer',
 	sources: ['t/test_buffer.c', 'buffer.c'],
 	dependencies: common_flags + libunwind,

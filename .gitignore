@@ -47,6 +47,7 @@ mod_ssi_exprparser.h
 scgi-responder
 sconsbuild/
 stamp-h1
+test_array
 test_base64
 test_buffer
 test_burl

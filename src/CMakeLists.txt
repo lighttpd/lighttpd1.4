@@ -654,6 +654,16 @@ add_and_install_library(mod_vhostdb mod_vhostdb.c)
 add_and_install_library(mod_webdav mod_webdav.c)
 add_and_install_library(mod_wstunnel mod_wstunnel.c)
 
+add_executable(test_array
+	t/test_array.c
+	array.c
+	data_array.c
+	data_integer.c
+	data_string.c
+	buffer.c
+)
+add_test(NAME test_array COMMAND test_array)
+
 add_executable(test_buffer
 	t/test_buffer.c
 	buffer.c
@@ -895,6 +905,8 @@ if(WITH_LIBUNWIND)
 	target_link_libraries(lighttpd ${LIBUNWIND_LDFLAGS})
 	add_target_properties(lighttpd COMPILE_FLAGS ${LIBUNWIND_CFLAGS})
 
+	target_link_libraries(test_array ${LIBUNWIND_LDFLAGS})
+	add_target_properties(test_array COMPILE_FLAGS ${LIBUNWIND_CFLAGS})
 	target_link_libraries(test_buffer ${LIBUNWIND_LDFLAGS})
 	add_target_properties(test_buffer COMPILE_FLAGS ${LIBUNWIND_CFLAGS})
 	target_link_libraries(test_burl ${LIBUNWIND_LDFLAGS})
