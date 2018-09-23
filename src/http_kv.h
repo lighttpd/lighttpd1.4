@@ -2,6 +2,8 @@
 #define INCLUDED_HTTP_KV_H
 #include "first.h"
 
+#include "buffer.h"
+
 /* sources:
  * - [RFC2616], Section 9
  *   (or http://tools.ietf.org/html/draft-ietf-httpbis-p2-semantics-22)
@@ -61,5 +63,6 @@ const char *get_http_version_name(int i);
 const char *get_http_method_name(http_method_t i);
 int get_http_version_key(const char *s);
 http_method_t get_http_method_key(const char *s);
+void http_status_append(buffer *b, int status);
 
 #endif

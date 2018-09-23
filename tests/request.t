@@ -332,10 +332,10 @@ $t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 416, 'HTTP-
          "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
 <html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
  <head>
-  <title>416 - Requested Range Not Satisfiable</title>
+  <title>416 Requested Range Not Satisfiable</title>
  </head>
  <body>
-  <h1>416 - Requested Range Not Satisfiable</h1>
+  <h1>416 Requested Range Not Satisfiable</h1>
  </body>
 </html>
 EOF
@@ -354,10 +354,10 @@ $t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 416, 'HTTP-
          "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
 <html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
  <head>
-  <title>416 - Requested Range Not Satisfiable</title>
+  <title>416 Requested Range Not Satisfiable</title>
  </head>
  <body>
-  <h1>416 - Requested Range Not Satisfiable</h1>
+  <h1>416 Requested Range Not Satisfiable</h1>
  </body>
 </html>
 EOF

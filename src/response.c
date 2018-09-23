@@ -31,9 +31,7 @@ int http_response_write_header(server *srv, connection *con) {
 	} else {
 		buffer_copy_string_len(b, CONST_STR_LEN("HTTP/1.0 "));
 	}
-	buffer_append_int(b, con->http_status);
-	buffer_append_string_len(b, CONST_STR_LEN(" "));
-	buffer_append_string(b, get_http_status_name(con->http_status));
+	http_status_append(b, con->http_status);
 
 	/* disable keep-alive if requested */
 	if (con->request_count > con->conf.max_keep_alive_requests || 0 == con->conf.max_keep_alive_idle) {

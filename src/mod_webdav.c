@@ -527,9 +527,7 @@ static int webdav_gen_response_status_tag(server *srv, connection *con, physical
 	} else {
 		buffer_copy_string_len(b, CONST_STR_LEN("HTTP/1.0 "));
 	}
-	buffer_append_int(b, status);
-	buffer_append_string_len(b, CONST_STR_LEN(" "));
-	buffer_append_string(b, get_http_status_name(status));
+	http_status_append(b, status);
 
 	buffer_append_string_len(b,CONST_STR_LEN("</D:status>\n"));
 	buffer_append_string_len(b,CONST_STR_LEN("</D:response>\n"));

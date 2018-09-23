@@ -340,18 +340,14 @@ static int connection_handle_write_prepare(server *srv, connection *con) {
 					   "<html xmlns=\"http://www.w3.org/1999/xhtml\" xml:lang=\"en\" lang=\"en\">\n"
 					   " <head>\n"
 					   "  <title>"));
-			buffer_append_int(b, con->http_status);
-			buffer_append_string_len(b, CONST_STR_LEN(" - "));
-			buffer_append_string(b, get_http_status_name(con->http_status));
+			http_status_append(b, con->http_status);
 
 			buffer_append_string_len(b, CONST_STR_LEN(
 					     "</title>\n"
 					     " </head>\n"
 					     " <body>\n"
 					     "  <h1>"));
-			buffer_append_int(b, con->http_status);
-			buffer_append_string_len(b, CONST_STR_LEN(" - "));
-			buffer_append_string(b, get_http_status_name(con->http_status));
+			http_status_append(b, con->http_status);
 
 			buffer_append_string_len(b, CONST_STR_LEN("</h1>\n"
 					     " </body>\n"
