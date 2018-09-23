@@ -64,5 +64,6 @@ const char *get_http_method_name(http_method_t i);
 int get_http_version_key(const char *s);
 http_method_t get_http_method_key(const char *s);
 void http_status_append(buffer *b, int status);
+void http_method_append(buffer *b, http_method_t method);
 
 #endif

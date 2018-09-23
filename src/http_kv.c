@@ -165,3 +165,12 @@ void http_status_append(buffer * const b, const int status) {
         buffer_append_string_len(b, CONST_STR_LEN(" "));
     }
 }
+
+void http_method_append(buffer * const b, const http_method_t method) {
+    const keyvalue * const kv = http_methods;
+    int i;
+    for (i = 0; kv[i].key != method && kv[i].value; ++i) ;
+    if (kv[i].value) {
+        buffer_append_string_len(b, kv[i].value, kv[i].vlen);
+    }
+}

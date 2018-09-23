@@ -428,17 +428,11 @@ static cond_result_t config_check_cond_nocache(server *srv, connection *con, dat
 		l = http_header_request_get(con, HTTP_HEADER_UNSPECIFIED, CONST_BUF_LEN(dc->comp_tag));
 		if (NULL == l) l = srv->empty_string;
 		break;
-	case COMP_HTTP_REQUEST_METHOD: {
-		const char *method = get_http_method_name(con->request.http_method);
-
-		/* we only have the request method as const char but we need a buffer for comparing */
-
-		buffer_copy_string(srv->tmp_buf, method);
-
+	case COMP_HTTP_REQUEST_METHOD:
 		l = srv->tmp_buf;
-
+		buffer_string_set_length(l, 0);
+		http_method_append(l, con->request.http_method);
 		break;
-	}
 	default:
 		return COND_RESULT_FALSE;
 	}

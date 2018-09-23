@@ -538,7 +538,8 @@ static buffer *magnet_env_get_buffer_by_id(server *srv, connection *con, int id)
 	case MAGNET_ENV_URI_QUERY: dest = con->uri.query; break;
 
 	case MAGNET_ENV_REQUEST_METHOD:
-		buffer_copy_string(srv->tmp_buf, get_http_method_name(con->request.http_method));
+		buffer_string_set_length(srv->tmp_buf, 0);
+		http_method_append(srv->tmp_buf, con->request.http_method);
 		dest = srv->tmp_buf;
 		break;
 	case MAGNET_ENV_REQUEST_URI:      dest = con->request.uri; break;

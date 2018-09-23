@@ -1028,7 +1028,7 @@ REQUESTDONE_FUNC(log_access_write) {
 					con->request.http_version == HTTP_VERSION_1_1 ? "HTTP/1.1" : "HTTP/1.0", 8);
 				break;
 			case FORMAT_REQUEST_METHOD:
-				buffer_append_string(b, get_http_method_name(con->request.http_method));
+				http_method_append(b, con->request.http_method);
 				break;
 			case FORMAT_PERCENT:
 				buffer_append_string_len(b, CONST_STR_LEN("%"));

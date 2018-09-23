@@ -718,7 +718,7 @@ static handler_t proxy_create_env(server *srv, gw_handler_ctx *gwhctx) {
 	/* build header */
 
 	/* request line */
-	buffer_copy_string(b, get_http_method_name(con->request.http_method));
+	http_method_append(b, con->request.http_method);
 	buffer_append_string_len(b, CONST_STR_LEN(" "));
 	buffer_append_string_buffer(b, con->request.uri);
 	if (remap_headers)
