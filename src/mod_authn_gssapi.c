@@ -193,9 +193,9 @@ static void mod_authn_gssapi_log_gss_error(server *srv, const char *file, unsign
         maj_stat = gss_display_status(&min_stat, err_min, GSS_C_MECH_CODE,
                                       GSS_C_NULL_OID, &msg_ctx, &status_string);
         if (!GSS_ERROR(maj_stat)) {
-            buffer_append_string(msg, " (");
+            buffer_append_string_len(msg, CONST_STR_LEN(" ("));
             buffer_append_string(msg, status_string.value);
-            buffer_append_string(msg, ")");
+            buffer_append_string_len(msg, CONST_STR_LEN(")"));
             gss_release_buffer(&min_stat, &status_string);
         }
     } while (!GSS_ERROR(maj_stat) && msg_ctx != 0);
@@ -365,12 +365,12 @@ static handler_t mod_authn_gssapi_check_spnego(server *srv, connection *con, plu
          * ??? What if con->server_name is not set?
          * ??? Will this work below if IPv6 provided in Host?  probably not */
         if (!buffer_is_empty(con->request.http_host)) {
-            buffer_append_string(sprinc, "/");
+            buffer_append_string_len(sprinc, CONST_STR_LEN("/"));
             buffer_append_string_len(sprinc, con->request.http_host->ptr, strcspn(con->request.http_host->ptr, ":"));
         }
     }
     if (strchr(sprinc->ptr, '@') == NULL) {
-        buffer_append_string(sprinc, "@");
+        buffer_append_string_len(sprinc, CONST_STR_LEN("@"));
         buffer_append_string_buffer(sprinc, require->realm);
     }
     /*#define GSS_C_NT_USER_NAME gss_nt_user_name*/
@@ -663,7 +663,7 @@ static handler_t mod_authn_gssapi_basic(server *srv, connection *con, void *p_d,
          * ??? What if con->server_name is not set?
          * ??? Will this work below if IPv6 provided in Host?  probably not */
         if (!buffer_is_empty(con->request.http_host)) {
-            buffer_append_string(sprinc, "/");
+            buffer_append_string_len(sprinc, CONST_STR_LEN("/"));
             buffer_append_string_len(sprinc, con->request.http_host->ptr, strcspn(con->request.http_host->ptr, ":"));
         }
     }

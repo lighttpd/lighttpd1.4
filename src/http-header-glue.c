@@ -206,7 +206,7 @@ static int http_response_parse_range(server *srv, connection *con, buffer *path,
 	int error;
 	off_t start, end;
 	const char *s, *minus;
-	char *boundary = "fkj49sn38dcn3";
+	static const char boundary[] = "fkj49sn38dcn3";
 	buffer *content_type = http_header_response_get(con, HTTP_HEADER_CONTENT_TYPE, CONST_STR_LEN("Content-Type"));
 
 	start = 0;
@@ -328,7 +328,7 @@ static int http_response_parse_range(server *srv, connection *con, buffer *path,
 				buffer *b = buffer_init();
 
 				buffer_copy_string_len(b, CONST_STR_LEN("\r\n--"));
-				buffer_append_string(b, boundary);
+				buffer_append_string_len(b, boundary, sizeof(boundary)-1);
 
 				/* write Content-Range */
 				buffer_append_string_len(b, CONST_STR_LEN("\r\nContent-Range: bytes "));
@@ -364,7 +364,7 @@ static int http_response_parse_range(server *srv, connection *con, buffer *path,
 		buffer *b = buffer_init();
 
 		buffer_copy_string_len(b, "\r\n--", 4);
-		buffer_append_string(b, boundary);
+		buffer_append_string_len(b, boundary, sizeof(boundary)-1);
 		buffer_append_string_len(b, "--\r\n", 4);
 
 		con->response.content_length += buffer_string_length(b);
@@ -374,7 +374,7 @@ static int http_response_parse_range(server *srv, connection *con, buffer *path,
 		/* set header-fields */
 
 		buffer_copy_string_len(srv->tmp_buf, CONST_STR_LEN("multipart/byteranges; boundary="));
-		buffer_append_string(srv->tmp_buf, boundary);
+		buffer_append_string_len(srv->tmp_buf, boundary, sizeof(boundary)-1);
 
 		/* overwrite content-type */
 		http_header_response_set(con, HTTP_HEADER_CONTENT_TYPE, CONST_STR_LEN("Content-Type"), CONST_BUF_LEN(srv->tmp_buf));

@@ -861,7 +861,7 @@ static handler_t mod_auth_send_401_unauthorized_digest(server *srv, connection *
 	buffer_append_string_len(srv->tmp_buf, CONST_STR_LEN("\", charset=\"UTF-8\", nonce=\""));
 	buffer_append_uint_hex(srv->tmp_buf, (uintmax_t)srv->cur_ts);
 	buffer_append_string_len(srv->tmp_buf, CONST_STR_LEN(":"));
-	buffer_append_string(srv->tmp_buf, hh);
+	buffer_append_string_len(srv->tmp_buf, hh, HASHHEXLEN);
 	buffer_append_string_len(srv->tmp_buf, CONST_STR_LEN("\", qop=\"auth\""));
 	if (nonce_stale) {
 		buffer_append_string_len(srv->tmp_buf, CONST_STR_LEN(", stale=true"));

@@ -566,7 +566,7 @@ context ::= DOLLAR SRVVARNAME(B) LBRACKET stringop(C) RBRACKET cond(E) expressio
 
     b = buffer_init();
     buffer_copy_buffer(b, ctx->current->key);
-    buffer_append_string(b, "/");
+    buffer_append_string_len(b, CONST_STR_LEN("/"));
     buffer_append_string_buffer(b, B);
     buffer_append_string_buffer(b, C);
     buffer_append_string_buffer(b, op);
