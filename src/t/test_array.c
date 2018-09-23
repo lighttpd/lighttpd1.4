@@ -7,6 +7,26 @@
 #include "array.h"
 #include "buffer.h"
 
+static void test_array_get_int_ptr (void) {
+    data_integer *di;
+    int *i;
+    array *a = array_init();
+
+    i = array_get_int_ptr(a, CONST_STR_LEN("abc"));
+    assert(NULL != i);
+    *i = 4;
+    i = array_get_int_ptr(a, CONST_STR_LEN("abc"));
+    assert(NULL != i);
+    assert(*i == 4);
+    di = (data_integer *)array_get_element_klen(a, CONST_STR_LEN("does-not-exist"));
+    assert(NULL == di);
+    di = (data_integer *)array_get_element_klen(a, CONST_STR_LEN("abc"));
+    assert(NULL != di);
+    assert(di->value == 4);
+
+    array_free(a);
+}
+
 static void test_array_insert_value (void) {
     data_string *ds;
     array *a = array_init();
@@ -74,6 +94,7 @@ static void test_array_set_key_value (void) {
 }
 
 int main() {
+    test_array_get_int_ptr();
     test_array_insert_value();
     test_array_insert_key_value();
     test_array_set_key_value();

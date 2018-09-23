@@ -1499,7 +1499,6 @@ static void context_free(config_t *context) {
 int config_read(server *srv, const char *fn) {
 	config_t context;
 	data_config *dc;
-	data_integer *dpid;
 	buffer *dcwd;
 	int ret;
 	char *pos;
@@ -1526,10 +1525,7 @@ int config_read(server *srv, const char *fn) {
 	context.current = dc;
 
 	/* default context */
-	dpid = data_integer_init();
-	dpid->value = getpid();
-	buffer_copy_string_len(dpid->key, CONST_STR_LEN("var.PID"));
-	array_insert_unique(dc->value, (data_unset *)dpid);
+	*array_get_int_ptr(dc->value, CONST_STR_LEN("var.PID")) = getpid();
 
 	dcwd = srv->tmp_buf;
 	buffer_string_prepare_copy(dcwd, 4095);

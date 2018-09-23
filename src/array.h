@@ -71,6 +71,7 @@ data_unset *array_extract_element_klen(array *a, const char *key, size_t klen); 
 void array_set_key_value(array *hdrs, const char *key, size_t key_len, const char *value, size_t val_len);
 void array_insert_key_value(array *hdrs, const char *key, size_t key_len, const char *value, size_t val_len);
 void array_insert_value(array *hdrs, const char *value, size_t val_len);
+int * array_get_int_ptr(array *a, const char *k, size_t klen);
 void array_replace(array *a, data_unset *entry);
 void array_print_indent(int depth);
 size_t array_get_max_key_length(array *a);

@@ -223,6 +223,19 @@ void array_insert_value(array *hdrs, const char *value, size_t val_len) {
 	array_insert_unique(hdrs, (data_unset *)ds);
 }
 
+int * array_get_int_ptr(array *a, const char *k, size_t klen) {
+	data_integer *di = (data_integer *)array_get_element_klen(a, k, klen);
+
+	if (NULL == di) {
+		di = (data_integer *)array_get_unused_element(a, TYPE_INTEGER);
+		if (NULL == di) di = data_integer_init();
+		buffer_copy_string_len(di->key, k, klen);
+		array_insert_unique(a, (data_unset *)di);
+	}
+
+	return &di->value;
+}
+
 /* if entry already exists return pointer to existing entry, otherwise insert entry and return NULL */
 static data_unset **array_find_or_insert(array *a, data_unset *entry) {
 	size_t ndx, pos, j;

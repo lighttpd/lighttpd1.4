@@ -18,16 +18,7 @@
  */
 
 int *status_counter_get_counter(server *srv, const char *s, size_t len) {
-	data_integer *di;
-
-	if (NULL == (di = (data_integer *)array_get_element_klen(srv->status, s, len))) {
-		/* not found, create it */
-		di = data_integer_init();
-		buffer_copy_string_len(di->key, s, len);
-		di->value = 0;
-		array_insert_unique(srv->status, (data_unset *)di);
-	}
-	return &di->value;
+	return array_get_int_ptr(srv->status, s, len);
 }
 
 /* dummies of the statistic framework functions

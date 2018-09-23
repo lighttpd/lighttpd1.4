@@ -690,6 +690,7 @@ add_executable(test_configfile
 	buffer.c
 	array.c
 	data_config.c
+	data_integer.c
 	data_string.c
 	http_header.c
 	http_kv.c
@@ -704,6 +705,7 @@ add_executable(test_request
 	request.c
 	buffer.c
 	array.c
+	data_integer.c
 	data_string.c
 	http_header.c
 	http_kv.c
