@@ -1,5 +1,6 @@
 #include "request.h"
 
+#undef NDEBUG
 #include <assert.h>
 #include <stdlib.h>
 #include <stdio.h>

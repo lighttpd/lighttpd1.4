@@ -1,5 +1,6 @@
 #include "configfile-glue.c"
 
+#undef NDEBUG
 #include <assert.h>
 #include <stdlib.h>
 #include <stdio.h>
