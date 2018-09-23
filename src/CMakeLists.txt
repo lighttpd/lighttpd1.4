@@ -583,7 +583,7 @@ set(COMMON_SRC
 	sock_addr.c
 	splaytree.c
 	rand.c
-	status_counter.c safe_memclear.c
+	safe_memclear.c
 )
 
 if(WIN32)

@@ -86,7 +86,7 @@ common_src=base64.c buffer.c burl.c log.c \
 	rand.c \
 	request.c \
 	sock_addr.c \
-	splaytree.c status_counter.c \
+	splaytree.c \
 	safe_memclear.c
 
 src = server.c response.c connections.c \

@@ -589,7 +589,6 @@ common_src = [
 	'sock_addr.c',
 	'splaytree.c',
 	'stat_cache.c',
-	'status_counter.c',
 	'stream.c',
 	'vector.c',
 ]
