@@ -55,4 +55,43 @@
 
 #define UNUSED(x) ( (void)(x) )
 
+
+#ifndef __has_attribute       /* clang */
+#define __has_attribute(x) 0
+#endif
+
+#ifdef __GNUC__
+#ifndef __GNUC_PREREQ
+#  ifdef __GNUC_PREREQ__
+#    define __GNUC_PREREQ __GNUC_PREREQ__
+#  elif defined __GNUC__ && defined __GNUC_MINOR__
+#    define __GNUC_PREREQ(maj, min) \
+       ((__GNUC__ << 16) + __GNUC_MINOR__ >= ((maj) << 16) + (min))
+#  else
+#    define __GNUC_PREREQ(maj, min) 0
+#  endif
+#endif
+#else
+#define __GNUC_PREREQ(maj,min) 0
+#endif
+
+#ifndef __attribute_cold__
+#if __has_attribute(cold) \
+ || __GNUC_PREREQ(4,3)
+#define __attribute_cold__  __attribute__((__cold__))
+#else
+#define __attribute_cold__
+#endif
+#endif
+
+#ifndef __attribute_noreturn__
+#if __has_attribute(noreturn) \
+ || __GNUC_PREREQ(2,5)
+#define __attribute_noreturn__  __attribute__((__noreturn__))
+#else
+#define __attribute_noreturn__
+#endif
+#endif
+
+
 #endif

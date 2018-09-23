@@ -173,12 +173,9 @@ static inline void buffer_append_slash(buffer *b); /* append '/' no non-empty st
 #define CONST_BUF_LEN(x) ((x) ? (x)->ptr : NULL), buffer_string_length(x)
 
 
-#ifdef __GNUC__
-# define LI_NORETURN __attribute__((noreturn))
-#else
-# define LI_NORETURN
-#endif
+#define LI_NORETURN __attribute_noreturn__
 
+__attribute_cold__
 void log_failed_assert(const char *filename, unsigned int line, const char *msg) LI_NORETURN;
 #define force_assert(x) do { if (!(x)) log_failed_assert(__FILE__, __LINE__, "assertion failed: " #x); } while(0)
 #define SEGFAULT() log_failed_assert(__FILE__, __LINE__, "aborted");
