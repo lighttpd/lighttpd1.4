@@ -95,14 +95,17 @@ static void data_auth_free(data_unset *d)
 
 static data_auth *data_auth_init(void)
 {
+    static const struct data_methods fn = {
+      NULL, /* reset must not be called on this data */
+      NULL, /* copy must not be called on this data */
+      data_auth_free,
+      NULL, /* insert_dup must not be called on this data */
+      NULL  /* print must not be called on this data */
+    };
     data_auth * const dauth = calloc(1, sizeof(*dauth));
     force_assert(NULL != dauth);
-    dauth->copy       = NULL; /* must not be called on this data */
-    dauth->free       = data_auth_free;
-    dauth->reset      = NULL; /* must not be called on this data */
-    dauth->insert_dup = NULL; /* must not be called on this data */
-    dauth->print      = NULL; /* must not be called on this data */
     dauth->type       = TYPE_OTHER;
+    dauth->fn         = &fn;
 
     dauth->key = buffer_init();
     dauth->require = http_auth_require_init();
@@ -327,7 +330,7 @@ SETDEFAULTS_FUNC(mod_auth_set_defaults) {
 				dauth->require->scheme = auth_scheme;
 				buffer_copy_buffer(dauth->require->realm, realm);
 				if (!mod_auth_require_parse(srv, dauth->require, require)) {
-					dauth->free((data_unset *)dauth);
+					dauth->fn->free((data_unset *)dauth);
 					return HANDLER_ERROR;
 				}
 				array_insert_unique(s->auth_require, (data_unset *)dauth);

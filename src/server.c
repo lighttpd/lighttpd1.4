@@ -1055,7 +1055,7 @@ static int server_main (server * const srv, int argc, char **argv) {
 	if (print_config) {
 		data_unset *dc = srv->config_context->data[0];
 		if (dc) {
-			dc->print(dc, 0);
+			dc->fn->print(dc, 0);
 			fprintf(stdout, "\n");
 		} else {
 			/* shouldn't happend */

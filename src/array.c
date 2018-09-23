@@ -34,7 +34,7 @@ array *array_init_array(array *src) {
 	a->data = malloc(sizeof(*src->data) * src->size);
 	force_assert(NULL != a->data);
 	for (i = 0; i < src->size; i++) {
-		if (src->data[i]) a->data[i] = src->data[i]->copy(src->data[i]);
+		if (src->data[i]) a->data[i] = src->data[i]->fn->copy(src->data[i]);
 		else a->data[i] = NULL;
 	}
 
@@ -49,7 +49,7 @@ void array_free(array *a) {
 	if (!a) return;
 
 	for (i = 0; i < a->size; i++) {
-		if (a->data[i]) a->data[i]->free(a->data[i]);
+		if (a->data[i]) a->data[i]->fn->free(a->data[i]);
 	}
 
 	if (a->data) free(a->data);
@@ -63,7 +63,7 @@ void array_reset(array *a) {
 	if (!a) return;
 
 	for (i = 0; i < a->used; i++) {
-		a->data[i]->reset(a->data[i]);
+		a->data[i]->fn->reset(a->data[i]);
 	}
 
 	a->used = 0;
@@ -277,7 +277,7 @@ static data_unset **array_find_or_insert(array *a, data_unset *entry) {
 	ndx = a->used;
 
 	/* make sure there is nothing here */
-	if (a->data[ndx]) a->data[ndx]->free(a->data[ndx]);
+	if (a->data[ndx]) a->data[ndx]->fn->free(a->data[ndx]);
 
 	a->data[a->used++] = entry;
 
@@ -299,7 +299,7 @@ void array_replace(array *a, data_unset *entry) {
 	force_assert(NULL != entry);
 	if (NULL != (old = array_find_or_insert(a, entry))) {
 		force_assert(*old != entry);
-		(*old)->free(*old);
+		(*old)->fn->free(*old);
 		*old = entry;
 	}
 }
@@ -310,7 +310,7 @@ void array_insert_unique(array *a, data_unset *entry) {
 	force_assert(NULL != entry);
 	if (NULL != (old = array_find_or_insert(a, entry))) {
 		force_assert((*old)->type == entry->type);
-		entry->insert_dup(*old, entry);
+		entry->fn->insert_dup(*old, entry);
 	}
 }
 
@@ -551,7 +551,7 @@ int array_print(array *a, int depth) {
 			if (i != 0) {
 				fprintf(stdout, ", ");
 			}
-			du->print(du, depth + 1);
+			du->fn->print(du, depth + 1);
 		}
 		fprintf(stdout, ")");
 		return 0;
@@ -575,7 +575,7 @@ int array_print(array *a, int depth) {
 			}
 			fprintf(stdout, " => ");
 		}
-		du->print(du, depth + 1);
+		du->fn->print(du, depth + 1);
 		fprintf(stdout, ",\n");
 	}
 	if (!(i && (i - 1 % 5) == 0)) {

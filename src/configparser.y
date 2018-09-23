@@ -52,7 +52,7 @@ static data_unset *configparser_get_variable(config_t *ctx, const buffer *key) {
     array_print(dc->value, 0);
 #endif
     if (NULL != (du = array_get_element_klen(dc->value, CONST_BUF_LEN(key)))) {
-      du = du->copy(du);
+      du = du->fn->copy(du);
       buffer_reset(du->key);
       return du;
     }
@@ -74,11 +74,11 @@ data_unset *configparser_merge_data(data_unset *op1, const data_unset *op2) {
       data_string *ds = data_string_init();
       buffer_append_int(ds->value, ((data_integer*)op1)->value);
       buffer_append_string_buffer(ds->value, ((data_string*)op2)->value);
-      op1->free(op1);
+      op1->fn->free(op1);
       return (data_unset *)ds;
     } else {
       fprintf(stderr, "data type mismatch, cannot merge\n");
-      op1->free(op1);
+      op1->fn->free(op1);
       return NULL;
     }
   }
@@ -100,10 +100,10 @@ data_unset *configparser_merge_data(data_unset *op1, const data_unset *op2) {
         du = (data_unset *)src->data[i];
         if (du) {
           if (du->is_index_key || buffer_is_empty(du->key) || !array_get_element_klen(dst, CONST_BUF_LEN(du->key))) {
-            array_insert_unique(dst, du->copy(du));
+            array_insert_unique(dst, du->fn->copy(du));
           } else {
             fprintf(stderr, "Duplicate array-key '%s'\n", du->key->ptr);
-            op1->free(op1);
+            op1->fn->free(op1);
             return NULL;
           }
         }
@@ -174,9 +174,9 @@ metaline ::= EOL.
 
 %type       cond                   {config_cond_t }
 
-%destructor value                  { if ($$) $$->free($$); }
-%destructor expression             { if ($$) $$->free($$); }
-%destructor aelement               { if ($$) $$->free($$); }
+%destructor value                  { if ($$) $$->fn->free($$); }
+%destructor expression             { if ($$) $$->fn->free($$); }
+%destructor aelement               { if ($$) $$->fn->free($$); }
 %destructor aelements              { array_free($$); }
 %destructor array                  { array_free($$); }
 %destructor key                    { buffer_free($$); }
@@ -205,7 +205,7 @@ varline ::= key(A) ASSIGN expression(B). {
   }
   buffer_free(A);
   A = NULL;
-  if (B) B->free(B);
+  if (B) B->fn->free(B);
   B = NULL;
 }
 
@@ -224,7 +224,7 @@ varline ::= key(A) FORCE_ASSIGN expression(B). {
   }
   buffer_free(A);
   A = NULL;
-  if (B) B->free(B);
+  if (B) B->fn->free(B);
   B = NULL;
 }
 
@@ -255,7 +255,7 @@ varline ::= key(A) APPEND expression(B). {
   }
   buffer_free(A);
   A = NULL;
-  if (B) B->free(B);
+  if (B) B->fn->free(B);
   B = NULL;
 }
 
@@ -280,9 +280,9 @@ expression(A) ::= expression(B) PLUS value(C). {
       ctx->ok = 0;
     }
   }
-  if (B) B->free(B);
+  if (B) B->fn->free(B);
   B = NULL;
-  if (C) C->free(C);
+  if (C) C->fn->free(C);
   C = NULL;
 }
 
@@ -369,7 +369,7 @@ aelements(A) ::= aelements(C) COMMA aelement(B). {
   }
   array_free(C);
   C = NULL;
-  if (B) B->free(B);
+  if (B) B->fn->free(B);
   B = NULL;
 }
 
@@ -385,7 +385,7 @@ aelements(A) ::= aelement(B). {
     array_insert_unique(A, B);
     B = NULL;
   }
-  if (B) B->free(B);
+  if (B) B->fn->free(B);
   B = NULL;
 }
 
@@ -401,7 +401,7 @@ aelement(A) ::= stringop(B) ARRAY_ASSIGN expression(C). {
     A = C;
     C = NULL;
   }
-  if (C) C->free(C);
+  if (C) C->fn->free(C);
   C = NULL;
   buffer_free(B);
   B = NULL;
@@ -493,7 +493,7 @@ condlines(A) ::= condlines(B) eols ELSE cond_else(C). {
     } else {
       fprintf(stderr, "unreachable else condition\n");
       ctx->ok = 0;
-      C->free((data_unset *)C);
+      C->fn->free((data_unset *)C);
       C = dc;
     }
 
@@ -715,7 +715,7 @@ context ::= DOLLAR SRVVARNAME(B) LBRACKET stringop(C) RBRACKET cond(E) expressio
       if (ctx->ok) {
         configparser_push(ctx, dc, 1);
       } else {
-        dc->free((data_unset*) dc);
+        dc->fn->free((data_unset*) dc);
       }
     }
   }
@@ -726,7 +726,7 @@ context ::= DOLLAR SRVVARNAME(B) LBRACKET stringop(C) RBRACKET cond(E) expressio
   B = NULL;
   buffer_free(C);
   C = NULL;
-  if (D) D->free(D);
+  if (D) D->fn->free(D);
   D = NULL;
 }
 
@@ -768,7 +768,7 @@ stringop(A) ::= expression(B). {
       ctx->ok = 0;
     }
   }
-  if (B) B->free(B);
+  if (B) B->fn->free(B);
   B = NULL;
 }
 

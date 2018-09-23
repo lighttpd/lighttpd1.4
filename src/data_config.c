@@ -58,7 +58,7 @@ static void data_config_reset(data_unset *d) {
 static int data_config_insert_dup(data_unset *dst, data_unset *src) {
 	UNUSED(dst);
 
-	src->free(src);
+	src->fn->free(src);
 
 	return 0;
 }
@@ -96,7 +96,7 @@ static void data_config_print(const data_unset *d, int depth) {
 			fprintf(stdout, " ");
 		}
 		fprintf(stdout, " = ");
-		du->print(du, depth);
+		du->fn->print(du, depth);
 		fprintf(stdout, "\n");
 	}
 
@@ -108,7 +108,7 @@ static void data_config_print(const data_unset *d, int depth) {
 		if (NULL == dc->prev) {
 			fprintf(stdout, "\n");
 			array_print_indent(depth);
-			dc->print((data_unset *) dc, depth);
+			dc->fn->print((data_unset *) dc, depth);
 			fprintf(stdout, "\n");
 		}
 	}
@@ -129,11 +129,18 @@ static void data_config_print(const data_unset *d, int depth) {
 		fprintf(stdout, "\n");
 		array_print_indent(depth);
 		fprintf(stdout, "else ");
-		ds->next->print((data_unset *)ds->next, depth);
+		ds->next->fn->print((data_unset *)ds->next, depth);
 	}
 }
 
 data_config *data_config_init(void) {
+	static const struct data_methods fn = {
+		data_config_reset,
+		data_config_copy,
+		data_config_free,
+		data_config_insert_dup,
+		data_config_print,
+	};
 	data_config *ds;
 
 	ds = calloc(1, sizeof(*ds));
@@ -145,12 +152,8 @@ data_config *data_config_init(void) {
 	ds->value = array_init();
 	vector_config_weak_init(&ds->children);
 
-	ds->copy = data_config_copy;
-	ds->free = data_config_free;
-	ds->reset = data_config_reset;
-	ds->insert_dup = data_config_insert_dup;
-	ds->print = data_config_print;
 	ds->type = TYPE_CONFIG;
+	ds->fn = &fn;
 
 	return ds;
 }

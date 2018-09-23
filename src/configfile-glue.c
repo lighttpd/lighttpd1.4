@@ -57,7 +57,7 @@ int config_insert_values_internal(server *srv, array *ca, const config_values_t 
 				for (j = 0; j < da->value->used; j++) {
 					data_unset *ds = da->value->data[j];
 					if (ds->type == TYPE_STRING || ds->type == TYPE_INTEGER || ds->type == TYPE_ARRAY) {
-						array_insert_unique(cv[i].destination, ds->copy(ds));
+						array_insert_unique(cv[i].destination, ds->fn->copy(ds));
 					} else {
 						log_error_write(srv, __FILE__, __LINE__, "sssbsd",
 								"the value of an array can only be a string, variable:",
