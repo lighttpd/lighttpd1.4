@@ -251,6 +251,7 @@ vars.AddVariables(
 	BoolVariable('with_memcached', 'enable memcached support', 'no'),
 	PackageVariable('with_mysql', 'enable mysql support', 'no'),
 	BoolVariable('with_openssl', 'enable openssl support', 'no'),
+	BoolVariable('with_pam', 'enable PAM auth support', 'no'),
 	PackageVariable('with_pcre', 'enable pcre support', 'yes'),
 	PackageVariable('with_pgsql', 'enable pgsql support', 'no'),
 	PackageVariable('with_sasl', 'enable SASL support', 'no'),
