@@ -189,7 +189,7 @@ static int secdl_verify_mac(server *srv, plugin_config *config, const char* prot
 
 			if (NULL == HMAC(
 					EVP_sha1(),
-					(unsigned char const*) CONST_BUF_LEN(config->secret),
+					(unsigned char const*) config->secret->ptr, buffer_string_length(config->secret),
 					(unsigned char const*) protected_path, strlen(protected_path),
 					digest, NULL)) {
 				log_error_write(srv, __FILE__, __LINE__, "s",
@@ -211,7 +211,7 @@ static int secdl_verify_mac(server *srv, plugin_config *config, const char* prot
 
 			if (NULL == HMAC(
 					EVP_sha256(),
-					(unsigned char const*) CONST_BUF_LEN(config->secret),
+					(unsigned char const*) config->secret->ptr, buffer_string_length(config->secret),
 					(unsigned char const*) protected_path, strlen(protected_path),
 					digest, NULL)) {
 				log_error_write(srv, __FILE__, __LINE__, "s",
