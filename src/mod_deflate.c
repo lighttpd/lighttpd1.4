@@ -1118,6 +1118,7 @@ CONNECTION_FUNC(mod_deflate_handle_response_start) {
 		etaglen = buffer_string_length(vb);
 		if (etaglen
 		    && con->http_status < 300 /*(want 2xx only)*/
+		    && NULL != if_none_match
 		    && 0 == strncmp(if_none_match->ptr, vb->ptr, etaglen-1)
 		    && if_none_match->ptr[etaglen-1] == '-'
 		    && 0 == strncmp(if_none_match->ptr+etaglen, label, strlen(label))) {
