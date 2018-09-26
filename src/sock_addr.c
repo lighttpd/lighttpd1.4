@@ -308,6 +308,9 @@ int sock_addr_stringify_append_buffer(buffer *b, const sock_addr *saddr)
       case AF_INET6:
         buffer_append_string_len(b, CONST_STR_LEN("["));
         if (0 != sock_addr_inet_ntop_append_buffer(b, saddr)) {
+          #ifdef __COVERITY__
+            force_assert(buffer_string_length(b) > 0); /*(appended "[")*/
+          #endif
             /* coverity[overflow_sink : FALSE] */
             buffer_string_set_length(b, buffer_string_length(b)-1);
             return -1;
