@@ -257,6 +257,8 @@ SETDEFAULTS_FUNC(mod_trigger_b4_dl_set_defaults) {
 	return HANDLER_GO_ON;
 }
 
+#if defined(HAVE_PCRE_H)
+
 #define PATCH(x) \
 	p->conf.x = s->x;
 static int mod_trigger_b4_dl_patch_connection(server *srv, connection *con, plugin_data *p) {
@@ -322,12 +324,14 @@ static int mod_trigger_b4_dl_patch_connection(server *srv, connection *con, plug
 }
 #undef PATCH
 
+#endif
+
 URIHANDLER_FUNC(mod_trigger_b4_dl_uri_handler) {
+#if defined(HAVE_PCRE_H)
 	plugin_data *p = p_d;
 	const char *remote_ip;
 	buffer *vb;
 
-#if defined(HAVE_PCRE_H)
 	int n;
 # define N 10
 	int ovec[N * 3];

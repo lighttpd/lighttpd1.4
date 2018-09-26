@@ -213,6 +213,9 @@ int data_config_pcre_exec(data_config *dc, cond_cache_t *cache, buffer *b) {
         cache->comp_value = b; /* holds pointer to b (!) for pattern subst */
     return cache->patterncount;
 #else
+    UNUSED(dc);
+    UNUSED(cache);
+    UNUSED(b);
     return 0;
 #endif
 }
