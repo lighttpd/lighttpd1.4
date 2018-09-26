@@ -33,9 +33,7 @@ documentation and/or software.
 #define POINTER unsigned char *
 
 #if 0 /* Note: not defined here or in lighttpd local "md5.h" */
-#if defined HAVE_LIBSSL && defined HAVE_OPENSSL_SSL_H
-#define USE_OPENSSL_CRYPTO
-#endif
+#include "sys-crypto.h" /* USE_OPENSSL_CRYPTO */
 #endif
 
 #ifndef USE_OPENSSL_CRYPTO

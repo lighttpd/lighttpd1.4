@@ -71,7 +71,8 @@
 # include <sys/prctl.h>
 #endif
 
-#if defined HAVE_LIBSSL && defined HAVE_OPENSSL_SSL_H
+#include "sys-crypto.h"
+#ifdef USE_OPENSSL_CRYPTO
 #define USE_SSL
 #define TEXT_SSL " (ssl)"
 #else

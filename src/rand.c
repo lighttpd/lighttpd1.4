@@ -14,9 +14,7 @@
 #include <time.h>
 #include <unistd.h>
 
-#if defined HAVE_LIBSSL && defined HAVE_OPENSSL_SSL_H
-#define USE_OPENSSL_CRYPTO
-#endif
+#include "sys-crypto.h"
 #ifdef USE_OPENSSL_CRYPTO
 #include <openssl/opensslv.h> /* OPENSSL_VERSION_NUMBER */
 #include <openssl/rand.h>

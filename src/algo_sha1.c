@@ -1,10 +1,7 @@
 #include "first.h"
 typedef int innocuous_typedef_to_quiet_empty_translation_unit_compiler_warning;
 
-#if defined HAVE_LIBSSL && defined HAVE_OPENSSL_SSL_H
-#define USE_OPENSSL_CRYPTO
-#endif
-
+#include "sys-crypto.h"
 #ifndef USE_OPENSSL_CRYPTO
 
 #include "sys-endian.h"

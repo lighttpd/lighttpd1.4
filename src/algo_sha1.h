@@ -2,7 +2,8 @@
 #define INCLUDED_ALGO_SHA1_H
 #include "first.h"
 
-#if defined HAVE_LIBSSL && defined HAVE_OPENSSL_SSL_H
+#include "sys-crypto.h"
+#ifdef USE_OPENSSL_CRYPTO
 
 #include <openssl/sha.h>
 

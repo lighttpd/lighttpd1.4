@@ -14,10 +14,7 @@
 # define HAVE_CRYPT
 #endif
 
-#if defined HAVE_LIBSSL && defined HAVE_OPENSSL_SSL_H
-#define USE_OPENSSL_CRYPTO
-#endif
-
+#include "sys-crypto.h"
 #ifdef USE_OPENSSL_CRYPTO
 #include <openssl/md4.h>
 #endif

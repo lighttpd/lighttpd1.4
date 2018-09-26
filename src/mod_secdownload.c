@@ -11,10 +11,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#if defined HAVE_LIBSSL && defined HAVE_OPENSSL_SSL_H
-#define USE_OPENSSL_CRYPTO
-#endif
-
+#include "sys-crypto.h"
 #ifdef USE_OPENSSL_CRYPTO
 #include <openssl/evp.h>
 #include <openssl/hmac.h>

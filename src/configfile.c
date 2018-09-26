@@ -10,6 +10,7 @@
 #include "configparser.h"
 #include "configfile.h"
 #include "stat_cache.h"
+#include "sys-crypto.h"
 
 #include <sys/stat.h>
 #include <sys/wait.h>
@@ -43,7 +44,7 @@ static void config_warn_authn_module (server *srv, const char *module, size_t le
 }
 #endif
 
-#if defined HAVE_LIBSSL && defined HAVE_OPENSSL_SSL_H
+#ifdef USE_OPENSSL_CRYPTO
 static void config_warn_openssl_module (server *srv) {
 	for (size_t i = 0; i < srv->config_context->used; ++i) {
 		const data_config *config = (data_config const*)srv->config_context->data[i];
@@ -502,14 +503,14 @@ static int config_insert(server *srv) {
 			if (HANDLER_ERROR == ret) break;
 		}
 
-#if !(defined HAVE_LIBSSL && defined HAVE_OPENSSL_SSL_H)
+	      #ifndef USE_OPENSSL_CRYPTO
 		if (s->ssl_enabled) {
 			log_error_write(srv, __FILE__, __LINE__, "s",
-					"ssl support is missing, recompile with --with-openssl");
+					"ssl support is missing, recompile with e.g. --with-openssl");
 			ret = HANDLER_ERROR;
 			break;
 		}
-#endif
+	      #endif
 	}
 	array_free(http_parseopts);
 
@@ -624,7 +625,7 @@ static int config_insert(server *srv) {
 		}
 
 		if (append_mod_openssl) {
-		      #if defined HAVE_LIBSSL && defined HAVE_OPENSSL_SSL_H
+		      #ifdef USE_OPENSSL_CRYPTO
 			config_warn_openssl_module(srv);
 		      #endif
 		}
