@@ -585,6 +585,7 @@ common_src = [
 	'md5.c',
 	'plugin.c',
 	'rand.c',
+	'request.c',
 	'safe_memclear.c',
 	'sock_addr.c',
 	'splaytree.c',
@@ -601,7 +602,6 @@ main_src = [
 	'inet_ntop_cache.c',
 	'network_write.c',
 	'network.c',
-	'request.c',
 	'response.c',
 	'server.c',
 ]

@@ -73,6 +73,7 @@ common_src = Split("base64.c buffer.c burl.c log.c \
 	http-header-glue.c \
 	http_auth.c \
 	http_vhostdb.c \
+	request.c \
 	sock_addr.c \
 	splaytree.c \
 	rand.c \
@@ -83,7 +84,7 @@ src = Split("server.c response.c connections.c \
 	inet_ntop_cache.c \
 	network.c \
 	network_write.c \
-	configfile.c configparser.c request.c")
+	configfile.c configparser.c")
 
 lemon = env.Program('lemon', 'lemon.c', LIBS = GatherLibs(env))
 

@@ -580,6 +580,7 @@ set(COMMON_SRC
 	http-header-glue.c
 	http_auth.c
 	http_vhostdb.c
+	request.c
 	sock_addr.c
 	splaytree.c
 	rand.c
@@ -612,7 +613,6 @@ add_executable(lighttpd
 	network_write.c
 	configfile.c
 	configparser.c
-	request.c
 	${COMMON_SRC}
 )
 set(L_INSTALL_TARGETS ${L_INSTALL_TARGETS} lighttpd)
