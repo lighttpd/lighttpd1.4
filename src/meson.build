@@ -378,8 +378,10 @@ libmysqlclient = []
 if get_option('with_mysql')
 	# manual search: extend include path with 'mysql/'
 	# header: mysql.h
-	# function: mysql_real_connect (-lmysqlclient)
-	libmysqlclient = [ dependency('mysqlclient') ]
+	# function: mysql_real_connect (-lmariadb)
+	libmysqlclient = [ dependency('mariadb') ]
+	#-# function: mysql_real_connect (-lmysqlclient)
+	#-libmysqlclient = [ dependency('mysqlclient') ]
 	conf_data.set('HAVE_MYSQL', true)
 endif
 
@@ -869,7 +871,7 @@ endif
 
 if get_option('with_sasl')
 	modules += [
-		[ 'mod_authn_sasl', [ 'mod_authn_sasl.c' ], libsasl2 ],
+		[ 'mod_authn_sasl', [ 'mod_authn_sasl.c' ], libsasl ],
 	]
 endif
 
