@@ -1,0 +1,125 @@
+1.0 Intro to lighttpd with wolfSSL
+
+Lighttpd is a lightweight web server we have ported wolfSSL to. The goal of
+this manual is to help the user get started with Lighttpd using the wolfSSL
+library for SSL and TLS operations.
+
+1.1 Current Status Notes
+
+wolfSSL offers support based in the United States as well as
+training! With our dual-licensing options, wolfSSL can provide you with the
+solution that you need for your commercial application or open source project.
+
+2.0 INSTALLATION
+
+2.1 Dependencies
+
+The lighttpd with wolfSSL requires the wolfSSL library version 3.15.3 or
+later.  Future releases of wolfSSL can be obtained from http://www.wolfssl.com.
+By default, lighttpd and wolfSSL install their libraries in different locations,
+making use of the `--prefix` option can help ensure your library files are in
+the expected locations.
+
+To build and install wolfSSL for use with Lighttpd run the following commands
+from the root wolfSSL directory:
+    git clone https://github.com/wolfSSL/wolfssl.git
+    cd wolfssl
+    ./autogen.sh (if cloned from a git repository)
+    ./configure --enable-lighty
+    make
+    sudo make install
+    sudo ldconfig (may additionally be required on some unix systems)
+
+More details and information about wolfSSL can be found in the wolfSSL Manual,
+available in both PDF and HTML formats from the wolfSSL Documentation page.
+
+Note: autogen.sh requires autconf and libtool.
+
+2.2 Building Lighttpd
+
+When building Lighttpd on Linux, or OS X, use the autoconf system.  To build
+Lighttpd, run the following two commands from Lighttpd’s top level directory:
+    ./autogen.sh
+    ./configure --with-wolfssl=yes [--without-bzip2] [--without-zlib] [--without-pcre]
+    make
+
+The `--with-wolfssl` option defaults to installing the wolfSSL libraries in the
+`/usr/local` directory. If a path is provided like --with-wolfssl=/usr then 
+it is used as the library location.
+
+To install lighttpd, run the following command:
+    sudo make install
+    sudo ldconfig (may additionally be required on some unix systems)
+
+By default, the Lighttpd library is installed in the /usr/local/lib directory.
+
+3.0 EXAMPLE SERVER
+
+Once you’ve installed Lighttpd and wolfSSL as explained in section 2, we’ve
+provided a directory containing an example server setup: docs/wolfssl in the
+lighttpd root directory.  The directory contains the following:
+
+    lighttpd.conf: a simple conf file that lighttpd will run.  It uses
+    localhost, and the port 443. It should only work with https.
+
+    To generate a self-signed certificate for testing purposes, please refer to
+    on-line documentation at lighttpd.net and place the server.pem file in the
+    ./docs/wolfssl directory.
+    https://redmine.lighttpd.net/projects/lighttpd/wiki/Docs_SSL#Self-Signed-Certificates
+
+    server.pem: the server’s certificate (the client will need to authenticate
+    the server).
+
+    index.html: the index page which will be returned on an https GET. It says:
+    "Congratulations!!!  You got Lighttpd with wolfSSL to run."  When you see
+    this, you know you’re doing something right.
+
+3.1  To run the lighttpd server: in the ./docs/wolfssl directory enter
+the following:
+
+    sudo /usr/local/sbin/lighttpd -D -f lighttpd.conf
+
+Successful output:  2015-07-17 14:01:52: (log.c.164) server started
+
+3.2 Testing with the wolfSSL client program:
+
+To run without verifying the server’s cert (in the wolfssl directory):
+    ./examples/client/client -p 443 -g -d
+
+This will send a GET request, and on success the contents of the index.html
+should be displayed on the terminal (along with a lot of other stuff):
+    Congratulations!!!  You got Lighttpd with wolfSSL to run.
+
+To run and verify the server’s cert (in wolfssl directory):
+    ./examples/client/client -p 443 -g -A /path/to/lighttpd/doc/wolfssl/server.pem
+
+On success, the same congratulatory output should be displayed.
+
+Browser: in the browser type:
+    https://127.0.0.1
+
+Accept the complaints about unrecognized certs to see the page without server.
+Page should show same congratulatory text as above.
+
+4.0 Debugging
+
+To get debug messages from wolfSSL code you must configure with the `--enable-debug` option:
+    ./configure --enable-lighty --enable-debug
+
+To turn on the wolfSSL debugging the following must be added to lighttpd:
+./src/server.c: main() before any wolfSSL functions are called:
+    wolfSSL_Debugging_ON();
+
+After you have done this, wolfSSL debug messages will be printed to stderr.
+
+The following line in the lighttpd.conf will specify the lighttpd log file:
+    server.errorlog = "./server_err.log"
+
+Prior to the log being opened, log messages will be directed to stderr.
+
+4.1 PK Callbacks
+
+If you'd like to use this with external crypto hardware for ECC then you can build
+wolfSSL with the `./configure --enable-pkcallbacks` option. The reference PK callbacks
+are in the src/mod_openssl.c file. Search for HAVE_WOLFSSL_PK_CALLBACKS to locate the reference
+functions.

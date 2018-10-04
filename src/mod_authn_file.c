@@ -596,7 +596,15 @@ static void apr_sha_encode(const char *pw, char *result, size_t nbytes) {
     unsigned char digest[20];
     size_t base64_written;
 
+#ifdef HAVE_WOLFSSL_SSL_H
+    SHA_CTX sha1;
+
+    SHA1_Init(&sha1);
+    SHA1_Update(&sha1, (const unsigned char*) pw, strlen(pw));
+    SHA1_Final(digest, &sha1);
+#else
     SHA1((const unsigned char*) pw, strlen(pw), digest);
+#endif /* HAVE_WOLFSSL_SSL_H */
 
     memset(result, 0, nbytes);
 
@@ -642,6 +650,7 @@ static handler_t mod_authn_file_htpasswd_basic(server *srv, connection *con, voi
             #endif
            #endif
            #ifdef USE_OPENSSL_CRYPTO /* (for MD4_*() (e.g. MD4_Update())) */
+           #ifndef NO_MD4
             if (0 == memcmp(password->ptr, CONST_STR_LEN("$1+ntlm$"))) {
                 /* CRYPT-MD5-NTLM algorithm
                  * This algorithm allows for the construction of (slight more)
@@ -693,6 +702,7 @@ static handler_t mod_authn_file_htpasswd_basic(server *srv, connection *con, voi
                 }
             }
             else
+           #endif /* !NO_MD4 */
            #endif
             {
                #if defined(HAVE_CRYPT_R)

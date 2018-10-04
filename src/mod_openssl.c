@@ -10,12 +10,21 @@
 #endif
 #endif
 
+#ifdef HAVE_WOLFSSL_SSL_H
+#include "sys-crypto.h"
+#endif
+
 #include <openssl/ssl.h>
 #include <openssl/bn.h>
 #include <openssl/err.h>
 #include <openssl/rand.h>
 #ifndef OPENSSL_NO_DH
 #include <openssl/dh.h>
+#endif
+#ifdef HAVE_WOLFSSL_SSL_H
+#include <openssl/bio.h>
+#include <openssl/objects.h>
+#include <openssl/pem.h>
 #endif
 
 #if ! defined OPENSSL_NO_TLSEXT && ! defined SSL_CTRL_SET_TLSEXT_HOSTNAME
@@ -107,6 +116,10 @@ handler_ctx_free (handler_ctx *hctx)
 
 INIT_FUNC(mod_openssl_init)
 {
+
+    #ifdef DEBUG_WOLFSSL
+        wolfSSL_Debugging_ON();
+    #endif
     plugin_data_singleton = (plugin_data *)calloc(1, sizeof(plugin_data));
     return plugin_data_singleton;
 }
@@ -720,6 +733,7 @@ network_init_ssl (server *srv, void *p_d)
         SSL_CTX_set_options(s->ssl_ctx, ssloptions);
         SSL_CTX_set_info_callback(s->ssl_ctx, ssl_info_callback);
 
+#ifndef HAVE_WOLFSSL_SSL_H /* wolfSSL doesn't support SSLV2 */
         if (!s->ssl_use_sslv2 && 0 != SSL_OP_NO_SSLv2) {
             /* disable SSLv2 */
             if ((SSL_OP_NO_SSLv2
@@ -730,6 +744,7 @@ network_init_ssl (server *srv, void *p_d)
                 return -1;
             }
         }
+#endif
 
         if (!s->ssl_use_sslv3 && 0 != SSL_OP_NO_SSLv3) {
             /* disable SSLv3 */
