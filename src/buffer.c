@@ -398,7 +398,7 @@ int buffer_is_equal_caseless_string(const buffer *a, const char *s, size_t b_len
 	force_assert(b_len + 1 > b_len);
 
 	/* 1 = equal; 0 = not equal */
-	return (a->used == b_len + 1 && 0 == strncasecmp(a->ptr, s));
+	return (a->used == b_len + 1 && 0 == strncasecmp(a->ptr, s, b_len));
 }
 
 int buffer_caseless_compare(const char *a, size_t a_len, const char *b, size_t b_len) {
