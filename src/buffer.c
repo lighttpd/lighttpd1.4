@@ -375,38 +375,30 @@ char hex2int(unsigned char hex) {
 
 /**
  * check if two buffer contain the same data
- *
- * HISTORY: this function was pretty much optimized, but didn't handled
- * alignment properly.
  */
 
 int buffer_is_equal(const buffer *a, const buffer *b) {
 	force_assert(NULL != a && NULL != b);
 
-	if (a->used != b->used) return 0;
-	if (a->used == 0) return 1;
-
-	return (0 == memcmp(a->ptr, b->ptr, a->used));
+	/* 1 = equal; 0 = not equal */
+	return (a->used == b->used && 0 == memcmp(a->ptr, b->ptr, a->used));
 }
 
 int buffer_is_equal_string(const buffer *a, const char *s, size_t b_len) {
 	force_assert(NULL != a && NULL != s);
 	force_assert(b_len + 1 > b_len);
 
-	if (a->used != b_len + 1) return 0;
-	if (0 != memcmp(a->ptr, s, b_len)) return 0;
-	if ('\0' != a->ptr[a->used-1]) return 0;
-
-	return 1;
+	/* 1 = equal; 0 = not equal */
+	return (a->used == b_len + 1 && 0 == memcmp(a->ptr, s, b_len));
 }
 
 /* buffer_is_equal_caseless_string(b, CONST_STR_LEN("value")) */
 int buffer_is_equal_caseless_string(const buffer *a, const char *s, size_t b_len) {
-	force_assert(NULL != a);
-	if (a->used != b_len + 1) return 0;
-	force_assert('\0' == a->ptr[a->used - 1]);
+	force_assert(NULL != a && NULL != s);
+	force_assert(b_len + 1 > b_len);
 
-	return (0 == strcasecmp(a->ptr, s));
+	/* 1 = equal; 0 = not equal */
+	return (a->used == b_len + 1 && 0 == strncasecmp(a->ptr, s));
 }
 
 int buffer_caseless_compare(const char *a, size_t a_len, const char *b, size_t b_len) {
