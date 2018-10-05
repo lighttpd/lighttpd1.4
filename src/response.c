@@ -171,7 +171,12 @@ static handler_t http_response_physical_path_check(server *srv, connection *con)
 			size_t len = buffer_string_length(con->physical.basedir);
 			if (len > 0 && '/' == con->physical.basedir->ptr[len-1]) --len;
 			pathinfo = con->physical.path->ptr + len;
-			if ('/' != *pathinfo) pathinfo = NULL;
+			if ('/' != *pathinfo) {
+				pathinfo = NULL;
+			}
+			else if (pathinfo == con->physical.path->ptr) { /*(basedir is "/")*/
+				pathinfo = strchr(pathinfo+1, '/');
+			}
 		}
 
 		for (char *pprev = pathinfo; pathinfo; pprev = pathinfo, pathinfo = strchr(pathinfo+1, '/')) {
