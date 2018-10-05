@@ -17,6 +17,13 @@
 #include <openssl/hmac.h>
 #endif
 
+#ifdef HAVE_WOLFSSL_SSL_H
+/* workaround for wolf HMAC function macro and CONST_BUF_LEN expansion,
+ * which casuses parameter expansion in CONST_BUF_LEN to not work correctly */
+#undef HMAC
+#define HMAC wolfSSL_HMAC
+#endif /* HAVE_WOLFSSL_SSL_H */
+
 #include "md5.h"
 
 /*

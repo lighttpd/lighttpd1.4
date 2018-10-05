@@ -6,4 +6,8 @@
 #define USE_OPENSSL_CRYPTO
 #endif
 
+#ifdef HAVE_WOLFSSL_SSL_H
+#include <wolfssl/options.h>
+#endif
+
 #endif

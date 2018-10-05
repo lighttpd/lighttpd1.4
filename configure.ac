@@ -590,6 +590,56 @@ fi
 AM_CONDITIONAL([BUILD_WITH_KRB5], [test "$WITH_KRB5" != no])
 AC_SUBST([KRB5_LIB])
 
+AC_CHECK_SIZEOF(long)
+AC_CHECK_SIZEOF(long long)
+AC_CHECK_SIZEOF(off_t)
+
+dnl Check for wolfSSL
+WITH_WOLFSSL=no
+AC_MSG_NOTICE([----------------------------------------])
+AC_MSG_CHECKING([for wolfSSL])
+AC_ARG_WITH([wolfssl],
+  [AC_HELP_STRING([--with-wolfssl@<:@=DIR@:>@],
+    [Include wolfSSL support (default no, yes=/usr/local)]
+  )],
+  [
+    CPPFLAGS="$CPPFLAGS -DHAVE_WOLFSSL_SSL_H -DUSE_WOLFSSL -DHAVE_LIBSSL -DHAVE_OPENSSL_SSL_H"
+    LIBS="$LIBS -lwolfssl"
+    SSL_LIB="-lwolfssl"
+
+    if test "x$withval" != "xno" ; then
+      if test "x$withval" == "xyes" || test "x$withval" == "x" ; then
+          LDFLAGS="$LDFLAGS -L/usr/local/lib"
+          CFLAGS="$CFLAGS -I/usr/local/include -I/usr/local/include/wolfssl"
+      else
+        if test -d "$withval/lib" ; then
+            LDFLAGS="$LDFLAGS -L$withval/lib"
+        else
+            LDFLAGS="$LDFLAGS -L$withval"
+        fi
+        if test -d "$withval/include"; then
+            CFLAGS="$CFLAGS -I$withval/include -I$withval/include/wolfssl"
+        else
+            CFLAGS="$CFLAGS -I$withval -I$withval/wolfssl"
+        fi
+      fi
+
+      AC_LINK_IFELSE([AC_LANG_PROGRAM([[#include <wolfssl/ssl.h>]], [[ wolfSSL_Init(); ]])], [ wolfssl_linked=yes ],[ wolfssl_linked=no ])
+
+      if test "x$wolfssl_linked" == "xno" ; then
+        AC_MSG_ERROR([wolfSSL Library not found.
+            If it's already installed, specify its path using --with-wolfssl=/dir/])
+
+      else
+        WITH_WOLFSSL=yes
+      fi
+    fi
+  ]
+)
+AC_MSG_RESULT([$WITH_WOLFSSL])
+AM_CONDITIONAL(HAVE_LIBWOLFSSL, [test "x$WITH_WOLFSSL" = "xyes"])
+
+
 dnl Check for openssl
 AC_MSG_NOTICE([----------------------------------------])
 AC_MSG_CHECKING([for OpenSSL])
@@ -635,7 +685,7 @@ AC_ARG_WITH([openssl-libs],
   [AC_MSG_RESULT([no])]
 )
 
-AM_CONDITIONAL([BUILD_WITH_OPENSSL], [test "$WITH_OPENSSL" != no])
+AM_CONDITIONAL([BUILD_WITH_OPENSSL], [test "$WITH_OPENSSL" != no || test "$WITH_WOLFSSL" == yes])
 
 if test "$WITH_OPENSSL" != no; then
   if test "$WITH_KRB5" != no; then
@@ -1375,6 +1425,9 @@ lighty_track_feature() {
     no_build="$no_build $2"
   fi
 }
+
+lighty_track_feature "wolfssl" "" \
+  'test "$WITH_WOLFSSL" != no'
 
 lighty_track_feature "regex-conditionals" "" \
   'test "$WITH_PCRE" != no'
