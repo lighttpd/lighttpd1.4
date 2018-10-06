@@ -81,7 +81,7 @@ static char *local_send_buffer;
 typedef struct {
     SSL *ssl;
     connection *con;
-    unsigned int renegotiations; /* count of SSL_CB_HANDSHAKE_START */
+    int renegotiations; /* count of SSL_CB_HANDSHAKE_START */
     int request_env_patched;
     plugin_config conf;
     server *srv;
@@ -198,8 +198,21 @@ ssl_info_callback (const SSL *ssl, int where, int ret)
 
     if (0 != (where & SSL_CB_HANDSHAKE_START)) {
         handler_ctx *hctx = (handler_ctx *) SSL_get_app_data(ssl);
-        ++hctx->renegotiations;
+        if (hctx->renegotiations >= 0) ++hctx->renegotiations;
     }
+  #ifdef TLS1_3_VERSION
+    /* https://github.com/openssl/openssl/issues/5721
+     * "TLSv1.3 unexpected InfoCallback after handshake completed" */
+    if (0 != (where & SSL_CB_HANDSHAKE_DONE)) {
+        /* SSL_version() is valid after initial handshake completed */
+        if (SSL_version(ssl) >= TLS1_3_VERSION) {
+            /* https://wiki.openssl.org/index.php/TLS1.3
+             * "Renegotiation is not possible in a TLSv1.3 connection" */
+            handler_ctx *hctx = (handler_ctx *) SSL_get_app_data(ssl);
+            hctx->renegotiations = -1;
+        }
+    }
+  #endif
 }
 
 /* https://wiki.openssl.org/index.php/Manual:SSL_CTX_set_verify(3)#EXAMPLES */
