@@ -170,12 +170,4 @@ void SHA1_Final(sha1_byte digest[SHA1_DIGEST_LENGTH], SHA_CTX *context) {
     memset(&finalcount, 0, 8);
 }
 
-unsigned char *SHA1(const unsigned char *d, size_t n, unsigned char *md) {
-    SHA_CTX ctx;
-    SHA1_Init(&ctx);
-    SHA1_Update(&ctx, d, (unsigned int)n);
-    SHA1_Final(md, &ctx);
-    return md;
-}
-
 #endif

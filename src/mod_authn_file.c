@@ -595,8 +595,11 @@ static void apr_md5_encode(const char *pw, const char *salt, char *result, size_
 static void apr_sha_encode(const char *pw, char *result, size_t nbytes) {
     unsigned char digest[20];
     size_t base64_written;
+    SHA_CTX sha1;
 
-    SHA1((const unsigned char*) pw, strlen(pw), digest);
+    SHA1_Init(&sha1);
+    SHA1_Update(&sha1, (const unsigned char *) pw, strlen(pw));
+    SHA1_Final(digest, &sha1);
 
     memset(result, 0, nbytes);
 
