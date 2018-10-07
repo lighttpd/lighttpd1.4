@@ -953,7 +953,14 @@ static int http_response_process_headers(server *srv, connection *con, http_resp
             con->response.content_length = strtoul(value, NULL, 10);
             break;
           case HTTP_HEADER_TRANSFER_ENCODING:
-            if (opts->backend == BACKEND_PROXY) continue;
+            if (opts->backend == BACKEND_PROXY) {
+                log_error_write(srv, __FILE__, __LINE__, "s",
+                                "proxy backend sent invalid response header "
+                                "(Transfer-Encoding) to HTTP/1.0 request");
+                con->http_status = 502; /* Bad Gateway */
+                con->mode = DIRECT;
+                return -1;
+            }
             break;
           default:
             break;
