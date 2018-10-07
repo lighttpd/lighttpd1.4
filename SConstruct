@@ -251,6 +251,7 @@ vars.AddVariables(
 	BoolVariable('with_memcached', 'enable memcached support', 'no'),
 	PackageVariable('with_mysql', 'enable mysql support', 'no'),
 	BoolVariable('with_openssl', 'enable openssl support', 'no'),
+	PackageVariable('with_wolfssl', 'enable wolfSSL support', 'no'),
 	BoolVariable('with_pam', 'enable PAM auth support', 'no'),
 	PackageVariable('with_pcre', 'enable pcre support', 'yes'),
 	PackageVariable('with_pgsql', 'enable pgsql support', 'no'),
@@ -580,6 +581,21 @@ if 1:
 			CPPFLAGS = [ '-DHAVE_OPENSSL_SSL_H', '-DHAVE_LIBSSL'],
 			LIBSSL = 'ssl',
 			LIBCRYPTO = 'crypto',
+		)
+
+	if env['with_wolfssl']:
+		if type(env['with_wolfssl']) is str:
+			autoconf.env.AppendUnique(
+				CPPPATH = [ env['with_wolfssl'] + '/include',
+					    env['with_wolfssl'] + '/include/wolfssl' ],
+				LIBPATH = [ env['with_wolfssl'] + '/lib' ],
+			)
+		if not autoconf.CheckLibWithHeader('wolfssl', 'wolfssl/ssl.h', 'C'):
+			fail("Couldn't find wolfssl")
+		autoconf.env.Append(
+			CPPFLAGS = [ '-DHAVE_WOLFSSL_SSL_H' ],
+			LIBSSL = '',
+			LIBCRYPTO = 'wolfssl',
 		)
 
 	if env['with_pam']:
