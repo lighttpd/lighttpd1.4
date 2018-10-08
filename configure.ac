@@ -635,8 +635,6 @@ AC_ARG_WITH([openssl-libs],
   [AC_MSG_RESULT([no])]
 )
 
-AM_CONDITIONAL([BUILD_WITH_OPENSSL], [test "$WITH_OPENSSL" != no])
-
 if test "$WITH_OPENSSL" != no; then
   if test "$WITH_KRB5" != no; then
     AC_DEFINE([USE_OPENSSL_KERBEROS], [1], [with kerberos])
@@ -662,6 +660,53 @@ if test "$WITH_OPENSSL" != no; then
   AC_SUBST([SSL_LIB])
   AC_SUBST([CRYPTO_LIB])
 fi
+
+dnl Check for wolfSSL
+AC_MSG_NOTICE([----------------------------------------])
+AC_MSG_CHECKING([for wolfSSL])
+AC_ARG_WITH([wolfssl],
+  [AC_HELP_STRING([--with-wolfssl@<:@=DIR@:>@],
+    [Include openssl support (default no)]
+  )],
+  [WITH_WOLFSSL=$withval],
+  [WITH_WOLFSSL=no]
+)
+AC_MSG_RESULT([$WITH_WOLFSSL])
+
+if test "$WITH_WOLFSSL" != no; then
+  if test "$WITH_WOLFSSL" == yes; then
+    WITH_WOLFSSL="/usr/local"
+  fi
+
+  CPPFLAGS="${CPPFLAGS} -I$WITH_WOLFSSL/include -I$WITH_WOLFSSL/include/wolfssl"
+  LDFLAGS="${LDFLAGS} -L$WITH_WOLFSSL/lib"
+
+  AC_CHECK_HEADERS([wolfssl/ssl.h], [], [
+    AC_MSG_ERROR([wolfssl headers not found. install them or build without --with-wolfssl])
+  ])
+  AC_CHECK_LIB([wolfssl], [wolfSSL_Init],
+    [CRYPTO_LIB="-lwolfssl"],
+    [AC_MSG_ERROR([wolfssl crypto library not found. install it or build without --with-wolfssl])]
+  )
+  AC_COMPILE_IFELSE([AC_LANG_SOURCE([[
+    #include <wolfssl/options.h>
+    #if !defined(HAVE_LIGHTY) && !defined(OPENSSL_ALL)
+    #error HAVE_LIGHTY macro not defined
+    #endif
+  ]])], [], [AC_MSG_ERROR([wolfssl must be built with ./configure --enable-lighty])])
+  SSL_LIB="-lwolfssl"
+
+  AC_SUBST([SSL_LIB])
+  AC_SUBST([CRYPTO_LIB])
+fi
+
+AM_CONDITIONAL([BUILD_WITH_OPENSSL],
+               [test "$WITH_OPENSSL" != no || test "$WITH_WOLFSSL" != no])
+
+if test "$WITH_OPENSSL" != no && test "$WITH_WOLFSSL" != no; then
+  AC_MSG_ERROR([lighttpd should not be built with both --with-openssl and --with-wolfssl])
+fi
+
 
 dnl pcre support
 AC_MSG_NOTICE([----------------------------------------])
@@ -1419,7 +1464,7 @@ lighty_track_feature "pam" "mod_authn_pam" \
   'test "$WITH_PAM" != no'
 
 lighty_track_feature "network-openssl" "mod_openssl" \
-  'test "$WITH_OPENSSL" != no'
+  'test "$WITH_OPENSSL" != no || test "$WITH_WOLFSSL" != no'
 
 lighty_track_feature "auth-crypt" "" \
   'test "$found_crypt" != no'
