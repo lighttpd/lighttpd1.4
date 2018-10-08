@@ -10,6 +10,17 @@
 #endif
 #endif
 
+#include "sys-crypto.h"
+
+#ifdef HAVE_WOLFSSL_SSL_H
+#include <openssl/bio.h>
+#include <openssl/objects.h>
+#include <openssl/pem.h>
+#ifdef NO_OLD_SSL_NAMES
+#define SSL_OP_NO_SSLv2 WOLFSSL_OP_NO_SSLv2
+#endif
+#endif
+
 #include <openssl/ssl.h>
 #include <openssl/bn.h>
 #include <openssl/err.h>
@@ -108,6 +119,9 @@ handler_ctx_free (handler_ctx *hctx)
 INIT_FUNC(mod_openssl_init)
 {
     plugin_data_singleton = (plugin_data *)calloc(1, sizeof(plugin_data));
+  #ifdef DEBUG_WOLFSSL
+    wolfSSL_Debugging_ON();
+  #endif
     return plugin_data_singleton;
 }
 

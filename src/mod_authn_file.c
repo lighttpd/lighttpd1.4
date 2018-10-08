@@ -645,6 +645,7 @@ static handler_t mod_authn_file_htpasswd_basic(server *srv, connection *con, voi
             #endif
            #endif
            #ifdef USE_OPENSSL_CRYPTO /* (for MD4_*() (e.g. MD4_Update())) */
+           #ifndef NO_MD4 /*(e.g. wolfSSL built without MD4)*/
             if (0 == memcmp(password->ptr, CONST_STR_LEN("$1+ntlm$"))) {
                 /* CRYPT-MD5-NTLM algorithm
                  * This algorithm allows for the construction of (slight more)
@@ -696,6 +697,7 @@ static handler_t mod_authn_file_htpasswd_basic(server *srv, connection *con, voi
                 }
             }
             else
+           #endif
            #endif
             {
                #if defined(HAVE_CRYPT_R)
