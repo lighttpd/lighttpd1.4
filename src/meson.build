@@ -397,6 +397,20 @@ if get_option('with_openssl')
 	conf_data.set('HAVE_OPENSSL_SSL_H', true)
 	conf_data.set('HAVE_LIBSSL', true)
 endif
+if get_option('with_wolfssl') != 'false'
+	# manual search:
+	# header: wolfssl/ssl.h
+	# function: wolfSSL_Init (-lwolfssl)
+	p = get_option('with_wolfssl')
+	if p == 'true'
+		p = '/usr/local'
+	endif
+	i = include_directories(p+'/include', p+'/include/wolfssl')
+	libwolfssl_includes_dep = [ declare_dependency(include_directories: i) ]
+	libcrypto = [ compiler.find_library('libwolfssl', dirs: [ p+'/lib', p+'/lib64' ]) ]
+	libcrypto += libwolfssl_includes_dep
+	conf_data.set('HAVE_WOLFSSL_SSL_H', true)
+endif
 
 libpcre = []
 if get_option('with_pcre')
@@ -690,16 +704,16 @@ executable('lighttpd-angel',
 executable('lighttpd', configparser,
 	sources: common_src + main_src,
 	# libssl needed?
-	dependencies: common_flags + lighttpd_flags
-		+ libattr
-		+ libcrypto
-		+ libdl
-		+ libev
-		+ libfam
-		+ libpcre
-		+ libunwind
-		+ libws2_32
-	,
+	dependencies: [ common_flags, lighttpd_flags
+		, libattr
+		, libcrypto
+		, libdl
+		, libev
+		, libfam
+		, libpcre
+		, libunwind
+		, libws2_32
+	],
 	install: true,
 	install_dir: sbinddir,
 )
@@ -768,7 +782,7 @@ modules = [
 	[ 'mod_accesslog', [ 'mod_accesslog.c' ] ],
 	[ 'mod_alias', [ 'mod_alias.c' ] ],
 	[ 'mod_auth', [ 'mod_auth.c' ] ],
-	[ 'mod_authn_file', [ 'mod_authn_file.c' ], libcrypt + libcrypto ],
+	[ 'mod_authn_file', [ 'mod_authn_file.c' ], [ libcrypt, libcrypto ] ],
 	[ 'mod_compress', [ 'mod_compress.c' ], libbz2 + libz ],
 	[ 'mod_deflate', [ 'mod_deflate.c' ], libbz2 + libz ],
 	[ 'mod_dirlisting', [ 'mod_dirlisting.c' ], libpcre ],
@@ -863,6 +877,12 @@ if get_option('with_openssl')
 	]
 endif
 
+if get_option('with_wolfssl') != 'false'
+	modules += [
+		[ 'mod_openssl', [ 'mod_openssl.c' ], libcrypto ],
+	]
+endif
+
 if get_option('with_pam')
 	modules += [
 		[ 'mod_authn_pam', [ 'mod_authn_pam.c' ], libpam ],
@@ -881,7 +901,7 @@ foreach mod: modules
 	mod_deps = mod.length() > 2 ? mod.get(2) : []
 	shared_module(mod_name,
 		sources: mod_sources,
-		dependencies: common_flags + mod_deps,
+		dependencies: [ common_flags, mod_deps ],
 		name_prefix: '',
 		install: true,
 		install_dir: moduledir,
