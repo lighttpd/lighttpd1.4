@@ -145,9 +145,11 @@ char* buffer_string_prepare_append(buffer *b, size_t size) {
 
 void buffer_string_set_length(buffer *b, size_t len) {
 	force_assert(NULL != b);
-	force_assert(len + 1 > len);
 
-	buffer_realloc(b, len + 1);
+	if (len >= b->size) {
+		force_assert(len + 1 > len);
+		buffer_realloc(b, len + 1);
+	}
 
 	b->used = len + 1;
 	b->ptr[len] = '\0';
@@ -181,9 +183,9 @@ void buffer_copy_string_len(buffer *b, const char *s, size_t s_len) {
 
 	buffer_string_prepare_copy(b, s_len);
 
-	if (0 != s_len) memcpy(b->ptr, s, s_len);
-
-	buffer_commit(b, s_len);
+	if (0 != s_len) memcpy(b->ptr, s, s_len); /*(s might be NULL)*/
+	b->ptr[s_len] = '\0';
+	b->used = s_len + 1;
 }
 
 void buffer_copy_buffer(buffer *b, const buffer *src) {
@@ -218,11 +220,11 @@ void buffer_append_string_len(buffer *b, const char *s, size_t s_len) {
 
 	target_buf = buffer_string_prepare_append(b, s_len);
 
-	if (0 == s_len) return; /* nothing to append */
+	if (0 == s_len) return; /* nothing to append *//*(s might be NULL)*/
 
 	memcpy(target_buf, s, s_len);
-
-	buffer_commit(b, s_len);
+	target_buf[s_len] = '\0';
+	b->used += s_len;
 }
 
 void buffer_append_string_buffer(buffer *b, const buffer *src) {
