@@ -12,18 +12,12 @@
 
 #include "sys-crypto.h"
 
-#ifdef HAVE_WOLFSSL_SSL_H
-#include <openssl/bio.h>
-#include <openssl/objects.h>
-#include <openssl/pem.h>
-#ifdef NO_OLD_SSL_NAMES
-#define SSL_OP_NO_SSLv2 WOLFSSL_OP_NO_SSLv2
-#endif
-#endif
-
 #include <openssl/ssl.h>
+#include <openssl/bio.h>
 #include <openssl/bn.h>
 #include <openssl/err.h>
+#include <openssl/objects.h>
+#include <openssl/pem.h>
 #include <openssl/rand.h>
 #ifndef OPENSSL_NO_DH
 #include <openssl/dh.h>
@@ -747,6 +741,7 @@ network_init_ssl (server *srv, void *p_d)
         SSL_CTX_set_options(s->ssl_ctx, ssloptions);
         SSL_CTX_set_info_callback(s->ssl_ctx, ssl_info_callback);
 
+      #ifndef HAVE_WOLFSSL_SSL_H /*(wolfSSL does not support SSLv2)*/
         if (!s->ssl_use_sslv2 && 0 != SSL_OP_NO_SSLv2) {
             /* disable SSLv2 */
             if ((SSL_OP_NO_SSLv2
@@ -757,6 +752,7 @@ network_init_ssl (server *srv, void *p_d)
                 return -1;
             }
         }
+      #endif
 
         if (!s->ssl_use_sslv3 && 0 != SSL_OP_NO_SSLv3) {
             /* disable SSLv3 */
