@@ -128,6 +128,9 @@ char* buffer_string_prepare_copy(buffer *b, size_t size) {
 char* buffer_string_prepare_append(buffer *b, size_t size) {
 	force_assert(NULL !=  b);
 
+	if (b->used && size < b->size - b->used)
+		return b->ptr + b->used - 1;
+
 	if (buffer_string_is_empty(b)) {
 		return buffer_string_prepare_copy(b, size);
 	} else {
