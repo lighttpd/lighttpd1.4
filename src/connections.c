@@ -302,6 +302,7 @@ static int connection_handle_write_prepare(server *srv, connection *con) {
 		if (con->http_status < 400 || con->http_status >= 600) break;
 
 		if (con->mode != DIRECT && (!con->conf.error_intercept || con->error_handler_saved_status)) break;
+		if (con->mode == DIRECT && con->error_handler_saved_status >= 65535) break;
 
 		con->file_finished = 0;
 
@@ -1174,11 +1175,13 @@ int connection_state_machine(server *srv, connection *con) {
 				/* response headers received from backend; fall through to start response */
 				/* fall through */
 			case HANDLER_FINISHED:
+				if (con->http_status == 0) con->http_status = 200;
 				if (con->error_handler_saved_status > 0) {
 					con->request.http_method = con->error_handler_saved_method;
 				}
 				if (con->mode == DIRECT || con->conf.error_intercept) {
 					if (con->error_handler_saved_status) {
+						const int subreq_status = con->http_status;
 						if (con->error_handler_saved_status > 0) {
 							con->http_status = con->error_handler_saved_status;
 						} else if (con->http_status == 404 || con->http_status == 403) {
@@ -1187,6 +1190,11 @@ int connection_state_machine(server *srv, connection *con) {
 						} else {
 							/* error-handler-404 is back and has generated content */
 							/* if Status: was set, take it otherwise use 200 */
+						}
+						if (200 <= subreq_status && subreq_status <= 299) {
+							/*(flag value to indicate that error handler succeeded)
+							 *(for (con->mode == DIRECT))*/
+							con->error_handler_saved_status = 65535; /* >= 1000 */
 						}
 					} else if (con->http_status >= 400) {
 						buffer *error_handler = NULL;
@@ -1239,7 +1247,6 @@ int connection_state_machine(server *srv, connection *con) {
 						}
 					}
 				}
-				if (con->http_status == 0) con->http_status = 200;
 
 				/* we have something to send, go on */
 				connection_set_state(srv, con, CON_STATE_RESPONSE_START);
