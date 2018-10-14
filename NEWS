@@ -3,7 +3,70 @@
 NEWS
 ====
 
-- 1.4.51
+- 1.4.51 - 2018-10-14
+  * [core] split parsing header line into separate function
+  * [core] explicitly return 0 instead of constant result
+  * [core] header parsing: use goto for error handling
+  * [core,security] process headers after combining folded headers
+  * [core] replace folding whitespace with a single space
+  * [buffer] fix duplicate assert and comment
+  * [core] redo HTTP header line folding
+  * [core] parse header line strings before copying
+  * [core] abstraction to insert/modify response hdrs
+  * [core] code reuse with array_insert_key_value()
+  * [core] simplify parsing hdr key whitespace then :
+  * [core] http_request_parse_reqline() separate func
+  * [core] abstraction layer for HTTP header manip
+  * [core] code reuse with http_response_body_clear()
+  * [mod_proxy] fix proxy.forwarded and proxy.replace-http-host (fixes #2902)
+  * [mod_rewrite] fix url.rewrite-repeat and url.rewrite-if-not-file (fixes #2908)
+  * [core] fastcgi.h link to Open Market License (OML) (fixes #2901)
+  * [mod_proxy,mod_wstunnel] copy full plugin_config (fixes #2903)
+  * [mod_fastcgi,mod_scgi] error on oversized request (fixes #2905)
+  * [mod_auth] send 401 for mismatch HTTP auth scheme (fixes #2906)
+  * [core] code reuse array_match_*() routines
+  * [mod_skeleton] review and simplify
+  * [multiple] code reuse: employ array_match_*()
+  * [doc] lighttpd.service uses network-online.target
+  * [mod_flv_streaming] code simplifications
+  * [mod_authn_pam] mod_auth PAM support (fixes #688)
+  * [mod_sockproxy] add to build
+  * [core] fix include_shell on inline shell commands (fixes #2910)
+  * [multiple] code reuse: using array_*() funcs
+  * [tests] t/test_array.c
+  * [core] array_get_int_ptr()
+  * [core] more memory-efficient fn table for data_*
+  * [tests] #undef NDEBUG before assert.h in t/test_*
+  * [core] inline status_counter routines
+  * [core] log_failed_assert() __attribute__((cold))
+  * [core] http_status_append()
+  * [core] http_method_append()
+  * [core] prefer buffer_append_string_len()
+  * [build] fix SCons build for mod_authn_pam
+  * [mod_userdir] security: skip username "." and ".."
+  * [mod_deflate] null-check to quiet coverity warning
+  * [core] quiet coverity false positive
+  * [multiple] quiet compiler warnings --without-pcre
+  * [mod_secdownload] support if HMAC() is a macro
+  * [TLS] sys-crypto.h abstraction
+  * [TLS] sys-crypto.h abstraction
+  * [build] put request.c in common src
+  * [meson] build fixes for libmariadb and libsasl2
+  * [core] PATH_INFO calculation when basedir is "/" (fixes #2911)
+  * [core] better consistency in buffer_is_equal*()
+  * [core] fix missing param from prev commit
+  * [mod_openssl] no renegotiation in TLS 1.3 (fixes #2912)
+  * [core] reject Transfer-Encoding from proxy (#2913)
+  * [mod_auth] use SHA1_Init,Update,Final
+  * [mod_openssl] add support for wolfSSL
+  * [build] automake support for wolfSSL
+  * [build] SCons support for wolfSSL
+  * [build] meson support for wolfSSL
+  * [build] CMake support for wolfSSL
+  * [core] perf: buffer.c internal inlines
+  * [mod_openssl] wolfSSL does not support SSLv2
+  * [core] perf: buffer_string_append_len()
+  * [core] permit server.error_handler to static file
 
 - 1.4.50 - 2018-08-13
   * [mod_extforward] allow explict IPs to be untrusted (#2860)
