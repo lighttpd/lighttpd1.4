@@ -3,6 +3,8 @@
 NEWS
 ====
 
+- 1.4.52
+
 - 1.4.51 - 2018-10-14
   * [core] split parsing header line into separate function
   * [core] explicitly return 0 instead of constant result
