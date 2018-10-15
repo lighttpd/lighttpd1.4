@@ -91,7 +91,7 @@ static int mod_vhostdb_dbconf_setup (server *srv, array *opts, void **vdata)
       #if MYSQL_VERSION_ID >= 50013
         /* in mysql versions above 5.0.3 the reconnect flag is off by default */
         {
-            my_bool reconnect = 1;
+            char reconnect = 1;
             mysql_options(dbconn, MYSQL_OPT_RECONNECT, &reconnect);
         }
       #endif
