@@ -1460,7 +1460,7 @@ int config_parse_cmd(server *srv, config_t *context, const char *cmd) {
 			}
 			if (0 != wstatus) {
 				log_error_write(srv, __FILE__, __LINE__, "SSsd",
-						"commaned \"", cmd, "\" exited non-zero:", WEXITSTATUS(wstatus));
+						"command \"", cmd, "\" exited non-zero:", WEXITSTATUS(wstatus));
 				ret = -1;
 			}
 
