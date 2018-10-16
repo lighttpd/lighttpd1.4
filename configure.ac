@@ -674,7 +674,7 @@ AC_ARG_WITH([wolfssl],
 AC_MSG_RESULT([$WITH_WOLFSSL])
 
 if test "$WITH_WOLFSSL" != no; then
-  if test "$WITH_WOLFSSL" == yes; then
+  if test "$WITH_WOLFSSL" = yes; then
     WITH_WOLFSSL="/usr/local"
   fi
 
