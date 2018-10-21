@@ -40,32 +40,16 @@ static connection *connections_get_new_connection(server *srv) {
 	connections *conns = srv->conns;
 	size_t i;
 
-	if (conns->size == 0) {
-		conns->size = srv->max_conns >= 128 ? 128 : srv->max_conns > 16 ? 16 : srv->max_conns;
-		conns->ptr = NULL;
-		conns->ptr = malloc(sizeof(*conns->ptr) * conns->size);
-		force_assert(NULL != conns->ptr);
-		for (i = 0; i < conns->size; i++) {
-			conns->ptr[i] = connection_init(srv);
-		}
-	} else if (conns->size == conns->used) {
-		conns->size += srv->max_conns >= 128 ? 128 : 16;
+	if (conns->size == conns->used) {
+		conns->size += srv->max_conns >= 128 ? 128 : srv->max_conns > 16 ? 16 : srv->max_conns;
 		conns->ptr = realloc(conns->ptr, sizeof(*conns->ptr) * conns->size);
 		force_assert(NULL != conns->ptr);
 
 		for (i = conns->used; i < conns->size; i++) {
 			conns->ptr[i] = connection_init(srv);
+			connection_reset(srv, conns->ptr[i]);
 		}
 	}
-
-	connection_reset(srv, conns->ptr[conns->used]);
-#if 0
-	fprintf(stderr, "%s.%d: add: ", __FILE__, __LINE__);
-	for (i = 0; i < conns->used + 1; i++) {
-		fprintf(stderr, "%d ", conns->ptr[i]->fd);
-	}
-	fprintf(stderr, "\n");
-#endif
 
 	conns->ptr[conns->used]->ndx = conns->used;
 	return conns->ptr[conns->used++];
@@ -1100,6 +1084,7 @@ connection *connection_accepted(server *srv, server_socket *srv_socket, sock_add
 
 		buffer_copy_string_len(con->proto, CONST_STR_LEN("http"));
 		if (HANDLER_GO_ON != plugins_call_handle_connection_accept(srv, con)) {
+			connection_reset(srv, con);
 			connection_close(srv, con);
 			return NULL;
 		}
