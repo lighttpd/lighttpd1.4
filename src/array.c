@@ -70,6 +70,20 @@ void array_reset(array *a) {
 	a->unique_ndx = 0;
 }
 
+void array_reset_data_strings(array *a) {
+	if (!a) return;
+
+	for (size_t i = 0; i < a->used; ++i) {
+		data_string * const ds = (data_string *)a->data[i];
+		/*force_assert(ds->type == TYPE_STRING);*/
+		buffer_reset(ds->key);
+		buffer_reset(ds->value);
+	}
+
+	a->used = 0;
+	a->unique_ndx = 0;
+}
+
 data_unset *array_pop(array *a) {
 	data_unset *du;
 

@@ -470,7 +470,7 @@ static int parse_single_header(server *srv, connection *con, parse_header_state 
       case HTTP_HEADER_CONNECTION:
         {
             array * const vals = srv->split_vals;
-            array_reset(vals);
+            array_reset_data_strings(vals);
             http_request_split_value(vals, v, vlen); /* split on , */
             for (size_t vi = 0; vi < vals->used; ++vi) {
                 data_string *dsv = (data_string *)vals->data[vi];

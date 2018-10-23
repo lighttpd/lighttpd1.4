@@ -501,6 +501,6 @@ void connection_response_reset(server *srv, connection *con) {
 		buffer_reset(con->physical.etag);
 	}
 	con->response.htags = 0;
-	array_reset(con->response.headers);
+	array_reset_data_strings(con->response.headers);
 	http_response_body_clear(con, 0);
 }

@@ -298,7 +298,7 @@ SETDEFAULTS_FUNC(mod_deflate_setdefaults) {
 		s->compression_level = -1;
 		s->max_loadavg = 0.0;
 
-		array_reset(p->encodings); /* temp array for allowed encodings list */
+		array_reset_data_strings(p->encodings); /* temp array for allowed encodings list */
 
 		cv[0].destination = s->mimetypes;
 		cv[1].destination = p->encodings;

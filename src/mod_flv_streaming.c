@@ -170,7 +170,7 @@ URIHANDLER_FUNC(mod_flv_streaming_path_handler) {
 			/* if there is a end=[0-9]+ in the header use it as end pos,
 			 * otherwise send rest of file, starting from start */
 
-			array_reset(srv->split_vals);
+			array_reset_data_strings(srv->split_vals);
 			split_get_params(srv->split_vals, con->uri.query);
 
 			if (NULL != (get_param = (data_string *)array_get_element_klen(srv->split_vals, CONST_STR_LEN("start")))) {

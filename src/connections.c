@@ -229,7 +229,7 @@ static void connection_handle_errdoc_init(connection *con) {
 
 	buffer_reset(con->physical.path);
 	con->response.htags = 0;
-	array_reset(con->response.headers);
+	array_reset_data_strings(con->response.headers);
 	http_response_body_clear(con, 0);
 
 	if (NULL != www_auth) {
@@ -649,8 +649,8 @@ int connection_reset(server *srv, connection *con) {
 	con->request.te_chunked = 0;
 	con->request.htags = 0;
 
-	array_reset(con->request.headers);
-	array_reset(con->environment);
+	array_reset_data_strings(con->request.headers);
+	array_reset_data_strings(con->environment);
 
 	chunkqueue_reset(con->request_content_queue);
 

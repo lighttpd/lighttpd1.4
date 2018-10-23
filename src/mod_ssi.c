@@ -171,7 +171,7 @@ static int build_ssi_cgi_vars(server *srv, connection *con, handler_ctx *p) {
 		memset(vb_auth, 0, sizeof(buffer));
 	}
 
-	array_reset(p->ssi_cgi_env);
+	array_reset_data_strings(p->ssi_cgi_env);
 
 	if (0 != http_cgi_headers(srv, con, &opts, ssi_env_add, p->ssi_cgi_env)) {
 		con->http_status = 400;
@@ -1195,8 +1195,8 @@ static int mod_ssi_handle_request(server *srv, connection *con, handler_ctx *p) 
 
 	/* get a stream to the file */
 
-	array_reset(p->ssi_vars);
-	array_reset(p->ssi_cgi_env);
+	array_reset_data_strings(p->ssi_vars);
+	array_reset_data_strings(p->ssi_cgi_env);
 	buffer_copy_string_len(p->timefmt, CONST_STR_LEN("%a, %d %b %Y %H:%M:%S %Z"));
 	build_ssi_cgi_vars(srv, con, p);
 
