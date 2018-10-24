@@ -253,16 +253,24 @@ int http_request_host_normalize(buffer *b, int scheme_port) {
             buffer_string_set_length(b, (size_t)(colon - p)); /*(remove port str)*/
         }
 
-        if (light_isdigit(*p)) {
+        if (light_isdigit(*p)) do {
             /* (IPv4 address literal or domain starting w/ digit (e.g. 3com))*/
+            /* (check one-element cache of normalized IPv4 address string) */
+            static struct { char s[INET_ADDRSTRLEN]; size_t n; } laddr;
+            size_t n = colon ? (size_t)(colon - p) : blen;
             sock_addr addr;
+            if (n == laddr.n && 0 == memcmp(p, laddr.s, n)) break;
             if (1 == sock_addr_inet_pton(&addr, p, AF_INET, 0)) {
                 sock_addr_inet_ntop_copy_buffer(b, &addr);
+                n = buffer_string_length(b);
+                if (n < sizeof(laddr.s)) memcpy(laddr.s, b->ptr, (laddr.n = n));
             }
-        }
-    } else { /* IPv6 addr */
+        } while (0);
+    } else do { /* IPv6 addr */
       #if defined(HAVE_IPV6) && defined(HAVE_INET_PTON)
 
+        /* (check one-element cache of normalized IPv4 address string) */
+        static struct { char s[INET6_ADDRSTRLEN]; size_t n; } laddr;
         sock_addr addr;
         char *bracket = b->ptr+blen-1;
         char *percent = strchr(b->ptr+1, '%');
@@ -286,6 +294,13 @@ int http_request_host_normalize(buffer *b, int scheme_port) {
             }
         }
 
+        len = (size_t)((percent ? percent : bracket) - (b->ptr+1));
+        if (laddr.n == len && 0 == memcmp(laddr.s, b->ptr+1, len)) {
+            /* truncate after ']' and re-add normalized port, if needed */
+            buffer_string_set_length(b, (size_t)(bracket - b->ptr + 1));
+            break;
+        }
+
         *bracket = '\0';/*(terminate IPv6 string)*/
         if (percent) *percent = '\0'; /*(remove %interface from address)*/
         rc = sock_addr_inet_pton(&addr, b->ptr+1, AF_INET6, 0);
@@ -298,6 +313,7 @@ int http_request_host_normalize(buffer *b, int scheme_port) {
         if (percent) {
             if (percent > bracket) return -1;
             if (len + (size_t)(bracket - percent) >= sizeof(buf)) return -1;
+            if (len < sizeof(laddr.s)) memcpy(laddr.s, buf, (laddr.n = len));
             memcpy(buf+len, percent, (size_t)(bracket - percent));
             len += (size_t)(bracket - percent);
         }
@@ -310,7 +326,7 @@ int http_request_host_normalize(buffer *b, int scheme_port) {
         return -1;
 
       #endif
-    }
+    } while (0);
 
     if (0 != port && port != scheme_port) {
         buffer_append_string_len(b, CONST_STR_LEN(":"));
