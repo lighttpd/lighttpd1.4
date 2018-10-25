@@ -117,9 +117,11 @@ static void buffer_realloc(buffer *b, size_t size) {
 
 char* buffer_string_prepare_copy(buffer *b, size_t size) {
 	force_assert(NULL != b);
-	force_assert(size + 1 > size);
 
-	buffer_alloc(b, size + 1);
+	if (size >= b->size) {
+		force_assert(size + 1 > size);
+		buffer_alloc(b, size + 1);
+	}
 
 	b->used = 1;
 	b->ptr[0] = '\0';
@@ -186,7 +188,7 @@ void buffer_copy_string_len(buffer *b, const char *s, size_t s_len) {
 	force_assert(NULL != b);
 	force_assert(NULL != s || s_len == 0);
 
-	buffer_string_prepare_copy(b, s_len);
+	if (s_len >= b->size) buffer_string_prepare_copy(b, s_len);
 
 	if (0 != s_len) memcpy(b->ptr, s, s_len); /*(s might be NULL)*/
 	b->ptr[s_len] = '\0';
