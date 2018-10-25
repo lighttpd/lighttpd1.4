@@ -882,7 +882,7 @@ REQUESTDONE_FUNC(log_access_write) {
 				      # endif /* HAVE_GMTIME_R */
 				      #endif /* HAVE_STRUCT_TM_GMTOFF */
 
-					buffer_string_prepare_copy(p->conf.ts_accesslog_str, 255);
+					buffer_string_set_length(p->conf.ts_accesslog_str, 0);
 
 					if (buffer_string_is_empty(f->string)) {
 					      #if defined(HAVE_STRUCT_TM_GMTOFF)
