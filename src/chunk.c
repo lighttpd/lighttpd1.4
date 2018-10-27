@@ -258,10 +258,24 @@ void chunkqueue_append_file(chunkqueue *cq, buffer *fn, off_t offset, off_t len)
 	chunkqueue_append_chunk(cq, c);
 }
 
+
+static int chunkqueue_append_mem_extend_chunk(chunkqueue *cq, const char *mem, size_t len) {
+	chunk *c = cq->last;
+	if (0 == len) return 1;
+	if (c != NULL && c->type == MEM_CHUNK
+	    && buffer_string_length(c->mem) < 4095 - len) {
+		buffer_append_string_len(c->mem, mem, len);
+		cq->bytes_in += len;
+		return 1;
+	}
+	return 0;
+}
+
+
 void chunkqueue_append_buffer(chunkqueue *cq, buffer *mem) {
 	chunk *c;
-
-	if (buffer_string_is_empty(mem)) return;
+	size_t len = buffer_string_length(mem);
+	if (len < 256 && chunkqueue_append_mem_extend_chunk(cq, mem->ptr, len)) return;
 
 	c = chunkqueue_get_unused_chunk(cq);
 	c->type = MEM_CHUNK;
@@ -274,8 +288,7 @@ void chunkqueue_append_buffer(chunkqueue *cq, buffer *mem) {
 
 void chunkqueue_append_mem(chunkqueue *cq, const char * mem, size_t len) {
 	chunk *c;
-
-	if (0 == len) return;
+	if (len < 4096 && chunkqueue_append_mem_extend_chunk(cq, mem, len)) return;
 
 	c = chunkqueue_get_unused_chunk(cq);
 	c->type = MEM_CHUNK;
