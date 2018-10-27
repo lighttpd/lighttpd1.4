@@ -198,7 +198,7 @@ static int mod_status_get_multiplier(double *avg, char *multiplier, int size) {
 
 static handler_t mod_status_handle_server_status_html(server *srv, connection *con, void *p_d) {
 	plugin_data *p = p_d;
-	buffer *b = buffer_init();
+	buffer *b = chunkqueue_append_buffer_open(con->write_queue);
 	size_t j;
 	double avg;
 	char multiplier = '\0';
@@ -585,8 +585,7 @@ static handler_t mod_status_handle_server_status_html(server *srv, connection *c
 		      "</html>\n"
 		      ));
 
-	chunkqueue_append_buffer(con->write_queue, b);
-	buffer_free(b);
+	chunkqueue_append_buffer_commit(con->write_queue);
 
 	http_header_response_set(con, HTTP_HEADER_CONTENT_TYPE, CONST_STR_LEN("Content-Type"), CONST_STR_LEN("text/html"));
 
@@ -596,7 +595,7 @@ static handler_t mod_status_handle_server_status_html(server *srv, connection *c
 
 static handler_t mod_status_handle_server_status_text(server *srv, connection *con, void *p_d) {
 	plugin_data *p = p_d;
-	buffer *b = buffer_init();
+	buffer *b = chunkqueue_append_buffer_open(con->write_queue);
 	double avg;
 	time_t ts;
 	char buf[32];
@@ -647,8 +646,7 @@ static handler_t mod_status_handle_server_status_text(server *srv, connection *c
 	}
 	buffer_append_string_len(b, CONST_STR_LEN("\n"));
 
-	chunkqueue_append_buffer(con->write_queue, b);
-	buffer_free(b);
+	chunkqueue_append_buffer_commit(con->write_queue);
 
 	/* set text/plain output */
 	http_header_response_set(con, HTTP_HEADER_CONTENT_TYPE, CONST_STR_LEN("Content-Type"), CONST_STR_LEN("text/plain"));
@@ -659,7 +657,7 @@ static handler_t mod_status_handle_server_status_text(server *srv, connection *c
 
 static handler_t mod_status_handle_server_status_json(server *srv, connection *con, void *p_d) {
 	plugin_data *p = p_d;
-	buffer *b = buffer_init();
+	buffer *b = chunkqueue_append_buffer_open(con->write_queue);
 	double avg;
 	time_t ts;
 	char buf[32];
@@ -732,8 +730,7 @@ static handler_t mod_status_handle_server_status_json(server *srv, connection *c
 
 	if (jsonp) buffer_append_string_len(b, CONST_STR_LEN(");"));
 
-	chunkqueue_append_buffer(con->write_queue, b);
-	buffer_free(b);
+	chunkqueue_append_buffer_commit(con->write_queue);
 
 	/* set text/plain output */
 	http_header_response_set(con, HTTP_HEADER_CONTENT_TYPE, CONST_STR_LEN("Content-Type"), CONST_STR_LEN("application/javascript"));
@@ -756,7 +753,7 @@ static handler_t mod_status_handle_server_statistics(server *srv, connection *co
 		return HANDLER_FINISHED;
 	}
 
-	b = buffer_init();
+	b = chunkqueue_append_buffer_open(con->write_queue);
 	for (i = 0; i < st->used; i++) {
 		size_t ndx = st->sorted[i];
 
@@ -765,9 +762,7 @@ static handler_t mod_status_handle_server_statistics(server *srv, connection *co
 		buffer_append_int(b, ((data_integer *)(st->data[ndx]))->value);
 		buffer_append_string_len(b, CONST_STR_LEN("\n"));
 	}
-
-	chunkqueue_append_buffer(con->write_queue, b);
-	buffer_free(b);
+	chunkqueue_append_buffer_commit(con->write_queue);
 
 	http_header_response_set(con, HTTP_HEADER_CONTENT_TYPE, CONST_STR_LEN("Content-Type"), CONST_STR_LEN("text/plain"));
 
@@ -798,7 +793,7 @@ static handler_t mod_status_handle_server_status(server *srv, connection *con, v
 
 static handler_t mod_status_handle_server_config(server *srv, connection *con, void *p_d) {
 	plugin_data *p = p_d;
-	buffer *b = buffer_init();
+	buffer *b = chunkqueue_append_buffer_open(con->write_queue);
 	buffer *m = p->module_list;
 	size_t i;
 
@@ -851,8 +846,7 @@ static handler_t mod_status_handle_server_config(server *srv, connection *con, v
 		      "</html>\n"
 		      ));
 
-	chunkqueue_append_buffer(con->write_queue, b);
-	buffer_free(b);
+	chunkqueue_append_buffer_commit(con->write_queue);
 
 	http_header_response_set(con, HTTP_HEADER_CONTENT_TYPE, CONST_STR_LEN("Content-Type"), CONST_STR_LEN("text/html"));
 

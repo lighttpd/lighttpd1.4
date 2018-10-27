@@ -329,6 +329,20 @@ void chunkqueue_prepend_buffer_commit(chunkqueue *cq) {
 }
 
 
+buffer * chunkqueue_append_buffer_open(chunkqueue *cq) {
+	chunk *c = chunkqueue_get_unused_chunk(cq);
+	c->type = MEM_CHUNK;
+	chunkqueue_append_chunk(cq, c);
+	buffer_string_prepare_append(c->mem, 4095);
+	return c->mem;
+}
+
+
+void chunkqueue_append_buffer_commit(chunkqueue *cq) {
+	cq->bytes_in += buffer_string_length(cq->last->mem);
+}
+
+
 void chunkqueue_get_memory(chunkqueue *cq, char **mem, size_t *len, size_t min_size, size_t alloc_size) {
 	static const size_t REALLOC_MAX_SIZE = 256;
 	chunk *c;

@@ -64,6 +64,8 @@ void chunkqueue_append_chunkqueue(chunkqueue *cq, chunkqueue *src);
 
 buffer * chunkqueue_prepend_buffer_open(chunkqueue *cq);
 void chunkqueue_prepend_buffer_commit(chunkqueue *cq);
+buffer * chunkqueue_append_buffer_open(chunkqueue *cq);
+void chunkqueue_append_buffer_commit(chunkqueue *cq);
 
 struct server; /*(declaration)*/
 int chunkqueue_append_mem_to_tempfile(struct server *srv, chunkqueue *cq, const char *mem, size_t len);

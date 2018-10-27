@@ -1213,7 +1213,7 @@ static int webdav_parse_chunkqueue(server *srv, connection *con, handler_ctx *hc
 #ifdef USE_LOCKS
 static int webdav_lockdiscovery(connection *con, buffer *locktoken, const char *lockscope, const char *locktype, int depth) {
 
-	buffer *b = buffer_init();
+	buffer *b = chunkqueue_append_buffer_open(con->write_queue);
 
 	http_header_response_set(con, HTTP_HEADER_OTHER, CONST_STR_LEN("Lock-Token"), CONST_BUF_LEN(locktoken));
 
@@ -1229,8 +1229,7 @@ static int webdav_lockdiscovery(connection *con, buffer *locktoken, const char *
 	buffer_append_string_len(b,CONST_STR_LEN("</D:lockdiscovery>\n"));
 	buffer_append_string_len(b,CONST_STR_LEN("</D:prop>\n"));
 
-	chunkqueue_append_buffer(con->write_queue, b);
-	buffer_free(b);
+	chunkqueue_append_buffer_commit(con->write_queue);
 
 	return 0;
 }
@@ -1452,7 +1451,7 @@ SUBREQUEST_FUNC(mod_webdav_subrequest_handler_huge) {
 
 		http_header_response_set(con, HTTP_HEADER_CONTENT_TYPE, CONST_STR_LEN("Content-Type"), CONST_STR_LEN("text/xml; charset=\"utf-8\""));
 
-		b = buffer_init();
+		b = chunkqueue_append_buffer_open(con->write_queue);
 
 		buffer_copy_string_len(b, CONST_STR_LEN("<?xml version=\"1.0\" encoding=\"utf-8\"?>\n"));
 
@@ -1599,8 +1598,7 @@ SUBREQUEST_FUNC(mod_webdav_subrequest_handler_huge) {
 			log_error_write(srv, __FILE__, __LINE__, "sb", "XML-response-body:", b);
 		}
 
-		chunkqueue_append_buffer(con->write_queue, b);
-		buffer_free(b);
+		chunkqueue_append_buffer_commit(con->write_queue);
 
 		con->file_finished = 1;
 
@@ -1677,7 +1675,7 @@ SUBREQUEST_FUNC(mod_webdav_subrequest_handler_huge) {
 				/* we got an error somewhere in between, build a 207 */
 				http_header_response_set(con, HTTP_HEADER_CONTENT_TYPE, CONST_STR_LEN("Content-Type"), CONST_STR_LEN("text/xml; charset=\"utf-8\""));
 
-				b = buffer_init();
+				b = chunkqueue_append_buffer_open(con->write_queue);
 
 				buffer_copy_string_len(b, CONST_STR_LEN("<?xml version=\"1.0\" encoding=\"utf-8\"?>\n"));
 
@@ -1691,8 +1689,7 @@ SUBREQUEST_FUNC(mod_webdav_subrequest_handler_huge) {
 					log_error_write(srv, __FILE__, __LINE__, "sb", "XML-response-body:", b);
 				}
 
-				chunkqueue_append_buffer(con->write_queue, b);
-				buffer_free(b);
+				chunkqueue_append_buffer_commit(con->write_queue);
 
 				con->http_status = 207;
 				con->file_finished = 1;
