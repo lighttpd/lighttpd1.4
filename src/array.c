@@ -97,6 +97,10 @@ data_unset *array_pop(array *a) {
 	return du;
 }
 
+static int array_keycmp(const char *a, size_t alen, const char *b, size_t blen) {
+    return alen < blen ? -1 : alen > blen ? 1 : buffer_caseless_compare(a, alen, b, blen);
+}
+
 /* returns index of element or ARRAY_NOT_FOUND
  * if rndx != NULL it stores the position in a->sorted[] where the key needs
  * to be inserted
@@ -111,9 +115,8 @@ static size_t array_get_index(const array *a, const char *key, size_t keylen, si
 
 	while (lower != upper) {
 		size_t probe = (lower + upper) / 2;
-		int cmp = buffer_caseless_compare(key, keylen, CONST_BUF_LEN(a->data[a->sorted[probe]]->key));
-		assert(lower < upper); /* from loop invariant (lower <= upper) + (lower != upper) */
-		assert((lower <= probe) && (probe < upper)); /* follows from lower < upper */
+		const buffer *b = a->data[a->sorted[probe]]->key;
+		int cmp = array_keycmp(key, keylen, CONST_BUF_LEN(b));
 
 		if (cmp == 0) {
 			/* found */
