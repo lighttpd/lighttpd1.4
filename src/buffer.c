@@ -77,12 +77,11 @@ void buffer_move(buffer *b, buffer *src) {
 	tmp = *src; *src = *b; *b = tmp;
 }
 
-#define BUFFER_PIECE_SIZE 64
+#define BUFFER_PIECE_SIZE 64uL  /*(must be power-of-2)*/
 static size_t buffer_align_size(size_t size) {
-	size_t align = BUFFER_PIECE_SIZE - (size % BUFFER_PIECE_SIZE);
-	/* overflow on unsinged size_t is defined to wrap around */
-	if (size + align < size) return size;
-	return size + align;
+	size_t aligned = (size + BUFFER_PIECE_SIZE-1) & ~(BUFFER_PIECE_SIZE-1);
+	force_assert(aligned >= size);
+	return aligned;
 }
 
 /* make sure buffer is at least "size" big. discard old data */
