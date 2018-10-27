@@ -971,8 +971,8 @@ static int connection_read_cq(server *srv, connection *con, chunkqueue *cq, off_
 	 * if FIONREAD doesn't signal a big chunk we fill the previous buffer
 	 *  if it has >= 1kb free
 	 */
-	if (0 != fdevent_ioctl_fionread(con->fd, S_IFSOCK, &toread) || toread <= 4096) {
-		toread = 4096;
+	if (0 != fdevent_ioctl_fionread(con->fd, S_IFSOCK, &toread) || toread < 4096) {
+		toread = 4095;
 	}
 	else if (toread > MAX_READ_LIMIT) {
 		toread = MAX_READ_LIMIT;

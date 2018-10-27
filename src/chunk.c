@@ -328,7 +328,7 @@ void chunkqueue_get_memory(chunkqueue *cq, char **mem, size_t *len, size_t min_s
 
 	/* default values: */
 	if (0 == min_size) min_size = 1024;
-	if (0 == alloc_size) alloc_size = 4096;
+	if (0 == alloc_size) alloc_size = 4095;
 	if (alloc_size < min_size) alloc_size = min_size;
 
 	if (NULL != cq->last && MEM_CHUNK == cq->last->type) {
