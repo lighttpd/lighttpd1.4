@@ -325,8 +325,7 @@ static int http_response_parse_range(server *srv, connection *con, buffer *path,
 		if (!error) {
 			if (multipart) {
 				/* write boundary-header */
-				buffer *b = buffer_init();
-
+				buffer *b = srv->tmp_buf;
 				buffer_copy_string_len(b, CONST_STR_LEN("\r\n--"));
 				buffer_append_string_len(b, boundary, sizeof(boundary)-1);
 
@@ -347,8 +346,7 @@ static int http_response_parse_range(server *srv, connection *con, buffer *path,
 				buffer_append_string_len(b, CONST_STR_LEN("\r\n\r\n"));
 
 				con->response.content_length += buffer_string_length(b);
-				chunkqueue_append_buffer(con->write_queue, b);
-				buffer_free(b);
+				chunkqueue_append_mem(con->write_queue, CONST_BUF_LEN(b));
 			}
 
 			chunkqueue_append_file(con->write_queue, path, start, end - start + 1);
@@ -361,15 +359,13 @@ static int http_response_parse_range(server *srv, connection *con, buffer *path,
 
 	if (multipart) {
 		/* add boundary end */
-		buffer *b = buffer_init();
-
+		buffer *b = srv->tmp_buf;
 		buffer_copy_string_len(b, "\r\n--", 4);
 		buffer_append_string_len(b, boundary, sizeof(boundary)-1);
 		buffer_append_string_len(b, "--\r\n", 4);
 
 		con->response.content_length += buffer_string_length(b);
-		chunkqueue_append_buffer(con->write_queue, b);
-		buffer_free(b);
+		chunkqueue_append_mem(con->write_queue, CONST_BUF_LEN(b));
 
 		/* set header-fields */
 

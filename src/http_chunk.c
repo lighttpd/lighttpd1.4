@@ -33,7 +33,7 @@ static void http_chunk_append_len(server *srv, connection *con, uintmax_t len) {
 	buffer_append_uint_hex(b, len);
 	buffer_append_string_len(b, CONST_STR_LEN("\r\n"));
 
-	chunkqueue_append_buffer(con->write_queue, b);
+	chunkqueue_append_mem(con->write_queue, CONST_BUF_LEN(b));
 }
 
 static int http_chunk_append_file_open_fstat(server *srv, connection *con, buffer *fn, struct stat *st) {

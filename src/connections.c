@@ -310,12 +310,11 @@ static int connection_handle_write_prepare(server *srv, connection *con) {
 		}
 
 		if (!con->file_finished) {
-			buffer *b;
+			buffer *b = srv->tmp_buf;
 
 			buffer_reset(con->physical.path);
 
 			con->file_finished = 1;
-			b = buffer_init();
 
 			/* build default error-page */
 			buffer_copy_string_len(b, CONST_STR_LEN(
@@ -339,8 +338,7 @@ static int connection_handle_write_prepare(server *srv, connection *con) {
 					     "</html>\n"
 					     ));
 
-			(void)http_chunk_append_buffer(srv, con, b);
-			buffer_free(b);
+			(void)http_chunk_append_mem(srv, con, CONST_BUF_LEN(b));
 
 			http_header_response_set(con, HTTP_HEADER_CONTENT_TYPE, CONST_STR_LEN("Content-Type"), CONST_STR_LEN("text/html"));
 		}

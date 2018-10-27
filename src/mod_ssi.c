@@ -371,7 +371,7 @@ static int process_ssi_stmt(server *srv, connection *con, handler_ctx *p, const 
 		case SSI_ECHO_USER_NAME: {
 			struct passwd *pw;
 
-			b = buffer_init();
+			b = srv->tmp_buf;
 #ifdef HAVE_PWD_H
 			if (NULL == (pw = getpwuid(st->st_uid))) {
 				buffer_copy_int(b, st->st_uid);
@@ -381,8 +381,7 @@ static int process_ssi_stmt(server *srv, connection *con, handler_ctx *p, const 
 #else
 			buffer_copy_int(b, st->st_uid);
 #endif
-			chunkqueue_append_buffer(con->write_queue, b);
-			buffer_free(b);
+			chunkqueue_append_mem(con->write_queue, CONST_BUF_LEN(b));
 			break;
 		}
 		case SSI_ECHO_LAST_MODIFIED: {
@@ -580,7 +579,7 @@ static int process_ssi_stmt(server *srv, connection *con, handler_ctx *p, const 
 
 			switch (ssicmd) {
 			case SSI_FSIZE:
-				b = buffer_init();
+				b = srv->tmp_buf;
 				if (p->sizefmt) {
 					int j = 0;
 					const char *abr[] = { " B", " kB", " MB", " GB", " TB", NULL };
@@ -594,8 +593,7 @@ static int process_ssi_stmt(server *srv, connection *con, handler_ctx *p, const 
 				} else {
 					buffer_copy_int(b, stb.st_size);
 				}
-				chunkqueue_append_buffer(con->write_queue, b);
-				buffer_free(b);
+				chunkqueue_append_mem(con->write_queue, CONST_BUF_LEN(b));
 				break;
 			case SSI_FLASTMOD:
 				if (0 == strftime(buf, sizeof(buf), p->timefmt->ptr, localtime(&t))) {
@@ -719,7 +717,8 @@ static int process_ssi_stmt(server *srv, connection *con, handler_ctx *p, const 
 	case SSI_PRINTENV:
 		if (p->if_is_false) break;
 
-		b = buffer_init();
+		b = srv->tmp_buf;
+		buffer_string_set_length(b, 0);
 		for (i = 0; i < p->ssi_vars->used; i++) {
 			data_string *ds = (data_string *)p->ssi_vars->data[p->ssi_vars->sorted[i]];
 
@@ -736,9 +735,7 @@ static int process_ssi_stmt(server *srv, connection *con, handler_ctx *p, const 
 			buffer_append_string_encoded(b, CONST_BUF_LEN(ds->value), ENCODING_MINIMAL_XML);
 			buffer_append_string_len(b, CONST_STR_LEN("\n"));
 		}
-		chunkqueue_append_buffer(con->write_queue, b);
-		buffer_free(b);
-
+		chunkqueue_append_mem(con->write_queue, CONST_BUF_LEN(b));
 		break;
 	case SSI_EXEC: {
 		const char *cmd = NULL;

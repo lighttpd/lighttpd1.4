@@ -356,9 +356,8 @@ URIHANDLER_FUNC(mod_uploadprogress_uri_handler) {
 		http_header_response_set(con, HTTP_HEADER_OTHER, CONST_STR_LEN("Expires"), CONST_STR_LEN("Thu, 19 Nov 1981 08:52:00 GMT"));
 		http_header_response_set(con, HTTP_HEADER_CACHE_CONTROL, CONST_STR_LEN("Cache-Control"), CONST_STR_LEN("no-store, no-cache, must-revalidate, post-check=0, pre-check=0"));
 
-		b = buffer_init();
-
 		/* prepare XML */
+		b = srv->tmp_buf;
 		buffer_copy_string_len(b, CONST_STR_LEN(
 			"<?xml version=\"1.0\" encoding=\"iso-8859-1\"?>"
 			"<upload>"
@@ -371,14 +370,7 @@ URIHANDLER_FUNC(mod_uploadprogress_uri_handler) {
 		buffer_append_string_len(b, CONST_STR_LEN(
 			"</received>"
 			"</upload>"));
-
-#if 0
-		log_error_write(srv, __FILE__, __LINE__, "sb", "...", b);
-#endif
-
-		chunkqueue_append_buffer(con->write_queue, b);
-		buffer_free(b);
-
+		chunkqueue_append_mem(con->write_queue, CONST_BUF_LEN(b));
 		return HANDLER_FINISHED;
 	default:
 		break;
