@@ -1129,12 +1129,13 @@ handler_t http_response_read(server *srv, connection *con, http_response_opts *o
     while (1) {
         ssize_t n;
         size_t avail = buffer_string_space(b);
-        unsigned int toread = 4096;
+        unsigned int toread = 0;
 
         if (0 == fdevent_ioctl_fionread(fd, opts->fdfmt, (int *)&toread)) {
             if (avail < toread) {
-                if (toread < 4096)
-                    toread = 4096;
+                size_t blen = buffer_string_length(b);
+                if (toread + blen < 4096)
+                    toread = 4095 - blen;
                 else if (toread > MAX_READ_LIMIT)
                     toread = MAX_READ_LIMIT;
             }
@@ -1149,9 +1150,13 @@ handler_t http_response_read(server *srv, connection *con, http_response_opts *o
                           & FDEVENT_STREAM_RESPONSE_POLLRDHUP))
                         return HANDLER_GO_ON;/*optimistic read; data not ready*/
                 }
-                toread = 4096; /* let read() below indicate if EOF or EAGAIN */
+                if (0 == avail) /* let read() below indicate if EOF or EAGAIN */
+                    toread = 1024;
               #endif
             }
+        }
+        else if (avail < 1024) {
+            toread = 4095 - avail;
         }
 
         if (con->conf.stream_response_body & FDEVENT_STREAM_RESPONSE_BUFMIN) {
