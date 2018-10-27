@@ -404,11 +404,10 @@ static int connection_handle_write_prepare(server *srv, connection *con) {
 				con->response.send_chunked = 1;
 				if (qlen) {
 					/* create initial Transfer-Encoding: chunked segment */
-					buffer *b = srv->tmp_chunk_len;
-					buffer_string_set_length(b, 0);
+					buffer * const b = chunkqueue_prepend_buffer_open(con->write_queue);
 					buffer_append_uint_hex(b, (uintmax_t)qlen);
 					buffer_append_string_len(b, CONST_STR_LEN("\r\n"));
-					chunkqueue_prepend_buffer(con->write_queue, b);
+					chunkqueue_prepend_buffer_commit(con->write_queue);
 					chunkqueue_append_mem(con->write_queue, CONST_STR_LEN("\r\n"));
 				}
 				http_header_response_append(con, HTTP_HEADER_TRANSFER_ENCODING, CONST_STR_LEN("Transfer-Encoding"), CONST_STR_LEN("chunked"));

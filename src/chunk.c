@@ -271,19 +271,6 @@ void chunkqueue_append_buffer(chunkqueue *cq, buffer *mem) {
 	chunkqueue_append_chunk(cq, c);
 }
 
-void chunkqueue_prepend_buffer(chunkqueue *cq, buffer *mem) {
-	chunk *c;
-
-	if (buffer_string_is_empty(mem)) return;
-
-	c = chunkqueue_get_unused_chunk(cq);
-	c->type = MEM_CHUNK;
-	force_assert(NULL != c->mem);
-	buffer_move(c->mem, mem);
-
-	chunkqueue_prepend_chunk(cq, c);
-}
-
 
 void chunkqueue_append_mem(chunkqueue *cq, const char * mem, size_t len) {
 	chunk *c;
@@ -312,6 +299,20 @@ void chunkqueue_append_chunkqueue(chunkqueue *cq, chunkqueue *src) {
 	src->first = NULL;
 	src->last = NULL;
 	src->bytes_out = src->bytes_in;
+}
+
+
+buffer * chunkqueue_prepend_buffer_open(chunkqueue *cq) {
+	chunk *c = chunkqueue_get_unused_chunk(cq);
+	c->type = MEM_CHUNK;
+	chunkqueue_prepend_chunk(cq, c);
+	buffer_string_prepare_append(c->mem, 4095);
+	return c->mem;
+}
+
+
+void chunkqueue_prepend_buffer_commit(chunkqueue *cq) {
+	cq->bytes_in += buffer_string_length(cq->first->mem);
 }
 
 

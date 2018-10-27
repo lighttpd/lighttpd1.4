@@ -24,7 +24,7 @@
 #include <time.h>
 
 int http_response_write_header(server *srv, connection *con) {
-	buffer * const b = buffer_init();
+	buffer * const b = chunkqueue_prepend_buffer_open(con->write_queue);
 
 	if (con->request.http_version == HTTP_VERSION_1_1) {
 		buffer_copy_string_len(b, CONST_STR_LEN("HTTP/1.1 "));
@@ -112,9 +112,7 @@ int http_response_write_header(server *srv, connection *con) {
 		log_error_write(srv, __FILE__, __LINE__, "sSb", "Response-Header:", "\n", b);
 	}
 
-	chunkqueue_prepend_buffer(con->write_queue, b);
-	buffer_free(b);
-
+	chunkqueue_prepend_buffer_commit(con->write_queue);
 	return 0;
 }
 

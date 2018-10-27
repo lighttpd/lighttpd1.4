@@ -60,8 +60,10 @@ void chunkqueue_append_file(chunkqueue *cq, buffer *fn, off_t offset, off_t len)
 void chunkqueue_append_file_fd(chunkqueue *cq, buffer *fn, int fd, off_t offset, off_t len); /* copies "fn" */
 void chunkqueue_append_mem(chunkqueue *cq, const char *mem, size_t len); /* copies memory */
 void chunkqueue_append_buffer(chunkqueue *cq, buffer *mem); /* may reset "mem" */
-void chunkqueue_prepend_buffer(chunkqueue *cq, buffer *mem); /* may reset "mem" */
 void chunkqueue_append_chunkqueue(chunkqueue *cq, chunkqueue *src);
+
+buffer * chunkqueue_prepend_buffer_open(chunkqueue *cq);
+void chunkqueue_prepend_buffer_commit(chunkqueue *cq);
 
 struct server; /*(declaration)*/
 int chunkqueue_append_mem_to_tempfile(struct server *srv, chunkqueue *cq, const char *mem, size_t len);
