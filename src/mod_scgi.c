@@ -142,58 +142,61 @@ static int scgi_env_add_uwsgi(void *venv, const char *key, size_t key_len, const
 
 
 static handler_t scgi_create_env(server *srv, handler_ctx *hctx) {
-	buffer *b;
-
-	buffer *scgi_env = buffer_init();
+	buffer *b = chunkqueue_prepend_buffer_open(hctx->wb);
 	gw_host *host = hctx->host;
-
-	connection *con   = hctx->remote_conn;
-
+	connection *con = hctx->remote_conn;
 	http_cgi_opts opts = { 0, 0, host->docroot, NULL };
-
 	http_cgi_header_append_cb scgi_env_add = hctx->conf.proto == LI_PROTOCOL_SCGI
 	  ? scgi_env_add_scgi
 	  : scgi_env_add_uwsgi;
+	size_t offset;
 
-	buffer_string_prepare_copy(scgi_env, 1023);
+        /* save space for 9 digits (plus ':'), though incoming HTTP request
+	 * currently limited to 64k (65535, so 5 chars) */
+	buffer_copy_string_len(b, CONST_STR_LEN("          "));
 
-	if (0 != http_cgi_headers(srv, con, &opts, scgi_env_add, scgi_env)) {
-		buffer_free(scgi_env);
+	if (0 != http_cgi_headers(srv, con, &opts, scgi_env_add, b)) {
 		con->http_status = 400;
 		con->mode = DIRECT;
+		buffer_string_set_length(b, 0);
+		chunkqueue_remove_finished_chunks(hctx->wb);
 		return HANDLER_FINISHED;
 	}
 
 	if (hctx->conf.proto == LI_PROTOCOL_SCGI) {
-		scgi_env_add(scgi_env, CONST_STR_LEN("SCGI"), CONST_STR_LEN("1"));
-		b = buffer_init();
-		buffer_append_int(b, buffer_string_length(scgi_env));
-		buffer_append_string_len(b, CONST_STR_LEN(":"));
-		buffer_append_string_buffer(b, scgi_env);
+		size_t len;
+		scgi_env_add(b, CONST_STR_LEN("SCGI"), CONST_STR_LEN("1"));
+		buffer_string_set_length(srv->tmp_buf, 0);
+		buffer_append_int(srv->tmp_buf, buffer_string_length(b)-10);
+		buffer_append_string_len(srv->tmp_buf, CONST_STR_LEN(":"));
+		len = buffer_string_length(srv->tmp_buf);
+		offset = 10 - len;
+		memcpy(b->ptr+offset, srv->tmp_buf->ptr, len);
 		buffer_append_string_len(b, CONST_STR_LEN(","));
-		buffer_free(scgi_env);
 	} else { /* LI_PROTOCOL_UWSGI */
 		/* http://uwsgi-docs.readthedocs.io/en/latest/Protocol.html */
-		size_t len = buffer_string_length(scgi_env);
+		size_t len = buffer_string_length(b)-10;
 		uint32_t uwsgi_header;
 		if (len > USHRT_MAX) {
-			buffer_free(scgi_env);
 			con->http_status = 431; /* Request Header Fields Too Large */
 			con->mode = DIRECT;
+			buffer_string_set_length(b, 0);
+			chunkqueue_remove_finished_chunks(hctx->wb);
 			return HANDLER_FINISHED;
 		}
-		b = buffer_init();
-		buffer_string_prepare_copy(b, 4 + len);
+		offset = 10 - 4;
 		uwsgi_header = ((uint32_t)uwsgi_htole16((uint16_t)len)) << 8;
-		memcpy(b->ptr, (char *)&uwsgi_header, 4);
-		buffer_commit(b, 4);
-		buffer_append_string_buffer(b, scgi_env);
-		buffer_free(scgi_env);
+		memcpy(b->ptr+offset, (char *)&uwsgi_header, 4);
 	}
 
-	hctx->wb_reqlen = buffer_string_length(b);
-	chunkqueue_append_buffer(hctx->wb, b);
-	buffer_free(b);
+	hctx->wb_reqlen = buffer_string_length(b) - offset;
+	chunkqueue_prepend_buffer_commit(hctx->wb);
+      #if 0
+	hctx->wb->first->offset += (off_t)offset;
+	hctx->wb->bytes_in -= (off_t)offset;
+      #else
+	chunkqueue_mark_written(hctx->wb, offset);
+      #endif
 
 	if (con->request.content_length) {
 		chunkqueue_append_chunkqueue(hctx->wb, con->request_content_queue);

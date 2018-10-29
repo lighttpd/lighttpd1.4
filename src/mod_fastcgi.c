@@ -103,7 +103,7 @@ static int fcgi_env_add(void *venv, const char *key, size_t key_len, const char 
 	len += key_len > 127 ? 4 : 1;
 	len += val_len > 127 ? 4 : 1;
 
-	if (buffer_string_length(env) + len >= FCGI_MAX_LENGTH) {
+	if (buffer_string_length(env) + len >= FCGI_MAX_LENGTH + sizeof(FCGI_BeginRequestRecord) + sizeof(FCGI_Header)) {
 		/**
 		 * we can't append more headers, ignore it
 		 */
@@ -210,7 +210,7 @@ static handler_t fcgi_create_env(server *srv, handler_ctx *hctx) {
 	FCGI_Header header;
 	int request_id;
 
-	buffer *fcgi_env = buffer_init();
+	buffer *b = chunkqueue_prepend_buffer_open(hctx->wb);
 	gw_host *host = hctx->host;
 
 	connection *con   = hctx->remote_conn;
@@ -238,30 +238,28 @@ static handler_t fcgi_create_env(server *srv, handler_ctx *hctx) {
 	beginRecord.body.flags = 0;
 	memset(beginRecord.body.reserved, 0, sizeof(beginRecord.body.reserved));
 
-	/* send FCGI_PARAMS */
-	buffer_string_prepare_copy(fcgi_env, 1023);
+	buffer_copy_string_len(b, (const char *)&beginRecord, sizeof(beginRecord));
+	fcgi_header(&header, FCGI_PARAMS, request_id, 0, 0); /*(set aside space to fill in later)*/
+	buffer_append_string_len(b, (const char *)&header, sizeof(header));
 
-	if (0 != http_cgi_headers(srv, con, &opts, fcgi_env_add, fcgi_env)) {
+	/* send FCGI_PARAMS */
+
+	if (0 != http_cgi_headers(srv, con, &opts, fcgi_env_add, b)) {
 		con->http_status = 400;
 		con->mode = DIRECT;
-		buffer_free(fcgi_env);
+		buffer_string_set_length(b, 0);
+		chunkqueue_remove_finished_chunks(hctx->wb);
 		return HANDLER_FINISHED;
 	} else {
-		buffer *b = buffer_init();
-
-		buffer_copy_string_len(b, (const char *)&beginRecord, sizeof(beginRecord));
-
-		fcgi_header(&(header), FCGI_PARAMS, request_id, buffer_string_length(fcgi_env), 0);
-		buffer_append_string_len(b, (const char *)&header, sizeof(header));
-		buffer_append_string_buffer(b, fcgi_env);
-		buffer_free(fcgi_env);
+		fcgi_header(&(header), FCGI_PARAMS, request_id,
+			    buffer_string_length(b) - sizeof(FCGI_BeginRequestRecord) - sizeof(FCGI_Header), 0);
+		memcpy(b->ptr+sizeof(FCGI_BeginRequestRecord), (const char *)&header, sizeof(header));
 
 		fcgi_header(&(header), FCGI_PARAMS, request_id, 0, 0);
 		buffer_append_string_len(b, (const char *)&header, sizeof(header));
 
 		hctx->wb_reqlen = buffer_string_length(b);
-		chunkqueue_append_buffer(hctx->wb, b);
-		buffer_free(b);
+		chunkqueue_prepend_buffer_commit(hctx->wb);
 	}
 
 	if (con->request.content_length) {

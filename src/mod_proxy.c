@@ -708,12 +708,11 @@ static void proxy_set_Forwarded(connection *con, const unsigned int flags) {
 static handler_t proxy_create_env(server *srv, gw_handler_ctx *gwhctx) {
 	handler_ctx *hctx = (handler_ctx *)gwhctx;
 	connection *con = hctx->gw.remote_conn;
-	buffer *b = buffer_init();
+	buffer *b = chunkqueue_prepend_buffer_open(hctx->gw.wb);
 	const int remap_headers = (NULL != hctx->conf.header.urlpaths
 				   || NULL != hctx->conf.header.hosts_request);
 	const int upgrade = hctx->conf.header.upgrade
 	    && (NULL != http_header_request_get(con, HTTP_HEADER_UPGRADE, CONST_STR_LEN("Upgrade")));
-	buffer_string_prepare_copy(b, 8192-1);
 
 	/* build header */
 
@@ -832,8 +831,7 @@ static handler_t proxy_create_env(server *srv, gw_handler_ctx *gwhctx) {
 		buffer_append_string_len(b, CONST_STR_LEN("Connection: close, upgrade\r\n\r\n"));
 
 	hctx->gw.wb_reqlen = buffer_string_length(b);
-	chunkqueue_append_buffer(hctx->gw.wb, b);
-	buffer_free(b);
+	chunkqueue_prepend_buffer_commit(hctx->gw.wb);
 
 	if (con->request.content_length) {
 		chunkqueue_append_chunkqueue(hctx->gw.wb, con->request_content_queue);
