@@ -118,7 +118,11 @@ static int fcgi_env_add(void *venv, const char *key, size_t key_len, const char 
 	force_assert(key_len < 0x7fffffffu);
 	force_assert(val_len < 0x7fffffffu);
 
-	buffer_string_prepare_append(env, len);
+	if (buffer_string_space(env) < len) {
+		size_t extend = env->size * 2 - buffer_string_length(env);
+		extend = extend > len ? extend : len + 4095;
+		buffer_string_prepare_append(env, extend);
+	}
 
 	if (key_len > 127) {
 		len_enc[len_enc_len++] = ((key_len >> 24) & 0xff) | 0x80;

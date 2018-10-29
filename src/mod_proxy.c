@@ -792,6 +792,12 @@ static handler_t proxy_create_env(server *srv, gw_handler_ctx *gwhctx) {
 		vlen = buffer_string_length(ds->value);
 		if (0 == vlen) continue;
 
+		if (buffer_string_space(b) < klen + vlen + 4) {
+			size_t extend = b->size * 2 - buffer_string_length(b);
+			extend = extend > klen + vlen + 4 ? extend : klen + vlen + 4 + 4095;
+			buffer_string_prepare_append(b, extend);
+		}
+
 		buffer_append_string_len(b, ds->key->ptr, klen);
 		buffer_append_string_len(b, CONST_STR_LEN(": "));
 		buffer_append_string_len(b, ds->value->ptr, vlen);

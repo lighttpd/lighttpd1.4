@@ -100,7 +100,11 @@ static int scgi_env_add_scgi(void *venv, const char *key, size_t key_len, const 
 
 	len = key_len + val_len + 2;
 
-	buffer_string_prepare_append(env, len);
+	if (buffer_string_space(env) < len) {
+		size_t extend = env->size * 2 - buffer_string_length(env);
+		extend = extend > len ? extend : len + 4095;
+		buffer_string_prepare_append(env, extend);
+	}
 
 	buffer_append_string_len(env, key, key_len);
 	buffer_append_string_len(env, "", 1);
