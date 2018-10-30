@@ -153,12 +153,13 @@ void http_header_env_set(connection *con, const char *k, size_t klen, const char
 }
 
 void http_header_env_append(connection *con, const char *k, size_t klen, const char *v, size_t vlen) {
-    if (vlen) {
+    /*if (vlen)*/ /* skip check; permit env var w/ blank value to be appended */
+    {
         buffer * const vb = http_header_env_get(con, k, klen);
         if (NULL == vb) {
             array_insert_key_value(con->environment, k, klen, v, vlen);
         }
-        else { /* append value */
+        else if (vlen) { /* append value */
             buffer_append_string_len(vb, CONST_STR_LEN(", "));
             buffer_append_string_len(vb, v, vlen);
         }
