@@ -132,7 +132,11 @@ static int scgi_env_add_uwsgi(void *venv, const char *key, size_t key_len, const
 
 	len = 2 + key_len + 2 + val_len;
 
-	buffer_string_prepare_append(env, len);
+	if (buffer_string_space(env) < len) {
+		size_t extend = env->size * 2 - buffer_string_length(env);
+		extend = extend > len ? extend : len + 4095;
+		buffer_string_prepare_append(env, extend);
+	}
 
 	uwlen = uwsgi_htole16((uint16_t)key_len);
 	buffer_append_string_len(env, (char *)&uwlen, 2);
@@ -154,6 +158,10 @@ static handler_t scgi_create_env(server *srv, handler_ctx *hctx) {
 	  ? scgi_env_add_scgi
 	  : scgi_env_add_uwsgi;
 	size_t offset;
+
+	if ((off_t)buffer_string_space(b) < con->read_queue->bytes_out - hctx->wb->bytes_in) {
+		buffer_string_prepare_copy(b, ((size_t)(con->read_queue->bytes_out - hctx->wb->bytes_in + 4095) & ~4095uL)-1);
+	}
 
         /* save space for 9 digits (plus ':'), though incoming HTTP request
 	 * currently limited to 64k (65535, so 5 chars) */

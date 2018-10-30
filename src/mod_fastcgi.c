@@ -242,6 +242,10 @@ static handler_t fcgi_create_env(server *srv, handler_ctx *hctx) {
 	beginRecord.body.flags = 0;
 	memset(beginRecord.body.reserved, 0, sizeof(beginRecord.body.reserved));
 
+	if ((off_t)buffer_string_space(b) < con->read_queue->bytes_out - hctx->wb->bytes_in) {
+		buffer_string_prepare_copy(b, ((size_t)(con->read_queue->bytes_out - hctx->wb->bytes_in + 4095) & ~4095uL)-1);
+	}
+
 	buffer_copy_string_len(b, (const char *)&beginRecord, sizeof(beginRecord));
 	fcgi_header(&header, FCGI_PARAMS, request_id, 0, 0); /*(set aside space to fill in later)*/
 	buffer_append_string_len(b, (const char *)&header, sizeof(header));

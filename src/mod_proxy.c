@@ -714,6 +714,10 @@ static handler_t proxy_create_env(server *srv, gw_handler_ctx *gwhctx) {
 	const int upgrade = hctx->conf.header.upgrade
 	    && (NULL != http_header_request_get(con, HTTP_HEADER_UPGRADE, CONST_STR_LEN("Upgrade")));
 
+	if ((off_t)buffer_string_space(b) < con->read_queue->bytes_out - hctx->gw.wb->bytes_in) {
+		buffer_string_prepare_copy(b, ((size_t)(con->read_queue->bytes_out - hctx->gw.wb->bytes_in + 4095) & ~4095uL)-1);
+	}
+
 	/* build header */
 
 	/* request line */
