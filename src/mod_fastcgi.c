@@ -284,7 +284,6 @@ static handler_t fcgi_create_env(server *srv, handler_ctx *hctx) {
 }
 
 typedef struct {
-	buffer  *b;
 	unsigned int len;
 	int      type;
 	int      padding;
@@ -292,82 +291,61 @@ typedef struct {
 } fastcgi_response_packet;
 
 static int fastcgi_get_packet(server *srv, handler_ctx *hctx, fastcgi_response_packet *packet) {
-	chunk *c;
-	size_t offset;
-	size_t toread;
-	FCGI_Header *header;
-
-	if (!hctx->rb->first) return -1;
-
-	packet->b = buffer_init();
-	packet->len = 0;
-	packet->type = 0;
-	packet->padding = 0;
-	packet->request_id = 0;
-
-	offset = 0; toread = 8;
-	/* get at least the FastCGI header */
-	for (c = hctx->rb->first; c; c = c->next) {
-		size_t weHave = buffer_string_length(c->mem) - c->offset;
-
-		if (weHave > toread) weHave = toread;
-
-		buffer_append_string_len(packet->b, c->mem->ptr + c->offset, weHave);
-		toread -= weHave;
-		offset = weHave; /* skip offset bytes in chunk for "real" data */
-
-		if (0 == toread) break;
-	}
-
-	if (buffer_string_length(packet->b) < sizeof(FCGI_Header)) {
+	FCGI_Header header;
+	size_t toread = sizeof(FCGI_Header), flen = 0;
+	off_t rblen = chunkqueue_length(hctx->rb);
+	if (rblen < (off_t)sizeof(FCGI_Header)) {
 		/* no header */
-		if (hctx->conf.debug) {
-			log_error_write(srv, __FILE__, __LINE__, "sdsds", "FastCGI: header too small:", buffer_string_length(packet->b), "bytes <", sizeof(FCGI_Header), "bytes, waiting for more data");
+		if (hctx->conf.debug && 0 != rblen) {
+			log_error_write(srv, __FILE__, __LINE__, "sosds", "FastCGI: header too small:", rblen, "bytes <", sizeof(FCGI_Header), "bytes, waiting for more data");
 		}
-
-		buffer_free(packet->b);
-
 		return -1;
 	}
 
-	/* we have at least a header, now check how much me have to fetch */
-	header = (FCGI_Header *)(packet->b->ptr);
-
-	packet->len = (header->contentLengthB0 | (header->contentLengthB1 << 8)) + header->paddingLength;
-	packet->request_id = (header->requestIdB0 | (header->requestIdB1 << 8));
-	packet->type = header->type;
-	packet->padding = header->paddingLength;
-
-	/* ->b should only be the content */
-	buffer_string_set_length(packet->b, 0);
-
-	if (packet->len) {
-		/* copy the content */
-		for (; c && (buffer_string_length(packet->b) < packet->len); c = c->next) {
-			size_t weWant = packet->len - buffer_string_length(packet->b);
-			size_t weHave = buffer_string_length(c->mem) - c->offset - offset;
-
-			if (weHave > weWant) weHave = weWant;
-
-			buffer_append_string_len(packet->b, c->mem->ptr + c->offset + offset, weHave);
-
-			/* we only skipped the first bytes as they belonged to the fcgi header */
-			offset = 0;
+	/* get at least the FastCGI header */
+	for (chunk *c = hctx->rb->first; c; c = c->next) {
+		size_t weHave = buffer_string_length(c->mem) - c->offset;
+		if (weHave >= toread) {
+			memcpy((char *)&header + flen, c->mem->ptr + c->offset, toread);
+			break;
 		}
 
-		if (buffer_string_length(packet->b) < packet->len) {
-			/* we didn't get the full packet */
-
-			buffer_free(packet->b);
-			return -1;
-		}
-
-		buffer_string_set_length(packet->b, buffer_string_length(packet->b) - packet->padding);
+		memcpy((char *)&header + flen, c->mem->ptr + c->offset, weHave);
+		flen += weHave;
+		toread -= weHave;
 	}
 
-	chunkqueue_mark_written(hctx->rb, packet->len + sizeof(FCGI_Header));
+	/* we have at least a header, now check how much we have to fetch */
+	packet->len = (header.contentLengthB0 | (header.contentLengthB1 << 8)) + header.paddingLength;
+	packet->request_id = (header.requestIdB0 | (header.requestIdB1 << 8));
+	packet->type = header.type;
+	packet->padding = header.paddingLength;
 
+	if (packet->len > (unsigned int)rblen-sizeof(FCGI_Header)) {
+		return -1; /* we didn't get the full packet */
+	}
+
+	chunkqueue_mark_written(hctx->rb, sizeof(FCGI_Header));
 	return 0;
+}
+
+static void fastcgi_get_packet_body(buffer *b, handler_ctx *hctx, fastcgi_response_packet *packet) {
+	/* copy content; hctx->rb must contain at least packet->len content */
+	size_t toread = packet->len;
+	buffer_string_prepare_append(b, packet->len);
+	for (chunk *c = hctx->rb->first; c; c = c->next) {
+		size_t weHave = buffer_string_length(c->mem) - c->offset;
+		if (weHave >= toread) {
+			buffer_append_string_len(b, c->mem->ptr + c->offset, toread);
+			break;
+		}
+
+		buffer_append_string_len(b, c->mem->ptr + c->offset, weHave);
+		toread -= weHave;
+	}
+
+	buffer_string_set_length(b, buffer_string_length(b) - packet->padding);
+	chunkqueue_mark_written(hctx->rb, packet->len);
 }
 
 static handler_t fcgi_recv_parse(server *srv, connection *con, struct http_response_opts_t *opts, buffer *b, size_t n) {
@@ -409,19 +387,20 @@ static handler_t fcgi_recv_parse(server *srv, connection *con, struct http_respo
 			/* is the header already finished */
 			if (0 == con->file_started) {
 				/* split header from body */
-				buffer *hdrs = (!hctx->response)
-				  ? packet.b
-				  : (buffer_append_string_buffer(hctx->response, packet.b), hctx->response);
-				handler_t rc = http_response_parse_headers(srv, con, &hctx->opts, hdrs);
-				if (rc != HANDLER_GO_ON) {
+				buffer *hdrs = hctx->response;
+				if (NULL == hdrs) {
+					hdrs = srv->tmp_buf;
+					buffer_string_set_length(srv->tmp_buf, 0);
+				}
+				fastcgi_get_packet_body(hdrs, hctx, &packet);
+				if (HANDLER_GO_ON != http_response_parse_headers(srv, con, &hctx->opts, hdrs)) {
 					hctx->send_content_body = 0;
 					fin = 1;
 					break;
 				}
 				if (0 == con->file_started) {
 					if (!hctx->response) {
-						hctx->response = packet.b;
-						packet.b = NULL;
+						hctx->response = buffer_init_buffer(hdrs);
 					}
 				}
 				else if (hctx->gw_mode == GW_AUTHORIZER &&
@@ -429,19 +408,24 @@ static handler_t fcgi_recv_parse(server *srv, connection *con, struct http_respo
 					/* authorizer approved request; ignore the content here */
 					hctx->send_content_body = 0;
 				}
-			} else if (hctx->send_content_body && !buffer_string_is_empty(packet.b)) {
-				if (0 != http_chunk_append_buffer(srv, con, packet.b)) {
+			} else if (hctx->send_content_body) {
+				buffer_string_set_length(srv->tmp_buf, 0);
+				fastcgi_get_packet_body(srv->tmp_buf, hctx, &packet);
+				if (0 != http_chunk_append_buffer(srv, con, srv->tmp_buf)) {
 					/* error writing to tempfile;
 					 * truncate response or send 500 if nothing sent yet */
 					fin = 1;
-					break;
 				}
+			} else {
+				chunkqueue_mark_written(hctx->rb, packet.len);
 			}
 			break;
 		case FCGI_STDERR:
 			if (packet.len == 0) break;
 
-			log_error_write_multiline_buffer(srv, __FILE__, __LINE__, packet.b, "s",
+			buffer_string_set_length(srv->tmp_buf, 0);
+			fastcgi_get_packet_body(srv->tmp_buf, hctx, &packet);
+			log_error_write_multiline_buffer(srv, __FILE__, __LINE__, srv->tmp_buf, "s",
 					"FastCGI-stderr:");
 
 			break;
@@ -452,9 +436,9 @@ static handler_t fcgi_recv_parse(server *srv, connection *con, struct http_respo
 		default:
 			log_error_write(srv, __FILE__, __LINE__, "sd",
 					"FastCGI: header.type not handled: ", packet.type);
+			chunkqueue_mark_written(hctx->rb, packet.len);
 			break;
 		}
-		buffer_free(packet.b);
 	}
 
 	return 0 == fin ? HANDLER_GO_ON : HANDLER_FINISHED;
