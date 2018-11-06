@@ -409,9 +409,7 @@ static handler_t fcgi_recv_parse(server *srv, connection *con, struct http_respo
 					hctx->send_content_body = 0;
 				}
 			} else if (hctx->send_content_body) {
-				buffer_string_set_length(srv->tmp_buf, 0);
-				fastcgi_get_packet_body(srv->tmp_buf, hctx, &packet);
-				if (0 != http_chunk_append_buffer(srv, con, srv->tmp_buf)) {
+				if (0 != http_chunk_transfer_cqlen(srv, con, hctx->rb, packet.len)) {
 					/* error writing to tempfile;
 					 * truncate response or send 500 if nothing sent yet */
 					fin = 1;

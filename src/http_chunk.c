@@ -22,18 +22,16 @@
 #include <errno.h>
 #include <string.h>
 
+static buffer * http_chunk_header(buffer *b, uintmax_t len) {
+    buffer_string_set_length(b, 0);
+    buffer_append_uint_hex(b, len);
+    buffer_append_string_len(b, CONST_STR_LEN("\r\n"));
+    return b;
+}
+
 static void http_chunk_append_len(server *srv, connection *con, uintmax_t len) {
-	buffer *b;
-
-	force_assert(NULL != srv);
-
-	b = srv->tmp_chunk_len;
-
-	buffer_string_set_length(b, 0);
-	buffer_append_uint_hex(b, len);
-	buffer_append_string_len(b, CONST_STR_LEN("\r\n"));
-
-	chunkqueue_append_mem(con->write_queue, CONST_BUF_LEN(b));
+    buffer *b = http_chunk_header(srv->tmp_chunk_len, len);
+    chunkqueue_append_mem(con->write_queue, CONST_BUF_LEN(b));
 }
 
 static int http_chunk_append_file_open_fstat(server *srv, connection *con, buffer *fn, struct stat *st) {
@@ -97,13 +95,7 @@ static int http_chunk_append_to_tempfile(server *srv, connection *con, const cha
 	chunkqueue * const cq = con->write_queue;
 
 	if (con->response.send_chunked) {
-		/*http_chunk_append_len(srv, con, len);*/
-		buffer *b = srv->tmp_chunk_len;
-
-		buffer_string_set_length(b, 0);
-		buffer_append_uint_hex(b, len);
-		buffer_append_string_len(b, CONST_STR_LEN("\r\n"));
-
+		buffer *b = http_chunk_header(srv->tmp_chunk_len, len);
 		if (0 != chunkqueue_append_mem_to_tempfile(srv, cq, CONST_BUF_LEN(b))) {
 			return -1;
 		}
@@ -122,15 +114,38 @@ static int http_chunk_append_to_tempfile(server *srv, connection *con, const cha
 	return 0;
 }
 
-static int http_chunk_append_data(server *srv, connection *con, buffer *b, const char * mem, size_t len) {
+static int http_chunk_append_cq_to_tempfile(server *srv, connection *con, chunkqueue *src, size_t len) {
+    chunkqueue * const cq = con->write_queue;
 
+    if (con->response.send_chunked) {
+        buffer *b = http_chunk_header(srv->tmp_chunk_len, len);
+        if (0 != chunkqueue_append_mem_to_tempfile(srv, cq, CONST_BUF_LEN(b))) {
+            return -1;
+        }
+    }
+
+    if (0 != chunkqueue_steal_with_tempfiles(srv, cq, src, len)) {
+        return -1;
+    }
+
+    if (con->response.send_chunked) {
+        if (0!=chunkqueue_append_mem_to_tempfile(srv,cq,CONST_STR_LEN("\r\n"))){
+            return -1;
+        }
+    }
+
+    return 0;
+}
+
+static int http_chunk_uses_tempfile(server *srv, connection *con, size_t len) {
 	chunkqueue * const cq = con->write_queue;
 	chunk *c = cq->last;
-	if (0 == len) return 0;
+	UNUSED(srv);
 
 	/* current usage does not append_mem or append_buffer after appending
 	 * file, so not checking if users of this interface have appended large
-	 * (references to) files to chunkqueue, which would not be in memory */
+	 * (references to) files to chunkqueue, which would not be in memory
+	 * (but included in calculation for whether or not to use temp file) */
 
 	/*(allow slightly larger mem use if FDEVENT_STREAM_RESPONSE_BUFMIN
 	 * to reduce creation of temp files when backend producer will be
@@ -139,37 +154,76 @@ static int http_chunk_append_data(server *srv, connection *con, buffer *b, const
 	if ((c && c->type == FILE_CHUNK && c->file.is_temp)
 	    || cq->bytes_in - cq->bytes_out + len
 		> 1024 * ((con->conf.stream_response_body & FDEVENT_STREAM_RESPONSE_BUFMIN) ? 128 : 64)) {
-		return http_chunk_append_to_tempfile(srv, con, b ? b->ptr : mem, len);
-	}
-
-	/* not appending to prior mem chunk just in case using openssl
-	 * and need to resubmit same args as prior call to openssl (required?)*/
-
-	if (con->response.send_chunked) {
-		http_chunk_append_len(srv, con, len);
-	}
-
-	/*(chunkqueue_append_buffer() might steal buffer contents)*/
-	b ? chunkqueue_append_buffer(cq, b) : chunkqueue_append_mem(cq, mem, len);
-
-	if (con->response.send_chunked) {
-		chunkqueue_append_mem(cq, CONST_STR_LEN("\r\n"));
+		return 1;
 	}
 
 	return 0;
 }
 
 int http_chunk_append_buffer(server *srv, connection *con, buffer *mem) {
-	force_assert(NULL != con);
+    chunkqueue * const cq = con->write_queue;
+    size_t len = buffer_string_length(mem);
+    if (0 == len) return 0;
 
-	return http_chunk_append_data(srv, con, mem, NULL, buffer_string_length(mem));
+    if (http_chunk_uses_tempfile(srv, con, len)) {
+        return http_chunk_append_to_tempfile(srv, con, mem->ptr, len);
+    }
+
+    if (con->response.send_chunked) {
+        http_chunk_append_len(srv, con, len);
+    }
+
+    /*(chunkqueue_append_buffer() might steal buffer contents)*/
+    chunkqueue_append_buffer(cq, mem);
+
+    if (con->response.send_chunked) {
+        chunkqueue_append_mem(cq, CONST_STR_LEN("\r\n"));
+    }
+
+    return 0;
 }
 
 int http_chunk_append_mem(server *srv, connection *con, const char * mem, size_t len) {
-	force_assert(NULL != con);
-	force_assert(NULL != mem || 0 == len);
+    chunkqueue * const cq = con->write_queue;
+    if (0 == len) return 0;
+    force_assert(NULL != mem);
 
-	return http_chunk_append_data(srv, con, NULL, mem, len);
+    if (http_chunk_uses_tempfile(srv, con, len)) {
+        return http_chunk_append_to_tempfile(srv, con, mem, len);
+    }
+
+    if (con->response.send_chunked) {
+        http_chunk_append_len(srv, con, len);
+    }
+
+    chunkqueue_append_mem(cq, mem, len);
+
+    if (con->response.send_chunked) {
+        chunkqueue_append_mem(cq, CONST_STR_LEN("\r\n"));
+    }
+
+    return 0;
+}
+
+int http_chunk_transfer_cqlen(server *srv, connection *con, chunkqueue *src, size_t len) {
+    chunkqueue * const cq = con->write_queue;
+    if (0 == len) return 0;
+
+    if (http_chunk_uses_tempfile(srv, con, len)) {
+        return http_chunk_append_cq_to_tempfile(srv, con, src, len);
+    }
+
+    if (con->response.send_chunked) {
+        http_chunk_append_len(srv, con, len);
+    }
+
+    chunkqueue_steal(cq, src, len);
+
+    if (con->response.send_chunked) {
+        chunkqueue_append_mem(cq, CONST_STR_LEN("\r\n"));
+    }
+
+    return 0;
 }
 
 void http_chunk_close(server *srv, connection *con) {
