@@ -43,15 +43,18 @@ typedef struct {
 	chunk *first;
 	chunk *last;
 
-	chunk *unused;
-	size_t unused_chunks;
-
 	off_t bytes_in, bytes_out;
 
 	array *tempdirs;
 	unsigned int upload_temp_file_size;
 	unsigned int tempdir_idx;
 } chunkqueue;
+
+buffer * chunk_buffer_acquire(void);
+void chunk_buffer_release(buffer *b);
+
+void chunkqueue_chunk_pool_clear(void);
+void chunkqueue_chunk_pool_free(void);
 
 chunkqueue *chunkqueue_init(void);
 void chunkqueue_set_tempdirs_default_reset (void);

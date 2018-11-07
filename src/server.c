@@ -398,6 +398,7 @@ static void server_free(server *srv) {
 	array_free(srv->split_vals);
 
 	li_rand_cleanup();
+	chunkqueue_chunk_pool_free();
 
 	free(srv);
 }
@@ -1792,6 +1793,8 @@ static int server_main (server * const srv, int argc, char **argv) {
 				}
 			      #endif
 
+				/* free excess chunkqueue buffers every 64 seconds */
+				if (0 == (min_ts & 0x3f)) chunkqueue_chunk_pool_clear();
 				/* cleanup stat-cache */
 				stat_cache_trigger_cleanup(srv);
 				/* reset global/aggregate rate limit counters */
