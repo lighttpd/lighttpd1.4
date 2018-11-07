@@ -732,8 +732,8 @@ static int mod_deflate_file_chunk(server *srv, connection *con, handler_ctx *hct
 #endif
 
 	if (-1 == c->file.fd) {  /* open the file if not already open */
-		if (-1 == (c->file.fd = fdevent_open_cloexec(c->file.name->ptr, O_RDONLY, 0))) {
-			log_error_write(srv, __FILE__, __LINE__, "sbs", "open failed for:", c->file.name, strerror(errno));
+		if (-1 == (c->file.fd = fdevent_open_cloexec(c->mem->ptr, O_RDONLY, 0))) {
+			log_error_write(srv, __FILE__, __LINE__, "sbs", "open failed for:", c->mem, strerror(errno));
 
 			return -1;
 		}
@@ -794,7 +794,7 @@ static int mod_deflate_file_chunk(server *srv, connection *con, handler_ctx *hct
 		if (MAP_FAILED == (c->file.mmap.start = mmap(0, (size_t)to_mmap, PROT_READ, MAP_SHARED, c->file.fd, c->file.mmap.offset))
 		    && (errno != EINVAL || MAP_FAILED == (c->file.mmap.start = mmap(0, (size_t)to_mmap, PROT_READ, MAP_PRIVATE, c->file.fd, c->file.mmap.offset)))) {
 			log_error_write(srv, __FILE__, __LINE__, "ssbd", "mmap failed:",
-					strerror(errno), c->file.name, c->file.fd);
+					strerror(errno), c->mem, c->file.fd);
 
 			return -1;
 		}
@@ -805,7 +805,7 @@ static int mod_deflate_file_chunk(server *srv, connection *con, handler_ctx *hct
 		if (c->file.mmap.length > (64 KByte) &&
 		    0 != madvise(c->file.mmap.start, c->file.mmap.length, MADV_WILLNEED)) {
 			log_error_write(srv, __FILE__, __LINE__, "ssbd", "madvise failed:",
-					strerror(errno), c->file.name, c->file.fd);
+					strerror(errno), c->mem, c->file.fd);
 		}
 #endif
 
@@ -834,7 +834,7 @@ static int mod_deflate_file_chunk(server *srv, connection *con, handler_ctx *hct
 		toSend = st_size;
 		if (toSend > 2 MByte) toSend = 2 MByte;
 		if (NULL == (start = malloc((size_t)toSend)) || -1 == lseek(c->file.fd, abs_offset, SEEK_SET) || toSend != read(c->file.fd, start, (size_t)toSend)) {
-			log_error_write(srv, __FILE__, __LINE__, "sbss", "reading", c->file.name, "failed:", strerror(errno));
+			log_error_write(srv, __FILE__, __LINE__, "sbss", "reading", c->mem, "failed:", strerror(errno));
 
 			free(start);
 			return -1;
@@ -850,7 +850,7 @@ static int mod_deflate_file_chunk(server *srv, connection *con, handler_ctx *hct
 			sigbus_jmp_valid = 0;
 
 			log_error_write(srv, __FILE__, __LINE__, "sbd", "SIGBUS in mmap:",
-				c->file.name, c->file.fd);
+					c->mem, c->file.fd);
 			return -1;
 		}
 	}

@@ -524,8 +524,8 @@ static ssize_t cgi_write_file_chunk_mmap(server *srv, connection *con, int fd, c
 	/*(simplified from chunk.c:chunkqueue_open_file_chunk())*/
 	UNUSED(con);
 	if (-1 == c->file.fd) {
-		if (-1 == (c->file.fd = fdevent_open_cloexec(c->file.name->ptr, O_RDONLY, 0))) {
-			log_error_write(srv, __FILE__, __LINE__, "ssb", "open failed:", strerror(errno), c->file.name);
+		if (-1 == (c->file.fd = fdevent_open_cloexec(c->mem->ptr, O_RDONLY, 0))) {
+			log_error_write(srv, __FILE__, __LINE__, "ssb", "open failed:", strerror(errno), c->mem);
 			return -1;
 		}
 	}
@@ -551,10 +551,10 @@ static ssize_t cgi_write_file_chunk_mmap(server *srv, connection *con, int fd, c
 			    || 0 >= (toSend = read(c->file.fd, data, toSend))) {
 				if (-1 == toSend) {
 					log_error_write(srv, __FILE__, __LINE__, "ssbdo", "lseek/read failed:",
-						strerror(errno), c->file.name, c->file.fd, offset);
+							strerror(errno), c->mem, c->file.fd, offset);
 				} else { /*(0 == toSend)*/
 					log_error_write(srv, __FILE__, __LINE__, "sbdo", "unexpected EOF (input truncated?):",
-						c->file.name, c->file.fd, offset);
+							c->mem, c->file.fd, offset);
 				}
 				free(data);
 				return -1;

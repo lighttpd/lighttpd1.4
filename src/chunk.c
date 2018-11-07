@@ -59,7 +59,6 @@ static chunk *chunk_init(void) {
 
 	c->type = MEM_CHUNK;
 	c->mem = buffer_init();
-	c->file.name = c->mem;
 	c->file.start = c->file.length = c->file.mmap.offset = 0;
 	c->file.fd = -1;
 	c->file.mmap.start = MAP_FAILED;

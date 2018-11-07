@@ -1132,7 +1132,7 @@ static int webdav_parse_chunkqueue(server *srv, connection *con, handler_ctx *hc
 				data = c->file.mmap.start + c->offset;
 			} else {
 				if (-1 == c->file.fd &&  /* open the file if not already open */
-				    -1 == (c->file.fd = fdevent_open_cloexec(c->file.name->ptr, O_RDONLY, 0))) {
+				    -1 == (c->file.fd = fdevent_open_cloexec(c->mem->ptr, O_RDONLY, 0))) {
 					log_error_write(srv, __FILE__, __LINE__, "ss", "open failed: ", strerror(errno));
 
 					return -1;
@@ -1151,7 +1151,7 @@ static int webdav_parse_chunkqueue(server *srv, connection *con, handler_ctx *hc
 					if (-1 == lseek(c->file.fd, c->file.start + c->offset, SEEK_SET)
 					    || 0 > (rd = read(c->file.fd, data, weHave))) {
 						log_error_write(srv, __FILE__, __LINE__, "ssbd", "lseek/read failed: ",
-								strerror(errno), c->file.name, c->file.fd);
+								strerror(errno), c->mem, c->file.fd);
 						free(data);
 						return -1;
 					}
@@ -1847,7 +1847,7 @@ SUBREQUEST_FUNC(mod_webdav_subrequest_handler_huge) {
 					data = c->file.mmap.start + c->offset;
 				} else {
 					if (-1 == c->file.fd &&  /* open the file if not already open */
-					    -1 == (c->file.fd = fdevent_open_cloexec(c->file.name->ptr, O_RDONLY, 0))) {
+					    -1 == (c->file.fd = fdevent_open_cloexec(c->mem->ptr, O_RDONLY, 0))) {
 						log_error_write(srv, __FILE__, __LINE__, "ss", "open failed: ", strerror(errno));
 						close(fd);
 						return HANDLER_ERROR;
@@ -1866,7 +1866,7 @@ SUBREQUEST_FUNC(mod_webdav_subrequest_handler_huge) {
 						if (-1 == lseek(c->file.fd, c->file.start + c->offset, SEEK_SET)
 						    || 0 > (rd = read(c->file.fd, data, dlen))) {
 							log_error_write(srv, __FILE__, __LINE__, "ssbd", "lseek/read failed: ",
-									strerror(errno), c->file.name, c->file.fd);
+									strerror(errno), c->mem, c->file.fd);
 							free(data);
 							close(fd);
 							return HANDLER_ERROR;

@@ -281,7 +281,8 @@ static int network_write_file_chunk_mmap(server *srv, int fd, chunkqueue *cq, of
                                   MAP_SHARED, c->file.fd, c->file.mmap.offset);
         if (MAP_FAILED == c->file.mmap.start) {
             log_error_write(srv, __FILE__, __LINE__, "ssbdoo", "mmap failed:",
-                strerror(errno), c->file.name, c->file.fd, c->file.mmap.offset, (off_t) c->file.mmap.length);
+                            strerror(errno), c->mem, c->file.fd,
+                            c->file.mmap.offset, (off_t) c->file.mmap.length);
             return -1;
         }
 
@@ -316,7 +317,7 @@ static int network_write_file_chunk_mmap(server *srv, int fd, chunkqueue *cq, of
         sigbus_jmp_valid = 0;
 
         log_error_write(srv, __FILE__, __LINE__, "sbd", "SIGBUS in mmap:",
-                        c->file.name, c->file.fd);
+                        c->mem, c->file.fd);
 
         munmap(c->file.mmap.start, c->file.mmap.length);
         c->file.mmap.start = MAP_FAILED;

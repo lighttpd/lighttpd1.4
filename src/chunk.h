@@ -10,25 +10,10 @@
 #include "array.h"
 
 typedef struct chunk {
+	struct chunk *next;
 	enum { MEM_CHUNK, FILE_CHUNK } type;
 
-	buffer *mem; /* either the storage of the mem-chunk or the read-ahead buffer */
-
-	struct {
-		/* filechunk */
-		buffer *name; /* name of the file */
-		off_t  start; /* starting offset in the file */
-		off_t  length; /* octets to send from the starting offset */
-
-		int    fd;
-		struct {
-			char   *start; /* the start pointer of the mmap'ed area */
-			size_t length; /* size of the mmap'ed area */
-			off_t  offset; /* start is <n> octet away from the start of the file */
-		} mmap;
-
-		int is_temp; /* file is temporary and will be deleted if on cleanup */
-	} file;
+	buffer *mem; /* either the storage of the mem-chunk or the name of the file */
 
 	/* the size of the chunk is either:
 	 * - mem-chunk: buffer_string_length(chunk::mem)
@@ -36,7 +21,19 @@ typedef struct chunk {
 	 */
 	off_t  offset; /* octets sent from this chunk */
 
-	struct chunk *next;
+	struct {
+		/* filechunk */
+		off_t  start; /* starting offset in the file */
+		off_t  length; /* octets to send from the starting offset */
+
+		int    fd;
+		int is_temp; /* file is temporary and will be deleted if on cleanup */
+		struct {
+			char   *start; /* the start pointer of the mmap'ed area */
+			size_t length; /* size of the mmap'ed area */
+			off_t  offset; /* start is <n> octet away from the start of the file */
+		} mmap;
+	} file;
 } chunk;
 
 typedef struct {
