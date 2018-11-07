@@ -984,7 +984,7 @@ static handler_t mod_proxy_check_extension(server *srv, connection *con, void *p
 	if (con->mode == p->id) {
 		handler_ctx *hctx = con->plugin_ctx[p->id];
 		hctx->gw.create_env = proxy_create_env;
-		hctx->gw.response = buffer_init();
+		hctx->gw.response = chunk_buffer_acquire();
 		hctx->gw.opts.backend = BACKEND_PROXY;
 		hctx->gw.opts.pdata = hctx;
 		hctx->gw.opts.headers = proxy_response_headers;

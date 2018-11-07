@@ -1067,7 +1067,7 @@ static gw_handler_ctx * handler_ctx_init(size_t sz) {
 
     hctx->fde_ndx = -1;
 
-    /*hctx->response = buffer_init();*//*(allocated when needed)*/
+    /*hctx->response = chunk_buffer_acquire();*//*(allocated when needed)*/
 
     hctx->request_id = 0;
     hctx->gw_mode = GW_RESPONDER;
@@ -1089,7 +1089,7 @@ static gw_handler_ctx * handler_ctx_init(size_t sz) {
 static void handler_ctx_free(gw_handler_ctx *hctx) {
     /* caller MUST have called gw_backend_close(srv, hctx) if necessary */
     if (hctx->handler_ctx_free) hctx->handler_ctx_free(hctx);
-    buffer_free(hctx->response);
+    chunk_buffer_release(hctx->response);
 
     chunkqueue_free(hctx->rb);
     chunkqueue_free(hctx->wb);
@@ -1113,7 +1113,7 @@ static void handler_ctx_clear(gw_handler_ctx *hctx) {
     if (hctx->wb) chunkqueue_reset(hctx->wb);
     hctx->wb_reqlen = 0;
 
-    buffer_reset(hctx->response);
+    if (hctx->response) buffer_string_set_length(hctx->response, 0);
 
     hctx->fd = -1;
     hctx->fde_ndx = -1;
@@ -2040,13 +2040,13 @@ static handler_t gw_recv_response(server *srv, gw_handler_ctx *hctx) {
     gw_host *host = hctx->host;
     /*(XXX: make this a configurable flag for other protocols)*/
     buffer *b = hctx->opts.backend == BACKEND_FASTCGI
-      ? buffer_init()
+      ? chunk_buffer_acquire()
       : hctx->response;
 
     handler_t rc = http_response_read(srv, hctx->remote_conn, &hctx->opts,
                                       b, hctx->fd, &hctx->fde_ndx);
 
-    if (b != hctx->response) buffer_free(b);
+    if (b != hctx->response) chunk_buffer_release(b);
 
     switch (rc) {
     default:

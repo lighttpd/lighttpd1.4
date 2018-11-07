@@ -91,7 +91,7 @@ static handler_ctx * cgi_handler_ctx_init(void) {
 
 	force_assert(hctx);
 
-	hctx->response = buffer_init();
+	hctx->response = chunk_buffer_acquire();
 	hctx->fd = -1;
 	hctx->fdtocgi = -1;
 
@@ -99,7 +99,7 @@ static handler_ctx * cgi_handler_ctx_init(void) {
 }
 
 static void cgi_handler_ctx_free(handler_ctx *hctx) {
-	buffer_free(hctx->response);
+	chunk_buffer_release(hctx->response);
 	free(hctx);
 }
 

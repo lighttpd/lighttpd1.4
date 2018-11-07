@@ -522,7 +522,7 @@ static handler_t wstunnel_handler_setup (server *srv, connection *con, plugin_da
     hctx->gw.create_env       = wstunnel_create_env;
     hctx->gw.handler_ctx_free = wstunnel_handler_ctx_free;
     hctx->gw.backend_error    = wstunnel_backend_error;
-    hctx->gw.response         = buffer_init();
+    hctx->gw.response         = chunk_buffer_acquire();
 
     hctx->frame.state         = MOD_WEBSOCKET_FRAME_STATE_INIT;
     hctx->frame.ctl.siz       = 0;

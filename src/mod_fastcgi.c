@@ -400,7 +400,8 @@ static handler_t fcgi_recv_parse(server *srv, connection *con, struct http_respo
 				}
 				if (0 == con->file_started) {
 					if (!hctx->response) {
-						hctx->response = buffer_init_buffer(hdrs);
+						hctx->response = chunk_buffer_acquire();
+						buffer_copy_buffer(hctx->response, hdrs);
 					}
 				}
 				else if (hctx->gw_mode == GW_AUTHORIZER &&

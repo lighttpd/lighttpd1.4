@@ -285,7 +285,7 @@ static handler_t scgi_check_extension(server *srv, connection *con, void *p_d, i
 		handler_ctx *hctx = con->plugin_ctx[p->id];
 		hctx->opts.backend = BACKEND_SCGI;
 		hctx->create_env = scgi_create_env;
-		hctx->response = buffer_init();
+		hctx->response = chunk_buffer_acquire();
 	}
 
 	return HANDLER_GO_ON;

@@ -152,7 +152,7 @@ static handler_t mod_sockproxy_connection_accept(server *srv, connection *con, v
 		handler_ctx *hctx = con->plugin_ctx[p->id];
 		hctx->opts.backend = BACKEND_PROXY;
 		hctx->create_env = sockproxy_create_env_connect;
-		hctx->response = buffer_init();
+		hctx->response = chunk_buffer_acquire();
 		con->http_status = -1; /*(skip HTTP processing)*/
 	}
 
