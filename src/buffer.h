@@ -71,7 +71,7 @@ void buffer_copy_buffer(buffer *b, const buffer *src);
 
 void buffer_append_string(buffer *b, const char *s);
 void buffer_append_string_len(buffer *b, const char *s, size_t s_len);
-void buffer_append_string_buffer(buffer *b, const buffer *src);
+static inline void buffer_append_string_buffer(buffer *b, const buffer *src);
 
 #define buffer_append_uint_hex(b,len) buffer_append_uint_hex_lc((b),(len))
 void buffer_append_uint_hex_lc(buffer *b, uintmax_t len);
@@ -197,6 +197,10 @@ static inline size_t buffer_string_space(const buffer *b) {
 	if (NULL == b || b->size == 0) return 0;
 	if (0 == b->used) return b->size - 1;
 	return b->size - b->used;
+}
+
+static inline void buffer_append_string_buffer(buffer *b, const buffer *src) {
+	buffer_append_string_len(b, CONST_BUF_LEN(src));
 }
 
 static inline void buffer_append_slash(buffer *b) {

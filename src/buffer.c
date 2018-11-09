@@ -233,14 +233,6 @@ void buffer_append_string_len(buffer *b, const char *s, size_t s_len) {
 	b->used += s_len;
 }
 
-void buffer_append_string_buffer(buffer *b, const buffer *src) {
-	if (NULL == src) {
-		buffer_append_string_len(b, NULL, 0);
-	} else {
-		buffer_append_string_len(b, src->ptr, buffer_string_length(src));
-	}
-}
-
 void buffer_append_uint_hex_lc(buffer *b, uintmax_t value) {
 	char *buf;
 	unsigned int shift = 0;
