@@ -182,7 +182,7 @@ static handler_t stat_cache_handle_fdevent(server *srv, void *_fce, int revent) 
 
 				for (j = 0; j < 2; j++) {
 					buffer_copy_string(scf->hash_key, fe.filename);
-					buffer_append_int(scf->hash_key, j);
+					buffer_append_string_len(scf->hash_key, (0 == j ? "0" : "1"), 1);
 
 					ndx = hashme(scf->hash_key);
 
@@ -293,7 +293,7 @@ static handler_t stat_cache_fam_dir_check(server *srv, stat_cache_fam *scf, stat
 	}
 
 	buffer_copy_buffer(scf->hash_key, scf->dir_name);
-	buffer_append_int(scf->hash_key, (int)follow_symlink);
+	buffer_append_string_len(scf->hash_key, (0 != follow_symlink ? "1" : "0"), 1);
 
 	scf->dir_ndx = hashme(scf->hash_key);
 
@@ -621,7 +621,7 @@ handler_t stat_cache_get_entry(server *srv, connection *con, buffer *name, stat_
 	sc = srv->stat_cache;
 
 	buffer_copy_buffer(sc->hash_key, name);
-	buffer_append_int(sc->hash_key, follow_symlink);
+	buffer_append_string_len(sc->hash_key, (0 != follow_symlink ? "1" : "0"), 1);
 
 	file_ndx = hashme(sc->hash_key);
 	sc->files = splaytree_splay(sc->files, file_ndx);
