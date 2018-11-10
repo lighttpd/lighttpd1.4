@@ -224,7 +224,9 @@ int li_rand_bytes (unsigned char *buf, int num)
 void li_rand_cleanup (void)
 {
   #ifdef USE_OPENSSL_CRYPTO
+  #if OPENSSL_VERSION_NUMBER < 0x10100000L
     RAND_cleanup();
+  #endif
   #endif
     safe_memclear(xsubi, sizeof(xsubi));
 }
