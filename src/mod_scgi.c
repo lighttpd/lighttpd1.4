@@ -94,6 +94,7 @@ SETDEFAULTS_FUNC(mod_scgi_set_defaults) {
 
 static int scgi_env_add_scgi(void *venv, const char *key, size_t key_len, const char *val, size_t val_len) {
 	buffer *env = venv;
+	char *dst;
 	size_t len;
 
 	if (!key || !val) return -1;
@@ -106,10 +107,12 @@ static int scgi_env_add_scgi(void *venv, const char *key, size_t key_len, const 
 		buffer_string_prepare_append(env, extend);
 	}
 
-	buffer_append_string_len(env, key, key_len);
-	buffer_append_string_len(env, "", 1);
-	buffer_append_string_len(env, val, val_len);
-	buffer_append_string_len(env, "", 1);
+	dst = buffer_string_prepare_append(env, len);
+	memcpy(dst, key, key_len);
+	dst[key_len] = '\0';
+	memcpy(dst + key_len + 1, val, val_len);
+	dst[key_len + 1 + val_len] = '\0';
+	buffer_commit(env, len);
 
 	return 0;
 }
@@ -124,6 +127,7 @@ static int scgi_env_add_scgi(void *venv, const char *key, size_t key_len, const 
 
 static int scgi_env_add_uwsgi(void *venv, const char *key, size_t key_len, const char *val, size_t val_len) {
 	buffer *env = venv;
+	char *dst;
 	size_t len;
 	uint16_t uwlen;
 
@@ -138,12 +142,14 @@ static int scgi_env_add_uwsgi(void *venv, const char *key, size_t key_len, const
 		buffer_string_prepare_append(env, extend);
 	}
 
+	dst = buffer_string_prepare_append(env, len);
 	uwlen = uwsgi_htole16((uint16_t)key_len);
-	buffer_append_string_len(env, (char *)&uwlen, 2);
-	buffer_append_string_len(env, key, key_len);
+	memcpy(dst, (char *)&uwlen, 2);
+	memcpy(dst + 2, key, key_len);
 	uwlen = uwsgi_htole16((uint16_t)val_len);
-	buffer_append_string_len(env, (char *)&uwlen, 2);
-	buffer_append_string_len(env, val, val_len);
+	memcpy(dst + 2 + key_len, (char *)&uwlen, 2);
+	memcpy(dst + 2 + key_len + 2, val, val_len);
+	buffer_commit(env, len);
 
 	return 0;
 }

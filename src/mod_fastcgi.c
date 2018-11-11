@@ -95,6 +95,7 @@ static int fcgi_env_add(void *venv, const char *key, size_t key_len, const char 
 	size_t len;
 	char len_enc[8];
 	size_t len_enc_len = 0;
+	char *dst;
 
 	if (!key || !val) return -1;
 
@@ -142,9 +143,11 @@ static int fcgi_env_add(void *venv, const char *key, size_t key_len, const char 
 		len_enc[len_enc_len++] = (val_len >> 0) & 0xff;
 	}
 
-	buffer_append_string_len(env, len_enc, len_enc_len);
-	buffer_append_string_len(env, key, key_len);
-	buffer_append_string_len(env, val, val_len);
+	dst = buffer_string_prepare_append(env, len);
+	memcpy(dst, len_enc, len_enc_len);
+	memcpy(dst + len_enc_len, key, key_len);
+	memcpy(dst + len_enc_len + key_len, val, val_len);
+	buffer_commit(env, len);
 
 	return 0;
 }
