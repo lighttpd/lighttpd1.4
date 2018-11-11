@@ -40,11 +40,15 @@ static int pipe_cloexec(int pipefd[2]) {
 }
 
 typedef struct {
-	char **ptr;
-
-	size_t size;
+	char *ptr;
 	size_t used;
-} char_array;
+	size_t size;
+	size_t *offsets;
+	size_t osize;
+	size_t oused;
+	char **eptr;
+	size_t esize;
+} env_accum;
 
 typedef struct {
 	struct { pid_t pid; void *ctx; } *ptr;
@@ -63,11 +67,10 @@ typedef struct {
 
 typedef struct {
 	PLUGIN_DATA;
-	buffer_pid_t cgi_pid;
-
 	plugin_config **config_storage;
-
 	plugin_config conf;
+	buffer_pid_t cgi_pid;
+	env_accum env;
 } plugin_data;
 
 typedef struct {
@@ -137,7 +140,9 @@ FREE_FUNC(mod_cgi_free) {
 
 
 	if (r->ptr) free(r->ptr);
-
+	free(p->env.ptr);
+	free(p->env.offsets);
+	free(p->env.eptr);
 	free(p);
 
 	return HANDLER_GO_ON;
@@ -456,29 +461,31 @@ static handler_t cgi_handle_fdevent(server *srv, void *ctx, int revents) {
 
 
 static int cgi_env_add(void *venv, const char *key, size_t key_len, const char *val, size_t val_len) {
-	char_array *env = venv;
+	env_accum *env = venv;
 	char *dst;
 
 	if (!key || !val) return -1;
 
-	dst = malloc(key_len + val_len + 2);
-	force_assert(dst);
+	if (env->size - env->used < key_len + val_len + 2) {
+		if (0 == env->size) env->size = 4096;
+		do { env->size *= 2; } while (env->size - env->used < key_len + val_len + 2);
+		env->ptr = realloc(env->ptr, env->size);
+		force_assert(env->ptr);
+	}
+
+	dst = env->ptr + env->used;
 	memcpy(dst, key, key_len);
 	dst[key_len] = '=';
 	memcpy(dst + key_len + 1, val, val_len);
 	dst[key_len + 1 + val_len] = '\0';
 
-	if (env->size == 0) {
-		env->size = 16;
-		env->ptr = malloc(env->size * sizeof(*env->ptr));
-		force_assert(env->ptr);
-	} else if (env->size == env->used) {
-		env->size += 16;
-		env->ptr = realloc(env->ptr, env->size * sizeof(*env->ptr));
-		force_assert(env->ptr);
+	if (env->osize == env->oused) {
+		env->osize += 16;
+		env->offsets = realloc(env->offsets, env->osize * sizeof(*env->offsets));
+		force_assert(env->offsets);
 	}
-
-	env->ptr[env->used++] = dst;
+	env->offsets[env->oused++] = env->used;
+	env->used += key_len + val_len + 2;
 
 	return 0;
 }
@@ -697,7 +704,6 @@ static int cgi_write_request(server *srv, handler_ctx *hctx, int fd) {
 }
 
 static int cgi_create_env(server *srv, connection *con, plugin_data *p, handler_ctx *hctx, buffer *cgi_handler) {
-	char_array env;
 	char *args[3];
 	int to_cgi_fds[2];
 	int from_cgi_fds[2];
@@ -729,38 +735,41 @@ static int cgi_create_env(server *srv, connection *con, plugin_data *p, handler_
 	fdevent_setfd_cloexec(from_cgi_fds[0]);
 
 	{
-		int i = 0;
+		size_t i = 0;
 		const char *s;
 		http_cgi_opts opts = { 0, 0, NULL, NULL };
+		env_accum *env = &p->env;
+		env->used = 0;
+		env->oused = 0;
 
 		/* create environment */
-		env.ptr = NULL;
-		env.size = 0;
-		env.used = 0;
 
-		http_cgi_headers(srv, con, &opts, cgi_env_add, &env);
+		http_cgi_headers(srv, con, &opts, cgi_env_add, env);
 
 		/* for valgrind */
 		if (NULL != (s = getenv("LD_PRELOAD"))) {
-			cgi_env_add(&env, CONST_STR_LEN("LD_PRELOAD"), s, strlen(s));
+			cgi_env_add(env, CONST_STR_LEN("LD_PRELOAD"), s, strlen(s));
 		}
 
 		if (NULL != (s = getenv("LD_LIBRARY_PATH"))) {
-			cgi_env_add(&env, CONST_STR_LEN("LD_LIBRARY_PATH"), s, strlen(s));
+			cgi_env_add(env, CONST_STR_LEN("LD_LIBRARY_PATH"), s, strlen(s));
 		}
 #ifdef __CYGWIN__
 		/* CYGWIN needs SYSTEMROOT */
 		if (NULL != (s = getenv("SYSTEMROOT"))) {
-			cgi_env_add(&env, CONST_STR_LEN("SYSTEMROOT"), s, strlen(s));
+			cgi_env_add(env, CONST_STR_LEN("SYSTEMROOT"), s, strlen(s));
 		}
 #endif
 
-		if (env.size == env.used) {
-			env.size += 16;
-			env.ptr = realloc(env.ptr, env.size * sizeof(*env.ptr));
+		if (env->esize <= env->oused) {
+			env->esize = (env->oused + 1 + 0xf) & ~(0xfuL);
+			env->eptr = realloc(env->eptr, env->esize * sizeof(*env->eptr));
+			force_assert(env->eptr);
 		}
-
-		env.ptr[env.used] = NULL;
+		for (i = 0; i < env->oused; ++i) {
+			env->eptr[i] = env->ptr + env->offsets[i];
+		}
+		env->eptr[env->oused] = NULL;
 
 		/* set up args */
 		i = 0;
@@ -777,10 +786,7 @@ static int cgi_create_env(server *srv, connection *con, plugin_data *p, handler_
 		log_error_write(srv, __FILE__, __LINE__, "ssb", "open dirname failed:", strerror(errno), con->physical.path);
 	}
 
-	hctx->pid = (dfd >= 0) ? fdevent_fork_execve(args[0], args, env.ptr, to_cgi_fds[0], from_cgi_fds[1], -1, dfd) : -1;
-
-	for (size_t i = 0; i < env.used; ++i) free(env.ptr[i]);
-	free(env.ptr);
+	hctx->pid = (dfd >= 0) ? fdevent_fork_execve(args[0], args, p->env.eptr, to_cgi_fds[0], from_cgi_fds[1], -1, dfd) : -1;
 
 	if (-1 == hctx->pid) {
 		/* log error with errno prior to calling close() (might change errno) */
