@@ -1580,6 +1580,10 @@ CONNECTION_FUNC(mod_openssl_handle_con_accept)
 }
 
 
+static void
+mod_openssl_close_notify(server *srv, handler_ctx *hctx);
+
+
 CONNECTION_FUNC(mod_openssl_handle_con_shut_wr)
 {
     plugin_data *p = p_d;
@@ -1587,6 +1591,16 @@ CONNECTION_FUNC(mod_openssl_handle_con_shut_wr)
     if (NULL == hctx) return HANDLER_GO_ON;
 
     if (SSL_is_init_finished(hctx->ssl)) {
+        mod_openssl_close_notify(srv, hctx);
+    }
+
+    return HANDLER_GO_ON;
+}
+
+
+static void
+mod_openssl_close_notify(server *srv, handler_ctx *hctx)
+{
         int ret, ssl_r;
         unsigned long err;
         ERR_clear_error();
@@ -1647,9 +1661,6 @@ CONNECTION_FUNC(mod_openssl_handle_con_shut_wr)
             }
         }
         ERR_clear_error();
-    }
-
-    return HANDLER_GO_ON;
 }
 
 
