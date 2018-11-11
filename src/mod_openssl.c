@@ -1614,6 +1614,33 @@ mod_openssl_close_notify(server *srv, handler_ctx *hctx)
              * FIXME: wait for fdevent and call SSL_shutdown again
              *
              */
+
+            /* Drain SSL read buffers in case pending records need processing.
+             * Limit to reading 16k to avoid denial of service when the CPU
+             * processing TLS is slower than arrival speed of TLS data packets.
+             *
+             * references:
+             *
+             * "New session ticket breaks bidirectional shutdown of TLS 1.3 connection"
+             * https://github.com/openssl/openssl/issues/6262
+             *
+             * The peer is still allowed to send data after receiving the
+             * "close notify" event. If the peer did send data it need to be
+             * processed by calling SSL_read() before calling SSL_shutdown() a
+             * second time. SSL_read() will indicate the end of the peer data by
+             * returning <= 0 and SSL_get_error() returning
+             * SSL_ERROR_ZERO_RETURN. It is recommended to call SSL_read()
+             * between SSL_shutdown() calls.
+             *
+             * Additional discussion in "Auto retry in shutdown"
+             * https://github.com/openssl/openssl/pull/6340
+             */
+            err = 0;
+            do {
+                char buf[4096];
+                ret = SSL_read(hctx->ssl, buf, (int)sizeof(buf));
+            } while (ret > 0 && (err += (unsigned long)ret) < 16384);
+
             ERR_clear_error();
             if (-1 != (ret = SSL_shutdown(hctx->ssl))) break;
 
