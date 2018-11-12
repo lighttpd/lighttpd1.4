@@ -62,8 +62,10 @@ void chunkqueue_append_mem(chunkqueue *cq, const char *mem, size_t len); /* copi
 void chunkqueue_append_buffer(chunkqueue *cq, buffer *mem); /* may reset "mem" */
 void chunkqueue_append_chunkqueue(chunkqueue *cq, chunkqueue *src);
 
+buffer * chunkqueue_prepend_buffer_open_sz(chunkqueue *cq, size_t sz);
 buffer * chunkqueue_prepend_buffer_open(chunkqueue *cq);
 void chunkqueue_prepend_buffer_commit(chunkqueue *cq);
+buffer * chunkqueue_append_buffer_open_sz(chunkqueue *cq, size_t sz);
 buffer * chunkqueue_append_buffer_open(chunkqueue *cq);
 void chunkqueue_append_buffer_commit(chunkqueue *cq);
 

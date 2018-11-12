@@ -331,9 +331,18 @@ void chunkqueue_append_chunkqueue(chunkqueue *cq, chunkqueue *src) {
 }
 
 
+buffer * chunkqueue_prepend_buffer_open_sz(chunkqueue *cq, size_t sz) {
+	chunk * const c = chunkqueue_prepend_mem_chunk(cq);
+	buffer * const b = c->mem;
+	if (buffer_string_space(b) < sz) {
+		buffer_string_prepare_copy(b, ((sz + 4095) & ~4095uL)-1);
+	}
+	return b;
+}
+
+
 buffer * chunkqueue_prepend_buffer_open(chunkqueue *cq) {
 	chunk *c = chunkqueue_prepend_mem_chunk(cq);
-	buffer_string_prepare_append(c->mem, 4095);
 	return c->mem;
 }
 
@@ -343,9 +352,18 @@ void chunkqueue_prepend_buffer_commit(chunkqueue *cq) {
 }
 
 
+buffer * chunkqueue_append_buffer_open_sz(chunkqueue *cq, size_t sz) {
+	chunk * const c = chunkqueue_append_mem_chunk(cq);
+	buffer * const b = c->mem;
+	if (buffer_string_space(b) < sz) {
+		buffer_string_prepare_copy(b, ((sz + 4095) & ~4095uL)-1);
+	}
+	return b;
+}
+
+
 buffer * chunkqueue_append_buffer_open(chunkqueue *cq) {
 	chunk *c = chunkqueue_append_mem_chunk(cq);
-	buffer_string_prepare_append(c->mem, 4095);
 	return c->mem;
 }
 
