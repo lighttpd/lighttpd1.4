@@ -194,9 +194,7 @@ static inline size_t buffer_string_length(const buffer *b) {
 }
 
 static inline size_t buffer_string_space(const buffer *b) {
-	if (NULL == b || b->size == 0) return 0;
-	if (0 == b->used) return b->size - 1;
-	return b->size - b->used;
+	return NULL != b ? b->size - (0 != b->used) : 0;
 }
 
 static inline void buffer_append_string_buffer(buffer *b, const buffer *src) {
