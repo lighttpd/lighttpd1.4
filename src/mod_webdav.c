@@ -2234,7 +2234,11 @@ SUBREQUEST_FUNC(mod_webdav_subrequest_handler_huge) {
 			case ENOENT:
 				con->http_status = 404;
 				break;
+			default:
+				con->http_status = 403;
+				break;
 			}
+			return HANDLER_FINISHED;
 		}
 
 		if (S_ISDIR(st.st_mode) && con->physical.path->ptr[buffer_string_length(con->physical.path)-1] != '/') {
@@ -2436,6 +2440,12 @@ propmatch_cleanup:
 
 						return HANDLER_FINISHED;
 					}
+				}
+				else {
+					log_error_write(srv, __FILE__, __LINE__, "sBss",
+							"stat", con->physical.path, ":", strerror(errno));
+					con->http_status = 403; /* Forbidden */
+					return HANDLER_FINISHED;
 				}
 			} else if (hdr_if == NULL && depth == -1) {
 				/* we don't support Depth: Infinity on directories */
