@@ -711,7 +711,14 @@ network_init_ssl (server *srv, void *p_d)
 
         if (buffer_string_is_empty(s->ssl_pemfile) || !s->ssl_enabled) continue;
 
-        if (NULL == (s->ssl_ctx = SSL_CTX_new(SSLv23_server_method()))) {
+      #if OPENSSL_VERSION_NUMBER >= 0x10100000L
+        s->ssl_ctx = (!s->ssl_use_sslv2 && !s->ssl_use_sslv3)
+          ? SSL_CTX_new(TLS_server_method())
+          : SSL_CTX_new(SSLv23_server_method());
+      #else
+        s->ssl_ctx = SSL_CTX_new(SSLv23_server_method());
+      #endif
+        if (NULL == s->ssl_ctx) {
             log_error_write(srv, __FILE__, __LINE__, "ss", "SSL:",
                             ERR_error_string(ERR_get_error(), NULL));
             return -1;
