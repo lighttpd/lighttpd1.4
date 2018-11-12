@@ -217,9 +217,7 @@ static handler_t fcgi_create_env(server *srv, handler_ctx *hctx) {
 	FCGI_Header header;
 	int request_id;
 
-	buffer *b = chunkqueue_prepend_buffer_open(hctx->wb);
 	gw_host *host = hctx->host;
-
 	connection *con   = hctx->remote_conn;
 
 	http_cgi_opts opts = {
@@ -228,6 +226,8 @@ static handler_t fcgi_create_env(server *srv, handler_ctx *hctx) {
 	  host->docroot,
 	  host->strip_request_uri
 	};
+
+	buffer * const b = chunkqueue_prepend_buffer_open_sz(hctx->wb, (size_t)(con->read_queue->bytes_out - hctx->wb->bytes_in));
 
 	/* send FCGI_BEGIN_REQUEST */
 
@@ -244,10 +244,6 @@ static handler_t fcgi_create_env(server *srv, handler_ctx *hctx) {
 	beginRecord.body.roleB1 = 0;
 	beginRecord.body.flags = 0;
 	memset(beginRecord.body.reserved, 0, sizeof(beginRecord.body.reserved));
-
-	if ((off_t)buffer_string_space(b) < con->read_queue->bytes_out - hctx->wb->bytes_in) {
-		buffer_string_prepare_copy(b, ((size_t)(con->read_queue->bytes_out - hctx->wb->bytes_in + 4095) & ~4095uL)-1);
-	}
 
 	buffer_copy_string_len(b, (const char *)&beginRecord, sizeof(beginRecord));
 	fcgi_header(&header, FCGI_PARAMS, request_id, 0, 0); /*(set aside space to fill in later)*/

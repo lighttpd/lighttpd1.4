@@ -156,7 +156,6 @@ static int scgi_env_add_uwsgi(void *venv, const char *key, size_t key_len, const
 
 
 static handler_t scgi_create_env(server *srv, handler_ctx *hctx) {
-	buffer *b = chunkqueue_prepend_buffer_open(hctx->wb);
 	gw_host *host = hctx->host;
 	connection *con = hctx->remote_conn;
 	http_cgi_opts opts = { 0, 0, host->docroot, NULL };
@@ -164,10 +163,7 @@ static handler_t scgi_create_env(server *srv, handler_ctx *hctx) {
 	  ? scgi_env_add_scgi
 	  : scgi_env_add_uwsgi;
 	size_t offset;
-
-	if ((off_t)buffer_string_space(b) < con->read_queue->bytes_out - hctx->wb->bytes_in) {
-		buffer_string_prepare_copy(b, ((size_t)(con->read_queue->bytes_out - hctx->wb->bytes_in + 4095) & ~4095uL)-1);
-	}
+	buffer * const b = chunkqueue_prepend_buffer_open_sz(hctx->wb, (size_t)(con->read_queue->bytes_out - hctx->wb->bytes_in));
 
         /* save space for 9 digits (plus ':'), though incoming HTTP request
 	 * currently limited to 64k (65535, so 5 chars) */
