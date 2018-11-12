@@ -25,6 +25,7 @@
 #define DEFAULT_TEMPFILE_SIZE (1 * 1024 * 1024)
 #define MAX_TEMPFILE_SIZE (128 * 1024 * 1024)
 
+static size_t chunk_buf_sz = 4096;
 static chunk *chunks;
 static chunk *chunk_buffers;
 static array *chunkqueue_default_tempdirs = NULL;
@@ -51,7 +52,7 @@ chunkqueue *chunkqueue_init(void) {
 	return cq;
 }
 
-static chunk *chunk_init(void) {
+static chunk *chunk_init(size_t sz) {
 	chunk *c;
 
 	c = calloc(1, sizeof(*c));
@@ -67,7 +68,7 @@ static chunk *chunk_init(void) {
 	c->offset = 0;
 	c->next = NULL;
 
-	buffer_string_prepare_append(c->mem, 4095);
+	buffer_string_prepare_copy(c->mem, sz-1);
 
 	return c;
 }
@@ -108,7 +109,7 @@ buffer * chunk_buffer_acquire(void) {
         chunks = c->next;
     }
     else {
-        c = chunk_init();
+        c = chunk_init(chunk_buf_sz);
     }
     c->next = chunk_buffers;
     chunk_buffers = c;
@@ -119,7 +120,7 @@ buffer * chunk_buffer_acquire(void) {
 
 void chunk_buffer_release(buffer *b) {
     if (NULL == b) return;
-    if (b->size >= 4096 && chunk_buffers) {
+    if (b->size >= chunk_buf_sz && chunk_buffers) {
         chunk *c = chunk_buffers;
         chunk_buffers = c->next;
         c->mem = b;
@@ -138,12 +139,12 @@ static chunk * chunk_acquire(void) {
         return c;
     }
     else {
-        return chunk_init();
+        return chunk_init(chunk_buf_sz);
     }
 }
 
 static void chunk_release(chunk *c) {
-    if (c->mem->size >= 4096) {
+    if (c->mem->size >= chunk_buf_sz) {
         chunk_reset(c);
         c->next = chunks;
         chunks = c;
@@ -284,7 +285,7 @@ static int chunkqueue_append_mem_extend_chunk(chunkqueue *cq, const char *mem, s
 	chunk *c = cq->last;
 	if (0 == len) return 1;
 	if (c != NULL && c->type == MEM_CHUNK
-	    && buffer_string_length(c->mem) < 4095 - len) {
+	    && buffer_string_space(c->mem) >= len) {
 		buffer_append_string_len(c->mem, mem, len);
 		cq->bytes_in += len;
 		return 1;
@@ -306,7 +307,8 @@ void chunkqueue_append_buffer(chunkqueue *cq, buffer *mem) {
 
 void chunkqueue_append_mem(chunkqueue *cq, const char * mem, size_t len) {
 	chunk *c;
-	if (len < 4096 && chunkqueue_append_mem_extend_chunk(cq, mem, len)) return;
+	if (len < chunk_buf_sz && chunkqueue_append_mem_extend_chunk(cq, mem, len))
+		return;
 
 	c = chunkqueue_append_mem_chunk(cq);
 	cq->bytes_in += len;
@@ -331,13 +333,22 @@ void chunkqueue_append_chunkqueue(chunkqueue *cq, chunkqueue *src) {
 }
 
 
+__attribute_cold__
+static void chunkqueue_buffer_open_resize(chunk *c, size_t sz) {
+	chunk * const n = chunk_init((sz + 4095) & ~4095uL);
+	buffer * const b = c->mem;
+	c->mem = n->mem;
+	n->mem = b;
+	chunk_release(n);
+}
+
+
 buffer * chunkqueue_prepend_buffer_open_sz(chunkqueue *cq, size_t sz) {
 	chunk * const c = chunkqueue_prepend_mem_chunk(cq);
-	buffer * const b = c->mem;
-	if (buffer_string_space(b) < sz) {
-		buffer_string_prepare_copy(b, ((sz + 4095) & ~4095uL)-1);
+	if (buffer_string_space(c->mem) < sz) {
+		chunkqueue_buffer_open_resize(c, sz);
 	}
-	return b;
+	return c->mem;
 }
 
 
@@ -354,11 +365,10 @@ void chunkqueue_prepend_buffer_commit(chunkqueue *cq) {
 
 buffer * chunkqueue_append_buffer_open_sz(chunkqueue *cq, size_t sz) {
 	chunk * const c = chunkqueue_append_mem_chunk(cq);
-	buffer * const b = c->mem;
-	if (buffer_string_space(b) < sz) {
-		buffer_string_prepare_copy(b, ((sz + 4095) & ~4095uL)-1);
+	if (buffer_string_space(c->mem) < sz) {
+		chunkqueue_buffer_open_resize(c, sz);
 	}
-	return b;
+	return c->mem;
 }
 
 
