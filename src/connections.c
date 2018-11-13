@@ -959,22 +959,20 @@ static int connection_read_cq(server *srv, connection *con, chunkqueue *cq, off_
 	int len;
 	char *mem = NULL;
 	size_t mem_len = 0;
-	int toread;
 	force_assert(cq == con->read_queue);       /*(code transform assumption; minimize diff)*/
 	force_assert(max_bytes == MAX_READ_LIMIT); /*(code transform assumption; minimize diff)*/
 
-	/* default size for chunks is 4kb; only use bigger chunks if FIONREAD tells
-	 *  us more than 4kb is available
-	 * if FIONREAD doesn't signal a big chunk we fill the previous buffer
-	 *  if it has >= 1kb free
+	/* check avail data to read and obtain memory into which to read
+	 * fill previous chunk if it has sufficient space
+	 * (use mem_len=0 to obtain large buffer at least half of chunk_buf_sz)
 	 */
-	if (0 != fdevent_ioctl_fionread(con->fd, S_IFSOCK, &toread) || toread < 4096) {
-		toread = 4095;
+	{
+		int frd;
+		if (0 == fdevent_ioctl_fionread(con->fd, S_IFSOCK, &frd)) {
+			mem_len = (frd < MAX_READ_LIMIT) ? (size_t)frd : MAX_READ_LIMIT;
+		}
 	}
-	else if (toread > MAX_READ_LIMIT) {
-		toread = MAX_READ_LIMIT;
-	}
-	chunkqueue_get_memory(con->read_queue, &mem, &mem_len, 0, toread);
+	mem = chunkqueue_get_memory(con->read_queue, &mem_len);
 
 #if defined(__WIN32)
 	len = recv(con->fd, mem, mem_len, 0);

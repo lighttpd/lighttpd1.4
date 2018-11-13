@@ -383,61 +383,24 @@ void chunkqueue_append_buffer_commit(chunkqueue *cq) {
 }
 
 
-void chunkqueue_get_memory(chunkqueue *cq, char **mem, size_t *len, size_t min_size, size_t alloc_size) {
-	static const size_t REALLOC_MAX_SIZE = 256;
-	chunk *c;
+char * chunkqueue_get_memory(chunkqueue *cq, size_t *len) {
+	size_t sz = *len ? *len : (chunk_buf_sz >> 1);
 	buffer *b;
-	char *dummy_mem;
-	size_t dummy_len;
-
-	force_assert(NULL != cq);
-	if (NULL == mem) mem = &dummy_mem;
-	if (NULL == len) len = &dummy_len;
-
-	/* default values: */
-	if (0 == min_size) min_size = 1024;
-	if (0 == alloc_size) alloc_size = 4095;
-	if (alloc_size < min_size) alloc_size = min_size;
-
-	if (NULL != cq->last && MEM_CHUNK == cq->last->type) {
-		size_t have;
-
-		b = cq->last->mem;
-		have = buffer_string_space(b);
-
-		/* unused buffer: allocate space */
-		if (buffer_string_is_empty(b)) {
-			buffer_string_prepare_copy(b, alloc_size);
-			have = buffer_string_space(b);
-		}
-		/* if buffer is really small just make it bigger */
-		else if (have < min_size && b->size <= REALLOC_MAX_SIZE) {
-			size_t cur_len = buffer_string_length(b);
-			size_t new_size = cur_len + min_size, append;
-			if (new_size < alloc_size) new_size = alloc_size;
-
-			append = new_size - cur_len;
-			if (append >= min_size) {
-				buffer_string_prepare_append(b, append);
-				have = buffer_string_space(b);
-			}
-		}
-
+	chunk *c = cq->last;
+	if (NULL != c && MEM_CHUNK == c->type) {
 		/* return pointer into existing buffer if large enough */
-		if (have >= min_size) {
-			*mem = b->ptr + buffer_string_length(b);
-			*len = have;
-			return;
+		size_t avail = buffer_string_space(c->mem);
+		if (avail >= sz) {
+			*len = avail;
+			b = c->mem;
+			return b->ptr + buffer_string_length(b);
 		}
 	}
 
 	/* allocate new chunk */
-	c = chunkqueue_append_mem_chunk(cq);
-	b = c->mem;
-	buffer_string_prepare_append(b, alloc_size);
-
-	*mem = b->ptr;
+	b = chunkqueue_append_buffer_open_sz(cq, sz);
 	*len = buffer_string_space(b);
+	return b->ptr;
 }
 
 void chunkqueue_use_memory(chunkqueue *cq, size_t len) {
@@ -454,7 +417,7 @@ void chunkqueue_use_memory(chunkqueue *cq, size_t len) {
 		/* unused buffer: can't remove chunk easily from
 		 * end of list, so just reset the buffer
 		 */
-		buffer_reset(b);
+		buffer_string_set_length(b, 0);
 	}
 }
 

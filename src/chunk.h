@@ -73,18 +73,15 @@ struct server; /*(declaration)*/
 int chunkqueue_append_mem_to_tempfile(struct server *srv, chunkqueue *cq, const char *mem, size_t len);
 
 /* functions to handle buffers to read into: */
-/* return a pointer to a buffer in *mem with size *len;
- *  it should be at least min_size big, and use alloc_size if
- *  new memory is allocated.
+/* obtain/reserve memory in chunkqueue at least len (input) size,
+ * return pointer to memory with len (output) available for use
  * modifying the chunkqueue invalidates the memory area.
  * should always be followed by chunkqueue_get_memory(),
  *  even if nothing was read.
- * pass 0 for min_size/alloc_size for default values
+ * pass 0 in len for mem at least half of chunk_buf_sz
  */
-void chunkqueue_get_memory(chunkqueue *cq, char **mem, size_t *len, size_t min_size, size_t alloc_size);
-/* append first len bytes of the memory queried with
- * chunkqueue_get_memory to the chunkqueue
- */
+char * chunkqueue_get_memory(chunkqueue *cq, size_t *len);
+/* commit len bytes of mem obtained from chunkqueue_get_memory() */
 void chunkqueue_use_memory(chunkqueue *cq, size_t len);
 
 /* mark first "len" bytes as written (incrementing chunk offsets)

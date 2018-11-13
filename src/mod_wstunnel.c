@@ -938,17 +938,11 @@ static int send_ietf_00(handler_ctx *hctx, mod_wstunnel_frame_type_t type, const
         http_chunk_append_mem(srv, con, &head, 1);
         len = 4*(siz/3)+4+1;
         /* avoid accumulating too much data in memory; send to tmpfile */
-      #if 0
-        chunkqueue_get_memory(con->write_queue, &mem, &len, len, 0);
-        len=li_to_base64(mem,len,(unsigned char *)payload,siz,BASE64_STANDARD);
-        chunkqueue_use_memory(con->write_queue, len);
-      #else
         mem = malloc(len);
         force_assert(mem);
         len=li_to_base64(mem,len,(unsigned char *)payload,siz,BASE64_STANDARD);
         http_chunk_append_mem(srv, con, mem, len);
         free(mem);
-      #endif
         http_chunk_append_mem(srv, con, &tail, 1);
         len += 2;
         break;
@@ -1029,13 +1023,8 @@ static int recv_ietf_00(handler_ctx *hctx) {
                 i++;
                 if (hctx->frame.type == MOD_WEBSOCKET_FRAME_TYPE_TEXT
                     && !buffer_is_empty(payload)) {
-                    size_t len;
                     hctx->frame.ctl.siz = 0;
-                    len = buffer_string_length(payload);
-                    chunkqueue_get_memory(hctx->gw.wb, &mem, &len, len, 0);
-                    len = buffer_string_length(payload);
-                    memcpy(mem, payload->ptr, len);
-                    chunkqueue_use_memory(hctx->gw.wb, len);
+                    chunkqueue_append_mem(hctx->gw.wb, CONST_BUF_LEN(payload));
                     buffer_reset(payload);
                 }
                 else {
@@ -1044,7 +1033,7 @@ static int recv_ietf_00(handler_ctx *hctx) {
                         buffer *b;
                         size_t len = buffer_string_length(payload);
                         len = (len+3)/4*3+1;
-                        chunkqueue_get_memory(hctx->gw.wb, &mem, &len, len, 0);
+                        chunkqueue_get_memory(hctx->gw.wb, &len);
                         b = hctx->gw.wb->last->mem;
                         len = buffer_string_length(b);
                         DEBUG_LOG(MOD_WEBSOCKET_LOG_DEBUG, "ss",
@@ -1313,14 +1302,8 @@ static int recv_rfc_6455(handler_ctx *hctx) {
                 case MOD_WEBSOCKET_FRAME_TYPE_TEXT:
                 case MOD_WEBSOCKET_FRAME_TYPE_BIN:
                   {
-                    char *mem;
-                    size_t len;
                     unmask_payload(hctx);
-                    len = buffer_string_length(payload);
-                    chunkqueue_get_memory(hctx->gw.wb, &mem, &len, len, 0);
-                    len = buffer_string_length(payload);
-                    memcpy(mem, payload->ptr, len);
-                    chunkqueue_use_memory(hctx->gw.wb, len);
+                    chunkqueue_append_mem(hctx->gw.wb, CONST_BUF_LEN(payload));
                     buffer_reset(payload);
                     break;
                   }

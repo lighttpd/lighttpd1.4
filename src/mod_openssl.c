@@ -1430,8 +1430,9 @@ connection_read_cq_ssl (server *srv, connection *con,
 
     ERR_clear_error();
     do {
-        chunkqueue_get_memory(con->read_queue, &mem, &mem_len, 0,
-                              SSL_pending(hctx->ssl));
+        len = SSL_pending(hctx->ssl);
+        mem_len = len < 2048 ? 2048 : (size_t)len;
+        mem = chunkqueue_get_memory(con->read_queue, &mem_len);
 #if 0
         /* overwrite everything with 0 */
         memset(mem, 0, mem_len);
