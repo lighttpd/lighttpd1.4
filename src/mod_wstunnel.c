@@ -496,7 +496,7 @@ static void wstunnel_backend_error(gw_handler_ctx *gwhctx) {
 
 static void wstunnel_handler_ctx_free(void *gwhctx) {
     handler_ctx *hctx = (handler_ctx *)gwhctx;
-    buffer_free(hctx->frame.payload);
+    chunk_buffer_release(hctx->frame.payload);
 }
 
 static handler_t wstunnel_handler_setup (server *srv, connection *con, plugin_data *p) {
@@ -526,7 +526,7 @@ static handler_t wstunnel_handler_setup (server *srv, connection *con, plugin_da
 
     hctx->frame.state         = MOD_WEBSOCKET_FRAME_STATE_INIT;
     hctx->frame.ctl.siz       = 0;
-    hctx->frame.payload       = buffer_init();
+    hctx->frame.payload       = chunk_buffer_acquire();
 
     binary = !buffer_is_empty(hctx->conf.frame_type); /*("binary")*/
     if (!binary) {
@@ -1024,8 +1024,8 @@ static int recv_ietf_00(handler_ctx *hctx) {
                 if (hctx->frame.type == MOD_WEBSOCKET_FRAME_TYPE_TEXT
                     && !buffer_is_empty(payload)) {
                     hctx->frame.ctl.siz = 0;
-                    chunkqueue_append_mem(hctx->gw.wb, CONST_BUF_LEN(payload));
-                    buffer_reset(payload);
+                    chunkqueue_append_buffer(hctx->gw.wb, payload);
+                    buffer_string_set_length(payload, 0);
                 }
                 else {
                     if (hctx->frame.state == MOD_WEBSOCKET_FRAME_STATE_INIT
@@ -1043,7 +1043,7 @@ static int recv_ietf_00(handler_ctx *hctx) {
                                       "fail to base64-decode");
                             return -1;
                         }
-                        buffer_reset(payload);
+                        buffer_string_set_length(payload, 0);
                         /*chunkqueue_use_memory()*/
                         hctx->gw.wb->bytes_in += buffer_string_length(b)-len;
                     }
@@ -1303,8 +1303,8 @@ static int recv_rfc_6455(handler_ctx *hctx) {
                 case MOD_WEBSOCKET_FRAME_TYPE_BIN:
                   {
                     unmask_payload(hctx);
-                    chunkqueue_append_mem(hctx->gw.wb, CONST_BUF_LEN(payload));
-                    buffer_reset(payload);
+                    chunkqueue_append_buffer(hctx->gw.wb, payload);
+                    buffer_string_set_length(payload, 0);
                     break;
                   }
                 case MOD_WEBSOCKET_FRAME_TYPE_PING:
@@ -1313,11 +1313,11 @@ static int recv_rfc_6455(handler_ctx *hctx) {
                         mod_wstunnel_frame_send(hctx,
                           MOD_WEBSOCKET_FRAME_TYPE_PONG,
                           payload->ptr, buffer_string_length(payload));
-                        buffer_reset(payload);
+                        buffer_string_set_length(payload, 0);
                     }
                     break;
                 case MOD_WEBSOCKET_FRAME_TYPE_PONG:
-                    buffer_reset(payload);
+                    buffer_string_set_length(payload, 0);
                     break;
                 case MOD_WEBSOCKET_FRAME_TYPE_CLOSE:
                 default:
