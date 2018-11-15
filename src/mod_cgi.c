@@ -48,6 +48,11 @@ typedef struct {
 	size_t oused;
 	char **eptr;
 	size_t esize;
+	buffer *ld_preload;
+	buffer *ld_library_path;
+      #ifdef __CYGWIN__
+	buffer *systemroot;
+      #endif
 } env_accum;
 
 typedef struct {
@@ -108,10 +113,22 @@ static void cgi_handler_ctx_free(handler_ctx *hctx) {
 
 INIT_FUNC(mod_cgi_init) {
 	plugin_data *p;
+	const char *s;
 
 	p = calloc(1, sizeof(*p));
 
 	force_assert(p);
+
+	/* for valgrind */
+	s = getenv("LD_PRELOAD");
+	if (s) p->env.ld_preload = buffer_init_string(s);
+	s = getenv("LD_LIBRARY_PATH");
+	if (s) p->env.ld_library_path = buffer_init_string(s);
+      #ifdef __CYGWIN__
+	/* CYGWIN needs SYSTEMROOT */
+	s = getenv("SYSTEMROOT");
+	if (s) p->env.systemroot = buffer_init_string(s);
+      #endif
 
 	return p;
 }
@@ -143,6 +160,11 @@ FREE_FUNC(mod_cgi_free) {
 	free(p->env.ptr);
 	free(p->env.offsets);
 	free(p->env.eptr);
+	buffer_free(p->env.ld_preload);
+	buffer_free(p->env.ld_library_path);
+      #ifdef __CYGWIN__
+	buffer_free(p->env.systemroot);
+      #endif
 	free(p);
 
 	return HANDLER_GO_ON;
@@ -745,7 +767,6 @@ static int cgi_create_env(server *srv, connection *con, plugin_data *p, handler_
 
 	{
 		size_t i = 0;
-		const char *s;
 		http_cgi_opts opts = { 0, 0, NULL, NULL };
 		env_accum *env = &p->env;
 		env->used = 0;
@@ -756,19 +777,18 @@ static int cgi_create_env(server *srv, connection *con, plugin_data *p, handler_
 		http_cgi_headers(srv, con, &opts, cgi_env_add, env);
 
 		/* for valgrind */
-		if (NULL != (s = getenv("LD_PRELOAD"))) {
-			cgi_env_add(env, CONST_STR_LEN("LD_PRELOAD"), s, strlen(s));
+		if (p->env.ld_preload) {
+			cgi_env_add(env, CONST_STR_LEN("LD_PRELOAD"), CONST_BUF_LEN(p->env.ld_preload));
 		}
-
-		if (NULL != (s = getenv("LD_LIBRARY_PATH"))) {
-			cgi_env_add(env, CONST_STR_LEN("LD_LIBRARY_PATH"), s, strlen(s));
+		if (p->env.ld_library_path) {
+			cgi_env_add(env, CONST_STR_LEN("LD_LIBRARY_PATH"), CONST_BUF_LEN(p->env.ld_library_path));
 		}
-#ifdef __CYGWIN__
+	      #ifdef __CYGWIN__
 		/* CYGWIN needs SYSTEMROOT */
-		if (NULL != (s = getenv("SYSTEMROOT"))) {
-			cgi_env_add(env, CONST_STR_LEN("SYSTEMROOT"), s, strlen(s));
+		if (p->env.systemroot) {
+			cgi_env_add(env, CONST_STR_LEN("SYSTEMROOT"), CONST_BUF_LEN(p->env.systemroot));
 		}
-#endif
+	      #endif
 
 		if (env->esize <= env->oused) {
 			env->esize = (env->oused + 1 + 0xf) & ~(0xfuL);
