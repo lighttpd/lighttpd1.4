@@ -925,6 +925,7 @@ static int http_response_process_headers(server *srv, connection *con, http_resp
                 status = strtol(value, NULL, 10);
                 if (status >= 100 && status < 1000) {
                     con->http_status = status;
+                    status_is_set = 1;
                 } else {
                     con->http_status = 502;
                     con->mode = DIRECT;
