@@ -42,11 +42,13 @@ enum http_header_e {
 enum http_header_e http_header_hkey_get(const char *s, size_t slen);
 
 buffer * http_header_response_get(connection *con, enum http_header_e id, const char *k, size_t klen);
+void http_header_response_unset(connection *con, enum http_header_e id, const char *k, size_t klen);
 void http_header_response_set(connection *con, enum http_header_e id, const char *k, size_t klen, const char *v, size_t vlen);
 void http_header_response_append(connection *con, enum http_header_e id, const char *k, size_t klen, const char *v, size_t vlen);
 void http_header_response_insert(connection *con, enum http_header_e id, const char *k, size_t klen, const char *v, size_t vlen);
 
 buffer * http_header_request_get(connection *con, enum http_header_e id, const char *k, size_t klen);
+void http_header_request_unset(connection *con, enum http_header_e id, const char *k, size_t klen);
 void http_header_request_set(connection *con, enum http_header_e id, const char *k, size_t klen, const char *v, size_t vlen);
 void http_header_request_append(connection *con, enum http_header_e id, const char *k, size_t klen, const char *v, size_t vlen);
 

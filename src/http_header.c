@@ -64,26 +64,36 @@ buffer * http_header_response_get(connection *con, enum http_header_e id, const 
     return ds && !buffer_string_is_empty(ds->value) ? ds->value : NULL;
 }
 
+void http_header_response_unset(connection *con, enum http_header_e id, const char *k, size_t klen) {
+    if (id <= HTTP_HEADER_OTHER || (con->response.htags & id)) {
+        if (id > HTTP_HEADER_OTHER) con->response.htags &= ~id;
+        array_set_key_value(con->response.headers, k, klen, CONST_STR_LEN(""));
+    }
+}
+
 void http_header_response_set(connection *con, enum http_header_e id, const char *k, size_t klen, const char *v, size_t vlen) {
     /* set value, including setting blank value if 0 == vlen
      * (note: if 0 == vlen, header is still inserted with blank value,
      *  which is used to indicate a "removed" header)
      */
-    con->response.htags |= id;
+    if (id > HTTP_HEADER_OTHER)
+        (vlen) ? (con->response.htags |= id) : (con->response.htags &= ~id);
     array_set_key_value(con->response.headers, k, klen, v, vlen);
 }
 
 void http_header_response_append(connection *con, enum http_header_e id, const char *k, size_t klen, const char *v, size_t vlen) {
     if (vlen) {
-        buffer *vb = (id <= HTTP_HEADER_OTHER || (con->response.htags & id))
-          ? http_header_response_get(con, id, k, klen)
+        data_string *ds= (id <= HTTP_HEADER_OTHER || (con->response.htags & id))
+          ? (data_string *)array_get_element_klen(con->response.headers,k,klen)
           : NULL;
-        if (NULL == vb) {
+        if (id > HTTP_HEADER_OTHER) con->response.htags |= id;
+        if (NULL == ds) {
             array_insert_key_value(con->response.headers, k, klen, v, vlen);
-            con->response.htags |= id;
         }
         else { /* append value */
-            buffer_append_string_len(vb, CONST_STR_LEN(", "));
+            buffer *vb = ds->value;
+            if (!buffer_string_is_empty(vb))
+                buffer_append_string_len(vb, CONST_STR_LEN(", "));
             buffer_append_string_len(vb, v, vlen);
         }
     }
@@ -91,17 +101,20 @@ void http_header_response_append(connection *con, enum http_header_e id, const c
 
 void http_header_response_insert(connection *con, enum http_header_e id, const char *k, size_t klen, const char *v, size_t vlen) {
     if (vlen) {
-        buffer *vb = (id <= HTTP_HEADER_OTHER || (con->response.htags & id))
-          ? http_header_response_get(con, id, k, klen)
+        data_string *ds= (id <= HTTP_HEADER_OTHER || (con->response.htags & id))
+          ? (data_string *)array_get_element_klen(con->response.headers,k,klen)
           : NULL;
-        if (NULL == vb) {
+        if (id > HTTP_HEADER_OTHER) con->response.htags |= id;
+        if (NULL == ds) {
             array_insert_key_value(con->response.headers, k, klen, v, vlen);
-            con->response.htags |= id;
         }
         else { /* append value */
-            buffer_append_string_len(vb, CONST_STR_LEN("\r\n"));
-            buffer_append_string_len(vb, k, klen);
-            buffer_append_string_len(vb, CONST_STR_LEN(": "));
+            buffer *vb = ds->value;
+            if (!buffer_string_is_empty(vb)) {
+                buffer_append_string_len(vb, CONST_STR_LEN("\r\n"));
+                buffer_append_string_len(vb, k, klen);
+                buffer_append_string_len(vb, CONST_STR_LEN(": "));
+            }
             buffer_append_string_len(vb, v, vlen);
         }
     }
@@ -116,26 +129,36 @@ buffer * http_header_request_get(connection *con, enum http_header_e id, const c
     return ds && !buffer_string_is_empty(ds->value) ? ds->value : NULL;
 }
 
+void http_header_request_unset(connection *con, enum http_header_e id, const char *k, size_t klen) {
+    if (id <= HTTP_HEADER_OTHER || (con->request.htags & id)) {
+        if (id > HTTP_HEADER_OTHER) con->request.htags &= ~id;
+        array_set_key_value(con->request.headers, k, klen, CONST_STR_LEN(""));
+    }
+}
+
 void http_header_request_set(connection *con, enum http_header_e id, const char *k, size_t klen, const char *v, size_t vlen) {
     /* set value, including setting blank value if 0 == vlen
      * (note: if 0 == vlen, header is still inserted with blank value,
      *  which is used to indicate a "removed" header)
      */
-    con->request.htags |= id;
+    if (id > HTTP_HEADER_OTHER)
+        (vlen) ? (con->request.htags |= id) : (con->request.htags &= ~id);
     array_set_key_value(con->request.headers, k, klen, v, vlen);
 }
 
 void http_header_request_append(connection *con, enum http_header_e id, const char *k, size_t klen, const char *v, size_t vlen) {
     if (vlen) {
-        buffer *vb = (id <= HTTP_HEADER_OTHER || (con->request.htags & id))
-          ? http_header_request_get(con, id, k, klen)
+        data_string *ds = (id <= HTTP_HEADER_OTHER || (con->request.htags & id))
+          ? (data_string *)array_get_element_klen(con->request.headers, k, klen)
           : NULL;
-        if (NULL == vb) {
+        if (id > HTTP_HEADER_OTHER) con->request.htags |= id;
+        if (NULL == ds) {
             array_insert_key_value(con->request.headers, k, klen, v, vlen);
-            con->request.htags |= id;
         }
         else { /* append value */
-            buffer_append_string_len(vb, CONST_STR_LEN(", "));
+            buffer *vb = ds->value;
+            if (!buffer_string_is_empty(vb))
+                buffer_append_string_len(vb, CONST_STR_LEN(", "));
             buffer_append_string_len(vb, v, vlen);
         }
     }

@@ -49,8 +49,7 @@ int http_response_write_header(server *srv, connection *con) {
 	}
 
 	if (304 == con->http_status && (con->response.htags & HTTP_HEADER_CONTENT_ENCODING)) {
-		buffer *vb = http_header_response_get(con, HTTP_HEADER_CONTENT_ENCODING, CONST_STR_LEN("Content-Encoding"));
-		if (NULL != vb) buffer_reset(vb);
+		http_header_response_unset(con, HTTP_HEADER_CONTENT_ENCODING, CONST_STR_LEN("Content-Encoding"));
 	}
 
 	/* add all headers */

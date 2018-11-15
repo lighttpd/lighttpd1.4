@@ -1196,13 +1196,12 @@ CONNECTION_FUNC(mod_deflate_handle_response_start) {
 			vb->ptr[etaglen-1] = '"'; /*(overwrite '-')*/
 			buffer_string_set_length(vb, etaglen);
 		}
-		vb = http_header_response_get(con, HTTP_HEADER_CONTENT_ENCODING, CONST_STR_LEN("Content-Encoding"));
-		if (vb) buffer_reset(vb); /* headers with empty values are ignored for output */
+		http_header_response_unset(con, HTTP_HEADER_CONTENT_ENCODING, CONST_STR_LEN("Content-Encoding"));
 		return HANDLER_GO_ON;
 	}
 
 	if (con->response.htags & HTTP_HEADER_CONTENT_LENGTH) {
-		http_header_response_set(con, HTTP_HEADER_CONTENT_LENGTH, CONST_STR_LEN("Content-Length"), CONST_STR_LEN(""));
+		http_header_response_unset(con, HTTP_HEADER_CONTENT_LENGTH, CONST_STR_LEN("Content-Length"));
 	}
 	con->plugin_ctx[p->id] = hctx;
 

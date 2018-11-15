@@ -672,7 +672,9 @@ static int magnet_copy_response_header(connection *con, lua_State *L, int lighty
 				const_buffer val = magnet_checkconstbuffer(L, -1);
 				enum http_header_e id = http_header_hkey_get(key.ptr, key.len);
 
-				http_header_response_set(con, id, key.ptr, key.len, val.ptr, val.len);
+				val.len
+				  ? http_header_response_set(con, id, key.ptr, key.len, val.ptr, val.len)
+				  : http_header_response_unset(con, id, key.ptr, key.len);
 			}
 
 			lua_pop(L, 1);

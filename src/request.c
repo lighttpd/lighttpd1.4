@@ -1127,12 +1127,11 @@ int http_request_parse(server *srv, connection *con) {
 
 			/* reset value for Transfer-Encoding, a hop-by-hop header,
 			 * which must not be blindly forwarded to backends */
-			buffer_reset(vb); /* headers with empty values are ignored */
+			http_header_request_unset(con, HTTP_HEADER_TRANSFER_ENCODING, CONST_STR_LEN("Transfer-Encoding"));
 
 			/*(note: ignore whether or not Content-Length was provided)*/
 		        if (con->request.htags & HTTP_HEADER_CONTENT_LENGTH) {
-				vb = http_header_request_get(con, HTTP_HEADER_CONTENT_LENGTH, CONST_STR_LEN("Content-Length"));
-				if (NULL != vb) buffer_reset(vb); /* headers with empty values are ignored */
+				http_header_request_unset(con, HTTP_HEADER_CONTENT_LENGTH, CONST_STR_LEN("Content-Length"));
 			}
 
 			state.con_length_set = 1;

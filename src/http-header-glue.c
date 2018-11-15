@@ -189,12 +189,12 @@ int http_response_handle_cachable(server *srv, connection *con, buffer *mtime) {
 void http_response_body_clear (connection *con, int preserve_length) {
     con->response.send_chunked = 0;
     if (con->response.htags & HTTP_HEADER_TRANSFER_ENCODING) {
-        http_header_response_set(con, HTTP_HEADER_TRANSFER_ENCODING, CONST_STR_LEN("Transfer-Encoding"), CONST_STR_LEN(""));
+        http_header_response_unset(con, HTTP_HEADER_TRANSFER_ENCODING, CONST_STR_LEN("Transfer-Encoding"));
     }
     if (!preserve_length) { /* preserve for HEAD responses and no-content responses (204, 205, 304) */
         con->response.content_length = -1;
         if (con->response.htags & HTTP_HEADER_CONTENT_LENGTH) {
-            http_header_response_set(con, HTTP_HEADER_CONTENT_LENGTH, CONST_STR_LEN("Content-Length"), CONST_STR_LEN(""));
+            http_header_response_unset(con, HTTP_HEADER_CONTENT_LENGTH, CONST_STR_LEN("Content-Length"));
         }
     }
     chunkqueue_reset(con->write_queue);
@@ -549,7 +549,7 @@ static void http_response_xsendfile (server *srv, connection *con, buffer *path,
 	 * determined by open(), fstat() to reduces race conditions if the file
 	 * is modified between stat() (stat_cache_get_entry()) and open(). */
 	if (con->response.htags & HTTP_HEADER_CONTENT_LENGTH) {
-		http_header_response_set(con, HTTP_HEADER_CONTENT_LENGTH, CONST_STR_LEN("Content-Length"), CONST_STR_LEN(""));
+		http_header_response_unset(con, HTTP_HEADER_CONTENT_LENGTH, CONST_STR_LEN("Content-Length"));
 		con->response.content_length = -1;
 	}
 
@@ -601,7 +601,7 @@ static void http_response_xsendfile2(server *srv, connection *con, const buffer 
 
     /* reset Content-Length, if set by backend */
     if (con->response.htags & HTTP_HEADER_CONTENT_LENGTH) {
-        http_header_response_set(con, HTTP_HEADER_CONTENT_LENGTH, CONST_STR_LEN("Content-Length"), CONST_STR_LEN(""));
+        http_header_response_unset(con, HTTP_HEADER_CONTENT_LENGTH, CONST_STR_LEN("Content-Length"));
         con->response.content_length = -1;
     }
 
@@ -1102,6 +1102,7 @@ handler_t http_response_parse_headers(server *srv, connection *con, http_respons
         if (opts->backend == BACKEND_FASTCGI
             && NULL != (vb = http_header_response_get(con, HTTP_HEADER_OTHER, CONST_STR_LEN("X-Sendfile2")))) {
             http_response_xsendfile2(srv, con, vb, opts->xsendfile_docroot);
+            /* http_header_response_unset() shortcut for HTTP_HEADER_OTHER */
             buffer_reset(vb); /*(do not send to client)*/
             if (con->mode == DIRECT) con->file_started = 0;
             return HANDLER_FINISHED;
@@ -1109,6 +1110,7 @@ handler_t http_response_parse_headers(server *srv, connection *con, http_respons
                    || (opts->backend == BACKEND_FASTCGI /* X-LIGHTTPD-send-file is deprecated; historical for fastcgi */
                        && NULL != (vb = http_header_response_get(con, HTTP_HEADER_OTHER, CONST_STR_LEN("X-LIGHTTPD-send-file"))))) {
             http_response_xsendfile(srv, con, vb, opts->xsendfile_docroot);
+            /* http_header_response_unset() shortcut for HTTP_HEADER_OTHER */
             buffer_reset(vb); /*(do not send to client)*/
             if (con->mode == DIRECT) con->file_started = 0;
             return HANDLER_FINISHED;

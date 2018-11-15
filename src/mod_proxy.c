@@ -936,9 +936,8 @@ static handler_t proxy_response_headers(server *srv, connection *con, struct htt
             /* preserve prior questionable behavior; likely broken behavior
              * anyway if backend thinks connection is being upgraded but client
              * does not receive Connection: upgrade */
-            http_header_response_set(con, HTTP_HEADER_UPGRADE,
-                                     CONST_STR_LEN("Upgrade"),
-                                     CONST_STR_LEN(""));
+            http_header_response_unset(con, HTTP_HEADER_UPGRADE,
+                                       CONST_STR_LEN("Upgrade"))
           #endif
         }
     }

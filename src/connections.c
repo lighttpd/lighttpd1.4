@@ -373,8 +373,7 @@ static int connection_handle_write_prepare(server *srv, connection *con) {
 			    con->http_status == 204 ||
 			    con->http_status == 304) {
 				/* no Content-Body, no Content-Length */
-				buffer *vb = http_header_response_get(con, HTTP_HEADER_CONTENT_LENGTH, CONST_STR_LEN("Content-Length"));
-				if (NULL != vb) buffer_reset(vb); /* Headers with empty values are ignored for output */
+				http_header_response_unset(con, HTTP_HEADER_CONTENT_LENGTH, CONST_STR_LEN("Content-Length"));
 			} else if (qlen > 0 || con->request.http_method != HTTP_METHOD_HEAD) {
 				/* qlen = 0 is important for Redirects (301, ...) as they MAY have
 				 * a content. Browsers are waiting for a Content otherwise
