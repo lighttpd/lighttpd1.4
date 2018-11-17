@@ -2063,6 +2063,9 @@ SUBREQUEST_FUNC(mod_webdav_subrequest_handler_huge) {
 
 				/* don't add a second / */
 				if (p->physical.rel_path->ptr[0] == '/') {
+				      #ifdef __COVERITY__
+					if (buffer_string_length(p->physical.rel_path) < 1) return HANDLER_ERROR;
+				      #endif
 					buffer_append_string_len(p->physical.path, p->physical.rel_path->ptr + 1, buffer_string_length(p->physical.rel_path) - 1);
 				} else {
 					buffer_append_string_buffer(p->physical.path, p->physical.rel_path);
