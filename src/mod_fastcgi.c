@@ -330,8 +330,8 @@ static int fastcgi_get_packet(server *srv, handler_ctx *hctx, fastcgi_response_p
 
 static void fastcgi_get_packet_body(buffer *b, handler_ctx *hctx, fastcgi_response_packet *packet) {
 	/* copy content; hctx->rb must contain at least packet->len content */
-	size_t toread = packet->len;
-	buffer_string_prepare_append(b, packet->len);
+	size_t toread = packet->len - packet->padding;
+	buffer_string_prepare_append(b, toread);
 	for (chunk *c = hctx->rb->first; c; c = c->next) {
 		size_t weHave = buffer_string_length(c->mem) - c->offset;
 		if (weHave >= toread) {
@@ -342,8 +342,6 @@ static void fastcgi_get_packet_body(buffer *b, handler_ctx *hctx, fastcgi_respon
 		buffer_append_string_len(b, c->mem->ptr + c->offset, weHave);
 		toread -= weHave;
 	}
-
-	buffer_string_set_length(b, buffer_string_length(b) - packet->padding);
 	chunkqueue_mark_written(hctx->rb, packet->len);
 }
 
