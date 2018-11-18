@@ -664,46 +664,15 @@ int connection_reset(server *srv, connection *con) {
 	return 0;
 }
 
-/**
- * handle all header and content read
- *
- * we get called by the state-engine and by the fdevent-handler
- */
-static int connection_handle_read_state(server *srv, connection *con)  {
+static void connection_read_header(server *srv, connection *con)  {
 	chunk *c, *last_chunk;
 	off_t last_offset;
 	chunkqueue *cq = con->read_queue;
-	int is_closed = 0; /* the connection got closed, if we don't have a complete header, -> error */
-	/* when in CON_STATE_READ: about to receive first byte for a request: */
-	int is_request_start = chunkqueue_is_empty(cq);
-
-	if (con->is_readable) {
-		con->read_idle_ts = srv->cur_ts;
-
-		switch(con->network_read(srv, con, con->read_queue, MAX_READ_LIMIT)) {
-		case -1:
-			connection_set_state(srv, con, CON_STATE_ERROR);
-			return -1;
-		case -2:
-			is_closed = 1;
-			break;
-		default:
-			break;
-		}
-	}
 
 	chunkqueue_remove_finished_chunks(cq);
 
 	/* we might have got several packets at once
 	 */
-
-	/* update request_start timestamp when first byte of
-	 * next request is received on a keep-alive connection */
-	if (con->request_count > 1 && is_request_start) {
-		con->request_start = srv->cur_ts;
-		if (con->conf.high_precision_timestamps)
-			log_clock_gettime_realtime(&con->request_start_hp);
-	}
 
 		/* if there is a \r\n\r\n in the chunkqueue
 		 *
@@ -797,10 +766,6 @@ found_header_end:
 			}
 
 			connection_set_state(srv, con, CON_STATE_REQUEST_END);
-		} else if (is_closed) {
-			/* the connection got closed and we didn't got enough data to leave CON_STATE_READ;
-			 * the only way is to leave here */
-			connection_set_state(srv, con, CON_STATE_ERROR);
 		}
 
 		if ((last_chunk ? buffer_string_length(con->request.request) : (size_t)chunkqueue_length(cq))
@@ -812,6 +777,57 @@ found_header_end:
 		}
 
 	chunkqueue_remove_finished_chunks(cq);
+}
+
+/**
+ * handle request header read
+ *
+ * we get called by the state-engine and by the fdevent-handler
+ */
+static int connection_handle_read_state(server *srv, connection *con)  {
+	int is_closed = 0; /* the connection got closed, if we don't have a complete header, -> error */
+
+	if (con->request_count > 1 && 0 == con->bytes_read) {
+
+		/* update request_start timestamp when first byte of
+		 * next request is received on a keep-alive connection */
+		con->request_start = srv->cur_ts;
+		if (con->conf.high_precision_timestamps)
+			log_clock_gettime_realtime(&con->request_start_hp);
+
+		if (!chunkqueue_is_empty(con->read_queue)) {
+			/*(if partially read next request and unable to read() any bytes below,
+			 * then will unnecessarily scan again here before subsequent read())*/
+			connection_read_header(srv, con);
+			if (con->state != CON_STATE_READ) {
+				con->read_idle_ts = srv->cur_ts;
+				return 0;
+			}
+		}
+	}
+
+	if (con->is_readable) {
+		con->read_idle_ts = srv->cur_ts;
+
+		switch (con->network_read(srv, con, con->read_queue, MAX_READ_LIMIT)) {
+		case -1:
+			connection_set_state(srv, con, CON_STATE_ERROR);
+			return -1;
+		case -2:
+			is_closed = 1;
+			break;
+		default:
+			break;
+		}
+	}
+
+	connection_read_header(srv, con);
+
+	if (con->state == CON_STATE_READ && is_closed) {
+		/* the connection got closed and we didn't got enough data to leave CON_STATE_READ;
+		 * the only way is to leave here */
+		connection_set_state(srv, con, CON_STATE_ERROR);
+	}
 
 	return 0;
 }
@@ -955,7 +971,7 @@ connection *connection_accept(server *srv, server_socket *srv_socket) {
 
 /* 0: everything ok, -1: error, -2: con closed */
 static int connection_read_cq(server *srv, connection *con, chunkqueue *cq, off_t max_bytes) {
-	int len;
+	ssize_t len;
 	char *mem = NULL;
 	size_t mem_len = 0;
 	force_assert(cq == con->read_queue);       /*(code transform assumption; minimize diff)*/
