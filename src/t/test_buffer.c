@@ -101,9 +101,28 @@ static void test_buffer_to_lower_upper(void) {
 	buffer_free(psrc);
 }
 
+static void test_buffer_string_space(void) {
+	buffer *b = buffer_init();
+	size_t space;
+
+	space = buffer_string_space(b);
+	assert(0 == space);
+	buffer_copy_string_len(b, CONST_STR_LEN(""));
+	space = buffer_string_space(b);
+	assert(space > 0);
+	assert(space + buffer_string_length(b) == b->size - 1);
+	buffer_commit(b, b->size - 1);
+	assert(b->used == b->size);
+	space = buffer_string_space(b);
+	assert(0 == space);
+
+	buffer_free(b);
+}
+
 int main() {
 	test_buffer_path_simplify();
 	test_buffer_to_lower_upper();
+	test_buffer_string_space();
 
 	return 0;
 }
