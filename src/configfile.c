@@ -235,7 +235,7 @@ static int config_insert(server *srv) {
 		{ "server.network-backend",            NULL, T_CONFIG_STRING,  T_CONFIG_SCOPE_SERVER     }, /* 44 */
 		{ "server.upload-dirs",                NULL, T_CONFIG_ARRAY,   T_CONFIG_SCOPE_SERVER     }, /* 45 */
 		{ "server.core-files",                 NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_SERVER     }, /* 46 */
-		{ "unused-slot-moved-to-mod-openssl",  NULL, T_CONFIG_STRING,  T_CONFIG_SCOPE_CONNECTION }, /* 47 */
+		{ "server.compat-module-load",         NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_SERVER     }, /* 47 */
 		{ "unused-slot-moved-to-mod-openssl",  NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION }, /* 48 */
 		{ "etag.use-inode",                    NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION }, /* 49 */
 
@@ -302,6 +302,7 @@ static int config_insert(server *srv) {
 	cv[44].destination = srv->srvconf.network_backend;
 	cv[45].destination = srv->srvconf.upload_tempdirs;
 	cv[46].destination = &(srv->srvconf.enable_cores);
+	cv[47].destination = &(srv->srvconf.compat_module_load);
 
 	cv[52].destination = &(srv->srvconf.reject_expect_100_with_417);
 	cv[55].destination = srv->srvconf.breakagelog_file;
@@ -542,7 +543,7 @@ static int config_insert(server *srv) {
 		log_error_write(srv, __FILE__, __LINE__, "s",
 				"unexpected value for server.modules; expected list of \"mod_xxxxxx\" strings");
 		ret = HANDLER_ERROR;
-	} else {
+	} else if (srv->srvconf.compat_module_load) {
 		data_string *ds;
 		int prepend_mod_indexfile = 1;
 		int append_mod_dirlisting = 1;

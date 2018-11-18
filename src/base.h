@@ -345,6 +345,8 @@ typedef struct {
 	time_t loadts;
 	double loadavg[3];
 	buffer *syslog_facility;
+
+	unsigned short compat_module_load;
 } server_config;
 
 typedef struct server_socket {

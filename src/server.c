@@ -300,6 +300,7 @@ static server *server_init(void) {
 	srv->srvconf.loadavg[0] = 0.0;
 	srv->srvconf.loadavg[1] = 0.0;
 	srv->srvconf.loadavg[2] = 0.0;
+	srv->srvconf.compat_module_load = 1;
 
 	/* use syslog */
 	srv->errorlog_fd = STDERR_FILENO;
