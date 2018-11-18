@@ -131,6 +131,7 @@ void chunk_buffer_release(buffer *b) {
         c->mem = b;
         c->next = chunks;
         chunks = c;
+        buffer_string_set_length(b, 0);
     }
     else {
         buffer_free(b);
