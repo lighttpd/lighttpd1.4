@@ -425,6 +425,7 @@ static int cgi_recv_response(server *srv, handler_ctx *hctx) {
 			return HANDLER_FINISHED;
 		case HANDLER_COMEBACK:
 			/* hctx->conf.local_redir */
+			buffer_string_set_length(hctx->response, 0);
 			connection_response_reset(srv, hctx->remote_conn); /*(includes con->http_status = 0)*/
 			plugins_call_connection_reset(srv, hctx->remote_conn);
 			/*cgi_connection_close(srv, hctx);*//*(already cleaned up and hctx is now invalid)*/
