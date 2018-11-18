@@ -54,6 +54,7 @@ void chunkqueue_chunk_pool_clear(void);
 void chunkqueue_chunk_pool_free(void);
 
 chunkqueue *chunkqueue_init(void);
+void chunkqueue_set_chunk_size (size_t sz);
 void chunkqueue_set_tempdirs_default_reset (void);
 void chunkqueue_set_tempdirs_default (array *tempdirs, unsigned int upload_temp_file_size);
 void chunkqueue_append_file(chunkqueue *cq, buffer *fn, off_t offset, off_t len); /* copies "fn" */

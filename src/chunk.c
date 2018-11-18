@@ -31,6 +31,11 @@ static chunk *chunk_buffers;
 static array *chunkqueue_default_tempdirs = NULL;
 static unsigned int chunkqueue_default_tempfile_size = DEFAULT_TEMPFILE_SIZE;
 
+void chunkqueue_set_chunk_size (size_t sz)
+{
+    chunk_buf_sz = sz > 0 ? ((sz + 1023) & ~1023uL) : 4096;
+}
+
 void chunkqueue_set_tempdirs_default_reset (void)
 {
     chunkqueue_default_tempdirs = NULL;

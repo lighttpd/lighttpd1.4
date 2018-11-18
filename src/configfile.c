@@ -175,6 +175,7 @@ static int config_insert(server *srv) {
 	int ret = 0;
 	buffer *stat_cache_string;
 	array *http_parseopts;
+	unsigned int chunk_sz = 0;
 
 	config_values_t cv[] = {
 		{ "server.bind",                       NULL, T_CONFIG_STRING,  T_CONFIG_SCOPE_SERVER     }, /* 0 */
@@ -236,7 +237,7 @@ static int config_insert(server *srv) {
 		{ "server.upload-dirs",                NULL, T_CONFIG_ARRAY,   T_CONFIG_SCOPE_SERVER     }, /* 45 */
 		{ "server.core-files",                 NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_SERVER     }, /* 46 */
 		{ "server.compat-module-load",         NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_SERVER     }, /* 47 */
-		{ "unused-slot-moved-to-mod-openssl",  NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION }, /* 48 */
+		{ "server.chunkqueue-chunk-sz",        NULL, T_CONFIG_INT,     T_CONFIG_SCOPE_SERVER     }, /* 48 */
 		{ "etag.use-inode",                    NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION }, /* 49 */
 
 		{ "etag.use-mtime",                    NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION }, /* 50 */
@@ -303,6 +304,7 @@ static int config_insert(server *srv) {
 	cv[45].destination = srv->srvconf.upload_tempdirs;
 	cv[46].destination = &(srv->srvconf.enable_cores);
 	cv[47].destination = &(srv->srvconf.compat_module_load);
+	cv[48].destination = &chunk_sz;
 
 	cv[52].destination = &(srv->srvconf.reject_expect_100_with_417);
 	cv[55].destination = srv->srvconf.breakagelog_file;
@@ -526,6 +528,10 @@ static int config_insert(server *srv) {
 
 		if (s->log_request_handling || s->log_request_header)
 			srv->srvconf.log_request_header_on_error = 1;
+	}
+
+	if (0 != chunk_sz) {
+		chunkqueue_set_chunk_size(chunk_sz);
 	}
 
 	if (0 != stat_cache_choose_engine(srv, stat_cache_string)) {
