@@ -256,6 +256,8 @@ static handler_t process_rewrite_rules(server *srv, connection *con, plugin_data
 	burl.port      = sock_addr_get_port(&con->srv_socket->addr);
 	burl.path      = con->uri.path_raw;
 	burl.query     = con->uri.query;
+	if (buffer_string_is_empty(burl.authority))
+		burl.authority = con->server_name;
 
 	rc = pcre_keyvalue_buffer_process(kvb, &ctx, con->request.uri, srv->tmp_buf);
 	if (HANDLER_FINISHED == rc && !buffer_is_empty(srv->tmp_buf) && srv->tmp_buf->ptr[0] == '/') {

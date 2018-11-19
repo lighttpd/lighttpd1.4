@@ -163,6 +163,8 @@ URIHANDLER_FUNC(mod_redirect_uri_handler) {
     burl.port      = sock_addr_get_port(&con->srv_socket->addr);
     burl.path      = con->uri.path_raw;
     burl.query     = con->uri.query;
+    if (buffer_string_is_empty(burl.authority))
+        burl.authority = con->server_name;
 
     /* redirect URL on match
      * e.g. redirect /base/ to /index.php?section=base
