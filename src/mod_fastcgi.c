@@ -407,11 +407,12 @@ static handler_t fcgi_recv_parse(server *srv, connection *con, struct http_respo
 					hctx->send_content_body = 0;
 				}
 			} else if (hctx->send_content_body) {
-				if (0 != http_chunk_transfer_cqlen(srv, con, hctx->rb, packet.len)) {
+				if (0 != http_chunk_transfer_cqlen(srv, con, hctx->rb, packet.len - packet.padding)) {
 					/* error writing to tempfile;
 					 * truncate response or send 500 if nothing sent yet */
 					fin = 1;
 				}
+				if (packet.padding) chunkqueue_mark_written(hctx->rb, packet.padding);
 			} else {
 				chunkqueue_mark_written(hctx->rb, packet.len);
 			}
