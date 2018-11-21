@@ -78,12 +78,10 @@ static chunk *chunk_init(size_t sz) {
 	return c;
 }
 
-static void chunk_reset(chunk *c) {
+static void chunk_reset_file_chunk(chunk *c) {
 	if (c->file.is_temp && !buffer_string_is_empty(c->mem)) {
 		unlink(c->mem->ptr);
 	}
-	buffer_string_set_length(c->mem, 0);
-
 	if (c->file.fd != -1) {
 		close(c->file.fd);
 		c->file.fd = -1;
@@ -96,12 +94,17 @@ static void chunk_reset(chunk *c) {
 	c->file.mmap.length = 0;
 	c->file.is_temp = 0;
 	c->type = MEM_CHUNK;
+}
+
+static void chunk_reset(chunk *c) {
+	if (c->type == FILE_CHUNK) chunk_reset_file_chunk(c);
+
+	buffer_string_set_length(c->mem, 0);
 	c->offset = 0;
-	c->next = NULL;
 }
 
 static void chunk_free(chunk *c) {
-	chunk_reset(c);
+	if (c->type == FILE_CHUNK) chunk_reset_file_chunk(c);
 	buffer_free(c->mem);
 	free(c);
 }
