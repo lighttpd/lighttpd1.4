@@ -707,7 +707,7 @@ static int get_key_number(uint32_t *ret, const buffer *b) {
     uint32_t sp = 0;
     char tmp[10 + 1]; /* #define UINT32_MAX_STRLEN 10 */
 
-    for (size_t i = 0, used = b->used; i < used; ++i) {
+    for (size_t i = 0, used = buffer_string_length(b); i < used; ++i) {
         if (light_isdigit(s[i])) {
             tmp[j] = s[i];
             if (++j >= sizeof(tmp)) return -1;
