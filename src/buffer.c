@@ -73,54 +73,35 @@ void buffer_move(buffer *b, buffer *src) {
 	tmp = *src; *src = *b; *b = tmp;
 }
 
-#define BUFFER_PIECE_SIZE 64uL  /*(must be power-of-2)*/
-static size_t buffer_align_size(size_t size) {
-	size_t aligned = (size + BUFFER_PIECE_SIZE-1) & ~(BUFFER_PIECE_SIZE-1);
-	force_assert(aligned >= size);
-	return aligned;
+/* make sure buffer is at least "size" big + 1 for '\0'. keep old data */
+__attribute_cold__
+static void buffer_realloc(buffer *b, size_t len) {
+    #define BUFFER_PIECE_SIZE 64uL  /*(must be power-of-2)*/
+    const size_t sz = (len + 1 + BUFFER_PIECE_SIZE-1) & ~(BUFFER_PIECE_SIZE-1);
+    force_assert(sz > len);
+
+    b->size = sz;
+    b->ptr = realloc(b->ptr, sz);
+
+    force_assert(NULL != b->ptr);
 }
 
-/* make sure buffer is at least "size" big. discard old data */
-static void buffer_alloc(buffer *b, size_t size) {
-	force_assert(NULL != b);
-	if (0 == size) size = 1;
-
-	if (size <= b->size) return;
-
-	if (NULL != b->ptr) free(b->ptr);
-
-	b->used = 0;
-	b->size = buffer_align_size(size);
-	b->ptr = malloc(b->size);
-
-	force_assert(NULL != b->ptr);
+__attribute_cold__
+static void buffer_alloc_replace(buffer *b, size_t size) {
+    /*(discard old data so realloc() does not copy)*/
+    if (NULL != b->ptr) {
+        free(b->ptr);
+        b->ptr = NULL;
+    }
+    buffer_realloc(b, size);
 }
-
-/* make sure buffer is at least "size" big. keep old data */
-static void buffer_realloc(buffer *b, size_t size) {
-	force_assert(NULL != b);
-	if (0 == size) size = 1;
-
-	if (size <= b->size) return;
-
-	b->size = buffer_align_size(size);
-	b->ptr = realloc(b->ptr, b->size);
-
-	force_assert(NULL != b->ptr);
-}
-
 
 char* buffer_string_prepare_copy(buffer *b, size_t size) {
 	force_assert(NULL != b);
 
-	if (size >= b->size) {
-		force_assert(size + 1 > size);
-		buffer_alloc(b, size + 1);
-	}
+	if (size >= b->size) buffer_alloc_replace(b, size);
 
-	b->used = 1;
-	b->ptr[0] = '\0';
-
+	b->used = 0;
 	return b->ptr;
 }
 
@@ -148,10 +129,7 @@ char* buffer_string_prepare_append(buffer *b, size_t size) {
 void buffer_string_set_length(buffer *b, size_t len) {
 	force_assert(NULL != b);
 
-	if (len >= b->size) {
-		force_assert(len + 1 > len);
-		buffer_realloc(b, len + 1);
-	}
+	if (len >= b->size) buffer_realloc(b, len);
 
 	b->used = len + 1;
 	b->ptr[len] = '\0';
@@ -166,10 +144,10 @@ void buffer_commit(buffer *b, size_t size)
 
 	if (size > 0) {
 		/* check for overflow: unsigned overflow is defined to wrap around */
-		force_assert(b->used + size > b->used);
-
-		force_assert(b->used + size <= b->size);
-		b->used += size;
+		size_t sz = b->used + size;
+		force_assert(sz > b->used);
+		force_assert(sz <= b->size);
+		b->used = sz;
 	}
 
 	b->ptr[b->used - 1] = '\0';
@@ -193,7 +171,6 @@ void buffer_copy_string_len(buffer *b, const char *s, size_t s_len) {
 void buffer_copy_buffer(buffer *b, const buffer *src) {
 	if (NULL == src || 0 == src->used) {
 		buffer_string_prepare_copy(b, 0);
-		b->used = 0; /* keep special empty state for now */
 	} else {
 		buffer_copy_string_len(b, src->ptr, buffer_string_length(src));
 	}
@@ -221,10 +198,10 @@ void buffer_append_string_len(buffer *b, const char *s, size_t s_len) {
 	force_assert(NULL != s || s_len == 0);
 
 	target_buf = buffer_string_prepare_append(b, s_len);
+	if (0 == b->used) ++b->used; /*(must include '\0' for append below)*/
 
-	if (0 == s_len) return; /* nothing to append *//*(s might be NULL)*/
-
-	memcpy(target_buf, s, s_len);
+	/*(s might be NULL if 0 == s_len)*/
+	if (s_len) memcpy(target_buf, s, s_len);
 	target_buf[s_len] = '\0';
 	b->used += s_len;
 }
@@ -297,13 +274,8 @@ void buffer_append_strftime(buffer *b, const char *format, const struct tm *tm) 
 	size_t r;
 	char* buf;
 	force_assert(NULL != b);
+	force_assert(NULL != format);
 	force_assert(NULL != tm);
-
-	if (NULL == format || '\0' == format[0]) {
-		/* empty format */
-		buffer_string_prepare_append(b, 0);
-		return;
-	}
 
 	buf = buffer_string_prepare_append(b, 255);
 	r = strftime(buf, buffer_string_space(b), format, tm);
@@ -836,7 +808,7 @@ void buffer_path_simplify(buffer *dest, buffer *src)
 	force_assert(NULL != dest && NULL != src);
 
 	if (buffer_string_is_empty(src)) {
-		buffer_string_prepare_copy(dest, 0);
+		buffer_copy_string_len(dest, CONST_STR_LEN(""));
 		return;
 	}
 
