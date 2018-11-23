@@ -254,7 +254,7 @@ static handler_t fcgi_create_env(server *srv, handler_ctx *hctx) {
 	if (0 != http_cgi_headers(srv, con, &opts, fcgi_env_add, b)) {
 		con->http_status = 400;
 		con->mode = DIRECT;
-		buffer_string_set_length(b, 0);
+		buffer_clear(b);
 		chunkqueue_remove_finished_chunks(hctx->wb);
 		return HANDLER_FINISHED;
 	} else {
@@ -387,7 +387,7 @@ static handler_t fcgi_recv_parse(server *srv, connection *con, struct http_respo
 				buffer *hdrs = hctx->response;
 				if (NULL == hdrs) {
 					hdrs = srv->tmp_buf;
-					buffer_string_set_length(srv->tmp_buf, 0);
+					buffer_clear(srv->tmp_buf);
 				}
 				fastcgi_get_packet_body(hdrs, hctx, &packet);
 				if (HANDLER_GO_ON != http_response_parse_headers(srv, con, &hctx->opts, hdrs)) {
@@ -420,7 +420,7 @@ static handler_t fcgi_recv_parse(server *srv, connection *con, struct http_respo
 		case FCGI_STDERR:
 			if (packet.len == 0) break;
 
-			buffer_string_set_length(srv->tmp_buf, 0);
+			buffer_clear(srv->tmp_buf);
 			fastcgi_get_packet_body(srv->tmp_buf, hctx, &packet);
 			log_error_write_multiline_buffer(srv, __FILE__, __LINE__, srv->tmp_buf, "s",
 					"FastCGI-stderr:");

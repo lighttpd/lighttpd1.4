@@ -494,11 +494,11 @@ void connection_response_reset(server *srv, connection *con) {
 	con->file_started = 0;
 	con->response.keep_alive = 0;
 	if (con->physical.path) { /*(skip for mod_fastcgi authorizer)*/
-		buffer_reset(con->physical.doc_root);
+		buffer_clear(con->physical.doc_root);
 		buffer_reset(con->physical.path);
-		buffer_reset(con->physical.basedir);
+		buffer_clear(con->physical.basedir);
 		buffer_reset(con->physical.rel_path);
-		buffer_reset(con->physical.etag);
+		buffer_clear(con->physical.etag);
 	}
 	con->response.htags = 0;
 	array_reset_data_strings(con->response.headers);

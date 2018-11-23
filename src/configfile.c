@@ -1445,7 +1445,7 @@ int config_parse_cmd(server *srv, config_t *context, const char *cmd) {
 			pid_t wpid;
 			int wstatus;
 			buffer *out = srv->tmp_buf;
-			buffer_string_set_length(out, 0);
+			buffer_clear(out);
 			close(fds[1]);
 			fds[1] = -1;
 			do {
@@ -1592,11 +1592,10 @@ int config_set_defaults(server *srv) {
 	if (srv->srvconf.upload_tempdirs->used) {
 		buffer * const b = srv->tmp_buf;
 		size_t len;
+		buffer_clear(b);
 		if (!buffer_string_is_empty(srv->srvconf.changeroot)) {
 			buffer_copy_buffer(b, srv->srvconf.changeroot);
 			buffer_append_slash(b);
-		} else {
-			buffer_reset(b);
 		}
 		len = buffer_string_length(b);
 

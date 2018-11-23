@@ -239,7 +239,7 @@ SETDEFAULTS_FUNC(mod_extforward_set_defaults) {
 					if (NULL != nm_slash) {
 						log_error_write(srv, __FILE__, __LINE__, "sbsbs", "ERROR: untrusted CIDR masks are ignored (\"", ds->key, "\" => \"", ds->value, "\")");
 					}
-					buffer_reset(ds->value); /* empty is untrusted */
+					buffer_clear(ds->value); /* empty is untrusted */
 					continue;
 				}
 				if (NULL != nm_slash) {
@@ -266,7 +266,7 @@ SETDEFAULTS_FUNC(mod_extforward_set_defaults) {
 					rc = sock_addr_from_str_numeric(srv, &sm->addr, ds->key->ptr);
 					*nm_slash = '/';
 					if (1 != rc) return HANDLER_ERROR;
-					buffer_reset(ds->value); /* empty is untrusted, e.g. if subnet (incorrectly) appears in X-Forwarded-For */
+					buffer_clear(ds->value); /* empty is untrusted, e.g. if subnet (incorrectly) appears in X-Forwarded-For */
 				}
 			}
 		}
@@ -964,7 +964,7 @@ static handler_t mod_extforward_Forwarded (server *srv, connection *con, plugin_
         /* create X-Forwarded-For if not present
          * (and at least original connecting IP is a trusted proxy) */
         buffer *xff = srv->tmp_buf;
-        buffer_string_set_length(xff, 0);
+        buffer_clear(xff);
         for (j = 0; j < used; ) {
             if (-1 == offsets[j]) { ++j; continue; }
             if (3 == offsets[j+1]

@@ -169,7 +169,7 @@ static int mod_vhostdb_dbi_query(server *srv, connection *con, void *p_d, buffer
 
     /*(reuse buffer for sql query before generating docroot result)*/
     buffer *sqlquery = docroot;
-    buffer_string_set_length(sqlquery, 0); /*(also resets docroot (alias))*/
+    buffer_clear(sqlquery); /*(also resets docroot (alias))*/
 
     mod_vhostdb_patch_connection(srv, con, p);
     if (NULL == p->conf.vdata) return 0; /*(after resetting docroot)*/
@@ -198,7 +198,7 @@ static int mod_vhostdb_dbi_query(server *srv, connection *con, void *p_d, buffer
         result = dbi_conn_query(dbconf->dbconn, sqlquery->ptr);
     } while (!result && ++retry_count < 2);
 
-    buffer_string_set_length(docroot, 0); /*(reset buffer to store result)*/
+    buffer_clear(docroot); /*(reset buffer to store result)*/
 
     if (!result) {
         const char *errmsg;

@@ -68,7 +68,7 @@ static handler_t network_server_handle_fdevent(server *srv, void *context, int r
 }
 
 static void network_host_normalize_addr_str(buffer *host, sock_addr *addr) {
-    buffer_reset(host);
+    buffer_clear(host);
     sock_addr_stringify_append_buffer(host, addr);
 }
 

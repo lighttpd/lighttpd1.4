@@ -326,7 +326,7 @@ SETDEFAULTS_FUNC(mod_dirlisting_set_defaults) {
 				buffer_copy_string_len(s->show_readme, CONST_STR_LEN("README.txt"));
 			}
 			else if (buffer_is_equal_string(s->show_readme, CONST_STR_LEN("disable"))) {
-				buffer_string_set_length(s->show_readme, 0);
+				buffer_clear(s->show_readme);
 			}
 		}
 
@@ -335,7 +335,7 @@ SETDEFAULTS_FUNC(mod_dirlisting_set_defaults) {
 				buffer_copy_string_len(s->show_header, CONST_STR_LEN("HEADER.txt"));
 			}
 			else if (buffer_is_equal_string(s->show_header, CONST_STR_LEN("disable"))) {
-				buffer_string_set_length(s->show_header, 0);
+				buffer_clear(s->show_header);
 			}
 		}
 	}

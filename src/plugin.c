@@ -236,7 +236,6 @@ int plugins_load(server *srv) {
 		}
 
 #endif
-		buffer_reset(srv->tmp_buf);
 		buffer_copy_string(srv->tmp_buf, module);
 		buffer_append_string_len(srv->tmp_buf, CONST_STR_LEN("_plugin_init"));
 

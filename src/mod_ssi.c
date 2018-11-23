@@ -718,7 +718,7 @@ static int process_ssi_stmt(server *srv, connection *con, handler_ctx *p, const 
 		if (p->if_is_false) break;
 
 		b = srv->tmp_buf;
-		buffer_string_set_length(b, 0);
+		buffer_clear(b);
 		for (i = 0; i < p->ssi_vars->used; i++) {
 			data_string *ds = (data_string *)p->ssi_vars->data[p->ssi_vars->sorted[i]];
 

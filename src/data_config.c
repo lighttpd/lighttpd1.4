@@ -49,9 +49,9 @@ static void data_config_reset(data_unset *d) {
 	data_config *ds = (data_config *)d;
 
 	/* reused array elements */
-	buffer_reset(ds->key);
-	buffer_reset(ds->comp_tag);
-	buffer_reset(ds->comp_key);
+	buffer_clear(ds->key);
+	buffer_clear(ds->comp_tag);
+	buffer_clear(ds->comp_key);
 	array_reset(ds->value);
 }
 

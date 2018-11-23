@@ -172,7 +172,7 @@ static handler_t scgi_create_env(server *srv, handler_ctx *hctx) {
 	if (0 != http_cgi_headers(srv, con, &opts, scgi_env_add, b)) {
 		con->http_status = 400;
 		con->mode = DIRECT;
-		buffer_string_set_length(b, 0);
+		buffer_clear(b);
 		chunkqueue_remove_finished_chunks(hctx->wb);
 		return HANDLER_FINISHED;
 	}
@@ -180,7 +180,7 @@ static handler_t scgi_create_env(server *srv, handler_ctx *hctx) {
 	if (hctx->conf.proto == LI_PROTOCOL_SCGI) {
 		size_t len;
 		scgi_env_add(b, CONST_STR_LEN("SCGI"), CONST_STR_LEN("1"));
-		buffer_string_set_length(srv->tmp_buf, 0);
+		buffer_clear(srv->tmp_buf);
 		buffer_append_int(srv->tmp_buf, buffer_string_length(b)-10);
 		buffer_append_string_len(srv->tmp_buf, CONST_STR_LEN(":"));
 		len = buffer_string_length(srv->tmp_buf);
@@ -194,7 +194,7 @@ static handler_t scgi_create_env(server *srv, handler_ctx *hctx) {
 		if (len > USHRT_MAX) {
 			con->http_status = 431; /* Request Header Fields Too Large */
 			con->mode = DIRECT;
-			buffer_string_set_length(b, 0);
+			buffer_clear(b);
 			chunkqueue_remove_finished_chunks(hctx->wb);
 			return HANDLER_FINISHED;
 		}

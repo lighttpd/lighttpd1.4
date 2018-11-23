@@ -387,7 +387,7 @@ CONNECTION_FUNC(mod_expire_handler) {
 			/* expires should be at least srv->cur_ts */
 			if (expires < srv->cur_ts) expires = srv->cur_ts;
 
-			buffer_string_set_length(p->expire_tstmp, 0);
+			buffer_clear(p->expire_tstmp);
 			buffer_append_strftime(p->expire_tstmp, "%a, %d %b %Y %H:%M:%S GMT", gmtime(&(expires)));
 
 			/* HTTP/1.0 */

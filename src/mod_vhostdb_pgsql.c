@@ -111,7 +111,7 @@ static int mod_vhostdb_pgsql_query(server *srv, connection *con, void *p_d, buff
 
     /*(reuse buffer for sql query before generating docroot result)*/
     buffer *sqlquery = docroot;
-    buffer_string_set_length(sqlquery, 0); /*(also resets docroot (alias))*/
+    buffer_clear(sqlquery); /*(also resets docroot (alias))*/
 
     mod_vhostdb_patch_connection(srv, con, p);
     if (NULL == p->conf.vdata) return 0; /*(after resetting docroot)*/
@@ -138,7 +138,7 @@ static int mod_vhostdb_pgsql_query(server *srv, connection *con, void *p_d, buff
 
     res = PQexec(dbconf->dbconn, sqlquery->ptr);
 
-    buffer_string_set_length(docroot, 0); /*(reset buffer to store result)*/
+    buffer_clear(docroot); /*(reset buffer to store result)*/
 
     if (PGRES_TUPLES_OK != PQresultStatus(res)) {
         log_error_write(srv, __FILE__, __LINE__, "s",

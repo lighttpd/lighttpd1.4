@@ -290,7 +290,7 @@ CONNECTION_FUNC(mod_mysql_vhost_handle_docroot) {
 	if (buffer_is_equal(c->server_name, con->uri.authority)) goto GO_ON;
 
 	/* build and run SQL query */
-	buffer_string_set_length(p->tmp_buf, 0);
+	buffer_clear(p->tmp_buf);
 	for (char *b = p->conf.mysql_query->ptr, *d; *b; b = d+1) {
 		if (NULL != (d = strchr(b, '?'))) {
 			/* escape the uri.authority */

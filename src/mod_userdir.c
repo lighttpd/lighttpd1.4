@@ -330,7 +330,7 @@ URIHANDLER_FUNC(mod_userdir_docroot_handler) {
 	}
 	buffer_copy_buffer(con->physical.path, p->temp_path);
 
-	buffer_reset(p->temp_path);
+	buffer_clear(p->temp_path);
 
 	return HANDLER_GO_ON;
 }

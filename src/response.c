@@ -86,10 +86,8 @@ int http_response_write_header(server *srv, connection *con) {
 
 		/* cache the generated timestamp */
 		if (srv->cur_ts != srv->last_generated_date_ts) {
-			buffer_string_set_length(srv->ts_date_str, 0);
-
+			buffer_clear(srv->ts_date_str);
 			buffer_append_strftime(srv->ts_date_str, "%a, %d %b %Y %H:%M:%S GMT", gmtime(&(srv->cur_ts)));
-
 			srv->last_generated_date_ts = srv->cur_ts;
 		}
 

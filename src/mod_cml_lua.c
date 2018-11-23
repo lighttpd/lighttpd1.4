@@ -162,7 +162,7 @@ int cache_parse_lua(server *srv, connection *con, plugin_data *p, buffer *fn) {
 
 		buffer_copy_buffer(b, con->uri.query);
 		cache_export_get_params(L, get_tbl, b);
-		buffer_reset(b);
+		buffer_clear(b);
 	}
 	lua_setglobal(L, "get");
 

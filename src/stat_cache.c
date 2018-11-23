@@ -546,7 +546,7 @@ const buffer * stat_cache_content_type_get(server *srv, connection *con, const b
 
     if (S_ISREG(sce->st.st_mode)) {
         /* determine mimetype */
-        buffer_reset(sce->content_type);
+        buffer_clear(sce->content_type);
       #if defined(HAVE_XATTR) || defined(HAVE_EXTATTR)
         if (con->conf.use_xattr) {
             stat_cache_attr_get(sce->content_type, name->ptr, srv->srvconf.xattr_name->ptr);
@@ -709,9 +709,9 @@ handler_t stat_cache_get_entry(server *srv, connection *con, buffer *name, stat_
 
 	} else {
 
-		buffer_reset(sce->etag);
+		buffer_clear(sce->etag);
 	      #if defined(HAVE_XATTR) || defined(HAVE_EXTATTR)
-		buffer_reset(sce->content_type);
+		buffer_clear(sce->content_type);
 	      #endif
 
 	}

@@ -65,6 +65,13 @@ void buffer_commit(buffer *b, size_t size);
  */
 void buffer_string_set_length(buffer *b, size_t len);
 
+/* clear buffer
+ * - invalidate buffer contents
+ * - unsets used chars but does not modify existing ptr contents
+ *   (b->ptr *is not* set to an empty, '\0'-terminated string "")
+ */
+static inline void buffer_clear(buffer *b);
+
 void buffer_copy_string(buffer *b, const char *s);
 void buffer_copy_string_len(buffer *b, const char *s, size_t s_len);
 void buffer_copy_buffer(buffer *b, const buffer *src);
@@ -204,6 +211,10 @@ static inline void buffer_append_string_buffer(buffer *b, const buffer *src) {
 static inline void buffer_append_slash(buffer *b) {
 	size_t len = buffer_string_length(b);
 	if (len > 0 && '/' != b->ptr[len-1]) BUFFER_APPEND_STRING_CONST(b, "/");
+}
+
+static inline void buffer_clear(buffer *b) {
+	b->used = 0;
 }
 
 #endif

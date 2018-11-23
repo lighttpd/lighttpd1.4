@@ -983,7 +983,7 @@ static int webdav_get_live_property(server *srv, connection *con, handler_ctx *h
 			buffer_append_string_len(b, CONST_STR_LEN("<D:getetag>"));
 			buffer_append_string_buffer(b, con->physical.etag);
 			buffer_append_string_len(b, CONST_STR_LEN("</D:getetag>"));
-			buffer_reset(con->physical.etag);
+			buffer_clear(con->physical.etag);
 			found = 1;
 	      #ifdef USE_LOCKS
 		} else if (0 == strcmp(prop_name, "lockdiscovery")) {
@@ -1527,8 +1527,8 @@ SUBREQUEST_FUNC(mod_webdav_subrequest_handler_huge) {
 					buffer_append_string(d.path, de->d_name);
 					buffer_append_string(d.rel_path, de->d_name);
 
-					buffer_reset(prop_200);
-					buffer_reset(prop_404);
+					buffer_clear(prop_200);
+					buffer_clear(prop_404);
 
 					webdav_get_props(srv, con, hctx, &d, req_props, prop_200, prop_404);
 

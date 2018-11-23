@@ -28,7 +28,7 @@ static void data_integer_reset(data_unset *d) {
 	data_integer *ds = (data_integer *)d;
 
 	/* reused integer elements */
-	buffer_reset(ds->key);
+	buffer_clear(ds->key);
 	ds->value = 0;
 }
 

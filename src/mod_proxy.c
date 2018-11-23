@@ -536,7 +536,7 @@ static void proxy_set_Forwarded(connection *con, const unsigned int flags) {
                                 CONST_STR_LEN("Forwarded"),
                                 CONST_STR_LEN("x")); /*(must not be blank for _get below)*/
         b = http_header_request_get(con, HTTP_HEADER_FORWARDED, CONST_STR_LEN("Forwarded"));
-        buffer_string_set_length(b, 0);
+        buffer_clear(b);
         if (NULL != xff) {
             /* use X-Forwarded-For contents to seed Forwarded */
             char *s = xff->ptr;

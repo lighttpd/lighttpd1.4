@@ -231,9 +231,9 @@ URIHANDLER_FUNC(mod_cml_power_magnet) {
 
 	mod_cml_patch_connection(srv, con, p);
 
-	buffer_reset(p->basedir);
-	buffer_reset(p->baseurl);
-	buffer_reset(p->trigger_handler);
+	buffer_clear(p->basedir);
+	buffer_clear(p->baseurl);
+	buffer_clear(p->trigger_handler);
 
 	if (buffer_string_is_empty(p->conf.power_magnet)) return HANDLER_GO_ON;
 
@@ -285,9 +285,9 @@ URIHANDLER_FUNC(mod_cml_is_handled) {
 
 	mod_cml_patch_connection(srv, con, p);
 
-	buffer_reset(p->basedir);
-	buffer_reset(p->baseurl);
-	buffer_reset(p->trigger_handler);
+	buffer_clear(p->basedir);
+	buffer_clear(p->baseurl);
+	buffer_clear(p->trigger_handler);
 
 	if (buffer_string_is_empty(p->conf.ext)) return HANDLER_GO_ON;
 

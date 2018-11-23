@@ -1113,7 +1113,7 @@ static void handler_ctx_clear(gw_handler_ctx *hctx) {
     if (hctx->wb) chunkqueue_reset(hctx->wb);
     hctx->wb_reqlen = 0;
 
-    if (hctx->response) buffer_string_set_length(hctx->response, 0);
+    if (hctx->response) buffer_clear(hctx->response);
 
     hctx->fd = -1;
     hctx->fde_ndx = -1;
@@ -1279,7 +1279,7 @@ int gw_set_defaults_backend(server *srv, gw_plugin_data *p, data_unset *du, size
             }
 
             host = gw_host_init();
-            buffer_reset(gw_mode);
+            buffer_clear(gw_mode);
 
             buffer_copy_buffer(host->id, da_host->key);
 
@@ -2377,7 +2377,7 @@ handler_t gw_check_extension(server *srv, connection *con, gw_plugin_data *p, in
                 if (host->fix_root_path_name && extension->key->ptr[0] == '/'
                                              && extension->key->ptr[1] == '\0'){
                     buffer_copy_buffer(con->request.pathinfo, con->uri.path);
-                    buffer_string_set_length(con->uri.path, 0);
+                    buffer_clear(con->uri.path);
                 } else if (extension->key->ptr[0] == '/'
                            && buffer_string_length(con->uri.path)
                               > buffer_string_length(extension->key)

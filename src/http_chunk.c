@@ -23,7 +23,7 @@
 #include <string.h>
 
 static buffer * http_chunk_header(buffer *b, uintmax_t len) {
-    buffer_string_set_length(b, 0);
+    buffer_clear(b);
     buffer_append_uint_hex(b, len);
     buffer_append_string_len(b, CONST_STR_LEN("\r\n"));
     return b;

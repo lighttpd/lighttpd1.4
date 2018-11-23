@@ -98,7 +98,7 @@ buffer * strftime_cache_get(server *srv, time_t last_mod) {
 
 	srv->mtime_cache[i].mtime = last_mod;
 	tm = gmtime(&(srv->mtime_cache[i].mtime));
-	buffer_string_set_length(srv->mtime_cache[i].str, 0);
+	buffer_clear(srv->mtime_cache[i].str);
 	buffer_append_strftime(srv->mtime_cache[i].str, "%a, %d %b %Y %H:%M:%S GMT", tm);
 
 	return srv->mtime_cache[i].str;
@@ -1103,7 +1103,7 @@ handler_t http_response_parse_headers(server *srv, connection *con, http_respons
             && NULL != (vb = http_header_response_get(con, HTTP_HEADER_OTHER, CONST_STR_LEN("X-Sendfile2")))) {
             http_response_xsendfile2(srv, con, vb, opts->xsendfile_docroot);
             /* http_header_response_unset() shortcut for HTTP_HEADER_OTHER */
-            buffer_reset(vb); /*(do not send to client)*/
+            buffer_clear(vb); /*(do not send to client)*/
             if (con->mode == DIRECT) con->file_started = 0;
             return HANDLER_FINISHED;
         } else if (NULL != (vb = http_header_response_get(con, HTTP_HEADER_OTHER, CONST_STR_LEN("X-Sendfile")))
@@ -1111,7 +1111,7 @@ handler_t http_response_parse_headers(server *srv, connection *con, http_respons
                        && NULL != (vb = http_header_response_get(con, HTTP_HEADER_OTHER, CONST_STR_LEN("X-LIGHTTPD-send-file"))))) {
             http_response_xsendfile(srv, con, vb, opts->xsendfile_docroot);
             /* http_header_response_unset() shortcut for HTTP_HEADER_OTHER */
-            buffer_reset(vb); /*(do not send to client)*/
+            buffer_clear(vb); /*(do not send to client)*/
             if (con->mode == DIRECT) con->file_started = 0;
             return HANDLER_FINISHED;
         }
@@ -1224,14 +1224,14 @@ handler_t http_response_read(server *srv, connection *con, http_response_opts *o
             handler_t rc = http_response_parse_headers(srv, con, opts, b);
             if (rc != HANDLER_GO_ON) return rc;
             /* accumulate response in b until headers completed (or error) */
-            if (con->file_started) buffer_string_set_length(b, 0);
+            if (con->file_started) buffer_clear(b);
         } else {
             if (0 != http_chunk_append_buffer(srv, con, b)) {
                 /* error writing to tempfile;
                  * truncate response or send 500 if nothing sent yet */
                 return HANDLER_ERROR;
             }
-            buffer_string_set_length(b, 0);
+            buffer_clear(b);
         }
 
         if ((con->conf.stream_response_body & FDEVENT_STREAM_RESPONSE_BUFMIN)

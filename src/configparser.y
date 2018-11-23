@@ -53,7 +53,7 @@ static data_unset *configparser_get_variable(config_t *ctx, const buffer *key) {
 #endif
     if (NULL != (du = array_get_element_klen(dc->value, CONST_BUF_LEN(key)))) {
       du = du->fn->copy(du);
-      buffer_reset(du->key);
+      buffer_clear(du->key);
       return du;
     }
   }

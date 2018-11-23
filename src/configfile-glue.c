@@ -430,7 +430,7 @@ static cond_result_t config_check_cond_nocache(server *srv, connection *con, dat
 		break;
 	case COMP_HTTP_REQUEST_METHOD:
 		l = srv->tmp_buf;
-		buffer_string_set_length(l, 0);
+		buffer_clear(l);
 		http_method_append(l, con->request.http_method);
 		break;
 	default:

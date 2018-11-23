@@ -270,7 +270,7 @@ static void pcre_keyvalue_buffer_subst(buffer *b, const buffer *patternb, const 
 
 	/* search for $... or %... pattern substitutions */
 
-	buffer_string_set_length(b, 0);
+	buffer_clear(b);
 
 	for (size_t k = 0; k + 1 < pattern_len; ++k) {
 		if (pattern[k] == '$' || pattern[k] == '%') {

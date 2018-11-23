@@ -308,7 +308,7 @@ SETDEFAULTS_FUNC(mod_deflate_setdefaults) {
 		cv[5].destination = &(s->output_buffer_size);
 		cv[6].destination = &(s->work_block_size);
 		cv[7].destination = p->tmp_buf;
-		buffer_string_set_length(p->tmp_buf, 0);
+		buffer_clear(p->tmp_buf);
 
 		p->config_storage[i] = s;
 
@@ -1184,7 +1184,7 @@ CONNECTION_FUNC(mod_deflate_handle_response_start) {
 	hctx->plugin_data = p;
 	hctx->compression_type = compression_type;
 	/* setup output buffer */
-	buffer_string_set_length(p->tmp_buf, 0);
+	buffer_clear(p->tmp_buf);
 	hctx->output = p->tmp_buf;
 	if (0 != mod_deflate_stream_init(hctx)) {
 		/*(should not happen unless ENOMEM)*/

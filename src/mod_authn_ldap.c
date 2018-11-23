@@ -93,7 +93,7 @@ static void mod_authn_add_scheme (server *srv, buffer *host)
           "ldap://", "ldaps://", "ldapi://", "cldap://"
         };
         char *b, *e = host->ptr;
-        buffer_string_set_length(srv->tmp_buf, 0);
+        buffer_clear(srv->tmp_buf);
         while (*(b = e)) {
             unsigned int j;
             while (*b==' '||*b=='\t'||*b=='\r'||*b=='\n'||*b==',') ++b;
@@ -611,7 +611,7 @@ static handler_t mod_authn_ldap_basic(server *srv, connection *con, void *p_d, c
     }
 
     /* build filter to get DN for uid = username */
-    buffer_string_set_length(p->ldap_filter, 0);
+    buffer_clear(p->ldap_filter);
     if (*template->ptr == ',') {
         /* special-case filter template beginning with ',' to be explicit DN */
         buffer_append_string_len(p->ldap_filter, CONST_STR_LEN("uid="));

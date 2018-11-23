@@ -964,7 +964,7 @@ static void server_graceful_state (server *srv) {
     else {
         server_sockets_close(srv);
         remove_pid_file(srv);
-        buffer_reset(srv->srvconf.pid_file); /*(prevent more removal attempts)*/
+        buffer_clear(srv->srvconf.pid_file); /*(prevent more removal attempts)*/
     }
 }
 
@@ -1067,7 +1067,7 @@ static int server_main (server * const srv, int argc, char **argv) {
 	}
 
 	if (test_config) {
-		buffer_reset(srv->srvconf.pid_file);
+		buffer_clear(srv->srvconf.pid_file);
 		if (1 == test_config) {
 			printf("Syntax OK\n");
 		} else { /*(test_config > 1)*/
@@ -1090,7 +1090,7 @@ static int server_main (server * const srv, int argc, char **argv) {
 		graceful_shutdown = 1;
 		srv->sockets_disabled = 1;
 		srv->srvconf.dont_daemonize = 1;
-		buffer_reset(srv->srvconf.pid_file);
+		buffer_clear(srv->srvconf.pid_file);
 		if (srv->srvconf.max_worker) {
 			srv->srvconf.max_worker = 0;
 			log_error_write(srv, __FILE__, __LINE__, "s",
@@ -1631,7 +1631,7 @@ static int server_main (server * const srv, int argc, char **argv) {
 			close(pid_fd);
 			pid_fd = -1;
 		}
-		buffer_reset(srv->srvconf.pid_file);
+		buffer_clear(srv->srvconf.pid_file);
 
 		fdevent_clr_logger_pipe_pids();
 		srv->pid = getpid();

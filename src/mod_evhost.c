@@ -294,7 +294,7 @@ static handler_t mod_evhost_uri_handler(server *srv, connection *con, void *p_d)
 	mod_evhost_parse_host(con, parsed_host, p->tmp_buf);
 
 	/* build document-root */
-	buffer_reset(p->tmp_buf);
+	buffer_clear(p->tmp_buf);
 
 	for (i = 0; i < p->conf.len; i++) {
 		ptr = p->conf.path_pieces[i]->ptr;

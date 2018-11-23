@@ -133,7 +133,7 @@ static int mod_vhostdb_mysql_query(server *srv, connection *con, void *p_d, buff
 
     /*(reuse buffer for sql query before generating docroot result)*/
     buffer *sqlquery = docroot;
-    buffer_string_set_length(sqlquery, 0); /*(also resets docroot (alias))*/
+    buffer_clear(sqlquery); /*(also resets docroot (alias))*/
 
     mod_vhostdb_patch_connection(srv, con, p);
     if (NULL == p->conf.vdata) return 0; /*(after resetting docroot)*/
@@ -160,11 +160,11 @@ static int mod_vhostdb_mysql_query(server *srv, connection *con, void *p_d, buff
     if (mysql_real_query(dbconf->dbconn, CONST_BUF_LEN(sqlquery))) {
         log_error_write(srv, __FILE__, __LINE__, "s",
                         mysql_error(dbconf->dbconn));
-        buffer_string_set_length(docroot, 0); /*(reset buffer; no result)*/
+        buffer_clear(docroot); /*(reset buffer; no result)*/
         return -1;
     }
 
-    buffer_string_set_length(docroot, 0); /*(reset buffer to store result)*/
+    buffer_clear(docroot); /*(reset buffer to store result)*/
 
     result = mysql_store_result(dbconf->dbconn);
     cols = mysql_num_fields(result);

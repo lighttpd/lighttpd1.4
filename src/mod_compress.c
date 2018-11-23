@@ -204,7 +204,7 @@ SETDEFAULTS_FUNC(mod_compress_setdefaults) {
 		cv[2].destination = &(s->compress_max_filesize);
 		cv[3].destination = encodings_arr; /* temp array for allowed encodings list */
 		cv[4].destination = srv->tmp_buf;
-		buffer_string_set_length(srv->tmp_buf, 0);
+		buffer_clear(srv->tmp_buf);
 
 		p->config_storage[i] = s;
 
@@ -889,12 +889,16 @@ PHYSICALPATH_FUNC(mod_compress_physical) {
 	/* check if mimetype is in compress-config */
 	content_type = NULL;
 	stat_cache_content_type_get(srv, con, con->physical.path, sce);
-	if (sce->content_type->ptr) {
+	if (!buffer_is_empty(sce->content_type)) {
 		char *c;
 		if ( (c = strchr(sce->content_type->ptr, ';')) != NULL) {
 			content_type = srv->tmp_buf;
 			buffer_copy_string_len(content_type, sce->content_type->ptr, c - sce->content_type->ptr);
 		}
+	}
+	else {
+		content_type = srv->tmp_buf;
+		buffer_copy_string_len(content_type, CONST_STR_LEN(""));
 	}
 
 	for (m = 0; m < p->conf.compress->used; m++) {

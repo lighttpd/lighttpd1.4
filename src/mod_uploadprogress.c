@@ -131,7 +131,7 @@ static int connection_map_remove_connection(connection_map *cm, connection *con)
 		if (cme->con == con) {
 			/* found connection */
 
-			buffer_reset(cme->con_id);
+			buffer_clear(cme->con_id);
 			cme->con = NULL;
 
 			cm->used--;

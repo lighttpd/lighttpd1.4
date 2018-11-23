@@ -610,7 +610,7 @@ int connection_reset(server *srv, connection *con) {
 	con->request.http_version = HTTP_VERSION_UNSET;
 
 #define CLEAN(x) \
-	if (con->x) buffer_reset(con->x);
+	buffer_reset(con->x);
 
 	CLEAN(request.uri);
 	CLEAN(request.request_line);
@@ -631,16 +631,7 @@ int connection_reset(server *srv, connection *con) {
 	/*CLEAN(proto);*//* set to default in connection_accepted() */
 #undef CLEAN
 
-#define CLEAN(x) \
-	if (con->x) con->x->used = 0;
-
-#undef CLEAN
-
-#define CLEAN(x) \
-		con->request.x = NULL;
-
-	CLEAN(http_host);
-#undef CLEAN
+	con->request.http_host = NULL;
 	con->request.content_length = 0;
 	con->request.te_chunked = 0;
 	con->request.htags = 0;

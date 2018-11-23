@@ -123,7 +123,7 @@ static int log_buffer_prepare(buffer *b, server *srv, const char *filename, unsi
 		if (-1 == srv->errorlog_fd) return -1;
 		/* cache the generated timestamp */
 		if (srv->cur_ts != srv->last_generated_debug_ts) {
-			buffer_string_set_length(srv->ts_debug_str, 0);
+			buffer_clear(srv->ts_debug_str);
 			buffer_append_strftime(srv->ts_debug_str, "%Y-%m-%d %H:%M:%S", localtime(&(srv->cur_ts)));
 
 			srv->last_generated_debug_ts = srv->cur_ts;

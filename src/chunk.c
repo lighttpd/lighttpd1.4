@@ -99,7 +99,7 @@ static void chunk_reset_file_chunk(chunk *c) {
 static void chunk_reset(chunk *c) {
 	if (c->type == FILE_CHUNK) chunk_reset_file_chunk(c);
 
-	buffer_string_set_length(c->mem, 0);
+	buffer_clear(c->mem);
 	c->offset = 0;
 }
 
@@ -134,7 +134,7 @@ void chunk_buffer_release(buffer *b) {
         c->mem = b;
         c->next = chunks;
         chunks = c;
-        buffer_string_set_length(b, 0);
+        buffer_clear(b);
     }
     else {
         buffer_free(b);
@@ -426,7 +426,7 @@ void chunkqueue_use_memory(chunkqueue *cq, size_t len) {
 		/* unused buffer: can't remove chunk easily from
 		 * end of list, so just reset the buffer
 		 */
-		buffer_string_set_length(b, 0);
+		buffer_clear(b);
 	}
 }
 

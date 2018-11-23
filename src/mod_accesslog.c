@@ -679,7 +679,7 @@ static void log_access_flush(server *srv, void *p_d) {
 				accesslog_write_all(srv, s->access_logfile, s->log_access_fd, CONST_BUF_LEN(s->access_logbuffer));
 			}
 
-			buffer_reset(s->access_logbuffer);
+			buffer_clear(s->access_logbuffer);
 		}
 	}
 }
@@ -781,10 +781,6 @@ REQUESTDONE_FUNC(log_access_write) {
 		b = p->conf.access_logbuffer;
 	}
 
-	if (buffer_is_empty(b)) {
-		buffer_string_set_length(b, 0);
-	}
-
 	for (j = 0; j < p->conf.parsed_format->used; j++) {
 		const format_field * const f = p->conf.parsed_format->ptr[j];
 		switch(f->type) {
@@ -882,7 +878,7 @@ REQUESTDONE_FUNC(log_access_write) {
 				      # endif /* HAVE_GMTIME_R */
 				      #endif /* HAVE_STRUCT_TM_GMTOFF */
 
-					buffer_string_set_length(p->conf.ts_accesslog_str, 0);
+					buffer_clear(p->conf.ts_accesslog_str);
 
 					if (buffer_string_is_empty(f->string)) {
 					      #if defined(HAVE_STRUCT_TM_GMTOFF)
@@ -1131,9 +1127,9 @@ REQUESTDONE_FUNC(log_access_write) {
 		if (!buffer_string_is_empty(b)) {
 			/*(syslog appends a \n on its own)*/
 			syslog(p->conf.syslog_level, "%s", b->ptr);
-			buffer_reset(b);
 		}
 #endif
+		buffer_clear(b);
 		return HANDLER_GO_ON;
 	}
 
@@ -1145,7 +1141,7 @@ REQUESTDONE_FUNC(log_access_write) {
 		if (p->conf.log_access_fd >= 0) {
 			accesslog_write_all(srv, p->conf.access_logfile, p->conf.log_access_fd, CONST_BUF_LEN(b));
 		}
-		buffer_reset(b);
+		buffer_clear(b);
 	}
 
 	return HANDLER_GO_ON;

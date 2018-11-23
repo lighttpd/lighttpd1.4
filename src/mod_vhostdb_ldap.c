@@ -57,7 +57,7 @@ static void mod_vhostdb_dbconf_add_scheme (server *srv, buffer *host)
           "ldap://", "ldaps://", "ldapi://", "cldap://"
         };
         char *b, *e = host->ptr;
-        buffer_string_set_length(srv->tmp_buf, 0);
+        buffer_clear(srv->tmp_buf);
         while (*(b = e)) {
             unsigned int j;
             while (*b==' '||*b=='\t'||*b=='\r'||*b=='\n'||*b==',') ++b;
@@ -381,7 +381,7 @@ static int mod_vhostdb_ldap_query(server *srv, connection *con, void *p_d, buffe
 
     /*(reuse buffer for ldap query before generating docroot result)*/
     buffer *filter = docroot;
-    buffer_string_set_length(filter, 0); /*(also resets docroot (alias))*/
+    buffer_clear(filter); /*(also resets docroot (alias))*/
 
     mod_vhostdb_patch_connection(srv, con, p);
     if (NULL == p->conf.vdata) return 0; /*(after resetting docroot)*/
@@ -419,7 +419,7 @@ static int mod_vhostdb_ldap_query(server *srv, connection *con, void *p_d, buffe
                         "you might have to refine the filter:", filter);
     }
 
-    buffer_string_set_length(docroot, 0); /*(reset buffer to store result)*/
+    buffer_clear(docroot); /*(reset buffer to store result)*/
 
     if (0 == count) { /*(no entries found)*/
         ldap_msgfree(lm);
