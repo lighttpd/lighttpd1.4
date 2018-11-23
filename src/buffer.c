@@ -724,21 +724,18 @@ void buffer_append_string_c_escaped(buffer *b, const char *s, size_t s_len) {
 
 
 void buffer_copy_string_encoded_cgi_varnames(buffer *b, const char *s, size_t s_len, int is_http_header) {
-	size_t i, j;
+	size_t i, j = 0;
 
 	force_assert(NULL != b);
 	force_assert(NULL != s || 0 == s_len);
 
-	buffer_reset(b);
+	buffer_string_prepare_copy(b, s_len + 5);
 
 	if (is_http_header && NULL != s && 0 != strcasecmp(s, "CONTENT-TYPE")) {
-		buffer_string_prepare_append(b, s_len + 5);
 		buffer_copy_string_len(b, CONST_STR_LEN("HTTP_"));
-	} else {
-		buffer_string_prepare_append(b, s_len);
+		j = 5; /* "HTTP_" */
 	}
 
-	j = buffer_string_length(b);
 	for (i = 0; i < s_len; ++i) {
 		unsigned char cr = s[i];
 		if (light_isalpha(cr)) {
