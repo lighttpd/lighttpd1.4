@@ -2513,7 +2513,7 @@ propmatch_cleanup:
 							sqlite3_reset(stmt);
 
 							sqlite3_bind_text(stmt, 1,
-								CONST_BUF_LEN(p->uri.path),
+								CONST_BUF_LEN(con->uri.path),
 								SQLITE_TRANSIENT);
 
 							/* it is the PK */
