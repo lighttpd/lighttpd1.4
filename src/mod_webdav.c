@@ -102,7 +102,6 @@ INIT_FUNC(mod_webdav_init) {
 	p->tmp_buf = buffer_init();
 
 	p->uri.scheme = buffer_init();
-	p->uri.path_raw = buffer_init();
 	p->uri.path = buffer_init();
 	p->uri.authority = buffer_init();
 
@@ -154,7 +153,6 @@ FREE_FUNC(mod_webdav_free) {
 	}
 
 	buffer_free(p->uri.scheme);
-	buffer_free(p->uri.path_raw);
 	buffer_free(p->uri.path);
 	buffer_free(p->uri.authority);
 
@@ -1961,10 +1959,6 @@ SUBREQUEST_FUNC(mod_webdav_subrequest_handler_huge) {
 		 * - the query string is thrown away
 		 *  */
 
-		buffer_reset(p->uri.scheme);
-		buffer_reset(p->uri.path_raw);
-		buffer_reset(p->uri.authority);
-
 		start = destination->ptr;
 
 		if (NULL == (sep = strstr(start, "://"))) {
@@ -1989,9 +1983,9 @@ SUBREQUEST_FUNC(mod_webdav_subrequest_handler_huge) {
 
 		if (NULL == (sep = strchr(start, '?'))) {
 			/* no query string, good */
-			buffer_copy_string(p->uri.path_raw, start);
+			buffer_copy_string(p->uri.path, start);
 		} else {
-			buffer_copy_string_len(p->uri.path_raw, start, sep - start);
+			buffer_copy_string_len(p->uri.path, start, sep - start);
 		}
 
 		if (!buffer_is_equal(p->uri.authority, con->uri.authority)) {
@@ -2000,9 +1994,8 @@ SUBREQUEST_FUNC(mod_webdav_subrequest_handler_huge) {
 			return HANDLER_FINISHED;
 		}
 
-		buffer_copy_buffer(p->tmp_buf, p->uri.path_raw);
-		buffer_urldecode_path(p->tmp_buf);
-		buffer_path_simplify(p->uri.path, p->tmp_buf);
+		buffer_urldecode_path(p->uri.path);
+		buffer_path_simplify(p->uri.path, p->uri.path);
 
 		/* we now have a URI which is clean. transform it into a physical path */
 		buffer_copy_buffer(p->physical.doc_root, con->physical.doc_root);
