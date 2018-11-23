@@ -607,17 +607,11 @@ handler_t http_response_prepare(server *srv, connection *con) {
 
 		buffer_copy_buffer(con->physical.basedir, con->physical.doc_root);
 		buffer_copy_buffer(con->physical.path, con->physical.doc_root);
-		buffer_append_slash(con->physical.path);
-		if (!buffer_string_is_empty(con->physical.rel_path) &&
-		    con->physical.rel_path->ptr[0] == '/') {
-		      #ifdef __COVERITY__
-			if (buffer_string_length(con->physical.rel_path) < 1) return HANDLER_ERROR;
-		      #endif
-			/* coverity[overflow_sink : FALSE] */
-			buffer_append_string_len(con->physical.path, con->physical.rel_path->ptr + 1, buffer_string_length(con->physical.rel_path) - 1);
-		} else {
-			buffer_append_string_buffer(con->physical.path, con->physical.rel_path);
+		if (buffer_string_is_empty(con->physical.rel_path)
+		    || con->physical.rel_path->ptr[0] != '/') {
+			buffer_append_slash(con->physical.path);
 		}
+		buffer_append_string_buffer(con->physical.path, con->physical.rel_path);
 
 		if (con->conf.log_request_handling) {
 			log_error_write(srv, __FILE__, __LINE__,  "s",  "-- after doc_root");
