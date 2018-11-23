@@ -317,9 +317,11 @@ value(A) ::= key(B). {
 }
 
 value(A) ::= STRING(B). {
+  buffer *b;
   A = (data_unset *)data_string_init();
-  buffer_move(((data_string *)(A))->value, B);
-  buffer_free(B);
+  b = ((data_string *)(A))->value;
+  buffer_free(b);
+  ((data_string *)(A))->value = B;
   B = NULL;
 }
 

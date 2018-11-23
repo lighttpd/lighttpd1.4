@@ -66,14 +66,10 @@ void buffer_reset(buffer *b) {
 
 void buffer_move(buffer *b, buffer *src) {
 	buffer tmp;
+	force_assert(NULL != b);
+	force_assert(NULL != src);
 
-	if (NULL == b) {
-		buffer_reset(src);
-		return;
-	}
-	buffer_reset(b);
-	if (NULL == src) return;
-
+	buffer_clear(b);
 	tmp = *src; *src = *b; *b = tmp;
 }
 
