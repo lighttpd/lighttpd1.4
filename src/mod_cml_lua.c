@@ -64,7 +64,7 @@ static int c_to_lua_push(lua_State *L, int tbl, const char *key, size_t key_len,
 
 static int cache_export_get_params(lua_State *L, int tbl, buffer *qrystr) {
 	size_t is_key = 1;
-	size_t i, len;
+	size_t i, len, klen = 0;
 	char *key = NULL, *val = NULL;
 
 	key = qrystr->ptr;
@@ -76,9 +76,7 @@ static int cache_export_get_params(lua_State *L, int tbl, buffer *qrystr) {
 		case '=':
 			if (is_key) {
 				val = qrystr->ptr + i + 1;
-
-				qrystr->ptr[i] = '\0';
-
+				klen = (size_t)(val - key - 1);
 				is_key = 0;
 			}
 
@@ -87,13 +85,9 @@ static int cache_export_get_params(lua_State *L, int tbl, buffer *qrystr) {
 		case '\0': /* fin symbol */
 			if (!is_key) {
 				/* we need at least a = since the last & */
-
-				/* terminate the value */
-				qrystr->ptr[i] = '\0';
-
 				c_to_lua_push(L, tbl,
-					key, strlen(key),
-					val, strlen(val));
+					key, klen,
+					val, (size_t)(qrystr->ptr + i - val));
 			}
 
 			key = qrystr->ptr + i + 1;
@@ -157,13 +151,7 @@ int cache_parse_lua(server *srv, connection *con, plugin_data *p, buffer *fn) {
 
 	/* register GET parameter */
 	lua_newtable(L);
-	{
-		int get_tbl = lua_gettop(L);
-
-		buffer_copy_buffer(b, con->uri.query);
-		cache_export_get_params(L, get_tbl, b);
-		buffer_clear(b);
-	}
+	cache_export_get_params(L, lua_gettop(L), con->uri.query);
 	lua_setglobal(L, "get");
 
 	/* 2 default constants */
