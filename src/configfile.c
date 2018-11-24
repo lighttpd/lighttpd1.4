@@ -24,6 +24,9 @@
 #include <limits.h>
 #include <glob.h>
 
+#ifndef PATH_MAX
+#define PATH_MAX 4096
+#endif
 
 #if defined(HAVE_MYSQL) || (defined(HAVE_LDAP_H) && defined(HAVE_LBER_H) && defined(HAVE_LIBLDAP) && defined(HAVE_LIBLBER))
 static void config_warn_authn_module (server *srv, const char *module, size_t len) {
@@ -1372,39 +1375,28 @@ int config_parse_file(server *srv, config_t *context, const char *fn) {
 	return ret;
 }
 
-static char* getCWD(void) {
-	char *s, *s1;
-	size_t len;
-#ifdef PATH_MAX
-	len = PATH_MAX;
-#else
-	len = 4096;
-#endif
+#ifdef __CYGWIN__
 
-	s = malloc(len);
-	if (!s) return NULL;
-	while (NULL == getcwd(s, len)) {
-		if (errno != ERANGE || SSIZE_MAX - len < len) {
-			free(s);
-			return NULL;
-		}
-		len *= 2;
-		s1 = realloc(s, len);
-		if (!s1) {
-			free(s);
-			return NULL;
-		}
-		s = s1;
-	}
-	return s;
+static char* getCWD(char *buf, size_t sz) {
+    if (NULL == getcwd(buf, sz)) {
+        return NULL;
+    }
+    for (size_t i = 0; buf[i]; ++i) {
+        if (buf[i] == '\\') buf[i] = '/';
+    }
+    return buf;
 }
+
+#define getcwd(buf, sz) getCWD((buf),(sz))
+
+#endif /* __CYGWIN__ */
 
 int config_parse_cmd(server *srv, config_t *context, const char *cmd) {
 	int ret = 0;
-	char *oldpwd;
 	int fds[2];
+	char oldpwd[PATH_MAX];
 
-	if (NULL == (oldpwd = getCWD())) {
+	if (NULL == getcwd(oldpwd, sizeof(oldpwd))) {
 		log_error_write(srv, __FILE__, __LINE__, "s",
 			"cannot get cwd", strerror(errno));
 		return -1;
@@ -1414,7 +1406,6 @@ int config_parse_cmd(server *srv, config_t *context, const char *cmd) {
 		if (0 != chdir(context->basedir->ptr)) {
 			log_error_write(srv, __FILE__, __LINE__, "sbs",
 				"cannot change directory to", context->basedir, strerror(errno));
-			free(oldpwd);
 			return -1;
 		}
 	}
@@ -1488,7 +1479,6 @@ int config_parse_cmd(server *srv, config_t *context, const char *cmd) {
 			"cannot change directory to", oldpwd, strerror(errno));
 		ret = -1;
 	}
-	free(oldpwd);
 	return ret;
 }
 
@@ -1536,8 +1526,8 @@ int config_read(server *srv, const char *fn) {
 	*array_get_int_ptr(dc->value, CONST_STR_LEN("var.PID")) = getpid();
 
 	dcwd = srv->tmp_buf;
-	buffer_string_prepare_copy(dcwd, 4095);
-	if (NULL != getcwd(dcwd->ptr, 4095)) {
+	buffer_string_prepare_copy(dcwd, PATH_MAX-1);
+	if (NULL != getcwd(dcwd->ptr, buffer_string_space(dcwd)+1)) {
 		buffer_commit(dcwd, strlen(dcwd->ptr));
 		array_set_key_value(dc->value, CONST_STR_LEN("var.CWD"), CONST_BUF_LEN(dcwd));
 	}
