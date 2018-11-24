@@ -1049,6 +1049,19 @@ static int server_main (server * const srv, int argc, char **argv) {
 		}
 	}
 
+      #ifdef __CYGWIN__
+	if (!srv->config_storage && NULL != getenv("NSSM_SERVICE_NAME")) {
+		char *dir = getenv("NSSM_SERVICE_DIR");
+		if (NULL != dir && 0 != chdir(dir)) {
+			log_error_write(srv, __FILE__, __LINE__, "sss", "chdir failed:", dir, strerror(errno));
+			return -1;
+		}
+		srv->srvconf.dont_daemonize = 1;
+		buffer_copy_string_len(srv->srvconf.modules_dir, CONST_STR_LEN("modules"));
+		if (config_read(srv, "conf/lighttpd.conf")) return -1;
+	}
+      #endif
+
 	if (!srv->config_storage) {
 		log_error_write(srv, __FILE__, __LINE__, "s",
 				"No configuration available. Try using -f option.");
