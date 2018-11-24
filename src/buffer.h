@@ -74,7 +74,7 @@ static inline void buffer_clear(buffer *b);
 
 void buffer_copy_string(buffer *b, const char *s);
 void buffer_copy_string_len(buffer *b, const char *s, size_t s_len);
-void buffer_copy_buffer(buffer *b, const buffer *src);
+static inline void buffer_copy_buffer(buffer *b, const buffer *src);
 
 void buffer_append_string(buffer *b, const char *s);
 void buffer_append_string_len(buffer *b, const char *s, size_t s_len);
@@ -202,6 +202,10 @@ static inline size_t buffer_string_length(const buffer *b) {
 
 static inline size_t buffer_string_space(const buffer *b) {
 	return NULL != b && b->size ? b->size - (b->used | (0 == b->used)) : 0;
+}
+
+static inline void buffer_copy_buffer(buffer *b, const buffer *src) {
+	buffer_copy_string_len(b, CONST_BUF_LEN(src));
 }
 
 static inline void buffer_append_string_buffer(buffer *b, const buffer *src) {

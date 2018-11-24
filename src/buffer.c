@@ -168,14 +168,6 @@ void buffer_copy_string_len(buffer *b, const char *s, size_t s_len) {
 	b->used = s_len + 1;
 }
 
-void buffer_copy_buffer(buffer *b, const buffer *src) {
-	if (NULL == src || 0 == src->used) {
-		buffer_string_prepare_copy(b, 0);
-	} else {
-		buffer_copy_string_len(b, src->ptr, buffer_string_length(src));
-	}
-}
-
 void buffer_append_string(buffer *b, const char *s) {
 	buffer_append_string_len(b, s, NULL != s ? strlen(s) : 0);
 }

@@ -30,7 +30,7 @@ int http_response_redirect_to_directory(server *srv, connection *con) {
 
 	buffer_copy_buffer(o, con->uri.scheme);
 	buffer_append_string_len(o, CONST_STR_LEN("://"));
-	if (!buffer_is_empty(con->uri.authority)) {
+	if (!buffer_string_is_empty(con->uri.authority)) {
 		buffer_append_string_buffer(o, con->uri.authority);
 	} else {
 		/* get the name of the currently connected socket */
