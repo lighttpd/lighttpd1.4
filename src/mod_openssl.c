@@ -327,6 +327,7 @@ network_ssl_servername_callback (SSL *ssl, int *al, server *srv)
     const char *servername;
     handler_ctx *hctx = (handler_ctx *) SSL_get_app_data(ssl);
     connection *con = hctx->con;
+    size_t len;
     UNUSED(al);
 
     buffer_copy_string(con->uri.scheme, "https");
@@ -340,8 +341,14 @@ network_ssl_servername_callback (SSL *ssl, int *al, server *srv)
 #endif
         return SSL_TLSEXT_ERR_NOACK;
     }
+    len = strlen(servername);
+    if (len >= 1024) { /*(expecting < 256)*/
+        log_error_write(srv, __FILE__, __LINE__, "sss", "SSL:",
+                        "SNI name too long", servername);
+        return SSL_TLSEXT_ERR_ALERT_FATAL;
+    }
     /* use SNI to patch mod_openssl config and then reset COMP_HTTP_HOST */
-    buffer_copy_string(con->uri.authority, servername);
+    buffer_copy_string_len(con->uri.authority, servername, len);
     buffer_to_lower(con->uri.authority);
 
     con->conditional_is_valid[COMP_HTTP_SCHEME] = 1;
@@ -350,7 +357,7 @@ network_ssl_servername_callback (SSL *ssl, int *al, server *srv)
     /* reset COMP_HTTP_HOST so that conditions re-run after request hdrs read */
     /*(done in response.c:config_cond_cache_reset() after request hdrs read)*/
     /*config_cond_cache_reset_item(con, COMP_HTTP_HOST);*/
-    /*buffer_reset(con->uri.authority);*/
+    /*buffer_clear(con->uri.authority);*/
 
     if (NULL == hctx->conf.ssl_pemfile_x509
         || NULL == hctx->conf.ssl_pemfile_pkey) {

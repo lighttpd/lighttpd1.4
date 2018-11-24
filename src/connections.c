@@ -64,7 +64,7 @@ static int connection_del(server *srv, connection *con) {
 
 	if (-1 == con->ndx) return -1;
 
-	buffer_reset(con->uri.authority);
+	buffer_clear(con->uri.authority);
 	buffer_reset(con->uri.path);
 	buffer_reset(con->uri.query);
 	buffer_reset(con->request.orig_uri);
@@ -619,17 +619,18 @@ int connection_reset(server *srv, connection *con) {
 
 	/* CLEAN(request.orig_uri); */
 
-	CLEAN(uri.scheme);
-	/* CLEAN(uri.authority); */
 	/* CLEAN(uri.path); */
 	CLEAN(uri.path_raw);
 	/* CLEAN(uri.query); */
 
 	CLEAN(parse_request);
 
-	CLEAN(server_name);
-	/*CLEAN(proto);*//* set to default in connection_accepted() */
 #undef CLEAN
+
+	buffer_clear(con->uri.scheme);
+	/*buffer_clear(con->proto);*//* set to default in connection_accepted() */
+	/*buffer_clear(con->uri.authority);*/
+	buffer_clear(con->server_name);
 
 	con->request.http_host = NULL;
 	con->request.content_length = 0;
@@ -1126,7 +1127,7 @@ int connection_state_machine(server *srv, connection *con) {
 
 			break;
 		case CON_STATE_REQUEST_END: /* transient */
-			buffer_reset(con->uri.authority);
+			buffer_clear(con->uri.authority);
 			buffer_reset(con->uri.path);
 			buffer_reset(con->uri.query);
 			buffer_reset(con->request.orig_uri);

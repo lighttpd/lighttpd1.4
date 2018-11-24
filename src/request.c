@@ -348,10 +348,6 @@ int http_request_host_policy (connection *con, buffer *b, const buffer *scheme) 
                 && 0 != http_request_host_normalize(b, scheme_port(scheme))));
 }
 
-#if 0
-#define DUMP_HEADER
-#endif
-
 static int http_request_split_value(array *vals, const char *current, size_t len) {
 	int state = 0;
 	const char *token_start = NULL, *token_end = NULL;
@@ -468,6 +464,14 @@ static int parse_single_header(server *srv, connection *con, parse_header_state 
       case HTTP_HEADER_HOST:
         if (!(con->request.htags & HTTP_HEADER_HOST)) {
             saveb = &con->request.http_host;
+            if (vlen >= 1024) { /*(expecting < 256)*/
+                if (srv->srvconf.log_request_header_on_error) {
+                    log_error_write(srv, __FILE__, __LINE__, "s", "uri-authority too long -> 400");
+                    log_error_write(srv, __FILE__, __LINE__, "Sb",
+                                    "request-header:\n", con->request.request);
+                }
+                return 0; /* invalid header */
+            }
         }
         else if (state->reqline_host) {
             /* ignore all Host: headers as we got Host in request line */
@@ -867,6 +871,14 @@ static size_t http_request_parse_reqline(server *srv, connection *con, parse_hea
 
 	if (state->reqline_host) {
 		/* Insert as host header */
+		if (state->reqline_hostlen >= 1024) { /*(expecting < 256)*/
+			if (srv->srvconf.log_request_header_on_error) {
+				log_error_write(srv, __FILE__, __LINE__, "s", "uri-authority too long -> 400");
+				log_error_write(srv, __FILE__, __LINE__, "Sb",
+						"request-header:\n", con->request.request);
+			}
+			return 0;
+		}
 		http_header_request_set(con, HTTP_HEADER_HOST, CONST_STR_LEN("Host"), state->reqline_host, state->reqline_hostlen);
 		con->request.http_host = http_header_request_get(con, HTTP_HEADER_HOST, CONST_STR_LEN("Host"));
 	}
