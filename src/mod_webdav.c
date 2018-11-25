@@ -1292,37 +1292,26 @@ static int webdav_has_lock(server *srv, connection *con, handler_ctx *hctx, buff
 	return has_lock;
 }
 
+static int mod_webdav_depth(connection *con) {
+    buffer *b =
+      http_header_request_get(con, HTTP_HEADER_OTHER, CONST_STR_LEN("Depth"));
+    if (NULL != b && 1 == buffer_string_length(b)) {
+        if (b->ptr[0] == '0') return 0;
+        if (b->ptr[0] == '1') return 1;
+    }
+    return -1; /* (Depth: infinity) */
+}
 
-SUBREQUEST_FUNC(mod_webdav_subrequest_handler_huge) {
-	plugin_data *p = p_d;
-	handler_ctx *hctx = con->plugin_ctx[p->id];
+static handler_t mod_webdav_propfind(server *srv, connection *con, plugin_data *p, handler_ctx *hctx) {
 	buffer *b;
 	DIR *dir;
-	int depth = -1; /* (Depth: infinity) */
+	int depth = mod_webdav_depth(con);
 	struct stat st;
 	buffer *prop_200;
 	buffer *prop_404;
 	webdav_properties *req_props;
 	stat_cache_entry *sce = NULL;
 
-	UNUSED(srv);
-
-	if (NULL == hctx) return HANDLER_GO_ON;
-	if (!hctx->conf.enabled) return HANDLER_GO_ON;
-	/* physical path is setup */
-	if (buffer_is_empty(con->physical.path)) return HANDLER_GO_ON;
-
-	/* PROPFIND need them */
-	if (NULL != (b = http_header_request_get(con, HTTP_HEADER_OTHER, CONST_STR_LEN("Depth"))) && 1 == buffer_string_length(b)) {
-		if ('0' == *b->ptr) {
-			depth = 0;
-		} else if ('1' == *b->ptr) {
-			depth = 1;
-		}
-	} /* else treat as Depth: infinity */
-
-	switch (con->request.http_method) {
-	case HTTP_METHOD_PROPFIND:
 		/* they want to know the properties of the directory */
 		req_props = NULL;
 
@@ -1601,7 +1590,9 @@ SUBREQUEST_FUNC(mod_webdav_subrequest_handler_huge) {
 		con->file_finished = 1;
 
 		return HANDLER_FINISHED;
-	case HTTP_METHOD_MKCOL:
+}
+
+static handler_t mod_webdav_mkcol(connection *con, plugin_data *p) {
 		if (p->conf.is_readonly) {
 			con->http_status = 403;
 			return HANDLER_FINISHED;
@@ -1636,7 +1627,11 @@ SUBREQUEST_FUNC(mod_webdav_subrequest_handler_huge) {
 		}
 
 		return HANDLER_FINISHED;
-	case HTTP_METHOD_DELETE:
+}
+
+static handler_t mod_webdav_delete(server *srv, connection *con, plugin_data *p, handler_ctx *hctx) {
+		struct stat st;
+
 		if (p->conf.is_readonly) {
 			con->http_status = 403;
 			return HANDLER_FINISHED;
@@ -1671,6 +1666,7 @@ SUBREQUEST_FUNC(mod_webdav_subrequest_handler_huge) {
 
 			if (webdav_delete_dir(srv, con, hctx, &(con->physical), multi_status_resp)) {
 				/* we got an error somewhere in between, build a 207 */
+				buffer *b;
 				http_header_response_set(con, HTTP_HEADER_CONTENT_TYPE, CONST_STR_LEN("Content-Type"), CONST_STR_LEN("text/xml; charset=\"utf-8\""));
 
 				b = chunkqueue_append_buffer_open(con->write_queue);
@@ -1728,7 +1724,10 @@ SUBREQUEST_FUNC(mod_webdav_subrequest_handler_huge) {
 			con->http_status = 204;
 		}
 		return HANDLER_FINISHED;
-	case HTTP_METHOD_PUT: {
+}
+
+static handler_t mod_webdav_put(server *srv, connection *con, plugin_data *p, handler_ctx *hctx) {
+		buffer *b;
 		int fd;
 		chunkqueue *cq = con->request_content_queue;
 		chunk *c;
@@ -1916,9 +1915,11 @@ SUBREQUEST_FUNC(mod_webdav_subrequest_handler_huge) {
 		}
 
 		return HANDLER_FINISHED;
-	}
-	case HTTP_METHOD_MOVE:
-	case HTTP_METHOD_COPY: {
+}
+
+static handler_t mod_webdav_copymove(server *srv, connection *con, plugin_data *p, handler_ctx *hctx) {
+		buffer *b;
+		struct stat st;
 		buffer *destination = NULL;
 		char *sep, *sep2, *start;
 		int overwrite = 1;
@@ -2212,8 +2213,10 @@ SUBREQUEST_FUNC(mod_webdav_subrequest_handler_huge) {
 		}
 
 		return HANDLER_FINISHED;
-	}
-	case HTTP_METHOD_PROPPATCH:
+}
+
+static handler_t mod_webdav_proppatch(server *srv, connection *con, plugin_data *p, handler_ctx *hctx) {
+		struct stat st;
 		if (p->conf.is_readonly) {
 			con->http_status = 403;
 			return HANDLER_FINISHED;
@@ -2380,7 +2383,9 @@ propmatch_cleanup:
 #endif
 		con->http_status = 501;
 		return HANDLER_FINISHED;
-	case HTTP_METHOD_LOCK:
+}
+
+static handler_t mod_webdav_lock(server *srv, connection *con, plugin_data *p, handler_ctx *hctx) {
 		/**
 		 * a mac wants to write
 		 *
@@ -2404,6 +2409,7 @@ propmatch_cleanup:
 		 * </D:lockinfo>\n
 		 */
 
+		int depth = mod_webdav_depth(con);
 		if (depth != 0 && depth != -1) {
 			con->http_status = 400;
 
@@ -2415,6 +2421,7 @@ propmatch_cleanup:
 			xmlDocPtr xml;
 			buffer *hdr_if = NULL;
 			int created = 0;
+			struct stat st;
 
 			if (con->state == CON_STATE_READ_POST) {
 				handler_t r = connection_handle_read_post_state(srv, con);
@@ -2603,7 +2610,7 @@ propmatch_cleanup:
 				return HANDLER_FINISHED;
 			}
 		} else {
-
+			buffer *b;
 			if (NULL != (b = http_header_request_get(con, HTTP_HEADER_OTHER, CONST_STR_LEN("If")))) {
 				buffer *locktoken = b;
 				sqlite3_stmt *stmt = p->conf.stmt_refresh_lock;
@@ -2640,13 +2647,15 @@ propmatch_cleanup:
 				return HANDLER_FINISHED;
 			}
 		}
-		break;
 #else
 		con->http_status = 501;
 		return HANDLER_FINISHED;
 #endif
-	case HTTP_METHOD_UNLOCK:
+}
+
+static handler_t mod_webdav_unlock(server *srv, connection *con, plugin_data *p) {
 #ifdef USE_LOCKS
+		buffer *b;
 		if (NULL != (b = http_header_request_get(con, HTTP_HEADER_OTHER, CONST_STR_LEN("Lock-Token")))) {
 			buffer *locktoken = b;
 			sqlite3_stmt *stmt = p->conf.stmt_remove_lock;
@@ -2693,17 +2702,42 @@ propmatch_cleanup:
 
 			return HANDLER_FINISHED;
 		}
-		break;
 #else
 		con->http_status = 501;
 		return HANDLER_FINISHED;
 #endif
-	default:
-		break;
-	}
+}
 
-	/* not found */
-	return HANDLER_GO_ON;
+SUBREQUEST_FUNC(mod_webdav_subrequest_handler_huge) {
+	plugin_data *p = p_d;
+	handler_ctx *hctx = con->plugin_ctx[p->id];
+
+	if (NULL == hctx) return HANDLER_GO_ON;
+	if (!hctx->conf.enabled) return HANDLER_GO_ON;
+	/* physical path is setup */
+	if (buffer_is_empty(con->physical.path)) return HANDLER_GO_ON;
+
+	switch (con->request.http_method) {
+	case HTTP_METHOD_PROPFIND:
+		return mod_webdav_propfind(srv, con, p, hctx);
+	case HTTP_METHOD_MKCOL:
+		return mod_webdav_mkcol(con, p);
+	case HTTP_METHOD_DELETE:
+		return mod_webdav_delete(srv, con, p, hctx);
+	case HTTP_METHOD_PUT:
+		return mod_webdav_put(srv, con, p, hctx);
+	case HTTP_METHOD_MOVE:
+	case HTTP_METHOD_COPY:
+		return mod_webdav_copymove(srv, con, p, hctx);
+	case HTTP_METHOD_PROPPATCH:
+		return mod_webdav_proppatch(srv, con, p, hctx);
+	case HTTP_METHOD_LOCK:
+		return mod_webdav_lock(srv, con, p, hctx);
+	case HTTP_METHOD_UNLOCK:
+		return mod_webdav_unlock(srv, con, p);
+	default:
+		return HANDLER_GO_ON; /* not found */
+	}
 }
 
 
