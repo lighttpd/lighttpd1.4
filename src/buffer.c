@@ -806,13 +806,6 @@ void buffer_path_simplify(buffer *dest, buffer *src)
 
 	force_assert('\0' == src->ptr[src->used-1]);
 
-	/* might need one character more for the '/' prefix */
-	if (src == dest) {
-		buffer_string_prepare_append(dest, 1);
-	} else {
-		buffer_string_prepare_copy(dest, buffer_string_length(src) + 1);
-	}
-
 #if defined(__WIN32) || defined(__CYGWIN__)
 	/* cygwin is treating \ and / the same, so we have to that too */
 	{
@@ -832,14 +825,15 @@ void buffer_path_simplify(buffer *dest, buffer *src)
 	while (*walk == ' ') {
 		walk++;
 	}
+	if (*walk == '.') {
+		if (walk[1] == '/' || walk[1] == '\0')
+			++walk;
+		else if (walk[1] == '.' && (walk[2] == '/' || walk[2] == '\0'))
+			walk+=2;
+	}
 
 	pre1 = 0;
 	c = *(walk++);
-	/* prefix with '/' if not already present */
-	if (c != '/') {
-		pre1 = '/';
-		*(out++) = '/';
-	}
 
 	while (c != '\0') {
 		/* assert((src != dest || out <= walk) && slash <= out); */
@@ -859,7 +853,7 @@ void buffer_path_simplify(buffer *dest, buffer *src)
 
 		if (c == '/' || c == '\0') {
 			const size_t toklen = out - slash;
-			if (toklen == 3 && pre2 == '.' && pre1 == '.') {
+			if (toklen == 3 && pre2 == '.' && pre1 == '.' && *slash == '/') {
 				/* "/../" or ("/.." at end of string) */
 				out = slash;
 				/* if there is something before "/..", there is at least one

@@ -396,6 +396,14 @@ handler_t http_response_prepare(server *srv, connection *con) {
 			buffer_copy_buffer(con->uri.path, con->uri.path_raw);
 			buffer_urldecode_path(con->uri.path);
 			buffer_path_simplify(con->uri.path, con->uri.path);
+			if (buffer_string_is_empty(con->uri.path) || con->uri.path->ptr[0] != '/') {
+				log_error_write(srv, __FILE__, __LINE__, "sbs",
+						"uri-path does not begin with '/':", con->uri.path, "-> 400");
+				con->keep_alive = 0;
+				con->http_status = 400;
+				con->file_finished = 1;
+				return HANDLER_FINISHED;
+			}
 		}
 
 		con->conditional_is_valid[COMP_SERVER_SOCKET] = 1;       /* SERVERsocket */

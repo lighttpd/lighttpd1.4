@@ -1998,6 +1998,11 @@ static handler_t mod_webdav_copymove(server *srv, connection *con, plugin_data *
 		buffer_urldecode_path(p->uri.path);
 		buffer_path_simplify(p->uri.path, p->uri.path);
 
+		if (buffer_string_is_empty(p->uri.path) || p->uri.path->ptr[0] != '/') {
+			con->http_status = 400;
+			return HANDLER_FINISHED;
+		}
+
 		/* we now have a URI which is clean. transform it into a physical path */
 		buffer_copy_buffer(p->physical.doc_root, con->physical.doc_root);
 		buffer_copy_buffer(p->physical.rel_path, p->uri.path);

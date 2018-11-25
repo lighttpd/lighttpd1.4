@@ -31,6 +31,7 @@ static void test_burl_normalize (void) {
     int flags;
 
     flags = HTTP_PARSEOPT_URL_NORMALIZE_UNRESERVED;
+    run_burl_normalize(psrc, ptmp, flags, __LINE__, CONST_STR_LEN("no-slash"), CONST_STR_LEN("no-slash"));
     run_burl_normalize(psrc, ptmp, flags, __LINE__, CONST_STR_LEN("/"), CONST_STR_LEN("/"));
     run_burl_normalize(psrc, ptmp, flags, __LINE__, CONST_STR_LEN("/abc"), CONST_STR_LEN("/abc"));
     run_burl_normalize(psrc, ptmp, flags, __LINE__, CONST_STR_LEN("/abc/"), CONST_STR_LEN("/abc/"));

@@ -23,15 +23,6 @@ static void run_buffer_path_simplify(buffer *psrc, buffer *pdest, const char *in
 		fflush(stderr);
 		abort();
 	} else {
-	      #if 0
-		fprintf(stdout,
-			"%s.%d: buffer_path_simplify('%s') succeeded: got '%s'\n",
-			__FILE__,
-			__LINE__,
-			in,
-			out);
-	      #endif
-
 		if (psrc != pdest) buffer_copy_buffer(psrc, pdest);
 		buffer_path_simplify(pdest, psrc);
 
@@ -40,7 +31,7 @@ static void run_buffer_path_simplify(buffer *psrc, buffer *pdest, const char *in
 				"%s.%d: buffer_path_simplify('%s') failed - not idempotent: expected '%s', got '%s'\n",
 				__FILE__,
 				__LINE__,
-				out,
+				in,
 				out,
 				pdest->ptr ? pdest->ptr : "");
 			fflush(stderr);
@@ -51,21 +42,25 @@ static void run_buffer_path_simplify(buffer *psrc, buffer *pdest, const char *in
 
 static void test_buffer_path_simplify_with(buffer *psrc, buffer *pdest) {
 	run_buffer_path_simplify(psrc, pdest, CONST_STR_LEN(""), CONST_STR_LEN(""));
-	run_buffer_path_simplify(psrc, pdest, CONST_STR_LEN(" "), CONST_STR_LEN("/"));
 	run_buffer_path_simplify(psrc, pdest, CONST_STR_LEN("/"), CONST_STR_LEN("/"));
 	run_buffer_path_simplify(psrc, pdest, CONST_STR_LEN("//"), CONST_STR_LEN("/"));
-	run_buffer_path_simplify(psrc, pdest, CONST_STR_LEN("abc"), CONST_STR_LEN("/abc"));
-	run_buffer_path_simplify(psrc, pdest, CONST_STR_LEN("abc//"), CONST_STR_LEN("/abc/"));
-	run_buffer_path_simplify(psrc, pdest, CONST_STR_LEN("abc/./xyz"), CONST_STR_LEN("/abc/xyz"));
-	run_buffer_path_simplify(psrc, pdest, CONST_STR_LEN("abc/.//xyz"), CONST_STR_LEN("/abc/xyz"));
+	run_buffer_path_simplify(psrc, pdest, CONST_STR_LEN("abc"), CONST_STR_LEN("abc"));
+	run_buffer_path_simplify(psrc, pdest, CONST_STR_LEN("abc//"), CONST_STR_LEN("abc/"));
+	run_buffer_path_simplify(psrc, pdest, CONST_STR_LEN("abc/./xyz"), CONST_STR_LEN("abc/xyz"));
+	run_buffer_path_simplify(psrc, pdest, CONST_STR_LEN("abc/.//xyz"), CONST_STR_LEN("abc/xyz"));
 	run_buffer_path_simplify(psrc, pdest, CONST_STR_LEN("abc/../xyz"), CONST_STR_LEN("/xyz"));
 	run_buffer_path_simplify(psrc, pdest, CONST_STR_LEN("/abc/./xyz"), CONST_STR_LEN("/abc/xyz"));
 	run_buffer_path_simplify(psrc, pdest, CONST_STR_LEN("/abc//./xyz"), CONST_STR_LEN("/abc/xyz"));
 	run_buffer_path_simplify(psrc, pdest, CONST_STR_LEN("/abc/../xyz"), CONST_STR_LEN("/xyz"));
 	run_buffer_path_simplify(psrc, pdest, CONST_STR_LEN("abc/../xyz/."), CONST_STR_LEN("/xyz/"));
 	run_buffer_path_simplify(psrc, pdest, CONST_STR_LEN("/abc/../xyz/."), CONST_STR_LEN("/xyz/"));
-	run_buffer_path_simplify(psrc, pdest, CONST_STR_LEN("abc/./xyz/.."), CONST_STR_LEN("/abc/"));
+	run_buffer_path_simplify(psrc, pdest, CONST_STR_LEN("abc/./xyz/.."), CONST_STR_LEN("abc/"));
 	run_buffer_path_simplify(psrc, pdest, CONST_STR_LEN("/abc/./xyz/.."), CONST_STR_LEN("/abc/"));
+	run_buffer_path_simplify(psrc, pdest, CONST_STR_LEN("."), CONST_STR_LEN(""));
+	run_buffer_path_simplify(psrc, pdest, CONST_STR_LEN(".."), CONST_STR_LEN(""));
+	run_buffer_path_simplify(psrc, pdest, CONST_STR_LEN("..."), CONST_STR_LEN("..."));
+	run_buffer_path_simplify(psrc, pdest, CONST_STR_LEN("...."), CONST_STR_LEN("...."));
+	run_buffer_path_simplify(psrc, pdest, CONST_STR_LEN(".../"), CONST_STR_LEN(".../"));
 	run_buffer_path_simplify(psrc, pdest, CONST_STR_LEN("./xyz/.."), CONST_STR_LEN("/"));
 	run_buffer_path_simplify(psrc, pdest, CONST_STR_LEN(".//xyz/.."), CONST_STR_LEN("/"));
 	run_buffer_path_simplify(psrc, pdest, CONST_STR_LEN("/./xyz/.."), CONST_STR_LEN("/"));
