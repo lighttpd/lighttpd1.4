@@ -535,6 +535,9 @@ static void proxy_set_Forwarded(connection *con, const unsigned int flags) {
         http_header_request_set(con, HTTP_HEADER_FORWARDED,
                                 CONST_STR_LEN("Forwarded"),
                                 CONST_STR_LEN("x")); /*(must not be blank for _get below)*/
+      #ifdef __COVERITY__
+        force_assert(NULL != b); /*(not NULL because created directly above)*/
+      #endif
         b = http_header_request_get(con, HTTP_HEADER_FORWARDED, CONST_STR_LEN("Forwarded"));
         buffer_clear(b);
         if (NULL != xff) {
