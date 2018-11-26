@@ -554,6 +554,15 @@ static void http_response_xsendfile (server *srv, connection *con, buffer *path,
 	}
 
 	buffer_urldecode_path(path);
+	if (!buffer_is_valid_UTF8(path)) {
+		log_error_write(srv, __FILE__, __LINE__, "sb",
+				"X-Sendfile invalid UTF-8 after url-decode:", path);
+		if (con->http_status < 400) {
+			con->http_status = 502;
+			con->mode = DIRECT;
+		}
+		return;
+	}
 	buffer_path_simplify(path, path);
 	if (con->conf.force_lowercase_filenames) {
 		buffer_to_lower(path);
@@ -627,6 +636,12 @@ static void http_response_xsendfile2(server *srv, connection *con, const buffer 
         for (pos = ++range; *pos && *pos != ' ' && *pos != ','; pos++) ;
 
         buffer_urldecode_path(b);
+        if (!buffer_is_valid_UTF8(b)) {
+            log_error_write(srv, __FILE__, __LINE__, "sb",
+                            "X-Sendfile2 invalid UTF-8 after url-decode:", b);
+            con->http_status = 502;
+            break;
+        }
         buffer_path_simplify(b, b);
         if (con->conf.force_lowercase_filenames) {
             buffer_to_lower(b);

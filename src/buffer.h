@@ -134,6 +134,7 @@ void buffer_copy_string_encoded_cgi_varnames(buffer *b, const char *s, size_t s_
 
 void buffer_urldecode_path(buffer *url);
 void buffer_urldecode_query(buffer *url);
+int buffer_is_valid_UTF8(const buffer *b);
 void buffer_path_simplify(buffer *dest, buffer *src);
 
 void buffer_to_lower(buffer *b);

@@ -772,6 +772,39 @@ void buffer_urldecode_query(buffer *url) {
 	buffer_urldecode_internal(url, 1);
 }
 
+int buffer_is_valid_UTF8(const buffer *b) {
+    /* https://www.w3.org/International/questions/qa-forms-utf-8 */
+    const unsigned char *c = (unsigned char *)b->ptr;
+    while (*c) {
+
+        /*(note: includes ctrls)*/
+        if (                         c[0] <  0x80 ) { ++c;  continue; }
+
+        if (         0xc2 <= c[0] && c[0] <= 0xdf
+            &&       0x80 <= c[1] && c[1] <= 0xbf ) { c+=2; continue; }
+
+        if ( (   (   0xe0 == c[0]
+                  && 0xa0 <= c[1] && c[1] <= 0xbf)
+              || (   0xe1 <= c[0] && c[0] <= 0xef && c[0] != 0xed
+                  && 0x80 <= c[1] && c[1] <= 0xbf)
+              || (   0xed == c[0]
+                  && 0x80 <= c[1] && c[1] <= 0x9f)   )
+            &&       0x80 <= c[2] && c[2] <= 0xbf ) { c+=3; continue; }
+
+        if ( (   (   0xf0 == c[0]
+                  && 0x90 <= c[1] && c[1] <= 0xbf)
+              || (   0xf1 <= c[0] && c[0] <= 0xf3
+                  && 0x80 <= c[1] && c[1] <= 0xbf)
+              || (   0xf4 == c[0]
+                  && 0x80 <= c[1] && c[1] <= 0x8f)   )
+            &&       0x80 <= c[2] && c[2] <= 0xbf
+            &&       0x80 <= c[3] && c[3] <= 0xbf ) { c+=4; continue; }
+
+        return 0; /* invalid */
+    }
+    return 1; /* valid */
+}
+
 /* - special case: empty string returns empty string
  * - on windows or cygwin: replace \ with /
  * - strip leading spaces

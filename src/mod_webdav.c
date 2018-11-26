@@ -1996,6 +1996,11 @@ static handler_t mod_webdav_copymove(server *srv, connection *con, plugin_data *
 		}
 
 		buffer_urldecode_path(p->uri.path);
+		if (!buffer_is_valid_UTF8(p->uri.path)) {
+			/* invalid UTF-8 after url-decode */
+			con->http_status = 400;
+			return HANDLER_FINISHED;
+		}
 		buffer_path_simplify(p->uri.path, p->uri.path);
 
 		if (buffer_string_is_empty(p->uri.path) || p->uri.path->ptr[0] != '/') {

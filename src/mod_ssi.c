@@ -511,6 +511,11 @@ static int process_ssi_stmt(server *srv, connection *con, handler_ctx *p, const 
 
 			buffer_copy_string(srv->tmp_buf, file_path);
 			buffer_urldecode_path(srv->tmp_buf);
+			if (!buffer_is_valid_UTF8(srv->tmp_buf)) {
+				log_error_write(srv, __FILE__, __LINE__, "sb",
+						"SSI invalid UTF-8 after url-decode:", srv->tmp_buf);
+				break;
+			}
 			buffer_path_simplify(srv->tmp_buf, srv->tmp_buf);
 			buffer_append_string_buffer(p->stat_fn, srv->tmp_buf);
 		} else {
@@ -518,17 +523,22 @@ static int process_ssi_stmt(server *srv, connection *con, handler_ctx *p, const 
 			size_t remain;
 
 			if (virt_path[0] == '/') {
-				buffer_copy_string(p->stat_fn, virt_path);
+				buffer_copy_string(srv->tmp_buf, virt_path);
 			} else {
 				/* there is always a / */
 				sl = strrchr(con->uri.path->ptr, '/');
 
-				buffer_copy_string_len(p->stat_fn, con->uri.path->ptr, sl - con->uri.path->ptr + 1);
-				buffer_append_string(p->stat_fn, virt_path);
+				buffer_copy_string_len(srv->tmp_buf, con->uri.path->ptr, sl - con->uri.path->ptr + 1);
+				buffer_append_string(srv->tmp_buf, virt_path);
 			}
 
-			buffer_urldecode_path(p->stat_fn);
-			buffer_path_simplify(srv->tmp_buf, p->stat_fn);
+			buffer_urldecode_path(srv->tmp_buf);
+			if (!buffer_is_valid_UTF8(srv->tmp_buf)) {
+				log_error_write(srv, __FILE__, __LINE__, "sb",
+						"SSI invalid UTF-8 after url-decode:", srv->tmp_buf);
+				break;
+			}
+			buffer_path_simplify(srv->tmp_buf, srv->tmp_buf);
 
 			/* we have an uri */
 
