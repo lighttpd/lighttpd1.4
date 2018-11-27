@@ -491,7 +491,7 @@ handler_t http_response_prepare(server *srv, connection *con) {
 		}
 
 		if (con->request.http_method == HTTP_METHOD_OPTIONS &&
-		    con->uri.path->ptr[0] == '*' && con->uri.path_raw->ptr[1] == '\0') {
+		    con->uri.path->ptr[0] == '*' && con->uri.path->ptr[1] == '\0') {
 			/* option requests are handled directly without checking of the path */
 
 			http_header_response_append(con, HTTP_HEADER_OTHER, CONST_STR_LEN("Allow"), CONST_STR_LEN("OPTIONS, GET, HEAD, POST"));
