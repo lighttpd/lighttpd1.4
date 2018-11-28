@@ -807,8 +807,7 @@ static void http_list_directory_header(server *srv, connection *con, plugin_data
 		buffer *hb = p->conf.show_header;
 		if (hb->ptr[0] != '/') {
 			buffer_copy_buffer(p->tmp_buf, con->physical.path);
-			buffer_append_slash(p->tmp_buf);
-			buffer_append_string_buffer(p->tmp_buf, p->conf.show_header);
+			buffer_append_path_len(p->tmp_buf, CONST_BUF_LEN(p->conf.show_header));
 			hb = p->tmp_buf;
 		}
 
@@ -858,8 +857,7 @@ static void http_list_directory_footer(server *srv, connection *con, plugin_data
 		buffer *rb = p->conf.show_readme;
 		if (rb->ptr[0] != '/') {
 			buffer_copy_buffer(p->tmp_buf,  con->physical.path);
-			buffer_append_slash(p->tmp_buf);
-			buffer_append_string_buffer(p->tmp_buf, p->conf.show_readme);
+			buffer_append_path_len(p->tmp_buf, CONST_BUF_LEN(p->conf.show_readme));
 			rb = p->tmp_buf;
 		}
 

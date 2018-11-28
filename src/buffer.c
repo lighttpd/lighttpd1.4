@@ -198,6 +198,21 @@ void buffer_append_string_len(buffer *b, const char *s, size_t s_len) {
 	b->used += s_len;
 }
 
+void buffer_append_path_len(buffer *b, const char *a, size_t alen) {
+    size_t blen = buffer_string_length(b);
+    int aslash = (alen && a[0] == '/');
+    buffer_string_prepare_append(b, alen+2); /*(+ '/' and + '\0' if 0 == blen)*/
+    if (blen && b->ptr[blen-1] == '/') {
+        if (aslash) --b->used;
+    }
+    else {
+        if (!b->used) ++b->used;
+        if (!aslash) b->ptr[++b->used - 2] = '/';
+    }
+    memcpy(b->ptr+b->used-1, a, alen);
+    b->ptr[(b->used += alen)-1] = '\0';
+}
+
 void buffer_append_uint_hex_lc(buffer *b, uintmax_t value) {
 	char *buf;
 	unsigned int shift = 0;

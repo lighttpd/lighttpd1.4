@@ -262,6 +262,7 @@ URIHANDLER_FUNC(mod_userdir_docroot_handler) {
 	}
 
 	/* we build the physical path */
+	buffer_clear(p->temp_path);
 
 	if (buffer_string_is_empty(p->conf.basepath)) {
 #ifdef HAVE_PWD_H
@@ -287,16 +288,13 @@ URIHANDLER_FUNC(mod_userdir_docroot_handler) {
 		}
 
 		buffer_copy_buffer(p->temp_path, p->conf.basepath);
-		buffer_append_slash(p->temp_path);
 		if (p->conf.letterhomes) {
 			if (p->username->ptr[0] == '.') return HANDLER_GO_ON;
-			buffer_append_string_len(p->temp_path, p->username->ptr, 1);
-			buffer_append_slash(p->temp_path);
+			buffer_append_path_len(p->temp_path, p->username->ptr, 1);
 		}
-		buffer_append_string_buffer(p->temp_path, p->username);
+		buffer_append_path_len(p->temp_path, CONST_BUF_LEN(p->username));
 	}
-	buffer_append_slash(p->temp_path);
-	buffer_append_string_buffer(p->temp_path, p->conf.path);
+	buffer_append_path_len(p->temp_path, CONST_BUF_LEN(p->conf.path));
 
 	if (buffer_string_is_empty(p->conf.basepath)) {
 		struct stat st;
@@ -329,8 +327,6 @@ URIHANDLER_FUNC(mod_userdir_docroot_handler) {
 		buffer_append_string(p->temp_path, rel_url + 1); /* skip the / */
 	}
 	buffer_copy_buffer(con->physical.path, p->temp_path);
-
-	buffer_clear(p->temp_path);
 
 	return HANDLER_GO_ON;
 }

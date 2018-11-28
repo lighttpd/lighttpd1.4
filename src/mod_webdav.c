@@ -590,6 +590,7 @@ static int webdav_delete_dir(server *srv, connection *con, handler_ctx *hctx, ph
 
 		while(NULL != (de = readdir(dir))) {
 			struct stat st;
+			size_t nlen;
 
 			if ((de->d_name[0] == '.' && de->d_name[1] == '\0')  ||
 			  (de->d_name[0] == '.' && de->d_name[1] == '.' && de->d_name[2] == '\0')) {
@@ -597,13 +598,12 @@ static int webdav_delete_dir(server *srv, connection *con, handler_ctx *hctx, ph
 				/* ignore the parent dir */
 			}
 
+			nlen = strlen(de->d_name);
 			buffer_copy_buffer(d.path, dst->path);
-			buffer_append_slash(d.path);
-			buffer_append_string(d.path, de->d_name);
+			buffer_append_path_len(d.path, de->d_name, nlen);
 
 			buffer_copy_buffer(d.rel_path, dst->rel_path);
-			buffer_append_slash(d.rel_path);
-			buffer_append_string(d.rel_path, de->d_name);
+			buffer_append_path_len(d.rel_path, de->d_name, nlen);
 
 			/* stat and unlink afterwards */
 			if (-1 == stat(d.path->ptr, &st)) {
@@ -770,27 +770,25 @@ static int webdav_copy_dir(server *srv, connection *con, handler_ctx *hctx, phys
 
 		while (NULL != (de = readdir(srcdir))) {
 			struct stat st;
+			size_t nlen;
 
 			if ((de->d_name[0] == '.' && de->d_name[1] == '\0')
 				|| (de->d_name[0] == '.' && de->d_name[1] == '.' && de->d_name[2] == '\0')) {
 				continue;
 			}
 
+			nlen = strlen(de->d_name);
 			buffer_copy_buffer(s.path, src->path);
-			buffer_append_slash(s.path);
-			buffer_append_string(s.path, de->d_name);
+			buffer_append_path_len(s.path, de->d_name, nlen);
 
 			buffer_copy_buffer(d.path, dst->path);
-			buffer_append_slash(d.path);
-			buffer_append_string(d.path, de->d_name);
+			buffer_append_path_len(d.path, de->d_name, nlen);
 
 			buffer_copy_buffer(s.rel_path, src->rel_path);
-			buffer_append_slash(s.rel_path);
-			buffer_append_string(s.rel_path, de->d_name);
+			buffer_append_path_len(s.rel_path, de->d_name, nlen);
 
 			buffer_copy_buffer(d.rel_path, dst->rel_path);
-			buffer_append_slash(d.rel_path);
-			buffer_append_string(d.rel_path, de->d_name);
+			buffer_append_path_len(d.rel_path, de->d_name, nlen);
 
 			if (-1 == stat(s.path->ptr, &st)) {
 				/* why ? */
@@ -1500,19 +1498,18 @@ static handler_t mod_webdav_propfind(server *srv, connection *con, plugin_data *
 				d.rel_path = buffer_init();
 
 				while(NULL != (de = readdir(dir))) {
+					size_t nlen;
 					if (de->d_name[0] == '.' && (de->d_name[1] == '\0' || (de->d_name[1] == '.' && de->d_name[2] == '\0'))) {
 						continue;
 						/* ignore the parent and target dir */
 					}
 
+					nlen = strlen(de->d_name);
 					buffer_copy_buffer(d.path, dst->path);
-					buffer_append_slash(d.path);
+					buffer_append_path_len(d.path, de->d_name, nlen);
 
 					buffer_copy_buffer(d.rel_path, dst->rel_path);
-					buffer_append_slash(d.rel_path);
-
-					buffer_append_string(d.path, de->d_name);
-					buffer_append_string(d.rel_path, de->d_name);
+					buffer_append_path_len(d.rel_path, de->d_name, nlen);
 
 					buffer_clear(prop_200);
 					buffer_clear(prop_404);
@@ -2064,16 +2061,7 @@ static handler_t mod_webdav_copymove(server *srv, connection *con, plugin_data *
 				buffer_copy_buffer(p->physical.path, p->physical.doc_root);
 				buffer_append_slash(p->physical.path);
 				buffer_copy_buffer(p->physical.basedir, p->physical.path);
-
-				/* don't add a second / */
-				if (p->physical.rel_path->ptr[0] == '/') {
-				      #ifdef __COVERITY__
-					if (buffer_string_length(p->physical.rel_path) < 1) return HANDLER_ERROR;
-				      #endif
-					buffer_append_string_len(p->physical.path, p->physical.rel_path->ptr + 1, buffer_string_length(p->physical.rel_path) - 1);
-				} else {
-					buffer_append_string_buffer(p->physical.path, p->physical.rel_path);
-				}
+				buffer_append_path_len(p->physical.path, CONST_BUF_LEN(p->physical.rel_path));
 			}
 		}
 

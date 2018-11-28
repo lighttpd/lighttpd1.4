@@ -114,10 +114,44 @@ static void test_buffer_string_space(void) {
 	buffer_free(b);
 }
 
+static void test_buffer_append_path_len(void) {
+	buffer *b = buffer_init();
+
+	buffer_append_path_len(b, CONST_STR_LEN("a"));
+	assert(buffer_is_equal_string(b, CONST_STR_LEN("/a")));
+	buffer_clear(b);
+	buffer_append_path_len(b, CONST_STR_LEN("a"));
+	assert(buffer_is_equal_string(b, CONST_STR_LEN("/a")));
+	buffer_clear(b);
+	buffer_append_path_len(b, CONST_STR_LEN("/a"));
+	assert(buffer_is_equal_string(b, CONST_STR_LEN("/a")));
+	buffer_copy_string_len(b, CONST_STR_LEN("/"));
+	buffer_append_path_len(b, CONST_STR_LEN("a"));
+	assert(buffer_is_equal_string(b, CONST_STR_LEN("/a")));
+	buffer_copy_string_len(b, CONST_STR_LEN("/"));
+	buffer_append_path_len(b, CONST_STR_LEN("/a"));
+	assert(buffer_is_equal_string(b, CONST_STR_LEN("/a")));
+	buffer_copy_string_len(b, CONST_STR_LEN("a"));
+	buffer_append_path_len(b, CONST_STR_LEN("a"));
+	assert(buffer_is_equal_string(b, CONST_STR_LEN("a/a")));
+	buffer_copy_string_len(b, CONST_STR_LEN("a/"));
+	buffer_append_path_len(b, CONST_STR_LEN("a"));
+	assert(buffer_is_equal_string(b, CONST_STR_LEN("a/a")));
+	buffer_copy_string_len(b, CONST_STR_LEN("a/"));
+	buffer_append_path_len(b, CONST_STR_LEN("/a"));
+	assert(buffer_is_equal_string(b, CONST_STR_LEN("a/a")));
+	buffer_copy_string_len(b, CONST_STR_LEN("/a/"));
+	buffer_append_path_len(b, CONST_STR_LEN("/a"));
+	assert(buffer_is_equal_string(b, CONST_STR_LEN("/a/a")));
+
+	buffer_free(b);
+}
+
 int main() {
 	test_buffer_path_simplify();
 	test_buffer_to_lower_upper();
 	test_buffer_string_space();
+	test_buffer_append_path_len();
 
 	return 0;
 }

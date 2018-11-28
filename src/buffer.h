@@ -170,6 +170,7 @@ static inline int light_isalnum(int c) {
 static inline size_t buffer_string_length(const buffer *b); /* buffer string length without terminating 0 */
 static inline size_t buffer_string_space(const buffer *b); /* maximum length of string that can be stored without reallocating */
 static inline void buffer_append_slash(buffer *b); /* append '/' no non-empty strings not ending in '/' */
+void buffer_append_path_len(buffer *b, const char *a, size_t alen); /* join strings with '/', if '/' not present */
 
 #define BUFFER_APPEND_STRING_CONST(x, y) \
 	buffer_append_string_len(x, y, sizeof(y) - 1)

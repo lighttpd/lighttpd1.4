@@ -615,11 +615,7 @@ handler_t http_response_prepare(server *srv, connection *con) {
 
 		buffer_copy_buffer(con->physical.basedir, con->physical.doc_root);
 		buffer_copy_buffer(con->physical.path, con->physical.doc_root);
-		if (buffer_string_is_empty(con->physical.rel_path)
-		    || con->physical.rel_path->ptr[0] != '/') {
-			buffer_append_slash(con->physical.path);
-		}
-		buffer_append_string_buffer(con->physical.path, con->physical.rel_path);
+		buffer_append_path_len(con->physical.path, CONST_BUF_LEN(con->physical.rel_path));
 
 		if (con->conf.log_request_handling) {
 			log_error_write(srv, __FILE__, __LINE__,  "s",  "-- after doc_root");
