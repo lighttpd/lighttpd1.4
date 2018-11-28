@@ -1178,12 +1178,18 @@ static int server_main (server * const srv, int argc, char **argv) {
 	}
 
 	/* mod_indexfile should be listed in server.modules prior to dynamic handlers */
-	for (i = 0; i < srv->plugins.used; ++i) {
+	i = 0;
+	for (buffer *pname = NULL; i < srv->plugins.used; ++i) {
 		plugin *p = ((plugin **)srv->plugins.ptr)[i];
-		if (buffer_is_equal_string(p->name, CONST_STR_LEN("indexfile"))) break;
+		if (buffer_is_equal_string(p->name, CONST_STR_LEN("indexfile"))) {
+			if (!pname) {
+				log_error_write(srv, __FILE__, __LINE__, "SB",
+						"Warning: mod_indexfile should be listed in server.modules prior to mod_", pname);
+			}
+			break;
+		}
 		if (p->handle_subrequest_start && p->handle_subrequest) {
-			log_error_write(srv, __FILE__, __LINE__, "SB",
-					"Warning: mod_indexfile should be listed in server.modules prior to mod_", p->name);
+			if (!pname) pname = p->name;
 		}
 	}
 
