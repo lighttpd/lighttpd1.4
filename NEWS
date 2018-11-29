@@ -3,7 +3,86 @@
 NEWS
 ====
 
-- 1.4.52
+- 1.4.52 - 2018-11-28
+  * [mysql] MySQL 8 deprecates my_bool
+  * [core] typo in trace
+  * [build] Fix unportable test(1) operator
+  * [core] perf: call connection_reset() fewer times
+  * [core] perf: array_reset_data_strings()
+  * [core] perf: buffer_free_ptr() __attribute__ cold
+  * [core] perf: one-element cache for host normalize
+  * [core] perf: buffer_copy_string_len()
+  * [core] perf: skip redundant prepare copy calls
+  * [core] perf: buffer_align_size() identity if align
+  * [core] perf: size write buffers for reuse
+  * [core] perf: prepend headers directly into write q
+  * [core] perf: copy small strings; better buf reuse
+  * [core] perf: copy small strings; extend last chunk
+  * [core] perf: specialized func for array sorting
+  * [core] perf: append response directly into write q
+  * [core] perf: better buf reuse reading from backend
+  * [core] chunk.c code reuse
+  * [multiple] perf: write headers to backend write cq
+  * [multiple] perf: power-2 alloc large headers
+  * [multiple] perf: use larger initial backend buffer
+  * [core] permit env vars to be set with blank value
+  * [mod_fastcgi] perf: reduce data copies
+  * [mod_fastcgi] perf: reduce data copies
+  * [core] perf: chunk.c chunk pool
+  * [multiple] perf: reuse large buffers w/ backend
+  * [multiple] better packing of struct chunk
+  * [core] perf: inline buffer_append_string_buffer()
+  * [core] slightly simpler flag append to string
+  * [mod_cgi] perf: reuse buffers for creating CGI env
+  * [mod_fastcgi,mod_scgi] perf: env accumulation
+  * [core] Don't call RAND_cleanup with OpenSSL 1.1.x
+  * [mod_openssl] move SSL_shutdown() to separate func
+  * [mod_openssl] SSL_read before second SSL_shutdown
+  * [mod_cgi] perf: use stat_cache for cgi handler
+  * [mod_openssl] prefer using TLS_server_method()
+  * [mod_webdav] return 403 if file should exist
+  * [core] perf: chunkqueue buffers already sized up
+  * [core] perf: simpler buffer_string_space()
+  * [multiple] dynamic handlers hint backend header sz
+  * [core] use chunk_buf_sz instead of hard-coded num
+  * [multiple] perf: simplify chunkqueue_get_memory()
+  * [mod_wstunnel] perf: reuse large buffers
+  * [mod_cgi] perf: cache getenv() results at start up
+  * [core] fix 301 -> 302 overwrite with Location (fixes #2918)
+  * [core] fix setting of headers previously reset (fixes #2919)
+  * [mod_webdav] quiet coverity false positive
+  * [core] server.compat-module-load = "disable"
+  * [core] server.chunkqueue-chunk-sz = 4096
+  * [core] perf: simpler buffer_string_space() (fixed)
+  * [core] perf: faster HTTP pipelined requests
+  * [core] perf: simpler buffer_string_space() (tests)
+  * [mod_cgi] reset reused buffer on internal redir
+  * [core] clear chunk buffer upon release
+  * [mod_fastcgi] minor: copy packet without padding
+  * [mod_redirect,mod_rewrite] use server_name
+  * [mod_fastcgi] transfer chunks minus packet padding
+  * [core] separate func to reset FILE_CHUNK
+  * [core] perf: simple, quick buffer_clear()
+  * [core] perf: small improvement to encoding CGI var
+  * [core] perf: small improvement buffer_string_space
+  * [core] simpler physical path concatenation
+  * [mod_webdav] fix LOCK on incorrect URI path
+  * [mod_webdav] one fewer buffer copy for COPY,MOVE
+  * [core] perf: simplify buffer_move()
+  * [mod_cml] parse query string without modifying it
+  * [core] perf: buffer optimizations
+  * [mod_wstunnel] use buffer_string_length()
+  * [core] perf: inline buffer_copy_buffer()
+  * [core] cygwin helper func for getcwd
+  * [core] cygwin sample to run lighttpd under NSSM
+  * [core] limit con->uri.authority < 1024 octets
+  * [mod_webdav] separate func for each request method
+  * [core] reject decoded url-path without leading '/'
+  * [multiple] validate UTF-8 in url-decoded paths
+  * [mod_proxy] silence coverity false positive
+  * [core] fix typo
+  * [core] buffer_append_path_len()
+  * [core] quiet indexfile warning if mod not loaded
 
 - 1.4.51 - 2018-10-14
   * [core] split parsing header line into separate function
