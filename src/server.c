@@ -1182,7 +1182,7 @@ static int server_main (server * const srv, int argc, char **argv) {
 	for (buffer *pname = NULL; i < srv->plugins.used; ++i) {
 		plugin *p = ((plugin **)srv->plugins.ptr)[i];
 		if (buffer_is_equal_string(p->name, CONST_STR_LEN("indexfile"))) {
-			if (!pname) {
+			if (pname) {
 				log_error_write(srv, __FILE__, __LINE__, "SB",
 						"Warning: mod_indexfile should be listed in server.modules prior to mod_", pname);
 			}
