@@ -2383,6 +2383,7 @@ propmatch_cleanup:
 		return HANDLER_FINISHED;
 }
 
+#ifdef USE_LOCKS
 static handler_t mod_webdav_lock(server *srv, connection *con, plugin_data *p, handler_ctx *hctx) {
 		/**
 		 * a mac wants to write
@@ -2414,7 +2415,6 @@ static handler_t mod_webdav_lock(server *srv, connection *con, plugin_data *p, h
 			return HANDLER_FINISHED;
 		}
 
-#ifdef USE_LOCKS
 		if (con->request.content_length) {
 			xmlDocPtr xml;
 			buffer *hdr_if = NULL;
@@ -2645,14 +2645,11 @@ static handler_t mod_webdav_lock(server *srv, connection *con, plugin_data *p, h
 				return HANDLER_FINISHED;
 			}
 		}
-#else
-		con->http_status = 501;
-		return HANDLER_FINISHED;
-#endif
 }
+#endif
 
-static handler_t mod_webdav_unlock(server *srv, connection *con, plugin_data *p) {
 #ifdef USE_LOCKS
+static handler_t mod_webdav_unlock(server *srv, connection *con, plugin_data *p) {
 		buffer *b;
 		if (NULL != (b = http_header_request_get(con, HTTP_HEADER_OTHER, CONST_STR_LEN("Lock-Token")))) {
 			buffer *locktoken = b;
@@ -2700,11 +2697,8 @@ static handler_t mod_webdav_unlock(server *srv, connection *con, plugin_data *p)
 
 			return HANDLER_FINISHED;
 		}
-#else
-		con->http_status = 501;
-		return HANDLER_FINISHED;
-#endif
 }
+#endif
 
 SUBREQUEST_FUNC(mod_webdav_subrequest_handler_huge) {
 	plugin_data *p = p_d;
@@ -2729,10 +2723,17 @@ SUBREQUEST_FUNC(mod_webdav_subrequest_handler_huge) {
 		return mod_webdav_copymove(srv, con, p, hctx);
 	case HTTP_METHOD_PROPPATCH:
 		return mod_webdav_proppatch(srv, con, p, hctx);
+	#ifdef USE_LOCKS
 	case HTTP_METHOD_LOCK:
 		return mod_webdav_lock(srv, con, p, hctx);
 	case HTTP_METHOD_UNLOCK:
 		return mod_webdav_unlock(srv, con, p);
+	#else
+	case HTTP_METHOD_LOCK:
+	case HTTP_METHOD_UNLOCK:
+		con->http_status = 501;
+		return HANDLER_FINISHED;
+	#endif
 	default:
 		return HANDLER_GO_ON; /* not found */
 	}
