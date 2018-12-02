@@ -119,40 +119,44 @@ SETDEFAULTS_FUNC(mod_simple_vhost_set_defaults) {
 		if (0 != config_insert_values_global(srv, config->value, cv, i == 0 ? T_CONFIG_SCOPE_SERVER : T_CONFIG_SCOPE_CONNECTION)) {
 			return HANDLER_ERROR;
 		}
+
+		if (!buffer_string_is_empty(s->server_root))
+			buffer_append_slash(s->server_root);
+		if (!buffer_string_is_empty(s->document_root))
+			buffer_append_slash(s->document_root);
 	}
 
 	return HANDLER_GO_ON;
 }
 
-static int build_doc_root(server *srv, connection *con, plugin_data *p, buffer *out, buffer *host) {
-	stat_cache_entry *sce = NULL;
-	force_assert(!buffer_string_is_empty(p->conf.server_root));
-
-	buffer_string_prepare_copy(out, 127);
-	buffer_copy_buffer(out, p->conf.server_root);
+static void build_doc_root_path(buffer *out, buffer *sroot, buffer *host, buffer *droot) {
+	force_assert(!buffer_string_is_empty(sroot));
+	buffer_copy_buffer(out, sroot);
 
 	if (!buffer_string_is_empty(host)) {
 		/* a hostname has to start with a alpha-numerical character
 		 * and must not contain a slash "/"
 		 */
 		char *dp;
-
-		buffer_append_slash(out);
-
 		if (NULL == (dp = strchr(host->ptr, ':'))) {
 			buffer_append_string_buffer(out, host);
 		} else {
 			buffer_append_string_len(out, host->ptr, dp - host->ptr);
 		}
 	}
-	buffer_append_slash(out);
 
-	if (buffer_string_length(p->conf.document_root) > 1 && p->conf.document_root->ptr[0] == '/') {
-		buffer_append_string_len(out, p->conf.document_root->ptr + 1, buffer_string_length(p->conf.document_root) - 1);
-	} else {
-		buffer_append_string_buffer(out, p->conf.document_root);
+	if (!buffer_string_is_empty(droot)) {
+		buffer_append_path_len(out, CONST_BUF_LEN(droot));
+	}
+	else {
 		buffer_append_slash(out);
 	}
+}
+
+static int build_doc_root(server *srv, connection *con, plugin_data *p, buffer *out, buffer *host) {
+	stat_cache_entry *sce = NULL;
+
+	build_doc_root_path(out, p->conf.server_root, host, p->conf.document_root);
 
 	if (HANDLER_ERROR == stat_cache_get_entry(srv, con, out, &sce)) {
 		if (p->conf.debug) {

@@ -52,5 +52,6 @@ test_base64
 test_buffer
 test_burl
 test_configfile
+test_mod_simple_vhost
 test_request
 versionstamp.h

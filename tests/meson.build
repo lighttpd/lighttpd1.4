@@ -41,7 +41,6 @@ tests = [
 	'mod-rewrite.t',
 	'mod-secdownload.t',
 	'mod-setenv.t',
-	'mod-simplevhost.t',
 	'mod-ssi.t',
 	'mod-userdir.t',
 	'request.t',

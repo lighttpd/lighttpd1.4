@@ -6,6 +6,7 @@ noinst_PROGRAMS=\
 	t/test_burl \
 	t/test_base64 \
 	t/test_configfile \
+	t/test_mod_simple_vhost \
 	t/test_request
 
 sbin_PROGRAMS=lighttpd lighttpd-angel
@@ -17,6 +18,7 @@ TESTS=\
 	t/test_burl$(EXEEXT) \
 	t/test_base64$(EXEEXT) \
 	t/test_configfile$(EXEEXT) \
+	t/test_mod_simple_vhost$(EXEEXT) \
 	t/test_request$(EXEEXT)
 
 lemon$(BUILD_EXEEXT): lemon.c
@@ -550,6 +552,9 @@ t_test_burl_LDADD = $(LIBUNWIND_LIBS)
 
 t_test_configfile_SOURCES = t/test_configfile.c buffer.c array.c data_config.c data_integer.c data_string.c http_header.c http_kv.c vector.c log.c sock_addr.c
 t_test_configfile_LDADD = $(PCRE_LIB) $(LIBUNWIND_LIBS)
+
+t_test_mod_simple_vhost_SOURCES = t/test_mod_simple_vhost.c configfile-glue.c buffer.c array.c data_config.c data_integer.c data_string.c http_header.c http_kv.c vector.c log.c sock_addr.c
+t_test_mod_simple_vhost_LDADD = $(PCRE_LIB) $(LIBUNWIND_LIBS)
 
 t_test_request_SOURCES = t/test_request.c request.c buffer.c array.c data_integer.c data_string.c http_header.c http_kv.c log.c sock_addr.c
 t_test_request_LDADD = $(LIBUNWIND_LIBS)

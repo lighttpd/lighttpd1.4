@@ -53,8 +53,6 @@ touch "${tmpdir}/servers/www.example.org/pages/image.jpg" \
       "${tmpdir}/servers/www.example.org/pages/Foo.txt" \
       "${tmpdir}/servers/www.example.org/pages/a" \
       "${tmpdir}/servers/www.example.org/pages/index.html~" \
-      "${tmpdir}/servers/a.example.org/pages/a/a.html" \
-      "${tmpdir}/servers/b.example.org/pages/b/b.html" \
       "${tmpdir}/servers/evhost/e/v/evhost1/pages/index.html" \
       "${tmpdir}/servers/evhost/evhost2/pages/index.html"
 echo "12345" > "${tmpdir}/servers/www.example.org/pages/range.pdf"

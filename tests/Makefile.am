@@ -52,8 +52,6 @@ CONFS=\
 	mod-rewrite.t \
 	mod-secdownload.t \
 	mod-setenv.t \
-	mod-simplevhost.conf \
-	mod-simplevhost.t \
 	mod-ssi.t \
 	mod-userdir.t \
 	proxy.conf \
