@@ -67,6 +67,7 @@ static int cache_export_get_params(lua_State *L, int tbl, buffer *qrystr) {
 	size_t i, len, klen = 0;
 	char *key = NULL, *val = NULL;
 
+	if (buffer_string_is_empty(qrystr)) return 0;
 	key = qrystr->ptr;
 
 	/* we need the \0 */

@@ -121,6 +121,7 @@ static int split_get_params(array *get_params, buffer *qrystr) {
 	size_t is_key = 1, klen = 0;
 	char *key = qrystr->ptr, *val = NULL;
 
+	if (buffer_string_is_empty(qrystr)) return 0;
 	for (size_t i = 0, len = buffer_string_length(qrystr); i <= len; ++i) {
 		switch(qrystr->ptr[i]) {
 		case '=':
