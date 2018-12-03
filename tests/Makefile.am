@@ -42,8 +42,6 @@ CONFS=\
 	mod-cgi.t \
 	mod-compress.conf \
 	mod-compress.t \
-	mod-evhost.conf \
-	mod-evhost.t \
 	mod-extforward.conf \
 	mod-extforward.t \
 	mod-fastcgi.t \

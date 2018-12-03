@@ -23,8 +23,6 @@ mkdir -p "${tmpdir}/servers/www.example.org/pages/indexfile/"
 mkdir -p "${tmpdir}/servers/123.example.org/pages/"
 mkdir -p "${tmpdir}/servers/a.example.org/pages/a/"
 mkdir -p "${tmpdir}/servers/b.example.org/pages/b/"
-mkdir -p "${tmpdir}/servers/evhost/e/v/evhost1/pages"
-mkdir -p "${tmpdir}/servers/evhost/evhost2/pages"
 mkdir -p "${tmpdir}/logs/"
 mkdir -p "${tmpdir}/cache/"
 mkdir -p "${tmpdir}/cache/compress/"
@@ -52,9 +50,7 @@ touch "${tmpdir}/servers/www.example.org/pages/image.jpg" \
       "${tmpdir}/servers/www.example.org/pages/image.JPG" \
       "${tmpdir}/servers/www.example.org/pages/Foo.txt" \
       "${tmpdir}/servers/www.example.org/pages/a" \
-      "${tmpdir}/servers/www.example.org/pages/index.html~" \
-      "${tmpdir}/servers/evhost/e/v/evhost1/pages/index.html" \
-      "${tmpdir}/servers/evhost/evhost2/pages/index.html"
+      "${tmpdir}/servers/www.example.org/pages/index.html~"
 echo "12345" > "${tmpdir}/servers/www.example.org/pages/range.pdf"
 
 printf "%-40s" "preparing infrastructure"

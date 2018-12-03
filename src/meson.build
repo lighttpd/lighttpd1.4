@@ -760,6 +760,25 @@ test('test_configfile', executable('test_configfile',
 	build_by_default: false,
 ))
 
+test('test_mod_evhost', executable('test_mod_evhost',
+	sources: [
+		't/test_mod_evhost.c',
+		'configfile-glue.c',
+		'buffer.c',
+		'array.c',
+		'data_config.c',
+		'data_integer.c',
+		'data_string.c',
+		'http_header.c',
+		'http_kv.c',
+		'vector.c',
+		'log.c',
+		'sock_addr.c',
+	],
+	dependencies: common_flags + libpcre + libunwind,
+	build_by_default: false,
+))
+
 test('test_mod_simple_vhost', executable('test_mod_simple_vhost',
 	sources: [
 		't/test_mod_simple_vhost.c',
