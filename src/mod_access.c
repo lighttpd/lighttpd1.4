@@ -135,6 +135,25 @@ static int mod_access_patch_connection(server *srv, connection *con, plugin_data
 }
 #undef PATCH
 
+static int mod_access_check (const array *allow, const array *deny, const buffer *urlpath, const int lc) {
+
+    if (allow->used) {
+        const buffer *match = (!lc)
+          ? array_match_value_suffix(allow, urlpath)
+          : array_match_value_suffix_nc(allow, urlpath);
+        return (match != NULL); /* allowed if match; denied if none matched */
+    }
+
+    if (deny->used) {
+        const buffer *match = (!lc)
+          ? array_match_value_suffix(deny, urlpath)
+          : array_match_value_suffix_nc(deny, urlpath);
+        return (match == NULL); /* deny if match; allow if none matched */
+    }
+
+    return 1; /* allowed (not denied) */
+}
+
 /**
  * URI handler
  *
@@ -146,50 +165,37 @@ static int mod_access_patch_connection(server *srv, connection *con, plugin_data
  */
 URIHANDLER_FUNC(mod_access_uri_handler) {
 	plugin_data *p = p_d;
-	const buffer *match;
-
 	if (buffer_is_empty(con->uri.path)) return HANDLER_GO_ON;
 
 	mod_access_patch_connection(srv, con, p);
+
+	if (0 == p->conf.access_allow->used && 0 == p->conf.access_deny->used) {
+		return HANDLER_GO_ON; /* access allowed; nothing to match */
+	}
 
 	if (con->conf.log_request_handling) {
 		log_error_write(srv, __FILE__, __LINE__, "s",
 				"-- mod_access_uri_handler called");
 	}
 
-	match = (!con->conf.force_lowercase_filenames)
-	  ? array_match_value_suffix(p->conf.access_allow, con->uri.path)
-	  : array_match_value_suffix_nc(p->conf.access_allow, con->uri.path);
-	if (match) return HANDLER_GO_ON; /* allowed */
+	if (mod_access_check(p->conf.access_allow, p->conf.access_deny,
+			     con->uri.path, con->conf.force_lowercase_filenames)) {
+		return HANDLER_GO_ON; /* access allowed */
+	}
 
-	if (p->conf.access_allow->used) { /* have access_allow but none matched */
-		con->http_status = 403;
-		con->mode = DIRECT;
-
-		if (con->conf.log_request_handling) {
-			log_error_write(srv, __FILE__, __LINE__, "sb",
-				"url denied as failed to match any from access_allow", con->uri.path);
+	/* (else) access denied */
+	if (con->conf.log_request_handling) {
+		if (p->conf.access_allow->used) {
+			log_error_write(srv, __FILE__, __LINE__, "sb", "url denied as failed to match any from access_allow", con->uri.path);
 		}
-
-		return HANDLER_FINISHED;
+		else {
+			log_error_write(srv, __FILE__, __LINE__, "sb", "url denied as we match access_deny", con->uri.path);
+		}
 	}
 
-	match = (!con->conf.force_lowercase_filenames)
-	  ? array_match_value_suffix(p->conf.access_deny, con->uri.path)
-	  : array_match_value_suffix_nc(p->conf.access_deny, con->uri.path);
-	if (match) { /* denied */
-			con->http_status = 403;
-			con->mode = DIRECT;
-
-			if (con->conf.log_request_handling) {
-	 			log_error_write(srv, __FILE__, __LINE__, "sb", 
-					"url denied as we match:", match);
-			}
-
-			return HANDLER_FINISHED;
-	}
-
-	return HANDLER_GO_ON;
+	con->http_status = 403;
+	con->mode = DIRECT;
+	return HANDLER_FINISHED;
 }
 
 
