@@ -271,23 +271,10 @@ static int mod_evhost_patch_connection(server *srv, connection *con, plugin_data
 #undef PATCH
 
 
-static handler_t mod_evhost_uri_handler(server *srv, connection *con, void *p_d) {
-	plugin_data *p = p_d;
+static void mod_evhost_build_doc_root_path(connection *con, plugin_data *p) {
 	size_t i;
 	array *parsed_host;
 	register char *ptr;
-	int not_good = 0;
-	stat_cache_entry *sce = NULL;
-
-	/* not authority set */
-	if (buffer_string_is_empty(con->uri.authority)) return HANDLER_GO_ON;
-
-	mod_evhost_patch_connection(srv, con, p);
-
-	/* missing even default(global) conf */
-	if (0 == p->conf.len) {
-		return HANDLER_GO_ON;
-	}
 
 	parsed_host = array_init();
 
@@ -341,6 +328,24 @@ static handler_t mod_evhost_uri_handler(server *srv, connection *con, void *p_d)
 	buffer_append_slash(p->tmp_buf);
 
 	array_free(parsed_host);
+}
+
+static handler_t mod_evhost_uri_handler(server *srv, connection *con, void *p_d) {
+	plugin_data *p = p_d;
+	int not_good = 0;
+	stat_cache_entry *sce = NULL;
+
+	/* not authority set */
+	if (buffer_string_is_empty(con->uri.authority)) return HANDLER_GO_ON;
+
+	mod_evhost_patch_connection(srv, con, p);
+
+	/* missing even default(global) conf */
+	if (0 == p->conf.len) {
+		return HANDLER_GO_ON;
+	}
+
+	mod_evhost_build_doc_root_path(con, p);
 
 	if (HANDLER_ERROR == stat_cache_get_entry(srv, con, p->tmp_buf, &sce)) {
 		log_error_write(srv, __FILE__, __LINE__, "sb", strerror(errno), p->tmp_buf);
