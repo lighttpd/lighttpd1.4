@@ -18,7 +18,6 @@ extra_dist = Split('fastcgi-10.conf \
 	core-request.t \
 	core-response.t \
 	core-keepalive.t \
-	mod-access.t \
 	mod-auth.t \
 	mod-cgi.t \
 	mod-compress.t \

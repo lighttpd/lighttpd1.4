@@ -760,6 +760,22 @@ add_executable(test_configfile
 )
 add_test(NAME test_configfile COMMAND test_configfile)
 
+add_executable(test_mod_access
+	t/test_mod_access.c
+	configfile-glue.c
+	buffer.c
+	array.c
+	data_config.c
+	data_integer.c
+	data_string.c
+	http_header.c
+	http_kv.c
+	vector.c
+	log.c
+	sock_addr.c
+)
+add_test(NAME test_mod_access COMMAND test_mod_access)
+
 add_executable(test_mod_evhost
 	t/test_mod_evhost.c
 	configfile-glue.c
@@ -817,6 +833,8 @@ if(HAVE_PCRE_H)
 	add_target_properties(mod_redirect COMPILE_FLAGS ${PCRE_CFLAGS})
 	target_link_libraries(test_configfile ${PCRE_LDFLAGS})
 	add_target_properties(test_configfile COMPILE_FLAGS ${PCRE_CFLAGS})
+	target_link_libraries(test_mod_access ${PCRE_LDFLAGS})
+	add_target_properties(test_mod_access COMPILE_FLAGS ${PCRE_CFLAGS})
 	target_link_libraries(test_mod_evhost ${PCRE_LDFLAGS})
 	add_target_properties(test_mod_evhost COMPILE_FLAGS ${PCRE_CFLAGS})
 	target_link_libraries(test_mod_simple_vhost ${PCRE_LDFLAGS})
@@ -1018,6 +1036,8 @@ if(WITH_LIBUNWIND)
 	add_target_properties(test_base64 COMPILE_FLAGS ${LIBUNWIND_CFLAGS})
 	target_link_libraries(test_configfile ${PCRE_LDFLAGS} ${LIBUNWIND_LDFLAGS})
 	add_target_properties(test_configfile COMPILE_FLAGS ${PCRE_CFLAGS} ${LIBUNWIND_CFLAGS})
+	target_link_libraries(test_mod_access ${PCRE_LDFLAGS} ${LIBUNWIND_LDFLAGS})
+	add_target_properties(test_mod_access COMPILE_FLAGS ${PCRE_CFLAGS} ${LIBUNWIND_CFLAGS})
 	target_link_libraries(test_mod_evhost ${PCRE_LDFLAGS} ${LIBUNWIND_LDFLAGS})
 	add_target_properties(test_mod_evhost COMPILE_FLAGS ${PCRE_CFLAGS} ${LIBUNWIND_CFLAGS})
 	target_link_libraries(test_mod_simple_vhost ${PCRE_LDFLAGS} ${LIBUNWIND_LDFLAGS})

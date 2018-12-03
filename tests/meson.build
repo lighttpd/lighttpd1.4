@@ -30,7 +30,6 @@ tests = [
 	'core-response.t',
 	'core-var-include.t',
 	'lowercase.t',
-	'mod-access.t',
 	'mod-auth.t',
 	'mod-cgi.t',
 	'mod-compress.t',

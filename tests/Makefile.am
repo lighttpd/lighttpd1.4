@@ -37,7 +37,6 @@ CONFS=\
 	LightyTest.pm \
 	lowercase.conf \
 	lowercase.t \
-	mod-access.t \
 	mod-auth.t \
 	mod-cgi.t \
 	mod-compress.conf \
