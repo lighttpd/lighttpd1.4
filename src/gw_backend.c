@@ -701,7 +701,7 @@ static void gw_proc_kill(server *srv, gw_host *host, gw_proc *proc) {
         host->unused_procs->prev = proc;
     host->unused_procs = proc;
 
-    kill(proc->pid, SIGTERM);
+    kill(proc->pid, host->kill_signal);
 
     gw_proc_set_state(host, proc, PROC_STATE_KILLED);
 
