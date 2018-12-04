@@ -1,9 +1,11 @@
-#include "configfile-glue.c"
+#include "first.h"
 
 #undef NDEBUG
 #include <assert.h>
 #include <stdlib.h>
 #include <stdio.h>
+
+#include "configfile-glue.c"
 
 const struct {
     const char *string;
