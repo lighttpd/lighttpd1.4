@@ -330,7 +330,8 @@ static void gw_proc_waitpid_log(server *srv, gw_host *host, gw_proc *proc, int s
                             WEXITSTATUS(status), proc->connection_name);
         }
     } else if (WIFSIGNALED(status)) {
-        if (WTERMSIG(status) != SIGTERM && WTERMSIG(status) != SIGINT) {
+        if (WTERMSIG(status) != SIGTERM && WTERMSIG(status) != SIGINT
+            && WTERMSIG(status) != host->kill_signal) {
             log_error_write(srv, __FILE__, __LINE__, "sd",
                             "child signalled:", WTERMSIG(status));
         }
@@ -701,7 +702,7 @@ static void gw_proc_kill(server *srv, gw_host *host, gw_proc *proc) {
         host->unused_procs->prev = proc;
     host->unused_procs = proc;
 
-    kill(proc->pid, SIGTERM);
+    kill(proc->pid, host->kill_signal);
 
     gw_proc_set_state(host, proc, PROC_STATE_KILLED);
 
@@ -986,7 +987,7 @@ static int gw_establish_connection(server *srv, gw_host *host, gw_proc *proc, pi
     return 0;
 }
 
-static void gw_restart_dead_procs(server *srv, gw_host *host, int debug) {
+static void gw_restart_dead_procs(server *srv, gw_host *host, int debug, int trigger) {
     for (gw_proc *proc = host->first; proc; proc = proc->next) {
         if (debug > 2) {
             log_error_write(srv, __FILE__, __LINE__,  "sbdddd",
@@ -1001,6 +1002,12 @@ static void gw_restart_dead_procs(server *srv, gw_host *host, int debug) {
             gw_proc_check_enable(srv, host, proc);
             break;
         case PROC_STATE_KILLED:
+            if (trigger && ++proc->disabled_until > 4) {
+                int sig = (proc->disabled_until <= 8)
+                  ? host->kill_signal
+                  : proc->disabled_until <= 16 ? SIGTERM : SIGKILL;
+                kill(proc->pid, sig);
+            }
             break;
         case PROC_STATE_DIED_WAIT_FOR_PID:
             /*(state should not happen in workers if server.max-worker > 0)*/
@@ -1918,7 +1925,7 @@ static handler_t gw_write_error(server *srv, gw_handler_ctx *hctx) {
         /* (optimization to detect backend process exit while processing a
          *  large number of ready events; (this block could be removed)) */
         if (0 == srv->srvconf.max_worker)
-            gw_restart_dead_procs(srv, hctx->host, hctx->conf.debug);
+            gw_restart_dead_procs(srv, hctx->host, hctx->conf.debug, 0);
 
         /* cleanup this request and let request handler start request again */
         if (hctx->reconnects++ < 5) return gw_reconnect(srv, hctx);
@@ -2458,7 +2465,7 @@ static void gw_handle_trigger_host(server *srv, gw_host *host, int debug) {
         gw_proc_waitpid(srv, host, proc);
     }
 
-    gw_restart_dead_procs(srv, host, debug);
+    gw_restart_dead_procs(srv, host, debug, 1);
 
     /* check if adaptive spawning enabled */
     if (host->min_procs == host->max_procs) return;
