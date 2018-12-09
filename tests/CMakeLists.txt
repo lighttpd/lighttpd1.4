@@ -27,8 +27,6 @@ set(T_FILES
 	mod-extforward.t
 	mod-fastcgi.t
 	mod-proxy.t
-	mod-redirect.t
-	mod-rewrite.t
 	mod-secdownload.t
 	mod-setenv.t
 	mod-ssi.t

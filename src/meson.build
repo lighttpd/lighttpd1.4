@@ -760,6 +760,21 @@ test('test_configfile', executable('test_configfile',
 	build_by_default: false,
 ))
 
+test('test_keyvalue', executable('test_keyvalue',
+	sources: [
+		't/test_keyvalue.c',
+		'burl.c',
+		'buffer.c',
+		'base64.c',
+		'array.c',
+		'data_integer.c',
+		'data_string.c',
+		'log.c',
+	],
+	dependencies: common_flags + libpcre + libunwind,
+	build_by_default: false,
+))
+
 test('test_mod_access', executable('test_mod_access',
 	sources: [
 		't/test_mod_access.c',

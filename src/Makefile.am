@@ -6,6 +6,7 @@ noinst_PROGRAMS=\
 	t/test_burl \
 	t/test_base64 \
 	t/test_configfile \
+	t/test_keyvalue \
 	t/test_mod_access \
 	t/test_mod_evhost \
 	t/test_mod_simple_vhost \
@@ -20,6 +21,7 @@ TESTS=\
 	t/test_burl$(EXEEXT) \
 	t/test_base64$(EXEEXT) \
 	t/test_configfile$(EXEEXT) \
+	t/test_keyvalue$(EXEEXT) \
 	t/test_mod_access$(EXEEXT) \
 	t/test_mod_evhost$(EXEEXT) \
 	t/test_mod_simple_vhost$(EXEEXT) \
@@ -556,6 +558,9 @@ t_test_burl_LDADD = $(LIBUNWIND_LIBS)
 
 t_test_configfile_SOURCES = t/test_configfile.c buffer.c array.c data_config.c data_integer.c data_string.c http_header.c http_kv.c vector.c log.c sock_addr.c
 t_test_configfile_LDADD = $(PCRE_LIB) $(LIBUNWIND_LIBS)
+
+t_test_keyvalue_SOURCES = t/test_keyvalue.c burl.c buffer.c base64.c array.c data_integer.c data_string.c log.c
+t_test_keyvalue_LDADD = $(PCRE_LIB) $(LIBUNWIND_LIBS)
 
 t_test_mod_access_SOURCES = t/test_mod_access.c configfile-glue.c buffer.c array.c data_config.c data_integer.c data_string.c http_header.c http_kv.c vector.c log.c sock_addr.c
 t_test_mod_access_LDADD = $(PCRE_LIB) $(LIBUNWIND_LIBS)

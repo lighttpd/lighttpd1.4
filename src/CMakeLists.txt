@@ -760,6 +760,18 @@ add_executable(test_configfile
 )
 add_test(NAME test_configfile COMMAND test_configfile)
 
+add_executable(test_keyvalue
+	t/test_keyvalue.c
+	burl.c
+	buffer.c
+	base64.c
+	array.c
+	data_integer.c
+	data_string.c
+	log.c
+)
+add_test(NAME test_keyvalue COMMAND test_keyvalue)
+
 add_executable(test_mod_access
 	t/test_mod_access.c
 	configfile-glue.c
@@ -833,6 +845,8 @@ if(HAVE_PCRE_H)
 	add_target_properties(mod_redirect COMPILE_FLAGS ${PCRE_CFLAGS})
 	target_link_libraries(test_configfile ${PCRE_LDFLAGS})
 	add_target_properties(test_configfile COMPILE_FLAGS ${PCRE_CFLAGS})
+	target_link_libraries(test_keyvalue ${PCRE_LDFLAGS})
+	add_target_properties(test_keyvalue COMPILE_FLAGS ${PCRE_CFLAGS})
 	target_link_libraries(test_mod_access ${PCRE_LDFLAGS})
 	add_target_properties(test_mod_access COMPILE_FLAGS ${PCRE_CFLAGS})
 	target_link_libraries(test_mod_evhost ${PCRE_LDFLAGS})
@@ -1036,6 +1050,8 @@ if(WITH_LIBUNWIND)
 	add_target_properties(test_base64 COMPILE_FLAGS ${LIBUNWIND_CFLAGS})
 	target_link_libraries(test_configfile ${PCRE_LDFLAGS} ${LIBUNWIND_LDFLAGS})
 	add_target_properties(test_configfile COMPILE_FLAGS ${PCRE_CFLAGS} ${LIBUNWIND_CFLAGS})
+	target_link_libraries(test_keyvalue ${PCRE_LDFLAGS} ${LIBUNWIND_LDFLAGS})
+	add_target_properties(test_keyvalue COMPILE_FLAGS ${PCRE_CFLAGS} ${LIBUNWIND_CFLAGS})
 	target_link_libraries(test_mod_access ${PCRE_LDFLAGS} ${LIBUNWIND_LDFLAGS})
 	add_target_properties(test_mod_access COMPILE_FLAGS ${PCRE_CFLAGS} ${LIBUNWIND_CFLAGS})
 	target_link_libraries(test_mod_evhost ${PCRE_LDFLAGS} ${LIBUNWIND_LDFLAGS})
