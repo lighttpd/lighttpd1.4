@@ -8,7 +8,7 @@ BEGIN {
 
 use strict;
 use IO::Socket;
-use Test::More tests => 9;
+use Test::More tests => 7;
 use LightyTest;
 
 my $tf_real = LightyTest->new();
@@ -16,12 +16,6 @@ my $tf_proxy = LightyTest->new();
 
 my $t;
 my $php_child = -1;
-
-SKIP: {
-	skip "PHP already running on port 1026", 1 if $tf_real->listening_on(1026);
-	skip "no php binary found", 1 unless $LightyTest::HAVE_PHP;
-	ok(-1 != ($php_child = $tf_real->spawnfcgi($ENV{'PHP'}, 1026)), "Spawning php");
-}
 
 ## we need two procs
 ## 1. the real webserver
@@ -53,8 +47,6 @@ EOF
 $t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200, 'Server' => 'Apache 1.3.29' } ];
 ok($tf_proxy->handle_http($t) == 0, 'drop Server from real server');
 
-SKIP: {
-	skip "no PHP running on port 1026", 1 unless $tf_real->listening_on(1026);
 	$t->{REQUEST}  = ( <<EOF
 GET /rewrite/all/some+test%3axxx%20with%20space HTTP/1.0
 Host: www.example.org
@@ -62,17 +54,10 @@ EOF
  );
 	$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200, 'HTTP-Content' => '/some+test%3axxx%20with%20space' } ];
 	ok($tf_proxy->handle_http($t) == 0, 'rewrited urls work with encoded path');
-}
 
 ok($tf_proxy->stop_proc == 0, "Stopping lighttpd proxy");
 
 ok($tf_real->stop_proc == 0, "Stopping lighttpd");
-
-SKIP: {
-	skip "PHP not started, cannot stop it", 1 unless $php_child != -1;
-	ok(0 == $tf_real->endspawnfcgi($php_child), "Stopping php");
-	$php_child = -1;
-}
 
 exit 0;
 

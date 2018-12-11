@@ -38,6 +38,7 @@ cp "${srcdir}/docroot/www/"*.html \
 cp "${srcdir}/docroot/www/go/"*.php "${tmpdir}/servers/www.example.org/pages/go/"
 cp "${srcdir}/docroot/www/expire/"*.txt "${tmpdir}/servers/www.example.org/pages/expire/"
 cp "${srcdir}/docroot/www/indexfile/"*.php "${tmpdir}/servers/www.example.org/pages/indexfile/"
+cp "${srcdir}/docroot/www/indexfile/"*.pl "${tmpdir}/servers/www.example.org/pages/indexfile/"
 cp "${srcdir}/docroot/123/"*.txt \
    "${srcdir}/docroot/123/"*.html \
    "${srcdir}/docroot/123/"*.php \

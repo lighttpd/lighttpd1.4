@@ -20,8 +20,6 @@ TESTS=\
 
 CONFS=\
 	404-handler.conf \
-	bug-06.conf \
-	bug-12.conf \
 	cachable.t \
 	condition.conf \
 	core-404-handler.t \
@@ -31,12 +29,11 @@ CONFS=\
 	core-response.t \
 	core-var-include.t \
 	fastcgi-10.conf \
-	fastcgi-13.conf \
-	fastcgi-auth.conf \
 	fastcgi-responder.conf \
 	LightyTest.pm \
 	lowercase.conf \
 	lowercase.t \
+	mod-auth.conf \
 	mod-auth.t \
 	mod-cgi.t \
 	mod-compress.conf \
@@ -45,6 +42,7 @@ CONFS=\
 	mod-extforward.t \
 	mod-fastcgi.t \
 	mod-proxy.t \
+	mod-secdownload.conf \
 	mod-secdownload.t \
 	mod-setenv.t \
 	mod-ssi.t \

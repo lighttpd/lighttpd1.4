@@ -7,7 +7,7 @@ BEGIN {
 }
 
 use strict;
-use Test::More tests => 59;
+use Test::More tests => 48;
 use LightyTest;
 
 my $tf = LightyTest->new();
@@ -22,8 +22,9 @@ SKIP: {
 }
 
 SKIP: {
-	skip "no PHP running on port 1026", 35 unless $tf->listening_on(1026);
+	skip "no PHP running on port 1026", 34 unless $tf->listening_on(1026);
 
+	$tf->{CONFIGFILE} = 'fastcgi-10.conf';
 	ok($tf->start_proc == 0, "Starting lighttpd") or goto cleanup;
 
 	$t->{REQUEST} = ( <<EOF
@@ -115,14 +116,6 @@ EOF
 	ok($tf->handle_http($t) == 0, 'SERVER_NAME');
 
 	$t->{REQUEST}  = ( <<EOF
-GET /get-server-env.php?env=SERVER_NAME HTTP/1.0
-Host: zzz.example.org
-EOF
- );
-	$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200, 'HTTP-Content' => 'www.example.org' } ];
-	ok($tf->handle_http($t) == 0, 'SERVER_NAME');
-
-	$t->{REQUEST}  = ( <<EOF
 GET /cgi.php/abc HTTP/1.0
 EOF
  );
@@ -207,12 +200,6 @@ EOF
 	$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200, 'HTTP-Content' => 'Basic' } ];
 	ok($tf->handle_http($t) == 0, '$_SERVER["AUTH_TYPE"]');
 
-
-	ok($tf->stop_proc == 0, "Stopping lighttpd");
-
-
-	$tf->{CONFIGFILE} = 'fastcgi-10.conf';
-	ok($tf->start_proc == 0, "Starting lighttpd with $tf->{CONFIGFILE}") or goto cleanup;
 	$t->{REQUEST}  = ( <<EOF
 GET /get-server-env.php?env=SERVER_NAME HTTP/1.0
 Host: zzz.example.org
@@ -229,10 +216,6 @@ EOF
 	$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200, 'HTTP-Content' => 'zzz.example.org' } ];
 	ok($tf->handle_http($t) == 0, 'SERVER_NAME (absolute url in request line)');
 
-	ok($tf->stop_proc == 0, "Stopping lighttpd");
-	
-	$tf->{CONFIGFILE} = 'bug-06.conf';
-	ok($tf->start_proc == 0, "Starting lighttpd with $tf->{CONFIGFILE}") or goto cleanup;
 	$t->{REQUEST}  = ( <<EOF
 GET /indexfile/ HTTP/1.0
 Host: www.example.org
@@ -241,10 +224,6 @@ EOF
 	$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200, 'HTTP-Content' => '/indexfile/index.php' } ];
 	ok($tf->handle_http($t) == 0, 'Bug #6');
 
-	ok($tf->stop_proc == 0, "Stopping lighttpd");
-
-	$tf->{CONFIGFILE} = 'bug-12.conf';
-	ok($tf->start_proc == 0, "Starting lighttpd with bug-12.conf") or goto cleanup;
 	$t->{REQUEST}  = ( <<EOF
 POST /indexfile/abc HTTP/1.0
 Host: www.example.org
@@ -253,6 +232,31 @@ EOF
  );
 	$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 404, 'HTTP-Content' => '/indexfile/return-404.php' } ];
 	ok($tf->handle_http($t) == 0, 'Bug #12');
+
+	$t->{REQUEST}  = ( <<EOF
+GET /indexfile/index.php HTTP/1.0
+Host: bin-env.example.org
+EOF
+ );
+	$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200 } ];
+	ok($tf->handle_http($t) == 0, 'FastCGI + local spawning');
+
+	$t->{REQUEST} = ( <<EOF
+HEAD /indexfile/index.php HTTP/1.0
+Host: bin-env.example.org
+EOF
+ );
+	$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200, '-Content-Length' => '0' } ];
+	# Of course a valid content-length != 0 would be ok, but we assume for now that such one is not generated.
+	ok($tf->handle_http($t) == 0, 'Check for buggy content length with HEAD');
+
+	$t->{REQUEST}  = ( <<EOF
+GET /get-env.php?env=MAIL HTTP/1.0
+Host: bin-env.example.org
+EOF
+ );
+	$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200 , 'HTTP-Content' => '' } ];
+	ok($tf->handle_http($t) == 0, 'FastCGI + bin-copy-environment');
 
 	ok($tf->stop_proc == 0, "Stopping lighttpd");
 }
@@ -264,13 +268,15 @@ SKIP: {
 }
 
 SKIP: {
-	skip "no fcgi-auth found", 7 unless -x $tf->{BASEDIR}."/tests/fcgi-auth" || -x $tf->{BASEDIR}."/tests/fcgi-auth.exe";
+	skip "no fcgi-auth, fcgi-responder found", 15
+	  unless (-x $tf->{BASEDIR}."/tests/fcgi-auth"      || -x $tf->{BASEDIR}."/tests/fcgi-auth.exe")
+	      && (-x $tf->{BASEDIR}."/tests/fcgi-responder" || -x $tf->{BASEDIR}."/tests/fcgi-responder.exe");
 
-	$tf->{CONFIGFILE} = 'fastcgi-auth.conf';
+	$tf->{CONFIGFILE} = 'fastcgi-responder.conf';
 	ok($tf->start_proc == 0, "Starting lighttpd with $tf->{CONFIGFILE}") or die();
 	$t->{REQUEST}  = ( <<EOF
 GET /index.html?ok HTTP/1.0
-Host: www.example.org
+Host: auth.example.org
 EOF
  );
 	$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200 } ];
@@ -278,7 +284,7 @@ EOF
 
 	$t->{REQUEST}  = ( <<EOF
 GET /index.html?fail HTTP/1.0
-Host: www.example.org
+Host: auth.example.org
 EOF
  );
 	$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 403 } ];
@@ -286,7 +292,7 @@ EOF
 
 	$t->{REQUEST}  = ( <<EOF
 GET /expire/access.txt?ok HTTP/1.0
-Host: www.example.org
+Host: auth.example.org
 EOF
  );
 	$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200 } ];
@@ -294,7 +300,7 @@ EOF
 
 	$t->{REQUEST}  = ( <<EOF
 GET /index.fcgi?varfail HTTP/1.0
-Host: www.example.org
+Host: auth.example.org
 EOF
  );
 	$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 403 } ];
@@ -302,56 +308,12 @@ EOF
 
 	$t->{REQUEST}  = ( <<EOF
 GET /index.fcgi?var HTTP/1.0
-Host: www.example.org
+Host: auth.example.org
 EOF
  );
 	$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200, 'HTTP-Content' => 'LighttpdTestContent' } ];
 	ok($tf->handle_http($t) == 0, 'FastCGI - Auth Success with Variable- to Env expansion');
 
-
-	ok($tf->stop_proc == 0, "Stopping lighttpd");
-}
-
-SKIP: {
-	skip "no php found", 5 unless $LightyTest::HAVE_PHP;
-	$tf->{CONFIGFILE} = 'fastcgi-13.conf';
-	ok($tf->start_proc == 0, "Starting lighttpd with $tf->{CONFIGFILE}") or die();
-	$t->{REQUEST}  = ( <<EOF
-GET /indexfile/index.php HTTP/1.0
-Host: www.example.org
-EOF
- );
-	$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200 } ];
-	ok($tf->handle_http($t) == 0, 'FastCGI + local spawning');
-
-	$t->{REQUEST} = ( <<EOF
-HEAD /indexfile/index.php HTTP/1.0
-Host: www.example.org
-EOF
- );
-	$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200, '-Content-Length' => '0' } ];
-	# Of course a valid content-length != 0 would be ok, but we assume for now that such one is not generated.
-	ok($tf->handle_http($t) == 0, 'Check for buggy content length with HEAD');
-
-	$t->{REQUEST}  = ( <<EOF
-GET /get-env.php?env=MAIL HTTP/1.0
-Host: www.example.org
-EOF
- );
-	$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200 , 'HTTP-Content' => '' } ];
-	ok($tf->handle_http($t) == 0, 'FastCGI + bin-copy-environment');
-
-
-
-	ok($tf->stop_proc == 0, "Stopping lighttpd");
-}
-
-
-SKIP: {
-	skip "no fcgi-responder found", 10 unless -x $tf->{BASEDIR}."/tests/fcgi-responder" || -x $tf->{BASEDIR}."/tests/fcgi-responder.exe";
-	
-	$tf->{CONFIGFILE} = 'fastcgi-responder.conf';
-	ok($tf->start_proc == 0, "Starting lighttpd with $tf->{CONFIGFILE}") or die();
 	$t->{REQUEST}  = ( <<EOF
 GET /index.fcgi?lf HTTP/1.0
 Host: www.example.org

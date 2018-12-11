@@ -17,6 +17,7 @@ use MIME::Base64 qw(encode_base64url);
 my $tf = LightyTest->new();
 my $t;
 
+$tf->{CONFIGFILE} = 'mod-secdownload.conf';
 ok($tf->start_proc == 0, "Starting lighttpd") or die();
 
 my $secret = "verysecret";
