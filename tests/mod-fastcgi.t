@@ -22,7 +22,7 @@ SKIP: {
 }
 
 SKIP: {
-	skip "no PHP running on port 1026", 34 unless $tf->listening_on(1026);
+	skip "no PHP running on port 1026", 31 unless $tf->listening_on(1026);
 
 	$tf->{CONFIGFILE} = 'fastcgi-10.conf';
 	ok($tf->start_proc == 0, "Starting lighttpd") or goto cleanup;
