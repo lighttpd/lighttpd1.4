@@ -172,17 +172,12 @@ static handler_t fcgi_stdin_append(server *srv, handler_ctx *hctx) {
 	off_t offset, weWant;
 	const off_t req_cqlen = req_cq->bytes_in - req_cq->bytes_out;
 	int request_id = hctx->request_id;
+	UNUSED(srv);
 
 	/* something to send ? */
 	for (offset = 0; offset != req_cqlen; offset += weWant) {
 		weWant = req_cqlen - offset > FCGI_MAX_LENGTH ? FCGI_MAX_LENGTH : req_cqlen - offset;
 
-		/* we announce toWrite octets
-		 * now take all request_content chunks available
-		 * */
-
-		fcgi_header(&(header), FCGI_STDIN, request_id, weWant, 0);
-		chunkqueue_append_mem(hctx->wb, (const char *)&header, sizeof(header));
 		if (-1 != hctx->wb_reqlen) {
 			if (hctx->wb_reqlen >= 0) {
 				hctx->wb_reqlen += sizeof(header);
@@ -191,10 +186,10 @@ static handler_t fcgi_stdin_append(server *srv, handler_ctx *hctx) {
 			}
 		}
 
-		if (hctx->conf.debug > 10) {
-			log_error_write(srv, __FILE__, __LINE__, "soso", "tosend:", offset, "/", req_cqlen);
-		}
-
+		fcgi_header(&(header), FCGI_STDIN, request_id, weWant, 0);
+		hctx->wb->first->type == MEM_CHUNK /* else FILE_CHUNK for temp file */
+		  ? chunkqueue_append_mem(hctx->wb, (const char *)&header, sizeof(header))
+		  : chunkqueue_append_mem_min(hctx->wb, (const char *)&header, sizeof(header));
 		chunkqueue_steal(hctx->wb, req_cq, weWant);
 		/*(hctx->wb_reqlen already includes content_length)*/
 	}
@@ -227,7 +222,8 @@ static handler_t fcgi_create_env(server *srv, handler_ctx *hctx) {
 	  host->strip_request_uri
 	};
 
-	buffer * const b = chunkqueue_prepend_buffer_open_sz(hctx->wb, (size_t)(con->read_queue->bytes_out - hctx->wb->bytes_in));
+	size_t rsz = (size_t)(con->read_queue->bytes_out - hctx->wb->bytes_in);
+	buffer * const b = chunkqueue_prepend_buffer_open_sz(hctx->wb, rsz < 65536 ? rsz : con->header_len);
 
 	/* send FCGI_BEGIN_REQUEST */
 

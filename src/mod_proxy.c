@@ -715,7 +715,8 @@ static handler_t proxy_create_env(server *srv, gw_handler_ctx *gwhctx) {
 				   || NULL != hctx->conf.header.hosts_request);
 	const int upgrade = hctx->conf.header.upgrade
 	    && (NULL != http_header_request_get(con, HTTP_HEADER_UPGRADE, CONST_STR_LEN("Upgrade")));
-	buffer * const b = chunkqueue_prepend_buffer_open_sz(hctx->gw.wb, (size_t)(con->read_queue->bytes_out - hctx->gw.wb->bytes_in));
+	size_t rsz = (size_t)(con->read_queue->bytes_out - hctx->gw.wb->bytes_in);
+	buffer * const b = chunkqueue_prepend_buffer_open_sz(hctx->gw.wb, rsz < 65536 ? rsz : con->header_len);
 
 	/* build header */
 

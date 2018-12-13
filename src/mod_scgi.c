@@ -163,7 +163,8 @@ static handler_t scgi_create_env(server *srv, handler_ctx *hctx) {
 	  ? scgi_env_add_scgi
 	  : scgi_env_add_uwsgi;
 	size_t offset;
-	buffer * const b = chunkqueue_prepend_buffer_open_sz(hctx->wb, (size_t)(con->read_queue->bytes_out - hctx->wb->bytes_in));
+	size_t rsz = (size_t)(con->read_queue->bytes_out - hctx->wb->bytes_in);
+	buffer * const b = chunkqueue_prepend_buffer_open_sz(hctx->wb, rsz < 65536 ? rsz : con->header_len);
 
         /* save space for 9 digits (plus ':'), though incoming HTTP request
 	 * currently limited to 64k (65535, so 5 chars) */

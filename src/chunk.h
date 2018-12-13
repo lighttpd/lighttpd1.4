@@ -60,6 +60,7 @@ void chunkqueue_set_tempdirs_default (array *tempdirs, unsigned int upload_temp_
 void chunkqueue_append_file(chunkqueue *cq, buffer *fn, off_t offset, off_t len); /* copies "fn" */
 void chunkqueue_append_file_fd(chunkqueue *cq, buffer *fn, int fd, off_t offset, off_t len); /* copies "fn" */
 void chunkqueue_append_mem(chunkqueue *cq, const char *mem, size_t len); /* copies memory */
+void chunkqueue_append_mem_min(chunkqueue *cq, const char * mem, size_t len); /* copies memory */
 void chunkqueue_append_buffer(chunkqueue *cq, buffer *mem); /* may reset "mem" */
 void chunkqueue_append_chunkqueue(chunkqueue *cq, chunkqueue *src);
 

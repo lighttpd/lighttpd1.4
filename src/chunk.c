@@ -325,6 +325,18 @@ void chunkqueue_append_mem(chunkqueue *cq, const char * mem, size_t len) {
 }
 
 
+void chunkqueue_append_mem_min(chunkqueue *cq, const char * mem, size_t len) {
+	chunk *c;
+	if (len < chunk_buf_sz && chunkqueue_append_mem_extend_chunk(cq, mem, len))
+		return;
+
+	c = chunk_init(len+1);
+	chunkqueue_append_chunk(cq, c);
+	cq->bytes_in += len;
+	buffer_copy_string_len(c->mem, mem, len);
+}
+
+
 void chunkqueue_append_chunkqueue(chunkqueue *cq, chunkqueue *src) {
 	if (src == NULL || NULL == src->first) return;
 
