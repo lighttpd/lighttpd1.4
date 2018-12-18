@@ -15,7 +15,6 @@ my $tf_real = LightyTest->new();
 my $tf_proxy = LightyTest->new();
 
 my $t;
-my $php_child = -1;
 
 ## we need two procs
 ## 1. the real webserver
@@ -63,7 +62,6 @@ exit 0;
 
 cleanup:
 
-$tf_real->endspawnfcgi($php_child) if $php_child != -1;
 $tf_real->stop_proc;
 $tf_proxy->stop_proc;
 

@@ -7,22 +7,15 @@ BEGIN {
 }
 
 use strict;
-use Test::More tests => 48;
+use Test::More tests => 46;
 use LightyTest;
 
 my $tf = LightyTest->new();
 
 my $t;
-my $php_child = -1;
 
 SKIP: {
-	skip "PHP already running on port 1026", 1 if $tf->listening_on(1026);
-	skip "no php binary found", 1 unless $LightyTest::HAVE_PHP;
-	ok(-1 != ($php_child = $tf->spawnfcgi($ENV{'PHP'}, 1026)), "Spawning php");
-}
-
-SKIP: {
-	skip "no PHP running on port 1026", 31 unless $tf->listening_on(1026);
+	skip "no php binary found", 31 unless $LightyTest::HAVE_PHP;
 
 	$tf->{CONFIGFILE} = 'fastcgi-10.conf';
 	ok($tf->start_proc == 0, "Starting lighttpd") or goto cleanup;
@@ -262,12 +255,6 @@ EOF
 }
 
 SKIP: {
-	skip "PHP not started, cannot stop it", 1 unless $php_child != -1;
-	ok(0 == $tf->endspawnfcgi($php_child), "Stopping php");
-	$php_child = -1;
-}
-
-SKIP: {
 	skip "no fcgi-auth, fcgi-responder found", 15
 	  unless (-x $tf->{BASEDIR}."/tests/fcgi-auth"      || -x $tf->{BASEDIR}."/tests/fcgi-auth.exe")
 	      && (-x $tf->{BASEDIR}."/tests/fcgi-responder" || -x $tf->{BASEDIR}."/tests/fcgi-responder.exe");
@@ -391,7 +378,5 @@ EOF
 exit 0;
 
 cleanup: ;
-
-$tf->endspawnfcgi($php_child) if $php_child != -1;
 
 die();
