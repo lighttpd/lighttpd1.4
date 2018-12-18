@@ -187,7 +187,7 @@ static handler_t fcgi_stdin_append(server *srv, handler_ctx *hctx) {
 		}
 
 		fcgi_header(&(header), FCGI_STDIN, request_id, weWant, 0);
-		hctx->wb->first->type == MEM_CHUNK /* else FILE_CHUNK for temp file */
+		(chunkqueue_is_empty(hctx->wb) || hctx->wb->first->type == MEM_CHUNK) /* else FILE_CHUNK for temp file */
 		  ? chunkqueue_append_mem(hctx->wb, (const char *)&header, sizeof(header))
 		  : chunkqueue_append_mem_min(hctx->wb, (const char *)&header, sizeof(header));
 		chunkqueue_steal(hctx->wb, req_cq, weWant);
