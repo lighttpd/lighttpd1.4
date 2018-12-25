@@ -79,7 +79,6 @@ struct stat_cache_fam;
 
 typedef struct stat_cache {
 	splay_tree *files; /* the nodes of the tree are stat_cache_entry's */
-	buffer *hash_key;  /* temp-store for the hash-key */
       #ifdef HAVE_FAM_H
 	struct stat_cache_fam *scf;
       #endif
@@ -87,11 +86,16 @@ typedef struct stat_cache {
 
 
 /* the famous DJB hash function for strings */
-static uint32_t hashme(buffer *str) {
+static uint32_t hashme(const char *str, int z) {
 	uint32_t hash = 5381;
-	for (const unsigned char *s = (unsigned char *)str->ptr; *s; ++s) {
+	for (const unsigned char *s = (const unsigned char *)str; *s; ++s) {
 		hash = ((hash << 5) + hash) ^ *s;
 	}
+
+	/* customizations */
+
+	/* (differentiate hash values with and w/o con->conf.follow_symlink) */
+	hash = ((hash << 5) + hash) ^ (z ? '1' : '0');
 
 	hash &= ~(((uint32_t)1) << 31); /* strip the highest bit */
 
@@ -118,7 +122,6 @@ typedef struct stat_cache_fam {
 	int dir_ndx;
 	fam_dir_entry *fam_dir;
 	buffer *dir_name; /* for building the dirname from the filename */
-	buffer *hash_key;  /* temp-store for the hash-key */
 } stat_cache_fam;
 
 static fam_dir_entry * fam_dir_entry_init(void) {
@@ -181,10 +184,8 @@ static handler_t stat_cache_handle_fdevent(server *srv, void *_fce, int revent) 
 				/* we have 2 versions, follow and no-follow-symlink */
 
 				for (j = 0; j < 2; j++) {
-					buffer_copy_string(scf->hash_key, fe.filename);
-					buffer_append_string_len(scf->hash_key, (0 == j ? "0" : "1"), 1);
 
-					ndx = hashme(scf->hash_key);
+					ndx = hashme(fe.filename, j);
 
 					scf->dirs = splaytree_splay(scf->dirs, ndx);
 					node = scf->dirs;
@@ -220,7 +221,6 @@ static stat_cache_fam * stat_cache_init_fam(server *srv) {
 	stat_cache_fam *scf = calloc(1, sizeof(*scf));
 	scf->fam_fcce_ndx = -1;
 	scf->dir_name = buffer_init();
-	scf->hash_key = buffer_init();
 
 	/* setup FAM */
 	if (0 != FAMOpen2(&scf->fam, "lighttpd")) {
@@ -242,7 +242,6 @@ static stat_cache_fam * stat_cache_init_fam(server *srv) {
 static void stat_cache_free_fam(stat_cache_fam *scf) {
 	if (NULL == scf) return;
 	buffer_free(scf->dir_name);
-	buffer_free(scf->hash_key);
 
 	while (scf->dirs) {
 		int osize;
@@ -292,10 +291,7 @@ static handler_t stat_cache_fam_dir_check(server *srv, stat_cache_fam *scf, stat
 		return HANDLER_ERROR;
 	}
 
-	buffer_copy_buffer(scf->hash_key, scf->dir_name);
-	buffer_append_string_len(scf->hash_key, (0 != follow_symlink ? "1" : "0"), 1);
-
-	scf->dir_ndx = hashme(scf->hash_key);
+	scf->dir_ndx = hashme(scf->dir_name->ptr, follow_symlink);
 
 	scf->dirs = splaytree_splay(scf->dirs, scf->dir_ndx);
 
@@ -380,8 +376,6 @@ stat_cache *stat_cache_init(server *srv) {
 	sc = calloc(1, sizeof(*sc));
 	force_assert(NULL != sc);
 
-	sc->hash_key = buffer_init();
-
 #ifdef HAVE_FAM_H
 	if (STAT_CACHE_ENGINE_FAM == srv->srvconf.stat_cache_engine) {
 		sc->scf = stat_cache_init_fam(srv);
@@ -431,8 +425,6 @@ void stat_cache_free(stat_cache *sc) {
 
 		force_assert(osize - 1 == splaytree_size(sc->files));
 	}
-
-	buffer_free(sc->hash_key);
 
 #ifdef HAVE_FAM_H
 	stat_cache_free_fam(sc->scf);
@@ -620,10 +612,7 @@ handler_t stat_cache_get_entry(server *srv, connection *con, buffer *name, stat_
 
 	sc = srv->stat_cache;
 
-	buffer_copy_buffer(sc->hash_key, name);
-	buffer_append_string_len(sc->hash_key, (0 != follow_symlink ? "1" : "0"), 1);
-
-	file_ndx = hashme(sc->hash_key);
+	file_ndx = hashme(name->ptr, follow_symlink);
 	sc->files = splaytree_splay(sc->files, file_ndx);
 
 	if (sc->files && (sc->files->key == file_ndx)) {
