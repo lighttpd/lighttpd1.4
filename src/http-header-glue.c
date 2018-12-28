@@ -24,10 +24,7 @@
 
 
 int http_response_redirect_to_directory(server *srv, connection *con) {
-	buffer *o;
-
-	o = buffer_init();
-
+	buffer *o = srv->tmp_buf;
 	buffer_copy_buffer(o, con->uri.scheme);
 	buffer_append_string_len(o, CONST_STR_LEN("://"));
 	if (!buffer_string_is_empty(con->uri.authority)) {
@@ -77,9 +74,6 @@ int http_response_redirect_to_directory(server *srv, connection *con) {
 
 	con->http_status = 301;
 	con->file_finished = 1;
-
-	buffer_free(o);
-
 	return 0;
 }
 
