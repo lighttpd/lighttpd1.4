@@ -39,18 +39,14 @@ int http_response_redirect_to_directory(server *srv, connection *con) {
 		if (-1 == getsockname(con->fd, (struct sockaddr *)&our_addr, &our_addr_len)
 		    || our_addr_len > (socklen_t)sizeof(our_addr)) {
 			con->http_status = 500;
-
 			log_error_write(srv, __FILE__, __LINE__, "ss",
 					"can't get sockname", strerror(errno));
-
-			buffer_free(o);
-			return 0;
+			return -1;
 		}
 
 		/* Lookup name: secondly try to get hostname for bind address */
 		if (0 != sock_addr_nameinfo_append_buffer(srv, o, &our_addr)) {
 			con->http_status = 500;
-			buffer_free(o);
 			return -1;
 		} else {
 			unsigned short default_port = 80;
