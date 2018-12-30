@@ -41,11 +41,19 @@ int http_response_buffer_append_authority(server *srv, connection *con, buffer *
 			return -1;
 		}
 
+		if (our_addr.plain.sa_family == AF_INET
+		    && our_addr.ipv4.sin_addr.s_addr == htonl(INADDR_LOOPBACK)) {
+			buffer_append_string_len(o, CONST_STR_LEN("localhost"));
+		} else if (!buffer_string_is_empty(con->server_name)) {
+			buffer_append_string_buffer(o, con->server_name);
+		} else
 		/* Lookup name: secondly try to get hostname for bind address */
 		if (0 != sock_addr_nameinfo_append_buffer(srv, o, &our_addr)) {
 			con->http_status = 500;
 			return -1;
-		} else {
+		}
+
+		{
 			unsigned short listen_port = sock_addr_get_port(&our_addr);
 			unsigned short default_port = 80;
 			if (buffer_is_equal_caseless_string(con->uri.scheme, CONST_STR_LEN("https"))) {
