@@ -49,13 +49,15 @@ int http_response_redirect_to_directory(server *srv, connection *con) {
 			con->http_status = 500;
 			return -1;
 		} else {
+			unsigned short listen_port = sock_addr_get_port(&our_addr);
 			unsigned short default_port = 80;
 			if (buffer_is_equal_caseless_string(con->uri.scheme, CONST_STR_LEN("https"))) {
 				default_port = 443;
 			}
-			if (default_port != srv->srvconf.port) {
+			if (0 == listen_port) listen_port = srv->srvconf.port;
+			if (default_port != listen_port) {
 				buffer_append_string_len(o, CONST_STR_LEN(":"));
-				buffer_append_int(o, srv->srvconf.port);
+				buffer_append_int(o, listen_port);
 			}
 		}
 	}
