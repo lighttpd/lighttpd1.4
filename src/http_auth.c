@@ -57,7 +57,7 @@ int http_auth_const_time_memeq (const char *a, const size_t alen, const char *b,
      * (similar to mod_secdownload.c:const_time_memeq()) */
     /* round to next multiple of 64 to avoid potentially leaking exact
      * password length when subject to high precision timing attacks) */
-    size_t lim = ((alen >= blen ? alen : blen) + 0xFFFFF) & ~0xFFFFF;
+    size_t lim = ((alen >= blen ? alen : blen) + 0x3F) & ~0x3F;
     int diff = 0;
     for (size_t i = 0, j = 0; lim; --lim) {
         diff |= (a[i] ^ b[j]);
