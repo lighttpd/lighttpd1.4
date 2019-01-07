@@ -34,8 +34,12 @@ typedef struct {
   unsigned char buffer[64];                         /* input buffer */
 } li_MD5_CTX;
 
+#ifndef MD5_DIGEST_LENGTH
+#define MD5_DIGEST_LENGTH 16
+#endif
+
 void li_MD5_Init (li_MD5_CTX *);
 void li_MD5_Update (li_MD5_CTX *, const void *, unsigned int);
-void li_MD5_Final (unsigned char [16], li_MD5_CTX *);
+void li_MD5_Final (unsigned char [MD5_DIGEST_LENGTH], li_MD5_CTX *);
 
 #endif
