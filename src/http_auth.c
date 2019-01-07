@@ -29,7 +29,7 @@ void http_auth_scheme_set (const http_auth_scheme_t *scheme)
 }
 
 
-static http_auth_backend_t http_auth_backends[8];
+static http_auth_backend_t http_auth_backends[12];
 
 const http_auth_backend_t * http_auth_backend_get (const buffer *name)
 {
