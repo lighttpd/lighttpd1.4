@@ -36,6 +36,10 @@ int http_response_write_header(server *srv, connection *con) {
 	/* disable keep-alive if requested */
 	if (con->request_count > con->conf.max_keep_alive_requests || 0 == con->conf.max_keep_alive_idle) {
 		con->keep_alive = 0;
+	} else if (0 != con->request.content_length
+		   && con->request.content_length != con->request_content_queue->bytes_in
+		   && (con->mode == DIRECT || 0 == con->conf.stream_request_body)) {
+		con->keep_alive = 0;
 	} else {
 		con->keep_alive_idle = con->conf.max_keep_alive_idle;
 	}
