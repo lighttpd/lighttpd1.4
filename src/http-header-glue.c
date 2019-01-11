@@ -43,7 +43,28 @@ int http_response_buffer_append_authority(server *srv, connection *con, buffer *
 
 		if (our_addr.plain.sa_family == AF_INET
 		    && our_addr.ipv4.sin_addr.s_addr == htonl(INADDR_LOOPBACK)) {
-			buffer_append_string_len(o, CONST_STR_LEN("localhost"));
+			static char lhost[32];
+			static size_t lhost_len = 0;
+			if (0 != lhost_len) {
+				buffer_append_string_len(o, lhost, lhost_len);
+			}
+			else {
+				size_t olen = buffer_string_length(o);
+				if (0 == sock_addr_nameinfo_append_buffer(srv, o, &our_addr)) {
+					lhost_len = buffer_string_length(o) - olen;
+					if (lhost_len < sizeof(lhost)) {
+						memcpy(lhost, o->ptr+olen, lhost_len+1); /*(+1 for '\0')*/
+					}
+					else {
+						lhost_len = 0;
+					}
+				}
+				else {
+					lhost_len = sizeof("localhost")-1;
+					memcpy(lhost, "localhost", lhost_len+1); /*(+1 for '\0')*/
+					buffer_append_string_len(o, lhost, lhost_len);
+				}
+			}
 		} else if (!buffer_string_is_empty(con->server_name)) {
 			buffer_append_string_buffer(o, con->server_name);
 		} else
