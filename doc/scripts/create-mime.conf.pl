@@ -45,6 +45,27 @@ my %manual_conflicts_resolve = (
 	'.ra' => {
 		'audio/x-pn-realaudio' => 'audio/x-realaudio',
 	},
+	# use font media types from iana registry
+	'.otf' => {
+		'application/font-sfnt' => 'font/ttf',
+		'font/sfnt' => 'font/ttf',
+		'font/ttf' => 'font/ttf',
+	},
+	'.ttf' => {
+		'application/font-sfnt' => 'font/ttf',
+		'font/otf' => 'font/ttf',
+		'font/sfnt' => 'font/ttf',
+	},
+	'.woff' => {
+		'application/font-woff' => 'font/woff',
+	},
+	# end of fonts
+	'.asn' => {
+		'chemical/x-ncbi-asn1-spec' => 'application/octet-stream',
+	},
+	'.ent' => {
+		'chemical/x-ncbi-asn1-ascii' => 'application/octet-stream',
+	},
 );
 
 open MIMETYPES, "/etc/mime.types" or die "Can't open /etc/mime.types: $!";
