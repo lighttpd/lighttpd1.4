@@ -132,21 +132,6 @@ static int network_server_init(server *srv, buffer *host_token, size_t sidx, int
 	int family = 0;
 	int set_v6only = 0;
 
-#ifdef __WIN32
-	int err;
-	WORD wVersionRequested;
-	WSADATA wsaData;
-
-	wVersionRequested = MAKEWORD( 2, 2 );
-
-	err = WSAStartup( wVersionRequested, &wsaData );
-	if ( err != 0 ) {
-		    /* Tell the user that we could not find a usable */
-		    /* WinSock DLL.                                  */
-		    return -1;
-	}
-#endif
-
 	if (buffer_string_is_empty(host_token)) {
 		log_error_write(srv, __FILE__, __LINE__, "s", "value of $SERVER[\"socket\"] must not be empty");
 		return -1;
@@ -387,6 +372,16 @@ int network_close(server *srv) {
 
 int network_init(server *srv, int stdin_fd) {
 	size_t i;
+
+      #ifdef __WIN32
+	WSADATA wsaData;
+	WORD wVersionRequested = MAKEWORD(2, 2);
+	if (0 != WSAStartup(wVersionRequested, &wsaData)) {
+		/* Tell the user that we could not find a usable WinSock DLL */
+		return -1;
+	}
+      #endif
+
 	if (0 != network_write_init(srv)) return -1;
 
 	{
