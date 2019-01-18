@@ -123,6 +123,20 @@ static int network_host_parse_addr(server *srv, sock_addr *addr, socklen_t *addr
     return 0;
 }
 
+static void network_srv_sockets_append(server *srv, server_socket *srv_socket) {
+	if (srv->srv_sockets.size == 0) {
+		srv->srv_sockets.size = 4;
+		srv->srv_sockets.used = 0;
+		srv->srv_sockets.ptr = malloc(srv->srv_sockets.size * sizeof(server_socket*));
+		force_assert(NULL != srv->srv_sockets.ptr);
+	} else if (srv->srv_sockets.used == srv->srv_sockets.size) {
+		srv->srv_sockets.size += 4;
+		srv->srv_sockets.ptr = realloc(srv->srv_sockets.ptr, srv->srv_sockets.size * sizeof(server_socket*));
+		force_assert(NULL != srv->srv_sockets.ptr);
+	}
+	srv->srv_sockets.ptr[srv->srv_sockets.used++] = srv_socket;
+}
+
 static int network_server_init(server *srv, buffer *host_token, size_t sidx, int stdin_fd) {
 	server_socket *srv_socket;
 	const char *host;
@@ -199,17 +213,7 @@ static int network_server_init(server *srv, buffer *host_token, size_t sidx, int
 	srv_socket->is_ssl = s->ssl_enabled;
 	srv_socket->srv_token = buffer_init_buffer(host_token);
 
-	if (srv->srv_sockets.size == 0) {
-		srv->srv_sockets.size = 4;
-		srv->srv_sockets.used = 0;
-		srv->srv_sockets.ptr = malloc(srv->srv_sockets.size * sizeof(server_socket*));
-		force_assert(NULL != srv->srv_sockets.ptr);
-	} else if (srv->srv_sockets.used == srv->srv_sockets.size) {
-		srv->srv_sockets.size += 4;
-		srv->srv_sockets.ptr = realloc(srv->srv_sockets.ptr, srv->srv_sockets.size * sizeof(server_socket*));
-		force_assert(NULL != srv->srv_sockets.ptr);
-	}
-	srv->srv_sockets.ptr[srv->srv_sockets.used++] = srv_socket;
+	network_srv_sockets_append(srv, srv_socket);
 
 	if (srv->sockets_disabled) { /* lighttpd -1 (one-shot mode) */
 		return 0;
