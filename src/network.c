@@ -155,10 +155,6 @@ static int network_server_init(server *srv, buffer *host_token, size_t sidx, int
 
 	memset(&addr, 0, sizeof(addr));
 	if (-1 != stdin_fd) {
-		if (0 == sidx && srv->srv_sockets.used > 0) {
-			close(stdin_fd);/*(graceful restart listening to "/dev/stdin")*/
-			return 0;
-		}
 		if (-1 == getsockname(stdin_fd, (struct sockaddr *)&addr, &addr_len)) {
 			log_error_write(srv, __FILE__, __LINE__, "ss",
 					"getsockname()", strerror(errno));
@@ -393,7 +389,9 @@ int network_init(server *srv, int stdin_fd) {
 			buffer_append_int(b, srv->srvconf.port);
 		}
 
-		rc = network_server_init(srv, b, 0, stdin_fd);
+		rc = (-1 == stdin_fd || 0 == srv->srv_sockets.used)
+		  ? network_server_init(srv, b, 0, stdin_fd)
+		  : close(stdin_fd);/*(graceful restart listening to "/dev/stdin")*/
 		buffer_free(b);
 		if (0 != rc) return -1;
 	}
