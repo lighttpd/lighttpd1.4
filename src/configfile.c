@@ -277,6 +277,7 @@ static int config_insert(server *srv) {
 		{ "server.syslog-facility",            NULL, T_CONFIG_STRING,  T_CONFIG_SCOPE_SERVER     }, /* 80 */
 		{ "server.socket-perms",               NULL, T_CONFIG_STRING,  T_CONFIG_SCOPE_CONNECTION }, /* 81 */
 		{ "server.http-parseopts",             NULL, T_CONFIG_ARRAY,   T_CONFIG_SCOPE_SERVER     }, /* 82 */
+		{ "server.systemd-socket-activation",  NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_SERVER     }, /* 83 */
 
 		{ NULL,                                NULL, T_CONFIG_UNSET,   T_CONFIG_SCOPE_UNSET      }
 	};
@@ -321,6 +322,7 @@ static int config_insert(server *srv) {
 	cv[80].destination = srv->srvconf.syslog_facility;
 	http_parseopts = array_init();
 	cv[82].destination = http_parseopts;
+	cv[83].destination = &(srv->srvconf.systemd_socket_activation);
 
 	srv->config_storage = calloc(1, srv->config_context->used * sizeof(specific_config *));
 

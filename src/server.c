@@ -87,6 +87,7 @@
 static int oneshot_fd = 0;
 static volatile int pid_fd = -2;
 static server_socket_array graceful_sockets;
+static server_socket_array inherited_sockets;
 static volatile sig_atomic_t graceful_restart = 0;
 static volatile sig_atomic_t graceful_shutdown = 0;
 static volatile sig_atomic_t srv_shutdown = 0;
@@ -301,6 +302,7 @@ static server *server_init(void) {
 	srv->srvconf.loadavg[1] = 0.0;
 	srv->srvconf.loadavg[2] = 0.0;
 	srv->srvconf.compat_module_load = 1;
+	srv->srvconf.systemd_socket_activation = 0;
 
 	/* use syslog */
 	srv->errorlog_fd = STDERR_FILENO;
@@ -856,11 +858,15 @@ static int log_error_close(server *srv) {
 static void server_sockets_save (server *srv) {    /* graceful_restart */
     memcpy(&graceful_sockets, &srv->srv_sockets, sizeof(server_socket_array));
     memset(&srv->srv_sockets, 0, sizeof(server_socket_array));
+    memcpy(&inherited_sockets, &srv->srv_sockets_inherited, sizeof(server_socket_array));
+    memset(&srv->srv_sockets_inherited, 0, sizeof(server_socket_array));
 }
 
 static void server_sockets_restore (server *srv) { /* graceful_restart */
     memcpy(&srv->srv_sockets, &graceful_sockets, sizeof(server_socket_array));
     memset(&graceful_sockets, 0, sizeof(server_socket_array));
+    memcpy(&srv->srv_sockets_inherited, &inherited_sockets, sizeof(server_socket_array));
+    memset(&inherited_sockets, 0, sizeof(server_socket_array));
 }
 
 static int server_sockets_set_nb_cloexec (server *srv) {
@@ -1003,6 +1009,7 @@ static int server_main (server * const srv, int argc, char **argv) {
 	/*graceful_restart = 0;*//*(reset below to avoid further daemonizing)*/
 	/*(intentionally preserved)*/
 	/*memset(graceful_sockets, 0, sizeof(graceful_sockets));*/
+	/*memset(inherited_sockets, 0, sizeof(inherited_sockets));*/
 	/*pid_fd = -1;*/
 
 	srv->srvconf.port = 0;

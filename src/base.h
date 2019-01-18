@@ -347,6 +347,7 @@ typedef struct {
 	buffer *syslog_facility;
 
 	unsigned short compat_module_load;
+	unsigned short systemd_socket_activation;
 } server_config;
 
 typedef struct server_socket {
@@ -459,6 +460,8 @@ struct server {
 	uid_t uid;
 	gid_t gid;
 	pid_t pid;
+
+	server_socket_array srv_sockets_inherited;
 };
 
 
