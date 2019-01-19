@@ -186,7 +186,7 @@ lib_LTLIBRARIES += mod_mysql_vhost.la
 mod_mysql_vhost_la_SOURCES = mod_mysql_vhost.c
 mod_mysql_vhost_la_LDFLAGS = $(common_module_ldflags)
 mod_mysql_vhost_la_LIBADD = $(MYSQL_LIBS) $(common_libadd)
-mod_mysql_vhost_la_CPPFLAGS = $(MYSQL_INCLUDE)
+mod_mysql_vhost_la_CPPFLAGS = $(MYSQL_CFLAGS)
 endif
 
 if BUILD_WITH_MYSQL
@@ -194,7 +194,7 @@ lib_LTLIBRARIES += mod_vhostdb_mysql.la
 mod_vhostdb_mysql_la_SOURCES = mod_vhostdb_mysql.c
 mod_vhostdb_mysql_la_LDFLAGS = $(common_module_ldflags)
 mod_vhostdb_mysql_la_LIBADD = $(MYSQL_LIBS) $(common_libadd)
-mod_vhostdb_mysql_la_CPPFLAGS = $(MYSQL_INCLUDE)
+mod_vhostdb_mysql_la_CPPFLAGS = $(MYSQL_CFLAGS)
 endif
 
 if BUILD_WITH_PGSQL
@@ -364,7 +364,7 @@ lib_LTLIBRARIES += mod_authn_mysql.la
 mod_authn_mysql_la_SOURCES = mod_authn_mysql.c
 mod_authn_mysql_la_LDFLAGS = $(common_module_ldflags)
 mod_authn_mysql_la_LIBADD = $(CRYPT_LIB) $(MYSQL_LIBS) $(common_libadd)
-mod_authn_mysql_la_CPPFLAGS = $(MYSQL_INCLUDE)
+mod_authn_mysql_la_CPPFLAGS = $(MYSQL_CFLAGS)
 endif
 
 if BUILD_WITH_SASL
@@ -506,7 +506,7 @@ lighttpd_LDADD += $(PAM_LIB)
 endif
 if BUILD_WITH_MYSQL
 lighttpd_SOURCES += mod_authn_mysql.c mod_mysql_vhost.c mod_vhostdb_mysql.c
-lighttpd_CPPFLAGS += $(MYSQL_INCLUDE)
+lighttpd_CPPFLAGS += $(MYSQL_CFLAGS)
 lighttpd_LDADD += $(MYSQL_LIBS)
 endif
 if BUILD_WITH_PGSQL

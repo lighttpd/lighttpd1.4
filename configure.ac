@@ -226,32 +226,42 @@ AC_ARG_WITH([mysql],
 )
 AC_MSG_RESULT([$WITH_MYSQL])
 
-MYSQL_INCLUDE=
+MYSQL_CFLAGS=
 MYSQL_LIBS=
 
 if test "$WITH_MYSQL" != no; then
   if test "$WITH_MYSQL" = yes; then
-    AC_PATH_PROG([MYSQL_CONFIG], [mysql_config])
+    PKG_CHECK_MODULES([MYSQL],[mariadb],[
+      MYSQL_CONFIG=$PKG_CONFIG
+    ],[
+      PKG_CHECK_MODULES([MYSQL],[mysqlclient],[
+        MYSQL_CONFIG=$PKG_CONFIG
+      ],[
+        AC_PATH_PROG([MYSQL_CONFIG], [mysql_config])
+      ])
+    ])
   else
     MYSQL_CONFIG=$WITH_MYSQL
   fi
 
-  if test -z "$MYSQL_CONFIG"; then
-    AC_MSG_ERROR([mysql_config is not found])
-  fi
-  if test ! -x "$MYSQL_CONFIG"; then
-    AC_MSG_ERROR([mysql_config not exists or not executable, use --with-mysql=path-to-mysql_config])
-  fi
+  if test "$MYSQL_CONFIG" != "$PKG_CONFIG"; then
+    if test -z "$MYSQL_CONFIG"; then
+      AC_MSG_ERROR([mysql_config is not found])
+    fi
+    if test ! -x "$MYSQL_CONFIG"; then
+      AC_MSG_ERROR([mysql_config not exists or not executable, use --with-mysql=path-to-mysql_config])
+    fi
 
-  if "$MYSQL_CONFIG" | grep -- '--include' > /dev/null ; then
-    MYSQL_INCLUDE=`"$MYSQL_CONFIG" --include | sed s/\'//g`
-  else
-    MYSQL_INCLUDE=`"$MYSQL_CONFIG" --cflags | sed s/\'//g`
+    if "$MYSQL_CONFIG" | grep -- '--include' > /dev/null ; then
+      MYSQL_CFLAGS=`"$MYSQL_CONFIG" --include | sed s/\'//g`
+    else
+      MYSQL_CFLAGS=`"$MYSQL_CONFIG" --cflags | sed s/\'//g`
+    fi
+    MYSQL_LIBS=`"$MYSQL_CONFIG" --libs | sed s/\'//g`
   fi
-  MYSQL_LIBS=`"$MYSQL_CONFIG" --libs | sed s/\'//g`
 
   AC_MSG_CHECKING([for MySQL includes at])
-  AC_MSG_RESULT([$MYSQL_INCLUDE])
+  AC_MSG_RESULT([$MYSQL_CFLAGS])
 
   AC_MSG_CHECKING([for MySQL libraries at])
   AC_MSG_RESULT([$MYSQL_LIBS])
@@ -261,7 +271,7 @@ fi
 AM_CONDITIONAL([BUILD_WITH_MYSQL], [test "$WITH_MYSQL" != no])
 
 AC_SUBST([MYSQL_LIBS])
-AC_SUBST([MYSQL_INCLUDE])
+AC_SUBST([MYSQL_CFLAGS])
 
 dnl Checks for pgsql
 AC_MSG_NOTICE([----------------------------------------])
