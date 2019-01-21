@@ -612,7 +612,6 @@ void buffer_append_string_encoded(buffer *b, const char *s, size_t s_len, buffer
 
 	d = (unsigned char*) buffer_string_prepare_append(b, d_len);
 	buffer_commit(b, d_len); /* fill below */
-	force_assert('\0' == *d);
 
 	for (ds = (unsigned char *)s, d_len = 0, ndx = 0; ndx < s_len; ds++, ndx++) {
 		if (map[*ds]) {
@@ -669,7 +668,6 @@ void buffer_append_string_c_escaped(buffer *b, const char *s, size_t s_len) {
 
 	d = (unsigned char*) buffer_string_prepare_append(b, d_len);
 	buffer_commit(b, d_len); /* fill below */
-	force_assert('\0' == *d);
 
 	for (ds = (unsigned char *)s, d_len = 0, ndx = 0; ndx < s_len; ds++, ndx++) {
 		if ((*ds < 0x20) /* control character */

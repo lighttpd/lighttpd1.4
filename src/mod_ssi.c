@@ -1210,7 +1210,7 @@ static int mod_ssi_handle_request(server *srv, connection *con, handler_ctx *p) 
 	/* Reset the modified time of included files */
 	include_file_last_mtime = 0;
 
-	mod_ssi_process_file(srv, con, p, &st);
+	if (mod_ssi_process_file(srv, con, p, &st)) return -1;
 
 	con->file_started  = 1;
 	con->file_finished = 1;

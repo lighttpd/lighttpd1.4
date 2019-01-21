@@ -240,6 +240,11 @@ static handler_t process_rewrite_rules(server *srv, connection *con, plugin_data
 
 		if (hctx->loops++ > 100) {
 			data_config *dc = p->conf.context;
+			if (NULL == dc) {
+				log_error_write(srv, __FILE__, __LINE__,  "s",
+						"ENDLESS LOOP IN rewrite-rule DETECTED ... aborting request");
+				return HANDLER_ERROR;
+			}
 			log_error_write(srv, __FILE__, __LINE__,  "SbbSBS",
 					"ENDLESS LOOP IN rewrite-rule DETECTED ... aborting request, perhaps you want to use url.rewrite-once instead of url.rewrite-repeat ($", dc->comp_key, dc->op, "\"", dc->string, "\")");
 

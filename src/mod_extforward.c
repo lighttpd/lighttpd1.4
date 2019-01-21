@@ -730,7 +730,7 @@ static handler_t mod_extforward_Forwarded (server *srv, connection *con, plugin_
     used = j+1;
     offsets[used] = -1; /* mark end of last set of params */
 
-    while (j > 0) { /*(param=value pairs, so j > 0, not j >= 0)*/
+    while (j >= 4) { /*(param=value pairs)*/
         if (-1 == offsets[j]) { --j; continue; }
         do {
             j -= 3; /*(k, klen, v, vlen come in sets of 4)*/

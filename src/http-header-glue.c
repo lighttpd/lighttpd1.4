@@ -31,6 +31,7 @@ int http_response_buffer_append_authority(server *srv, connection *con, buffer *
 		sock_addr our_addr;
 		socklen_t our_addr_len;
 
+		our_addr.plain.sa_family = 0;
 		our_addr_len = sizeof(our_addr);
 
 		if (-1 == getsockname(con->fd, (struct sockaddr *)&our_addr, &our_addr_len)
@@ -245,7 +246,8 @@ static int http_response_parse_range(server *srv, connection *con, buffer *path,
 	for (s = range, error = 0;
 	     !error && *s && NULL != (minus = strchr(s, '-')); ) {
 		char *err;
-		off_t la, le;
+		off_t la = 0, le;
+		*((const char **)&err) = s; /*(quiet clang --analyze)*/
 
 		if (s != minus) {
 			la = strtoll(s, &err, 10);
