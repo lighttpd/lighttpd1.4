@@ -352,7 +352,7 @@ CONNECTION_FUNC(mod_expire_handler) {
 		vb = http_header_response_get(con, HTTP_HEADER_CONTENT_TYPE, CONST_STR_LEN("Content-Type"));
 		ds = (NULL != vb)
 		   ? (data_string *)array_match_key_prefix(p->conf.expire_mimetypes, vb)
-		   : (data_string *)array_match_key_prefix_klen(p->conf.expire_mimetypes, CONST_STR_LEN(""));
+		   : (data_string *)array_get_element_klen(p->conf.expire_mimetypes, CONST_STR_LEN(""));
 		if (NULL == ds) return HANDLER_GO_ON;
 		vb = ds->value;
 	}
