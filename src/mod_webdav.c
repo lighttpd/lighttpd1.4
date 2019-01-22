@@ -1958,12 +1958,14 @@ static handler_t mod_webdav_copymove(server *srv, connection *con, plugin_data *
 		 *  */
 
 		start = destination->ptr;
+		sep = start + buffer_string_length(con->uri.scheme);
 
-		if (NULL == (sep = strstr(start, "://"))) {
+		if (0 != strncmp(start, con->uri.scheme->ptr, sep - start)
+		    || sep[0] != ':' || sep[1] != '/' || sep[2] != '/') {
 			con->http_status = 400;
 			return HANDLER_FINISHED;
 		}
-		buffer_copy_string_len(p->uri.scheme, start, sep - start);
+		buffer_copy_buffer(p->uri.scheme, con->uri.scheme); /*(unused?)*/
 
 		start = sep + 3;
 
