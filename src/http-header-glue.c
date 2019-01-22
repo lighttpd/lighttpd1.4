@@ -78,7 +78,7 @@ int http_response_buffer_append_authority(server *srv, connection *con, buffer *
 		{
 			unsigned short listen_port = sock_addr_get_port(&our_addr);
 			unsigned short default_port = 80;
-			if (buffer_is_equal_caseless_string(con->uri.scheme, CONST_STR_LEN("https"))) {
+			if (buffer_is_equal_string(con->uri.scheme, CONST_STR_LEN("https"))) {
 				default_port = 443;
 			}
 			if (0 == listen_port) listen_port = srv->srvconf.port;
@@ -1440,8 +1440,7 @@ int http_cgi_headers (server *srv, connection *con, http_cgi_opts *opts, http_cg
     rc |= cb(vdata, CONST_STR_LEN("REQUEST_SCHEME"),
                     CONST_BUF_LEN(con->uri.scheme));
 
-    if (buffer_is_equal_caseless_string(con->uri.scheme,
-                                        CONST_STR_LEN("https"))) {
+    if (buffer_is_equal_string(con->uri.scheme, CONST_STR_LEN("https"))) {
         rc |= cb(vdata, CONST_STR_LEN("HTTPS"), CONST_STR_LEN("on"));
     }
 
