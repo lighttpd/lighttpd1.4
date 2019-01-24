@@ -69,6 +69,7 @@ typedef struct {
     buffer *ssl_dh_file;
     buffer *ssl_ec_curve;
     array *ssl_conf_cmd;
+    buffer *ssl_acme_tls_1;
 } plugin_config;
 
 typedef struct {
@@ -87,7 +88,8 @@ typedef struct {
     SSL *ssl;
     connection *con;
     int renegotiations; /* count of SSL_CB_HANDSHAKE_START */
-    int request_env_patched;
+    unsigned short request_env_patched;
+    unsigned short alpn;
     plugin_config conf;
     server *srv;
 } handler_ctx;
@@ -140,6 +142,7 @@ FREE_FUNC(mod_openssl_free)
             buffer_free(s->ssl_ec_curve);
             buffer_free(s->ssl_verifyclient_username);
             array_free(s->ssl_conf_cmd);
+            buffer_free(s->ssl_acme_tls_1);
 
             if (copy) continue;
             SSL_CTX_free(s->ssl_ctx);
@@ -350,6 +353,12 @@ network_ssl_servername_callback (SSL *ssl, int *al, server *srv)
     /* use SNI to patch mod_openssl config and then reset COMP_HTTP_HOST */
     buffer_copy_string_len(con->uri.authority, servername, len);
     buffer_to_lower(con->uri.authority);
+  #if 0
+    /*(con->uri.authority used below for configuration before request read;
+     * revisit for h2)*/
+    if (0 != http_request_host_policy(con, con->uri.authority, con->uri.scheme))
+        return SSL_TLSEXT_ERR_ALERT_FATAL;
+  #endif
 
     con->conditional_is_valid[COMP_HTTP_SCHEME] = 1;
     con->conditional_is_valid[COMP_HTTP_HOST] = 1;
@@ -518,6 +527,165 @@ network_openssl_load_pemfile (server *srv, plugin_config *s, size_t ndx)
 
     return 0;
 }
+
+
+#ifndef OPENSSL_NO_TLSEXT
+
+#if OPENSSL_VERSION_NUMBER >= 0x10002000
+
+static int
+mod_openssl_acme_tls_1 (SSL *ssl, handler_ctx *hctx)
+{
+    server *srv = hctx->srv;
+    buffer *b = srv->tmp_buf;
+    buffer *name = hctx->con->uri.authority;
+    X509 *ssl_pemfile_x509 = NULL;
+    EVP_PKEY *ssl_pemfile_pkey = NULL;
+    size_t len;
+    int rc = SSL_TLSEXT_ERR_ALERT_FATAL;
+
+    /* check if acme-tls/1 protocol is enabled (path to dir of cert(s) is set)*/
+    if (buffer_string_is_empty(hctx->conf.ssl_acme_tls_1))
+        return SSL_TLSEXT_ERR_NOACK; /*(reuse value here for not-configured)*/
+    buffer_copy_buffer(b, hctx->conf.ssl_acme_tls_1);
+    buffer_append_slash(b);
+
+    /* check if SNI set server name (required for acme-tls/1 protocol)
+     * and perform simple path checks for no '/'
+     * and no leading '.' (e.g. ignore "." or ".." or anything beginning '.') */
+    if (buffer_string_is_empty(name))   return rc;
+    if (NULL != strchr(name->ptr, '/')) return rc;
+    if (name->ptr[0] == '.')            return rc;
+  #if 0
+    if (0 != http_request_host_policy(hctx->con, name, hctx->con->uri.scheme))
+        return rc;
+  #endif
+    buffer_append_string_buffer(b, name);
+    len = buffer_string_length(b);
+
+    do {
+        buffer_append_string_len(b, CONST_STR_LEN(".crt.pem"));
+        ssl_pemfile_x509 = x509_load_pem_file(srv, b->ptr);
+        if (NULL == ssl_pemfile_x509) {
+            log_error_write(srv, __FILE__, __LINE__, "ssb", "SSL:",
+                            "Failed to load acme-tls/1 pemfile:", b);
+            break;
+        }
+
+        buffer_string_set_length(b, len); /*(remove ".crt.pem")*/
+        buffer_append_string_len(b, CONST_STR_LEN(".key.pem"));
+        ssl_pemfile_pkey = evp_pkey_load_pem_file(srv, b->ptr);
+        if (NULL == ssl_pemfile_pkey) {
+            log_error_write(srv, __FILE__, __LINE__, "ssb", "SSL:",
+                            "Failed to load acme-tls/1 pemfile:", b);
+            break;
+        }
+
+      #if 0 /* redundant with below? */
+        if (!X509_check_private_key(ssl_pemfile_x509, ssl_pemfile_pkey)) {
+            log_error_write(srv, __FILE__, __LINE__, "sssb", "SSL:",
+               "Private key does not match acme-tls/1 certificate public key,"
+               " reason:" ERR_error_string(ERR_get_error(), NULL), b);
+            break;
+        }
+      #endif
+
+        /* first set certificate!
+         * setting private key checks whether certificate matches it */
+        if (1 != SSL_use_certificate(ssl, ssl_pemfile_x509)) {
+            log_error_write(srv, __FILE__, __LINE__, "ssb:s", "SSL:",
+              "failed to set acme-tls/1 certificate for TLS server name",
+              name, ERR_error_string(ERR_get_error(), NULL));
+            break;
+        }
+
+        if (1 != SSL_use_PrivateKey(ssl, ssl_pemfile_pkey)) {
+            log_error_write(srv, __FILE__, __LINE__, "ssb:s", "SSL:",
+              "failed to set acme-tls/1 private key for TLS server name",
+              name, ERR_error_string(ERR_get_error(), NULL));
+            break;
+        }
+
+        rc = SSL_TLSEXT_ERR_OK;
+    } while (0);
+
+    if (ssl_pemfile_pkey) EVP_PKEY_free(ssl_pemfile_pkey);
+    if (ssl_pemfile_x509) X509_free(ssl_pemfile_x509);
+
+    return rc;
+}
+
+enum {
+  MOD_OPENSSL_ALPN_HTTP11      = 1
+ ,MOD_OPENSSL_ALPN_HTTP10      = 2
+ ,MOD_OPENSSL_ALPN_H2          = 3
+ ,MOD_OPENSSL_ALPN_ACME_TLS_1  = 4
+};
+
+/* https://www.iana.org/assignments/tls-extensiontype-values/tls-extensiontype-values.xhtml#alpn-protocol-ids */
+static int
+mod_openssl_alpn_select_cb (SSL *ssl, const unsigned char **out, unsigned char *outlen, const unsigned char *in, unsigned int inlen, void *arg)
+{
+    handler_ctx *hctx = (handler_ctx *) SSL_get_app_data(ssl);
+    unsigned short proto;
+    UNUSED(arg);
+
+    for (unsigned int i = 0, n; i < inlen; i += n) {
+        n = in[i++];
+        if (i+n > inlen) break;
+        switch (n) {
+         #if 0
+          case 2:  /* "h2" */
+            if (in[i] == 'h' && in[i+1] == '2') {
+                proto = MOD_OPENSSL_ALPN_H2;
+                break;
+            }
+            continue;
+         #endif
+          case 8:  /* "http/1.1" "http/1.0" */
+            if (0 == memcmp(in+i, "http/1.", 7)) {
+                if (in[i+7] == '1') {
+                    proto = MOD_OPENSSL_ALPN_HTTP11;
+                    break;
+                }
+                if (in[i+7] == '0') {
+                    proto = MOD_OPENSSL_ALPN_HTTP10;
+                    break;
+                }
+            }
+            continue;
+          case 10: /* "acme-tls/1" */
+            if (0 == memcmp(in+i, "acme-tls/1", 10)) {
+                int rc = mod_openssl_acme_tls_1(ssl, hctx);
+                if (rc == SSL_TLSEXT_ERR_OK) {
+                    proto = MOD_OPENSSL_ALPN_ACME_TLS_1;
+                    break;
+                }
+                /* (use SSL_TLSEXT_ERR_NOACK for not-configured) */
+                if (rc == SSL_TLSEXT_ERR_NOACK) continue;
+                return rc;
+            }
+            continue;
+          default:
+            continue;
+        }
+
+        hctx->alpn = proto;
+        *out = in+i;
+        *outlen = n;
+        return SSL_TLSEXT_ERR_OK;
+    }
+
+  #if OPENSSL_VERSION_NUMBER < 0x10100000L
+    return SSL_TLSEXT_ERR_NOACK;
+  #else
+    return SSL_TLSEXT_ERR_ALERT_FATAL;
+  #endif
+}
+
+#endif /* OPENSSL_VERSION_NUMBER >= 0x10002000 */
+
+#endif /* OPENSSL_NO_TLSEXT */
 
 
 static int
@@ -988,6 +1156,10 @@ network_init_ssl (server *srv, void *p_d)
                             "extension");
             return -1;
         }
+
+       #if OPENSSL_VERSION_NUMBER >= 0x10002000
+        SSL_CTX_set_alpn_select_cb(s->ssl_ctx,mod_openssl_alpn_select_cb,NULL);
+       #endif
       #endif
 
         if (s->ssl_conf_cmd->used) {
@@ -1024,6 +1196,7 @@ SETDEFAULTS_FUNC(mod_openssl_set_defaults)
         { "ssl.ca-crl-file",                   NULL, T_CONFIG_STRING,  T_CONFIG_SCOPE_CONNECTION }, /* 18 */
         { "ssl.ca-dn-file",                    NULL, T_CONFIG_STRING,  T_CONFIG_SCOPE_CONNECTION }, /* 19 */
         { "ssl.openssl.ssl-conf-cmd",          NULL, T_CONFIG_ARRAY,   T_CONFIG_SCOPE_CONNECTION }, /* 20 */
+        { "ssl.acme-tls-1",                    NULL, T_CONFIG_STRING,  T_CONFIG_SCOPE_CONNECTION }, /* 21 */
         { NULL,                         NULL, T_CONFIG_UNSET, T_CONFIG_SCOPE_UNSET }
     };
 
@@ -1061,6 +1234,7 @@ SETDEFAULTS_FUNC(mod_openssl_set_defaults)
         s->ssl_conf_cmd = (0 == i)
           ? array_init()
           : array_init_array(p->config_storage[0]->ssl_conf_cmd);
+        s->ssl_acme_tls_1 = buffer_init();
 
         cv[0].destination = &(s->ssl_log_noise);
         cv[1].destination = &(s->ssl_enabled);
@@ -1083,6 +1257,7 @@ SETDEFAULTS_FUNC(mod_openssl_set_defaults)
         cv[18].destination = s->ssl_ca_crl_file;
         cv[19].destination = s->ssl_ca_dn_file;
         cv[20].destination = s->ssl_conf_cmd;
+        cv[21].destination = s->ssl_acme_tls_1;
 
         p->config_storage[i] = s;
 
@@ -1157,6 +1332,7 @@ mod_openssl_patch_connection (server *srv, connection *con, handler_ctx *hctx)
     PATCH(ssl_verifyclient_export_cert);
     PATCH(ssl_disable_client_renegotiation);
     PATCH(ssl_read_ahead);
+    PATCH(ssl_acme_tls_1);
 
     PATCH(ssl_log_noise);
 
@@ -1196,6 +1372,8 @@ mod_openssl_patch_connection (server *srv, connection *con, handler_ctx *hctx)
                 PATCH(ssl_disable_client_renegotiation);
             } else if (buffer_is_equal_string(du->key, CONST_STR_LEN("ssl.read-ahead"))) {
                 PATCH(ssl_read_ahead);
+            } else if (buffer_is_equal_string(du->key, CONST_STR_LEN("ssl.acme-tls-1"))) {
+                PATCH(ssl_acme_tls_1);
             } else if (buffer_is_equal_string(du->key, CONST_STR_LEN("debug.log-ssl-noise"))) {
                 PATCH(ssl_log_noise);
           #if 0 /*(not patched)*/
@@ -1459,6 +1637,21 @@ connection_read_cq_ssl (server *srv, connection *con,
               "SSL: renegotiation initiated by client, killing connection");
             return -1;
         }
+
+      #if OPENSSL_VERSION_NUMBER >= 0x10002000
+        if (hctx->alpn) {
+            if (hctx->alpn == MOD_OPENSSL_ALPN_ACME_TLS_1) {
+                chunkqueue_reset(con->read_queue);
+                /* initiate handshake in order to send ServerHello.
+                 * Once TLS handshake is complete, return -1 to result in
+                 * CON_STATE_ERROR so that socket connection is quickly closed*/
+                if (1 == SSL_do_handshake(hctx->ssl)) return -1;
+                len = -1;
+                break;
+            }
+            hctx->alpn = 0;
+        }
+      #endif
     } while (len > 0
              && (hctx->conf.ssl_read_ahead || SSL_pending(hctx->ssl) > 0));
 
