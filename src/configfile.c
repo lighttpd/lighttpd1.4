@@ -1437,8 +1437,7 @@ int config_parse_cmd(server *srv, config_t *context, const char *cmd) {
 			ssize_t rd;
 			pid_t wpid;
 			int wstatus;
-			buffer *out = srv->tmp_buf;
-			buffer_clear(out);
+			buffer *out = buffer_init();
 			close(fds[1]);
 			fds[1] = -1;
 			do {
@@ -1471,6 +1470,7 @@ int config_parse_cmd(server *srv, config_t *context, const char *cmd) {
 				ret = config_parse(srv, context, &t);
 				buffer_free(source);
 			}
+			buffer_free(out);
 		}
 		if (-1 != fds[0]) close(fds[0]);
 		if (-1 != fds[1]) close(fds[1]);
