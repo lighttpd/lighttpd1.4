@@ -62,6 +62,7 @@ typedef struct {
     unsigned short ssl_use_sslv2;
     unsigned short ssl_use_sslv3;
     buffer *ssl_pemfile;
+    buffer *ssl_privkey;
     buffer *ssl_ca_file;
     buffer *ssl_ca_crl_file;
     buffer *ssl_ca_dn_file;
@@ -134,6 +135,7 @@ FREE_FUNC(mod_openssl_free)
             if (NULL == s) continue;
             copy = s->ssl_enabled && buffer_string_is_empty(s->ssl_pemfile);
             buffer_free(s->ssl_pemfile);
+            buffer_free(s->ssl_privkey);
             buffer_free(s->ssl_ca_file);
             buffer_free(s->ssl_ca_crl_file);
             buffer_free(s->ssl_ca_dn_file);
@@ -514,14 +516,16 @@ network_openssl_load_pemfile (server *srv, plugin_config *s, size_t ndx)
 
     s->ssl_pemfile_x509 = x509_load_pem_file(srv, s->ssl_pemfile->ptr);
     if (NULL == s->ssl_pemfile_x509) return -1;
-    s->ssl_pemfile_pkey = evp_pkey_load_pem_file(srv, s->ssl_pemfile->ptr);
+    s->ssl_pemfile_pkey = !buffer_string_is_empty(s->ssl_privkey)
+      ? evp_pkey_load_pem_file(srv, s->ssl_privkey->ptr)
+      : evp_pkey_load_pem_file(srv, s->ssl_pemfile->ptr);
     if (NULL == s->ssl_pemfile_pkey) return -1;
 
     if (!X509_check_private_key(s->ssl_pemfile_x509, s->ssl_pemfile_pkey)) {
-        log_error_write(srv, __FILE__, __LINE__, "sssb", "SSL:",
+        log_error_write(srv, __FILE__, __LINE__, "sssbb", "SSL:",
                         "Private key does not match the certificate public key,"
                         " reason:", ERR_error_string(ERR_get_error(), NULL),
-                        s->ssl_pemfile);
+                        s->ssl_pemfile, s->ssl_privkey);
         return -1;
     }
 
@@ -1126,18 +1130,18 @@ network_init_ssl (server *srv, void *p_d)
         }
 
         if (1 != SSL_CTX_use_PrivateKey(s->ssl_ctx, s->ssl_pemfile_pkey)) {
-            log_error_write(srv, __FILE__, __LINE__, "ssb", "SSL:",
+            log_error_write(srv, __FILE__, __LINE__, "ssbb", "SSL:",
                             ERR_error_string(ERR_get_error(), NULL),
-                            s->ssl_pemfile);
+                            s->ssl_pemfile, s->ssl_privkey);
             return -1;
         }
 
         if (SSL_CTX_check_private_key(s->ssl_ctx) != 1) {
-            log_error_write(srv, __FILE__, __LINE__, "sssb", "SSL:",
+            log_error_write(srv, __FILE__, __LINE__, "sssbb", "SSL:",
                             "Private key does not match the certificate public "
                             "key, reason:",
                             ERR_error_string(ERR_get_error(), NULL),
-                            s->ssl_pemfile);
+                            s->ssl_pemfile, s->ssl_privkey);
             return -1;
         }
         SSL_CTX_set_default_read_ahead(s->ssl_ctx, s->ssl_read_ahead);
@@ -1197,6 +1201,7 @@ SETDEFAULTS_FUNC(mod_openssl_set_defaults)
         { "ssl.ca-dn-file",                    NULL, T_CONFIG_STRING,  T_CONFIG_SCOPE_CONNECTION }, /* 19 */
         { "ssl.openssl.ssl-conf-cmd",          NULL, T_CONFIG_ARRAY,   T_CONFIG_SCOPE_CONNECTION }, /* 20 */
         { "ssl.acme-tls-1",                    NULL, T_CONFIG_STRING,  T_CONFIG_SCOPE_CONNECTION }, /* 21 */
+        { "ssl.privkey",                       NULL, T_CONFIG_STRING,  T_CONFIG_SCOPE_CONNECTION }, /* 22 */
         { NULL,                         NULL, T_CONFIG_UNSET, T_CONFIG_SCOPE_UNSET }
     };
 
@@ -1210,6 +1215,7 @@ SETDEFAULTS_FUNC(mod_openssl_set_defaults)
 
         s->ssl_enabled   = 0;
         s->ssl_pemfile   = buffer_init();
+        s->ssl_privkey   = buffer_init();
         s->ssl_ca_file   = buffer_init();
         s->ssl_ca_crl_file = buffer_init();
         s->ssl_ca_dn_file = buffer_init();
@@ -1258,6 +1264,7 @@ SETDEFAULTS_FUNC(mod_openssl_set_defaults)
         cv[19].destination = s->ssl_ca_dn_file;
         cv[20].destination = s->ssl_conf_cmd;
         cv[21].destination = s->ssl_acme_tls_1;
+        cv[22].destination = s->ssl_privkey;
 
         p->config_storage[i] = s;
 
@@ -1310,6 +1317,7 @@ mod_openssl_patch_connection (server *srv, connection *con, handler_ctx *hctx)
 
     /*PATCH(ssl_enabled);*//*(not patched)*/
     /*PATCH(ssl_pemfile);*//*(not patched)*/
+    /*PATCH(ssl_privkey);*//*(not patched)*/
     PATCH(ssl_pemfile_x509);
     PATCH(ssl_pemfile_pkey);
     PATCH(ssl_ca_file);
@@ -1350,6 +1358,7 @@ mod_openssl_patch_connection (server *srv, connection *con, handler_ctx *hctx)
 
             if (buffer_is_equal_string(du->key, CONST_STR_LEN("ssl.pemfile"))) {
                 /*PATCH(ssl_pemfile);*//*(not patched)*/
+                /*PATCH(ssl_privkey);*//*(not patched)*/
                 PATCH(ssl_pemfile_x509);
                 PATCH(ssl_pemfile_pkey);
             } else if (buffer_is_equal_string(du->key, CONST_STR_LEN("ssl.ca-file"))) {
