@@ -3,6 +3,48 @@
 NEWS
 ====
 
+- 1.4.53 - 2019-01-27
+  * [mod_cml,mod_flv_streaming] fix NULL ptr deref
+  * [mod_simple_vhost] t/test_mod_simple_vhost
+  * [mod_evhost] split uri handler func for testing
+  * [mod_evhost] restructure for unit tests
+  * [mod_evhost] t/test_mod_evhost
+  * [mod_access] restructure for unit tests
+  * [mod_access] t/test_mod_access
+  * [tests] include first.h and NDEBUG early
+  * [core] use kill_signal for gw_proc_kill()
+  * [tests] t/test_keyvalue
+  * [tests] some test config cleanup
+  * [tests] update skip count in mod-fastcgi.t
+  * [multiple] reduce initial buffer sz if large POST (fixes #2922)
+  * [mod_fastcgi] fix NULL ptr deref from bugfix #2922 (fixes #2923)
+  * [tests] more test config cleanup
+  * [core] perf: incremental hash of pathname w/o copy
+  * [core] perf: reuse buffer to redirect to directory
+  * [core] do not free() reused buffer
+  * [core] use connected sock port in dir redirect
+  * [core] http_response_buffer_append_authority()
+  * [core] use con->server_name for dir redir
+  * [core] memeq compare rounded to 64, not next 1M
+  * [core] define MD5_DIGEST_LENGTH 16
+  * [mod_auth] permit additional auth backends to load
+  * [core] send Connection: close if reqbody not read (fixes #2924)
+  * [core] cache rev DNS for localhost for dir redir
+  * [doc/conf] resolve some mime type conflicts from debian buster, regenerate mime.conf
+  * [core] move winsock init to network_init()
+  * [core] move /dev/stdin graceful restart handling
+  * [core] network_srv_sockets_append() shared code
+  * [core] systemd socket activation support
+  * [build] autotools: try mysqlclient.pc and mariadb.pc (fixes #2925)
+  * [mod_expire] look up expire fallback "" explicitly
+  * [multiple] calloc match ptr type (clang --analyze)
+  * [multiple] quiet clang --analyze where trivial
+  * [mod_webdav] compare COPY, MOVE Destination scheme
+  * [core] con->uri.scheme is maintained lowercase
+  * [mod_openssl] ALPN and acme-tls/1 (fixes #2931)
+  * [core] Fix recursive include_shell invocations
+  * [mod_openssl] ssl.privkey directive (optional)
+
 - 1.4.52 - 2018-11-28
   * [mysql] MySQL 8 deprecates my_bool
   * [core] typo in trace
