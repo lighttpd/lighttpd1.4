@@ -2023,27 +2023,8 @@ static int server_main_loop (server * const srv) {
 		}
 
 		if ((n = fdevent_poll(srv->ev, 1000)) > 0) {
-			/* n is the number of events */
-			int fd;
-			int revents;
-			int fd_ndx;
+			fdevent_process(srv, srv->ev, n);
 			last_active_ts = srv->cur_ts;
-			fd_ndx = -1;
-			do {
-				fdevent_handler handler;
-				void *context;
-
-				fd_ndx  = fdevent_event_next_fdndx (srv->ev, fd_ndx);
-				if (-1 == fd_ndx) break; /* not all fdevent handlers know how many fds got an event */
-
-				revents = fdevent_event_get_revent (srv->ev, fd_ndx);
-				fd      = fdevent_event_get_fd     (srv->ev, fd_ndx);
-				handler = fdevent_get_handler(srv->ev, fd);
-				context = fdevent_get_context(srv->ev, fd);
-				if (NULL != handler) {
-					(*handler)(srv, context, revents);
-				}
-			} while (--n > 0);
 		} else if (n < 0 && errno != EINTR) {
 			log_error_write(srv, __FILE__, __LINE__, "ss",
 					"fdevent_poll failed:",

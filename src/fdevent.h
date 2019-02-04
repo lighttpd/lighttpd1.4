@@ -51,14 +51,11 @@ void fdevent_event_set(fdevents *ev, int *fde_ndx, int fd, int events); /* event
 void fdevent_event_add(fdevents *ev, int *fde_ndx, int fd, int event); /* events can be FDEVENT_IN or FDEVENT_OUT */
 void fdevent_event_clr(fdevents *ev, int *fde_ndx, int fd, int event); /* events can be FDEVENT_IN or FDEVENT_OUT */
 void fdevent_event_del(fdevents *ev, int *fde_ndx, int fd);
-int fdevent_event_get_revent(fdevents *ev, size_t ndx);
-int fdevent_event_get_fd(fdevents *ev, size_t ndx);
 fdevent_handler fdevent_get_handler(fdevents *ev, int fd);
 void * fdevent_get_context(fdevents *ev, int fd);
 
-int fdevent_event_next_fdndx(fdevents *ev, int ndx);
-
 int fdevent_poll(fdevents *ev, int timeout_ms);
+void fdevent_process(server *srv, fdevents *ev, int n);
 
 int fdevent_register(fdevents *ev, int fd, fdevent_handler handler, void *ctx);
 int fdevent_unregister(fdevents *ev, int fd);

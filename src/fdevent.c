@@ -424,18 +424,6 @@ int fdevent_poll(fdevents *ev, int timeout_ms) {
 	return ev->poll(ev, timeout_ms);
 }
 
-int fdevent_event_get_revent(fdevents *ev, size_t ndx) {
-	if (ev->event_get_revent == NULL) SEGFAULT();
-
-	return ev->event_get_revent(ev, ndx);
-}
-
-int fdevent_event_get_fd(fdevents *ev, size_t ndx) {
-	if (ev->event_get_fd == NULL) SEGFAULT();
-
-	return ev->event_get_fd(ev, ndx);
-}
-
 fdevent_handler fdevent_get_handler(fdevents *ev, int fd) {
 	if (ev->fdarray[fd] == NULL) SEGFAULT();
 	if ((uintptr_t)ev->fdarray[fd] & 0x3) return NULL;
@@ -610,10 +598,19 @@ int fdevent_accept_listenfd(int listenfd, struct sockaddr *addr, size_t *addrlen
 }
 
 
-int fdevent_event_next_fdndx(fdevents *ev, int ndx) {
-	if (ev->event_next_fdndx) return ev->event_next_fdndx(ev, ndx);
-
-	return -1;
+void fdevent_process(server *srv, fdevents *ev, int n) {
+    /* n is the number of events */
+    int ndx = -1;
+    do {
+        ndx = ev->event_next_fdndx(ev, ndx);
+        /* not all fdevent handlers know how many fds got an event */
+        if (-1 == ndx) return;
+        else {
+            fdnode *fdn = ev->fdarray[ev->event_get_fd(ev, ndx)];
+            if (0 == ((uintptr_t)fdn & 0x3))
+                (*fdn->handler)(srv, fdn->ctx, ev->event_get_revent(ev, ndx));
+        }
+    } while (--n > 0);
 }
 
 
