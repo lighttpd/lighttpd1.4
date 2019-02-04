@@ -4,8 +4,7 @@
 
 #include "base.h"
 
-connection *connection_init(server *srv);
-int connection_reset(server *srv, connection *con);
+__attribute_cold__
 void connections_free(server *srv);
 
 connection * connection_accept(server *srv, server_socket *srv_sock);

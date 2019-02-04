@@ -31,8 +31,13 @@ typedef struct {
 	buffer *content_type;
 } stat_cache_entry;
 
+__attribute_cold__
 int stat_cache_choose_engine (server *srv, const buffer *stat_cache_string);
+
+__attribute_cold__
 struct stat_cache *stat_cache_init(server *srv);
+
+__attribute_cold__
 void stat_cache_free(struct stat_cache *fc);
 
 const buffer * stat_cache_mimetype_by_ext(const connection *con, const char *name, size_t nlen);

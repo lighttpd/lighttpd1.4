@@ -222,6 +222,7 @@ static int daemonize(void) {
 }
 #endif
 
+__attribute_cold__
 static server *server_init(void) {
 	int i;
 	server *srv = calloc(1, sizeof(*srv));
@@ -315,6 +316,7 @@ static server *server_init(void) {
 	return srv;
 }
 
+__attribute_cold__
 static void server_free(server *srv) {
 	size_t i;
 
@@ -407,6 +409,7 @@ static void server_free(server *srv) {
 	free(srv);
 }
 
+__attribute_cold__
 static void remove_pid_file(server *srv) {
 	if (pid_fd <= -2) return;
 	if (!buffer_string_is_empty(srv->srvconf.pid_file) && 0 <= pid_fd) {
@@ -437,6 +440,7 @@ static void remove_pid_file(server *srv) {
 }
 
 
+__attribute_cold__
 static server_socket * server_oneshot_getsock(server *srv, sock_addr *cnt_addr) {
 	server_socket *srv_socket, *srv_socket_wild = NULL;
 	size_t i;
@@ -462,6 +466,7 @@ static server_socket * server_oneshot_getsock(server *srv, sock_addr *cnt_addr) 
 }
 
 
+__attribute_cold__
 static int server_oneshot_init(server *srv, int fd) {
 	/* Note: does not work with netcat due to requirement that fd be socket.
 	 * STDOUT_FILENO was not saved earlier in startup, and that is to where
@@ -526,6 +531,7 @@ static int server_oneshot_init(server *srv, int fd) {
 }
 
 
+__attribute_cold__
 static void show_version (void) {
 	char *b = PACKAGE_DESC TEXT_SSL \
 " - a light and fast webserver\n"
@@ -536,6 +542,7 @@ static void show_version (void) {
 	write_all(STDOUT_FILENO, b, strlen(b));
 }
 
+__attribute_cold__
 static void show_features (void) {
   static const char features[] =
       "\nFeatures:\n\n"
@@ -634,6 +641,7 @@ static void show_features (void) {
   printf("%s%s%s\n", fdevent_show_event_handlers(), network_write_show_handlers(), features);
 }
 
+__attribute_cold__
 static void show_help (void) {
 	char *b = PACKAGE_DESC TEXT_SSL
 #ifdef NONREPRODUCIBLE_BUILD
@@ -831,6 +839,7 @@ static int log_error_cycle(server *srv) {
     return 0;
 }
 
+__attribute_cold__
 static int log_error_close(server *srv) {
     switch(srv->errorlog_mode) {
     case ERRORLOG_PIPE:
@@ -856,6 +865,7 @@ static int log_error_close(server *srv) {
     return 0;
 }
 
+__attribute_cold__
 static void server_sockets_save (server *srv) {    /* graceful_restart */
     memcpy(&graceful_sockets, &srv->srv_sockets, sizeof(server_socket_array));
     memset(&srv->srv_sockets, 0, sizeof(server_socket_array));
@@ -863,6 +873,7 @@ static void server_sockets_save (server *srv) {    /* graceful_restart */
     memset(&srv->srv_sockets_inherited, 0, sizeof(server_socket_array));
 }
 
+__attribute_cold__
 static void server_sockets_restore (server *srv) { /* graceful_restart */
     memcpy(&srv->srv_sockets, &graceful_sockets, sizeof(server_socket_array));
     memset(&graceful_sockets, 0, sizeof(server_socket_array));
@@ -870,6 +881,7 @@ static void server_sockets_restore (server *srv) { /* graceful_restart */
     memset(&inherited_sockets, 0, sizeof(server_socket_array));
 }
 
+__attribute_cold__
 static int server_sockets_set_nb_cloexec (server *srv) {
     if (srv->sockets_disabled) return 0; /* lighttpd -1 (one-shot mode) */
     for (size_t i = 0; i < srv->srv_sockets.used; ++i) {
@@ -883,6 +895,7 @@ static int server_sockets_set_nb_cloexec (server *srv) {
     return 0;
 }
 
+__attribute_cold__
 static void server_sockets_set_event (server *srv, int event) {
     for (size_t i = 0; i < srv->srv_sockets.used; ++i) {
         server_socket *srv_socket = srv->srv_sockets.ptr[i];
@@ -890,11 +903,13 @@ static void server_sockets_set_event (server *srv, int event) {
     }
 }
 
+__attribute_cold__
 static void server_sockets_unregister (server *srv) {
     for (size_t i = 0; i < srv->srv_sockets.used; ++i)
         network_unregister_sock(srv, srv->srv_sockets.ptr[i]);
 }
 
+__attribute_cold__
 static void server_sockets_close (server *srv) {
     /* closing socket right away will make it possible for the next lighttpd
      * to take over (old-style graceful restart), but only if backends
@@ -911,6 +926,7 @@ static void server_sockets_close (server *srv) {
     }
 }
 
+__attribute_cold__
 static void server_graceful_shutdown_maint (server *srv) {
     connections *conns = srv->conns;
     for (size_t ndx = 0; ndx < conns->used; ++ndx) {
@@ -947,6 +963,7 @@ static void server_graceful_shutdown_maint (server *srv) {
     }
 }
 
+__attribute_cold__
 static void server_graceful_state (server *srv) {
 
     if (!srv_shutdown) server_graceful_shutdown_maint(srv);
@@ -975,6 +992,7 @@ static void server_graceful_state (server *srv) {
     }
 }
 
+__attribute_cold__
 static int server_main (server * const srv, int argc, char **argv) {
 	int print_config = 0;
 	int test_config = 0;
@@ -1731,6 +1749,7 @@ static int server_main (server * const srv, int argc, char **argv) {
 	return 1;
 }
 
+__attribute_cold__
 __attribute_noinline__
 static int server_handle_sighup (server * const srv) {
 			handler_t r;

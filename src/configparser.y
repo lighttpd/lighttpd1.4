@@ -63,7 +63,7 @@ static data_unset *configparser_get_variable(config_t *ctx, const buffer *key) {
 /* op1 is to be eat/return by this function if success, op1->key is not cared
    op2 is left untouch, unreferenced
  */
-data_unset *configparser_merge_data(data_unset *op1, const data_unset *op2) {
+static data_unset *configparser_merge_data(data_unset *op1, const data_unset *op2) {
   /* type mismatch */
   if (op1->type != op2->type) {
     if (op1->type == TYPE_STRING && op2->type == TYPE_INTEGER) {

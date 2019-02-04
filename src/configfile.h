@@ -81,8 +81,12 @@ struct data_config {
 
 struct cond_cache_t;    /* declaration */
 
+__attribute_cold__
 data_config *data_config_init(void);
+
+__attribute_cold__
 int data_config_pcre_compile(data_config *dc);
+
 int data_config_pcre_exec(data_config *dc, struct cond_cache_t *cache, buffer *b);
 
 typedef struct {
@@ -94,14 +98,26 @@ typedef struct {
 	buffer *basedir;
 } config_t;
 
+__attribute_cold__
 int config_read(server *srv, const char *fn);
+
+__attribute_cold__
 int config_set_defaults(server *srv);
+
+__attribute_cold__
 void *configparserAlloc(void *(*mallocProc)(size_t));
+
+__attribute_cold__
 void configparserFree(void *p, void (*freeProc)(void*));
+
+__attribute_cold__
 void configparser(void *yyp, int yymajor, buffer *yyminor, config_t *ctx);
+
+__attribute_cold__
 int config_parse_file(server *srv, config_t *context, const char *fn);
+
+__attribute_cold__
 int config_parse_cmd(server *srv, config_t *context, const char *cmd);
-data_unset *configparser_merge_data(data_unset *op1, const data_unset *op2);
 
 int config_setup_connection(server *srv, connection *con);
 int config_patch_connection(server *srv, connection *con);
@@ -133,8 +149,12 @@ typedef struct {
 	config_scope_type_t scope;
 } config_values_t;
 
+__attribute_cold__
 int config_insert_values_global(server *srv, array *ca, const config_values_t *cv, config_scope_type_t scope);
+
+__attribute_cold__
 int config_insert_values_internal(server *srv, array *ca, const config_values_t *cv, config_scope_type_t scope);
+
 int config_check_cond(server *srv, connection *con, data_config *dc);
 
 #endif

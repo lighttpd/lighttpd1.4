@@ -31,10 +31,19 @@ typedef handler_t (*fdevent_handler)(struct server *srv, void *ctx, int revents)
 #define FDEVENT_STREAM_RESPONSE_BUFMIN    BV(1)
 #define FDEVENT_STREAM_RESPONSE_POLLRDHUP BV(15)
 
+__attribute_cold__
 int fdevent_config(server *srv);
+
+__attribute_cold__
 const char * fdevent_show_event_handlers(void);
+
+__attribute_cold__
 fdevents *fdevent_init(struct server *srv);
+
+__attribute_cold__
 int fdevent_reset(fdevents *ev); /* "init" after fork() */
+
+__attribute_cold__
 void fdevent_free(fdevents *ev);
 
 int fdevent_event_get_interest(const fdevents *ev, int fd);

@@ -36,6 +36,12 @@ typedef struct {
 	        PLUGIN_DATA;
 } plugin_data;
 
+__attribute_cold__
+static connection *connection_init(server *srv);
+
+static int connection_reset(server *srv, connection *con);
+
+
 static connection *connections_get_new_connection(server *srv) {
 	connections *conns = srv->conns;
 	size_t i;
@@ -473,7 +479,8 @@ static int connection_handle_write(server *srv, connection *con) {
 
 
 
-connection *connection_init(server *srv) {
+__attribute_cold__
+static connection *connection_init(server *srv) {
 	connection *con;
 
 	UNUSED(srv);
@@ -594,7 +601,7 @@ void connections_free(server *srv) {
 }
 
 
-int connection_reset(server *srv, connection *con) {
+static int connection_reset(server *srv, connection *con) {
 	plugins_call_connection_reset(srv, con);
 
 	connection_response_reset(srv, con);
