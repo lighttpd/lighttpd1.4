@@ -413,7 +413,7 @@ mod_wstunnel_la_LDFLAGS = $(common_module_ldflags)
 mod_wstunnel_la_LIBADD = $(common_libadd) $(CRYPTO_LIB)
 
 
-hdr = server.h base64.h buffer.h burl.h network.h log.h http_kv.h keyvalue.h \
+hdr = base64.h buffer.h burl.h network.h log.h http_kv.h keyvalue.h \
 	response.h request.h fastcgi.h chunk.h \
 	first.h settings.h http_chunk.h \
 	algo_sha1.h md5.h http_auth.h http_header.h http_vhostdb.h stream.h \
