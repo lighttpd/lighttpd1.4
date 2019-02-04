@@ -185,7 +185,7 @@ URIHANDLER_FUNC(mod_staticfile_subrequest) {
 	}
 
 	/* ignore certain extensions */
-	if (array_match_value_suffix(p->conf.exclude_ext, con->physical.path)) {
+	if (0 != p->conf.exclude_ext->used && array_match_value_suffix(p->conf.exclude_ext, con->physical.path)) {
 			if (con->conf.log_request_handling) {
 				log_error_write(srv, __FILE__, __LINE__,  "s",  "-- NOT handling file as static file, extension forbidden");
 			}
