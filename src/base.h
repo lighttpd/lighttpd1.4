@@ -388,6 +388,8 @@ struct server {
 	int con_closed;
 
 	int max_fds;    /* max possible fds */
+	int max_fds_lowat;/* low  watermark */
+	int max_fds_hiwat;/* high watermark */
 	int cur_fds;    /* currently used fds */
 	int want_fds;   /* waiting fds */
 	int sockets_disabled;

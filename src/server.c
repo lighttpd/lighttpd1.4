@@ -1690,6 +1690,9 @@ static int server_main (server * const srv, int argc, char **argv) {
 		return -1;
 	}
 
+	srv->max_fds_lowat = srv->max_fds * 8 / 10;
+	srv->max_fds_hiwat = srv->max_fds * 9 / 10;
+
 	/* libev backend overwrites our SIGCHLD handler and calls waitpid on SIGCHLD; we want our own SIGCHLD handling. */
 #ifdef HAVE_SIGACTION
 	sigaction(SIGCHLD, &act, NULL);
@@ -1986,7 +1989,7 @@ static int server_main_loop (server * const srv) {
 		} else if (srv->sockets_disabled) {
 			/* our server sockets are disabled, why ? */
 
-			if ((srv->cur_fds + srv->want_fds < srv->max_fds * 8 / 10) && /* we have enough unused fds */
+			if ((srv->cur_fds + srv->want_fds < srv->max_fds_lowat) && /* we have enough unused fds */
 			    (srv->conns->used <= srv->max_conns * 9 / 10)) {
 				server_sockets_set_event(srv, FDEVENT_IN);
 				log_error_write(srv, __FILE__, __LINE__, "s", "[note] sockets enabled again");
@@ -1994,7 +1997,7 @@ static int server_main_loop (server * const srv) {
 				srv->sockets_disabled = 0;
 			}
 		} else {
-			if ((srv->cur_fds + srv->want_fds > srv->max_fds * 9 / 10) || /* out of fds */
+			if ((srv->cur_fds + srv->want_fds > srv->max_fds_hiwat) || /* out of fds */
 			    (srv->conns->used >= srv->max_conns)) { /* out of connections */
 				/* disable server-fds */
 				server_sockets_set_event(srv, 0);
