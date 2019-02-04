@@ -1977,6 +1977,12 @@ static int server_main_loop (server * const srv) {
 		if (graceful_shutdown) {
 			server_graceful_state(srv);
 			srv->sockets_disabled = 1;
+			if (srv->conns->used == 0) {
+				/* we are in graceful shutdown phase and all connections are closed
+				 * we are ready to terminate without harming anyone */
+				srv_shutdown = 1;
+				break;
+			}
 		} else if (srv->sockets_disabled) {
 			/* our server sockets are disabled, why ? */
 
@@ -2001,13 +2007,6 @@ static int server_main_loop (server * const srv) {
 
 				srv->sockets_disabled = 1;
 			}
-		}
-
-		if (graceful_shutdown && srv->conns->used == 0) {
-			/* we are in graceful shutdown phase and all connections are closed
-			 * we are ready to terminate without harming anyone */
-			srv_shutdown = 1;
-			break;
 		}
 
 		/* we still have some fds to share */
@@ -2061,26 +2060,6 @@ static int server_main_loop (server * const srv) {
 		srv->joblist->used = 0;
 	}
 
-	if (graceful_shutdown || graceful_restart) {
-		server_graceful_state(srv);
-	}
-
-	if (2 == graceful_shutdown) { /* value 2 indicates idle timeout */
-		log_error_write(srv, __FILE__, __LINE__, "s",
-				"server stopped after idle timeout");
-	} else {
-#ifdef HAVE_SIGACTION
-		log_error_write(srv, __FILE__, __LINE__, "sdsd",
-				"server stopped by UID =",
-				last_sigterm_info.si_uid,
-				"PID =",
-				last_sigterm_info.si_pid);
-#else
-		log_error_write(srv, __FILE__, __LINE__, "s",
-				"server stopped");
-#endif
-	}
-
 	return 0;
 }
 
@@ -2111,7 +2090,27 @@ int main (int argc, char **argv) {
         }
 
         rc = server_main(srv, argc, argv);
-        if (rc > 0) rc = server_main_loop(srv);
+        if (rc > 0 && 0 == (rc = server_main_loop(srv))) {
+            if (graceful_shutdown || graceful_restart) {
+                server_graceful_state(srv);
+            }
+
+            if (2 == graceful_shutdown) { /* value 2 indicates idle timeout */
+                log_error_write(srv, __FILE__, __LINE__, "s",
+                                "server stopped after idle timeout");
+            } else {
+              #ifdef HAVE_SIGACTION
+                log_error_write(srv, __FILE__, __LINE__, "sdsd",
+                                "server stopped by UID =",
+                                last_sigterm_info.si_uid,
+                                "PID =",
+                                last_sigterm_info.si_pid);
+              #else
+                log_error_write(srv, __FILE__, __LINE__, "s",
+                                "server stopped");
+              #endif
+            }
+        }
 
         /* clean-up */
         remove_pid_file(srv);
