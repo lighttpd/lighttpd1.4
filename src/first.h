@@ -75,12 +75,30 @@
 #define __GNUC_PREREQ(maj,min) 0
 #endif
 
+#ifndef __attribute_noinline__
+#if __has_attribute(noinline) \
+ || __GNUC_PREREQ(3,1)
+#define __attribute_noinline__  __attribute__((__noinline__))
+#else
+#define __attribute_noinline__
+#endif
+#endif
+
 #ifndef __attribute_cold__
 #if __has_attribute(cold) \
  || __GNUC_PREREQ(4,3)
 #define __attribute_cold__  __attribute__((__cold__))
 #else
 #define __attribute_cold__
+#endif
+#endif
+
+#ifndef __attribute_hot__
+#if __has_attribute(hot) \
+ || __GNUC_PREREQ(4,3)
+#define __attribute_hot__  __attribute__((__hot__))
+#else
+#define __attribute_hot__
 #endif
 #endif
 

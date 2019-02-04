@@ -94,6 +94,7 @@ static volatile sig_atomic_t srv_shutdown = 0;
 static volatile sig_atomic_t handle_sig_child = 0;
 static volatile sig_atomic_t handle_sig_alarm = 1;
 static volatile sig_atomic_t handle_sig_hup = 0;
+static time_t idle_limit = 0;
 
 #if defined(HAVE_SIGACTION) && defined(SA_SIGINFO)
 static volatile siginfo_t last_sigterm_info;
@@ -983,7 +984,6 @@ static int server_main (server * const srv, int argc, char **argv) {
 	int num_childs = 0;
 #endif
 	size_t i;
-	time_t idle_limit = 0, last_active_ts = time(NULL);
 #ifdef HAVE_SIGACTION
 	struct sigaction act;
 #endif
@@ -1003,6 +1003,7 @@ static int server_main (server * const srv, int argc, char **argv) {
 	graceful_shutdown = 0;
 	handle_sig_alarm = 1;
 	handle_sig_hup = 0;
+	idle_limit = 0;
 	chunkqueue_set_tempdirs_default_reset();
 	http_auth_dumbdata_reset();
 	http_vhostdb_dumbdata_reset();
@@ -1727,18 +1728,12 @@ static int server_main (server * const srv, int argc, char **argv) {
 		oneshot_fd = -1;
 	}
 
-	/* main-loop */
-	while (!srv_shutdown) {
-		int n;
-		size_t ndx;
-		time_t min_ts;
+	return 1;
+}
 
-		if (handle_sig_hup) {
+__attribute_noinline__
+static int server_handle_sighup (server * const srv) {
 			handler_t r;
-
-			/* reset notification */
-			handle_sig_hup = 0;
-
 
 			/* cycle logfiles */
 
@@ -1766,23 +1761,12 @@ static int server_main (server * const srv, int argc, char **argv) {
 					"logfiles cycled");
 #endif
 			}
-		}
 
-		if (handle_sig_alarm) {
-			/* a new second */
+			return 0;
+}
 
-#ifdef USE_ALARM
-			/* reset notification */
-			handle_sig_alarm = 0;
-#endif
-
-			/* get current time */
-			min_ts = time(NULL);
-
-			if (min_ts != srv->cur_ts) {
-#ifdef DEBUG_CONNECTION_STATES
-				int cs = 0;
-#endif
+__attribute_noinline__
+static void server_handle_sigalrm (server * const srv, time_t min_ts, time_t last_active_ts) {
 				connections *conns = srv->conns;
 				handler_t r;
 
@@ -1825,7 +1809,7 @@ static int server_main (server * const srv, int argc, char **argv) {
 				/* cleanup stat-cache */
 				stat_cache_trigger_cleanup(srv);
 				/* reset global/aggregate rate limit counters */
-				for (i = 0; i < srv->config_context->used; ++i) {
+				for (size_t i = 0; i < srv->config_context->used; ++i) {
 					srv->config_storage[i]->global_bytes_per_second_cnt = 0;
 				}
 				/* if graceful_shutdown, accelerate cleanup of recently completed request/responses */
@@ -1834,7 +1818,7 @@ static int server_main (server * const srv, int argc, char **argv) {
 				 * check all connections for timeouts
 				 *
 				 */
-				for (ndx = 0; ndx < conns->used; ndx++) {
+				for (size_t ndx = 0; ndx < conns->used; ++ndx) {
 					connection * const con = conns->ptr[ndx];
 					const int waitevents = fdevent_event_get_interest(srv->ev, con->fd);
 					int changed = 0;
@@ -1920,29 +1904,12 @@ static int server_main (server * const srv, int argc, char **argv) {
 					if (changed) {
 						connection_state_machine(srv, con);
 					}
-
-#if DEBUG_CONNECTION_STATES
-					if (cs == 0) {
-						fprintf(stderr, "connection-state: ");
-						cs = 1;
-					}
-
-					fprintf(stderr, "c[%d,%d]: %s ",
-						con->fd,
-						con->fcgi.fd,
-						connection_get_state(con->state));
-#endif
 				}
+}
 
-#ifdef DEBUG_CONNECTION_STATES
-				if (cs == 1) fprintf(stderr, "\n");
-#endif
-			}
-		}
-
-		if (handle_sig_child) {
+__attribute_noinline__
+static void server_handle_sigchld (server * const srv) {
 			pid_t pid;
-			handle_sig_child = 0;
 			do {
 				int status;
 				pid = waitpid(-1, &status, WNOHANG);
@@ -1958,6 +1925,34 @@ static int server_main (server * const srv, int argc, char **argv) {
 					}
 				}
 			} while (pid > 0 || (-1 == pid && errno == EINTR));
+}
+
+__attribute_hot__
+__attribute_noinline__
+static int server_main_loop (server * const srv) {
+	time_t last_active_ts = time(NULL);
+
+	while (!srv_shutdown) {
+		int n;
+
+		if (handle_sig_hup) {
+			handle_sig_hup = 0;
+			if (server_handle_sighup(srv)) return -1;
+		}
+
+		if (handle_sig_alarm) {
+			time_t min_ts = time(NULL);
+		      #ifdef USE_ALARM
+			handle_sig_alarm = 0;
+		      #endif
+			if (min_ts != srv->cur_ts) {
+				server_handle_sigalrm(srv, min_ts, last_active_ts);
+			}
+		}
+
+		if (handle_sig_child) {
+			handle_sig_child = 0;
+			server_handle_sigchld(srv);
 		}
 
 		if (graceful_shutdown) {
@@ -2039,7 +2034,7 @@ static int server_main (server * const srv, int argc, char **argv) {
 
 		if (n >= 0) fdevent_sched_run(srv, srv->ev);
 
-		for (ndx = 0; ndx < srv->joblist->used; ndx++) {
+		for (size_t ndx = 0; ndx < srv->joblist->used; ++ndx) {
 			connection *con = srv->joblist->ptr[ndx];
 			connection_state_machine(srv, con);
 		}
@@ -2070,6 +2065,7 @@ static int server_main (server * const srv, int argc, char **argv) {
 	return 0;
 }
 
+__attribute_cold__
 int main (int argc, char **argv) {
     int rc;
 
@@ -2096,6 +2092,7 @@ int main (int argc, char **argv) {
         }
 
         rc = server_main(srv, argc, argv);
+        if (rc > 0) rc = server_main_loop(srv);
 
         /* clean-up */
         remove_pid_file(srv);
