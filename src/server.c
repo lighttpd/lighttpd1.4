@@ -1952,6 +1952,7 @@ static void server_handle_sigchld (server * const srv) {
 __attribute_hot__
 __attribute_noinline__
 static int server_main_loop (server * const srv) {
+	connections * const joblist = srv->joblist;
 	time_t last_active_ts = time(NULL);
 
 	while (!srv_shutdown) {
@@ -2036,12 +2037,11 @@ static int server_main_loop (server * const srv) {
 
 		if (n >= 0) fdevent_sched_run(srv, srv->ev);
 
-		for (size_t ndx = 0; ndx < srv->joblist->used; ++ndx) {
-			connection *con = srv->joblist->ptr[ndx];
+		for (size_t ndx = 0; ndx < joblist->used; ++ndx) {
+			connection *con = joblist->ptr[ndx];
 			connection_state_machine(srv, con);
 		}
-
-		srv->joblist->used = 0;
+		joblist->used = 0;
 	}
 
 	return 0;
