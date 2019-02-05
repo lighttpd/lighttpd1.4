@@ -748,7 +748,7 @@ found_header_end:
 
 		/* found */
 		if (last_chunk) {
-			buffer_reset(con->request.request);
+			buffer_clear(con->request.request);
 
 			for (c = cq->first; c; c = c->next) {
 				size_t len = buffer_string_length(c->mem) - c->offset;
