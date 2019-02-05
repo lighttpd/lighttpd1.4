@@ -1,3 +1,6 @@
+# please note:
+# server.systemd-socket-activation option needs to be enabled in lighttpd config for socket activation to work.
+
 [Unit]
 Description=lighttpd socket
 
