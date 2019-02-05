@@ -1,0 +1,16 @@
+# please note: lighttpd.conf must contain directive:
+#   server.systemd-socket-activation = "enable"
+
+[Unit]
+Description=lighttpd socket
+
+[Socket]
+# Enable listening on http port
+ListenStream=80
+# To enable listening on https port, lighttpd config needs SSL setup
+# https://redmine.lighttpd.net/projects/lighttpd/wiki/Docs_SSL
+#ListenStream=443
+Service=lighttpd.service
+
+[Install]
+WantedBy=sockets.target
