@@ -1,1 +1,1 @@
-EXTRA_DIST=lighttpd.service
+EXTRA_DIST=lighttpd.service lighttpd.socket

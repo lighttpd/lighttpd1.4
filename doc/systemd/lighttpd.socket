@@ -1,0 +1,10 @@
+[Unit]
+Description=lighttpd socket
+
+[Socket]
+ListenStream=80
+ListenStream=443
+Service=lighttpd.service
+
+[Install]
+WantedBy=sockets.target
