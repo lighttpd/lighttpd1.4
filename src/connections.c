@@ -106,6 +106,9 @@ static int connection_close(server *srv, connection *con) {
 
 	plugins_call_handle_connection_close(srv, con);
 
+	con->request_count = 0;
+	chunkqueue_reset(con->read_queue);
+
 	fdevent_event_del(srv->ev, &(con->fde_ndx), con->fd);
 	fdevent_unregister(srv->ev, con->fd);
 #ifdef __WIN32
@@ -475,6 +478,52 @@ static int connection_handle_write(server *srv, connection *con) {
 	}
 
 	return 0;
+}
+
+static void connection_handle_write_state(server *srv, connection *con) {
+    do {
+        /* only try to write if we have something in the queue */
+        if (!chunkqueue_is_empty(con->write_queue)) {
+            if (con->is_writable) {
+                if (-1 == connection_handle_write(srv, con)) {
+                    log_error_write(srv, __FILE__, __LINE__, "ds",
+                            con->fd, "handle write failed.");
+                    connection_set_state(srv, con, CON_STATE_ERROR);
+                    break;
+                }
+                if (con->state != CON_STATE_WRITE) break;
+            }
+        } else if (con->file_finished) {
+            connection_set_state(srv, con, CON_STATE_RESPONSE_END);
+            break;
+        }
+
+        if (con->mode != DIRECT && !con->file_finished) {
+            int r = plugins_call_handle_subrequest(srv, con);
+            switch(r) {
+            case HANDLER_WAIT_FOR_EVENT:
+            case HANDLER_FINISHED:
+            case HANDLER_GO_ON:
+                break;
+            case HANDLER_WAIT_FOR_FD:
+                srv->want_fds++;
+                fdwaitqueue_append(srv, con);
+                break;
+            case HANDLER_COMEBACK:
+            default:
+                log_error_write(srv, __FILE__, __LINE__, "sdd",
+                                "unexpected subrequest handler ret-value:",
+                                con->fd, r);
+                /* fall through */
+            case HANDLER_ERROR:
+                connection_set_state(srv, con, CON_STATE_ERROR);
+                break;
+            }
+        }
+    } while (con->state == CON_STATE_WRITE
+             && (!chunkqueue_is_empty(con->write_queue)
+                 ? con->is_writable
+                 : con->file_finished));
 }
 
 
@@ -1102,66 +1151,9 @@ connection *connection_accepted(server *srv, server_socket *srv_socket, sock_add
 }
 
 
-int connection_state_machine(server *srv, connection *con) {
-	int done = 0, r;
-
-	if (srv->srvconf.log_state_handling) {
-		log_error_write(srv, __FILE__, __LINE__, "sds",
-				"state at start",
-				con->fd,
-				connection_get_state(con->state));
-	}
-
-	while (done == 0) {
-		size_t ostate = con->state;
-
-		if (srv->srvconf.log_state_handling) {
-			log_error_write(srv, __FILE__, __LINE__, "sds",
-					"state for fd", con->fd, connection_get_state(con->state));
-		}
-
-		switch (con->state) {
-		case CON_STATE_REQUEST_START: /* transient */
-			con->request_start = srv->cur_ts;
-			con->read_idle_ts = srv->cur_ts;
-			if (con->conf.high_precision_timestamps)
-				log_clock_gettime_realtime(&con->request_start_hp);
-
-			con->request_count++;
-			con->loops_per_request = 0;
-
-			connection_set_state(srv, con, CON_STATE_READ);
-
-			break;
-		case CON_STATE_REQUEST_END: /* transient */
-			buffer_clear(con->uri.authority);
-			buffer_reset(con->uri.path);
-			buffer_reset(con->uri.query);
-			buffer_reset(con->request.orig_uri);
-
-			if (http_request_parse(srv, con)) {
-				/* we have to read some data from the POST request */
-
-				connection_set_state(srv, con, CON_STATE_READ_POST);
-
-				break;
-			}
-
-			connection_set_state(srv, con, CON_STATE_HANDLE_REQUEST);
-
-			break;
-		case CON_STATE_READ_POST:
-		case CON_STATE_HANDLE_REQUEST:
-			/*
-			 * the request is parsed
-			 *
-			 * decided what to do with the request
-			 * -
-			 *
-			 *
-			 */
-
-			switch (r = http_response_prepare(srv, con)) {
+static int connection_handle_request(server *srv, connection *con) {
+			int r = http_response_prepare(srv, con);
+			switch (r) {
 			case HANDLER_WAIT_FOR_EVENT:
 				if (!con->file_finished && (!con->file_started || 0 == con->conf.stream_response_body)) {
 					break; /* come back here */
@@ -1236,8 +1228,7 @@ int connection_state_machine(server *srv, connection *con) {
 							connection_handle_errdoc_init(con);
 							con->http_status = 0; /*(after connection_handle_errdoc_init())*/
 
-							done = -1;
-							break;
+							return 1;
 						}
 					}
 				}
@@ -1252,8 +1243,7 @@ int connection_state_machine(server *srv, connection *con) {
 
 				break;
 			case HANDLER_COMEBACK:
-				done = -1;
-				break;
+				return 1;
 			case HANDLER_ERROR:
 				/* something went wrong */
 				connection_set_state(srv, con, CON_STATE_ERROR);
@@ -1263,95 +1253,95 @@ int connection_state_machine(server *srv, connection *con) {
 				break;
 			}
 
-			if (con->state == CON_STATE_HANDLE_REQUEST && ostate == CON_STATE_READ_POST) {
-				ostate = CON_STATE_HANDLE_REQUEST;
-			}
-			break;
-		case CON_STATE_RESPONSE_START:
-			/*
-			 * the decision is done
-			 * - create the HTTP-Response-Header
-			 *
-			 */
+			return 0;
+}
 
-			if (-1 == connection_handle_write_prepare(srv, con)) {
-				connection_set_state(srv, con, CON_STATE_ERROR);
 
+int connection_state_machine(server *srv, connection *con) {
+	connection_state_t ostate;
+	int r;
+
+	if (srv->srvconf.log_state_handling) {
+		log_error_write(srv, __FILE__, __LINE__, "sds",
+				"state at enter",
+				con->fd,
+				connection_get_state(con->state));
+	}
+
+	do {
+		if (srv->srvconf.log_state_handling) {
+			log_error_write(srv, __FILE__, __LINE__, "sds",
+					"state for fd", con->fd, connection_get_state(con->state));
+		}
+
+		switch ((ostate = con->state)) {
+		case CON_STATE_REQUEST_START: /* transient */
+			con->request_start = srv->cur_ts;
+			con->read_idle_ts = srv->cur_ts;
+			if (con->conf.high_precision_timestamps)
+				log_clock_gettime_realtime(&con->request_start_hp);
+
+			con->request_count++;
+			con->loops_per_request = 0;
+
+			connection_set_state(srv, con, CON_STATE_READ);
+			/* fall through */
+		case CON_STATE_READ:
+			connection_handle_read_state(srv, con);
+			if (con->state != CON_STATE_REQUEST_END) break;
+			/* fall through */
+		case CON_STATE_REQUEST_END: /* transient */
+			buffer_clear(con->uri.authority);
+			buffer_reset(con->uri.path);
+			buffer_reset(con->uri.query);
+			buffer_reset(con->request.orig_uri);
+
+			ostate = http_request_parse(srv, con)
+			  ? CON_STATE_READ_POST
+			  : CON_STATE_HANDLE_REQUEST;
+			connection_set_state(srv, con, ostate);
+			/* fall through */
+		case CON_STATE_READ_POST:
+		case CON_STATE_HANDLE_REQUEST:
+			if (connection_handle_request(srv, con)) {
+				/* redo loop; will not match con->state */
+				ostate = CON_STATE_CONNECT;
 				break;
 			}
 
+			if (con->state == CON_STATE_HANDLE_REQUEST
+			    && ostate == CON_STATE_READ_POST) {
+				ostate = CON_STATE_HANDLE_REQUEST;
+			}
+
+			if (con->state != CON_STATE_RESPONSE_START) break;
+			/* fall through */
+		case CON_STATE_RESPONSE_START: /* transient */
+			if (-1 == connection_handle_write_prepare(srv, con)) {
+				connection_set_state(srv, con, CON_STATE_ERROR);
+				break;
+			}
 			connection_set_state(srv, con, CON_STATE_WRITE);
-			break;
+			/* fall through */
+		case CON_STATE_WRITE:
+			connection_handle_write_state(srv, con);
+			if (con->state != CON_STATE_RESPONSE_END) break;
+			/* fall through */
 		case CON_STATE_RESPONSE_END: /* transient */
 		case CON_STATE_ERROR:        /* transient */
 			connection_handle_response_end_state(srv, con);
 			break;
-		case CON_STATE_CONNECT:
-			chunkqueue_reset(con->read_queue);
-
-			con->request_count = 0;
-
-			break;
 		case CON_STATE_CLOSE:
 			connection_handle_close_state(srv, con);
 			break;
-		case CON_STATE_READ:
-			connection_handle_read_state(srv, con);
-			break;
-		case CON_STATE_WRITE:
-			do {
-				/* only try to write if we have something in the queue */
-				if (!chunkqueue_is_empty(con->write_queue)) {
-					if (con->is_writable) {
-						if (-1 == connection_handle_write(srv, con)) {
-							log_error_write(srv, __FILE__, __LINE__, "ds",
-									con->fd,
-									"handle write failed.");
-							connection_set_state(srv, con, CON_STATE_ERROR);
-							break;
-						}
-						if (con->state != CON_STATE_WRITE) break;
-					}
-				} else if (con->file_finished) {
-					connection_set_state(srv, con, CON_STATE_RESPONSE_END);
-					break;
-				}
-
-				if (con->mode != DIRECT && !con->file_finished) {
-					switch(r = plugins_call_handle_subrequest(srv, con)) {
-					case HANDLER_WAIT_FOR_EVENT:
-					case HANDLER_FINISHED:
-					case HANDLER_GO_ON:
-						break;
-					case HANDLER_WAIT_FOR_FD:
-						srv->want_fds++;
-						fdwaitqueue_append(srv, con);
-						break;
-					case HANDLER_COMEBACK:
-					default:
-						log_error_write(srv, __FILE__, __LINE__, "sdd", "unexpected subrequest handler ret-value: ", con->fd, r);
-						/* fall through */
-					case HANDLER_ERROR:
-						connection_set_state(srv, con, CON_STATE_ERROR);
-						break;
-					}
-				}
-			} while (con->state == CON_STATE_WRITE && (!chunkqueue_is_empty(con->write_queue) ? con->is_writable : con->file_finished));
-
+		case CON_STATE_CONNECT:
 			break;
 		default:
 			log_error_write(srv, __FILE__, __LINE__, "sdd",
 					"unknown state:", con->fd, con->state);
-
 			break;
 		}
-
-		if (done == -1) {
-			done = 0;
-		} else if (ostate == con->state) {
-			done = 1;
-		}
-	}
+	} while (ostate != con->state);
 
 	if (srv->srvconf.log_state_handling) {
 		log_error_write(srv, __FILE__, __LINE__, "sds",
