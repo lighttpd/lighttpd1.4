@@ -713,118 +713,56 @@ static int connection_reset(server *srv, connection *con) {
 }
 
 static void connection_read_header(server *srv, connection *con)  {
-	chunk *c, *last_chunk;
-	off_t last_offset;
-	chunkqueue *cq = con->read_queue;
+    chunkqueue * const cq = con->read_queue;
+    chunk *c;
+    size_t hlen = 0;
+    int le = 0;
 
-	chunkqueue_remove_finished_chunks(cq);
+    for (c = cq->first; c; c = c->next) {
+        size_t clen = buffer_string_length(c->mem) - c->offset;
+        const char * const b = c->mem->ptr + c->offset;
+        const char *n = b;
+        if (0 == clen) continue;
+        if (le) { /*(line end sequence cross chunk boundary)*/
+            if (n[0] == '\r')   ++n;
+            if (n[0] == '\n') { ++n; hlen += n - b; break; }
+            if (n[0] == '\0') { hlen += n - b; continue; }
+            le = 0;
+        }
+        for (; (n = strchr(n, '\n')); ++n) {
+            if (n[1] == '\r')   ++n;
+            if (n[1] == '\n') { hlen += n - b + 2; break; }
+            if (n[1] == '\0') { n = NULL; le = 1; break; }
+        }
+        if (n) break;
+        hlen += clen;
+    }
 
-	/* we might have got several packets at once
-	 */
+    if (hlen > srv->srvconf.max_request_field_size) {
+        log_error_write(srv, __FILE__, __LINE__, "s",
+                        "oversized request-header -> sending Status 431");
+        con->http_status = 431; /* Request Header Fields Too Large */
+        con->keep_alive = 0;
+        connection_set_state(srv, con, CON_STATE_HANDLE_REQUEST);
+    }
 
-		/* if there is a \r\n\r\n in the chunkqueue
-		 *
-		 * scan the chunk-queue twice
-		 * 1. to find the \r\n\r\n
-		 * 2. to copy the header-packet
-		 *
-		 */
+    if (NULL == c) return; /* incomplete request headers */
 
-		last_chunk = NULL;
-		last_offset = 0;
+    buffer_clear(con->request.request);
 
-		for (c = cq->first; c; c = c->next) {
-			size_t i;
-			size_t len = buffer_string_length(c->mem) - c->offset;
-			const char *b = c->mem->ptr + c->offset;
+    for (c = cq->first; c; c = c->next) {
+        size_t len = buffer_string_length(c->mem) - c->offset;
+        if (len > hlen) len = hlen;
+        buffer_append_string_len(con->request.request,
+                                 c->mem->ptr + c->offset, len);
+        c->offset += len;
+        cq->bytes_out += len;
+        if (0 == (hlen -= len)) break;
+    }
 
-			for (i = 0; i < len; ++i) {
-				char ch = b[i];
+    chunkqueue_remove_finished_chunks(cq);
 
-				if ('\r' == ch) {
-					/* chec if \n\r\n follows */
-					size_t j = i+1;
-					chunk *cc = c;
-					const char header_end[] = "\r\n\r\n";
-					int header_end_match_pos = 1;
-
-					for ( ; cc; cc = cc->next, j = 0 ) {
-						size_t bblen = buffer_string_length(cc->mem) - cc->offset;
-						const char *bb = cc->mem->ptr + cc->offset;
-
-						for ( ; j < bblen; j++) {
-							ch = bb[j];
-
-							if (ch == header_end[header_end_match_pos]) {
-								header_end_match_pos++;
-								if (4 == header_end_match_pos) {
-									last_chunk = cc;
-									last_offset = j+1;
-									goto found_header_end;
-								}
-							} else {
-								goto reset_search;
-							}
-						}
-					}
-				} else if ('\n' == ch) {
-					/* check if \n follows */
-					if (i+1 < len) {
-						if (b[i+1] == '\n') {
-							last_chunk = c;
-							last_offset = i+2;
-							break;
-						} /* else goto reset_search; */
-					} else {
-						for (chunk *cc = c->next; cc; cc = cc->next) {
-							size_t bblen = buffer_string_length(cc->mem) - cc->offset;
-							const char *bb = cc->mem->ptr + cc->offset;
-							if (0 == bblen) continue;
-							if (bb[0] == '\n') {
-								last_chunk = cc;
-								last_offset = 1;
-								goto found_header_end;
-							} else {
-								goto reset_search;
-							}
-						}
-					}
-				}
-reset_search: ;
-			}
-		}
-found_header_end:
-
-		/* found */
-		if (last_chunk) {
-			buffer_clear(con->request.request);
-
-			for (c = cq->first; c; c = c->next) {
-				size_t len = buffer_string_length(c->mem) - c->offset;
-
-				if (c == last_chunk) {
-					len = last_offset;
-				}
-
-				buffer_append_string_len(con->request.request, c->mem->ptr + c->offset, len);
-				c->offset += len;
-				cq->bytes_out += len;
-
-				if (c == last_chunk) break;
-			}
-
-			connection_set_state(srv, con, CON_STATE_REQUEST_END);
-		}
-
-		if ((last_chunk ? buffer_string_length(con->request.request) : (size_t)chunkqueue_length(cq))
-		    > srv->srvconf.max_request_field_size) {
-			log_error_write(srv, __FILE__, __LINE__, "s", "oversized request-header -> sending Status 431");
-			con->http_status = 431; /* Request Header Fields Too Large */
-			con->keep_alive = 0;
-			connection_set_state(srv, con, CON_STATE_HANDLE_REQUEST);
-		}
-
-	chunkqueue_remove_finished_chunks(cq);
+    connection_set_state(srv, con, CON_STATE_REQUEST_END);
 }
 
 /**
