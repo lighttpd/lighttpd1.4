@@ -1,12 +1,14 @@
-# please note:
-# server.systemd-socket-activation option needs to be enabled in lighttpd config for socket activation to work.
+# please note: lighttpd.conf must contain directive: server.systemd-socket-activation = "enable"
 
 [Unit]
 Description=lighttpd socket
 
 [Socket]
+# Enable listening on http port
 ListenStream=80
-ListenStream=443
+# To enable listening on https port, you need first setup SSL
+# https://redmine.lighttpd.net/projects/lighttpd/wiki/Docs_SSL
+#ListenStream=443
 Service=lighttpd.service
 
 [Install]
