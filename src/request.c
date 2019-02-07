@@ -408,9 +408,9 @@ static int request_uri_is_valid_char(unsigned char c) {
 }
 
 static void http_request_missing_CR_before_LF(server *srv, connection *con) {
+	UNUSED(con);
 	if (srv->srvconf.log_request_header_on_error) {
 		log_error_write(srv, __FILE__, __LINE__, "s", "missing CR before LF in header -> 400");
-		log_error_write(srv, __FILE__, __LINE__, "Sb", "request-header:\n", con->request.request);
 	}
 }
 
@@ -467,8 +467,6 @@ static int parse_single_header(server *srv, connection *con, parse_header_state 
             if (vlen >= 1024) { /*(expecting < 256)*/
                 if (srv->srvconf.log_request_header_on_error) {
                     log_error_write(srv, __FILE__, __LINE__, "s", "uri-authority too long -> 400");
-                    log_error_write(srv, __FILE__, __LINE__, "Sb",
-                                    "request-header:\n", con->request.request);
                 }
                 return 0; /* invalid header */
             }
@@ -481,8 +479,6 @@ static int parse_single_header(server *srv, connection *con, parse_header_state 
             if (srv->srvconf.log_request_header_on_error) {
                 log_error_write(srv, __FILE__, __LINE__, "s",
                                 "duplicate Host-header -> 400");
-                log_error_write(srv, __FILE__, __LINE__, "Sb",
-                                "request-header:\n", con->request.request);
             }
             return 0; /* invalid header */
         }
@@ -512,8 +508,6 @@ static int parse_single_header(server *srv, connection *con, parse_header_state 
             if (srv->srvconf.log_request_header_on_error) {
                 log_error_write(srv, __FILE__, __LINE__, "s",
                                 "duplicate Content-Type-header -> 400");
-                log_error_write(srv, __FILE__, __LINE__, "Sb",
-                                "request-header:\n", con->request.request);
             }
             return 0; /* invalid header */
         }
@@ -542,8 +536,6 @@ static int parse_single_header(server *srv, connection *con, parse_header_state 
             if (srv->srvconf.log_request_header_on_error) {
                 log_error_write(srv, __FILE__, __LINE__, "s",
                                 "duplicate Content-Length-header -> 400");
-                log_error_write(srv, __FILE__, __LINE__, "Sb",
-                                "request-header:\n", con->request.request);
             }
             return 0; /* invalid header */
         }
@@ -564,8 +556,6 @@ static int parse_single_header(server *srv, connection *con, parse_header_state 
                 if (srv->srvconf.log_request_header_on_error) {
                     log_error_write(srv, __FILE__, __LINE__, "s",
                                     "duplicate If-Modified-Since header -> 400");
-                    log_error_write(srv, __FILE__, __LINE__, "Sb",
-                                    "request-header:\n", con->request.request);
                 }
                 return 0; /* invalid header */
             }
@@ -662,9 +652,6 @@ static size_t http_request_parse_reqline(server *srv, connection *con, parse_hea
 				if (request_line_stage != 2) {
 					if (srv->srvconf.log_request_header_on_error) {
 						log_error_write(srv, __FILE__, __LINE__, "s", "incomplete request line -> 400");
-						log_error_write(srv, __FILE__, __LINE__, "Sb",
-								"request-header:\n",
-								con->request.request);
 					}
 					return 0;
 				}
@@ -680,9 +667,6 @@ static size_t http_request_parse_reqline(server *srv, connection *con, parse_hea
 
 					if (srv->srvconf.log_request_header_on_error) {
 						log_error_write(srv, __FILE__, __LINE__, "s", "unknown http-method -> 501");
-						log_error_write(srv, __FILE__, __LINE__, "Sb",
-								"request-header:\n",
-								con->request.request);
 					}
 
 					return 0;
@@ -723,9 +707,6 @@ static size_t http_request_parse_reqline(server *srv, connection *con, parse_hea
 					if (invalid_version) {
 						if (srv->srvconf.log_request_header_on_error) {
 							log_error_write(srv, __FILE__, __LINE__, "s", "unknown protocol -> 400");
-							log_error_write(srv, __FILE__, __LINE__, "Sb",
-									"request-header:\n",
-									con->request.request);
 						}
 						return 0;
 					}
@@ -739,18 +720,12 @@ static size_t http_request_parse_reqline(server *srv, connection *con, parse_hea
 
 						if (srv->srvconf.log_request_header_on_error) {
 							log_error_write(srv, __FILE__, __LINE__, "s", "unknown HTTP version -> 505");
-							log_error_write(srv, __FILE__, __LINE__, "Sb",
-									"request-header:\n",
-									con->request.request);
 						}
 						return 0;
 					}
 				} else {
 					if (srv->srvconf.log_request_header_on_error) {
 						log_error_write(srv, __FILE__, __LINE__, "s", "unknown protocol -> 400");
-						log_error_write(srv, __FILE__, __LINE__, "Sb",
-								"request-header:\n",
-								con->request.request);
 					}
 					return 0;
 				}
@@ -808,10 +783,6 @@ static size_t http_request_parse_reqline(server *srv, connection *con, parse_hea
 									"invalid character in URI -> 400",
 									con->request.uri->ptr[j]);
 						}
-
-						log_error_write(srv, __FILE__, __LINE__, "Sb",
-								"request-header:\n",
-								con->request.request);
 					}
 
 					return 0;
@@ -841,9 +812,6 @@ static size_t http_request_parse_reqline(server *srv, connection *con, parse_hea
 				/* ERROR, one space to much */
 				if (srv->srvconf.log_request_header_on_error) {
 					log_error_write(srv, __FILE__, __LINE__, "s", "overlong request line -> 400");
-					log_error_write(srv, __FILE__, __LINE__, "Sb",
-							"request-header:\n",
-							con->request.request);
 				}
 				return 0;
 			}
@@ -856,9 +824,6 @@ static size_t http_request_parse_reqline(server *srv, connection *con, parse_hea
 	if (buffer_string_is_empty(con->request.uri)) {
 		if (srv->srvconf.log_request_header_on_error) {
 			log_error_write(srv, __FILE__, __LINE__, "s", "no uri specified -> 400");
-			log_error_write(srv, __FILE__, __LINE__, "Sb",
-							"request-header:\n",
-							con->request.request);
 		}
 		return 0;
 	}
@@ -868,8 +833,6 @@ static size_t http_request_parse_reqline(server *srv, connection *con, parse_hea
 		if (state->reqline_hostlen >= 1024) { /*(expecting < 256)*/
 			if (srv->srvconf.log_request_header_on_error) {
 				log_error_write(srv, __FILE__, __LINE__, "s", "uri-authority too long -> 400");
-				log_error_write(srv, __FILE__, __LINE__, "Sb",
-						"request-header:\n", con->request.request);
 			}
 			return 0;
 		}
@@ -894,7 +857,6 @@ int http_request_parse(server *srv, connection *con) {
 	if (con->parse_request->ptr[i] == ' ' || con->parse_request->ptr[i] == '\t') {
 		if (srv->srvconf.log_request_header_on_error) {
 			log_error_write(srv, __FILE__, __LINE__, "s", "WS at the start of first line -> 400");
-			log_error_write(srv, __FILE__, __LINE__, "Sb", "request-header:\n", con->request.request);
 		}
 		goto failure;
 	}
@@ -917,9 +879,6 @@ int http_request_parse(server *srv, connection *con) {
 				if (*cur != ':') {
 						if (srv->srvconf.log_request_header_on_error) {
 							log_error_write(srv, __FILE__, __LINE__, "s", "WS character in key -> 400");
-							log_error_write(srv, __FILE__, __LINE__, "Sb",
-								"request-header:\n",
-								con->request.request);
 						}
 
 						goto failure;
@@ -948,12 +907,8 @@ int http_request_parse(server *srv, connection *con) {
 			case '{':
 			case '}':
 				if (srv->srvconf.log_request_header_on_error) {
-					log_error_write(srv, __FILE__, __LINE__, "sbsds",
-						"invalid character in key", con->request.request, cur, *cur, "-> 400");
-
-					log_error_write(srv, __FILE__, __LINE__, "Sb",
-						"request-header:\n",
-						con->request.request);
+					log_error_write(srv, __FILE__, __LINE__, "ssds",
+						"invalid character in key", cur, *cur, "-> 400");
 				}
 				goto failure;
 			case '\r':
@@ -968,9 +923,6 @@ int http_request_parse(server *srv, connection *con) {
 				} else {
 					if (srv->srvconf.log_request_header_on_error) {
 						log_error_write(srv, __FILE__, __LINE__, "s", "CR without LF -> 400");
-						log_error_write(srv, __FILE__, __LINE__, "Sb",
-							"request-header:\n",
-							con->request.request);
 					}
 
 					goto failure;
@@ -989,12 +941,8 @@ int http_request_parse(server *srv, connection *con) {
 			default:
 				if (http_header_strict ? (*cur < 32 || ((unsigned char)*cur) >= 127) : *cur == '\0') {
 					if (srv->srvconf.log_request_header_on_error) {
-						log_error_write(srv, __FILE__, __LINE__, "sbsds",
-							"invalid character in key", con->request.request, cur, *cur, "-> 400");
-
-						log_error_write(srv, __FILE__, __LINE__, "Sb",
-							"request-header:\n",
-							con->request.request);
+						log_error_write(srv, __FILE__, __LINE__, "ssds",
+							"invalid character in key", cur, *cur, "-> 400");
 					}
 
 					goto failure;
@@ -1007,8 +955,7 @@ int http_request_parse(server *srv, connection *con) {
 			case '\r':
 				if (cur[1] != '\n') {
 					if (srv->srvconf.log_request_header_on_error) {
-						log_error_write(srv, __FILE__, __LINE__, "sbs",
-								"CR without LF", con->request.request, "-> 400");
+						log_error_write(srv, __FILE__, __LINE__, "s", "CR without LF -> 400");
 					}
 
 					goto failure;
@@ -1083,9 +1030,6 @@ int http_request_parse(server *srv, connection *con) {
 
 			if (srv->srvconf.log_request_header_on_error) {
 				log_error_write(srv, __FILE__, __LINE__, "s", "HTTP/1.1 but Host missing -> 400");
-				log_error_write(srv, __FILE__, __LINE__, "Sb",
-						"request-header:\n",
-						con->request.request);
 			}
 			goto failure;
 		}
@@ -1107,9 +1051,6 @@ int http_request_parse(server *srv, connection *con) {
 		if (srv->srvconf.log_request_header_on_error) {
 			log_error_write(srv, __FILE__, __LINE__, "s",
 					"Invalid Hostname -> 400");
-			log_error_write(srv, __FILE__, __LINE__, "Sb",
-					"request-header:\n",
-					con->request.request);
 		}
 
 		goto failure;
