@@ -762,6 +762,28 @@ static void connection_read_header(server *srv, connection *con)  {
 
     chunkqueue_remove_finished_chunks(cq);
 
+    if (con->conf.log_request_header) {
+        log_error_write(srv, __FILE__, __LINE__, "sdsdSb",
+          "fd:", con->fd,
+          "request-len:", buffer_string_length(con->request.request),
+          "\n", con->request.request);
+    }
+
+    buffer_clear(con->uri.authority);
+    buffer_reset(con->uri.path);
+    buffer_reset(con->uri.query);
+    buffer_reset(con->request.orig_uri);
+
+    if (0 != http_request_parse(srv, con)) {
+        con->keep_alive = 0;
+        con->request.content_length = 0;
+
+        if (srv->srvconf.log_request_header_on_error) {
+            log_error_write(srv, __FILE__, __LINE__, "Sb",
+                            "request-header:\n", con->request.request);
+        }
+    }
+
     connection_set_state(srv, con, CON_STATE_REQUEST_END);
 }
 
@@ -1229,14 +1251,9 @@ int connection_state_machine(server *srv, connection *con) {
 			if (con->state != CON_STATE_REQUEST_END) break;
 			/* fall through */
 		case CON_STATE_REQUEST_END: /* transient */
-			buffer_clear(con->uri.authority);
-			buffer_reset(con->uri.path);
-			buffer_reset(con->uri.query);
-			buffer_reset(con->request.orig_uri);
-
-			ostate = http_request_parse(srv, con)
-			  ? CON_STATE_READ_POST
-			  : CON_STATE_HANDLE_REQUEST;
+			ostate = (0 == con->request.content_length)
+			  ? CON_STATE_HANDLE_REQUEST
+			  : CON_STATE_READ_POST;
 			connection_set_state(srv, con, ostate);
 			/* fall through */
 		case CON_STATE_READ_POST:

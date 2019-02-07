@@ -597,12 +597,6 @@ static size_t http_request_parse_reqline(server *srv, connection *con, parse_hea
 	 * End    : "^$"
 	 */
 
-	if (con->conf.log_request_header) {
-		log_error_write(srv, __FILE__, __LINE__, "sdsdSb",
-				"fd:", con->fd,
-				"request-len:", buffer_string_length(con->request.request),
-				"\n", con->request.request);
-	}
 
 	if (con->request_count > 1 &&
 	    con->request.request->ptr[0] == '\r' &&
@@ -1181,21 +1175,9 @@ int http_request_parse(server *srv, connection *con) {
 		break;
 	}
 
-
-	/* check if we have read post data */
-	if (state.con_length_set) {
-		/* we have content */
-		if (con->request.content_length != 0) {
-			return 1;
-		}
-	}
-
 	return 0;
 
 failure:
-	con->keep_alive = 0;
-	con->response.keep_alive = 0;
 	if (!con->http_status) con->http_status = 400;
-
-	return 0;
+	return -1;
 }
