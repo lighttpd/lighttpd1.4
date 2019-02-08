@@ -180,7 +180,7 @@
 #include <libxml/parser.h>
 #include <sqlite3.h>
 
-#if defined(HAVE_UUID) && defined(HAVE_UUID_UUID_H)
+#if defined(HAVE_LIBUUID) && defined(HAVE_UUID_UUID_H)
 #define USE_LOCKS
 #include <uuid/uuid.h>
 #endif
