@@ -587,38 +587,6 @@ static size_t http_request_parse_reqline(server *srv, connection *con, parse_hea
 	 * End    : "^$"
 	 */
 
-
-	if (con->request_count > 1 &&
-	    con->request.request->ptr[0] == '\r' &&
-	    con->request.request->ptr[1] == '\n') {
-		/* we are in keep-alive and might get \r\n after a previous POST request.*/
-
-	      #ifdef __COVERITY__
-		if (buffer_string_length(con->request.request) < 2) {
-			return 0;
-		}
-	      #endif
-		/* coverity[overflow_sink : FALSE] */
-		buffer_copy_string_len(con->parse_request, con->request.request->ptr + 2, buffer_string_length(con->request.request) - 2);
-	} else if (con->request_count > 0 &&
-	    con->request.request->ptr[1] == '\n') {
-		/* we are in keep-alive and might get \n after a previous POST request.*/
-		if (http_header_strict) {
-			http_request_missing_CR_before_LF(srv, con);
-			return 0;
-		}
-	      #ifdef __COVERITY__
-		if (buffer_string_length(con->request.request) < 1) {
-			return 0;
-		}
-	      #endif
-		/* coverity[overflow_sink : FALSE] */
-		buffer_copy_string_len(con->parse_request, con->request.request->ptr + 1, buffer_string_length(con->request.request) - 1);
-	} else {
-		/* fill the local request buffer */
-		buffer_copy_buffer(con->parse_request, con->request.request);
-	}
-
 	/* parse the first line of the request
 	 *
 	 * should be:

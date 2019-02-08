@@ -2,6 +2,7 @@
 
 #include "base.h"
 #include "buffer.h"
+#include "burl.h"       /* HTTP_PARSEOPT_HEADER_STRICT */
 #include "log.h"
 #include "connections.h"
 #include "fdevent.h"
@@ -671,16 +672,12 @@ static int connection_reset(server *srv, connection *con) {
 	CLEAN(request.uri);
 	CLEAN(request.request_line);
 	CLEAN(request.pathinfo);
-	CLEAN(request.request);
 
 	/* CLEAN(request.orig_uri); */
 
 	/* CLEAN(uri.path); */
 	CLEAN(uri.path_raw);
 	/* CLEAN(uri.query); */
-
-	CLEAN(parse_request);
-
 #undef CLEAN
 
 	buffer_clear(con->uri.scheme);
@@ -717,6 +714,7 @@ static void connection_read_header(server *srv, connection *con)  {
     chunk *c;
     size_t hlen = 0;
     int le = 0;
+    buffer *save;
 
     for (c = cq->first; c; c = c->next) {
         size_t clen = buffer_string_length(c->mem) - c->offset;
@@ -762,6 +760,28 @@ static void connection_read_header(server *srv, connection *con)  {
 
     chunkqueue_remove_finished_chunks(cq);
 
+    /* skip past \r\n or \n after previous POST request when keep-alive */
+    if (con->request_count > 1) {
+        char * const s = con->request.request->ptr;
+      #ifdef __COVERITY__
+        if (buffer_string_length(con->request.request) < 2) {
+            return;
+        }
+      #endif
+        if (s[0] == '\r' && s[1] == '\n') {
+            size_t len = buffer_string_length(con->request.request);
+            memmove(s, s+2, len-2);
+            buffer_string_set_length(con->request.request, len-2);
+        }
+        else if (s[0] == '\n') {
+            if (!(con->conf.http_parseopts & HTTP_PARSEOPT_HEADER_STRICT)) {
+                size_t len = buffer_string_length(con->request.request);
+                memmove(s, s+1, len-1);
+                buffer_string_set_length(con->request.request, len-1);
+            }
+        }
+    }
+
     if (con->conf.log_request_header) {
         log_error_write(srv, __FILE__, __LINE__, "sdsdSb",
           "fd:", con->fd,
@@ -774,15 +794,26 @@ static void connection_read_header(server *srv, connection *con)  {
     buffer_reset(con->uri.query);
     buffer_reset(con->request.orig_uri);
 
+    save = con->parse_request;
+    con->parse_request = con->request.request; /* for http_request_parse() */
+    if (srv->srvconf.log_request_header_on_error) {
+        /* copy request only if we may need to log it upon error */
+        buffer_copy_buffer(save, con->request.request);
+    }
+
     if (0 != http_request_parse(srv, con)) {
         con->keep_alive = 0;
         con->request.content_length = 0;
 
         if (srv->srvconf.log_request_header_on_error) {
             log_error_write(srv, __FILE__, __LINE__, "Sb",
-                            "request-header:\n", con->request.request);
+                            "request-header:\n", save);
         }
     }
+
+    con->parse_request = save;
+    buffer_reset(save);
+    buffer_reset(con->request.request);
 
     connection_set_state(srv, con, CON_STATE_REQUEST_END);
 }

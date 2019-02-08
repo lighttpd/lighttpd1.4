@@ -31,7 +31,7 @@ static void test_request_connection_reset(connection *con)
 static void run_http_request_parse(server *srv, connection *con, int line, int status, const char *desc, const char *req, size_t reqlen)
 {
     test_request_connection_reset(con);
-    buffer_copy_string_len(con->request.request, req, reqlen);
+    buffer_copy_string_len(con->parse_request, req, reqlen);
     http_request_parse(srv, con);
     if (con->http_status != status) {
         fprintf(stderr,
