@@ -465,7 +465,7 @@ if get_option('with_webdav_locks')
 			error('Couldn\'t find uuid/uuid.h or uuid_generate in lib c and uuid')
 		endif
 	endif
-	conf_data.set('HAVE_UUID', true)
+	conf_data.set('HAVE_LIBUUID', true)
 	conf_data.set('HAVE_UUID_UUID_H', true)
 endif
 

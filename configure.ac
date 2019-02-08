@@ -963,8 +963,8 @@ if test "$WITH_WEBDAV_LOCKS" != no; then
     )
   fi
 
-  AC_DEFINE([HAVE_UUID], [1], [libuuid])
-  AC_DEFINE([HAVE_UUID_H], [1], [uuid/uuid.h is available])
+  AC_DEFINE([HAVE_LIBUUID], [1], [libuuid])
+  AC_DEFINE([HAVE_UUID_UUID_H], [1], [uuid/uuid.h is available])
   AC_SUBST([UUID_LIBS])
 fi
 
