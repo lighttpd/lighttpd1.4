@@ -8,12 +8,9 @@
 #include "log.h"
 #include "sock_addr.h"
 
-#include <sys/stat.h>
-
 #include <limits.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys-strings.h>
 
 static int request_check_hostname(buffer *host) {
 	enum { DOMAINLABEL, TOPLABEL } stage = TOPLABEL;
@@ -1033,7 +1030,7 @@ int http_request_parse(server *srv, connection *con) {
 				goto failure;
 			}
 
-			if (0 != strcasecmp(vb->ptr, "chunked")) {
+			if (0 != buffer_caseless_compare(CONST_BUF_LEN(vb), CONST_STR_LEN("chunked"))) {
 				/* Transfer-Encoding might contain additional encodings,
 				 * which are not currently supported by lighttpd */
 				con->http_status = 501; /* Not Implemented */
