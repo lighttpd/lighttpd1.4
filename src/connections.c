@@ -545,6 +545,7 @@ static connection *connection_init(server *srv) {
 	con->bytes_read = 0;
 	con->bytes_header = 0;
 	con->loops_per_request = 0;
+	con->parse_request = con->request.request; /* for http_request_parse() */
 
 #define CLEAN(x) \
 	con->x = buffer_init();
@@ -567,7 +568,6 @@ static connection *connection_init(server *srv) {
 	CLEAN(physical.basedir);
 	CLEAN(physical.rel_path);
 	CLEAN(physical.etag);
-	CLEAN(parse_request);
 
 	CLEAN(server_name);
 	CLEAN(proto);
@@ -633,7 +633,6 @@ void connections_free(server *srv) {
 		CLEAN(physical.basedir);
 		CLEAN(physical.etag);
 		CLEAN(physical.rel_path);
-		CLEAN(parse_request);
 
 		CLEAN(server_name);
 		CLEAN(proto);
@@ -714,7 +713,7 @@ static void connection_read_header(server *srv, connection *con)  {
     chunk *c;
     size_t hlen = 0;
     int le = 0;
-    buffer *save;
+    buffer *save = NULL;
 
     for (c = cq->first; c; c = c->next) {
         size_t clen = buffer_string_length(c->mem) - c->offset;
@@ -794,11 +793,9 @@ static void connection_read_header(server *srv, connection *con)  {
     buffer_reset(con->uri.query);
     buffer_reset(con->request.orig_uri);
 
-    save = con->parse_request;
-    con->parse_request = con->request.request; /* for http_request_parse() */
     if (srv->srvconf.log_request_header_on_error) {
         /* copy request only if we may need to log it upon error */
-        buffer_copy_buffer(save, con->request.request);
+        save = buffer_init_buffer(con->request.request);
     }
 
     if (0 != http_request_parse(srv, con)) {
@@ -811,8 +808,7 @@ static void connection_read_header(server *srv, connection *con)  {
         }
     }
 
-    con->parse_request = save;
-    buffer_reset(save);
+    if (NULL != save) buffer_free(save);
     buffer_reset(con->request.request);
 
     connection_set_state(srv, con, CON_STATE_REQUEST_END);
