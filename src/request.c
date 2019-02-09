@@ -566,12 +566,15 @@ static int parse_single_header(server *srv, connection *con, parse_header_state 
 
 static size_t http_request_parse_reqline(server *srv, connection *con, buffer *hdrs, parse_header_state *state) {
 	char * const ptr = hdrs->ptr;
-	char *uri = NULL, *proto = NULL, *method = NULL;
-	int line = 0;
+	char *uri = NULL, *proto = NULL;
 
-	int request_line_stage = 0;
-	size_t i, first, ilen;
+	size_t i;
 	const unsigned int http_header_strict = (con->conf.http_parseopts & HTTP_PARSEOPT_HEADER_STRICT);
+
+	/* hdrs must end with '\n' (already checked before parsing headers) */
+      #ifdef __COVERITY__
+	if (NULL == strchr(ptr, '\n')) return 400;
+      #endif
 
 	/*
 	 * Request: "^(GET|POST|HEAD) ([^ ]+(\\?[^ ]+|)) (HTTP/1\\.[01])$"
@@ -585,40 +588,42 @@ static size_t http_request_parse_reqline(server *srv, connection *con, buffer *h
 	 *
 	 * <method> <uri> <protocol>\r\n
 	 * */
-	ilen = buffer_string_length(hdrs);
-	for (i = 0, first = 0; i < ilen && line == 0; i++) {
-		switch(ptr[i]) {
-		case '\r':
-			if (ptr[i+1] != '\n') break;
-			/* fall through */
-		case '\n':
+	for (i = 0; ptr[i] != '\n'; ++i) {
+		if (ptr[i] == ' ') {
+			if (NULL == uri) uri = ptr + i + 1;
+			else if (NULL == proto) proto = ptr + i + 1;
+			else return http_request_header_line_invalid(srv, 400, "overlong request line; extra space -> 400"); /* ERROR, one space to much */
+		}
+	}
+	ptr[i] = '\0';
+	state->reqline_len = i+1;
+
 			{
 				http_method_t r;
 				char *nuri = NULL;
 				size_t j, jlen;
 
-				buffer_copy_string_len(con->request.request_line, ptr, i);
-
 				/* \r\n -> \0\0 */
-				if (ptr[i] == '\r') {
-					ptr[i] = '\0';
-					++i;
+			      #ifdef __COVERITY__
+				if (0 == i) return 400;
+			      #endif
+				if (ptr[i-1] == '\r') {
+					ptr[i-1] = '\0';
 				} else if (http_header_strict) { /* '\n' */
 					return http_request_header_line_invalid(srv, 400, "missing CR before LF in header -> 400");
 				}
-				ptr[i] = '\0';
 
-				if (request_line_stage != 2) {
+				buffer_copy_string_len(con->request.request_line, ptr, i);
+
+				if (NULL == proto) {
 					return http_request_header_line_invalid(srv, 400, "incomplete request line -> 400");
 				}
-
-				proto = ptr + first;
 
 				*(uri - 1) = '\0';
 				*(proto - 1) = '\0';
 
 				/* we got the first one :) */
-				if (HTTP_METHOD_UNSET == (r = get_http_method_key(method))) {
+				if (HTTP_METHOD_UNSET == (r = get_http_method_key(ptr))) {
 					return http_request_header_line_invalid(srv, 501, "unknown http-method -> 501");
 				}
 
@@ -695,6 +700,7 @@ static size_t http_request_parse_reqline(server *srv, connection *con, buffer *h
 
 				/* check uri for invalid characters */
 				jlen = buffer_string_length(con->request.uri);
+				if (0 == jlen) return http_request_header_line_invalid(srv, 400, "no uri specified -> 400");
 				if ((con->conf.http_parseopts & HTTP_PARSEOPT_URL_NORMALIZE_CTRLS_REJECT)) {
 					j = jlen; /* URI will be checked in http_response_prepare() */
 				} else if (http_header_strict) {
@@ -708,38 +714,7 @@ static size_t http_request_parse_reqline(server *srv, connection *con, buffer *h
 				}
 
 				buffer_copy_buffer(con->request.orig_uri, con->request.uri);
-
-				con->http_status = 0;
-
-				line++;
-				first = i+1;
 			}
-			break;
-		case ' ':
-			switch(request_line_stage) {
-			case 0:
-				/* GET|POST|... */
-				method = ptr + first;
-				first = i + 1;
-				break;
-			case 1:
-				/* /foobar/... */
-				uri = ptr + first;
-				first = i + 1;
-				break;
-			default:
-				/* ERROR, one space to much */
-				return http_request_header_line_invalid(srv, 400, "overlong request line -> 400");
-			}
-
-			request_line_stage++;
-			break;
-		}
-	}
-
-	if (buffer_string_is_empty(con->request.uri)) {
-		return http_request_header_line_invalid(srv, 400, "no uri specified -> 400");
-	}
 
 	if (state->reqline_host) {
 		/* Insert as host header */
@@ -750,7 +725,6 @@ static size_t http_request_parse_reqline(server *srv, connection *con, buffer *h
 		con->request.http_host = http_header_request_get(con, HTTP_HEADER_HOST, CONST_STR_LEN("Host"));
 	}
 
-	state->reqline_len = i;
 	return 0;
 }
 
