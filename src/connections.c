@@ -728,6 +728,8 @@ static void connection_read_header(server *srv, connection *con)  {
 
     if (NULL == c) return; /* incomplete request headers */
 
+    con->header_len = hlen;
+
     buffer_clear(con->request.request);
 
     for (c = cq->first; c; c = c->next) {
@@ -781,7 +783,8 @@ static void connection_read_header(server *srv, connection *con)  {
         save = buffer_init_buffer(con->request.request);
     }
 
-    if (0 != http_request_parse(srv, con, con->request.request)) {
+    con->http_status = http_request_parse(srv, con, con->request.request);
+    if (0 != con->http_status) {
         con->keep_alive = 0;
         con->request.content_length = 0;
 

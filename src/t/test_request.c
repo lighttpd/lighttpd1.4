@@ -29,13 +29,14 @@ static void test_request_connection_reset(connection *con)
 
 static void run_http_request_parse(server *srv, connection *con, int line, int status, const char *desc, const char *req, size_t reqlen)
 {
+    int http_status;
     test_request_connection_reset(con);
     buffer_copy_string_len(con->request.request, req, reqlen);
-    http_request_parse(srv, con, con->request.request);
-    if (con->http_status != status) {
+    http_status = http_request_parse(srv, con, con->request.request);
+    if (http_status != status) {
         fprintf(stderr,
                 "%s.%d: %s() failed: expected '%d', got '%d' for test %s\n",
-                __FILE__, line, "http_request_parse", status, con->http_status,
+                __FILE__, line, "http_request_parse", status, http_status,
                 desc);
         fflush(stderr);
         abort();
