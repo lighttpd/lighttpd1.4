@@ -619,11 +619,8 @@ static size_t http_request_parse_reqline(server *srv, connection *con, buffer *h
 					return http_request_header_line_invalid(srv, 400, "incomplete request line -> 400");
 				}
 
-				*(uri - 1) = '\0';
-				*(proto - 1) = '\0';
-
 				/* we got the first one :) */
-				if (HTTP_METHOD_UNSET == (r = get_http_method_key(ptr))) {
+				if (HTTP_METHOD_UNSET == (r = get_http_method_key(ptr, uri - 1 - ptr))) {
 					return http_request_header_line_invalid(srv, 501, "unknown http-method -> 501");
 				}
 
@@ -673,6 +670,8 @@ static size_t http_request_parse_reqline(server *srv, connection *con, buffer *h
 				} else {
 					return http_request_header_line_invalid(srv, 400, "unknown protocol -> 400");
 				}
+
+				*(proto - 1) = '\0'; /*(terminate for strchr())*/
 
 				if (*uri == '/') {
 					/* (common case) */
