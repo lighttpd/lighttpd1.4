@@ -570,7 +570,8 @@ static int parse_single_header(server *srv, connection *con, parse_header_state 
     return 1;
 }
 
-static size_t http_request_parse_reqline(server *srv, connection *con, parse_header_state *state) {
+static size_t http_request_parse_reqline(server *srv, connection *con, buffer *hdrs, parse_header_state *state) {
+	char * const ptr = hdrs->ptr;
 	char *uri = NULL, *proto = NULL, *method = NULL;
 	int line = 0;
 
@@ -590,11 +591,11 @@ static size_t http_request_parse_reqline(server *srv, connection *con, parse_hea
 	 *
 	 * <method> <uri> <protocol>\r\n
 	 * */
-	ilen = buffer_string_length(con->parse_request);
+	ilen = buffer_string_length(hdrs);
 	for (i = 0, first = 0; i < ilen && line == 0; i++) {
-		switch(con->parse_request->ptr[i]) {
+		switch(ptr[i]) {
 		case '\r':
-			if (con->parse_request->ptr[i+1] != '\n') break;
+			if (ptr[i+1] != '\n') break;
 			/* fall through */
 		case '\n':
 			{
@@ -602,17 +603,17 @@ static size_t http_request_parse_reqline(server *srv, connection *con, parse_hea
 				char *nuri = NULL;
 				size_t j, jlen;
 
-				buffer_copy_string_len(con->request.request_line, con->parse_request->ptr, i);
+				buffer_copy_string_len(con->request.request_line, ptr, i);
 
 				/* \r\n -> \0\0 */
-				if (con->parse_request->ptr[i] == '\r') {
-					con->parse_request->ptr[i] = '\0';
+				if (ptr[i] == '\r') {
+					ptr[i] = '\0';
 					++i;
 				} else if (http_header_strict) { /* '\n' */
 					http_request_missing_CR_before_LF(srv, con);
 					return 0;
 				}
-				con->parse_request->ptr[i] = '\0';
+				ptr[i] = '\0';
 
 				if (request_line_stage != 2) {
 					if (srv->srvconf.log_request_header_on_error) {
@@ -621,7 +622,7 @@ static size_t http_request_parse_reqline(server *srv, connection *con, parse_hea
 					return 0;
 				}
 
-				proto = con->parse_request->ptr + first;
+				proto = ptr + first;
 
 				*(uri - 1) = '\0';
 				*(proto - 1) = '\0';
@@ -765,12 +766,12 @@ static size_t http_request_parse_reqline(server *srv, connection *con, parse_hea
 			switch(request_line_stage) {
 			case 0:
 				/* GET|POST|... */
-				method = con->parse_request->ptr + first;
+				method = ptr + first;
 				first = i + 1;
 				break;
 			case 1:
 				/* /foobar/... */
-				uri = con->parse_request->ptr + first;
+				uri = ptr + first;
 				first = i + 1;
 				break;
 			default:
@@ -808,7 +809,8 @@ static size_t http_request_parse_reqline(server *srv, connection *con, parse_hea
 	return i;
 }
 
-int http_request_parse(server *srv, connection *con) {
+int http_request_parse(server *srv, connection *con, buffer *hdrs) {
+	char * const ptr = hdrs->ptr;
 	char *value = NULL;
 	size_t i, first, ilen;
 	const unsigned int http_header_strict = (con->conf.http_parseopts & HTTP_PARSEOPT_HEADER_STRICT);
@@ -816,19 +818,19 @@ int http_request_parse(server *srv, connection *con) {
 	parse_header_state state;
 	init_parse_header_state(&state);
 
-	i = first = http_request_parse_reqline(srv, con, &state);
+	i = first = http_request_parse_reqline(srv, con, hdrs, &state);
 	if (0 == i) goto failure;
 
-	if (con->parse_request->ptr[i] == ' ' || con->parse_request->ptr[i] == '\t') {
+	if (ptr[i] == ' ' || ptr[i] == '\t') {
 		if (srv->srvconf.log_request_header_on_error) {
 			log_error_write(srv, __FILE__, __LINE__, "s", "WS at the start of first line -> 400");
 		}
 		goto failure;
 	}
 
-	ilen = buffer_string_length(con->parse_request);
+	ilen = buffer_string_length(hdrs);
 	for (int is_key = 1, key_len = 0, done = 0; i <= ilen && !done; ++i) {
-		char *cur = con->parse_request->ptr + i;
+		char *cur = ptr + i;
 
 		if (is_key) {
 			/**
@@ -853,7 +855,7 @@ int http_request_parse(server *srv, connection *con) {
 				is_key = 0;
 				key_len = i - first;
 				value = cur + 1;
-				i = cur - con->parse_request->ptr;
+				i = cur - ptr;
 				break;
 			case '(':
 			case ')':
@@ -877,10 +879,10 @@ int http_request_parse(server *srv, connection *con) {
 				}
 				goto failure;
 			case '\r':
-				if (con->parse_request->ptr[i+1] == '\n' && i == first) {
+				if (ptr[i+1] == '\n' && i == first) {
 					/* End of Header */
-					con->parse_request->ptr[i] = '\0';
-					con->parse_request->ptr[i+1] = '\0';
+					ptr[i] = '\0';
+					ptr[i+1] = '\0';
 
 					i++;
 
@@ -898,7 +900,7 @@ int http_request_parse(server *srv, connection *con) {
 					http_request_missing_CR_before_LF(srv, con);
 					goto failure;
 				} else if (i == first) {
-					con->parse_request->ptr[i] = '\0';
+					ptr[i] = '\0';
 					done = 1;
 					break;
 				}
@@ -949,7 +951,7 @@ int http_request_parse(server *srv, connection *con) {
 					/* End of Headerline */
 					*cur = '\0'; /*(for if value is further parsed and '\0' is expected at end of string)*/
 
-					if (!parse_single_header(srv, con, &state, con->parse_request->ptr + first, key_len, value, cur - value)) {
+					if (!parse_single_header(srv, con, &state, ptr + first, key_len, value, cur - value)) {
 						/* parse_single_header should already have logged it */
 						goto failure;
 					}

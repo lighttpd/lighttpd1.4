@@ -247,8 +247,6 @@ struct connection {
 	buffer *dst_addr_buf;
 
 	/* request */
-	buffer *parse_request;
-
 	request  request;
 	request_uri uri;
 	physical physical;

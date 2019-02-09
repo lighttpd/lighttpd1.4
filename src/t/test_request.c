@@ -20,7 +20,6 @@ static void test_request_connection_reset(connection *con)
     con->header_len = 0;
     con->http_status = 0;
     buffer_reset(con->proto);
-    buffer_reset(con->parse_request);
     buffer_reset(con->request.request);
     buffer_reset(con->request.request_line);
     buffer_reset(con->request.orig_uri);
@@ -31,8 +30,8 @@ static void test_request_connection_reset(connection *con)
 static void run_http_request_parse(server *srv, connection *con, int line, int status, const char *desc, const char *req, size_t reqlen)
 {
     test_request_connection_reset(con);
-    buffer_copy_string_len(con->parse_request, req, reqlen);
-    http_request_parse(srv, con);
+    buffer_copy_string_len(con->request.request, req, reqlen);
+    http_request_parse(srv, con, con->request.request);
     if (con->http_status != status) {
         fprintf(stderr,
                 "%s.%d: %s() failed: expected '%d', got '%d' for test %s\n",
@@ -462,7 +461,6 @@ int main (void)
 
     memset(&con, 0, sizeof(connection));
     con.proto                = buffer_init();
-    con.parse_request        = buffer_init();
     con.request.request      = buffer_init();
     con.request.request_line = buffer_init();
     con.request.orig_uri     = buffer_init();
@@ -476,7 +474,6 @@ int main (void)
     test_request_http_request_parse(&srv, &con);
 
     buffer_free(con.proto);
-    buffer_free(con.parse_request);
     buffer_free(con.request.request);
     buffer_free(con.request.request_line);
     buffer_free(con.request.orig_uri);

@@ -545,7 +545,6 @@ static connection *connection_init(server *srv) {
 	con->bytes_read = 0;
 	con->bytes_header = 0;
 	con->loops_per_request = 0;
-	con->parse_request = con->request.request; /* for http_request_parse() */
 
 #define CLEAN(x) \
 	con->x = buffer_init();
@@ -798,7 +797,7 @@ static void connection_read_header(server *srv, connection *con)  {
         save = buffer_init_buffer(con->request.request);
     }
 
-    if (0 != http_request_parse(srv, con)) {
+    if (0 != http_request_parse(srv, con, con->request.request)) {
         con->keep_alive = 0;
         con->request.content_length = 0;
 
