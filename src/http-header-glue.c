@@ -988,8 +988,10 @@ static int http_response_process_headers(server *srv, connection *con, http_resp
             break;
           case HTTP_HEADER_CONNECTION:
             if (opts->backend == BACKEND_PROXY) continue;
-            con->response.keep_alive =
-              (0 == strcasecmp(value, "Keep-Alive")) ? 1 : 0;
+            /*(should parse for tokens and do case-insensitive match for "close"
+             * but this is an imperfect though simplistic attempt to honor
+             * backend request to close)*/
+            if (NULL != strstr(value, "lose")) con->keep_alive = 0;
             break;
           case HTTP_HEADER_CONTENT_LENGTH:
             con->response.content_length = strtoul(value, NULL, 10);

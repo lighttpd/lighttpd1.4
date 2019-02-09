@@ -50,8 +50,6 @@ typedef struct {
 
 typedef struct {
 	off_t   content_length;
-	int     keep_alive;               /* used by  the subrequests in proxy, cgi and fcgi to say the subrequest was keep-alive or not */
-
 	unsigned int htags; /* bitfield of flagged headers present in response */
 	array  *headers;
 	int send_chunked;

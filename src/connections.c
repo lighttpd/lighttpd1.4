@@ -422,22 +422,6 @@ static int connection_handle_write_prepare(server *srv, connection *con) {
 				con->keep_alive = 0;
 			}
 		}
-
-		/**
-		 * if the backend sent a Connection: close, follow the wish
-		 *
-		 * NOTE: if the backend sent Connection: Keep-Alive, but no Content-Length, we
-		 * will close the connection. That's fine. We can always decide the close 
-		 * the connection
-		 *
-		 * FIXME: to be nice we should remove the Connection: ... 
-		 */
-		if (con->response.htags & HTTP_HEADER_CONNECTION) {
-			/* a subrequest disable keep-alive although the client wanted it */
-			if (con->keep_alive && !con->response.keep_alive) {
-				con->keep_alive = 0;
-			}
-		}
 	}
 
 	if (con->request.http_method == HTTP_METHOD_HEAD) {
@@ -1200,7 +1184,6 @@ static int connection_handle_request(server *srv, connection *con) {
 								con->is_writable = 1;
 								con->file_finished = 0;
 								con->file_started = 0;
-								con->response.keep_alive = 0;
 
 								con->error_handler_saved_status = con->http_status;
 								con->error_handler_saved_method = con->request.http_method;

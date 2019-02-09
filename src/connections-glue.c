@@ -492,7 +492,6 @@ void connection_response_reset(server *srv, connection *con) {
 	con->is_writable = 1;
 	con->file_finished = 0;
 	con->file_started = 0;
-	con->response.keep_alive = 0;
 	if (con->physical.path) { /*(skip for mod_fastcgi authorizer)*/
 		buffer_clear(con->physical.doc_root);
 		buffer_reset(con->physical.path);
