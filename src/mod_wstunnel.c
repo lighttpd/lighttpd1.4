@@ -884,7 +884,7 @@ handler_t mod_wstunnel_handshake_create_response(handler_ctx *hctx) {
         /* 8 bytes should have been sent with request
          * for draft-ietf-hybi-thewebsocketprotocol-00 */
         chunkqueue *cq = con->request_content_queue;
-        if (0 == hctx->hybivers && chunkqueue_length(cq) < 8)
+        if (chunkqueue_length(cq) < 8)
             return HANDLER_WAIT_FOR_EVENT;
       #endif /* _MOD_WEBSOCKET_SPEC_IETF_00_ */
 

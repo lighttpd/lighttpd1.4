@@ -620,10 +620,7 @@ static ssize_t cgi_write_file_chunk_mmap(server *srv, connection *con, int fd, c
 		}
 	}
 
-	if (r >= 0) {
-		chunkqueue_mark_written(cq, r);
-	}
-
+	chunkqueue_mark_written(cq, r);
 	return r;
 }
 
