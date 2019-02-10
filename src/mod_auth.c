@@ -138,7 +138,7 @@ static int mod_auth_require_parse (server *srv, http_auth_require_t * const requ
                             "error value:", b, "error near:", str);
             return 0;
         }
-        if (p-1  == eq) {
+        if (eq[1] == '|' || eq[1] == '\0') {
             log_error_write(srv, __FILE__, __LINE__, "sssbss",
                             "error parsing auth.require 'require' field: missing token after '='",
                             "(expecting \"valid-user\" or \"user=a|user=b|group=g|host=h\").",
