@@ -992,22 +992,61 @@ static int mod_deflate_patch_connection(server *srv, connection *con, plugin_dat
 static int mod_deflate_choose_encoding (const char *value, plugin_data *p, const char **label) {
 	/* get client side support encodings */
 	int accept_encoding = 0;
-#if !defined(USE_ZLIB) && !defined(USE_BZ2LIB)
+      #if !defined(USE_ZLIB) && !defined(USE_BZ2LIB)
 	UNUSED(value);
-#endif
-#ifdef USE_ZLIB
-	if (NULL != strstr(value, "gzip")) accept_encoding |= HTTP_ACCEPT_ENCODING_GZIP;
-	else if (NULL != strstr(value, "x-gzip")) accept_encoding |= HTTP_ACCEPT_ENCODING_X_GZIP;
-	if (NULL != strstr(value, "deflate")) accept_encoding |= HTTP_ACCEPT_ENCODING_DEFLATE;
-#endif
-	/* if (NULL != strstr(value, "compress")) accept_encoding |= HTTP_ACCEPT_ENCODING_COMPRESS; */
-#ifdef USE_BZ2LIB
-	if (p->conf.allowed_encodings & (HTTP_ACCEPT_ENCODING_BZIP2 | HTTP_ACCEPT_ENCODING_X_BZIP2)) {
-		if (NULL != strstr(value, "bzip2")) accept_encoding |= HTTP_ACCEPT_ENCODING_BZIP2;
-		else if (NULL != strstr(value, "x-bzip2")) accept_encoding |= HTTP_ACCEPT_ENCODING_X_BZIP2;
-	}
-#endif
-	/* if (NULL != strstr(value, "identity")) accept_encoding |= HTTP_ACCEPT_ENCODING_IDENTITY; */
+      #else
+        for (; *value; ++value) {
+            const char *v;
+            while (*value == ' ' || *value == ',') continue;
+            v = value;
+            while (*value!=' ' && *value!=',' && *value!=';' && *value!='\0')
+                ++value;
+            switch (value - v) {
+              case 4:
+               #ifdef USE_ZLIB
+                if (0 == memcmp(v, "gzip", 4))
+                    accept_encoding |= HTTP_ACCEPT_ENCODING_GZIP;
+               #endif
+                break;
+              case 5:
+               #ifdef USE_BZ2LIB
+                if (0 == memcmp(v, "bzip2", 5))
+                    accept_encoding |= HTTP_ACCEPT_ENCODING_BZIP2;
+               #endif
+                break;
+              case 6:
+               #ifdef USE_ZLIB
+                if (0 == memcmp(v, "x-gzip", 6))
+                    accept_encoding |= HTTP_ACCEPT_ENCODING_X_GZIP;
+               #endif
+                break;
+              case 7:
+               #ifdef USE_ZLIB
+                if (0 == memcmp(v, "deflate", 7))
+                    accept_encoding |= HTTP_ACCEPT_ENCODING_DEFLATE;
+               #endif
+               #ifdef USE_BZ2LIB
+                if (0 == memcmp(v, "x-bzip2", 7))
+                    accept_encoding |= HTTP_ACCEPT_ENCODING_X_BZIP2;
+               #endif
+                break;
+             #if 0
+              case 8:
+                if (0 == memcmp(v, "identity", 8))
+                    accept_encoding |= HTTP_ACCEPT_ENCODING_IDENTITY;
+                else if (0 == memcmp(v, "compress", 8))
+                    accept_encoding |= HTTP_ACCEPT_ENCODING_COMPRESS;
+                break;
+             #endif
+              default:
+                break;
+            }
+            if (*value == ';') {
+                while (*value != ',' && *value != '\0') ++value;
+            }
+            if (*value == '\0') break;
+        }
+      #endif
 
 	/* mask to limit to allowed_encodings */
 	accept_encoding &= p->conf.allowed_encodings;
@@ -1022,6 +1061,7 @@ static int mod_deflate_choose_encoding (const char *value, plugin_data *p, const
 		return HTTP_ACCEPT_ENCODING_BZIP2;
 	} else
 #endif
+#ifdef USE_ZLIB
 	if (accept_encoding & HTTP_ACCEPT_ENCODING_GZIP) {
 		*label = "gzip";
 		return HTTP_ACCEPT_ENCODING_GZIP;
@@ -1031,6 +1071,10 @@ static int mod_deflate_choose_encoding (const char *value, plugin_data *p, const
 	} else if (accept_encoding & HTTP_ACCEPT_ENCODING_DEFLATE) {
 		*label = "deflate";
 		return HTTP_ACCEPT_ENCODING_DEFLATE;
+	} else
+#endif
+	if (0 == accept_encoding) {
+		return 0;
 	} else {
 		return 0;
 	}
