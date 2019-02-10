@@ -190,6 +190,7 @@ static handler_t connection_handle_read_post_chunked(server *srv, connection *co
                                 /* ignore excessively long trailers;
                                  * disable keep-alive on connection */
                                 con->keep_alive = 0;
+                                p = c->mem->ptr + buffer_string_length(c->mem) - 4;
                             }
                         }
                         hsz = p + 4 - (c->mem->ptr+c->offset);
