@@ -599,7 +599,6 @@ static size_t http_request_parse_reqline(server *srv, connection *con, buffer *h
 	state->reqline_len = i+1;
 
 			{
-				http_method_t r;
 				char *nuri = NULL;
 				size_t j, jlen;
 
@@ -619,51 +618,19 @@ static size_t http_request_parse_reqline(server *srv, connection *con, buffer *h
 					return http_request_header_line_invalid(srv, 400, "incomplete request line -> 400");
 				}
 
-				/* we got the first one :) */
-				if (HTTP_METHOD_UNSET == (r = get_http_method_key(ptr, uri - 1 - ptr))) {
+				con->request.http_method = get_http_method_key(ptr, uri - 1 - ptr);
+				if (HTTP_METHOD_UNSET == con->request.http_method) {
 					return http_request_header_line_invalid(srv, 501, "unknown http-method -> 501");
 				}
 
-				con->request.http_method = r;
-
 				/*
-				 * RFC2616 says:
-				 *
-				 * HTTP-Version   = "HTTP" "/" 1*DIGIT "." 1*DIGIT
-				 *
-				 * */
-				if (0 == strncmp(proto, "HTTP/", sizeof("HTTP/") - 1)) {
-					char * major = proto + sizeof("HTTP/") - 1;
-					char * minor = strchr(major, '.');
-					char *err = NULL;
-					int major_num = 0, minor_num = 0;
-
-					int invalid_version = 0;
-
-					if (NULL == minor || /* no dot */
-					    minor == major || /* no major */
-					    *(minor + 1) == '\0' /* no minor */) {
-						invalid_version = 1;
-					} else {
-						*minor = '\0';
-						major_num = strtol(major, &err, 10);
-
-						if (*err != '\0') invalid_version = 1;
-
-						*minor++ = '.';
-						minor_num = strtol(minor, &err, 10);
-
-						if (*err != '\0') invalid_version = 1;
-					}
-
-					if (invalid_version) {
-						return http_request_header_line_invalid(srv, 400, "unknown protocol -> 400");
-					}
-
-					if (major_num == 1 && minor_num == 1) {
-						con->request.http_version = con->conf.allow_http11 ? HTTP_VERSION_1_1 : HTTP_VERSION_1_0;
-					} else if (major_num == 1 && minor_num == 0) {
-						con->request.http_version = HTTP_VERSION_1_0;
+				 * RFC7230:
+				 *   HTTP-version  = HTTP-name "/" DIGIT "." DIGIT
+				 *   HTTP-name     = %x48.54.54.50 ; "HTTP", case-sensitive
+				 */
+				if (proto[0]=='H' && proto[1]=='T' && proto[2]=='T' && proto[3]=='P' && proto[4] == '/') {
+					if (proto[5] == '1' && proto[6] == '.' && (proto[7] == '1' || proto[7] == '0')) {
+						con->request.http_version = (proto[7] == '1') ? HTTP_VERSION_1_1 : HTTP_VERSION_1_0;
 					} else {
 						return http_request_header_line_invalid(srv, 505, "unknown HTTP version -> 505");
 					}

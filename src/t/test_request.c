@@ -260,24 +260,23 @@ static void test_request_http_request_parse(server *srv, connection *con)
       CONST_STR_LEN("GET /\r\n"
                     "\r\n"));
 
-    run_http_request_parse(srv, con, __LINE__, 0,
+    run_http_request_parse(srv, con, __LINE__, 505,
       "zeros in protocol version",
       CONST_STR_LEN("GET / HTTP/01.01\r\n"
                     "Host: foo\r\n"
                     "\r\n"));
-    assert(con->request.http_version == HTTP_VERSION_1_1);
 
-    run_http_request_parse(srv, con, __LINE__, 400,
+    run_http_request_parse(srv, con, __LINE__, 505,
       "missing major version",
       CONST_STR_LEN("GET / HTTP/.01\r\n"
                     "\r\n"));
 
-    run_http_request_parse(srv, con, __LINE__, 400,
+    run_http_request_parse(srv, con, __LINE__, 505,
       "missing minor version",
       CONST_STR_LEN("GET / HTTP/01.\r\n"
                     "\r\n"));
 
-    run_http_request_parse(srv, con, __LINE__, 400,
+    run_http_request_parse(srv, con, __LINE__, 505,
       "strings as version",
       CONST_STR_LEN("GET / HTTP/a.b\r\n"
                     "\r\n"));
