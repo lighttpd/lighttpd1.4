@@ -32,8 +32,6 @@ typedef struct {
 	http_method_t  http_method;
 	http_version_t http_version;
 
-	buffer *request_line;
-
 	/* strings to the header */
 	buffer *http_host; /* not alloced */
 

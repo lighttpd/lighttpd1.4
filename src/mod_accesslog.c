@@ -946,9 +946,12 @@ REQUESTDONE_FUNC(log_access_write) {
 				}
 				break;
 			case FORMAT_REQUEST_LINE:
-				if (!buffer_string_is_empty(con->request.request_line)) {
-					accesslog_append_escaped(b, con->request.request_line);
-				}
+				/*(attempt to reconstruct request line)*/
+				buffer_append_string(b, get_http_method_name(con->request.http_method));
+				buffer_append_string_len(b, CONST_STR_LEN(" "));
+				accesslog_append_escaped(b, con->request.orig_uri);
+				buffer_append_string_len(b, CONST_STR_LEN(" "));
+				buffer_append_string(b, get_http_version_name(con->request.http_version));
 				break;
 			case FORMAT_STATUS:
 				buffer_append_int(b, con->http_status);

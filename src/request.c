@@ -612,8 +612,6 @@ static size_t http_request_parse_reqline(server *srv, connection *con, buffer *h
 					return http_request_header_line_invalid(srv, 400, "missing CR before LF in header -> 400");
 				}
 
-				buffer_copy_string_len(con->request.request_line, ptr, i);
-
 				if (NULL == proto) {
 					return http_request_header_line_invalid(srv, 400, "incomplete request line -> 400");
 				}

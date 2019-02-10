@@ -21,7 +21,6 @@ static void test_request_connection_reset(connection *con)
     con->http_status = 0;
     buffer_reset(con->proto);
     buffer_reset(con->request.request);
-    buffer_reset(con->request.request_line);
     buffer_reset(con->request.orig_uri);
     buffer_reset(con->request.uri);
     array_reset(con->request.headers);
@@ -462,7 +461,6 @@ int main (void)
     memset(&con, 0, sizeof(connection));
     con.proto                = buffer_init();
     con.request.request      = buffer_init();
-    con.request.request_line = buffer_init();
     con.request.orig_uri     = buffer_init();
     con.request.uri          = buffer_init();
     con.request.headers      = array_init();
@@ -475,7 +473,6 @@ int main (void)
 
     buffer_free(con.proto);
     buffer_free(con.request.request);
-    buffer_free(con.request.request_line);
     buffer_free(con.request.orig_uri);
     buffer_free(con.request.uri);
     array_free(con.request.headers);
