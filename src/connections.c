@@ -911,7 +911,7 @@ static handler_t connection_handle_fdevent(server *srv, void *context, int reven
 			con->conf.stream_request_body &= ~(FDEVENT_STREAM_REQUEST_BUFMIN|FDEVENT_STREAM_REQUEST_POLLIN);
 			con->conf.stream_request_body |= FDEVENT_STREAM_REQUEST_POLLRDHUP;
 			con->is_readable = 1; /*(can read 0 for end-of-stream)*/
-			con->keep_alive = 0;
+			if (chunkqueue_is_empty(con->read_queue)) con->keep_alive = 0;
 			if (con->request.content_length < -1) { /*(transparent proxy mode; no more data to read)*/
 				con->request.content_length = con->request_content_queue->bytes_in;
 			}
