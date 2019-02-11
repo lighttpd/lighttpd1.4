@@ -1393,7 +1393,7 @@ int gw_set_defaults_backend(server *srv, gw_plugin_data *p, data_unset *du, size
                 if (buffer_string_is_empty(host->host) &&
                     buffer_string_is_empty(host->bin_path)) {
                     log_error_write(srv, __FILE__, __LINE__, "sbsbsbs",
-                            "host or binpath have to be set in:",
+                            "host or bin-path have to be set in:",
                             da->key, "= (",
                             da_ext->key, " => (",
                             da_host->key, " ( ...");
