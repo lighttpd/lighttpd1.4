@@ -343,7 +343,6 @@ PLUGIN_TO_SLOT(PLUGIN_FUNC_CONNECTION_RESET, connection_reset)
 	handler_t plugins_call_##y(server *srv) {\
 		plugin **slot;\
 		size_t j;\
-		if (!srv->plugin_slots) return HANDLER_GO_ON;\
 		slot = ((plugin ***)(srv->plugin_slots))[x];\
 		if (!slot) return HANDLER_GO_ON;\
 		for (j = 0; j < srv->plugins.used && slot[j]; j++) { \
@@ -516,7 +515,7 @@ handler_t plugins_call_init(server *srv) {
 
 void plugins_free(server *srv) {
 	size_t i;
-	plugins_call_cleanup(srv);
+	if (srv->plugin_slots) plugins_call_cleanup(srv);
 
 	for (i = 0; i < srv->plugins.used; i++) {
 		plugin *p = ((plugin **)srv->plugins.ptr)[i];
