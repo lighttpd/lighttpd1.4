@@ -78,13 +78,7 @@ static int connection_map_insert(connection_map *cm, connection *con, const char
 	connection_map_entry *cme;
 	size_t i;
 
-	if (cm->size == 0) {
-		cm->size = 16;
-		cm->ptr = malloc(cm->size * sizeof(*(cm->ptr)));
-		for (i = 0; i < cm->size; i++) {
-			cm->ptr[i] = NULL;
-		}
-	} else if (cm->used == cm->size) {
+	if (cm->used == cm->size) {
 		cm->size += 16;
 		cm->ptr = realloc(cm->ptr, cm->size * sizeof(*(cm->ptr)));
 		for (i = cm->used; i < cm->size; i++) {

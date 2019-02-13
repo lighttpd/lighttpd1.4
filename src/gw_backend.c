@@ -200,11 +200,7 @@ static int gw_extension_insert(gw_exts *ext, buffer *key, gw_host *fh) {
         fe->last_used_ndx = -1;
         buffer_copy_buffer(fe->key, key);
 
-        if (ext->size == 0) {
-            ext->size = 8;
-            ext->exts = malloc(ext->size * sizeof(*(ext->exts)));
-            force_assert(ext->exts);
-        } else if (ext->used == ext->size) {
+        if (ext->used == ext->size) {
             ext->size += 8;
             ext->exts = realloc(ext->exts, ext->size * sizeof(*(ext->exts)));
             force_assert(ext->exts);
@@ -435,11 +431,7 @@ static int env_add(char_array *env, const char *key, size_t key_len, const char 
         }
     }
 
-    if (env->size == 0) {
-        env->size = 16;
-        env->ptr = malloc(env->size * sizeof(*env->ptr));
-        force_assert(env->ptr);
-    } else if (env->size == env->used + 1) {
+    if (env->size <= env->used + 1) {
         env->size += 16;
         env->ptr = realloc(env->ptr, env->size * sizeof(*env->ptr));
         force_assert(env->ptr);
@@ -738,10 +730,7 @@ static int parse_binpath(char_array *env, buffer *b) {
         case '\t':
             /* a WS, stop here and copy the argument */
 
-            if (env->size == 0) {
-                env->size = 16;
-                env->ptr = malloc(env->size * sizeof(*env->ptr));
-            } else if (env->size == env->used) {
+            if (env->size == env->used) {
                 env->size += 16;
                 env->ptr = realloc(env->ptr, env->size * sizeof(*env->ptr));
             }
@@ -758,10 +747,7 @@ static int parse_binpath(char_array *env, buffer *b) {
         }
     }
 
-    if (env->size == 0) {
-        env->size = 16;
-        env->ptr = malloc(env->size * sizeof(*env->ptr));
-    } else if (env->size == env->used) { /*need one extra for terminating NULL*/
+    if (env->size == env->used) { /*need one extra for terminating NULL*/
         env->size += 16;
         env->ptr = realloc(env->ptr, env->size * sizeof(*env->ptr));
     }
@@ -769,10 +755,7 @@ static int parse_binpath(char_array *env, buffer *b) {
     /* the rest */
     env->ptr[env->used++] = strdup(start);
 
-    if (env->size == 0) {
-        env->size = 16;
-        env->ptr = malloc(env->size * sizeof(*env->ptr));
-    } else if (env->size == env->used) { /*need one extra for terminating NULL*/
+    if (env->size == env->used) { /*need one extra for terminating NULL*/
         env->size += 16;
         env->ptr = realloc(env->ptr, env->size * sizeof(*env->ptr));
     }

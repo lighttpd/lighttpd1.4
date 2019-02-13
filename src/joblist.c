@@ -7,11 +7,7 @@
 #include <string.h>
 
 int joblist_append(server *srv, connection *con) {
-	if (srv->joblist->size == 0) {
-		srv->joblist->size  = 16;
-		srv->joblist->ptr   = malloc(sizeof(*srv->joblist->ptr) * srv->joblist->size);
-		force_assert(NULL != srv->joblist->ptr);
-	} else if (srv->joblist->used == srv->joblist->size) {
+	if (srv->joblist->used == srv->joblist->size) {
 		srv->joblist->size += 16;
 		srv->joblist->ptr   = realloc(srv->joblist->ptr, sizeof(*srv->joblist->ptr) * srv->joblist->size);
 		force_assert(NULL != srv->joblist->ptr);
@@ -44,11 +40,7 @@ connection *fdwaitqueue_unshift(server *srv, connections *fdwaitqueue) {
 }
 
 int fdwaitqueue_append(server *srv, connection *con) {
-	if (srv->fdwaitqueue->size == 0) {
-		srv->fdwaitqueue->size  = 16;
-		srv->fdwaitqueue->ptr   = malloc(sizeof(*(srv->fdwaitqueue->ptr)) * srv->fdwaitqueue->size);
-		force_assert(NULL != srv->fdwaitqueue->ptr);
-	} else if (srv->fdwaitqueue->used == srv->fdwaitqueue->size) {
+	if (srv->fdwaitqueue->used == srv->fdwaitqueue->size) {
 		srv->fdwaitqueue->size += 16;
 		srv->fdwaitqueue->ptr   = realloc(srv->fdwaitqueue->ptr, sizeof(*(srv->fdwaitqueue->ptr)) * srv->fdwaitqueue->size);
 		force_assert(NULL != srv->fdwaitqueue->ptr);

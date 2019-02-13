@@ -257,11 +257,7 @@ static int accesslog_parse_format(server *srv, format_fields *fields, buffer *fo
 		case '%':
 			if (i > 0 && start != i) {
 				/* copy the string before this % */
-				if (fields->size == 0) {
-					fields->size = 16;
-					fields->used = 0;
-					fields->ptr = malloc(fields->size * sizeof(format_field * ));
-				} else if (fields->used == fields->size) {
+				if (fields->used == fields->size) {
 					fields->size += 16;
 					fields->ptr = realloc(fields->ptr, fields->size * sizeof(format_field * ));
 				}
@@ -277,11 +273,7 @@ static int accesslog_parse_format(server *srv, format_fields *fields, buffer *fo
 
 			/* we need a new field */
 
-			if (fields->size == 0) {
-				fields->size = 16;
-				fields->used = 0;
-				fields->ptr = malloc(fields->size * sizeof(format_field * ));
-			} else if (fields->used == fields->size) {
+			if (fields->used == fields->size) {
 				fields->size += 16;
 				fields->ptr = realloc(fields->ptr, fields->size * sizeof(format_field * ));
 			}
@@ -412,11 +404,7 @@ static int accesslog_parse_format(server *srv, format_fields *fields, buffer *fo
 
 	if (start < i) {
 		/* copy the string */
-		if (fields->size == 0) {
-			fields->size = 16;
-			fields->used = 0;
-			fields->ptr = malloc(fields->size * sizeof(format_field * ));
-		} else if (fields->used == fields->size) {
+		if (fields->used == fields->size) {
 			fields->size += 16;
 			fields->ptr = realloc(fields->ptr, fields->size * sizeof(format_field * ));
 		}

@@ -45,11 +45,7 @@ static int fdevent_poll_event_del(fdevents *ev, int fde_ndx, int fd) {
 		/* ev->pollfds[k].events = 0; */
 		/* ev->pollfds[k].revents = 0; */
 
-		if (ev->unused.size == 0) {
-			ev->unused.size = 16;
-			ev->unused.ptr = malloc(sizeof(*(ev->unused.ptr)) * ev->unused.size);
-			force_assert(NULL != ev->unused.ptr);
-		} else if (ev->unused.size == ev->unused.used) {
+		if (ev->unused.size == ev->unused.used) {
 			ev->unused.size += 16;
 			ev->unused.ptr = realloc(ev->unused.ptr, sizeof(*(ev->unused.ptr)) * ev->unused.size);
 			force_assert(NULL != ev->unused.ptr);
@@ -106,11 +102,7 @@ static int fdevent_poll_event_set(fdevents *ev, int fde_ndx, int fd, int events)
 
 		return k;
 	} else {
-		if (ev->size == 0) {
-			ev->size = 16;
-			ev->pollfds = malloc(sizeof(*ev->pollfds) * ev->size);
-			force_assert(NULL != ev->pollfds);
-		} else if (ev->size == ev->used) {
+		if (ev->size == ev->used) {
 			ev->size += 16;
 			ev->pollfds = realloc(ev->pollfds, sizeof(*ev->pollfds) * ev->size);
 			force_assert(NULL != ev->pollfds);

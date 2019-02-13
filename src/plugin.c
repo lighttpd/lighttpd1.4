@@ -88,12 +88,7 @@ static void plugin_free(plugin *p) {
 
 static int plugins_register(server *srv, plugin *p) {
 	plugin **ps;
-	if (0 == srv->plugins.size) {
-		srv->plugins.size = 4;
-		srv->plugins.ptr  = malloc(srv->plugins.size * sizeof(*ps));
-		force_assert(NULL != srv->plugins.ptr);
-		srv->plugins.used = 0;
-	} else if (srv->plugins.used == srv->plugins.size) {
+	if (srv->plugins.used == srv->plugins.size) {
 		srv->plugins.size += 4;
 		srv->plugins.ptr   = realloc(srv->plugins.ptr, srv->plugins.size * sizeof(*ps));
 		force_assert(NULL != srv->plugins.ptr);

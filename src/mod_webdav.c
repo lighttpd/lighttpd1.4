@@ -1391,10 +1391,7 @@ static handler_t mod_webdav_propfind(server *srv, connection *con, plugin_data *
 								}
 
 								/* add property to requested list */
-								if (req_props->size == 0) {
-									req_props->size = 16;
-									req_props->ptr = malloc(sizeof(*(req_props->ptr)) * req_props->size);
-								} else if (req_props->used == req_props->size) {
+								if (req_props->used == req_props->size) {
 									req_props->size += 16;
 									req_props->ptr = realloc(req_props->ptr, sizeof(*(req_props->ptr)) * req_props->size);
 								}

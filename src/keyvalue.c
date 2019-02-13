@@ -38,18 +38,7 @@ int pcre_keyvalue_buffer_append(server *srv, pcre_keyvalue_buffer *kvb, buffer *
 
 	if (!key) return -1;
 
-	if (kvb->size == 0) {
-		kvb->size = 4;
-		kvb->used = 0;
-
-		kvb->kv = malloc(kvb->size * sizeof(*kvb->kv));
-		force_assert(NULL != kvb->kv);
-
-		for(i = 0; i < kvb->size; i++) {
-			kvb->kv[i] = calloc(1, sizeof(**kvb->kv));
-			force_assert(NULL != kvb->kv[i]);
-		}
-	} else if (kvb->used == kvb->size) {
+	if (kvb->used == kvb->size) {
 		kvb->size += 4;
 
 		kvb->kv = realloc(kvb->kv, kvb->size * sizeof(*kvb->kv));

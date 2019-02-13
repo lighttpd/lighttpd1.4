@@ -275,14 +275,7 @@ static data_unset **array_find_or_insert(array *a, data_unset *entry) {
 	/* there couldn't possibly be enough memory to store so many entries */
 	force_assert(a->used + 1 <= SSIZE_MAX);
 
-	if (a->size == 0) {
-		a->size   = 16;
-		a->data   = malloc(sizeof(*a->data)     * a->size);
-		a->sorted = malloc(sizeof(*a->sorted)   * a->size);
-		force_assert(a->data);
-		force_assert(a->sorted);
-		for (j = a->used; j < a->size; j++) a->data[j] = NULL;
-	} else if (a->size == a->used) {
+	if (a->size == a->used) {
 		a->size  += 16;
 		a->data   = realloc(a->data,   sizeof(*a->data)   * a->size);
 		a->sorted = realloc(a->sorted, sizeof(*a->sorted) * a->size);

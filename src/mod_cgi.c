@@ -249,11 +249,7 @@ SETDEFAULTS_FUNC(mod_fastcgi_set_defaults) {
 static void cgi_pid_add(plugin_data *p, pid_t pid, void *ctx) {
 	buffer_pid_t *r = &(p->cgi_pid);
 
-	if (r->size == 0) {
-		r->size = 16;
-		r->ptr = malloc(sizeof(*r->ptr) * r->size);
-		force_assert(r->ptr);
-	} else if (r->used == r->size) {
+	if (r->used == r->size) {
 		r->size += 16;
 		r->ptr = realloc(r->ptr, sizeof(*r->ptr) * r->size);
 		force_assert(r->ptr);

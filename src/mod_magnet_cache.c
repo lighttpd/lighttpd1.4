@@ -96,10 +96,7 @@ lua_State *script_cache_get_script(server *srv, connection *con, script_cache *c
 	if (sc == NULL) {
 		sc = script_init();
 
-		if (cache->size == 0) {
-			cache->size = 16;
-			cache->ptr = malloc(cache->size * sizeof(*(cache->ptr)));
-		} else if (cache->used == cache->size) {
+		if (cache->used == cache->size) {
 			cache->size += 16;
 			cache->ptr = realloc(cache->ptr, cache->size * sizeof(*(cache->ptr)));
 		}

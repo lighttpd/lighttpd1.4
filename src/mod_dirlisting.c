@@ -95,16 +95,7 @@ static int excludes_buffer_append(excludes_buffer *exb, buffer *string) {
 
 	if (!string) return -1;
 
-	if (exb->size == 0) {
-		exb->size = 4;
-		exb->used = 0;
-
-		exb->ptr = malloc(exb->size * sizeof(*exb->ptr));
-
-		for(i = 0; i < exb->size ; i++) {
-			exb->ptr[i] = calloc(1, sizeof(**exb->ptr));
-		}
-	} else if (exb->used == exb->size) {
+	if (exb->used == exb->size) {
 		exb->size += 4;
 
 		exb->ptr = realloc(exb->ptr, exb->size * sizeof(*exb->ptr));

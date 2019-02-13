@@ -124,16 +124,12 @@ static int network_host_parse_addr(server *srv, sock_addr *addr, socklen_t *addr
 }
 
 static void network_srv_sockets_append(server *srv, server_socket *srv_socket) {
-	if (srv->srv_sockets.size == 0) {
-		srv->srv_sockets.size = 4;
-		srv->srv_sockets.used = 0;
-		srv->srv_sockets.ptr = malloc(srv->srv_sockets.size * sizeof(server_socket*));
-		force_assert(NULL != srv->srv_sockets.ptr);
-	} else if (srv->srv_sockets.used == srv->srv_sockets.size) {
+	if (srv->srv_sockets.used == srv->srv_sockets.size) {
 		srv->srv_sockets.size += 4;
 		srv->srv_sockets.ptr = realloc(srv->srv_sockets.ptr, srv->srv_sockets.size * sizeof(server_socket*));
 		force_assert(NULL != srv->srv_sockets.ptr);
 	}
+
 	srv->srv_sockets.ptr[srv->srv_sockets.used++] = srv_socket;
 }
 
