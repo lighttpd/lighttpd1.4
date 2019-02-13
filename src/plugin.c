@@ -291,28 +291,14 @@ int plugins_load(server *srv) {
 
 #define PLUGIN_TO_SLOT(x, y) \
 	handler_t plugins_call_##y(server *srv, connection *con) {\
-		plugin **slot;\
-		size_t j;\
-		slot = ((plugin ***)(srv->plugin_slots))[x];\
-		if (!slot) return HANDLER_GO_ON;\
-		for (j = 0; j < srv->plugins.used && slot[j]; j++) { \
-			plugin *p = slot[j];\
-			handler_t r;\
-			switch(r = p->y(srv, con, p->data)) {\
-			case HANDLER_GO_ON:\
-				break;\
-			case HANDLER_FINISHED:\
-			case HANDLER_COMEBACK:\
-			case HANDLER_WAIT_FOR_EVENT:\
-			case HANDLER_WAIT_FOR_FD:\
-			case HANDLER_ERROR:\
-				return r;\
-			default:\
-				log_error_write(srv, __FILE__, __LINE__, "sbs", #x, p->name, "unknown state");\
-				return HANDLER_ERROR;\
-			}\
+		plugin ** const slot = ((plugin ***)(srv->plugin_slots))[x];\
+		const size_t used = srv->plugins.used;\
+		handler_t rc = HANDLER_GO_ON;\
+		if (slot) {\
+			const plugin *p;\
+			for (size_t i = 0; i < used && (p = slot[i]) && (rc = p->y(srv, con, p->data)) == HANDLER_GO_ON; ++i) ;\
 		}\
-		return HANDLER_GO_ON;\
+		return rc;\
 	}
 
 /**
@@ -341,28 +327,14 @@ PLUGIN_TO_SLOT(PLUGIN_FUNC_CONNECTION_RESET, connection_reset)
 
 #define PLUGIN_TO_SLOT(x, y) \
 	handler_t plugins_call_##y(server *srv) {\
-		plugin **slot;\
-		size_t j;\
-		slot = ((plugin ***)(srv->plugin_slots))[x];\
-		if (!slot) return HANDLER_GO_ON;\
-		for (j = 0; j < srv->plugins.used && slot[j]; j++) { \
-			plugin *p = slot[j];\
-			handler_t r;\
-			switch(r = p->y(srv, p->data)) {\
-			case HANDLER_GO_ON:\
-				break;\
-			case HANDLER_FINISHED:\
-			case HANDLER_COMEBACK:\
-			case HANDLER_WAIT_FOR_EVENT:\
-			case HANDLER_WAIT_FOR_FD:\
-			case HANDLER_ERROR:\
-				return r;\
-			default:\
-				log_error_write(srv, __FILE__, __LINE__, "sbsd", #x, p->name, "unknown state:", r);\
-				return HANDLER_ERROR;\
-			}\
+		plugin ** const slot = ((plugin ***)(srv->plugin_slots))[x];\
+		const size_t used = srv->plugins.used; \
+		handler_t rc = HANDLER_GO_ON;\
+		if (slot) {\
+			const plugin *p;\
+			for (size_t i = 0; i < used && (p = slot[i]) && (rc = p->y(srv, p->data)) == HANDLER_GO_ON; ++i) ;\
 		}\
-		return HANDLER_GO_ON;\
+		return rc;\
 	}
 
 /**
