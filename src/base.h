@@ -219,6 +219,7 @@ struct connection {
 	/* fd states */
 	int is_readable;
 	int is_writable;
+	int is_ssl_sock;
 
 	int keep_alive;              /* only request.c can enable it, all other just disable */
 	int keep_alive_idle;         /* remember max_keep_alive_idle from config */

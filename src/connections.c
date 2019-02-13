@@ -132,6 +132,7 @@ static int connection_close(server *srv, connection *con) {
 				"connection closed for fd", con->fd);
 	}
 	con->fd = -1;
+	con->is_ssl_sock = 0;
 
 	/* plugins should have cleaned themselves up */
 	for (size_t i = 0; i < srv->plugins.used; ++i) {
@@ -857,7 +858,7 @@ static handler_t connection_handle_fdevent(server *srv, void *context, int reven
 
 	joblist_append(srv, con);
 
-	if (con->srv_socket->is_ssl) {
+	if (con->is_ssl_sock) {
 		/* ssl may read and write for both reads and writes */
 		if (revents & (FDEVENT_IN | FDEVENT_OUT)) {
 			con->is_readable = 1;
@@ -1107,6 +1108,7 @@ connection *connection_accepted(server *srv, server_socket *srv_socket, sock_add
 		con->dst_addr = *cnt_addr;
 		buffer_copy_string(con->dst_addr_buf, inet_ntop_cache_get_ip(srv, &(con->dst_addr)));
 		con->srv_socket = srv_socket;
+		con->is_ssl_sock = srv_socket->is_ssl;
 
 		config_cond_cache_reset(srv, con);
 		con->conditional_is_valid[COMP_SERVER_SOCKET] = 1;
