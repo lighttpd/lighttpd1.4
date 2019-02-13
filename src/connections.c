@@ -439,7 +439,7 @@ static int connection_handle_write_prepare(server *srv, connection *con) {
 	return 0;
 }
 
-static int connection_handle_write(server *srv, connection *con) {
+static void connection_handle_write(server *srv, connection *con) {
 	switch(connection_write_chunkqueue(srv, con, con->write_queue, MAX_WRITE_LIMIT)) {
 	case 0:
 		con->write_request_ts = srv->cur_ts;
@@ -462,8 +462,6 @@ static int connection_handle_write(server *srv, connection *con) {
 		/* not finished yet -> WRITE */
 		break;
 	}
-
-	return 0;
 }
 
 static void connection_handle_write_state(server *srv, connection *con) {
@@ -471,12 +469,7 @@ static void connection_handle_write_state(server *srv, connection *con) {
         /* only try to write if we have something in the queue */
         if (!chunkqueue_is_empty(con->write_queue)) {
             if (con->is_writable) {
-                if (-1 == connection_handle_write(srv, con)) {
-                    log_error_write(srv, __FILE__, __LINE__, "ds",
-                            con->fd, "handle write failed.");
-                    connection_set_state(srv, con, CON_STATE_ERROR);
-                    break;
-                }
+                connection_handle_write(srv, con);
                 if (con->state != CON_STATE_WRITE) break;
             }
         } else if (con->file_finished) {
@@ -882,14 +875,7 @@ static handler_t connection_handle_fdevent(server *srv, void *context, int reven
 	if (con->state == CON_STATE_WRITE &&
 	    !chunkqueue_is_empty(con->write_queue) &&
 	    con->is_writable) {
-
-		if (-1 == connection_handle_write(srv, con)) {
-			connection_set_state(srv, con, CON_STATE_ERROR);
-
-			log_error_write(srv, __FILE__, __LINE__, "ds",
-					con->fd,
-					"handle write failed.");
-		}
+		connection_handle_write(srv, con);
 	}
 
 	if (con->state == CON_STATE_CLOSE) {
