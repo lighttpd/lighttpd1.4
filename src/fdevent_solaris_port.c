@@ -58,7 +58,7 @@ static int fdevent_solaris_port_event_set(fdevents *ev, int fde_ndx, int fd, int
 	return fd;
 }
 
-static int fdevent_solaris_port_event_get_revent(fdevents *ev, size_t ndx) {
+static int fdevent_solaris_port_event_get_revent(const fdevents *ev, size_t ndx) {
 	int events = 0, e;
 
 	e = ev->port_events[ndx].portev_events;
@@ -70,20 +70,6 @@ static int fdevent_solaris_port_event_get_revent(fdevents *ev, size_t ndx) {
 	if (e & POLLNVAL) events |= FDEVENT_NVAL;
 
 	return e;
-}
-
-static int fdevent_solaris_port_event_get_fd(fdevents *ev, size_t ndx) {
-	return ev->port_events[ndx].portev_object;
-}
-
-static int fdevent_solaris_port_event_next_fdndx(fdevents *ev, int ndx) {
-	size_t i;
-
-	UNUSED(ev);
-
-	i = (ndx < 0) ? 0 : ndx + 1;
-
-	return i;
 }
 
 static void fdevent_solaris_port_free(fdevents *ev) {
@@ -118,7 +104,7 @@ static int fdevent_solaris_port_poll(fdevents *ev, int timeout_ms) {
 		if (!(errno == ETIME && wait_for_events != available_events)) return ret;
 	}
 
-	for (i = 0; i < available_events; ++i) {
+	for (i = 0; i < (int)available_events; ++i) {
 		user_data = (const int *) ev->port_events[i].portev_user;
 
 		if ((ret = port_associate(ev->port_fd, PORT_SOURCE_FD, ev->port_events[i].portev_object,
@@ -132,7 +118,14 @@ static int fdevent_solaris_port_poll(fdevents *ev, int timeout_ms) {
 		}
 	}
 
-	return available_events;
+    for (i = 0; i < available_events; ++i) {
+        fdnode * const fdn = ev->fdarray[ev->port_events[i].portev_object];
+        if (0 == ((uintptr_t)fdn & 0x3)) {
+            int revents = fdevent_solaris_port_event_get_revent(ev, i);
+            (*fdn->handler)(ev->srv, fdn->ctx, revents);
+        }
+    }
+    return available_events;
 }
 
 int fdevent_solaris_port_init(fdevents *ev) {
@@ -145,10 +138,6 @@ int fdevent_solaris_port_init(fdevents *ev) {
 
 	SET(event_del);
 	SET(event_set);
-
-	SET(event_next_fdndx);
-	SET(event_get_fd);
-	SET(event_get_revent);
 
 	if ((ev->port_fd = port_create()) < 0) {
 		log_error_write(ev->srv, __FILE__, __LINE__, "SSS",

@@ -108,45 +108,16 @@ static int fdevent_freebsd_kqueue_event_set(fdevents *ev, int fde_ndx, int fd, i
 	return fd;
 }
 
-static int fdevent_freebsd_kqueue_poll(fdevents *ev, int timeout_ms) {
-	int ret;
-	struct timespec ts;
+static int fdevent_freebsd_kqueue_event_get_revent(const fdevents *ev, size_t ndx) {
+	int events = 0;
+	int filt = ev->kq_results[ndx].filter;
+	int e = ev->kq_results[ndx].flags;
 
-	ts.tv_sec  = timeout_ms / 1000;
-	ts.tv_nsec = (timeout_ms % 1000) * 1000000;
-
-	ret = kevent(ev->kq_fd,
-		NULL, 0,
-		ev->kq_results, ev->maxfds,
-		&ts);
-
-	if (ret == -1) {
-		switch(errno) {
-		case EINTR:
-			/* we got interrupted, perhaps just a SIGCHLD of a CGI script */
-			return 0;
-		default:
-			log_error_write(ev->srv, __FILE__, __LINE__, "SS",
-				"kqueue failed polling: ", strerror(errno));
-			break;
-		}
-	}
-
-	return ret;
-}
-
-static int fdevent_freebsd_kqueue_event_get_revent(fdevents *ev, size_t ndx) {
-	int events = 0, e;
-
-	int filt = e = ev->kq_results[ndx].filter;
-
-	if (e == EVFILT_READ) {
+	if (filt == EVFILT_READ) {
 		events |= FDEVENT_IN;
-	} else if (e == EVFILT_WRITE) {
+	} else if (filt == EVFILT_WRITE) {
 		events |= FDEVENT_OUT;
 	}
-
-	e = ev->kq_results[ndx].flags;
 
 	if (e & EV_EOF) {
 		if (filt == EVFILT_READ) {
@@ -163,14 +134,24 @@ static int fdevent_freebsd_kqueue_event_get_revent(fdevents *ev, size_t ndx) {
 	return events;
 }
 
-static int fdevent_freebsd_kqueue_event_get_fd(fdevents *ev, size_t ndx) {
-	return ev->kq_results[ndx].ident;
-}
+static int fdevent_freebsd_kqueue_poll(fdevents * const ev, int timeout_ms) {
+    server * const srv = ev->srv;
+    struct timespec ts;
+    int n;
 
-static int fdevent_freebsd_kqueue_event_next_fdndx(fdevents *ev, int ndx) {
-	UNUSED(ev);
+    ts.tv_sec  = timeout_ms / 1000;
+    ts.tv_nsec = (timeout_ms % 1000) * 1000000;
 
-	return (ndx < 0) ? 0 : ndx + 1;
+    n = kevent(ev->kq_fd, NULL, 0, ev->kq_results, ev->maxfds, &ts);
+
+    for (int i = 0; i < n; ++i) {
+        fdnode * const fdn = ev->fdarray[ev->kq_results[i].ident];
+        if (0 == ((uintptr_t)fdn & 0x3)) {
+            int revents = fdevent_freebsd_kqueue_event_get_revent(ev, i);
+            (*fdn->handler)(srv, fdn->ctx, revents);
+        }
+    }
+    return n;
 }
 
 static int fdevent_freebsd_kqueue_reset(fdevents *ev) {
@@ -196,10 +177,6 @@ int fdevent_freebsd_kqueue_init(fdevents *ev) {
 
 	SET(event_del);
 	SET(event_set);
-
-	SET(event_next_fdndx);
-	SET(event_get_fd);
-	SET(event_get_revent);
 
 	ev->kq_fd = -1;
 

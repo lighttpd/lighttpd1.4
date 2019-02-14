@@ -87,11 +87,7 @@ static int fdevent_linux_sysepoll_event_set(fdevents *ev, int fde_ndx, int fd, i
 	return fd;
 }
 
-static int fdevent_linux_sysepoll_poll(fdevents *ev, int timeout_ms) {
-	return epoll_wait(ev->epoll_fd, ev->epoll_events, ev->maxfds, timeout_ms);
-}
-
-static int fdevent_linux_sysepoll_event_get_revent(fdevents *ev, size_t ndx) {
+static int fdevent_linux_sysepoll_event_get_revent(const fdevents *ev, size_t ndx) {
 	int events = 0, e;
 
 	e = ev->epoll_events[ndx].events;
@@ -105,23 +101,17 @@ static int fdevent_linux_sysepoll_event_get_revent(fdevents *ev, size_t ndx) {
 	return events;
 }
 
-static int fdevent_linux_sysepoll_event_get_fd(fdevents *ev, size_t ndx) {
-# if 0
-	log_error_write(ev->srv, __FILE__, __LINE__, "SD, D",
-		"fdevent_linux_sysepoll_event_get_fd: ", (int) ndx, ev->epoll_events[ndx].data.fd);
-# endif
-
-	return ev->epoll_events[ndx].data.fd;
-}
-
-static int fdevent_linux_sysepoll_event_next_fdndx(fdevents *ev, int ndx) {
-	size_t i;
-
-	UNUSED(ev);
-
-	i = (ndx < 0) ? 0 : ndx + 1;
-
-	return i;
+static int fdevent_linux_sysepoll_poll(fdevents * const ev, int timeout_ms) {
+    int n = epoll_wait(ev->epoll_fd, ev->epoll_events, ev->maxfds, timeout_ms);
+    server * const srv = ev->srv;
+    for (int i = 0; i < n; ++i) {
+        fdnode * const fdn = ev->fdarray[ev->epoll_events[i].data.fd];
+        if (0 == ((uintptr_t)fdn & 0x3)) {
+            int revents = fdevent_linux_sysepoll_event_get_revent(ev, i);
+            (*fdn->handler)(srv, fdn->ctx, revents);
+        }
+    }
+    return n;
 }
 
 int fdevent_linux_sysepoll_init(fdevents *ev) {
@@ -134,10 +124,6 @@ int fdevent_linux_sysepoll_init(fdevents *ev) {
 
 	SET(event_del);
 	SET(event_set);
-
-	SET(event_next_fdndx);
-	SET(event_get_fd);
-	SET(event_get_revent);
 
 	if (-1 == (ev->epoll_fd = epoll_create(ev->maxfds))) {
 		log_error_write(ev->srv, __FILE__, __LINE__, "SSS",

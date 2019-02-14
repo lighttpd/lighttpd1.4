@@ -57,20 +57,7 @@ static int fdevent_select_event_set(fdevents *ev, int fde_ndx, int fd, int event
 	return fd;
 }
 
-static int fdevent_select_poll(fdevents *ev, int timeout_ms) {
-	struct timeval tv;
-
-	tv.tv_sec =  timeout_ms / 1000;
-	tv.tv_usec = (timeout_ms % 1000) * 1000;
-
-	ev->select_read = ev->select_set_read;
-	ev->select_write = ev->select_set_write;
-	ev->select_error = ev->select_set_error;
-
-	return select(ev->select_max_fd + 1, &(ev->select_read), &(ev->select_write), &(ev->select_error), &tv);
-}
-
-static int fdevent_select_event_get_revent(fdevents *ev, size_t ndx) {
+static int fdevent_select_event_get_revent(const fdevents *ev, size_t ndx) {
 	int revents = 0;
 
 	if (FD_ISSET(ndx, &(ev->select_read))) {
@@ -86,13 +73,7 @@ static int fdevent_select_event_get_revent(fdevents *ev, size_t ndx) {
 	return revents;
 }
 
-static int fdevent_select_event_get_fd(fdevents *ev, size_t ndx) {
-	UNUSED(ev);
-
-	return ndx;
-}
-
-static int fdevent_select_event_next_fdndx(fdevents *ev, int ndx) {
+static int fdevent_select_event_next_fdndx(const fdevents *ev, int ndx) {
 	int i;
 
 	i = (ndx < 0) ? 0 : ndx + 1;
@@ -106,6 +87,31 @@ static int fdevent_select_event_next_fdndx(fdevents *ev, int ndx) {
 	return -1;
 }
 
+static int fdevent_select_poll(fdevents *ev, int timeout_ms) {
+    int n;
+    struct timeval tv;
+
+    tv.tv_sec =  timeout_ms / 1000;
+    tv.tv_usec = (timeout_ms % 1000) * 1000;
+
+    ev->select_read = ev->select_set_read;
+    ev->select_write = ev->select_set_write;
+    ev->select_error = ev->select_set_error;
+
+    n = select(ev->select_max_fd + 1, &(ev->select_read), &(ev->select_write), &(ev->select_error), &tv);
+    for (int ndx = -1, i = 0; i < n; ++i) {
+        fdnode *fdn;
+        ndx = fdevent_select_event_next_fdndx(ev, ndx);
+        if (-1 == ndx) continue;
+        fdn = ev->fdarray[ndx];
+        if (0 == ((uintptr_t)fdn & 0x3)) {
+            int revents = fdevent_select_event_get_revent(ev, ndx);
+            (*fdn->handler)(ev->srv, fdn->ctx, revents);
+        }
+    }
+    return n;
+}
+
 int fdevent_select_init(fdevents *ev) {
 	ev->type = FDEVENT_HANDLER_SELECT;
 #define SET(x) \
@@ -116,10 +122,6 @@ int fdevent_select_init(fdevents *ev) {
 
 	SET(event_del);
 	SET(event_set);
-
-	SET(event_next_fdndx);
-	SET(event_get_fd);
-	SET(event_get_revent);
 
 	return 0;
 }

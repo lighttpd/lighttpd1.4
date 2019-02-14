@@ -135,11 +135,6 @@ struct fdevents {
 
     int (*event_set)(struct fdevents *ev, int fde_ndx, int fd, int events);
     int (*event_del)(struct fdevents *ev, int fde_ndx, int fd);
-    int (*event_get_revent)(struct fdevents *ev, size_t ndx);
-    int (*event_get_fd)(struct fdevents *ev, size_t ndx);
-
-    int (*event_next_fdndx)(struct fdevents *ev, int ndx);
-
     int (*poll)(struct fdevents *ev, int timeout_ms);
 };
 

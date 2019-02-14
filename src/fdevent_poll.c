@@ -115,14 +115,7 @@ static int fdevent_poll_event_set(fdevents *ev, int fde_ndx, int fd, int events)
 	}
 }
 
-static int fdevent_poll_poll(fdevents *ev, int timeout_ms) {
-#if 0
-	fdevent_poll_event_compress(ev);
-#endif
-	return poll(ev->pollfds, ev->used, timeout_ms);
-}
-
-static int fdevent_poll_event_get_revent(fdevents *ev, size_t ndx) {
+static int fdevent_poll_event_get_revent(const fdevents *ev, size_t ndx) {
 	int r, poll_r;
 
 	if (ndx >= ev->used) {
@@ -155,19 +148,30 @@ static int fdevent_poll_event_get_revent(fdevents *ev, size_t ndx) {
 	return r;
 }
 
-static int fdevent_poll_event_get_fd(fdevents *ev, size_t ndx) {
-	return ev->pollfds[ndx].fd;
-}
-
-static int fdevent_poll_event_next_fdndx(fdevents *ev, int ndx) {
-	size_t i;
-
-	i = (ndx < 0) ? 0 : ndx + 1;
-	for (; i < ev->used; i++) {
+static int fdevent_poll_event_next_fdndx(const fdevents *ev, int ndx) {
+	for (size_t i = (size_t)(ndx+1); i < ev->used; ++i) {
 		if (ev->pollfds[i].revents) return i;
 	}
-
 	return -1;
+}
+
+static int fdevent_poll_poll(fdevents *ev, int timeout_ms) {
+  #if 0
+    fdevent_poll_event_compress(ev);
+  #endif
+    int n = poll(ev->pollfds, ev->used, timeout_ms);
+    server * const srv = ev->srv;
+    for (int ndx = -1, i = 0; i < n; ++i) {
+        fdnode *fdn;
+        ndx = fdevent_poll_event_next_fdndx(ev, ndx);
+        if (-1 == ndx) continue;
+        fdn = ev->fdarray[ndx];
+        if (0 == ((uintptr_t)fdn & 0x3)) {
+            int revents = fdevent_poll_event_get_revent(ev, i);
+            (*fdn->handler)(srv, fdn->ctx, revents);
+        }
+    }
+    return n;
 }
 
 int fdevent_poll_init(fdevents *ev) {
@@ -180,10 +184,6 @@ int fdevent_poll_init(fdevents *ev) {
 
 	SET(event_del);
 	SET(event_set);
-
-	SET(event_next_fdndx);
-	SET(event_get_fd);
-	SET(event_get_revent);
 
 	return 0;
 }

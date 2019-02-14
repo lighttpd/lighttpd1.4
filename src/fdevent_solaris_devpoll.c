@@ -68,20 +68,7 @@ static int fdevent_solaris_devpoll_event_set(fdevents *ev, int fde_ndx, int fd, 
 	return fd;
 }
 
-static int fdevent_solaris_devpoll_poll(fdevents *ev, int timeout_ms) {
-	struct dvpoll dopoll;
-	int ret;
-
-	dopoll.dp_timeout = timeout_ms;
-	dopoll.dp_nfds = ev->maxfds - 1;
-	dopoll.dp_fds = ev->devpollfds;
-
-	ret = ioctl(ev->devpoll_fd, DP_POLL, &dopoll);
-
-	return ret;
-}
-
-static int fdevent_solaris_devpoll_event_get_revent(fdevents *ev, size_t ndx) {
+static int fdevent_solaris_devpoll_event_get_revent(const fdevents *ev, size_t ndx) {
 	int r, poll_r;
 
 	r = 0;
@@ -99,18 +86,25 @@ static int fdevent_solaris_devpoll_event_get_revent(fdevents *ev, size_t ndx) {
 	return r;
 }
 
-static int fdevent_solaris_devpoll_event_get_fd(fdevents *ev, size_t ndx) {
-	return ev->devpollfds[ndx].fd;
-}
+static int fdevent_solaris_devpoll_poll(fdevents *ev, int timeout_ms) {
+    int n;
+    server * const srv = ev->srv;
+    struct dvpoll dopoll;
 
-static int fdevent_solaris_devpoll_event_next_fdndx(fdevents *ev, int last_ndx) {
-	size_t i;
+    dopoll.dp_timeout = timeout_ms;
+    dopoll.dp_nfds = ev->maxfds - 1;
+    dopoll.dp_fds = ev->devpollfds;
 
-	UNUSED(ev);
+    n = ioctl(ev->devpoll_fd, DP_POLL, &dopoll);
 
-	i = (last_ndx < 0) ? 0 : last_ndx + 1;
-
-	return i;
+    for (int i = 0; i < n; ++i) {
+        fdnode * const fdn = ev->fdarray[ev->devpollfds[i].fd];
+        if (0 == ((uintptr_t)fdn & 0x3)) {
+            int revents = fdevent_solaris_devpoll_event_get_revent(ev, i);
+            (*fdn->handler)(srv, fdn->ctx, revents);
+        }
+    }
+    return n;
 }
 
 int fdevent_solaris_devpoll_reset(fdevents *ev) {
@@ -137,10 +131,6 @@ int fdevent_solaris_devpoll_init(fdevents *ev) {
 
 	SET(event_del);
 	SET(event_set);
-
-	SET(event_next_fdndx);
-	SET(event_get_fd);
-	SET(event_get_revent);
 
 	ev->devpollfds = malloc(sizeof(*ev->devpollfds) * ev->maxfds);
 	force_assert(NULL != ev->devpollfds);

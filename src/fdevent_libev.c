@@ -23,20 +23,7 @@ static void io_watcher_cb(struct ev_loop *loop, ev_io *w, int revents) {
 	if (revents & EV_WRITE) r |= FDEVENT_OUT;
 	if (revents & EV_ERROR) r |= FDEVENT_ERR;
 
-	switch (r = (*handler)(ev->srv, context, r)) {
-	case HANDLER_FINISHED:
-	case HANDLER_GO_ON:
-	case HANDLER_WAIT_FOR_EVENT:
-	case HANDLER_WAIT_FOR_FD:
-		break;
-	case HANDLER_ERROR:
-		/* should never happen */
-		SEGFAULT();
-		break;
-	default:
-		log_error_write(ev->srv, __FILE__, __LINE__, "d", r);
-		break;
-	}
+	(*handler)(ev->srv, context, r);
 }
 
 static void fdevent_libev_free(fdevents *ev) {
@@ -105,27 +92,6 @@ static int fdevent_libev_poll(fdevents *ev, int timeout_ms) {
 	return 0;
 }
 
-static int fdevent_libev_event_get_revent(fdevents *ev, size_t ndx) {
-	UNUSED(ev);
-	UNUSED(ndx);
-
-	return 0;
-}
-
-static int fdevent_libev_event_get_fd(fdevents *ev, size_t ndx) {
-	UNUSED(ev);
-	UNUSED(ndx);
-
-	return -1;
-}
-
-static int fdevent_libev_event_next_fdndx(fdevents *ev, int ndx) {
-	UNUSED(ev);
-	UNUSED(ndx);
-
-	return -1;
-}
-
 static int fdevent_libev_reset(fdevents *ev) {
 	UNUSED(ev);
 
@@ -148,10 +114,6 @@ int fdevent_libev_init(fdevents *ev) {
 
 	SET(event_del);
 	SET(event_set);
-
-	SET(event_next_fdndx);
-	SET(event_get_fd);
-	SET(event_get_revent);
 
 	if (NULL == (ev->libev_loop = ev_default_loop(0))) {
 		log_error_write(ev->srv, __FILE__, __LINE__, "S",

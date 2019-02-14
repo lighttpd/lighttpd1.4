@@ -598,22 +598,6 @@ int fdevent_accept_listenfd(int listenfd, struct sockaddr *addr, size_t *addrlen
 }
 
 
-void fdevent_process(server *srv, fdevents *ev, int n) {
-    /* n is the number of events */
-    int ndx = -1;
-    do {
-        ndx = ev->event_next_fdndx(ev, ndx);
-        /* not all fdevent handlers know how many fds got an event */
-        if (-1 == ndx) return;
-        else {
-            fdnode *fdn = ev->fdarray[ev->event_get_fd(ev, ndx)];
-            if (0 == ((uintptr_t)fdn & 0x3))
-                (*fdn->handler)(srv, fdn->ctx, ev->event_get_revent(ev, ndx));
-        }
-    } while (--n > 0);
-}
-
-
 #ifdef __APPLE__
 #include <crt_externs.h>
 #define environ (* _NSGetEnviron())

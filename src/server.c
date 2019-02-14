@@ -2026,16 +2026,14 @@ static int server_main_loop (server * const srv) {
 			}
 		}
 
-		if ((n = fdevent_poll(srv->ev, 1000)) > 0) {
-			fdevent_process(srv, srv->ev, n);
-			last_active_ts = srv->cur_ts;
-		} else if (n < 0 && errno != EINTR) {
+		if ((n = fdevent_poll(srv->ev, 1000)) >= 0) {
+			if (n > 0) last_active_ts = srv->cur_ts;
+			fdevent_sched_run(srv, srv->ev);
+		} else if (errno != EINTR) {
 			log_error_write(srv, __FILE__, __LINE__, "ss",
 					"fdevent_poll failed:",
 					strerror(errno));
 		}
-
-		if (n >= 0) fdevent_sched_run(srv, srv->ev);
 
 		for (size_t ndx = 0; ndx < joblist->used; ++ndx) {
 			connection *con = joblist->ptr[ndx];
