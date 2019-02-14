@@ -64,6 +64,7 @@ void array_reset(array *a) {
 
 	for (i = 0; i < a->used; i++) {
 		a->data[i]->fn->reset(a->data[i]);
+		a->data[i]->is_index_key = 0;
 	}
 
 	a->used = 0;
@@ -76,6 +77,7 @@ void array_reset_data_strings(array *a) {
 	for (size_t i = 0; i < a->used; ++i) {
 		data_string * const ds = (data_string *)a->data[i];
 		/*force_assert(ds->type == TYPE_STRING);*/
+		ds->is_index_key = 0;
 		buffer_reset(ds->key);
 		buffer_reset(ds->value);
 	}
