@@ -165,9 +165,9 @@ static int fdevent_poll_poll(fdevents *ev, int timeout_ms) {
         fdnode *fdn;
         ndx = fdevent_poll_event_next_fdndx(ev, ndx);
         if (-1 == ndx) break;
-        fdn = ev->fdarray[ndx];
+        fdn = ev->fdarray[ev->pollfds[ndx].fd];
         if (0 == ((uintptr_t)fdn & 0x3)) {
-            int revents = fdevent_poll_event_get_revent(ev, i);
+            int revents = fdevent_poll_event_get_revent(ev, ndx);
             (*fdn->handler)(srv, fdn->ctx, revents);
         }
     }
