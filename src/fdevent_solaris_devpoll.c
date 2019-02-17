@@ -46,16 +46,10 @@ static int fdevent_solaris_devpoll_event_del(fdevents *ev, int fde_ndx, int fd) 
 
 static int fdevent_solaris_devpoll_event_set(fdevents *ev, int fde_ndx, int fd, int events) {
 	struct pollfd pfd;
-	int add = 0;
-
-	int pevents = 0;
-	if (events & FDEVENT_IN)  pevents |= POLLIN;
-	if (events & FDEVENT_OUT) pevents |= POLLOUT;
-
-	if (fde_ndx == -1) add = 1;
+	int add = (-1 == fde_ndx);
 
 	pfd.fd = fd;
-	pfd.events = pevents;
+	pfd.events = events;
 	pfd.revents = 0;
 
 	if (-1 == write(ev->devpoll_fd, &pfd, sizeof(pfd))) {
@@ -66,24 +60,6 @@ static int fdevent_solaris_devpoll_event_set(fdevents *ev, int fde_ndx, int fd, 
 	}
 
 	return fd;
-}
-
-static int fdevent_solaris_devpoll_event_get_revent(const fdevents *ev, size_t ndx) {
-	int r, poll_r;
-
-	r = 0;
-	poll_r = ev->devpollfds[ndx].revents;
-
-	/* map POLL* to FDEVEN_*; they are probably the same, but still. */
-
-	if (poll_r & POLLIN) r |= FDEVENT_IN;
-	if (poll_r & POLLOUT) r |= FDEVENT_OUT;
-	if (poll_r & POLLERR) r |= FDEVENT_ERR;
-	if (poll_r & POLLHUP) r |= FDEVENT_HUP;
-	if (poll_r & POLLNVAL) r |= FDEVENT_NVAL;
-	if (poll_r & POLLPRI) r |= FDEVENT_PRI;
-
-	return r;
 }
 
 static int fdevent_solaris_devpoll_poll(fdevents *ev, int timeout_ms) {
@@ -98,9 +74,9 @@ static int fdevent_solaris_devpoll_poll(fdevents *ev, int timeout_ms) {
     n = ioctl(ev->devpoll_fd, DP_POLL, &dopoll);
 
     for (int i = 0; i < n; ++i) {
+        int revents = ev->devpollfds[i].revents;
         fdnode * const fdn = ev->fdarray[ev->devpollfds[i].fd];
         if (0 == ((uintptr_t)fdn & 0x3)) {
-            int revents = fdevent_solaris_devpoll_event_get_revent(ev, i);
             (*fdn->handler)(srv, fdn->ctx, revents);
         }
     }
@@ -122,6 +98,13 @@ int fdevent_solaris_devpoll_reset(fdevents *ev) {
 }
 int fdevent_solaris_devpoll_init(fdevents *ev) {
 	ev->type = FDEVENT_HANDLER_SOLARIS_DEVPOLL;
+	force_assert(POLLIN    == FDEVENT_IN);
+	force_assert(POLLPRI   == FDEVENT_PRI);
+	force_assert(POLLOUT   == FDEVENT_OUT);
+	force_assert(POLLERR   == FDEVENT_ERR);
+	force_assert(POLLHUP   == FDEVENT_HUP);
+	force_assert(POLLNVAL  == FDEVENT_NVAL);
+	force_assert(POLLRDHUP == FDEVENT_RDHUP);
 #define SET(x) \
 	ev->x = fdevent_solaris_devpoll_##x;
 

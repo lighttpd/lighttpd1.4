@@ -302,8 +302,10 @@ int fdevent_register(fdevents *ev, int fd, fdevent_handler handler, void *ctx) {
 	fdn->handler = handler;
 	fdn->fd      = fd;
 	fdn->ctx     = ctx;
-	fdn->handler_ctx = NULL;
 	fdn->events  = 0;
+      #ifdef FDEVENT_USE_LIBEV
+	fdn->handler_ctx = NULL;
+      #endif
 
 	ev->fdarray[fd] = fdn;
 

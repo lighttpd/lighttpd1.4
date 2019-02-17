@@ -12,13 +12,17 @@ typedef handler_t (*fdevent_handler)(struct server *srv, void *ctx, int revents)
 /* these are the POLL* values from <bits/poll.h> (linux poll)
  */
 
-#define FDEVENT_IN     BV(0)
-#define FDEVENT_PRI    BV(1)
-#define FDEVENT_OUT    BV(2)
-#define FDEVENT_ERR    BV(3)
-#define FDEVENT_HUP    BV(4)
-#define FDEVENT_NVAL   BV(5)
-#define FDEVENT_RDHUP  BV(13)
+#define FDEVENT_IN     0x0001
+#define FDEVENT_PRI    0x0002
+#define FDEVENT_OUT    0x0004
+#define FDEVENT_ERR    0x0008
+#define FDEVENT_HUP    0x0010
+#define FDEVENT_NVAL   0x0020
+#if defined(__sun) && defined(__SVR4) /* Solaris */
+#define FDEVENT_RDHUP  0x4000
+#else
+#define FDEVENT_RDHUP  0x2000
+#endif
 
 #define FDEVENT_STREAM_REQUEST                  BV(0)
 #define FDEVENT_STREAM_REQUEST_BUFMIN           BV(1)

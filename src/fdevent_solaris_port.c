@@ -58,20 +58,6 @@ static int fdevent_solaris_port_event_set(fdevents *ev, int fde_ndx, int fd, int
 	return fd;
 }
 
-static int fdevent_solaris_port_event_get_revent(const fdevents *ev, size_t ndx) {
-	int events = 0, e;
-
-	e = ev->port_events[ndx].portev_events;
-	if (e & POLLIN) events |= FDEVENT_IN;
-	if (e & POLLOUT) events |= FDEVENT_OUT;
-	if (e & POLLERR) events |= FDEVENT_ERR;
-	if (e & POLLHUP) events |= FDEVENT_HUP;
-	if (e & POLLPRI) events |= FDEVENT_PRI;
-	if (e & POLLNVAL) events |= FDEVENT_NVAL;
-
-	return e;
-}
-
 static void fdevent_solaris_port_free(fdevents *ev) {
 	close(ev->port_fd);
 	free(ev->port_events);
@@ -119,9 +105,9 @@ static int fdevent_solaris_port_poll(fdevents *ev, int timeout_ms) {
 	}
 
     for (i = 0; i < available_events; ++i) {
+        int revents = ev->port_events[i].portev_events;
         fdnode * const fdn = ev->fdarray[ev->port_events[i].portev_object];
         if (0 == ((uintptr_t)fdn & 0x3)) {
-            int revents = fdevent_solaris_port_event_get_revent(ev, i);
             (*fdn->handler)(ev->srv, fdn->ctx, revents);
         }
     }
@@ -130,6 +116,13 @@ static int fdevent_solaris_port_poll(fdevents *ev, int timeout_ms) {
 
 int fdevent_solaris_port_init(fdevents *ev) {
 	ev->type = FDEVENT_HANDLER_SOLARIS_PORT;
+	force_assert(POLLIN    == FDEVENT_IN);
+	force_assert(POLLPRI   == FDEVENT_PRI);
+	force_assert(POLLOUT   == FDEVENT_OUT);
+	force_assert(POLLERR   == FDEVENT_ERR);
+	force_assert(POLLHUP   == FDEVENT_HUP);
+	force_assert(POLLNVAL  == FDEVENT_NVAL);
+	force_assert(POLLRDHUP == FDEVENT_RDHUP);
 #define SET(x) \
 	ev->x = fdevent_solaris_port_##x;
 

@@ -26,16 +26,9 @@ static void fdevent_linux_sysepoll_free(fdevents *ev) {
 }
 
 static int fdevent_linux_sysepoll_event_del(fdevents *ev, int fde_ndx, int fd) {
-	struct epoll_event ep;
-
 	if (fde_ndx < 0) return -1;
 
-	memset(&ep, 0, sizeof(ep));
-
-	ep.data.fd = fd;
-	ep.data.ptr = NULL;
-
-	if (0 != epoll_ctl(ev->epoll_fd, EPOLL_CTL_DEL, fd, &ep)) {
+	if (0 != epoll_ctl(ev->epoll_fd, EPOLL_CTL_DEL, fd, NULL)) {
 		log_error_write(ev->srv, __FILE__, __LINE__, "SSS",
 			"epoll_ctl failed: ", strerror(errno), ", dying");
 
@@ -44,23 +37,12 @@ static int fdevent_linux_sysepoll_event_del(fdevents *ev, int fde_ndx, int fd) {
 		return 0;
 	}
 
-
 	return -1;
 }
 
 static int fdevent_linux_sysepoll_event_set(fdevents *ev, int fde_ndx, int fd, int events) {
 	struct epoll_event ep;
-	int add = 0;
-
-	if (fde_ndx == -1) add = 1;
-
-	memset(&ep, 0, sizeof(ep));
-
-	ep.events = 0;
-
-	if (events & FDEVENT_IN)  ep.events |= EPOLLIN;
-	if (events & FDEVENT_OUT) ep.events |= EPOLLOUT;
-	if (events & FDEVENT_RDHUP) ep.events |= EPOLLRDHUP;
+	int add = (-1 == fde_ndx);
 
 	/**
 	 *
@@ -70,9 +52,7 @@ static int fdevent_linux_sysepoll_event_set(fdevents *ev, int fde_ndx, int fd, i
 	 *
 	 */
 
-	ep.events |= EPOLLERR | EPOLLHUP /* | EPOLLET */;
-
-	ep.data.ptr = NULL;
+	ep.events = events | EPOLLERR | EPOLLHUP /* | EPOLLET */;
 	ep.data.fd = fd;
 
 	if (0 != epoll_ctl(ev->epoll_fd, add ? EPOLL_CTL_ADD : EPOLL_CTL_MOD, fd, &ep)) {
@@ -87,27 +67,13 @@ static int fdevent_linux_sysepoll_event_set(fdevents *ev, int fde_ndx, int fd, i
 	return fd;
 }
 
-static int fdevent_linux_sysepoll_event_get_revent(const fdevents *ev, size_t ndx) {
-	int events = 0, e;
-
-	e = ev->epoll_events[ndx].events;
-	if (e & EPOLLIN) events |= FDEVENT_IN;
-	if (e & EPOLLOUT) events |= FDEVENT_OUT;
-	if (e & EPOLLERR) events |= FDEVENT_ERR;
-	if (e & EPOLLHUP) events |= FDEVENT_HUP;
-	if (e & EPOLLPRI) events |= FDEVENT_PRI;
-	if (e & EPOLLRDHUP) events |= FDEVENT_RDHUP;
-
-	return events;
-}
-
 static int fdevent_linux_sysepoll_poll(fdevents * const ev, int timeout_ms) {
     int n = epoll_wait(ev->epoll_fd, ev->epoll_events, ev->maxfds, timeout_ms);
     server * const srv = ev->srv;
     for (int i = 0; i < n; ++i) {
+        int revents = ev->epoll_events[i].events;
         fdnode * const fdn = ev->fdarray[ev->epoll_events[i].data.fd];
         if (0 == ((uintptr_t)fdn & 0x3)) {
-            int revents = fdevent_linux_sysepoll_event_get_revent(ev, i);
             (*fdn->handler)(srv, fdn->ctx, revents);
         }
     }
@@ -116,6 +82,14 @@ static int fdevent_linux_sysepoll_poll(fdevents * const ev, int timeout_ms) {
 
 int fdevent_linux_sysepoll_init(fdevents *ev) {
 	ev->type = FDEVENT_HANDLER_LINUX_SYSEPOLL;
+	force_assert(EPOLLIN    == FDEVENT_IN);
+	force_assert(EPOLLPRI   == FDEVENT_PRI);
+	force_assert(EPOLLOUT   == FDEVENT_OUT);
+	force_assert(EPOLLERR   == FDEVENT_ERR);
+	force_assert(EPOLLHUP   == FDEVENT_HUP);
+      #if 0 != EPOLLRDHUP
+	force_assert(EPOLLRDHUP == FDEVENT_RDHUP);
+      #endif
 #define SET(x) \
 	ev->x = fdevent_linux_sysepoll_##x;
 

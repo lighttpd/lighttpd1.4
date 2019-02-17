@@ -63,9 +63,11 @@ typedef enum {
 typedef struct _fdnode {
     fdevent_handler handler;
     void *ctx;
-    void *handler_ctx;
     int fd;
     int events;
+  #ifdef FDEVENT_USE_LIBEV
+    void *handler_ctx;
+  #endif
 } fdnode;
 
 /**
@@ -83,16 +85,33 @@ typedef struct {
 #endif
 
 struct fdevents {
-    struct server *srv;
-    fdevent_handler_t type;
-
     fdnode **fdarray;
     fdnode *pendclose;
-    size_t maxfds;
 
+    int (*event_set)(struct fdevents *ev, int fde_ndx, int fd, int events);
+    int (*event_del)(struct fdevents *ev, int fde_ndx, int fd);
+    int (*poll)(struct fdevents *ev, int timeout_ms);
+
+    struct server *srv;
+    size_t maxfds;
   #ifdef FDEVENT_USE_LINUX_EPOLL
     int epoll_fd;
     struct epoll_event *epoll_events;
+  #endif
+  #ifdef FDEVENT_USE_SOLARIS_DEVPOLL
+    int devpoll_fd;
+    struct pollfd *devpollfds;
+  #endif
+  #ifdef FDEVENT_USE_SOLARIS_PORT
+    int port_fd;
+    port_event_t *port_events;
+  #endif
+  #ifdef FDEVENT_USE_FREEBSD_KQUEUE
+    int kq_fd;
+    struct kevent *kq_results;
+  #endif
+  #ifdef FDEVENT_USE_LIBEV
+    struct ev_loop *libev_loop;
   #endif
   #ifdef FDEVENT_USE_POLL
     struct pollfd *pollfds;
@@ -113,29 +132,10 @@ struct fdevents {
 
     int select_max_fd;
   #endif
-  #ifdef FDEVENT_USE_SOLARIS_DEVPOLL
-    int devpoll_fd;
-    struct pollfd *devpollfds;
-  #endif
-  #ifdef FDEVENT_USE_SOLARIS_PORT
-    port_event_t *port_events;
-  #endif
-  #ifdef FDEVENT_USE_FREEBSD_KQUEUE
-    int kq_fd;
-    struct kevent *kq_results;
-  #endif
-  #ifdef FDEVENT_USE_SOLARIS_PORT
-    int port_fd;
-  #endif
-  #ifdef FDEVENT_USE_LIBEV
-    struct ev_loop *libev_loop;
-  #endif
+
     int (*reset)(struct fdevents *ev);
     void (*free)(struct fdevents *ev);
-
-    int (*event_set)(struct fdevents *ev, int fde_ndx, int fd, int events);
-    int (*event_del)(struct fdevents *ev, int fde_ndx, int fd);
-    int (*poll)(struct fdevents *ev, int timeout_ms);
+    fdevent_handler_t type;
 };
 
 int fdevent_select_init(struct fdevents *ev);
