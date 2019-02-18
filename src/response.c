@@ -374,9 +374,13 @@ handler_t http_response_prepare(server *srv, connection *con) {
 				}
 			      #endif
 			} else {
-				qstr = strchr(con->request.uri->ptr, '#');/* discard fragment */
-				if (qstr) buffer_string_set_length(con->request.uri, qstr - con->request.uri->ptr);
-				qstr = strchr(con->request.uri->ptr, '?');
+				size_t rlen = buffer_string_length(con->request.uri);
+				qstr = memchr(con->request.uri->ptr, '#', rlen);/* discard fragment */
+				if (qstr) {
+					rlen = (size_t)(qstr - con->request.uri->ptr);
+					buffer_string_set_length(con->request.uri, rlen);
+				}
+				qstr = memchr(con->request.uri->ptr, '?', rlen);
 			}
 
 			/** extract query string from request.uri */

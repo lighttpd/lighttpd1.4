@@ -636,28 +636,27 @@ static size_t http_request_parse_reqline(server *srv, connection *con, buffer *h
 					return http_request_header_line_invalid(srv, 400, "unknown protocol -> 400");
 				}
 
-				*(proto - 1) = '\0'; /*(terminate for strchr())*/
+				jlen = (size_t)(proto - uri - 1);
 
 				if (*uri == '/') {
 					/* (common case) */
-					buffer_copy_string_len(con->request.uri, uri, proto - uri - 1);
+					buffer_copy_string_len(con->request.uri, uri, jlen);
 				} else if (0 == buffer_caseless_compare(uri, 7, "http://", 7) &&
-				    NULL != (nuri = strchr(uri + 7, '/'))) {
+				    NULL != (nuri = memchr(uri + 7, '/', jlen-7))) {
 					state->reqline_host = uri + 7;
 					state->reqline_hostlen = nuri - state->reqline_host;
 
 					buffer_copy_string_len(con->request.uri, nuri, proto - nuri - 1);
 				} else if (0 == buffer_caseless_compare(uri, 8, "https://", 8) &&
-				    NULL != (nuri = strchr(uri + 8, '/'))) {
+				    NULL != (nuri = memchr(uri + 8, '/', jlen-8))) {
 					state->reqline_host = uri + 8;
 					state->reqline_hostlen = nuri - state->reqline_host;
 
 					buffer_copy_string_len(con->request.uri, nuri, proto - nuri - 1);
 				} else if (!http_header_strict
 					   || (HTTP_METHOD_CONNECT == con->request.http_method && (uri[0] == ':' || light_isdigit(uri[0])))
-					   || (HTTP_METHOD_OPTIONS == con->request.http_method && uri[0] == '*' && uri[1] == '\0')) {
-					/* everything looks good so far */
-					buffer_copy_string_len(con->request.uri, uri, proto - uri - 1);
+					   || (HTTP_METHOD_OPTIONS == con->request.http_method && uri[0] == '*' && 1 == jlen)) {
+					buffer_copy_string_len(con->request.uri, uri, jlen);
 				} else {
 					return http_request_header_line_invalid(srv, 400, "request-URI parse error -> 400");
 				}

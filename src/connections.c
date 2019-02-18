@@ -700,7 +700,7 @@ static void connection_read_header(server *srv, connection *con)  {
             if (n[0] == '\0') { hlen += n - b; continue; }
             le = 0;
         }
-        for (; (n = strchr(n, '\n')); ++n) {
+        for (const char * const end = b+clen; (n = memchr(n,'\n',end-n)); ++n) {
             if (n[1] == '\r')   ++n;
             if (n[1] == '\n') { hlen += n - b + 2; break; }
             if (n[1] == '\0') { n = NULL; le = 1; break; }
