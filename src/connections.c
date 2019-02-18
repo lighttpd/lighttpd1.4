@@ -150,7 +150,7 @@ static int connection_close(server *srv, connection *con) {
 	return 0;
 }
 
-static void connection_read_for_eos(server *srv, connection *con) {
+static void connection_read_for_eos_plain(server *srv, connection *con) {
 	/* we have to do the linger_on_close stuff regardless
 	 * of con->keep_alive; even non-keepalive sockets may
 	 * still have unread data, and closing before reading
@@ -173,6 +173,18 @@ static void connection_read_for_eos(server *srv, connection *con) {
 		con->close_timeout_ts = srv->cur_ts - (HTTP_LINGER_TIMEOUT+1);
 }
 
+static void connection_read_for_eos_ssl(server *srv, connection *con) {
+	if (con->network_read(srv, con, con->read_queue, MAX_READ_LIMIT) < 0)
+		con->close_timeout_ts = srv->cur_ts - (HTTP_LINGER_TIMEOUT+1);
+	chunkqueue_reset(con->read_queue);
+}
+
+static void connection_read_for_eos(server *srv, connection *con) {
+	!con->is_ssl_sock
+	  ? connection_read_for_eos_plain(srv, con)
+	  : connection_read_for_eos_ssl(srv, con);
+}
+
 static void connection_handle_close_state(server *srv, connection *con) {
 	connection_read_for_eos(srv, con);
 
@@ -188,7 +200,8 @@ static void connection_handle_shutdown(server *srv, connection *con) {
 	connection_reset(srv, con);
 
 	/* close the connection */
-	if (con->fd >= 0 && 0 == shutdown(con->fd, SHUT_WR)) {
+	if (con->fd >= 0
+	    && (con->is_ssl_sock || 0 == shutdown(con->fd, SHUT_WR))) {
 		con->close_timeout_ts = srv->cur_ts;
 		connection_set_state(srv, con, CON_STATE_CLOSE);
 

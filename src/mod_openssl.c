@@ -88,7 +88,8 @@ static char *local_send_buffer;
 typedef struct {
     SSL *ssl;
     connection *con;
-    int renegotiations; /* count of SSL_CB_HANDSHAKE_START */
+    short renegotiations; /* count of SSL_CB_HANDSHAKE_START */
+    short close_notify;
     unsigned short request_env_patched;
     unsigned short alpn;
     plugin_config conf;
@@ -1509,11 +1510,17 @@ load_next_chunk (server *srv, chunkqueue *cq, off_t max_bytes,
 
 
 static int
+mod_openssl_close_notify(server *srv, handler_ctx *hctx);
+
+
+static int
 connection_write_cq_ssl (server *srv, connection *con,
                          chunkqueue *cq, off_t max_bytes)
 {
     handler_ctx *hctx = con->plugin_ctx[plugin_data_singleton->id];
     SSL *ssl = hctx->ssl;
+
+    if (0 != hctx->close_notify) return mod_openssl_close_notify(srv, hctx);
 
     chunkqueue_remove_finished_chunks(cq);
 
@@ -1621,6 +1628,8 @@ connection_read_cq_ssl (server *srv, connection *con,
     /*(code transform assumption; minimize diff)*/
     force_assert(cq == con->read_queue);
     UNUSED(max_bytes);
+
+    if (0 != hctx->close_notify) return mod_openssl_close_notify(srv, hctx);
 
     ERR_clear_error();
     do {
@@ -1798,7 +1807,16 @@ CONNECTION_FUNC(mod_openssl_handle_con_accept)
 
 
 static void
-mod_openssl_close_notify(server *srv, handler_ctx *hctx);
+mod_openssl_detach(handler_ctx *hctx)
+{
+    /* step aside from futher SSL processing
+     * (used after handle_connection_shut_wr hook) */
+    /* future: might restore prior network_read and network_write fn ptrs */
+    hctx->con->is_ssl_sock = 0;
+    /* if called after handle_connection_shut_wr hook, shutdown SHUT_WR */
+    if (-1 == hctx->close_notify) shutdown(hctx->con->fd, SHUT_WR);
+    hctx->close_notify = 1;
+}
 
 
 CONNECTION_FUNC(mod_openssl_handle_con_shut_wr)
@@ -1807,34 +1825,36 @@ CONNECTION_FUNC(mod_openssl_handle_con_shut_wr)
     handler_ctx *hctx = con->plugin_ctx[p->id];
     if (NULL == hctx) return HANDLER_GO_ON;
 
+    hctx->close_notify = -2;
     if (SSL_is_init_finished(hctx->ssl)) {
         mod_openssl_close_notify(srv, hctx);
+    }
+    else {
+        mod_openssl_detach(hctx);
     }
 
     return HANDLER_GO_ON;
 }
 
 
-static void
+static int
 mod_openssl_close_notify(server *srv, handler_ctx *hctx)
 {
         int ret, ssl_r;
         unsigned long err;
+
+        if (1 == hctx->close_notify) return -2;
+
         ERR_clear_error();
         switch ((ret = SSL_shutdown(hctx->ssl))) {
         case 1:
-            /* ok */
-            break;
+            mod_openssl_detach(hctx);
+            return -2;
         case 0:
-            /* wait for fd-event
-             *
-             * FIXME: wait for fdevent and call SSL_shutdown again
-             *
-             */
-
             /* Drain SSL read buffers in case pending records need processing.
-             * Limit to reading 16k to avoid denial of service when the CPU
+             * Limit to reading next record to avoid denial of service when CPU
              * processing TLS is slower than arrival speed of TLS data packets.
+             * (unless hctx->conf.ssl_read_ahead is set)
              *
              * references:
              *
@@ -1852,25 +1872,40 @@ mod_openssl_close_notify(server *srv, handler_ctx *hctx)
              * Additional discussion in "Auto retry in shutdown"
              * https://github.com/openssl/openssl/pull/6340
              */
-            err = 0;
-            do {
-                char buf[4096];
-                ret = SSL_read(hctx->ssl, buf, (int)sizeof(buf));
-            } while (ret > 0 && (err += (unsigned long)ret) < 16384);
+            ssl_r = SSL_pending(hctx->ssl);
+            if (ssl_r) {
+                do {
+                    char buf[4096];
+                    ret = SSL_read(hctx->ssl, buf, (int)sizeof(buf));
+                } while (ret > 0 && (hctx->conf.ssl_read_ahead||(ssl_r-=ret)));
+            }
 
             ERR_clear_error();
-            if (-1 != (ret = SSL_shutdown(hctx->ssl))) break;
+            switch ((ret = SSL_shutdown(hctx->ssl))) {
+            case 1:
+                mod_openssl_detach(hctx);
+                return -2;
+            case 0:
+                hctx->close_notify = -1;
+                return 0;
+            default:
+                break;
+            }
 
             /* fall through */
         default:
 
+            if (!SSL_is_init_finished(hctx->ssl)) {
+                mod_openssl_detach(hctx);
+                return -2;
+            }
+
             switch ((ssl_r = SSL_get_error(hctx->ssl, ret))) {
             case SSL_ERROR_ZERO_RETURN:
-                break;
             case SSL_ERROR_WANT_WRITE:
-                /*con->is_writable=-1;*//*(no effect; shutdown() called below)*/
             case SSL_ERROR_WANT_READ:
-                break;
+                hctx->close_notify = -1;
+                return 0; /* try again later */
             case SSL_ERROR_SYSCALL:
                 /* perhaps we have error waiting in our error-queue */
                 if (0 != (err = ERR_get_error())) {
@@ -1905,6 +1940,8 @@ mod_openssl_close_notify(server *srv, handler_ctx *hctx)
             }
         }
         ERR_clear_error();
+        hctx->close_notify = -1;
+        return ret;
 }
 
 
