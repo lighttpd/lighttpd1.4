@@ -1236,6 +1236,8 @@ SETDEFAULTS_FUNC(mod_openssl_set_defaults)
         s->ssl_read_ahead = (0 == i)
           ? 0
           : p->config_storage[0]->ssl_read_ahead;
+        if (0 == i)
+            buffer_copy_string_len(s->ssl_cipher_list, CONST_STR_LEN("HIGH"));
         if (0 != i) {
             buffer *b;
             b = p->config_storage[0]->ssl_ca_crl_file;
