@@ -1236,8 +1236,18 @@ SETDEFAULTS_FUNC(mod_openssl_set_defaults)
         s->ssl_read_ahead = (0 == i)
           ? 0
           : p->config_storage[0]->ssl_read_ahead;
-        if (0 != i) buffer_copy_buffer(s->ssl_ca_crl_file, p->config_storage[0]->ssl_ca_crl_file);
-        if (0 != i) buffer_copy_buffer(s->ssl_ca_dn_file, p->config_storage[0]->ssl_ca_dn_file);
+        if (0 != i) {
+            buffer *b;
+            b = p->config_storage[0]->ssl_ca_crl_file;
+            if (!buffer_string_is_empty(b))
+                buffer_copy_buffer(s->ssl_ca_crl_file, b);
+            b = p->config_storage[0]->ssl_ca_dn_file;
+            if (!buffer_string_is_empty(b))
+                buffer_copy_buffer(s->ssl_ca_dn_file, b);
+            b = p->config_storage[0]->ssl_cipher_list;
+            if (!buffer_string_is_empty(b))
+                buffer_copy_buffer(s->ssl_cipher_list, b);
+        }
         s->ssl_conf_cmd = (0 == i)
           ? array_init()
           : array_init_array(p->config_storage[0]->ssl_conf_cmd);
