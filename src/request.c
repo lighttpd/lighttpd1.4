@@ -891,7 +891,8 @@ int http_request_parse(server *srv, connection *con, buffer *hdrs) {
 	case HTTP_METHOD_GET:
 	case HTTP_METHOD_HEAD:
 		/* content-length is forbidden for those */
-		if (state.con_length_set && con->request.content_length != 0) {
+		if (state.con_length_set && 0 != con->request.content_length
+		    && !(con->conf.http_parseopts & HTTP_PARSEOPT_METHOD_GET_BODY)) {
 			return http_request_header_line_invalid(srv, 400, "GET/HEAD with content-length -> 400");
 		}
 		break;

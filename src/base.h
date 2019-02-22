@@ -336,6 +336,7 @@ typedef struct {
 	unsigned short http_host_strict;
 	unsigned short http_host_normalize;
 	unsigned short http_url_normalize;
+	unsigned short http_method_get_body;
 	unsigned short high_precision_timestamps;
 	time_t loadts;
 	double loadavg[3];

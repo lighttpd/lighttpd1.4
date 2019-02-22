@@ -121,6 +121,10 @@ static int config_http_parseopts (server *srv, array *a) {
             srv->srvconf.http_host_normalize = val;
             continue;
         }
+        else if (buffer_is_equal_string(ds->key, CONST_STR_LEN("method-get-body"))) {
+            srv->srvconf.http_method_get_body = val;
+            continue;
+        }
         else {
             log_error_write(srv, __FILE__, __LINE__, "sb",
                             "unrecognized key for server.http-parseopts:",
@@ -528,7 +532,8 @@ static int config_insert(server *srv) {
 		   (srv->srvconf.http_header_strict  ?(HTTP_PARSEOPT_HEADER_STRICT) :0)
 		  |(srv->srvconf.http_host_strict    ?(HTTP_PARSEOPT_HOST_STRICT
 		                                      |HTTP_PARSEOPT_HOST_NORMALIZE):0)
-		  |(srv->srvconf.http_host_normalize ?(HTTP_PARSEOPT_HOST_NORMALIZE):0);
+		  |(srv->srvconf.http_host_normalize ?(HTTP_PARSEOPT_HOST_NORMALIZE):0)
+		  |(srv->srvconf.http_method_get_body?(HTTP_PARSEOPT_METHOD_GET_BODY):0);
 		s->http_parseopts |= srv->srvconf.http_url_normalize;
 
 		if (s->log_request_handling || s->log_request_header)

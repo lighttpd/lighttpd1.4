@@ -26,6 +26,7 @@ enum burl_opts_e {
  ,HTTP_PARSEOPT_URL_NORMALIZE_PATH_DOTSEG_REMOVE  =0x400/* "." ".." "//" */
  ,HTTP_PARSEOPT_URL_NORMALIZE_PATH_DOTSEG_REJECT  =0x800
  ,HTTP_PARSEOPT_URL_NORMALIZE_QUERY_20_PLUS       =0x1000
+ ,HTTP_PARSEOPT_METHOD_GET_BODY                   =0x8000
 };
 
 int burl_normalize (buffer *b, buffer *t, int flags);
