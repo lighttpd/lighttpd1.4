@@ -1055,8 +1055,6 @@ static gw_handler_ctx * handler_ctx_init(size_t sz) {
     gw_handler_ctx *hctx = calloc(1, 0 == sz ? sizeof(*hctx) : sz);
     force_assert(hctx);
 
-    hctx->fde_ndx = -1;
-
     /*hctx->response = chunk_buffer_acquire();*//*(allocated when needed)*/
 
     hctx->request_id = 0;
@@ -1106,7 +1104,6 @@ static void handler_ctx_clear(gw_handler_ctx *hctx) {
     if (hctx->response) buffer_clear(hctx->response);
 
     hctx->fd = -1;
-    hctx->fde_ndx = -1;
     hctx->reconnects = 0;
     hctx->request_id = 0;
     hctx->send_content_body = 1;
@@ -1646,11 +1643,10 @@ void gw_set_transparent(server *srv, gw_handler_ctx *hctx) {
 
 static void gw_backend_close(server *srv, gw_handler_ctx *hctx) {
     if (hctx->fd >= 0) {
-        fdevent_event_del(srv->ev, &(hctx->fde_ndx), hctx->fd);
+        fdevent_event_del(srv->ev, hctx->fd);
         /*fdevent_unregister(srv->ev, hctx->fd);*//*(handled below)*/
         fdevent_sched_close(srv->ev, hctx->fd, 1);
         hctx->fd = -1;
-        hctx->fde_ndx = -1;
     }
 
     if (hctx->host) {
@@ -1716,7 +1712,7 @@ static void gw_conditional_tcp_fin(server *srv, gw_handler_ctx *hctx) {
     con->conf.stream_request_body &= ~FDEVENT_STREAM_REQUEST_POLLIN;
     con->is_readable = 0;
     shutdown(hctx->fd, SHUT_WR);
-    fdevent_event_clr(srv->ev, &hctx->fde_ndx, hctx->fd, FDEVENT_OUT);
+    fdevent_event_clr(srv->ev, hctx->fd, FDEVENT_OUT);
 }
 
 static handler_t gw_write_request(server *srv, gw_handler_ctx *hctx) {
@@ -1771,7 +1767,7 @@ static handler_t gw_write_request(server *srv, gw_handler_ctx *hctx) {
         switch (gw_establish_connection(srv, hctx->host, hctx->proc, hctx->pid,
                                         hctx->fd, hctx->conf.debug)) {
         case 1: /* connection is in progress */
-            fdevent_event_set(srv->ev, &(hctx->fde_ndx), hctx->fd, FDEVENT_OUT);
+            fdevent_event_set(srv->ev, hctx->fd, FDEVENT_OUT);
             gw_set_state(srv, hctx, GW_STATE_CONNECT_DELAYED);
             return HANDLER_WAIT_FOR_EVENT;
         case -1:/* connection error */
@@ -1803,8 +1799,7 @@ static handler_t gw_write_request(server *srv, gw_handler_ctx *hctx) {
             handler_t rc = hctx->create_env(srv, hctx);
             if (HANDLER_GO_ON != rc) {
                 if (HANDLER_FINISHED != rc && HANDLER_ERROR != rc)
-                    fdevent_event_clr(srv->ev, &(hctx->fde_ndx), hctx->fd,
-                                      FDEVENT_OUT);
+                    fdevent_event_clr(srv->ev, hctx->fd, FDEVENT_OUT);
                 return rc;
             }
         }
@@ -1819,8 +1814,7 @@ static handler_t gw_write_request(server *srv, gw_handler_ctx *hctx) {
             }
         }
 
-        fdevent_event_add(srv->ev, &hctx->fde_ndx, hctx->fd,
-                          FDEVENT_IN | FDEVENT_RDHUP);
+        fdevent_event_add(srv->ev, hctx->fd, FDEVENT_IN | FDEVENT_RDHUP);
         gw_set_state(srv, hctx, GW_STATE_WRITE);
         /* fall through */
     case GW_STATE_WRITE:
@@ -1862,7 +1856,7 @@ static handler_t gw_write_request(server *srv, gw_handler_ctx *hctx) {
         }
 
         if (hctx->wb->bytes_out == hctx->wb_reqlen) {
-            fdevent_event_clr(srv->ev, &(hctx->fde_ndx), hctx->fd, FDEVENT_OUT);
+            fdevent_event_clr(srv->ev, hctx->fd, FDEVENT_OUT);
             gw_set_state(srv, hctx, GW_STATE_READ);
         } else {
             off_t wblen = hctx->wb->bytes_in - hctx->wb->bytes_out;
@@ -1878,9 +1872,9 @@ static handler_t gw_write_request(server *srv, gw_handler_ctx *hctx) {
                 }
             }
             if (0 == wblen) {
-                fdevent_event_clr(srv->ev,&hctx->fde_ndx,hctx->fd,FDEVENT_OUT);
+                fdevent_event_clr(srv->ev, hctx->fd, FDEVENT_OUT);
             } else {
-                fdevent_event_add(srv->ev,&hctx->fde_ndx,hctx->fd,FDEVENT_OUT);
+                fdevent_event_add(srv->ev, hctx->fd, FDEVENT_OUT);
             }
         }
 
@@ -1938,14 +1932,14 @@ handler_t gw_handle_subrequest(server *srv, connection *con, void *p_d) {
     if ((con->conf.stream_response_body & FDEVENT_STREAM_RESPONSE_BUFMIN)
         && con->file_started) {
         if (chunkqueue_length(con->write_queue) > 65536 - 4096) {
-            fdevent_event_clr(srv->ev, &(hctx->fde_ndx), hctx->fd, FDEVENT_IN);
+            fdevent_event_clr(srv->ev, hctx->fd, FDEVENT_IN);
         }
         else if (!(fdevent_event_get_interest(srv->ev, hctx->fd) & FDEVENT_IN)){
             /* optimistic read from backend */
             handler_t rc;
             rc = gw_recv_response(srv, hctx);        /*(might invalidate hctx)*/
             if (rc != HANDLER_GO_ON) return rc;      /*(unless HANDLER_GO_ON)*/
-            fdevent_event_add(srv->ev, &(hctx->fde_ndx), hctx->fd, FDEVENT_IN);
+            fdevent_event_add(srv->ev, hctx->fd, FDEVENT_IN);
         }
     }
 
@@ -2033,8 +2027,8 @@ static handler_t gw_recv_response(server *srv, gw_handler_ctx *hctx) {
       ? chunk_buffer_acquire()
       : hctx->response;
 
-    handler_t rc = http_response_read(srv, hctx->remote_conn, &hctx->opts,
-                                      b, hctx->fd, &hctx->fde_ndx);
+    handler_t rc =
+      http_response_read(srv, hctx->remote_conn, &hctx->opts, b, hctx->fd);
 
     if (b != hctx->response) chunk_buffer_release(b);
 

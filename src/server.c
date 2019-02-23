@@ -899,12 +899,14 @@ __attribute_cold__
 static void server_sockets_set_event (server *srv, int event) {
     for (size_t i = 0; i < srv->srv_sockets.used; ++i) {
         server_socket *srv_socket = srv->srv_sockets.ptr[i];
-        fdevent_event_set(srv->ev,&(srv_socket->fde_ndx),srv_socket->fd,event);
+        fdevent_event_set(srv->ev, srv_socket->fd, event);
     }
 }
 
 __attribute_cold__
 static void server_sockets_unregister (server *srv) {
+    if (2 == srv->sockets_disabled) return;
+    srv->sockets_disabled = 2;
     for (size_t i = 0; i < srv->srv_sockets.used; ++i)
         network_unregister_sock(srv, srv->srv_sockets.ptr[i]);
 }
@@ -916,14 +918,16 @@ static void server_sockets_close (server *srv) {
      * (e.g. fastcgi, scgi, etc) are independent from lighttpd, rather
      * than started by lighttpd via "bin-path")
      */
+    if (3 == srv->sockets_disabled) return;
     for (size_t i = 0; i < srv->srv_sockets.used; ++i) {
         server_socket *srv_socket = srv->srv_sockets.ptr[i];
         if (-1 == srv_socket->fd) continue;
-        network_unregister_sock(srv, srv_socket);
+        if (2 != srv->sockets_disabled) network_unregister_sock(srv,srv_socket);
         close(srv_socket->fd);
         srv_socket->fd = -1;
         /* network_close() will cleanup after us */
     }
+    srv->sockets_disabled = 3;
 }
 
 __attribute_cold__
@@ -968,10 +972,8 @@ static void server_graceful_state (server *srv) {
 
     if (!srv_shutdown) server_graceful_shutdown_maint(srv);
 
-    if (!oneshot_fd) {
-        if (0==srv->srv_sockets.used || -1 == srv->srv_sockets.ptr[0]->fde_ndx)
-            return;
-    }
+    if (!oneshot_fd
+        && (2 == srv->sockets_disabled || 3 == srv->sockets_disabled)) return;
 
     log_error_write(srv, __FILE__, __LINE__, "s",
                     "[note] graceful shutdown started");
@@ -1980,7 +1982,6 @@ static int server_main_loop (server * const srv) {
 
 		if (graceful_shutdown) {
 			server_graceful_state(srv);
-			srv->sockets_disabled = 1;
 			if (srv->conns->used == 0) {
 				/* we are in graceful shutdown phase and all connections are closed
 				 * we are ready to terminate without harming anyone */

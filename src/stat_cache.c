@@ -117,7 +117,6 @@ typedef struct stat_cache_fam {
 	splay_tree *dirs; /* the nodes of the tree are fam_dir_entry */
 
 	FAMConnection fam;
-	int    fam_fcce_ndx;
 
 	int dir_ndx;
 	fam_dir_entry *fam_dir;
@@ -208,10 +207,11 @@ static handler_t stat_cache_handle_fdevent(server *srv, void *_fce, int revent) 
 
 	if (revent & (FDEVENT_HUP|FDEVENT_RDHUP)) {
 		/* fam closed the connection */
-		fdevent_event_del(srv->ev, &(scf->fam_fcce_ndx), FAMCONNECTION_GETFD(&scf->fam));
+		fdevent_event_del(srv->ev, FAMCONNECTION_GETFD(&scf->fam));
 		fdevent_unregister(srv->ev, FAMCONNECTION_GETFD(&scf->fam));
 
 		FAMClose(&scf->fam);
+		FAMCONNECTION_GETFD(&scf->fam) = -1;
 	}
 
 	return HANDLER_GO_ON;
@@ -219,7 +219,6 @@ static handler_t stat_cache_handle_fdevent(server *srv, void *_fce, int revent) 
 
 static stat_cache_fam * stat_cache_init_fam(server *srv) {
 	stat_cache_fam *scf = calloc(1, sizeof(*scf));
-	scf->fam_fcce_ndx = -1;
 	scf->dir_name = buffer_init();
 
 	/* setup FAM */
@@ -234,7 +233,7 @@ static stat_cache_fam * stat_cache_init_fam(server *srv) {
 
 	fdevent_setfd_cloexec(FAMCONNECTION_GETFD(&scf->fam));
 	fdevent_register(srv->ev, FAMCONNECTION_GETFD(&scf->fam), stat_cache_handle_fdevent, NULL);
-	fdevent_event_set(srv->ev, &(scf->fam_fcce_ndx), FAMCONNECTION_GETFD(&scf->fam), FDEVENT_IN | FDEVENT_RDHUP);
+	fdevent_event_set(srv->ev, FAMCONNECTION_GETFD(&scf->fam), FDEVENT_IN | FDEVENT_RDHUP);
 
 	return scf;
 }
@@ -259,10 +258,7 @@ static void stat_cache_free_fam(stat_cache_fam *scf) {
 		}
 	}
 
-	if (-1 != scf->fam_fcce_ndx) {
-		/* fd events already gone */
-		scf->fam_fcce_ndx = -1;
-
+	if (-1 != FAMCONNECTION_GETFD(&scf->fam)) {
 		FAMClose(&scf->fam);
 	}
 

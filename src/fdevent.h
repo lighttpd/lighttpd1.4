@@ -51,10 +51,10 @@ __attribute_cold__
 void fdevent_free(fdevents *ev);
 
 int fdevent_event_get_interest(const fdevents *ev, int fd);
-void fdevent_event_set(fdevents *ev, int *fde_ndx, int fd, int events); /* events can be FDEVENT_IN, FDEVENT_OUT or FDEVENT_IN | FDEVENT_OUT */
-void fdevent_event_add(fdevents *ev, int *fde_ndx, int fd, int event); /* events can be FDEVENT_IN or FDEVENT_OUT */
-void fdevent_event_clr(fdevents *ev, int *fde_ndx, int fd, int event); /* events can be FDEVENT_IN or FDEVENT_OUT */
-void fdevent_event_del(fdevents *ev, int *fde_ndx, int fd);
+void fdevent_event_set(fdevents *ev, int fd, int events);/* events can be FDEVENT_IN, FDEVENT_OUT or FDEVENT_IN | FDEVENT_OUT */
+void fdevent_event_add(fdevents *ev, int fd, int event); /* event  can be FDEVENT_IN or FDEVENT_OUT */
+void fdevent_event_clr(fdevents *ev, int fd, int event); /* event  can be FDEVENT_IN or FDEVENT_OUT */
+void fdevent_event_del(fdevents *ev, int fd);
 
 int fdevent_poll(fdevents *ev, int timeout_ms);
 

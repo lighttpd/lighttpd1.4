@@ -372,8 +372,7 @@ static void fdevent_fdnode_event_set(fdevents *ev, fdnode *fdn, int events) {
                         "fdevent event_set failed: ", strerror(errno));
 }
 
-void fdevent_event_del(fdevents *ev, int *fde_ndx, int fd) {
-    UNUSED(fde_ndx);
+void fdevent_event_del(fdevents *ev, int fd) {
     if (-1 != fd) {
         fdnode *fdn = ev->fdarray[fd];
         if ((uintptr_t)fdn & 0x3) return;
@@ -381,21 +380,18 @@ void fdevent_event_del(fdevents *ev, int *fde_ndx, int fd) {
     }
 }
 
-void fdevent_event_set(fdevents *ev, int *fde_ndx, int fd, int events) {
-    UNUSED(fde_ndx);
+void fdevent_event_set(fdevents *ev, int fd, int events) {
     if (-1 != fd) fdevent_fdnode_event_set(ev, ev->fdarray[fd], events);
 }
 
-void fdevent_event_add(fdevents *ev, int *fde_ndx, int fd, int event) {
-    UNUSED(fde_ndx);
+void fdevent_event_add(fdevents *ev, int fd, int event) {
     if (-1 != fd) {
         fdnode *fdn = ev->fdarray[fd];
         fdevent_fdnode_event_set(ev, fdn, (fdn->events | event));
     }
 }
 
-void fdevent_event_clr(fdevents *ev, int *fde_ndx, int fd, int event) {
-    UNUSED(fde_ndx);
+void fdevent_event_clr(fdevents *ev, int fd, int event) {
     if (-1 != fd) {
         fdnode *fdn = ev->fdarray[fd];
         fdevent_fdnode_event_set(ev, fdn, (fdn->events & ~event));

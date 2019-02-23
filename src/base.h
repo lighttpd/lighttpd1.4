@@ -213,7 +213,6 @@ struct connection {
 				      */
 
 	int fd;                      /* the FD for this connection */
-	int fde_ndx;                 /* index for the fdevent-handler */
 	int ndx;                     /* reverse mapping to server->connection[ndx] */
 
 	/* fd states */
@@ -349,7 +348,6 @@ typedef struct {
 typedef struct server_socket {
 	sock_addr addr;
 	int       fd;
-	int       fde_ndx;
 
 	unsigned short is_ssl;
 	unsigned short sidx;

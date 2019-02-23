@@ -204,7 +204,6 @@ static int network_server_init(server *srv, buffer *host_token, size_t sidx, int
 	force_assert(NULL != srv_socket);
 	memcpy(&srv_socket->addr, &addr, addr_len);
 	srv_socket->fd = -1;
-	srv_socket->fde_ndx = -1;
 	srv_socket->sidx = sidx;
 	srv_socket->is_ssl = s->ssl_enabled;
 	srv_socket->srv_token = buffer_init_buffer(host_token);
@@ -511,8 +510,8 @@ int network_init(server *srv, int stdin_fd) {
 }
 
 void network_unregister_sock(server *srv, server_socket *srv_socket) {
-	if (-1 == srv_socket->fd || -1 == srv_socket->fde_ndx) return;
-	fdevent_event_del(srv->ev, &srv_socket->fde_ndx, srv_socket->fd);
+	if (-1 == srv_socket->fd || NULL == srv->ev) return;
+	fdevent_event_del(srv->ev, srv_socket->fd);
 	fdevent_unregister(srv->ev, srv_socket->fd);
 }
 
@@ -530,7 +529,7 @@ int network_register_fdevents(server *srv) {
 		server_socket *srv_socket = srv->srv_sockets.ptr[i];
 
 		fdevent_register(srv->ev, srv_socket->fd, network_server_handle_fdevent, srv_socket);
-		fdevent_event_set(srv->ev, &(srv_socket->fde_ndx), srv_socket->fd, FDEVENT_IN);
+		fdevent_event_set(srv->ev, srv_socket->fd, FDEVENT_IN);
 	}
 	return 0;
 }

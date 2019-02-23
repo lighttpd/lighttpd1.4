@@ -110,7 +110,7 @@ static int connection_close(server *srv, connection *con) {
 	con->request_count = 0;
 	chunkqueue_reset(con->read_queue);
 
-	fdevent_event_del(srv->ev, &(con->fde_ndx), con->fd);
+	fdevent_event_del(srv->ev, con->fd);
 	fdevent_unregister(srv->ev, con->fd);
 #ifdef __WIN32
 	if (closesocket(con->fd)) {
@@ -531,7 +531,6 @@ static connection *connection_init(server *srv) {
 
 	con->fd = 0;
 	con->ndx = -1;
-	con->fde_ndx = -1;
 	con->bytes_written = 0;
 	con->bytes_read = 0;
 	con->bytes_header = 0;
@@ -917,7 +916,7 @@ static handler_t connection_handle_fdevent(server *srv, void *context, int reven
 			}
 			if (sock_addr_get_family(&con->dst_addr) == AF_UNIX) {
 				/* future: will getpeername() on AF_UNIX properly check if still connected? */
-				fdevent_event_set(srv->ev, &con->fde_ndx, con->fd, events);
+				fdevent_event_set(srv->ev, con->fd, events);
 			} else if (fdevent_is_tcp_half_closed(con->fd)) {
 				/* Success of fdevent_is_tcp_half_closed() after FDEVENT_RDHUP indicates TCP FIN received,
 				 * but does not distinguish between client shutdown(fd, SHUT_WR) and client close(fd).
@@ -927,7 +926,7 @@ static handler_t connection_handle_fdevent(server *srv, void *context, int reven
 				 * (without FDEVENT_RDHUP interest) when checking for write timeouts
 				 * once a second in server.c, though getpeername() on Windows might not indicate this */
 				con->conf.stream_request_body |= FDEVENT_STREAM_REQUEST_TCP_FIN;
-				fdevent_event_set(srv->ev, &con->fde_ndx, con->fd, events);
+				fdevent_event_set(srv->ev, con->fd, events);
 			} else {
 				/* Failure of fdevent_is_tcp_half_closed() indicates TCP RST
 				 * (or unable to tell (unsupported OS), though should not
@@ -1096,7 +1095,6 @@ connection *connection_accepted(server *srv, server_socket *srv_socket, sock_add
 		con = connections_get_new_connection(srv);
 
 		con->fd = cnt;
-		con->fde_ndx = -1;
 		fdevent_register(srv->ev, con->fd, connection_handle_fdevent, con);
 		con->network_read = connection_read_cq;
 		con->network_write = connection_write_cq;
@@ -1365,7 +1363,7 @@ int connection_state_machine(server *srv, connection *con) {
 			if ((r & FDEVENT_OUT) && !(events & FDEVENT_OUT)) {
 				con->write_request_ts = srv->cur_ts;
 			}
-			fdevent_event_set(srv->ev, &con->fde_ndx, con->fd, r);
+			fdevent_event_set(srv->ev, con->fd, r);
 		}
 	}
 
