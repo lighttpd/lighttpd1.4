@@ -196,66 +196,51 @@ fdevents *fdevent_init(server *srv) {
 	ev->maxfds = maxfds;
 
 	switch(type) {
+	#ifdef FDEVENT_USE_POLL
 	case FDEVENT_HANDLER_POLL:
-		if (0 != fdevent_poll_init(ev)) {
-			log_error_write(srv, __FILE__, __LINE__, "S",
-				"event-handler poll failed");
-			goto error;
-		}
-		return ev;
+		if (0 == fdevent_poll_init(ev)) return ev;
+		break;
+	#endif
+	#ifdef FDEVENT_USE_SELECT
 	case FDEVENT_HANDLER_SELECT:
-		if (0 != fdevent_select_init(ev)) {
-			log_error_write(srv, __FILE__, __LINE__, "S",
-				"event-handler select failed");
-			goto error;
-		}
-		return ev;
+		if (0 == fdevent_select_init(ev)) return ev;
+		break;
+	#endif
+	#ifdef FDEVENT_USE_LINUX_EPOLL
 	case FDEVENT_HANDLER_LINUX_SYSEPOLL:
-		if (0 != fdevent_linux_sysepoll_init(ev)) {
-			log_error_write(srv, __FILE__, __LINE__, "S",
-				"event-handler linux-sysepoll failed, try to set server.event-handler = \"poll\" or \"select\"");
-			goto error;
-		}
-		return ev;
+		if (0 == fdevent_linux_sysepoll_init(ev)) return ev;
+		break;
+	#endif
+	#ifdef FDEVENT_USE_SOLARIS_DEVPOLL
 	case FDEVENT_HANDLER_SOLARIS_DEVPOLL:
-		if (0 != fdevent_solaris_devpoll_init(ev)) {
-			log_error_write(srv, __FILE__, __LINE__, "S",
-				"event-handler solaris-devpoll failed, try to set server.event-handler = \"poll\" or \"select\"");
-			goto error;
-		}
-		return ev;
+		if (0 == fdevent_solaris_devpoll_init(ev)) return ev;
+		break;
+	#endif
+	#ifdef FDEVENT_USE_SOLARIS_PORT
 	case FDEVENT_HANDLER_SOLARIS_PORT:
-		if (0 != fdevent_solaris_port_init(ev)) {
-			log_error_write(srv, __FILE__, __LINE__, "S",
-				"event-handler solaris-eventports failed, try to set server.event-handler = \"poll\" or \"select\"");
-			goto error;
-		}
-		return ev;
+		if (0 == fdevent_solaris_port_init(ev)) return ev;
+		break;
+	#endif
+	#ifdef FDEVENT_USE_FREEBSD_KQUEUE
 	case FDEVENT_HANDLER_FREEBSD_KQUEUE:
-		if (0 != fdevent_freebsd_kqueue_init(ev)) {
-			log_error_write(srv, __FILE__, __LINE__, "S",
-				"event-handler freebsd-kqueue failed, try to set server.event-handler = \"poll\" or \"select\"");
-			goto error;
-		}
-		return ev;
+		if (0 == fdevent_freebsd_kqueue_init(ev)) return ev;
+		break;
+	#endif
+	#ifdef FDEVENT_USE_LIBEV
 	case FDEVENT_HANDLER_LIBEV:
-		if (0 != fdevent_libev_init(ev)) {
-			log_error_write(srv, __FILE__, __LINE__, "S",
-				"event-handler libev failed, try to set server.event-handler = \"poll\" or \"select\"");
-			goto error;
-		}
-		return ev;
+		if (0 == fdevent_libev_init(ev)) return ev;
+		break;
+	#endif
 	case FDEVENT_HANDLER_UNSET:
 	default:
 		break;
 	}
 
-error:
 	free(ev->fdarray);
 	free(ev);
 
-	log_error_write(srv, __FILE__, __LINE__, "S",
-		"event-handler is unknown, try to set server.event-handler = \"poll\" or \"select\"");
+	log_error_write(srv, __FILE__, __LINE__, "sBS",
+		"event-handler failed:", srv->srvconf.event_handler, "; try to set server.event-handler = \"poll\" or \"select\"");
 	return NULL;
 }
 
@@ -277,59 +262,44 @@ void fdevent_free(fdevents *ev) {
 }
 
 int fdevent_reset(fdevents *ev) {
-	if (ev->reset) return ev->reset(ev);
-
-	return 0;
+	int rc = (NULL != ev->reset) ? ev->reset(ev) : 0;
+	if (-1 == rc) {
+		log_error_write(ev->srv, __FILE__, __LINE__, "sBS",
+			"event-handler failed:", ev->srv->srvconf.event_handler, "; try to set server.event-handler = \"poll\" or \"select\"");
+	}
+	return rc;
 }
 
 static fdnode *fdnode_init(void) {
-	fdnode *fdn;
-
-	fdn = calloc(1, sizeof(*fdn));
-	force_assert(NULL != fdn);
-	fdn->fd = -1;
-	return fdn;
+	return calloc(1, sizeof(fdnode));
 }
 
 static void fdnode_free(fdnode *fdn) {
 	free(fdn);
 }
 
-int fdevent_register(fdevents *ev, int fd, fdevent_handler handler, void *ctx) {
-	fdnode *fdn;
-
-	fdn = fdnode_init();
+void fdevent_register(fdevents *ev, int fd, fdevent_handler handler, void *ctx) {
+	fdnode *fdn  = ev->fdarray[fd] = fdnode_init();
+	force_assert(NULL != fdn);
 	fdn->handler = handler;
 	fdn->fd      = fd;
 	fdn->ctx     = ctx;
 	fdn->events  = 0;
+	fdn->fde_ndx = -1;
       #ifdef FDEVENT_USE_LIBEV
 	fdn->handler_ctx = NULL;
       #endif
-
-	ev->fdarray[fd] = fdn;
-
-	return 0;
 }
 
-int fdevent_unregister(fdevents *ev, int fd) {
-	fdnode *fdn;
-
-	if (!ev) return 0;
-	fdn = ev->fdarray[fd];
-	if ((uintptr_t)fdn & 0x3) return 0; /*(should not happen)*/
-
-	fdnode_free(fdn);
-
+void fdevent_unregister(fdevents *ev, int fd) {
+	fdnode *fdn = ev->fdarray[fd];
+	if ((uintptr_t)fdn & 0x3) return; /*(should not happen)*/
 	ev->fdarray[fd] = NULL;
-
-	return 0;
+	fdnode_free(fdn);
 }
 
 void fdevent_sched_close(fdevents *ev, int fd, int issock) {
-	fdnode *fdn;
-	if (!ev) return;
-	fdn = ev->fdarray[fd];
+	fdnode *fdn = ev->fdarray[fd];
 	if ((uintptr_t)fdn & 0x3) return;
 	ev->fdarray[fd] = (fdnode *)((uintptr_t)fdn | (issock ? 0x1 : 0x2));
 	fdn->ctx = ev->pendclose;
@@ -376,70 +346,64 @@ int fdevent_event_get_interest(const fdevents *ev, int fd) {
 	return fd >= 0 ? ev->fdarray[fd]->events : 0;
 }
 
-void fdevent_event_del(fdevents *ev, int *fde_ndx, int fd) {
-	if (-1 == fd) return;
-	if ((uintptr_t)ev->fdarray[fd] & 0x3) return;
+static void fdevent_fdnode_event_del(fdevents *ev, fdnode *fdn) {
+    if (-1 == fdn->fde_ndx) return;
+    if (0 == ev->event_del(ev, fdn)) {
+        fdn->fde_ndx = -1;
+        fdn->events = 0;
+    }
+    else {
+        log_error_write(ev->srv, __FILE__, __LINE__, "SS",
+                        "fdevent event_del failed: ", strerror(errno));
+    }
+}
 
-	if (ev->event_del) *fde_ndx = ev->event_del(ev, *fde_ndx, fd);
-	ev->fdarray[fd]->events = 0;
+static void fdevent_fdnode_event_set(fdevents *ev, fdnode *fdn, int events) {
+    /*(Note: skips registering with kernel if initial events is 0,
+     * so caller should pass non-zero events for initial registration.
+     * If never registered due to never being called with non-zero events,
+     * then FDEVENT_HUP or FDEVENT_ERR will never be returned.) */
+    if (fdn->events == events) return;/*(no change; nothing to do)*/
+
+    if (0 == ev->event_set(ev, fdn, events))
+        fdn->events = events;
+    else
+        log_error_write(ev->srv, __FILE__, __LINE__, "SS",
+                        "fdevent event_set failed: ", strerror(errno));
+}
+
+void fdevent_event_del(fdevents *ev, int *fde_ndx, int fd) {
+    UNUSED(fde_ndx);
+    if (-1 != fd) {
+        fdnode *fdn = ev->fdarray[fd];
+        if ((uintptr_t)fdn & 0x3) return;
+        fdevent_fdnode_event_del(ev, fdn);
+    }
 }
 
 void fdevent_event_set(fdevents *ev, int *fde_ndx, int fd, int events) {
-	if (-1 == fd) return;
-
-	/*(Note: skips registering with kernel if initial events is 0,
-         * so caller should pass non-zero events for initial registration.
-         * If never registered due to never being called with non-zero events,
-         * then FDEVENT_HUP or FDEVENT_ERR will never be returned.) */
-	if (ev->fdarray[fd]->events == events) return;/*(no change; nothing to do)*/
-
-	if (ev->event_set) *fde_ndx = ev->event_set(ev, *fde_ndx, fd, events);
-	ev->fdarray[fd]->events = events;
+    UNUSED(fde_ndx);
+    if (-1 != fd) fdevent_fdnode_event_set(ev, ev->fdarray[fd], events);
 }
 
 void fdevent_event_add(fdevents *ev, int *fde_ndx, int fd, int event) {
-	int events;
-	if (-1 == fd) return;
-
-	events = ev->fdarray[fd]->events;
-	if ((events & event) == event) return; /*(no change; nothing to do)*/
-
-	events |= event;
-	if (ev->event_set) *fde_ndx = ev->event_set(ev, *fde_ndx, fd, events);
-	ev->fdarray[fd]->events = events;
+    UNUSED(fde_ndx);
+    if (-1 != fd) {
+        fdnode *fdn = ev->fdarray[fd];
+        fdevent_fdnode_event_set(ev, fdn, (fdn->events | event));
+    }
 }
 
 void fdevent_event_clr(fdevents *ev, int *fde_ndx, int fd, int event) {
-	int events;
-	if (-1 == fd) return;
-
-	events = ev->fdarray[fd]->events;
-	if (!(events & event)) return; /*(no change; nothing to do)*/
-
-	events &= ~event;
-	if (ev->event_set) *fde_ndx = ev->event_set(ev, *fde_ndx, fd, events);
-	ev->fdarray[fd]->events = events;
+    UNUSED(fde_ndx);
+    if (-1 != fd) {
+        fdnode *fdn = ev->fdarray[fd];
+        fdevent_fdnode_event_set(ev, fdn, (fdn->events & ~event));
+    }
 }
 
 int fdevent_poll(fdevents *ev, int timeout_ms) {
-	if (ev->poll == NULL) SEGFAULT();
 	return ev->poll(ev, timeout_ms);
-}
-
-fdevent_handler fdevent_get_handler(fdevents *ev, int fd) {
-	if (ev->fdarray[fd] == NULL) SEGFAULT();
-	if ((uintptr_t)ev->fdarray[fd] & 0x3) return NULL;
-	if (ev->fdarray[fd]->fd != fd) SEGFAULT();
-
-	return ev->fdarray[fd]->handler;
-}
-
-void * fdevent_get_context(fdevents *ev, int fd) {
-	if (ev->fdarray[fd] == NULL) SEGFAULT();
-	if ((uintptr_t)ev->fdarray[fd] & 0x3) return NULL;
-	if (ev->fdarray[fd]->fd != fd) SEGFAULT();
-
-	return ev->fdarray[fd]->ctx;
 }
 
 void fdevent_setfd_cloexec(int fd) {

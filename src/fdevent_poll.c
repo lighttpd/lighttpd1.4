@@ -3,9 +3,6 @@
 #include "fdevent_impl.h"
 #include "fdevent.h"
 #include "buffer.h"
-#include "log.h"
-
-#include <sys/types.h>
 
 #include <unistd.h>
 #include <stdlib.h>
@@ -20,26 +17,16 @@
 #  include <sys/poll.h>
 # endif
 
-#ifndef POLLRDHUP
-#define POLLRDHUP 0
-#endif
-
+__attribute_cold__
 static void fdevent_poll_free(fdevents *ev) {
 	free(ev->pollfds);
 	if (ev->unused.ptr) free(ev->unused.ptr);
 }
 
-static int fdevent_poll_event_del(fdevents *ev, int fde_ndx, int fd) {
-	if (fde_ndx < 0) return -1;
-
-	if ((size_t)fde_ndx >= ev->used) {
-		log_error_write(ev->srv, __FILE__, __LINE__, "SdD",
-			"del! out of range ", fde_ndx, (int) ev->used);
-		SEGFAULT();
-	}
-
-	if (ev->pollfds[fde_ndx].fd == fd) {
-		size_t k = fde_ndx;
+static int fdevent_poll_event_del(fdevents *ev, fdnode *fdn) {
+	int fd = fdn->fd;
+	int k = fdn->fde_ndx;
+	if ((size_t)k >= ev->used || ev->pollfds[k].fd != fd) return (errno = EINVAL, -1);
 
 		ev->pollfds[k].fd = -1;
 		/* ev->pollfds[k].events = 0; */
@@ -52,28 +39,18 @@ static int fdevent_poll_event_del(fdevents *ev, int fde_ndx, int fd) {
 		}
 
 		ev->unused.ptr[ev->unused.used++] = k;
-	} else {
-		log_error_write(ev->srv, __FILE__, __LINE__, "SdD",
-			"del! ", ev->pollfds[fde_ndx].fd, fd);
 
-		SEGFAULT();
-	}
-
-	return -1;
+	return 0;
 }
 
-static int fdevent_poll_event_set(fdevents *ev, int fde_ndx, int fd, int events) {
-	int k;
+static int fdevent_poll_event_set(fdevents *ev, fdnode *fdn, int events) {
+	int fd = fdn->fd;
+	int k = fdn->fde_ndx;
 
-	if (fde_ndx != -1) {
-		if (ev->pollfds[fde_ndx].fd == fd) {
-			ev->pollfds[fde_ndx].events = events;
-
-			return fde_ndx;
-		}
-		log_error_write(ev->srv, __FILE__, __LINE__, "SdD",
-			"set: ", fde_ndx, ev->pollfds[fde_ndx].fd);
-		SEGFAULT();
+	if (k >= 0) {
+		if ((size_t)k >= ev->used || ev->pollfds[k].fd != fd) return (errno = EINVAL, -1);
+		ev->pollfds[k].events = events;
+		return 0;
 	}
 
 	if (ev->unused.used > 0) {
@@ -89,10 +66,11 @@ static int fdevent_poll_event_set(fdevents *ev, int fde_ndx, int fd, int events)
 		k = ev->used++;
 	}
 
+	fdn->fde_ndx = k;
 	ev->pollfds[k].fd = fd;
 	ev->pollfds[k].events = events;
 
-	return k;
+	return 0;
 }
 
 static int fdevent_poll_next_ndx(const fdevents *ev, int ndx) {
@@ -106,8 +84,8 @@ static int fdevent_poll_poll(fdevents *ev, int timeout_ms) {
     const int n = poll(ev->pollfds, ev->used, timeout_ms);
     server * const srv = ev->srv;
     for (int ndx=-1,i=0; i<n && -1!=(ndx=fdevent_poll_next_ndx(ev,ndx)); ++i){
-        int revents = ev->pollfds[ndx].revents;
         fdnode *fdn = ev->fdarray[ev->pollfds[ndx].fd];
+        int revents = ev->pollfds[ndx].revents;
         if (0 == ((uintptr_t)fdn & 0x3)) {
             (*fdn->handler)(srv, fdn->ctx, revents);
         }
@@ -115,39 +93,24 @@ static int fdevent_poll_poll(fdevents *ev, int timeout_ms) {
     return n;
 }
 
+__attribute_cold__
 int fdevent_poll_init(fdevents *ev) {
-	ev->type = FDEVENT_HANDLER_POLL;
 	force_assert(POLLIN    == FDEVENT_IN);
 	force_assert(POLLPRI   == FDEVENT_PRI);
 	force_assert(POLLOUT   == FDEVENT_OUT);
 	force_assert(POLLERR   == FDEVENT_ERR);
 	force_assert(POLLHUP   == FDEVENT_HUP);
 	force_assert(POLLNVAL  == FDEVENT_NVAL);
-      #if 0 != POLLRDHUP
+      #ifdef POLLRDHUP
 	force_assert(POLLRDHUP == FDEVENT_RDHUP);
       #endif
-#define SET(x) \
-	ev->x = fdevent_poll_##x;
 
-	SET(free);
-	SET(poll);
-
-	SET(event_del);
-	SET(event_set);
-
+	ev->type      = FDEVENT_HANDLER_POLL;
+	ev->event_set = fdevent_poll_event_set;
+	ev->event_del = fdevent_poll_event_del;
+	ev->poll      = fdevent_poll_poll;
+	ev->free      = fdevent_poll_free;
 	return 0;
 }
 
-
-
-
-#else
-int fdevent_poll_init(fdevents *ev) {
-	UNUSED(ev);
-
-	log_error_write(ev->srv, __FILE__, __LINE__,
-		"s", "poll is not supported, try to set server.event-handler = \"select\"");
-
-	return -1;
-}
 #endif

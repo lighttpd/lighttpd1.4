@@ -3,34 +3,29 @@
 #include "fdevent_impl.h"
 #include "fdevent.h"
 #include "buffer.h"
-#include "log.h"
-
-#include <sys/types.h>
 
 #include <unistd.h>
 #include <stdlib.h>
 #include <string.h>
-#include <errno.h>
 #include <fcntl.h>
 
 #ifdef FDEVENT_USE_FREEBSD_KQUEUE
+
 # include <sys/event.h>
 # include <sys/time.h>
 
+__attribute_cold__
 static void fdevent_freebsd_kqueue_free(fdevents *ev) {
 	close(ev->kq_fd);
 	free(ev->kq_results);
 }
 
-static int fdevent_freebsd_kqueue_event_del(fdevents *ev, int fde_ndx, int fd) {
-	int ret, n = 0;
+static int fdevent_freebsd_kqueue_event_del(fdevents *ev, fdnode *fdn) {
 	struct kevent kev[2];
-	struct timespec ts;
-	int oevents;
-
-	if (fde_ndx < 0) return -1;
-
-	oevents = ev->fdarray[fd]->events;
+	struct timespec ts = {0, 0};
+	int fd = fdn->fd;
+	int n = 0;
+	int oevents = fdn->events;
 
 	if (oevents & FDEVENT_IN)  {
 		EV_SET(&kev[n], fd, EVFILT_READ, EV_DELETE, 0, 0, NULL);
@@ -41,37 +36,17 @@ static int fdevent_freebsd_kqueue_event_del(fdevents *ev, int fde_ndx, int fd) {
 		n++;
 	}
 
-	if (0 == n) return -1;
-
-	ts.tv_sec  = 0;
-	ts.tv_nsec = 0;
-
-	ret = kevent(ev->kq_fd,
-		kev, n,
-		NULL, 0,
-		&ts);
-
-	if (ret == -1) {
-		log_error_write(ev->srv, __FILE__, __LINE__, "SS",
-			"kqueue event delete failed: ", strerror(errno));
-
-		return -1;
-	}
-
-	return -1;
+	return (0 != n) ? kevent(ev->kq_fd, kev, n, NULL, 0, &ts) : 0;
 }
 
-static int fdevent_freebsd_kqueue_event_set(fdevents *ev, int fde_ndx, int fd, int events) {
-	int ret, n = 0;
+static int fdevent_freebsd_kqueue_event_set(fdevents *ev, fdnode *fdn, int events) {
 	struct kevent kev[2];
-	struct timespec ts;
-	int oevents = ev->fdarray[fd]->events;
+	struct timespec ts = {0, 0};
+	int fd = fdn->fde_ndx = fdn->fd;
+	int n = 0;
+	int oevents = fdn->events;
 	int addevents = events & ~oevents;
 	int delevents = ~events & oevents;
-
-	UNUSED(fde_ndx);
-
-	if (events == oevents) return fd;
 
 	if (addevents & FDEVENT_IN)  {
 		EV_SET(&kev[n], fd, EVFILT_READ, EV_ADD, 0, 0, NULL);
@@ -88,50 +63,7 @@ static int fdevent_freebsd_kqueue_event_set(fdevents *ev, int fde_ndx, int fd, i
 		n++;
 	}
 
-	if (0 == n) return fd;
-
-	ts.tv_sec  = 0;
-	ts.tv_nsec = 0;
-
-	ret = kevent(ev->kq_fd,
-		kev, n,
-		NULL, 0,
-		&ts);
-
-	if (ret == -1) {
-		log_error_write(ev->srv, __FILE__, __LINE__, "SS",
-			"kqueue event set failed: ", strerror(errno));
-
-		return -1;
-	}
-
-	return fd;
-}
-
-static int fdevent_freebsd_kqueue_event_get_revent(const fdevents *ev, size_t ndx) {
-	int events = 0;
-	int filt = ev->kq_results[ndx].filter;
-	int e = ev->kq_results[ndx].flags;
-
-	if (filt == EVFILT_READ) {
-		events |= FDEVENT_IN;
-	} else if (filt == EVFILT_WRITE) {
-		events |= FDEVENT_OUT;
-	}
-
-	if (e & EV_EOF) {
-		if (filt == EVFILT_READ) {
-			events |= FDEVENT_RDHUP;
-		} else {
-			events |= FDEVENT_HUP;
-		}
-	}
-
-	if (e & EV_ERROR) {
-		events |= FDEVENT_ERR;
-	}
-
-	return events;
+	return (0 != n) ? kevent(ev->kq_fd, kev, n, NULL, 0, &ts) : 0;
 }
 
 static int fdevent_freebsd_kqueue_poll(fdevents * const ev, int timeout_ms) {
@@ -146,64 +78,37 @@ static int fdevent_freebsd_kqueue_poll(fdevents * const ev, int timeout_ms) {
 
     for (int i = 0; i < n; ++i) {
         fdnode * const fdn = ev->fdarray[ev->kq_results[i].ident];
+        int filt = ev->kq_results[i].filter;
+        int e = ev->kq_results[i].flags;
         if (0 == ((uintptr_t)fdn & 0x3)) {
-            int revents = fdevent_freebsd_kqueue_event_get_revent(ev, i);
+            int revents = (filt == EVFILT_READ) ? FDEVENT_IN : FDEVENT_OUT;
+            if (e & EV_EOF)
+                revents |= (filt == EVFILT_READ ? FDEVENT_RDHUP : FDEVENT_HUP);
+            if (e & EV_ERROR)
+                revents |= FDEVENT_ERR;
             (*fdn->handler)(srv, fdn->ctx, revents);
         }
     }
     return n;
 }
 
+__attribute_cold__
 static int fdevent_freebsd_kqueue_reset(fdevents *ev) {
-	if (-1 == (ev->kq_fd = kqueue())) {
-		log_error_write(ev->srv, __FILE__, __LINE__, "SSS",
-			"kqueue failed (", strerror(errno), "), try to set server.event-handler = \"poll\" or \"select\"");
-
-		return -1;
-	}
-
-	return 0;
+	return (-1 != (ev->kq_fd = kqueue())) ? 0 : -1;
 }
 
-
+__attribute_cold__
 int fdevent_freebsd_kqueue_init(fdevents *ev) {
-	ev->type = FDEVENT_HANDLER_FREEBSD_KQUEUE;
-#define SET(x) \
-	ev->x = fdevent_freebsd_kqueue_##x;
-
-	SET(free);
-	SET(poll);
-	SET(reset);
-
-	SET(event_del);
-	SET(event_set);
-
-	ev->kq_fd = -1;
-
+	ev->type       = FDEVENT_HANDLER_FREEBSD_KQUEUE;
+	ev->event_set  = fdevent_freebsd_kqueue_event_set;
+	ev->event_del  = fdevent_freebsd_kqueue_event_del;
+	ev->poll       = fdevent_freebsd_kqueue_poll;
+	ev->reset      = fdevent_freebsd_kqueue_reset;
+	ev->free       = fdevent_freebsd_kqueue_free;
+	ev->kq_fd      = -1;
 	ev->kq_results = calloc(ev->maxfds, sizeof(*ev->kq_results));
 	force_assert(NULL != ev->kq_results);
-
-	/* check that kqueue works */
-
-	if (-1 == (ev->kq_fd = kqueue())) {
-		log_error_write(ev->srv, __FILE__, __LINE__, "SSS",
-			"kqueue failed (", strerror(errno), "), try to set server.event-handler = \"poll\" or \"select\"");
-
-		return -1;
-	}
-
-	close(ev->kq_fd);
-	ev->kq_fd = -1;
-
 	return 0;
 }
-#else
-int fdevent_freebsd_kqueue_init(fdevents *ev) {
-	UNUSED(ev);
 
-	log_error_write(ev->srv, __FILE__, __LINE__, "S",
-		"kqueue not available, try to set server.event-handler = \"poll\" or \"select\"");
-
-	return -1;
-}
 #endif

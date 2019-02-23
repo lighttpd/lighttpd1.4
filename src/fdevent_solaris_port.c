@@ -5,8 +5,6 @@
 #include "buffer.h"
 #include "log.h"
 
-#include <sys/types.h>
-
 #include <unistd.h>
 #include <stdlib.h>
 #include <string.h>
@@ -16,48 +14,18 @@
 #ifdef FDEVENT_USE_SOLARIS_PORT
 
 #include <sys/poll.h>
-static const int SOLARIS_PORT_POLL_READ       = POLLIN;
-static const int SOLARIS_PORT_POLL_WRITE      = POLLOUT;
-static const int SOLARIS_PORT_POLL_READ_WRITE = POLLIN & POLLOUT;
 
-static int fdevent_solaris_port_event_del(fdevents *ev, int fde_ndx, int fd) {
-	if (fde_ndx < 0) return -1;
-
-	if (0 != port_dissociate(ev->port_fd, PORT_SOURCE_FD, fd)) {
-		log_error_write(ev->srv, __FILE__, __LINE__, "SSS",
-			"port_dissociate failed: ", strerror(errno), ", dying");
-
-		SEGFAULT();
-
-		return 0;
-	}
-
-	return -1;
+static int fdevent_solaris_port_event_del(fdevents *ev, fdnode *fdn) {
+    return port_dissociate(ev->port_fd, PORT_SOURCE_FD, fdn->fd);
 }
 
-static int fdevent_solaris_port_event_set(fdevents *ev, int fde_ndx, int fd, int events) {
-	const int* user_data = NULL;
-
-	if ((events & FDEVENT_IN) && (events & FDEVENT_OUT)) {
-		user_data = &SOLARIS_PORT_POLL_READ_WRITE;
-	} else if (events & FDEVENT_IN) {
-		user_data = &SOLARIS_PORT_POLL_READ;
-	} else if (events & FDEVENT_OUT) {
-		user_data = &SOLARIS_PORT_POLL_WRITE;
-	}
-
-	if (0 != port_associate(ev->port_fd, PORT_SOURCE_FD, fd, *user_data, (void*) user_data)) {
-		log_error_write(ev->srv, __FILE__, __LINE__, "SSS",
-			"port_associate failed: ", strerror(errno), ", dying");
-
-		SEGFAULT();
-
-		return 0;
-	}
-
-	return fd;
+static int fdevent_solaris_port_event_set(fdevents *ev, fdnode *fdn, int events) {
+    int fd = fdn->fdn_ndx = fdn->fd;
+    intptr_t ud = events & (POLLIN|POLLOUT);
+    return port_associate(ev->port_fd,PORT_SOURCE_FD,fd,(int)ud,(void*)ud);
 }
 
+__attribute_cold__
 static void fdevent_solaris_port_free(fdevents *ev) {
 	close(ev->port_fd);
 	free(ev->port_events);
@@ -65,10 +33,9 @@ static void fdevent_solaris_port_free(fdevents *ev) {
 
 /* if there is any error it will return the return values of port_getn, otherwise it will return number of events **/
 static int fdevent_solaris_port_poll(fdevents *ev, int timeout_ms) {
-	int i = 0;
+	const int pfd = ev->port_fd;
 	int ret;
 	unsigned int available_events, wait_for_events = 0;
-	const int *user_data;
 
 	struct timespec  timeout;
 
@@ -76,7 +43,7 @@ static int fdevent_solaris_port_poll(fdevents *ev, int timeout_ms) {
 	timeout.tv_nsec = (timeout_ms % 1000L) * 1000000L;
 
 	/* get the number of file descriptors with events */
-	if ((ret = port_getn(ev->port_fd, ev->port_events, 0, &wait_for_events, &timeout)) < 0) return ret;
+	if ((ret = port_getn(pfd, ev->port_events, 0, &wait_for_events, &timeout)) < 0) return ret;
 
 	/* wait for at least one event */
 	if (0 == wait_for_events) wait_for_events = 1;
@@ -84,38 +51,33 @@ static int fdevent_solaris_port_poll(fdevents *ev, int timeout_ms) {
 	available_events = wait_for_events;
 
 	/* get the events of the file descriptors */
-	if ((ret = port_getn(ev->port_fd, ev->port_events, ev->maxfds, &available_events, &timeout)) < 0) {
+	if ((ret = port_getn(pfd, ev->port_events, ev->maxfds, &available_events, &timeout)) < 0) {
 		/* if errno == ETIME and available_event == wait_for_events we didn't get any events */
 		/* for other errors we didn't get any events either */
 		if (!(errno == ETIME && wait_for_events != available_events)) return ret;
 	}
 
-	for (i = 0; i < (int)available_events; ++i) {
-		user_data = (const int *) ev->port_events[i].portev_user;
-
-		if ((ret = port_associate(ev->port_fd, PORT_SOURCE_FD, ev->port_events[i].portev_object,
-			*user_data, (void*) user_data)) < 0) {
-			log_error_write(ev->srv, __FILE__, __LINE__, "SSS",
-				"port_associate failed: ", strerror(errno), ", dying");
-
-			SEGFAULT();
-
-			return 0;
-		}
-	}
-
-    for (i = 0; i < available_events; ++i) {
+    for (int i = 0; i < (int)available_events; ++i) {
+        int fd = (int)ev->port_events[i].portev_object;
+        fdnode * const fdn = ev->fdarray[fd];
+        const intptr_t ud = (intptr_t)ev->port_events[i].portev_user;
         int revents = ev->port_events[i].portev_events;
-        fdnode * const fdn = ev->fdarray[ev->port_events[i].portev_object];
         if (0 == ((uintptr_t)fdn & 0x3)) {
+            if (port_associate(pfd,PORT_SOURCE_FD,fd,(int)ud,(void*)ud) < 0) {
+                log_error_write(ev->srv, __FILE__, __LINE__, "SS",
+                                "port_associate failed: ", strerror(errno));
+            }
             (*fdn->handler)(ev->srv, fdn->ctx, revents);
+        }
+        else {
+            fdn->fde_ndx = -1;
         }
     }
     return available_events;
 }
 
+__attribute_cold__
 int fdevent_solaris_port_init(fdevents *ev) {
-	ev->type = FDEVENT_HANDLER_SOLARIS_PORT;
 	force_assert(POLLIN    == FDEVENT_IN);
 	force_assert(POLLPRI   == FDEVENT_PRI);
 	force_assert(POLLOUT   == FDEVENT_OUT);
@@ -123,35 +85,18 @@ int fdevent_solaris_port_init(fdevents *ev) {
 	force_assert(POLLHUP   == FDEVENT_HUP);
 	force_assert(POLLNVAL  == FDEVENT_NVAL);
 	force_assert(POLLRDHUP == FDEVENT_RDHUP);
-#define SET(x) \
-	ev->x = fdevent_solaris_port_##x;
 
-	SET(free);
-	SET(poll);
-
-	SET(event_del);
-	SET(event_set);
-
-	if ((ev->port_fd = port_create()) < 0) {
-		log_error_write(ev->srv, __FILE__, __LINE__, "SSS",
-			"port_create() failed (", strerror(errno), "), try to set server.event-handler = \"poll\" or \"select\"");
-
-		return -1;
-	}
-
+	ev->type        = FDEVENT_HANDLER_SOLARIS_PORT;
+	ev->event_set   = fdevent_solaris_port_event_set;
+	ev->event_del   = fdevent_solaris_port_event_del;
+	ev->poll        = fdevent_solaris_port_poll;
+	ev->free        = fdevent_solaris_port_free;
 	ev->port_events = malloc(ev->maxfds * sizeof(*ev->port_events));
 	force_assert(NULL != ev->port_events);
+
+	if ((ev->port_fd = port_create()) < 0) return -1;
 
 	return 0;
 }
 
-#else
-int fdevent_solaris_port_init(fdevents *ev) {
-	UNUSED(ev);
-
-	log_error_write(ev->srv, __FILE__, __LINE__, "S",
-		"solaris-eventports not supported, try to set server.event-handler = \"poll\" or \"select\"");
-
-	return -1;
-}
 #endif

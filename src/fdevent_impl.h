@@ -65,6 +65,7 @@ typedef struct _fdnode {
     void *ctx;
     int fd;
     int events;
+    int fde_ndx;
   #ifdef FDEVENT_USE_LIBEV
     void *handler_ctx;
   #endif
@@ -88,8 +89,8 @@ struct fdevents {
     fdnode **fdarray;
     fdnode *pendclose;
 
-    int (*event_set)(struct fdevents *ev, int fde_ndx, int fd, int events);
-    int (*event_del)(struct fdevents *ev, int fde_ndx, int fd);
+    int (*event_set)(struct fdevents *ev, fdnode *fdn, int events);
+    int (*event_del)(struct fdevents *ev, fdnode *fdn);
     int (*poll)(struct fdevents *ev, int timeout_ms);
 
     struct server *srv;
@@ -138,12 +139,19 @@ struct fdevents {
     fdevent_handler_t type;
 };
 
+__attribute_cold__
 int fdevent_select_init(struct fdevents *ev);
+__attribute_cold__
 int fdevent_poll_init(struct fdevents *ev);
+__attribute_cold__
 int fdevent_linux_sysepoll_init(struct fdevents *ev);
+__attribute_cold__
 int fdevent_solaris_devpoll_init(struct fdevents *ev);
+__attribute_cold__
 int fdevent_solaris_port_init(struct fdevents *ev);
+__attribute_cold__
 int fdevent_freebsd_kqueue_init(struct fdevents *ev);
+__attribute_cold__
 int fdevent_libev_init(struct fdevents *ev);
 
 #endif
