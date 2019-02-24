@@ -82,7 +82,7 @@ static int ssl_is_init;
 /* need assigned p->id for deep access of module handler_ctx for connection
  *   i.e. handler_ctx *hctx = con->plugin_ctx[plugin_data_singleton->id]; */
 static plugin_data *plugin_data_singleton;
-#define LOCAL_SEND_BUFSIZE (64 * 1024)
+#define LOCAL_SEND_BUFSIZE (16 * 1024)
 static char *local_send_buffer;
 
 typedef struct {
@@ -1435,7 +1435,7 @@ load_next_chunk (server *srv, chunkqueue *cq, off_t max_bytes,
 {
     chunk *c = cq->first;
 
-    /* local_send_buffer is a 64k sendbuffer (LOCAL_SEND_BUFSIZE)
+    /* local_send_buffer is a static buffer of size (LOCAL_SEND_BUFSIZE)
      *
      * it has to stay at the same location all the time to satisfy the needs
      * of SSL_write to pass the SAME parameter in case of a _WANT_WRITE
