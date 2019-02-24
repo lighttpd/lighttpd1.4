@@ -800,8 +800,6 @@ static void connection_read_header(server *srv, connection *con)  {
     if (NULL != save) buffer_free(save);
     buffer_reset(con->request.request);
 
-    if (!con->conf.allow_http11) con->request.http_version = HTTP_VERSION_1_0;
-
     connection_set_state(srv, con, CON_STATE_REQUEST_END);
 }
 
