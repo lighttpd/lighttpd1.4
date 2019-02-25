@@ -2003,7 +2003,6 @@ static int server_main_loop (server * const srv) {
 	time_t last_active_ts = time(NULL);
 
 	while (!srv_shutdown) {
-		int n;
 
 		if (handle_sig_hup) {
 			handle_sig_hup = 0;
@@ -2043,13 +2042,8 @@ static int server_main_loop (server * const srv) {
 			server_process_want_fds(srv);
 		}
 
-		if ((n = fdevent_poll(srv->ev, 1000)) >= 0) {
-			if (n > 0) last_active_ts = srv->cur_ts;
-			fdevent_sched_run(srv, srv->ev);
-		} else if (errno != EINTR) {
-			log_error_write(srv, __FILE__, __LINE__, "ss",
-					"fdevent_poll failed:",
-					strerror(errno));
+		if (fdevent_poll(srv->ev, 1000) > 0) {
+			last_active_ts = srv->cur_ts;
 		}
 
 		for (size_t ndx = 0; ndx < joblist->used; ++ndx) {

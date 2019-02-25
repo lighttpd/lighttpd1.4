@@ -306,7 +306,8 @@ void fdevent_sched_close(fdevents *ev, int fd, int issock) {
 	ev->pendclose = fdn;
 }
 
-void fdevent_sched_run(server *srv, fdevents *ev) {
+static void fdevent_sched_run(fdevents *ev) {
+	server *srv = ev->srv;
 	for (fdnode *fdn = ev->pendclose; fdn; ) {
 		int fd, rc;
 		fdnode *fdn_tmp;
@@ -399,7 +400,13 @@ void fdevent_event_clr(fdevents *ev, int fd, int event) {
 }
 
 int fdevent_poll(fdevents *ev, int timeout_ms) {
-	return ev->poll(ev, timeout_ms);
+    int n = ev->poll(ev, timeout_ms);
+    if (n >= 0)
+        fdevent_sched_run(ev);
+    else if (errno != EINTR)
+        log_error_write(ev->srv, __FILE__, __LINE__, "SS",
+                        "fdevent_poll failed: ", strerror(errno));
+    return n;
 }
 
 void fdevent_setfd_cloexec(int fd) {

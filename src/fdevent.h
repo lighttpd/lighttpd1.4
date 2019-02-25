@@ -61,7 +61,6 @@ int fdevent_poll(fdevents *ev, int timeout_ms);
 void fdevent_register(fdevents *ev, int fd, fdevent_handler handler, void *ctx);
 void fdevent_unregister(fdevents *ev, int fd);
 void fdevent_sched_close(fdevents *ev, int fd, int issock);
-void fdevent_sched_run(struct server *srv, fdevents *ev);
 
 void fdevent_setfd_cloexec(int fd);
 void fdevent_clrfd_cloexec(int fd);
