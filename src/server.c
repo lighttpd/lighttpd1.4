@@ -995,6 +995,51 @@ static void server_graceful_state (server *srv) {
 }
 
 __attribute_cold__
+static void server_sockets_enable (server *srv) {
+    server_sockets_set_event(srv, FDEVENT_IN);
+    srv->sockets_disabled = 0;
+    log_error_write(srv, __FILE__, __LINE__, "s",
+                    "[note] sockets enabled again");
+}
+
+__attribute_cold__
+static void server_sockets_disable (server *srv) {
+    server_sockets_set_event(srv, 0);
+    srv->sockets_disabled = 1;
+    log_error_write(srv, __FILE__, __LINE__, "s",
+                    (srv->conns->used >= srv->max_conns)
+                    ? "[note] sockets disabled, connection limit reached"
+                    : "[note] sockets disabled, out-of-fds");
+}
+
+__attribute_cold__
+static void server_overload_check (server *srv) {
+    if (srv->cur_fds + srv->want_fds < srv->max_fds_lowat
+        && srv->conns->used <= srv->max_conns * 9 / 10) {
+
+        server_sockets_enable(srv);
+    }
+}
+
+static void server_load_check (server *srv) {
+    if (srv->cur_fds + srv->want_fds > srv->max_fds_hiwat  /* out of fds */
+        || srv->conns->used >= srv->max_conns) {   /* out of connections */
+
+        server_sockets_disable(srv);
+    }
+}
+
+__attribute_cold__
+static void server_process_want_fds (server *srv) {
+    for (int n = srv->max_fds - srv->cur_fds - 16; n > 0; --n) {
+        connection *con = fdwaitqueue_unshift(srv, srv->fdwaitqueue);
+        if (NULL == con) break;
+        connection_state_machine(srv, con);
+        --srv->want_fds;
+    }
+}
+
+__attribute_cold__
 static int server_main (server * const srv, int argc, char **argv) {
 	int print_config = 0;
 	int test_config = 0;
@@ -1989,42 +2034,13 @@ static int server_main_loop (server * const srv) {
 				break;
 			}
 		} else if (srv->sockets_disabled) {
-			/* our server sockets are disabled, why ? */
-
-			if ((srv->cur_fds + srv->want_fds < srv->max_fds_lowat) && /* we have enough unused fds */
-			    (srv->conns->used <= srv->max_conns * 9 / 10)) {
-				server_sockets_set_event(srv, FDEVENT_IN);
-				log_error_write(srv, __FILE__, __LINE__, "s", "[note] sockets enabled again");
-
-				srv->sockets_disabled = 0;
-			}
+			server_overload_check(srv);
 		} else {
-			if ((srv->cur_fds + srv->want_fds > srv->max_fds_hiwat) || /* out of fds */
-			    (srv->conns->used >= srv->max_conns)) { /* out of connections */
-				/* disable server-fds */
-				server_sockets_set_event(srv, 0);
-
-				if (srv->conns->used >= srv->max_conns) {
-					log_error_write(srv, __FILE__, __LINE__, "s", "[note] sockets disabled, connection limit reached");
-				} else {
-					log_error_write(srv, __FILE__, __LINE__, "s", "[note] sockets disabled, out-of-fds");
-				}
-
-				srv->sockets_disabled = 1;
-			}
+			server_load_check(srv);
 		}
 
-		/* we still have some fds to share */
 		if (srv->want_fds) {
-			/* check the fdwaitqueue for waiting fds */
-			int free_fds = srv->max_fds - srv->cur_fds - 16;
-			connection *con;
-
-			for (; free_fds > 0 && NULL != (con = fdwaitqueue_unshift(srv, srv->fdwaitqueue)); free_fds--) {
-				connection_state_machine(srv, con);
-
-				srv->want_fds--;
-			}
+			server_process_want_fds(srv);
 		}
 
 		if ((n = fdevent_poll(srv->ev, 1000)) >= 0) {
