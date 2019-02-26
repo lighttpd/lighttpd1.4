@@ -404,6 +404,9 @@ void chunkqueue_append_buffer_commit(chunkqueue *cq) {
 }
 
 
+static void chunkqueue_remove_empty_chunks(chunkqueue *cq);
+
+
 char * chunkqueue_get_memory(chunkqueue *cq, size_t *len) {
 	size_t sz = *len ? *len : (chunk_buf_sz >> 1);
 	buffer *b;
@@ -435,10 +438,9 @@ void chunkqueue_use_memory(chunkqueue *cq, size_t len) {
 		buffer_commit(b, len);
 		cq->bytes_in += len;
 	} else if (buffer_string_is_empty(b)) {
-		/* unused buffer: can't remove chunk easily from
-		 * end of list, so just reset the buffer
-		 */
-		buffer_clear(b);
+		/* scan chunkqueue to remove empty last chunk
+		 * (generally not expecting a deep queue) */
+		chunkqueue_remove_empty_chunks(cq);
 	}
 }
 
@@ -567,8 +569,6 @@ static chunk *chunkqueue_get_append_tempfile(server *srv, chunkqueue *cq) {
 
 	return c;
 }
-
-static void chunkqueue_remove_empty_chunks(chunkqueue *cq);
 
 int chunkqueue_append_mem_to_tempfile(server *srv, chunkqueue *dest, const char *mem, size_t len) {
 	chunk *dst_c;
