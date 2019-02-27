@@ -82,7 +82,7 @@ SETDEFAULTS_FUNC(mod_authn_sasl_set_defaults) {
         { NULL,                             NULL, T_CONFIG_UNSET,  T_CONFIG_SCOPE_UNSET }
     };
 
-    p->config_storage = calloc(1, srv->config_context->used * sizeof(plugin_config *));
+    p->config_storage = calloc(srv->config_context->used, sizeof(plugin_config *));
 
     for (i = 0; i < srv->config_context->used; i++) {
         data_config const *config = (data_config const*)srv->config_context->data[i];
