@@ -27,7 +27,7 @@ static int fdevent_linux_sysepoll_event_set(fdevents *ev, fdnode *fdn, int event
     int fd = fdn->fde_ndx = fdn->fd;
     struct epoll_event ep;
     ep.events = events | EPOLLERR | EPOLLHUP;
-    ep.data.fd = fd;
+    ep.data.ptr = fdn;
     return epoll_ctl(ev->epoll_fd, op, fd, &ep);
 }
 
@@ -35,9 +35,9 @@ static int fdevent_linux_sysepoll_poll(fdevents * const ev, int timeout_ms) {
     int n = epoll_wait(ev->epoll_fd, ev->epoll_events, ev->maxfds, timeout_ms);
     server * const srv = ev->srv;
     for (int i = 0; i < n; ++i) {
-        fdnode * const fdn = ev->fdarray[ev->epoll_events[i].data.fd];
+        fdnode * const fdn = (fdnode *)ev->epoll_events[i].data.ptr;
         int revents = ev->epoll_events[i].events;
-        if (0 == ((uintptr_t)fdn & 0x3)) {
+        if ((fdevent_handler)NULL != fdn->handler) {
             (*fdn->handler)(srv, fdn->ctx, revents);
         }
     }

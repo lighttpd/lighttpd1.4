@@ -28,11 +28,11 @@ static int fdevent_freebsd_kqueue_event_del(fdevents *ev, fdnode *fdn) {
 	int oevents = fdn->events;
 
 	if (oevents & FDEVENT_IN)  {
-		EV_SET(&kev[n], fd, EVFILT_READ, EV_DELETE, 0, 0, NULL);
+		EV_SET(&kev[n], fd, EVFILT_READ, EV_DELETE, 0, 0, fdn);
 		n++;
 	}
 	if (oevents & FDEVENT_OUT)  {
-		EV_SET(&kev[n], fd, EVFILT_WRITE, EV_DELETE, 0, 0, NULL);
+		EV_SET(&kev[n], fd, EVFILT_WRITE, EV_DELETE, 0, 0, fdn);
 		n++;
 	}
 
@@ -49,17 +49,17 @@ static int fdevent_freebsd_kqueue_event_set(fdevents *ev, fdnode *fdn, int event
 	int delevents = ~events & oevents;
 
 	if (addevents & FDEVENT_IN)  {
-		EV_SET(&kev[n], fd, EVFILT_READ, EV_ADD, 0, 0, NULL);
+		EV_SET(&kev[n], fd, EVFILT_READ, EV_ADD, 0, 0, fdn);
 		n++;
 	} else if (delevents & FDEVENT_IN) {
-		EV_SET(&kev[n], fd, EVFILT_READ, EV_DELETE, 0, 0, NULL);
+		EV_SET(&kev[n], fd, EVFILT_READ, EV_DELETE, 0, 0, fdn);
 		n++;
 	}
 	if (addevents & FDEVENT_OUT)  {
-		EV_SET(&kev[n], fd, EVFILT_WRITE, EV_ADD, 0, 0, NULL);
+		EV_SET(&kev[n], fd, EVFILT_WRITE, EV_ADD, 0, 0, fdn);
 		n++;
 	} else if (delevents & FDEVENT_OUT) {
-		EV_SET(&kev[n], fd, EVFILT_WRITE, EV_DELETE, 0, 0, NULL);
+		EV_SET(&kev[n], fd, EVFILT_WRITE, EV_DELETE, 0, 0, fdn);
 		n++;
 	}
 
@@ -77,10 +77,10 @@ static int fdevent_freebsd_kqueue_poll(fdevents * const ev, int timeout_ms) {
     n = kevent(ev->kq_fd, NULL, 0, ev->kq_results, ev->maxfds, &ts);
 
     for (int i = 0; i < n; ++i) {
-        fdnode * const fdn = ev->fdarray[ev->kq_results[i].ident];
+        fdnode * const fdn = (fdnode *)ev->kq_results[i].udata;
         int filt = ev->kq_results[i].filter;
         int e = ev->kq_results[i].flags;
-        if (0 == ((uintptr_t)fdn & 0x3)) {
+        if ((fdevent_handler)NULL != fdn->handler) {
             int revents = (filt == EVFILT_READ) ? FDEVENT_IN : FDEVENT_OUT;
             if (e & EV_EOF)
                 revents |= (filt == EVFILT_READ ? FDEVENT_RDHUP : FDEVENT_HUP);

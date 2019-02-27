@@ -302,6 +302,7 @@ void fdevent_sched_close(fdevents *ev, int fd, int issock) {
 	fdnode *fdn = ev->fdarray[fd];
 	if ((uintptr_t)fdn & 0x3) return;
 	ev->fdarray[fd] = (fdnode *)((uintptr_t)fdn | (issock ? 0x1 : 0x2));
+	fdn->handler = (fdevent_handler)NULL;
 	fdn->ctx = ev->pendclose;
 	ev->pendclose = fdn;
 }
