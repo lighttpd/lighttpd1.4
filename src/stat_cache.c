@@ -121,6 +121,8 @@ typedef struct stat_cache_fam {
 	int dir_ndx;
 	fam_dir_entry *fam_dir;
 	buffer *dir_name; /* for building the dirname from the filename */
+	fdnode *fdn;
+	int fd;
 } stat_cache_fam;
 
 static fam_dir_entry * fam_dir_entry_init(void) {
@@ -207,11 +209,12 @@ static handler_t stat_cache_handle_fdevent(server *srv, void *_fce, int revent) 
 
 	if (revent & (FDEVENT_HUP|FDEVENT_RDHUP)) {
 		/* fam closed the connection */
-		fdevent_event_del(srv->ev, FAMCONNECTION_GETFD(&scf->fam));
-		fdevent_unregister(srv->ev, FAMCONNECTION_GETFD(&scf->fam));
+		fdevent_fdnode_event_del(srv->ev, scf->fdn);
+		fdevent_unregister(srv->ev, scf->fd);
+		scf->fdn = NULL;
 
 		FAMClose(&scf->fam);
-		FAMCONNECTION_GETFD(&scf->fam) = -1;
+		scf->fd = -1;
 	}
 
 	return HANDLER_GO_ON;
@@ -220,6 +223,7 @@ static handler_t stat_cache_handle_fdevent(server *srv, void *_fce, int revent) 
 static stat_cache_fam * stat_cache_init_fam(server *srv) {
 	stat_cache_fam *scf = calloc(1, sizeof(*scf));
 	scf->dir_name = buffer_init();
+	scf->fd = -1;
 
 	/* setup FAM */
 	if (0 != FAMOpen2(&scf->fam, "lighttpd")) {
@@ -231,9 +235,10 @@ static stat_cache_fam * stat_cache_init_fam(server *srv) {
 	FAMNoExists(&scf->fam);
       #endif
 
-	fdevent_setfd_cloexec(FAMCONNECTION_GETFD(&scf->fam));
-	fdevent_register(srv->ev, FAMCONNECTION_GETFD(&scf->fam), stat_cache_handle_fdevent, NULL);
-	fdevent_event_set(srv->ev, FAMCONNECTION_GETFD(&scf->fam), FDEVENT_IN | FDEVENT_RDHUP);
+	scf->fd = FAMCONNECTION_GETFD(&scf->fam);
+	fdevent_setfd_cloexec(scf->fd);
+	scf->fdn = fdevent_register(srv->ev, scf->fd, stat_cache_handle_fdevent, NULL);
+	fdevent_fdnode_event_set(srv->ev, scf->fdn, FDEVENT_IN | FDEVENT_RDHUP);
 
 	return scf;
 }
@@ -258,8 +263,10 @@ static void stat_cache_free_fam(stat_cache_fam *scf) {
 		}
 	}
 
-	if (-1 != FAMCONNECTION_GETFD(&scf->fam)) {
+	if (-1 != scf->fd) {
+		/*scf->fdn already cleaned up in fdevent_free()*/
 		FAMClose(&scf->fam);
+		/*scf->fd = -1;*/
 	}
 
 	free(scf);

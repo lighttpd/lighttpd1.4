@@ -60,17 +60,6 @@ typedef enum {
     FDEVENT_HANDLER_LIBEV
 } fdevent_handler_t;
 
-typedef struct _fdnode {
-    fdevent_handler handler;
-    void *ctx;
-    int fd;
-    int events;
-    int fde_ndx;
-  #ifdef FDEVENT_USE_LIBEV
-    void *handler_ctx;
-  #endif
-} fdnode;
-
 /**
  * array of unused fd's
  *

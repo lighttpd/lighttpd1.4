@@ -510,9 +510,11 @@ int network_init(server *srv, int stdin_fd) {
 }
 
 void network_unregister_sock(server *srv, server_socket *srv_socket) {
-	if (-1 == srv_socket->fd || NULL == srv->ev) return;
-	fdevent_event_del(srv->ev, srv_socket->fd);
-	fdevent_unregister(srv->ev, srv_socket->fd);
+	fdnode *fdn = srv_socket->fdn;
+	if (NULL == fdn) return;
+	fdevent_fdnode_event_del(srv->ev, fdn);
+	fdevent_unregister(srv->ev, fdn->fd);
+	srv_socket->fdn = NULL;
 }
 
 int network_register_fdevents(server *srv) {
@@ -528,8 +530,8 @@ int network_register_fdevents(server *srv) {
 	for (i = 0; i < srv->srv_sockets.used; i++) {
 		server_socket *srv_socket = srv->srv_sockets.ptr[i];
 
-		fdevent_register(srv->ev, srv_socket->fd, network_server_handle_fdevent, srv_socket);
-		fdevent_event_set(srv->ev, srv_socket->fd, FDEVENT_IN);
+		srv_socket->fdn = fdevent_register(srv->ev, srv_socket->fd, network_server_handle_fdevent, srv_socket);
+		fdevent_fdnode_event_set(srv->ev, srv_socket->fdn, FDEVENT_IN);
 	}
 	return 0;
 }

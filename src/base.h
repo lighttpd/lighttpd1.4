@@ -212,6 +212,7 @@ struct connection {
 				      * this is self-protection
 				      */
 
+	fdnode *fdn;                 /* fdevent (fdnode *) object */
 	int fd;                      /* the FD for this connection */
 	int ndx;                     /* reverse mapping to server->connection[ndx] */
 
@@ -352,6 +353,7 @@ typedef struct server_socket {
 	unsigned short is_ssl;
 	unsigned short sidx;
 
+	fdnode *fdn;
 	buffer *srv_token;
 } server_socket;
 

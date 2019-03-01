@@ -357,9 +357,6 @@ static void server_free(server *srv) {
 	CLEAN(tmp_chunk_len);
 #undef CLEAN
 
-#if 0
-	fdevent_unregister(srv->ev, srv->fd);
-#endif
 	fdevent_free(srv->ev);
 
 	free(srv->conns);
@@ -899,7 +896,7 @@ __attribute_cold__
 static void server_sockets_set_event (server *srv, int event) {
     for (size_t i = 0; i < srv->srv_sockets.used; ++i) {
         server_socket *srv_socket = srv->srv_sockets.ptr[i];
-        fdevent_event_set(srv->ev, srv_socket->fd, event);
+        fdevent_fdnode_event_set(srv->ev, srv_socket->fdn, event);
     }
 }
 
@@ -1889,7 +1886,7 @@ static void server_handle_sigalrm (server * const srv, time_t min_ts, time_t las
 				 */
 				for (size_t ndx = 0; ndx < conns->used; ++ndx) {
 					connection * const con = conns->ptr[ndx];
-					const int waitevents = fdevent_event_get_interest(srv->ev, con->fd);
+					const int waitevents = fdevent_fdnode_interest(con->fdn);
 					int changed = 0;
 					int t_diff;
 

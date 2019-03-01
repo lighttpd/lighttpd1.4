@@ -9,8 +9,18 @@ typedef struct fdevents fdevents;
 
 typedef handler_t (*fdevent_handler)(struct server *srv, void *ctx, int revents);
 
-/* these are the POLL* values from <bits/poll.h> (linux poll)
- */
+struct fdnode_st {
+    fdevent_handler handler;
+    void *ctx;
+    int fd;
+    int events;
+    int fde_ndx;
+  #ifdef HAVE_LIBEV
+    void *handler_ctx;
+  #endif
+};
+
+/* These must match POLL* values from operating system headers */
 
 #define FDEVENT_IN     0x0001
 #define FDEVENT_PRI    0x0002
@@ -50,15 +60,15 @@ int fdevent_reset(fdevents *ev); /* "init" after fork() */
 __attribute_cold__
 void fdevent_free(fdevents *ev);
 
-int fdevent_event_get_interest(const fdevents *ev, int fd);
-void fdevent_event_set(fdevents *ev, int fd, int events);/* events can be FDEVENT_IN, FDEVENT_OUT or FDEVENT_IN | FDEVENT_OUT */
-void fdevent_event_add(fdevents *ev, int fd, int event); /* event  can be FDEVENT_IN or FDEVENT_OUT */
-void fdevent_event_clr(fdevents *ev, int fd, int event); /* event  can be FDEVENT_IN or FDEVENT_OUT */
-void fdevent_event_del(fdevents *ev, int fd);
+#define fdevent_fdnode_interest(fdn) (NULL != (fdn) ? (fdn)->events : 0)
+void fdevent_fdnode_event_del(fdevents *ev, fdnode *fdn);
+void fdevent_fdnode_event_set(fdevents *ev, fdnode *fdn, int events);
+void fdevent_fdnode_event_add(fdevents *ev, fdnode *fdn, int event);
+void fdevent_fdnode_event_clr(fdevents *ev, fdnode *fdn, int event);
 
 int fdevent_poll(fdevents *ev, int timeout_ms);
 
-void fdevent_register(fdevents *ev, int fd, fdevent_handler handler, void *ctx);
+fdnode * fdevent_register(fdevents *ev, int fd, fdevent_handler handler, void *ctx);
 void fdevent_unregister(fdevents *ev, int fd);
 void fdevent_sched_close(fdevents *ev, int fd, int issock);
 

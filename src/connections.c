@@ -110,8 +110,9 @@ static int connection_close(server *srv, connection *con) {
 	con->request_count = 0;
 	chunkqueue_reset(con->read_queue);
 
-	fdevent_event_del(srv->ev, con->fd);
+	fdevent_fdnode_event_del(srv->ev, con->fdn);
 	fdevent_unregister(srv->ev, con->fd);
+	con->fdn = NULL;
 #ifdef __WIN32
 	if (closesocket(con->fd)) {
 		log_error_write(srv, __FILE__, __LINE__, "sds",
@@ -903,7 +904,7 @@ static handler_t connection_handle_fdevent(server *srv, void *context, int reven
 		} else if (revents & FDEVENT_HUP) {
 			connection_set_state(srv, con, CON_STATE_ERROR);
 		} else if (revents & FDEVENT_RDHUP) {
-			int events = fdevent_event_get_interest(srv->ev, con->fd);
+			int events = fdevent_fdnode_interest(con->fdn);
 			events &= ~(FDEVENT_IN|FDEVENT_RDHUP);
 			con->conf.stream_request_body &= ~(FDEVENT_STREAM_REQUEST_BUFMIN|FDEVENT_STREAM_REQUEST_POLLIN);
 			con->conf.stream_request_body |= FDEVENT_STREAM_REQUEST_POLLRDHUP;
@@ -914,7 +915,7 @@ static handler_t connection_handle_fdevent(server *srv, void *context, int reven
 			}
 			if (sock_addr_get_family(&con->dst_addr) == AF_UNIX) {
 				/* future: will getpeername() on AF_UNIX properly check if still connected? */
-				fdevent_event_set(srv->ev, con->fd, events);
+				fdevent_fdnode_event_set(srv->ev, con->fdn, events);
 			} else if (fdevent_is_tcp_half_closed(con->fd)) {
 				/* Success of fdevent_is_tcp_half_closed() after FDEVENT_RDHUP indicates TCP FIN received,
 				 * but does not distinguish between client shutdown(fd, SHUT_WR) and client close(fd).
@@ -924,7 +925,7 @@ static handler_t connection_handle_fdevent(server *srv, void *context, int reven
 				 * (without FDEVENT_RDHUP interest) when checking for write timeouts
 				 * once a second in server.c, though getpeername() on Windows might not indicate this */
 				con->conf.stream_request_body |= FDEVENT_STREAM_REQUEST_TCP_FIN;
-				fdevent_event_set(srv->ev, con->fd, events);
+				fdevent_fdnode_event_set(srv->ev, con->fdn, events);
 			} else {
 				/* Failure of fdevent_is_tcp_half_closed() indicates TCP RST
 				 * (or unable to tell (unsupported OS), though should not
@@ -1093,7 +1094,7 @@ connection *connection_accepted(server *srv, server_socket *srv_socket, sock_add
 		con = connections_get_new_connection(srv);
 
 		con->fd = cnt;
-		fdevent_register(srv->ev, con->fd, connection_handle_fdevent, con);
+		con->fdn = fdevent_register(srv->ev, con->fd, connection_handle_fdevent, con);
 		con->network_read = connection_read_cq;
 		con->network_write = connection_write_cq;
 
@@ -1341,7 +1342,7 @@ int connection_state_machine(server *srv, connection *con) {
 		break;
 	}
 	if (con->fd >= 0) {
-		const int events = fdevent_event_get_interest(srv->ev, con->fd);
+		const int events = fdevent_fdnode_interest(con->fdn);
 		if (con->is_readable < 0) {
 			con->is_readable = 0;
 			r |= FDEVENT_IN;
@@ -1361,7 +1362,7 @@ int connection_state_machine(server *srv, connection *con) {
 			if ((r & FDEVENT_OUT) && !(events & FDEVENT_OUT)) {
 				con->write_request_ts = srv->cur_ts;
 			}
-			fdevent_event_set(srv->ev, con->fd, r);
+			fdevent_fdnode_event_set(srv->ev, con->fdn, r);
 		}
 	}
 

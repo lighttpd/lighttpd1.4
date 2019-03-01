@@ -278,7 +278,7 @@ static void fdnode_free(fdnode *fdn) {
 	free(fdn);
 }
 
-void fdevent_register(fdevents *ev, int fd, fdevent_handler handler, void *ctx) {
+fdnode * fdevent_register(fdevents *ev, int fd, fdevent_handler handler, void *ctx) {
 	fdnode *fdn  = ev->fdarray[fd] = fdnode_init();
 	force_assert(NULL != fdn);
 	fdn->handler = handler;
@@ -289,6 +289,7 @@ void fdevent_register(fdevents *ev, int fd, fdevent_handler handler, void *ctx) 
       #ifdef FDEVENT_USE_LIBEV
 	fdn->handler_ctx = NULL;
       #endif
+	return fdn;
 }
 
 void fdevent_unregister(fdevents *ev, int fd) {
@@ -344,11 +345,7 @@ static void fdevent_sched_run(fdevents *ev) {
 	ev->pendclose = NULL;
 }
 
-int fdevent_event_get_interest(const fdevents *ev, int fd) {
-	return fd >= 0 ? ev->fdarray[fd]->events : 0;
-}
-
-static void fdevent_fdnode_event_del(fdevents *ev, fdnode *fdn) {
+static void fdevent_fdnode_event_unsetter(fdevents *ev, fdnode *fdn) {
     if (-1 == fdn->fde_ndx) return;
     if (0 == ev->event_del(ev, fdn)) {
         fdn->fde_ndx = -1;
@@ -360,7 +357,7 @@ static void fdevent_fdnode_event_del(fdevents *ev, fdnode *fdn) {
     }
 }
 
-static void fdevent_fdnode_event_set(fdevents *ev, fdnode *fdn, int events) {
+static void fdevent_fdnode_event_setter(fdevents *ev, fdnode *fdn, int events) {
     /*(Note: skips registering with kernel if initial events is 0,
      * so caller should pass non-zero events for initial registration.
      * If never registered due to never being called with non-zero events,
@@ -374,30 +371,20 @@ static void fdevent_fdnode_event_set(fdevents *ev, fdnode *fdn, int events) {
                         "fdevent event_set failed: ", strerror(errno));
 }
 
-void fdevent_event_del(fdevents *ev, int fd) {
-    if (-1 != fd) {
-        fdnode *fdn = ev->fdarray[fd];
-        if ((uintptr_t)fdn & 0x3) return;
-        fdevent_fdnode_event_del(ev, fdn);
-    }
+void fdevent_fdnode_event_del(fdevents *ev, fdnode *fdn) {
+    if (NULL != fdn) fdevent_fdnode_event_unsetter(ev, fdn);
 }
 
-void fdevent_event_set(fdevents *ev, int fd, int events) {
-    if (-1 != fd) fdevent_fdnode_event_set(ev, ev->fdarray[fd], events);
+void fdevent_fdnode_event_set(fdevents *ev, fdnode *fdn, int events) {
+    if (NULL != fdn) fdevent_fdnode_event_setter(ev, fdn, events);
 }
 
-void fdevent_event_add(fdevents *ev, int fd, int event) {
-    if (-1 != fd) {
-        fdnode *fdn = ev->fdarray[fd];
-        fdevent_fdnode_event_set(ev, fdn, (fdn->events | event));
-    }
+void fdevent_fdnode_event_add(fdevents *ev, fdnode *fdn, int event) {
+    if (NULL != fdn) fdevent_fdnode_event_setter(ev, fdn, (fdn->events|event));
 }
 
-void fdevent_event_clr(fdevents *ev, int fd, int event) {
-    if (-1 != fd) {
-        fdnode *fdn = ev->fdarray[fd];
-        fdevent_fdnode_event_set(ev, fdn, (fdn->events & ~event));
-    }
+void fdevent_fdnode_event_clr(fdevents *ev, fdnode *fdn, int event) {
+    if (NULL != fdn) fdevent_fdnode_event_setter(ev, fdn, (fdn->events&~event));
 }
 
 int fdevent_poll(fdevents *ev, int timeout_ms) {
