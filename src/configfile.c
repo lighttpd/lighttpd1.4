@@ -838,6 +838,7 @@ typedef struct {
 	int in_key;
 	int in_brace;
 	int in_cond;
+	int simulate_eol;
 } tokenizer_t;
 
 #if 0
@@ -902,7 +903,14 @@ static int config_tokenizer(server *srv, tokenizer_t *t, int *token_id, buffer *
 	int tid = 0;
 	size_t i;
 
-	for (tid = 0; tid == 0 && t->offset < t->size && t->input[t->offset] ; ) {
+	if (t->simulate_eol) {
+		t->simulate_eol = 0;
+		t->in_key = 1;
+		tid = TK_EOL;
+		buffer_copy_string_len(token, CONST_STR_LEN("(EOL)"));
+	}
+
+	while (tid == 0 && t->offset < t->size && t->input[t->offset]) {
 		char c = t->input[t->offset];
 		const char *start = NULL;
 
@@ -1149,6 +1157,21 @@ static int config_tokenizer(server *srv, tokenizer_t *t, int *token_id, buffer *
 
 			buffer_copy_string_len(token, CONST_STR_LEN("}"));
 
+			for (; t->offset < t->size; ++t->offset,++t->line_pos) {
+				c = t->input[t->offset];
+				if (c == '\r' || c == '\n') {
+					break;
+				}
+				else if (c == '#') {
+					t->line_pos += config_skip_comment(t);
+					break;
+				}
+				else if (c != ' ' && c != '\t') {
+					t->simulate_eol = 1;
+					break;
+				} /* else (c == ' ' || c == '\t') */
+			}
+
 			break;
 
 		case '[':
@@ -1314,6 +1337,7 @@ static int tokenizer_init(tokenizer_t *t, const buffer *source, const char *inpu
 	t->in_key = 1;
 	t->in_brace = 0;
 	t->in_cond = 0;
+	t->simulate_eol = 0;
 	return 0;
 }
 
