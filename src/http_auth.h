@@ -47,6 +47,6 @@ int http_auth_const_time_memeq (const char *a, size_t alen, const char *b, size_
 
 void http_auth_setenv(connection *con, const char *username, size_t ulen, const char *auth_type, size_t alen);
 
-int http_auth_md5_hex2bin (const char *md5hex, size_t len, unsigned char md5bin[16]);
+int http_auth_digest_hex2bin (const char *hexstr, size_t len, unsigned char *bin, size_t binlen);
 
 #endif

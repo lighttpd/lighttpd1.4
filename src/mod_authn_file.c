@@ -257,7 +257,8 @@ static int mod_authn_file_htdigest_get(server *srv, const buffer *auth_fn, const
 
             fclose(fp);
 
-            return http_auth_md5_hex2bin(f_pwd, pwd_len, HA1);
+            return http_auth_digest_hex2bin(f_pwd, pwd_len,
+                                            HA1, sizeof(HA1));
         }
     }
 

@@ -137,20 +137,21 @@ void http_auth_setenv(connection *con, const char *username, size_t ulen, const 
     http_header_env_set(con, CONST_STR_LEN("AUTH_TYPE"), auth_type, alen);
 }
 
-int http_auth_md5_hex2bin (const char *md5hex, size_t len, unsigned char md5bin[16])
+int http_auth_digest_hex2bin (const char *hexstr, size_t len, unsigned char *bin, size_t binlen)
 {
-    /* validate and transform 32-byte MD5 hex string to 16-byte binary MD5 */
-    if (32 != len) return -1; /*(Note: char *md5hex must be a 32-char string)*/
-    for (int i = 0; i < 32; i+=2) {
-        int hi = md5hex[i];
-        int lo = md5hex[i+1];
+    /* validate and transform 32-byte MD5 hex string to 16-byte binary MD5,
+     * or 64-byte SHA-256 or SHA-512-256 hex string to 32-byte binary digest */
+    if (len > (binlen << 1)) return -1;
+    for (int i = 0, ilen = (int)len; i < ilen; i+=2) {
+        int hi = hexstr[i];
+        int lo = hexstr[i+1];
         if ('0' <= hi && hi <= '9')                    hi -= '0';
         else if ((hi |= 0x20), 'a' <= hi && hi <= 'f') hi += -'a' + 10;
         else                                           return -1;
         if ('0' <= lo && lo <= '9')                    lo -= '0';
         else if ((lo |= 0x20), 'a' <= lo && lo <= 'f') lo += -'a' + 10;
         else                                           return -1;
-        md5bin[(i >> 1)] = (unsigned char)((hi << 4) | lo);
+        bin[(i >> 1)] = (unsigned char)((hi << 4) | lo);
     }
     return 0;
 }
