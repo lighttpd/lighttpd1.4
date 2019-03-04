@@ -538,7 +538,7 @@ typedef struct {
 	char **ptr;
 } digest_kv;
 
-static handler_t mod_auth_send_401_unauthorized_digest(server *srv, connection *con, buffer *realm, int nonce_stale);
+static handler_t mod_auth_send_401_unauthorized_digest(server *srv, connection *con, const struct http_auth_require_t *require, int nonce_stale);
 
 static handler_t mod_auth_check_digest(server *srv, connection *con, void *p_d, const struct http_auth_require_t *require, const struct http_auth_backend_t *backend) {
 	buffer *vb = http_header_request_get(con, HTTP_HEADER_AUTHORIZATION, CONST_STR_LEN("Authorization"));
@@ -607,11 +607,11 @@ static handler_t mod_auth_check_digest(server *srv, connection *con, void *p_d, 
 	}
 
 	if (NULL == vb) {
-		return mod_auth_send_401_unauthorized_digest(srv, con, require->realm, 0);
+		return mod_auth_send_401_unauthorized_digest(srv, con, require, 0);
 	}
 
 	if (0 != strncasecmp(vb->ptr, "Digest ", sizeof("Digest ")-1)) {
-		return mod_auth_send_401_unauthorized_digest(srv, con, require->realm, 0);
+		return mod_auth_send_401_unauthorized_digest(srv, con, require, 0);
 	} else {
 		size_t n = buffer_string_length(vb);
 	      #ifdef __COVERITY__
@@ -682,7 +682,7 @@ static handler_t mod_auth_check_digest(server *srv, connection *con, void *p_d, 
 		log_error_write(srv, __FILE__, __LINE__, "s",
 				"digest: realm mismatch");
 		buffer_free(b);
-		return mod_auth_send_401_unauthorized_digest(srv, con, require->realm, 0);
+		return mod_auth_send_401_unauthorized_digest(srv, con, require, 0);
 	}
 
 	/**
@@ -741,7 +741,7 @@ static handler_t mod_auth_check_digest(server *srv, connection *con, void *p_d, 
 	case HANDLER_ERROR:
 	default:
 		buffer_free(b);
-		return mod_auth_send_401_unauthorized_digest(srv, con, require->realm, 0);
+		return mod_auth_send_401_unauthorized_digest(srv, con, require, 0);
 	}
 	memcpy(HA1, ai.digest, ai.dlen);
 
@@ -799,13 +799,13 @@ static handler_t mod_auth_check_digest(server *srv, connection *con, void *p_d, 
 				"digest: auth failed for ", username, ": wrong password, IP:", con->dst_addr_buf);
 
 		buffer_free(b);
-		return mod_auth_send_401_unauthorized_digest(srv, con, require->realm, 0);
+		return mod_auth_send_401_unauthorized_digest(srv, con, require, 0);
 	}
 
 	/* value is our allow-rules */
 	if (!http_auth_match_rules(require, username, NULL, NULL)) {
 		buffer_free(b);
-		return mod_auth_send_401_unauthorized_digest(srv, con, require->realm, 0);
+		return mod_auth_send_401_unauthorized_digest(srv, con, require, 0);
 	}
 
 	/* check age of nonce.  Note, random data is used in nonce generation
@@ -827,7 +827,7 @@ static handler_t mod_auth_check_digest(server *srv, connection *con, void *p_d, 
 		    || ts > srv->cur_ts || srv->cur_ts - ts > 600) { /*(10 mins)*/
 			/* nonce is stale; have client regenerate digest */
 			buffer_free(b);
-			return mod_auth_send_401_unauthorized_digest(srv, con, require->realm, 1);
+			return mod_auth_send_401_unauthorized_digest(srv, con, require, 1);
 		} /*(future: might send nextnonce when expiration is imminent)*/
 	}
 
@@ -838,7 +838,7 @@ static handler_t mod_auth_check_digest(server *srv, connection *con, void *p_d, 
 	return HANDLER_GO_ON;
 }
 
-static handler_t mod_auth_send_401_unauthorized_digest(server *srv, connection *con, buffer *realm, int nonce_stale) {
+static handler_t mod_auth_send_401_unauthorized_digest(server *srv, connection *con, const struct http_auth_require_t *require, int nonce_stale) {
 	li_MD5_CTX Md5Ctx;
 	HASH h;
 	char hh[33];
@@ -865,7 +865,7 @@ static handler_t mod_auth_send_401_unauthorized_digest(server *srv, connection *
 	con->mode = DIRECT;
 
 	buffer_copy_string_len(srv->tmp_buf, CONST_STR_LEN("Digest realm=\""));
-	buffer_append_string_buffer(srv->tmp_buf, realm);
+	buffer_append_string_buffer(srv->tmp_buf, require->realm);
 	buffer_append_string_len(srv->tmp_buf, CONST_STR_LEN("\", charset=\"UTF-8\", nonce=\""));
 	buffer_append_uint_hex(srv->tmp_buf, (uintmax_t)srv->cur_ts);
 	buffer_append_string_len(srv->tmp_buf, CONST_STR_LEN(":"));
