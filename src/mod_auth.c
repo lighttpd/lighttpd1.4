@@ -560,6 +560,7 @@ static handler_t mod_auth_check_digest(server *srv, connection *con, void *p_d, 
 	const char *m = NULL;
 	int i;
 	buffer *b;
+	http_auth_info_t ai;
 
 	li_MD5_CTX Md5Ctx;
 	HASH HA1;
@@ -670,7 +671,14 @@ static handler_t mod_auth_check_digest(server *srv, connection *con, void *p_d, 
 		return mod_auth_send_400_bad_request(srv, con);
 	}
 
-	if (!buffer_is_equal_string(require->realm, realm, strlen(realm))) {
+	ai.dalgo    = HTTP_AUTH_DIGEST_MD5;
+	ai.dlen     = HTTP_AUTH_DIGEST_MD5_BINLEN;
+	ai.username = username;
+	ai.ulen     = strlen(username);
+	ai.realm    = realm;
+	ai.rlen     = strlen(realm);
+
+	if (!buffer_is_equal_string(require->realm, ai.realm, ai.rlen)) {
 		log_error_write(srv, __FILE__, __LINE__, "s",
 				"digest: realm mismatch");
 		buffer_free(b);
@@ -721,8 +729,7 @@ static handler_t mod_auth_check_digest(server *srv, connection *con, void *p_d, 
 		}
 	}
 
-	/* password-string == HA1 */
-	switch (backend->digest(srv, con, backend->p_d, username, realm, HA1)) {
+	switch (backend->digest(srv, con, backend->p_d, &ai)) {
 	case HANDLER_GO_ON:
 		break;
 	case HANDLER_WAIT_FOR_EVENT:
@@ -736,6 +743,7 @@ static handler_t mod_auth_check_digest(server *srv, connection *con, void *p_d, 
 		buffer_free(b);
 		return mod_auth_send_401_unauthorized_digest(srv, con, require->realm, 0);
 	}
+	memcpy(HA1, ai.digest, ai.dlen);
 
 	if (algorithm &&
 	    strcasecmp(algorithm, "md5-sess") == 0) {
@@ -823,7 +831,7 @@ static handler_t mod_auth_check_digest(server *srv, connection *con, void *p_d, 
 		} /*(future: might send nextnonce when expiration is imminent)*/
 	}
 
-	http_auth_setenv(con, username, strlen(username), CONST_STR_LEN("Digest"));
+	http_auth_setenv(con, ai.username, ai.ulen, CONST_STR_LEN("Digest"));
 
 	buffer_free(b);
 

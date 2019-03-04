@@ -135,7 +135,7 @@ static void mod_authn_mysql_sock_error(server *srv, plugin_config *pconf) {
 }
 
 static handler_t mod_authn_mysql_basic(server *srv, connection *con, void *p_d, const http_auth_require_t *require, const buffer *username, const char *pw);
-static handler_t mod_authn_mysql_digest(server *srv, connection *con, void *p_d, const char *username, const char *realm, unsigned char HA1[16]);
+static handler_t mod_authn_mysql_digest(server *srv, connection *con, void *p_d, http_auth_info_t *dig);
 
 INIT_FUNC(mod_authn_mysql_init) {
     static http_auth_backend_t http_auth_backend_mysql =
@@ -387,7 +387,7 @@ static int mod_authn_mysql_password_cmp(const char *userpw, unsigned long userpw
     return -1;
 }
 
-static int mod_authn_mysql_result(server *srv, plugin_data *p, const char *pw, unsigned char HA1[16]) {
+static int mod_authn_mysql_result(server *srv, plugin_data *p, http_auth_info_t *ai, const char *pw) {
     MYSQL_RES *result = mysql_store_result(p->conf.mysql_conn);
     int rc = -1;
     my_ulonglong num_rows;
@@ -413,8 +413,11 @@ static int mod_authn_mysql_result(server *srv, plugin_data *p, const char *pw, u
             rc = mod_authn_mysql_password_cmp(row[0], lengths[0], pw);
         }
         else {          /* used with HTTP Digest auth */
-            rc = http_auth_digest_hex2bin(row[0], lengths[0],
-                                          HA1, sizeof(HA1));
+            /*(currently supports only single row, single digest algorithm)*/
+            if (lengths[0] == (ai->dlen << 1)) {
+                rc = http_auth_digest_hex2bin(row[0], lengths[0],
+                                              ai->digest, sizeof(ai->digest));
+            }
         }
     }
     else if (0 == num_rows) {
@@ -428,7 +431,7 @@ static int mod_authn_mysql_result(server *srv, plugin_data *p, const char *pw, u
     return rc;
 }
 
-static handler_t mod_authn_mysql_query(server *srv, connection *con, void *p_d, const char *username, const char *realm, const char *pw, unsigned char HA1[16]) {
+static handler_t mod_authn_mysql_query(server *srv, connection *con, void *p_d, http_auth_info_t *ai, const char *pw) {
     plugin_data *p = (plugin_data *)p_d;
     int rc = -1;
 
@@ -443,14 +446,12 @@ static handler_t mod_authn_mysql_query(server *srv, connection *con, void *p_d, 
     }
 
     do {
-        size_t unamelen = strlen(username);
-        size_t urealmlen = strlen(realm);
         char q[1024], uname[512], urealm[512];
         unsigned long mrc;
 
-        if (unamelen > sizeof(uname)/2-1)
+        if (ai->ulen > sizeof(uname)/2-1)
             return HANDLER_ERROR;
-        if (urealmlen > sizeof(urealm)/2-1)
+        if (ai->rlen > sizeof(urealm)/2-1)
             return HANDLER_ERROR;
 
         if (!mod_authn_mysql_sock_acquire(srv, &p->conf)) {
@@ -458,20 +459,20 @@ static handler_t mod_authn_mysql_query(server *srv, connection *con, void *p_d, 
         }
 
       #if 0
-        mrc = mysql_real_escape_string_quote(p->conf.mysql_conn,uname,username,
-                                             (unsigned long)unamelen, '\'');
+        mrc = mysql_real_escape_string_quote(p->conf.mysql_conn, uname,
+                                             ai->username, ai->ulen, '\'');
         if ((unsigned long)~0 == mrc) break;
 
-        mrc = mysql_real_escape_string_quote(p->conf.mysql_conn,urealm,realm,
-                                             (unsigned long)urealmlen, '\'');
+        mrc = mysql_real_escape_string_quote(p->conf.mysql_conn, urealm,
+                                             ai->realm, ai->rlen, '\'');
         if ((unsigned long)~0 == mrc) break;
       #else
         mrc = mysql_real_escape_string(p->conf.mysql_conn, uname,
-                                       username, (unsigned long)unamelen);
+                                       ai->username, ai->ulen);
         if ((unsigned long)~0 == mrc) break;
 
         mrc = mysql_real_escape_string(p->conf.mysql_conn, urealm,
-                                       realm, (unsigned long)urealmlen);
+                                       ai->realm, ai->rlen);
         if ((unsigned long)~0 == mrc) break;
       #endif
 
@@ -512,7 +513,7 @@ static handler_t mod_authn_mysql_query(server *srv, connection *con, void *p_d, 
             }
         }
 
-        rc = mod_authn_mysql_result(srv, p, pw, HA1);
+        rc = mod_authn_mysql_result(srv, p, ai, pw);
 
     } while (0);
 
@@ -522,19 +523,23 @@ static handler_t mod_authn_mysql_query(server *srv, connection *con, void *p_d, 
 }
 
 static handler_t mod_authn_mysql_basic(server *srv, connection *con, void *p_d, const http_auth_require_t *require, const buffer *username, const char *pw) {
-    /*(HA1 is not written since pw passed should not be NULL;
-     * avoid passing NULL since subroutine expects unsigned char HA1[16] arg)*/
-    static unsigned char HA1[16];
-    char *realm = require->realm->ptr;
-    handler_t rc =mod_authn_mysql_query(srv,con,p_d,username->ptr,realm,pw,HA1);
+    handler_t rc;
+    http_auth_info_t ai;
+    ai.dalgo    = HTTP_AUTH_DIGEST_NONE;
+    ai.dlen     = 0;
+    ai.username = username->ptr;
+    ai.ulen     = buffer_string_length(username);
+    ai.realm    = require->realm->ptr;
+    ai.rlen     = buffer_string_length(require->realm);
+    rc = mod_authn_mysql_query(srv, con, p_d, &ai, pw);
     if (HANDLER_GO_ON != rc) return rc;
     return http_auth_match_rules(require, username->ptr, NULL, NULL)
       ? HANDLER_GO_ON  /* access granted */
       : HANDLER_ERROR;
 }
 
-static handler_t mod_authn_mysql_digest(server *srv, connection *con, void *p_d, const char *username, const char *realm, unsigned char HA1[16]) {
-    return mod_authn_mysql_query(srv,con,p_d,username,realm,NULL,HA1);
+static handler_t mod_authn_mysql_digest(server *srv, connection *con, void *p_d, http_auth_info_t *ai) {
+    return mod_authn_mysql_query(srv, con, p_d, ai, NULL);
 }
 
 int mod_authn_mysql_plugin_init(plugin *p);

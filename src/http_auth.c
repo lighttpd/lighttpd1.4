@@ -137,6 +137,19 @@ void http_auth_setenv(connection *con, const char *username, size_t ulen, const 
     http_header_env_set(con, CONST_STR_LEN("AUTH_TYPE"), auth_type, alen);
 }
 
+unsigned int http_auth_digest_len (int algo)
+{
+    if (algo & (HTTP_AUTH_DIGEST_SHA256 | HTTP_AUTH_DIGEST_SHA512_256)) {
+        /* HTTP_AUTH_DIGEST_SHA512_256_BINLEN */
+        return HTTP_AUTH_DIGEST_SHA256_BINLEN;
+    }
+    if (algo & HTTP_AUTH_DIGEST_MD5) {
+        return HTTP_AUTH_DIGEST_MD5_BINLEN;
+    }
+
+    return 0;
+}
+
 int http_auth_digest_hex2bin (const char *hexstr, size_t len, unsigned char *bin, size_t binlen)
 {
     /* validate and transform 32-byte MD5 hex string to 16-byte binary MD5,
