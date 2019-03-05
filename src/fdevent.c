@@ -165,10 +165,16 @@ fdevents *fdevent_init(server *srv) {
 	 * (reported on Android running a custom ROM)
 	 * https://redmine.lighttpd.net/issues/2883
 	 */
+       #ifdef SOCK_NONBLOCK
 	int fd = socket(AF_INET, SOCK_STREAM | SOCK_CLOEXEC | SOCK_NONBLOCK, 0);
+       #else
+	int fd = socket(AF_INET, SOCK_STREAM | SOCK_CLOEXEC, 0);
+       #endif
 	if (fd >= 0) {
 		int flags = fcntl(fd, F_GETFL, 0);
+              #ifdef SOCK_NONBLOCK
 		use_sock_nonblock = (-1 != flags && (flags & O_NONBLOCK));
+              #endif
 		use_sock_cloexec = 1;
 		close(fd);
 	}
@@ -454,8 +460,18 @@ int fdevent_socket_cloexec(int domain, int type, int protocol) {
 int fdevent_socket_nb_cloexec(int domain, int type, int protocol) {
 	int fd;
 #ifdef SOCK_CLOEXEC
+       #ifdef SOCK_NONBLOCK
 	if (use_sock_cloexec && use_sock_nonblock)
 		return socket(domain, type | SOCK_CLOEXEC | SOCK_NONBLOCK, protocol);
+       #else
+	if (use_sock_cloexec) {
+		fd = socket(domain, type | SOCK_CLOEXEC, protocol);
+	      #ifdef O_NONBLOCK
+		if (-1 != fd) force_assert(-1 != fcntl(fd,F_SETFL,O_NONBLOCK|O_RDWR));
+	      #endif
+		return fd;
+	}
+       #endif
 #endif
 	if (-1 != (fd = socket(domain, type, protocol))) {
 #ifdef FD_CLOEXEC
