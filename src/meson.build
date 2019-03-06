@@ -853,7 +853,7 @@ modules = [
 	[ 'mod_access', [ 'mod_access.c' ] ],
 	[ 'mod_accesslog', [ 'mod_accesslog.c' ] ],
 	[ 'mod_alias', [ 'mod_alias.c' ] ],
-	[ 'mod_auth', [ 'mod_auth.c' ] ],
+	[ 'mod_auth', [ 'mod_auth.c' ], [ libcrypto ] ],
 	[ 'mod_authn_file', [ 'mod_authn_file.c' ], [ libcrypt, libcrypto ] ],
 	[ 'mod_compress', [ 'mod_compress.c' ], libbz2 + libz ],
 	[ 'mod_deflate', [ 'mod_deflate.c' ], libbz2 + libz ],

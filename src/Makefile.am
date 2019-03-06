@@ -331,7 +331,7 @@ mod_deflate_la_LIBADD = $(Z_LIB) $(BZ_LIB) $(common_libadd)
 lib_LTLIBRARIES += mod_auth.la
 mod_auth_la_SOURCES = mod_auth.c
 mod_auth_la_LDFLAGS = $(common_module_ldflags)
-mod_auth_la_LIBADD = $(common_libadd)
+mod_auth_la_LIBADD = $(CRYPTO_LIB) $(common_libadd)
 
 lib_LTLIBRARIES += mod_authn_file.la
 mod_authn_file_la_SOURCES = mod_authn_file.c
