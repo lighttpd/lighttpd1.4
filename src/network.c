@@ -264,7 +264,10 @@ static int network_server_init(server *srv, buffer *host_token, size_t sidx, int
 			return -1;
 		}
 
-		fdevent_fcntl_set_nb(srv->ev, srv_socket->fd);
+		if (-1 == fdevent_fcntl_set_nb(srv->ev, srv_socket->fd)) {
+			log_error_write(srv, __FILE__, __LINE__, "ss", "fcntl:", strerror(errno));
+			return -1;
+		}
 	} else
 #endif
 	{
