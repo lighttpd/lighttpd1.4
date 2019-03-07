@@ -965,7 +965,20 @@ static handler_t magnet_attract(server *srv, connection *con, plugin_data *p, bu
 	/* we should have the function, the lighty table and the return value on the stack */
 	force_assert(lua_gettop(L) == 3);
 
-	lua_return_value = (int) luaL_optinteger(L, -1, -1);
+	switch (lua_type(L, -1)) {
+	case LUA_TNUMBER:
+	case LUA_TNIL:
+		lua_return_value = (int) luaL_optinteger(L, -1, -1);
+		break;
+	default:
+		log_error_write(srv, __FILE__, __LINE__, "sss",
+				"lua_pcall():",
+				"unexpected return type:",
+				luaL_typename(L, -1));
+		lua_return_value = -1;
+		break;
+	}
+
 	lua_pop(L, 1); /* pop return value */
 
 	magnet_copy_response_header(con, L, lighty_table_ndx);
