@@ -1353,7 +1353,7 @@ AC_ARG_ENABLE([extra-warnings],
 )
 
 if test "$extrawarnings" = true || test "$extrawarnings" = error; then
-  TRY_CFLAGS([-g -O2 -g2 -Wall -Wmissing-declarations -Wdeclaration-after-statement -Wcast-align -Wsign-compare -Wnested-externs -Wpointer-arith -D_FORTIFY_SOURCE=2 -fstack-protector --param=ssp-buffer-size=4 -Wformat -Werror=format-security])
+  TRY_CFLAGS([-g -O2 -g2 -Wall -Wmissing-declarations -Wcast-align -Wsign-compare -Wnested-externs -Wpointer-arith -D_FORTIFY_SOURCE=2 -fstack-protector --param=ssp-buffer-size=4 -Wformat -Werror=format-security])
   TRY_LDFLAGS([-Wl,--as-needed])
   if test "$extrawarnings" = error; then
     AS_VAR_APPEND([CFLAGS], [" -Werror"])

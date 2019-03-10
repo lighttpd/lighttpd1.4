@@ -121,7 +121,7 @@ option('build_extra_warnings',
 )
 option('warn_cflags',
 	type: 'string',
-	value: '-g -g2 -Wall -Wmissing-declarations -Wdeclaration-after-statement -Wcast-align -Wsign-compare -Wnested-externs -Wpointer-arith -D_FORTIFY_SOURCE=2 -fstack-protector --param=ssp-buffer-size=4 -Wformat -Werror=format-security',
+	value: '-g -g2 -Wall -Wmissing-declarations -Wcast-align -Wsign-compare -Wnested-externs -Wpointer-arith -D_FORTIFY_SOURCE=2 -fstack-protector --param=ssp-buffer-size=4 -Wformat -Werror=format-security',
 	description: 'CFLAGS to use when build_extra_warnings is active',
 )
 
