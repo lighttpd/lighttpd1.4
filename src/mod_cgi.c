@@ -551,7 +551,7 @@ static ssize_t cgi_write_file_chunk_mmap(server *srv, connection *con, int fd, c
 	/*(simplified from chunk.c:chunkqueue_open_file_chunk())*/
 	UNUSED(con);
 	if (-1 == c->file.fd) {
-		if (-1 == (c->file.fd = fdevent_open_cloexec(c->mem->ptr, O_RDONLY, 0))) {
+		if (-1 == (c->file.fd = fdevent_open_cloexec(c->mem->ptr, con->conf.follow_symlink, O_RDONLY, 0))) {
 			log_error_write(srv, __FILE__, __LINE__, "ssb", "open failed:", strerror(errno), c->mem);
 			return -1;
 		}
@@ -804,7 +804,7 @@ static int cgi_create_env(server *srv, connection *con, plugin_data *p, handler_
 		args[i  ] = NULL;
 	}
 
-	dfd = fdevent_open_dirname(con->physical.path->ptr);
+	dfd = fdevent_open_dirname(con->physical.path->ptr, con->conf.follow_symlink);
 	if (-1 == dfd) {
 		log_error_write(srv, __FILE__, __LINE__, "ssb", "open dirname failed:", strerror(errno), con->physical.path);
 	}

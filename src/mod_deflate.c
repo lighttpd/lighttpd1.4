@@ -732,7 +732,7 @@ static int mod_deflate_file_chunk(server *srv, connection *con, handler_ctx *hct
 #endif
 
 	if (-1 == c->file.fd) {  /* open the file if not already open */
-		if (-1 == (c->file.fd = fdevent_open_cloexec(c->mem->ptr, O_RDONLY, 0))) {
+		if (-1 == (c->file.fd = fdevent_open_cloexec(c->mem->ptr, con->conf.follow_symlink, O_RDONLY, 0))) {
 			log_error_write(srv, __FILE__, __LINE__, "sbs", "open failed for:", c->mem, strerror(errno));
 
 			return -1;

@@ -807,7 +807,8 @@ int chunkqueue_open_file_chunk(server *srv, chunkqueue *cq) {
 	toSend = c->file.length - c->offset;
 
 	if (-1 == c->file.fd) {
-		if (-1 == (c->file.fd = fdevent_open_cloexec(c->mem->ptr, O_RDONLY, 0))) {
+		/* (permit symlinks; should already have been checked.  However, TOC-TOU remains) */
+		if (-1 == (c->file.fd = fdevent_open_cloexec(c->mem->ptr, 1, O_RDONLY, 0))) {
 			log_error_write(srv, __FILE__, __LINE__, "ssb", "open failed:", strerror(errno), c->mem);
 			return -1;
 		}

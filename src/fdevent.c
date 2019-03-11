@@ -484,15 +484,38 @@ int fdevent_socket_nb_cloexec(int domain, int type, int protocol) {
 	return fd;
 }
 
+#ifndef O_BINARY
+#define O_BINARY 0
+#endif
+#ifndef O_LARGEFILE
+#define O_LARGEFILE 0
+#endif
 #ifndef O_NOCTTY
 #define O_NOCTTY 0
 #endif
+#ifndef O_NOFOLLOW
+#define O_NOFOLLOW 0
+#endif
 
-int fdevent_open_cloexec(const char *pathname, int flags, mode_t mode) {
-#ifdef O_CLOEXEC
-	return open(pathname, flags | O_CLOEXEC | O_NOCTTY, mode);
+/*(O_NOFOLLOW is not handled here)*/
+/*(Note: O_NOFOLLOW affects only the final path segment, the target file,
+ * not any intermediate symlinks along the path)*/
+
+/* O_CLOEXEC handled further below, if defined) */
+#ifdef O_NONBLOCK
+#define FDEVENT_O_FLAGS \
+        (O_BINARY | O_LARGEFILE | O_NOCTTY | O_NONBLOCK)
 #else
-	int fd = open(pathname, flags | O_NOCTTY, mode);
+#define FDEVENT_O_FLAGS \
+        (O_BINARY | O_LARGEFILE | O_NOCTTY )
+#endif
+
+int fdevent_open_cloexec(const char *pathname, int symlinks, int flags, mode_t mode) {
+	if (!symlinks) flags |= O_NOFOLLOW;
+#ifdef O_CLOEXEC
+	return open(pathname, flags | O_CLOEXEC | FDEVENT_O_FLAGS, mode);
+#else
+	int fd = open(pathname, flags | FDEVENT_O_FLAGS, mode);
 #ifdef FD_CLOEXEC
 	if (fd != -1)
 		force_assert(-1 != fcntl(fd, F_SETFD, FD_CLOEXEC));
@@ -504,14 +527,14 @@ int fdevent_open_cloexec(const char *pathname, int flags, mode_t mode) {
 
 int fdevent_open_devnull(void) {
   #if defined(_WIN32)
-    return fdevent_open_cloexec("nul", O_RDWR, 0);
+    return fdevent_open_cloexec("nul", 0, O_RDWR, 0);
   #else
-    return fdevent_open_cloexec("/dev/null", O_RDWR, 0);
+    return fdevent_open_cloexec("/dev/null", 0, O_RDWR, 0);
   #endif
 }
 
 
-int fdevent_open_dirname(char *path) {
+int fdevent_open_dirname(char *path, int symlinks) {
     /*(handle special cases of no dirname or dirname is root directory)*/
     char * const c = strrchr(path, '/');
     const char * const dname = (NULL != c ? c == path ? "/" : path : ".");
@@ -521,7 +544,7 @@ int fdevent_open_dirname(char *path) {
     flags |= O_DIRECTORY;
   #endif
     if (NULL != c) *c = '\0';
-    dfd = fdevent_open_cloexec(dname, flags, 0);
+    dfd = fdevent_open_cloexec(dname, symlinks, flags, 0);
     if (NULL != c) *c = '/';
     return dfd;
 }
@@ -861,14 +884,10 @@ static int fdevent_open_logger_pipe(const char *logger) {
 }
 
 
-#ifndef O_LARGEFILE
-#define O_LARGEFILE 0
-#endif
-
 int fdevent_open_logger(const char *logger) {
-    if (logger[0] != '|') {
-        int flags = O_APPEND | O_WRONLY | O_CREAT | O_LARGEFILE;
-        return fdevent_open_cloexec(logger, flags, 0644);
+    if (logger[0] != '|') { /*(permit symlinks)*/
+        int flags = O_APPEND | O_WRONLY | O_CREAT;
+        return fdevent_open_cloexec(logger, 1, flags, 0644);
     }
     else {
         return fdevent_open_logger_pipe(logger+1); /*(skip the '|')*/

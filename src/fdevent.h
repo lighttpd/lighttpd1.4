@@ -79,14 +79,14 @@ int fdevent_fcntl_set_nb_cloexec(fdevents *ev, int fd);
 int fdevent_fcntl_set_nb_cloexec_sock(fdevents *ev, int fd);
 int fdevent_socket_cloexec(int domain, int type, int protocol);
 int fdevent_socket_nb_cloexec(int domain, int type, int protocol);
-int fdevent_open_cloexec(const char *pathname, int flags, mode_t mode);
+int fdevent_open_cloexec(const char *pathname, int symlinks, int flags, mode_t mode);
 
 struct sockaddr;
 int fdevent_accept_listenfd(int listenfd, struct sockaddr *addr, size_t *addrlen);
 
 char ** fdevent_environ(void);
 int fdevent_open_devnull(void);
-int fdevent_open_dirname(char *path);
+int fdevent_open_dirname(char *path, int symlinks);
 int fdevent_set_stdin_stdout_stderr(int fdin, int fdout, int fderr);
 pid_t fdevent_fork_execve(const char *name, char *argv[], char *envp[], int fdin, int fdout, int fderr, int dfd);
 int fdevent_open_logger(const char *logger);

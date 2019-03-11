@@ -236,7 +236,7 @@ int cache_parse_lua(server *srv, connection *con, plugin_data *p, buffer *fn) {
 					buffer_copy_string(b, lua_tostring(L, -1));
 				}
 
-				fd = stat_cache_open_rdonly_fstat(srv, con, b, &st);
+				fd = stat_cache_open_rdonly_fstat(b, &st, con->conf.follow_symlink);
 				if (fd < 0) {
 					/* stat failed */
 

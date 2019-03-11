@@ -41,7 +41,7 @@ static int http_chunk_append_file_open_fstat(server *srv, connection *con, buffe
 		if (HANDLER_ERROR == stat_cache_get_entry(srv, con, fn, &sce)) return -1;
 	}
 
-	return stat_cache_open_rdonly_fstat(srv, con, fn, st);
+	return stat_cache_open_rdonly_fstat(fn, st, con->conf.follow_symlink);
 }
 
 static void http_chunk_append_file_fd_range(server *srv, connection *con, buffer *fn, int fd, off_t offset, off_t len) {

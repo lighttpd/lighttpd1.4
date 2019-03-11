@@ -106,7 +106,7 @@ static int li_rand_device_bytes (unsigned char *buf, int num)
 
     for (unsigned int u = 0; u < sizeof(devices)/sizeof(devices[0]); ++u) {
         /*(some systems might have symlink to another device; omit O_NOFOLLOW)*/
-        int fd = fdevent_open_cloexec(devices[u], O_RDONLY, 0);
+        int fd = fdevent_open_cloexec(devices[u], 0, O_RDONLY, 0);
         if (fd >= 0) {
             ssize_t rd = 0;
           #ifdef RNDGETENTCNT

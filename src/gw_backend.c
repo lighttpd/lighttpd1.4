@@ -562,7 +562,7 @@ static int gw_spawn_connection(server *srv, gw_host *host, gw_proc *proc, int de
             env.ptr[env.used] = NULL;
         }
 
-        dfd = fdevent_open_dirname(host->args.ptr[0]);
+        dfd = fdevent_open_dirname(host->args.ptr[0], 1); /* permit symlinks */
         if (-1 == dfd) {
             log_error_write(srv, __FILE__, __LINE__, "sss",
                             "open dirname failed:", strerror(errno),

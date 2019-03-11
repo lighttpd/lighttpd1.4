@@ -1266,7 +1266,7 @@ static int server_main (server * const srv, int argc, char **argv) {
 	/* open pid file BEFORE chroot */
 	if (-2 == pid_fd) pid_fd = -1; /*(initial startup state)*/
 	if (-1 == pid_fd && !buffer_string_is_empty(srv->srvconf.pid_file)) {
-		if (-1 == (pid_fd = fdevent_open_cloexec(srv->srvconf.pid_file->ptr, O_WRONLY | O_CREAT | O_EXCL | O_TRUNC, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH))) {
+		if (-1 == (pid_fd = fdevent_open_cloexec(srv->srvconf.pid_file->ptr, 0, O_WRONLY | O_CREAT | O_EXCL | O_TRUNC, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH))) {
 			struct stat st;
 			if (errno != EEXIST) {
 				log_error_write(srv, __FILE__, __LINE__, "sbs",
@@ -1285,7 +1285,7 @@ static int server_main (server * const srv, int argc, char **argv) {
 				return -1;
 			}
 
-			if (-1 == (pid_fd = fdevent_open_cloexec(srv->srvconf.pid_file->ptr, O_WRONLY | O_CREAT | O_TRUNC, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH))) {
+			if (-1 == (pid_fd = fdevent_open_cloexec(srv->srvconf.pid_file->ptr, 0, O_WRONLY | O_CREAT | O_TRUNC, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH))) {
 				log_error_write(srv, __FILE__, __LINE__, "sbs",
 						"opening pid-file failed:", srv->srvconf.pid_file, strerror(errno));
 				return -1;
