@@ -1335,7 +1335,7 @@ static handler_t mod_webdav_propfind(server *srv, connection *con, plugin_data *
 		}
 
 		if (S_ISDIR(sce->st.st_mode) && con->physical.path->ptr[buffer_string_length(con->physical.path)-1] != '/') {
-			http_response_redirect_to_directory(srv, con);
+			http_response_redirect_to_directory(srv, con, 308);
 			return HANDLER_FINISHED;
 		}
 
@@ -1652,7 +1652,7 @@ static handler_t mod_webdav_delete(server *srv, connection *con, plugin_data *p,
 			buffer *multi_status_resp;
 
 			if (con->physical.path->ptr[buffer_string_length(con->physical.path)-1] != '/') {
-				http_response_redirect_to_directory(srv, con);
+				http_response_redirect_to_directory(srv, con, 308);
 				return HANDLER_FINISHED;
 			}
 
@@ -2083,7 +2083,7 @@ static handler_t mod_webdav_copymove(server *srv, connection *con, plugin_data *
 			/* src is a directory */
 
 			if (con->physical.path->ptr[buffer_string_length(con->physical.path)-1] != '/') {
-				http_response_redirect_to_directory(srv, con);
+				http_response_redirect_to_directory(srv, con, 308);
 				return HANDLER_FINISHED;
 			}
 
@@ -2238,7 +2238,7 @@ static handler_t mod_webdav_proppatch(server *srv, connection *con, plugin_data 
 		}
 
 		if (S_ISDIR(st.st_mode) && con->physical.path->ptr[buffer_string_length(con->physical.path)-1] != '/') {
-			http_response_redirect_to_directory(srv, con);
+			http_response_redirect_to_directory(srv, con, 308);
 			return HANDLER_FINISHED;
 		}
 

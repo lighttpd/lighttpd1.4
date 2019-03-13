@@ -91,7 +91,7 @@ int http_response_buffer_append_authority(server *srv, connection *con, buffer *
 	return 0;
 }
 
-int http_response_redirect_to_directory(server *srv, connection *con) {
+int http_response_redirect_to_directory(server *srv, connection *con, int status) {
 	buffer *o = srv->tmp_buf;
 	buffer_copy_buffer(o, con->uri.scheme);
 	buffer_append_string_len(o, CONST_STR_LEN("://"));
@@ -105,10 +105,15 @@ int http_response_redirect_to_directory(server *srv, connection *con) {
 		buffer_append_string_buffer(o, con->uri.query);
 	}
 
-	http_header_response_set(con, HTTP_HEADER_LOCATION, CONST_STR_LEN("Location"), CONST_BUF_LEN(o));
+	if (status >= 300) {
+		http_header_response_set(con, HTTP_HEADER_LOCATION, CONST_STR_LEN("Location"), CONST_BUF_LEN(o));
+		con->http_status = status;
+		con->file_finished = 1;
+	}
+	else {
+		http_header_response_set(con, HTTP_HEADER_CONTENT_LOCATION, CONST_STR_LEN("Content-Location"), CONST_BUF_LEN(o));
+	}
 
-	con->http_status = 301;
-	con->file_finished = 1;
 	return 0;
 }
 

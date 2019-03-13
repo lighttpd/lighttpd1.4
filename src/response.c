@@ -245,7 +245,7 @@ static handler_t http_response_physical_path_check(server *srv, connection *con)
 		if (con->uri.path->ptr[buffer_string_length(con->uri.path) - 1] != '/') {
 			/* redirect to .../ */
 
-			http_response_redirect_to_directory(srv, con);
+			http_response_redirect_to_directory(srv, con, 301);
 
 			return HANDLER_FINISHED;
 		}

@@ -215,7 +215,7 @@ URIHANDLER_FUNC(mod_userdir_docroot_handler) {
 
 	if (NULL == (rel_url = strchr(con->uri.path->ptr + 2, '/'))) {
 		/* / is missing -> redirect to .../ as we are a user - DIRECTORY ! :) */
-		http_response_redirect_to_directory(srv, con);
+		http_response_redirect_to_directory(srv, con, 301);
 
 		return HANDLER_FINISHED;
 	}
