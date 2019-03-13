@@ -1193,6 +1193,8 @@ static int connection_handle_request(server *srv, connection *con) {
 								con->error_handler_saved_status = -con->http_status; /*(negative to flag old behavior)*/
 							}
 
+							if (con->request.http_version == HTTP_VERSION_UNSET) con->request.http_version = HTTP_VERSION_1_0;
+
 							buffer_copy_buffer(con->request.uri, error_handler);
 							connection_handle_errdoc_init(con);
 							con->http_status = 0; /*(after connection_handle_errdoc_init())*/
