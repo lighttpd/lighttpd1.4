@@ -26,6 +26,9 @@ static int fdevent_linux_sysepoll_event_set(fdevents *ev, fdnode *fdn, int event
     int op = (-1 == fdn->fde_ndx) ? EPOLL_CTL_ADD : EPOLL_CTL_MOD;
     int fd = fdn->fde_ndx = fdn->fd;
     struct epoll_event ep;
+  #ifndef EPOLLRDHUP
+    events &= ~FDEVENT_RDHUP;
+  #endif
     ep.events = events | EPOLLERR | EPOLLHUP;
     ep.data.ptr = fdn;
     return epoll_ctl(ev->epoll_fd, op, fd, &ep);

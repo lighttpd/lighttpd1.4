@@ -47,6 +47,10 @@ static int fdevent_poll_event_set(fdevents *ev, fdnode *fdn, int events) {
 	int fd = fdn->fd;
 	int k = fdn->fde_ndx;
 
+      #ifndef POLLRDHUP
+	events &= ~FDEVENT_RDHUP;
+      #endif
+
 	if (k >= 0) {
 		if ((size_t)k >= ev->used || ev->pollfds[k].fd != fd) return (errno = EINVAL, -1);
 		ev->pollfds[k].events = events;
