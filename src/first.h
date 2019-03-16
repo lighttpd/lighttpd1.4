@@ -111,5 +111,12 @@
 #endif
 #endif
 
+#if __has_attribute(fallthrough) \
+ || __GNUC_PREREQ(7,0)
+#define __attribute_fallthrough__  __attribute__((__fallthrough__));
+#else
+#define __attribute_fallthrough__
+#endif
+
 
 #endif
