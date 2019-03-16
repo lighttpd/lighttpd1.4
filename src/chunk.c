@@ -524,21 +524,10 @@ static chunk *chunkqueue_get_append_tempfile(server *srv, chunkqueue *cq) {
 
 			buffer_copy_buffer(template, ds->value);
 			buffer_append_path_len(template, CONST_STR_LEN("lighttpd-upload-XXXXXX"));
-
-		      #ifdef __COVERITY__
-			/* POSIX-2008 requires mkstemp create file with 0600 perms */
-			umask(0600);
-		      #endif
-			/* coverity[secure_temp : FALSE] */
-			if (-1 != (fd = mkstemp(template->ptr))) break;
+			if (-1 != (fd = fdevent_mkstemp_append(template->ptr))) break;
 		}
 	} else {
-	      #ifdef __COVERITY__
-		/* POSIX-2008 requires mkstemp create file with 0600 perms */
-		umask(0600);
-	      #endif
-		/* coverity[secure_temp : FALSE] */
-		fd = mkstemp(template->ptr);
+		fd = fdevent_mkstemp_append(template->ptr);
 	}
 
 	if (fd < 0) {
@@ -550,16 +539,6 @@ static chunk *chunkqueue_get_append_tempfile(server *srv, chunkqueue *cq) {
 		buffer_free(template);
 		return NULL;
 	}
-
-	if (0 != fcntl(fd, F_SETFL, fcntl(fd, F_GETFL, 0) | O_APPEND)) {
-		/* (should not happen; fd is regular file) */
-		log_error_write(srv, __FILE__, __LINE__, "sbs",
-				"fcntl():", template, strerror(errno));
-		close(fd);
-		buffer_free(template);
-		return NULL;
-	}
-	fdevent_setfd_cloexec(fd);
 
 	c = chunkqueue_append_file_chunk(cq, template, 0, 0);
 	c->file.fd = fd;

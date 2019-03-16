@@ -80,6 +80,7 @@ int fdevent_fcntl_set_nb_cloexec_sock(fdevents *ev, int fd);
 int fdevent_socket_cloexec(int domain, int type, int protocol);
 int fdevent_socket_nb_cloexec(int domain, int type, int protocol);
 int fdevent_open_cloexec(const char *pathname, int symlinks, int flags, mode_t mode);
+int fdevent_mkstemp_append(char *path);
 
 struct sockaddr;
 int fdevent_accept_listenfd(int listenfd, struct sockaddr *addr, size_t *addrlen);

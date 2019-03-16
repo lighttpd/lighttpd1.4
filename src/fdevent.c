@@ -550,6 +550,28 @@ int fdevent_open_dirname(char *path, int symlinks) {
 }
 
 
+int fdevent_mkstemp_append(char *path) {
+  #ifdef __COVERITY__
+    /* POSIX-2008 requires mkstemp create file with 0600 perms */
+    umask(0600);
+  #endif
+    /* coverity[secure_temp : FALSE] */
+    const int fd = mkstemp(path);
+    if (fd < 0) return fd;
+
+    if (0 != fcntl(fd, F_SETFL, fcntl(fd, F_GETFL, 0) | O_APPEND)) {
+        /* (should not happen; fd is regular file) */
+        int errnum = errno;
+        close(fd);
+        errno = errnum;
+        return -1;
+    }
+
+    fdevent_setfd_cloexec(fd);
+    return fd;
+}
+
+
 int fdevent_accept_listenfd(int listenfd, struct sockaddr *addr, size_t *addrlen) {
 	int fd;
 	socklen_t len = (socklen_t) *addrlen;
