@@ -111,11 +111,22 @@
 #endif
 #endif
 
+#ifndef __attribute_fallthrough__
 #if __has_attribute(fallthrough) \
  || __GNUC_PREREQ(7,0)
 #define __attribute_fallthrough__  __attribute__((__fallthrough__));
 #else
-#define __attribute_fallthrough__
+#define __attribute_fallthrough__  /* fall through */
+#endif
+#endif
+
+#ifndef __attribute_format__
+#if __has_attribute(format) \
+ || __GNUC_PREREQ(2,95) /*(maybe earlier gcc, too)*/
+#define __attribute_format__(x)  __attribute__((__format__ x))
+#else
+#define __attribute_format__(x)
+#endif
 #endif
 
 
