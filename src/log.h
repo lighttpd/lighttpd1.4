@@ -31,4 +31,12 @@ log_error_st * log_error_st_init (time_t *cur_ts_ptr, time_t *last_ts_ptr);
 __attribute_cold__
 void log_error_st_free (log_error_st *errh);
 
+__attribute_cold__
+__attribute_format__((__printf__, 4, 5))
+void log_error(const log_error_st *errh, const char *filename, unsigned int line, const char *fmt, ...);
+
+__attribute_cold__
+__attribute_format__((__printf__, 4, 5))
+void log_perror(const log_error_st *errh, const char *filename, unsigned int line, const char *fmt, ...);
+
 #endif
