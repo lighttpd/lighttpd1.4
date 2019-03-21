@@ -256,6 +256,8 @@ struct connection {
 	unsigned int mode;           /* DIRECT (0) or plugin id */
 	int async_callback;
 
+	log_error_st *errh;
+
 	void **plugin_ctx;           /* plugin connection specific config */
 
 	specific_config conf;        /* global connection specific config */
@@ -367,11 +369,6 @@ typedef struct {
 struct server {
 	server_socket_array srv_sockets;
 
-	/* the errorlog */
-	int errorlog_fd;
-	enum { ERRORLOG_FILE, ERRORLOG_FD, ERRORLOG_SYSLOG, ERRORLOG_PIPE } errorlog_mode;
-	buffer *errorlog_buf;
-
 	struct fdevents *ev;
 
 	buffer_plugin plugins;
@@ -408,6 +405,8 @@ struct server {
 	mtime_cache_type mtime_cache[FILE_CACHE_MAX];
 
 	array *split_vals;
+
+	log_error_st *errh;
 
 	/* Timestamps */
 	time_t cur_ts;

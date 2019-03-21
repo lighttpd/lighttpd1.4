@@ -9,6 +9,7 @@
 #include "request.h"
 #include "base.h"
 #include "burl.h"
+#include "log.h"
 
 static void test_request_connection_reset(connection *con)
 {
@@ -453,9 +454,8 @@ int main (void)
     connection con;
 
     memset(&srv, 0, sizeof(server));
-    srv.errorlog_fd = -1; /* use 2 for STDERR_FILENO from unistd.h */
-    srv.errorlog_mode = ERRORLOG_FD;
-    srv.errorlog_buf = buffer_init();
+    srv.errh = log_error_st_init(&srv.cur_ts, &srv.last_generated_debug_ts);
+    srv.errh->errorlog_fd = -1; /* (disable) */
     srv.split_vals = array_init();
 
     memset(&con, 0, sizeof(connection));
@@ -478,7 +478,7 @@ int main (void)
     array_free(con.request.headers);
 
     array_free(srv.split_vals);
-    buffer_free(srv.errorlog_buf);
+    log_error_st_free(srv.errh);
 
     return 0;
 }
