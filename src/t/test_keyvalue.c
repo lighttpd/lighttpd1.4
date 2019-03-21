@@ -16,9 +16,7 @@ static pcre_keyvalue_buffer * test_keyvalue_test_kvb_init (void) {
     server srv;
 
     memset(&srv, 0, sizeof(srv));
-    srv.errorlog_fd = STDERR_FILENO;
-    srv.errorlog_mode = ERRORLOG_FD;
-    srv.errorlog_buf = buffer_init();
+    srv.errh = log_error_st_init(&srv.cur_ts, &srv.last_generated_debug_ts);
 
     buffer_copy_string_len(k, CONST_STR_LEN("^/foo($|\\?.+)"));
     buffer_copy_string_len(v, CONST_STR_LEN("/foo/$1"));
@@ -35,7 +33,7 @@ static pcre_keyvalue_buffer * test_keyvalue_test_kvb_init (void) {
 
     buffer_free(k);
     buffer_free(v);
-    buffer_free(srv.errorlog_buf);
+    log_error_st_free(srv.errh);
 
     return kvb;
 }

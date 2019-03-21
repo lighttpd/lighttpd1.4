@@ -1092,6 +1092,7 @@ connection *connection_accepted(server *srv, server_socket *srv_socket, sock_add
 		srv->con_opened++;
 
 		con = connections_get_new_connection(srv);
+		con->errh = srv->errh;
 
 		con->fd = cnt;
 		con->fdn = fdevent_register(srv->ev, con->fd, connection_handle_fdevent, con);

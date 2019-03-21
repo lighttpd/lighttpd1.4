@@ -232,9 +232,7 @@ static server *server_init(void) {
 
 	CLEAN(response_header);
 	CLEAN(parse_full_path);
-	CLEAN(ts_debug_str);
 	CLEAN(ts_date_str);
-	CLEAN(errorlog_buf);
 	CLEAN(response_range);
 	CLEAN(tmp_buf);
 	srv->empty_string = buffer_init_string("");
@@ -280,6 +278,8 @@ static server *server_init(void) {
 	srv->fdwaitqueue = calloc(1, sizeof(*srv->fdwaitqueue));
 	force_assert(srv->fdwaitqueue);
 
+	srv->errh = log_error_st_init(&srv->cur_ts, &srv->last_generated_debug_ts);
+
 	srv->srvconf.modules = array_init();
 	srv->srvconf.modules_dir = buffer_init_string(LIBRARY_DIR);
 	srv->srvconf.network_backend = buffer_init();
@@ -306,10 +306,6 @@ static server *server_init(void) {
 	srv->srvconf.compat_module_load = 1;
 	srv->srvconf.systemd_socket_activation = 0;
 
-	/* use syslog */
-	srv->errorlog_fd = STDERR_FILENO;
-	srv->errorlog_mode = ERRORLOG_FD;
-
 	srv->split_vals = array_init();
 	srv->request_env = plugins_call_handle_request_env;
 
@@ -333,9 +329,7 @@ static void server_free(server *srv) {
 
 	CLEAN(response_header);
 	CLEAN(parse_full_path);
-	CLEAN(ts_debug_str);
 	CLEAN(ts_date_str);
-	CLEAN(errorlog_buf);
 	CLEAN(response_range);
 	CLEAN(tmp_buf);
 	CLEAN(empty_string);
@@ -403,6 +397,7 @@ static void server_free(server *srv) {
 	li_rand_cleanup();
 	chunkqueue_chunk_pool_free();
 
+	log_error_st_free(srv->errh);
 	free(srv);
 }
 
@@ -674,6 +669,7 @@ static void show_help (void) {
  */
 
 static int log_error_open(server *srv) {
+    log_error_st *errh = srv->errh;
     int errfd;
   #ifdef HAVE_SYSLOG_H
     /* perhaps someone wants to use syslog() */
@@ -743,11 +739,11 @@ static int log_error_open(server *srv) {
     openlog("lighttpd", LOG_CONS|LOG_PID, -1==facility ? LOG_DAEMON : facility);
   #endif
 
-    srv->errorlog_mode = ERRORLOG_FD;
-    srv->errorlog_fd = STDERR_FILENO;
+    errh->errorlog_mode = ERRORLOG_FD;
+    errh->errorlog_fd = STDERR_FILENO;
 
     if (srv->srvconf.errorlog_use_syslog) {
-        srv->errorlog_mode = ERRORLOG_SYSLOG;
+        errh->errorlog_mode = ERRORLOG_SYSLOG;
     }
     else if (!buffer_string_is_empty(srv->srvconf.errorlog_file)) {
         const char *logfile = srv->srvconf.errorlog_file->ptr;
@@ -758,24 +754,24 @@ static int log_error_open(server *srv) {
                             "' failed: ", strerror(errno));
             return -1;
         }
-        srv->errorlog_fd = fd;
-        srv->errorlog_mode = logfile[0] == '|' ? ERRORLOG_PIPE : ERRORLOG_FILE;
+        errh->errorlog_fd = fd;
+        errh->errorlog_mode = logfile[0] == '|' ? ERRORLOG_PIPE : ERRORLOG_FILE;
     }
 
-    if (srv->errorlog_mode == ERRORLOG_FD && !srv->srvconf.dont_daemonize) {
+    if (errh->errorlog_mode == ERRORLOG_FD && !srv->srvconf.dont_daemonize) {
         /* We can only log to stderr in dont-daemonize mode;
          * if we do daemonize and no errorlog file is specified,
          * we log into /dev/null
          */
-        srv->errorlog_fd = -1;
+        errh->errorlog_fd = -1;
     }
 
     if (!buffer_string_is_empty(srv->srvconf.breakagelog_file)) {
         const char *logfile = srv->srvconf.breakagelog_file->ptr;
 
-        if (srv->errorlog_mode == ERRORLOG_FD) {
-            srv->errorlog_fd = dup(STDERR_FILENO);
-            fdevent_setfd_cloexec(srv->errorlog_fd);
+        if (errh->errorlog_mode == ERRORLOG_FD) {
+            errh->errorlog_fd = dup(STDERR_FILENO);
+            fdevent_setfd_cloexec(errh->errorlog_fd);
         }
 
         if (-1 == (errfd = fdevent_open_logger(logfile))) {
@@ -823,9 +819,10 @@ static int log_error_open(server *srv) {
 static int log_error_cycle(server *srv) {
     /* cycle only if the error log is a file */
 
-    if (srv->errorlog_mode == ERRORLOG_FILE) {
+    log_error_st *errh = srv->errh;
+    if (errh->errorlog_mode == ERRORLOG_FILE) {
         const char *logfile = srv->srvconf.errorlog_file->ptr;
-        if (-1 == fdevent_cycle_logger(logfile, &srv->errorlog_fd)) {
+        if (-1 == fdevent_cycle_logger(logfile, &errh->errorlog_fd)) {
             /* write to old log */
             log_error_write(srv, __FILE__, __LINE__, "SSSS",
                             "cycling errorlog '", logfile,
@@ -838,18 +835,19 @@ static int log_error_cycle(server *srv) {
 
 __attribute_cold__
 static int log_error_close(server *srv) {
-    switch(srv->errorlog_mode) {
+    log_error_st *errh = srv->errh;
+    switch(errh->errorlog_mode) {
     case ERRORLOG_PIPE:
     case ERRORLOG_FILE:
     case ERRORLOG_FD:
-        if (-1 != srv->errorlog_fd) {
+        if (-1 != errh->errorlog_fd) {
             /* don't close STDERR */
             /* fdevent_close_logger_pipes() closes ERRORLOG_PIPE */
-            if (STDERR_FILENO != srv->errorlog_fd
-                && srv->errorlog_mode != ERRORLOG_PIPE) {
-                close(srv->errorlog_fd);
+            if (STDERR_FILENO != errh->errorlog_fd
+                && ERRORLOG_PIPE != errh->errorlog_mode) {
+                close(errh->errorlog_fd);
             }
-            srv->errorlog_fd = -1;
+            errh->errorlog_fd = -1;
         }
         break;
     case ERRORLOG_SYSLOG:
