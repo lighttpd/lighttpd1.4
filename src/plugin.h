@@ -37,6 +37,7 @@ typedef struct {
 	void *(* init)                       ();
 	handler_t (* priv_defaults)          (server *srv, void *p_d);
 	handler_t (* set_defaults)           (server *srv, void *p_d);
+	handler_t (* worker_init)            (server *srv, void *p_d); /* at server startup (each worker after fork()) */
 	handler_t (* cleanup)                (server *srv, void *p_d);
 	                                                                                   /* is called ... */
 	handler_t (* handle_trigger)         (server *srv, void *p_d);                     /* once a second */
@@ -100,6 +101,9 @@ handler_t plugins_call_init(server *srv);
 
 __attribute_cold__
 handler_t plugins_call_set_defaults(server *srv);
+
+__attribute_cold__
+handler_t plugins_call_worker_init(server *srv);
 
 __attribute_cold__
 handler_t plugins_call_cleanup(server *srv);
