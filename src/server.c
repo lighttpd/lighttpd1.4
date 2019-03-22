@@ -1787,6 +1787,10 @@ static int server_main (server * const srv, int argc, char **argv) {
 		return -1;
 	}
 
+	/* plugin hook for worker_init */
+	if (HANDLER_GO_ON != plugins_call_worker_init(srv))
+		return -1;
+
 	if (oneshot_fd && server_oneshot_init(srv, oneshot_fd)) {
 		oneshot_fd = -1;
 	}
