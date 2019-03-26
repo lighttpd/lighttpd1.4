@@ -4703,7 +4703,10 @@ mod_webdav_proppatch (connection * const con, const plugin_config * const pconf)
             if (0 != webdav_xmlstrcmp_fixed(props->name, "prop"))
                 continue;
 
-            const xmlNode * const prop = props->children;
+            const xmlNode *prop = props->children;
+            /* libxml2 will keep those blank (whitespace only) nodes */
+            while (NULL != prop && xmlIsBlankNode(prop))
+                prop = prop->next;
             if (NULL == prop)
                 continue;
             if (prop->ns && '\0' == *(char *)prop->ns->href
