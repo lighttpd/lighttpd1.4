@@ -138,6 +138,12 @@ static handler_t http_response_physical_path_check(server *srv, connection *con)
 		case ENAMETOOLONG:
 			/* file name to be read was too long. return 404 */
 		case ENOENT:
+			if (con->request.http_method == HTTP_METHOD_OPTIONS
+			    && NULL != http_header_response_get(con, HTTP_HEADER_OTHER, CONST_STR_LEN("Allow"))) {
+				con->http_status = 200;
+				return HANDLER_FINISHED;
+			}
+
 			con->http_status = 404;
 
 			if (con->conf.log_request_handling) {
