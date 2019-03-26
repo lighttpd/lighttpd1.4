@@ -674,7 +674,12 @@ handler_t stat_cache_get_entry(server *srv, connection *con, buffer *name, stat_
 		}
 
 		/* try to open the file to check if we can read it */
-		if (-1 == (fd = open(name->ptr, O_RDONLY))) {
+	      #ifdef O_NONBLOCK
+		fd = open(name->ptr, O_RDONLY | O_NONBLOCK, 0);
+	      #else
+		fd = open(name->ptr, O_RDONLY, 0);
+	      #endif
+		if (-1 == fd) {
 			return HANDLER_ERROR;
 		}
 		close(fd);

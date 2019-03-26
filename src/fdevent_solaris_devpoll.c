@@ -63,8 +63,7 @@ __attribute_cold__
 int fdevent_solaris_devpoll_reset(fdevents *ev) {
 	/* a forked process does only inherit the filedescriptor,
 	 * but every operation on the device will lead to a EACCES */
-	if ((ev->devpoll_fd = open("/dev/poll", O_RDWR)) < 0) return -1;
-	fdevent_setfd_cloexec(ev->devpoll_fd);
+	if ((ev->devpoll_fd = fdevent_open_cloexec("/dev/poll", 1, O_RDWR, 0)) < 0) return -1;
 	return 0;
 }
 

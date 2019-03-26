@@ -1168,15 +1168,8 @@ static void mod_ssi_read_fd(server *srv, connection *con, handler_ctx *p, struct
 }
 
 
-/* don't want to block when open()ing a fifo */
-#if defined(O_NONBLOCK)
-# define FIFO_NONBLOCK O_NONBLOCK
-#else
-# define FIFO_NONBLOCK 0
-#endif
-
 static int mod_ssi_process_file(server *srv, connection *con, handler_ctx *p, struct stat *st) {
-	int fd = open(con->physical.path->ptr, O_RDONLY | FIFO_NONBLOCK);
+	int fd = fdevent_open_cloexec(con->physical.path->ptr, con->conf.follow_symlink, O_RDONLY, 0);
 	if (-1 == fd) {
 		log_error_write(srv, __FILE__, __LINE__,  "SsB", "open(): ",
 				strerror(errno), con->physical.path);
