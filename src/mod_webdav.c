@@ -659,17 +659,6 @@ static int webdav_delete_dir(server *srv, connection *con, handler_ctx *hctx, ph
 	return have_multi_status;
 }
 
-/* don't want to block when open()ing a fifo */
-#if defined(O_NONBLOCK)
-# define FIFO_NONBLOCK O_NONBLOCK
-#else
-# define FIFO_NONBLOCK 0
-#endif
-
-#ifndef O_BINARY
-#define O_BINARY 0
-#endif
-
 static int webdav_copy_file(server *srv, connection *con, handler_ctx *hctx, physical *src, physical *dst, int overwrite) {
 	char *data;
 	ssize_t rd, wr, offset;
@@ -677,11 +666,11 @@ static int webdav_copy_file(server *srv, connection *con, handler_ctx *hctx, phy
 	UNUSED(srv);
 	UNUSED(con);
 
-	if (-1 == (ifd = open(src->path->ptr, O_RDONLY | O_BINARY | FIFO_NONBLOCK))) {
+	if (-1 == (ifd = fdevent_open_cloexec(src->path->ptr, 0, O_RDONLY, 0))) {
 		return 403;
 	}
 
-	if (-1 == (ofd = open(dst->path->ptr, O_WRONLY|O_TRUNC|O_CREAT|(overwrite ? 0 : O_EXCL), WEBDAV_FILE_MODE))) {
+	if (-1 == (ofd = fdevent_open_cloexec(dst->path->ptr, 0, O_WRONLY|O_TRUNC|O_CREAT|(overwrite ? 0 : O_EXCL), WEBDAV_FILE_MODE))) {
 		/* opening the destination failed for some reason */
 		switch(errno) {
 		case EEXIST:
@@ -1128,7 +1117,7 @@ static int webdav_parse_chunkqueue(server *srv, connection *con, handler_ctx *hc
 				data = c->file.mmap.start + c->offset;
 			} else {
 				if (-1 == c->file.fd &&  /* open the file if not already open */
-				    -1 == (c->file.fd = fdevent_open_cloexec(c->mem->ptr, con->conf.follow_symlink, O_RDONLY, 0))) {
+				    -1 == (c->file.fd = fdevent_open_cloexec(c->mem->ptr, 1, O_RDONLY, 0))) {
 					log_error_write(srv, __FILE__, __LINE__, "ss", "open failed: ", strerror(errno));
 
 					return -1;
@@ -1781,7 +1770,7 @@ static handler_t mod_webdav_put(server *srv, connection *con, plugin_data *p, ha
 				return HANDLER_FINISHED;
 			}
 
-			if (-1 == (fd = open(con->physical.path->ptr, O_WRONLY, WEBDAV_FILE_MODE))) {
+			if (-1 == (fd = fdevent_open_cloexec(con->physical.path->ptr, 0, O_WRONLY, WEBDAV_FILE_MODE))) {
 				switch (errno) {
 				case ENOENT:
 					con->http_status = 404; /* not found */
@@ -1805,9 +1794,9 @@ static handler_t mod_webdav_put(server *srv, connection *con, plugin_data *p, ha
 			/* take what we have in the request-body and write it to a file */
 
 			/* if the file doesn't exist, create it */
-			if (-1 == (fd = open(con->physical.path->ptr, O_WRONLY|O_TRUNC, WEBDAV_FILE_MODE))) {
+			if (-1 == (fd = fdevent_open_cloexec(con->physical.path->ptr, 0, O_WRONLY|O_TRUNC, WEBDAV_FILE_MODE))) {
 				if (errno != ENOENT ||
-				    -1 == (fd = open(con->physical.path->ptr, O_WRONLY|O_CREAT|O_TRUNC|O_EXCL, WEBDAV_FILE_MODE))) {
+				    -1 == (fd = fdevent_open_cloexec(con->physical.path->ptr, 0, O_WRONLY|O_CREAT|O_TRUNC|O_EXCL, WEBDAV_FILE_MODE))) {
 					/* we can't open the file */
 					con->http_status = 403;
 
@@ -1838,7 +1827,7 @@ static handler_t mod_webdav_put(server *srv, connection *con, plugin_data *p, ha
 					data = c->file.mmap.start + c->offset;
 				} else {
 					if (-1 == c->file.fd &&  /* open the file if not already open */
-					    -1 == (c->file.fd = fdevent_open_cloexec(c->mem->ptr, con->conf.follow_symlink, O_RDONLY, 0))) {
+					    -1 == (c->file.fd = fdevent_open_cloexec(c->mem->ptr, 1, O_RDONLY, 0))) {
 						log_error_write(srv, __FILE__, __LINE__, "ss", "open failed: ", strerror(errno));
 						close(fd);
 						return HANDLER_ERROR;
@@ -2429,7 +2418,7 @@ static handler_t mod_webdav_lock(server *srv, connection *con, plugin_data *p, h
 
 			if (0 != stat(con->physical.path->ptr, &st)) {
 				if (errno == ENOENT) {
-					int fd = open(con->physical.path->ptr, O_WRONLY|O_CREAT|O_APPEND|O_BINARY|FIFO_NONBLOCK, WEBDAV_FILE_MODE);
+					int fd = fdevent_open_cloexec(con->physical.path->ptr, 0, O_WRONLY|O_CREAT|O_APPEND, WEBDAV_FILE_MODE);
 					if (fd >= 0) {
 						close(fd);
 						created = 1;

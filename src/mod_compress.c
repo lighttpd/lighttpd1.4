@@ -3,6 +3,7 @@
 #include "base.h"
 #include "log.h"
 #include "buffer.h"
+#include "fdevent.h"
 #include "http_header.h"
 #include "response.h"
 #include "stat_cache.h"
@@ -22,10 +23,6 @@
 #include <string.h>
 #include <errno.h>
 #include <time.h>
-
-#ifndef O_BINARY
-#define O_BINARY 0
-#endif
 
 #if defined HAVE_ZLIB_H && defined HAVE_LIBZ
 # define USE_ZLIB
@@ -540,7 +537,8 @@ static int deflate_file_to_file(server *srv, connection *con, plugin_data *p, bu
 		return -1;
 	}
 
-	if (-1 == (ofd = open(p->ofn->ptr, O_WRONLY | O_CREAT | O_EXCL | O_BINARY, 0600))) {
+	/*(note: follows symlinks in protected cache dir)*/
+	if (-1 == (ofd = fdevent_open_cloexec(p->ofn->ptr, 1, O_WRONLY | O_CREAT | O_EXCL, 0600))) {
 		if (errno == EEXIST) {
 			return -1; /* cache file being created */
 		}
@@ -552,7 +550,7 @@ static int deflate_file_to_file(server *srv, connection *con, plugin_data *p, bu
 #if 0
 	log_error_write(srv, __FILE__, __LINE__, "bs", p->ofn, "compress-cache miss");
 #endif
-	if (-1 == (ifd = open(filename, O_RDONLY | O_BINARY))) {
+	if (-1 == (ifd = fdevent_open_cloexec(filename, con->conf.follow_symlink, O_RDONLY, 0))) {
 		log_error_write(srv, __FILE__, __LINE__, "sbss", "opening plain-file", fn, "failed", strerror(errno));
 
 		close(ofd);
@@ -687,7 +685,7 @@ static int deflate_file_to_buffer(server *srv, connection *con, plugin_data *p, 
 		return -1;
 	}
 
-	if (-1 == (ifd = open(fn->ptr, O_RDONLY | O_BINARY))) {
+	if (-1 == (ifd = fdevent_open_cloexec(fn->ptr, con->conf.follow_symlink, O_RDONLY, 0))) {
 		log_error_write(srv, __FILE__, __LINE__, "sbss", "opening plain-file", fn, "failed", strerror(errno));
 
 		return -1;
