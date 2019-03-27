@@ -28,7 +28,6 @@
  *       and how does it handle encoding and entity-inlining of external refs?
  *       Must xml decode/encode (normalize) before storing user data in database
  *       if going to add that data verbatim to xml doc returned in queries
- * TODO: when walking xml nodes, should add checks for "DAV:" namespace
  * TODO: consider where it might be useful/informative to check
  *       SQLITE_OK != sqlite3_reset() or SQLITE_OK != sqlite3_bind_...() or ...
  *       (in some cases no rows returned is ok, while in other cases it is not)
@@ -256,8 +255,10 @@ int mod_webdav_plugin_init(plugin *p) {
 #define WEBDAV_FLAG_MOVE_XDEV    0x10
 #define WEBDAV_FLAG_COPY_XDEV    0x20
 
-#define webdav_xmlstrcmp_fixed(s, fixed) \
-        memcmp((s), (fixed), sizeof(fixed))
+#define webdav_xmlnode_isdav(prop, attr) \
+        ((prop)->ns && \
+            0 == memcmp((prop)->ns->href, "DAV:", sizeof("DAV:")) && \
+            0 == memcmp((prop)->name, (attr), sizeof(attr)))
 
 #include <ctype.h>      /* isupper() tolower() */
 static void
@@ -3558,15 +3559,14 @@ mod_webdav_propfind (connection * const con, const plugin_config * const pconf)
         rootnode = xmlDocGetRootElement(xml);
     }
 
-    if (NULL != rootnode
-        && 0 == webdav_xmlstrcmp_fixed(rootnode->name, "propfind")) {
+    if (NULL != rootnode && webdav_xmlnode_isdav(rootnode, "propfind")) {
         for (const xmlNode *cmd = rootnode->children; cmd; cmd = cmd->next) {
-            if (0 == webdav_xmlstrcmp_fixed(cmd->name, "allprop"))
+            if (webdav_xmlnode_isdav(cmd, "allprop"))
                 pb.allprop = pb.lockdiscovery = 1;
-            else if (0 == webdav_xmlstrcmp_fixed(cmd->name, "propname"))
+            else if (webdav_xmlnode_isdav(cmd, "propname"))
                 pb.propname = 1;
-            else if (0 != webdav_xmlstrcmp_fixed(cmd->name, "prop")
-                     && 0 != webdav_xmlstrcmp_fixed(cmd->name, "include"))
+            else if (!webdav_xmlnode_isdav(cmd, "prop")
+                     && !webdav_xmlnode_isdav(cmd, "include"))
                 continue;
 
             /* "prop" or "include": get prop by name */
@@ -4536,8 +4536,7 @@ mod_webdav_proppatch (connection * const con, const plugin_config * const pconf)
     }
 
     const xmlNode * const rootnode = xmlDocGetRootElement(xml);
-    if (NULL == rootnode
-        || 0 != webdav_xmlstrcmp_fixed(rootnode->name, "propertyupdate")) {
+    if (NULL == rootnode || !webdav_xmlnode_isdav(rootnode, "propertyupdate")) {
         http_status_set_error(con, 422); /* Unprocessable Entity */
         xmlFreeDoc(xml);
         return HANDLER_FINISHED;
@@ -4561,13 +4560,13 @@ mod_webdav_proppatch (connection * const con, const plugin_config * const pconf)
     buffer *ms = NULL; /*(multi-status)*/
     int update;
     for (const xmlNode *cmd = rootnode->children; cmd; cmd = cmd->next) {
-        if (!(update = (0 == webdav_xmlstrcmp_fixed(cmd->name, "set")))) {
-            if (0 != webdav_xmlstrcmp_fixed(cmd->name, "remove"))
+        if (!(update = (webdav_xmlnode_isdav(cmd, "set")))) {
+            if (!webdav_xmlnode_isdav(cmd, "remove"))
                 continue; /* skip; not "set" or "remove" */
         }
 
         for (const xmlNode *props = cmd->children; props; props = props->next) {
-            if (0 != webdav_xmlstrcmp_fixed(props->name, "prop"))
+            if (!webdav_xmlnode_isdav(props, "prop"))
                 continue;
 
             const xmlNode *prop = props->children;
@@ -4774,8 +4773,7 @@ mod_webdav_lock (connection * const con, const plugin_config * const pconf)
         }
 
         const xmlNode * const rootnode = xmlDocGetRootElement(xml);
-        if (NULL == rootnode
-            || 0 != webdav_xmlstrcmp_fixed(rootnode->name, "lockinfo")) {
+        if (NULL == rootnode || !webdav_xmlnode_isdav(rootnode, "lockinfo")) {
             http_status_set_error(con, 422); /* Unprocessable Entity */
             xmlFreeDoc(xml);
             return HANDLER_FINISHED;
@@ -4783,12 +4781,12 @@ mod_webdav_lock (connection * const con, const plugin_config * const pconf)
 
         const xmlNode *lockinfo = rootnode->children;
         for (; lockinfo; lockinfo = lockinfo->next) {
-            if (0 == webdav_xmlstrcmp_fixed(lockinfo->name, "lockscope")) {
+            if (webdav_xmlnode_isdav(lockinfo, "lockscope")) {
                 const xmlNode *value = lockinfo->children;
                 for (; value; value = value->next) {
-                    if (0 == webdav_xmlstrcmp_fixed(value->name, "exclusive"))
+                    if (webdav_xmlnode_isdav(value, "exclusive"))
                         lockdata.lockscope=(const buffer *)&lockscope_exclusive;
-                    else if (0 == webdav_xmlstrcmp_fixed(value->name, "shared"))
+                    else if (webdav_xmlnode_isdav(value, "shared"))
                         lockdata.lockscope=(const buffer *)&lockscope_shared;
                     else {
                         lockdata.lockscope=NULL; /* trigger error below loop */
@@ -4796,10 +4794,10 @@ mod_webdav_lock (connection * const con, const plugin_config * const pconf)
                     }
                 }
             }
-            else if (0 == webdav_xmlstrcmp_fixed(lockinfo->name, "locktype")) {
+            else if (webdav_xmlnode_isdav(lockinfo, "locktype")) {
                 const xmlNode *value = lockinfo->children;
                 for (; value; value = value->next) {
-                    if (0 == webdav_xmlstrcmp_fixed(value->name, "write"))
+                    if (webdav_xmlnode_isdav(value, "write"))
                         lockdata.locktype = (const buffer *)&locktype_write;
                     else {
                         lockdata.locktype = NULL;/* trigger error below loop */
@@ -4807,7 +4805,7 @@ mod_webdav_lock (connection * const con, const plugin_config * const pconf)
                     }
                 }
             }
-            else if (0 == webdav_xmlstrcmp_fixed(lockinfo->name, "owner")) {
+            else if (webdav_xmlnode_isdav(lockinfo, "owner")) {
                 if (lockinfo->children)
                     lockdata.ownerinfo.ptr =
                       (char *)xmlNodeListGetString(xml, lockinfo->children, 0);
