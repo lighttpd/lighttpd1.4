@@ -5040,20 +5040,21 @@ mod_webdav_lock (connection * const con, const plugin_config * const pconf)
         /* create locktoken
          * (uuid_unparse() output is 36 chars + '\0') */
         uuid_t id;
-        char lockstr[sizeof("urn:uuid:") + 36] = "urn:uuid:";
-        lockdata.locktoken.ptr = lockstr;
-        lockdata.locktoken.used = sizeof(lockstr);
+        char lockstr[sizeof("<urn:uuid:>") + 36] = "<urn:uuid:";
+        lockdata.locktoken.ptr = lockstr+1;         /*(without surrounding <>)*/
+        lockdata.locktoken.used = sizeof(lockstr)-2;/*(without surrounding <>)*/
         uuid_generate(id);
-        uuid_unparse(id, lockstr+sizeof("urn:uuid:")-1);
+        uuid_unparse(id, lockstr+sizeof("<urn:uuid:")-1);
 
         /* XXX: consider fix TOC-TOU race condition by starting transaction
          * and re-running webdav_lock_activelocks() check before running
          * webdav_lock_acquire() (but both routines would need to be modified
          * to defer calling sqlite3_reset(stmt) to be part of transaction) */
         if (webdav_lock_acquire(pconf, &lockdata)) {
+            lockstr[sizeof(lockstr)-2] = '>';
             http_header_response_set(con, HTTP_HEADER_OTHER,
                                      CONST_STR_LEN("Lock-Token"),
-                                     CONST_BUF_LEN(&lockdata.locktoken));
+                                     lockstr, sizeof(lockstr)-1);
             webdav_xml_doc_lock_acquired(con, pconf, &lockdata);
             http_status_set_fin(con, created ? 201 : 200); /* Created | OK */
         }
