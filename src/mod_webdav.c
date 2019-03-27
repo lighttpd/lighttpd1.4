@@ -4949,12 +4949,12 @@ mod_webdav_lock (connection * const con, const plugin_config * const pconf)
             }
         }
 
+      do { /*(resources are cleaned up after code block)*/
+
         if (NULL == lockdata.lockscope || NULL == lockdata.locktype) {
             /*(missing lockscope and locktype in lock request)*/
             http_status_set_error(con, 422); /* Unprocessable Entity */
-            xmlFree(lockdata.ownerinfo.ptr);
-            xmlFreeDoc(xml);
-            return HANDLER_FINISHED;
+            break; /* clean up resources and return HANDLER_FINISHED */
         }
 
         /* check lock prior to potentially creating new resource,
@@ -4969,9 +4969,7 @@ mod_webdav_lock (connection * const con, const plugin_config * const pconf)
             /* 423 Locked */
             webdav_xml_doc_error_no_conflicting_lock(con, cbdata.b);
             buffer_free(cbdata.b);
-            xmlFree(lockdata.ownerinfo.ptr);
-            xmlFreeDoc(xml);
-            return HANDLER_FINISHED;
+            break; /* clean up resources and return HANDLER_FINISHED */
         }
         buffer_free(cbdata.b);
 
@@ -5014,18 +5012,15 @@ mod_webdav_lock (connection * const con, const plugin_config * const pconf)
             }
             else if (errno != EEXIST) {
                 http_status_set_error(con, 403); /* Forbidden */
-                xmlFree(lockdata.ownerinfo.ptr);
-                xmlFreeDoc(xml);
-                return HANDLER_FINISHED;
+                break; /* clean up resources and return HANDLER_FINISHED */
             }
             lockdata.depth = 0; /* force Depth: 0 on non-collections */
         }
         else if (S_ISDIR(st.st_mode)) {
             if (con->physical.path->ptr[con->physical.path->used - 2] != '/') {
+                /* 308 Permanent Redirect */
                 http_response_redirect_to_directory(pconf->srv, con, 308);
-                xmlFree(lockdata.ownerinfo.ptr);    /* 308 Permanent Redirect */
-                xmlFreeDoc(xml);
-                return HANDLER_FINISHED;
+                break; /* clean up resources and return HANDLER_FINISHED */
                 /* Alternatively, could append '/' to con->physical.path
                  * and con->physical.rel_path, set Content-Location in
                  * response headers, and continue to serve the request */
@@ -5033,9 +5028,7 @@ mod_webdav_lock (connection * const con, const plugin_config * const pconf)
         }
         else if (con->physical.path->ptr[con->physical.path->used - 2] == '/') {
             http_status_set_error(con, 403); /* Forbidden */
-            xmlFree(lockdata.ownerinfo.ptr);
-            xmlFreeDoc(xml);
-            return HANDLER_FINISHED;
+            break; /* clean up resources and return HANDLER_FINISHED */
         }
         else if (0 != lockdata.depth)
             lockdata.depth = 0; /* force Depth: 0 on non-collections */
@@ -5063,6 +5056,8 @@ mod_webdav_lock (connection * const con, const plugin_config * const pconf)
         }
         else /*(database error obtaining lock)*/
             http_status_set_error(con, 500); /* Internal Server Error */
+
+      } while (0); /*(resources are cleaned up after code block)*/
 
         xmlFree(lockdata.ownerinfo.ptr);
         xmlFreeDoc(xml);
