@@ -42,8 +42,6 @@
  *
  * deficiencies
  * - incomplete "shared" lock support
- * - add support for conditional requests (RFC 7232)
- *     If If-Match If-Modified-Since If-None-Match If-Unmodified-Since
  * - review code for proper decoding/encoding of elements from/to XML and db
  * - preserve XML info in scope on dead properties, e.g. xml:lang
  *
@@ -2059,6 +2057,47 @@ webdav_fcopyfile_sz (int ifd, int ofd, off_t isz)
 
 
 static int
+webdav_if_match_or_unmodified_since (connection * const con, struct stat *st)
+{
+    buffer *im = (0 != con->etag_flags)
+      ? http_header_request_get(con, HTTP_HEADER_OTHER,
+                                CONST_STR_LEN("If-Match"))
+      : NULL;
+
+    buffer *ius =
+      http_header_request_get(con, HTTP_HEADER_OTHER,
+                              CONST_STR_LEN("If-Unmodified-Since"));
+
+    if (NULL == im && NULL == ius) return 0;
+
+    struct stat stp;
+    if (NULL == st) {
+        st = &stp;
+        if (0 != lstat(con->physical.path->ptr, st))
+            return 412; /* Precondition Failed */
+    }
+
+    if (NULL != im) {
+        buffer *etagb = con->physical.etag;
+        etag_create(etagb, st, con->etag_flags);
+        etag_mutate(etagb, etagb);
+        if (!etag_is_equal(etagb, im->ptr, 0))
+            return 412; /* Precondition Failed */
+    }
+
+    if (NULL != ius) {
+        struct tm itm, *ftm = gmtime(&st->st_mtime);
+        if (NULL == strptime(ius->ptr, "%a, %d %b %Y %H:%M:%S GMT", &itm)
+            || mktime(ftm) > mktime(&itm)) { /* timegm() not standard */
+            return 412; /* Precondition Failed */
+        }
+    }
+
+    return 0;
+}
+
+
+static int
 webdav_parse_Depth (connection * const con)
 {
     /* Depth = "Depth" ":" ("0" | "1" | "infinity") */
@@ -3806,6 +3845,11 @@ mod_webdav_delete (connection * const con, const plugin_config * const pconf)
         return HANDLER_FINISHED;
     }
 
+    if (0 != webdav_if_match_or_unmodified_since(con, &st)) {
+        http_status_set_error(con, 412); /* Precondition Failed */
+        return HANDLER_FINISHED;
+    }
+
     if (S_ISDIR(st.st_mode)) {
         if (con->physical.path->ptr[con->physical.path->used - 2] != '/') {
           #if 0 /*(issues warning for /usr/bin/litmus copymove test)*/
@@ -3985,6 +4029,11 @@ mod_webdav_write_single_file_chunk (connection* const con, chunkqueue* const cq)
 static handler_t
 mod_webdav_put_0 (connection * const con, const plugin_config * const pconf)
 {
+    if (0 != webdav_if_match_or_unmodified_since(con, NULL)) {
+        http_status_set_error(con, 412); /* Precondition Failed */
+        return HANDLER_FINISHED;
+    }
+
     /* special-case PUT 0-length file */
     int fd;
     fd = fdevent_open_cloexec(con->physical.path->ptr, 0,
@@ -4148,8 +4197,21 @@ static handler_t
 mod_webdav_put (connection * const con, const plugin_config * const pconf)
 {
     if (con->state == CON_STATE_READ_POST) {
+        int first_read = chunkqueue_is_empty(con->request_content_queue);
         handler_t rc = connection_handle_read_post_state(pconf->srv, con);
-        if (rc != HANDLER_GO_ON) return rc;
+        if (rc != HANDLER_GO_ON) {
+            if (first_read && rc == HANDLER_WAIT_FOR_EVENT
+                && 0 != webdav_if_match_or_unmodified_since(con, NULL)) {
+                http_status_set_error(con, 412); /* Precondition Failed */
+                return HANDLER_FINISHED;
+            }
+            return rc;
+        }
+    }
+
+    if (0 != webdav_if_match_or_unmodified_since(con, NULL)) {
+        http_status_set_error(con, 412); /* Precondition Failed */
+        return HANDLER_FINISHED;
     }
 
     /* construct temporary filename in same directory as target
@@ -4430,7 +4492,13 @@ mod_webdav_copymove_b (connection * const con, const plugin_config * const pconf
         http_status_set_error(con, (errno == ENOENT) ? 404 : 403);
         return HANDLER_FINISHED;
     }
-    else if (S_ISDIR(st.st_mode)) {
+
+    if (0 != webdav_if_match_or_unmodified_since(con, &st)) {
+        http_status_set_error(con, 412); /* Precondition Failed */
+        return HANDLER_FINISHED;
+    }
+
+    if (S_ISDIR(st.st_mode)) {
         if (con->physical.path->ptr[con->physical.path->used - 2] != '/') {
             http_response_redirect_to_directory(pconf->srv, con, 308);
             return HANDLER_FINISHED; /* 308 Permanent Redirect */
@@ -4648,6 +4716,12 @@ mod_webdav_proppatch (connection * const con, const plugin_config * const pconf)
         http_status_set_error(con, (errno == ENOENT) ? 404 : 403);
         return HANDLER_FINISHED;
     }
+
+    if (0 != webdav_if_match_or_unmodified_since(con, &st)) {
+        http_status_set_error(con, 412); /* Precondition Failed */
+        return HANDLER_FINISHED;
+    }
+
     if (S_ISDIR(st.st_mode)) {
         if (con->physical.path->ptr[con->physical.path->used - 2] != '/') {
             /* set "Content-Location" instead of sending 308 redirect to dir */
@@ -5014,7 +5088,21 @@ mod_webdav_lock (connection * const con, const plugin_config * const pconf)
                 http_status_set_error(con, 403); /* Forbidden */
                 break; /* clean up resources and return HANDLER_FINISHED */
             }
+            else if (0 != lstat(con->physical.path->ptr, &st)) {
+                http_status_set_error(con, 403); /* Forbidden */
+                break; /* clean up resources and return HANDLER_FINISHED */
+            }
             lockdata.depth = 0; /* force Depth: 0 on non-collections */
+        }
+
+        if (!created) {
+            if (0 != webdav_if_match_or_unmodified_since(con, &st)) {
+                http_status_set_error(con, 412); /* Precondition Failed */
+                break; /* clean up resources and return HANDLER_FINISHED */
+            }
+        }
+
+        if (created) {
         }
         else if (S_ISDIR(st.st_mode)) {
             if (con->physical.path->ptr[con->physical.path->used - 2] != '/') {
