@@ -107,7 +107,7 @@ typedef struct {
     gw_plugin_config gw;
     buffer *frame_type;
     array *origins;
-    unsigned int ping_interval;
+    unsigned short int ping_interval;
 } plugin_config;
 
 typedef struct plugin_data {
