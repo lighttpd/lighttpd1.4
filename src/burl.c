@@ -289,7 +289,7 @@ static int burl_normalize_path (buffer *b, buffer *t, int qs, int flags)
             path_simplify = 1;
             break;
         }
-        do { ++i; } while (i < len && s[i] != '/');
+        while (i < len && s[i] != '/') ++i;
         if (s[i] == '/' && s[i+1] == '/') { /*(s[len] != '/')*/
             path_simplify = 1;
             break;
