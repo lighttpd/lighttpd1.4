@@ -317,11 +317,13 @@ typedef struct {
     unsigned short enabled;
     unsigned short is_readonly;
     unsigned short log_xml;
+    unsigned short deprecated_unsafe_partial_put_compat;
 
     sql_config *sql;
     server *srv;
     buffer *tmpb;
     buffer *sqlite_db_name; /* not used after worker init */
+    array *opts;
 } plugin_config;
 
 typedef struct {
@@ -348,6 +350,7 @@ FREE_FUNC(mod_webdav_free) {
             plugin_config * const s = p->config_storage[i];
             if (NULL == s) continue;
             buffer_free(s->sqlite_db_name);
+            array_free(s->opts);
 
             sql_config * const sql = s->sql;
             if (!sql || !sql->sqlh) {
@@ -409,6 +412,7 @@ SETDEFAULTS_FUNC(mod_webdav_set_defaults) {
       { "webdav.is-readonly",    NULL, T_CONFIG_BOOLEAN,    T_CONFIG_SCOPE_CONNECTION },
       { "webdav.log-xml",        NULL, T_CONFIG_BOOLEAN,    T_CONFIG_SCOPE_CONNECTION },
       { "webdav.sqlite-db-name", NULL, T_CONFIG_STRING,     T_CONFIG_SCOPE_CONNECTION },
+      { "webdav.opts",           NULL, T_CONFIG_ARRAY,      T_CONFIG_SCOPE_CONNECTION },
 
       { NULL, NULL, T_CONFIG_UNSET, T_CONFIG_SCOPE_UNSET }
     };
@@ -425,11 +429,13 @@ SETDEFAULTS_FUNC(mod_webdav_set_defaults) {
         force_assert(s);
         p->config_storage[i] = s;
         s->sqlite_db_name = buffer_init();
+        s->opts = array_init();
 
         cv[0].destination = &(s->enabled);
         cv[1].destination = &(s->is_readonly);
         cv[2].destination = &(s->log_xml);
         cv[3].destination = s->sqlite_db_name;
+        cv[4].destination = s->opts;
 
         if (0 != config_insert_values_global(srv, config->value, cv, i == 0 ? T_CONFIG_SCOPE_SERVER : T_CONFIG_SCOPE_CONNECTION)) {
             return HANDLER_ERROR;
@@ -438,6 +444,20 @@ SETDEFAULTS_FUNC(mod_webdav_set_defaults) {
         if (!buffer_is_empty(s->sqlite_db_name)) {
             if (mod_webdav_sqlite3_init(s, srv->errh) == HANDLER_ERROR)
                 return HANDLER_ERROR;
+        }
+
+        for (size_t j = 0, used = s->opts->used; j < used; ++j) {
+            data_string *ds = (data_string *)s->opts->data[j];
+            if (buffer_is_equal_string(ds->key,
+                  CONST_STR_LEN("deprecated-unsafe-partial-put"))
+                && buffer_is_equal_string(ds->value, CONST_STR_LEN("enable"))) {
+                s->deprecated_unsafe_partial_put_compat = 1;
+                continue;
+            }
+            log_error(srv->errh, __FILE__, __LINE__,
+                      "unrecognized webdav.opts: %.*s",
+                      BUFFER_INTLEN_PTR(ds->key));
+            return HANDLER_ERROR;
         }
     }
     if (n_context) {
@@ -481,6 +501,8 @@ mod_webdav_patch_connection (server * const restrict srv,
             } else if (buffer_is_equal_string(du->key, CONST_STR_LEN("webdav.sqlite-db-name"))) {
                 PATCH_OPTION(sql);
           #endif
+            } else if (buffer_is_equal_string(du->key, CONST_STR_LEN("webdav.opts"))) {
+                PATCH_OPTION(deprecated_unsafe_partial_put_compat);
             }
         }
     }
@@ -4073,6 +4095,7 @@ mod_webdav_put_prep (connection * const con, const plugin_config * const pconf)
 {
     if (NULL != http_header_request_get(con, HTTP_HEADER_OTHER,
                                         CONST_STR_LEN("Content-Range"))) {
+        if (pconf->deprecated_unsafe_partial_put_compat) return HANDLER_GO_ON;
         /* [RFC7231] 4.3.4 PUT
          *   An origin server that allows PUT on a given target resource MUST
          *   send a 400 (Bad Request) response to a PUT request that contains a
@@ -4193,6 +4216,57 @@ mod_webdav_put_linkat_rename (connection * const con,
 #endif
 
 
+__attribute_cold__
+static handler_t
+mod_webdav_put_deprecated_unsafe_partial_put_compat (connection * const con, const buffer * const h)
+{
+    /* historical code performed very limited range parse (repeated here) */
+    /* we only support <num>- ... */
+    const char *num = h->ptr;
+    off_t offset;
+    char *err;
+    if (0 != strncmp(num, "bytes", sizeof("bytes")-1)) {
+        http_status_set_error(con, 501); /* Not Implemented */
+        return HANDLER_FINISHED;
+    }
+    num += 5; /* +5 for "bytes" */
+    offset = strtoll(num, &err, 10); /*(strtoll() ignores leading whitespace)*/
+    if (num == err || *err != '-' || offset < 0) {
+        http_status_set_error(con, 501); /* Not Implemented */
+        return HANDLER_FINISHED;
+    }
+
+    const int fd = fdevent_open_cloexec(con->physical.path->ptr, 0,
+                                        O_WRONLY, WEBDAV_FILE_MODE);
+    if (fd < 0) {
+        http_status_set_error(con, (errno == ENOENT) ? 404 : 403);
+        return HANDLER_FINISHED;
+    }
+
+    if (-1 == lseek(fd, offset, SEEK_SET)) {
+        close(fd);
+        http_status_set_error(con, 500); /* Internal Server Error */
+        return HANDLER_FINISHED;
+    }
+
+    /* copy all chunks even though expecting single chunk
+     * (still, loop on partial writes)
+     * (Note: copying might take some time, temporarily pausing server)
+     * (error status is set if error occurs) */
+    mod_webdav_write_cq(con, con->request_content_queue, fd);
+
+    const int wc = close(fd);
+    if (0 != wc && !http_status_is_set(con))
+        http_status_set_error(con, (errno == ENOSPC) ? 507 : 403);
+
+    if (!http_status_is_set(con)) {
+        http_status_set_fin(con, 204); /* No Content */
+    }
+
+    return HANDLER_FINISHED;
+}
+
+
 static handler_t
 mod_webdav_put (connection * const con, const plugin_config * const pconf)
 {
@@ -4212,6 +4286,14 @@ mod_webdav_put (connection * const con, const plugin_config * const pconf)
     if (0 != webdav_if_match_or_unmodified_since(con, NULL)) {
         http_status_set_error(con, 412); /* Precondition Failed */
         return HANDLER_FINISHED;
+    }
+
+    if (pconf->deprecated_unsafe_partial_put_compat) {
+        const buffer * const h =
+          http_header_request_get(con, HTTP_HEADER_OTHER,
+                                  CONST_STR_LEN("Content-Range"));
+        if (NULL != h)
+            return mod_webdav_put_deprecated_unsafe_partial_put_compat(con, h);
     }
 
     /* construct temporary filename in same directory as target
