@@ -26,7 +26,7 @@
 #define MAX_TEMPFILE_SIZE (128 * 1024 * 1024)
 
 static size_t chunk_buf_sz = 4096;
-static chunk *chunks;
+static chunk *chunks, *chunks_oversized;
 static chunk *chunk_buffers;
 static array *chunkqueue_default_tempdirs = NULL;
 static off_t chunkqueue_default_tempfile_size = DEFAULT_TEMPFILE_SIZE;
@@ -141,22 +141,41 @@ void chunk_buffer_release(buffer *b) {
     }
 }
 
-static chunk * chunk_acquire(void) {
-    if (chunks) {
-        chunk *c = chunks;
-        chunks = c->next;
-        return c;
+static chunk * chunk_acquire(size_t sz) {
+    if (sz <= chunk_buf_sz) {
+        if (chunks) {
+            chunk *c = chunks;
+            chunks = c->next;
+            return c;
+        }
+        sz = chunk_buf_sz;
     }
     else {
-        return chunk_init(chunk_buf_sz);
+        sz = (sz + 8191) & ~8191uL;
+        /* future: might have buckets of certain sizes, up to socket buf sizes*/
+        if (chunks_oversized && chunks_oversized->mem->size >= sz) {
+            chunk *c = chunks_oversized;
+            chunks_oversized = c->next;
+            return c;
+        }
     }
+
+    return chunk_init(sz);
 }
 
 static void chunk_release(chunk *c) {
-    if (c->mem->size >= chunk_buf_sz) {
+    const size_t sz = c->mem->size;
+    if (sz == chunk_buf_sz) {
         chunk_reset(c);
         c->next = chunks;
         chunks = c;
+    }
+    else if (sz > chunk_buf_sz) {
+        chunk_reset(c);
+        chunk **co = &chunks_oversized;
+        while (*co && sz < (*co)->mem->size) co = &(*co)->next;
+        c->next = *co;
+        *co = c;
     }
     else {
         chunk_free(c);
@@ -170,6 +189,11 @@ void chunkqueue_chunk_pool_clear(void)
         chunk_free(c);
     }
     chunks = NULL;
+    for (chunk *next, *c = chunks_oversized; c; c = next) {
+        next = c->next;
+        chunk_free(c);
+    }
+    chunks_oversized = NULL;
 }
 
 void chunkqueue_chunk_pool_free(void)
@@ -235,20 +259,20 @@ static void chunkqueue_append_chunk(chunkqueue *cq, chunk *c) {
 	}
 }
 
-static chunk * chunkqueue_prepend_mem_chunk(chunkqueue *cq) {
-    chunk *c = chunk_acquire();
+static chunk * chunkqueue_prepend_mem_chunk(chunkqueue *cq, size_t sz) {
+    chunk *c = chunk_acquire(sz);
     chunkqueue_prepend_chunk(cq, c);
     return c;
 }
 
-static chunk * chunkqueue_append_mem_chunk(chunkqueue *cq) {
-    chunk *c = chunk_acquire();
+static chunk * chunkqueue_append_mem_chunk(chunkqueue *cq, size_t sz) {
+    chunk *c = chunk_acquire(sz);
     chunkqueue_append_chunk(cq, c);
     return c;
 }
 
 static chunk * chunkqueue_append_file_chunk(chunkqueue *cq, buffer *fn, off_t offset, off_t len) {
-    chunk *c = chunk_acquire();
+    chunk *c = chunk_acquire(buffer_string_length(fn)+1);
     chunkqueue_append_chunk(cq, c);
     c->type = FILE_CHUNK;
     c->file.start = offset;
@@ -308,7 +332,7 @@ void chunkqueue_append_buffer(chunkqueue *cq, buffer *mem) {
 	size_t len = buffer_string_length(mem);
 	if (len < 256 && chunkqueue_append_mem_extend_chunk(cq, mem->ptr, len)) return;
 
-	c = chunkqueue_append_mem_chunk(cq);
+	c = chunkqueue_append_mem_chunk(cq, chunk_buf_sz);
 	cq->bytes_in += len;
 	buffer_move(c->mem, mem);
 }
@@ -319,7 +343,7 @@ void chunkqueue_append_mem(chunkqueue *cq, const char * mem, size_t len) {
 	if (len < chunk_buf_sz && chunkqueue_append_mem_extend_chunk(cq, mem, len))
 		return;
 
-	c = chunkqueue_append_mem_chunk(cq);
+	c = chunkqueue_append_mem_chunk(cq, len+1);
 	cq->bytes_in += len;
 	buffer_copy_string_len(c->mem, mem, len);
 }
@@ -354,28 +378,14 @@ void chunkqueue_append_chunkqueue(chunkqueue *cq, chunkqueue *src) {
 }
 
 
-__attribute_cold__
-static void chunkqueue_buffer_open_resize(chunk *c, size_t sz) {
-	chunk * const n = chunk_init((sz + 4095) & ~4095uL);
-	buffer * const b = c->mem;
-	c->mem = n->mem;
-	n->mem = b;
-	chunk_release(n);
-}
-
-
 buffer * chunkqueue_prepend_buffer_open_sz(chunkqueue *cq, size_t sz) {
-	chunk * const c = chunkqueue_prepend_mem_chunk(cq);
-	if (buffer_string_space(c->mem) < sz) {
-		chunkqueue_buffer_open_resize(c, sz);
-	}
+	chunk * const c = chunkqueue_prepend_mem_chunk(cq, sz);
 	return c->mem;
 }
 
 
 buffer * chunkqueue_prepend_buffer_open(chunkqueue *cq) {
-	chunk *c = chunkqueue_prepend_mem_chunk(cq);
-	return c->mem;
+	return chunkqueue_prepend_buffer_open_sz(cq, chunk_buf_sz);
 }
 
 
@@ -385,17 +395,13 @@ void chunkqueue_prepend_buffer_commit(chunkqueue *cq) {
 
 
 buffer * chunkqueue_append_buffer_open_sz(chunkqueue *cq, size_t sz) {
-	chunk * const c = chunkqueue_append_mem_chunk(cq);
-	if (buffer_string_space(c->mem) < sz) {
-		chunkqueue_buffer_open_resize(c, sz);
-	}
+	chunk * const c = chunkqueue_append_mem_chunk(cq, sz);
 	return c->mem;
 }
 
 
 buffer * chunkqueue_append_buffer_open(chunkqueue *cq) {
-	chunk *c = chunkqueue_append_mem_chunk(cq);
-	return c->mem;
+	return chunkqueue_append_buffer_open_sz(cq, chunk_buf_sz);
 }
 
 
