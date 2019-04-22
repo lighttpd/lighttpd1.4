@@ -2119,6 +2119,20 @@ webdav_if_match_or_unmodified_since (connection * const con, struct stat *st)
 }
 
 
+static void
+webdav_response_etag (connection * const con, struct stat *st)
+{
+    if (0 != con->etag_flags) {
+        buffer *etagb = con->physical.etag;
+        etag_create(etagb, st, con->etag_flags);
+        etag_mutate(etagb, etagb);
+        http_header_response_set(con, HTTP_HEADER_ETAG,
+                                 CONST_STR_LEN("ETag"),
+                                 CONST_BUF_LEN(etagb));
+    }
+}
+
+
 static int
 webdav_parse_Depth (connection * const con)
 {
@@ -4062,6 +4076,11 @@ mod_webdav_put_0 (connection * const con, const plugin_config * const pconf)
                               O_WRONLY | O_CREAT | O_EXCL | O_TRUNC,
                               WEBDAV_FILE_MODE);
     if (fd >= 0) {
+        if (0 != con->etag_flags) {
+            /*(skip sending etag if fstat() error; not expected)*/
+            struct stat st;
+            if (0 == fstat(fd, &st)) webdav_response_etag(con, &st);
+        }
         close(fd);
         http_status_set_fin(con, 201); /* Created */
         return HANDLER_FINISHED;
@@ -4185,6 +4204,7 @@ mod_webdav_put_linkat_rename (connection * const con,
     li_itostrn(pathproc+sizeof("/proc/self/fd/")-1,
                sizeof(pathproc)-(sizeof("/proc/self/fd/")-1), (long)c->file.fd);
     if (0 == linkat(AT_FDCWD, pathproc, AT_FDCWD, pathtemp, AT_SYMLINK_FOLLOW)){
+        struct stat st;
       #ifdef RENAME_NOREPLACE /*(renameat2() not well-supported yet)*/
         if (0 == renameat2(AT_FDCWD, pathtemp,
                            AT_FDCWD, con->physical.path->ptr, RENAME_NOREPLACE))
@@ -4193,7 +4213,6 @@ mod_webdav_put_linkat_rename (connection * const con,
             http_status_set_fin(con, 204); /* No Content */ /*(replaced)*/
         else
       #else
-        struct stat st;
         http_status_set_fin(con, 0 == lstat(con->physical.path->ptr, &st)
                                  ? 204   /* No Content */
                                  : 201); /* Created */
@@ -4206,6 +4225,12 @@ mod_webdav_put_linkat_rename (connection * const con,
                 http_status_set_error(con, 403); /* Forbidden */
             unlink(pathtemp);
         }
+
+        if (0 != con->etag_flags && http_status_get(con) < 300) { /*(201, 204)*/
+            /*(skip sending etag if fstat() error; not expected)*/
+            if (0 == fstat(c->file.fd, &st)) webdav_response_etag(con, &st);
+        }
+
         chunkqueue_mark_written(cq, c->file.length);
         chunkqueue_remove_finished_chunks(cq);
         return 1;
@@ -4255,12 +4280,19 @@ mod_webdav_put_deprecated_unsafe_partial_put_compat (connection * const con, con
      * (error status is set if error occurs) */
     mod_webdav_write_cq(con, con->request_content_queue, fd);
 
+    struct stat st;
+    if (0 != con->etag_flags && !http_status_is_set(con)) {
+        /*(skip sending etag if fstat() error; not expected)*/
+        if (0 != fstat(fd, &st)) con->etag_flags = 0;
+    }
+
     const int wc = close(fd);
     if (0 != wc && !http_status_is_set(con))
         http_status_set_error(con, (errno == ENOSPC) ? 507 : 403);
 
     if (!http_status_is_set(con)) {
         http_status_set_fin(con, 204); /* No Content */
+        if (0 != con->etag_flags) webdav_response_etag(con, &st);
     }
 
     return HANDLER_FINISHED;
@@ -4362,6 +4394,12 @@ mod_webdav_put (connection * const con, const plugin_config * const pconf)
      * (error status is set if error occurs) */
     mod_webdav_write_cq(con, cq, fd);
 
+    struct stat st;
+    if (0 != con->etag_flags && !http_status_is_set(con)) {
+        /*(skip sending etag if fstat() error; not expected)*/
+        if (0 != fstat(fd, &st)) con->etag_flags = 0;
+    }
+
     const int wc = close(fd);
     if (0 != wc && !http_status_is_set(con))
         http_status_set_error(con, (errno == ENOSPC) ? 507 : 403);
@@ -4371,7 +4409,10 @@ mod_webdav_put (connection * const con, const plugin_config * const pconf)
         http_status_set_fin(con, 0 == lstat(con->physical.path->ptr, &ste)
                                  ? 204   /* No Content */
                                  : 201); /* Created */
-        if (0 != rename(pathtemp, con->physical.path->ptr)) {
+        if (0 == rename(pathtemp, con->physical.path->ptr)) {
+            if (0 != con->etag_flags) webdav_response_etag(con, &st);
+        }
+        else {
             if (errno == EISDIR)
                 http_status_set_error(con, 405); /* Method Not Allowed */
             else
@@ -5163,6 +5204,8 @@ mod_webdav_lock (connection * const con, const plugin_config * const pconf)
                                      WEBDAV_FILE_MODE)
               : -1;
             if (fd >= 0) {
+                /*(skip sending etag if fstat() error; not expected)*/
+                if (0 != fstat(fd, &st)) con->etag_flags = 0;
                 close(fd);
                 created = 1;
             }
@@ -5222,6 +5265,8 @@ mod_webdav_lock (connection * const con, const plugin_config * const pconf)
                                      CONST_STR_LEN("Lock-Token"),
                                      lockstr, sizeof(lockstr)-1);
             webdav_xml_doc_lock_acquired(con, pconf, &lockdata);
+            if (0 != con->etag_flags && !S_ISDIR(st.st_mode))
+                webdav_response_etag(con, &st);
             http_status_set_fin(con, created ? 201 : 200); /* Created | OK */
         }
         else /*(database error obtaining lock)*/
