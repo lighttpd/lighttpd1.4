@@ -2012,8 +2012,11 @@ webdav_prop_select_propnames (const plugin_config * const pconf,
 }
 
 
-#if (defined(__APPLE__) && defined(__MACH__)) || defined(__FreeBSD__)
-#include <copyfile.h>     /* fcopyfile() *//* FreeBSD and OS X 10.5+ */
+#if defined(__APPLE__) && defined(__MACH__)
+#include <copyfile.h>     /* fcopyfile() *//* OS X 10.5+ */
+#endif
+#ifdef __FreeBSD__
+#include <libelftc.h>     /* elftc_copyfile() */
 #endif
 #ifdef __linux__
 #include <sys/sendfile.h> /* sendfile() */
@@ -2039,8 +2042,16 @@ webdav_fcopyfile_sz (int ifd, int ofd, off_t isz)
     /*fcntl(ofd, F_SETFL, fcntl(ofd, F_GETFL, 0) & ~O_NONBLOCK);*/
   #endif
 
-  #if (defined(__APPLE__) && defined(__MACH__)) || defined(__FreeBSD__)
+  #if defined(__APPLE__) && defined(__MACH__)
     if (0 == fcopyfile(ifd, ofd, NULL, COPYFILE_ALL))
+        return 0;
+
+    lseek(ifd, 0, SEEK_SET);
+    lseek(ofd, 0, SEEK_SET);
+  #endif
+
+  #ifdef __FreeBSD__
+    if (0 == elftc_copyfile(ifd, ofd))
         return 0;
 
     lseek(ifd, 0, SEEK_SET);
@@ -4038,6 +4049,7 @@ mod_webdav_write_cq (connection* const con, chunkqueue* const cq, const int fd)
 }
 
 
+#if (defined(__linux__) || defined(__CYGWIN__)) && defined(O_TMPFILE)
 static int
 mod_webdav_write_single_file_chunk (connection* const con, chunkqueue* const cq)
 {
@@ -4060,6 +4072,7 @@ mod_webdav_write_single_file_chunk (connection* const con, chunkqueue* const cq)
         return 0;
     }
 }
+#endif
 
 
 static handler_t
