@@ -2050,6 +2050,7 @@ webdav_fcopyfile_sz (int ifd, int ofd, off_t isz)
     lseek(ofd, 0, SEEK_SET);
   #endif
 
+ #if 0
   #ifdef __FreeBSD__
     if (0 == elftc_copyfile(ifd, ofd))
         return 0;
@@ -2057,6 +2058,7 @@ webdav_fcopyfile_sz (int ifd, int ofd, off_t isz)
     lseek(ifd, 0, SEEK_SET);
     lseek(ofd, 0, SEEK_SET);
   #endif
+ #endif
 
   #ifdef __linux__ /* Linux 2.6.33+ sendfile() supports file-to-file copy */
     off_t offset = 0;
