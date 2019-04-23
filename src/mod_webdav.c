@@ -2099,28 +2099,43 @@ webdav_if_match_or_unmodified_since (connection * const con, struct stat *st)
                                 CONST_STR_LEN("If-Match"))
       : NULL;
 
+    buffer *inm = (0 != con->etag_flags)
+      ? http_header_request_get(con, HTTP_HEADER_IF_NONE_MATCH,
+                                CONST_STR_LEN("If-None-Match"))
+      : NULL;
+
     buffer *ius =
       http_header_request_get(con, HTTP_HEADER_OTHER,
                               CONST_STR_LEN("If-Unmodified-Since"));
 
-    if (NULL == im && NULL == ius) return 0;
+    if (NULL == im && NULL == inm && NULL == ius) return 0;
 
     struct stat stp;
-    if (NULL == st) {
-        st = &stp;
-        if (0 != lstat(con->physical.path->ptr, st))
-            return 412; /* Precondition Failed */
+    if (NULL == st)
+        st = (0 == lstat(con->physical.path->ptr, &stp)) ? &stp : NULL;
+
+    buffer *etagb = con->physical.etag;
+    if (NULL != st && (NULL != im || NULL != inm)) {
+        etag_create(etagb, st, con->etag_flags);
+        etag_mutate(etagb, etagb);
     }
 
     if (NULL != im) {
-        buffer *etagb = con->physical.etag;
-        etag_create(etagb, st, con->etag_flags);
-        etag_mutate(etagb, etagb);
-        if (!etag_is_equal(etagb, im->ptr, 0))
+        if (NULL == st || !etag_is_equal(etagb, im->ptr, 0))
+            return 412; /* Precondition Failed */
+    }
+
+    if (NULL != inm) {
+        if (NULL == st
+            ? !buffer_is_equal_string(inm,CONST_STR_LEN("*"))
+              || (errno != ENOENT && errno != ENOTDIR)
+            : etag_is_equal(etagb, inm->ptr, 0))
             return 412; /* Precondition Failed */
     }
 
     if (NULL != ius) {
+        if (NULL == st)
+            return 412; /* Precondition Failed */
         struct tm itm, *ftm = gmtime(&st->st_mtime);
         if (NULL == strptime(ius->ptr, "%a, %d %b %Y %H:%M:%S GMT", &itm)
             || mktime(ftm) > mktime(&itm)) { /* timegm() not standard */
