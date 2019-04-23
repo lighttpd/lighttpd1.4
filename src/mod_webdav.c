@@ -3537,9 +3537,9 @@ webdav_has_lock (connection * const con,
              *   List = "(" 1*Condition ")"
              *   Condition = ["Not"] (State-token | "[" entity-tag "]")
              */
+            int notflag = 0;
             while (*p != '\0' && *++p != ')') {
                 while (*p == ' ' || *p == '\t') ++p;
-                int notflag = 0;
                 if (   (p[0] & 0xdf) == 'N'
                     && (p[1] & 0xdf) == 'O'
                     && (p[2] & 0xdf) == 'T') {
@@ -3572,6 +3572,17 @@ webdav_has_lock (connection * const con,
                         http_status_set_error(con,412);/* Precondition Failed */
                         return 0;
                     }
+                    continue;
+                }
+
+                if (p[1] == 'D'
+                    && 0 == strncmp(p, "<DAV:no-lock>",
+                                    sizeof("<DAV:no-lock>")-1)) {
+                    if (0 == notflag) {
+                        http_status_set_error(con,412);/* Precondition Failed */
+                        return 0;
+                    }
+                    p += sizeof("<DAV:no-lock>")-2; /* point p to '>' */
                     continue;
                 }
 
