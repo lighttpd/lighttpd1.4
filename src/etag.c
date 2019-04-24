@@ -160,6 +160,9 @@ int etag_create(buffer *etag, const struct stat *st, etag_flags_t flags) {
 	
 	if (flags & ETAG_USE_MTIME) {
 		buffer_append_int(etag, st->st_mtime);
+	      #ifdef st_mtime /* use high-precision timestamp if available */
+		buffer_append_int(etag, st->st_mtim.tv_nsec);
+	      #endif
 	}
 
 	return 0;
