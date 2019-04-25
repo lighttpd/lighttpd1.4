@@ -86,20 +86,19 @@ typedef struct stat_cache {
 
 
 /* the famous DJB hash function for strings */
-static uint32_t hashme(const char *str, int z) {
-	uint32_t hash = 5381;
-	for (const unsigned char *s = (const unsigned char *)str; *s; ++s) {
-		hash = ((hash << 5) + hash) ^ *s;
-	}
+static uint32_t djbhash(const char *str, const size_t len)
+{
+    const unsigned char * const s = (const unsigned char *)str;
+    uint32_t hash = 5381;
+    for (size_t i = 0; i < len; ++i) hash = ((hash << 5) + hash) ^ s[i];
+    return hash;
+}
 
-	/* customizations */
 
-	/* (differentiate hash values with and w/o con->conf.follow_symlink) */
-	hash = ((hash << 5) + hash) ^ (z ? '1' : '0');
-
-	hash &= ~(((uint32_t)1) << 31); /* strip the highest bit */
-
-	return hash;
+static uint32_t hashme(const char *str, const size_t len)
+{
+    /* strip highest bit of hash value for splaytree */
+    return djbhash(str,len) & ~(((uint32_t)1) << 31);
 }
 
 
@@ -164,7 +163,7 @@ static handler_t stat_cache_handle_fdevent(server *srv, void *_fce, int revent) 
 			FAMEvent fe;
 			fam_dir_entry *fam_dir;
 			splay_tree *node;
-			int ndx, j;
+			int ndx;
 
 			FAMNextEvent(&scf->fam, &fe);
 
@@ -182,11 +181,7 @@ static handler_t stat_cache_handle_fdevent(server *srv, void *_fce, int revent) 
 				/* file/dir is still here */
 				if (fe.code == FAMChanged) break;
 
-				/* we have 2 versions, follow and no-follow-symlink */
-
-				for (j = 0; j < 2; j++) {
-
-					ndx = hashme(fe.filename, j);
+					ndx = hashme(fe.filename, strlen(fe.filename));
 
 					scf->dirs = splaytree_splay(scf->dirs, ndx);
 					node = scf->dirs;
@@ -199,7 +194,6 @@ static handler_t stat_cache_handle_fdevent(server *srv, void *_fce, int revent) 
 
 						force_assert(osize - 1 == splaytree_size(scf->dirs));
 					}
-				}
 				break;
 			default:
 				break;
@@ -287,14 +281,14 @@ static int buffer_copy_dirname(buffer *dst, const buffer *file) {
 	return -1;
 }
 
-static handler_t stat_cache_fam_dir_check(server *srv, stat_cache_fam *scf, stat_cache_entry *sce, const buffer *name, unsigned int follow_symlink) {
+static handler_t stat_cache_fam_dir_check(server *srv, stat_cache_fam *scf, stat_cache_entry *sce, const buffer *name) {
 	if (0 != buffer_copy_dirname(scf->dir_name, name)) {
 		log_error_write(srv, __FILE__, __LINE__, "sb",
 				"no '/' found in filename:", name);
 		return HANDLER_ERROR;
 	}
 
-	scf->dir_ndx = hashme(scf->dir_name->ptr, follow_symlink);
+	scf->dir_ndx = hashme(CONST_BUF_LEN(scf->dir_name));
 
 	scf->dirs = splaytree_splay(scf->dirs, scf->dir_ndx);
 
@@ -590,8 +584,8 @@ handler_t stat_cache_get_entry(server *srv, connection *con, buffer *name, stat_
 	stat_cache *sc;
 	struct stat st;
 	int fd;
-	const int follow_symlink = con->conf.follow_symlink;
 	int file_ndx;
+	UNUSED(con);
 
 	*ret_sce = NULL;
 
@@ -601,7 +595,7 @@ handler_t stat_cache_get_entry(server *srv, connection *con, buffer *name, stat_
 
 	sc = srv->stat_cache;
 
-	file_ndx = hashme(name->ptr, follow_symlink);
+	file_ndx = hashme(CONST_BUF_LEN(name));
 	sc->files = splaytree_splay(sc->files, file_ndx);
 
 	if (sc->files && (sc->files->key == file_ndx)) {
@@ -614,7 +608,7 @@ handler_t stat_cache_get_entry(server *srv, connection *con, buffer *name, stat_
 
 		if (buffer_is_equal(name, sce->name)) {
 			if (srv->srvconf.stat_cache_engine == STAT_CACHE_ENGINE_SIMPLE) {
-				if (sce->stat_ts == srv->cur_ts && follow_symlink) {
+				if (sce->stat_ts == srv->cur_ts) {
 					*ret_sce = sce;
 					return HANDLER_GO_ON;
 				}
@@ -628,7 +622,7 @@ handler_t stat_cache_get_entry(server *srv, connection *con, buffer *name, stat_
 #ifdef HAVE_FAM_H
 	/* dir-check */
 	if (srv->srvconf.stat_cache_engine == STAT_CACHE_ENGINE_FAM) {
-		switch (stat_cache_fam_dir_check(srv, sc->scf, sce, name, follow_symlink)) {
+		switch (stat_cache_fam_dir_check(srv, sc->scf, sce, name)) {
 		case HANDLER_GO_ON:
 			break;
 		case HANDLER_FINISHED:
