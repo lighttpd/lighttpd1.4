@@ -159,9 +159,6 @@ static handler_t stat_cache_handle_fdevent(server *srv, void *_fce, int revent) 
 
 		for (i = 0; i < events; i++) {
 			FAMEvent fe;
-			splay_tree *node;
-			int ndx;
-
 			if (FAMNextEvent(&scf->fam, &fe) < 0) break;
 			scf->dirs = splaytree_splay(scf->dirs, (int)(intptr_t)fe.userdata);
 			if (!scf->dirs || scf->dirs->key != (int)(intptr_t)fe.userdata) {
@@ -193,28 +190,12 @@ static handler_t stat_cache_handle_fdevent(server *srv, void *_fce, int revent) 
 
 			switch(fe.code) {
 			case FAMChanged:
+				++fam_dir->version;
+				break;
 			case FAMDeleted:
 			case FAMMoved:
-				/* if the filename is a directory remove the entry */
-
-				fam_dir->version++;
-
-				/* file/dir is still here */
-				if (fe.code == FAMChanged) break;
-
-					ndx = hashme(fe.filename, strlen(fe.filename));
-
-					scf->dirs = splaytree_splay(scf->dirs, ndx);
-					node = scf->dirs;
-
-					if (node && (node->key == ndx)) {
-						int osize = splaytree_size(scf->dirs);
-
-						fam_dir_entry_free(&scf->fam, node->data);
-						scf->dirs = splaytree_delete(scf->dirs, ndx);
-
-						force_assert(osize - 1 == splaytree_size(scf->dirs));
-					}
+				fam_dir_entry_free(&scf->fam, fam_dir);
+				scf->dirs = splaytree_delete(scf->dirs, scf->dirs->key);
 				break;
 			default:
 				break;
