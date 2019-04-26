@@ -169,6 +169,28 @@ static handler_t stat_cache_handle_fdevent(server *srv, void *_fce, int revent) 
 			}
 			fam_dir_entry *fam_dir = scf->dirs->data;
 
+			if (fe.filename[0] != '/') {
+				switch(fe.code) {
+				case FAMCreated:
+					/* file created in monitored dir modifies dir */
+					++fam_dir->version;
+					break;
+				case FAMChanged:
+					/* file changed in monitored dir does not modify dir */
+					++fam_dir->version; /* however, current impl here needs this */
+					break;
+				case FAMDeleted:
+				case FAMMoved:
+					/* file deleted or moved in monitored dir modifies dir,
+					 * but FAM provides separate notification for that */
+					++fam_dir->version;
+					break;
+				default:
+					break;
+				}
+				continue;
+			}
+
 			switch(fe.code) {
 			case FAMChanged:
 			case FAMDeleted:
