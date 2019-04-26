@@ -58,8 +58,9 @@
  * - a splay-tree is used as we can use the caching effect of it
  */
 
-/* we want to cleanup the stat-cache every few seconds, let's say 10
+/* we want to cleanup the FAM stat-cache every few seconds, let's say 10
  *
+ * - (NOT CURRENTLY DONE)
  * - remove entries which are outdated since 30s
  * - remove entries which are fresh but havn't been used since 60s
  * - if we don't have a stat-cache entry for a directory, release it from the monitor
@@ -99,6 +100,16 @@ static uint32_t hashme(const char *str, const size_t len)
 {
     /* strip highest bit of hash value for splaytree */
     return djbhash(str,len) & ~(((uint32_t)1) << 31);
+}
+
+
+static void * stat_cache_sptree_find(splay_tree ** const sptree,
+                                     const char * const name,
+                                     size_t len)
+{
+    const int ndx = hashme(name, len);
+    *sptree = splaytree_splay(*sptree, ndx);
+    return (*sptree && (*sptree)->key == ndx) ? (*sptree)->data : NULL;
 }
 
 
@@ -146,25 +157,70 @@ static void fam_dir_entry_free(FAMConnection *fc, void *data) {
 	free(fam_dir);
 }
 
-static handler_t stat_cache_handle_fdevent(server *srv, void *_fce, int revent) {
-	size_t i;
-	stat_cache_fam *scf = srv->stat_cache->scf;
-	size_t events;
+static void fam_dir_node_delete(stat_cache_fam *scf, const char *name, size_t len)
+{
+    splay_tree **sptree = &scf->dirs;
+    fam_dir_entry *fam_dir =
+      stat_cache_sptree_find(sptree, name, len);
+    if (fam_dir && buffer_is_equal_string(fam_dir->name, name, len)) {
+        fam_dir_entry_free(&scf->fam, fam_dir);
+        *sptree = splaytree_delete(*sptree, (*sptree)->key);
+    }
+}
 
+/*
+ * walk though splay_tree and collect contents of dir tree.
+ * remove tagged entries in a second loop
+ */
+
+static void fam_dir_tag_tree(splay_tree *t, const char *name, size_t len,
+                             int *keys, int *ndx)
+{
+    if (*ndx == 8192) return; /*(must match num array entries in keys[])*/
+    if (t->left)  fam_dir_tag_tree(t->left,  name, len, keys, ndx);
+    if (t->right) fam_dir_tag_tree(t->right, name, len, keys, ndx);
+    if (*ndx == 8192) return; /*(must match num array entries in keys[])*/
+
+    buffer *b = ((fam_dir_entry *)t->data)->name;
+    size_t blen = buffer_string_length(b);
+    if (blen > len && b->ptr[len] == '/' && 0 == memcmp(b->ptr, name, len))
+        keys[(*ndx)++] = t->key;
+}
+
+static void fam_dir_prune_tree(stat_cache_fam * const scf,
+                               const char *name, size_t len)
+{
+    int max_ndx, i;
+    int keys[8192]; /* 32k size on stack */
+    do {
+        if (!scf->dirs) return;
+        max_ndx = 0;
+        fam_dir_tag_tree(scf->dirs, name, len, keys, &max_ndx);
+        for (i = 0; i < max_ndx; ++i) {
+            const int ndx = keys[i];
+            splay_tree *node = scf->dirs = splaytree_splay(scf->dirs, ndx);
+            if (node && node->key == ndx) {
+                fam_dir_entry_free(&scf->fam, node->data);
+                scf->dirs = splaytree_delete(scf->dirs, ndx);
+            }
+        }
+    } while (max_ndx == sizeof(keys)/sizeof(int));
+}
+
+static handler_t stat_cache_handle_fdevent(server *srv, void *_fce, int revent) {
+	stat_cache_fam *scf = srv->stat_cache->scf;
 	UNUSED(_fce);
-	/* */
 
 	if (revent & FDEVENT_IN) {
-		events = FAMPending(&scf->fam);
-
-		for (i = 0; i < events; i++) {
+		for (int i = 0, ndx; i || (i = FAMPending(&scf->fam)) > 0; --i) {
 			FAMEvent fe;
 			if (FAMNextEvent(&scf->fam, &fe) < 0) break;
 
 			/* ignore events which may have been pending for
 			 * paths recently cancelled via FAMCancelMonitor() */
-			scf->dirs = splaytree_splay(scf->dirs, (int)(intptr_t)fe.userdata);
-			if (!scf->dirs || scf->dirs->key != (int)(intptr_t)fe.userdata) {
+			ndx = (int)(intptr_t)fe.userdata;
+			scf->dirs = splaytree_splay(scf->dirs, ndx);
+			if (!scf->dirs || scf->dirs->key != ndx) {
 				continue;
 			}
 			fam_dir_entry *fam_dir = scf->dirs->data;
@@ -195,14 +251,16 @@ static handler_t stat_cache_handle_fdevent(server *srv, void *_fce, int revent) 
 				continue;
 			}
 
+			/*expect: buffer_is_equal_string(fam_dir->name, fe.filename, strlen(fe.filename))*/
 			switch(fe.code) {
 			case FAMChanged:
 				++fam_dir->version;
 				break;
 			case FAMDeleted:
 			case FAMMoved:
+				scf->dirs = splaytree_delete(scf->dirs, ndx);
+				fam_dir_prune_tree(scf, CONST_BUF_LEN(fam_dir->name));
 				fam_dir_entry_free(&scf->fam, fam_dir);
-				scf->dirs = splaytree_delete(scf->dirs, scf->dirs->key);
 				break;
 			default:
 				break;
@@ -749,8 +807,8 @@ int stat_cache_open_rdonly_fstat (buffer *name, struct stat *st, int symlinks) {
 }
 
 /**
- * remove stat() from cache which havn't been stat()ed for
- * more than 10 seconds
+ * remove stat() from cache which haven't been stat()ed for
+ * more than 2 seconds
  *
  *
  * walk though the stat-cache, collect the ids which are too old
