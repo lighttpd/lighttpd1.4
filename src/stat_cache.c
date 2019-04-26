@@ -163,7 +163,7 @@ static handler_t stat_cache_handle_fdevent(server *srv, void *_fce, int revent) 
 			splay_tree *node;
 			int ndx;
 
-			FAMNextEvent(&scf->fam, &fe);
+			if (FAMNextEvent(&scf->fam, &fe) < 0) break;
 
 			/* handle event */
 
