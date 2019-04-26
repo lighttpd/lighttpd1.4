@@ -159,13 +159,15 @@ static handler_t stat_cache_handle_fdevent(server *srv, void *_fce, int revent) 
 
 		for (i = 0; i < events; i++) {
 			FAMEvent fe;
-			fam_dir_entry *fam_dir;
 			splay_tree *node;
 			int ndx;
 
 			if (FAMNextEvent(&scf->fam, &fe) < 0) break;
-
-			/* handle event */
+			scf->dirs = splaytree_splay(scf->dirs, (int)(intptr_t)fe.userdata);
+			if (!scf->dirs || scf->dirs->key != (int)(intptr_t)fe.userdata) {
+				continue;
+			}
+			fam_dir_entry *fam_dir = scf->dirs->data;
 
 			switch(fe.code) {
 			case FAMChanged:
@@ -173,7 +175,6 @@ static handler_t stat_cache_handle_fdevent(server *srv, void *_fce, int revent) 
 			case FAMMoved:
 				/* if the filename is a directory remove the entry */
 
-				fam_dir = fe.userdata;
 				fam_dir->version++;
 
 				/* file/dir is still here */
@@ -300,7 +301,7 @@ static void stat_cache_fam_dir_monitor(server *srv, stat_cache_fam *scf, stat_ca
 		fam_dir->version = 1;
 
 		if (0 != FAMMonitorDirectory(&scf->fam, fam_dir->name->ptr,
-					     &fam_dir->req, fam_dir)) {
+					     &fam_dir->req, (void *)(intptr_t)scf->dir_ndx)) {
 
 			log_error_write(srv, __FILE__, __LINE__, "sbsbs",
 					"monitoring dir failed:",
