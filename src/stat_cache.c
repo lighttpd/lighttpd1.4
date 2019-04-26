@@ -107,9 +107,9 @@ static uint32_t hashme(const char *str, const size_t len)
 #include <fam.h>
 
 typedef struct {
-	FAMRequest *req;
 	buffer *name;
 	int version;
+	FAMRequest req;
 } fam_dir_entry;
 
 typedef struct stat_cache_fam {
@@ -119,7 +119,7 @@ typedef struct stat_cache_fam {
 
 	int dir_ndx;
 	fam_dir_entry *fam_dir;
-	buffer *dir_name; /* for building the dirname from the filename */
+	size_t dirlen; /* for building the dirname from the filename */
 	fdnode *fdn;
 	int fd;
 } stat_cache_fam;
@@ -140,11 +140,9 @@ static void fam_dir_entry_free(FAMConnection *fc, void *data) {
 
 	if (!fam_dir) return;
 
-	FAMCancelMonitor(fc, fam_dir->req);
+	FAMCancelMonitor(fc, &fam_dir->req);
 
 	buffer_free(fam_dir->name);
-	free(fam_dir->req);
-
 	free(fam_dir);
 }
 
@@ -216,7 +214,6 @@ static handler_t stat_cache_handle_fdevent(server *srv, void *_fce, int revent) 
 
 static stat_cache_fam * stat_cache_init_fam(server *srv) {
 	stat_cache_fam *scf = calloc(1, sizeof(*scf));
-	scf->dir_name = buffer_init();
 	scf->fd = -1;
 
 	/* setup FAM */
@@ -239,7 +236,6 @@ static stat_cache_fam * stat_cache_init_fam(server *srv) {
 
 static void stat_cache_free_fam(stat_cache_fam *scf) {
 	if (NULL == scf) return;
-	buffer_free(scf->dir_name);
 
 	while (scf->dirs) {
 		splay_tree *node = scf->dirs;
@@ -256,29 +252,19 @@ static void stat_cache_free_fam(stat_cache_fam *scf) {
 	free(scf);
 }
 
-static int buffer_copy_dirname(buffer *dst, const buffer *file) {
-	size_t i;
-
-	if (buffer_string_is_empty(file)) return -1;
-
-	for (i = buffer_string_length(file); i > 0; i--) {
-		if (file->ptr[i] == '/') {
-			buffer_copy_string_len(dst, file->ptr, i);
-			return 0;
-		}
-	}
-
-	return -1;
-}
-
 static handler_t stat_cache_fam_dir_check(server *srv, stat_cache_fam *scf, stat_cache_entry *sce, const buffer *name) {
-	if (0 != buffer_copy_dirname(scf->dir_name, name)) {
+	char *slash = !buffer_string_is_empty(name)
+          ? strrchr(name->ptr, '/')
+          : NULL;
+	if (NULL == slash) {
 		log_error_write(srv, __FILE__, __LINE__, "sb",
 				"no '/' found in filename:", name);
 		return HANDLER_ERROR;
 	}
+	scf->dirlen = (size_t)(slash - name->ptr);
+	if (0 == scf->dirlen) scf->dirlen = 1; /* root dir ("/") */
 
-	scf->dir_ndx = hashme(CONST_BUF_LEN(scf->dir_name));
+	scf->dir_ndx = hashme(name->ptr, scf->dirlen);
 
 	scf->dirs = splaytree_splay(scf->dirs, scf->dir_ndx);
 
@@ -286,7 +272,7 @@ static handler_t stat_cache_fam_dir_check(server *srv, stat_cache_fam *scf, stat
 		scf->fam_dir = scf->dirs->data;
 
 		/* check whether we got a collision */
-		if (buffer_is_equal(scf->dir_name, scf->fam_dir->name)) {
+		if (buffer_is_equal_string(scf->fam_dir->name, name->ptr, scf->dirlen)) {
 			/* test whether a found file cache entry is still ok */
 			if ((NULL != sce) && (scf->fam_dir->version == sce->dir_version)) {
 				/* the stat()-cache entry is still ok */
@@ -309,15 +295,12 @@ static void stat_cache_fam_dir_monitor(server *srv, stat_cache_fam *scf, stat_ca
 	if (NULL == fam_dir) {
 		fam_dir = fam_dir_entry_init();
 
-		buffer_copy_buffer(fam_dir->name, scf->dir_name);
+		buffer_copy_string_len(fam_dir->name, name->ptr, scf->dirlen);
 
 		fam_dir->version = 1;
 
-		fam_dir->req = calloc(1, sizeof(FAMRequest));
-		force_assert(NULL != fam_dir);
-
 		if (0 != FAMMonitorDirectory(&scf->fam, fam_dir->name->ptr,
-					     fam_dir->req, fam_dir)) {
+					     &fam_dir->req, fam_dir)) {
 
 			log_error_write(srv, __FILE__, __LINE__, "sbsbs",
 					"monitoring dir failed:",
@@ -326,7 +309,7 @@ static void stat_cache_fam_dir_monitor(server *srv, stat_cache_fam *scf, stat_ca
 					FamErrlist[FAMErrno]);
 
 			fam_dir_entry_free(&scf->fam, fam_dir);
-			fam_dir = NULL;
+			return;
 		} else {
 			int osize = splaytree_size(scf->dirs);
 
@@ -347,10 +330,7 @@ static void stat_cache_fam_dir_monitor(server *srv, stat_cache_fam *scf, stat_ca
 	}
 
 	/* bind the fam_fc to the stat() cache entry */
-
-	if (fam_dir) {
-		sce->dir_version = fam_dir->version;
-	}
+	sce->dir_version = fam_dir->version;
 }
 
 #endif
