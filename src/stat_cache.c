@@ -297,10 +297,17 @@ static void stat_cache_fam_dir_monitor(server *srv, stat_cache_fam *scf, stat_ca
 	/* is this directory already registered ? */
 	fam_dir_entry *fam_dir = scf->fam_dir;
 	if (NULL == fam_dir) {
-		fam_dir = fam_dir_entry_init();
+		/* already splayed scf->dir_ndx */
+		if (NULL != scf->dirs && scf->dirs->key == scf->dir_ndx) {
+			/* hash collision; preserve existing
+			 * do not monitor new to avoid cache thrashing */
+			return;
+		} else {
+			fam_dir = fam_dir_entry_init();
+			scf->dirs = splaytree_insert(scf->dirs, scf->dir_ndx, fam_dir);
+		}
 
 		buffer_copy_string_len(fam_dir->name, name->ptr, scf->dirlen);
-
 		fam_dir->version = 1;
 
 		if (0 != FAMMonitorDirectory(&scf->fam, fam_dir->name->ptr,
@@ -312,24 +319,9 @@ static void stat_cache_fam_dir_monitor(server *srv, stat_cache_fam *scf, stat_ca
 					"file:", name,
 					FamErrlist[FAMErrno]);
 
+			scf->dirs = splaytree_delete(scf->dirs, scf->dir_ndx);
 			fam_dir_entry_free(&scf->fam, fam_dir);
 			return;
-		} else {
-			int osize = splaytree_size(scf->dirs);
-
-			/* already splayed scf->dir_ndx */
-			if ((NULL != scf->dirs) && (scf->dirs->key == scf->dir_ndx)) {
-				/* hash collision: replace old entry */
-				fam_dir_entry_free(&scf->fam, scf->dirs->data);
-				scf->dirs->data = fam_dir;
-			} else {
-				scf->dirs = splaytree_insert(scf->dirs, scf->dir_ndx, fam_dir);
-				force_assert(osize == (splaytree_size(scf->dirs) - 1));
-			}
-
-			force_assert(scf->dirs);
-			force_assert(scf->dirs->data == fam_dir);
-			scf->fam_dir = fam_dir;
 		}
 	}
 
