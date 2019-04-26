@@ -207,6 +207,10 @@ static void fam_dir_prune_tree(stat_cache_fam * const scf,
     } while (max_ndx == sizeof(keys)/sizeof(int));
 }
 
+/* declarations */
+static void stat_cache_delete_tree(server *srv, const char *name, size_t len);
+static void stat_cache_invalidate_entry(server *srv, const char *name, size_t len);
+
 static handler_t stat_cache_handle_fdevent(server *srv, void *_fce, int revent) {
 	stat_cache_fam *scf = srv->stat_cache->scf;
 	UNUSED(_fce);
@@ -230,6 +234,7 @@ static handler_t stat_cache_handle_fdevent(server *srv, void *_fce, int revent) 
 			}
 
 			if (fe.filename[0] != '/') {
+				size_t len;
 				switch(fe.code) {
 				case FAMCreated:
 					/* file created in monitored dir modifies dir */
@@ -238,12 +243,19 @@ static handler_t stat_cache_handle_fdevent(server *srv, void *_fce, int revent) 
 				case FAMChanged:
 					/* file changed in monitored dir does not modify dir */
 					++fam_dir->version; /* however, current impl here needs this */
-					break;
 				case FAMDeleted:
 				case FAMMoved:
 					/* file deleted or moved in monitored dir modifies dir,
 					 * but FAM provides separate notification for that */
 					++fam_dir->version;
+					/* temporarily append filename to dir in fam_dir->name to
+					 * construct path, then delete stat_cache entry (if any)*/
+					len = buffer_string_length(fam_dir->name);
+					buffer_append_string_len(fam_dir->name, CONST_STR_LEN("/"));
+					buffer_append_string_len(fam_dir->name, fe.filename, strlen(fe.filename));
+					/* (alternatively, could chose to stat() and update)*/
+					stat_cache_invalidate_entry(srv, CONST_BUF_LEN(fam_dir->name));
+					buffer_string_set_length(fam_dir->name, len);
 					break;
 				default:
 					break;
@@ -255,11 +267,13 @@ static handler_t stat_cache_handle_fdevent(server *srv, void *_fce, int revent) 
 			switch(fe.code) {
 			case FAMChanged:
 				++fam_dir->version;
+				stat_cache_invalidate_entry(srv, CONST_BUF_LEN(fam_dir->name));
 				break;
 			case FAMDeleted:
 			case FAMMoved:
 				scf->dirs = splaytree_delete(scf->dirs, ndx);
 				fam_dir_prune_tree(scf, CONST_BUF_LEN(fam_dir->name));
+				stat_cache_delete_tree(srv, CONST_BUF_LEN(fam_dir->name));
 				fam_dir_entry_free(&scf->fam, fam_dir);
 				break;
 			default:
@@ -594,6 +608,101 @@ const buffer * stat_cache_etag_get(stat_cache_entry *sce, etag_flags_t flags) {
     return NULL;
 }
 
+void stat_cache_update_entry(server *srv, const char *name, size_t len,
+                             struct stat *st, buffer *etagb)
+{
+    if (srv->srvconf.stat_cache_engine == STAT_CACHE_ENGINE_NONE) return;
+    force_assert(0 != len);
+    if (name[len-1] == '/') { if (0 == --len) len = 1; }
+    splay_tree **sptree = &srv->stat_cache->files;
+    stat_cache_entry *sce =
+      stat_cache_sptree_find(sptree, name, len);
+    if (sce && buffer_is_equal_string(sce->name, name, len)) {
+        sce->stat_ts = srv->cur_ts;
+        sce->st = *st;
+        buffer_copy_buffer(sce->etag, etagb);
+    }
+}
+
+void stat_cache_delete_entry(server *srv, const char *name, size_t len)
+{
+    if (srv->srvconf.stat_cache_engine == STAT_CACHE_ENGINE_NONE) return;
+    force_assert(0 != len);
+    if (name[len-1] == '/') { if (0 == --len) len = 1; }
+    splay_tree **sptree = &srv->stat_cache->files;
+    stat_cache_entry *sce = stat_cache_sptree_find(sptree, name, len);
+    if (sce && buffer_is_equal_string(sce->name, name, len)) {
+        stat_cache_entry_free(sce);
+        *sptree = splaytree_delete(*sptree, (*sptree)->key);
+    }
+}
+
+static void stat_cache_invalidate_entry(server *srv, const char *name, size_t len)
+{
+    splay_tree **sptree = &srv->stat_cache->files;
+    stat_cache_entry *sce = stat_cache_sptree_find(sptree, name, len);
+    if (sce && buffer_is_equal_string(sce->name, name, len)) {
+        sce->stat_ts = 0;
+    }
+}
+
+/*
+ * walk though splay_tree and collect contents of dir tree.
+ * remove tagged entries in a second loop
+ */
+
+static void stat_cache_tag_dir_tree(splay_tree *t, const char *name, size_t len,
+                                    int *keys, int *ndx)
+{
+    if (*ndx == 8192) return; /*(must match num array entries in keys[])*/
+    if (t->left)  stat_cache_tag_dir_tree(t->left,  name, len, keys, ndx);
+    if (t->right) stat_cache_tag_dir_tree(t->right, name, len, keys, ndx);
+    if (*ndx == 8192) return; /*(must match num array entries in keys[])*/
+
+    buffer *b = ((stat_cache_entry *)t->data)->name;
+    size_t blen = buffer_string_length(b);
+    if (blen > len && b->ptr[len] == '/' && 0 == memcmp(b->ptr, name, len))
+        keys[(*ndx)++] = t->key;
+}
+
+static void stat_cache_prune_dir_tree(stat_cache * const sc,
+                                      const char *name, size_t len)
+{
+    int max_ndx, i;
+    int keys[8192]; /* 32k size on stack */
+    do {
+        if (!sc->files) return;
+        max_ndx = 0;
+        stat_cache_tag_dir_tree(sc->files, name, len, keys, &max_ndx);
+        for (i = 0; i < max_ndx; ++i) {
+            const int ndx = keys[i];
+            splay_tree *node = sc->files = splaytree_splay(sc->files, ndx);
+            if (node && node->key == ndx) {
+                stat_cache_entry_free(node->data);
+                sc->files = splaytree_delete(sc->files, ndx);
+            }
+        }
+    } while (max_ndx == sizeof(keys)/sizeof(int));
+}
+
+static void stat_cache_delete_tree(server *srv, const char *name, size_t len)
+{
+    stat_cache_delete_entry(srv, name, len);
+    stat_cache_prune_dir_tree(srv->stat_cache, name, len);
+}
+
+void stat_cache_delete_dir(server *srv, const char *name, size_t len)
+{
+    force_assert(0 != len);
+    if (name[len-1] == '/') { if (0 == --len) len = 1; }
+  #ifdef HAVE_FAM_H
+    if (srv->srvconf.stat_cache_engine == STAT_CACHE_ENGINE_FAM) {
+        fam_dir_node_delete(srv->stat_cache->scf, name, len);
+        fam_dir_prune_tree(srv->stat_cache->scf, name, len);
+    }
+  #endif
+    stat_cache_delete_tree(srv, name, len);
+}
 
 /***
  *
