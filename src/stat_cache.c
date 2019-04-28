@@ -589,13 +589,24 @@ handler_t stat_cache_get_entry(server *srv, connection *con, buffer *name, stat_
 
 	*ret_sce = NULL;
 
+	/* consistency: ensure lookup name does not end in '/' unless root "/"
+	 * (but use full path given with stat(), even with trailing '/') */
+	int final_slash = 0;
+	size_t len = buffer_string_length(name);
+	force_assert(0 != len);
+	if (name->ptr[len-1] == '/') { final_slash = 1; if (0 == --len) len = 1; }
+	/* Note: paths are expected to be normalized before calling stat_cache,
+	 * e.g. without repeated '/' */
+
+	if (name->ptr[0] != '/') return HANDLER_ERROR;
+
 	/*
 	 * check if the directory for this file has changed
 	 */
 
 	sc = srv->stat_cache;
 
-	file_ndx = hashme(CONST_BUF_LEN(name));
+	file_ndx = hashme(name->ptr, len);
 	sc->files = splaytree_splay(sc->files, file_ndx);
 
 	if (sc->files && (sc->files->key == file_ndx)) {
@@ -606,9 +617,13 @@ handler_t stat_cache_get_entry(server *srv, connection *con, buffer *name, stat_
 
 		/* check if the name is the same, we might have a collision */
 
-		if (buffer_is_equal(name, sce->name)) {
+		if (buffer_is_equal_string(sce->name, name->ptr, len)) {
 			if (srv->srvconf.stat_cache_engine == STAT_CACHE_ENGINE_SIMPLE) {
 				if (sce->stat_ts == srv->cur_ts) {
+					if (final_slash && !S_ISDIR(sce->st.st_mode)) {
+						errno = ENOTDIR;
+						return HANDLER_ERROR;
+					}
 					*ret_sce = sce;
 					return HANDLER_GO_ON;
 				}
@@ -626,6 +641,10 @@ handler_t stat_cache_get_entry(server *srv, connection *con, buffer *name, stat_
 		case HANDLER_GO_ON:
 			break;
 		case HANDLER_FINISHED:
+			if (final_slash && !S_ISDIR(sce->st.st_mode)) {
+				errno = ENOTDIR;
+				return HANDLER_ERROR;
+			}
 			*ret_sce = sce;
 			return HANDLER_GO_ON;
 		case HANDLER_ERROR:
@@ -668,7 +687,7 @@ handler_t stat_cache_get_entry(server *srv, connection *con, buffer *name, stat_
 	if (NULL == sce) {
 
 		sce = stat_cache_entry_init();
-		buffer_copy_buffer(sce->name, name);
+		buffer_copy_string_len(sce->name, name->ptr, len);
 
 		/* already splayed file_ndx */
 		if ((NULL != sc->files) && (sc->files->key == file_ndx)) {
