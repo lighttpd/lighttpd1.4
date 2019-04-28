@@ -158,13 +158,13 @@ static handler_t http_response_physical_path_check(server *srv, connection *con)
 			break;
 		default:
 			/* we have no idea what happend. let's tell the user so. */
-			con->http_status = 500;
-			buffer_reset(con->physical.path);
-
 			log_error_write(srv, __FILE__, __LINE__, "ssbsb",
 					"file not found ... or so: ", strerror(errno),
 					con->uri.path,
 					"->", con->physical.path);
+
+			con->http_status = 500;
+			buffer_reset(con->physical.path);
 
 			return HANDLER_FINISHED;
 		}
