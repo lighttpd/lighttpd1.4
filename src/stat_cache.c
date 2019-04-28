@@ -242,19 +242,9 @@ static void stat_cache_free_fam(stat_cache_fam *scf) {
 	buffer_free(scf->dir_name);
 
 	while (scf->dirs) {
-		int osize;
 		splay_tree *node = scf->dirs;
-
-		osize = scf->dirs->size;
-
 		fam_dir_entry_free(&scf->fam, node->data);
 		scf->dirs = splaytree_delete(scf->dirs, node->key);
-
-		if (osize == 1) {
-			force_assert(NULL == scf->dirs);
-		} else {
-			force_assert(osize == (scf->dirs->size + 1));
-		}
 	}
 
 	if (-1 != scf->fd) {
@@ -412,15 +402,9 @@ static void stat_cache_entry_free(void *data) {
 
 void stat_cache_free(stat_cache *sc) {
 	while (sc->files) {
-		int osize;
 		splay_tree *node = sc->files;
-
-		osize = sc->files->size;
-
 		stat_cache_entry_free(node->data);
 		sc->files = splaytree_delete(sc->files, node->key);
-
-		force_assert(osize - 1 == splaytree_size(sc->files));
 	}
 
 #ifdef HAVE_FAM_H
@@ -695,13 +679,8 @@ handler_t stat_cache_get_entry(server *srv, connection *con, buffer *name, stat_
 			stat_cache_entry_free(sc->files->data);
 			sc->files->data = sce;
 		} else {
-			int osize = splaytree_size(sc->files);
-
 			sc->files = splaytree_insert(sc->files, file_ndx, sce);
-			force_assert(osize + 1 == splaytree_size(sc->files));
 		}
-		force_assert(sc->files);
-		force_assert(sc->files->data == sce);
 
 	} else {
 
