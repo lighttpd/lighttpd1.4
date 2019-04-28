@@ -160,11 +160,18 @@ static handler_t stat_cache_handle_fdevent(server *srv, void *_fce, int revent) 
 		for (i = 0; i < events; i++) {
 			FAMEvent fe;
 			if (FAMNextEvent(&scf->fam, &fe) < 0) break;
+
+			/* ignore events which may have been pending for
+			 * paths recently cancelled via FAMCancelMonitor() */
 			scf->dirs = splaytree_splay(scf->dirs, (int)(intptr_t)fe.userdata);
 			if (!scf->dirs || scf->dirs->key != (int)(intptr_t)fe.userdata) {
 				continue;
 			}
 			fam_dir_entry *fam_dir = scf->dirs->data;
+			if (FAMREQUEST_GETREQNUM(&fam_dir->req)
+			    != FAMREQUEST_GETREQNUM(&fe.fr)) {
+				continue;
+			}
 
 			if (fe.filename[0] != '/') {
 				switch(fe.code) {
