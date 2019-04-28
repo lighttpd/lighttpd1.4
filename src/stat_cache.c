@@ -795,24 +795,24 @@ int stat_cache_open_rdonly_fstat (buffer *name, struct stat *st, int symlinks) {
  * and remove them in a second loop
  */
 
-static int stat_cache_tag_old_entries(server *srv, splay_tree *t, int *keys, size_t *ndx) {
+static int stat_cache_tag_old_entries(server *srv, splay_tree *t, int *keys, size_t *ndx, time_t max_age) {
 	stat_cache_entry *sce;
 
 	if (!t) return 0;
 
-	stat_cache_tag_old_entries(srv, t->left, keys, ndx);
-	stat_cache_tag_old_entries(srv, t->right, keys, ndx);
+	stat_cache_tag_old_entries(srv, t->left, keys, ndx, max_age);
+	stat_cache_tag_old_entries(srv, t->right, keys, ndx, max_age);
 
 	sce = t->data;
 
-	if (srv->cur_ts - sce->stat_ts > 2) {
+	if (srv->cur_ts - sce->stat_ts > max_age) {
 		keys[(*ndx)++] = t->key;
 	}
 
 	return 0;
 }
 
-int stat_cache_trigger_cleanup(server *srv) {
+static int stat_cache_periodic_cleanup(server *srv, time_t max_age) {
 	stat_cache *sc;
 	size_t max_ndx = 0, i;
 	int *keys;
@@ -824,7 +824,7 @@ int stat_cache_trigger_cleanup(server *srv) {
 	keys = calloc(1, sizeof(int) * sc->files->size);
 	force_assert(NULL != keys);
 
-	stat_cache_tag_old_entries(srv, sc->files, keys, &max_ndx);
+	stat_cache_tag_old_entries(srv, sc->files, keys, &max_ndx, max_age);
 
 	for (i = 0; i < max_ndx; i++) {
 		int ndx = keys[i];
@@ -841,6 +841,14 @@ int stat_cache_trigger_cleanup(server *srv) {
 	}
 
 	free(keys);
+
+	return 0;
+}
+
+int stat_cache_trigger_cleanup(server *srv) {
+	time_t max_age = 2;
+
+	stat_cache_periodic_cleanup(srv, max_age);
 
 	return 0;
 }
