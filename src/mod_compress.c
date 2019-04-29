@@ -863,11 +863,6 @@ PHYSICALPATH_FUNC(mod_compress_physical) {
 	}
 
 	/* we only handle regular files */
-#ifdef HAVE_LSTAT
-	if ((sce->is_symlink == 1) && !con->conf.follow_symlink) {
-		return HANDLER_GO_ON;
-	}
-#endif
 	if (!S_ISREG(sce->st.st_mode)) {
 		return HANDLER_GO_ON;
 	}
@@ -941,6 +936,11 @@ PHYSICALPATH_FUNC(mod_compress_physical) {
 
 					const char *compression_name = NULL;
 					int compression_type = 0;
+
+					if (!con->conf.follow_symlink
+					    && 0 != stat_cache_path_contains_symlink(srv, con->physical.path)) {
+						return HANDLER_GO_ON;
+					}
 
 					mtime = strftime_cache_get(srv, sce->st.st_mtime);
 

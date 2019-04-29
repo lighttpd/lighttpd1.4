@@ -234,8 +234,8 @@ static handler_t http_response_physical_path_check(server *srv, connection *con)
 		}
 	}
 
-#ifdef HAVE_LSTAT
-	if ((sce->is_symlink != 0) && !con->conf.follow_symlink) {
+	if (!con->conf.follow_symlink
+	    && 0 != stat_cache_path_contains_symlink(srv, con->physical.path)) {
 		con->http_status = 403;
 
 		if (con->conf.log_request_handling) {
@@ -245,8 +245,8 @@ static handler_t http_response_physical_path_check(server *srv, connection *con)
 
 		buffer_reset(con->physical.path);
 		return HANDLER_FINISHED;
-	};
-#endif
+	}
+
 	if (S_ISDIR(sce->st.st_mode)) {
 		if (con->uri.path->ptr[buffer_string_length(con->uri.path) - 1] != '/') {
 			/* redirect to .../ */
@@ -255,11 +255,7 @@ static handler_t http_response_physical_path_check(server *srv, connection *con)
 
 			return HANDLER_FINISHED;
 		}
-#ifdef HAVE_LSTAT
-	} else if (!S_ISREG(sce->st.st_mode) && !sce->is_symlink) {
-#else
 	} else if (!S_ISREG(sce->st.st_mode)) {
-#endif
 		/* any special handling of non-reg files ?*/
 	}
 

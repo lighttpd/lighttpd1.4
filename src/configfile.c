@@ -366,9 +366,7 @@ static int config_insert(server *srv) {
 		s->use_ipv6      = (i == 0) ? 0 : srv->config_storage[0]->use_ipv6;
 		s->set_v6only    = (i == 0) ? 1 : srv->config_storage[0]->set_v6only;
 		s->defer_accept  = (i == 0) ? 0 : srv->config_storage[0]->defer_accept;
-#ifdef HAVE_LSTAT
 		s->follow_symlink = 1;
-#endif
 		s->kbytes_per_second = 0;
 		s->allow_http11  = 1;
 		s->etag_use_inode = 1;
@@ -400,9 +398,7 @@ static int config_insert(server *srv) {
 		cv[20].destination = &(s->max_read_idle);
 		cv[21].destination = &(s->max_write_idle);
 		cv[22].destination = s->error_handler;
-#ifdef HAVE_LSTAT
 		cv[24].destination = &(s->follow_symlink);
-#endif
 		cv[25].destination = &(s->global_kbytes_per_second);
 		cv[26].destination = &(s->kbytes_per_second);
 		cv[27].destination = &(s->use_xattr);
@@ -692,9 +688,7 @@ int config_setup_connection(server *srv, connection *con) {
 	PATCH(error_handler_404);
 	PATCH(error_intercept);
 	PATCH(errorfile_prefix);
-#ifdef HAVE_LSTAT
 	PATCH(follow_symlink);
-#endif
 	PATCH(server_tag);
 	PATCH(kbytes_per_second);
 	PATCH(global_kbytes_per_second);
@@ -771,10 +765,8 @@ int config_patch_connection(server *srv, connection *con) {
 				PATCH(etag_use_mtime);
 			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("etag.use-size"))) {
 				PATCH(etag_use_size);
-#ifdef HAVE_LSTAT
 			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("server.follow-symlink"))) {
 				PATCH(follow_symlink);
-#endif
 			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("server.name"))) {
 				buffer_copy_buffer(con->server_name, s->server_name);
 			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("server.tag"))) {

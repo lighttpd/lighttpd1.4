@@ -575,19 +575,6 @@ const buffer * stat_cache_etag_get(stat_cache_entry *sce, etag_flags_t flags) {
     return NULL;
 }
 
-#ifdef HAVE_LSTAT
-static int stat_cache_lstat(server *srv, buffer *dname, struct stat *lst) {
-	if (lstat(dname->ptr, lst) == 0) {
-		return S_ISLNK(lst->st_mode) ? 0 : 1;
-	}
-	else {
-		log_error_write(srv, __FILE__, __LINE__, "sbs",
-				"lstat failed for:",
-				dname, strerror(errno));
-	};
-	return -1;
-}
-#endif
 
 /***
  *
@@ -604,7 +591,6 @@ handler_t stat_cache_get_entry(server *srv, connection *con, buffer *name, stat_
 	struct stat st;
 	int fd;
 	const int follow_symlink = con->conf.follow_symlink;
-	struct stat lst;
 	int file_ndx;
 
 	*ret_sce = NULL;
@@ -716,54 +702,6 @@ handler_t stat_cache_get_entry(server *srv, connection *con, buffer *name, stat_
 	sce->st = st;
 	sce->stat_ts = srv->cur_ts;
 
-	/* catch the obvious symlinks
-	 *
-	 * this is not a secure check as we still have a race-condition between
-	 * the stat() and the open. We can only solve this by
-	 * 1. open() the file
-	 * 2. fstat() the fd
-	 *
-	 * and keeping the file open for the rest of the time. But this can
-	 * only be done at network level.
-	 *
-	 * per default it is not a symlink
-	 * */
-#ifdef HAVE_LSTAT
-	sce->is_symlink = 0;
-
-	/* we want to only check for symlinks if we should block symlinks.
-	 */
-	if (!follow_symlink) {
-		if (stat_cache_lstat(srv, name, &lst)  == 0) {
-				sce->is_symlink = 1;
-		}
-
-		/*
-		 * we assume "/" can not be symlink, so
-		 * skip the symlink stuff if our path is /
-		 **/
-		else if (buffer_string_length(name) > 1) {
-			buffer *dname;
-			char *s_cur;
-
-			dname = buffer_init();
-			buffer_copy_buffer(dname, name);
-
-			while ((s_cur = strrchr(dname->ptr, '/'))) {
-				buffer_string_set_length(dname, s_cur - dname->ptr);
-				if (dname->ptr == s_cur) {
-					break;
-				}
-				if (stat_cache_lstat(srv, dname, &lst)  == 0) {
-					sce->is_symlink = 1;
-					break;
-				};
-			};
-			buffer_free(dname);
-		};
-	}
-#endif
-
 #ifdef HAVE_FAM_H
 	if (srv->srvconf.stat_cache_engine == STAT_CACHE_ENGINE_FAM) {
 		stat_cache_fam_dir_monitor(srv, sc->scf, sce, name);
@@ -773,6 +711,52 @@ handler_t stat_cache_get_entry(server *srv, connection *con, buffer *name, stat_
 	*ret_sce = sce;
 
 	return HANDLER_GO_ON;
+}
+
+int stat_cache_path_contains_symlink(server *srv, buffer *name) {
+    /* caller should check for symlinks only if we should block symlinks. */
+
+    /* catch the obvious symlinks
+     *
+     * this is not a secure check as we still have a race-condition between
+     * the stat() and the open. We can only solve this by
+     * 1. open() the file
+     * 2. fstat() the fd
+     *
+     * and keeping the file open for the rest of the time. But this can
+     * only be done at network level.
+     * */
+
+  #ifdef HAVE_LSTAT
+    /* we assume "/" can not be symlink,
+     * so skip the symlink stuff if path is "/" */
+    size_t len = buffer_string_length(name);
+    force_assert(0 != len);
+    force_assert(name->ptr[0] == '/');
+    if (1 == len) return 0;
+   #ifndef PATH_MAX
+   #define PATH_MAX 4096
+   #endif
+    if (len >= PATH_MAX) return -1;
+
+    char buf[PATH_MAX];
+    memcpy(buf, name->ptr, len);
+    char *s_cur = buf+len;
+    do {
+        *s_cur = '\0';
+        struct stat st;
+        if (0 == lstat(buf, &st)) {
+            if (S_ISLNK(st.st_mode)) return 1;
+        }
+        else {
+            log_error_write(srv, __FILE__, __LINE__, "sss",
+                            "lstat failed for:", buf, strerror(errno));
+            return -1;
+        }
+    } while ((s_cur = strrchr(buf, '/')) != buf);
+  #endif
+
+    return 0;
 }
 
 int stat_cache_open_rdonly_fstat (buffer *name, struct stat *st, int symlinks) {

@@ -35,10 +35,9 @@ static void http_chunk_append_len(server *srv, connection *con, uintmax_t len) {
 }
 
 static int http_chunk_append_file_open_fstat(server *srv, connection *con, buffer *fn, struct stat *st) {
-	if (!con->conf.follow_symlink) {
-		/*(preserve existing stat_cache symlink checks)*/
-		stat_cache_entry *sce;
-		if (HANDLER_ERROR == stat_cache_get_entry(srv, con, fn, &sce)) return -1;
+	if (!con->conf.follow_symlink
+	    && 0 != stat_cache_path_contains_symlink(srv, fn)) {
+		return -1;
 	}
 
 	return stat_cache_open_rdonly_fstat(fn, st, con->conf.follow_symlink);

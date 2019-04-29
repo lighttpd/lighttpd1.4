@@ -443,9 +443,8 @@ void http_response_send_file (server *srv, connection *con, buffer *path) {
 		return;
 	}
 
-	/* we only handline regular files */
-#ifdef HAVE_LSTAT
-	if ((sce->is_symlink == 1) && !con->conf.follow_symlink) {
+	if (!con->conf.follow_symlink
+	    && 0 != stat_cache_path_contains_symlink(srv, path)) {
 		con->http_status = 403;
 
 		if (con->conf.log_request_handling) {
@@ -455,7 +454,8 @@ void http_response_send_file (server *srv, connection *con, buffer *path) {
 
 		return;
 	}
-#endif
+
+	/* we only handle regular files */
 	if (!S_ISREG(sce->st.st_mode)) {
 		con->http_status = 403;
 
