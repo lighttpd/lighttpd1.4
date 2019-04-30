@@ -5,6 +5,7 @@
 #include "log.h"
 #include "buffer.h"
 #include "http_header.h"
+#include "stat_cache.h"
 
 #include "plugin.h"
 
@@ -584,7 +585,13 @@ static int process_ssi_stmt(server *srv, connection *con, handler_ctx *p, const 
 			}
 		}
 
-		if (0 == stat(p->stat_fn->ptr, &stb)) {
+		if (!con->conf.follow_symlink
+		    && 0 != stat_cache_path_contains_symlink(srv, p->stat_fn)) {
+			break;
+		}
+
+		int fd = stat_cache_open_rdonly_fstat(p->stat_fn, &stb, con->conf.follow_symlink);
+		if (fd > 0) {
 			time_t t = stb.st_mtime;
 
 			switch (ssicmd) {
@@ -619,7 +626,8 @@ static int process_ssi_stmt(server *srv, connection *con, handler_ctx *p, const 
 
 				if (file_path || 0 == p->conf.ssi_recursion_max) {
 					/* don't process if #include file="..." is used */
-					chunkqueue_append_file(con->write_queue, p->stat_fn, 0, stb.st_size);
+					chunkqueue_append_file_fd(con->write_queue, p->stat_fn, fd, 0, stb.st_size);
+					fd = -1;
 				} else {
 					buffer *upsave, *ppsave, *prpsave;
 
@@ -649,6 +657,9 @@ static int process_ssi_stmt(server *srv, connection *con, handler_ctx *p, const 
 
 					con->uri.path = con->physical.rel_path = buffer_init_buffer(srv->tmp_buf);
 
+					close(fd);
+					fd = -1;
+
 					/*(ignore return value; muddle along as best we can if error occurs)*/
 					++p->ssi_recursion_depth;
 					mod_ssi_process_file(srv, con, p, &stb);
@@ -665,6 +676,8 @@ static int process_ssi_stmt(server *srv, connection *con, handler_ctx *p, const 
 
 				break;
 			}
+
+			if (fd > 0) close(fd);
 		} else {
 			log_error_write(srv, __FILE__, __LINE__, "sbs",
 					"ssi: stating failed ",

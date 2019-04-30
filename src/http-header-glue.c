@@ -15,6 +15,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <errno.h>
+#include <fcntl.h>
 
 #include <time.h>
 
@@ -468,6 +469,17 @@ void http_response_send_file (server *srv, connection *con, buffer *path) {
 		return;
 	}
 
+	/*(Note: O_NOFOLLOW affects only the final path segment,
+	 * the target file, not any intermediate symlinks along path)*/
+	const int fd = fdevent_open_cloexec(path->ptr, con->conf.follow_symlink, O_RDONLY, 0);
+	if (fd < 0) {
+		con->http_status = (errno == ENOENT) ? 404 : 403;
+		if (con->conf.log_request_handling) {
+			log_error_write(srv, __FILE__, __LINE__,  "sbs", "file open failed:", path, strerror(errno));
+		}
+		return;
+	}
+
 	/* mod_compress might set several data directly, don't overwrite them */
 
 	/* set response content-type, if not set already */
@@ -510,6 +522,7 @@ void http_response_send_file (server *srv, connection *con, buffer *path) {
 		}
 
 		if (HANDLER_FINISHED == http_response_handle_cachable(srv, con, mtime)) {
+			close(fd);
 			return;
 		}
 	}
@@ -557,6 +570,7 @@ void http_response_send_file (server *srv, connection *con, buffer *path) {
 			if (0 == http_response_parse_range(srv, con, path, sce, range->ptr+6)) {
 				con->http_status = 206;
 			}
+			close(fd);
 			return;
 		}
 	}
@@ -566,12 +580,10 @@ void http_response_send_file (server *srv, connection *con, buffer *path) {
 	/* we add it here for all requests
 	 * the HEAD request will drop it afterwards again
 	 */
-	if (0 == sce->st.st_size || 0 == http_chunk_append_file(srv, con, path)) {
-		con->http_status = 200;
-		con->file_finished = 1;
-	} else {
-		con->http_status = 403;
-	}
+
+	http_chunk_append_file_fd(srv, con, path, fd, sce->st.st_size);
+	con->http_status = 200;
+	con->file_finished = 1;
 }
 
 
