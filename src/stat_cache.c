@@ -717,7 +717,6 @@ handler_t stat_cache_get_entry(server *srv, connection *con, buffer *name, stat_
 	stat_cache_entry *sce = NULL;
 	stat_cache *sc;
 	struct stat st;
-	int fd;
 	int file_ndx;
 	UNUSED(con);
 
@@ -788,16 +787,9 @@ handler_t stat_cache_get_entry(server *srv, connection *con, buffer *name, stat_
 	}
 #endif
 
-	/*
-	 * *lol*
-	 * - open() + fstat() on a named-pipe results in a (intended) hang.
-	 * - stat() if regular file + open() to see if we can read from it is better
-	 *
-	 * */
 	if (-1 == stat(name->ptr, &st)) {
 		return HANDLER_ERROR;
 	}
-
 
 	if (S_ISREG(st.st_mode)) {
 		/* fix broken stat/open for symlinks to reg files with appended slash on freebsd,osx */
@@ -805,17 +797,6 @@ handler_t stat_cache_get_entry(server *srv, connection *con, buffer *name, stat_
 			errno = ENOTDIR;
 			return HANDLER_ERROR;
 		}
-
-		/* try to open the file to check if we can read it */
-	      #ifdef O_NONBLOCK
-		fd = open(name->ptr, O_RDONLY | O_NONBLOCK, 0);
-	      #else
-		fd = open(name->ptr, O_RDONLY, 0);
-	      #endif
-		if (-1 == fd) {
-			return HANDLER_ERROR;
-		}
-		close(fd);
 	}
 
 	if (NULL == sce) {

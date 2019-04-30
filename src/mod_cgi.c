@@ -719,13 +719,12 @@ static int cgi_write_request(server *srv, handler_ctx *hctx, int fd) {
 	return 0;
 }
 
-static struct stat * cgi_stat(server *srv, connection *con, buffer *path, struct stat *st) {
-    /* CGI might be executable even if it is not readable
-     * (stat_cache_get_entry() currently checks file is readable)*/
+static struct stat * cgi_stat(server *srv, connection *con, buffer *path) {
+    /* CGI might be executable even if it is not readable */
     stat_cache_entry *sce;
     return (HANDLER_ERROR != stat_cache_get_entry(srv, con, path, &sce))
       ? &sce->st
-      : (0 == stat(path->ptr, st)) ? st : NULL;
+      : NULL;
 }
 
 static int cgi_create_env(server *srv, connection *con, plugin_data *p, handler_ctx *hctx, buffer *cgi_handler) {
@@ -736,9 +735,7 @@ static int cgi_create_env(server *srv, connection *con, plugin_data *p, handler_
 	UNUSED(p);
 
 	if (!buffer_string_is_empty(cgi_handler)) {
-		/* stat the exec file */
-		struct stat st;
-		if (NULL == cgi_stat(srv, con, cgi_handler, &st)) {
+		if (NULL == cgi_stat(srv, con, cgi_handler)) {
 			log_error_write(srv, __FILE__, __LINE__, "sbss",
 					"stat for cgi-handler", cgi_handler,
 					"failed:", strerror(errno));
@@ -910,7 +907,6 @@ static int mod_cgi_patch_connection(server *srv, connection *con, plugin_data *p
 
 URIHANDLER_FUNC(cgi_is_handled) {
 	plugin_data *p = p_d;
-	struct stat stbuf;
 	struct stat *st;
 	data_string *ds;
 
@@ -922,7 +918,7 @@ URIHANDLER_FUNC(cgi_is_handled) {
 	ds = (data_string *)array_match_key_suffix(p->conf.cgi, con->physical.path);
 	if (NULL == ds) return HANDLER_GO_ON;
 
-	st = cgi_stat(srv, con, con->physical.path, &stbuf);
+	st = cgi_stat(srv, con, con->physical.path);
 	if (NULL == st) return HANDLER_GO_ON;
 
 	if (!S_ISREG(st->st_mode)) return HANDLER_GO_ON;
