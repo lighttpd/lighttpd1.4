@@ -81,13 +81,16 @@ int http_chunk_append_file(server *srv, connection *con, buffer *fn) {
 	struct stat st;
 	const int fd = http_chunk_append_file_open_fstat(srv, con, fn, &st);
 	if (fd < 0) return -1;
+	http_chunk_append_file_fd(srv, con, fn, fd, st.st_size);
+	return 0;
+}
 
-	if (0 != st.st_size) {
-		http_chunk_append_file_fd_range(srv, con, fn, fd, 0, st.st_size);
+void http_chunk_append_file_fd(server *srv, connection *con, buffer *fn, int fd, off_t sz) {
+	if (0 != sz) {
+		http_chunk_append_file_fd_range(srv, con, fn, fd, 0, sz);
 	} else {
 		close(fd);
 	}
-	return 0;
 }
 
 static int http_chunk_append_to_tempfile(server *srv, connection *con, const char * mem, size_t len) {
