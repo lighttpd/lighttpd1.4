@@ -2034,6 +2034,9 @@ __attribute_noinline__
 static int
 webdav_fcopyfile_sz (int ifd, int ofd, off_t isz)
 {
+    if (0 == isz)
+        return 0;
+
   #ifdef _WIN32
     /* Windows CopyFile() not usable here; operates on filenames, not fds */
   #else
@@ -2046,8 +2049,8 @@ webdav_fcopyfile_sz (int ifd, int ofd, off_t isz)
     if (0 == fcopyfile(ifd, ofd, NULL, COPYFILE_ALL))
         return 0;
 
-    lseek(ifd, 0, SEEK_SET);
-    lseek(ofd, 0, SEEK_SET);
+    if (0 != lseek(ifd, 0, SEEK_SET)) return -1;
+    if (0 != lseek(ofd, 0, SEEK_SET)) return -1;
   #endif
 
  #if 0
@@ -2055,8 +2058,8 @@ webdav_fcopyfile_sz (int ifd, int ofd, off_t isz)
     if (0 == elftc_copyfile(ifd, ofd))
         return 0;
 
-    lseek(ifd, 0, SEEK_SET);
-    lseek(ofd, 0, SEEK_SET);
+    if (0 != lseek(ifd, 0, SEEK_SET)) return -1;
+    if (0 != lseek(ofd, 0, SEEK_SET)) return -1;
   #endif
  #endif
 
@@ -2067,11 +2070,8 @@ webdav_fcopyfile_sz (int ifd, int ofd, off_t isz)
         return 0;
 
     /*lseek(ifd, 0, SEEK_SET);*/ /*(ifd offset not modified due to &offset arg)*/
-    lseek(ofd, 0, SEEK_SET);
+    if (0 != lseek(ofd, 0, SEEK_SET)) return -1;
   #endif
-
-    if (0 == isz)
-        return 0;
 
     ssize_t rd, wr, off;
     char buf[16384];
@@ -2777,6 +2777,9 @@ webdav_copymove_dir (const plugin_config * const pconf,
              * Be sure to hard-link using linkat() w/o AT_SYMLINK_FOLLOW)*/
         }
       #endif
+        else {
+            status = 0;
+        }
 
         src->path->ptr[    (src->path->used     = src_path_used)    -1] = '\0';
         src->rel_path->ptr[(src->rel_path->used = src_rel_path_used)-1] = '\0';
