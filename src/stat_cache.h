@@ -21,7 +21,7 @@ typedef struct {
 	time_t stat_ts;
 
 #ifdef HAVE_FAM_H
-	int    dir_version;
+	void *fam_dir;
 #endif
 
 	buffer *content_type;
