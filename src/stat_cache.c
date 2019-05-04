@@ -245,88 +245,88 @@ static void stat_cache_invalidate_dir_tree(server *srv, const char *name, size_t
 
 static void stat_cache_handle_fdevent_in(server *srv, stat_cache_fam *scf)
 {
-		for (int i = 0, ndx; i || (i = FAMPending(&scf->fam)) > 0; --i) {
-			FAMEvent fe;
-			if (FAMNextEvent(&scf->fam, &fe) < 0) break;
+    for (int i = 0, ndx; i || (i = FAMPending(&scf->fam)) > 0; --i) {
+        FAMEvent fe;
+        if (FAMNextEvent(&scf->fam, &fe) < 0) break;
 
-			/* ignore events which may have been pending for
-			 * paths recently cancelled via FAMCancelMonitor() */
-			ndx = (int)(intptr_t)fe.userdata;
-			scf->dirs = splaytree_splay(scf->dirs, ndx);
-			if (!scf->dirs || scf->dirs->key != ndx) {
-				continue;
-			}
-			fam_dir_entry *fam_dir = scf->dirs->data;
-			if (FAMREQUEST_GETREQNUM(&fam_dir->req)
-			    != FAMREQUEST_GETREQNUM(&fe.fr)) {
-				continue;
-			}
+        /* ignore events which may have been pending for
+         * paths recently cancelled via FAMCancelMonitor() */
+        ndx = (int)(intptr_t)fe.userdata;
+        scf->dirs = splaytree_splay(scf->dirs, ndx);
+        if (!scf->dirs || scf->dirs->key != ndx) {
+            continue;
+        }
+        fam_dir_entry *fam_dir = scf->dirs->data;
+        if (FAMREQUEST_GETREQNUM(&fam_dir->req)
+            != FAMREQUEST_GETREQNUM(&fe.fr)) {
+            continue;
+        }
 
-			if (fe.filename[0] != '/') {
-				buffer * const n = fam_dir->name;
-				fam_dir_entry *fam_link;
-				size_t len;
-				switch(fe.code) {
-				case FAMCreated:
-					/* file created in monitored dir modifies dir and
-					 * we should get a separate FAMChanged event for dir.
-					 * Therefore, ignore file FAMCreated event here.
-					 * Also, if FAMNoExists() is used, might get spurious
-					 * FAMCreated events as changes are made e.g. in monitored
-					 * sub-sub-sub dirs and the library discovers new (already
-					 * existing) dir entries */
-					continue;
-				case FAMChanged:
-					/* file changed in monitored dir does not modify dir */
-				case FAMDeleted:
-				case FAMMoved:
-					/* file deleted or moved in monitored dir modifies dir,
-					 * but FAM provides separate notification for that */
+        if (fe.filename[0] != '/') {
+            buffer * const n = fam_dir->name;
+            fam_dir_entry *fam_link;
+            size_t len;
+            switch(fe.code) {
+            case FAMCreated:
+                /* file created in monitored dir modifies dir and
+                 * we should get a separate FAMChanged event for dir.
+                 * Therefore, ignore file FAMCreated event here.
+                 * Also, if FAMNoExists() is used, might get spurious
+                 * FAMCreated events as changes are made e.g. in monitored
+                 * sub-sub-sub dirs and the library discovers new (already
+                 * existing) dir entries */
+                continue;
+            case FAMChanged:
+                /* file changed in monitored dir does not modify dir */
+            case FAMDeleted:
+            case FAMMoved:
+                /* file deleted or moved in monitored dir modifies dir,
+                 * but FAM provides separate notification for that */
 
-					/* temporarily append filename to dir in fam_dir->name to
-					 * construct path, then delete stat_cache entry (if any)*/
-					len = buffer_string_length(n);
-					buffer_append_string_len(n, CONST_STR_LEN("/"));
-					buffer_append_string_len(n,fe.filename,strlen(fe.filename));
-					/* (alternatively, could chose to stat() and update)*/
-					stat_cache_invalidate_entry(srv, CONST_BUF_LEN(n));
+                /* temporarily append filename to dir in fam_dir->name to
+                 * construct path, then delete stat_cache entry (if any)*/
+                len = buffer_string_length(n);
+                buffer_append_string_len(n, CONST_STR_LEN("/"));
+                buffer_append_string_len(n,fe.filename,strlen(fe.filename));
+                /* (alternatively, could chose to stat() and update)*/
+                stat_cache_invalidate_entry(srv, CONST_BUF_LEN(n));
 
-					fam_link = /*(check if might be symlink to monitored dir)*/
-					  stat_cache_sptree_find(&scf->dirs, CONST_BUF_LEN(n));
-					if (fam_link && !buffer_is_equal(fam_link->name, n))
-						fam_link = NULL;
+                fam_link = /*(check if might be symlink to monitored dir)*/
+                  stat_cache_sptree_find(&scf->dirs, CONST_BUF_LEN(n));
+                if (fam_link && !buffer_is_equal(fam_link->name, n))
+                    fam_link = NULL;
 
-					buffer_string_set_length(n, len);
+                buffer_string_set_length(n, len);
 
-					if (fam_link) {
-						/* replaced symlink changes containing dir */
-						stat_cache_invalidate_entry(srv, CONST_BUF_LEN(n));
-						/* handle symlink to dir as deleted dir below */
-						fe.code = FAMDeleted;
-						fam_dir = fam_link;
-						break;
-					}
-					continue;
-				default:
-					continue;
-				}
-			}
+                if (fam_link) {
+                    /* replaced symlink changes containing dir */
+                    stat_cache_invalidate_entry(srv, CONST_BUF_LEN(n));
+                    /* handle symlink to dir as deleted dir below */
+                    fe.code = FAMDeleted;
+                    fam_dir = fam_link;
+                    break;
+                }
+                continue;
+            default:
+                continue;
+            }
+        }
 
-			switch(fe.code) {
-			case FAMChanged:
-				stat_cache_invalidate_entry(srv, CONST_BUF_LEN(fam_dir->name));
-				break;
-			case FAMDeleted:
-			case FAMMoved:
-				stat_cache_delete_tree(srv, CONST_BUF_LEN(fam_dir->name));
-				fam_dir_invalidate_node(fam_dir);
-				fam_dir_invalidate_tree(scf->dirs, CONST_BUF_LEN(fam_dir->name));
-				fam_dir_periodic_cleanup(srv);
-				break;
-			default:
-				break;
-			}
-		}
+        switch(fe.code) {
+        case FAMChanged:
+            stat_cache_invalidate_entry(srv, CONST_BUF_LEN(fam_dir->name));
+            break;
+        case FAMDeleted:
+        case FAMMoved:
+            stat_cache_delete_tree(srv, CONST_BUF_LEN(fam_dir->name));
+            fam_dir_invalidate_node(fam_dir);
+            fam_dir_invalidate_tree(scf->dirs, CONST_BUF_LEN(fam_dir->name));
+            fam_dir_periodic_cleanup(srv);
+            break;
+        default:
+            break;
+        }
+    }
 }
 
 static handler_t stat_cache_handle_fdevent(server *srv, void *_fce, int revent)
