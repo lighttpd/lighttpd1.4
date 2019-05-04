@@ -750,7 +750,7 @@ void stat_cache_delete_entry(server *srv, const char *name, size_t len)
     }
 }
 
-#if HAVE_FAM_H
+#ifdef HAVE_FAM_H
 
 static void stat_cache_invalidate_entry(server *srv, const char *name, size_t len)
 {
