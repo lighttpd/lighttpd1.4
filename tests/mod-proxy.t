@@ -51,7 +51,7 @@ GET /rewrite/all/some+test%3axxx%20with%20space HTTP/1.0
 Host: www.example.org
 EOF
  );
-	$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200, 'HTTP-Content' => '/some+test%3axxx%20with%20space' } ];
+	$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200, 'HTTP-Content' => '/some+test%3Axxx%20with%20space' } ];
 	ok($tf_proxy->handle_http($t) == 0, 'rewrited urls work with encoded path');
 
 ok($tf_proxy->stop_proc == 0, "Stopping lighttpd proxy");

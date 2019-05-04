@@ -54,7 +54,7 @@ $t->{REQUEST}  = ( <<EOF
 GET /index.html%00 HTTP/1.0
 EOF
  );
-$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 404 } ];
+$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 400 } ];
 ok($tf->handle_http($t) == 0, 'URL-encoding, %00');
 
 $t->{REQUEST}  = ( <<EOF
