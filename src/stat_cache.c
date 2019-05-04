@@ -243,11 +243,8 @@ static void stat_cache_delete_tree(server *srv, const char *name, size_t len);
 static void stat_cache_invalidate_entry(server *srv, const char *name, size_t len);
 static void stat_cache_invalidate_dir_tree(server *srv, const char *name, size_t len);
 
-static handler_t stat_cache_handle_fdevent(server *srv, void *_fce, int revent) {
-	stat_cache_fam *scf = srv->stat_cache->scf;
-	UNUSED(_fce);
-
-	if (revent & FDEVENT_IN) {
+static void stat_cache_handle_fdevent_in(server *srv, stat_cache_fam *scf)
+{
 		for (int i = 0, ndx; i || (i = FAMPending(&scf->fam)) > 0; --i) {
 			FAMEvent fe;
 			if (FAMNextEvent(&scf->fam, &fe) < 0) break;
@@ -330,6 +327,15 @@ static handler_t stat_cache_handle_fdevent(server *srv, void *_fce, int revent) 
 				break;
 			}
 		}
+}
+
+static handler_t stat_cache_handle_fdevent(server *srv, void *_fce, int revent)
+{
+	stat_cache_fam *scf = srv->stat_cache->scf;
+	UNUSED(_fce);
+
+	if (revent & FDEVENT_IN) {
+		stat_cache_handle_fdevent_in(srv, scf);
 	}
 
 	if (revent & (FDEVENT_HUP|FDEVENT_RDHUP)) {
