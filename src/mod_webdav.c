@@ -2015,7 +2015,7 @@ webdav_prop_select_propnames (const plugin_config * const pconf,
 #if defined(__APPLE__) && defined(__MACH__)
 #include <copyfile.h>     /* fcopyfile() *//* OS X 10.5+ */
 #endif
-#ifdef __FreeBSD__
+#ifdef HAVE_ELFTC_COPYFILE/* __FreeBSD__ */
 #include <libelftc.h>     /* elftc_copyfile() */
 #endif
 #ifdef __linux__
@@ -2053,15 +2053,13 @@ webdav_fcopyfile_sz (int ifd, int ofd, off_t isz)
     if (0 != lseek(ofd, 0, SEEK_SET)) return -1;
   #endif
 
- #if 0
-  #ifdef __FreeBSD__
+  #ifdef HAVE_ELFTC_COPYFILE /* __FreeBSD__ */
     if (0 == elftc_copyfile(ifd, ofd))
         return 0;
 
     if (0 != lseek(ifd, 0, SEEK_SET)) return -1;
     if (0 != lseek(ofd, 0, SEEK_SET)) return -1;
   #endif
- #endif
 
   #ifdef __linux__ /* Linux 2.6.33+ sendfile() supports file-to-file copy */
     off_t offset = 0;

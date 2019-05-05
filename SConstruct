@@ -453,6 +453,12 @@ if 1:
 	if autoconf.CheckType('struct sockaddr_storage', '#include <sys/socket.h>\n'):
 		autoconf.env.Append(CPPFLAGS = [ '-DHAVE_STRUCT_SOCKADDR_STORAGE' ])
 
+	if autoconf.CheckLibWithHeader('elftc', 'libelftc.h', 'c', 'elftc_copyfile(0, 1);'):
+		autoconf.env.Append(
+			CPPFLAGS = [ '-DHAVE_ELFTC_COPYFILE' ],
+			LIBS = [ 'elftc' ],
+		)
+
 	if autoconf.CheckLibWithHeader('rt', 'time.h', 'c', 'clock_gettime(CLOCK_MONOTONIC, (struct timespec*)0);'):
 		autoconf.env.Append(
 			CPPFLAGS = [ '-DHAVE_CLOCK_GETTIME' ],

@@ -188,6 +188,7 @@ check_symbol_exists(clock_gettime "time.h" HAVE_CLOCK_GETTIME)
 if (NOT HAVE_CLOCK_GETTIME)
 	check_library_exists(rt clock_gettime "time.h" HAVE_CLOCK_GETTIME)
 endif()
+check_library_exists(elftc elftc_copyfile "libelftc.h" HAVE_ELFTC_COPYFILE)
 check_c_source_compiles("
 	#include <sys/types.h>
 	#include <sys/socket.h>

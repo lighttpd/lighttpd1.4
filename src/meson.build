@@ -161,6 +161,12 @@ if not(conf_data.get('HAVE_CLOCK_GETTIME'))
 	endif
 endif
 
+libelftc = []
+if compiler.has_function('elftc_copyfile', args: defs + ['-lelftc'], prefix: '#include <libelftc.h>')
+	conf_data.set('HAVE_ELFTC_COPYFILE', true)
+	libelftc = [ compiler.find_library('elftc') ]
+endif
+
 conf_data.set('HAVE_IPV6', compiler.compiles('''
 	#include <sys/types.h>
 	#include <sys/socket.h>
@@ -881,7 +887,7 @@ modules = [
 	[ 'mod_userdir', [ 'mod_userdir.c' ] ],
 	[ 'mod_usertrack', [ 'mod_usertrack.c' ] ],
 	[ 'mod_vhostdb', [ 'mod_vhostdb.c' ] ],
-	[ 'mod_webdav', [ 'mod_webdav.c' ], libsqlite3 + libuuid + libxml2 ],
+	[ 'mod_webdav', [ 'mod_webdav.c' ], libsqlite3 + libuuid + libxml2 + libelftc ],
 	[ 'mod_wstunnel', [ 'mod_wstunnel.c' ], libcrypto ],
 ]
 

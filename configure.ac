@@ -156,6 +156,19 @@ AC_SEARCH_LIBS([accept], [network])
 dnl clock_gettime() needs -lrt with glibc < 2.17, and possibly other platforms
 AC_SEARCH_LIBS([clock_gettime], [rt])
 
+dnl FreeBSD elftc_copyfile()
+save_LIBS=$LIBS
+LIBS=
+AC_SEARCH_LIBS([elftc_copyfile], [elftc], [
+  AC_CHECK_HEADERS([libelftc.h], [
+    ELFTC_LIB=$LIBS
+    AC_DEFINE([HAVE_LIBELFTC], [1], [libelftc])
+    AC_DEFINE([HAVE_ELFTC_COPYFILE], [1], [elftc_copyfile])
+  ])
+])
+LIBS=$save_LIBS
+AC_SUBST([ELFTC_LIB])
+
 dnl need dlopen/-ldl to load plugins (when not on windows)
 save_LIBS=$LIBS
 LIBS=
