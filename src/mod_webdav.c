@@ -2127,7 +2127,7 @@ webdav_if_match_or_unmodified_since (connection * const con, struct stat *st)
         if (NULL == st
             ? !buffer_is_equal_string(inm,CONST_STR_LEN("*"))
               || (errno != ENOENT && errno != ENOTDIR)
-            : etag_is_equal(etagb, inm->ptr, 0))
+            : etag_is_equal(etagb, inm->ptr, 1))
             return 412; /* Precondition Failed */
     }
 

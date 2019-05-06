@@ -152,8 +152,7 @@ EOF
 $t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200 } ];
 ok($tf->handle_http($t) == 0, 'A quoted star is just a regular ETag');
 
-TODO: {
-	local $TODO = "weak etags not allowed yet";
+{
 	$t->{REQUEST}  = ( <<EOF
 GET / HTTP/1.0
 If-None-Match: W/$etag
@@ -188,8 +187,7 @@ EOF
 $t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 304 } ];
 ok($tf->handle_http($t) == 0, 'Client sent a list of ETags, the second matches');
 
-TODO: {
-	local $TODO = "weak etags not allowed yet";
+{
 	$t->{REQUEST}  = ( <<EOF
 GET / HTTP/1.0
 If-None-Match: "12345", W/$etag

@@ -158,10 +158,12 @@ int http_response_handle_cachable(server *srv, connection *con, buffer *mtime) {
 	 */
 
 	if ((vb = http_header_request_get(con, HTTP_HEADER_IF_NONE_MATCH, CONST_STR_LEN("If-None-Match")))) {
-		/* use strong etag checking for now: weak comparison must not be used
-		 * for ranged requests
-		 */
-		if (etag_is_equal(con->physical.etag, vb->ptr, 0)) {
+		/*(weak etag comparison must not be used for ranged requests)*/
+		int range_request =
+		  (con->conf.range_requests
+		   && (200 == con->http_status || 0 == con->http_status)
+		   && NULL != http_header_request_get(con, HTTP_HEADER_RANGE, CONST_STR_LEN("Range")));
+		if (etag_is_equal(con->physical.etag, vb->ptr, !range_request)) {
 			if (head_or_get) {
 				con->http_status = 304;
 				return HANDLER_FINISHED;
