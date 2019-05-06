@@ -328,32 +328,16 @@ verify_callback(int preverify_ok, X509_STORE_CTX *ctx)
 static int mod_openssl_patch_connection (server *srv, connection *con, handler_ctx *hctx);
 
 static int
-network_ssl_servername_callback (SSL *ssl, int *al, server *srv)
+mod_openssl_SNI (SSL *ssl, server *srv, handler_ctx *hctx, const char *servername, size_t len)
 {
-    const char *servername;
-    handler_ctx *hctx = (handler_ctx *) SSL_get_app_data(ssl);
-    connection *con = hctx->con;
-    size_t len;
-    UNUSED(al);
-
-    buffer_copy_string(con->uri.scheme, "https");
-
-    servername = SSL_get_servername(ssl, TLSEXT_NAMETYPE_host_name);
-    if (NULL == servername) {
-#if 0
-        /* this "error" just means the client didn't support it */
-        log_error_write(srv, __FILE__, __LINE__, "ss", "SSL:",
-                "failed to get TLS server name");
-#endif
-        return SSL_TLSEXT_ERR_NOACK;
-    }
-    len = strlen(servername);
-    if (len >= 1024) { /*(expecting < 256)*/
-        log_error_write(srv, __FILE__, __LINE__, "sss", "SSL:",
-                        "SNI name too long", servername);
+    if (len >= 1024) { /*(expecting < 256; TLSEXT_MAXLEN_host_name is 255)*/
+        log_error(srv->errh, __FILE__, __LINE__,
+                  "SSL: SNI name too long %.*s", (int)len, servername);
         return SSL_TLSEXT_ERR_ALERT_FATAL;
     }
+
     /* use SNI to patch mod_openssl config and then reset COMP_HTTP_HOST */
+    connection * const con = hctx->con;
     buffer_copy_string_len(con->uri.authority, servername, len);
     buffer_to_lower(con->uri.authority);
   #if 0
@@ -426,6 +410,47 @@ network_ssl_servername_callback (SSL *ssl, int *al, server *srv)
 
     return SSL_TLSEXT_ERR_OK;
 }
+
+#ifdef SSL_CLIENT_HELLO_SUCCESS
+static int
+mod_openssl_client_hello_cb (SSL *ssl, int *al, void *srv)
+{
+    handler_ctx *hctx = (handler_ctx *) SSL_get_app_data(ssl);
+    buffer_copy_string(hctx->con->uri.scheme, "https");
+
+    const unsigned char *name;
+    size_t len, slen;
+    if (!SSL_client_hello_get0_ext(ssl, TLSEXT_TYPE_server_name, &name, &len)) {
+        return SSL_CLIENT_HELLO_SUCCESS; /* client did not provide SNI */
+    }
+
+    /* expecting single element in the server_name extension; parse first one */
+    if (len > 5
+        && (size_t)((name[0] << 8) + name[1]) == len-2
+        && name[2] == TLSEXT_TYPE_server_name
+        && (slen = (name[3] << 8) + name[4]) <= len-5) { /*(first)*/
+        int rc = mod_openssl_SNI(ssl, srv, hctx, (const char *)name+5, slen);
+        if (rc == SSL_TLSEXT_ERR_OK)
+            return SSL_CLIENT_HELLO_SUCCESS;
+    }
+
+    *al = TLS1_AD_UNRECOGNIZED_NAME;
+    return SSL_CLIENT_HELLO_ERROR;
+}
+#else
+static int
+network_ssl_servername_callback (SSL *ssl, int *al, server *srv)
+{
+    handler_ctx *hctx = (handler_ctx *) SSL_get_app_data(ssl);
+    buffer_copy_string(hctx->con->uri.scheme, "https");
+    UNUSED(al);
+
+    const char *servername = SSL_get_servername(ssl, TLSEXT_NAMETYPE_host_name);
+    return (NULL != servername)
+      ? mod_openssl_SNI(ssl, srv, hctx, servername, strlen(servername))
+      : SSL_TLSEXT_ERR_NOACK; /* client did not provide SNI */
+}
+#endif
 #endif
 
 
@@ -1152,6 +1177,9 @@ network_init_ssl (server *srv, void *p_d)
                                    | SSL_MODE_RELEASE_BUFFERS);
 
       #ifndef OPENSSL_NO_TLSEXT
+       #ifdef SSL_CLIENT_HELLO_SUCCESS
+        SSL_CTX_set_client_hello_cb(s->ssl_ctx,mod_openssl_client_hello_cb,srv);
+       #else
         if (!SSL_CTX_set_tlsext_servername_callback(
                s->ssl_ctx, network_ssl_servername_callback) ||
             !SSL_CTX_set_tlsext_servername_arg(s->ssl_ctx, srv)) {
@@ -1161,6 +1189,7 @@ network_init_ssl (server *srv, void *p_d)
                             "extension");
             return -1;
         }
+       #endif
 
        #if OPENSSL_VERSION_NUMBER >= 0x10002000
         SSL_CTX_set_alpn_select_cb(s->ssl_ctx,mod_openssl_alpn_select_cb,NULL);
