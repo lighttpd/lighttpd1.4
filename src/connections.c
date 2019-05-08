@@ -1232,8 +1232,9 @@ static int connection_handle_request(server *srv, connection *con) {
 int connection_state_machine(server *srv, connection *con) {
 	connection_state_t ostate;
 	int r;
+	const int log_state_handling = srv->srvconf.log_state_handling;
 
-	if (srv->srvconf.log_state_handling) {
+	if (log_state_handling) {
 		log_error_write(srv, __FILE__, __LINE__, "sds",
 				"state at enter",
 				con->fd,
@@ -1241,7 +1242,7 @@ int connection_state_machine(server *srv, connection *con) {
 	}
 
 	do {
-		if (srv->srvconf.log_state_handling) {
+		if (log_state_handling) {
 			log_error_write(srv, __FILE__, __LINE__, "sds",
 					"state for fd", con->fd, connection_get_state(con->state));
 		}
@@ -1310,7 +1311,7 @@ int connection_state_machine(server *srv, connection *con) {
 		}
 	} while (ostate != con->state);
 
-	if (srv->srvconf.log_state_handling) {
+	if (log_state_handling) {
 		log_error_write(srv, __FILE__, __LINE__, "sds",
 				"state at exit:",
 				con->fd,
