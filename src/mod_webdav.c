@@ -3742,6 +3742,14 @@ mod_webdav_propfind (connection * const con, const plugin_config * const pconf)
     }
     else if (S_ISDIR(pb.st.st_mode)) {
         if (con->physical.path->ptr[con->physical.path->used - 2] != '/') {
+            buffer *vb = http_header_request_get(con, HTTP_HEADER_OTHER,
+                                                 CONST_STR_LEN("User-Agent"));
+            if (vb && 0 == strncmp(vb->ptr, "Microsoft-WebDAV-MiniRedir/",
+                                   sizeof("Microsoft-WebDAV-MiniRedir/")-1)) {
+                /* workaround Microsoft-WebDAV-MiniRedir bug */
+                http_response_redirect_to_directory(pconf->srv, con, 308);
+                return HANDLER_FINISHED;
+            }
             /* set "Content-Location" instead of sending 308 redirect to dir */
             if (!http_response_redirect_to_directory(pconf->srv, con, 0))
                 return HANDLER_FINISHED;
@@ -4914,6 +4922,16 @@ mod_webdav_proppatch (connection * const con, const plugin_config * const pconf)
 
     if (S_ISDIR(st.st_mode)) {
         if (con->physical.path->ptr[con->physical.path->used - 2] != '/') {
+            buffer *vb = http_header_request_get(con, HTTP_HEADER_OTHER,
+                                                 CONST_STR_LEN("User-Agent"));
+            if (vb && 0 == strncmp(vb->ptr, "Microsoft-WebDAV-MiniRedir/",
+                                   sizeof("Microsoft-WebDAV-MiniRedir/")-1)) {
+                /* workaround Microsoft-WebDAV-MiniRedir bug */
+                /* (might not be necessary for PROPPATCH here,
+                 *  but match behavior in mod_webdav_propfind() for PROPFIND) */
+                http_response_redirect_to_directory(pconf->srv, con, 308);
+                return HANDLER_FINISHED;
+            }
             /* set "Content-Location" instead of sending 308 redirect to dir */
             if (!http_response_redirect_to_directory(pconf->srv, con, 0))
                 return HANDLER_FINISHED;
@@ -5023,6 +5041,16 @@ mod_webdav_proppatch (connection * const con, const plugin_config * const pconf)
     if (NULL == ms
           ? webdav_db_transaction_commit(pconf)
           : webdav_db_transaction_rollback(pconf)) {
+        if (NULL == ms) {
+            buffer *vb = http_header_request_get(con, HTTP_HEADER_OTHER,
+                                                 CONST_STR_LEN("User-Agent"));
+            if (vb && 0 == strncmp(vb->ptr, "Microsoft-WebDAV-MiniRedir/",
+                                   sizeof("Microsoft-WebDAV-MiniRedir/")-1)) {
+                /* workaround Microsoft-WebDAV-MiniRedir bug; 204 not handled */
+                ms = buffer_init(); /* 207 Multi-status */
+                webdav_xml_response_status(ms, con->physical.path, 200);
+            }
+        }
         if (NULL == ms)
             http_status_set_fin(con, 204); /* No Content */
         else /* 207 Multi-status */
