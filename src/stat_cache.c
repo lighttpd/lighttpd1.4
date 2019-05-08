@@ -320,7 +320,8 @@ static void stat_cache_handle_fdevent_in(server *srv, stat_cache_fam *scf)
         case FAMMoved:
             stat_cache_delete_tree(srv, CONST_BUF_LEN(fam_dir->name));
             fam_dir_invalidate_node(fam_dir);
-            fam_dir_invalidate_tree(scf->dirs, CONST_BUF_LEN(fam_dir->name));
+            if (scf->dirs)
+                fam_dir_invalidate_tree(scf->dirs,CONST_BUF_LEN(fam_dir->name));
             fam_dir_periodic_cleanup(srv);
             break;
         default:
@@ -848,11 +849,11 @@ void stat_cache_delete_dir(server *srv, const char *name, size_t len)
     stat_cache_delete_tree(srv, name, len);
   #ifdef HAVE_FAM_H
     if (srv->srvconf.stat_cache_engine == STAT_CACHE_ENGINE_FAM) {
-        fam_dir_entry *fam_dir =
-          stat_cache_sptree_find(&srv->stat_cache->scf->dirs, name, len);
+        splay_tree **sptree = &srv->stat_cache->scf->dirs;
+        fam_dir_entry *fam_dir = stat_cache_sptree_find(sptree, name, len);
         if (fam_dir && buffer_is_equal_string(fam_dir->name, name, len))
             fam_dir_invalidate_node(fam_dir);
-        fam_dir_invalidate_tree(srv->stat_cache->scf->dirs, name, len);
+        if (*sptree) fam_dir_invalidate_tree(*sptree, name, len);
         fam_dir_periodic_cleanup(srv);
     }
   #endif
