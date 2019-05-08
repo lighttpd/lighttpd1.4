@@ -3747,6 +3747,7 @@ mod_webdav_propfind (connection * const con, const plugin_config * const pconf)
             if (vb && 0 == strncmp(vb->ptr, "Microsoft-WebDAV-MiniRedir/",
                                    sizeof("Microsoft-WebDAV-MiniRedir/")-1)) {
                 /* workaround Microsoft-WebDAV-MiniRedir bug */
+                /* (MS File Explorer unable to open folder if not redirected) */
                 http_response_redirect_to_directory(pconf->srv, con, 308);
                 return HANDLER_FINISHED;
             }
@@ -5047,6 +5048,8 @@ mod_webdav_proppatch (connection * const con, const plugin_config * const pconf)
             if (vb && 0 == strncmp(vb->ptr, "Microsoft-WebDAV-MiniRedir/",
                                    sizeof("Microsoft-WebDAV-MiniRedir/")-1)) {
                 /* workaround Microsoft-WebDAV-MiniRedir bug; 204 not handled */
+                /* 200 without response body or 204 both incorrectly interpreted
+                 * as 507 Insufficient Storage by Microsoft-WebDAV-MiniRedir. */
                 ms = buffer_init(); /* 207 Multi-status */
                 webdav_xml_response_status(ms, con->physical.path, 200);
             }
