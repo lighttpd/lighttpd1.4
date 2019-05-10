@@ -42,6 +42,7 @@ const buffer * stat_cache_etag_get(stat_cache_entry *sce, etag_flags_t flags);
 void stat_cache_update_entry(server *srv, const char *name, size_t len, struct stat *st, buffer *etagb);
 void stat_cache_delete_entry(server *srv, const char *name, size_t len);
 void stat_cache_delete_dir(server *srv, const char *name, size_t len);
+void stat_cache_invalidate_entry(server *srv, const char *name, size_t len);
 handler_t stat_cache_get_entry(server *srv, connection *con, buffer *name, stat_cache_entry **sce);
 int stat_cache_path_contains_symlink(server *srv, buffer *name);
 int stat_cache_open_rdonly_fstat (buffer *name, struct stat *st, int symlinks);

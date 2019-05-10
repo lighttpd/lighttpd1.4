@@ -240,7 +240,6 @@ static void fam_dir_invalidate_tree(splay_tree *t, const char *name, size_t len)
 
 /* declarations */
 static void stat_cache_delete_tree(server *srv, const char *name, size_t len);
-static void stat_cache_invalidate_entry(server *srv, const char *name, size_t len);
 static void stat_cache_invalidate_dir_tree(server *srv, const char *name, size_t len);
 
 static void stat_cache_handle_fdevent_in(server *srv, stat_cache_fam *scf)
@@ -751,9 +750,7 @@ void stat_cache_delete_entry(server *srv, const char *name, size_t len)
     }
 }
 
-#ifdef HAVE_FAM_H
-
-static void stat_cache_invalidate_entry(server *srv, const char *name, size_t len)
+void stat_cache_invalidate_entry(server *srv, const char *name, size_t len)
 {
     splay_tree **sptree = &srv->stat_cache->files;
     stat_cache_entry *sce = stat_cache_sptree_find(sptree, name, len);
@@ -767,6 +764,8 @@ static void stat_cache_invalidate_entry(server *srv, const char *name, size_t le
       #endif
     }
 }
+
+#ifdef HAVE_FAM_H
 
 static void stat_cache_invalidate_dir_tree_walk(splay_tree *t,
                                                 const char *name, size_t len)
