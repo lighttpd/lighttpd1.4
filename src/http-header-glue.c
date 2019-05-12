@@ -473,8 +473,10 @@ void http_response_send_file (server *srv, connection *con, buffer *path) {
 
 	/*(Note: O_NOFOLLOW affects only the final path segment,
 	 * the target file, not any intermediate symlinks along path)*/
-	const int fd = fdevent_open_cloexec(path->ptr, con->conf.follow_symlink, O_RDONLY, 0);
-	if (fd < 0) {
+	const int fd = (0 != sce->st.st_size)
+	  ? fdevent_open_cloexec(path->ptr, con->conf.follow_symlink, O_RDONLY, 0)
+	  : -1;
+	if (fd < 0 && 0 != sce->st.st_size) {
 		con->http_status = (errno == ENOENT) ? 404 : 403;
 		if (con->conf.log_request_handling) {
 			log_error_write(srv, __FILE__, __LINE__,  "sbs", "file open failed:", path, strerror(errno));
@@ -524,9 +526,15 @@ void http_response_send_file (server *srv, connection *con, buffer *path) {
 		}
 
 		if (HANDLER_FINISHED == http_response_handle_cachable(srv, con, mtime)) {
-			close(fd);
+			if (fd >= 0) close(fd);
 			return;
 		}
+	}
+
+	if (fd < 0) { /* 0-length file */
+		con->http_status = 200;
+		con->file_finished = 1;
+		return;
 	}
 
 	if (con->conf.range_requests
