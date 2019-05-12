@@ -43,6 +43,36 @@ static int http_chunk_append_file_open_fstat(server *srv, connection *con, buffe
 	return stat_cache_open_rdonly_fstat(fn, st, con->conf.follow_symlink);
 }
 
+static int http_chunk_append_read_fd_range(server *srv, connection *con, buffer *fn, int fd, off_t offset, off_t len) {
+    /* note: this routine should not be used for range requests
+     * unless the total size of ranges requested is small */
+    /* note: future: could read into existing MEM_CHUNK in cq->last if
+     * there is sufficient space, but would need to adjust for existing
+     * offset in for cq->bytes_in in chunkqueue_append_buffer_commit() */
+    UNUSED(fn);
+
+    if (con->response.send_chunked) {
+        http_chunk_append_len(srv, con, (uintmax_t)len);
+    }
+
+    if (0 != offset && -1 == lseek(fd, offset, SEEK_SET)) return -1;
+    chunkqueue * const cq = con->write_queue;
+    buffer * const b = chunkqueue_append_buffer_open_sz(cq, len+2);
+    ssize_t rd;
+    offset = 0;
+    do {
+        rd = read(fd, b->ptr+offset, len-offset);
+    } while ((rd > 0 && (offset += rd, len -= rd)) || errno == EINTR);
+    buffer_commit(b, offset);
+
+    if (con->response.send_chunked) {
+        buffer_append_string_len(b, CONST_STR_LEN("\r\n"));
+    }
+
+    chunkqueue_append_buffer_commit(cq);
+    return (rd >= 0) ? 0 : -1;
+}
+
 static void http_chunk_append_file_fd_range(server *srv, connection *con, buffer *fn, int fd, off_t offset, off_t len) {
 	chunkqueue *cq = con->write_queue;
 
@@ -85,11 +115,16 @@ int http_chunk_append_file(server *srv, connection *con, buffer *fn) {
 	return 0;
 }
 
-void http_chunk_append_file_fd(server *srv, connection *con, buffer *fn, int fd, off_t sz) {
-	if (0 != sz) {
+int http_chunk_append_file_fd(server *srv, connection *con, buffer *fn, int fd, off_t sz) {
+	if (sz > 32768) {
 		http_chunk_append_file_fd_range(srv, con, fn, fd, 0, sz);
+		return 0;
 	} else {
+		int rc = (0 != sz) /*(read small files into memory)*/
+		  ? http_chunk_append_read_fd_range(srv, con, fn, fd, 0, sz)
+		  : 0;
 		close(fd);
+		return rc;
 	}
 }
 

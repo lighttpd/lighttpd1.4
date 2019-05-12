@@ -591,9 +591,13 @@ void http_response_send_file (server *srv, connection *con, buffer *path) {
 	 * the HEAD request will drop it afterwards again
 	 */
 
-	http_chunk_append_file_fd(srv, con, path, fd, sce->st.st_size);
-	con->http_status = 200;
-	con->file_finished = 1;
+	if (0 == http_chunk_append_file_fd(srv, con, path, fd, sce->st.st_size)) {
+		con->http_status = 200;
+		con->file_finished = 1;
+	}
+	else {
+		con->http_status = 500;
+	}
 }
 
 
