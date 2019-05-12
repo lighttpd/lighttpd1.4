@@ -1831,8 +1831,6 @@ static handler_t gw_write_request(server *srv, gw_handler_ctx *hctx) {
             ret = srv->network_backend_write(srv, hctx->fd, hctx->wb,
                                              MAX_WRITE_LIMIT);
 
-            chunkqueue_remove_finished_chunks(hctx->wb);
-
             if (ret < 0) {
                 switch(errno) {
                 case EPIPE:

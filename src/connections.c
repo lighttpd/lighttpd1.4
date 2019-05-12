@@ -741,12 +741,10 @@ static void connection_read_header(server *srv, connection *con)  {
         if (len > hlen) len = hlen;
         buffer_append_string_len(con->request.request,
                                  c->mem->ptr + c->offset, len);
-        c->offset += len;
-        cq->bytes_out += len;
         if (0 == (hlen -= len)) break;
     }
 
-    chunkqueue_remove_finished_chunks(cq);
+    chunkqueue_mark_written(cq, con->header_len);
 
     /* skip past \r\n or \n after previous POST request when keep-alive */
     if (con->request_count > 1) {

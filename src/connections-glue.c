@@ -344,7 +344,6 @@ int connection_write_chunkqueue(server *srv, connection *con, chunkqueue *cq, of
 
 	ret = con->network_write(srv, con, cq, max_bytes);
 	if (ret >= 0) {
-		chunkqueue_remove_finished_chunks(cq);
 		ret = chunkqueue_is_empty(cq) ? 0 : 1;
 	}
 
@@ -394,9 +393,7 @@ static int connection_write_100_continue(server *srv, connection *con) {
 		return 0; /* error */
 	}
 
-	if (written == sizeof(http_100_continue)-1) {
-		chunkqueue_remove_finished_chunks(cq);
-	} else if (0 == written) {
+	if (0 == written) {
 		/* skip sending 100 Continue if send would block */
 		chunkqueue_mark_written(cq, sizeof(http_100_continue)-1);
 		con->is_writable = 0;

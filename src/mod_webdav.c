@@ -3440,7 +3440,6 @@ webdav_parse_chunkqueue (connection * const con,
 
         weWant -= weHave;
         chunkqueue_mark_written(cq, weHave);
-        chunkqueue_remove_finished_chunks(cq);
     }
 
     if (XML_ERR_OK == err) {
@@ -4105,7 +4104,6 @@ mod_webdav_write_cq_first_chunk (connection * const con, chunkqueue * const cq,
 
     if (wr > 0) {
         chunkqueue_mark_written(cq, wr);
-        chunkqueue_remove_finished_chunks(cq);
     }
     else if (wr < 0)
         http_status_set_error(con, (errno == ENOSPC) ? 507 : 403);
@@ -4327,7 +4325,6 @@ mod_webdav_put_linkat_rename (connection * const con,
         }
 
         chunkqueue_mark_written(cq, c->file.length);
-        chunkqueue_remove_finished_chunks(cq);
         return 1;
     }
 

@@ -208,55 +208,36 @@ void chunkqueue_chunk_pool_free(void)
 }
 
 static off_t chunk_remaining_length(const chunk *c) {
-	off_t len = 0;
-	switch (c->type) {
-	case MEM_CHUNK:
-		len = buffer_string_length(c->mem);
-		break;
-	case FILE_CHUNK:
-		len = c->file.length;
-		break;
-	default:
-		force_assert(c->type == MEM_CHUNK || c->type == FILE_CHUNK);
-		break;
-	}
-	force_assert(c->offset <= len);
-	return len - c->offset;
+    /* MEM_CHUNK or FILE_CHUNK */
+    return (c->type == MEM_CHUNK
+              ? (off_t)buffer_string_length(c->mem)
+              : c->file.length)
+           - c->offset;
+}
+
+static void chunkqueue_release_chunks(chunkqueue *cq) {
+    cq->last = NULL;
+    for (chunk *c; (c = cq->first); ) {
+        cq->first = c->next;
+        chunk_release(c);
+    }
 }
 
 void chunkqueue_free(chunkqueue *cq) {
-	chunk *c, *pc;
-
-	if (NULL == cq) return;
-
-	for (c = cq->first; c; ) {
-		pc = c;
-		c = c->next;
-		chunk_release(pc);
-	}
-
-	free(cq);
+    if (NULL == cq) return;
+    chunkqueue_release_chunks(cq);
+    free(cq);
 }
 
 static void chunkqueue_prepend_chunk(chunkqueue *cq, chunk *c) {
-	c->next = cq->first;
-	cq->first = c;
-
-	if (NULL == cq->last) {
-		cq->last = c;
-	}
+    if (NULL == (c->next = cq->first)) cq->last = c;
+    cq->first = c;
 }
 
 static void chunkqueue_append_chunk(chunkqueue *cq, chunk *c) {
-	c->next = NULL;
-	if (cq->last) {
-		cq->last->next = c;
-	}
-	cq->last = c;
-
-	if (NULL == cq->first) {
-		cq->first = c;
-	}
+    c->next = NULL;
+    *(cq->last ? &cq->last->next : &cq->first) = c;
+    cq->last = c;
 }
 
 static chunk * chunkqueue_prepend_mem_chunk(chunkqueue *cq, size_t sz) {
@@ -283,19 +264,10 @@ static chunk * chunkqueue_append_file_chunk(chunkqueue *cq, buffer *fn, off_t of
 }
 
 void chunkqueue_reset(chunkqueue *cq) {
-	chunk *cur = cq->first;
-
-	cq->first = cq->last = NULL;
-
-	while (NULL != cur) {
-		chunk *next = cur->next;
-		chunk_release(cur);
-		cur = next;
-	}
-
-	cq->bytes_in = 0;
-	cq->bytes_out = 0;
-	cq->tempdir_idx = 0;
+    chunkqueue_release_chunks(cq);
+    cq->bytes_in = 0;
+    cq->bytes_out = 0;
+    cq->tempdir_idx = 0;
 }
 
 void chunkqueue_append_file_fd(chunkqueue *cq, buffer *fn, int fd, off_t offset, off_t len) {
@@ -723,49 +695,38 @@ off_t chunkqueue_length(chunkqueue *cq) {
 }
 
 void chunkqueue_mark_written(chunkqueue *cq, off_t len) {
-	off_t written = len;
-	chunk *c;
-	force_assert(len >= 0);
+    cq->bytes_out += len;
 
-	for (c = cq->first; NULL != c; c = cq->first) {
-		off_t c_len = chunk_remaining_length(c);
+    for (chunk *c; (c = cq->first); ) {
+        off_t c_len = chunk_remaining_length(c);
+        if (len >= c_len) { /* chunk got finished */
+            len -= c_len;
+            cq->first = c->next;
+            chunk_release(c);
+            if (0 == len) break;
+        }
+        else { /* partial chunk */
+            c->offset += len;
+            return; /* chunk not finished */
+        }
+    }
 
-		if (0 == written && 0 != c_len) break; /* no more finished chunks */
-
-		if (written >= c_len) { /* chunk got finished */
-			c->offset += c_len;
-			written -= c_len;
-
-			cq->first = c->next;
-			if (c == cq->last) cq->last = NULL;
-			chunk_release(c);
-		} else { /* partial chunk */
-			c->offset += written;
-			written = 0;
-			break; /* chunk not finished */
-		}
-	}
-
-	force_assert(0 == written);
-	cq->bytes_out += len;
+    if (NULL == cq->first)
+        cq->last = NULL;
+    else
+        chunkqueue_remove_finished_chunks(cq);
 }
 
 void chunkqueue_remove_finished_chunks(chunkqueue *cq) {
-	chunk *c;
-
-	for (c = cq->first; c; c = cq->first) {
-		if (0 != chunk_remaining_length(c)) break; /* not finished yet */
-
-		cq->first = c->next;
-		if (c == cq->last) cq->last = NULL;
-		chunk_release(c);
-	}
+    for (chunk *c; (c = cq->first) && 0 == chunk_remaining_length(c); ){
+        if (NULL == (cq->first = c->next)) cq->last = NULL;
+        chunk_release(c);
+    }
 }
 
 static void chunkqueue_remove_empty_chunks(chunkqueue *cq) {
 	chunk *c;
 	chunkqueue_remove_finished_chunks(cq);
-	if (chunkqueue_is_empty(cq)) return;
 
 	for (c = cq->first; c && c->next; c = c->next) {
 		if (0 == chunk_remaining_length(c->next)) {
