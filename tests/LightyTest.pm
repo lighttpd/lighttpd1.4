@@ -444,4 +444,17 @@ sub endspawnfcgi {
 	return 0;
 }
 
+sub has_feature {
+	# quick-n-dirty crude parse of "lighttpd -V"
+	# (XXX: should be run on demand and only once per instance, then cached)
+	my ($self, $feature) = @_;
+	my $FH;
+	open($FH, "-|",$self->{LIGHTTPD_PATH}, "-V") || return 0;
+	while (<$FH>) {
+		return ($1 eq '+') if (/([-+]) \Q$feature\E/);
+	}
+	close $FH;
+	return 0;
+}
+
 1;
