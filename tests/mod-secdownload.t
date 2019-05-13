@@ -80,6 +80,15 @@ $t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 404 } ];
 
 ok($tf->handle_http($t) == 0, 'secdownload - timeout (md5)');
 
+
+if (!$tf->has_feature("SSL support")) {
+
+    for (1..4) { ok(1, "secdownload (hmac-sha1) (skipped) - (missing SSL support)"); }
+    for (1..5) { ok(1, "secdownload (hmac-sha256) (skipped) - (missing SSL support)"); }
+
+}
+else {
+
 ## HMAC-SHA1
 $f = "/index.html";
 $thex = sprintf("%08x", time);
@@ -191,6 +200,8 @@ EOF
 $t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 404 } ];
 
 ok($tf->handle_http($t) == 0, 'secdownload - timeout (hmac-sha256)');
+
+} # SKIP if lighttpd built without crypto algorithms (e.g. without openssl)
 
 ## THE END
 
