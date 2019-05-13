@@ -49,7 +49,6 @@ void buffer_free(buffer *b) {
 
 __attribute_cold__
 static void buffer_free_ptr(buffer *b) {
-	if (NULL == b) return;
 	free(b->ptr);
 	b->ptr = NULL;
 	b->used = 0;
@@ -57,11 +56,10 @@ static void buffer_free_ptr(buffer *b) {
 }
 
 void buffer_reset(buffer *b) {
-	if (NULL != b && b->size > 0) {
-		b->used = 0;
-		/* release buffer larger than ... bytes */
-		if (b->size > BUFFER_MAX_REUSE_SIZE) buffer_free_ptr(b);
-	}
+	force_assert(NULL != b);
+	b->used = 0;
+	/* release buffer larger than ... bytes */
+	if (b->size > BUFFER_MAX_REUSE_SIZE) buffer_free_ptr(b);
 }
 
 void buffer_move(buffer *b, buffer *src) {
