@@ -161,7 +161,11 @@ int etag_create(buffer *etag, const struct stat *st, etag_flags_t flags) {
 	if (flags & ETAG_USE_MTIME) {
 		buffer_append_int(etag, st->st_mtime);
 	      #ifdef st_mtime /* use high-precision timestamp if available */
+	      #if defined(__APPLE__) && defined(__MACH__)
+		buffer_append_int(etag, st->st_mtimespec.tv_nsec);
+	      #else
 		buffer_append_int(etag, st->st_mtim.tv_nsec);
+	      #endif
 	      #endif
 	}
 
