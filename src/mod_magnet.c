@@ -9,6 +9,7 @@
 #include "plugin.h"
 
 #include "mod_magnet_cache.h"
+#include "sock_addr.h"
 #include "stat_cache.h"
 #include "status_counter.h"
 #include "etag.h"
@@ -489,6 +490,7 @@ typedef struct {
 		MAGNET_ENV_REQUEST_ORIG_URI,
 		MAGNET_ENV_REQUEST_PATH_INFO,
 		MAGNET_ENV_REQUEST_REMOTE_IP,
+		MAGNET_ENV_REQUEST_SERVER_ADDR,
 		MAGNET_ENV_REQUEST_PROTOCOL
 	} type;
 } magnet_env_t;
@@ -510,6 +512,8 @@ static const magnet_env_t magnet_env[] = {
 	{ "request.orig-uri", MAGNET_ENV_REQUEST_ORIG_URI },
 	{ "request.path-info", MAGNET_ENV_REQUEST_PATH_INFO },
 	{ "request.remote-ip", MAGNET_ENV_REQUEST_REMOTE_IP },
+	{ "request.remote-addr", MAGNET_ENV_REQUEST_REMOTE_IP },
+	{ "request.server-addr", MAGNET_ENV_REQUEST_SERVER_ADDR },
 	{ "request.protocol", MAGNET_ENV_REQUEST_PROTOCOL },
 
 	{ NULL, MAGNET_ENV_UNSET }
@@ -546,6 +550,35 @@ static buffer *magnet_env_get_buffer_by_id(server *srv, connection *con, int id)
 	case MAGNET_ENV_REQUEST_ORIG_URI: dest = con->request.orig_uri; break;
 	case MAGNET_ENV_REQUEST_PATH_INFO: dest = con->request.pathinfo; break;
 	case MAGNET_ENV_REQUEST_REMOTE_IP: dest = con->dst_addr_buf; break;
+	case MAGNET_ENV_REQUEST_SERVER_ADDR:
+		dest = srv->tmp_buf;
+		buffer_clear(dest);
+		switch (con->srv_socket->addr.plain.sa_family) {
+		case AF_INET:
+		case AF_INET6:
+			if (sock_addr_is_addr_wildcard(&con->srv_socket->addr)) {
+				sock_addr addrbuf;
+				socklen_t addrlen = sizeof(addrbuf);
+				if (0 == getsockname(con->fd,(struct sockaddr *)&addrbuf,&addrlen)){
+					char buf[INET6_ADDRSTRLEN + 1];
+					const char *s = sock_addr_inet_ntop(&addrbuf, buf, sizeof(buf)-1);
+					if (NULL != s)
+						buffer_copy_string_len(dest, s, strlen(s));
+				}
+			}
+			else {
+				buffer_copy_buffer(dest, con->srv_socket->srv_token);
+				if (dest->ptr[0] != '[' || dest->ptr[buffer_string_length(dest)-1] != ']') {
+					char *s = strrchr(dest->ptr, ':');
+					if (s != NULL) /* local IP without port */
+						buffer_string_set_length(dest, s - dest->ptr);
+				}
+			}
+			break;
+		default:
+			break;
+		}
+		break;
 	case MAGNET_ENV_REQUEST_PROTOCOL:
 		buffer_copy_string(srv->tmp_buf, get_http_version_name(con->request.http_version));
 		dest = srv->tmp_buf;
