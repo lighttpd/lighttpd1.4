@@ -62,7 +62,7 @@ static int http_chunk_append_read_fd_range(server *srv, connection *con, buffer 
     offset = 0;
     do {
         rd = read(fd, b->ptr+offset, len-offset);
-    } while ((rd > 0 && (offset += rd, len -= rd)) || errno == EINTR);
+    } while (rd > 0 ? (offset += rd, len -= rd) : errno == EINTR);
     buffer_commit(b, offset);
 
     if (con->response.send_chunked) {
