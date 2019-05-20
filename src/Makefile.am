@@ -135,6 +135,13 @@ mod_geoip_la_LDFLAGS = $(common_module_ldflags)
 mod_geoip_la_LIBADD = $(common_libadd) $(GEOIP_LIB)
 endif
 
+if BUILD_WITH_MAXMINDDB
+lib_LTLIBRARIES += mod_maxminddb.la
+mod_maxminddb_la_SOURCES = mod_maxminddb.c
+mod_maxminddb_la_LDFLAGS = $(common_module_ldflags)
+mod_maxminddb_la_LIBADD = $(common_libadd) $(MAXMINDDB_LIB)
+endif
+
 lib_LTLIBRARIES += mod_evasive.la
 mod_evasive_la_SOURCES = mod_evasive.c
 mod_evasive_la_LDFLAGS = $(common_module_ldflags)
@@ -485,6 +492,10 @@ lighttpd_LDFLAGS = -export-dynamic
 if BUILD_WITH_GEOIP
 lighttpd_SOURCES += mod_geoip.c
 lighttpd_LDADD += $(GEOIP_LIB)
+endif
+if BUILD_WITH_MAXMINDDB
+lighttpd_SOURCES += mod_maxminddb.c
+lighttpd_LDADD += $(MAXMINDDB_LIB)
 endif
 if BUILD_WITH_LUA
 lighttpd_SOURCES += mod_cml.c mod_cml_lua.c mod_cml_funcs.c \

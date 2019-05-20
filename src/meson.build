@@ -910,6 +910,12 @@ if get_option('with_lua')
 	]
 endif
 
+if get_option('with_maxminddb')
+	modules += [
+		[ 'mod_maxminddb', [ 'mod_maxminddb.c' ], libmaxminddb ],
+	]
+endif
+
 if get_option('with_geoip')
 	modules += [
 		[ 'mod_geoip', [ 'mod_geoip.c' ], libgeoip ],

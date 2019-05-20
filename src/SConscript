@@ -136,6 +136,9 @@ modules = {
 if env['with_geoip']:
 	modules['mod_geoip'] = { 'src' : [ 'mod_geoip.c' ], 'lib' : [ env['LIBGEOIP'] ] }
 
+if env['with_maxminddb']:
+	modules['mod_maxminddb'] = { 'src' : [ 'mod_maxminddb.c' ], 'lib' : [ env['LIBMAXMINDDB'] ] }
+
 if env['with_krb5']:
 	modules['mod_authn_gssapi'] = { 'src' : [ 'mod_authn_gssapi.c' ], 'lib' : [ env['LIBKRB5'], env['LIBGSSAPI_KRB5'] ] }
 

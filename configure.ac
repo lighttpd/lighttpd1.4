@@ -1041,6 +1041,36 @@ if test "$WITH_GEOIP" != no; then
 fi
 AM_CONDITIONAL([BUILD_WITH_GEOIP], [test "$WITH_GEOIP" != no])
 
+dnl Check for maxminddb
+AC_MSG_NOTICE([----------------------------------------])
+AC_MSG_CHECKING([for maxminddb])
+AC_ARG_WITH([maxminddb],
+  [AC_HELP_STRING([--with-maxminddb], [IP-based geolocation lookup])],
+  [WITH_MAXMINDDB=$withval],
+  [WITH_MAXMINDDB=no]
+)
+AC_MSG_RESULT([$WITH_MAXMINDDB])
+
+if test "$WITH_MAXMINDDB" != no; then
+  if test "$WITH_MAXMINDDB" != yes; then
+    MAXMINDDB_LIB="-L$WITH_MAXMINDDB -lmaxminddb"
+    CPPFLAGS="$CPPFLAGS -I$WITH_MAXMINDDB"
+  else
+    AC_CHECK_LIB([maxminddb], [MMDB_open],
+      [MAXMINDDB_LIB=-lmaxminddb],
+      [AC_MSG_ERROR([maxminddb lib not found, install it or build without --with-maxminddb])]
+    )
+    AC_CHECK_HEADERS([maxminddb.h], [],
+      [AC_MSG_ERROR([maxminddb headers not found, install them or build without --with-maxminddb])]
+    )
+  fi
+
+  AC_DEFINE([HAVE_MAXMINDDB], [1], [libmaxminddb])
+  AC_DEFINE([HAVE_MAXMINDDB_H], [1])
+  AC_SUBST([MAXMINDDB_LIB])
+fi
+AM_CONDITIONAL([BUILD_WITH_MAXMINDDB], [test "$WITH_MAXMINDDB" != no])
+
 dnl Check for memcached
 AC_MSG_NOTICE([----------------------------------------])
 AC_MSG_CHECKING([for memcached])
@@ -1470,6 +1500,9 @@ lighty_track_feature "lua" "mod_cml mod_magnet" \
 
 lighty_track_feature "geoip" "mod_geoip" \
   'test "$WITH_GEOIP" != no'
+
+lighty_track_feature "maxminddb" "mod_maxminddb" \
+  'test "$WITH_MAXMINDDB" != no'
 
 lighty_track_feature "compress-gzip compress-deflate" "" \
   'test "$WITH_ZLIB" != no'

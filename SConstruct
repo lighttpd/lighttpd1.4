@@ -243,6 +243,7 @@ vars.AddVariables(
 	BoolVariable('with_fam', 'enable FAM/gamin support', 'no'),
 	BoolVariable('with_gdbm', 'enable gdbm support', 'no'),
 	BoolVariable('with_geoip', 'enable GeoIP support', 'no'),
+	BoolVariable('with_maxminddb', 'enable MaxMind GeoIP2 support', 'no'),
 	BoolVariable('with_krb5', 'enable krb5 auth support', 'no'),
 	BoolVariable('with_ldap', 'enable ldap auth support', 'no'),
 	# with_libev not supported
@@ -520,6 +521,14 @@ if 1:
 		autoconf.env.Append(
 			CPPFLAGS = [ '-DHAVE_GEOIP' ],
 			LIBGEOIP = 'GeoIP',
+		)
+
+	if env['with_maxminddb']:
+		if not autoconf.CheckLibWithHeader('maxminddb', 'maxminddb.h', 'C'):
+			fail("Couldn't find maxminddb")
+		autoconf.env.Append(
+			CPPFLAGS = [ '-DHAVE_MAXMINDDB' ],
+			LIBMAXMINDDB = 'maxminddb',
 		)
 
 	if env['with_krb5']:

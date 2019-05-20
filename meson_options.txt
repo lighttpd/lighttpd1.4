@@ -48,6 +48,11 @@ option('with_lua',
 	value: false,
 	description: 'with lua 5.1 for mod_magnet [default: off]',
 )
+option('with_maxminddb',
+	type: 'boolean',
+	value: false,
+	description: 'with MaxMind GeoIP2-support mod_maxminddb [default: off]',
+)
 option('with_memcached',
 	type: 'boolean',
 	value: false,
