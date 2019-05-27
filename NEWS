@@ -3,6 +3,156 @@
 NEWS
 ====
 
+- 1.4.54 - 2019-05-27
+  * [mod_evhost] handle IPv6 literal addr; add tests
+  * [core] separate server_main_loop() func, mark hot
+  * [core] mark startup/shutdown funcs cold
+  * [core] some server_main_loop() cleanup
+  * [core] fdevent_process()
+  * [core] srv->max_fds_lowat and srv->max_fds_hiwat
+  * [core] remove server.h
+  * [mod_staticfile] search ext array if not empty
+  * [core] store joblist pointer on stack
+  * [core] quickly clear request buffer for reuse
+  * [core] helper funcs for connection_state_machine()
+  * [core] perf: optimize connection_read_header()
+  * [core] parse request in connection_read_header()
+  * [core] log_request_header_on_error in one place
+  * [core] copy request only if might need for logging
+  * [core] make parse_request,request.request same buf
+  * [core] prefer buffer_caseless_compare()
+  * [core] pass req hdrs buffer to http_request_parse
+  * [core] replace con->response.keep_alive
+  * [core] mark log_error_write*() funcs cold
+  * [core] http_request_parse() mark error paths cold
+  * [core] lift code out of request line parse loop
+  * [core] get_http_method_key() match by strlen first
+  * [core] RFC7230 HTTP-version parse
+  * [mod_accesslog] attempt to reconstruct req line
+  * [multiple] minor: remove duplicated conditions
+  * [mod_deflate] honor request for x-gzip, x-bzip2
+  * [mod_auth] minor: adjust config validation
+  * [core] discard oversized trailers
+  * [core] no keep-alive if POLLRDHUP,empty read queue
+  * [core] fix gw_backend spelling of directive in err
+  * [multiple] reduce code dup in list resizing
+  * [core] con->is_ssl_sock
+  * [core] connection_handle_write() updates con state
+  * [core] skip plugins_call_cleanup if not init'ed
+  * [core] simpler loops to run plugin hooks
+  * [core] fix mixed use of srv->split_vals array (fixes #2932)
+  * [core] dispatch events from within event framework
+  * [core] don't call fd event handlers more than once, they might already be gone (fixes segfault)
+  * [core] poll: fdarray uses fd as index, not fde_ndx
+  * [core] map FDEVENT_* to OS system event frameworks
+  * [core] prefer memchr() over strchr()
+  * [core] use openssl to read,discard request body
+  * [mod_openssl] inherit cipherlist from global scope
+  * [mod_openssl] default: ssl.cipher-list = "HIGH"
+  * [mod_proxy] pass Content-Length to backend if > 0
+  * [core] config option to allow GET w/ request body
+  * [core] some fdevent code streamlining
+  * [core] remove fde_ndx member outside fdevents
+  * [core] remove redundant check for allow_http11
+  * [mod_openssl] use 16k static buffer instead of 64k
+  * [core] pull server load checks out of main loop
+  * [core] isolate fdevent processing
+  * [core] release empty chunk buf when nothing read
+  * [core] perf: pass (fdnode *) to epoll and kqueue
+  * [core] modify config parser to handle multiple }
+  * [core] pass (fdnode *) for registered fdevent fd
+  * [mod_auth] http_auth_digest_hex2bin()
+  * [mod_auth] http_auth_info_t digest abstraction
+  * [mod_auth] pass http_auth_require_t for 401 Unauth
+  * [core] no SOCK_NONBLOCK on QNX 7.0
+  * [mod_auth] HTTP Auth Digest algorithm=SHA-256
+  * [core] silence coverity warning
+  * [mod_magnet] fix invalid script return-type crash (fixes #2938)
+  * [build] remove -Wdeclaration-after-statement
+  * [core] pass conf.follow_symlink in more places
+  * [core] fix assertion with server.error-handler (fixes #2941)
+  * [core] extend dir redirection to take HTTP status
+  * [doc] minor adjust create-mime.conf.pl regex match (#2942)
+  * [core] __attribute__((fallthrough)) for GCC 7.0
+  * [core] fdevent_mkstemp_append() (shared)
+  * [core] off_t upload_temp_file_size
+  * [core] clear FDEVENT_RDHUP if no POLLRDHUP
+  * [mod_wstunnel] fix ping-interval for big-endian (fixes #2944)
+  * [core] fix abort in http-parseopts (fixes #2945)
+  * [core] remove repeated slashes in http-parseopts
+  * [core] fix 1.4.52 regression in mem use with POST (fixes #2948)
+  * [multiple] cleaner calloc use in SETDEFAULTS_FUNC
+  * [core] add const to some etag prototypes
+  * [core] __attribute__((format ...))
+  * [core] struct log_error_st for error logging
+  * [core] log_error, log_perror using printf-like fmt
+  * [core] new worker_init hook to follow parent fork
+  * [core] replace open() with fdevent_open_cloexec()
+  * [mod_webdav] major rewrite (fixes #1818)
+  * [core] 200 for OPTIONS /non-existent/path HTTP/1.1 (fixes #2939)
+  * [mod_webdav] surround Lock-Token with "<...>"
+  * [mod_webdav] fix uuid detection macro
+  * [mod_webdav] fix misbehavior on blank nodes in PROPPATCH
+  * [mod_webdav] clean up resources after do{}while(0)
+  * [mod_webdav] check If-Match, If-Unmodified-Since (#1818)
+  * [mod_webdav] deprecated unsafe partial PUT compat
+  * [mod_webdav] provide ETag in more responses
+  * [mod_webdav] platform portability fixes
+  * [mod_webdav] disable elftc_copyfile() on FreeBSD
+  * [mod_webdav] special-case If: (<DAV:no-lock>)
+  * [mod_webdav] check If-None-Match (#1818)
+  * [stat_cache] separate func for symlink policy chk
+  * [stat_cache] separate symlink pol from data struct
+  * [stat_cache] store entries without trailing slash
+  * [stat_cache] pass age param for stat cache cleanup
+  * [stat_cache] remove splaytree ins/del debug code
+  * [stat_cache] FAM: reduce string copying
+  * [stat_cache] FAM: check FAMNextEvent() return code
+  * [stat_cache] FAM: use entry hash index as userdata
+  * [stat_cache] FAM: improve handling modified file
+  * [stat_cache] FAM: ignore follow-symlink config
+  * [stat_cache] FAM: check hash collision before add
+  * [stat_cache] FAM: ignore event with no valid match
+  * [stat_cache] FAM: funcs to invalidate entries
+  * [stat_cache] interfaces to invalidate entries
+  * [mod_webdav] update stat_cache after file mod
+  * [core] use high precision stat timestamp in etag
+  * [scons] adjustment for static build under CentOS
+  * [core] emit trace using path before clearing path
+  * [core] http_chunk_append_file_fd()
+  * [multiple] open target file earlier in some cases
+  * [stat_cache] no longer stat() and open() for stat
+  * [stat_cache] FAM: improve monitoring, cache 16 sec
+  * [stat_cache] FAM: separate routine for FDEVENT_IN
+  * [stat_cache] FAM: whitespace-only change
+  * [mod_webdav] quiet coverity warnings
+  * [doc] highlight relevance of module load order (fixes #2946)
+  * [core] behavior change: stricter URL normalization
+  * [stat_cache] fix compilation error for cmake
+  * [cmake] help cmake on FreeBSD find sys/event.h
+  * [scons] help scons on FreeBSD find sys/event.h
+  * [build] detect FreeBSD elftc_copyfile()
+  * [mod_openssl] use SSL_CTX_set_client_hello_cb()
+  * [core] support weak etags with If-None-Match
+  * [core] store log_state_handling flag on stack
+  * [core] check if splay_tree NULL before invalidate
+  * [mod_webdav] workaround Microsoft-WebDAV-MiniRedir
+  * [mod_webdav] doc Microsoft-WebDAV-MiniRedir bugs
+  * [mod_webdav] invalidate parent dir in stat_cache
+  * [doc] systemd socket activation config example
+  * [core] chunkqueue perf: code reuse
+  * [core] chunkqueue perf: specialized buffer.h funcs
+  * [core] chunkqueue perf: skip opening 0-length file
+  * [core] chunkqueue perf: read small files into mem
+  * [core] buffer_reset() should not be passed NULL
+  * [tests] has_feature() helper func
+  * [tests] skip mod-secdownload HMAC-SHA1,HMAC-SHA256
+  * [core] use high precision stat timestamp on OS X
+  * [mod_magnet] expose server addr (local IP) to lua
+  * [core] adjust http_chunk read() retry loop
+  * [mod_maxminddb] MaxMind GeoIP2 support
+  * [mod_authn_ldap] ldap_set_option LDAP_OPT_RESTART (fixes #2940)
+
 - 1.4.53 - 2019-01-27
   * [mod_cml,mod_flv_streaming] fix NULL ptr deref
   * [mod_simple_vhost] t/test_mod_simple_vhost
