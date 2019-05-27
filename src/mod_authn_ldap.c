@@ -404,6 +404,9 @@ static LDAP * mod_authn_ldap_host_init(server *srv, plugin_config *s) {
         return NULL;
     }
 
+    /* restart ldap functions if interrupted by a signal, e.g. SIGCHLD */
+    ldap_set_option(ld, LDAP_OPT_RESTART, LDAP_OPT_ON);
+
     if (s->auth_ldap_starttls) {
         /* if no CA file is given, it is ok, as we will use encryption
          * if the server requires a CAfile it will tell us */
