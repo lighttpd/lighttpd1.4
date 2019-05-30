@@ -20,7 +20,7 @@ static int fdevent_solaris_port_event_del(fdevents *ev, fdnode *fdn) {
 }
 
 static int fdevent_solaris_port_event_set(fdevents *ev, fdnode *fdn, int events) {
-    int fd = fdn->fdn_ndx = fdn->fd;
+    int fd = fdn->fde_ndx = fdn->fd;
     intptr_t ud = events & (POLLIN|POLLOUT);
     return port_associate(ev->port_fd,PORT_SOURCE_FD,fd,(int)ud,(void*)ud);
 }
