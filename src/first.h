@@ -129,5 +129,14 @@
 #endif
 #endif
 
+#ifndef __attribute_pure__
+#if __has_attribute(pure) \
+ || __GNUC_PREREQ(2,96)
+#define __attribute_pure__(x)  __attribute__((__pure__ x))
+#else
+#define __attribute_pure__(x)
+#endif
+#endif
+
 
 #endif
