@@ -102,8 +102,10 @@ void li_tohex_uc(char *buf, size_t buf_len, const char *s, size_t s_len);
  * unset "string" (buffer) config options are initialized to used == 0,
  * while setting an empty string leads to used == 1
  */
+__attribute_pure__
 static inline int buffer_is_empty(const buffer *b);
 /* NULL buffer, empty buffer (used == 0) or empty string (used == 1) */
+__attribute_pure__
 static inline int buffer_string_is_empty(const buffer *b);
 
 __attribute_pure__
@@ -118,9 +120,16 @@ int buffer_eq_icase_slen(const buffer * const b, const char * const s, const siz
 __attribute_pure__
 int buffer_eq_slen(const buffer * const b, const char * const s, const size_t slen);
 
+__attribute_pure__
 int buffer_is_equal(const buffer *a, const buffer *b);
+
+__attribute_pure__
 int buffer_is_equal_right_len(const buffer *a, const buffer *b, size_t len);
+
+__attribute_pure__
 int buffer_is_equal_string(const buffer *a, const char *s, size_t b_len);
+
+__attribute_pure__
 int buffer_is_equal_caseless_string(const buffer *a, const char *s, size_t b_len);
 
 void buffer_substr_replace (buffer *b, size_t offset, size_t len, const buffer *replace);
@@ -156,30 +165,37 @@ void buffer_to_upper(buffer *b);
 char hex2int(unsigned char c);
 char int2hex(char i);
 
+__attribute_pure__
 static inline int light_isdigit(int c);
-static inline int light_isxdigit(int c);
-static inline int light_isalpha(int c);
-static inline int light_isalnum(int c);
-
 static inline int light_isdigit(int c) {
 	return (c >= '0' && c <= '9');
 }
 
+__attribute_pure__
+static inline int light_isxdigit(int c);
 static inline int light_isxdigit(int c) {
 	return light_isdigit(c) || (c |= 32, c >= 'a' && c <= 'f');
 }
 
+__attribute_pure__
+static inline int light_isalpha(int c);
 static inline int light_isalpha(int c) {
 	return (c |= 32, c >= 'a' && c <= 'z');
 }
 
+__attribute_pure__
+static inline int light_isalnum(int c);
 static inline int light_isalnum(int c) {
 	return light_isdigit(c) || light_isalpha(c);
 }
 
 
+__attribute_pure__
 static inline size_t buffer_string_length(const buffer *b); /* buffer string length without terminating 0 */
+
+__attribute_pure__
 static inline size_t buffer_string_space(const buffer *b); /* maximum length of string that can be stored without reallocating */
+
 static inline void buffer_append_slash(buffer *b); /* append '/' no non-empty strings not ending in '/' */
 void buffer_append_path_len(buffer *b, const char *a, size_t alen); /* join strings with '/', if '/' not present */
 

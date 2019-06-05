@@ -100,10 +100,13 @@ int chunkqueue_steal_with_tempfiles(struct server *srv, chunkqueue *dest, chunkq
 
 int chunkqueue_open_file_chunk(struct server *srv, chunkqueue *cq);
 
+__attribute_pure__
 off_t chunkqueue_length(chunkqueue *cq);
+
 void chunkqueue_free(chunkqueue *cq);
 void chunkqueue_reset(chunkqueue *cq);
 
+__attribute_pure__
 static inline int chunkqueue_is_empty(const chunkqueue *cq);
 static inline int chunkqueue_is_empty(const chunkqueue *cq) {
 	return NULL == cq->first;
