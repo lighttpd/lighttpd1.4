@@ -99,8 +99,26 @@ data_unset *array_pop(array *a) {
 	return du;
 }
 
+__attribute_pure__
+static int array_caseless_compare(const char * const a, const char * const b, const size_t len) {
+    for (size_t i = 0; i < len; ++i) {
+        unsigned int ca = ((unsigned char *)a)[i];
+        unsigned int cb = ((unsigned char *)b)[i];
+        if (ca == cb) continue;
+
+        /* always lowercase for transitive results */
+        if (ca >= 'A' && ca <= 'Z') ca |= 32;
+        if (cb >= 'A' && cb <= 'Z') cb |= 32;
+
+        if (ca == cb) continue;
+        return (int)(ca - cb);
+    }
+    return 0;
+}
+
+__attribute_pure__
 static int array_keycmp(const char *a, size_t alen, const char *b, size_t blen) {
-    return alen < blen ? -1 : alen > blen ? 1 : buffer_caseless_compare(a, alen, b, blen);
+    return alen < blen ? -1 : alen > blen ? 1 : array_caseless_compare(a, b, blen);
 }
 
 /* returns index of element or ARRAY_NOT_FOUND
