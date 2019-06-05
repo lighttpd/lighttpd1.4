@@ -495,13 +495,13 @@ static int parse_single_header(server *srv, connection *con, parse_header_state 
             http_request_split_value(vals, v, vlen); /* split on , */
             for (size_t vi = 0; vi < vals->used; ++vi) {
                 data_string *dsv = (data_string *)vals->data[vi];
-                if (0 == buffer_caseless_compare(CONST_BUF_LEN(dsv->value),
-                                                 CONST_STR_LEN("keep-alive"))) {
+                if (buffer_eq_icase_slen(dsv->value,
+                                         CONST_STR_LEN("keep-alive"))) {
                     state->keep_alive_set = HTTP_CONNECTION_KEEPALIVE;
                     break;
                 }
-                else if (0 == buffer_caseless_compare(CONST_BUF_LEN(dsv->value),
-                                                      CONST_STR_LEN("close"))) {
+                else if (buffer_eq_icase_slen(dsv->value,
+                                              CONST_STR_LEN("close"))) {
                     state->keep_alive_set = HTTP_CONNECTION_CLOSE;
                     break;
                 }
@@ -641,13 +641,13 @@ static size_t http_request_parse_reqline(server *srv, connection *con, buffer *h
 				if (*uri == '/') {
 					/* (common case) */
 					buffer_copy_string_len(con->request.uri, uri, jlen);
-				} else if (0 == buffer_caseless_compare(uri, 7, "http://", 7) &&
+				} else if (jlen > 7 && buffer_eq_icase_ssn(uri, "http://", 7) &&
 				    NULL != (nuri = memchr(uri + 7, '/', jlen-7))) {
 					state->reqline_host = uri + 7;
 					state->reqline_hostlen = nuri - state->reqline_host;
 
 					buffer_copy_string_len(con->request.uri, nuri, proto - nuri - 1);
-				} else if (0 == buffer_caseless_compare(uri, 8, "https://", 8) &&
+				} else if (jlen > 8 && buffer_eq_icase_ssn(uri, "https://", 8) &&
 				    NULL != (nuri = memchr(uri + 8, '/', jlen-8))) {
 					state->reqline_host = uri + 8;
 					state->reqline_hostlen = nuri - state->reqline_host;
@@ -864,7 +864,7 @@ int http_request_parse(server *srv, connection *con, buffer *hdrs) {
 				return http_request_header_line_invalid(srv, 400, "HTTP/1.0 with Transfer-Encoding (bad HTTP/1.0 proxy?) -> 400");
 			}
 
-			if (0 != buffer_caseless_compare(CONST_BUF_LEN(vb), CONST_STR_LEN("chunked"))) {
+			if (!buffer_eq_icase_slen(vb, CONST_STR_LEN("chunked"))) {
 				/* Transfer-Encoding might contain additional encodings,
 				 * which are not currently supported by lighttpd */
 				return http_request_header_line_invalid(srv, 501, NULL); /* Not Implemented */

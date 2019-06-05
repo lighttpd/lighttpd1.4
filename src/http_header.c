@@ -49,7 +49,7 @@ enum http_header_e http_header_hkey_get(const char *s, size_t slen) {
     const struct keyvlenvalue * const kv = http_headers;
     for (int i = 0; kv[i].vlen && slen >= kv[i].vlen; ++i) {
         if (slen == kv[i].vlen
-            && 0 == buffer_caseless_compare(s, slen, kv[i].value, kv[i].vlen))
+            && buffer_eq_icase_ssn(s, kv[i].value, slen))
             return (enum http_header_e)kv[i].key;
     }
     return HTTP_HEADER_OTHER;

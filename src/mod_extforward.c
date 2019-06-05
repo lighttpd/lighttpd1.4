@@ -570,10 +570,10 @@ static void mod_extforward_set_proto(server *srv, connection *con, const char *p
 		if (extforward_check_proxy) {
 			http_header_env_set(con, CONST_STR_LEN("_L_EXTFORWARD_ACTUAL_PROTO"), CONST_BUF_LEN(con->uri.scheme));
 		}
-		if (0 == buffer_caseless_compare(proto, protolen, CONST_STR_LEN("https"))) {
+		if (buffer_eq_icase_ss(proto, protolen, CONST_STR_LEN("https"))) {
 			buffer_copy_string_len(con->uri.scheme, CONST_STR_LEN("https"));
 			config_cond_cache_reset_item(srv, con, COMP_HTTP_SCHEME);
-		} else if (0 == buffer_caseless_compare(proto, protolen, CONST_STR_LEN("http"))) {
+		} else if (buffer_eq_icase_ss(proto, protolen, CONST_STR_LEN("http"))) {
 			buffer_copy_string_len(con->uri.scheme, CONST_STR_LEN("http"));
 			config_cond_cache_reset_item(srv, con, COMP_HTTP_SCHEME);
 		}
@@ -735,7 +735,7 @@ static handler_t mod_extforward_Forwarded (server *srv, connection *con, plugin_
         do {
             j -= 3; /*(k, klen, v, vlen come in sets of 4)*/
         } while ((3 != offsets[j+1]  /* 3 == sizeof("for")-1 */
-                  || 0 != buffer_caseless_compare(s+offsets[j], 3, "for", 3))
+                  || !buffer_eq_icase_ssn(s+offsets[j], "for", 3))
                  && 0 != j-- && -1 != offsets[j]);
         if (j < 0) break;
         if (-1 == offsets[j]) { --j; continue; }
@@ -816,27 +816,27 @@ static handler_t mod_extforward_Forwarded (server *srv, connection *con, plugin_
         switch (offsets[j+1]) {
          #if 0
           case 2:
-            if (0 == buffer_caseless_compare(s+offsets[j],2,"by",2))
+            if (buffer_eq_icase_ssn(s+offsets[j], "by", 2))
                 oby = j;
             break;
          #endif
          #if 0
           /*(already handled above to find IP prior to earliest trusted proxy)*/
           case 3:
-            if (0 == buffer_caseless_compare(s+offsets[j],3,"for",3))
+            if (buffer_eq_icase_ssn(s+offsets[j], "for", 3))
                 ofor = j;
             break;
          #endif
           case 4:
-            if (0 == buffer_caseless_compare(s+offsets[j],4,"host",4))
+            if (buffer_eq_icase_ssn(s+offsets[j], "host", 4))
                 ohost = j;
             break;
           case 5:
-            if (0 == buffer_caseless_compare(s+offsets[j],5,"proto",5))
+            if (buffer_eq_icase_ssn(s+offsets[j], "proto", 5))
                 oproto = j;
             break;
           case 11:
-            if (0 == buffer_caseless_compare(s+offsets[j],11,"remote_user",11))
+            if (buffer_eq_icase_ssn(s+offsets[j], "remote_user", 11))
                 oremote_user = j;
             break;
           default:
@@ -876,7 +876,7 @@ static handler_t mod_extforward_Forwarded (server *srv, connection *con, plugin_
         for (j = i; j < used && -1 == ohost; ) {
             if (-1 == offsets[j]) { ++j; continue; }
             if (4 == offsets[j+1]
-                && 0 == buffer_caseless_compare(s+offsets[j], 4, "host", 4))
+                && buffer_eq_icase_ssn(s+offsets[j], "host", 4))
                 ohost = j;
             j += 4; /*(k, klen, v, vlen come in sets of 4)*/
         }
@@ -926,7 +926,7 @@ static handler_t mod_extforward_Forwarded (server *srv, connection *con, plugin_
         for (j = i; j < used; ) {
             if (-1 == offsets[j]) { ++j; continue; }
             if (11 == offsets[j+1]
-                && 0==buffer_caseless_compare(s+offsets[j],11,"remote_user",11))
+                && buffer_eq_icase_ssn(s+offsets[j], "remote_user", 11))
                 oremote_user = j;
             j += 4; /*(k, klen, v, vlen come in sets of 4)*/
         }
@@ -968,7 +968,7 @@ static handler_t mod_extforward_Forwarded (server *srv, connection *con, plugin_
         for (j = 0; j < used; ) {
             if (-1 == offsets[j]) { ++j; continue; }
             if (3 == offsets[j+1]
-                && 0 == buffer_caseless_compare(s+offsets[j], 3, "for", 3)) {
+                && buffer_eq_icase_ssn(s+offsets[j], "for", 3)) {
                 if (!buffer_string_is_empty(xff))
                     buffer_append_string_len(xff, CONST_STR_LEN(", "));
                 /* quoted-string, IPv6 brackets, and :port already removed */
