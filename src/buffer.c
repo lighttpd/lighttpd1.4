@@ -346,6 +346,40 @@ char hex2int(unsigned char hex) {
 	return li_cton(hex,n) ? (char)n : 0xFF;
 }
 
+
+int buffer_eq_icase_ssn(const char * const a, const char * const b, const size_t len) {
+    for (size_t i = 0; i < len; ++i) {
+        unsigned int ca = ((unsigned char *)a)[i];
+        unsigned int cb = ((unsigned char *)b)[i];
+        if (ca != cb) {
+            ca |= 0x20;
+            cb |= 0x20;
+            if (ca       !=       cb) return 0;
+            if (ca < 'a' || 'z' < ca) return 0;
+            if (cb < 'a' || 'z' < cb) return 0;
+        }
+    }
+    return 1;
+}
+
+int buffer_eq_icase_ss(const char * const a, const size_t alen, const char * const b, const size_t blen) {
+    /* 1 = equal; 0 = not equal */ /* short string sizes expected (< INT_MAX) */
+    return (alen == blen && buffer_eq_icase_ssn(a, b, blen));
+}
+
+int buffer_eq_icase_slen(const buffer * const b, const char * const s, const size_t slen) {
+    /* Note: b must be initialized, i.e. 0 != b->used; uninitialized is not eq*/
+    /* 1 = equal; 0 = not equal */ /* short string sizes expected (< INT_MAX) */
+    return (b->used == slen + 1 && buffer_eq_icase_ssn(b->ptr, s, slen));
+}
+
+int buffer_eq_slen(const buffer * const b, const char * const s, const size_t slen) {
+    /* Note: b must be initialized, i.e. 0 != b->used; uninitialized is not eq*/
+    /* 1 = equal; 0 = not equal */ /* short string sizes expected (< INT_MAX) */
+    return (b->used == slen + 1 && 0 == memcmp(b->ptr, s, slen));
+}
+
+
 /**
  * check if two buffer contain the same data
  */
@@ -369,28 +403,8 @@ int buffer_is_equal_string(const buffer *a, const char *s, size_t b_len) {
 int buffer_is_equal_caseless_string(const buffer *a, const char *s, size_t b_len) {
 	force_assert(NULL != a && NULL != s);
 	force_assert(b_len + 1 > b_len);
-
 	/* 1 = equal; 0 = not equal */
-	return (a->used == b_len + 1 && 0 == strncasecmp(a->ptr, s, b_len));
-}
-
-int buffer_caseless_compare(const char *a, size_t a_len, const char *b, size_t b_len) {
-	size_t const len = (a_len < b_len) ? a_len : b_len;
-	size_t i;
-
-	for (i = 0; i < len; ++i) {
-		unsigned char ca = a[i], cb = b[i];
-		if (ca == cb) continue;
-
-		/* always lowercase for transitive results */
-		if (ca >= 'A' && ca <= 'Z') ca |= 32;
-		if (cb >= 'A' && cb <= 'Z') cb |= 32;
-
-		if (ca == cb) continue;
-		return ((int)ca) - ((int)cb);
-	}
-	if (a_len == b_len) return 0;
-	return a_len < b_len ? -1 : 1;
+	return buffer_eq_icase_slen(a, s, b_len);
 }
 
 int buffer_is_equal_right_len(const buffer *b1, const buffer *b2, size_t len) {

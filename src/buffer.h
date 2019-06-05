@@ -106,11 +106,22 @@ static inline int buffer_is_empty(const buffer *b);
 /* NULL buffer, empty buffer (used == 0) or empty string (used == 1) */
 static inline int buffer_string_is_empty(const buffer *b);
 
+__attribute_pure__
+int buffer_eq_icase_ssn(const char * const a, const char * const b, const size_t len);
+
+__attribute_pure__
+int buffer_eq_icase_ss(const char * const a, const size_t alen, const char * const b, const size_t blen);
+
+__attribute_pure__
+int buffer_eq_icase_slen(const buffer * const b, const char * const s, const size_t slen);
+
+__attribute_pure__
+int buffer_eq_slen(const buffer * const b, const char * const s, const size_t slen);
+
 int buffer_is_equal(const buffer *a, const buffer *b);
 int buffer_is_equal_right_len(const buffer *a, const buffer *b, size_t len);
 int buffer_is_equal_string(const buffer *a, const char *s, size_t b_len);
 int buffer_is_equal_caseless_string(const buffer *a, const char *s, size_t b_len);
-int buffer_caseless_compare(const char *a, size_t a_len, const char *b, size_t b_len);
 
 void buffer_substr_replace (buffer *b, size_t offset, size_t len, const buffer *replace);
 
