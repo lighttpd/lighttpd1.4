@@ -637,7 +637,7 @@ static void mod_auth_digest_mutate_sha256(http_auth_info_t *ai, const char *m, c
     SHA256_Update(&ctx, (unsigned char *)uri, strlen(uri));
   #if 0
     /* qop=auth-int not supported, already checked in caller */
-    if (qop && strcasecmp(qop, "auth-int") == 0) {
+    if (qop && buffer_eq_icase_ss(qop, strlen(qop), CONST_STR_LEN("auth-int"))){
         SHA256_Update(&ctx, CONST_STR_LEN(":"));
         SHA256_Update(&ctx, (unsigned char *) [body checksum], ai->dlen*2);
     }
@@ -705,7 +705,7 @@ static void mod_auth_digest_mutate_sha512_256(http_auth_info_t *ai, const char *
     SHA512_256_Update(&ctx, (unsigned char *)uri, strlen(uri));
   #if 0
     /* qop=auth-int not supported, already checked in caller */
-    if (qop && strcasecmp(qop, "auth-int") == 0) {
+    if (qop && buffer_eq_icase_ss(qop, strlen(qop), CONST_STR_LEN("auth-int"))){
         SHA512_256_Update(&ctx, CONST_STR_LEN(":"));
         SHA512_256_Update(&ctx, (unsigned char *)[body checksum], ai->dlen*2);
     }
@@ -777,7 +777,7 @@ static void mod_auth_digest_mutate_md5(http_auth_info_t *ai, const char *m, cons
     li_MD5_Update(&ctx, (unsigned char *)uri, strlen(uri));
   #if 0
     /* qop=auth-int not supported, already checked in caller */
-    if (qop && strcasecmp(qop, "auth-int") == 0) {
+    if (qop && buffer_eq_icase_ss(qop, strlen(qop), CONST_STR_LEN("auth-int"))){
         li_MD5_Update(&ctx, CONST_STR_LEN(":"));
         li_MD5_Update(&ctx, (unsigned char *) [body checksum], ai->dlen*2);
     }
@@ -1055,7 +1055,7 @@ static handler_t mod_auth_check_digest(server *srv, connection *con, void *p_d, 
 		}
 	}
 
-	if (qop && strcasecmp(qop, "auth-int") == 0) {
+	if (qop && buffer_eq_icase_ss(qop, strlen(qop), CONST_STR_LEN("auth-int"))){
 		log_error_write(srv, __FILE__, __LINE__, "s",
 				"digest: qop=auth-int not supported");
 

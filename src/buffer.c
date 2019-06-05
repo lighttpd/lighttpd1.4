@@ -716,7 +716,11 @@ void buffer_copy_string_encoded_cgi_varnames(buffer *b, const char *s, size_t s_
 
 	buffer_string_prepare_copy(b, s_len + 5);
 
-	if (is_http_header && NULL != s && 0 != strcasecmp(s, "CONTENT-TYPE")) {
+	if (is_http_header) {
+		if (s_len == 12 && buffer_eq_icase_ssn(s, "Content-Type", 12)) {
+			buffer_copy_string_len(b, CONST_STR_LEN("CONTENT_TYPE"));
+			return;
+		}
 		buffer_copy_string_len(b, CONST_STR_LEN("HTTP_"));
 		j = 5; /* "HTTP_" */
 	}

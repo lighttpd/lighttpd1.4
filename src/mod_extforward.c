@@ -228,12 +228,12 @@ SETDEFAULTS_FUNC(mod_extforward_set_defaults) {
 
 		if (array_get_element(config->value, "extforward.forwarder")) {
 			const data_string * const allds = (data_string *)array_get_element(s->forwarder, "all");
-			s->forward_all = (NULL == allds) ? 0 : (0 == strcasecmp(allds->value->ptr, "trust")) ? 1 : -1;
+			s->forward_all = (NULL == allds) ? 0 : buffer_eq_icase_slen(allds->value, CONST_STR_LEN("trust")) ? 1 : -1;
 			for (size_t j = 0; j < s->forwarder->used; ++j) {
 				data_string * const ds = (data_string *)s->forwarder->data[j];
 				char * const nm_slash = strchr(ds->key->ptr, '/');
-				if (0 != strcasecmp(ds->value->ptr, "trust")) {
-					if (0 != strcasecmp(ds->value->ptr, "untrusted")) {
+				if (!buffer_eq_icase_slen(ds->value, CONST_STR_LEN("trust"))) {
+					if (!buffer_eq_icase_slen(ds->value, CONST_STR_LEN("untrusted"))) {
 						log_error_write(srv, __FILE__, __LINE__, "sbsbs", "ERROR: expect \"trust\", not \"", ds->key, "\" => \"", ds->value, "\"; treating as untrusted");
 					}
 					if (NULL != nm_slash) {
