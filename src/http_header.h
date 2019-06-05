@@ -39,6 +39,7 @@ enum http_header_e {
  ,HTTP_HEADER_X_FORWARDED_PROTO = 0x04000000
 };
 
+__attribute_pure__
 enum http_header_e http_header_hkey_get(const char *s, size_t slen);
 
 buffer * http_header_response_get(connection *con, enum http_header_e id, const char *k, size_t klen);

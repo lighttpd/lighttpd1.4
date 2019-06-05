@@ -53,6 +53,7 @@ typedef struct stat_cache {
 
 
 /* the famous DJB hash function for strings */
+__attribute_pure__
 static uint32_t djbhash(const char *str, const size_t len)
 {
     const unsigned char * const s = (const unsigned char *)str;
@@ -62,6 +63,7 @@ static uint32_t djbhash(const char *str, const size_t len)
 }
 
 
+__attribute_pure__
 static uint32_t hashme(const char *str, const size_t len)
 {
     /* strip highest bit of hash value for splaytree */
