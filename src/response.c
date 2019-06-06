@@ -23,6 +23,31 @@
 #include <string.h>
 #include <time.h>
 
+__attribute_cold__
+static int http_response_omit_header(connection *con, const data_string * const ds) {
+    const size_t klen = buffer_string_length(ds->key);
+    if (klen == sizeof("X-Sendfile")-1
+        && buffer_eq_icase_ssn(ds->key->ptr,CONST_STR_LEN("X-Sendfile")))
+        return 1;
+    if (klen >= sizeof("X-LIGHTTPD-")-1
+        && buffer_eq_icase_ssn(ds->key->ptr,CONST_STR_LEN("X-LIGHTTPD-"))) {
+        if (klen == sizeof("X-LIGHTTPD-KBytes-per-second")-1
+            && buffer_eq_icase_ssn(ds->key->ptr+sizeof("X-LIGHTTPD-")-1,
+                                   CONST_STR_LEN("KBytes-per-second"))) {
+            /* "X-LIGHTTPD-KBytes-per-second" */
+            long limit = strtol(ds->value->ptr, NULL, 10);
+            if (limit > 0
+                && (limit < con->conf.kbytes_per_second
+                    || 0 == con->conf.kbytes_per_second)) {
+                if (limit > USHRT_MAX) limit= USHRT_MAX;
+                con->conf.kbytes_per_second = limit;
+            }
+        }
+        return 1;
+    }
+    return 0;
+}
+
 int http_response_write_header(server *srv, connection *con) {
 	buffer * const b = chunkqueue_prepend_buffer_open(con->write_queue);
 
@@ -60,23 +85,10 @@ int http_response_write_header(server *srv, connection *con) {
 	for (size_t i = 0; i < con->response.headers->used; ++i) {
 		const data_string * const ds = (data_string *)con->response.headers->data[i];
 
-		if (buffer_string_is_empty(ds->value) || buffer_string_is_empty(ds->key)) continue;
-		if ((ds->key->ptr[0] & 0xdf) == 'X') {
-			if (0 == strncasecmp(ds->key->ptr, CONST_STR_LEN("X-Sendfile"))) continue;
-			if (0 == strncasecmp(ds->key->ptr, CONST_STR_LEN("X-LIGHTTPD-"))) {
-				if (0 == strncasecmp(ds->key->ptr+sizeof("X-LIGHTTPD-")-1, CONST_STR_LEN("KBytes-per-second"))) {
-					/* "X-LIGHTTPD-KBytes-per-second" */
-					long limit = strtol(ds->value->ptr, NULL, 10);
-					if (limit > 0
-					    && (limit < con->conf.kbytes_per_second
-					        || 0 == con->conf.kbytes_per_second)) {
-						if (limit > USHRT_MAX) limit= USHRT_MAX;
-						con->conf.kbytes_per_second = limit;
-					}
-				}
-				continue;
-			}
-		}
+		if (buffer_string_is_empty(ds->value)) continue;
+		if (buffer_string_is_empty(ds->key)) continue;
+		if ((ds->key->ptr[0] & 0xdf)=='X' && http_response_omit_header(con, ds))
+			continue;
 
 		buffer_append_string_len(b, CONST_STR_LEN("\r\n"));
 		buffer_append_string_buffer(b, ds->key);
