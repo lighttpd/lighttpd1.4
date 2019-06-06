@@ -171,7 +171,6 @@
 #include <stdio.h>      /* rename() */
 #include <stdlib.h>     /* strtol() */
 #include <string.h>
-#include <strings.h>    /* strncasecmp() */
 #include <unistd.h>     /* getpid() linkat() rmdir() unlinkat() */
 
 #ifndef _D_EXACT_NAMLEN
@@ -5184,7 +5183,7 @@ mod_webdav_lock (connection * const con, const plugin_config * const pconf)
         const char *p = h->ptr;
         do {
             if ((*p | 0x20) == 's'
-                && 0 == strncasecmp(p, CONST_STR_LEN("second-"))) {
+                && buffer_eq_icase_ssn(p, CONST_STR_LEN("second-"))) {
                 long t = strtol(p+sizeof("second-")-1, NULL, 10);
                 if (0 < t && t < lockdata.timeout)
                     lockdata.timeout = t > 5 ? t : 5;
@@ -5200,7 +5199,7 @@ mod_webdav_lock (connection * const con, const plugin_config * const pconf)
             }
           #if 0
             else if ((*p | 0x20) == 'i'
-                     && 0 == strncasecmp(p, CONST_STR_LEN("infinity"))) {
+                     && buffer_eq_icase_ssn(p, CONST_STR_LEN("infinity"))) {
                 lockdata.timeout = INT32_MAX;
                 break;
             }

@@ -15,7 +15,6 @@
 
 #include <sys/types.h>
 #include <sys/stat.h>
-#include "sys-strings.h"
 
 #include <fcntl.h>
 #include <unistd.h>
@@ -798,7 +797,7 @@ static int mod_compress_contains_encoding(const char *headervalue, const char *e
 		while (*m == ',' || *m == ' ' || *m == '\t') {
 			++m;
 		}
-		if (0 == strncasecmp(m, encoding, len)) {
+		if (buffer_eq_icase_ssn(m, encoding, len)) {
 			/*(not a full HTTP field parse: not parsing for q-values and not handling q=0)*/
 			m += len;
 			if (*m == '\0' || *m == ',' || *m == ';' || *m == ' ' || *m == '\t')

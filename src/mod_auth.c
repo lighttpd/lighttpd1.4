@@ -560,7 +560,7 @@ static handler_t mod_auth_check_basic(server *srv, connection *con, void *p_d, c
 		return mod_auth_send_401_unauthorized_basic(srv, con, require->realm);
 	}
 
-	if (0 != strncasecmp(b->ptr, "Basic ", sizeof("Basic ")-1)) {
+	if (!buffer_eq_icase_ssn(b->ptr, CONST_STR_LEN("Basic "))) {
 		return mod_auth_send_401_unauthorized_basic(srv, con, require->realm);
 	}
       #ifdef __COVERITY__
@@ -951,7 +951,7 @@ static handler_t mod_auth_check_digest(server *srv, connection *con, void *p_d, 
 		return mod_auth_send_401_unauthorized_digest(srv, con, require, 0);
 	}
 
-	if (0 != strncasecmp(vb->ptr, "Digest ", sizeof("Digest ")-1)) {
+	if (!buffer_eq_icase_ssn(vb->ptr, CONST_STR_LEN("Digest "))) {
 		return mod_auth_send_401_unauthorized_digest(srv, con, require, 0);
 	} else {
 		size_t n = buffer_string_length(vb);

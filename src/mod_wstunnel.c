@@ -411,7 +411,7 @@ static int header_contains_token (buffer *b, const char *m, size_t mlen)
 {
     for (char *s = b->ptr; s; s = strchr(s, ',')) {
         while (*s == ' ' || *s == '\t' || *s == ',') ++s;
-        if (0 == strncasecmp(s, m, mlen)) {
+        if (buffer_eq_icase_ssn(s, m, mlen)) {
             s += mlen;
             if (*s == '\0' || *s == ' ' || *s == '\t' || *s == ',' || *s == ';')
                 return 1;
@@ -535,7 +535,7 @@ static handler_t wstunnel_handler_setup (server *srv, connection *con, plugin_da
         if (NULL != vb) {
             for (const char *s = vb->ptr; *s; ++s) {
                 while (*s==' '||*s=='\t'||*s=='\r'||*s=='\n') ++s;
-                if (0 == strncasecmp(s, "binary", sizeof("binary")-1)) {
+                if (buffer_eq_icase_ssn(s, CONST_STR_LEN("binary"))) {
                     s += sizeof("binary")-1;
                     while (*s==' '||*s=='\t'||*s=='\r'||*s=='\n') ++s;
                     if (*s==','||*s=='\0') {
@@ -544,7 +544,7 @@ static handler_t wstunnel_handler_setup (server *srv, connection *con, plugin_da
                         break;
                     }
                 }
-                else if (0 == strncasecmp(s, "base64", sizeof("base64")-1)) {
+                else if (buffer_eq_icase_ssn(s, CONST_STR_LEN("base64"))) {
                     s += sizeof("base64")-1;
                     while (*s==' '||*s=='\t'||*s=='\r'||*s=='\n') ++s;
                     if (*s==','||*s=='\0') {

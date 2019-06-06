@@ -471,7 +471,7 @@ static handler_t mod_authn_gssapi_check (server *srv, connection *con, void *p_d
         return mod_authn_gssapi_send_401_unauthorized_negotiate(con);
     }
 
-    if (0 != strncasecmp(vb->ptr, "Negotiate ", sizeof("Negotiate ")-1)) {
+    if (!buffer_eq_icase_ssn(vb->ptr, CONST_STR_LEN("Negotiate "))) {
         return mod_authn_gssapi_send_400_bad_request(srv, con);
     }
 

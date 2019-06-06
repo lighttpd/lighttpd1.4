@@ -104,7 +104,7 @@ static void mod_authn_add_scheme (server *srv, buffer *host)
             if (!buffer_string_is_empty(srv->tmp_buf))
                 buffer_append_string_len(srv->tmp_buf, CONST_STR_LEN(","));
             for (j = 0; j < sizeof(schemes)/sizeof(char *); ++j) {
-                if (0 == strncasecmp(b, schemes[j], strlen(schemes[j]))) {
+                if (buffer_eq_icase_ssn(b, schemes[j], strlen(schemes[j]))) {
                     break;
                 }
             }
