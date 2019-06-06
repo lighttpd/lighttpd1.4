@@ -227,7 +227,7 @@ static handler_t http_response_physical_path_check(server *srv, connection *con)
 			size_t len = strlen(pathinfo), reqlen;
 			if (con->conf.force_lowercase_filenames
 			    && len <= (reqlen = buffer_string_length(con->request.uri))
-			    && 0 == strncasecmp(con->request.uri->ptr + reqlen - len, pathinfo, len)) {
+			    && buffer_eq_icase_ssn(con->request.uri->ptr + reqlen - len, pathinfo, len)) {
 				/* attempt to preserve case-insensitive PATH_INFO
 				 * (works in common case where mod_alias, mod_magnet, and other modules
 				 *  have not modified the PATH_INFO portion of request URI, or did so

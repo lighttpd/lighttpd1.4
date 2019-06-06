@@ -19,7 +19,6 @@
 
 #include <time.h>
 
-#include "sys-strings.h"
 #include "sys-socket.h"
 #include <unistd.h>
 
@@ -641,7 +640,7 @@ static void http_response_xsendfile (server *srv, connection *con, buffer *path,
 			if (dlen <= xlen
 			    && (!con->conf.force_lowercase_filenames
 				? 0 == memcmp(path->ptr, ds->value->ptr, dlen)
-				: 0 == strncasecmp(path->ptr, ds->value->ptr, dlen))) {
+				: buffer_eq_icase_ssn(path->ptr, ds->value->ptr, dlen))) {
 				break;
 			}
 		}
@@ -715,7 +714,7 @@ static void http_response_xsendfile2(server *srv, connection *con, const buffer 
                 if (dlen <= xlen
                     && (!con->conf.force_lowercase_filenames
                     ? 0 == memcmp(b->ptr, ds->value->ptr, dlen)
-                    : 0 == strncasecmp(b->ptr, ds->value->ptr, dlen))) {
+                    : buffer_eq_icase_ssn(b->ptr, ds->value->ptr, dlen))) {
                     break;
                 }
             }
@@ -985,8 +984,11 @@ static int http_response_process_headers(server *srv, connection *con, http_resp
                         con->http_status = 502; /* Bad Gateway */
                         break;
                     }
-                } else if (id == HTTP_HEADER_OTHER && key_len > 9
-                           && 0==strncasecmp(key, CONST_STR_LEN("Variable-"))) {
+                }
+                else if (id == HTTP_HEADER_OTHER && key_len > 9
+                         && (key[0] & 0xdf) == 'V'
+                         && buffer_eq_icase_ssn(key,
+                                                CONST_STR_LEN("Variable-"))) {
                     http_header_env_append(con, key + 9, key_len - 9, value, strlen(value));
                 }
                 continue;

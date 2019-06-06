@@ -639,7 +639,7 @@ const buffer * stat_cache_mimetype_by_ext(const connection *con, const char *nam
             /* suffix match */
             const data_string *ds = (data_string *)con->conf.mimetypes->data[i];
             const size_t klen = buffer_string_length(ds->key);
-            if (klen <= nlen && 0 == strncasecmp(end-klen, ds->key->ptr, klen))
+            if (klen <= nlen && buffer_eq_icase_ssn(end-klen, ds->key->ptr, klen))
                 return ds->value;
         }
     }

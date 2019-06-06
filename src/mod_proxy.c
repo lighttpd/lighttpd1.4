@@ -309,7 +309,7 @@ static const buffer * http_header_remap_host_match (buffer *b, size_t off, http_
                 if (NULL == k) continue;
                 mlen = buffer_string_length(k);
             }
-            if (mlen == alen && 0 == strncasecmp(s, k->ptr, alen)) {
+            if (buffer_eq_icase_ss(s, alen, k->ptr, mlen)) {
                 if (buffer_is_equal_string(ds->value, CONST_STR_LEN("-"))) {
                     return remap_hdrs->http_host;
                 }
@@ -462,7 +462,7 @@ static void http_header_remap_setcookie (buffer *b, size_t off, http_header_rema
             ++e;
             switch ((int)(e - s - 1)) {
               case 4:
-                if (0 == strncasecmp(s, "path", 4)) {
+                if (buffer_eq_icase_ssn(s, "path", 4)) {
                     if (*e == '"') ++e;
                     if (*e != '/') continue;
                     off = (size_t)(e - b->ptr);
@@ -472,7 +472,7 @@ static void http_header_remap_setcookie (buffer *b, size_t off, http_header_rema
                 }
                 break;
               case 6:
-                if (0 == strncasecmp(s, "domain", 6)) {
+                if (buffer_eq_icase_ssn(s, "domain", 6)) {
                     size_t alen = 0;
                     if (*e == '"') ++e;
                     if (*e == '.') ++e;

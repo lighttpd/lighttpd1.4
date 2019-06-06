@@ -17,7 +17,6 @@
 
 #include <sys/types.h>
 #include <sys/stat.h>
-#include "sys-strings.h"
 #include <sys/wait.h>
 
 #include <ctype.h>
@@ -574,7 +573,7 @@ static int process_ssi_stmt(server *srv, connection *con, handler_ctx *p, const 
 			if (!con->conf.force_lowercase_filenames
 			    ? buffer_is_equal_right_len(con->physical.path, con->physical.rel_path, remain)
 			    :(buffer_string_length(con->physical.path) >= remain
-			      && 0 == strncasecmp(con->physical.path->ptr+buffer_string_length(con->physical.path)-remain, con->physical.rel_path->ptr+i, remain))) {
+			      && buffer_eq_icase_ssn(con->physical.path->ptr+buffer_string_length(con->physical.path)-remain, con->physical.rel_path->ptr+i, remain))) {
 				buffer_copy_string_len(p->stat_fn, con->physical.path->ptr, buffer_string_length(con->physical.path)-remain);
 				buffer_append_string_len(p->stat_fn, srv->tmp_buf->ptr+i, buffer_string_length(srv->tmp_buf)-i);
 			} else {

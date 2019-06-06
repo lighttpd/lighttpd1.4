@@ -400,7 +400,7 @@ array_match_key_prefix_nc_klen (const array * const a, const char * const s, con
     for (size_t i = 0; i < a->used; ++i) {
         const buffer * const key = a->data[i]->key;
         const size_t klen = buffer_string_length(key);
-        if (klen <= slen && 0 == strncasecmp(s, key->ptr, klen))
+        if (klen <= slen && buffer_eq_icase_ssn(s, key->ptr, klen))
             return a->data[i];
     }
     return NULL;
@@ -440,7 +440,7 @@ array_match_value_prefix_nc (const array * const a, const buffer * const b)
     for (size_t i = 0; i < a->used; ++i) {
         const buffer * const value = ((data_string *)a->data[i])->value;
         const size_t vlen = buffer_string_length(value);
-        if (vlen <= blen && 0 == strncasecmp(b->ptr, value->ptr, vlen))
+        if (vlen <= blen && buffer_eq_icase_ssn(b->ptr, value->ptr, vlen))
             return value;
     }
     return NULL;
@@ -470,7 +470,7 @@ array_match_key_suffix_nc (const array * const a, const buffer * const b)
     for (size_t i = 0; i < a->used; ++i) {
         const buffer * const key = a->data[i]->key;
         const size_t klen = buffer_string_length(key);
-        if (klen <= blen && 0 == strncasecmp(end - klen, key->ptr, klen))
+        if (klen <= blen && buffer_eq_icase_ssn(end - klen, key->ptr, klen))
             return a->data[i];
     }
     return NULL;
@@ -500,7 +500,7 @@ array_match_value_suffix_nc (const array * const a, const buffer * const b)
     for (size_t i = 0; i < a->used; ++i) {
         const buffer * const value = ((data_string *)a->data[i])->value;
         const size_t vlen = buffer_string_length(value);
-        if (vlen <= blen && 0 == strncasecmp(end - vlen, value->ptr, vlen))
+        if (vlen <= blen && buffer_eq_icase_ssn(end - vlen, value->ptr, vlen))
             return value;
     }
     return NULL;
