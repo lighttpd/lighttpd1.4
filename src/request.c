@@ -452,18 +452,8 @@ static void init_parse_header_state(parse_header_state* state) {
  *
  * returns 0 on success, HTTP status on error
  */
-static int parse_single_header(server *srv, connection *con, parse_header_state *state, char *k, size_t klen, char *v, size_t vlen) {
-    const enum http_header_e id = http_header_hkey_get(k, klen);
+static int parse_single_header(server *srv, connection *con, parse_header_state *state, const enum http_header_e id, char *k, size_t klen, char *v, size_t vlen) {
     buffer **saveb = NULL;
-
-    /* strip leading whitespace */
-    for (; vlen > 0 && (v[0] == ' ' || v[0] == '\t'); ++v, --vlen) ;
-
-    /* strip trailing whitespace */
-    while (vlen > 0 && (v[vlen - 1] == ' ' || v[vlen - 1] == '\t')) --vlen;
-
-    /* empty header-fields are not allowed by HTTP-RFC, we just ignore them */
-    if (0 == vlen) return 0; /* ignore header */
 
     /*
      * Note: k might not be '\0'-terminated
@@ -554,7 +544,6 @@ static int parse_single_header(server *srv, connection *con, parse_header_state 
         break;
     }
 
-    con->request.htags |= id;
     http_header_request_append(con, id, k, klen, v, vlen);
 
     if (saveb) {
@@ -598,6 +587,10 @@ static size_t http_request_parse_reqline(server *srv, connection *con, buffer *h
 	ptr[i] = '\0';
 	state->reqline_len = i+1;
 
+	if (NULL == proto) {
+		return http_request_header_line_invalid(srv, 400, "incomplete request line -> 400");
+	}
+
 			{
 				char *nuri = NULL;
 				size_t j, jlen;
@@ -608,10 +601,6 @@ static size_t http_request_parse_reqline(server *srv, connection *con, buffer *h
 					ptr[i-1] = '\0';
 				} else if (http_header_strict) { /* '\n' */
 					return http_request_header_line_invalid(srv, 400, "missing CR before LF in header -> 400");
-				}
-
-				if (NULL == proto) {
-					return http_request_header_line_invalid(srv, 400, "incomplete request line -> 400");
 				}
 
 				con->request.http_method = get_http_method_key(ptr, uri - 1 - ptr);
@@ -689,11 +678,147 @@ static size_t http_request_parse_reqline(server *srv, connection *con, buffer *h
 	return 0;
 }
 
+__attribute_noinline__
+static int http_request_parse_header_other(server *srv, const char *k, int klen, const unsigned int http_header_strict) {
+    for (int i = 0; i < klen; ++i) {
+        if (light_isalpha(k[i]) || k[i] == '-') continue; /*(common cases)*/
+        /**
+         * 1*<any CHAR except CTLs or separators>
+         * CTLs == 0-31 + 127, CHAR = 7-bit ascii (0..127)
+         *
+         */
+        switch(k[i]) {
+        case ' ':
+        case '\t':
+            return http_request_header_line_invalid(srv, 400, "WS character in key -> 400");
+        case '(':
+        case ')':
+        case '<':
+        case '>':
+        case '@':
+        case ',':
+        case ';':
+        case '\\':
+        case '\"':
+        case '/':
+        case '[':
+        case ']':
+        case '?':
+        case '=':
+        case '{':
+        case '}':
+            return http_request_header_char_invalid(srv, k[i], "invalid character in header key -> 400");
+        default:
+            if (http_header_strict ? (k[i] < 32 || ((unsigned char *)k)[i] >= 127) : k[i] == '\0')
+                return http_request_header_char_invalid(srv, k[i], "invalid character in header key -> 400");
+            break; /* ok */
+        }
+    }
+    return 0;
+}
+
+static int http_request_parse_headers(server *srv, connection *con, buffer *hdrs, parse_header_state *state) {
+    char * const ptr = hdrs->ptr;
+    const unsigned int http_header_strict = (con->conf.http_parseopts & HTTP_PARSEOPT_HEADER_STRICT);
+    size_t i = state->reqline_len;
+
+    if (ptr[i] == ' ' || ptr[i] == '\t') {
+        return http_request_header_line_invalid(srv, 400, "WS at the start of first line -> 400");
+    }
+
+    const size_t ilen = buffer_string_length(hdrs);
+    for (; i < ilen; ++i) {
+        char *k = ptr + i;
+        char *end = k;
+        while ((end = memchr(end, '\n', ilen - i)) && (end[1] == ' ' || end[1] == '\t')) {
+            /* line folding */
+            if (end != k && end[-1] == '\r')
+                end[-1] = ' ';
+            else if (http_header_strict)
+                return http_request_header_line_invalid(srv, 400, "missing CR before LF in header -> 400");
+            end[0] = ' ';
+            end += 2;
+        }
+        if (NULL == end) /*(should not happen)*/
+            return http_request_header_line_invalid(srv, 400, "missing LF in header -> 400");
+        i = end - ptr;
+        if (i+1 == ilen) break; /* end of headers */
+        if (end != k && end[-1] == '\r')
+            --end;
+        else if (http_header_strict)
+            return http_request_header_line_invalid(srv, 400, "missing CR before LF in header -> 400");
+        /* remove trailing whitespace from value */
+        while (end != k && (end[-1] == ' ' || end[-1] == '\t')) --end;
+        /*(for if value is further parsed (in parse_single_header())
+         * and '\0' is expected at end of string)*/
+        *end = '\0';
+
+        char *colon = memchr(k, ':', end - k);
+        if (NULL == colon)
+            return http_request_header_line_invalid(srv, 400, "invalid header missing ':' -> 400");
+
+        char *v = colon + 1;
+
+        /* RFC7230 Hypertext Transfer Protocol (HTTP/1.1): Message Syntax and Routing
+         * 3.2.4.  Field Parsing
+         * [...]
+         * No whitespace is allowed between the header field-name and colon.  In
+         * the past, differences in the handling of such whitespace have led to
+         * security vulnerabilities in request routing and response handling.  A
+         * server MUST reject any received request message that contains
+         * whitespace between a header field-name and colon with a response code
+         * of 400 (Bad Request).  A proxy MUST remove any such whitespace from a
+         * response message before forwarding the message downstream.
+         */
+        /* (line k[-1] is always preceded by a '\n',
+         *  including first header after request-line,
+         *  so no need to check colon != k) */
+        if (colon[-1] == ' ' || colon[-1] == '\t') {
+            if (http_header_strict) {
+                return http_request_header_line_invalid(srv, 400, "invalid whitespace between field-name and colon -> 400");
+            }
+            else {
+                /* remove trailing whitespace from key(if !http_header_strict)*/
+                do { --colon; } while (colon[-1] == ' ' || colon[-1] == '\t');
+            }
+        }
+
+        const int klen = (int)(colon - k);
+        const enum http_header_e id = http_header_hkey_get(k, klen);
+
+        if (id == HTTP_HEADER_OTHER
+            && 0 != http_request_parse_header_other(srv, k, klen, http_header_strict)) {
+            return 400;
+        }
+
+        /* remove leading whitespace from value */
+        while (*v == ' ' || *v == '\t') ++v;
+
+        const int vlen = (int)(end - v);
+        /* empty header-fields are not allowed by HTTP-RFC, we just ignore them */
+        if (0 == vlen) continue; /* ignore header */
+
+        if (http_header_strict) {
+            for (int j = 0; j < vlen; ++j) {
+                if ((((unsigned char *)v)[j] < 32 && v[j] != '\t') || v[j]==127)
+                    return http_request_header_char_invalid(srv, v[j], "invalid character in header -> 400");
+            }
+        }
+        else {
+            for (int j = 0; j < vlen; ++j) {
+                if (v[j] == '\0')
+                    return http_request_header_char_invalid(srv, v[j], "invalid character in header -> 400");
+            }
+        }
+
+        int status = parse_single_header(srv, con, state, id, k, (size_t)klen, v, (size_t)vlen);
+        if (0 != status) return status;
+    }
+
+    return 0;
+}
+
 int http_request_parse(server *srv, connection *con, buffer *hdrs) {
-	char * const ptr = hdrs->ptr;
-	char *value = NULL;
-	size_t i, first, ilen;
-	const unsigned int http_header_strict = (con->conf.http_parseopts & HTTP_PARSEOPT_HEADER_STRICT);
 	int status;
 
 	parse_header_state state;
@@ -702,137 +827,8 @@ int http_request_parse(server *srv, connection *con, buffer *hdrs) {
 	status = http_request_parse_reqline(srv, con, hdrs, &state);
 	if (0 != status) return status;
 
-	i = first = state.reqline_len;
-
-	if (ptr[i] == ' ' || ptr[i] == '\t') {
-		return http_request_header_line_invalid(srv, 400, "WS at the start of first line -> 400");
-	}
-
-	ilen = buffer_string_length(hdrs);
-	for (int is_key = 1, key_len = 0; i < ilen; ++i) {
-		char *cur = ptr + i;
-
-		if (is_key) {
-			/**
-			 * 1*<any CHAR except CTLs or separators>
-			 * CTLs == 0-31 + 127, CHAR = 7-bit ascii (0..127)
-			 *
-			 */
-			switch(*cur) {
-			case ' ':
-			case '\t':
-				/* RFC7230 Hypertext Transfer Protocol (HTTP/1.1): Message Syntax and Routing
-				 * 3.2.4.  Field Parsing
-				 * [...]
-				 * No whitespace is allowed between the header field-name and colon.  In
-				 * the past, differences in the handling of such whitespace have led to
-				 * security vulnerabilities in request routing and response handling.  A
-				 * server MUST reject any received request message that contains
-				 * whitespace between a header field-name and colon with a response code
-				 * of 400 (Bad Request).  A proxy MUST remove any such whitespace from a
-				 * response message before forwarding the message downstream.
-				 */
-				if (http_header_strict)
-					return http_request_header_line_invalid(srv, 400, "invalid whitespace between field-name and colon -> 400");
-				/* skip every thing up to the : */
-				do { ++cur; } while (*cur == ' ' || *cur == '\t');
-				if (*cur != ':') {
-					return http_request_header_line_invalid(srv, 400, "WS character in key -> 400");
-				}
-				/* fall through */
-			case ':':
-				is_key = 0;
-				key_len = i - first;
-				value = cur + 1;
-				i = cur - ptr;
-				break;
-			case '(':
-			case ')':
-			case '<':
-			case '>':
-			case '@':
-			case ',':
-			case ';':
-			case '\\':
-			case '\"':
-			case '/':
-			case '[':
-			case ']':
-			case '?':
-			case '=':
-			case '{':
-			case '}':
-				return http_request_header_char_invalid(srv, *cur, "invalid character in header key -> 400");
-			case '\r':
-				if (ptr[i+1] == '\n' && i == first) {
-					/* End of Header */
-					++i;
-				} else {
-					return http_request_header_line_invalid(srv, 400, "CR without LF -> 400");
-				}
-				break;
-			case '\n':
-				if (http_header_strict) {
-					return http_request_header_line_invalid(srv, 400, "missing CR before LF in header -> 400");
-				} else if (i == first) {
-					/* End of Header */
-					break;
-				}
-				/* fall through */
-			default:
-				if (http_header_strict ? (*cur < 32 || ((unsigned char)*cur) >= 127) : *cur == '\0') {
-					return http_request_header_char_invalid(srv, *cur, "invalid character in header key -> 400");
-				}
-				/* ok */
-				break;
-			}
-		} else {
-			switch(*cur) {
-			case '\r':
-				if (cur[1] != '\n') {
-					return http_request_header_line_invalid(srv, 400, "CR without LF -> 400");
-				}
-				if (cur[2] == ' ' || cur[2] == '\t') { /* header line folding */
-					cur[0] = ' ';
-					cur[1] = ' ';
-					i += 2;
-					continue;
-				}
-				++i;
-				/* fall through */
-			case '\n':
-					if (*cur == '\n') {
-						if (http_header_strict) {
-							return http_request_header_line_invalid(srv, 400, "missing CR before LF in header -> 400");
-						}
-						if (cur[1] == ' ' || cur[1] == '\t') { /* header line folding */
-							cur[0] = ' ';
-							i += 1;
-							continue;
-						}
-					}
-
-					/* End of Headerline */
-					*cur = '\0'; /*(for if value is further parsed and '\0' is expected at end of string)*/
-
-					status = parse_single_header(srv, con, &state, ptr + first, key_len, value, cur - value);
-					if (0 != status) return status;
-
-					first = i+1;
-					is_key = 1;
-					value = NULL;
-				break;
-			case ' ':
-			case '\t':
-				break;
-			default:
-				if (http_header_strict ? (*cur >= 0 && *cur < 32) : *cur == '\0') {
-					return http_request_header_char_invalid(srv, *cur, "invalid character in header -> 400");
-				}
-				break;
-			}
-		}
-	}
+	status = http_request_parse_headers(srv, con, hdrs, &state);
+	if (0 != status) return status;
 
 	/* do some post-processing */
 
