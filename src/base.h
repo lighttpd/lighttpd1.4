@@ -404,8 +404,6 @@ struct server {
 	/* caches */
 	mtime_cache_type mtime_cache[FILE_CACHE_MAX];
 
-	array *split_vals;
-
 	log_error_st *errh;
 
 	/* Timestamps */

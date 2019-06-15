@@ -453,7 +453,6 @@ int main (void)
     memset(&srv, 0, sizeof(server));
     srv.errh = log_error_st_init(&srv.cur_ts, &srv.last_generated_debug_ts);
     srv.errh->errorlog_fd = -1; /* (disable) */
-    srv.split_vals = array_init();
 
     memset(&con, 0, sizeof(connection));
     con.proto                = buffer_init();
@@ -474,7 +473,6 @@ int main (void)
     buffer_free(con.request.uri);
     array_free(con.request.headers);
 
-    array_free(srv.split_vals);
     log_error_st_free(srv.errh);
 
     return 0;

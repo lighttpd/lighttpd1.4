@@ -306,7 +306,6 @@ static server *server_init(void) {
 	srv->srvconf.compat_module_load = 1;
 	srv->srvconf.systemd_socket_activation = 0;
 
-	srv->split_vals = array_init();
 	srv->request_env = plugins_call_handle_request_env;
 
 	return srv;
@@ -392,7 +391,6 @@ static void server_free(server *srv) {
 	}
 
 	array_free(srv->srvconf.modules);
-	array_free(srv->split_vals);
 
 	li_rand_cleanup();
 	chunkqueue_chunk_pool_free();
