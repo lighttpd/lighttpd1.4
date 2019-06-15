@@ -117,36 +117,20 @@ static int mod_flv_streaming_patch_connection(server *srv, connection *con, plug
 }
 #undef PATCH
 
-static int split_get_params(array *get_params, buffer *qrystr) {
-	size_t is_key = 1, klen = 0;
-	char *key = qrystr->ptr, *val = NULL;
-
-	if (buffer_string_is_empty(qrystr)) return 0;
-	for (size_t i = 0, len = buffer_string_length(qrystr); i <= len; ++i) {
-		switch(qrystr->ptr[i]) {
-		case '=':
-			if (is_key) {
-				val = qrystr->ptr + i + 1;
-				klen = (size_t)(qrystr->ptr + i - key);
-				is_key = 0;
-			}
-
-			break;
-		case '&':
-		case '\0': /* fin symbol */
-			if (!is_key) {
-				/* we need at least a = since the last & */
-				array_insert_key_value(get_params, key, klen, val, qrystr->ptr + i - val);
-			}
-
-			key = qrystr->ptr + i + 1;
-			val = NULL;
-			is_key = 1;
-			break;
-		}
-	}
-
-	return 0;
+static off_t get_param_value(buffer *qb, const char *m, size_t mlen) {
+    const char * const q = qb->ptr;
+    size_t len = buffer_string_length(qb);
+    if (len < mlen+2) return -1;
+    len -= (mlen+2);
+    for (size_t i = 0; i <= len; ++i) {
+        if (0 == memcmp(q+i, m, mlen) && q[i+mlen] == '=') {
+            char *err;
+            off_t n = strtoll(q+i+mlen+1, &err, 10);
+            return (*err == '\0' || *err == '&') ? n : -1;
+        }
+        do { ++i; } while (i < len && q[i] != '&');
+    }
+    return -1;
 }
 
 URIHANDLER_FUNC(mod_flv_streaming_path_handler) {
@@ -162,36 +146,19 @@ URIHANDLER_FUNC(mod_flv_streaming_path_handler) {
 		return HANDLER_GO_ON;
 	}
 
-	{
-			data_string *get_param;
-			off_t start = 0, len = -1;
-			char *err = NULL;
+	off_t start = get_param_value(con->uri.query, CONST_STR_LEN("start"));
+	off_t end = get_param_value(con->uri.query, CONST_STR_LEN("end"));
+	off_t len = -1;
+	if (start < 0) start = 0;
+	if (start < end)
+		len = end - start + 1;
+	else if (0 == start)
+		return HANDLER_GO_ON; /* let mod_staticfile send whole file */
+
 			/* if there is a start=[0-9]+ in the header use it as start,
 			 * otherwise set start to beginning of file */
 			/* if there is a end=[0-9]+ in the header use it as end pos,
 			 * otherwise send rest of file, starting from start */
-
-			array_reset_data_strings(srv->split_vals);
-			split_get_params(srv->split_vals, con->uri.query);
-
-			if (NULL != (get_param = (data_string *)array_get_element_klen(srv->split_vals, CONST_STR_LEN("start")))) {
-				if (buffer_string_is_empty(get_param->value)) return HANDLER_GO_ON;
-				start = strtoll(get_param->value->ptr, &err, 10);
-				if (*err != '\0') return HANDLER_GO_ON;
-				if (start < 0) return HANDLER_GO_ON;
-			}
-
-			if (NULL != (get_param = (data_string *)array_get_element_klen(srv->split_vals, CONST_STR_LEN("end")))) {
-				off_t end;
-				if (buffer_string_is_empty(get_param->value)) return HANDLER_GO_ON;
-				end = strtoll(get_param->value->ptr, &err, 10);
-				if (*err != '\0') return HANDLER_GO_ON;
-				if (end < 0) return HANDLER_GO_ON;
-				len = (start < end ? end - start : start - end) + 1;
-			}
-			else if (0 == start) {
-				return HANDLER_GO_ON;
-			}
 
 			/* let's build a flv header */
 			http_chunk_append_mem(srv, con, CONST_STR_LEN("FLV\x1\x1\0\0\0\x9\0\0\0\x9"));
@@ -203,7 +170,6 @@ URIHANDLER_FUNC(mod_flv_streaming_path_handler) {
 			http_header_response_set(con, HTTP_HEADER_CONTENT_TYPE, CONST_STR_LEN("Content-Type"), CONST_STR_LEN("video/x-flv"));
 			con->file_finished = 1;
 			return HANDLER_FINISHED;
-	}
 }
 
 /* this function is called at dlopen() time and inits the callbacks */
