@@ -42,6 +42,9 @@ enum http_header_e {
 __attribute_pure__
 enum http_header_e http_header_hkey_get(const char *s, size_t slen);
 
+__attribute_pure__
+int http_header_str_contains_token (const char *s, size_t slen, const char *m, size_t mlen);
+
 buffer * http_header_response_get(connection *con, enum http_header_e id, const char *k, size_t klen);
 void http_header_response_unset(connection *con, enum http_header_e id, const char *k, size_t klen);
 void http_header_response_set(connection *con, enum http_header_e id, const char *k, size_t klen, const char *v, size_t vlen);

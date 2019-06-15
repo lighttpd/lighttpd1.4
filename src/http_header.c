@@ -57,6 +57,24 @@ enum http_header_e http_header_hkey_get(const char *s, size_t slen) {
 }
 
 
+int http_header_str_contains_token (const char * const s, const size_t slen, const char * const m, const size_t mlen)
+{
+    /*if (slen < mlen) return 0;*//*(possible optimizations for caller)*/
+    /*if (slen == mlen && buffer_eq_icase_ssn(s, m, mlen)) return 1;*/
+    size_t i = 0;
+    do {
+        while (i < slen &&  (s[i]==' ' || s[i]=='\t' || s[i]==',')) ++i;
+        if (i == slen) return 0;
+        if (buffer_eq_icase_ssn(s+i, m, mlen)) {
+            i += mlen;
+            if (i == slen || s[i]==' ' || s[i]=='\t' || s[i]==',' || s[i]==';')
+                return 1;
+        }
+        while (i < slen &&   s[i]!=',') ++i;
+    } while (i < slen);
+    return 0;
+}
+
 buffer * http_header_response_get(connection *con, enum http_header_e id, const char *k, size_t klen) {
     data_string * const ds =
       (id <= HTTP_HEADER_OTHER || (con->response.htags & id))

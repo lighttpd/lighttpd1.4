@@ -345,57 +345,6 @@ int http_request_host_policy (connection *con, buffer *b, const buffer *scheme) 
                 && 0 != http_request_host_normalize(b, scheme_port(scheme))));
 }
 
-static int http_request_split_value(array *vals, const char *current, size_t len) {
-	int state = 0;
-	const char *token_start = NULL, *token_end = NULL;
-	/*
-	 * parse
-	 *
-	 * val1, val2, val3, val4
-	 *
-	 * into a array (more or less a explode() incl. stripping of whitespaces
-	 */
-
-	for (size_t i = 0; i <= len; ++i, ++current) {
-		switch (state) {
-		case 0: /* find start of a token */
-			switch (*current) {
-			case ' ':
-			case '\t': /* skip white space */
-			case ',': /* skip empty token */
-				break;
-			case '\0': /* end of string */
-				return 0;
-			default:
-				/* found real data, switch to state 1 to find the end of the token */
-				token_start = token_end = current;
-				state = 1;
-				break;
-			}
-			break;
-		case 1: /* find end of token and last non white space character */
-			switch (*current) {
-			case ' ':
-			case '\t':
-				/* space - don't update token_end */
-				break;
-			case ',':
-			case '\0': /* end of string also marks the end of a token */
-				array_insert_value(vals, token_start, token_end-token_start+1);
-				state = 0;
-				break;
-			default:
-				/* no white space, update token_end to include current character */
-				token_end = current;
-				break;
-			}
-			break;
-		}
-	}
-
-	return 0;
-}
-
 static int request_uri_is_valid_char(unsigned char c) {
 	return (c > 32 && c != 127 && c != 255);
 }
@@ -479,23 +428,15 @@ static int parse_single_header(server *srv, connection *con, parse_header_state 
         }
         break;
       case HTTP_HEADER_CONNECTION:
-        {
-            array * const vals = srv->split_vals;
-            array_reset_data_strings(vals);
-            http_request_split_value(vals, v, vlen); /* split on , */
-            for (size_t vi = 0; vi < vals->used; ++vi) {
-                data_string *dsv = (data_string *)vals->data[vi];
-                if (buffer_eq_icase_slen(dsv->value,
-                                         CONST_STR_LEN("keep-alive"))) {
-                    state->keep_alive_set = HTTP_CONNECTION_KEEPALIVE;
-                    break;
-                }
-                else if (buffer_eq_icase_slen(dsv->value,
-                                              CONST_STR_LEN("close"))) {
-                    state->keep_alive_set = HTTP_CONNECTION_CLOSE;
-                    break;
-                }
-            }
+        /* "Connection: close" is common case if header is present */
+        if ((vlen == 5 && buffer_eq_icase_ssn(v, CONST_STR_LEN("close")))
+            || http_header_str_contains_token(v,vlen,CONST_STR_LEN("close"))) {
+            state->keep_alive_set = HTTP_CONNECTION_CLOSE;
+            break;
+        }
+        if (http_header_str_contains_token(v,vlen,CONST_STR_LEN("keep-alive"))){
+            state->keep_alive_set = HTTP_CONNECTION_KEEPALIVE;
+            break;
         }
         break;
       case HTTP_HEADER_CONTENT_TYPE:

@@ -407,19 +407,6 @@ static void mod_wstunnel_patch_connection(server *srv, connection *con, plugin_d
 #undef PATCH_GW
 #undef PATCH
 
-static int header_contains_token (buffer *b, const char *m, size_t mlen)
-{
-    for (char *s = b->ptr; s; s = strchr(s, ',')) {
-        while (*s == ' ' || *s == '\t' || *s == ',') ++s;
-        if (buffer_eq_icase_ssn(s, m, mlen)) {
-            s += mlen;
-            if (*s == '\0' || *s == ' ' || *s == '\t' || *s == ',' || *s == ';')
-                return 1;
-        }
-    }
-    return 0;
-}
-
 static int wstunnel_is_allowed_origin(connection *con, handler_ctx *hctx) {
     /* If allowed origins is set (and not empty list), fail closed if no match.
      * Note that origin provided in request header has not been normalized, so
@@ -594,11 +581,11 @@ static handler_t mod_wstunnel_check_extension(server *srv, connection *con, void
      */
     vb = http_header_request_get(con, HTTP_HEADER_UPGRADE, CONST_STR_LEN("Upgrade"));
     if (NULL == vb
-        || !header_contains_token(vb, CONST_STR_LEN("websocket")))
+        || !http_header_str_contains_token(CONST_BUF_LEN(vb), CONST_STR_LEN("websocket")))
         return HANDLER_GO_ON;
     vb = http_header_request_get(con, HTTP_HEADER_CONNECTION, CONST_STR_LEN("Connection"));
     if (NULL == vb
-        || !header_contains_token(vb, CONST_STR_LEN("upgrade")))
+        || !http_header_str_contains_token(CONST_BUF_LEN(vb), CONST_STR_LEN("upgrade")))
         return HANDLER_GO_ON;
 
     mod_wstunnel_patch_connection(srv, con, p);
