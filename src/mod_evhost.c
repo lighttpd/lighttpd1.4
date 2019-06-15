@@ -20,10 +20,10 @@ typedef struct {
 
 typedef struct {
 	PLUGIN_DATA;
-	buffer *tmp_buf;
-
 	plugin_config **config_storage;
 	plugin_config conf;
+	buffer *tmp_buf;
+	array *split_vals;
 } plugin_data;
 
 INIT_FUNC(mod_evhost_init) {
@@ -32,6 +32,7 @@ INIT_FUNC(mod_evhost_init) {
 	p = calloc(1, sizeof(*p));
 
 	p->tmp_buf = buffer_init();
+	p->split_vals = array_init();
 
 	return p;
 }
@@ -67,6 +68,7 @@ FREE_FUNC(mod_evhost_free) {
 	}
 
 	buffer_free(p->tmp_buf);
+	array_free(p->split_vals);
 
 	free(p);
 
@@ -347,7 +349,7 @@ static handler_t mod_evhost_uri_handler(server *srv, connection *con, void *p_d)
 		return HANDLER_GO_ON;
 	}
 
-	mod_evhost_build_doc_root_path(p->tmp_buf, srv->split_vals, con->uri.authority, p->conf.path_pieces, p->conf.len);
+	mod_evhost_build_doc_root_path(p->tmp_buf, p->split_vals, con->uri.authority, p->conf.path_pieces, p->conf.len);
 
 	if (HANDLER_ERROR == stat_cache_get_entry(srv, con, p->tmp_buf, &sce)) {
 		log_error_write(srv, __FILE__, __LINE__, "sb", strerror(errno), p->tmp_buf);
