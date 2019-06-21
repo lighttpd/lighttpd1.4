@@ -257,6 +257,7 @@ struct connection {
 	int async_callback;
 
 	log_error_st *errh;
+	server *srv;
 
 	void **plugin_ctx;           /* plugin connection specific config */
 
