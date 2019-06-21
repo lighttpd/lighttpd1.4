@@ -2004,15 +2004,18 @@ static int server_main_loop (server * const srv) {
 			if (server_handle_sighup(srv)) return -1;
 		}
 
+		/*(USE_ALARM not used; fdevent_poll() is effective periodic timer)*/
+	      #ifdef USE_ALARM
 		if (handle_sig_alarm) {
-			time_t min_ts = time(NULL);
-		      #ifdef USE_ALARM
 			handle_sig_alarm = 0;
-		      #endif
+	      #endif
+			time_t min_ts = time(NULL);
 			if (min_ts != srv->cur_ts) {
 				server_handle_sigalrm(srv, min_ts, last_active_ts);
 			}
+	      #ifdef USE_ALARM
 		}
+	      #endif
 
 		if (handle_sig_child) {
 			handle_sig_child = 0;
