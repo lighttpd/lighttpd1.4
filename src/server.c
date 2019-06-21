@@ -922,46 +922,9 @@ static void server_sockets_close (server *srv) {
 }
 
 __attribute_cold__
-static void server_graceful_shutdown_maint (server *srv) {
-    connections *conns = srv->conns;
-    for (size_t ndx = 0; ndx < conns->used; ++ndx) {
-        connection * const con = conns->ptr[ndx];
-        int changed = 0;
-
-        if (con->state == CON_STATE_CLOSE) {
-            /* reduce remaining linger timeout to be
-             * (from zero) *up to* one more second, but no more */
-            if (HTTP_LINGER_TIMEOUT > 1)
-                con->close_timeout_ts -= (HTTP_LINGER_TIMEOUT - 1);
-            if (srv->cur_ts - con->close_timeout_ts > HTTP_LINGER_TIMEOUT)
-                changed = 1;
-        }
-        else if (con->state == CON_STATE_READ && con->request_count > 1
-                 && chunkqueue_is_empty(con->read_queue)) {
-            /* close connections in keep-alive waiting for next request */
-            connection_set_state(srv, con, CON_STATE_ERROR);
-            changed = 1;
-        }
-
-        con->keep_alive = 0;                    /* disable keep-alive */
-
-        con->conf.kbytes_per_second = 0;        /* disable rate limit */
-        con->conf.global_kbytes_per_second = 0; /* disable rate limit */
-        if (con->traffic_limit_reached) {
-            con->traffic_limit_reached = 0;
-            changed = 1;
-        }
-
-        if (changed) {
-            connection_state_machine(srv, con);
-        }
-    }
-}
-
-__attribute_cold__
 static void server_graceful_state (server *srv) {
 
-    if (!srv_shutdown) server_graceful_shutdown_maint(srv);
+    if (!srv_shutdown) connection_graceful_shutdown_maint(srv);
 
     if (!oneshot_fd
         && (2 == srv->sockets_disabled || 3 == srv->sockets_disabled)) return;
@@ -1831,7 +1794,6 @@ static int server_handle_sighup (server * const srv) {
 
 __attribute_noinline__
 static void server_handle_sigalrm (server * const srv, time_t min_ts, time_t last_active_ts) {
-				connections *conns = srv->conns;
 				handler_t r;
 
 				switch(r = plugins_call_handle_trigger(srv)) {
@@ -1877,98 +1839,8 @@ static void server_handle_sigalrm (server * const srv, time_t min_ts, time_t las
 					srv->config_storage[i]->global_bytes_per_second_cnt = 0;
 				}
 				/* if graceful_shutdown, accelerate cleanup of recently completed request/responses */
-				if (graceful_shutdown && !srv_shutdown) server_graceful_shutdown_maint(srv);
-				/**
-				 * check all connections for timeouts
-				 *
-				 */
-				for (size_t ndx = 0; ndx < conns->used; ++ndx) {
-					connection * const con = conns->ptr[ndx];
-					const int waitevents = fdevent_fdnode_interest(con->fdn);
-					int changed = 0;
-					int t_diff;
-
-					if (con->state == CON_STATE_CLOSE) {
-						if (srv->cur_ts - con->close_timeout_ts > HTTP_LINGER_TIMEOUT) {
-							changed = 1;
-						}
-					} else if (waitevents & FDEVENT_IN) {
-						if (con->request_count == 1 || con->state != CON_STATE_READ) { /* e.g. CON_STATE_READ_POST || CON_STATE_WRITE */
-							if (srv->cur_ts - con->read_idle_ts > con->conf.max_read_idle) {
-								/* time - out */
-								if (con->conf.log_request_handling) {
-									log_error_write(srv, __FILE__, __LINE__, "sd",
-										"connection closed - read timeout:", con->fd);
-								}
-
-								connection_set_state(srv, con, CON_STATE_ERROR);
-								changed = 1;
-							}
-						} else {
-							if (srv->cur_ts - con->read_idle_ts > con->keep_alive_idle) {
-								/* time - out */
-								if (con->conf.log_request_handling) {
-									log_error_write(srv, __FILE__, __LINE__, "sd",
-										"connection closed - keep-alive timeout:", con->fd);
-								}
-
-								connection_set_state(srv, con, CON_STATE_ERROR);
-								changed = 1;
-							}
-						}
-					}
-
-					/* max_write_idle timeout currently functions as backend timeout,
-					 * too, after response has been started.
-					 * future: have separate backend timeout, and then change this
-					 * to check for write interest before checking for timeout */
-					/*if (waitevents & FDEVENT_OUT)*/
-					if ((con->state == CON_STATE_WRITE) &&
-					    (con->write_request_ts != 0)) {
-#if 0
-						if (srv->cur_ts - con->write_request_ts > 60) {
-							log_error_write(srv, __FILE__, __LINE__, "sdd",
-									"connection closed - pre-write-request-timeout:", con->fd, srv->cur_ts - con->write_request_ts);
-						}
-#endif
-
-						if (srv->cur_ts - con->write_request_ts > con->conf.max_write_idle) {
-							/* time - out */
-							if (con->conf.log_timeouts) {
-								log_error_write(srv, __FILE__, __LINE__, "sbsbsosds",
-									"NOTE: a request from",
-									con->dst_addr_buf,
-									"for",
-									con->request.uri,
-									"timed out after writing",
-									con->bytes_written,
-									"bytes. We waited",
-									(int)con->conf.max_write_idle,
-									"seconds. If this a problem increase server.max-write-idle");
-							}
-							connection_set_state(srv, con, CON_STATE_ERROR);
-							changed = 1;
-						}
-					}
-
-					/* we don't like div by zero */
-					if (0 == (t_diff = srv->cur_ts - con->connection_start)) t_diff = 1;
-
-					if (con->traffic_limit_reached &&
-					    (con->conf.kbytes_per_second == 0 ||
-					     ((con->bytes_written / t_diff) < con->conf.kbytes_per_second * 1024))) {
-						/* enable connection again */
-						con->traffic_limit_reached = 0;
-
-						changed = 1;
-					}
-
-					con->bytes_written_cur_second = 0;
-
-					if (changed) {
-						connection_state_machine(srv, con);
-					}
-				}
+				if (graceful_shutdown && !srv_shutdown) connection_graceful_shutdown_maint(srv);
+				connection_periodic_maint(srv, min_ts);
 }
 
 __attribute_noinline__

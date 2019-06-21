@@ -24,6 +24,4 @@
  */
 #define MAX_HTTP_REQUEST_HEADER  (32 * 1024)
 
-#define HTTP_LINGER_TIMEOUT 5
-
 #endif
