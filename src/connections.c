@@ -697,7 +697,7 @@ static int connection_reset(server *srv, connection *con) {
 	return 0;
 }
 
-static void connection_read_header(server *srv, connection *con)  {
+static int connection_read_header(server *srv, connection *con) {
     chunkqueue * const cq = con->read_queue;
     chunk *c;
     size_t hlen = 0;
@@ -729,10 +729,10 @@ static void connection_read_header(server *srv, connection *con)  {
                         "oversized request-header -> sending Status 431");
         con->http_status = 431; /* Request Header Fields Too Large */
         con->keep_alive = 0;
-        connection_set_state(srv, con, CON_STATE_HANDLE_REQUEST);
+        return 1;
     }
 
-    if (NULL == c) return; /* incomplete request headers */
+    if (NULL == c) return 0; /* incomplete request headers */
 
     con->header_len = hlen;
 
@@ -753,7 +753,7 @@ static void connection_read_header(server *srv, connection *con)  {
         char * const s = con->request.request->ptr;
       #ifdef __COVERITY__
         if (buffer_string_length(con->request.request) < 2) {
-            return;
+            return 0;
         }
       #endif
         if (s[0] == '\r' && s[1] == '\n') {
@@ -801,7 +801,7 @@ static void connection_read_header(server *srv, connection *con)  {
     if (NULL != save) buffer_free(save);
     buffer_reset(con->request.request);
 
-    connection_set_state(srv, con, CON_STATE_REQUEST_END);
+    return 1;
 }
 
 /**
@@ -823,11 +823,12 @@ static int connection_handle_read_state(server *srv, connection *con)  {
 		if (!chunkqueue_is_empty(con->read_queue)) {
 			/*(if partially read next request and unable to read() any bytes below,
 			 * then will unnecessarily scan again here before subsequent read())*/
-			connection_read_header(srv, con);
-			if (con->state != CON_STATE_READ) {
+			if (connection_read_header(srv, con)) {
 				con->read_idle_ts = srv->cur_ts;
-				return 0;
+				connection_set_state(srv, con, CON_STATE_REQUEST_END);
+				return 1;
 			}
+			if (!con->is_readable) return 0;
 		}
 	}
 
@@ -837,7 +838,7 @@ static int connection_handle_read_state(server *srv, connection *con)  {
 		switch (con->network_read(srv, con, con->read_queue, MAX_READ_LIMIT)) {
 		case -1:
 			connection_set_state(srv, con, CON_STATE_ERROR);
-			return -1;
+			return 0;
 		case -2:
 			is_closed = 1;
 			break;
@@ -846,9 +847,11 @@ static int connection_handle_read_state(server *srv, connection *con)  {
 		}
 	}
 
-	connection_read_header(srv, con);
-
-	if (con->state == CON_STATE_READ && is_closed) {
+	if (connection_read_header(srv, con)) {
+		connection_set_state(srv, con, CON_STATE_REQUEST_END);
+		return 1;
+	}
+	else if (is_closed) {
 		/* the connection got closed and we didn't got enough data to leave CON_STATE_READ;
 		 * the only way is to leave here */
 		connection_set_state(srv, con, CON_STATE_ERROR);
@@ -1261,8 +1264,8 @@ int connection_state_machine(server *srv, connection *con) {
 			connection_set_state(srv, con, CON_STATE_READ);
 			/* fall through */
 		case CON_STATE_READ:
-			connection_handle_read_state(srv, con);
-			if (con->state != CON_STATE_REQUEST_END) break;
+			if (!connection_handle_read_state(srv, con)) break;
+			/*if (con->state != CON_STATE_REQUEST_END) break;*/
 			/* fall through */
 		case CON_STATE_REQUEST_END: /* transient */
 			ostate = (0 == con->request.content_length)
