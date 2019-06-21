@@ -699,7 +699,8 @@ static int connection_reset(server *srv, connection *con) {
 	return 0;
 }
 
-static int connection_read_header(server *srv, connection *con) {
+static int connection_read_header(connection *con) {
+    server *srv = con->srv;
     chunkqueue * const cq = con->read_queue;
     chunk *c;
     size_t hlen = 0;
@@ -789,7 +790,7 @@ static int connection_read_header(server *srv, connection *con) {
         save = buffer_init_buffer(con->request.request);
     }
 
-    con->http_status = http_request_parse(srv, con, con->request.request);
+    con->http_status = http_request_parse(con, con->request.request);
     if (0 != con->http_status) {
         con->keep_alive = 0;
         con->request.content_length = 0;
@@ -825,7 +826,7 @@ static int connection_handle_read_state(server *srv, connection *con)  {
 		if (!chunkqueue_is_empty(con->read_queue)) {
 			/*(if partially read next request and unable to read() any bytes below,
 			 * then will unnecessarily scan again here before subsequent read())*/
-			if (connection_read_header(srv, con)) {
+			if (connection_read_header(con)) {
 				con->read_idle_ts = srv->cur_ts;
 				connection_set_state(srv, con, CON_STATE_REQUEST_END);
 				return 1;
@@ -849,7 +850,7 @@ static int connection_handle_read_state(server *srv, connection *con)  {
 		}
 	}
 
-	if (connection_read_header(srv, con)) {
+	if (connection_read_header(con)) {
 		connection_set_state(srv, con, CON_STATE_REQUEST_END);
 		return 1;
 	}

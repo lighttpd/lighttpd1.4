@@ -759,7 +759,8 @@ static int http_request_parse_headers(server *srv, connection *con, buffer *hdrs
     return 0;
 }
 
-int http_request_parse(server *srv, connection *con, buffer *hdrs) {
+int http_request_parse(connection *con, buffer *hdrs) {
+	server *srv = con->srv;
 	int status;
 
 	parse_header_state state;
