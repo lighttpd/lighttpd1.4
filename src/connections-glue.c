@@ -45,14 +45,6 @@ const char *connection_get_short_state(connection_state_t state) {
 	}
 }
 
-int connection_set_state(server *srv, connection *con, connection_state_t state) {
-	UNUSED(srv);
-
-	con->state = state;
-
-	return 0;
-}
-
 static int connection_handle_read_post_cq_compact(chunkqueue *cq) {
     /* combine first mem chunk with next non-empty mem chunk
      * (loop if next chunk is empty) */
@@ -389,7 +381,7 @@ static int connection_write_100_continue(server *srv, connection *con) {
 	*(con->conf.global_bytes_per_second_cnt_ptr) += written;
 
 	if (rc < 0) {
-		connection_set_state(srv, con, CON_STATE_ERROR);
+		con->state = CON_STATE_ERROR;
 		return 0; /* error */
 	}
 
@@ -418,7 +410,7 @@ handler_t connection_handle_read_post_state(server *srv, connection *con) {
 
 		switch(con->network_read(srv, con, con->read_queue, MAX_READ_LIMIT)) {
 		case -1:
-			connection_set_state(srv, con, CON_STATE_ERROR);
+			con->state = CON_STATE_ERROR;
 			return HANDLER_ERROR;
 		case -2:
 			is_closed = 1;
@@ -466,7 +458,7 @@ handler_t connection_handle_read_post_state(server *srv, connection *con) {
 		/* Content is ready */
 		con->conf.stream_request_body &= ~FDEVENT_STREAM_REQUEST_POLLIN;
 		if (con->state == CON_STATE_READ_POST) {
-			connection_set_state(srv, con, CON_STATE_HANDLE_REQUEST);
+			con->state = CON_STATE_HANDLE_REQUEST;
 		}
 		return HANDLER_GO_ON;
 	} else if (is_closed) {

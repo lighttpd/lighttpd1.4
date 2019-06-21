@@ -35,6 +35,8 @@
 
 #define HTTP_LINGER_TIMEOUT 5
 
+#define connection_set_state(srv, con, n) ((con)->state = (n))
+
 typedef struct {
 	        PLUGIN_DATA;
 } plugin_data;
