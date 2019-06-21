@@ -3762,7 +3762,7 @@ mod_webdav_propfind (connection * const con, const plugin_config * const pconf)
     }
     else if (S_ISDIR(pb.st.st_mode)) {
         if (con->physical.path->ptr[con->physical.path->used - 2] != '/') {
-            buffer *vb = http_header_request_get(con, HTTP_HEADER_OTHER,
+            buffer *vb = http_header_request_get(con, HTTP_HEADER_USER_AGENT,
                                                  CONST_STR_LEN("User-Agent"));
             if (vb && 0 == strncmp(vb->ptr, "Microsoft-WebDAV-MiniRedir/",
                                    sizeof("Microsoft-WebDAV-MiniRedir/")-1)) {
@@ -4951,7 +4951,7 @@ mod_webdav_proppatch (connection * const con, const plugin_config * const pconf)
 
     if (S_ISDIR(st.st_mode)) {
         if (con->physical.path->ptr[con->physical.path->used - 2] != '/') {
-            buffer *vb = http_header_request_get(con, HTTP_HEADER_OTHER,
+            buffer *vb = http_header_request_get(con, HTTP_HEADER_USER_AGENT,
                                                  CONST_STR_LEN("User-Agent"));
             if (vb && 0 == strncmp(vb->ptr, "Microsoft-WebDAV-MiniRedir/",
                                    sizeof("Microsoft-WebDAV-MiniRedir/")-1)) {
@@ -5071,7 +5071,7 @@ mod_webdav_proppatch (connection * const con, const plugin_config * const pconf)
           ? webdav_db_transaction_commit(pconf)
           : webdav_db_transaction_rollback(pconf)) {
         if (NULL == ms) {
-            buffer *vb = http_header_request_get(con, HTTP_HEADER_OTHER,
+            buffer *vb = http_header_request_get(con, HTTP_HEADER_USER_AGENT,
                                                  CONST_STR_LEN("User-Agent"));
             if (vb && 0 == strncmp(vb->ptr, "Microsoft-WebDAV-MiniRedir/",
                                    sizeof("Microsoft-WebDAV-MiniRedir/")-1)) {

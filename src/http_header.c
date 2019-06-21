@@ -30,6 +30,7 @@ static const keyvlenvalue http_headers[] = {
  ,{ HTTP_HEADER_FORWARDED,            CONST_LEN_STR("Forwarded") }
  ,{ HTTP_HEADER_CONNECTION,           CONST_LEN_STR("Connection") }
  ,{ HTTP_HEADER_SET_COOKIE,           CONST_LEN_STR("Set-Cookie") }
+ ,{ HTTP_HEADER_USER_AGENT,           CONST_LEN_STR("User-Agent") }
  ,{ HTTP_HEADER_CONTENT_TYPE,         CONST_LEN_STR("Content-Type") }
  ,{ HTTP_HEADER_LAST_MODIFIED,        CONST_LEN_STR("Last-Modified") }
  ,{ HTTP_HEADER_AUTHORIZATION,        CONST_LEN_STR("Authorization") }
