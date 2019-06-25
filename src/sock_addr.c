@@ -544,10 +544,9 @@ int sock_addr_from_str_hints(server *srv, sock_addr *saddr, socklen_t *len, cons
             }
             memcpy(saddr->un.sun_path, str, hostlen);
           #if defined(SUN_LEN)
-            *len = SUN_LEN(&saddr->un);
+            *len = SUN_LEN(&saddr->un)+1;
           #else
-            /* stevens says: */
-            *len = hostlen + sizeof(saddr->un.sun_family);
+            *len = offsetof(struct sockaddr_un, sun_path) + hostlen;
           #endif
         }
         return 1;
