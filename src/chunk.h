@@ -100,6 +100,8 @@ int chunkqueue_steal_with_tempfiles(struct server *srv, chunkqueue *dest, chunkq
 
 int chunkqueue_open_file_chunk(struct server *srv, chunkqueue *cq);
 
+void chunkqueue_compact_mem(chunkqueue *cq, size_t clen);
+
 __attribute_pure__
 off_t chunkqueue_length(chunkqueue *cq);
 

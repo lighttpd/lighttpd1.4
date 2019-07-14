@@ -749,6 +749,35 @@ static void chunkqueue_remove_empty_chunks(chunkqueue *cq) {
 	}
 }
 
+void chunkqueue_compact_mem(chunkqueue *cq, size_t clen) {
+    chunk *c = cq->first;
+    buffer *b = c->mem;
+    size_t len = buffer_string_length(b) - c->offset;
+    if (b->size > clen) {
+        if (0 != c->offset) {
+            memmove(b->ptr, b->ptr+c->offset, len);
+            buffer_string_set_length(b, len);
+            c->offset = 0;
+        }
+    }
+    else {
+        b = chunkqueue_prepend_buffer_open_sz(cq, clen + 8192);
+        buffer_append_string_len(b, c->mem->ptr + c->offset, len);
+        cq->first->next = c->next;
+        chunk_release(c);
+        c = cq->first;
+    }
+    for (chunk *fc = c; ((clen -= len) && (c = fc->next)); ) {
+        len = buffer_string_length(c->mem) - c->offset;
+        if (len > clen) len = clen;
+        buffer_append_string_len(b, c->mem->ptr + c->offset, len);
+        fc->next = c->next;
+        chunk_release(c);
+    }
+    /* chunkqueue_prepend_buffer_commit() is not called here;
+     * no data added/removed from chunkqueue; consolidated only */
+}
+
 int chunkqueue_open_file_chunk(server *srv, chunkqueue *cq) {
 	chunk* const c = cq->first;
 	off_t offset, toSend;
