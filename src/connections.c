@@ -699,6 +699,30 @@ static int connection_reset(server *srv, connection *con) {
 	return 0;
 }
 
+__attribute_noinline__
+static void connection_chunkqueue_compact(chunkqueue *cq, size_t clen) {
+    if (0 == clen) {
+        chunk *c = cq->first;
+        if (c == cq->last) {
+            if (0 != c->offset && buffer_string_space(c->mem) < 1024) {
+                buffer *b = c->mem;
+                size_t len = buffer_string_length(b) - c->offset;
+                memmove(b->ptr, b->ptr+c->offset, len);
+                buffer_string_set_length(b, len);
+                c->offset = 0;
+            }
+            return;
+        }
+        clen = chunkqueue_length(cq);
+        if (0 == clen) return; /*(not expected)*/
+    }
+
+    /* caller should have checked if data already in first chunk if 0 != clen */
+    /*if (len >= clen) return;*/ /*(not expected)*/
+
+    chunkqueue_compact_mem(cq, clen);
+}
+
 static int connection_read_header(connection *con) {
     server *srv = con->srv;
     chunkqueue * const cq = con->read_queue;
@@ -740,6 +764,10 @@ static int connection_read_header(connection *con) {
     con->header_len = hlen;
 
     buffer_clear(con->request.request);
+    if (c != cq->first) {
+        connection_chunkqueue_compact(cq, hlen);
+        c = cq->first;
+    } /*(else common case: headers in single chunk)*/
 
     for (c = cq->first; c; c = c->next) {
         size_t len = buffer_string_length(c->mem) - c->offset;
@@ -831,7 +859,17 @@ static int connection_handle_read_state(server *srv, connection *con)  {
 				connection_set_state(srv, con, CON_STATE_REQUEST_END);
 				return 1;
 			}
-			if (!con->is_readable) return 0;
+			else {
+				/*if (!con->is_readable) return 0;*/
+				/* partial header of next request has already been read,
+				 * so optimistically check for more data received on
+				 * socket while processing the previous request */
+				con->is_readable = 1;
+				/* adjust last chunk offset for better reuse on keep-alive */
+				/* (caller already checked that cq is not empty) */
+				if (con->read_queue->last->offset > 6*1024)
+					connection_chunkqueue_compact(con->read_queue, 0);
+			}
 		}
 	}
 
@@ -858,6 +896,10 @@ static int connection_handle_read_state(server *srv, connection *con)  {
 		/* the connection got closed and we didn't got enough data to leave CON_STATE_READ;
 		 * the only way is to leave here */
 		connection_set_state(srv, con, CON_STATE_ERROR);
+	}
+
+	if (con->read_queue->first != con->read_queue->last) {
+		connection_chunkqueue_compact(con->read_queue, 0);
 	}
 
 	return 0;
