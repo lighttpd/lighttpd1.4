@@ -29,10 +29,18 @@ static void test_request_connection_reset(connection *con)
 
 static void run_http_request_parse(connection *con, int line, int status, const char *desc, const char *req, size_t reqlen)
 {
-    int http_status;
+    unsigned short hloffsets[32];
     test_request_connection_reset(con);
-    buffer_copy_string_len(con->request.request, req, reqlen);
-    http_status = http_request_parse(con, con->request.request);
+    buffer * const hdrs = con->request.request;
+    buffer_copy_string_len(hdrs, req, reqlen);
+    hloffsets[0] = 1;
+    hloffsets[1] = 0;
+    for (const char *n=req, *end=req+reqlen; (n=memchr(n,'\n',end-n)); ++n) {
+        if (++hloffsets[0] >= sizeof(hloffsets)/sizeof(*hloffsets)) break;
+        hloffsets[hloffsets[0]] = n - req + 1;
+    }
+    --hloffsets[0]; /*(ignore final blank line "\r\n" ending headers)*/
+    int http_status = http_request_parse(con, hdrs, hloffsets);
     if (http_status != status) {
         fprintf(stderr,
                 "%s.%d: %s() failed: expected '%d', got '%d' for test %s\n",
@@ -46,6 +54,102 @@ static void run_http_request_parse(connection *con, int line, int status, const 
 static void test_request_http_request_parse(connection *con)
 {
     data_string *ds;
+
+    run_http_request_parse(con, __LINE__, 400,
+      "invalid request-line: space",
+      CONST_STR_LEN(" \r\n"
+                    "Host: www.example.org\r\n"
+                    "\r\n"));
+
+    run_http_request_parse(con, __LINE__, 400,
+      "invalid request-line: space, char",
+      CONST_STR_LEN(" a\r\n"
+                    "Host: www.example.org\r\n"
+                    "\r\n"));
+
+    run_http_request_parse(con, __LINE__, 400,
+      "invalid request-line: dot",
+      CONST_STR_LEN(".\r\n"
+                    "Host: www.example.org\r\n"
+                    "\r\n"));
+
+    run_http_request_parse(con, __LINE__, 400,
+      "invalid request-line: single char",
+      CONST_STR_LEN("a\r\n"
+                    "Host: www.example.org\r\n"
+                    "\r\n"));
+
+    run_http_request_parse(con, __LINE__, 400,
+      "invalid request-line: char, space",
+      CONST_STR_LEN("a \r\n"
+                    "Host: www.example.org\r\n"
+                    "\r\n"));
+
+    run_http_request_parse(con, __LINE__, 400,
+      "invalid request-line: method only",
+      CONST_STR_LEN("GET\r\n"
+                    "Host: www.example.org\r\n"
+                    "\r\n"));
+
+    run_http_request_parse(con, __LINE__, 400,
+      "invalid request-line: method space",
+      CONST_STR_LEN("GET \r\n"
+                    "Host: www.example.org\r\n"
+                    "\r\n"));
+
+    run_http_request_parse(con, __LINE__, 400,
+      "invalid request-line: method space space",
+      CONST_STR_LEN("GET  \r\n"
+                    "Host: www.example.org\r\n"
+                    "\r\n"));
+
+    run_http_request_parse(con, __LINE__, 400,
+      "invalid request-line: method space proto",
+      CONST_STR_LEN("GET HTTP/1.0\r\n"
+                    "Host: www.example.org\r\n"
+                    "\r\n"));
+
+    run_http_request_parse(con, __LINE__, 400,
+      "invalid request-line: method space space proto",
+      CONST_STR_LEN("GET  HTTP/1.0\r\n"
+                    "Host: www.example.org\r\n"
+                    "\r\n"));
+
+    run_http_request_parse(con, __LINE__, 400,
+      "invalid request-line: method space space space proto",
+      CONST_STR_LEN("GET   HTTP/1.0\r\n"
+                    "Host: www.example.org\r\n"
+                    "\r\n"));
+
+    run_http_request_parse(con, __LINE__, 400,
+      "invalid request-line: method slash proto, no spaces",
+      CONST_STR_LEN("GET/HTTP/1.0\r\n"
+                    "Host: www.example.org\r\n"
+                    "\r\n"));
+
+    run_http_request_parse(con, __LINE__, 400,
+      "invalid request-line: method space slash proto",
+      CONST_STR_LEN("GET /HTTP/1.0\r\n"
+                    "Host: www.example.org\r\n"
+                    "\r\n"));
+
+    run_http_request_parse(con, __LINE__, 400,
+      "invalid request-line: method space space slash proto",
+      CONST_STR_LEN("GET  /HTTP/1.0\r\n"
+                    "Host: www.example.org\r\n"
+                    "\r\n"));
+
+    run_http_request_parse(con, __LINE__, 501,
+      "invalid request-line: method slash space proto",
+      CONST_STR_LEN("GET/ HTTP/1.0\r\n"
+                    "Host: www.example.org\r\n"
+                    "\r\n"));
+
+    run_http_request_parse(con, __LINE__, 501,
+      "invalid request-line: method slash space space proto",
+      CONST_STR_LEN("GET/  HTTP/1.0\r\n"
+                    "Host: www.example.org\r\n"
+                    "\r\n"));
 
     run_http_request_parse(con, __LINE__, 0,
       "hostname",

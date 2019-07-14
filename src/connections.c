@@ -700,6 +700,22 @@ static int connection_reset(server *srv, connection *con) {
 }
 
 __attribute_noinline__
+static void connection_discard_blank_line(connection *con, const buffer *hdrs, unsigned short *hoff)  {
+    const char * const s = hdrs->ptr + hoff[1];
+  #ifdef __COVERITY__
+    if (buffer_string_length(hdrs) - hoff[1] < 2) {
+        return;
+    }
+  #endif
+    if ((s[0] == '\r' && s[1] == '\n')
+        || (s[0] == '\n'
+            && !(con->conf.http_parseopts & HTTP_PARSEOPT_HEADER_STRICT))) {
+        hoff[2] += hoff[1];
+        memmove(hoff+1, hoff+2, (--hoff[0] - 1) * sizeof(unsigned short));
+    }
+}
+
+__attribute_noinline__
 static void connection_chunkqueue_compact(chunkqueue *cq, size_t clen) {
     if (0 == clen) {
         chunk *c = cq->first;
@@ -724,36 +740,52 @@ static void connection_chunkqueue_compact(chunkqueue *cq, size_t clen) {
 }
 
 static int connection_read_header(connection *con) {
-    server *srv = con->srv;
     chunkqueue * const cq = con->read_queue;
     chunk *c;
     size_t hlen = 0;
+    size_t clen;
+    const char *b, *n, *end;
     int le = 0;
-    buffer *save = NULL;
+    const unsigned int max_request_field_size =
+      con->srv->srvconf.max_request_field_size;
+    unsigned short hoff[8192]; /* max num header lines + 1; 16k on stack */
 
+    hoff[0] = 1; /* number of lines */
+    hoff[1] = 0; /* base offset for all lines */
+    hoff[2] = 0; /* init offset from base for 2nd line (added += later) */
     for (c = cq->first; c; c = c->next) {
-        size_t clen = buffer_string_length(c->mem) - c->offset;
-        const char * const b = c->mem->ptr + c->offset;
-        const char *n = b;
+        clen = buffer_string_length(c->mem) - c->offset;
+        b = c->mem->ptr + c->offset;
+        n = b;
         if (0 == clen) continue;
         if (le) { /*(line end sequence cross chunk boundary)*/
-            if (n[0] == '\r')   ++n;
-            if (n[0] == '\n') { ++n; hlen += n - b; break; }
-            if (n[0] == '\0') { hlen += n - b; continue; }
+            if (n[0] == '\r') { ++n; ++hlen; --clen; }
+            if (n[0] == '\n') { ++n; ++hlen; break; }
+            if (n[0] == '\0') { continue; }
             le = 0;
         }
-        for (const char * const end = b+clen; (n = memchr(n,'\n',end-n)); ++n) {
-            if (n[1] == '\r')   ++n;
-            if (n[1] == '\n') { hlen += n - b + 2; break; }
+        for (end=n+clen; (n = memchr((b = n),'\n',end-n)); ++n) {
+            size_t x = (size_t)(n - b + 1);
+            clen -= x;
+            hlen += x;
+            if (++hoff[0]>=sizeof(hoff)/sizeof(hoff[0])-1) break;
+            hoff[hoff[0]] = hlen;
+            hoff[hoff[0]+1] = 0;
+            if (n[1] == '\r') { ++n; ++hlen; --clen; }
+            if (n[1] == '\n') { hoff[hoff[0]+1] = ++hlen; break; } // - (n[0] == '\r' ? 2 : 1);
             if (n[1] == '\0') { n = NULL; le = 1; break; }
         }
         if (n) break;
+        /* casting to (unsigned short) might truncate, and the hoff[]
+         * addition might overflow, but max_request_field_size is USHORT_MAX,
+         * so failure will be detected below */
         hlen += clen;
     }
 
-    if (hlen > srv->srvconf.max_request_field_size) {
-        log_error_write(srv, __FILE__, __LINE__, "s",
-                        "oversized request-header -> sending Status 431");
+    if (hlen > max_request_field_size
+        || hoff[0] >= sizeof(hoff)/sizeof(hoff[0])-1) {
+        log_error(con->errh, __FILE__, __LINE__, "%s",
+                  "oversized request-header -> sending Status 431");
         con->http_status = 431; /* Request Header Fields Too Large */
         con->keep_alive = 0;
         return 1;
@@ -763,49 +795,22 @@ static int connection_read_header(connection *con) {
 
     con->header_len = hlen;
 
-    buffer_clear(con->request.request);
     if (c != cq->first) {
         connection_chunkqueue_compact(cq, hlen);
         c = cq->first;
     } /*(else common case: headers in single chunk)*/
-
-    for (c = cq->first; c; c = c->next) {
-        size_t len = buffer_string_length(c->mem) - c->offset;
-        if (len > hlen) len = hlen;
-        buffer_append_string_len(con->request.request,
-                                 c->mem->ptr + c->offset, len);
-        if (0 == (hlen -= len)) break;
-    }
-
-    chunkqueue_mark_written(cq, con->header_len);
+    hoff[1] = (unsigned short)c->offset;
+    buffer * const hdrs = c->mem;
 
     /* skip past \r\n or \n after previous POST request when keep-alive */
-    if (con->request_count > 1) {
-        char * const s = con->request.request->ptr;
-      #ifdef __COVERITY__
-        if (buffer_string_length(con->request.request) < 2) {
-            return 0;
-        }
-      #endif
-        if (s[0] == '\r' && s[1] == '\n') {
-            size_t len = buffer_string_length(con->request.request);
-            memmove(s, s+2, len-2);
-            buffer_string_set_length(con->request.request, len-2);
-        }
-        else if (s[0] == '\n') {
-            if (!(con->conf.http_parseopts & HTTP_PARSEOPT_HEADER_STRICT)) {
-                size_t len = buffer_string_length(con->request.request);
-                memmove(s, s+1, len-1);
-                buffer_string_set_length(con->request.request, len-1);
-            }
-        }
+    if (con->request_count > 1 && hoff[2] - hoff[1] <= 2) {
+        connection_discard_blank_line(con, hdrs, hoff);
     }
 
     if (con->conf.log_request_header) {
-        log_error_write(srv, __FILE__, __LINE__, "sdsdSb",
-          "fd:", con->fd,
-          "request-len:", buffer_string_length(con->request.request),
-          "\n", con->request.request);
+        log_error(con->errh, __FILE__, __LINE__,
+                  "fd: %d request-len: %zu\n%.*s", con->fd, con->header_len,
+                  (int)con->header_len, hdrs->ptr + hoff[1]);
     }
 
     buffer_clear(con->uri.authority);
@@ -813,25 +818,20 @@ static int connection_read_header(connection *con) {
     buffer_reset(con->uri.query);
     buffer_reset(con->request.orig_uri);
 
-    if (srv->srvconf.log_request_header_on_error) {
-        /* copy request only if we may need to log it upon error */
-        save = buffer_init_buffer(con->request.request);
-    }
-
-    con->http_status = http_request_parse(con, con->request.request);
+    con->http_status = http_request_parse(con, hdrs, hoff);
     if (0 != con->http_status) {
         con->keep_alive = 0;
         con->request.content_length = 0;
 
-        if (srv->srvconf.log_request_header_on_error) {
-            log_error_write(srv, __FILE__, __LINE__, "Sb",
-                            "request-header:\n", save);
+        if (con->srv->srvconf.log_request_header_on_error) {
+            /*(http_request_parse() modifies hdrs only to
+             * undo line-wrapping in-place using spaces)*/
+            log_error(con->errh, __FILE__, __LINE__, "request-header:\n%.*s",
+                      (int)con->header_len, hdrs->ptr + hoff[1]);
         }
     }
 
-    if (NULL != save) buffer_free(save);
-    buffer_reset(con->request.request);
-
+    chunkqueue_mark_written(cq, con->header_len);
     return 1;
 }
 
