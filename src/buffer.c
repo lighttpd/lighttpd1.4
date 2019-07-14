@@ -85,7 +85,9 @@ static void buffer_realloc(buffer *b, size_t len) {
 }
 
 __attribute_cold__
+__attribute_noinline__
 static void buffer_alloc_replace(buffer *b, size_t size) {
+    force_assert(NULL != b);
     /*(discard old data so realloc() does not copy)*/
     if (NULL != b->ptr) {
         free(b->ptr);
@@ -95,20 +97,16 @@ static void buffer_alloc_replace(buffer *b, size_t size) {
 }
 
 char* buffer_string_prepare_copy(buffer *b, size_t size) {
-	force_assert(NULL != b);
-
-	if (size >= b->size) buffer_alloc_replace(b, size);
+	if (NULL == b || size >= b->size) buffer_alloc_replace(b, size);
 
 	b->used = 0;
 	return b->ptr;
 }
 
-char* buffer_string_prepare_append(buffer *b, size_t size) {
+__attribute_cold__
+__attribute_noinline__
+static char* buffer_string_prepare_append_resize(buffer *b, size_t size) {
 	force_assert(NULL !=  b);
-
-	if (b->used && size < b->size - b->used)
-		return b->ptr + b->used - 1;
-
 	if (buffer_string_is_empty(b)) {
 		return buffer_string_prepare_copy(b, size);
 	} else {
@@ -122,6 +120,12 @@ char* buffer_string_prepare_append(buffer *b, size_t size) {
 
 		return b->ptr + b->used - 1;
 	}
+}
+
+char* buffer_string_prepare_append(buffer *b, size_t size) {
+    return (NULL != b && size < b->size - b->used)
+      ? b->ptr + b->used - (0 != b->used)
+      : buffer_string_prepare_append_resize(b, size);
 }
 
 void buffer_string_set_length(buffer *b, size_t len) {
