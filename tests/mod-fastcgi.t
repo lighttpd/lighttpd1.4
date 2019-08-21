@@ -7,7 +7,7 @@ BEGIN {
 }
 
 use strict;
-use Test::More tests => 46;
+use Test::More tests => 44;
 use LightyTest;
 
 my $tf = LightyTest->new();
@@ -192,22 +192,6 @@ EOF
  );
 	$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200, 'HTTP-Content' => 'Basic' } ];
 	ok($tf->handle_http($t) == 0, '$_SERVER["AUTH_TYPE"]');
-
-	$t->{REQUEST}  = ( <<EOF
-GET /get-server-env.php?env=SERVER_NAME HTTP/1.0
-Host: zzz.example.org
-EOF
- );
-	$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200, 'HTTP-Content' => 'zzz.example.org' } ];
-	ok($tf->handle_http($t) == 0, 'FastCGI + Host');
-
-	$t->{REQUEST}  = ( <<EOF
-GET http://zzz.example.org/get-server-env.php?env=SERVER_NAME HTTP/1.0
-Host: aaa.example.org
-EOF
- );
-	$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200, 'HTTP-Content' => 'zzz.example.org' } ];
-	ok($tf->handle_http($t) == 0, 'SERVER_NAME (absolute url in request line)');
 
 	$t->{REQUEST}  = ( <<EOF
 GET /indexfile/ HTTP/1.0

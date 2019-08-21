@@ -374,23 +374,13 @@ static int http_request_header_char_invalid(connection *con, char ch, const char
     return 400;
 }
 
-enum keep_alive_set {
-	HTTP_CONNECTION_UNSET,
-	HTTP_CONNECTION_KEEPALIVE,
-	HTTP_CONNECTION_CLOSE,
-};
-
 typedef struct {
-	enum keep_alive_set keep_alive_set;
-	char con_length_set;
 	char *reqline_host;
 	int reqline_hostlen;
 	size_t reqline_len;
 } parse_header_state;
 
 static void init_parse_header_state(parse_header_state* state) {
-	state->keep_alive_set = HTTP_CONNECTION_UNSET;
-	state->con_length_set = 0;
 	state->reqline_host = NULL;
 	state->reqline_hostlen = 0;
 	state->reqline_len = 0;
@@ -402,7 +392,7 @@ static void init_parse_header_state(parse_header_state* state) {
  *
  * returns 0 on success, HTTP status on error
  */
-static int parse_single_header(connection *con, parse_header_state *state, const enum http_header_e id, char *k, size_t klen, char *v, size_t vlen) {
+static int http_request_parse_single_header(connection *con, const enum http_header_e id, const char *k, size_t klen, const char *v, size_t vlen) {
     buffer **saveb = NULL;
 
     /*
@@ -420,8 +410,9 @@ static int parse_single_header(connection *con, parse_header_state *state, const
                 return http_request_header_line_invalid(con, 400, "uri-authority too long -> 400");
             }
         }
-        else if (state->reqline_host) {
-            /* ignore all Host: headers as we got Host in request line */
+        else if (NULL != con->request.http_host
+                 && buffer_is_equal_string(con->request.http_host, v, vlen)) {
+            /* ignore all Host: headers if match authority in request line */
             return 0; /* ignore header */
         }
         else {
@@ -432,11 +423,11 @@ static int parse_single_header(connection *con, parse_header_state *state, const
         /* "Connection: close" is common case if header is present */
         if ((vlen == 5 && buffer_eq_icase_ssn(v, CONST_STR_LEN("close")))
             || http_header_str_contains_token(v,vlen,CONST_STR_LEN("close"))) {
-            state->keep_alive_set = HTTP_CONNECTION_CLOSE;
+            con->keep_alive = 0;
             break;
         }
         if (http_header_str_contains_token(v,vlen,CONST_STR_LEN("keep-alive"))){
-            state->keep_alive_set = HTTP_CONNECTION_KEEPALIVE;
+            con->keep_alive = 1;
             break;
         }
         break;
@@ -484,6 +475,21 @@ static int parse_single_header(connection *con, parse_header_state *state, const
             }
         }
         break;
+      case HTTP_HEADER_TRANSFER_ENCODING:
+        if (HTTP_VERSION_1_0 == con->request.http_version) {
+            return http_request_header_line_invalid(con, 400, "HTTP/1.0 with Transfer-Encoding (bad HTTP/1.0 proxy?) -> 400");
+        }
+
+        if (!buffer_eq_icase_ss(v, vlen, CONST_STR_LEN("chunked"))) {
+            /* Transfer-Encoding might contain additional encodings,
+             * which are not currently supported by lighttpd */
+            return http_request_header_line_invalid(con, 501, NULL); /* Not Implemented */
+        }
+        con->request.content_length = -1;
+
+        /* Transfer-Encoding is a hop-by-hop header,
+         * which must not be blindly forwarded to backends */
+        return 0; /* skip header */
     }
 
     http_header_request_append(con, id, k, klen, v, vlen);
@@ -558,6 +564,8 @@ static size_t http_request_parse_reqline(connection *con, buffer *hdrs, parse_he
 				if (proto[0]=='H' && proto[1]=='T' && proto[2]=='T' && proto[3]=='P' && proto[4] == '/') {
 					if (proto[5] == '1' && proto[6] == '.' && (proto[7] == '1' || proto[7] == '0')) {
 						con->request.http_version = (proto[7] == '1') ? HTTP_VERSION_1_1 : HTTP_VERSION_1_0;
+    /* keep-alive default: HTTP/1.1 -> true; HTTP/1.0 -> false */
+    con->keep_alive = (HTTP_VERSION_1_0 != con->request.http_version);
 					} else {
 						return http_request_header_line_invalid(con, 505, "unknown HTTP version -> 505");
 					}
@@ -615,6 +623,8 @@ static size_t http_request_parse_reqline(connection *con, buffer *hdrs, parse_he
 		}
 		http_header_request_set(con, HTTP_HEADER_HOST, CONST_STR_LEN("Host"), state->reqline_host, state->reqline_hostlen);
 		con->request.http_host = http_header_request_get(con, HTTP_HEADER_HOST, CONST_STR_LEN("Host"));
+		if (buffer_string_is_empty(con->request.http_host))
+			return http_request_header_line_invalid(con, 400, "empty uri-authority in request-line -> 400");
 	}
 
 	return 0;
@@ -753,7 +763,7 @@ static int http_request_parse_headers(connection *con, buffer *hdrs, parse_heade
             }
         }
 
-        int status = parse_single_header(con, state, id, k, (size_t)klen, v, (size_t)vlen);
+        int status = http_request_parse_single_header(con, id, k, (size_t)klen, v, (size_t)vlen);
         if (0 != status) return status;
     }
 
@@ -774,37 +784,16 @@ int http_request_parse(connection *con, buffer *hdrs) {
 
 	/* do some post-processing */
 
-	if (con->request.http_version == HTTP_VERSION_1_1) {
-		if (state.keep_alive_set != HTTP_CONNECTION_CLOSE) {
-			/* no Connection-Header sent */
-
-			/* HTTP/1.1 -> keep-alive default TRUE */
-			con->keep_alive = 1;
-		} else {
-			con->keep_alive = 0;
-		}
-
-		/* RFC 2616, 14.23 */
-		if (con->request.http_host == NULL ||
-		    buffer_string_is_empty(con->request.http_host)) {
-			return http_request_header_line_invalid(con, 400, "HTTP/1.1 but Host missing -> 400");
-		}
-	} else {
-		if (state.keep_alive_set == HTTP_CONNECTION_KEEPALIVE) {
-			/* no Connection-Header sent */
-
-			/* HTTP/1.0 -> keep-alive default FALSE  */
-			con->keep_alive = 1;
-		} else {
-			con->keep_alive = 0;
-		}
-	}
-
-	/* check hostname field if it is set */
-	if (!buffer_is_empty(con->request.http_host) &&
-	    0 != http_request_host_policy(con, con->request.http_host, con->proto)) {
-		return http_request_header_line_invalid(con, 400, "Invalid Hostname -> 400");
-	}
+    /* check hostname field if it is set */
+    if (con->request.http_host) {
+        if (0 != http_request_host_policy(con, con->request.http_host, con->proto))
+            return http_request_header_line_invalid(con, 400, "Invalid Hostname -> 400");
+    }
+    else {
+        /* RFC 2616, 14.23 */
+        if (con->request.http_version == HTTP_VERSION_1_1)
+            return http_request_header_line_invalid(con, 400, "HTTP/1.1 but Host missing -> 400");
+    }
 
         if (con->request.htags & HTTP_HEADER_TRANSFER_ENCODING) {
 		buffer *vb = http_header_request_get(con, HTTP_HEADER_TRANSFER_ENCODING, CONST_STR_LEN("Transfer-Encoding"));
@@ -844,32 +833,49 @@ int http_request_parse(connection *con, buffer *hdrs) {
 				}
 			}
 
-			state.con_length_set = 1;
 			con->request.content_length = -1;
 		}
 	}
-        else if (con->request.htags & HTTP_HEADER_CONTENT_LENGTH) {
-		state.con_length_set = 1;
-	}
 
-	switch(con->request.http_method) {
-	case HTTP_METHOD_GET:
-	case HTTP_METHOD_HEAD:
-		/* content-length is forbidden for those */
-		if (state.con_length_set && 0 != con->request.content_length
-		    && !(con->conf.http_parseopts & HTTP_PARSEOPT_METHOD_GET_BODY)) {
-			return http_request_header_line_invalid(con, 400, "GET/HEAD with content-length -> 400");
-		}
-		break;
-	case HTTP_METHOD_POST:
-		/* content-length is required for them */
-		if (!state.con_length_set) {
-			return http_request_header_line_invalid(con, 411, "POST-request, but content-length missing -> 411");
-		}
-		break;
-	default:
-		break;
-	}
+    if (0 == con->request.content_length) {
+        /* POST requires Content-Length (or Transfer-Encoding)
+         * (-1 == con->request.content_length when Transfer-Encoding: chunked)*/
+        if (HTTP_METHOD_POST == con->request.http_method
+            && !(con->request.htags & HTTP_HEADER_CONTENT_LENGTH)) {
+            return http_request_header_line_invalid(con, 411, "POST-request, but content-length missing -> 411");
+        }
+    }
+    else {
+        /* (-1 == con->request.content_length when Transfer-Encoding: chunked)*/
+        if (-1 == con->request.content_length
+            && (con->request.htags & HTTP_HEADER_CONTENT_LENGTH)) {
+            /* RFC7230 Hypertext Transfer Protocol (HTTP/1.1): Message Syntax and Routing
+             * 3.3.3.  Message Body Length
+             * [...]
+             * If a message is received with both a Transfer-Encoding and a
+             * Content-Length header field, the Transfer-Encoding overrides the
+             * Content-Length.  Such a message might indicate an attempt to
+             * perform request smuggling (Section 9.5) or response splitting
+             * (Section 9.4) and ought to be handled as an error.  A sender MUST
+             * remove the received Content-Length field prior to forwarding such
+             * a message downstream.
+             */
+            const unsigned int http_header_strict =
+              (con->conf.http_parseopts & HTTP_PARSEOPT_HEADER_STRICT);
+            if (http_header_strict) {
+                return http_request_header_line_invalid(con, 400, "invalid Transfer-Encoding + Content-Length -> 400");
+            }
+            else {
+                /* ignore Content-Length */
+                http_header_request_unset(con, HTTP_HEADER_CONTENT_LENGTH, CONST_STR_LEN("Content-Length"));
+            }
+        }
+        if ((HTTP_METHOD_GET == con->request.http_method
+             || HTTP_METHOD_HEAD == con->request.http_method)
+            && !(con->conf.http_parseopts & HTTP_PARSEOPT_METHOD_GET_BODY)) {
+            return http_request_header_line_invalid(con, 400, "GET/HEAD with content-length -> 400");
+        }
+    }
 
 	return 0;
 }

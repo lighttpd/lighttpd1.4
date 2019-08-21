@@ -435,6 +435,32 @@ static void test_request_http_request_parse(connection *con)
                     "If-Modified-Since: \0\r\n"
                     "\r\n"));
 
+    run_http_request_parse(con, __LINE__, 0,
+      "absolute-uri in request-line (without Host)",
+      CONST_STR_LEN("GET http://zzz.example.org/ HTTP/1.1\r\n"
+                    "Connection: close\r\n"
+                    "\r\n"));
+    ds = (data_string *)
+      array_get_element_klen(con->request.headers, CONST_STR_LEN("Host"));
+    assert(ds && buffer_is_equal_string(ds->value, CONST_STR_LEN("zzz.example.org")));
+
+    run_http_request_parse(con, __LINE__, 0,
+      "absolute-uri in request-line (with Host match)",
+      CONST_STR_LEN("GET http://zzz.example.org/ HTTP/1.1\r\n"
+                    "Host: zzz.example.org\r\n"
+                    "Connection: close\r\n"
+                    "\r\n"));
+    ds = (data_string *)
+      array_get_element_klen(con->request.headers, CONST_STR_LEN("Host"));
+    assert(ds && buffer_is_equal_string(ds->value, CONST_STR_LEN("zzz.example.org")));
+
+    run_http_request_parse(con, __LINE__, 400,
+      "absolute-uri in request-line (with Host mismatch)",
+      CONST_STR_LEN("GET http://zzz.example.org/ HTTP/1.1\r\n"
+                    "Host: aaa.example.org\r\n"
+                    "Connection: close\r\n"
+                    "\r\n"));
+
     /* (quick check that none of above tests were left in a state
      *  which resulted in subsequent tests returning 400 for other
      *  reasons) */
