@@ -42,7 +42,7 @@ void safe_memclear(void *s, size_t n) {
 #elif defined(HAVE_EXPLICIT_BZERO)
 	explicit_bzero(s, n);
 #elif defined(HAVE_EXPLICIT_MEMSET)
-    explicit_memset(s, 0, n);
+	explicit_memset(s, 0, n);
 #else
 	safe_memset(s, 0, n);
 #endif

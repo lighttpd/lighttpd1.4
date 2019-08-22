@@ -151,6 +151,7 @@ conf_data.set('HAVE_ISSETUGID', compiler.has_function('issetugid', args: defs))
 conf_data.set('HAVE_INET_PTON', compiler.has_function('inet_pton', args: defs))
 conf_data.set('HAVE_MEMSET_S', compiler.has_function('memset_s', args: defs))
 conf_data.set('HAVE_EXPLICIT_BZERO', compiler.has_function('explicit_bzero', args: defs))
+conf_data.set('HAVE_EXPLICIT_MEMSET', compiler.has_function('explicit_memset', args: defs))
 
 conf_data.set('HAVE_CLOCK_GETTIME', compiler.has_header_symbol('time.h', 'clock_gettime'))
 clock_lib = []

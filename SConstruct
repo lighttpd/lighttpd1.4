@@ -388,6 +388,7 @@ if 1:
 		'dup2',
 		'epoll_ctl',
 		'explicit_bzero',
+		'explicit_memset',
 		'fork',
 		'getcwd',
 		'gethostbyname',
