@@ -4,7 +4,7 @@
 
 #include <string.h>
 
-#if !defined(HAVE_MEMSET_S) && !defined(HAVE_EXPLICIT_BZERO)
+#if !defined(HAVE_MEMSET_S) && !defined(HAVE_EXPLICIT_BZERO) && !defined(HAVE_EXPLICIT_MEMSET)
 
 #  if defined(HAVE_WEAK_SYMBOLS)
 /* it seems weak functions are never inlined, even for static builds */
@@ -41,6 +41,8 @@ void safe_memclear(void *s, size_t n) {
 	memset_s(s, n, 0, n);
 #elif defined(HAVE_EXPLICIT_BZERO)
 	explicit_bzero(s, n);
+#elif defined(HAVE_EXPLICIT_MEMSET)
+    explicit_memset(s, 0, n);
 #else
 	safe_memset(s, 0, n);
 #endif

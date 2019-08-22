@@ -1211,6 +1211,7 @@ AC_CHECK_FUNCS([\
   clock_gettime \
   epoll_ctl \
   explicit_bzero \
+  explicit_memset \
   fork \
   getloadavg \
   getrlimit \
