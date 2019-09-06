@@ -1130,6 +1130,13 @@ static int config_tokenizer(server *srv, tokenizer_t *t, int *token_id, buffer *
 				t->offset += 2;
 				tid = TK_FORCE_ASSIGN;
 				buffer_copy_string_len(token, CONST_STR_LEN(":="));
+			} else {
+				/* ERROR */
+				log_error_write(srv, __FILE__, __LINE__, "sbsdsds",
+						"source:", t->source,
+						"line:", t->line, "pos:", t->line_pos,
+						"unexpected character ':'");
+				return -1;
 			}
 			break;
 
