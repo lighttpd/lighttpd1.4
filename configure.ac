@@ -303,20 +303,26 @@ PGSQL_LIBS=
 
 if test "$WITH_PGSQL" != no; then
   if test "$WITH_PGSQL" = yes; then
-    AC_PATH_PROG([PGSQL_CONFIG], [pg_config])
+    PKG_CHECK_MODULES([PGSQL],[libpq],[
+      PGSQL_CONFIG=$PKG_CONFIG
+    ],[
+      AC_PATH_PROG([PGSQL_CONFIG], [pg_config])
+    ])
   else
     PGSQL_CONFIG=$WITH_PGSQL
   fi
 
-  if test -z "$PGSQL_CONFIG"; then
-    AC_MSG_ERROR([pg_config is not found])
-  fi
-  if test ! -x "$PGSQL_CONFIG"; then
-    AC_MSG_ERROR([pg_config not exists or not executable, use --with-pgsql=path-to-pg_config])
-  fi
+  if test "$PGSQL_CONFIG" != "$PKG_CONFIG"; then
+    if test -z "$PGSQL_CONFIG"; then
+      AC_MSG_ERROR([pg_config is not found])
+    fi
+    if test ! -x "$PGSQL_CONFIG"; then
+      AC_MSG_ERROR([pg_config not exists or not executable, use --with-pgsql=path-to-pg_config])
+    fi
 
-  PGSQL_INCLUDE="-I`"$PGSQL_CONFIG" --includedir`"
-  PGSQL_LIBS="-L`"$PGSQL_CONFIG" --libdir` -lpq"
+    PGSQL_INCLUDE="-I`"$PGSQL_CONFIG" --includedir`"
+    PGSQL_LIBS="-L`"$PGSQL_CONFIG" --libdir` -lpq"
+  fi
 
   AC_MSG_CHECKING([for PgSQL includes at])
   AC_MSG_RESULT([$PGSQL_INCLUDE])
