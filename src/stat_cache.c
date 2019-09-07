@@ -342,6 +342,11 @@ static handler_t stat_cache_handle_fdevent(server *srv, void *_fce, int revent)
 
 	if (revent & (FDEVENT_HUP|FDEVENT_RDHUP)) {
 		/* fam closed the connection */
+		log_error_write(srv, __FILE__, __LINE__, "s",
+				"FAM connection closed; disabling stat_cache.");
+		/* (although effectively STAT_CACHE_ENGINE_NONE,
+		 *  do not change here so that periodic jobs clean up memory)*/
+		/*srv->srvconf.stat_cache_engine = STAT_CACHE_ENGINE_NONE; */
 		fdevent_fdnode_event_del(srv->ev, scf->fdn);
 		fdevent_unregister(srv->ev, scf->fd);
 		scf->fdn = NULL;
@@ -397,6 +402,7 @@ static void stat_cache_free_fam(stat_cache_fam *scf) {
 
 static fam_dir_entry * fam_dir_monitor(server *srv, stat_cache_fam *scf, char *fn, size_t dirlen, struct stat *st)
 {
+    if (NULL == scf->fdn) return NULL; /* FAM connection closed; do nothing */
     const int fn_is_dir = S_ISDIR(st->st_mode);
     /*force_assert(0 != dirlen);*/
     /*force_assert(fn[0] == '/');*/
@@ -780,12 +786,10 @@ static void stat_cache_invalidate_dir_tree_walk(splay_tree *t,
     if (blen > len && b->ptr[len] == '/' && 0 == memcmp(b->ptr, name, len)) {
         stat_cache_entry *sce = t->data;
         sce->stat_ts = 0;
-      #ifdef HAVE_FAM_H
         if (sce->fam_dir != NULL) {
             --((fam_dir_entry *)sce->fam_dir)->refcnt;
             sce->fam_dir = NULL;
         }
-      #endif
     }
 }
 
