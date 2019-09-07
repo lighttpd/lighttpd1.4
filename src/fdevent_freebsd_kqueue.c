@@ -37,6 +37,8 @@ static int fdevent_freebsd_kqueue_event_del(fdevents *ev, fdnode *fdn) {
 	}
 
 	return (0 != n) ? kevent(ev->kq_fd, kev, n, NULL, 0, &ts) : 0;
+	/*(kevent() changelist still processed on EINTR,
+	 * but EINTR should not be received since 0 == nevents)*/
 }
 
 static int fdevent_freebsd_kqueue_event_set(fdevents *ev, fdnode *fdn, int events) {
@@ -64,6 +66,8 @@ static int fdevent_freebsd_kqueue_event_set(fdevents *ev, fdnode *fdn, int event
 	}
 
 	return (0 != n) ? kevent(ev->kq_fd, kev, n, NULL, 0, &ts) : 0;
+	/*(kevent() changelist still processed on EINTR,
+	 * but EINTR should not be received since 0 == nevents)*/
 }
 
 static int fdevent_freebsd_kqueue_poll(fdevents * const ev, int timeout_ms) {

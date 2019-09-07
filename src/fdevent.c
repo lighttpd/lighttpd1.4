@@ -351,16 +351,64 @@ static void fdevent_sched_run(fdevents *ev) {
 	ev->pendclose = NULL;
 }
 
+__attribute_cold__
+__attribute_noinline__
+static int fdevent_fdnode_event_unsetter_retry(fdevents *ev, fdnode *fdn) {
+    do {
+        switch (errno) {
+         #ifdef EWOULDBLOCK
+         #if EAGAIN != EWOULDBLOCK
+          case EWOULDBLOCK:
+         #endif
+         #endif
+          case EAGAIN:
+          case EINTR:
+            /* temporary error; retry */
+            break;
+          /*case ENOMEM:*/
+          default:
+            /* unrecoverable error; might leak fd */
+            log_error_write(ev->srv, __FILE__, __LINE__, "sDsS",
+                            "fdevent event_del failed on fd", fdn->fd, ":",
+                            strerror(errno));
+            return 0;
+        }
+    } while (0 != ev->event_del(ev, fdn));
+    return 1;
+}
+
 static void fdevent_fdnode_event_unsetter(fdevents *ev, fdnode *fdn) {
     if (-1 == fdn->fde_ndx) return;
-    if (0 == ev->event_del(ev, fdn)) {
-        fdn->fde_ndx = -1;
-        fdn->events = 0;
-    }
-    else {
-        log_error_write(ev->srv, __FILE__, __LINE__, "SS",
-                        "fdevent event_del failed: ", strerror(errno));
-    }
+    if (0 != ev->event_del(ev, fdn))
+        fdevent_fdnode_event_unsetter_retry(ev, fdn);
+    fdn->fde_ndx = -1;
+    fdn->events = 0;
+}
+
+__attribute_cold__
+__attribute_noinline__
+static int fdevent_fdnode_event_setter_retry(fdevents *ev, fdnode *fdn, int events) {
+    do {
+        switch (errno) {
+         #ifdef EWOULDBLOCK
+         #if EAGAIN != EWOULDBLOCK
+          case EWOULDBLOCK:
+         #endif
+         #endif
+          case EAGAIN:
+          case EINTR:
+            /* temporary error; retry */
+            break;
+          /*case ENOMEM:*/
+          default:
+            /* unrecoverable error */
+            log_error_write(ev->srv, __FILE__, __LINE__, "sDsS",
+                            "fdevent event_set failed on fd", fdn->fd, ":",
+                            strerror(errno));
+            return 0;
+        }
+    } while (0 != ev->event_set(ev, fdn, events));
+    return 1;
 }
 
 static void fdevent_fdnode_event_setter(fdevents *ev, fdnode *fdn, int events) {
@@ -370,11 +418,9 @@ static void fdevent_fdnode_event_setter(fdevents *ev, fdnode *fdn, int events) {
      * then FDEVENT_HUP or FDEVENT_ERR will never be returned.) */
     if (fdn->events == events) return;/*(no change; nothing to do)*/
 
-    if (0 == ev->event_set(ev, fdn, events))
+    if (0 == ev->event_set(ev, fdn, events)
+        || fdevent_fdnode_event_setter_retry(ev, fdn, events))
         fdn->events = events;
-    else
-        log_error_write(ev->srv, __FILE__, __LINE__, "SS",
-                        "fdevent event_set failed: ", strerror(errno));
 }
 
 void fdevent_fdnode_event_del(fdevents *ev, fdnode *fdn) {
