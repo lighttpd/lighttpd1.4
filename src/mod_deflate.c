@@ -997,7 +997,7 @@ static int mod_deflate_choose_encoding (const char *value, plugin_data *p, const
       #else
         for (; *value; ++value) {
             const char *v;
-            while (*value == ' ' || *value == ',') continue;
+            while (*value == ' ' || *value == ',') ++value;
             v = value;
             while (*value!=' ' && *value!=',' && *value!=';' && *value!='\0')
                 ++value;
