@@ -41,6 +41,7 @@
 typedef struct {
     buffer *auth_gssapi_keytab;
     buffer *auth_gssapi_principal;
+    unsigned short int auth_gssapi_store_creds;
 } plugin_config;
 
 typedef struct {
@@ -101,6 +102,7 @@ SETDEFAULTS_FUNC(mod_authn_gssapi_set_defaults) {
     config_values_t cv[] = {
         { "auth.backend.gssapi.keytab",     NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_CONNECTION },
         { "auth.backend.gssapi.principal",  NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_CONNECTION },
+        { "auth.backend.gssapi.store-creds",NULL, T_CONFIG_BOOLEAN,T_CONFIG_SCOPE_CONNECTION },
         { NULL,                             NULL, T_CONFIG_UNSET,  T_CONFIG_SCOPE_UNSET }
     };
 
@@ -117,6 +119,9 @@ SETDEFAULTS_FUNC(mod_authn_gssapi_set_defaults) {
 
         cv[0].destination = s->auth_gssapi_keytab;
         cv[1].destination = s->auth_gssapi_principal;
+        cv[2].destination = &s->auth_gssapi_store_creds;
+        /* default enabled for backwards compatibility; disable in future */
+        s->auth_gssapi_store_creds = 1;
 
         p->config_storage[i] = s;
 
@@ -137,6 +142,7 @@ static int mod_authn_gssapi_patch_connection(server *srv, connection *con, plugi
 
     PATCH(auth_gssapi_keytab);
     PATCH(auth_gssapi_principal);
+    PATCH(auth_gssapi_store_creds);
 
     /* skip the first, the global context */
     for (i = 1; i < srv->config_context->used; i++) {
@@ -154,6 +160,8 @@ static int mod_authn_gssapi_patch_connection(server *srv, connection *con, plugi
                 PATCH(auth_gssapi_keytab);
             } else if (buffer_is_equal_string(du->key, CONST_STR_LEN("auth.backend.gssapi.principal"))) {
                 PATCH(auth_gssapi_principal);
+            } else if (buffer_is_equal_string(du->key, CONST_STR_LEN("auth.backend.gssapi.store-creds"))) {
+                PATCH(auth_gssapi_store_creds);
             }
         }
     }
@@ -433,7 +441,7 @@ static handler_t mod_authn_gssapi_check_spnego(server *srv, connection *con, plu
         goto end;
     }
 
-    {
+    if (p->conf.auth_gssapi_store_creds) {
         if (!(acc_flags & GSS_C_DELEG_FLAG)) {
             log_error_write(srv, __FILE__, __LINE__, "ss", "Unable to delegate credentials for user:", token_out.value);
             goto end;
@@ -730,6 +738,8 @@ static handler_t mod_authn_gssapi_basic(server *srv, connection *con, void *p_d,
         mod_authn_gssapi_log_krb5_error(srv, __FILE__, __LINE__, "mod_authn_gssapi_verify_krb5_init_creds", NULL, kcontext, ret);
         goto end;
     }
+
+    if (!p->conf.auth_gssapi_store_creds) goto end;
 
     ret = krb5_cc_resolve(kcontext, "MEMORY:", &ret_ccache);
     if (ret) {
