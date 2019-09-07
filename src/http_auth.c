@@ -56,11 +56,22 @@ int http_auth_const_time_memeq (const char *a, const size_t alen, const char *b,
     /* constant time memory compare, unless compiler figures it out
      * (similar to mod_secdownload.c:const_time_memeq()) */
     /* round to next multiple of 64 to avoid potentially leaking exact
-     * password length when subject to high precision timing attacks) */
+     * password length when subject to high precision timing attacks)
+     * (not necessary when comparing digests, which have defined lengths)
+     */
+    /* Note: some libs provide similar funcs but might not obscure length, e.g.
+     * OpenSSL:
+     *   int CRYPTO_memcmp(const void * in_a, const void * in_b, size_t len)
+     * Note: some OS provide similar funcs but might not obscure length, e.g.
+     * OpenBSD: int timingsafe_bcmp(const void *b1, const void *b2, size_t len)
+     * NetBSD: int consttime_memequal(void *b1, void *b2, size_t len)
+     */
+    const volatile unsigned char * const av = (const unsigned char *)a;
+    const volatile unsigned char * const bv = (const unsigned char *)b;
     size_t lim = ((alen >= blen ? alen : blen) + 0x3F) & ~0x3F;
-    int diff = 0;
+    int diff = (alen != blen); /*(never match if string length mismatch)*/
     for (size_t i = 0, j = 0; lim; --lim) {
-        diff |= (a[i] ^ b[j]);
+        diff |= (av[i] ^ bv[j]);
         i += (i < alen);
         j += (j < blen);
     }
