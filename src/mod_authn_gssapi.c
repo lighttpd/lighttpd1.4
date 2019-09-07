@@ -269,6 +269,13 @@ static int mod_authn_gssapi_create_krb5_ccache(server *srv, connection *con, plu
  * HTTP auth Negotiate
  */
 
+static handler_t mod_authn_gssapi_send_500_server_error (connection *con)
+{
+    con->http_status = 500;
+    con->mode = DIRECT;
+    return HANDLER_FINISHED;
+}
+
 static handler_t mod_authn_gssapi_send_401_unauthorized_negotiate (connection *con)
 {
     con->http_status = 401;
@@ -334,7 +341,7 @@ static handler_t mod_authn_gssapi_check_spnego(server *srv, connection *con, plu
     gss_name_t client_name    = GSS_C_NO_NAME;
 
     buffer *sprinc;
-    int ret = 0;
+    handler_t rc = HANDLER_UNSET;
 
     buffer *t_in = buffer_init();
     if (!buffer_append_base64_decode(t_in, realm_str, strlen(realm_str), BASE64_STANDARD)) {
@@ -421,19 +428,24 @@ static handler_t mod_authn_gssapi_check_spnego(server *srv, connection *con, plu
         goto end;
     }
 
-    if (!(acc_flags & GSS_C_DELEG_FLAG)) {
-        log_error_write(srv, __FILE__, __LINE__, "ss", "Unable to delegate credentials for user:", token_out.value);
-        goto end;
-    }
-
     /* check the allow-rules */
     if (!http_auth_match_rules(require, token_out.value, NULL, NULL)) {
         goto end;
     }
 
-    ret = mod_authn_gssapi_store_gss_creds(srv, con, p, token_out.value, client_cred);
-    if (ret)
-        http_auth_setenv(con, token_out.value, token_out.length, CONST_STR_LEN("GSSAPI"));
+    {
+        if (!(acc_flags & GSS_C_DELEG_FLAG)) {
+            log_error_write(srv, __FILE__, __LINE__, "ss", "Unable to delegate credentials for user:", token_out.value);
+            goto end;
+        }
+        else if (!mod_authn_gssapi_store_gss_creds(srv, con, p, token_out.value, client_cred)) {
+            rc = mod_authn_gssapi_send_500_server_error(con);
+            goto end;
+        }
+    }
+
+    http_auth_setenv(con, token_out.value, token_out.length, CONST_STR_LEN("GSSAPI"));
+    rc = HANDLER_GO_ON; /* success */
 
     end:
         buffer_free(t_in);
@@ -459,7 +471,7 @@ static handler_t mod_authn_gssapi_check_spnego(server *srv, connection *con, plu
         if (token_out.length)
             gss_release_buffer(&st_minor, &token_out);
 
-        return ret ? HANDLER_GO_ON : mod_authn_gssapi_send_401_unauthorized_negotiate(con);
+        return rc != HANDLER_UNSET ? rc : mod_authn_gssapi_send_401_unauthorized_negotiate(con);
 }
 
 static handler_t mod_authn_gssapi_check (server *srv, connection *con, void *p_d, const struct http_auth_require_t *require, const struct http_auth_backend_t *backend)
