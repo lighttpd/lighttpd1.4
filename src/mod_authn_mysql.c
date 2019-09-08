@@ -380,7 +380,7 @@ static int mod_authn_mysql_password_cmp(const char *userpw, unsigned long userpw
         /*(compare 16-byte MD5 binary instead of converting to hex strings
          * in order to then have to do case-insensitive hex str comparison)*/
         return (0 == http_auth_digest_hex2bin(userpw, 32, md5pw, sizeof(md5pw)))
-          ? memcmp(HA1, md5pw, sizeof(md5pw))
+          ? http_auth_const_time_memeq(HA1, md5pw, sizeof(md5pw)) ? 0 : 1
           : -1;
     }
 

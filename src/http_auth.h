@@ -71,6 +71,9 @@ const http_auth_backend_t * http_auth_backend_get (const buffer *name);
 void http_auth_backend_set (const http_auth_backend_t *backend);
 
 __attribute_pure__
+int http_auth_const_time_memeq (const void *a, const void *b, size_t len);
+
+__attribute_pure__
 int http_auth_const_time_memeq_pad (const void *a, size_t alen, const void *b, size_t blen);
 
 void http_auth_setenv(connection *con, const char *username, size_t ulen, const char *auth_type, size_t alen);

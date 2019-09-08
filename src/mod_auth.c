@@ -1128,7 +1128,7 @@ static handler_t mod_auth_check_digest(server *srv, connection *con, void *p_d, 
 
 	mod_auth_digest_mutate(&ai,m,uri,nonce,cnonce,nc,qop);
 
-	if (0 != memcmp(rdigest, ai.digest, ai.dlen)) {
+	if (!http_auth_const_time_memeq(rdigest, ai.digest, ai.dlen)) {
 		/* digest not ok */
 		log_error_write(srv, __FILE__, __LINE__, "sssB",
 				"digest: auth failed for ", username, ": wrong password, IP:", con->dst_addr_buf);

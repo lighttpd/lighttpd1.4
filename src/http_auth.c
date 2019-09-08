@@ -51,6 +51,29 @@ void http_auth_backend_set (const http_auth_backend_t *backend)
 }
 
 
+int http_auth_const_time_memeq (const void *a, const void *b, const size_t len)
+{
+    /* constant time memory compare, unless compiler figures it out
+     * (similar to mod_secdownload.c:const_time_memeq()) */
+    /* caller should prefer http_auth_const_time_memeq_pad()
+     * if not operating on digests, which have defined lengths */
+    /* Note: some libs provide similar funcs, e.g.
+     * OpenSSL:
+     *   int CRYPTO_memcmp(const void * in_a, const void * in_b, size_t len)
+     * Note: some OS provide similar funcs, e.g.
+     * OpenBSD: int timingsafe_bcmp(const void *b1, const void *b2, size_t len)
+     * NetBSD: int consttime_memequal(void *b1, void *b2, size_t len)
+     */
+    const volatile unsigned char * const av = (const unsigned char *)a;
+    const volatile unsigned char * const bv = (const unsigned char *)b;
+    int diff = 0;
+    for (size_t i = 0; i < len; ++i) {
+        diff |= (av[i] ^ bv[i]);
+    }
+    return (0 == diff);
+}
+
+
 int http_auth_const_time_memeq_pad (const void *a, const size_t alen, const void *b, const size_t blen)
 {
     /* constant time memory compare, unless compiler figures it out

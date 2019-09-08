@@ -356,7 +356,7 @@ static handler_t mod_authn_file_htdigest_basic(server *srv, connection *con, voi
 
     mod_authn_file_digest(&ai, pw, strlen(pw));
 
-    return (0 == memcmp(htdigest, ai.digest, ai.dlen)
+    return (http_auth_const_time_memeq(htdigest, ai.digest, ai.dlen)
             && http_auth_match_rules(require, username->ptr, NULL, NULL))
       ? HANDLER_GO_ON
       : HANDLER_ERROR;
