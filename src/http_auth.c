@@ -51,7 +51,7 @@ void http_auth_backend_set (const http_auth_backend_t *backend)
 }
 
 
-int http_auth_const_time_memeq (const char *a, const size_t alen, const char *b, const size_t blen)
+int http_auth_const_time_memeq_pad (const void *a, const size_t alen, const void *b, const size_t blen)
 {
     /* constant time memory compare, unless compiler figures it out
      * (similar to mod_secdownload.c:const_time_memeq()) */
