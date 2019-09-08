@@ -868,9 +868,9 @@ static void mod_auth_digest_www_authenticate(buffer *b, time_t cur_ts, const str
         }
         buffer_append_string_len(b, CONST_STR_LEN("Digest realm=\""));
         buffer_append_string_buffer(b, require->realm);
-        buffer_append_string_len(b, CONST_STR_LEN("\", charset=\"UTF-8\", algorithm=\""));
+        buffer_append_string_len(b, CONST_STR_LEN("\", charset=\"UTF-8\", algorithm="));
         buffer_append_string_len(b, algoname[i], algolen[i]);
-        buffer_append_string_len(b, CONST_STR_LEN("\", nonce=\""));
+        buffer_append_string_len(b, CONST_STR_LEN(", nonce=\""));
         buffer_append_uint_hex(b, (uintmax_t)cur_ts);
         buffer_append_string_len(b, CONST_STR_LEN(":"));
         (append_nonce[i])(b, cur_ts, rnd);
