@@ -881,6 +881,33 @@ static void mod_auth_digest_www_authenticate(buffer *b, time_t cur_ts, const str
     }
 }
 
+static void mod_auth_digest_authentication_info(buffer *b, time_t cur_ts, int dalgo) {
+    const int rnd = li_rand_pseudo();
+    void(*append_nonce)(buffer *, time_t, int);
+    switch (dalgo) {
+     #ifdef USE_OPENSSL_CRYPTO
+      #ifdef SHA512_256_DIGEST_LENGTH
+      case HTTP_AUTH_DIGEST_SHA512_256:
+        append_nonce = mod_auth_digest_nonce_sha512_256;
+        break;
+      #endif
+      case HTTP_AUTH_DIGEST_SHA256:
+        append_nonce = mod_auth_digest_nonce_sha256;
+        break;
+     #endif
+      /*case HTTP_AUTH_DIGEST_MD5:*/
+      default:
+        append_nonce = mod_auth_digest_nonce_md5;
+        break;
+    }
+    buffer_clear(b);
+    buffer_append_string_len(b, CONST_STR_LEN("nextnonce=\""));
+    buffer_append_uint_hex(b, (uintmax_t)cur_ts);
+    buffer_append_string_len(b, CONST_STR_LEN(":"));
+    (append_nonce)(b, cur_ts, rnd);
+    buffer_append_string_len(b, CONST_STR_LEN("\""));
+}
+
 typedef struct {
 	const char *key;
 	int key_len;
@@ -1136,7 +1163,12 @@ static handler_t mod_auth_check_digest(server *srv, connection *con, void *p_d, 
 			/* nonce is stale; have client regenerate digest */
 			buffer_free(b);
 			return mod_auth_send_401_unauthorized_digest(srv, con, require, ai.dalgo);
-		} /*(future: might send nextnonce when expiration is imminent)*/
+		}
+		else if (srv->cur_ts - ts > 540) { /*(9 mins)*/
+			/*(send nextnonce when expiration is approaching)*/
+			mod_auth_digest_authentication_info(srv->tmp_buf, srv->cur_ts, ai.dalgo);
+			http_header_response_set(con, HTTP_HEADER_OTHER, CONST_STR_LEN("Authentication-Info"), CONST_BUF_LEN(srv->tmp_buf));
+		}
 	}
 
 	http_auth_setenv(con, ai.username, ai.ulen, CONST_STR_LEN("Digest"));
