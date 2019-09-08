@@ -3325,7 +3325,7 @@ webdav_mmap_file_chunk (chunk * const c)
     /*(request body provided in temporary file, so ok to mmap().
      * Otherwise, must check defined(ENABLE_MMAP)) */
     /* chunk_reset() or chunk_free() will clean up mmap'd chunk */
-    /* close c->file.fd only faster mmap() succeeds, since it will not
+    /* close c->file.fd only after mmap() succeeds, since it will not
      * be able to be re-opened if it was a tmpfile that was unlinked */
     /*assert(c->type == FILE_CHUNK);*/
     if (MAP_FAILED != c->file.mmap.start)
@@ -4274,6 +4274,9 @@ mod_webdav_put_prep (connection * const con, const plugin_config * const pconf)
     }
     buffer_clear(cq->last->mem); /* file already unlink()ed */
     chunkqueue_set_tempdirs(cq, cq->tempdirs, INTMAX_MAX);
+    /* force huge cq->upload_temp_file_size since chunkqueue_set_tempdirs()
+     * might truncate upload_temp_file_size to chunk.c:MAX_TEMPFILE_SIZE */
+    cq->upload_temp_file_size = INTMAX_MAX;
     cq->last->file.is_temp = 1;
 
     return HANDLER_GO_ON;
