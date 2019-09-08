@@ -1076,9 +1076,7 @@ static handler_t mod_auth_check_digest(server *srv, connection *con, void *p_d, 
 	 * uri sent in client request. */
 	{
 		const size_t ulen = strlen(uri);
-		const size_t rlen = buffer_string_length(con->request.orig_uri);
-		if (!buffer_is_equal_string(con->request.orig_uri, uri, ulen)
-		    && !(rlen < ulen && 0 == memcmp(con->request.orig_uri->ptr, uri, rlen) && uri[rlen] == '?')) {
+		if (!buffer_is_equal_string(con->request.orig_uri, uri, ulen)) {
 			log_error_write(srv, __FILE__, __LINE__, "sbsssB",
 					"digest: auth failed: uri mismatch (", con->request.orig_uri, "!=", uri, "), IP:", con->dst_addr_buf);
 			buffer_free(b);
