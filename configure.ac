@@ -298,7 +298,7 @@ AC_ARG_WITH([pgsql],
 )
 AC_MSG_RESULT([$WITH_PGSQL])
 
-PGSQL_INCLUDE=
+PGSQL_CFLAGS=
 PGSQL_LIBS=
 
 if test "$WITH_PGSQL" != no; then
@@ -320,12 +320,12 @@ if test "$WITH_PGSQL" != no; then
       AC_MSG_ERROR([pg_config not exists or not executable, use --with-pgsql=path-to-pg_config])
     fi
 
-    PGSQL_INCLUDE="-I`"$PGSQL_CONFIG" --includedir`"
+    PGSQL_CFLAGS="-I`"$PGSQL_CONFIG" --includedir`"
     PGSQL_LIBS="-L`"$PGSQL_CONFIG" --libdir` -lpq"
   fi
 
   AC_MSG_CHECKING([for PgSQL includes at])
-  AC_MSG_RESULT([$PGSQL_INCLUDE])
+  AC_MSG_RESULT([$PGSQL_CFLAGS])
 
   AC_MSG_CHECKING([for PgSQL libraries at])
   AC_MSG_RESULT([$PGSQL_LIBS])
@@ -335,7 +335,7 @@ fi
 AM_CONDITIONAL([BUILD_WITH_PGSQL], [test "$WITH_PGSQL" != no])
 
 AC_SUBST([PGSQL_LIBS])
-AC_SUBST([PGSQL_INCLUDE])
+AC_SUBST([PGSQL_CFLAGS])
 
 dnl Checks for libdbi library
 AC_MSG_NOTICE([----------------------------------------])
