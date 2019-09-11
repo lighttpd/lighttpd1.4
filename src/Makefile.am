@@ -209,7 +209,7 @@ lib_LTLIBRARIES += mod_vhostdb_pgsql.la
 mod_vhostdb_pgsql_la_SOURCES = mod_vhostdb_pgsql.c
 mod_vhostdb_pgsql_la_LDFLAGS = $(common_module_ldflags)
 mod_vhostdb_pgsql_la_LIBADD = $(PGSQL_LIBS) $(common_libadd)
-mod_vhostdb_pgsql_la_CPPFLAGS = $(PGSQL_INCLUDE)
+mod_vhostdb_pgsql_la_CPPFLAGS = $(PGSQL_CFLAGS)
 endif
 
 if BUILD_WITH_DBI
@@ -522,7 +522,7 @@ lighttpd_LDADD += $(MYSQL_LIBS)
 endif
 if BUILD_WITH_PGSQL
 lighttpd_SOURCES += mod_vhostdb_pgsql.c
-lighttpd_CPPFLAGS += $(PGSQL_INCLUDE)
+lighttpd_CPPFLAGS += $(PGSQL_CFLAGS)
 lighttpd_LDADD += $(PGSQL_LIBS)
 endif
 if BUILD_WITH_DBI
