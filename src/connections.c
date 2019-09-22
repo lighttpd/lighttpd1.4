@@ -736,6 +736,22 @@ static chunk * connection_read_header_more(connection *con, chunkqueue *cq, chun
       (NULL != c && olen < buffer_string_length(c->mem) - c->offset) ? c : NULL;
 }
 
+__attribute_hot__
+static size_t connection_read_header_hoff(const char *n, const size_t clen, unsigned short hoff[8192]) {
+    size_t hlen = 0;
+    for (const char *b; (n = memchr((b = n),'\n',clen-hlen)); ++n) {
+        size_t x = (size_t)(n - b + 1);
+        hlen += x;
+        if (x <= 2 && (x == 1 || n[-1] == '\r')) {
+            hoff[hoff[0]+1] = hlen;
+            return hlen;
+        }
+        if (++hoff[0] >= /*sizeof(hoff)/sizeof(hoff[0])-1*/ 8192-1) break;
+        hoff[hoff[0]] = hlen;
+    }
+    return 0;
+}
+
 static int connection_read_header(connection *con) {
     chunkqueue * const cq = con->read_queue;
     chunk *c = cq->first;
@@ -746,29 +762,22 @@ static int connection_read_header(connection *con) {
         if (NULL == c) continue;
         clen = buffer_string_length(c->mem) - c->offset;
         if (0 == clen) continue;
-        n = c->mem->ptr + c->offset;
         if (c->offset > USHRT_MAX) /*(highly unlikely)*/
             chunkqueue_compact_mem(cq, clen);
 
         hoff[0] = 1;                         /* number of lines */
         hoff[1] = (unsigned short)c->offset; /* base offset for all lines */
         /*hoff[2] = ...;*/                   /* offset from base for 2nd line */
-        hlen = 0;
-        for (; (n = memchr((b = n),'\n',clen)); ++n) {
-            size_t x = (size_t)(n - b + 1);
-            clen -= x;
-            hlen += x;
-            if (x <= 2 && (x==1 || n[-1]=='\r')) { clen = 0; break; }
-            if (++hoff[0]>=sizeof(hoff)/sizeof(hoff[0])-1) break;
-            hoff[hoff[0]] = hlen;
-        }
+
+        con->header_len =
+          connection_read_header_hoff(c->mem->ptr + c->offset, clen, hoff);
 
         /* casting to (unsigned short) might truncate, and the hoff[]
          * addition might overflow, but max_request_field_size is USHRT_MAX,
          * so failure will be detected below */
         const unsigned int max_request_field_size =
           con->srv->srvconf.max_request_field_size;
-        if (hlen + clen > max_request_field_size
+        if ((con->header_len ? con->header_len : clen) > max_request_field_size
             || hoff[0] >= sizeof(hoff)/sizeof(hoff[0])-1) {
             log_error(con->errh, __FILE__, __LINE__, "%s",
                       "oversized request-header -> sending Status 431");
@@ -776,11 +785,8 @@ static int connection_read_header(connection *con) {
             con->keep_alive = 0;
             return 1;
         }
-        if (NULL != n) {
-            hoff[hoff[0]+1] = hlen;
-            con->header_len = hlen;
-            break;
-        }
+
+        if (0 != con->header_len) break;
     } while ((c = connection_read_header_more(con, cq, c, clen)));
     if (NULL == c) return 0; /* incomplete request headers */
 
