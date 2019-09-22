@@ -715,96 +715,88 @@ static void connection_discard_blank_line(connection *con, const buffer *hdrs, u
     }
 }
 
-__attribute_noinline__
-static void connection_chunkqueue_compact(chunkqueue *cq, size_t clen) {
-    if (0 == clen) {
-        chunk *c = cq->first;
-        if (c == cq->last) {
-            if (0 != c->offset && buffer_string_space(c->mem) < 1024) {
-                buffer *b = c->mem;
-                size_t len = buffer_string_length(b) - c->offset;
-                memmove(b->ptr, b->ptr+c->offset, len);
-                buffer_string_set_length(b, len);
-                c->offset = 0;
-            }
-            return;
-        }
-        clen = chunkqueue_length(cq);
-        if (0 == clen) return; /*(not expected)*/
+static chunk * connection_read_header_more(connection *con, chunkqueue *cq, chunk *c, const size_t olen) {
+    if ((NULL == c || NULL == c->next) && con->is_readable) {
+        server * const srv = con->srv;
+        con->read_idle_ts = srv->cur_ts;
+        if (0 != con->network_read(srv, con, cq, MAX_READ_LIMIT))
+            connection_set_state(con, CON_STATE_ERROR);
     }
 
-    /* caller should have checked if data already in first chunk if 0 != clen */
-    /*if (len >= clen) return;*/ /*(not expected)*/
+    if (cq->first != cq->last && 0 != olen) {
+        const size_t clen = chunkqueue_length(cq);
+        size_t block = (olen + (16384-1)) & (16384-1);
+        block += (block - olen > 1024 ? 0 : 16384);
+        chunkqueue_compact_mem(cq, block > clen ? clen : block);
+    }
 
-    chunkqueue_compact_mem(cq, clen);
+    /* detect if data is added to chunk */
+    c = cq->first;
+    return
+      (NULL != c && olen < buffer_string_length(c->mem) - c->offset) ? c : NULL;
 }
 
 static int connection_read_header(connection *con) {
     chunkqueue * const cq = con->read_queue;
-    chunk *c;
-    size_t hlen = 0;
-    size_t clen;
-    const char *b, *n, *end;
-    int le = 0;
-    const unsigned int max_request_field_size =
-      con->srv->srvconf.max_request_field_size;
-    unsigned short hoff[8192]; /* max num header lines + 1; 16k on stack */
+    chunk *c = cq->first;
+    size_t clen = 0;
+    unsigned short hoff[8192]; /* max num header lines + 3; 16k on stack */
 
-    hoff[0] = 1; /* number of lines */
-    hoff[1] = 0; /* base offset for all lines */
-    hoff[2] = 0; /* init offset from base for 2nd line (added += later) */
-    for (c = cq->first; c; c = c->next) {
+    do {
+        if (NULL == c) continue;
         clen = buffer_string_length(c->mem) - c->offset;
-        b = c->mem->ptr + c->offset;
-        n = b;
         if (0 == clen) continue;
-        if (le) { /*(line end sequence cross chunk boundary)*/
-            if (n[0] == '\r') { ++n; ++hlen; --clen; }
-            if (n[0] == '\n') { ++n; ++hlen; break; }
-            if (n[0] == '\0') { continue; }
-            le = 0;
-        }
-        for (end=n+clen; (n = memchr((b = n),'\n',end-n)); ++n) {
+        n = c->mem->ptr + c->offset;
+        if (c->offset > USHRT_MAX) /*(highly unlikely)*/
+            chunkqueue_compact_mem(cq, clen);
+
+        hoff[0] = 1;                         /* number of lines */
+        hoff[1] = (unsigned short)c->offset; /* base offset for all lines */
+        /*hoff[2] = ...;*/                   /* offset from base for 2nd line */
+        hlen = 0;
+        for (; (n = memchr((b = n),'\n',clen)); ++n) {
             size_t x = (size_t)(n - b + 1);
             clen -= x;
             hlen += x;
+            if (x <= 2 && (x==1 || n[-1]=='\r')) { clen = 0; break; }
             if (++hoff[0]>=sizeof(hoff)/sizeof(hoff[0])-1) break;
             hoff[hoff[0]] = hlen;
-            hoff[hoff[0]+1] = 0;
-            if (n[1] == '\r') { ++n; ++hlen; --clen; }
-            if (n[1] == '\n') { hoff[hoff[0]+1] = ++hlen; break; } // - (n[0] == '\r' ? 2 : 1);
-            if (n[1] == '\0') { n = NULL; le = 1; break; }
         }
-        if (n) break;
+
         /* casting to (unsigned short) might truncate, and the hoff[]
-         * addition might overflow, but max_request_field_size is USHORT_MAX,
+         * addition might overflow, but max_request_field_size is USHRT_MAX,
          * so failure will be detected below */
-        hlen += clen;
-    }
-
-    if (hlen > max_request_field_size
-        || hoff[0] >= sizeof(hoff)/sizeof(hoff[0])-1) {
-        log_error(con->errh, __FILE__, __LINE__, "%s",
-                  "oversized request-header -> sending Status 431");
-        con->http_status = 431; /* Request Header Fields Too Large */
-        con->keep_alive = 0;
-        return 1;
-    }
-
+        const unsigned int max_request_field_size =
+          con->srv->srvconf.max_request_field_size;
+        if (hlen + clen > max_request_field_size
+            || hoff[0] >= sizeof(hoff)/sizeof(hoff[0])-1) {
+            log_error(con->errh, __FILE__, __LINE__, "%s",
+                      "oversized request-header -> sending Status 431");
+            con->http_status = 431; /* Request Header Fields Too Large */
+            con->keep_alive = 0;
+            return 1;
+        }
+        if (NULL != n) {
+            hoff[hoff[0]+1] = hlen;
+            con->header_len = hlen;
+            break;
+        }
+    } while ((c = connection_read_header_more(con, cq, c, clen)));
     if (NULL == c) return 0; /* incomplete request headers */
 
-    con->header_len = hlen;
-
-    if (c != cq->first) {
-        connection_chunkqueue_compact(cq, hlen);
-        c = cq->first;
-    } /*(else common case: headers in single chunk)*/
-    hoff[1] = (unsigned short)c->offset;
     buffer * const hdrs = c->mem;
 
-    /* skip past \r\n or \n after previous POST request when keep-alive */
-    if (con->request_count > 1 && hoff[2] - hoff[1] <= 2) {
-        connection_discard_blank_line(con, hdrs, hoff);
+    if (con->request_count > 1) {
+        /* skip past \r\n or \n after previous POST request when keep-alive */
+        if (hoff[2] - hoff[1] <= 2)
+            connection_discard_blank_line(con, hdrs, hoff);
+
+        /* clear buffers which may have been kept for reporting on keep-alive,
+         * (e.g. mod_status) */
+        buffer_clear(con->uri.authority);
+        buffer_reset(con->uri.path);
+        buffer_reset(con->uri.query);
+        buffer_reset(con->request.orig_uri);
     }
 
     if (con->conf.log_request_header) {
@@ -812,11 +804,6 @@ static int connection_read_header(connection *con) {
                   "fd: %d request-len: %zu\n%.*s", con->fd, con->header_len,
                   (int)con->header_len, hdrs->ptr + hoff[1]);
     }
-
-    buffer_clear(con->uri.authority);
-    buffer_reset(con->uri.path);
-    buffer_reset(con->uri.query);
-    buffer_reset(con->request.orig_uri);
 
     con->http_status = http_request_parse(con, hdrs, hoff);
     if (0 != con->http_status) {
@@ -841,68 +828,37 @@ static int connection_read_header(connection *con) {
  * we get called by the state-engine and by the fdevent-handler
  */
 static int connection_handle_read_state(server *srv, connection *con)  {
-	int is_closed = 0; /* the connection got closed, if we don't have a complete header, -> error */
+    int pipelined_request_start = 0;
+    int keepalive_request_start = 0;
 
-	if (con->request_count > 1 && 0 == con->bytes_read) {
+    if (con->request_count > 1 && 0 == con->bytes_read) {
+        keepalive_request_start = 1;
+        if (!chunkqueue_is_empty(con->read_queue)) {
+            pipelined_request_start = 1;
+            /* partial header of next request has already been read,
+             * so optimistically check for more data received on
+             * socket while processing the previous request */
+            con->is_readable = 1;
+            /*(if partially read next request and unable to read() any bytes,
+             * then will unnecessarily scan again before subsequent read())*/
+        }
+    }
 
-		/* update request_start timestamp when first byte of
-		 * next request is received on a keep-alive connection */
-		con->request_start = srv->cur_ts;
-		if (con->conf.high_precision_timestamps)
-			log_clock_gettime_realtime(&con->request_start_hp);
+    const int header_complete = connection_read_header(con);
 
-		if (!chunkqueue_is_empty(con->read_queue)) {
-			/*(if partially read next request and unable to read() any bytes below,
-			 * then will unnecessarily scan again here before subsequent read())*/
-			if (connection_read_header(con)) {
-				con->read_idle_ts = srv->cur_ts;
-				connection_set_state(con, CON_STATE_REQUEST_END);
-				return 1;
-			}
-			else {
-				/*if (!con->is_readable) return 0;*/
-				/* partial header of next request has already been read,
-				 * so optimistically check for more data received on
-				 * socket while processing the previous request */
-				con->is_readable = 1;
-				/* adjust last chunk offset for better reuse on keep-alive */
-				/* (caller already checked that cq is not empty) */
-				if (con->read_queue->last->offset > 6*1024)
-					connection_chunkqueue_compact(con->read_queue, 0);
-			}
-		}
-	}
+    if (keepalive_request_start && 0 != con->bytes_read) {
+        /* update request_start timestamp when first byte of
+         * next request is received on a keep-alive connection */
+        con->request_start = srv->cur_ts;
+        if (con->conf.high_precision_timestamps)
+            log_clock_gettime_realtime(&con->request_start_hp);
+    }
 
-	if (con->is_readable) {
-		con->read_idle_ts = srv->cur_ts;
+    if (!header_complete) return 0;
 
-		switch (con->network_read(srv, con, con->read_queue, MAX_READ_LIMIT)) {
-		case -1:
-			connection_set_state(con, CON_STATE_ERROR);
-			return 0;
-		case -2:
-			is_closed = 1;
-			break;
-		default:
-			break;
-		}
-	}
-
-	if (connection_read_header(con)) {
-		connection_set_state(con, CON_STATE_REQUEST_END);
-		return 1;
-	}
-	else if (is_closed) {
-		/* the connection got closed and we didn't got enough data to leave CON_STATE_READ;
-		 * the only way is to leave here */
-		connection_set_state(con, CON_STATE_ERROR);
-	}
-
-	if (con->read_queue->first != con->read_queue->last) {
-		connection_chunkqueue_compact(con->read_queue, 0);
-	}
-
-	return 0;
+    if (pipelined_request_start) con->read_idle_ts = srv->cur_ts;
+    connection_set_state(con, CON_STATE_REQUEST_END);
+    return 1;
 }
 
 static handler_t connection_handle_fdevent(server *srv, void *context, int revents) {
