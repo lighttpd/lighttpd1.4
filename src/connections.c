@@ -35,7 +35,7 @@
 
 #define HTTP_LINGER_TIMEOUT 5
 
-#define connection_set_state(srv, con, n) ((con)->state = (n))
+#define connection_set_state(con, n) ((con)->state = (n))
 
 typedef struct {
 	        PLUGIN_DATA;
@@ -150,7 +150,7 @@ static int connection_close(server *srv, connection *con) {
 	}
 
 	connection_del(srv, con);
-	connection_set_state(srv, con, CON_STATE_CONNECT);
+	connection_set_state(con, CON_STATE_CONNECT);
 
 	return 0;
 }
@@ -208,7 +208,7 @@ static void connection_handle_shutdown(server *srv, connection *con) {
 	if (con->fd >= 0
 	    && (con->is_ssl_sock || 0 == shutdown(con->fd, SHUT_WR))) {
 		con->close_timeout_ts = srv->cur_ts;
-		connection_set_state(srv, con, CON_STATE_CLOSE);
+		connection_set_state(con, CON_STATE_CLOSE);
 
 		if (srv->srvconf.log_state_handling) {
 			log_error_write(srv, __FILE__, __LINE__, "sd",
@@ -240,7 +240,7 @@ static void connection_handle_response_end_state(server *srv, connection *con) {
 		con->request_start = srv->cur_ts;
 		con->read_idle_ts = srv->cur_ts;
 #endif
-		connection_set_state(srv, con, CON_STATE_REQUEST_START);
+		connection_set_state(con, CON_STATE_REQUEST_START);
 	} else {
 		connection_handle_shutdown(srv, con);
 	}
@@ -462,16 +462,16 @@ static void connection_handle_write(server *srv, connection *con) {
 	case 0:
 		con->write_request_ts = srv->cur_ts;
 		if (con->file_finished) {
-			connection_set_state(srv, con, CON_STATE_RESPONSE_END);
+			connection_set_state(con, CON_STATE_RESPONSE_END);
 		}
 		break;
 	case -1: /* error on our side */
 		log_error_write(srv, __FILE__, __LINE__, "sd",
 				"connection closed: write failed on fd", con->fd);
-		connection_set_state(srv, con, CON_STATE_ERROR);
+		connection_set_state(con, CON_STATE_ERROR);
 		break;
 	case -2: /* remote close */
-		connection_set_state(srv, con, CON_STATE_ERROR);
+		connection_set_state(con, CON_STATE_ERROR);
 		break;
 	case 1:
 		con->write_request_ts = srv->cur_ts;
@@ -491,7 +491,7 @@ static void connection_handle_write_state(server *srv, connection *con) {
                 if (con->state != CON_STATE_WRITE) break;
             }
         } else if (con->file_finished) {
-            connection_set_state(srv, con, CON_STATE_RESPONSE_END);
+            connection_set_state(con, CON_STATE_RESPONSE_END);
             break;
         }
 
@@ -513,7 +513,7 @@ static void connection_handle_write_state(server *srv, connection *con) {
                                 con->fd, r);
                 /* fall through */
             case HANDLER_ERROR:
-                connection_set_state(srv, con, CON_STATE_ERROR);
+                connection_set_state(con, CON_STATE_ERROR);
                 break;
             }
         }
@@ -856,7 +856,7 @@ static int connection_handle_read_state(server *srv, connection *con)  {
 			 * then will unnecessarily scan again here before subsequent read())*/
 			if (connection_read_header(con)) {
 				con->read_idle_ts = srv->cur_ts;
-				connection_set_state(srv, con, CON_STATE_REQUEST_END);
+				connection_set_state(con, CON_STATE_REQUEST_END);
 				return 1;
 			}
 			else {
@@ -878,7 +878,7 @@ static int connection_handle_read_state(server *srv, connection *con)  {
 
 		switch (con->network_read(srv, con, con->read_queue, MAX_READ_LIMIT)) {
 		case -1:
-			connection_set_state(srv, con, CON_STATE_ERROR);
+			connection_set_state(con, CON_STATE_ERROR);
 			return 0;
 		case -2:
 			is_closed = 1;
@@ -889,13 +889,13 @@ static int connection_handle_read_state(server *srv, connection *con)  {
 	}
 
 	if (connection_read_header(con)) {
-		connection_set_state(srv, con, CON_STATE_REQUEST_END);
+		connection_set_state(con, CON_STATE_REQUEST_END);
 		return 1;
 	}
 	else if (is_closed) {
 		/* the connection got closed and we didn't got enough data to leave CON_STATE_READ;
 		 * the only way is to leave here */
-		connection_set_state(srv, con, CON_STATE_ERROR);
+		connection_set_state(con, CON_STATE_ERROR);
 	}
 
 	if (con->read_queue->first != con->read_queue->last) {
@@ -950,7 +950,7 @@ static handler_t connection_handle_fdevent(server *srv, void *context, int reven
 		if (con->state == CON_STATE_CLOSE) {
 			con->close_timeout_ts = srv->cur_ts - (HTTP_LINGER_TIMEOUT+1);
 		} else if (revents & FDEVENT_HUP) {
-			connection_set_state(srv, con, CON_STATE_ERROR);
+			connection_set_state(con, CON_STATE_ERROR);
 		} else if (revents & FDEVENT_RDHUP) {
 			int events = fdevent_fdnode_interest(con->fdn);
 			events &= ~(FDEVENT_IN|FDEVENT_RDHUP);
@@ -978,10 +978,10 @@ static handler_t connection_handle_fdevent(server *srv, void *context, int reven
 				/* Failure of fdevent_is_tcp_half_closed() indicates TCP RST
 				 * (or unable to tell (unsupported OS), though should not
 				 * be setting FDEVENT_RDHUP in that case) */
-				connection_set_state(srv, con, CON_STATE_ERROR);
+				connection_set_state(con, CON_STATE_ERROR);
 			}
 		} else if (revents & FDEVENT_ERR) { /* error, connection reset */
-			connection_set_state(srv, con, CON_STATE_ERROR);
+			connection_set_state(con, CON_STATE_ERROR);
 		} else {
 			log_error_write(srv, __FILE__, __LINE__, "sd",
 					"connection closed: poll() -> ???", revents);
@@ -1101,7 +1101,7 @@ static int connection_read_cq(server *srv, connection *con, chunkqueue *cq, off_
 		}
 #endif /* __WIN32 */
 
-		connection_set_state(srv, con, CON_STATE_ERROR);
+		connection_set_state(con, CON_STATE_ERROR);
 
 		return -1;
 	} else if (len == 0) {
@@ -1148,7 +1148,7 @@ connection *connection_accepted(server *srv, server_socket *srv_socket, sock_add
 		con->network_read = connection_read_cq;
 		con->network_write = connection_write_cq;
 
-		connection_set_state(srv, con, CON_STATE_REQUEST_START);
+		connection_set_state(con, CON_STATE_REQUEST_START);
 
 		con->connection_start = srv->cur_ts;
 		con->dst_addr = *cnt_addr;
@@ -1166,7 +1166,7 @@ connection *connection_accepted(server *srv, server_socket *srv_socket, sock_add
 			connection_close(srv, con);
 			return NULL;
 		}
-		if (con->http_status < 0) connection_set_state(srv, con, CON_STATE_WRITE);
+		if (con->http_status < 0) connection_set_state(con, CON_STATE_WRITE);
 		return con;
 }
 
@@ -1255,7 +1255,7 @@ static int connection_handle_request(server *srv, connection *con) {
 				}
 
 				/* we have something to send, go on */
-				connection_set_state(srv, con, CON_STATE_RESPONSE_START);
+				connection_set_state(con, CON_STATE_RESPONSE_START);
 				break;
 			case HANDLER_WAIT_FOR_FD:
 				srv->want_fds++;
@@ -1267,7 +1267,7 @@ static int connection_handle_request(server *srv, connection *con) {
 				return 1;
 			case HANDLER_ERROR:
 				/* something went wrong */
-				connection_set_state(srv, con, CON_STATE_ERROR);
+				connection_set_state(con, CON_STATE_ERROR);
 				break;
 			default:
 				log_error_write(srv, __FILE__, __LINE__, "sdd", "unknown ret-value: ", con->fd, r);
@@ -1306,7 +1306,7 @@ int connection_state_machine(server *srv, connection *con) {
 			con->request_count++;
 			con->loops_per_request = 0;
 
-			connection_set_state(srv, con, CON_STATE_READ);
+			connection_set_state(con, CON_STATE_READ);
 			/* fall through */
 		case CON_STATE_READ:
 			if (!connection_handle_read_state(srv, con)) break;
@@ -1316,7 +1316,7 @@ int connection_state_machine(server *srv, connection *con) {
 			ostate = (0 == con->request.content_length)
 			  ? CON_STATE_HANDLE_REQUEST
 			  : CON_STATE_READ_POST;
-			connection_set_state(srv, con, ostate);
+			connection_set_state(con, ostate);
 			/* fall through */
 		case CON_STATE_READ_POST:
 		case CON_STATE_HANDLE_REQUEST:
@@ -1335,10 +1335,10 @@ int connection_state_machine(server *srv, connection *con) {
 			/* fall through */
 		case CON_STATE_RESPONSE_START: /* transient */
 			if (-1 == connection_handle_write_prepare(srv, con)) {
-				connection_set_state(srv, con, CON_STATE_ERROR);
+				connection_set_state(con, CON_STATE_ERROR);
 				break;
 			}
-			connection_set_state(srv, con, CON_STATE_WRITE);
+			connection_set_state(con, CON_STATE_WRITE);
 			/* fall through */
 		case CON_STATE_WRITE:
 			connection_handle_write_state(srv, con);
@@ -1441,7 +1441,7 @@ static void connection_check_timeout (server * const srv, const time_t cur_ts, c
                               "connection closed - read timeout: %d", con->fd);
                 }
 
-                connection_set_state(srv, con, CON_STATE_ERROR);
+                connection_set_state(con, CON_STATE_ERROR);
                 changed = 1;
             }
         } else {
@@ -1453,7 +1453,7 @@ static void connection_check_timeout (server * const srv, const time_t cur_ts, c
                               con->fd);
                 }
 
-                connection_set_state(srv, con, CON_STATE_ERROR);
+                connection_set_state(con, CON_STATE_ERROR);
                 changed = 1;
             }
         }
@@ -1485,7 +1485,7 @@ static void connection_check_timeout (server * const srv, const time_t cur_ts, c
                   BUFFER_INTLEN_PTR(con->request.uri),
                   con->bytes_written, (int)con->conf.max_write_idle);
             }
-            connection_set_state(srv, con, CON_STATE_ERROR);
+            connection_set_state(con, CON_STATE_ERROR);
             changed = 1;
         }
     }
@@ -1534,7 +1534,7 @@ void connection_graceful_shutdown_maint (server *srv) {
         else if (con->state == CON_STATE_READ && con->request_count > 1
                  && chunkqueue_is_empty(con->read_queue)) {
             /* close connections in keep-alive waiting for next request */
-            connection_set_state(srv, con, CON_STATE_ERROR);
+            connection_set_state(con, CON_STATE_ERROR);
             changed = 1;
         }
 
