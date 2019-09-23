@@ -752,7 +752,28 @@ static size_t connection_read_header_hoff(const char *n, const size_t clen, unsi
     return 0;
 }
 
-static int connection_read_header(connection *con) {
+/**
+ * handle request header read
+ *
+ * we get called by the state-engine and by the fdevent-handler
+ */
+static int connection_handle_read_state(server * const srv, connection * const con)  {
+    int keepalive_request_start = 0;
+    int pipelined_request_start = 0;
+
+    if (con->request_count > 1 && 0 == con->bytes_read) {
+        keepalive_request_start = 1;
+        if (!chunkqueue_is_empty(con->read_queue)) {
+            pipelined_request_start = 1;
+            /* partial header of next request has already been read,
+             * so optimistically check for more data received on
+             * socket while processing the previous request */
+            con->is_readable = 1;
+            /*(if partially read next request and unable to read() any bytes,
+             * then will unnecessarily scan again before subsequent read())*/
+        }
+    }
+
     chunkqueue * const cq = con->read_queue;
     chunk *c = cq->first;
     size_t clen = 0;
@@ -776,7 +797,7 @@ static int connection_read_header(connection *con) {
          * addition might overflow, but max_request_field_size is USHRT_MAX,
          * so failure will be detected below */
         const unsigned int max_request_field_size =
-          con->srv->srvconf.max_request_field_size;
+          srv->srvconf.max_request_field_size;
         if ((con->header_len ? con->header_len : clen) > max_request_field_size
             || hoff[0] >= sizeof(hoff)/sizeof(hoff[0])-1) {
             log_error(con->errh, __FILE__, __LINE__, "%s",
@@ -788,6 +809,18 @@ static int connection_read_header(connection *con) {
 
         if (0 != con->header_len) break;
     } while ((c = connection_read_header_more(con, cq, c, clen)));
+
+    if (keepalive_request_start) {
+        if (0 != con->bytes_read) {
+            /* update request_start timestamp when first byte of
+             * next request is received on a keep-alive connection */
+            con->request_start = srv->cur_ts;
+            if (con->conf.high_precision_timestamps)
+                log_clock_gettime_realtime(&con->request_start_hp);
+        }
+        if (pipelined_request_start && c) con->read_idle_ts = srv->cur_ts;
+    }
+
     if (NULL == c) return 0; /* incomplete request headers */
 
     buffer * const hdrs = c->mem;
@@ -816,7 +849,7 @@ static int connection_read_header(connection *con) {
         con->keep_alive = 0;
         con->request.content_length = 0;
 
-        if (con->srv->srvconf.log_request_header_on_error) {
+        if (srv->srvconf.log_request_header_on_error) {
             /*(http_request_parse() modifies hdrs only to
              * undo line-wrapping in-place using spaces)*/
             log_error(con->errh, __FILE__, __LINE__, "request-header:\n%.*s",
@@ -825,44 +858,6 @@ static int connection_read_header(connection *con) {
     }
 
     chunkqueue_mark_written(cq, con->header_len);
-    return 1;
-}
-
-/**
- * handle request header read
- *
- * we get called by the state-engine and by the fdevent-handler
- */
-static int connection_handle_read_state(server *srv, connection *con)  {
-    int pipelined_request_start = 0;
-    int keepalive_request_start = 0;
-
-    if (con->request_count > 1 && 0 == con->bytes_read) {
-        keepalive_request_start = 1;
-        if (!chunkqueue_is_empty(con->read_queue)) {
-            pipelined_request_start = 1;
-            /* partial header of next request has already been read,
-             * so optimistically check for more data received on
-             * socket while processing the previous request */
-            con->is_readable = 1;
-            /*(if partially read next request and unable to read() any bytes,
-             * then will unnecessarily scan again before subsequent read())*/
-        }
-    }
-
-    const int header_complete = connection_read_header(con);
-
-    if (keepalive_request_start && 0 != con->bytes_read) {
-        /* update request_start timestamp when first byte of
-         * next request is received on a keep-alive connection */
-        con->request_start = srv->cur_ts;
-        if (con->conf.high_precision_timestamps)
-            log_clock_gettime_realtime(&con->request_start_hp);
-    }
-
-    if (!header_complete) return 0;
-
-    if (pipelined_request_start) con->read_idle_ts = srv->cur_ts;
     connection_set_state(con, CON_STATE_REQUEST_END);
     return 1;
 }
