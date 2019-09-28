@@ -594,11 +594,12 @@ int sock_addr_from_str_numeric(server *srv, sock_addr *saddr, const char *str)
         log_error_write(srv, __FILE__, __LINE__, "SSSs(S)",
                         "could not parse ip address ", str, " because ",
                         gai_strerror(result), strerror(errno));
+        return result;
     } else if (addrlist == NULL) {
         log_error_write(srv, __FILE__, __LINE__, "SSS",
                         "Problem in parsing ip address ", str,
                         ": succeeded, but no information returned");
-        result = -1;
+        return -1;
     } else switch (addrlist->ai_family) {
     case AF_INET:
         memcpy(&saddr->ipv4, addrlist->ai_addr, sizeof(saddr->ipv4));
