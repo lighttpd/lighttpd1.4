@@ -8,7 +8,7 @@ BEGIN {
 
 use strict;
 use IO::Socket;
-use Test::More tests => 52;
+use Test::More tests => 51;
 use LightyTest;
 
 my $tf = LightyTest->new();
@@ -502,16 +502,6 @@ EOF
 $t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 403 } ];
 ok($tf->handle_http($t) == 0, 'static file with forbidden pathinfo');
 
-
-print "\nConnection header\n";
-$t->{REQUEST}  = ( <<EOF
-GET /12345.txt HTTP/1.1
-Connection  : close
-Host: 123.example.org
-EOF
- );
-$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.1', 'HTTP-Status' => 200, 'HTTP-Content' => '12345'."\n", 'Content-Type' => 'text/plain', 'Connection' => 'close' } ];
-ok($tf->handle_http($t) == 0, 'Connection-header, spaces before ":"');
 
 $t->{REQUEST}  = ( <<EOF
 GET /12345.txt HTTP/1.1

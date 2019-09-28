@@ -310,14 +310,11 @@ static void test_request_http_request_parse(server *srv, connection *con)
     assert(buffer_is_equal_string(con->request.uri,
                                   CONST_STR_LEN("/")));
 
-    run_http_request_parse(srv, con, __LINE__, 0,
+    run_http_request_parse(srv, con, __LINE__, 400,
       "whitespace after key",
       CONST_STR_LEN("GET / HTTP/1.0\r\n"
                     "ABC : foo\r\n"
                     "\r\n"));
-    ds = (data_string *)
-      array_get_element_klen(con->request.headers, CONST_STR_LEN("ABC"));
-    assert(ds && buffer_is_equal_string(ds->value, CONST_STR_LEN("foo")));
 
     run_http_request_parse(srv, con, __LINE__, 400,
       "whitespace within key",
