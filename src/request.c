@@ -650,6 +650,7 @@ static int http_request_parse_reqline(connection * const con, const char * const
     return 0;
 }
 
+__attribute_cold__
 __attribute_noinline__
 static int http_request_parse_header_other(connection * const con, const char * const k, const int klen, const unsigned int http_header_strict) {
     for (int i = 0; i < klen; ++i) {
@@ -768,9 +769,13 @@ static int http_request_parse_headers(connection * const con, char * const ptr, 
             return http_request_header_line_invalid(con, 400, "invalid header key -> 400");
         const enum http_header_e id = http_header_hkey_get(k, klen);
 
-        if (id == HTTP_HEADER_OTHER
-            && 0 != http_request_parse_header_other(con, k, klen, http_header_strict)) {
-            return 400;
+        if (id == HTTP_HEADER_OTHER) {
+            for (int j = 0; j < klen; ++j) {
+                if (light_isalpha(k[j]) || k[j] == '-') continue; /*(common cases)*/
+                if (0 != http_request_parse_header_other(con, k+j, klen-j, http_header_strict))
+                    return 400;
+                break;
+            }
         }
 
         /* remove leading whitespace from value */
