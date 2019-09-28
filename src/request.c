@@ -794,20 +794,19 @@ static int http_request_parse_headers(connection *con, char * const ptr, const u
     return 0;
 }
 
-int http_request_parse(connection * const con, buffer * const hdrs, const unsigned short * const hoff) {
+int http_request_parse(connection * const con, char * const hdrs, const unsigned short * const hoff) {
     /*
      * Request: "^(GET|POST|HEAD|...) ([^ ]+(\\?[^ ]+|)) (HTTP/1\\.[01])$"
      * Header : "^([-a-zA-Z]+): (.+)$"
      * End    : "^$"
      */
 
-    char * const ptr = hdrs->ptr+hoff[1];
     int status;
 
-    status = http_request_parse_reqline(con, ptr, hoff);
+    status = http_request_parse_reqline(con, hdrs, hoff);
     if (0 != status) return status;
 
-    status = http_request_parse_headers(con, ptr, hoff);
+    status = http_request_parse_headers(con, hdrs, hoff);
     if (0 != status) return status;
 
     /* post-processing */

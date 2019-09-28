@@ -700,13 +700,7 @@ static int connection_reset(server *srv, connection *con) {
 }
 
 __attribute_noinline__
-static void connection_discard_blank_line(connection *con, const buffer *hdrs, unsigned short *hoff)  {
-    const char * const s = hdrs->ptr + hoff[1];
-  #ifdef __COVERITY__
-    if (buffer_string_length(hdrs) - hoff[1] < 2) {
-        return;
-    }
-  #endif
+static void connection_discard_blank_line(connection *con, const char * const s, unsigned short *hoff)  {
     if ((s[0] == '\r' && s[1] == '\n')
         || (s[0] == '\n'
             && !(con->conf.http_parseopts & HTTP_PARSEOPT_HEADER_STRICT))) {
@@ -823,7 +817,13 @@ static int connection_handle_read_state(server * const srv, connection * const c
 
     if (NULL == c) return 0; /* incomplete request headers */
 
-    buffer * const hdrs = c->mem;
+  #ifdef __COVERITY__
+    if (buffer_string_length(c->mem) < hoff[1]) {
+        return 1;
+    }
+  #endif
+
+    char * const hdrs = c->mem->ptr + hoff[1];
 
     if (con->request_count > 1) {
         /* skip past \r\n or \n after previous POST request when keep-alive */
@@ -841,7 +841,7 @@ static int connection_handle_read_state(server * const srv, connection * const c
     if (con->conf.log_request_header) {
         log_error(con->errh, __FILE__, __LINE__,
                   "fd: %d request-len: %zu\n%.*s", con->fd, con->header_len,
-                  (int)con->header_len, hdrs->ptr + hoff[1]);
+                  (int)con->header_len, hdrs);
     }
 
     con->http_status = http_request_parse(con, hdrs, hoff);
@@ -853,7 +853,7 @@ static int connection_handle_read_state(server * const srv, connection * const c
             /*(http_request_parse() modifies hdrs only to
              * undo line-wrapping in-place using spaces)*/
             log_error(con->errh, __FILE__, __LINE__, "request-header:\n%.*s",
-                      (int)con->header_len, hdrs->ptr + hoff[1]);
+                      (int)con->header_len, hdrs);
         }
     }
 
