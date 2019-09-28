@@ -12,7 +12,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-static int request_check_hostname(buffer *host) {
+static int request_check_hostname(buffer * const host) {
 	enum { DOMAINLABEL, TOPLABEL } stage = TOPLABEL;
 	size_t i;
 	int label_len = 0;
@@ -202,7 +202,7 @@ static int request_check_hostname(buffer *host) {
 	return 0;
 }
 
-int http_request_host_normalize(buffer *b, int scheme_port) {
+int http_request_host_normalize(buffer * const b, const int scheme_port) {
     /*
      * check for and canonicalize numeric IP address and portnum (optional)
      * (IP address may be followed by ":portnum" (optional))
@@ -334,12 +334,12 @@ int http_request_host_normalize(buffer *b, int scheme_port) {
 }
 
 __attribute_pure__
-static int scheme_port (const buffer *scheme)
+static int scheme_port (const buffer * const scheme)
 {
     return buffer_is_equal_string(scheme, CONST_STR_LEN("https")) ? 443 : 80;
 }
 
-int http_request_host_policy (connection *con, buffer *b, const buffer *scheme) {
+int http_request_host_policy (connection * const con, buffer * const b, const buffer * const scheme) {
     return (((con->conf.http_parseopts & HTTP_PARSEOPT_HOST_STRICT)
              && 0 != request_check_hostname(b))
             || ((con->conf.http_parseopts & HTTP_PARSEOPT_HOST_NORMALIZE)
@@ -347,13 +347,13 @@ int http_request_host_policy (connection *con, buffer *b, const buffer *scheme) 
 }
 
 __attribute_pure__ /*(could be even more strict and use __attribute_const__)*/
-static int request_uri_is_valid_char(unsigned char c) {
+static int request_uri_is_valid_char(const unsigned char c) {
 	return (c > 32 && c != 127 && c != 255);
 }
 
 __attribute_cold__
 __attribute_noinline__
-static int http_request_header_line_invalid(connection *con, int status, const char *msg) {
+static int http_request_header_line_invalid(connection * const con, const int status, const char * const msg) {
     if (con->srv->srvconf.log_request_header_on_error) {
         if (msg) log_error(con->errh, __FILE__, __LINE__, "%s", msg);
     }
@@ -362,7 +362,7 @@ static int http_request_header_line_invalid(connection *con, int status, const c
 
 __attribute_cold__
 __attribute_noinline__
-static int http_request_header_char_invalid(connection *con, char ch, const char *msg) {
+static int http_request_header_char_invalid(connection * const con, const char ch, const char * const msg) {
     if (con->srv->srvconf.log_request_header_on_error) {
         if ((unsigned char)ch > 32 && ch != 127) {
             log_error(con->errh, __FILE__, __LINE__, "%s ('%c')", msg, ch);
@@ -380,7 +380,7 @@ static int http_request_header_char_invalid(connection *con, char ch, const char
  *
  * returns 0 on success, HTTP status on error
  */
-static int http_request_parse_single_header(connection *con, const enum http_header_e id, const char *k, size_t klen, const char *v, size_t vlen) {
+static int http_request_parse_single_header(connection * const con, const enum http_header_e id, const char * const k, const size_t klen, const char * const v, const size_t vlen) {
     buffer **saveb = NULL;
 
     /*
@@ -492,7 +492,7 @@ static int http_request_parse_single_header(connection *con, const enum http_hea
 }
 
 __attribute_cold__
-static int http_request_parse_proto_loose(connection *con, const char * const ptr, size_t len) {
+static int http_request_parse_proto_loose(connection * const con, const char * const ptr, const size_t len) {
     const char * proto = memchr(ptr, ' ', len);
     if (NULL == proto)
         return http_request_header_line_invalid(con, 400, "incomplete request line -> 400");
@@ -550,7 +550,7 @@ static const char * http_request_parse_uri_alt(connection * const con, const cha
     }
 }
 
-static int http_request_parse_reqline(connection *con, const char * const ptr, const unsigned short * const hoff) {
+static int http_request_parse_reqline(connection * const con, const char * const ptr, const unsigned short * const hoff) {
     const unsigned int http_header_strict =
       (con->conf.http_parseopts & HTTP_PARSEOPT_HEADER_STRICT);
     size_t len = hoff[2];
@@ -651,7 +651,7 @@ static int http_request_parse_reqline(connection *con, const char * const ptr, c
 }
 
 __attribute_noinline__
-static int http_request_parse_header_other(connection *con, const char *k, int klen, const unsigned int http_header_strict) {
+static int http_request_parse_header_other(connection * const con, const char * const k, const int klen, const unsigned int http_header_strict) {
     for (int i = 0; i < klen; ++i) {
         if (light_isalpha(k[i]) || k[i] == '-') continue; /*(common cases)*/
         /**
@@ -689,7 +689,7 @@ static int http_request_parse_header_other(connection *con, const char *k, int k
     return 0;
 }
 
-static int http_request_parse_headers(connection *con, char * const ptr, const unsigned short * const hoff) {
+static int http_request_parse_headers(connection * const con, char * const ptr, const unsigned short * const hoff) {
     const unsigned int http_header_strict =
       (con->conf.http_parseopts & HTTP_PARSEOPT_HEADER_STRICT);
 
