@@ -425,19 +425,20 @@ static array *extract_forward_array(buffer *pbuffer)
 {
 	array *result = array_init();
 	if (!buffer_string_is_empty(pbuffer)) {
-		char *base, *curr;
+		const char *base, *curr;
 		/* state variable, 0 means not in string, 1 means in string */
 		int in_str = 0;
 		for (base = pbuffer->ptr, curr = pbuffer->ptr; *curr; curr++) {
+			int hex_or_colon = (light_isxdigit(*curr) || *curr == ':');
 			if (in_str) {
-				if ((*curr > '9' || *curr < '0') && *curr != '.' && *curr != ':' && (*curr < 'a' || *curr > 'f') && (*curr < 'A' || *curr > 'F')) {
+				if (!hex_or_colon && *curr != '.') {
 					/* found an separator , insert value into result array */
 					array_insert_value(result, base, curr - base);
 					/* change state to not in string */
 					in_str = 0;
 				}
 			} else {
-				if ((*curr >= '0' && *curr <= '9') || *curr == ':' || (*curr >= 'a' && *curr <= 'f') || (*curr >= 'A' && *curr <= 'F')) {
+				if (hex_or_colon) {
 					/* found leading char of an IP address, move base pointer and change state */
 					base = curr;
 					in_str = 1;
