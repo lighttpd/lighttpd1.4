@@ -102,42 +102,24 @@ void http_header_response_set(connection *con, enum http_header_e id, const char
 }
 
 void http_header_response_append(connection *con, enum http_header_e id, const char *k, size_t klen, const char *v, size_t vlen) {
-    if (vlen) {
-        data_string *ds= (id <= HTTP_HEADER_OTHER || (con->response.htags & id))
-          ? (data_string *)array_get_element_klen(con->response.headers,k,klen)
-          : NULL;
-        if (id > HTTP_HEADER_OTHER) con->response.htags |= id;
-        if (NULL == ds) {
-            array_insert_key_value(con->response.headers, k, klen, v, vlen);
-        }
-        else { /* append value */
-            buffer *vb = ds->value;
-            if (!buffer_string_is_empty(vb))
-                buffer_append_string_len(vb, CONST_STR_LEN(", "));
-            buffer_append_string_len(vb, v, vlen);
-        }
-    }
+    if (0 == vlen) return;
+    if (id > HTTP_HEADER_OTHER) con->response.htags |= id;
+    buffer * const vb = array_get_buf_ptr(con->response.headers, k, klen);
+    if (!buffer_string_is_empty(vb)) /* append value */
+        buffer_append_string_len(vb, CONST_STR_LEN(", "));
+    buffer_append_string_len(vb, v, vlen);
 }
 
 void http_header_response_insert(connection *con, enum http_header_e id, const char *k, size_t klen, const char *v, size_t vlen) {
-    if (vlen) {
-        data_string *ds= (id <= HTTP_HEADER_OTHER || (con->response.htags & id))
-          ? (data_string *)array_get_element_klen(con->response.headers,k,klen)
-          : NULL;
-        if (id > HTTP_HEADER_OTHER) con->response.htags |= id;
-        if (NULL == ds) {
-            array_insert_key_value(con->response.headers, k, klen, v, vlen);
-        }
-        else { /* append value */
-            buffer *vb = ds->value;
-            if (!buffer_string_is_empty(vb)) {
-                buffer_append_string_len(vb, CONST_STR_LEN("\r\n"));
-                buffer_append_string_len(vb, k, klen);
-                buffer_append_string_len(vb, CONST_STR_LEN(": "));
-            }
-            buffer_append_string_len(vb, v, vlen);
-        }
+    if (0 == vlen) return;
+    if (id > HTTP_HEADER_OTHER) con->response.htags |= id;
+    buffer * const vb = array_get_buf_ptr(con->response.headers, k, klen);
+    if (!buffer_string_is_empty(vb)) { /* append value */
+        buffer_append_string_len(vb, CONST_STR_LEN("\r\n"));
+        buffer_append_string_len(vb, k, klen);
+        buffer_append_string_len(vb, CONST_STR_LEN(": "));
     }
+    buffer_append_string_len(vb, v, vlen);
 }
 
 
@@ -167,21 +149,12 @@ void http_header_request_set(connection *con, enum http_header_e id, const char 
 }
 
 void http_header_request_append(connection *con, enum http_header_e id, const char *k, size_t klen, const char *v, size_t vlen) {
-    if (vlen) {
-        data_string *ds = (id <= HTTP_HEADER_OTHER || (con->request.htags & id))
-          ? (data_string *)array_get_element_klen(con->request.headers, k, klen)
-          : NULL;
-        if (id > HTTP_HEADER_OTHER) con->request.htags |= id;
-        if (NULL == ds) {
-            array_insert_key_value(con->request.headers, k, klen, v, vlen);
-        }
-        else { /* append value */
-            buffer *vb = ds->value;
-            if (!buffer_string_is_empty(vb))
-                buffer_append_string_len(vb, CONST_STR_LEN(", "));
-            buffer_append_string_len(vb, v, vlen);
-        }
-    }
+    if (0 == vlen) return;
+    if (id > HTTP_HEADER_OTHER) con->request.htags |= id;
+    buffer * const vb = array_get_buf_ptr(con->request.headers, k, klen);
+    if (!buffer_string_is_empty(vb)) /* append value */
+        buffer_append_string_len(vb, CONST_STR_LEN(", "));
+    buffer_append_string_len(vb, v, vlen);
 }
 
 
@@ -196,15 +169,10 @@ void http_header_env_set(connection *con, const char *k, size_t klen, const char
 }
 
 void http_header_env_append(connection *con, const char *k, size_t klen, const char *v, size_t vlen) {
-    /*if (vlen)*/ /* skip check; permit env var w/ blank value to be appended */
-    {
-        buffer * const vb = http_header_env_get(con, k, klen);
-        if (NULL == vb) {
-            array_insert_key_value(con->environment, k, klen, v, vlen);
-        }
-        else if (vlen) { /* append value */
-            buffer_append_string_len(vb, CONST_STR_LEN(", "));
-            buffer_append_string_len(vb, v, vlen);
-        }
-    }
+    /*if (0 == vlen) return;*//* skip check; permit env var w/ blank value */
+    buffer * const vb = array_get_buf_ptr(con->environment, k, klen);
+    if (0 == vlen) return;
+    if (!buffer_string_is_empty(vb)) /* append value */
+        buffer_append_string_len(vb, CONST_STR_LEN(", "));
+    buffer_append_string_len(vb, v, vlen);
 }

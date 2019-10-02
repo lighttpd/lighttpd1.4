@@ -156,7 +156,7 @@ SETDEFAULTS_FUNC(mod_ssi_set_defaults) {
 
 
 static int ssi_env_add(void *venv, const char *key, size_t klen, const char *val, size_t vlen) {
-	array_insert_key_value((array *)venv, key, klen, val, vlen);
+	array_set_key_value((array *)venv, key, klen, val, vlen);
 	return 0;
 }
 
@@ -701,7 +701,7 @@ static int process_ssi_stmt(server *srv, connection *con, handler_ctx *p, const 
 		if (p->if_is_false) break;
 
 		if (key && val) {
-			array_insert_key_value(p->ssi_vars, key, strlen(key), val, strlen(val));
+			array_set_key_value(p->ssi_vars, key, strlen(key), val, strlen(val));
 		} else if (key || val) {
 			log_error_write(srv, __FILE__, __LINE__, "sSSss",
 					"ssi: var and value have to be set in <!--#set", l[1], "=", l[2], "-->");

@@ -17,7 +17,7 @@ static data_unset *data_config_copy(const data_unset *s) {
 	data_config *ds = data_config_init();
 
 	ds->comp = src->comp;
-	buffer_copy_buffer(ds->key, src->key);
+	if (!buffer_is_empty(src->key)) buffer_copy_buffer(ds->key, src->key);
 	buffer_copy_buffer(ds->comp_tag, src->comp_tag);
 	buffer_copy_buffer(ds->comp_key, src->comp_key);
 	array_free(ds->value);

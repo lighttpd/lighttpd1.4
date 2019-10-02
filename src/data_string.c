@@ -10,9 +10,8 @@ static data_unset *data_string_copy(const data_unset *s) {
 	data_string *src = (data_string *)s;
 	data_string *ds = data_string_init();
 
-	buffer_copy_buffer(ds->key, src->key);
+	if (!buffer_is_empty(src->key)) buffer_copy_buffer(ds->key, src->key);
 	buffer_copy_buffer(ds->value, src->value);
-	ds->is_index_key = src->is_index_key;
 	return (data_unset *)ds;
 }
 
