@@ -46,17 +46,20 @@ enum http_header_e http_header_hkey_get(const char *s, size_t slen);
 __attribute_pure__
 int http_header_str_contains_token (const char *s, size_t slen, const char *m, size_t mlen);
 
+__attribute_pure__
 buffer * http_header_response_get(connection *con, enum http_header_e id, const char *k, size_t klen);
 void http_header_response_unset(connection *con, enum http_header_e id, const char *k, size_t klen);
 void http_header_response_set(connection *con, enum http_header_e id, const char *k, size_t klen, const char *v, size_t vlen);
 void http_header_response_append(connection *con, enum http_header_e id, const char *k, size_t klen, const char *v, size_t vlen);
 void http_header_response_insert(connection *con, enum http_header_e id, const char *k, size_t klen, const char *v, size_t vlen);
 
+__attribute_pure__
 buffer * http_header_request_get(connection *con, enum http_header_e id, const char *k, size_t klen);
 void http_header_request_unset(connection *con, enum http_header_e id, const char *k, size_t klen);
 void http_header_request_set(connection *con, enum http_header_e id, const char *k, size_t klen, const char *v, size_t vlen);
 void http_header_request_append(connection *con, enum http_header_e id, const char *k, size_t klen, const char *v, size_t vlen);
 
+__attribute_pure__
 buffer * http_header_env_get(connection *con, const char *k, size_t klen);
 void http_header_env_set(connection *con, const char *k, size_t klen, const char *v, size_t vlen);
 void http_header_env_append(connection *con, const char *k, size_t klen, const char *v, size_t vlen);

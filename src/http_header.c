@@ -76,12 +76,25 @@ int http_header_str_contains_token (const char * const s, const size_t slen, con
     return 0;
 }
 
-buffer * http_header_response_get(connection *con, enum http_header_e id, const char *k, size_t klen) {
-    data_string * const ds =
-      (id <= HTTP_HEADER_OTHER || (con->response.htags & id))
-      ? (data_string *)array_get_element_klen(con->response.headers, k, klen)
-      : NULL;
+
+static inline void http_header_token_append(buffer * const vb, const char * const v, const size_t vlen) {
+    if (!buffer_string_is_empty(vb))
+        buffer_append_string_len(vb, CONST_STR_LEN(", "));
+    buffer_append_string_len(vb, v, vlen);
+}
+
+__attribute_pure__
+static inline buffer * http_header_generic_get_ifnotempty(const array * const a, const char * const k, const size_t klen) {
+    const data_string * const ds =
+      (data_string *)array_get_element_klen(a, k, klen);
     return ds && !buffer_string_is_empty(ds->value) ? ds->value : NULL;
+}
+
+
+buffer * http_header_response_get(connection *con, enum http_header_e id, const char *k, size_t klen) {
+    return (id <= HTTP_HEADER_OTHER || (con->response.htags & id))
+      ? http_header_generic_get_ifnotempty(con->response.headers, k, klen)
+      : NULL;
 }
 
 void http_header_response_unset(connection *con, enum http_header_e id, const char *k, size_t klen) {
@@ -105,9 +118,7 @@ void http_header_response_append(connection *con, enum http_header_e id, const c
     if (0 == vlen) return;
     if (id > HTTP_HEADER_OTHER) con->response.htags |= id;
     buffer * const vb = array_get_buf_ptr(con->response.headers, k, klen);
-    if (!buffer_string_is_empty(vb)) /* append value */
-        buffer_append_string_len(vb, CONST_STR_LEN(", "));
-    buffer_append_string_len(vb, v, vlen);
+    http_header_token_append(vb, v, vlen);
 }
 
 void http_header_response_insert(connection *con, enum http_header_e id, const char *k, size_t klen, const char *v, size_t vlen) {
@@ -124,11 +135,9 @@ void http_header_response_insert(connection *con, enum http_header_e id, const c
 
 
 buffer * http_header_request_get(connection *con, enum http_header_e id, const char *k, size_t klen) {
-    data_string * const ds =
-      (id <= HTTP_HEADER_OTHER || (con->request.htags & id))
-      ? (data_string *)array_get_element_klen(con->request.headers, k, klen)
+    return (id <= HTTP_HEADER_OTHER || (con->request.htags & id))
+      ? http_header_generic_get_ifnotempty(con->request.headers, k, klen)
       : NULL;
-    return ds && !buffer_string_is_empty(ds->value) ? ds->value : NULL;
 }
 
 void http_header_request_unset(connection *con, enum http_header_e id, const char *k, size_t klen) {
@@ -152,16 +161,12 @@ void http_header_request_append(connection *con, enum http_header_e id, const ch
     if (0 == vlen) return;
     if (id > HTTP_HEADER_OTHER) con->request.htags |= id;
     buffer * const vb = array_get_buf_ptr(con->request.headers, k, klen);
-    if (!buffer_string_is_empty(vb)) /* append value */
-        buffer_append_string_len(vb, CONST_STR_LEN(", "));
-    buffer_append_string_len(vb, v, vlen);
+    http_header_token_append(vb, v, vlen);
 }
 
 
 buffer * http_header_env_get(connection *con, const char *k, size_t klen) {
-    data_string * const ds =
-      (data_string *)array_get_element_klen(con->environment, k, klen);
-    return ds && !buffer_string_is_empty(ds->value) ? ds->value : NULL;
+    return http_header_generic_get_ifnotempty(con->environment, k, klen);
 }
 
 void http_header_env_set(connection *con, const char *k, size_t klen, const char *v, size_t vlen) {
@@ -172,7 +177,5 @@ void http_header_env_append(connection *con, const char *k, size_t klen, const c
     /*if (0 == vlen) return;*//* skip check; permit env var w/ blank value */
     buffer * const vb = array_get_buf_ptr(con->environment, k, klen);
     if (0 == vlen) return;
-    if (!buffer_string_is_empty(vb)) /* append value */
-        buffer_append_string_len(vb, CONST_STR_LEN(", "));
-    buffer_append_string_len(vb, v, vlen);
+    http_header_token_append(vb, v, vlen);
 }
