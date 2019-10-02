@@ -6,6 +6,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+__attribute_cold__
 static data_unset *data_integer_copy(const data_unset *s) {
 	data_integer *src = (data_integer *)s;
 	data_integer *ds = data_integer_init();
@@ -23,6 +24,7 @@ static void data_integer_free(data_unset *d) {
 	free(d);
 }
 
+__attribute_cold__
 static void data_integer_reset(data_unset *d) {
 	data_integer *ds = (data_integer *)d;
 
@@ -31,6 +33,7 @@ static void data_integer_reset(data_unset *d) {
 	ds->value = 0;
 }
 
+__attribute_cold__
 static int data_integer_insert_dup(data_unset *dst, data_unset *src) {
 	UNUSED(dst);
 
@@ -39,6 +42,7 @@ static int data_integer_insert_dup(data_unset *dst, data_unset *src) {
 	return 0;
 }
 
+__attribute_cold__
 static void data_integer_print(const data_unset *d, int depth) {
 	data_integer *ds = (data_integer *)d;
 	UNUSED(depth);

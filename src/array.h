@@ -58,8 +58,13 @@ typedef struct {
 data_integer *data_integer_init(void);
 
 array *array_init(void);
+
+__attribute_cold__
 array *array_init_array(const array *a);
+
 void array_free(array *a);
+
+__attribute_cold__
 void array_reset(array *a);
 
 __attribute_hot__

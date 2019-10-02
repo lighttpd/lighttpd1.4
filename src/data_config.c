@@ -12,6 +12,7 @@
 #include <pcre.h>
 #endif
 
+__attribute_cold__
 static data_unset *data_config_copy(const data_unset *s) {
 	data_config *src = (data_config *)s;
 	data_config *ds = data_config_init();
@@ -25,6 +26,7 @@ static data_unset *data_config_copy(const data_unset *s) {
 	return (data_unset *)ds;
 }
 
+__attribute_cold__
 static void data_config_free(data_unset *d) {
 	data_config *ds = (data_config *)d;
 
@@ -45,6 +47,7 @@ static void data_config_free(data_unset *d) {
 	free(d);
 }
 
+__attribute_cold__
 static void data_config_reset(data_unset *d) {
 	data_config *ds = (data_config *)d;
 
@@ -55,6 +58,7 @@ static void data_config_reset(data_unset *d) {
 	array_reset(ds->value);
 }
 
+__attribute_cold__
 static int data_config_insert_dup(data_unset *dst, data_unset *src) {
 	UNUSED(dst);
 
@@ -63,6 +67,7 @@ static int data_config_insert_dup(data_unset *dst, data_unset *src) {
 	return 0;
 }
 
+__attribute_cold__
 static void data_config_print(const data_unset *d, int depth) {
 	data_config *ds = (data_config *)d;
 	array *a = (array *)ds->value;

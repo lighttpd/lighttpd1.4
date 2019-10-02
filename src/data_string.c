@@ -6,6 +6,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+__attribute_cold__
 static data_unset *data_string_copy(const data_unset *s) {
 	data_string *src = (data_string *)s;
 	data_string *ds = data_string_init();
@@ -24,6 +25,7 @@ static void data_string_free(data_unset *d) {
 	free(d);
 }
 
+__attribute_cold__
 static void data_string_reset(data_unset *d) {
 	data_string *ds = (data_string *)d;
 
@@ -32,6 +34,7 @@ static void data_string_reset(data_unset *d) {
 	buffer_reset(ds->value);
 }
 
+__attribute_cold__
 static int data_string_insert_dup(data_unset *dst, data_unset *src) {
 	data_string *ds_dst = (data_string *)dst;
 	data_string *ds_src = (data_string *)src;
@@ -48,6 +51,7 @@ static int data_string_insert_dup(data_unset *dst, data_unset *src) {
 	return 0;
 }
 
+__attribute_cold__
 static void data_string_print(const data_unset *d, int depth) {
 	data_string *ds = (data_string *)d;
 	size_t i, len;
