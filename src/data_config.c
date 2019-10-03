@@ -48,17 +48,6 @@ static void data_config_free(data_unset *d) {
 }
 
 __attribute_cold__
-static void data_config_reset(data_unset *d) {
-	data_config *ds = (data_config *)d;
-
-	/* reused array elements */
-	buffer_clear(ds->key);
-	buffer_clear(ds->comp_tag);
-	buffer_clear(ds->comp_key);
-	array_reset(ds->value);
-}
-
-__attribute_cold__
 static int data_config_insert_dup(data_unset *dst, data_unset *src) {
 	UNUSED(dst);
 
@@ -140,7 +129,6 @@ static void data_config_print(const data_unset *d, int depth) {
 
 data_config *data_config_init(void) {
 	static const struct data_methods fn = {
-		data_config_reset,
 		data_config_copy,
 		data_config_free,
 		data_config_insert_dup,

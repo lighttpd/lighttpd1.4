@@ -26,15 +26,6 @@ static void data_array_free(data_unset *d) {
 }
 
 __attribute_cold__
-static void data_array_reset(data_unset *d) {
-	data_array *ds = (data_array *)d;
-
-	/* reused array elements */
-	buffer_reset(ds->key);
-	array_reset(ds->value);
-}
-
-__attribute_cold__
 static int data_array_insert_dup(data_unset *dst, data_unset *src) {
 	UNUSED(dst);
 
@@ -52,7 +43,6 @@ static void data_array_print(const data_unset *d, int depth) {
 
 data_array *data_array_init(void) {
 	static const struct data_methods fn = {
-		data_array_reset,
 		data_array_copy,
 		data_array_free,
 		data_array_insert_dup,

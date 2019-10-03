@@ -26,15 +26,6 @@ static void data_string_free(data_unset *d) {
 }
 
 __attribute_cold__
-static void data_string_reset(data_unset *d) {
-	data_string *ds = (data_string *)d;
-
-	/* reused array elements */
-	buffer_reset(ds->key);
-	buffer_reset(ds->value);
-}
-
-__attribute_cold__
 static int data_string_insert_dup(data_unset *dst, data_unset *src) {
 	data_string *ds_dst = (data_string *)dst;
 	data_string *ds_src = (data_string *)src;
@@ -80,7 +71,6 @@ static void data_string_print(const data_unset *d, int depth) {
 
 data_string *data_string_init(void) {
 	static const struct data_methods fn = {
-		data_string_reset,
 		data_string_copy,
 		data_string_free,
 		data_string_insert_dup,

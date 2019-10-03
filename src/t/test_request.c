@@ -24,7 +24,7 @@ static void test_request_connection_reset(connection *con)
     buffer_reset(con->request.request);
     buffer_reset(con->request.orig_uri);
     buffer_reset(con->request.uri);
-    array_reset(con->request.headers);
+    array_reset_data_strings(con->request.headers);
 }
 
 static void run_http_request_parse(connection *con, int line, int status, const char *desc, const char *req, size_t reqlen)

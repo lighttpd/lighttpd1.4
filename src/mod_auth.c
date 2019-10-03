@@ -101,7 +101,6 @@ static void data_auth_free(data_unset *d)
 static data_auth *data_auth_init(void)
 {
     static const struct data_methods fn = {
-      NULL, /* reset must not be called on this data */
       NULL, /* copy must not be called on this data */
       data_auth_free,
       NULL, /* insert_dup must not be called on this data */

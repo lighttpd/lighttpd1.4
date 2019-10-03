@@ -25,15 +25,6 @@ static void data_integer_free(data_unset *d) {
 }
 
 __attribute_cold__
-static void data_integer_reset(data_unset *d) {
-	data_integer *ds = (data_integer *)d;
-
-	/* reused integer elements */
-	buffer_clear(ds->key);
-	ds->value = 0;
-}
-
-__attribute_cold__
 static int data_integer_insert_dup(data_unset *dst, data_unset *src) {
 	UNUSED(dst);
 
@@ -53,7 +44,6 @@ static void data_integer_print(const data_unset *d, int depth) {
 
 data_integer *data_integer_init(void) {
 	static const struct data_methods fn = {
-		data_integer_reset,
 		data_integer_copy,
 		data_integer_free,
 		data_integer_insert_dup,

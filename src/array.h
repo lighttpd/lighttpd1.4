@@ -7,7 +7,6 @@
 struct data_unset; /* declaration */
 
 struct data_methods {
-	void (*reset)(struct data_unset *p); \
 	struct data_unset *(*copy)(const struct data_unset *src); \
 	void (*free)(struct data_unset *p); \
 	int (*insert_dup)(struct data_unset *dst, struct data_unset *src); \
@@ -63,9 +62,6 @@ __attribute_cold__
 array *array_init_array(const array *a);
 
 void array_free(array *a);
-
-__attribute_cold__
-void array_reset(array *a);
 
 __attribute_hot__
 void array_reset_data_strings(array *a);

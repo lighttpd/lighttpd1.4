@@ -66,18 +66,6 @@ void array_free(array * const a) {
 	free(a);
 }
 
-void array_reset(array * const a) {
-	if (!a) return;
-
-	data_unset ** const data = a->data;
-	const uint32_t used = a->used;
-	a->used = 0;
-	for (uint32_t i = 0; i < used; ++i) {
-		data[i]->fn->reset(data[i]);
-		data[i]->is_index_key = 0;
-	}
-}
-
 void array_reset_data_strings(array * const a) {
 	if (!a) return;
 
