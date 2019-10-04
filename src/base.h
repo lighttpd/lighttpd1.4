@@ -390,15 +390,9 @@ struct server {
 	uint32_t max_conns;
 
 	/* buffers */
-	buffer *parse_full_path;
-	buffer *response_header;
-	buffer *response_range;
 	buffer *tmp_buf;
-
 	buffer *tmp_chunk_len;
-
 	buffer *empty_string; /* is necessary for cond_match */
-
 	buffer *cond_check_buf;
 
 	/* caches */
