@@ -23,4 +23,7 @@ handler_t connection_handle_read_post_error(server *srv, connection *con, int ht
 int connection_write_chunkqueue(server *srv, connection *con, chunkqueue *c, off_t max_bytes);
 void connection_response_reset(server *srv, connection *con);
 
+#define joblist_append(srv, con) connection_list_append(&(srv)->joblist, (con))
+void connection_list_append(connections *conns, connection *con);
+
 #endif

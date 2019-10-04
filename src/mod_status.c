@@ -199,8 +199,8 @@ static int mod_status_get_multiplier(double *avg, char *multiplier, int size) {
 static handler_t mod_status_handle_server_status_html(server *srv, connection *con, void *p_d) {
 	plugin_data *p = p_d;
 	buffer *b = chunkqueue_append_buffer_open(con->write_queue);
-	size_t j;
 	double avg;
+	uint32_t j;
 	char multiplier = '\0';
 	char buf[32];
 	time_t ts;
@@ -456,11 +456,11 @@ static handler_t mod_status_handle_server_status_html(server *srv, connection *c
 	buffer_append_string_len(b, CONST_STR_LEN("<hr />\n<pre>\n"));
 
 	buffer_append_string_len(b, CONST_STR_LEN("<b>"));
-	buffer_append_int(b, srv->conns->used);
+	buffer_append_int(b, srv->conns.used);
 	buffer_append_string_len(b, CONST_STR_LEN(" connections</b>\n"));
 
-	for (j = 0; j < srv->conns->used; j++) {
-		connection *c = srv->conns->ptr[j];
+	for (j = 0; j < srv->conns.used; ++j) {
+		connection *c = srv->conns.ptr[j];
 		const char *state;
 
 		if (CON_STATE_READ == c->state && !buffer_string_is_empty(c->request.orig_uri)) {
@@ -508,8 +508,8 @@ static handler_t mod_status_handle_server_status_html(server *srv, connection *c
 	mod_status_header_append_sort(b, p_d, "File");
 	buffer_append_string_len(b, CONST_STR_LEN("</tr>\n"));
 
-	for (j = 0; j < srv->conns->used; j++) {
-		connection *c = srv->conns->ptr[j];
+	for (j = 0; j < srv->conns.used; ++j) {
+		connection *c = srv->conns.ptr[j];
 
 		buffer_append_string_len(b, CONST_STR_LEN("<tr><td class=\"string\">"));
 
@@ -599,8 +599,6 @@ static handler_t mod_status_handle_server_status_text(server *srv, connection *c
 	double avg;
 	time_t ts;
 	char buf[32];
-	unsigned int k;
-	unsigned int l;
 
 	/* output total number of requests */
 	buffer_append_string_len(b, CONST_STR_LEN("Total Accesses: "));
@@ -624,24 +622,24 @@ static handler_t mod_status_handle_server_status_text(server *srv, connection *c
 
 	/* output busy servers */
 	buffer_append_string_len(b, CONST_STR_LEN("BusyServers: "));
-	buffer_append_int(b, srv->conns->used);
+	buffer_append_int(b, srv->conns.used);
 	buffer_append_string_len(b, CONST_STR_LEN("\n"));
 
 	buffer_append_string_len(b, CONST_STR_LEN("IdleServers: "));
-	buffer_append_int(b, srv->conns->size - srv->conns->used);
+	buffer_append_int(b, srv->conns.size - srv->conns.used);
 	buffer_append_string_len(b, CONST_STR_LEN("\n"));
 
 	/* output scoreboard */
 	buffer_append_string_len(b, CONST_STR_LEN("Scoreboard: "));
-	for (k = 0; k < srv->conns->used; k++) {
-		connection *c = srv->conns->ptr[k];
+	for (uint32_t i = 0; i < srv->conns.used; ++i) {
+		connection *c = srv->conns.ptr[i];
 		const char *state =
 		  (CON_STATE_READ == c->state && !buffer_string_is_empty(c->request.orig_uri))
 		    ? "k"
 		    : connection_get_short_state(c->state);
 		buffer_append_string_len(b, state, 1);
 	}
-	for (l = 0; l < srv->conns->size - srv->conns->used; l++) {
+	for (uint32_t i = 0; i < srv->conns.size - srv->conns.used; ++i) {
 		buffer_append_string_len(b, CONST_STR_LEN("_"));
 	}
 	buffer_append_string_len(b, CONST_STR_LEN("\n"));
@@ -661,7 +659,7 @@ static handler_t mod_status_handle_server_status_json(server *srv, connection *c
 	double avg;
 	time_t ts;
 	char buf[32];
-	size_t j;
+	uint32_t j;
 	unsigned int jsonp = 0;
 
 	if (buffer_string_length(con->uri.query) >= sizeof("jsonp=")-1
@@ -701,11 +699,11 @@ static handler_t mod_status_handle_server_status_json(server *srv, connection *c
 
 	/* output busy servers */
 	buffer_append_string_len(b, CONST_STR_LEN("\t\"BusyServers\": "));
-	buffer_append_int(b, srv->conns->used);
+	buffer_append_int(b, srv->conns.used);
 	buffer_append_string_len(b, CONST_STR_LEN(",\n"));
 
 	buffer_append_string_len(b, CONST_STR_LEN("\t\"IdleServers\": "));
-	buffer_append_int(b, srv->conns->size - srv->conns->used);
+	buffer_append_int(b, srv->conns.size - srv->conns.used);
 	buffer_append_string_len(b, CONST_STR_LEN(",\n"));
 
 	for (j = 0, avg = 0; j < 5; j++) {
@@ -795,7 +793,6 @@ static handler_t mod_status_handle_server_config(server *srv, connection *con, v
 	plugin_data *p = p_d;
 	buffer *b = chunkqueue_append_buffer_open(con->write_queue);
 	buffer *m = p->module_list;
-	size_t i;
 
 	buffer_copy_string_len(b, CONST_STR_LEN(
 			   "<?xml version=\"1.0\" encoding=\"iso-8859-1\"?>\n"
@@ -824,7 +821,7 @@ static handler_t mod_status_handle_server_config(server *srv, connection *con, v
 
 	mod_status_header_append(b, "Config-File-Settings");
 
-	for (i = 0; i < srv->plugins.used; i++) {
+	for (uint32_t i = 0; i < srv->plugins.used; ++i) {
 		plugin **ps = srv->plugins.ptr;
 
 		plugin *pl = ps[i];
@@ -917,11 +914,10 @@ static handler_t mod_status_handler(server *srv, connection *con, void *p_d) {
 
 TRIGGER_FUNC(mod_status_trigger) {
 	plugin_data *p = p_d;
-	size_t i;
 
 	/* check all connections */
-	for (i = 0; i < srv->conns->used; i++) {
-		connection *c = srv->conns->ptr[i];
+	for (uint32_t i = 0; i < srv->conns.used; ++i) {
+		connection *c = srv->conns.ptr[i];
 
 		p->bytes_written += c->bytes_written_cur_second;
 	}

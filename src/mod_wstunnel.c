@@ -89,8 +89,8 @@
 #include "chunk.h"
 #include "fdevent.h"
 #include "http_header.h"
-#include "joblist.h"
 #include "log.h"
+#include "connections.h"
 
 #define MOD_WEBSOCKET_LOG_NONE  0
 #define MOD_WEBSOCKET_LOG_ERR   1
@@ -603,8 +603,8 @@ TRIGGER_FUNC(mod_wstunnel_handle_trigger) {
 
     gw_handle_trigger(srv, p_d);
 
-    for (size_t i = 0; i < srv->conns->used; ++i) {
-        connection *con = srv->conns->ptr[i];
+    for (uint32_t i = 0; i < srv->conns.used; ++i) {
+        connection *con = srv->conns.ptr[i];
         handler_ctx *hctx = con->plugin_ctx[p->id];
         if (NULL == hctx || con->mode != p->id)
             continue;

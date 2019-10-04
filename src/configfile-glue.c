@@ -543,9 +543,7 @@ static void config_cond_clear_node(server *srv, connection *con, data_config *dc
  * if the item is COND_LAST_ELEMENT we reset all items
  */
 void config_cond_cache_reset_item(server *srv, connection *con, comp_key_t item) {
-	size_t i;
-
-	for (i = 0; i < srv->config_context->used; i++) {
+	for (uint32_t i = 0; i < srv->config_context->used; ++i) {
 		data_config *dc = (data_config *)srv->config_context->data[i];
 
 		if (item == dc->comp) {
@@ -561,17 +559,15 @@ void config_cond_cache_reset_item(server *srv, connection *con, comp_key_t item)
  * reset the config cache to its initial state at connection start
  */
 void config_cond_cache_reset(server *srv, connection *con) {
-	size_t i;
-
 	/* resetting all entries; no need to follow children as in config_cond_cache_reset_item */
-	for (i = 0; i < srv->config_context->used; i++) {
+	for (uint32_t i = 0; i < srv->config_context->used; ++i) {
 		con->cond_cache[i].result = COND_RESULT_UNSET;
 		con->cond_cache[i].local_result = COND_RESULT_UNSET;
 		con->cond_cache[i].patterncount = 0;
 		con->cond_cache[i].comp_value = NULL;
 	}
 
-	for (i = 0; i < COMP_LAST_ELEMENT; i++) {
+	for (int i = 0; i < COMP_LAST_ELEMENT; ++i) {
 		con->conditional_is_valid[i] = 0;
 	}
 }

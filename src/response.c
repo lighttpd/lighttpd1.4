@@ -352,7 +352,7 @@ handler_t http_response_prepare(server *srv, connection *con) {
 		} else {
 			char *qstr;
 			if (con->conf.http_parseopts & HTTP_PARSEOPT_URL_NORMALIZE) {
-				/*size_t len = buffer_string_length(con->request.uri);*/
+				/*uint32_t len = (uint32_t)buffer_string_length(con->request.uri);*/
 				int qs = burl_normalize(con->request.uri, srv->tmp_buf, con->conf.http_parseopts);
 				if (-2 == qs) {
 					log_error_write(srv, __FILE__, __LINE__, "sb",

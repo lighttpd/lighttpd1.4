@@ -205,8 +205,8 @@ struct connection {
 	time_t request_start;
 	struct timespec request_start_hp;
 
-	size_t request_count;        /* number of requests handled in this connection */
-	size_t loops_per_request;    /* to catch endless loops in a single request
+	uint32_t request_count;      /* number of requests handled in this connection */
+	uint32_t loops_per_request;  /* to catch endless loops in a single request
 				      *
 				      * used by mod_rewrite, mod_fastcgi, ... and others
 				      * this is self-protection
@@ -249,7 +249,7 @@ struct connection {
 	physical physical;
 	response response;
 
-	size_t header_len;
+	uint32_t header_len;
 
 	array  *environment; /* used to pass lighttpd internal stuff to the FastCGI/CGI apps, setenv does that */
 
@@ -283,8 +283,8 @@ struct connection {
 
 typedef struct {
 	connection **ptr;
-	size_t size;
-	size_t used;
+	uint32_t size;
+	uint32_t used;
 } connections;
 
 typedef struct {
@@ -294,8 +294,8 @@ typedef struct {
 
 typedef struct {
 	void  *ptr;
-	size_t used;
-	size_t size;
+	uint32_t used;
+	uint32_t size;
 } buffer_plugin;
 
 typedef struct {
@@ -363,8 +363,8 @@ typedef struct server_socket {
 typedef struct {
 	server_socket **ptr;
 
-	size_t size;
-	size_t used;
+	uint32_t size;
+	uint32_t used;
 } server_socket_array;
 
 struct server {
@@ -385,10 +385,9 @@ struct server {
 	int max_fds_lowat;/* low  watermark */
 	int max_fds_hiwat;/* high watermark */
 	int cur_fds;    /* currently used fds */
-	int want_fds;   /* waiting fds */
 	int sockets_disabled;
 
-	size_t max_conns;
+	uint32_t max_conns;
 
 	/* buffers */
 	buffer *parse_full_path;
@@ -427,9 +426,9 @@ struct server {
 	short int config_deprecated;
 	short int config_unsupported;
 
-	connections *conns;
-	connections *joblist;
-	connections *fdwaitqueue;
+	connections conns;
+	connections joblist;
+	connections fdwaitqueue;
 
 	struct stat_cache *stat_cache;
 

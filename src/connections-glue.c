@@ -9,6 +9,7 @@
 #include "response.h"
 
 #include <errno.h>
+#include <stdlib.h>
 #include <string.h>
 
 const char *connection_get_state(connection_state_t state) {
@@ -43,6 +44,18 @@ const char *connection_get_short_state(connection_state_t state) {
 	case CON_STATE_RESPONSE_END: return "S";
 	default: return "x";
 	}
+}
+
+__attribute_cold__
+static void connection_list_resize(connections *conns) {
+    conns->size += 16;
+    conns->ptr   = realloc(conns->ptr, sizeof(*conns->ptr) * conns->size);
+    force_assert(NULL != conns->ptr);
+}
+
+void connection_list_append(connections *conns, connection *con) {
+    if (conns->used == conns->size) connection_list_resize(conns);
+    conns->ptr[conns->used++] = con;
 }
 
 static int connection_handle_read_post_cq_compact(chunkqueue *cq) {

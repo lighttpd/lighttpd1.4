@@ -15,7 +15,6 @@
 #include "stat_cache.h"
 #include "configfile.h"
 #include "plugin.h"
-#include "joblist.h"
 #include "network_write.h"
 
 #ifdef HAVE_VERSIONSTAMP_H
@@ -228,7 +227,6 @@ static int daemonize(void) {
 
 __attribute_cold__
 static server *server_init(void) {
-	int i;
 	server *srv = calloc(1, sizeof(*srv));
 	force_assert(srv);
 #define CLEAN(x) \
@@ -263,7 +261,7 @@ static server *server_init(void) {
 	CLEAN(status);
 #undef CLEAN
 
-	for (i = 0; i < FILE_CACHE_MAX; i++) {
+	for (int i = 0; i < FILE_CACHE_MAX; ++i) {
 		srv->mtime_cache[i].mtime = (time_t)-1;
 		srv->mtime_cache[i].str = buffer_init();
 	}
@@ -272,15 +270,6 @@ static server *server_init(void) {
 
 	srv->cur_ts = time(NULL);
 	srv->startup_ts = srv->cur_ts;
-
-	srv->conns = calloc(1, sizeof(*srv->conns));
-	force_assert(srv->conns);
-
-	srv->joblist = calloc(1, sizeof(*srv->joblist));
-	force_assert(srv->joblist);
-
-	srv->fdwaitqueue = calloc(1, sizeof(*srv->fdwaitqueue));
-	force_assert(srv->fdwaitqueue);
 
 	srv->errh = log_error_st_init(&srv->cur_ts, &srv->last_generated_debug_ts);
 
@@ -313,9 +302,7 @@ static server *server_init(void) {
 
 __attribute_cold__
 static void server_free(server *srv) {
-	size_t i;
-
-	for (i = 0; i < FILE_CACHE_MAX; i++) {
+	for (int i = 0; i < FILE_CACHE_MAX; ++i) {
 		buffer_free(srv->mtime_cache[i].str);
 	}
 
@@ -352,10 +339,8 @@ static void server_free(server *srv) {
 
 	fdevent_free(srv->ev);
 
-	free(srv->conns);
-
 	if (srv->config_storage) {
-		for (i = 0; i < srv->config_context->used; i++) {
+		for (uint32_t i = 0; i < srv->config_context->used; ++i) {
 			specific_config *s = srv->config_storage[i];
 
 			if (!s) continue;
@@ -383,8 +368,8 @@ static void server_free(server *srv) {
 	CLEAN(srvconf.upload_tempdirs);
 #undef CLEAN
 
-	joblist_free(srv, srv->joblist);
-	fdwaitqueue_free(srv, srv->fdwaitqueue);
+	free(srv->joblist.ptr);
+	free(srv->fdwaitqueue.ptr);
 
 	if (srv->stat_cache) {
 		stat_cache_free(srv->stat_cache);
@@ -433,8 +418,7 @@ static void remove_pid_file(server *srv) {
 __attribute_cold__
 static server_socket * server_oneshot_getsock(server *srv, sock_addr *cnt_addr) {
 	server_socket *srv_socket, *srv_socket_wild = NULL;
-	size_t i;
-	for (i = 0; i < srv->srv_sockets.used; ++i) {
+	for (uint32_t i = 0; i < srv->srv_sockets.used; ++i) {
 		srv_socket = srv->srv_sockets.ptr[i];
 		if (!sock_addr_is_port_eq(&srv_socket->addr,cnt_addr)) continue;
 		if (sock_addr_is_addr_eq(&srv_socket->addr,cnt_addr)) return srv_socket;
@@ -719,8 +703,7 @@ static int log_error_open(server *srv) {
            ,{ "local6",   LOG_LOCAL6 }
            ,{ "local7",   LOG_LOCAL7 }
         };
-        unsigned int i;
-        for (i = 0; i < sizeof(facility_names)/sizeof(facility_names[0]); ++i) {
+        for (unsigned int i = 0; i < sizeof(facility_names)/sizeof(facility_names[0]); ++i) {
             const struct facility_name_st *f = facility_names+i;
             if (0 == strcmp(srv->srvconf.syslog_facility->ptr, f->name)) {
                 facility = f->val;
@@ -877,7 +860,7 @@ static void server_sockets_restore (server *srv) { /* graceful_restart */
 __attribute_cold__
 static int server_sockets_set_nb_cloexec (server *srv) {
     if (srv->sockets_disabled) return 0; /* lighttpd -1 (one-shot mode) */
-    for (size_t i = 0; i < srv->srv_sockets.used; ++i) {
+    for (uint32_t i = 0; i < srv->srv_sockets.used; ++i) {
         server_socket *srv_socket = srv->srv_sockets.ptr[i];
         if (-1 == fdevent_fcntl_set_nb_cloexec_sock(srv->ev, srv_socket->fd)) {
             log_error_write(srv, __FILE__, __LINE__, "ss",
@@ -890,7 +873,7 @@ static int server_sockets_set_nb_cloexec (server *srv) {
 
 __attribute_cold__
 static void server_sockets_set_event (server *srv, int event) {
-    for (size_t i = 0; i < srv->srv_sockets.used; ++i) {
+    for (uint32_t i = 0; i < srv->srv_sockets.used; ++i) {
         server_socket *srv_socket = srv->srv_sockets.ptr[i];
         fdevent_fdnode_event_set(srv->ev, srv_socket->fdn, event);
     }
@@ -900,7 +883,7 @@ __attribute_cold__
 static void server_sockets_unregister (server *srv) {
     if (2 == srv->sockets_disabled) return;
     srv->sockets_disabled = 2;
-    for (size_t i = 0; i < srv->srv_sockets.used; ++i)
+    for (uint32_t i = 0; i < srv->srv_sockets.used; ++i)
         network_unregister_sock(srv, srv->srv_sockets.ptr[i]);
 }
 
@@ -912,7 +895,7 @@ static void server_sockets_close (server *srv) {
      * than started by lighttpd via "bin-path")
      */
     if (3 == srv->sockets_disabled) return;
-    for (size_t i = 0; i < srv->srv_sockets.used; ++i) {
+    for (uint32_t i = 0; i < srv->srv_sockets.used; ++i) {
         server_socket *srv_socket = srv->srv_sockets.ptr[i];
         if (-1 == srv_socket->fd) continue;
         if (2 != srv->sockets_disabled) network_unregister_sock(srv,srv_socket);
@@ -963,35 +946,39 @@ static void server_sockets_disable (server *srv) {
     server_sockets_set_event(srv, 0);
     srv->sockets_disabled = 1;
     log_error_write(srv, __FILE__, __LINE__, "s",
-                    (srv->conns->used >= srv->max_conns)
+                    (srv->conns.used >= srv->max_conns)
                     ? "[note] sockets disabled, connection limit reached"
                     : "[note] sockets disabled, out-of-fds");
 }
 
 __attribute_cold__
 static void server_overload_check (server *srv) {
-    if (srv->cur_fds + srv->want_fds < srv->max_fds_lowat
-        && srv->conns->used <= srv->max_conns * 9 / 10) {
+    if (srv->cur_fds + (int)srv->fdwaitqueue.used < srv->max_fds_lowat
+        && srv->conns.used <= srv->max_conns * 9 / 10) {
 
         server_sockets_enable(srv);
     }
 }
 
 static void server_load_check (server *srv) {
-    if (srv->cur_fds + srv->want_fds > srv->max_fds_hiwat  /* out of fds */
-        || srv->conns->used >= srv->max_conns) {   /* out of connections */
+    /* check if hit limits for num fds used or num connections */
+    if (srv->cur_fds + (int)srv->fdwaitqueue.used > srv->max_fds_hiwat
+        || srv->conns.used >= srv->max_conns) {
 
         server_sockets_disable(srv);
     }
 }
 
 __attribute_cold__
-static void server_process_want_fds (server *srv) {
+static void server_process_fdwaitqueue (server *srv) {
+    connections * const fdwaitqueue = &srv->fdwaitqueue;
+    uint32_t i = 0;
     for (int n = srv->max_fds - srv->cur_fds - 16; n > 0; --n) {
-        connection *con = fdwaitqueue_unshift(srv, srv->fdwaitqueue);
-        if (NULL == con) break;
-        connection_state_machine(srv, con);
-        --srv->want_fds;
+        if (i == fdwaitqueue->used) break;
+        connection_state_machine(srv, fdwaitqueue->ptr[i++]);
+    }
+    if (i > 0 && 0 != (fdwaitqueue->used -= i)) {
+	memmove(fdwaitqueue->ptr, fdwaitqueue->ptr+i, fdwaitqueue->used * sizeof(*(fdwaitqueue->ptr)));
     }
 }
 
@@ -1004,7 +991,7 @@ static int server_main (server * const srv, int argc, char **argv) {
 #ifdef HAVE_FORK
 	int num_childs = 0;
 #endif
-	size_t i;
+	uint32_t i;
 #ifdef HAVE_SIGACTION
 	struct sigaction act;
 #endif
@@ -1501,9 +1488,7 @@ static int server_main (server * const srv, int argc, char **argv) {
 	/* dump unused config-keys */
 	for (i = 0; i < srv->config_context->used; i++) {
 		array *config = ((data_config *)srv->config_context->data[i])->value;
-		size_t j;
-
-		for (j = 0; config && j < config->used; j++) {
+		for (uint32_t j = 0; config && j < config->used; ++j) {
 			data_unset *du = config->data[j];
 
 			/* all var.* is known as user defined variable */
@@ -1837,7 +1822,7 @@ static void server_handle_sigalrm (server * const srv, time_t min_ts, time_t las
 				/* cleanup stat-cache */
 				stat_cache_trigger_cleanup(srv);
 				/* reset global/aggregate rate limit counters */
-				for (size_t i = 0; i < srv->config_context->used; ++i) {
+				for (uint32_t i = 0; i < srv->config_context->used; ++i) {
 					srv->config_storage[i]->global_bytes_per_second_cnt = 0;
 				}
 				/* if graceful_shutdown, accelerate cleanup of recently completed request/responses */
@@ -1868,7 +1853,7 @@ static void server_handle_sigchld (server * const srv) {
 __attribute_hot__
 __attribute_noinline__
 static int server_main_loop (server * const srv) {
-	connections * const joblist = srv->joblist;
+	connections * const joblist = &srv->joblist;
 	time_t last_active_ts = time(NULL);
 
 	while (!srv_shutdown) {
@@ -1898,7 +1883,7 @@ static int server_main_loop (server * const srv) {
 
 		if (graceful_shutdown) {
 			server_graceful_state(srv);
-			if (srv->conns->used == 0) {
+			if (0 == srv->conns.used) {
 				/* we are in graceful shutdown phase and all connections are closed
 				 * we are ready to terminate without harming anyone */
 				srv_shutdown = 1;
@@ -1910,15 +1895,15 @@ static int server_main_loop (server * const srv) {
 			server_load_check(srv);
 		}
 
-		if (srv->want_fds) {
-			server_process_want_fds(srv);
+		if (srv->fdwaitqueue.used) {
+			server_process_fdwaitqueue(srv);
 		}
 
 		if (fdevent_poll(srv->ev, 1000) > 0) {
 			last_active_ts = srv->cur_ts;
 		}
 
-		for (size_t ndx = 0; ndx < joblist->used; ++ndx) {
+		for (uint32_t ndx = 0; ndx < joblist->used; ++ndx) {
 			connection *con = joblist->ptr[ndx];
 			connection_state_machine(srv, con);
 		}

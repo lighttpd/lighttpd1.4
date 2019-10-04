@@ -603,7 +603,6 @@ common_src = [
 	'http_kv.c',
 	'http_vhostdb.c',
 	'http-header-glue.c',
-	'joblist.c',
 	'keyvalue.c',
 	'log.c',
 	'md5.c',

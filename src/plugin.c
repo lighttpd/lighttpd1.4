@@ -293,11 +293,11 @@ int plugins_load(server *srv) {
 #define PLUGIN_TO_SLOT(x, y) \
 	handler_t plugins_call_##y(server *srv, connection *con) {\
 		plugin ** const slot = ((plugin ***)(srv->plugin_slots))[x];\
-		const size_t used = srv->plugins.used;\
+		const uint32_t used = srv->plugins.used;\
 		handler_t rc = HANDLER_GO_ON;\
 		if (slot) {\
 			const plugin *p;\
-			for (size_t i = 0; i < used && (p = slot[i]) && (rc = p->y(srv, con, p->data)) == HANDLER_GO_ON; ++i) ;\
+			for (uint32_t i = 0; i < used && (p = slot[i]) && (rc = p->y(srv, con, p->data)) == HANDLER_GO_ON; ++i) ;\
 		}\
 		return rc;\
 	}
@@ -329,11 +329,11 @@ PLUGIN_TO_SLOT(PLUGIN_FUNC_CONNECTION_RESET, connection_reset)
 #define PLUGIN_TO_SLOT(x, y) \
 	handler_t plugins_call_##y(server *srv) {\
 		plugin ** const slot = ((plugin ***)(srv->plugin_slots))[x];\
-		const size_t used = srv->plugins.used; \
+		const uint32_t used = srv->plugins.used; \
 		handler_t rc = HANDLER_GO_ON;\
 		if (slot) {\
 			const plugin *p;\
-			for (size_t i = 0; i < used && (p = slot[i]) && (rc = p->y(srv, p->data)) == HANDLER_GO_ON; ++i) ;\
+			for (uint32_t i = 0; i < used && (p = slot[i]) && (rc = p->y(srv, p->data)) == HANDLER_GO_ON; ++i) ;\
 		}\
 		return rc;\
 	}
@@ -357,7 +357,7 @@ handler_t plugins_call_handle_waitpid(server *srv, pid_t pid, int status) {
 	plugin ** const slot =
 	  ((plugin ***)(srv->plugin_slots))[PLUGIN_FUNC_HANDLE_WAITPID];
 	if (!slot) return HANDLER_GO_ON;
-	for (size_t i = 0; i < srv->plugins.used && slot[i]; ++i) {
+	for (uint32_t i = 0; i < srv->plugins.used && slot[i]; ++i) {
 		plugin *p = slot[i];
 		handler_t r = p->handle_waitpid(srv, p->data, pid, status);
 		if (r != HANDLER_GO_ON) return r;
@@ -372,12 +372,8 @@ handler_t plugins_call_handle_waitpid(server *srv, pid_t pid, int status) {
  *
  */
 handler_t plugins_call_handle_fdevent(server *srv, const fd_conn *fdc) {
-	size_t i;
-	plugin **ps;
-
-	ps = srv->plugins.ptr;
-
-	for (i = 0; i < srv->plugins.used; i++) {
+	plugin ** const ps = srv->plugins.ptr;
+	for (uint32_t i = 0; i < srv->plugins.used; ++i) {
 		plugin *p = ps[i];
 		if (p->handle_fdevent) {
 			handler_t r;
@@ -408,18 +404,14 @@ handler_t plugins_call_handle_fdevent(server *srv, const fd_conn *fdc) {
  */
 
 handler_t plugins_call_init(server *srv) {
-	size_t i;
-	plugin **ps;
-
-	ps = srv->plugins.ptr;
+	plugin ** const ps = srv->plugins.ptr;
 
 	/* fill slots */
 
 	srv->plugin_slots = calloc(PLUGIN_FUNC_SIZEOF, sizeof(ps));
 	force_assert(NULL != srv->plugin_slots);
 
-	for (i = 0; i < srv->plugins.used; i++) {
-		size_t j;
+	for (uint32_t i = 0; i < srv->plugins.used; ++i) {
 		/* check which calls are supported */
 
 		plugin *p = ps[i];
@@ -432,7 +424,7 @@ handler_t plugins_call_init(server *srv) {
 			force_assert(NULL != slot); \
 			((plugin ***)(srv->plugin_slots))[x] = slot; \
 		} \
-		for (j = 0; j < srv->plugins.used; j++) { \
+		for (uint32_t j = 0; j < srv->plugins.used; ++j) { \
 			if (slot[j]) continue;\
 			slot[j] = p;\
 			break;\
@@ -489,25 +481,23 @@ handler_t plugins_call_init(server *srv) {
 }
 
 void plugins_free(server *srv) {
-	size_t i;
-	if (srv->plugin_slots) plugins_call_cleanup(srv);
+	if (srv->plugin_slots) {
+		plugins_call_cleanup(srv);
+		for (int i = 0; i < PLUGIN_FUNC_SIZEOF; ++i) {
+			plugin **slot = ((plugin ***)(srv->plugin_slots))[i];
+			if (slot) free(slot);
+		}
+		free(srv->plugin_slots);
+		srv->plugin_slots = NULL;
+	}
 
-	for (i = 0; i < srv->plugins.used; i++) {
+	for (uint32_t i = 0; i < srv->plugins.used; ++i) {
 		plugin *p = ((plugin **)srv->plugins.ptr)[i];
 
 		plugin_free(p);
 	}
-
-	for (i = 0; srv->plugin_slots && i < PLUGIN_FUNC_SIZEOF; i++) {
-		plugin **slot = ((plugin ***)(srv->plugin_slots))[i];
-
-		if (slot) free(slot);
-	}
-
-	free(srv->plugin_slots);
-	srv->plugin_slots = NULL;
-
 	free(srv->plugins.ptr);
 	srv->plugins.ptr = NULL;
 	srv->plugins.used = 0;
+	srv->plugins.size = 0;
 }

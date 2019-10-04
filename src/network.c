@@ -61,8 +61,8 @@ static handler_t network_server_handle_fdevent(server *srv, void *context, int r
 	/* accept()s at most 100 connections directly
 	 *
 	 * we jump out after 100 to give the waiting connections a chance */
-	if (srv->conns->used >= srv->max_conns) return HANDLER_GO_ON;
-	loops = (int)(srv->max_conns - srv->conns->used + 1);
+	if (srv->conns.used >= srv->max_conns) return HANDLER_GO_ON;
+	loops = (int)(srv->max_conns - srv->conns.used + 1);
 	if (loops > 100) loops = 101;
 
 	while (--loops && NULL != (con = connection_accept(srv, srv_socket)))
@@ -154,7 +154,7 @@ static int network_server_init(server *srv, buffer *host_token, size_t sidx, int
 	/* check if we already know this socket, and if yes, don't init it
 	 * (optimization: check strings here to filter out exact matches;
 	 *  binary addresses are matched further below) */
-	for (size_t i = 0; i < srv->srv_sockets.used; ++i) {
+	for (uint32_t i = 0; i < srv->srv_sockets.used; ++i) {
 		if (buffer_is_equal(srv->srv_sockets.ptr[i]->srv_token, host_token)) {
 			buffer_copy_buffer(host_token, srv->srv_sockets.ptr[i]->srv_token);
 			return 0;
@@ -198,7 +198,7 @@ static int network_server_init(server *srv, buffer *host_token, size_t sidx, int
 	}
 
 	/* check if we already know this socket (after potential DNS resolution), and if yes, don't init it */
-	for (size_t i = 0; i < srv->srv_sockets.used; ++i) {
+	for (uint32_t i = 0; i < srv->srv_sockets.used; ++i) {
 		if (0 == memcmp(&srv->srv_sockets.ptr[i]->addr, &addr, sizeof(addr))) {
 			return 0;
 		}
@@ -219,7 +219,7 @@ static int network_server_init(server *srv, buffer *host_token, size_t sidx, int
 	}
 
 	if (srv->srvconf.systemd_socket_activation) {
-		for (size_t i = 0; i < srv->srv_sockets_inherited.used; ++i) {
+		for (uint32_t i = 0; i < srv->srv_sockets_inherited.used; ++i) {
 			if (0 != memcmp(&srv->srv_sockets_inherited.ptr[i]->addr, &srv_socket->addr, addr_len)) continue;
 			if ((unsigned short)~0u == srv->srv_sockets_inherited.ptr[i]->sidx) {
 				srv->srv_sockets_inherited.ptr[i]->sidx = sidx;
@@ -362,8 +362,7 @@ static int network_server_init(server *srv, buffer *host_token, size_t sidx, int
 }
 
 int network_close(server *srv) {
-	size_t i;
-	for (i = 0; i < srv->srv_sockets.used; i++) {
+	for (uint32_t i = 0; i < srv->srv_sockets.used; ++i) {
 		server_socket *srv_socket = srv->srv_sockets.ptr[i];
 		if (srv_socket->fd != -1) {
 			network_unregister_sock(srv, srv_socket);
@@ -380,7 +379,7 @@ int network_close(server *srv) {
 	srv->srv_sockets.used = 0;
 	srv->srv_sockets.size = 0;
 
-	for (i = 0; i < srv->srv_sockets_inherited.used; i++) {
+	for (uint32_t i = 0; i < srv->srv_sockets_inherited.used; ++i) {
 		server_socket *srv_socket = srv->srv_sockets_inherited.ptr[i];
 		if (srv_socket->fd != -1 && srv_socket->sidx != (unsigned short)~0u) {
 			close(srv_socket->fd);
@@ -451,7 +450,7 @@ int network_init(server *srv, int stdin_fd) {
 	if (0 != network_write_init(srv)) return -1;
 
 	if (srv->srvconf.systemd_socket_activation) {
-		for (size_t i = 0; i < srv->srv_sockets_inherited.used; ++i) {
+		for (uint32_t i = 0; i < srv->srv_sockets_inherited.used; ++i) {
 		        srv->srv_sockets_inherited.ptr[i]->sidx = (unsigned short)~0u;
 		}
 		if (0 != network_socket_activation_from_env(srv)) return -1;
@@ -503,7 +502,7 @@ int network_init(server *srv, int stdin_fd) {
 	if (srv->srvconf.systemd_socket_activation) {
 		/* activate any inherited sockets not explicitly listed in config file */
 		server_socket *srv_socket;
-		for (size_t i = 0; i < srv->srv_sockets_inherited.used; ++i) {
+		for (uint32_t i = 0; i < srv->srv_sockets_inherited.used; ++i) {
 		        if ((unsigned short)~0u != srv->srv_sockets_inherited.ptr[i]->sidx) continue;
 		        srv->srv_sockets_inherited.ptr[i]->sidx = 0;
 			srv_socket = calloc(1, sizeof(server_socket));
@@ -525,8 +524,6 @@ void network_unregister_sock(server *srv, server_socket *srv_socket) {
 }
 
 int network_register_fdevents(server *srv) {
-	size_t i;
-
 	if (-1 == fdevent_reset(srv->ev)) {
 		return -1;
 	}
@@ -534,7 +531,7 @@ int network_register_fdevents(server *srv) {
 	if (srv->sockets_disabled) return 0; /* lighttpd -1 (one-shot mode) */
 
 	/* register fdevents after reset */
-	for (i = 0; i < srv->srv_sockets.used; i++) {
+	for (uint32_t i = 0; i < srv->srv_sockets.used; ++i) {
 		server_socket *srv_socket = srv->srv_sockets.ptr[i];
 
 		srv_socket->fdn = fdevent_register(srv->ev, srv_socket->fd, network_server_handle_fdevent, srv_socket);

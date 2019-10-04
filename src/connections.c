@@ -14,7 +14,6 @@
 #include "network.h"
 #include "http_chunk.h"
 #include "stat_cache.h"
-#include "joblist.h"
 
 #include "plugin.h"
 
@@ -48,7 +47,7 @@ static int connection_reset(server *srv, connection *con);
 
 
 static connection *connections_get_new_connection(server *srv) {
-	connections *conns = srv->conns;
+	connections * const conns = &srv->conns;
 	size_t i;
 
 	if (conns->size == conns->used) {
@@ -68,7 +67,7 @@ static connection *connections_get_new_connection(server *srv) {
 
 static int connection_del(server *srv, connection *con) {
 	size_t i;
-	connections *conns = srv->conns;
+	connections * const conns = &srv->conns;
 	connection *temp;
 
 	if (con == NULL) return -1;
@@ -140,7 +139,7 @@ static int connection_close(server *srv, connection *con) {
 	con->is_ssl_sock = 0;
 
 	/* plugins should have cleaned themselves up */
-	for (size_t i = 0; i < srv->plugins.used; ++i) {
+	for (uint32_t i = 0; i < srv->plugins.used; ++i) {
 		plugin *p = ((plugin **)(srv->plugins.ptr))[i];
 		plugin_data *pd = p->data;
 		if (!pd || NULL == con->plugin_ctx[pd->id]) continue;
@@ -217,6 +216,11 @@ static void connection_handle_shutdown(server *srv, connection *con) {
 	} else {
 		connection_close(srv, con);
 	}
+}
+
+__attribute_cold__
+static void connection_fdwaitqueue_append(server *srv, connection *con) {
+    connection_list_append(&srv->fdwaitqueue, con);
 }
 
 static void connection_handle_response_end_state(server *srv, connection *con) {
@@ -503,8 +507,7 @@ static void connection_handle_write_state(server *srv, connection *con) {
             case HANDLER_GO_ON:
                 break;
             case HANDLER_WAIT_FOR_FD:
-                srv->want_fds++;
-                fdwaitqueue_append(srv, con);
+                connection_fdwaitqueue_append(srv, con);
                 break;
             case HANDLER_COMEBACK:
             default:
@@ -588,12 +591,8 @@ static connection *connection_init(server *srv) {
 }
 
 void connections_free(server *srv) {
-	connections *conns = srv->conns;
-	size_t i;
-
-	if (NULL == conns) return;
-
-	for (i = 0; i < conns->size; i++) {
+	connections * const conns = &srv->conns;
+	for (uint32_t i = 0; i < conns->size; ++i) {
 		connection *con = conns->ptr[i];
 
 		connection_reset(srv, con);
@@ -637,8 +636,7 @@ void connections_free(server *srv) {
 	}
 
 	free(conns->ptr);
-	free(conns);
-	srv->conns = NULL;
+	conns->ptr = NULL;
 }
 
 
@@ -731,14 +729,14 @@ static chunk * connection_read_header_more(connection *con, chunkqueue *cq, chun
 }
 
 __attribute_hot__
-static size_t connection_read_header_hoff(const char *n, const size_t clen, unsigned short hoff[8192]) {
+static uint32_t connection_read_header_hoff(const char *n, const size_t clen, unsigned short hoff[8192]) {
     size_t hlen = 0;
     for (const char *b; (n = memchr((b = n),'\n',clen-hlen)); ++n) {
         size_t x = (size_t)(n - b + 1);
         hlen += x;
         if (x <= 2 && (x == 1 || n[-1] == '\r')) {
             hoff[hoff[0]+1] = hlen;
-            return hlen;
+            return hlen <= UINT32_MAX ? (uint32_t)hlen : 0;
         }
         if (++hoff[0] >= /*sizeof(hoff)/sizeof(hoff[0])-1*/ 8192-1) break;
         hoff[hoff[0]] = hlen;
@@ -840,7 +838,7 @@ static int connection_handle_read_state(server * const srv, connection * const c
 
     if (con->conf.log_request_header) {
         log_error(con->errh, __FILE__, __LINE__,
-                  "fd: %d request-len: %zu\n%.*s", con->fd, con->header_len,
+                  "fd: %d request-len: %d\n%.*s", con->fd, (int)con->header_len,
                   (int)con->header_len, hdrs);
     }
 
@@ -960,7 +958,7 @@ connection *connection_accept(server *srv, server_socket *srv_socket) {
 	 * see #1216
 	 */
 
-	if (srv->conns->used >= srv->max_conns) {
+	if (srv->conns.used >= srv->max_conns) {
 		return NULL;
 	}
 
@@ -1215,10 +1213,7 @@ static int connection_handle_request(server *srv, connection *con) {
 				connection_set_state(con, CON_STATE_RESPONSE_START);
 				break;
 			case HANDLER_WAIT_FOR_FD:
-				srv->want_fds++;
-
-				fdwaitqueue_append(srv, con);
-
+				connection_fdwaitqueue_append(srv, con);
 				break;
 			case HANDLER_COMEBACK:
 				return 1;
@@ -1468,14 +1463,14 @@ static void connection_check_timeout (server * const srv, const time_t cur_ts, c
 
 void connection_periodic_maint (server * const srv, const time_t cur_ts) {
     /* check all connections for timeouts */
-    connections * const conns = srv->conns;
+    connections * const conns = &srv->conns;
     for (size_t ndx = 0; ndx < conns->used; ++ndx) {
         connection_check_timeout(srv, cur_ts, conns->ptr[ndx]);
     }
 }
 
 void connection_graceful_shutdown_maint (server *srv) {
-    connections *conns = srv->conns;
+    connections * const conns = &srv->conns;
     for (size_t ndx = 0; ndx < conns->used; ++ndx) {
         connection * const con = conns->ptr[ndx];
         int changed = 0;

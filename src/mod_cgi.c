@@ -5,7 +5,6 @@
 #include "http_kv.h"
 #include "log.h"
 #include "connections.h"
-#include "joblist.h"
 #include "response.h"
 #include "http_chunk.h"
 #include "http_header.h"
