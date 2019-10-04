@@ -724,19 +724,20 @@ static chunk * connection_read_header_more(connection *con, chunkqueue *cq, chun
 
     /* detect if data is added to chunk */
     c = cq->first;
-    return
-      (NULL != c && olen < buffer_string_length(c->mem) - c->offset) ? c : NULL;
+    return (c && (size_t)c->offset + olen < buffer_string_length(c->mem))
+      ? c
+      : NULL;
 }
 
 __attribute_hot__
-static uint32_t connection_read_header_hoff(const char *n, const size_t clen, unsigned short hoff[8192]) {
-    size_t hlen = 0;
+static uint32_t connection_read_header_hoff(const char *n, const uint32_t clen, unsigned short hoff[8192]) {
+    uint32_t hlen = 0;
     for (const char *b; (n = memchr((b = n),'\n',clen-hlen)); ++n) {
-        size_t x = (size_t)(n - b + 1);
+        uint32_t x = (uint32_t)(n - b + 1);
         hlen += x;
         if (x <= 2 && (x == 1 || n[-1] == '\r')) {
             hoff[hoff[0]+1] = hlen;
-            return hlen <= UINT32_MAX ? (uint32_t)hlen : 0;
+            return hlen;
         }
         if (++hoff[0] >= /*sizeof(hoff)/sizeof(hoff[0])-1*/ 8192-1) break;
         hoff[hoff[0]] = hlen;
@@ -768,7 +769,7 @@ static int connection_handle_read_state(server * const srv, connection * const c
 
     chunkqueue * const cq = con->read_queue;
     chunk *c = cq->first;
-    size_t clen = 0;
+    uint32_t clen = 0;
     unsigned short hoff[8192]; /* max num header lines + 3; 16k on stack */
 
     do {

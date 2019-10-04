@@ -19,9 +19,9 @@ typedef struct {
 	char *ptr;
 
 	/* "used" includes a terminating 0 */
-	size_t used;
+	uint32_t used;
 	/* size of allocated buffer at *ptr */
-	size_t size;
+	uint32_t size;
 } buffer;
 
 /* create new buffer; either empty or copy given data */
@@ -63,7 +63,7 @@ void buffer_commit(buffer *b, size_t size);
  * - does not modify the string data apart from terminating zero
  * - reallocates the buffer iff needed
  */
-void buffer_string_set_length(buffer *b, size_t len);
+void buffer_string_set_length(buffer *b, uint32_t len);
 
 /* clear buffer
  * - invalidate buffer contents
@@ -191,10 +191,10 @@ static inline int light_isalnum(int c) {
 
 
 __attribute_pure__
-static inline size_t buffer_string_length(const buffer *b); /* buffer string length without terminating 0 */
+static inline uint32_t buffer_string_length(const buffer *b); /* buffer string length without terminating 0 */
 
 __attribute_pure__
-static inline size_t buffer_string_space(const buffer *b); /* maximum length of string that can be stored without reallocating */
+static inline uint32_t buffer_string_space(const buffer *b); /* maximum length of string that can be stored without reallocating */
 
 static inline void buffer_append_slash(buffer *b); /* append '/' no non-empty strings not ending in '/' */
 void buffer_append_path_len(buffer *b, const char *a, size_t alen); /* join strings with '/', if '/' not present */
@@ -227,11 +227,11 @@ static inline int buffer_string_is_empty(const buffer *b) {
 	return NULL == b || b->used < 2;
 }
 
-static inline size_t buffer_string_length(const buffer *b) {
+static inline uint32_t buffer_string_length(const buffer *b) {
 	return NULL != b && 0 != b->used ? b->used - 1 : 0;
 }
 
-static inline size_t buffer_string_space(const buffer *b) {
+static inline uint32_t buffer_string_space(const buffer *b) {
 	return NULL != b && b->size ? b->size - (b->used | (0 == b->used)) : 0;
 }
 
@@ -244,7 +244,7 @@ static inline void buffer_append_string_buffer(buffer *b, const buffer *src) {
 }
 
 static inline void buffer_append_slash(buffer *b) {
-	size_t len = buffer_string_length(b);
+	uint32_t len = buffer_string_length(b);
 	if (len > 0 && '/' != b->ptr[len-1]) BUFFER_APPEND_STRING_CONST(b, "/");
 }
 

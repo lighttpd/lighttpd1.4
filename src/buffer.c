@@ -128,7 +128,7 @@ char* buffer_string_prepare_append(buffer *b, size_t size) {
       : buffer_string_prepare_append_resize(b, size);
 }
 
-void buffer_string_set_length(buffer *b, size_t len) {
+void buffer_string_set_length(buffer *b, uint32_t len) {
 	force_assert(NULL != b);
 
 	if (len >= b->size) buffer_realloc(b, len);
