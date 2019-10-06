@@ -25,9 +25,6 @@ typedef struct data_unset {
 
 typedef struct {
 	data_unset  **data;
-
-	uint32_t *sorted;
-
 	uint32_t used; /* <= INT32_MAX */
 	uint32_t size;
 } array;
@@ -97,7 +94,6 @@ data_unset *array_extract_element_klen(array *a, const char *key, size_t klen); 
 
 int * array_get_int_ptr(array *a, const char *k, size_t klen);
 
-__attribute_hot__
 buffer * array_get_buf_ptr(array *a, const char *k, size_t klen);
 
 void array_insert_value(array *a, const char *v, size_t vlen);
