@@ -77,8 +77,6 @@ void array_reset_data_strings(array * const a) {
 		/*force_assert(ds->type == TYPE_STRING);*/
 		buffer * const k = ds->key;
 		buffer * const v = ds->value;
-		buffer_clear(k);
-		buffer_clear(v);
 		if (k->size > BUFFER_MAX_REUSE_SIZE) buffer_reset(k);
 		if (v->size > BUFFER_MAX_REUSE_SIZE) buffer_reset(v);
 	}
@@ -264,6 +262,7 @@ int * array_get_int_ptr(array * const a, const char * const k, const size_t klen
 
     data_integer * const di =array_insert_integer_at_pos(a,(uint32_t)(-ipos-1));
     buffer_copy_string_len(di->key, k, klen);
+    di->value = 0;
     return &di->value;
 }
 
@@ -273,11 +272,13 @@ buffer * array_get_buf_ptr(array * const a, const char * const k, const size_t k
 
     data_string * const ds = array_insert_string_at_pos(a, (uint32_t)(-ipos-1));
     buffer_copy_string_len(ds->key, k, klen);
+    buffer_clear(ds->value);
     return ds->value;
 }
 
 void array_insert_value(array * const a, const char * const v, const size_t vlen) {
     data_string * const ds = array_insert_string_at_pos(a, a->used);
+    buffer_clear(ds->key);
     buffer_copy_string_len(ds->value, v, vlen);
 }
 

@@ -3,6 +3,7 @@
 #include "base.h"
 #include "buffer.h"
 #include "burl.h"       /* HTTP_PARSEOPT_HEADER_STRICT */
+#include "settings.h"   /* BUFFER_MAX_REUSE_SIZE */
 #include "log.h"
 #include "connections.h"
 #include "fdevent.h"
@@ -678,15 +679,19 @@ static int connection_reset(server *srv, connection *con) {
 	con->request.te_chunked = 0;
 	con->request.htags = 0;
 
-	array_reset_data_strings(con->request.headers);
-	array_reset_data_strings(con->environment);
+	if (con->header_len <= BUFFER_MAX_REUSE_SIZE)
+		con->request.headers->used = 0;
+	else
+		array_reset_data_strings(con->request.headers);
+	con->header_len = 0;
+	if (0 != con->environment->used)
+		array_reset_data_strings(con->environment);
 
 	chunkqueue_reset(con->request_content_queue);
 
 	/* The cond_cache gets reset in response.c */
 	/* config_cond_cache_reset(srv, con); */
 
-	con->header_len = 0;
 	con->async_callback = 0;
 	con->error_handler_saved_status = 0;
 	/*con->error_handler_saved_method = HTTP_METHOD_UNSET;*/
