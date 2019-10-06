@@ -133,7 +133,11 @@ static int32_t array_get_index(const array * const a, const char * const k, cons
     while (lower != upper) {
         uint32_t probe = (lower + upper) / 2;
         const buffer * const b = a->data[a->sorted[probe]]->key;
-        int cmp = array_keycmp(k, klen, CONST_BUF_LEN(b));
+        /* key is non-empty (0==b->used), though possibly blank (1==b->used),
+         * if inserted into key-value array */
+        /*force_assert(b && b->used);*/
+        int cmp = array_keycmp(k, klen, b->ptr, b->used-1);
+        /*int cmp = array_keycmp(k, klen, CONST_BUF_LEN(b));*/
         if (cmp < 0)           /* key < [probe] */
             upper = probe;     /* still: lower <= upper */
         else if (cmp > 0)      /* key > [probe] */
