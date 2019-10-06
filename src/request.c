@@ -887,9 +887,25 @@ int http_request_parse(server *srv, connection *con, buffer *hdrs) {
 			 * which must not be blindly forwarded to backends */
 			http_header_request_unset(con, HTTP_HEADER_TRANSFER_ENCODING, CONST_STR_LEN("Transfer-Encoding"));
 
-			/*(note: ignore whether or not Content-Length was provided)*/
 		        if (con->request.htags & HTTP_HEADER_CONTENT_LENGTH) {
-				http_header_request_unset(con, HTTP_HEADER_CONTENT_LENGTH, CONST_STR_LEN("Content-Length"));
+				/* RFC7230 Hypertext Transfer Protocol (HTTP/1.1): Message Syntax and Routing
+				 * 3.3.3.  Message Body Length
+				 * [...]
+				 * If a message is received with both a Transfer-Encoding and a
+				 * Content-Length header field, the Transfer-Encoding overrides the
+				 * Content-Length.  Such a message might indicate an attempt to
+				 * perform request smuggling (Section 9.5) or response splitting
+				 * (Section 9.4) and ought to be handled as an error.  A sender MUST
+				 * remove the received Content-Length field prior to forwarding such
+				 * a message downstream.
+				 */
+				if (http_header_strict) {
+					return http_request_header_line_invalid(srv, 400, "invalid Transfer-Encoding + Content-Length -> 400");
+				}
+				else {
+					/* ignore Content-Length */
+					http_header_request_unset(con, HTTP_HEADER_CONTENT_LENGTH, CONST_STR_LEN("Content-Length"));
+				}
 			}
 
 			state.con_length_set = 1;
