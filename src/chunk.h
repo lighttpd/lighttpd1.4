@@ -47,13 +47,17 @@ typedef struct {
 	unsigned int tempdir_idx;
 } chunkqueue;
 
+__attribute_returns_nonnull__
 buffer * chunk_buffer_acquire(void);
+
 void chunk_buffer_release(buffer *b);
 
 void chunkqueue_chunk_pool_clear(void);
 void chunkqueue_chunk_pool_free(void);
 
+__attribute_returns_nonnull__
 chunkqueue *chunkqueue_init(void);
+
 void chunkqueue_set_chunk_size (size_t sz);
 void chunkqueue_set_tempdirs_default_reset (void);
 void chunkqueue_set_tempdirs_default (array *tempdirs, off_t upload_temp_file_size);
@@ -65,11 +69,20 @@ void chunkqueue_append_mem_min(chunkqueue *cq, const char * mem, size_t len); /*
 void chunkqueue_append_buffer(chunkqueue *cq, buffer *mem); /* may reset "mem" */
 void chunkqueue_append_chunkqueue(chunkqueue *cq, chunkqueue *src);
 
+__attribute_returns_nonnull__
 buffer * chunkqueue_prepend_buffer_open_sz(chunkqueue *cq, size_t sz);
+
+__attribute_returns_nonnull__
 buffer * chunkqueue_prepend_buffer_open(chunkqueue *cq);
+
 void chunkqueue_prepend_buffer_commit(chunkqueue *cq);
+
+__attribute_returns_nonnull__
 buffer * chunkqueue_append_buffer_open_sz(chunkqueue *cq, size_t sz);
+
+__attribute_returns_nonnull__
 buffer * chunkqueue_append_buffer_open(chunkqueue *cq);
+
 void chunkqueue_append_buffer_commit(chunkqueue *cq);
 
 struct server; /*(declaration)*/
@@ -83,6 +96,7 @@ int chunkqueue_append_mem_to_tempfile(struct server *srv, chunkqueue *cq, const 
  *  even if nothing was read.
  * pass 0 in len for mem at least half of chunk_buf_sz
  */
+__attribute_returns_nonnull__
 char * chunkqueue_get_memory(chunkqueue *cq, size_t *len);
 /* commit len bytes of mem obtained from chunkqueue_get_memory() */
 void chunkqueue_use_memory(chunkqueue *cq, size_t len);

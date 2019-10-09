@@ -25,8 +25,13 @@ typedef struct {
 } buffer;
 
 /* create new buffer; either empty or copy given data */
+__attribute_returns_nonnull__
 buffer* buffer_init(void);
+
+__attribute_returns_nonnull__
 buffer* buffer_init_buffer(const buffer *src); /* src can  be NULL */
+
+__attribute_returns_nonnull__
 buffer* buffer_init_string(const char *str); /* str can  be NULL */
 
 void buffer_free(buffer *b); /* b can be NULL */
@@ -41,6 +46,7 @@ void buffer_move(buffer *b, buffer *src);
  * sets b to an empty string, and may drop old content.
  * @return b->ptr
  */
+__attribute_returns_nonnull__
 char* buffer_string_prepare_copy(buffer *b, size_t size);
 
 /* allocate buffer large enough to be able to append a string of given size
@@ -49,6 +55,7 @@ char* buffer_string_prepare_copy(buffer *b, size_t size);
  * "used" data is preserved; if not empty buffer must contain a
  * zero terminated string.
  */
+__attribute_returns_nonnull__
 char* buffer_string_prepare_append(buffer *b, size_t size);
 
 /* use after prepare_(copy,append) when you have written data to the buffer

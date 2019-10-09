@@ -105,6 +105,7 @@ char* buffer_string_prepare_copy(buffer *b, size_t size) {
 
 __attribute_cold__
 __attribute_noinline__
+__attribute_returns_nonnull__
 static char* buffer_string_prepare_append_resize(buffer *b, size_t size) {
 	force_assert(NULL !=  b);
 	if (buffer_string_is_empty(b)) {

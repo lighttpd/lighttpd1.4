@@ -18,6 +18,7 @@ void status_counter_set(server *srv, const char *s, size_t len, int val);
 #include "base.h"       /* (srv->status) */
 #include "array.h"
 
+__attribute_returns_nonnull__
 static inline
 int *status_counter_get_counter(server *srv, const char *s, size_t len) {
     return array_get_int_ptr(srv->status, s, len);

@@ -53,9 +53,11 @@ typedef struct {
 
 data_integer *data_integer_init(void);
 
+__attribute_returns_nonnull__
 array *array_init(void);
 
 __attribute_cold__
+__attribute_returns_nonnull__
 array *array_init_array(const array *a);
 
 void array_free(array *a);
@@ -92,8 +94,10 @@ data_unset *array_get_element_klen(const array *a, const char *key, size_t klen)
 __attribute_cold__
 data_unset *array_extract_element_klen(array *a, const char *key, size_t klen); /* removes found entry from array */
 
+__attribute_returns_nonnull__
 int * array_get_int_ptr(array *a, const char *k, size_t klen);
 
+__attribute_returns_nonnull__
 buffer * array_get_buf_ptr(array *a, const char *k, size_t klen);
 
 void array_insert_value(array *a, const char *v, size_t vlen);

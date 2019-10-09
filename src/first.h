@@ -138,5 +138,14 @@
 #endif
 #endif
 
+#ifndef __attribute_returns_nonnull__
+#if __has_attribute(returns_nonnull) \
+ || __GNUC_PREREQ(4,9)
+#define __attribute_returns_nonnull__  __attribute__((__returns_nonnull__))
+#else
+#define __attribute_returns_nonnull__
+#endif
+#endif
+
 
 #endif

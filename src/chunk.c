@@ -68,6 +68,7 @@ chunkqueue *chunkqueue_init(void) {
 	return cq;
 }
 
+__attribute_returns_nonnull__
 static chunk *chunk_init(size_t sz) {
 	chunk *c;
 
@@ -152,6 +153,7 @@ void chunk_buffer_release(buffer *b) {
     }
 }
 
+__attribute_returns_nonnull__
 static chunk * chunk_acquire(size_t sz) {
     if (sz <= chunk_buf_sz) {
         if (chunks) {
@@ -251,18 +253,21 @@ static void chunkqueue_append_chunk(chunkqueue *cq, chunk *c) {
     cq->last = c;
 }
 
+__attribute_returns_nonnull__
 static chunk * chunkqueue_prepend_mem_chunk(chunkqueue *cq, size_t sz) {
     chunk *c = chunk_acquire(sz);
     chunkqueue_prepend_chunk(cq, c);
     return c;
 }
 
+__attribute_returns_nonnull__
 static chunk * chunkqueue_append_mem_chunk(chunkqueue *cq, size_t sz) {
     chunk *c = chunk_acquire(sz);
     chunkqueue_append_chunk(cq, c);
     return c;
 }
 
+__attribute_returns_nonnull__
 static chunk * chunkqueue_append_file_chunk(chunkqueue *cq, buffer *fn, off_t offset, off_t len) {
     chunk *c = chunk_acquire(buffer_string_length(fn)+1);
     chunkqueue_append_chunk(cq, c);
