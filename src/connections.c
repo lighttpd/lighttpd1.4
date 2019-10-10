@@ -1222,6 +1222,9 @@ static int connection_handle_request(server *srv, connection *con) {
 				connection_fdwaitqueue_append(srv, con);
 				break;
 			case HANDLER_COMEBACK:
+				if (con->mode == DIRECT && buffer_is_empty(con->physical.path)) {
+					config_setup_connection(srv, con);
+				}
 				return 1;
 			case HANDLER_ERROR:
 				/* something went wrong */
