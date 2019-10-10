@@ -166,7 +166,8 @@ static handler_t mod_vhostdb_error_500 (connection *con)
 static handler_t mod_vhostdb_found (connection *con, vhostdb_entry *ve)
 {
     /* fix virtual server and docroot */
-    buffer_copy_buffer(con->server_name, ve->server_name);
+    con->server_name = con->server_name_buf;
+    buffer_copy_buffer(con->server_name_buf, ve->server_name);
     buffer_copy_buffer(con->physical.doc_root, ve->document_root);
     return HANDLER_GO_ON;
 }

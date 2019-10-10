@@ -239,7 +239,8 @@ static handler_t mod_simple_vhost_docroot(server *srv, connection *con, void *p_
 	    !buffer_string_is_empty(con->uri.authority) &&
 	    buffer_is_equal(p->conf.docroot_cache_key, con->uri.authority)) {
 		/* cache hit */
-		buffer_copy_buffer(con->server_name,       p->conf.docroot_cache_servername);
+		con->server_name = con->server_name_buf;
+		buffer_copy_buffer(con->server_name_buf,   p->conf.docroot_cache_servername);
 		buffer_copy_buffer(con->physical.doc_root, p->conf.docroot_cache_value);
 	} else {
 		/* build document-root */
@@ -250,7 +251,8 @@ static handler_t mod_simple_vhost_docroot(server *srv, connection *con, void *p_
 					   p->doc_root,
 					   p->conf.default_host)) {
 				/* default host worked */
-				buffer_copy_buffer(con->server_name, p->conf.default_host);
+				con->server_name = con->server_name_buf;
+				buffer_copy_buffer(con->server_name_buf, p->conf.default_host);
 				buffer_copy_buffer(con->physical.doc_root, p->doc_root);
 				/* do not cache default host */
 			}
@@ -258,7 +260,8 @@ static handler_t mod_simple_vhost_docroot(server *srv, connection *con, void *p_
 		}
 
 		/* found host */
-		buffer_copy_buffer(con->server_name, con->uri.authority);
+		con->server_name = con->server_name_buf;
+		buffer_copy_buffer(con->server_name_buf, con->uri.authority);
 		buffer_copy_buffer(con->physical.doc_root, p->doc_root);
 
 		/* copy to cache */

@@ -566,7 +566,7 @@ static connection *connection_init(server *srv) {
 	CLEAN(physical.rel_path);
 	CLEAN(physical.etag);
 
-	CLEAN(server_name);
+	CLEAN(server_name_buf);
 	CLEAN(proto);
 	CLEAN(dst_addr_buf);
 
@@ -626,7 +626,7 @@ void connections_free(server *srv) {
 		CLEAN(physical.etag);
 		CLEAN(physical.rel_path);
 
-		CLEAN(server_name);
+		CLEAN(server_name_buf);
 		CLEAN(proto);
 		CLEAN(dst_addr_buf);
 #undef CLEAN
@@ -672,7 +672,7 @@ static int connection_reset(server *srv, connection *con) {
 	buffer_clear(con->uri.scheme);
 	/*buffer_clear(con->proto);*//* set to default in connection_accepted() */
 	/*buffer_clear(con->uri.authority);*/
-	buffer_clear(con->server_name);
+	/*buffer_clear(con->server_name_buf);*//* reset when used */
 
 	con->request.http_host = NULL;
 	con->request.content_length = 0;

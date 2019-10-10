@@ -626,7 +626,7 @@ handler_t http_response_prepare(server *srv, connection *con) {
 
 		/* the docroot plugins might set the servername, if they don't we take http-host */
 		if (buffer_string_is_empty(con->server_name)) {
-			buffer_copy_buffer(con->server_name, con->uri.authority);
+			con->server_name = con->uri.authority;
 		}
 
 		/**

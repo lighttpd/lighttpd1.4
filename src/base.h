@@ -264,8 +264,9 @@ struct connection {
 	specific_config conf;        /* global connection specific config */
 	cond_cache_t *cond_cache;
 
-	buffer *server_name;
+	const buffer *server_name;
 	buffer *proto;
+	buffer *server_name_buf;
 
 	/* error-handler */
 	int error_handler_saved_status;

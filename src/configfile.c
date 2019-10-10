@@ -695,7 +695,6 @@ int config_setup_connection(server *srv, connection *con) {
 	PATCH(global_bytes_per_second_cnt);
 
 	con->conf.global_bytes_per_second_cnt_ptr = &s->global_bytes_per_second_cnt;
-	buffer_copy_buffer(con->server_name, s->server_name);
 
 	PATCH(log_request_header);
 	PATCH(log_response_header);
@@ -714,6 +713,8 @@ int config_setup_connection(server *srv, connection *con) {
 	PATCH(etag_use_inode);
 	PATCH(etag_use_mtime);
 	PATCH(etag_use_size);
+
+	con->server_name = s->server_name;
 
 	return 0;
 }
@@ -768,7 +769,7 @@ int config_patch_connection(server *srv, connection *con) {
 			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("server.follow-symlink"))) {
 				PATCH(follow_symlink);
 			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("server.name"))) {
-				buffer_copy_buffer(con->server_name, s->server_name);
+				PATCH(server_name);
 			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("server.tag"))) {
 				PATCH(server_tag);
 			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("server.stream-request-body"))) {
