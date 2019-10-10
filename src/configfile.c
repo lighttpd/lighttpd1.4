@@ -668,58 +668,18 @@ static int config_insert(server *srv) {
 }
 
 
-#define PATCH(x) con->conf.x = s->x
-int config_setup_connection(server *srv, connection *con) {
-	specific_config *s = srv->config_storage[0];
-
-	PATCH(http_parseopts);
-
-	PATCH(allow_http11);
-	PATCH(mimetypes);
-	PATCH(document_root);
-	PATCH(high_precision_timestamps);
-	PATCH(max_keep_alive_requests);
-	PATCH(max_keep_alive_idle);
-	PATCH(max_read_idle);
-	PATCH(max_write_idle);
-	PATCH(max_request_size);
-	PATCH(use_xattr);
-	PATCH(error_handler);
-	PATCH(error_handler_404);
-	PATCH(error_intercept);
-	PATCH(errorfile_prefix);
-	PATCH(follow_symlink);
-	PATCH(server_tag);
-	PATCH(kbytes_per_second);
-	PATCH(global_kbytes_per_second);
-	PATCH(global_bytes_per_second_cnt);
-
-	con->conf.global_bytes_per_second_cnt_ptr = &s->global_bytes_per_second_cnt;
-
-	PATCH(log_request_header);
-	PATCH(log_response_header);
-	PATCH(log_request_handling);
-	PATCH(log_condition_handling);
-	PATCH(log_file_not_found);
-	PATCH(log_timeouts);
-
-	PATCH(range_requests);
-	PATCH(force_lowercase_filenames);
-	/*PATCH(listen_backlog);*//*(not necessary; used only at startup)*/
-	PATCH(stream_request_body);
-	PATCH(stream_response_body);
-	PATCH(socket_perms);
-
-	PATCH(etag_use_inode);
-	PATCH(etag_use_mtime);
-	PATCH(etag_use_size);
-
-	con->server_name = s->server_name;
-
-	return 0;
+void config_setup_connection(server *srv, connection *con) {
+    /* initialize specific_config (con->conf) from top-level specific_config */
+    specific_config * const s = srv->config_storage[0];
+    const size_t len = /* offsetof() */
+      (uintptr_t)&((specific_config *)0)->global_bytes_per_second_cnt_ptr;
+    con->conf.global_bytes_per_second_cnt_ptr = &s->global_bytes_per_second_cnt;
+    con->server_name = s->server_name;
+    memcpy(&con->conf, s, len);
 }
 
-int config_patch_connection(server *srv, connection *con) {
+#define PATCH(x) con->conf.x = s->x
+void config_patch_connection(server *srv, connection *con) {
 	size_t i, j;
 
 	/* skip the first, the global context */
@@ -802,8 +762,10 @@ int config_patch_connection(server *srv, connection *con) {
 				PATCH(global_kbytes_per_second);
 				PATCH(global_bytes_per_second_cnt);
 				con->conf.global_bytes_per_second_cnt_ptr = &s->global_bytes_per_second_cnt;
+		      #if 0 /*(not necessary; used only at startup)*/
 			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("server.socket-perms"))) {
 				PATCH(socket_perms);
+		      #endif
 			}
 		}
 	}
@@ -811,15 +773,10 @@ int config_patch_connection(server *srv, connection *con) {
 		con->etag_flags = (con->conf.etag_use_mtime ? ETAG_USE_MTIME : 0) |
 				  (con->conf.etag_use_inode ? ETAG_USE_INODE : 0) |
 				  (con->conf.etag_use_size  ? ETAG_USE_SIZE  : 0);
-
-	return 0;
 }
 #undef PATCH
 
 typedef struct {
-	int foo;
-	int bar;
-
 	const buffer *source;
 	const char *input;
 	size_t offset;

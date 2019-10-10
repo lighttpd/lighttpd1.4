@@ -84,9 +84,7 @@ typedef struct {
 	buffer *error_handler;
 	buffer *error_handler_404;
 	buffer *server_tag;
-	buffer *dirlist_encoding;
 	buffer *errorfile_prefix;
-	buffer *socket_perms;
 
 	unsigned short high_precision_timestamps;
 	unsigned short max_keep_alive_requests;
@@ -109,11 +107,6 @@ typedef struct {
 	unsigned short log_condition_handling;
 	unsigned short log_timeouts;
 
-
-	/* server wide */
-	unsigned short use_ipv6, set_v6only; /* set_v6only is only a temporary option */
-	unsigned short defer_accept;
-	unsigned short ssl_enabled; /* only interesting for setting up listening sockets. don't use at runtime */
 	unsigned short allow_http11;
 	unsigned short etag_use_inode;
 	unsigned short etag_use_mtime;
@@ -121,7 +114,6 @@ typedef struct {
 	unsigned short force_lowercase_filenames; /* if the FS is case-insensitive, force all files to lower-case */
 	unsigned int http_parseopts;
 	unsigned int max_request_size;
-	int listen_backlog;
 
 	unsigned short kbytes_per_second; /* connection kb/s limit */
 
@@ -143,6 +135,19 @@ typedef struct {
 	 *
 	 */
 	off_t *global_bytes_per_second_cnt_ptr; /*  */
+
+	/*
+	 * global_bytes_per_second_cnt_ptr must be the final member above this point
+	 * members above this point are patched per connection
+	 */
+
+	/* global or per-socket config; not patched per connection */
+
+	unsigned short use_ipv6, set_v6only; /* set_v6only is only a temporary option */
+	unsigned short defer_accept;
+	unsigned short ssl_enabled; /* only interesting for setting up listening sockets. don't use at runtime */
+	int listen_backlog;
+	buffer *socket_perms;
 
 #if defined(__FreeBSD__) || defined(__NetBSD__) \
  || defined(__OpenBSD__) || defined(__DragonFly__)
