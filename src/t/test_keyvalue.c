@@ -46,20 +46,24 @@ static void test_keyvalue_pcre_keyvalue_buffer_process (void) {
     cond_cache_t cache;
     pcre_keyvalue_ctx ctx;
     handler_t rc;
+    buffer *scheme    = buffer_init();
+    buffer *authority = buffer_init();
+    buffer *path      = buffer_init();
+    buffer *query     = buffer_init();
 
     ctx.burl = &burl;
-    burl.scheme    = buffer_init();
-    burl.authority = buffer_init();
+    burl.scheme    = scheme;
+    burl.authority = authority;
     burl.port      = 80;
-    burl.path      = buffer_init();
-    burl.query     = buffer_init();
-    buffer_copy_string_len(burl.scheme, CONST_STR_LEN("http"));
-    buffer_copy_string_len(burl.authority, CONST_STR_LEN("www.example.com"));
+    burl.path      = path;
+    burl.query     = query;
+    buffer_copy_string_len(scheme, CONST_STR_LEN("http"));
+    buffer_copy_string_len(authority, CONST_STR_LEN("www.example.com"));
     /* model outer conditional match of $HTTP["host"] =~ "^(www).example.com$" */
     ctx.cache = &cache;
     memset(&cache, 0, sizeof(cache));
     cache.patterncount = 2;
-    cache.comp_value = burl.authority;
+    cache.comp_value = authority;
     cache.matches[0] = 0;
     cache.matches[1] = 15;
     cache.matches[2] = 0;
@@ -70,46 +74,46 @@ static void test_keyvalue_pcre_keyvalue_buffer_process (void) {
      */
 
     buffer_copy_string_len(url, CONST_STR_LEN("/foo"));
-    buffer_copy_string_len(burl.path, CONST_STR_LEN("/foo"));
-    buffer_clear(burl.query);
+    buffer_copy_string_len(path, CONST_STR_LEN("/foo"));
+    buffer_clear(query);
     rc = pcre_keyvalue_buffer_process(kvb, &ctx, url, result);
     assert(HANDLER_FINISHED == rc);
     assert(buffer_is_equal_string(result, CONST_STR_LEN("/foo/")));
 
     buffer_copy_string_len(url, CONST_STR_LEN("/foo?a=b"));
-    buffer_copy_string_len(burl.path, CONST_STR_LEN("/foo"));
-    buffer_copy_string_len(burl.query, CONST_STR_LEN("a=b"));
+    buffer_copy_string_len(path, CONST_STR_LEN("/foo"));
+    buffer_copy_string_len(query, CONST_STR_LEN("a=b"));
     rc = pcre_keyvalue_buffer_process(kvb, &ctx, url, result);
     assert(HANDLER_FINISHED == rc);
     assert(buffer_is_equal_string(result, CONST_STR_LEN("/foo/?a=b")));
 
     buffer_copy_string_len(url, CONST_STR_LEN("/bar?a=b"));
-    buffer_copy_string_len(burl.path, CONST_STR_LEN("/bar"));
-    buffer_copy_string_len(burl.query, CONST_STR_LEN("a=b"));
+    buffer_copy_string_len(path, CONST_STR_LEN("/bar"));
+    buffer_copy_string_len(query, CONST_STR_LEN("a=b"));
     rc = pcre_keyvalue_buffer_process(kvb, &ctx, url, result);
     assert(HANDLER_FINISHED == rc);
     assert(buffer_is_equal_string(result, CONST_STR_LEN("/?bar&a=b")));
 
     buffer_copy_string_len(url, CONST_STR_LEN("/nofile?a=b"));
-    buffer_copy_string_len(burl.path, CONST_STR_LEN("/nofile"));
-    buffer_copy_string_len(burl.query, CONST_STR_LEN("a=b"));
+    buffer_copy_string_len(path, CONST_STR_LEN("/nofile"));
+    buffer_copy_string_len(query, CONST_STR_LEN("a=b"));
     rc = pcre_keyvalue_buffer_process(kvb, &ctx, url, result);
     assert(HANDLER_FINISHED == rc);
     assert(buffer_is_equal_string(result, CONST_STR_LEN("/?file=/nofile&a=b")));
 
     buffer_copy_string_len(url, CONST_STR_LEN("/redirect?a=b"));
-    buffer_copy_string_len(burl.path, CONST_STR_LEN("/redirect"));
-    buffer_copy_string_len(burl.query, CONST_STR_LEN("a=b"));
+    buffer_copy_string_len(path, CONST_STR_LEN("/redirect"));
+    buffer_copy_string_len(query, CONST_STR_LEN("a=b"));
     rc = pcre_keyvalue_buffer_process(kvb, &ctx, url, result);
     assert(HANDLER_FINISHED == rc);
     assert(buffer_is_equal_string(result, CONST_STR_LEN("/?seg=www&a=b")));
 
     buffer_free(url);
     buffer_free(result);
-    buffer_free(burl.scheme);
-    buffer_free(burl.authority);
-    buffer_free(burl.path);
-    buffer_free(burl.query);
+    buffer_free(scheme);
+    buffer_free(authority);
+    buffer_free(path);
+    buffer_free(query);
     pcre_keyvalue_buffer_free(kvb);
 }
 #endif

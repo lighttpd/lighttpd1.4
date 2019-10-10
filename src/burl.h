@@ -5,11 +5,11 @@
 #include "buffer.h"
 
 struct burl_parts_t {
-  buffer *scheme;
-  buffer *authority;
+  const buffer *scheme;
+  const buffer *authority;
   unsigned short port;
-  buffer *path;
-  buffer *query;
+  const buffer *path;
+  const buffer *query;
 };
 
 enum burl_opts_e {
