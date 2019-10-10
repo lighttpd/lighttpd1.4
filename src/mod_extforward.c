@@ -226,8 +226,8 @@ SETDEFAULTS_FUNC(mod_extforward_set_defaults) {
 			return HANDLER_ERROR;
 		}
 
-		if (array_get_element(config->value, "extforward.forwarder")) {
-			const data_string * const allds = (data_string *)array_get_element(s->forwarder, "all");
+		if (array_get_element_klen(config->value, CONST_STR_LEN("extforward.forwarder"))) {
+			const data_string * const allds = (const data_string *)array_get_element_klen(s->forwarder, CONST_STR_LEN("all"));
 			s->forward_all = (NULL == allds) ? 0 : buffer_eq_icase_slen(allds->value, CONST_STR_LEN("trust")) ? 1 : -1;
 			for (size_t j = 0; j < s->forwarder->used; ++j) {
 				data_string * const ds = (data_string *)s->forwarder->data[j];
@@ -278,7 +278,7 @@ SETDEFAULTS_FUNC(mod_extforward_set_defaults) {
 		}
 
 		/* default to "X-Forwarded-For" or "Forwarded-For" if extforward.headers not specified or empty */
-		if (!s->hap_PROXY && 0 == s->headers->used && (0 == i || NULL != array_get_element(config->value, "extforward.headers"))) {
+		if (!s->hap_PROXY && 0 == s->headers->used && (0 == i || NULL != array_get_element_klen(config->value, CONST_STR_LEN("extforward.headers")))) {
 			array_insert_value(s->headers, CONST_STR_LEN("X-Forwarded-For"));
 			array_insert_value(s->headers, CONST_STR_LEN("Forwarded-For"));
 		}
@@ -458,8 +458,8 @@ static array *extract_forward_array(buffer *pbuffer)
  */
 static int is_proxy_trusted(plugin_data *p, const char * const ip, size_t iplen)
 {
-    data_string *ds =
-      (data_string *)array_get_element_klen(p->conf.forwarder, ip, iplen);
+    const data_string *ds =
+      (const data_string *)array_get_element_klen(p->conf.forwarder, ip, iplen);
     if (NULL != ds) return !buffer_string_is_empty(ds->value);
 
     if (p->conf.forward_masks) {
@@ -1017,9 +1017,9 @@ URIHANDLER_FUNC(mod_extforward_uri_handler) {
 	}
 
 	if (p->conf.hap_PROXY_ssl_client_verify) {
-		data_string *ds;
+		const data_string *ds;
 		if (NULL != hctx && hctx->ssl_client_verify && NULL != hctx->env
-		    && NULL != (ds = (data_string *)array_get_element(hctx->env, "SSL_CLIENT_S_DN_CN"))) {
+		    && NULL != (ds = (const data_string *)array_get_element_klen(hctx->env, CONST_STR_LEN("SSL_CLIENT_S_DN_CN")))) {
 			http_header_env_set(con,
 					    CONST_STR_LEN("SSL_CLIENT_VERIFY"),
 					    CONST_STR_LEN("SUCCESS"));

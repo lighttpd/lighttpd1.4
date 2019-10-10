@@ -53,7 +53,7 @@ static int ssi_expr_tokenizer(server *srv, connection *con, handler_ctx *p,
 
 	for (tid = 0; tid == 0 && t->offset < t->size && t->input[t->offset] ; ) {
 		char c = t->input[t->offset];
-		data_string *ds;
+		const data_string *ds;
 
 		switch (c) {
 		case '=':
@@ -219,9 +219,9 @@ static int ssi_expr_tokenizer(server *srv, connection *con, handler_ctx *p,
 
 			tid = TK_VALUE;
 
-			if (NULL != (ds = (data_string *)array_get_element_klen(p->ssi_cgi_env, CONST_BUF_LEN(token)))) {
+			if (NULL != (ds = (const data_string *)array_get_element_klen(p->ssi_cgi_env, CONST_BUF_LEN(token)))) {
 				buffer_copy_buffer(token, ds->value);
-			} else if (NULL != (ds = (data_string *)array_get_element_klen(p->ssi_vars, CONST_BUF_LEN(token)))) {
+			} else if (NULL != (ds = (const data_string *)array_get_element_klen(p->ssi_vars, CONST_BUF_LEN(token)))) {
 				buffer_copy_buffer(token, ds->value);
 			} else {
 				buffer_copy_string_len(token, CONST_STR_LEN(""));

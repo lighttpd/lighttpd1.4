@@ -293,7 +293,7 @@ static void mod_evhost_build_doc_root_path(buffer *b, array *parsed_host, buffer
 	for (size_t i = 0; i < npieces; ++i) {
 		const char *ptr = path_pieces[i]->ptr;
 		if (*ptr == '%') {
-			data_string *ds;
+			const data_string *ds;
 
 			if (*(ptr+1) == '%') {
 				/* %% */

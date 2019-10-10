@@ -66,8 +66,8 @@ SETDEFAULTS_FUNC(mod_redirect_set_defaults) {
 		data_config const* config = (data_config const*)srv->config_context->data[i];
 		plugin_config *s;
 		size_t j;
-		data_unset *du;
-		data_array *da;
+		const data_unset *du;
+		const data_array *da;
 
 		s = calloc(1, sizeof(plugin_config));
 		s->redirect   = pcre_keyvalue_buffer_init();
@@ -84,12 +84,12 @@ SETDEFAULTS_FUNC(mod_redirect_set_defaults) {
 
 		if (s->redirect_code < 100 || s->redirect_code >= 1000) s->redirect_code = 301;
 
-		if (NULL == (du = array_get_element(config->value, "url.redirect"))) {
+		if (NULL == (du = array_get_element_klen(config->value, CONST_STR_LEN("url.redirect")))) {
 			/* no url.redirect defined */
 			continue;
 		}
 
-		da = (data_array *)du;
+		da = (const data_array *)du;
 
 		if (du->type != TYPE_ARRAY || !array_is_kvstring(da->value)) {
 			log_error_write(srv, __FILE__, __LINE__, "s",

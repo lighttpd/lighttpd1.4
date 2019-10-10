@@ -660,24 +660,24 @@ const buffer * stat_cache_mimetype_by_ext(const connection *con, const char *nam
             s = name;
         }
         /* search for basename, then longest .ext2.ext1, then .ext1, then "" */
-        ds = (data_string *)array_get_element_klen(con->conf.mimetypes, s, end - s);
+        ds = (const data_string *)array_get_element_klen(con->conf.mimetypes, s, end - s);
         if (NULL != ds) return ds->value;
         while (++s < end) {
             while (*s != '.' && ++s != end) ;
             if (s == end) break;
             /* search ".ext" then "ext" */
-            ds = (data_string *)array_get_element_klen(con->conf.mimetypes, s, end - s);
+            ds = (const data_string *)array_get_element_klen(con->conf.mimetypes, s, end - s);
             if (NULL != ds) return ds->value;
             /* repeat search without leading '.' to handle situation where
              * admin configured mimetype.assign keys without leading '.' */
             if (++s < end) {
                 if (*s == '.') { --s; continue; }
-                ds = (data_string *)array_get_element_klen(con->conf.mimetypes, s, end - s);
+                ds = (const data_string *)array_get_element_klen(con->conf.mimetypes, s, end - s);
                 if (NULL != ds) return ds->value;
             }
         }
         /* search for ""; catchall */
-        ds = (data_string *)array_get_element(con->conf.mimetypes, "");
+        ds = (const data_string *)array_get_element_klen(con->conf.mimetypes, CONST_STR_LEN(""));
         if (NULL != ds) return ds->value;
     }
 

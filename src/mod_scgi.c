@@ -22,7 +22,7 @@ enum { LI_PROTOCOL_SCGI, LI_PROTOCOL_UWSGI };
 
 SETDEFAULTS_FUNC(mod_scgi_set_defaults) {
 	plugin_data *p = p_d;
-	data_unset *du;
+	const data_unset *du;
 	size_t i = 0;
 
 	config_values_t cv[] = {
@@ -62,18 +62,18 @@ SETDEFAULTS_FUNC(mod_scgi_set_defaults) {
 			return HANDLER_ERROR;
 		}
 
-		du = array_get_element(config->value, "scgi.server");
+		du = array_get_element_klen(config->value, CONST_STR_LEN("scgi.server"));
 		if (!gw_set_defaults_backend(srv, p, du, i, 1)) {
 			return HANDLER_ERROR;
 		}
 
-		du = array_get_element(config->value, "scgi.balance");
+		du = array_get_element_klen(config->value, CONST_STR_LEN("scgi.balance"));
 		if (!gw_set_defaults_balance(srv, s, du)) {
 			return HANDLER_ERROR;
 		}
 
-		if (NULL != (du = array_get_element(config->value, "scgi.protocol"))) {
-			data_string *ds = (data_string *)du;
+		if (NULL != (du = array_get_element_klen(config->value, CONST_STR_LEN("scgi.protocol")))) {
+			const data_string *ds = (const data_string *)du;
 			if (du->type == TYPE_STRING
 			    && buffer_is_equal_string(ds->value, CONST_STR_LEN("scgi"))) {
 				s->proto = LI_PROTOCOL_SCGI;

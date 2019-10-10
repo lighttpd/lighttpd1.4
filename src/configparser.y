@@ -16,6 +16,10 @@
 #include <stdio.h>
 #include <string.h>
 
+static data_config * configparser_get_data_config(const array *a, const char *k, const size_t klen) {
+  return (data_config *)array_get_data_unset(a, k, klen);
+}
+
 static void configparser_push(config_t *ctx, data_config *dc, int isnew) {
   if (isnew) {
     dc->context_ndx = ctx->all_configs->used;
@@ -40,7 +44,7 @@ static data_config *configparser_pop(config_t *ctx) {
 
 /* return a copied variable */
 static data_unset *configparser_get_variable(config_t *ctx, const buffer *key) {
-  data_unset *du;
+  const data_unset *du;
   data_config *dc;
 
 #if 0
@@ -52,9 +56,9 @@ static data_unset *configparser_get_variable(config_t *ctx, const buffer *key) {
     array_print(dc->value, 0);
 #endif
     if (NULL != (du = array_get_element_klen(dc->value, CONST_BUF_LEN(key)))) {
-      du = du->fn->copy(du);
-      buffer_clear(du->key);
-      return du;
+      data_unset *du_copy = du->fn->copy(du);
+      buffer_clear(du_copy->key);
+      return du_copy;
     }
   }
   return NULL;
@@ -414,7 +418,7 @@ eols ::= .
 
 globalstart ::= GLOBAL. {
   data_config *dc;
-  dc = (data_config *)array_get_element_klen(ctx->srv->config_context, CONST_STR_LEN("global"));
+  dc = configparser_get_data_config(ctx->srv->config_context, CONST_STR_LEN("global"));
   force_assert(dc);
   configparser_push(ctx, dc, 0);
 }
@@ -487,7 +491,7 @@ condlines(A) ::= condlines(B) eols ELSE cond_else(C). {
       force_assert(0);
     }
 
-    if (NULL == (dc = (data_config *)array_get_element_klen(ctx->all_configs, CONST_BUF_LEN(C->key)))) {
+    if (NULL == (dc = configparser_get_data_config(ctx->all_configs, CONST_BUF_LEN(C->key)))) {
       /* re-insert into ctx->all_configs with new C->key */
       array_insert_unique(ctx->all_configs, (data_unset *)C);
       C->prev = B;
@@ -575,7 +579,7 @@ context ::= DOLLAR SRVVARNAME(B) LBRACKET stringop(C) RBRACKET cond(E) expressio
     rvalue = ((data_string*)D)->value;
     buffer_append_string_buffer(b, rvalue);
 
-    if (NULL != (dc = (data_config *)array_get_element_klen(ctx->all_configs, CONST_BUF_LEN(b)))) {
+    if (NULL != (dc = configparser_get_data_config(ctx->all_configs, CONST_BUF_LEN(b)))) {
       configparser_push(ctx, dc, 0);
     } else {
       static const struct {

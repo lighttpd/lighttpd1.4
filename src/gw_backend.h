@@ -335,8 +335,8 @@ typedef struct gw_handler_ctx {
 void * gw_init(void);
 void gw_plugin_config_free(gw_plugin_config *s);
 handler_t gw_free(server *srv, void *p_d);
-int gw_set_defaults_backend(server *srv, gw_plugin_data *p, data_unset *du, size_t i, int sh_exec);
-int gw_set_defaults_balance(server *srv, gw_plugin_config *s, data_unset *du);
+int gw_set_defaults_backend(server *srv, gw_plugin_data *p, const data_unset *du, size_t i, int sh_exec);
+int gw_set_defaults_balance(server *srv, gw_plugin_config *s, const data_unset *du);
 handler_t gw_check_extension(server *srv, connection *con, gw_plugin_data *p, int uri_path_handler, size_t hctx_sz);
 handler_t gw_connection_reset(server *srv, connection *con, void *p_d);
 handler_t gw_handle_subrequest(server *srv, connection *con, void *p_d);

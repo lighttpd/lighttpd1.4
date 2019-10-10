@@ -22,7 +22,7 @@ typedef gw_handler_ctx   handler_ctx;
 
 SETDEFAULTS_FUNC(mod_sockproxy_set_defaults) {
 	plugin_data *p = p_d;
-	data_unset *du;
+	const data_unset *du;
 	size_t i = 0;
 
 	config_values_t cv[] = {
@@ -56,12 +56,12 @@ SETDEFAULTS_FUNC(mod_sockproxy_set_defaults) {
 			return HANDLER_ERROR;
 		}
 
-		du = array_get_element(config->value, "sockproxy.server");
+		du = array_get_element_klen(config->value, CONST_STR_LEN("sockproxy.server"));
 		if (!gw_set_defaults_backend(srv, (gw_plugin_data *)p, du, i, 0)) {
 			return HANDLER_ERROR;
 		}
 
-		du = array_get_element(config->value, "sockproxy.balance");
+		du = array_get_element_klen(config->value, CONST_STR_LEN("sockproxy.balance"));
 		if (!gw_set_defaults_balance(srv, s, du)) {
 			return HANDLER_ERROR;
 		}

@@ -30,7 +30,7 @@
 /* parse config array */
 int config_insert_values_internal(server *srv, array *ca, const config_values_t cv[], config_scope_type_t scope) {
 	size_t i;
-	data_unset *du;
+	const data_unset *du;
 
 	for (i = 0; cv[i].key; i++) {
 
@@ -52,7 +52,7 @@ int config_insert_values_internal(server *srv, array *ca, const config_values_t 
 		case T_CONFIG_ARRAY:
 			if (du->type == TYPE_ARRAY) {
 				size_t j;
-				data_array *da = (data_array *)du;
+				const data_array *da = (const data_array *)du;
 
 				for (j = 0; j < da->value->used; j++) {
 					data_unset *ds = da->value->data[j];
@@ -74,7 +74,7 @@ int config_insert_values_internal(server *srv, array *ca, const config_values_t 
 			break;
 		case T_CONFIG_STRING:
 			if (du->type == TYPE_STRING) {
-				data_string *ds = (data_string *)du;
+				const data_string *ds = (const data_string *)du;
 
 				buffer_copy_buffer(cv[i].destination, ds->value);
 			} else {
@@ -86,13 +86,13 @@ int config_insert_values_internal(server *srv, array *ca, const config_values_t 
 		case T_CONFIG_SHORT:
 			switch(du->type) {
 			case TYPE_INTEGER: {
-				data_integer *di = (data_integer *)du;
+				const data_integer *di = (const data_integer *)du;
 
 				*((unsigned short *)(cv[i].destination)) = di->value;
 				break;
 			}
 			case TYPE_STRING: {
-				data_string *ds = (data_string *)du;
+				const data_string *ds = (const data_string *)du;
 
 				/* If the value came from an environment variable, then it is a
 				 * data_string, although it may contain a number in ASCII
@@ -121,13 +121,13 @@ int config_insert_values_internal(server *srv, array *ca, const config_values_t 
 		case T_CONFIG_INT:
 			switch(du->type) {
 			case TYPE_INTEGER: {
-				data_integer *di = (data_integer *)du;
+				const data_integer *di = (const data_integer *)du;
 
 				*((unsigned int *)(cv[i].destination)) = di->value;
 				break;
 			}
 			case TYPE_STRING: {
-				data_string *ds = (data_string *)du;
+				const data_string *ds = (const data_string *)du;
 
 				if (ds->value->ptr && *ds->value->ptr) {
 					char *e;
@@ -149,7 +149,7 @@ int config_insert_values_internal(server *srv, array *ca, const config_values_t 
 			break;
 		case T_CONFIG_BOOLEAN:
 			if (du->type == TYPE_STRING) {
-				data_string *ds = (data_string *)du;
+				const data_string *ds = (const data_string *)du;
 
 				if (buffer_is_equal_string(ds->value, CONST_STR_LEN("enable"))) {
 					*((unsigned short *)(cv[i].destination)) = 1;
@@ -189,7 +189,7 @@ int config_insert_values_internal(server *srv, array *ca, const config_values_t 
 
 int config_insert_values_global(server *srv, array *ca, const config_values_t cv[], config_scope_type_t scope) {
 	size_t i;
-	data_unset *du;
+	const data_unset *du;
 
 	for (i = 0; cv[i].key; i++) {
 		if (NULL == (du = array_get_element_klen(ca, cv[i].key, strlen(cv[i].key)))) {

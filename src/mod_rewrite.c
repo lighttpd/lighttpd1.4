@@ -70,15 +70,13 @@ FREE_FUNC(mod_rewrite_free) {
 }
 
 static int parse_config_entry(server *srv, array *ca, pcre_keyvalue_buffer *kvb, const char *option, size_t olen) {
-	data_unset *du;
+	const data_array * const da = (const data_array *)
+	  array_get_element_klen(ca, option, olen);
 
-	if (NULL != (du = array_get_element_klen(ca, option, olen))) {
-		data_array *da;
+	if (NULL != da) {
 		size_t j;
 
-		da = (data_array *)du;
-
-		if (du->type != TYPE_ARRAY || !array_is_kvstring(da->value)) {
+		if (da->type != TYPE_ARRAY || !array_is_kvstring(da->value)) {
 			log_error_write(srv, __FILE__, __LINE__, "SSS",
 					"unexpected value for ", option, "; expected list of \"regex\" => \"subst\"");
 			return HANDLER_ERROR;

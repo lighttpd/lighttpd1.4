@@ -202,7 +202,7 @@ FREE_FUNC(mod_wstunnel_free) {
 
 SETDEFAULTS_FUNC(mod_wstunnel_set_defaults) {
     plugin_data *p = p_d;
-    data_unset *du;
+    const data_unset *du;
     config_values_t cv[] = {
         { "wstunnel.server",        NULL, T_CONFIG_LOCAL, T_CONFIG_SCOPE_CONNECTION },
         { "wstunnel.debug",         NULL, T_CONFIG_SHORT, T_CONFIG_SCOPE_CONNECTION },
@@ -241,12 +241,12 @@ SETDEFAULTS_FUNC(mod_wstunnel_set_defaults) {
             return HANDLER_ERROR;
         }
 
-        du = array_get_element(ca, "wstunnel.server");
+        du = array_get_element_klen(ca, CONST_STR_LEN("wstunnel.server"));
         if (!gw_set_defaults_backend(srv, (gw_plugin_data *)p, du, i, 0)) {
             return HANDLER_ERROR;
         }
 
-        du = array_get_element(ca, "wstunnel.balance");
+        du = array_get_element_klen(ca, CONST_STR_LEN("wstunnel.balance"));
         if (!gw_set_defaults_balance(srv, &s->gw, du)) {
             return HANDLER_ERROR;
         }

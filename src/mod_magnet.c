@@ -234,7 +234,8 @@ static int magnet_array_get_element(lua_State *L, const array *a) {
     /* __index: param 1 is the (empty) table the value was not found in */
     size_t klen;
     const char * const k = luaL_checklstring(L, 2, &klen);
-    data_string * const ds = (data_string *)array_get_element_klen(a, k, klen);
+    const data_string * const ds = (const data_string *)
+      array_get_element_klen(a, k, klen);
     magnet_push_buffer(L, NULL != ds ? ds->value : NULL);
     return 1;
 }

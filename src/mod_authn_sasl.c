@@ -86,7 +86,7 @@ SETDEFAULTS_FUNC(mod_authn_sasl_set_defaults) {
 
     for (i = 0; i < srv->config_context->used; i++) {
         data_config const *config = (data_config const*)srv->config_context->data[i];
-        data_string *ds;
+        const data_string *ds;
         plugin_config *s = calloc(1, sizeof(plugin_config));
         s->opts = array_init();
 
@@ -100,11 +100,11 @@ SETDEFAULTS_FUNC(mod_authn_sasl_set_defaults) {
 
         if (0 == s->opts->used) continue;
 
-        ds = (data_string *)
+        ds = (const data_string *)
           array_get_element_klen(s->opts, CONST_STR_LEN("service"));
         s->service = (NULL != ds) ? ds->value->ptr : "http";
 
-        ds = (data_string *)
+        ds = (const data_string *)
           array_get_element_klen(s->opts, CONST_STR_LEN("fqdn"));
         if (NULL != ds) s->fqdn = ds->value->ptr;
         if (NULL == s->fqdn) {
@@ -120,7 +120,7 @@ SETDEFAULTS_FUNC(mod_authn_sasl_set_defaults) {
             s->fqdn = p->fqdn->ptr;
         }
 
-        ds = (data_string *)
+        ds = (const data_string *)
           array_get_element_klen(s->opts, CONST_STR_LEN("pwcheck_method"));
         if (NULL != ds) {
             s->pwcheck_method = ds->value;
@@ -139,7 +139,7 @@ SETDEFAULTS_FUNC(mod_authn_sasl_set_defaults) {
             }
         }
 
-        ds = (data_string *)
+        ds = (const data_string *)
           array_get_element_klen(s->opts, CONST_STR_LEN("sasldb_path"));
         if (NULL != ds) s->sasldb_path = ds->value;
     }

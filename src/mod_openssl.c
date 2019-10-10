@@ -724,7 +724,7 @@ network_openssl_ssl_conf_cmd (server *srv, plugin_config *s)
   #ifdef SSL_CONF_FLAG_CMDLINE
 
     int rc = 0;
-    data_string *ds;
+    const data_string *ds;
     SSL_CONF_CTX * const cctx = SSL_CONF_CTX_new();
     SSL_CONF_CTX_set_ssl_ctx(cctx, s->ssl_ctx);
     SSL_CONF_CTX_set_flags(cctx, SSL_CONF_FLAG_FILE
@@ -733,7 +733,7 @@ network_openssl_ssl_conf_cmd (server *srv, plugin_config *s)
                                | SSL_CONF_FLAG_CERTIFICATE);
 
     /* always disable null and export ciphers */
-    ds = (data_string *)
+    ds = (const data_string *)
       array_get_element_klen(s->ssl_conf_cmd,
                              CONST_STR_LEN("CipherString"));
     if (NULL != ds) {

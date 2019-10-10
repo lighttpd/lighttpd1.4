@@ -79,7 +79,7 @@ FREE_FUNC(mod_expire_free) {
 	return HANDLER_GO_ON;
 }
 
-static int mod_expire_get_offset(server *srv, plugin_data *p, buffer *expire, time_t *offset) {
+static int mod_expire_get_offset(server *srv, plugin_data *p, const buffer *expire, time_t *offset) {
 	char *ts;
 	int type = -1;
 	time_t retts = 0;
@@ -326,8 +326,8 @@ static int mod_expire_patch_connection(server *srv, connection *con, plugin_data
 
 CONNECTION_FUNC(mod_expire_handler) {
 	plugin_data *p = p_d;
-	buffer *vb;
-	data_string *ds;
+	const buffer *vb;
+	const data_string *ds;
 
 	/* Add caching headers only to http_status 200 OK or 206 Partial Content */
 	if (con->http_status != 200 && con->http_status != 206) return HANDLER_GO_ON;
@@ -343,7 +343,7 @@ CONNECTION_FUNC(mod_expire_handler) {
 	mod_expire_patch_connection(srv, con, p);
 
 	/* check expire.url */
-	ds = (data_string *)array_match_key_prefix(p->conf.expire_url, con->uri.path);
+	ds = (const data_string *)array_match_key_prefix(p->conf.expire_url, con->uri.path);
 	if (NULL != ds) {
 		vb = ds->value;
 	}
@@ -351,8 +351,8 @@ CONNECTION_FUNC(mod_expire_handler) {
 		/* check expire.mimetypes (if no match with expire.url) */
 		vb = http_header_response_get(con, HTTP_HEADER_CONTENT_TYPE, CONST_STR_LEN("Content-Type"));
 		ds = (NULL != vb)
-		   ? (data_string *)array_match_key_prefix(p->conf.expire_mimetypes, vb)
-		   : (data_string *)array_get_element_klen(p->conf.expire_mimetypes, CONST_STR_LEN(""));
+		   ? (const data_string *)array_match_key_prefix(p->conf.expire_mimetypes, vb)
+		   : (const data_string *)array_get_element_klen(p->conf.expire_mimetypes, CONST_STR_LEN(""));
 		if (NULL == ds) return HANDLER_GO_ON;
 		vb = ds->value;
 	}

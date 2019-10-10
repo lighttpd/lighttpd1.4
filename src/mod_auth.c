@@ -286,7 +286,7 @@ SETDEFAULTS_FUNC(mod_auth_set_defaults) {
 		data_config const* config = (data_config const*)srv->config_context->data[i];
 		plugin_config *s;
 		size_t n;
-		data_array *da;
+		const data_array *da;
 
 		s = calloc(1, sizeof(plugin_config));
 		s->auth_backend_conf = buffer_init();
@@ -313,7 +313,7 @@ SETDEFAULTS_FUNC(mod_auth_set_defaults) {
 		}
 
 		/* no auth.require for this section */
-		if (NULL == (da = (data_array *)array_get_element(config->value, "auth.require"))) continue;
+		if (NULL == (da = (const data_array *)array_get_element_klen(config->value, CONST_STR_LEN("auth.require")))) continue;
 
 		if (da->type != TYPE_ARRAY || !array_is_kvarray(da->value)) {
 			log_error_write(srv, __FILE__, __LINE__, "ss",

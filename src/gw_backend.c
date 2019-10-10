@@ -1173,12 +1173,12 @@ handler_t gw_free(server *srv, void *p_d) {
     return HANDLER_GO_ON;
 }
 
-int gw_set_defaults_backend(server *srv, gw_plugin_data *p, data_unset *du, size_t i, int sh_exec) {
+int gw_set_defaults_backend(server *srv, gw_plugin_data *p, const data_unset *du, size_t i, int sh_exec) {
     /* per-module plugin_config MUST have common "base class" gw_plugin_config*/
     /* per-module plugin_data MUST have pointer-compatible common "base class"
      * with gw_plugin_data (stemming from gw_plugin_config compatibility) */
 
-    data_array *da = (data_array *)du;
+    const data_array *da = (const data_array *)du;
     gw_plugin_config *s = p->config_storage[i];
     buffer *gw_mode;
     gw_host *host = NULL;
@@ -1590,12 +1590,12 @@ error:
     return 0;
 }
 
-int gw_set_defaults_balance(server *srv, gw_plugin_config *s, data_unset *du) {
+int gw_set_defaults_balance(server *srv, gw_plugin_config *s, const data_unset *du) {
     buffer *b;
     if (NULL == du) {
         b = NULL;
     } else if (du->type == TYPE_STRING) {
-        b = ((data_string *)du)->value;
+        b = ((const data_string *)du)->value;
     } else {
         log_error_write(srv, __FILE__, __LINE__, "s",
                         "unexpected type for xxxxx.balance; expected string");

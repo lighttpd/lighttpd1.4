@@ -75,7 +75,7 @@ SETDEFAULTS_FUNC(mod_authn_pam_set_defaults) {
 
     for (size_t i = 0; i < srv->config_context->used; ++i) {
         data_config const *config = (data_config const*)srv->config_context->data[i];
-        data_string *ds;
+        const data_string *ds;
         plugin_config *s = calloc(1, sizeof(plugin_config));
         s->opts = array_init();
 
@@ -89,7 +89,7 @@ SETDEFAULTS_FUNC(mod_authn_pam_set_defaults) {
 
         if (0 == s->opts->used) continue;
 
-        ds = (data_string *)
+        ds = (const data_string *)
           array_get_element_klen(s->opts, CONST_STR_LEN("service"));
         s->service = (NULL != ds) ? ds->value->ptr : "http";
     }
