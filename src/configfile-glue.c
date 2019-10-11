@@ -28,7 +28,7 @@
 /* handle global options */
 
 /* parse config array */
-int config_insert_values_internal(server *srv, array *ca, const config_values_t cv[], config_scope_type_t scope) {
+int config_insert_values_internal(server *srv, const array *ca, const config_values_t cv[], config_scope_type_t scope) {
 	size_t i;
 	const data_unset *du;
 
@@ -187,7 +187,7 @@ int config_insert_values_internal(server *srv, array *ca, const config_values_t 
 	return 0;
 }
 
-int config_insert_values_global(server *srv, array *ca, const config_values_t cv[], config_scope_type_t scope) {
+int config_insert_values_global(server *srv, const array *ca, const config_values_t cv[], config_scope_type_t scope) {
 	size_t i;
 	const data_unset *du;
 
@@ -264,9 +264,11 @@ static int config_addrbuf_eq_remote_ip_mask(server *srv, buffer *string, char *n
 	return config_addrstr_eq_remote_ip_mask(srv, addrstr, nm_bits, rmt);
 }
 
-static cond_result_t config_check_cond_cached(server *srv, connection *con, data_config *dc);
+static int data_config_pcre_exec(const data_config *dc, cond_cache_t *cache, buffer *b);
 
-static cond_result_t config_check_cond_nocache(server *srv, connection *con, data_config *dc) {
+static cond_result_t config_check_cond_cached(server *srv, connection *con, const data_config *dc);
+
+static cond_result_t config_check_cond_nocache(server *srv, connection *con, const data_config *dc) {
 	buffer *l;
 	server_socket *srv_sock = con->srv_socket;
 	cond_cache_t *cache = &con->cond_cache[dc->context_ndx];
@@ -474,7 +476,7 @@ static cond_result_t config_check_cond_nocache(server *srv, connection *con, dat
 	return COND_RESULT_FALSE;
 }
 
-static cond_result_t config_check_cond_cached(server *srv, connection *con, data_config *dc) {
+static cond_result_t config_check_cond_cached(server *srv, connection *con, const data_config *dc) {
 	cond_cache_t *caches = con->cond_cache;
 
 	if (COND_RESULT_UNSET == caches[dc->context_ndx].result) {
@@ -508,7 +510,7 @@ static cond_result_t config_check_cond_cached(server *srv, connection *con, data
 
 /* if we reset the cache result for a node, we also need to clear all
  * child nodes and else-branches*/
-static void config_cond_clear_node(server *srv, connection *con, data_config *dc) {
+static void config_cond_clear_node(server *srv, connection *con, const data_config *dc) {
 	/* if a node is "unset" all children are unset too */
 	if (con->cond_cache[dc->context_ndx].result != COND_RESULT_UNSET) {
 		size_t i;
@@ -527,7 +529,7 @@ static void config_cond_clear_node(server *srv, connection *con, data_config *dc
 		con->cond_cache[dc->context_ndx].result = COND_RESULT_UNSET;
 
 		for (i = 0; i < dc->children.used; ++i) {
-			data_config *dc_child = dc->children.data[i];
+			const data_config *dc_child = dc->children.data[i];
 			if (NULL == dc_child->prev) {
 				/* only call for first node in if-else chain */
 				config_cond_clear_node(srv, con, dc_child);
@@ -544,7 +546,7 @@ static void config_cond_clear_node(server *srv, connection *con, data_config *dc
  */
 void config_cond_cache_reset_item(server *srv, connection *con, comp_key_t item) {
 	for (uint32_t i = 0; i < srv->config_context->used; ++i) {
-		data_config *dc = (data_config *)srv->config_context->data[i];
+		const data_config *dc = (data_config *)srv->config_context->data[i];
 
 		if (item == dc->comp) {
 			/* clear local_result */
@@ -572,9 +574,32 @@ void config_cond_cache_reset(server *srv, connection *con) {
 	}
 }
 
-int config_check_cond(server *srv, connection *con, data_config *dc) {
+int config_check_cond(server *srv, connection *con, const data_config *dc) {
 	if (con->conf.log_condition_handling) {
 		log_error_write(srv, __FILE__, __LINE__,  "s",  "=== start of condition block ===");
 	}
 	return (config_check_cond_cached(srv, con, dc) == COND_RESULT_TRUE);
+}
+
+#ifdef HAVE_PCRE_H
+#include <pcre.h>
+#endif
+
+static int data_config_pcre_exec(const data_config *dc, cond_cache_t *cache, buffer *b) {
+#ifdef HAVE_PCRE_H
+    #ifndef elementsof
+    #define elementsof(x) (sizeof(x) / sizeof(x[0]))
+    #endif
+    cache->patterncount =
+      pcre_exec(dc->regex, dc->regex_study, CONST_BUF_LEN(b), 0, 0,
+                cache->matches, elementsof(cache->matches));
+    if (cache->patterncount > 0)
+        cache->comp_value = b; /* holds pointer to b (!) for pattern subst */
+    return cache->patterncount;
+#else
+    UNUSED(dc);
+    UNUSED(cache);
+    UNUSED(b);
+    return 0;
+#endif
 }

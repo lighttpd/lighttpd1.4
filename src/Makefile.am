@@ -79,12 +79,10 @@ common_src=base64.c buffer.c burl.c log.c \
 	stat_cache.c plugin.c etag.c array.c \
 	data_string.c data_array.c \
 	data_integer.c algo_sha1.c md5.c \
-	vector.c \
 	fdevent_select.c fdevent_libev.c \
 	fdevent_poll.c fdevent_linux_sysepoll.c \
 	fdevent_solaris_devpoll.c fdevent_solaris_port.c \
 	fdevent_freebsd_kqueue.c \
-	data_config.c \
 	crc32.c \
 	connections-glue.c \
 	configfile-glue.c \
@@ -101,6 +99,8 @@ src = server.c response.c connections.c \
 	inet_ntop_cache.c \
 	network.c \
 	network_write.c \
+	data_config.c \
+	vector.c \
 	configfile.c configparser.c
 
 lib_LTLIBRARIES =
@@ -573,13 +573,13 @@ t_test_configfile_LDADD = $(PCRE_LIB) $(LIBUNWIND_LIBS)
 t_test_keyvalue_SOURCES = t/test_keyvalue.c burl.c buffer.c base64.c array.c data_integer.c data_string.c log.c
 t_test_keyvalue_LDADD = $(PCRE_LIB) $(LIBUNWIND_LIBS)
 
-t_test_mod_access_SOURCES = t/test_mod_access.c configfile-glue.c buffer.c array.c data_config.c data_integer.c data_string.c http_header.c http_kv.c vector.c log.c sock_addr.c
+t_test_mod_access_SOURCES = t/test_mod_access.c configfile-glue.c buffer.c array.c data_integer.c data_string.c http_header.c http_kv.c log.c sock_addr.c
 t_test_mod_access_LDADD = $(PCRE_LIB) $(LIBUNWIND_LIBS)
 
-t_test_mod_evhost_SOURCES = t/test_mod_evhost.c configfile-glue.c buffer.c array.c data_config.c data_integer.c data_string.c http_header.c http_kv.c vector.c log.c sock_addr.c
+t_test_mod_evhost_SOURCES = t/test_mod_evhost.c configfile-glue.c buffer.c array.c data_integer.c data_string.c http_header.c http_kv.c log.c sock_addr.c
 t_test_mod_evhost_LDADD = $(PCRE_LIB) $(LIBUNWIND_LIBS)
 
-t_test_mod_simple_vhost_SOURCES = t/test_mod_simple_vhost.c configfile-glue.c buffer.c array.c data_config.c data_integer.c data_string.c http_header.c http_kv.c vector.c log.c sock_addr.c
+t_test_mod_simple_vhost_SOURCES = t/test_mod_simple_vhost.c configfile-glue.c buffer.c array.c data_integer.c data_string.c http_header.c http_kv.c log.c sock_addr.c
 t_test_mod_simple_vhost_LDADD = $(PCRE_LIB) $(LIBUNWIND_LIBS)
 
 t_test_request_SOURCES = t/test_request.c request.c buffer.c array.c data_integer.c data_string.c http_header.c http_kv.c log.c sock_addr.c

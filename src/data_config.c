@@ -1,6 +1,5 @@
 #include "first.h"
 
-#include "base.h"       /* (cond_cache_t) */
 #include "array.h"
 #include "configfile.h"
 
@@ -190,25 +189,6 @@ int data_config_pcre_compile(data_config *dc) {
     fprintf(stderr, "can't handle '$%s[%s] =~ ...' as you compiled without pcre support. \n"
                     "(perhaps just a missing pcre-devel package ?) \n",
                     dc->comp_key->ptr, dc->comp_tag->ptr);
-    return 0;
-#endif
-}
-
-int data_config_pcre_exec(data_config *dc, cond_cache_t *cache, buffer *b) {
-#ifdef HAVE_PCRE_H
-    #ifndef elementsof
-    #define elementsof(x) (sizeof(x) / sizeof(x[0]))
-    #endif
-    cache->patterncount =
-      pcre_exec(dc->regex, dc->regex_study, CONST_BUF_LEN(b), 0, 0,
-                cache->matches, elementsof(cache->matches));
-    if (cache->patterncount > 0)
-        cache->comp_value = b; /* holds pointer to b (!) for pattern subst */
-    return cache->patterncount;
-#else
-    UNUSED(dc);
-    UNUSED(cache);
-    UNUSED(b);
     return 0;
 #endif
 }

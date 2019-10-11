@@ -86,8 +86,7 @@ data_config *data_config_init(void);
 
 __attribute_cold__
 int data_config_pcre_compile(data_config *dc);
-
-int data_config_pcre_exec(data_config *dc, struct cond_cache_t *cache, buffer *b);
+/*int data_config_pcre_exec(const data_config *dc, struct cond_cache_t *cache, buffer *b);*/
 
 typedef struct {
 	server *srv;
@@ -150,11 +149,11 @@ typedef struct {
 } config_values_t;
 
 __attribute_cold__
-int config_insert_values_global(server *srv, array *ca, const config_values_t *cv, config_scope_type_t scope);
+int config_insert_values_global(server *srv, const array *ca, const config_values_t *cv, config_scope_type_t scope);
 
 __attribute_cold__
-int config_insert_values_internal(server *srv, array *ca, const config_values_t *cv, config_scope_type_t scope);
+int config_insert_values_internal(server *srv, const array *ca, const config_values_t *cv, config_scope_type_t scope);
 
-int config_check_cond(server *srv, connection *con, data_config *dc);
+int config_check_cond(server *srv, connection *con, const data_config *dc);
 
 #endif

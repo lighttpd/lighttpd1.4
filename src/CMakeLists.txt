@@ -641,12 +641,10 @@ set(COMMON_SRC
 	stat_cache.c plugin.c etag.c array.c
 	data_string.c data_array.c
 	data_integer.c algo_sha1.c md5.c
-	vector.c
 	fdevent_select.c fdevent_libev.c
 	fdevent_poll.c fdevent_linux_sysepoll.c
 	fdevent_solaris_devpoll.c fdevent_solaris_port.c
 	fdevent_freebsd_kqueue.c
-	data_config.c
 	crc32.c
 	connections-glue.c
 	configfile-glue.c
@@ -684,6 +682,8 @@ add_executable(lighttpd
 	inet_ntop_cache.c
 	network.c
 	network_write.c
+	data_config.c
+	vector.c
 	configfile.c
 	configparser.c
 	${COMMON_SRC}
@@ -790,12 +790,10 @@ add_executable(test_mod_access
 	configfile-glue.c
 	buffer.c
 	array.c
-	data_config.c
 	data_integer.c
 	data_string.c
 	http_header.c
 	http_kv.c
-	vector.c
 	log.c
 	sock_addr.c
 )
@@ -806,12 +804,10 @@ add_executable(test_mod_evhost
 	configfile-glue.c
 	buffer.c
 	array.c
-	data_config.c
 	data_integer.c
 	data_string.c
 	http_header.c
 	http_kv.c
-	vector.c
 	log.c
 	sock_addr.c
 )
@@ -822,12 +818,10 @@ add_executable(test_mod_simple_vhost
 	configfile-glue.c
 	buffer.c
 	array.c
-	data_config.c
 	data_integer.c
 	data_string.c
 	http_header.c
 	http_kv.c
-	vector.c
 	log.c
 	sock_addr.c
 )
