@@ -1118,8 +1118,8 @@ connection *connection_accepted(server *srv, server_socket *srv_socket, sock_add
 		con->is_ssl_sock = srv_socket->is_ssl;
 
 		config_cond_cache_reset(srv, con);
-		con->conditional_is_valid[COMP_SERVER_SOCKET] = 1;
-		con->conditional_is_valid[COMP_HTTP_REMOTE_IP] = 1;
+		con->conditional_is_valid |= (1 << COMP_SERVER_SOCKET)
+					  |  (1 << COMP_HTTP_REMOTE_IP);
 
 		buffer_copy_string_len(con->proto, CONST_STR_LEN("http"));
 		if (HANDLER_GO_ON != plugins_call_handle_connection_accept(srv, con)) {

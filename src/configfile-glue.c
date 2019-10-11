@@ -322,7 +322,7 @@ static cond_result_t config_check_cond_nocache(server *srv, connection *con, con
 		}
 	}
 
-	if (!con->conditional_is_valid[dc->comp]) {
+	if (!(con->conditional_is_valid & (1 << dc->comp))) {
 		if (con->conf.log_condition_handling) {
 			log_error_write(srv, __FILE__, __LINE__,  "dss", 
 				dc->comp,
@@ -561,16 +561,14 @@ void config_cond_cache_reset_item(server *srv, connection *con, comp_key_t item)
  * reset the config cache to its initial state at connection start
  */
 void config_cond_cache_reset(server *srv, connection *con) {
+	cond_cache_t * const cond_cache = con->cond_cache;
+	con->conditional_is_valid = 0;
 	/* resetting all entries; no need to follow children as in config_cond_cache_reset_item */
-	for (uint32_t i = 0; i < srv->config_context->used; ++i) {
-		con->cond_cache[i].result = COND_RESULT_UNSET;
-		con->cond_cache[i].local_result = COND_RESULT_UNSET;
-		con->cond_cache[i].patterncount = 0;
-		con->cond_cache[i].comp_value = NULL;
-	}
-
-	for (int i = 0; i < COMP_LAST_ELEMENT; ++i) {
-		con->conditional_is_valid[i] = 0;
+	for (uint32_t i = 1, used = srv->config_context->used; i < used; ++i) {
+		cond_cache[i].result = COND_RESULT_UNSET;
+		cond_cache[i].local_result = COND_RESULT_UNSET;
+		cond_cache[i].patterncount = 0;
+		cond_cache[i].comp_value = NULL;
 	}
 }
 

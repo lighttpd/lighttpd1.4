@@ -427,14 +427,14 @@ handler_t http_response_prepare(server *srv, connection *con) {
 			}
 		}
 
-		con->conditional_is_valid[COMP_SERVER_SOCKET] = 1;       /* SERVERsocket */
-		con->conditional_is_valid[COMP_HTTP_SCHEME] = 1;         /* Scheme:      */
-		con->conditional_is_valid[COMP_HTTP_HOST] = 1;           /* Host:        */
-		con->conditional_is_valid[COMP_HTTP_REMOTE_IP] = 1;      /* Client-IP */
-		con->conditional_is_valid[COMP_HTTP_REQUEST_METHOD] = 1; /* REQUEST_METHOD */
-		con->conditional_is_valid[COMP_HTTP_URL] = 1;            /* HTTPurl */
-		con->conditional_is_valid[COMP_HTTP_QUERY_STRING] = 1;   /* HTTPqs */
-		con->conditional_is_valid[COMP_HTTP_REQUEST_HEADER] = 1; /* HTTP request header */
+		con->conditional_is_valid |= (1 << COMP_SERVER_SOCKET)
+					  |  (1 << COMP_HTTP_SCHEME)
+					  |  (1 << COMP_HTTP_HOST)
+					  |  (1 << COMP_HTTP_REMOTE_IP)
+					  |  (1 << COMP_HTTP_REQUEST_METHOD)
+					  |  (1 << COMP_HTTP_URL)
+					  |  (1 << COMP_HTTP_QUERY_STRING)
+					  |  (1 << COMP_HTTP_REQUEST_HEADER);
 		config_patch_connection(srv, con);
 
 		/* do we have to downgrade to 1.0 ? */

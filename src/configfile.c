@@ -1544,8 +1544,6 @@ int config_set_defaults(server *srv) {
 	specific_config *s = srv->config_storage[0];
 	struct stat st1, st2;
 
-	force_assert(sizeof(((connection *)0)->conditional_is_valid) >= COMP_LAST_ELEMENT);
-
 	if (0 != fdevent_config(srv)) return -1;
 
 	if (!buffer_string_is_empty(srv->srvconf.changeroot)) {

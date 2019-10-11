@@ -347,8 +347,8 @@ mod_openssl_SNI (SSL *ssl, server *srv, handler_ctx *hctx, const char *servernam
         return SSL_TLSEXT_ERR_ALERT_FATAL;
   #endif
 
-    con->conditional_is_valid[COMP_HTTP_SCHEME] = 1;
-    con->conditional_is_valid[COMP_HTTP_HOST] = 1;
+    con->conditional_is_valid |= (1 << COMP_HTTP_SCHEME)
+                              |  (1 << COMP_HTTP_HOST);
     mod_openssl_patch_connection(srv, con, hctx);
     /* reset COMP_HTTP_HOST so that conditions re-run after request hdrs read */
     /*(done in response.c:config_cond_cache_reset() after request hdrs read)*/

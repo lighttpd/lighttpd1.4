@@ -267,6 +267,7 @@ struct connection {
 	void **plugin_ctx;           /* plugin connection specific config */
 
 	specific_config conf;        /* global connection specific config */
+	uint32_t conditional_is_valid;
 	cond_cache_t *cond_cache;
 
 	const buffer *server_name;
@@ -283,8 +284,6 @@ struct connection {
 
 	/* etag handling */
 	etag_flags_t etag_flags;
-
-	int8_t conditional_is_valid[16]; /* MUST be >= COMP_LAST_ELEMENT] */
 };
 
 typedef struct {
