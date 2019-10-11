@@ -9,12 +9,17 @@
 typedef struct keyvlenvalue {
     const int key;
     const unsigned int vlen;
-    const char * const value;
+    const char value[24];
 } keyvlenvalue;
 
 /* Note: must be sorted by length */
 /* Note: must be kept in sync with http_header.h enum http_header_e */
-#define CONST_LEN_STR(x) (unsigned int)(sizeof(x)-1), (x)
+/* Note: must be kept in sync http_headers[] and http_headers_off[] */
+/* http_headers_off lists first offset at which string of specific len occur */
+int8_t http_headers_off[] = {
+  -1, -1, -1, -1, 0, 4, 5, 9, 10, 11, 12, -1, 15, 16, 20, 21, 23, 25
+};
+#define CONST_LEN_STR(x) (unsigned int)(sizeof(x)-1), x
 static const keyvlenvalue http_headers[] = {
   { HTTP_HEADER_HOST,                 CONST_LEN_STR("Host") }
  ,{ HTTP_HEADER_DATE,                 CONST_LEN_STR("Date") }
@@ -44,12 +49,14 @@ static const keyvlenvalue http_headers[] = {
  ,{ HTTP_HEADER_IF_MODIFIED_SINCE,    CONST_LEN_STR("If-Modified-Since") }
  ,{ HTTP_HEADER_TRANSFER_ENCODING,    CONST_LEN_STR("Transfer-Encoding") }
  ,{ HTTP_HEADER_X_FORWARDED_PROTO,    CONST_LEN_STR("X-Forwarded-Proto") }
- ,{ HTTP_HEADER_OTHER, 0, NULL }
+ ,{ HTTP_HEADER_OTHER, 0, "" }
 };
 
 enum http_header_e http_header_hkey_get(const char *s, size_t slen) {
     const struct keyvlenvalue * const kv = http_headers;
-    for (int i = 0; kv[i].vlen && slen >= kv[i].vlen; ++i) {
+    int i = slen < sizeof(http_headers_off) ? http_headers_off[slen] : -1;
+    if (i < 0) return HTTP_HEADER_OTHER;
+    for (; slen == kv[i].vlen; ++i) {
         if (slen == kv[i].vlen
             && buffer_eq_icase_ssn(s, kv[i].value, slen))
             return (enum http_header_e)kv[i].key;
