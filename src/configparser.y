@@ -539,7 +539,8 @@ cond_else(A) ::= context_else LCURLY metalines RCURLY. {
 
 context ::= DOLLAR SRVVARNAME(B) LBRACKET stringop(C) RBRACKET cond(E) expression(D). {
   data_config *dc;
-  buffer *b = NULL, *rvalue, *op = NULL;
+  buffer *b = NULL, *rvalue;
+  const char *op = NULL;
 
   if (ctx->ok && D->type != TYPE_STRING) {
     fprintf(stderr, "rvalue must be string");
@@ -549,16 +550,16 @@ context ::= DOLLAR SRVVARNAME(B) LBRACKET stringop(C) RBRACKET cond(E) expressio
   if (ctx->ok) {
     switch(E) {
     case CONFIG_COND_NE:
-      op = buffer_init_string("!=");
+      op = "!=";
       break;
     case CONFIG_COND_EQ:
-      op = buffer_init_string("==");
+      op = "==";
       break;
     case CONFIG_COND_NOMATCH:
-      op = buffer_init_string("!~");
+      op = "!~";
       break;
     case CONFIG_COND_MATCH:
-      op = buffer_init_string("=~");
+      op = "=~";
       break;
     default:
       force_assert(0);
@@ -570,7 +571,7 @@ context ::= DOLLAR SRVVARNAME(B) LBRACKET stringop(C) RBRACKET cond(E) expressio
     buffer_append_string_len(b, CONST_STR_LEN("/"));
     buffer_append_string_buffer(b, B);
     buffer_append_string_buffer(b, C);
-    buffer_append_string_buffer(b, op);
+    buffer_append_string_len(b, op, 2);
     rvalue = &((data_string*)D)->value;
     buffer_append_string_buffer(b, rvalue);
 
@@ -603,7 +604,7 @@ context ::= DOLLAR SRVVARNAME(B) LBRACKET stringop(C) RBRACKET cond(E) expressio
       dc = data_config_init();
 
       buffer_copy_buffer(&dc->key, b);
-      buffer_copy_buffer(dc->op, op);
+      dc->op = op;
       buffer_copy_buffer(dc->comp_tag, C);
       buffer_copy_buffer(dc->comp_key, B);
       buffer_append_string_len(dc->comp_key, CONST_STR_LEN("[\""));
@@ -722,7 +723,6 @@ context ::= DOLLAR SRVVARNAME(B) LBRACKET stringop(C) RBRACKET cond(E) expressio
   }
 
   buffer_free(b);
-  buffer_free(op);
   buffer_free(B);
   B = NULL;
   buffer_free(C);

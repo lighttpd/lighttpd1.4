@@ -62,7 +62,7 @@ struct data_config {
 	comp_key_t comp;
 
 	config_cond_t cond;
-	buffer *op;
+	const char *op;
 
 	int context_ndx; /* more or less like an id */
 	vector_config_weak children;

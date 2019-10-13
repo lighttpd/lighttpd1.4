@@ -29,7 +29,6 @@ static void data_config_free(data_unset *d) {
 	data_config *ds = (data_config *)d;
 
 	free(ds->key.ptr);
-	buffer_free(ds->op);
 	buffer_free(ds->comp_tag);
 	buffer_free(ds->comp_key);
 
@@ -67,7 +66,7 @@ static void data_config_print(const data_unset *d, int depth) {
 	else {
 		if (ds->cond != CONFIG_COND_ELSE) {
 			fprintf(stdout, "$%s %s \"%s\" {\n",
-					ds->comp_key->ptr, ds->op->ptr, ds->string->ptr);
+					ds->comp_key->ptr, ds->op, ds->string->ptr);
 		} else {
 			fprintf(stdout, "{\n");
 		}
@@ -111,7 +110,7 @@ static void data_config_print(const data_unset *d, int depth) {
 	if (0 != ds->context_ndx) {
 		if (ds->cond != CONFIG_COND_ELSE) {
 			fprintf(stdout, " # end of $%s %s \"%s\"",
-					ds->comp_key->ptr, ds->op->ptr, ds->string->ptr);
+					ds->comp_key->ptr, ds->op, ds->string->ptr);
 		} else {
 			fprintf(stdout, " # end of else");
 		}
@@ -136,7 +135,6 @@ data_config *data_config_init(void) {
 
 	ds = calloc(1, sizeof(*ds));
 
-	ds->op = buffer_init();
 	ds->comp_tag = buffer_init();
 	ds->comp_key = buffer_init();
 	ds->value = array_init();
