@@ -283,7 +283,7 @@ SETDEFAULTS_FUNC(mod_wstunnel_set_defaults) {
             return HANDLER_ERROR;
         }
         for (size_t j = 0; j < s->origins->used; ++j) {
-            if (buffer_string_is_empty(((data_string *)s->origins->data[j])->value)) {
+            if (buffer_string_is_empty(&((data_string *)s->origins->data[j])->value)) {
                 log_error_write(srv, __FILE__, __LINE__, "s",
                                 "unexpected empty string in wstunnel.origins");
                 return HANDLER_ERROR;
@@ -435,7 +435,7 @@ static int wstunnel_is_allowed_origin(connection *con, handler_ctx *hctx) {
     }
 
     for (size_t i = 0; i < allowed_origins->used; ++i) {
-        buffer *b = ((data_string *)allowed_origins->data[i])->value;
+        buffer *b = &((data_string *)allowed_origins->data[i])->value;
         size_t blen = buffer_string_length(b);
         if ((olen > blen ? origin->ptr[olen-blen-1] == '.' : olen == blen)
             && buffer_is_equal_right_len(origin, b, blen)) {

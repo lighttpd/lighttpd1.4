@@ -139,13 +139,13 @@ int plugins_load(server *srv) {
 	size_t i, j;
 
 	for (i = 0; i < srv->srvconf.modules->used; i++) {
-		data_string *d = (data_string *)srv->srvconf.modules->data[i];
-		char *module = d->value->ptr;
+		data_string *ds = (data_string *)srv->srvconf.modules->data[i];
+		char *module = ds->value.ptr;
 
 		for (j = 0; j < i; j++) {
-			if (buffer_is_equal(d->value, ((data_string *) srv->srvconf.modules->data[j])->value)) {
+			if (buffer_is_equal(&ds->value, &((data_string *) srv->srvconf.modules->data[j])->value)) {
 				log_error_write(srv, __FILE__, __LINE__, "sbs",
-					"Cannot load plugin", d->value,
+					"Cannot load plugin", &ds->value,
 					"more than once, please fix your config (lighttpd may not accept such configs in future releases)");
 				continue;
 			}
@@ -178,13 +178,13 @@ int plugins_load(server *srv) {
 	size_t i, j;
 
 	for (i = 0; i < srv->srvconf.modules->used; i++) {
-		data_string *d = (data_string *)srv->srvconf.modules->data[i];
-		char *module = d->value->ptr;
+		data_string *ds = (data_string *)srv->srvconf.modules->data[i];
+		char *module = ds->value.ptr;
 
 		for (j = 0; j < i; j++) {
-			if (buffer_is_equal(d->value, ((data_string *) srv->srvconf.modules->data[j])->value)) {
+			if (buffer_is_equal(&ds->value, &((data_string *) srv->srvconf.modules->data[j])->value)) {
 				log_error_write(srv, __FILE__, __LINE__, "sbs",
-					"Cannot load plugin", d->value,
+					"Cannot load plugin", &ds->value,
 					"more than once, please fix your config (lighttpd may not accept such configs in future releases)");
 				continue;
 			}

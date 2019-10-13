@@ -204,7 +204,7 @@ SETDEFAULTS_FUNC(mod_maxmind_set_defaults)
                               "maxminddb.env must be a list of strings");
                     return HANDLER_ERROR;
                 }
-                buffer *value = data[j]->value;
+                buffer *value = &data[j]->value;
                 if (buffer_string_is_empty(value)
                     || '/' == value->ptr[0]
                     || '/' == value->ptr[buffer_string_length(value)-1]) {
@@ -384,7 +384,7 @@ CONNECTION_FUNC(mod_maxmind_request_env_handler)
          * (when mod_extforward is listed after mod_openssl in server.modules)*/
         data_string *ds = (data_string *)env->data[i];
         http_header_env_set(con,
-                            CONST_BUF_LEN(&ds->key), CONST_BUF_LEN(ds->value));
+                            CONST_BUF_LEN(&ds->key), CONST_BUF_LEN(&ds->value));
     }
 
     return HANDLER_GO_ON;

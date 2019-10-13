@@ -230,13 +230,13 @@ SETDEFAULTS_FUNC(mod_fastcgi_set_defaults) {
 						"unexpected type for key cgi.x-sendfile-docroot; expected: cgi.x-sendfile-docroot = ( \"/allowed/path\", ... )");
 					return HANDLER_ERROR;
 				}
-				if (ds->value->ptr[0] != '/') {
+				if (ds->value.ptr[0] != '/') {
 					log_error_write(srv, __FILE__, __LINE__, "SBs",
-						"cgi.x-sendfile-docroot paths must begin with '/'; invalid: \"", ds->value, "\"");
+						"cgi.x-sendfile-docroot paths must begin with '/'; invalid: \"", &ds->value, "\"");
 					return HANDLER_ERROR;
 				}
-				buffer_path_simplify(ds->value, ds->value);
-				buffer_append_slash(ds->value);
+				buffer_path_simplify(&ds->value, &ds->value);
+				buffer_append_slash(&ds->value);
 			}
 		}
 	}
@@ -927,7 +927,7 @@ URIHANDLER_FUNC(cgi_is_handled) {
 		handler_ctx *hctx = cgi_handler_ctx_init();
 		hctx->remote_conn = con;
 		hctx->plugin_data = p;
-		hctx->cgi_handler = ds->value;
+		hctx->cgi_handler = &ds->value;
 		memcpy(&hctx->conf, &p->conf, sizeof(plugin_config));
 		hctx->conf.upgrade =
 		  hctx->conf.upgrade

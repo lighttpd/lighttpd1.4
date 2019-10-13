@@ -231,21 +231,21 @@ SETDEFAULTS_FUNC(mod_compress_setdefaults) {
 				data_string *ds = (data_string *)encodings_arr->data[j];
 #endif
 #ifdef USE_ZLIB
-				if (NULL != strstr(ds->value->ptr, "gzip"))
+				if (NULL != strstr(ds->value.ptr, "gzip"))
 					s->allowed_encodings |= HTTP_ACCEPT_ENCODING_GZIP | HTTP_ACCEPT_ENCODING_X_GZIP;
-				if (NULL != strstr(ds->value->ptr, "x-gzip"))
+				if (NULL != strstr(ds->value.ptr, "x-gzip"))
 					s->allowed_encodings |= HTTP_ACCEPT_ENCODING_X_GZIP;
-				if (NULL != strstr(ds->value->ptr, "deflate"))
+				if (NULL != strstr(ds->value.ptr, "deflate"))
 					s->allowed_encodings |= HTTP_ACCEPT_ENCODING_DEFLATE;
 				/*
-				if (NULL != strstr(ds->value->ptr, "compress"))
+				if (NULL != strstr(ds->value.ptr, "compress"))
 					s->allowed_encodings |= HTTP_ACCEPT_ENCODING_COMPRESS;
 				*/
 #endif
 #ifdef USE_BZ2LIB
-				if (NULL != strstr(ds->value->ptr, "bzip2"))
+				if (NULL != strstr(ds->value.ptr, "bzip2"))
 					s->allowed_encodings |= HTTP_ACCEPT_ENCODING_BZIP2 | HTTP_ACCEPT_ENCODING_X_BZIP2;
-				if (NULL != strstr(ds->value->ptr, "x-bzip2"))
+				if (NULL != strstr(ds->value.ptr, "x-bzip2"))
 					s->allowed_encodings |= HTTP_ACCEPT_ENCODING_X_BZIP2;
 #endif
 			}
@@ -874,8 +874,8 @@ PHYSICALPATH_FUNC(mod_compress_physical) {
 	for (m = 0; m < p->conf.compress->used; m++) {
 		data_string *compress_ds = (data_string *)p->conf.compress->data[m];
 
-		if (buffer_is_equal(compress_ds->value, sce->content_type)
-		    || (content_type && buffer_is_equal(compress_ds->value, content_type))) {
+		if (buffer_is_equal(&compress_ds->value, sce->content_type)
+		    || (content_type && buffer_is_equal(&compress_ds->value, content_type))) {
 			/* mimetype found */
 			buffer *vb;
 

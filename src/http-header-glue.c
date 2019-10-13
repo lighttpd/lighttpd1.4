@@ -636,11 +636,11 @@ static void http_response_xsendfile (server *srv, connection *con, buffer *path,
 		size_t i, xlen = buffer_string_length(path);
 		for (i = 0; i < xdocroot->used; ++i) {
 			data_string *ds = (data_string *)xdocroot->data[i];
-			size_t dlen = buffer_string_length(ds->value);
+			size_t dlen = buffer_string_length(&ds->value);
 			if (dlen <= xlen
 			    && (!con->conf.force_lowercase_filenames
-				? 0 == memcmp(path->ptr, ds->value->ptr, dlen)
-				: buffer_eq_icase_ssn(path->ptr, ds->value->ptr, dlen))) {
+				? 0 == memcmp(path->ptr, ds->value.ptr, dlen)
+				: buffer_eq_icase_ssn(path->ptr, ds->value.ptr, dlen))) {
 				break;
 			}
 		}
@@ -710,11 +710,11 @@ static void http_response_xsendfile2(server *srv, connection *con, const buffer 
             size_t i, xlen = buffer_string_length(b);
             for (i = 0; i < xdocroot->used; ++i) {
                 data_string *ds = (data_string *)xdocroot->data[i];
-                size_t dlen = buffer_string_length(ds->value);
+                size_t dlen = buffer_string_length(&ds->value);
                 if (dlen <= xlen
                     && (!con->conf.force_lowercase_filenames
-                    ? 0 == memcmp(b->ptr, ds->value->ptr, dlen)
-                    : buffer_eq_icase_ssn(b->ptr, ds->value->ptr, dlen))) {
+                    ? 0 == memcmp(b->ptr, ds->value.ptr, dlen)
+                    : buffer_eq_icase_ssn(b->ptr, ds->value.ptr, dlen))) {
                     break;
                 }
             }
@@ -1532,7 +1532,7 @@ int http_cgi_headers (server *srv, connection *con, http_cgi_opts *opts, http_cg
 
     for (n = 0; n < con->request.headers->used; n++) {
         data_string *ds = (data_string *)con->request.headers->data[n];
-        if (!buffer_string_is_empty(ds->value) && !buffer_is_empty(&ds->key)) {
+        if (!buffer_string_is_empty(&ds->value) && !buffer_is_empty(&ds->key)) {
             /* Security: Do not emit HTTP_PROXY in environment.
              * Some executables use HTTP_PROXY to configure
              * outgoing proxy.  See also https://httpoxy.org/ */
@@ -1543,7 +1543,7 @@ int http_cgi_headers (server *srv, connection *con, http_cgi_opts *opts, http_cg
             buffer_copy_string_encoded_cgi_varnames(srv->tmp_buf,
                                                     CONST_BUF_LEN(&ds->key), 1);
             rc |= cb(vdata, CONST_BUF_LEN(srv->tmp_buf),
-                            CONST_BUF_LEN(ds->value));
+                            CONST_BUF_LEN(&ds->value));
         }
     }
 
@@ -1551,11 +1551,11 @@ int http_cgi_headers (server *srv, connection *con, http_cgi_opts *opts, http_cg
 
     for (n = 0; n < con->environment->used; n++) {
         data_string *ds = (data_string *)con->environment->data[n];
-        if (!buffer_is_empty(ds->value) && !buffer_is_empty(&ds->key)) {
+        if (!buffer_is_empty(&ds->value) && !buffer_is_empty(&ds->key)) {
             buffer_copy_string_encoded_cgi_varnames(srv->tmp_buf,
                                                     CONST_BUF_LEN(&ds->key), 0);
             rc |= cb(vdata, CONST_BUF_LEN(srv->tmp_buf),
-                            CONST_BUF_LEN(ds->value));
+                            CONST_BUF_LEN(&ds->value));
         }
     }
 

@@ -101,9 +101,9 @@ SETDEFAULTS_FUNC(mod_redirect_set_defaults) {
 			data_string *ds = (data_string *)da->value->data[j];
 			if (srv->srvconf.http_url_normalize) {
 				pcre_keyvalue_burl_normalize_key(&ds->key, srv->tmp_buf);
-				pcre_keyvalue_burl_normalize_value(ds->value, srv->tmp_buf);
+				pcre_keyvalue_burl_normalize_value(&ds->value, srv->tmp_buf);
 			}
-			if (0 != pcre_keyvalue_buffer_append(srv, s->redirect, &ds->key, ds->value)) {
+			if (0 != pcre_keyvalue_buffer_append(srv, s->redirect, &ds->key, &ds->value)) {
 				log_error_write(srv, __FILE__, __LINE__, "sb",
 						"pcre-compile failed for", &ds->key);
 				return HANDLER_ERROR;

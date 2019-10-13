@@ -228,18 +228,18 @@ SETDEFAULTS_FUNC(mod_extforward_set_defaults) {
 
 		if (array_get_element_klen(config->value, CONST_STR_LEN("extforward.forwarder"))) {
 			const data_string * const allds = (const data_string *)array_get_element_klen(s->forwarder, CONST_STR_LEN("all"));
-			s->forward_all = (NULL == allds) ? 0 : buffer_eq_icase_slen(allds->value, CONST_STR_LEN("trust")) ? 1 : -1;
+			s->forward_all = (NULL == allds) ? 0 : buffer_eq_icase_slen(&allds->value, CONST_STR_LEN("trust")) ? 1 : -1;
 			for (size_t j = 0; j < s->forwarder->used; ++j) {
 				data_string * const ds = (data_string *)s->forwarder->data[j];
 				char * const nm_slash = strchr(ds->key.ptr, '/');
-				if (!buffer_eq_icase_slen(ds->value, CONST_STR_LEN("trust"))) {
-					if (!buffer_eq_icase_slen(ds->value, CONST_STR_LEN("untrusted"))) {
-						log_error_write(srv, __FILE__, __LINE__, "sbsbs", "ERROR: expect \"trust\", not \"", &ds->key, "\" => \"", ds->value, "\"; treating as untrusted");
+				if (!buffer_eq_icase_slen(&ds->value, CONST_STR_LEN("trust"))) {
+					if (!buffer_eq_icase_slen(&ds->value, CONST_STR_LEN("untrusted"))) {
+						log_error_write(srv, __FILE__, __LINE__, "sbsbs", "ERROR: expect \"trust\", not \"", &ds->key, "\" => \"", &ds->value, "\"; treating as untrusted");
 					}
 					if (NULL != nm_slash) {
-						log_error_write(srv, __FILE__, __LINE__, "sbsbs", "ERROR: untrusted CIDR masks are ignored (\"", &ds->key, "\" => \"", ds->value, "\")");
+						log_error_write(srv, __FILE__, __LINE__, "sbsbs", "ERROR: untrusted CIDR masks are ignored (\"", &ds->key, "\" => \"", &ds->value, "\")");
 					}
-					buffer_clear(ds->value); /* empty is untrusted */
+					buffer_clear(&ds->value); /* empty is untrusted */
 					continue;
 				}
 				if (NULL != nm_slash) {
@@ -266,7 +266,7 @@ SETDEFAULTS_FUNC(mod_extforward_set_defaults) {
 					rc = sock_addr_from_str_numeric(srv, &sm->addr, ds->key.ptr);
 					*nm_slash = '/';
 					if (1 != rc) return HANDLER_ERROR;
-					buffer_clear(ds->value); /* empty is untrusted, e.g. if subnet (incorrectly) appears in X-Forwarded-For */
+					buffer_clear(&ds->value); /* empty is untrusted, e.g. if subnet (incorrectly) appears in X-Forwarded-For */
 				}
 			}
 		}
@@ -313,9 +313,9 @@ SETDEFAULTS_FUNC(mod_extforward_set_defaults) {
 			}
 			if (du->type == TYPE_STRING) {
 				data_string *ds = (data_string *)du;
-				if (buffer_is_equal_string(ds->value, CONST_STR_LEN("enable"))) {
+				if (buffer_is_equal_string(&ds->value, CONST_STR_LEN("enable"))) {
 					s->opts |= param;
-				} else if (!buffer_is_equal_string(ds->value, CONST_STR_LEN("disable"))) {
+				} else if (!buffer_is_equal_string(&ds->value, CONST_STR_LEN("disable"))) {
 					log_error_write(srv, __FILE__, __LINE__, "sb",
 						        "extforward.params values must be one of: 0, 1, enable, disable; error for key:", &du->key);
 					return HANDLER_ERROR;
@@ -344,13 +344,13 @@ SETDEFAULTS_FUNC(mod_extforward_set_defaults) {
 			size_t j;
 			for (j = 0; j < srv->srvconf.modules->used; ++j) {
 				data_string *ds = (data_string *)srv->srvconf.modules->data[j];
-				if (buffer_is_equal_string(ds->value, CONST_STR_LEN("mod_extforward"))) {
+				if (buffer_is_equal_string(&ds->value, CONST_STR_LEN("mod_extforward"))) {
 					break;
 				}
 			}
 			for (; j < srv->srvconf.modules->used; ++j) {
 				data_string *ds = (data_string *)srv->srvconf.modules->data[j];
-				if (buffer_is_equal_string(ds->value, CONST_STR_LEN("mod_openssl"))) {
+				if (buffer_is_equal_string(&ds->value, CONST_STR_LEN("mod_openssl"))) {
 					log_error_write(srv, __FILE__, __LINE__, "s",
 						        "mod_extforward must be loaded after mod_openssl in server.modules when extforward.hap-PROXY = \"enable\"");
 					break;
@@ -362,7 +362,7 @@ SETDEFAULTS_FUNC(mod_extforward_set_defaults) {
 
 	for (i = 0; i < srv->srvconf.modules->used; i++) {
 		data_string *ds = (data_string *)srv->srvconf.modules->data[i];
-		if (buffer_is_equal_string(ds->value, CONST_STR_LEN("mod_proxy"))) {
+		if (buffer_is_equal_string(&ds->value, CONST_STR_LEN("mod_proxy"))) {
 			extforward_check_proxy = 1;
 			break;
 		}
@@ -460,7 +460,7 @@ static int is_proxy_trusted(plugin_data *p, const char * const ip, size_t iplen)
 {
     const data_string *ds =
       (const data_string *)array_get_element_klen(p->conf.forwarder, ip, iplen);
-    if (NULL != ds) return !buffer_string_is_empty(ds->value);
+    if (NULL != ds) return !buffer_string_is_empty(&ds->value);
 
     if (p->conf.forward_masks) {
         const struct sock_addr_mask * const addrs =p->conf.forward_masks->addrs;
@@ -500,8 +500,8 @@ static const char *last_not_in_array(array *a, plugin_data *p)
 
 	for (i = a->used - 1; i >= 0; i--) {
 		data_string *ds = (data_string *)a->data[i];
-		if (!is_proxy_trusted(p, CONST_BUF_LEN(ds->value))) {
-			return ds->value->ptr;
+		if (!is_proxy_trusted(p, CONST_BUF_LEN(&ds->value))) {
+			return ds->value.ptr;
 		}
 	}
 	return NULL;
@@ -1025,7 +1025,7 @@ URIHANDLER_FUNC(mod_extforward_uri_handler) {
 					    CONST_STR_LEN("SUCCESS"));
 			http_header_env_set(con,
 					    CONST_STR_LEN("REMOTE_USER"),
-					    CONST_BUF_LEN(ds->value));
+					    CONST_BUF_LEN(&ds->value));
 			http_header_env_set(con,
 					    CONST_STR_LEN("AUTH_TYPE"),
 					    CONST_STR_LEN("SSL_CLIENT_VERIFY"));
@@ -1037,7 +1037,7 @@ URIHANDLER_FUNC(mod_extforward_uri_handler) {
 	}
 
 	for (size_t k = 0; k < p->conf.headers->used && NULL == forwarded; ++k) {
-		buffer *hdr = ((data_string *)p->conf.headers->data[k])->value;
+		buffer *hdr = &((data_string *)p->conf.headers->data[k])->value;
 		forwarded = http_header_request_get(con, HTTP_HEADER_UNSPECIFIED, CONST_BUF_LEN(hdr));
 		if (forwarded) {
 			is_forwarded_header = buffer_is_equal_caseless_string(hdr, CONST_STR_LEN("Forwarded"));
@@ -1080,7 +1080,7 @@ CONNECTION_FUNC(mod_extforward_handle_request_env) {
          * (when mod_extforward is listed after mod_openssl in server.modules)*/
         data_string *ds = (data_string *)hctx->env->data[i];
         http_header_env_set(con,
-                            CONST_BUF_LEN(&ds->key), CONST_BUF_LEN(ds->value));
+                            CONST_BUF_LEN(&ds->key), CONST_BUF_LEN(&ds->value));
     }
     return HANDLER_GO_ON;
 }

@@ -24,7 +24,7 @@
 typedef struct {
     dbi_conn dbconn;
     dbi_inst dbinst;
-    buffer *sqlquery;
+    const buffer *sqlquery;
     server *srv;
     short reconnect_count;
 } vhostdb_config;
@@ -70,18 +70,18 @@ static void mod_vhostdb_dbconf_free (void *vdata)
 
 static int mod_vhostdb_dbconf_setup (server *srv, array *opts, void **vdata)
 {
-    buffer *sqlquery = NULL;
+    const buffer *sqlquery = NULL;
     const buffer *dbtype=NULL, *dbname=NULL;
 
     for (size_t i = 0; i < opts->used; ++i) {
         const data_string *ds = (data_string *)opts->data[i];
         if (ds->type == TYPE_STRING) {
             if (buffer_is_equal_caseless_string(&ds->key, CONST_STR_LEN("sql"))) {
-                sqlquery = ds->value;
+                sqlquery = &ds->value;
             } else if (buffer_is_equal_caseless_string(&ds->key, CONST_STR_LEN("dbname"))) {
-                dbname = ds->value;
+                dbname = &ds->value;
             } else if (buffer_is_equal_caseless_string(&ds->key, CONST_STR_LEN("dbtype"))) {
-                dbtype = ds->value;
+                dbtype = &ds->value;
             }
         }
     }
@@ -131,8 +131,8 @@ static int mod_vhostdb_dbconf_setup (server *srv, array *opts, void **vdata)
                     dbi_conn_set_option_numeric(dbconn, opt->ptr, di->value);
                 } else if (du->type == TYPE_STRING) {
                     data_string *ds = (data_string *)du;
-                    if (ds->value != sqlquery && ds->value != dbtype) {
-                        dbi_conn_set_option(dbconn, opt->ptr, ds->value->ptr);
+                    if (&ds->value != sqlquery && &ds->value != dbtype) {
+                        dbi_conn_set_option(dbconn, opt->ptr, ds->value.ptr);
                     }
                 }
             }

@@ -35,7 +35,7 @@ static void test_array_insert_value (void) {
     array_insert_value(a, CONST_STR_LEN("def"));
     ds = (data_string *)a->data[0];
     assert(NULL != ds);
-    assert(buffer_is_equal_string(ds->value, CONST_STR_LEN("def")));
+    assert(buffer_is_equal_string(&ds->value, CONST_STR_LEN("def")));
 
     array_free(a);
 }
@@ -50,7 +50,7 @@ static void test_array_set_key_value (void) {
     ds = (data_string *)array_get_element_klen(a, CONST_STR_LEN("abc"));
     assert(NULL != ds);
     assert(buffer_is_equal_string(&ds->key, CONST_STR_LEN("abc")));
-    assert(buffer_is_equal_string(ds->value, CONST_STR_LEN("def")));
+    assert(buffer_is_equal_string(&ds->value, CONST_STR_LEN("def")));
 
     array_set_key_value(a, CONST_STR_LEN("abc"), CONST_STR_LEN("ghi"));
     ds = (data_string *)array_get_element_klen(a, CONST_STR_LEN("does-not-exist"));
@@ -58,7 +58,7 @@ static void test_array_set_key_value (void) {
     ds = (data_string *)array_get_element_klen(a, CONST_STR_LEN("abc"));
     assert(NULL != ds);
     assert(buffer_is_equal_string(&ds->key, CONST_STR_LEN("abc")));
-    assert(buffer_is_equal_string(ds->value, CONST_STR_LEN("ghi")));
+    assert(buffer_is_equal_string(&ds->value, CONST_STR_LEN("ghi")));
 
     array_free(a);
 }

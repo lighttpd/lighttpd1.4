@@ -91,7 +91,7 @@ SETDEFAULTS_FUNC(mod_authn_pam_set_defaults) {
 
         ds = (const data_string *)
           array_get_element_klen(s->opts, CONST_STR_LEN("service"));
-        s->service = (NULL != ds) ? ds->value->ptr : "http";
+        s->service = (NULL != ds) ? ds->value.ptr : "http";
     }
 
     if (p->config_storage[0]->service == NULL)

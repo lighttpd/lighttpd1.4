@@ -102,11 +102,11 @@ SETDEFAULTS_FUNC(mod_authn_sasl_set_defaults) {
 
         ds = (const data_string *)
           array_get_element_klen(s->opts, CONST_STR_LEN("service"));
-        s->service = (NULL != ds) ? ds->value->ptr : "http";
+        s->service = (NULL != ds) ? ds->value.ptr : "http";
 
         ds = (const data_string *)
           array_get_element_klen(s->opts, CONST_STR_LEN("fqdn"));
-        if (NULL != ds) s->fqdn = ds->value->ptr;
+        if (NULL != ds) s->fqdn = ds->value.ptr;
         if (NULL == s->fqdn) {
             if (NULL == p->fqdn) {
                 struct utsname uts;
@@ -123,25 +123,27 @@ SETDEFAULTS_FUNC(mod_authn_sasl_set_defaults) {
         ds = (const data_string *)
           array_get_element_klen(s->opts, CONST_STR_LEN("pwcheck_method"));
         if (NULL != ds) {
-            s->pwcheck_method = ds->value;
-            if (!buffer_is_equal_string(ds->value, CONST_STR_LEN("saslauthd"))
-                && !buffer_is_equal_string(ds->value, CONST_STR_LEN("auxprop"))
-                && !buffer_is_equal_string(ds->value, CONST_STR_LEN("sasldb"))){
+            s->pwcheck_method = &ds->value;
+            if (!buffer_is_equal_string(&ds->value, CONST_STR_LEN("saslauthd"))
+                && !buffer_is_equal_string(&ds->value, CONST_STR_LEN("auxprop"))
+                && !buffer_is_equal_string(&ds->value, CONST_STR_LEN("sasldb"))){
                 log_error_write(srv, __FILE__, __LINE__, "sb",
                                 "sasl pwcheck_method must be one of saslauthd, "
-                                "sasldb, or auxprop, not:", ds->value);
+                                "sasldb, or auxprop, not:", &ds->value);
                 return HANDLER_ERROR;
             }
-            if (buffer_is_equal_string(ds->value, CONST_STR_LEN("sasldb"))) {
+            if (buffer_is_equal_string(&ds->value, CONST_STR_LEN("sasldb"))) {
                 /* Cyrus libsasl2 expects "auxprop" instead of "sasldb"
                  * (mod_authn_sasl_cb_getopt auxprop_plugin returns "sasldb") */
-                buffer_copy_string_len(ds->value, CONST_STR_LEN("auxprop"));
+                buffer *pwcheck_method =
+                  array_get_buf_ptr(s->opts, CONST_STR_LEN("pwcheck_method"));
+                buffer_copy_string_len(pwcheck_method, CONST_STR_LEN("auxprop"));
             }
         }
 
         ds = (const data_string *)
           array_get_element_klen(s->opts, CONST_STR_LEN("sasldb_path"));
-        if (NULL != ds) s->sasldb_path = ds->value;
+        if (NULL != ds) s->sasldb_path = &ds->value;
     }
 
     return HANDLER_GO_ON;

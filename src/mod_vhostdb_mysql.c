@@ -17,7 +17,7 @@
 
 typedef struct {
     MYSQL *dbconn;
-    buffer *sqlquery;
+    const buffer *sqlquery;
 } vhostdb_config;
 
 typedef struct {
@@ -41,27 +41,27 @@ static void mod_vhostdb_dbconf_free (void *vdata)
 
 static int mod_vhostdb_dbconf_setup (server *srv, array *opts, void **vdata)
 {
-    buffer *sqlquery = NULL;
+    const buffer *sqlquery = NULL;
     const char *dbname=NULL, *user=NULL, *pass=NULL, *host=NULL, *sock=NULL;
     unsigned int port = 0;
 
     for (size_t i = 0; i < opts->used; ++i) {
         const data_string *ds = (data_string *)opts->data[i];
-        if (ds->type == TYPE_STRING && !buffer_string_is_empty(ds->value)) {
+        if (ds->type == TYPE_STRING && !buffer_string_is_empty(&ds->value)) {
             if (buffer_is_equal_caseless_string(&ds->key, CONST_STR_LEN("sql"))) {
-                sqlquery = ds->value;
+                sqlquery = &ds->value;
             } else if (buffer_is_equal_caseless_string(&ds->key, CONST_STR_LEN("dbname"))) {
-                dbname = ds->value->ptr;
+                dbname = ds->value.ptr;
             } else if (buffer_is_equal_caseless_string(&ds->key, CONST_STR_LEN("user"))) {
-                user = ds->value->ptr;
+                user = ds->value.ptr;
             } else if (buffer_is_equal_caseless_string(&ds->key, CONST_STR_LEN("password"))) {
-                pass = ds->value->ptr;
+                pass = ds->value.ptr;
             } else if (buffer_is_equal_caseless_string(&ds->key, CONST_STR_LEN("host"))) {
-                host = ds->value->ptr;
+                host = ds->value.ptr;
             } else if (buffer_is_equal_caseless_string(&ds->key, CONST_STR_LEN("port"))) {
-                port = strtoul(ds->value->ptr, NULL, 10);
+                port = strtoul(ds->value.ptr, NULL, 10);
             } else if (buffer_is_equal_caseless_string(&ds->key, CONST_STR_LEN("sock"))) {
-                sock = ds->value->ptr;
+                sock = ds->value.ptr;
             }
         }
     }

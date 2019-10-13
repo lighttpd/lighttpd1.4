@@ -313,17 +313,17 @@ static void mod_evhost_build_doc_root_path(buffer *b, array *parsed_host, buffer
 				s[1] = ptr[2]; /*(assumes single digit before '.', and, optionally, '.' and single digit after '.')*/
 				if (NULL != (ds = (data_string *)array_get_element_klen(parsed_host, s, 2))) {
 					if (ptr[3] != '.' || ptr[4] == '0') {
-						buffer_append_string_buffer(b, ds->value);
+						buffer_append_string_buffer(b, &ds->value);
 					} else {
-						if ((size_t)(ptr[4]-'0') <= buffer_string_length(ds->value)) {
-							buffer_append_string_len(b, ds->value->ptr+(ptr[4]-'0')-1, 1);
+						if ((size_t)(ptr[4]-'0') <= buffer_string_length(&ds->value)) {
+							buffer_append_string_len(b, ds->value.ptr+(ptr[4]-'0')-1, 1);
 						}
 					}
 				} else {
 					/* unhandled %-sequence */
 				}
 			} else if (NULL != (ds = (data_string *)array_get_element_klen(parsed_host, CONST_BUF_LEN(path_pieces[i])))) {
-				buffer_append_string_buffer(b, ds->value);
+				buffer_append_string_buffer(b, &ds->value);
 			} else {
 				/* unhandled %-sequence */
 			}

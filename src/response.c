@@ -35,7 +35,7 @@ static int http_response_omit_header(connection *con, const data_string * const 
             && buffer_eq_icase_ssn(ds->key.ptr+sizeof("X-LIGHTTPD-")-1,
                                    CONST_STR_LEN("KBytes-per-second"))) {
             /* "X-LIGHTTPD-KBytes-per-second" */
-            long limit = strtol(ds->value->ptr, NULL, 10);
+            long limit = strtol(ds->value.ptr, NULL, 10);
             if (limit > 0
                 && (limit < con->conf.kbytes_per_second
                     || 0 == con->conf.kbytes_per_second)) {
@@ -85,7 +85,7 @@ int http_response_write_header(server *srv, connection *con) {
 	for (size_t i = 0; i < con->response.headers->used; ++i) {
 		const data_string * const ds = (data_string *)con->response.headers->data[i];
 
-		if (buffer_string_is_empty(ds->value)) continue;
+		if (buffer_string_is_empty(&ds->value)) continue;
 		if (buffer_string_is_empty(&ds->key)) continue;
 		if ((ds->key.ptr[0] & 0xdf)=='X' && http_response_omit_header(con, ds))
 			continue;
@@ -93,7 +93,7 @@ int http_response_write_header(server *srv, connection *con) {
 		buffer_append_string_len(b, CONST_STR_LEN("\r\n"));
 		buffer_append_string_buffer(b, &ds->key);
 		buffer_append_string_len(b, CONST_STR_LEN(": "));
-		buffer_append_string_buffer(b, ds->value);
+		buffer_append_string_buffer(b, &ds->value);
 	}
 
 	if (!(con->response.htags & HTTP_HEADER_DATE)) {

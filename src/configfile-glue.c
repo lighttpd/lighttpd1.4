@@ -76,7 +76,7 @@ int config_insert_values_internal(server *srv, const array *ca, const config_val
 			if (du->type == TYPE_STRING) {
 				const data_string *ds = (const data_string *)du;
 
-				buffer_copy_buffer(cv[i].destination, ds->value);
+				buffer_copy_buffer(cv[i].destination, &ds->value);
 			} else {
 				log_error_write(srv, __FILE__, __LINE__, "ss", cv[i].key, "should have been a string like ... = \"...\"");
 
@@ -100,16 +100,16 @@ int config_insert_values_internal(server *srv, const array *ca, const config_val
 				 * short before giving up, in order to support setting numeric
 				 * values with environment variables (eg, port number).
 				 */
-				if (ds->value->ptr && *ds->value->ptr) {
+				if (ds->value.ptr && *ds->value.ptr) {
 					char *e;
-					long l = strtol(ds->value->ptr, &e, 10);
-					if (e != ds->value->ptr && !*e && l >=0 && l <= 65535) {
+					long l = strtol(ds->value.ptr, &e, 10);
+					if (e != ds->value.ptr && !*e && l >=0 && l <= 65535) {
 						*((unsigned short *)(cv[i].destination)) = l;
 						break;
 					}
 				}
 
-				log_error_write(srv, __FILE__, __LINE__, "ssb", "got a string but expected a short:", cv[i].key, ds->value);
+				log_error_write(srv, __FILE__, __LINE__, "ssb", "got a string but expected a short:", cv[i].key, &ds->value);
 
 				return -1;
 			}
@@ -129,16 +129,16 @@ int config_insert_values_internal(server *srv, const array *ca, const config_val
 			case TYPE_STRING: {
 				const data_string *ds = (const data_string *)du;
 
-				if (ds->value->ptr && *ds->value->ptr) {
+				if (ds->value.ptr && *ds->value.ptr) {
 					char *e;
-					long l = strtol(ds->value->ptr, &e, 10);
-					if (e != ds->value->ptr && !*e && l >= 0) {
+					long l = strtol(ds->value.ptr, &e, 10);
+					if (e != ds->value.ptr && !*e && l >= 0) {
 						*((unsigned int *)(cv[i].destination)) = l;
 						break;
 					}
 				}
 
-				log_error_write(srv, __FILE__, __LINE__, "ssb", "got a string but expected an integer:", cv[i].key, ds->value);
+				log_error_write(srv, __FILE__, __LINE__, "ssb", "got a string but expected an integer:", cv[i].key, &ds->value);
 
 				return -1;
 			}
@@ -151,12 +151,12 @@ int config_insert_values_internal(server *srv, const array *ca, const config_val
 			if (du->type == TYPE_STRING) {
 				const data_string *ds = (const data_string *)du;
 
-				if (buffer_is_equal_string(ds->value, CONST_STR_LEN("enable"))) {
+				if (buffer_is_equal_string(&ds->value, CONST_STR_LEN("enable"))) {
 					*((unsigned short *)(cv[i].destination)) = 1;
-				} else if (buffer_is_equal_string(ds->value, CONST_STR_LEN("disable"))) {
+				} else if (buffer_is_equal_string(&ds->value, CONST_STR_LEN("disable"))) {
 					*((unsigned short *)(cv[i].destination)) = 0;
 				} else {
-					log_error_write(srv, __FILE__, __LINE__, "ssbs", "ERROR: unexpected value for key:", cv[i].key, ds->value, "(enable|disable)");
+					log_error_write(srv, __FILE__, __LINE__, "ssbs", "ERROR: unexpected value for key:", cv[i].key, &ds->value, "(enable|disable)");
 
 					return -1;
 				}

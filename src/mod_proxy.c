@@ -195,9 +195,9 @@ SETDEFAULTS_FUNC(mod_proxy_set_defaults) {
 			}
 			if (du->type == TYPE_STRING) {
 				data_string *ds = (data_string *)du;
-				if (buffer_is_equal_string(ds->value, CONST_STR_LEN("enable"))) {
+				if (buffer_is_equal_string(&ds->value, CONST_STR_LEN("enable"))) {
 					s->forwarded |= param;
-				} else if (!buffer_is_equal_string(ds->value, CONST_STR_LEN("disable"))) {
+				} else if (!buffer_is_equal_string(&ds->value, CONST_STR_LEN("disable"))) {
 					log_error_write(srv, __FILE__, __LINE__, "sb",
 						        "proxy.forwarded values must be one of: 0, 1, enable, disable; error for key:", &du->key);
 					return HANDLER_ERROR;
@@ -226,8 +226,8 @@ SETDEFAULTS_FUNC(mod_proxy_set_defaults) {
 							"unexpected value for proxy.header; expected \"enable\" or \"disable\" for https-remap");
 					return HANDLER_ERROR;
 				}
-				s->header.https_remap = !buffer_is_equal_string(ds->value, CONST_STR_LEN("disable"))
-						     && !buffer_is_equal_string(ds->value, CONST_STR_LEN("0"));
+				s->header.https_remap = !buffer_is_equal_string(&ds->value, CONST_STR_LEN("disable"))
+						     && !buffer_is_equal_string(&ds->value, CONST_STR_LEN("0"));
 				continue;
 			}
 			else if (buffer_is_equal_string(&da->key, CONST_STR_LEN("upgrade"))) {
@@ -237,8 +237,8 @@ SETDEFAULTS_FUNC(mod_proxy_set_defaults) {
 							"unexpected value for proxy.header; expected \"upgrade\" => \"enable\" or \"disable\"");
 					return HANDLER_ERROR;
 				}
-				s->header.upgrade = !buffer_is_equal_string(ds->value, CONST_STR_LEN("disable"))
-						 && !buffer_is_equal_string(ds->value, CONST_STR_LEN("0"));
+				s->header.upgrade = !buffer_is_equal_string(&ds->value, CONST_STR_LEN("disable"))
+						 && !buffer_is_equal_string(&ds->value, CONST_STR_LEN("0"));
 				continue;
 			}
 			else if (buffer_is_equal_string(&da->key, CONST_STR_LEN("connect"))) {
@@ -248,8 +248,8 @@ SETDEFAULTS_FUNC(mod_proxy_set_defaults) {
 							"unexpected value for proxy.header; expected \"connect\" => \"enable\" or \"disable\"");
 					return HANDLER_ERROR;
 				}
-				s->header.connect_method = !buffer_is_equal_string(ds->value, CONST_STR_LEN("disable"))
-							&& !buffer_is_equal_string(ds->value, CONST_STR_LEN("0"));
+				s->header.connect_method = !buffer_is_equal_string(&ds->value, CONST_STR_LEN("disable"))
+							&& !buffer_is_equal_string(&ds->value, CONST_STR_LEN("0"));
 				continue;
 			}
 			if (da->type != TYPE_ARRAY || !array_is_kvstring(da->value)) {
@@ -276,7 +276,7 @@ SETDEFAULTS_FUNC(mod_proxy_set_defaults) {
 
 	for (i = 0; i < srv->srvconf.modules->used; i++) {
 		data_string *ds = (data_string *)srv->srvconf.modules->data[i];
-		if (buffer_is_equal_string(ds->value, CONST_STR_LEN("mod_extforward"))) {
+		if (buffer_is_equal_string(&ds->value, CONST_STR_LEN("mod_extforward"))) {
 			proxy_check_extforward = 1;
 			break;
 		}
@@ -310,14 +310,14 @@ static const buffer * http_header_remap_host_match (buffer *b, size_t off, http_
                 mlen = buffer_string_length(k);
             }
             if (buffer_eq_icase_ss(s, alen, k->ptr, mlen)) {
-                if (buffer_is_equal_string(ds->value, CONST_STR_LEN("-"))) {
+                if (buffer_is_equal_string(&ds->value, CONST_STR_LEN("-"))) {
                     return remap_hdrs->http_host;
                 }
-                else if (!buffer_string_is_empty(ds->value)) {
+                else if (!buffer_string_is_empty(&ds->value)) {
                     /*(save first matched request host for response match)*/
                     if (is_req && NULL == remap_hdrs->forwarded_host)
-                        remap_hdrs->forwarded_host = ds->value;
-                    return ds->value;
+                        remap_hdrs->forwarded_host = &ds->value;
+                    return &ds->value;
                 } /*(else leave authority as-is and stop matching)*/
                 break;
             }
@@ -353,24 +353,24 @@ static size_t http_header_remap_urlpath (buffer *b, size_t off, http_header_rema
                 if (mlen <= plen && 0 == memcmp(s, ds->key.ptr, mlen)) {
                     if (NULL == remap_hdrs->forwarded_urlpath)
                         remap_hdrs->forwarded_urlpath = ds;
-                    buffer_substr_replace(b, off, mlen, ds->value);
-                    return buffer_string_length(ds->value);/*(replacement len)*/
+                    buffer_substr_replace(b, off, mlen, &ds->value);
+                    return buffer_string_length(&ds->value);/*(replacement len)*/
                 }
             }
         }
         else {        /* response; perform reverse map */
             if (NULL != remap_hdrs->forwarded_urlpath) {
                 const data_string * const ds = remap_hdrs->forwarded_urlpath;
-                const size_t mlen = buffer_string_length(ds->value);
-                if (mlen <= plen && 0 == memcmp(s, ds->value->ptr, mlen)) {
+                const size_t mlen = buffer_string_length(&ds->value);
+                if (mlen <= plen && 0 == memcmp(s, ds->value.ptr, mlen)) {
                     buffer_substr_replace(b, off, mlen, &ds->key);
                     return buffer_string_length(&ds->key); /*(replacement len)*/
                 }
             }
             for (size_t i = 0, used = urlpaths->used; i < used; ++i) {
                 const data_string * const ds = (data_string *)urlpaths->data[i];
-                const size_t mlen = buffer_string_length(ds->value);
-                if (mlen <= plen && 0 == memcmp(s, ds->value->ptr, mlen)) {
+                const size_t mlen = buffer_string_length(&ds->value);
+                if (mlen <= plen && 0 == memcmp(s, ds->value.ptr, mlen)) {
                     buffer_substr_replace(b, off, mlen, &ds->key);
                     return buffer_string_length(&ds->key); /*(replacement len)*/
                 }
@@ -794,7 +794,7 @@ static handler_t proxy_create_env(server *srv, gw_handler_ctx *gwhctx) {
 			continue;
 		}
 
-		vlen = buffer_string_length(ds->value);
+		vlen = buffer_string_length(&ds->value);
 		if (0 == vlen) continue;
 
 		if (buffer_string_space(b) < klen + vlen + 4) {
@@ -805,7 +805,7 @@ static handler_t proxy_create_env(server *srv, gw_handler_ctx *gwhctx) {
 
 		buffer_append_string_len(b, ds->key.ptr, klen);
 		buffer_append_string_len(b, CONST_STR_LEN(": "));
-		buffer_append_string_len(b, ds->value->ptr, vlen);
+		buffer_append_string_len(b, ds->value.ptr, vlen);
 		buffer_append_string_len(b, CONST_STR_LEN("\r\n"));
 
 		if (!remap_headers) continue;

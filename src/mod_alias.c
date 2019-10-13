@@ -184,17 +184,17 @@ PHYSICALPATH_FUNC(mod_alias_physical_handler) {
 				char *s = uri_ptr + alias_len + 1;
 				if (*s == '.') ++s;
 				if (*s == '/' || *s == '\0') {
-					size_t vlen = buffer_string_length(ds->value);
+					size_t vlen = buffer_string_length(&ds->value);
 					if (0 != alias_len && ds->key.ptr[alias_len-1] != '/'
-					    && 0 != vlen && ds->value->ptr[vlen-1] == '/') {
+					    && 0 != vlen && ds->value.ptr[vlen-1] == '/') {
 						con->http_status = 403;
 						return HANDLER_FINISHED;
 					}
 				}
 			}
 
-			buffer_copy_buffer(con->physical.basedir, ds->value);
-			buffer_copy_buffer(srv->tmp_buf, ds->value);
+			buffer_copy_buffer(con->physical.basedir, &ds->value);
+			buffer_copy_buffer(srv->tmp_buf, &ds->value);
 			buffer_append_string(srv->tmp_buf, uri_ptr + alias_len);
 			buffer_copy_buffer(con->physical.path, srv->tmp_buf);
 

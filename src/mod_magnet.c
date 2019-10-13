@@ -236,7 +236,7 @@ static int magnet_array_get_element(lua_State *L, const array *a) {
     const char * const k = luaL_checklstring(L, 2, &klen);
     const data_string * const ds = (const data_string *)
       array_get_element_klen(a, k, klen);
-    magnet_push_buffer(L, NULL != ds ? ds->value : NULL);
+    magnet_push_buffer(L, NULL != ds ? &ds->value : NULL);
     return 1;
 }
 #endif
@@ -258,7 +258,7 @@ static int magnet_array_next(lua_State *L) {
 		switch (du->type) {
 			case TYPE_STRING:
 				ds = (data_string *)du;
-				magnet_push_buffer(L, ds->value);
+				magnet_push_buffer(L, &ds->value);
 				break;
 			case TYPE_INTEGER:
 				di = (data_integer *)du;
@@ -1064,9 +1064,9 @@ static handler_t magnet_attract_array(server *srv, connection *con, plugin_data 
 	for (i = 0; i < files->used && ret == HANDLER_GO_ON; i++) {
 		data_string *ds = (data_string *)files->data[i];
 
-		if (buffer_string_is_empty(ds->value)) continue;
+		if (buffer_string_is_empty(&ds->value)) continue;
 
-		ret = magnet_attract(srv, con, p, ds->value);
+		ret = magnet_attract(srv, con, p, &ds->value);
 	}
 
 	if (con->error_handler_saved_status) {

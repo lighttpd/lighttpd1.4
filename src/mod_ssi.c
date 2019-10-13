@@ -455,7 +455,7 @@ static int process_ssi_stmt(server *srv, connection *con, handler_ctx *p, const 
 
 			if (NULL != (ds = (const data_string *)array_get_element_klen(p->ssi_cgi_env, var_val, strlen(var_val))) ||
 			    NULL != (ds = (const data_string *)array_get_element_klen(p->ssi_vars, var_val, strlen(var_val)))) {
-				chunkqueue_append_mem(con->write_queue, CONST_BUF_LEN(ds->value));
+				chunkqueue_append_mem(con->write_queue, CONST_BUF_LEN(&ds->value));
 			} else {
 				chunkqueue_append_mem(con->write_queue, CONST_STR_LEN("(none)"));
 			}
@@ -746,7 +746,7 @@ static int process_ssi_stmt(server *srv, connection *con, handler_ctx *p, const 
 
 			buffer_append_string_buffer(b, &ds->key);
 			buffer_append_string_len(b, CONST_STR_LEN("="));
-			buffer_append_string_encoded(b, CONST_BUF_LEN(ds->value), ENCODING_MINIMAL_XML);
+			buffer_append_string_encoded(b, CONST_BUF_LEN(&ds->value), ENCODING_MINIMAL_XML);
 			buffer_append_string_len(b, CONST_STR_LEN("\n"));
 		}
 		for (i = 0; i < p->ssi_cgi_env->used; i++) {
@@ -754,7 +754,7 @@ static int process_ssi_stmt(server *srv, connection *con, handler_ctx *p, const 
 
 			buffer_append_string_buffer(b, &ds->key);
 			buffer_append_string_len(b, CONST_STR_LEN("="));
-			buffer_append_string_encoded(b, CONST_BUF_LEN(ds->value), ENCODING_MINIMAL_XML);
+			buffer_append_string_encoded(b, CONST_BUF_LEN(&ds->value), ENCODING_MINIMAL_XML);
 			buffer_append_string_len(b, CONST_STR_LEN("\n"));
 		}
 		chunkqueue_append_mem(con->write_queue, CONST_BUF_LEN(b));

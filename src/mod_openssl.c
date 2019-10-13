@@ -737,16 +737,18 @@ network_openssl_ssl_conf_cmd (server *srv, plugin_config *s)
       array_get_element_klen(s->ssl_conf_cmd,
                              CONST_STR_LEN("CipherString"));
     if (NULL != ds) {
-        buffer_append_string_len(ds->value,
+        buffer *cipher_string =
+          array_get_buf_ptr(s->ssl_conf_cmd, CONST_STR_LEN("CipherString"));
+        buffer_append_string_len(cipher_string,
                                  CONST_STR_LEN(":!aNULL:!eNULL:!EXP"));
     }
 
     for (size_t i = 0; i < s->ssl_conf_cmd->used; ++i) {
         ds = (data_string *)s->ssl_conf_cmd->data[i];
         ERR_clear_error();
-        if (SSL_CONF_cmd(cctx, ds->key.ptr, ds->value->ptr) <= 0) {
+        if (SSL_CONF_cmd(cctx, ds->key.ptr, ds->value.ptr) <= 0) {
             log_error_write(srv, __FILE__, __LINE__, "ssbbss", "SSL:",
-                            "SSL_CONF_cmd", &ds->key, ds->value, ":",
+                            "SSL_CONF_cmd", &ds->key, &ds->value, ":",
                             ERR_error_string(ERR_get_error(), NULL));
             rc = -1;
             break;

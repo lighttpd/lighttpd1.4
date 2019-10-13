@@ -449,7 +449,7 @@ SETDEFAULTS_FUNC(mod_webdav_set_defaults) {
             data_string *ds = (data_string *)s->opts->data[j];
             if (buffer_is_equal_string(&ds->key,
                   CONST_STR_LEN("deprecated-unsafe-partial-put"))
-                && buffer_is_equal_string(ds->value, CONST_STR_LEN("enable"))) {
+                && buffer_is_equal_string(&ds->value, CONST_STR_LEN("enable"))) {
                 s->deprecated_unsafe_partial_put_compat = 1;
                 continue;
             }
@@ -562,11 +562,22 @@ URIHANDLER_FUNC(mod_webdav_uri_handler)
 
 #ifdef USE_LOCKS
 
+typedef struct webdav_lockdata_wr {
+  buffer locktoken;
+  buffer lockroot;
+  buffer ownerinfo;
+  buffer *owner;           /* NB: caller must provide writable storage */
+  const buffer *lockscope; /* future: might use enum, store int in db */
+  const buffer *locktype;  /* future: might use enum, store int in db */
+  int depth;
+  int timeout;           /* offset from now, not absolute time_t */
+} webdav_lockdata_wr;
+
 typedef struct webdav_lockdata {
   buffer locktoken;
   buffer lockroot;
   buffer ownerinfo;
-  buffer *owner;
+  const buffer *owner;
   const buffer *lockscope; /* future: might use enum, store int in db */
   const buffer *locktype;  /* future: might use enum, store int in db */
   int depth;
@@ -1384,7 +1395,7 @@ webdav_lock_match (const plugin_config * const pconf,
 #ifdef USE_LOCKS
 static void
 webdav_lock_activelocks_lockdata (sqlite3_stmt * const stmt,
-                                  webdav_lockdata * const lockdata)
+                                  webdav_lockdata_wr * const lockdata)
 {
     lockdata->locktoken.ptr  = (char *)sqlite3_column_text(stmt, 0);
     lockdata->locktoken.used = sqlite3_column_bytes(stmt, 0);
@@ -1444,7 +1455,7 @@ webdav_lock_activelocks (const plugin_config * const pconf,
         if (0 != expand_checks && -1 == sqlite3_column_int(stmt, 6) /*depth*/)
             continue;
 
-        webdav_lock_activelocks_lockdata(stmt, &lockdata);
+        webdav_lock_activelocks_lockdata(stmt, (webdav_lockdata_wr *)&lockdata);
         if (lockdata.timeout > 0)
             lock_cb(vdata, &lockdata);
     }
@@ -1461,7 +1472,7 @@ webdav_lock_activelocks (const plugin_config * const pconf,
     sqlite3_bind_text(stmt, 1, CONST_BUF_LEN(uri), SQLITE_STATIC);
 
     while (SQLITE_ROW == sqlite3_step(stmt)) {
-        webdav_lock_activelocks_lockdata(stmt, &lockdata);
+        webdav_lock_activelocks_lockdata(stmt, (webdav_lockdata_wr *)&lockdata);
         if (lockdata.timeout > 0)
             lock_cb(vdata, &lockdata);
     }
@@ -1486,7 +1497,7 @@ webdav_lock_activelocks (const plugin_config * const pconf,
         if (uri->used-1 == (uint32_t)sqlite3_column_bytes(stmt, 1) /*resource*/)
             continue;
 
-        webdav_lock_activelocks_lockdata(stmt, &lockdata);
+        webdav_lock_activelocks_lockdata(stmt, (webdav_lockdata_wr *)&lockdata);
         if (lockdata.timeout > 0)
             lock_cb(vdata, &lockdata);
     }
@@ -3557,7 +3568,7 @@ webdav_has_lock (connection * const con,
     const data_string * const authn_user = (const data_string *)
       array_get_element_klen(con->environment,
                              CONST_STR_LEN("REMOTE_USER"));
-    cbdata.authn_user = authn_user ? authn_user->value : &owner;
+    cbdata.authn_user = authn_user ? &authn_user->value : &owner;
 
     const buffer * const h =
       http_header_request_get(con, HTTP_HEADER_OTHER, CONST_STR_LEN("If"));
@@ -5171,7 +5182,7 @@ mod_webdav_lock (connection * const con, const plugin_config * const pconf)
       { NULL, 0, 0 }, /* locktoken */
       { con->physical.rel_path->ptr,con->physical.rel_path->used,0},/*lockroot*/
       { NULL, 0, 0 }, /* ownerinfo */
-      (authn_user ? authn_user->value : &owner), /* owner */
+      (authn_user ? &authn_user->value : &owner), /* owner */
       NULL, /* lockscope */
       NULL, /* locktype  */
       -1,   /* depth */
@@ -5457,7 +5468,7 @@ mod_webdav_unlock (connection * const con, const plugin_config * const pconf)
       { h->ptr+1, h->used-2, 0 }, /* locktoken (remove < > around token) */
       { con->physical.rel_path->ptr,con->physical.rel_path->used,0},/*lockroot*/
       { NULL, 0, 0 }, /* ownerinfo (unused for unlock) */
-      (authn_user ? authn_user->value : &owner), /* owner */
+      (authn_user ? &authn_user->value : &owner), /* owner */
       NULL, /* lockscope (unused for unlock) */
       NULL, /* locktype  (unused for unlock) */
       0,    /* depth     (unused for unlock) */

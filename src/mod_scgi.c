@@ -75,10 +75,10 @@ SETDEFAULTS_FUNC(mod_scgi_set_defaults) {
 		if (NULL != (du = array_get_element_klen(config->value, CONST_STR_LEN("scgi.protocol")))) {
 			const data_string *ds = (const data_string *)du;
 			if (du->type == TYPE_STRING
-			    && buffer_is_equal_string(ds->value, CONST_STR_LEN("scgi"))) {
+			    && buffer_is_equal_string(&ds->value, CONST_STR_LEN("scgi"))) {
 				s->proto = LI_PROTOCOL_SCGI;
 			} else if (du->type == TYPE_STRING
-			           && buffer_is_equal_string(ds->value, CONST_STR_LEN("uwsgi"))) {
+			           && buffer_is_equal_string(&ds->value, CONST_STR_LEN("uwsgi"))) {
 				s->proto = LI_PROTOCOL_UWSGI;
 			} else {
 				log_error_write(srv, __FILE__, __LINE__, "sss",

@@ -72,12 +72,12 @@ static data_unset *configparser_merge_data(data_unset *op1, const data_unset *op
   if (op1->type != op2->type) {
     if (op1->type == TYPE_STRING && op2->type == TYPE_INTEGER) {
       data_string *ds = (data_string *)op1;
-      buffer_append_int(ds->value, ((data_integer*)op2)->value);
+      buffer_append_int(&ds->value, ((data_integer*)op2)->value);
       return op1;
     } else if (op1->type == TYPE_INTEGER && op2->type == TYPE_STRING) {
       data_string *ds = data_string_init();
-      buffer_append_int(ds->value, ((data_integer*)op1)->value);
-      buffer_append_string_buffer(ds->value, ((data_string*)op2)->value);
+      buffer_append_int(&ds->value, ((data_integer*)op1)->value);
+      buffer_append_string_buffer(&ds->value, &((data_string*)op2)->value);
       op1->fn->free(op1);
       return (data_unset *)ds;
     } else {
@@ -89,7 +89,7 @@ static data_unset *configparser_merge_data(data_unset *op1, const data_unset *op
 
   switch (op1->type) {
     case TYPE_STRING:
-      buffer_append_string_buffer(((data_string *)op1)->value, ((data_string *)op2)->value);
+      buffer_append_string_buffer(&((data_string *)op1)->value, &((data_string *)op2)->value);
       break;
     case TYPE_INTEGER:
       ((data_integer *)op1)->value += ((data_integer *)op2)->value;
@@ -304,7 +304,7 @@ value(A) ::= key(B). {
       if (NULL != (env = getenv(B->ptr + 4))) {
         data_string *ds;
         ds = data_string_init();
-        buffer_append_string(ds->value, env);
+        buffer_append_string(&ds->value, env);
         A = (data_unset *)ds;
       }
       else {
@@ -321,12 +321,8 @@ value(A) ::= key(B). {
 }
 
 value(A) ::= STRING(B). {
-  buffer *b;
   A = (data_unset *)data_string_init();
-  b = ((data_string *)(A))->value;
-  buffer_free(b);
-  ((data_string *)(A))->value = B;
-  B = NULL;
+  buffer_copy_buffer(&((data_string *)A)->value, B);
 }
 
 value(A) ::= INTEGER(B). {
@@ -576,7 +572,7 @@ context ::= DOLLAR SRVVARNAME(B) LBRACKET stringop(C) RBRACKET cond(E) expressio
     buffer_append_string_buffer(b, B);
     buffer_append_string_buffer(b, C);
     buffer_append_string_buffer(b, op);
-    rvalue = ((data_string*)D)->value;
+    rvalue = &((data_string*)D)->value;
     buffer_append_string_buffer(b, rvalue);
 
     if (NULL != (dc = configparser_get_data_config(ctx->all_configs, CONST_BUF_LEN(b)))) {
@@ -764,8 +760,7 @@ stringop(A) ::= expression(B). {
   A = NULL;
   if (ctx->ok) {
     if (B->type == TYPE_STRING) {
-      A = ((data_string*)B)->value;
-      ((data_string*)B)->value = NULL;
+      A = buffer_init_buffer(&((data_string*)B)->value);
     } else if (B->type == TYPE_INTEGER) {
       A = buffer_init();
       buffer_copy_int(A, ((data_integer *)B)->value);

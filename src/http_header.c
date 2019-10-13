@@ -94,7 +94,7 @@ __attribute_pure__
 static inline buffer * http_header_generic_get_ifnotempty(const array * const a, const char * const k, const size_t klen) {
     data_string * const ds =
       (data_string *)array_get_element_klen(a, k, klen);
-    return ds && !buffer_string_is_empty(ds->value) ? ds->value : NULL;
+    return ds && !buffer_string_is_empty(&ds->value) ? &ds->value : NULL;
 }
 
 

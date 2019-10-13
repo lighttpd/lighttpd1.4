@@ -17,7 +17,7 @@
 
 typedef struct {
     LDAP *ldap;
-    buffer *filter;
+    const buffer *filter;
     server *srv;
 
     const char *attr;
@@ -83,32 +83,32 @@ static void mod_vhostdb_dbconf_add_scheme (server *srv, buffer *host)
 
 static int mod_vhostdb_dbconf_setup (server *srv, array *opts, void **vdata)
 {
-    buffer *filter = NULL;
+    const buffer *filter = NULL;
     const char *attr = "documentRoot";
     const char *basedn=NULL,*binddn=NULL,*bindpw=NULL,*host=NULL,*cafile=NULL;
     unsigned short starttls = 0;
 
     for (size_t i = 0; i < opts->used; ++i) {
-        const data_string *ds = (data_string *)opts->data[i];
+        data_string *ds = (data_string *)opts->data[i];
         if (ds->type == TYPE_STRING) {
             if (buffer_is_equal_caseless_string(&ds->key, CONST_STR_LEN("filter"))) {
-                filter = ds->value;
+                filter = &ds->value;
             } else if (buffer_is_equal_caseless_string(&ds->key, CONST_STR_LEN("attr"))) {
-                if (!buffer_string_is_empty(ds->value)) attr   = ds->value->ptr;
+                if (!buffer_string_is_empty(&ds->value)) attr   = ds->value.ptr;
             } else if (buffer_is_equal_caseless_string(&ds->key, CONST_STR_LEN("host"))) {
-                mod_vhostdb_dbconf_add_scheme(srv, ds->value);
-                host   = ds->value->ptr;
+                mod_vhostdb_dbconf_add_scheme(srv, &ds->value);
+                host   = ds->value.ptr;
             } else if (buffer_is_equal_caseless_string(&ds->key, CONST_STR_LEN("base-dn"))) {
-                if (!buffer_string_is_empty(ds->value)) basedn = ds->value->ptr;
+                if (!buffer_string_is_empty(&ds->value)) basedn = ds->value.ptr;
             } else if (buffer_is_equal_caseless_string(&ds->key, CONST_STR_LEN("bind-dn"))) {
-                if (!buffer_string_is_empty(ds->value)) binddn = ds->value->ptr;
+                if (!buffer_string_is_empty(&ds->value)) binddn = ds->value.ptr;
             } else if (buffer_is_equal_caseless_string(&ds->key, CONST_STR_LEN("bind-pw"))) {
-                bindpw = ds->value->ptr;
+                bindpw = ds->value.ptr;
             } else if (buffer_is_equal_caseless_string(&ds->key, CONST_STR_LEN("ca-file"))) {
-                if (!buffer_string_is_empty(ds->value)) cafile = ds->value->ptr;
+                if (!buffer_string_is_empty(&ds->value)) cafile = ds->value.ptr;
             } else if (buffer_is_equal_caseless_string(&ds->key, CONST_STR_LEN("starttls"))) {
-                starttls = !buffer_is_equal_string(ds->value, CONST_STR_LEN("disable"))
-                        && !buffer_is_equal_string(ds->value, CONST_STR_LEN("0"));
+                starttls = !buffer_is_equal_string(&ds->value, CONST_STR_LEN("disable"))
+                        && !buffer_is_equal_string(&ds->value, CONST_STR_LEN("0"));
             }
         }
     }
@@ -380,7 +380,7 @@ static int mod_vhostdb_ldap_query(server *srv, connection *con, void *p_d, buffe
     struct berval **vals;
     int count;
     char *basedn;
-    buffer *template;
+    const buffer *template;
 
     /*(reuse buffer for ldap query before generating docroot result)*/
     buffer *filter = docroot;

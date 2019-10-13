@@ -304,9 +304,9 @@ SETDEFAULTS_FUNC(mod_dirlisting_set_defaults) {
 					return HANDLER_ERROR;
 				}
 
-				if (0 != excludes_buffer_append(s->excludes, ((data_string*)(du_exclude))->value)) {
+				if (0 != excludes_buffer_append(s->excludes, &((data_string*)(du_exclude))->value)) {
 					log_error_write(srv, __FILE__, __LINE__, "sb",
-						"pcre-compile failed for", ((data_string*)(du_exclude))->value);
+						"pcre-compile failed for", &((data_string*)(du_exclude))->value);
 					return HANDLER_ERROR;
 				}
 			}

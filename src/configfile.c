@@ -35,7 +35,7 @@ static void config_warn_authn_module (server *srv, const char *module, size_t le
 		const data_unset *du = array_get_element_klen(config->value, CONST_STR_LEN("auth.backend"));
 		if (NULL != du && du->type == TYPE_STRING) {
 			data_string *ds = (data_string *)du;
-			if (buffer_is_equal_string(ds->value, module, len)) {
+			if (buffer_is_equal_string(&ds->value, module, len)) {
 				buffer_copy_string_len(srv->tmp_buf, CONST_STR_LEN("mod_authn_"));
 				buffer_append_string_len(srv->tmp_buf, module, len);
 				array_insert_value(srv->srvconf.modules, CONST_BUF_LEN(srv->tmp_buf));
@@ -78,14 +78,14 @@ static int config_http_parseopts (server *srv, array *a) {
         const data_string * const ds = (data_string *)a->data[i];
         unsigned short int opt;
         int val = 0;
-        if (buffer_is_equal_string(ds->value, CONST_STR_LEN("enable")))
+        if (buffer_is_equal_string(&ds->value, CONST_STR_LEN("enable")))
             val = 1;
-        else if (buffer_is_equal_string(ds->value, CONST_STR_LEN("disable")))
+        else if (buffer_is_equal_string(&ds->value, CONST_STR_LEN("disable")))
             val = 0;
         else {
             log_error_write(srv, __FILE__, __LINE__, "sbsbs",
                             "unrecognized value for server.http-parseopts:",
-                            &ds->key, "=>", ds->value,
+                            &ds->key, "=>", &ds->value,
                             "(expect \"[enable|disable]\")");
             rc = 0;
         }
@@ -570,35 +570,35 @@ static int config_insert(server *srv) {
 		for (i = 0; i < srv->srvconf.modules->used; i++) {
 			ds = (data_string *)srv->srvconf.modules->data[i];
 
-			if (buffer_is_equal_string(ds->value, CONST_STR_LEN("mod_indexfile"))) {
+			if (buffer_is_equal_string(&ds->value, CONST_STR_LEN("mod_indexfile"))) {
 				prepend_mod_indexfile = 0;
 			}
 
-			if (buffer_is_equal_string(ds->value, CONST_STR_LEN("mod_staticfile"))) {
+			if (buffer_is_equal_string(&ds->value, CONST_STR_LEN("mod_staticfile"))) {
 				append_mod_staticfile = 0;
 			}
 
-			if (buffer_is_equal_string(ds->value, CONST_STR_LEN("mod_dirlisting"))) {
+			if (buffer_is_equal_string(&ds->value, CONST_STR_LEN("mod_dirlisting"))) {
 				append_mod_dirlisting = 0;
 			}
 
-			if (buffer_is_equal_string(ds->value, CONST_STR_LEN("mod_openssl"))) {
+			if (buffer_is_equal_string(&ds->value, CONST_STR_LEN("mod_openssl"))) {
 				append_mod_openssl = 0;
 			}
 
-			if (buffer_is_equal_string(ds->value, CONST_STR_LEN("mod_authn_file"))) {
+			if (buffer_is_equal_string(&ds->value, CONST_STR_LEN("mod_authn_file"))) {
 				append_mod_authn_file = 0;
 			}
 
-			if (buffer_is_equal_string(ds->value, CONST_STR_LEN("mod_authn_ldap"))) {
+			if (buffer_is_equal_string(&ds->value, CONST_STR_LEN("mod_authn_ldap"))) {
 				append_mod_authn_ldap = 0;
 			}
 
-			if (buffer_is_equal_string(ds->value, CONST_STR_LEN("mod_authn_mysql"))) {
+			if (buffer_is_equal_string(&ds->value, CONST_STR_LEN("mod_authn_mysql"))) {
 				append_mod_authn_mysql = 0;
 			}
 
-			if (buffer_is_equal_string(ds->value, CONST_STR_LEN("mod_auth"))) {
+			if (buffer_is_equal_string(&ds->value, CONST_STR_LEN("mod_auth"))) {
 				contains_mod_auth = 1;
 			}
 
@@ -621,7 +621,7 @@ static int config_insert(server *srv) {
 
 			for (i = 0; i < srv->srvconf.modules->used; i++) {
 				ds = (data_string *)srv->srvconf.modules->data[i];
-				array_insert_value(modules, CONST_BUF_LEN(ds->value));
+				array_insert_value(modules, CONST_BUF_LEN(&ds->value));
 			}
 
 			array_free(srv->srvconf.modules);
@@ -1578,7 +1578,7 @@ int config_set_defaults(server *srv) {
 		for (i = 0; i < srv->srvconf.upload_tempdirs->used; ++i) {
 			const data_string * const ds = (data_string *)srv->srvconf.upload_tempdirs->data[i];
 			buffer_string_set_length(b, len); /*(truncate)*/
-			buffer_append_string_buffer(b, ds->value);
+			buffer_append_string_buffer(b, &ds->value);
 			if (-1 == stat(b->ptr, &st1)) {
 				log_error_write(srv, __FILE__, __LINE__, "sb",
 					"server.upload-dirs doesn't exist:", b);

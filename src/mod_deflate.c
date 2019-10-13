@@ -346,21 +346,21 @@ SETDEFAULTS_FUNC(mod_deflate_setdefaults) {
 				data_string *ds = (data_string *)p->encodings->data[j];
 #endif
 #ifdef USE_ZLIB
-				if (NULL != strstr(ds->value->ptr, "gzip"))
+				if (NULL != strstr(ds->value.ptr, "gzip"))
 					s->allowed_encodings |= HTTP_ACCEPT_ENCODING_GZIP | HTTP_ACCEPT_ENCODING_X_GZIP;
-				if (NULL != strstr(ds->value->ptr, "x-gzip"))
+				if (NULL != strstr(ds->value.ptr, "x-gzip"))
 					s->allowed_encodings |= HTTP_ACCEPT_ENCODING_X_GZIP;
-				if (NULL != strstr(ds->value->ptr, "deflate"))
+				if (NULL != strstr(ds->value.ptr, "deflate"))
 					s->allowed_encodings |= HTTP_ACCEPT_ENCODING_DEFLATE;
 				/*
-				if (NULL != strstr(ds->value->ptr, "compress"))
+				if (NULL != strstr(ds->value.ptr, "compress"))
 					s->allowed_encodings |= HTTP_ACCEPT_ENCODING_COMPRESS;
 				*/
 #endif
 #ifdef USE_BZ2LIB
-				if (NULL != strstr(ds->value->ptr, "bzip2"))
+				if (NULL != strstr(ds->value.ptr, "bzip2"))
 					s->allowed_encodings |= HTTP_ACCEPT_ENCODING_BZIP2 | HTTP_ACCEPT_ENCODING_X_BZIP2;
-				if (NULL != strstr(ds->value->ptr, "x-bzip2"))
+				if (NULL != strstr(ds->value.ptr, "x-bzip2"))
 					s->allowed_encodings |= HTTP_ACCEPT_ENCODING_X_BZIP2;
 #endif
 			}
@@ -381,7 +381,7 @@ SETDEFAULTS_FUNC(mod_deflate_setdefaults) {
 		 * so ignore '*' at end of mimetype for end-user flexibility
 		 * in specifying trailing wildcard to grouping of mimetypes */
 		for (size_t m = 0; m < s->mimetypes->used; ++m) {
-			buffer *mimetype = ((data_string *)s->mimetypes->data[m])->value;
+			buffer *mimetype = &((data_string *)s->mimetypes->data[m])->value;
 			size_t len = buffer_string_length(mimetype);
 			if (len > 2 && mimetype->ptr[len-1] == '*') {
 				buffer_string_set_length(mimetype, len-1);
@@ -1140,7 +1140,7 @@ CONNECTION_FUNC(mod_deflate_handle_response_start) {
 	} else {
 		/* If no Content-Type set, compress only if first p->conf.mimetypes value is "" */
 		data_string *mimetype = (data_string *)p->conf.mimetypes->data[0];
-		if (!buffer_string_is_empty(mimetype->value)) return HANDLER_GO_ON;
+		if (!buffer_string_is_empty(&mimetype->value)) return HANDLER_GO_ON;
 	}
 
 	/* Vary: Accept-Encoding (response might change according to request Accept-Encoding) */

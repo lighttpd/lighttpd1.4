@@ -123,14 +123,14 @@ SETDEFAULTS_FUNC(mod_cml_set_defaults) {
 				data_string *ds = (data_string *)s->mc_hosts->data[0];
 
 				buffer_append_string_len(option_string, CONST_STR_LEN("--SERVER="));
-				buffer_append_string_buffer(option_string, ds->value);
+				buffer_append_string_buffer(option_string, &ds->value);
 			}
 
 			for (k = 1; k < s->mc_hosts->used; k++) {
 				data_string *ds = (data_string *)s->mc_hosts->data[k];
 
 				buffer_append_string_len(option_string, CONST_STR_LEN(" --SERVER="));
-				buffer_append_string_buffer(option_string, ds->value);
+				buffer_append_string_buffer(option_string, &ds->value);
 			}
 
 			s->memc = memcached(CONST_BUF_LEN(option_string));

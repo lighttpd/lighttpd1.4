@@ -32,7 +32,7 @@ typedef struct {
 typedef struct {
 	DATA_UNSET;
 
-	buffer *value;
+	buffer value;
 } data_string;
 
 data_string *data_string_init(void);

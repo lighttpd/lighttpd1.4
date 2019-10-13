@@ -69,7 +69,7 @@ void array_reset_data_strings(array * const a) {
 		data_string * const ds = data[i];
 		/*force_assert(ds->type == TYPE_STRING);*/
 		buffer * const k = &ds->key;
-		buffer * const v = ds->value;
+		buffer * const v = &ds->value;
 		if (k->size > BUFFER_MAX_REUSE_SIZE) buffer_reset(k);
 		if (v->size > BUFFER_MAX_REUSE_SIZE) buffer_reset(v);
 	}
@@ -247,18 +247,18 @@ int * array_get_int_ptr(array * const a, const char * const k, const size_t klen
 
 buffer * array_get_buf_ptr(array * const a, const char * const k, const size_t klen) {
     int32_t ipos = array_get_index(a, k, klen);
-    if (ipos >= 0) return ((data_string *)a->data[ipos])->value;
+    if (ipos >= 0) return &((data_string *)a->data[ipos])->value;
 
     data_string * const ds = array_insert_string_at_pos(a, (uint32_t)(-ipos-1));
     buffer_copy_string_len(&ds->key, k, klen);
-    buffer_clear(ds->value);
-    return ds->value;
+    buffer_clear(&ds->value);
+    return &ds->value;
 }
 
 void array_insert_value(array * const a, const char * const v, const size_t vlen) {
     data_string * const ds = array_insert_string_at_pos(a, a->used);
     buffer_clear(&ds->key);
-    buffer_copy_string_len(ds->value, v, vlen);
+    buffer_copy_string_len(&ds->value, v, vlen);
 }
 
 /* if entry already exists return pointer to existing entry, otherwise insert entry and return NULL */
@@ -380,7 +380,7 @@ array_match_value_prefix (const array * const a, const buffer * const b)
     const size_t blen = buffer_string_length(b);
 
     for (uint32_t i = 0; i < a->used; ++i) {
-        const buffer * const value = ((data_string *)a->data[i])->value;
+        const buffer * const value = &((data_string *)a->data[i])->value;
         const size_t vlen = buffer_string_length(value);
         if (vlen <= blen && 0 == memcmp(b->ptr, value->ptr, vlen))
             return value;
@@ -394,7 +394,7 @@ array_match_value_prefix_nc (const array * const a, const buffer * const b)
     const size_t blen = buffer_string_length(b);
 
     for (uint32_t i = 0; i < a->used; ++i) {
-        const buffer * const value = ((data_string *)a->data[i])->value;
+        const buffer * const value = &((data_string *)a->data[i])->value;
         const size_t vlen = buffer_string_length(value);
         if (vlen <= blen && buffer_eq_icase_ssn(b->ptr, value->ptr, vlen))
             return value;
@@ -439,7 +439,7 @@ array_match_value_suffix (const array * const a, const buffer * const b)
     const char * const end = b->ptr + blen;
 
     for (uint32_t i = 0; i < a->used; ++i) {
-        const buffer * const value = ((data_string *)a->data[i])->value;
+        const buffer * const value = &((data_string *)a->data[i])->value;
         const size_t vlen = buffer_string_length(value);
         if (vlen <= blen && 0 == memcmp(end - vlen, value->ptr, vlen))
             return value;
@@ -454,7 +454,7 @@ array_match_value_suffix_nc (const array * const a, const buffer * const b)
     const char * const end = b->ptr + blen;
 
     for (uint32_t i = 0; i < a->used; ++i) {
-        const buffer * const value = ((data_string *)a->data[i])->value;
+        const buffer * const value = &((data_string *)a->data[i])->value;
         const size_t vlen = buffer_string_length(value);
         if (vlen <= blen && buffer_eq_icase_ssn(end - vlen, value->ptr, vlen))
             return value;

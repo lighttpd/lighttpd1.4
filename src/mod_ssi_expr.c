@@ -220,9 +220,9 @@ static int ssi_expr_tokenizer(server *srv, connection *con, handler_ctx *p,
 			tid = TK_VALUE;
 
 			if (NULL != (ds = (const data_string *)array_get_element_klen(p->ssi_cgi_env, CONST_BUF_LEN(token)))) {
-				buffer_copy_buffer(token, ds->value);
+				buffer_copy_buffer(token, &ds->value);
 			} else if (NULL != (ds = (const data_string *)array_get_element_klen(p->ssi_vars, CONST_BUF_LEN(token)))) {
-				buffer_copy_buffer(token, ds->value);
+				buffer_copy_buffer(token, &ds->value);
 			} else {
 				buffer_copy_string_len(token, CONST_STR_LEN(""));
 			}

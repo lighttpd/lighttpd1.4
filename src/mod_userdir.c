@@ -240,7 +240,7 @@ URIHANDLER_FUNC(mod_userdir_docroot_handler) {
 	for (k = 0; k < p->conf.exclude_user->used; k++) {
 		data_string *ds = (data_string *)p->conf.exclude_user->data[k];
 
-		if (buffer_is_equal(ds->value, p->username)) {
+		if (buffer_is_equal(&ds->value, p->username)) {
 			/* user in exclude list */
 			return HANDLER_GO_ON;
 		}
@@ -251,7 +251,7 @@ URIHANDLER_FUNC(mod_userdir_docroot_handler) {
 		for (k = 0; k < p->conf.include_user->used; k++) {
 			data_string *ds = (data_string *)p->conf.include_user->data[k];
 
-			if (buffer_is_equal(ds->value, p->username)) {
+			if (buffer_is_equal(&ds->value, p->username)) {
 				/* user in include list */
 				found_user = 1;
 				break;

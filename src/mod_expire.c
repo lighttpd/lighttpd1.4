@@ -255,9 +255,9 @@ SETDEFAULTS_FUNC(mod_expire_set_defaults) {
 			data_string *ds = (data_string *)s->expire_url->data[k];
 
 			/* parse lines */
-			if (-1 == mod_expire_get_offset(srv, p, ds->value, NULL)) {
+			if (-1 == mod_expire_get_offset(srv, p, &ds->value, NULL)) {
 				log_error_write(srv, __FILE__, __LINE__, "sb",
-						"parsing expire.url failed:", ds->value);
+						"parsing expire.url failed:", &ds->value);
 				return HANDLER_ERROR;
 			}
 		}
@@ -279,9 +279,9 @@ SETDEFAULTS_FUNC(mod_expire_set_defaults) {
 			if (klen && ds->key.ptr[klen-1] == '*') buffer_string_set_length(&ds->key, klen-1);
 
 			/* parse lines */
-			if (-1 == mod_expire_get_offset(srv, p, ds->value, NULL)) {
+			if (-1 == mod_expire_get_offset(srv, p, &ds->value, NULL)) {
 				log_error_write(srv, __FILE__, __LINE__, "sb",
-						"parsing expire.mimetypes failed:", ds->value);
+						"parsing expire.mimetypes failed:", &ds->value);
 				return HANDLER_ERROR;
 			}
 		}
@@ -345,7 +345,7 @@ CONNECTION_FUNC(mod_expire_handler) {
 	/* check expire.url */
 	ds = (const data_string *)array_match_key_prefix(p->conf.expire_url, con->uri.path);
 	if (NULL != ds) {
-		vb = ds->value;
+		vb = &ds->value;
 	}
 	else {
 		/* check expire.mimetypes (if no match with expire.url) */
@@ -354,7 +354,7 @@ CONNECTION_FUNC(mod_expire_handler) {
 		   ? (const data_string *)array_match_key_prefix(p->conf.expire_mimetypes, vb)
 		   : (const data_string *)array_get_element_klen(p->conf.expire_mimetypes, CONST_STR_LEN(""));
 		if (NULL == ds) return HANDLER_GO_ON;
-		vb = ds->value;
+		vb = &ds->value;
 	}
 
 	if (NULL != vb) {

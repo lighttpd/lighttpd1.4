@@ -523,8 +523,8 @@ static int gw_spawn_connection(server *srv, gw_host *host, gw_proc *proc, int de
                     data_string *ds=(data_string *)host->bin_env_copy->data[i];
                     char *ge;
 
-                    if (NULL != (ge = getenv(ds->value->ptr))) {
-                        env_add(&env, CONST_BUF_LEN(ds->value), ge, strlen(ge));
+                    if (NULL != (ge = getenv(ds->value.ptr))) {
+                        env_add(&env,CONST_BUF_LEN(&ds->value),ge,strlen(ge));
                     }
                 }
             } else {
@@ -542,7 +542,7 @@ static int gw_spawn_connection(server *srv, gw_host *host, gw_proc *proc, int de
             for (i = 0; i < host->bin_env->used; ++i) {
                 data_string *ds = (data_string *)host->bin_env->data[i];
 
-                env_add(&env, CONST_BUF_LEN(&ds->key), CONST_BUF_LEN(ds->value));
+                env_add(&env,CONST_BUF_LEN(&ds->key),CONST_BUF_LEN(&ds->value));
             }
 
             for (i = 0; i < env.used; ++i) {
@@ -1544,13 +1544,13 @@ int gw_set_defaults_backend(server *srv, gw_plugin_data *p, const data_unset *du
                           "unexpected type for x-sendfile-docroot; expected: \"x-sendfile-docroot\" => ( \"/allowed/path\", ... )");
                         goto error;
                     }
-                    if (ds->value->ptr[0] != '/') {
+                    if (ds->value.ptr[0] != '/') {
                         log_error_write(srv, __FILE__, __LINE__, "SBs",
-                          "x-sendfile-docroot paths must begin with '/'; invalid: \"", ds->value, "\"");
+                          "x-sendfile-docroot paths must begin with '/'; invalid: \"", &ds->value, "\"");
                         goto error;
                     }
-                    buffer_path_simplify(ds->value, ds->value);
-                    buffer_append_slash(ds->value);
+                    buffer_path_simplify(&ds->value, &ds->value);
+                    buffer_append_slash(&ds->value);
                 }
             }
 
@@ -1591,11 +1591,11 @@ error:
 }
 
 int gw_set_defaults_balance(server *srv, gw_plugin_config *s, const data_unset *du) {
-    buffer *b;
+    const buffer *b;
     if (NULL == du) {
         b = NULL;
     } else if (du->type == TYPE_STRING) {
-        b = ((const data_string *)du)->value;
+        b = &((const data_string *)du)->value;
     } else {
         log_error_write(srv, __FILE__, __LINE__, "s",
                         "unexpected type for xxxxx.balance; expected string");
@@ -2262,7 +2262,7 @@ handler_t gw_check_extension(server *srv, connection *con, gw_plugin_data *p, in
                     for (k = 0; k < exts->used; ++k) {
                         extension = exts->exts[k];
 
-                        if (buffer_is_equal(ds->value, extension->key)) {
+                        if (buffer_is_equal(&ds->value, extension->key)) {
                             break;
                         }
                     }

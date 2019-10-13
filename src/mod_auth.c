@@ -342,13 +342,13 @@ SETDEFAULTS_FUNC(mod_auth_set_defaults) {
 				if (da_file->value->data[m]->type == TYPE_STRING) {
 					data_string *ds = (data_string *)da_file->value->data[m];
 					if (buffer_is_equal_string(&ds->key, CONST_STR_LEN("method"))) {
-						method = ds->value;
+						method = &ds->value;
 					} else if (buffer_is_equal_string(&ds->key, CONST_STR_LEN("realm"))) {
-						realm = ds->value;
+						realm = &ds->value;
 					} else if (buffer_is_equal_string(&ds->key, CONST_STR_LEN("require"))) {
-						require = ds->value;
+						require = &ds->value;
 					} else if (buffer_is_equal_string(&ds->key, CONST_STR_LEN("algorithm"))) {
-						algos = ds->value;
+						algos = &ds->value;
 					} else {
 						log_error_write(srv, __FILE__, __LINE__, "ssbs",
 							"the field is unknown in:",
