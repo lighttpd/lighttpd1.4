@@ -277,9 +277,9 @@ SETDEFAULTS_FUNC(mod_dirlisting_set_defaults) {
 		}
 
 		if (NULL != (du_excludes = array_get_element_klen(config->value, CONST_STR_LEN(CONFIG_EXCLUDE)))) {
-			array *excludes_list;
+			const array *excludes_list;
 
-			excludes_list = ((const data_array*)du_excludes)->value;
+			excludes_list = &((const data_array*)du_excludes)->value;
 
 			if (du_excludes->type != TYPE_ARRAY || !array_is_vlist(excludes_list)) {
 				log_error_write(srv, __FILE__, __LINE__, "s",

@@ -40,7 +40,7 @@ data_string *data_string_init(void);
 typedef struct {
 	DATA_UNSET;
 
-	array *value;
+	array value;
 } data_array;
 
 data_array *data_array_init(void);
@@ -57,8 +57,10 @@ __attribute_returns_nonnull__
 array *array_init(void);
 
 __attribute_cold__
-__attribute_returns_nonnull__
-array *array_init_array(const array *a);
+void array_copy_array(array *dst, const array *src);
+
+__attribute_cold__
+void array_free_data(array *a);
 
 void array_free(array *a);
 

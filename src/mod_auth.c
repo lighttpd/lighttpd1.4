@@ -314,7 +314,7 @@ SETDEFAULTS_FUNC(mod_auth_set_defaults) {
 		/* no auth.require for this section */
 		if (NULL == (da = (const data_array *)array_get_element_klen(config->value, CONST_STR_LEN("auth.require")))) continue;
 
-		if (da->type != TYPE_ARRAY || !array_is_kvarray(da->value)) {
+		if (da->type != TYPE_ARRAY || !array_is_kvarray(&da->value)) {
 			log_error_write(srv, __FILE__, __LINE__, "ss",
 					"unexpected value for auth.require; expected ",
 					"auth.require = ( \"urlpath\" => ( \"option\" => \"value\" ) )");
@@ -322,15 +322,15 @@ SETDEFAULTS_FUNC(mod_auth_set_defaults) {
 		}
 
 
-		for (n = 0; n < da->value->used; n++) {
+		for (n = 0; n < da->value.used; n++) {
 			size_t m;
-			data_array *da_file = (data_array *)da->value->data[n];
+			data_array *da_file = (data_array *)da->value.data[n];
 			const buffer *method = NULL, *realm = NULL, *require = NULL;
 			const http_auth_scheme_t *auth_scheme;
 			buffer *algos = NULL;
 			int algorithm = HTTP_AUTH_DIGEST_SESS;
 
-			if (!array_is_kvstring(da_file->value)) {
+			if (!array_is_kvstring(&da_file->value)) {
 				log_error_write(srv, __FILE__, __LINE__, "ss",
 						"unexpected value for auth.require; expected ",
 						"auth.require = ( \"urlpath\" => ( \"option\" => \"value\" ) )");
@@ -338,9 +338,9 @@ SETDEFAULTS_FUNC(mod_auth_set_defaults) {
 				return HANDLER_ERROR;
 			}
 
-			for (m = 0; m < da_file->value->used; m++) {
-				if (da_file->value->data[m]->type == TYPE_STRING) {
-					data_string *ds = (data_string *)da_file->value->data[m];
+			for (m = 0; m < da_file->value.used; m++) {
+				if (da_file->value.data[m]->type == TYPE_STRING) {
+					data_string *ds = (data_string *)da_file->value.data[m];
 					if (buffer_is_equal_string(&ds->key, CONST_STR_LEN("method"))) {
 						method = &ds->value;
 					} else if (buffer_is_equal_string(&ds->key, CONST_STR_LEN("realm"))) {
@@ -353,7 +353,7 @@ SETDEFAULTS_FUNC(mod_auth_set_defaults) {
 						log_error_write(srv, __FILE__, __LINE__, "ssbs",
 							"the field is unknown in:",
 							"auth.require = ( \"...\" => ( ..., -> \"",
-							&da_file->value->data[m]->key,
+							&da_file->value.data[m]->key,
 							"\" <- => \"...\" ) )");
 
 						return HANDLER_ERROR;
@@ -362,7 +362,7 @@ SETDEFAULTS_FUNC(mod_auth_set_defaults) {
 					log_error_write(srv, __FILE__, __LINE__, "ssbs",
 						"a string was expected for:",
 						"auth.require = ( \"...\" => ( ..., -> \"",
-						&da_file->value->data[m]->key,
+						&da_file->value.data[m]->key,
 						"\" <- => \"...\" ) )");
 
 					return HANDLER_ERROR;

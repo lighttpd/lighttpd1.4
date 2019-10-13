@@ -54,8 +54,8 @@ int config_insert_values_internal(server *srv, const array *ca, const config_val
 				size_t j;
 				const data_array *da = (const data_array *)du;
 
-				for (j = 0; j < da->value->used; j++) {
-					data_unset *ds = da->value->data[j];
+				for (j = 0; j < da->value.used; j++) {
+					data_unset *ds = da->value.data[j];
 					if (ds->type == TYPE_STRING || ds->type == TYPE_INTEGER || ds->type == TYPE_ARRAY) {
 						array_insert_unique(cv[i].destination, ds->fn->copy(ds));
 					} else {

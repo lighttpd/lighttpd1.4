@@ -76,14 +76,14 @@ static int parse_config_entry(server *srv, array *ca, pcre_keyvalue_buffer *kvb,
 	if (NULL != da) {
 		size_t j;
 
-		if (da->type != TYPE_ARRAY || !array_is_kvstring(da->value)) {
+		if (da->type != TYPE_ARRAY || !array_is_kvstring(&da->value)) {
 			log_error_write(srv, __FILE__, __LINE__, "SSS",
 					"unexpected value for ", option, "; expected list of \"regex\" => \"subst\"");
 			return HANDLER_ERROR;
 		}
 
-		for (j = 0; j < da->value->used; j++) {
-			data_string *ds = (data_string *)da->value->data[j];
+		for (j = 0; j < da->value.used; j++) {
+			data_string *ds = (data_string *)da->value.data[j];
 			if (srv->srvconf.http_url_normalize) {
 				pcre_keyvalue_burl_normalize_key(&ds->key, srv->tmp_buf);
 				pcre_keyvalue_burl_normalize_value(&ds->value, srv->tmp_buf);

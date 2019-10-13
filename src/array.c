@@ -29,33 +29,32 @@ array *array_init(void) {
 	return a;
 }
 
-array *array_init_array(const array * const src) {
-	array *a = array_init();
-
-	if (0 == src->size) return a;
-
-	a->used = src->used;
-	a->size = src->size;
-
-	a->data = calloc(src->size, sizeof(*src->data));
-	force_assert(NULL != a->data);
-	for (uint32_t i = 0; i < src->used; ++i) {
-		a->data[i] = src->data[i]->fn->copy(src->data[i]);
-	}
-
-	return a;
-}
-
-void array_free(array * const a) {
-	if (!a) return;
-
+void array_free_data(array * const a) {
 	data_unset ** const data = a->data;
 	const uint32_t sz = a->size;
 	for (uint32_t i = 0; i < sz; ++i) {
 		if (data[i]) data[i]->fn->free(data[i]);
 	}
+	free(data);
+}
 
-	if (data) free(data);
+void array_copy_array(array * const dst, const array * const src) {
+	array_free_data(dst);
+	if (0 == src->size) return;
+
+	dst->used = src->used;
+	dst->size = src->size;
+
+	dst->data = calloc(src->size, sizeof(*src->data));
+	force_assert(NULL != dst->data);
+	for (uint32_t i = 0; i < src->used; ++i) {
+		dst->data[i] = src->data[i]->fn->copy(src->data[i]);
+	}
+}
+
+void array_free(array * const a) {
+	if (!a) return;
+	array_free_data(a);
 	free(a);
 }
 

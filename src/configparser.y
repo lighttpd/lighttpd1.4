@@ -95,8 +95,8 @@ static data_unset *configparser_merge_data(data_unset *op1, const data_unset *op
       ((data_integer *)op1)->value += ((data_integer *)op2)->value;
       break;
     case TYPE_ARRAY: {
-      array *dst = ((data_array *)op1)->value;
-      array *src = ((data_array *)op2)->value;
+      array *dst = &((data_array *)op1)->value;
+      array *src = &((data_array *)op2)->value;
       data_unset *du;
       size_t i;
 
@@ -341,8 +341,7 @@ value(A) ::= INTEGER(B). {
 }
 value(A) ::= array(B). {
   A = (data_unset *)data_array_init();
-  array_free(((data_array *)(A))->value);
-  ((data_array *)(A))->value = B;
+  array_copy_array(&((data_array *)(A))->value, B);
   B = NULL;
 }
 array(A) ::= LPARAN RPARAN. {

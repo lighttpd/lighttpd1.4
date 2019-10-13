@@ -252,19 +252,19 @@ SETDEFAULTS_FUNC(mod_proxy_set_defaults) {
 							&& !buffer_is_equal_string(&ds->value, CONST_STR_LEN("0"));
 				continue;
 			}
-			if (da->type != TYPE_ARRAY || !array_is_kvstring(da->value)) {
+			if (da->type != TYPE_ARRAY || !array_is_kvstring(&da->value)) {
 				log_error_write(srv, __FILE__, __LINE__, "sb",
 						"unexpected value for proxy.header; expected ( \"param\" => ( \"key\" => \"value\" ) ) near key", &da->key);
 				return HANDLER_ERROR;
 			}
 			if (buffer_is_equal_string(&da->key, CONST_STR_LEN("map-urlpath"))) {
-				s->header.urlpaths = da->value;
+				s->header.urlpaths = &da->value;
 			}
 			else if (buffer_is_equal_string(&da->key, CONST_STR_LEN("map-host-request"))) {
-				s->header.hosts_request = da->value;
+				s->header.hosts_request = &da->value;
 			}
 			else if (buffer_is_equal_string(&da->key, CONST_STR_LEN("map-host-response"))) {
-				s->header.hosts_response = da->value;
+				s->header.hosts_response = &da->value;
 			}
 			else {
 				log_error_write(srv, __FILE__, __LINE__, "sb",

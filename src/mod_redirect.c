@@ -91,14 +91,14 @@ SETDEFAULTS_FUNC(mod_redirect_set_defaults) {
 
 		da = (const data_array *)du;
 
-		if (du->type != TYPE_ARRAY || !array_is_kvstring(da->value)) {
+		if (du->type != TYPE_ARRAY || !array_is_kvstring(&da->value)) {
 			log_error_write(srv, __FILE__, __LINE__, "s",
 					"unexpected value for url.redirect; expected list of \"regex\" => \"redirect\"");
 			return HANDLER_ERROR;
 		}
 
-		for (j = 0; j < da->value->used; j++) {
-			data_string *ds = (data_string *)da->value->data[j];
+		for (j = 0; j < da->value.used; j++) {
+			data_string *ds = (data_string *)da->value.data[j];
 			if (srv->srvconf.http_url_normalize) {
 				pcre_keyvalue_burl_normalize_key(&ds->key, srv->tmp_buf);
 				pcre_keyvalue_burl_normalize_value(&ds->value, srv->tmp_buf);

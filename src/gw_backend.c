@@ -1185,7 +1185,7 @@ int gw_set_defaults_backend(server *srv, gw_plugin_data *p, const data_unset *du
 
     if (NULL == da) return 1;
 
-    if (da->type != TYPE_ARRAY || !array_is_kvarray(da->value)) {
+    if (da->type != TYPE_ARRAY || !array_is_kvarray(&da->value)) {
         log_error_write(srv, __FILE__, __LINE__, "s",
           "unexpected value for xxxxx.server; expected "
           "( \"ext\" => ( \"backend-label\" => ( \"key\" => \"value\" )))");
@@ -1206,8 +1206,8 @@ int gw_set_defaults_backend(server *srv, gw_plugin_data *p, const data_unset *du
      *               "<ext>" => ( ... ) )
      */
 
-    for (size_t j = 0; j < da->value->used; ++j) {
-        data_array *da_ext = (data_array *)da->value->data[j];
+    for (size_t j = 0; j < da->value.used; ++j) {
+        data_array *da_ext = (data_array *)da->value.data[j];
 
         /*
          * da_ext->key == name of the extension
@@ -1221,8 +1221,8 @@ int gw_set_defaults_backend(server *srv, gw_plugin_data *p, const data_unset *du
          *               "<ext>" => ... )
          */
 
-        for (size_t n = 0; n < da_ext->value->used; ++n) {
-            data_array *da_host = (data_array *)da_ext->value->data[n];
+        for (size_t n = 0; n < da_ext->value.used; ++n) {
+            data_array *da_host = (data_array *)da_ext->value.data[n];
 
             config_values_t fcv[] = {
                 { "host",              NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_CONNECTION },       /* 0 */
@@ -1256,7 +1256,7 @@ int gw_set_defaults_backend(server *srv, gw_plugin_data *p, const data_unset *du
             };
             unsigned short host_mode = GW_RESPONDER;
 
-            if (da_host->type != TYPE_ARRAY || !array_is_kvany(da_host->value)){
+            if (da_host->type != TYPE_ARRAY || !array_is_kvany(&da_host->value)){
                 log_error_write(srv, __FILE__, __LINE__, "SBS",
                   "unexpected value for gw.server near [",
                   &da_host->key, "](string); expected ( \"ext\" => ( \"backend-label\" => ( \"key\" => \"value\" )))");
@@ -1308,15 +1308,15 @@ int gw_set_defaults_backend(server *srv, gw_plugin_data *p, const data_unset *du
             fcv[21].destination = host->xsendfile_docroot;
             fcv[22].destination = &(host->tcp_fin_propagate);
 
-            if (0 != config_insert_values_internal(srv, da_host->value, fcv, T_CONFIG_SCOPE_CONNECTION)) {
+            if (0 != config_insert_values_internal(srv, &da_host->value, fcv, T_CONFIG_SCOPE_CONNECTION)) {
                 goto error;
             }
 
-            for (size_t m = 0; m < da_host->value->used; ++m) {
-                if (NULL != strchr(da_host->value->data[m]->key.ptr, '_')) {
+            for (size_t m = 0; m < da_host->value.used; ++m) {
+                if (NULL != strchr(da_host->value.data[m]->key.ptr, '_')) {
                     log_error_write(srv, __FILE__, __LINE__, "sb",
                       "incorrect directive contains underscore ('_') instead of dash ('-'):",
-                      &da_host->value->data[m]->key);
+                      &da_host->value.data[m]->key);
                 }
             }
 

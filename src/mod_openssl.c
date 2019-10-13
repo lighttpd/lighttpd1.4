@@ -1281,9 +1281,10 @@ SETDEFAULTS_FUNC(mod_openssl_set_defaults)
             if (!buffer_string_is_empty(b))
                 buffer_copy_buffer(s->ssl_cipher_list, b);
         }
-        s->ssl_conf_cmd = (0 == i)
-          ? array_init()
-          : array_init_array(p->config_storage[0]->ssl_conf_cmd);
+        s->ssl_conf_cmd = array_init();
+        if (0 != i)
+            array_copy_array(s->ssl_conf_cmd,
+                             p->config_storage[0]->ssl_conf_cmd);
         s->ssl_acme_tls_1 = buffer_init();
 
         cv[0].destination = &(s->ssl_log_noise);
