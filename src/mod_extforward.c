@@ -231,13 +231,13 @@ SETDEFAULTS_FUNC(mod_extforward_set_defaults) {
 			s->forward_all = (NULL == allds) ? 0 : buffer_eq_icase_slen(allds->value, CONST_STR_LEN("trust")) ? 1 : -1;
 			for (size_t j = 0; j < s->forwarder->used; ++j) {
 				data_string * const ds = (data_string *)s->forwarder->data[j];
-				char * const nm_slash = strchr(ds->key->ptr, '/');
+				char * const nm_slash = strchr(ds->key.ptr, '/');
 				if (!buffer_eq_icase_slen(ds->value, CONST_STR_LEN("trust"))) {
 					if (!buffer_eq_icase_slen(ds->value, CONST_STR_LEN("untrusted"))) {
-						log_error_write(srv, __FILE__, __LINE__, "sbsbs", "ERROR: expect \"trust\", not \"", ds->key, "\" => \"", ds->value, "\"; treating as untrusted");
+						log_error_write(srv, __FILE__, __LINE__, "sbsbs", "ERROR: expect \"trust\", not \"", &ds->key, "\" => \"", ds->value, "\"; treating as untrusted");
 					}
 					if (NULL != nm_slash) {
-						log_error_write(srv, __FILE__, __LINE__, "sbsbs", "ERROR: untrusted CIDR masks are ignored (\"", ds->key, "\" => \"", ds->value, "\")");
+						log_error_write(srv, __FILE__, __LINE__, "sbsbs", "ERROR: untrusted CIDR masks are ignored (\"", &ds->key, "\" => \"", ds->value, "\")");
 					}
 					buffer_clear(ds->value); /* empty is untrusted */
 					continue;
@@ -248,7 +248,7 @@ SETDEFAULTS_FUNC(mod_extforward_set_defaults) {
 					const int nm_bits = strtol(nm_slash + 1, &err, 10);
 					int rc;
 					if (*err || nm_bits <= 0) {
-						log_error_write(srv, __FILE__, __LINE__, "sbs", "ERROR: invalid netmask:", ds->key, err);
+						log_error_write(srv, __FILE__, __LINE__, "sbs", "ERROR: invalid netmask:", &ds->key, err);
 						return HANDLER_ERROR;
 					}
 					if (NULL == s->forward_masks) {
@@ -263,7 +263,7 @@ SETDEFAULTS_FUNC(mod_extforward_set_defaults) {
 					sm = s->forward_masks->addrs + s->forward_masks->used++;
 					sm->bits = nm_bits;
 					*nm_slash = '\0';
-					rc = sock_addr_from_str_numeric(srv, &sm->addr, ds->key->ptr);
+					rc = sock_addr_from_str_numeric(srv, &sm->addr, ds->key.ptr);
 					*nm_slash = '/';
 					if (1 != rc) return HANDLER_ERROR;
 					buffer_clear(ds->value); /* empty is untrusted, e.g. if subnet (incorrectly) appears in X-Forwarded-For */
@@ -292,23 +292,23 @@ SETDEFAULTS_FUNC(mod_extforward_set_defaults) {
 			proxy_forwarded_t param;
 			data_unset *du = s->opts_params->data[j];
 		      #if 0  /*("for" and "proto" historical behavior: always enabled)*/
-			if (buffer_is_equal_string(du->key, CONST_STR_LEN("by"))) {
+			if (buffer_is_equal_string(&du->key, CONST_STR_LEN("by"))) {
 				param = PROXY_FORWARDED_BY;
-			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("for"))) {
+			} else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("for"))) {
 				param = PROXY_FORWARDED_FOR;
 			} else
 		      #endif
-			if (buffer_is_equal_string(du->key, CONST_STR_LEN("host"))) {
+			if (buffer_is_equal_string(&du->key, CONST_STR_LEN("host"))) {
 				param = PROXY_FORWARDED_HOST;
 		      #if 0
-			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("proto"))) {
+			} else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("proto"))) {
 				param = PROXY_FORWARDED_PROTO;
 		      #endif
-			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("remote_user"))) {
+			} else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("remote_user"))) {
 				param = PROXY_FORWARDED_REMOTE_USER;
 			} else {
 				log_error_write(srv, __FILE__, __LINE__, "sb",
-					        "extforward.params keys must be one of: host, remote_user, but not:", du->key);
+					        "extforward.params keys must be one of: host, remote_user, but not:", &du->key);
 				return HANDLER_ERROR;
 			}
 			if (du->type == TYPE_STRING) {
@@ -317,7 +317,7 @@ SETDEFAULTS_FUNC(mod_extforward_set_defaults) {
 					s->opts |= param;
 				} else if (!buffer_is_equal_string(ds->value, CONST_STR_LEN("disable"))) {
 					log_error_write(srv, __FILE__, __LINE__, "sb",
-						        "extforward.params values must be one of: 0, 1, enable, disable; error for key:", du->key);
+						        "extforward.params values must be one of: 0, 1, enable, disable; error for key:", &du->key);
 					return HANDLER_ERROR;
 				}
 			} else if (du->type == TYPE_INTEGER) {
@@ -325,7 +325,7 @@ SETDEFAULTS_FUNC(mod_extforward_set_defaults) {
 				if (di->value) s->opts |= param;
 			} else {
 				log_error_write(srv, __FILE__, __LINE__, "sb",
-					        "extforward.params values must be one of: 0, 1, enable, disable; error for key:", du->key);
+					        "extforward.params values must be one of: 0, 1, enable, disable; error for key:", &du->key);
 				return HANDLER_ERROR;
 			}
 		}
@@ -1080,7 +1080,7 @@ CONNECTION_FUNC(mod_extforward_handle_request_env) {
          * (when mod_extforward is listed after mod_openssl in server.modules)*/
         data_string *ds = (data_string *)hctx->env->data[i];
         http_header_env_set(con,
-                            CONST_BUF_LEN(ds->key), CONST_BUF_LEN(ds->value));
+                            CONST_BUF_LEN(&ds->key), CONST_BUF_LEN(ds->value));
     }
     return HANDLER_GO_ON;
 }

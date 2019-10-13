@@ -300,7 +300,7 @@ SETDEFAULTS_FUNC(mod_dirlisting_set_defaults) {
 				if (du_exclude->type != TYPE_STRING) {
 					log_error_write(srv, __FILE__, __LINE__, "sssbs",
 						"unexpected type for key: ", CONFIG_EXCLUDE, "[",
-						du_exclude->key, "](string)");
+						&du_exclude->key, "](string)");
 					return HANDLER_ERROR;
 				}
 

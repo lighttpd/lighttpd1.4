@@ -11,7 +11,7 @@ static data_unset *data_integer_copy(const data_unset *s) {
 	data_integer *src = (data_integer *)s;
 	data_integer *ds = data_integer_init();
 
-	if (!buffer_is_empty(src->key)) buffer_copy_buffer(ds->key, src->key);
+	if (!buffer_is_empty(&src->key)) buffer_copy_buffer(&ds->key, &src->key);
 	ds->value = src->value;
 	return (data_unset *)ds;
 }
@@ -19,7 +19,7 @@ static data_unset *data_integer_copy(const data_unset *s) {
 static void data_integer_free(data_unset *d) {
 	data_integer *ds = (data_integer *)d;
 
-	buffer_free(ds->key);
+	free(ds->key.ptr);
 
 	free(d);
 }
@@ -54,7 +54,6 @@ data_integer *data_integer_init(void) {
 	ds = calloc(1, sizeof(*ds));
 	force_assert(NULL != ds);
 
-	ds->key = buffer_init();
 	ds->value = 0;
 
 	ds->type = TYPE_INTEGER;

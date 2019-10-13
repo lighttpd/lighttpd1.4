@@ -254,7 +254,7 @@ static int magnet_array_next(lua_State *L) {
 
 	if (pos >= a->used) return 0;
 	if (NULL != (du = a->data[pos])) {
-		lua_pushlstring(L, CONST_BUF_LEN(du->key));
+		lua_pushlstring(L, CONST_BUF_LEN(&du->key));
 		switch (du->type) {
 			case TYPE_STRING:
 				ds = (data_string *)du;

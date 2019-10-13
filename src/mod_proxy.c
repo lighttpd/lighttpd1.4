@@ -178,19 +178,19 @@ SETDEFAULTS_FUNC(mod_proxy_set_defaults) {
 		for (size_t j = 0, used = s->forwarded_params->used; j < used; ++j) {
 			proxy_forwarded_t param;
 			du = s->forwarded_params->data[j];
-			if (buffer_is_equal_string(du->key, CONST_STR_LEN("by"))) {
+			if (buffer_is_equal_string(&du->key, CONST_STR_LEN("by"))) {
 				param = PROXY_FORWARDED_BY;
-			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("for"))) {
+			} else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("for"))) {
 				param = PROXY_FORWARDED_FOR;
-			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("host"))) {
+			} else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("host"))) {
 				param = PROXY_FORWARDED_HOST;
-			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("proto"))) {
+			} else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("proto"))) {
 				param = PROXY_FORWARDED_PROTO;
-			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("remote_user"))) {
+			} else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("remote_user"))) {
 				param = PROXY_FORWARDED_REMOTE_USER;
 			} else {
 				log_error_write(srv, __FILE__, __LINE__, "sb",
-					        "proxy.forwarded keys must be one of: by, for, host, proto, remote_user, but not:", du->key);
+					        "proxy.forwarded keys must be one of: by, for, host, proto, remote_user, but not:", &du->key);
 				return HANDLER_ERROR;
 			}
 			if (du->type == TYPE_STRING) {
@@ -199,7 +199,7 @@ SETDEFAULTS_FUNC(mod_proxy_set_defaults) {
 					s->forwarded |= param;
 				} else if (!buffer_is_equal_string(ds->value, CONST_STR_LEN("disable"))) {
 					log_error_write(srv, __FILE__, __LINE__, "sb",
-						        "proxy.forwarded values must be one of: 0, 1, enable, disable; error for key:", du->key);
+						        "proxy.forwarded values must be one of: 0, 1, enable, disable; error for key:", &du->key);
 					return HANDLER_ERROR;
 				}
 			} else if (du->type == TYPE_INTEGER) {
@@ -207,7 +207,7 @@ SETDEFAULTS_FUNC(mod_proxy_set_defaults) {
 				if (di->value) s->forwarded |= param;
 			} else {
 				log_error_write(srv, __FILE__, __LINE__, "sb",
-					        "proxy.forwarded values must be one of: 0, 1, enable, disable; error for key:", du->key);
+					        "proxy.forwarded values must be one of: 0, 1, enable, disable; error for key:", &du->key);
 				return HANDLER_ERROR;
 			}
 		}
@@ -219,7 +219,7 @@ SETDEFAULTS_FUNC(mod_proxy_set_defaults) {
 		}
 		for (size_t j = 0, used = s->header_params->used; j < used; ++j) {
 			data_array *da = (data_array *)s->header_params->data[j];
-			if (buffer_is_equal_string(da->key, CONST_STR_LEN("https-remap"))) {
+			if (buffer_is_equal_string(&da->key, CONST_STR_LEN("https-remap"))) {
 				data_string *ds = (data_string *)da;
 				if (ds->type != TYPE_STRING) {
 					log_error_write(srv, __FILE__, __LINE__, "s",
@@ -230,7 +230,7 @@ SETDEFAULTS_FUNC(mod_proxy_set_defaults) {
 						     && !buffer_is_equal_string(ds->value, CONST_STR_LEN("0"));
 				continue;
 			}
-			else if (buffer_is_equal_string(da->key, CONST_STR_LEN("upgrade"))) {
+			else if (buffer_is_equal_string(&da->key, CONST_STR_LEN("upgrade"))) {
 				data_string *ds = (data_string *)da;
 				if (ds->type != TYPE_STRING) {
 					log_error_write(srv, __FILE__, __LINE__, "s",
@@ -241,7 +241,7 @@ SETDEFAULTS_FUNC(mod_proxy_set_defaults) {
 						 && !buffer_is_equal_string(ds->value, CONST_STR_LEN("0"));
 				continue;
 			}
-			else if (buffer_is_equal_string(da->key, CONST_STR_LEN("connect"))) {
+			else if (buffer_is_equal_string(&da->key, CONST_STR_LEN("connect"))) {
 				data_string *ds = (data_string *)da;
 				if (ds->type != TYPE_STRING) {
 					log_error_write(srv, __FILE__, __LINE__, "s",
@@ -254,21 +254,21 @@ SETDEFAULTS_FUNC(mod_proxy_set_defaults) {
 			}
 			if (da->type != TYPE_ARRAY || !array_is_kvstring(da->value)) {
 				log_error_write(srv, __FILE__, __LINE__, "sb",
-						"unexpected value for proxy.header; expected ( \"param\" => ( \"key\" => \"value\" ) ) near key", da->key);
+						"unexpected value for proxy.header; expected ( \"param\" => ( \"key\" => \"value\" ) ) near key", &da->key);
 				return HANDLER_ERROR;
 			}
-			if (buffer_is_equal_string(da->key, CONST_STR_LEN("map-urlpath"))) {
+			if (buffer_is_equal_string(&da->key, CONST_STR_LEN("map-urlpath"))) {
 				s->header.urlpaths = da->value;
 			}
-			else if (buffer_is_equal_string(da->key, CONST_STR_LEN("map-host-request"))) {
+			else if (buffer_is_equal_string(&da->key, CONST_STR_LEN("map-host-request"))) {
 				s->header.hosts_request = da->value;
 			}
-			else if (buffer_is_equal_string(da->key, CONST_STR_LEN("map-host-response"))) {
+			else if (buffer_is_equal_string(&da->key, CONST_STR_LEN("map-host-response"))) {
 				s->header.hosts_response = da->value;
 			}
 			else {
 				log_error_write(srv, __FILE__, __LINE__, "sb",
-						"unexpected key for proxy.header; expected ( \"param\" => ( \"key\" => \"value\" ) ) near key", da->key);
+						"unexpected key for proxy.header; expected ( \"param\" => ( \"key\" => \"value\" ) ) near key", &da->key);
 				return HANDLER_ERROR;
 			}
 		}
@@ -296,7 +296,7 @@ static const buffer * http_header_remap_host_match (buffer *b, size_t off, http_
         const char * const s = b->ptr+off;
         for (size_t i = 0, used = hosts->used; i < used; ++i) {
             const data_string * const ds = (data_string *)hosts->data[i];
-            const buffer *k = ds->key;
+            const buffer *k = &ds->key;
             size_t mlen = buffer_string_length(k);
             if (1 == mlen && k->ptr[0] == '-') {
                 /* match with authority provided in Host (if is_req)
@@ -349,8 +349,8 @@ static size_t http_header_remap_urlpath (buffer *b, size_t off, http_header_rema
         if (is_req) { /* request */
             for (size_t i = 0, used = urlpaths->used; i < used; ++i) {
                 const data_string * const ds = (data_string *)urlpaths->data[i];
-                const size_t mlen = buffer_string_length(ds->key);
-                if (mlen <= plen && 0 == memcmp(s, ds->key->ptr, mlen)) {
+                const size_t mlen = buffer_string_length(&ds->key);
+                if (mlen <= plen && 0 == memcmp(s, ds->key.ptr, mlen)) {
                     if (NULL == remap_hdrs->forwarded_urlpath)
                         remap_hdrs->forwarded_urlpath = ds;
                     buffer_substr_replace(b, off, mlen, ds->value);
@@ -363,16 +363,16 @@ static size_t http_header_remap_urlpath (buffer *b, size_t off, http_header_rema
                 const data_string * const ds = remap_hdrs->forwarded_urlpath;
                 const size_t mlen = buffer_string_length(ds->value);
                 if (mlen <= plen && 0 == memcmp(s, ds->value->ptr, mlen)) {
-                    buffer_substr_replace(b, off, mlen, ds->key);
-                    return buffer_string_length(ds->key); /*(replacement len)*/
+                    buffer_substr_replace(b, off, mlen, &ds->key);
+                    return buffer_string_length(&ds->key); /*(replacement len)*/
                 }
             }
             for (size_t i = 0, used = urlpaths->used; i < used; ++i) {
                 const data_string * const ds = (data_string *)urlpaths->data[i];
                 const size_t mlen = buffer_string_length(ds->value);
                 if (mlen <= plen && 0 == memcmp(s, ds->value->ptr, mlen)) {
-                    buffer_substr_replace(b, off, mlen, ds->key);
-                    return buffer_string_length(ds->key); /*(replacement len)*/
+                    buffer_substr_replace(b, off, mlen, &ds->key);
+                    return buffer_string_length(&ds->key); /*(replacement len)*/
                 }
             }
         }
@@ -769,26 +769,26 @@ static handler_t proxy_create_env(server *srv, gw_handler_ctx *gwhctx) {
 	/* request header */
 	for (size_t i = 0, used = con->request.headers->used; i < used; ++i) {
 		data_string *ds = (data_string *)con->request.headers->data[i];
-		const size_t klen = buffer_string_length(ds->key);
+		const size_t klen = buffer_string_length(&ds->key);
 		size_t vlen;
 		switch (klen) {
 		default:
 			break;
 		case 4:
-			if (buffer_is_equal_caseless_string(ds->key, CONST_STR_LEN("Host"))) continue; /*(handled further above)*/
+			if (buffer_is_equal_caseless_string(&ds->key, CONST_STR_LEN("Host"))) continue; /*(handled further above)*/
 			break;
 		case 10:
-			if (buffer_is_equal_caseless_string(ds->key, CONST_STR_LEN("Connection"))) continue;
-			if (buffer_is_equal_caseless_string(ds->key, CONST_STR_LEN("Set-Cookie"))) continue; /*(response header only; avoid accidental reflection)*/
+			if (buffer_is_equal_caseless_string(&ds->key, CONST_STR_LEN("Connection"))) continue;
+			if (buffer_is_equal_caseless_string(&ds->key, CONST_STR_LEN("Set-Cookie"))) continue; /*(response header only; avoid accidental reflection)*/
 			break;
 		case 16:
-			if (buffer_is_equal_caseless_string(ds->key, CONST_STR_LEN("Proxy-Connection"))) continue;
+			if (buffer_is_equal_caseless_string(&ds->key, CONST_STR_LEN("Proxy-Connection"))) continue;
 			break;
 		case 5:
 			/* Do not emit HTTP_PROXY in environment.
 			 * Some executables use HTTP_PROXY to configure
 			 * outgoing proxy.  See also https://httpoxy.org/ */
-			if (buffer_is_equal_caseless_string(ds->key, CONST_STR_LEN("Proxy"))) continue;
+			if (buffer_is_equal_caseless_string(&ds->key, CONST_STR_LEN("Proxy"))) continue;
 			break;
 		case 0:
 			continue;
@@ -803,7 +803,7 @@ static handler_t proxy_create_env(server *srv, gw_handler_ctx *gwhctx) {
 			buffer_string_prepare_append(b, extend);
 		}
 
-		buffer_append_string_len(b, ds->key->ptr, klen);
+		buffer_append_string_len(b, ds->key.ptr, klen);
 		buffer_append_string_len(b, CONST_STR_LEN(": "));
 		buffer_append_string_len(b, ds->value->ptr, vlen);
 		buffer_append_string_len(b, CONST_STR_LEN("\r\n"));
@@ -817,19 +817,19 @@ static handler_t proxy_create_env(server *srv, gw_handler_ctx *gwhctx) {
 			continue;
 	      #if 0 /* "URI" is HTTP response header (non-standard; historical in Apache) */
 		case 3:
-			if (buffer_is_equal_caseless_string(ds->key, CONST_STR_LEN("URI"))) break;
+			if (buffer_is_equal_caseless_string(&ds->key, CONST_STR_LEN("URI"))) break;
 			continue;
 	      #endif
 	      #if 0 /* "Location" is HTTP response header */
 		case 8:
-			if (buffer_is_equal_caseless_string(ds->key, CONST_STR_LEN("Location"))) break;
+			if (buffer_is_equal_caseless_string(&ds->key, CONST_STR_LEN("Location"))) break;
 			continue;
 	      #endif
 		case 11: /* "Destination" is WebDAV request header */
-			if (buffer_is_equal_caseless_string(ds->key, CONST_STR_LEN("Destination"))) break;
+			if (buffer_is_equal_caseless_string(&ds->key, CONST_STR_LEN("Destination"))) break;
 			continue;
 		case 16: /* "Content-Location" may be HTTP request or response header */
-			if (buffer_is_equal_caseless_string(ds->key, CONST_STR_LEN("Content-Location"))) break;
+			if (buffer_is_equal_caseless_string(&ds->key, CONST_STR_LEN("Content-Location"))) break;
 			continue;
 		}
 

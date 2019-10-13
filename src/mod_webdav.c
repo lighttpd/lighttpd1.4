@@ -447,7 +447,7 @@ SETDEFAULTS_FUNC(mod_webdav_set_defaults) {
 
         for (size_t j = 0, used = s->opts->used; j < used; ++j) {
             data_string *ds = (data_string *)s->opts->data[j];
-            if (buffer_is_equal_string(ds->key,
+            if (buffer_is_equal_string(&ds->key,
                   CONST_STR_LEN("deprecated-unsafe-partial-put"))
                 && buffer_is_equal_string(ds->value, CONST_STR_LEN("enable"))) {
                 s->deprecated_unsafe_partial_put_compat = 1;
@@ -455,7 +455,7 @@ SETDEFAULTS_FUNC(mod_webdav_set_defaults) {
             }
             log_error(srv->errh, __FILE__, __LINE__,
                       "unrecognized webdav.opts: %.*s",
-                      BUFFER_INTLEN_PTR(ds->key));
+                      BUFFER_INTLEN_PTR(&ds->key));
             return HANDLER_ERROR;
         }
     }

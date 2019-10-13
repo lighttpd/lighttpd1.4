@@ -25,14 +25,14 @@
 
 __attribute_cold__
 static int http_response_omit_header(connection *con, const data_string * const ds) {
-    const size_t klen = buffer_string_length(ds->key);
+    const size_t klen = buffer_string_length(&ds->key);
     if (klen == sizeof("X-Sendfile")-1
-        && buffer_eq_icase_ssn(ds->key->ptr,CONST_STR_LEN("X-Sendfile")))
+        && buffer_eq_icase_ssn(ds->key.ptr, CONST_STR_LEN("X-Sendfile")))
         return 1;
     if (klen >= sizeof("X-LIGHTTPD-")-1
-        && buffer_eq_icase_ssn(ds->key->ptr,CONST_STR_LEN("X-LIGHTTPD-"))) {
+        && buffer_eq_icase_ssn(ds->key.ptr, CONST_STR_LEN("X-LIGHTTPD-"))) {
         if (klen == sizeof("X-LIGHTTPD-KBytes-per-second")-1
-            && buffer_eq_icase_ssn(ds->key->ptr+sizeof("X-LIGHTTPD-")-1,
+            && buffer_eq_icase_ssn(ds->key.ptr+sizeof("X-LIGHTTPD-")-1,
                                    CONST_STR_LEN("KBytes-per-second"))) {
             /* "X-LIGHTTPD-KBytes-per-second" */
             long limit = strtol(ds->value->ptr, NULL, 10);
@@ -86,12 +86,12 @@ int http_response_write_header(server *srv, connection *con) {
 		const data_string * const ds = (data_string *)con->response.headers->data[i];
 
 		if (buffer_string_is_empty(ds->value)) continue;
-		if (buffer_string_is_empty(ds->key)) continue;
-		if ((ds->key->ptr[0] & 0xdf)=='X' && http_response_omit_header(con, ds))
+		if (buffer_string_is_empty(&ds->key)) continue;
+		if ((ds->key.ptr[0] & 0xdf)=='X' && http_response_omit_header(con, ds))
 			continue;
 
 		buffer_append_string_len(b, CONST_STR_LEN("\r\n"));
-		buffer_append_string_buffer(b, ds->key);
+		buffer_append_string_buffer(b, &ds->key);
 		buffer_append_string_len(b, CONST_STR_LEN(": "));
 		buffer_append_string_buffer(b, ds->value);
 	}

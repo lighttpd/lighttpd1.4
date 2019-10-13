@@ -1486,14 +1486,14 @@ static int server_main (server * const srv, int argc, char **argv) {
 			data_unset *du = config->data[j];
 
 			/* all var.* is known as user defined variable */
-			if (strncmp(du->key->ptr, "var.", sizeof("var.") - 1) == 0) {
+			if (strncmp(du->key.ptr, "var.", sizeof("var.") - 1) == 0) {
 				continue;
 			}
 
-			if (NULL == array_get_element_klen(srv->config_touched, CONST_BUF_LEN(du->key))) {
+			if (NULL == array_get_element_klen(srv->config_touched, CONST_BUF_LEN(&du->key))) {
 				log_error_write(srv, __FILE__, __LINE__, "sbs",
 						"WARNING: unknown config-key:",
-						du->key,
+						&du->key,
 						"(ignored)");
 			}
 		}

@@ -91,22 +91,22 @@ static int mod_vhostdb_dbconf_setup (server *srv, array *opts, void **vdata)
     for (size_t i = 0; i < opts->used; ++i) {
         const data_string *ds = (data_string *)opts->data[i];
         if (ds->type == TYPE_STRING) {
-            if (buffer_is_equal_caseless_string(ds->key, CONST_STR_LEN("filter"))) {
+            if (buffer_is_equal_caseless_string(&ds->key, CONST_STR_LEN("filter"))) {
                 filter = ds->value;
-            } else if (buffer_is_equal_caseless_string(ds->key, CONST_STR_LEN("attr"))) {
+            } else if (buffer_is_equal_caseless_string(&ds->key, CONST_STR_LEN("attr"))) {
                 if (!buffer_string_is_empty(ds->value)) attr   = ds->value->ptr;
-            } else if (buffer_is_equal_caseless_string(ds->key, CONST_STR_LEN("host"))) {
+            } else if (buffer_is_equal_caseless_string(&ds->key, CONST_STR_LEN("host"))) {
                 mod_vhostdb_dbconf_add_scheme(srv, ds->value);
                 host   = ds->value->ptr;
-            } else if (buffer_is_equal_caseless_string(ds->key, CONST_STR_LEN("base-dn"))) {
+            } else if (buffer_is_equal_caseless_string(&ds->key, CONST_STR_LEN("base-dn"))) {
                 if (!buffer_string_is_empty(ds->value)) basedn = ds->value->ptr;
-            } else if (buffer_is_equal_caseless_string(ds->key, CONST_STR_LEN("bind-dn"))) {
+            } else if (buffer_is_equal_caseless_string(&ds->key, CONST_STR_LEN("bind-dn"))) {
                 if (!buffer_string_is_empty(ds->value)) binddn = ds->value->ptr;
-            } else if (buffer_is_equal_caseless_string(ds->key, CONST_STR_LEN("bind-pw"))) {
+            } else if (buffer_is_equal_caseless_string(&ds->key, CONST_STR_LEN("bind-pw"))) {
                 bindpw = ds->value->ptr;
-            } else if (buffer_is_equal_caseless_string(ds->key, CONST_STR_LEN("ca-file"))) {
+            } else if (buffer_is_equal_caseless_string(&ds->key, CONST_STR_LEN("ca-file"))) {
                 if (!buffer_string_is_empty(ds->value)) cafile = ds->value->ptr;
-            } else if (buffer_is_equal_caseless_string(ds->key, CONST_STR_LEN("starttls"))) {
+            } else if (buffer_is_equal_caseless_string(&ds->key, CONST_STR_LEN("starttls"))) {
                 starttls = !buffer_is_equal_string(ds->value, CONST_STR_LEN("disable"))
                         && !buffer_is_equal_string(ds->value, CONST_STR_LEN("0"));
             }

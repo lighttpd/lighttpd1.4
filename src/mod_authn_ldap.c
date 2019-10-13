@@ -578,7 +578,7 @@ static handler_t mod_authn_ldap_memberOf(server *srv, plugin_config *s, const ht
     buffer_append_string_len(filter, CONST_STR_LEN(")"));
 
     for (size_t i = 0; i < groups->used; ++i) {
-        char *base = groups->data[i]->key->ptr;
+        char *base = groups->data[i]->key.ptr;
         LDAPMessage *lm = mod_authn_ldap_search(srv, s, base, filter->ptr);
         if (NULL != lm) {
             int count = ldap_count_entries(s->ldap, lm);

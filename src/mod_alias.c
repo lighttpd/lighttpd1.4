@@ -99,9 +99,9 @@ SETDEFAULTS_FUNC(mod_alias_set_defaults) {
 			size_t j, k;
 
 			for (j = 0; j < a->used; j ++) {
-				const buffer *prefix = a->data[j]->key;
+				const buffer *prefix = &a->data[j]->key;
 				for (k = j + 1; k < a->used; k ++) {
-					const buffer *key = a->data[k]->key;
+					const buffer *key = &a->data[k]->key;
 
 					if (buffer_string_length(key) < buffer_string_length(prefix)) {
 						break;
@@ -179,13 +179,13 @@ PHYSICALPATH_FUNC(mod_alias_physical_handler) {
 
 			/* check for path traversal in url-path following alias if key
 			 * does not end in slash, but replacement value ends in slash */
-			alias_len = buffer_string_length(ds->key);
+			alias_len = buffer_string_length(&ds->key);
 			if (uri_ptr[alias_len] == '.') {
 				char *s = uri_ptr + alias_len + 1;
 				if (*s == '.') ++s;
 				if (*s == '/' || *s == '\0') {
 					size_t vlen = buffer_string_length(ds->value);
-					if (0 != alias_len && ds->key->ptr[alias_len-1] != '/'
+					if (0 != alias_len && ds->key.ptr[alias_len-1] != '/'
 					    && 0 != vlen && ds->value->ptr[vlen-1] == '/') {
 						con->http_status = 403;
 						return HANDLER_FINISHED;

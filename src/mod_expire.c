@@ -270,13 +270,13 @@ SETDEFAULTS_FUNC(mod_expire_set_defaults) {
 
 		for (k = 0; k < s->expire_mimetypes->used; k++) {
 			data_string *ds = (data_string *)s->expire_mimetypes->data[k];
-			size_t klen = buffer_string_length(ds->key);
+			size_t klen = buffer_string_length(&ds->key);
 
 			/*(omit trailing '*', if present, from prefix match)*/
 			/*(not usually a good idea to modify array keys
 			 * since doing so might break array_get_element_klen() search,
 			 * but array use in this module only walks array)*/
-			if (klen && ds->key->ptr[klen-1] == '*') buffer_string_set_length(ds->key, klen-1);
+			if (klen && ds->key.ptr[klen-1] == '*') buffer_string_set_length(&ds->key, klen-1);
 
 			/* parse lines */
 			if (-1 == mod_expire_get_offset(srv, p, ds->value, NULL)) {

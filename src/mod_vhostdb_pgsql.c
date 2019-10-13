@@ -46,17 +46,17 @@ static int mod_vhostdb_dbconf_setup (server *srv, array *opts, void **vdata)
     for (size_t i = 0; i < opts->used; ++i) {
         const data_string *ds = (data_string *)opts->data[i];
         if (ds->type == TYPE_STRING) {
-            if (buffer_is_equal_caseless_string(ds->key, CONST_STR_LEN("sql"))) {
+            if (buffer_is_equal_caseless_string(&ds->key, CONST_STR_LEN("sql"))) {
                 sqlquery = ds->value;
-            } else if (buffer_is_equal_caseless_string(ds->key, CONST_STR_LEN("dbname"))) {
+            } else if (buffer_is_equal_caseless_string(&ds->key, CONST_STR_LEN("dbname"))) {
                 dbname = ds->value->ptr;
-            } else if (buffer_is_equal_caseless_string(ds->key, CONST_STR_LEN("user"))) {
+            } else if (buffer_is_equal_caseless_string(&ds->key, CONST_STR_LEN("user"))) {
                 user = ds->value->ptr;
-            } else if (buffer_is_equal_caseless_string(ds->key, CONST_STR_LEN("password"))) {
+            } else if (buffer_is_equal_caseless_string(&ds->key, CONST_STR_LEN("password"))) {
                 pass = ds->value->ptr;
-            } else if (buffer_is_equal_caseless_string(ds->key, CONST_STR_LEN("host"))) {
+            } else if (buffer_is_equal_caseless_string(&ds->key, CONST_STR_LEN("host"))) {
                 host = ds->value->ptr;
-            } else if (buffer_is_equal_caseless_string(ds->key, CONST_STR_LEN("port"))) {
+            } else if (buffer_is_equal_caseless_string(&ds->key, CONST_STR_LEN("port"))) {
                 port = ds->value->ptr;
             }
         }

@@ -311,7 +311,7 @@ mod_maxmind_geoip2 (array * const env, sock_addr *dst_addr,
     for (size_t i = 0, used = pconf->env->used; i < used; ++i) {
         if (MMDB_SUCCESS == MMDB_aget_value(entry, &data, cenv[i])
             && data.has_data) {
-            geoip2_env_set(env, CONST_BUF_LEN(names[i]->key), &data);
+            geoip2_env_set(env, CONST_BUF_LEN(&names[i]->key), &data);
         }
     }
 }
@@ -384,7 +384,7 @@ CONNECTION_FUNC(mod_maxmind_request_env_handler)
          * (when mod_extforward is listed after mod_openssl in server.modules)*/
         data_string *ds = (data_string *)env->data[i];
         http_header_env_set(con,
-                            CONST_BUF_LEN(ds->key), CONST_BUF_LEN(ds->value));
+                            CONST_BUF_LEN(&ds->key), CONST_BUF_LEN(ds->value));
     }
 
     return HANDLER_GO_ON;

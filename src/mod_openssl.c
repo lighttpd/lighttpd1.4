@@ -744,9 +744,9 @@ network_openssl_ssl_conf_cmd (server *srv, plugin_config *s)
     for (size_t i = 0; i < s->ssl_conf_cmd->used; ++i) {
         ds = (data_string *)s->ssl_conf_cmd->data[i];
         ERR_clear_error();
-        if (SSL_CONF_cmd(cctx, ds->key->ptr, ds->value->ptr) <= 0) {
+        if (SSL_CONF_cmd(cctx, ds->key.ptr, ds->value->ptr) <= 0) {
             log_error_write(srv, __FILE__, __LINE__, "ssbbss", "SSL:",
-                            "SSL_CONF_cmd", ds->key, ds->value, ":",
+                            "SSL_CONF_cmd", &ds->key, ds->value, ":",
                             ERR_error_string(ERR_get_error(), NULL));
             rc = -1;
             break;
@@ -1318,7 +1318,7 @@ SETDEFAULTS_FUNC(mod_openssl_set_defaults)
             /* inherit ssl settings from global scope (in network_init_ssl())
              * (if only ssl.engine = "enable" and no other ssl.* settings)*/
             for (size_t j = 0; j < config->value->used; ++j) {
-                buffer *k = config->value->data[j]->key;
+                buffer *k = &config->value->data[j]->key;
                 if (0 == strncmp(k->ptr, "ssl.", sizeof("ssl.")-1)
                     && !buffer_is_equal_string(k, CONST_STR_LEN("ssl.engine"))){
                     log_error_write(srv, __FILE__, __LINE__, "sb",

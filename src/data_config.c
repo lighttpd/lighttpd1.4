@@ -17,7 +17,7 @@ static data_unset *data_config_copy(const data_unset *s) {
 	data_config *ds = data_config_init();
 
 	ds->comp = src->comp;
-	if (!buffer_is_empty(src->key)) buffer_copy_buffer(ds->key, src->key);
+	if (!buffer_is_empty(&src->key)) buffer_copy_buffer(&ds->key, &src->key);
 	buffer_copy_buffer(ds->comp_tag, src->comp_tag);
 	buffer_copy_buffer(ds->comp_key, src->comp_key);
 	array_free(ds->value);
@@ -29,7 +29,7 @@ __attribute_cold__
 static void data_config_free(data_unset *d) {
 	data_config *ds = (data_config *)d;
 
-	buffer_free(ds->key);
+	free(ds->key.ptr);
 	buffer_free(ds->op);
 	buffer_free(ds->comp_tag);
 	buffer_free(ds->comp_key);
@@ -80,11 +80,11 @@ static void data_config_print(const data_unset *d, int depth) {
 	maxlen = array_get_max_key_length(a);
 	for (i = 0; i < a->used; i ++) {
 		data_unset *du = a->data[i];
-		size_t len = buffer_string_length(du->key);
+		size_t len = buffer_string_length(&du->key);
 		size_t j;
 
 		array_print_indent(depth);
-		fprintf(stdout, "%s", du->key->ptr);
+		fprintf(stdout, "%s", du->key.ptr);
 		for (j = maxlen - len; j > 0; j --) {
 			fprintf(stdout, " ");
 		}
@@ -137,7 +137,6 @@ data_config *data_config_init(void) {
 
 	ds = calloc(1, sizeof(*ds));
 
-	ds->key = buffer_init();
 	ds->op = buffer_init();
 	ds->comp_tag = buffer_init();
 	ds->comp_key = buffer_init();

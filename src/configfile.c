@@ -53,7 +53,7 @@ static void config_warn_openssl_module (server *srv) {
 		const data_config *config = (data_config const*)srv->config_context->data[i];
 		for (size_t j = 0; j < config->value->used; ++j) {
 			data_unset *du = config->value->data[j];
-			if (0 == strncmp(du->key->ptr, "ssl.", sizeof("ssl.")-1)) {
+			if (0 == strncmp(du->key.ptr, "ssl.", sizeof("ssl.")-1)) {
 				/* mod_openssl should be loaded after mod_extforward */
 				array_insert_value(srv->srvconf.modules, CONST_STR_LEN("mod_openssl"));
 				log_error_write(srv, __FILE__, __LINE__, "S", "Warning: please add \"mod_openssl\" to server.modules list in lighttpd.conf.  A future release of lighttpd 1.4.x *will not* automatically load mod_openssl and lighttpd *will not* use SSL/TLS where your lighttpd.conf contains ssl.* directives");
@@ -85,50 +85,50 @@ static int config_http_parseopts (server *srv, array *a) {
         else {
             log_error_write(srv, __FILE__, __LINE__, "sbsbs",
                             "unrecognized value for server.http-parseopts:",
-                            ds->key, "=>", ds->value,
+                            &ds->key, "=>", ds->value,
                             "(expect \"[enable|disable]\")");
             rc = 0;
         }
-        if (buffer_is_equal_string(ds->key, CONST_STR_LEN("url-normalize")))
+        if (buffer_is_equal_string(&ds->key, CONST_STR_LEN("url-normalize")))
             opt = HTTP_PARSEOPT_URL_NORMALIZE;
-        else if (buffer_is_equal_string(ds->key, CONST_STR_LEN("url-normalize-unreserved")))
+        else if (buffer_is_equal_string(&ds->key, CONST_STR_LEN("url-normalize-unreserved")))
             opt = HTTP_PARSEOPT_URL_NORMALIZE_UNRESERVED;
-        else if (buffer_is_equal_string(ds->key, CONST_STR_LEN("url-normalize-required")))
+        else if (buffer_is_equal_string(&ds->key, CONST_STR_LEN("url-normalize-required")))
             opt = HTTP_PARSEOPT_URL_NORMALIZE_REQUIRED;
-        else if (buffer_is_equal_string(ds->key, CONST_STR_LEN("url-ctrls-reject")))
+        else if (buffer_is_equal_string(&ds->key, CONST_STR_LEN("url-ctrls-reject")))
             opt = HTTP_PARSEOPT_URL_NORMALIZE_CTRLS_REJECT;
-        else if (buffer_is_equal_string(ds->key, CONST_STR_LEN("url-path-backslash-trans")))
+        else if (buffer_is_equal_string(&ds->key, CONST_STR_LEN("url-path-backslash-trans")))
             opt = HTTP_PARSEOPT_URL_NORMALIZE_PATH_BACKSLASH_TRANS;
-        else if (buffer_is_equal_string(ds->key, CONST_STR_LEN("url-path-2f-decode")))
+        else if (buffer_is_equal_string(&ds->key, CONST_STR_LEN("url-path-2f-decode")))
             opt = HTTP_PARSEOPT_URL_NORMALIZE_PATH_2F_DECODE;
-        else if (buffer_is_equal_string(ds->key, CONST_STR_LEN("url-path-2f-reject")))
+        else if (buffer_is_equal_string(&ds->key, CONST_STR_LEN("url-path-2f-reject")))
             opt = HTTP_PARSEOPT_URL_NORMALIZE_PATH_2F_REJECT;
-        else if (buffer_is_equal_string(ds->key, CONST_STR_LEN("url-path-dotseg-remove")))
+        else if (buffer_is_equal_string(&ds->key, CONST_STR_LEN("url-path-dotseg-remove")))
             opt = HTTP_PARSEOPT_URL_NORMALIZE_PATH_DOTSEG_REMOVE;
-        else if (buffer_is_equal_string(ds->key, CONST_STR_LEN("url-path-dotseg-reject")))
+        else if (buffer_is_equal_string(&ds->key, CONST_STR_LEN("url-path-dotseg-reject")))
             opt = HTTP_PARSEOPT_URL_NORMALIZE_PATH_DOTSEG_REJECT;
-        else if (buffer_is_equal_string(ds->key, CONST_STR_LEN("url-query-20-plus")))
+        else if (buffer_is_equal_string(&ds->key, CONST_STR_LEN("url-query-20-plus")))
             opt = HTTP_PARSEOPT_URL_NORMALIZE_QUERY_20_PLUS;
-        else if (buffer_is_equal_string(ds->key, CONST_STR_LEN("header-strict"))) {
+        else if (buffer_is_equal_string(&ds->key, CONST_STR_LEN("header-strict"))) {
             srv->srvconf.http_header_strict = val;
             continue;
         }
-        else if (buffer_is_equal_string(ds->key, CONST_STR_LEN("host-strict"))) {
+        else if (buffer_is_equal_string(&ds->key, CONST_STR_LEN("host-strict"))) {
             srv->srvconf.http_host_strict = val;
             continue;
         }
-        else if (buffer_is_equal_string(ds->key, CONST_STR_LEN("host-normalize"))) {
+        else if (buffer_is_equal_string(&ds->key, CONST_STR_LEN("host-normalize"))) {
             srv->srvconf.http_host_normalize = val;
             continue;
         }
-        else if (buffer_is_equal_string(ds->key, CONST_STR_LEN("method-get-body"))) {
+        else if (buffer_is_equal_string(&ds->key, CONST_STR_LEN("method-get-body"))) {
             srv->srvconf.http_method_get_body = val;
             continue;
         }
         else {
             log_error_write(srv, __FILE__, __LINE__, "sb",
                             "unrecognized key for server.http-parseopts:",
-                            ds->key);
+                            &ds->key);
             rc = 0;
             continue;
         }
@@ -1503,7 +1503,7 @@ int config_read(server *srv, const char *fn) {
 	}
 
 	dc = data_config_init();
-	buffer_copy_string_len(dc->key, CONST_STR_LEN("global"));
+	buffer_copy_string_len(&dc->key, CONST_STR_LEN("global"));
 
 	force_assert(context.all_configs->used == 0);
 	dc->context_ndx = context.all_configs->used;

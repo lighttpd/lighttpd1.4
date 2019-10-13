@@ -61,7 +61,7 @@ int config_insert_values_internal(server *srv, const array *ca, const config_val
 					} else {
 						log_error_write(srv, __FILE__, __LINE__, "sssbsd",
 								"the value of an array can only be a string, variable:",
-								cv[i].key, "[", ds->key, "], type:", ds->type);
+								cv[i].key, "[", &ds->key, "], type:", ds->type);
 
 						return -1;
 					}
@@ -197,7 +197,7 @@ int config_insert_values_global(server *srv, const array *ca, const config_value
 
 			continue;
 		}
-		array_set_key_value(srv->config_touched, CONST_BUF_LEN(du->key), CONST_STR_LEN(""));
+		array_set_key_value(srv->config_touched, CONST_BUF_LEN(&du->key), CONST_STR_LEN(""));
 	}
 
 	return config_insert_values_internal(srv, ca, cv, scope);
@@ -281,7 +281,7 @@ static cond_result_t config_check_cond_nocache(server *srv, connection *con, con
 		 * if the parent is not decided yet or false, we can't be true either 
 		 */
 		if (con->conf.log_condition_handling) {
-			log_error_write(srv, __FILE__, __LINE__,  "sb", "go parent", dc->parent->key);
+			log_error_write(srv, __FILE__, __LINE__,  "sb", "go parent", &dc->parent->key);
 		}
 
 		switch (config_check_cond_cached(srv, con, dc->parent)) {
@@ -304,7 +304,7 @@ static cond_result_t config_check_cond_nocache(server *srv, connection *con, con
 		 * was evaluated as "false" (not unset/skipped/true)
 		 */
 		if (con->conf.log_condition_handling) {
-			log_error_write(srv, __FILE__, __LINE__,  "sb", "go prev", dc->prev->key);
+			log_error_write(srv, __FILE__, __LINE__,  "sb", "go prev", &dc->prev->key);
 		}
 
 		/* make sure prev is checked first */
@@ -326,7 +326,7 @@ static cond_result_t config_check_cond_nocache(server *srv, connection *con, con
 		if (con->conf.log_condition_handling) {
 			log_error_write(srv, __FILE__, __LINE__,  "dss", 
 				dc->comp,
-				dc->key->ptr,
+				dc->key.ptr,
 				"not available yet");
 		}
 

@@ -15,9 +15,9 @@ struct data_methods {
 
 typedef enum { TYPE_UNSET, TYPE_STRING, TYPE_OTHER, TYPE_ARRAY, TYPE_INTEGER, TYPE_DONOTUSE, TYPE_CONFIG } data_type_t;
 #define DATA_UNSET \
-	buffer *key; \
-	data_type_t type; \
-	const struct data_methods *fn /* function table */
+	buffer key; \
+	const struct data_methods *fn; /* function table */ \
+	data_type_t type
 
 typedef struct data_unset {
 	DATA_UNSET;

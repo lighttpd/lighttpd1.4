@@ -10,7 +10,7 @@ static data_unset *data_array_copy(const data_unset *s) {
 	data_array *src = (data_array *)s;
 	data_array *ds = data_array_init();
 
-	if (!buffer_is_empty(src->key)) buffer_copy_buffer(ds->key, src->key);
+	if (!buffer_is_empty(&src->key)) buffer_copy_buffer(&ds->key, &src->key);
 	array_free(ds->value);
 	ds->value = array_init_array(src->value);
 	return (data_unset *)ds;
@@ -19,7 +19,7 @@ static data_unset *data_array_copy(const data_unset *s) {
 static void data_array_free(data_unset *d) {
 	data_array *ds = (data_array *)d;
 
-	buffer_free(ds->key);
+	free(ds->key.ptr);
 	array_free(ds->value);
 
 	free(d);
@@ -53,7 +53,6 @@ data_array *data_array_init(void) {
 	ds = calloc(1, sizeof(*ds));
 	force_assert(NULL != ds);
 
-	ds->key = buffer_init();
 	ds->value = array_init();
 
 	ds->type = TYPE_ARRAY;

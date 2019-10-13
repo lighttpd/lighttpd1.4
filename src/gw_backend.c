@@ -542,7 +542,7 @@ static int gw_spawn_connection(server *srv, gw_host *host, gw_proc *proc, int de
             for (i = 0; i < host->bin_env->used; ++i) {
                 data_string *ds = (data_string *)host->bin_env->data[i];
 
-                env_add(&env, CONST_BUF_LEN(ds->key), CONST_BUF_LEN(ds->value));
+                env_add(&env, CONST_BUF_LEN(&ds->key), CONST_BUF_LEN(ds->value));
             }
 
             for (i = 0; i < env.used; ++i) {
@@ -1259,7 +1259,7 @@ int gw_set_defaults_backend(server *srv, gw_plugin_data *p, const data_unset *du
             if (da_host->type != TYPE_ARRAY || !array_is_kvany(da_host->value)){
                 log_error_write(srv, __FILE__, __LINE__, "SBS",
                   "unexpected value for gw.server near [",
-                  da_host->key, "](string); expected ( \"ext\" => ( \"backend-label\" => ( \"key\" => \"value\" )))");
+                  &da_host->key, "](string); expected ( \"ext\" => ( \"backend-label\" => ( \"key\" => \"value\" )))");
 
                 goto error;
             }
@@ -1267,7 +1267,7 @@ int gw_set_defaults_backend(server *srv, gw_plugin_data *p, const data_unset *du
             host = gw_host_init();
             buffer_clear(gw_mode);
 
-            buffer_copy_buffer(host->id, da_host->key);
+            buffer_copy_buffer(host->id, &da_host->key);
 
             host->check_local  = 1;
             host->min_procs    = 4;
@@ -1313,10 +1313,10 @@ int gw_set_defaults_backend(server *srv, gw_plugin_data *p, const data_unset *du
             }
 
             for (size_t m = 0; m < da_host->value->used; ++m) {
-                if (NULL != strchr(da_host->value->data[m]->key->ptr, '_')) {
+                if (NULL != strchr(da_host->value->data[m]->key.ptr, '_')) {
                     log_error_write(srv, __FILE__, __LINE__, "sb",
                       "incorrect directive contains underscore ('_') instead of dash ('-'):",
-                      da_host->value->data[m]->key);
+                      &da_host->value->data[m]->key);
                 }
             }
 
@@ -1324,9 +1324,9 @@ int gw_set_defaults_backend(server *srv, gw_plugin_data *p, const data_unset *du
                 && !buffer_string_is_empty(host->unixsocket)) {
                 log_error_write(srv, __FILE__, __LINE__, "sbsbsbs",
                   "either host/port or socket have to be set in:",
-                  da->key, "= (",
-                  da_ext->key, " => (",
-                  da_host->key, " ( ...");
+                  &da->key, "= (",
+                  &da_ext->key, " => (",
+                  &da_host->key, " ( ...");
 
                 goto error;
             }
@@ -1343,9 +1343,9 @@ int gw_set_defaults_backend(server *srv, gw_plugin_data *p, const data_unset *du
                 if (buffer_string_length(host->unixsocket) + 1 > sizeof(un.sun_path) - 2) {
                     log_error_write(srv, __FILE__, __LINE__, "sbsbsbs",
                             "unixsocket is too long in:",
-                            da->key, "= (",
-                            da_ext->key, " => (",
-                            da_host->key, " ( ...");
+                            &da->key, "= (",
+                            &da_ext->key, " => (",
+                            &da_host->key, " ( ...");
 
                     goto error;
                 }
@@ -1373,9 +1373,9 @@ int gw_set_defaults_backend(server *srv, gw_plugin_data *p, const data_unset *du
                     buffer_string_is_empty(host->bin_path)) {
                     log_error_write(srv, __FILE__, __LINE__, "sbsbsbs",
                             "host or bin-path have to be set in:",
-                            da->key, "= (",
-                            da_ext->key, " => (",
-                            da_host->key, " ( ...");
+                            &da->key, "= (",
+                            &da_ext->key, " => (",
+                            &da_host->key, " ( ...");
 
                     goto error;
                 } else if (0 == host->port) {
@@ -1567,14 +1567,14 @@ int gw_set_defaults_backend(server *srv, gw_plugin_data *p, const data_unset *du
              *  request body from client and can authorizer or deny request
              *  prior to receiving the full upload)
              */
-            gw_extension_insert(s->exts, da_ext->key, host);
+            gw_extension_insert(s->exts, &da_ext->key, host);
 
             if (host_mode == GW_AUTHORIZER) {
                 ++host->refcount;
-                gw_extension_insert(s->exts_auth, da_ext->key, host);
+                gw_extension_insert(s->exts_auth, &da_ext->key, host);
             } else if (host_mode == GW_RESPONDER) {
                 ++host->refcount;
-                gw_extension_insert(s->exts_resp, da_ext->key, host);
+                gw_extension_insert(s->exts_resp, &da_ext->key, host);
             } /*(else should have been rejected above)*/
 
             host = NULL;

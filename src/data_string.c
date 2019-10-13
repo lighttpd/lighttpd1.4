@@ -11,7 +11,7 @@ static data_unset *data_string_copy(const data_unset *s) {
 	data_string *src = (data_string *)s;
 	data_string *ds = data_string_init();
 
-	if (!buffer_is_empty(src->key)) buffer_copy_buffer(ds->key, src->key);
+	if (!buffer_is_empty(&src->key)) buffer_copy_buffer(&ds->key, &src->key);
 	buffer_copy_buffer(ds->value, src->value);
 	return (data_unset *)ds;
 }
@@ -19,7 +19,7 @@ static data_unset *data_string_copy(const data_unset *s) {
 static void data_string_free(data_unset *d) {
 	data_string *ds = (data_string *)d;
 
-	buffer_free(ds->key);
+	free(ds->key.ptr);
 	buffer_free(ds->value);
 
 	free(d);
@@ -81,7 +81,6 @@ data_string *data_string_init(void) {
 	ds = calloc(1, sizeof(*ds));
 	force_assert(NULL != ds);
 
-	ds->key = buffer_init();
 	ds->value = buffer_init();
 
 	ds->type = TYPE_STRING;

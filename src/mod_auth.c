@@ -93,7 +93,7 @@ typedef struct {
 static void data_auth_free(data_unset *d)
 {
     data_auth * const dauth = (data_auth *)d;
-    buffer_free(dauth->key);
+    free(dauth->key.ptr);
     http_auth_require_free(dauth->require);
     free(dauth);
 }
@@ -111,7 +111,6 @@ static data_auth *data_auth_init(void)
     dauth->type       = TYPE_OTHER;
     dauth->fn         = &fn;
 
-    dauth->key = buffer_init();
     dauth->require = http_auth_require_init();
 
     return dauth;
@@ -342,19 +341,19 @@ SETDEFAULTS_FUNC(mod_auth_set_defaults) {
 			for (m = 0; m < da_file->value->used; m++) {
 				if (da_file->value->data[m]->type == TYPE_STRING) {
 					data_string *ds = (data_string *)da_file->value->data[m];
-					if (buffer_is_equal_string(ds->key, CONST_STR_LEN("method"))) {
+					if (buffer_is_equal_string(&ds->key, CONST_STR_LEN("method"))) {
 						method = ds->value;
-					} else if (buffer_is_equal_string(ds->key, CONST_STR_LEN("realm"))) {
+					} else if (buffer_is_equal_string(&ds->key, CONST_STR_LEN("realm"))) {
 						realm = ds->value;
-					} else if (buffer_is_equal_string(ds->key, CONST_STR_LEN("require"))) {
+					} else if (buffer_is_equal_string(&ds->key, CONST_STR_LEN("require"))) {
 						require = ds->value;
-					} else if (buffer_is_equal_string(ds->key, CONST_STR_LEN("algorithm"))) {
+					} else if (buffer_is_equal_string(&ds->key, CONST_STR_LEN("algorithm"))) {
 						algos = ds->value;
 					} else {
 						log_error_write(srv, __FILE__, __LINE__, "ssbs",
 							"the field is unknown in:",
 							"auth.require = ( \"...\" => ( ..., -> \"",
-							da_file->value->data[m]->key,
+							&da_file->value->data[m]->key,
 							"\" <- => \"...\" ) )");
 
 						return HANDLER_ERROR;
@@ -363,7 +362,7 @@ SETDEFAULTS_FUNC(mod_auth_set_defaults) {
 					log_error_write(srv, __FILE__, __LINE__, "ssbs",
 						"a string was expected for:",
 						"auth.require = ( \"...\" => ( ..., -> \"",
-						da_file->value->data[m]->key,
+						&da_file->value->data[m]->key,
 						"\" <- => \"...\" ) )");
 
 					return HANDLER_ERROR;
@@ -410,7 +409,7 @@ SETDEFAULTS_FUNC(mod_auth_set_defaults) {
 
 			if (require) { /*(always true at this point)*/
 				data_auth * const dauth = data_auth_init();
-				buffer_copy_buffer(dauth->key, da_file->key);
+				buffer_copy_buffer(&dauth->key, &da_file->key);
 				dauth->require->scheme = auth_scheme;
 				dauth->require->algorithm = algorithm;
 				buffer_copy_buffer(dauth->require->realm, realm);

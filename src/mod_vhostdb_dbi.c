@@ -76,11 +76,11 @@ static int mod_vhostdb_dbconf_setup (server *srv, array *opts, void **vdata)
     for (size_t i = 0; i < opts->used; ++i) {
         const data_string *ds = (data_string *)opts->data[i];
         if (ds->type == TYPE_STRING) {
-            if (buffer_is_equal_caseless_string(ds->key, CONST_STR_LEN("sql"))) {
+            if (buffer_is_equal_caseless_string(&ds->key, CONST_STR_LEN("sql"))) {
                 sqlquery = ds->value;
-            } else if (buffer_is_equal_caseless_string(ds->key, CONST_STR_LEN("dbname"))) {
+            } else if (buffer_is_equal_caseless_string(&ds->key, CONST_STR_LEN("dbname"))) {
                 dbname = ds->value;
-            } else if (buffer_is_equal_caseless_string(ds->key, CONST_STR_LEN("dbtype"))) {
+            } else if (buffer_is_equal_caseless_string(&ds->key, CONST_STR_LEN("dbtype"))) {
                 dbtype = ds->value;
             }
         }
@@ -124,7 +124,7 @@ static int mod_vhostdb_dbconf_setup (server *srv, array *opts, void **vdata)
         /* set options */
         for (size_t j = 0; j < opts->used; ++j) {
             data_unset *du = opts->data[j];
-            const buffer *opt = du->key;
+            const buffer *opt = &du->key;
             if (!buffer_string_is_empty(opt)) {
                 if (du->type == TYPE_INTEGER) {
                     data_integer *di = (data_integer *)du;

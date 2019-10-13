@@ -220,16 +220,16 @@ URIHANDLER_FUNC(mod_setenv_uri_handler) {
 
 	for (k = 0; k < p->conf.request_header->used; k++) {
 		data_string *ds = (data_string *)p->conf.request_header->data[k];
-		enum http_header_e id = http_header_hkey_get(CONST_BUF_LEN(ds->key));
-		http_header_request_append(con, id, CONST_BUF_LEN(ds->key), CONST_BUF_LEN(ds->value));
+		enum http_header_e id = http_header_hkey_get(CONST_BUF_LEN(&ds->key));
+		http_header_request_append(con, id, CONST_BUF_LEN(&ds->key), CONST_BUF_LEN(ds->value));
 	}
 
 	for (k = 0; k < hctx->conf.set_request_header->used; ++k) {
 		data_string *ds = (data_string *)hctx->conf.set_request_header->data[k];
-		enum http_header_e id = http_header_hkey_get(CONST_BUF_LEN(ds->key));
+		enum http_header_e id = http_header_hkey_get(CONST_BUF_LEN(&ds->key));
 		!buffer_string_is_empty(ds->value)
-		  ? http_header_request_set(con, id, CONST_BUF_LEN(ds->key), CONST_BUF_LEN(ds->value))
-		  : http_header_request_unset(con, id, CONST_BUF_LEN(ds->key));
+		  ? http_header_request_set(con, id, CONST_BUF_LEN(&ds->key), CONST_BUF_LEN(ds->value))
+		  : http_header_request_unset(con, id, CONST_BUF_LEN(&ds->key));
 	}
 
 	return HANDLER_GO_ON;
@@ -245,12 +245,12 @@ CONNECTION_FUNC(mod_setenv_handle_request_env) {
 
 	for (size_t k = 0; k < hctx->conf.environment->used; ++k) {
 		data_string *ds = (data_string *)hctx->conf.environment->data[k];
-		http_header_env_append(con, CONST_BUF_LEN(ds->key), CONST_BUF_LEN(ds->value));
+		http_header_env_append(con, CONST_BUF_LEN(&ds->key), CONST_BUF_LEN(ds->value));
 	}
 
 	for (size_t k = 0; k < hctx->conf.set_environment->used; ++k) {
 		data_string *ds = (data_string *)hctx->conf.set_environment->data[k];
-		http_header_env_set(con, CONST_BUF_LEN(ds->key), CONST_BUF_LEN(ds->value));
+		http_header_env_set(con, CONST_BUF_LEN(&ds->key), CONST_BUF_LEN(ds->value));
 	}
 
 	return HANDLER_GO_ON;
@@ -264,16 +264,16 @@ CONNECTION_FUNC(mod_setenv_handle_response_start) {
 
 	for (size_t k = 0; k < hctx->conf.response_header->used; ++k) {
 		data_string *ds = (data_string *)hctx->conf.response_header->data[k];
-		enum http_header_e id = http_header_hkey_get(CONST_BUF_LEN(ds->key));
-		http_header_response_insert(con, id, CONST_BUF_LEN(ds->key), CONST_BUF_LEN(ds->value));
+		enum http_header_e id = http_header_hkey_get(CONST_BUF_LEN(&ds->key));
+		http_header_response_insert(con, id, CONST_BUF_LEN(&ds->key), CONST_BUF_LEN(ds->value));
 	}
 
 	for (size_t k = 0; k < hctx->conf.set_response_header->used; ++k) {
 		data_string *ds = (data_string *)hctx->conf.set_response_header->data[k];
-		enum http_header_e id = http_header_hkey_get(CONST_BUF_LEN(ds->key));
+		enum http_header_e id = http_header_hkey_get(CONST_BUF_LEN(&ds->key));
 		!buffer_string_is_empty(ds->value)
-		  ? http_header_response_set(con, id, CONST_BUF_LEN(ds->key), CONST_BUF_LEN(ds->value))
-		  : http_header_response_unset(con, id, CONST_BUF_LEN(ds->key));
+		  ? http_header_response_set(con, id, CONST_BUF_LEN(&ds->key), CONST_BUF_LEN(ds->value))
+		  : http_header_response_unset(con, id, CONST_BUF_LEN(&ds->key));
 	}
 
 	return HANDLER_GO_ON;
