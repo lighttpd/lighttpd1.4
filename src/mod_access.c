@@ -123,9 +123,9 @@ static int mod_access_patch_connection(server *srv, connection *con, plugin_data
 		for (j = 0; j < dc->value->used; j++) {
 			data_unset *du = dc->value->data[j];
 
-			if (buffer_is_equal_string(du->key, CONST_STR_LEN("url.access-deny"))) {
+			if (buffer_is_equal_string(&du->key, CONST_STR_LEN("url.access-deny"))) {
 				PATCH(access_deny);
-			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("url.access-allow"))) {
+			} else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("url.access-allow"))) {
 				PATCH(access_allow);
 			}
 		}

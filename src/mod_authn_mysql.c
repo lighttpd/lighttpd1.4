@@ -304,25 +304,25 @@ static int mod_authn_mysql_patch_connection(server *srv, connection *con, plugin
         for (j = 0; j < dc->value->used; j++) {
             data_unset *du = dc->value->data[j];
 
-            if (buffer_is_equal_string(du->key, CONST_STR_LEN("auth.backend.mysql.host"))) {
+            if (buffer_is_equal_string(&du->key, CONST_STR_LEN("auth.backend.mysql.host"))) {
                 PATCH(auth_mysql_host);
-            } else if (buffer_is_equal_string(du->key, CONST_STR_LEN("auth.backend.mysql.user"))) {
+            } else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("auth.backend.mysql.user"))) {
                 PATCH(auth_mysql_user);
-            } else if (buffer_is_equal_string(du->key, CONST_STR_LEN("auth.backend.mysql.pass"))) {
+            } else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("auth.backend.mysql.pass"))) {
                 PATCH(auth_mysql_pass);
-            } else if (buffer_is_equal_string(du->key, CONST_STR_LEN("auth.backend.mysql.db"))) {
+            } else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("auth.backend.mysql.db"))) {
                 PATCH(auth_mysql_db);
-            } else if (buffer_is_equal_string(du->key, CONST_STR_LEN("auth.backend.mysql.port"))) {
+            } else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("auth.backend.mysql.port"))) {
                 PATCH(auth_mysql_port);
-            } else if (buffer_is_equal_string(du->key, CONST_STR_LEN("auth.backend.mysql.socket"))) {
+            } else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("auth.backend.mysql.socket"))) {
                 PATCH(auth_mysql_socket);
-            } else if (buffer_is_equal_string(du->key, CONST_STR_LEN("auth.backend.mysql.users_table"))) {
+            } else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("auth.backend.mysql.users_table"))) {
                 PATCH(auth_mysql_users_table);
-            } else if (buffer_is_equal_string(du->key, CONST_STR_LEN("auth.backend.mysql.col_user"))) {
+            } else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("auth.backend.mysql.col_user"))) {
                 PATCH(auth_mysql_col_user);
-            } else if (buffer_is_equal_string(du->key, CONST_STR_LEN("auth.backend.mysql.col_pass"))) {
+            } else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("auth.backend.mysql.col_pass"))) {
                 PATCH(auth_mysql_col_pass);
-            } else if (buffer_is_equal_string(du->key, CONST_STR_LEN("auth.backend.mysql.col_realm"))) {
+            } else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("auth.backend.mysql.col_realm"))) {
                 PATCH(auth_mysql_col_realm);
             }
         }

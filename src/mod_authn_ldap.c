@@ -214,24 +214,24 @@ static int mod_authn_ldap_patch_connection(server *srv, connection *con, plugin_
         for (j = 0; j < dc->value->used; j++) {
             data_unset *du = dc->value->data[j];
 
-            if (buffer_is_equal_string(du->key, CONST_STR_LEN("auth.backend.ldap.hostname"))) {
+            if (buffer_is_equal_string(&du->key, CONST_STR_LEN("auth.backend.ldap.hostname"))) {
                 PATCH(auth_ldap_hostname);
                 p->anon_conf = s;
-            } else if (buffer_is_equal_string(du->key, CONST_STR_LEN("auth.backend.ldap.base-dn"))) {
+            } else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("auth.backend.ldap.base-dn"))) {
                 PATCH(auth_ldap_basedn);
-            } else if (buffer_is_equal_string(du->key, CONST_STR_LEN("auth.backend.ldap.filter"))) {
+            } else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("auth.backend.ldap.filter"))) {
                 PATCH(auth_ldap_filter);
-            } else if (buffer_is_equal_string(du->key, CONST_STR_LEN("auth.backend.ldap.ca-file"))) {
+            } else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("auth.backend.ldap.ca-file"))) {
                 PATCH(auth_ldap_cafile);
-            } else if (buffer_is_equal_string(du->key, CONST_STR_LEN("auth.backend.ldap.starttls"))) {
+            } else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("auth.backend.ldap.starttls"))) {
                 PATCH(auth_ldap_starttls);
-            } else if (buffer_is_equal_string(du->key, CONST_STR_LEN("auth.backend.ldap.bind-dn"))) {
+            } else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("auth.backend.ldap.bind-dn"))) {
                 PATCH(auth_ldap_binddn);
-            } else if (buffer_is_equal_string(du->key, CONST_STR_LEN("auth.backend.ldap.bind-pw"))) {
+            } else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("auth.backend.ldap.bind-pw"))) {
                 PATCH(auth_ldap_bindpw);
-            } else if (buffer_is_equal_string(du->key, CONST_STR_LEN("auth.backend.ldap.allow-empty-pw"))) {
+            } else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("auth.backend.ldap.allow-empty-pw"))) {
                 PATCH(auth_ldap_allow_empty_pw);
-            } else if (buffer_is_equal_string(du->key, CONST_STR_LEN("auth.backend.ldap.groupmember"))) {
+            } else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("auth.backend.ldap.groupmember"))) {
                 PATCH(auth_ldap_groupmember);
             }
         }

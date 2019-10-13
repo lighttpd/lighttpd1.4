@@ -179,15 +179,15 @@ static int mod_cml_patch_connection(server *srv, connection *con, plugin_data *p
 		for (j = 0; j < dc->value->used; j++) {
 			data_unset *du = dc->value->data[j];
 
-			if (buffer_is_equal_string(du->key, CONST_STR_LEN("cml.extension"))) {
+			if (buffer_is_equal_string(&du->key, CONST_STR_LEN("cml.extension"))) {
 				PATCH(ext);
-			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("cml.memcache-hosts"))) {
+			} else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("cml.memcache-hosts"))) {
 #if defined(USE_MEMCACHED)
 				PATCH(memc);
 #endif
-			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("cml.memcache-namespace"))) {
+			} else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("cml.memcache-namespace"))) {
 				PATCH(mc_namespace);
-			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("cml.power-magnet"))) {
+			} else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("cml.power-magnet"))) {
 				PATCH(power_magnet);
 			}
 		}

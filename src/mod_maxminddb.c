@@ -344,14 +344,14 @@ mod_maxmind_patch_connection (server * const srv,
         for (size_t j = 0; j < dc->value->used; ++j) {
             data_unset *du = dc->value->data[j];
 
-            if (buffer_is_equal_string(du->key, CONST_STR_LEN("maxminddb.activate"))) {
+            if (buffer_is_equal_string(&du->key, CONST_STR_LEN("maxminddb.activate"))) {
                 PATCH(activate);
             }
-            else if (buffer_is_equal_string(du->key, CONST_STR_LEN("maxminddb.db"))) {
+            else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("maxminddb.db"))) {
                 /*PATCH(db_name);*//*(not used)*/
                 PATCH(mmdb);
             }
-            else if (buffer_is_equal_string(du->key, CONST_STR_LEN("maxminddb.env"))) {
+            else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("maxminddb.env"))) {
                 PATCH(env);
                 PATCH(cenv);
             }

@@ -1398,55 +1398,55 @@ mod_openssl_patch_connection (server *srv, connection *con, handler_ctx *hctx)
         for (size_t j = 0; j < dc->value->used; ++j) {
             data_unset *du = dc->value->data[j];
 
-            if (buffer_is_equal_string(du->key, CONST_STR_LEN("ssl.pemfile"))) {
+            if (buffer_is_equal_string(&du->key, CONST_STR_LEN("ssl.pemfile"))) {
                 /*PATCH(ssl_pemfile);*//*(not patched)*/
                 /*PATCH(ssl_privkey);*//*(not patched)*/
                 PATCH(ssl_pemfile_x509);
                 PATCH(ssl_pemfile_pkey);
-            } else if (buffer_is_equal_string(du->key, CONST_STR_LEN("ssl.ca-file"))) {
+            } else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("ssl.ca-file"))) {
                 PATCH(ssl_ca_file);
                 PATCH(ssl_ca_file_cert_names);
-            } else if (buffer_is_equal_string(du->key, CONST_STR_LEN("ssl.ca-dn-file"))) {
+            } else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("ssl.ca-dn-file"))) {
                 PATCH(ssl_ca_dn_file);
                 PATCH(ssl_ca_file_cert_names);
-            } else if (buffer_is_equal_string(du->key, CONST_STR_LEN("ssl.verifyclient.activate"))) {
+            } else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("ssl.verifyclient.activate"))) {
                 PATCH(ssl_verifyclient);
-            } else if (buffer_is_equal_string(du->key, CONST_STR_LEN("ssl.verifyclient.enforce"))) {
+            } else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("ssl.verifyclient.enforce"))) {
                 PATCH(ssl_verifyclient_enforce);
-            } else if (buffer_is_equal_string(du->key, CONST_STR_LEN("ssl.verifyclient.depth"))) {
+            } else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("ssl.verifyclient.depth"))) {
                 PATCH(ssl_verifyclient_depth);
-            } else if (buffer_is_equal_string(du->key, CONST_STR_LEN("ssl.verifyclient.username"))) {
+            } else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("ssl.verifyclient.username"))) {
                 PATCH(ssl_verifyclient_username);
-            } else if (buffer_is_equal_string(du->key, CONST_STR_LEN("ssl.verifyclient.exportcert"))) {
+            } else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("ssl.verifyclient.exportcert"))) {
                 PATCH(ssl_verifyclient_export_cert);
-            } else if (buffer_is_equal_string(du->key, CONST_STR_LEN("ssl.disable-client-renegotiation"))) {
+            } else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("ssl.disable-client-renegotiation"))) {
                 PATCH(ssl_disable_client_renegotiation);
-            } else if (buffer_is_equal_string(du->key, CONST_STR_LEN("ssl.read-ahead"))) {
+            } else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("ssl.read-ahead"))) {
                 PATCH(ssl_read_ahead);
-            } else if (buffer_is_equal_string(du->key, CONST_STR_LEN("ssl.acme-tls-1"))) {
+            } else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("ssl.acme-tls-1"))) {
                 PATCH(ssl_acme_tls_1);
-            } else if (buffer_is_equal_string(du->key, CONST_STR_LEN("debug.log-ssl-noise"))) {
+            } else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("debug.log-ssl-noise"))) {
                 PATCH(ssl_log_noise);
           #if 0 /*(not patched)*/
-            } else if (buffer_is_equal_string(du->key, CONST_STR_LEN("ssl.ca-crl-file"))) {
+            } else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("ssl.ca-crl-file"))) {
                 PATCH(ssl_ca_crl_file);
-            } else if (buffer_is_equal_string(du->key, CONST_STR_LEN("ssl.honor-cipher-order"))) {
+            } else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("ssl.honor-cipher-order"))) {
                 PATCH(ssl_honor_cipher_order);
-            } else if (buffer_is_equal_string(du->key, CONST_STR_LEN("ssl.empty-fragments"))) {
+            } else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("ssl.empty-fragments"))) {
                 PATCH(ssl_empty_fragments);
-            } else if (buffer_is_equal_string(du->key, CONST_STR_LEN("ssl.use-sslv2"))) {
+            } else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("ssl.use-sslv2"))) {
                 PATCH(ssl_use_sslv2);
-            } else if (buffer_is_equal_string(du->key, CONST_STR_LEN("ssl.use-sslv3"))) {
+            } else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("ssl.use-sslv3"))) {
                 PATCH(ssl_use_sslv3);
-            } else if (buffer_is_equal_string(du->key, CONST_STR_LEN("ssl.cipher-list"))) {
+            } else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("ssl.cipher-list"))) {
                 PATCH(ssl_cipher_list);
-            } else if (buffer_is_equal_string(du->key, CONST_STR_LEN("ssl.dh-file"))) {
+            } else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("ssl.dh-file"))) {
                 PATCH(ssl_dh_file);
-            } else if (buffer_is_equal_string(du->key, CONST_STR_LEN("ssl.ec-curve"))) {
+            } else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("ssl.ec-curve"))) {
                 PATCH(ssl_ec_curve);
-            } else if (buffer_is_equal_string(du->key, CONST_STR_LEN("ssl.engine"))) {
+            } else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("ssl.engine"))) {
                 PATCH(ssl_enabled);
-            } else if (buffer_is_equal_string(du->key, CONST_STR_LEN("ssl.openssl.ssl-conf-cmd"))) {
+            } else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("ssl.openssl.ssl-conf-cmd"))) {
                 PATCH(ssl_conf_cmd);
           #endif
             }

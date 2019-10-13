@@ -140,11 +140,11 @@ static int mod_staticfile_patch_connection(server *srv, connection *con, plugin_
 		for (j = 0; j < dc->value->used; j++) {
 			data_unset *du = dc->value->data[j];
 
-			if (buffer_is_equal_string(du->key, CONST_STR_LEN("static-file.exclude-extensions"))) {
+			if (buffer_is_equal_string(&du->key, CONST_STR_LEN("static-file.exclude-extensions"))) {
 				PATCH(exclude_ext);
-			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("static-file.etags"))) {
+			} else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("static-file.etags"))) {
 				PATCH(etags_used);
-			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("static-file.disable-pathinfo"))) {
+			} else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("static-file.disable-pathinfo"))) {
 				PATCH(disable_pathinfo);
 			}
 		}

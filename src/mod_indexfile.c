@@ -131,9 +131,9 @@ static int mod_indexfile_patch_connection(server *srv, connection *con, plugin_d
 		for (j = 0; j < dc->value->used; j++) {
 			data_unset *du = dc->value->data[j];
 
-			if (buffer_is_equal_string(du->key, CONST_STR_LEN("server.indexfiles"))) {
+			if (buffer_is_equal_string(&du->key, CONST_STR_LEN("server.indexfiles"))) {
 				PATCH(indexfiles);
-			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("index-file.names"))) {
+			} else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("index-file.names"))) {
 				PATCH(indexfiles);
 			}
 		}

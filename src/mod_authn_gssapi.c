@@ -156,11 +156,11 @@ static int mod_authn_gssapi_patch_connection(server *srv, connection *con, plugi
         for (j = 0; j < dc->value->used; j++) {
             data_unset *du = dc->value->data[j];
 
-            if (buffer_is_equal_string(du->key, CONST_STR_LEN("auth.backend.gssapi.keytab"))) {
+            if (buffer_is_equal_string(&du->key, CONST_STR_LEN("auth.backend.gssapi.keytab"))) {
                 PATCH(auth_gssapi_keytab);
-            } else if (buffer_is_equal_string(du->key, CONST_STR_LEN("auth.backend.gssapi.principal"))) {
+            } else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("auth.backend.gssapi.principal"))) {
                 PATCH(auth_gssapi_principal);
-            } else if (buffer_is_equal_string(du->key, CONST_STR_LEN("auth.backend.gssapi.store-creds"))) {
+            } else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("auth.backend.gssapi.store-creds"))) {
                 PATCH(auth_gssapi_store_creds);
             }
         }

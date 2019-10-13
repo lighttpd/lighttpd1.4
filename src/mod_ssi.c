@@ -1282,15 +1282,15 @@ static int mod_ssi_patch_connection(server *srv, connection *con, plugin_data *p
 		for (j = 0; j < dc->value->used; j++) {
 			data_unset *du = dc->value->data[j];
 
-			if (buffer_is_equal_string(du->key, CONST_STR_LEN("ssi.extension"))) {
+			if (buffer_is_equal_string(&du->key, CONST_STR_LEN("ssi.extension"))) {
 				PATCH(ssi_extension);
-			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("ssi.content-type"))) {
+			} else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("ssi.content-type"))) {
 				PATCH(content_type);
-			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("ssi.conditional-requests"))) {
+			} else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("ssi.conditional-requests"))) {
 				PATCH(conditional_requests);
-			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("ssi.exec"))) {
+			} else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("ssi.exec"))) {
 				PATCH(ssi_exec);
-			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("ssi.recursion-max"))) {
+			} else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("ssi.recursion-max"))) {
 				PATCH(ssi_recursion_max);
 			}
 		}

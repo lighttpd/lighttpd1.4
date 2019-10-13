@@ -462,15 +462,15 @@ static int fcgi_patch_connection(server *srv, connection *con, plugin_data *p) {
 		for (j = 0; j < dc->value->used; j++) {
 			data_unset *du = dc->value->data[j];
 
-			if (buffer_is_equal_string(du->key, CONST_STR_LEN("fastcgi.server"))) {
+			if (buffer_is_equal_string(&du->key, CONST_STR_LEN("fastcgi.server"))) {
 				PATCH(exts);
 				PATCH(exts_auth);
 				PATCH(exts_resp);
-			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("fastcgi.debug"))) {
+			} else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("fastcgi.debug"))) {
 				PATCH(debug);
-			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("fastcgi.balance"))) {
+			} else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("fastcgi.balance"))) {
 				PATCH(balance);
-			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("fastcgi.map-extensions"))) {
+			} else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("fastcgi.map-extensions"))) {
 				PATCH(ext_mapping);
 			}
 		}

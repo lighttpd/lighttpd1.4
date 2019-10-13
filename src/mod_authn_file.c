@@ -180,13 +180,13 @@ static int mod_authn_file_patch_connection(server *srv, connection *con, plugin_
         for (j = 0; j < dc->value->used; j++) {
             data_unset *du = dc->value->data[j];
 
-            if (buffer_is_equal_string(du->key, CONST_STR_LEN("auth.backend.plain.groupfile"))) {
+            if (buffer_is_equal_string(&du->key, CONST_STR_LEN("auth.backend.plain.groupfile"))) {
                 PATCH(auth_plain_groupfile);
-            } else if (buffer_is_equal_string(du->key, CONST_STR_LEN("auth.backend.plain.userfile"))) {
+            } else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("auth.backend.plain.userfile"))) {
                 PATCH(auth_plain_userfile);
-            } else if (buffer_is_equal_string(du->key, CONST_STR_LEN("auth.backend.htdigest.userfile"))) {
+            } else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("auth.backend.htdigest.userfile"))) {
                 PATCH(auth_htdigest_userfile);
-            } else if (buffer_is_equal_string(du->key, CONST_STR_LEN("auth.backend.htpasswd.userfile"))) {
+            } else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("auth.backend.htpasswd.userfile"))) {
                 PATCH(auth_htpasswd_userfile);
             }
         }

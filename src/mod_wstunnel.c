@@ -382,23 +382,23 @@ static void mod_wstunnel_patch_connection(server *srv, connection *con, plugin_d
         for (j = 0; j < dc->value->used; j++) {
             data_unset *du = dc->value->data[j];
 
-            if (buffer_is_equal_string(du->key, CONST_STR_LEN("wstunnel.server"))) {
+            if (buffer_is_equal_string(&du->key, CONST_STR_LEN("wstunnel.server"))) {
                 PATCH_GW(exts);
                 /*(wstunnel can not act as authorizer,
                  * but p->conf.exts_auth must not be NULL)*/
                 PATCH_GW(exts_auth);
                 PATCH_GW(exts_resp);
-            } else if (buffer_is_equal_string(du->key, CONST_STR_LEN("wstunnel.debug"))) {
+            } else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("wstunnel.debug"))) {
                 PATCH_GW(debug);
-            } else if (buffer_is_equal_string(du->key, CONST_STR_LEN("wstunnel.balance"))) {
+            } else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("wstunnel.balance"))) {
                 PATCH_GW(balance);
-            } else if (buffer_is_equal_string(du->key, CONST_STR_LEN("wstunnel.map-extensions"))) {
+            } else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("wstunnel.map-extensions"))) {
                 PATCH_GW(ext_mapping);
-            } else if (buffer_is_equal_string(du->key, CONST_STR_LEN("wstunnel.frame-type"))) {
+            } else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("wstunnel.frame-type"))) {
                 PATCH(frame_type);
-            } else if (buffer_is_equal_string(du->key, CONST_STR_LEN("wstunnel.origins"))) {
+            } else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("wstunnel.origins"))) {
                 PATCH(origins);
-            } else if (buffer_is_equal_string(du->key, CONST_STR_LEN("wstunnel.ping-interval"))) {
+            } else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("wstunnel.ping-interval"))) {
                 PATCH(ping_interval);
             }
         }

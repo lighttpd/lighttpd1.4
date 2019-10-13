@@ -312,9 +312,9 @@ static int mod_expire_patch_connection(server *srv, connection *con, plugin_data
 		for (j = 0; j < dc->value->used; j++) {
 			data_unset *du = dc->value->data[j];
 
-			if (buffer_is_equal_string(du->key, CONST_STR_LEN("expire.url"))) {
+			if (buffer_is_equal_string(&du->key, CONST_STR_LEN("expire.url"))) {
 				PATCH(expire_url);
-			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("expire.mimetypes"))) {
+			} else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("expire.mimetypes"))) {
 				PATCH(expire_mimetypes);
 			}
 		}

@@ -397,17 +397,17 @@ static int mod_extforward_patch_connection(server *srv, connection *con, plugin_
 		for (j = 0; j < dc->value->used; j++) {
 			data_unset *du = dc->value->data[j];
 
-			if (buffer_is_equal_string(du->key, CONST_STR_LEN("extforward.forwarder"))) {
+			if (buffer_is_equal_string(&du->key, CONST_STR_LEN("extforward.forwarder"))) {
 				PATCH(forwarder);
 				PATCH(forward_masks);
 				PATCH(forward_all);
-			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("extforward.headers"))) {
+			} else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("extforward.headers"))) {
 				PATCH(headers);
-			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("extforward.params"))) {
+			} else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("extforward.params"))) {
 				PATCH(opts);
-			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("extforward.hap-PROXY"))) {
+			} else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("extforward.hap-PROXY"))) {
 				PATCH(hap_PROXY);
-			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("extforward.hap-PROXY-ssl-client-verify"))) {
+			} else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("extforward.hap-PROXY-ssl-client-verify"))) {
 				PATCH(hap_PROXY_ssl_client_verify);
 			}
 		}

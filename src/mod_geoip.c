@@ -198,11 +198,11 @@ static int mod_geoip_patch_connection(server *srv, connection *con, plugin_data 
 		for (j = 0; j < dc->value->used; j++) {
 			data_unset *du = dc->value->data[j];
 
-			if (buffer_is_equal_string(du->key, CONST_STR_LEN("geoip.db-filename"))) {
+			if (buffer_is_equal_string(&du->key, CONST_STR_LEN("geoip.db-filename"))) {
 				PATCH(db_name);
 			}
 
-			if (buffer_is_equal_string(du->key, CONST_STR_LEN("geoip.memory-cache"))) {
+			if (buffer_is_equal_string(&du->key, CONST_STR_LEN("geoip.memory-cache"))) {
 				PATCH(mem_cache);
 			}
 		}

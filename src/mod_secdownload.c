@@ -417,19 +417,19 @@ static int mod_secdownload_patch_connection(server *srv, connection *con, plugin
 		for (j = 0; j < dc->value->used; j++) {
 			data_unset *du = dc->value->data[j];
 
-			if (buffer_is_equal_string(du->key, CONST_STR_LEN("secdownload.secret"))) {
+			if (buffer_is_equal_string(&du->key, CONST_STR_LEN("secdownload.secret"))) {
 				PATCH(secret);
-			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("secdownload.document-root"))) {
+			} else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("secdownload.document-root"))) {
 				PATCH(doc_root);
-			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("secdownload.uri-prefix"))) {
+			} else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("secdownload.uri-prefix"))) {
 				PATCH(uri_prefix);
-			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("secdownload.timeout"))) {
+			} else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("secdownload.timeout"))) {
 				PATCH(timeout);
-			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("secdownload.algorithm"))) {
+			} else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("secdownload.algorithm"))) {
 				PATCH(algorithm);
-			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("secdownload.path-segments"))) {
+			} else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("secdownload.path-segments"))) {
 				PATCH(path_segments);
-			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("secdownload.hash-querystr"))) {
+			} else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("secdownload.hash-querystr"))) {
 				PATCH(hash_querystr);
 			}
 		}

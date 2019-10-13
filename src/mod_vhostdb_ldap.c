@@ -536,7 +536,7 @@ static void mod_vhostdb_patch_connection (server *srv, connection *con, plugin_d
         for (size_t j = 0; j < dc->value->used; ++j) {
             data_unset *du = dc->value->data[j];
 
-            if (buffer_is_equal_string(du->key,CONST_STR_LEN("vhostdb.ldap"))) {
+            if (buffer_is_equal_string(&du->key,CONST_STR_LEN("vhostdb.ldap"))) {
                 PATCH(vdata);
             }
         }

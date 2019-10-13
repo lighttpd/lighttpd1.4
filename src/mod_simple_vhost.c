@@ -200,16 +200,16 @@ static int mod_simple_vhost_patch_connection(server *srv, connection *con, plugi
 		for (j = 0; j < dc->value->used; j++) {
 			data_unset *du = dc->value->data[j];
 
-			if (buffer_is_equal_string(du->key, CONST_STR_LEN("simple-vhost.server-root"))) {
+			if (buffer_is_equal_string(&du->key, CONST_STR_LEN("simple-vhost.server-root"))) {
 				PATCH(server_root);
 				PATCH(docroot_cache_key);
 				PATCH(docroot_cache_value);
 				PATCH(docroot_cache_servername);
-			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("simple-vhost.default-host"))) {
+			} else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("simple-vhost.default-host"))) {
 				PATCH(default_host);
-			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("simple-vhost.document-root"))) {
+			} else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("simple-vhost.document-root"))) {
 				PATCH(document_root);
-			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("simple-vhost.debug"))) {
+			} else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("simple-vhost.debug"))) {
 				PATCH(debug);
 			}
 		}

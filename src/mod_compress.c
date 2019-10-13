@@ -765,15 +765,15 @@ static int mod_compress_patch_connection(server *srv, connection *con, plugin_da
 		for (j = 0; j < dc->value->used; j++) {
 			data_unset *du = dc->value->data[j];
 
-			if (buffer_is_equal_string(du->key, CONST_STR_LEN("compress.cache-dir"))) {
+			if (buffer_is_equal_string(&du->key, CONST_STR_LEN("compress.cache-dir"))) {
 				PATCH(compress_cache_dir);
-			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("compress.filetype"))) {
+			} else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("compress.filetype"))) {
 				PATCH(compress);
-			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("compress.max-filesize"))) {
+			} else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("compress.max-filesize"))) {
 				PATCH(compress_max_filesize);
-			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("compress.allowed-encodings"))) {
+			} else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("compress.allowed-encodings"))) {
 				PATCH(allowed_encodings);
-			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("compress.max-loadavg"))) {
+			} else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("compress.max-loadavg"))) {
 				PATCH(max_loadavg);
 			}
 		}

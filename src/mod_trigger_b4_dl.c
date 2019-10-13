@@ -292,27 +292,27 @@ static int mod_trigger_b4_dl_patch_connection(server *srv, connection *con, plug
 		for (j = 0; j < dc->value->used; j++) {
 			data_unset *du = dc->value->data[j];
 
-			if (buffer_is_equal_string(du->key, CONST_STR_LEN("trigger-before-download.download-url"))) {
+			if (buffer_is_equal_string(&du->key, CONST_STR_LEN("trigger-before-download.download-url"))) {
 #if defined(HAVE_PCRE_H)
 				PATCH(download_regex);
 #endif
-			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("trigger-before-download.trigger-url"))) {
+			} else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("trigger-before-download.trigger-url"))) {
 # if defined(HAVE_PCRE_H)
 				PATCH(trigger_regex);
 # endif
-			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("trigger-before-download.gdbm-filename"))) {
+			} else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("trigger-before-download.gdbm-filename"))) {
 #if defined(HAVE_GDBM_H)
 				PATCH(db);
 #endif
-			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("trigger-before-download.trigger-timeout"))) {
+			} else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("trigger-before-download.trigger-timeout"))) {
 				PATCH(trigger_timeout);
-			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("trigger-before-download.debug"))) {
+			} else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("trigger-before-download.debug"))) {
 				PATCH(debug);
-			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("trigger-before-download.deny-url"))) {
+			} else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("trigger-before-download.deny-url"))) {
 				PATCH(deny_url);
-			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("trigger-before-download.memcache-namespace"))) {
+			} else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("trigger-before-download.memcache-namespace"))) {
 				PATCH(mc_namespace);
-			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("trigger-before-download.memcache-hosts"))) {
+			} else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("trigger-before-download.memcache-hosts"))) {
 #if defined(USE_MEMCACHED)
 				PATCH(memc);
 #endif

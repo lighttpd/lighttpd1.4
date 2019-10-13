@@ -251,17 +251,17 @@ static int scgi_patch_connection(server *srv, connection *con, plugin_data *p) {
 		for (j = 0; j < dc->value->used; j++) {
 			data_unset *du = dc->value->data[j];
 
-			if (buffer_is_equal_string(du->key, CONST_STR_LEN("scgi.server"))) {
+			if (buffer_is_equal_string(&du->key, CONST_STR_LEN("scgi.server"))) {
 				PATCH(exts);
 				PATCH(exts_auth);
 				PATCH(exts_resp);
-			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("scgi.protocol"))) {
+			} else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("scgi.protocol"))) {
 				PATCH(proto);
-			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("scgi.balance"))) {
+			} else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("scgi.balance"))) {
 				PATCH(balance);
-			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("scgi.debug"))) {
+			} else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("scgi.debug"))) {
 				PATCH(debug);
-			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("scgi.map-extensions"))) {
+			} else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("scgi.map-extensions"))) {
 				PATCH(ext_mapping);
 			}
 		}

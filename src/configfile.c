@@ -694,76 +694,76 @@ void config_patch_connection(server *srv, connection *con) {
 		for (j = 0; j < dc->value->used; j++) {
 			data_unset *du = dc->value->data[j];
 
-			if (buffer_is_equal_string(du->key, CONST_STR_LEN("server.document-root"))) {
+			if (buffer_is_equal_string(&du->key, CONST_STR_LEN("server.document-root"))) {
 				PATCH(document_root);
-			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("server.range-requests"))) {
+			} else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("server.range-requests"))) {
 				PATCH(range_requests);
-			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("server.error-handler"))) {
+			} else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("server.error-handler"))) {
 				PATCH(error_handler);
-			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("server.error-handler-404"))) {
+			} else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("server.error-handler-404"))) {
 				PATCH(error_handler_404);
-			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("server.error-intercept"))) {
+			} else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("server.error-intercept"))) {
 				PATCH(error_intercept);
-			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("server.errorfile-prefix"))) {
+			} else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("server.errorfile-prefix"))) {
 				PATCH(errorfile_prefix);
-			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("mimetype.assign"))) {
+			} else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("mimetype.assign"))) {
 				PATCH(mimetypes);
-			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("server.max-keep-alive-requests"))) {
+			} else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("server.max-keep-alive-requests"))) {
 				PATCH(max_keep_alive_requests);
-			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("server.max-keep-alive-idle"))) {
+			} else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("server.max-keep-alive-idle"))) {
 				PATCH(max_keep_alive_idle);
-			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("server.max-write-idle"))) {
+			} else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("server.max-write-idle"))) {
 				PATCH(max_write_idle);
-			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("server.max-read-idle"))) {
+			} else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("server.max-read-idle"))) {
 				PATCH(max_read_idle);
-			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("server.max-request-size"))) {
+			} else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("server.max-request-size"))) {
 				PATCH(max_request_size);
-			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("mimetype.use-xattr"))) {
+			} else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("mimetype.use-xattr"))) {
 				PATCH(use_xattr);
-			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("etag.use-inode"))) {
+			} else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("etag.use-inode"))) {
 				PATCH(etag_use_inode);
-			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("etag.use-mtime"))) {
+			} else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("etag.use-mtime"))) {
 				PATCH(etag_use_mtime);
-			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("etag.use-size"))) {
+			} else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("etag.use-size"))) {
 				PATCH(etag_use_size);
-			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("server.follow-symlink"))) {
+			} else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("server.follow-symlink"))) {
 				PATCH(follow_symlink);
-			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("server.name"))) {
+			} else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("server.name"))) {
 				PATCH(server_name);
-			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("server.tag"))) {
+			} else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("server.tag"))) {
 				PATCH(server_tag);
-			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("server.stream-request-body"))) {
+			} else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("server.stream-request-body"))) {
 				PATCH(stream_request_body);
-			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("server.stream-response-body"))) {
+			} else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("server.stream-response-body"))) {
 				PATCH(stream_response_body);
-			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("connection.kbytes-per-second"))) {
+			} else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("connection.kbytes-per-second"))) {
 				PATCH(kbytes_per_second);
-			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("debug.log-request-handling"))) {
+			} else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("debug.log-request-handling"))) {
 				PATCH(log_request_handling);
-			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("debug.log-request-header"))) {
+			} else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("debug.log-request-header"))) {
 				PATCH(log_request_header);
-			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("debug.log-response-header"))) {
+			} else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("debug.log-response-header"))) {
 				PATCH(log_response_header);
-			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("debug.log-condition-handling"))) {
+			} else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("debug.log-condition-handling"))) {
 				PATCH(log_condition_handling);
-			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("debug.log-file-not-found"))) {
+			} else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("debug.log-file-not-found"))) {
 				PATCH(log_file_not_found);
-			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("debug.log-timeouts"))) {
+			} else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("debug.log-timeouts"))) {
 				PATCH(log_timeouts);
-			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("server.protocol-http11"))) {
+			} else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("server.protocol-http11"))) {
 				PATCH(allow_http11);
-			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("server.force-lowercase-filenames"))) {
+			} else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("server.force-lowercase-filenames"))) {
 				PATCH(force_lowercase_filenames);
 		      #if 0 /*(not necessary; used only at startup)*/
-			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("server.listen-backlog"))) {
+			} else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("server.listen-backlog"))) {
 				PATCH(listen_backlog);
 		      #endif
-			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("server.kbytes-per-second"))) {
+			} else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("server.kbytes-per-second"))) {
 				PATCH(global_kbytes_per_second);
 				PATCH(global_bytes_per_second_cnt);
 				con->conf.global_bytes_per_second_cnt_ptr = &s->global_bytes_per_second_cnt;
 		      #if 0 /*(not necessary; used only at startup)*/
-			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("server.socket-perms"))) {
+			} else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("server.socket-perms"))) {
 				PATCH(socket_perms);
 		      #endif
 			}

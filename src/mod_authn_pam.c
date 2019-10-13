@@ -117,7 +117,7 @@ static int mod_authn_pam_patch_connection(server *srv, connection *con, plugin_d
         s = p->config_storage[i];
         for (size_t j = 0; j < dc->value->used; ++j) {
             data_unset *du = dc->value->data[j];
-            if (buffer_is_equal_string(du->key, CONST_STR_LEN("auth.backend.pam.opts"))) {
+            if (buffer_is_equal_string(&du->key, CONST_STR_LEN("auth.backend.pam.opts"))) {
                 PATCH(service);
             }
         }

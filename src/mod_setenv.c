@@ -176,17 +176,17 @@ static int mod_setenv_patch_connection(server *srv, connection *con, plugin_data
 		for (j = 0; j < dc->value->used; j++) {
 			data_unset *du = dc->value->data[j];
 
-			if (buffer_is_equal_string(du->key, CONST_STR_LEN("setenv.add-request-header"))) {
+			if (buffer_is_equal_string(&du->key, CONST_STR_LEN("setenv.add-request-header"))) {
 				PATCH(request_header);
-			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("setenv.set-request-header"))) {
+			} else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("setenv.set-request-header"))) {
 				PATCH(set_request_header);
-			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("setenv.add-response-header"))) {
+			} else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("setenv.add-response-header"))) {
 				PATCH(response_header);
-			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("setenv.set-response-header"))) {
+			} else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("setenv.set-response-header"))) {
 				PATCH(set_response_header);
-			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("setenv.add-environment"))) {
+			} else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("setenv.add-environment"))) {
 				PATCH(environment);
-			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("setenv.set-environment"))) {
+			} else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("setenv.set-environment"))) {
 				PATCH(set_environment);
 			}
 		}

@@ -965,21 +965,21 @@ static int mod_deflate_patch_connection(server *srv, connection *con, plugin_dat
 		for (j = 0; j < dc->value->used; j++) {
 			data_unset *du = dc->value->data[j];
 
-			if (buffer_is_equal_string(du->key, CONST_STR_LEN("deflate.mimetypes"))) {
+			if (buffer_is_equal_string(&du->key, CONST_STR_LEN("deflate.mimetypes"))) {
 				PATCH(mimetypes);
-			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("deflate.allowed-encodings"))) {
+			} else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("deflate.allowed-encodings"))) {
 				PATCH(allowed_encodings);
-			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("deflate.max-compress-size"))) {
+			} else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("deflate.max-compress-size"))) {
 				PATCH(max_compress_size);
-			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("deflate.min-compress-size"))) {
+			} else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("deflate.min-compress-size"))) {
 				PATCH(min_compress_size);
-			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("deflate.compression-level"))) {
+			} else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("deflate.compression-level"))) {
 				PATCH(compression_level);
-			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("deflate.output-buffer-size"))) {
+			} else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("deflate.output-buffer-size"))) {
 				PATCH(output_buffer_size);
-			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("deflate.work-block-size"))) {
+			} else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("deflate.work-block-size"))) {
 				PATCH(work_block_size);
-			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("deflate.max-loadavg"))) {
+			} else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("deflate.max-loadavg"))) {
 				PATCH(max_loadavg);
 			}
 		}

@@ -171,17 +171,17 @@ static int mod_userdir_patch_connection(server *srv, connection *con, plugin_dat
 		for (j = 0; j < dc->value->used; j++) {
 			data_unset *du = dc->value->data[j];
 
-			if (buffer_is_equal_string(du->key, CONST_STR_LEN("userdir.path"))) {
+			if (buffer_is_equal_string(&du->key, CONST_STR_LEN("userdir.path"))) {
 				PATCH(path);
-			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("userdir.exclude-user"))) {
+			} else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("userdir.exclude-user"))) {
 				PATCH(exclude_user);
-			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("userdir.include-user"))) {
+			} else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("userdir.include-user"))) {
 				PATCH(include_user);
-			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("userdir.basepath"))) {
+			} else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("userdir.basepath"))) {
 				PATCH(basepath);
-			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("userdir.letterhomes"))) {
+			} else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("userdir.letterhomes"))) {
 				PATCH(letterhomes);
-			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("userdir.active"))) {
+			} else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("userdir.active"))) {
 				PATCH(active);
 			}
 		}

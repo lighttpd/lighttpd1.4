@@ -900,21 +900,21 @@ static int mod_proxy_patch_connection(server *srv, connection *con, plugin_data 
 		for (j = 0; j < dc->value->used; j++) {
 			data_unset *du = dc->value->data[j];
 
-			if (buffer_is_equal_string(du->key, CONST_STR_LEN("proxy.server"))) {
+			if (buffer_is_equal_string(&du->key, CONST_STR_LEN("proxy.server"))) {
 				PATCH_GW(exts);
 				PATCH_GW(exts_auth);
 				PATCH_GW(exts_resp);
-			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("proxy.debug"))) {
+			} else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("proxy.debug"))) {
 				PATCH_GW(debug);
-			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("proxy.balance"))) {
+			} else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("proxy.balance"))) {
 				PATCH_GW(balance);
-			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("proxy.map-extensions"))) {
+			} else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("proxy.map-extensions"))) {
 				PATCH_GW(ext_mapping);
-			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("proxy.replace-http-host"))) {
+			} else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("proxy.replace-http-host"))) {
 				PATCH(replace_http_host);
-			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("proxy.forwarded"))) {
+			} else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("proxy.forwarded"))) {
 				PATCH(forwarded);
-			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("proxy.header"))) {
+			} else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("proxy.header"))) {
 				PATCH(header); /*(copies struct)*/
 			}
 		}

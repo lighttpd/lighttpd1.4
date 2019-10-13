@@ -490,17 +490,17 @@ mod_webdav_patch_connection (server * const restrict srv,
         /* merge config */
         for (size_t j = 0; j < dc->value->used; ++j) {
             data_unset *du = dc->value->data[j];
-            if (buffer_is_equal_string(du->key, CONST_STR_LEN("webdav.activate"))) {
+            if (buffer_is_equal_string(&du->key, CONST_STR_LEN("webdav.activate"))) {
                 PATCH_OPTION(enabled);
-            } else if (buffer_is_equal_string(du->key, CONST_STR_LEN("webdav.is-readonly"))) {
+            } else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("webdav.is-readonly"))) {
                 PATCH_OPTION(is_readonly);
-            } else if (buffer_is_equal_string(du->key, CONST_STR_LEN("webdav.log-xml"))) {
+            } else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("webdav.log-xml"))) {
                 PATCH_OPTION(log_xml);
           #ifdef USE_PROPPATCH
-            } else if (buffer_is_equal_string(du->key, CONST_STR_LEN("webdav.sqlite-db-name"))) {
+            } else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("webdav.sqlite-db-name"))) {
                 PATCH_OPTION(sql);
           #endif
-            } else if (buffer_is_equal_string(du->key, CONST_STR_LEN("webdav.opts"))) {
+            } else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("webdav.opts"))) {
                 PATCH_OPTION(deprecated_unsafe_partial_put_compat);
             }
         }

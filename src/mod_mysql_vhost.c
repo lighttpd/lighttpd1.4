@@ -250,7 +250,7 @@ static int mod_mysql_vhost_patch_connection(server *srv, connection *con, plugin
 		for (j = 0; j < dc->value->used; j++) {
 			data_unset *du = dc->value->data[j];
 
-			if (buffer_is_equal_string(du->key, CONST_STR_LEN("mysql-vhost.sql"))) {
+			if (buffer_is_equal_string(&du->key, CONST_STR_LEN("mysql-vhost.sql"))) {
 				PATCH(mysql_query);
 			}
 		}

@@ -729,17 +729,17 @@ static int mod_accesslog_patch_connection(server *srv, connection *con, plugin_d
 		for (j = 0; j < dc->value->used; j++) {
 			data_unset *du = dc->value->data[j];
 
-			if (buffer_is_equal_string(du->key, CONST_STR_LEN("accesslog.filename"))) {
+			if (buffer_is_equal_string(&du->key, CONST_STR_LEN("accesslog.filename"))) {
 				PATCH(access_logfile);
 				PATCH(log_access_fd);
 				PATCH(access_logbuffer);
-			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("accesslog.format"))) {
+			} else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("accesslog.format"))) {
 				PATCH(parsed_format);
 				PATCH(last_generated_accesslog_ts_ptr);
 				PATCH(ts_accesslog_str);
-			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("accesslog.use-syslog"))) {
+			} else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("accesslog.use-syslog"))) {
 				PATCH(use_syslog);
-			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("accesslog.syslog-level"))) {
+			} else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("accesslog.syslog-level"))) {
 				PATCH(syslog_level);
 			}
 		}

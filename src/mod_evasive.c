@@ -132,11 +132,11 @@ static int mod_evasive_patch_connection(server *srv, connection *con, plugin_dat
 		for (j = 0; j < dc->value->used; j++) {
 			data_unset *du = dc->value->data[j];
 
-			if (buffer_is_equal_string(du->key, CONST_STR_LEN("evasive.max-conns-per-ip"))) {
+			if (buffer_is_equal_string(&du->key, CONST_STR_LEN("evasive.max-conns-per-ip"))) {
 				PATCH(max_conns);
-			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("evasive.silent"))) {
+			} else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("evasive.silent"))) {
 				PATCH(silent);
-			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("evasive.location"))) {
+			} else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("evasive.location"))) {
 				PATCH(location);
 			}
 		}

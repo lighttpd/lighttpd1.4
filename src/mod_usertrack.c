@@ -165,13 +165,13 @@ static int mod_usertrack_patch_connection(server *srv, connection *con, plugin_d
 		for (j = 0; j < dc->value->used; j++) {
 			data_unset *du = dc->value->data[j];
 
-			if (buffer_is_equal_string(du->key, CONST_STR_LEN("usertrack.cookie-name"))) {
+			if (buffer_is_equal_string(&du->key, CONST_STR_LEN("usertrack.cookie-name"))) {
 				PATCH(cookie_name);
-			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("usertrack.cookie-attrs"))) {
+			} else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("usertrack.cookie-attrs"))) {
 				PATCH(cookie_attrs);
-			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("usertrack.cookie-max-age"))) {
+			} else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("usertrack.cookie-max-age"))) {
 				PATCH(cookie_max_age);
-			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("usertrack.cookie-domain"))) {
+			} else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("usertrack.cookie-domain"))) {
 				PATCH(cookie_domain);
 			}
 		}

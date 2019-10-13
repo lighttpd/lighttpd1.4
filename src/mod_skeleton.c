@@ -135,7 +135,7 @@ static int mod_skeleton_patch_connection(server *srv, connection *con, plugin_da
 		for (size_t j = 0; j < dc->value->used; ++j) {
 			data_unset *du = dc->value->data[j];
 
-			if (buffer_is_equal_string(du->key, CONST_STR_LEN("skeleton.array"))) {
+			if (buffer_is_equal_string(&du->key, CONST_STR_LEN("skeleton.array"))) {
 				PATCH(match);
 			}
 		}

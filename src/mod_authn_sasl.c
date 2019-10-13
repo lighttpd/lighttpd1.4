@@ -167,7 +167,7 @@ static int mod_authn_sasl_patch_connection(server *srv, connection *con, plugin_
         s = p->config_storage[i];
         for (size_t j = 0; j < dc->value->used; ++j) {
             data_unset *du = dc->value->data[j];
-            if (buffer_is_equal_string(du->key, CONST_STR_LEN("auth.backend.sasl.opts"))) {
+            if (buffer_is_equal_string(&du->key, CONST_STR_LEN("auth.backend.sasl.opts"))) {
                 PATCH(service);
                 PATCH(fqdn);
                 PATCH(pwcheck_method);

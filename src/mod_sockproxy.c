@@ -117,13 +117,13 @@ static int mod_sockproxy_patch_connection(server *srv, connection *con, plugin_d
 		for (j = 0; j < dc->value->used; j++) {
 			data_unset *du = dc->value->data[j];
 
-			if (buffer_is_equal_string(du->key, CONST_STR_LEN("sockproxy.server"))) {
+			if (buffer_is_equal_string(&du->key, CONST_STR_LEN("sockproxy.server"))) {
 				PATCH(exts);
 				PATCH(exts_auth);
 				PATCH(exts_resp);
-			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("sockproxy.debug"))) {
+			} else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("sockproxy.debug"))) {
 				PATCH(debug);
-			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("sockproxy.balance"))) {
+			} else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("sockproxy.balance"))) {
 				PATCH(balance);
 			}
 		}

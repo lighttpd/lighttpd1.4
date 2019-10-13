@@ -884,17 +884,17 @@ static int mod_cgi_patch_connection(server *srv, connection *con, plugin_data *p
 		for (j = 0; j < dc->value->used; j++) {
 			data_unset *du = dc->value->data[j];
 
-			if (buffer_is_equal_string(du->key, CONST_STR_LEN("cgi.assign"))) {
+			if (buffer_is_equal_string(&du->key, CONST_STR_LEN("cgi.assign"))) {
 				PATCH(cgi);
-			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("cgi.execute-x-only"))) {
+			} else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("cgi.execute-x-only"))) {
 				PATCH(execute_x_only);
-			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("cgi.local-redir"))) {
+			} else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("cgi.local-redir"))) {
 				PATCH(local_redir);
-			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("cgi.upgrade"))) {
+			} else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("cgi.upgrade"))) {
 				PATCH(upgrade);
-			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("cgi.x-sendfile"))) {
+			} else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("cgi.x-sendfile"))) {
 				PATCH(xsendfile_allow);
-			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("cgi.x-sendfile-docroot"))) {
+			} else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("cgi.x-sendfile-docroot"))) {
 				PATCH(xsendfile_docroot);
 			}
 		}

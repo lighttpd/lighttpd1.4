@@ -368,34 +368,34 @@ static int mod_dirlisting_patch_connection(server *srv, connection *con, plugin_
 		for (j = 0; j < dc->value->used; j++) {
 			data_unset *du = dc->value->data[j];
 
-			if (buffer_is_equal_string(du->key, CONST_STR_LEN(CONFIG_ACTIVATE)) ||
-			    buffer_is_equal_string(du->key, CONST_STR_LEN(CONFIG_DIR_LISTING))) {
+			if (buffer_is_equal_string(&du->key, CONST_STR_LEN(CONFIG_ACTIVATE)) ||
+			    buffer_is_equal_string(&du->key, CONST_STR_LEN(CONFIG_DIR_LISTING))) {
 				PATCH(dir_listing);
-			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN(CONFIG_HIDE_DOTFILES))) {
+			} else if (buffer_is_equal_string(&du->key, CONST_STR_LEN(CONFIG_HIDE_DOTFILES))) {
 				PATCH(hide_dot_files);
-			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN(CONFIG_EXTERNAL_CSS))) {
+			} else if (buffer_is_equal_string(&du->key, CONST_STR_LEN(CONFIG_EXTERNAL_CSS))) {
 				PATCH(external_css);
-			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN(CONFIG_EXTERNAL_JS))) {
+			} else if (buffer_is_equal_string(&du->key, CONST_STR_LEN(CONFIG_EXTERNAL_JS))) {
 				PATCH(external_js);
-			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN(CONFIG_ENCODING))) {
+			} else if (buffer_is_equal_string(&du->key, CONST_STR_LEN(CONFIG_ENCODING))) {
 				PATCH(encoding);
-			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN(CONFIG_SHOW_README))) {
+			} else if (buffer_is_equal_string(&du->key, CONST_STR_LEN(CONFIG_SHOW_README))) {
 				PATCH(show_readme);
-			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN(CONFIG_HIDE_README_FILE))) {
+			} else if (buffer_is_equal_string(&du->key, CONST_STR_LEN(CONFIG_HIDE_README_FILE))) {
 				PATCH(hide_readme_file);
-			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN(CONFIG_SHOW_HEADER))) {
+			} else if (buffer_is_equal_string(&du->key, CONST_STR_LEN(CONFIG_SHOW_HEADER))) {
 				PATCH(show_header);
-			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN(CONFIG_HIDE_HEADER_FILE))) {
+			} else if (buffer_is_equal_string(&du->key, CONST_STR_LEN(CONFIG_HIDE_HEADER_FILE))) {
 				PATCH(hide_header_file);
-			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN(CONFIG_SET_FOOTER))) {
+			} else if (buffer_is_equal_string(&du->key, CONST_STR_LEN(CONFIG_SET_FOOTER))) {
 				PATCH(set_footer);
-			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN(CONFIG_EXCLUDE))) {
+			} else if (buffer_is_equal_string(&du->key, CONST_STR_LEN(CONFIG_EXCLUDE))) {
 				PATCH(excludes);
-			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN(CONFIG_ENCODE_README))) {
+			} else if (buffer_is_equal_string(&du->key, CONST_STR_LEN(CONFIG_ENCODE_README))) {
 				PATCH(encode_readme);
-			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN(CONFIG_ENCODE_HEADER))) {
+			} else if (buffer_is_equal_string(&du->key, CONST_STR_LEN(CONFIG_ENCODE_HEADER))) {
 				PATCH(encode_header);
-			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN(CONFIG_AUTO_LAYOUT))) {
+			} else if (buffer_is_equal_string(&du->key, CONST_STR_LEN(CONFIG_AUTO_LAYOUT))) {
 				PATCH(auto_layout);
 			}
 		}

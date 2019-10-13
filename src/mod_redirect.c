@@ -134,10 +134,10 @@ static int mod_redirect_patch_connection(server *srv, connection *con, plugin_da
 		for (j = 0; j < dc->value->used; j++) {
 			data_unset *du = dc->value->data[j];
 
-			if (0 == strcmp(du->key->ptr, "url.redirect")) {
+			if (0 == strcmp(du->key.ptr, "url.redirect")) {
 				p->conf.redirect = s->redirect;
 				p->conf.context = dc;
-			} else if (0 == strcmp(du->key->ptr, "url.redirect-code")) {
+			} else if (0 == strcmp(du->key.ptr, "url.redirect-code")) {
 				p->conf.redirect_code = s->redirect_code;
 			}
 		}

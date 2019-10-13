@@ -107,7 +107,7 @@ static int mod_flv_streaming_patch_connection(server *srv, connection *con, plug
 		for (j = 0; j < dc->value->used; j++) {
 			data_unset *du = dc->value->data[j];
 
-			if (buffer_is_equal_string(du->key, CONST_STR_LEN("flv-streaming.extensions"))) {
+			if (buffer_is_equal_string(&du->key, CONST_STR_LEN("flv-streaming.extensions"))) {
 				PATCH(extensions);
 			}
 		}

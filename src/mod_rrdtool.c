@@ -265,7 +265,7 @@ static int mod_rrd_patch_connection(server *srv, connection *con, plugin_data *p
 		for (j = 0; j < dc->value->used; j++) {
 			data_unset *du = dc->value->data[j];
 
-			if (buffer_is_equal_string(du->key, CONST_STR_LEN("rrdtool.db-name"))) {
+			if (buffer_is_equal_string(&du->key, CONST_STR_LEN("rrdtool.db-name"))) {
 				PATCH(path_rrd);
 				/* get pointers to double values */
 

@@ -183,27 +183,27 @@ static int mod_rewrite_patch_connection(server *srv, connection *con, plugin_dat
 		for (j = 0; j < dc->value->used; j++) {
 			data_unset *du = dc->value->data[j];
 
-			if (buffer_is_equal_string(du->key, CONST_STR_LEN("url.rewrite"))) {
+			if (buffer_is_equal_string(&du->key, CONST_STR_LEN("url.rewrite"))) {
 				PATCH(rewrite);
 				p->conf.context = dc;
 				PATCH(rewrite_repeat_idx);
-			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("url.rewrite-once"))) {
+			} else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("url.rewrite-once"))) {
 				PATCH(rewrite);
 				p->conf.context = dc;
 				PATCH(rewrite_repeat_idx);
-			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("url.rewrite-repeat"))) {
+			} else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("url.rewrite-repeat"))) {
 				PATCH(rewrite);
 				p->conf.context = dc;
 				PATCH(rewrite_repeat_idx);
-			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("url.rewrite-if-not-file"))) {
+			} else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("url.rewrite-if-not-file"))) {
 				PATCH(rewrite_NF);
 				p->conf.context_NF = dc;
 				PATCH(rewrite_NF_repeat_idx);
-			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("url.rewrite-repeat-if-not-file"))) {
+			} else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("url.rewrite-repeat-if-not-file"))) {
 				PATCH(rewrite_NF);
 				p->conf.context_NF = dc;
 				PATCH(rewrite_NF_repeat_idx);
-			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("url.rewrite-final"))) {
+			} else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("url.rewrite-final"))) {
 				PATCH(rewrite);
 				p->conf.context = dc;
 				PATCH(rewrite_repeat_idx);

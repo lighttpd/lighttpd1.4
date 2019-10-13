@@ -237,7 +237,7 @@ static int mod_uploadprogress_patch_connection(server *srv, connection *con, plu
 		for (j = 0; j < dc->value->used; j++) {
 			data_unset *du = dc->value->data[j];
 
-			if (buffer_is_equal_string(du->key, CONST_STR_LEN("upload-progress.progress-url"))) {
+			if (buffer_is_equal_string(&du->key, CONST_STR_LEN("upload-progress.progress-url"))) {
 				PATCH(progress_url);
 			}
 		}

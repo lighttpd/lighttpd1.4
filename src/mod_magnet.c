@@ -159,9 +159,9 @@ static int mod_magnet_patch_connection(server *srv, connection *con, plugin_data
 		for (j = 0; j < dc->value->used; j++) {
 			data_unset *du = dc->value->data[j];
 
-			if (buffer_is_equal_string(du->key, CONST_STR_LEN(MAGNET_CONFIG_RAW_URL))) {
+			if (buffer_is_equal_string(&du->key, CONST_STR_LEN(MAGNET_CONFIG_RAW_URL))) {
 				PATCH(url_raw);
-			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN(MAGNET_CONFIG_PHYSICAL_PATH))) {
+			} else if (buffer_is_equal_string(&du->key, CONST_STR_LEN(MAGNET_CONFIG_PHYSICAL_PATH))) {
 				PATCH(physical_path);
 			}
 		}

@@ -874,13 +874,13 @@ static int mod_status_patch_connection(server *srv, connection *con, plugin_data
 		for (j = 0; j < dc->value->used; j++) {
 			data_unset *du = dc->value->data[j];
 
-			if (buffer_is_equal_string(du->key, CONST_STR_LEN("status.status-url"))) {
+			if (buffer_is_equal_string(&du->key, CONST_STR_LEN("status.status-url"))) {
 				PATCH(status_url);
-			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("status.config-url"))) {
+			} else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("status.config-url"))) {
 				PATCH(config_url);
-			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("status.enable-sort"))) {
+			} else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("status.enable-sort"))) {
 				PATCH(sort);
-			} else if (buffer_is_equal_string(du->key, CONST_STR_LEN("status.statistics-url"))) {
+			} else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("status.statistics-url"))) {
 				PATCH(statistics_url);
 			}
 		}
