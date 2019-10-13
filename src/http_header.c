@@ -92,8 +92,8 @@ static inline void http_header_token_append(buffer * const vb, const char * cons
 
 __attribute_pure__
 static inline buffer * http_header_generic_get_ifnotempty(const array * const a, const char * const k, const size_t klen) {
-    const data_string * const ds =
-      (const data_string *)array_get_element_klen(a, k, klen);
+    data_string * const ds =
+      (data_string *)array_get_element_klen(a, k, klen);
     return ds && !buffer_string_is_empty(ds->value) ? ds->value : NULL;
 }
 

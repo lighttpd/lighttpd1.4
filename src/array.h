@@ -88,7 +88,7 @@ __attribute_pure__
 int array_is_kvstring(const array *a);
 
 __attribute_pure__
-const data_unset *array_get_element_klen(const array *a, const char *key, size_t klen);
+data_unset *array_get_element_klen(const array *a, const char *key, size_t klen);
 
 __attribute_cold__
 __attribute_pure__

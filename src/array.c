@@ -142,7 +142,7 @@ static int32_t array_get_index(const array * const a, const char * const k, cons
 }
 
 __attribute_hot__
-const data_unset *array_get_element_klen(const array * const a, const char *key, const size_t klen) {
+data_unset *array_get_element_klen(const array * const a, const char *key, const size_t klen) {
     const int32_t ipos = array_get_index(a, key, klen);
     return ipos >= 0 ? a->data[ipos] : NULL;
 }
