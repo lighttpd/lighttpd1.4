@@ -484,7 +484,7 @@ static handler_t mod_authn_gssapi_check_spnego(server *srv, connection *con, plu
 
 static handler_t mod_authn_gssapi_check (server *srv, connection *con, void *p_d, const struct http_auth_require_t *require, const struct http_auth_backend_t *backend)
 {
-    buffer *vb = http_header_request_get(con, HTTP_HEADER_AUTHORIZATION, CONST_STR_LEN("Authorization"));
+    const buffer *vb = http_header_request_get(con, HTTP_HEADER_AUTHORIZATION, CONST_STR_LEN("Authorization"));
 
     UNUSED(backend);
     if (NULL == vb) {

@@ -479,7 +479,7 @@ static handler_t mod_auth_uri_handler(server *srv, connection *con, void *p_d) {
 	{
 			const http_auth_scheme_t * const scheme = dauth->require->scheme;
 			if (p->conf.auth_extern_authn) {
-				buffer *vb = http_header_env_get(con, CONST_STR_LEN("REMOTE_USER"));
+				const buffer *vb = http_header_env_get(con, CONST_STR_LEN("REMOTE_USER"));
 				if (NULL != vb && http_auth_match_rules(dauth->require, vb->ptr, NULL, NULL)) {
 					return HANDLER_GO_ON;
 				}
@@ -540,7 +540,7 @@ static handler_t mod_auth_send_401_unauthorized_basic(server *srv, connection *c
 }
 
 static handler_t mod_auth_check_basic(server *srv, connection *con, void *p_d, const struct http_auth_require_t *require, const struct http_auth_backend_t *backend) {
-	buffer *b = http_header_request_get(con, HTTP_HEADER_AUTHORIZATION, CONST_STR_LEN("Authorization"));
+	const buffer *b = http_header_request_get(con, HTTP_HEADER_AUTHORIZATION, CONST_STR_LEN("Authorization"));
 	buffer *username;
 	char *pw;
 	handler_t rc = HANDLER_UNSET;
@@ -916,7 +916,7 @@ typedef struct {
 static handler_t mod_auth_send_401_unauthorized_digest(server *srv, connection *con, const struct http_auth_require_t *require, int nonce_stale);
 
 static handler_t mod_auth_check_digest(server *srv, connection *con, void *p_d, const struct http_auth_require_t *require, const struct http_auth_backend_t *backend) {
-	buffer *vb = http_header_request_get(con, HTTP_HEADER_AUTHORIZATION, CONST_STR_LEN("Authorization"));
+	const buffer *vb = http_header_request_get(con, HTTP_HEADER_AUTHORIZATION, CONST_STR_LEN("Authorization"));
 
 	char *username = NULL;
 	char *realm = NULL;
@@ -1190,7 +1190,7 @@ static handler_t mod_auth_send_401_unauthorized_digest(server *srv, connection *
 
 static handler_t mod_auth_check_extern(server *srv, connection *con, void *p_d, const struct http_auth_require_t *require, const struct http_auth_backend_t *backend) {
 	/* require REMOTE_USER already set */
-	buffer *vb = http_header_env_get(con, CONST_STR_LEN("REMOTE_USER"));
+	const buffer *vb = http_header_env_get(con, CONST_STR_LEN("REMOTE_USER"));
 	UNUSED(srv);
 	UNUSED(p_d);
 	UNUSED(backend);

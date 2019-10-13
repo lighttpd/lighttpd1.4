@@ -257,7 +257,7 @@ static void connection_handle_errdoc_init(connection *con) {
 	 * mod_auth WWW-Authenticate response header. */
 	buffer *www_auth = NULL;
 	if (401 == con->http_status) {
-		buffer *vb = http_header_response_get(con, HTTP_HEADER_OTHER, CONST_STR_LEN("WWW-Authenticate"));
+		const buffer *vb = http_header_response_get(con, HTTP_HEADER_OTHER, CONST_STR_LEN("WWW-Authenticate"));
 		if (NULL != vb) www_auth = buffer_init_buffer(vb);
 	}
 

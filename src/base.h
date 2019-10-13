@@ -195,7 +195,7 @@ typedef struct cond_cache_t {
 	cond_result_t local_result;
 	int patterncount;
 	int matches[3 * 10];
-	buffer *comp_value; /* just a pointer */
+	const buffer *comp_value; /* just a pointer */
 } cond_cache_t;
 
 struct connection {

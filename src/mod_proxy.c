@@ -530,7 +530,7 @@ static void proxy_set_Forwarded(connection *con, const unsigned int flags) {
         b = http_header_request_get(con, HTTP_HEADER_FORWARDED, CONST_STR_LEN("Forwarded"));
 
     if (flags && NULL == b) {
-        buffer *xff =
+        const buffer *xff =
           http_header_request_get(con, HTTP_HEADER_X_FORWARDED_FOR, CONST_STR_LEN("X-Forwarded-For"));
         http_header_request_set(con, HTTP_HEADER_FORWARDED,
                                 CONST_STR_LEN("Forwarded"),
@@ -671,7 +671,7 @@ static void proxy_set_Forwarded(connection *con, const unsigned int flags) {
     }
 
     if (flags & PROXY_FORWARDED_REMOTE_USER) {
-        buffer *remote_user =
+        const buffer *remote_user =
           http_header_env_get(con, CONST_STR_LEN("REMOTE_USER"));
         if (NULL != remote_user) {
             if (semicolon)
@@ -758,7 +758,7 @@ static handler_t proxy_create_env(server *srv, gw_handler_ctx *gwhctx) {
 		&& HTTP_METHOD_HEAD != con->request.http_method)) {
 		/* set Content-Length if client sent Transfer-Encoding: chunked
 		 * and not streaming to backend (request body has been fully received) */
-		buffer *vb = http_header_request_get(con, HTTP_HEADER_CONTENT_LENGTH, CONST_STR_LEN("Content-Length"));
+		const buffer *vb = http_header_request_get(con, HTTP_HEADER_CONTENT_LENGTH, CONST_STR_LEN("Content-Length"));
 		if (NULL == vb) {
 			char buf[LI_ITOSTRING_LENGTH];
 			li_itostrn(buf, sizeof(buf), con->request.content_length);

@@ -184,7 +184,7 @@ static int mod_usertrack_patch_connection(server *srv, connection *con, plugin_d
 URIHANDLER_FUNC(mod_usertrack_uri_handler) {
 	plugin_data *p = p_d;
 	buffer *cookie;
-	buffer *b;
+	const buffer *b;
 	unsigned char h[16];
 	li_MD5_CTX Md5Ctx;
 	char hh[LI_ITOSTRING_LENGTH];

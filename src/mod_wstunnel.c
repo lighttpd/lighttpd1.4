@@ -412,7 +412,7 @@ static int wstunnel_is_allowed_origin(connection *con, handler_ctx *hctx) {
      * Note that origin provided in request header has not been normalized, so
      * change in case or other non-normal forms might not match allowed list */
     const array * const allowed_origins = hctx->conf.origins;
-    buffer *origin = NULL;
+    const buffer *origin = NULL;
     size_t olen;
 
     if (0 == allowed_origins->used) {
@@ -517,7 +517,7 @@ static handler_t wstunnel_handler_setup (server *srv, connection *con, plugin_da
 
     binary = !buffer_is_empty(hctx->conf.frame_type); /*("binary")*/
     if (!binary) {
-        buffer *vb =
+        const buffer *vb =
           http_header_request_get(con, HTTP_HEADER_OTHER, CONST_STR_LEN("Sec-WebSocket-Protocol"));
         if (NULL != vb) {
             for (const char *s = vb->ptr; *s; ++s) {
@@ -565,7 +565,7 @@ static handler_t wstunnel_handler_setup (server *srv, connection *con, plugin_da
 
 static handler_t mod_wstunnel_check_extension(server *srv, connection *con, void *p_d) {
     plugin_data *p = p_d;
-    buffer *vb;
+    const buffer *vb;
     handler_t rc;
 
     if (con->mode != DIRECT)
@@ -744,7 +744,7 @@ static int create_response_ietf_00(handler_ctx *hctx) {
 
     /* "Origin" header is preferred
      * ("Sec-WebSocket-Origin" is from older drafts of websocket spec) */
-    buffer *origin = http_header_request_get(con, HTTP_HEADER_OTHER, CONST_STR_LEN("Origin"));
+    const buffer *origin = http_header_request_get(con, HTTP_HEADER_OTHER, CONST_STR_LEN("Origin"));
     if (NULL == origin) {
         origin =
           http_header_request_get(con, HTTP_HEADER_OTHER, CONST_STR_LEN("Sec-WebSocket-Origin"));
@@ -807,9 +807,9 @@ static int create_response_rfc_6455(handler_ctx *hctx) {
     SHA_CTX sha;
     unsigned char sha_digest[SHA_DIGEST_LENGTH];
 
-    buffer *value =
+    const buffer *value_wskey =
       http_header_request_get(con, HTTP_HEADER_OTHER, CONST_STR_LEN("Sec-WebSocket-Key"));
-    if (NULL == value) {
+    if (NULL == value_wskey) {
         DEBUG_LOG(MOD_WEBSOCKET_LOG_ERR, "s", "Sec-WebSocket-Key is invalid");
         return -1;
     }
@@ -817,7 +817,7 @@ static int create_response_rfc_6455(handler_ctx *hctx) {
     /* get SHA1 hash of key */
     /* refer: RFC-6455 Sec.1.3 Opening Handshake */
     SHA1_Init(&sha);
-    SHA1_Update(&sha, (const unsigned char *)CONST_BUF_LEN(value));
+    SHA1_Update(&sha, (const unsigned char *)CONST_BUF_LEN(value_wskey));
     SHA1_Update(&sha, (const unsigned char *)CONST_STR_LEN("258EAFA5-E914-47DA-95CA-C5AB0DC85B11"));
     SHA1_Final(sha_digest, &sha);
 
@@ -830,7 +830,7 @@ static int create_response_rfc_6455(handler_ctx *hctx) {
                                 CONST_STR_LEN("upgrade"));
   #endif
 
-    value = hctx->srv->tmp_buf;
+    buffer *value = hctx->srv->tmp_buf;
     buffer_clear(value);
     buffer_append_base64_encode(value, sha_digest, SHA_DIGEST_LENGTH, BASE64_STANDARD);
     http_header_response_set(con, HTTP_HEADER_OTHER,

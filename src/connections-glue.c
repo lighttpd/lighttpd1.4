@@ -440,7 +440,7 @@ handler_t connection_handle_read_post_state(server *srv, connection *con) {
 	if (chunkqueue_is_empty(cq) && 0 == dst_cq->bytes_in
 	    && con->request.http_version != HTTP_VERSION_1_0
 	    && chunkqueue_is_empty(con->write_queue) && con->is_writable) {
-		buffer *vb = http_header_request_get(con, HTTP_HEADER_EXPECT, CONST_STR_LEN("Expect"));
+		const buffer *vb = http_header_request_get(con, HTTP_HEADER_EXPECT, CONST_STR_LEN("Expect"));
 		if (NULL != vb && buffer_eq_icase_slen(vb, CONST_STR_LEN("100-continue"))) {
 			http_header_request_unset(con, HTTP_HEADER_EXPECT, CONST_STR_LEN("Expect"));
 			if (!connection_write_100_continue(srv, con)) {

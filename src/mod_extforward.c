@@ -421,7 +421,7 @@ static int mod_extforward_patch_connection(server *srv, connection *con, plugin_
 /*
    extract a forward array from the environment
 */
-static array *extract_forward_array(buffer *pbuffer)
+static array *extract_forward_array(const buffer *pbuffer)
 {
 	array *result = array_init();
 	if (!buffer_string_is_empty(pbuffer)) {
@@ -581,7 +581,7 @@ static void mod_extforward_set_proto(server *srv, connection *con, const char *p
 	}
 }
 
-static handler_t mod_extforward_X_Forwarded_For(server *srv, connection *con, plugin_data *p, buffer *x_forwarded_for) {
+static handler_t mod_extforward_X_Forwarded_For(server *srv, connection *con, plugin_data *p, const buffer *x_forwarded_for) {
 	/* build forward_array from forwarded data_string */
 	array *forward_array = extract_forward_array(x_forwarded_for);
 	const char *real_remote_addr = last_not_in_array(forward_array, p);
@@ -594,7 +594,7 @@ static handler_t mod_extforward_X_Forwarded_For(server *srv, connection *con, pl
 		 *   (not done: walking backwards in X-Forwarded-Proto the same num of steps
 		 *    as in X-Forwarded-For to find proto set by last trusted proxy)
 		 */
-		buffer *x_forwarded_proto = http_header_request_get(con, HTTP_HEADER_X_FORWARDED_PROTO, CONST_STR_LEN("X-Forwarded-Proto"));
+		const buffer *x_forwarded_proto = http_header_request_get(con, HTTP_HEADER_X_FORWARDED_PROTO, CONST_STR_LEN("X-Forwarded-Proto"));
 		if (mod_extforward_set_addr(srv, con, p, real_remote_addr) && NULL != x_forwarded_proto) {
 			mod_extforward_set_proto(srv, con, CONST_BUF_LEN(x_forwarded_proto));
 		}
@@ -649,7 +649,7 @@ static int buffer_backslash_unescape (buffer * const b) {
     return 1;
 }
 
-static handler_t mod_extforward_Forwarded (server *srv, connection *con, plugin_data *p, buffer *forwarded) {
+static handler_t mod_extforward_Forwarded (server *srv, connection *con, plugin_data *p, const buffer *forwarded) {
     /* HTTP list need not consist of param=value tokens,
      * but this routine expect such for HTTP Forwarded header
      * Since info in each set of params is only used if from
@@ -1005,7 +1005,7 @@ static handler_t mod_extforward_Forwarded (server *srv, connection *con, plugin_
 
 URIHANDLER_FUNC(mod_extforward_uri_handler) {
 	plugin_data *p = p_d;
-	buffer *forwarded = NULL;
+	const buffer *forwarded = NULL;
 	handler_ctx *hctx = con->plugin_ctx[p->id];
 	int is_forwarded_header = 0;
 

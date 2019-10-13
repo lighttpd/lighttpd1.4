@@ -453,7 +453,7 @@ static int http_request_parse_single_header(connection * const con, const enum h
             /* Proxies sometimes send dup headers
              * if they are the same we ignore the second
              * if not, we raise an error */
-            buffer *vb =
+            const buffer *vb =
               http_header_request_get(con, HTTP_HEADER_IF_MODIFIED_SINCE,
                                       CONST_STR_LEN("If-Modified-Since"));
             if (vb && buffer_is_equal_caseless_string(vb, v, vlen)) {

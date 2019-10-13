@@ -877,7 +877,7 @@ PHYSICALPATH_FUNC(mod_compress_physical) {
 		if (buffer_is_equal(&compress_ds->value, sce->content_type)
 		    || (content_type && buffer_is_equal(&compress_ds->value, content_type))) {
 			/* mimetype found */
-			buffer *vb;
+			const buffer *vb;
 
 			/* the response might change according to Accept-Encoding */
 			http_header_response_append(con, HTTP_HEADER_VARY, CONST_STR_LEN("Vary"), CONST_STR_LEN("Accept-Encoding"));

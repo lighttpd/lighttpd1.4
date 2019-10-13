@@ -1082,6 +1082,7 @@ static int mod_deflate_choose_encoding (const char *value, plugin_data *p, const
 
 CONNECTION_FUNC(mod_deflate_handle_response_start) {
 	plugin_data *p = p_d;
+	const buffer *vbro;
 	buffer *vb;
 	handler_ctx *hctx;
 	const char *label;
@@ -1123,20 +1124,20 @@ CONNECTION_FUNC(mod_deflate_handle_response_start) {
 	}
 
 	/* Check if response has a Content-Encoding. */
-	vb = http_header_response_get(con, HTTP_HEADER_CONTENT_ENCODING, CONST_STR_LEN("Content-Encoding"));
-	if (NULL != vb) return HANDLER_GO_ON;
+	vbro = http_header_response_get(con, HTTP_HEADER_CONTENT_ENCODING, CONST_STR_LEN("Content-Encoding"));
+	if (NULL != vbro) return HANDLER_GO_ON;
 
 	/* Check Accept-Encoding for supported encoding. */
-	vb = http_header_request_get(con, HTTP_HEADER_ACCEPT_ENCODING, CONST_STR_LEN("Accept-Encoding"));
-	if (NULL == vb) return HANDLER_GO_ON;
+	vbro = http_header_request_get(con, HTTP_HEADER_ACCEPT_ENCODING, CONST_STR_LEN("Accept-Encoding"));
+	if (NULL == vbro) return HANDLER_GO_ON;
 
 	/* find matching encodings */
-	compression_type = mod_deflate_choose_encoding(vb->ptr, p, &label);
+	compression_type = mod_deflate_choose_encoding(vbro->ptr, p, &label);
 	if (!compression_type) return HANDLER_GO_ON;
 
 	/* Check mimetype in response header "Content-Type" */
-	if (NULL != (vb = http_header_response_get(con, HTTP_HEADER_CONTENT_TYPE, CONST_STR_LEN("Content-Type")))) {
-		if (NULL == array_match_value_prefix(p->conf.mimetypes, vb)) return HANDLER_GO_ON;
+	if (NULL != (vbro = http_header_response_get(con, HTTP_HEADER_CONTENT_TYPE, CONST_STR_LEN("Content-Type")))) {
+		if (NULL == array_match_value_prefix(p->conf.mimetypes, vbro)) return HANDLER_GO_ON;
 	} else {
 		/* If no Content-Type set, compress only if first p->conf.mimetypes value is "" */
 		data_string *mimetype = (data_string *)p->conf.mimetypes->data[0];
@@ -1158,7 +1159,7 @@ CONNECTION_FUNC(mod_deflate_handle_response_start) {
 	 * (slightly imperfect (close enough?) match of ETag "000000" to "000000-gzip") */
 	vb = http_header_response_get(con, HTTP_HEADER_ETAG, CONST_STR_LEN("ETag"));
 	if (NULL != vb && (con->request.htags & HTTP_HEADER_IF_NONE_MATCH)) {
-		buffer *if_none_match = http_header_response_get(con, HTTP_HEADER_IF_NONE_MATCH, CONST_STR_LEN("If-None-Match"));
+		const buffer *if_none_match = http_header_response_get(con, HTTP_HEADER_IF_NONE_MATCH, CONST_STR_LEN("If-None-Match"));
 		etaglen = buffer_string_length(vb);
 		if (etaglen
 		    && con->http_status < 300 /*(want 2xx only)*/

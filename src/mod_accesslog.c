@@ -187,7 +187,7 @@ static void accesslog_write_all(server *srv, const buffer *filename, int fd, con
 	}
 }
 
-static void accesslog_append_escaped(buffer *dest, buffer *str) {
+static void accesslog_append_escaped(buffer *dest, const buffer *str) {
 	char *ptr, *start, *end;
 
 	/* replaces non-printable chars with \xHH where HH is the hex representation of the byte */
@@ -755,7 +755,7 @@ REQUESTDONE_FUNC(log_access_write) {
 	size_t j;
 
 	int newts = 0;
-	buffer *vb;
+	const buffer *vb;
 	struct timespec ts = { 0, 0 };
 
 	mod_accesslog_patch_connection(srv, con, p);

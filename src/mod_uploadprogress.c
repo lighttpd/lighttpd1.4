@@ -289,8 +289,9 @@ URIHANDLER_FUNC(mod_uploadprogress_uri_handler) {
 		}
 	}
 
-	if (NULL != (b = http_header_request_get(con, HTTP_HEADER_OTHER, CONST_STR_LEN("X-Progress-ID")))) {
-		id = b->ptr;
+	const buffer *h = http_header_request_get(con, HTTP_HEADER_OTHER, CONST_STR_LEN("X-Progress-ID"));
+	if (NULL != h) {
+		id = h->ptr;
 	} else if (!buffer_string_is_empty(con->uri.query)
 		   && (id = strstr(con->uri.query->ptr, "X-Progress-ID="))) {
 		/* perhaps the POST request is using the query-string to pass the X-Progress-ID */

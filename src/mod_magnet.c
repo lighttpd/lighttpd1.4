@@ -429,7 +429,7 @@ static int magnet_reqhdr_get(lua_State *L) {
     connection *con = magnet_get_connection(L);
     size_t klen;
     const char * const k = luaL_checklstring(L, 2, &klen);
-    buffer * const vb =
+    const buffer * const vb =
       http_header_request_get(con, HTTP_HEADER_UNSPECIFIED, k, klen);
     magnet_push_buffer(L, NULL != vb ? vb : NULL);
     return 1;
@@ -671,7 +671,7 @@ static int magnet_cgi_get(lua_State *L) {
     connection *con = magnet_get_connection(L);
     size_t klen;
     const char * const k = luaL_checklstring(L, 2, &klen);
-    buffer * const vb = http_header_env_get(con, k, klen);
+    const buffer * const vb = http_header_env_get(con, k, klen);
     magnet_push_buffer(L, NULL != vb ? vb : NULL);
     return 1;
 }
@@ -1072,7 +1072,7 @@ static handler_t magnet_attract_array(server *srv, connection *con, plugin_data 
 	if (con->error_handler_saved_status) {
 		/* retrieve (possibly modified) REDIRECT_STATUS and store as number */
 		unsigned long x;
-		buffer * const vb = http_header_env_get(con, CONST_STR_LEN("REDIRECT_STATUS"));
+		const buffer * const vb = http_header_env_get(con, CONST_STR_LEN("REDIRECT_STATUS"));
 		if (vb && (x = strtoul(vb->ptr, NULL, 10)) < 1000)
 			/*(simplified validity check x < 1000)*/
 			con->error_handler_saved_status =

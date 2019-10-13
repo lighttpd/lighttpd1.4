@@ -330,7 +330,7 @@ URIHANDLER_FUNC(mod_trigger_b4_dl_uri_handler) {
 #if defined(HAVE_PCRE_H)
 	plugin_data *p = p_d;
 	const char *remote_ip;
-	buffer *vb;
+	const buffer *vb;
 
 	int n;
 # define N 10

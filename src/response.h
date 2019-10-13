@@ -46,7 +46,7 @@ handler_t http_response_read(server *srv, connection *con, http_response_opts *o
 handler_t http_response_prepare(server *srv, connection *con);
 int http_response_buffer_append_authority(server *srv, connection *con, buffer *b);
 int http_response_redirect_to_directory(server *srv, connection *con, int status);
-int http_response_handle_cachable(server *srv, connection *con, buffer * mtime);
+int http_response_handle_cachable(server *srv, connection *con, const buffer * mtime);
 void http_response_body_clear(connection *con, int preserve_length);
 void http_response_send_file (server *srv, connection *con, buffer *path);
 void http_response_backend_done (server *srv, connection *con);

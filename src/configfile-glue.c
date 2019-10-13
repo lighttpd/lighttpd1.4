@@ -264,12 +264,12 @@ static int config_addrbuf_eq_remote_ip_mask(server *srv, buffer *string, char *n
 	return config_addrstr_eq_remote_ip_mask(srv, addrstr, nm_bits, rmt);
 }
 
-static int data_config_pcre_exec(const data_config *dc, cond_cache_t *cache, buffer *b);
+static int data_config_pcre_exec(const data_config *dc, cond_cache_t *cache, const buffer *b);
 
 static cond_result_t config_check_cond_cached(server *srv, connection *con, const data_config *dc);
 
 static cond_result_t config_check_cond_nocache(server *srv, connection *con, const data_config *dc) {
-	buffer *l;
+	const buffer *l;
 	server_socket *srv_sock = con->srv_socket;
 	cond_cache_t *cache = &con->cond_cache[dc->context_ndx];
 
@@ -432,8 +432,8 @@ static cond_result_t config_check_cond_nocache(server *srv, connection *con, con
 		break;
 	case COMP_HTTP_REQUEST_METHOD:
 		l = srv->tmp_buf;
-		buffer_clear(l);
-		http_method_append(l, con->request.http_method);
+		buffer_clear(srv->tmp_buf);
+		http_method_append(srv->tmp_buf, con->request.http_method);
 		break;
 	default:
 		return COND_RESULT_FALSE;
@@ -583,7 +583,7 @@ int config_check_cond(server *srv, connection *con, const data_config *dc) {
 #include <pcre.h>
 #endif
 
-static int data_config_pcre_exec(const data_config *dc, cond_cache_t *cache, buffer *b) {
+static int data_config_pcre_exec(const data_config *dc, cond_cache_t *cache, const buffer *b) {
 #ifdef HAVE_PCRE_H
     #ifndef elementsof
     #define elementsof(x) (sizeof(x) / sizeof(x[0]))

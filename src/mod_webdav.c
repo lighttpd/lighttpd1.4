@@ -2102,17 +2102,17 @@ webdav_fcopyfile_sz (int ifd, int ofd, off_t isz)
 static int
 webdav_if_match_or_unmodified_since (connection * const con, struct stat *st)
 {
-    buffer *im = (0 != con->etag_flags)
+    const buffer *im = (0 != con->etag_flags)
       ? http_header_request_get(con, HTTP_HEADER_OTHER,
                                 CONST_STR_LEN("If-Match"))
       : NULL;
 
-    buffer *inm = (0 != con->etag_flags)
+    const buffer *inm = (0 != con->etag_flags)
       ? http_header_request_get(con, HTTP_HEADER_IF_NONE_MATCH,
                                 CONST_STR_LEN("If-None-Match"))
       : NULL;
 
-    buffer *ius =
+    const buffer *ius =
       http_header_request_get(con, HTTP_HEADER_OTHER,
                               CONST_STR_LEN("If-Unmodified-Since"));
 
@@ -3773,8 +3773,9 @@ mod_webdav_propfind (connection * const con, const plugin_config * const pconf)
     }
     else if (S_ISDIR(pb.st.st_mode)) {
         if (con->physical.path->ptr[con->physical.path->used - 2] != '/') {
-            buffer *vb = http_header_request_get(con, HTTP_HEADER_USER_AGENT,
-                                                 CONST_STR_LEN("User-Agent"));
+            const buffer *vb =
+              http_header_request_get(con, HTTP_HEADER_USER_AGENT,
+                                      CONST_STR_LEN("User-Agent"));
             if (vb && 0 == strncmp(vb->ptr, "Microsoft-WebDAV-MiniRedir/",
                                    sizeof("Microsoft-WebDAV-MiniRedir/")-1)) {
                 /* workaround Microsoft-WebDAV-MiniRedir bug */
@@ -4962,8 +4963,9 @@ mod_webdav_proppatch (connection * const con, const plugin_config * const pconf)
 
     if (S_ISDIR(st.st_mode)) {
         if (con->physical.path->ptr[con->physical.path->used - 2] != '/') {
-            buffer *vb = http_header_request_get(con, HTTP_HEADER_USER_AGENT,
-                                                 CONST_STR_LEN("User-Agent"));
+            const buffer *vb =
+              http_header_request_get(con, HTTP_HEADER_USER_AGENT,
+                                      CONST_STR_LEN("User-Agent"));
             if (vb && 0 == strncmp(vb->ptr, "Microsoft-WebDAV-MiniRedir/",
                                    sizeof("Microsoft-WebDAV-MiniRedir/")-1)) {
                 /* workaround Microsoft-WebDAV-MiniRedir bug */
@@ -5082,8 +5084,9 @@ mod_webdav_proppatch (connection * const con, const plugin_config * const pconf)
           ? webdav_db_transaction_commit(pconf)
           : webdav_db_transaction_rollback(pconf)) {
         if (NULL == ms) {
-            buffer *vb = http_header_request_get(con, HTTP_HEADER_USER_AGENT,
-                                                 CONST_STR_LEN("User-Agent"));
+            const buffer *vb =
+              http_header_request_get(con, HTTP_HEADER_USER_AGENT,
+                                      CONST_STR_LEN("User-Agent"));
             if (vb && 0 == strncmp(vb->ptr, "Microsoft-WebDAV-MiniRedir/",
                                    sizeof("Microsoft-WebDAV-MiniRedir/")-1)) {
                 /* workaround Microsoft-WebDAV-MiniRedir bug; 204 not handled */

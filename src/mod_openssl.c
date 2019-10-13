@@ -2080,7 +2080,7 @@ https_add_ssl_client_entries (server *srv, connection *con, handler_ctx *hctx)
          *   ssl.verifyclient.username = "SSL_CLIENT_S_DN_emailAddress"
          */
         buffer *varname = hctx->conf.ssl_verifyclient_username;
-        buffer *vb = http_header_env_get(con, CONST_BUF_LEN(varname));
+        const buffer *vb = http_header_env_get(con, CONST_BUF_LEN(varname));
         if (vb) { /* same as http_auth.c:http_auth_setenv() */
             http_header_env_set(con,
                                 CONST_STR_LEN("REMOTE_USER"),

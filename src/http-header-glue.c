@@ -139,8 +139,8 @@ buffer * strftime_cache_get(server *srv, time_t last_mod) {
 }
 
 
-int http_response_handle_cachable(server *srv, connection *con, buffer *mtime) {
-	buffer *vb;
+int http_response_handle_cachable(server *srv, connection *con, const buffer *mtime) {
+	const buffer *vb;
 	int head_or_get =
 		(  HTTP_METHOD_GET  == con->request.http_method
 		|| HTTP_METHOD_HEAD == con->request.http_method);
@@ -243,7 +243,7 @@ static int http_response_parse_range(server *srv, connection *con, buffer *path,
 	off_t start, end;
 	const char *s, *minus;
 	static const char boundary[] = "fkj49sn38dcn3";
-	buffer *content_type = http_header_response_get(con, HTTP_HEADER_CONTENT_TYPE, CONST_STR_LEN("Content-Type"));
+	const buffer *content_type = http_header_response_get(con, HTTP_HEADER_CONTENT_TYPE, CONST_STR_LEN("Content-Type"));
 
 	start = 0;
 	end = sce->st.st_size - 1;
@@ -431,8 +431,8 @@ static int http_response_parse_range(server *srv, connection *con, buffer *path,
 
 void http_response_send_file (server *srv, connection *con, buffer *path) {
 	stat_cache_entry *sce = NULL;
-	buffer *mtime = NULL;
-	buffer *vb;
+	const buffer *mtime = NULL;
+	const buffer *vb;
 	int allow_caching = (0 == con->http_status || 200 == con->http_status);
 
 	if (HANDLER_ERROR == stat_cache_get_entry(srv, con, path, &sce)) {
@@ -540,7 +540,7 @@ void http_response_send_file (server *srv, connection *con, buffer *path) {
 	    && (200 == con->http_status || 0 == con->http_status)
 	    && NULL != (vb = http_header_request_get(con, HTTP_HEADER_RANGE, CONST_STR_LEN("Range")))
 	    && NULL == http_header_response_get(con, HTTP_HEADER_CONTENT_ENCODING, CONST_STR_LEN("Content-Encoding"))) {
-		buffer *range = vb;
+		const buffer *range = vb;
 		int do_range_request = 1;
 		/* check if we have a conditional GET */
 
@@ -878,7 +878,7 @@ static handler_t http_response_process_local_redir(server *srv, connection *con,
 
     /* con->http_status >= 300 && con->http_status < 400) */
     size_t ulen = buffer_string_length(con->uri.path);
-    buffer *vb = http_header_response_get(con, HTTP_HEADER_LOCATION, CONST_STR_LEN("Location"));
+    const buffer *vb = http_header_response_get(con, HTTP_HEADER_LOCATION, CONST_STR_LEN("Location"));
     if (NULL != vb
         && vb->ptr[0] == '/'
         && (0 != strncmp(vb->ptr, con->uri.path->ptr, ulen)

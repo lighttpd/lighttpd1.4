@@ -281,7 +281,7 @@ int cache_parse_lua(server *srv, connection *con, plugin_data *p, buffer *fn) {
 		lua_settop(L, curelem - 1);
 
 		if (ret == 0) {
-			buffer *vb = http_header_response_get(con, HTTP_HEADER_LAST_MODIFIED, CONST_STR_LEN("Last-Modified"));
+			const buffer *vb = http_header_response_get(con, HTTP_HEADER_LAST_MODIFIED, CONST_STR_LEN("Last-Modified"));
 			if (NULL == vb) { /* no Last-Modified specified */
 				char timebuf[sizeof("Sat, 23 Jul 2005 21:20:01 GMT")];
 				if (0 == mtime) mtime = time(NULL); /* default last-modified to now */
