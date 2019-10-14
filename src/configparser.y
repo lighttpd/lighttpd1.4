@@ -463,8 +463,8 @@ condlines(A) ::= condlines(B) eols ELSE cond_else(C). {
     buffer_copy_buffer(&C->key, &B->key);
     C->comp = B->comp;
     /*buffer_copy_buffer(C->comp_key, B->comp_key);*/
-    /*C->string = buffer_init_buffer(B->string);*/
-    pos = buffer_string_length(&C->key)-buffer_string_length(B->string)-2;
+    /*buffer_copy_buffer(&C->string, &B->string);*/
+    pos = buffer_string_length(&C->key)-buffer_string_length(&B->string)-2;
     switch(B->cond) {
     case CONFIG_COND_NE:
       C->key.ptr[pos] = '='; /* opposite cond */
@@ -693,7 +693,7 @@ context ::= DOLLAR SRVVARNAME(B) LBRACKET stringop(C) RBRACKET cond(E) expressio
         }
       }
 
-      dc->string = buffer_init_buffer(rvalue);
+      buffer_copy_buffer(&dc->string, rvalue);
 
       if (ctx->ok) switch(E) {
       case CONFIG_COND_NE:

@@ -35,7 +35,7 @@ static void data_config_free(data_unset *d) {
 	array_free(ds->value);
 	vector_config_weak_clear(&ds->children);
 
-	if (ds->string) buffer_free(ds->string);
+	free(ds->string.ptr);
 #ifdef HAVE_PCRE_H
 	if (ds->regex) pcre_free(ds->regex);
 	if (ds->regex_study) pcre_free(ds->regex_study);
@@ -66,7 +66,7 @@ static void data_config_print(const data_unset *d, int depth) {
 	else {
 		if (ds->cond != CONFIG_COND_ELSE) {
 			fprintf(stdout, "$%s %s \"%s\" {\n",
-					ds->comp_key->ptr, ds->op, ds->string->ptr);
+					ds->comp_key->ptr, ds->op, ds->string.ptr);
 		} else {
 			fprintf(stdout, "{\n");
 		}
@@ -110,7 +110,7 @@ static void data_config_print(const data_unset *d, int depth) {
 	if (0 != ds->context_ndx) {
 		if (ds->cond != CONFIG_COND_ELSE) {
 			fprintf(stdout, " # end of $%s %s \"%s\"",
-					ds->comp_key->ptr, ds->op, ds->string->ptr);
+					ds->comp_key->ptr, ds->op, ds->string.ptr);
 		} else {
 			fprintf(stdout, " # end of else");
 		}
@@ -155,17 +155,17 @@ int data_config_pcre_compile(data_config *dc) {
     if (dc->regex) pcre_free(dc->regex);
     if (dc->regex_study) pcre_free(dc->regex_study);
 
-    dc->regex = pcre_compile(dc->string->ptr, 0, &errptr, &erroff, NULL);
+    dc->regex = pcre_compile(dc->string.ptr, 0, &errptr, &erroff, NULL);
     if (NULL == dc->regex) {
         fprintf(stderr, "parsing regex failed: %s -> %s at offset %d\n",
-                dc->string->ptr, errptr, erroff);
+                dc->string.ptr, errptr, erroff);
         return 0;
     }
 
     dc->regex_study = pcre_study(dc->regex, 0, &errptr);
     if (NULL == dc->regex_study && errptr != NULL) {
         fprintf(stderr, "studying regex failed: %s -> %s\n",
-                dc->string->ptr, errptr);
+                dc->string.ptr, errptr);
         return 0;
     }
 
@@ -173,11 +173,11 @@ int data_config_pcre_compile(data_config *dc) {
                            &captures);
     if (0 != erroff) {
         fprintf(stderr, "getting capture count for regex failed: %s\n",
-                dc->string->ptr);
+                dc->string.ptr);
         return 0;
     } else if (captures > 9) {
         fprintf(stderr, "Too many captures in regex, use (?:...) instead of (...): %s\n",
-                dc->string->ptr);
+                dc->string.ptr);
         return 0;
     }
     return 1;

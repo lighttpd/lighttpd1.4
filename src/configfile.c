@@ -496,11 +496,11 @@ static int config_insert(server *srv) {
 			case CONFIG_COND_EQ:
 				/* (can use this routine as long as it does not perform
 				 *  any regex-specific normalization of first arg) */
-				pcre_keyvalue_burl_normalize_key(config->string, srv->tmp_buf);
+				pcre_keyvalue_burl_normalize_key(&config->string, srv->tmp_buf);
 				break;
 			case CONFIG_COND_NOMATCH:
 			case CONFIG_COND_MATCH:
-				pcre_keyvalue_burl_normalize_key(config->string, srv->tmp_buf);
+				pcre_keyvalue_burl_normalize_key(&config->string, srv->tmp_buf);
 				if (!data_config_pcre_compile(config)) {
 					ret = HANDLER_ERROR;
 				}

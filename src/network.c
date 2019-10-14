@@ -487,16 +487,16 @@ int network_init(server *srv, int stdin_fd) {
 		if (dc->cond == CONFIG_COND_NE) {
 			socklen_t addr_len = sizeof(sock_addr);
 			sock_addr addr;
-			if (0 != network_host_parse_addr(srv, &addr, &addr_len, dc->string, srv->config_storage[i]->use_ipv6)) {
+			if (0 != network_host_parse_addr(srv, &addr, &addr_len, &dc->string, srv->config_storage[i]->use_ipv6)) {
 				return -1;
 			}
-			network_host_normalize_addr_str(dc->string, &addr);
+			network_host_normalize_addr_str(&dc->string, &addr);
 			continue;
 		}
 
 		if (dc->cond != CONFIG_COND_EQ) continue;
 
-			if (0 != network_server_init(srv, dc->string, i, -1)) return -1;
+			if (0 != network_server_init(srv, &dc->string, i, -1)) return -1;
 	}
 
 	if (srv->srvconf.systemd_socket_activation) {

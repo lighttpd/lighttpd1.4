@@ -72,7 +72,7 @@ struct data_config {
 	data_config *prev;
 	data_config *next;
 
-	buffer *string;
+	buffer string;
 #ifdef HAVE_PCRE_H
 	void *regex;
 	struct pcre_extra *regex_study;

@@ -244,7 +244,7 @@ static handler_t process_rewrite_rules(server *srv, connection *con, plugin_data
 				return HANDLER_ERROR;
 			}
 			log_error_write(srv, __FILE__, __LINE__,  "SbsSBS",
-					"ENDLESS LOOP IN rewrite-rule DETECTED ... aborting request, perhaps you want to use url.rewrite-once instead of url.rewrite-repeat ($", dc->comp_key, dc->op, "\"", dc->string, "\")");
+					"ENDLESS LOOP IN rewrite-rule DETECTED ... aborting request, perhaps you want to use url.rewrite-once instead of url.rewrite-repeat ($", dc->comp_key, dc->op, "\"", &dc->string, "\")");
 
 			return HANDLER_ERROR;
 		}

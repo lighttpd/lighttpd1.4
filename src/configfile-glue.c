@@ -233,7 +233,7 @@ static int config_addrstr_eq_remote_ip_mask(server *srv, const char *addrstr, in
 	return sock_addr_is_addr_eq_bits(&addr, rmt, nm_bits);
 }
 
-static int config_addrbuf_eq_remote_ip_mask(server *srv, buffer *string, char *nm_slash, sock_addr *rmt) {
+static int config_addrbuf_eq_remote_ip_mask(server *srv, const buffer *string, char *nm_slash, sock_addr *rmt) {
 	char *err;
 	int nm_bits = strtol(nm_slash + 1, &err, 10);
 	size_t addrstrlen = (size_t)(nm_slash - string->ptr);
@@ -364,7 +364,7 @@ static cond_result_t config_check_cond_nocache(server *srv, connection *con, con
 			case CONFIG_COND_EQ:
 				port = sock_addr_get_port(&srv_sock->addr);
 				if (0 == port) break;
-				ck_colon = strchr(dc->string->ptr, ':');
+				ck_colon = strchr(dc->string.ptr, ':');
 				val_colon = strchr(l->ptr, ':');
 
 				if (NULL != ck_colon && NULL == val_colon) {
@@ -400,8 +400,8 @@ static cond_result_t config_check_cond_nocache(server *srv, connection *con, con
 
 		if ((dc->cond == CONFIG_COND_EQ ||
 		     dc->cond == CONFIG_COND_NE) &&
-		    (NULL != (nm_slash = strchr(dc->string->ptr, '/')))) {
-			switch (config_addrbuf_eq_remote_ip_mask(srv, dc->string, nm_slash, &con->dst_addr)) {
+		    (NULL != (nm_slash = strchr(dc->string.ptr, '/')))) {
+			switch (config_addrbuf_eq_remote_ip_mask(srv, &dc->string, nm_slash, &con->dst_addr)) {
 			case  1: return (dc->cond == CONFIG_COND_EQ) ? COND_RESULT_TRUE : COND_RESULT_FALSE;
 			case  0: return (dc->cond == CONFIG_COND_EQ) ? COND_RESULT_FALSE : COND_RESULT_TRUE;
 			case -1: return COND_RESULT_FALSE; /*(error parsing configfile entry)*/
@@ -449,12 +449,12 @@ static cond_result_t config_check_cond_nocache(server *srv, connection *con, con
 
 	if (con->conf.log_condition_handling) {
 		log_error_write(srv, __FILE__, __LINE__,  "bsbsb", dc->comp_key,
-				"(", l, ") compare to ", dc->string);
+				"(", l, ") compare to ", &dc->string);
 	}
 	switch(dc->cond) {
 	case CONFIG_COND_NE:
 	case CONFIG_COND_EQ:
-		if (buffer_is_equal(l, dc->string)) {
+		if (buffer_is_equal(l, &dc->string)) {
 			return (dc->cond == CONFIG_COND_EQ) ? COND_RESULT_TRUE : COND_RESULT_FALSE;
 		} else {
 			return (dc->cond == CONFIG_COND_EQ) ? COND_RESULT_FALSE : COND_RESULT_TRUE;
