@@ -742,7 +742,7 @@ static int process_ssi_stmt(server *srv, connection *con, handler_ctx *p, const 
 		b = srv->tmp_buf;
 		buffer_clear(b);
 		for (i = 0; i < p->ssi_vars->used; i++) {
-			data_string *ds = (data_string *)p->ssi_vars->data[i];
+			data_string *ds = (data_string *)p->ssi_vars->data[p->ssi_vars->sorted[i]];
 
 			buffer_append_string_buffer(b, &ds->key);
 			buffer_append_string_len(b, CONST_STR_LEN("="));
@@ -750,7 +750,7 @@ static int process_ssi_stmt(server *srv, connection *con, handler_ctx *p, const 
 			buffer_append_string_len(b, CONST_STR_LEN("\n"));
 		}
 		for (i = 0; i < p->ssi_cgi_env->used; i++) {
-			data_string *ds = (data_string *)p->ssi_cgi_env->data[i];
+			data_string *ds = (data_string *)p->ssi_cgi_env->data[p->ssi_cgi_env->sorted[i]];
 
 			buffer_append_string_buffer(b, &ds->key);
 			buffer_append_string_len(b, CONST_STR_LEN("="));

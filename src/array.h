@@ -25,6 +25,9 @@ typedef struct data_unset {
 
 typedef struct {
 	data_unset  **data;
+
+	uint32_t *sorted;
+
 	uint32_t used; /* <= INT32_MAX */
 	uint32_t size;
 } array;
