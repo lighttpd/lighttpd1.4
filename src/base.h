@@ -397,8 +397,6 @@ struct server {
 	/* buffers */
 	buffer *tmp_buf;
 	buffer *tmp_chunk_len;
-	buffer *empty_string; /* is necessary for cond_match */
-	buffer *cond_check_buf;
 
 	/* caches */
 	mtime_cache_type mtime_cache[FILE_CACHE_MAX];

@@ -234,8 +234,6 @@ static server *server_init(void) {
 
 	CLEAN(ts_date_str);
 	CLEAN(tmp_buf);
-	srv->empty_string = buffer_init_string("");
-	CLEAN(cond_check_buf);
 
 	CLEAN(srvconf.errorlog_file);
 	CLEAN(srvconf.breakagelog_file);
@@ -312,8 +310,6 @@ static void server_free(server *srv) {
 
 	CLEAN(ts_date_str);
 	CLEAN(tmp_buf);
-	CLEAN(empty_string);
-	CLEAN(cond_check_buf);
 
 	CLEAN(srvconf.errorlog_file);
 	CLEAN(srvconf.breakagelog_file);

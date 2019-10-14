@@ -54,18 +54,10 @@ DEFINE_TYPED_VECTOR_NO_RELEASE(config_weak, data_config*);
 
 struct data_config {
 	DATA_UNSET;
-
-	array *value;
-
-	buffer *comp_tag;
-	buffer *comp_key;
-	comp_key_t comp;
-
-	config_cond_t cond;
-	const char *op;
-
 	int context_ndx; /* more or less like an id */
-	vector_config_weak children;
+	comp_key_t comp;
+	config_cond_t cond;
+
 	/* nested */
 	data_config *parent;
 	/* for chaining only */
@@ -77,6 +69,12 @@ struct data_config {
 	void *regex;
 	struct pcre_extra *regex_study;
 #endif
+	buffer *comp_tag;
+	buffer *comp_key;
+	const char *op;
+
+	vector_config_weak children;
+	array *value;
 };
 
 struct cond_cache_t;    /* declaration */
