@@ -99,9 +99,9 @@ SETDEFAULTS_FUNC(mod_alias_set_defaults) {
 			size_t j, k;
 
 			for (j = 0; j < a->used; j ++) {
-				const buffer *prefix = &a->data[a->sorted[j]]->key;
+				const buffer *prefix = &a->sorted[j]->key;
 				for (k = j + 1; k < a->used; k ++) {
-					const buffer *key = &a->data[a->sorted[k]]->key;
+					const buffer *key = &a->sorted[k]->key;
 
 					if (buffer_string_length(key) < buffer_string_length(prefix)) {
 						break;
@@ -110,7 +110,11 @@ SETDEFAULTS_FUNC(mod_alias_set_defaults) {
 						break;
 					}
 					/* ok, they have same prefix. check position */
-					if (a->sorted[j] < a->sorted[k]) {
+					const data_unset *dj = a->sorted[j];
+					const data_unset *dk = a->sorted[k];
+					const data_unset **data = (const data_unset **)a->data;
+					while (*data != dj && *data != dk) ++data;
+					if (*data == dj) {
 						log_error_write(srv, __FILE__, __LINE__, "SBSBS",
 							"url.alias: `", key, "' will never match as `", prefix, "' matched first");
 						return HANDLER_ERROR;

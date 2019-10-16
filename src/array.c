@@ -88,7 +88,7 @@ data_unset *array_pop(array * const a) {
 
 	a->used --;
 	du = a->data[a->used];
-	force_assert(a->sorted[a->used] == a->used); /* only works on "simple" lists */
+	force_assert(a->sorted[a->used] == du); /* only works on "simple" lists */
 	a->data[a->used] = NULL;
 
 	return du;
@@ -117,7 +117,7 @@ static int array_keycmp(const char * const a, const size_t alen, const char * co
     return alen < blen ? -1 : alen > blen ? 1 : array_caseless_compare(a, b, blen);
 }
 
-/* returns pos into a->sorted[] which contains index to data in a->data[]
+/* returns pos into a->sorted[] which contains copy of data (ptr) in a->data[]
  * if pos >= 0, or returns -pos-1 if that is the position-1 in a->sorted[]
  * where the key needs to be inserted (-1 to avoid -0)
  */
@@ -130,7 +130,7 @@ static int32_t array_get_index(const array * const a, const char * const k, cons
     uint32_t lower = 0, upper = a->used;
     while (lower != upper) {
         uint32_t probe = (lower + upper) / 2;
-        const buffer * const b = &a->data[a->sorted[probe]]->key;
+        const buffer * const b = &a->sorted[probe]->key;
         /* key is non-empty (0==b->used), though possibly blank (1==b->used),
          * if inserted into key-value array */
         /*force_assert(b && b->used);*/
@@ -150,42 +150,34 @@ static int32_t array_get_index(const array * const a, const char * const k, cons
 __attribute_hot__
 data_unset *array_get_element_klen(const array * const a, const char *key, const size_t klen) {
     const int32_t ipos = array_get_index(a, key, klen);
-    return ipos >= 0 ? a->data[a->sorted[ipos]] : NULL;
+    return ipos >= 0 ? a->sorted[ipos] : NULL;
 }
 
 /* non-const (data_config *) for configparser.y (not array_get_element_klen())*/
 data_unset *array_get_data_unset(const array * const a, const char *key, const size_t klen) {
     const int32_t ipos = array_get_index(a, key, klen);
-    return ipos >= 0 ? a->data[a->sorted[ipos]] : NULL;
+    return ipos >= 0 ? a->sorted[ipos] : NULL;
 }
 
 data_unset *array_extract_element_klen(array * const a, const char *key, const size_t klen) {
     const int32_t ipos = array_get_index(a, key, klen);
     if (ipos < 0) return NULL;
 
+    /* remove entry from a->sorted: move everything after pos one step left */
+    data_unset * const entry = a->sorted[ipos];
     const uint32_t last_ndx = --a->used;
-		const uint32_t ndx = a->sorted[ipos], pos = (uint32_t)ipos;
-		data_unset * const entry = a->data[ndx];
+    if (last_ndx != (uint32_t)ipos) {
+        data_unset ** const d = a->sorted + ipos;
+        memmove(d, d+1, (last_ndx - (uint32_t)ipos) * sizeof(*d));
+    }
 
-		/* now we need to swap it with the last element (if it isn't already the last element) */
-		if (ndx != last_ndx) {
-			/* to swap we also need to modify the index in a->sorted - find pos of last_elem there */
-			int32_t last_elem_pos = array_get_index(a, CONST_BUF_LEN(&a->data[last_ndx]->key));
-			/* last element must be present at the expected position */
-			force_assert(last_ndx == a->sorted[last_elem_pos]);
-
-			/* move entry from last_ndx to ndx */
-			a->data[ndx] = a->data[last_ndx];
-
-			/* fix index entry for moved entry */
-			a->sorted[last_elem_pos] = ndx;
-		}
-
-		/* remove entry in a->sorted: move everything after pos one step to the left */
-		if (pos != last_ndx) {
-			memmove(a->sorted + pos, a->sorted + pos + 1, (last_ndx - pos) * sizeof(*a->sorted));
-		}
-
+    if (entry != a->data[last_ndx]) {
+        /* walk a->data[] to find data ptr */
+        /* (not checking (ndx <= last_ndx) since entry must be in a->data[]) */
+        uint32_t ndx = 0;
+        while (entry != a->data[ndx]) ++ndx;
+        a->data[ndx] = a->data[last_ndx]; /* swap with last element */
+    }
     a->data[last_ndx] = NULL;
     return entry;
 }
@@ -233,9 +225,10 @@ static void array_insert_data_at_pos(array * const a, data_unset * const entry, 
 
     /* move everything one step to the right */
     if (pos != ndx) {
-        memmove(a->sorted + (pos + 1), a->sorted + (pos), (ndx - pos) * sizeof(*a->sorted));
+        data_unset ** const d = a->sorted + pos;
+        memmove(d+1, d, (ndx - pos) * sizeof(*a->sorted));
     }
-    a->sorted[pos] = ndx;
+    a->sorted[pos] = entry;
 
     if (prev) prev->fn->free(prev); /* free prior data, if any, from slot */
 }
@@ -260,7 +253,7 @@ static data_string * array_insert_string_at_pos(array * const a, const uint32_t 
 
 int * array_get_int_ptr(array * const a, const char * const k, const size_t klen) {
     int32_t ipos = array_get_index(a, k, klen);
-    if (ipos >= 0) return &((data_integer *)a->data[a->sorted[ipos]])->value;
+    if (ipos >= 0) return &((data_integer *)a->sorted[ipos])->value;
 
     data_integer * const di =array_insert_integer_at_pos(a,(uint32_t)(-ipos-1));
     buffer_copy_string_len(&di->key, k, klen);
@@ -270,7 +263,7 @@ int * array_get_int_ptr(array * const a, const char * const k, const size_t klen
 
 buffer * array_get_buf_ptr(array * const a, const char * const k, const size_t klen) {
     int32_t ipos = array_get_index(a, k, klen);
-    if (ipos >= 0) return &((data_string *)a->data[a->sorted[ipos]])->value;
+    if (ipos >= 0) return &((data_string *)a->sorted[ipos])->value;
 
     data_string * const ds = array_insert_string_at_pos(a, (uint32_t)(-ipos-1));
     buffer_copy_string_len(&ds->key, k, klen);
@@ -297,7 +290,7 @@ static data_unset **array_find_or_insert(array * const a, data_unset * const ent
 
     /* try to find the entry */
     const int32_t ipos = array_get_index(a, CONST_BUF_LEN(&entry->key));
-    if (ipos >= 0) return &a->data[a->sorted[ipos]];
+    if (ipos >= 0) return &a->sorted[ipos];
 
     array_insert_data_at_pos(a, entry, (uint32_t)(-ipos - 1));
     return NULL;
@@ -305,13 +298,21 @@ static data_unset **array_find_or_insert(array * const a, data_unset * const ent
 
 /* replace or insert data (free existing entry) */
 void array_replace(array * const a, data_unset * const entry) {
-	data_unset **old;
+    if (NULL == array_find_or_insert(a, entry)) return;
 
-	if (NULL != (old = array_find_or_insert(a, entry))) {
-		force_assert(*old != entry);
-		(*old)->fn->free(*old);
-		*old = entry;
-	}
+    /* find the entry (array_find_or_insert() returned non-NULL) */
+    const int32_t ipos = array_get_index(a, CONST_BUF_LEN(&entry->key));
+    force_assert(ipos >= 0);
+    data_unset *old = a->sorted[ipos];
+    force_assert(old != entry);
+    a->sorted[ipos] = entry;
+
+    uint32_t i = 0;
+    while (i < a->used && a->data[i] != old) ++i;
+    force_assert(i != a->used);
+    a->data[i] = entry;
+
+    old->fn->free(old);
 }
 
 void array_insert_unique(array * const a, data_unset * const entry) {

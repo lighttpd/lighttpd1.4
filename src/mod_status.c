@@ -753,11 +753,9 @@ static handler_t mod_status_handle_server_statistics(server *srv, connection *co
 
 	b = chunkqueue_append_buffer_open(con->write_queue);
 	for (i = 0; i < st->used; i++) {
-		size_t ndx = st->sorted[i];
-
-		buffer_append_string_buffer(b, &st->data[ndx]->key);
+		buffer_append_string_buffer(b, &st->sorted[i]->key);
 		buffer_append_string_len(b, CONST_STR_LEN(": "));
-		buffer_append_int(b, ((data_integer *)(st->data[ndx]))->value);
+		buffer_append_int(b, ((data_integer *)st->sorted[i])->value);
 		buffer_append_string_len(b, CONST_STR_LEN("\n"));
 	}
 	chunkqueue_append_buffer_commit(con->write_queue);
