@@ -82,8 +82,8 @@ int http_response_write_header(server *srv, connection *con) {
 	}
 
 	/* add all headers */
-	for (size_t i = 0; i < con->response.headers->used; ++i) {
-		const data_string * const ds = (data_string *)con->response.headers->data[i];
+	for (size_t i = 0; i < con->response.headers.used; ++i) {
+		const data_string * const ds = (data_string *)con->response.headers.data[i];
 
 		if (buffer_string_is_empty(&ds->value)) continue;
 		if (buffer_string_is_empty(&ds->key)) continue;

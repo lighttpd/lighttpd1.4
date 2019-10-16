@@ -887,7 +887,7 @@ static handler_t http_response_process_local_redir(server *srv, connection *con,
                 && vb->ptr[ulen] != '?'))
         && 0 == blen
         && !(con->response.htags & HTTP_HEADER_STATUS) /*no "Status" or NPH response*/
-        && 1 == con->response.headers->used) {
+        && 1 == con->response.headers.used) {
         if (++con->loops_per_request > 5) {
             log_error_write(srv, __FILE__, __LINE__, "sb",
                             "too many internal loops while processing request:",
@@ -1530,8 +1530,8 @@ int http_cgi_headers (server *srv, connection *con, http_cgi_opts *opts, http_cg
     li_utostrn(buf, sizeof(buf), sock_addr_get_port(&con->dst_addr));
     rc |= cb(vdata, CONST_STR_LEN("REMOTE_PORT"), buf, strlen(buf));
 
-    for (n = 0; n < con->request.headers->used; n++) {
-        data_string *ds = (data_string *)con->request.headers->data[n];
+    for (n = 0; n < con->request.headers.used; n++) {
+        data_string *ds = (data_string *)con->request.headers.data[n];
         if (!buffer_string_is_empty(&ds->value) && !buffer_is_empty(&ds->key)) {
             /* Security: Do not emit HTTP_PROXY in environment.
              * Some executables use HTTP_PROXY to configure
@@ -1549,8 +1549,8 @@ int http_cgi_headers (server *srv, connection *con, http_cgi_opts *opts, http_cg
 
     srv->request_env(srv, con);
 
-    for (n = 0; n < con->environment->used; n++) {
-        data_string *ds = (data_string *)con->environment->data[n];
+    for (n = 0; n < con->environment.used; n++) {
+        data_string *ds = (data_string *)con->environment.data[n];
         if (!buffer_is_empty(&ds->value) && !buffer_is_empty(&ds->key)) {
             buffer_copy_string_encoded_cgi_varnames(srv->tmp_buf,
                                                     CONST_BUF_LEN(&ds->key), 0);

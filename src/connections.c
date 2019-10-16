@@ -263,7 +263,7 @@ static void connection_handle_errdoc_init(connection *con) {
 
 	buffer_reset(con->physical.path);
 	con->response.htags = 0;
-	array_reset_data_strings(con->response.headers);
+	array_reset_data_strings(&con->response.headers);
 	http_response_body_clear(con, 0);
 
 	if (NULL != www_auth) {
@@ -575,10 +575,6 @@ static connection *connection_init(server *srv) {
 	con->read_queue = chunkqueue_init();
 	con->request_content_queue = chunkqueue_init();
 
-	con->request.headers      = array_init();
-	con->response.headers     = array_init();
-	con->environment     = array_init();
-
 	/* init plugin specific connection structures */
 
 	con->plugin_ctx = calloc(1, (srv->plugins.used + 1) * sizeof(void *));
@@ -601,9 +597,9 @@ void connections_free(server *srv) {
 		chunkqueue_free(con->write_queue);
 		chunkqueue_free(con->read_queue);
 		chunkqueue_free(con->request_content_queue);
-		array_free(con->request.headers);
-		array_free(con->response.headers);
-		array_free(con->environment);
+		array_free_data(&con->request.headers);
+		array_free_data(&con->response.headers);
+		array_free_data(&con->environment);
 
 #define CLEAN(x) \
 	buffer_free(con->x);
@@ -680,12 +676,12 @@ static int connection_reset(server *srv, connection *con) {
 	con->request.htags = 0;
 
 	if (con->header_len <= BUFFER_MAX_REUSE_SIZE)
-		con->request.headers->used = 0;
+		con->request.headers.used = 0;
 	else
-		array_reset_data_strings(con->request.headers);
+		array_reset_data_strings(&con->request.headers);
 	con->header_len = 0;
-	if (0 != con->environment->used)
-		array_reset_data_strings(con->environment);
+	if (0 != con->environment.used)
+		array_reset_data_strings(&con->environment);
 
 	chunkqueue_reset(con->request_content_queue);
 

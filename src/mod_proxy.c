@@ -767,8 +767,8 @@ static handler_t proxy_create_env(server *srv, gw_handler_ctx *gwhctx) {
 	}
 
 	/* request header */
-	for (size_t i = 0, used = con->request.headers->used; i < used; ++i) {
-		data_string *ds = (data_string *)con->request.headers->data[i];
+	for (size_t i = 0, used = con->request.headers.used; i < used; ++i) {
+		data_string *ds = (data_string *)con->request.headers.data[i];
 		const size_t klen = buffer_string_length(&ds->key);
 		size_t vlen;
 		switch (klen) {

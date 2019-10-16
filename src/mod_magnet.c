@@ -437,7 +437,7 @@ static int magnet_reqhdr_get(lua_State *L) {
 
 static int magnet_reqhdr_pairs(lua_State *L) {
 	connection *con = magnet_get_connection(L);
-	return magnet_array_pairs(L, con->request.headers);
+	return magnet_array_pairs(L, &con->request.headers);
 }
 
 static int magnet_status_get(lua_State *L) {
@@ -688,7 +688,7 @@ static int magnet_cgi_set(lua_State *L) {
 static int magnet_cgi_pairs(lua_State *L) {
 	connection *con = magnet_get_connection(L);
 
-	return magnet_array_pairs(L, con->environment);
+	return magnet_array_pairs(L, &con->environment);
 }
 
 

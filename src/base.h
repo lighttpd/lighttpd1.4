@@ -36,7 +36,7 @@ typedef struct {
 	buffer *http_host; /* not alloced */
 
 	unsigned int htags; /* bitfield of flagged headers present in request */
-	array  *headers;
+	array headers;
 
 	/* CONTENT */
 	off_t content_length; /* returned by strtoll() */
@@ -49,7 +49,7 @@ typedef struct {
 typedef struct {
 	off_t   content_length;
 	unsigned int htags; /* bitfield of flagged headers present in response */
-	array  *headers;
+	array headers;
 	int send_chunked;
 } response;
 
@@ -243,20 +243,19 @@ struct connection {
 	off_t bytes_read;             /* used by mod_accesslog, mod_rrd */
 	off_t bytes_header;
 
-	int http_status;
-
 	sock_addr dst_addr;
 	buffer *dst_addr_buf;
 
 	/* request */
+	int http_status;
+	uint32_t header_len;
+
 	request  request;
 	request_uri uri;
 	physical physical;
 	response response;
 
-	uint32_t header_len;
-
-	array  *environment; /* used to pass lighttpd internal stuff to the FastCGI/CGI apps, setenv does that */
+	array environment; /* used to pass lighttpd internal stuff to the FastCGI/CGI apps, setenv does that */
 
 	unsigned int mode;           /* DIRECT (0) or plugin id */
 	int async_callback;

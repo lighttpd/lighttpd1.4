@@ -24,7 +24,7 @@ static void test_request_connection_reset(connection *con)
     buffer_reset(con->request.request);
     buffer_reset(con->request.orig_uri);
     buffer_reset(con->request.uri);
-    array_reset_data_strings(con->request.headers);
+    array_reset_data_strings(&con->request.headers);
 }
 
 static void run_http_request_parse(connection *con, int line, int status, const char *desc, const char *req, size_t reqlen)
@@ -330,7 +330,7 @@ static void test_request_http_request_parse(connection *con)
                     "  baz\r\n"
                     "\r\n"));
     ds = (data_string *)
-      array_get_element_klen(con->request.headers, CONST_STR_LEN("Location"));
+      array_get_element_klen(&con->request.headers, CONST_STR_LEN("Location"));
     assert(ds
            && buffer_is_equal_string(&ds->value,
                                      CONST_STR_LEN("foo, foobar    baz")));
@@ -343,7 +343,7 @@ static void test_request_http_request_parse(connection *con)
                     "  baz\r\n"
                     "\r\n"));
     ds = (data_string *)
-      array_get_element_klen(con->request.headers, CONST_STR_LEN("Location"));
+      array_get_element_klen(&con->request.headers, CONST_STR_LEN("Location"));
     assert(ds
            && buffer_is_equal_string(&ds->value, CONST_STR_LEN("foobar    baz")));
 
@@ -355,7 +355,7 @@ static void test_request_http_request_parse(connection *con)
                     "  baz\r\n"
                     "\r\n"));
     ds = (data_string *)
-      array_get_element_klen(con->request.headers, CONST_STR_LEN("Location"));
+      array_get_element_klen(&con->request.headers, CONST_STR_LEN("Location"));
     assert(ds
            && buffer_is_equal_string(&ds->value, CONST_STR_LEN("foobar    baz")));
 
@@ -432,7 +432,7 @@ static void test_request_http_request_parse(connection *con)
                     "ABC:foo\r\n"
                     "\r\n"));
     ds = (data_string *)
-      array_get_element_klen(con->request.headers, CONST_STR_LEN("ABC"));
+      array_get_element_klen(&con->request.headers, CONST_STR_LEN("ABC"));
     assert(ds && buffer_is_equal_string(&ds->value, CONST_STR_LEN("foo")));
 
     run_http_request_parse(con, __LINE__, 0,
@@ -442,7 +442,7 @@ static void test_request_http_request_parse(connection *con)
                     "  bc\r\n"
                     "\r\n"));
     ds = (data_string *)
-      array_get_element_klen(con->request.headers, CONST_STR_LEN("ABC"));
+      array_get_element_klen(&con->request.headers, CONST_STR_LEN("ABC"));
     assert(ds && buffer_is_equal_string(&ds->value, CONST_STR_LEN("foo    bc")));
 
     run_http_request_parse(con, __LINE__, 411,
@@ -545,7 +545,7 @@ static void test_request_http_request_parse(connection *con)
                     "Connection: close\r\n"
                     "\r\n"));
     ds = (data_string *)
-      array_get_element_klen(con->request.headers, CONST_STR_LEN("Host"));
+      array_get_element_klen(&con->request.headers, CONST_STR_LEN("Host"));
     assert(ds && buffer_is_equal_string(&ds->value, CONST_STR_LEN("zzz.example.org")));
 
     run_http_request_parse(con, __LINE__, 0,
@@ -555,7 +555,7 @@ static void test_request_http_request_parse(connection *con)
                     "Connection: close\r\n"
                     "\r\n"));
     ds = (data_string *)
-      array_get_element_klen(con->request.headers, CONST_STR_LEN("Host"));
+      array_get_element_klen(&con->request.headers, CONST_STR_LEN("Host"));
     assert(ds && buffer_is_equal_string(&ds->value, CONST_STR_LEN("zzz.example.org")));
 
     run_http_request_parse(con, __LINE__, 400,
@@ -591,7 +591,6 @@ int main (void)
     con.request.request      = buffer_init();
     con.request.orig_uri     = buffer_init();
     con.request.uri          = buffer_init();
-    con.request.headers      = array_init();
     con.conf.allow_http11   = 1;
     con.conf.http_parseopts = HTTP_PARSEOPT_HEADER_STRICT
                             | HTTP_PARSEOPT_HOST_STRICT
@@ -603,7 +602,7 @@ int main (void)
     buffer_free(con.request.request);
     buffer_free(con.request.orig_uri);
     buffer_free(con.request.uri);
-    array_free(con.request.headers);
+    array_free_data(&con.request.headers);
 
     log_error_st_free(srv.errh);
 
