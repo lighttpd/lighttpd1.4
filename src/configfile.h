@@ -152,6 +152,6 @@ int config_insert_values_global(server *srv, const array *ca, const config_value
 __attribute_cold__
 int config_insert_values_internal(server *srv, const array *ca, const config_values_t *cv, config_scope_type_t scope);
 
-int config_check_cond(server *srv, connection *con, const data_config *dc);
+int config_check_cond(connection *con, int context_ndx);
 
 #endif

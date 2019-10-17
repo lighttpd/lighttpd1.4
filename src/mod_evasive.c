@@ -122,11 +122,10 @@ static int mod_evasive_patch_connection(server *srv, connection *con, plugin_dat
 
 	/* skip the first, the global context */
 	for (i = 1; i < srv->config_context->used; i++) {
+		if (!config_check_cond(con, i)) continue; /* condition not matched */
+
 		data_config *dc = (data_config *)srv->config_context->data[i];
 		s = p->config_storage[i];
-
-		/* condition didn't match */
-		if (!config_check_cond(srv, con, dc)) continue;
 
 		/* merge config */
 		for (j = 0; j < dc->value->used; j++) {

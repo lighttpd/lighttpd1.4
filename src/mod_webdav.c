@@ -481,10 +481,9 @@ mod_webdav_patch_connection (server * const restrict srv,
       (data_config **)srv->config_context->data;
 
     for (size_t i = 1; i < srv->config_context->used; ++i) {
-        data_config * const dc = context_data[i];
-        if (!config_check_cond(srv, con, dc))
-            continue; /* condition did not match */
+        if (!config_check_cond(con, i)) continue; /* condition not matched */
 
+        data_config * const dc = context_data[i];
         s = p->config_storage[i];
 
         /* merge config */

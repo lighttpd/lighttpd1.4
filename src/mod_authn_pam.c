@@ -108,10 +108,9 @@ static int mod_authn_pam_patch_connection(server *srv, connection *con, plugin_d
 
     /* skip the first, the global context */
     for (size_t i = 1; i < srv->config_context->used; ++i) {
-        data_config *dc = (data_config *)srv->config_context->data[i];
+        if (!config_check_cond(con, i)) continue; /* condition not matched */
 
-        /* condition didn't match */
-        if (!config_check_cond(srv, con, dc)) continue;
+        data_config *dc = (data_config *)srv->config_context->data[i];
 
         /* merge config */
         s = p->config_storage[i];

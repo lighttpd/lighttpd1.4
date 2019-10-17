@@ -1391,11 +1391,10 @@ mod_openssl_patch_connection (server *srv, connection *con, handler_ctx *hctx)
 
     /* skip the first, the global context */
     for (size_t i = 1; i < srv->config_context->used; ++i) {
+        if (!config_check_cond(con, i)) continue; /* condition not matched */
+
         data_config *dc = (data_config *)srv->config_context->data[i];
         s = plugin_data_singleton->config_storage[i];
-
-        /* condition didn't match */
-        if (!config_check_cond(srv, con, dc)) continue;
 
         /* merge config */
         for (size_t j = 0; j < dc->value->used; ++j) {

@@ -503,6 +503,27 @@ static cond_result_t config_check_cond_cached(connection *con, const data_config
 	return cache->result;
 }
 
+__attribute_noinline__
+static cond_result_t config_check_cond_calc(connection *con, const int context_ndx) {
+    const data_config * const dc = (const data_config *)
+          con->srv->config_context->data[context_ndx];
+    const int debug_cond = con->conf.log_condition_handling;
+    if (debug_cond) {
+        log_error(con->errh, __FILE__, __LINE__,
+                  "=== start of condition block ===");
+    }
+    return config_check_cond_cached(con, dc, debug_cond);
+}
+
+/* future: might make static inline in header for plugins */
+int config_check_cond(connection * const con, const int context_ndx) {
+    const cond_cache_t * const cache = &con->cond_cache[context_ndx];
+    return COND_RESULT_TRUE
+        == (COND_RESULT_UNSET != cache->result
+              ? cache->result
+              : config_check_cond_calc(con, context_ndx));
+}
+
 /* if we reset the cache result for a node, we also need to clear all
  * child nodes and else-branches*/
 static void config_cond_clear_node(server *srv, connection *con, const data_config *dc) {
@@ -565,15 +586,6 @@ void config_cond_cache_reset(server *srv, connection *con) {
 		cond_cache[i].patterncount = 0;
 		cond_cache[i].comp_value = NULL;
 	}
-}
-
-int config_check_cond(server *srv, connection *con, const data_config *dc) {
-	UNUSED(srv);
-	const int debug_cond = con->conf.log_condition_handling;
-	if (debug_cond) {
-		log_error(con->errh, __FILE__, __LINE__, "=== start of condition block ===");
-	}
-	return (config_check_cond_cached(con, dc, debug_cond) == COND_RESULT_TRUE);
 }
 
 #ifdef HAVE_PCRE_H

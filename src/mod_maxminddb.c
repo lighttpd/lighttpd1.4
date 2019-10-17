@@ -333,10 +333,9 @@ mod_maxmind_patch_connection (server * const srv,
 
     s = p->config_storage[1]; /* base config (global context) copied above */
     for (size_t i = 1; i < srv->config_context->used; ++i) {
-        data_config *dc = context_data[i];
-        if (!config_check_cond(srv, con, dc))
-            continue; /* condition did not match */
+        if (!config_check_cond(con, i)) continue; /* condition not matched */
 
+        data_config *dc = context_data[i];
         s = p->config_storage[i];
 
         /* merge config */
