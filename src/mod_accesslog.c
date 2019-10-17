@@ -1098,7 +1098,7 @@ REQUESTDONE_FUNC(log_access_write) {
 							buffer_free(bstr);
 							break;
 						} else {
-							do { ++str; } while (*str != ' ' && *str != '\t' && *str != '\0');
+							while (*str != ';' && *str != ' ' && *str != '\t' && *str != '\0') ++str;
 						}
 						while (*str == ' ' || *str == '\t') ++str;
 					} while (*str++ == ';');
