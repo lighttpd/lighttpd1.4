@@ -187,15 +187,15 @@ static void accesslog_write_all(server *srv, const buffer *filename, int fd, con
 	}
 }
 
-static void accesslog_append_escaped(buffer *dest, const buffer *str) {
+static void accesslog_append_escaped_str(buffer *dest, char *str, size_t len) {
 	char *ptr, *start, *end;
 
 	/* replaces non-printable chars with \xHH where HH is the hex representation of the byte */
 	/* exceptions: " => \", \ => \\, whitespace chars => \n \t etc. */
-	if (buffer_string_is_empty(str)) return;
-	buffer_string_prepare_append(dest, buffer_string_length(str));
+	if (0 == len) return;
+	buffer_string_prepare_append(dest, len);
 
-	for (ptr = start = str->ptr, end = str->ptr + buffer_string_length(str); ptr < end; ptr++) {
+	for (ptr = start = str, end = str+len; ptr < end; ++ptr) {
 		unsigned char const c = (unsigned char) *ptr;
 		if (c >= ' ' && c <= '~' && c != '"' && c != '\\') {
 			/* nothing to change, add later as one block */
@@ -245,6 +245,10 @@ static void accesslog_append_escaped(buffer *dest, const buffer *str) {
 	if (start < end) {
 		buffer_append_string_len(dest, start, end - start);
 	}
+}
+
+static void accesslog_append_escaped(buffer *dest, const buffer *str) {
+	accesslog_append_escaped_str(dest, CONST_BUF_LEN(str));
 }
 
 static int accesslog_parse_format(server *srv, format_fields *fields, buffer *format) {
@@ -1088,14 +1092,10 @@ REQUESTDONE_FUNC(log_access_write) {
 						while (*str == ' ' || *str == '\t') ++str;
 						if (0 == strncmp(str, f->string->ptr, len) && str[len] == '=') {
 							char *v = str+len+1;
-							buffer *bstr;
 							for (str = v; *str != '\0' && *str != ';'; ++str) ;
 							if (str == v) break;
 							do { --str; } while (str > v && (*str == ' ' || *str == '\t'));
-							bstr = buffer_init();
-							buffer_copy_string_len(bstr, v, str - v + 1);
-							accesslog_append_escaped(b, bstr);
-							buffer_free(bstr);
+							accesslog_append_escaped_str(b, v, str - v + 1);
 							break;
 						} else {
 							while (*str != ';' && *str != ' ' && *str != '\t' && *str != '\0') ++str;
