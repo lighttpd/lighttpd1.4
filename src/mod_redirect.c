@@ -14,7 +14,7 @@
 
 typedef struct {
 	pcre_keyvalue_buffer *redirect;
-	data_config *context; /* to which apply me */
+	int context_ndx; /* to which apply me */
 	unsigned short redirect_code;
 } plugin_config;
 
@@ -120,7 +120,7 @@ static int mod_redirect_patch_connection(server *srv, connection *con, plugin_da
 
 	p->conf.redirect = s->redirect;
 	p->conf.redirect_code = s->redirect_code;
-	p->conf.context = NULL;
+	p->conf.context_ndx = 0;
 
 	/* skip the first, the global context */
 	for (i = 1; i < srv->config_context->used; i++) {
@@ -135,7 +135,7 @@ static int mod_redirect_patch_connection(server *srv, connection *con, plugin_da
 
 			if (0 == strcmp(du->key.ptr, "url.redirect")) {
 				p->conf.redirect = s->redirect;
-				p->conf.context = dc;
+				p->conf.context_ndx = i;
 			} else if (0 == strcmp(du->key.ptr, "url.redirect-code")) {
 				p->conf.redirect_code = s->redirect_code;
 			}
@@ -153,8 +153,8 @@ URIHANDLER_FUNC(mod_redirect_uri_handler) {
 
     mod_redirect_patch_connection(srv, con, p);
     if (!p->conf.redirect->used) return HANDLER_GO_ON;
-    ctx.cache = p->conf.context
-      ? &con->cond_cache[p->conf.context->context_ndx]
+    ctx.cache = p->conf.context_ndx
+      ? &con->cond_cache[p->conf.context_ndx]
       : NULL;
     ctx.burl = &burl;
     burl.scheme    = con->uri.scheme;

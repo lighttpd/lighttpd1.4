@@ -15,7 +15,7 @@
 typedef struct {
 	pcre_keyvalue_buffer *rewrite;
 	pcre_keyvalue_buffer *rewrite_NF;
-	data_config *context, *context_NF; /* to which apply me */
+	int context_ndx, context_ndx_NF; /* to which apply me */
 	int rewrite_repeat_idx, rewrite_NF_repeat_idx;
 } plugin_config;
 
@@ -166,8 +166,8 @@ static int mod_rewrite_patch_connection(server *srv, connection *con, plugin_dat
 
 	PATCH(rewrite);
 	PATCH(rewrite_NF);
-	p->conf.context = NULL;
-	p->conf.context_NF = NULL;
+	p->conf.context_ndx = 0;
+	p->conf.context_ndx_NF = 0;
 	PATCH(rewrite_repeat_idx);
 	PATCH(rewrite_NF_repeat_idx);
 
@@ -184,27 +184,27 @@ static int mod_rewrite_patch_connection(server *srv, connection *con, plugin_dat
 
 			if (buffer_is_equal_string(&du->key, CONST_STR_LEN("url.rewrite"))) {
 				PATCH(rewrite);
-				p->conf.context = dc;
+				p->conf.context_ndx = i;
 				PATCH(rewrite_repeat_idx);
 			} else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("url.rewrite-once"))) {
 				PATCH(rewrite);
-				p->conf.context = dc;
+				p->conf.context_ndx = i;
 				PATCH(rewrite_repeat_idx);
 			} else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("url.rewrite-repeat"))) {
 				PATCH(rewrite);
-				p->conf.context = dc;
+				p->conf.context_ndx = i;
 				PATCH(rewrite_repeat_idx);
 			} else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("url.rewrite-if-not-file"))) {
 				PATCH(rewrite_NF);
-				p->conf.context_NF = dc;
+				p->conf.context_ndx_NF = i;
 				PATCH(rewrite_NF_repeat_idx);
 			} else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("url.rewrite-repeat-if-not-file"))) {
 				PATCH(rewrite_NF);
-				p->conf.context_NF = dc;
+				p->conf.context_ndx_NF = i;
 				PATCH(rewrite_NF_repeat_idx);
 			} else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("url.rewrite-final"))) {
 				PATCH(rewrite);
-				p->conf.context = dc;
+				p->conf.context_ndx = i;
 				PATCH(rewrite_repeat_idx);
 			}
 		}
@@ -236,12 +236,12 @@ static handler_t process_rewrite_rules(server *srv, connection *con, plugin_data
 		hctx = con->plugin_ctx[p->id];
 
 		if (hctx->loops++ > 100) {
-			data_config *dc = p->conf.context;
-			if (NULL == dc) {
+			if (0 == p->conf.context_ndx) {
 				log_error_write(srv, __FILE__, __LINE__,  "s",
 						"ENDLESS LOOP IN rewrite-rule DETECTED ... aborting request");
 				return HANDLER_ERROR;
 			}
+			data_config *dc = (data_config *)srv->config_context->data[p->conf.context_ndx];
 			log_error_write(srv, __FILE__, __LINE__,  "SbsSBS",
 					"ENDLESS LOOP IN rewrite-rule DETECTED ... aborting request, perhaps you want to use url.rewrite-once instead of url.rewrite-repeat ($", dc->comp_key, dc->op, "\"", &dc->string, "\")");
 
@@ -251,7 +251,7 @@ static handler_t process_rewrite_rules(server *srv, connection *con, plugin_data
 		if (hctx->state == REWRITE_STATE_FINISHED) return HANDLER_GO_ON;
 	}
 
-	ctx.cache = p->conf.context ? &con->cond_cache[p->conf.context->context_ndx] : NULL;
+	ctx.cache = p->conf.context_ndx ? &con->cond_cache[p->conf.context_ndx] : NULL;
 	ctx.burl = &burl;
 	burl.scheme    = con->uri.scheme;
 	burl.authority = con->uri.authority;
@@ -295,7 +295,7 @@ URIHANDLER_FUNC(mod_rewrite_physical) {
 	if (con->mode != DIRECT) return HANDLER_GO_ON;
 
 	mod_rewrite_patch_connection(srv, con, p);
-	p->conf.context = p->conf.context_NF;
+	p->conf.context_ndx = p->conf.context_ndx_NF;
 	if (!p->conf.rewrite_NF->used) return HANDLER_GO_ON;
 
 	/* skip if physical.path is a regular file */
