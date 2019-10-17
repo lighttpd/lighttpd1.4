@@ -662,7 +662,7 @@ mod_openssl_alpn_select_cb (SSL *ssl, const unsigned char **out, unsigned char *
 
     for (unsigned int i = 0, n; i < inlen; i += n) {
         n = in[i++];
-        if (i+n > inlen) break;
+        if (i+n > inlen || 0 == n) break;
         switch (n) {
          #if 0
           case 2:  /* "h2" */
