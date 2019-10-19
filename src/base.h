@@ -303,41 +303,7 @@ typedef struct {
 } buffer_plugin;
 
 typedef struct {
-	unsigned short port;
-	buffer *bindhost;
-
-	buffer *errorlog_file;
-	unsigned short errorlog_use_syslog;
-	buffer *breakagelog_file;
-
-	unsigned short dont_daemonize;
-	unsigned short preflight_check;
-	buffer *changeroot;
-	buffer *username;
-	buffer *groupname;
-
-	buffer *pid_file;
-
-	buffer *event_handler;
-
-	buffer *modules_dir;
-	buffer *network_backend;
-	array *modules;
-	array *upload_tempdirs;
-	unsigned int upload_temp_file_size;
 	unsigned int max_request_field_size;
-
-	unsigned short max_worker;
-	unsigned short max_fds;
-	unsigned short max_conns;
-
-	unsigned short log_request_header_on_error;
-	unsigned short log_state_handling;
-
-	int stat_cache_engine;
-	unsigned short enable_cores;
-	unsigned short reject_expect_100_with_417;
-	buffer *xattr_name;
 
 	unsigned short http_header_strict;
 	unsigned short http_host_strict;
@@ -345,12 +311,43 @@ typedef struct {
 	unsigned short http_url_normalize;
 	unsigned short http_method_get_body;
 	unsigned short high_precision_timestamps;
+
+	unsigned short max_worker;
+	unsigned short max_fds;
+	unsigned short max_conns;
+
+	unsigned short log_state_handling;
+	unsigned short log_request_header_on_error;
+	unsigned short port;
+
 	time_t loadts;
 	double loadavg[3];
-	buffer *syslog_facility;
 
+	int stat_cache_engine;
+
+	unsigned int upload_temp_file_size;
+	array *upload_tempdirs;
+	buffer *xattr_name;
+
+	unsigned short dont_daemonize;
+	unsigned short preflight_check;
+	unsigned short enable_cores;
+	unsigned short reject_expect_100_with_417; /*(ignored)*/
 	unsigned short compat_module_load;
 	unsigned short systemd_socket_activation;
+	unsigned short errorlog_use_syslog;
+	buffer *errorlog_file;
+	buffer *breakagelog_file;
+	buffer *syslog_facility;
+	buffer *bindhost;
+	buffer *changeroot;
+	buffer *username;
+	buffer *groupname;
+	buffer *pid_file;
+	buffer *event_handler;
+	buffer *modules_dir;
+	buffer *network_backend;
+	array *modules;
 } server_config;
 
 typedef struct server_socket {
@@ -372,12 +369,20 @@ typedef struct {
 } server_socket_array;
 
 struct server {
-	server_socket_array srv_sockets;
+	void *plugin_slots;
+	struct stat_cache *stat_cache;
 
 	struct fdevents *ev;
+	int (* network_backend_write)(struct server *srv, int fd, chunkqueue *cq, off_t max_bytes);
+	handler_t (* request_env)(struct server *srv, connection *con);
 
-	buffer_plugin plugins;
-	void *plugin_slots;
+	/* buffers */
+	buffer *tmp_buf;
+	buffer *tmp_chunk_len;
+
+	connections conns;
+	connections joblist;
+	connections fdwaitqueue;
 
 	/* counters */
 	int con_opened;
@@ -393,40 +398,17 @@ struct server {
 
 	uint32_t max_conns;
 
-	/* buffers */
-	buffer *tmp_buf;
-	buffer *tmp_chunk_len;
-
-	/* caches */
-	mtime_cache_type mtime_cache[FILE_CACHE_MAX];
-
-	log_error_st *errh;
-
 	/* Timestamps */
 	time_t cur_ts;
 	time_t last_generated_date_ts;
 	time_t last_generated_debug_ts;
-	time_t startup_ts;
 
-	buffer *ts_debug_str;
 	buffer *ts_date_str;
+	log_error_st *errh;
 
 	/* config-file */
-	array *config_touched;
-
 	array *config_context;
 	specific_config **config_storage;
-
-	server_config  srvconf;
-
-	short int config_deprecated;
-	short int config_unsupported;
-
-	connections conns;
-	connections joblist;
-	connections fdwaitqueue;
-
-	struct stat_cache *stat_cache;
 
 	/**
 	 * The status array can carry all the status information you want
@@ -443,16 +425,26 @@ struct server {
 	 */
 	array *status;
 
-	int event_handler;
+	server_config  srvconf;
 
-	int (* network_backend_write)(struct server *srv, int fd, chunkqueue *cq, off_t max_bytes);
-	handler_t (* request_env)(struct server *srv, connection *con);
+	/* caches */
+	mtime_cache_type mtime_cache[FILE_CACHE_MAX];
+
+	/* members used at start-up or rarely used */
+	server_socket_array srv_sockets;
+	server_socket_array srv_sockets_inherited;
+	buffer_plugin plugins;
+
+	array *config_touched;
+	short int config_deprecated;
+	short int config_unsupported;
+
+	int event_handler;
+	time_t startup_ts;
 
 	uid_t uid;
 	gid_t gid;
 	pid_t pid;
-
-	server_socket_array srv_sockets_inherited;
 };
 
 
