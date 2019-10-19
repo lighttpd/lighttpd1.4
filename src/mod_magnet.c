@@ -1103,15 +1103,13 @@ URIHANDLER_FUNC(mod_magnet_physical) {
 int mod_magnet_plugin_init(plugin *p);
 int mod_magnet_plugin_init(plugin *p) {
 	p->version     = LIGHTTPD_VERSION_ID;
-	p->name        = buffer_init_string("magnet");
+	p->name        = "magnet";
 
 	p->init        = mod_magnet_init;
 	p->handle_uri_clean  = mod_magnet_uri_handler;
 	p->handle_physical   = mod_magnet_physical;
 	p->set_defaults  = mod_magnet_set_defaults;
 	p->cleanup     = mod_magnet_free;
-
-	p->data        = NULL;
 
 	return 0;
 }

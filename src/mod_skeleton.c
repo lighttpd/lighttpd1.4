@@ -170,8 +170,7 @@ URIHANDLER_FUNC(mod_skeleton_uri_handler) {
 int mod_skeleton_plugin_init(plugin *p);
 int mod_skeleton_plugin_init(plugin *p) {
 	p->version     = LIGHTTPD_VERSION_ID;
-	p->name        = buffer_init_string("skeleton");
-	p->data        = NULL;
+	p->name        = "skeleton";
 	p->init        = mod_skeleton_init;
 	p->cleanup     = mod_skeleton_free;
 	p->set_defaults= mod_skeleton_set_defaults;

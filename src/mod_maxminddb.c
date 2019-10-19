@@ -73,15 +73,13 @@ CONNECTION_FUNC(mod_maxmind_handle_con_close);
 int mod_maxminddb_plugin_init(plugin *p);
 int mod_maxminddb_plugin_init(plugin *p) {
     p->version                   = LIGHTTPD_VERSION_ID;
-    p->name                      = buffer_init_string("maxminddb");
+    p->name                      = "maxminddb";
 
     p->set_defaults              = mod_maxmind_set_defaults;
     p->init                      = mod_maxmind_init;
     p->cleanup                   = mod_maxmind_free;
     p->handle_request_env        = mod_maxmind_request_env_handler;
     p->handle_connection_close   = mod_maxmind_handle_con_close;
-
-    p->data                      = NULL;
 
     return 0;
 }
@@ -96,7 +94,6 @@ typedef struct {
 
 typedef struct {
     PLUGIN_DATA;
-    int nconfig;
     plugin_config **config_storage;
 } plugin_data;
 

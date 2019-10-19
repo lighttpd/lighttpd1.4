@@ -189,14 +189,12 @@ URIHANDLER_FUNC(mod_redirect_uri_handler) {
 int mod_redirect_plugin_init(plugin *p);
 int mod_redirect_plugin_init(plugin *p) {
 	p->version     = LIGHTTPD_VERSION_ID;
-	p->name        = buffer_init_string("redirect");
+	p->name        = "redirect";
 
 	p->init        = mod_redirect_init;
 	p->handle_uri_clean  = mod_redirect_uri_handler;
 	p->set_defaults  = mod_redirect_set_defaults;
 	p->cleanup     = mod_redirect_free;
-
-	p->data        = NULL;
 
 	return 0;
 }

@@ -1141,7 +1141,7 @@ REQUESTDONE_FUNC(log_access_write) {
 int mod_accesslog_plugin_init(plugin *p);
 int mod_accesslog_plugin_init(plugin *p) {
 	p->version     = LIGHTTPD_VERSION_ID;
-	p->name        = buffer_init_string("accesslog");
+	p->name        = "accesslog";
 
 	p->init        = mod_accesslog_init;
 	p->set_defaults= log_access_open;
@@ -1150,8 +1150,6 @@ int mod_accesslog_plugin_init(plugin *p) {
 	p->handle_request_done  = log_access_write;
 	p->handle_trigger       = log_access_periodic_flush;
 	p->handle_sighup        = log_access_cycle;
-
-	p->data        = NULL;
 
 	return 0;
 }

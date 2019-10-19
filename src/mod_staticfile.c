@@ -207,14 +207,12 @@ URIHANDLER_FUNC(mod_staticfile_subrequest) {
 int mod_staticfile_plugin_init(plugin *p);
 int mod_staticfile_plugin_init(plugin *p) {
 	p->version     = LIGHTTPD_VERSION_ID;
-	p->name        = buffer_init_string("staticfile");
+	p->name        = "staticfile";
 
 	p->init        = mod_staticfile_init;
 	p->handle_subrequest_start = mod_staticfile_subrequest;
 	p->set_defaults  = mod_staticfile_set_defaults;
 	p->cleanup     = mod_staticfile_free;
-
-	p->data        = NULL;
 
 	return 0;
 }

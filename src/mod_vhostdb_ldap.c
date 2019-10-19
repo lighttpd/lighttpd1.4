@@ -548,7 +548,7 @@ int mod_vhostdb_ldap_plugin_init (plugin *p);
 int mod_vhostdb_ldap_plugin_init (plugin *p)
 {
     p->version          = LIGHTTPD_VERSION_ID;
-    p->name             = buffer_init_string("vhostdb_ldap");
+    p->name             = "vhostdb_ldap";
 
     p->init             = mod_vhostdb_init;
     p->cleanup          = mod_vhostdb_cleanup;

@@ -274,12 +274,10 @@ static handler_t mod_authn_sasl_basic(server *srv, connection *con, void *p_d, c
 int mod_authn_sasl_plugin_init(plugin *p);
 int mod_authn_sasl_plugin_init(plugin *p) {
     p->version     = LIGHTTPD_VERSION_ID;
-    p->name        = buffer_init_string("authn_sasl");
+    p->name        = "authn_sasl";
     p->init        = mod_authn_sasl_init;
     p->set_defaults= mod_authn_sasl_set_defaults;
     p->cleanup     = mod_authn_sasl_free;
-
-    p->data        = NULL;
 
     return 0;
 }

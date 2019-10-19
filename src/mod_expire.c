@@ -410,14 +410,12 @@ CONNECTION_FUNC(mod_expire_handler) {
 int mod_expire_plugin_init(plugin *p);
 int mod_expire_plugin_init(plugin *p) {
 	p->version     = LIGHTTPD_VERSION_ID;
-	p->name        = buffer_init_string("expire");
+	p->name        = "expire";
 
 	p->init        = mod_expire_init;
 	p->handle_response_start = mod_expire_handler;
 	p->set_defaults  = mod_expire_set_defaults;
 	p->cleanup     = mod_expire_free;
-
-	p->data        = NULL;
 
 	return 0;
 }

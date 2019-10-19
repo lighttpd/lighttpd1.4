@@ -590,7 +590,7 @@ TRIGGER_FUNC(mod_trigger_b4_dl_handle_trigger) {
 int mod_trigger_b4_dl_plugin_init(plugin *p);
 int mod_trigger_b4_dl_plugin_init(plugin *p) {
 	p->version     = LIGHTTPD_VERSION_ID;
-	p->name        = buffer_init_string("trigger_b4_dl");
+	p->name        = "trigger_b4_dl";
 
 	p->init        = mod_trigger_b4_dl_init;
 	p->handle_uri_clean  = mod_trigger_b4_dl_uri_handler;
@@ -599,8 +599,6 @@ int mod_trigger_b4_dl_plugin_init(plugin *p) {
 	p->handle_trigger  = mod_trigger_b4_dl_handle_trigger;
 #endif
 	p->cleanup     = mod_trigger_b4_dl_free;
-
-	p->data        = NULL;
 
 	return 0;
 }

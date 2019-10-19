@@ -1354,7 +1354,7 @@ static handler_t mod_ssi_connection_reset(server *srv, connection *con, void *p_
 int mod_ssi_plugin_init(plugin *p);
 int mod_ssi_plugin_init(plugin *p) {
 	p->version     = LIGHTTPD_VERSION_ID;
-	p->name        = buffer_init_string("ssi");
+	p->name        = "ssi";
 
 	p->init        = mod_ssi_init;
 	p->handle_subrequest_start = mod_ssi_physical_path;
@@ -1362,8 +1362,6 @@ int mod_ssi_plugin_init(plugin *p) {
 	p->connection_reset        = mod_ssi_connection_reset;
 	p->set_defaults  = mod_ssi_set_defaults;
 	p->cleanup     = mod_ssi_free;
-
-	p->data        = NULL;
 
 	return 0;
 }

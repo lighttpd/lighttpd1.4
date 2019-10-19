@@ -810,13 +810,11 @@ CONNECTION_FUNC(mod_authn_gssapi_handle_reset) {
 int mod_authn_gssapi_plugin_init(plugin *p);
 int mod_authn_gssapi_plugin_init(plugin *p) {
     p->version     = LIGHTTPD_VERSION_ID;
-    p->name        = buffer_init_string("authn_gssapi");
+    p->name        = "authn_gssapi";
     p->init        = mod_authn_gssapi_init;
     p->set_defaults= mod_authn_gssapi_set_defaults;
     p->cleanup     = mod_authn_gssapi_free;
     p->connection_reset = mod_authn_gssapi_handle_reset;
-
-    p->data        = NULL;
 
     return 0;
 }

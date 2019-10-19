@@ -192,14 +192,12 @@ URIHANDLER_FUNC(mod_evasive_uri_handler) {
 int mod_evasive_plugin_init(plugin *p);
 int mod_evasive_plugin_init(plugin *p) {
 	p->version     = LIGHTTPD_VERSION_ID;
-	p->name        = buffer_init_string("evasive");
+	p->name        = "evasive";
 
 	p->init        = mod_evasive_init;
 	p->set_defaults = mod_evasive_set_defaults;
 	p->handle_uri_clean  = mod_evasive_uri_handler;
 	p->cleanup     = mod_evasive_free;
-
-	p->data        = NULL;
 
 	return 0;
 }

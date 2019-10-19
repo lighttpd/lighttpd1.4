@@ -291,14 +291,12 @@ CONNECTION_FUNC(mod_geoip_handle_request_env) {
 int mod_geoip_plugin_init(plugin *p);
 int mod_geoip_plugin_init(plugin *p) {
 	p->version     = LIGHTTPD_VERSION_ID;
-	p->name        = buffer_init_string("geoip");
+	p->name        = "geoip";
 
 	p->init        = mod_geoip_init;
 	p->handle_request_env = mod_geoip_handle_request_env;
 	p->set_defaults  = mod_geoip_set_defaults;
 	p->cleanup     = mod_geoip_free;
-
-	p->data        = NULL;
 
 	return 0;
 }

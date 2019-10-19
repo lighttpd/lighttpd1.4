@@ -364,13 +364,11 @@ static handler_t mod_evhost_uri_handler(server *srv, connection *con, void *p_d)
 int mod_evhost_plugin_init(plugin *p);
 int mod_evhost_plugin_init(plugin *p) {
 	p->version     = LIGHTTPD_VERSION_ID;
-	p->name                    = buffer_init_string("evhost");
+	p->name        = "evhost";
 	p->init                    = mod_evhost_init;
 	p->set_defaults            = mod_evhost_set_defaults;
 	p->handle_docroot          = mod_evhost_uri_handler;
 	p->cleanup                 = mod_evhost_free;
-
-	p->data                    = NULL;
 
 	return 0;
 }

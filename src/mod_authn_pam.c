@@ -174,8 +174,7 @@ static handler_t mod_authn_pam_basic(server *srv, connection *con, void *p_d, co
 int mod_authn_pam_plugin_init(plugin *p);
 int mod_authn_pam_plugin_init(plugin *p) {
     p->version     = LIGHTTPD_VERSION_ID;
-    p->name        = buffer_init_string("authn_pam");
-    p->data        = NULL;
+    p->name        = "authn_pam";
     p->init        = mod_authn_pam_init;
     p->cleanup     = mod_authn_pam_free;
     p->set_defaults= mod_authn_pam_set_defaults;

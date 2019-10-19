@@ -769,12 +769,10 @@ static handler_t mod_authn_file_htpasswd_basic(server *srv, connection *con, voi
 int mod_authn_file_plugin_init(plugin *p);
 int mod_authn_file_plugin_init(plugin *p) {
     p->version     = LIGHTTPD_VERSION_ID;
-    p->name        = buffer_init_string("authn_file");
+    p->name        = "authn_file";
     p->init        = mod_authn_file_init;
     p->set_defaults= mod_authn_file_set_defaults;
     p->cleanup     = mod_authn_file_free;
-
-    p->data        = NULL;
 
     return 0;
 }

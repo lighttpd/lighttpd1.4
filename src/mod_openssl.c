@@ -2201,7 +2201,7 @@ int mod_openssl_plugin_init (plugin *p);
 int mod_openssl_plugin_init (plugin *p)
 {
     p->version      = LIGHTTPD_VERSION_ID;
-    p->name         = buffer_init_string("openssl");
+    p->name         = "openssl";
     p->init         = mod_openssl_init;
     p->cleanup      = mod_openssl_free;
     p->priv_defaults= mod_openssl_set_defaults;
@@ -2212,8 +2212,6 @@ int mod_openssl_plugin_init (plugin *p)
     p->handle_uri_raw            = mod_openssl_handle_uri_raw;
     p->handle_request_env        = mod_openssl_handle_request_env;
     p->connection_reset          = mod_openssl_handle_request_reset;
-
-    p->data         = NULL;
 
     return 0;
 }

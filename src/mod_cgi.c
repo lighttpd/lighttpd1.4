@@ -1052,7 +1052,7 @@ static handler_t cgi_waitpid_cb(server *srv, void *p_d, pid_t pid, int status) {
 int mod_cgi_plugin_init(plugin *p);
 int mod_cgi_plugin_init(plugin *p) {
 	p->version     = LIGHTTPD_VERSION_ID;
-	p->name        = buffer_init_string("cgi");
+	p->name        = "cgi";
 
 	p->connection_reset = cgi_connection_close_callback;
 	p->handle_subrequest_start = cgi_is_handled;
@@ -1061,8 +1061,6 @@ int mod_cgi_plugin_init(plugin *p) {
 	p->init           = mod_cgi_init;
 	p->cleanup        = mod_cgi_free;
 	p->set_defaults   = mod_fastcgi_set_defaults;
-
-	p->data        = NULL;
 
 	return 0;
 }

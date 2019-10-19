@@ -1021,7 +1021,7 @@ static handler_t mod_proxy_check_extension(server *srv, connection *con, void *p
 int mod_proxy_plugin_init(plugin *p);
 int mod_proxy_plugin_init(plugin *p) {
 	p->version      = LIGHTTPD_VERSION_ID;
-	p->name         = buffer_init_string("proxy");
+	p->name         = "proxy";
 
 	p->init         = mod_proxy_init;
 	p->cleanup      = mod_proxy_free;
@@ -1031,8 +1031,6 @@ int mod_proxy_plugin_init(plugin *p) {
 	p->handle_subrequest       = gw_handle_subrequest;
 	p->handle_trigger          = gw_handle_trigger;
 	p->handle_waitpid          = gw_handle_waitpid_cb;
-
-	p->data         = NULL;
 
 	return 0;
 }

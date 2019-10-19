@@ -261,7 +261,7 @@ int mod_vhostdb_pgsql_plugin_init (plugin *p);
 int mod_vhostdb_pgsql_plugin_init (plugin *p)
 {
     p->version          = LIGHTTPD_VERSION_ID;
-    p->name             = buffer_init_string("vhostdb_pgsql");
+    p->name             = "vhostdb_pgsql";
 
     p->init             = mod_vhostdb_init;
     p->cleanup          = mod_vhostdb_cleanup;

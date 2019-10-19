@@ -320,7 +320,7 @@ int mod_vhostdb_dbi_plugin_init (plugin *p);
 int mod_vhostdb_dbi_plugin_init (plugin *p)
 {
     p->version          = LIGHTTPD_VERSION_ID;
-    p->name             = buffer_init_string("vhostdb_dbi");
+    p->name             = "vhostdb_dbi";
 
     p->init             = mod_vhostdb_init;
     p->cleanup          = mod_vhostdb_cleanup;

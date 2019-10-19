@@ -238,7 +238,7 @@ CONNECTION_FUNC(mod_webdav_handle_reset);
 int mod_webdav_plugin_init(plugin *p);
 int mod_webdav_plugin_init(plugin *p) {
     p->version           = LIGHTTPD_VERSION_ID;
-    p->name              = buffer_init_string("webdav");
+    p->name              = "webdav";
 
     p->init              = mod_webdav_init;
     p->cleanup           = mod_webdav_free;
@@ -248,8 +248,6 @@ int mod_webdav_plugin_init(plugin *p) {
     p->handle_physical   = mod_webdav_physical_handler;
     p->handle_subrequest = mod_webdav_subrequest_handler;
     p->connection_reset  = mod_webdav_handle_reset;
-
-    p->data              = NULL;
 
     return 0;
 }
@@ -327,7 +325,6 @@ typedef struct {
 
 typedef struct {
     PLUGIN_DATA;
-    int nconfig;
     plugin_config **config_storage;
 } plugin_data;
 

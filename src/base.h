@@ -257,7 +257,7 @@ struct connection {
 
 	array environment; /* used to pass lighttpd internal stuff to the FastCGI/CGI apps, setenv does that */
 
-	unsigned int mode;           /* DIRECT (0) or plugin id */
+	int mode;                    /* DIRECT (0) or plugin id */
 	int async_callback;
 
 	log_error_st *errh;

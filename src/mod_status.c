@@ -791,6 +791,7 @@ static handler_t mod_status_handle_server_config(server *srv, connection *con, v
 	plugin_data *p = p_d;
 	buffer *b = chunkqueue_append_buffer_open(con->write_queue);
 	buffer *m = p->module_list;
+	buffer_clear(m);
 
 	buffer_copy_string_len(b, CONST_STR_LEN(
 			   "<?xml version=\"1.0\" encoding=\"iso-8859-1\"?>\n"
@@ -820,16 +821,11 @@ static handler_t mod_status_handle_server_config(server *srv, connection *con, v
 	mod_status_header_append(b, "Config-File-Settings");
 
 	for (uint32_t i = 0; i < srv->plugins.used; ++i) {
-		plugin **ps = srv->plugins.ptr;
-
-		plugin *pl = ps[i];
-
-		if (i == 0) {
-			buffer_copy_buffer(m, pl->name);
-		} else {
+		const char *name = ((plugin **)srv->plugins.ptr)[i]->name;
+		if (i != 0) {
 			buffer_append_string_len(m, CONST_STR_LEN("<br />"));
-			buffer_append_string_buffer(m, pl->name);
 		}
+		buffer_append_string_len(m, name, strlen(name));
 	}
 
 	mod_status_row_append(b, "Loaded Modules", m->ptr);
@@ -954,7 +950,7 @@ REQUESTDONE_FUNC(mod_status_account) {
 int mod_status_plugin_init(plugin *p);
 int mod_status_plugin_init(plugin *p) {
 	p->version     = LIGHTTPD_VERSION_ID;
-	p->name        = buffer_init_string("status");
+	p->name        = "status";
 
 	p->init        = mod_status_init;
 	p->cleanup     = mod_status_free;
@@ -963,8 +959,6 @@ int mod_status_plugin_init(plugin *p) {
 	p->handle_uri_clean    = mod_status_handler;
 	p->handle_trigger      = mod_status_trigger;
 	p->handle_request_done = mod_status_account;
-
-	p->data        = NULL;
 
 	return 0;
 }

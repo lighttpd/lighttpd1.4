@@ -490,13 +490,11 @@ static handler_t mod_auth_uri_handler(server *srv, connection *con, void *p_d) {
 int mod_auth_plugin_init(plugin *p);
 int mod_auth_plugin_init(plugin *p) {
 	p->version     = LIGHTTPD_VERSION_ID;
-	p->name        = buffer_init_string("auth");
+	p->name        = "auth";
 	p->init        = mod_auth_init;
 	p->set_defaults = mod_auth_set_defaults;
 	p->handle_uri_clean = mod_auth_uri_handler;
 	p->cleanup     = mod_auth_free;
-
-	p->data        = NULL;
 
 	return 0;
 }

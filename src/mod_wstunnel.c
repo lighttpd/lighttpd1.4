@@ -638,7 +638,7 @@ TRIGGER_FUNC(mod_wstunnel_handle_trigger) {
 int mod_wstunnel_plugin_init(plugin *p);
 int mod_wstunnel_plugin_init(plugin *p) {
     p->version           = LIGHTTPD_VERSION_ID;
-    p->name              = buffer_init_string("wstunnel");
+    p->name              = "wstunnel";
     p->init              = mod_wstunnel_init;
     p->cleanup           = mod_wstunnel_free;
     p->set_defaults      = mod_wstunnel_set_defaults;
@@ -647,7 +647,6 @@ int mod_wstunnel_plugin_init(plugin *p) {
     p->handle_subrequest = gw_handle_subrequest;
     p->handle_trigger    = mod_wstunnel_handle_trigger;
     p->handle_waitpid    = gw_handle_waitpid_cb;
-    p->data              = NULL;
     return 0;
 }
 

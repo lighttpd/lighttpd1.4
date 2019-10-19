@@ -162,7 +162,7 @@ static handler_t mod_sockproxy_connection_accept(server *srv, connection *con, v
 int mod_sockproxy_plugin_init(plugin *p);
 int mod_sockproxy_plugin_init(plugin *p) {
 	p->version      = LIGHTTPD_VERSION_ID;
-	p->name         = buffer_init_string("sockproxy");
+	p->name         = "sockproxy";
 
 	p->init         = gw_init;
 	p->cleanup      = gw_free;
@@ -172,8 +172,6 @@ int mod_sockproxy_plugin_init(plugin *p) {
 	p->handle_subrequest       = gw_handle_subrequest;
 	p->handle_trigger          = gw_handle_trigger;
 	p->handle_waitpid          = gw_handle_waitpid_cb;
-
-	p->data         = NULL;
 
 	return 0;
 }

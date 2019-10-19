@@ -144,7 +144,7 @@ static int connection_close(server *srv, connection *con) {
 		plugin *p = ((plugin **)(srv->plugins.ptr))[i];
 		plugin_data *pd = p->data;
 		if (!pd || NULL == con->plugin_ctx[pd->id]) continue;
-		log_error_write(srv, __FILE__, __LINE__, "sb",
+		log_error_write(srv, __FILE__, __LINE__, "ss",
 				"missing cleanup in", p->name);
 		con->plugin_ctx[pd->id] = NULL;
 	}

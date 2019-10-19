@@ -65,26 +65,20 @@ static plugin *plugin_init(void) {
 }
 
 static void plugin_free(plugin *p) {
-#if !defined(LIGHTTPD_STATIC)
-	int use_dlclose = 1;
-#endif
+  #if !defined(LIGHTTPD_STATIC)
+    if (p->lib) {
+     #if defined(HAVE_VALGRIND_VALGRIND_H)
+     /*if (!RUNNING_ON_VALGRIND) */
+     #endif
+      #if defined(__WIN32)
+        FreeLibrary(p->lib);
+      #else
+        dlclose(p->lib);
+      #endif
+    }
+  #endif
 
-	if (p->name) buffer_free(p->name);
-#if defined(HAVE_VALGRIND_VALGRIND_H) && !defined(LIGHTTPD_STATIC)
-	/*if (RUNNING_ON_VALGRIND) use_dlclose = 0;*/
-#endif
-
-#if !defined(LIGHTTPD_STATIC)
-	if (use_dlclose && p->lib) {
-#if defined(__WIN32)
-)		FreeLibrary(p->lib);
-#else
-		dlclose(p->lib);
-#endif
-	}
-#endif
-
-	free(p);
+    free(p);
 }
 
 static int plugins_register(server *srv, plugin *p) {
@@ -455,7 +449,7 @@ handler_t plugins_call_init(server *srv) {
 
 		if (p->init) {
 			if (NULL == (p->data = p->init())) {
-				log_error_write(srv, __FILE__, __LINE__, "sb",
+				log_error_write(srv, __FILE__, __LINE__, "ss",
 						"plugin-init failed for module", p->name);
 				return HANDLER_ERROR;
 			}
@@ -464,12 +458,10 @@ handler_t plugins_call_init(server *srv) {
 			((plugin_data *)(p->data))->id = i + 1;
 
 			if (p->version != LIGHTTPD_VERSION_ID) {
-				log_error_write(srv, __FILE__, __LINE__, "sb",
+				log_error_write(srv, __FILE__, __LINE__, "ss",
 						"plugin-version doesn't match lighttpd-version for", p->name);
 				return HANDLER_ERROR;
 			}
-		} else {
-			p->data = NULL;
 		}
 
 		if (p->priv_defaults && HANDLER_ERROR==p->priv_defaults(srv, p->data)) {

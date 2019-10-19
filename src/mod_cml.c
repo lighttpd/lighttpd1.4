@@ -324,7 +324,7 @@ URIHANDLER_FUNC(mod_cml_is_handled) {
 int mod_cml_plugin_init(plugin *p);
 int mod_cml_plugin_init(plugin *p) {
 	p->version     = LIGHTTPD_VERSION_ID;
-	p->name        = buffer_init_string("cache");
+	p->name        = "cache";
 
 	p->init        = mod_cml_init;
 	p->cleanup     = mod_cml_free;
@@ -332,8 +332,6 @@ int mod_cml_plugin_init(plugin *p) {
 
 	p->handle_subrequest_start = mod_cml_is_handled;
 	p->handle_physical         = mod_cml_power_magnet;
-
-	p->data        = NULL;
 
 	return 0;
 }

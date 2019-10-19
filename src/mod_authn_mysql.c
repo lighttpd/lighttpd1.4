@@ -544,12 +544,10 @@ static handler_t mod_authn_mysql_digest(server *srv, connection *con, void *p_d,
 int mod_authn_mysql_plugin_init(plugin *p);
 int mod_authn_mysql_plugin_init(plugin *p) {
     p->version     = LIGHTTPD_VERSION_ID;
-    p->name        = buffer_init_string("authn_mysql");
+    p->name        = "authn_mysql";
     p->init        = mod_authn_mysql_init;
     p->set_defaults= mod_authn_mysql_set_defaults;
     p->cleanup     = mod_authn_mysql_free;
-
-    p->data        = NULL;
 
     return 0;
 }

@@ -176,14 +176,12 @@ URIHANDLER_FUNC(mod_flv_streaming_path_handler) {
 int mod_flv_streaming_plugin_init(plugin *p);
 int mod_flv_streaming_plugin_init(plugin *p) {
 	p->version     = LIGHTTPD_VERSION_ID;
-	p->name        = buffer_init_string("flv_streaming");
+	p->name        = "flv_streaming";
 
 	p->init        = mod_flv_streaming_init;
 	p->handle_physical = mod_flv_streaming_path_handler;
 	p->set_defaults  = mod_flv_streaming_set_defaults;
 	p->cleanup     = mod_flv_streaming_free;
-
-	p->data        = NULL;
 
 	return 0;
 }

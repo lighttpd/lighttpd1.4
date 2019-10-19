@@ -1187,14 +1187,12 @@ URIHANDLER_FUNC(mod_dirlisting_subrequest) {
 int mod_dirlisting_plugin_init(plugin *p);
 int mod_dirlisting_plugin_init(plugin *p) {
 	p->version     = LIGHTTPD_VERSION_ID;
-	p->name        = buffer_init_string("dirlisting");
+	p->name        = "dirlisting";
 
 	p->init        = mod_dirlisting_init;
 	p->handle_subrequest_start  = mod_dirlisting_subrequest;
 	p->set_defaults  = mod_dirlisting_set_defaults;
 	p->cleanup     = mod_dirlisting_free;
-
-	p->data        = NULL;
 
 	return 0;
 }

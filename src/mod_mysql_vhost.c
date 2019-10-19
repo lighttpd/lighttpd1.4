@@ -367,7 +367,7 @@ ERR500:
 int mod_mysql_vhost_plugin_init(plugin *p);
 int mod_mysql_vhost_plugin_init(plugin *p) {
 	p->version        = LIGHTTPD_VERSION_ID;
-	p->name           = buffer_init_string("mysql_vhost");
+	p->name           = "mysql_vhost";
 
 	p->init           = mod_mysql_vhost_init;
 	p->cleanup        = mod_mysql_vhost_cleanup;

@@ -1273,15 +1273,13 @@ static handler_t mod_deflate_cleanup(server *srv, connection *con, void *p_d) {
 int mod_deflate_plugin_init(plugin *p);
 int mod_deflate_plugin_init(plugin *p) {
 	p->version     = LIGHTTPD_VERSION_ID;
-	p->name        = buffer_init_string("deflate");
+	p->name        = "deflate";
 
 	p->init		= mod_deflate_init;
 	p->cleanup	= mod_deflate_free;
 	p->set_defaults	= mod_deflate_setdefaults;
 	p->connection_reset	= mod_deflate_cleanup;
 	p->handle_response_start	= mod_deflate_handle_response_start;
-
-	p->data        = NULL;
 
 	return 0;
 }

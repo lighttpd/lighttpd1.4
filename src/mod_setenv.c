@@ -296,7 +296,7 @@ CONNECTION_FUNC(mod_setenv_reset) {
 int mod_setenv_plugin_init(plugin *p);
 int mod_setenv_plugin_init(plugin *p) {
 	p->version     = LIGHTTPD_VERSION_ID;
-	p->name        = buffer_init_string("setenv");
+	p->name        = "setenv";
 
 	p->init        = mod_setenv_init;
 	p->handle_uri_clean  = mod_setenv_uri_handler;
@@ -306,8 +306,6 @@ int mod_setenv_plugin_init(plugin *p) {
 	p->cleanup     = mod_setenv_free;
 
 	p->connection_reset  = mod_setenv_reset;
-
-	p->data        = NULL;
 
 	return 0;
 }

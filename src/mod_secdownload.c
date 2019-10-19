@@ -557,14 +557,12 @@ URIHANDLER_FUNC(mod_secdownload_uri_handler) {
 int mod_secdownload_plugin_init(plugin *p);
 int mod_secdownload_plugin_init(plugin *p) {
 	p->version     = LIGHTTPD_VERSION_ID;
-	p->name        = buffer_init_string("secdownload");
+	p->name        = "secdownload";
 
 	p->init        = mod_secdownload_init;
 	p->handle_physical  = mod_secdownload_uri_handler;
 	p->set_defaults  = mod_secdownload_set_defaults;
 	p->cleanup     = mod_secdownload_free;
-
-	p->data        = NULL;
 
 	return 0;
 }

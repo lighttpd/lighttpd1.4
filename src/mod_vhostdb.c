@@ -226,14 +226,12 @@ CONNECTION_FUNC(mod_vhostdb_handle_docroot) {
 int mod_vhostdb_plugin_init(plugin *p);
 int mod_vhostdb_plugin_init(plugin *p) {
     p->version          = LIGHTTPD_VERSION_ID;
-    p->name             = buffer_init_string("vhostdb");
+    p->name             = "vhostdb";
     p->init             = mod_vhostdb_init;
     p->cleanup          = mod_vhostdb_free;
     p->set_defaults     = mod_vhostdb_set_defaults;
     p->handle_docroot   = mod_vhostdb_handle_docroot;
     p->connection_reset = mod_vhostdb_handle_connection_close;
-
-    p->data             = NULL;
 
     return 0;
 }

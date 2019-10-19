@@ -271,14 +271,12 @@ URIHANDLER_FUNC(mod_usertrack_uri_handler) {
 int mod_usertrack_plugin_init(plugin *p);
 int mod_usertrack_plugin_init(plugin *p) {
 	p->version     = LIGHTTPD_VERSION_ID;
-	p->name        = buffer_init_string("usertrack");
+	p->name        = "usertrack";
 
 	p->init        = mod_usertrack_init;
 	p->handle_uri_clean  = mod_usertrack_uri_handler;
 	p->set_defaults  = mod_usertrack_set_defaults;
 	p->cleanup     = mod_usertrack_free;
-
-	p->data        = NULL;
 
 	return 0;
 }

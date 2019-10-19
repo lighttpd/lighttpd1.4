@@ -276,14 +276,12 @@ static handler_t mod_simple_vhost_docroot(server *srv, connection *con, void *p_
 int mod_simple_vhost_plugin_init(plugin *p);
 int mod_simple_vhost_plugin_init(plugin *p) {
 	p->version     = LIGHTTPD_VERSION_ID;
-	p->name        = buffer_init_string("simple_vhost");
+	p->name        = "simple_vhost";
 
 	p->init        = mod_simple_vhost_init;
 	p->set_defaults = mod_simple_vhost_set_defaults;
 	p->handle_docroot  = mod_simple_vhost_docroot;
 	p->cleanup     = mod_simple_vhost_free;
-
-	p->data        = NULL;
 
 	return 0;
 }

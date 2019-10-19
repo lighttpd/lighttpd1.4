@@ -27,23 +27,11 @@
 #define REQUESTDONE_FUNC   CONNECTION_FUNC
 #define URIHANDLER_FUNC    CONNECTION_FUNC
 
-#define PLUGIN_DATA        size_t id
+#define PLUGIN_DATA        int id; int nconfig
 
 typedef struct {
-	size_t version;
-
-	buffer *name; /* name of the plugin */
-
-	void *(* init)                       ();
-	handler_t (* priv_defaults)          (server *srv, void *p_d);
-	handler_t (* set_defaults)           (server *srv, void *p_d);
-	handler_t (* worker_init)            (server *srv, void *p_d); /* at server startup (each worker after fork()) */
-	handler_t (* cleanup)                (server *srv, void *p_d);
+	void *data;
 	                                                                                   /* is called ... */
-	handler_t (* handle_trigger)         (server *srv, void *p_d);                     /* once a second */
-	handler_t (* handle_sighup)          (server *srv, void *p_d);                     /* at a sighup */
-	handler_t (* handle_waitpid)         (server *srv, void *p_d, pid_t pid, int status); /* upon a child process exit */
-
 	handler_t (* handle_uri_raw)         (server *srv, connection *con, void *p_d);    /* after uri_raw is set */
 	handler_t (* handle_uri_clean)       (server *srv, connection *con, void *p_d);    /* after uri is set */
 	handler_t (* handle_docroot)         (server *srv, connection *con, void *p_d);    /* getting the document-root */
@@ -53,21 +41,24 @@ typedef struct {
 	handler_t (* handle_connection_accept) (server *srv, connection *con, void *p_d);  /* after accept() socket */
 	handler_t (* handle_connection_shut_wr)(server *srv, connection *con, void *p_d);  /* done writing to socket */
 	handler_t (* handle_connection_close)  (server *srv, connection *con, void *p_d);  /* before close() of socket */
-
-
-
-	handler_t (* handle_subrequest_start)(server *srv, connection *con, void *p_d);
-
-	                                                                                   /* when a handler for the request
-											    * has to be found
-											    */
+	handler_t (* handle_subrequest_start)(server *srv, connection *con, void *p_d);    /* when handler for request not found yet */
 	handler_t (* handle_subrequest)      (server *srv, connection *con, void *p_d);    /* */
 	handler_t (* handle_response_start)  (server *srv, connection *con, void *p_d);    /* before response headers are written */
 	handler_t (* connection_reset)       (server *srv, connection *con, void *p_d);    /* after request done or request abort */
-	void *data;
 
-	/* dlopen handle */
-	void *lib;
+	handler_t (* handle_trigger)         (server *srv, void *p_d);                     /* once a second */
+	handler_t (* handle_sighup)          (server *srv, void *p_d);                     /* at a sighup */
+	handler_t (* handle_waitpid)         (server *srv, void *p_d, pid_t pid, int status); /* upon a child process exit */
+
+	void *(* init)                       ();
+	handler_t (* priv_defaults)          (server *srv, void *p_d);
+	handler_t (* set_defaults)           (server *srv, void *p_d);
+	handler_t (* worker_init)            (server *srv, void *p_d); /* at server startup (each worker after fork()) */
+	handler_t (* cleanup)                (server *srv, void *p_d);
+
+	const char *name;/* name of the plugin */
+	size_t version;
+	void *lib;       /* dlopen handle */
 } plugin;
 
 __attribute_cold__

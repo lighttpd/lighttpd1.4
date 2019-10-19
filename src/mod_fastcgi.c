@@ -523,7 +523,7 @@ static handler_t fcgi_check_extension_2(server *srv, connection *con, void *p_d)
 int mod_fastcgi_plugin_init(plugin *p);
 int mod_fastcgi_plugin_init(plugin *p) {
 	p->version      = LIGHTTPD_VERSION_ID;
-	p->name         = buffer_init_string("fastcgi");
+	p->name         = "fastcgi";
 
 	p->init         = gw_init;
 	p->cleanup      = gw_free;
@@ -534,8 +534,6 @@ int mod_fastcgi_plugin_init(plugin *p) {
 	p->handle_subrequest       = gw_handle_subrequest;
 	p->handle_trigger          = gw_handle_trigger;
 	p->handle_waitpid          = gw_handle_waitpid_cb;
-
-	p->data         = NULL;
 
 	return 0;
 }

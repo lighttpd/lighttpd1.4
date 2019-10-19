@@ -1168,7 +1168,7 @@ CONNECTION_FUNC(mod_extforward_handle_con_accept)
 int mod_extforward_plugin_init(plugin *p);
 int mod_extforward_plugin_init(plugin *p) {
 	p->version     = LIGHTTPD_VERSION_ID;
-	p->name        = buffer_init_string("extforward");
+	p->name        = "extforward";
 
 	p->init        = mod_extforward_init;
 	p->handle_connection_accept = mod_extforward_handle_con_accept;
@@ -1179,8 +1179,6 @@ int mod_extforward_plugin_init(plugin *p) {
 	p->handle_connection_close = mod_extforward_handle_con_close;
 	p->set_defaults  = mod_extforward_set_defaults;
 	p->cleanup     = mod_extforward_free;
-
-	p->data        = NULL;
 
 	return 0;
 }
