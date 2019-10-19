@@ -106,6 +106,19 @@ static int connection_del(server *srv, connection *con) {
 	return 0;
 }
 
+__attribute_cold__
+static void connection_plugin_ctx_check(server *srv, connection *con) {
+	/* plugins should have cleaned themselves up */
+	for (uint32_t i = 0; i < srv->plugins.used; ++i) {
+		plugin *p = ((plugin **)(srv->plugins.ptr))[i];
+		plugin_data *pd = p->data;
+		if (!pd || NULL == con->plugin_ctx[pd->id]) continue;
+		log_error_write(srv, __FILE__, __LINE__, "ss",
+				"missing cleanup in", p->name);
+		con->plugin_ctx[pd->id] = NULL;
+	}
+}
+
 static int connection_close(server *srv, connection *con) {
 	if (con->fd < 0) con->fd = -con->fd;
 
@@ -141,12 +154,10 @@ static int connection_close(server *srv, connection *con) {
 
 	/* plugins should have cleaned themselves up */
 	for (uint32_t i = 0; i < srv->plugins.used; ++i) {
-		plugin *p = ((plugin **)(srv->plugins.ptr))[i];
-		plugin_data *pd = p->data;
-		if (!pd || NULL == con->plugin_ctx[pd->id]) continue;
-		log_error_write(srv, __FILE__, __LINE__, "ss",
-				"missing cleanup in", p->name);
-		con->plugin_ctx[pd->id] = NULL;
+		if (NULL != con->plugin_ctx[i]) {
+			connection_plugin_ctx_check(srv, con);
+			break;
+		}
 	}
 
 	connection_del(srv, con);
