@@ -214,7 +214,8 @@ void buffer_append_path_len(buffer *b, const char *a, size_t alen); /* join stri
 
 #define BUFFER_INTLEN_PTR(x) (x)->used ? (int)((x)->used - 1) : 0, (x)->ptr
 
-#define CONST_STR_LEN(x) x, (x) ? sizeof(x) - 1 : 0
+#define CONST_LEN_STR(x) (uint32_t)sizeof(x)-1, x
+#define CONST_STR_LEN(x) x, (uint32_t)sizeof(x) - 1
 #define CONST_BUF_LEN(x) ((x) ? (x)->ptr : NULL), buffer_string_length(x)
 
 

@@ -5,8 +5,6 @@
 
 #include <string.h>
 
-#define CONST_LEN_STR(x) (unsigned int)sizeof(x)-1, (x)
-
 typedef struct {
 	int key;
 	unsigned int vlen;

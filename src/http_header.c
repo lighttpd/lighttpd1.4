@@ -19,7 +19,6 @@ typedef struct keyvlenvalue {
 int8_t http_headers_off[] = {
   -1, -1, -1, -1, 0, 4, 5, 9, 10, 11, 12, -1, 15, 16, 20, 21, 23, 25
 };
-#define CONST_LEN_STR(x) (unsigned int)(sizeof(x)-1), x
 static const keyvlenvalue http_headers[] = {
   { HTTP_HEADER_HOST,                 CONST_LEN_STR("Host") }
  ,{ HTTP_HEADER_DATE,                 CONST_LEN_STR("Date") }
