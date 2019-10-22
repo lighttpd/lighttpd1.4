@@ -30,6 +30,10 @@
 #define PLUGIN_DATA        int id; int nconfig
 
 typedef struct {
+	PLUGIN_DATA;
+} plugin_data_base;
+
+typedef struct {
 	void *data;
 	                                                                                   /* is called ... */
 	handler_t (* handle_uri_raw)         (server *srv, connection *con, void *p_d);    /* after uri_raw is set */

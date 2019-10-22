@@ -24,10 +24,6 @@
  *
  */
 
-typedef struct {
-	PLUGIN_DATA;
-} plugin_data;
-
 typedef enum {
 	PLUGIN_FUNC_HANDLE_URI_CLEAN,
 	PLUGIN_FUNC_HANDLE_URI_RAW,
@@ -282,7 +278,7 @@ int plugins_load(server *srv) {
 
 typedef struct {
   handler_t(*fn)();
-  void *data;
+  plugin_data_base *data;
 } plugin_fn_data;
 
 __attribute_hot__
@@ -406,7 +402,7 @@ handler_t plugins_call_init(server *srv) {
 			}
 
 			/* used for con->mode, DIRECT == 0, plugins above that */
-			((plugin_data *)(p->data))->id = i + 1;
+			((plugin_data_base *)(p->data))->id = i + 1;
 
 			if (p->version != LIGHTTPD_VERSION_ID) {
 				log_error_write(srv, __FILE__, __LINE__, "ss",

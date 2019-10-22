@@ -37,10 +37,6 @@
 
 #define connection_set_state(con, n) ((con)->state = (n))
 
-typedef struct {
-	        PLUGIN_DATA;
-} plugin_data;
-
 __attribute_cold__
 static connection *connection_init(server *srv);
 
@@ -111,7 +107,7 @@ static void connection_plugin_ctx_check(server *srv, connection *con) {
 	/* plugins should have cleaned themselves up */
 	for (uint32_t i = 0; i < srv->plugins.used; ++i) {
 		plugin *p = ((plugin **)(srv->plugins.ptr))[i];
-		plugin_data *pd = p->data;
+		plugin_data_base *pd = p->data;
 		if (!pd || NULL == con->plugin_ctx[pd->id]) continue;
 		log_error_write(srv, __FILE__, __LINE__, "ss",
 				"missing cleanup in", p->name);
