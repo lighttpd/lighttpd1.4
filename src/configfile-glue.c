@@ -203,14 +203,45 @@ int config_insert_values_global(server *srv, const array *ca, const config_value
 }
 
 __attribute_cold__
-static const char* cond_result_to_string(cond_result_t cond_result) {
-	switch (cond_result) {
-	case COND_RESULT_UNSET: return "unset";
-	case COND_RESULT_SKIP: return "skipped";
-	case COND_RESULT_FALSE: return "false";
-	case COND_RESULT_TRUE: return "true";
-	default: return "invalid cond_result_t";
-	}
+__attribute_noinline__
+static void config_cond_result_trace(connection *con, const data_config *dc, int cached) {
+    cond_cache_t * const cache = &con->cond_cache[dc->context_ndx];
+    const char *msg;
+    switch (cache->result) {
+      case COND_RESULT_UNSET: msg = "unset"; break;
+      case COND_RESULT_SKIP:  msg = "skipped"; break;
+      case COND_RESULT_FALSE: msg = "false"; break;
+      case COND_RESULT_TRUE:  msg = "true"; break;
+      default:                msg = "invalid cond_result_t"; break;
+    }
+    log_error(con->errh, __FILE__, __LINE__, "%d (%s) result: %s",
+              dc->context_ndx, "uncached"+(cached ? 2 : 0), msg);
+}
+
+static cond_result_t config_check_cond_nocache(connection *con, const data_config *dc, int debug_cond, cond_cache_t *cache);
+
+static cond_result_t config_check_cond_nocache_calc(connection *con, const data_config *dc, int debug_cond, cond_cache_t *cache) {
+    cache->result = config_check_cond_nocache(con, dc, debug_cond, cache);
+    switch (cache->result) {
+      case COND_RESULT_FALSE:
+      case COND_RESULT_TRUE:
+        /* remember result of local condition for a partial reset */
+        cache->local_result = cache->result;
+        break;
+      default:
+        break;
+    }
+    if (debug_cond) config_cond_result_trace(con, dc, 0);
+    return cache->result;
+}
+
+static cond_result_t config_check_cond_cached(connection *con, const data_config *dc, const int debug_cond) {
+    cond_cache_t * const cache = &con->cond_cache[dc->context_ndx];
+    if (COND_RESULT_UNSET != cache->result) {
+        if (debug_cond) config_cond_result_trace(con, dc, 1);
+        return cache->result;
+    }
+    return config_check_cond_nocache_calc(con, dc, debug_cond, cache);
 }
 
 static int config_addrstr_eq_remote_ip_mask(connection *con, const char *addrstr, int nm_bits, sock_addr *rmt) {
@@ -266,9 +297,7 @@ static int config_addrbuf_eq_remote_ip_mask(connection *con, const buffer *strin
 
 static int data_config_pcre_exec(const data_config *dc, cond_cache_t *cache, const buffer *b);
 
-static cond_result_t config_check_cond_cached(connection *con, const data_config *dc, const int debug_cond);
-
-static cond_result_t config_check_cond_nocache(connection *con, const data_config *dc, const int debug_cond) {
+static cond_result_t config_check_cond_nocache(connection *con, const data_config *dc, const int debug_cond, cond_cache_t * const cache) {
 	static struct const_char_buffer {
 	  const char *ptr;
 	  uint32_t used;
@@ -335,7 +364,6 @@ static cond_result_t config_check_cond_nocache(connection *con, const data_confi
 	}
 
 	/* if we had a real result before and weren't cleared just return it */
-	cond_cache_t * const cache = &con->cond_cache[dc->context_ndx];
 	switch (cache->local_result) {
 	case COND_RESULT_TRUE:
 	case COND_RESULT_FALSE:
@@ -475,36 +503,8 @@ static cond_result_t config_check_cond_nocache(connection *con, const data_confi
 	return COND_RESULT_FALSE;
 }
 
-static cond_result_t config_check_cond_cached(connection *con, const data_config *dc, const int debug_cond) {
-	cond_cache_t * const cache = &con->cond_cache[dc->context_ndx];
-	int offset = 2;
-
-	if (COND_RESULT_UNSET == cache->result) {
-		offset = 0;
-		cache->result = config_check_cond_nocache(con, dc, debug_cond);
-		switch (cache->result) {
-		case COND_RESULT_FALSE:
-		case COND_RESULT_TRUE:
-			/* remember result of local condition for a partial reset */
-			cache->local_result = cache->result;
-			break;
-		default:
-			break;
-		}
-	}
-
-	if (debug_cond) {
-		log_error(con->errh, __FILE__, __LINE__, "%d (%s) result: %s",
-			dc->context_ndx,
-			"uncached"+offset,
-			cond_result_to_string(cache->result));
-	}
-
-	return cache->result;
-}
-
 __attribute_noinline__
-static cond_result_t config_check_cond_calc(connection *con, const int context_ndx) {
+static cond_result_t config_check_cond_calc(connection *con, const int context_ndx, cond_cache_t * const cache) {
     const data_config * const dc = (const data_config *)
           con->srv->config_context->data[context_ndx];
     const int debug_cond = con->conf.log_condition_handling;
@@ -512,16 +512,16 @@ static cond_result_t config_check_cond_calc(connection *con, const int context_n
         log_error(con->errh, __FILE__, __LINE__,
                   "=== start of condition block ===");
     }
-    return config_check_cond_cached(con, dc, debug_cond);
+    return config_check_cond_nocache_calc(con, dc, debug_cond, cache);
 }
 
 /* future: might make static inline in header for plugins */
 int config_check_cond(connection * const con, const int context_ndx) {
-    const cond_cache_t * const cache = &con->cond_cache[context_ndx];
+    cond_cache_t * const cache = &con->cond_cache[context_ndx];
     return COND_RESULT_TRUE
         == (COND_RESULT_UNSET != cache->result
               ? cache->result
-              : config_check_cond_calc(con, context_ndx));
+              : config_check_cond_calc(con, context_ndx, cache));
 }
 
 /* if we reset the cache result for a node, we also need to clear all
