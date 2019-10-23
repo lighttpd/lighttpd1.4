@@ -27,7 +27,9 @@
 #define REQUESTDONE_FUNC   CONNECTION_FUNC
 #define URIHANDLER_FUNC    CONNECTION_FUNC
 
-#define PLUGIN_DATA        int id; int nconfig
+#define PLUGIN_DATA        int id; \
+                           int nconfig; \
+                           config_plugin_value_t *cvlist
 
 typedef struct {
 	PLUGIN_DATA;

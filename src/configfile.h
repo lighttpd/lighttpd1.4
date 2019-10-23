@@ -126,17 +126,45 @@ typedef enum { T_CONFIG_UNSET,
 		T_CONFIG_STRING,
 		T_CONFIG_SHORT,
 		T_CONFIG_INT,
-		T_CONFIG_BOOLEAN,
+		T_CONFIG_BOOL,
 		T_CONFIG_ARRAY,
 		T_CONFIG_LOCAL,
 		T_CONFIG_DEPRECATED,
 		T_CONFIG_UNSUPPORTED
 } config_values_type_t;
+#define T_CONFIG_BOOLEAN T_CONFIG_BOOL
 
 typedef enum { T_CONFIG_SCOPE_UNSET,
 		T_CONFIG_SCOPE_SERVER,
 		T_CONFIG_SCOPE_CONNECTION
 } config_scope_type_t;
+
+typedef struct {
+    int k_id;
+    config_values_type_t vtype;
+    union v_u {
+      void *v;
+      const array *a;
+      const buffer *b;
+      const char *s;
+      unsigned int u;
+      unsigned short int shrt;
+      double d;
+      off_t o;
+      uint32_t u2[2];
+    } v;
+} config_plugin_value_t;
+
+typedef struct {
+    const char *k;
+    uint32_t klen;
+    /*uint32_t k_id;*//*(array index is used for k_id)*/
+    config_values_type_t ktype;
+    config_scope_type_t scope;
+} config_plugin_keys_t;
+
+__attribute_cold__
+int config_plugin_values_init(server *srv, void *p_d, const config_plugin_keys_t *cpk, const char *mname);
 
 typedef struct {
 	const char *key;

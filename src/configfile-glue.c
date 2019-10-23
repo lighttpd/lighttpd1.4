@@ -8,6 +8,7 @@
 #include "sock_addr.h"
 
 #include "configfile.h"
+#include "plugin.h"
 
 #include <string.h>
 #include <stdlib.h>     /* strtol */
@@ -23,6 +24,221 @@
  *
  */
 
+
+int config_plugin_values_init(server * const srv, void *p_d, const config_plugin_keys_t * const cpk, const char * const mname) {
+    plugin_data_base * const p = (plugin_data_base *)p_d;
+    array * const touched = srv->config_touched;
+    unsigned char matches[4096];   /*directives matches (4k is way too many!)*/
+    unsigned short contexts[4096]; /*conditions matches (4k is way too many!)*/
+    uint32_t n = 0;
+    int rc = 1; /* default is success */
+    force_assert(sizeof(matches) >= srv->config_context->used);
+
+    /* traverse config contexts twice: once to count, once to store matches */
+
+    for (uint32_t u = 0; u < srv->config_context->used; ++u) {
+        const array *ca =
+          ((data_config const *)srv->config_context->data[u])->value;
+
+        matches[n] = 0;
+        for (int i = 0; cpk[i].ktype != T_CONFIG_UNSET; ++i) {
+            data_unset * const du =
+              array_get_element_klen(ca, cpk[i].k, cpk[i].klen);
+            if (NULL == du) continue; /* not found */
+
+            ++matches[n];
+
+            array_set_key_value(touched,cpk[i].k,cpk[i].klen,CONST_STR_LEN(""));
+
+            if (cpk[i].scope == T_CONFIG_SCOPE_SERVER && 0 != u) {
+                /* server scope options should be set only in server scope */
+                log_error(srv->errh, __FILE__, __LINE__,
+                  "DEPRECATED: do not set server options in conditionals, "
+                  "variable: %s", cpk[i].k);
+            }
+        }
+        if (matches[n]) contexts[n++] = (unsigned short)u;
+    }
+
+    uint32_t elts = 0;
+    for (uint32_t u = 0; u < n; ++u) elts += matches[u];
+    p->nconfig = n;
+    /*(+1 to include global scope, whether or not any directives exist)*/
+    /*(+n for extra element to end each list)*/
+    p->cvlist = (config_plugin_value_t *)
+      calloc(1+n+n+elts, sizeof(config_plugin_value_t));
+    force_assert(p->cvlist);
+
+    elts = 1+n;
+    /* shift past first element if no directives in global scope */
+    const uint32_t shft = (0 != n && 0 != contexts[0]);
+    if (shft) ++p->nconfig;
+    for (uint32_t u = 0; u < n; ++u) {
+        config_plugin_value_t * const cpv = p->cvlist+shft+u;
+        cpv->k_id = (int)contexts[u];
+        cpv->v.u2[0] = elts;
+        cpv->v.u2[1] = matches[u];
+        elts += matches[u]+1;     /* +1 to end list with cpv->k_id = -1 */
+    }
+
+    for (uint32_t u = 0; u < n; ++u) {
+        const array *ca =
+          ((data_config const *)srv->config_context->data[contexts[u]])->value;
+        config_plugin_value_t *cpv = p->cvlist + p->cvlist[shft+u].v.u2[0];
+
+        for (int i = 0; cpk[i].ktype != T_CONFIG_UNSET; ++i) {
+            data_unset * const du =
+              array_get_element_klen(ca, cpk[i].k, cpk[i].klen);
+            if (NULL == du) continue; /* not found */
+
+            cpv->k_id = i;
+            cpv->vtype = cpk[i].ktype;
+
+            switch (cpk[i].ktype) {
+              case T_CONFIG_ARRAY:
+                if (du->type == TYPE_ARRAY) {
+                    cpv->v.a = &((const data_array *)du)->value;
+                    /* future: might provide modifiers to perform one of
+                     * array_is_{vlist,kvany,kvarray,kvstring}() tests
+                     * and provide generic error message if mismatch */
+                }
+                else {
+                    log_error(srv->errh, __FILE__, __LINE__,
+                      "%s should have been an array of strings like "
+                      "... = ( \"...\" )", cpk[i].k);
+                    rc = 0;
+                    continue;
+                }
+                break;
+              case T_CONFIG_STRING:
+                if (du->type == TYPE_STRING) {
+                    cpv->v.b = &((const data_string *)du)->value;
+                }
+                else {
+                    log_error(srv->errh, __FILE__, __LINE__,
+                      "%s should have been a string like ... = \"...\"",
+                      cpk[i].k);
+                    rc = 0;
+                    continue;
+                }
+                break;
+              case T_CONFIG_SHORT:
+                switch(du->type) {
+                  case TYPE_INTEGER:
+                    cpv->v.shrt =
+                      (unsigned short)((const data_integer *)du)->value;
+                    break;
+                  case TYPE_STRING: {
+                    /* If the value came from an environment variable, then it
+                     * is a data_string, although it may contain a number in
+                     * ASCII decimal format.  We try to interpret the string as
+                     * a decimal short before giving up, in order to support
+                     * setting numeric values with environment variables
+                     * (e.g. port number).
+                     */
+                    const char * const v = ((const data_string *)du)->value.ptr;
+                    if (v && *v) {
+                        char *e;
+                        long l = strtol(v, &e, 10);
+                        if (e != v && !*e && l >= 0 && l <= 65535) {
+                            cpv->v.shrt = (unsigned short)l;
+                            break;
+                        }
+                    }
+                    log_error(srv->errh, __FILE__, __LINE__,
+                      "got a string but expected a short: %s %s", cpk[i].k, v);
+                    rc = 0;
+                    continue;
+                  }
+                  default:
+                    log_error(srv->errh, __FILE__, __LINE__,
+                      "unexpected type for key: %s %d expected a short integer,"
+                      " range 0 ... 65535", cpk[i].k, du->type);
+                    rc = 0;
+                    continue;
+                }
+                break;
+              case T_CONFIG_INT:
+                switch(du->type) {
+                  case TYPE_INTEGER:
+                    cpv->v.u = ((const data_integer *)du)->value;
+                    break;
+                  case TYPE_STRING: {
+                    const char * const v = ((const data_string *)du)->value.ptr;
+                    if (v && *v) {
+                        char *e;
+                        long l = strtol(v, &e, 10);
+                        if (e != v && !*e && l >= 0) {
+                            cpv->v.shrt = (unsigned int)l;
+                            break;
+                        }
+                    }
+                    log_error(srv->errh, __FILE__, __LINE__,
+                      "got a string but expected an integer: %s %s",cpk[i].k,v);
+                    rc = 0;
+                    continue;
+                  }
+                  default:
+                    log_error(srv->errh, __FILE__, __LINE__,
+                      "unexpected type for key: %s %d expected an integer, "
+                      "range 0 ... 4294967295", cpk[i].k, du->type);
+                    rc = 0;
+                    continue;
+                }
+                break;
+              case T_CONFIG_BOOL:
+                if (du->type == TYPE_STRING) {
+                    const buffer *b = &((const data_string *)du)->value;
+                    if (buffer_eq_icase_slen(b, CONST_STR_LEN("enable"))
+                        || buffer_eq_icase_slen(b, CONST_STR_LEN("true"))) {
+                        cpv->v.u = 1;
+                    }
+                    else if (buffer_eq_icase_slen(b, CONST_STR_LEN("disable"))
+                             || buffer_eq_icase_slen(b,CONST_STR_LEN("false"))){
+                        cpv->v.u = 0;
+                    }
+                    else {
+                        log_error(srv->errh, __FILE__, __LINE__,
+                          "ERROR: unexpected value for key: %s %s "
+                          "(enable|disable)", cpk[i].k, b->ptr);
+                        rc = 0;
+                        continue;
+                    }
+                }
+                else if (du->type == TYPE_INTEGER) {
+                    cpv->v.u = (0 != ((const data_integer *)du)->value);
+                }
+                else {
+                    log_error(srv->errh, __FILE__, __LINE__,
+                      "ERROR: unexpected type for key: %s (string) "
+                      "\"(enable|disable)\"", cpk[i].k);
+                    rc = 0;
+                    continue;
+                }
+                break;
+              case T_CONFIG_LOCAL:
+              case T_CONFIG_UNSET:
+                continue;
+              case T_CONFIG_UNSUPPORTED:
+                log_error(srv->errh, __FILE__, __LINE__,
+                  "ERROR: found unsupported key: %s (%s)", cpk[i].k, mname);
+                srv->config_unsupported = 1;
+                continue;
+              case T_CONFIG_DEPRECATED:
+                log_error(srv->errh, __FILE__, __LINE__,
+                  "ERROR: found deprecated key: %s (%s)", cpk[i].k, mname);
+                srv->config_deprecated = 1;
+                continue;
+            }
+
+            ++cpv;
+        }
+
+        cpv->k_id = -1; /* indicate list end */
+    }
+
+    return rc;
+}
 
 /* handle global options */
 

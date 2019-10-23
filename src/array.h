@@ -13,7 +13,7 @@ struct data_methods {
 	void (*print)(const struct data_unset *p, int depth);
 };
 
-typedef enum { TYPE_UNSET, TYPE_STRING, TYPE_OTHER, TYPE_ARRAY, TYPE_INTEGER, TYPE_DONOTUSE, TYPE_CONFIG } data_type_t;
+typedef enum { TYPE_STRING, TYPE_ARRAY, TYPE_INTEGER, TYPE_CONFIG, TYPE_OTHER } data_type_t;
 #define DATA_UNSET \
 	buffer key; \
 	const struct data_methods *fn; /* function table */ \
