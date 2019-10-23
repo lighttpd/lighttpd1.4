@@ -258,7 +258,6 @@ static server *server_init(void) {
 
 	for (int i = 0; i < FILE_CACHE_MAX; ++i) {
 		srv->mtime_cache[i].mtime = (time_t)-1;
-		srv->mtime_cache[i].str = buffer_init();
 	}
 
 	li_rand_reseed();
@@ -298,7 +297,7 @@ static server *server_init(void) {
 __attribute_cold__
 static void server_free(server *srv) {
 	for (int i = 0; i < FILE_CACHE_MAX; ++i) {
-		buffer_free(srv->mtime_cache[i].str);
+		free(srv->mtime_cache[i].str.ptr);
 	}
 
 	if (oneshot_fd > 0) {

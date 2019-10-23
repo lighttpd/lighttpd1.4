@@ -293,7 +293,7 @@ typedef struct {
 
 typedef struct {
 	time_t  mtime;  /* the key */
-	buffer *str;    /* a buffer for the string represenation */
+	buffer str;     /* buffer for the string represenation */
 } mtime_cache_type;
 
 typedef struct {

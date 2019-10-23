@@ -1228,7 +1228,7 @@ static int mod_ssi_handle_request(server *srv, connection *con, handler_ctx *p) 
 
 	if (p->conf.conditional_requests) {
 		/* Generate "ETag" & "Last-Modified" headers */
-		buffer *mtime = NULL;
+		const buffer *mtime = NULL;
 
 		/* use most recently modified include file for ETag and Last-Modified */
 		if (st.st_mtime < include_file_last_mtime)

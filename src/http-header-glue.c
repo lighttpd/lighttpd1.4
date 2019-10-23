@@ -117,25 +117,26 @@ int http_response_redirect_to_directory(server *srv, connection *con, int status
 	return 0;
 }
 
-buffer * strftime_cache_get(server *srv, time_t last_mod) {
+const buffer * strftime_cache_get(server *srv, time_t last_mod) {
 	static int i;
-	struct tm *tm;
 
+	mtime_cache_type * const mtime_cache = srv->mtime_cache;
 	for (int j = 0; j < FILE_CACHE_MAX; ++j) {
-		if (srv->mtime_cache[j].mtime == last_mod)
-			return srv->mtime_cache[j].str; /* found cache-entry */
+		if (mtime_cache[j].mtime == last_mod)
+			return &mtime_cache[j].str; /* found cache-entry */
 	}
 
 	if (++i == FILE_CACHE_MAX) {
 		i = 0;
 	}
 
-	srv->mtime_cache[i].mtime = last_mod;
-	tm = gmtime(&(srv->mtime_cache[i].mtime));
-	buffer_clear(srv->mtime_cache[i].str);
-	buffer_append_strftime(srv->mtime_cache[i].str, "%a, %d %b %Y %H:%M:%S GMT", tm);
+	mtime_cache[i].mtime = last_mod;
+	buffer * const b = &mtime_cache[i].str;
+	buffer_clear(b);
+	buffer_append_strftime(b, "%a, %d %b %Y %H:%M:%S GMT",
+	                       gmtime(&(mtime_cache[i].mtime)));
 
-	return srv->mtime_cache[i].str;
+	return b;
 }
 
 

@@ -805,7 +805,7 @@ PHYSICALPATH_FUNC(mod_compress_physical) {
 	size_t m;
 	off_t max_fsize;
 	stat_cache_entry *sce = NULL;
-	buffer *mtime = NULL;
+	const buffer *mtime = NULL;
 	buffer *content_type;
 
 	if (con->mode != DIRECT || con->http_status) return HANDLER_GO_ON;
