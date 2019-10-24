@@ -33,6 +33,9 @@ static int fdevent_solaris_devpoll_event_del(fdevents *ev, fdnode *fdn) {
 static int fdevent_solaris_devpoll_event_set(fdevents *ev, fdnode *fdn, int events) {
 	struct pollfd pfd;
 	pfd.fd = fdn->fde_ndx = fdn->fd;
+      #ifndef POLLRDHUP
+	events &= ~FDEVENT_RDHUP;
+      #endif
 	pfd.events = events;
 	pfd.revents = 0;
 	return (-1 != write(ev->devpoll_fd, &pfd, sizeof(pfd))) ? 0 : -1;
@@ -75,7 +78,9 @@ int fdevent_solaris_devpoll_init(fdevents *ev) {
 	force_assert(POLLERR   == FDEVENT_ERR);
 	force_assert(POLLHUP   == FDEVENT_HUP);
 	force_assert(POLLNVAL  == FDEVENT_NVAL);
+      #ifdef POLLRDHUP
 	force_assert(POLLRDHUP == FDEVENT_RDHUP);
+      #endif
 
 	ev->type       = FDEVENT_HANDLER_SOLARIS_DEVPOLL;
 	ev->event_set  = fdevent_solaris_devpoll_event_set;

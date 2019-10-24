@@ -84,7 +84,9 @@ int fdevent_solaris_port_init(fdevents *ev) {
 	force_assert(POLLERR   == FDEVENT_ERR);
 	force_assert(POLLHUP   == FDEVENT_HUP);
 	force_assert(POLLNVAL  == FDEVENT_NVAL);
+      #ifdef POLLRDHUP
 	force_assert(POLLRDHUP == FDEVENT_RDHUP);
+      #endif
 
 	ev->type        = FDEVENT_HANDLER_SOLARIS_PORT;
 	ev->event_set   = fdevent_solaris_port_event_set;
