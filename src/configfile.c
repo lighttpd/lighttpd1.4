@@ -667,17 +667,6 @@ static int config_insert(server *srv) {
 
 }
 
-
-void config_setup_connection(server *srv, connection *con) {
-    /* initialize specific_config (con->conf) from top-level specific_config */
-    specific_config * const s = srv->config_storage[0];
-    const size_t len = /* offsetof() */
-      (uintptr_t)&((specific_config *)0)->global_bytes_per_second_cnt_ptr;
-    con->conf.global_bytes_per_second_cnt_ptr = &s->global_bytes_per_second_cnt;
-    con->server_name = s->server_name;
-    memcpy(&con->conf, s, len);
-}
-
 #define PATCH(x) con->conf.x = s->x
 void config_patch_connection(server *srv, connection *con) {
 	size_t i, j;

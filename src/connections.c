@@ -535,6 +535,16 @@ static void connection_handle_write_state(server *srv, connection *con) {
 }
 
 
+static void connection_reset_config(server *srv, connection *con) {
+    /* initialize specific_config (con->conf) from top-level specific_config */
+    specific_config * const s = srv->config_storage[0];
+    const size_t len = /* offsetof() */
+      (uintptr_t)&((specific_config *)0)->global_bytes_per_second_cnt_ptr;
+    con->conf.global_bytes_per_second_cnt_ptr = &s->global_bytes_per_second_cnt;
+    con->server_name = s->server_name;
+    memcpy(&con->conf, s, len);
+}
+
 
 __attribute_cold__
 static connection *connection_init(server *srv) {
@@ -589,7 +599,7 @@ static connection *connection_init(server *srv) {
 
 	con->cond_cache = calloc(srv->config_context->used, sizeof(cond_cache_t));
 	force_assert(NULL != con->cond_cache);
-	config_setup_connection(srv, con);
+	connection_reset_config(srv, con);
 
 	return con;
 }
@@ -700,7 +710,7 @@ static int connection_reset(server *srv, connection *con) {
 	/*con->error_handler_saved_method = HTTP_METHOD_UNSET;*/
 	/*(error_handler_saved_method value is not valid unless error_handler_saved_status is set)*/
 
-	config_setup_connection(srv, con);
+	connection_reset_config(srv, con);
 
 	return 0;
 }
@@ -1226,7 +1236,7 @@ static int connection_handle_request(server *srv, connection *con) {
 				break;
 			case HANDLER_COMEBACK:
 				if (con->mode == DIRECT && buffer_is_empty(con->physical.path)) {
-					config_setup_connection(srv, con);
+					connection_reset_config(srv, con);
 				}
 				return 1;
 			case HANDLER_ERROR:

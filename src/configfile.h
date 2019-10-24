@@ -116,7 +116,6 @@ int config_parse_file(server *srv, config_t *context, const char *fn);
 __attribute_cold__
 int config_parse_cmd(server *srv, config_t *context, const char *cmd);
 
-void config_setup_connection(server *srv, connection *con);
 void config_patch_connection(server *srv, connection *con);
 
 void config_cond_cache_reset(server *srv, connection *con);
