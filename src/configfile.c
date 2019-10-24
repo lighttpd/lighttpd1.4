@@ -765,7 +765,7 @@ void config_patch_connection(server *srv, connection *con) {
 #undef PATCH
 
 typedef struct {
-	const buffer *source;
+	const char *source;
 	const char *input;
 	size_t offset;
 	size_t size;
@@ -779,43 +779,6 @@ typedef struct {
 	int simulate_eol;
 } tokenizer_t;
 
-#if 0
-static int tokenizer_open(server *srv, tokenizer_t *t, buffer *basedir, const char *fn) {
-	if (buffer_string_is_empty(basedir) ||
-			(fn[0] == '/' || fn[0] == '\\') ||
-			(fn[0] == '.' && (fn[1] == '/' || fn[1] == '\\'))) {
-		t->file = buffer_init_string(fn);
-	} else {
-		t->file = buffer_init_buffer(basedir);
-		buffer_append_string(t->file, fn);
-	}
-
-	if (0 != stream_open(&(t->s), t->file)) {
-		log_error_write(srv, __FILE__, __LINE__, "sbss",
-				"opening configfile ", t->file, "failed:", strerror(errno));
-		buffer_free(t->file);
-		return -1;
-	}
-
-	t->input = t->s.start;
-	t->offset = 0;
-	t->size = t->s.size;
-	t->line = 1;
-	t->line_pos = 1;
-
-	t->in_key = 1;
-	t->in_brace = 0;
-	t->in_cond = 0;
-	return 0;
-}
-
-static int tokenizer_close(server *srv, tokenizer_t *t) {
-	UNUSED(srv);
-
-	buffer_free(t->file);
-	return stream_close(&(t->s));
-}
-#endif
 static int config_skip_newline(tokenizer_t *t) {
 	int skipped = 1;
 	force_assert(t->input[t->offset] == '\r' || t->input[t->offset] == '\n');
@@ -835,6 +798,13 @@ static int config_skip_comment(tokenizer_t *t) {
 	     i++);
 	t->offset += i;
 	return i;
+}
+
+__attribute_cold__
+static int config_tokenizer_err(server *srv, const char *file, unsigned int line, tokenizer_t *t, const char *msg) {
+    log_error(srv->errh, file, line, "source: %s line: %d pos: %d %s",
+              t->source, t->line, t->line_pos, msg);
+    return -1;
 }
 
 static int config_tokenizer(server *srv, tokenizer_t *t, int *token_id, buffer *token) {
@@ -862,11 +832,8 @@ static int config_tokenizer(server *srv, tokenizer_t *t, int *token_id, buffer *
 
 					tid = TK_ARRAY_ASSIGN;
 				} else {
-					log_error_write(srv, __FILE__, __LINE__, "sbsdsds",
-							"source:", t->source,
-							"line:", t->line, "pos:", t->line_pos,
+					return config_tokenizer_err(srv, __FILE__, __LINE__, t,
 							"use => for assignments in arrays");
-					return -1;
 				}
 			} else if (t->in_cond) {
 				if (t->input[t->offset + 1] == '=') {
@@ -882,11 +849,8 @@ static int config_tokenizer(server *srv, tokenizer_t *t, int *token_id, buffer *
 
 					tid = TK_MATCH;
 				} else {
-					log_error_write(srv, __FILE__, __LINE__, "sbsdsds",
-							"source:", t->source,
-							"line:", t->line, "pos:", t->line_pos,
+					return config_tokenizer_err(srv, __FILE__, __LINE__, t,
 							"only =~ and == are allowed in the condition");
-					return -1;
 				}
 				t->in_key = 1;
 				t->in_cond = 0;
@@ -898,11 +862,8 @@ static int config_tokenizer(server *srv, tokenizer_t *t, int *token_id, buffer *
 				t->offset++;
 				t->line_pos++;
 			} else {
-				log_error_write(srv, __FILE__, __LINE__, "sbsdsds",
-						"source:", t->source,
-						"line:", t->line, "pos:", t->line_pos,
+				return config_tokenizer_err(srv, __FILE__, __LINE__, t,
 						"unexpected equal-sign: =");
-				return -1;
 			}
 
 			break;
@@ -921,20 +882,14 @@ static int config_tokenizer(server *srv, tokenizer_t *t, int *token_id, buffer *
 
 					tid = TK_NOMATCH;
 				} else {
-					log_error_write(srv, __FILE__, __LINE__, "sbsdsds",
-							"source:", t->source,
-							"line:", t->line, "pos:", t->line_pos,
+					return config_tokenizer_err(srv, __FILE__, __LINE__, t,
 							"only !~ and != are allowed in the condition");
-					return -1;
 				}
 				t->in_key = 1;
 				t->in_cond = 0;
 			} else {
-				log_error_write(srv, __FILE__, __LINE__, "sbsdsds",
-						"source:", t->source,
-						"line:", t->line, "pos:", t->line_pos,
+				return config_tokenizer_err(srv, __FILE__, __LINE__, t,
 						"unexpected exclamation-marks: !");
-				return -1;
 			}
 
 			break;
@@ -1018,14 +973,8 @@ static int config_tokenizer(server *srv, tokenizer_t *t, int *token_id, buffer *
 			}
 
 			if (t->input[t->offset + i] == '\0') {
-				/* ERROR */
-
-				log_error_write(srv, __FILE__, __LINE__, "sbsdsds",
-						"source:", t->source,
-						"line:", t->line, "pos:", t->line_pos,
+				return config_tokenizer_err(srv, __FILE__, __LINE__, t,
 						"missing closing quote");
-
-				return -1;
 			}
 
 			t->offset += i + 1;
@@ -1077,12 +1026,8 @@ static int config_tokenizer(server *srv, tokenizer_t *t, int *token_id, buffer *
 				tid = TK_FORCE_ASSIGN;
 				buffer_copy_string_len(token, CONST_STR_LEN(":="));
 			} else {
-				/* ERROR */
-				log_error_write(srv, __FILE__, __LINE__, "sbsdsds",
-						"source:", t->source,
-						"line:", t->line, "pos:", t->line_pos,
+				return config_tokenizer_err(srv, __FILE__, __LINE__, t,
 						"unexpected character ':'");
-				return -1;
 			}
 			break;
 
@@ -1153,12 +1098,8 @@ static int config_tokenizer(server *srv, tokenizer_t *t, int *token_id, buffer *
 					t->offset += i;
 					t->line_pos += i;
 				} else {
-					/* ERROR */
-					log_error_write(srv, __FILE__, __LINE__, "sbsdsds",
-							"source:", t->source,
-							"line:", t->line, "pos:", t->line_pos,
+					return config_tokenizer_err(srv, __FILE__, __LINE__, t,
 							"invalid character in condition");
-					return -1;
 				}
 			} else if (isdigit((unsigned char)c)) {
 				/* take all digits */
@@ -1200,12 +1141,8 @@ static int config_tokenizer(server *srv, tokenizer_t *t, int *token_id, buffer *
 					t->offset += i;
 					t->line_pos += i;
 				} else {
-					/* ERROR */
-					log_error_write(srv, __FILE__, __LINE__, "sbsdsds",
-							"source:", t->source,
-							"line:", t->line, "pos:", t->line_pos,
+					return config_tokenizer_err(srv, __FILE__, __LINE__, t,
 							"invalid character in variable name");
-					return -1;
 				}
 			}
 			break;
@@ -1214,13 +1151,6 @@ static int config_tokenizer(server *srv, tokenizer_t *t, int *token_id, buffer *
 
 	if (tid) {
 		*token_id = tid;
-#if 0
-		log_error_write(srv, __FILE__, __LINE__, "sbsdsdbdd",
-				"source:", t->source,
-				"line:", t->line, "pos:", t->line_pos,
-				token, token->used - 1, tid);
-#endif
-
 		return 1;
 	} else if (t->offset < t->size) {
 		log_error_write(srv, __FILE__, __LINE__, "Dsb", tid, ",", token);
@@ -1228,17 +1158,30 @@ static int config_tokenizer(server *srv, tokenizer_t *t, int *token_id, buffer *
 	return 0;
 }
 
-static int config_parse(server *srv, config_t *context, tokenizer_t *t) {
+static int config_parse(server *srv, config_t *context, const char *source, const char *input, size_t isize) {
 	void *pParser;
-	int token_id;
 	buffer *token, *lasttoken;
+	int token_id = 0;
 	int ret;
+	tokenizer_t t;
+
+	t.source = source;
+	t.input = input;
+	t.size = isize;
+	t.offset = 0;
+	t.line = 1;
+	t.line_pos = 1;
+
+	t.in_key = 1;
+	t.in_brace = 0;
+	t.in_cond = 0;
+	t.simulate_eol = 0;
 
 	pParser = configparserAlloc( malloc );
 	force_assert(pParser);
 	lasttoken = buffer_init();
 	token = buffer_init();
-	while((1 == (ret = config_tokenizer(srv, t, &token_id, token))) && context->ok) {
+	while((1 == (ret = config_tokenizer(srv, &t, &token_id, token))) && context->ok) {
 		buffer_copy_buffer(lasttoken, token);
 		configparser(pParser, token_id, token, context);
 
@@ -1256,13 +1199,12 @@ static int config_parse(server *srv, config_t *context, tokenizer_t *t) {
 	configparserFree(pParser, free);
 
 	if (ret == -1) {
-		log_error_write(srv, __FILE__, __LINE__, "sb",
-				"configfile parser failed at:", lasttoken);
+		log_error(srv->errh, __FILE__, __LINE__,
+		          "configfile parser failed at: %s", lasttoken->ptr);
 	} else if (context->ok == 0) {
-		log_error_write(srv, __FILE__, __LINE__, "sbsdsdsb",
-				"source:", t->source,
-				"line:", t->line, "pos:", t->line_pos,
-				"parser failed somehow near here:", lasttoken);
+		log_error(srv->errh, __FILE__, __LINE__, "source: %s line: %d pos: %d "
+		          "parser failed somehow near here: %s",
+		          t.source, t.line, t.line_pos, lasttoken->ptr);
 		ret = -1;
 	}
 	buffer_free(lasttoken);
@@ -1270,43 +1212,22 @@ static int config_parse(server *srv, config_t *context, tokenizer_t *t) {
 	return ret == -1 ? -1 : 0;
 }
 
-static int tokenizer_init(tokenizer_t *t, const buffer *source, const char *input, size_t size) {
-
-	t->source = source;
-	t->input = input;
-	t->size = size;
-	t->offset = 0;
-	t->line = 1;
-	t->line_pos = 1;
-
-	t->in_key = 1;
-	t->in_brace = 0;
-	t->in_cond = 0;
-	t->simulate_eol = 0;
-	return 0;
-}
-
-static int config_parse_file_stream(server *srv, config_t *context, const buffer *filename) {
-	tokenizer_t t;
+static int config_parse_file_stream(server *srv, config_t *context, const char *fn) {
 	stream s;
-	int ret;
 
-	if (0 != stream_open(&s, filename)) {
-		log_error_write(srv, __FILE__, __LINE__, "sbss",
-				"opening configfile ", filename, "failed:", strerror(errno));
+	if (0 != stream_open(&s, fn)) {
+		log_error(srv->errh, __FILE__, __LINE__,
+		          "opening configfile %s failed: %s", fn, strerror(errno));
 		return -1;
-	} else {
-		tokenizer_init(&t, filename, s.start, s.size);
-		ret = config_parse(srv, context, &t);
 	}
 
+	int ret = config_parse(srv, context, fn, s.start, (size_t)s.size);
 	stream_close(&s);
 	return ret;
 }
 
 int config_parse_file(server *srv, config_t *context, const char *fn) {
 	buffer *filename;
-	size_t i;
 	int ret = -1;
       #ifdef GLOB_BRACE
 	int flags = GLOB_BRACE;
@@ -1326,9 +1247,8 @@ int config_parse_file(server *srv, config_t *context, const char *fn) {
 
 	switch (glob(filename->ptr, flags, NULL, &gl)) {
 	case 0:
-		for (i = 0; i < gl.gl_pathc; ++i) {
-			buffer_copy_string(filename, gl.gl_pathv[i]);
-			ret = config_parse_file_stream(srv, context, filename);
+		for (size_t i = 0; i < gl.gl_pathc; ++i) {
+			ret = config_parse_file_stream(srv, context, gl.gl_pathv[i]);
 			if (0 != ret) break;
 		}
 		globfree(&gl);
@@ -1438,11 +1358,7 @@ int config_parse_cmd(server *srv, config_t *context, const char *cmd) {
 			}
 
 			if (-1 != ret) {
-				buffer *source = buffer_init_string(cmd);
-				tokenizer_t t;
-				tokenizer_init(&t, source, CONST_BUF_LEN(out));
-				ret = config_parse(srv, context, &t);
-				buffer_free(source);
+				ret = config_parse(srv, context, cmd, CONST_BUF_LEN(out));
 			}
 			buffer_free(out);
 		}
@@ -1476,7 +1392,6 @@ int config_read(server *srv, const char *fn) {
 	buffer *dcwd;
 	int ret;
 	char *pos;
-	buffer *filename;
 
 	context_init(srv, &context);
 	context.all_configs = srv->config_context;
@@ -1508,9 +1423,7 @@ int config_read(server *srv, const char *fn) {
 		array_set_key_value(dc->value, CONST_STR_LEN("var.CWD"), CONST_BUF_LEN(dcwd));
 	}
 
-	filename = buffer_init_string(fn);
-	ret = config_parse_file_stream(srv, &context, filename);
-	buffer_free(filename);
+	ret = config_parse_file_stream(srv, &context, fn);
 
 	/* remains nothing if parser is ok */
 	force_assert(!(0 == ret && context.ok && 0 != context.configs_stack.used));

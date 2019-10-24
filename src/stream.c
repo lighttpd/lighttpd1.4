@@ -22,7 +22,7 @@
 # define FIFO_NONBLOCK 0
 #endif
 
-int stream_open(stream *f, const buffer *fn) {
+int stream_open(stream *f, const char *fn) {
 
 #if !defined(__WIN32)
 
@@ -33,7 +33,7 @@ int stream_open(stream *f, const buffer *fn) {
 	f->size = 0;
 	f->mapped = 0;
 
-	if (-1 == (fd = open(fn->ptr, O_RDONLY | O_BINARY | FIFO_NONBLOCK))) {
+	if (-1 == (fd = open(fn, O_RDONLY | O_BINARY | FIFO_NONBLOCK))) {
 		return -1;
 	}
 
@@ -77,7 +77,7 @@ int stream_open(stream *f, const buffer *fn) {
 	f->start = NULL;
 	f->size = 0;
 
-	fh = CreateFile(fn->ptr,
+	fh = CreateFile(fn,
 			GENERIC_READ,
 			FILE_SHARE_READ,
 			NULL,
