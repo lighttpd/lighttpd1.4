@@ -18,7 +18,6 @@
 # include <pwd.h>
 #endif
 
-/* plugin config for all request/connections */
 typedef struct {
 	array *exclude_user;
 	array *include_user;
@@ -31,27 +30,19 @@ typedef struct {
 typedef struct {
 	PLUGIN_DATA;
 
-	buffer *username;
-	buffer *temp_path;
-
 	plugin_config **config_storage;
 
 	plugin_config conf;
 } plugin_data;
 
-/* init the plugin data */
 INIT_FUNC(mod_userdir_init) {
 	plugin_data *p;
 
 	p = calloc(1, sizeof(*p));
 
-	p->username = buffer_init();
-	p->temp_path = buffer_init();
-
 	return p;
 }
 
-/* detroy the plugin data */
 FREE_FUNC(mod_userdir_free) {
 	plugin_data *p = p_d;
 
@@ -75,15 +66,10 @@ FREE_FUNC(mod_userdir_free) {
 		free(p->config_storage);
 	}
 
-	buffer_free(p->username);
-	buffer_free(p->temp_path);
-
 	free(p);
 
 	return HANDLER_GO_ON;
 }
-
-/* handle plugin config and check values */
 
 SETDEFAULTS_FUNC(mod_userdir_set_defaults) {
 	plugin_data *p = p_d;
@@ -190,147 +176,154 @@ static int mod_userdir_patch_connection(server *srv, connection *con, plugin_dat
 }
 #undef PATCH
 
-URIHANDLER_FUNC(mod_userdir_docroot_handler) {
-	plugin_data *p = p_d;
-	size_t k;
-	char *rel_url;
-#ifdef HAVE_PWD_H
-	struct passwd *pwd = NULL;
-#endif
-
-	if (buffer_is_empty(con->uri.path)) return HANDLER_GO_ON;
-
-	mod_userdir_patch_connection(srv, con, p);
-
-	/* enforce the userdir.path to be set in the config, ugly fix for #1587;
-	 * should be replaced with a clean .enabled option in 1.5
-	 */
-	if (!p->conf.active || buffer_is_empty(p->conf.path)) return HANDLER_GO_ON;
-
-	/* /~user/foo.html -> /home/user/public_html/foo.html */
-
-	if (con->uri.path->ptr[0] != '/' ||
-	    con->uri.path->ptr[1] != '~') return HANDLER_GO_ON;
-
-	if (NULL == (rel_url = strchr(con->uri.path->ptr + 2, '/'))) {
-		/* / is missing -> redirect to .../ as we are a user - DIRECTORY ! :) */
-		http_response_redirect_to_directory(srv, con, 301);
-
-		return HANDLER_FINISHED;
-	}
-
-	/* /~/ is a empty username, catch it directly */
-	if (0 == rel_url - (con->uri.path->ptr + 2)) {
-		return HANDLER_GO_ON;
-	}
-
-	buffer_copy_string_len(p->username, con->uri.path->ptr + 2, rel_url - (con->uri.path->ptr + 2));
-
-	if (buffer_string_is_empty(p->conf.basepath)
-#ifdef HAVE_PWD_H
-	    && NULL == (pwd = getpwnam(p->username->ptr))
-#endif
-	    ) {
-		/* user not found */
-		return HANDLER_GO_ON;
-	}
-
-
-	for (k = 0; k < p->conf.exclude_user->used; k++) {
-		data_string *ds = (data_string *)p->conf.exclude_user->data[k];
-
-		if (buffer_is_equal(&ds->value, p->username)) {
-			/* user in exclude list */
-			return HANDLER_GO_ON;
-		}
-	}
-
-	if (p->conf.include_user->used) {
-		int found_user = 0;
-		for (k = 0; k < p->conf.include_user->used; k++) {
-			data_string *ds = (data_string *)p->conf.include_user->data[k];
-
-			if (buffer_is_equal(&ds->value, p->username)) {
-				/* user in include list */
-				found_user = 1;
-				break;
-			}
-		}
-
-		if (!found_user) return HANDLER_GO_ON;
-	}
-
-	/* we build the physical path */
-	buffer_clear(p->temp_path);
-
-	if (buffer_string_is_empty(p->conf.basepath)) {
-#ifdef HAVE_PWD_H
-		buffer_copy_string(p->temp_path, pwd->pw_dir);
-#endif
-	} else {
-		char *cp = p->username->ptr;
-		/* check if the username is valid
-		 * a request for /~../ should lead to a directory traversal
-		 * limiting to [-_a-z0-9.] should fix it */
-		if (cp[0] == '.' && (cp[1] == '\0' || (cp[1] == '.' && cp[2] == '\0'))) {
-			return HANDLER_GO_ON;
-		}
-
-		for (; *cp; cp++) {
-			char c = *cp;
-			if (!(light_isalnum(c) || c == '-' || c == '_' || c == '.')) {
-				return HANDLER_GO_ON;
-			}
-		}
-		if (con->conf.force_lowercase_filenames) {
-			buffer_to_lower(p->username);
-		}
-
-		buffer_copy_buffer(p->temp_path, p->conf.basepath);
-		if (p->conf.letterhomes) {
-			if (p->username->ptr[0] == '.') return HANDLER_GO_ON;
-			buffer_append_path_len(p->temp_path, p->username->ptr, 1);
-		}
-		buffer_append_path_len(p->temp_path, CONST_BUF_LEN(p->username));
-	}
-	buffer_append_path_len(p->temp_path, CONST_BUF_LEN(p->conf.path));
-
-	if (buffer_string_is_empty(p->conf.basepath)) {
-		struct stat st;
-		int ret;
-
-		ret = stat(p->temp_path->ptr, &st);
-		if (ret < 0 || S_ISDIR(st.st_mode) != 1) {
-			return HANDLER_GO_ON;
-		}
-	}
-
-	buffer_copy_buffer(con->physical.basedir, p->temp_path);
-
-	/* the physical rel_path is basically the same as uri.path;
-	 * but it is converted to lowercase in case of force_lowercase_filenames and some special handling
-	 * for trailing '.', ' ' and '/' on windows
-	 * we assume that no docroot/physical handler changed this
-	 * (docroot should only set the docroot/server name, phyiscal should only change the phyiscal.path;
-	 *  the exception mod_secdownload doesn't work with userdir anyway)
-	 */
-	buffer_append_slash(p->temp_path);
-	/* if no second '/' is found, we assume that it was stripped from the uri.path for the special handling
-	 * on windows.
-	 * we do not care about the trailing slash here on windows, as we already ensured it is a directory
-	 *
-	 * TODO: what to do with trailing dots in usernames on windows? they may result in the same directory
-	 *       as a username without them.
-	 */
-	if (NULL != (rel_url = strchr(con->physical.rel_path->ptr + 2, '/'))) {
-		buffer_append_string(p->temp_path, rel_url + 1); /* skip the / */
-	}
-	buffer_copy_buffer(con->physical.path, p->temp_path);
-
-	return HANDLER_GO_ON;
+static int mod_userdir_in_vlist_nc(const array * const a, const char * const k, const size_t klen) {
+    for (uint32_t i = 0, used = a->used; i < used; ++i) {
+        const data_string * const ds = (const data_string *)a->data[i];
+        if (buffer_eq_icase_slen(&ds->value, k, klen)) return 1;
+    }
+    return 0;
 }
 
-/* this function is called at dlopen() time and inits the callbacks */
+static int mod_userdir_in_vlist(const array * const a, const char * const k, const size_t klen) {
+    for (uint32_t i = 0, used = a->used; i < used; ++i) {
+        const data_string * const ds = (const data_string *)a->data[i];
+        if (buffer_eq_slen(&ds->value, k, klen)) return 1;
+    }
+    return 0;
+}
+
+__attribute_noinline__
+static handler_t mod_userdir_docroot_construct(connection * const con, plugin_data * const p, const char * const uptr, const size_t ulen) {
+    char u[256];
+    if (ulen >= sizeof(u)) return HANDLER_GO_ON;
+
+    memcpy(u, uptr, ulen);
+    u[ulen] = '\0';
+
+    /* we build the physical path */
+    buffer * const b = con->srv->tmp_buf;
+
+    if (buffer_string_is_empty(p->conf.basepath)) {
+      #ifdef HAVE_PWD_H
+        /* XXX: future: might add cache; getpwnam() lookup is expensive */
+        struct passwd *pwd = getpwnam(u);
+        if (pwd) {
+            struct stat st;
+            buffer_copy_string(b, pwd->pw_dir);
+            buffer_append_path_len(b, CONST_BUF_LEN(p->conf.path));
+            if (0 != stat(b->ptr, &st) || !S_ISDIR(st.st_mode)) {
+                return HANDLER_GO_ON;
+            }
+        }
+        else /* user not found */
+      #endif
+            return HANDLER_GO_ON;
+    } else {
+        /* check if the username is valid
+         * a request for /~../ should lead to a directory traversal
+         * limiting to [-_a-z0-9.] should fix it */
+        if (ulen <= 2 && (u[0] == '.' && (1 == ulen || u[1] == '.'))) {
+            return HANDLER_GO_ON;
+        }
+
+        for (size_t i = 0; i < ulen; ++i) {
+            const int c = u[i];
+            if (!(light_isalnum(c) || c == '-' || c == '_' || c == '.')) {
+                return HANDLER_GO_ON;
+            }
+        }
+
+        if (con->conf.force_lowercase_filenames) {
+            for (size_t i = 0; i < ulen; ++i) {
+                if (u[i] >= 'A' && u[i] <= 'Z') u[i] |= 0x20;
+            }
+        }
+
+        buffer_copy_buffer(b, p->conf.basepath);
+        if (p->conf.letterhomes) {
+            if (u[0] == '.') return HANDLER_GO_ON;
+            buffer_append_path_len(b, u, 1);
+        }
+        buffer_append_path_len(b, u, ulen);
+        buffer_append_path_len(b, CONST_BUF_LEN(p->conf.path));
+    }
+
+    buffer_copy_buffer(con->physical.basedir, b);
+    buffer_copy_buffer(con->physical.path, b);
+
+    /* the physical rel_path is basically the same as uri.path;
+     * but it is converted to lowercase in case of force_lowercase_filenames
+     * and some special handling for trailing '.', ' ' and '/' on windows
+     * we assume that no docroot/physical handler changed this
+     * (docroot should only set the docroot/server name, phyiscal should only
+     *  change the physical.path;
+     *  the exception mod_secdownload doesn't work with userdir anyway)
+     */
+    buffer_append_slash(con->physical.path);
+    /* if no second '/' is found, we assume that it was stripped from the
+     * uri.path for the special handling on windows.  we do not care about the
+     * trailing slash here on windows, as we already ensured it is a directory
+     *
+     * TODO: what to do with trailing dots in usernames on windows?
+     * they may result in the same directory as a username without them.
+     */
+    char *rel_url;
+    if (NULL != (rel_url = strchr(con->physical.rel_path->ptr + 2, '/'))) {
+        buffer_append_string(con->physical.path, rel_url + 1); /* skip the / */
+    }
+
+    return HANDLER_GO_ON;
+}
+
+URIHANDLER_FUNC(mod_userdir_docroot_handler) {
+    /* /~user/foo.html -> /home/user/public_html/foo.html */
+
+    if (buffer_is_empty(con->uri.path)) return HANDLER_GO_ON;
+
+    if (con->uri.path->ptr[0] != '/' ||
+        con->uri.path->ptr[1] != '~') return HANDLER_GO_ON;
+
+    plugin_data * const p = p_d;
+    mod_userdir_patch_connection(srv, con, p);
+
+    /* enforce the userdir.path to be set in the config, ugly fix for #1587;
+     * should be replaced with a clean .enabled option in 1.5
+     */
+    if (!p->conf.active || buffer_is_empty(p->conf.path)) return HANDLER_GO_ON;
+
+    const char * const uptr = con->uri.path->ptr + 2;
+    const char * const rel_url = strchr(uptr, '/');
+    if (NULL == rel_url) {
+        /* / is missing -> redirect to .../ as we are a user - DIRECTORY ! :) */
+        http_response_redirect_to_directory(srv, con, 301);
+        return HANDLER_FINISHED;
+    }
+
+    /* /~/ is a empty username, catch it directly */
+    const size_t ulen = (size_t)(rel_url - uptr);
+    if (0 == ulen) return HANDLER_GO_ON;
+
+    /* vlists could be turned into sorted array at config time,
+     * but these lists are expected to be relatively short in most cases
+     * so there is not a huge benefit to doing so in the common case */
+
+    if (p->conf.exclude_user) {
+        /* use case-insensitive comparison for exclude list
+         * if con->conf.force_lowercase_filenames */
+        if (!con->conf.force_lowercase_filenames
+            ? mod_userdir_in_vlist(p->conf.exclude_user, uptr, ulen)
+            : mod_userdir_in_vlist_nc(p->conf.exclude_user, uptr, ulen))
+            return HANDLER_GO_ON; /* user in exclude list */
+    }
+
+    if (p->conf.include_user) {
+        if (!mod_userdir_in_vlist(p->conf.include_user, uptr, ulen))
+            return HANDLER_GO_ON; /* user not in include list */
+    }
+
+    return mod_userdir_docroot_construct(con, p, uptr, ulen);
+}
+
 
 int mod_userdir_plugin_init(plugin *p);
 int mod_userdir_plugin_init(plugin *p) {
