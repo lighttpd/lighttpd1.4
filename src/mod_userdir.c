@@ -1,9 +1,9 @@
 #include "first.h"
 
 #include "base.h"
-#include "log.h"
+#include "array.h"
 #include "buffer.h"
-
+#include "log.h"
 #include "response.h"
 
 #include "plugin.h"
@@ -19,162 +19,144 @@
 #endif
 
 typedef struct {
-	array *exclude_user;
-	array *include_user;
-	buffer *path;
-	buffer *basepath;
-	unsigned short letterhomes;
-	unsigned short active;
+    const array *exclude_user;
+    const array *include_user;
+    const buffer *path;
+    const buffer *basepath;
+    unsigned short letterhomes;
+    unsigned short active;
 } plugin_config;
 
 typedef struct {
-	PLUGIN_DATA;
-
-	plugin_config **config_storage;
-
-	plugin_config conf;
+    PLUGIN_DATA;
+    plugin_config defaults;
+    plugin_config conf;
 } plugin_data;
 
 INIT_FUNC(mod_userdir_init) {
-	plugin_data *p;
-
-	p = calloc(1, sizeof(*p));
-
-	return p;
+    return calloc(1, sizeof(plugin_data));
 }
 
 FREE_FUNC(mod_userdir_free) {
-	plugin_data *p = p_d;
+    plugin_data *p = p_d;
+    if (!p) return HANDLER_GO_ON;
+    UNUSED(srv);
 
-	if (!p) return HANDLER_GO_ON;
+    free(p->cvlist);
+    free(p);
 
-	if (p->config_storage) {
-		size_t i;
+    return HANDLER_GO_ON;
+}
 
-		for (i = 0; i < srv->config_context->used; i++) {
-			plugin_config *s = p->config_storage[i];
+static void mod_userdir_merge_config_cpv(plugin_config * const pconf, const config_plugin_value_t * const cpv) {
+    switch (cpv->k_id) { /* index into static config_plugin_keys_t cpk[] */
+      case 0: /* userdir.path */
+        pconf->path = cpv->v.b;
+        break;
+      case 1: /* userdir.exclude-user */
+        pconf->exclude_user = cpv->v.a;
+        break;
+      case 2: /* userdir.include-user */
+        pconf->include_user = cpv->v.a;
+        break;
+      case 3: /* userdir.basepath */
+        pconf->basepath = cpv->v.b;
+        break;
+      case 4: /* userdir.letterhomes */
+        pconf->letterhomes = cpv->v.u;
+        break;
+      case 5: /* userdir.active */
+        pconf->active = cpv->v.u;
+        break;
+      default:/* should not happen */
+        return;
+    }
+}
 
-			if (NULL == s) continue;
+static void mod_userdir_merge_config(plugin_config * const pconf, const config_plugin_value_t *cpv) {
+    do {
+        mod_userdir_merge_config_cpv(pconf, cpv);
+    } while ((++cpv)->k_id != -1);
+}
 
-			array_free(s->include_user);
-			array_free(s->exclude_user);
-			buffer_free(s->path);
-			buffer_free(s->basepath);
-
-			free(s);
-		}
-		free(p->config_storage);
-	}
-
-	free(p);
-
-	return HANDLER_GO_ON;
+static void mod_userdir_patch_config(connection * const con, plugin_data * const p) {
+    memcpy(&p->conf, &p->defaults, sizeof(plugin_config));
+    for (int i = 1, used = p->nconfig; i < used; ++i) {
+        if (config_check_cond(con, (uint32_t)p->cvlist[i].k_id))
+            mod_userdir_merge_config(&p->conf, p->cvlist + p->cvlist[i].v.u2[0]);
+    }
 }
 
 SETDEFAULTS_FUNC(mod_userdir_set_defaults) {
-	plugin_data *p = p_d;
-	size_t i;
+    static const config_plugin_keys_t cpk[] = {
+      { CONST_STR_LEN("userdir.path"),
+        T_CONFIG_STRING,
+        T_CONFIG_SCOPE_CONNECTION }
+     ,{ CONST_STR_LEN("userdir.exclude-user"),
+        T_CONFIG_ARRAY,
+        T_CONFIG_SCOPE_CONNECTION }
+     ,{ CONST_STR_LEN("userdir.include-user"),
+        T_CONFIG_ARRAY,
+        T_CONFIG_SCOPE_CONNECTION }
+     ,{ CONST_STR_LEN("userdir.basepath"),
+        T_CONFIG_STRING,
+        T_CONFIG_SCOPE_CONNECTION }
+     ,{ CONST_STR_LEN("userdir.letterhomes"),
+        T_CONFIG_BOOL,
+        T_CONFIG_SCOPE_CONNECTION }
+     ,{ CONST_STR_LEN("userdir.active"),
+        T_CONFIG_BOOL,
+        T_CONFIG_SCOPE_CONNECTION }
+     ,{ NULL, 0,
+        T_CONFIG_UNSET,
+        T_CONFIG_SCOPE_UNSET }
+    };
 
-	config_values_t cv[] = {
-		{ "userdir.path",               NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_CONNECTION },       /* 0 */
-		{ "userdir.exclude-user",       NULL, T_CONFIG_ARRAY,  T_CONFIG_SCOPE_CONNECTION },       /* 1 */
-		{ "userdir.include-user",       NULL, T_CONFIG_ARRAY,  T_CONFIG_SCOPE_CONNECTION },       /* 2 */
-		{ "userdir.basepath",           NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_CONNECTION },       /* 3 */
-		{ "userdir.letterhomes",        NULL, T_CONFIG_BOOLEAN,T_CONFIG_SCOPE_CONNECTION },       /* 4 */
-		{ "userdir.active",             NULL, T_CONFIG_BOOLEAN,T_CONFIG_SCOPE_CONNECTION },       /* 5 */
-		{ NULL,                         NULL, T_CONFIG_UNSET,  T_CONFIG_SCOPE_UNSET }
-	};
+    plugin_data * const p = p_d;
+    if (!config_plugin_values_init(srv, p, cpk, "mod_userdir"))
+        return HANDLER_ERROR;
 
-	if (!p) return HANDLER_ERROR;
+    /* process and validate config directives
+     * (init i to 0 if global context; to 1 to skip empty global context) */
+    for (int i = !p->cvlist[0].v.u2[1]; i < p->nconfig; ++i) {
+        const config_plugin_value_t *cpv = p->cvlist + p->cvlist[i].v.u2[0];
+        for (; -1 != cpv->k_id; ++cpv) {
+            switch (cpv->k_id) {
+              case 0: /* userdir.path */
+                break;
+              case 1: /* userdir.exclude-user */
+              case 2: /* userdir.include-user */
+                if (!array_is_vlist(cpv->v.a)) {
+                    log_error(srv->errh, __FILE__, __LINE__,
+                      "unexpected value for %s; "
+                      "expected list of \"suffix\"", cpk[cpv->k_id].k);
+                    return HANDLER_ERROR;
+                }
+                break;
+              case 3: /* userdir.basepath */
+              case 4: /* userdir.letterhomes */
+              case 5: /* userdir.active */
+                break;
+              default:/* should not happen */
+                break;
+            }
+        }
+    }
 
-	p->config_storage = calloc(srv->config_context->used, sizeof(plugin_config *));
+    /* enabled by default for backward compatibility;
+     * if userdir.path isn't set userdir is disabled too,
+     * but you can't disable it by setting it to an empty string. */
+    p->defaults.active = 1;
 
-	for (i = 0; i < srv->config_context->used; i++) {
-		data_config const* config = (data_config const*)srv->config_context->data[i];
-		plugin_config *s;
+    /* initialize p->defaults from global config context */
+    if (p->nconfig > 0 && p->cvlist->v.u2[1]) {
+        const config_plugin_value_t *cpv = p->cvlist + p->cvlist->v.u2[0];
+        if (-1 != cpv->k_id)
+            mod_userdir_merge_config(&p->defaults, cpv);
+    }
 
-		s = calloc(1, sizeof(plugin_config));
-		s->exclude_user = array_init();
-		s->include_user = array_init();
-		s->path = buffer_init();
-		s->basepath = buffer_init();
-		s->letterhomes = 0;
-		/* enabled by default for backward compatibility; if userdir.path isn't set userdir is disabled too,
-		 * but you can't disable it by setting it to an empty string. */
-		s->active = 1;
-
-		cv[0].destination = s->path;
-		cv[1].destination = s->exclude_user;
-		cv[2].destination = s->include_user;
-		cv[3].destination = s->basepath;
-		cv[4].destination = &(s->letterhomes);
-		cv[5].destination = &(s->active);
-
-		p->config_storage[i] = s;
-
-		if (0 != config_insert_values_global(srv, config->value, cv, i == 0 ? T_CONFIG_SCOPE_SERVER : T_CONFIG_SCOPE_CONNECTION)) {
-			return HANDLER_ERROR;
-		}
-
-		if (!array_is_vlist(s->exclude_user)) {
-			log_error_write(srv, __FILE__, __LINE__, "s",
-					"unexpected value for userdir.exclude-user; expected list of \"suffix\"");
-			return HANDLER_ERROR;
-		}
-
-		if (!array_is_vlist(s->include_user)) {
-			log_error_write(srv, __FILE__, __LINE__, "s",
-					"unexpected value for userdir.include-user; expected list of \"suffix\"");
-			return HANDLER_ERROR;
-		}
-	}
-
-	return HANDLER_GO_ON;
+    return HANDLER_GO_ON;
 }
-
-#define PATCH(x) \
-	p->conf.x = s->x;
-static int mod_userdir_patch_connection(server *srv, connection *con, plugin_data *p) {
-	size_t i, j;
-	plugin_config *s = p->config_storage[0];
-
-	PATCH(path);
-	PATCH(exclude_user);
-	PATCH(include_user);
-	PATCH(basepath);
-	PATCH(letterhomes);
-	PATCH(active);
-
-	/* skip the first, the global context */
-	for (i = 1; i < srv->config_context->used; i++) {
-		if (!config_check_cond(con, i)) continue; /* condition not matched */
-
-		data_config *dc = (data_config *)srv->config_context->data[i];
-		s = p->config_storage[i];
-
-		/* merge config */
-		for (j = 0; j < dc->value->used; j++) {
-			data_unset *du = dc->value->data[j];
-
-			if (buffer_is_equal_string(&du->key, CONST_STR_LEN("userdir.path"))) {
-				PATCH(path);
-			} else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("userdir.exclude-user"))) {
-				PATCH(exclude_user);
-			} else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("userdir.include-user"))) {
-				PATCH(include_user);
-			} else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("userdir.basepath"))) {
-				PATCH(basepath);
-			} else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("userdir.letterhomes"))) {
-				PATCH(letterhomes);
-			} else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("userdir.active"))) {
-				PATCH(active);
-			}
-		}
-	}
-
-	return 0;
-}
-#undef PATCH
 
 static int mod_userdir_in_vlist_nc(const array * const a, const char * const k, const size_t klen) {
     for (uint32_t i = 0, used = a->used; i < used; ++i) {
@@ -284,7 +266,7 @@ URIHANDLER_FUNC(mod_userdir_docroot_handler) {
         con->uri.path->ptr[1] != '~') return HANDLER_GO_ON;
 
     plugin_data * const p = p_d;
-    mod_userdir_patch_connection(srv, con, p);
+    mod_userdir_patch_config(con, p);
 
     /* enforce the userdir.path to be set in the config, ugly fix for #1587;
      * should be replaced with a clean .enabled option in 1.5
