@@ -24,7 +24,7 @@ typedef struct {
 } script_cache;
 
 script_cache *script_cache_init(void);
-void script_cache_free(script_cache *cache);
+void script_cache_free_data(script_cache *cache);
 
 lua_State *script_cache_get_script(server *srv, connection *con,
 	       	script_cache *cache, buffer *name);

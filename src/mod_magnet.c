@@ -24,8 +24,6 @@
 #define LUA_RIDX_LIGHTTPD_SERVER     "lighty.srv"
 #define LUA_RIDX_LIGHTTPD_CONNECTION "lighty.con"
 
-#define MAGNET_CONFIG_RAW_URL       "magnet.attract-raw-url-to"
-#define MAGNET_CONFIG_PHYSICAL_PATH "magnet.attract-physical-path-to"
 #define MAGNET_RESTART_REQUEST      99
 
 /* plugin config for all request/connections */
@@ -33,142 +31,109 @@
 static jmp_buf exceptionjmp;
 
 typedef struct {
-	array *url_raw;
-	array *physical_path;
+    const array *url_raw;
+    const array *physical_path;
 } plugin_config;
 
 typedef struct {
-	PLUGIN_DATA;
+    PLUGIN_DATA;
+    plugin_config defaults;
+    plugin_config conf;
 
-	script_cache *cache;
-
-	plugin_config **config_storage;
-
-	plugin_config conf;
+    script_cache cache;
 } plugin_data;
 
-/* init the plugin data */
 INIT_FUNC(mod_magnet_init) {
-	plugin_data *p;
-
-	p = calloc(1, sizeof(*p));
-
-	p->cache = script_cache_init();
-
-	return p;
+    return calloc(1, sizeof(plugin_data));
 }
 
-/* detroy the plugin data */
 FREE_FUNC(mod_magnet_free) {
-	plugin_data *p = p_d;
+    plugin_data *p = p_d;
+    if (!p) return HANDLER_GO_ON;
+    UNUSED(srv);
 
-	UNUSED(srv);
+    script_cache_free_data(&p->cache);
 
-	if (!p) return HANDLER_GO_ON;
+    free(p->cvlist);
+    free(p);
 
-	if (p->config_storage) {
-		size_t i;
-
-		for (i = 0; i < srv->config_context->used; i++) {
-			plugin_config *s = p->config_storage[i];
-
-			if (NULL == s) continue;
-
-			array_free(s->url_raw);
-			array_free(s->physical_path);
-
-			free(s);
-		}
-		free(p->config_storage);
-	}
-
-	script_cache_free(p->cache);
-
-	free(p);
-
-	return HANDLER_GO_ON;
+    return HANDLER_GO_ON;
 }
 
-/* handle plugin config and check values */
+static void mod_magnet_merge_config_cpv(plugin_config * const pconf, const config_plugin_value_t * const cpv) {
+    switch (cpv->k_id) { /* index into static config_plugin_keys_t cpk[] */
+      case 0: /* magnet.attract-raw-url-to */
+        pconf->url_raw = cpv->v.a;
+        break;
+      case 1: /* magnet.attract-physical-path-to */
+        pconf->physical_path = cpv->v.a;
+        break;
+      default:/* should not happen */
+        return;
+    }
+}
+
+static void mod_magnet_merge_config(plugin_config * const pconf, const config_plugin_value_t *cpv) {
+    do {
+        mod_magnet_merge_config_cpv(pconf, cpv);
+    } while ((++cpv)->k_id != -1);
+}
+
+static void mod_magnet_patch_config(connection * const con, plugin_data * const p) {
+    memcpy(&p->conf, &p->defaults, sizeof(plugin_config));
+    for (int i = 1, used = p->nconfig; i < used; ++i) {
+        if (config_check_cond(con, (uint32_t)p->cvlist[i].k_id))
+            mod_magnet_merge_config(&p->conf, p->cvlist + p->cvlist[i].v.u2[0]);
+    }
+}
 
 SETDEFAULTS_FUNC(mod_magnet_set_defaults) {
-	plugin_data *p = p_d;
-	size_t i = 0;
+    static const config_plugin_keys_t cpk[] = {
+      { CONST_STR_LEN("magnet.attract-raw-url-to"),
+        T_CONFIG_ARRAY,
+        T_CONFIG_SCOPE_CONNECTION }
+     ,{ CONST_STR_LEN("magnet.attract-physical-path-to"),
+        T_CONFIG_ARRAY,
+        T_CONFIG_SCOPE_CONNECTION }
+     ,{ NULL, 0,
+        T_CONFIG_UNSET,
+        T_CONFIG_SCOPE_UNSET }
+    };
 
-	config_values_t cv[] = {
-		{ MAGNET_CONFIG_RAW_URL,       NULL, T_CONFIG_ARRAY, T_CONFIG_SCOPE_CONNECTION },       /* 0 */
-		{ MAGNET_CONFIG_PHYSICAL_PATH, NULL, T_CONFIG_ARRAY, T_CONFIG_SCOPE_CONNECTION },       /* 1 */
-		{ NULL,                           NULL, T_CONFIG_UNSET, T_CONFIG_SCOPE_UNSET }
-	};
+    plugin_data * const p = p_d;
+    if (!config_plugin_values_init(srv, p, cpk, "mod_magnet"))
+        return HANDLER_ERROR;
 
-	if (!p) return HANDLER_ERROR;
+    /* process and validate config directives
+     * (init i to 0 if global context; to 1 to skip empty global context) */
+    for (int i = !p->cvlist[0].v.u2[1]; i < p->nconfig; ++i) {
+        const config_plugin_value_t *cpv = p->cvlist + p->cvlist[i].v.u2[0];
+        for (; -1 != cpv->k_id; ++cpv) {
+            switch (cpv->k_id) {
+              case 0: /* magnet.attract-raw-url-to */
+              case 1: /* magnet.attract-physical-path-to */
+                if (!array_is_vlist(cpv->v.a)) {
+                    log_error(srv->errh, __FILE__, __LINE__,
+                      "unexpected value for %s; "
+                      "expected list of \"scriptpath\"", cpk[cpv->k_id].k);
+                    return HANDLER_ERROR;
+                }
+                break;
+              default:/* should not happen */
+                break;
+            }
+        }
+    }
 
-	p->config_storage = calloc(srv->config_context->used, sizeof(plugin_config *));
+    /* initialize p->defaults from global config context */
+    if (p->nconfig > 0 && p->cvlist->v.u2[1]) {
+        const config_plugin_value_t *cpv = p->cvlist + p->cvlist->v.u2[0];
+        if (-1 != cpv->k_id)
+            mod_magnet_merge_config(&p->defaults, cpv);
+    }
 
-	for (i = 0; i < srv->config_context->used; i++) {
-		data_config const* config = (data_config const*)srv->config_context->data[i];
-		plugin_config *s;
-
-		s = calloc(1, sizeof(plugin_config));
-		s->url_raw  = array_init();
-		s->physical_path = array_init();
-
-		cv[0].destination = s->url_raw;
-		cv[1].destination = s->physical_path;
-
-		p->config_storage[i] = s;
-
-		if (0 != config_insert_values_global(srv, config->value, cv, i == 0 ? T_CONFIG_SCOPE_SERVER : T_CONFIG_SCOPE_CONNECTION)) {
-			return HANDLER_ERROR;
-		}
-
-		if (!array_is_vlist(s->url_raw)) {
-			log_error_write(srv, __FILE__, __LINE__, "s",
-					"unexpected value for magnet.attract-raw-url-to; expected list of \"scriptpath\"");
-			return HANDLER_ERROR;
-		}
-
-		if (!array_is_vlist(s->physical_path)) {
-			log_error_write(srv, __FILE__, __LINE__, "s",
-					"unexpected value for magnet.attract-physical-path-to; expected list \"scriptpath\"");
-			return HANDLER_ERROR;
-		}
-	}
-
-	return HANDLER_GO_ON;
+    return HANDLER_GO_ON;
 }
-
-#define PATCH(x) \
-	p->conf.x = s->x;
-static int mod_magnet_patch_connection(server *srv, connection *con, plugin_data *p) {
-	size_t i, j;
-	plugin_config *s = p->config_storage[0];
-
-	PATCH(url_raw);
-	PATCH(physical_path);
-
-	/* skip the first, the global context */
-	for (i = 1; i < srv->config_context->used; i++) {
-		if (!config_check_cond(con, i)) continue; /* condition not matched */
-
-		data_config *dc = (data_config *)srv->config_context->data[i];
-		s = p->config_storage[i];
-
-		/* merge config */
-		for (j = 0; j < dc->value->used; j++) {
-			data_unset *du = dc->value->data[j];
-
-			if (buffer_is_equal_string(&du->key, CONST_STR_LEN(MAGNET_CONFIG_RAW_URL))) {
-				PATCH(url_raw);
-			} else if (buffer_is_equal_string(&du->key, CONST_STR_LEN(MAGNET_CONFIG_PHYSICAL_PATH))) {
-				PATCH(physical_path);
-			}
-		}
-	}
-
-	return 0;
-}
-#undef PATCH
 
 #if !defined(LUA_VERSION_NUM) || LUA_VERSION_NUM < 502
 /* lua5.1 backward compat definition */
@@ -831,7 +796,7 @@ static handler_t magnet_attract(server *srv, connection *con, plugin_data *p, bu
 	const int lighty_table_ndx = 2;
 
 	/* get the script-context */
-	L = script_cache_get_script(srv, con, p->cache, name);
+	L = script_cache_get_script(srv, con, &p->cache, name);
 
 	if (lua_isstring(L, -1)) {
 		log_error_write(srv, __FILE__, __LINE__,
@@ -1048,19 +1013,23 @@ static handler_t magnet_attract(server *srv, connection *con, plugin_data *p, bu
 	}
 }
 
-static handler_t magnet_attract_array(server *srv, connection *con, plugin_data *p, array *files) {
-	size_t i;
-	handler_t ret = HANDLER_GO_ON;
+static handler_t magnet_attract_array(server *srv, connection *con, plugin_data *p, int is_uri) {
+	mod_magnet_patch_config(con, p);
+
+	const array * const files = (is_uri)
+	  ? p->conf.url_raw
+	  : p->conf.physical_path;
 
 	/* no filename set */
-	if (files->used == 0) return HANDLER_GO_ON;
+	if (NULL == files || files->used == 0) return HANDLER_GO_ON;
 
 	srv->request_env(srv, con);
 
 	/**
 	 * execute all files and jump out on the first !HANDLER_GO_ON
 	 */
-	for (i = 0; i < files->used && ret == HANDLER_GO_ON; i++) {
+	handler_t ret = HANDLER_GO_ON;
+	for (uint32_t i = 0; i < files->used && ret == HANDLER_GO_ON; ++i) {
 		data_string *ds = (data_string *)files->data[i];
 
 		if (buffer_string_is_empty(&ds->value)) continue;
@@ -1082,23 +1051,13 @@ static handler_t magnet_attract_array(server *srv, connection *con, plugin_data 
 }
 
 URIHANDLER_FUNC(mod_magnet_uri_handler) {
-	plugin_data *p = p_d;
-
-	mod_magnet_patch_connection(srv, con, p);
-
-	return magnet_attract_array(srv, con, p, p->conf.url_raw);
+	return magnet_attract_array(srv, con, p_d, 1);
 }
 
 URIHANDLER_FUNC(mod_magnet_physical) {
-	plugin_data *p = p_d;
-
-	mod_magnet_patch_connection(srv, con, p);
-
-	return magnet_attract_array(srv, con, p, p->conf.physical_path);
+	return magnet_attract_array(srv, con, p_d, 0);
 }
 
-
-/* this function is called at dlopen() time and inits the callbacks */
 
 int mod_magnet_plugin_init(plugin *p);
 int mod_magnet_plugin_init(plugin *p) {

@@ -33,15 +33,15 @@ static void script_free(script *sc) {
 	free(sc);
 }
 
+#if 0
 script_cache *script_cache_init() {
-	script_cache *p;
-
-	p = calloc(1, sizeof(*p));
-
+	script_cache *p = calloc(1, sizeof(script_cache));
+	force_assert(p);
 	return p;
 }
+#endif
 
-void script_cache_free(script_cache *p) {
+void script_cache_free_data(script_cache *p) {
 	size_t i;
 
 	if (!p) return;
@@ -51,8 +51,6 @@ void script_cache_free(script_cache *p) {
 	}
 
 	free(p->ptr);
-
-	free(p);
 }
 
 lua_State *script_cache_get_script(server *srv, connection *con, script_cache *cache, buffer *name) {
