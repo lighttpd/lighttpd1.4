@@ -1,8 +1,9 @@
 #include "first.h"
 
 #include "base.h"
-#include "log.h"
+#include "array.h"
 #include "buffer.h"
+#include "log.h"
 #include "http_chunk.h"
 #include "http_header.h"
 
@@ -11,110 +12,99 @@
 #include <stdlib.h>
 #include <string.h>
 
-/* plugin config for all request/connections */
-
 typedef struct {
-	array *extensions;
+    const array *extensions;
 } plugin_config;
 
 typedef struct {
-	PLUGIN_DATA;
-	plugin_config **config_storage;
-	plugin_config conf;
+    PLUGIN_DATA;
+    plugin_config defaults;
+    plugin_config conf;
 } plugin_data;
 
-/* init the plugin data */
 INIT_FUNC(mod_flv_streaming_init) {
-	return calloc(1, sizeof(plugin_data));
+    return calloc(1, sizeof(plugin_data));
 }
 
-/* detroy the plugin data */
 FREE_FUNC(mod_flv_streaming_free) {
-	plugin_data *p = p_d;
-	if (!p) return HANDLER_GO_ON;
+    plugin_data *p = p_d;
+    if (!p) return HANDLER_GO_ON;
+    UNUSED(srv);
 
-	if (p->config_storage) {
-		for (size_t i = 0; i < srv->config_context->used; ++i) {
-			plugin_config *s = p->config_storage[i];
-			if (NULL == s) continue;
-			array_free(s->extensions);
-			free(s);
-		}
-		free(p->config_storage);
-	}
-	free(p);
-	UNUSED(srv);
-	return HANDLER_GO_ON;
+    free(p->cvlist);
+    free(p);
+
+    return HANDLER_GO_ON;
 }
 
-/* handle plugin config and check values */
+static void mod_flv_streaming_merge_config_cpv(plugin_config * const pconf, const config_plugin_value_t * const cpv) {
+    switch (cpv->k_id) { /* index into static config_plugin_keys_t cpk[] */
+      case 0: /* flv-streaming.extensions */
+        pconf->extensions = cpv->v.a;
+        break;
+      default:/* should not happen */
+        return;
+    }
+}
+
+static void mod_flv_streaming_merge_config(plugin_config * const pconf, const config_plugin_value_t *cpv) {
+    do {
+        mod_flv_streaming_merge_config_cpv(pconf, cpv);
+    } while ((++cpv)->k_id != -1);
+}
+
+static void mod_flv_streaming_patch_config(connection * const con, plugin_data * const p) {
+    memcpy(&p->conf, &p->defaults, sizeof(plugin_config));
+    for (int i = 1, used = p->nconfig; i < used; ++i) {
+        if (config_check_cond(con, (uint32_t)p->cvlist[i].k_id))
+            mod_flv_streaming_merge_config(&p->conf,
+                                           p->cvlist + p->cvlist[i].v.u2[0]);
+    }
+}
 
 SETDEFAULTS_FUNC(mod_flv_streaming_set_defaults) {
-	plugin_data *p = p_d;
-	size_t i = 0;
+    static const config_plugin_keys_t cpk[] = {
+      { CONST_STR_LEN("flv-streaming.extensions"),
+        T_CONFIG_ARRAY,
+        T_CONFIG_SCOPE_CONNECTION }
+     ,{ NULL, 0,
+        T_CONFIG_UNSET,
+        T_CONFIG_SCOPE_UNSET }
+    };
 
-	config_values_t cv[] = {
-		{ "flv-streaming.extensions",   NULL, T_CONFIG_ARRAY, T_CONFIG_SCOPE_CONNECTION },       /* 0 */
-		{ NULL,                         NULL, T_CONFIG_UNSET, T_CONFIG_SCOPE_UNSET }
-	};
+    plugin_data * const p = p_d;
+    if (!config_plugin_values_init(srv, p, cpk, "mod_flv_streaming"))
+        return HANDLER_ERROR;
 
-	if (!p) return HANDLER_ERROR;
+    /* process and validate config directives
+     * (init i to 0 if global context; to 1 to skip empty global context) */
+    for (int i = !p->cvlist[0].v.u2[1]; i < p->nconfig; ++i) {
+        const config_plugin_value_t *cpv = p->cvlist + p->cvlist[i].v.u2[0];
+        for (; -1 != cpv->k_id; ++cpv) {
+            switch (cpv->k_id) {
+              case 0: /* flv-streaming.extensions */
+                if (!array_is_vlist(cpv->v.a)) {
+                    log_error(srv->errh, __FILE__, __LINE__,
+                      "unexpected value for %s; "
+                      "expected list of \"ext\"", cpk[cpv->k_id].k);
+                    return HANDLER_ERROR;
+                }
+                break;
+              default:/* should not happen */
+                break;
+            }
+        }
+    }
 
-	p->config_storage = calloc(srv->config_context->used, sizeof(plugin_config *));
+    /* initialize p->defaults from global config context */
+    if (p->nconfig > 0 && p->cvlist->v.u2[1]) {
+        const config_plugin_value_t *cpv = p->cvlist + p->cvlist->v.u2[0];
+        if (-1 != cpv->k_id)
+            mod_flv_streaming_merge_config(&p->defaults, cpv);
+    }
 
-	for (i = 0; i < srv->config_context->used; i++) {
-		data_config const* config = (data_config const*)srv->config_context->data[i];
-		plugin_config *s;
-
-		s = calloc(1, sizeof(plugin_config));
-		s->extensions     = array_init();
-
-		cv[0].destination = s->extensions;
-
-		p->config_storage[i] = s;
-
-		if (0 != config_insert_values_global(srv, config->value, cv, i == 0 ? T_CONFIG_SCOPE_SERVER : T_CONFIG_SCOPE_CONNECTION)) {
-			return HANDLER_ERROR;
-		}
-
-		if (!array_is_vlist(s->extensions)) {
-			log_error_write(srv, __FILE__, __LINE__, "s",
-					"unexpected value for flv-streaming.extensions; expected list of \"ext\"");
-			return HANDLER_ERROR;
-		}
-	}
-
-	return HANDLER_GO_ON;
+    return HANDLER_GO_ON;
 }
-
-#define PATCH(x) \
-	p->conf.x = s->x;
-static int mod_flv_streaming_patch_connection(server *srv, connection *con, plugin_data *p) {
-	size_t i, j;
-	plugin_config *s = p->config_storage[0];
-
-	PATCH(extensions);
-
-	/* skip the first, the global context */
-	for (i = 1; i < srv->config_context->used; i++) {
-		if (!config_check_cond(con, i)) continue; /* condition not matched */
-
-		data_config *dc = (data_config *)srv->config_context->data[i];
-		s = p->config_storage[i];
-
-		/* merge config */
-		for (j = 0; j < dc->value->used; j++) {
-			data_unset *du = dc->value->data[j];
-
-			if (buffer_is_equal_string(&du->key, CONST_STR_LEN("flv-streaming.extensions"))) {
-				PATCH(extensions);
-			}
-		}
-	}
-
-	return 0;
-}
-#undef PATCH
 
 static off_t get_param_value(buffer *qb, const char *m, size_t mlen) {
     const char * const q = qb->ptr;
@@ -138,7 +128,8 @@ URIHANDLER_FUNC(mod_flv_streaming_path_handler) {
 	if (con->mode != DIRECT) return HANDLER_GO_ON;
 	if (buffer_string_is_empty(con->physical.path)) return HANDLER_GO_ON;
 
-	mod_flv_streaming_patch_connection(srv, con, p);
+	mod_flv_streaming_patch_config(con, p);
+	if (NULL == p->conf.extensions) return HANDLER_GO_ON;
 
 	if (!array_match_value_suffix(p->conf.extensions, con->physical.path)) {
 		/* not found */
@@ -171,7 +162,6 @@ URIHANDLER_FUNC(mod_flv_streaming_path_handler) {
 			return HANDLER_FINISHED;
 }
 
-/* this function is called at dlopen() time and inits the callbacks */
 
 int mod_flv_streaming_plugin_init(plugin *p);
 int mod_flv_streaming_plugin_init(plugin *p) {
