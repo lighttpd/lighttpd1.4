@@ -1,160 +1,138 @@
 #include "first.h"
 
 #include "base.h"
-#include "log.h"
+#include "array.h"
 #include "buffer.h"
+#include "log.h"
 
 #include "plugin.h"
 
 #include <stdlib.h>
 #include <string.h>
 
-/* plugin config for all request/connections */
 typedef struct {
-	array *alias;
+    const array *alias;
 } plugin_config;
 
 typedef struct {
-	PLUGIN_DATA;
-
-	plugin_config **config_storage;
-
-	plugin_config conf;
+    PLUGIN_DATA;
+    plugin_config defaults;
+    plugin_config conf;
 } plugin_data;
 
-/* init the plugin data */
 INIT_FUNC(mod_alias_init) {
-	plugin_data *p;
-
-	p = calloc(1, sizeof(*p));
-
-
-
-	return p;
+    return calloc(1, sizeof(plugin_data));
 }
 
-/* detroy the plugin data */
 FREE_FUNC(mod_alias_free) {
-	plugin_data *p = p_d;
+    plugin_data *p = p_d;
+    if (!p) return HANDLER_GO_ON;
+    UNUSED(srv);
 
-	if (!p) return HANDLER_GO_ON;
+    free(p->cvlist);
+    free(p);
 
-	if (p->config_storage) {
-		size_t i;
-
-		for (i = 0; i < srv->config_context->used; i++) {
-			plugin_config *s = p->config_storage[i];
-
-			if (NULL == s) continue;
-
-			array_free(s->alias);
-
-			free(s);
-		}
-		free(p->config_storage);
-	}
-
-	free(p);
-
-	return HANDLER_GO_ON;
+    return HANDLER_GO_ON;
 }
 
-/* handle plugin config and check values */
+static void mod_alias_merge_config_cpv(plugin_config * const pconf, const config_plugin_value_t * const cpv) {
+    switch (cpv->k_id) { /* index into static config_plugin_keys_t cpk[] */
+      case 0: /* alias.url */
+        pconf->alias = cpv->v.a;
+        break;
+      default:/* should not happen */
+        return;
+    }
+}
+
+static void mod_alias_merge_config(plugin_config * const pconf, const config_plugin_value_t *cpv) {
+    do {
+        mod_alias_merge_config_cpv(pconf, cpv);
+    } while ((++cpv)->k_id != -1);
+}
+
+static void mod_alias_patch_config(connection * const con, plugin_data * const p) {
+    memcpy(&p->conf, &p->defaults, sizeof(plugin_config));
+    for (int i = 1, used = p->nconfig; i < used; ++i) {
+        if (config_check_cond(con, (uint32_t)p->cvlist[i].k_id))
+            mod_alias_merge_config(&p->conf, p->cvlist + p->cvlist[i].v.u2[0]);
+    }
+}
+
+static int mod_alias_check_order(server * const srv, const array * const a) {
+    for (uint32_t j = 0; j < a->used; ++j) {
+        const buffer * const prefix = &a->sorted[j]->key;
+        const size_t plen = buffer_string_length(prefix);
+        for (uint32_t k = j + 1; k < a->used; ++k) {
+            const buffer * const key = &a->sorted[k]->key;
+            if (buffer_string_length(key) < plen) {
+                break;
+            }
+            if (memcmp(key->ptr, prefix->ptr, plen) != 0) {
+                break;
+            }
+            /* ok, they have same prefix. check position */
+            const data_unset *dj = a->sorted[j];
+            const data_unset *dk = a->sorted[k];
+            const data_unset **data = (const data_unset **)a->data;
+            while (*data != dj && *data != dk) ++data;
+            if (*data == dj) {
+                log_error(srv->errh, __FILE__, __LINE__,
+                  "url.alias: `%s' will never match as `%s' matched first",
+                  key->ptr, prefix->ptr);
+                return 0;
+            }
+        }
+    }
+    return 1;
+}
 
 SETDEFAULTS_FUNC(mod_alias_set_defaults) {
-	plugin_data *p = p_d;
-	size_t i = 0;
+    static const config_plugin_keys_t cpk[] = {
+      { CONST_STR_LEN("alias.url"),
+        T_CONFIG_ARRAY,
+        T_CONFIG_SCOPE_CONNECTION }
+     ,{ NULL, 0,
+        T_CONFIG_UNSET,
+        T_CONFIG_SCOPE_UNSET }
+    };
 
-	config_values_t cv[] = {
-		{ "alias.url",                  NULL, T_CONFIG_ARRAY, T_CONFIG_SCOPE_CONNECTION },       /* 0 */
-		{ NULL,                         NULL, T_CONFIG_UNSET,  T_CONFIG_SCOPE_UNSET }
-	};
+    plugin_data * const p = p_d;
+    if (!config_plugin_values_init(srv, p, cpk, "mod_alias"))
+        return HANDLER_ERROR;
 
-	if (!p) return HANDLER_ERROR;
+    /* process and validate config directives
+     * (init i to 0 if global context; to 1 to skip empty global context) */
+    for (int i = !p->cvlist[0].v.u2[1]; i < p->nconfig; ++i) {
+        const config_plugin_value_t *cpv = p->cvlist + p->cvlist[i].v.u2[0];
+        for (; -1 != cpv->k_id; ++cpv) {
+            switch (cpv->k_id) {
+              case 0: /* alias.url */
+                if (!array_is_kvstring(cpv->v.a)) {
+                    log_error(srv->errh, __FILE__, __LINE__,
+                      "unexpected value for %s; "
+                      "expected list of \"urlpath\" => \"filepath\"",
+                      cpk[cpv->k_id].k);
+                    return HANDLER_ERROR;
+                }
+                if (cpv->v.a->used >= 2 && !mod_alias_check_order(srv,cpv->v.a))
+                    return HANDLER_ERROR;
+                break;
+              default:/* should not happen */
+                break;
+            }
+        }
+    }
 
-	p->config_storage = calloc(srv->config_context->used, sizeof(plugin_config *));
+    /* initialize p->defaults from global config context */
+    if (p->nconfig > 0 && p->cvlist->v.u2[1]) {
+        const config_plugin_value_t *cpv = p->cvlist + p->cvlist->v.u2[0];
+        if (-1 != cpv->k_id)
+            mod_alias_merge_config(&p->defaults, cpv);
+    }
 
-	for (i = 0; i < srv->config_context->used; i++) {
-		data_config const* config = (data_config const*)srv->config_context->data[i];
-		plugin_config *s;
-
-		s = calloc(1, sizeof(plugin_config));
-		s->alias = array_init();
-		cv[0].destination = s->alias;
-
-		p->config_storage[i] = s;
-
-		if (0 != config_insert_values_global(srv, config->value, cv, i == 0 ? T_CONFIG_SCOPE_SERVER : T_CONFIG_SCOPE_CONNECTION)) {
-			return HANDLER_ERROR;
-		}
-
-		if (!array_is_kvstring(s->alias)) {
-			log_error_write(srv, __FILE__, __LINE__, "s",
-					"unexpected value for alias.url; expected list of \"urlpath\" => \"filepath\"");
-			return HANDLER_ERROR;
-		}
-
-		if (s->alias->used >= 2) {
-			const array *a = s->alias;
-			size_t j, k;
-
-			for (j = 0; j < a->used; j ++) {
-				const buffer *prefix = &a->sorted[j]->key;
-				for (k = j + 1; k < a->used; k ++) {
-					const buffer *key = &a->sorted[k]->key;
-
-					if (buffer_string_length(key) < buffer_string_length(prefix)) {
-						break;
-					}
-					if (memcmp(key->ptr, prefix->ptr, buffer_string_length(prefix)) != 0) {
-						break;
-					}
-					/* ok, they have same prefix. check position */
-					const data_unset *dj = a->sorted[j];
-					const data_unset *dk = a->sorted[k];
-					const data_unset **data = (const data_unset **)a->data;
-					while (*data != dj && *data != dk) ++data;
-					if (*data == dj) {
-						log_error_write(srv, __FILE__, __LINE__, "SBSBS",
-							"url.alias: `", key, "' will never match as `", prefix, "' matched first");
-						return HANDLER_ERROR;
-					}
-				}
-			}
-		}
-	}
-
-	return HANDLER_GO_ON;
+    return HANDLER_GO_ON;
 }
-
-#define PATCH(x) \
-	p->conf.x = s->x;
-static int mod_alias_patch_connection(server *srv, connection *con, plugin_data *p) {
-	size_t i, j;
-	plugin_config *s = p->config_storage[0];
-
-	PATCH(alias);
-
-	/* skip the first, the global context */
-	for (i = 1; i < srv->config_context->used; i++) {
-		if (!config_check_cond(con, i)) continue; /* condition not matched */
-
-		data_config *dc = (data_config *)srv->config_context->data[i];
-		s = p->config_storage[i];
-
-		/* merge config */
-		for (j = 0; j < dc->value->used; j++) {
-			data_unset *du = dc->value->data[j];
-
-			if (buffer_is_equal_string(&du->key, CONST_STR_LEN("alias.url"))) {
-				PATCH(alias);
-			}
-		}
-	}
-
-	return 0;
-}
-#undef PATCH
 
 PHYSICALPATH_FUNC(mod_alias_physical_handler) {
 	plugin_data *p = p_d;
@@ -165,7 +143,8 @@ PHYSICALPATH_FUNC(mod_alias_physical_handler) {
 
 	if (0 == uri_len) return HANDLER_GO_ON;
 
-	mod_alias_patch_connection(srv, con, p);
+	mod_alias_patch_config(con, p);
+	if (NULL == p->conf.alias) return HANDLER_GO_ON;
 
 	/* do not include trailing slash on basedir */
 	basedir_len = buffer_string_length(con->physical.basedir);
@@ -204,7 +183,6 @@ PHYSICALPATH_FUNC(mod_alias_physical_handler) {
 			return HANDLER_GO_ON;
 }
 
-/* this function is called at dlopen() time and inits the callbacks */
 
 int mod_alias_plugin_init(plugin *p);
 int mod_alias_plugin_init(plugin *p) {
