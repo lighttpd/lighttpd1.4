@@ -13,211 +13,157 @@
 
 #include "md5.h"
 
-/* plugin config for all request/connections */
-
 typedef struct {
-	buffer *cookie_name;
-	buffer *cookie_attrs;
-	buffer *cookie_domain;
+	const buffer *cookie_name;
+	const buffer *cookie_attrs;
+	const buffer *cookie_domain;
 	unsigned int cookie_max_age;
 } plugin_config;
 
 typedef struct {
-	PLUGIN_DATA;
-
-	plugin_config **config_storage;
-
-	plugin_config conf;
+    PLUGIN_DATA;
+    plugin_config defaults;
+    plugin_config conf;
 } plugin_data;
 
-/* init the plugin data */
 INIT_FUNC(mod_usertrack_init) {
-	plugin_data *p;
-
-	p = calloc(1, sizeof(*p));
-
-	return p;
+    return calloc(1, sizeof(plugin_data));
 }
 
-/* detroy the plugin data */
 FREE_FUNC(mod_usertrack_free) {
-	plugin_data *p = p_d;
+    plugin_data *p = p_d;
+    if (!p) return HANDLER_GO_ON;
+    UNUSED(srv);
 
-	UNUSED(srv);
+    free(p->cvlist);
+    free(p);
 
-	if (!p) return HANDLER_GO_ON;
-
-	if (p->config_storage) {
-		size_t i;
-		for (i = 0; i < srv->config_context->used; i++) {
-			plugin_config *s = p->config_storage[i];
-
-			if (NULL == s) continue;
-
-			buffer_free(s->cookie_name);
-			buffer_free(s->cookie_attrs);
-			buffer_free(s->cookie_domain);
-
-			free(s);
-		}
-		free(p->config_storage);
-	}
-
-	free(p);
-
-	return HANDLER_GO_ON;
+    return HANDLER_GO_ON;
 }
 
-/* handle plugin config and check values */
+static void mod_usertrack_merge_config_cpv(plugin_config * const pconf, const config_plugin_value_t * const cpv) {
+    switch (cpv->k_id) { /* index into static config_plugin_keys_t cpk[] */
+      case 0: /* usertrack.cookie-name */
+        pconf->cookie_name = cpv->v.b;
+        break;
+      case 1: /* usertrack.cookie-max-age */
+        pconf->cookie_max_age = cpv->v.u;
+        break;
+      case 2: /* usertrack.cookie-domain */
+        pconf->cookie_domain = cpv->v.b;
+        break;
+      case 3: /* usertrack.cookie-attrs */
+        pconf->cookie_attrs = cpv->v.b;
+        break;
+      default:/* should not happen */
+        return;
+    }
+}
+
+static void mod_usertrack_merge_config(plugin_config * const pconf, const config_plugin_value_t *cpv) {
+    do {
+        mod_usertrack_merge_config_cpv(pconf, cpv);
+    } while ((++cpv)->k_id != -1);
+}
+
+static void mod_usertrack_patch_config(connection * const con, plugin_data * const p) {
+    memcpy(&p->conf, &p->defaults, sizeof(plugin_config));
+    for (int i = 1, used = p->nconfig; i < used; ++i) {
+        if (config_check_cond(con, (uint32_t)p->cvlist[i].k_id))
+            mod_usertrack_merge_config(&p->conf, p->cvlist + p->cvlist[i].v.u2[0]);
+    }
+}
 
 SETDEFAULTS_FUNC(mod_usertrack_set_defaults) {
-	plugin_data *p = p_d;
-	size_t i = 0;
+    static const config_plugin_keys_t cpk[] = {
+      { CONST_STR_LEN("usertrack.cookie-name"),
+        T_CONFIG_STRING,
+        T_CONFIG_SCOPE_CONNECTION }
+     ,{ CONST_STR_LEN("usertrack.cookie-max-age"),
+        T_CONFIG_INT,
+        T_CONFIG_SCOPE_CONNECTION }
+     ,{ CONST_STR_LEN("usertrack.cookie-domain"),
+        T_CONFIG_STRING,
+        T_CONFIG_SCOPE_CONNECTION }
+     ,{ CONST_STR_LEN("usertrack.cookie-attrs"),
+        T_CONFIG_STRING,
+        T_CONFIG_SCOPE_CONNECTION }
+     ,{ NULL, 0,
+        T_CONFIG_UNSET,
+        T_CONFIG_SCOPE_UNSET }
+    };
 
-	config_values_t cv[] = {
-		{ "usertrack.cookie-name",       NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_CONNECTION },       /* 0 */
-		{ "usertrack.cookie-max-age",    NULL, T_CONFIG_INT, T_CONFIG_SCOPE_CONNECTION },          /* 1 */
-		{ "usertrack.cookie-domain",     NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_CONNECTION },       /* 2 */
-		{ "usertrack.cookie-attrs",      NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_CONNECTION },       /* 3 */
+    plugin_data * const p = p_d;
+    if (!config_plugin_values_init(srv, p, cpk, "mod_usertrack"))
+        return HANDLER_ERROR;
 
-		{ NULL,                          NULL, T_CONFIG_UNSET, T_CONFIG_SCOPE_UNSET }
-	};
+    /* process and validate config directives
+     * (init i to 0 if global context; to 1 to skip empty global context) */
+    for (int i = !p->cvlist[0].v.u2[1]; i < p->nconfig; ++i) {
+        const config_plugin_value_t *cpv = p->cvlist + p->cvlist[i].v.u2[0];
+        for (; -1 != cpv->k_id; ++cpv) {
+            switch (cpv->k_id) {
+              case 0: /* usertrack.cookie-name */
+                if (!buffer_string_is_empty(cpv->v.b)) {
+                    const char * const ptr = cpv->v.b->ptr;
+                    const size_t len = buffer_string_length(cpv->v.b);
+                    for (size_t j = 0; j < len; ++j) {
+                        if (!light_isalpha(ptr[j])) {
+                            log_error(srv->errh, __FILE__, __LINE__,
+                              "invalid character in %s: %s",
+                               cpk[cpv->k_id].k, ptr);
+                            return HANDLER_ERROR;
+                        }
+                    }
+                }
+                break;
+              case 1: /* usertrack.cookie-max-age */
+                break;
+              case 2: /* usertrack.cookie-domain */
+                if (!buffer_string_is_empty(cpv->v.b)) {
+                    const char * const ptr = cpv->v.b->ptr;
+                    const size_t len = buffer_string_length(cpv->v.b);
+                    for (size_t j = 0; j < len; ++j) {
+                        const char c = ptr[j];
+                        if (c <= 32 || c >= 127 || c == '"' || c == '\\') {
+                            log_error(srv->errh, __FILE__, __LINE__,
+                              "invalid character in %s: %s",
+                               cpk[cpv->k_id].k, ptr);
+                            return HANDLER_ERROR;
+                        }
+                    }
+                }
+                break;
+              case 3: /* usertrack.cookie-attrs */
+                break;
+              default:/* should not happen */
+                break;
+            }
+        }
+    }
 
-	if (!p) return HANDLER_ERROR;
+    /* initialize p->defaults from global config context */
+    if (p->nconfig > 0 && p->cvlist->v.u2[1]) {
+        const config_plugin_value_t *cpv = p->cvlist + p->cvlist->v.u2[0];
+        if (-1 != cpv->k_id)
+            mod_usertrack_merge_config(&p->defaults, cpv);
+    }
+    if (buffer_string_is_empty(p->defaults.cookie_name)) {
+        static const struct { const char *ptr; uint32_t used; uint32_t size; }
+          default_cookie_name = { "TRACKID", sizeof("TRACKID"), 0 };
+        *((const buffer **)&p->defaults.cookie_name) =
+          (const buffer *)&default_cookie_name;
+    }
 
-	p->config_storage = calloc(srv->config_context->used, sizeof(plugin_config *));
-
-	for (i = 0; i < srv->config_context->used; i++) {
-		data_config const* config = (data_config const*)srv->config_context->data[i];
-		plugin_config *s;
-
-		s = calloc(1, sizeof(plugin_config));
-		s->cookie_name    = buffer_init();
-		s->cookie_attrs   = buffer_init();
-		s->cookie_domain  = buffer_init();
-		s->cookie_max_age = 0;
-
-		cv[0].destination = s->cookie_name;
-		cv[1].destination = &(s->cookie_max_age);
-		cv[2].destination = s->cookie_domain;
-		cv[3].destination = s->cookie_attrs;
-
-		p->config_storage[i] = s;
-
-		if (0 != config_insert_values_global(srv, config->value, cv, i == 0 ? T_CONFIG_SCOPE_SERVER : T_CONFIG_SCOPE_CONNECTION)) {
-			return HANDLER_ERROR;
-		}
-
-		if (buffer_string_is_empty(s->cookie_name)) {
-			buffer_copy_string_len(s->cookie_name, CONST_STR_LEN("TRACKID"));
-		} else {
-			size_t j, len = buffer_string_length(s->cookie_name);
-			for (j = 0; j < len; j++) {
-				char c = s->cookie_name->ptr[j] | 32;
-				if (c < 'a' || c > 'z') {
-					log_error_write(srv, __FILE__, __LINE__, "sb",
-							"invalid character in usertrack.cookie-name:",
-							s->cookie_name);
-
-					return HANDLER_ERROR;
-				}
-			}
-		}
-
-		if (!buffer_string_is_empty(s->cookie_domain)) {
-			size_t j, len = buffer_string_length(s->cookie_domain);
-			for (j = 0; j < len; j++) {
-				char c = s->cookie_domain->ptr[j];
-				if (c <= 32 || c >= 127 || c == '"' || c == '\\') {
-					log_error_write(srv, __FILE__, __LINE__, "sb",
-							"invalid character in usertrack.cookie-domain:",
-							s->cookie_domain);
-
-					return HANDLER_ERROR;
-				}
-			}
-		}
-	}
-
-	return HANDLER_GO_ON;
+    return HANDLER_GO_ON;
 }
 
-#define PATCH(x) \
-	p->conf.x = s->x;
-static int mod_usertrack_patch_connection(server *srv, connection *con, plugin_data *p) {
-	size_t i, j;
-	plugin_config *s = p->config_storage[0];
-
-	PATCH(cookie_name);
-	PATCH(cookie_attrs);
-	PATCH(cookie_domain);
-	PATCH(cookie_max_age);
-
-	/* skip the first, the global context */
-	for (i = 1; i < srv->config_context->used; i++) {
-		if (!config_check_cond(con, i)) continue; /* condition not matched */
-
-		data_config *dc = (data_config *)srv->config_context->data[i];
-		s = p->config_storage[i];
-
-		/* merge config */
-		for (j = 0; j < dc->value->used; j++) {
-			data_unset *du = dc->value->data[j];
-
-			if (buffer_is_equal_string(&du->key, CONST_STR_LEN("usertrack.cookie-name"))) {
-				PATCH(cookie_name);
-			} else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("usertrack.cookie-attrs"))) {
-				PATCH(cookie_attrs);
-			} else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("usertrack.cookie-max-age"))) {
-				PATCH(cookie_max_age);
-			} else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("usertrack.cookie-domain"))) {
-				PATCH(cookie_domain);
-			}
-		}
-	}
-
-	return 0;
-}
-#undef PATCH
-
-URIHANDLER_FUNC(mod_usertrack_uri_handler) {
-	plugin_data *p = p_d;
+__attribute_noinline__
+static handler_t mod_usertrack_set_cookie(server *srv, connection *con, plugin_data *p) {
 	buffer *cookie;
-	const buffer *b;
 	unsigned char h[16];
 	li_MD5_CTX Md5Ctx;
 	char hh[LI_ITOSTRING_LENGTH];
-
-	if (buffer_is_empty(con->uri.path)) return HANDLER_GO_ON;
-
-	mod_usertrack_patch_connection(srv, con, p);
-
-	if (NULL != (b = http_header_request_get(con, HTTP_HEADER_COOKIE, CONST_STR_LEN("Cookie")))) {
-		char *g;
-		/* we have a cookie, does it contain a valid name ? */
-
-		/* parse the cookie
-		 *
-		 * check for cookiename + (WS | '=')
-		 *
-		 */
-
-		if (NULL != (g = strstr(b->ptr, p->conf.cookie_name->ptr))) {
-			char *nc;
-
-			/* skip WS */
-			for (nc = g + buffer_string_length(p->conf.cookie_name); *nc == ' ' || *nc == '\t'; nc++);
-
-			if (*nc == '=') {
-				/* ok, found the key of our own cookie */
-
-				if (strlen(nc) > 32) {
-					/* i'm lazy */
-					return HANDLER_GO_ON;
-				}
-			}
-		}
-	}
 
 	/* set a cookie */
 	cookie = srv->tmp_buf;
@@ -266,7 +212,35 @@ URIHANDLER_FUNC(mod_usertrack_uri_handler) {
 	return HANDLER_GO_ON;
 }
 
-/* this function is called at dlopen() time and inits the callbacks */
+URIHANDLER_FUNC(mod_usertrack_uri_handler) {
+    plugin_data * const p = p_d;
+
+    if (buffer_is_empty(con->uri.path)) return HANDLER_GO_ON;
+
+    mod_usertrack_patch_config(con, p);
+
+    const buffer * const b =
+      http_header_request_get(con, HTTP_HEADER_COOKIE, CONST_STR_LEN("Cookie"));
+    if (NULL != b) {
+        /* parse the cookie (fuzzy; not precise using strstr() below)
+         * check for cookiename + (WS | '=')
+         */
+        const char * const g = strstr(b->ptr, p->conf.cookie_name->ptr);
+        if (NULL != g) {
+            const char *nc = g+buffer_string_length(p->conf.cookie_name);
+            while (*nc == ' ' || *nc == '\t') ++nc; /* skip WS */
+            if (*nc == '=') { /* ok, found the key of our own cookie */
+                if (strlen(nc) > 32) {
+                    /* i'm lazy */
+                    return HANDLER_GO_ON;
+                }
+            }
+        }
+    }
+
+    return mod_usertrack_set_cookie(srv, con, p);
+}
+
 
 int mod_usertrack_plugin_init(plugin *p);
 int mod_usertrack_plugin_init(plugin *p) {
