@@ -101,7 +101,7 @@ static int cache_export_get_params(lua_State *L, int tbl, buffer *qrystr) {
 	return 0;
 }
 
-int cache_parse_lua(server *srv, connection *con, plugin_data *p, buffer *fn) {
+int cache_parse_lua(server *srv, connection *con, plugin_data *p, const buffer *fn) {
 	lua_State *L;
 	int ret = -1;
 	buffer *b;
@@ -145,8 +145,8 @@ int cache_parse_lua(server *srv, connection *con, plugin_data *p, buffer *fn) {
 			c_to_lua_push(L, header_tbl, CONST_STR_LEN("PATH_INFO"), CONST_BUF_LEN(con->request.pathinfo));
 		}
 
-		c_to_lua_push(L, header_tbl, CONST_STR_LEN("CWD"), CONST_BUF_LEN(p->basedir));
-		c_to_lua_push(L, header_tbl, CONST_STR_LEN("BASEURL"), CONST_BUF_LEN(p->baseurl));
+		c_to_lua_push(L, header_tbl, CONST_STR_LEN("CWD"), CONST_BUF_LEN(&p->basedir));
+		c_to_lua_push(L, header_tbl, CONST_STR_LEN("BASEURL"), CONST_BUF_LEN(&p->baseurl));
 	}
 	lua_setglobal(L, "request");
 
@@ -187,7 +187,7 @@ int cache_parse_lua(server *srv, connection *con, plugin_data *p, buffer *fn) {
 	lua_pop(L, 1);
 
 	/* fetch the data from lua */
-	lua_to_c_get_string(L, "trigger_handler", p->trigger_handler);
+	lua_to_c_get_string(L, "trigger_handler", &p->trigger_handler);
 
 	if (0 == lua_to_c_get_string(L, "output_contenttype", b)) {
 		http_header_response_set(con, HTTP_HEADER_CONTENT_TYPE, CONST_STR_LEN("Content-Type"), CONST_BUF_LEN(b));
@@ -230,7 +230,7 @@ int cache_parse_lua(server *srv, connection *con, plugin_data *p, buffer *fn) {
 
 				/* the file is relative, make it absolute */
 				if (s[0] != '/') {
-					buffer_copy_buffer(b, p->basedir);
+					buffer_copy_buffer(b, &p->basedir);
 					buffer_append_string(b, lua_tostring(L, -1));
 				} else {
 					buffer_copy_string(b, lua_tostring(L, -1));
@@ -243,7 +243,7 @@ int cache_parse_lua(server *srv, connection *con, plugin_data *p, buffer *fn) {
 					switch(errno) {
 					case ENOENT:
 						/* a file is missing, call the handler to generate it */
-						if (!buffer_string_is_empty(p->trigger_handler)) {
+						if (!buffer_string_is_empty(&p->trigger_handler)) {
 							ret = 1; /* cache-miss */
 
 							log_error_write(srv, __FILE__, __LINE__, "s",
@@ -305,13 +305,13 @@ int cache_parse_lua(server *srv, connection *con, plugin_data *p, buffer *fn) {
 		}
 	}
 
-	if (ret == 1 && !buffer_string_is_empty(p->trigger_handler)) {
+	if (ret == 1 && !buffer_string_is_empty(&p->trigger_handler)) {
 		/* cache-miss */
-		buffer_copy_buffer(con->uri.path, p->baseurl);
-		buffer_append_string_buffer(con->uri.path, p->trigger_handler);
+		buffer_copy_buffer(con->uri.path, &p->baseurl);
+		buffer_append_string_buffer(con->uri.path, &p->trigger_handler);
 
-		buffer_copy_buffer(con->physical.path, p->basedir);
-		buffer_append_string_buffer(con->physical.path, p->trigger_handler);
+		buffer_copy_buffer(con->physical.path, &p->basedir);
+		buffer_append_string_buffer(con->physical.path, &p->trigger_handler);
 
 		chunkqueue_reset(con->write_queue);
 	}

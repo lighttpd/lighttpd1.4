@@ -14,29 +14,24 @@
 #define plugin_data mod_cache_plugin_data
 
 typedef struct {
-	buffer *ext;
-
-	array  *mc_hosts;
-	buffer *mc_namespace;
-#if defined(USE_MEMCACHED)
-	memcached_st *memc;
-#endif
-	buffer *power_magnet;
+    const buffer *ext;
+    const buffer *power_magnet;
+    /*const buffer *mc_namespace;*//*(unused)*/
+  #if defined(USE_MEMCACHED)
+    memcached_st *memc;
+  #endif
 } plugin_config;
 
 typedef struct {
-	PLUGIN_DATA;
+    PLUGIN_DATA;
+    plugin_config defaults;
+    plugin_config conf;
 
-	buffer *basedir;
-	buffer *baseurl;
-
-	buffer *trigger_handler;
-
-	plugin_config **config_storage;
-
-	plugin_config conf;
+    buffer basedir;
+    buffer baseurl;
+    buffer trigger_handler;
 } plugin_data;
 
-int cache_parse_lua(server *srv, connection *con, plugin_data *p, buffer *fn);
+int cache_parse_lua(server *srv, connection *con, plugin_data *p, const buffer *fn);
 
 #endif

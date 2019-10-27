@@ -14,194 +14,189 @@
 #include <string.h>
 #include <errno.h>
 
-/* init the plugin data */
 INIT_FUNC(mod_cml_init) {
-	plugin_data *p;
-
-	p = calloc(1, sizeof(*p));
-
-	p->basedir         = buffer_init();
-	p->baseurl         = buffer_init();
-	p->trigger_handler = buffer_init();
-
-	return p;
+    return calloc(1, sizeof(plugin_data));
 }
 
-/* detroy the plugin data */
+static void mod_cml_free_config(plugin_data * const p) {
+    if (NULL == p->cvlist) return;
+  #if defined(USE_MEMCACHED)
+    /* (init i to 0 if global context; to 1 to skip empty global context) */
+    for (int i = !p->cvlist[0].v.u2[1], used = p->nconfig; i < used; ++i) {
+        config_plugin_value_t *cpv = p->cvlist + p->cvlist[i].v.u2[0];
+        for (; -1 != cpv->k_id; ++cpv) {
+            switch (cpv->k_id) {
+              case 1: /* cml.memcache-hosts */
+                if (cpv->vtype == T_CONFIG_LOCAL && NULL != cpv->v.v)
+                    memcached_free(cpv->v.v); /* mod_cml_free_memcached() */
+                break;
+              default:
+                break;
+            }
+        }
+    }
+  #endif
+}
+
+static int mod_cml_init_memcached(server *srv, config_plugin_value_t * const cpv) {
+    const array * const mc_hosts = cpv->v.a;
+    if (0 == mc_hosts->used) {
+        cpv->v.v = NULL;
+        return 1;
+    }
+
+  #if defined(USE_MEMCACHED)
+
+    buffer * const opts = srv->tmp_buf;
+    buffer_clear(opts);
+    for (uint32_t k = 0; k < mc_hosts->used; ++k) {
+        const data_string * const ds = (const data_string *)mc_hosts->data[k];
+        buffer_append_string_len(opts, CONST_STR_LEN(" --SERVER="));
+        buffer_append_string_buffer(opts, &ds->value);
+    }
+
+    cpv->v.v = memcached(opts->ptr+1, buffer_string_length(opts)-1);
+
+    if (cpv->v.v) {
+        cpv->vtype = T_CONFIG_LOCAL;
+        return 1;
+    }
+    else {
+        log_error(srv->errh, __FILE__, __LINE__,
+          "configuring memcached failed for option string: %s", opts->ptr);
+        return 0;
+    }
+
+  #else
+
+    log_error(srv->errh, __FILE__, __LINE__,
+      "memcache support is not compiled in but cml.memcache-hosts is set, "
+      "aborting");
+    return 0;
+
+  #endif
+}
+
 FREE_FUNC(mod_cml_free) {
-	plugin_data *p = p_d;
+    plugin_data * const p = p_d;
+    if (!p) return HANDLER_GO_ON;
+    UNUSED(srv);
 
-	UNUSED(srv);
+    free(p->trigger_handler.ptr);
+    free(p->basedir.ptr);
+    free(p->baseurl.ptr);
 
-	if (!p) return HANDLER_GO_ON;
+    mod_cml_free_config(p);
 
-	if (p->config_storage) {
-		size_t i;
-		for (i = 0; i < srv->config_context->used; i++) {
-			plugin_config *s = p->config_storage[i];
+    free(p->cvlist);
+    free(p);
 
-			if (NULL == s) continue;
-
-			buffer_free(s->ext);
-
-			buffer_free(s->mc_namespace);
-			buffer_free(s->power_magnet);
-			array_free(s->mc_hosts);
-
-#if defined(USE_MEMCACHED)
-			if (s->memc) memcached_free(s->memc);
-#endif
-
-			free(s);
-		}
-		free(p->config_storage);
-	}
-
-	buffer_free(p->trigger_handler);
-	buffer_free(p->basedir);
-	buffer_free(p->baseurl);
-
-	free(p);
-
-	return HANDLER_GO_ON;
+    return HANDLER_GO_ON;
 }
 
-/* handle plugin config and check values */
+static void mod_cml_merge_config_cpv(plugin_config * const pconf, const config_plugin_value_t * const cpv) {
+    switch (cpv->k_id) { /* index into static config_plugin_keys_t cpk[] */
+      case 0: /* cml.extension */
+        pconf->ext = cpv->v.b;
+        break;
+      case 1: /* cml.memcache-hosts *//* setdefaults inits memcached_st *memc */
+       #if defined(USE_MEMCACHED)
+        if (cpv->vtype != T_CONFIG_LOCAL) break;
+        pconf->memc = cpv->v.v;
+       #endif
+        break;
+      case 2: /* cml.memcache-namespace */
+        /*pconf->mc_namespace = cpv->v.b;*//*(unused)*/
+        break;
+      case 3: /* cml.power-magnet */
+        pconf->power_magnet = cpv->v.b;
+        break;
+      default:/* should not happen */
+        return;
+    }
+}
+
+static void mod_cml_merge_config(plugin_config * const pconf, const config_plugin_value_t *cpv) {
+    do {
+        mod_cml_merge_config_cpv(pconf, cpv);
+    } while ((++cpv)->k_id != -1);
+}
+
+static void mod_cml_patch_config(connection * const con, plugin_data * const p) {
+    memcpy(&p->conf, &p->defaults, sizeof(plugin_config));
+    for (int i = 1, used = p->nconfig; i < used; ++i) {
+        if (config_check_cond(con, (uint32_t)p->cvlist[i].k_id))
+            mod_cml_merge_config(&p->conf, p->cvlist + p->cvlist[i].v.u2[0]);
+    }
+}
 
 SETDEFAULTS_FUNC(mod_cml_set_defaults) {
-	plugin_data *p = p_d;
-	size_t i = 0;
+    static const config_plugin_keys_t cpk[] = {
+      { CONST_STR_LEN("cml.extension"),
+        T_CONFIG_STRING,
+        T_CONFIG_SCOPE_CONNECTION }
+     ,{ CONST_STR_LEN("cml.memcache-hosts"),
+        T_CONFIG_ARRAY,
+        T_CONFIG_SCOPE_CONNECTION }
+     ,{ CONST_STR_LEN("cml.memcache-namespace"), /*(unused)*/
+        T_CONFIG_STRING,
+        T_CONFIG_SCOPE_CONNECTION }
+     ,{ CONST_STR_LEN("cml.power-magnet"),
+        T_CONFIG_STRING,
+        T_CONFIG_SCOPE_CONNECTION }
+     ,{ NULL, 0,
+        T_CONFIG_UNSET,
+        T_CONFIG_SCOPE_UNSET }
+    };
 
-	config_values_t cv[] = {
-		{ "cml.extension",              NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_CONNECTION },       /* 0 */
-		{ "cml.memcache-hosts",         NULL, T_CONFIG_ARRAY, T_CONFIG_SCOPE_CONNECTION },        /* 1 */
-		{ "cml.memcache-namespace",     NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_CONNECTION },       /* 2 */
-		{ "cml.power-magnet",           NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_CONNECTION },       /* 3 */
-		{ NULL,                         NULL, T_CONFIG_UNSET, T_CONFIG_SCOPE_UNSET }
-	};
+    plugin_data * const p = p_d;
+    if (!config_plugin_values_init(srv, p, cpk, "mod_cml"))
+        return HANDLER_ERROR;
 
-	if (!p) return HANDLER_ERROR;
+    /* process and validate config directives
+     * (init i to 0 if global context; to 1 to skip empty global context) */
+    for (int i = !p->cvlist[0].v.u2[1]; i < p->nconfig; ++i) {
+        config_plugin_value_t *cpv = p->cvlist + p->cvlist[i].v.u2[0];
+        for (; -1 != cpv->k_id; ++cpv) {
+            switch (cpv->k_id) {
+              case 0: /* cml.extension */
+                break;
+              case 1: /* cml.memcache-hosts */ /* config converted to memc handles */
+                if (!array_is_vlist(cpv->v.a)) {
+                    log_error(srv->errh, __FILE__, __LINE__,
+                      "unexpected value for %s; "
+                      "expected list of \"host\"", cpk[cpv->k_id].k);
+                    return HANDLER_ERROR;
+                }
+                if (!mod_cml_init_memcached(srv, cpv)) {
+                    return HANDLER_ERROR;
+                }
+                break;
+              case 2: /* cml.memcache-namespace *//*(unused)*/
+              case 3: /* cml.power-magnet */
+                break;
+              default:/* should not happen */
+                break;
+            }
+        }
+    }
 
-	p->config_storage = calloc(srv->config_context->used, sizeof(plugin_config *));
+    /* initialize p->defaults from global config context */
+    if (p->nconfig > 0 && p->cvlist->v.u2[1]) {
+        const config_plugin_value_t *cpv = p->cvlist + p->cvlist->v.u2[0];
+        if (-1 != cpv->k_id)
+            mod_cml_merge_config(&p->defaults, cpv);
+    }
 
-	for (i = 0; i < srv->config_context->used; i++) {
-		data_config const* config = (data_config const*)srv->config_context->data[i];
-		plugin_config *s;
-
-		s = calloc(1, sizeof(plugin_config));
-		s->ext    = buffer_init();
-		s->mc_hosts       = array_init();
-		s->mc_namespace   = buffer_init();
-		s->power_magnet   = buffer_init();
-#if defined(USE_MEMCACHED)
-		s->memc = NULL;
-#endif
-
-		cv[0].destination = s->ext;
-		cv[1].destination = s->mc_hosts;
-		cv[2].destination = s->mc_namespace;
-		cv[3].destination = s->power_magnet;
-
-		p->config_storage[i] = s;
-
-		if (0 != config_insert_values_global(srv, config->value, cv, i == 0 ? T_CONFIG_SCOPE_SERVER : T_CONFIG_SCOPE_CONNECTION)) {
-			return HANDLER_ERROR;
-		}
-
-		if (!array_is_vlist(s->mc_hosts)) {
-			log_error_write(srv, __FILE__, __LINE__, "s",
-					"unexpected value for cml.memcache-hosts; expected list of \"host\"");
-			return HANDLER_ERROR;
-		}
-
-		if (s->mc_hosts->used) {
-#if defined(USE_MEMCACHED)
-			buffer *option_string = buffer_init();
-			size_t k;
-
-			{
-				data_string *ds = (data_string *)s->mc_hosts->data[0];
-
-				buffer_append_string_len(option_string, CONST_STR_LEN("--SERVER="));
-				buffer_append_string_buffer(option_string, &ds->value);
-			}
-
-			for (k = 1; k < s->mc_hosts->used; k++) {
-				data_string *ds = (data_string *)s->mc_hosts->data[k];
-
-				buffer_append_string_len(option_string, CONST_STR_LEN(" --SERVER="));
-				buffer_append_string_buffer(option_string, &ds->value);
-			}
-
-			s->memc = memcached(CONST_BUF_LEN(option_string));
-
-			if (NULL == s->memc) {
-				log_error_write(srv, __FILE__, __LINE__, "sb",
-					"configuring memcached failed for option string:",
-					option_string);
-			}
-			buffer_free(option_string);
-
-			if (NULL == s->memc) return HANDLER_ERROR;
-#else
-			log_error_write(srv, __FILE__, __LINE__, "s",
-				"memcache support is not compiled in but cml.memcache-hosts is set, aborting");
-			return HANDLER_ERROR;
-#endif
-		}
-	}
-
-	return HANDLER_GO_ON;
+    return HANDLER_GO_ON;
 }
 
-#define PATCH(x) \
-	p->conf.x = s->x;
-static int mod_cml_patch_connection(server *srv, connection *con, plugin_data *p) {
-	size_t i, j;
-	plugin_config *s = p->config_storage[0];
-
-	PATCH(ext);
-#if defined(USE_MEMCACHED)
-	PATCH(memc);
-#endif
-	PATCH(mc_namespace);
-	PATCH(power_magnet);
-
-	/* skip the first, the global context */
-	for (i = 1; i < srv->config_context->used; i++) {
-		if (!config_check_cond(con, i)) continue; /* condition not matched */
-
-		data_config *dc = (data_config *)srv->config_context->data[i];
-		s = p->config_storage[i];
-
-		/* merge config */
-		for (j = 0; j < dc->value->used; j++) {
-			data_unset *du = dc->value->data[j];
-
-			if (buffer_is_equal_string(&du->key, CONST_STR_LEN("cml.extension"))) {
-				PATCH(ext);
-			} else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("cml.memcache-hosts"))) {
-#if defined(USE_MEMCACHED)
-				PATCH(memc);
-#endif
-			} else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("cml.memcache-namespace"))) {
-				PATCH(mc_namespace);
-			} else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("cml.power-magnet"))) {
-				PATCH(power_magnet);
-			}
-		}
-	}
-
-	return 0;
-}
-#undef PATCH
-
-static int cache_call_lua(server *srv, connection *con, plugin_data *p, buffer *cml_file) {
+static int cache_call_lua(server *srv, connection *con, plugin_data *p, const buffer *cml_file) {
 	buffer *b;
 	char *c;
 
 	/* cleanup basedir */
-	b = p->baseurl;
+	b = &p->baseurl;
 	buffer_copy_buffer(b, con->uri.path);
 	for (c = b->ptr + buffer_string_length(b); c > b->ptr && *c != '/'; c--);
 
@@ -209,7 +204,7 @@ static int cache_call_lua(server *srv, connection *con, plugin_data *p, buffer *
 		buffer_string_set_length(b, c - b->ptr + 1);
 	}
 
-	b = p->basedir;
+	b = &p->basedir;
 	buffer_copy_buffer(b, con->physical.path);
 	for (c = b->ptr + buffer_string_length(b); c > b->ptr && *c != '/'; c--);
 
@@ -228,13 +223,13 @@ static int cache_call_lua(server *srv, connection *con, plugin_data *p, buffer *
 URIHANDLER_FUNC(mod_cml_power_magnet) {
 	plugin_data *p = p_d;
 
-	mod_cml_patch_connection(srv, con, p);
-
-	buffer_clear(p->basedir);
-	buffer_clear(p->baseurl);
-	buffer_clear(p->trigger_handler);
+	mod_cml_patch_config(con, p);
 
 	if (buffer_string_is_empty(p->conf.power_magnet)) return HANDLER_GO_ON;
+
+	buffer_clear(&p->basedir);
+	buffer_clear(&p->baseurl);
+	buffer_clear(&p->trigger_handler);
 
 	/*
 	 * power-magnet:
@@ -282,17 +277,17 @@ URIHANDLER_FUNC(mod_cml_is_handled) {
 
 	if (buffer_string_is_empty(con->physical.path)) return HANDLER_ERROR;
 
-	mod_cml_patch_connection(srv, con, p);
-
-	buffer_clear(p->basedir);
-	buffer_clear(p->baseurl);
-	buffer_clear(p->trigger_handler);
+	mod_cml_patch_config(con, p);
 
 	if (buffer_string_is_empty(p->conf.ext)) return HANDLER_GO_ON;
 
 	if (!buffer_is_equal_right_len(con->physical.path, p->conf.ext, buffer_string_length(p->conf.ext))) {
 		return HANDLER_GO_ON;
 	}
+
+	buffer_clear(&p->basedir);
+	buffer_clear(&p->baseurl);
+	buffer_clear(&p->trigger_handler);
 
 	switch(cache_call_lua(srv, con, p, con->physical.path)) {
 	case -1:
@@ -320,6 +315,7 @@ URIHANDLER_FUNC(mod_cml_is_handled) {
 		return HANDLER_COMEBACK;
 	}
 }
+
 
 int mod_cml_plugin_init(plugin *p);
 int mod_cml_plugin_init(plugin *p) {
