@@ -82,22 +82,20 @@ typedef enum {
 } secdl_algorithm;
 
 typedef struct {
-	buffer *doc_root;
-	buffer *secret;
-	buffer *uri_prefix;
-	secdl_algorithm algorithm;
+    const buffer *doc_root;
+    const buffer *secret;
+    const buffer *uri_prefix;
+    secdl_algorithm algorithm;
 
-	unsigned int timeout;
-	unsigned short path_segments;
-	unsigned short hash_querystr;
+    unsigned int timeout;
+    unsigned short path_segments;
+    unsigned short hash_querystr;
 } plugin_config;
 
 typedef struct {
-	PLUGIN_DATA;
-
-	plugin_config **config_storage;
-
-	plugin_config conf;
+    PLUGIN_DATA;
+    plugin_config defaults;
+    plugin_config conf;
 } plugin_data;
 
 static int const_time_memeq(const char *a, const char *b, size_t len) {
@@ -117,7 +115,7 @@ static const char* secdl_algorithm_names[] = {
 	"hmac-sha256",
 };
 
-static secdl_algorithm algorithm_from_string(buffer *name) {
+static secdl_algorithm algorithm_from_string(const buffer *name) {
 	size_t ndx;
 
 	if (buffer_string_is_empty(name)) return SECDL_INVALID;
@@ -227,117 +225,155 @@ static int secdl_verify_mac(server *srv, plugin_config *config, const char* prot
 	return 0;
 }
 
-/* init the plugin data */
 INIT_FUNC(mod_secdownload_init) {
-	plugin_data *p;
-
-	p = calloc(1, sizeof(*p));
-
-	return p;
+    return calloc(1, sizeof(plugin_data));
 }
 
-/* detroy the plugin data */
 FREE_FUNC(mod_secdownload_free) {
-	plugin_data *p = p_d;
-	UNUSED(srv);
+    plugin_data *p = p_d;
+    if (!p) return HANDLER_GO_ON;
+    UNUSED(srv);
 
-	if (!p) return HANDLER_GO_ON;
+    free(p->cvlist);
+    free(p);
 
-	if (p->config_storage) {
-		size_t i;
-		for (i = 0; i < srv->config_context->used; i++) {
-			plugin_config *s = p->config_storage[i];
-
-			if (NULL == s) continue;
-
-			buffer_free(s->secret);
-			buffer_free(s->doc_root);
-			buffer_free(s->uri_prefix);
-
-			free(s);
-		}
-		free(p->config_storage);
-	}
-
-	free(p);
-
-	return HANDLER_GO_ON;
+    return HANDLER_GO_ON;
 }
 
-/* handle plugin config and check values */
+static int mod_secdownload_parse_algorithm(server * const srv, config_plugin_value_t * const cpv) {
+    secdl_algorithm algorithm = algorithm_from_string(cpv->v.b);
+    switch (algorithm) {
+      case SECDL_INVALID:
+        log_error(srv->errh, __FILE__, __LINE__,
+          "invalid secdownload.algorithm: %s", cpv->v.b->ptr);
+        return 0;
+     #ifndef USE_OPENSSL_CRYPTO
+      case SECDL_HMAC_SHA1:
+      case SECDL_HMAC_SHA256:
+        log_error(srv->errh, __FILE__, __LINE__,
+          "unsupported secdownload.algorithm: %s", cpv->v.b->ptr);
+        /*return 0;*/
+        /* proceed to allow config to load for other tests */
+        /* (use of unsupported algorithm will result in failure at runtime) */
+        break;
+     #endif
+      default:
+        break;
+    }
+
+    cpv->vtype = T_CONFIG_INT;
+    cpv->v.u = algorithm;
+    return 1;
+}
+
+static void mod_secdownload_merge_config_cpv(plugin_config * const pconf, const config_plugin_value_t * const cpv) {
+    switch (cpv->k_id) { /* index into static config_plugin_keys_t cpk[] */
+      case 0: /* secdownload.secret */
+        pconf->secret = cpv->v.b;
+        break;
+      case 1: /* secdownload.document-root */
+        pconf->doc_root = cpv->v.b;
+        break;
+      case 2: /* secdownload.uri-prefix */
+        pconf->uri_prefix = cpv->v.b;
+        break;
+      case 3: /* secdownload.timeout */
+        pconf->timeout = cpv->v.u;
+        break;
+      case 4: /* secdownload.algorithm */
+        pconf->algorithm = cpv->v.u; /* mod_secdownload_parse_algorithm() */
+        break;
+      case 5: /* secdownload.path-segments */
+        pconf->path_segments = cpv->v.shrt;
+        break;
+      case 6: /* secdownload.hash-querystr */
+        pconf->hash_querystr = cpv->v.u;
+        break;
+      default:/* should not happen */
+        return;
+    }
+}
+
+static void mod_secdownload_merge_config(plugin_config * const pconf, const config_plugin_value_t *cpv) {
+    do {
+        mod_secdownload_merge_config_cpv(pconf, cpv);
+    } while ((++cpv)->k_id != -1);
+}
+
+static void mod_secdownload_patch_config(connection * const con, plugin_data * const p) {
+    memcpy(&p->conf, &p->defaults, sizeof(plugin_config));
+    for (int i = 1, used = p->nconfig; i < used; ++i) {
+        if (config_check_cond(con, (uint32_t)p->cvlist[i].k_id))
+            mod_secdownload_merge_config(&p->conf, p->cvlist + p->cvlist[i].v.u2[0]);
+    }
+}
 
 SETDEFAULTS_FUNC(mod_secdownload_set_defaults) {
-	plugin_data *p = p_d;
-	size_t i = 0;
+    static const config_plugin_keys_t cpk[] = {
+      { CONST_STR_LEN("secdownload.secret"),
+        T_CONFIG_STRING,
+        T_CONFIG_SCOPE_CONNECTION }
+     ,{ CONST_STR_LEN("secdownload.document-root"),
+        T_CONFIG_STRING,
+        T_CONFIG_SCOPE_CONNECTION }
+     ,{ CONST_STR_LEN("secdownload.uri-prefix"),
+        T_CONFIG_STRING,
+        T_CONFIG_SCOPE_CONNECTION }
+     ,{ CONST_STR_LEN("secdownload.timeout"),
+        T_CONFIG_INT,
+        T_CONFIG_SCOPE_CONNECTION }
+     ,{ CONST_STR_LEN("secdownload.algorithm"),
+        T_CONFIG_STRING,
+        T_CONFIG_SCOPE_CONNECTION }
+     ,{ CONST_STR_LEN("secdownload.path-segments"),
+        T_CONFIG_SHORT,
+        T_CONFIG_SCOPE_CONNECTION }
+     ,{ CONST_STR_LEN("secdownload.hash-querystr"),
+        T_CONFIG_BOOL,
+        T_CONFIG_SCOPE_CONNECTION }
+     ,{ NULL, 0,
+        T_CONFIG_UNSET,
+        T_CONFIG_SCOPE_UNSET }
+    };
 
-	config_values_t cv[] = {
-		{ "secdownload.secret",        NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_CONNECTION }, /* 0 */
-		{ "secdownload.document-root", NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_CONNECTION }, /* 1 */
-		{ "secdownload.uri-prefix",    NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_CONNECTION }, /* 2 */
-		{ "secdownload.timeout",       NULL, T_CONFIG_INT,    T_CONFIG_SCOPE_CONNECTION }, /* 3 */
-		{ "secdownload.algorithm",     NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_CONNECTION }, /* 4 */
-		{ "secdownload.path-segments", NULL, T_CONFIG_SHORT,  T_CONFIG_SCOPE_CONNECTION }, /* 5 */
-		{ "secdownload.hash-querystr", NULL, T_CONFIG_BOOLEAN,T_CONFIG_SCOPE_CONNECTION }, /* 6 */
-		{ NULL,                        NULL, T_CONFIG_UNSET,  T_CONFIG_SCOPE_UNSET      }
-	};
+    plugin_data * const p = p_d;
+    if (!config_plugin_values_init(srv, p, cpk, "mod_secdownload"))
+        return HANDLER_ERROR;
 
-	if (!p) return HANDLER_ERROR;
+    /* process and validate config directives
+     * (init i to 0 if global context; to 1 to skip empty global context) */
+    for (int i = !p->cvlist[0].v.u2[1]; i < p->nconfig; ++i) {
+        config_plugin_value_t *cpv = p->cvlist + p->cvlist[i].v.u2[0];
+        for (; -1 != cpv->k_id; ++cpv) {
+            switch (cpv->k_id) {
+              case 0: /* secdownload.secret */
+              case 1: /* secdownload.document-root */
+              case 2: /* secdownload.uri-prefix */
+              case 3: /* secdownload.timeout */
+                break;
+              case 4: /* secdownload.algorithm */
+                if (!mod_secdownload_parse_algorithm(srv, cpv))
+                    return HANDLER_ERROR;
+                break;
+              case 5: /* secdownload.path-segments */
+              case 6: /* secdownload.hash-querystr */
+                break;
+              default:/* should not happen */
+                break;
+            }
+        }
+    }
 
-	p->config_storage = calloc(srv->config_context->used, sizeof(plugin_config *));
+    p->defaults.timeout = 60;
 
-	for (i = 0; i < srv->config_context->used; i++) {
-		data_config const* config = (data_config const*)srv->config_context->data[i];
-		plugin_config *s;
-		buffer *algorithm = buffer_init();
+    /* initialize p->defaults from global config context */
+    if (p->nconfig > 0 && p->cvlist->v.u2[1]) {
+        const config_plugin_value_t *cpv = p->cvlist + p->cvlist->v.u2[0];
+        if (-1 != cpv->k_id)
+            mod_secdownload_merge_config(&p->defaults, cpv);
+    }
 
-		s = calloc(1, sizeof(plugin_config));
-		s->secret        = buffer_init();
-		s->doc_root      = buffer_init();
-		s->uri_prefix    = buffer_init();
-		s->timeout       = 60;
-		s->path_segments = 0;
-		s->hash_querystr = 0;
-
-		cv[0].destination = s->secret;
-		cv[1].destination = s->doc_root;
-		cv[2].destination = s->uri_prefix;
-		cv[3].destination = &(s->timeout);
-		cv[4].destination = algorithm;
-		cv[5].destination = &(s->path_segments);
-		cv[6].destination = &(s->hash_querystr);
-
-		p->config_storage[i] = s;
-
-		if (0 != config_insert_values_global(srv, config->value, cv, i == 0 ? T_CONFIG_SCOPE_SERVER : T_CONFIG_SCOPE_CONNECTION)) {
-			buffer_free(algorithm);
-			return HANDLER_ERROR;
-		}
-
-		if (!buffer_is_empty(algorithm)) {
-			s->algorithm = algorithm_from_string(algorithm);
-			switch (s->algorithm) {
-			case SECDL_INVALID:
-				log_error_write(srv, __FILE__, __LINE__, "sb",
-					"invalid secdownload.algorithm:",
-					algorithm);
-				buffer_free(algorithm);
-				return HANDLER_ERROR;
-#ifndef USE_OPENSSL_CRYPTO
-			case SECDL_HMAC_SHA1:
-			case SECDL_HMAC_SHA256:
-				log_error_write(srv, __FILE__, __LINE__, "sb",
-					"unsupported secdownload.algorithm:",
-					algorithm);
-#endif
-			default:
-				break;
-			}
-		}
-
-		buffer_free(algorithm);
-	}
-
-	return HANDLER_GO_ON;
+    return HANDLER_GO_ON;
 }
 
 /**
@@ -391,54 +427,6 @@ static int is_base64_len(const char *str, size_t len) {
 	return i == len;
 }
 
-#define PATCH(x) \
-	p->conf.x = s->x;
-static int mod_secdownload_patch_connection(server *srv, connection *con, plugin_data *p) {
-	size_t i, j;
-	plugin_config *s = p->config_storage[0];
-
-	PATCH(secret);
-	PATCH(doc_root);
-	PATCH(uri_prefix);
-	PATCH(timeout);
-	PATCH(algorithm);
-	PATCH(path_segments);
-	PATCH(hash_querystr);
-
-	/* skip the first, the global context */
-	for (i = 1; i < srv->config_context->used; i++) {
-		if (!config_check_cond(con, i)) continue; /* condition not matched */
-
-		data_config *dc = (data_config *)srv->config_context->data[i];
-		s = p->config_storage[i];
-
-		/* merge config */
-		for (j = 0; j < dc->value->used; j++) {
-			data_unset *du = dc->value->data[j];
-
-			if (buffer_is_equal_string(&du->key, CONST_STR_LEN("secdownload.secret"))) {
-				PATCH(secret);
-			} else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("secdownload.document-root"))) {
-				PATCH(doc_root);
-			} else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("secdownload.uri-prefix"))) {
-				PATCH(uri_prefix);
-			} else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("secdownload.timeout"))) {
-				PATCH(timeout);
-			} else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("secdownload.algorithm"))) {
-				PATCH(algorithm);
-			} else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("secdownload.path-segments"))) {
-				PATCH(path_segments);
-			} else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("secdownload.hash-querystr"))) {
-				PATCH(hash_querystr);
-			}
-		}
-	}
-
-	return 0;
-}
-#undef PATCH
-
-
 URIHANDLER_FUNC(mod_secdownload_uri_handler) {
 	plugin_data *p = p_d;
 	const char *rel_uri, *ts_str, *mac_str, *protected_path;
@@ -449,7 +437,7 @@ URIHANDLER_FUNC(mod_secdownload_uri_handler) {
 
 	if (buffer_is_empty(con->uri.path)) return HANDLER_GO_ON;
 
-	mod_secdownload_patch_connection(srv, con, p);
+	mod_secdownload_patch_config(con, p);
 
 	if (buffer_string_is_empty(p->conf.uri_prefix)) return HANDLER_GO_ON;
 
@@ -552,7 +540,6 @@ URIHANDLER_FUNC(mod_secdownload_uri_handler) {
 	return HANDLER_GO_ON;
 }
 
-/* this function is called at dlopen() time and inits the callbacks */
 
 int mod_secdownload_plugin_init(plugin *p);
 int mod_secdownload_plugin_init(plugin *p) {
