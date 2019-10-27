@@ -18,15 +18,17 @@
 #include <stdio.h>
 
 typedef struct {
-	buffer *config_url;
-	buffer *status_url;
-	buffer *statistics_url;
+    const buffer *config_url;
+    const buffer *status_url;
+    const buffer *statistics_url;
 
-	int     sort;
+    int sort;
 } plugin_config;
 
 typedef struct {
 	PLUGIN_DATA;
+	plugin_config defaults;
+	plugin_config conf;
 
 	double traffic_out;
 	double requests;
@@ -42,102 +44,89 @@ typedef struct {
 	double abs_requests;
 
 	double bytes_written;
-
-	buffer *module_list;
-
-	plugin_config **config_storage;
-
-	plugin_config conf;
 } plugin_data;
 
 INIT_FUNC(mod_status_init) {
-	plugin_data *p;
-	size_t i;
-
-	p = calloc(1, sizeof(*p));
-
-	p->traffic_out = p->requests = 0;
-	p->rel_traffic_out = p->rel_requests = 0;
-	p->abs_traffic_out = p->abs_requests = 0;
-	p->bytes_written = 0;
-	p->module_list = buffer_init();
-
-	for (i = 0; i < 5; i++) {
-		p->mod_5s_traffic_out[i] = p->mod_5s_requests[i] = 0;
-	}
-
-	return p;
+    return calloc(1, sizeof(plugin_data));
 }
 
 FREE_FUNC(mod_status_free) {
-	plugin_data *p = p_d;
+    plugin_data *p = p_d;
+    if (!p) return HANDLER_GO_ON;
+    UNUSED(srv);
 
-	UNUSED(srv);
+    free(p->cvlist);
+    free(p);
 
-	if (!p) return HANDLER_GO_ON;
+    return HANDLER_GO_ON;
+}
 
-	buffer_free(p->module_list);
+static void mod_status_merge_config_cpv(plugin_config * const pconf, const config_plugin_value_t * const cpv) {
+    switch (cpv->k_id) { /* index into static config_plugin_keys_t cpk[] */
+      case 0: /* status.status-url */
+        pconf->status_url = cpv->v.b;
+        break;
+      case 1: /* status.config-url */
+        pconf->config_url = cpv->v.b;
+        break;
+      case 2: /* status.statistics-url */
+        pconf->statistics_url = cpv->v.b;
+        break;
+      case 3: /* status.enable-sort */
+        pconf->sort = (int)cpv->v.u;
+        break;
+      default:/* should not happen */
+        return;
+    }
+}
 
-	if (p->config_storage) {
-		size_t i;
-		for (i = 0; i < srv->config_context->used; i++) {
-			plugin_config *s = p->config_storage[i];
-			if (NULL == s) continue;
+static void mod_status_merge_config(plugin_config * const pconf, const config_plugin_value_t *cpv) {
+    do {
+        mod_status_merge_config_cpv(pconf, cpv);
+    } while ((++cpv)->k_id != -1);
+}
 
-			buffer_free(s->status_url);
-			buffer_free(s->statistics_url);
-			buffer_free(s->config_url);
-
-			free(s);
-		}
-		free(p->config_storage);
-	}
-
-
-	free(p);
-
-	return HANDLER_GO_ON;
+static void mod_status_patch_config(connection * const con, plugin_data * const p) {
+    memcpy(&p->conf, &p->defaults, sizeof(plugin_config));
+    for (int i = 1, used = p->nconfig; i < used; ++i) {
+        if (config_check_cond(con, (uint32_t)p->cvlist[i].k_id))
+            mod_status_merge_config(&p->conf, p->cvlist + p->cvlist[i].v.u2[0]);
+    }
 }
 
 SETDEFAULTS_FUNC(mod_status_set_defaults) {
-	plugin_data *p = p_d;
-	size_t i;
+    static const config_plugin_keys_t cpk[] = {
+      { CONST_STR_LEN("status.status-url"),
+        T_CONFIG_STRING,
+        T_CONFIG_SCOPE_CONNECTION }
+     ,{ CONST_STR_LEN("status.config-url"),
+        T_CONFIG_STRING,
+        T_CONFIG_SCOPE_CONNECTION }
+     ,{ CONST_STR_LEN("status.statistics-url"),
+        T_CONFIG_STRING,
+        T_CONFIG_SCOPE_CONNECTION }
+     ,{ CONST_STR_LEN("status.enable-sort"),
+        T_CONFIG_BOOL,
+        T_CONFIG_SCOPE_CONNECTION }
+     ,{ NULL, 0,
+        T_CONFIG_UNSET,
+        T_CONFIG_SCOPE_UNSET }
+    };
 
-	config_values_t cv[] = {
-		{ "status.status-url",           NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_CONNECTION },
-		{ "status.config-url",           NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_CONNECTION },
-		{ "status.enable-sort",          NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION },
-		{ "status.statistics-url",       NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_CONNECTION },
-		{ NULL,                          NULL, T_CONFIG_UNSET, T_CONFIG_SCOPE_UNSET }
-	};
+    plugin_data * const p = p_d;
+    if (!config_plugin_values_init(srv, p, cpk, "mod_status"))
+        return HANDLER_ERROR;
 
-	if (!p) return HANDLER_ERROR;
+    p->defaults.sort = 1;
 
-	p->config_storage = calloc(srv->config_context->used, sizeof(plugin_config *));
+    /* initialize p->defaults from global config context */
+    if (p->nconfig > 0 && p->cvlist->v.u2[1]) {
+        const config_plugin_value_t *cpv = p->cvlist + p->cvlist->v.u2[0];
+        if (-1 != cpv->k_id)
+            mod_status_merge_config(&p->defaults, cpv);
+    }
 
-	for (i = 0; i < srv->config_context->used; i++) {
-		data_config const* config = (data_config const*)srv->config_context->data[i];
-		plugin_config *s;
-
-		s = calloc(1, sizeof(plugin_config));
-		s->config_url    = buffer_init();
-		s->status_url    = buffer_init();
-		s->sort          = 1;
-		s->statistics_url    = buffer_init();
-
-		cv[0].destination = s->status_url;
-		cv[1].destination = s->config_url;
-		cv[2].destination = &(s->sort);
-		cv[3].destination = s->statistics_url;
-
-		p->config_storage[i] = s;
-
-		if (0 != config_insert_values_global(srv, config->value, cv, i == 0 ? T_CONFIG_SCOPE_SERVER : T_CONFIG_SCOPE_CONNECTION)) {
-			return HANDLER_ERROR;
-		}
-	}
-
-	return HANDLER_GO_ON;
+    return HANDLER_GO_ON;
 }
 
 
@@ -165,8 +154,7 @@ static int mod_status_header_append(buffer *b, const char *key) {
 	return 0;
 }
 
-static int mod_status_header_append_sort(buffer *b, void *p_d, const char* key) {
-	plugin_data *p = p_d;
+static int mod_status_header_append_sort(buffer *b, plugin_data *p, const char* key) {
 
 	if (p->conf.sort) {
 		buffer_append_string_len(b, CONST_STR_LEN("<th class=\"status\"><a href=\"#\" class=\"sortheader\" onclick=\"resort(this);return false;\">"));
@@ -196,8 +184,7 @@ static int mod_status_get_multiplier(double *avg, char *multiplier, int size) {
 	return 0;
 }
 
-static handler_t mod_status_handle_server_status_html(server *srv, connection *con, void *p_d) {
-	plugin_data *p = p_d;
+static handler_t mod_status_handle_server_status_html(server *srv, connection *con, plugin_data *p) {
 	buffer *b = chunkqueue_append_buffer_open(con->write_queue);
 	double avg;
 	uint32_t j;
@@ -498,14 +485,14 @@ static handler_t mod_status_handle_server_status_html(server *srv, connection *c
 
 	buffer_append_string_len(b, CONST_STR_LEN("<table summary=\"status\" class=\"status\">\n"));
 	buffer_append_string_len(b, CONST_STR_LEN("<tr>"));
-	mod_status_header_append_sort(b, p_d, "Client IP");
-	mod_status_header_append_sort(b, p_d, "Read");
-	mod_status_header_append_sort(b, p_d, "Written");
-	mod_status_header_append_sort(b, p_d, "State");
-	mod_status_header_append_sort(b, p_d, "Time");
-	mod_status_header_append_sort(b, p_d, "Host");
-	mod_status_header_append_sort(b, p_d, "URI");
-	mod_status_header_append_sort(b, p_d, "File");
+	mod_status_header_append_sort(b, p, "Client IP");
+	mod_status_header_append_sort(b, p, "Read");
+	mod_status_header_append_sort(b, p, "Written");
+	mod_status_header_append_sort(b, p, "State");
+	mod_status_header_append_sort(b, p, "Time");
+	mod_status_header_append_sort(b, p, "Host");
+	mod_status_header_append_sort(b, p, "URI");
+	mod_status_header_append_sort(b, p, "File");
 	buffer_append_string_len(b, CONST_STR_LEN("</tr>\n"));
 
 	for (j = 0; j < srv->conns.used; ++j) {
@@ -593,8 +580,7 @@ static handler_t mod_status_handle_server_status_html(server *srv, connection *c
 }
 
 
-static handler_t mod_status_handle_server_status_text(server *srv, connection *con, void *p_d) {
-	plugin_data *p = p_d;
+static handler_t mod_status_handle_server_status_text(server *srv, connection *con, plugin_data *p) {
 	buffer *b = chunkqueue_append_buffer_open(con->write_queue);
 	double avg;
 	time_t ts;
@@ -653,8 +639,7 @@ static handler_t mod_status_handle_server_status_text(server *srv, connection *c
 }
 
 
-static handler_t mod_status_handle_server_status_json(server *srv, connection *con, void *p_d) {
-	plugin_data *p = p_d;
+static handler_t mod_status_handle_server_status_json(server *srv, connection *con, plugin_data *p) {
 	buffer *b = chunkqueue_append_buffer_open(con->write_queue);
 	double avg;
 	time_t ts;
@@ -737,11 +722,10 @@ static handler_t mod_status_handle_server_status_json(server *srv, connection *c
 }
 
 
-static handler_t mod_status_handle_server_statistics(server *srv, connection *con, void *p_d) {
+static handler_t mod_status_handle_server_statistics(server *srv, connection *con) {
 	buffer *b;
 	size_t i;
 	array *st = srv->status;
-	UNUSED(p_d);
 
 	if (0 == st->used) {
 		/* we have nothing to send */
@@ -769,15 +753,15 @@ static handler_t mod_status_handle_server_statistics(server *srv, connection *co
 }
 
 
-static handler_t mod_status_handle_server_status(server *srv, connection *con, void *p_d) {
+static handler_t mod_status_handle_server_status(server *srv, connection *con, plugin_data *p) {
 
 	if (buffer_is_equal_string(con->uri.query, CONST_STR_LEN("auto"))) {
-		mod_status_handle_server_status_text(srv, con, p_d);
+		mod_status_handle_server_status_text(srv, con, p);
 	} else if (buffer_string_length(con->uri.query) >= sizeof("json")-1
 		   && 0 == memcmp(con->uri.query->ptr, CONST_STR_LEN("json"))) {
-		mod_status_handle_server_status_json(srv, con, p_d);
+		mod_status_handle_server_status_json(srv, con, p);
 	} else {
-		mod_status_handle_server_status_html(srv, con, p_d);
+		mod_status_handle_server_status_html(srv, con, p);
 	}
 
 	con->http_status = 200;
@@ -787,11 +771,8 @@ static handler_t mod_status_handle_server_status(server *srv, connection *con, v
 }
 
 
-static handler_t mod_status_handle_server_config(server *srv, connection *con, void *p_d) {
-	plugin_data *p = p_d;
+static handler_t mod_status_handle_server_config(server *srv, connection *con) {
 	buffer *b = chunkqueue_append_buffer_open(con->write_queue);
-	buffer *m = p->module_list;
-	buffer_clear(m);
 
 	buffer_copy_string_len(b, CONST_STR_LEN(
 			   "<?xml version=\"1.0\" encoding=\"iso-8859-1\"?>\n"
@@ -820,6 +801,8 @@ static handler_t mod_status_handle_server_config(server *srv, connection *con, v
 
 	mod_status_header_append(b, "Config-File-Settings");
 
+	buffer *m = srv->tmp_buf;
+	buffer_clear(m);
 	for (uint32_t i = 0; i < srv->plugins.used; ++i) {
 		const char *name = ((plugin **)srv->plugins.ptr)[i]->name;
 		if (i != 0) {
@@ -827,7 +810,6 @@ static handler_t mod_status_handle_server_config(server *srv, connection *con, v
 		}
 		buffer_append_string_len(m, name, strlen(name));
 	}
-
 	mod_status_row_append(b, "Loaded Modules", m->ptr);
 
 	buffer_append_string_len(b, CONST_STR_LEN("  </table>\n"));
@@ -847,59 +829,22 @@ static handler_t mod_status_handle_server_config(server *srv, connection *con, v
 	return HANDLER_FINISHED;
 }
 
-#define PATCH(x) \
-	p->conf.x = s->x;
-static int mod_status_patch_connection(server *srv, connection *con, plugin_data *p) {
-	size_t i, j;
-	plugin_config *s = p->config_storage[0];
-
-	PATCH(status_url);
-	PATCH(config_url);
-	PATCH(sort);
-	PATCH(statistics_url);
-
-	/* skip the first, the global context */
-	for (i = 1; i < srv->config_context->used; i++) {
-		if (!config_check_cond(con, i)) continue; /* condition not matched */
-
-		data_config *dc = (data_config *)srv->config_context->data[i];
-		s = p->config_storage[i];
-
-		/* merge config */
-		for (j = 0; j < dc->value->used; j++) {
-			data_unset *du = dc->value->data[j];
-
-			if (buffer_is_equal_string(&du->key, CONST_STR_LEN("status.status-url"))) {
-				PATCH(status_url);
-			} else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("status.config-url"))) {
-				PATCH(config_url);
-			} else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("status.enable-sort"))) {
-				PATCH(sort);
-			} else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("status.statistics-url"))) {
-				PATCH(statistics_url);
-			}
-		}
-	}
-
-	return 0;
-}
-
 static handler_t mod_status_handler(server *srv, connection *con, void *p_d) {
 	plugin_data *p = p_d;
 
 	if (con->mode != DIRECT) return HANDLER_GO_ON;
 
-	mod_status_patch_connection(srv, con, p);
+	mod_status_patch_config(con, p);
 
 	if (!buffer_string_is_empty(p->conf.status_url) &&
 	    buffer_is_equal(p->conf.status_url, con->uri.path)) {
-		return mod_status_handle_server_status(srv, con, p_d);
+		return mod_status_handle_server_status(srv, con, p);
 	} else if (!buffer_string_is_empty(p->conf.config_url) &&
 	    buffer_is_equal(p->conf.config_url, con->uri.path)) {
-		return mod_status_handle_server_config(srv, con, p_d);
+		return mod_status_handle_server_config(srv, con);
 	} else if (!buffer_string_is_empty(p->conf.statistics_url) &&
 	    buffer_is_equal(p->conf.statistics_url, con->uri.path)) {
-		return mod_status_handle_server_statistics(srv, con, p_d);
+		return mod_status_handle_server_statistics(srv, con);
 	}
 
 	return HANDLER_GO_ON;
@@ -946,6 +891,7 @@ REQUESTDONE_FUNC(mod_status_account) {
 
 	return HANDLER_GO_ON;
 }
+
 
 int mod_status_plugin_init(plugin *p);
 int mod_status_plugin_init(plugin *p) {
