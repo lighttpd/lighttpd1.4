@@ -23,24 +23,20 @@ typedef struct {
 typedef struct {
 	connection_map_entry **ptr;
 
-	size_t used;
-	size_t size;
+	uint32_t used;
+	uint32_t size;
 } connection_map;
 
-/* plugin config for all request/connections */
-
 typedef struct {
-	buffer *progress_url;
+    const buffer *progress_url;
 } plugin_config;
 
 typedef struct {
-	PLUGIN_DATA;
+    PLUGIN_DATA;
+    plugin_config defaults;
+    plugin_config conf;
 
-	connection_map *con_map;
-
-	plugin_config **config_storage;
-
-	plugin_config conf;
+    connection_map con_map;
 } plugin_data;
 
 /**
@@ -49,18 +45,8 @@ typedef struct {
  *
  */
 
-/* init the plugin data */
-static connection_map *connection_map_init() {
-	connection_map *cm;
-
-	cm = calloc(1, sizeof(*cm));
-
-	return cm;
-}
-
-static void connection_map_free(connection_map *cm) {
-	size_t i;
-	for (i = 0; i < cm->size; i++) {
+static void connection_map_free_data(connection_map *cm) {
+	for (uint32_t i = 0; i < cm->size; ++i) {
 		connection_map_entry *cme = cm->ptr[i];
 
 		if (!cme) break;
@@ -70,20 +56,16 @@ static void connection_map_free(connection_map *cm) {
 		}
 		free(cme);
 	}
-
-	free(cm);
 }
 
 static int connection_map_insert(connection_map *cm, connection *con, const char *con_id, size_t idlen) {
 	connection_map_entry *cme;
-	size_t i;
 
 	if (cm->used == cm->size) {
-		cm->size += 16;
+		cm->size = cm->size ? (cm->size << 1) : 16;
+		force_assert(cm->size);
 		cm->ptr = realloc(cm->ptr, cm->size * sizeof(*(cm->ptr)));
-		for (i = cm->used; i < cm->size; i++) {
-			cm->ptr[i] = NULL;
-		}
+		memset(cm->ptr+cm->used, 0, (cm->size - cm->used)*sizeof(*(cm->ptr)));
 	}
 
 	if (cm->ptr[cm->used]) {
@@ -102,9 +84,7 @@ static int connection_map_insert(connection_map *cm, connection *con, const char
 }
 
 static connection *connection_map_get_connection(connection_map *cm, const char *con_id, size_t idlen) {
-	size_t i;
-
-	for (i = 0; i < cm->used; i++) {
+	for (uint32_t i = 0; i < cm->used; ++i) {
 		connection_map_entry *cme = cm->ptr[i];
 
 		if (buffer_is_equal_string(cme->con_id, con_id, idlen)) {
@@ -117,9 +97,7 @@ static connection *connection_map_get_connection(connection_map *cm, const char 
 }
 
 static int connection_map_remove_connection(connection_map *cm, connection *con) {
-	size_t i;
-
-	for (i = 0; i < cm->used; i++) {
+	for (uint32_t i = 0; i < cm->used; ++i) {
 		connection_map_entry *cme = cm->ptr[i];
 
 		if (cme->con == con) {
@@ -143,108 +121,71 @@ static int connection_map_remove_connection(connection_map *cm, connection *con)
 	return 0;
 }
 
-/* init the plugin data */
 INIT_FUNC(mod_uploadprogress_init) {
-	plugin_data *p;
-
-	p = calloc(1, sizeof(*p));
-
-	p->con_map = connection_map_init();
-
-	return p;
+    return calloc(1, sizeof(plugin_data));
 }
 
-/* detroy the plugin data */
 FREE_FUNC(mod_uploadprogress_free) {
-	plugin_data *p = p_d;
+    plugin_data *p = p_d;
+    if (!p) return HANDLER_GO_ON;
+    UNUSED(srv);
 
-	UNUSED(srv);
+    connection_map_free_data(&p->con_map);
 
-	if (!p) return HANDLER_GO_ON;
+    free(p->cvlist);
+    free(p);
 
-	if (p->config_storage) {
-		size_t i;
-		for (i = 0; i < srv->config_context->used; i++) {
-			plugin_config *s = p->config_storage[i];
-
-			if (NULL == s) continue;
-
-			buffer_free(s->progress_url);
-
-			free(s);
-		}
-		free(p->config_storage);
-	}
-
-	connection_map_free(p->con_map);
-
-	free(p);
-
-	return HANDLER_GO_ON;
+    return HANDLER_GO_ON;
 }
 
-/* handle plugin config and check values */
+static void mod_uploadprogress_merge_config_cpv(plugin_config * const pconf, const config_plugin_value_t * const cpv) {
+    switch (cpv->k_id) { /* index into static config_plugin_keys_t cpk[] */
+      case 0: /* upload-progress.progress-url */
+        pconf->progress_url = cpv->v.b;
+        break;
+      default:/* should not happen */
+        return;
+    }
+}
+
+static void mod_uploadprogress_merge_config(plugin_config * const pconf, const config_plugin_value_t *cpv) {
+    do {
+        mod_uploadprogress_merge_config_cpv(pconf, cpv);
+    } while ((++cpv)->k_id != -1);
+}
+
+static void mod_uploadprogress_patch_config(connection * const con, plugin_data * const p) {
+    memcpy(&p->conf, &p->defaults, sizeof(plugin_config));
+    for (int i = 1, used = p->nconfig; i < used; ++i) {
+        if (config_check_cond(con, (uint32_t)p->cvlist[i].k_id))
+            mod_uploadprogress_merge_config(&p->conf,
+                                            p->cvlist + p->cvlist[i].v.u2[0]);
+    }
+}
 
 SETDEFAULTS_FUNC(mod_uploadprogress_set_defaults) {
-	plugin_data *p = p_d;
-	size_t i = 0;
+    static const config_plugin_keys_t cpk[] = {
+      { CONST_STR_LEN("upload-progress.progress-url"),
+        T_CONFIG_STRING,
+        T_CONFIG_SCOPE_CONNECTION }
+     ,{ NULL, 0,
+        T_CONFIG_UNSET,
+        T_CONFIG_SCOPE_UNSET }
+    };
 
-	config_values_t cv[] = {
-		{ "upload-progress.progress-url", NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_CONNECTION },       /* 0 */
-		{ NULL,                         NULL, T_CONFIG_UNSET, T_CONFIG_SCOPE_UNSET }
-	};
+    plugin_data * const p = p_d;
+    if (!config_plugin_values_init(srv, p, cpk, "mod_uploadprogress"))
+        return HANDLER_ERROR;
 
-	if (!p) return HANDLER_ERROR;
+    /* initialize p->defaults from global config context */
+    if (p->nconfig > 0 && p->cvlist->v.u2[1]) {
+        const config_plugin_value_t *cpv = p->cvlist + p->cvlist->v.u2[0];
+        if (-1 != cpv->k_id)
+            mod_uploadprogress_merge_config(&p->defaults, cpv);
+    }
 
-	p->config_storage = calloc(srv->config_context->used, sizeof(plugin_config *));
-
-	for (i = 0; i < srv->config_context->used; i++) {
-		data_config const* config = (data_config const*)srv->config_context->data[i];
-		plugin_config *s;
-
-		s = calloc(1, sizeof(plugin_config));
-		s->progress_url    = buffer_init();
-
-		cv[0].destination = s->progress_url;
-
-		p->config_storage[i] = s;
-
-		if (0 != config_insert_values_global(srv, config->value, cv, i == 0 ? T_CONFIG_SCOPE_SERVER : T_CONFIG_SCOPE_CONNECTION)) {
-			return HANDLER_ERROR;
-		}
-	}
-
-	return HANDLER_GO_ON;
+    return HANDLER_GO_ON;
 }
-
-#define PATCH(x) \
-	p->conf.x = s->x;
-static int mod_uploadprogress_patch_connection(server *srv, connection *con, plugin_data *p) {
-	size_t i, j;
-	plugin_config *s = p->config_storage[0];
-
-	PATCH(progress_url);
-
-	/* skip the first, the global context */
-	for (i = 1; i < srv->config_context->used; i++) {
-		if (!config_check_cond(con, i)) continue; /* condition not matched */
-
-		data_config *dc = (data_config *)srv->config_context->data[i];
-		s = p->config_storage[i];
-
-		/* merge config */
-		for (j = 0; j < dc->value->used; j++) {
-			data_unset *du = dc->value->data[j];
-
-			if (buffer_is_equal_string(&du->key, CONST_STR_LEN("upload-progress.progress-url"))) {
-				PATCH(progress_url);
-			}
-		}
-	}
-
-	return 0;
-}
-#undef PATCH
 
 /**
  *
@@ -279,7 +220,7 @@ URIHANDLER_FUNC(mod_uploadprogress_uri_handler) {
 	default:               return HANDLER_GO_ON;
 	}
 
-	mod_uploadprogress_patch_connection(srv, con, p);
+	mod_uploadprogress_patch_config(con, p);
 	if (buffer_string_is_empty(p->conf.progress_url)) return HANDLER_GO_ON;
 
 	if (con->request.http_method == HTTP_METHOD_GET) {
@@ -321,7 +262,7 @@ URIHANDLER_FUNC(mod_uploadprogress_uri_handler) {
 	switch(con->request.http_method) {
 	case HTTP_METHOD_POST:
 
-		connection_map_insert(p->con_map, con, id, len);
+		connection_map_insert(&p->con_map, con, id, len);
 
 		return HANDLER_GO_ON;
 	case HTTP_METHOD_GET:
@@ -334,7 +275,7 @@ URIHANDLER_FUNC(mod_uploadprogress_uri_handler) {
 		con->mode = DIRECT;
 
 		/* get the connection */
-		if (NULL == (post_con = connection_map_get_connection(p->con_map, id, len))) {
+		if (NULL == (post_con = connection_map_get_connection(&p->con_map, id, len))) {
 			log_error_write(srv, __FILE__, __LINE__, "ss",
 					"ID not known:", id);
 
@@ -381,14 +322,13 @@ REQUESTDONE_FUNC(mod_uploadprogress_request_done) {
 	if (con->request.http_method != HTTP_METHOD_POST) return HANDLER_GO_ON;
 	if (buffer_string_is_empty(con->uri.path)) return HANDLER_GO_ON;
 
-	if (connection_map_remove_connection(p->con_map, con)) {
+	if (connection_map_remove_connection(&p->con_map, con)) {
 		/* removed */
 	}
 
 	return HANDLER_GO_ON;
 }
 
-/* this function is called at dlopen() time and inits the callbacks */
 
 int mod_uploadprogress_plugin_init(plugin *p);
 int mod_uploadprogress_plugin_init(plugin *p) {
