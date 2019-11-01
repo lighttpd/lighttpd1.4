@@ -130,61 +130,58 @@ enum e_optflags_port {
 
 
 typedef struct {
-	enum { FIELD_UNSET, FIELD_STRING, FIELD_FORMAT } type;
-
-	buffer *string;
-	int field;
-	int opt;
+    enum { FIELD_UNSET, FIELD_STRING, FIELD_FORMAT } type;
+    int field;
+    int opt;
+    buffer string;
 } format_field;
 
 typedef struct {
-	format_field **ptr;
-
-	size_t used;
-	size_t size;
+    time_t last_generated_accesslog_ts;
+    buffer ts_accesslog_str;
+  #if defined(__STDC_VERSION__) && __STDC_VERSION__-0 >= 199901L /* C99 */
+    format_field ptr[];  /* C99 VLA */
+  #else
+    format_field ptr[1];
+  #endif
 } format_fields;
 
 typedef struct {
-	buffer *access_logfile;
 	int    log_access_fd;
-	buffer *access_logbuffer; /* each logfile has a separate buffer */
-
-	unsigned short use_syslog; /* syslog has global buffer */
+	char use_syslog; /* syslog has global buffer */
+	char piped_logger;
 	unsigned short syslog_level;
-
-	buffer *format;
-
-	time_t last_generated_accesslog_ts;
-	time_t *last_generated_accesslog_ts_ptr;
-
-	buffer *ts_accesslog_str;
+	buffer *access_logbuffer; /* each logfile has a separate buffer */
+	const buffer *access_logfile;
 
 	format_fields *parsed_format;
 } plugin_config;
 
 typedef struct {
-	PLUGIN_DATA;
+    int log_access_fd;
+    char piped_logger;
+    const buffer *access_logfile;
+    buffer access_logbuffer; /* each logfile has a separate buffer */
+} accesslog_st;
 
-	plugin_config **config_storage;
-	plugin_config conf;
+typedef struct {
+    PLUGIN_DATA;
+    plugin_config defaults;
+    plugin_config conf;
 
-	buffer *syslog_logbuffer; /* syslog has global buffer. no caching, always written directly */
+    buffer syslog_logbuffer; /* syslog has global buffer. no caching, always written directly */
+    log_error_st *errh; /* copy of srv->errh */
+    format_fields *default_format;/* allocated if default format */
 } plugin_data;
 
 INIT_FUNC(mod_accesslog_init) {
-	plugin_data *p;
-
-	p = calloc(1, sizeof(*p));
-	p->syslog_logbuffer = buffer_init();
-
-	return p;
+    return calloc(1, sizeof(plugin_data));
 }
 
-static void accesslog_write_all(server *srv, const buffer *filename, int fd, const void* buf, size_t count) {
-	if (-1 == write_all(fd, buf, count)) {
-		log_error_write(srv, __FILE__, __LINE__, "sbs",
-			"writing access log entry failed:", filename, strerror(errno));
-	}
+static int accesslog_write_all(const int fd, buffer * const b) {
+    const ssize_t wr = (fd >= 0) ? write_all(fd, CONST_BUF_LEN(b)) : 0;
+    buffer_clear(b); /*(clear buffer, even if fd < 0)*/
+    return (-1 != wr);
 }
 
 static void accesslog_append_escaped_str(buffer *dest, char *str, size_t len) {
@@ -251,67 +248,78 @@ static void accesslog_append_escaped(buffer *dest, const buffer *str) {
 	accesslog_append_escaped_str(dest, CONST_BUF_LEN(str));
 }
 
-static int accesslog_parse_format(server *srv, format_fields *fields, buffer *format) {
+__attribute_cold__
+static format_fields * accesslog_parse_format_err(server *srv, const char *file, unsigned int line, format_field *f, const char *msg) {
+    log_error(srv->errh, file, line, "%s", msg);
+    for (; f->type != FIELD_UNSET; ++f) free(f->string.ptr);
+    return NULL;
+}
+
+static format_fields * accesslog_parse_format(server *srv, const char *format, const size_t flen) {
+	/* common log format (the default) results in 18 elements,
+	 * so 127 should be enough except for obscene custom usage */
 	size_t i, j, k = 0, start = 0;
+	uint32_t used = 0;
+	const uint32_t sz = 127;
+	format_field *f;
+	format_field fptr[sz+1]; /* (128 elements takes 4k on stack in 64-bit) */
+	memset(fptr, 0, sizeof(fptr));
+	if (0 != FIELD_UNSET) return NULL;
 
-	if (buffer_is_empty(format)) return -1;
+	if (0 == flen) return NULL;
 
-	for (i = 0; i < buffer_string_length(format); i++) {
-		switch(format->ptr[i]) {
-		case '%':
+	for (i = 0; i < flen; ++i) {
+		if (format[i] != '%') continue;
+
 			if (i > 0 && start != i) {
 				/* copy the string before this % */
-				if (fields->used == fields->size) {
-					fields->size += 16;
-					fields->ptr = realloc(fields->ptr, fields->size * sizeof(format_field * ));
-				}
+				if (used == sz)
+					return accesslog_parse_format_err(srv, __FILE__, __LINE__, fptr,
+					         "too many fields (>= 127) in accesslog.format");
 
-				fields->ptr[fields->used] = malloc(sizeof(format_field));
-				fields->ptr[fields->used]->type = FIELD_STRING;
-				fields->ptr[fields->used]->string = buffer_init();
+				f = fptr+used;
+				f->type = FIELD_STRING;
+				memset(&f->string, 0, sizeof(buffer));
+				buffer_copy_string_len(&f->string, format + start, i - start);
 
-				buffer_copy_string_len(fields->ptr[fields->used]->string, format->ptr + start, i - start);
-
-				fields->used++;
+				++used;
 			}
 
 			/* we need a new field */
-
-			if (fields->used == fields->size) {
-				fields->size += 16;
-				fields->ptr = realloc(fields->ptr, fields->size * sizeof(format_field * ));
-			}
+			if (used == sz)
+				return accesslog_parse_format_err(srv, __FILE__, __LINE__, fptr,
+				         "too many fields (>= 127) in accesslog.format");
 
 			/* search for the terminating command */
-			switch (format->ptr[i+1]) {
+			switch (format[i+1]) {
 			case '>':
 			case '<':
 				/* after the } has to be a character */
-				if (format->ptr[i+2] == '\0') {
-					log_error_write(srv, __FILE__, __LINE__, "s", "%< and %> have to be followed by a format-specifier");
-					return -1;
+				if (format[i+2] == '\0') {
+					return accesslog_parse_format_err(srv, __FILE__, __LINE__, fptr,
+					         "%< and %> have to be followed by a format-specifier");
 				}
 
 
 				for (j = 0; fmap[j].key != '\0'; j++) {
-					if (fmap[j].key != format->ptr[i+2]) continue;
+					if (fmap[j].key != format[i+2]) continue;
 
 					/* found key */
 
-					fields->ptr[fields->used] = malloc(sizeof(format_field));
-					fields->ptr[fields->used]->type = FIELD_FORMAT;
-					fields->ptr[fields->used]->field = fmap[j].type;
-					fields->ptr[fields->used]->string = NULL;
-					fields->ptr[fields->used]->opt = 0;
+					f = fptr+used;
+					f->type = FIELD_FORMAT;
+					f->field = fmap[j].type;
+					f->opt = 0;
+					f->string.ptr = NULL;
 
-					fields->used++;
+					++used;
 
 					break;
 				}
 
 				if (fmap[j].key == '\0') {
-					log_error_write(srv, __FILE__, __LINE__, "s", "%< and %> have to be followed by a valid format-specifier");
-					return -1;
+					return accesslog_parse_format_err(srv, __FILE__, __LINE__, fptr,
+					         "%< and %> have to be followed by a valid format-specifier");
 				}
 
 				start = i + 3;
@@ -321,47 +329,46 @@ static int accesslog_parse_format(server *srv, format_fields *fields, buffer *fo
 			case '{':
 				/* go forward to } */
 
-				for (k = i+2; k < buffer_string_length(format); k++) {
-					if (format->ptr[k] == '}') break;
+				for (k = i+2; k < flen; ++k) {
+					if (format[k] == '}') break;
 				}
 
-				if (k == buffer_string_length(format)) {
-					log_error_write(srv, __FILE__, __LINE__, "s", "%{ has to be terminated by a }");
-					return -1;
+				if (k == flen) {
+					return accesslog_parse_format_err(srv, __FILE__, __LINE__, fptr,
+					         "%{ has to be terminated by a }");
 				}
 
 				/* after the } has to be a character */
-				if (format->ptr[k+1] == '\0') {
-					log_error_write(srv, __FILE__, __LINE__, "s", "%{...} has to be followed by a format-specifier");
-					return -1;
+				if (format[k+1] == '\0') {
+					return accesslog_parse_format_err(srv, __FILE__, __LINE__, fptr,
+					         "%{...} has to be followed by a format-specifier");
 				}
 
 				if (k == i + 2) {
-					log_error_write(srv, __FILE__, __LINE__, "s", "%{...} has to contain a string");
-					return -1;
+					return accesslog_parse_format_err(srv, __FILE__, __LINE__, fptr,
+					         "%{...} has to contain a string");
 				}
 
 				for (j = 0; fmap[j].key != '\0'; j++) {
-					if (fmap[j].key != format->ptr[k+1]) continue;
+					if (fmap[j].key != format[k+1]) continue;
 
 					/* found key */
 
-					fields->ptr[fields->used] = malloc(sizeof(format_field));
-					fields->ptr[fields->used]->type = FIELD_FORMAT;
-					fields->ptr[fields->used]->field = fmap[j].type;
-					fields->ptr[fields->used]->string = buffer_init();
-					fields->ptr[fields->used]->opt = 0;
+					f = fptr+used;
+					f->type = FIELD_FORMAT;
+					f->field = fmap[j].type;
+					f->opt = 0;
+					memset(&f->string, 0, sizeof(buffer));
+					buffer_copy_string_len(&f->string, format + i + 2, k - (i + 2));
 
-					buffer_copy_string_len(fields->ptr[fields->used]->string, format->ptr + i + 2, k - (i + 2));
-
-					fields->used++;
+					++used;
 
 					break;
 				}
 
 				if (fmap[j].key == '\0') {
-					log_error_write(srv, __FILE__, __LINE__, "s", "%{...} has to be followed by a valid format-specifier");
-					return -1;
+					return accesslog_parse_format_err(srv, __FILE__, __LINE__, fptr,
+					         "%{...} has to be followed by a valid format-specifier");
 				}
 
 				start = k + 2;
@@ -370,30 +377,30 @@ static int accesslog_parse_format(server *srv, format_fields *fields, buffer *fo
 				break;
 			default:
 				/* after the % has to be a character */
-				if (format->ptr[i+1] == '\0') {
-					log_error_write(srv, __FILE__, __LINE__, "s", "% has to be followed by a format-specifier");
-					return -1;
+				if (format[i+1] == '\0') {
+					return accesslog_parse_format_err(srv, __FILE__, __LINE__, fptr,
+					         "% has to be followed by a format-specifier");
 				}
 
 				for (j = 0; fmap[j].key != '\0'; j++) {
-					if (fmap[j].key != format->ptr[i+1]) continue;
+					if (fmap[j].key != format[i+1]) continue;
 
 					/* found key */
 
-					fields->ptr[fields->used] = malloc(sizeof(format_field));
-					fields->ptr[fields->used]->type = FIELD_FORMAT;
-					fields->ptr[fields->used]->field = fmap[j].type;
-					fields->ptr[fields->used]->string = NULL;
-					fields->ptr[fields->used]->opt = 0;
+					f = fptr+used;
+					f->type = FIELD_FORMAT;
+					f->field = fmap[j].type;
+					f->string.ptr = NULL;
+					f->opt = 0;
 
-					fields->used++;
+					++used;
 
 					break;
 				}
 
 				if (fmap[j].key == '\0') {
-					log_error_write(srv, __FILE__, __LINE__, "s", "% has to be followed by a valid format-specifier");
-					return -1;
+					return accesslog_parse_format_err(srv, __FILE__, __LINE__, fptr,
+					         "% has to be followed by a valid format-specifier");
 				}
 
 				start = i + 2;
@@ -401,151 +408,240 @@ static int accesslog_parse_format(server *srv, format_fields *fields, buffer *fo
 
 				break;
 			}
-
-			break;
-		}
 	}
 
 	if (start < i) {
 		/* copy the string */
-		if (fields->used == fields->size) {
-			fields->size += 16;
-			fields->ptr = realloc(fields->ptr, fields->size * sizeof(format_field * ));
-		}
+		if (used == sz)
+			return accesslog_parse_format_err(srv, __FILE__, __LINE__, fptr,
+			         "too many fields (>= 127) in accesslog.format");
 
-		fields->ptr[fields->used] = malloc(sizeof(format_field));
-		fields->ptr[fields->used]->type = FIELD_STRING;
-		fields->ptr[fields->used]->string = buffer_init();
+		f = fptr+used;
+		f->type = FIELD_STRING;
+		memset(&f->string, 0, sizeof(buffer));
+		buffer_copy_string_len(&f->string, format + start, i - start);
 
-		buffer_copy_string_len(fields->ptr[fields->used]->string, format->ptr + start, i - start);
-
-		fields->used++;
+		++used;
 	}
 
-	return 0;
+	format_fields * const fields =
+	  malloc(sizeof(format_fields) + ((used+1) * sizeof(format_field)));
+	force_assert(fields);
+	memset(fields, 0, sizeof(format_fields));
+	memcpy(fields->ptr, fptr, (used+1) * sizeof(format_field));
+	return fields;
+}
+
+static void mod_accesslog_free_accesslog(accesslog_st * const x, plugin_data *p) {
+    /*(piped loggers are closed in fdevent_close_logger_pipes())*/
+    if (!x->piped_logger && -1 != x->log_access_fd) {
+        if (!accesslog_write_all(x->log_access_fd, &x->access_logbuffer)) {
+            log_perror(p->errh, __FILE__, __LINE__,
+              "writing access log entry failed: %s", x->access_logfile->ptr);
+        }
+        close(x->log_access_fd);
+    }
+    free(x->access_logbuffer.ptr);
+}
+
+static void mod_accesslog_free_format_fields(format_fields * const ff) {
+    for (format_field *f = ff->ptr; f->type != FIELD_UNSET; ++f)
+        free(f->string.ptr);
+    free(ff->ts_accesslog_str.ptr);
+    free(ff);
+}
+
+static void mod_accesslog_free_config(plugin_data * const p) {
+    if (NULL == p->cvlist) return;
+    /* (init i to 0 if global context; to 1 to skip empty global context) */
+    for (int i = !p->cvlist[0].v.u2[1], used = p->nconfig; i < used; ++i) {
+        config_plugin_value_t *cpv = p->cvlist + p->cvlist[i].v.u2[0];
+        for (; -1 != cpv->k_id; ++cpv) {
+            if (cpv->vtype != T_CONFIG_LOCAL || NULL == cpv->v.v) continue;
+            switch (cpv->k_id) {
+              case 0: /* accesslog.filename */
+                mod_accesslog_free_accesslog(cpv->v.v, p);
+                break;
+              case 1: /* accesslog.format */
+                mod_accesslog_free_format_fields(cpv->v.v);
+                break;
+              default:
+                break;
+            }
+        }
+    }
+
+    if (NULL != p->default_format) {
+        mod_accesslog_free_format_fields(p->default_format);
+    }
 }
 
 FREE_FUNC(mod_accesslog_free) {
-	plugin_data *p = p_d;
-	size_t i;
+    plugin_data *p = p_d;
+    if (!p) return HANDLER_GO_ON;
+    UNUSED(srv);
 
-	if (!p) return HANDLER_GO_ON;
+    mod_accesslog_free_config(p);
 
-	if (p->config_storage) {
+    free(p->syslog_logbuffer.ptr);
+    free(p->cvlist);
+    free(p);
 
-		for (i = 0; i < srv->config_context->used; i++) {
-			plugin_config *s = p->config_storage[i];
-
-			if (NULL == s) continue;
-
-			if (!buffer_string_is_empty(s->access_logbuffer)) {
-				if (s->log_access_fd != -1) {
-					accesslog_write_all(srv, s->access_logfile, s->log_access_fd, CONST_BUF_LEN(s->access_logbuffer));
-				}
-			}
-
-			if (s->log_access_fd != -1) {
-				if (buffer_string_is_empty(s->access_logfile) || *s->access_logfile->ptr != '|') {
-					close(s->log_access_fd);
-				} /*(else piped loggers closed in fdevent_close_logger_pipes())*/
-			}
-
-			buffer_free(s->ts_accesslog_str);
-			buffer_free(s->access_logbuffer);
-			buffer_free(s->format);
-			buffer_free(s->access_logfile);
-
-			if (s->parsed_format) {
-				size_t j;
-				for (j = 0; j < s->parsed_format->used; j++) {
-					if (s->parsed_format->ptr[j]->string) buffer_free(s->parsed_format->ptr[j]->string);
-					free(s->parsed_format->ptr[j]);
-				}
-				free(s->parsed_format->ptr);
-				free(s->parsed_format);
-			}
-
-			free(s);
-		}
-
-		free(p->config_storage);
-	}
-
-	if (p->syslog_logbuffer) buffer_free(p->syslog_logbuffer);
-	free(p);
-
-	return HANDLER_GO_ON;
+    return HANDLER_GO_ON;
 }
 
-SETDEFAULTS_FUNC(log_access_open) {
-	plugin_data *p = p_d;
-	size_t i = 0;
+static void mod_accesslog_merge_config_cpv(plugin_config * const pconf, const config_plugin_value_t * const cpv) {
+    switch (cpv->k_id) { /* index into static config_plugin_keys_t cpk[] */
+      case 0:{/* accesslog.filename */
+        if (cpv->vtype != T_CONFIG_LOCAL) break;
+        accesslog_st * const x = cpv->v.v;
+        pconf->log_access_fd    = x->log_access_fd;
+        pconf->piped_logger     = x->piped_logger;
+        pconf->access_logfile   = x->access_logfile;
+        pconf->access_logbuffer = &x->access_logbuffer;
+        break;
+      }
+      case 1:{/* accesslog.format */
+        if (cpv->vtype != T_CONFIG_LOCAL) break;
+        pconf->parsed_format = cpv->v.v;
+        break;
+      }
+      case 2: /* accesslog.use-syslog */
+        pconf->use_syslog = (int)cpv->v.u;
+        break;
+      case 3: /* accesslog.syslog-level */
+        pconf->syslog_level = cpv->v.shrt;
+        break;
+      default:/* should not happen */
+        return;
+    }
+}
 
-	config_values_t cv[] = {
-		{ "accesslog.filename",             NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_CONNECTION },
-		{ "accesslog.use-syslog",           NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION },
-		{ "accesslog.format",               NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_CONNECTION },
-		{ "accesslog.syslog-level",         NULL, T_CONFIG_SHORT, T_CONFIG_SCOPE_CONNECTION },
-		{ NULL,                             NULL, T_CONFIG_UNSET, T_CONFIG_SCOPE_UNSET }
-	};
+static void mod_accesslog_merge_config(plugin_config * const pconf, const config_plugin_value_t *cpv) {
+    do {
+        mod_accesslog_merge_config_cpv(pconf, cpv);
+    } while ((++cpv)->k_id != -1);
+}
 
-	if (!p) return HANDLER_ERROR;
+static void mod_accesslog_patch_config(connection * const con, plugin_data * const p) {
+    memcpy(&p->conf, &p->defaults, sizeof(plugin_config));
+    for (int i = 1, used = p->nconfig; i < used; ++i) {
+        if (config_check_cond(con, (uint32_t)p->cvlist[i].k_id))
+            mod_accesslog_merge_config(&p->conf, p->cvlist + p->cvlist[i].v.u2[0]);
+    }
+}
 
-	p->config_storage = calloc(srv->config_context->used, sizeof(plugin_config *));
+static format_fields * mod_accesslog_process_format(server * const srv, const char * const format, const size_t flen);
 
-	for (i = 0; i < srv->config_context->used; i++) {
-		data_config const* config = (data_config const*)srv->config_context->data[i];
-		plugin_config *s;
+SETDEFAULTS_FUNC(mod_accesslog_set_defaults) {
+    static const config_plugin_keys_t cpk[] = {
+      { CONST_STR_LEN("accesslog.filename"),
+        T_CONFIG_STRING,
+        T_CONFIG_SCOPE_CONNECTION }
+     ,{ CONST_STR_LEN("accesslog.format"),
+        T_CONFIG_STRING,
+        T_CONFIG_SCOPE_CONNECTION }
+     ,{ CONST_STR_LEN("accesslog.use-syslog"),
+        T_CONFIG_BOOL,
+        T_CONFIG_SCOPE_CONNECTION }
+     ,{ CONST_STR_LEN("accesslog.syslog-level"),
+        T_CONFIG_SHORT,
+        T_CONFIG_SCOPE_CONNECTION }
+     ,{ NULL, 0,
+        T_CONFIG_UNSET,
+        T_CONFIG_SCOPE_UNSET }
+    };
 
-		s = calloc(1, sizeof(plugin_config));
-		s->access_logfile = buffer_init();
-		s->format = buffer_init();
-		s->access_logbuffer = buffer_init();
-		s->ts_accesslog_str = buffer_init();
-		s->log_access_fd = -1;
-		s->last_generated_accesslog_ts = 0;
-		s->last_generated_accesslog_ts_ptr = &(s->last_generated_accesslog_ts);
-		s->syslog_level = LOG_INFO;
+    plugin_data * const p = p_d;
+    p->errh = srv->errh;
+    if (!config_plugin_values_init(srv, p, cpk, "mod_accesslog"))
+        return HANDLER_ERROR;
 
+    /* process and validate config directives
+     * (init i to 0 if global context; to 1 to skip empty global context) */
+    for (int i = !p->cvlist[0].v.u2[1]; i < p->nconfig; ++i) {
+        config_plugin_value_t *cpv = p->cvlist + p->cvlist[i].v.u2[0];
+        int use_syslog = 0;
+        accesslog_st *x = NULL;
+        for (; -1 != cpv->k_id; ++cpv) {
+            switch (cpv->k_id) {
+              case 0: /* accesslog.filename */
+                x = calloc(1, sizeof(accesslog_st));
+                force_assert(x);
+                x->log_access_fd = -1;
+                x->piped_logger = (cpv->v.b->ptr[0] == '|');
+                x->access_logfile = cpv->v.b;
+                cpv->vtype = T_CONFIG_LOCAL;
+                cpv->v.v = x;
+                break;
+              case 1: /* accesslog.format */
+                cpv->v.v =
+                  mod_accesslog_process_format(srv, CONST_BUF_LEN(cpv->v.b));
+                if (NULL == cpv->v.v) return HANDLER_ERROR;
+                cpv->vtype = T_CONFIG_LOCAL;
+                break;
+              case 2: /* accesslog.use-syslog */
+                use_syslog = (int)cpv->v.u;
+                break;
+              case 3: /* accesslog.syslog-level */
+                break;
+              default:/* should not happen */
+                break;
+            }
+        }
 
-		cv[0].destination = s->access_logfile;
-		cv[1].destination = &(s->use_syslog);
-		cv[2].destination = s->format;
-		cv[3].destination = &(s->syslog_level);
+        if (srv->srvconf.preflight_check) continue;
 
-		p->config_storage[i] = s;
+        if (use_syslog) continue; /* ignore the next checks */
+        if (NULL == x || buffer_string_is_empty(x->access_logfile)) continue;
 
-		if (0 != config_insert_values_global(srv, config->value, cv, i == 0 ? T_CONFIG_SCOPE_SERVER : T_CONFIG_SCOPE_CONNECTION)) {
-			return HANDLER_ERROR;
-		}
+        x->log_access_fd = fdevent_open_logger(x->access_logfile->ptr);
+        if (-1 == x->log_access_fd) {
+            log_perror(srv->errh, __FILE__, __LINE__,
+              "opening log '%s' failed", x->access_logfile->ptr);
+            return HANDLER_ERROR;
+        }
+    }
 
-		if (i == 0 && buffer_string_is_empty(s->format)) {
-			/* set a default logfile string */
+    p->defaults.log_access_fd = -1;
+    p->defaults.syslog_level = LOG_INFO;
 
-			buffer_copy_string_len(s->format, CONST_STR_LEN("%h %V %u %t \"%r\" %>s %b \"%{Referer}i\" \"%{User-Agent}i\""));
-		}
+    /* initialize p->defaults from global config context */
+    if (p->nconfig > 0 && p->cvlist->v.u2[1]) {
+        const config_plugin_value_t *cpv = p->cvlist + p->cvlist->v.u2[0];
+        if (-1 != cpv->k_id)
+            mod_accesslog_merge_config(&p->defaults, cpv);
+    }
 
-		/* parse */
+    if (NULL == p->defaults.parsed_format) {
+        /* (set default format even if p->use_syslog since
+         *  some other condition might enable logfile) */
+        static const char fmt[] =
+          "%h %V %u %t \"%r\" %>s %b \"%{Referer}i\" \"%{User-Agent}i\"";
+        p->defaults.parsed_format = p->default_format =
+          mod_accesslog_process_format(srv, CONST_STR_LEN(fmt));
+        if (NULL == p->default_format) return HANDLER_ERROR;
+    }
 
-		if (!buffer_is_empty(s->format)) {
-			size_t j, tcount = 0;
+    return HANDLER_GO_ON;
+}
 
-			s->parsed_format = calloc(1, sizeof(*(s->parsed_format)));
-
-			if (-1 == accesslog_parse_format(srv, s->parsed_format, s->format)) {
-
-				log_error_write(srv, __FILE__, __LINE__, "sb",
-						"parsing accesslog-definition failed:", s->format);
-
-				return HANDLER_ERROR;
+static format_fields * mod_accesslog_process_format(server * const srv, const char * const format, const size_t flen) {
+			format_fields * const parsed_format =
+			  accesslog_parse_format(srv, format, flen);
+			if (NULL == parsed_format) {
+				log_error(srv->errh, __FILE__, __LINE__,
+					"parsing accesslog-definition failed: %s", format);
+				return NULL;
 			}
 
-			for (j = 0; j < s->parsed_format->used; ++j) {
-				format_field * const f = s->parsed_format->ptr[j];
+			uint32_t tcount = 0;
+			for (format_field *f = parsed_format->ptr; f->type != FIELD_UNSET; ++f) {
+				const buffer * const fstr = &f->string;
 				if (FIELD_FORMAT != f->type) continue;
 				if (FORMAT_TIMESTAMP == f->field) {
-					if (!buffer_string_is_empty(f->string)) {
-						const char *ptr = f->string->ptr;
+					if (!buffer_string_is_empty(fstr)) {
+						const char *ptr = fstr->ptr;
 						if (0 == strncmp(ptr, "begin:", sizeof("begin:")-1)) {
 							f->opt |= FORMAT_FLAG_TIME_BEGIN;
 							ptr += sizeof("begin:")-1;
@@ -561,20 +657,20 @@ SETDEFAULTS_FUNC(log_access_open) {
 						else if (0 == strcmp(ptr, "usec_frac")) f->opt |= FORMAT_FLAG_TIME_USEC_FRAC;
 						else if (0 == strcmp(ptr, "nsec_frac")) f->opt |= FORMAT_FLAG_TIME_NSEC_FRAC;
 						else if (NULL == strchr(ptr, '%')) {
-							log_error_write(srv, __FILE__, __LINE__, "sb",
-								"constant string for time format (misspelled token? or missing '%'):", s->format);
-
-							return HANDLER_ERROR;
+							log_error(srv->errh, __FILE__, __LINE__,
+								"constant string for time format (misspelled token? or missing '%%'): %s", format);
+							mod_accesslog_free_format_fields(parsed_format);
+							return NULL;
 						}
 					}
 
 					/* make sure they didn't try to send the timestamp in twice
-					 * (would invalidate s->ts_accesslog_str cache of timestamp str) */
+					 * (would invalidate pconf->parsed_format.ts_accesslog_str cache of timestamp str) */
 					if (!(f->opt & ~(FORMAT_FLAG_TIME_BEGIN|FORMAT_FLAG_TIME_END|FORMAT_FLAG_TIME_SEC)) && ++tcount > 1) {
-						log_error_write(srv, __FILE__, __LINE__, "sb",
-							"you may not use strftime timestamp format %{}t twice in the same access log:", s->format);
-
-						return HANDLER_ERROR;
+						log_error(srv->errh, __FILE__, __LINE__,
+							"you may not use strftime timestamp format %%{}t twice in the same access log: %s", format);
+						mod_accesslog_free_format_fields(parsed_format);
+						return NULL;
 					}
 
 					if (f->opt & FORMAT_FLAG_TIME_BEGIN) srv->srvconf.high_precision_timestamps = 1;
@@ -582,201 +678,132 @@ SETDEFAULTS_FUNC(log_access_open) {
 					f->opt |= FORMAT_FLAG_TIME_USEC;
 					srv->srvconf.high_precision_timestamps = 1;
 				} else if (FORMAT_TIME_USED == f->field) {
-					if (buffer_string_is_empty(f->string)
-					      || buffer_is_equal_string(f->string, CONST_STR_LEN("s"))
-					      || buffer_is_equal_string(f->string, CONST_STR_LEN("sec")))  f->opt |= FORMAT_FLAG_TIME_SEC;
-					else if (buffer_is_equal_string(f->string, CONST_STR_LEN("ms"))
-					      || buffer_is_equal_string(f->string, CONST_STR_LEN("msec"))) f->opt |= FORMAT_FLAG_TIME_MSEC;
-					else if (buffer_is_equal_string(f->string, CONST_STR_LEN("us"))
-					      || buffer_is_equal_string(f->string, CONST_STR_LEN("usec"))) f->opt |= FORMAT_FLAG_TIME_USEC;
-					else if (buffer_is_equal_string(f->string, CONST_STR_LEN("ns"))
-					      || buffer_is_equal_string(f->string, CONST_STR_LEN("nsec"))) f->opt |= FORMAT_FLAG_TIME_NSEC;
+					if (buffer_string_is_empty(fstr)
+					      || buffer_is_equal_string(fstr, CONST_STR_LEN("s"))
+					      || buffer_is_equal_string(fstr, CONST_STR_LEN("sec")))  f->opt |= FORMAT_FLAG_TIME_SEC;
+					else if (buffer_is_equal_string(fstr, CONST_STR_LEN("ms"))
+					      || buffer_is_equal_string(fstr, CONST_STR_LEN("msec"))) f->opt |= FORMAT_FLAG_TIME_MSEC;
+					else if (buffer_is_equal_string(fstr, CONST_STR_LEN("us"))
+					      || buffer_is_equal_string(fstr, CONST_STR_LEN("usec"))) f->opt |= FORMAT_FLAG_TIME_USEC;
+					else if (buffer_is_equal_string(fstr, CONST_STR_LEN("ns"))
+					      || buffer_is_equal_string(fstr, CONST_STR_LEN("nsec"))) f->opt |= FORMAT_FLAG_TIME_NSEC;
 					else {
-						log_error_write(srv, __FILE__, __LINE__, "sb",
-							"invalid time unit in %{UNIT}T:", s->format);
-
-						return HANDLER_ERROR;
+						log_error(srv->errh, __FILE__, __LINE__,
+							"invalid time unit in %%{UNIT}T: %s", format);
+						mod_accesslog_free_format_fields(parsed_format);
+						return NULL;
 					}
 
 					if (f->opt & ~(FORMAT_FLAG_TIME_SEC)) srv->srvconf.high_precision_timestamps = 1;
 				} else if (FORMAT_COOKIE == f->field) {
-					if (buffer_string_is_empty(f->string)) f->type = FIELD_STRING; /*(blank)*/
+					if (buffer_string_is_empty(fstr)) f->type = FIELD_STRING; /*(blank)*/
 				} else if (FORMAT_SERVER_PORT == f->field) {
-					if (buffer_string_is_empty(f->string))
+					if (buffer_string_is_empty(fstr))
 						f->opt |= FORMAT_FLAG_PORT_LOCAL;
-					else if (buffer_is_equal_string(f->string, CONST_STR_LEN("canonical")))
+					else if (buffer_is_equal_string(fstr, CONST_STR_LEN("canonical")))
 						f->opt |= FORMAT_FLAG_PORT_LOCAL;
-					else if (buffer_is_equal_string(f->string, CONST_STR_LEN("local")))
+					else if (buffer_is_equal_string(fstr, CONST_STR_LEN("local")))
 						f->opt |= FORMAT_FLAG_PORT_LOCAL;
-					else if (buffer_is_equal_string(f->string, CONST_STR_LEN("remote")))
+					else if (buffer_is_equal_string(fstr, CONST_STR_LEN("remote")))
 						f->opt |= FORMAT_FLAG_PORT_REMOTE;
 					else {
-						log_error_write(srv, __FILE__, __LINE__, "sb",
-								"invalid format %{canonical,local,remote}p:", s->format);
-
-						return HANDLER_ERROR;
+						log_error(srv->errh, __FILE__, __LINE__,
+							"invalid format %%{canonical,local,remote}p: %s", format);
+						mod_accesslog_free_format_fields(parsed_format);
+						return NULL;
 					}
 				}
 			}
 
-#if 0
-			/* debugging */
-			for (j = 0; j < s->parsed_format->used; j++) {
-				switch (s->parsed_format->ptr[j]->type) {
-				case FIELD_FORMAT:
-					log_error_write(srv, __FILE__, __LINE__, "ssds",
-							"config:", "format", s->parsed_format->ptr[j]->field,
-							s->parsed_format->ptr[j]->string ?
-							s->parsed_format->ptr[j]->string->ptr : "" );
-					break;
-				case FIELD_STRING:
-					log_error_write(srv, __FILE__, __LINE__, "ssbs", "config:", "string '", s->parsed_format->ptr[j]->string, "'");
-					break;
-				default:
-					break;
-				}
-			}
-#endif
-		}
-
-		if (s->use_syslog) {
-			/* ignore the next checks */
-			continue;
-		}
-
-		if (buffer_string_is_empty(s->access_logfile)) continue;
-
-		if (srv->srvconf.preflight_check) continue;
-
-		if (-1 == (s->log_access_fd = fdevent_open_logger(s->access_logfile->ptr))) {
-			log_error_write(srv, __FILE__, __LINE__, "SBSS",
-					"opening log '", s->access_logfile,
-					"' failed: ", strerror(errno));
-			return HANDLER_ERROR;
-		}
-	}
-
-	return HANDLER_GO_ON;
+			return parsed_format;
 }
 
-static void log_access_flush(server *srv, void *p_d) {
-	plugin_data *p = p_d;
-	size_t i;
-
-	for (i = 0; i < srv->config_context->used; i++) {
-		plugin_config *s = p->config_storage[i];
-
-		if (!buffer_string_is_empty(s->access_logbuffer)) {
-			if (s->log_access_fd != -1) {
-				accesslog_write_all(srv, s->access_logfile, s->log_access_fd, CONST_BUF_LEN(s->access_logbuffer));
-			}
-
-			buffer_clear(s->access_logbuffer);
-		}
-	}
+static void log_access_flush(plugin_data * const p) {
+    /* future: might be slightly faster to have allocated array of open files
+     * rather than walking config, but only might matter with many directives */
+    /* (init i to 0 if global context; to 1 to skip empty global context) */
+    for (int i = !p->cvlist[0].v.u2[1]; i < p->nconfig; ++i) {
+        config_plugin_value_t *cpv = p->cvlist + p->cvlist[i].v.u2[0];
+        for (; -1 != cpv->k_id; ++cpv) {
+            switch (cpv->k_id) {
+              case 0: /* accesslog.filename */
+                if (cpv->vtype == T_CONFIG_LOCAL && NULL != cpv->v.v) {
+                    accesslog_st * const x = cpv->v.v;
+                    if (buffer_string_is_empty(&x->access_logbuffer)) continue;
+                    if (!accesslog_write_all(x->log_access_fd,
+                                             &x->access_logbuffer)) {
+                        log_perror(p->errh, __FILE__, __LINE__,
+                          "writing access log entry failed: %s",
+                          x->access_logfile->ptr);
+                    }
+                }
+                break;
+              default:
+                break;
+            }
+        }
+    }
 }
 
 TRIGGER_FUNC(log_access_periodic_flush) {
 	/* flush buffered access logs every 4 seconds */
-	if (0 == (srv->cur_ts & 3)) log_access_flush(srv, p_d);
+	if (0 == (srv->cur_ts & 3)) log_access_flush((plugin_data *)p_d);
 	return HANDLER_GO_ON;
 }
 
 SIGHUP_FUNC(log_access_cycle) {
-	plugin_data *p = p_d;
-	size_t i;
+    plugin_data * const p = p_d;
 
-	if (!p->config_storage) return HANDLER_GO_ON;
+    log_access_flush(p);
 
-	log_access_flush(srv, p);
+    /* future: might be slightly faster to have allocated array of open files
+     * rather than walking config, but only might matter with many directives */
+    /* (init i to 0 if global context; to 1 to skip empty global context) */
+    for (int i = !p->cvlist[0].v.u2[1]; i < p->nconfig; ++i) {
+        config_plugin_value_t *cpv = p->cvlist + p->cvlist[i].v.u2[0];
+        for (; -1 != cpv->k_id; ++cpv) {
+            if (cpv->vtype != T_CONFIG_LOCAL || NULL == cpv->v.v) continue;
+            switch (cpv->k_id) {
+              case 0:{/* accesslog.filename */
+                accesslog_st * const x = cpv->v.v;
+                if (x->piped_logger) continue;
+                if (buffer_string_is_empty(x->access_logfile)) continue;
+                if (-1 == fdevent_cycle_logger(x->access_logfile->ptr,
+                                               &x->log_access_fd)) {
+                    log_perror(srv->errh, __FILE__, __LINE__,
+                      "cycling access log failed: %s", x->access_logfile->ptr);
+                }
+                break;
+              }
+              default:
+                break;
+            }
+        }
+    }
 
-	for (i = 0; i < srv->config_context->used; i++) {
-		plugin_config *s = p->config_storage[i];
-		if (s->use_syslog == 0
-			&& !buffer_string_is_empty(s->access_logfile)
-			&& s->access_logfile->ptr[0] != '|') {
-
-			if (-1 == fdevent_cycle_logger(s->access_logfile->ptr, &s->log_access_fd)) {
-				log_error_write(srv, __FILE__, __LINE__, "ss", "cycling access-log failed:", strerror(errno));
-				return HANDLER_ERROR;
-			}
-		}
-	}
-
-	return HANDLER_GO_ON;
+    return HANDLER_GO_ON;
 }
-
-#define PATCH(x) \
-	p->conf.x = s->x;
-static int mod_accesslog_patch_connection(server *srv, connection *con, plugin_data *p) {
-	size_t i, j;
-	plugin_config *s = p->config_storage[0];
-
-	PATCH(access_logfile);
-	PATCH(log_access_fd);
-	PATCH(last_generated_accesslog_ts_ptr);
-	PATCH(access_logbuffer);
-	PATCH(ts_accesslog_str);
-	PATCH(parsed_format);
-	PATCH(use_syslog);
-	PATCH(syslog_level);
-
-	/* skip the first, the global context */
-	for (i = 1; i < srv->config_context->used; i++) {
-		if (!config_check_cond(con, i)) continue; /* condition not matched */
-
-		data_config *dc = (data_config *)srv->config_context->data[i];
-		s = p->config_storage[i];
-
-		/* merge config */
-		for (j = 0; j < dc->value->used; j++) {
-			data_unset *du = dc->value->data[j];
-
-			if (buffer_is_equal_string(&du->key, CONST_STR_LEN("accesslog.filename"))) {
-				PATCH(access_logfile);
-				PATCH(log_access_fd);
-				PATCH(access_logbuffer);
-			} else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("accesslog.format"))) {
-				PATCH(parsed_format);
-				PATCH(last_generated_accesslog_ts_ptr);
-				PATCH(ts_accesslog_str);
-			} else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("accesslog.use-syslog"))) {
-				PATCH(use_syslog);
-			} else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("accesslog.syslog-level"))) {
-				PATCH(syslog_level);
-			}
-		}
-	}
-
-	return 0;
-}
-#undef PATCH
 
 REQUESTDONE_FUNC(log_access_write) {
 	plugin_data *p = p_d;
-	buffer *b;
-	size_t j;
-
-	int newts = 0;
-	const buffer *vb;
-	struct timespec ts = { 0, 0 };
-
-	mod_accesslog_patch_connection(srv, con, p);
+	mod_accesslog_patch_config(con, p);
 
 	/* No output device, nothing to do */
 	if (!p->conf.use_syslog && p->conf.log_access_fd == -1) return HANDLER_GO_ON;
 
-	if (p->conf.use_syslog) {
-		b = p->syslog_logbuffer;
-	} else {
-		b = p->conf.access_logbuffer;
-	}
+	buffer * const b = (p->conf.use_syslog)
+	  ? &p->syslog_logbuffer
+	  : p->conf.access_logbuffer;
 
-	for (j = 0; j < p->conf.parsed_format->used; j++) {
-		const format_field * const f = p->conf.parsed_format->ptr[j];
+	const buffer *vb;
+	struct timespec ts = { 0, 0 };
+
+	int flush = p->conf.piped_logger;
+
+	for (const format_field *f = p->conf.parsed_format->ptr; f->type != FIELD_UNSET; ++f) {
 		switch(f->type) {
 		case FIELD_STRING:
-			buffer_append_string_buffer(b, f->string);
+			buffer_append_string_buffer(b, &f->string);
 			break;
 		case FIELD_FORMAT:
 			switch(f->field) {
@@ -832,9 +859,9 @@ REQUESTDONE_FUNC(log_access_write) {
 						for (ptr = b->ptr + buffer_string_length(b); ns > 0; ns /= 10)
 							*--ptr = (ns % 10) + '0';
 					}
-				} else if (!(f->opt & FORMAT_FLAG_TIME_BEGIN) && srv->cur_ts == *(p->conf.last_generated_accesslog_ts_ptr)) {
-					buffer_append_string_buffer(b, p->conf.ts_accesslog_str);
 				} else {
+					format_fields * const parsed_format = p->conf.parsed_format;
+					buffer * const ts_accesslog_str = &parsed_format->ts_accesslog_str;
 					/* cache the generated timestamp (only if ! FORMAT_FLAG_TIME_BEGIN) */
 					struct tm *tmptr;
 					time_t t;
@@ -849,8 +876,12 @@ REQUESTDONE_FUNC(log_access_write) {
 				      #endif /* HAVE_STRUCT_TM_GMTOFF */
 
 					if (!(f->opt & FORMAT_FLAG_TIME_BEGIN)) {
-						t = *(p->conf.last_generated_accesslog_ts_ptr) = srv->cur_ts;
-						newts = 1;
+						if (parsed_format->last_generated_accesslog_ts == srv->cur_ts) {
+							buffer_append_string_buffer(b, ts_accesslog_str);
+							break;
+						}
+						t = parsed_format->last_generated_accesslog_ts = srv->cur_ts;
+						flush = 1;
 					} else {
 						t = con->request_start;
 					}
@@ -869,33 +900,33 @@ REQUESTDONE_FUNC(log_access_write) {
 				      # endif /* HAVE_GMTIME_R */
 				      #endif /* HAVE_STRUCT_TM_GMTOFF */
 
-					buffer_clear(p->conf.ts_accesslog_str);
+					buffer_clear(ts_accesslog_str);
 
-					if (buffer_string_is_empty(f->string)) {
+					if (buffer_string_is_empty(&f->string)) {
 					      #if defined(HAVE_STRUCT_TM_GMTOFF)
 						long scd, hrs, min;
-						buffer_append_strftime(p->conf.ts_accesslog_str, "[%d/%b/%Y:%H:%M:%S ", tmptr);
-						buffer_append_string_len(p->conf.ts_accesslog_str, tmptr->tm_gmtoff >= 0 ? "+" : "-", 1);
+						buffer_append_strftime(ts_accesslog_str, "[%d/%b/%Y:%H:%M:%S ", tmptr);
+						buffer_append_string_len(ts_accesslog_str, tmptr->tm_gmtoff >= 0 ? "+" : "-", 1);
 
 						scd = labs(tmptr->tm_gmtoff);
 						hrs = scd / 3600;
 						min = (scd % 3600) / 60;
 
 						/* hours */
-						if (hrs < 10) buffer_append_string_len(p->conf.ts_accesslog_str, CONST_STR_LEN("0"));
-						buffer_append_int(p->conf.ts_accesslog_str, hrs);
+						if (hrs < 10) buffer_append_string_len(ts_accesslog_str, CONST_STR_LEN("0"));
+						buffer_append_int(ts_accesslog_str, hrs);
 
-						if (min < 10) buffer_append_string_len(p->conf.ts_accesslog_str, CONST_STR_LEN("0"));
-						buffer_append_int(p->conf.ts_accesslog_str, min);
-						buffer_append_string_len(p->conf.ts_accesslog_str, CONST_STR_LEN("]"));
+						if (min < 10) buffer_append_string_len(ts_accesslog_str, CONST_STR_LEN("0"));
+						buffer_append_int(ts_accesslog_str, min);
+						buffer_append_string_len(ts_accesslog_str, CONST_STR_LEN("]"));
 					      #else
-						buffer_append_strftime(p->conf.ts_accesslog_str, "[%d/%b/%Y:%H:%M:%S +0000]", tmptr);
+						buffer_append_strftime(ts_accesslog_str, "[%d/%b/%Y:%H:%M:%S +0000]", tmptr);
 					      #endif /* HAVE_STRUCT_TM_GMTOFF */
 					} else {
-						buffer_append_strftime(p->conf.ts_accesslog_str, f->string->ptr, tmptr);
+						buffer_append_strftime(ts_accesslog_str, f->string.ptr, tmptr);
 					}
 
-					buffer_append_string_buffer(b, p->conf.ts_accesslog_str);
+					buffer_append_string_buffer(b, ts_accesslog_str);
 				}
 				break;
 			case FORMAT_TIME_USED:
@@ -957,14 +988,14 @@ REQUESTDONE_FUNC(log_access_write) {
 				}
 				break;
 			case FORMAT_HEADER:
-				if (NULL != (vb = http_header_request_get(con, HTTP_HEADER_UNSPECIFIED, CONST_BUF_LEN(f->string)))) {
+				if (NULL != (vb = http_header_request_get(con, HTTP_HEADER_UNSPECIFIED, CONST_BUF_LEN(&f->string)))) {
 					accesslog_append_escaped(b, vb);
 				} else {
 					buffer_append_string_len(b, CONST_STR_LEN("-"));
 				}
 				break;
 			case FORMAT_RESPONSE_HEADER:
-				if (NULL != (vb = http_header_response_get(con, HTTP_HEADER_UNSPECIFIED, CONST_BUF_LEN(f->string)))) {
+				if (NULL != (vb = http_header_response_get(con, HTTP_HEADER_UNSPECIFIED, CONST_BUF_LEN(&f->string)))) {
 					accesslog_append_escaped(b, vb);
 				} else {
 					buffer_append_string_len(b, CONST_STR_LEN("-"));
@@ -972,7 +1003,7 @@ REQUESTDONE_FUNC(log_access_write) {
 				break;
 			case FORMAT_ENV:
 			case FORMAT_NOTE:
-				if (NULL != (vb = http_header_env_get(con, CONST_BUF_LEN(f->string)))) {
+				if (NULL != (vb = http_header_env_get(con, CONST_BUF_LEN(&f->string)))) {
 					accesslog_append_escaped(b, vb);
 				} else {
 					buffer_append_string_len(b, CONST_STR_LEN("-"));
@@ -1086,10 +1117,10 @@ REQUESTDONE_FUNC(log_access_write) {
 			case FORMAT_COOKIE:
 				if (NULL != (vb = http_header_request_get(con, HTTP_HEADER_COOKIE, CONST_STR_LEN("Cookie")))) {
 					char *str = vb->ptr;
-					size_t len = buffer_string_length(f->string);
+					size_t len = buffer_string_length(&f->string);
 					do {
 						while (*str == ' ' || *str == '\t') ++str;
-						if (0 == strncmp(str, f->string->ptr, len) && str[len] == '=') {
+						if (0 == strncmp(str, f->string.ptr, len) && str[len] == '=') {
 							char *v = str+len+1;
 							for (str = v; *str != '\0' && *str != ';'; ++str) ;
 							if (str == v) break;
@@ -1120,18 +1151,16 @@ REQUESTDONE_FUNC(log_access_write) {
 		}
 #endif
 		buffer_clear(b);
-		return HANDLER_GO_ON;
 	}
+	else {
+		buffer_append_string_len(b, CONST_STR_LEN("\n"));
 
-	buffer_append_string_len(b, CONST_STR_LEN("\n"));
-
-	if ((!buffer_string_is_empty(p->conf.access_logfile) && p->conf.access_logfile->ptr[0] == '|') || /* pipes don't cache */
-	    newts ||
-	    buffer_string_length(b) >= BUFFER_MAX_REUSE_SIZE) {
-		if (p->conf.log_access_fd >= 0) {
-			accesslog_write_all(srv, p->conf.access_logfile, p->conf.log_access_fd, CONST_BUF_LEN(b));
+		if (flush || buffer_string_length(b) >= BUFFER_MAX_REUSE_SIZE) {
+			if (!accesslog_write_all(p->conf.log_access_fd, b)) {
+				log_error_write(srv, __FILE__, __LINE__, "sbs",
+					"writing access log entry failed:", p->conf.access_logfile, strerror(errno));
+			}
 		}
-		buffer_clear(b);
 	}
 
 	return HANDLER_GO_ON;
@@ -1144,7 +1173,7 @@ int mod_accesslog_plugin_init(plugin *p) {
 	p->name        = "accesslog";
 
 	p->init        = mod_accesslog_init;
-	p->set_defaults= log_access_open;
+	p->set_defaults= mod_accesslog_set_defaults;
 	p->cleanup     = mod_accesslog_free;
 
 	p->handle_request_done  = log_access_write;
