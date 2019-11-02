@@ -12,124 +12,130 @@
 #include <errno.h>
 
 typedef struct {
-	buffer *server_root;
-	buffer *default_host;
-	buffer *document_root;
-
-	buffer *docroot_cache_key;
-	buffer *docroot_cache_value;
-	buffer *docroot_cache_servername;
-
-	unsigned short debug;
+    const buffer *server_root;
+    const buffer *default_host;
+    const buffer *document_root;
+    unsigned short debug;
 } plugin_config;
 
 typedef struct {
-	PLUGIN_DATA;
+    PLUGIN_DATA;
+    plugin_config defaults;
+    plugin_config conf;
 
-	buffer *doc_root;
-
-	plugin_config **config_storage;
-	plugin_config conf;
+    buffer tmp_buf;
+    buffer last_root;
 } plugin_data;
 
 INIT_FUNC(mod_simple_vhost_init) {
-	plugin_data *p;
-
-	p = calloc(1, sizeof(*p));
-
-	p->doc_root = buffer_init();
-
-	return p;
+    return calloc(1, sizeof(plugin_data));
 }
 
 FREE_FUNC(mod_simple_vhost_free) {
-	plugin_data *p = p_d;
+    plugin_data *p = p_d;
+    if (!p) return HANDLER_GO_ON;
+    UNUSED(srv);
 
-	UNUSED(srv);
+    free(p->tmp_buf.ptr);
+    free(p->last_root.ptr);
 
-	if (!p) return HANDLER_GO_ON;
+    free(p->cvlist);
+    free(p);
 
-	if (p->config_storage) {
-		size_t i;
-		for (i = 0; i < srv->config_context->used; i++) {
-			plugin_config *s = p->config_storage[i];
-			if (NULL == s) continue;
+    return HANDLER_GO_ON;
+}
 
-			buffer_free(s->document_root);
-			buffer_free(s->default_host);
-			buffer_free(s->server_root);
+static void mod_simple_vhost_merge_config_cpv(plugin_config * const pconf, const config_plugin_value_t * const cpv) {
+    switch (cpv->k_id) { /* index into static config_plugin_keys_t cpk[] */
+      case 0: /* simple-vhost.server-root */
+        pconf->server_root = cpv->v.b;
+        break;
+      case 1: /* simple-vhost.default-host */
+        pconf->default_host = cpv->v.b;
+        break;
+      case 2: /* simple-vhost.document-root */
+        pconf->document_root = cpv->v.b;
+        break;
+      case 3: /* simple-vhost.debug */
+        pconf->debug = cpv->v.shrt;
+        break;
+      default:/* should not happen */
+        return;
+    }
+}
 
-			buffer_free(s->docroot_cache_key);
-			buffer_free(s->docroot_cache_value);
-			buffer_free(s->docroot_cache_servername);
+static void mod_simple_vhost_merge_config(plugin_config * const pconf, const config_plugin_value_t *cpv) {
+    do {
+        mod_simple_vhost_merge_config_cpv(pconf, cpv);
+    } while ((++cpv)->k_id != -1);
+}
 
-			free(s);
-		}
-
-		free(p->config_storage);
-	}
-
-	buffer_free(p->doc_root);
-
-	free(p);
-
-	return HANDLER_GO_ON;
+static void mod_simple_vhost_patch_config(connection * const con, plugin_data * const p) {
+    memcpy(&p->conf, &p->defaults, sizeof(plugin_config));
+    for (int i = 1, used = p->nconfig; i < used; ++i) {
+        if (config_check_cond(con, (uint32_t)p->cvlist[i].k_id))
+            mod_simple_vhost_merge_config(&p->conf,
+                                          p->cvlist + p->cvlist[i].v.u2[0]);
+    }
 }
 
 SETDEFAULTS_FUNC(mod_simple_vhost_set_defaults) {
-	plugin_data *p = p_d;
-	size_t i;
+    static const config_plugin_keys_t cpk[] = {
+      { CONST_STR_LEN("simple-vhost.server-root"),
+        T_CONFIG_STRING,
+        T_CONFIG_SCOPE_CONNECTION }
+     ,{ CONST_STR_LEN("simple-vhost.default-host"),
+        T_CONFIG_STRING,
+        T_CONFIG_SCOPE_CONNECTION }
+     ,{ CONST_STR_LEN("simple-vhost.document-root"),
+        T_CONFIG_STRING,
+        T_CONFIG_SCOPE_CONNECTION }
+     ,{ CONST_STR_LEN("simple-vhost.debug"),
+        T_CONFIG_SHORT,
+        T_CONFIG_SCOPE_CONNECTION }
+     ,{ NULL, 0,
+        T_CONFIG_UNSET,
+        T_CONFIG_SCOPE_UNSET }
+    };
 
-	config_values_t cv[] = {
-		{ "simple-vhost.server-root",       NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_CONNECTION },
-		{ "simple-vhost.default-host",      NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_CONNECTION },
-		{ "simple-vhost.document-root",     NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_CONNECTION },
-		{ "simple-vhost.debug",             NULL, T_CONFIG_SHORT, T_CONFIG_SCOPE_CONNECTION },
-		{ NULL,                             NULL, T_CONFIG_UNSET, T_CONFIG_SCOPE_UNSET }
-	};
+    plugin_data * const p = p_d;
+    if (!config_plugin_values_init(srv, p, cpk, "mod_simple_vhost"))
+        return HANDLER_ERROR;
 
-	if (!p) return HANDLER_ERROR;
+    /* process and validate config directives
+     * (init i to 0 if global context; to 1 to skip empty global context) */
+    for (int i = !p->cvlist[0].v.u2[1]; i < p->nconfig; ++i) {
+        config_plugin_value_t *cpv = p->cvlist + p->cvlist[i].v.u2[0];
+        for (; -1 != cpv->k_id; ++cpv) {
+            switch (cpv->k_id) {
+              case 0: /* simple-vhost.server-root */
+              case 2: /* simple-vhost.document-root */
+                if (!buffer_string_is_empty(cpv->v.b)) {
+                    buffer *b;
+                    *(const buffer **)&b = cpv->v.b;
+                    buffer_append_slash(b);
+                }
+                break;
+              case 1: /* simple-vhost.default-host */
+              case 3: /* simple-vhost.debug */
+                break;
+              default:/* should not happen */
+                break;
+            }
+        }
+    }
 
-	p->config_storage = calloc(srv->config_context->used, sizeof(plugin_config *));
+    /* initialize p->defaults from global config context */
+    if (p->nconfig > 0 && p->cvlist->v.u2[1]) {
+        const config_plugin_value_t *cpv = p->cvlist + p->cvlist->v.u2[0];
+        if (-1 != cpv->k_id)
+            mod_simple_vhost_merge_config(&p->defaults, cpv);
+    }
 
-	for (i = 0; i < srv->config_context->used; i++) {
-		data_config const* config = (data_config const*)srv->config_context->data[i];
-		plugin_config *s;
-
-		s = calloc(1, sizeof(plugin_config));
-
-		s->server_root = buffer_init();
-		s->default_host = buffer_init();
-		s->document_root = buffer_init();
-
-		s->docroot_cache_key = buffer_init();
-		s->docroot_cache_value = buffer_init();
-		s->docroot_cache_servername = buffer_init();
-
-		s->debug = 0;
-
-		cv[0].destination = s->server_root;
-		cv[1].destination = s->default_host;
-		cv[2].destination = s->document_root;
-		cv[3].destination = &(s->debug);
-
-
-		p->config_storage[i] = s;
-
-		if (0 != config_insert_values_global(srv, config->value, cv, i == 0 ? T_CONFIG_SCOPE_SERVER : T_CONFIG_SCOPE_CONNECTION)) {
-			return HANDLER_ERROR;
-		}
-
-		if (!buffer_string_is_empty(s->server_root))
-			buffer_append_slash(s->server_root);
-		if (!buffer_string_is_empty(s->document_root))
-			buffer_append_slash(s->document_root);
-	}
-
-	return HANDLER_GO_ON;
+    return HANDLER_GO_ON;
 }
 
-static void build_doc_root_path(buffer *out, buffer *sroot, buffer *host, buffer *droot) {
+static void build_doc_root_path(buffer *out, const buffer *sroot, const buffer *host, const buffer *droot) {
 	force_assert(!buffer_string_is_empty(sroot));
 	buffer_copy_buffer(out, sroot);
 
@@ -153,123 +159,49 @@ static void build_doc_root_path(buffer *out, buffer *sroot, buffer *host, buffer
 	}
 }
 
-static int build_doc_root(server *srv, connection *con, plugin_data *p, buffer *out, buffer *host) {
+static int build_doc_root(server *srv, connection *con, plugin_data *p, buffer *out, const buffer *host) {
 	stat_cache_entry *sce = NULL;
 
 	build_doc_root_path(out, p->conf.server_root, host, p->conf.document_root);
+
+	/* one-element cache (postive cache, not negative cache) */
+	if (buffer_is_equal(out, &p->last_root)) return 1;
 
 	if (HANDLER_ERROR == stat_cache_get_entry(srv, con, out, &sce)) {
 		if (p->conf.debug) {
 			log_error_write(srv, __FILE__, __LINE__, "sb",
 					strerror(errno), out);
 		}
-		return -1;
+		return 0;
 	} else if (!S_ISDIR(sce->st.st_mode)) {
-		return -1;
+		return 0;
 	}
 
-	return 0;
+	buffer_copy_buffer(&p->last_root, out);
+	return 1;
 }
-
-
-#define PATCH(x) \
-	p->conf.x = s->x;
-static int mod_simple_vhost_patch_connection(server *srv, connection *con, plugin_data *p) {
-	size_t i, j;
-	plugin_config *s = p->config_storage[0];
-
-	PATCH(server_root);
-	PATCH(default_host);
-	PATCH(document_root);
-
-	PATCH(docroot_cache_key);
-	PATCH(docroot_cache_value);
-	PATCH(docroot_cache_servername);
-
-	PATCH(debug);
-
-	/* skip the first, the global context */
-	for (i = 1; i < srv->config_context->used; i++) {
-		if (!config_check_cond(con, i)) continue; /* condition not matched */
-
-		data_config *dc = (data_config *)srv->config_context->data[i];
-		s = p->config_storage[i];
-
-		/* merge config */
-		for (j = 0; j < dc->value->used; j++) {
-			data_unset *du = dc->value->data[j];
-
-			if (buffer_is_equal_string(&du->key, CONST_STR_LEN("simple-vhost.server-root"))) {
-				PATCH(server_root);
-				PATCH(docroot_cache_key);
-				PATCH(docroot_cache_value);
-				PATCH(docroot_cache_servername);
-			} else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("simple-vhost.default-host"))) {
-				PATCH(default_host);
-			} else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("simple-vhost.document-root"))) {
-				PATCH(document_root);
-			} else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("simple-vhost.debug"))) {
-				PATCH(debug);
-			}
-		}
-	}
-
-	return 0;
-}
-#undef PATCH
 
 static handler_t mod_simple_vhost_docroot(server *srv, connection *con, void *p_data) {
-	plugin_data *p = p_data;
+    plugin_data * const p = p_data;
+    mod_simple_vhost_patch_config(con, p);
+    if (buffer_string_is_empty(p->conf.server_root)) return HANDLER_GO_ON;
+    /* build_doc_root() requires p->conf.server_root;
+     * skip module if simple-vhost.server-root not set or set to empty string */
 
-	/*
-	 * cache the last successfull translation from hostname (authority) to docroot
-	 * - this saves us a stat() call
-	 *
-	 */
+    /* (default host and HANDLER_GO_ON instead of HANDLER_ERROR (on error)
+     *  are the two differences between mod_simple_vhost and mod_vhostdb) */
 
-	mod_simple_vhost_patch_connection(srv, con, p);
+    /* build document-root */
+    buffer * const b = &p->tmp_buf;
+    const buffer *host = con->uri.authority;
+    if ((!buffer_string_is_empty(host) && build_doc_root(srv, con, p, b, host))
+        || build_doc_root(srv, con, p, b, (host = p->conf.default_host))) {
+        con->server_name = con->server_name_buf;
+        buffer_copy_buffer(con->server_name_buf, host);
+        buffer_copy_buffer(con->physical.doc_root, b);
+    }
 
-	/* build_doc_root() requires a server_root; skip module if simple-vhost.server-root is not set
-	 * or set to an empty string (especially don't cache any results!)
-	 */
-	if (buffer_string_is_empty(p->conf.server_root)) return HANDLER_GO_ON;
-
-	if (!buffer_string_is_empty(p->conf.docroot_cache_key) &&
-	    !buffer_string_is_empty(con->uri.authority) &&
-	    buffer_is_equal(p->conf.docroot_cache_key, con->uri.authority)) {
-		/* cache hit */
-		con->server_name = con->server_name_buf;
-		buffer_copy_buffer(con->server_name_buf,   p->conf.docroot_cache_servername);
-		buffer_copy_buffer(con->physical.doc_root, p->conf.docroot_cache_value);
-	} else {
-		/* build document-root */
-		if (buffer_string_is_empty(con->uri.authority) ||
-		    build_doc_root(srv, con, p, p->doc_root, con->uri.authority)) {
-			/* not found, fallback the default-host */
-			if (0 == build_doc_root(srv, con, p,
-					   p->doc_root,
-					   p->conf.default_host)) {
-				/* default host worked */
-				con->server_name = con->server_name_buf;
-				buffer_copy_buffer(con->server_name_buf, p->conf.default_host);
-				buffer_copy_buffer(con->physical.doc_root, p->doc_root);
-				/* do not cache default host */
-			}
-			return HANDLER_GO_ON;
-		}
-
-		/* found host */
-		con->server_name = con->server_name_buf;
-		buffer_copy_buffer(con->server_name_buf, con->uri.authority);
-		buffer_copy_buffer(con->physical.doc_root, p->doc_root);
-
-		/* copy to cache */
-		buffer_copy_buffer(p->conf.docroot_cache_key,        con->uri.authority);
-		buffer_copy_buffer(p->conf.docroot_cache_value,      p->doc_root);
-		buffer_copy_buffer(p->conf.docroot_cache_servername, con->server_name);
-	}
-
-	return HANDLER_GO_ON;
+    return HANDLER_GO_ON;
 }
 
 
