@@ -21,12 +21,11 @@ typedef struct {
 
 typedef struct {
     void *vdata;
-    array *options;
 } plugin_config;
 
 typedef struct {
     PLUGIN_DATA;
-    plugin_config **config_storage;
+    plugin_config defaults;
     plugin_config conf;
 } plugin_data;
 
@@ -38,7 +37,7 @@ static void mod_vhostdb_dbconf_free (void *vdata)
     free(dbconf);
 }
 
-static int mod_vhostdb_dbconf_setup (server *srv, array *opts, void **vdata)
+static int mod_vhostdb_dbconf_setup (server *srv, const array *opts, void **vdata)
 {
     const buffer *sqlquery = NULL;
     const char *dbname=NULL, *user=NULL, *pass=NULL, *host=NULL, *port=NULL;
@@ -100,7 +99,7 @@ static int mod_vhostdb_dbconf_setup (server *srv, array *opts, void **vdata)
     return 0;
 }
 
-static void mod_vhostdb_patch_connection (server *srv, connection *con, plugin_data *p);
+static void mod_vhostdb_patch_config(connection * const con, plugin_data * const p);
 
 static int mod_vhostdb_pgsql_query(server *srv, connection *con, void *p_d, buffer *docroot)
 {
@@ -113,7 +112,7 @@ static int mod_vhostdb_pgsql_query(server *srv, connection *con, void *p_d, buff
     buffer *sqlquery = docroot;
     buffer_clear(sqlquery); /*(also resets docroot (alias))*/
 
-    mod_vhostdb_patch_connection(srv, con, p);
+    mod_vhostdb_patch_config(con, p);
     if (NULL == p->conf.vdata) return 0; /*(after resetting docroot)*/
     dbconf = (vhostdb_config *)p->conf.vdata;
 
@@ -172,91 +171,114 @@ INIT_FUNC(mod_vhostdb_init) {
     return p;
 }
 
+static void mod_vhostdb_free_config(plugin_data * const p) {
+    if (NULL == p->cvlist) return;
+    /* (init i to 0 if global context; to 1 to skip empty global context) */
+    for (int i = !p->cvlist[0].v.u2[1], used = p->nconfig; i < used; ++i) {
+        config_plugin_value_t *cpv = p->cvlist + p->cvlist[i].v.u2[0];
+        for (; -1 != cpv->k_id; ++cpv) {
+            if (cpv->vtype != T_CONFIG_LOCAL || NULL == cpv->v.v) continue;
+            switch (cpv->k_id) {
+              case 0: /* vhostdb.<db> */
+                mod_vhostdb_dbconf_free(cpv->v.v);
+                break;
+              default:
+                break;
+            }
+        }
+    }
+}
+
 FREE_FUNC(mod_vhostdb_cleanup) {
     plugin_data *p = p_d;
     if (!p) return HANDLER_GO_ON;
 
-    if (p->config_storage) {
-        for (size_t i = 0; i < srv->config_context->used; i++) {
-            plugin_config *s = p->config_storage[i];
-            if (!s) continue;
-            mod_vhostdb_dbconf_free(s->vdata);
-            array_free(s->options);
-            free(s);
-        }
-        free(p->config_storage);
-    }
+    mod_vhostdb_free_config(p);
+
+    free(p->cvlist);
     free(p);
 
     UNUSED(srv);
     return HANDLER_GO_ON;
 }
 
-SETDEFAULTS_FUNC(mod_vhostdb_set_defaults) {
-    plugin_data *p = p_d;
+static void mod_vhostdb_merge_config_cpv(plugin_config * const pconf, const config_plugin_value_t * const cpv) {
+    switch (cpv->k_id) { /* index into static config_plugin_keys_t cpk[] */
+      case 0: /* vhostdb.<db> */
+        if (cpv->vtype == T_CONFIG_LOCAL)
+            pconf->vdata = cpv->v.v;
+        break;
+      default:/* should not happen */
+        return;
+    }
+}
 
-    config_values_t cv[] = {
-        { "vhostdb.pgsql",  NULL, T_CONFIG_ARRAY,  T_CONFIG_SCOPE_CONNECTION },
-        { NULL,             NULL, T_CONFIG_UNSET,  T_CONFIG_SCOPE_UNSET }
+static void mod_vhostdb_merge_config(plugin_config * const pconf, const config_plugin_value_t *cpv) {
+    do {
+        mod_vhostdb_merge_config_cpv(pconf, cpv);
+    } while ((++cpv)->k_id != -1);
+}
+
+static void mod_vhostdb_patch_config(connection * const con, plugin_data * const p) {
+    memcpy(&p->conf, &p->defaults, sizeof(plugin_config));
+    for (int i = 1, used = p->nconfig; i < used; ++i) {
+        if (config_check_cond(con, (uint32_t)p->cvlist[i].k_id))
+            mod_vhostdb_merge_config(&p->conf,p->cvlist + p->cvlist[i].v.u2[0]);
+    }
+}
+
+SETDEFAULTS_FUNC(mod_vhostdb_set_defaults) {
+    static const config_plugin_keys_t cpk[] = {
+      { CONST_STR_LEN("vhostdb.pgsql"),
+        T_CONFIG_ARRAY,
+        T_CONFIG_SCOPE_CONNECTION }
+     ,{ NULL, 0,
+        T_CONFIG_UNSET,
+        T_CONFIG_SCOPE_UNSET }
     };
 
-    p->config_storage = calloc(srv->config_context->used, sizeof(plugin_config *));
+    plugin_data * const p = p_d;
+    if (!config_plugin_values_init(srv, p, cpk, "mod_vhostdb_pgsql"))
+        return HANDLER_ERROR;
 
-    for (size_t i = 0; i < srv->config_context->used; ++i) {
-        data_config const *config = (data_config const*)srv->config_context->data[i];
-        plugin_config *s = calloc(1, sizeof(plugin_config));
-
-        s->options = array_init();
-        cv[0].destination = s->options;
-
-        p->config_storage[i] = s;
-
-        if (config_insert_values_global(srv, config->value, cv, i == 0 ? T_CONFIG_SCOPE_SERVER : T_CONFIG_SCOPE_CONNECTION)) {
-            return HANDLER_ERROR;
+    /* process and validate config directives
+     * (init i to 0 if global context; to 1 to skip empty global context) */
+    for (int i = !p->cvlist[0].v.u2[1]; i < p->nconfig; ++i) {
+        config_plugin_value_t *cpv = p->cvlist + p->cvlist[i].v.u2[0];
+        for (; -1 != cpv->k_id; ++cpv) {
+            switch (cpv->k_id) {
+              case 0: /* vhostdb.<db> */
+                if (cpv->v.a->used) {
+                    if (!array_is_kvstring(cpv->v.a)) {
+                        log_error(srv->errh, __FILE__, __LINE__,
+                          "unexpected value for %s; "
+                          "expected list of \"option\" => \"value\"",
+                          cpk[cpv->k_id].k);
+                        return HANDLER_ERROR;
+                    }
+                    if (0 != mod_vhostdb_dbconf_setup(srv, cpv->v.a, &cpv->v.v))
+                        return HANDLER_ERROR;
+                    if (NULL != cpv->v.v)
+                        cpv->vtype = T_CONFIG_LOCAL;
+                }
+                break;
+              default:/* should not happen */
+                break;
+            }
         }
+    }
 
-	if (!array_is_kvstring(s->options)) {
-		log_error_write(srv, __FILE__, __LINE__, "s",
-				"unexpected value for vhostdb.pgsql; expected list of \"option\" => \"value\"");
-		return HANDLER_ERROR;
-	}
-
-        if (s->options->used
-            && 0 != mod_vhostdb_dbconf_setup(srv, s->options, &s->vdata)) {
-            return HANDLER_ERROR;
-        }
+    /* initialize p->defaults from global config context */
+    if (p->nconfig > 0 && p->cvlist->v.u2[1]) {
+        const config_plugin_value_t *cpv = p->cvlist + p->cvlist->v.u2[0];
+        if (-1 != cpv->k_id)
+            mod_vhostdb_merge_config(&p->defaults, cpv);
     }
 
     return HANDLER_GO_ON;
 }
 
-#define PATCH(x) \
-    p->conf.x = s->x;
-static void mod_vhostdb_patch_connection (server *srv, connection *con, plugin_data *p)
-{
-    plugin_config *s = p->config_storage[0];
-    PATCH(vdata);
 
-    /* skip the first, the global context */
-    for (size_t i = 1; i < srv->config_context->used; ++i) {
-        if (!config_check_cond(con, i)) continue; /* condition not matched */
-
-        data_config *dc = (data_config *)srv->config_context->data[i];
-        s = p->config_storage[i];
-
-        /* merge config */
-        for (size_t j = 0; j < dc->value->used; ++j) {
-            data_unset *du = dc->value->data[j];
-
-            if (buffer_is_equal_string(&du->key,CONST_STR_LEN("vhostdb.pgsql"))){
-                PATCH(vdata);
-            }
-        }
-    }
-}
-#undef PATCH
-
-/* this function is called at dlopen() time and inits the callbacks */
 int mod_vhostdb_pgsql_plugin_init (plugin *p);
 int mod_vhostdb_pgsql_plugin_init (plugin *p)
 {
