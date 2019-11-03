@@ -2,25 +2,8 @@
 
 #undef NDEBUG
 #include <assert.h>
-#include <stdlib.h>
-#include <stdio.h>
 
 #include "mod_evhost.c"
-
-static plugin_config * test_mod_evhost_plugin_config_init(void) {
-    plugin_config *s = calloc(1, sizeof(plugin_config));
-    s->path_pieces_raw = buffer_init();
-    s->path_pieces = NULL;
-    s->len = 0;
-    return s;
-}
-
-static void test_mod_evhost_plugin_config_free(plugin_config *s) {
-    buffer_free(s->path_pieces_raw);
-    for (size_t i = 0; i < s->len; ++i) buffer_free(s->path_pieces[i]);
-    free(s->path_pieces);
-    free(s);
-}
 
 struct ttt {
   const char *pattern;
@@ -32,12 +15,11 @@ struct ttt {
 static void test_mod_evhost_build_doc_root_path_loop(struct ttt *tt, size_t nelts, buffer *authority, buffer *b, array *a) {
     for (size_t i = 0; i < nelts; ++i) {
         struct ttt *t = tt+i;
-        plugin_config *s = test_mod_evhost_plugin_config_init();
-        buffer_copy_string_len(s->path_pieces_raw, t->pattern, t->plen);
-        assert(0 == mod_evhost_parse_pattern(s));
-        mod_evhost_build_doc_root_path(b, a, authority, s->path_pieces, s->len);
+        const buffer *path_pieces = mod_evhost_parse_pattern(t->pattern);
+        assert(NULL != path_pieces);
+        mod_evhost_build_doc_root_path(b, a, authority, path_pieces);
         assert(buffer_is_equal_string(b, t->expect, t->elen));
-        test_mod_evhost_plugin_config_free(s);
+        mod_evhost_free_path_pieces(path_pieces);
     }
 }
 
