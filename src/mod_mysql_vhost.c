@@ -23,27 +23,17 @@
  */
 
 typedef struct {
-	MYSQL 	*mysql;
-	buffer  *mysql_query;
-
-	buffer  *mydb;
-	buffer  *myuser;
-	buffer  *mypass;
-	buffer  *mysock;
-
-	buffer  *hostname;
-	unsigned short port;
+    MYSQL *mysql;
+    const buffer *mysql_query;
 } plugin_config;
 
 /* global plugin data */
 typedef struct {
-	PLUGIN_DATA;
+    PLUGIN_DATA;
+    plugin_config defaults;
+    plugin_config conf;
 
-	buffer 	*tmp_buf;
-
-	plugin_config **config_storage;
-
-	plugin_config conf;
+    buffer tmp_buf;
 } plugin_data;
 
 /* per connection plugin data */
@@ -54,48 +44,41 @@ typedef struct {
 
 /* init the plugin data */
 INIT_FUNC(mod_mysql_vhost_init) {
-	plugin_data *p;
+    return calloc(1, sizeof(plugin_data));
+}
 
-	p = calloc(1, sizeof(*p));
-
-	p->tmp_buf = buffer_init();
-
-	return p;
+/* cleanup the mysql connections */
+static void mod_mysql_vhost_free_config(plugin_data * const p) {
+    if (NULL == p->cvlist) return;
+    /* (init i to 0 if global context; to 1 to skip empty global context) */
+    for (int i = !p->cvlist[0].v.u2[1], used = p->nconfig; i < used; ++i) {
+        config_plugin_value_t *cpv = p->cvlist + p->cvlist[i].v.u2[0];
+        for (; -1 != cpv->k_id; ++cpv) {
+            if (cpv->vtype != T_CONFIG_LOCAL || NULL == cpv->v.v) continue;
+            switch (cpv->k_id) {
+              case 1: /* mysql-vhost.db */
+                mysql_close(cpv->v.v);
+                break;
+              default:
+                break;
+            }
+        }
+    }
 }
 
 /* cleanup the plugin data */
-SERVER_FUNC(mod_mysql_vhost_cleanup) {
-	plugin_data *p = p_d;
+FREE_FUNC(mod_mysql_vhost_cleanup) {
+    plugin_data *p = p_d;
+    if (!p) return HANDLER_GO_ON;
 
-	UNUSED(srv);
+    mod_mysql_vhost_free_config(p);
+    free(p->tmp_buf.ptr);
 
-	if (!p) return HANDLER_GO_ON;
+    free(p->cvlist);
+    free(p);
 
-	if (p->config_storage) {
-		size_t i;
-		for (i = 0; i < srv->config_context->used; i++) {
-			plugin_config *s = p->config_storage[i];
-
-			if (!s) continue;
-
-			mysql_close(s->mysql);
-
-			buffer_free(s->mysql_query);
-			buffer_free(s->mydb);
-			buffer_free(s->myuser);
-			buffer_free(s->mypass);
-			buffer_free(s->mysock);
-			buffer_free(s->hostname);
-
-			free(s);
-		}
-		free(p->config_storage);
-	}
-	buffer_free(p->tmp_buf);
-
-	free(p);
-
-	return HANDLER_GO_ON;
+    UNUSED(srv);
+    return HANDLER_GO_ON;
 }
 
 /* handle the plugin per connection data */
@@ -133,136 +116,174 @@ CONNECTION_FUNC(mod_mysql_vhost_handle_connection_reset) {
 	return HANDLER_GO_ON;
 }
 
+static void mod_mysql_vhost_merge_config_cpv(plugin_config * const pconf, const config_plugin_value_t * const cpv) {
+    switch (cpv->k_id) { /* index into static config_plugin_keys_t cpk[] */
+      case 0: /* mysql-vhost.sql */
+        pconf->mysql_query = cpv->v.b;
+        break;
+      case 1: /* mysql-vhost.db */
+        if (cpv->vtype == T_CONFIG_LOCAL)
+            pconf->mysql = cpv->v.v;
+        break;
+      case 2: /* mysql-vhost.user */
+      case 3: /* mysql-vhost.pass */
+      case 4: /* mysql-vhost.sock */
+      case 5: /* mysql-vhost.hostname */
+      case 6: /* mysql-vhost.port */
+        break;
+      default:/* should not happen */
+        return;
+    }
+}
+
+static void mod_mysql_vhost_merge_config(plugin_config * const pconf, const config_plugin_value_t *cpv) {
+    do {
+        mod_mysql_vhost_merge_config_cpv(pconf, cpv);
+    } while ((++cpv)->k_id != -1);
+}
+
+static void mod_mysql_vhost_patch_config(connection * const con, plugin_data * const p) {
+    memcpy(&p->conf, &p->defaults, sizeof(plugin_config));
+    for (int i = 1, used = p->nconfig; i < used; ++i) {
+        if (config_check_cond(con, (uint32_t)p->cvlist[i].k_id))
+            mod_mysql_vhost_merge_config(&p->conf,
+                                         p->cvlist + p->cvlist[i].v.u2[0]);
+    }
+}
+
+static MYSQL * mod_mysql_vhost_db_setup (server *srv, const char *dbname, const char *user, const char *pass, const char *sock, const char *host, unsigned short port) {
+    /* required:
+     * - database
+     * - username
+     *
+     * optional:
+     * - password, default: empty
+     * - socket, default: mysql default
+     * - hostname, if set overrides socket
+     * - port, default: 3306
+     */
+
+    MYSQL * const my = mysql_init(NULL);
+    if (NULL == my) {
+        log_error(srv->errh, __FILE__, __LINE__,
+          "mysql_init() failed, exiting...");
+        return NULL;
+    }
+
+  #if MYSQL_VERSION_ID >= 50013
+    /* in mysql versions above 5.0.3 the reconnect flag is off by default */
+    char reconnect = 1;
+    mysql_options(my, MYSQL_OPT_RECONNECT, &reconnect);
+  #endif
+
+    unsigned long flags = 0;
+  #if MYSQL_VERSION_ID >= 40100
+    /* CLIENT_MULTI_STATEMENTS first appeared in 4.1 */
+    flags |= CLIENT_MULTI_STATEMENTS;
+  #endif
+
+    if (!mysql_real_connect(my, host, user, pass, dbname, port, sock, flags)) {
+        log_error_write(srv, __FILE__, __LINE__, "s", mysql_error(my));
+        mysql_close(my);
+        return NULL;
+    }
+
+    fdevent_setfd_cloexec(my->net.fd);
+    return my;
+}
+
 /* set configuration values */
-SERVER_FUNC(mod_mysql_vhost_set_defaults) {
-	plugin_data *p = p_d;
-	size_t i = 0;
+SETDEFAULTS_FUNC(mod_mysql_vhost_set_defaults) {
+    static const config_plugin_keys_t cpk[] = {
+      { CONST_STR_LEN("mysql-vhost.sql"),
+        T_CONFIG_STRING,
+        T_CONFIG_SCOPE_CONNECTION }
+     ,{ CONST_STR_LEN("mysql-vhost.db"),
+        T_CONFIG_STRING,
+        T_CONFIG_SCOPE_CONNECTION }
+     ,{ CONST_STR_LEN("mysql-vhost.user"),
+        T_CONFIG_STRING,
+        T_CONFIG_SCOPE_CONNECTION }
+     ,{ CONST_STR_LEN("mysql-vhost.pass"),
+        T_CONFIG_STRING,
+        T_CONFIG_SCOPE_CONNECTION }
+     ,{ CONST_STR_LEN("mysql-vhost.sock"),
+        T_CONFIG_STRING,
+        T_CONFIG_SCOPE_CONNECTION }
+     ,{ CONST_STR_LEN("mysql-vhost.hostname"),
+        T_CONFIG_STRING,
+        T_CONFIG_SCOPE_CONNECTION }
+     ,{ CONST_STR_LEN("mysql-vhost.port"),
+        T_CONFIG_SHORT,
+        T_CONFIG_SCOPE_CONNECTION }
+     ,{ NULL, 0,
+        T_CONFIG_UNSET,
+        T_CONFIG_SCOPE_UNSET }
+    };
 
-	config_values_t cv[] = {
-		{ "mysql-vhost.db",       NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_CONNECTION }, /* 0 */
-		{ "mysql-vhost.user",     NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_CONNECTION }, /* 1 */
-		{ "mysql-vhost.pass",     NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_CONNECTION }, /* 2 */
-		{ "mysql-vhost.sock",     NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_CONNECTION }, /* 3 */
-		{ "mysql-vhost.sql",      NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_CONNECTION }, /* 4 */
-		{ "mysql-vhost.hostname", NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_CONNECTION }, /* 5 */
-		{ "mysql-vhost.port",     NULL, T_CONFIG_SHORT,  T_CONFIG_SCOPE_CONNECTION }, /* 6 */
-		{ NULL,                   NULL, T_CONFIG_UNSET,  T_CONFIG_SCOPE_UNSET      }
-	};
+    plugin_data * const p = p_d;
+    if (!config_plugin_values_init(srv, p, cpk, "mod_mysql_vhost"))
+        return HANDLER_ERROR;
 
-	p->config_storage = calloc(srv->config_context->used, sizeof(plugin_config *));
+    /* process and validate config directives
+     * (init i to 0 if global context; to 1 to skip empty global context) */
+    for (int i = !p->cvlist[0].v.u2[1]; i < p->nconfig; ++i) {
+        config_plugin_value_t *cpv = p->cvlist + p->cvlist[i].v.u2[0];
+        const char *dbname=NULL, *user=NULL, *pass=NULL, *host=NULL, *sock=NULL;
+        unsigned short port = 0;
+        config_plugin_value_t *db = NULL;
+        for (; -1 != cpv->k_id; ++cpv) {
+            switch (cpv->k_id) {
+              case 0: /* mysql_vhost.sql */
+                break;
+              case 1: /* mysql_vhost.db */
+                if (!buffer_string_is_empty(cpv->v.b)) {
+                    db = cpv;
+                    dbname = cpv->v.b->ptr;
+                }
+                break;
+              case 2: /* mysql_vhost.user */
+                if (!buffer_string_is_empty(cpv->v.b))
+                    user = cpv->v.b->ptr;
+                break;
+              case 3: /* mysql_vhost.pass */
+                if (!buffer_string_is_empty(cpv->v.b))
+                    pass = cpv->v.b->ptr;
+                break;
+              case 4: /* mysql_vhost.sock */
+                if (!buffer_string_is_empty(cpv->v.b))
+                    sock = cpv->v.b->ptr;
+                break;
+              case 5: /* mysql_vhost.hostname */
+                if (!buffer_string_is_empty(cpv->v.b))
+                    host = cpv->v.b->ptr;
+                break;
+              case 6: /* mysql_vhost.port */
+                port = cpv->v.shrt;
+                break;
+              default:/* should not happen */
+                break;
+            }
+        }
 
-	for (i = 0; i < srv->config_context->used; i++) {
-		data_config const* config = (data_config const*)srv->config_context->data[i];
-		plugin_config *s;
+        if (dbname && user) {
+            cpv = db;
+            cpv->v.v =
+              mod_mysql_vhost_db_setup(srv,dbname,user,pass,sock,host,port);
+            if (NULL == db->v.v) return HANDLER_ERROR;
+            cpv->vtype = T_CONFIG_LOCAL;
+        }
+    }
 
-		s = calloc(1, sizeof(plugin_config));
-		s->mysql_query = buffer_init();
-		s->mydb = buffer_init();
-		s->myuser = buffer_init();
-		s->mypass = buffer_init();
-		s->mysock = buffer_init();
-		s->hostname = buffer_init();
-		s->port = 0;               /* default port for mysql */
-		s->mysql = NULL;
+    /* initialize p->defaults from global config context */
+    if (p->nconfig > 0 && p->cvlist->v.u2[1]) {
+        const config_plugin_value_t *cpv = p->cvlist + p->cvlist->v.u2[0];
+        if (-1 != cpv->k_id)
+            mod_mysql_vhost_merge_config(&p->defaults, cpv);
+    }
 
-		cv[0].destination = s->mydb;
-		cv[1].destination = s->myuser;
-		cv[2].destination = s->mypass;
-		cv[3].destination = s->mysock;
-		cv[4].destination = s->mysql_query;
-		cv[5].destination = s->hostname;
-		cv[6].destination = &(s->port);
-
-		p->config_storage[i] = s;
-
-		if (config_insert_values_global(srv, config->value, cv, i == 0 ? T_CONFIG_SCOPE_SERVER : T_CONFIG_SCOPE_CONNECTION)) {
-			return HANDLER_ERROR;
-		}
-
-		/* required:
-		 * - username
-		 * - database
-		 *
-		 * optional:
-		 * - password, default: empty
-		 * - socket, default: mysql default
-		 * - hostname, if set overrides socket
-		 * - port, default: 3306
-		 */
-
-		/* all have to be set */
-		if (!(buffer_string_is_empty(s->myuser) ||
-		      buffer_string_is_empty(s->mydb))) {
-
-			if (NULL == (s->mysql = mysql_init(NULL))) {
-				log_error_write(srv, __FILE__, __LINE__, "s", "mysql_init() failed, exiting...");
-				return HANDLER_ERROR;
-			}
-
-#if MYSQL_VERSION_ID >= 50013
-			/* in mysql versions above 5.0.3 the reconnect flag is off by default */
-			{
-				char reconnect = 1;
-				mysql_options(s->mysql, MYSQL_OPT_RECONNECT, &reconnect);
-			}
-#endif
-
-#define FOO(x) (buffer_string_is_empty(s->x) ? NULL : s->x->ptr)
-
-#if MYSQL_VERSION_ID >= 40100
-			/* CLIENT_MULTI_STATEMENTS first appeared in 4.1 */ 
-			if (!mysql_real_connect(s->mysql, FOO(hostname), FOO(myuser), FOO(mypass),
-						FOO(mydb), s->port, FOO(mysock), CLIENT_MULTI_STATEMENTS)) {
-#else
-			if (!mysql_real_connect(s->mysql, FOO(hostname), FOO(myuser), FOO(mypass),
-						FOO(mydb), s->port, FOO(mysock), 0)) {
-#endif
-				log_error_write(srv, __FILE__, __LINE__, "s", mysql_error(s->mysql));
-				return HANDLER_ERROR;
-			}
-#undef FOO
-
-			fdevent_setfd_cloexec(s->mysql->net.fd);
-		}
-	}
-
-	return HANDLER_GO_ON;
+    return HANDLER_GO_ON;
 }
-
-#define PATCH(x) \
-	p->conf.x = s->x;
-static int mod_mysql_vhost_patch_connection(server *srv, connection *con, plugin_data *p) {
-	size_t i, j;
-	plugin_config *s = p->config_storage[0];
-
-	PATCH(mysql_query);
-	PATCH(mysql);
-
-	/* skip the first, the global context */
-	for (i = 1; i < srv->config_context->used; i++) {
-		if (!config_check_cond(con, i)) continue; /* condition not matched */
-
-		data_config *dc = (data_config *)srv->config_context->data[i];
-		s = p->config_storage[i];
-
-		/* merge config */
-		for (j = 0; j < dc->value->used; j++) {
-			data_unset *du = dc->value->data[j];
-
-			if (buffer_is_equal_string(&du->key, CONST_STR_LEN("mysql-vhost.sql"))) {
-				PATCH(mysql_query);
-			}
-		}
-
-		if (s->mysql) {
-			PATCH(mysql);
-		}
-	}
-
-	return 0;
-}
-#undef PATCH
-
 
 /* handle document root request */
 CONNECTION_FUNC(mod_mysql_vhost_handle_docroot) {
@@ -277,7 +298,7 @@ CONNECTION_FUNC(mod_mysql_vhost_handle_docroot) {
 	/* no host specified? */
 	if (buffer_string_is_empty(con->uri.authority)) return HANDLER_GO_ON;
 
-	mod_mysql_vhost_patch_connection(srv, con, p);
+	mod_mysql_vhost_patch_config(con, p);
 
 	if (!p->conf.mysql) return HANDLER_GO_ON;
 	if (buffer_string_is_empty(p->conf.mysql_query)) return HANDLER_GO_ON;
@@ -289,25 +310,26 @@ CONNECTION_FUNC(mod_mysql_vhost_handle_docroot) {
 	if (buffer_is_equal(c->server_name, con->uri.authority)) goto GO_ON;
 
 	/* build and run SQL query */
-	buffer_clear(p->tmp_buf);
-	for (char *b = p->conf.mysql_query->ptr, *d; *b; b = d+1) {
-		if (NULL != (d = strchr(b, '?'))) {
+	buffer * const b = &p->tmp_buf;
+	buffer_clear(b);
+	for (const char *ptr = p->conf.mysql_query->ptr, *d; *ptr; ptr = d+1) {
+		if (NULL != (d = strchr(ptr, '?'))) {
 			/* escape the uri.authority */
 			unsigned long to_len;
-			buffer_append_string_len(p->tmp_buf, b, (size_t)(d - b));
-			buffer_string_prepare_append(p->tmp_buf, buffer_string_length(con->uri.authority) * 2);
+			buffer_append_string_len(b, ptr, (size_t)(d - ptr));
+			buffer_string_prepare_append(b, buffer_string_length(con->uri.authority) * 2);
 			to_len = mysql_real_escape_string(p->conf.mysql,
-					p->tmp_buf->ptr + buffer_string_length(p->tmp_buf),
+					b->ptr + buffer_string_length(b),
 					CONST_BUF_LEN(con->uri.authority));
 			if ((unsigned long)~0 == to_len) goto ERR500;
-			buffer_commit(p->tmp_buf, to_len);
+			buffer_commit(b, to_len);
 		} else {
 			d = p->conf.mysql_query->ptr + buffer_string_length(p->conf.mysql_query);
-			buffer_append_string_len(p->tmp_buf, b, (size_t)(d - b));
+			buffer_append_string_len(b, ptr, (size_t)(d - ptr));
 			break;
 		}
 	}
-	if (mysql_real_query(p->conf.mysql, CONST_BUF_LEN(p->tmp_buf))) {
+	if (mysql_real_query(p->conf.mysql, CONST_BUF_LEN(b))) {
 		log_error_write(srv, __FILE__, __LINE__, "s", mysql_error(p->conf.mysql));
 		goto ERR500;
 	}
@@ -324,21 +346,21 @@ CONNECTION_FUNC(mod_mysql_vhost_handle_docroot) {
 	}
 
 	/* sanity check that really is a directory */
-	buffer_copy_string(p->tmp_buf, row[0]);
-	buffer_append_slash(p->tmp_buf);
+	buffer_copy_string(b, row[0]);
+	buffer_append_slash(b);
 
-	if (HANDLER_ERROR == stat_cache_get_entry(srv, con, p->tmp_buf, &sce)) {
-		log_error_write(srv, __FILE__, __LINE__, "sb", strerror(errno), p->tmp_buf);
+	if (HANDLER_ERROR == stat_cache_get_entry(srv, con, b, &sce)) {
+		log_error_write(srv, __FILE__, __LINE__, "sb", strerror(errno), b);
 		goto ERR500;
 	}
 	if (!S_ISDIR(sce->st.st_mode)) {
-		log_error_write(srv, __FILE__, __LINE__, "sb", "Not a directory", p->tmp_buf);
+		log_error_write(srv, __FILE__, __LINE__, "sb", "Not a directory", b);
 		goto ERR500;
 	}
 
 	/* cache the data */
 	buffer_copy_buffer(c->server_name, con->uri.authority);
-	buffer_copy_buffer(c->document_root, p->tmp_buf);
+	buffer_copy_buffer(c->document_root, b);
 
 	mysql_free_result(result);
 #if MYSQL_VERSION_ID >= 40100
