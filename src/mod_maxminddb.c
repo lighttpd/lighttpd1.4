@@ -64,166 +64,278 @@
 
 #include <maxminddb.h>
 
-SETDEFAULTS_FUNC(mod_maxmind_set_defaults);
-INIT_FUNC(mod_maxmind_init);
-FREE_FUNC(mod_maxmind_free);
-CONNECTION_FUNC(mod_maxmind_request_env_handler);
-CONNECTION_FUNC(mod_maxmind_handle_con_close);
+SETDEFAULTS_FUNC(mod_maxminddb_set_defaults);
+INIT_FUNC(mod_maxminddb_init);
+FREE_FUNC(mod_maxminddb_free);
+CONNECTION_FUNC(mod_maxminddb_request_env_handler);
+CONNECTION_FUNC(mod_maxminddb_handle_con_close);
 
 int mod_maxminddb_plugin_init(plugin *p);
 int mod_maxminddb_plugin_init(plugin *p) {
     p->version                   = LIGHTTPD_VERSION_ID;
     p->name                      = "maxminddb";
 
-    p->set_defaults              = mod_maxmind_set_defaults;
-    p->init                      = mod_maxmind_init;
-    p->cleanup                   = mod_maxmind_free;
-    p->handle_request_env        = mod_maxmind_request_env_handler;
-    p->handle_connection_close   = mod_maxmind_handle_con_close;
+    p->set_defaults              = mod_maxminddb_set_defaults;
+    p->init                      = mod_maxminddb_init;
+    p->cleanup                   = mod_maxminddb_free;
+    p->handle_request_env        = mod_maxminddb_request_env_handler;
+    p->handle_connection_close   = mod_maxminddb_handle_con_close;
 
     return 0;
 }
 
 typedef struct {
     int activate;
-    array *env;
+    const array *env;
     const char ***cenv;
     struct MMDB_s *mmdb;
-    buffer *db_name;
 } plugin_config;
 
 typedef struct {
     PLUGIN_DATA;
-    plugin_config **config_storage;
+    plugin_config defaults;
 } plugin_data;
 
+typedef struct {
+    const array *env;
+    const char ***cenv;
+} plugin_config_env;
 
-INIT_FUNC(mod_maxmind_init)
+INIT_FUNC(mod_maxminddb_init)
 {
     return calloc(1, sizeof(plugin_data));
 }
 
 
-FREE_FUNC(mod_maxmind_free)
+static void mod_maxminddb_free_config (plugin_data * const p)
 {
-    plugin_data *p = (plugin_data *)p_d;
-    if (!p) return HANDLER_GO_ON;
-
-    if (p->config_storage) {
-        for (int i = 0; i < p->nconfig; ++i) {
-            plugin_config * const s = p->config_storage[i];
-            if (!s) continue;
-            buffer_free(s->db_name);
-            if (s->mmdb) { MMDB_close(s->mmdb); free(s->mmdb); }
-            for (size_t k = 0, used = s->env->used; k < used; ++k)
-                free(s->cenv[k]);
-            free(s->cenv);
-            array_free(s->env);
+    if (NULL == p->cvlist) return;
+    /* (init i to 0 if global context; to 1 to skip empty global context) */
+    for (int i = !p->cvlist[0].v.u2[1], used = p->nconfig; i < used; ++i) {
+        config_plugin_value_t *cpv = p->cvlist + p->cvlist[i].v.u2[0];
+        for (; -1 != cpv->k_id; ++cpv) {
+            switch (cpv->k_id) {
+              case 1: /* maxminddb.db */
+                if (cpv->vtype == T_CONFIG_LOCAL && NULL != cpv->v.v) {
+                    struct MMDB_s *mmdb;
+                    *(struct MMDB_s **)&mmdb = cpv->v.v;
+                    MMDB_close(mmdb);
+                    free(mmdb);
+                }
+                break;
+              case 2: /* maxminddb.env */
+                if (cpv->vtype == T_CONFIG_LOCAL && NULL != cpv->v.v) {
+                    plugin_config_env * const pcenv = cpv->v.v;
+                    const array * const env = pcenv->env;
+                    char ***cenv;
+                    *(const char ****)&cenv = pcenv->cenv;
+                    for (uint32_t k = 0, cused = env->used; k < cused; ++k)
+                        free(cenv[k]);
+                    free(cenv);
+                }
+                break;
+              default:
+                break;
+            }
         }
-        free(p->config_storage);
     }
+}
 
+
+FREE_FUNC(mod_maxminddb_free)
+{
+    plugin_data * const p = p_d;
+    if (!p) return HANDLER_GO_ON;
+    UNUSED(srv);
+
+    mod_maxminddb_free_config(p);
+
+    free(p->cvlist);
     free(p);
 
-    UNUSED(srv);
     return HANDLER_GO_ON;
 }
 
 
-SETDEFAULTS_FUNC(mod_maxmind_set_defaults)
+static MMDB_s *
+mod_maxminddb_open_db (server *srv, const buffer *db_name)
 {
-    static config_values_t cv[] = {
-      { "maxminddb.activate",  NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION },
-      { "maxminddb.db",        NULL, T_CONFIG_STRING,  T_CONFIG_SCOPE_CONNECTION },
-      { "maxminddb.env",       NULL, T_CONFIG_ARRAY,   T_CONFIG_SCOPE_CONNECTION },
+    if (db_name->used < sizeof(".mmdb")
+        || 0 != memcmp(db_name->ptr+db_name->used-sizeof(".mmdb"),
+                       CONST_STR_LEN(".mmdb"))) {
+        log_error(srv->errh, __FILE__, __LINE__,
+          "GeoIP database is of unsupported type %.*s)",
+          BUFFER_INTLEN_PTR(db_name));
+        return NULL;
+    }
 
-      { NULL, NULL, T_CONFIG_UNSET, T_CONFIG_SCOPE_UNSET }
+    MMDB_s * const mmdb = (MMDB_s *)calloc(1, sizeof(MMDB_s));
+    int rc = MMDB_open(db_name->ptr, MMDB_MODE_MMAP, mmdb);
+    if (MMDB_SUCCESS == rc)
+        return mmdb;
+
+    if (MMDB_IO_ERROR == rc)
+        log_perror(srv->errh, __FILE__, __LINE__,
+          "failed to open GeoIP2 database (%.*s)",
+          BUFFER_INTLEN_PTR(db_name));
+    else
+        log_error(srv->errh, __FILE__, __LINE__,
+          "failed to open GeoIP2 database (%.*s): %s",
+          BUFFER_INTLEN_PTR(db_name), MMDB_strerror(rc));
+    free(mmdb);
+    return NULL;
+}
+
+
+static plugin_config_env *
+mod_maxminddb_prep_cenv (server *srv, const array * const env)
+{
+    data_string ** const data = (data_string **)env->data;
+    char *** const cenv = calloc(env->used, sizeof(char **));
+    force_assert(cenv);
+    for (uint32_t j = 0, used = env->used; j < used; ++j) {
+        if (data[j]->type != TYPE_STRING) {
+            log_error(srv->errh, __FILE__, __LINE__,
+              "maxminddb.env must be a list of strings");
+            for (uint32_t k = 0; k < j; ++k) free(cenv[k]);
+            free(cenv);
+            return NULL;
+        }
+        buffer *value = &data[j]->value;
+        if (buffer_string_is_empty(value)
+            || '/' == value->ptr[0]
+            || '/' == value->ptr[buffer_string_length(value)-1]) {
+            log_error(srv->errh, __FILE__, __LINE__,
+              "maxminddb.env must be a list of non-empty "
+              "strings and must not begin or end with '/'");
+            for (uint32_t k = 0; k < j; ++k) free(cenv[k]);
+            free(cenv);
+            return NULL;
+        }
+        /* XXX: should strings be lowercased? */
+        unsigned int k = 2;
+        for (char *t = value->ptr; (t = strchr(t, '/')); ++t) ++k;
+        const char **keys = (const char **)(cenv[j] = calloc(k,sizeof(char *)));
+        force_assert(keys);
+        k = 0;
+        keys[k] = value->ptr;
+        for (char *t = value->ptr; (t = strchr(t, '/')); ) {
+            *t = '\0';
+            keys[++k] = ++t;
+        }
+        keys[++k] = NULL;
+    }
+
+    plugin_config_env * const pcenv = malloc(sizeof(plugin_config_env));
+    force_assert(pcenv);
+    pcenv->env = env;
+    pcenv->cenv = (const char ***)cenv;
+    return pcenv;
+}
+
+
+static void
+mod_maxminddb_merge_config_cpv(plugin_config * const pconf,
+                               const config_plugin_value_t * const cpv)
+{
+    switch (cpv->k_id) { /* index into static config_plugin_keys_t cpk[] */
+      case 0: /* maxminddb.activate */
+        pconf->activate = (int)cpv->v.u;
+        break;
+      case 1: /* maxminddb.db */
+        if (cpv->vtype != T_CONFIG_LOCAL) break;
+        pconf->mmdb = cpv->v.v;
+        break;
+      case 2: /* maxminddb.env */
+        if (cpv->vtype == T_CONFIG_LOCAL) {
+            plugin_config_env * const pcenv = cpv->v.v;
+            pconf->env = pcenv->env;
+            pconf->cenv = pcenv->cenv;
+        }
+        break;
+      default:/* should not happen */
+        return;
+    }
+}
+
+
+static void
+mod_maxminddb_merge_config (plugin_config * const pconf,
+                            const config_plugin_value_t *cpv)
+{
+    do {
+        mod_maxminddb_merge_config_cpv(pconf, cpv);
+    } while ((++cpv)->k_id != -1);
+}
+
+
+static void
+mod_maxmind_patch_config (connection * const con,
+                          const plugin_data * const p,
+                          plugin_config * const pconf)
+{
+    memcpy(pconf, &p->defaults, sizeof(plugin_config));
+    for (int i = 1, used = p->nconfig; i < used; ++i) {
+        if (config_check_cond(con, (uint32_t)p->cvlist[i].k_id))
+            mod_maxminddb_merge_config(pconf, p->cvlist + p->cvlist[i].v.u2[0]);
+    }
+}
+
+
+SETDEFAULTS_FUNC(mod_maxminddb_set_defaults)
+{
+    static const config_plugin_keys_t cpk[] = {
+      { CONST_STR_LEN("maxminddb.activate"),
+        T_CONFIG_BOOL,
+        T_CONFIG_SCOPE_CONNECTION }
+     ,{ CONST_STR_LEN("maxminddb.db"),
+        T_CONFIG_STRING,
+        T_CONFIG_SCOPE_CONNECTION }
+     ,{ CONST_STR_LEN("maxminddb.env"),
+        T_CONFIG_ARRAY,
+        T_CONFIG_SCOPE_CONNECTION }
+     ,{ NULL, 0,
+        T_CONFIG_UNSET,
+        T_CONFIG_SCOPE_UNSET }
     };
 
-    plugin_data * const p = (plugin_data *)p_d;
-    const size_t n_context = p->nconfig = srv->config_context->used;
-    p->config_storage = calloc(p->nconfig, sizeof(plugin_config *));
-    force_assert(p->config_storage);
+    plugin_data * const p = p_d;
+    if (!config_plugin_values_init(srv, p, cpk, "mod_maxminddb"))
+        return HANDLER_ERROR;
 
-    for (size_t i = 0; i < n_context; ++i) {
-        plugin_config * const s = calloc(1, sizeof(plugin_config));
-        force_assert(s);
-        p->config_storage[i] = s;
-        s->db_name = buffer_init();
-        s->env = array_init();
-
-        cv[0].destination = &s->activate;
-        cv[1].destination = s->db_name;
-        cv[2].destination = s->env;
-
-        array * const ca = ((data_config *)srv->config_context->data[i])->value;
-        if (0 != config_insert_values_global(srv, ca, cv, i == 0 ? T_CONFIG_SCOPE_SERVER : T_CONFIG_SCOPE_CONNECTION)) {
-            return HANDLER_ERROR;
-        }
-
-        if (!buffer_is_empty(s->db_name)) {
-
-            if (s->db_name->used >= sizeof(".mmdb")
-                && 0 == memcmp(s->db_name->ptr+s->db_name->used-sizeof(".mmdb"),
-                               CONST_STR_LEN(".mmdb"))) {
-                MMDB_s * const mmdb = (MMDB_s *)calloc(1, sizeof(MMDB_s));
-                int rc = MMDB_open(s->db_name->ptr, MMDB_MODE_MMAP, mmdb);
-                if (MMDB_SUCCESS != rc) {
-                    if (MMDB_IO_ERROR == rc)
-                        log_perror(srv->errh, __FILE__, __LINE__,
-                                   "failed to open GeoIP2 database (%.*s)",
-                                   BUFFER_INTLEN_PTR(s->db_name));
-                    else
-                        log_error(srv->errh, __FILE__, __LINE__,
-                                  "failed to open GeoIP2 database (%.*s): %s",
-                                  BUFFER_INTLEN_PTR(s->db_name),
-                                  MMDB_strerror(rc));
-                    free(mmdb);
-                    return HANDLER_ERROR;
+    /* process and validate config directives
+     * (init i to 0 if global context; to 1 to skip empty global context) */
+    for (int i = !p->cvlist[0].v.u2[1]; i < p->nconfig; ++i) {
+        config_plugin_value_t *cpv = p->cvlist + p->cvlist[i].v.u2[0];
+        for (; -1 != cpv->k_id; ++cpv) {
+            switch (cpv->k_id) {
+              case 0: /* maxminddb.activate */
+                break;
+              case 1: /* maxminddb.db */
+                if (!buffer_is_empty(cpv->v.b)) {
+                    cpv->v.v = mod_maxminddb_open_db(srv, cpv->v.b);
+                    if (NULL == cpv->v.v) return HANDLER_ERROR;
+                    cpv->vtype = T_CONFIG_LOCAL;
                 }
-                s->mmdb = mmdb;
-            }
-            else {
-                log_error(srv->errh, __FILE__, __LINE__,
-                          "GeoIP database is of unsupported type %.*s)",
-                          BUFFER_INTLEN_PTR(s->db_name));
-                return HANDLER_ERROR;
+                break;
+              case 2: /* maxminddb.env */
+                if (cpv->v.a->used) {
+                    cpv->v.v = mod_maxminddb_prep_cenv(srv, cpv->v.a);
+                    if (NULL == cpv->v.v) return HANDLER_ERROR;
+                    cpv->vtype = T_CONFIG_LOCAL;
+                }
+                break;
+              default:/* should not happen */
+                break;
             }
         }
+    }
 
-        if (s->env->used) {
-            data_string **data = (data_string **)s->env->data;
-            s->cenv = calloc(s->env->used, sizeof(char **));
-            force_assert(s->cenv);
-            for (size_t j = 0, used = s->env->used; j < used; ++j) {
-                if (data[j]->type != TYPE_STRING) {
-                    log_error(srv->errh, __FILE__, __LINE__,
-                              "maxminddb.env must be a list of strings");
-                    return HANDLER_ERROR;
-                }
-                buffer *value = &data[j]->value;
-                if (buffer_string_is_empty(value)
-                    || '/' == value->ptr[0]
-                    || '/' == value->ptr[buffer_string_length(value)-1]) {
-                    log_error(srv->errh, __FILE__, __LINE__,
-                              "maxminddb.env must be a list of non-empty "
-                              "strings and must not begin or end with '/'");
-                    return HANDLER_ERROR;
-                }
-                /* XXX: should strings be lowercased? */
-                unsigned int k = 2;
-                for (char *t = value->ptr; (t = strchr(t, '/')); ++t) ++k;
-                const char **keys = s->cenv[j] = calloc(k, sizeof(char *));
-                force_assert(keys);
-                k = 0;
-                keys[k] = value->ptr;
-                for (char *t = value->ptr; (t = strchr(t, '/')); ) {
-                    *t = '\0';
-                    keys[++k] = ++t;
-                }
-                keys[++k] = NULL;
-            }
-        }
+    /* initialize p->defaults from global config context */
+    if (p->nconfig > 0 && p->cvlist->v.u2[1]) {
+        const config_plugin_value_t *cpv = p->cvlist + p->cvlist->v.u2[0];
+        if (-1 != cpv->k_id)
+            mod_maxminddb_merge_config(&p->defaults, cpv);
     }
 
     return HANDLER_GO_ON;
@@ -231,8 +343,8 @@ SETDEFAULTS_FUNC(mod_maxmind_set_defaults)
 
 
 static void
-geoip2_env_set (array * const env, const char *k, size_t klen,
-                MMDB_entry_data_s *data)
+geoip2_env_set (array * const env, const char * const k,
+                const size_t klen, MMDB_entry_data_s * const data)
 {
     /* GeoIP2 database interfaces return pointers directly into database,
      * and these are valid until the database is closed.
@@ -292,8 +404,8 @@ geoip2_env_set (array * const env, const char *k, size_t klen,
 
 
 static void
-mod_maxmind_geoip2 (array * const env, sock_addr *dst_addr,
-                    plugin_config *pconf)
+mod_maxmind_geoip2 (array * const env, sock_addr * const dst_addr,
+                    plugin_config * const pconf)
 {
     MMDB_lookup_result_s res;
     MMDB_entry_data_s data;
@@ -314,59 +426,17 @@ mod_maxmind_geoip2 (array * const env, sock_addr *dst_addr,
 }
 
 
-static void
-mod_maxmind_patch_connection (server * const srv,
-                              connection * const con,
-                              const plugin_data * const p,
-                              plugin_config * const pconf)
-{
-    const plugin_config *s = p->config_storage[0];
-    memcpy(pconf, s, sizeof(*s));
-    if (1 == p->nconfig)
-        return;
-
-    data_config ** const context_data =
-      (data_config **)srv->config_context->data;
-
-    s = p->config_storage[1]; /* base config (global context) copied above */
-    for (size_t i = 1; i < srv->config_context->used; ++i) {
-        if (!config_check_cond(con, i)) continue; /* condition not matched */
-
-        data_config *dc = context_data[i];
-        s = p->config_storage[i];
-
-        /* merge config */
-        #define PATCH(x) pconf->x = s->x;
-        for (size_t j = 0; j < dc->value->used; ++j) {
-            data_unset *du = dc->value->data[j];
-
-            if (buffer_is_equal_string(&du->key, CONST_STR_LEN("maxminddb.activate"))) {
-                PATCH(activate);
-            }
-            else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("maxminddb.db"))) {
-                /*PATCH(db_name);*//*(not used)*/
-                PATCH(mmdb);
-            }
-            else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("maxminddb.env"))) {
-                PATCH(env);
-                PATCH(cenv);
-            }
-        }
-        #undef PATCH
-    }
-}
-
-
-CONNECTION_FUNC(mod_maxmind_request_env_handler)
+CONNECTION_FUNC(mod_maxminddb_request_env_handler)
 {
     const int sa_family = con->dst_addr.plain.sa_family;
     if (sa_family != AF_INET && sa_family != AF_INET6) return HANDLER_GO_ON;
 
+    UNUSED(srv);
     plugin_config pconf;
     plugin_data *p = p_d;
-    mod_maxmind_patch_connection(srv, con, p, &pconf);
+    mod_maxmind_patch_config(con, p, &pconf);
     /* check that mod_maxmind is activated and env fields were requested */
-    if (!pconf.activate || 0 == pconf.env->used) return HANDLER_GO_ON;
+    if (!pconf.activate || NULL == pconf.env) return HANDLER_GO_ON;
 
     array *env = con->plugin_ctx[p->id];
     if (NULL == env) {
@@ -387,7 +457,7 @@ CONNECTION_FUNC(mod_maxmind_request_env_handler)
 }
 
 
-CONNECTION_FUNC(mod_maxmind_handle_con_close)
+CONNECTION_FUNC(mod_maxminddb_handle_con_close)
 {
     plugin_data *p = p_d;
     array *env = con->plugin_ctx[p->id];
