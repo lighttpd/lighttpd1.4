@@ -32,7 +32,7 @@ typedef struct http_response_opts_t {
   int authorizer;
   unsigned short local_redir;
   unsigned short xsendfile_allow;
-  array *xsendfile_docroot;
+  const array *xsendfile_docroot;
   void *pdata;
   handler_t(*parse)(server *, connection *, struct http_response_opts_t *, buffer *, size_t);
   handler_t(*headers)(server *, connection *, struct http_response_opts_t *);

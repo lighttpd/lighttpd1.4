@@ -633,7 +633,7 @@ static void http_response_xsendfile (server *srv, connection *con, buffer *path,
 	 * - xdocroot should have trailing slash appended at config time
 	 * - con->conf.force_lowercase_filenames is not a server-wide setting,
 	 *   and so can not be definitively applied to xdocroot at config time*/
-	if (xdocroot->used) {
+	if (xdocroot) {
 		size_t i, xlen = buffer_string_length(path);
 		for (i = 0; i < xdocroot->used; ++i) {
 			data_string *ds = (data_string *)xdocroot->data[i];
@@ -645,7 +645,7 @@ static void http_response_xsendfile (server *srv, connection *con, buffer *path,
 				break;
 			}
 		}
-		if (i == xdocroot->used) {
+		if (i == xdocroot->used && 0 != i) {
 			log_error_write(srv, __FILE__, __LINE__, "SBs",
 					"X-Sendfile (", path,
 					") not under configured x-sendfile-docroot(s)");
@@ -707,7 +707,7 @@ static void http_response_xsendfile2(server *srv, connection *con, const buffer 
         if (con->conf.force_lowercase_filenames) {
             buffer_to_lower(b);
         }
-        if (xdocroot->used) {
+        if (xdocroot) {
             size_t i, xlen = buffer_string_length(b);
             for (i = 0; i < xdocroot->used; ++i) {
                 data_string *ds = (data_string *)xdocroot->data[i];
@@ -719,7 +719,7 @@ static void http_response_xsendfile2(server *srv, connection *con, const buffer 
                     break;
                 }
             }
-            if (i == xdocroot->used) {
+            if (i == xdocroot->used && 0 != i) {
                 log_error_write(srv, __FILE__, __LINE__, "SBs",
                                 "X-Sendfile2 (", b,
                                 ") not under configured x-sendfile-docroot(s)");
