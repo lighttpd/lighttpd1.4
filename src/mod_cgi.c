@@ -61,17 +61,17 @@ typedef struct {
 } buffer_pid_t;
 
 typedef struct {
-	array *cgi;
+	const array *cgi;
 	unsigned short execute_x_only;
 	unsigned short local_redir;
 	unsigned short xsendfile_allow;
 	unsigned short upgrade;
-	array *xsendfile_docroot;
+	const array *xsendfile_docroot;
 } plugin_config;
 
 typedef struct {
 	PLUGIN_DATA;
-	plugin_config **config_storage;
+	plugin_config defaults;
 	plugin_config conf;
 	buffer_pid_t cgi_pid;
 	env_accum env;
@@ -135,25 +135,11 @@ INIT_FUNC(mod_cgi_init) {
 
 FREE_FUNC(mod_cgi_free) {
 	plugin_data *p = p_d;
+	if (!p) return HANDLER_GO_ON;
+
 	buffer_pid_t *r = &(p->cgi_pid);
 
 	UNUSED(srv);
-
-	if (p->config_storage) {
-		size_t i;
-		for (i = 0; i < srv->config_context->used; i++) {
-			plugin_config *s = p->config_storage[i];
-
-			if (NULL == s) continue;
-
-			array_free(s->cgi);
-			array_free(s->xsendfile_docroot);
-
-			free(s);
-		}
-		free(p->config_storage);
-	}
-
 
 	if (r->ptr) free(r->ptr);
 	free(p->env.ptr);
@@ -164,84 +150,136 @@ FREE_FUNC(mod_cgi_free) {
       #ifdef __CYGWIN__
 	buffer_free(p->env.systemroot);
       #endif
+
+	free(p->cvlist);
 	free(p);
 
 	return HANDLER_GO_ON;
 }
 
-SETDEFAULTS_FUNC(mod_fastcgi_set_defaults) {
-	plugin_data *p = p_d;
-	size_t i = 0;
+static void mod_cgi_merge_config_cpv(plugin_config * const pconf, const config_plugin_value_t * const cpv) {
+    switch (cpv->k_id) { /* index into static config_plugin_keys_t cpk[] */
+      case 0: /* cgi.assign */
+        pconf->cgi = cpv->v.a;
+        break;
+      case 1: /* cgi.execute-x-only */
+        pconf->execute_x_only = (unsigned short)cpv->v.u;
+        break;
+      case 2: /* cgi.x-sendfile */
+        pconf->xsendfile_allow = (unsigned short)cpv->v.u;
+        break;
+      case 3: /* cgi.x-sendfile-docroot */
+        pconf->xsendfile_docroot = cpv->v.a;
+        break;
+      case 4: /* cgi.local-redir */
+        pconf->local_redir = (unsigned short)cpv->v.u;
+        break;
+      case 5: /* cgi.upgrade */
+        pconf->upgrade = (unsigned short)cpv->v.u;
+        break;
+      default:/* should not happen */
+        return;
+    }
+}
 
-	config_values_t cv[] = {
-		{ "cgi.assign",                  NULL, T_CONFIG_ARRAY, T_CONFIG_SCOPE_CONNECTION },       /* 0 */
-		{ "cgi.execute-x-only",          NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION },     /* 1 */
-		{ "cgi.x-sendfile",              NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION },     /* 2 */
-		{ "cgi.x-sendfile-docroot",      NULL, T_CONFIG_ARRAY,   T_CONFIG_SCOPE_CONNECTION },     /* 3 */
-		{ "cgi.local-redir",             NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION },     /* 4 */
-		{ "cgi.upgrade",                 NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION },     /* 5 */
-		{ NULL,                          NULL, T_CONFIG_UNSET, T_CONFIG_SCOPE_UNSET}
-	};
+static void mod_cgi_merge_config(plugin_config * const pconf, const config_plugin_value_t *cpv) {
+    do {
+        mod_cgi_merge_config_cpv(pconf, cpv);
+    } while ((++cpv)->k_id != -1);
+}
 
-	if (!p) return HANDLER_ERROR;
+static void mod_cgi_patch_config(connection * const con, plugin_data * const p) {
+    memcpy(&p->conf, &p->defaults, sizeof(plugin_config));
+    for (int i = 1, used = p->nconfig; i < used; ++i) {
+        if (config_check_cond(con, (uint32_t)p->cvlist[i].k_id))
+            mod_cgi_merge_config(&p->conf, p->cvlist + p->cvlist[i].v.u2[0]);
+    }
+}
 
-	p->config_storage = calloc(srv->config_context->used, sizeof(plugin_config *));
-	force_assert(p->config_storage);
+SETDEFAULTS_FUNC(mod_cgi_set_defaults) {
+    static const config_plugin_keys_t cpk[] = {
+      { CONST_STR_LEN("cgi.assign"),
+        T_CONFIG_ARRAY,
+        T_CONFIG_SCOPE_CONNECTION }
+     ,{ CONST_STR_LEN("cgi.execute-x-only"),
+        T_CONFIG_BOOL,
+        T_CONFIG_SCOPE_CONNECTION }
+     ,{ CONST_STR_LEN("cgi.x-sendfile"),
+        T_CONFIG_BOOL,
+        T_CONFIG_SCOPE_CONNECTION }
+     ,{ CONST_STR_LEN("cgi.x-sendfile-docroot"),
+        T_CONFIG_ARRAY,
+        T_CONFIG_SCOPE_CONNECTION }
+     ,{ CONST_STR_LEN("cgi.local-redir"),
+        T_CONFIG_BOOL,
+        T_CONFIG_SCOPE_CONNECTION }
+     ,{ CONST_STR_LEN("cgi.upgrade"),
+        T_CONFIG_BOOL,
+        T_CONFIG_SCOPE_CONNECTION }
+     ,{ NULL, 0,
+        T_CONFIG_UNSET,
+        T_CONFIG_SCOPE_UNSET }
+    };
 
-	for (i = 0; i < srv->config_context->used; i++) {
-		data_config const* config = (data_config const*)srv->config_context->data[i];
-		plugin_config *s;
+    plugin_data * const p = p_d;
+    if (!config_plugin_values_init(srv, p, cpk, "mod_cgi"))
+        return HANDLER_ERROR;
 
-		s = calloc(1, sizeof(plugin_config));
-		force_assert(s);
+    /* process and validate config directives
+     * (init i to 0 if global context; to 1 to skip empty global context) */
+    for (int i = !p->cvlist[0].v.u2[1]; i < p->nconfig; ++i) {
+        const config_plugin_value_t *cpv = p->cvlist + p->cvlist[i].v.u2[0];
+        for (; -1 != cpv->k_id; ++cpv) {
+            switch (cpv->k_id) {
+              case 0: /* cgi.assign */
+                if (!array_is_kvstring(cpv->v.a)) {
+                    log_error(srv->errh, __FILE__, __LINE__,
+                      "unexpected value for %s; "
+                      "expected list of \"ext\" -> \"exepath\"",
+                      cpk[cpv->k_id].k);
+                    return HANDLER_ERROR;
+                }
+                break;
+              case 1: /* cgi.execute-x-only */
+              case 2: /* cgi.x-sendfile */
+                break;
+              case 3: /* cgi.x-sendfile-docroot */
+                if (!array_is_vlist(cpv->v.a)) {
+                    log_error(srv->errh, __FILE__, __LINE__,
+                      "unexpected value for %s; "
+                      "expected: %s = ( \"/allowed/path\", ... )",
+                      cpk[cpv->k_id].k, cpk[cpv->k_id].k);
+                    return HANDLER_ERROR;
+                }
+                for (uint32_t j = 0; j < cpv->v.a->used; ++j) {
+                    data_string *ds = (data_string *)cpv->v.a->data[j];
+                    if (ds->value.ptr[0] != '/') {
+                        log_error(srv->errh, __FILE__, __LINE__,
+                          "%s paths must begin with '/'; invalid: \"%s\"",
+                          cpk[cpv->k_id].k, ds->value.ptr);
+                        return HANDLER_ERROR;
+                    }
+                    buffer_path_simplify(&ds->value, &ds->value);
+                    buffer_append_slash(&ds->value);
+                }
+                break;
+              case 4: /* cgi.local-redir */
+              case 5: /* cgi.upgrade */
+                break;
+              default:/* should not happen */
+                break;
+            }
+        }
+    }
 
-		s->cgi    = array_init();
-		s->execute_x_only = 0;
-		s->local_redir    = 0;
-		s->xsendfile_allow= 0;
-		s->xsendfile_docroot = array_init();
-		s->upgrade        = 0;
+    /* initialize p->defaults from global config context */
+    if (p->nconfig > 0 && p->cvlist->v.u2[1]) {
+        const config_plugin_value_t *cpv = p->cvlist + p->cvlist->v.u2[0];
+        if (-1 != cpv->k_id)
+            mod_cgi_merge_config(&p->defaults, cpv);
+    }
 
-		cv[0].destination = s->cgi;
-		cv[1].destination = &(s->execute_x_only);
-		cv[2].destination = &(s->xsendfile_allow);
-		cv[3].destination = s->xsendfile_docroot;
-		cv[4].destination = &(s->local_redir);
-		cv[5].destination = &(s->upgrade);
-
-		p->config_storage[i] = s;
-
-		if (0 != config_insert_values_global(srv, config->value, cv, i == 0 ? T_CONFIG_SCOPE_SERVER : T_CONFIG_SCOPE_CONNECTION)) {
-			return HANDLER_ERROR;
-		}
-
-		if (!array_is_kvstring(s->cgi)) {
-			log_error_write(srv, __FILE__, __LINE__, "s",
-					"unexpected value for cgi.assign; expected list of \"ext\" => \"exepath\"");
-			return HANDLER_ERROR;
-		}
-
-		if (s->xsendfile_docroot->used) {
-			size_t j;
-			for (j = 0; j < s->xsendfile_docroot->used; ++j) {
-				data_string *ds = (data_string *)s->xsendfile_docroot->data[j];
-				if (ds->type != TYPE_STRING) {
-					log_error_write(srv, __FILE__, __LINE__, "s",
-						"unexpected type for key cgi.x-sendfile-docroot; expected: cgi.x-sendfile-docroot = ( \"/allowed/path\", ... )");
-					return HANDLER_ERROR;
-				}
-				if (ds->value.ptr[0] != '/') {
-					log_error_write(srv, __FILE__, __LINE__, "SBs",
-						"cgi.x-sendfile-docroot paths must begin with '/'; invalid: \"", &ds->value, "\"");
-					return HANDLER_ERROR;
-				}
-				buffer_path_simplify(&ds->value, &ds->value);
-				buffer_append_slash(&ds->value);
-			}
-		}
-	}
-
-	return HANDLER_GO_ON;
+    return HANDLER_GO_ON;
 }
 
 
@@ -859,50 +897,6 @@ static int cgi_create_env(server *srv, connection *con, plugin_data *p, handler_
 	}
 }
 
-#define PATCH(x) \
-	p->conf.x = s->x;
-static int mod_cgi_patch_connection(server *srv, connection *con, plugin_data *p) {
-	size_t i, j;
-	plugin_config *s = p->config_storage[0];
-
-	PATCH(cgi);
-	PATCH(execute_x_only);
-	PATCH(local_redir);
-	PATCH(upgrade);
-	PATCH(xsendfile_allow);
-	PATCH(xsendfile_docroot);
-
-	/* skip the first, the global context */
-	for (i = 1; i < srv->config_context->used; i++) {
-		if (!config_check_cond(con, i)) continue; /* condition not matched */
-
-		data_config *dc = (data_config *)srv->config_context->data[i];
-		s = p->config_storage[i];
-
-		/* merge config */
-		for (j = 0; j < dc->value->used; j++) {
-			data_unset *du = dc->value->data[j];
-
-			if (buffer_is_equal_string(&du->key, CONST_STR_LEN("cgi.assign"))) {
-				PATCH(cgi);
-			} else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("cgi.execute-x-only"))) {
-				PATCH(execute_x_only);
-			} else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("cgi.local-redir"))) {
-				PATCH(local_redir);
-			} else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("cgi.upgrade"))) {
-				PATCH(upgrade);
-			} else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("cgi.x-sendfile"))) {
-				PATCH(xsendfile_allow);
-			} else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("cgi.x-sendfile-docroot"))) {
-				PATCH(xsendfile_docroot);
-			}
-		}
-	}
-
-	return 0;
-}
-#undef PATCH
-
 URIHANDLER_FUNC(cgi_is_handled) {
 	plugin_data *p = p_d;
 	struct stat *st;
@@ -911,7 +905,8 @@ URIHANDLER_FUNC(cgi_is_handled) {
 	if (con->mode != DIRECT) return HANDLER_GO_ON;
 	if (buffer_is_empty(con->physical.path)) return HANDLER_GO_ON;
 
-	mod_cgi_patch_connection(srv, con, p);
+	mod_cgi_patch_config(con, p);
+	if (NULL == p->conf.cgi) return HANDLER_GO_ON;
 
 	ds = (data_string *)array_match_key_suffix(p->conf.cgi, con->physical.path);
 	if (NULL == ds) return HANDLER_GO_ON;
@@ -1060,7 +1055,7 @@ int mod_cgi_plugin_init(plugin *p) {
 	p->handle_waitpid = cgi_waitpid_cb;
 	p->init           = mod_cgi_init;
 	p->cleanup        = mod_cgi_free;
-	p->set_defaults   = mod_fastcgi_set_defaults;
+	p->set_defaults   = mod_cgi_set_defaults;
 
 	return 0;
 }
