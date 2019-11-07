@@ -169,24 +169,23 @@ static void sigbus_handler(int sig) {
 #define GByte * 1024 MByte
 
 typedef struct {
-	array		*mimetypes;
-	int		allowed_encodings;
+	const array	*mimetypes;
 	unsigned int	max_compress_size;
 	unsigned short	min_compress_size;
 	unsigned short	output_buffer_size;
 	unsigned short	work_block_size;
 	unsigned short	sync_flush;
 	short		compression_level;
+	short		allowed_encodings;
 	double		max_loadavg;
 } plugin_config;
 
 typedef struct {
-	PLUGIN_DATA;
-	buffer *tmp_buf;
-	array *encodings;
+    PLUGIN_DATA;
+    plugin_config defaults;
+    plugin_config conf;
 
-	plugin_config **config_storage;
-	plugin_config conf;
+    buffer tmp_buf;
 } plugin_data;
 
 typedef struct {
@@ -218,7 +217,7 @@ static handler_ctx *handler_ctx_init() {
 
 static void handler_ctx_free(handler_ctx *hctx) {
       #if 0
-	if (hctx->output != p->tmp_buf) {
+	if (hctx->output != &p->tmp_buf) {
 		buffer_free(hctx->output);
 	}
       #endif
@@ -227,170 +226,226 @@ static void handler_ctx_free(handler_ctx *hctx) {
 }
 
 INIT_FUNC(mod_deflate_init) {
-	plugin_data *p;
-
-	p = calloc(1, sizeof(*p));
-
-	p->encodings = array_init();
-	p->tmp_buf = buffer_init();
-	buffer_string_prepare_copy(p->tmp_buf, 64 KByte);
-
-	return p;
+    plugin_data * const p = calloc(1, sizeof(plugin_data));
+    buffer_string_prepare_copy(&p->tmp_buf, 64 KByte);
+    return p;
 }
 
 FREE_FUNC(mod_deflate_free) {
-	plugin_data *p = p_d;
+    plugin_data *p = p_d;
+    if (!p) return HANDLER_GO_ON;
+    UNUSED(srv);
 
-	UNUSED(srv);
+    free(p->tmp_buf.ptr);
 
-	if (!p) return HANDLER_GO_ON;
+    free(p->cvlist);
+    free(p);
 
-	if (p->config_storage) {
-		size_t i;
-		for (i = 0; i < srv->config_context->used; i++) {
-			plugin_config *s = p->config_storage[i];
-
-			if (!s) continue;
-
-			array_free(s->mimetypes);
-			free(s);
-		}
-		free(p->config_storage);
-	}
-
-	buffer_free(p->tmp_buf);
-	array_free(p->encodings);
-
-	free(p);
-
-	return HANDLER_GO_ON;
+    return HANDLER_GO_ON;
 }
 
-SETDEFAULTS_FUNC(mod_deflate_setdefaults) {
-	plugin_data *p = p_d;
-	size_t i = 0;
+static void mod_deflate_merge_config_cpv(plugin_config * const pconf, const config_plugin_value_t * const cpv) {
+    switch (cpv->k_id) { /* index into static config_plugin_keys_t cpk[] */
+      case 0: /* deflate.mimetypes */
+        pconf->mimetypes = cpv->v.a;
+        break;
+      case 1: /* deflate.allowed-encodings */
+        pconf->allowed_encodings = (short)cpv->v.shrt;
+        break;
+      case 2: /* deflate.max-compress-size */
+        pconf->max_compress_size = cpv->v.u;
+        break;
+      case 3: /* deflate.min-compress-size */
+        pconf->min_compress_size = cpv->v.shrt;
+        break;
+      case 4: /* deflate.compression-level */
+        pconf->compression_level = (short)cpv->v.shrt;
+        break;
+      case 5: /* deflate.output-buffer-size */
+        pconf->output_buffer_size = cpv->v.shrt;
+        break;
+      case 6: /* deflate.work-block-size */
+        pconf->work_block_size = cpv->v.shrt;
+        break;
+      case 7: /* deflate.max-loadavg */
+        pconf->max_loadavg = cpv->v.d;
+        break;
+      default:/* should not happen */
+        return;
+    }
+}
 
-	config_values_t cv[] = {
-		{ "deflate.mimetypes",             NULL, T_CONFIG_ARRAY, T_CONFIG_SCOPE_CONNECTION },
-		{ "deflate.allowed-encodings",     NULL, T_CONFIG_ARRAY, T_CONFIG_SCOPE_CONNECTION },
-		{ "deflate.max-compress-size",     NULL, T_CONFIG_INT,   T_CONFIG_SCOPE_CONNECTION },
-		{ "deflate.min-compress-size",     NULL, T_CONFIG_SHORT, T_CONFIG_SCOPE_CONNECTION },
-		{ "deflate.compression-level",     NULL, T_CONFIG_SHORT, T_CONFIG_SCOPE_CONNECTION },
-		{ "deflate.output-buffer-size",    NULL, T_CONFIG_SHORT, T_CONFIG_SCOPE_CONNECTION },
-		{ "deflate.work-block-size",       NULL, T_CONFIG_SHORT, T_CONFIG_SCOPE_CONNECTION },
-		{ "deflate.max-loadavg",           NULL, T_CONFIG_STRING,T_CONFIG_SCOPE_CONNECTION },
-		{ NULL,                            NULL, T_CONFIG_UNSET, T_CONFIG_SCOPE_UNSET }
-	};
+static void mod_deflate_merge_config(plugin_config * const pconf, const config_plugin_value_t *cpv) {
+    do {
+        mod_deflate_merge_config_cpv(pconf, cpv);
+    } while ((++cpv)->k_id != -1);
+}
 
-	p->config_storage = calloc(srv->config_context->used, sizeof(plugin_config *));
+static void mod_deflate_patch_config(connection * const con, plugin_data * const p) {
+    memcpy(&p->conf, &p->defaults, sizeof(plugin_config));
+    for (int i = 1, used = p->nconfig; i < used; ++i) {
+        if (config_check_cond(con, (uint32_t)p->cvlist[i].k_id))
+            mod_deflate_merge_config(&p->conf, p->cvlist + p->cvlist[i].v.u2[0]);
+    }
+}
 
-	for (i = 0; i < srv->config_context->used; i++) {
-		plugin_config *s;
+static short mod_deflate_encodings_to_flags(const array *encodings) {
+    short allowed_encodings = 0;
+    if (encodings->used) {
+        for (uint32_t j = 0; j < encodings->used; ++j) {
+          #if defined(USE_ZLIB) || defined(USE_BZ2LIB)
+            data_string *ds = (data_string *)encodings->data[j];
+          #endif
+          #ifdef USE_ZLIB
+            if (NULL != strstr(ds->value.ptr, "gzip"))
+                allowed_encodings |= HTTP_ACCEPT_ENCODING_GZIP
+                                  |  HTTP_ACCEPT_ENCODING_X_GZIP;
+            if (NULL != strstr(ds->value.ptr, "x-gzip"))
+                allowed_encodings |= HTTP_ACCEPT_ENCODING_X_GZIP;
+            if (NULL != strstr(ds->value.ptr, "deflate"))
+                allowed_encodings |= HTTP_ACCEPT_ENCODING_DEFLATE;
+            /*
+            if (NULL != strstr(ds->value.ptr, "compress"))
+                allowed_encodings |= HTTP_ACCEPT_ENCODING_COMPRESS;
+            */
+          #endif
+          #ifdef USE_BZ2LIB
+            if (NULL != strstr(ds->value.ptr, "bzip2"))
+                allowed_encodings |= HTTP_ACCEPT_ENCODING_BZIP2
+                                  |  HTTP_ACCEPT_ENCODING_X_BZIP2;
+            if (NULL != strstr(ds->value.ptr, "x-bzip2"))
+                allowed_encodings |= HTTP_ACCEPT_ENCODING_X_BZIP2;
+          #endif
+        }
+    }
+    else {
+        /* default encodings */
+      #ifdef USE_ZLIB
+        allowed_encodings |= HTTP_ACCEPT_ENCODING_GZIP
+                          |  HTTP_ACCEPT_ENCODING_X_GZIP
+                          |  HTTP_ACCEPT_ENCODING_DEFLATE;
+      #endif
+      #ifdef USE_BZ2LIB
+        allowed_encodings |= HTTP_ACCEPT_ENCODING_BZIP2
+                          |  HTTP_ACCEPT_ENCODING_X_BZIP2;
+      #endif
+    }
+    return allowed_encodings;
+}
 
-		s = calloc(1, sizeof(plugin_config));
-		s->mimetypes = array_init();
-		s->allowed_encodings = 0;
-		s->max_compress_size = 128*1024; /*(128 MB measured as num KB)*/
-		s->min_compress_size = 256;
-		s->output_buffer_size = 0;
-		s->work_block_size = 2048;
-		s->sync_flush = 0;
-		s->compression_level = -1;
-		s->max_loadavg = 0.0;
+SETDEFAULTS_FUNC(mod_deflate_set_defaults) {
+    static const config_plugin_keys_t cpk[] = {
+      { CONST_STR_LEN("deflate.mimetypes"),
+        T_CONFIG_ARRAY,
+        T_CONFIG_SCOPE_CONNECTION }
+     ,{ CONST_STR_LEN("deflate.allow-encodings"),
+        T_CONFIG_ARRAY,
+        T_CONFIG_SCOPE_CONNECTION }
+     ,{ CONST_STR_LEN("deflate.max-compress-size"),
+        T_CONFIG_INT,
+        T_CONFIG_SCOPE_CONNECTION }
+     ,{ CONST_STR_LEN("deflate.min-compress-size"),
+        T_CONFIG_SHORT,
+        T_CONFIG_SCOPE_CONNECTION }
+     ,{ CONST_STR_LEN("deflate.compression-level"),
+        T_CONFIG_SHORT,
+        T_CONFIG_SCOPE_CONNECTION }
+     ,{ CONST_STR_LEN("deflate.output-buffer-size"),
+        T_CONFIG_SHORT,
+        T_CONFIG_SCOPE_CONNECTION }
+     ,{ CONST_STR_LEN("deflate.work-block-size"),
+        T_CONFIG_SHORT,
+        T_CONFIG_SCOPE_CONNECTION }
+     ,{ CONST_STR_LEN("deflate.max-loadavg"),
+        T_CONFIG_STRING,
+        T_CONFIG_SCOPE_CONNECTION }
+     ,{ NULL, 0,
+        T_CONFIG_UNSET,
+        T_CONFIG_SCOPE_UNSET }
+    };
 
-		array_reset_data_strings(p->encodings); /* temp array for allowed encodings list */
+    plugin_data * const p = p_d;
+    if (!config_plugin_values_init(srv, p, cpk, "mod_deflate"))
+        return HANDLER_ERROR;
 
-		cv[0].destination = s->mimetypes;
-		cv[1].destination = p->encodings;
-		cv[2].destination = &(s->max_compress_size);
-		cv[3].destination = &(s->min_compress_size);
-		cv[4].destination = &(s->compression_level);
-		cv[5].destination = &(s->output_buffer_size);
-		cv[6].destination = &(s->work_block_size);
-		cv[7].destination = p->tmp_buf;
-		buffer_clear(p->tmp_buf);
+    /* process and validate config directives
+     * (init i to 0 if global context; to 1 to skip empty global context) */
+    for (int i = !p->cvlist[0].v.u2[1]; i < p->nconfig; ++i) {
+        config_plugin_value_t *cpv = p->cvlist + p->cvlist[i].v.u2[0];
+        for (; -1 != cpv->k_id; ++cpv) {
+            switch (cpv->k_id) {
+              case 0: /* deflate.mimetypes */
+                if (!array_is_vlist(cpv->v.a)) {
+                    log_error(srv->errh, __FILE__, __LINE__,
+                      "unexpected value for %s; "
+                      "expected list of \"mimetype\"", cpk[cpv->k_id].k);
+                    return HANDLER_ERROR;
+                }
+                /* mod_deflate matches mimetype as prefix of Content-Type
+                 * so ignore '*' at end of mimetype for end-user flexibility
+                 * in specifying trailing wildcard to grouping of mimetypes */
+                for (uint32_t m = 0; m < cpv->v.a->used; ++m) {
+                    buffer *mimetype=&((data_string *)cpv->v.a->data[m])->value;
+                    size_t len = buffer_string_length(mimetype);
+                    if (len > 2 && mimetype->ptr[len-1] == '*')
+                        buffer_string_set_length(mimetype, len-1);
+                }
+                if (0 == cpv->v.a->used) cpv->v.a = NULL;
+                break;
+              case 1: /* deflate.allowed-encodings */
+                if (!array_is_vlist(cpv->v.a)) {
+                    log_error(srv->errh, __FILE__, __LINE__,
+                      "unexpected value for %s; "
+                      "expected list of \"encoding\"", cpk[cpv->k_id].k);
+                    return HANDLER_ERROR;
+                }
+                cpv->v.shrt = (unsigned short)
+                  mod_deflate_encodings_to_flags(cpv->v.a);
+                cpv->vtype = T_CONFIG_SHORT;
+                break;
+              case 2: /* deflate.max-compress-size */
+              case 3: /* deflate.min-compress-size */
+                break;
+              case 4: /* deflate.compression-level */
+                if ((cpv->v.shrt < 1 || cpv->v.shrt > 9)
+                    && *(short *)&cpv->v.shrt != -1) {
+                    log_error(srv->errh, __FILE__, __LINE__,
+                      "compression-level must be between 1 and 9: %hu",
+                      cpv->v.shrt);
+                    return HANDLER_ERROR;
+                }
+                break;
+              case 5: /* deflate.output-buffer-size */
+              case 6: /* deflate.work-block-size */
+                break;
+              case 7: /* deflate.max-loadavg */
+                cpv->v.d = (!buffer_string_is_empty(cpv->v.b))
+                  ? strtod(cpv->v.b->ptr, NULL)
+                  : 0.0;
+                break;
+              default:/* should not happen */
+                break;
+            }
+        }
+    }
 
-		p->config_storage[i] = s;
+    p->defaults.allowed_encodings = 0;
+    p->defaults.max_compress_size = 128*1024; /*(128 MB measured as num KB)*/
+    p->defaults.min_compress_size = 256;
+    p->defaults.compression_level = -1;
+    p->defaults.output_buffer_size = 0;
+    p->defaults.work_block_size = 2048;
+    p->defaults.max_loadavg = 0.0;
+    p->defaults.sync_flush = 0;
 
-		if (0 != config_insert_values_global(srv, ((data_config *)srv->config_context->data[i])->value, cv, i == 0 ? T_CONFIG_SCOPE_SERVER : T_CONFIG_SCOPE_CONNECTION)) {
-			return HANDLER_ERROR;
-		}
+    /* initialize p->defaults from global config context */
+    if (p->nconfig > 0 && p->cvlist->v.u2[1]) {
+        const config_plugin_value_t *cpv = p->cvlist + p->cvlist->v.u2[0];
+        if (-1 != cpv->k_id)
+            mod_deflate_merge_config(&p->defaults, cpv);
+    }
 
-		if ((s->compression_level < 1 || s->compression_level > 9) &&
-				s->compression_level != -1) {
-			log_error_write(srv, __FILE__, __LINE__, "sd",
-				"compression-level must be between 1 and 9:", s->compression_level);
-			return HANDLER_ERROR;
-		}
-
-		if (!buffer_string_is_empty(p->tmp_buf)) {
-			s->max_loadavg = strtod(p->tmp_buf->ptr, NULL);
-		}
-
-		if (!array_is_vlist(s->mimetypes)) {
-			log_error_write(srv, __FILE__, __LINE__, "s",
-					"unexpected value for deflate.mimetypes; expected list of \"mimetype\"");
-			return HANDLER_ERROR;
-		}
-
-		if (!array_is_vlist(p->encodings)) {
-			log_error_write(srv, __FILE__, __LINE__, "s",
-					"unexpected value for deflate.allowed-encodings; expected list of \"encoding\"");
-			return HANDLER_ERROR;
-		}
-
-		if (p->encodings->used) {
-			size_t j = 0;
-			for (j = 0; j < p->encodings->used; j++) {
-#if defined(USE_ZLIB) || defined(USE_BZ2LIB)
-				data_string *ds = (data_string *)p->encodings->data[j];
-#endif
-#ifdef USE_ZLIB
-				if (NULL != strstr(ds->value.ptr, "gzip"))
-					s->allowed_encodings |= HTTP_ACCEPT_ENCODING_GZIP | HTTP_ACCEPT_ENCODING_X_GZIP;
-				if (NULL != strstr(ds->value.ptr, "x-gzip"))
-					s->allowed_encodings |= HTTP_ACCEPT_ENCODING_X_GZIP;
-				if (NULL != strstr(ds->value.ptr, "deflate"))
-					s->allowed_encodings |= HTTP_ACCEPT_ENCODING_DEFLATE;
-				/*
-				if (NULL != strstr(ds->value.ptr, "compress"))
-					s->allowed_encodings |= HTTP_ACCEPT_ENCODING_COMPRESS;
-				*/
-#endif
-#ifdef USE_BZ2LIB
-				if (NULL != strstr(ds->value.ptr, "bzip2"))
-					s->allowed_encodings |= HTTP_ACCEPT_ENCODING_BZIP2 | HTTP_ACCEPT_ENCODING_X_BZIP2;
-				if (NULL != strstr(ds->value.ptr, "x-bzip2"))
-					s->allowed_encodings |= HTTP_ACCEPT_ENCODING_X_BZIP2;
-#endif
-			}
-		} else {
-			/* default encodings */
-#ifdef USE_ZLIB
-			s->allowed_encodings |= HTTP_ACCEPT_ENCODING_GZIP
-					     |  HTTP_ACCEPT_ENCODING_X_GZIP
-					     |  HTTP_ACCEPT_ENCODING_DEFLATE;
-#endif
-#ifdef USE_BZ2LIB
-			s->allowed_encodings |= HTTP_ACCEPT_ENCODING_BZIP2
-					     |  HTTP_ACCEPT_ENCODING_X_BZIP2;
-#endif
-		}
-
-		/* mod_deflate matches mimetype as prefix of Content-Type
-		 * so ignore '*' at end of mimetype for end-user flexibility
-		 * in specifying trailing wildcard to grouping of mimetypes */
-		for (size_t m = 0; m < s->mimetypes->used; ++m) {
-			buffer *mimetype = &((data_string *)s->mimetypes->data[m])->value;
-			size_t len = buffer_string_length(mimetype);
-			if (len > 2 && mimetype->ptr[len-1] == '*') {
-				buffer_string_set_length(mimetype, len-1);
-			}
-		}
-	}
-
-	return HANDLER_GO_ON;
-
+    return HANDLER_GO_ON;
 }
 
 
@@ -938,56 +993,6 @@ static handler_t deflate_compress_response(server *srv, connection *con, handler
 }
 
 
-#define PATCH(x) \
-	p->conf.x = s->x;
-static int mod_deflate_patch_connection(server *srv, connection *con, plugin_data *p) {
-	size_t i, j;
-	plugin_config *s = p->config_storage[0];
-
-	PATCH(mimetypes);
-	PATCH(allowed_encodings);
-	PATCH(max_compress_size);
-	PATCH(min_compress_size);
-	PATCH(compression_level);
-	PATCH(output_buffer_size);
-	PATCH(work_block_size);
-	PATCH(max_loadavg);
-
-	/* skip the first, the global context */
-	for (i = 1; i < srv->config_context->used; i++) {
-		if (!config_check_cond(con, i)) continue; /* condition not matched */
-
-		data_config *dc = (data_config *)srv->config_context->data[i];
-		s = p->config_storage[i];
-
-		/* merge config */
-		for (j = 0; j < dc->value->used; j++) {
-			data_unset *du = dc->value->data[j];
-
-			if (buffer_is_equal_string(&du->key, CONST_STR_LEN("deflate.mimetypes"))) {
-				PATCH(mimetypes);
-			} else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("deflate.allowed-encodings"))) {
-				PATCH(allowed_encodings);
-			} else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("deflate.max-compress-size"))) {
-				PATCH(max_compress_size);
-			} else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("deflate.min-compress-size"))) {
-				PATCH(min_compress_size);
-			} else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("deflate.compression-level"))) {
-				PATCH(compression_level);
-			} else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("deflate.output-buffer-size"))) {
-				PATCH(output_buffer_size);
-			} else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("deflate.work-block-size"))) {
-				PATCH(work_block_size);
-			} else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("deflate.max-loadavg"))) {
-				PATCH(max_loadavg);
-			}
-		}
-	}
-
-	return 0;
-}
-#undef PATCH
-
 static int mod_deflate_choose_encoding (const char *value, plugin_data *p, const char **label) {
 	/* get client side support encodings */
 	int accept_encoding = 0;
@@ -1108,10 +1113,10 @@ CONNECTION_FUNC(mod_deflate_handle_response_start) {
 		break;
 	}
 
-	mod_deflate_patch_connection(srv, con, p);
+	mod_deflate_patch_config(con, p);
 
 	/* check if deflate configured for any mimetypes */
-	if (!p->conf.mimetypes->used) return HANDLER_GO_ON;
+	if (NULL == p->conf.mimetypes) return HANDLER_GO_ON;
 
 	/* check if size of response is below min-compress-size or exceeds max*/
 	/* (con->file_finished checked at top of routine) */
@@ -1228,8 +1233,8 @@ CONNECTION_FUNC(mod_deflate_handle_response_start) {
 	hctx->plugin_data = p;
 	hctx->compression_type = compression_type;
 	/* setup output buffer */
-	buffer_clear(p->tmp_buf);
-	hctx->output = p->tmp_buf;
+	buffer_clear(&p->tmp_buf);
+	hctx->output = &p->tmp_buf;
 	if (0 != mod_deflate_stream_init(hctx)) {
 		/*(should not happen unless ENOMEM)*/
 		handler_ctx_free(hctx);
@@ -1277,7 +1282,7 @@ int mod_deflate_plugin_init(plugin *p) {
 
 	p->init		= mod_deflate_init;
 	p->cleanup	= mod_deflate_free;
-	p->set_defaults	= mod_deflate_setdefaults;
+	p->set_defaults	= mod_deflate_set_defaults;
 	p->connection_reset	= mod_deflate_cleanup;
 	p->handle_response_start	= mod_deflate_handle_response_start;
 
