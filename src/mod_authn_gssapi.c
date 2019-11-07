@@ -30,7 +30,6 @@
 #include "http_header.h"
 #include "base.h"
 #include "log.h"
-#include "md5.h"
 #include "base64.h"
 
 #include <errno.h>
@@ -39,14 +38,14 @@
 #include <unistd.h>
 
 typedef struct {
-    buffer *auth_gssapi_keytab;
-    buffer *auth_gssapi_principal;
-    unsigned short int auth_gssapi_store_creds;
+    const buffer *auth_gssapi_keytab;
+    const buffer *auth_gssapi_principal;
+    unsigned int auth_gssapi_store_creds;
 } plugin_config;
 
 typedef struct {
     PLUGIN_DATA;
-    plugin_config **config_storage;
+    plugin_config defaults;
     plugin_config conf;
 } plugin_data;
 
@@ -71,103 +70,77 @@ INIT_FUNC(mod_authn_gssapi_init) {
 
 FREE_FUNC(mod_authn_gssapi_free) {
     plugin_data *p = p_d;
-
-    UNUSED(srv);
-
     if (!p) return HANDLER_GO_ON;
 
-    if (p->config_storage) {
-        size_t i;
-        for (i = 0; i < srv->config_context->used; i++) {
-            plugin_config *s = p->config_storage[i];
-
-            if (NULL == s) continue;
-
-            buffer_free(s->auth_gssapi_keytab);
-            buffer_free(s->auth_gssapi_principal);
-
-            free(s);
-        }
-        free(p->config_storage);
-    }
-
+    free(p->cvlist);
     free(p);
-
+    UNUSED(srv);
     return HANDLER_GO_ON;
+}
+
+static void mod_authn_gssapi_merge_config_cpv(plugin_config * const pconf, const config_plugin_value_t * const cpv) {
+    switch (cpv->k_id) { /* index into static config_plugin_keys_t cpk[] */
+      case 0: /* auth.backend.gssapi.keytab */
+        pconf->auth_gssapi_keytab = cpv->v.b;
+        break;
+      case 1: /* auth.backend.gssapi.principal */
+        pconf->auth_gssapi_principal = cpv->v.b;
+        break;
+      case 2: /* auth.backend.gssapi.store-creds */
+        pconf->auth_gssapi_store_creds = cpv->v.u;
+        break;
+      default:/* should not happen */
+        return;
+    }
+}
+
+static void mod_authn_gssapi_merge_config(plugin_config * const pconf, const config_plugin_value_t *cpv) {
+    do {
+        mod_authn_gssapi_merge_config_cpv(pconf, cpv);
+    } while ((++cpv)->k_id != -1);
+}
+
+static void mod_authn_gssapi_patch_config(connection * const con, plugin_data * const p) {
+    memcpy(&p->conf, &p->defaults, sizeof(plugin_config));
+    for (int i = 1, used = p->nconfig; i < used; ++i) {
+        if (config_check_cond(con, (uint32_t)p->cvlist[i].k_id))
+            mod_authn_gssapi_merge_config(&p->conf,
+                                        p->cvlist + p->cvlist[i].v.u2[0]);
+    }
 }
 
 SETDEFAULTS_FUNC(mod_authn_gssapi_set_defaults) {
-    plugin_data *p = p_d;
-    size_t i;
-    config_values_t cv[] = {
-        { "auth.backend.gssapi.keytab",     NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_CONNECTION },
-        { "auth.backend.gssapi.principal",  NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_CONNECTION },
-        { "auth.backend.gssapi.store-creds",NULL, T_CONFIG_BOOLEAN,T_CONFIG_SCOPE_CONNECTION },
-        { NULL,                             NULL, T_CONFIG_UNSET,  T_CONFIG_SCOPE_UNSET }
+    static const config_plugin_keys_t cpk[] = {
+      { CONST_STR_LEN("auth.backend.gssapi.keytab"),
+        T_CONFIG_STRING,
+        T_CONFIG_SCOPE_CONNECTION }
+     ,{ CONST_STR_LEN("auth.backend.gssapi.principal"),
+        T_CONFIG_STRING,
+        T_CONFIG_SCOPE_CONNECTION }
+     ,{ CONST_STR_LEN("auth.backend.gssapi.store-creds"),
+        T_CONFIG_BOOL,
+        T_CONFIG_SCOPE_CONNECTION }
+     ,{ NULL, 0,
+        T_CONFIG_UNSET,
+        T_CONFIG_SCOPE_UNSET }
     };
 
-    p->config_storage = calloc(srv->config_context->used, sizeof(plugin_config *));
+    plugin_data * const p = p_d;
+    if (!config_plugin_values_init(srv, p, cpk, "mod_authn_gssapi"))
+        return HANDLER_ERROR;
 
-    for (i = 0; i < srv->config_context->used; i++) {
-        data_config const* config = (data_config const*)srv->config_context->data[i];
-        plugin_config *s;
+    /* default enabled for backwards compatibility; disable in future */
+    p->defaults.auth_gssapi_store_creds = 1;
 
-        s = calloc(1, sizeof(plugin_config));
-
-        s->auth_gssapi_keytab = buffer_init();
-        s->auth_gssapi_principal = buffer_init();
-
-        cv[0].destination = s->auth_gssapi_keytab;
-        cv[1].destination = s->auth_gssapi_principal;
-        cv[2].destination = &s->auth_gssapi_store_creds;
-        /* default enabled for backwards compatibility; disable in future */
-        s->auth_gssapi_store_creds = 1;
-
-        p->config_storage[i] = s;
-
-        if (0 != config_insert_values_global(srv, config->value, cv, i == 0 ? T_CONFIG_SCOPE_SERVER : T_CONFIG_SCOPE_CONNECTION)) {
-            return HANDLER_ERROR;
-        }
+    /* initialize p->defaults from global config context */
+    if (p->nconfig > 0 && p->cvlist->v.u2[1]) {
+        const config_plugin_value_t *cpv = p->cvlist + p->cvlist->v.u2[0];
+        if (-1 != cpv->k_id)
+            mod_authn_gssapi_merge_config(&p->defaults, cpv);
     }
 
     return HANDLER_GO_ON;
 }
-
-#define PATCH(x) \
-    p->conf.x = s->x;
-static int mod_authn_gssapi_patch_connection(server *srv, connection *con, plugin_data *p)
-{
-    size_t i, j;
-    plugin_config *s = p->config_storage[0];
-
-    PATCH(auth_gssapi_keytab);
-    PATCH(auth_gssapi_principal);
-    PATCH(auth_gssapi_store_creds);
-
-    /* skip the first, the global context */
-    for (i = 1; i < srv->config_context->used; i++) {
-        if (!config_check_cond(con, i)) continue; /* condition not matched */
-
-        data_config *dc = (data_config *)srv->config_context->data[i];
-        s = p->config_storage[i];
-
-        /* merge config */
-        for (j = 0; j < dc->value->used; j++) {
-            data_unset *du = dc->value->data[j];
-
-            if (buffer_is_equal_string(&du->key, CONST_STR_LEN("auth.backend.gssapi.keytab"))) {
-                PATCH(auth_gssapi_keytab);
-            } else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("auth.backend.gssapi.principal"))) {
-                PATCH(auth_gssapi_principal);
-            } else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("auth.backend.gssapi.store-creds"))) {
-                PATCH(auth_gssapi_store_creds);
-            }
-        }
-    }
-
-    return 0;
-}
-#undef PATCH
 
 static handler_t mod_authn_gssapi_send_400_bad_request (server *srv, connection *con)
 {
@@ -357,7 +330,7 @@ static handler_t mod_authn_gssapi_check_spnego(server *srv, connection *con, plu
         return mod_authn_gssapi_send_400_bad_request(srv, con);
     }
 
-    mod_authn_gssapi_patch_connection(srv, con, p);
+    mod_authn_gssapi_patch_config(con, p);
 
     {
         /* ??? Should code = krb5_kt_resolve(kcontext, p->conf.auth_gssapi_keytab->ptr, &keytab);
@@ -661,11 +634,16 @@ static handler_t mod_authn_gssapi_basic(server *srv, connection *con, void *p_d,
         return mod_authn_gssapi_send_401_unauthorized_basic(con);
     }
 
-    mod_authn_gssapi_patch_connection(srv, con, p);
+    mod_authn_gssapi_patch_config(con, p);
 
     code = krb5_init_context(&kcontext);
     if (code) {
         log_error_write(srv, __FILE__, __LINE__, "sd", "krb5_init_context():", code);
+        return mod_authn_gssapi_send_401_unauthorized_basic(con); /*(well, should be 500)*/
+    }
+
+    if (buffer_string_is_empty(p->conf.auth_gssapi_keytab)) {
+        log_error_write(srv, __FILE__, __LINE__, "s", "auth.backend.gssapi.keytab not configured");
         return mod_authn_gssapi_send_401_unauthorized_basic(con); /*(well, should be 500)*/
     }
 

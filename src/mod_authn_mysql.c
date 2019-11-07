@@ -39,99 +39,105 @@
 #endif
 
 typedef struct {
-    MYSQL  *mysql_conn;
-    buffer *mysql_conn_host;
-    buffer *mysql_conn_user;
-    buffer *mysql_conn_pass;
-    buffer *mysql_conn_db;
-    int mysql_conn_port;
     int auth_mysql_port;
-    buffer *auth_mysql_host;
-    buffer *auth_mysql_user;
-    buffer *auth_mysql_pass;
-    buffer *auth_mysql_db;
-    buffer *auth_mysql_socket;
-    buffer *auth_mysql_users_table;
-    buffer *auth_mysql_col_user;
-    buffer *auth_mysql_col_pass;
-    buffer *auth_mysql_col_realm;
+    const char *auth_mysql_host;
+    const char *auth_mysql_user;
+    const char *auth_mysql_pass;
+    const char *auth_mysql_db;
+    const char *auth_mysql_socket;
+    const char *auth_mysql_users_table;
+    const char *auth_mysql_col_user;
+    const char *auth_mysql_col_pass;
+    const char *auth_mysql_col_realm;
 } plugin_config;
 
 typedef struct {
     PLUGIN_DATA;
-    plugin_config **config_storage;
+    plugin_config defaults;
     plugin_config conf;
+
+    MYSQL *mysql_conn;
+    const char *mysql_conn_host;
+    const char *mysql_conn_user;
+    const char *mysql_conn_pass;
+    const char *mysql_conn_db;
+    int mysql_conn_port;
 } plugin_data;
 
-static void mod_authn_mysql_sock_close(plugin_config *pconf) {
-    if (NULL != pconf->mysql_conn) {
-        mysql_close(pconf->mysql_conn);
-        pconf->mysql_conn = NULL;
+static void mod_authn_mysql_sock_close(plugin_data *p) {
+    if (NULL != p->mysql_conn) {
+        mysql_close(p->mysql_conn);
+        p->mysql_conn = NULL;
     }
 }
 
-static MYSQL * mod_authn_mysql_sock_connect(server *srv, plugin_config *pconf) {
-    if (NULL != pconf->mysql_conn) {
+static MYSQL * mod_authn_mysql_sock_connect(server *srv, plugin_data *p) {
+    plugin_config * const pconf = &p->conf;
+    if (NULL != p->mysql_conn) {
         /* reuse open db connection if same ptrs to host user pass db port */
-        if (   pconf->mysql_conn_host == pconf->auth_mysql_host
-            && pconf->mysql_conn_user == pconf->auth_mysql_user
-            && pconf->mysql_conn_pass == pconf->auth_mysql_pass
-            && pconf->mysql_conn_db   == pconf->auth_mysql_db
-            && pconf->mysql_conn_port == pconf->auth_mysql_port) {
-            return pconf->mysql_conn;
+        if (   p->mysql_conn_host == pconf->auth_mysql_host
+            && p->mysql_conn_user == pconf->auth_mysql_user
+            && p->mysql_conn_pass == pconf->auth_mysql_pass
+            && p->mysql_conn_db   == pconf->auth_mysql_db
+            && p->mysql_conn_port == pconf->auth_mysql_port) {
+            return p->mysql_conn;
         }
-        mod_authn_mysql_sock_close(pconf);
+        mod_authn_mysql_sock_close(p);
     }
 
     /* !! mysql_init() is not thread safe !! (see MySQL doc) */
-    pconf->mysql_conn = mysql_init(NULL);
-    if (mysql_real_connect(pconf->mysql_conn,
-                           pconf->auth_mysql_host->ptr,
-                           pconf->auth_mysql_user->ptr,
-                           pconf->auth_mysql_pass->ptr,
-                           pconf->auth_mysql_db->ptr,
+    p->mysql_conn = mysql_init(NULL);
+    if (mysql_real_connect(p->mysql_conn,
+                           pconf->auth_mysql_host,
+                           pconf->auth_mysql_user,
+                           pconf->auth_mysql_pass,
+                           pconf->auth_mysql_db,
                            pconf->auth_mysql_port,
-                           !buffer_string_is_empty(pconf->auth_mysql_socket)
-                             ? pconf->auth_mysql_socket->ptr
+                           (pconf->auth_mysql_socket && *pconf->auth_mysql_socket)
+                             ? pconf->auth_mysql_socket
                              : NULL,
                            CLIENT_IGNORE_SIGPIPE)) {
-        /* (copy ptrs to config data (has lifetime until server shutdown)) */
-        pconf->mysql_conn_host = pconf->auth_mysql_host;
-        pconf->mysql_conn_user = pconf->auth_mysql_user;
-        pconf->mysql_conn_pass = pconf->auth_mysql_pass;
-        pconf->mysql_conn_db   = pconf->auth_mysql_db;
-        pconf->mysql_conn_port = pconf->auth_mysql_port;
-        return pconf->mysql_conn;
+        /* (copy ptrs to plugin data (has lifetime until server shutdown)) */
+        p->mysql_conn_host = pconf->auth_mysql_host;
+        p->mysql_conn_user = pconf->auth_mysql_user;
+        p->mysql_conn_pass = pconf->auth_mysql_pass;
+        p->mysql_conn_db   = pconf->auth_mysql_db;
+        p->mysql_conn_port = pconf->auth_mysql_port;
+        return p->mysql_conn;
     }
     else {
-        /*(note: any of these params might be buffers with b->ptr == NULL)*/
-        log_error_write(srv, __FILE__, __LINE__, "sbsb"/*sb*/"sbss",
-                        "opening connection to mysql:", pconf->auth_mysql_host,
-                        "user:", pconf->auth_mysql_user,
-                        /*"pass:", pconf->auth_mysql_pass,*//*(omit from logs)*/
-                        "db:",   pconf->auth_mysql_db,
-                        "failed:", mysql_error(pconf->mysql_conn));
-        mod_authn_mysql_sock_close(pconf);
+        /*(note: any of these params might be NULL)*/
+        log_error_write(srv, __FILE__, __LINE__, "ssss"/*ss*/"ssss",
+          "opening connection to mysql:",
+          pconf->auth_mysql_host ? pconf->auth_mysql_host : NULL,
+          "user:",
+          pconf->auth_mysql_user ? pconf->auth_mysql_user : NULL,
+          /*"pass:",*//*(omit pass from logs)*/
+          /*pconf->auth_mysql_pass ? pconf->auth_mysql_pass : NULL,*/
+          "db:",
+          pconf->auth_mysql_db ? pconf->auth_mysql_db : NULL,
+          "failed:", mysql_error(p->mysql_conn));
+        mod_authn_mysql_sock_close(p);
         return NULL;
     }
 }
 
-static MYSQL * mod_authn_mysql_sock_acquire(server *srv, plugin_config *pconf) {
-    return mod_authn_mysql_sock_connect(srv, pconf);
+static MYSQL * mod_authn_mysql_sock_acquire(server *srv, plugin_data *p) {
+    return mod_authn_mysql_sock_connect(srv, p);
 }
 
-static void mod_authn_mysql_sock_release(server *srv, plugin_config *pconf) {
+static void mod_authn_mysql_sock_release(server *srv, plugin_data *p) {
     UNUSED(srv);
-    UNUSED(pconf);
+    UNUSED(p);
     /*(empty; leave db connection open)*/
     /* Note: mod_authn_mysql_result() calls mod_authn_mysql_sock_error()
      *       on error, so take that into account if making changes here.
-     *       Must check if (NULL == pconf->mysql_conn) */
+     *       Must check if (NULL == p->mysql_conn) */
 }
 
-static void mod_authn_mysql_sock_error(server *srv, plugin_config *pconf) {
+static void mod_authn_mysql_sock_error(server *srv, plugin_data *p) {
     UNUSED(srv);
-    mod_authn_mysql_sock_close(pconf);
+    mod_authn_mysql_sock_close(p);
 }
 
 static handler_t mod_authn_mysql_basic(server *srv, connection *con, void *p_d, const http_auth_require_t *require, const buffer *username, const char *pw);
@@ -151,185 +157,151 @@ INIT_FUNC(mod_authn_mysql_init) {
 
 FREE_FUNC(mod_authn_mysql_free) {
     plugin_data *p = p_d;
-
-    UNUSED(srv);
-
     if (!p) return HANDLER_GO_ON;
 
-    if (p->config_storage) {
-        size_t i;
-        for (i = 0; i < srv->config_context->used; i++) {
-            plugin_config *s = p->config_storage[i];
+    mod_authn_mysql_sock_close(p);
 
-            if (NULL == s) continue;
-
-            buffer_free(s->auth_mysql_host);
-            buffer_free(s->auth_mysql_user);
-            buffer_free(s->auth_mysql_pass);
-            buffer_free(s->auth_mysql_db);
-            buffer_free(s->auth_mysql_socket);
-            buffer_free(s->auth_mysql_users_table);
-            buffer_free(s->auth_mysql_col_user);
-            buffer_free(s->auth_mysql_col_pass);
-            buffer_free(s->auth_mysql_col_realm);
-
-            if (s->mysql_conn) mod_authn_mysql_sock_close(s);
-
-            free(s);
-        }
-        free(p->config_storage);
-    }
-    mod_authn_mysql_sock_close(&p->conf);
-
+    free(p->cvlist);
     free(p);
-
+    UNUSED(srv);
     return HANDLER_GO_ON;
+}
+
+static void mod_authn_mysql_merge_config_cpv(plugin_config * const pconf, const config_plugin_value_t * const cpv) {
+    switch (cpv->k_id) { /* index into static config_plugin_keys_t cpk[] */
+      case 0: /* auth.backend.mysql.host */
+        pconf->auth_mysql_host = cpv->v.b->ptr;
+        break;
+      case 1: /* auth.backend.mysql.user */
+        pconf->auth_mysql_user = cpv->v.b->ptr;
+        break;
+      case 2: /* auth.backend.mysql.pass */
+        pconf->auth_mysql_pass = cpv->v.b->ptr;
+        break;
+      case 3: /* auth.backend.mysql.db */
+        pconf->auth_mysql_db = cpv->v.b->ptr;
+        break;
+      case 4: /* auth.backend.mysql.port */
+        pconf->auth_mysql_port = (int)cpv->v.shrt;
+        break;
+      case 5: /* auth.backend.mysql.socket */
+        pconf->auth_mysql_socket = cpv->v.b->ptr;
+        break;
+      case 6: /* auth.backend.mysql.users_table */
+        pconf->auth_mysql_users_table = cpv->v.b->ptr;
+        break;
+      case 7: /* auth.backend.mysql.col_user */
+        pconf->auth_mysql_col_user = cpv->v.b->ptr;
+        break;
+      case 8: /* auth.backend.mysql.col_pass */
+        pconf->auth_mysql_col_pass = cpv->v.b->ptr;
+        break;
+      case 9: /* auth.backend.mysql.col_realm */
+        pconf->auth_mysql_col_realm = cpv->v.b->ptr;
+        break;
+      default:/* should not happen */
+        return;
+    }
+}
+
+static void mod_authn_mysql_merge_config(plugin_config * const pconf, const config_plugin_value_t *cpv) {
+    do {
+        mod_authn_mysql_merge_config_cpv(pconf, cpv);
+    } while ((++cpv)->k_id != -1);
+}
+
+static void mod_authn_mysql_patch_config(connection * const con, plugin_data * const p) {
+    memcpy(&p->conf, &p->defaults, sizeof(plugin_config));
+    for (int i = 1, used = p->nconfig; i < used; ++i) {
+        if (config_check_cond(con, (uint32_t)p->cvlist[i].k_id))
+            mod_authn_mysql_merge_config(&p->conf,
+                                        p->cvlist + p->cvlist[i].v.u2[0]);
+    }
 }
 
 SETDEFAULTS_FUNC(mod_authn_mysql_set_defaults) {
-    plugin_data *p = p_d;
-    size_t i;
-    config_values_t cv[] = {
-        { "auth.backend.mysql.host",        NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_CONNECTION },
-        { "auth.backend.mysql.user",        NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_CONNECTION },
-        { "auth.backend.mysql.pass",        NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_CONNECTION },
-        { "auth.backend.mysql.db",          NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_CONNECTION },
-        { "auth.backend.mysql.port",        NULL, T_CONFIG_INT,    T_CONFIG_SCOPE_CONNECTION },
-        { "auth.backend.mysql.socket",      NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_CONNECTION },
-        { "auth.backend.mysql.users_table", NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_CONNECTION },
-        { "auth.backend.mysql.col_user",    NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_CONNECTION },
-        { "auth.backend.mysql.col_pass",    NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_CONNECTION },
-        { "auth.backend.mysql.col_realm",   NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_CONNECTION },
-        { NULL,                             NULL, T_CONFIG_UNSET,  T_CONFIG_SCOPE_UNSET }
+    static const config_plugin_keys_t cpk[] = {
+      { CONST_STR_LEN("auth.backend.mysql.host"),
+        T_CONFIG_STRING,
+        T_CONFIG_SCOPE_CONNECTION }
+     ,{ CONST_STR_LEN("auth.backend.mysql.user"),
+        T_CONFIG_STRING,
+        T_CONFIG_SCOPE_CONNECTION }
+     ,{ CONST_STR_LEN("auth.backend.mysql.pass"),
+        T_CONFIG_STRING,
+        T_CONFIG_SCOPE_CONNECTION }
+     ,{ CONST_STR_LEN("auth.backend.mysql.db"),
+        T_CONFIG_STRING,
+        T_CONFIG_SCOPE_CONNECTION }
+     ,{ CONST_STR_LEN("auth.backend.mysql.port"),
+        T_CONFIG_SHORT,
+        T_CONFIG_SCOPE_CONNECTION }
+     ,{ CONST_STR_LEN("auth.backend.mysql.socket"),
+        T_CONFIG_STRING,
+        T_CONFIG_SCOPE_CONNECTION }
+     ,{ CONST_STR_LEN("auth.backend.mysql.users_table"),
+        T_CONFIG_STRING,
+        T_CONFIG_SCOPE_CONNECTION }
+     ,{ CONST_STR_LEN("auth.backend.mysql.col_user"),
+        T_CONFIG_STRING,
+        T_CONFIG_SCOPE_CONNECTION }
+     ,{ CONST_STR_LEN("auth.backend.mysql.col_pass"),
+        T_CONFIG_STRING,
+        T_CONFIG_SCOPE_CONNECTION }
+     ,{ CONST_STR_LEN("auth.backend.mysql.col_realm"),
+        T_CONFIG_STRING,
+        T_CONFIG_SCOPE_CONNECTION }
+     ,{ NULL, 0,
+        T_CONFIG_UNSET,
+        T_CONFIG_SCOPE_UNSET }
     };
 
-    p->config_storage = calloc(srv->config_context->used, sizeof(plugin_config *));
+    plugin_data * const p = p_d;
+    if (!config_plugin_values_init(srv, p, cpk, "mod_authn_mysql"))
+        return HANDLER_ERROR;
 
-    for (i = 0; i < srv->config_context->used; i++) {
-        data_config const* config = (data_config const*)srv->config_context->data[i];
-        plugin_config *s;
-
-        s = calloc(1, sizeof(plugin_config));
-
-        s->mysql_conn                             = NULL;
-        s->auth_mysql_host                        = buffer_init();
-        s->auth_mysql_user                        = buffer_init();
-        s->auth_mysql_pass                        = buffer_init();
-        s->auth_mysql_db                          = buffer_init();
-        s->auth_mysql_socket                      = buffer_init();
-        s->auth_mysql_users_table                 = buffer_init();
-        s->auth_mysql_col_user                    = buffer_init();
-        s->auth_mysql_col_pass                    = buffer_init();
-        s->auth_mysql_col_realm                   = buffer_init();
-
-        cv[0].destination = s->auth_mysql_host;
-        cv[1].destination = s->auth_mysql_user;
-        cv[2].destination = s->auth_mysql_pass;
-        cv[3].destination = s->auth_mysql_db;
-        cv[4].destination = &s->auth_mysql_port;
-        cv[5].destination = s->auth_mysql_socket;
-        cv[6].destination = s->auth_mysql_users_table;
-        cv[7].destination = s->auth_mysql_col_user;
-        cv[8].destination = s->auth_mysql_col_pass;
-        cv[9].destination = s->auth_mysql_col_realm;
-
-        p->config_storage[i] = s;
-
-        if (0 != config_insert_values_global(srv, config->value, cv, i == 0 ? T_CONFIG_SCOPE_SERVER : T_CONFIG_SCOPE_CONNECTION)) {
-            return HANDLER_ERROR;
-        }
-
-        if (!buffer_is_empty(s->auth_mysql_col_user)
-            && buffer_string_is_empty(s->auth_mysql_col_user)) {
-            log_error_write(srv, __FILE__, __LINE__, "s",
-                            "auth.backend.mysql.col_user must not be blank");
-            return HANDLER_ERROR;
-        }
-        if (!buffer_is_empty(s->auth_mysql_col_pass)
-            && buffer_string_is_empty(s->auth_mysql_col_pass)) {
-            log_error_write(srv, __FILE__, __LINE__, "s",
-                            "auth.backend.mysql.col_pass must not be blank");
-            return HANDLER_ERROR;
-        }
-        if (!buffer_is_empty(s->auth_mysql_col_realm)
-            && buffer_string_is_empty(s->auth_mysql_col_realm)) {
-            log_error_write(srv, __FILE__, __LINE__, "s",
-                            "auth.backend.mysql.col_realm must not be blank");
-            return HANDLER_ERROR;
-        }
-    }
-
-    if (p->config_storage[0]) { /*(always true)*/
-        plugin_config *s = p->config_storage[0];
-        if (buffer_is_empty(s->auth_mysql_col_user)) {
-            buffer_copy_string_len(s->auth_mysql_col_user, CONST_STR_LEN("user"));
-        }
-        if (buffer_is_empty(s->auth_mysql_col_pass)) {
-            buffer_copy_string_len(s->auth_mysql_col_pass, CONST_STR_LEN("password"));
-        }
-        if (buffer_is_empty(s->auth_mysql_col_realm)) {
-            buffer_copy_string_len(s->auth_mysql_col_realm, CONST_STR_LEN("realm"));
-        }
-    }
-
-    return HANDLER_GO_ON;
-}
-
-#define PATCH(x) \
-    p->conf.x = s->x;
-static int mod_authn_mysql_patch_connection(server *srv, connection *con, plugin_data *p) {
-    size_t i, j;
-    plugin_config *s = p->config_storage[0];
-
-    PATCH(auth_mysql_host);
-    PATCH(auth_mysql_user);
-    PATCH(auth_mysql_pass);
-    PATCH(auth_mysql_db);
-    PATCH(auth_mysql_port);
-    PATCH(auth_mysql_socket);
-    PATCH(auth_mysql_users_table);
-    PATCH(auth_mysql_col_user);
-    PATCH(auth_mysql_col_pass);
-    PATCH(auth_mysql_col_realm);
-
-    /* skip the first, the global context */
-    for (i = 1; i < srv->config_context->used; i++) {
-        if (!config_check_cond(con, i)) continue; /* condition not matched */
-
-        data_config *dc = (data_config *)srv->config_context->data[i];
-        s = p->config_storage[i];
-
-        /* merge config */
-        for (j = 0; j < dc->value->used; j++) {
-            data_unset *du = dc->value->data[j];
-
-            if (buffer_is_equal_string(&du->key, CONST_STR_LEN("auth.backend.mysql.host"))) {
-                PATCH(auth_mysql_host);
-            } else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("auth.backend.mysql.user"))) {
-                PATCH(auth_mysql_user);
-            } else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("auth.backend.mysql.pass"))) {
-                PATCH(auth_mysql_pass);
-            } else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("auth.backend.mysql.db"))) {
-                PATCH(auth_mysql_db);
-            } else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("auth.backend.mysql.port"))) {
-                PATCH(auth_mysql_port);
-            } else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("auth.backend.mysql.socket"))) {
-                PATCH(auth_mysql_socket);
-            } else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("auth.backend.mysql.users_table"))) {
-                PATCH(auth_mysql_users_table);
-            } else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("auth.backend.mysql.col_user"))) {
-                PATCH(auth_mysql_col_user);
-            } else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("auth.backend.mysql.col_pass"))) {
-                PATCH(auth_mysql_col_pass);
-            } else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("auth.backend.mysql.col_realm"))) {
-                PATCH(auth_mysql_col_realm);
+    /* process and validate config directives
+     * (init i to 0 if global context; to 1 to skip empty global context) */
+    for (int i = !p->cvlist[0].v.u2[1]; i < p->nconfig; ++i) {
+        config_plugin_value_t *cpv = p->cvlist + p->cvlist[i].v.u2[0];
+        for (; -1 != cpv->k_id; ++cpv) {
+            switch (cpv->k_id) {
+              case 0: /* auth.backend.mysql.host */
+              case 1: /* auth.backend.mysql.user */
+              case 2: /* auth.backend.mysql.pass */
+              case 3: /* auth.backend.mysql.db */
+              case 4: /* auth.backend.mysql.port */
+              case 5: /* auth.backend.mysql.socket */
+              case 6: /* auth.backend.mysql.users_table */
+                break;
+              case 7: /* auth.backend.mysql.col_user */
+              case 8: /* auth.backend.mysql.col_pass */
+              case 9: /* auth.backend.mysql.col_realm */
+                if (buffer_string_is_empty(cpv->v.b)) {
+                    log_error(srv->errh, __FILE__, __LINE__,
+                      "%s must not be blank", cpk[cpv->k_id].k);
+                    return HANDLER_ERROR;
+                }
+                break;
+              default:/* should not happen */
+                break;
             }
         }
     }
 
-    return 0;
+    p->defaults.auth_mysql_col_user = "user";
+    p->defaults.auth_mysql_col_pass = "password";
+    p->defaults.auth_mysql_col_realm = "realm";
+
+    /* initialize p->defaults from global config context */
+    if (p->nconfig > 0 && p->cvlist->v.u2[1]) {
+        const config_plugin_value_t *cpv = p->cvlist + p->cvlist->v.u2[0];
+        if (-1 != cpv->k_id)
+            mod_authn_mysql_merge_config(&p->defaults, cpv);
+    }
+
+    return HANDLER_GO_ON;
 }
-#undef PATCH
 
 static int mod_authn_mysql_password_cmp(const char *userpw, unsigned long userpwlen, const char *reqpw) {
   #if defined(HAVE_CRYPT_R) || defined(HAVE_CRYPT)
@@ -387,7 +359,7 @@ static int mod_authn_mysql_password_cmp(const char *userpw, unsigned long userpw
 }
 
 static int mod_authn_mysql_result(server *srv, plugin_data *p, http_auth_info_t *ai, const char *pw) {
-    MYSQL_RES *result = mysql_store_result(p->conf.mysql_conn);
+    MYSQL_RES *result = mysql_store_result(p->mysql_conn);
     int rc = -1;
     my_ulonglong num_rows;
 
@@ -395,9 +367,9 @@ static int mod_authn_mysql_result(server *srv, plugin_data *p, http_auth_info_t 
         /*(future: might log mysql_error() string)*/
       #if 0
         log_error_write(srv, __FILE__, __LINE__, "ss", "mysql_store_result:",
-                        mysql_error(p->conf.mysql_conn));
+                        mysql_error(p->mysql_conn));
       #endif
-        mod_authn_mysql_sock_error(srv, &p->conf);
+        mod_authn_mysql_sock_error(srv, p);
         return -1;
     }
 
@@ -434,9 +406,9 @@ static handler_t mod_authn_mysql_query(server *srv, connection *con, void *p_d, 
     plugin_data *p = (plugin_data *)p_d;
     int rc = -1;
 
-    mod_authn_mysql_patch_connection(srv, con, p);
+    mod_authn_mysql_patch_config(con, p);
 
-    if (buffer_string_is_empty(p->conf.auth_mysql_users_table)) {
+    if (NULL == p->conf.auth_mysql_users_table) {
         /*(auth.backend.mysql.host, auth.backend.mysql.db might be NULL; do not log)*/
         log_error_write(srv, __FILE__, __LINE__, "sb",
                         "auth config missing auth.backend.mysql.users_table for uri:",
@@ -453,35 +425,35 @@ static handler_t mod_authn_mysql_query(server *srv, connection *con, void *p_d, 
         if (ai->rlen > sizeof(urealm)/2-1)
             return HANDLER_ERROR;
 
-        if (!mod_authn_mysql_sock_acquire(srv, &p->conf)) {
+        if (!mod_authn_mysql_sock_acquire(srv, p)) {
             return HANDLER_ERROR;
         }
 
       #if 0
-        mrc = mysql_real_escape_string_quote(p->conf.mysql_conn, uname,
+        mrc = mysql_real_escape_string_quote(p->mysql_conn, uname,
                                              ai->username, ai->ulen, '\'');
         if ((unsigned long)~0 == mrc) break;
 
-        mrc = mysql_real_escape_string_quote(p->conf.mysql_conn, urealm,
+        mrc = mysql_real_escape_string_quote(p->mysql_conn, urealm,
                                              ai->realm, ai->rlen, '\'');
         if ((unsigned long)~0 == mrc) break;
       #else
-        mrc = mysql_real_escape_string(p->conf.mysql_conn, uname,
+        mrc = mysql_real_escape_string(p->mysql_conn, uname,
                                        ai->username, ai->ulen);
         if ((unsigned long)~0 == mrc) break;
 
-        mrc = mysql_real_escape_string(p->conf.mysql_conn, urealm,
+        mrc = mysql_real_escape_string(p->mysql_conn, urealm,
                                        ai->realm, ai->rlen);
         if ((unsigned long)~0 == mrc) break;
       #endif
 
         rc = snprintf(q, sizeof(q),
                       "SELECT %s FROM %s WHERE %s='%s' AND %s='%s'",
-                      p->conf.auth_mysql_col_pass->ptr,
-                      p->conf.auth_mysql_users_table->ptr,
-                      p->conf.auth_mysql_col_user->ptr,
+                      p->conf.auth_mysql_col_pass,
+                      p->conf.auth_mysql_users_table,
+                      p->conf.auth_mysql_col_user,
                       uname,
-                      p->conf.auth_mysql_col_realm->ptr,
+                      p->conf.auth_mysql_col_realm,
                       urealm);
 
         if (rc >= (int)sizeof(q)) {
@@ -490,23 +462,26 @@ static handler_t mod_authn_mysql_query(server *srv, connection *con, void *p_d, 
         }
 
         /* for now we stay synchronous */
-        if (0 != mysql_query(p->conf.mysql_conn, q)) {
+        if (0 != mysql_query(p->mysql_conn, q)) {
             /* reconnect to db and retry once if query error occurs */
-            mod_authn_mysql_sock_error(srv, &p->conf);
-            if (!mod_authn_mysql_sock_acquire(srv, &p->conf)) {
+            mod_authn_mysql_sock_error(srv, p);
+            if (!mod_authn_mysql_sock_acquire(srv, p)) {
                 rc = -1;
                 break;
             }
-            if (0 != mysql_query(p->conf.mysql_conn, q)) {
+            if (0 != mysql_query(p->mysql_conn, q)) {
                 /*(note: any of these params might be bufs w/ b->ptr == NULL)*/
-                log_error_write(srv, __FILE__, __LINE__, "sbsb"/*sb*/"sbssss",
-                                "mysql_query host:", p->conf.auth_mysql_host,
-                                "user:", p->conf.auth_mysql_user,
-                                /*(omit pass from logs)*/
-                                /*"pass:", p->conf.auth_mysql_pass,*/
-                                "db:",   p->conf.auth_mysql_db,
-                                "query:", q,
-                                "failed:", mysql_error(p->conf.mysql_conn));
+                log_error_write(srv, __FILE__, __LINE__, "ssss"/*ss*/"ssssss",
+                  "mysql_query host:",
+                  p->conf.auth_mysql_host ? p->conf.auth_mysql_host : NULL,
+                  "user:",
+                  p->conf.auth_mysql_user ? p->conf.auth_mysql_user : NULL,
+                  /*"pass:",*//*(omit pass from logs)*/
+                  /*p->conf.auth_mysql_pass ? p->conf.auth_mysql_pass : NULL,*/
+                  "db:",
+                  p->conf.auth_mysql_db ? p->conf.auth_mysql_db : NULL,
+                  "query:", q,
+                  "failed:", mysql_error(p->mysql_conn));
                 rc = -1;
                 break;
             }
@@ -516,7 +491,7 @@ static handler_t mod_authn_mysql_query(server *srv, connection *con, void *p_d, 
 
     } while (0);
 
-    mod_authn_mysql_sock_release(srv, &p->conf);
+    mod_authn_mysql_sock_release(srv, p);
 
     return (0 == rc) ? HANDLER_GO_ON : HANDLER_ERROR;
 }

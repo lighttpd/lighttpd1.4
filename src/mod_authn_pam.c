@@ -22,13 +22,12 @@
 #include <string.h>
 
 typedef struct {
-    array *opts;
     const char *service;
 } plugin_config;
 
 typedef struct {
     PLUGIN_DATA;
-    plugin_config **config_storage;
+    plugin_config defaults;
     plugin_config conf;
 } plugin_data;
 
@@ -50,81 +49,83 @@ FREE_FUNC(mod_authn_pam_free) {
     plugin_data *p = p_d;
     if (!p) return HANDLER_GO_ON;
 
-    if (p->config_storage) {
-        for (size_t i = 0; i < srv->config_context->used; ++i) {
-            plugin_config *s = p->config_storage[i];
-            if (NULL == s) continue;
-            array_free(s->opts);
-            free(s);
-        }
-        free(p->config_storage);
-    }
+    free(p->cvlist);
     free(p);
     UNUSED(srv);
     return HANDLER_GO_ON;
 }
 
-SETDEFAULTS_FUNC(mod_authn_pam_set_defaults) {
-    plugin_data *p = p_d;
-    config_values_t cv[] = {
-        { "auth.backend.pam.opts",          NULL, T_CONFIG_ARRAY, T_CONFIG_SCOPE_CONNECTION },
-        { NULL,                             NULL, T_CONFIG_UNSET, T_CONFIG_SCOPE_UNSET }
-    };
-
-    p->config_storage = calloc(srv->config_context->used, sizeof(plugin_config *));
-
-    for (size_t i = 0; i < srv->config_context->used; ++i) {
-        data_config const *config = (data_config const*)srv->config_context->data[i];
-        const data_string *ds;
-        plugin_config *s = calloc(1, sizeof(plugin_config));
-        s->opts = array_init();
-
-        cv[0].destination = s->opts;
-
-        p->config_storage[i] = s;
-
-        if (0 != config_insert_values_global(srv, config->value, cv, i == 0 ? T_CONFIG_SCOPE_SERVER : T_CONFIG_SCOPE_CONNECTION)) {
-            return HANDLER_ERROR;
-        }
-
-        if (0 == s->opts->used) continue;
-
-        ds = (const data_string *)
-          array_get_element_klen(s->opts, CONST_STR_LEN("service"));
-        s->service = (NULL != ds) ? ds->value.ptr : "http";
+static void mod_authn_pam_merge_config_cpv(plugin_config * const pconf, const config_plugin_value_t * const cpv) {
+    switch (cpv->k_id) { /* index into static config_plugin_keys_t cpk[] */
+      case 0: /* auth.backend.pam.opts */
+        if (cpv->vtype == T_CONFIG_LOCAL)
+            pconf->service = cpv->v.v;
+        break;
+      default:/* should not happen */
+        return;
     }
-
-    if (p->config_storage[0]->service == NULL)
-        p->config_storage[0]->service = "http";
-
-    return HANDLER_GO_ON;
 }
 
-#define PATCH(x) \
-    p->conf.x = s->x;
-static int mod_authn_pam_patch_connection(server *srv, connection *con, plugin_data *p) {
-    plugin_config *s = p->config_storage[0];
-    PATCH(service);
+static void mod_authn_pam_merge_config(plugin_config * const pconf, const config_plugin_value_t *cpv) {
+    do {
+        mod_authn_pam_merge_config_cpv(pconf, cpv);
+    } while ((++cpv)->k_id != -1);
+}
 
-    /* skip the first, the global context */
-    for (size_t i = 1; i < srv->config_context->used; ++i) {
-        if (!config_check_cond(con, i)) continue; /* condition not matched */
+static void mod_authn_pam_patch_config(connection * const con, plugin_data * const p) {
+    memcpy(&p->conf, &p->defaults, sizeof(plugin_config));
+    for (int i = 1, used = p->nconfig; i < used; ++i) {
+        if (config_check_cond(con, (uint32_t)p->cvlist[i].k_id))
+            mod_authn_pam_merge_config(&p->conf,
+                                        p->cvlist + p->cvlist[i].v.u2[0]);
+    }
+}
 
-        data_config *dc = (data_config *)srv->config_context->data[i];
+SETDEFAULTS_FUNC(mod_authn_pam_set_defaults) {
+    static const config_plugin_keys_t cpk[] = {
+      { CONST_STR_LEN("auth.backend.pam.opts"),
+        T_CONFIG_ARRAY,
+        T_CONFIG_SCOPE_CONNECTION }
+     ,{ NULL, 0,
+        T_CONFIG_UNSET,
+        T_CONFIG_SCOPE_UNSET }
+    };
 
-        /* merge config */
-        s = p->config_storage[i];
-        for (size_t j = 0; j < dc->value->used; ++j) {
-            data_unset *du = dc->value->data[j];
-            if (buffer_is_equal_string(&du->key, CONST_STR_LEN("auth.backend.pam.opts"))) {
-                PATCH(service);
+    plugin_data * const p = p_d;
+    if (!config_plugin_values_init(srv, p, cpk, "mod_authn_pam"))
+        return HANDLER_ERROR;
+
+    /* process and validate config directives
+     * (init i to 0 if global context; to 1 to skip empty global context) */
+    for (int i = !p->cvlist[0].v.u2[1]; i < p->nconfig; ++i) {
+        config_plugin_value_t *cpv = p->cvlist + p->cvlist[i].v.u2[0];
+        for (; -1 != cpv->k_id; ++cpv) {
+            switch (cpv->k_id) {
+              case 0: /* auth.backend.pam.opts */
+                if (cpv->v.a->used) {
+                    const data_string *ds = (const data_string *)
+                      array_get_element_klen(cpv->v.a,CONST_STR_LEN("service"));
+                    cpv->v.v = (NULL != ds) ? ds->value.ptr : "http";
+                    cpv->vtype = T_CONFIG_LOCAL;
+                }
+                break;
+              default:/* should not happen */
+                break;
             }
         }
     }
 
-    return 0;
+    p->defaults.service = "http";
+
+    /* initialize p->defaults from global config context */
+    if (p->nconfig > 0 && p->cvlist->v.u2[1]) {
+        const config_plugin_value_t *cpv = p->cvlist + p->cvlist->v.u2[0];
+        if (-1 != cpv->k_id)
+            mod_authn_pam_merge_config(&p->defaults, cpv);
+    }
+
+    return HANDLER_GO_ON;
 }
-#undef PATCH
 
 static int mod_authn_pam_fn_conv(int num_msg, const struct pam_message **msg, struct pam_response **resp, void *appdata_ptr)  {
     const char * const pw = (char *)appdata_ptr;
@@ -149,7 +150,7 @@ static handler_t mod_authn_pam_query(server *srv, connection *con, void *p_d, co
     UNUSED(realm);
     *(const char **)&conv.appdata_ptr = pw; /*(cast away const)*/
 
-    mod_authn_pam_patch_connection(srv, con, p);
+    mod_authn_pam_patch_config(con, p);
 
     rc = pam_start(p->conf.service, username->ptr, &conv, &pamh);
     if (PAM_SUCCESS != rc

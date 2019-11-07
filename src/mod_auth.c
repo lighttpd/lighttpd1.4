@@ -19,21 +19,15 @@
  */
 
 typedef struct {
-	/* auth */
-	array  *auth_require;
-	buffer *auth_backend_conf;
-	unsigned short auth_extern_authn;
-
-	/* generated */
-	const http_auth_backend_t *auth_backend;
+    const http_auth_backend_t *auth_backend;
+    const array *auth_require;
+    unsigned int auth_extern_authn;
 } plugin_config;
 
 typedef struct {
-	PLUGIN_DATA;
-
-	plugin_config **config_storage;
-
-	plugin_config conf;
+    PLUGIN_DATA;
+    plugin_config defaults;
+    plugin_config conf;
 } plugin_data;
 
 static handler_t mod_auth_check_basic(server *srv, connection *con, void *p_d, const struct http_auth_require_t *require, const struct http_auth_backend_t *backend);
@@ -56,31 +50,34 @@ INIT_FUNC(mod_auth_init) {
 	return p;
 }
 
+static void mod_auth_free_config(plugin_data * const p) {
+    if (NULL == p->cvlist) return;
+    /* (init i to 0 if global context; to 1 to skip empty global context) */
+    for (int i = !p->cvlist[0].v.u2[1], used = p->nconfig; i < used; ++i) {
+        config_plugin_value_t *cpv = p->cvlist + p->cvlist[i].v.u2[0];
+        for (; -1 != cpv->k_id; ++cpv) {
+            if (cpv->vtype != T_CONFIG_LOCAL || NULL == cpv->v.v) continue;
+            switch (cpv->k_id) {
+              case 1: /* auth.require */
+                array_free(cpv->v.v);
+                break;
+              default:
+                break;
+            }
+        }
+    }
+}
+
 FREE_FUNC(mod_auth_free) {
-	plugin_data *p = p_d;
+    plugin_data *p = p_d;
+    if (!p) return HANDLER_GO_ON;
 
-	UNUSED(srv);
+    mod_auth_free_config(p);
 
-	if (!p) return HANDLER_GO_ON;
-
-	if (p->config_storage) {
-		size_t i;
-		for (i = 0; i < srv->config_context->used; i++) {
-			plugin_config *s = p->config_storage[i];
-
-			if (NULL == s) continue;
-
-			array_free(s->auth_require);
-			buffer_free(s->auth_backend_conf);
-
-			free(s);
-		}
-		free(p->config_storage);
-	}
-
-	free(p);
-
-	return HANDLER_GO_ON;
+    free(p->cvlist);
+    free(p);
+    UNUSED(srv);
+    return HANDLER_GO_ON;
 }
 
 /* data type for mod_auth structured data
@@ -268,63 +265,11 @@ static int mod_auth_require_parse (server *srv, http_auth_require_t * const requ
     return 1; /* success */
 }
 
-SETDEFAULTS_FUNC(mod_auth_set_defaults) {
-	plugin_data *p = p_d;
-	size_t i;
-
-	config_values_t cv[] = {
-		{ "auth.backend",                   NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_CONNECTION }, /* 0 */
-		{ "auth.require",                   NULL, T_CONFIG_LOCAL, T_CONFIG_SCOPE_CONNECTION },  /* 1 */
-		{ "auth.extern-authn",              NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION },/* 2 */
-		{ NULL,                             NULL, T_CONFIG_UNSET, T_CONFIG_SCOPE_UNSET }
-	};
-
-	p->config_storage = calloc(srv->config_context->used, sizeof(plugin_config *));
-
-	for (i = 0; i < srv->config_context->used; i++) {
-		data_config const* config = (data_config const*)srv->config_context->data[i];
-		plugin_config *s;
-		size_t n;
-		const data_array *da;
-
-		s = calloc(1, sizeof(plugin_config));
-		s->auth_backend_conf = buffer_init();
-
-		s->auth_require = array_init();
-
-		cv[0].destination = s->auth_backend_conf;
-		cv[1].destination = s->auth_require; /* T_CONFIG_LOCAL; not modified by config_insert_values_global() */
-		cv[2].destination = &s->auth_extern_authn;
-
-		p->config_storage[i] = s;
-
-		if (0 != config_insert_values_global(srv, config->value, cv, i == 0 ? T_CONFIG_SCOPE_SERVER : T_CONFIG_SCOPE_CONNECTION)) {
-			return HANDLER_ERROR;
-		}
-
-		if (!buffer_string_is_empty(s->auth_backend_conf)) {
-			s->auth_backend = http_auth_backend_get(s->auth_backend_conf);
-			if (NULL == s->auth_backend) {
-				log_error_write(srv, __FILE__, __LINE__, "sb", "auth.backend not supported:", s->auth_backend_conf);
-
-				return HANDLER_ERROR;
-			}
-		}
-
-		/* no auth.require for this section */
-		if (NULL == (da = (const data_array *)array_get_element_klen(config->value, CONST_STR_LEN("auth.require")))) continue;
-
-		if (da->type != TYPE_ARRAY || !array_is_kvarray(&da->value)) {
-			log_error_write(srv, __FILE__, __LINE__, "ss",
-					"unexpected value for auth.require; expected ",
-					"auth.require = ( \"urlpath\" => ( \"option\" => \"value\" ) )");
-			return HANDLER_ERROR;
-		}
-
-
-		for (n = 0; n < da->value.used; n++) {
+static handler_t mod_auth_require_parse_array(server *srv, const array *value, array * const auth_require)
+{
+		for (uint32_t n = 0; n < value->used; ++n) {
 			size_t m;
-			data_array *da_file = (data_array *)da->value.data[n];
+			data_array *da_file = (data_array *)value->data[n];
 			const buffer *method = NULL, *realm = NULL, *require = NULL;
 			const http_auth_scheme_t *auth_scheme;
 			buffer *algos = NULL;
@@ -417,54 +362,125 @@ SETDEFAULTS_FUNC(mod_auth_set_defaults) {
 					dauth->fn->free((data_unset *)dauth);
 					return HANDLER_ERROR;
 				}
-				array_insert_unique(s->auth_require, (data_unset *)dauth);
+				array_insert_unique(auth_require, (data_unset *)dauth);
 			}
 		}
-	}
 
 	return HANDLER_GO_ON;
 }
 
-#define PATCH(x) \
-	p->conf.x = s->x;
-static int mod_auth_patch_connection(server *srv, connection *con, plugin_data *p) {
-	size_t i, j;
-	plugin_config *s = p->config_storage[0];
-
-	PATCH(auth_backend);
-	PATCH(auth_require);
-	PATCH(auth_extern_authn);
-
-	/* skip the first, the global context */
-	for (i = 1; i < srv->config_context->used; i++) {
-		if (!config_check_cond(con, i)) continue; /* condition not matched */
-
-		data_config *dc = (data_config *)srv->config_context->data[i];
-		s = p->config_storage[i];
-
-		/* merge config */
-		for (j = 0; j < dc->value->used; j++) {
-			data_unset *du = dc->value->data[j];
-
-			if (buffer_is_equal_string(&du->key, CONST_STR_LEN("auth.backend"))) {
-				PATCH(auth_backend);
-			} else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("auth.require"))) {
-				PATCH(auth_require);
-			} else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("auth.extern-authn"))) {
-				PATCH(auth_extern_authn);
-			}
-		}
-	}
-
-	return 0;
+static void mod_auth_merge_config_cpv(plugin_config * const pconf, const config_plugin_value_t * const cpv) {
+    switch (cpv->k_id) { /* index into static config_plugin_keys_t cpk[] */
+      case 0: /* auth.backend */
+        if (cpv->vtype == T_CONFIG_LOCAL)
+            pconf->auth_backend = cpv->v.v;
+        break;
+      case 1: /* auth.require */
+        if (cpv->vtype == T_CONFIG_LOCAL)
+            pconf->auth_require = cpv->v.v;
+        break;
+      case 2: /* auth.extern-authn */
+        pconf->auth_extern_authn = cpv->v.u;
+      default:/* should not happen */
+        return;
+    }
 }
-#undef PATCH
+
+static void mod_auth_merge_config(plugin_config * const pconf, const config_plugin_value_t *cpv) {
+    do {
+        mod_auth_merge_config_cpv(pconf, cpv);
+    } while ((++cpv)->k_id != -1);
+}
+
+static void mod_auth_patch_config(connection * const con, plugin_data * const p) {
+    memcpy(&p->conf, &p->defaults, sizeof(plugin_config));
+    for (int i = 1, used = p->nconfig; i < used; ++i) {
+        if (config_check_cond(con, (uint32_t)p->cvlist[i].k_id))
+            mod_auth_merge_config(&p->conf, p->cvlist + p->cvlist[i].v.u2[0]);
+    }
+}
+
+SETDEFAULTS_FUNC(mod_auth_set_defaults) {
+    static const config_plugin_keys_t cpk[] = {
+      { CONST_STR_LEN("auth.backend"),
+        T_CONFIG_STRING,
+        T_CONFIG_SCOPE_CONNECTION }
+     ,{ CONST_STR_LEN("auth.require"),
+        T_CONFIG_ARRAY,
+        T_CONFIG_SCOPE_CONNECTION }
+     ,{ CONST_STR_LEN("auth.extern-authn"),
+        T_CONFIG_BOOL,
+        T_CONFIG_SCOPE_CONNECTION }
+     ,{ NULL, 0,
+        T_CONFIG_UNSET,
+        T_CONFIG_SCOPE_UNSET }
+    };
+
+    plugin_data * const p = p_d;
+    if (!config_plugin_values_init(srv, p, cpk, "mod_auth"))
+        return HANDLER_ERROR;
+
+    /* process and validate config directives
+     * (init i to 0 if global context; to 1 to skip empty global context) */
+    for (int i = !p->cvlist[0].v.u2[1]; i < p->nconfig; ++i) {
+        config_plugin_value_t *cpv = p->cvlist + p->cvlist[i].v.u2[0];
+        for (; -1 != cpv->k_id; ++cpv) {
+            switch (cpv->k_id) {
+              case 0: /* auth.backend */
+                if (!buffer_string_is_empty(cpv->v.b)) {
+                    const http_auth_backend_t * const auth_backend =
+                      http_auth_backend_get(cpv->v.b);
+                    if (NULL == auth_backend) {
+                        log_error(srv->errh, __FILE__, __LINE__,
+                          "auth.backend not supported: %s", cpv->v.b->ptr);
+                        return HANDLER_ERROR;
+                    }
+                    *(const http_auth_backend_t **)&cpv->v.v = auth_backend;
+                    cpv->vtype = T_CONFIG_LOCAL;
+                }
+                break;
+              case 1: /* auth.require */
+                if (array_is_kvarray(cpv->v.a)) {
+                    array * const a = array_init();
+                    if (HANDLER_GO_ON !=
+                        mod_auth_require_parse_array(srv, cpv->v.a, a)) {
+                        array_free(a);
+                        return HANDLER_ERROR;
+                    }
+                    cpv->v.a = a;
+                    cpv->vtype = T_CONFIG_LOCAL;
+                }
+                else {
+                    log_error(srv->errh, __FILE__, __LINE__,
+                      "unexpected value for %s; expected "
+                      "%s = ( \"urlpath\" => ( \"option\" => \"value\" ) )",
+                      cpk[cpv->k_id].k, cpk[cpv->k_id].k);
+                    return HANDLER_ERROR;
+                }
+                break;
+              case 2: /* auth.extern-authn */
+                break;
+              default:/* should not happen */
+                break;
+            }
+        }
+    }
+
+    /* initialize p->defaults from global config context */
+    if (p->nconfig > 0 && p->cvlist->v.u2[1]) {
+        const config_plugin_value_t *cpv = p->cvlist + p->cvlist->v.u2[0];
+        if (-1 != cpv->k_id)
+            mod_auth_merge_config(&p->defaults, cpv);
+    }
+
+    return HANDLER_GO_ON;
+}
 
 static handler_t mod_auth_uri_handler(server *srv, connection *con, void *p_d) {
 	plugin_data *p = p_d;
 	data_auth *dauth;
 
-	mod_auth_patch_connection(srv, con, p);
+	mod_auth_patch_config(con, p);
 
 	if (p->conf.auth_require == NULL) return HANDLER_GO_ON;
 

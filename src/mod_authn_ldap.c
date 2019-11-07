@@ -14,24 +14,32 @@
 typedef struct {
     LDAP *ldap;
     server *srv;
+    const char *auth_ldap_hostname;
+    const char *auth_ldap_binddn;
+    const char *auth_ldap_bindpw;
+    const char *auth_ldap_cafile;
+    int auth_ldap_starttls;
+} plugin_config_ldap;
 
-    buffer *auth_ldap_hostname;
-    buffer *auth_ldap_basedn;
-    buffer *auth_ldap_binddn;
-    buffer *auth_ldap_bindpw;
-    buffer *auth_ldap_filter;
-    buffer *auth_ldap_cafile;
-    buffer *auth_ldap_groupmember;
-    unsigned short auth_ldap_starttls;
-    unsigned short auth_ldap_allow_empty_pw;
+typedef struct {
+    plugin_config_ldap *ldc;
+    const char *auth_ldap_basedn;
+    const buffer *auth_ldap_filter;
+    const buffer *auth_ldap_groupmember;
+    int auth_ldap_allow_empty_pw;
+
+    int auth_ldap_starttls;
+    const char *auth_ldap_binddn;
+    const char *auth_ldap_bindpw;
+    const char *auth_ldap_cafile;
 } plugin_config;
 
 typedef struct {
     PLUGIN_DATA;
-    plugin_config **config_storage;
-    plugin_config conf, *anon_conf; /* this is only used as long as no handler_ctx is setup */
+    plugin_config defaults;
+    plugin_config conf;
 
-    buffer *ldap_filter;
+    buffer ldap_filter;
 } plugin_data;
 
 static handler_t mod_authn_ldap_basic(server *srv, connection *con, void *p_d, const http_auth_require_t *require, const buffer *username, const char *pw);
@@ -40,7 +48,6 @@ INIT_FUNC(mod_authn_ldap_init) {
     static http_auth_backend_t http_auth_backend_ldap =
       { "ldap", mod_authn_ldap_basic, NULL, NULL };
     plugin_data *p = calloc(1, sizeof(*p));
-    p->ldap_filter = buffer_init();
 
     /* register http_auth_backend_ldap */
     http_auth_backend_ldap.p_d = p;
@@ -49,39 +56,89 @@ INIT_FUNC(mod_authn_ldap_init) {
     return p;
 }
 
+static void mod_authn_ldap_free_config(plugin_data *p) {
+    if (NULL == p->cvlist) return;
+    /* (init i to 0 if global context; to 1 to skip empty global context) */
+    for (int i = !p->cvlist[0].v.u2[1], used = p->nconfig; i < used; ++i) {
+        config_plugin_value_t *cpv = p->cvlist + p->cvlist[i].v.u2[0];
+        for (; -1 != cpv->k_id; ++cpv) {
+            switch (cpv->k_id) {
+              case 0: /* auth.backend.ldap.hostname */
+                if (cpv->vtype == T_CONFIG_LOCAL) {
+                    plugin_config_ldap *s = cpv->v.v;
+                    if (NULL != s->ldap) ldap_unbind_ext_s(s->ldap, NULL, NULL);
+                    free(s);
+                }
+                break;
+              default:
+                break;
+            }
+        }
+    }
+}
+
 FREE_FUNC(mod_authn_ldap_free) {
     plugin_data *p = p_d;
-
-    UNUSED(srv);
-
     if (!p) return HANDLER_GO_ON;
 
-    buffer_free(p->ldap_filter);
+    mod_authn_ldap_free_config(p);
+    free(p->ldap_filter.ptr);
 
-    if (p->config_storage) {
-        size_t i;
-        for (i = 0; i < srv->config_context->used; i++) {
-            plugin_config *s = p->config_storage[i];
-
-            if (NULL == s) continue;
-
-            buffer_free(s->auth_ldap_hostname);
-            buffer_free(s->auth_ldap_basedn);
-            buffer_free(s->auth_ldap_binddn);
-            buffer_free(s->auth_ldap_bindpw);
-            buffer_free(s->auth_ldap_filter);
-            buffer_free(s->auth_ldap_cafile);
-            buffer_free(s->auth_ldap_groupmember);
-
-            if (NULL != s->ldap) ldap_unbind_ext_s(s->ldap, NULL, NULL);
-            free(s);
-        }
-        free(p->config_storage);
-    }
-
+    free(p->cvlist);
     free(p);
-
+    UNUSED(srv);
     return HANDLER_GO_ON;
+}
+
+static void mod_authn_ldap_merge_config_cpv(plugin_config * const pconf, const config_plugin_value_t * const cpv) {
+    switch (cpv->k_id) { /* index into static config_plugin_keys_t cpk[] */
+      case 0: /* auth.backend.ldap.hostname */
+        if (cpv->vtype == T_CONFIG_LOCAL)
+            pconf->ldc = cpv->v.v;
+        break;
+      case 1: /* auth.backend.ldap.base-dn */
+        if (cpv->vtype == T_CONFIG_LOCAL)
+            pconf->auth_ldap_basedn = cpv->v.v;
+        break;
+      case 2: /* auth.backend.ldap.filter */
+        pconf->auth_ldap_filter = cpv->v.v;
+        break;
+      case 3: /* auth.backend.ldap.ca-file */
+        pconf->auth_ldap_cafile = cpv->v.v;
+        break;
+      case 4: /* auth.backend.ldap.starttls */
+        pconf->auth_ldap_starttls = (int)cpv->v.u;
+        break;
+      case 5: /* auth.backend.ldap.bind-dn */
+        pconf->auth_ldap_binddn = cpv->v.v;
+        break;
+      case 6: /* auth.backend.ldap.bind-pw */
+        pconf->auth_ldap_bindpw = cpv->v.v;
+        break;
+      case 7: /* auth.backend.ldap.allow-empty-pw */
+        pconf->auth_ldap_allow_empty_pw = (int)cpv->v.u;
+        break;
+      case 8: /* auth.backend.ldap.groupmember */
+        pconf->auth_ldap_groupmember = cpv->v.b;
+        break;
+      default:/* should not happen */
+        return;
+    }
+}
+
+static void mod_authn_ldap_merge_config(plugin_config * const pconf, const config_plugin_value_t *cpv) {
+    do {
+        mod_authn_ldap_merge_config_cpv(pconf, cpv);
+    } while ((++cpv)->k_id != -1);
+}
+
+static void mod_authn_ldap_patch_config(connection * const con, plugin_data * const p) {
+    memcpy(&p->conf, &p->defaults, sizeof(plugin_config));
+    for (int i = 1, used = p->nconfig; i < used; ++i) {
+        if (config_check_cond(con, (uint32_t)p->cvlist[i].k_id))
+            mod_authn_ldap_merge_config(&p->conf,
+                                        p->cvlist + p->cvlist[i].v.u2[0]);
+    }
 }
 
 /*(copied from mod_vhostdb_ldap.c)*/
@@ -118,133 +175,155 @@ static void mod_authn_add_scheme (server *srv, buffer *host)
 }
 
 SETDEFAULTS_FUNC(mod_authn_ldap_set_defaults) {
-    plugin_data *p = p_d;
-    size_t i;
-config_values_t cv[] = {
-        { "auth.backend.ldap.hostname",     NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_CONNECTION }, /* 0 */
-        { "auth.backend.ldap.base-dn",      NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_CONNECTION }, /* 1 */
-        { "auth.backend.ldap.filter",       NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_CONNECTION }, /* 2 */
-        { "auth.backend.ldap.ca-file",      NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_CONNECTION }, /* 3 */
-        { "auth.backend.ldap.starttls",     NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION }, /* 4 */
-        { "auth.backend.ldap.bind-dn",      NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_CONNECTION }, /* 5 */
-        { "auth.backend.ldap.bind-pw",      NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_CONNECTION }, /* 6 */
-        { "auth.backend.ldap.allow-empty-pw",     NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION }, /* 7 */
-        { "auth.backend.ldap.groupmember",  NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_CONNECTION }, /* 8 */
-        { NULL,                             NULL, T_CONFIG_UNSET, T_CONFIG_SCOPE_UNSET }
+    static const config_plugin_keys_t cpk[] = {
+      { CONST_STR_LEN("auth.backend.ldap.hostname"),
+        T_CONFIG_STRING,
+        T_CONFIG_SCOPE_CONNECTION }
+     ,{ CONST_STR_LEN("auth.backend.ldap.base-dn"),
+        T_CONFIG_STRING,
+        T_CONFIG_SCOPE_CONNECTION }
+     ,{ CONST_STR_LEN("auth.backend.ldap.filter"),
+        T_CONFIG_STRING,
+        T_CONFIG_SCOPE_CONNECTION }
+     ,{ CONST_STR_LEN("auth.backend.ldap.ca-file"),
+        T_CONFIG_STRING,
+        T_CONFIG_SCOPE_CONNECTION }
+     ,{ CONST_STR_LEN("auth.backend.ldap.starttls"),
+        T_CONFIG_BOOL,
+        T_CONFIG_SCOPE_CONNECTION }
+     ,{ CONST_STR_LEN("auth.backend.ldap.bind-dn"),
+        T_CONFIG_STRING,
+        T_CONFIG_SCOPE_CONNECTION }
+     ,{ CONST_STR_LEN("auth.backend.ldap.bind-pw"),
+        T_CONFIG_STRING,
+        T_CONFIG_SCOPE_CONNECTION }
+     ,{ CONST_STR_LEN("auth.backend.ldap.allow-empty-pw"),
+        T_CONFIG_BOOL,
+        T_CONFIG_SCOPE_CONNECTION }
+     ,{ CONST_STR_LEN("auth.backend.ldap.groupmember"),
+        T_CONFIG_STRING,
+        T_CONFIG_SCOPE_CONNECTION }
+     ,{ NULL, 0,
+        T_CONFIG_UNSET,
+        T_CONFIG_SCOPE_UNSET }
     };
 
-    p->config_storage = calloc(srv->config_context->used, sizeof(plugin_config *));
+    plugin_data * const p = p_d;
+    if (!config_plugin_values_init(srv, p, cpk, "mod_authn_ldap"))
+        return HANDLER_ERROR;
 
-    for (i = 0; i < srv->config_context->used; i++) {
-        data_config const* config = (data_config const*)srv->config_context->data[i];
-        plugin_config *s;
-
-        s = calloc(1, sizeof(plugin_config));
-
-        s->auth_ldap_hostname = buffer_init();
-        s->auth_ldap_basedn = buffer_init();
-        s->auth_ldap_binddn = buffer_init();
-        s->auth_ldap_bindpw = buffer_init();
-        s->auth_ldap_filter = buffer_init();
-        s->auth_ldap_cafile = buffer_init();
-        s->auth_ldap_groupmember = buffer_init_string("memberUid");
-        s->auth_ldap_starttls = 0;
-        s->ldap = NULL;
-
-        cv[0].destination = s->auth_ldap_hostname;
-        cv[1].destination = s->auth_ldap_basedn;
-        cv[2].destination = s->auth_ldap_filter;
-        cv[3].destination = s->auth_ldap_cafile;
-        cv[4].destination = &(s->auth_ldap_starttls);
-        cv[5].destination = s->auth_ldap_binddn;
-        cv[6].destination = s->auth_ldap_bindpw;
-        cv[7].destination = &(s->auth_ldap_allow_empty_pw);
-        cv[8].destination = s->auth_ldap_groupmember;
-
-        p->config_storage[i] = s;
-
-        if (0 != config_insert_values_global(srv, config->value, cv, i == 0 ? T_CONFIG_SCOPE_SERVER : T_CONFIG_SCOPE_CONNECTION)) {
-            return HANDLER_ERROR;
-        }
-
-        if (!buffer_string_is_empty(s->auth_ldap_filter)) {
-            if (*s->auth_ldap_filter->ptr != ',') {
-                /*(translate '$' to '?' for consistency with other modules)*/
-                char *d = s->auth_ldap_filter->ptr;
-                for (; NULL != (d = strchr(d, '$')); ++d) *d = '?';
-                if (NULL == strchr(s->auth_ldap_filter->ptr, '?')) {
-                    log_error_write(srv, __FILE__, __LINE__, "s", "ldap: auth.backend.ldap.filter is missing a replace-operator '?'");
-                    return HANDLER_ERROR;
+    /* process and validate config directives
+     * (init i to 0 if global context; to 1 to skip empty global context) */
+    for (int i = !p->cvlist[0].v.u2[1]; i < p->nconfig; ++i) {
+        config_plugin_value_t *cpv = p->cvlist + p->cvlist[i].v.u2[0];
+        plugin_config_ldap *ldc = NULL;
+        char *binddn = NULL, *bindpw = NULL, *cafile = NULL;
+        int starttls = 0;
+        for (; -1 != cpv->k_id; ++cpv) {
+            switch (cpv->k_id) {
+              case 0: /* auth.backend.ldap.hostname */
+                if (!buffer_string_is_empty(cpv->v.b)) {
+                    buffer *b;
+                    *(const buffer **)&b = cpv->v.b;
+                    mod_authn_add_scheme(srv, b);
+                    ldc = malloc(sizeof(plugin_config_ldap));
+                    force_assert(ldc);
+                    ldc->srv = srv;
+                    ldc->auth_ldap_hostname = b->ptr;
+                    cpv->v.v = ldc;
                 }
+                else {
+                    cpv->v.v = NULL;
+                }
+                cpv->vtype = T_CONFIG_LOCAL;
+                break;
+              case 1: /* auth.backend.ldap.base-dn */
+                cpv->vtype = T_CONFIG_LOCAL;
+                cpv->v.v = !buffer_string_is_empty(cpv->v.b)
+                  ? cpv->v.b->ptr
+                  : NULL;
+                break;
+              case 2: /* auth.backend.ldap.filter */
+                if (!buffer_string_is_empty(cpv->v.b)) {
+                    buffer *b;
+                    *(const buffer **)&b = cpv->v.b;
+                    if (*b->ptr != ',') {
+                        /*(translate $ to ? for consistency w/ other modules)*/
+                        char *d = b->ptr;
+                        for (; NULL != (d = strchr(d, '$')); ++d) *d = '?';
+                        if (NULL == strchr(b->ptr, '?')) {
+                            log_error(srv->errh, __FILE__, __LINE__,
+                              "ldap: %s is missing a replace-operator '?'",
+                              cpk[cpv->k_id].k);
+                            return HANDLER_ERROR;
+                        }
+                    }
+                    cpv->v.v = b;
+                }
+                else {
+                    cpv->v.v = NULL;
+                }
+                cpv->vtype = T_CONFIG_LOCAL;
+                break;
+              case 3: /* auth.backend.ldap.ca-file */
+                cafile = !buffer_string_is_empty(cpv->v.b)
+                  ? cpv->v.b->ptr
+                  : NULL;
+                cpv->vtype = T_CONFIG_LOCAL;
+                cpv->v.v = cafile;
+                break;
+              case 4: /* auth.backend.ldap.starttls */
+                starttls = (int)cpv->v.u;
+                break;
+              case 5: /* auth.backend.ldap.bind-dn */
+                binddn = !buffer_string_is_empty(cpv->v.b)
+                  ? cpv->v.b->ptr
+                  : NULL;
+                cpv->vtype = T_CONFIG_LOCAL;
+                cpv->v.v = binddn;
+                break;
+              case 6: /* auth.backend.ldap.bind-pw */
+                cpv->vtype = T_CONFIG_LOCAL;
+                cpv->v.v = bindpw = cpv->v.b->ptr;
+                break;
+              case 7: /* auth.backend.ldap.allow-empty-pw */
+              case 8: /* auth.backend.ldap.groupmember */
+                break;
+              default:/* should not happen */
+                break;
             }
         }
 
-        mod_authn_add_scheme(srv, s->auth_ldap_hostname);
+        if (ldc) {
+            ldc->auth_ldap_binddn = binddn;
+            ldc->auth_ldap_bindpw = bindpw;
+            ldc->auth_ldap_cafile = cafile;
+            ldc->auth_ldap_starttls = starttls;
+        }
+    }
+
+    static const struct { const char *ptr; uint32_t used; uint32_t size; }
+      memberUid = { "memberUid", sizeof("memberUid"), 0 };
+    *(const buffer **)&p->defaults.auth_ldap_groupmember =
+      (const buffer *)&memberUid;
+
+    /* initialize p->defaults from global config context */
+    if (p->nconfig > 0 && p->cvlist->v.u2[1]) {
+        const config_plugin_value_t *cpv = p->cvlist + p->cvlist->v.u2[0];
+        if (-1 != cpv->k_id)
+            mod_authn_ldap_merge_config(&p->defaults, cpv);
     }
 
     return HANDLER_GO_ON;
 }
 
-#define PATCH(x) \
-    p->conf.x = s->x;
-static int mod_authn_ldap_patch_connection(server *srv, connection *con, plugin_data *p) {
-    size_t i, j;
-    plugin_config *s = p->config_storage[0];
-
-    PATCH(auth_ldap_hostname);
-    PATCH(auth_ldap_basedn);
-    PATCH(auth_ldap_binddn);
-    PATCH(auth_ldap_bindpw);
-    PATCH(auth_ldap_filter);
-    PATCH(auth_ldap_cafile);
-    PATCH(auth_ldap_starttls);
-    PATCH(auth_ldap_allow_empty_pw);
-    PATCH(auth_ldap_groupmember);
-    p->anon_conf = s;
-
-    /* skip the first, the global context */
-    for (i = 1; i < srv->config_context->used; i++) {
-        if (!config_check_cond(con, i)) continue; /* condition not matched */
-
-        data_config *dc = (data_config *)srv->config_context->data[i];
-        s = p->config_storage[i];
-
-        /* merge config */
-        for (j = 0; j < dc->value->used; j++) {
-            data_unset *du = dc->value->data[j];
-
-            if (buffer_is_equal_string(&du->key, CONST_STR_LEN("auth.backend.ldap.hostname"))) {
-                PATCH(auth_ldap_hostname);
-                p->anon_conf = s;
-            } else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("auth.backend.ldap.base-dn"))) {
-                PATCH(auth_ldap_basedn);
-            } else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("auth.backend.ldap.filter"))) {
-                PATCH(auth_ldap_filter);
-            } else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("auth.backend.ldap.ca-file"))) {
-                PATCH(auth_ldap_cafile);
-            } else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("auth.backend.ldap.starttls"))) {
-                PATCH(auth_ldap_starttls);
-            } else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("auth.backend.ldap.bind-dn"))) {
-                PATCH(auth_ldap_binddn);
-            } else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("auth.backend.ldap.bind-pw"))) {
-                PATCH(auth_ldap_bindpw);
-            } else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("auth.backend.ldap.allow-empty-pw"))) {
-                PATCH(auth_ldap_allow_empty_pw);
-            } else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("auth.backend.ldap.groupmember"))) {
-                PATCH(auth_ldap_groupmember);
-            }
-        }
-    }
-
-    return 0;
-}
-#undef PATCH
-
+__attribute_cold__
 static void mod_authn_ldap_err(server *srv, const char *file, unsigned long line, const char *fn, int err)
 {
     log_error_write(srv,file,line,"sSss","ldap:",fn,":",ldap_err2string(err));
 }
 
+__attribute_cold__
 static void mod_authn_ldap_opt_err(server *srv, const char *file, unsigned long line, const char *fn, LDAP *ld)
 {
     int err;
@@ -383,13 +462,13 @@ static void mod_authn_append_ldap_filter_escape(buffer * const filter, const buf
     }
 }
 
-static LDAP * mod_authn_ldap_host_init(server *srv, plugin_config *s) {
+static LDAP * mod_authn_ldap_host_init(server *srv, plugin_config_ldap *s) {
     LDAP *ld;
     int ret;
 
-    if (buffer_string_is_empty(s->auth_ldap_hostname)) return NULL;
+    if (NULL == s->auth_ldap_hostname) return NULL;
 
-    if (LDAP_SUCCESS != ldap_initialize(&ld, s->auth_ldap_hostname->ptr)) {
+    if (LDAP_SUCCESS != ldap_initialize(&ld, s->auth_ldap_hostname)) {
         log_error_write(srv, __FILE__, __LINE__, "sss", "ldap:",
                         "ldap_initialize():", strerror(errno));
         return NULL;
@@ -409,9 +488,9 @@ static LDAP * mod_authn_ldap_host_init(server *srv, plugin_config *s) {
     if (s->auth_ldap_starttls) {
         /* if no CA file is given, it is ok, as we will use encryption
          * if the server requires a CAfile it will tell us */
-        if (!buffer_string_is_empty(s->auth_ldap_cafile)) {
+        if (s->auth_ldap_cafile) {
             ret = ldap_set_option(NULL, LDAP_OPT_X_TLS_CACERTFILE,
-                                  s->auth_ldap_cafile->ptr);
+                                  s->auth_ldap_cafile);
             if (LDAP_OPT_SUCCESS != ret) {
                 mod_authn_ldap_err(srv, __FILE__, __LINE__,
                                    "ldap_set_option(LDAP_OPT_X_TLS_CACERTFILE)",
@@ -455,18 +534,18 @@ static int mod_authn_ldap_bind(server *srv, LDAP *ld, const char *dn, const char
 }
 
 static int mod_authn_ldap_rebind_proc (LDAP *ld, LDAP_CONST char *url, ber_tag_t ldap_request, ber_int_t msgid, void *params) {
-    plugin_config *s = (plugin_config *)params;
+    const plugin_config_ldap *s = (const plugin_config_ldap *)params;
     UNUSED(url);
     UNUSED(ldap_request);
     UNUSED(msgid);
-    return !buffer_string_is_empty(s->auth_ldap_binddn)
+    return s->auth_ldap_binddn
       ? mod_authn_ldap_bind(s->srv, ld,
-                            s->auth_ldap_binddn->ptr,
-                            s->auth_ldap_bindpw->ptr)
+                            s->auth_ldap_binddn,
+                            s->auth_ldap_bindpw)
       : mod_authn_ldap_bind(s->srv, ld, NULL, NULL);
 }
 
-static LDAPMessage * mod_authn_ldap_search(server *srv, plugin_config *s, char *base, char *filter) {
+static LDAPMessage * mod_authn_ldap_search(server *srv, plugin_config_ldap *s, const char *base, const char *filter) {
     LDAPMessage *lm = NULL;
     char *attrs[] = { LDAP_NO_ATTRS, NULL };
     int ret;
@@ -521,7 +600,7 @@ static LDAPMessage * mod_authn_ldap_search(server *srv, plugin_config *s, char *
     return lm;
 }
 
-static char * mod_authn_ldap_get_dn(server *srv, plugin_config *s, char *base, char *filter) {
+static char * mod_authn_ldap_get_dn(server *srv, plugin_config_ldap *s, const char *base, const char *filter) {
     LDAP *ld;
     LDAPMessage *lm, *first;
     char *dn;
@@ -576,11 +655,12 @@ static handler_t mod_authn_ldap_memberOf(server *srv, plugin_config *s, const ht
     }
     buffer_append_string_len(filter, CONST_STR_LEN(")"));
 
+    plugin_config_ldap * const ldc = s->ldc;
     for (size_t i = 0; i < groups->used; ++i) {
-        char *base = groups->data[i]->key.ptr;
-        LDAPMessage *lm = mod_authn_ldap_search(srv, s, base, filter->ptr);
+        const char *base = groups->data[i]->key.ptr;
+        LDAPMessage *lm = mod_authn_ldap_search(srv, ldc, base, filter->ptr);
         if (NULL != lm) {
-            int count = ldap_count_entries(s->ldap, lm);
+            int count = ldap_count_entries(ldc->ldap, lm);
             ldap_msgfree(lm);
             if (count > 0) {
                 rc = HANDLER_GO_ON;
@@ -597,88 +677,101 @@ static handler_t mod_authn_ldap_basic(server *srv, connection *con, void *p_d, c
     plugin_data *p = (plugin_data *)p_d;
     LDAP *ld;
     char *dn;
-    buffer *template;
-    handler_t rc;
 
-    mod_authn_ldap_patch_connection(srv, con, p);
-    p->anon_conf->srv = srv;
-    p->conf.srv = srv;
+    mod_authn_ldap_patch_config(con, p);
 
     if (pw[0] == '\0' && !p->conf.auth_ldap_allow_empty_pw)
         return HANDLER_ERROR;
 
-    template = p->conf.auth_ldap_filter;
-    if (buffer_string_is_empty(template)) {
+    const buffer * const template = p->conf.auth_ldap_filter;
+    if (NULL == template)
         return HANDLER_ERROR;
-    }
 
     /* build filter to get DN for uid = username */
-    buffer_clear(p->ldap_filter);
+    buffer * const ldap_filter = &p->ldap_filter;
+    buffer_clear(ldap_filter);
     if (*template->ptr == ',') {
         /* special-case filter template beginning with ',' to be explicit DN */
-        buffer_append_string_len(p->ldap_filter, CONST_STR_LEN("uid="));
-        mod_authn_append_ldap_dn_escape(p->ldap_filter, username);
-        buffer_append_string_buffer(p->ldap_filter, template);
-        dn = p->ldap_filter->ptr;
-    } else {
-        for (char *b = template->ptr, *d; *b; b = d+1) {
+        buffer_append_string_len(ldap_filter, CONST_STR_LEN("uid="));
+        mod_authn_append_ldap_dn_escape(ldap_filter, username);
+        buffer_append_string_buffer(ldap_filter, template);
+        dn = ldap_filter->ptr;
+    }
+    else {
+        for (const char *b = template->ptr, *d; *b; b = d+1) {
             if (NULL != (d = strchr(b, '?'))) {
-                buffer_append_string_len(p->ldap_filter, b, (size_t)(d - b));
-                mod_authn_append_ldap_filter_escape(p->ldap_filter, username);
-            } else {
+                buffer_append_string_len(ldap_filter, b, (size_t)(d - b));
+                mod_authn_append_ldap_filter_escape(ldap_filter, username);
+            }
+            else {
                 d = template->ptr + buffer_string_length(template);
-                buffer_append_string_len(p->ldap_filter, b, (size_t)(d - b));
+                buffer_append_string_len(ldap_filter, b, (size_t)(d - b));
                 break;
             }
         }
 
         /* ldap_search for DN (synchronous; blocking) */
-        dn = mod_authn_ldap_get_dn(srv, p->anon_conf,
-                                   p->conf.auth_ldap_basedn->ptr,
-                                   p->ldap_filter->ptr);
-        if (NULL == dn) {
-            return HANDLER_ERROR;
-        }
+        dn = mod_authn_ldap_get_dn(srv, p->conf.ldc,
+                                   p->conf.auth_ldap_basedn, ldap_filter->ptr);
+        if (NULL == dn) return HANDLER_ERROR;
     }
 
-    /* auth against LDAP server (synchronous; blocking) */
+    /*(Check ldc here rather than further up to preserve historical behavior
+     * where p->conf.ldc above (was p->anon_conf above) is set of directives in
+     * same context as auth_ldap_hostname.  Preference: admin intentions are
+     * clearer if directives are always together in a set in same context)*/
 
-    ld = mod_authn_ldap_host_init(srv, &p->conf);
-    if (NULL == ld) {
-        if (dn != p->ldap_filter->ptr) ldap_memfree(dn);
-        return HANDLER_ERROR;
+    plugin_config_ldap * const ldc_base = p->conf.ldc;
+    plugin_config_ldap ldc_custom;
+
+    if ( p->conf.ldc->auth_ldap_starttls != p->conf.auth_ldap_starttls
+        || p->conf.ldc->auth_ldap_binddn != p->conf.auth_ldap_binddn
+        || p->conf.ldc->auth_ldap_bindpw != p->conf.auth_ldap_bindpw
+        || p->conf.ldc->auth_ldap_cafile != p->conf.auth_ldap_cafile ) {
+        ldc_custom.ldap = NULL;
+        ldc_custom.srv = srv;
+        ldc_custom.auth_ldap_hostname = ldc_base->auth_ldap_hostname;
+        ldc_custom.auth_ldap_starttls = p->conf.auth_ldap_starttls;
+        ldc_custom.auth_ldap_binddn = p->conf.auth_ldap_binddn;
+        ldc_custom.auth_ldap_bindpw = p->conf.auth_ldap_bindpw;
+        ldc_custom.auth_ldap_cafile = p->conf.auth_ldap_cafile;
+        p->conf.ldc = &ldc_custom;
     }
 
-    /* Disable referral tracking.  Target user should be in provided scope */
-    {
+    handler_t rc = HANDLER_ERROR;
+    do {
+        /* auth against LDAP server (synchronous; blocking) */
+
+        ld = mod_authn_ldap_host_init(srv, p->conf.ldc);
+        if (NULL == ld)
+            break;
+
+        /* Disable referral tracking; target user should be in provided scope */
         int ret = ldap_set_option(ld, LDAP_OPT_REFERRALS, LDAP_OPT_OFF);
         if (LDAP_OPT_SUCCESS != ret) {
             mod_authn_ldap_err(srv,__FILE__,__LINE__,"ldap_set_option()",ret);
-            ldap_destroy(ld);
-            if (dn != p->ldap_filter->ptr) ldap_memfree(dn);
-            return HANDLER_ERROR;
+            break;
         }
-    }
 
-    if (LDAP_SUCCESS != mod_authn_ldap_bind(srv, ld, dn, pw)) {
-        ldap_destroy(ld);
-        if (dn != p->ldap_filter->ptr) ldap_memfree(dn);
-        return HANDLER_ERROR;
-    }
+        if (LDAP_SUCCESS != mod_authn_ldap_bind(srv, ld, dn, pw))
+            break;
 
-    ldap_unbind_ext_s(ld, NULL, NULL); /* disconnect */
+        ldap_unbind_ext_s(ld, NULL, NULL); /* disconnect */
+        ld = NULL;
 
-    if (http_auth_match_rules(require, username->ptr, NULL, NULL)) {
-        rc = HANDLER_GO_ON; /* access granted */
-    } else {
-        rc = HANDLER_ERROR;
-        if (require->group->used) {
-            /*(must not re-use p->ldap_filter, since it might be used for dn)*/
-            rc = mod_authn_ldap_memberOf(srv, &p->conf, require, username, dn);
+        if (http_auth_match_rules(require, username->ptr, NULL, NULL)) {
+            rc = HANDLER_GO_ON; /* access granted */
         }
-    }
+        else if (require->group->used) {
+            /*(must not re-use ldap_filter, since it might be used for dn)*/
+            rc = mod_authn_ldap_memberOf(srv,&p->conf,require,username,dn);
+        }
+    } while (0);
 
-    if (dn != p->ldap_filter->ptr) ldap_memfree(dn);
+    if (NULL != ld) ldap_destroy(ld);
+    if (ldc_base != p->conf.ldc && NULL != p->conf.ldc->ldap)
+        ldap_unbind_ext_s(p->conf.ldc->ldap, NULL, NULL);
+    if (dn != ldap_filter->ptr) ldap_memfree(dn);
     return rc;
 }
 

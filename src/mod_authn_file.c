@@ -47,15 +47,15 @@
  */
 
 typedef struct {
-    buffer *auth_plain_groupfile;
-    buffer *auth_plain_userfile;
-    buffer *auth_htdigest_userfile;
-    buffer *auth_htpasswd_userfile;
+    const buffer *auth_plain_groupfile;
+    const buffer *auth_plain_userfile;
+    const buffer *auth_htdigest_userfile;
+    const buffer *auth_htpasswd_userfile;
 } plugin_config;
 
 typedef struct {
     PLUGIN_DATA;
-    plugin_config **config_storage;
+    plugin_config defaults;
     plugin_config conf;
 } plugin_data;
 
@@ -91,109 +91,80 @@ INIT_FUNC(mod_authn_file_init) {
 
 FREE_FUNC(mod_authn_file_free) {
     plugin_data *p = p_d;
-
-    UNUSED(srv);
-
     if (!p) return HANDLER_GO_ON;
 
-    if (p->config_storage) {
-        size_t i;
-        for (i = 0; i < srv->config_context->used; i++) {
-            plugin_config *s = p->config_storage[i];
-
-            if (NULL == s) continue;
-
-            buffer_free(s->auth_plain_groupfile);
-            buffer_free(s->auth_plain_userfile);
-            buffer_free(s->auth_htdigest_userfile);
-            buffer_free(s->auth_htpasswd_userfile);
-
-            free(s);
-        }
-        free(p->config_storage);
-    }
-
+    free(p->cvlist);
     free(p);
-
+    UNUSED(srv);
     return HANDLER_GO_ON;
+}
+
+static void mod_authn_file_merge_config_cpv(plugin_config * const pconf, const config_plugin_value_t * const cpv) {
+    switch (cpv->k_id) { /* index into static config_plugin_keys_t cpk[] */
+      case 0: /* auth.backend.plain.groupfile */
+        pconf->auth_plain_groupfile = cpv->v.b;
+        break;
+      case 1: /* auth.backend.plain.userfile */
+        pconf->auth_plain_userfile = cpv->v.b;
+        break;
+      case 2: /* auth.backend.htdigest.userfile */
+        pconf->auth_htdigest_userfile = cpv->v.b;
+        break;
+      case 3: /* auth.backend.htpasswd.userfile */
+        pconf->auth_htpasswd_userfile = cpv->v.b;
+        break;
+      default:/* should not happen */
+        return;
+    }
+}
+
+static void mod_authn_file_merge_config(plugin_config * const pconf, const config_plugin_value_t *cpv) {
+    do {
+        mod_authn_file_merge_config_cpv(pconf, cpv);
+    } while ((++cpv)->k_id != -1);
+}
+
+static void mod_authn_file_patch_config(connection * const con, plugin_data * const p) {
+    memcpy(&p->conf, &p->defaults, sizeof(plugin_config));
+    for (int i = 1, used = p->nconfig; i < used; ++i) {
+        if (config_check_cond(con, (uint32_t)p->cvlist[i].k_id))
+            mod_authn_file_merge_config(&p->conf,
+                                        p->cvlist + p->cvlist[i].v.u2[0]);
+    }
 }
 
 SETDEFAULTS_FUNC(mod_authn_file_set_defaults) {
-    plugin_data *p = p_d;
-    size_t i;
-
-    config_values_t cv[] = {
-        { "auth.backend.plain.groupfile",   NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_CONNECTION }, /* 0 */
-        { "auth.backend.plain.userfile",    NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_CONNECTION }, /* 1 */
-        { "auth.backend.htdigest.userfile", NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_CONNECTION }, /* 2 */
-        { "auth.backend.htpasswd.userfile", NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_CONNECTION }, /* 3 */
-        { NULL,                             NULL, T_CONFIG_UNSET, T_CONFIG_SCOPE_UNSET }
+    static const config_plugin_keys_t cpk[] = {
+      { CONST_STR_LEN("auth.backend.plain.groupfile"),
+        T_CONFIG_STRING,
+        T_CONFIG_SCOPE_CONNECTION }
+     ,{ CONST_STR_LEN("auth.backend.plain.userfile"),
+        T_CONFIG_STRING,
+        T_CONFIG_SCOPE_CONNECTION }
+     ,{ CONST_STR_LEN("auth.backend.htdigest.userfile"),
+        T_CONFIG_STRING,
+        T_CONFIG_SCOPE_CONNECTION }
+     ,{ CONST_STR_LEN("auth.backend.htpasswd.userfile"),
+        T_CONFIG_STRING,
+        T_CONFIG_SCOPE_CONNECTION }
+     ,{ NULL, 0,
+        T_CONFIG_UNSET,
+        T_CONFIG_SCOPE_UNSET }
     };
 
-    p->config_storage = calloc(srv->config_context->used, sizeof(plugin_config *));
+    plugin_data * const p = p_d;
+    if (!config_plugin_values_init(srv, p, cpk, "mod_authn_file"))
+        return HANDLER_ERROR;
 
-    for (i = 0; i < srv->config_context->used; i++) {
-        data_config const* config = (data_config const*)srv->config_context->data[i];
-        plugin_config *s;
-
-        s = calloc(1, sizeof(plugin_config));
-        s->auth_plain_groupfile = buffer_init();
-        s->auth_plain_userfile = buffer_init();
-        s->auth_htdigest_userfile = buffer_init();
-        s->auth_htpasswd_userfile = buffer_init();
-
-        cv[0].destination = s->auth_plain_groupfile;
-        cv[1].destination = s->auth_plain_userfile;
-        cv[2].destination = s->auth_htdigest_userfile;
-        cv[3].destination = s->auth_htpasswd_userfile;
-
-        p->config_storage[i] = s;
-
-        if (0 != config_insert_values_global(srv, config->value, cv, i == 0 ? T_CONFIG_SCOPE_SERVER : T_CONFIG_SCOPE_CONNECTION)) {
-            return HANDLER_ERROR;
-        }
+    /* initialize p->defaults from global config context */
+    if (p->nconfig > 0 && p->cvlist->v.u2[1]) {
+        const config_plugin_value_t *cpv = p->cvlist + p->cvlist->v.u2[0];
+        if (-1 != cpv->k_id)
+            mod_authn_file_merge_config(&p->defaults, cpv);
     }
 
     return HANDLER_GO_ON;
 }
-
-#define PATCH(x) \
-    p->conf.x = s->x;
-static int mod_authn_file_patch_connection(server *srv, connection *con, plugin_data *p) {
-    size_t i, j;
-    plugin_config *s = p->config_storage[0];
-
-    PATCH(auth_plain_groupfile);
-    PATCH(auth_plain_userfile);
-    PATCH(auth_htdigest_userfile);
-    PATCH(auth_htpasswd_userfile);
-
-    /* skip the first, the global context */
-    for (i = 1; i < srv->config_context->used; i++) {
-        if (!config_check_cond(con, i)) continue; /* condition not matched */
-
-        data_config *dc = (data_config *)srv->config_context->data[i];
-        s = p->config_storage[i];
-
-        /* merge config */
-        for (j = 0; j < dc->value->used; j++) {
-            data_unset *du = dc->value->data[j];
-
-            if (buffer_is_equal_string(&du->key, CONST_STR_LEN("auth.backend.plain.groupfile"))) {
-                PATCH(auth_plain_groupfile);
-            } else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("auth.backend.plain.userfile"))) {
-                PATCH(auth_plain_userfile);
-            } else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("auth.backend.htdigest.userfile"))) {
-                PATCH(auth_htdigest_userfile);
-            } else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("auth.backend.htpasswd.userfile"))) {
-                PATCH(auth_htpasswd_userfile);
-            }
-        }
-    }
-
-    return 0;
-}
-#undef PATCH
 
 
 
@@ -314,7 +285,7 @@ static int mod_authn_file_htdigest_get(server *srv, connection *con, void *p_d, 
     const buffer *auth_fn;
     FILE *fp;
 
-    mod_authn_file_patch_connection(srv, con, p);
+    mod_authn_file_patch_config(con, p);
     auth_fn = p->conf.auth_htdigest_userfile;
     if (buffer_string_is_empty(auth_fn)) return -1;
 
@@ -425,7 +396,7 @@ static handler_t mod_authn_file_plain_digest(server *srv, connection *con, void 
     plugin_data *p = (plugin_data *)p_d;
     buffer *password_buf = buffer_init();/* password-string from auth-backend */
     int rc;
-    mod_authn_file_patch_connection(srv, con, p);
+    mod_authn_file_patch_config(con, p);
     rc = mod_authn_file_htpasswd_get(srv, p->conf.auth_plain_userfile, ai->username, ai->ulen, password_buf);
     if (0 == rc) {
         /* generate password from plain-text */
@@ -439,7 +410,7 @@ static handler_t mod_authn_file_plain_basic(server *srv, connection *con, void *
     plugin_data *p = (plugin_data *)p_d;
     buffer *password_buf = buffer_init();/* password-string from auth-backend */
     int rc;
-    mod_authn_file_patch_connection(srv, con, p);
+    mod_authn_file_patch_config(con, p);
     rc = mod_authn_file_htpasswd_get(srv, p->conf.auth_plain_userfile, CONST_BUF_LEN(username), password_buf);
     if (0 == rc) {
         rc = http_auth_const_time_memeq_pad(CONST_BUF_LEN(password_buf), pw, strlen(pw)) ? 0 : -1;
@@ -663,7 +634,7 @@ static handler_t mod_authn_file_htpasswd_basic(server *srv, connection *con, voi
     plugin_data *p = (plugin_data *)p_d;
     buffer *password = buffer_init();/* password-string from auth-backend */
     int rc;
-    mod_authn_file_patch_connection(srv, con, p);
+    mod_authn_file_patch_config(con, p);
     rc = mod_authn_file_htpasswd_get(srv, p->conf.auth_htpasswd_userfile, CONST_BUF_LEN(username), password);
     if (0 == rc) {
         char sample[256];
