@@ -13,7 +13,6 @@
 #include <stdlib.h>
 #include <string.h>
 #include <dirent.h>
-#include <errno.h>
 #include <fcntl.h>
 #include <unistd.h>
 #include <time.h>
@@ -34,375 +33,336 @@
 #include <sys/extattr.h>
 #endif
 
-/* plugin config for all request/connections */
-
 typedef struct {
-#ifdef HAVE_PCRE_H
-	pcre *regex;
-#endif
-	buffer *string;
-} excludes;
+	char dir_listing;
+	char hide_dot_files;
+	char hide_readme_file;
+	char encode_readme;
+	char hide_header_file;
+	char encode_header;
+	char auto_layout;
 
-typedef struct {
-	excludes **ptr;
+      #ifdef HAVE_PCRE_H
+	pcre **excludes;
+      #else
+	void *excludes;
+      #endif
 
-	size_t used;
-	size_t size;
-} excludes_buffer;
-
-typedef struct {
-	unsigned short dir_listing;
-	unsigned short hide_dot_files;
-	unsigned short hide_readme_file;
-	unsigned short encode_readme;
-	unsigned short hide_header_file;
-	unsigned short encode_header;
-	unsigned short auto_layout;
-
-	excludes_buffer *excludes;
-
-	buffer *show_readme;
-	buffer *show_header;
-	buffer *external_css;
-	buffer *external_js;
-	buffer *encoding;
-	buffer *set_footer;
+	const buffer *show_readme;
+	const buffer *show_header;
+	const buffer *external_css;
+	const buffer *external_js;
+	const buffer *encoding;
+	const buffer *set_footer;
 } plugin_config;
 
 typedef struct {
 	PLUGIN_DATA;
-
-	buffer *tmp_buf;
-	buffer *content_charset;
-
-	plugin_config **config_storage;
-
+	plugin_config defaults;
 	plugin_config conf;
+
+	buffer tmp_buf;
 } plugin_data;
 
-static excludes_buffer *excludes_buffer_init(void) {
-	excludes_buffer *exb;
-
-	exb = calloc(1, sizeof(*exb));
-
-	return exb;
-}
-
 #ifdef HAVE_PCRE_H
-static int excludes_buffer_append(excludes_buffer *exb, buffer *string) {
-	size_t i;
-	const char *errptr;
-	int erroff;
 
-	if (!string) return -1;
-
-	if (exb->used == exb->size) {
-		exb->size += 4;
-
-		exb->ptr = realloc(exb->ptr, exb->size * sizeof(*exb->ptr));
-
-		for(i = exb->used; i < exb->size; i++) {
-			exb->ptr[i] = calloc(1, sizeof(**exb->ptr));
-		}
-	}
-
-
-	if (NULL == (exb->ptr[exb->used]->regex = pcre_compile(string->ptr, 0,
-						    &errptr, &erroff, NULL))) {
-		return -1;
-	}
-
-	exb->ptr[exb->used]->string = buffer_init();
-	buffer_copy_buffer(exb->ptr[exb->used]->string, string);
-
-	exb->used++;
-
-	return 0;
+static pcre ** mod_dirlisting_parse_excludes(server *srv, const array *a) {
+    pcre **regexes = calloc(a->used + 1, sizeof(pcre *));
+    force_assert(regexes);
+    for (uint32_t j = 0; j < a->used; ++j) {
+        const data_string *ds = (const data_string *)a->data[j];
+        const char *errptr;
+        int erroff;
+        regexes[j] = pcre_compile(ds->value.ptr, 0, &errptr, &erroff, NULL);
+        if (NULL == regexes[j]) {
+            log_error(srv->errh, __FILE__, __LINE__,
+              "pcre_compile failed for: %s", ds->value.ptr);
+            for (pcre **regex = regexes; *regex; ++regex) pcre_free(*regex);
+            free(regexes);
+            return NULL;
+        }
+    }
+    return regexes;
 }
+
+static int mod_dirlisting_exclude(server *srv, pcre **regex, const char *name, size_t len) {
+    for(; *regex; ++regex) {
+        #define N 10
+        int ovec[N * 3];
+        int n;
+        if ((n = pcre_exec(*regex, NULL, name, len, 0, 0, ovec, 3 * N)) < 0) {
+            if (n == PCRE_ERROR_NOMATCH) continue;
+
+            log_error(srv->errh, __FILE__, __LINE__,
+              "execution error while matching: %d", n);
+            /* aborting would require a lot of manual cleanup here.
+             * skip instead (to not leak names that break pcre matching)
+             */
+        }
+        return 1;
+        #undef N
+    }
+    return 0; /* no match */
+}
+
+#else
+
+#define mod_dirlisting_exclude(a, b, c, d) 0
+
 #endif
 
-static void excludes_buffer_free(excludes_buffer *exb) {
-#ifdef HAVE_PCRE_H
-	size_t i;
 
-	for (i = 0; i < exb->size; i++) {
-		if (exb->ptr[i]->regex) pcre_free(exb->ptr[i]->regex);
-		if (exb->ptr[i]->string) buffer_free(exb->ptr[i]->string);
-		free(exb->ptr[i]);
-	}
-
-	if (exb->ptr) free(exb->ptr);
-#endif
-
-	free(exb);
-}
-
-/* init the plugin data */
 INIT_FUNC(mod_dirlisting_init) {
-	plugin_data *p;
-
-	p = calloc(1, sizeof(*p));
-
-	p->tmp_buf = buffer_init();
-	p->content_charset = buffer_init();
-
-	return p;
+    return calloc(1, sizeof(plugin_data));
 }
 
-/* detroy the plugin data */
+static void mod_dirlisting_free_config(plugin_data * const p) {
+    if (NULL == p->cvlist) return;
+    /* (init i to 0 if global context; to 1 to skip empty global context) */
+    for (int i = !p->cvlist[0].v.u2[1], used = p->nconfig; i < used; ++i) {
+        config_plugin_value_t *cpv = p->cvlist + p->cvlist[i].v.u2[0];
+        for (; -1 != cpv->k_id; ++cpv) {
+            switch (cpv->k_id) {
+             #ifdef HAVE_PCRE_H
+              case 2: /* dir-listing.exclude */
+                if (cpv->vtype != T_CONFIG_LOCAL) continue;
+                for (pcre **regex = cpv->v.v; *regex; ++regex)
+                    pcre_free(*regex);
+                free(cpv->v.v);
+                break;
+             #endif
+              default:
+                break;
+            }
+        }
+    }
+}
+
 FREE_FUNC(mod_dirlisting_free) {
-	plugin_data *p = p_d;
+    plugin_data *p = p_d;
+    if (!p) return HANDLER_GO_ON;
+    UNUSED(srv);
 
-	UNUSED(srv);
+    mod_dirlisting_free_config(p);
+    free(p->tmp_buf.ptr);
 
-	if (!p) return HANDLER_GO_ON;
+    free(p->cvlist);
+    free(p);
 
-	if (p->config_storage) {
-		size_t i;
-		for (i = 0; i < srv->config_context->used; i++) {
-			plugin_config *s = p->config_storage[i];
-
-			if (!s) continue;
-
-			excludes_buffer_free(s->excludes);
-			buffer_free(s->show_readme);
-			buffer_free(s->show_header);
-			buffer_free(s->external_css);
-			buffer_free(s->external_js);
-			buffer_free(s->encoding);
-			buffer_free(s->set_footer);
-
-			free(s);
-		}
-		free(p->config_storage);
-	}
-
-	buffer_free(p->tmp_buf);
-	buffer_free(p->content_charset);
-
-	free(p);
-
-	return HANDLER_GO_ON;
+    return HANDLER_GO_ON;
 }
 
-/* handle plugin config and check values */
 
-#define CONFIG_EXCLUDE          "dir-listing.exclude"
-#define CONFIG_ACTIVATE         "dir-listing.activate"
-#define CONFIG_HIDE_DOTFILES    "dir-listing.hide-dotfiles"
-#define CONFIG_EXTERNAL_CSS     "dir-listing.external-css"
-#define CONFIG_EXTERNAL_JS      "dir-listing.external-js"
-#define CONFIG_ENCODING         "dir-listing.encoding"
-#define CONFIG_SHOW_README      "dir-listing.show-readme"
-#define CONFIG_HIDE_README_FILE "dir-listing.hide-readme-file"
-#define CONFIG_SHOW_HEADER      "dir-listing.show-header"
-#define CONFIG_HIDE_HEADER_FILE "dir-listing.hide-header-file"
-#define CONFIG_DIR_LISTING      "server.dir-listing"
-#define CONFIG_SET_FOOTER       "dir-listing.set-footer"
-#define CONFIG_ENCODE_README    "dir-listing.encode-readme"
-#define CONFIG_ENCODE_HEADER    "dir-listing.encode-header"
-#define CONFIG_AUTO_LAYOUT      "dir-listing.auto-layout"
+static void mod_dirlisting_merge_config_cpv(plugin_config * const pconf, const config_plugin_value_t * const cpv) {
+    switch (cpv->k_id) { /* index into static config_plugin_keys_t cpk[] */
+      case 0: /* dir-listing.activate */
+      case 1: /* server.dir-listing *//*(historical)*/
+        pconf->dir_listing = (char)cpv->v.u;
+        break;
+      case 2: /* dir-listing.exclude */
+        if (cpv->vtype == T_CONFIG_LOCAL)
+            pconf->excludes = cpv->v.v;
+        break;
+      case 3: /* dir-listing.hide-dotfiles */
+        pconf->hide_dot_files = (char)cpv->v.u;
+        break;
+      case 4: /* dir-listing.external-css */
+        pconf->external_css = cpv->v.b;
+        break;
+      case 5: /* dir-listing.external-js */
+        pconf->external_js = cpv->v.b;
+        break;
+      case 6: /* dir-listing.encoding */
+        pconf->encoding = cpv->v.b;
+        break;
+      case 7: /* dir-listing.show-readme */
+        pconf->show_readme = cpv->v.b;
+        break;
+      case 8: /* dir-listing.hide-readme-file */
+        pconf->hide_readme_file = (char)cpv->v.u;
+        break;
+      case 9: /* dir-listing.show-header */
+        pconf->show_header = cpv->v.b;
+        break;
+      case 10:/* dir-listing.hide-header-file */
+        pconf->hide_header_file = (char)cpv->v.u;
+        break;
+      case 11:/* dir-listing.set-footer */
+        pconf->set_footer = cpv->v.b;
+        break;
+      case 12:/* dir-listing.encode-readme */
+        pconf->encode_readme = (char)cpv->v.u;
+        break;
+      case 13:/* dir-listing.encode-header */
+        pconf->encode_header = (char)cpv->v.u;
+        break;
+      case 14:/* dir-listing.auto-layout */
+        pconf->auto_layout = (char)cpv->v.u;
+        break;
+      default:/* should not happen */
+        return;
+    }
+}
 
+static void mod_dirlisting_merge_config(plugin_config * const pconf, const config_plugin_value_t *cpv) {
+    do {
+        mod_dirlisting_merge_config_cpv(pconf, cpv);
+    } while ((++cpv)->k_id != -1);
+}
+
+static void mod_dirlisting_patch_config(connection * const con, plugin_data * const p) {
+    memcpy(&p->conf, &p->defaults, sizeof(plugin_config));
+    for (int i = 1, used = p->nconfig; i < used; ++i) {
+        if (config_check_cond(con, (uint32_t)p->cvlist[i].k_id))
+            mod_dirlisting_merge_config(&p->conf, p->cvlist + p->cvlist[i].v.u2[0]);
+    }
+}
 
 SETDEFAULTS_FUNC(mod_dirlisting_set_defaults) {
-	plugin_data *p = p_d;
-	size_t i = 0;
+    static const config_plugin_keys_t cpk[] = {
+      { CONST_STR_LEN("dir-listing.activate"),
+        T_CONFIG_BOOL,
+        T_CONFIG_SCOPE_CONNECTION }
+     ,{ CONST_STR_LEN("server.dir-listing"),
+        T_CONFIG_BOOL,
+        T_CONFIG_SCOPE_CONNECTION }
+     ,{ CONST_STR_LEN("dir-listing.exclude"),
+        T_CONFIG_ARRAY,
+        T_CONFIG_SCOPE_CONNECTION }
+     ,{ CONST_STR_LEN("dir-listing.hide-dot-files"),
+        T_CONFIG_BOOL,
+        T_CONFIG_SCOPE_CONNECTION }
+     ,{ CONST_STR_LEN("dir-listing.external-css"),
+        T_CONFIG_STRING,
+        T_CONFIG_SCOPE_CONNECTION }
+     ,{ CONST_STR_LEN("dir-listing.external-js"),
+        T_CONFIG_STRING,
+        T_CONFIG_SCOPE_CONNECTION }
+     ,{ CONST_STR_LEN("dir-listing.encoding"),
+        T_CONFIG_STRING,
+        T_CONFIG_SCOPE_CONNECTION }
+     ,{ CONST_STR_LEN("dir-listing.show-readme"),
+        T_CONFIG_STRING,
+        T_CONFIG_SCOPE_CONNECTION }
+     ,{ CONST_STR_LEN("dir-listing.hide-readme-file"),
+        T_CONFIG_BOOL,
+        T_CONFIG_SCOPE_CONNECTION }
+     ,{ CONST_STR_LEN("dir-listing.show-header"),
+        T_CONFIG_STRING,
+        T_CONFIG_SCOPE_CONNECTION }
+     ,{ CONST_STR_LEN("dir-listing.hide-header-file"),
+        T_CONFIG_BOOL,
+        T_CONFIG_SCOPE_CONNECTION }
+     ,{ CONST_STR_LEN("dir-listing.set-footer"),
+        T_CONFIG_STRING,
+        T_CONFIG_SCOPE_CONNECTION }
+     ,{ CONST_STR_LEN("dir-listing.encode-readme"),
+        T_CONFIG_BOOL,
+        T_CONFIG_SCOPE_CONNECTION }
+     ,{ CONST_STR_LEN("dir-listing.encode-header"),
+        T_CONFIG_BOOL,
+        T_CONFIG_SCOPE_CONNECTION }
+     ,{ CONST_STR_LEN("dir-listing.auto-layout"),
+        T_CONFIG_BOOL,
+        T_CONFIG_SCOPE_CONNECTION }
+     ,{ NULL, 0,
+        T_CONFIG_UNSET,
+        T_CONFIG_SCOPE_UNSET }
+    };
 
-	config_values_t cv[] = {
-		{ CONFIG_EXCLUDE,          NULL, T_CONFIG_LOCAL, T_CONFIG_SCOPE_CONNECTION },   /* 0 */
-		{ CONFIG_ACTIVATE,         NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION }, /* 1 */
-		{ CONFIG_HIDE_DOTFILES,    NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION }, /* 2 */
-		{ CONFIG_EXTERNAL_CSS,     NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_CONNECTION },  /* 3 */
-		{ CONFIG_ENCODING,         NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_CONNECTION },  /* 4 */
-		{ CONFIG_SHOW_README,      NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_CONNECTION },  /* 5 */
-		{ CONFIG_HIDE_README_FILE, NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION }, /* 6 */
-		{ CONFIG_SHOW_HEADER,      NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_CONNECTION },  /* 7 */
-		{ CONFIG_HIDE_HEADER_FILE, NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION }, /* 8 */
-		{ CONFIG_DIR_LISTING,      NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION }, /* 9 */
-		{ CONFIG_SET_FOOTER,       NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_CONNECTION },  /* 10 */
-		{ CONFIG_ENCODE_README,    NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION }, /* 11 */
-		{ CONFIG_ENCODE_HEADER,    NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION }, /* 12 */
-		{ CONFIG_AUTO_LAYOUT,      NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION }, /* 13 */
-		{ CONFIG_EXTERNAL_JS,      NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_CONNECTION },  /* 14 */
+    plugin_data * const p = p_d;
+    if (!config_plugin_values_init(srv, p, cpk, "mod_dirlisting"))
+        return HANDLER_ERROR;
 
-		{ NULL,                          NULL, T_CONFIG_UNSET, T_CONFIG_SCOPE_UNSET }
-	};
+    /* process and validate config directives
+     * (init i to 0 if global context; to 1 to skip empty global context) */
+    for (int i = !p->cvlist[0].v.u2[1]; i < p->nconfig; ++i) {
+        config_plugin_value_t *cpv = p->cvlist + p->cvlist[i].v.u2[0];
+        for (; -1 != cpv->k_id; ++cpv) {
+            switch (cpv->k_id) {
+              case 0: /* dir-listing.activate */
+              case 1: /* server.dir-listing *//*(historical)*/
+                break;
+              case 2: /* dir-listing.exclude */
+                if (!array_is_vlist(cpv->v.a)) {
+                    log_error(srv->errh, __FILE__, __LINE__,
+                      "unexpected value for %s; "
+                      "expected list of \"regex\"", cpk[cpv->k_id].k);
+                    return HANDLER_ERROR;
+                }
+               #ifndef HAVE_PCRE_H
+                if (cpv->v.a->used > 0) {
+                    log_error(srv->errh, __FILE__, __LINE__,
+                      "pcre support is missing for: %s, "
+                      "please install libpcre and the headers",
+                      cpk[cpv->k_id].k);
+                    return HANDLER_ERROR;
+                }
+               #else
+                cpv->v.v = mod_dirlisting_parse_excludes(srv, cpv->v.a);
+                if (NULL == cpv->v.v) {
+                    log_error(srv->errh, __FILE__, __LINE__,
+                      "unexpected value for %s", cpk[cpv->k_id].k);
+                    return HANDLER_ERROR;
+                }
+                cpv->vtype = T_CONFIG_LOCAL;
+               #endif
+                break;
+              case 3: /* dir-listing.hide-dotfiles */
+              case 4: /* dir-listing.external-css */
+              case 5: /* dir-listing.external-js */
+              case 6: /* dir-listing.encoding */
+              case 7: /* dir-listing.show-readme */
+                if (!buffer_string_is_empty(cpv->v.b)) {
+                    buffer *b;
+                    *(const buffer **)&b = cpv->v.b;
+                    if (buffer_is_equal_string(b, CONST_STR_LEN("enable")))
+                        buffer_copy_string_len(b, CONST_STR_LEN("README.txt"));
+                    else if (buffer_is_equal_string(b,CONST_STR_LEN("disable")))
+                        buffer_clear(b);
+                }
+                break;
+              case 8: /* dir-listing.hide-readme-file */
+                break;
+              case 9: /* dir-listing.show-header */
+                if (!buffer_string_is_empty(cpv->v.b)) {
+                    buffer *b;
+                    *(const buffer **)&b = cpv->v.b;
+                    if (buffer_is_equal_string(b, CONST_STR_LEN("enable")))
+                        buffer_copy_string_len(b, CONST_STR_LEN("HEADER.txt"));
+                    else if (buffer_is_equal_string(b,CONST_STR_LEN("disable")))
+                        buffer_clear(b);
+                }
+                break;
+              case 10:/* dir-listing.hide-header-file */
+              case 11:/* dir-listing.set-footer */
+              case 12:/* dir-listing.encode-readme */
+              case 13:/* dir-listing.encode-header */
+              case 14:/* dir-listing.auto-layout */
+                break;
+              default:/* should not happen */
+                break;
+            }
+        }
+    }
 
-	if (!p) return HANDLER_ERROR;
+    p->defaults.dir_listing = 0;
+    p->defaults.hide_dot_files = 1;
+    p->defaults.hide_readme_file = 0;
+    p->defaults.hide_header_file = 0;
+    p->defaults.encode_readme = 1;
+    p->defaults.encode_header = 1;
+    p->defaults.auto_layout = 1;
 
-	p->config_storage = calloc(srv->config_context->used, sizeof(plugin_config *));
+    /* initialize p->defaults from global config context */
+    if (p->nconfig > 0 && p->cvlist->v.u2[1]) {
+        const config_plugin_value_t *cpv = p->cvlist + p->cvlist->v.u2[0];
+        if (-1 != cpv->k_id)
+            mod_dirlisting_merge_config(&p->defaults, cpv);
+    }
 
-	for (i = 0; i < srv->config_context->used; i++) {
-		data_config const* config = (data_config const*)srv->config_context->data[i];
-		plugin_config *s;
-		const data_unset *du_excludes;
-
-		s = calloc(1, sizeof(plugin_config));
-		s->excludes = excludes_buffer_init();
-		s->dir_listing = 0;
-		s->show_readme = buffer_init();
-		s->show_header = buffer_init();
-		s->external_css = buffer_init();
-		s->external_js = buffer_init();
-		s->hide_dot_files = 1;
-		s->hide_readme_file = 0;
-		s->hide_header_file = 0;
-		s->encode_readme = 1;
-		s->encode_header = 1;
-		s->auto_layout = 1;
-
-		s->encoding = buffer_init();
-		s->set_footer = buffer_init();
-
-		cv[0].destination = s->excludes;
-		cv[1].destination = &(s->dir_listing);
-		cv[2].destination = &(s->hide_dot_files);
-		cv[3].destination = s->external_css;
-		cv[4].destination = s->encoding;
-		cv[5].destination = s->show_readme;
-		cv[6].destination = &(s->hide_readme_file);
-		cv[7].destination = s->show_header;
-		cv[8].destination = &(s->hide_header_file);
-		cv[9].destination = &(s->dir_listing); /* old name */
-		cv[10].destination = s->set_footer;
-		cv[11].destination = &(s->encode_readme);
-		cv[12].destination = &(s->encode_header);
-		cv[13].destination = &(s->auto_layout);
-		cv[14].destination = s->external_js;
-
-		p->config_storage[i] = s;
-
-		if (0 != config_insert_values_global(srv, config->value, cv, i == 0 ? T_CONFIG_SCOPE_SERVER : T_CONFIG_SCOPE_CONNECTION)) {
-			return HANDLER_ERROR;
-		}
-
-		if (NULL != (du_excludes = array_get_element_klen(config->value, CONST_STR_LEN(CONFIG_EXCLUDE)))) {
-			const array *excludes_list;
-
-			excludes_list = &((const data_array*)du_excludes)->value;
-
-			if (du_excludes->type != TYPE_ARRAY || !array_is_vlist(excludes_list)) {
-				log_error_write(srv, __FILE__, __LINE__, "s",
-					"unexpected type for " CONFIG_EXCLUDE "; expected list of \"regex\"");
-				return HANDLER_ERROR;
-			}
-
-#ifndef HAVE_PCRE_H
-			if (excludes_list->used > 0) {
-				log_error_write(srv, __FILE__, __LINE__, "sss",
-					"pcre support is missing for: ", CONFIG_EXCLUDE, ", please install libpcre and the headers");
-				return HANDLER_ERROR;
-			}
-#else
-			for (size_t j = 0; j < excludes_list->used; ++j) {
-				data_unset *du_exclude = excludes_list->data[j];
-
-				if (du_exclude->type != TYPE_STRING) {
-					log_error_write(srv, __FILE__, __LINE__, "sssbs",
-						"unexpected type for key: ", CONFIG_EXCLUDE, "[",
-						&du_exclude->key, "](string)");
-					return HANDLER_ERROR;
-				}
-
-				if (0 != excludes_buffer_append(s->excludes, &((data_string*)(du_exclude))->value)) {
-					log_error_write(srv, __FILE__, __LINE__, "sb",
-						"pcre-compile failed for", &((data_string*)(du_exclude))->value);
-					return HANDLER_ERROR;
-				}
-			}
-#endif
-		}
-
-		if (!buffer_string_is_empty(s->show_readme)) {
-			if (buffer_is_equal_string(s->show_readme, CONST_STR_LEN("enable"))) {
-				buffer_copy_string_len(s->show_readme, CONST_STR_LEN("README.txt"));
-			}
-			else if (buffer_is_equal_string(s->show_readme, CONST_STR_LEN("disable"))) {
-				buffer_clear(s->show_readme);
-			}
-		}
-
-		if (!buffer_string_is_empty(s->show_header)) {
-			if (buffer_is_equal_string(s->show_header, CONST_STR_LEN("enable"))) {
-				buffer_copy_string_len(s->show_header, CONST_STR_LEN("HEADER.txt"));
-			}
-			else if (buffer_is_equal_string(s->show_header, CONST_STR_LEN("disable"))) {
-				buffer_clear(s->show_header);
-			}
-		}
-	}
-
-	return HANDLER_GO_ON;
+    return HANDLER_GO_ON;
 }
-
-#define PATCH(x) \
-	p->conf.x = s->x;
-static int mod_dirlisting_patch_connection(server *srv, connection *con, plugin_data *p) {
-	size_t i, j;
-	plugin_config *s = p->config_storage[0];
-
-	PATCH(dir_listing);
-	PATCH(external_css);
-	PATCH(external_js);
-	PATCH(hide_dot_files);
-	PATCH(encoding);
-	PATCH(show_readme);
-	PATCH(hide_readme_file);
-	PATCH(show_header);
-	PATCH(hide_header_file);
-	PATCH(excludes);
-	PATCH(set_footer);
-	PATCH(encode_readme);
-	PATCH(encode_header);
-	PATCH(auto_layout);
-
-	/* skip the first, the global context */
-	for (i = 1; i < srv->config_context->used; i++) {
-		if (!config_check_cond(con, i)) continue; /* condition not matched */
-
-		data_config *dc = (data_config *)srv->config_context->data[i];
-		s = p->config_storage[i];
-
-		/* merge config */
-		for (j = 0; j < dc->value->used; j++) {
-			data_unset *du = dc->value->data[j];
-
-			if (buffer_is_equal_string(&du->key, CONST_STR_LEN(CONFIG_ACTIVATE)) ||
-			    buffer_is_equal_string(&du->key, CONST_STR_LEN(CONFIG_DIR_LISTING))) {
-				PATCH(dir_listing);
-			} else if (buffer_is_equal_string(&du->key, CONST_STR_LEN(CONFIG_HIDE_DOTFILES))) {
-				PATCH(hide_dot_files);
-			} else if (buffer_is_equal_string(&du->key, CONST_STR_LEN(CONFIG_EXTERNAL_CSS))) {
-				PATCH(external_css);
-			} else if (buffer_is_equal_string(&du->key, CONST_STR_LEN(CONFIG_EXTERNAL_JS))) {
-				PATCH(external_js);
-			} else if (buffer_is_equal_string(&du->key, CONST_STR_LEN(CONFIG_ENCODING))) {
-				PATCH(encoding);
-			} else if (buffer_is_equal_string(&du->key, CONST_STR_LEN(CONFIG_SHOW_README))) {
-				PATCH(show_readme);
-			} else if (buffer_is_equal_string(&du->key, CONST_STR_LEN(CONFIG_HIDE_README_FILE))) {
-				PATCH(hide_readme_file);
-			} else if (buffer_is_equal_string(&du->key, CONST_STR_LEN(CONFIG_SHOW_HEADER))) {
-				PATCH(show_header);
-			} else if (buffer_is_equal_string(&du->key, CONST_STR_LEN(CONFIG_HIDE_HEADER_FILE))) {
-				PATCH(hide_header_file);
-			} else if (buffer_is_equal_string(&du->key, CONST_STR_LEN(CONFIG_SET_FOOTER))) {
-				PATCH(set_footer);
-			} else if (buffer_is_equal_string(&du->key, CONST_STR_LEN(CONFIG_EXCLUDE))) {
-				PATCH(excludes);
-			} else if (buffer_is_equal_string(&du->key, CONST_STR_LEN(CONFIG_ENCODE_README))) {
-				PATCH(encode_readme);
-			} else if (buffer_is_equal_string(&du->key, CONST_STR_LEN(CONFIG_ENCODE_HEADER))) {
-				PATCH(encode_header);
-			} else if (buffer_is_equal_string(&du->key, CONST_STR_LEN(CONFIG_AUTO_LAYOUT))) {
-				PATCH(auto_layout);
-			}
-		}
-	}
-
-	return 0;
-}
-#undef PATCH
 
 typedef struct {
 	size_t  namelen;
@@ -489,7 +449,7 @@ static int http_list_directory_sizefmt(char *buf, size_t bufsz, off_t size) {
 	return buflen + 3;
 }
 
-static void http_list_directory_include_file(buffer *out, int symlinks, buffer *path, const char *classname, int encode) {
+static void http_list_directory_include_file(buffer *out, int symlinks, const buffer *path, const char *classname, int encode) {
 	int fd = fdevent_open_cloexec(path->ptr, symlinks, O_RDONLY, 0);
 	ssize_t rd;
 	char buf[8192];
@@ -788,11 +748,11 @@ static void http_list_directory_header(server *srv, connection *con, plugin_data
 	if (!buffer_string_is_empty(p->conf.show_header)) {
 		/* if we have a HEADER file, display it in <pre class="header"></pre> */
 
-		buffer *hb = p->conf.show_header;
+		const buffer *hb = p->conf.show_header;
 		if (hb->ptr[0] != '/') {
-			buffer_copy_buffer(p->tmp_buf, con->physical.path);
-			buffer_append_path_len(p->tmp_buf, CONST_BUF_LEN(p->conf.show_header));
-			hb = p->tmp_buf;
+			hb = &p->tmp_buf;
+			buffer_copy_buffer(&p->tmp_buf, con->physical.path);
+			buffer_append_path_len(&p->tmp_buf, CONST_BUF_LEN(p->conf.show_header));
 		}
 
 		http_list_directory_include_file(out, con->conf.follow_symlink, hb, "header", p->conf.encode_header);
@@ -838,11 +798,11 @@ static void http_list_directory_footer(server *srv, connection *con, plugin_data
 	if (!buffer_string_is_empty(p->conf.show_readme)) {
 		/* if we have a README file, display it in <pre class="readme"></pre> */
 
-		buffer *rb = p->conf.show_readme;
+		const buffer *rb = p->conf.show_readme;
 		if (rb->ptr[0] != '/') {
-			buffer_copy_buffer(p->tmp_buf,  con->physical.path);
-			buffer_append_path_len(p->tmp_buf, CONST_BUF_LEN(p->conf.show_readme));
-			rb = p->tmp_buf;
+			rb = &p->tmp_buf;
+			buffer_copy_buffer(&p->tmp_buf,  con->physical.path);
+			buffer_append_path_len(&p->tmp_buf, CONST_BUF_LEN(p->conf.show_readme));
 		}
 
 		http_list_directory_include_file(out, con->conf.follow_symlink, rb, "readme", p->conf.encode_readme);
@@ -926,8 +886,8 @@ static int http_list_directory(server *srv, connection *con, plugin_data *p, buf
 	path_file = path + i;
 
 	if (NULL == (dp = opendir(path))) {
-		log_error_write(srv, __FILE__, __LINE__, "sbs",
-			"opendir failed:", dir, strerror(errno));
+		log_error(con->errh, __FILE__, __LINE__,
+			"opendir failed: %s", dir->ptr);
 
 		free(path);
 		return -1;
@@ -943,10 +903,6 @@ static int http_list_directory(server *srv, connection *con, plugin_data *p, buf
 	files.used = 0;
 
 	while ((dent = readdir(dp)) != NULL) {
-#ifdef HAVE_PCRE_H
-		unsigned short exclude_match = 0;
-#endif
-
 		if (dent->d_name[0] == '.') {
 			if (hide_dotfiles)
 				continue;
@@ -965,41 +921,14 @@ static int http_list_directory(server *srv, connection *con, plugin_data *p, buf
 				continue;
 		}
 
+		i = strlen(dent->d_name);
+
 		/* compare d_name against excludes array
 		 * elements, skipping any that match.
 		 */
-#ifdef HAVE_PCRE_H
-		for(i = 0; i < p->conf.excludes->used; i++) {
-			int n;
-#define N 10
-			int ovec[N * 3];
-			pcre *regex = p->conf.excludes->ptr[i]->regex;
-
-			if ((n = pcre_exec(regex, NULL, dent->d_name,
-				    strlen(dent->d_name), 0, 0, ovec, 3 * N)) < 0) {
-				if (n != PCRE_ERROR_NOMATCH) {
-					log_error_write(srv, __FILE__, __LINE__, "sd",
-						"execution error while matching:", n);
-
-					/* aborting would require a lot of manual cleanup here.
-					 * skip instead (to not leak names that break pcre matching)
-					 */
-					exclude_match = 1;
-					break;
-				}
-			}
-			else {
-				exclude_match = 1;
-				break;
-			}
-		}
-
-		if (exclude_match) {
+		if (p->conf.excludes
+		    && mod_dirlisting_exclude(srv, p->conf.excludes, dent->d_name, i))
 			continue;
-		}
-#endif
-
-		i = strlen(dent->d_name);
 
 		/* NOTE: the manual says, d_name is never more than NAME_MAX
 		 *       so this should actually not be a buffer-overflow-risk
@@ -1121,9 +1050,9 @@ static int http_list_directory(server *srv, connection *con, plugin_data *p, buf
 	if (buffer_string_is_empty(p->conf.encoding)) {
 		http_header_response_set(con, HTTP_HEADER_CONTENT_TYPE, CONST_STR_LEN("Content-Type"), CONST_STR_LEN("text/html"));
 	} else {
-		buffer_copy_string_len(p->content_charset, CONST_STR_LEN("text/html; charset="));
-		buffer_append_string_buffer(p->content_charset, p->conf.encoding);
-		http_header_response_set(con, HTTP_HEADER_CONTENT_TYPE, CONST_STR_LEN("Content-Type"), CONST_BUF_LEN(p->content_charset));
+		buffer_copy_string_len(&p->tmp_buf, CONST_STR_LEN("text/html; charset="));
+		buffer_append_string_buffer(&p->tmp_buf, p->conf.encoding);
+		http_header_response_set(con, HTTP_HEADER_CONTENT_TYPE, CONST_STR_LEN("Content-Type"), CONST_BUF_LEN(&p->tmp_buf));
 	}
 
 	chunkqueue_append_buffer_commit(con->write_queue);
@@ -1155,7 +1084,7 @@ URIHANDLER_FUNC(mod_dirlisting_subrequest) {
 	if (buffer_is_empty(con->uri.path)) return HANDLER_GO_ON;
 	if (con->uri.path->ptr[buffer_string_length(con->uri.path) - 1] != '/') return HANDLER_GO_ON;
 
-	mod_dirlisting_patch_connection(srv, con, p);
+	mod_dirlisting_patch_config(con, p);
 
 	if (!p->conf.dir_listing) return HANDLER_GO_ON;
 
@@ -1182,7 +1111,6 @@ URIHANDLER_FUNC(mod_dirlisting_subrequest) {
 	return HANDLER_FINISHED;
 }
 
-/* this function is called at dlopen() time and inits the callbacks */
 
 int mod_dirlisting_plugin_init(plugin *p);
 int mod_dirlisting_plugin_init(plugin *p) {
