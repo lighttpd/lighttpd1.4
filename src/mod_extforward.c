@@ -64,8 +64,6 @@
  */
 
 
-/* plugin config for all request/connections */
-
 typedef enum {
 	PROXY_FORWARDED_NONE         = 0x00,
 	PROXY_FORWARDED_FOR          = 0x01,
@@ -80,29 +78,33 @@ struct sock_addr_mask {
   int bits;
 };
 
-struct sock_addr_masks {
-  struct sock_addr_mask *addrs;
-  size_t used;
-  size_t sz;
+struct forwarder_cfg {
+  const array *forwarder;
+  int forward_all;
+  uint32_t addrs_used;
+ #if defined(__STDC_VERSION__) && __STDC_VERSION__-0 >= 199901L /* C99 */
+  struct sock_addr_mask addrs[];
+ #else
+  struct sock_addr_mask addrs[1];
+ #endif
 };
 
 typedef struct {
-	array *forwarder;
-	struct sock_addr_masks *forward_masks;
-	array *headers;
-	array *opts_params;
-	unsigned int opts;
-	unsigned short int hap_PROXY;
-	unsigned short int hap_PROXY_ssl_client_verify;
-	short int forward_all;
+    const array *forwarder;
+    int forward_all;
+    uint32_t forward_masks_used;
+    const struct sock_addr_mask *forward_masks;
+    const array *headers;
+    unsigned int opts;
+    char hap_PROXY;
+    char hap_PROXY_ssl_client_verify;
 } plugin_config;
 
 typedef struct {
-	PLUGIN_DATA;
-
-	plugin_config **config_storage;
-
-	plugin_config conf;
+    PLUGIN_DATA;
+    plugin_config defaults;
+    plugin_config conf;
+    array *default_headers;
 } plugin_data;
 
 static plugin_data *mod_extforward_plugin_data_singleton;
@@ -128,6 +130,7 @@ typedef struct {
 static handler_ctx * handler_ctx_init(void) {
 	handler_ctx * hctx;
 	hctx = calloc(1, sizeof(*hctx));
+	force_assert(hctx);
 	return hctx;
 }
 
@@ -135,286 +138,341 @@ static void handler_ctx_free(handler_ctx *hctx) {
 	free(hctx);
 }
 
-/* init the plugin data */
 INIT_FUNC(mod_extforward_init) {
-	plugin_data *p;
-	p = calloc(1, sizeof(*p));
-	mod_extforward_plugin_data_singleton = p;
-	return p;
+	return calloc(1, sizeof(plugin_data));
 }
 
-/* destroy the plugin data */
+static void mod_extforward_free_config(plugin_data * const p) {
+    if (NULL == p->cvlist) return;
+    /* (init i to 0 if global context; to 1 to skip empty global context) */
+    for (int i = !p->cvlist[0].v.u2[1], used = p->nconfig; i < used; ++i) {
+        config_plugin_value_t *cpv = p->cvlist + p->cvlist[i].v.u2[0];
+        for (; -1 != cpv->k_id; ++cpv) {
+            switch (cpv->k_id) {
+              case 0: /* extforward.forwarder */
+                if (cpv->vtype == T_CONFIG_LOCAL) free(cpv->v.v);
+                break;
+              default:
+                break;
+            }
+        }
+    }
+}
+
 FREE_FUNC(mod_extforward_free) {
-	plugin_data *p = p_d;
+    plugin_data *p = p_d;
+    if (!p) return HANDLER_GO_ON;
+    UNUSED(srv);
 
-	UNUSED(srv);
+    mod_extforward_free_config(p);
+    array_free(p->default_headers);
 
-	if (!p) return HANDLER_GO_ON;
+    free(p->cvlist);
+    free(p);
 
-	if (p->config_storage) {
-		size_t i;
-
-		for (i = 0; i < srv->config_context->used; i++) {
-			plugin_config *s = p->config_storage[i];
-
-			if (NULL == s) continue;
-
-			array_free(s->forwarder);
-			array_free(s->headers);
-			array_free(s->opts_params);
-
-			if (s->forward_masks) {
-				free(s->forward_masks->addrs);
-				free(s->forward_masks);
-			}
-
-			free(s);
-		}
-		free(p->config_storage);
-	}
-
-
-	free(p);
-
-	return HANDLER_GO_ON;
+    return HANDLER_GO_ON;
 }
 
-/* handle plugin config and check values */
+static void mod_extforward_merge_config_cpv(plugin_config * const pconf, const config_plugin_value_t * const cpv) {
+    switch (cpv->k_id) { /* index into static config_plugin_keys_t cpk[] */
+      case 0: /* extforward.forwarder */
+        if (cpv->vtype == T_CONFIG_LOCAL) {
+            const struct forwarder_cfg * const fwd = cpv->v.v;
+            pconf->forwarder = fwd->forwarder;
+            pconf->forward_all = fwd->forward_all;
+            pconf->forward_masks_used = fwd->addrs_used;
+            pconf->forward_masks = fwd->addrs;
+        }
+        break;
+      case 1: /* extforward.headers */
+        pconf->headers = cpv->v.a;
+        break;
+      case 2: /* extforward.params */
+        if (cpv->vtype == T_CONFIG_LOCAL)
+            pconf->opts = cpv->v.u;
+        break;
+      case 3: /* extforward.hap-PROXY */
+        pconf->hap_PROXY = (char)cpv->v.u;
+        break;
+      case 4: /* extforward.hap-PROXY-ssl-client-verify */
+        pconf->hap_PROXY_ssl_client_verify = (char)cpv->v.u;
+        break;
+      default:/* should not happen */
+        return;
+    }
+}
+
+static void mod_extforward_merge_config(plugin_config * const pconf, const config_plugin_value_t *cpv) {
+    do {
+        mod_extforward_merge_config_cpv(pconf, cpv);
+    } while ((++cpv)->k_id != -1);
+}
+
+static void mod_extforward_patch_config(connection * const con, plugin_data * const p) {
+    memcpy(&p->conf, &p->defaults, sizeof(plugin_config));
+    for (int i = 1, used = p->nconfig; i < used; ++i) {
+        if (config_check_cond(con, (uint32_t)p->cvlist[i].k_id))
+            mod_extforward_merge_config(&p->conf, p->cvlist + p->cvlist[i].v.u2[0]);
+    }
+}
+
+static void * mod_extforward_parse_forwarder(server *srv, const array *forwarder) {
+    const data_string * const allds = (const data_string *)
+      array_get_element_klen(forwarder, CONST_STR_LEN("all"));
+    const int forward_all = (NULL == allds)
+      ? 0
+      : buffer_eq_icase_slen(&allds->value, CONST_STR_LEN("trust")) ? 1 : -1;
+    uint32_t nmasks = 0;
+    for (uint32_t j = 0; j < forwarder->used; ++j) {
+        data_string * const ds = (data_string *)forwarder->data[j];
+        char * const nm_slash = strchr(ds->key.ptr, '/');
+        if (NULL != nm_slash) ++nmasks;
+        if (!buffer_eq_icase_slen(&ds->value, CONST_STR_LEN("trust"))) {
+            if (!buffer_eq_icase_slen(&ds->value, CONST_STR_LEN("untrusted")))
+                log_error(srv->errh, __FILE__, __LINE__,
+                  "ERROR: expect \"trust\", not \"%s\" => \"%s\"; "
+                  "treating as untrusted", ds->key.ptr, ds->value.ptr);
+            if (NULL != nm_slash) {
+                /* future: consider adding member next to bits in sock_addr_mask
+                 *         with bool trusted/untrusted member */
+                --nmasks;
+                log_error(srv->errh, __FILE__, __LINE__,
+                  "ERROR: untrusted CIDR masks are ignored (\"%s\" => \"%s\")",
+                  ds->key.ptr, ds->value.ptr);
+            }
+            buffer_clear(&ds->value); /* empty is untrusted */
+            continue;
+        }
+    }
+
+    struct forwarder_cfg * const fwd =
+      malloc(sizeof(struct forwarder_cfg)+sizeof(struct sock_addr_mask)*nmasks);
+    force_assert(fwd);
+    memset(fwd, 0,
+           sizeof(struct forwarder_cfg) + sizeof(struct sock_addr_mask)*nmasks);
+    fwd->forwarder = forwarder;
+    fwd->forward_all = forward_all;
+    fwd->addrs_used = 0;
+    for (uint32_t j = 0; j < forwarder->used; ++j) {
+        data_string * const ds = (data_string *)forwarder->data[j];
+        char * const nm_slash = strchr(ds->key.ptr, '/');
+        if (NULL == nm_slash) continue;
+        if (buffer_string_is_empty(&ds->value)) continue; /* ignored */
+
+        char *err;
+        const int nm_bits = strtol(nm_slash + 1, &err, 10);
+        int rc;
+        if (*err || nm_bits <= 0) {
+            log_error(srv->errh, __FILE__, __LINE__,
+              "ERROR: invalid netmask: %s %s", ds->key.ptr, err);
+            free(fwd);
+            return NULL;
+        }
+        struct sock_addr_mask * const sm = fwd->addrs + fwd->addrs_used++;
+        sm->bits = nm_bits;
+        *nm_slash = '\0';
+        rc = sock_addr_from_str_numeric(srv, &sm->addr, ds->key.ptr);
+        *nm_slash = '/';
+        if (1 != rc) {
+            free(fwd);
+            return NULL;
+        }
+        buffer_clear(&ds->value);
+        /* empty is untrusted,
+         * e.g. if subnet (incorrectly) appears in X-Forwarded-For */
+    }
+
+    return fwd;
+}
+
+static unsigned int mod_extforward_parse_opts(server *srv, const array *opts_params) {
+    unsigned int opts = 0;
+    for (uint32_t j = 0, used = opts_params->used; j < used; ++j) {
+        proxy_forwarded_t param;
+        data_unset *du = opts_params->data[j];
+      #if 0  /*("for" and "proto" historical behavior: always enabled)*/
+        if (buffer_eq_slen(&du->key, CONST_STR_LEN("by")))
+            param = PROXY_FORWARDED_BY;
+        else if (buffer_eq_slen(&du->key, CONST_STR_LEN("for")))
+            param = PROXY_FORWARDED_FOR;
+        else
+      #endif
+        if (buffer_eq_slen(&du->key, CONST_STR_LEN("host")))
+            param = PROXY_FORWARDED_HOST;
+      #if 0
+        else if (buffer_eq_slen(&du->key, CONST_STR_LEN("proto")))
+            param = PROXY_FORWARDED_PROTO;
+      #endif
+        else if (buffer_eq_slen(&du->key, CONST_STR_LEN("remote_user")))
+            param = PROXY_FORWARDED_REMOTE_USER;
+        else {
+            log_error(srv->errh, __FILE__, __LINE__,
+              "extforward.params keys must be one of: "
+              "host, remote_user, but not: %s", du->key.ptr);
+            return HANDLER_ERROR;
+        }
+
+        if (du->type == TYPE_STRING) {
+            data_string *ds = (data_string *)du;
+            if (buffer_eq_slen(&ds->value, CONST_STR_LEN("enable"))) {
+                opts |= param;
+            }
+            else if (!buffer_eq_slen(&ds->value, CONST_STR_LEN("disable"))) {
+                log_error(srv->errh, __FILE__, __LINE__,
+                  "extforward.params values must be one of: "
+                  "0, 1, enable, disable; error for key: %s", du->key.ptr);
+                return UINT_MAX;
+            }
+        }
+        else if (du->type == TYPE_INTEGER) {
+            data_integer *di = (data_integer *)du;
+            if (di->value) opts |= param;
+        }
+        else {
+            log_error(srv->errh, __FILE__, __LINE__,
+              "extforward.params values must be one of: "
+              "0, 1, enable, disable; error for key: %s", du->key.ptr);
+            return UINT_MAX;
+        }
+    }
+    return opts;
+}
 
 SETDEFAULTS_FUNC(mod_extforward_set_defaults) {
-	plugin_data *p = p_d;
-	size_t i = 0;
+    static const config_plugin_keys_t cpk[] = {
+      { CONST_STR_LEN("extforward.forwarder"),
+        T_CONFIG_ARRAY,
+        T_CONFIG_SCOPE_CONNECTION }
+     ,{ CONST_STR_LEN("extforward.headers"),
+        T_CONFIG_ARRAY,
+        T_CONFIG_SCOPE_CONNECTION }
+     ,{ CONST_STR_LEN("extforward.params"),
+        T_CONFIG_ARRAY,
+        T_CONFIG_SCOPE_CONNECTION }
+     ,{ CONST_STR_LEN("extforward.hap-PROXY"),
+        T_CONFIG_BOOL,
+        T_CONFIG_SCOPE_CONNECTION }
+     ,{ CONST_STR_LEN("extforward.hap-PROXY-ssl-client-verify"),
+        T_CONFIG_BOOL,
+        T_CONFIG_SCOPE_CONNECTION }
+     ,{ NULL, 0,
+        T_CONFIG_UNSET,
+        T_CONFIG_SCOPE_UNSET }
+    };
 
-	config_values_t cv[] = {
-		{ "extforward.forwarder",       NULL, T_CONFIG_ARRAY, T_CONFIG_SCOPE_CONNECTION },       /* 0 */
-		{ "extforward.headers",         NULL, T_CONFIG_ARRAY, T_CONFIG_SCOPE_CONNECTION },       /* 1 */
-		{ "extforward.params",          NULL, T_CONFIG_ARRAY, T_CONFIG_SCOPE_CONNECTION },       /* 2 */
-		{ "extforward.hap-PROXY",       NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION },     /* 3 */
-		{ "extforward.hap-PROXY-ssl-client-verify", NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION }, /* 4 */
-		{ NULL,                         NULL, T_CONFIG_UNSET, T_CONFIG_SCOPE_UNSET }
-	};
+    plugin_data * const p = p_d;
+    if (!config_plugin_values_init(srv, p, cpk, "mod_extforward"))
+        return HANDLER_ERROR;
 
-	if (!p) return HANDLER_ERROR;
+    int hap_PROXY = 0;
 
-	p->config_storage = calloc(srv->config_context->used, sizeof(plugin_config *));
+    /* process and validate config directives
+     * (init i to 0 if global context; to 1 to skip empty global context) */
+    for (int i = !p->cvlist[0].v.u2[1]; i < p->nconfig; ++i) {
+        config_plugin_value_t *cpv = p->cvlist + p->cvlist[i].v.u2[0];
+        for (; -1 != cpv->k_id; ++cpv) {
+            switch (cpv->k_id) {
+              case 0: /* extforward.forwarder */
+                if (!array_is_kvstring(cpv->v.a)) {
+                    log_error(srv->errh, __FILE__, __LINE__,
+                      "unexpected value for %s; "
+                      "expected list of \"IPaddr\" => \"trust\"",
+                      cpk[cpv->k_id].k);
+                    return HANDLER_ERROR;
+                }
+                cpv->v.v = mod_extforward_parse_forwarder(srv, cpv->v.a);
+                if (NULL == cpv->v.v) {
+                    log_error(srv->errh, __FILE__, __LINE__,
+                      "unexpected value for %s", cpk[cpv->k_id].k);
+                    return HANDLER_ERROR;
+                }
+                cpv->vtype = T_CONFIG_LOCAL;
+                break;
+              case 1: /* extforward.headers */
+                if (!array_is_vlist(cpv->v.a)) {
+                    log_error(srv->errh, __FILE__, __LINE__,
+                      "unexpected value for %s; "
+                      "expected list of \"headername\"", cpk[cpv->k_id].k);
+                    return HANDLER_ERROR;
+                }
+                break;
+              case 2: /* extforward.params */
+                if (!array_is_kvany(cpv->v.a)) {
+                    log_error(srv->errh, __FILE__, __LINE__,
+                      "unexpected value for %s; "
+                      "expected list of \"param\" => \"value\"",
+                      cpk[cpv->k_id].k);
+                    return HANDLER_ERROR;
+                }
+                cpv->v.u = mod_extforward_parse_opts(srv, cpv->v.a);
+                if (UINT_MAX == cpv->v.u)
+                    return HANDLER_ERROR;
+                break;
+              case 3: /* extforward.hap-PROXY */
+                if (cpv->v.u) hap_PROXY = 1;
+                break;
+              case 4: /* extforward.hap-PROXY-ssl-client-verify */
+                break;
+              default:/* should not happen */
+                break;
+            }
+        }
+    }
 
-	for (i = 0; i < srv->config_context->used; i++) {
-		data_config const* config = (data_config const*)srv->config_context->data[i];
-		plugin_config *s;
+    mod_extforward_plugin_data_singleton = p;
+    p->defaults.opts = PROXY_FORWARDED_NONE;
 
-		s = calloc(1, sizeof(plugin_config));
-		s->forwarder    = array_init();
-		s->headers      = array_init();
-		s->opts_params  = array_init();
-		s->opts         = PROXY_FORWARDED_NONE;
+    /* initialize p->defaults from global config context */
+    if (p->nconfig > 0 && p->cvlist->v.u2[1]) {
+        const config_plugin_value_t *cpv = p->cvlist + p->cvlist->v.u2[0];
+        if (-1 != cpv->k_id)
+            mod_extforward_merge_config(&p->defaults, cpv);
+    }
 
-		cv[0].destination = s->forwarder;
-		cv[1].destination = s->headers;
-		cv[2].destination = s->opts_params;
-		cv[3].destination = &s->hap_PROXY;
-		cv[4].destination = &s->hap_PROXY_ssl_client_verify;
+    /* default to "X-Forwarded-For" or "Forwarded-For" if extforward.headers
+     * is not specified or is empty (and not using hap_PROXY) */
+    if (!p->defaults.hap_PROXY
+        && (NULL == p->defaults.headers || 0 == p->defaults.headers->used)) {
+        p->defaults.headers = p->default_headers = array_init();
+        array_insert_value(p->default_headers,CONST_STR_LEN("X-Forwarded-For"));
+        array_insert_value(p->default_headers,CONST_STR_LEN("Forwarded-For"));
+    }
 
-		p->config_storage[i] = s;
+    /* attempt to warn if mod_extforward is not last module loaded to hook
+     * handle_connection_accept.  (Nice to have, but remove this check if
+     * it reaches too far into internals and prevents other code changes.)
+     * While it would be nice to check connection_handle_accept plugin slot
+     * to make sure mod_extforward is last, that info is private to plugin.c
+     * so merely warn if mod_openssl is loaded after mod_extforward, though
+     * future modules which hook connection_handle_accept might be missed.*/
+    if (hap_PROXY) {
+        uint32_t i;
+        for (i = 0; i < srv->srvconf.modules->used; ++i) {
+            data_string *ds = (data_string *)srv->srvconf.modules->data[i];
+            if (buffer_eq_slen(&ds->value, CONST_STR_LEN("mod_extforward")))
+                break;
+        }
+        for (; i < srv->srvconf.modules->used; ++i) {
+            data_string *ds = (data_string *)srv->srvconf.modules->data[i];
+            if (buffer_eq_slen(&ds->value, CONST_STR_LEN("mod_openssl"))) {
+                log_error_write(srv, __FILE__, __LINE__, "s",
+                  "mod_extforward must be loaded after mod_openssl in "
+                  "server.modules when extforward.hap-PROXY = \"enable\"");
+                break;
+            }
+        }
+    }
 
-		if (0 != config_insert_values_global(srv, config->value, cv, i == 0 ? T_CONFIG_SCOPE_SERVER : T_CONFIG_SCOPE_CONNECTION)) {
-			return HANDLER_ERROR;
-		}
+    for (uint32_t i = 0; i < srv->srvconf.modules->used; ++i) {
+        data_string *ds = (data_string *)srv->srvconf.modules->data[i];
+        if (buffer_is_equal_string(&ds->value, CONST_STR_LEN("mod_proxy"))) {
+            extforward_check_proxy = 1;
+            break;
+        }
+    }
 
-		if (!array_is_kvstring(s->forwarder)) {
-			log_error_write(srv, __FILE__, __LINE__, "s",
-					"unexpected value for extforward.forwarder; expected list of \"IPaddr\" => \"trust\"");
-			return HANDLER_ERROR;
-		}
-
-		if (array_get_element_klen(config->value, CONST_STR_LEN("extforward.forwarder"))) {
-			const data_string * const allds = (const data_string *)array_get_element_klen(s->forwarder, CONST_STR_LEN("all"));
-			s->forward_all = (NULL == allds) ? 0 : buffer_eq_icase_slen(&allds->value, CONST_STR_LEN("trust")) ? 1 : -1;
-			for (size_t j = 0; j < s->forwarder->used; ++j) {
-				data_string * const ds = (data_string *)s->forwarder->data[j];
-				char * const nm_slash = strchr(ds->key.ptr, '/');
-				if (!buffer_eq_icase_slen(&ds->value, CONST_STR_LEN("trust"))) {
-					if (!buffer_eq_icase_slen(&ds->value, CONST_STR_LEN("untrusted"))) {
-						log_error_write(srv, __FILE__, __LINE__, "sbsbs", "ERROR: expect \"trust\", not \"", &ds->key, "\" => \"", &ds->value, "\"; treating as untrusted");
-					}
-					if (NULL != nm_slash) {
-						log_error_write(srv, __FILE__, __LINE__, "sbsbs", "ERROR: untrusted CIDR masks are ignored (\"", &ds->key, "\" => \"", &ds->value, "\")");
-					}
-					buffer_clear(&ds->value); /* empty is untrusted */
-					continue;
-				}
-				if (NULL != nm_slash) {
-					struct sock_addr_mask *sm;
-					char *err;
-					const int nm_bits = strtol(nm_slash + 1, &err, 10);
-					int rc;
-					if (*err || nm_bits <= 0) {
-						log_error_write(srv, __FILE__, __LINE__, "sbs", "ERROR: invalid netmask:", &ds->key, err);
-						return HANDLER_ERROR;
-					}
-					if (NULL == s->forward_masks) {
-						s->forward_masks = calloc(1, sizeof(struct sock_addr_masks));
-						force_assert(s->forward_masks);
-					}
-					if (s->forward_masks->used == s->forward_masks->sz) {
-						s->forward_masks->sz += 2;
-						s->forward_masks->addrs = realloc(s->forward_masks->addrs, s->forward_masks->sz * sizeof(struct sock_addr_mask));
-						force_assert(s->forward_masks->addrs);
-					}
-					sm = s->forward_masks->addrs + s->forward_masks->used++;
-					sm->bits = nm_bits;
-					*nm_slash = '\0';
-					rc = sock_addr_from_str_numeric(srv, &sm->addr, ds->key.ptr);
-					*nm_slash = '/';
-					if (1 != rc) return HANDLER_ERROR;
-					buffer_clear(&ds->value); /* empty is untrusted, e.g. if subnet (incorrectly) appears in X-Forwarded-For */
-				}
-			}
-		}
-
-		if (!array_is_vlist(s->headers)) {
-			log_error_write(srv, __FILE__, __LINE__, "s",
-					"unexpected value for extforward.headers; expected list of \"headername\"");
-			return HANDLER_ERROR;
-		}
-
-		/* default to "X-Forwarded-For" or "Forwarded-For" if extforward.headers not specified or empty */
-		if (!s->hap_PROXY && 0 == s->headers->used && (0 == i || NULL != array_get_element_klen(config->value, CONST_STR_LEN("extforward.headers")))) {
-			array_insert_value(s->headers, CONST_STR_LEN("X-Forwarded-For"));
-			array_insert_value(s->headers, CONST_STR_LEN("Forwarded-For"));
-		}
-
-		if (!array_is_kvany(s->opts_params)) {
-			log_error_write(srv, __FILE__, __LINE__, "s",
-					"unexpected value for extforward.params; expected ( \"param\" => \"value\" )");
-			return HANDLER_ERROR;
-		}
-		for (size_t j = 0, used = s->opts_params->used; j < used; ++j) {
-			proxy_forwarded_t param;
-			data_unset *du = s->opts_params->data[j];
-		      #if 0  /*("for" and "proto" historical behavior: always enabled)*/
-			if (buffer_is_equal_string(&du->key, CONST_STR_LEN("by"))) {
-				param = PROXY_FORWARDED_BY;
-			} else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("for"))) {
-				param = PROXY_FORWARDED_FOR;
-			} else
-		      #endif
-			if (buffer_is_equal_string(&du->key, CONST_STR_LEN("host"))) {
-				param = PROXY_FORWARDED_HOST;
-		      #if 0
-			} else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("proto"))) {
-				param = PROXY_FORWARDED_PROTO;
-		      #endif
-			} else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("remote_user"))) {
-				param = PROXY_FORWARDED_REMOTE_USER;
-			} else {
-				log_error_write(srv, __FILE__, __LINE__, "sb",
-					        "extforward.params keys must be one of: host, remote_user, but not:", &du->key);
-				return HANDLER_ERROR;
-			}
-			if (du->type == TYPE_STRING) {
-				data_string *ds = (data_string *)du;
-				if (buffer_is_equal_string(&ds->value, CONST_STR_LEN("enable"))) {
-					s->opts |= param;
-				} else if (!buffer_is_equal_string(&ds->value, CONST_STR_LEN("disable"))) {
-					log_error_write(srv, __FILE__, __LINE__, "sb",
-						        "extforward.params values must be one of: 0, 1, enable, disable; error for key:", &du->key);
-					return HANDLER_ERROR;
-				}
-			} else if (du->type == TYPE_INTEGER) {
-				data_integer *di = (data_integer *)du;
-				if (di->value) s->opts |= param;
-			} else {
-				log_error_write(srv, __FILE__, __LINE__, "sb",
-					        "extforward.params values must be one of: 0, 1, enable, disable; error for key:", &du->key);
-				return HANDLER_ERROR;
-			}
-		}
-	}
-
-	/* attempt to warn if mod_extforward is not last module loaded to hook
-	 * handle_connection_accept.  (Nice to have, but remove this check if
-	 * it reaches too far into internals and prevents other code changes.)
-	 * While it would be nice to check connection_handle_accept plugin slot
-	 * to make sure mod_extforward is last, that info is private to plugin.c
-	 * so merely warn if mod_openssl is loaded after mod_extforward, though
-	 * future modules which hook connection_handle_accept might be missed.*/
-	for (i = 0; i < srv->config_context->used; ++i) {
-		plugin_config *s = p->config_storage[i];
-		if (s->hap_PROXY) {
-			size_t j;
-			for (j = 0; j < srv->srvconf.modules->used; ++j) {
-				data_string *ds = (data_string *)srv->srvconf.modules->data[j];
-				if (buffer_is_equal_string(&ds->value, CONST_STR_LEN("mod_extforward"))) {
-					break;
-				}
-			}
-			for (; j < srv->srvconf.modules->used; ++j) {
-				data_string *ds = (data_string *)srv->srvconf.modules->data[j];
-				if (buffer_is_equal_string(&ds->value, CONST_STR_LEN("mod_openssl"))) {
-					log_error_write(srv, __FILE__, __LINE__, "s",
-						        "mod_extforward must be loaded after mod_openssl in server.modules when extforward.hap-PROXY = \"enable\"");
-					break;
-				}
-			}
-			break;
-		}
-	}
-
-	for (i = 0; i < srv->srvconf.modules->used; i++) {
-		data_string *ds = (data_string *)srv->srvconf.modules->data[i];
-		if (buffer_is_equal_string(&ds->value, CONST_STR_LEN("mod_proxy"))) {
-			extforward_check_proxy = 1;
-			break;
-		}
-	}
-
-	return HANDLER_GO_ON;
+    return HANDLER_GO_ON;
 }
-
-#define PATCH(x) \
-	p->conf.x = s->x;
-static int mod_extforward_patch_connection(server *srv, connection *con, plugin_data *p) {
-	size_t i, j;
-	plugin_config *s = p->config_storage[0];
-
-	PATCH(forwarder);
-	PATCH(forward_masks);
-	PATCH(headers);
-	PATCH(opts);
-	PATCH(hap_PROXY);
-	PATCH(hap_PROXY_ssl_client_verify);
-	PATCH(forward_all);
-
-	/* skip the first, the global context */
-	for (i = 1; i < srv->config_context->used; i++) {
-		if (!config_check_cond(con, i)) continue; /* condition not matched */
-
-		data_config *dc = (data_config *)srv->config_context->data[i];
-		s = p->config_storage[i];
-
-		/* merge config */
-		for (j = 0; j < dc->value->used; j++) {
-			data_unset *du = dc->value->data[j];
-
-			if (buffer_is_equal_string(&du->key, CONST_STR_LEN("extforward.forwarder"))) {
-				PATCH(forwarder);
-				PATCH(forward_masks);
-				PATCH(forward_all);
-			} else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("extforward.headers"))) {
-				PATCH(headers);
-			} else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("extforward.params"))) {
-				PATCH(opts);
-			} else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("extforward.hap-PROXY"))) {
-				PATCH(hap_PROXY);
-			} else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("extforward.hap-PROXY-ssl-client-verify"))) {
-				PATCH(hap_PROXY_ssl_client_verify);
-			}
-		}
-	}
-
-	return 0;
-}
-#undef PATCH
 
 
 /*
@@ -461,9 +519,9 @@ static int is_proxy_trusted(plugin_data *p, const char * const ip, size_t iplen)
       (const data_string *)array_get_element_klen(p->conf.forwarder, ip, iplen);
     if (NULL != ds) return !buffer_string_is_empty(&ds->value);
 
-    if (p->conf.forward_masks) {
-        const struct sock_addr_mask * const addrs =p->conf.forward_masks->addrs;
-        const size_t aused = p->conf.forward_masks->used;
+    if (p->conf.forward_masks_used) {
+        const struct sock_addr_mask * const addrs = p->conf.forward_masks;
+        const uint32_t aused = p->conf.forward_masks_used;
         sock_addr addr;
         /* C funcs inet_aton(), inet_pton() require '\0'-terminated IP str */
         char addrstr[64]; /*(larger than INET_ADDRSTRLEN and INET6_ADDRSTRLEN)*/
@@ -474,7 +532,7 @@ static int is_proxy_trusted(plugin_data *p, const char * const ip, size_t iplen)
         if (1 != sock_addr_inet_pton(&addr, addrstr, AF_INET,  0)
          && 1 != sock_addr_inet_pton(&addr, addrstr, AF_INET6, 0)) return 0;
 
-        for (size_t i = 0; i < aused; ++i) {
+        for (uint32_t i = 0; i < aused; ++i) {
             if (sock_addr_is_addr_eq_bits(&addr, &addrs[i].addr, addrs[i].bits))
                 return 1;
         }
@@ -1008,7 +1066,7 @@ URIHANDLER_FUNC(mod_extforward_uri_handler) {
 	handler_ctx *hctx = con->plugin_ctx[p->id];
 	int is_forwarded_header = 0;
 
-	mod_extforward_patch_connection(srv, con, p);
+	mod_extforward_patch_config(con, p);
 
 	if (con->conf.log_request_handling) {
 		log_error_write(srv, __FILE__, __LINE__, "s",
@@ -1035,7 +1093,9 @@ URIHANDLER_FUNC(mod_extforward_uri_handler) {
 		}
 	}
 
-	for (size_t k = 0; k < p->conf.headers->used && NULL == forwarded; ++k) {
+	if (NULL == p->conf.forwarder) return HANDLER_GO_ON;
+	if (NULL == p->conf.headers) return HANDLER_GO_ON;
+	for (uint32_t k = 0; k < p->conf.headers->used && NULL == forwarded; ++k) {
 		buffer *hdr = &((data_string *)p->conf.headers->data[k])->value;
 		forwarded = http_header_request_get(con, HTTP_HEADER_UNSPECIFIED, CONST_BUF_LEN(hdr));
 		if (forwarded) {
@@ -1074,7 +1134,7 @@ CONNECTION_FUNC(mod_extforward_handle_request_env) {
     handler_ctx *hctx = con->plugin_ctx[p->id];
     UNUSED(srv);
     if (NULL == hctx || NULL == hctx->env) return HANDLER_GO_ON;
-    for (size_t i=0; i < hctx->env->used; ++i) {
+    for (uint32_t i=0; i < hctx->env->used; ++i) {
         /* note: replaces values which may have been set by mod_openssl
          * (when mod_extforward is listed after mod_openssl in server.modules)*/
         data_string *ds = (data_string *)hctx->env->data[i];
@@ -1144,8 +1204,9 @@ static int mod_extforward_network_read (server *srv, connection *con, chunkqueue
 CONNECTION_FUNC(mod_extforward_handle_con_accept)
 {
     plugin_data *p = p_d;
-    mod_extforward_patch_connection(srv, con, p);
+    mod_extforward_patch_config(con, p);
     if (!p->conf.hap_PROXY) return HANDLER_GO_ON;
+    if (NULL == p->conf.forwarder) return HANDLER_GO_ON;
     if (is_connection_trusted(con, p)) {
         handler_ctx *hctx = handler_ctx_init();
         con->plugin_ctx[p->id] = hctx;
@@ -1162,8 +1223,6 @@ CONNECTION_FUNC(mod_extforward_handle_con_accept)
     return HANDLER_GO_ON;
 }
 
-
-/* this function is called at dlopen() time and inits the callbacks */
 
 int mod_extforward_plugin_init(plugin *p);
 int mod_extforward_plugin_init(plugin *p) {
