@@ -161,7 +161,7 @@
 #define _GNU_SOURCE
 #endif
 
-#include "first.h"  /* first */
+#include "first.h"      /* first */
 #include "sys-mmap.h"
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -306,11 +306,7 @@ typedef struct {
   #endif
 } sql_config;
 
-/* plugin config for all request/connections */
-
 typedef struct {
-    int config_context_idx;
-    uint32_t directives;
     unsigned short enabled;
     unsigned short is_readonly;
     unsigned short log_xml;
@@ -325,73 +321,146 @@ typedef struct {
 
 typedef struct {
     PLUGIN_DATA;
-    plugin_config **config_storage;
+    plugin_config defaults;
 } plugin_data;
 
 
-/* init the plugin data */
 INIT_FUNC(mod_webdav_init) {
     return calloc(1, sizeof(plugin_data));
 }
 
 
-/* destroy the plugin data */
+static void mod_webdav_free_config(plugin_data * const p) {
+    if (NULL == p->cvlist) return;
+    /* (init i to 0 if global context; to 1 to skip empty global context) */
+    for (int i = !p->cvlist[0].v.u2[1], used = p->nconfig; i < used; ++i) {
+        config_plugin_value_t *cpv = p->cvlist + p->cvlist[i].v.u2[0];
+        for (; -1 != cpv->k_id; ++cpv) {
+            switch (cpv->k_id) {
+             #ifdef USE_PROPPATCH
+              case 0: /* webdav.sqlite-db-name */
+                if (cpv->vtype == T_CONFIG_LOCAL) {
+                    sql_config * const sql = cpv->v.v;
+                    if (!sql->sqlh) {
+                        free(sql);
+                        continue;
+                    }
+
+                    sqlite3_finalize(sql->stmt_props_select_propnames);
+                    sqlite3_finalize(sql->stmt_props_select_props);
+                    sqlite3_finalize(sql->stmt_props_select_prop);
+                    sqlite3_finalize(sql->stmt_props_update_prop);
+                    sqlite3_finalize(sql->stmt_props_delete_prop);
+                    sqlite3_finalize(sql->stmt_props_copy);
+                    sqlite3_finalize(sql->stmt_props_move);
+                    sqlite3_finalize(sql->stmt_props_move_col);
+                    sqlite3_finalize(sql->stmt_props_delete);
+
+                    sqlite3_finalize(sql->stmt_locks_acquire);
+                    sqlite3_finalize(sql->stmt_locks_refresh);
+                    sqlite3_finalize(sql->stmt_locks_release);
+                    sqlite3_finalize(sql->stmt_locks_read);
+                    sqlite3_finalize(sql->stmt_locks_read_uri);
+                    sqlite3_finalize(sql->stmt_locks_read_uri_infinity);
+                    sqlite3_finalize(sql->stmt_locks_read_uri_members);
+                    sqlite3_finalize(sql->stmt_locks_delete_uri);
+                    sqlite3_finalize(sql->stmt_locks_delete_uri_col);
+                    sqlite3_close(sql->sqlh);
+                    free(sql);
+                }
+                break;
+             #endif
+              default:
+                break;
+            }
+        }
+    }
+}
+
+
 FREE_FUNC(mod_webdav_free) {
     plugin_data *p = (plugin_data *)p_d;
     if (!p) return HANDLER_GO_ON;
 
-    if (p->config_storage) {
-      #ifdef USE_PROPPATCH
-        for (int i = 0; i < p->nconfig; ++i) {
-            plugin_config * const s = p->config_storage[i];
-            if (NULL == s) continue;
-            buffer_free(s->sqlite_db_name);
-            array_free(s->opts);
+    mod_webdav_free_config(p);
 
-            sql_config * const sql = s->sql;
-            if (!sql || !sql->sqlh) {
-                free(sql);
-                continue;
-            }
-
-            sqlite3_finalize(sql->stmt_props_select_propnames);
-            sqlite3_finalize(sql->stmt_props_select_props);
-            sqlite3_finalize(sql->stmt_props_select_prop);
-            sqlite3_finalize(sql->stmt_props_update_prop);
-            sqlite3_finalize(sql->stmt_props_delete_prop);
-            sqlite3_finalize(sql->stmt_props_copy);
-            sqlite3_finalize(sql->stmt_props_move);
-            sqlite3_finalize(sql->stmt_props_move_col);
-            sqlite3_finalize(sql->stmt_props_delete);
-
-            sqlite3_finalize(sql->stmt_locks_acquire);
-            sqlite3_finalize(sql->stmt_locks_refresh);
-            sqlite3_finalize(sql->stmt_locks_release);
-            sqlite3_finalize(sql->stmt_locks_read);
-            sqlite3_finalize(sql->stmt_locks_read_uri);
-            sqlite3_finalize(sql->stmt_locks_read_uri_infinity);
-            sqlite3_finalize(sql->stmt_locks_read_uri_members);
-            sqlite3_finalize(sql->stmt_locks_delete_uri);
-            sqlite3_finalize(sql->stmt_locks_delete_uri_col);
-            sqlite3_close(sql->sqlh);
-            free(sql);
-        }
-      #endif
-        free(p->config_storage);
-    }
-
+    free(p->cvlist);
     free(p);
-
     UNUSED(srv);
     return HANDLER_GO_ON;
 }
 
 
-__attribute_cold__
-static handler_t mod_webdav_sqlite3_init (plugin_config * restrict s, log_error_st *errh);
+static void mod_webdav_merge_config_cpv(plugin_config * const pconf, const config_plugin_value_t * const cpv) {
+    switch (cpv->k_id) { /* index into static config_plugin_keys_t cpk[] */
+      case 0: /* webdav.sqlite-db-name */
+        if (cpv->vtype == T_CONFIG_LOCAL)
+            pconf->sql = cpv->v.v;
+        break;
+      case 1: /* webdav.activate */
+        pconf->enabled = (unsigned short)cpv->v.u;
+        break;
+      case 2: /* webdav.is-readonly */
+        pconf->is_readonly = (unsigned short)cpv->v.u;
+        break;
+      case 3: /* webdav.log-xml */
+        pconf->log_xml = (unsigned short)cpv->v.u;
+        break;
+      case 4: /* webdav.opts */
+        if (cpv->vtype == T_CONFIG_LOCAL)
+            pconf->deprecated_unsafe_partial_put_compat =
+              (unsigned short)cpv->v.u;
+        break;
+      default:/* should not happen */
+        return;
+    }
+}
 
-/* handle plugin config and check values */
+
+static void mod_webdav_merge_config(plugin_config * const pconf, const config_plugin_value_t *cpv) {
+    do {
+        mod_webdav_merge_config_cpv(pconf, cpv);
+    } while ((++cpv)->k_id != -1);
+}
+
+
+static void mod_webdav_patch_config(connection * const con, plugin_data * const p, plugin_config * const pconf) {
+    memcpy(pconf, &p->defaults, sizeof(plugin_config));
+    for (int i = 1, used = p->nconfig; i < used; ++i) {
+        if (config_check_cond(con, (uint32_t)p->cvlist[i].k_id))
+            mod_webdav_merge_config(pconf, p->cvlist + p->cvlist[i].v.u2[0]);
+    }
+}
+
+
+__attribute_cold__
+static int mod_webdav_sqlite3_init (const char * restrict s, log_error_st *errh);
+
 SETDEFAULTS_FUNC(mod_webdav_set_defaults) {
+    static const config_plugin_keys_t cpk[] = {
+      { CONST_STR_LEN("webdav.sqlite-db-name"),
+        T_CONFIG_STRING,
+        T_CONFIG_SCOPE_CONNECTION }
+     ,{ CONST_STR_LEN("webdav.activate"),
+        T_CONFIG_BOOL,
+        T_CONFIG_SCOPE_CONNECTION }
+     ,{ CONST_STR_LEN("webdav.is-readonly"),
+        T_CONFIG_BOOL,
+        T_CONFIG_SCOPE_CONNECTION }
+     ,{ CONST_STR_LEN("webdav.log-xml"),
+        T_CONFIG_BOOL,
+        T_CONFIG_SCOPE_CONNECTION }
+     ,{ CONST_STR_LEN("webdav.opts"),
+        T_CONFIG_ARRAY,
+        T_CONFIG_SCOPE_CONNECTION }
+     ,{ NULL, 0,
+        T_CONFIG_UNSET,
+        T_CONFIG_SCOPE_UNSET }
+    };
+
+    plugin_data * const p = p_d;
+    if (!config_plugin_values_init(srv, p, cpk, "mod_webdav"))
+        return HANDLER_ERROR;
 
   #ifdef USE_PROPPATCH
     int sqlrc = sqlite3_config(SQLITE_CONFIG_SINGLETHREAD);
@@ -403,104 +472,55 @@ SETDEFAULTS_FUNC(mod_webdav_set_defaults) {
     }
   #endif
 
-    config_values_t cv[] = {
-      { "webdav.activate",       NULL, T_CONFIG_BOOLEAN,    T_CONFIG_SCOPE_CONNECTION },
-      { "webdav.is-readonly",    NULL, T_CONFIG_BOOLEAN,    T_CONFIG_SCOPE_CONNECTION },
-      { "webdav.log-xml",        NULL, T_CONFIG_BOOLEAN,    T_CONFIG_SCOPE_CONNECTION },
-      { "webdav.sqlite-db-name", NULL, T_CONFIG_STRING,     T_CONFIG_SCOPE_CONNECTION },
-      { "webdav.opts",           NULL, T_CONFIG_ARRAY,      T_CONFIG_SCOPE_CONNECTION },
-
-      { NULL, NULL, T_CONFIG_UNSET, T_CONFIG_SCOPE_UNSET }
-    };
-
-    plugin_data * const p = (plugin_data *)p_d;
-    p->config_storage = calloc(srv->config_context->used, sizeof(plugin_config *));
-    force_assert(p->config_storage);
-
-    const size_t n_context = p->nconfig = srv->config_context->used;
-    for (size_t i = 0; i < n_context; ++i) {
-        data_config const *config =
-          (data_config const *)srv->config_context->data[i];
-        plugin_config * const restrict s = calloc(1, sizeof(plugin_config));
-        force_assert(s);
-        p->config_storage[i] = s;
-        s->sqlite_db_name = buffer_init();
-        s->opts = array_init();
-
-        cv[0].destination = &(s->enabled);
-        cv[1].destination = &(s->is_readonly);
-        cv[2].destination = &(s->log_xml);
-        cv[3].destination = s->sqlite_db_name;
-        cv[4].destination = s->opts;
-
-        if (0 != config_insert_values_global(srv, config->value, cv, i == 0 ? T_CONFIG_SCOPE_SERVER : T_CONFIG_SCOPE_CONNECTION)) {
-            return HANDLER_ERROR;
-        }
-
-        if (!buffer_is_empty(s->sqlite_db_name)) {
-            if (mod_webdav_sqlite3_init(s, srv->errh) == HANDLER_ERROR)
-                return HANDLER_ERROR;
-        }
-
-        for (size_t j = 0, used = s->opts->used; j < used; ++j) {
-            data_string *ds = (data_string *)s->opts->data[j];
-            if (buffer_is_equal_string(&ds->key,
-                  CONST_STR_LEN("deprecated-unsafe-partial-put"))
-                && buffer_is_equal_string(&ds->value, CONST_STR_LEN("enable"))) {
-                s->deprecated_unsafe_partial_put_compat = 1;
-                continue;
+    /* process and validate config directives
+     * (init i to 0 if global context; to 1 to skip empty global context) */
+    for (int i = !p->cvlist[0].v.u2[1]; i < p->nconfig; ++i) {
+        config_plugin_value_t *cpv = p->cvlist + p->cvlist[i].v.u2[0];
+        for (; -1 != cpv->k_id; ++cpv) {
+            switch (cpv->k_id) {
+              case 0: /* webdav.sqlite-db-name */
+                if (!buffer_string_is_empty(cpv->v.b)) {
+                    if (!mod_webdav_sqlite3_init(cpv->v.b->ptr, srv->errh))
+                        return HANDLER_ERROR;
+                }
+                break;
+              case 1: /* webdav.activate */
+              case 2: /* webdav.is-readonly */
+              case 3: /* webdav.log-xml */
+                break;
+              case 4: /* webdav.opts */
+                for (uint32_t j = 0, used = cpv->v.a->used; j < used; ++j) {
+                    data_string *ds = (data_string *)cpv->v.a->data[j];
+                    if (buffer_is_equal_string(&ds->key,
+                          CONST_STR_LEN("deprecated-unsafe-partial-put"))) {
+                        cpv->v.u =
+                          buffer_eq_slen(&ds->value,CONST_STR_LEN("enable"));
+                        cpv->vtype = T_CONFIG_LOCAL;
+                        continue;
+                    }
+                    log_error(srv->errh, __FILE__, __LINE__,
+                              "unrecognized webdav.opts: %.*s",
+                              BUFFER_INTLEN_PTR(&ds->key));
+                    return HANDLER_ERROR;
+                }
+                break;
+              default:/* should not happen */
+                break;
             }
-            log_error(srv->errh, __FILE__, __LINE__,
-                      "unrecognized webdav.opts: %.*s",
-                      BUFFER_INTLEN_PTR(&ds->key));
-            return HANDLER_ERROR;
         }
     }
-    if (n_context) {
-        p->config_storage[0]->srv  = srv;
-        p->config_storage[0]->tmpb = srv->tmp_buf;
+
+    p->defaults.srv = srv;
+    p->defaults.tmpb = srv->tmp_buf;
+
+    /* initialize p->defaults from global config context */
+    if (p->nconfig > 0 && p->cvlist->v.u2[1]) {
+        const config_plugin_value_t *cpv = p->cvlist + p->cvlist->v.u2[0];
+        if (-1 != cpv->k_id)
+            mod_webdav_merge_config(&p->defaults, cpv);
     }
 
     return HANDLER_GO_ON;
-}
-
-
-#define PATCH_OPTION(x) pconf->x = s->x;
-static void
-mod_webdav_patch_connection (server * const restrict srv,
-                             connection * const restrict con,
-                             const plugin_data * const restrict p,
-                             plugin_config * const restrict pconf)
-{
-    const plugin_config *s = p->config_storage[0];
-    memcpy(pconf, s, sizeof(*s));
-    data_config ** const restrict context_data =
-      (data_config **)srv->config_context->data;
-
-    for (size_t i = 1; i < srv->config_context->used; ++i) {
-        if (!config_check_cond(con, i)) continue; /* condition not matched */
-
-        data_config * const dc = context_data[i];
-        s = p->config_storage[i];
-
-        /* merge config */
-        for (size_t j = 0; j < dc->value->used; ++j) {
-            data_unset *du = dc->value->data[j];
-            if (buffer_is_equal_string(&du->key, CONST_STR_LEN("webdav.activate"))) {
-                PATCH_OPTION(enabled);
-            } else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("webdav.is-readonly"))) {
-                PATCH_OPTION(is_readonly);
-            } else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("webdav.log-xml"))) {
-                PATCH_OPTION(log_xml);
-          #ifdef USE_PROPPATCH
-            } else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("webdav.sqlite-db-name"))) {
-                PATCH_OPTION(sql);
-          #endif
-            } else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("webdav.opts"))) {
-                PATCH_OPTION(deprecated_unsafe_partial_put_compat);
-            }
-        }
-    }
 }
 
 
@@ -511,7 +531,7 @@ URIHANDLER_FUNC(mod_webdav_uri_handler)
         return HANDLER_GO_ON;
 
     plugin_config pconf;
-    mod_webdav_patch_connection(srv, con, (plugin_data *)p_d, &pconf);
+    mod_webdav_patch_config(con, (plugin_data *)p_d, &pconf);
     if (!pconf.enabled) return HANDLER_GO_ON;
 
     /* [RFC4918] 18 DAV Compliance Classes */
@@ -1126,8 +1146,8 @@ webdav_xml_doc_error_no_conflicting_lock (connection * const con,
 
 
 __attribute_cold__
-static handler_t
-mod_webdav_sqlite3_init (plugin_config * const restrict s,
+static int
+mod_webdav_sqlite3_init (const char * const restrict dbname,
                          log_error_st * const errh)
 {
   #ifndef USE_PROPPATCH
@@ -1135,34 +1155,32 @@ mod_webdav_sqlite3_init (plugin_config * const restrict s,
     log_error(errh, __FILE__, __LINE__,
               "Sorry, no sqlite3 and libxml2 support include, "
               "compile with --with-webdav-props");
-    UNUSED(s);
-    return HANDLER_ERROR;
+    UNUSED(dbname);
+    return 0;
 
   #else /* USE_PROPPATCH */
 
   /*(expects (plugin_config *s) (log_error_st *errh) (char *err))*/
   #define MOD_WEBDAV_SQLITE_CREATE_TABLE(query, label)                   \
-    if (sqlite3_exec(sql->sqlh, query, NULL, NULL, &err) != SQLITE_OK) { \
+    if (sqlite3_exec(sqlh, query, NULL, NULL, &err) != SQLITE_OK) {      \
         if (0 != strcmp(err, "table " label " already exists")) {        \
             log_error(errh, __FILE__, __LINE__,                          \
                       "create table " label ": %s", err);                \
             sqlite3_free(err);                                           \
-            return HANDLER_ERROR;                                        \
+            sqlite3_close(sqlh);                                         \
+            return 0;                                                    \
         }                                                                \
         sqlite3_free(err);                                               \
     }
 
-    sql_config * const sql = s->sql = (sql_config *)calloc(1, sizeof(*sql));
-    force_assert(sql);
-    int sqlrc = sqlite3_open_v2(s->sqlite_db_name->ptr, &sql->sqlh,
+    sqlite3 *sqlh;
+    int sqlrc = sqlite3_open_v2(dbname, &sqlh,
                                 SQLITE_OPEN_READWRITE|SQLITE_OPEN_CREATE, NULL);
     if (sqlrc != SQLITE_OK) {
-        log_error(errh, __FILE__, __LINE__, "sqlite3_open() '%.*s': %s",
-                  BUFFER_INTLEN_PTR(s->sqlite_db_name),
-                  sql->sqlh
-                    ? sqlite3_errmsg(sql->sqlh)
-                    : sqlite3_errstr(sqlrc));
-        return HANDLER_ERROR;
+        log_error(errh, __FILE__, __LINE__, "sqlite3_open() '%s': %s",
+                  dbname, sqlh ? sqlite3_errmsg(sqlh) : sqlite3_errstr(sqlrc));
+        if (sqlh) sqlite3_close(sqlh);
+        return 0;
     }
 
     char *err = NULL;
@@ -1177,21 +1195,20 @@ mod_webdav_sqlite3_init (plugin_config * const restrict s,
     "SELECT COUNT(*) FROM locks WHERE ownerinfo = \"\""
   #define MOD_WEBDAV_SQLITE_ALTER_TABLE_LOCKS \
     "ALTER TABLE locks ADD COLUMN ownerinfo TEXT NOT NULL DEFAULT \"\""
-    if (sqlite3_exec(sql->sqlh, MOD_WEBDAV_SQLITE_SELECT_LOCKS_OWNERINFO_TEST,
+    if (sqlite3_exec(sqlh, MOD_WEBDAV_SQLITE_SELECT_LOCKS_OWNERINFO_TEST,
                      NULL, NULL, &err) != SQLITE_OK) {
         sqlite3_free(err); /* "no such column: ownerinfo" */
-        if (sqlite3_exec(sql->sqlh, MOD_WEBDAV_SQLITE_ALTER_TABLE_LOCKS,
+        if (sqlite3_exec(sqlh, MOD_WEBDAV_SQLITE_ALTER_TABLE_LOCKS,
                          NULL, NULL, &err) != SQLITE_OK) {
             log_error(errh, __FILE__, __LINE__, "alter table locks: %s", err);
             sqlite3_free(err);
-            return HANDLER_ERROR;
+            sqlite3_close(sqlh);
+            return 0;
         }
     }
 
-    sqlite3_close(sql->sqlh);
-    sql->sqlh = NULL;
-
-    return HANDLER_GO_ON;
+    sqlite3_close(sqlh);
+    return 1;
 
   #endif /* USE_PROPPATCH */
 }
@@ -1199,9 +1216,9 @@ mod_webdav_sqlite3_init (plugin_config * const restrict s,
 
 #ifdef USE_PROPPATCH
 __attribute_cold__
-static handler_t
+static int
 mod_webdav_sqlite3_prep (sql_config * const restrict sql,
-                         const buffer * const sqlite_db_name,
+                         const char * const sqlite_db_name,
                          log_error_st * const errh)
 {
   /*(expects (plugin_config *s) (log_error_st *errh))*/
@@ -1210,18 +1227,18 @@ mod_webdav_sqlite3_prep (sql_config * const restrict sql,
         != SQLITE_OK) {                                                    \
         log_error(errh, __FILE__, __LINE__, "sqlite3_prepare_v2(): %s",    \
                   sqlite3_errmsg(sql->sqlh));                              \
-        return HANDLER_ERROR;                                              \
+        return 0;                                                          \
     }
 
-    int sqlrc = sqlite3_open_v2(sqlite_db_name->ptr, &sql->sqlh,
+    int sqlrc = sqlite3_open_v2(sqlite_db_name, &sql->sqlh,
                                 SQLITE_OPEN_READWRITE, NULL);
     if (sqlrc != SQLITE_OK) {
-        log_error(errh, __FILE__, __LINE__, "sqlite3_open() '%.*s': %s",
-                  BUFFER_INTLEN_PTR(sqlite_db_name),
+        log_error(errh, __FILE__, __LINE__, "sqlite3_open() '%s': %s",
+                  sqlite_db_name,
                   sql->sqlh
                     ? sqlite3_errmsg(sql->sqlh)
                     : sqlite3_errstr(sqlrc));
-        return HANDLER_ERROR;
+        return 0;
     }
 
     /* future: perhaps not all statements should be prepared;
@@ -1265,7 +1282,7 @@ mod_webdav_sqlite3_prep (sql_config * const restrict sql,
     MOD_WEBDAV_SQLITE_PREPARE_STMT( MOD_WEBDAV_SQLITE_LOCKS_DELETE_URI_COL,
                                     sql->stmt_locks_delete_uri_col);
 
-    return HANDLER_GO_ON;
+    return 1;
 
 }
 #endif /* USE_PROPPATCH */
@@ -1281,12 +1298,26 @@ SERVER_FUNC(mod_webdav_worker_init)
      *   across a fork() system call into the child process.
      */
     plugin_data * const p = (plugin_data *)p_d;
-    for (int i = 0; i < p->nconfig; ++i) {
-        plugin_config *s = p->config_storage[i];
-        if (!buffer_is_empty(s->sqlite_db_name)
-            && mod_webdav_sqlite3_prep(s->sql, s->sqlite_db_name, srv->errh)
-               == HANDLER_ERROR)
-            return HANDLER_ERROR;
+    /* (init i to 0 if global context; to 1 to skip empty global context) */
+    for (int i = !p->cvlist[0].v.u2[1], used = p->nconfig; i < used; ++i) {
+        config_plugin_value_t *cpv = p->cvlist + p->cvlist[i].v.u2[0];
+        for (; -1 != cpv->k_id; ++cpv) {
+            switch (cpv->k_id) {
+             #ifdef USE_PROPPATCH
+              case 0: /* webdav.sqlite-db-name */
+                if (!buffer_is_empty(cpv->v.b)) {
+                    const char * const dbname = cpv->v.b->ptr;
+                    cpv->v.v = calloc(1, sizeof(sql_config));
+                    cpv->vtype = T_CONFIG_LOCAL;
+                    if (!mod_webdav_sqlite3_prep(cpv->v.v, dbname, srv->errh))
+                        return HANDLER_ERROR;
+                }
+                break;
+             #endif
+              default:
+                break;
+            }
+        }
     }
   #else
     UNUSED(srv);
@@ -5570,7 +5601,7 @@ PHYSICALPATH_FUNC(mod_webdav_physical_handler)
     }
 
     plugin_config pconf;
-    mod_webdav_patch_connection(srv, con, (plugin_data *)p_d, &pconf);
+    mod_webdav_patch_config(con, (plugin_data *)p_d, &pconf);
     if (!pconf.enabled) return HANDLER_GO_ON;
 
     if (check_readonly && pconf.is_readonly) {
