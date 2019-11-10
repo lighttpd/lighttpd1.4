@@ -13,245 +13,290 @@
 #include <string.h>
 
 typedef struct {
-	pcre_keyvalue_buffer *rewrite;
-	pcre_keyvalue_buffer *rewrite_NF;
-	int context_ndx, context_ndx_NF; /* to which apply me */
-	int rewrite_repeat_idx, rewrite_NF_repeat_idx;
+    pcre_keyvalue_buffer *rewrite;
+    pcre_keyvalue_buffer *rewrite_NF;
 } plugin_config;
 
-typedef struct {
-	enum { REWRITE_STATE_UNSET, REWRITE_STATE_FINISHED} state;
-	int loops;
-} handler_ctx;
+enum { REWRITE_STATE_REWRITTEN = 1024, REWRITE_STATE_FINISHED = 2048}; /*flags*/
 
 typedef struct {
-	PLUGIN_DATA;
-	plugin_config **config_storage;
-	plugin_config conf;
+    PLUGIN_DATA;
+    plugin_config defaults;
+    plugin_config conf;
 } plugin_data;
 
-static handler_ctx * handler_ctx_init(void) {
-	handler_ctx * hctx;
-
-	hctx = calloc(1, sizeof(*hctx));
-
-	hctx->state = REWRITE_STATE_UNSET;
-	hctx->loops = 0;
-
-	return hctx;
-}
-
-static void handler_ctx_free(handler_ctx *hctx) {
-	free(hctx);
-}
-
 INIT_FUNC(mod_rewrite_init) {
-	return calloc(1, sizeof(plugin_data));
+    return calloc(1, sizeof(plugin_data));
+}
+
+static void mod_rewrite_free_config(plugin_data * const p) {
+    if (NULL == p->cvlist) return;
+    /* (init i to 0 if global context; to 1 to skip empty global context) */
+    for (int i = !p->cvlist[0].v.u2[1], used = p->nconfig; i < used; ++i) {
+        config_plugin_value_t *cpv = p->cvlist + p->cvlist[i].v.u2[0];
+        /* kvb value might be copied in multiple directives; free only once */
+        pcre_keyvalue_buffer *kvb = NULL, *kvb_NF = NULL;
+        for (; -1 != cpv->k_id; ++cpv) {
+            switch (cpv->k_id) {
+              case 0: /* url.rewrite-once */
+              case 1: /* url.rewrite-final */
+              case 2: /* url.rewrite */
+              case 3: /* url.rewrite-repeat */
+                if (cpv->vtype == T_CONFIG_LOCAL)
+                    kvb = cpv->v.v;
+                break;
+              case 4: /* url.rewrite-if-not-file */
+              case 5: /* url.rewrite-repeat-if-not-file */
+                if (cpv->vtype == T_CONFIG_LOCAL)
+                    kvb_NF = cpv->v.v;
+              default:
+                break;
+            }
+        }
+        if (kvb)    pcre_keyvalue_buffer_free(kvb);
+        if (kvb_NF) pcre_keyvalue_buffer_free(kvb_NF);
+    }
 }
 
 FREE_FUNC(mod_rewrite_free) {
-	plugin_data *p = p_d;
-	if (!p) return HANDLER_GO_ON;
+    plugin_data *p = p_d;
+    if (!p) return HANDLER_GO_ON;
+    UNUSED(srv);
 
-	if (p->config_storage) {
-		size_t i;
-		for (i = 0; i < srv->config_context->used; i++) {
-			plugin_config *s = p->config_storage[i];
-			if (NULL == s) continue;
-			pcre_keyvalue_buffer_free(s->rewrite);
-			pcre_keyvalue_buffer_free(s->rewrite_NF);
-			free(s);
-		}
-		free(p->config_storage);
-	}
+    mod_rewrite_free_config(p);
 
-	free(p);
-	return HANDLER_GO_ON;
+    free(p->cvlist);
+    free(p);
+
+    return HANDLER_GO_ON;
 }
 
-static int parse_config_entry(server *srv, array *ca, pcre_keyvalue_buffer *kvb, const char *option, size_t olen) {
-	const data_array * const da = (const data_array *)
-	  array_get_element_klen(ca, option, olen);
+static void mod_rewrite_merge_config_cpv(plugin_config * const pconf, const config_plugin_value_t * const cpv) {
+    switch (cpv->k_id) { /* index into static config_plugin_keys_t cpk[] */
+      case 0: /* url.rewrite-once */
+      case 1: /* url.rewrite-final */
+      case 2: /* url.rewrite */
+      case 3: /* url.rewrite-repeat */
+        /*if (cpv->vtype == T_CONFIG_LOCAL)*//*always true here in mod_rewrite*/
+            pconf->rewrite = cpv->v.v;
+        break;
+      case 4: /* url.rewrite-if-not-file */
+      case 5: /* url.rewrite-repeat-if-not-file */
+        /*if (cpv->vtype == T_CONFIG_LOCAL)*//*always true here in mod_rewrite*/
+            pconf->rewrite_NF = cpv->v.v;
+        break;
+      default:/* should not happen */
+        return;
+    }
+}
 
-	if (NULL != da) {
-		size_t j;
+static void mod_rewrite_merge_config(plugin_config * const pconf, const config_plugin_value_t *cpv) {
+    do {
+        mod_rewrite_merge_config_cpv(pconf, cpv);
+    } while ((++cpv)->k_id != -1);
+}
 
-		if (da->type != TYPE_ARRAY || !array_is_kvstring(&da->value)) {
-			log_error_write(srv, __FILE__, __LINE__, "SSS",
-					"unexpected value for ", option, "; expected list of \"regex\" => \"subst\"");
-			return HANDLER_ERROR;
-		}
+static void mod_rewrite_patch_config(connection * const con, plugin_data * const p) {
+    memcpy(&p->conf, &p->defaults, sizeof(plugin_config));
+    for (int i = 1, used = p->nconfig; i < used; ++i) {
+        if (config_check_cond(con, (uint32_t)p->cvlist[i].k_id))
+            mod_rewrite_merge_config(&p->conf, p->cvlist+p->cvlist[i].v.u2[0]);
+    }
+}
 
-		for (j = 0; j < da->value.used; j++) {
-			data_string *ds = (data_string *)da->value.data[j];
-			if (srv->srvconf.http_url_normalize) {
-				pcre_keyvalue_burl_normalize_key(&ds->key, srv->tmp_buf);
-				pcre_keyvalue_burl_normalize_value(&ds->value, srv->tmp_buf);
-			}
-			if (0 != pcre_keyvalue_buffer_append(srv, kvb, &ds->key, &ds->value)) {
-				log_error_write(srv, __FILE__, __LINE__, "sb",
-						"pcre-compile failed for", &ds->key);
-				return HANDLER_ERROR;
-			}
-		}
-	}
+static pcre_keyvalue_buffer * mod_rewrite_parse_list(server *srv, const array *a, pcre_keyvalue_buffer *kvb, const int condidx, const char *option) {
+    if (!array_is_kvstring(a)) {
+        log_error(srv->errh, __FILE__, __LINE__,
+          "unexpected value for %s; "
+          "expected list of \"regex\" => \"subst\"",
+          option);
+        return NULL;
+    }
 
-	return 0;
+    int allocated = 0;
+    if (NULL == kvb) {
+        allocated = 1;
+        kvb = pcre_keyvalue_buffer_init();
+        kvb->x0 = (unsigned short)condidx;
+    }
+
+    for (uint32_t j = 0; j < a->used; ++j) {
+        data_string *ds = (data_string *)a->data[j];
+        if (srv->srvconf.http_url_normalize) {
+            pcre_keyvalue_burl_normalize_key(&ds->key, srv->tmp_buf);
+            pcre_keyvalue_burl_normalize_value(&ds->value, srv->tmp_buf);
+        }
+        if (!pcre_keyvalue_buffer_append(srv->errh, kvb, &ds->key, &ds->value)){
+            log_error(srv->errh, __FILE__, __LINE__,
+              "pcre-compile failed for %s", ds->key.ptr);
+            if (allocated) pcre_keyvalue_buffer_free(kvb);
+            return NULL;
+        }
+    }
+
+    return kvb;
 }
 
 SETDEFAULTS_FUNC(mod_rewrite_set_defaults) {
-	size_t i = 0;
-	config_values_t cv[] = {
-		{ "url.rewrite-repeat",        NULL, T_CONFIG_LOCAL, T_CONFIG_SCOPE_CONNECTION }, /* 0 */
-		{ "url.rewrite-once",          NULL, T_CONFIG_LOCAL, T_CONFIG_SCOPE_CONNECTION }, /* 1 */
+    static const config_plugin_keys_t cpk[] = {
+      { CONST_STR_LEN("url.rewrite-once"),
+        T_CONFIG_ARRAY,
+        T_CONFIG_SCOPE_CONNECTION }
+     ,{ CONST_STR_LEN("url.rewrite-final"),  /* old name => url.rewrite-once */
+        T_CONFIG_ARRAY,
+        T_CONFIG_SCOPE_CONNECTION }
+     ,{ CONST_STR_LEN("url.rewrite"),        /* old name => url.rewrite-once */
+        T_CONFIG_ARRAY,
+        T_CONFIG_SCOPE_CONNECTION }
+     ,{ CONST_STR_LEN("url.rewrite-repeat"),
+        T_CONFIG_ARRAY,
+        T_CONFIG_SCOPE_CONNECTION }
+     ,{ CONST_STR_LEN("url.rewrite-if-not-file"), /* rewrite-once if ENOENT */
+        T_CONFIG_ARRAY,
+        T_CONFIG_SCOPE_CONNECTION }
+     ,{ CONST_STR_LEN("url.rewrite-repeat-if-not-file"), /* repeat if ENOENT */
+        T_CONFIG_ARRAY,
+        T_CONFIG_SCOPE_CONNECTION }
+     ,{ NULL, 0,
+        T_CONFIG_UNSET,
+        T_CONFIG_SCOPE_UNSET }
+    };
 
-		/* these functions only rewrite if the target is not already in the filestore
-		 *
-		 * url.rewrite-repeat-if-not-file is the equivalent of url.rewrite-repeat
-		 * url.rewrite-if-not-file is the equivalent of url.rewrite-once
-		 *
-		 */
-		{ "url.rewrite-repeat-if-not-file", NULL, T_CONFIG_LOCAL, T_CONFIG_SCOPE_CONNECTION }, /* 2 */
-		{ "url.rewrite-if-not-file",        NULL, T_CONFIG_LOCAL, T_CONFIG_SCOPE_CONNECTION }, /* 3 */
+    plugin_data * const p = p_d;
+    if (!config_plugin_values_init(srv, p, cpk, "mod_rewrite"))
+        return HANDLER_ERROR;
 
-		/* old names, still supported
-		 *
-		 * url.rewrite remapped to url.rewrite-once
-		 * url.rewrite-final    is url.rewrite-once
-		 *
-		 */
-		{ "url.rewrite",               NULL, T_CONFIG_LOCAL, T_CONFIG_SCOPE_CONNECTION }, /* 4 */
-		{ "url.rewrite-final",         NULL, T_CONFIG_LOCAL, T_CONFIG_SCOPE_CONNECTION }, /* 5 */
-		{ NULL,                        NULL, T_CONFIG_UNSET, T_CONFIG_SCOPE_UNSET }
-	};
+    /* process and validate config directives
+     * (init i to 0 if global context; to 1 to skip empty global context) */
+    for (int i = !p->cvlist[0].v.u2[1]; i < p->nconfig; ++i) {
+        config_plugin_value_t *cpv = p->cvlist + p->cvlist[i].v.u2[0];
+        /* parse directives in specific order to encode repeat_idx in kvb->x1 */
+        config_plugin_value_t *rewrite_once = NULL, *rewrite_repeat = NULL,
+                              *rewrite_NF = NULL,   *rewrite_repeat_NF = NULL,
+                              *rewrite = NULL,      *rewrite_final = NULL;
+        for (; -1 != cpv->k_id; ++cpv) {
+            switch (cpv->k_id) {
+              case 0: /* url.rewrite-once */
+                rewrite_once = cpv;
+                break;
+              case 1: /* url.rewrite-final */
+                rewrite_final = cpv;
+                break;
+              case 2: /* url.rewrite */
+                rewrite = cpv;
+                break;
+              case 3: /* url.rewrite-repeat */
+                rewrite_repeat = cpv;
+                break;
+              case 4: /* url.rewrite-if-not-file */
+                rewrite_NF = cpv;
+                break;
+              case 5: /* url.rewrite-repeat-if-not-file */
+                rewrite_repeat_NF = cpv;
+                break;
+              default:/* should not happen */
+                break;
+            }
+        }
 
-	plugin_data *p = p_d;
+        const int condidx = p->cvlist[i].k_id;
+        pcre_keyvalue_buffer *kvb = NULL, *kvb_NF = NULL;
 
-	if (!p) return HANDLER_ERROR;
+        if ((cpv = rewrite_once)) {
+            cpv->v.v = mod_rewrite_parse_list(srv, cpv->v.a, kvb, condidx,
+                                              cpk[cpv->k_id].k); /* directive */
+            if (NULL == cpv->v.v) return HANDLER_ERROR;
+            cpv->vtype = T_CONFIG_LOCAL;
+            kvb = cpv->v.v;
+        }
 
-	/* 0 */
-	p->config_storage = calloc(srv->config_context->used, sizeof(plugin_config *));
+        if ((cpv = rewrite_final)) {
+            cpv->v.v = mod_rewrite_parse_list(srv, cpv->v.a, kvb, condidx,
+                                              cpk[cpv->k_id].k); /* directive */
+            if (NULL == cpv->v.v) return HANDLER_ERROR;
+            cpv->vtype = T_CONFIG_LOCAL;
+            kvb = cpv->v.v;
+        }
 
-	for (i = 0; i < srv->config_context->used; i++) {
-		data_config const* config = (data_config const*)srv->config_context->data[i];
-		plugin_config *s;
+        if ((cpv = rewrite)) {
+            cpv->v.v = mod_rewrite_parse_list(srv, cpv->v.a, kvb, condidx,
+                                              cpk[cpv->k_id].k); /* directive */
+            if (NULL == cpv->v.v) return HANDLER_ERROR;
+            cpv->vtype = T_CONFIG_LOCAL;
+            kvb = cpv->v.v;
+        }
 
-		s = calloc(1, sizeof(plugin_config));
-		s->rewrite = pcre_keyvalue_buffer_init();
-		s->rewrite_NF = pcre_keyvalue_buffer_init();
-		p->config_storage[i] = s;
+        if (kvb) kvb->x1 = (unsigned short)kvb->used; /* repeat_idx */
 
-		if (0 != config_insert_values_global(srv, config->value, cv, i == 0 ? T_CONFIG_SCOPE_SERVER : T_CONFIG_SCOPE_CONNECTION)) {
-			return HANDLER_ERROR;
-		}
+        if ((cpv = rewrite_repeat)) {
+            cpv->v.v = mod_rewrite_parse_list(srv, cpv->v.a, kvb, condidx,
+                                              cpk[cpv->k_id].k); /* directive */
+            if (NULL == cpv->v.v) return HANDLER_ERROR;
+            cpv->vtype = T_CONFIG_LOCAL;
+            /*kvb = cpv->v.v;*/
+        }
 
-		parse_config_entry(srv, config->value, s->rewrite, CONST_STR_LEN("url.rewrite-once"));
-		parse_config_entry(srv, config->value, s->rewrite, CONST_STR_LEN("url.rewrite-final"));
-		parse_config_entry(srv, config->value, s->rewrite_NF, CONST_STR_LEN("url.rewrite-if-not-file"));
-		s->rewrite_NF_repeat_idx = (int)s->rewrite_NF->used;
-		parse_config_entry(srv, config->value, s->rewrite_NF, CONST_STR_LEN("url.rewrite-repeat-if-not-file"));
-		parse_config_entry(srv, config->value, s->rewrite, CONST_STR_LEN("url.rewrite"));
-		s->rewrite_repeat_idx = (int)s->rewrite->used;
-		parse_config_entry(srv, config->value, s->rewrite, CONST_STR_LEN("url.rewrite-repeat"));
-	}
+        if ((cpv = rewrite_NF)) {
+            cpv->v.v = mod_rewrite_parse_list(srv, cpv->v.a, kvb_NF, condidx,
+                                              cpk[cpv->k_id].k); /* directive */
+            if (NULL == cpv->v.v) return HANDLER_ERROR;
+            cpv->vtype = T_CONFIG_LOCAL;
+            kvb_NF = cpv->v.v;
+        }
 
-	return HANDLER_GO_ON;
-}
+        if (kvb_NF) kvb_NF->x1 = (unsigned short)kvb_NF->used; /* repeat_idx */
 
-#define PATCH(x) \
-	p->conf.x = s->x;
-static int mod_rewrite_patch_connection(server *srv, connection *con, plugin_data *p) {
-	size_t i, j;
-	plugin_config *s = p->config_storage[0];
+        if ((cpv = rewrite_repeat_NF)) {
+            cpv->v.v = mod_rewrite_parse_list(srv, cpv->v.a, kvb_NF, condidx,
+                                              cpk[cpv->k_id].k); /* directive */
+            if (NULL == cpv->v.v) return HANDLER_ERROR;
+            cpv->vtype = T_CONFIG_LOCAL;
+            /*kvb_NF = cpv->v.v;*/
+        }
+    }
 
-	PATCH(rewrite);
-	PATCH(rewrite_NF);
-	p->conf.context_ndx = 0;
-	p->conf.context_ndx_NF = 0;
-	PATCH(rewrite_repeat_idx);
-	PATCH(rewrite_NF_repeat_idx);
+    /* initialize p->defaults from global config context */
+    if (p->nconfig > 0 && p->cvlist->v.u2[1]) {
+        const config_plugin_value_t *cpv = p->cvlist + p->cvlist->v.u2[0];
+        if (-1 != cpv->k_id)
+            mod_rewrite_merge_config(&p->defaults, cpv);
+    }
 
-	/* skip the first, the global context */
-	for (i = 1; i < srv->config_context->used; i++) {
-		if (!config_check_cond(con, i)) continue; /* condition not matched */
-
-		data_config *dc = (data_config *)srv->config_context->data[i];
-		s = p->config_storage[i];
-
-		/* merge config */
-		for (j = 0; j < dc->value->used; j++) {
-			data_unset *du = dc->value->data[j];
-
-			if (buffer_is_equal_string(&du->key, CONST_STR_LEN("url.rewrite"))) {
-				PATCH(rewrite);
-				p->conf.context_ndx = i;
-				PATCH(rewrite_repeat_idx);
-			} else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("url.rewrite-once"))) {
-				PATCH(rewrite);
-				p->conf.context_ndx = i;
-				PATCH(rewrite_repeat_idx);
-			} else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("url.rewrite-repeat"))) {
-				PATCH(rewrite);
-				p->conf.context_ndx = i;
-				PATCH(rewrite_repeat_idx);
-			} else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("url.rewrite-if-not-file"))) {
-				PATCH(rewrite_NF);
-				p->conf.context_ndx_NF = i;
-				PATCH(rewrite_NF_repeat_idx);
-			} else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("url.rewrite-repeat-if-not-file"))) {
-				PATCH(rewrite_NF);
-				p->conf.context_ndx_NF = i;
-				PATCH(rewrite_NF_repeat_idx);
-			} else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("url.rewrite-final"))) {
-				PATCH(rewrite);
-				p->conf.context_ndx = i;
-				PATCH(rewrite_repeat_idx);
-			}
-		}
-	}
-
-	return 0;
+    return HANDLER_GO_ON;
 }
 
 URIHANDLER_FUNC(mod_rewrite_con_reset) {
-	plugin_data *p = p_d;
-
-	UNUSED(srv);
-
-	if (con->plugin_ctx[p->id]) {
-		handler_ctx_free(con->plugin_ctx[p->id]);
-		con->plugin_ctx[p->id] = NULL;
-	}
-
-	return HANDLER_GO_ON;
+    con->plugin_ctx[((plugin_data *)p_d)->id] = NULL;
+    UNUSED(srv);
+    return HANDLER_GO_ON;
 }
 
-static handler_t process_rewrite_rules(server *srv, connection *con, plugin_data *p, pcre_keyvalue_buffer *kvb, int repeat_idx) {
-	handler_ctx *hctx;
+static handler_t process_rewrite_rules(server *srv, connection *con, plugin_data *p, const pcre_keyvalue_buffer *kvb) {
 	struct burl_parts_t burl;
 	pcre_keyvalue_ctx ctx;
 	handler_t rc;
 
 	if (con->plugin_ctx[p->id]) {
-		hctx = con->plugin_ctx[p->id];
+		uintptr_t * const hctx = (uintptr_t *)(con->plugin_ctx + p->id);
 
-		if (hctx->loops++ > 100) {
-			if (0 == p->conf.context_ndx) {
+		if (((++*hctx) & 0x1FF) > 100) {
+			if (0 == kvb->x0) {
 				log_error_write(srv, __FILE__, __LINE__,  "s",
 						"ENDLESS LOOP IN rewrite-rule DETECTED ... aborting request");
 				return HANDLER_ERROR;
 			}
-			data_config *dc = (data_config *)srv->config_context->data[p->conf.context_ndx];
+			data_config *dc = (data_config *)srv->config_context->data[kvb->x0];
 			log_error_write(srv, __FILE__, __LINE__,  "SbsSBS",
 					"ENDLESS LOOP IN rewrite-rule DETECTED ... aborting request, perhaps you want to use url.rewrite-once instead of url.rewrite-repeat ($", dc->comp_key, dc->op, "\"", &dc->string, "\")");
 
 			return HANDLER_ERROR;
 		}
 
-		if (hctx->state == REWRITE_STATE_FINISHED) return HANDLER_GO_ON;
+		if (*hctx & REWRITE_STATE_FINISHED) return HANDLER_GO_ON;
 	}
 
-	ctx.cache = p->conf.context_ndx ? &con->cond_cache[p->conf.context_ndx] : NULL;
+	/*(kvb->x0 is context_idx)*/
+	ctx.cache = kvb->x0 ? &con->cond_cache[kvb->x0] : NULL;
 	ctx.burl = &burl;
 	burl.scheme    = con->uri.scheme;
 	burl.authority = con->uri.authority;
@@ -264,13 +309,10 @@ static handler_t process_rewrite_rules(server *srv, connection *con, plugin_data
 	rc = pcre_keyvalue_buffer_process(kvb, &ctx, con->request.uri, srv->tmp_buf);
 	if (HANDLER_FINISHED == rc && !buffer_is_empty(srv->tmp_buf) && srv->tmp_buf->ptr[0] == '/') {
 		buffer_copy_buffer(con->request.uri, srv->tmp_buf);
-		if (con->plugin_ctx[p->id] == NULL) {
-			hctx = handler_ctx_init();
-			con->plugin_ctx[p->id] = hctx;
-		} else {
-			hctx = con->plugin_ctx[p->id];
-		}
-		if (ctx.m < repeat_idx) hctx->state = REWRITE_STATE_FINISHED;
+		uintptr_t * const hctx = (uintptr_t *)(con->plugin_ctx + p->id);
+		*hctx |= REWRITE_STATE_REWRITTEN;
+		/*(kvb->x1 is repeat_idx)*/
+		if (ctx.m < kvb->x1) *hctx |= REWRITE_STATE_FINISHED;
 		buffer_reset(con->physical.path);
 		rc = HANDLER_COMEBACK;
 	}
@@ -289,31 +331,29 @@ static handler_t process_rewrite_rules(server *srv, connection *con, plugin_data
 }
 
 URIHANDLER_FUNC(mod_rewrite_physical) {
-	plugin_data *p = p_d;
-	stat_cache_entry *sce;
+    plugin_data * const p = p_d;
 
-	if (con->mode != DIRECT) return HANDLER_GO_ON;
+    if (con->mode != DIRECT) return HANDLER_GO_ON;
 
-	mod_rewrite_patch_connection(srv, con, p);
-	p->conf.context_ndx = p->conf.context_ndx_NF;
-	if (!p->conf.rewrite_NF->used) return HANDLER_GO_ON;
+    mod_rewrite_patch_config(con, p);
+    if (!p->conf.rewrite_NF || !p->conf.rewrite_NF->used) return HANDLER_GO_ON;
 
-	/* skip if physical.path is a regular file */
-	sce = NULL;
-	if (HANDLER_ERROR != stat_cache_get_entry(srv, con, con->physical.path, &sce)) {
-		if (S_ISREG(sce->st.st_mode)) return HANDLER_GO_ON;
-	}
+    /* skip if physical.path is a regular file */
+    stat_cache_entry *sce;
+    if (HANDLER_ERROR != stat_cache_get_entry(srv,con,con->physical.path,&sce)){
+        if (S_ISREG(sce->st.st_mode)) return HANDLER_GO_ON;
+    }
 
-	return process_rewrite_rules(srv, con, p, p->conf.rewrite_NF, p->conf.rewrite_NF_repeat_idx);
+    return process_rewrite_rules(srv, con, p, p->conf.rewrite_NF);
 }
 
 URIHANDLER_FUNC(mod_rewrite_uri_handler) {
-	plugin_data *p = p_d;
+    plugin_data *p = p_d;
 
-	mod_rewrite_patch_connection(srv, con, p);
-	if (!p->conf.rewrite->used) return HANDLER_GO_ON;
+    mod_rewrite_patch_config(con, p);
+    if (!p->conf.rewrite || !p->conf.rewrite->used) return HANDLER_GO_ON;
 
-	return process_rewrite_rules(srv, con, p, p->conf.rewrite, p->conf.rewrite_repeat_idx);
+    return process_rewrite_rules(srv, con, p, p->conf.rewrite);
 }
 
 int mod_rewrite_plugin_init(plugin *p);
