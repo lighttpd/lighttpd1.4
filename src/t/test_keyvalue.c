@@ -8,32 +8,36 @@
 
 #include "keyvalue.c"
 
+#include "base.h"   /* struct server, struct cond_cache_t */
+
 #ifdef HAVE_PCRE_H
 static pcre_keyvalue_buffer * test_keyvalue_test_kvb_init (void) {
     pcre_keyvalue_buffer *kvb = pcre_keyvalue_buffer_init();
-    buffer *k = buffer_init();
-    buffer *v = buffer_init();
-    server srv;
 
+    static server srv;
     memset(&srv, 0, sizeof(srv));
-    srv.errh = log_error_st_init(&srv.cur_ts, &srv.last_generated_debug_ts);
 
-    buffer_copy_string_len(k, CONST_STR_LEN("^/foo($|\\?.+)"));
-    buffer_copy_string_len(v, CONST_STR_LEN("/foo/$1"));
-    assert(0 == pcre_keyvalue_buffer_append(&srv, kvb, k, v));
-    buffer_copy_string_len(k, CONST_STR_LEN("^/bar(?:$|\\?(.+))"));
-    buffer_copy_string_len(v, CONST_STR_LEN("/?bar&$1"));
-    assert(0 == pcre_keyvalue_buffer_append(&srv, kvb, k, v));
-    buffer_copy_string_len(k, CONST_STR_LEN("^/redirect(?:\\?(.*))?$"));
-    buffer_copy_string_len(v, CONST_STR_LEN("/?seg=%1&$1"));
-    assert(0 == pcre_keyvalue_buffer_append(&srv, kvb, k, v));
-    buffer_copy_string_len(k, CONST_STR_LEN("^(/[^?]*)(?:\\?(.*))?$"));
-    buffer_copy_string_len(v, CONST_STR_LEN("/?file=$1&$2"));
-    assert(0 == pcre_keyvalue_buffer_append(&srv, kvb, k, v));
+    log_error_st * const errh =
+      log_error_st_init(&srv.cur_ts, &srv.last_generated_debug_ts);
 
-    buffer_free(k);
-    buffer_free(v);
-    log_error_st_free(srv.errh);
+    /* strings must be persistent for pcre_keyvalue_buffer_append() */
+    static const buffer kvstr[] = {
+      { "^/foo($|\\?.+)",          sizeof("^/foo($|\\?.+)"), 0 },
+      { "/foo/$1",                 sizeof("/foo/$1"), 0 },
+      { "^/bar(?:$|\\?(.+))",      sizeof("^/bar(?:$|\\?(.+))"), 0 },
+      { "/?bar&$1",                sizeof("/?bar&$1"), 0 },
+      { "^/redirect(?:\\?(.*))?$", sizeof("^/redirect(?:\\?(.*))?$"), 0 },
+      { "/?seg=%1&$1",             sizeof("/?seg=%1&$1"), 0 },
+      { "^(/[^?]*)(?:\\?(.*))?$",  sizeof("^(/[^?]*)(?:\\?(.*))?$"), 0 },
+      { "/?file=$1&$2",            sizeof("/?file=$1&$2"), 0 }
+    };
+
+    assert(pcre_keyvalue_buffer_append(errh, kvb, kvstr+0, kvstr+1));
+    assert(pcre_keyvalue_buffer_append(errh, kvb, kvstr+2, kvstr+3));
+    assert(pcre_keyvalue_buffer_append(errh, kvb, kvstr+4, kvstr+5));
+    assert(pcre_keyvalue_buffer_append(errh, kvb, kvstr+6, kvstr+7));
+
+    log_error_st_free(errh);
 
     return kvb;
 }

@@ -1,7 +1,7 @@
 #include "first.h"
 
 #include "keyvalue.h"
-#include "base.h"
+#include "base.h"       /* struct cond_cache_t */
 #include "burl.h"
 #include "log.h"
 
@@ -17,7 +17,7 @@ typedef struct pcre_keyvalue {
 	pcre *key;
 	pcre_extra *key_extra;
 #endif
-	buffer *value;
+	buffer value;
 } pcre_keyvalue;
 
 pcre_keyvalue_buffer *pcre_keyvalue_buffer_init(void) {
@@ -29,75 +29,61 @@ pcre_keyvalue_buffer *pcre_keyvalue_buffer_init(void) {
 	return kvb;
 }
 
-int pcre_keyvalue_buffer_append(server *srv, pcre_keyvalue_buffer *kvb, buffer *key, buffer *value) {
+int pcre_keyvalue_buffer_append(log_error_st *errh, pcre_keyvalue_buffer *kvb, const buffer *key, const buffer *value) {
 #ifdef HAVE_PCRE_H
-	size_t i;
 	const char *errptr;
 	int erroff;
 	pcre_keyvalue *kv;
 
-	if (!key) return -1;
-
-	if (kvb->used == kvb->size) {
-		kvb->size += 4;
-
-		kvb->kv = realloc(kvb->kv, kvb->size * sizeof(*kvb->kv));
+	if (0 == (kvb->used & 3)) { /*(allocate in groups of 4)*/
+		kvb->kv = realloc(kvb->kv, (kvb->used + 4) * sizeof(*kvb->kv));
 		force_assert(NULL != kvb->kv);
-
-		for(i = kvb->used; i < kvb->size; i++) {
-			kvb->kv[i] = calloc(1, sizeof(**kvb->kv));
-			force_assert(NULL != kvb->kv[i]);
-		}
 	}
 
-	kv = kvb->kv[kvb->used];
+	kv = kvb->kv + kvb->used++;
+	kv->key_extra = NULL;
+
+        /* copy persistent config data, and elide free() in free_data below */
+	memcpy(&kv->value, value, sizeof(buffer));
+	/*buffer_copy_buffer(&kv->value, value);*/
+
 	if (NULL == (kv->key = pcre_compile(key->ptr,
 					  0, &errptr, &erroff, NULL))) {
 
-		log_error_write(srv, __FILE__, __LINE__, "SS",
-			"rexexp compilation error at ", errptr);
-		return -1;
+		log_error(errh, __FILE__, __LINE__,
+		  "rexexp compilation error at %s", errptr);
+		return 0;
 	}
 
 	if (NULL == (kv->key_extra = pcre_study(kv->key, 0, &errptr)) &&
 			errptr != NULL) {
-		return -1;
+		return 0;
 	}
-
-	kv->value = buffer_init_buffer(value);
-
-	kvb->used++;
-
 #else
 	static int logged_message = 0;
-	if (logged_message) return 0;
+	if (logged_message) return 1;
 	logged_message = 1;
-	log_error_write(srv, __FILE__, __LINE__, "s",
-			"pcre support is missing, please install libpcre and the headers");
+	log_error(errh, __FILE__, __LINE__,
+	  "pcre support is missing, please install libpcre and the headers");
 	UNUSED(kvb);
 	UNUSED(key);
 	UNUSED(value);
 #endif
 
-	return 0;
+	return 1;
 }
 
 void pcre_keyvalue_buffer_free(pcre_keyvalue_buffer *kvb) {
 #ifdef HAVE_PCRE_H
-	size_t i;
-	pcre_keyvalue *kv;
-
-	for (i = 0; i < kvb->size; i++) {
-		kv = kvb->kv[i];
+	for (uint32_t i = 0; i < kvb->used; ++i) {
+		pcre_keyvalue * const kv = kvb->kv+i;
 		if (kv->key) pcre_free(kv->key);
 		if (kv->key_extra) pcre_free(kv->key_extra);
-		if (kv->value) buffer_free(kv->value);
-		free(kv);
+		/*free (kv->value.ptr);*//*(see pcre_keyvalue_buffer_append)*/
 	}
 
 	if (kvb->kv) free(kvb->kv);
 #endif
-
 	free(kvb);
 }
 
@@ -288,9 +274,9 @@ static void pcre_keyvalue_buffer_subst(buffer *b, const buffer *patternb, const 
 	buffer_append_string_len(b, pattern + start, pattern_len - start);
 }
 
-handler_t pcre_keyvalue_buffer_process(pcre_keyvalue_buffer *kvb, pcre_keyvalue_ctx *ctx, buffer *input, buffer *result) {
+handler_t pcre_keyvalue_buffer_process(const pcre_keyvalue_buffer *kvb, pcre_keyvalue_ctx *ctx, const buffer *input, buffer *result) {
     for (int i = 0, used = (int)kvb->used; i < used; ++i) {
-        pcre_keyvalue * const kv = kvb->kv[i];
+        const pcre_keyvalue * const kv = kvb->kv+i;
         #define N 20
         int ovec[N * 3];
         #undef N
@@ -301,7 +287,7 @@ handler_t pcre_keyvalue_buffer_process(pcre_keyvalue_buffer *kvb, pcre_keyvalue_
                 return HANDLER_ERROR;
             }
         }
-        else if (buffer_string_is_empty(kv->value)) {
+        else if (buffer_string_is_empty(&kv->value)) {
             /* short-circuit if blank replacement pattern
              * (do not attempt to match against remaining kvb rules) */
             ctx->m = i;
@@ -311,7 +297,7 @@ handler_t pcre_keyvalue_buffer_process(pcre_keyvalue_buffer *kvb, pcre_keyvalue_
             const char **list;
             ctx->m = i;
             pcre_get_substring_list(input->ptr, ovec, n, &list);
-            pcre_keyvalue_buffer_subst(result, kv->value, list, n, ctx);
+            pcre_keyvalue_buffer_subst(result, &kv->value, list, n, ctx);
             pcre_free(list);
             return HANDLER_FINISHED;
         }
@@ -320,7 +306,7 @@ handler_t pcre_keyvalue_buffer_process(pcre_keyvalue_buffer *kvb, pcre_keyvalue_
     return HANDLER_GO_ON;
 }
 #else
-handler_t pcre_keyvalue_buffer_process(pcre_keyvalue_buffer *kvb, pcre_keyvalue_ctx *ctx, buffer *input, buffer *result) {
+handler_t pcre_keyvalue_buffer_process(const pcre_keyvalue_buffer *kvb, pcre_keyvalue_ctx *ctx, const buffer *input, buffer *result) {
     UNUSED(kvb);
     UNUSED(ctx);
     UNUSED(input);
