@@ -63,6 +63,10 @@
 # include <syslog.h>
 #endif
 
+#ifdef HAVE_SYS_LOADAVG_H
+# include <sys/loadavg.h>
+#endif
+
 #ifdef HAVE_SYS_RESOURCE_H
 # include <sys/resource.h>
 #endif

@@ -112,6 +112,7 @@ AC_CHECK_HEADERS([\
   sys/epoll.h \
   sys/event.h \
   sys/filio.h \
+  sys/loadavg.h \
   sys/mman.h \
   sys/poll.h \
   sys/prctl.h \

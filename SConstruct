@@ -360,6 +360,7 @@ if 1:
 		'sys/devpoll.h',
 		'sys/epoll.h',
 		'sys/filio.h',
+		'sys/loadavg.h',
 		'sys/poll.h',
 		'sys/port.h',
 		'sys/prctl.h',

@@ -16,6 +16,7 @@
 #cmakedefine  HAVE_SYS_DEVPOLL_H
 #cmakedefine  HAVE_SYS_EPOLL_H
 #cmakedefine  HAVE_SYS_EVENT_H
+#cmakedefine  HAVE_SYS_LOADAVG_H
 #cmakedefine  HAVE_SYS_MMAN_H
 #cmakedefine  HAVE_SYS_POLL_H
 #cmakedefine  HAVE_SYS_PORT_H
