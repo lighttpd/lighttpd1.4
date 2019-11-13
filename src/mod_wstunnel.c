@@ -104,16 +104,17 @@
   }
 
 typedef struct {
-    gw_plugin_config gw;
-    buffer *frame_type;
-    array *origins;
+    gw_plugin_config gw; /* start must match layout of gw_plugin_config */
+    const array *origins;
+    unsigned int frame_type;
     unsigned short int ping_interval;
 } plugin_config;
 
 typedef struct plugin_data {
     PLUGIN_DATA;
-    plugin_config **config_storage;
+    pid_t srv_pid; /* must match layout of gw_plugin_data through conf member */
     plugin_config conf;
+    plugin_config defaults;
 } plugin_data;
 
 typedef enum {
@@ -182,116 +183,179 @@ INIT_FUNC(mod_wstunnel_init) {
     return calloc(1, sizeof(plugin_data));
 }
 
-FREE_FUNC(mod_wstunnel_free) {
-    plugin_data *p = p_d;
-    if (p->config_storage) {
-        for (size_t i = 0; i < srv->config_context->used; ++i) {
-            plugin_config *s = p->config_storage[i];
-            if (NULL == s) continue;
-            buffer_free(s->frame_type);
-            array_free(s->origins);
-            /*assert(0 == offsetof(s->gw));*/
-            gw_plugin_config_free(&s->gw);
-            /*free(s);*//*free'd by gw_plugin_config_free()*/
+static void mod_wstunnel_merge_config_cpv(plugin_config * const pconf, const config_plugin_value_t * const cpv) {
+    switch (cpv->k_id) { /* index into static config_plugin_keys_t cpk[] */
+      case 0: /* wstunnel.server */
+        if (cpv->vtype == T_CONFIG_LOCAL) {
+            gw_plugin_config * const gw = cpv->v.v;
+            pconf->gw.exts      = gw->exts;
+            pconf->gw.exts_auth = gw->exts_auth;
+            pconf->gw.exts_resp = gw->exts_resp;
         }
-        free(p->config_storage);
+        break;
+      case 1: /* wstunnel.balance */
+        /*if (cpv->vtype == T_CONFIG_LOCAL)*//*always true here for this param*/
+            pconf->gw.balance = (int)cpv->v.u;
+        break;
+      case 2: /* wstunnel.debug */
+        pconf->gw.debug = (int)cpv->v.u;
+        break;
+      case 3: /* wstunnel.map-extensions */
+        pconf->gw.ext_mapping = cpv->v.a;
+        break;
+      case 4: /* wstunnel.frame-type */
+        pconf->frame_type = cpv->v.u;
+        break;
+      case 5: /* wstunnel.origins */
+        pconf->origins = cpv->v.a;
+        break;
+      case 6: /* wstunnel.ping-interval */
+        pconf->ping_interval = cpv->v.shrt;
+        break;
+      default:/* should not happen */
+        return;
     }
-    free(p);
-    return HANDLER_GO_ON;
+}
+
+static void mod_wstunnel_merge_config(plugin_config * const pconf, const config_plugin_value_t *cpv) {
+    do {
+        mod_wstunnel_merge_config_cpv(pconf, cpv);
+    } while ((++cpv)->k_id != -1);
+}
+
+static void mod_wstunnel_patch_config(connection * const con, plugin_data * const p) {
+    memcpy(&p->conf, &p->defaults, sizeof(plugin_config));
+    for (int i = 1, used = p->nconfig; i < used; ++i) {
+        if (config_check_cond(con, (uint32_t)p->cvlist[i].k_id))
+            mod_wstunnel_merge_config(&p->conf, p->cvlist+p->cvlist[i].v.u2[0]);
+    }
 }
 
 SETDEFAULTS_FUNC(mod_wstunnel_set_defaults) {
-    plugin_data *p = p_d;
-    const data_unset *du;
-    config_values_t cv[] = {
-        { "wstunnel.server",        NULL, T_CONFIG_LOCAL, T_CONFIG_SCOPE_CONNECTION },
-        { "wstunnel.debug",         NULL, T_CONFIG_SHORT, T_CONFIG_SCOPE_CONNECTION },
-        { "wstunnel.balance",       NULL, T_CONFIG_LOCAL, T_CONFIG_SCOPE_CONNECTION },
-        { "wstunnel.map-extensions",NULL, T_CONFIG_ARRAY, T_CONFIG_SCOPE_CONNECTION },
-        { "wstunnel.frame-type",    NULL, T_CONFIG_STRING,T_CONFIG_SCOPE_CONNECTION },
-        { "wstunnel.origins",       NULL, T_CONFIG_ARRAY, T_CONFIG_SCOPE_CONNECTION },
-        { "wstunnel.ping-interval", NULL, T_CONFIG_SHORT, T_CONFIG_SCOPE_CONNECTION },
-        { NULL,                     NULL, T_CONFIG_UNSET, T_CONFIG_SCOPE_UNSET }
+    static const config_plugin_keys_t cpk[] = {
+      { CONST_STR_LEN("wstunnel.server"),
+        T_CONFIG_ARRAY,
+        T_CONFIG_SCOPE_CONNECTION }
+     ,{ CONST_STR_LEN("wstunnel.balance"),
+        T_CONFIG_STRING,
+        T_CONFIG_SCOPE_CONNECTION }
+     ,{ CONST_STR_LEN("wstunnel.debug"),
+        T_CONFIG_INT,
+        T_CONFIG_SCOPE_CONNECTION }
+     ,{ CONST_STR_LEN("wstunnel.map-extensions"),
+        T_CONFIG_ARRAY,
+        T_CONFIG_SCOPE_CONNECTION }
+     ,{ CONST_STR_LEN("wstunnel.frame-type"),
+        T_CONFIG_STRING,
+        T_CONFIG_SCOPE_CONNECTION }
+     ,{ CONST_STR_LEN("wstunnel.origins"),
+        T_CONFIG_ARRAY,
+        T_CONFIG_SCOPE_CONNECTION }
+     ,{ CONST_STR_LEN("wstunnel.ping-interval"),
+        T_CONFIG_SHORT,
+        T_CONFIG_SCOPE_CONNECTION }
+     ,{ NULL, 0,
+        T_CONFIG_UNSET,
+        T_CONFIG_SCOPE_UNSET }
     };
 
-    p->config_storage = calloc(srv->config_context->used, sizeof(plugin_config *));
-    force_assert(p->config_storage);
-    for (size_t i = 0; i < srv->config_context->used; ++i) {
-        array *ca = ((data_config *)(srv->config_context->data[i]))->value;
-        plugin_config *s = calloc(1, sizeof(plugin_config));
-        force_assert(s);
+    plugin_data * const p = p_d;
+    if (!config_plugin_values_init(srv, p, cpk, "mod_wstunnel"))
+        return HANDLER_ERROR;
 
-        s->gw.debug = 0; /* MOD_WEBSOCKET_LOG_NONE */
-        s->gw.ext_mapping = array_init();
-        s->frame_type = buffer_init();
-        s->origins = array_init();
-        s->ping_interval = 0; /* do not send ping */
-
-        cv[0].destination = NULL; /* T_CONFIG_LOCAL */
-        cv[1].destination = &(s->gw.debug);
-        cv[2].destination = NULL; /* T_CONFIG_LOCAL */
-        cv[3].destination = s->gw.ext_mapping;
-        cv[4].destination = s->frame_type;
-        cv[5].destination = s->origins;
-        cv[6].destination = &(s->ping_interval);
-
-        p->config_storage[i] = s;
-
-        if (0 != config_insert_values_global(srv, ca, cv, i == 0 ? T_CONFIG_SCOPE_SERVER : T_CONFIG_SCOPE_CONNECTION)) {
-            return HANDLER_ERROR;
-        }
-
-        du = array_get_element_klen(ca, CONST_STR_LEN("wstunnel.server"));
-        if (!gw_set_defaults_backend(srv, (gw_plugin_data *)p, du, i, 0)) {
-            return HANDLER_ERROR;
-        }
-
-        du = array_get_element_klen(ca, CONST_STR_LEN("wstunnel.balance"));
-        if (!gw_set_defaults_balance(srv, &s->gw, du)) {
-            return HANDLER_ERROR;
+    /* process and validate config directives
+     * (init i to 0 if global context; to 1 to skip empty global context) */
+    for (int i = !p->cvlist[0].v.u2[1]; i < p->nconfig; ++i) {
+        config_plugin_value_t *cpv = p->cvlist + p->cvlist[i].v.u2[0];
+        gw_plugin_config *gw = NULL;
+        for (; -1 != cpv->k_id; ++cpv) {
+            switch (cpv->k_id) {
+              case 0: /* wstunnel.server */
+                gw = calloc(1, sizeof(gw_plugin_config));
+                force_assert(gw);
+                if (!gw_set_defaults_backend(srv, (gw_plugin_data *)p, cpv->v.a,
+                                             gw, 0, cpk[cpv->k_id].k)) {
+                    gw_plugin_config_free(gw);
+                    return HANDLER_ERROR;
+                }
+                /* error if "mode" = "authorizer";
+                 * wstunnel can not act as authorizer */
+                /*(check after gw_set_defaults_backend())*/
+                if (gw->exts_auth && gw->exts_auth->used) {
+                    log_error(srv->errh, __FILE__, __LINE__,
+                      "%s must not define any hosts with "
+                      "attribute \"mode\" = \"authorizer\"", cpk[cpv->k_id].k);
+                    gw_plugin_config_free(gw);
+                    return HANDLER_ERROR;
+                }
+                cpv->v.v = gw;
+                cpv->vtype = T_CONFIG_LOCAL;
+                break;
+              case 1: /* wstunnel.balance */
+                cpv->v.u = (unsigned int)gw_get_defaults_balance(srv, cpv->v.b);
+                break;
+              case 2: /* wstunnel.debug */
+                break;
+              case 3: /* wstunnel.map-extensions */
+                if (!array_is_kvstring(cpv->v.a)) {
+                    log_error(srv->errh, __FILE__, __LINE__,
+                      "unexpected value for %s; "
+                      "expected list of \"suffix\" => \"subst\"",
+                      cpk[cpv->k_id].k);
+                    return HANDLER_ERROR;
+                }
+                break;
+              case 4: /* wstunnel.frame-type */
+                /*(default frame-type to "text" unless "binary" is specified)*/
+                cpv->v.u =
+                  buffer_eq_icase_slen(cpv->v.b, CONST_STR_LEN("binary"));
+                break;
+              case 5: /* wstunnel.origins */
+                if (!array_is_vlist(cpv->v.a)) {
+                    log_error(srv->errh, __FILE__, __LINE__,
+                      "unexpected value for %s; "
+                      "expected %s = ( \"...\", \"...\" )",
+                      cpk[cpv->k_id].k, cpk[cpv->k_id].k);
+                    return HANDLER_ERROR;
+                }
+                for (uint32_t j = 0; j < cpv->v.a->used; ++j) {
+                    buffer *origin = &((data_string *)cpv->v.a->data[j])->value;
+                    if (buffer_string_is_empty(origin)) {
+                        log_error(srv->errh, __FILE__, __LINE__,
+                          "unexpected empty string in %s", cpk[cpv->k_id].k);
+                        return HANDLER_ERROR;
+                    }
+                }
+                break;
+              case 6: /* wstunnel.ping-interval */
+                break;
+              default:/* should not happen */
+                break;
+            }
         }
 
         /* disable check-local for all exts (default enabled) */
-        if (s->gw.exts) { /*(check after gw_set_defaults_backend())*/
-            for (size_t j = 0; j < s->gw.exts->used; ++j) {
-                gw_extension *ex = s->gw.exts->exts[j];
-                for (size_t n = 0; n < ex->used; ++n) {
+        if (gw && gw->exts) { /*(check after gw_set_defaults_backend())*/
+            for (uint32_t j = 0; j < gw->exts->used; ++j) {
+                gw_extension *ex = gw->exts->exts[j];
+                for (uint32_t n = 0; n < ex->used; ++n) {
                     ex->hosts[n]->check_local = 0;
                 }
             }
         }
-
-        /* error if "mode" = "authorizer"; wstunnel can not act as authorizer */
-        /*(check after gw_set_defaults_backend())*/
-        if (s->gw.exts_auth && s->gw.exts_auth->used) {
-            log_error_write(srv, __FILE__, __LINE__, "s",
-                            "wstunnel.server must not define any hosts "
-                            "with attribute \"mode\" = \"authorizer\"");
-            return HANDLER_ERROR;
-        }
-
-        /*(default frame-type to "text" unless "binary" is specified)*/
-        if (!buffer_is_empty(s->frame_type)
-            && !buffer_is_equal_caseless_string(s->frame_type,
-                                                CONST_STR_LEN("binary"))) {
-            buffer_clear(s->frame_type);
-        }
-
-        if (!array_is_vlist(s->origins)) {
-            log_error_write(srv, __FILE__, __LINE__, "s",
-                            "unexpected value for wstunnel.origins; expected wstunnel.origins = ( \"...\", \"...\" )");
-            return HANDLER_ERROR;
-        }
-        for (size_t j = 0; j < s->origins->used; ++j) {
-            if (buffer_string_is_empty(&((data_string *)s->origins->data[j])->value)) {
-                log_error_write(srv, __FILE__, __LINE__, "s",
-                                "unexpected empty string in wstunnel.origins");
-                return HANDLER_ERROR;
-            }
-        }
     }
 
-    /*assert(0 == offsetof(s->gw));*/
+    /* default is 0 */
+    /*p->defaults.balance = (unsigned int)gw_get_defaults_balance(srv, NULL);*/
+    p->defaults.ping_interval = 0; /* do not send ping */
+
+    /* initialize p->defaults from global config context */
+    if (p->nconfig > 0 && p->cvlist->v.u2[1]) {
+        const config_plugin_value_t *cpv = p->cvlist + p->cvlist->v.u2[0];
+        if (-1 != cpv->k_id)
+            mod_wstunnel_merge_config(&p->defaults, cpv);
+    }
+
     return HANDLER_GO_ON;
 }
 
@@ -353,58 +417,6 @@ static handler_t wstunnel_recv_parse(server *srv, connection *con, http_response
     return HANDLER_GO_ON;
 }
 
-#define PATCH(x)    p->conf.x    = s->x
-#define PATCH_GW(x) p->conf.gw.x = s->gw.x
-static void mod_wstunnel_patch_connection(server *srv, connection *con, plugin_data *p) {
-    size_t i, j;
-    plugin_config *s = p->config_storage[0];
-
-    PATCH_GW(exts);
-    PATCH_GW(exts_auth);
-    PATCH_GW(exts_resp);
-    PATCH_GW(debug);
-    PATCH_GW(balance);
-    PATCH_GW(ext_mapping);
-    PATCH(frame_type);
-    PATCH(origins);
-    PATCH(ping_interval);
-
-    /* skip the first, the global context */
-    for (i = 1; i < srv->config_context->used; i++) {
-        if (!config_check_cond(con, i)) continue; /* condition not matched */
-
-        data_config *dc = (data_config *)srv->config_context->data[i];
-        s = p->config_storage[i];
-
-        /* merge config */
-        for (j = 0; j < dc->value->used; j++) {
-            data_unset *du = dc->value->data[j];
-
-            if (buffer_is_equal_string(&du->key, CONST_STR_LEN("wstunnel.server"))) {
-                PATCH_GW(exts);
-                /*(wstunnel can not act as authorizer,
-                 * but p->conf.exts_auth must not be NULL)*/
-                PATCH_GW(exts_auth);
-                PATCH_GW(exts_resp);
-            } else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("wstunnel.debug"))) {
-                PATCH_GW(debug);
-            } else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("wstunnel.balance"))) {
-                PATCH_GW(balance);
-            } else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("wstunnel.map-extensions"))) {
-                PATCH_GW(ext_mapping);
-            } else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("wstunnel.frame-type"))) {
-                PATCH(frame_type);
-            } else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("wstunnel.origins"))) {
-                PATCH(origins);
-            } else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("wstunnel.ping-interval"))) {
-                PATCH(ping_interval);
-            }
-        }
-    }
-}
-#undef PATCH_GW
-#undef PATCH
-
 static int wstunnel_is_allowed_origin(connection *con, handler_ctx *hctx) {
     /* If allowed origins is set (and not empty list), fail closed if no match.
      * Note that origin provided in request header has not been normalized, so
@@ -413,7 +425,7 @@ static int wstunnel_is_allowed_origin(connection *con, handler_ctx *hctx) {
     const buffer *origin = NULL;
     size_t olen;
 
-    if (0 == allowed_origins->used) {
+    if (NULL == allowed_origins || 0 == allowed_origins->used) {
         DEBUG_LOG(MOD_WEBSOCKET_LOG_INFO, "s", "allowed origins not specified");
         return 1;
     }
@@ -486,7 +498,6 @@ static void wstunnel_handler_ctx_free(void *gwhctx) {
 
 static handler_t wstunnel_handler_setup (server *srv, connection *con, plugin_data *p) {
     handler_ctx *hctx = con->plugin_ctx[p->id];
-    int binary;
     int hybivers;
     hctx->srv = srv; /*(for mod_wstunnel module-specific DEBUG_LOG() macro)*/
     hctx->conf = p->conf; /*(copies struct)*/
@@ -513,7 +524,7 @@ static handler_t wstunnel_handler_setup (server *srv, connection *con, plugin_da
     hctx->frame.ctl.siz       = 0;
     hctx->frame.payload       = chunk_buffer_acquire();
 
-    binary = !buffer_is_empty(hctx->conf.frame_type); /*("binary")*/
+    unsigned int binary = hctx->conf.frame_type; /*(0 = "text"; 1 = "binary")*/
     if (!binary) {
         const buffer *vb =
           http_header_request_get(con, HTTP_HEADER_OTHER, CONST_STR_LEN("Sec-WebSocket-Protocol"));
@@ -586,7 +597,7 @@ static handler_t mod_wstunnel_check_extension(server *srv, connection *con, void
         || !http_header_str_contains_token(CONST_BUF_LEN(vb), CONST_STR_LEN("upgrade")))
         return HANDLER_GO_ON;
 
-    mod_wstunnel_patch_connection(srv, con, p);
+    mod_wstunnel_patch_config(con, p);
     if (NULL == p->conf.gw.exts) return HANDLER_GO_ON;
 
     rc = gw_check_extension(srv,con,(gw_plugin_data *)p,1,sizeof(handler_ctx));
@@ -640,7 +651,7 @@ int mod_wstunnel_plugin_init(plugin *p) {
     p->version           = LIGHTTPD_VERSION_ID;
     p->name              = "wstunnel";
     p->init              = mod_wstunnel_init;
-    p->cleanup           = mod_wstunnel_free;
+    p->cleanup           = gw_free;
     p->set_defaults      = mod_wstunnel_set_defaults;
     p->connection_reset  = gw_connection_reset;
     p->handle_uri_clean  = mod_wstunnel_check_extension;

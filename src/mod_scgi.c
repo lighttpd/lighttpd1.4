@@ -20,76 +20,137 @@ typedef gw_handler_ctx   handler_ctx;
 
 enum { LI_PROTOCOL_SCGI, LI_PROTOCOL_UWSGI };
 
+static void mod_scgi_merge_config_cpv(plugin_config * const pconf, const config_plugin_value_t * const cpv) {
+    switch (cpv->k_id) { /* index into static config_plugin_keys_t cpk[] */
+      case 0: /* scgi.server */
+        if (cpv->vtype == T_CONFIG_LOCAL) {
+            gw_plugin_config * const gw = cpv->v.v;
+            pconf->exts      = gw->exts;
+            pconf->exts_auth = gw->exts_auth;
+            pconf->exts_resp = gw->exts_resp;
+        }
+        break;
+      case 1: /* scgi.balance */
+        /*if (cpv->vtype == T_CONFIG_LOCAL)*//*always true here for this param*/
+            pconf->balance = (int)cpv->v.u;
+        break;
+      case 2: /* scgi.debug */
+        pconf->debug = (int)cpv->v.u;
+        break;
+      case 3: /* scgi.map-extensions */
+        pconf->ext_mapping = cpv->v.a;
+        break;
+      case 4: /* scgi.protocol */
+        /*if (cpv->vtype == T_CONFIG_LOCAL)*//*always true here for this param*/
+            pconf->proto = (int)cpv->v.u;
+        break;
+      default:/* should not happen */
+        return;
+    }
+}
+
+static void mod_scgi_merge_config(plugin_config * const pconf, const config_plugin_value_t *cpv) {
+    do {
+        mod_scgi_merge_config_cpv(pconf, cpv);
+    } while ((++cpv)->k_id != -1);
+}
+
+static void mod_scgi_patch_config(connection * const con, plugin_data * const p) {
+    memcpy(&p->conf, &p->defaults, sizeof(plugin_config));
+    for (int i = 1, used = p->nconfig; i < used; ++i) {
+        if (config_check_cond(con, (uint32_t)p->cvlist[i].k_id))
+            mod_scgi_merge_config(&p->conf, p->cvlist + p->cvlist[i].v.u2[0]);
+    }
+}
+
 SETDEFAULTS_FUNC(mod_scgi_set_defaults) {
-	plugin_data *p = p_d;
-	const data_unset *du;
-	size_t i = 0;
+    static const config_plugin_keys_t cpk[] = {
+      { CONST_STR_LEN("scgi.server"),
+        T_CONFIG_ARRAY,
+        T_CONFIG_SCOPE_CONNECTION }
+     ,{ CONST_STR_LEN("scgi.balance"),
+        T_CONFIG_STRING,
+        T_CONFIG_SCOPE_CONNECTION }
+     ,{ CONST_STR_LEN("scgi.debug"),
+        T_CONFIG_INT,
+        T_CONFIG_SCOPE_CONNECTION }
+     ,{ CONST_STR_LEN("scgi.map-extensions"),
+        T_CONFIG_ARRAY,
+        T_CONFIG_SCOPE_CONNECTION }
+     ,{ CONST_STR_LEN("scgi.protocol"),
+        T_CONFIG_STRING,
+        T_CONFIG_SCOPE_CONNECTION }
+     ,{ NULL, 0,
+        T_CONFIG_UNSET,
+        T_CONFIG_SCOPE_UNSET }
+    };
 
-	config_values_t cv[] = {
-		{ "scgi.server",              NULL, T_CONFIG_LOCAL, T_CONFIG_SCOPE_CONNECTION },       /* 0 */
-		{ "scgi.debug",               NULL, T_CONFIG_SHORT, T_CONFIG_SCOPE_CONNECTION },       /* 1 */
-		{ "scgi.protocol",            NULL, T_CONFIG_LOCAL, T_CONFIG_SCOPE_CONNECTION },       /* 2 */
-		{ "scgi.map-extensions",      NULL, T_CONFIG_ARRAY, T_CONFIG_SCOPE_CONNECTION },       /* 3 */
-		{ "scgi.balance",             NULL, T_CONFIG_LOCAL, T_CONFIG_SCOPE_CONNECTION },       /* 4 */
-		{ NULL,                       NULL, T_CONFIG_UNSET, T_CONFIG_SCOPE_UNSET }
-	};
+    plugin_data * const p = p_d;
+    if (!config_plugin_values_init(srv, p, cpk, "mod_scgi"))
+        return HANDLER_ERROR;
 
-	p->config_storage = calloc(srv->config_context->used, sizeof(plugin_config *));
-	force_assert(p->config_storage);
+    /* process and validate config directives
+     * (init i to 0 if global context; to 1 to skip empty global context) */
+    for (int i = !p->cvlist[0].v.u2[1]; i < p->nconfig; ++i) {
+        config_plugin_value_t *cpv = p->cvlist + p->cvlist[i].v.u2[0];
+        for (; -1 != cpv->k_id; ++cpv) {
+            switch (cpv->k_id) {
+              case 0:{/* scgi.server */
+                gw_plugin_config *gw = calloc(1, sizeof(gw_plugin_config));
+                force_assert(gw);
+                if (!gw_set_defaults_backend(srv, p, cpv->v.a, gw, 1,
+                                             cpk[cpv->k_id].k)) {
+                    gw_plugin_config_free(gw);
+                    return HANDLER_ERROR;
+                }
+                cpv->v.v = gw;
+                cpv->vtype = T_CONFIG_LOCAL;
+                break;
+              }
+              case 1: /* scgi.balance */
+                cpv->v.u = (unsigned int)gw_get_defaults_balance(srv, cpv->v.b);
+                break;
+              case 2: /* scgi.debug */
+                break;
+              case 3: /* scgi.map-extensions */
+                if (!array_is_kvstring(cpv->v.a)) {
+                    log_error(srv->errh, __FILE__, __LINE__,
+                      "unexpected value for %s; "
+                      "expected list of \"suffix\" => \"subst\"",
+                      cpk[cpv->k_id].k);
+                    return HANDLER_ERROR;
+                }
+                break;
+              case 4: /* scgi.protocol */
+                if (buffer_eq_slen(cpv->v.b, CONST_STR_LEN("scgi")))
+                    cpv->v.u = LI_PROTOCOL_SCGI;
+                else if (buffer_eq_slen(cpv->v.b, CONST_STR_LEN("uwsgi")))
+                    cpv->v.u = LI_PROTOCOL_UWSGI;
+                else {
+                    log_error(srv->errh, __FILE__, __LINE__,
+                      "unexpected type for key: %s"
+                      "expected \"scgi\" or \"uwsgi\"", cpk[cpv->k_id].k);
+                    return HANDLER_ERROR;
+                }
+                break;
+              default:/* should not happen */
+                break;
+            }
+        }
+    }
 
-	for (i = 0; i < srv->config_context->used; i++) {
-		data_config const* config = (data_config const*)srv->config_context->data[i];
-		plugin_config *s;
+    /* default is 0 */
+    /*p->defaults.balance = (unsigned int)gw_get_defaults_balance(srv, NULL);*/
+    /*p->defaults.proto   = LI_PROTOCOL_SCGI;*//*(default)*/
 
-		s = calloc(1, sizeof(plugin_config));
-		force_assert(s);
-		s->exts          = NULL;
-		s->exts_auth     = NULL;
-		s->exts_resp     = NULL;
-		s->debug         = 0;
-		s->proto         = LI_PROTOCOL_SCGI;
-		s->ext_mapping   = array_init();
+    /* initialize p->defaults from global config context */
+    if (p->nconfig > 0 && p->cvlist->v.u2[1]) {
+        const config_plugin_value_t *cpv = p->cvlist + p->cvlist->v.u2[0];
+        if (-1 != cpv->k_id)
+            mod_scgi_merge_config(&p->defaults, cpv);
+    }
 
-		cv[0].destination = s->exts; /* not used; T_CONFIG_LOCAL */
-		cv[1].destination = &(s->debug);
-		cv[2].destination = NULL;    /* not used; T_CONFIG_LOCAL */
-		cv[3].destination = s->ext_mapping;
-		cv[4].destination = NULL;    /* not used; T_CONFIG_LOCAL */
-
-		p->config_storage[i] = s;
-
-		if (0 != config_insert_values_global(srv, config->value, cv, i == 0 ? T_CONFIG_SCOPE_SERVER : T_CONFIG_SCOPE_CONNECTION)) {
-			return HANDLER_ERROR;
-		}
-
-		du = array_get_element_klen(config->value, CONST_STR_LEN("scgi.server"));
-		if (!gw_set_defaults_backend(srv, p, du, i, 1)) {
-			return HANDLER_ERROR;
-		}
-
-		du = array_get_element_klen(config->value, CONST_STR_LEN("scgi.balance"));
-		if (!gw_set_defaults_balance(srv, s, du)) {
-			return HANDLER_ERROR;
-		}
-
-		if (NULL != (du = array_get_element_klen(config->value, CONST_STR_LEN("scgi.protocol")))) {
-			const data_string *ds = (const data_string *)du;
-			if (du->type == TYPE_STRING
-			    && buffer_is_equal_string(&ds->value, CONST_STR_LEN("scgi"))) {
-				s->proto = LI_PROTOCOL_SCGI;
-			} else if (du->type == TYPE_STRING
-			           && buffer_is_equal_string(&ds->value, CONST_STR_LEN("uwsgi"))) {
-				s->proto = LI_PROTOCOL_UWSGI;
-			} else {
-				log_error_write(srv, __FILE__, __LINE__, "sss",
-						"unexpected type for key: ", "scgi.protocol", "expected \"scgi\" or \"uwsgi\"");
-
-				return HANDLER_ERROR;
-			}
-		}
-	}
-
-	return HANDLER_GO_ON;
+    return HANDLER_GO_ON;
 }
 
 static int scgi_env_add_scgi(void *venv, const char *key, size_t key_len, const char *val, size_t val_len) {
@@ -225,51 +286,6 @@ static handler_t scgi_create_env(server *srv, handler_ctx *hctx) {
 	return HANDLER_GO_ON;
 }
 
-#define PATCH(x) \
-	p->conf.x = s->x;
-static int scgi_patch_connection(server *srv, connection *con, plugin_data *p) {
-	size_t i, j;
-	plugin_config *s = p->config_storage[0];
-
-	PATCH(exts);
-	PATCH(exts_auth);
-	PATCH(exts_resp);
-	PATCH(proto);
-	PATCH(debug);
-	PATCH(balance);
-	PATCH(ext_mapping);
-
-	/* skip the first, the global context */
-	for (i = 1; i < srv->config_context->used; i++) {
-		if (!config_check_cond(con, i)) continue; /* condition not matched */
-
-		data_config *dc = (data_config *)srv->config_context->data[i];
-		s = p->config_storage[i];
-
-		/* merge config */
-		for (j = 0; j < dc->value->used; j++) {
-			data_unset *du = dc->value->data[j];
-
-			if (buffer_is_equal_string(&du->key, CONST_STR_LEN("scgi.server"))) {
-				PATCH(exts);
-				PATCH(exts_auth);
-				PATCH(exts_resp);
-			} else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("scgi.protocol"))) {
-				PATCH(proto);
-			} else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("scgi.balance"))) {
-				PATCH(balance);
-			} else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("scgi.debug"))) {
-				PATCH(debug);
-			} else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("scgi.map-extensions"))) {
-				PATCH(ext_mapping);
-			}
-		}
-	}
-
-	return 0;
-}
-#undef PATCH
-
 
 static handler_t scgi_check_extension(server *srv, connection *con, void *p_d, int uri_path_handler) {
 	plugin_data *p = p_d;
@@ -277,7 +293,7 @@ static handler_t scgi_check_extension(server *srv, connection *con, void *p_d, i
 
 	if (con->mode != DIRECT) return HANDLER_GO_ON;
 
-	scgi_patch_connection(srv, con, p);
+	mod_scgi_patch_config(con, p);
 	if (NULL == p->conf.exts) return HANDLER_GO_ON;
 
 	rc = gw_check_extension(srv, con, p, uri_path_handler, 0);

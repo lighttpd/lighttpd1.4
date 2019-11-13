@@ -1,7 +1,6 @@
 #include "first.h"
 
 #include <sys/types.h>
-#include <errno.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -37,58 +36,119 @@ typedef gw_handler_ctx   handler_ctx;
 #error "mismatched defines: (GW_FILTER != FCGI_FILTER)"
 #endif
 
-SETDEFAULTS_FUNC(mod_fastcgi_set_defaults) {
-	plugin_data *p = p_d;
-	const data_unset *du;
-	size_t i = 0;
-
-	config_values_t cv[] = {
-		{ "fastcgi.server",              NULL, T_CONFIG_LOCAL, T_CONFIG_SCOPE_CONNECTION },       /* 0 */
-		{ "fastcgi.debug",               NULL, T_CONFIG_INT  , T_CONFIG_SCOPE_CONNECTION },       /* 1 */
-		{ "fastcgi.map-extensions",      NULL, T_CONFIG_ARRAY, T_CONFIG_SCOPE_CONNECTION },       /* 2 */
-		{ "fastcgi.balance",             NULL, T_CONFIG_LOCAL, T_CONFIG_SCOPE_CONNECTION },       /* 3 */
-		{ NULL,                          NULL, T_CONFIG_UNSET, T_CONFIG_SCOPE_UNSET }
-	};
-
-	p->config_storage = calloc(srv->config_context->used, sizeof(plugin_config *));
-	force_assert(p->config_storage);
-
-	for (i = 0; i < srv->config_context->used; i++) {
-		data_config const* config = (data_config const*)srv->config_context->data[i];
-		plugin_config *s;
-
-		s = calloc(1, sizeof(plugin_config));
-		force_assert(s);
-		s->exts          = NULL;
-		s->exts_auth     = NULL;
-		s->exts_resp     = NULL;
-		s->debug         = 0;
-		s->ext_mapping   = array_init();
-
-		cv[0].destination = s->exts; /* not used; T_CONFIG_LOCAL */
-		cv[1].destination = &(s->debug);
-		cv[2].destination = s->ext_mapping;
-		cv[3].destination = NULL;    /* not used; T_CONFIG_LOCAL */
-
-		p->config_storage[i] = s;
-
-		if (0 != config_insert_values_global(srv, config->value, cv, i == 0 ? T_CONFIG_SCOPE_SERVER : T_CONFIG_SCOPE_CONNECTION)) {
-			return HANDLER_ERROR;
-		}
-
-		du = array_get_element_klen(config->value, CONST_STR_LEN("fastcgi.server"));
-		if (!gw_set_defaults_backend(srv, p, du, i, 0)) {
-			return HANDLER_ERROR;
-		}
-
-		du = array_get_element_klen(config->value, CONST_STR_LEN("fastcgi.balance"));
-		if (!gw_set_defaults_balance(srv, s, du)) {
-			return HANDLER_ERROR;
-		}
-	}
-
-	return HANDLER_GO_ON;
+static void mod_fastcgi_merge_config_cpv(plugin_config * const pconf, const config_plugin_value_t * const cpv) {
+    switch (cpv->k_id) { /* index into static config_plugin_keys_t cpk[] */
+      case 0: /* fastcgi.server */
+        if (cpv->vtype == T_CONFIG_LOCAL) {
+            gw_plugin_config * const gw = cpv->v.v;
+            pconf->exts      = gw->exts;
+            pconf->exts_auth = gw->exts_auth;
+            pconf->exts_resp = gw->exts_resp;
+        }
+        break;
+      case 1: /* fastcgi.balance */
+        /*if (cpv->vtype == T_CONFIG_LOCAL)*//*always true here for this param*/
+            pconf->balance = (int)cpv->v.u;
+        break;
+      case 2: /* fastcgi.debug */
+        pconf->debug = (int)cpv->v.u;
+        break;
+      case 3: /* fastcgi.map-extensions */
+        pconf->ext_mapping = cpv->v.a;
+        break;
+      default:/* should not happen */
+        return;
+    }
 }
+
+static void mod_fastcgi_merge_config(plugin_config * const pconf, const config_plugin_value_t *cpv) {
+    do {
+        mod_fastcgi_merge_config_cpv(pconf, cpv);
+    } while ((++cpv)->k_id != -1);
+}
+
+static void mod_fastcgi_patch_config(connection * const con, plugin_data * const p) {
+    memcpy(&p->conf, &p->defaults, sizeof(plugin_config));
+    for (int i = 1, used = p->nconfig; i < used; ++i) {
+        if (config_check_cond(con, (uint32_t)p->cvlist[i].k_id))
+            mod_fastcgi_merge_config(&p->conf,p->cvlist + p->cvlist[i].v.u2[0]);
+    }
+}
+
+SETDEFAULTS_FUNC(mod_fastcgi_set_defaults) {
+    static const config_plugin_keys_t cpk[] = {
+      { CONST_STR_LEN("fastcgi.server"),
+        T_CONFIG_ARRAY,
+        T_CONFIG_SCOPE_CONNECTION }
+     ,{ CONST_STR_LEN("fastcgi.balance"),
+        T_CONFIG_STRING,
+        T_CONFIG_SCOPE_CONNECTION }
+     ,{ CONST_STR_LEN("fastcgi.debug"),
+        T_CONFIG_INT,
+        T_CONFIG_SCOPE_CONNECTION }
+     ,{ CONST_STR_LEN("fastcgi.map-extensions"),
+        T_CONFIG_ARRAY,
+        T_CONFIG_SCOPE_CONNECTION }
+     ,{ NULL, 0,
+        T_CONFIG_UNSET,
+        T_CONFIG_SCOPE_UNSET }
+    };
+
+    plugin_data * const p = p_d;
+    if (!config_plugin_values_init(srv, p, cpk, "mod_fastcgi"))
+        return HANDLER_ERROR;
+
+    /* process and validate config directives
+     * (init i to 0 if global context; to 1 to skip empty global context) */
+    for (int i = !p->cvlist[0].v.u2[1]; i < p->nconfig; ++i) {
+        config_plugin_value_t *cpv = p->cvlist + p->cvlist[i].v.u2[0];
+        for (; -1 != cpv->k_id; ++cpv) {
+            switch (cpv->k_id) {
+              case 0:{/* fastcgi.server */
+                gw_plugin_config *gw = calloc(1, sizeof(gw_plugin_config));
+                force_assert(gw);
+                if (!gw_set_defaults_backend(srv, p, cpv->v.a, gw, 0,
+                                             cpk[cpv->k_id].k)) {
+                    gw_plugin_config_free(gw);
+                    return HANDLER_ERROR;
+                }
+                cpv->v.v = gw;
+                cpv->vtype = T_CONFIG_LOCAL;
+                break;
+              }
+              case 1: /* fastcgi.balance */
+                cpv->v.u = (unsigned int)gw_get_defaults_balance(srv, cpv->v.b);
+                break;
+              case 2: /* fastcgi.debug */
+                break;
+              case 3: /* fastcgi.map-extensions */
+                if (!array_is_kvstring(cpv->v.a)) {
+                    log_error(srv->errh, __FILE__, __LINE__,
+                      "unexpected value for %s; "
+                      "expected list of \"suffix\" => \"subst\"",
+                      cpk[cpv->k_id].k);
+                    return HANDLER_ERROR;
+                }
+                break;
+              default:/* should not happen */
+                break;
+            }
+        }
+    }
+
+    /* default is 0 */
+    /*p->defaults.balance = (unsigned int)gw_get_defaults_balance(srv, NULL);*/
+
+    /* initialize p->defaults from global config context */
+    if (p->nconfig > 0 && p->cvlist->v.u2[1]) {
+        const config_plugin_value_t *cpv = p->cvlist + p->cvlist->v.u2[0];
+        if (-1 != cpv->k_id)
+            mod_fastcgi_merge_config(&p->defaults, cpv);
+    }
+
+    return HANDLER_GO_ON;
+}
+
 
 static int fcgi_env_add(void *venv, const char *key, size_t key_len, const char *val, size_t val_len) {
 	buffer *env = venv;
@@ -437,55 +497,13 @@ static handler_t fcgi_recv_parse(server *srv, connection *con, struct http_respo
 	return 0 == fin ? HANDLER_GO_ON : HANDLER_FINISHED;
 }
 
-#define PATCH(x) \
-	p->conf.x = s->x;
-static int fcgi_patch_connection(server *srv, connection *con, plugin_data *p) {
-	size_t i, j;
-	plugin_config *s = p->config_storage[0];
-
-	PATCH(exts);
-	PATCH(exts_auth);
-	PATCH(exts_resp);
-	PATCH(debug);
-	PATCH(balance);
-	PATCH(ext_mapping);
-
-	/* skip the first, the global context */
-	for (i = 1; i < srv->config_context->used; i++) {
-		if (!config_check_cond(con, i)) continue; /* condition not matched */
-
-		data_config *dc = (data_config *)srv->config_context->data[i];
-		s = p->config_storage[i];
-
-		/* merge config */
-		for (j = 0; j < dc->value->used; j++) {
-			data_unset *du = dc->value->data[j];
-
-			if (buffer_is_equal_string(&du->key, CONST_STR_LEN("fastcgi.server"))) {
-				PATCH(exts);
-				PATCH(exts_auth);
-				PATCH(exts_resp);
-			} else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("fastcgi.debug"))) {
-				PATCH(debug);
-			} else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("fastcgi.balance"))) {
-				PATCH(balance);
-			} else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("fastcgi.map-extensions"))) {
-				PATCH(ext_mapping);
-			}
-		}
-	}
-
-	return 0;
-}
-#undef PATCH
-
 static handler_t fcgi_check_extension(server *srv, connection *con, void *p_d, int uri_path_handler) {
 	plugin_data *p = p_d;
 	handler_t rc;
 
 	if (con->mode != DIRECT) return HANDLER_GO_ON;
 
-	fcgi_patch_connection(srv, con, p);
+	mod_fastcgi_patch_config(con, p);
 	if (NULL == p->conf.exts) return HANDLER_GO_ON;
 
 	rc = gw_check_extension(srv, con, p, uri_path_handler, 0);

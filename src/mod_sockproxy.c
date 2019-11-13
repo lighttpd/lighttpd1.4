@@ -20,64 +20,112 @@ typedef gw_handler_ctx   handler_ctx;
  *
  */
 
+static void mod_sockproxy_merge_config_cpv(plugin_config * const pconf, const config_plugin_value_t * const cpv) {
+    switch (cpv->k_id) { /* index into static config_plugin_keys_t cpk[] */
+      case 0: /* sockproxy.server */
+        if (cpv->vtype == T_CONFIG_LOCAL) {
+            gw_plugin_config * const gw = cpv->v.v;
+            pconf->exts      = gw->exts;
+            pconf->exts_auth = gw->exts_auth;
+            pconf->exts_resp = gw->exts_resp;
+        }
+        break;
+      case 1: /* sockproxy.balance */
+        /*if (cpv->vtype == T_CONFIG_LOCAL)*//*always true here for this param*/
+            pconf->balance = (int)cpv->v.u;
+        break;
+      case 2: /* sockproxy.debug */
+        pconf->debug = (int)cpv->v.u;
+        break;
+      default:/* should not happen */
+        return;
+    }
+}
+
+static void mod_sockproxy_merge_config(plugin_config * const pconf, const config_plugin_value_t *cpv) {
+    do {
+        mod_sockproxy_merge_config_cpv(pconf, cpv);
+    } while ((++cpv)->k_id != -1);
+}
+
+static void mod_sockproxy_patch_config(connection * const con, plugin_data * const p) {
+    memcpy(&p->conf, &p->defaults, sizeof(plugin_config));
+    for (int i = 1, used = p->nconfig; i < used; ++i) {
+        if (config_check_cond(con, (uint32_t)p->cvlist[i].k_id))
+            mod_sockproxy_merge_config(&p->conf,p->cvlist+p->cvlist[i].v.u2[0]);
+    }
+}
+
 SETDEFAULTS_FUNC(mod_sockproxy_set_defaults) {
-	plugin_data *p = p_d;
-	const data_unset *du;
-	size_t i = 0;
+    static const config_plugin_keys_t cpk[] = {
+      { CONST_STR_LEN("sockproxy.server"),
+        T_CONFIG_ARRAY,
+        T_CONFIG_SCOPE_CONNECTION }
+     ,{ CONST_STR_LEN("sockproxy.balance"),
+        T_CONFIG_STRING,
+        T_CONFIG_SCOPE_CONNECTION }
+     ,{ CONST_STR_LEN("sockproxy.debug"),
+        T_CONFIG_INT,
+        T_CONFIG_SCOPE_CONNECTION }
+     ,{ NULL, 0,
+        T_CONFIG_UNSET,
+        T_CONFIG_SCOPE_UNSET }
+    };
 
-	config_values_t cv[] = {
-		{ "sockproxy.server",          NULL, T_CONFIG_LOCAL, T_CONFIG_SCOPE_CONNECTION },       /* 0 */
-		{ "sockproxy.debug",           NULL, T_CONFIG_SHORT, T_CONFIG_SCOPE_CONNECTION },       /* 1 */
-		{ "sockproxy.balance",         NULL, T_CONFIG_LOCAL, T_CONFIG_SCOPE_CONNECTION },       /* 2 */
-		{ NULL,                        NULL, T_CONFIG_UNSET, T_CONFIG_SCOPE_UNSET }
-	};
+    plugin_data * const p = p_d;
+    if (!config_plugin_values_init(srv, p, cpk, "mod_sockproxy"))
+        return HANDLER_ERROR;
 
-	p->config_storage = calloc(srv->config_context->used, sizeof(plugin_config *));
-	force_assert(p->config_storage);
+    /* process and validate config directives
+     * (init i to 0 if global context; to 1 to skip empty global context) */
+    for (int i = !p->cvlist[0].v.u2[1]; i < p->nconfig; ++i) {
+        config_plugin_value_t *cpv = p->cvlist + p->cvlist[i].v.u2[0];
+        gw_plugin_config *gw = NULL;
+        for (; -1 != cpv->k_id; ++cpv) {
+            switch (cpv->k_id) {
+              case 0: /* sockproxy.server */
+                gw = calloc(1, sizeof(gw_plugin_config));
+                force_assert(gw);
+                if (!gw_set_defaults_backend(srv, p, cpv->v.a, gw, 0,
+                                             cpk[cpv->k_id].k)) {
+                    gw_plugin_config_free(gw);
+                    return HANDLER_ERROR;
+                }
+                cpv->v.v = gw;
+                cpv->vtype = T_CONFIG_LOCAL;
+                break;
+              case 1: /* sockproxy.balance */
+                cpv->v.u = (unsigned int)gw_get_defaults_balance(srv, cpv->v.b);
+                break;
+              case 2: /* sockproxy.debug */
+                break;
+              default:/* should not happen */
+                break;
+            }
+        }
 
-	for (i = 0; i < srv->config_context->used; i++) {
-		data_config const* config = (data_config const*)srv->config_context->data[i];
-		plugin_config *s;
+        /* disable check-local for all exts (default enabled) */
+        if (gw && gw->exts) { /*(check after gw_set_defaults_backend())*/
+            for (uint32_t j = 0; j < gw->exts->used; ++j) {
+                gw_extension *ex = gw->exts->exts[j];
+                for (uint32_t n = 0; n < ex->used; ++n) {
+                    ex->hosts[n]->check_local = 0;
+                }
+            }
+        }
+    }
 
-		s = calloc(1, sizeof(plugin_config));
-		force_assert(s);
-		s->exts          = NULL;
-		s->exts_auth     = NULL;
-		s->exts_resp     = NULL;
-		s->debug         = 0;
+    /* default is 0 */
+    /*p->defaults.balance = (unsigned int)gw_get_defaults_balance(srv, NULL);*/
 
-		cv[0].destination = NULL; /* T_CONFIG_LOCAL */
-		cv[1].destination = &(s->debug);
-		cv[2].destination = NULL; /* T_CONFIG_LOCAL */
+    /* initialize p->defaults from global config context */
+    if (p->nconfig > 0 && p->cvlist->v.u2[1]) {
+        const config_plugin_value_t *cpv = p->cvlist + p->cvlist->v.u2[0];
+        if (-1 != cpv->k_id)
+            mod_sockproxy_merge_config(&p->defaults, cpv);
+    }
 
-		p->config_storage[i] = s;
-
-		if (0 != config_insert_values_global(srv, config->value, cv, i == 0 ? T_CONFIG_SCOPE_SERVER : T_CONFIG_SCOPE_CONNECTION)) {
-			return HANDLER_ERROR;
-		}
-
-		du = array_get_element_klen(config->value, CONST_STR_LEN("sockproxy.server"));
-		if (!gw_set_defaults_backend(srv, (gw_plugin_data *)p, du, i, 0)) {
-			return HANDLER_ERROR;
-		}
-
-		du = array_get_element_klen(config->value, CONST_STR_LEN("sockproxy.balance"));
-		if (!gw_set_defaults_balance(srv, s, du)) {
-			return HANDLER_ERROR;
-		}
-
-		/* disable check-local for all exts (default enabled) */
-		if (s->exts) { /*(check after gw_set_defaults_backend())*/
-			for (size_t j = 0; j < s->exts->used; ++j) {
-				gw_extension *ex = s->exts->exts[j];
-				for (size_t n = 0; n < ex->used; ++n) {
-					ex->hosts[n]->check_local = 0;
-				}
-			}
-		}
-	}
-
-	return HANDLER_GO_ON;
+    return HANDLER_GO_ON;
 }
 
 
@@ -92,53 +140,13 @@ static handler_t sockproxy_create_env_connect(server *srv, handler_ctx *hctx) {
 }
 
 
-#define PATCH(x) \
-	p->conf.x = s->x;
-static int mod_sockproxy_patch_connection(server *srv, connection *con, plugin_data *p) {
-	size_t i, j;
-	plugin_config *s = p->config_storage[0];
-
-	PATCH(exts);
-	PATCH(exts_auth);
-	PATCH(exts_resp);
-	PATCH(debug);
-	PATCH(ext_mapping);
-	PATCH(balance);
-
-	/* skip the first, the global context */
-	for (i = 1; i < srv->config_context->used; i++) {
-		if (!config_check_cond(con, i)) continue; /* condition not matched */
-
-		data_config *dc = (data_config *)srv->config_context->data[i];
-		s = p->config_storage[i];
-
-		/* merge config */
-		for (j = 0; j < dc->value->used; j++) {
-			data_unset *du = dc->value->data[j];
-
-			if (buffer_is_equal_string(&du->key, CONST_STR_LEN("sockproxy.server"))) {
-				PATCH(exts);
-				PATCH(exts_auth);
-				PATCH(exts_resp);
-			} else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("sockproxy.debug"))) {
-				PATCH(debug);
-			} else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("sockproxy.balance"))) {
-				PATCH(balance);
-			}
-		}
-	}
-
-	return 0;
-}
-#undef PATCH
-
 static handler_t mod_sockproxy_connection_accept(server *srv, connection *con, void *p_d) {
 	plugin_data *p = p_d;
 	handler_t rc;
 
 	if (con->mode != DIRECT) return HANDLER_GO_ON;
 
-	mod_sockproxy_patch_connection(srv, con, p);
+	mod_sockproxy_patch_config(con, p);
 	if (NULL == p->conf.exts) return HANDLER_GO_ON;
 
 	/*(fake con->uri.path for matching purposes in gw_check_extension())*/

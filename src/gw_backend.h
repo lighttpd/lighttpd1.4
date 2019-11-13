@@ -12,14 +12,14 @@
 typedef struct {
     char **ptr;
 
-    size_t size;
-    size_t used;
+    uint32_t size;
+    uint32_t used;
 } char_array;
 
 typedef struct gw_proc {
-    size_t id; /* id will be between 1 and max_procs */
+    uint32_t id; /* id will be between 1 and max_procs */
+    unsigned short port;  /* config.port + pno */
     buffer *unixsocket; /* config.socket + "-" + id */
-    unsigned port;  /* config.port + pno */
     socklen_t saddrlen;
     struct sockaddr *saddr;
 
@@ -28,13 +28,11 @@ typedef struct gw_proc {
 
     pid_t pid;   /* PID of the spawned process (0 if not spawned locally) */
 
+    uint32_t load; /* number of requests waiting on this process */
 
-    size_t load; /* number of requests waiting on this process */
-
-    time_t last_used; /* see idle_timeout */
-    size_t requests;  /* see max_requests */
     struct gw_proc *prev, *next; /* see first */
 
+    time_t last_used; /* see idle_timeout */
     time_t disabled_until; /* proc disabled until given time */
 
     int is_local;
@@ -74,8 +72,8 @@ typedef struct {
 
     unsigned short min_procs;
     unsigned short max_procs;
-    size_t num_procs;    /* how many procs are started */
-    size_t active_procs; /* how many procs in state PROC_STATE_RUNNING */
+    uint32_t num_procs;    /* how many procs are started */
+    uint32_t active_procs; /* how many procs in state PROC_STATE_RUNNING */
 
     unsigned short max_load_per_proc;
 
@@ -103,7 +101,7 @@ typedef struct {
      * process after a number of handled requests.
      *
      */
-    size_t max_requests_per_proc;
+    uint32_t max_requests_per_proc;
 
 
     /* config */
@@ -197,9 +195,9 @@ typedef struct {
     unsigned short xsendfile_allow;
     array *xsendfile_docroot;
 
-    ssize_t load;
+    int32_t load;
 
-    size_t max_id; /* corresponds most of the time to num_procs */
+    uint32_t max_id; /* corresponds most of the time to num_procs */
 
     buffer *strip_request_uri;
 
@@ -242,15 +240,15 @@ typedef struct {
 
     gw_host **hosts;
 
-    size_t used;
-    size_t size;
+    uint32_t used;
+    uint32_t size;
 } gw_extension;
 
 typedef struct {
     gw_extension **exts;
 
-    size_t used;
-    size_t size;
+    uint32_t used;
+    uint32_t size;
 } gw_exts;
 
 
@@ -265,9 +263,7 @@ typedef struct gw_plugin_config {
     gw_exts *exts;
     gw_exts *exts_auth;
     gw_exts *exts_resp;
-
-    array *ext_mapping;
-
+    const array *ext_mapping;
     int balance;
     int proto;
     int debug;
@@ -276,10 +272,9 @@ typedef struct gw_plugin_config {
 /* generic plugin data, shared between all connections */
 typedef struct gw_plugin_data {
     PLUGIN_DATA;
-    gw_plugin_config **config_storage;
-
+    pid_t srv_pid; /* must precede gw_plugin_config for mods w/ larger struct */
     gw_plugin_config conf; /* used only as long as no gw_handler_ctx is setup */
-    pid_t srv_pid;
+    gw_plugin_config defaults;/*(must not be used by gw_backend.c: lg struct) */
 } gw_plugin_data;
 
 /* connection specific data */
@@ -335,8 +330,8 @@ typedef struct gw_handler_ctx {
 void * gw_init(void);
 void gw_plugin_config_free(gw_plugin_config *s);
 handler_t gw_free(server *srv, void *p_d);
-int gw_set_defaults_backend(server *srv, gw_plugin_data *p, const data_unset *du, size_t i, int sh_exec);
-int gw_set_defaults_balance(server *srv, gw_plugin_config *s, const data_unset *du);
+int gw_set_defaults_backend(server *srv, gw_plugin_data *p, const array *a, gw_plugin_config *s, int sh_exec, const char *cpkkey);
+int gw_get_defaults_balance(server *srv, const buffer *b);
 handler_t gw_check_extension(server *srv, connection *con, gw_plugin_data *p, int uri_path_handler, size_t hctx_sz);
 handler_t gw_connection_reset(server *srv, connection *con, void *p_d);
 handler_t gw_handle_subrequest(server *srv, connection *con, void *p_d);

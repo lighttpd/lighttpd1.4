@@ -158,7 +158,7 @@ static void gw_host_free(gw_host *h) {
     gw_proc_free(h->first);
     gw_proc_free(h->unused_procs);
 
-    for (size_t i = 0; i < h->args.used; ++i) free(h->args.ptr[i]);
+    for (uint32_t i = 0; i < h->args.used; ++i) free(h->args.ptr[i]);
     free(h->args.ptr);
     free(h);
 }
@@ -171,9 +171,9 @@ static gw_exts *gw_extensions_init(void) {
 
 static void gw_extensions_free(gw_exts *f) {
     if (!f) return;
-    for (size_t i = 0; i < f->used; ++i) {
+    for (uint32_t i = 0; i < f->used; ++i) {
         gw_extension *fe = f->exts[i];
-        for (size_t j = 0; j < fe->used; ++j) {
+        for (uint32_t j = 0; j < fe->used; ++j) {
             gw_host_free(fe->hosts[j]);
         }
         buffer_free(fe->key);
@@ -186,7 +186,7 @@ static void gw_extensions_free(gw_exts *f) {
 
 static int gw_extension_insert(gw_exts *ext, buffer *key, gw_host *fh) {
     gw_extension *fe = NULL;
-    for (size_t i = 0; i < ext->used; ++i) {
+    for (uint32_t i = 0; i < ext->used; ++i) {
         if (buffer_is_equal(key, ext->exts[i]->key)) {
             fe = ext->exts[i];
             break;
@@ -423,7 +423,7 @@ static int env_add(char_array *env, const char *key, size_t key_len, const char 
     dst[key_len] = '=';
     memcpy(dst + key_len + 1, val, val_len + 1); /* add the \0 from the value */
 
-    for (size_t i = 0; i < env->used; ++i) {
+    for (uint32_t i = 0; i < env->used; ++i) {
         if (0 == strncmp(dst, env->ptr[i], key_len + 1)) {
             free(env->ptr[i]);
             env->ptr[i] = dst;
@@ -476,7 +476,7 @@ static int gw_spawn_connection(server *srv, gw_host *host, gw_proc *proc, int de
     if (-1 == status) {
         /* server is not up, spawn it  */
         char_array env;
-        size_t i;
+        uint32_t i;
         int dfd = -1;
 
         /* reopen socket */
@@ -701,13 +701,28 @@ static void gw_proc_kill(server *srv, gw_host *host, gw_proc *proc) {
     --host->num_procs;
 }
 
-static gw_host * unixsocket_is_dup(gw_plugin_data *p, size_t used, buffer *unixsocket) {
-    for (size_t i = 0; i < used; ++i) {
-        gw_exts *exts = p->config_storage[i]->exts;
-        if (NULL == exts) continue;
-        for (size_t j = 0; j < exts->used; ++j) {
+static gw_host * unixsocket_is_dup(gw_plugin_data *p, buffer *unixsocket) {
+    if (NULL == p->cvlist) return NULL;
+    /* (init i to 0 if global context; to 1 to skip empty global context) */
+    for (int i = !p->cvlist[0].v.u2[1], used = p->nconfig; i < used; ++i) {
+        config_plugin_value_t *cpv = p->cvlist + p->cvlist[i].v.u2[0];
+        gw_plugin_config *conf = NULL;
+        for (; -1 != cpv->k_id; ++cpv) {
+            switch (cpv->k_id) {
+              case 0: /* xxxxx.server */
+                if (cpv->vtype == T_CONFIG_LOCAL) conf = cpv->v.v;
+                break;
+              default:
+                break;
+            }
+        }
+
+        if (NULL == conf || NULL == conf->exts) continue;
+
+        gw_exts *exts = conf->exts;
+        for (uint32_t j = 0; j < exts->used; ++j) {
             gw_extension *ex = exts->exts[j];
-            for (size_t n = 0; n < ex->used; ++n) {
+            for (uint32_t n = 0; n < ex->used; ++n) {
                 gw_host *host = ex->hosts[n];
                 if (!buffer_string_is_empty(host->unixsocket)
                     && buffer_is_equal(host->unixsocket, unixsocket)
@@ -778,7 +793,7 @@ static gw_host * gw_host_get(server *srv, connection *con, gw_extension *extensi
     unsigned long last_max = ULONG_MAX;
     int max_usage = INT_MAX;
     int ndx = -1;
-    size_t k;
+    uint32_t k;
 
     if (extension->used <= 1) {
         if (1 == extension->used && extension->hosts[0]->active_procs > 0) {
@@ -1122,9 +1137,9 @@ void * gw_init(void) {
 void gw_plugin_config_free(gw_plugin_config *s) {
     gw_exts *exts = s->exts;
     if (exts) {
-        for (size_t j = 0; j < exts->used; ++j) {
+        for (uint32_t j = 0; j < exts->used; ++j) {
             gw_extension *ex = exts->exts[j];
-            for (size_t n = 0; n < ex->used; ++n) {
+            for (uint32_t n = 0; n < ex->used; ++n) {
                 gw_proc *proc;
                 gw_host *host = ex->hosts[n];
 
@@ -1155,40 +1170,46 @@ void gw_plugin_config_free(gw_plugin_config *s) {
         gw_extensions_free(s->exts_auth);
         gw_extensions_free(s->exts_resp);
     }
-    array_free(s->ext_mapping);
     free(s);
 }
 
 handler_t gw_free(server *srv, void *p_d) {
-    gw_plugin_data *p = p_d;
-    if (p->config_storage) {
-        for (size_t i = 0; i < srv->config_context->used; ++i) {
-            gw_plugin_config *s = p->config_storage[i];
-            if (NULL == s) continue;
-            gw_plugin_config_free(s);
+    gw_plugin_data * const p = p_d;
+    if (!p) return HANDLER_GO_ON;
+    UNUSED(srv);
+    if (NULL == p->cvlist) { free(p); return HANDLER_GO_ON; }
+    /* (init i to 0 if global context; to 1 to skip empty global context) */
+    for (int i = !p->cvlist[0].v.u2[1], used = p->nconfig; i < used; ++i) {
+        config_plugin_value_t *cpv = p->cvlist + p->cvlist[i].v.u2[0];
+        for (; -1 != cpv->k_id; ++cpv) {
+            switch (cpv->k_id) {
+              case 0: /* xxxxx.server */
+                if (cpv->vtype == T_CONFIG_LOCAL)
+                    gw_plugin_config_free(cpv->v.v);
+                break;
+              default:
+                break;
+            }
         }
-        free(p->config_storage);
     }
+    free(p->cvlist);
     free(p);
     return HANDLER_GO_ON;
 }
 
-int gw_set_defaults_backend(server *srv, gw_plugin_data *p, const data_unset *du, size_t i, int sh_exec) {
+int gw_set_defaults_backend(server *srv, gw_plugin_data *p, const array *a, gw_plugin_config *s, int sh_exec, const char *cpkkey) {
     /* per-module plugin_config MUST have common "base class" gw_plugin_config*/
     /* per-module plugin_data MUST have pointer-compatible common "base class"
      * with gw_plugin_data (stemming from gw_plugin_config compatibility) */
 
-    const data_array *da = (const data_array *)du;
-    gw_plugin_config *s = p->config_storage[i];
     buffer *gw_mode;
     gw_host *host = NULL;
 
-    if (NULL == da) return 1;
-
-    if (da->type != TYPE_ARRAY || !array_is_kvarray(&da->value)) {
-        log_error_write(srv, __FILE__, __LINE__, "s",
-          "unexpected value for xxxxx.server; expected "
-          "( \"ext\" => ( \"backend-label\" => ( \"key\" => \"value\" )))");
+    if (!array_is_kvarray(a)) {
+        log_error(srv->errh, __FILE__, __LINE__,
+          "unexpected value for %s; expected "
+          "( \"ext\" => ( \"backend-label\" => ( \"key\" => \"value\" )))",
+          cpkkey);
         return 0;
     }
 
@@ -1206,8 +1227,8 @@ int gw_set_defaults_backend(server *srv, gw_plugin_data *p, const data_unset *du
      *               "<ext>" => ( ... ) )
      */
 
-    for (size_t j = 0; j < da->value.used; ++j) {
-        data_array *da_ext = (data_array *)da->value.data[j];
+    for (uint32_t j = 0; j < a->used; ++j) {
+        data_array *da_ext = (data_array *)a->data[j];
 
         /*
          * da_ext->key == name of the extension
@@ -1221,7 +1242,7 @@ int gw_set_defaults_backend(server *srv, gw_plugin_data *p, const data_unset *du
          *               "<ext>" => ... )
          */
 
-        for (size_t n = 0; n < da_ext->value.used; ++n) {
+        for (uint32_t n = 0; n < da_ext->value.used; ++n) {
             data_array *da_host = (data_array *)da_ext->value.data[n];
 
             config_values_t fcv[] = {
@@ -1231,7 +1252,7 @@ int gw_set_defaults_backend(server *srv, gw_plugin_data *p, const data_unset *du
                 { "socket",            NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_CONNECTION },       /* 3 */
                 { "bin-path",          NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_CONNECTION },       /* 4 */
 
-                { "check-local",       NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION },      /* 5 */
+                { "check-local",       NULL, T_CONFIG_BOOL, T_CONFIG_SCOPE_CONNECTION },         /* 5 */
                 { "port",              NULL, T_CONFIG_SHORT, T_CONFIG_SCOPE_CONNECTION },        /* 6 */
                 { "min-procs",         NULL, T_CONFIG_SHORT, T_CONFIG_SCOPE_CONNECTION },        /* 7 */
                 { "max-procs",         NULL, T_CONFIG_SHORT, T_CONFIG_SCOPE_CONNECTION },        /* 8 */
@@ -1242,15 +1263,15 @@ int gw_set_defaults_backend(server *srv, gw_plugin_data *p, const data_unset *du
                 { "bin-environment",   NULL, T_CONFIG_ARRAY, T_CONFIG_SCOPE_CONNECTION },        /* 12 */
                 { "bin-copy-environment", NULL, T_CONFIG_ARRAY, T_CONFIG_SCOPE_CONNECTION },     /* 13 */
 
-                { "broken-scriptfilename", NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION },  /* 14 */
-                { "allow-x-send-file",  NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION },     /* 15 */
+                { "broken-scriptfilename", NULL, T_CONFIG_BOOL, T_CONFIG_SCOPE_CONNECTION },     /* 14 */
+                { "allow-x-send-file",  NULL, T_CONFIG_BOOL, T_CONFIG_SCOPE_CONNECTION },        /* 15 */
                 { "strip-request-uri",  NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_CONNECTION },      /* 16 */
                 { "kill-signal",        NULL, T_CONFIG_SHORT, T_CONFIG_SCOPE_CONNECTION },       /* 17 */
-                { "fix-root-scriptname",   NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION },  /* 18 */
+                { "fix-root-scriptname",   NULL, T_CONFIG_BOOL, T_CONFIG_SCOPE_CONNECTION },     /* 18 */
                 { "listen-backlog",    NULL, T_CONFIG_INT,   T_CONFIG_SCOPE_CONNECTION },        /* 19 */
-                { "x-sendfile",        NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION },      /* 20 */
+                { "x-sendfile",        NULL, T_CONFIG_BOOL, T_CONFIG_SCOPE_CONNECTION },         /* 20 */
                 { "x-sendfile-docroot",NULL, T_CONFIG_ARRAY,  T_CONFIG_SCOPE_CONNECTION },       /* 21 */
-                { "tcp-fin-propagate", NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION },      /* 22 */
+                { "tcp-fin-propagate", NULL, T_CONFIG_BOOL, T_CONFIG_SCOPE_CONNECTION },         /* 22 */
 
                 { NULL,                NULL, T_CONFIG_UNSET, T_CONFIG_SCOPE_UNSET }
             };
@@ -1312,7 +1333,7 @@ int gw_set_defaults_backend(server *srv, gw_plugin_data *p, const data_unset *du
                 goto error;
             }
 
-            for (size_t m = 0; m < da_host->value.used; ++m) {
+            for (uint32_t m = 0; m < da_host->value.used; ++m) {
                 if (NULL != strchr(da_host->value.data[m]->key.ptr, '_')) {
                     log_error_write(srv, __FILE__, __LINE__, "sb",
                       "incorrect directive contains underscore ('_') instead of dash ('-'):",
@@ -1322,9 +1343,9 @@ int gw_set_defaults_backend(server *srv, gw_plugin_data *p, const data_unset *du
 
             if ((!buffer_string_is_empty(host->host) || host->port)
                 && !buffer_string_is_empty(host->unixsocket)) {
-                log_error_write(srv, __FILE__, __LINE__, "sbsbsbs",
+                log_error_write(srv, __FILE__, __LINE__, "sssbsbs",
                   "either host/port or socket have to be set in:",
-                  &da->key, "= (",
+                  cpkkey, "= (",
                   &da_ext->key, " => (",
                   &da_host->key, " ( ...");
 
@@ -1341,9 +1362,9 @@ int gw_set_defaults_backend(server *srv, gw_plugin_data *p, const data_unset *du
                 struct sockaddr_un un;
 
                 if (buffer_string_length(host->unixsocket) + 1 > sizeof(un.sun_path) - 2) {
-                    log_error_write(srv, __FILE__, __LINE__, "sbsbsbs",
+                    log_error_write(srv, __FILE__, __LINE__, "sssbsbs",
                             "unixsocket is too long in:",
-                            &da->key, "= (",
+                            cpkkey, "= (",
                             &da_ext->key, " => (",
                             &da_host->key, " ( ...");
 
@@ -1351,7 +1372,7 @@ int gw_set_defaults_backend(server *srv, gw_plugin_data *p, const data_unset *du
                 }
 
                 if (!buffer_string_is_empty(host->bin_path)) {
-                    gw_host *duplicate = unixsocket_is_dup(p, i+1, host->unixsocket);
+                    gw_host *duplicate = unixsocket_is_dup(p, host->unixsocket);
                     if (NULL != duplicate) {
                         if (!buffer_is_equal(host->bin_path, duplicate->bin_path)) {
                             log_error_write(srv, __FILE__, __LINE__, "sb",
@@ -1371,9 +1392,9 @@ int gw_set_defaults_backend(server *srv, gw_plugin_data *p, const data_unset *du
 
                 if (buffer_string_is_empty(host->host) &&
                     buffer_string_is_empty(host->bin_path)) {
-                    log_error_write(srv, __FILE__, __LINE__, "sbsbsbs",
+                    log_error_write(srv, __FILE__, __LINE__, "sssbsbs",
                             "host or bin-path have to be set in:",
-                            &da->key, "= (",
+                            cpkkey, "= (",
                             &da_ext->key, " => (",
                             &da_host->key, " ( ...");
 
@@ -1410,7 +1431,7 @@ int gw_set_defaults_backend(server *srv, gw_plugin_data *p, const data_unset *du
                     /*(preserve prior behavior for SCGI exec of command)*/
                     /*(admin should really prefer to put
                      * any complex command into a script)*/
-                    for (size_t m = 0; m < host->args.used; ++m)
+                    for (uint32_t m = 0; m < host->args.used; ++m)
                         free(host->args.ptr[m]);
                     free(host->args.ptr);
 
@@ -1457,7 +1478,7 @@ int gw_set_defaults_backend(server *srv, gw_plugin_data *p, const data_unset *du
                                     "\n\tmax-procs:", host->max_procs);
                 }
 
-                for (size_t pno = 0; pno < host->min_procs; ++pno) {
+                for (uint32_t pno = 0; pno < host->min_procs; ++pno) {
                     gw_proc *proc = gw_proc_init();
                     proc->id = host->num_procs++;
                     host->max_id++;
@@ -1536,7 +1557,7 @@ int gw_set_defaults_backend(server *srv, gw_plugin_data *p, const data_unset *du
             }
 
             if (host->xsendfile_docroot->used) {
-                size_t k;
+                uint32_t k;
                 for (k = 0; k < host->xsendfile_docroot->used; ++k) {
                     data_string *ds = (data_string *)host->xsendfile_docroot->data[k];
                     if (ds->type != TYPE_STRING) {
@@ -1590,38 +1611,27 @@ error:
     return 0;
 }
 
-int gw_set_defaults_balance(server *srv, gw_plugin_config *s, const data_unset *du) {
-    const buffer *b;
-    if (NULL == du) {
-        b = NULL;
-    } else if (du->type == TYPE_STRING) {
-        b = &((const data_string *)du)->value;
-    } else {
-        log_error_write(srv, __FILE__, __LINE__, "s",
-                        "unexpected type for xxxxx.balance; expected string");
-        return 0;
-    }
-    if (buffer_string_is_empty(b)) {
-        s->balance = GW_BALANCE_LEAST_CONNECTION;
-    } else if (buffer_is_equal_string(b, CONST_STR_LEN("fair"))) {
-        s->balance = GW_BALANCE_LEAST_CONNECTION;
-    } else if (buffer_is_equal_string(b, CONST_STR_LEN("least-connection"))) {
-        s->balance = GW_BALANCE_LEAST_CONNECTION;
-    } else if (buffer_is_equal_string(b, CONST_STR_LEN("round-robin"))) {
-        s->balance = GW_BALANCE_RR;
-    } else if (buffer_is_equal_string(b, CONST_STR_LEN("hash"))) {
-        s->balance = GW_BALANCE_HASH;
-    } else if (buffer_is_equal_string(b, CONST_STR_LEN("sticky"))) {
-        s->balance = GW_BALANCE_STICKY;
-    } else {
-        log_error_write(srv, __FILE__, __LINE__, "sb",
-                        "xxxxx.balance has to be one of: "
-                        "least-connection, round-robin, hash, sticky, but not:",
-                        b);
-        return 0;
-    }
-    return 1;
+int gw_get_defaults_balance(server *srv, const buffer *b) {
+    if (buffer_string_is_empty(b))
+        return GW_BALANCE_LEAST_CONNECTION;
+    if (buffer_eq_slen(b, CONST_STR_LEN("fair")))
+        return GW_BALANCE_LEAST_CONNECTION;
+    if (buffer_eq_slen(b, CONST_STR_LEN("least-connection")))
+        return GW_BALANCE_LEAST_CONNECTION;
+    if (buffer_eq_slen(b, CONST_STR_LEN("round-robin")))
+        return GW_BALANCE_RR;
+    if (buffer_eq_slen(b, CONST_STR_LEN("hash")))
+        return GW_BALANCE_HASH;
+    if (buffer_eq_slen(b, CONST_STR_LEN("sticky")))
+        return GW_BALANCE_STICKY;
+
+    log_error_write(srv, __FILE__, __LINE__, "sb",
+                    "xxxxx.balance has to be one of: "
+                    "least-connection, round-robin, hash, sticky, but not:",
+                    b);
+    return GW_BALANCE_LEAST_CONNECTION;
 }
+
 
 static void gw_set_state(server *srv, gw_handler_ctx *hctx, gw_connection_state_t state) {
     hctx->state = state;
@@ -2258,7 +2268,7 @@ handler_t gw_check_extension(server *srv, connection *con, gw_plugin_data *p, in
             if (NULL != ds) {
                 /* found a mapping */
                     /* check if we know the extension */
-                    size_t k;
+                    uint32_t k;
                     for (k = 0; k < exts->used; ++k) {
                         extension = exts->exts[k];
 
@@ -2278,7 +2288,7 @@ handler_t gw_check_extension(server *srv, connection *con, gw_plugin_data *p, in
             size_t uri_path_len = buffer_string_length(con->uri.path);
 
             /* check if extension matches */
-            for (size_t k = 0; k < exts->used; ++k) {
+            for (uint32_t k = 0; k < exts->used; ++k) {
                 gw_extension *ext = exts->exts[k];
                 size_t ct_len = buffer_string_length(ext->key);
 
@@ -2489,18 +2499,18 @@ static void gw_handle_trigger_host(server *srv, gw_host *host, int debug) {
 }
 
 static void gw_handle_trigger_exts(server *srv, gw_exts *exts, int debug) {
-    for (size_t j = 0; j < exts->used; ++j) {
+    for (uint32_t j = 0; j < exts->used; ++j) {
         gw_extension *ex = exts->exts[j];
-        for (size_t n = 0; n < ex->used; ++n) {
+        for (uint32_t n = 0; n < ex->used; ++n) {
             gw_handle_trigger_host(srv, ex->hosts[n], debug);
         }
     }
 }
 
 static void gw_handle_trigger_exts_wkr(server *srv, gw_exts *exts) {
-    for (size_t j = 0; j < exts->used; ++j) {
+    for (uint32_t j = 0; j < exts->used; ++j) {
         gw_extension * const ex = exts->exts[j];
-        for (size_t n = 0; n < ex->used; ++n) {
+        for (uint32_t n = 0; n < ex->used; ++n) {
             gw_host * const host = ex->hosts[n];
             for (gw_proc *proc = host->first; proc; proc = proc->next) {
                 if (proc->state == PROC_STATE_OVERLOADED)
@@ -2511,35 +2521,78 @@ static void gw_handle_trigger_exts_wkr(server *srv, gw_exts *exts) {
 }
 
 handler_t gw_handle_trigger(server *srv, void *p_d) {
-    gw_plugin_data *p = p_d;
+    gw_plugin_data * const p = p_d;
     int wkr = (0 != srv->srvconf.max_worker && p->srv_pid != srv->pid);
+    int global_debug = 0;
 
-    for (size_t i = 0; i < srv->config_context->used; i++) {
-        gw_plugin_config *conf = p->config_storage[i];
-        gw_exts *exts = conf->exts;
-        int debug = conf->debug ? conf->debug : p->config_storage[0]->debug;
-        if (NULL == exts) continue;
+    if (NULL == p->cvlist) return HANDLER_GO_ON;
+    /* (init i to 0 if global context; to 1 to skip empty global context) */
+    for (int i = !p->cvlist[0].v.u2[1], used = p->nconfig; i < used; ++i) {
+        config_plugin_value_t *cpv = p->cvlist + p->cvlist[i].v.u2[0];
+        gw_plugin_config *conf = NULL;
+        int debug = global_debug;
+        for (; -1 != cpv->k_id; ++cpv) {
+            switch (cpv->k_id) {
+              case 0: /* xxxxx.server */
+                if (cpv->vtype == T_CONFIG_LOCAL) conf = cpv->v.v;
+                break;
+              case 2: /* xxxxx.debug */
+                debug = (int)cpv->v.u;
+                if (0 == i) global_debug = (int)cpv->v.u;
+              default:
+                break;
+            }
+        }
+
+        if (NULL == conf || NULL == conf->exts) continue;
+
+        /* (debug flag is only active if set in same scope as xxxxx.server
+         *  or global scope (for convenience))
+         * (unable to use p->defaults.debug since gw_plugin_config
+         *  might be part of a larger plugin_config) */
         wkr
-          ? gw_handle_trigger_exts_wkr(srv, exts)
-          : gw_handle_trigger_exts(srv, exts, debug);
+          ? gw_handle_trigger_exts_wkr(srv, conf->exts)
+          : gw_handle_trigger_exts(srv, conf->exts, debug);
     }
 
     return HANDLER_GO_ON;
 }
 
 handler_t gw_handle_waitpid_cb(server *srv, void *p_d, pid_t pid, int status) {
-    gw_plugin_data *p = p_d;
+    gw_plugin_data * const p = p_d;
     if (0 != srv->srvconf.max_worker && p->srv_pid != srv->pid)
         return HANDLER_GO_ON;
+    int global_debug = 0;
 
-    for (size_t i = 0; i < srv->config_context->used; ++i) {
-        gw_plugin_config *conf = p->config_storage[i];
+    if (NULL == p->cvlist) return HANDLER_GO_ON;
+    /* (init i to 0 if global context; to 1 to skip empty global context) */
+    for (int i = !p->cvlist[0].v.u2[1], used = p->nconfig; i < used; ++i) {
+        config_plugin_value_t *cpv = p->cvlist + p->cvlist[i].v.u2[0];
+        gw_plugin_config *conf = NULL;
+        int debug = global_debug;
+        for (; -1 != cpv->k_id; ++cpv) {
+            switch (cpv->k_id) {
+              case 0: /* xxxxx.server */
+                if (cpv->vtype == T_CONFIG_LOCAL) conf = cpv->v.v;
+                break;
+              case 2: /* xxxxx.debug */
+                debug = (int)cpv->v.u;
+                if (0 == i) global_debug = (int)cpv->v.u;
+              default:
+                break;
+            }
+        }
+
+        if (NULL == conf || NULL == conf->exts) continue;
+
+        /* (debug flag is only active if set in same scope as xxxxx.server
+         *  or global scope (for convenience))
+         * (unable to use p->defaults.debug since gw_plugin_config
+         *  might be part of a larger plugin_config) */
         gw_exts *exts = conf->exts;
-        int debug = conf->debug ? conf->debug : p->config_storage[0]->debug;
-        if (NULL == exts) continue;
-        for (size_t j = 0; j < exts->used; ++j) {
+        for (uint32_t j = 0; j < exts->used; ++j) {
             gw_extension *ex = exts->exts[j];
-            for (size_t n = 0; n < ex->used; ++n) {
+            for (uint32_t n = 0; n < ex->used; ++n) {
                 gw_host *host = ex->hosts[n];
                 gw_proc *proc;
                 for (proc = host->first; proc; proc = proc->next) {
