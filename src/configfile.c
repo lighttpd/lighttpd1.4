@@ -34,7 +34,7 @@ typedef struct {
     specific_config defaults;
 } config_data_base;
 
-void config_free_config(void * const p_d) {
+static void config_free_config(void * const p_d) {
     plugin_data_base * const p = p_d;
     if (NULL == p) return;
     if (NULL == p->cvlist) { free(p); return; }
@@ -838,8 +838,6 @@ static int config_insert(server *srv) {
         T_CONFIG_SCOPE_UNSET }
     };
 
-    if (0 != config_insert_srvconf(srv)) return HANDLER_ERROR;
-
     int rc = 0;
     config_data_base * const p = calloc(1, sizeof(config_data_base));
     force_assert(p);
@@ -963,7 +961,7 @@ static int config_insert(server *srv) {
       | (srv->srvconf.http_host_normalize  ?  HTTP_PARSEOPT_HOST_NORMALIZE  :0)
       | (srv->srvconf.http_method_get_body ?  HTTP_PARSEOPT_METHOD_GET_BODY :0);
     p->defaults.http_parseopts |= srv->srvconf.http_url_normalize;
-    p->defaults.mimetypes = &srv->empty_array; /*(mimetypes must not be NULL)*/
+    p->defaults.mimetypes = &srv->srvconf.empty_array; /*(must not be NULL)*/
 
     /* initialize p->defaults from global config context */
     if (p->nconfig > 0 && p->cvlist->v.u2[1]) {
@@ -978,6 +976,101 @@ static int config_insert(server *srv) {
 
     return rc;
 }
+
+int config_finalize(server *srv, const buffer *default_server_tag) {
+    /* (call after plugins_call_set_defaults()) */
+
+    config_data_base * const p = srv->config_data_base;
+
+    /* settings might be enabled during plugins_call_set_defaults() */
+    p->defaults.high_precision_timestamps =
+      srv->srvconf.high_precision_timestamps;
+
+    /* configure default server_tag if not set
+     * (if configured to blank, unset server_tag)*/
+    if (buffer_is_empty(p->defaults.server_tag))
+        p->defaults.server_tag = default_server_tag;
+    else if (buffer_string_is_empty(p->defaults.server_tag))
+        p->defaults.server_tag = NULL;
+
+    /* dump unused config keys */
+    for (uint32_t i = 0; i < srv->config_context->used; ++i) {
+        array *config = ((data_config *)srv->config_context->data[i])->value;
+        for (uint32_t j = 0; config && j < config->used; ++j) {
+            const buffer * const k = &config->data[j]->key;
+
+            /* all var.* is known as user defined variable */
+            if (strncmp(k->ptr, "var.", sizeof("var.") - 1) == 0)
+                continue;
+
+            if (!array_get_element_klen(srv->srvconf.config_touched,
+                                        CONST_BUF_LEN(k)))
+                log_error(srv->errh, __FILE__, __LINE__,
+                  "WARNING: unknown config-key: %s (ignored)", k->ptr);
+        }
+    }
+
+    array_free(srv->srvconf.config_touched);
+    srv->srvconf.config_touched = NULL;
+
+    if (srv->srvconf.config_unsupported || srv->srvconf.config_deprecated) {
+        if (srv->srvconf.config_unsupported)
+            log_error(srv->errh, __FILE__, __LINE__,
+              "Configuration contains unsupported keys. Going down.");
+        if (srv->srvconf.config_deprecated)
+            log_error(srv->errh, __FILE__, __LINE__,
+              "Configuration contains deprecated keys. Going down.");
+        return 0;
+    }
+
+    return 1;
+}
+
+void config_print(server *srv) {
+    data_unset *dc = srv->config_context->data[0];
+    dc->fn->print(dc, 0);
+}
+
+void config_free(server *srv) {
+    config_free_config(srv->config_data_base);
+
+    array_free(srv->config_context);
+    array_free(srv->srvconf.config_touched);
+    array_free(srv->srvconf.modules);
+    buffer_free(srv->srvconf.modules_dir);
+    array_free(srv->srvconf.upload_tempdirs);
+}
+
+void config_init(server *srv) {
+    srv->config_context = array_init();
+    srv->srvconf.config_touched = array_init();
+
+    srv->srvconf.port = 0;
+    srv->srvconf.dont_daemonize = 0;
+    srv->srvconf.preflight_check = 0;
+    srv->srvconf.compat_module_load = 1;
+    srv->srvconf.systemd_socket_activation = 0;
+
+    srv->srvconf.high_precision_timestamps = 0;
+    srv->srvconf.max_request_field_size = 8192;
+
+    srv->srvconf.xattr_name = "Content-Type";
+    srv->srvconf.http_header_strict  = 1;
+    srv->srvconf.http_host_strict    = 1; /*(implies http_host_normalize)*/
+    srv->srvconf.http_host_normalize = 0;
+    srv->srvconf.http_url_normalize =
+        HTTP_PARSEOPT_URL_NORMALIZE
+      | HTTP_PARSEOPT_URL_NORMALIZE_UNRESERVED
+      | HTTP_PARSEOPT_URL_NORMALIZE_CTRLS_REJECT
+      | HTTP_PARSEOPT_URL_NORMALIZE_PATH_2F_DECODE
+      | HTTP_PARSEOPT_URL_NORMALIZE_PATH_DOTSEG_REMOVE;
+
+    srv->srvconf.modules = array_init();
+    srv->srvconf.modules_dir = buffer_init_string(LIBRARY_DIR);
+    srv->srvconf.upload_tempdirs = array_init();
+}
+
+
 
 typedef struct {
 	const char *source;
@@ -1646,6 +1739,10 @@ int config_read(server *srv, const char *fn) {
 
 	if (0 != ret) {
 		return ret;
+	}
+
+	if (0 != config_insert_srvconf(srv)) {
+		return -1;
 	}
 
 	if (0 != config_insert(srv)) {

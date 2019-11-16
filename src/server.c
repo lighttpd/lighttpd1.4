@@ -24,6 +24,7 @@
 #endif
 
 #define PACKAGE_DESC PACKAGE_NAME "/" PACKAGE_VERSION REPO_VERSION
+static const buffer default_server_tag = { CONST_STR_LEN(PACKAGE_DESC), 0 };
 
 #include <sys/types.h>
 #include <sys/time.h>
@@ -245,8 +246,6 @@ static server *server_init(void) {
 #define CLEAN(x) \
 	srv->x = array_init();
 
-	CLEAN(config_context);
-	CLEAN(config_touched);
 	CLEAN(status);
 #undef CLEAN
 
@@ -261,22 +260,7 @@ static server *server_init(void) {
 
 	srv->errh = log_error_st_init(&srv->cur_ts, &srv->last_generated_debug_ts);
 
-	srv->srvconf.modules = array_init();
-	srv->srvconf.modules_dir = buffer_init_string(LIBRARY_DIR);
-	srv->srvconf.upload_tempdirs = array_init();
-	srv->srvconf.xattr_name = "Content-Type";
-	srv->srvconf.http_header_strict  = 1;
-	srv->srvconf.http_host_strict    = 1; /*(implies http_host_normalize)*/
-	srv->srvconf.http_host_normalize = 0;
-	srv->srvconf.http_url_normalize = HTTP_PARSEOPT_URL_NORMALIZE
-					| HTTP_PARSEOPT_URL_NORMALIZE_UNRESERVED
-					| HTTP_PARSEOPT_URL_NORMALIZE_CTRLS_REJECT
-					| HTTP_PARSEOPT_URL_NORMALIZE_PATH_2F_DECODE
-					| HTTP_PARSEOPT_URL_NORMALIZE_PATH_DOTSEG_REMOVE;
-	srv->srvconf.high_precision_timestamps = 0;
-	srv->srvconf.max_request_field_size = 8192;
-	srv->srvconf.compat_module_load = 1;
-	srv->srvconf.systemd_socket_activation = 0;
+	config_init(srv);
 
 	srv->request_env = plugins_call_handle_request_env;
 
@@ -303,22 +287,17 @@ static void server_free(server *srv) {
 	CLEAN(ts_date_str);
 	CLEAN(tmp_buf);
 
-	CLEAN(srvconf.modules_dir);
-
 	CLEAN(tmp_chunk_len);
 #undef CLEAN
 
 	fdevent_free(srv->ev);
 
-	config_free_config(srv->config_data_base);
+	config_free(srv);
 
 #define CLEAN(x) \
 	array_free(srv->x);
 
-	CLEAN(config_context);
-	CLEAN(config_touched);
 	CLEAN(status);
-	CLEAN(srvconf.upload_tempdirs);
 #undef CLEAN
 
 	free(srv->joblist.ptr);
@@ -327,8 +306,6 @@ static void server_free(server *srv) {
 	if (srv->stat_cache) {
 		stat_cache_free(srv->stat_cache);
 	}
-
-	array_free(srv->srvconf.modules);
 
 	li_rand_cleanup();
 	chunkqueue_chunk_pool_free();
@@ -975,10 +952,6 @@ static int server_main (server * const srv, int argc, char **argv) {
 	/*memset(inherited_sockets, 0, sizeof(inherited_sockets));*/
 	/*pid_fd = -1;*/
 
-	srv->srvconf.port = 0;
-	srv->srvconf.dont_daemonize = 0;
-	srv->srvconf.preflight_check = 0;
-
 	while(-1 != (o = getopt(argc, argv, "f:m:i:hvVD1pt"))) {
 		switch(o) {
 		case 'f':
@@ -1039,14 +1012,8 @@ static int server_main (server * const srv, int argc, char **argv) {
 	}
 
 	if (print_config) {
-		data_unset *dc = srv->config_context->data[0];
-		if (dc) {
-			dc->fn->print(dc, 0);
-			fprintf(stdout, "\n");
-		} else {
-			/* shouldn't happend */
-			fprintf(stderr, "global config not found\n");
-		}
+		config_print(srv);
+		fprintf(stdout, "\n");
 	}
 
 	if (test_config) {
@@ -1418,52 +1385,12 @@ static int server_main (server * const srv, int argc, char **argv) {
 		log_error_write(srv, __FILE__, __LINE__, "s", "server started (" PACKAGE_DESC ")");
 	}
 
-	specific_config *s = &((config_data_base *)srv->config_data_base)->defaults;
-	if (buffer_is_empty(s->server_tag)) {
-		static const buffer server_tag =
-		  { CONST_STR_LEN(PACKAGE_DESC), 0 };
-		s->server_tag = &server_tag;
-	}
-
 	if (HANDLER_GO_ON != plugins_call_set_defaults(srv)) {
 		log_error_write(srv, __FILE__, __LINE__, "s", "Configuration of plugins failed. Going down.");
 		return -1;
 	}
 
-	/* settings might be enabled during module config set defaults */
-	s->high_precision_timestamps = srv->srvconf.high_precision_timestamps;
-
-	/* dump unused config-keys */
-	for (i = 0; i < srv->config_context->used; i++) {
-		array *config = ((data_config *)srv->config_context->data[i])->value;
-		for (uint32_t j = 0; config && j < config->used; ++j) {
-			data_unset *du = config->data[j];
-
-			/* all var.* is known as user defined variable */
-			if (strncmp(du->key.ptr, "var.", sizeof("var.") - 1) == 0) {
-				continue;
-			}
-
-			if (NULL == array_get_element_klen(srv->config_touched, CONST_BUF_LEN(&du->key))) {
-				log_error_write(srv, __FILE__, __LINE__, "sbs",
-						"WARNING: unknown config-key:",
-						&du->key,
-						"(ignored)");
-			}
-		}
-	}
-
-	if (srv->config_unsupported) {
-		log_error_write(srv, __FILE__, __LINE__, "s",
-				"Configuration contains unsupported keys. Going down.");
-	}
-
-	if (srv->config_deprecated) {
-		log_error_write(srv, __FILE__, __LINE__, "s",
-				"Configuration contains deprecated keys. Going down.");
-	}
-
-	if (srv->config_unsupported || srv->config_deprecated) {
+	if (!config_finalize(srv, &default_server_tag)) {
 		return -1;
 	}
 

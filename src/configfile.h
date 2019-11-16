@@ -129,7 +129,16 @@ __attribute_cold__
 int config_parse_cmd(server *srv, config_t *context, const char *cmd);
 
 __attribute_cold__
-void config_free_config(void *p);
+void config_init(server *srv);
+
+__attribute_cold__
+void config_print(server *srv);
+
+__attribute_cold__
+int config_finalize(server *srv, const buffer *default_server_tag);
+
+__attribute_cold__
+void config_free(server *srv);
 
 void config_reset_config_bytes_sec(void *p);
 

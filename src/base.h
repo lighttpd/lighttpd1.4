@@ -302,6 +302,8 @@ typedef struct {
 	unsigned char preflight_check;
 	unsigned char enable_cores;
 	unsigned char compat_module_load;
+	unsigned char config_deprecated;
+	unsigned char config_unsupported;
 	unsigned char systemd_socket_activation;
 	unsigned char errorlog_use_syslog;
 	const buffer *errorlog_file;
@@ -316,6 +318,8 @@ typedef struct {
 	buffer *pid_file;
 	buffer *modules_dir;
 	array *modules;
+	array *config_touched;
+	array empty_array;
 } server_config;
 
 typedef struct server_socket {
@@ -400,16 +404,11 @@ struct server {
 	/* config-file */
 	void *config_data_base;
 	array *config_context;
-	array empty_array;
 
 	/* members used at start-up or rarely used */
 	server_socket_array srv_sockets;
 	server_socket_array srv_sockets_inherited;
 	buffer_plugin plugins;
-
-	array *config_touched;
-	unsigned char config_deprecated;
-	unsigned char config_unsupported;
 
 	int event_handler;
 	time_t startup_ts;

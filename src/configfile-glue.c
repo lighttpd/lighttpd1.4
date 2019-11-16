@@ -37,7 +37,7 @@ void config_get_config_cond_info(server *srv, uint32_t idx, config_cond_info *cf
 
 int config_plugin_values_init(server * const srv, void *p_d, const config_plugin_keys_t * const cpk, const char * const mname) {
     plugin_data_base * const p = (plugin_data_base *)p_d;
-    array * const touched = srv->config_touched;
+    array * const touched = srv->srvconf.config_touched;
     unsigned char matches[4096];   /*directives matches (4k is way too many!)*/
     unsigned short contexts[4096]; /*conditions matches (4k is way too many!)*/
     uint32_t n = 0;
@@ -232,12 +232,12 @@ int config_plugin_values_init(server * const srv, void *p_d, const config_plugin
               case T_CONFIG_UNSUPPORTED:
                 log_error(srv->errh, __FILE__, __LINE__,
                   "ERROR: found unsupported key: %s (%s)", cpk[i].k, mname);
-                srv->config_unsupported = 1;
+                srv->srvconf.config_unsupported = 1;
                 continue;
               case T_CONFIG_DEPRECATED:
                 log_error(srv->errh, __FILE__, __LINE__,
                   "ERROR: found deprecated key: %s (%s)", cpk[i].k, mname);
-                srv->config_deprecated = 1;
+                srv->srvconf.config_deprecated = 1;
                 continue;
             }
 
@@ -397,13 +397,13 @@ int config_insert_values_internal(server *srv, const array *ca, const config_val
 		case T_CONFIG_UNSUPPORTED:
 			log_error_write(srv, __FILE__, __LINE__, "ssss", "ERROR: found unsupported key:", cv[i].key, "-", (char *)(cv[i].destination));
 
-			srv->config_unsupported = 1;
+			srv->srvconf.config_unsupported = 1;
 
 			break;
 		case T_CONFIG_DEPRECATED:
 			log_error_write(srv, __FILE__, __LINE__, "ssss", "ERROR: found deprecated key:", cv[i].key, "-", (char *)(cv[i].destination));
 
-			srv->config_deprecated = 1;
+			srv->srvconf.config_deprecated = 1;
 
 			break;
 		}
@@ -422,7 +422,7 @@ int config_insert_values_global(server *srv, const array *ca, const config_value
 
 			continue;
 		}
-		array_set_key_value(srv->config_touched, CONST_BUF_LEN(&du->key), CONST_STR_LEN(""));
+		array_set_key_value(srv->srvconf.config_touched, CONST_BUF_LEN(&du->key), CONST_STR_LEN(""));
 	}
 
 	return config_insert_values_internal(srv, ca, cv, scope);
