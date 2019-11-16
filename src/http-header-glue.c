@@ -510,7 +510,7 @@ void http_response_send_file (server *srv, connection *con, buffer *path) {
 	}
 
 	if (allow_caching) {
-		if (con->etag_flags != 0 && !buffer_string_is_empty(stat_cache_etag_get(sce, con->etag_flags))) {
+		if (con->conf.etag_flags != 0 && !buffer_string_is_empty(stat_cache_etag_get(sce, con->conf.etag_flags))) {
 			if (NULL == http_header_response_get(con, HTTP_HEADER_ETAG, CONST_STR_LEN("ETag"))) {
 				/* generate e-tag */
 				etag_mutate(con->physical.etag, sce->etag);

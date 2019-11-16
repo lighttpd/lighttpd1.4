@@ -56,7 +56,7 @@ int fdevent_config(server *srv) {
 		{ FDEVENT_HANDLER_UNSET,          NULL }
 	};
 
-	if (buffer_string_is_empty(srv->srvconf.event_handler)) {
+	if (NULL == srv->srvconf.event_handler) {
 		/* choose a good default
 		 *
 		 * the event_handler list is sorted by 'goodness'
@@ -71,24 +71,23 @@ int fdevent_config(server *srv) {
 			return -1;
 		}
 
-		buffer_copy_string(srv->srvconf.event_handler, event_handlers[0].name);
+		srv->srvconf.event_handler = event_handlers[0].name;
 	} else {
 		/*
 		 * User override
 		 */
 
 		for (size_t i = 0; event_handlers[i].name; i++) {
-			if (0 == strcmp(event_handlers[i].name, srv->srvconf.event_handler->ptr)) {
+			if (0 == strcmp(event_handlers[i].name, srv->srvconf.event_handler)) {
 				srv->event_handler = event_handlers[i].et;
 				break;
 			}
 		}
 
 		if (FDEVENT_HANDLER_UNSET == srv->event_handler) {
-			log_error_write(srv, __FILE__, __LINE__, "sb",
-					"the selected event-handler in unknown or not supported:",
-					srv->srvconf.event_handler );
-
+			log_error(srv->errh, __FILE__, __LINE__,
+			  "the selected event-handler in unknown or not supported: %s",
+			  srv->srvconf.event_handler);
 			return -1;
 		}
 	}
@@ -245,8 +244,10 @@ fdevents *fdevent_init(server *srv) {
 	free(ev->fdarray);
 	free(ev);
 
-	log_error_write(srv, __FILE__, __LINE__, "sBS",
-		"event-handler failed:", srv->srvconf.event_handler, "; try to set server.event-handler = \"poll\" or \"select\"");
+	log_error(srv->errh, __FILE__, __LINE__,
+	  "event-handler failed: %s; "
+	  "try to set server.event-handler = \"poll\" or \"select\"",
+	  srv->srvconf.event_handler);
 	return NULL;
 }
 
@@ -270,8 +271,11 @@ void fdevent_free(fdevents *ev) {
 int fdevent_reset(fdevents *ev) {
 	int rc = (NULL != ev->reset) ? ev->reset(ev) : 0;
 	if (-1 == rc) {
-		log_error_write(ev->srv, __FILE__, __LINE__, "sBS",
-			"event-handler failed:", ev->srv->srvconf.event_handler, "; try to set server.event-handler = \"poll\" or \"select\"");
+		const char *event_handler = ev->srv->srvconf.event_handler;
+		log_error(ev->srv->errh, __FILE__, __LINE__,
+		  "event-handler failed: %s; "
+		  "try to set server.event-handler = \"poll\" or \"select\"",
+		  event_handler ? event_handler : "");
 	}
 	return rc;
 }

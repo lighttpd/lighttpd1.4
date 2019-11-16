@@ -535,17 +535,6 @@ static void connection_handle_write_state(server *srv, connection *con) {
 }
 
 
-static void connection_reset_config(server *srv, connection *con) {
-    /* initialize specific_config (con->conf) from top-level specific_config */
-    specific_config * const s = srv->config_storage[0];
-    const size_t len = /* offsetof() */
-      (uintptr_t)&((specific_config *)0)->global_bytes_per_second_cnt_ptr;
-    con->conf.global_bytes_per_second_cnt_ptr = &s->global_bytes_per_second_cnt;
-    con->server_name = s->server_name;
-    memcpy(&con->conf, s, len);
-}
-
-
 __attribute_cold__
 static connection *connection_init(server *srv) {
 	connection *con;
@@ -599,7 +588,7 @@ static connection *connection_init(server *srv) {
 
 	con->cond_cache = calloc(srv->config_context->used, sizeof(cond_cache_t));
 	force_assert(NULL != con->cond_cache);
-	connection_reset_config(srv, con);
+	config_reset_config(srv, con);
 
 	return con;
 }
@@ -710,7 +699,7 @@ static int connection_reset(server *srv, connection *con) {
 	/*con->error_handler_saved_method = HTTP_METHOD_UNSET;*/
 	/*(error_handler_saved_method value is not valid unless error_handler_saved_status is set)*/
 
-	connection_reset_config(srv, con);
+	config_reset_config(srv, con);
 
 	return 0;
 }
@@ -1177,7 +1166,7 @@ static int connection_handle_request(server *srv, connection *con) {
 							con->error_handler_saved_status = 65535; /* >= 1000 */
 						}
 					} else if (con->http_status >= 400) {
-						buffer *error_handler = NULL;
+						const buffer *error_handler = NULL;
 						if (!buffer_string_is_empty(con->conf.error_handler)) {
 							error_handler = con->conf.error_handler;
 						} else if ((con->http_status == 404 || con->http_status == 403)
@@ -1236,7 +1225,7 @@ static int connection_handle_request(server *srv, connection *con) {
 				break;
 			case HANDLER_COMEBACK:
 				if (con->mode == DIRECT && buffer_is_empty(con->physical.path)) {
-					connection_reset_config(srv, con);
+					config_reset_config(srv, con);
 				}
 				return 1;
 			case HANDLER_ERROR:
@@ -1464,12 +1453,11 @@ static void connection_check_timeout (server * const srv, const time_t cur_ts, c
         }
     }
 
-    /* we don't like div by zero */
     if (0 == (t_diff = cur_ts - con->connection_start)) t_diff = 1;
 
     if (con->traffic_limit_reached &&
-        (con->conf.kbytes_per_second == 0 ||
-         ((con->bytes_written / t_diff) < con->conf.kbytes_per_second * 1024))){
+        (con->conf.bytes_per_second == 0 ||
+         con->bytes_written < (off_t)con->conf.bytes_per_second * t_diff)) {
         /* enable connection again */
         con->traffic_limit_reached = 0;
 
@@ -1514,8 +1502,8 @@ void connection_graceful_shutdown_maint (server *srv) {
 
         con->keep_alive = 0;                    /* disable keep-alive */
 
-        con->conf.kbytes_per_second = 0;        /* disable rate limit */
-        con->conf.global_kbytes_per_second = 0; /* disable rate limit */
+        con->conf.bytes_per_second = 0;         /* disable rate limit */
+        con->conf.global_bytes_per_second = 0;  /* disable rate limit */
         if (con->traffic_limit_reached) {
             con->traffic_limit_reached = 0;
             changed = 1;

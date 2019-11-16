@@ -128,7 +128,13 @@ int config_parse_file(server *srv, config_t *context, const char *fn);
 __attribute_cold__
 int config_parse_cmd(server *srv, config_t *context, const char *cmd);
 
-void config_patch_connection(server *srv, connection *con);
+__attribute_cold__
+void config_free_config(void *p);
+
+void config_reset_config_bytes_sec(void *p);
+
+void config_reset_config(server *srv, connection *con);
+void config_patch_config(server *srv, connection *con);
 
 void config_cond_cache_reset(server *srv, connection *con);
 void config_cond_cache_reset_item(server *srv, connection *con, comp_key_t item);
@@ -150,7 +156,7 @@ typedef enum { T_CONFIG_SCOPE_UNSET,
 		T_CONFIG_SCOPE_CONNECTION
 } config_scope_type_t;
 
-typedef struct {
+typedef struct config_plugin_value {
     int k_id;
     config_values_type_t vtype;
     union v_u {

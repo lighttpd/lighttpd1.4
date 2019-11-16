@@ -74,7 +74,7 @@ lua_State *script_cache_get_script(server *srv, connection *con, script_cache *c
 				break;
 			}
 
-			stat_cache_etag_get(sce, con->etag_flags);
+			stat_cache_etag_get(sce, con->conf.etag_flags);
 			if (!buffer_is_equal(sce->etag, sc->etag)) {
 				/* the etag is outdated, reload the function */
 				lua_pop(sc->L, 1);
@@ -115,7 +115,7 @@ lua_State *script_cache_get_script(server *srv, connection *con, script_cache *c
 	}
 
 	if (HANDLER_GO_ON == stat_cache_get_entry(srv, con, sc->name, &sce)) {
-		buffer_copy_buffer(sc->etag, stat_cache_etag_get(sce, con->etag_flags));
+		buffer_copy_buffer(sc->etag, stat_cache_etag_get(sce, con->conf.etag_flags));
 	}
 
 	force_assert(lua_isfunction(sc->L, -1));

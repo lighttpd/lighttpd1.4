@@ -143,7 +143,7 @@ int etag_is_equal(const buffer *etag, const char *line, int weak_ok) {
 	return 0;
 }
 
-int etag_create(buffer *etag, const struct stat *st, etag_flags_t flags) {
+int etag_create(buffer *etag, const struct stat *st, int flags) {
 	if (0 == flags) return 0;
 
 	buffer_clear(etag);

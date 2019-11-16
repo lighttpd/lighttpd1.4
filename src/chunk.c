@@ -28,7 +28,7 @@
 static size_t chunk_buf_sz = 4096;
 static chunk *chunks, *chunks_oversized;
 static chunk *chunk_buffers;
-static array *chunkqueue_default_tempdirs = NULL;
+static const array *chunkqueue_default_tempdirs = NULL;
 static off_t chunkqueue_default_tempfile_size = DEFAULT_TEMPFILE_SIZE;
 
 void chunkqueue_set_chunk_size (size_t sz)
@@ -438,7 +438,7 @@ void chunkqueue_use_memory(chunkqueue *cq, size_t len) {
 	}
 }
 
-void chunkqueue_set_tempdirs_default (array *tempdirs, off_t upload_temp_file_size) {
+void chunkqueue_set_tempdirs_default (const array *tempdirs, off_t upload_temp_file_size) {
 	chunkqueue_default_tempdirs = tempdirs;
 	chunkqueue_default_tempfile_size
 		= (0 == upload_temp_file_size)                ? DEFAULT_TEMPFILE_SIZE
@@ -446,7 +446,7 @@ void chunkqueue_set_tempdirs_default (array *tempdirs, off_t upload_temp_file_si
 		                                              : upload_temp_file_size;
 }
 
-void chunkqueue_set_tempdirs(chunkqueue *cq, array *tempdirs, off_t upload_temp_file_size) {
+void chunkqueue_set_tempdirs(chunkqueue *cq, const array *tempdirs, off_t upload_temp_file_size) {
 	force_assert(NULL != cq);
 	cq->tempdirs = tempdirs;
 	cq->upload_temp_file_size

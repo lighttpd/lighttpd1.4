@@ -5,6 +5,7 @@
 #include "fdevent.h"
 #include "log.h"
 #include "connections.h"
+#include "plugin.h"
 #include "configfile.h"
 #include "sock_addr.h"
 
@@ -137,10 +138,60 @@ static void network_srv_sockets_append(server *srv, server_socket *srv_socket) {
 	srv->srv_sockets.ptr[srv->srv_sockets.used++] = srv_socket;
 }
 
-static int network_server_init(server *srv, buffer *host_token, size_t sidx, int stdin_fd) {
+typedef struct {
+    /* global or per-socket config; not patched per connection */
+    int listen_backlog;
+    unsigned char ssl_enabled;
+    unsigned char use_ipv6;
+    unsigned char set_v6only; /* set_v6only is only a temporary option */
+    unsigned char defer_accept;
+    const buffer *socket_perms;
+    const buffer *bsd_accept_filter;
+} network_socket_config;
+
+typedef struct {
+    PLUGIN_DATA;
+    network_socket_config defaults;
+    network_socket_config conf;
+} network_plugin_data;
+
+static void network_merge_config_cpv(network_socket_config * const pconf, const config_plugin_value_t * const cpv) {
+    switch (cpv->k_id) { /* index into static config_plugin_keys_t cpk[] */
+      case 0: /* ssl.engine */
+        pconf->ssl_enabled = (0 != cpv->v.u);
+        break;
+      case 1: /* server.listen-backlog */
+        pconf->listen_backlog = (int)cpv->v.u;
+        break;
+      case 2: /* server.socket-perms */
+        pconf->socket_perms = cpv->v.b;
+        break;
+      case 3: /* server.bsd-accept-filter */
+        pconf->bsd_accept_filter = cpv->v.b;
+        break;
+      case 4: /* server.defer-accept */
+        pconf->defer_accept = (0 != cpv->v.u);
+        break;
+      case 5: /* server.use-ipv6 */
+        pconf->use_ipv6 = (0 != cpv->v.u);
+        break;
+      case 6: /* server.set-v6only */
+        pconf->set_v6only = (0 != cpv->v.u);
+        break;
+      default:/* should not happen */
+        return;
+    }
+}
+
+static void network_merge_config(network_socket_config * const pconf, const config_plugin_value_t *cpv) {
+    do {
+        network_merge_config_cpv(pconf, cpv);
+    } while ((++cpv)->k_id != -1);
+}
+
+static int network_server_init(server *srv, network_socket_config *s, buffer *host_token, size_t sidx, int stdin_fd) {
 	server_socket *srv_socket;
 	const char *host;
-	specific_config *s = srv->config_storage[sidx];
 	socklen_t addr_len = sizeof(sock_addr);
 	sock_addr addr;
 	int family = 0;
@@ -156,7 +207,6 @@ static int network_server_init(server *srv, buffer *host_token, size_t sidx, int
 	 *  binary addresses are matched further below) */
 	for (uint32_t i = 0; i < srv->srv_sockets.used; ++i) {
 		if (buffer_is_equal(srv->srv_sockets.ptr[i]->srv_token, host_token)) {
-			buffer_copy_buffer(host_token, srv->srv_sockets.ptr[i]->srv_token);
 			return 0;
 		}
 	}
@@ -398,7 +448,7 @@ int network_close(server *srv) {
 	return 0;
 }
 
-static int network_socket_activation_nfds(server *srv, int nfds) {
+static int network_socket_activation_nfds(server *srv, network_socket_config *s, int nfds) {
     buffer *host = buffer_init();
     socklen_t addr_len;
     sock_addr addr;
@@ -412,7 +462,7 @@ static int network_socket_activation_nfds(server *srv, int nfds) {
             break;
         }
         network_host_normalize_addr_str(host, &addr);
-        rc = network_server_init(srv, host, 0, fd);
+        rc = network_server_init(srv, s, host, 0, fd);
         if (0 != rc) break;
         srv->srv_sockets.ptr[srv->srv_sockets.used-1]->sidx = (unsigned short)~0u;
     }
@@ -422,13 +472,13 @@ static int network_socket_activation_nfds(server *srv, int nfds) {
     return rc;
 }
 
-static int network_socket_activation_from_env(server *srv) {
+static int network_socket_activation_from_env(server *srv, network_socket_config *s) {
     char *listen_pid = getenv("LISTEN_PID");
     char *listen_fds = getenv("LISTEN_FDS");
     pid_t lpid = listen_pid ? (pid_t)strtoul(listen_pid,NULL,10) : 0;
     int nfds = listen_fds ? atoi(listen_fds) : 0;
     int rc = (lpid == getpid() && nfds > 0)
-      ? network_socket_activation_nfds(srv, nfds)
+      ? network_socket_activation_nfds(srv, s, nfds)
       : 0;
     unsetenv("LISTEN_PID");
     unsetenv("LISTEN_FDS");
@@ -438,85 +488,151 @@ static int network_socket_activation_from_env(server *srv) {
 }
 
 int network_init(server *srv, int stdin_fd) {
-      #ifdef __WIN32
-	WSADATA wsaData;
-	WORD wVersionRequested = MAKEWORD(2, 2);
-	if (0 != WSAStartup(wVersionRequested, &wsaData)) {
-		/* Tell the user that we could not find a usable WinSock DLL */
-		return -1;
-	}
-      #endif
+    /*(network params used during setup (from $SERVER["socket"] condition))*/
+    static const config_plugin_keys_t cpk[] = {
+      { CONST_STR_LEN("ssl.engine"),
+        T_CONFIG_BOOL,
+        T_CONFIG_SCOPE_CONNECTION }
+     ,{ CONST_STR_LEN("server.listen-backlog"),
+        T_CONFIG_INT,
+        T_CONFIG_SCOPE_CONNECTION }
+     ,{ CONST_STR_LEN("server.socket-perms"),
+        T_CONFIG_STRING,
+        T_CONFIG_SCOPE_CONNECTION }
+     ,{ CONST_STR_LEN("server.bsd-accept-filter"),
+        T_CONFIG_STRING,
+        T_CONFIG_SCOPE_CONNECTION }
+     ,{ CONST_STR_LEN("server.defer-accept"),
+        T_CONFIG_BOOL,
+        T_CONFIG_SCOPE_CONNECTION }
+     ,{ CONST_STR_LEN("server.use-ipv6"),
+        T_CONFIG_BOOL,
+        T_CONFIG_SCOPE_CONNECTION }
+     ,{ CONST_STR_LEN("server.set-v6only"),
+        T_CONFIG_BOOL,
+        T_CONFIG_SCOPE_CONNECTION }
+     ,{ NULL, 0,
+        T_CONFIG_UNSET,
+        T_CONFIG_SCOPE_UNSET }
+    };
 
-	if (0 != network_write_init(srv)) return -1;
+  #ifdef __WIN32
+    WSADATA wsaData;
+    WORD wVersionRequested = MAKEWORD(2, 2);
+    if (0 != WSAStartup(wVersionRequested, &wsaData)) {
+        /* Tell the user that we could not find a usable WinSock DLL */
+        return -1;
+    }
+  #endif
 
-	if (srv->srvconf.systemd_socket_activation) {
-		for (uint32_t i = 0; i < srv->srv_sockets_inherited.used; ++i) {
-		        srv->srv_sockets_inherited.ptr[i]->sidx = (unsigned short)~0u;
-		}
-		if (0 != network_socket_activation_from_env(srv)) return -1;
-		if (0 == srv->srv_sockets_inherited.used) {
-			srv->srvconf.systemd_socket_activation = 0;
-		}
-	}
+    if (0 != network_write_init(srv)) return -1;
 
-	/* process srv->srvconf.bindhost
-	 * (skip if systemd socket activation is enabled and bindhost is empty; do not additionally listen on "*") */
-	if (!srv->srvconf.systemd_socket_activation || !buffer_string_is_empty(srv->srvconf.bindhost)) {
-		int rc;
-		buffer *b = buffer_init();
-		buffer_copy_buffer(b, srv->srvconf.bindhost);
-		if (b->ptr[0] != '/') { /*(skip adding port if unix socket path)*/
-			buffer_append_string_len(b, CONST_STR_LEN(":"));
-			buffer_append_int(b, srv->srvconf.port);
-		}
+    network_plugin_data np;
+    memset(&np, 0, sizeof(network_plugin_data));
+    network_plugin_data *p = &np;
 
-		rc = (-1 == stdin_fd || 0 == srv->srv_sockets.used)
-		  ? network_server_init(srv, b, 0, stdin_fd)
-		  : close(stdin_fd);/*(graceful restart listening to "/dev/stdin")*/
-		buffer_free(b);
-		if (0 != rc) return -1;
-	}
+    if (!config_plugin_values_init(srv, p, cpk, "network"))
+        return HANDLER_ERROR;
 
-	/* check for $SERVER["socket"] */
-	for (uint32_t i = 1; i < srv->config_context->used; ++i) {
-		config_cond_info cfginfo;
-		config_get_config_cond_info(srv, i, &cfginfo);
-		buffer *host_token;
-		*(const buffer **)&host_token = cfginfo.string;
-		/*(cfginfo.string is modified during config)*/
+    p->defaults.listen_backlog = 1024;
+    p->defaults.defer_accept = 0;
+    p->defaults.use_ipv6 = 0;
+    p->defaults.set_v6only = 1;
 
-		/* not our stage */
-		if (COMP_SERVER_SOCKET != cfginfo.comp) continue;
+    /* initialize p->defaults from global config context */
+    if (p->nconfig > 0 && p->cvlist->v.u2[1]) {
+        const config_plugin_value_t *cpv = p->cvlist + p->cvlist->v.u2[0];
+        if (-1 != cpv->k_id)
+            network_merge_config(&p->defaults, cpv);
+    }
 
-		if (cfginfo.cond == CONFIG_COND_NE) {
-			socklen_t addr_len = sizeof(sock_addr);
-			sock_addr addr;
-			if (0 != network_host_parse_addr(srv, &addr, &addr_len, host_token, srv->config_storage[i]->use_ipv6)) {
-				return -1;
-			}
-			network_host_normalize_addr_str(host_token, &addr);
-			continue;
-		}
+    int rc = 0;
+    do {
 
-		if (cfginfo.cond != CONFIG_COND_EQ) continue;
+        if (srv->srvconf.systemd_socket_activation) {
+            for (uint32_t i = 0; i < srv->srv_sockets_inherited.used; ++i) {
+                srv->srv_sockets_inherited.ptr[i]->sidx = (unsigned short)~0u;
+            }
+            rc = network_socket_activation_from_env(srv, &p->defaults);
+            if (0 != rc) break;
+            if (0 == srv->srv_sockets_inherited.used) {
+                srv->srvconf.systemd_socket_activation = 0;
+            }
+        }
 
-			if (0 != network_server_init(srv, host_token, i, -1)) return -1;
-	}
+        /* process srv->srvconf.bindhost
+         * (skip if systemd socket activation is enabled and bindhost is empty;
+         *  do not additionally listen on "*") */
+        if (!srv->srvconf.systemd_socket_activation
+            || !buffer_string_is_empty(srv->srvconf.bindhost)) {
+            buffer *b = buffer_init();
+            buffer_copy_buffer(b, srv->srvconf.bindhost);
+            if (b->ptr[0] != '/') { /*(skip adding port if unix socket path)*/
+                buffer_append_string_len(b, CONST_STR_LEN(":"));
+                buffer_append_int(b, srv->srvconf.port);
+            }
 
-	if (srv->srvconf.systemd_socket_activation) {
-		/* activate any inherited sockets not explicitly listed in config file */
-		server_socket *srv_socket;
-		for (uint32_t i = 0; i < srv->srv_sockets_inherited.used; ++i) {
-		        if ((unsigned short)~0u != srv->srv_sockets_inherited.ptr[i]->sidx) continue;
-		        srv->srv_sockets_inherited.ptr[i]->sidx = 0;
-			srv_socket = calloc(1, sizeof(server_socket));
-			force_assert(NULL != srv_socket);
-			memcpy(srv_socket, srv->srv_sockets_inherited.ptr[i], sizeof(server_socket));
-			network_srv_sockets_append(srv, srv_socket);
-		}
-	}
+            rc = (-1 == stdin_fd || 0 == srv->srv_sockets.used)
+              ? network_server_init(srv, &p->defaults, b, 0, stdin_fd)
+              : close(stdin_fd);/*(graceful restart listening to "/dev/stdin")*/
+            buffer_free(b);
+            if (0 != rc) break;
+        }
 
-	return 0;
+        /* check for $SERVER["socket"] */
+        for (uint32_t i = 1; i < srv->config_context->used; ++i) {
+            config_cond_info cfginfo;
+            config_get_config_cond_info(srv, i, &cfginfo);
+            if (COMP_SERVER_SOCKET != cfginfo.comp) continue;/* not our stage */
+
+            buffer *host_token;
+            *(const buffer **)&host_token = cfginfo.string;
+            /*(cfginfo.string is modified during config)*/
+
+            memcpy(&p->conf, &p->defaults, sizeof(network_socket_config));
+            for (int j = !p->cvlist[0].v.u2[1]; j < p->nconfig; ++j) {
+                if ((int)i != p->cvlist[j].k_id) continue;
+                const config_plugin_value_t *cpv =
+                  p->cvlist + p->cvlist[j].v.u2[0];
+                network_merge_config(&p->conf, cpv);
+                break;
+            }
+
+            if (cfginfo.cond == CONFIG_COND_EQ) {
+                rc = network_server_init(srv, &p->conf, host_token, i, -1);
+                if (0 != rc) break;
+            }
+            else if (cfginfo.cond == CONFIG_COND_NE) {
+                socklen_t addr_len = sizeof(sock_addr);
+                sock_addr addr;
+                rc = network_host_parse_addr(srv, &addr, &addr_len,
+                                             host_token, p->conf.use_ipv6);
+                if (0 != rc) break;
+                network_host_normalize_addr_str(host_token, &addr);
+            }
+        }
+        if (0 != rc) break;
+
+        if (srv->srvconf.systemd_socket_activation) {
+            /* activate any inherited sockets not explicitly listed in config */
+            server_socket *srv_socket;
+            for (uint32_t i = 0; i < srv->srv_sockets_inherited.used; ++i) {
+                    if ((unsigned short)~0u
+                        != srv->srv_sockets_inherited.ptr[i]->sidx)
+                        continue;
+                    srv->srv_sockets_inherited.ptr[i]->sidx = 0;
+                srv_socket = calloc(1, sizeof(server_socket));
+                force_assert(NULL != srv_socket);
+                memcpy(srv_socket, srv->srv_sockets_inherited.ptr[i],
+                       sizeof(server_socket));
+                network_srv_sockets_append(srv, srv_socket);
+            }
+        }
+
+    } while (0);
+
+    free(p->cvlist);
+    return rc;
 }
 
 void network_unregister_sock(server *srv, server_socket *srv_socket) {

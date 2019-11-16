@@ -168,7 +168,7 @@ URIHANDLER_FUNC(mod_staticfile_subrequest) {
 		log_error_write(srv, __FILE__, __LINE__,  "s",  "-- handling file as static file");
 	}
 
-	if (!p->conf.etags_used) con->etag_flags = 0;
+	if (!p->conf.etags_used) con->conf.etag_flags = 0;
 	http_response_send_file(srv, con, con->physical.path);
 
 	return HANDLER_FINISHED;

@@ -361,7 +361,7 @@ static int magnet_stat(lua_State *L) {
 	lua_pushinteger(L, sce->st.st_ino);
 	lua_setfield(L, -2, "st_ino");
 
-	if (!buffer_string_is_empty(stat_cache_etag_get(sce, con->etag_flags))) {
+	if (!buffer_string_is_empty(stat_cache_etag_get(sce, con->conf.etag_flags))) {
 		/* we have to mutate the etag */
 		etag_mutate(srv->tmp_buf, sce->etag);
 		lua_pushlstring(L, CONST_BUF_LEN(srv->tmp_buf));

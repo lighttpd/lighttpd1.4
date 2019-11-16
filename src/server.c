@@ -87,6 +87,11 @@
 /* #define USE_ALARM */
 #endif
 
+typedef struct {
+    PLUGIN_DATA;
+    specific_config defaults;
+} config_data_base;
+
 static int oneshot_fd = 0;
 static volatile int pid_fd = -2;
 static server_socket_array graceful_sockets;
@@ -234,17 +239,6 @@ static server *server_init(void) {
 
 	CLEAN(ts_date_str);
 	CLEAN(tmp_buf);
-
-	CLEAN(srvconf.errorlog_file);
-	CLEAN(srvconf.breakagelog_file);
-	CLEAN(srvconf.groupname);
-	CLEAN(srvconf.username);
-	CLEAN(srvconf.changeroot);
-	CLEAN(srvconf.bindhost);
-	CLEAN(srvconf.event_handler);
-	CLEAN(srvconf.pid_file);
-	CLEAN(srvconf.syslog_facility);
-
 	CLEAN(tmp_chunk_len);
 #undef CLEAN
 
@@ -269,10 +263,8 @@ static server *server_init(void) {
 
 	srv->srvconf.modules = array_init();
 	srv->srvconf.modules_dir = buffer_init_string(LIBRARY_DIR);
-	srv->srvconf.network_backend = buffer_init();
 	srv->srvconf.upload_tempdirs = array_init();
-	srv->srvconf.reject_expect_100_with_417 = 1;
-	srv->srvconf.xattr_name = buffer_init_string("Content-Type");
+	srv->srvconf.xattr_name = "Content-Type";
 	srv->srvconf.http_header_strict  = 1;
 	srv->srvconf.http_host_strict    = 1; /*(implies http_host_normalize)*/
 	srv->srvconf.http_host_normalize = 0;
@@ -283,13 +275,14 @@ static server *server_init(void) {
 					| HTTP_PARSEOPT_URL_NORMALIZE_PATH_DOTSEG_REMOVE;
 	srv->srvconf.high_precision_timestamps = 0;
 	srv->srvconf.max_request_field_size = 8192;
-	srv->srvconf.loadavg[0] = 0.0;
-	srv->srvconf.loadavg[1] = 0.0;
-	srv->srvconf.loadavg[2] = 0.0;
 	srv->srvconf.compat_module_load = 1;
 	srv->srvconf.systemd_socket_activation = 0;
 
 	srv->request_env = plugins_call_handle_request_env;
+
+	srv->loadavg[0] = 0.0;
+	srv->loadavg[1] = 0.0;
+	srv->loadavg[2] = 0.0;
 
 	return srv;
 }
@@ -310,43 +303,14 @@ static void server_free(server *srv) {
 	CLEAN(ts_date_str);
 	CLEAN(tmp_buf);
 
-	CLEAN(srvconf.errorlog_file);
-	CLEAN(srvconf.breakagelog_file);
-	CLEAN(srvconf.groupname);
-	CLEAN(srvconf.username);
-	CLEAN(srvconf.changeroot);
-	CLEAN(srvconf.bindhost);
-	CLEAN(srvconf.event_handler);
-	CLEAN(srvconf.pid_file);
 	CLEAN(srvconf.modules_dir);
-	CLEAN(srvconf.network_backend);
-	CLEAN(srvconf.xattr_name);
-	CLEAN(srvconf.syslog_facility);
 
 	CLEAN(tmp_chunk_len);
 #undef CLEAN
 
 	fdevent_free(srv->ev);
 
-	if (srv->config_storage) {
-		for (uint32_t i = 0; i < srv->config_context->used; ++i) {
-			specific_config *s = srv->config_storage[i];
-
-			if (!s) continue;
-
-			buffer_free(s->document_root);
-			buffer_free(s->server_name);
-			buffer_free(s->server_tag);
-			buffer_free(s->error_handler);
-			buffer_free(s->error_handler_404);
-			buffer_free(s->errorfile_prefix);
-			buffer_free(s->socket_perms);
-			array_free(s->mimetypes);
-			free(s);
-		}
-		free(srv->config_storage);
-		srv->config_storage = NULL;
-	}
+	config_free_config(srv->config_data_base);
 
 #define CLEAN(x) \
 	array_free(srv->x);
@@ -918,7 +882,8 @@ static void server_graceful_state (server *srv) {
     else {
         server_sockets_close(srv);
         remove_pid_file(srv);
-        buffer_clear(srv->srvconf.pid_file); /*(prevent more removal attempts)*/
+        /*(prevent more removal attempts)*/
+        if (srv->srvconf.pid_file) buffer_clear(srv->srvconf.pid_file);
     }
 }
 
@@ -1017,7 +982,7 @@ static int server_main (server * const srv, int argc, char **argv) {
 	while(-1 != (o = getopt(argc, argv, "f:m:i:hvVD1pt"))) {
 		switch(o) {
 		case 'f':
-			if (srv->config_storage) {
+			if (srv->config_data_base) {
 				log_error_write(srv, __FILE__, __LINE__, "s",
 						"Can only read one config file. Use the include command to use multiple config files.");
 				return -1;
@@ -1055,7 +1020,7 @@ static int server_main (server * const srv, int argc, char **argv) {
 	}
 
       #ifdef __CYGWIN__
-	if (!srv->config_storage && NULL != getenv("NSSM_SERVICE_NAME")) {
+	if (!srv->config_data_base && NULL != getenv("NSSM_SERVICE_NAME")) {
 		char *dir = getenv("NSSM_SERVICE_DIR");
 		if (NULL != dir && 0 != chdir(dir)) {
 			log_error_write(srv, __FILE__, __LINE__, "sss", "chdir failed:", dir, strerror(errno));
@@ -1067,7 +1032,7 @@ static int server_main (server * const srv, int argc, char **argv) {
 	}
       #endif
 
-	if (!srv->config_storage) {
+	if (!srv->config_data_base) {
 		log_error_write(srv, __FILE__, __LINE__, "s",
 				"No configuration available. Try using -f option.");
 		return -1;
@@ -1085,7 +1050,7 @@ static int server_main (server * const srv, int argc, char **argv) {
 	}
 
 	if (test_config) {
-		buffer_clear(srv->srvconf.pid_file);
+		if (srv->srvconf.pid_file) buffer_clear(srv->srvconf.pid_file);
 		if (1 == test_config) {
 			printf("Syntax OK\n");
 		} else { /*(test_config > 1)*/
@@ -1108,7 +1073,7 @@ static int server_main (server * const srv, int argc, char **argv) {
 		graceful_shutdown = 1;
 		srv->sockets_disabled = 1;
 		srv->srvconf.dont_daemonize = 1;
-		buffer_clear(srv->srvconf.pid_file);
+		if (srv->srvconf.pid_file) buffer_clear(srv->srvconf.pid_file);
 		if (srv->srvconf.max_worker) {
 			srv->srvconf.max_worker = 0;
 			log_error_write(srv, __FILE__, __LINE__, "s",
@@ -1116,7 +1081,7 @@ static int server_main (server * const srv, int argc, char **argv) {
 		}
 	}
 
-	if (buffer_is_equal_string(srv->srvconf.bindhost, CONST_STR_LEN("/dev/stdin"))) {
+	if (srv->srvconf.bindhost && buffer_is_equal_string(srv->srvconf.bindhost, CONST_STR_LEN("/dev/stdin"))) {
 		stdin_fd = dup(STDIN_FILENO);
 		if (stdin_fd <= STDERR_FILENO) {
 			log_error_write(srv, __FILE__, __LINE__, "s",
@@ -1161,13 +1126,6 @@ static int server_main (server * const srv, int argc, char **argv) {
 	if (0 != config_set_defaults(srv)) {
 		log_error_write(srv, __FILE__, __LINE__, "s",
 				"setting default values failed");
-		return -1;
-	}
-
-	/* check document-root */
-	if (buffer_string_is_empty(srv->config_storage[0]->document_root)) {
-		log_error_write(srv, __FILE__, __LINE__, "s",
-				"document-root is not set\n");
 		return -1;
 	}
 
@@ -1460,8 +1418,11 @@ static int server_main (server * const srv, int argc, char **argv) {
 		log_error_write(srv, __FILE__, __LINE__, "s", "server started (" PACKAGE_DESC ")");
 	}
 
-	if (buffer_is_empty(srv->config_storage[0]->server_tag)) {
-		buffer_copy_string_len(srv->config_storage[0]->server_tag, CONST_STR_LEN(PACKAGE_DESC));
+	specific_config *s = &((config_data_base *)srv->config_data_base)->defaults;
+	if (buffer_is_empty(s->server_tag)) {
+		static const buffer server_tag =
+		  { CONST_STR_LEN(PACKAGE_DESC), 0 };
+		s->server_tag = &server_tag;
 	}
 
 	if (HANDLER_GO_ON != plugins_call_set_defaults(srv)) {
@@ -1470,7 +1431,7 @@ static int server_main (server * const srv, int argc, char **argv) {
 	}
 
 	/* settings might be enabled during module config set defaults */
-	srv->config_storage[0]->high_precision_timestamps = srv->srvconf.high_precision_timestamps;
+	s->high_precision_timestamps = srv->srvconf.high_precision_timestamps;
 
 	/* dump unused config-keys */
 	for (i = 0; i < srv->config_context->used; i++) {
@@ -1651,7 +1612,7 @@ static int server_main (server * const srv, int argc, char **argv) {
 			close(pid_fd);
 			pid_fd = -1;
 		}
-		buffer_clear(srv->srvconf.pid_file);
+		if (srv->srvconf.pid_file) buffer_clear(srv->srvconf.pid_file);
 
 		fdevent_clr_logger_pipe_pids();
 		srv->pid = getpid();
@@ -1797,9 +1758,9 @@ static void server_handle_sigalrm (server * const srv, time_t min_ts, time_t las
 
 			      #ifdef HAVE_GETLOADAVG
 				/* refresh loadavg data every 30 seconds */
-				if (srv->srvconf.loadts + 30 < min_ts) {
-					if (-1 != getloadavg(srv->srvconf.loadavg, 3)) {
-						srv->srvconf.loadts = min_ts;
+				if (srv->loadts + 30 < min_ts) {
+					if (-1 != getloadavg(srv->loadavg, 3)) {
+						srv->loadts = min_ts;
 					}
 				}
 			      #endif
@@ -1809,9 +1770,7 @@ static void server_handle_sigalrm (server * const srv, time_t min_ts, time_t las
 				/* cleanup stat-cache */
 				stat_cache_trigger_cleanup(srv);
 				/* reset global/aggregate rate limit counters */
-				for (uint32_t i = 0; i < srv->config_context->used; ++i) {
-					srv->config_storage[i]->global_bytes_per_second_cnt = 0;
-				}
+				config_reset_config_bytes_sec(srv->config_data_base);
 				/* if graceful_shutdown, accelerate cleanup of recently completed request/responses */
 				if (graceful_shutdown && !srv_shutdown) connection_graceful_shutdown_maint(srv);
 				connection_periodic_maint(srv, min_ts);

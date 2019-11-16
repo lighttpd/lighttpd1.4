@@ -797,7 +797,7 @@ static handler_t mod_status_handle_server_config(server *srv, connection *con) {
 #endif
 	mod_status_header_append(b, "Network Engine");
 
-	mod_status_row_append(b, "fd-Event-Handler", srv->srvconf.event_handler->ptr);
+	mod_status_row_append(b, "fd-Event-Handler", srv->srvconf.event_handler);
 
 	mod_status_header_append(b, "Config-File-Settings");
 

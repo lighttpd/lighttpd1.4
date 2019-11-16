@@ -1266,7 +1266,7 @@ static int mod_ssi_handle_request(server *srv, connection *con, handler_ctx *p) 
 		if (st.st_mtime < include_file_last_mtime)
 			st.st_mtime = include_file_last_mtime;
 
-		etag_create(con->physical.etag, &st, con->etag_flags);
+		etag_create(con->physical.etag, &st, con->conf.etag_flags);
 		etag_mutate(con->physical.etag, con->physical.etag);
 		http_header_response_set(con, HTTP_HEADER_ETAG, CONST_STR_LEN("ETag"), CONST_BUF_LEN(con->physical.etag));
 

@@ -610,7 +610,7 @@ int stat_cache_choose_engine (server *srv, const buffer *stat_cache_string) {
 }
 
 #if defined(HAVE_XATTR)
-static int stat_cache_attr_get(buffer *buf, char *name, char *xattrname) {
+static int stat_cache_attr_get(buffer *buf, char *name, const char *xattrname) {
 	int attrlen;
 	int ret;
 
@@ -622,7 +622,7 @@ static int stat_cache_attr_get(buffer *buf, char *name, char *xattrname) {
 	return ret;
 }
 #elif defined(HAVE_EXTATTR)
-static int stat_cache_attr_get(buffer *buf, char *name, char *xattrname) {
+static int stat_cache_attr_get(buffer *buf, char *name, const char *xattrname) {
 	ssize_t attrlen;
 
 	buffer_string_prepare_copy(buf, 1023);
@@ -695,7 +695,7 @@ const buffer * stat_cache_content_type_get(server *srv, connection *con, const b
         buffer_clear(sce->content_type);
       #if defined(HAVE_XATTR) || defined(HAVE_EXTATTR)
         if (con->conf.use_xattr) {
-            stat_cache_attr_get(sce->content_type, name->ptr, srv->srvconf.xattr_name->ptr);
+            stat_cache_attr_get(sce->content_type, name->ptr, srv->srvconf.xattr_name);
         }
       #else
         UNUSED(srv);
@@ -713,8 +713,8 @@ const buffer * stat_cache_content_type_get(server *srv, connection *con, const b
     return NULL;
 }
 
-const buffer * stat_cache_etag_get(stat_cache_entry *sce, etag_flags_t flags) {
-    /*(invalid caching if user config has multiple, different con->etag_flags
+const buffer * stat_cache_etag_get(stat_cache_entry *sce, int flags) {
+    /*(invalid caching if user cfg has multiple, different con->conf.etag_flags
      * for same path (not expected, since etag flags should be by filesystem))*/
     if (!buffer_string_is_empty(sce->etag)) return sce->etag;
 

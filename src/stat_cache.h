@@ -38,7 +38,7 @@ void stat_cache_free(struct stat_cache *fc);
 
 const buffer * stat_cache_mimetype_by_ext(const connection *con, const char *name, size_t nlen);
 const buffer * stat_cache_content_type_get(server *srv, connection *con, const buffer *name, stat_cache_entry *sce);
-const buffer * stat_cache_etag_get(stat_cache_entry *sce, etag_flags_t flags);
+const buffer * stat_cache_etag_get(stat_cache_entry *sce, int flags);
 void stat_cache_update_entry(server *srv, const char *name, size_t len, struct stat *st, buffer *etagb);
 void stat_cache_delete_entry(server *srv, const char *name, size_t len);
 void stat_cache_delete_dir(server *srv, const char *name, size_t len);

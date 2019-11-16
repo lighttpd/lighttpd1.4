@@ -42,7 +42,7 @@ typedef struct {
 
 	off_t bytes_in, bytes_out;
 
-	array *tempdirs;
+	const array *tempdirs;
 	off_t upload_temp_file_size;
 	unsigned int tempdir_idx;
 } chunkqueue;
@@ -60,8 +60,8 @@ chunkqueue *chunkqueue_init(void);
 
 void chunkqueue_set_chunk_size (size_t sz);
 void chunkqueue_set_tempdirs_default_reset (void);
-void chunkqueue_set_tempdirs_default (array *tempdirs, off_t upload_temp_file_size);
-void chunkqueue_set_tempdirs(chunkqueue *cq, array *tempdirs, off_t upload_temp_file_size);
+void chunkqueue_set_tempdirs_default (const array *tempdirs, off_t upload_temp_file_size);
+void chunkqueue_set_tempdirs(chunkqueue *cq, const array *tempdirs, off_t upload_temp_file_size);
 void chunkqueue_append_file(chunkqueue *cq, buffer *fn, off_t offset, off_t len); /* copies "fn" */
 void chunkqueue_append_file_fd(chunkqueue *cq, buffer *fn, int fd, off_t offset, off_t len); /* copies "fn" */
 void chunkqueue_append_mem(chunkqueue *cq, const char *mem, size_t len); /* copies memory */

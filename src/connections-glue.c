@@ -290,8 +290,8 @@ static handler_t connection_handle_read_body_unknown(server *srv, connection *co
 
 static off_t connection_write_throttle(server *srv, connection *con, off_t max_bytes) {
 	UNUSED(srv);
-	if (con->conf.global_kbytes_per_second) {
-		off_t limit = con->conf.global_kbytes_per_second * 1024 - *(con->conf.global_bytes_per_second_cnt_ptr);
+	if (con->conf.global_bytes_per_second) {
+		off_t limit = (off_t)con->conf.global_bytes_per_second - *(con->conf.global_bytes_per_second_cnt_ptr);
 		if (limit <= 0) {
 			/* we reached the global traffic limit */
 			con->traffic_limit_reached = 1;
@@ -302,8 +302,8 @@ static off_t connection_write_throttle(server *srv, connection *con, off_t max_b
 		}
 	}
 
-	if (con->conf.kbytes_per_second) {
-		off_t limit = con->conf.kbytes_per_second * 1024 - con->bytes_written_cur_second;
+	if (con->conf.bytes_per_second) {
+		off_t limit = (off_t)con->conf.bytes_per_second - con->bytes_written_cur_second;
 		if (limit <= 0) {
 			/* we reached the traffic limit */
 			con->traffic_limit_reached = 1;
@@ -362,7 +362,8 @@ int connection_write_chunkqueue(server *srv, connection *con, chunkqueue *cq, of
 	written = cq->bytes_out - written;
 	con->bytes_written += written;
 	con->bytes_written_cur_second += written;
-	*(con->conf.global_bytes_per_second_cnt_ptr) += written;
+	if (con->conf.global_bytes_per_second_cnt_ptr)
+		*(con->conf.global_bytes_per_second_cnt_ptr) += written;
 
 	return ret;
 }
@@ -391,7 +392,8 @@ static int connection_write_100_continue(server *srv, connection *con) {
 	written = cq->bytes_out - written;
 	con->bytes_written += written;
 	con->bytes_written_cur_second += written;
-	*(con->conf.global_bytes_per_second_cnt_ptr) += written;
+	if (con->conf.global_bytes_per_second_cnt_ptr)
+		*(con->conf.global_bytes_per_second_cnt_ptr) += written;
 
 	if (rc < 0) {
 		con->state = CON_STATE_ERROR;

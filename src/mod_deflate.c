@@ -1198,7 +1198,7 @@ CONNECTION_FUNC(mod_deflate_handle_response_start) {
 		}
 	}
 
-	if (0.0 < p->conf.max_loadavg && p->conf.max_loadavg < srv->srvconf.loadavg[0]) {
+	if (0.0 < p->conf.max_loadavg && p->conf.max_loadavg < srv->loadavg[0]) {
 		return HANDLER_GO_ON;
 	}
 

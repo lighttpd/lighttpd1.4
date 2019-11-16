@@ -35,12 +35,11 @@ static int http_response_omit_header(connection *con, const data_string * const 
             && buffer_eq_icase_ssn(ds->key.ptr+sizeof("X-LIGHTTPD-")-1,
                                    CONST_STR_LEN("KBytes-per-second"))) {
             /* "X-LIGHTTPD-KBytes-per-second" */
-            long limit = strtol(ds->value.ptr, NULL, 10);
+            off_t limit = strtol(ds->value.ptr, NULL, 10) << 10; /*(*=1024)*/
             if (limit > 0
-                && (limit < con->conf.kbytes_per_second
-                    || 0 == con->conf.kbytes_per_second)) {
-                if (limit > USHRT_MAX) limit= USHRT_MAX;
-                con->conf.kbytes_per_second = limit;
+                && (limit < con->conf.bytes_per_second
+                    || 0 == con->conf.bytes_per_second)) {
+                con->conf.bytes_per_second = limit;
             }
         }
         return 1;
@@ -59,6 +58,7 @@ int http_response_write_header(server *srv, connection *con) {
 	http_status_append(b, con->http_status);
 
 	/* disable keep-alive if requested */
+
 	if (con->request_count > con->conf.max_keep_alive_requests || 0 == con->conf.max_keep_alive_idle) {
 		con->keep_alive = 0;
 	} else if (0 != con->request.content_length
@@ -435,7 +435,7 @@ handler_t http_response_prepare(server *srv, connection *con) {
 					  |  (1 << COMP_HTTP_URL)
 					  |  (1 << COMP_HTTP_QUERY_STRING)
 					  |  (1 << COMP_HTTP_REQUEST_HEADER);
-		config_patch_connection(srv, con);
+		config_patch_config(srv, con);
 
 		/* do we have to downgrade to 1.0 ? */
 		if (!con->conf.allow_http11) {

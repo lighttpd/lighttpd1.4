@@ -563,7 +563,7 @@ static int deflate_file_to_file(server *srv, connection *con, plugin_data *p, in
 		return 0;
 	}
 
-	if (0.0 < p->conf.max_loadavg && p->conf.max_loadavg < srv->srvconf.loadavg[0]) {
+	if (0.0 < p->conf.max_loadavg && p->conf.max_loadavg < srv->loadavg[0]) {
 		return -1;
 	}
 
@@ -699,7 +699,7 @@ static int deflate_file_to_buffer(server *srv, connection *con, plugin_data *p, 
 
 	if (sce->st.st_size > 128 * 1024 * 1024) return -1;
 
-	if (0.0 < p->conf.max_loadavg && p->conf.max_loadavg < srv->srvconf.loadavg[0]) {
+	if (0.0 < p->conf.max_loadavg && p->conf.max_loadavg < srv->loadavg[0]) {
 		return -1;
 	}
 
@@ -851,7 +851,7 @@ PHYSICALPATH_FUNC(mod_compress_physical) {
 	 */
 	if (sce->st.st_size < 128) return HANDLER_GO_ON;
 
-	stat_cache_etag_get(sce, con->etag_flags);
+	stat_cache_etag_get(sce, con->conf.etag_flags);
 
 	/* check if mimetype is in compress-config */
 	content_type = NULL;

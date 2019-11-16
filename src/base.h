@@ -13,7 +13,6 @@
 #include "chunk.h"
 #include "http_kv.h"
 #include "sock_addr.h"
-#include "etag.h"
 
 struct fdevents;        /* declaration */
 struct stat_cache;      /* declaration */
@@ -76,57 +75,52 @@ typedef struct {
 } physical;
 
 typedef struct {
-	array *mimetypes;
+	const array *mimetypes;
 
 	/* virtual-servers */
-	buffer *document_root;
-	buffer *server_name;
-	buffer *error_handler;
-	buffer *error_handler_404;
-	buffer *server_tag;
-	buffer *errorfile_prefix;
+	const buffer *document_root;
+	const buffer *server_name;
+	const buffer *server_tag;
+	const buffer *error_handler;
+	const buffer *error_handler_404;
+	const buffer *errorfile_prefix;
 
-	unsigned short high_precision_timestamps;
 	unsigned short max_keep_alive_requests;
 	unsigned short max_keep_alive_idle;
 	unsigned short max_read_idle;
 	unsigned short max_write_idle;
-	unsigned short use_xattr;
-	unsigned short follow_symlink;
-	unsigned short range_requests;
 	unsigned short stream_request_body;
 	unsigned short stream_response_body;
-	unsigned short error_intercept;
+	unsigned char high_precision_timestamps;
+	unsigned char allow_http11;
+	unsigned char follow_symlink;
+	unsigned char etag_flags;
+	unsigned char force_lowercase_filenames; /* if the FS is case-insensitive, force all files to lower-case */
+	unsigned char use_xattr;
+	unsigned char range_requests;
+	unsigned char error_intercept;
 
 	/* debug */
 
-	unsigned short log_file_not_found;
-	unsigned short log_request_header;
-	unsigned short log_request_handling;
-	unsigned short log_response_header;
-	unsigned short log_condition_handling;
-	unsigned short log_timeouts;
+	unsigned char log_file_not_found;
+	unsigned char log_request_header;
+	unsigned char log_request_handling;
+	unsigned char log_response_header;
+	unsigned char log_condition_handling;
+	unsigned char log_timeouts;
 
-	unsigned short allow_http11;
-	unsigned short etag_use_inode;
-	unsigned short etag_use_mtime;
-	unsigned short etag_use_size;
-	unsigned short force_lowercase_filenames; /* if the FS is case-insensitive, force all files to lower-case */
 	unsigned int http_parseopts;
 	unsigned int max_request_size;
 
-	unsigned short kbytes_per_second; /* connection kb/s limit */
+	unsigned int bytes_per_second; /* connection bytes/sec limit */
+	unsigned int global_bytes_per_second;/*total bytes/sec limit for scope*/
 
-	/* configside */
-	unsigned short global_kbytes_per_second; /*  */
-
-	off_t  global_bytes_per_second_cnt;
 	/* server-wide traffic-shaper
 	 *
 	 * each context has the counter which is inited once
-	 * a second by the global_kbytes_per_second config-var
+	 * a second by the global_bytes_per_second config-var
 	 *
-	 * as soon as global_kbytes_per_second gets below 0
+	 * as soon as global_bytes_per_second gets below 0
 	 * the connected conns are "offline" a little bit
 	 *
 	 * the problem:
@@ -135,25 +129,6 @@ typedef struct {
 	 *
 	 */
 	off_t *global_bytes_per_second_cnt_ptr; /*  */
-
-	/*
-	 * global_bytes_per_second_cnt_ptr must be the final member above this point
-	 * members above this point are patched per connection
-	 */
-
-	/* global or per-socket config; not patched per connection */
-
-	unsigned short use_ipv6, set_v6only; /* set_v6only is only a temporary option */
-	unsigned short defer_accept;
-	unsigned short ssl_enabled; /* only interesting for setting up listening sockets. don't use at runtime */
-	int listen_backlog;
-	buffer *socket_perms;
-
-#if defined(__FreeBSD__) || defined(__NetBSD__) \
- || defined(__OpenBSD__) || defined(__DragonFly__)
-	buffer *bsd_accept_filter;
-#endif
-
 } specific_config;
 
 /* the order of the items should be the same as they are processed
@@ -193,9 +168,9 @@ typedef struct cond_cache_t {
 	cond_result_t result;
 	/* result without preconditions (must never be "skip") */
 	cond_result_t local_result;
+	const buffer *comp_value; /* just a pointer */
 	int patterncount;
 	int matches[3 * 10];
-	const buffer *comp_value; /* just a pointer */
 } cond_cache_t;
 
 struct connection {
@@ -280,9 +255,6 @@ struct connection {
 	struct server_socket *srv_socket;   /* reference to the server-socket */
 	int (* network_write)(struct server *srv, struct connection *con, chunkqueue *cq, off_t max_bytes);
 	int (* network_read)(struct server *srv, struct connection *con, chunkqueue *cq, off_t max_bytes);
-
-	/* etag handling */
-	etag_flags_t etag_flags;
 };
 
 typedef struct {
@@ -297,56 +269,52 @@ typedef struct {
 } mtime_cache_type;
 
 typedef struct {
-	void  *ptr;
+	void *ptr;
 	uint32_t used;
 	uint32_t size;
 } buffer_plugin;
 
 typedef struct {
 	unsigned int max_request_field_size;
+	int stat_cache_engine;
+	const char *xattr_name;
+	unsigned int log_state_handling;
+	unsigned char log_request_header_on_error;
 
-	unsigned short http_header_strict;
-	unsigned short http_host_strict;
-	unsigned short http_host_normalize;
+	/*(used sparsely, if at all, after config at startup)*/
+
+	unsigned char http_header_strict;
+	unsigned char http_host_strict;
+	unsigned char http_host_normalize;
+	unsigned char http_method_get_body;
+	unsigned char high_precision_timestamps;
 	unsigned short http_url_normalize;
-	unsigned short http_method_get_body;
-	unsigned short high_precision_timestamps;
 
 	unsigned short max_worker;
 	unsigned short max_fds;
 	unsigned short max_conns;
-
-	unsigned short log_state_handling;
-	unsigned short log_request_header_on_error;
 	unsigned short port;
-
-	time_t loadts;
-	double loadavg[3];
-
-	int stat_cache_engine;
 
 	unsigned int upload_temp_file_size;
 	array *upload_tempdirs;
-	buffer *xattr_name;
 
-	unsigned short dont_daemonize;
-	unsigned short preflight_check;
-	unsigned short enable_cores;
-	unsigned short reject_expect_100_with_417; /*(ignored)*/
-	unsigned short compat_module_load;
-	unsigned short systemd_socket_activation;
-	unsigned short errorlog_use_syslog;
-	buffer *errorlog_file;
-	buffer *breakagelog_file;
-	buffer *syslog_facility;
-	buffer *bindhost;
-	buffer *changeroot;
-	buffer *username;
-	buffer *groupname;
+	unsigned char dont_daemonize;
+	unsigned char preflight_check;
+	unsigned char enable_cores;
+	unsigned char compat_module_load;
+	unsigned char systemd_socket_activation;
+	unsigned char errorlog_use_syslog;
+	const buffer *errorlog_file;
+	const buffer *breakagelog_file;
+	const buffer *syslog_facility;
+	const buffer *bindhost;
+	const buffer *changeroot;
+	const buffer *username;
+	const buffer *groupname;
+	const buffer *network_backend;
+	const char *event_handler;
 	buffer *pid_file;
-	buffer *event_handler;
 	buffer *modules_dir;
-	buffer *network_backend;
 	array *modules;
 } server_config;
 
@@ -406,10 +374,6 @@ struct server {
 	buffer *ts_date_str;
 	log_error_st *errh;
 
-	/* config-file */
-	array *config_context;
-	specific_config **config_storage;
-
 	/**
 	 * The status array can carry all the status information you want
 	 * the key to the array is <module-prefix>.<name>
@@ -430,14 +394,22 @@ struct server {
 	/* caches */
 	mtime_cache_type mtime_cache[FILE_CACHE_MAX];
 
+	time_t loadts;
+	double loadavg[3];
+
+	/* config-file */
+	void *config_data_base;
+	array *config_context;
+	array empty_array;
+
 	/* members used at start-up or rarely used */
 	server_socket_array srv_sockets;
 	server_socket_array srv_sockets_inherited;
 	buffer_plugin plugins;
 
 	array *config_touched;
-	short int config_deprecated;
-	short int config_unsupported;
+	unsigned char config_deprecated;
+	unsigned char config_unsupported;
 
 	int event_handler;
 	time_t startup_ts;
