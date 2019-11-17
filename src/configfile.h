@@ -40,6 +40,18 @@ typedef enum {
 	COMP_LAST_ELEMENT
 } comp_key_t;
 
+typedef struct {
+	comp_key_t comp;
+	config_cond_t cond;
+	const buffer *string;
+	const buffer *comp_tag;
+	const buffer *comp_key;
+	const char *op;
+} config_cond_info;
+
+__attribute_cold__
+void config_get_config_cond_info(server *srv, uint32_t idx, config_cond_info *cfginfo);
+
 /* $HTTP["host"] ==    "incremental.home.kneschke.de" { ... }
  * for print:   comp_key      op    string
  * for compare: comp          cond  string/regex

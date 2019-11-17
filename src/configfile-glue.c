@@ -25,6 +25,16 @@
  */
 
 
+void config_get_config_cond_info(server *srv, uint32_t idx, config_cond_info *cfginfo) {
+    data_config *dc = (data_config *)srv->config_context->data[idx];
+    cfginfo->comp = dc->comp;
+    cfginfo->cond = dc->cond;
+    cfginfo->string = &dc->string;
+    cfginfo->comp_tag = dc->comp_tag;
+    cfginfo->comp_key = dc->comp_key;
+    cfginfo->op = dc->op;
+}
+
 int config_plugin_values_init(server * const srv, void *p_d, const config_plugin_keys_t * const cpk, const char * const mname) {
     plugin_data_base * const p = (plugin_data_base *)p_d;
     array * const touched = srv->config_touched;

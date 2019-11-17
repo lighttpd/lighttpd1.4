@@ -525,21 +525,8 @@ error:
 
 
 static int
-network_openssl_load_pemfile (server *srv, plugin_config *s, size_t ndx)
+network_openssl_load_pemfile (server *srv, plugin_config *s)
 {
-  #ifdef OPENSSL_NO_TLSEXT
-    data_config *dc = (data_config *)srv->config_context->data[ndx];
-    if ((ndx > 0 && (COMP_SERVER_SOCKET != dc->comp
-                     || dc->cond != CONFIG_COND_EQ)) || !s->ssl_enabled) {
-        log_error_write(srv, __FILE__, __LINE__, "ss", "SSL:",
-                        "ssl.pemfile only works in SSL socket binding context "
-                        "as openssl version does not support TLS extensions");
-        return -1;
-    }
-  #else
-    UNUSED(ndx);
-  #endif
-
     s->ssl_pemfile_x509 = x509_load_pem_file(srv, s->ssl_pemfile->ptr);
     if (NULL == s->ssl_pemfile_x509) return -1;
     s->ssl_pemfile_pkey = !buffer_string_is_empty(s->ssl_privkey)
@@ -883,15 +870,21 @@ network_init_ssl (server *srv, void *p_d)
         if (!buffer_string_is_empty(s->ssl_pemfile)) {
           #ifdef OPENSSL_NO_TLSEXT
             data_config *dc = (data_config *)srv->config_context->data[i];
-            if (COMP_HTTP_HOST == dc->comp) {
-                log_error_write(srv, __FILE__, __LINE__, "ss", "SSL:",
-                                "can't use ssl.pemfile with $HTTP[\"host\"], "
-                                "openssl version does not support TLS "
-                                "extensions");
+            if (!s->ssl_enabled
+                || (i > 0 && (COMP_SERVER_SOCKET != dc->comp
+                              || dc->cond != CONFIG_COND_EQ))) {
+                if (COMP_HTTP_HOST == dc->comp)
+                    log_error_write(srv, __FILE__, __LINE__, "ss", "SSL:",
+                      "can't use ssl.pemfile with $HTTP[\"host\"], "
+                      "as openssl version does not support TLS extensions");
+                else
+                    log_error_write(srv, __FILE__, __LINE__, "ss", "SSL:",
+                      "ssl.pemfile only works in SSL socket binding context "
+                      "as openssl version does not support TLS extensions");
                 return -1;
             }
           #endif
-            if (network_openssl_load_pemfile(srv, s, i)) return -1;
+            if (network_openssl_load_pemfile(srv, s)) return -1;
         }
 
 
@@ -1823,29 +1816,23 @@ CONNECTION_FUNC(mod_openssl_handle_con_accept)
     hctx->con = con;
     hctx->srv = srv;
     con->plugin_ctx[p->id] = hctx;
-    mod_openssl_patch_connection(srv, con, hctx);
 
-    /* connect fd to SSL */
     hctx->ssl = SSL_new(p->config_storage[srv_sock->sidx]->ssl_ctx);
-    if (NULL == hctx->ssl) {
-        log_error_write(srv, __FILE__, __LINE__, "ss", "SSL:",
-                        ERR_error_string(ERR_get_error(), NULL));
+    if (NULL != hctx->ssl
+        && SSL_set_app_data(hctx->ssl, hctx)
+        && SSL_set_fd(hctx->ssl, con->fd)) {
+        SSL_set_accept_state(hctx->ssl);
+        con->network_read = connection_read_cq_ssl;
+        con->network_write = connection_write_cq_ssl;
+        buffer_copy_string_len(con->proto, CONST_STR_LEN("https"));
+        mod_openssl_patch_connection(srv, con, hctx);
+        return HANDLER_GO_ON;
+    }
+    else {
+        log_error(srv->errh, __FILE__, __LINE__,
+          "SSL: %s", ERR_error_string(ERR_get_error(), NULL));
         return HANDLER_ERROR;
     }
-
-    buffer_copy_string_len(con->proto, CONST_STR_LEN("https"));
-    con->network_read = connection_read_cq_ssl;
-    con->network_write = connection_write_cq_ssl;
-    SSL_set_app_data(hctx->ssl, hctx);
-    SSL_set_accept_state(hctx->ssl);
-
-    if (1 != (SSL_set_fd(hctx->ssl, con->fd))) {
-        log_error_write(srv, __FILE__, __LINE__, "ss", "SSL:",
-                        ERR_error_string(ERR_get_error(), NULL));
-        return HANDLER_ERROR;
-    }
-
-    return HANDLER_GO_ON;
 }
 
 

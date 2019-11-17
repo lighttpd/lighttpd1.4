@@ -280,15 +280,19 @@ static handler_t process_rewrite_rules(server *srv, connection *con, plugin_data
 		uintptr_t * const hctx = (uintptr_t *)(con->plugin_ctx + p->id);
 
 		if (((++*hctx) & 0x1FF) > 100) {
-			if (0 == kvb->x0) {
-				log_error_write(srv, __FILE__, __LINE__,  "s",
-						"ENDLESS LOOP IN rewrite-rule DETECTED ... aborting request");
+			if (0 != kvb->x0) {
+				config_cond_info cfginfo;
+				config_get_config_cond_info(srv, kvb->x0, &cfginfo);
+				log_error(con->errh, __FILE__, __LINE__,
+				  "ENDLESS LOOP IN rewrite-rule DETECTED ... aborting request, "
+				  "perhaps you want to use url.rewrite-once instead of "
+				  "url.rewrite-repeat ($%s %s \"%s\")", cfginfo.comp_key->ptr,
+				  cfginfo.op, cfginfo.string->ptr);
 				return HANDLER_ERROR;
 			}
-			data_config *dc = (data_config *)srv->config_context->data[kvb->x0];
-			log_error_write(srv, __FILE__, __LINE__,  "SbsSBS",
-					"ENDLESS LOOP IN rewrite-rule DETECTED ... aborting request, perhaps you want to use url.rewrite-once instead of url.rewrite-repeat ($", dc->comp_key, dc->op, "\"", &dc->string, "\")");
 
+			log_error(con->errh, __FILE__, __LINE__,
+			  "ENDLESS LOOP IN rewrite-rule DETECTED ... aborting request");
 			return HANDLER_ERROR;
 		}
 

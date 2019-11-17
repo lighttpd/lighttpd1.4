@@ -478,25 +478,29 @@ int network_init(server *srv, int stdin_fd) {
 	}
 
 	/* check for $SERVER["socket"] */
-	for (size_t i = 1; i < srv->config_context->used; ++i) {
-		data_config *dc = (data_config *)srv->config_context->data[i];
+	for (uint32_t i = 1; i < srv->config_context->used; ++i) {
+		config_cond_info cfginfo;
+		config_get_config_cond_info(srv, i, &cfginfo);
+		buffer *host_token;
+		*(const buffer **)&host_token = cfginfo.string;
+		/*(cfginfo.string is modified during config)*/
 
 		/* not our stage */
-		if (COMP_SERVER_SOCKET != dc->comp) continue;
+		if (COMP_SERVER_SOCKET != cfginfo.comp) continue;
 
-		if (dc->cond == CONFIG_COND_NE) {
+		if (cfginfo.cond == CONFIG_COND_NE) {
 			socklen_t addr_len = sizeof(sock_addr);
 			sock_addr addr;
-			if (0 != network_host_parse_addr(srv, &addr, &addr_len, &dc->string, srv->config_storage[i]->use_ipv6)) {
+			if (0 != network_host_parse_addr(srv, &addr, &addr_len, host_token, srv->config_storage[i]->use_ipv6)) {
 				return -1;
 			}
-			network_host_normalize_addr_str(&dc->string, &addr);
+			network_host_normalize_addr_str(host_token, &addr);
 			continue;
 		}
 
-		if (dc->cond != CONFIG_COND_EQ) continue;
+		if (cfginfo.cond != CONFIG_COND_EQ) continue;
 
-			if (0 != network_server_init(srv, &dc->string, i, -1)) return -1;
+			if (0 != network_server_init(srv, host_token, i, -1)) return -1;
 	}
 
 	if (srv->srvconf.systemd_socket_activation) {
