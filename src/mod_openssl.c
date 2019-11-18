@@ -1,6 +1,7 @@
 #include "first.h"
 
 #include <errno.h>
+#include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
 
@@ -39,43 +40,71 @@
 #include "plugin.h"
 
 typedef struct {
-    SSL_CTX *ssl_ctx; /* not patched */
     /* SNI per host: with COMP_SERVER_SOCKET, COMP_HTTP_SCHEME, COMP_HTTP_HOST */
     EVP_PKEY *ssl_pemfile_pkey;
     X509 *ssl_pemfile_x509;
-    STACK_OF(X509_NAME) *ssl_ca_file_cert_names;
+    const buffer *ssl_pemfile;
+    const buffer *ssl_privkey;
+} plugin_cert;
 
-    unsigned short ssl_verifyclient;
-    unsigned short ssl_verifyclient_enforce;
-    unsigned short ssl_verifyclient_depth;
-    unsigned short ssl_verifyclient_export_cert;
-    buffer *ssl_verifyclient_username;
+typedef struct {
+    SSL_CTX *ssl_ctx;
+    EVP_PKEY *ssl_pemfile_pkey;
+} plugin_ssl_ctx;
 
-    unsigned short ssl_disable_client_renegotiation;
-    unsigned short ssl_read_ahead;
-    unsigned short ssl_log_noise;
+typedef struct {
+    SSL_CTX *ssl_ctx; /* output from network_init_ssl() */
 
     /*(used only during startup; not patched)*/
-    unsigned short ssl_enabled; /* only interesting for setting up listening sockets. don't use at runtime */
-    unsigned short ssl_honor_cipher_order; /* determine SSL cipher in server-preferred order, not client-order */
-    unsigned short ssl_empty_fragments; /* whether to not set SSL_OP_DONT_INSERT_EMPTY_FRAGMENTS */
-    unsigned short ssl_use_sslv2;
-    unsigned short ssl_use_sslv3;
-    buffer *ssl_pemfile;
-    buffer *ssl_privkey;
-    buffer *ssl_ca_file;
-    buffer *ssl_ca_crl_file;
-    buffer *ssl_ca_dn_file;
-    buffer *ssl_cipher_list;
-    buffer *ssl_dh_file;
-    buffer *ssl_ec_curve;
+    unsigned char ssl_enabled; /* only interesting for setting up listening sockets. don't use at runtime */
+    unsigned char ssl_honor_cipher_order; /* determine SSL cipher in server-preferred order, not client-order */
+    unsigned char ssl_empty_fragments; /* whether to not set SSL_OP_DONT_INSERT_EMPTY_FRAGMENTS */
+    unsigned char ssl_use_sslv2;
+    unsigned char ssl_use_sslv3;
+    const buffer *ssl_cipher_list;
+    const buffer *ssl_dh_file;
+    const buffer *ssl_ec_curve;
     array *ssl_conf_cmd;
-    buffer *ssl_acme_tls_1;
+
+    /*(copied from plugin_data for socket ssl_ctx config)*/
+    EVP_PKEY *ssl_pemfile_pkey;
+    X509 *ssl_pemfile_x509;
+    const buffer *ssl_pemfile;
+    const buffer *ssl_privkey;
+    STACK_OF(X509_NAME) *ssl_ca_file;
+    STACK_OF(X509_NAME) *ssl_ca_dn_file;
+    const buffer *ssl_ca_crl_file;
+    unsigned char ssl_verifyclient;
+    unsigned char ssl_verifyclient_enforce;
+    unsigned char ssl_verifyclient_depth;
+    unsigned char ssl_read_ahead;
+} plugin_config_socket; /*(used at startup during configuration)*/
+
+typedef struct {
+    /* SNI per host: w/ COMP_SERVER_SOCKET, COMP_HTTP_SCHEME, COMP_HTTP_HOST */
+    EVP_PKEY *ssl_pemfile_pkey;
+    X509 *ssl_pemfile_x509;
+    const buffer *ssl_pemfile;
+    STACK_OF(X509_NAME) *ssl_ca_file;
+    STACK_OF(X509_NAME) *ssl_ca_dn_file;
+    const buffer *ssl_ca_crl_file;
+
+    unsigned char ssl_verifyclient;
+    unsigned char ssl_verifyclient_enforce;
+    unsigned char ssl_verifyclient_depth;
+    unsigned char ssl_verifyclient_export_cert;
+    unsigned char ssl_read_ahead;
+    unsigned char ssl_log_noise;
+    unsigned char ssl_disable_client_renegotiation;
+    const buffer *ssl_verifyclient_username;
+    const buffer *ssl_acme_tls_1;
 } plugin_config;
 
 typedef struct {
     PLUGIN_DATA;
-    plugin_config **config_storage;
+    plugin_ssl_ctx *ssl_ctxs;
+    plugin_config defaults;
+    array *cafiles;
 } plugin_data;
 
 static int ssl_is_init;
@@ -124,67 +153,226 @@ INIT_FUNC(mod_openssl_init)
 }
 
 
+static int mod_openssl_init_once_openssl (server *srv)
+{
+    if (ssl_is_init) return 1;
+
+  #if OPENSSL_VERSION_NUMBER >= 0x10100000L \
+   && !defined(LIBRESSL_VERSION_NUMBER)
+    OPENSSL_init_ssl(OPENSSL_INIT_LOAD_SSL_STRINGS
+                    |OPENSSL_INIT_LOAD_CRYPTO_STRINGS,NULL);
+    OPENSSL_init_crypto(OPENSSL_INIT_ADD_ALL_CIPHERS
+                       |OPENSSL_INIT_ADD_ALL_DIGESTS
+                       |OPENSSL_INIT_LOAD_CONFIG, NULL);
+  #else
+    SSL_load_error_strings();
+    SSL_library_init();
+    OpenSSL_add_all_algorithms();
+  #endif
+    ssl_is_init = 1;
+
+    if (0 == RAND_status()) {
+        log_error_write(srv, __FILE__, __LINE__, "ss", "SSL:",
+                        "not enough entropy in the pool");
+        return 0;
+    }
+
+    local_send_buffer = malloc(LOCAL_SEND_BUFSIZE);
+    force_assert(NULL != local_send_buffer);
+
+    return 1;
+}
+
+
+static void mod_openssl_free_openssl (void)
+{
+    if (!ssl_is_init) return;
+
+  #if OPENSSL_VERSION_NUMBER >= 0x10100000L \
+   && !defined(LIBRESSL_VERSION_NUMBER)
+    /*(OpenSSL libraries handle thread init and deinit)
+     * https://github.com/openssl/openssl/pull/1048 */
+  #else
+    CRYPTO_cleanup_all_ex_data();
+    ERR_free_strings();
+   #if OPENSSL_VERSION_NUMBER >= 0x10000000L
+    ERR_remove_thread_state(NULL);
+   #else
+    ERR_remove_state(0);
+   #endif
+    EVP_cleanup();
+  #endif
+
+    free(local_send_buffer);
+    ssl_is_init = 0;
+}
+
+
+static void
+mod_openssl_free_config (server *srv, plugin_data * const p)
+{
+    array_free(p->cafiles);
+
+    if (NULL != p->ssl_ctxs) {
+        SSL_CTX * const ssl_ctx_global_scope = p->ssl_ctxs->ssl_ctx;
+        /* free ssl_ctx from $SERVER["socket"] (if not copy of global scope) */
+        for (uint32_t i = 1; i < srv->config_context->used; ++i) {
+            plugin_ssl_ctx * const s = p->ssl_ctxs + i;
+            if (s->ssl_ctx && s->ssl_ctx != ssl_ctx_global_scope)
+                SSL_CTX_free(s->ssl_ctx);
+        }
+        /* free ssl_ctx from global scope */
+        if (ssl_ctx_global_scope)
+            SSL_CTX_free(ssl_ctx_global_scope);
+        free(p->ssl_ctxs);
+    }
+
+    if (NULL == p->cvlist) return;
+    /* (init i to 0 if global context; to 1 to skip empty global context) */
+    for (int i = !p->cvlist[0].v.u2[1], used = p->nconfig; i < used; ++i) {
+        config_plugin_value_t *cpv = p->cvlist + p->cvlist[i].v.u2[0];
+        for (; -1 != cpv->k_id; ++cpv) {
+            switch (cpv->k_id) {
+              case 0: /* ssl.pemfile */
+                if (cpv->vtype == T_CONFIG_LOCAL) {
+                    plugin_cert *pc = cpv->v.v;
+                    EVP_PKEY_free(pc->ssl_pemfile_pkey);
+                    X509_free(pc->ssl_pemfile_x509);
+                }
+                break;
+              case 2: /* ssl.ca-file */
+              case 3: /* ssl.ca-dn-file */
+                if (cpv->vtype == T_CONFIG_LOCAL)
+                    sk_X509_NAME_pop_free(cpv->v.v, X509_NAME_free);
+                break;
+              default:
+                break;
+            }
+        }
+    }
+}
+
+
+static int
+mod_openssl_load_verify_locn (SSL_CTX *ssl_ctx, const buffer *b, server *srv)
+{
+    const char *fn = b->ptr;
+    if (1 == SSL_CTX_load_verify_locations(ssl_ctx, fn, NULL))
+        return 1;
+
+    log_error(srv->errh, __FILE__, __LINE__,
+      "SSL: %s %s", ERR_error_string(ERR_get_error(), NULL), fn);
+    return 0;
+}
+
+
+static int
+mod_openssl_load_ca_files (SSL_CTX *ssl_ctx, plugin_data *p, server *srv)
+{
+    /* load all ssl.ca-files specified in the config
+     * into each SSL_CTX to be prepared for SNI */
+
+    for (uint32_t i = 0, used = p->cafiles->used; i < used; ++i) {
+        const buffer *b = &((data_string *)p->cafiles->data[i])->value;
+        if (!mod_openssl_load_verify_locn(ssl_ctx, b, srv))
+            return 0;
+    }
+    return 1;
+}
+
+
 FREE_FUNC(mod_openssl_free)
 {
     plugin_data *p = p_d;
     if (!p) return HANDLER_GO_ON;
+    UNUSED(srv);
 
-    if (p->config_storage) {
-        for (size_t i = 0; i < srv->config_context->used; ++i) {
-            plugin_config *s = p->config_storage[i];
-            int copy;
-            if (NULL == s) continue;
-            copy = s->ssl_enabled && buffer_string_is_empty(s->ssl_pemfile);
-            buffer_free(s->ssl_pemfile);
-            buffer_free(s->ssl_privkey);
-            buffer_free(s->ssl_ca_file);
-            buffer_free(s->ssl_ca_crl_file);
-            buffer_free(s->ssl_ca_dn_file);
-            buffer_free(s->ssl_cipher_list);
-            buffer_free(s->ssl_dh_file);
-            buffer_free(s->ssl_ec_curve);
-            buffer_free(s->ssl_verifyclient_username);
-            array_free(s->ssl_conf_cmd);
-            buffer_free(s->ssl_acme_tls_1);
+    mod_openssl_free_config(srv, p);
+    mod_openssl_free_openssl();
 
-            if (copy) continue;
-            SSL_CTX_free(s->ssl_ctx);
-            EVP_PKEY_free(s->ssl_pemfile_pkey);
-            X509_free(s->ssl_pemfile_x509);
-            if (NULL != s->ssl_ca_file_cert_names)
-                sk_X509_NAME_pop_free(s->ssl_ca_file_cert_names,X509_NAME_free);
-        }
-        for (size_t i = 0; i < srv->config_context->used; ++i) {
-            plugin_config *s = p->config_storage[i];
-            if (NULL == s) continue;
-
-            free(s);
-        }
-        free(p->config_storage);
-    }
-
-    if (ssl_is_init) {
-      #if OPENSSL_VERSION_NUMBER >= 0x10100000L \
-       && !defined(LIBRESSL_VERSION_NUMBER)
-        /*(OpenSSL libraries handle thread init and deinit)
-         * https://github.com/openssl/openssl/pull/1048 */
-      #else
-        CRYPTO_cleanup_all_ex_data();
-        ERR_free_strings();
-       #if OPENSSL_VERSION_NUMBER >= 0x10000000L
-        ERR_remove_thread_state(NULL);
-       #else
-        ERR_remove_state(0);
-       #endif
-        EVP_cleanup();
-      #endif
-
-        free(local_send_buffer);
-    }
-
+    free(p->cvlist);
     free(p);
 
     return HANDLER_GO_ON;
+}
+
+
+static void
+mod_openssl_merge_config_cpv (plugin_config * const pconf, const config_plugin_value_t * const cpv)
+{
+    switch (cpv->k_id) { /* index into static config_plugin_keys_t cpk[] */
+      case 0: /* ssl.pemfile */
+        if (cpv->vtype == T_CONFIG_LOCAL) {
+            plugin_cert *pc = cpv->v.v;
+            pconf->ssl_pemfile_pkey = pc->ssl_pemfile_pkey;
+            pconf->ssl_pemfile_x509 = pc->ssl_pemfile_x509;
+            pconf->ssl_pemfile      = pc->ssl_pemfile;
+        }
+        break;
+      case 1: /* ssl.privkey */
+        break;
+      case 2: /* ssl.ca-file */
+        if (cpv->vtype == T_CONFIG_LOCAL)
+            pconf->ssl_ca_file = cpv->v.v;
+        break;
+      case 3: /* ssl.ca-dn-file */
+        if (cpv->vtype == T_CONFIG_LOCAL)
+            pconf->ssl_ca_dn_file = cpv->v.v;
+        break;
+      case 4: /* ssl.ca-crl-file */
+        pconf->ssl_ca_crl_file = cpv->v.b;
+        break;
+      case 5: /* ssl.read-ahead */
+        pconf->ssl_read_ahead = (0 != cpv->v.u);
+        break;
+      case 6: /* ssl.disable-client-renegotiation */
+        pconf->ssl_disable_client_renegotiation = (0 != cpv->v.u);
+        break;
+      case 7: /* ssl.verifyclient.activate */
+        pconf->ssl_verifyclient = (0 != cpv->v.u);
+        break;
+      case 8: /* ssl.verifyclient.enforce */
+        pconf->ssl_verifyclient_enforce = (0 != cpv->v.u);
+        break;
+      case 9: /* ssl.verifyclient.depth */
+        pconf->ssl_verifyclient_depth = (unsigned char)cpv->v.shrt;
+        break;
+      case 10:/* ssl.verifyclient.username */
+        pconf->ssl_verifyclient_username = cpv->v.b;
+        break;
+      case 11:/* ssl.verifyclient.exportcert */
+        pconf->ssl_verifyclient_export_cert = (0 != cpv->v.u);
+        break;
+      case 12:/* ssl.acme-tls-1 */
+        pconf->ssl_acme_tls_1 = cpv->v.b;
+        break;
+      case 13:/* debug.log-ssl-noise */
+        pconf->ssl_log_noise = (0 != cpv->v.u);
+        break;
+      default:/* should not happen */
+        return;
+    }
+}
+
+
+static void
+mod_openssl_merge_config(plugin_config * const pconf, const config_plugin_value_t *cpv)
+{
+    do {
+        mod_openssl_merge_config_cpv(pconf, cpv);
+    } while ((++cpv)->k_id != -1);
+}
+
+
+static void
+mod_openssl_patch_config (connection * const con, plugin_config * const pconf)
+{
+    plugin_data * const p = plugin_data_singleton;
+    memcpy(pconf, &p->defaults, sizeof(plugin_config));
+    for (int i = 1, used = p->nconfig; i < used; ++i) {
+        if (config_check_cond(con, (uint32_t)p->cvlist[i].k_id))
+            mod_openssl_merge_config(pconf, p->cvlist + p->cvlist[i].v.u2[0]);
+    }
 }
 
 
@@ -267,11 +455,11 @@ verify_callback(int preverify_ok, X509_STORE_CTX *ctx)
     }
 
     if (preverify_ok && 0 == depth
-        && !buffer_string_is_empty(hctx->conf.ssl_ca_dn_file)
-        && !buffer_string_is_empty(hctx->conf.ssl_ca_file)) {
+        && NULL != hctx->conf.ssl_ca_dn_file
+        && NULL != hctx->conf.ssl_ca_file) {
         /* verify that client cert is issued by CA in ssl.ca-dn-file
          * if both ssl.ca-dn-file and ssl.ca-file were configured */
-        STACK_OF(X509_NAME) * const names = hctx->conf.ssl_ca_file_cert_names;
+        STACK_OF(X509_NAME) * const cert_names = hctx->conf.ssl_ca_dn_file;
         X509_NAME *issuer;
       #if OPENSSL_VERSION_NUMBER >= 0x10002000L
         err_cert = X509_STORE_CTX_get_current_cert(ctx);
@@ -280,12 +468,12 @@ verify_callback(int preverify_ok, X509_STORE_CTX *ctx)
       #endif
         if (NULL == err_cert) return !hctx->conf.ssl_verifyclient_enforce;
         issuer = X509_get_issuer_name(err_cert);
-      #if 0 /*(?desirable/undesirable to have ssl_ca_file_cert_names sorted?)*/
-        if (-1 != sk_X509_NAME_find(names, issuer))
+      #if 0 /*(?desirable/undesirable to have cert_names sorted?)*/
+        if (-1 != sk_X509_NAME_find(cert_names, issuer))
             return preverify_ok; /* match */
       #else
-        for (int i = 0, len = sk_X509_NAME_num(names); i < len; ++i) {
-            if (0 == X509_NAME_cmp(sk_X509_NAME_value(names, i), issuer))
+        for (int i = 0, len = sk_X509_NAME_num(cert_names); i < len; ++i) {
+            if (0 == X509_NAME_cmp(sk_X509_NAME_value(cert_names, i), issuer))
                 return preverify_ok; /* match */
         }
       #endif
@@ -325,8 +513,6 @@ verify_callback(int preverify_ok, X509_STORE_CTX *ctx)
 }
 
 #ifndef OPENSSL_NO_TLSEXT
-static int mod_openssl_patch_connection (server *srv, connection *con, handler_ctx *hctx);
-
 static int
 mod_openssl_SNI (SSL *ssl, server *srv, handler_ctx *hctx, const char *servername, size_t len)
 {
@@ -347,45 +533,52 @@ mod_openssl_SNI (SSL *ssl, server *srv, handler_ctx *hctx, const char *servernam
         return SSL_TLSEXT_ERR_ALERT_FATAL;
   #endif
 
+    const buffer * const ssl_pemfile = hctx->conf.ssl_pemfile;
+
     con->conditional_is_valid |= (1 << COMP_HTTP_SCHEME)
                               |  (1 << COMP_HTTP_HOST);
-    mod_openssl_patch_connection(srv, con, hctx);
+    mod_openssl_patch_config(con, &hctx->conf);
     /* reset COMP_HTTP_HOST so that conditions re-run after request hdrs read */
     /*(done in response.c:config_cond_cache_reset() after request hdrs read)*/
     /*config_cond_cache_reset_item(con, COMP_HTTP_HOST);*/
     /*buffer_clear(con->uri.authority);*/
 
-    if (NULL == hctx->conf.ssl_pemfile_x509
-        || NULL == hctx->conf.ssl_pemfile_pkey) {
-        /* x509/pkey available <=> pemfile was set <=> pemfile got patched:
-         * so this should never happen, unless you nest $SERVER["socket"] */
-        log_error_write(srv, __FILE__, __LINE__, "ssb", "SSL:",
-                        "no certificate/private key for TLS server name",
-                        con->uri.authority);
-        return SSL_TLSEXT_ERR_ALERT_FATAL;
-    }
+    if (!buffer_is_equal(hctx->conf.ssl_pemfile, ssl_pemfile)) {
+        /* reconfigure to use SNI-specific cert if SNI-specific cert provided */
 
-    /* first set certificate!
-     * setting private key checks whether certificate matches it */
-    if (1 != SSL_use_certificate(ssl, hctx->conf.ssl_pemfile_x509)) {
-        log_error_write(srv, __FILE__, __LINE__, "ssb:s", "SSL:",
-                        "failed to set certificate for TLS server name",
-                        con->uri.authority,
-                        ERR_error_string(ERR_get_error(), NULL));
-        return SSL_TLSEXT_ERR_ALERT_FATAL;
-    }
+        if (NULL == hctx->conf.ssl_pemfile_x509
+            || NULL == hctx->conf.ssl_pemfile_pkey) {
+            /* x509/pkey available <=> pemfile was set <=> pemfile got patched:
+             * so this should never happen, unless you nest $SERVER["socket"] */
+            log_error(srv->errh, __FILE__, __LINE__,
+              "SSL: no certificate/private key for TLS server name %s",
+              con->uri.authority->ptr);
+            return SSL_TLSEXT_ERR_ALERT_FATAL;
+        }
 
-    if (1 != SSL_use_PrivateKey(ssl, hctx->conf.ssl_pemfile_pkey)) {
-        log_error_write(srv, __FILE__, __LINE__, "ssb:s", "SSL:",
-                        "failed to set private key for TLS server name",
-                        con->uri.authority,
-                        ERR_error_string(ERR_get_error(), NULL));
-        return SSL_TLSEXT_ERR_ALERT_FATAL;
+        /* first set certificate!
+         * setting private key checks whether certificate matches it */
+        if (1 != SSL_use_certificate(ssl, hctx->conf.ssl_pemfile_x509)) {
+            log_error(srv->errh, __FILE__, __LINE__,
+              "SSL: failed to set certificate for TLS server name %s: %s",
+              con->uri.authority->ptr, ERR_error_string(ERR_get_error(), NULL));
+            return SSL_TLSEXT_ERR_ALERT_FATAL;
+        }
+
+        if (1 != SSL_use_PrivateKey(ssl, hctx->conf.ssl_pemfile_pkey)) {
+            log_error(srv->errh, __FILE__, __LINE__,
+              "SSL: failed to set private key for TLS server name %s: %s",
+              con->uri.authority->ptr, ERR_error_string(ERR_get_error(), NULL));
+            return SSL_TLSEXT_ERR_ALERT_FATAL;
+        }
     }
 
     if (hctx->conf.ssl_verifyclient) {
         int mode;
-        if (NULL == hctx->conf.ssl_ca_file_cert_names) {
+        STACK_OF(X509_NAME) * const cert_names = hctx->conf.ssl_ca_dn_file
+          ? hctx->conf.ssl_ca_dn_file
+          : hctx->conf.ssl_ca_file;
+        if (NULL == cert_names) {
             log_error_write(srv, __FILE__, __LINE__, "ssb:s", "SSL:",
                             "can't verify client without ssl.ca-file "
                             "or ssl.ca-dn-file for TLS server name",
@@ -394,8 +587,7 @@ mod_openssl_SNI (SSL *ssl, server *srv, handler_ctx *hctx, const char *servernam
             return SSL_TLSEXT_ERR_ALERT_FATAL;
         }
 
-        SSL_set_client_CA_list(
-          ssl, SSL_dup_CA_list(hctx->conf.ssl_ca_file_cert_names));
+        SSL_set_client_CA_list(ssl, SSL_dup_CA_list(cert_names));
         /* forcing verification here is really not that useful
          * -- a client could just connect without SNI */
         mode = SSL_VERIFY_PEER;
@@ -524,25 +716,38 @@ error:
 }
 
 
-static int
-network_openssl_load_pemfile (server *srv, plugin_config *s)
+static void *
+network_openssl_load_pemfile (server *srv, const buffer *pemfile, const buffer *privkey)
 {
-    s->ssl_pemfile_x509 = x509_load_pem_file(srv, s->ssl_pemfile->ptr);
-    if (NULL == s->ssl_pemfile_x509) return -1;
-    s->ssl_pemfile_pkey = !buffer_string_is_empty(s->ssl_privkey)
-      ? evp_pkey_load_pem_file(srv, s->ssl_privkey->ptr)
-      : evp_pkey_load_pem_file(srv, s->ssl_pemfile->ptr);
-    if (NULL == s->ssl_pemfile_pkey) return -1;
+    if (!mod_openssl_init_once_openssl(srv)) return NULL;
 
-    if (!X509_check_private_key(s->ssl_pemfile_x509, s->ssl_pemfile_pkey)) {
-        log_error_write(srv, __FILE__, __LINE__, "sssbb", "SSL:",
-                        "Private key does not match the certificate public key,"
-                        " reason:", ERR_error_string(ERR_get_error(), NULL),
-                        s->ssl_pemfile, s->ssl_privkey);
-        return -1;
+    X509 *ssl_pemfile_x509 = x509_load_pem_file(srv, pemfile->ptr);
+    if (NULL == ssl_pemfile_x509)
+        return NULL;
+
+    EVP_PKEY *ssl_pemfile_pkey = evp_pkey_load_pem_file(srv, privkey->ptr);
+    if (NULL == ssl_pemfile_pkey) {
+        X509_free(ssl_pemfile_x509);
+        return NULL;
     }
 
-    return 0;
+    if (!X509_check_private_key(ssl_pemfile_x509, ssl_pemfile_pkey)) {
+        log_error(srv->errh, __FILE__, __LINE__, "SSL:"
+          "Private key does not match the certificate public key, "
+          "reason: %s %s %s", ERR_error_string(ERR_get_error(), NULL),
+          pemfile->ptr, privkey->ptr);
+        EVP_PKEY_free(ssl_pemfile_pkey);
+        X509_free(ssl_pemfile_x509);
+        return NULL;
+    }
+
+    plugin_cert *pc = malloc(sizeof(plugin_cert));
+    force_assert(pc);
+    pc->ssl_pemfile_pkey = ssl_pemfile_pkey;
+    pc->ssl_pemfile_x509 = ssl_pemfile_x509;
+    pc->ssl_pemfile = pemfile;
+    pc->ssl_privkey = privkey;
+    return pc;
 }
 
 
@@ -706,7 +911,7 @@ mod_openssl_alpn_select_cb (SSL *ssl, const unsigned char **out, unsigned char *
 
 
 static int
-network_openssl_ssl_conf_cmd (server *srv, plugin_config *s)
+network_openssl_ssl_conf_cmd (server *srv, plugin_config_socket *s)
 {
   #ifdef SSL_CONF_FLAG_CMDLINE
 
@@ -764,10 +969,8 @@ network_openssl_ssl_conf_cmd (server *srv, plugin_config *s)
 
 
 static int
-network_init_ssl (server *srv, void *p_d)
+network_init_ssl (server *srv, plugin_config_socket *s, plugin_data *p)
 {
-    plugin_data *p = p_d;
-
   #ifndef OPENSSL_NO_DH
    /* 1024-bit MODP Group with 160-bit prime order subgroup (RFC5114)
     * -----BEGIN DH PARAMETERS-----
@@ -810,8 +1013,7 @@ network_init_ssl (server *srv, void *p_d)
   #endif
 
     /* load SSL certificates */
-    for (size_t i = 0; i < srv->config_context->used; ++i) {
-        plugin_config *s = p->config_storage[i];
+
       #ifndef SSL_OP_NO_COMPRESSION
       #define SSL_OP_NO_COMPRESSION 0
       #endif
@@ -821,95 +1023,6 @@ network_init_ssl (server *srv, void *p_d)
         long ssloptions = SSL_OP_ALL
                         | SSL_OP_NO_SESSION_RESUMPTION_ON_RENEGOTIATION
                         | SSL_OP_NO_COMPRESSION;
-
-        if (s->ssl_enabled) {
-            if (buffer_string_is_empty(s->ssl_pemfile)) {
-                /* inherit ssl settings from global scope
-                 * (if only ssl.engine = "enable" and no other ssl.* settings)*/
-                if (0 != i && p->config_storage[0]->ssl_enabled) {
-                    s->ssl_ctx = p->config_storage[0]->ssl_ctx;
-                    continue;
-                }
-                /* PEM file is require */
-                log_error_write(srv, __FILE__, __LINE__, "s",
-                                "ssl.pemfile has to be set "
-                                "when ssl.engine = \"enable\"");
-                return -1;
-            }
-        }
-
-        if (buffer_string_is_empty(s->ssl_pemfile)
-            && buffer_string_is_empty(s->ssl_ca_dn_file)
-            && buffer_string_is_empty(s->ssl_ca_file)) continue;
-
-        if (ssl_is_init == 0) {
-          #if OPENSSL_VERSION_NUMBER >= 0x10100000L \
-           && !defined(LIBRESSL_VERSION_NUMBER)
-            OPENSSL_init_ssl(OPENSSL_INIT_LOAD_SSL_STRINGS
-                            |OPENSSL_INIT_LOAD_CRYPTO_STRINGS,NULL);
-            OPENSSL_init_crypto(OPENSSL_INIT_ADD_ALL_CIPHERS
-                               |OPENSSL_INIT_ADD_ALL_DIGESTS
-                               |OPENSSL_INIT_LOAD_CONFIG, NULL);
-          #else
-            SSL_load_error_strings();
-            SSL_library_init();
-            OpenSSL_add_all_algorithms();
-          #endif
-            ssl_is_init = 1;
-
-            if (0 == RAND_status()) {
-                log_error_write(srv, __FILE__, __LINE__, "ss", "SSL:",
-                                "not enough entropy in the pool");
-                return -1;
-            }
-
-            local_send_buffer = malloc(LOCAL_SEND_BUFSIZE);
-            force_assert(NULL != local_send_buffer);
-        }
-
-        if (!buffer_string_is_empty(s->ssl_pemfile)) {
-          #ifdef OPENSSL_NO_TLSEXT
-            data_config *dc = (data_config *)srv->config_context->data[i];
-            if (!s->ssl_enabled
-                || (i > 0 && (COMP_SERVER_SOCKET != dc->comp
-                              || dc->cond != CONFIG_COND_EQ))) {
-                if (COMP_HTTP_HOST == dc->comp)
-                    log_error_write(srv, __FILE__, __LINE__, "ss", "SSL:",
-                      "can't use ssl.pemfile with $HTTP[\"host\"], "
-                      "as openssl version does not support TLS extensions");
-                else
-                    log_error_write(srv, __FILE__, __LINE__, "ss", "SSL:",
-                      "ssl.pemfile only works in SSL socket binding context "
-                      "as openssl version does not support TLS extensions");
-                return -1;
-            }
-          #endif
-            if (network_openssl_load_pemfile(srv, s)) return -1;
-        }
-
-
-        if (!buffer_string_is_empty(s->ssl_ca_dn_file)) {
-            s->ssl_ca_file_cert_names =
-              SSL_load_client_CA_file(s->ssl_ca_dn_file->ptr);
-            if (NULL == s->ssl_ca_file_cert_names) {
-                log_error_write(srv, __FILE__, __LINE__, "ssb", "SSL:",
-                                ERR_error_string(ERR_get_error(), NULL),
-                                s->ssl_ca_dn_file);
-            }
-        }
-
-        if (NULL == s->ssl_ca_file_cert_names
-            && !buffer_string_is_empty(s->ssl_ca_file)) {
-            s->ssl_ca_file_cert_names =
-              SSL_load_client_CA_file(s->ssl_ca_file->ptr);
-            if (NULL == s->ssl_ca_file_cert_names) {
-                log_error_write(srv, __FILE__, __LINE__, "ssb", "SSL:",
-                                ERR_error_string(ERR_get_error(), NULL),
-                                s->ssl_ca_file);
-            }
-        }
-
-        if (buffer_string_is_empty(s->ssl_pemfile) || !s->ssl_enabled) continue;
 
       #if OPENSSL_VERSION_NUMBER >= 0x10100000L
         s->ssl_ctx = (!s->ssl_use_sslv2 && !s->ssl_use_sslv3)
@@ -1092,40 +1205,21 @@ network_init_ssl (server *srv, void *p_d)
 
         /* load all ssl.ca-files specified in the config into each SSL_CTX
          * to be prepared for SNI */
-        for (size_t j = 0; j < srv->config_context->used; ++j) {
-            plugin_config *s1 = p->config_storage[j];
-
-            if (!buffer_string_is_empty(s1->ssl_ca_dn_file)) {
-                if (1 != SSL_CTX_load_verify_locations(
-                           s->ssl_ctx, s1->ssl_ca_dn_file->ptr, NULL)) {
-                    log_error_write(srv, __FILE__, __LINE__, "ssb", "SSL:",
-                                    ERR_error_string(ERR_get_error(), NULL),
-                                    s1->ssl_ca_dn_file);
-                    return -1;
-                }
-            }
-            if (!buffer_string_is_empty(s1->ssl_ca_file)) {
-                if (1 != SSL_CTX_load_verify_locations(
-                           s->ssl_ctx, s1->ssl_ca_file->ptr, NULL)) {
-                    log_error_write(srv, __FILE__, __LINE__, "ssb", "SSL:",
-                                    ERR_error_string(ERR_get_error(), NULL),
-                                    s1->ssl_ca_file);
-                    return -1;
-                }
-            }
-        }
+        if (!mod_openssl_load_ca_files(s->ssl_ctx, p, srv))
+            return -1;
 
         if (s->ssl_verifyclient) {
-            int mode;
-            if (NULL == s->ssl_ca_file_cert_names) {
+            STACK_OF(X509_NAME) * const cert_names = s->ssl_ca_dn_file
+              ? s->ssl_ca_dn_file
+              : s->ssl_ca_file;
+            if (NULL == cert_names) {
                 log_error_write(srv, __FILE__, __LINE__, "s",
                                 "SSL: You specified ssl.verifyclient.activate "
                                 "but no ssl.ca-file or ssl.ca-dn-file");
                 return -1;
             }
-            SSL_CTX_set_client_CA_list(
-              s->ssl_ctx, SSL_dup_CA_list(s->ssl_ca_file_cert_names));
-            mode = SSL_VERIFY_PEER;
+            SSL_CTX_set_client_CA_list(s->ssl_ctx, SSL_dup_CA_list(cert_names));
+            int mode = SSL_VERIFY_PEER;
             if (s->ssl_verifyclient_enforce) {
                 mode |= SSL_VERIFY_FAIL_IF_NO_PEER_CERT;
             }
@@ -1191,266 +1285,417 @@ network_init_ssl (server *srv, void *p_d)
        #endif
       #endif
 
-        if (s->ssl_conf_cmd->used) {
+        if (s->ssl_conf_cmd && s->ssl_conf_cmd->used) {
             if (0 != network_openssl_ssl_conf_cmd(srv, s)) return -1;
+        }
+
+        return 0;
+}
+
+
+static int
+mod_openssl_set_defaults_sockets(server *srv, plugin_data *p)
+{
+    static const config_plugin_keys_t cpk[] = {
+      { CONST_STR_LEN("ssl.engine"),
+        T_CONFIG_BOOL,
+        T_CONFIG_SCOPE_CONNECTION }
+     ,{ CONST_STR_LEN("ssl.cipher-list"),
+        T_CONFIG_STRING,
+        T_CONFIG_SCOPE_CONNECTION }
+     ,{ CONST_STR_LEN("ssl.honor-cipher-order"),
+        T_CONFIG_BOOL,
+        T_CONFIG_SCOPE_CONNECTION }
+     ,{ CONST_STR_LEN("ssl.dh-file"),
+        T_CONFIG_STRING,
+        T_CONFIG_SCOPE_CONNECTION }
+     ,{ CONST_STR_LEN("ssl.ec-curve"),
+        T_CONFIG_STRING,
+        T_CONFIG_SCOPE_CONNECTION }
+     ,{ CONST_STR_LEN("ssl.openssl.ssl-conf-cmd"),
+        T_CONFIG_ARRAY,
+        T_CONFIG_SCOPE_CONNECTION }
+     ,{ CONST_STR_LEN("ssl.pemfile"), /* included to process global scope */
+        T_CONFIG_STRING,
+        T_CONFIG_SCOPE_CONNECTION }
+     ,{ CONST_STR_LEN("ssl.empty-fragments"),
+        T_CONFIG_BOOL,
+        T_CONFIG_SCOPE_CONNECTION }
+     ,{ CONST_STR_LEN("ssl.use-sslv2"),
+        T_CONFIG_BOOL,
+        T_CONFIG_SCOPE_CONNECTION }
+     ,{ CONST_STR_LEN("ssl.use-sslv3"),
+        T_CONFIG_BOOL,
+        T_CONFIG_SCOPE_CONNECTION }
+     ,{ NULL, 0,
+        T_CONFIG_UNSET,
+        T_CONFIG_SCOPE_UNSET }
+    };
+    static const buffer default_ssl_cipher_list = { CONST_STR_LEN("HIGH"), 0 };
+
+    p->ssl_ctxs = calloc(srv->config_context->used, sizeof(plugin_ssl_ctx));
+    force_assert(p->ssl_ctxs);
+
+    int rc = HANDLER_GO_ON;
+    plugin_data_base srvplug;
+    memset(&srvplug, 0, sizeof(srvplug));
+    plugin_data_base * const ps = &srvplug;
+    if (!config_plugin_values_init(srv, ps, cpk, "mod_openssl"))
+        return HANDLER_ERROR;
+
+    plugin_config_socket defaults;
+    memset(&defaults, 0, sizeof(defaults));
+    defaults.ssl_honor_cipher_order = 1;
+    defaults.ssl_cipher_list = &default_ssl_cipher_list;
+
+    /* process and validate config directives for global and $SERVER["socket"]
+     * (init i to 0 if global context; to 1 to skip empty global context) */
+    for (int i = !ps->cvlist[0].v.u2[1]; i < ps->nconfig; ++i) {
+        config_cond_info cfginfo;
+        config_get_config_cond_info(srv,(uint32_t)ps->cvlist[i].k_id,&cfginfo);
+        int is_socket_scope = (0 == i || cfginfo.comp == COMP_SERVER_SOCKET);
+        int count_not_engine = 0;
+
+        plugin_config_socket conf;
+        memcpy(&conf, &defaults, sizeof(conf));
+
+        /*(preserve prior behavior; not inherited)*/
+        /*(forcing inheritance might break existing configs where SSL is enabled
+         * by default in the global scope, but not $SERVER["socket"]=="*:80") */
+        conf.ssl_enabled = 0;
+
+        config_plugin_value_t *cpv = ps->cvlist + ps->cvlist[i].v.u2[0];
+        for (; -1 != cpv->k_id; ++cpv) {
+            /* ignore ssl.pemfile (k_id=6); included to process global scope */
+            if (!is_socket_scope && cpv->k_id != 6) {
+                log_error(srv->errh, __FILE__, __LINE__,
+                  "%s is valid only in global scope or "
+                  "$SERVER[\"socket\"] condition", cpk[cpv->k_id].k);
+                continue;
+            }
+            ++count_not_engine;
+            switch (cpv->k_id) {
+              case 0: /* ssl.engine */
+                conf.ssl_enabled = (0 != cpv->v.u);
+                --count_not_engine;
+                break;
+              case 1: /* ssl.cipher-list */
+                conf.ssl_cipher_list = cpv->v.b;
+                break;
+              case 2: /* ssl.honor-cipher-order */
+                conf.ssl_honor_cipher_order = (0 != cpv->v.u);
+                break;
+              case 3: /* ssl.dh-file */
+                conf.ssl_dh_file = cpv->v.b;
+                break;
+              case 4: /* ssl.ec-curve */
+                conf.ssl_ec_curve = cpv->v.b;
+                break;
+              case 5: /* ssl.openssl.ssl-conf-cmd */
+                *(const array **)&conf.ssl_conf_cmd = cpv->v.a;
+                if (!array_is_kvstring(cpv->v.a)) {
+                    log_error(srv->errh, __FILE__, __LINE__,
+                      "%s must be array of \"key\" => \"value\" strings",
+                      cpk[cpv->k_id].k);
+                    rc = HANDLER_ERROR;
+                }
+                break;
+              case 6: /* ssl.pemfile */
+                /* ignore here; included to process global scope when
+                 * ssl.pemfile is set, but ssl.engine is not "enable" */
+                break;
+              case 7: /* ssl.empty-fragments */
+                conf.ssl_empty_fragments = (0 != cpv->v.u);
+                break;
+              case 8: /* ssl.use-sslv2 */
+                conf.ssl_use_sslv2 = (0 != cpv->v.u);
+                break;
+              case 9: /* ssl.use-sslv3 */
+                conf.ssl_use_sslv3 = (0 != cpv->v.u);
+                break;
+              default:/* should not happen */
+                break;
+            }
+        }
+        if (HANDLER_GO_ON != rc) break;
+        if (0 == i) memcpy(&defaults, &conf, sizeof(conf));
+
+        if (0 != i && !conf.ssl_enabled) continue;
+
+        /* fill plugin_config_socket with global context then $SERVER["socket"]
+         * only for directives directly in current $SERVER["socket"] condition*/
+
+        /*conf.ssl_pemfile_pkey       = p->defaults.ssl_pemfile_pkey;*/
+        /*conf.ssl_pemfile_x509       = p->defaults.ssl_pemfile_x509;*/
+        conf.ssl_ca_file              = p->defaults.ssl_ca_file;
+        conf.ssl_ca_dn_file           = p->defaults.ssl_ca_dn_file;
+        conf.ssl_ca_crl_file          = p->defaults.ssl_ca_crl_file;
+        conf.ssl_verifyclient         = p->defaults.ssl_verifyclient;
+        conf.ssl_verifyclient_enforce = p->defaults.ssl_verifyclient_enforce;
+        conf.ssl_verifyclient_depth   = p->defaults.ssl_verifyclient_depth;
+        conf.ssl_read_ahead           = p->defaults.ssl_read_ahead;
+
+        int sidx = ps->cvlist[i].k_id;
+        for (int j = !p->cvlist[0].v.u2[1]; j < p->nconfig; ++j) {
+            if (p->cvlist[j].k_id != sidx) continue;
+            /*if (0 == sidx) break;*//*(repeat to get ssl_pemfile,ssl_privkey)*/
+            cpv = p->cvlist + p->cvlist[j].v.u2[0];
+            for (; -1 != cpv->k_id; ++cpv) {
+                ++count_not_engine;
+                switch (cpv->k_id) {
+                  case 0: /* ssl.pemfile */
+                    if (cpv->vtype == T_CONFIG_LOCAL) {
+                        plugin_cert *pc = cpv->v.v;
+                        conf.ssl_pemfile_pkey = pc->ssl_pemfile_pkey;
+                        conf.ssl_pemfile_x509 = pc->ssl_pemfile_x509;
+                        conf.ssl_pemfile      = pc->ssl_pemfile;
+                        conf.ssl_privkey      = pc->ssl_privkey;
+                    }
+                    break;
+                  case 2: /* ssl.ca-file */
+                    if (cpv->vtype == T_CONFIG_LOCAL)
+                        conf.ssl_ca_file = cpv->v.v;
+                    break;
+                  case 3: /* ssl.ca-dn-file */
+                    if (cpv->vtype == T_CONFIG_LOCAL)
+                        conf.ssl_ca_dn_file = cpv->v.v;
+                    break;
+                  case 4: /* ssl.ca-crl-file */
+                    conf.ssl_ca_crl_file = cpv->v.b;
+                    break;
+                  case 5: /* ssl.read-ahead */
+                    conf.ssl_read_ahead = (0 != cpv->v.u);
+                    break;
+                  case 7: /* ssl.verifyclient.activate */
+                    conf.ssl_verifyclient = (0 != cpv->v.u);
+                    break;
+                  case 8: /* ssl.verifyclient.enforce */
+                    conf.ssl_verifyclient_enforce = (0 != cpv->v.u);
+                    break;
+                  case 9: /* ssl.verifyclient.depth */
+                    conf.ssl_verifyclient_depth = (unsigned char)cpv->v.shrt;
+                    break;
+                  default:
+                    break;
+                }
+            }
+            break;
+        }
+
+        if (NULL == conf.ssl_pemfile_x509) {
+            if (0 == i && !conf.ssl_enabled) continue;
+            if (0 != i) {
+                /* inherit ssl settings from global scope
+                 * (if only ssl.engine = "enable" and no other ssl.* settings)
+                 * (This is for convenience when defining both IPv4 and IPv6
+                 *  and desiring to inherit the ssl config from global context
+                 *  without having to duplicate the directives)*/
+                if (count_not_engine) {
+                    log_error(srv->errh, __FILE__, __LINE__,
+                      "ssl.pemfile has to be set in same $SERVER[\"socket\"] scope "
+                      "as other ssl.* directives, unless only ssl.engine is set, "
+                      "inheriting ssl.* from global scope");
+                    rc = HANDLER_ERROR;
+                    continue;
+                }
+                plugin_ssl_ctx * const s = p->ssl_ctxs + sidx;
+                *s = *p->ssl_ctxs;/*(copy struct of ssl_ctx from global scope)*/
+                continue;
+            }
+            /* PEM file is required */
+            log_error(srv->errh, __FILE__, __LINE__,
+              "ssl.pemfile has to be set when ssl.engine = \"enable\"");
+            rc = HANDLER_ERROR;
+            continue;
+        }
+
+        /* configure ssl_ctx for socket */
+
+        /*conf.ssl_ctx = NULL;*//*(filled by network_init_ssl() even on error)*/
+        if (0 == network_init_ssl(srv, &conf, p)) {
+            plugin_ssl_ctx * const s = p->ssl_ctxs + sidx;
+            s->ssl_ctx = conf.ssl_ctx;
+            /*(used to match and avoid work changing keys
+             * during SNI when pkey has not changed)*/
+            s->ssl_pemfile_pkey = conf.ssl_pemfile_pkey;
+        }
+        else {
+            SSL_CTX_free(conf.ssl_ctx);
+            rc = HANDLER_ERROR;
         }
     }
 
-    return 0;
+    free(srvplug.cvlist);
+    return rc;
 }
 
 
 SETDEFAULTS_FUNC(mod_openssl_set_defaults)
 {
-    plugin_data *p = p_d;
-    config_values_t cv[] = {
-        { "debug.log-ssl-noise",               NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION }, /* 0 */
-        { "ssl.engine",                        NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION }, /* 1 */
-        { "ssl.pemfile",                       NULL, T_CONFIG_STRING,  T_CONFIG_SCOPE_CONNECTION }, /* 2 */
-        { "ssl.ca-file",                       NULL, T_CONFIG_STRING,  T_CONFIG_SCOPE_CONNECTION }, /* 3 */
-        { "ssl.dh-file",                       NULL, T_CONFIG_STRING,  T_CONFIG_SCOPE_CONNECTION }, /* 4 */
-        { "ssl.ec-curve",                      NULL, T_CONFIG_STRING,  T_CONFIG_SCOPE_CONNECTION }, /* 5 */
-        { "ssl.cipher-list",                   NULL, T_CONFIG_STRING,  T_CONFIG_SCOPE_CONNECTION }, /* 6 */
-        { "ssl.honor-cipher-order",            NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION }, /* 7 */
-        { "ssl.empty-fragments",               NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION }, /* 8 */
-        { "ssl.disable-client-renegotiation",  NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION }, /* 9 */
-        { "ssl.read-ahead",                    NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION }, /* 10 */
-        { "ssl.verifyclient.activate",         NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION }, /* 11 */
-        { "ssl.verifyclient.enforce",          NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION }, /* 12 */
-        { "ssl.verifyclient.depth",            NULL, T_CONFIG_SHORT,   T_CONFIG_SCOPE_CONNECTION }, /* 13 */
-        { "ssl.verifyclient.username",         NULL, T_CONFIG_STRING,  T_CONFIG_SCOPE_CONNECTION }, /* 14 */
-        { "ssl.verifyclient.exportcert",       NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION }, /* 15 */
-        { "ssl.use-sslv2",                     NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION }, /* 16 */
-        { "ssl.use-sslv3",                     NULL, T_CONFIG_BOOLEAN, T_CONFIG_SCOPE_CONNECTION }, /* 17 */
-        { "ssl.ca-crl-file",                   NULL, T_CONFIG_STRING,  T_CONFIG_SCOPE_CONNECTION }, /* 18 */
-        { "ssl.ca-dn-file",                    NULL, T_CONFIG_STRING,  T_CONFIG_SCOPE_CONNECTION }, /* 19 */
-        { "ssl.openssl.ssl-conf-cmd",          NULL, T_CONFIG_ARRAY,   T_CONFIG_SCOPE_CONNECTION }, /* 20 */
-        { "ssl.acme-tls-1",                    NULL, T_CONFIG_STRING,  T_CONFIG_SCOPE_CONNECTION }, /* 21 */
-        { "ssl.privkey",                       NULL, T_CONFIG_STRING,  T_CONFIG_SCOPE_CONNECTION }, /* 22 */
-        { NULL,                         NULL, T_CONFIG_UNSET, T_CONFIG_SCOPE_UNSET }
+    static const config_plugin_keys_t cpk[] = {
+      { CONST_STR_LEN("ssl.pemfile"),
+        T_CONFIG_STRING,
+        T_CONFIG_SCOPE_CONNECTION }
+     ,{ CONST_STR_LEN("ssl.privkey"),
+        T_CONFIG_STRING,
+        T_CONFIG_SCOPE_CONNECTION }
+     ,{ CONST_STR_LEN("ssl.ca-file"),
+        T_CONFIG_STRING,
+        T_CONFIG_SCOPE_CONNECTION }
+     ,{ CONST_STR_LEN("ssl.ca-dn-file"),
+        T_CONFIG_STRING,
+        T_CONFIG_SCOPE_CONNECTION }
+     ,{ CONST_STR_LEN("ssl.ca-crl-file"),
+        T_CONFIG_STRING,
+        T_CONFIG_SCOPE_CONNECTION }
+     ,{ CONST_STR_LEN("ssl.read-ahead"),
+        T_CONFIG_BOOL,
+        T_CONFIG_SCOPE_CONNECTION }
+     ,{ CONST_STR_LEN("ssl.disable-client-renegotiation"),
+        T_CONFIG_BOOL,
+        T_CONFIG_SCOPE_CONNECTION }
+     ,{ CONST_STR_LEN("ssl.verifyclient.activate"),
+        T_CONFIG_BOOL,
+        T_CONFIG_SCOPE_CONNECTION }
+     ,{ CONST_STR_LEN("ssl.verifyclient.enforce"),
+        T_CONFIG_BOOL,
+        T_CONFIG_SCOPE_CONNECTION }
+     ,{ CONST_STR_LEN("ssl.verifyclient.depth"),
+        T_CONFIG_SHORT,
+        T_CONFIG_SCOPE_CONNECTION }
+     ,{ CONST_STR_LEN("ssl.verifyclient.username"),
+        T_CONFIG_STRING,
+        T_CONFIG_SCOPE_CONNECTION }
+     ,{ CONST_STR_LEN("ssl.verifyclient.exportcert"),
+        T_CONFIG_BOOL,
+        T_CONFIG_SCOPE_CONNECTION }
+     ,{ CONST_STR_LEN("ssl.acme-tls-1"),
+        T_CONFIG_STRING,
+        T_CONFIG_SCOPE_CONNECTION }
+     ,{ CONST_STR_LEN("debug.log-ssl-noise"),
+        T_CONFIG_BOOL,
+        T_CONFIG_SCOPE_CONNECTION }
+     ,{ NULL, 0,
+        T_CONFIG_UNSET,
+        T_CONFIG_SCOPE_UNSET }
     };
 
-    if (!p) return HANDLER_ERROR;
+    plugin_data * const p = p_d;
+    p->cafiles = array_init();
+    if (!config_plugin_values_init(srv, p, cpk, "mod_openssl"))
+        return HANDLER_ERROR;
 
-    p->config_storage = calloc(srv->config_context->used, sizeof(plugin_config *));
-
-    for (size_t i = 0; i < srv->config_context->used; i++) {
-        data_config const* config = (data_config const*)srv->config_context->data[i];
-        plugin_config *s = calloc(1, sizeof(plugin_config));
-
-        s->ssl_enabled   = 0;
-        s->ssl_pemfile   = buffer_init();
-        s->ssl_privkey   = buffer_init();
-        s->ssl_ca_file   = buffer_init();
-        s->ssl_ca_crl_file = buffer_init();
-        s->ssl_ca_dn_file = buffer_init();
-        s->ssl_cipher_list = buffer_init();
-        s->ssl_dh_file   = buffer_init();
-        s->ssl_ec_curve  = buffer_init();
-        s->ssl_honor_cipher_order = 1;
-        s->ssl_empty_fragments = 0;
-        s->ssl_use_sslv2 = 0;
-        s->ssl_use_sslv3 = 0;
-        s->ssl_verifyclient = 0;
-        s->ssl_verifyclient_enforce = 1;
-        s->ssl_verifyclient_username = buffer_init();
-        s->ssl_verifyclient_depth = 9;
-        s->ssl_verifyclient_export_cert = 0;
-        s->ssl_disable_client_renegotiation = 1;
-        s->ssl_read_ahead = (0 == i)
-          ? 0
-          : p->config_storage[0]->ssl_read_ahead;
-        if (0 == i)
-            buffer_copy_string_len(s->ssl_cipher_list, CONST_STR_LEN("HIGH"));
-        if (0 != i) {
-            buffer *b;
-            b = p->config_storage[0]->ssl_ca_crl_file;
-            if (!buffer_string_is_empty(b))
-                buffer_copy_buffer(s->ssl_ca_crl_file, b);
-            b = p->config_storage[0]->ssl_ca_dn_file;
-            if (!buffer_string_is_empty(b))
-                buffer_copy_buffer(s->ssl_ca_dn_file, b);
-            b = p->config_storage[0]->ssl_cipher_list;
-            if (!buffer_string_is_empty(b))
-                buffer_copy_buffer(s->ssl_cipher_list, b);
-        }
-        s->ssl_conf_cmd = array_init();
-        if (0 != i)
-            array_copy_array(s->ssl_conf_cmd,
-                             p->config_storage[0]->ssl_conf_cmd);
-        s->ssl_acme_tls_1 = buffer_init();
-
-        cv[0].destination = &(s->ssl_log_noise);
-        cv[1].destination = &(s->ssl_enabled);
-        cv[2].destination = s->ssl_pemfile;
-        cv[3].destination = s->ssl_ca_file;
-        cv[4].destination = s->ssl_dh_file;
-        cv[5].destination = s->ssl_ec_curve;
-        cv[6].destination = s->ssl_cipher_list;
-        cv[7].destination = &(s->ssl_honor_cipher_order);
-        cv[8].destination = &(s->ssl_empty_fragments);
-        cv[9].destination = &(s->ssl_disable_client_renegotiation);
-        cv[10].destination = &(s->ssl_read_ahead);
-        cv[11].destination = &(s->ssl_verifyclient);
-        cv[12].destination = &(s->ssl_verifyclient_enforce);
-        cv[13].destination = &(s->ssl_verifyclient_depth);
-        cv[14].destination = s->ssl_verifyclient_username;
-        cv[15].destination = &(s->ssl_verifyclient_export_cert);
-        cv[16].destination = &(s->ssl_use_sslv2);
-        cv[17].destination = &(s->ssl_use_sslv3);
-        cv[18].destination = s->ssl_ca_crl_file;
-        cv[19].destination = s->ssl_ca_dn_file;
-        cv[20].destination = s->ssl_conf_cmd;
-        cv[21].destination = s->ssl_acme_tls_1;
-        cv[22].destination = s->ssl_privkey;
-
-        p->config_storage[i] = s;
-
-        if (0 != config_insert_values_global(srv, config->value, cv, i == 0 ? T_CONFIG_SCOPE_SERVER : T_CONFIG_SCOPE_CONNECTION)) {
-            return HANDLER_ERROR;
-        }
-
-        if (0 != i && s->ssl_enabled && buffer_string_is_empty(s->ssl_pemfile)){
-            /* inherit ssl settings from global scope (in network_init_ssl())
-             * (if only ssl.engine = "enable" and no other ssl.* settings)*/
-            for (size_t j = 0; j < config->value->used; ++j) {
-                buffer *k = &config->value->data[j]->key;
-                if (0 == strncmp(k->ptr, "ssl.", sizeof("ssl.")-1)
-                    && !buffer_is_equal_string(k, CONST_STR_LEN("ssl.engine"))){
-                    log_error_write(srv, __FILE__, __LINE__, "sb",
-                                    "ssl.pemfile has to be set in same scope "
-                                    "as other ssl.* directives, unless only "
-                                    "ssl.engine is set, inheriting ssl.* from "
-                                    "global scope", k);
-                    return HANDLER_ERROR;
+    /* process and validate config directives
+     * (init i to 0 if global context; to 1 to skip empty global context) */
+    for (int i = !p->cvlist[0].v.u2[1]; i < p->nconfig; ++i) {
+        config_plugin_value_t *cpv = p->cvlist + p->cvlist[i].v.u2[0];
+        config_plugin_value_t *pemfile = NULL;
+        config_plugin_value_t *privkey = NULL;
+        const buffer *ssl_ca_file = NULL;
+        const buffer *ssl_ca_dn_file = NULL;
+        for (; -1 != cpv->k_id; ++cpv) {
+            switch (cpv->k_id) {
+              case 0: /* ssl.pemfile */
+                if (!buffer_string_is_empty(cpv->v.b)) pemfile = cpv;
+                break;
+              case 1: /* ssl.privkey */
+                if (!buffer_string_is_empty(cpv->v.b)) privkey = cpv;
+                break;
+              case 2: /* ssl.ca-file */
+              case 3: /* ssl.ca-dn-file */
+                if (!mod_openssl_init_once_openssl(srv)) return HANDLER_ERROR;
+                if (!buffer_string_is_empty(cpv->v.b)) {
+                    const char * const fn = cpv->v.b->ptr;
+                    if (cpv->k_id == 2)
+                        ssl_ca_file = cpv->v.b;
+                    else
+                        ssl_ca_dn_file = cpv->v.b;
+                    cpv->v.v = SSL_load_client_CA_file(fn);
+                    if (NULL != cpv->v.v) {
+                        cpv->vtype = T_CONFIG_LOCAL;
+                    }
+                    else {
+                        log_error(srv->errh, __FILE__, __LINE__, "SSL: %s %s",
+                          ERR_error_string(ERR_get_error(), NULL), fn);
+                        return HANDLER_ERROR;
+                    }
                 }
+                break;
+              case 4: /* ssl.ca-crl-file */
+              case 5: /* ssl.read-ahead */
+              case 6: /* ssl.disable-client-renegotiation */
+              case 7: /* ssl.verifyclient.activate */
+              case 8: /* ssl.verifyclient.enforce */
+                break;
+              case 9: /* ssl.verifyclient.depth */
+                if (cpv->v.shrt > 255) {
+                    log_error(srv->errh, __FILE__, __LINE__,
+                      "%s is absurdly large (%hu); limiting to 255",
+                      cpk[cpv->k_id].k, cpv->v.shrt);
+                    cpv->v.shrt = 255;
+                }
+                break;
+              case 10:/* ssl.verifyclient.username */
+              case 11:/* ssl.verifyclient.exportcert */
+              case 12:/* ssl.acme-tls-1 */
+              case 13:/* debug.log-ssl-noise */
+                break;
+              default:/* should not happen */
+                break;
             }
         }
 
-        if (0 != i && s->ssl_enabled && config->comp != COMP_SERVER_SOCKET) {
-            log_error_write(srv, __FILE__, __LINE__, "s",
-                            "ssl.engine is valid only in global scope "
-                            "or $SERVER[\"socket\"] condition");
-        }
+        /* load all ssl.ca-files into a single chain to be prepared for SNI */
+        /*(certificate load order might matter)*/
+        if (ssl_ca_dn_file)
+            array_insert_value(p->cafiles, CONST_BUF_LEN(ssl_ca_dn_file));
+        if (ssl_ca_file)
+            array_insert_value(p->cafiles, CONST_BUF_LEN(ssl_ca_file));
 
-        if (!array_is_kvstring(s->ssl_conf_cmd)) {
-            log_error_write(srv, __FILE__, __LINE__, "s",
-                            "ssl.openssl.ssl-conf-cmd must be array "
-                            "of \"key\" => \"value\" strings");
-        }
-    }
-
-    if (0 != network_init_ssl(srv, p)) return HANDLER_ERROR;
-
-    return HANDLER_GO_ON;
-}
-
-
-#define PATCH(x) \
-    hctx->conf.x = s->x;
-static int
-mod_openssl_patch_connection (server *srv, connection *con, handler_ctx *hctx)
-{
-    plugin_config *s = plugin_data_singleton->config_storage[0];
-
-    /*PATCH(ssl_enabled);*//*(not patched)*/
-    /*PATCH(ssl_pemfile);*//*(not patched)*/
-    /*PATCH(ssl_privkey);*//*(not patched)*/
-    PATCH(ssl_pemfile_x509);
-    PATCH(ssl_pemfile_pkey);
-    PATCH(ssl_ca_file);
-    /*PATCH(ssl_ca_crl_file);*//*(not patched)*/
-    PATCH(ssl_ca_dn_file);
-    PATCH(ssl_ca_file_cert_names);
-    /*PATCH(ssl_cipher_list);*//*(not patched)*/
-    /*PATCH(ssl_dh_file);*//*(not patched)*/
-    /*PATCH(ssl_ec_curve);*//*(not patched)*/
-    /*PATCH(ssl_honor_cipher_order);*//*(not patched)*/
-    /*PATCH(ssl_empty_fragments);*//*(not patched)*/
-    /*PATCH(ssl_use_sslv2);*//*(not patched)*/
-    /*PATCH(ssl_use_sslv3);*//*(not patched)*/
-    /*PATCH(ssl_conf_cmd);*//*(not patched)*/
-
-    PATCH(ssl_verifyclient);
-    PATCH(ssl_verifyclient_enforce);
-    PATCH(ssl_verifyclient_depth);
-    PATCH(ssl_verifyclient_username);
-    PATCH(ssl_verifyclient_export_cert);
-    PATCH(ssl_disable_client_renegotiation);
-    PATCH(ssl_read_ahead);
-    PATCH(ssl_acme_tls_1);
-
-    PATCH(ssl_log_noise);
-
-    /* skip the first, the global context */
-    for (size_t i = 1; i < srv->config_context->used; ++i) {
-        if (!config_check_cond(con, i)) continue; /* condition not matched */
-
-        data_config *dc = (data_config *)srv->config_context->data[i];
-        s = plugin_data_singleton->config_storage[i];
-
-        /* merge config */
-        for (size_t j = 0; j < dc->value->used; ++j) {
-            data_unset *du = dc->value->data[j];
-
-            if (buffer_is_equal_string(&du->key, CONST_STR_LEN("ssl.pemfile"))) {
-                /*PATCH(ssl_pemfile);*//*(not patched)*/
-                /*PATCH(ssl_privkey);*//*(not patched)*/
-                PATCH(ssl_pemfile_x509);
-                PATCH(ssl_pemfile_pkey);
-            } else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("ssl.ca-file"))) {
-                PATCH(ssl_ca_file);
-                PATCH(ssl_ca_file_cert_names);
-            } else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("ssl.ca-dn-file"))) {
-                PATCH(ssl_ca_dn_file);
-                PATCH(ssl_ca_file_cert_names);
-            } else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("ssl.verifyclient.activate"))) {
-                PATCH(ssl_verifyclient);
-            } else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("ssl.verifyclient.enforce"))) {
-                PATCH(ssl_verifyclient_enforce);
-            } else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("ssl.verifyclient.depth"))) {
-                PATCH(ssl_verifyclient_depth);
-            } else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("ssl.verifyclient.username"))) {
-                PATCH(ssl_verifyclient_username);
-            } else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("ssl.verifyclient.exportcert"))) {
-                PATCH(ssl_verifyclient_export_cert);
-            } else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("ssl.disable-client-renegotiation"))) {
-                PATCH(ssl_disable_client_renegotiation);
-            } else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("ssl.read-ahead"))) {
-                PATCH(ssl_read_ahead);
-            } else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("ssl.acme-tls-1"))) {
-                PATCH(ssl_acme_tls_1);
-            } else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("debug.log-ssl-noise"))) {
-                PATCH(ssl_log_noise);
-          #if 0 /*(not patched)*/
-            } else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("ssl.ca-crl-file"))) {
-                PATCH(ssl_ca_crl_file);
-            } else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("ssl.honor-cipher-order"))) {
-                PATCH(ssl_honor_cipher_order);
-            } else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("ssl.empty-fragments"))) {
-                PATCH(ssl_empty_fragments);
-            } else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("ssl.use-sslv2"))) {
-                PATCH(ssl_use_sslv2);
-            } else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("ssl.use-sslv3"))) {
-                PATCH(ssl_use_sslv3);
-            } else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("ssl.cipher-list"))) {
-                PATCH(ssl_cipher_list);
-            } else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("ssl.dh-file"))) {
-                PATCH(ssl_dh_file);
-            } else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("ssl.ec-curve"))) {
-                PATCH(ssl_ec_curve);
-            } else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("ssl.engine"))) {
-                PATCH(ssl_enabled);
-            } else if (buffer_is_equal_string(&du->key, CONST_STR_LEN("ssl.openssl.ssl-conf-cmd"))) {
-                PATCH(ssl_conf_cmd);
+        if (pemfile) {
+          #ifdef OPENSSL_NO_TLSEXT
+            config_cond_info cfginfo;
+            uint32_t j = (uint32_t)p->cvlist[i].k_id;
+            config_get_config_cond_info(srv, j, &cfginfo);
+            if (j > 0 && (COMP_SERVER_SOCKET != cfginfo.comp
+                          || cfginfo.cond != CONFIG_COND_EQ)) {
+                if (COMP_HTTP_HOST == cfginfo.comp)
+                    log_error(srv->errh, __FILE__, __LINE__, "SSL:"
+                      "can't use ssl.pemfile with $HTTP[\"host\"], "
+                      "as openssl version does not support TLS extensions");
+                else
+                    log_error(srv->errh, __FILE__, __LINE__, "SSL:"
+                      "ssl.pemfile only works in SSL socket binding context "
+                      "as openssl version does not support TLS extensions");
+                return HANDLER_ERROR;
+            }
           #endif
-            }
+            if (NULL == privkey) privkey = pemfile;
+            pemfile->v.v =
+              network_openssl_load_pemfile(srv, pemfile->v.b, privkey->v.b);
+            if (pemfile->v.v)
+                pemfile->vtype = T_CONFIG_LOCAL;
+            else
+                return HANDLER_ERROR;
         }
     }
 
-    return 0;
+    p->defaults.ssl_verifyclient = 0;
+    p->defaults.ssl_verifyclient_enforce = 1;
+    p->defaults.ssl_verifyclient_depth = 9;
+    p->defaults.ssl_verifyclient_export_cert = 0;
+    p->defaults.ssl_disable_client_renegotiation = 1;
+    p->defaults.ssl_read_ahead = 0;
+
+    /* initialize p->defaults from global config context */
+    if (p->nconfig > 0 && p->cvlist->v.u2[1]) {
+        const config_plugin_value_t *cpv = p->cvlist + p->cvlist->v.u2[0];
+        if (-1 != cpv->k_id)
+            mod_openssl_merge_config(&p->defaults, cpv);
+    }
+
+    return mod_openssl_set_defaults_sockets(srv, p);
 }
-#undef PATCH
 
 
 static int
@@ -1672,10 +1917,6 @@ connection_read_cq_ssl (server *srv, connection *con,
         len = SSL_pending(hctx->ssl);
         mem_len = len < 2048 ? 2048 : (size_t)len;
         mem = chunkqueue_get_memory(con->read_queue, &mem_len);
-#if 0
-        /* overwrite everything with 0 */
-        memset(mem, 0, mem_len);
-#endif
 
         len = SSL_read(hctx->ssl, mem, mem_len);
         if (len > 0) {
@@ -1807,17 +2048,18 @@ connection_read_cq_ssl (server *srv, connection *con,
 
 CONNECTION_FUNC(mod_openssl_handle_con_accept)
 {
-    plugin_data *p = p_d;
-    handler_ctx *hctx;
     server_socket *srv_sock = con->srv_socket;
     if (!srv_sock->is_ssl) return HANDLER_GO_ON;
 
-    hctx = handler_ctx_init();
+    plugin_data *p = p_d;
+    handler_ctx * const hctx = handler_ctx_init();
     hctx->con = con;
     hctx->srv = srv;
     con->plugin_ctx[p->id] = hctx;
 
-    hctx->ssl = SSL_new(p->config_storage[srv_sock->sidx]->ssl_ctx);
+    plugin_ssl_ctx * const s = p->ssl_ctxs + srv_sock->sidx;
+    hctx->conf.ssl_pemfile_pkey = s->ssl_pemfile_pkey;
+    hctx->ssl = SSL_new(s->ssl_ctx);
     if (NULL != hctx->ssl
         && SSL_set_app_data(hctx->ssl, hctx)
         && SSL_set_fd(hctx->ssl, con->fd)) {
@@ -1825,7 +2067,7 @@ CONNECTION_FUNC(mod_openssl_handle_con_accept)
         con->network_read = connection_read_cq_ssl;
         con->network_write = connection_write_cq_ssl;
         buffer_copy_string_len(con->proto, CONST_STR_LEN("https"));
-        mod_openssl_patch_connection(srv, con, hctx);
+        mod_openssl_patch_config(con, &hctx->conf);
         return HANDLER_GO_ON;
     }
     else {
@@ -2066,7 +2308,7 @@ https_add_ssl_client_entries (server *srv, connection *con, handler_ctx *hctx)
          * or
          *   ssl.verifyclient.username = "SSL_CLIENT_S_DN_emailAddress"
          */
-        buffer *varname = hctx->conf.ssl_verifyclient_username;
+        const buffer *varname = hctx->conf.ssl_verifyclient_username;
         const buffer *vb = http_header_env_get(con, CONST_BUF_LEN(varname));
         if (vb) { /* same as http_auth.c:http_auth_setenv() */
             http_header_env_set(con,
@@ -2162,7 +2404,7 @@ CONNECTION_FUNC(mod_openssl_handle_uri_raw)
     handler_ctx *hctx = con->plugin_ctx[p->id];
     if (NULL == hctx) return HANDLER_GO_ON;
 
-    mod_openssl_patch_connection(srv, con, hctx);
+    mod_openssl_patch_config(con, &hctx->conf);
     if (hctx->conf.ssl_verifyclient) {
         mod_openssl_handle_request_env(srv, con, p);
     }
