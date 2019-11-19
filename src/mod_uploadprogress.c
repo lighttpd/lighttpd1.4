@@ -127,15 +127,7 @@ INIT_FUNC(mod_uploadprogress_init) {
 
 FREE_FUNC(mod_uploadprogress_free) {
     plugin_data *p = p_d;
-    if (!p) return HANDLER_GO_ON;
-    UNUSED(srv);
-
     connection_map_free_data(&p->con_map);
-
-    free(p->cvlist);
-    free(p);
-
-    return HANDLER_GO_ON;
 }
 
 static void mod_uploadprogress_merge_config_cpv(plugin_config * const pconf, const config_plugin_value_t * const cpv) {

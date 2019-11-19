@@ -32,17 +32,6 @@ INIT_FUNC(mod_expire_init) {
     return calloc(1, sizeof(plugin_data));
 }
 
-FREE_FUNC(mod_expire_free) {
-    plugin_data *p = p_d;
-    if (!p) return HANDLER_GO_ON;
-    UNUSED(srv);
-
-    free(p->cvlist);
-    free(p);
-
-    return HANDLER_GO_ON;
-}
-
 static int mod_expire_get_offset(server *srv, plugin_data *p, const buffer *expire, time_t *offset) {
 	char *ts;
 	int type = -1;
@@ -381,7 +370,6 @@ int mod_expire_plugin_init(plugin *p) {
 	p->init        = mod_expire_init;
 	p->handle_response_start = mod_expire_handler;
 	p->set_defaults  = mod_expire_set_defaults;
-	p->cleanup     = mod_expire_free;
 
 	return 0;
 }

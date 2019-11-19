@@ -50,17 +50,6 @@ INIT_FUNC(mod_status_init) {
     return calloc(1, sizeof(plugin_data));
 }
 
-FREE_FUNC(mod_status_free) {
-    plugin_data *p = p_d;
-    if (!p) return HANDLER_GO_ON;
-    UNUSED(srv);
-
-    free(p->cvlist);
-    free(p);
-
-    return HANDLER_GO_ON;
-}
-
 static void mod_status_merge_config_cpv(plugin_config * const pconf, const config_plugin_value_t * const cpv) {
     switch (cpv->k_id) { /* index into static config_plugin_keys_t cpk[] */
       case 0: /* status.status-url */
@@ -899,7 +888,6 @@ int mod_status_plugin_init(plugin *p) {
 	p->name        = "status";
 
 	p->init        = mod_status_init;
-	p->cleanup     = mod_status_free;
 	p->set_defaults= mod_status_set_defaults;
 
 	p->handle_uri_clean    = mod_status_handler;

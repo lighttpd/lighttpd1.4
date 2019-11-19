@@ -27,7 +27,6 @@ typedef struct {
     const buffer *mysql_query;
 } plugin_config;
 
-/* global plugin data */
 typedef struct {
     PLUGIN_DATA;
     plugin_config defaults;
@@ -36,19 +35,19 @@ typedef struct {
     buffer tmp_buf;
 } plugin_data;
 
-/* per connection plugin data */
 typedef struct {
 	buffer	*server_name;
 	buffer	*document_root;
 } plugin_connection_data;
 
-/* init the plugin data */
 INIT_FUNC(mod_mysql_vhost_init) {
     return calloc(1, sizeof(plugin_data));
 }
 
 /* cleanup the mysql connections */
-static void mod_mysql_vhost_free_config(plugin_data * const p) {
+FREE_FUNC(mod_mysql_vhost_cleanup) {
+    plugin_data * const p = p_d;
+    free(p->tmp_buf.ptr);
     if (NULL == p->cvlist) return;
     /* (init i to 0 if global context; to 1 to skip empty global context) */
     for (int i = !p->cvlist[0].v.u2[1], used = p->nconfig; i < used; ++i) {
@@ -66,22 +65,6 @@ static void mod_mysql_vhost_free_config(plugin_data * const p) {
     }
 }
 
-/* cleanup the plugin data */
-FREE_FUNC(mod_mysql_vhost_cleanup) {
-    plugin_data *p = p_d;
-    if (!p) return HANDLER_GO_ON;
-
-    mod_mysql_vhost_free_config(p);
-    free(p->tmp_buf.ptr);
-
-    free(p->cvlist);
-    free(p);
-
-    UNUSED(srv);
-    return HANDLER_GO_ON;
-}
-
-/* handle the plugin per connection data */
 static void* mod_mysql_vhost_connection_data(server *srv, connection *con, void *p_d)
 {
 	plugin_data *p = p_d;
@@ -98,7 +81,6 @@ static void* mod_mysql_vhost_connection_data(server *srv, connection *con, void 
 	return con->plugin_ctx[p->id] = c;
 }
 
-/* destroy the plugin per connection data */
 CONNECTION_FUNC(mod_mysql_vhost_handle_connection_reset) {
 	plugin_data *p = p_d;
 	plugin_connection_data *c = con->plugin_ctx[p->id];
@@ -192,7 +174,6 @@ static MYSQL * mod_mysql_vhost_db_setup (server *srv, const char *dbname, const 
     return my;
 }
 
-/* set configuration values */
 SETDEFAULTS_FUNC(mod_mysql_vhost_set_defaults) {
     static const config_plugin_keys_t cpk[] = {
       { CONST_STR_LEN("mysql-vhost.sql"),
@@ -285,7 +266,6 @@ SETDEFAULTS_FUNC(mod_mysql_vhost_set_defaults) {
     return HANDLER_GO_ON;
 }
 
-/* handle document root request */
 CONNECTION_FUNC(mod_mysql_vhost_handle_docroot) {
 	plugin_data *p = p_d;
 	plugin_connection_data *c;
@@ -385,7 +365,7 @@ ERR500:
 	return HANDLER_FINISHED;
 }
 
-/* this function is called at dlopen() time and inits the callbacks */
+
 int mod_mysql_vhost_plugin_init(plugin *p);
 int mod_mysql_vhost_plugin_init(plugin *p) {
 	p->version        = LIGHTTPD_VERSION_ID;

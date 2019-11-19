@@ -33,17 +33,6 @@ INIT_FUNC(mod_staticfile_init) {
     return calloc(1, sizeof(plugin_data));
 }
 
-FREE_FUNC(mod_staticfile_free) {
-    plugin_data *p = p_d;
-    if (!p) return HANDLER_GO_ON;
-    UNUSED(srv);
-
-    free(p->cvlist);
-    free(p);
-
-    return HANDLER_GO_ON;
-}
-
 static void mod_staticfile_merge_config_cpv(plugin_config * const pconf, const config_plugin_value_t * const cpv) {
     switch (cpv->k_id) { /* index into static config_plugin_keys_t cpk[] */
       case 0: /* static-file.exclude-extensions */
@@ -183,7 +172,6 @@ int mod_staticfile_plugin_init(plugin *p) {
 	p->init        = mod_staticfile_init;
 	p->handle_subrequest_start = mod_staticfile_subrequest;
 	p->set_defaults  = mod_staticfile_set_defaults;
-	p->cleanup     = mod_staticfile_free;
 
 	return 0;
 }

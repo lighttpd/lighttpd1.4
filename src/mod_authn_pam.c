@@ -45,16 +45,6 @@ INIT_FUNC(mod_authn_pam_init) {
     return p;
 }
 
-FREE_FUNC(mod_authn_pam_free) {
-    plugin_data *p = p_d;
-    if (!p) return HANDLER_GO_ON;
-
-    free(p->cvlist);
-    free(p);
-    UNUSED(srv);
-    return HANDLER_GO_ON;
-}
-
 static void mod_authn_pam_merge_config_cpv(plugin_config * const pconf, const config_plugin_value_t * const cpv) {
     switch (cpv->k_id) { /* index into static config_plugin_keys_t cpk[] */
       case 0: /* auth.backend.pam.opts */
@@ -177,7 +167,6 @@ int mod_authn_pam_plugin_init(plugin *p) {
     p->version     = LIGHTTPD_VERSION_ID;
     p->name        = "authn_pam";
     p->init        = mod_authn_pam_init;
-    p->cleanup     = mod_authn_pam_free;
     p->set_defaults= mod_authn_pam_set_defaults;
 
     return 0;

@@ -69,7 +69,8 @@ INIT_FUNC(mod_geoip_init) {
     return calloc(1, sizeof(plugin_data));
 }
 
-static void mod_geoip_free_config(plugin_data * const p) {
+FREE_FUNC(mod_geoip_free) {
+    plugin_data * const p = p_d;
     if (NULL == p->cvlist) return;
     /* (init i to 0 if global context; to 1 to skip empty global context) */
     for (int i = !p->cvlist[0].v.u2[1], used = p->nconfig; i < used; ++i) {
@@ -85,19 +86,6 @@ static void mod_geoip_free_config(plugin_data * const p) {
             }
         }
     }
-}
-
-FREE_FUNC(mod_geoip_free) {
-    plugin_data * const p = p_d;
-    if (!p) return HANDLER_GO_ON;
-    UNUSED(srv);
-
-    mod_geoip_free_config(p);
-
-    free(p->cvlist);
-    free(p);
-
-    return HANDLER_GO_ON;
 }
 
 static int mod_geoip_open_db(server *srv, config_plugin_value_t * const cpv, int mem_cache) {

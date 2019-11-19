@@ -17,7 +17,10 @@
 		__attribute_cold__ \
 		static void *x(void)
 
-#define FREE_FUNC          __attribute_cold__ SERVER_FUNC
+#define FREE_FUNC(x) \
+		__attribute_cold__ \
+		static void x(void *p_d)
+
 #define SETDEFAULTS_FUNC   __attribute_cold__ SERVER_FUNC
 #define SIGHUP_FUNC        __attribute_cold__ SERVER_FUNC
 #define TRIGGER_FUNC       SERVER_FUNC
@@ -60,7 +63,7 @@ typedef struct {
 	handler_t (* priv_defaults)          (server *srv, void *p_d);
 	handler_t (* set_defaults)           (server *srv, void *p_d);
 	handler_t (* worker_init)            (server *srv, void *p_d); /* at server startup (each worker after fork()) */
-	handler_t (* cleanup)                (server *srv, void *p_d);
+	void (* cleanup)                     (void *p_d);
 
 	const char *name;/* name of the plugin */
 	size_t version;
@@ -101,8 +104,5 @@ handler_t plugins_call_set_defaults(server *srv);
 
 __attribute_cold__
 handler_t plugins_call_worker_init(server *srv);
-
-__attribute_cold__
-handler_t plugins_call_cleanup(server *srv);
 
 #endif

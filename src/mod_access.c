@@ -25,17 +25,6 @@ INIT_FUNC(mod_access_init) {
     return calloc(1, sizeof(plugin_data));
 }
 
-FREE_FUNC(mod_access_free) {
-    plugin_data *p = p_d;
-    if (!p) return HANDLER_GO_ON;
-    UNUSED(srv);
-
-    free(p->cvlist);
-    free(p);
-
-    return HANDLER_GO_ON;
-}
-
 static void mod_access_merge_config_cpv(plugin_config * const pconf, const config_plugin_value_t * const cpv) {
     switch (cpv->k_id) { /* index into static config_plugin_keys_t cpk[] */
       case 0: /* url.access-deny */
@@ -189,7 +178,6 @@ int mod_access_plugin_init(plugin *p) {
 	p->set_defaults = mod_access_set_defaults;
 	p->handle_uri_clean = mod_access_uri_handler;
 	p->handle_subrequest_start  = mod_access_uri_handler;
-	p->cleanup     = mod_access_free;
 
 	return 0;
 }

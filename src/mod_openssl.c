@@ -104,6 +104,7 @@ typedef struct {
     PLUGIN_DATA;
     plugin_ssl_ctx *ssl_ctxs;
     plugin_config defaults;
+    server *srv;
     array *cafiles;
 } plugin_data;
 
@@ -284,16 +285,9 @@ mod_openssl_load_ca_files (SSL_CTX *ssl_ctx, plugin_data *p, server *srv)
 FREE_FUNC(mod_openssl_free)
 {
     plugin_data *p = p_d;
-    if (!p) return HANDLER_GO_ON;
-    UNUSED(srv);
-
-    mod_openssl_free_config(srv, p);
+    if (NULL == p->srv) return;
+    mod_openssl_free_config(p->srv, p);
     mod_openssl_free_openssl();
-
-    free(p->cvlist);
-    free(p);
-
-    return HANDLER_GO_ON;
 }
 
 
@@ -1581,6 +1575,7 @@ SETDEFAULTS_FUNC(mod_openssl_set_defaults)
     };
 
     plugin_data * const p = p_d;
+    p->srv = srv;
     p->cafiles = array_init();
     if (!config_plugin_values_init(srv, p, cpk, "mod_openssl"))
         return HANDLER_ERROR;

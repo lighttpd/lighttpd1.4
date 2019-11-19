@@ -50,7 +50,8 @@ INIT_FUNC(mod_auth_init) {
 	return p;
 }
 
-static void mod_auth_free_config(plugin_data * const p) {
+FREE_FUNC(mod_auth_free) {
+    plugin_data * const p = p_d;
     if (NULL == p->cvlist) return;
     /* (init i to 0 if global context; to 1 to skip empty global context) */
     for (int i = !p->cvlist[0].v.u2[1], used = p->nconfig; i < used; ++i) {
@@ -66,18 +67,6 @@ static void mod_auth_free_config(plugin_data * const p) {
             }
         }
     }
-}
-
-FREE_FUNC(mod_auth_free) {
-    plugin_data *p = p_d;
-    if (!p) return HANDLER_GO_ON;
-
-    mod_auth_free_config(p);
-
-    free(p->cvlist);
-    free(p);
-    UNUSED(srv);
-    return HANDLER_GO_ON;
 }
 
 /* data type for mod_auth structured data

@@ -18,7 +18,11 @@ INIT_FUNC(mod_cml_init) {
     return calloc(1, sizeof(plugin_data));
 }
 
-static void mod_cml_free_config(plugin_data * const p) {
+FREE_FUNC(mod_cml_free) {
+    plugin_data * const p = p_d;
+    free(p->trigger_handler.ptr);
+    free(p->basedir.ptr);
+    free(p->baseurl.ptr);
     if (NULL == p->cvlist) return;
   #if defined(USE_MEMCACHED)
     /* (init i to 0 if global context; to 1 to skip empty global context) */
@@ -75,23 +79,6 @@ static int mod_cml_init_memcached(server *srv, config_plugin_value_t * const cpv
     return 0;
 
   #endif
-}
-
-FREE_FUNC(mod_cml_free) {
-    plugin_data * const p = p_d;
-    if (!p) return HANDLER_GO_ON;
-    UNUSED(srv);
-
-    free(p->trigger_handler.ptr);
-    free(p->basedir.ptr);
-    free(p->baseurl.ptr);
-
-    mod_cml_free_config(p);
-
-    free(p->cvlist);
-    free(p);
-
-    return HANDLER_GO_ON;
 }
 
 static void mod_cml_merge_config_cpv(plugin_config * const pconf, const config_plugin_value_t * const cpv) {

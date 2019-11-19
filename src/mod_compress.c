@@ -91,16 +91,8 @@ INIT_FUNC(mod_compress_init) {
 
 FREE_FUNC(mod_compress_free) {
     plugin_data *p = p_d;
-    if (!p) return HANDLER_GO_ON;
-    UNUSED(srv);
-
     buffer_free(p->ofn);
     buffer_free(p->b);
-
-    free(p->cvlist);
-    free(p);
-
-    return HANDLER_GO_ON;
 }
 
 /* 0 on success, -1 for error */

@@ -29,7 +29,8 @@ INIT_FUNC(mod_rewrite_init) {
     return calloc(1, sizeof(plugin_data));
 }
 
-static void mod_rewrite_free_config(plugin_data * const p) {
+FREE_FUNC(mod_rewrite_free) {
+    plugin_data * const p = p_d;
     if (NULL == p->cvlist) return;
     /* (init i to 0 if global context; to 1 to skip empty global context) */
     for (int i = !p->cvlist[0].v.u2[1], used = p->nconfig; i < used; ++i) {
@@ -56,19 +57,6 @@ static void mod_rewrite_free_config(plugin_data * const p) {
         if (kvb)    pcre_keyvalue_buffer_free(kvb);
         if (kvb_NF) pcre_keyvalue_buffer_free(kvb_NF);
     }
-}
-
-FREE_FUNC(mod_rewrite_free) {
-    plugin_data *p = p_d;
-    if (!p) return HANDLER_GO_ON;
-    UNUSED(srv);
-
-    mod_rewrite_free_config(p);
-
-    free(p->cvlist);
-    free(p);
-
-    return HANDLER_GO_ON;
 }
 
 static void mod_rewrite_merge_config_cpv(plugin_config * const pconf, const config_plugin_value_t * const cpv) {

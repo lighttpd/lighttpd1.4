@@ -59,18 +59,6 @@ INIT_FUNC(mod_skeleton_init) {
     return calloc(1, sizeof(plugin_data));
 }
 
-/* destroy the plugin data */
-FREE_FUNC(mod_skeleton_free) {
-    plugin_data *p = p_d;
-    if (!p) return HANDLER_GO_ON;
-    UNUSED(srv);
-
-    free(p->cvlist);
-    free(p);
-
-    return HANDLER_GO_ON;
-}
-
 /* handle plugin config and check values */
 
 static void mod_skeleton_merge_config_cpv(plugin_config * const pconf, const config_plugin_value_t * const cpv) {
@@ -170,7 +158,6 @@ int mod_skeleton_plugin_init(plugin *p) {
 	p->version     = LIGHTTPD_VERSION_ID;
 	p->name        = "skeleton";
 	p->init        = mod_skeleton_init;
-	p->cleanup     = mod_skeleton_free;
 	p->set_defaults= mod_skeleton_set_defaults;
 
 	p->handle_uri_clean = mod_skeleton_uri_handler;

@@ -49,15 +49,7 @@ INIT_FUNC(mod_magnet_init) {
 
 FREE_FUNC(mod_magnet_free) {
     plugin_data *p = p_d;
-    if (!p) return HANDLER_GO_ON;
-    UNUSED(srv);
-
     script_cache_free_data(&p->cache);
-
-    free(p->cvlist);
-    free(p);
-
-    return HANDLER_GO_ON;
 }
 
 static void mod_magnet_merge_config_cpv(plugin_config * const pconf, const config_plugin_value_t * const cpv) {

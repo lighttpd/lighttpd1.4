@@ -451,7 +451,9 @@ static void mod_accesslog_free_format_fields(format_fields * const ff) {
     free(ff);
 }
 
-static void mod_accesslog_free_config(plugin_data * const p) {
+FREE_FUNC(mod_accesslog_free) {
+    plugin_data * const p = p_d;
+    free(p->syslog_logbuffer.ptr);
     if (NULL == p->cvlist) return;
     /* (init i to 0 if global context; to 1 to skip empty global context) */
     for (int i = !p->cvlist[0].v.u2[1], used = p->nconfig; i < used; ++i) {
@@ -474,20 +476,6 @@ static void mod_accesslog_free_config(plugin_data * const p) {
     if (NULL != p->default_format) {
         mod_accesslog_free_format_fields(p->default_format);
     }
-}
-
-FREE_FUNC(mod_accesslog_free) {
-    plugin_data *p = p_d;
-    if (!p) return HANDLER_GO_ON;
-    UNUSED(srv);
-
-    mod_accesslog_free_config(p);
-
-    free(p->syslog_logbuffer.ptr);
-    free(p->cvlist);
-    free(p);
-
-    return HANDLER_GO_ON;
 }
 
 static void mod_accesslog_merge_config_cpv(plugin_config * const pconf, const config_plugin_value_t * const cpv) {

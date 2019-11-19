@@ -334,7 +334,7 @@ __attribute_cold__
 void gw_plugin_config_free(gw_plugin_config *s);
 
 __attribute_cold__
-handler_t gw_free(server *srv, void *p_d);
+void gw_free(void *p_d);
 
 __attribute_cold__
 int gw_set_defaults_backend(server *srv, gw_plugin_data *p, const array *a, gw_plugin_config *s, int sh_exec, const char *cpkkey);

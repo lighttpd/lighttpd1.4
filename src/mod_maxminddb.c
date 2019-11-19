@@ -107,8 +107,9 @@ INIT_FUNC(mod_maxminddb_init)
 }
 
 
-static void mod_maxminddb_free_config (plugin_data * const p)
+FREE_FUNC(mod_maxminddb_free)
 {
+    plugin_data * const p = p_d;
     if (NULL == p->cvlist) return;
     /* (init i to 0 if global context; to 1 to skip empty global context) */
     for (int i = !p->cvlist[0].v.u2[1], used = p->nconfig; i < used; ++i) {
@@ -139,21 +140,6 @@ static void mod_maxminddb_free_config (plugin_data * const p)
             }
         }
     }
-}
-
-
-FREE_FUNC(mod_maxminddb_free)
-{
-    plugin_data * const p = p_d;
-    if (!p) return HANDLER_GO_ON;
-    UNUSED(srv);
-
-    mod_maxminddb_free_config(p);
-
-    free(p->cvlist);
-    free(p);
-
-    return HANDLER_GO_ON;
 }
 
 

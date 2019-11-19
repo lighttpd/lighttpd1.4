@@ -50,7 +50,10 @@ static void mod_evhost_free_path_pieces(const buffer *path_pieces) {
     free(b);
 }
 
-static void mod_evhost_free_config(plugin_data * const p) {
+FREE_FUNC(mod_evhost_free) {
+    plugin_data * const p = p_d;
+    free(p->tmp_buf.ptr);
+    array_free_data(&p->split_vals);
     if (NULL == p->cvlist) return;
     /* (init i to 0 if global context; to 1 to skip empty global context) */
     for (int i = !p->cvlist[0].v.u2[1], used = p->nconfig; i < used; ++i) {
@@ -66,22 +69,6 @@ static void mod_evhost_free_config(plugin_data * const p) {
             }
         }
     }
-}
-
-FREE_FUNC(mod_evhost_free) {
-    plugin_data *p = p_d;
-    if (!p) return HANDLER_GO_ON;
-    UNUSED(srv);
-
-    mod_evhost_free_config(p);
-
-    free(p->tmp_buf.ptr);
-    array_free_data(&p->split_vals);
-
-    free(p->cvlist);
-    free(p);
-
-    return HANDLER_GO_ON;
 }
 
 __attribute_cold__

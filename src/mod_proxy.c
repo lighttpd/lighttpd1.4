@@ -92,12 +92,9 @@ static void mod_proxy_free_config(plugin_data * const p)
 
 
 FREE_FUNC(mod_proxy_free) {
-    plugin_data *p = p_d;
-    if (!p) return HANDLER_GO_ON;
-
+    plugin_data * const p = p_d;
     mod_proxy_free_config(p);
-
-    return gw_free(srv, p);
+    gw_free(p);
 }
 
 static void mod_proxy_merge_config_cpv(plugin_config * const pconf, const config_plugin_value_t * const cpv)

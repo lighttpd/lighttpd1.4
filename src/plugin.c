@@ -41,8 +41,8 @@ typedef enum {
 	PLUGIN_FUNC_HANDLE_DOCROOT,
 	PLUGIN_FUNC_HANDLE_PHYSICAL,
 	PLUGIN_FUNC_CONNECTION_RESET,
-	PLUGIN_FUNC_INIT,
-	PLUGIN_FUNC_CLEANUP,
+	/* PLUGIN_FUNC_INIT, *//* handled here in plugin.c */
+	/* PLUGIN_FUNC_CLEANUP, *//* handled here in plugin.c */
 	PLUGIN_FUNC_SET_DEFAULTS,
 	PLUGIN_FUNC_WORKER_INIT,
 
@@ -347,7 +347,6 @@ PLUGIN_CALL_FN_SRV_CON_DATA(PLUGIN_FUNC_CONNECTION_RESET, connection_reset)
 
 PLUGIN_CALL_FN_SRV_DATA(PLUGIN_FUNC_HANDLE_TRIGGER, handle_trigger)
 PLUGIN_CALL_FN_SRV_DATA(PLUGIN_FUNC_HANDLE_SIGHUP, handle_sighup)
-PLUGIN_CALL_FN_SRV_DATA(PLUGIN_FUNC_CLEANUP, cleanup)
 PLUGIN_CALL_FN_SRV_DATA(PLUGIN_FUNC_SET_DEFAULTS, set_defaults)
 PLUGIN_CALL_FN_SRV_DATA(PLUGIN_FUNC_WORKER_INIT, worker_init)
 
@@ -363,6 +362,22 @@ handler_t plugins_call_handle_waitpid(server *srv, pid_t pid, int status) {
     while (plfd->fn&&(rc=plfd->fn(srv,plfd->data,pid,status))==HANDLER_GO_ON)
         ++plfd;
     return rc;
+}
+
+static void plugins_call_cleanup(server * const srv) {
+    plugin ** const ps = srv->plugins.ptr;
+    for (uint32_t i = 0; i < srv->plugins.used; ++i) {
+        plugin *p = ps[i];
+        if (NULL == p) continue;
+        if (NULL != p->data) {
+            plugin_data_base *pd = p->data;
+            if (p->cleanup)
+                p->cleanup(p->data);
+            free(pd->cvlist);
+            free(pd);
+            p->data = NULL;
+        }
+    }
 }
 
 /**
@@ -447,8 +462,6 @@ handler_t plugins_call_init(server *srv) {
 			++offsets[PLUGIN_FUNC_HANDLE_PHYSICAL];
 		if (p->connection_reset)
 			++offsets[PLUGIN_FUNC_CONNECTION_RESET];
-		if (p->cleanup)
-			++offsets[PLUGIN_FUNC_CLEANUP];
 		if (p->set_defaults)
 			++offsets[PLUGIN_FUNC_SET_DEFAULTS];
 		if (p->worker_init)
@@ -506,8 +519,6 @@ handler_t plugins_call_init(server *srv) {
 					offsets[PLUGIN_FUNC_HANDLE_PHYSICAL]);
 		plugins_call_init_slot(srv, p->connection_reset, p->data,
 					offsets[PLUGIN_FUNC_CONNECTION_RESET]);
-		plugins_call_init_slot(srv, p->cleanup, p->data,
-					offsets[PLUGIN_FUNC_CLEANUP]);
 		plugins_call_init_slot(srv, p->set_defaults, p->data,
 					offsets[PLUGIN_FUNC_SET_DEFAULTS]);
 		plugins_call_init_slot(srv, p->worker_init, p->data,

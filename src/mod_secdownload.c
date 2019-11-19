@@ -229,17 +229,6 @@ INIT_FUNC(mod_secdownload_init) {
     return calloc(1, sizeof(plugin_data));
 }
 
-FREE_FUNC(mod_secdownload_free) {
-    plugin_data *p = p_d;
-    if (!p) return HANDLER_GO_ON;
-    UNUSED(srv);
-
-    free(p->cvlist);
-    free(p);
-
-    return HANDLER_GO_ON;
-}
-
 static int mod_secdownload_parse_algorithm(server * const srv, config_plugin_value_t * const cpv) {
     secdl_algorithm algorithm = algorithm_from_string(cpv->v.b);
     switch (algorithm) {
@@ -549,7 +538,6 @@ int mod_secdownload_plugin_init(plugin *p) {
 	p->init        = mod_secdownload_init;
 	p->handle_physical  = mod_secdownload_uri_handler;
 	p->set_defaults  = mod_secdownload_set_defaults;
-	p->cleanup     = mod_secdownload_free;
 
 	return 0;
 }

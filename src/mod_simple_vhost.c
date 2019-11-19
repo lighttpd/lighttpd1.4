@@ -33,16 +33,8 @@ INIT_FUNC(mod_simple_vhost_init) {
 
 FREE_FUNC(mod_simple_vhost_free) {
     plugin_data *p = p_d;
-    if (!p) return HANDLER_GO_ON;
-    UNUSED(srv);
-
     free(p->tmp_buf.ptr);
     free(p->last_root.ptr);
-
-    free(p->cvlist);
-    free(p);
-
-    return HANDLER_GO_ON;
 }
 
 static void mod_simple_vhost_merge_config_cpv(plugin_config * const pconf, const config_plugin_value_t * const cpv) {

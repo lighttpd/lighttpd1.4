@@ -24,17 +24,6 @@ INIT_FUNC(mod_alias_init) {
     return calloc(1, sizeof(plugin_data));
 }
 
-FREE_FUNC(mod_alias_free) {
-    plugin_data *p = p_d;
-    if (!p) return HANDLER_GO_ON;
-    UNUSED(srv);
-
-    free(p->cvlist);
-    free(p);
-
-    return HANDLER_GO_ON;
-}
-
 static void mod_alias_merge_config_cpv(plugin_config * const pconf, const config_plugin_value_t * const cpv) {
     switch (cpv->k_id) { /* index into static config_plugin_keys_t cpk[] */
       case 0: /* alias.url */
@@ -192,7 +181,6 @@ int mod_alias_plugin_init(plugin *p) {
 	p->init           = mod_alias_init;
 	p->handle_physical= mod_alias_physical_handler;
 	p->set_defaults   = mod_alias_set_defaults;
-	p->cleanup        = mod_alias_free;
 
 	return 0;
 }

@@ -32,15 +32,7 @@ INIT_FUNC(mod_vhostdb_init) {
 
 FREE_FUNC(mod_vhostdb_free) {
     plugin_data *p = p_d;
-    if (!p) return HANDLER_GO_ON;
-
     free(p->tmp_buf.ptr);
-
-    free(p->cvlist);
-    free(p);
-
-    UNUSED(srv);
-    return HANDLER_GO_ON;
 }
 
 static void mod_vhostdb_merge_config_cpv(plugin_config * const pconf, const config_plugin_value_t * const cpv) {

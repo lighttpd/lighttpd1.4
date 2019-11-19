@@ -64,7 +64,8 @@ typedef struct {
     int mysql_conn_port;
 } plugin_data;
 
-static void mod_authn_mysql_sock_close(plugin_data *p) {
+static void mod_authn_mysql_sock_close(void *p_d) {
+    plugin_data * const p = p_d;
     if (NULL != p->mysql_conn) {
         mysql_close(p->mysql_conn);
         p->mysql_conn = NULL;
@@ -153,18 +154,6 @@ INIT_FUNC(mod_authn_mysql_init) {
     http_auth_backend_set(&http_auth_backend_mysql);
 
     return p;
-}
-
-FREE_FUNC(mod_authn_mysql_free) {
-    plugin_data *p = p_d;
-    if (!p) return HANDLER_GO_ON;
-
-    mod_authn_mysql_sock_close(p);
-
-    free(p->cvlist);
-    free(p);
-    UNUSED(srv);
-    return HANDLER_GO_ON;
 }
 
 static void mod_authn_mysql_merge_config_cpv(plugin_config * const pconf, const config_plugin_value_t * const cpv) {
@@ -522,7 +511,7 @@ int mod_authn_mysql_plugin_init(plugin *p) {
     p->name        = "authn_mysql";
     p->init        = mod_authn_mysql_init;
     p->set_defaults= mod_authn_mysql_set_defaults;
-    p->cleanup     = mod_authn_mysql_free;
+    p->cleanup     = mod_authn_mysql_sock_close;
 
     return 0;
 }

@@ -135,12 +135,7 @@ INIT_FUNC(mod_cgi_init) {
 
 FREE_FUNC(mod_cgi_free) {
 	plugin_data *p = p_d;
-	if (!p) return HANDLER_GO_ON;
-
 	buffer_pid_t *r = &(p->cgi_pid);
-
-	UNUSED(srv);
-
 	if (r->ptr) free(r->ptr);
 	free(p->env.ptr);
 	free(p->env.offsets);
@@ -150,11 +145,6 @@ FREE_FUNC(mod_cgi_free) {
       #ifdef __CYGWIN__
 	buffer_free(p->env.systemroot);
       #endif
-
-	free(p->cvlist);
-	free(p);
-
-	return HANDLER_GO_ON;
 }
 
 static void mod_cgi_merge_config_cpv(plugin_config * const pconf, const config_plugin_value_t * const cpv) {

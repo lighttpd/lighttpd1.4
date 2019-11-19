@@ -72,19 +72,10 @@ INIT_FUNC(mod_ssi_init) {
 
 FREE_FUNC(mod_ssi_free) {
 	plugin_data *p = p_d;
-	UNUSED(srv);
-
-	if (!p) return HANDLER_GO_ON;
-
 	array_free(p->ssi_vars);
 	array_free(p->ssi_cgi_env);
 	buffer_free(p->timefmt);
 	buffer_free(p->stat_fn);
-
-	free(p->cvlist);
-	free(p);
-
-	return HANDLER_GO_ON;
 }
 
 static void mod_ssi_merge_config_cpv(plugin_config * const pconf, const config_plugin_value_t * const cpv) {

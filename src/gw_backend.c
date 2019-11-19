@@ -1156,11 +1156,9 @@ void gw_plugin_config_free(gw_plugin_config *s) {
     free(s);
 }
 
-handler_t gw_free(server *srv, void *p_d) {
+void gw_free(void *p_d) {
     gw_plugin_data * const p = p_d;
-    if (!p) return HANDLER_GO_ON;
-    UNUSED(srv);
-    if (NULL == p->cvlist) { free(p); return HANDLER_GO_ON; }
+    if (NULL == p->cvlist) return;
     /* (init i to 0 if global context; to 1 to skip empty global context) */
     for (int i = !p->cvlist[0].v.u2[1], used = p->nconfig; i < used; ++i) {
         config_plugin_value_t *cpv = p->cvlist + p->cvlist[i].v.u2[0];
@@ -1175,9 +1173,6 @@ handler_t gw_free(server *srv, void *p_d) {
             }
         }
     }
-    free(p->cvlist);
-    free(p);
-    return HANDLER_GO_ON;
 }
 
 int gw_set_defaults_backend(server *srv, gw_plugin_data *p, const array *a, gw_plugin_config *s, int sh_exec, const char *cpkkey) {

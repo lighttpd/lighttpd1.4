@@ -45,17 +45,6 @@ INIT_FUNC(mod_setenv_init) {
     return calloc(1, sizeof(plugin_data));
 }
 
-FREE_FUNC(mod_setenv_free) {
-    plugin_data *p = p_d;
-    if (!p) return HANDLER_GO_ON;
-    UNUSED(srv);
-
-    free(p->cvlist);
-    free(p);
-
-    return HANDLER_GO_ON;
-}
-
 static void mod_setenv_merge_config_cpv(plugin_config * const pconf, const config_plugin_value_t * const cpv) {
     switch (cpv->k_id) { /* index into static config_plugin_keys_t cpk[] */
       case 0: /* setenv.add-request-header */
@@ -285,7 +274,6 @@ int mod_setenv_plugin_init(plugin *p) {
 	p->handle_request_env    = mod_setenv_handle_request_env;
 	p->handle_response_start = mod_setenv_handle_response_start;
 	p->set_defaults  = mod_setenv_set_defaults;
-	p->cleanup     = mod_setenv_free;
 
 	p->connection_reset  = mod_setenv_reset;
 

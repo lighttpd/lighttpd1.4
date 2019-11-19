@@ -42,17 +42,6 @@ INIT_FUNC(mod_evasive_init) {
     return calloc(1, sizeof(plugin_data));
 }
 
-FREE_FUNC(mod_evasive_free) {
-    plugin_data *p = p_d;
-    if (!p) return HANDLER_GO_ON;
-    UNUSED(srv);
-
-    free(p->cvlist);
-    free(p);
-
-    return HANDLER_GO_ON;
-}
-
 static void mod_evasive_merge_config_cpv(plugin_config * const pconf, const config_plugin_value_t * const cpv) {
     switch (cpv->k_id) { /* index into static config_plugin_keys_t cpk[] */
       case 0: /* evasive.max-conns-per-ip */
@@ -163,7 +152,6 @@ int mod_evasive_plugin_init(plugin *p) {
 	p->init        = mod_evasive_init;
 	p->set_defaults = mod_evasive_set_defaults;
 	p->handle_uri_clean  = mod_evasive_uri_handler;
-	p->cleanup     = mod_evasive_free;
 
 	return 0;
 }

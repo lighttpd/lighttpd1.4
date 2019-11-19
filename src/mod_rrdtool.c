@@ -39,6 +39,7 @@ typedef struct {
 
     int rrdtool_running;
     const buffer *path_rrdtool_bin;
+    server *srv;
 } plugin_data;
 
 INIT_FUNC(mod_rrd_init) {
@@ -64,22 +65,15 @@ static void mod_rrd_free_config(plugin_data * const p) {
 
 FREE_FUNC(mod_rrd_free) {
     plugin_data *p = p_d;
-    if (!p) return HANDLER_GO_ON;
-    UNUSED(srv);
-
+    if (NULL == p->srv) return;
     mod_rrd_free_config(p);
 
     if (p->read_fd >= 0) close(p->read_fd);
     if (p->write_fd >= 0) close(p->write_fd);
-    if (p->rrdtool_pid > 0 && p->srv_pid == srv->pid) {
+    if (p->rrdtool_pid > 0 && p->srv_pid == p->srv->pid) {
         /* collect status (blocking) */
         while (-1 == waitpid(p->rrdtool_pid, NULL, 0) && errno == EINTR) ;
     }
-
-    free(p->cvlist);
-    free(p);
-
-    return HANDLER_GO_ON;
 }
 
 static int mod_rrd_create_pipe(server *srv, plugin_data *p) {
@@ -179,6 +173,7 @@ SETDEFAULTS_FUNC(mod_rrd_set_defaults) {
     };
 
     plugin_data * const p = p_d;
+    p->srv = srv;
     if (!config_plugin_values_init(srv, p, cpk, "mod_rrdtool"))
         return HANDLER_ERROR;
 

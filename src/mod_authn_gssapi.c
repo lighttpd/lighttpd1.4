@@ -68,16 +68,6 @@ INIT_FUNC(mod_authn_gssapi_init) {
     return p;
 }
 
-FREE_FUNC(mod_authn_gssapi_free) {
-    plugin_data *p = p_d;
-    if (!p) return HANDLER_GO_ON;
-
-    free(p->cvlist);
-    free(p);
-    UNUSED(srv);
-    return HANDLER_GO_ON;
-}
-
 static void mod_authn_gssapi_merge_config_cpv(plugin_config * const pconf, const config_plugin_value_t * const cpv) {
     switch (cpv->k_id) { /* index into static config_plugin_keys_t cpk[] */
       case 0: /* auth.backend.gssapi.keytab */
@@ -791,7 +781,6 @@ int mod_authn_gssapi_plugin_init(plugin *p) {
     p->name        = "authn_gssapi";
     p->init        = mod_authn_gssapi_init;
     p->set_defaults= mod_authn_gssapi_set_defaults;
-    p->cleanup     = mod_authn_gssapi_free;
     p->connection_reset = mod_authn_gssapi_handle_reset;
 
     return 0;

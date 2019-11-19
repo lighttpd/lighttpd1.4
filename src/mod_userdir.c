@@ -37,17 +37,6 @@ INIT_FUNC(mod_userdir_init) {
     return calloc(1, sizeof(plugin_data));
 }
 
-FREE_FUNC(mod_userdir_free) {
-    plugin_data *p = p_d;
-    if (!p) return HANDLER_GO_ON;
-    UNUSED(srv);
-
-    free(p->cvlist);
-    free(p);
-
-    return HANDLER_GO_ON;
-}
-
 static void mod_userdir_merge_config_cpv(plugin_config * const pconf, const config_plugin_value_t * const cpv) {
     switch (cpv->k_id) { /* index into static config_plugin_keys_t cpk[] */
       case 0: /* userdir.path */
@@ -315,7 +304,6 @@ int mod_userdir_plugin_init(plugin *p) {
 	p->init           = mod_userdir_init;
 	p->handle_physical = mod_userdir_docroot_handler;
 	p->set_defaults   = mod_userdir_set_defaults;
-	p->cleanup        = mod_userdir_free;
 
 	return 0;
 }
