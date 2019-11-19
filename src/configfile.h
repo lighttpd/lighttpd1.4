@@ -158,7 +158,6 @@ typedef enum { T_CONFIG_UNSET,
 		T_CONFIG_DEPRECATED,
 		T_CONFIG_UNSUPPORTED
 } config_values_type_t;
-#define T_CONFIG_BOOLEAN T_CONFIG_BOOL
 
 typedef enum { T_CONFIG_SCOPE_UNSET,
 		T_CONFIG_SCOPE_SERVER,
@@ -194,20 +193,6 @@ int config_plugin_values_init_block(server * const srv, const array * const ca, 
 
 __attribute_cold__
 int config_plugin_values_init(server *srv, void *p_d, const config_plugin_keys_t *cpk, const char *mname);
-
-typedef struct {
-	const char *key;
-	void *destination;
-
-	config_values_type_t type;
-	config_scope_type_t scope;
-} config_values_t;
-
-__attribute_cold__
-int config_insert_values_global(server *srv, const array *ca, const config_values_t *cv, config_scope_type_t scope);
-
-__attribute_cold__
-int config_insert_values_internal(server *srv, const array *ca, const config_values_t *cv, config_scope_type_t scope);
 
 int config_check_cond(connection *con, int context_ndx);
 
