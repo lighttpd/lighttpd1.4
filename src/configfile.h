@@ -190,6 +190,9 @@ typedef struct {
 } config_plugin_keys_t;
 
 __attribute_cold__
+int config_plugin_values_init_block(server * const srv, const array * const ca, const config_plugin_keys_t * const cpk, const char * const mname, config_plugin_value_t *cpv);
+
+__attribute_cold__
 int config_plugin_values_init(server *srv, void *p_d, const config_plugin_keys_t *cpk, const char *mname);
 
 typedef struct {
