@@ -14,8 +14,8 @@ int http_response_write_header(server *srv, connection *con);
 typedef struct http_cgi_opts_t {
   int authorizer;
   int break_scriptfilename_for_php;
-  buffer *docroot;
-  buffer *strip_request_uri;
+  const buffer *docroot;
+  const buffer *strip_request_uri;
 } http_cgi_opts;
 
 enum {

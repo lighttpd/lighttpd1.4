@@ -48,7 +48,7 @@ typedef struct gw_proc {
 
 typedef struct {
     /* the key that is used to reference this value */
-    buffer *id;
+    const buffer *id;
 
     /* list of processes handling this extension
      * sorted by lowest load
@@ -116,7 +116,7 @@ typedef struct {
      * "localhost" (INADDR_LOOPBACK) is assumed.
      *
      */
-    buffer *host;
+    const buffer *host;
     unsigned short port;
     unsigned short family; /* sa_family_t */
 
@@ -128,7 +128,7 @@ typedef struct {
      * - more control (on locally)
      * - more speed (no extra overhead)
      */
-    buffer *unixsocket;
+    const buffer *unixsocket;
 
     /* if socket is local we can start the gw process ourself
      *
@@ -137,16 +137,16 @@ typedef struct {
      * check min_procs and max_procs for the number
      * of process to start up
      */
-    buffer *bin_path;
+    const buffer *bin_path;
 
     /* bin-path is set bin-environment is taken to
      * create the environement before starting the
      * FastCGI process
      *
      */
-    array *bin_env;
+    const array *bin_env;
 
-    array *bin_env_copy;
+    const array *bin_env_copy;
 
     /*
      * docroot-translation between URL->phys and the
@@ -157,7 +157,7 @@ typedef struct {
      * - chroot if local
      *
      */
-    buffer *docroot;
+    const buffer *docroot;
 
     /*
      * check_local tells you if the phys file is stat()ed
@@ -193,13 +193,13 @@ typedef struct {
      *
      */
     unsigned short xsendfile_allow;
-    array *xsendfile_docroot;
+    const array *xsendfile_docroot;
 
     int32_t load;
 
     uint32_t max_id; /* corresponds most of the time to num_procs */
 
-    buffer *strip_request_uri;
+    const buffer *strip_request_uri;
 
     unsigned short tcp_fin_propagate;
     unsigned short kill_signal; /* we need a setting for this as libfcgi
@@ -327,11 +327,21 @@ typedef struct gw_handler_ctx {
 } gw_handler_ctx;
 
 
+__attribute_cold__
 void * gw_init(void);
+
+__attribute_cold__
 void gw_plugin_config_free(gw_plugin_config *s);
+
+__attribute_cold__
 handler_t gw_free(server *srv, void *p_d);
+
+__attribute_cold__
 int gw_set_defaults_backend(server *srv, gw_plugin_data *p, const array *a, gw_plugin_config *s, int sh_exec, const char *cpkkey);
+
+__attribute_cold__
 int gw_get_defaults_balance(server *srv, const buffer *b);
+
 handler_t gw_check_extension(server *srv, connection *con, gw_plugin_data *p, int uri_path_handler, size_t hctx_sz);
 handler_t gw_connection_reset(server *srv, connection *con, void *p_d);
 handler_t gw_handle_subrequest(server *srv, connection *con, void *p_d);

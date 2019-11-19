@@ -124,17 +124,6 @@ static void gw_proc_free(gw_proc *f) {
 static gw_host *gw_host_init(void) {
     gw_host *f = calloc(1, sizeof(*f));
     force_assert(f);
-
-    f->id = buffer_init();
-    f->host = buffer_init();
-    f->unixsocket = buffer_init();
-    f->docroot = buffer_init();
-    f->bin_path = buffer_init();
-    f->bin_env = array_init();
-    f->bin_env_copy = array_init();
-    f->strip_request_uri = buffer_init();
-    f->xsendfile_docroot = array_init();
-
     return f;
 }
 
@@ -144,16 +133,6 @@ static void gw_host_free(gw_host *h) {
         --h->refcount;
         return;
     }
-
-    buffer_free(h->id);
-    buffer_free(h->host);
-    buffer_free(h->unixsocket);
-    buffer_free(h->docroot);
-    buffer_free(h->bin_path);
-    buffer_free(h->strip_request_uri);
-    array_free(h->bin_env);
-    array_free(h->bin_env_copy);
-    array_free(h->xsendfile_docroot);
 
     gw_proc_free(h->first);
     gw_proc_free(h->unused_procs);
@@ -390,7 +369,9 @@ static int gw_proc_sockaddr_init(server *srv, gw_host *host, gw_proc *proc) {
         else {
             /* overwrite host->host buffer with IP addr string so that
              * any further use of gw_host does not block on DNS lookup */
-            sock_addr_inet_ntop_copy_buffer(host->host, &addr);
+            buffer *h;
+            *(const buffer **)&h = host->host;
+            sock_addr_inet_ntop_copy_buffer(h, &addr);
             host->family = sock_addr_get_family(&addr);
         }
         buffer_copy_string_len(proc->connection_name, CONST_STR_LEN("tcp:"));
@@ -518,7 +499,7 @@ static int gw_spawn_connection(server *srv, gw_host *host, gw_proc *proc, int de
             env.used = 0;
 
             /* build clean environment */
-            if (host->bin_env_copy->used) {
+            if (host->bin_env_copy && host->bin_env_copy->used) {
                 for (i = 0; i < host->bin_env_copy->used; ++i) {
                     data_string *ds=(data_string *)host->bin_env_copy->data[i];
                     char *ge;
@@ -539,10 +520,12 @@ static int gw_spawn_connection(server *srv, gw_host *host, gw_proc *proc, int de
             }
 
             /* create environment */
-            for (i = 0; i < host->bin_env->used; ++i) {
-                data_string *ds = (data_string *)host->bin_env->data[i];
-
-                env_add(&env,CONST_BUF_LEN(&ds->key),CONST_BUF_LEN(&ds->value));
+            if (host->bin_env) {
+                for (i = 0; i < host->bin_env->used; ++i) {
+                    data_string *ds = (data_string *)host->bin_env->data[i];
+                    env_add(&env, CONST_BUF_LEN(&ds->key),
+                                  CONST_BUF_LEN(&ds->value));
+                }
             }
 
             for (i = 0; i < env.used; ++i) {
@@ -701,7 +684,7 @@ static void gw_proc_kill(server *srv, gw_host *host, gw_proc *proc) {
     --host->num_procs;
 }
 
-static gw_host * unixsocket_is_dup(gw_plugin_data *p, buffer *unixsocket) {
+static gw_host * unixsocket_is_dup(gw_plugin_data *p, const buffer *unixsocket) {
     if (NULL == p->cvlist) return NULL;
     /* (init i to 0 if global context; to 1 to skip empty global context) */
     for (int i = !p->cvlist[0].v.u2[1], used = p->nconfig; i < used; ++i) {
@@ -735,7 +718,7 @@ static gw_host * unixsocket_is_dup(gw_plugin_data *p, buffer *unixsocket) {
     return NULL;
 }
 
-static int parse_binpath(char_array *env, buffer *b) {
+static int parse_binpath(char_array *env, const buffer *b) {
     char *start = b->ptr;
     char c;
     /* search for spaces */
@@ -1202,7 +1185,81 @@ int gw_set_defaults_backend(server *srv, gw_plugin_data *p, const array *a, gw_p
     /* per-module plugin_data MUST have pointer-compatible common "base class"
      * with gw_plugin_data (stemming from gw_plugin_config compatibility) */
 
-    buffer *gw_mode;
+    static const config_plugin_keys_t cpk[] = {
+      { CONST_STR_LEN("host"),
+        T_CONFIG_STRING,
+        T_CONFIG_SCOPE_CONNECTION }
+     ,{ CONST_STR_LEN("port"),
+        T_CONFIG_SHORT,
+        T_CONFIG_SCOPE_CONNECTION }
+     ,{ CONST_STR_LEN("socket"),
+        T_CONFIG_STRING,
+        T_CONFIG_SCOPE_CONNECTION }
+     ,{ CONST_STR_LEN("listen-backlog"),
+        T_CONFIG_INT,
+        T_CONFIG_SCOPE_CONNECTION }
+     ,{ CONST_STR_LEN("bin-path"),
+        T_CONFIG_STRING,
+        T_CONFIG_SCOPE_CONNECTION }
+     ,{ CONST_STR_LEN("kill-signal"),
+        T_CONFIG_SHORT,
+        T_CONFIG_SCOPE_CONNECTION }
+     ,{ CONST_STR_LEN("check-local"),
+        T_CONFIG_BOOL,
+        T_CONFIG_SCOPE_CONNECTION }
+     ,{ CONST_STR_LEN("mode"),
+        T_CONFIG_STRING,
+        T_CONFIG_SCOPE_CONNECTION }
+     ,{ CONST_STR_LEN("docroot"),
+        T_CONFIG_STRING,
+        T_CONFIG_SCOPE_CONNECTION }
+     ,{ CONST_STR_LEN("min-procs"),
+        T_CONFIG_SHORT,
+        T_CONFIG_SCOPE_CONNECTION }
+     ,{ CONST_STR_LEN("max-procs"),
+        T_CONFIG_SHORT,
+        T_CONFIG_SCOPE_CONNECTION }
+     ,{ CONST_STR_LEN("max-load-per-proc"),
+        T_CONFIG_SHORT,
+        T_CONFIG_SCOPE_CONNECTION }
+     ,{ CONST_STR_LEN("idle-timeout"),
+        T_CONFIG_SHORT,
+        T_CONFIG_SCOPE_CONNECTION }
+     ,{ CONST_STR_LEN("disable-time"),
+        T_CONFIG_SHORT,
+        T_CONFIG_SCOPE_CONNECTION }
+     ,{ CONST_STR_LEN("bin-environment"),
+        T_CONFIG_ARRAY,
+        T_CONFIG_SCOPE_CONNECTION }
+     ,{ CONST_STR_LEN("bin-copy-environment"),
+        T_CONFIG_ARRAY,
+        T_CONFIG_SCOPE_CONNECTION }
+     ,{ CONST_STR_LEN("broken-scriptfilename"),
+        T_CONFIG_BOOL,
+        T_CONFIG_SCOPE_CONNECTION }
+     ,{ CONST_STR_LEN("strip-request-uri"),
+        T_CONFIG_STRING,
+        T_CONFIG_SCOPE_CONNECTION }
+     ,{ CONST_STR_LEN("fix-root-scriptname"),
+        T_CONFIG_BOOL,
+        T_CONFIG_SCOPE_CONNECTION }
+     ,{ CONST_STR_LEN("allow-x-send-file"),
+        T_CONFIG_BOOL,
+        T_CONFIG_SCOPE_CONNECTION }
+     ,{ CONST_STR_LEN("x-sendfile"),
+        T_CONFIG_BOOL,
+        T_CONFIG_SCOPE_CONNECTION }
+     ,{ CONST_STR_LEN("x-sendfile-docroot"),
+        T_CONFIG_ARRAY,
+        T_CONFIG_SCOPE_CONNECTION }
+     ,{ CONST_STR_LEN("tcp-fin-propagate"),
+        T_CONFIG_BOOL,
+        T_CONFIG_SCOPE_CONNECTION }
+     ,{ NULL, 0,
+        T_CONFIG_UNSET,
+        T_CONFIG_SCOPE_UNSET }
+    };
+
     gw_host *host = NULL;
 
     if (!array_is_kvarray(a)) {
@@ -1214,8 +1271,6 @@ int gw_set_defaults_backend(server *srv, gw_plugin_data *p, const array *a, gw_p
     }
 
     p->srv_pid = srv->pid;
-
-    gw_mode = buffer_init();
 
     s->exts      = gw_extensions_init();
     s->exts_auth = gw_extensions_init();
@@ -1243,53 +1298,29 @@ int gw_set_defaults_backend(server *srv, gw_plugin_data *p, const array *a, gw_p
          */
 
         for (uint32_t n = 0; n < da_ext->value.used; ++n) {
-            data_array *da_host = (data_array *)da_ext->value.data[n];
+            data_array * const da_host = (data_array *)da_ext->value.data[n];
 
-            config_values_t fcv[] = {
-                { "host",              NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_CONNECTION },       /* 0 */
-                { "docroot",           NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_CONNECTION },       /* 1 */
-                { "mode",              NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_CONNECTION },       /* 2 */
-                { "socket",            NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_CONNECTION },       /* 3 */
-                { "bin-path",          NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_CONNECTION },       /* 4 */
-
-                { "check-local",       NULL, T_CONFIG_BOOL, T_CONFIG_SCOPE_CONNECTION },         /* 5 */
-                { "port",              NULL, T_CONFIG_SHORT, T_CONFIG_SCOPE_CONNECTION },        /* 6 */
-                { "min-procs",         NULL, T_CONFIG_SHORT, T_CONFIG_SCOPE_CONNECTION },        /* 7 */
-                { "max-procs",         NULL, T_CONFIG_SHORT, T_CONFIG_SCOPE_CONNECTION },        /* 8 */
-                { "max-load-per-proc", NULL, T_CONFIG_SHORT, T_CONFIG_SCOPE_CONNECTION },        /* 9 */
-                { "idle-timeout",      NULL, T_CONFIG_SHORT, T_CONFIG_SCOPE_CONNECTION },        /* 10 */
-                { "disable-time",      NULL, T_CONFIG_SHORT, T_CONFIG_SCOPE_CONNECTION },        /* 11 */
-
-                { "bin-environment",   NULL, T_CONFIG_ARRAY, T_CONFIG_SCOPE_CONNECTION },        /* 12 */
-                { "bin-copy-environment", NULL, T_CONFIG_ARRAY, T_CONFIG_SCOPE_CONNECTION },     /* 13 */
-
-                { "broken-scriptfilename", NULL, T_CONFIG_BOOL, T_CONFIG_SCOPE_CONNECTION },     /* 14 */
-                { "allow-x-send-file",  NULL, T_CONFIG_BOOL, T_CONFIG_SCOPE_CONNECTION },        /* 15 */
-                { "strip-request-uri",  NULL, T_CONFIG_STRING, T_CONFIG_SCOPE_CONNECTION },      /* 16 */
-                { "kill-signal",        NULL, T_CONFIG_SHORT, T_CONFIG_SCOPE_CONNECTION },       /* 17 */
-                { "fix-root-scriptname",   NULL, T_CONFIG_BOOL, T_CONFIG_SCOPE_CONNECTION },     /* 18 */
-                { "listen-backlog",    NULL, T_CONFIG_INT,   T_CONFIG_SCOPE_CONNECTION },        /* 19 */
-                { "x-sendfile",        NULL, T_CONFIG_BOOL, T_CONFIG_SCOPE_CONNECTION },         /* 20 */
-                { "x-sendfile-docroot",NULL, T_CONFIG_ARRAY,  T_CONFIG_SCOPE_CONNECTION },       /* 21 */
-                { "tcp-fin-propagate", NULL, T_CONFIG_BOOL, T_CONFIG_SCOPE_CONNECTION },         /* 22 */
-
-                { NULL,                NULL, T_CONFIG_UNSET, T_CONFIG_SCOPE_UNSET }
-            };
-            unsigned short host_mode = GW_RESPONDER;
-
-            if (da_host->type != TYPE_ARRAY || !array_is_kvany(&da_host->value)){
-                log_error_write(srv, __FILE__, __LINE__, "SBS",
-                  "unexpected value for gw.server near [",
-                  &da_host->key, "](string); expected ( \"ext\" => ( \"backend-label\" => ( \"key\" => \"value\" )))");
-
+            if (da_host->type != TYPE_ARRAY
+                || !array_is_kvany(&da_host->value)){
+                log_error(srv->errh, __FILE__, __LINE__,
+                  "unexpected value for gw.server near [%s](string); "
+                  "expected ( \"ext\" => "
+                  "( \"backend-label\" => ( \"key\" => \"value\" )))",
+                  da_host->key.ptr ? da_host->key.ptr : "");
                 goto error;
             }
 
+            config_plugin_value_t cvlist[sizeof(cpk)/sizeof(cpk[0])+1];
+            memset(cvlist, 0, sizeof(cvlist));
+
+            array *ca = &da_host->value;
+            if (!config_plugin_values_init_block(srv, ca, cpk, cpkkey, cvlist))
+                goto error;
+
+            unsigned short host_mode = GW_RESPONDER;
+
             host = gw_host_init();
-            buffer_clear(gw_mode);
-
-            buffer_copy_buffer(host->id, &da_host->key);
-
+            host->id = &da_host->key;
             host->check_local  = 1;
             host->min_procs    = 4;
             host->max_procs    = 4;
@@ -1303,34 +1334,111 @@ int gw_set_defaults_backend(server *srv, gw_plugin_data *p, const array *a, gw_p
             host->xsendfile_allow = 0;
             host->refcount = 0;
 
-            fcv[0].destination = host->host;
-            fcv[1].destination = host->docroot;
-            fcv[2].destination = gw_mode;
-            fcv[3].destination = host->unixsocket;
-            fcv[4].destination = host->bin_path;
-
-            fcv[5].destination = &(host->check_local);
-            fcv[6].destination = &(host->port);
-            fcv[7].destination = &(host->min_procs);
-            fcv[8].destination = &(host->max_procs);
-            fcv[9].destination = &(host->max_load_per_proc);
-            fcv[10].destination = &(host->idle_timeout);
-            fcv[11].destination = &(host->disable_time);
-
-            fcv[12].destination = host->bin_env;
-            fcv[13].destination = host->bin_env_copy;
-            fcv[14].destination = &(host->break_scriptfilename_for_php);
-            fcv[15].destination = &(host->xsendfile_allow);
-            fcv[16].destination = host->strip_request_uri;
-            fcv[17].destination = &(host->kill_signal);
-            fcv[18].destination = &(host->fix_root_path_name);
-            fcv[19].destination = &(host->listen_backlog);
-            fcv[20].destination = &(host->xsendfile_allow);
-            fcv[21].destination = host->xsendfile_docroot;
-            fcv[22].destination = &(host->tcp_fin_propagate);
-
-            if (0 != config_insert_values_internal(srv, &da_host->value, fcv, T_CONFIG_SCOPE_CONNECTION)) {
-                goto error;
+            config_plugin_value_t *cpv = cvlist;
+            for (; -1 != cpv->k_id; ++cpv) {
+                switch (cpv->k_id) {
+                  case 0: /* host */
+                    host->host = cpv->v.b;
+                    break;
+                  case 1: /* port */
+                    host->port = cpv->v.shrt;
+                    break;
+                  case 2: /* socket */
+                    host->unixsocket = cpv->v.b;
+                    break;
+                  case 3: /* listen-backlog */
+                    host->listen_backlog = cpv->v.u;
+                    break;
+                  case 4: /* bin-path */
+                    host->bin_path = cpv->v.b;
+                    break;
+                  case 5: /* kill-signal */
+                    host->kill_signal = cpv->v.shrt;
+                    break;
+                  case 6: /* check-local */
+                    host->check_local = (0 != cpv->v.u);
+                    break;
+                  case 7: /* mode */
+                    if (!buffer_string_is_empty(cpv->v.b)) {
+                        const buffer *b = cpv->v.b;
+                        if (buffer_eq_slen(b, CONST_STR_LEN("responder")))
+                            host_mode = GW_RESPONDER;
+                        else if (buffer_eq_slen(b, CONST_STR_LEN("authorizer")))
+                            host_mode = GW_AUTHORIZER;
+                        else
+                            log_error(srv->errh, __FILE__, __LINE__,
+                              "WARNING: unknown gw mode: %s "
+                              "(ignored, mode set to responder)", b->ptr);
+                    }
+                    break;
+                  case 8: /* docroot */
+                    host->docroot = cpv->v.b;
+                    break;
+                  case 9: /* min-procs */
+                    host->min_procs = cpv->v.shrt;
+                    break;
+                  case 10:/* max-procs */
+                    host->max_procs = cpv->v.shrt;
+                    break;
+                  case 11:/* max-load-per-proc */
+                    host->max_load_per_proc = cpv->v.shrt;
+                    break;
+                  case 12:/* idle-timeout */
+                    host->idle_timeout = cpv->v.shrt;
+                    break;
+                  case 13:/* disable-time */
+                    host->disable_time = cpv->v.shrt;
+                    break;
+                  case 14:/* bin-environment */
+                    host->bin_env = cpv->v.a;
+                    break;
+                  case 15:/* bin-copy-environment */
+                    host->bin_env_copy = cpv->v.a;
+                    break;
+                  case 16:/* broken-scriptfilename */
+                    host->break_scriptfilename_for_php = (0 != cpv->v.u);
+                    break;
+                  case 17:/* strip-request-uri */
+                    host->strip_request_uri = cpv->v.b;
+                    break;
+                  case 18:/* fix-root-scriptname */
+                    host->fix_root_path_name = (0 != cpv->v.u);
+                    break;
+                  case 19:/* allow-x-send-file */
+                    host->xsendfile_allow = (0 != cpv->v.u);
+                    break;
+                  case 20:/* x-sendfile */
+                    host->xsendfile_allow = (0 != cpv->v.u);
+                    break;
+                  case 21:/* x-sendfile-docroot */
+                    host->xsendfile_docroot = cpv->v.a;
+                    if (cpv->v.a->used) {
+                        for (uint32_t k = 0; k < cpv->v.a->used; ++k) {
+                            data_string *ds = (data_string *)cpv->v.a->data[k];
+                            if (ds->type != TYPE_STRING) {
+                                log_error(srv->errh, __FILE__, __LINE__,
+                                  "unexpected type for x-sendfile-docroot; "
+                                  "expected: \"x-sendfile-docroot\" => "
+                                  "( \"/allowed/path\", ... )");
+                                goto error;
+                            }
+                            if (ds->value.ptr[0] != '/') {
+                                log_error(srv->errh, __FILE__, __LINE__,
+                                  "x-sendfile-docroot paths must begin with "
+                                  "'/'; invalid: \"%s\"", ds->value.ptr);
+                                goto error;
+                            }
+                            buffer_path_simplify(&ds->value, &ds->value);
+                            buffer_append_slash(&ds->value);
+                        }
+                    }
+                    break;
+                  case 22:/* tcp-fin-propagate */
+                    host->tcp_fin_propagate = (0 != cpv->v.u);
+                    break;
+                  default:
+                    break;
+                }
             }
 
             for (uint32_t m = 0; m < da_host->value.used; ++m) {
@@ -1354,7 +1462,7 @@ int gw_set_defaults_backend(server *srv, gw_plugin_data *p, const array *a, gw_p
 
             if (!buffer_string_is_empty(host->host) && *host->host->ptr == '/'
                 && buffer_string_is_empty(host->unixsocket)) {
-                buffer_copy_buffer(host->unixsocket, host->host);
+                host->unixsocket = host->host;
             }
 
             if (!buffer_string_is_empty(host->unixsocket)) {
@@ -1404,8 +1512,8 @@ int gw_set_defaults_backend(server *srv, gw_plugin_data *p, const array *a, gw_p
                 }
 
                 if (buffer_string_is_empty(host->host)) {
-                    buffer_copy_string_len(host->host,
-                                           CONST_STR_LEN("127.0.0.1"));
+                    static const buffer lhost = {CONST_STR_LEN("127.0.0.1"), 0};
+                    host->host = &lhost;
                 }
 
                 host->family = (NULL != strchr(host->host->ptr, ':'))
@@ -1544,37 +1652,6 @@ int gw_set_defaults_backend(server *srv, gw_plugin_data *p, const array *a, gw_p
                 if (0 != gw_proc_sockaddr_init(srv, host, proc)) goto error;
             }
 
-            if (!buffer_string_is_empty(gw_mode)) {
-                if (strcmp(gw_mode->ptr, "responder") == 0) {
-                    host_mode = GW_RESPONDER;
-                } else if (strcmp(gw_mode->ptr, "authorizer") == 0) {
-                    host_mode = GW_AUTHORIZER;
-                } else {
-                    log_error_write(srv, __FILE__, __LINE__, "sbs",
-                                    "WARNING: unknown gw mode:",
-                                    gw_mode,"(ignored, mode set to responder)");
-                }
-            }
-
-            if (host->xsendfile_docroot->used) {
-                uint32_t k;
-                for (k = 0; k < host->xsendfile_docroot->used; ++k) {
-                    data_string *ds = (data_string *)host->xsendfile_docroot->data[k];
-                    if (ds->type != TYPE_STRING) {
-                        log_error_write(srv, __FILE__, __LINE__, "s",
-                          "unexpected type for x-sendfile-docroot; expected: \"x-sendfile-docroot\" => ( \"/allowed/path\", ... )");
-                        goto error;
-                    }
-                    if (ds->value.ptr[0] != '/') {
-                        log_error_write(srv, __FILE__, __LINE__, "SBs",
-                          "x-sendfile-docroot paths must begin with '/'; invalid: \"", &ds->value, "\"");
-                        goto error;
-                    }
-                    buffer_path_simplify(&ds->value, &ds->value);
-                    buffer_append_slash(&ds->value);
-                }
-            }
-
             /* s->exts is list of exts -> hosts
              * s->exts now used as combined list
              *   of authorizer and responder hosts (for backend maintenance)
@@ -1602,12 +1679,10 @@ int gw_set_defaults_backend(server *srv, gw_plugin_data *p, const array *a, gw_p
         }
     }
 
-    buffer_free(gw_mode);
     return 1;
 
 error:
     if (NULL != host) gw_host_free(host);
-    buffer_free(gw_mode);
     return 0;
 }
 
