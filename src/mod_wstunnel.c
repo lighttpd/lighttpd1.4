@@ -98,10 +98,17 @@
 #define MOD_WEBSOCKET_LOG_INFO  3
 #define MOD_WEBSOCKET_LOG_DEBUG 4
 
-#define DEBUG_LOG(level, format, ...)                                        \
-  if (hctx->gw.conf.debug >= (level)) {                                      \
-      log_error_write(hctx->srv, __FILE__, __LINE__, (format), __VA_ARGS__); \
-  }
+#define DEBUG_LOG_ERR(format, ...) \
+  if (hctx->gw.conf.debug >= MOD_WEBSOCKET_LOG_ERR) { log_error(hctx->errh, __FILE__, __LINE__, (format), __VA_ARGS__); }
+
+#define DEBUG_LOG_WARN(format, ...) \
+  if (hctx->gw.conf.debug >= MOD_WEBSOCKET_LOG_WARN) { log_error(hctx->errh, __FILE__, __LINE__, (format), __VA_ARGS__); }
+
+#define DEBUG_LOG_INFO(format, ...) \
+  if (hctx->gw.conf.debug >= MOD_WEBSOCKET_LOG_INFO) { log_error(hctx->errh, __FILE__, __LINE__, (format), __VA_ARGS__); }
+
+#define DEBUG_LOG_DEBUG(format, ...) \
+  if (hctx->gw.conf.debug >= MOD_WEBSOCKET_LOG_DEBUG) { log_error(hctx->errh, __FILE__, __LINE__, (format), __VA_ARGS__); }
 
 typedef struct {
     gw_plugin_config gw; /* start must match layout of gw_plugin_config */
@@ -168,7 +175,8 @@ typedef struct {
     time_t ping_ts;
     int subproto;
 
-    server *srv;  /*(for mod_wstunnel module-specific DEBUG_LOG() macro)*/
+    log_error_st *errh; /*(for mod_wstunnel module-specific DEBUG_*() macros)*/
+    server *srv;
     plugin_config conf;
 } handler_ctx;
 
@@ -392,10 +400,8 @@ static handler_t wstunnel_stdin_append(server *srv, gw_handler_ctx *gwhctx) {
         /* future: might differentiate client close request from client error,
          *         and then send 1000 or 1001 */
         connection *con = hctx->gw.remote_conn;
-        DEBUG_LOG(MOD_WEBSOCKET_LOG_INFO, "sds",
-                  "disconnected from client ( fd =", con->fd, ")");
-        DEBUG_LOG(MOD_WEBSOCKET_LOG_DEBUG, "sds",
-                  "send close response to client ( fd =", con->fd, ")");
+        DEBUG_LOG_INFO("disconnected from client (fd=%d)", con->fd);
+        DEBUG_LOG_DEBUG("send close response to client (fd=%d)", con->fd);
         mod_wstunnel_frame_send(hctx, MOD_WEBSOCKET_FRAME_TYPE_CLOSE, CONST_STR_LEN("1000")); /* 1000 Normal Closure */
         gw_connection_reset(srv, con, hctx->gw.plugin_data);
         return HANDLER_FINISHED;
@@ -404,11 +410,10 @@ static handler_t wstunnel_stdin_append(server *srv, gw_handler_ctx *gwhctx) {
 
 static handler_t wstunnel_recv_parse(server *srv, connection *con, http_response_opts *opts, buffer *b, size_t n) {
     handler_ctx *hctx = (handler_ctx *)opts->pdata;
-    DEBUG_LOG(MOD_WEBSOCKET_LOG_DEBUG, "sdsx",
-              "recv data from backend ( fd =", hctx->gw.fd, "), size =", n);
+    DEBUG_LOG_DEBUG("recv data from backend (fd=%d), size=%zx", hctx->gw.fd, n);
     if (0 == n) return HANDLER_FINISHED;
     if (mod_wstunnel_frame_send(hctx,hctx->frame.type_backend,b->ptr,n) < 0) {
-        DEBUG_LOG(MOD_WEBSOCKET_LOG_ERR, "s", "fail to send data to client");
+        DEBUG_LOG_ERR("%s", "fail to send data to client");
         return HANDLER_ERROR;
     }
     buffer_clear(b);
@@ -426,7 +431,7 @@ static int wstunnel_is_allowed_origin(connection *con, handler_ctx *hctx) {
     size_t olen;
 
     if (NULL == allowed_origins || 0 == allowed_origins->used) {
-        DEBUG_LOG(MOD_WEBSOCKET_LOG_INFO, "s", "allowed origins not specified");
+        DEBUG_LOG_INFO("%s", "allowed origins not specified");
         return 1;
     }
 
@@ -439,7 +444,7 @@ static int wstunnel_is_allowed_origin(connection *con, handler_ctx *hctx) {
     }
     olen = buffer_string_length(origin);
     if (0 == olen) {
-        DEBUG_LOG(MOD_WEBSOCKET_LOG_ERR, "s", "Origin header is invalid");
+        DEBUG_LOG_ERR("%s", "Origin header is invalid");
         con->http_status = 400; /* Bad Request */
         return 0;
     }
@@ -449,13 +454,11 @@ static int wstunnel_is_allowed_origin(connection *con, handler_ctx *hctx) {
         size_t blen = buffer_string_length(b);
         if ((olen > blen ? origin->ptr[olen-blen-1] == '.' : olen == blen)
             && buffer_is_equal_right_len(origin, b, blen)) {
-            DEBUG_LOG(MOD_WEBSOCKET_LOG_INFO, "bsb",
-                      origin, "matches allowed origin:", b);
+            DEBUG_LOG_INFO("%s matches allowed origin: %s",origin->ptr,b->ptr);
             return 1;
         }
     }
-    DEBUG_LOG(MOD_WEBSOCKET_LOG_INFO, "bs",
-              origin, "does not match any allowed origins");
+    DEBUG_LOG_INFO("%s does not match any allowed origins", origin->ptr);
     con->http_status = 403; /* Forbidden */
     return 0;
 }
@@ -465,14 +468,14 @@ static int wstunnel_check_request(connection *con, handler_ctx *hctx) {
       http_header_request_get(con, HTTP_HEADER_OTHER, CONST_STR_LEN("Sec-WebSocket-Version"));
     const long hybivers = (NULL != vers) ? strtol(vers->ptr, NULL, 10) : 0;
     if (hybivers < 0 || hybivers > INT_MAX) {
-        DEBUG_LOG(MOD_WEBSOCKET_LOG_ERR, "s", "invalid Sec-WebSocket-Version");
+        DEBUG_LOG_ERR("%s", "invalid Sec-WebSocket-Version");
         con->http_status = 400; /* Bad Request */
         return -1;
     }
 
     /*(redundant since HTTP/1.1 required in mod_wstunnel_check_extension())*/
     if (buffer_is_empty(con->request.http_host)) {
-        DEBUG_LOG(MOD_WEBSOCKET_LOG_ERR, "s", "Host header does not exist");
+        DEBUG_LOG_ERR("%s", "Host header does not exist");
         con->http_status = 400; /* Bad Request */
         return -1;
     }
@@ -499,16 +502,17 @@ static void wstunnel_handler_ctx_free(void *gwhctx) {
 static handler_t wstunnel_handler_setup (server *srv, connection *con, plugin_data *p) {
     handler_ctx *hctx = con->plugin_ctx[p->id];
     int hybivers;
-    hctx->srv = srv; /*(for mod_wstunnel module-specific DEBUG_LOG() macro)*/
+    hctx->srv = srv;
+    hctx->errh = con->errh;/*(for mod_wstunnel module-specific DEBUG_* macros)*/
     hctx->conf = p->conf; /*(copies struct)*/
     hybivers = wstunnel_check_request(con, hctx);
     if (hybivers < 0) return HANDLER_FINISHED;
     hctx->hybivers = hybivers;
     if (0 == hybivers) {
-        DEBUG_LOG(MOD_WEBSOCKET_LOG_INFO,"s","WebSocket Version = hybi-00");
+        DEBUG_LOG_INFO("WebSocket Version = %s", "hybi-00");
     }
     else {
-        DEBUG_LOG(MOD_WEBSOCKET_LOG_INFO,"sd","WebSocket Version =",hybivers);
+        DEBUG_LOG_INFO("WebSocket Version = %d", hybivers);
     }
 
     hctx->gw.opts.backend     = BACKEND_PROXY; /*(act proxy-like; not used)*/
@@ -555,15 +559,13 @@ static handler_t wstunnel_handler_setup (server *srv, connection *con, plugin_da
     }
 
     if (binary) {
-        DEBUG_LOG(MOD_WEBSOCKET_LOG_INFO, "s",
-                  "will recv binary data from backend");
+        DEBUG_LOG_INFO("%s", "will recv binary data from backend");
         hctx->frame.type         = MOD_WEBSOCKET_FRAME_TYPE_BIN;
         hctx->frame.type_before  = MOD_WEBSOCKET_FRAME_TYPE_BIN;
         hctx->frame.type_backend = MOD_WEBSOCKET_FRAME_TYPE_BIN;
     }
     else {
-        DEBUG_LOG(MOD_WEBSOCKET_LOG_INFO, "s",
-                  "will recv text data from backend");
+        DEBUG_LOG_INFO("%s", "will recv text data from backend");
         hctx->frame.type         = MOD_WEBSOCKET_FRAME_TYPE_TEXT;
         hctx->frame.type_before  = MOD_WEBSOCKET_FRAME_TYPE_TEXT;
         hctx->frame.type_backend = MOD_WEBSOCKET_FRAME_TYPE_TEXT;
@@ -622,9 +624,8 @@ TRIGGER_FUNC(mod_wstunnel_handle_trigger) {
             continue;
 
         if (cur_ts - con->read_idle_ts > con->conf.max_read_idle) {
-            DEBUG_LOG(MOD_WEBSOCKET_LOG_INFO, "sds",
-                      "timeout client ( fd =", con->fd, ")");
-            mod_wstunnel_frame_send(hctx, MOD_WEBSOCKET_FRAME_TYPE_CLOSE, NULL, 0);
+            DEBUG_LOG_INFO("timeout client (fd=%d)", con->fd);
+            mod_wstunnel_frame_send(hctx,MOD_WEBSOCKET_FRAME_TYPE_CLOSE,NULL,0);
             gw_connection_reset(srv, con, p_d);
             joblist_append(srv, con);
             /* avoid server.c closing connection with error due to max_read_idle
@@ -758,17 +759,17 @@ static int create_response_ietf_00(handler_ctx *hctx) {
           http_header_request_get(con, HTTP_HEADER_OTHER, CONST_STR_LEN("Sec-WebSocket-Origin"));
     }
     if (NULL == origin) {
-        DEBUG_LOG(MOD_WEBSOCKET_LOG_ERR, "s", "Origin header is invalid");
+        DEBUG_LOG_ERR("%s", "Origin header is invalid");
         return -1;
     }
     if (buffer_is_empty(con->request.http_host)) {
-        DEBUG_LOG(MOD_WEBSOCKET_LOG_ERR, "s", "Host header does not exist");
+        DEBUG_LOG_ERR("%s", "Host header does not exist");
         return -1;
     }
 
     /* calc MD5 sum from keys */
     if (create_MD5_sum(con) < 0) {
-        DEBUG_LOG(MOD_WEBSOCKET_LOG_ERR, "s", "Sec-WebSocket-Key is invalid");
+        DEBUG_LOG_ERR("%s", "Sec-WebSocket-Key is invalid");
         return -1;
     }
 
@@ -818,7 +819,7 @@ static int create_response_rfc_6455(handler_ctx *hctx) {
     const buffer *value_wskey =
       http_header_request_get(con, HTTP_HEADER_OTHER, CONST_STR_LEN("Sec-WebSocket-Key"));
     if (NULL == value_wskey) {
-        DEBUG_LOG(MOD_WEBSOCKET_LOG_ERR, "s", "Sec-WebSocket-Key is invalid");
+        DEBUG_LOG_ERR("%s", "Sec-WebSocket-Key is invalid");
         return -1;
     }
 
@@ -864,7 +865,7 @@ handler_t mod_wstunnel_handshake_create_response(handler_ctx *hctx) {
     connection *con = hctx->gw.remote_conn;
   #ifdef _MOD_WEBSOCKET_SPEC_RFC_6455_
     if (hctx->hybivers >= 8) {
-        DEBUG_LOG(MOD_WEBSOCKET_LOG_DEBUG, "s", "send handshake response");
+        DEBUG_LOG_DEBUG("%s", "send handshake response");
         if (0 != create_response_rfc_6455(hctx)) {
             con->http_status = 400; /* Bad Request */
             return HANDLER_ERROR;
@@ -883,7 +884,7 @@ handler_t mod_wstunnel_handshake_create_response(handler_ctx *hctx) {
             return HANDLER_WAIT_FOR_EVENT;
       #endif /* _MOD_WEBSOCKET_SPEC_IETF_00_ */
 
-        DEBUG_LOG(MOD_WEBSOCKET_LOG_DEBUG, "s", "send handshake response");
+        DEBUG_LOG_DEBUG("%s", "send handshake response");
         if (0 != create_response_ietf_00(hctx)) {
             con->http_status = 400; /* Bad Request */
             return HANDLER_ERROR;
@@ -892,7 +893,7 @@ handler_t mod_wstunnel_handshake_create_response(handler_ctx *hctx) {
     }
   #endif /* _MOD_WEBSOCKET_SPEC_IETF_00_ */
 
-    DEBUG_LOG(MOD_WEBSOCKET_LOG_ERR, "s", "not supported WebSocket Version");
+    DEBUG_LOG_ERR("%s", "not supported WebSocket Version");
     con->http_status = 503; /* Service Unavailable */
     return HANDLER_ERROR;
 }
@@ -947,11 +948,10 @@ static int send_ietf_00(handler_ctx *hctx, mod_wstunnel_frame_type_t type, const
         len = 2;
         break;
     default:
-        DEBUG_LOG(MOD_WEBSOCKET_LOG_ERR, "s", "invalid frame type");
+        DEBUG_LOG_ERR("%s", "invalid frame type");
         return -1;
     }
-    DEBUG_LOG(MOD_WEBSOCKET_LOG_DEBUG, "sdsx",
-              "send data to client ( fd =", con->fd, "), frame size =", len);
+    DEBUG_LOG_DEBUG("send data to client (fd=%d), frame size=%zx",con->fd,len);
     return 0;
 }
 
@@ -960,9 +960,8 @@ static int recv_ietf_00(handler_ctx *hctx) {
     chunkqueue *cq = con->request_content_queue;
     buffer *payload = hctx->frame.payload;
     char *mem;
-    DEBUG_LOG(MOD_WEBSOCKET_LOG_DEBUG, "sdsx",
-              "recv data from client ( fd =", con->fd,
-              "), size =", chunkqueue_length(cq));
+    DEBUG_LOG_DEBUG("recv data from client (fd=%d), size=%zx",
+                    con->fd, chunkqueue_length(cq));
     for (chunk *c = cq->first; c; c = c->next) {
         char *frame = c->mem->ptr+c->offset;
         /*(chunk_remaining_length() on MEM_CHUNK)*/
@@ -978,41 +977,38 @@ static int recv_ietf_00(handler_ctx *hctx) {
                     i++;
                 }
                 else if (((unsigned char *)frame)[i] == 0xff) {
-                    DEBUG_LOG(MOD_WEBSOCKET_LOG_DEBUG,"s","recv close frame");
+                    DEBUG_LOG_DEBUG("%s", "recv close frame");
                     return -1;
                 }
                 else {
-                    DEBUG_LOG(MOD_WEBSOCKET_LOG_DEBUG,"s","recv invalid frame");
+                    DEBUG_LOG_DEBUG("%s", "recv invalid frame");
                     return -1;
                 }
                 break;
             case MOD_WEBSOCKET_FRAME_STATE_READ_PAYLOAD:
                 mem = (char *)memchr(frame+i, 0xff, flen - i);
                 if (mem == NULL) {
-                    DEBUG_LOG(MOD_WEBSOCKET_LOG_DEBUG, "sx",
-                              "got continuous payload, size =", flen - i);
+                    DEBUG_LOG_DEBUG("got continuous payload, size=%zx", flen-i);
                     hctx->frame.ctl.siz += flen - i;
                     if (hctx->frame.ctl.siz > MOD_WEBSOCKET_BUFMAX) {
-                        DEBUG_LOG(MOD_WEBSOCKET_LOG_WARN, "sx",
-                                  "frame size has been exceeded:",
-                                  MOD_WEBSOCKET_BUFMAX);
+                        DEBUG_LOG_WARN("frame size has been exceeded: %x",
+                                       MOD_WEBSOCKET_BUFMAX);
                         return -1;
                     }
                     buffer_append_string_len(payload, frame+i, flen - i);
                     i += flen - i;
                 }
                 else {
-                    DEBUG_LOG(MOD_WEBSOCKET_LOG_DEBUG, "sx",
-                              "got final payload, size =", (mem - frame+i));
-                    hctx->frame.ctl.siz += (mem - frame+i);
+                    DEBUG_LOG_DEBUG("got final payload, size=%zx",
+                                    mem - (frame+i));
+                    hctx->frame.ctl.siz += (mem - (frame+i));
                     if (hctx->frame.ctl.siz > MOD_WEBSOCKET_BUFMAX) {
-                        DEBUG_LOG(MOD_WEBSOCKET_LOG_WARN, "sx",
-                                  "frame size has been exceeded:",
-                                  MOD_WEBSOCKET_BUFMAX);
+                        DEBUG_LOG_WARN("frame size has been exceeded: %x",
+                                       MOD_WEBSOCKET_BUFMAX);
                         return -1;
                     }
-                    buffer_append_string_len(payload, frame+i, mem - frame+i);
-                    i += (mem - frame+i);
+                    buffer_append_string_len(payload, frame+i, mem - (frame+i));
+                    i += (mem - (frame+i));
                     hctx->frame.state = MOD_WEBSOCKET_FRAME_STATE_INIT;
                 }
                 i++;
@@ -1031,11 +1027,10 @@ static int recv_ietf_00(handler_ctx *hctx) {
                         chunkqueue_get_memory(hctx->gw.wb, &len);
                         b = hctx->gw.wb->last->mem;
                         len = buffer_string_length(b);
-                        DEBUG_LOG(MOD_WEBSOCKET_LOG_DEBUG, "ss",
-                                  "try to base64 decode:", payload->ptr);
+                        DEBUG_LOG_DEBUG("try to base64 decode: %s",
+                                        payload->ptr);
                         if (NULL == buffer_append_base64_decode(b, CONST_BUF_LEN(payload), BASE64_STANDARD)) {
-                            DEBUG_LOG(MOD_WEBSOCKET_LOG_ERR, "s",
-                                      "fail to base64-decode");
+                            DEBUG_LOG_ERR("%s", "fail to base64-decode");
                             return -1;
                         }
                         buffer_clear(payload);
@@ -1045,7 +1040,7 @@ static int recv_ietf_00(handler_ctx *hctx) {
                 }
                 break;
             default: /* never reach */
-                DEBUG_LOG(MOD_WEBSOCKET_LOG_ERR,"s", "BUG: unknown state");
+                DEBUG_LOG_ERR("%s", "BUG: unknown state");
                 return -1;
             }
         }
@@ -1088,28 +1083,28 @@ static int send_rfc_6455(handler_ctx *hctx, mod_wstunnel_frame_type_t type, cons
     switch (type) {
     case MOD_WEBSOCKET_FRAME_TYPE_TEXT:
         mem[0] = (char)(0x80 | MOD_WEBSOCKET_OPCODE_TEXT);
-        DEBUG_LOG(MOD_WEBSOCKET_LOG_DEBUG, "s", "type = text");
+        DEBUG_LOG_DEBUG("%s", "type = text");
         break;
     case MOD_WEBSOCKET_FRAME_TYPE_BIN:
         mem[0] = (char)(0x80 | MOD_WEBSOCKET_OPCODE_BIN);
-        DEBUG_LOG(MOD_WEBSOCKET_LOG_DEBUG, "s", "type = binary");
+        DEBUG_LOG_DEBUG("%s", "type = binary");
         break;
     case MOD_WEBSOCKET_FRAME_TYPE_PING:
         mem[0] = (char) (0x80 | MOD_WEBSOCKET_OPCODE_PING);
-        DEBUG_LOG(MOD_WEBSOCKET_LOG_DEBUG, "s", "type = ping");
+        DEBUG_LOG_DEBUG("%s", "type = ping");
         break;
     case MOD_WEBSOCKET_FRAME_TYPE_PONG:
         mem[0] = (char)(0x80 | MOD_WEBSOCKET_OPCODE_PONG);
-        DEBUG_LOG(MOD_WEBSOCKET_LOG_DEBUG, "s", "type = pong");
+        DEBUG_LOG_DEBUG("%s", "type = pong");
         break;
     case MOD_WEBSOCKET_FRAME_TYPE_CLOSE:
     default:
         mem[0] = (char)(0x80 | MOD_WEBSOCKET_OPCODE_CLOSE);
-        DEBUG_LOG(MOD_WEBSOCKET_LOG_DEBUG, "s", "type = close");
+        DEBUG_LOG_DEBUG("%s", "type = close");
         break;
     }
 
-    DEBUG_LOG(MOD_WEBSOCKET_LOG_DEBUG, "sx", "payload size =", siz);
+    DEBUG_LOG_DEBUG("payload size=%zx", siz);
     if (siz < MOD_WEBSOCKET_FRAME_LEN16) {
         mem[1] = siz;
         len = 2;
@@ -1134,8 +1129,8 @@ static int send_rfc_6455(handler_ctx *hctx, mod_wstunnel_frame_type_t type, cons
     }
     http_chunk_append_mem(srv, con, mem, len);
     if (siz) http_chunk_append_mem(srv, con, payload, siz);
-    DEBUG_LOG(MOD_WEBSOCKET_LOG_DEBUG, "sdsx",
-              "send data to client ( fd =",con->fd,"), frame size =",len+siz);
+    DEBUG_LOG_DEBUG("send data to client (fd=%d), frame size=%zx",
+                    con->fd, len+siz);
     return 0;
 }
 
@@ -1151,9 +1146,8 @@ static int recv_rfc_6455(handler_ctx *hctx) {
     connection *con = hctx->gw.remote_conn;
     chunkqueue *cq = con->request_content_queue;
     buffer *payload = hctx->frame.payload;
-    DEBUG_LOG(MOD_WEBSOCKET_LOG_DEBUG, "sdsx",
-              "recv data from client ( fd =", con->fd,
-              "), size =", chunkqueue_length(cq));
+    DEBUG_LOG_DEBUG("recv data from client (fd=%d), size=%zx",
+                    con->fd, chunkqueue_length(cq));
     for (chunk *c = cq->first; c; c = c->next) {
         char *frame = c->mem->ptr+c->offset;
         /*(chunk_remaining_length() on MEM_CHUNK)*/
@@ -1165,34 +1159,34 @@ static int recv_rfc_6455(handler_ctx *hctx) {
             case MOD_WEBSOCKET_FRAME_STATE_INIT:
                 switch (frame[i] & 0x0f) {
                 case MOD_WEBSOCKET_OPCODE_CONT:
-                    DEBUG_LOG(MOD_WEBSOCKET_LOG_DEBUG, "s", "type = continue");
+                    DEBUG_LOG_DEBUG("%s", "type = continue");
                     hctx->frame.type = hctx->frame.type_before;
                     break;
                 case MOD_WEBSOCKET_OPCODE_TEXT:
-                    DEBUG_LOG(MOD_WEBSOCKET_LOG_DEBUG, "s", "type = text");
+                    DEBUG_LOG_DEBUG("%s", "type = text");
                     hctx->frame.type = MOD_WEBSOCKET_FRAME_TYPE_TEXT;
                     hctx->frame.type_before = hctx->frame.type;
                     break;
                 case MOD_WEBSOCKET_OPCODE_BIN:
-                    DEBUG_LOG(MOD_WEBSOCKET_LOG_DEBUG, "s", "type = binary");
+                    DEBUG_LOG_DEBUG("%s", "type = binary");
                     hctx->frame.type = MOD_WEBSOCKET_FRAME_TYPE_BIN;
                     hctx->frame.type_before = hctx->frame.type;
                     break;
                 case MOD_WEBSOCKET_OPCODE_PING:
-                    DEBUG_LOG(MOD_WEBSOCKET_LOG_DEBUG, "s", "type = ping");
+                    DEBUG_LOG_DEBUG("%s", "type = ping");
                     hctx->frame.type = MOD_WEBSOCKET_FRAME_TYPE_PING;
                     break;
                 case MOD_WEBSOCKET_OPCODE_PONG:
-                    DEBUG_LOG(MOD_WEBSOCKET_LOG_DEBUG, "s", "type = pong");
+                    DEBUG_LOG_DEBUG("%s", "type = pong");
                     hctx->frame.type = MOD_WEBSOCKET_FRAME_TYPE_PONG;
                     break;
                 case MOD_WEBSOCKET_OPCODE_CLOSE:
-                    DEBUG_LOG(MOD_WEBSOCKET_LOG_DEBUG, "s", "type = close");
+                    DEBUG_LOG_DEBUG("%s", "type = close");
                     hctx->frame.type = MOD_WEBSOCKET_FRAME_TYPE_CLOSE;
                     return -1;
                     break;
                 default:
-                    DEBUG_LOG(MOD_WEBSOCKET_LOG_ERR, "s", "type is invalid");
+                    DEBUG_LOG_ERR("%s", "type is invalid");
                     return -1;
                     break;
                 }
@@ -1201,15 +1195,14 @@ static int recv_rfc_6455(handler_ctx *hctx) {
                 break;
             case MOD_WEBSOCKET_FRAME_STATE_READ_LENGTH:
                 if ((frame[i] & 0x80) != 0x80) {
-                    DEBUG_LOG(MOD_WEBSOCKET_LOG_ERR, "s",
-                              "payload was not masked");
+                    DEBUG_LOG_ERR("%s", "payload was not masked");
                     return -1;
                 }
                 hctx->frame.ctl.mask_cnt = 0;
                 hctx->frame.ctl.siz = (uint64_t)(frame[i] & 0x7f);
                 if (hctx->frame.ctl.siz == 0) {
-                    DEBUG_LOG(MOD_WEBSOCKET_LOG_DEBUG, "sx",
-                              "specified payload size =", hctx->frame.ctl.siz);
+                    DEBUG_LOG_DEBUG("specified payload size=%zx",
+                                    hctx->frame.ctl.siz);
                     hctx->frame.state = MOD_WEBSOCKET_FRAME_STATE_READ_MASK;
                 }
                 else if (hctx->frame.ctl.siz == MOD_WEBSOCKET_FRAME_LEN16) {
@@ -1225,8 +1218,8 @@ static int recv_rfc_6455(handler_ctx *hctx) {
                         MOD_WEBSOCKET_FRAME_STATE_READ_EX_LENGTH;
                 }
                 else {
-                    DEBUG_LOG(MOD_WEBSOCKET_LOG_DEBUG, "sx",
-                              "specified payload size =", hctx->frame.ctl.siz);
+                    DEBUG_LOG_DEBUG("specified payload size=%zx",
+                                    hctx->frame.ctl.siz);
                     hctx->frame.state = MOD_WEBSOCKET_FRAME_STATE_READ_MASK;
                 }
                 i++;
@@ -1238,13 +1231,12 @@ static int recv_rfc_6455(handler_ctx *hctx) {
                 if (hctx->frame.ctl.siz_cnt <= 0) {
                     if (hctx->frame.type == MOD_WEBSOCKET_FRAME_TYPE_PING &&
                         hctx->frame.ctl.siz > MOD_WEBSOCKET_BUFMAX) {
-                        DEBUG_LOG(MOD_WEBSOCKET_LOG_WARN, "sx",
-                                  "frame size has been exceeded:",
-                                  MOD_WEBSOCKET_BUFMAX);
+                        DEBUG_LOG_WARN("frame size has been exceeded: %x",
+                                       MOD_WEBSOCKET_BUFMAX);
                         return -1;
                     }
-                    DEBUG_LOG(MOD_WEBSOCKET_LOG_DEBUG, "sx",
-                              "specified payload size =", hctx->frame.ctl.siz);
+                    DEBUG_LOG_DEBUG("specified payload size=%zx",
+                                    hctx->frame.ctl.siz);
                     hctx->frame.state = MOD_WEBSOCKET_FRAME_STATE_READ_MASK;
                 }
                 i++;
@@ -1273,25 +1265,23 @@ static int recv_rfc_6455(handler_ctx *hctx) {
             case MOD_WEBSOCKET_FRAME_STATE_READ_PAYLOAD:
                 /* hctx->frame.ctl.siz <= SIZE_MAX */
                 if (hctx->frame.ctl.siz <= flen - i) {
-                    DEBUG_LOG(MOD_WEBSOCKET_LOG_DEBUG, "sx",
-                              "read payload, size =", hctx->frame.ctl.siz);
+                    DEBUG_LOG_DEBUG("read payload, size=%zx",
+                                    hctx->frame.ctl.siz);
                     buffer_append_string_len(payload, frame+i, (size_t)
                                              (hctx->frame.ctl.siz & SIZE_MAX));
                     i += (size_t)(hctx->frame.ctl.siz & SIZE_MAX);
                     hctx->frame.ctl.siz = 0;
                     hctx->frame.state = MOD_WEBSOCKET_FRAME_STATE_INIT;
-                    DEBUG_LOG(MOD_WEBSOCKET_LOG_DEBUG, "sx",
-                              "rest of frame size =", flen - i);
+                    DEBUG_LOG_DEBUG("rest of frame size=%zx", flen - i);
                 /* SIZE_MAX < hctx->frame.ctl.siz */
                 }
                 else {
-                    DEBUG_LOG(MOD_WEBSOCKET_LOG_DEBUG, "sx",
-                              "read payload, size =", flen - i);
+                    DEBUG_LOG_DEBUG("read payload, size=%zx", flen - i);
                     buffer_append_string_len(payload, frame+i, flen - i);
                     hctx->frame.ctl.siz -= flen - i;
                     i += flen - i;
-                    DEBUG_LOG(MOD_WEBSOCKET_LOG_DEBUG, "sx",
-                              "rest of payload size =", hctx->frame.ctl.siz);
+                    DEBUG_LOG_DEBUG("rest of payload size=%zx",
+                                    hctx->frame.ctl.siz);
                 }
                 switch (hctx->frame.type) {
                 case MOD_WEBSOCKET_FRAME_TYPE_TEXT:
@@ -1316,13 +1306,12 @@ static int recv_rfc_6455(handler_ctx *hctx) {
                     break;
                 case MOD_WEBSOCKET_FRAME_TYPE_CLOSE:
                 default:
-                    DEBUG_LOG(MOD_WEBSOCKET_LOG_ERR, "s",
-                              "BUG: invalid frame type");
+                    DEBUG_LOG_ERR("%s", "BUG: invalid frame type");
                     return -1;
                 }
                 break;
             default:
-                DEBUG_LOG(MOD_WEBSOCKET_LOG_ERR, "s", "BUG: invalid state");
+                DEBUG_LOG_ERR("%s", "BUG: invalid state");
                 return -1;
             }
         }
