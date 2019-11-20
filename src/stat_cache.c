@@ -1000,7 +1000,7 @@ handler_t stat_cache_get_entry(server *srv, connection *con, buffer *name, stat_
 	return HANDLER_GO_ON;
 }
 
-int stat_cache_path_contains_symlink(server *srv, buffer *name) {
+int stat_cache_path_contains_symlink(connection *con, buffer *name) {
     /* caller should check for symlinks only if we should block symlinks. */
 
     /* catch the obvious symlinks
@@ -1036,8 +1036,8 @@ int stat_cache_path_contains_symlink(server *srv, buffer *name) {
             if (S_ISLNK(st.st_mode)) return 1;
         }
         else {
-            log_error_write(srv, __FILE__, __LINE__, "sss",
-                            "lstat failed for:", buf, strerror(errno));
+            log_perror(con->errh, __FILE__, __LINE__,
+                       "lstat failed for: %s", buf);
             return -1;
         }
     } while ((s_cur = strrchr(buf, '/')) != buf);

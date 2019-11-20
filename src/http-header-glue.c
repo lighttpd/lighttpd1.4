@@ -447,7 +447,7 @@ void http_response_send_file (server *srv, connection *con, buffer *path) {
 	}
 
 	if (!con->conf.follow_symlink
-	    && 0 != stat_cache_path_contains_symlink(srv, path)) {
+	    && 0 != stat_cache_path_contains_symlink(con, path)) {
 		con->http_status = 403;
 
 		if (con->conf.log_request_handling) {

@@ -34,9 +34,9 @@ static void http_chunk_append_len(server *srv, connection *con, uintmax_t len) {
     chunkqueue_append_mem(con->write_queue, CONST_BUF_LEN(b));
 }
 
-static int http_chunk_append_file_open_fstat(server *srv, connection *con, buffer *fn, struct stat *st) {
+static int http_chunk_append_file_open_fstat(connection *con, buffer *fn, struct stat *st) {
 	if (!con->conf.follow_symlink
-	    && 0 != stat_cache_path_contains_symlink(srv, fn)) {
+	    && 0 != stat_cache_path_contains_symlink(con, fn)) {
 		return -1;
 	}
 
@@ -89,7 +89,7 @@ static void http_chunk_append_file_fd_range(server *srv, connection *con, buffer
 
 int http_chunk_append_file_range(server *srv, connection *con, buffer *fn, off_t offset, off_t len) {
 	struct stat st;
-	const int fd = http_chunk_append_file_open_fstat(srv, con, fn, &st);
+	const int fd = http_chunk_append_file_open_fstat(con, fn, &st);
 	if (fd < 0) return -1;
 
 	if (-1 == len) {
@@ -109,7 +109,7 @@ int http_chunk_append_file_range(server *srv, connection *con, buffer *fn, off_t
 
 int http_chunk_append_file(server *srv, connection *con, buffer *fn) {
 	struct stat st;
-	const int fd = http_chunk_append_file_open_fstat(srv, con, fn, &st);
+	const int fd = http_chunk_append_file_open_fstat(con, fn, &st);
 	if (fd < 0) return -1;
 	http_chunk_append_file_fd(srv, con, fn, fd, st.st_size);
 	return 0;

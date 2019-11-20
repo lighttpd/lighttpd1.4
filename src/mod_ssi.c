@@ -608,7 +608,7 @@ static int process_ssi_stmt(server *srv, connection *con, handler_ctx *p, const 
 		}
 
 		if (!con->conf.follow_symlink
-		    && 0 != stat_cache_path_contains_symlink(srv, p->stat_fn)) {
+		    && 0 != stat_cache_path_contains_symlink(con, p->stat_fn)) {
 			break;
 		}
 

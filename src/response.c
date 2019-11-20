@@ -247,7 +247,7 @@ static handler_t http_response_physical_path_check(server *srv, connection *con)
 	}
 
 	if (!con->conf.follow_symlink
-	    && 0 != stat_cache_path_contains_symlink(srv, con->physical.path)) {
+	    && 0 != stat_cache_path_contains_symlink(con, con->physical.path)) {
 		con->http_status = 403;
 
 		if (con->conf.log_request_handling) {

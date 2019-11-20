@@ -904,7 +904,7 @@ PHYSICALPATH_FUNC(mod_compress_physical) {
 					int compression_type = 0;
 
 					if (!con->conf.follow_symlink
-					    && 0 != stat_cache_path_contains_symlink(srv, con->physical.path)) {
+					    && 0 != stat_cache_path_contains_symlink(con, con->physical.path)) {
 						return HANDLER_GO_ON;
 					}
 
