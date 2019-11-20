@@ -1622,17 +1622,10 @@ static int server_main (server * const srv, int argc, char **argv) {
 __attribute_cold__
 __attribute_noinline__
 static int server_handle_sighup (server * const srv) {
-			handler_t r;
 
 			/* cycle logfiles */
 
-			switch(r = plugins_call_handle_sighup(srv)) {
-			case HANDLER_GO_ON:
-				break;
-			default:
-				log_error_write(srv, __FILE__, __LINE__, "sd", "sighup-handler return with an error", r);
-				break;
-			}
+			plugins_call_handle_sighup(srv);
 
 			if (-1 == log_error_cycle(srv)) {
 				log_error_write(srv, __FILE__, __LINE__, "s", "cycling errorlog failed, dying");
@@ -1656,18 +1649,8 @@ static int server_handle_sighup (server * const srv) {
 
 __attribute_noinline__
 static void server_handle_sigalrm (server * const srv, time_t min_ts, time_t last_active_ts) {
-				handler_t r;
 
-				switch(r = plugins_call_handle_trigger(srv)) {
-				case HANDLER_GO_ON:
-					break;
-				case HANDLER_ERROR:
-					log_error_write(srv, __FILE__, __LINE__, "s", "one of the triggers failed");
-					break;
-				default:
-					log_error_write(srv, __FILE__, __LINE__, "d", r);
-					break;
-				}
+				plugins_call_handle_trigger(srv);
 
 				srv->cur_ts = min_ts;
 

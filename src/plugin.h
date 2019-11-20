@@ -90,11 +90,11 @@ handler_t plugins_call_handle_connection_shut_wr(server *srv, connection *con);
 handler_t plugins_call_handle_connection_close(server *srv, connection *con);
 handler_t plugins_call_connection_reset(server *srv, connection *con);
 
-handler_t plugins_call_handle_trigger(server *srv);
+void plugins_call_handle_trigger(server *srv);
 handler_t plugins_call_handle_waitpid(server *srv, pid_t pid, int status);
 
 __attribute_cold__
-handler_t plugins_call_handle_sighup(server *srv);
+void plugins_call_handle_sighup(server *srv);
 
 __attribute_cold__
 handler_t plugins_call_init(server *srv);

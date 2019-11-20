@@ -304,6 +304,15 @@ static handler_t plugins_call_fn_srv_data(server * const srv, const int e) {
     return rc;
 }
 
+static void plugins_call_fn_srv_data_all(server * const srv, const int e) {
+    const uint32_t offset = ((const uint16_t *)srv->plugin_slots)[e];
+    if (0 == offset) return;
+    const plugin_fn_data *plfd = (const plugin_fn_data *)
+      (((uintptr_t)srv->plugin_slots) + offset);
+    for (; plfd->fn; ++plfd)
+        plfd->fn(srv, plfd->data);
+}
+
 /**
  * plugins that use
  *
@@ -340,17 +349,21 @@ PLUGIN_CALL_FN_SRV_CON_DATA(PLUGIN_FUNC_CONNECTION_RESET, connection_reset)
  * - void *p_d (plugin_data *)
  */
 
-#define PLUGIN_CALL_FN_SRV_DATA(x, y) \
-    handler_t plugins_call_##y(server *srv) {\
-        return plugins_call_fn_srv_data(srv, x); \
-    }
+handler_t plugins_call_set_defaults(server *srv) {
+    return plugins_call_fn_srv_data(srv, PLUGIN_FUNC_SET_DEFAULTS);
+}
 
-PLUGIN_CALL_FN_SRV_DATA(PLUGIN_FUNC_HANDLE_TRIGGER, handle_trigger)
-PLUGIN_CALL_FN_SRV_DATA(PLUGIN_FUNC_HANDLE_SIGHUP, handle_sighup)
-PLUGIN_CALL_FN_SRV_DATA(PLUGIN_FUNC_SET_DEFAULTS, set_defaults)
-PLUGIN_CALL_FN_SRV_DATA(PLUGIN_FUNC_WORKER_INIT, worker_init)
+handler_t plugins_call_worker_init(server *srv) {
+    return plugins_call_fn_srv_data(srv, PLUGIN_FUNC_WORKER_INIT);
+}
 
-#undef PLUGIN_CALL_FN_SRV_DATA
+void plugins_call_handle_trigger(server *srv) {
+    plugins_call_fn_srv_data_all(srv, PLUGIN_FUNC_HANDLE_TRIGGER);
+}
+
+void plugins_call_handle_sighup(server *srv) {
+    plugins_call_fn_srv_data_all(srv, PLUGIN_FUNC_HANDLE_SIGHUP);
+}
 
 handler_t plugins_call_handle_waitpid(server *srv, pid_t pid, int status) {
     const uint32_t offset =

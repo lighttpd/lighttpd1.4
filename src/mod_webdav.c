@@ -1276,6 +1276,7 @@ mod_webdav_sqlite3_prep (sql_config * const restrict sql,
 #endif /* USE_PROPPATCH */
 
 
+__attribute_cold__
 SERVER_FUNC(mod_webdav_worker_init)
 {
   #ifdef USE_PROPPATCH
