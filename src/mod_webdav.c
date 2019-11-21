@@ -208,7 +208,6 @@
 #include "response.h"   /* http_response_redirect_to_directory() */
 #include "stat_cache.h" /* stat_cache_mimetype_by_ext() */
 
-#include "configfile.h"
 #include "plugin.h"
 
 #define http_status_get(con)           ((con)->http_status)

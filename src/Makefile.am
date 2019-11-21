@@ -425,7 +425,7 @@ hdr = base64.h buffer.h burl.h network.h log.h http_kv.h keyvalue.h \
 	first.h settings.h http_chunk.h \
 	algo_sha1.h md5.h http_auth.h http_header.h http_vhostdb.h stream.h \
 	fdevent.h gw_backend.h connections.h base.h base_decls.h stat_cache.h \
-	plugin.h \
+	plugin.h plugin_config.h \
 	etag.h array.h vector.h crc32.h \
 	fdevent_impl.h network_write.h configfile.h \
 	mod_ssi.h mod_ssi_expr.h inet_ntop_cache.h \

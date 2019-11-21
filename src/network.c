@@ -6,7 +6,6 @@
 #include "log.h"
 #include "connections.h"
 #include "plugin.h"
-#include "configfile.h"
 #include "sock_addr.h"
 
 #include "network_write.h"

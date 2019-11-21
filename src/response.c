@@ -10,8 +10,6 @@
 #include "stat_cache.h"
 #include "chunk.h"
 
-#include "configfile.h"
-
 #include "plugin.h"
 
 #include <sys/types.h>

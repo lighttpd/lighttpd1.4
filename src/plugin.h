@@ -5,7 +5,7 @@
 #include "base_decls.h"
 #include "buffer.h"
 #include "array.h"
-#include "configfile.h"
+#include "plugin_config.h"
 
 #define SERVER_FUNC(x) \
 		static handler_t x(server *srv, void *p_d)

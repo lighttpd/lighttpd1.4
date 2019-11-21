@@ -9,7 +9,6 @@
 #include "fdevent.h"
 #include "http_header.h"
 
-#include "configfile.h"
 #include "request.h"
 #include "response.h"
 #include "network.h"

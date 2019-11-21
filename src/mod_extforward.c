@@ -9,8 +9,6 @@
 
 #include "plugin.h"
 
-#include "configfile.h"
-
 #include <limits.h>
 #include <stdlib.h>
 #include <string.h>
