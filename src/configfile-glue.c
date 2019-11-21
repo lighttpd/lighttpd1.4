@@ -351,7 +351,7 @@ static int config_addrbuf_eq_remote_ip_mask(connection *con, const buffer *strin
 	return config_addrstr_eq_remote_ip_mask(con, addrstr, nm_bits, rmt);
 }
 
-static int data_config_pcre_exec(const data_config *dc, cond_cache_t *cache, const buffer *b);
+static int data_config_pcre_exec(const data_config *dc, cond_cache_t *cache, const buffer *b, cond_match_t *cond_match);
 
 static cond_result_t config_check_cond_nocache(connection *con, const data_config *dc, const int debug_cond, cond_cache_t * const cache) {
 	static struct const_char_buffer {
@@ -544,7 +544,8 @@ static cond_result_t config_check_cond_nocache(connection *con, const data_confi
 		}
 	case CONFIG_COND_NOMATCH:
 	case CONFIG_COND_MATCH: {
-		if (data_config_pcre_exec(dc, cache, l) > 0) {
+		cond_match_t *cond_match = con->cond_match + dc->context_ndx;
+		if (data_config_pcre_exec(dc, cache, l, cond_match) > 0) {
 			return (dc->cond == CONFIG_COND_MATCH) ? COND_RESULT_TRUE : COND_RESULT_FALSE;
 		} else {
 			/* cache is already cleared */
@@ -576,38 +577,25 @@ int config_check_cond(connection * const con, const int context_ndx) {
     cond_cache_t * const cache = &con->cond_cache[context_ndx];
     return COND_RESULT_TRUE
         == (COND_RESULT_UNSET != cache->result
-              ? cache->result
+              ? (cond_result_t)cache->result
               : config_check_cond_calc(con, context_ndx, cache));
 }
 
 /* if we reset the cache result for a node, we also need to clear all
  * child nodes and else-branches*/
-static void config_cond_clear_node(server *srv, connection *con, const data_config *dc) {
+static void config_cond_clear_node(cond_cache_t * const cond_cache, const data_config * const dc) {
 	/* if a node is "unset" all children are unset too */
-	if (con->cond_cache[dc->context_ndx].result != COND_RESULT_UNSET) {
-		size_t i;
+	if (cond_cache[dc->context_ndx].result != COND_RESULT_UNSET) {
+		cond_cache[dc->context_ndx].result = COND_RESULT_UNSET;
 
-	      #if 0
-		/* (redundant; matches not relevant unless COND_RESULT_TRUE) */
-		switch (con->cond_cache[dc->context_ndx].local_result) {
-		case COND_RESULT_TRUE:
-		case COND_RESULT_FALSE:
-			break;
-		default:
-			con->cond_cache[dc->context_ndx].patterncount = 0;
-			con->cond_cache[dc->context_ndx].comp_value = NULL;
-		}
-	      #endif
-		con->cond_cache[dc->context_ndx].result = COND_RESULT_UNSET;
-
-		for (i = 0; i < dc->children.used; ++i) {
+		for (uint32_t i = 0; i < dc->children.used; ++i) {
 			const data_config *dc_child = dc->children.data[i];
 			if (NULL == dc_child->prev) {
 				/* only call for first node in if-else chain */
-				config_cond_clear_node(srv, con, dc_child);
+				config_cond_clear_node(cond_cache, dc_child);
 			}
 		}
-		if (NULL != dc->next) config_cond_clear_node(srv, con, dc->next);
+		if (NULL != dc->next) config_cond_clear_node(cond_cache, dc->next);
 	}
 }
 
@@ -617,14 +605,15 @@ static void config_cond_clear_node(server *srv, connection *con, const data_conf
  * if the item is COND_LAST_ELEMENT we reset all items
  */
 void config_cond_cache_reset_item(server *srv, connection *con, comp_key_t item) {
+	cond_cache_t * const cond_cache = con->cond_cache;
 	for (uint32_t i = 0; i < srv->config_context->used; ++i) {
 		const data_config *dc = (data_config *)srv->config_context->data[i];
 
 		if (item == dc->comp) {
 			/* clear local_result */
-			con->cond_cache[i].local_result = COND_RESULT_UNSET;
+			cond_cache[i].local_result = COND_RESULT_UNSET;
 			/* clear result in subtree (including the node itself) */
-			config_cond_clear_node(srv, con, dc);
+			config_cond_clear_node(cond_cache, dc);
 		}
 	}
 }
@@ -633,36 +622,34 @@ void config_cond_cache_reset_item(server *srv, connection *con, comp_key_t item)
  * reset the config cache to its initial state at connection start
  */
 void config_cond_cache_reset(server *srv, connection *con) {
-	cond_cache_t * const cond_cache = con->cond_cache;
 	con->conditional_is_valid = 0;
 	/* resetting all entries; no need to follow children as in config_cond_cache_reset_item */
-	for (uint32_t i = 1, used = srv->config_context->used; i < used; ++i) {
-		cond_cache[i].result = COND_RESULT_UNSET;
-		cond_cache[i].local_result = COND_RESULT_UNSET;
-		cond_cache[i].patterncount = 0;
-		cond_cache[i].comp_value = NULL;
-	}
+	/* static_assert(0 == COND_RESULT_UNSET); */
+	const uint32_t used = srv->config_context->used;
+	if (used > 1)
+		memset(con->cond_cache, 0, used*sizeof(cond_cache_t));
 }
 
 #ifdef HAVE_PCRE_H
 #include <pcre.h>
 #endif
 
-static int data_config_pcre_exec(const data_config *dc, cond_cache_t *cache, const buffer *b) {
+static int data_config_pcre_exec(const data_config *dc, cond_cache_t *cache, const buffer *b, cond_match_t *cond_match) {
 #ifdef HAVE_PCRE_H
     #ifndef elementsof
     #define elementsof(x) (sizeof(x) / sizeof(x[0]))
     #endif
     cache->patterncount =
       pcre_exec(dc->regex, dc->regex_study, CONST_BUF_LEN(b), 0, 0,
-                cache->matches, elementsof(cache->matches));
+                cond_match->matches, elementsof(cond_match->matches));
     if (cache->patterncount > 0)
-        cache->comp_value = b; /* holds pointer to b (!) for pattern subst */
+        cond_match->comp_value = b; /*holds pointer to b (!) for pattern subst*/
     return cache->patterncount;
 #else
     UNUSED(dc);
     UNUSED(cache);
     UNUSED(b);
+    UNUSED(cond_match);
     return 0;
 #endif
 }

@@ -1,7 +1,7 @@
 #include "first.h"
 
 #include "keyvalue.h"
-#include "base.h"       /* struct cond_cache_t */
+#include "plugin_config.h" /* struct cond_match_t */
 #include "burl.h"
 #include "log.h"
 
@@ -95,9 +95,9 @@ static void pcre_keyvalue_buffer_append_match(buffer *b, const char **list, int 
 }
 
 static void pcre_keyvalue_buffer_append_ctxmatch(buffer *b, pcre_keyvalue_ctx *ctx, unsigned int num, int flags) {
-    const struct cond_cache_t * const cache = ctx->cache;
+    const struct cond_match_t * const cache = ctx->cache;
     if (!cache) return; /* no enclosing match context */
-    if ((int)num < cache->patterncount) {
+    if ((int)num < ctx->cond_match_count) {
         const int off = cache->matches[(num <<= 1)]; /*(num *= 2)*/
         const int len = cache->matches[num+1] - off;
         burl_append(b, cache->comp_value->ptr + off, (size_t)len, flags);

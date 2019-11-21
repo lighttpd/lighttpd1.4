@@ -159,9 +159,12 @@ URIHANDLER_FUNC(mod_redirect_uri_handler) {
 
     mod_redirect_patch_config(con, p);
     if (!p->conf.redirect || !p->conf.redirect->used) return HANDLER_GO_ON;
-    ctx.cache = p->conf.redirect->x0
-      ? &con->cond_cache[p->conf.redirect->x0]
-      : NULL;
+
+    ctx.cache = NULL;
+    if (p->conf.redirect->x0) { /*(p->conf.redirect->x0 is context_idx)*/
+        ctx.cond_match_count=con->cond_cache[p->conf.redirect->x0].patterncount;
+        ctx.cache = con->cond_match + p->conf.redirect->x0;
+    }
     ctx.burl = &burl;
     burl.scheme    = con->uri.scheme;
     burl.authority = con->uri.authority;

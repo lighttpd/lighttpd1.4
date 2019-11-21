@@ -6,12 +6,13 @@
 #include "buffer.h"
 
 struct burl_parts_t;    /* declaration */
-struct cond_cache_t;    /* declaration */
+struct cond_match_t;    /* declaration */
 struct pcre_keyvalue;   /* declaration */
 
 typedef struct pcre_keyvalue_ctx {
-  struct cond_cache_t *cache;
+  struct cond_match_t *cache;
   struct burl_parts_t *burl;
+  int cond_match_count;
   int m;
 } pcre_keyvalue_ctx;
 

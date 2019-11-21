@@ -123,6 +123,38 @@ int config_plugin_values_init_block(server * const srv, const array * const ca, 
 __attribute_cold__
 int config_plugin_values_init(server *srv, void *p_d, const config_plugin_keys_t *cpk, const char *mname);
 
+typedef enum {
+    /* condition not active at the moment because itself or some
+     * pre-condition depends on data not available yet
+     */
+    COND_RESULT_UNSET,
+
+    /* special "unset" for branches not selected due to pre-conditions
+     * not met (but pre-conditions are not "unset" anymore)
+     */
+    COND_RESULT_SKIP,
+
+    /* actually evaluated the condition itself */
+    COND_RESULT_FALSE, /* not active */
+    COND_RESULT_TRUE   /* active */
+} cond_result_t;
+
+typedef struct cond_cache_t {
+    /* current result (with preconditions) */
+    int8_t result;        /*(cond_result_t)*/
+    /* result without preconditions (must never be "skip") */
+    int8_t local_result;  /*(cond_result_t)*/
+    int16_t patterncount;
+} cond_cache_t; /* 8 bytes (2^3) */
+
+typedef struct cond_match_t {
+    const buffer *comp_value; /* just a pointer */
+  #if !(defined(_LP64) || defined(__LP64__) || defined(_WIN64)) /*(not 64-bit)*/
+    int dummy_alignment; /*(for alignment in 32-bit)*/
+  #endif
+    int matches[3 * 10];
+} cond_match_t; /* 128 bytes (2^7) */
+
 int config_check_cond(connection *con, int context_ndx);
 
 #endif

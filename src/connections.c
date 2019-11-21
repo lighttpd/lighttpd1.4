@@ -587,6 +587,12 @@ static connection *connection_init(server *srv) {
 
 	con->cond_cache = calloc(srv->config_context->used, sizeof(cond_cache_t));
 	force_assert(NULL != con->cond_cache);
+      #ifdef HAVE_PCRE_H
+	if (srv->config_context->used > 1) {/*save 128b per con if no conditions)*/
+		con->cond_match=calloc(srv->config_context->used, sizeof(cond_match_t));
+		force_assert(NULL != con->cond_match);
+	}
+      #endif
 	config_reset_config(srv, con);
 
 	return con;
@@ -633,6 +639,7 @@ void connections_free(server *srv) {
 #undef CLEAN
 		free(con->plugin_ctx);
 		free(con->cond_cache);
+		free(con->cond_match);
 
 		free(con);
 	}

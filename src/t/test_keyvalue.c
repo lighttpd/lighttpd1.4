@@ -8,7 +8,8 @@
 
 #include "keyvalue.c"
 
-#include "base.h"   /* struct server, struct cond_cache_t */
+#include "base.h"   /* struct server */
+#include "plugin_config.h" /* struct cond_match_t */
 
 #ifdef HAVE_PCRE_H
 static pcre_keyvalue_buffer * test_keyvalue_test_kvb_init (void) {
@@ -47,7 +48,7 @@ static void test_keyvalue_pcre_keyvalue_buffer_process (void) {
     buffer *url = buffer_init();
     buffer *result = buffer_init();
     struct burl_parts_t burl;
-    cond_cache_t cache;
+    cond_match_t cache;
     pcre_keyvalue_ctx ctx;
     handler_t rc;
     buffer *scheme    = buffer_init();
@@ -64,9 +65,9 @@ static void test_keyvalue_pcre_keyvalue_buffer_process (void) {
     buffer_copy_string_len(scheme, CONST_STR_LEN("http"));
     buffer_copy_string_len(authority, CONST_STR_LEN("www.example.com"));
     /* model outer conditional match of $HTTP["host"] =~ "^(www).example.com$" */
+    ctx.cond_match_count = 2;
     ctx.cache = &cache;
     memset(&cache, 0, sizeof(cache));
-    cache.patterncount = 2;
     cache.comp_value = authority;
     cache.matches[0] = 0;
     cache.matches[1] = 15;

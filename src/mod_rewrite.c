@@ -287,8 +287,11 @@ static handler_t process_rewrite_rules(server *srv, connection *con, plugin_data
 		if (*hctx & REWRITE_STATE_FINISHED) return HANDLER_GO_ON;
 	}
 
-	/*(kvb->x0 is context_idx)*/
-	ctx.cache = kvb->x0 ? &con->cond_cache[kvb->x0] : NULL;
+	ctx.cache = NULL;
+	if (kvb->x0) { /*(kvb->x0 is context_idx)*/
+		ctx.cond_match_count = con->cond_cache[kvb->x0].patterncount;
+		ctx.cache = con->cond_match + kvb->x0;
+        }
 	ctx.burl = &burl;
 	burl.scheme    = con->uri.scheme;
 	burl.authority = con->uri.authority;

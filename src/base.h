@@ -16,6 +16,8 @@
 
 struct fdevents;        /* declaration */
 struct stat_cache;      /* declaration */
+struct cond_cache_t;    /* declaration */
+struct cond_match_t;    /* declaration */
 
 #define DIRECT 0        /* con->mode */
 
@@ -147,32 +149,6 @@ typedef enum {
 	CON_STATE_CLOSE
 } connection_state_t;
 
-typedef enum {
-	/* condition not active at the moment because itself or some
-	 * pre-condition depends on data not available yet
-	 */
-	COND_RESULT_UNSET,
-
-	/* special "unset" for branches not selected due to pre-conditions
-	 * not met (but pre-conditions are not "unset" anymore)
-	 */
-	COND_RESULT_SKIP,
-
-	/* actually evaluated the condition itself */
-	COND_RESULT_FALSE, /* not active */
-	COND_RESULT_TRUE   /* active */
-} cond_result_t;
-
-typedef struct cond_cache_t {
-	/* current result (with preconditions) */
-	cond_result_t result;
-	/* result without preconditions (must never be "skip") */
-	cond_result_t local_result;
-	const buffer *comp_value; /* just a pointer */
-	int patterncount;
-	int matches[3 * 10];
-} cond_cache_t;
-
 struct connection {
 	connection_state_t state;
 
@@ -242,7 +218,8 @@ struct connection {
 
 	specific_config conf;        /* global connection specific config */
 	uint32_t conditional_is_valid;
-	cond_cache_t *cond_cache;
+	struct cond_cache_t *cond_cache;
+	struct cond_match_t *cond_match;
 
 	const buffer *server_name;
 	buffer *proto;
