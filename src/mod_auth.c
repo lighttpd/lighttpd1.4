@@ -206,12 +206,12 @@ static int mod_auth_require_parse (server *srv, http_auth_require_t * const requ
           case 4:
             if (0 == memcmp(str, CONST_STR_LEN("user"))) {
                 /*("user=" is 5)*/
-                array_set_key_value(require->user, str+5, len-5, CONST_STR_LEN(""));
+                array_set_key_value(&require->user, str+5, len-5, CONST_STR_LEN(""));
                 continue;
             }
             else if (0 == memcmp(str, CONST_STR_LEN("host"))) {
                 /*("host=" is 5)*/
-                array_set_key_value(require->host, str+5, len-5, CONST_STR_LEN(""));
+                array_set_key_value(&require->host, str+5, len-5, CONST_STR_LEN(""));
                 log_error_write(srv, __FILE__, __LINE__, "ssb",
                                 "warning parsing auth.require 'require' field: 'host' not implemented;",
                                 "field value:", b);
@@ -221,7 +221,7 @@ static int mod_auth_require_parse (server *srv, http_auth_require_t * const requ
           case 5:
             if (0 == memcmp(str, CONST_STR_LEN("group"))) {
                 /*("group=" is 6)*/
-                array_set_key_value(require->group, str+6, len-6, CONST_STR_LEN(""));
+                array_set_key_value(&require->group, str+6, len-6, CONST_STR_LEN(""));
               #if 0/*(supported by mod_authn_ldap, but not all other backends)*/
                 log_error_write(srv, __FILE__, __LINE__, "ssb",
                                 "warning parsing auth.require 'require' field: 'group' not implemented;",
@@ -346,7 +346,7 @@ static handler_t mod_auth_require_parse_array(server *srv, const array *value, a
 				buffer_copy_buffer(&dauth->key, &da_file->key);
 				dauth->require->scheme = auth_scheme;
 				dauth->require->algorithm = algorithm;
-				buffer_copy_buffer(dauth->require->realm, realm);
+				dauth->require->realm = realm;
 				if (!mod_auth_require_parse(srv, dauth->require, require)) {
 					dauth->fn->free((data_unset *)dauth);
 					return HANDLER_ERROR;
@@ -528,7 +528,7 @@ static handler_t mod_auth_send_400_bad_request(server *srv, connection *con) {
 	return HANDLER_FINISHED;
 }
 
-static handler_t mod_auth_send_401_unauthorized_basic(server *srv, connection *con, buffer *realm) {
+static handler_t mod_auth_send_401_unauthorized_basic(server *srv, connection *con, const buffer *realm) {
 	con->http_status = 401;
 	con->mode = DIRECT;
 

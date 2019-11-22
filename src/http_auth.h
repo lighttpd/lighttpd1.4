@@ -28,12 +28,12 @@ struct http_auth_backend_t;
 
 typedef struct http_auth_require_t {
     const struct http_auth_scheme_t *scheme;
-    buffer *realm;
+    const buffer *realm;
     int valid_user;
     int algorithm;
-    array *user;
-    array *group;
-    array *host;
+    array user;
+    array group;
+    array host;
 } http_auth_require_t;
 
 http_auth_require_t * http_auth_require_init (void);

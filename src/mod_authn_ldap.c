@@ -630,7 +630,7 @@ static char * mod_authn_ldap_get_dn(server *srv, plugin_config_ldap *s, const ch
 }
 
 static handler_t mod_authn_ldap_memberOf(server *srv, plugin_config *s, const http_auth_require_t *require, const buffer *username, const char *userdn) {
-    array *groups = require->group;
+    const array *groups = &require->group;
     buffer *filter = buffer_init();
     handler_t rc = HANDLER_ERROR;
 
@@ -752,7 +752,7 @@ static handler_t mod_authn_ldap_basic(server *srv, connection *con, void *p_d, c
         if (http_auth_match_rules(require, username->ptr, NULL, NULL)) {
             rc = HANDLER_GO_ON; /* access granted */
         }
-        else if (require->group->used) {
+        else if (require->group.used) {
             /*(must not re-use ldap_filter, since it might be used for dn)*/
             rc = mod_authn_ldap_memberOf(srv,&p->conf,require,username,dn);
         }
