@@ -26,7 +26,7 @@ static void test_mod_evhost_build_doc_root_path_loop(struct ttt *tt, size_t nelt
 static void test_mod_evhost_build_doc_root_path(void) {
     buffer *authority = buffer_init();
     buffer *b = buffer_init();
-    array *a = array_init();
+    array *a = array_init(0);
     struct ttt tt1[] = {  /* "host.example.org" */
       /* correct pattern not using dot notation */
       { CONST_STR_LEN("/web/%3/"),

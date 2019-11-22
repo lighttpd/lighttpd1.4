@@ -419,7 +419,7 @@ SETDEFAULTS_FUNC(mod_extforward_set_defaults) {
      * is not specified or is empty (and not using hap_PROXY) */
     if (!p->defaults.hap_PROXY
         && (NULL == p->defaults.headers || 0 == p->defaults.headers->used)) {
-        p->defaults.headers = p->default_headers = array_init();
+        p->defaults.headers = p->default_headers = array_init(2);
         array_insert_value(p->default_headers,CONST_STR_LEN("X-Forwarded-For"));
         array_insert_value(p->default_headers,CONST_STR_LEN("Forwarded-For"));
     }
@@ -466,7 +466,7 @@ SETDEFAULTS_FUNC(mod_extforward_set_defaults) {
 */
 static array *extract_forward_array(const buffer *pbuffer)
 {
-	array *result = array_init();
+	array *result = array_init(8);
 	if (!buffer_string_is_empty(pbuffer)) {
 		const char *base, *curr;
 		/* state variable, 0 means not in string, 1 means in string */
@@ -1610,7 +1610,7 @@ static int mod_extforward_hap_PROXY_v2 (connection * const con,
                 subtlv = (struct pp2_tlv *)((char *)subtlv + 3 + n);
                 n = ((uint32_t)subtlv->length_hi << 8) | subtlv->length_lo;
                 if (3 + n > subsz) break; /*(invalid TLV)*/
-                if (NULL == hctx->env) hctx->env = array_init();
+                if (NULL == hctx->env) hctx->env = array_init(8);
                 switch (subtlv->type) {
                   case PP2_SUBTYPE_SSL_VERSION:
                     array_set_key_value(hctx->env,

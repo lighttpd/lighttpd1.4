@@ -64,8 +64,8 @@ INIT_FUNC(mod_ssi_init) {
 	p->timefmt = buffer_init();
 	p->stat_fn = buffer_init();
 
-	p->ssi_vars = array_init();
-	p->ssi_cgi_env = array_init();
+	p->ssi_vars = array_init(8);
+	p->ssi_cgi_env = array_init(32);
 
 	return p;
 }

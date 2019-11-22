@@ -1576,7 +1576,7 @@ SETDEFAULTS_FUNC(mod_openssl_set_defaults)
 
     plugin_data * const p = p_d;
     p->srv = srv;
-    p->cafiles = array_init();
+    p->cafiles = array_init(0);
     if (!config_plugin_values_init(srv, p, cpk, "mod_openssl"))
         return HANDLER_ERROR;
 

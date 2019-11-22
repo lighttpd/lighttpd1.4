@@ -242,12 +242,6 @@ static server *server_init(void) {
 	CLEAN(tmp_chunk_len);
 #undef CLEAN
 
-#define CLEAN(x) \
-	srv->x = array_init();
-
-	CLEAN(status);
-#undef CLEAN
-
 	for (int i = 0; i < FILE_CACHE_MAX; ++i) {
 		srv->mtime_cache[i].mtime = (time_t)-1;
 	}
@@ -293,11 +287,7 @@ static void server_free(server *srv) {
 
 	config_free(srv);
 
-#define CLEAN(x) \
-	array_free(srv->x);
-
-	CLEAN(status);
-#undef CLEAN
+	array_free_data(&srv->status);
 
 	free(srv->joblist.ptr);
 	free(srv->fdwaitqueue.ptr);

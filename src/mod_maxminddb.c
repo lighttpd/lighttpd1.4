@@ -426,7 +426,7 @@ CONNECTION_FUNC(mod_maxminddb_request_env_handler)
 
     array *env = con->plugin_ctx[p->id];
     if (NULL == env) {
-        env = con->plugin_ctx[p->id] = array_init();
+        env = con->plugin_ctx[p->id] = array_init(pconf.env->used);
         if (pconf.mmdb)
             mod_maxmind_geoip2(env, &con->dst_addr, &pconf);
     }

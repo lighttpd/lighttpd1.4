@@ -714,7 +714,7 @@ static handler_t mod_status_handle_server_status_json(server *srv, connection *c
 static handler_t mod_status_handle_server_statistics(server *srv, connection *con) {
 	buffer *b;
 	size_t i;
-	array *st = srv->status;
+	array *st = &srv->status;
 
 	if (0 == st->used) {
 		/* we have nothing to send */

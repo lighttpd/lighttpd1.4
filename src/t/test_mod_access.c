@@ -8,8 +8,8 @@
 #include "mod_access.c"
 
 static void test_mod_access_check(void) {
-    array *allow    = array_init();
-    array *deny     = array_init();
+    array *allow    = array_init(0);
+    array *deny     = array_init(0);
     buffer *urlpath = buffer_init();
     int lc = 0;
 

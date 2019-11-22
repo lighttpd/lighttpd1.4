@@ -12,8 +12,8 @@
 #include <assert.h>
 
 __attribute_cold__
-static void array_extend(array * const a) {
-    a->size  += 16;
+static void array_extend(array * const a, uint32_t n) {
+    a->size  += n;
     a->data   = realloc(a->data,   sizeof(*a->data)   * a->size);
     a->sorted = realloc(a->sorted, sizeof(*a->sorted) * a->size);
     force_assert(a->data);
@@ -21,12 +21,12 @@ static void array_extend(array * const a) {
     memset(a->data+a->used, 0, (a->size-a->used)*sizeof(*a->data));
 }
 
-array *array_init(void) {
+array *array_init(uint32_t n) {
 	array *a;
 
 	a = calloc(1, sizeof(*a));
 	force_assert(a);
-	array_extend(a);
+	if (n) array_extend(a, n);
 
 	return a;
 }
@@ -216,7 +216,7 @@ static void array_insert_data_at_pos(array * const a, data_unset * const entry, 
     force_assert(a->used + 1 <= INT32_MAX);
 
     if (a->size == a->used) {
-        array_extend(a);
+        array_extend(a, 16);
     }
 
     const uint32_t ndx = a->used++;

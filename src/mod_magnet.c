@@ -423,7 +423,7 @@ static int magnet_status_set(lua_State *L) {
 static int magnet_status_pairs(lua_State *L) {
 	server *srv = magnet_get_server(L);
 
-	return magnet_array_pairs(L, srv->status);
+	return magnet_array_pairs(L, &srv->status);
 }
 
 typedef struct {

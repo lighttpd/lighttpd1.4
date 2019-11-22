@@ -368,7 +368,7 @@ struct server {
 	 *
 	 *   fastcgi.backend.<key>.disconnects = ...
 	 */
-	array *status;
+	array status;
 
 	server_config  srvconf;
 

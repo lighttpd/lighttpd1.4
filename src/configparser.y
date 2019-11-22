@@ -345,7 +345,7 @@ value(A) ::= array(B). {
   B = NULL;
 }
 array(A) ::= LPARAN RPARAN. {
-  A = array_init();
+  A = array_init(8);
 }
 array(A) ::= LPARAN aelements(B) RPARAN. {
   A = B;
@@ -382,7 +382,7 @@ aelements(A) ::= aelements(C) COMMA. {
 aelements(A) ::= aelement(B). {
   A = NULL;
   if (ctx->ok) {
-    A = array_init();
+    A = array_init(4);
     array_insert_unique(A, B);
     B = NULL;
   }

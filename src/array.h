@@ -56,7 +56,7 @@ typedef struct {
 data_integer *data_integer_init(void);
 
 __attribute_returns_nonnull__
-array *array_init(void);
+array *array_init(uint32_t n);
 
 __attribute_cold__
 void array_copy_array(array *dst, const array *src);

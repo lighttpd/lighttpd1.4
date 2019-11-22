@@ -430,7 +430,7 @@ SETDEFAULTS_FUNC(mod_auth_set_defaults) {
                 break;
               case 1: /* auth.require */
                 if (array_is_kvarray(cpv->v.a)) {
-                    array * const a = array_init();
+                    array * const a = array_init(4);
                     if (HANDLER_GO_ON !=
                         mod_auth_require_parse_array(srv, cpv->v.a, a)) {
                         array_free(a);

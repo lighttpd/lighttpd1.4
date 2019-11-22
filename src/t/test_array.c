@@ -11,7 +11,7 @@
 static void test_array_get_int_ptr (void) {
     data_integer *di;
     int *i;
-    array *a = array_init();
+    array *a = array_init(0);
 
     i = array_get_int_ptr(a, CONST_STR_LEN("abc"));
     assert(NULL != i);
@@ -30,7 +30,7 @@ static void test_array_get_int_ptr (void) {
 
 static void test_array_insert_value (void) {
     data_string *ds;
-    array *a = array_init();
+    array *a = array_init(0);
 
     array_insert_value(a, CONST_STR_LEN("def"));
     ds = (data_string *)a->data[0];
@@ -42,7 +42,7 @@ static void test_array_insert_value (void) {
 
 static void test_array_set_key_value (void) {
     data_string *ds;
-    array *a = array_init();
+    array *a = array_init(0);
 
     array_set_key_value(a, CONST_STR_LEN("abc"), CONST_STR_LEN("def"));
     ds = (data_string *)array_get_element_klen(a, CONST_STR_LEN("does-not-exist"));

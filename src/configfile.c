@@ -311,7 +311,7 @@ static void config_compat_module_load (server *srv) {
 
     if (prepend_mod_indexfile) {
         /* mod_indexfile has to be loaded before mod_fastcgi and friends */
-        array *modules = array_init();
+        array *modules = array_init(srv->srvconf.modules->used+4);
         array_insert_value(modules, CONST_STR_LEN("mod_indexfile"));
 
         for (uint32_t i = 0; i < srv->srvconf.modules->used; ++i) {
@@ -1042,8 +1042,8 @@ void config_free(server *srv) {
 }
 
 void config_init(server *srv) {
-    srv->config_context = array_init();
-    srv->srvconf.config_touched = array_init();
+    srv->config_context = array_init(16);
+    srv->srvconf.config_touched = array_init(128);
 
     srv->srvconf.port = 0;
     srv->srvconf.dont_daemonize = 0;
@@ -1065,9 +1065,9 @@ void config_init(server *srv) {
       | HTTP_PARSEOPT_URL_NORMALIZE_PATH_2F_DECODE
       | HTTP_PARSEOPT_URL_NORMALIZE_PATH_DOTSEG_REMOVE;
 
-    srv->srvconf.modules = array_init();
+    srv->srvconf.modules = array_init(16);
     srv->srvconf.modules_dir = buffer_init_string(LIBRARY_DIR);
-    srv->srvconf.upload_tempdirs = array_init();
+    srv->srvconf.upload_tempdirs = array_init(2);
 }
 
 
