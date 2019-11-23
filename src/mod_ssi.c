@@ -590,7 +590,7 @@ static int process_ssi_stmt(server *srv, connection *con, handler_ctx *p, const 
 		}
 
 		int fd = stat_cache_open_rdonly_fstat(p->stat_fn, &stb, con->conf.follow_symlink);
-		if (fd > 0) {
+		if (fd >= 0) {
 			time_t t = stb.st_mtime;
 
 			switch (ssicmd) {
@@ -676,7 +676,7 @@ static int process_ssi_stmt(server *srv, connection *con, handler_ctx *p, const 
 				break;
 			}
 
-			if (fd > 0) close(fd);
+			if (fd >= 0) close(fd);
 		} else {
 			log_error_write(srv, __FILE__, __LINE__, "sbs",
 					"ssi: stating failed ",

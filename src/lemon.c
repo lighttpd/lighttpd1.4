@@ -2215,7 +2215,7 @@ to follow the previous rule.");
     case WAITING_FOR_DESTRUCTOR_SYMBOL:
       if( !isalpha(x[0]) ){
         ErrorMsg(psp->filename,psp->tokenlineno,
-          "Symbol name missing after %destructor keyword");
+          "Symbol name missing after %%destructor keyword");
         psp->errorcnt++;
         psp->state = RESYNC_AFTER_DECL_ERROR;
       }else{
@@ -2228,7 +2228,7 @@ to follow the previous rule.");
     case WAITING_FOR_DATATYPE_SYMBOL:
       if( !isalpha(x[0]) ){
         ErrorMsg(psp->filename,psp->tokenlineno,
-          "Symbol name missing after %destructor keyword");
+          "Symbol name missing after %%destructor keyword");
         psp->errorcnt++;
         psp->state = RESYNC_AFTER_DECL_ERROR;
       }else{
@@ -2343,14 +2343,14 @@ struct lemon *gp;
   rewind(fp);
   filebuf = (char *)malloc( filesize+1 );
   if( filebuf==0 ){
-    ErrorMsg(ps.filename,0,"Can't allocate %d of memory to hold this file.",
+    ErrorMsg(ps.filename,0,"Can't allocate %zu of memory to hold this file.",
       filesize+1);
     fclose(fp);
     gp->errorcnt++;
     return;
   }
   if( fread(filebuf,1,filesize,fp)!=filesize ){
-    ErrorMsg(ps.filename,0,"Can't read in all %d bytes of this file.",
+    ErrorMsg(ps.filename,0,"Can't read in all %zu bytes of this file.",
       filesize);
     free(filebuf);
     fclose(fp);

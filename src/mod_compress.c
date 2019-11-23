@@ -563,7 +563,6 @@ static int deflate_file_to_file(server *srv, connection *con, plugin_data *p, in
 
 			munmap(start, sce->st.st_size);
 			close(ofd);
-			close(ifd);
 
 			/* Remove the incomplete cache file, so that later hits aren't served from it */
 			if (-1 == unlink(p->ofn->ptr)) {
@@ -578,7 +577,6 @@ static int deflate_file_to_file(server *srv, connection *con, plugin_data *p, in
 		log_error_write(srv, __FILE__, __LINE__, "sbss", "reading", fn, "failed", strerror(errno));
 
 		close(ofd);
-		close(ifd);
 		free(start);
 
 		/* Remove the incomplete cache file, so that later hits aren't served from it */
@@ -626,8 +624,6 @@ static int deflate_file_to_file(server *srv, connection *con, plugin_data *p, in
 	} else
 #endif
 		free(start);
-
-	close(ifd);
 
 	if (0 != close(ofd) || ret != 0) {
 		if (0 == ret) {
@@ -689,7 +685,6 @@ static int deflate_file_to_buffer(server *srv, connection *con, plugin_data *p, 
 				fn, ifd);
 
 			munmap(start, sce->st.st_size);
-			close(ifd);
 			return -1;
 		}
 	} else
@@ -697,7 +692,6 @@ static int deflate_file_to_buffer(server *srv, connection *con, plugin_data *p, 
 	if (NULL == (start = malloc(sce->st.st_size)) || sce->st.st_size != read(ifd, start, sce->st.st_size)) {
 		log_error_write(srv, __FILE__, __LINE__, "sbss", "reading", fn, "failed", strerror(errno));
 
-		close(ifd);
 		free(start);
 		return -1;
 	}
@@ -730,8 +724,6 @@ static int deflate_file_to_buffer(server *srv, connection *con, plugin_data *p, 
 	} else
 #endif
 		free(start);
-
-	close(ifd);
 
 	if (ret != 0) return -1;
 
