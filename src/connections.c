@@ -257,6 +257,7 @@ static void connection_handle_response_end_state(server *srv, connection *con) {
 	}
 }
 
+__attribute_cold__
 static void connection_handle_errdoc_init(connection *con) {
 	/* modules that produce headers required with error response should
 	 * typically also produce an error document.  Make an exception for
@@ -276,6 +277,64 @@ static void connection_handle_errdoc_init(connection *con) {
 		http_header_response_set(con, HTTP_HEADER_OTHER, CONST_STR_LEN("WWW-Authenticate"), CONST_BUF_LEN(www_auth));
 		buffer_free(www_auth);
 	}
+}
+
+__attribute_cold__
+static void connection_handle_errdoc(connection *con) {
+    if (con->mode == DIRECT
+        ? con->error_handler_saved_status >= 65535
+        : (!con->conf.error_intercept || con->error_handler_saved_status))
+        return;
+
+    connection_handle_errdoc_init(con);
+    con->file_finished = 1;
+
+    server * const srv = con->srv;
+
+    /* try to send static errorfile */
+    if (!buffer_string_is_empty(con->conf.errorfile_prefix)) {
+        buffer_copy_buffer(con->physical.path, con->conf.errorfile_prefix);
+        buffer_append_int(con->physical.path, con->http_status);
+        buffer_append_string_len(con->physical.path, CONST_STR_LEN(".html"));
+        if (0 == http_chunk_append_file(srv, con, con->physical.path)) {
+            stat_cache_entry *sce = NULL;
+            if (stat_cache_get_entry(srv, con, con->physical.path, &sce)
+                != HANDLER_ERROR) {
+                stat_cache_content_type_get(srv, con, con->physical.path, sce);
+                http_header_response_set(con, HTTP_HEADER_CONTENT_TYPE,
+                                         CONST_STR_LEN("Content-Type"),
+                                         CONST_BUF_LEN(sce->content_type));
+            }
+            return;
+        }
+    }
+
+    /* build default error-page */
+    buffer_reset(con->physical.path);
+    buffer * const b = srv->tmp_buf;
+    buffer_copy_string_len(b, CONST_STR_LEN(
+      "<?xml version=\"1.0\" encoding=\"iso-8859-1\"?>\n"
+      "<!DOCTYPE html PUBLIC \"-//W3C//DTD XHTML 1.0 Transitional//EN\"\n"
+      "         \"http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd\">\n"
+      "<html xmlns=\"http://www.w3.org/1999/xhtml\" xml:lang=\"en\" lang=\"en\">\n"
+      " <head>\n"
+      "  <title>"));
+    http_status_append(b, con->http_status);
+    buffer_append_string_len(b, CONST_STR_LEN(
+      "</title>\n"
+      " </head>\n"
+      " <body>\n"
+      "  <h1>"));
+    http_status_append(b, con->http_status);
+    buffer_append_string_len(b, CONST_STR_LEN(
+      "</h1>\n"
+      " </body>\n"
+      "</html>\n"));
+    (void)http_chunk_append_mem(srv, con, CONST_BUF_LEN(b));
+
+    http_header_response_set(con, HTTP_HEADER_CONTENT_TYPE,
+                             CONST_STR_LEN("Content-Type"),
+                             CONST_STR_LEN("text/html"));
 }
 
 static int connection_handle_write_prepare(server *srv, connection *con) {
@@ -323,65 +382,8 @@ static int connection_handle_write_prepare(server *srv, connection *con) {
 		break;
 	default: /* class: header + body */
 		/* only custom body for 4xx and 5xx */
-		if (con->http_status < 400 || con->http_status >= 600) break;
-
-		if (con->mode != DIRECT && (!con->conf.error_intercept || con->error_handler_saved_status)) break;
-		if (con->mode == DIRECT && con->error_handler_saved_status >= 65535) break;
-
-		con->file_finished = 0;
-
-		connection_handle_errdoc_init(con);
-
-		/* try to send static errorfile */
-		if (!buffer_string_is_empty(con->conf.errorfile_prefix)) {
-			stat_cache_entry *sce = NULL;
-
-			buffer_copy_buffer(con->physical.path, con->conf.errorfile_prefix);
-			buffer_append_int(con->physical.path, con->http_status);
-			buffer_append_string_len(con->physical.path, CONST_STR_LEN(".html"));
-
-			if (0 == http_chunk_append_file(srv, con, con->physical.path)) {
-				con->file_finished = 1;
-				if (HANDLER_ERROR != stat_cache_get_entry(srv, con, con->physical.path, &sce)) {
-					stat_cache_content_type_get(srv, con, con->physical.path, sce);
-					http_header_response_set(con, HTTP_HEADER_CONTENT_TYPE, CONST_STR_LEN("Content-Type"), CONST_BUF_LEN(sce->content_type));
-				}
-			}
-		}
-
-		if (!con->file_finished) {
-			buffer *b = srv->tmp_buf;
-
-			buffer_reset(con->physical.path);
-
-			con->file_finished = 1;
-
-			/* build default error-page */
-			buffer_copy_string_len(b, CONST_STR_LEN(
-					   "<?xml version=\"1.0\" encoding=\"iso-8859-1\"?>\n"
-					   "<!DOCTYPE html PUBLIC \"-//W3C//DTD XHTML 1.0 Transitional//EN\"\n"
-					   "         \"http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd\">\n"
-					   "<html xmlns=\"http://www.w3.org/1999/xhtml\" xml:lang=\"en\" lang=\"en\">\n"
-					   " <head>\n"
-					   "  <title>"));
-			http_status_append(b, con->http_status);
-
-			buffer_append_string_len(b, CONST_STR_LEN(
-					     "</title>\n"
-					     " </head>\n"
-					     " <body>\n"
-					     "  <h1>"));
-			http_status_append(b, con->http_status);
-
-			buffer_append_string_len(b, CONST_STR_LEN("</h1>\n"
-					     " </body>\n"
-					     "</html>\n"
-					     ));
-
-			(void)http_chunk_append_mem(srv, con, CONST_BUF_LEN(b));
-
-			http_header_response_set(con, HTTP_HEADER_CONTENT_TYPE, CONST_STR_LEN("Content-Type"), CONST_STR_LEN("text/html"));
-		}
+		if (con->http_status >= 400 && con->http_status < 600)
+			connection_handle_errdoc(con);
 		break;
 	}
 
