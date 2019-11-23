@@ -1175,6 +1175,15 @@ void gw_free(void *p_d) {
     }
 }
 
+void gw_exts_clear_check_local(gw_exts *exts) {
+    for (uint32_t j = 0; j < exts->used; ++j) {
+        gw_extension *ex = exts->exts[j];
+        for (uint32_t n = 0; n < ex->used; ++n) {
+            ex->hosts[n]->check_local = 0;
+        }
+    }
+}
+
 int gw_set_defaults_backend(server *srv, gw_plugin_data *p, const array *a, gw_plugin_config *s, int sh_exec, const char *cpkkey) {
     /* per-module plugin_config MUST have common "base class" gw_plugin_config*/
     /* per-module plugin_data MUST have pointer-compatible common "base class"

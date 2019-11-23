@@ -106,12 +106,7 @@ SETDEFAULTS_FUNC(mod_sockproxy_set_defaults) {
 
         /* disable check-local for all exts (default enabled) */
         if (gw && gw->exts) { /*(check after gw_set_defaults_backend())*/
-            for (uint32_t j = 0; j < gw->exts->used; ++j) {
-                gw_extension *ex = gw->exts->exts[j];
-                for (uint32_t n = 0; n < ex->used; ++n) {
-                    ex->hosts[n]->check_local = 0;
-                }
-            }
+            gw_exts_clear_check_local(gw->exts);
         }
     }
 
