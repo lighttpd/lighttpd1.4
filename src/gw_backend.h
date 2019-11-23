@@ -233,7 +233,7 @@ typedef struct {
  */
 
 typedef struct {
-    buffer *key; /* like .php */
+    const buffer key; /* like .php */
 
     int note_is_sent;
     int last_used_ndx;
@@ -245,8 +245,7 @@ typedef struct {
 } gw_extension;
 
 typedef struct {
-    gw_extension **exts;
-
+    gw_extension *exts;
     uint32_t used;
     uint32_t size;
 } gw_exts;

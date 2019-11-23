@@ -151,44 +151,40 @@ static gw_exts *gw_extensions_init(void) {
 static void gw_extensions_free(gw_exts *f) {
     if (!f) return;
     for (uint32_t i = 0; i < f->used; ++i) {
-        gw_extension *fe = f->exts[i];
+        gw_extension *fe = f->exts+i;
         for (uint32_t j = 0; j < fe->used; ++j) {
             gw_host_free(fe->hosts[j]);
         }
-        buffer_free(fe->key);
         free(fe->hosts);
-        free(fe);
     }
     free(f->exts);
     free(f);
 }
 
-static int gw_extension_insert(gw_exts *ext, buffer *key, gw_host *fh) {
+static int gw_extension_insert(gw_exts *ext, const buffer *key, gw_host *fh) {
     gw_extension *fe = NULL;
     for (uint32_t i = 0; i < ext->used; ++i) {
-        if (buffer_is_equal(key, ext->exts[i]->key)) {
-            fe = ext->exts[i];
+        if (buffer_is_equal(key, &ext->exts[i].key)) {
+            fe = ext->exts+i;
             break;
         }
     }
 
     if (NULL == fe) {
-        fe = calloc(1, sizeof(*fe));
-        force_assert(fe);
-        fe->key = buffer_init();
-        fe->last_used_ndx = -1;
-        buffer_copy_buffer(fe->key, key);
-
         if (ext->used == ext->size) {
             ext->size += 8;
-            ext->exts = realloc(ext->exts, ext->size * sizeof(*(ext->exts)));
+            ext->exts = realloc(ext->exts, ext->size * sizeof(gw_extension));
             force_assert(ext->exts);
+            memset(ext->exts + ext->used, 0, 8 * sizeof(gw_extension));
         }
-        ext->exts[ext->used++] = fe;
-        fe->size = 4;
-        fe->hosts = malloc(fe->size * sizeof(*(fe->hosts)));
-        force_assert(fe->hosts);
-    } else if (fe->size == fe->used) {
+        fe = ext->exts + ext->used++;
+        fe->last_used_ndx = -1;
+        buffer *b;
+        *(const buffer **)&b = &fe->key;
+        memcpy(b, key, sizeof(buffer)); /*(copy; not later free'd)*/
+    }
+
+    if (fe->size == fe->used) {
         fe->size += 4;
         fe->hosts = realloc(fe->hosts, fe->size * sizeof(*(fe->hosts)));
         force_assert(fe->hosts);
@@ -704,7 +700,7 @@ static gw_host * unixsocket_is_dup(gw_plugin_data *p, const buffer *unixsocket) 
 
         gw_exts *exts = conf->exts;
         for (uint32_t j = 0; j < exts->used; ++j) {
-            gw_extension *ex = exts->exts[j];
+            gw_extension *ex = exts->exts+j;
             for (uint32_t n = 0; n < ex->used; ++n) {
                 gw_host *host = ex->hosts[n];
                 if (!buffer_string_is_empty(host->unixsocket)
@@ -936,7 +932,7 @@ static gw_host * gw_host_get(server *srv, connection *con, gw_extension *extensi
         extension->note_is_sent = 1;
         log_error_write(srv, __FILE__, __LINE__, "sBSbsbs",
                         "all handlers for", con->uri.path, "?",
-                        con->uri.query, "on", extension->key, "are down.");
+                        con->uri.query, "on", &extension->key, "are down.");
     }
 
     return NULL;
@@ -1121,7 +1117,7 @@ void gw_plugin_config_free(gw_plugin_config *s) {
     gw_exts *exts = s->exts;
     if (exts) {
         for (uint32_t j = 0; j < exts->used; ++j) {
-            gw_extension *ex = exts->exts[j];
+            gw_extension *ex = exts->exts+j;
             for (uint32_t n = 0; n < ex->used; ++n) {
                 gw_proc *proc;
                 gw_host *host = ex->hosts[n];
@@ -1177,7 +1173,7 @@ void gw_free(void *p_d) {
 
 void gw_exts_clear_check_local(gw_exts *exts) {
     for (uint32_t j = 0; j < exts->used; ++j) {
-        gw_extension *ex = exts->exts[j];
+        gw_extension *ex = exts->exts+j;
         for (uint32_t n = 0; n < ex->used; ++n) {
             ex->hosts[n]->check_local = 0;
         }
@@ -2349,9 +2345,9 @@ handler_t gw_check_extension(server *srv, connection *con, gw_plugin_data *p, in
                     /* check if we know the extension */
                     uint32_t k;
                     for (k = 0; k < exts->used; ++k) {
-                        extension = exts->exts[k];
+                        extension = exts->exts+k;
 
-                        if (buffer_is_equal(&ds->value, extension->key)) {
+                        if (buffer_is_equal(&ds->value, &extension->key)) {
                             break;
                         }
                     }
@@ -2368,19 +2364,19 @@ handler_t gw_check_extension(server *srv, connection *con, gw_plugin_data *p, in
 
             /* check if extension matches */
             for (uint32_t k = 0; k < exts->used; ++k) {
-                gw_extension *ext = exts->exts[k];
-                size_t ct_len = buffer_string_length(ext->key);
+                gw_extension *ext = exts->exts+k;
+                size_t ct_len = buffer_string_length(&ext->key);
 
                 /* check _url_ in the form "/gw_pattern" */
-                if (ext->key->ptr[0] == '/') {
+                if (ext->key.ptr[0] == '/') {
                     if (ct_len <= uri_path_len
-                        && 0==memcmp(con->uri.path->ptr,ext->key->ptr,ct_len)){
+                        && 0 == memcmp(con->uri.path->ptr,ext->key.ptr,ct_len)){
                         extension = ext;
                         break;
                     }
                 } else if (ct_len <= s_len
                            && 0 == memcmp(fn->ptr + s_len - ct_len,
-                                          ext->key->ptr, ct_len)) {
+                                          ext->key.ptr, ct_len)) {
                     /* check extension in the form ".fcg" */
                     extension = ext;
                     break;
@@ -2445,16 +2441,16 @@ handler_t gw_check_extension(server *srv, connection *con, gw_plugin_data *p, in
                 char *pathinfo;
 
                 /* the rewrite is only done for /prefix/? matches */
-                if (host->fix_root_path_name && extension->key->ptr[0] == '/'
-                                             && extension->key->ptr[1] == '\0'){
+                if (host->fix_root_path_name && extension->key.ptr[0] == '/'
+                                             && extension->key.ptr[1] == '\0') {
                     buffer_copy_buffer(con->request.pathinfo, con->uri.path);
                     buffer_clear(con->uri.path);
-                } else if (extension->key->ptr[0] == '/'
+                } else if (extension->key.ptr[0] == '/'
                            && buffer_string_length(con->uri.path)
-                              > buffer_string_length(extension->key)
+                              > buffer_string_length(&extension->key)
                            && (pathinfo =
                                  strchr(con->uri.path->ptr
-                                        + buffer_string_length(extension->key),
+                                        + buffer_string_length(&extension->key),
                                         '/')) != NULL) {
                     /* rewrite uri.path and pathinfo */
 
@@ -2579,7 +2575,7 @@ static void gw_handle_trigger_host(server *srv, gw_host *host, int debug) {
 
 static void gw_handle_trigger_exts(server *srv, gw_exts *exts, int debug) {
     for (uint32_t j = 0; j < exts->used; ++j) {
-        gw_extension *ex = exts->exts[j];
+        gw_extension *ex = exts->exts+j;
         for (uint32_t n = 0; n < ex->used; ++n) {
             gw_handle_trigger_host(srv, ex->hosts[n], debug);
         }
@@ -2588,7 +2584,7 @@ static void gw_handle_trigger_exts(server *srv, gw_exts *exts, int debug) {
 
 static void gw_handle_trigger_exts_wkr(server *srv, gw_exts *exts) {
     for (uint32_t j = 0; j < exts->used; ++j) {
-        gw_extension * const ex = exts->exts[j];
+        gw_extension * const ex = exts->exts+j;
         for (uint32_t n = 0; n < ex->used; ++n) {
             gw_host * const host = ex->hosts[n];
             for (gw_proc *proc = host->first; proc; proc = proc->next) {
@@ -2670,7 +2666,7 @@ handler_t gw_handle_waitpid_cb(server *srv, void *p_d, pid_t pid, int status) {
          *  might be part of a larger plugin_config) */
         gw_exts *exts = conf->exts;
         for (uint32_t j = 0; j < exts->used; ++j) {
-            gw_extension *ex = exts->exts[j];
+            gw_extension *ex = exts->exts+j;
             for (uint32_t n = 0; n < ex->used; ++n) {
                 gw_host *host = ex->hosts[n];
                 gw_proc *proc;
