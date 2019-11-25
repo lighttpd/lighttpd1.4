@@ -31,7 +31,7 @@ typedef struct {
     plugin_config conf;
 } plugin_data;
 
-static handler_t mod_authn_pam_basic(server *srv, connection *con, void *p_d, const http_auth_require_t *require, const buffer *username, const char *pw);
+static handler_t mod_authn_pam_basic(connection *con, void *p_d, const http_auth_require_t *require, const buffer *username, const char *pw);
 
 INIT_FUNC(mod_authn_pam_init) {
     static http_auth_backend_t http_auth_backend_pam =
@@ -131,7 +131,7 @@ static int mod_authn_pam_fn_conv(int num_msg, const struct pam_message **msg, st
     return PAM_SUCCESS;
 }
 
-static handler_t mod_authn_pam_query(server *srv, connection *con, void *p_d, const buffer *username, const char *realm, const char *pw) {
+static handler_t mod_authn_pam_query(connection *con, void *p_d, const buffer *username, const char *realm, const char *pw) {
     plugin_data *p = (plugin_data *)p_d;
     pam_handle_t *pamh = NULL;
     struct pam_conv conv = { mod_authn_pam_fn_conv, NULL };
@@ -147,15 +147,15 @@ static handler_t mod_authn_pam_query(server *srv, connection *con, void *p_d, co
      || PAM_SUCCESS !=(rc = pam_set_item(pamh,PAM_RHOST,con->dst_addr_buf->ptr))
      || PAM_SUCCESS !=(rc = pam_authenticate(pamh, flags))
      || PAM_SUCCESS !=(rc = pam_acct_mgmt(pamh, flags)))
-        log_error_write(srv, __FILE__, __LINE__, "ss",
-                        "pam:", pam_strerror(pamh, rc));
+        log_error(con->conf.errh, __FILE__, __LINE__,
+          "pam: %s", pam_strerror(pamh, rc));
     pam_end(pamh, rc);
     return (PAM_SUCCESS == rc) ? HANDLER_GO_ON : HANDLER_ERROR;
 }
 
-static handler_t mod_authn_pam_basic(server *srv, connection *con, void *p_d, const http_auth_require_t *require, const buffer *username, const char *pw) {
+static handler_t mod_authn_pam_basic(connection *con, void *p_d, const http_auth_require_t *require, const buffer *username, const char *pw) {
     char *realm = require->realm->ptr;
-    handler_t rc = mod_authn_pam_query(srv, con, p_d, username, realm, pw);
+    handler_t rc = mod_authn_pam_query(con, p_d, username, realm, pw);
     if (HANDLER_GO_ON != rc) return rc;
     return http_auth_match_rules(require, username->ptr, NULL, NULL)
       ? HANDLER_GO_ON  /* access granted */

@@ -6,7 +6,6 @@
 #include "log.h"
 #include "stat_cache.h"
 
-#include <errno.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -193,11 +192,12 @@ CONNECTION_FUNC(mod_vhostdb_handle_docroot) {
     /* sanity check that really is a directory */
     buffer_append_slash(b);
     if (HANDLER_ERROR == stat_cache_get_entry(srv, con, b, &sce)) {
-        log_error_write(srv, __FILE__, __LINE__, "sb", strerror(errno), b);
+        log_perror(con->conf.errh, __FILE__, __LINE__, "%s", b->ptr);
         return mod_vhostdb_error_500(con); /* HANDLER_FINISHED */
     }
     if (!S_ISDIR(sce->st.st_mode)) {
-        log_error_write(srv, __FILE__, __LINE__, "sb", "Not a directory", b);
+        log_error(con->conf.errh, __FILE__, __LINE__,
+          "Not a directory: %s", b->ptr);
         return mod_vhostdb_error_500(con); /* HANDLER_FINISHED */
     }
 

@@ -349,7 +349,7 @@ static void cgi_connection_close(server *srv, handler_ctx *hctx) {
 
 	/* finish response (if not already con->file_started, con->file_finished) */
 	if (con->mode == p->id) {
-		http_response_backend_done(srv, con);
+		http_response_backend_done(con);
 	}
 }
 
@@ -394,7 +394,7 @@ static handler_t cgi_handle_fdevent_send (server *srv, void *ctx, int revents) {
 	} else if (revents & FDEVENT_ERR) {
 		/* kill all connections to the cgi process */
 #if 1
-		log_error_write(srv, __FILE__, __LINE__, "s", "cgi-FDEVENT_ERR");
+		log_error(con->conf.errh, __FILE__, __LINE__, "cgi-FDEVENT_ERR");
 #endif
 		cgi_connection_close(srv, hctx);
 		return HANDLER_ERROR;
@@ -404,14 +404,14 @@ static handler_t cgi_handle_fdevent_send (server *srv, void *ctx, int revents) {
 }
 
 
-static handler_t cgi_response_headers(server *srv, connection *con, struct http_response_opts_t *opts) {
+static handler_t cgi_response_headers(connection *con, struct http_response_opts_t *opts) {
     /* response headers just completed */
     handler_ctx *hctx = (handler_ctx *)opts->pdata;
 
     if (con->response.htags & HTTP_HEADER_UPGRADE) {
         if (hctx->conf.upgrade && con->http_status == 101) {
             /* 101 Switching Protocols; transition to transparent proxy */
-            http_response_upgrade_read_body_unknown(srv, con);
+            http_response_upgrade_read_body_unknown(con);
         }
         else {
             con->response.htags &= ~HTTP_HEADER_UPGRADE;
@@ -429,7 +429,7 @@ static handler_t cgi_response_headers(server *srv, connection *con, struct http_
         chunkqueue *cq = con->request_content_queue;
         hctx->conf.upgrade = 0;
         if (cq->bytes_out == (off_t)con->request.content_length) {
-            cgi_connection_close_fdtocgi(srv, hctx); /*(closes hctx->fdtocgi)*/
+            cgi_connection_close_fdtocgi(con->srv, hctx); /*(closes hctx->fdtocgi)*/
         }
     }
 
@@ -438,12 +438,12 @@ static handler_t cgi_response_headers(server *srv, connection *con, struct http_
 
 
 static int cgi_recv_response(server *srv, handler_ctx *hctx) {
-		switch (http_response_read(srv, hctx->remote_conn, &hctx->opts,
+		switch (http_response_read(hctx->remote_conn, &hctx->opts,
 					   hctx->response, hctx->fdn)) {
 		default:
 			return HANDLER_GO_ON;
 		case HANDLER_ERROR:
-			http_response_backend_error(srv, hctx->remote_conn);
+			http_response_backend_error(hctx->remote_conn);
 			/* fall through */
 		case HANDLER_FINISHED:
 			cgi_connection_close(srv, hctx);
@@ -490,7 +490,7 @@ static handler_t cgi_handle_fdevent(server *srv, void *ctx, int revents) {
 		} else if (!buffer_string_is_empty(hctx->response)) {
 			/* unfinished header package which is a body in reality */
 			con->file_started = 1;
-			if (0 != http_chunk_append_buffer(srv, con, hctx->response)) {
+			if (0 != http_chunk_append_buffer(con, hctx->response)) {
 				cgi_connection_close(srv, hctx);
 				return HANDLER_ERROR;
 			}
@@ -555,7 +555,7 @@ static off_t mmap_align_offset(off_t start) {
  *
  * Also always use mmap; the files are "trusted", as we created them.
  */
-static ssize_t cgi_write_file_chunk_mmap(server *srv, connection *con, int fd, chunkqueue *cq) {
+static ssize_t cgi_write_file_chunk_mmap(connection *con, int fd, chunkqueue *cq) {
 	chunk* const c = cq->first;
 	off_t offset, toSend, file_end;
 	ssize_t r;
@@ -579,7 +579,7 @@ static ssize_t cgi_write_file_chunk_mmap(server *srv, connection *con, int fd, c
 	UNUSED(con);
 	if (-1 == c->file.fd) {
 		if (-1 == (c->file.fd = fdevent_open_cloexec(c->mem->ptr, con->conf.follow_symlink, O_RDONLY, 0))) {
-			log_error_write(srv, __FILE__, __LINE__, "ssb", "open failed:", strerror(errno), c->mem);
+			log_perror(con->conf.errh, __FILE__, __LINE__, "open failed: %s", c->mem->ptr);
 			return -1;
 		}
 	}
@@ -604,11 +604,13 @@ static ssize_t cgi_write_file_chunk_mmap(server *srv, connection *con, int fd, c
 			if (-1 == lseek(c->file.fd, offset, SEEK_SET)
 			    || 0 >= (toSend = read(c->file.fd, data, toSend))) {
 				if (-1 == toSend) {
-					log_error_write(srv, __FILE__, __LINE__, "ssbdo", "lseek/read failed:",
-							strerror(errno), c->mem, c->file.fd, offset);
+					log_perror(con->conf.errh, __FILE__, __LINE__,
+					  "lseek/read %s %d %lld failed:",
+					  c->mem->ptr, c->file.fd, (long long)offset);
 				} else { /*(0 == toSend)*/
-					log_error_write(srv, __FILE__, __LINE__, "sbdo", "unexpected EOF (input truncated?):",
-							c->mem, c->file.fd, offset);
+					log_error(con->conf.errh, __FILE__, __LINE__,
+					  "unexpected EOF (input truncated?): %s %d %lld",
+					  c->mem->ptr, c->file.fd, (long long)offset);
 				}
 				free(data);
 				return -1;
@@ -639,8 +641,8 @@ static ssize_t cgi_write_file_chunk_mmap(server *srv, connection *con, int fd, c
 		case ECONNRESET:
 			return -2;
 		default:
-			log_error_write(srv, __FILE__, __LINE__, "ssd",
-				"write failed:", strerror(errno), fd);
+			log_perror(con->conf.errh, __FILE__, __LINE__,
+			  "write %d failed", fd);
 			return -1;
 		}
 	}
@@ -664,7 +666,7 @@ static int cgi_write_request(server *srv, handler_ctx *hctx, int fd) {
 
 		switch(c->type) {
 		case FILE_CHUNK:
-			r = cgi_write_file_chunk_mmap(srv, con, fd, cq);
+			r = cgi_write_file_chunk_mmap(con, fd, cq);
 			break;
 
 		case MEM_CHUNK:
@@ -682,7 +684,7 @@ static int cgi_write_request(server *srv, handler_ctx *hctx, int fd) {
 					break;
 				default:
 					/* fatal error */
-					log_error_write(srv, __FILE__, __LINE__, "ss", "write failed due to: ", strerror(errno));
+					log_perror(con->conf.errh, __FILE__, __LINE__, "write() failed");
 					r = -1;
 					break;
 				}
@@ -700,7 +702,8 @@ static int cgi_write_request(server *srv, handler_ctx *hctx, int fd) {
 			return -1;
 		case -2:
 			/* connection reset */
-			log_error_write(srv, __FILE__, __LINE__, "s", "failed to send post data to cgi, connection closed by CGI");
+			log_error(con->conf.errh, __FILE__, __LINE__,
+			  "failed to send post data to cgi, connection closed by CGI");
 			/* skip all remaining data */
 			chunkqueue_mark_written(cq, chunkqueue_length(cq));
 			break;
@@ -715,7 +718,7 @@ static int cgi_write_request(server *srv, handler_ctx *hctx, int fd) {
 		if (-1 == hctx->fdtocgi) { /*(received request body sent in initial send to pipe buffer)*/
 			--srv->cur_fds;
 			if (close(fd)) {
-				log_error_write(srv, __FILE__, __LINE__, "sds", "cgi stdin close failed ", fd, strerror(errno));
+				log_perror(con->conf.errh, __FILE__, __LINE__, "cgi stdin close %d failed", fd);
 			}
 		} else {
 			cgi_connection_close_fdtocgi(srv, hctx); /*(closes only hctx->fdtocgi)*/
@@ -763,21 +766,20 @@ static int cgi_create_env(server *srv, connection *con, plugin_data *p, handler_
 
 	if (!buffer_string_is_empty(cgi_handler)) {
 		if (NULL == cgi_stat(srv, con, cgi_handler)) {
-			log_error_write(srv, __FILE__, __LINE__, "sbss",
-					"stat for cgi-handler", cgi_handler,
-					"failed:", strerror(errno));
+			log_perror(con->conf.errh, __FILE__, __LINE__,
+			  "stat for cgi-handler %s", cgi_handler->ptr);
 			return -1;
 		}
 	}
 
 	if (pipe_cloexec(to_cgi_fds)) {
-		log_error_write(srv, __FILE__, __LINE__, "ss", "pipe failed:", strerror(errno));
+		log_perror(con->conf.errh, __FILE__, __LINE__, "pipe failed");
 		return -1;
 	}
 	if (pipe_cloexec(from_cgi_fds)) {
 		close(to_cgi_fds[0]);
 		close(to_cgi_fds[1]);
-		log_error_write(srv, __FILE__, __LINE__, "ss", "pipe failed:", strerror(errno));
+		log_perror(con->conf.errh, __FILE__, __LINE__, "pipe failed");
 		return -1;
 	}
 	fdevent_setfd_cloexec(to_cgi_fds[1]);
@@ -792,7 +794,7 @@ static int cgi_create_env(server *srv, connection *con, plugin_data *p, handler_
 
 		/* create environment */
 
-		http_cgi_headers(srv, con, &opts, cgi_env_add, env);
+		http_cgi_headers(con, &opts, cgi_env_add, env);
 
 		/* for valgrind */
 		if (p->env.ld_preload) {
@@ -830,14 +832,14 @@ static int cgi_create_env(server *srv, connection *con, plugin_data *p, handler_
 
 	dfd = fdevent_open_dirname(con->physical.path->ptr, con->conf.follow_symlink);
 	if (-1 == dfd) {
-		log_error_write(srv, __FILE__, __LINE__, "ssb", "open dirname failed:", strerror(errno), con->physical.path);
+		log_perror(con->conf.errh, __FILE__, __LINE__, "open dirname %s failed", con->physical.path->ptr);
 	}
 
 	hctx->pid = (dfd >= 0) ? fdevent_fork_execve(args[0], args, p->env.eptr, to_cgi_fds[0], from_cgi_fds[1], -1, dfd) : -1;
 
 	if (-1 == hctx->pid) {
 		/* log error with errno prior to calling close() (might change errno) */
-		log_error_write(srv, __FILE__, __LINE__, "ss", "fork failed:", strerror(errno));
+		log_perror(con->conf.errh, __FILE__, __LINE__, "fork failed");
 		if (-1 != dfd) close(dfd);
 		close(from_cgi_fds[0]);
 		close(from_cgi_fds[1]);
@@ -860,7 +862,7 @@ static int cgi_create_env(server *srv, connection *con, plugin_data *p, handler_
 		} else {
 			/* there is content to send */
 			if (-1 == fdevent_fcntl_set_nb(srv->ev, to_cgi_fds[1])) {
-				log_error_write(srv, __FILE__, __LINE__, "ss", "fcntl failed: ", strerror(errno));
+				log_perror(con->conf.errh, __FILE__, __LINE__, "fcntl failed");
 				close(to_cgi_fds[1]);
 				cgi_connection_close(srv, hctx);
 				return -1;
@@ -877,7 +879,7 @@ static int cgi_create_env(server *srv, connection *con, plugin_data *p, handler_
 
 		hctx->fdn = fdevent_register(srv->ev, hctx->fd, cgi_handle_fdevent, hctx);
 		if (-1 == fdevent_fcntl_set_nb(srv->ev, hctx->fd)) {
-			log_error_write(srv, __FILE__, __LINE__, "ss", "fcntl failed: ", strerror(errno));
+			log_perror(con->conf.errh, __FILE__, __LINE__, "fcntl failed");
 			cgi_connection_close(srv, hctx);
 			return -1;
 		}
@@ -978,7 +980,7 @@ SUBREQUEST_FUNC(mod_cgi_handle_subrequest) {
 			 * (occurs here if client sends Transfer-Encoding: chunked
 			 *  and module is flagged to stream request body to backend) */
 			if (-1 == con->request.content_length) {
-				return connection_handle_read_post_error(srv, con, 411);
+				return connection_handle_read_post_error(con, 411);
 			}
 		}
 	}
@@ -1018,13 +1020,19 @@ static handler_t cgi_waitpid_cb(server *srv, void *p_d, pid_t pid, int status) {
         else if (WIFSIGNALED(status)) {
             /* ignore SIGTERM if sent by cgi_connection_close() (NULL == hctx)*/
             if (WTERMSIG(status) != SIGTERM || NULL != hctx) {
-                log_error_write(srv, __FILE__, __LINE__, "sdsd", "CGI pid", pid,
-                                "died with signal", WTERMSIG(status));
+                log_error_st *errh = hctx
+                  ? hctx->remote_conn->conf.errh
+                  : srv->errh;
+                log_error(errh, __FILE__, __LINE__,
+                  "CGI pid %d died with signal %d", pid, WTERMSIG(status));
             }
         }
         else {
-            log_error_write(srv, __FILE__, __LINE__, "sds",
-                            "CGI pid", pid, "ended unexpectedly");
+            log_error_st *errh = hctx
+              ? hctx->remote_conn->conf.errh
+              : srv->errh;
+            log_error(errh, __FILE__, __LINE__,
+              "CGI pid %d ended unexpectedly", pid);
         }
 
         return HANDLER_FINISHED;

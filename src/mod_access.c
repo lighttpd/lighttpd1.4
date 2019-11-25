@@ -104,11 +104,11 @@ __attribute_cold__
 static handler_t mod_access_reject (connection * const con, plugin_data * const p) {
     if (con->conf.log_request_handling) {
         if (p->conf.access_allow && p->conf.access_allow->used)
-            log_error(con->errh, __FILE__, __LINE__,
+            log_error(con->conf.errh, __FILE__, __LINE__,
               "url denied as failed to match any from access_allow %s",
               con->uri.path->ptr);
         else
-            log_error(con->errh, __FILE__, __LINE__,
+            log_error(con->conf.errh, __FILE__, __LINE__,
               "url denied as we match access_deny %s",
               con->uri.path->ptr);
     }
@@ -158,7 +158,7 @@ URIHANDLER_FUNC(mod_access_uri_handler) {
     }
 
     if (con->conf.log_request_handling) {
-        log_error(con->errh, __FILE__, __LINE__,
+        log_error(con->conf.errh, __FILE__, __LINE__,
           "-- mod_access_uri_handler called");
     }
 

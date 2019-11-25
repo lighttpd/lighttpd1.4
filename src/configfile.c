@@ -231,7 +231,7 @@ static int config_burl_normalize_cond (server *srv) {
 
 #if defined(HAVE_MYSQL) || (defined(HAVE_LDAP_H) && defined(HAVE_LBER_H) && defined(HAVE_LIBLDAP) && defined(HAVE_LIBLBER))
 static void config_warn_authn_module (server *srv, const char *module, size_t len) {
-	for (size_t i = 0; i < srv->config_context->used; ++i) {
+	for (uint32_t i = 0; i < srv->config_context->used; ++i) {
 		const data_config *config = (data_config const*)srv->config_context->data[i];
 		const data_unset *du = array_get_element_klen(config->value, CONST_STR_LEN("auth.backend"));
 		if (NULL != du && du->type == TYPE_STRING) {
@@ -240,7 +240,12 @@ static void config_warn_authn_module (server *srv, const char *module, size_t le
 				buffer_copy_string_len(srv->tmp_buf, CONST_STR_LEN("mod_authn_"));
 				buffer_append_string_len(srv->tmp_buf, module, len);
 				array_insert_value(srv->srvconf.modules, CONST_BUF_LEN(srv->tmp_buf));
-				log_error_write(srv, __FILE__, __LINE__, "SSSsSSS", "Warning: please add \"mod_authn_", module, "\" to server.modules list in lighttpd.conf.  A future release of lighttpd 1.4.x will not automatically load mod_authn_", module, "and lighttpd will fail to start up since your lighttpd.conf uses auth.backend = \"", module, "\".");
+				log_error(srv->errh, __FILE__, __LINE__,
+				  "Warning: please add \"mod_authn_%s\" to server.modules list "
+				  "in lighttpd.conf.  A future release of lighttpd 1.4.x will "
+				  "not automatically load mod_authn_%s and lighttpd will fail "
+				  "to start up since your lighttpd.conf uses "
+				  "auth.backend = \"%s\".", module, module, module);
 				return;
 			}
 		}
@@ -250,14 +255,19 @@ static void config_warn_authn_module (server *srv, const char *module, size_t le
 
 #ifdef USE_OPENSSL_CRYPTO
 static void config_warn_openssl_module (server *srv) {
-	for (size_t i = 0; i < srv->config_context->used; ++i) {
+	for (uint32_t i = 0; i < srv->config_context->used; ++i) {
 		const data_config *config = (data_config const*)srv->config_context->data[i];
-		for (size_t j = 0; j < config->value->used; ++j) {
+		for (uint32_t j = 0; j < config->value->used; ++j) {
 			data_unset *du = config->value->data[j];
 			if (0 == strncmp(du->key.ptr, "ssl.", sizeof("ssl.")-1)) {
 				/* mod_openssl should be loaded after mod_extforward */
 				array_insert_value(srv->srvconf.modules, CONST_STR_LEN("mod_openssl"));
-				log_error_write(srv, __FILE__, __LINE__, "S", "Warning: please add \"mod_openssl\" to server.modules list in lighttpd.conf.  A future release of lighttpd 1.4.x *will not* automatically load mod_openssl and lighttpd *will not* use SSL/TLS where your lighttpd.conf contains ssl.* directives");
+				log_error(srv->errh, __FILE__, __LINE__,
+				  "Warning: please add \"mod_openssl\" to server.modules list "
+				  "in lighttpd.conf.  A future release of lighttpd 1.4.x "
+				  "*will not* automatically load mod_openssl and lighttpd "
+				  "*will not* use SSL/TLS where your lighttpd.conf contains "
+				  "ssl.* directives");
 				return;
 			}
 		}
@@ -942,6 +952,7 @@ static int config_insert(server *srv) {
         }
     }
 
+    p->defaults.errh = srv->errh;
     p->defaults.max_keep_alive_requests = 100;
     p->defaults.max_keep_alive_idle = 5;
     p->defaults.max_read_idle = 60;
@@ -1461,7 +1472,7 @@ static int config_tokenizer(server *srv, tokenizer_t *t, int *token_id, buffer *
 		*token_id = tid;
 		return 1;
 	} else if (t->offset < t->size) {
-		log_error_write(srv, __FILE__, __LINE__, "Dsb", tid, ",", token);
+		log_error(srv->errh, __FILE__, __LINE__, "%d, %s", tid, token->ptr);
 	}
 	return 0;
 }
@@ -1524,8 +1535,8 @@ static int config_parse_file_stream(server *srv, config_t *context, const char *
 	stream s;
 
 	if (0 != stream_open(&s, fn)) {
-		log_error(srv->errh, __FILE__, __LINE__,
-		          "opening configfile %s failed: %s", fn, strerror(errno));
+		log_perror(srv->errh, __FILE__, __LINE__,
+		  "opening configfile %s failed", fn);
 		return -1;
 	}
 
@@ -1566,12 +1577,12 @@ int config_parse_file(server *srv, config_t *context, const char *fn) {
 			ret = 0; /* not an error if no files match glob pattern */
 		}
 		else {
-			log_error_write(srv, __FILE__, __LINE__, "sb", "include file not found: ", filename);
+			log_error(srv->errh, __FILE__, __LINE__, "include file not found: %s", filename->ptr);
 		}
 		break;
 	case GLOB_ABORTED:
 	case GLOB_NOSPACE:
-		log_error_write(srv, __FILE__, __LINE__, "sbss", "glob()", filename, "failed:", strerror(errno));
+		log_perror(srv->errh, __FILE__, __LINE__, "glob() %s failed", filename->ptr);
 		break;
 	}
 
@@ -1601,22 +1612,20 @@ int config_parse_cmd(server *srv, config_t *context, const char *cmd) {
 	char oldpwd[PATH_MAX];
 
 	if (NULL == getcwd(oldpwd, sizeof(oldpwd))) {
-		log_error_write(srv, __FILE__, __LINE__, "s",
-			"cannot get cwd", strerror(errno));
+		log_perror(srv->errh, __FILE__, __LINE__, "getcwd()");
 		return -1;
 	}
 
 	if (!buffer_string_is_empty(context->basedir)) {
 		if (0 != chdir(context->basedir->ptr)) {
-			log_error_write(srv, __FILE__, __LINE__, "sbs",
-				"cannot change directory to", context->basedir, strerror(errno));
+			log_perror(srv->errh, __FILE__, __LINE__,
+			  "cannot change directory to %s", context->basedir->ptr);
 			return -1;
 		}
 	}
 
 	if (pipe(fds)) {
-		log_error_write(srv, __FILE__, __LINE__, "ss",
-				"pipe failed: ", strerror(errno));
+		log_perror(srv->errh, __FILE__, __LINE__, "pipe()");
 		ret = -1;
 	}
 	else {
@@ -1631,8 +1640,7 @@ int config_parse_cmd(server *srv, config_t *context, const char *cmd) {
 		fdevent_setfd_cloexec(fds[0]);
 		pid = fdevent_fork_execve(args[0], args, NULL, -1, fds[1], -1, -1);
 		if (-1 == pid) {
-			log_error_write(srv, __FILE__, __LINE__, "SSss",
-					"fork/exec(", cmd, "):", strerror(errno));
+			log_perror(srv->errh, __FILE__, __LINE__, "fork/exec(%s)", cmd);
 			ret = -1;
 		}
 		else {
@@ -1647,21 +1655,20 @@ int config_parse_cmd(server *srv, config_t *context, const char *cmd) {
 				if (rd >= 0) buffer_commit(out, (size_t)rd);
 			} while (rd > 0 || (-1 == rd && errno == EINTR));
 			if (0 != rd) {
-				log_error_write(srv, __FILE__, __LINE__, "SSss",
-						"read \"", cmd, "\" failed:", strerror(errno));
+				log_perror(srv->errh, __FILE__, __LINE__, "read \"%s\"", cmd);
 				ret = -1;
 			}
 			close(fds[0]);
 			fds[0] = -1;
 			while (-1 == (wpid = waitpid(pid, &wstatus, 0)) && errno == EINTR) ;
 			if (wpid != pid) {
-				log_error_write(srv, __FILE__, __LINE__, "SSss",
-						"waitpid \"", cmd, "\" failed:", strerror(errno));
+				log_perror(srv->errh, __FILE__, __LINE__, "waitpid \"%s\"",cmd);
 				ret = -1;
 			}
 			if (0 != wstatus) {
-				log_error_write(srv, __FILE__, __LINE__, "SSsd",
-						"command \"", cmd, "\" exited non-zero:", WEXITSTATUS(wstatus));
+				log_error(srv->errh, __FILE__, __LINE__,
+				  "command \"%s\" exited non-zero: %d",
+				  cmd, WEXITSTATUS(wstatus));
 				ret = -1;
 			}
 
@@ -1675,8 +1682,8 @@ int config_parse_cmd(server *srv, config_t *context, const char *cmd) {
 	}
 
 	if (0 != chdir(oldpwd)) {
-		log_error_write(srv, __FILE__, __LINE__, "sss",
-			"cannot change directory to", oldpwd, strerror(errno));
+		log_perror(srv->errh, __FILE__, __LINE__,
+		  "cannot change directory to %s", oldpwd);
 		ret = -1;
 	}
 	return ret;
@@ -1761,13 +1768,15 @@ int config_set_defaults(server *srv) {
 
 	if (!buffer_string_is_empty(srv->srvconf.changeroot)) {
 		if (-1 == stat(srv->srvconf.changeroot->ptr, &st1)) {
-			log_error_write(srv, __FILE__, __LINE__, "sb",
-					"server.chroot doesn't exist:", srv->srvconf.changeroot);
+			log_error(srv->errh, __FILE__, __LINE__,
+			  "server.chroot doesn't exist: %s",
+			  srv->srvconf.changeroot->ptr);
 			return -1;
 		}
 		if (!S_ISDIR(st1.st_mode)) {
-			log_error_write(srv, __FILE__, __LINE__, "sb",
-					"server.chroot isn't a directory:", srv->srvconf.changeroot);
+			log_error(srv->errh, __FILE__, __LINE__,
+			  "server.chroot isn't a directory: %s",
+			  srv->srvconf.changeroot->ptr);
 			return -1;
 		}
 	}
@@ -1793,11 +1802,11 @@ int config_set_defaults(server *srv) {
 			buffer_string_set_length(b, len); /*(truncate)*/
 			buffer_append_string_buffer(b, &ds->value);
 			if (-1 == stat(b->ptr, &st1)) {
-				log_error_write(srv, __FILE__, __LINE__, "sb",
-					"server.upload-dirs doesn't exist:", b);
+				log_error(srv->errh, __FILE__, __LINE__,
+				  "server.upload-dirs doesn't exist: %s", b->ptr);
 			} else if (!S_ISDIR(st1.st_mode)) {
-				log_error_write(srv, __FILE__, __LINE__, "sb",
-					"server.upload-dirs isn't a directory:", b);
+				log_error(srv->errh, __FILE__, __LINE__,
+				  "server.upload-dirs isn't a directory: %s", b->ptr);
 			}
 		}
 	}
@@ -1807,8 +1816,7 @@ int config_set_defaults(server *srv) {
 		srv->srvconf.upload_temp_file_size);
 
 	if (buffer_string_is_empty(s->document_root)) {
-		log_error_write(srv, __FILE__, __LINE__, "s",
-				"document-root is not set");
+		log_error(srv->errh, __FILE__, __LINE__, "document-root is not set");
 		return -1;
 	}
 

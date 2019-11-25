@@ -852,7 +852,7 @@ webdav_xml_doc_multistatus (connection * const con,
       "</D:multistatus>\n"));
 
     if (pconf->log_xml)
-        log_error(con->errh, __FILE__, __LINE__,
+        log_error(con->conf.errh, __FILE__, __LINE__,
                   "XML-response-body: %.*s", BUFFER_INTLEN_PTR(b));
 
     chunkqueue_append_buffer_commit(con->write_queue);
@@ -881,7 +881,7 @@ webdav_xml_doc_multistatus_response (connection * const con,
       "</D:multistatus>\n"));
 
     if (pconf->log_xml)
-        log_error(con->errh, __FILE__, __LINE__,
+        log_error(con->conf.errh, __FILE__, __LINE__,
                   "XML-response-body: %.*s", BUFFER_INTLEN_PTR(b));
 
     chunkqueue_append_buffer_commit(con->write_queue);
@@ -918,7 +918,7 @@ webdav_xml_doc_lock_acquired (connection * const con,
       "</D:prop>\n"));
 
     if (pconf->log_xml)
-        log_error(con->errh, __FILE__, __LINE__,
+        log_error(con->conf.errh, __FILE__, __LINE__,
                   "XML-response-body: %.*s", BUFFER_INTLEN_PTR(b));
 
     chunkqueue_append_buffer_commit(con->write_queue);
@@ -3411,12 +3411,12 @@ webdav_parse_chunkqueue (connection * const con,
                 switch (errno) {
                   case ENOSYS: case ENODEV: case EINVAL: break;
                   default:
-                    log_perror(con->errh, __FILE__, __LINE__,
+                    log_perror(con->conf.errh, __FILE__, __LINE__,
                                "open() or mmap() '%*.s'",
                                BUFFER_INTLEN_PTR(c->mem));
                 }
                 if (webdav_open_chunk_file_rd(c) < 0) {
-                    log_perror(con->errh, __FILE__, __LINE__,
+                    log_perror(con->conf.errh, __FILE__, __LINE__,
                                "open() '%*.s'",
                                BUFFER_INTLEN_PTR(c->mem));
                     err = XML_IO_UNKNOWN;
@@ -3435,7 +3435,7 @@ webdav_parse_chunkqueue (connection * const con,
                     weHave = (size_t)rd;
                 }
                 else {
-                    log_perror(con->errh, __FILE__, __LINE__,
+                    log_perror(con->conf.errh, __FILE__, __LINE__,
                                "read() '%*.s'",
                                BUFFER_INTLEN_PTR(c->mem));
                     err = XML_IO_UNKNOWN;
@@ -3444,7 +3444,7 @@ webdav_parse_chunkqueue (connection * const con,
             }
         }
         else {
-            log_error(con->errh, __FILE__, __LINE__,
+            log_error(con->conf.errh, __FILE__, __LINE__,
                       "unrecognized chunk type: %d", c->type);
             err = XML_IO_UNKNOWN;
             break;
@@ -3453,11 +3453,11 @@ webdav_parse_chunkqueue (connection * const con,
         if (weHave > weWant) weHave = weWant;
 
         if (pconf->log_xml)
-            log_error(con->errh, __FILE__, __LINE__,
+            log_error(con->conf.errh, __FILE__, __LINE__,
                       "XML-request-body: %.*s", (int)weHave, xmlstr);
 
         if (XML_ERR_OK != (err = xmlParseChunk(ctxt, xmlstr, weHave, 0))) {
-            log_error(con->errh, __FILE__, __LINE__,
+            log_error(con->conf.errh, __FILE__, __LINE__,
                       "xmlParseChunk failed at: %lld %zu %d",
                       (long long int)cq->bytes_out, weHave, err);
             break;
@@ -3478,7 +3478,7 @@ webdav_parse_chunkqueue (connection * const con,
             }
             break;
           default:
-            log_error(con->errh, __FILE__, __LINE__,
+            log_error(con->conf.errh, __FILE__, __LINE__,
                       "xmlParseChunk failed at final packet: %d", err);
             break;
         }
@@ -3794,11 +3794,11 @@ mod_webdav_propfind (connection * const con, const plugin_config * const pconf)
                                    sizeof("Microsoft-WebDAV-MiniRedir/")-1)) {
                 /* workaround Microsoft-WebDAV-MiniRedir bug */
                 /* (MS File Explorer unable to open folder if not redirected) */
-                http_response_redirect_to_directory(pconf->srv, con, 308);
+                http_response_redirect_to_directory(con, 308);
                 return HANDLER_FINISHED;
             }
             /* set "Content-Location" instead of sending 308 redirect to dir */
-            if (!http_response_redirect_to_directory(pconf->srv, con, 0))
+            if (!http_response_redirect_to_directory(con, 0))
                 return HANDLER_FINISHED;
             buffer_append_string_len(con->physical.path,    CONST_STR_LEN("/"));
             buffer_append_string_len(con->physical.rel_path,CONST_STR_LEN("/"));
@@ -3846,7 +3846,7 @@ mod_webdav_propfind (connection * const con, const plugin_config * const pconf)
 
                 if (prop->ns && '\0' == *(char *)prop->ns->href
                              && '\0' != *(char *)prop->ns->prefix) {
-                    log_error(con->errh, __FILE__, __LINE__,
+                    log_error(con->conf.errh, __FILE__, __LINE__,
                               "no name space for: %s", prop->name);
                     /* 422 Unprocessable Entity */
                     http_status_set_error(con, 422);
@@ -3859,7 +3859,7 @@ mod_webdav_propfind (connection * const con, const plugin_config * const pconf)
                 if (pb.proplist.size == pb.proplist.used) {
                     if (pb.proplist.size == 32) {
                         /* arbitrarily chosen limit of 32 */
-                        log_error(con->errh, __FILE__, __LINE__,
+                        log_error(con->conf.errh, __FILE__, __LINE__,
                                   "too many properties in request (> 32)");
                         http_status_set_error(con, 400); /* Bad Request */
                         free(pb.proplist.ptr);
@@ -3945,7 +3945,7 @@ mod_webdav_propfind (connection * const con, const plugin_config * const pconf)
       "</D:multistatus>\n"));
 
     if (pconf->log_xml)
-        log_error(con->errh, __FILE__, __LINE__, "XML-response-body: %.*s",
+        log_error(con->conf.errh, __FILE__, __LINE__, "XML-response-body: %.*s",
                   BUFFER_INTLEN_PTR(pb.b));
 
     http_status_set_fin(con, 207); /* Multi-status */
@@ -3999,7 +3999,7 @@ mod_webdav_delete (connection * const con, const plugin_config * const pconf)
     if (S_ISDIR(st.st_mode)) {
         if (con->physical.path->ptr[con->physical.path->used - 2] != '/') {
           #if 0 /*(issues warning for /usr/bin/litmus copymove test)*/
-            http_response_redirect_to_directory(pconf->srv, con, 308);
+            http_response_redirect_to_directory(con, 308);
             return HANDLER_FINISHED; /* 308 Permanent Redirect */
             /* Alternatively, could append '/' to con->physical.path
              * and con->physical.rel_path, set Content-Location in
@@ -4087,7 +4087,7 @@ mod_webdav_write_cq_first_chunk (connection * const con, chunkqueue * const cq,
             switch (errno) {
               case ENOSYS: case ENODEV: case EINVAL: break;
               default:
-                log_perror(con->errh, __FILE__, __LINE__,
+                log_perror(con->conf.errh, __FILE__, __LINE__,
                            "open() or mmap() '%*.s'",
                            BUFFER_INTLEN_PTR(c->mem));
             }
@@ -4112,7 +4112,7 @@ mod_webdav_write_cq_first_chunk (connection * const con, chunkqueue * const cq,
                 break;
             }
             else {
-                log_perror(con->errh, __FILE__, __LINE__,
+                log_perror(con->conf.errh, __FILE__, __LINE__,
                            "read() '%*.s'",
                            BUFFER_INTLEN_PTR(c->mem));
                 http_status_set_error(con, 500); /* Internal Server Error */
@@ -4749,7 +4749,7 @@ mod_webdav_copymove_b (connection * const con, const plugin_config * const pconf
 
     if (S_ISDIR(st.st_mode)) {
         if (con->physical.path->ptr[con->physical.path->used - 2] != '/') {
-            http_response_redirect_to_directory(pconf->srv, con, 308);
+            http_response_redirect_to_directory(con, 308);
             return HANDLER_FINISHED; /* 308 Permanent Redirect */
             /* Alternatively, could append '/' to con->physical.path
              * and con->physical.rel_path, set Content-Location in
@@ -4986,11 +4986,11 @@ mod_webdav_proppatch (connection * const con, const plugin_config * const pconf)
                 /* workaround Microsoft-WebDAV-MiniRedir bug */
                 /* (might not be necessary for PROPPATCH here,
                  *  but match behavior in mod_webdav_propfind() for PROPFIND) */
-                http_response_redirect_to_directory(pconf->srv, con, 308);
+                http_response_redirect_to_directory(con, 308);
                 return HANDLER_FINISHED;
             }
             /* set "Content-Location" instead of sending 308 redirect to dir */
-            if (!http_response_redirect_to_directory(pconf->srv, con, 0))
+            if (!http_response_redirect_to_directory(con, 0))
                 return HANDLER_FINISHED;
             buffer_append_string_len(con->physical.path,    CONST_STR_LEN("/"));
             buffer_append_string_len(con->physical.rel_path,CONST_STR_LEN("/"));
@@ -5051,7 +5051,7 @@ mod_webdav_proppatch (connection * const con, const plugin_config * const pconf)
             if (prop->ns && '\0' == *(char *)prop->ns->href
                          && '\0' != *(char *)prop->ns->prefix) {
                 /* error: missing namespace for property */
-                log_error(con->errh, __FILE__, __LINE__,
+                log_error(con->conf.errh, __FILE__, __LINE__,
                           "no namespace for: %s", prop->name);
                 if (!ms) ms = buffer_init();      /* Unprocessable Entity */
                 webdav_xml_propstat_status(ms, "", (char *)prop->name, 422);
@@ -5388,7 +5388,7 @@ mod_webdav_lock (connection * const con, const plugin_config * const pconf)
         else if (S_ISDIR(st.st_mode)) {
             if (con->physical.path->ptr[con->physical.path->used - 2] != '/') {
                 /* 308 Permanent Redirect */
-                http_response_redirect_to_directory(pconf->srv, con, 308);
+                http_response_redirect_to_directory(con, 308);
                 break; /* clean up resources and return HANDLER_FINISHED */
                 /* Alternatively, could append '/' to con->physical.path
                  * and con->physical.rel_path, set Content-Location in

@@ -204,6 +204,7 @@ typedef struct {
 	buffer *output;
 	plugin_data *plugin_data;
 	int compression_type;
+	log_error_st *errh;
 } handler_ctx;
 
 static handler_ctx *handler_ctx_init() {
@@ -442,9 +443,9 @@ SETDEFAULTS_FUNC(mod_deflate_set_defaults) {
 
 
 #if defined(USE_ZLIB) || defined(USE_BZ2LIB)
-static int stream_http_chunk_append_mem(server *srv, connection *con, handler_ctx *hctx, size_t len) {
+static int stream_http_chunk_append_mem(connection *con, handler_ctx *hctx, size_t len) {
 	/* future: might also write stream to hctx temporary file in compressed file cache */
-	return http_chunk_append_mem(srv, con, hctx->output->ptr, len);
+	return http_chunk_append_mem(con, hctx->output->ptr, len);
 }
 #endif
 
@@ -478,7 +479,7 @@ static int stream_deflate_init(handler_ctx *hctx) {
 	return 0;
 }
 
-static int stream_deflate_compress(server *srv, connection *con, handler_ctx *hctx, unsigned char *start, off_t st_size) {
+static int stream_deflate_compress(connection *con, handler_ctx *hctx, unsigned char *start, off_t st_size) {
 	z_stream * const z = &(hctx->u.z);
 	size_t len;
 
@@ -493,7 +494,7 @@ static int stream_deflate_compress(server *srv, connection *con, handler_ctx *hc
 		if (z->avail_out == 0 || z->avail_in > 0) {
 			len = hctx->output->size - z->avail_out;
 			hctx->bytes_out += len;
-			stream_http_chunk_append_mem(srv, con, hctx, len);
+			stream_http_chunk_append_mem(con, hctx, len);
 			z->next_out = (unsigned char *)hctx->output->ptr;
 			z->avail_out = hctx->output->size;
 		}
@@ -502,7 +503,7 @@ static int stream_deflate_compress(server *srv, connection *con, handler_ctx *hc
 	return 0;
 }
 
-static int stream_deflate_flush(server *srv, connection *con, handler_ctx *hctx, int end) {
+static int stream_deflate_flush(connection *con, handler_ctx *hctx, int end) {
 	z_stream * const z = &(hctx->u.z);
 	const plugin_data *p = hctx->plugin_data;
 	size_t len;
@@ -532,7 +533,7 @@ static int stream_deflate_flush(server *srv, connection *con, handler_ctx *hctx,
 		len = hctx->output->size - z->avail_out;
 		if (z->avail_out == 0 || (len > 0 && (end || p->conf.sync_flush))) {
 			hctx->bytes_out += len;
-			stream_http_chunk_append_mem(srv, con, hctx, len);
+			stream_http_chunk_append_mem(con, hctx, len);
 			z->next_out = (unsigned char *)hctx->output->ptr;
 			z->avail_out = hctx->output->size;
 		}
@@ -541,17 +542,17 @@ static int stream_deflate_flush(server *srv, connection *con, handler_ctx *hctx,
 	return 0;
 }
 
-static int stream_deflate_end(server *srv, handler_ctx *hctx) {
+static int stream_deflate_end(handler_ctx *hctx) {
 	z_stream * const z = &(hctx->u.z);
 	int rc = deflateEnd(z);
 	if (Z_OK == rc || Z_DATA_ERROR == rc) return 0;
 
 	if (z->msg != NULL) {
-		log_error_write(srv, __FILE__, __LINE__, "sdss",
-				"deflateEnd error ret=", rc, ", msg=", z->msg);
+		log_error(hctx->errh, __FILE__, __LINE__,
+		  "deflateEnd error ret=%d, msg=%s", rc, z->msg);
 	} else {
-		log_error_write(srv, __FILE__, __LINE__, "sd",
-				"deflateEnd error ret=", rc);
+		log_error(hctx->errh, __FILE__, __LINE__,
+		  "deflateEnd error ret=%d", rc);
 	}
 	return -1;
 }
@@ -586,7 +587,7 @@ static int stream_bzip2_init(handler_ctx *hctx) {
 	return 0;
 }
 
-static int stream_bzip2_compress(server *srv, connection *con, handler_ctx *hctx, unsigned char *start, off_t st_size) {
+static int stream_bzip2_compress(connection *con, handler_ctx *hctx, unsigned char *start, off_t st_size) {
 	bz_stream * const bz = &(hctx->u.bz);
 	size_t len;
 
@@ -601,7 +602,7 @@ static int stream_bzip2_compress(server *srv, connection *con, handler_ctx *hctx
 		if (bz->avail_out == 0 || bz->avail_in > 0) {
 			len = hctx->output->size - bz->avail_out;
 			hctx->bytes_out += len;
-			stream_http_chunk_append_mem(srv, con, hctx, len);
+			stream_http_chunk_append_mem(con, hctx, len);
 			bz->next_out = hctx->output->ptr;
 			bz->avail_out = hctx->output->size;
 		}
@@ -610,7 +611,7 @@ static int stream_bzip2_compress(server *srv, connection *con, handler_ctx *hctx
 	return 0;
 }
 
-static int stream_bzip2_flush(server *srv, connection *con, handler_ctx *hctx, int end) {
+static int stream_bzip2_flush(connection *con, handler_ctx *hctx, int end) {
 	bz_stream * const bz = &(hctx->u.bz);
 	const plugin_data *p = hctx->plugin_data;
 	size_t len;
@@ -640,7 +641,7 @@ static int stream_bzip2_flush(server *srv, connection *con, handler_ctx *hctx, i
 		len = hctx->output->size - bz->avail_out;
 		if (bz->avail_out == 0 || (len > 0 && (end || p->conf.sync_flush))) {
 			hctx->bytes_out += len;
-			stream_http_chunk_append_mem(srv, con, hctx, len);
+			stream_http_chunk_append_mem(con, hctx, len);
 			bz->next_out = hctx->output->ptr;
 			bz->avail_out = hctx->output->size;
 		}
@@ -649,13 +650,13 @@ static int stream_bzip2_flush(server *srv, connection *con, handler_ctx *hctx, i
 	return 0;
 }
 
-static int stream_bzip2_end(server *srv, handler_ctx *hctx) {
+static int stream_bzip2_end(handler_ctx *hctx) {
 	bz_stream * const bz = &(hctx->u.bz);
 	int rc = BZ2_bzCompressEnd(bz);
 	if (BZ_OK == rc || BZ_DATA_ERROR == rc) return 0;
 
-	log_error_write(srv, __FILE__, __LINE__, "sd",
-			"BZ2_bzCompressEnd error ret=", rc);
+	log_error(hctx->errh, __FILE__, __LINE__,
+	  "BZ2_bzCompressEnd error ret=%d", rc);
 	return -1;
 }
 
@@ -678,47 +679,45 @@ static int mod_deflate_stream_init(handler_ctx *hctx) {
 	}
 }
 
-static int mod_deflate_compress(server *srv, connection *con, handler_ctx *hctx, unsigned char *start, off_t st_size) {
+static int mod_deflate_compress(connection *con, handler_ctx *hctx, unsigned char *start, off_t st_size) {
 	if (0 == st_size) return 0;
 	switch(hctx->compression_type) {
 #ifdef USE_ZLIB
 	case HTTP_ACCEPT_ENCODING_GZIP:
 	case HTTP_ACCEPT_ENCODING_DEFLATE:
-		return stream_deflate_compress(srv, con, hctx, start, st_size);
+		return stream_deflate_compress(con, hctx, start, st_size);
 #endif
 #ifdef USE_BZ2LIB
 	case HTTP_ACCEPT_ENCODING_BZIP2:
-		return stream_bzip2_compress(srv, con, hctx, start, st_size);
+		return stream_bzip2_compress(con, hctx, start, st_size);
 #endif
 	default:
-		UNUSED(srv);
 		UNUSED(con);
 		UNUSED(start);
 		return -1;
 	}
 }
 
-static int mod_deflate_stream_flush(server *srv, connection *con, handler_ctx *hctx, int end) {
+static int mod_deflate_stream_flush(connection *con, handler_ctx *hctx, int end) {
 	if (0 == hctx->bytes_in) return 0;
 	switch(hctx->compression_type) {
 #ifdef USE_ZLIB
 	case HTTP_ACCEPT_ENCODING_GZIP:
 	case HTTP_ACCEPT_ENCODING_DEFLATE:
-		return stream_deflate_flush(srv, con, hctx, end);
+		return stream_deflate_flush(con, hctx, end);
 #endif
 #ifdef USE_BZ2LIB
 	case HTTP_ACCEPT_ENCODING_BZIP2:
-		return stream_bzip2_flush(srv, con, hctx, end);
+		return stream_bzip2_flush(con, hctx, end);
 #endif
 	default:
-		UNUSED(srv);
 		UNUSED(con);
 		UNUSED(end);
 		return -1;
 	}
 }
 
-static void mod_deflate_note_ratio(server *srv, connection *con, handler_ctx *hctx) {
+static void mod_deflate_note_ratio(connection *con, handler_ctx *hctx) {
     /* store compression ratio in environment
      * for possible logging by mod_accesslog
      * (late in response handling, so not seen by most other modules) */
@@ -727,38 +726,37 @@ static void mod_deflate_note_ratio(server *srv, connection *con, handler_ctx *hc
     if (0 == hctx->bytes_in) return;
     li_itostrn(ratio, sizeof(ratio), hctx->bytes_out * 100 / hctx->bytes_in);
     http_header_env_set(con, CONST_STR_LEN("ratio"), ratio, strlen(ratio));
-    UNUSED(srv);
 }
 
-static int mod_deflate_stream_end(server *srv, handler_ctx *hctx) {
+static int mod_deflate_stream_end(handler_ctx *hctx) {
 	switch(hctx->compression_type) {
 #ifdef USE_ZLIB
 	case HTTP_ACCEPT_ENCODING_GZIP:
 	case HTTP_ACCEPT_ENCODING_DEFLATE:
-		return stream_deflate_end(srv, hctx);
+		return stream_deflate_end(hctx);
 #endif
 #ifdef USE_BZ2LIB
 	case HTTP_ACCEPT_ENCODING_BZIP2:
-		return stream_bzip2_end(srv, hctx);
+		return stream_bzip2_end(hctx);
 #endif
 	default:
-		UNUSED(srv);
 		return -1;
 	}
 }
 
-static void deflate_compress_cleanup(server *srv, connection *con, handler_ctx *hctx) {
+static void deflate_compress_cleanup(connection *con, handler_ctx *hctx) {
 	const plugin_data *p = hctx->plugin_data;
 	con->plugin_ctx[p->id] = NULL;
 
-	if (0 != mod_deflate_stream_end(srv, hctx)) {
-		log_error_write(srv, __FILE__, __LINE__, "s", "error closing stream");
+	if (0 != mod_deflate_stream_end(hctx)) {
+		log_error(con->conf.errh, __FILE__, __LINE__, "error closing stream");
 	}
 
       #if 1 /* unnecessary if deflate.min-compress-size is set to a reasonable value */
 	if (hctx->bytes_in < hctx->bytes_out) {
-		log_error_write(srv, __FILE__, __LINE__, "sbsdsd",
-				"uri ", con->uri.path_raw, " in=", hctx->bytes_in, " smaller than out=", hctx->bytes_out);
+		log_error(con->conf.errh, __FILE__, __LINE__,
+		  "uri %s in=%lld smaller than out=%lld", con->uri.path_raw->ptr,
+		  (long long)hctx->bytes_in, (long long)hctx->bytes_out);
 	}
       #endif
 
@@ -766,7 +764,7 @@ static void deflate_compress_cleanup(server *srv, connection *con, handler_ctx *
 }
 
 
-static int mod_deflate_file_chunk(server *srv, connection *con, handler_ctx *hctx, chunk *c, off_t st_size) {
+static int mod_deflate_file_chunk(connection *con, handler_ctx *hctx, chunk *c, off_t st_size) {
 	off_t abs_offset;
 	off_t toSend = -1;
 	char *start;
@@ -780,8 +778,7 @@ static int mod_deflate_file_chunk(server *srv, connection *con, handler_ctx *hct
 
 	if (-1 == c->file.fd) {  /* open the file if not already open */
 		if (-1 == (c->file.fd = fdevent_open_cloexec(c->mem->ptr, con->conf.follow_symlink, O_RDONLY, 0))) {
-			log_error_write(srv, __FILE__, __LINE__, "sbs", "open failed for:", c->mem, strerror(errno));
-
+			log_perror(con->conf.errh, __FILE__, __LINE__, "open failed %s", c->mem->ptr);
 			return -1;
 		}
 	}
@@ -840,8 +837,8 @@ static int mod_deflate_file_chunk(server *srv, connection *con, handler_ctx *hct
 
 		if (MAP_FAILED == (c->file.mmap.start = mmap(0, (size_t)to_mmap, PROT_READ, MAP_SHARED, c->file.fd, c->file.mmap.offset))
 		    && (errno != EINVAL || MAP_FAILED == (c->file.mmap.start = mmap(0, (size_t)to_mmap, PROT_READ, MAP_PRIVATE, c->file.fd, c->file.mmap.offset)))) {
-			log_error_write(srv, __FILE__, __LINE__, "ssbd", "mmap failed:",
-					strerror(errno), c->mem, c->file.fd);
+			log_perror(con->conf.errh, __FILE__, __LINE__,
+			  "mmap failed %s %d", c->mem->ptr, c->file.fd);
 
 			return -1;
 		}
@@ -851,8 +848,8 @@ static int mod_deflate_file_chunk(server *srv, connection *con, handler_ctx *hct
 		/* don't advise files < 64Kb */
 		if (c->file.mmap.length > (64 KByte) &&
 		    0 != madvise(c->file.mmap.start, c->file.mmap.length, MADV_WILLNEED)) {
-			log_error_write(srv, __FILE__, __LINE__, "ssbd", "madvise failed:",
-					strerror(errno), c->mem, c->file.fd);
+			log_perror(con->conf.errh, __FILE__, __LINE__,
+			  "madvise failed %s %d", c->mem->ptr, c->file.fd);
 		}
 #endif
 
@@ -864,12 +861,12 @@ static int mod_deflate_file_chunk(server *srv, connection *con, handler_ctx *hct
 	if (toSend > we_want_to_send) toSend = we_want_to_send;
 
 	if (toSend < 0) {
-		log_error_write(srv, __FILE__, __LINE__, "soooo",
-				"toSend is negative:",
-				toSend,
-				c->file.mmap.length,
-				abs_offset,
-				c->file.mmap.offset);
+		log_error(con->conf.errh, __FILE__, __LINE__,
+		  "toSend is negative: %lld %lld %lld %lld",
+		  (long long)toSend,
+		  (long long)c->file.mmap.length,
+		  (long long)abs_offset,
+		  (long long)c->file.mmap.offset);
 		force_assert(toSend < 0);
 	}
 
@@ -881,7 +878,7 @@ static int mod_deflate_file_chunk(server *srv, connection *con, handler_ctx *hct
 		toSend = st_size;
 		if (toSend > 2 MByte) toSend = 2 MByte;
 		if (NULL == (start = malloc((size_t)toSend)) || -1 == lseek(c->file.fd, abs_offset, SEEK_SET) || toSend != read(c->file.fd, start, (size_t)toSend)) {
-			log_error_write(srv, __FILE__, __LINE__, "sbss", "reading", c->mem, "failed:", strerror(errno));
+			log_perror(con->conf.errh, __FILE__, __LINE__, "reading %s failed", c->mem->ptr);
 
 			free(start);
 			return -1;
@@ -896,17 +893,16 @@ static int mod_deflate_file_chunk(server *srv, connection *con, handler_ctx *hct
 		if (0 != sigsetjmp(sigbus_jmp, 1)) {
 			sigbus_jmp_valid = 0;
 
-			log_error_write(srv, __FILE__, __LINE__, "sbd", "SIGBUS in mmap:",
-					c->mem, c->file.fd);
+			log_error(con->conf.errh, __FILE__, __LINE__,
+			  "SIGBUS in mmap: %s %d", c->mem->ptr, c->file.fd);
 			return -1;
 		}
 	}
 #endif
 
-	if (mod_deflate_compress(srv, con, hctx,
+	if (mod_deflate_compress(con, hctx,
 				(unsigned char *)start + (abs_offset - c->file.mmap.offset), toSend) < 0) {
-		log_error_write(srv, __FILE__, __LINE__, "s",
-				"compress failed.");
+		log_error(con->conf.errh, __FILE__, __LINE__, "compress failed.");
 		toSend = -1;
 	}
 
@@ -921,7 +917,7 @@ static int mod_deflate_file_chunk(server *srv, connection *con, handler_ctx *hct
 }
 
 
-static handler_t deflate_compress_response(server *srv, connection *con, handler_ctx *hctx) {
+static handler_t deflate_compress_response(connection *con, handler_ctx *hctx) {
 	off_t len, max;
 	int close_stream;
 
@@ -949,23 +945,21 @@ static handler_t deflate_compress_response(server *srv, connection *con, handler
 		case MEM_CHUNK:
 			len = buffer_string_length(c->mem) - c->offset;
 			if (len > max) len = max;
-			if (mod_deflate_compress(srv, con, hctx, (unsigned char *)c->mem->ptr+c->offset, len) < 0) {
-				log_error_write(srv, __FILE__, __LINE__, "s",
-						"compress failed.");
+			if (mod_deflate_compress(con, hctx, (unsigned char *)c->mem->ptr+c->offset, len) < 0) {
+				log_error(con->conf.errh, __FILE__, __LINE__, "compress failed.");
 				return HANDLER_ERROR;
 			}
 			break;
 		case FILE_CHUNK:
 			len = c->file.length - c->offset;
 			if (len > max) len = max;
-			if ((len = mod_deflate_file_chunk(srv, con, hctx, c, len)) < 0) {
-				log_error_write(srv, __FILE__, __LINE__, "s",
-						"compress file chunk failed.");
+			if ((len = mod_deflate_file_chunk(con, hctx, c, len)) < 0) {
+				log_error(con->conf.errh, __FILE__, __LINE__, "compress file chunk failed.");
 				return HANDLER_ERROR;
 			}
 			break;
 		default:
-			log_error_write(srv, __FILE__, __LINE__, "ds", c, "type not known");
+			log_error(con->conf.errh, __FILE__, __LINE__, "%d type not known", c->type);
 			return HANDLER_ERROR;
 		}
 
@@ -976,8 +970,8 @@ static handler_t deflate_compress_response(server *srv, connection *con, handler
 	/*(currently should always be true)*/
 	/*(current implementation requires response be complete)*/
 	close_stream = (con->file_finished && chunkqueue_is_empty(hctx->in_queue));
-	if (mod_deflate_stream_flush(srv, con, hctx, close_stream) < 0) {
-		log_error_write(srv, __FILE__, __LINE__, "s", "flush error");
+	if (mod_deflate_stream_flush(con, hctx, close_stream) < 0) {
+		log_error(con->conf.errh, __FILE__, __LINE__, "flush error");
 		return HANDLER_ERROR;
 	}
 
@@ -1224,14 +1218,15 @@ CONNECTION_FUNC(mod_deflate_handle_response_start) {
 	hctx = handler_ctx_init();
 	hctx->plugin_data = p;
 	hctx->compression_type = compression_type;
+	hctx->errh = con->conf.errh;
 	/* setup output buffer */
 	buffer_clear(&p->tmp_buf);
 	hctx->output = &p->tmp_buf;
 	if (0 != mod_deflate_stream_init(hctx)) {
 		/*(should not happen unless ENOMEM)*/
 		handler_ctx_free(hctx);
-		log_error_write(srv, __FILE__, __LINE__, "ss",
-				"Failed to initialize compression", label);
+		log_error(con->conf.errh, __FILE__, __LINE__,
+		  "Failed to initialize compression %s", label);
 		/* restore prior Etag and unset Content-Encoding */
 		if (etaglen) {
 			vb->ptr[etaglen-1] = '"'; /*(overwrite '-')*/
@@ -1246,12 +1241,12 @@ CONNECTION_FUNC(mod_deflate_handle_response_start) {
 	}
 	con->plugin_ctx[p->id] = hctx;
 
-	rc = deflate_compress_response(srv, con, hctx);
+	rc = deflate_compress_response(con, hctx);
 	if (HANDLER_GO_ON != rc) {
 		if (HANDLER_FINISHED == rc) {
-			mod_deflate_note_ratio(srv, con, hctx);
+			mod_deflate_note_ratio(con, hctx);
 		}
-		deflate_compress_cleanup(srv, con, hctx);
+		deflate_compress_cleanup(con, hctx);
 		if (HANDLER_ERROR == rc) return HANDLER_ERROR;
 	}
 
@@ -1262,8 +1257,9 @@ static handler_t mod_deflate_cleanup(server *srv, connection *con, void *p_d) {
 	plugin_data *p = p_d;
 	handler_ctx *hctx = con->plugin_ctx[p->id];
 
-	if (NULL != hctx) deflate_compress_cleanup(srv, con, hctx);
+	if (NULL != hctx) deflate_compress_cleanup(con, hctx);
 
+	UNUSED(srv);
 	return HANDLER_GO_ON;
 }
 

@@ -113,6 +113,7 @@ static off_t get_param_value(buffer *qb, const char *m, size_t mlen) {
 
 URIHANDLER_FUNC(mod_flv_streaming_path_handler) {
 	plugin_data *p = p_d;
+	UNUSED(srv);
 
 	if (con->mode != DIRECT) return HANDLER_GO_ON;
 	if (buffer_string_is_empty(con->physical.path)) return HANDLER_GO_ON;
@@ -140,8 +141,8 @@ URIHANDLER_FUNC(mod_flv_streaming_path_handler) {
 			 * otherwise send rest of file, starting from start */
 
 			/* let's build a flv header */
-			http_chunk_append_mem(srv, con, CONST_STR_LEN("FLV\x1\x1\0\0\0\x9\0\0\0\x9"));
-			if (0 != http_chunk_append_file_range(srv, con, con->physical.path, start, len)) {
+			http_chunk_append_mem(con, CONST_STR_LEN("FLV\x1\x1\0\0\0\x9\0\0\0\x9"));
+			if (0 != http_chunk_append_file_range(con, con->physical.path, start, len)) {
 				chunkqueue_reset(con->write_queue);
 				return HANDLER_GO_ON;
 			}

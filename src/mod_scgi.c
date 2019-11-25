@@ -1,7 +1,6 @@
 #include "first.h"
 
 #include <sys/types.h>
-#include <errno.h>
 #include <limits.h>
 #include <stdlib.h>
 #include <string.h>
@@ -231,7 +230,7 @@ static handler_t scgi_create_env(server *srv, handler_ctx *hctx) {
 	 * currently limited to 64k (65535, so 5 chars) */
 	buffer_copy_string_len(b, CONST_STR_LEN("          "));
 
-	if (0 != http_cgi_headers(srv, con, &opts, scgi_env_add, b)) {
+	if (0 != http_cgi_headers(con, &opts, scgi_env_add, b)) {
 		con->http_status = 400;
 		con->mode = DIRECT;
 		buffer_clear(b);

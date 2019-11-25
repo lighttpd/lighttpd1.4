@@ -7,13 +7,12 @@
 #include "log.h"
 #include "plugin.h"
 
-#include <errno.h>
 #include <stdlib.h>
 #include <string.h>
 
 typedef struct {
     LDAP *ldap;
-    server *srv;
+    log_error_st *errh;
     const char *auth_ldap_hostname;
     const char *auth_ldap_binddn;
     const char *auth_ldap_bindpw;
@@ -42,7 +41,7 @@ typedef struct {
     buffer ldap_filter;
 } plugin_data;
 
-static handler_t mod_authn_ldap_basic(server *srv, connection *con, void *p_d, const http_auth_require_t *require, const buffer *username, const char *pw);
+static handler_t mod_authn_ldap_basic(connection *con, void *p_d, const http_auth_require_t *require, const buffer *username, const char *pw);
 
 INIT_FUNC(mod_authn_ldap_init) {
     static http_auth_backend_t http_auth_backend_ldap =
@@ -218,7 +217,7 @@ SETDEFAULTS_FUNC(mod_authn_ldap_set_defaults) {
                     mod_authn_add_scheme(srv, b);
                     ldc = malloc(sizeof(plugin_config_ldap));
                     force_assert(ldc);
-                    ldc->srv = srv;
+                    ldc->errh = srv->errh;
                     ldc->auth_ldap_hostname = b->ptr;
                     cpv->v.v = ldc;
                 }
@@ -308,17 +307,17 @@ SETDEFAULTS_FUNC(mod_authn_ldap_set_defaults) {
 }
 
 __attribute_cold__
-static void mod_authn_ldap_err(server *srv, const char *file, unsigned long line, const char *fn, int err)
+static void mod_authn_ldap_err(log_error_st *errh, const char *file, unsigned long line, const char *fn, int err)
 {
-    log_error_write(srv,file,line,"sSss","ldap:",fn,":",ldap_err2string(err));
+    log_error(errh, file, line, "ldap: %s: %s", fn, ldap_err2string(err));
 }
 
 __attribute_cold__
-static void mod_authn_ldap_opt_err(server *srv, const char *file, unsigned long line, const char *fn, LDAP *ld)
+static void mod_authn_ldap_opt_err(log_error_st *errh, const char *file, unsigned long line, const char *fn, LDAP *ld)
 {
     int err;
     ldap_get_option(ld, LDAP_OPT_ERROR_NUMBER, &err);
-    mod_authn_ldap_err(srv, file, line, fn, err);
+    mod_authn_ldap_err(errh, file, line, fn, err);
 }
 
 static void mod_authn_append_ldap_dn_escape(buffer * const filter, const buffer * const raw) {
@@ -452,22 +451,21 @@ static void mod_authn_append_ldap_filter_escape(buffer * const filter, const buf
     }
 }
 
-static LDAP * mod_authn_ldap_host_init(server *srv, plugin_config_ldap *s) {
+static LDAP * mod_authn_ldap_host_init(log_error_st *errh, plugin_config_ldap *s) {
     LDAP *ld;
     int ret;
 
     if (NULL == s->auth_ldap_hostname) return NULL;
 
     if (LDAP_SUCCESS != ldap_initialize(&ld, s->auth_ldap_hostname)) {
-        log_error_write(srv, __FILE__, __LINE__, "sss", "ldap:",
-                        "ldap_initialize():", strerror(errno));
+        log_perror(errh, __FILE__, __LINE__, "ldap: ldap_initialize()");
         return NULL;
     }
 
     ret = LDAP_VERSION3;
     ret = ldap_set_option(ld, LDAP_OPT_PROTOCOL_VERSION, &ret);
     if (LDAP_OPT_SUCCESS != ret) {
-        mod_authn_ldap_err(srv, __FILE__, __LINE__, "ldap_set_option()", ret);
+        mod_authn_ldap_err(errh, __FILE__, __LINE__, "ldap_set_option()", ret);
         ldap_destroy(ld);
         return NULL;
     }
@@ -482,7 +480,7 @@ static LDAP * mod_authn_ldap_host_init(server *srv, plugin_config_ldap *s) {
             ret = ldap_set_option(NULL, LDAP_OPT_X_TLS_CACERTFILE,
                                   s->auth_ldap_cafile);
             if (LDAP_OPT_SUCCESS != ret) {
-                mod_authn_ldap_err(srv, __FILE__, __LINE__,
+                mod_authn_ldap_err(errh, __FILE__, __LINE__,
                                    "ldap_set_option(LDAP_OPT_X_TLS_CACERTFILE)",
                                    ret);
                 ldap_destroy(ld);
@@ -492,7 +490,7 @@ static LDAP * mod_authn_ldap_host_init(server *srv, plugin_config_ldap *s) {
 
         ret = ldap_start_tls_s(ld, NULL,  NULL);
         if (LDAP_OPT_SUCCESS != ret) {
-            mod_authn_ldap_err(srv,__FILE__,__LINE__,"ldap_start_tls_s()",ret);
+            mod_authn_ldap_err(errh,__FILE__,__LINE__,"ldap_start_tls_s()",ret);
             ldap_destroy(ld);
             return NULL;
         }
@@ -501,7 +499,7 @@ static LDAP * mod_authn_ldap_host_init(server *srv, plugin_config_ldap *s) {
     return ld;
 }
 
-static int mod_authn_ldap_bind(server *srv, LDAP *ld, const char *dn, const char *pw) {
+static int mod_authn_ldap_bind(log_error_st *errh, LDAP *ld, const char *dn, const char *pw) {
     struct berval creds;
     int ret;
 
@@ -517,7 +515,7 @@ static int mod_authn_ldap_bind(server *srv, LDAP *ld, const char *dn, const char
 
     ret = ldap_sasl_bind_s(ld,dn,LDAP_SASL_SIMPLE,&creds,NULL,NULL,NULL);
     if (ret != LDAP_SUCCESS) {
-        mod_authn_ldap_err(srv, __FILE__, __LINE__, "ldap_sasl_bind_s()", ret);
+        mod_authn_ldap_err(errh, __FILE__, __LINE__, "ldap_sasl_bind_s()", ret);
     }
 
     return ret;
@@ -529,13 +527,13 @@ static int mod_authn_ldap_rebind_proc (LDAP *ld, LDAP_CONST char *url, ber_tag_t
     UNUSED(ldap_request);
     UNUSED(msgid);
     return s->auth_ldap_binddn
-      ? mod_authn_ldap_bind(s->srv, ld,
+      ? mod_authn_ldap_bind(s->errh, ld,
                             s->auth_ldap_binddn,
                             s->auth_ldap_bindpw)
-      : mod_authn_ldap_bind(s->srv, ld, NULL, NULL);
+      : mod_authn_ldap_bind(s->errh, ld, NULL, NULL);
 }
 
-static LDAPMessage * mod_authn_ldap_search(server *srv, plugin_config_ldap *s, const char *base, const char *filter) {
+static LDAPMessage * mod_authn_ldap_search(log_error_st *errh, plugin_config_ldap *s, const char *base, const char *filter) {
     LDAPMessage *lm = NULL;
     char *attrs[] = { LDAP_NO_ATTRS, NULL };
     int ret;
@@ -564,7 +562,7 @@ static LDAPMessage * mod_authn_ldap_search(server *srv, plugin_config_ldap *s, c
         ldap_unbind_ext_s(s->ldap, NULL, NULL);
     }
 
-    s->ldap = mod_authn_ldap_host_init(srv, s);
+    s->ldap = mod_authn_ldap_host_init(errh, s);
     if (NULL == s->ldap) {
         return NULL;
     }
@@ -580,8 +578,8 @@ static LDAPMessage * mod_authn_ldap_search(server *srv, plugin_config_ldap *s, c
     ret = ldap_search_ext_s(s->ldap, base, LDAP_SCOPE_SUBTREE, filter,
                             attrs, 0, NULL, NULL, NULL, 0, &lm);
     if (LDAP_SUCCESS != ret) {
-        log_error_write(srv, __FILE__, __LINE__, "sSss",
-                        "ldap:", ldap_err2string(ret), "; filter:", filter);
+        log_error(errh, __FILE__, __LINE__,
+          "ldap: %s; filter: %s", ldap_err2string(ret), filter);
         ldap_unbind_ext_s(s->ldap, NULL, NULL);
         s->ldap = NULL;
         return NULL;
@@ -590,13 +588,13 @@ static LDAPMessage * mod_authn_ldap_search(server *srv, plugin_config_ldap *s, c
     return lm;
 }
 
-static char * mod_authn_ldap_get_dn(server *srv, plugin_config_ldap *s, const char *base, const char *filter) {
+static char * mod_authn_ldap_get_dn(log_error_st *errh, plugin_config_ldap *s, const char *base, const char *filter) {
     LDAP *ld;
     LDAPMessage *lm, *first;
     char *dn;
     int count;
 
-    lm = mod_authn_ldap_search(srv, s, base, filter);
+    lm = mod_authn_ldap_search(errh, s, base, filter);
     if (NULL == lm) {
         return NULL;
     }
@@ -608,19 +606,19 @@ static char * mod_authn_ldap_get_dn(server *srv, plugin_config_ldap *s, const ch
         ldap_msgfree(lm);
         return NULL;
     } else if (count > 1) {
-        log_error_write(srv, __FILE__, __LINE__, "sss",
-                        "ldap:", "more than one record returned.  "
-                        "you might have to refine the filter:", filter);
+        log_error(errh, __FILE__, __LINE__,
+          "ldap: more than one record returned.  "
+          "you might have to refine the filter: %s", filter);
     }
 
     if (NULL == (first = ldap_first_entry(ld, lm))) {
-        mod_authn_ldap_opt_err(srv,__FILE__,__LINE__,"ldap_first_entry()",ld);
+        mod_authn_ldap_opt_err(errh,__FILE__,__LINE__,"ldap_first_entry()",ld);
         ldap_msgfree(lm);
         return NULL;
     }
 
     if (NULL == (dn = ldap_get_dn(ld, first))) {
-        mod_authn_ldap_opt_err(srv,__FILE__,__LINE__,"ldap_get_dn()",ld);
+        mod_authn_ldap_opt_err(errh,__FILE__,__LINE__,"ldap_get_dn()",ld);
         ldap_msgfree(lm);
         return NULL;
     }
@@ -629,7 +627,7 @@ static char * mod_authn_ldap_get_dn(server *srv, plugin_config_ldap *s, const ch
     return dn;
 }
 
-static handler_t mod_authn_ldap_memberOf(server *srv, plugin_config *s, const http_auth_require_t *require, const buffer *username, const char *userdn) {
+static handler_t mod_authn_ldap_memberOf(log_error_st *errh, plugin_config *s, const http_auth_require_t *require, const buffer *username, const char *userdn) {
     const array *groups = &require->group;
     buffer *filter = buffer_init();
     handler_t rc = HANDLER_ERROR;
@@ -648,7 +646,7 @@ static handler_t mod_authn_ldap_memberOf(server *srv, plugin_config *s, const ht
     plugin_config_ldap * const ldc = s->ldc;
     for (size_t i = 0; i < groups->used; ++i) {
         const char *base = groups->data[i]->key.ptr;
-        LDAPMessage *lm = mod_authn_ldap_search(srv, ldc, base, filter->ptr);
+        LDAPMessage *lm = mod_authn_ldap_search(errh, ldc, base, filter->ptr);
         if (NULL != lm) {
             int count = ldap_count_entries(ldc->ldap, lm);
             ldap_msgfree(lm);
@@ -663,7 +661,7 @@ static handler_t mod_authn_ldap_memberOf(server *srv, plugin_config *s, const ht
     return rc;
 }
 
-static handler_t mod_authn_ldap_basic(server *srv, connection *con, void *p_d, const http_auth_require_t *require, const buffer *username, const char *pw) {
+static handler_t mod_authn_ldap_basic(connection *con, void *p_d, const http_auth_require_t *require, const buffer *username, const char *pw) {
     plugin_data *p = (plugin_data *)p_d;
     LDAP *ld;
     char *dn;
@@ -676,6 +674,8 @@ static handler_t mod_authn_ldap_basic(server *srv, connection *con, void *p_d, c
     const buffer * const template = p->conf.auth_ldap_filter;
     if (NULL == template)
         return HANDLER_ERROR;
+
+    log_error_st * const errh = con->conf.errh;
 
     /* build filter to get DN for uid = username */
     buffer * const ldap_filter = &p->ldap_filter;
@@ -701,7 +701,7 @@ static handler_t mod_authn_ldap_basic(server *srv, connection *con, void *p_d, c
         }
 
         /* ldap_search for DN (synchronous; blocking) */
-        dn = mod_authn_ldap_get_dn(srv, p->conf.ldc,
+        dn = mod_authn_ldap_get_dn(errh, p->conf.ldc,
                                    p->conf.auth_ldap_basedn, ldap_filter->ptr);
         if (NULL == dn) return HANDLER_ERROR;
     }
@@ -719,7 +719,7 @@ static handler_t mod_authn_ldap_basic(server *srv, connection *con, void *p_d, c
         || p->conf.ldc->auth_ldap_bindpw != p->conf.auth_ldap_bindpw
         || p->conf.ldc->auth_ldap_cafile != p->conf.auth_ldap_cafile ) {
         ldc_custom.ldap = NULL;
-        ldc_custom.srv = srv;
+        ldc_custom.errh = errh;
         ldc_custom.auth_ldap_hostname = ldc_base->auth_ldap_hostname;
         ldc_custom.auth_ldap_starttls = p->conf.auth_ldap_starttls;
         ldc_custom.auth_ldap_binddn = p->conf.auth_ldap_binddn;
@@ -732,18 +732,18 @@ static handler_t mod_authn_ldap_basic(server *srv, connection *con, void *p_d, c
     do {
         /* auth against LDAP server (synchronous; blocking) */
 
-        ld = mod_authn_ldap_host_init(srv, p->conf.ldc);
+        ld = mod_authn_ldap_host_init(errh, p->conf.ldc);
         if (NULL == ld)
             break;
 
         /* Disable referral tracking; target user should be in provided scope */
         int ret = ldap_set_option(ld, LDAP_OPT_REFERRALS, LDAP_OPT_OFF);
         if (LDAP_OPT_SUCCESS != ret) {
-            mod_authn_ldap_err(srv,__FILE__,__LINE__,"ldap_set_option()",ret);
+            mod_authn_ldap_err(errh,__FILE__,__LINE__,"ldap_set_option()",ret);
             break;
         }
 
-        if (LDAP_SUCCESS != mod_authn_ldap_bind(srv, ld, dn, pw))
+        if (LDAP_SUCCESS != mod_authn_ldap_bind(errh, ld, dn, pw))
             break;
 
         ldap_unbind_ext_s(ld, NULL, NULL); /* disconnect */
@@ -754,7 +754,7 @@ static handler_t mod_authn_ldap_basic(server *srv, connection *con, void *p_d, c
         }
         else if (require->group.used) {
             /*(must not re-use ldap_filter, since it might be used for dn)*/
-            rc = mod_authn_ldap_memberOf(srv,&p->conf,require,username,dn);
+            rc = mod_authn_ldap_memberOf(errh,&p->conf,require,username,dn);
         }
     } while (0);
 

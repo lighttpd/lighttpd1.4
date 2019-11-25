@@ -347,7 +347,7 @@ static handler_t mod_trigger_b4_dl_deny(connection * const con, const plugin_dat
         con->http_status = 307;
     }
     else {
-        log_error(con->errh, __FILE__, __LINE__,
+        log_error(con->conf.errh, __FILE__, __LINE__,
                   "trigger-before-download.deny-url not configured");
         con->http_status = 500;
     }
@@ -394,14 +394,14 @@ URIHANDLER_FUNC(mod_trigger_b4_dl_uri_handler) {
 	}
 
 	if (p->conf.debug) {
-		log_error_write(srv, __FILE__, __LINE__, "ss", "(debug) remote-ip:", remote_ip);
+		log_error(con->conf.errh, __FILE__, __LINE__, "(debug) remote-ip: %s", remote_ip->ptr);
 	}
 
 	/* check if URL is a trigger -> insert IP into DB */
 	if ((n = pcre_exec(p->conf.trigger_regex, NULL, CONST_BUF_LEN(con->uri.path), 0, 0, ovec, 3 * N)) < 0) {
 		if (n != PCRE_ERROR_NOMATCH) {
-			log_error_write(srv, __FILE__, __LINE__, "sd",
-					"execution error while matching:", n);
+			log_error(con->conf.errh, __FILE__, __LINE__,
+			  "execution error while matching: %d", n);
 
 			return HANDLER_ERROR;
 		}
@@ -418,8 +418,7 @@ URIHANDLER_FUNC(mod_trigger_b4_dl_uri_handler) {
 			val.dsize = sizeof(srv->cur_ts);
 
 			if (0 != gdbm_store(p->conf.db, key, val, GDBM_REPLACE)) {
-				log_error_write(srv, __FILE__, __LINE__, "s",
-						"insert failed");
+				log_error(con->conf.errh, __FILE__, __LINE__, "insert failed");
 			}
 		}
 # endif
@@ -429,15 +428,14 @@ URIHANDLER_FUNC(mod_trigger_b4_dl_uri_handler) {
 			mod_trigger_b4_dl_memcached_key(b, p, remote_ip);
 
 			if (p->conf.debug) {
-				log_error_write(srv, __FILE__, __LINE__, "sb", "(debug) triggered IP:", b);
+				log_error(con->conf.errh, __FILE__, __LINE__, "(debug) triggered IP: %s", b->ptr);
 			}
 
 			if (MEMCACHED_SUCCESS != memcached_set(p->conf.memc,
 					CONST_BUF_LEN(b),
 					(const char *)&(srv->cur_ts), sizeof(srv->cur_ts),
 					p->conf.trigger_timeout, 0)) {
-				log_error_write(srv, __FILE__, __LINE__, "s",
-					"insert failed");
+				log_error(con->conf.errh, __FILE__, __LINE__, "insert failed");
 			}
 		}
 # endif
@@ -446,8 +444,8 @@ URIHANDLER_FUNC(mod_trigger_b4_dl_uri_handler) {
 	/* check if URL is a download -> check IP in DB, update timestamp */
 	if ((n = pcre_exec(p->conf.download_regex, NULL, CONST_BUF_LEN(con->uri.path), 0, 0, ovec, 3 * N)) < 0) {
 		if (n != PCRE_ERROR_NOMATCH) {
-			log_error_write(srv, __FILE__, __LINE__, "sd",
-					"execution error while matching: ", n);
+			log_error(con->conf.errh, __FILE__, __LINE__,
+			  "execution error while matching: %d", n);
 			return HANDLER_ERROR;
 		}
 	} else {
@@ -476,8 +474,7 @@ URIHANDLER_FUNC(mod_trigger_b4_dl_uri_handler) {
 
 				if (p->conf.db) {
 					if (0 != gdbm_delete(p->conf.db, key)) {
-						log_error_write(srv, __FILE__, __LINE__, "s",
-								"delete failed");
+						log_error(con->conf.errh, __FILE__, __LINE__, "delete failed");
 					}
 				}
 
@@ -488,8 +485,7 @@ URIHANDLER_FUNC(mod_trigger_b4_dl_uri_handler) {
 			val.dsize = sizeof(srv->cur_ts);
 
 			if (0 != gdbm_store(p->conf.db, key, val, GDBM_REPLACE)) {
-				log_error_write(srv, __FILE__, __LINE__, "s",
-						"insert failed");
+				log_error(con->conf.errh, __FILE__, __LINE__, "insert failed");
 			}
 		}
 # endif
@@ -499,7 +495,7 @@ URIHANDLER_FUNC(mod_trigger_b4_dl_uri_handler) {
 			mod_trigger_b4_dl_memcached_key(b, p, remote_ip);
 
 			if (p->conf.debug) {
-				log_error_write(srv, __FILE__, __LINE__, "sb", "(debug) checking IP:", b);
+				log_error(con->conf.errh, __FILE__, __LINE__, "(debug) checking IP: %s", b->ptr);
 			}
 
 			/**
@@ -517,8 +513,7 @@ URIHANDLER_FUNC(mod_trigger_b4_dl_uri_handler) {
 					CONST_BUF_LEN(b),
 					(const char *)&(srv->cur_ts), sizeof(srv->cur_ts),
 					p->conf.trigger_timeout, 0)) {
-				log_error_write(srv, __FILE__, __LINE__, "s",
-					"insert failed");
+				log_error(con->conf.errh, __FILE__, __LINE__, "insert failed");
 			}
 		}
 # endif

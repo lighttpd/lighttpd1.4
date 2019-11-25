@@ -331,7 +331,7 @@ int sock_addr_stringify_append_buffer(buffer *b, const sock_addr *saddr)
 }
 
 
-int sock_addr_nameinfo_append_buffer(server *srv, buffer *b, const sock_addr *saddr)
+int sock_addr_nameinfo_append_buffer(buffer *b, const sock_addr *saddr, log_error_st *errh)
 {
     /*(this routine originates from
      * http-header-glue.c:http_response_redirect_to_directory())*/
@@ -342,9 +342,9 @@ int sock_addr_nameinfo_append_buffer(server *srv, buffer *b, const sock_addr *sa
         struct hostent *he = gethostbyaddr((char *)&saddr->ipv4.sin_addr,
                                            sizeof(struct in_addr), AF_INET);
         if (NULL == he) {
-            log_error_write(srv, __FILE__, __LINE__,
-                            "SdS", "NOTICE: gethostbyaddr failed: ",
-                            h_errno, ", using ip-address instead");
+            log_error(errh, __FILE__, __LINE__,
+              "NOTICE: gethostbyaddr failed: %d, using ip-address instead",
+              h_errno);
 
             sock_addr_inet_ntop_append_buffer(b, saddr);
         } else {
@@ -359,9 +359,8 @@ int sock_addr_nameinfo_append_buffer(server *srv, buffer *b, const sock_addr *sa
         if (0 != getnameinfo((const struct sockaddr *)(&saddr->ipv6),
                              sizeof(saddr->ipv6),
                              hbuf, sizeof(hbuf), NULL, 0, 0)) {
-            log_error_write(srv, __FILE__, __LINE__,
-                            "SSS", "NOTICE: getnameinfo failed: ",
-                            strerror(errno), ", using ip-address instead");
+            log_perror(errh, __FILE__, __LINE__,
+              "NOTICE: getnameinfo failed; using ip-address instead");
 
             buffer_append_string_len(b, CONST_STR_LEN("["));
             sock_addr_inet_ntop_append_buffer(b, saddr);
@@ -373,14 +372,13 @@ int sock_addr_nameinfo_append_buffer(server *srv, buffer *b, const sock_addr *sa
       }
      #endif
       default:
-        log_error_write(srv, __FILE__, __LINE__,
-                        "S", "ERROR: unsupported address-type");
+        log_error(errh, __FILE__, __LINE__, "ERROR: unsupported address-type");
         return -1;
     }
 }
 
 
-int sock_addr_from_str_hints(server *srv, sock_addr *saddr, socklen_t *len, const char *str, int family, unsigned short port)
+int sock_addr_from_str_hints(sock_addr *saddr, socklen_t *len, const char *str, int family, unsigned short port, log_error_st *errh)
 {
     /*(note: name resolution here is *blocking*)*/
     switch(family) {
@@ -404,9 +402,8 @@ int sock_addr_from_str_hints(server *srv, sock_addr *saddr, socklen_t *len, cons
             hints.ai_protocol = IPPROTO_TCP;
 
             if (0 != (r = getaddrinfo(str, NULL, &hints, &res))) {
-                log_error_write(srv, __FILE__, __LINE__,
-                                "sssss", "getaddrinfo failed: ",
-                                gai_strerror(r), "'", str, "'");
+                log_error(errh, __FILE__, __LINE__,
+                  "getaddrinfo failed: %s '%s'", gai_strerror(r), str);
                 return 0;
             }
 
@@ -461,9 +458,8 @@ int sock_addr_from_str_hints(server *srv, sock_addr *saddr, socklen_t *len, cons
                     return 1;
                 }
 
-                log_error_write(srv, __FILE__, __LINE__,
-                                "sssss", "getaddrinfo failed: ",
-                                gai_strerror(r), "'", str, "'");
+                log_error(errh, __FILE__, __LINE__,
+                  "getaddrinfo failed: %s '%s'", gai_strerror(r), str);
 
                 return 0;
             }
@@ -495,9 +491,8 @@ int sock_addr_from_str_hints(server *srv, sock_addr *saddr, socklen_t *len, cons
             hints.ai_protocol = IPPROTO_TCP;
 
             if (0 != (r = getaddrinfo(str, NULL, &hints, &res))) {
-                log_error_write(srv, __FILE__, __LINE__,
-                                "sssss", "getaddrinfo failed: ",
-                                gai_strerror(r), "'", str, "'");
+                log_error(errh, __FILE__, __LINE__,
+                  "getaddrinfo failed: %s '%s'", gai_strerror(r), str);
                 return 0;
             }
 
@@ -506,20 +501,20 @@ int sock_addr_from_str_hints(server *srv, sock_addr *saddr, socklen_t *len, cons
           #else
             struct hostent *he = gethostbyname(str);
             if (NULL == he) {
-                log_error_write(srv, __FILE__, __LINE__, "sds",
-                                "gethostbyname failed:", h_errno, str);
+                log_error(errh, __FILE__, __LINE__,
+                  "gethostbyname failed: %d %s", h_errno, str);
                 return 0;
             }
 
             if (he->h_addrtype != AF_INET) {
-                log_error_write(srv, __FILE__, __LINE__, "sd",
-                                "addr-type != AF_INET:", he->h_addrtype);
+                log_error(errh, __FILE__, __LINE__,
+                  "addr-type != AF_INET: %d", he->h_addrtype);
                 return 0;
             }
 
             if (he->h_length != sizeof(struct in_addr)) {
-                log_error_write(srv, __FILE__, __LINE__, "sd",
-                                "addr-length != sizeof(in_addr):",he->h_length);
+                log_error(errh, __FILE__, __LINE__,
+                  "addr-length != sizeof(in_addr): %d", he->h_length);
                 return 0;
             }
 
@@ -537,8 +532,8 @@ int sock_addr_from_str_hints(server *srv, sock_addr *saddr, socklen_t *len, cons
         {
             size_t hostlen = strlen(str) + 1;
             if (hostlen > sizeof(saddr->un.sun_path)) {
-                log_error_write(srv, __FILE__, __LINE__, "sS",
-                                "unix socket filename too long:", str);
+                log_error(errh, __FILE__, __LINE__,
+                  "unix socket filename too long: %s", str);
                 /*errno = ENAMETOOLONG;*/
                 return 0;
             }
@@ -552,20 +547,20 @@ int sock_addr_from_str_hints(server *srv, sock_addr *saddr, socklen_t *len, cons
         return 1;
      #else
       case AF_UNIX:
-        log_error_write(srv, __FILE__, __LINE__, "s",
-                        "unix domain sockets are not supported.");
+        log_error(errh, __FILE__, __LINE__,
+          "unix domain sockets are not supported.");
         return 0;
      #endif
       default:
-        log_error_write(srv, __FILE__, __LINE__, "sd",
-                        "address family unsupported:", family);
+        log_error(errh, __FILE__, __LINE__,
+          "address family unsupported: %d", family);
         /*errno = EAFNOSUPPORT;*/
         return 0;
     }
 }
 
 
-int sock_addr_from_str_numeric(server *srv, sock_addr *saddr, const char *str)
+int sock_addr_from_str_numeric(sock_addr *saddr, const char *str, log_error_st *errh)
 {
     /*(note: does not handle port if getaddrinfo() is not available)*/
     /*(note: getaddrinfo() is stricter than inet_aton() in what is accepted)*/
@@ -591,14 +586,14 @@ int sock_addr_from_str_numeric(server *srv, sock_addr *saddr, const char *str)
     result = getaddrinfo(str, NULL, &hints, &addrlist);
 
     if (result != 0) {
-        log_error_write(srv, __FILE__, __LINE__, "SSSs(S)",
-                        "could not parse ip address ", str, " because ",
-                        gai_strerror(result), strerror(errno));
+        log_perror(errh, __FILE__, __LINE__,
+          "could not parse ip address %s because %s",
+          str, gai_strerror(result));
         return result;
     } else if (addrlist == NULL) {
-        log_error_write(srv, __FILE__, __LINE__, "SSS",
-                        "Problem in parsing ip address ", str,
-                        ": succeeded, but no information returned");
+        log_error(errh, __FILE__, __LINE__,
+          "Problem in parsing ip address %s:"
+          "succeeded, but no information returned", str);
         return -1;
     } else switch (addrlist->ai_family) {
     case AF_INET:
@@ -610,9 +605,9 @@ int sock_addr_from_str_numeric(server *srv, sock_addr *saddr, const char *str)
         force_assert(AF_INET6 == saddr->plain.sa_family);
         break;
     default:
-        log_error_write(srv, __FILE__, __LINE__, "SSS",
-                        "Problem in parsing ip address ", str,
-                        ": succeeded, but unknown family");
+        log_error(errh, __FILE__, __LINE__,
+          "Problem in parsing ip address %s:"
+          "succeeded, but unknown family", str);
         result = -1;
         break;
     }
@@ -620,7 +615,7 @@ int sock_addr_from_str_numeric(server *srv, sock_addr *saddr, const char *str)
     freeaddrinfo(addrlist);
     return (0 == result);
   #else
-    UNUSED(srv);
+    UNUSED(errh);
     saddr->ipv4.sin_addr.s_addr = inet_addr(str);
     saddr->plain.sa_family = AF_INET;
     return (saddr->ipv4.sin_addr.s_addr != 0xFFFFFFFF);
@@ -628,7 +623,7 @@ int sock_addr_from_str_numeric(server *srv, sock_addr *saddr, const char *str)
 }
 
 
-int sock_addr_from_buffer_hints_numeric(server *srv, sock_addr *saddr, socklen_t *len, const buffer *b, int family, unsigned short port)
+int sock_addr_from_buffer_hints_numeric(sock_addr *saddr, socklen_t *len, const buffer *b, int family, unsigned short port, log_error_st *errh)
 {
     /*(this routine originates from mod_fastcgi.c and mod_scgi.c)*/
     if (buffer_string_is_empty(b)) {
@@ -649,8 +644,8 @@ int sock_addr_from_buffer_hints_numeric(server *srv, sock_addr *saddr, socklen_t
     }
   #if defined(HAVE_IPV6) && defined(HAVE_INET_PTON)
     else if (family == AF_INET6) {
-        log_error_write(srv, __FILE__, __LINE__, "sb",
-                        "invalid IPv6 address literal:", b);
+        log_error(errh, __FILE__, __LINE__,
+          "invalid IPv6 address literal: %s", b->ptr);
         return 0;
     }
   #endif
@@ -658,20 +653,20 @@ int sock_addr_from_buffer_hints_numeric(server *srv, sock_addr *saddr, socklen_t
     else {
         struct hostent *he = gethostbyname(b->ptr);
         if (NULL == he) {
-            log_error_write(srv, __FILE__, __LINE__, "sdb",
-                            "gethostbyname failed:", h_errno, b);
+            log_error(errh, __FILE__, __LINE__,
+              "gethostbyname failed: %d %s", h_errno, b->ptr);
             return 0;
         }
 
         if (he->h_addrtype != AF_INET) {
-            log_error_write(srv, __FILE__, __LINE__, "sd",
-                            "addr-type != AF_INET:", he->h_addrtype);
+            log_error(errh, __FILE__, __LINE__,
+              "addr-type != AF_INET: %d", he->h_addrtype);
             return 0;
         }
 
         if (he->h_length != sizeof(struct in_addr)) {
-            log_error_write(srv, __FILE__, __LINE__, "sd",
-                            "addr-length != sizeof(in_addr):",he->h_length);
+            log_error(errh, __FILE__, __LINE__,
+              "addr-length != sizeof(in_addr): %d", he->h_length);
             return 0;
         }
 
@@ -682,7 +677,7 @@ int sock_addr_from_buffer_hints_numeric(server *srv, sock_addr *saddr, socklen_t
         *len = sizeof(struct sockaddr_in);
     }
   #else
-    UNUSED(srv);
+    UNUSED(errh);
   #endif
 
     return 0;

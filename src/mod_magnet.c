@@ -284,8 +284,8 @@ static buffer* magnet_checkbuffer(lua_State *L, int index) {
 
 static int magnet_print(lua_State *L) {
 	const_buffer cb = magnet_checkconstbuffer(L, 1);
-	log_error_write(magnet_get_server(L), __FILE__, __LINE__, "ss",
-			"(lua-print)", cb.ptr);
+	connection *con = magnet_get_connection(L);
+	log_error(con->conf.errh, __FILE__, __LINE__, "(lua-print) %s", cb.ptr);
 	return 0;
 }
 
@@ -375,8 +375,8 @@ static int magnet_stat(lua_State *L) {
 
 static int magnet_atpanic(lua_State *L) {
 	const_buffer cb = magnet_checkconstbuffer(L, 1);
-	log_error_write(magnet_get_server(L), __FILE__, __LINE__, "ss",
-			"(lua-atpanic)", cb.ptr);
+	connection *con = magnet_get_connection(L);
+	log_error(con->conf.errh, __FILE__, __LINE__, "(lua-atpanic) %s", cb.ptr);
 	longjmp(exceptionjmp, 1);
 }
 
@@ -684,7 +684,7 @@ static int magnet_copy_response_header(connection *con, lua_State *L, int lighty
  *
  * return 200
  */
-static int magnet_attach_content(server *srv, connection *con, lua_State *L, int lighty_table_ndx) {
+static int magnet_attach_content(connection *con, lua_State *L, int lighty_table_ndx) {
 	force_assert(lua_istable(L, lighty_table_ndx));
 
 	lua_getfield(L, lighty_table_ndx, "content"); /* lighty.content */
@@ -720,7 +720,7 @@ static int magnet_attach_content(server *srv, connection *con, lua_State *L, int
 
 					if (0 != len) {
 						buffer *fn = magnet_checkbuffer(L, -3);
-						int rc = http_chunk_append_file_range(srv, con, fn, off, len);
+						int rc = http_chunk_append_file_range(con, fn, off, len);
 						buffer_free(fn);
 						if (0 != rc) {
 							return luaL_error(L, "error opening file content '%s' at offset %lld", lua_tostring(L, -3), (long long)off);
@@ -791,12 +791,8 @@ static handler_t magnet_attract(server *srv, connection *con, plugin_data *p, bu
 	L = script_cache_get_script(srv, con, &p->cache, name);
 
 	if (lua_isstring(L, -1)) {
-		log_error_write(srv, __FILE__, __LINE__,
-				"sbss",
-				"loading script",
-				name,
-				"failed:",
-				lua_tostring(L, -1));
+		log_error(con->conf.errh, __FILE__, __LINE__,
+		  "loading script %s failed: %s", name->ptr, lua_tostring(L, -1));
 
 		lua_pop(L, 1);
 
@@ -937,10 +933,8 @@ static handler_t magnet_attract(server *srv, connection *con, plugin_data *p, bu
 		magnet_setfenv_mainfn(L, 1);                          /* (sp -= 1) */
 
 		if (0 != ret) {
-			log_error_write(srv, __FILE__, __LINE__,
-				"ss",
-				"lua_pcall():",
-				lua_tostring(L, -1));
+			log_error(con->conf.errh, __FILE__, __LINE__,
+			  "lua_pcall(): %s", lua_tostring(L, -1));
 			lua_pop(L, 2); /* remove the error-msg and the lighty table at index 2 */
 
 			force_assert(lua_gettop(L) == 1); /* only the function should be on the stack */
@@ -961,10 +955,8 @@ static handler_t magnet_attract(server *srv, connection *con, plugin_data *p, bu
 		lua_return_value = (int) luaL_optinteger(L, -1, -1);
 		break;
 	default:
-		log_error_write(srv, __FILE__, __LINE__, "sss",
-				"lua_pcall():",
-				"unexpected return type:",
-				luaL_typename(L, -1));
+		log_error(con->conf.errh, __FILE__, __LINE__,
+		  "lua_pcall(): unexpected return type: %s", luaL_typename(L, -1));
 		lua_return_value = -1;
 		break;
 	}
@@ -982,7 +974,7 @@ static handler_t magnet_attract(server *srv, connection *con, plugin_data *p, bu
 
 			/* try { ...*/
 			if (0 == setjmp(exceptionjmp)) {
-				magnet_attach_content(srv, con, L, lighty_table_ndx);
+				magnet_attach_content(con, L, lighty_table_ndx);
 				if (!chunkqueue_is_empty(con->write_queue)) {
 					con->mode = p->id;
 				}

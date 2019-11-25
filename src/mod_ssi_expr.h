@@ -15,8 +15,6 @@ typedef struct {
 	int     ok;
 
 	ssi_val_t val;
-
-	void   *srv;
 } ssi_ctx_t;
 
 typedef enum { SSI_COND_UNSET, SSI_COND_LE, SSI_COND_GE, SSI_COND_EQ, SSI_COND_NE, SSI_COND_LT, SSI_COND_GT } ssi_expr_cond;

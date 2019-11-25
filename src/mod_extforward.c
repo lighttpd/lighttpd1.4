@@ -117,7 +117,7 @@ typedef struct {
 	buffer *saved_remote_addr_buf;
 
 	/* hap-PROXY protocol prior to receiving first request */
-	int(*saved_network_read)(server *, connection *, chunkqueue *, off_t);
+	int(*saved_network_read)(connection *, chunkqueue *, off_t);
 
 	/* connection-level state applied to requests in handle_request_env */
 	array *env;
@@ -257,7 +257,7 @@ static void * mod_extforward_parse_forwarder(server *srv, const array *forwarder
         struct sock_addr_mask * const sm = fwd->addrs + fwd->addrs_used++;
         sm->bits = nm_bits;
         *nm_slash = '\0';
-        rc = sock_addr_from_str_numeric(srv, &sm->addr, ds->key.ptr);
+        rc = sock_addr_from_str_numeric(&sm->addr, ds->key.ptr, srv->errh);
         *nm_slash = '/';
         if (1 != rc) {
             free(fwd);
@@ -441,7 +441,7 @@ SETDEFAULTS_FUNC(mod_extforward_set_defaults) {
         for (; i < srv->srvconf.modules->used; ++i) {
             data_string *ds = (data_string *)srv->srvconf.modules->data[i];
             if (buffer_eq_slen(&ds->value, CONST_STR_LEN("mod_openssl"))) {
-                log_error_write(srv, __FILE__, __LINE__, "s",
+                log_error(srv->errh, __FILE__, __LINE__,
                   "mod_extforward must be loaded after mod_openssl in "
                   "server.modules when extforward.hap-PROXY = \"enable\"");
                 break;
@@ -550,24 +550,24 @@ static const char *last_not_in_array(array *a, plugin_data *p)
 	return NULL;
 }
 
-static int mod_extforward_set_addr(server *srv, connection *con, plugin_data *p, const char *addr) {
+static int mod_extforward_set_addr(connection *con, plugin_data *p, const char *addr) {
 	sock_addr sock;
 	handler_ctx *hctx = con->plugin_ctx[p->id];
 
 	if (con->conf.log_request_handling) {
-		log_error_write(srv, __FILE__, __LINE__, "ss", "using address:", addr);
+		log_error(con->conf.errh, __FILE__, __LINE__, "using address: %s", addr);
 	}
 
 	sock.plain.sa_family = AF_UNSPEC;
-	if (1 != sock_addr_from_str_numeric(srv, &sock, addr)) return 0;
+	if (1 != sock_addr_from_str_numeric(&sock, addr, con->conf.errh)) return 0;
 	if (sock.plain.sa_family == AF_UNSPEC) return 0;
 
 	/* we found the remote address, modify current connection and save the old address */
 	if (hctx) {
 		if (hctx->saved_remote_addr_buf) {
 			if (con->conf.log_request_handling) {
-				log_error_write(srv, __FILE__, __LINE__, "s",
-					"-- mod_extforward_uri_handler already patched this connection, resetting state");
+				log_error(con->conf.errh, __FILE__, __LINE__,
+				  "-- mod_extforward_uri_handler already patched this connection, resetting state");
 			}
 			con->dst_addr = hctx->saved_remote_addr;
 			buffer_free(con->dst_addr_buf);
@@ -588,17 +588,17 @@ static int mod_extforward_set_addr(server *srv, connection *con, plugin_data *p,
 	con->dst_addr_buf = buffer_init_string(addr);
 
 	if (con->conf.log_request_handling) {
-		log_error_write(srv, __FILE__, __LINE__, "ss",
-				"patching con->dst_addr_buf for the accesslog:", addr);
+		log_error(con->conf.errh, __FILE__, __LINE__,
+		  "patching con->dst_addr_buf for the accesslog: %s", addr);
 	}
 
 	/* Now, clean the conf_cond cache, because we may have changed the results of tests */
-	config_cond_cache_reset_item(srv, con, COMP_HTTP_REMOTE_IP);
+	config_cond_cache_reset_item(con, COMP_HTTP_REMOTE_IP);
 
 	return 1;
 }
 
-static void mod_extforward_set_proto(server *srv, connection *con, const char *proto, size_t protolen) {
+static void mod_extforward_set_proto(connection *con, const char *proto, size_t protolen) {
 	if (0 != protolen && !buffer_is_equal_caseless_string(con->uri.scheme, proto, protolen)) {
 		/* update scheme if X-Forwarded-Proto is set
 		 * Limitations:
@@ -616,15 +616,15 @@ static void mod_extforward_set_proto(server *srv, connection *con, const char *p
 		}
 		if (buffer_eq_icase_ss(proto, protolen, CONST_STR_LEN("https"))) {
 			buffer_copy_string_len(con->uri.scheme, CONST_STR_LEN("https"));
-			config_cond_cache_reset_item(srv, con, COMP_HTTP_SCHEME);
+			config_cond_cache_reset_item(con, COMP_HTTP_SCHEME);
 		} else if (buffer_eq_icase_ss(proto, protolen, CONST_STR_LEN("http"))) {
 			buffer_copy_string_len(con->uri.scheme, CONST_STR_LEN("http"));
-			config_cond_cache_reset_item(srv, con, COMP_HTTP_SCHEME);
+			config_cond_cache_reset_item(con, COMP_HTTP_SCHEME);
 		}
 	}
 }
 
-static handler_t mod_extforward_X_Forwarded_For(server *srv, connection *con, plugin_data *p, const buffer *x_forwarded_for) {
+static handler_t mod_extforward_X_Forwarded_For(connection *con, plugin_data *p, const buffer *x_forwarded_for) {
 	/* build forward_array from forwarded data_string */
 	array *forward_array = extract_forward_array(x_forwarded_for);
 	const char *real_remote_addr = last_not_in_array(forward_array, p);
@@ -638,8 +638,8 @@ static handler_t mod_extforward_X_Forwarded_For(server *srv, connection *con, pl
 		 *    as in X-Forwarded-For to find proto set by last trusted proxy)
 		 */
 		const buffer *x_forwarded_proto = http_header_request_get(con, HTTP_HEADER_X_FORWARDED_PROTO, CONST_STR_LEN("X-Forwarded-Proto"));
-		if (mod_extforward_set_addr(srv, con, p, real_remote_addr) && NULL != x_forwarded_proto) {
-			mod_extforward_set_proto(srv, con, CONST_BUF_LEN(x_forwarded_proto));
+		if (mod_extforward_set_addr(con, p, real_remote_addr) && NULL != x_forwarded_proto) {
+			mod_extforward_set_proto(con, CONST_BUF_LEN(x_forwarded_proto));
 		}
 	}
 	array_free(forward_array);
@@ -692,7 +692,7 @@ static int buffer_backslash_unescape (buffer * const b) {
     return 1;
 }
 
-static handler_t mod_extforward_Forwarded (server *srv, connection *con, plugin_data *p, const buffer *forwarded) {
+static handler_t mod_extforward_Forwarded (connection *con, plugin_data *p, const buffer *forwarded) {
     /* HTTP list need not consist of param=value tokens,
      * but this routine expect such for HTTP Forwarded header
      * Since info in each set of params is only used if from
@@ -728,8 +728,8 @@ static handler_t mod_extforward_Forwarded (server *srv, connection *con, plugin_
         i = find_next_semicolon_or_comma_or_eq(s, i);
         if (i < 0) {
             /*(reject IP spoofing if attacker sets improper quoted-string)*/
-            log_error_write(srv, __FILE__, __LINE__, "s",
-                            "invalid quoted-string in Forwarded header");
+            log_error(con->conf.errh, __FILE__, __LINE__,
+              "invalid quoted-string in Forwarded header");
             con->http_status = 400; /* Bad Request */
             con->mode = DIRECT;
             return HANDLER_FINISHED;
@@ -740,8 +740,8 @@ static handler_t mod_extforward_Forwarded (server *srv, connection *con, plugin_
         i = find_next_semicolon_or_comma(s, i);
         if (i < 0) {
             /*(reject IP spoofing if attacker sets improper quoted-string)*/
-            log_error_write(srv, __FILE__, __LINE__, "s",
-                            "invalid quoted-string in Forwarded header");
+            log_error(con->conf.errh, __FILE__, __LINE__,
+              "invalid quoted-string in Forwarded header");
             con->http_status = 400; /* Bad Request */
             con->mode = DIRECT;
             return HANDLER_FINISHED;
@@ -763,8 +763,8 @@ static handler_t mod_extforward_Forwarded (server *srv, connection *con, plugin_
 
     if (j >= (int)(sizeof(offsets)/sizeof(int))-4) {
         /* error processing Forwarded; too many params; fail closed */
-        log_error_write(srv, __FILE__, __LINE__, "s",
-                        "Too many params in Forwarded header");
+        log_error(con->conf.errh, __FILE__, __LINE__,
+          "Too many params in Forwarded header");
         con->http_status = 400; /* Bad Request */
         con->mode = DIRECT;
         return HANDLER_FINISHED;
@@ -798,8 +798,8 @@ static handler_t mod_extforward_Forwarded (server *srv, connection *con, plugin_
                 ++v;
                 do { --vlen; } while (vlen > v && s[vlen] != ']');
                 if (v == vlen) {
-                    log_error_write(srv, __FILE__, __LINE__, "s",
-                                    "Invalid IPv6 addr in Forwarded header");
+                    log_error(con->conf.errh, __FILE__, __LINE__,
+                      "Invalid IPv6 addr in Forwarded header");
                     con->http_status = 400; /* Bad Request */
                     con->mode = DIRECT;
                     return HANDLER_FINISHED;
@@ -842,7 +842,7 @@ static handler_t mod_extforward_Forwarded (server *srv, connection *con, plugin_
         char c = *ipend;
         int rc;
         *ipend = '\0';
-        rc = mod_extforward_set_addr(srv, con, p, s+offsets[ofor+2]);
+        rc = mod_extforward_set_addr(con, p, s+offsets[ofor+2]);
         *ipend = c;
         if (!rc) return HANDLER_GO_ON; /* invalid addr; make no changes */
     }
@@ -896,7 +896,7 @@ static handler_t mod_extforward_Forwarded (server *srv, connection *con, plugin_
         vlen = v + offsets[oproto+3];
         while (vlen > v && (s[vlen-1] == ' ' || s[vlen-1] == '\t')) --vlen;
         if (vlen > v+1 && s[v] == '"' && s[vlen-1] == '"') { ++v; --vlen; }
-        mod_extforward_set_proto(srv, con, s+v, vlen-v);
+        mod_extforward_set_proto(con, s+v, vlen-v);
     }
 
     if (p->conf.opts & PROXY_FORWARDED_HOST) {
@@ -939,8 +939,8 @@ static handler_t mod_extforward_Forwarded (server *srv, connection *con, plugin_
                 ++v; --vlen;
                 buffer_copy_string_len(con->request.http_host, s+v, vlen-v);
                 if (!buffer_backslash_unescape(con->request.http_host)) {
-                    log_error_write(srv, __FILE__, __LINE__, "s",
-                                    "invalid host= value in Forwarded header");
+                    log_error(con->conf.errh, __FILE__, __LINE__,
+                      "invalid host= value in Forwarded header");
                     con->http_status = 400; /* Bad Request */
                     con->mode = DIRECT;
                     return HANDLER_FINISHED;
@@ -953,14 +953,14 @@ static handler_t mod_extforward_Forwarded (server *srv, connection *con, plugin_
             if (0 != http_request_host_policy(con, con->request.http_host,
                                               con->uri.scheme)) {
                 /*(reject invalid chars in Host)*/
-                log_error_write(srv, __FILE__, __LINE__, "s",
-                                "invalid host= value in Forwarded header");
+                log_error(con->conf.errh, __FILE__, __LINE__,
+                  "invalid host= value in Forwarded header");
                 con->http_status = 400; /* Bad Request */
                 con->mode = DIRECT;
                 return HANDLER_FINISHED;
             }
 
-            config_cond_cache_reset_item(srv, con, COMP_HTTP_HOST);
+            config_cond_cache_reset_item(con, COMP_HTTP_HOST);
         }
     }
 
@@ -988,7 +988,7 @@ static handler_t mod_extforward_Forwarded (server *srv, connection *con, plugin_
                 euser = http_header_env_get(con, CONST_STR_LEN("REMOTE_USER"));
                 force_assert(NULL != euser);
                 if (!buffer_backslash_unescape(euser)) {
-                    log_error_write(srv, __FILE__, __LINE__, "s",
+                    log_error(con->conf.errh, __FILE__, __LINE__,
                       "invalid remote_user= value in Forwarded header");
                     con->http_status = 400; /* Bad Request */
                     con->mode = DIRECT;
@@ -1007,7 +1007,7 @@ static handler_t mod_extforward_Forwarded (server *srv, connection *con, plugin_
         && NULL == http_header_request_get(con, HTTP_HEADER_X_FORWARDED_FOR, CONST_STR_LEN("X-Forwarded-For"))) {
         /* create X-Forwarded-For if not present
          * (and at least original connecting IP is a trusted proxy) */
-        buffer *xff = srv->tmp_buf;
+        buffer *xff = con->srv->tmp_buf;
         buffer_clear(xff);
         for (j = 0; j < used; ) {
             if (-1 == offsets[j]) { ++j; continue; }
@@ -1051,12 +1051,13 @@ URIHANDLER_FUNC(mod_extforward_uri_handler) {
 	const buffer *forwarded = NULL;
 	handler_ctx *hctx = con->plugin_ctx[p->id];
 	int is_forwarded_header = 0;
+	UNUSED(srv);
 
 	mod_extforward_patch_config(con, p);
 
 	if (con->conf.log_request_handling) {
-		log_error_write(srv, __FILE__, __LINE__, "s",
-			"-- mod_extforward_uri_handler called");
+		log_error(con->conf.errh, __FILE__, __LINE__,
+		  "-- mod_extforward_uri_handler called");
 	}
 
 	if (p->conf.hap_PROXY_ssl_client_verify) {
@@ -1091,7 +1092,8 @@ URIHANDLER_FUNC(mod_extforward_uri_handler) {
 	}
 	if (NULL == forwarded) {
 		if (con->conf.log_request_handling) {
-			log_error_write(srv, __FILE__, __LINE__, "s", "no forward header found, skipping");
+			log_error(con->conf.errh, __FILE__, __LINE__,
+			  "no forward header found, skipping");
 		}
 
 		return HANDLER_GO_ON;
@@ -1100,18 +1102,19 @@ URIHANDLER_FUNC(mod_extforward_uri_handler) {
 	/* if the remote ip itself is not trusted, then do nothing */
 	if (!is_connection_trusted(con, p)) {
 		if (con->conf.log_request_handling) {
-			log_error_write(srv, __FILE__, __LINE__, "sbs",
-					"remote address", con->dst_addr_buf, "is NOT a trusted proxy, skipping");
+			log_error(con->conf.errh, __FILE__, __LINE__,
+			  "remote address %s is NOT a trusted proxy, skipping",
+			  con->dst_addr_buf->ptr);
 		}
 
 		return HANDLER_GO_ON;
 	}
 
 	if (is_forwarded_header) {
-		return mod_extforward_Forwarded(srv, con, p, forwarded);
+		return mod_extforward_Forwarded(con, p, forwarded);
 	}
 
-	return mod_extforward_X_Forwarded_For(srv, con, p, forwarded);
+	return mod_extforward_X_Forwarded_For(con, p, forwarded);
 }
 
 
@@ -1134,6 +1137,7 @@ CONNECTION_FUNC(mod_extforward_handle_request_env) {
 CONNECTION_FUNC(mod_extforward_restore) {
 	plugin_data *p = p_d;
 	handler_ctx *hctx = con->plugin_ctx[p->id];
+	UNUSED(srv);
 
 	if (!hctx) return HANDLER_GO_ON;
 
@@ -1148,7 +1152,7 @@ CONNECTION_FUNC(mod_extforward_restore) {
 		con->dst_addr_buf = hctx->saved_remote_addr_buf;
 		hctx->saved_remote_addr_buf = NULL;
 		/* Now, clean the conf_cond cache, because we may have changed the results of tests */
-		config_cond_cache_reset_item(srv, con, COMP_HTTP_REMOTE_IP);
+		config_cond_cache_reset_item(con, COMP_HTTP_REMOTE_IP);
 	}
 
 	if (NULL == hctx->env) {
@@ -1185,11 +1189,12 @@ CONNECTION_FUNC(mod_extforward_handle_con_close)
 }
 
 
-static int mod_extforward_network_read (server *srv, connection *con, chunkqueue *cq, off_t max_bytes);
+static int mod_extforward_network_read (connection *con, chunkqueue *cq, off_t max_bytes);
 
 CONNECTION_FUNC(mod_extforward_handle_con_accept)
 {
     plugin_data *p = p_d;
+    UNUSED(srv);
     mod_extforward_patch_config(con, p);
     if (!p->conf.hap_PROXY) return HANDLER_GO_ON;
     if (NULL == p->conf.forwarder) return HANDLER_GO_ON;
@@ -1201,9 +1206,9 @@ CONNECTION_FUNC(mod_extforward_handle_con_accept)
     }
     else {
         if (con->conf.log_request_handling) {
-            log_error_write(srv, __FILE__, __LINE__, "sbs",
-                    "remote address", con->dst_addr_buf,
-                    "is NOT a trusted proxy, skipping");
+            log_error(con->conf.errh, __FILE__, __LINE__,
+              "remote address %s is NOT a trusted proxy, skipping",
+              con->dst_addr_buf->ptr);
         }
     }
     return HANDLER_GO_ON;
@@ -1659,7 +1664,7 @@ static int mod_extforward_hap_PROXY_v2 (connection * const con,
 }
 
 
-static int mod_extforward_network_read (server *srv, connection *con,
+static int mod_extforward_network_read (connection *con,
                                         chunkqueue *cq, off_t max_bytes)
 {
     /* XXX: when using hap-PROXY protocol, currently avoid overhead of setting
@@ -1673,16 +1678,14 @@ static int mod_extforward_network_read (server *srv, connection *con,
       case  2: rc = mod_extforward_hap_PROXY_v2(con, &hdr); break;
       case  1: rc = mod_extforward_hap_PROXY_v1(con, &hdr); break;
       case  0: return  0; /*(errno == EAGAIN || errno == EWOULDBLOCK)*/
-      case -1: log_error_write(srv, __FILE__, __LINE__, "ss",
-                               "hap-PROXY recv()", strerror(errno));
+      case -1: log_perror(con->conf.errh,__FILE__,__LINE__,"hap-PROXY recv()");
                rc = -1; break;
-      case -2: log_error_write(srv, __FILE__, __LINE__, "s",
-                               "hap-PROXY proto received "
-                               "invalid/unsupported request");
+      case -2: log_error(con->conf.errh,__FILE__,__LINE__,
+                 "hap-PROXY proto received invalid/unsupported request");
                /* fall through */
       default: rc = -1; break;
     }
 
-    mod_extforward_restore(srv, con, mod_extforward_plugin_data_singleton);
-    return (0 == rc) ? con->network_read(srv, con, cq, max_bytes) : rc;
+    mod_extforward_restore(con->srv, con, mod_extforward_plugin_data_singleton);
+    return (0 == rc) ? con->network_read(con, cq, max_bytes) : rc;
 }

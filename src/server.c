@@ -308,11 +308,8 @@ static void remove_pid_file(server *srv) {
 	if (pid_fd <= -2) return;
 	if (!buffer_string_is_empty(srv->srvconf.pid_file) && 0 <= pid_fd) {
 		if (0 != ftruncate(pid_fd, 0)) {
-			log_error_write(srv, __FILE__, __LINE__, "sbds",
-					"ftruncate failed for:",
-					srv->srvconf.pid_file,
-					errno,
-					strerror(errno));
+			log_perror(srv->errh, __FILE__, __LINE__,
+			  "ftruncate failed for: %s", srv->srvconf.pid_file->ptr);
 		}
 	}
 	if (0 <= pid_fd) {
@@ -323,11 +320,8 @@ static void remove_pid_file(server *srv) {
 	    buffer_string_is_empty(srv->srvconf.changeroot)) {
 		if (0 != unlink(srv->srvconf.pid_file->ptr)) {
 			if (errno != EACCES && errno != EPERM) {
-				log_error_write(srv, __FILE__, __LINE__, "sbds",
-						"unlink failed for:",
-						srv->srvconf.pid_file,
-						errno,
-						strerror(errno));
+				log_perror(srv->errh, __FILE__, __LINE__,
+				  "unlink failed for: %s", srv->srvconf.pid_file->ptr);
 			}
 		}
 	}
@@ -353,7 +347,7 @@ static server_socket * server_oneshot_getsock(server *srv, sock_addr *cnt_addr) 
 	} else if (srv->srv_sockets.used) {
 		return srv->srv_sockets.ptr[0];
 	} else {
-		log_error_write(srv, __FILE__, __LINE__, "s", "no sockets configured");
+		log_error(srv->errh, __FILE__, __LINE__, "no sockets configured");
 		return NULL;
 	}
 }
@@ -380,20 +374,21 @@ static int server_oneshot_init(server *srv, int fd) {
 	struct stat st;
 
 	if (0 != fstat(fd, &st)) {
-		log_error_write(srv, __FILE__, __LINE__, "ss", "fstat:", strerror(errno));
+		log_perror(srv->errh, __FILE__, __LINE__, "fstat()");
 		return 0;
 	}
 
 	if (!S_ISSOCK(st.st_mode)) {
 		/* require that fd is a socket
 		 * (modules might expect STDIN_FILENO and STDOUT_FILENO opened to /dev/null) */
-		log_error_write(srv, __FILE__, __LINE__, "s", "lighttpd -1 stdin is not a socket");
+		log_error(srv->errh, __FILE__, __LINE__,
+		  "lighttpd -1 stdin is not a socket");
 		return 0;
 	}
 
 	cnt_len = sizeof(cnt_addr);
 	if (0 != getsockname(fd, (struct sockaddr *)&cnt_addr, &cnt_len)) {
-		log_error_write(srv, __FILE__, __LINE__, "ss", "getsockname:", strerror(errno));
+		log_perror(srv->errh, __FILE__, __LINE__, "getsockname()");
 		return 0;
 	}
 
@@ -402,13 +397,13 @@ static int server_oneshot_init(server *srv, int fd) {
 
 	cnt_len = sizeof(cnt_addr);
 	if (0 != getpeername(fd, (struct sockaddr *)&cnt_addr, &cnt_len)) {
-		log_error_write(srv, __FILE__, __LINE__, "ss", "getpeername:", strerror(errno));
+		log_perror(srv->errh, __FILE__, __LINE__, "getpeername()");
 		return 0;
 	}
 
 	/*(must set flags; fd did not pass through fdevent accept() logic)*/
 	if (-1 == fdevent_fcntl_set_nb_cloexec(srv->ev, fd)) {
-		log_error_write(srv, __FILE__, __LINE__, "ss", "fcntl:", strerror(errno));
+		log_perror(srv->errh, __FILE__, __LINE__, "fcntl()");
 		return 0;
 	}
 
@@ -630,10 +625,10 @@ static int log_error_open(server *srv) {
             }
         }
         if (-1 == facility) {
-            log_error_write(srv, __FILE__, __LINE__, "SBS",
-                            "unrecognized server.syslog-facility: \"",
-                            srv->srvconf.syslog_facility,
-                            "\"; defaulting to \"daemon\" facility");
+            log_error(srv->errh, __FILE__, __LINE__,
+              "unrecognized server.syslog-facility: \"%s\"; "
+              "defaulting to \"daemon\" facility",
+              srv->srvconf.syslog_facility->ptr);
         }
     }
     openlog("lighttpd", LOG_CONS|LOG_PID, -1==facility ? LOG_DAEMON : facility);
@@ -649,9 +644,8 @@ static int log_error_open(server *srv) {
         const char *logfile = srv->srvconf.errorlog_file->ptr;
         int fd = fdevent_open_logger(logfile);
         if (-1 == fd) {
-            log_error_write(srv, __FILE__, __LINE__, "SSSS",
-                            "opening errorlog '", logfile,
-                            "' failed: ", strerror(errno));
+            log_perror(srv->errh, __FILE__, __LINE__,
+              "opening errorlog '%s' failed", logfile);
             return -1;
         }
         errh->errorlog_fd = fd;
@@ -675,9 +669,8 @@ static int log_error_open(server *srv) {
         }
 
         if (-1 == (errfd = fdevent_open_logger(logfile))) {
-            log_error_write(srv, __FILE__, __LINE__, "SSSS",
-                            "opening errorlog '", logfile,
-                            "' failed: ", strerror(errno));
+            log_perror(srv->errh, __FILE__, __LINE__,
+              "opening errorlog '%s' failed", logfile);
             return -1;
         }
 
@@ -686,8 +679,7 @@ static int log_error_open(server *srv) {
     else if (!srv->srvconf.dont_daemonize) {
         /* move STDERR_FILENO to /dev/null */
         if (-1 == (errfd = fdevent_open_devnull())) {
-            log_error_write(srv, __FILE__, __LINE__, "ss",
-                            "opening /dev/null failed:", strerror(errno));
+            log_perror(srv->errh,__FILE__,__LINE__,"opening /dev/null failed");
             return -1;
         }
     }
@@ -697,8 +689,7 @@ static int log_error_open(server *srv) {
     }
 
     if (0 != fdevent_set_stdin_stdout_stderr(-1, -1, errfd)) {
-        log_error_write(srv, __FILE__, __LINE__, "ss",
-                        "setting stderr failed:", strerror(errno));
+        log_perror(srv->errh, __FILE__, __LINE__, "setting stderr failed");
       #ifdef FD_CLOEXEC
         if (-1 != errfd) close(errfd);
       #endif
@@ -724,9 +715,8 @@ static int log_error_cycle(server *srv) {
         const char *logfile = srv->srvconf.errorlog_file->ptr;
         if (-1 == fdevent_cycle_logger(logfile, &errh->errorlog_fd)) {
             /* write to old log */
-            log_error_write(srv, __FILE__, __LINE__, "SSSS",
-                            "cycling errorlog '", logfile,
-                            "' failed: ", strerror(errno));
+            log_perror(srv->errh, __FILE__, __LINE__,
+              "cycling errorlog '%s' failed", logfile);
         }
     }
 
@@ -782,8 +772,7 @@ static int server_sockets_set_nb_cloexec (server *srv) {
     for (uint32_t i = 0; i < srv->srv_sockets.used; ++i) {
         server_socket *srv_socket = srv->srv_sockets.ptr[i];
         if (-1 == fdevent_fcntl_set_nb_cloexec_sock(srv->ev, srv_socket->fd)) {
-            log_error_write(srv, __FILE__, __LINE__, "ss",
-                            "fcntl failed:", strerror(errno));
+            log_perror(srv->errh, __FILE__, __LINE__, "fcntl()");
             return -1;
         }
     }
@@ -833,8 +822,7 @@ static void server_graceful_state (server *srv) {
     if (!oneshot_fd
         && (2 == srv->sockets_disabled || 3 == srv->sockets_disabled)) return;
 
-    log_error_write(srv, __FILE__, __LINE__, "s",
-                    "[note] graceful shutdown started");
+    log_error(srv->errh,__FILE__,__LINE__,"[note] graceful shutdown started");
 
     /* no graceful restart if chroot()ed, if oneshot mode, or if idle timeout */
     if (!buffer_string_is_empty(srv->srvconf.changeroot)
@@ -857,18 +845,17 @@ __attribute_cold__
 static void server_sockets_enable (server *srv) {
     server_sockets_set_event(srv, FDEVENT_IN);
     srv->sockets_disabled = 0;
-    log_error_write(srv, __FILE__, __LINE__, "s",
-                    "[note] sockets enabled again");
+    log_error(srv->errh, __FILE__, __LINE__, "[note] sockets enabled again");
 }
 
 __attribute_cold__
 static void server_sockets_disable (server *srv) {
     server_sockets_set_event(srv, 0);
     srv->sockets_disabled = 1;
-    log_error_write(srv, __FILE__, __LINE__, "s",
-                    (srv->conns.used >= srv->max_conns)
-                    ? "[note] sockets disabled, connection limit reached"
-                    : "[note] sockets disabled, out-of-fds");
+    log_error(srv->errh, __FILE__, __LINE__,
+      (srv->conns.used >= srv->max_conns)
+        ? "[note] sockets disabled, connection limit reached"
+        : "[note] sockets disabled, out-of-fds");
 }
 
 __attribute_cold__
@@ -945,8 +932,8 @@ static int server_main (server * const srv, int argc, char **argv) {
 		switch(o) {
 		case 'f':
 			if (srv->config_data_base) {
-				log_error_write(srv, __FILE__, __LINE__, "s",
-						"Can only read one config file. Use the include command to use multiple config files.");
+				log_error(srv->errh, __FILE__, __LINE__,
+				  "Can only read one config file. Use the include command to use multiple config files.");
 				return -1;
 			}
 			if (config_read(srv, optarg)) {
@@ -960,8 +947,8 @@ static int server_main (server * const srv, int argc, char **argv) {
 			char *endptr;
 			long timeout = strtol(optarg, &endptr, 0);
 			if (!*optarg || *endptr || timeout < 0) {
-				log_error_write(srv, __FILE__, __LINE__, "ss",
-						"Invalid idle timeout value:", optarg);
+				log_error(srv->errh, __FILE__, __LINE__,
+				  "Invalid idle timeout value: %s", optarg);
 				return -1;
 			}
 			idle_limit = (time_t)timeout;
@@ -985,7 +972,7 @@ static int server_main (server * const srv, int argc, char **argv) {
 	if (!srv->config_data_base && NULL != getenv("NSSM_SERVICE_NAME")) {
 		char *dir = getenv("NSSM_SERVICE_DIR");
 		if (NULL != dir && 0 != chdir(dir)) {
-			log_error_write(srv, __FILE__, __LINE__, "sss", "chdir failed:", dir, strerror(errno));
+			log_perror(srv->errh, __FILE__, __LINE__, "chdir %s failed", dir);
 			return -1;
 		}
 		srv->srvconf.dont_daemonize = 1;
@@ -995,8 +982,8 @@ static int server_main (server * const srv, int argc, char **argv) {
       #endif
 
 	if (!srv->config_data_base) {
-		log_error_write(srv, __FILE__, __LINE__, "s",
-				"No configuration available. Try using -f option.");
+		log_error(srv->errh, __FILE__, __LINE__,
+		  "No configuration available. Try using -f option.");
 		return -1;
 	}
 
@@ -1022,8 +1009,8 @@ static int server_main (server * const srv, int argc, char **argv) {
 
 	if (oneshot_fd) {
 		if (oneshot_fd <= STDERR_FILENO) {
-			log_error_write(srv, __FILE__, __LINE__, "s",
-					"Invalid fds at startup with lighttpd -1");
+			log_error(srv->errh, __FILE__, __LINE__,
+			  "Invalid fds at startup with lighttpd -1");
 			return -1;
 		}
 		graceful_shutdown = 1;
@@ -1032,16 +1019,16 @@ static int server_main (server * const srv, int argc, char **argv) {
 		if (srv->srvconf.pid_file) buffer_clear(srv->srvconf.pid_file);
 		if (srv->srvconf.max_worker) {
 			srv->srvconf.max_worker = 0;
-			log_error_write(srv, __FILE__, __LINE__, "s",
-					"server one-shot command line option disables server.max-worker config file option.");
+			log_error(srv->errh, __FILE__, __LINE__,
+			  "server one-shot command line option disables server.max-worker config file option.");
 		}
 	}
 
 	if (srv->srvconf.bindhost && buffer_is_equal_string(srv->srvconf.bindhost, CONST_STR_LEN("/dev/stdin"))) {
 		stdin_fd = dup(STDIN_FILENO);
 		if (stdin_fd <= STDERR_FILENO) {
-			log_error_write(srv, __FILE__, __LINE__, "s",
-					"Invalid fds at startup");
+			log_error(srv->errh, __FILE__, __LINE__,
+			  "Invalid fds at startup");
 			return -1;
 		}
 	}
@@ -1059,14 +1046,14 @@ static int server_main (server * const srv, int argc, char **argv) {
 		      #endif
 		} while (-1 != devnull && devnull <= STDERR_FILENO);
 		if (-1 == devnull) {
-			log_error_write(srv, __FILE__, __LINE__, "ss",
-					"opening /dev/null failed:", strerror(errno));
+			log_perror(srv->errh, __FILE__, __LINE__,
+			  "opening /dev/null failed");
 			return -1;
 		}
 		errfd = (0 == fstat(STDERR_FILENO, &st)) ? -1 : devnull;
 		if (0 != fdevent_set_stdin_stdout_stderr(devnull, devnull, errfd)) {
-			log_error_write(srv, __FILE__, __LINE__, "ss",
-					"setting default fds failed:", strerror(errno));
+			log_perror(srv->errh, __FILE__, __LINE__,
+			  "setting default fds failed");
 		      #ifdef FD_CLOEXEC
 			if (-1 != errfd) close(errfd);
 			if (devnull != errfd) close(devnull);
@@ -1080,19 +1067,20 @@ static int server_main (server * const srv, int argc, char **argv) {
 	}
 
 	if (0 != config_set_defaults(srv)) {
-		log_error_write(srv, __FILE__, __LINE__, "s",
-				"setting default values failed");
+		log_error(srv->errh, __FILE__, __LINE__,
+		  "setting default values failed");
 		return -1;
 	}
 
 	if (plugins_load(srv)) {
-		log_error_write(srv, __FILE__, __LINE__, "s",
-				"loading plugins finally failed");
+		log_error(srv->errh, __FILE__, __LINE__,
+		  "loading plugins finally failed");
 		return -1;
 	}
 
 	if (HANDLER_GO_ON != plugins_call_init(srv)) {
-		log_error_write(srv, __FILE__, __LINE__, "s", "Initialization of plugins failed. Going down.");
+		log_error(srv->errh, __FILE__, __LINE__,
+		  "Initialization of plugins failed. Going down.");
 		return -1;
 	}
 
@@ -1101,8 +1089,8 @@ static int server_main (server * const srv, int argc, char **argv) {
 	for (const char *pname = NULL; i < srv->plugins.used; ++i) {
 		plugin *p = ((plugin **)srv->plugins.ptr)[i];
 		if (NULL != pname && 0 == strcmp(p->name, "indexfile")) {
-			log_error_write(srv, __FILE__, __LINE__, "SS",
-					"Warning: mod_indexfile should be listed in server.modules prior to mod_", pname);
+			log_error(srv->errh, __FILE__, __LINE__,
+			  "Warning: mod_indexfile should be listed in server.modules prior to mod_%s", pname);
 			break;
 		}
 		if (p->handle_subrequest_start && p->handle_subrequest) {
@@ -1113,28 +1101,29 @@ static int server_main (server * const srv, int argc, char **argv) {
 	/* open pid file BEFORE chroot */
 	if (-2 == pid_fd) pid_fd = -1; /*(initial startup state)*/
 	if (-1 == pid_fd && !buffer_string_is_empty(srv->srvconf.pid_file)) {
-		if (-1 == (pid_fd = fdevent_open_cloexec(srv->srvconf.pid_file->ptr, 0, O_WRONLY | O_CREAT | O_EXCL | O_TRUNC, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH))) {
+		const char *pidfile = srv->srvconf.pid_file->ptr;
+		if (-1 == (pid_fd = fdevent_open_cloexec(pidfile, 0, O_WRONLY | O_CREAT | O_EXCL | O_TRUNC, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH))) {
 			struct stat st;
 			if (errno != EEXIST) {
-				log_error_write(srv, __FILE__, __LINE__, "sbs",
-					"opening pid-file failed:", srv->srvconf.pid_file, strerror(errno));
+				log_perror(srv->errh, __FILE__, __LINE__,
+				  "opening pid-file failed: %s", pidfile);
 				return -1;
 			}
 
-			if (0 != stat(srv->srvconf.pid_file->ptr, &st)) {
-				log_error_write(srv, __FILE__, __LINE__, "sbs",
-						"stating existing pid-file failed:", srv->srvconf.pid_file, strerror(errno));
+			if (0 != stat(pidfile, &st)) {
+				log_perror(srv->errh, __FILE__, __LINE__,
+				  "stating existing pid-file failed: %s", pidfile);
 			}
 
 			if (!S_ISREG(st.st_mode)) {
-				log_error_write(srv, __FILE__, __LINE__, "sb",
-						"pid-file exists and isn't regular file:", srv->srvconf.pid_file);
+				log_error(srv->errh, __FILE__, __LINE__,
+				  "pid-file exists and isn't regular file: %s", pidfile);
 				return -1;
 			}
 
-			if (-1 == (pid_fd = fdevent_open_cloexec(srv->srvconf.pid_file->ptr, 0, O_WRONLY | O_CREAT | O_TRUNC, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH))) {
-				log_error_write(srv, __FILE__, __LINE__, "sbs",
-						"opening pid-file failed:", srv->srvconf.pid_file, strerror(errno));
+			if (-1 == (pid_fd = fdevent_open_cloexec(pidfile, 0, O_WRONLY | O_CREAT | O_TRUNC, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH))) {
+				log_perror(srv->errh, __FILE__, __LINE__,
+				  "opening pid-file failed: %s", pidfile);
 				return -1;
 			}
 		}
@@ -1149,9 +1138,7 @@ static int server_main (server * const srv, int argc, char **argv) {
 #endif
 
 		if (0 != getrlimit(RLIMIT_NOFILE, &rlim)) {
-			log_error_write(srv, __FILE__, __LINE__,
-					"ss", "couldn't get 'max filedescriptors'",
-					strerror(errno));
+			log_perror(srv->errh, __FILE__, __LINE__, "getrlimit()");
 			return -1;
 		}
 
@@ -1166,9 +1153,7 @@ static int server_main (server * const srv, int argc, char **argv) {
 			if (i_am_root) rlim.rlim_max = srv->srvconf.max_fds;
 
 			if (0 != setrlimit(RLIMIT_NOFILE, &rlim)) {
-				log_error_write(srv, __FILE__, __LINE__,
-						"ss", "couldn't set 'max filedescriptors'",
-						strerror(errno));
+				log_perror(srv->errh, __FILE__, __LINE__, "setrlimit()");
 				return -1;
 			}
 		}
@@ -1199,36 +1184,36 @@ static int server_main (server * const srv, int argc, char **argv) {
 
 		if (!buffer_string_is_empty(srv->srvconf.groupname)) {
 			if (NULL == (grp = getgrnam(srv->srvconf.groupname->ptr))) {
-				log_error_write(srv, __FILE__, __LINE__, "sb",
-					"can't find groupname", srv->srvconf.groupname);
+				log_error(srv->errh, __FILE__, __LINE__,
+				  "can't find groupname %s", srv->srvconf.groupname->ptr);
 				return -1;
 			}
 		}
 
 		if (!buffer_string_is_empty(srv->srvconf.username)) {
 			if (NULL == (pwd = getpwnam(srv->srvconf.username->ptr))) {
-				log_error_write(srv, __FILE__, __LINE__, "sb",
-						"can't find username", srv->srvconf.username);
+				log_error(srv->errh, __FILE__, __LINE__,
+				  "can't find username %s", srv->srvconf.username->ptr);
 				return -1;
 			}
 
 			if (pwd->pw_uid == 0) {
-				log_error_write(srv, __FILE__, __LINE__, "s",
-						"I will not set uid to 0\n");
+				log_error(srv->errh, __FILE__, __LINE__,
+				  "I will not set uid to 0\n");
 				return -1;
 			}
 
 			if (NULL == grp && NULL == (grp = getgrgid(pwd->pw_gid))) {
-				log_error_write(srv, __FILE__, __LINE__, "sd",
-					"can't find group id", pwd->pw_gid);
+				log_error(srv->errh, __FILE__, __LINE__,
+				  "can't find group id %d", (int)pwd->pw_gid);
 				return -1;
 			}
 		}
 
 		if (NULL != grp) {
 			if (grp->gr_gid == 0) {
-				log_error_write(srv, __FILE__, __LINE__, "s",
-						"I will not set gid to 0\n");
+				log_error(srv->errh, __FILE__, __LINE__,
+				  "I will not set gid to 0\n");
 				return -1;
 			}
 		}
@@ -1239,11 +1224,11 @@ static int server_main (server * const srv, int argc, char **argv) {
 		 * */
 		if (NULL != grp) {
 			if (-1 == setgid(grp->gr_gid)) {
-				log_error_write(srv, __FILE__, __LINE__, "ss", "setgid failed: ", strerror(errno));
+				log_perror(srv->errh, __FILE__, __LINE__, "setgid()");
 				return -1;
 			}
 			if (-1 == setgroups(0, NULL)) {
-				log_error_write(srv, __FILE__, __LINE__, "ss", "setgroups failed: ", strerror(errno));
+				log_perror(srv->errh, __FILE__, __LINE__, "setgroups()");
 				return -1;
 			}
 			if (!buffer_string_is_empty(srv->srvconf.username)) {
@@ -1256,11 +1241,11 @@ static int server_main (server * const srv, int argc, char **argv) {
 			tzset();
 
 			if (-1 == chroot(srv->srvconf.changeroot->ptr)) {
-				log_error_write(srv, __FILE__, __LINE__, "ss", "chroot failed: ", strerror(errno));
+				log_perror(srv->errh, __FILE__, __LINE__, "chroot()");
 				return -1;
 			}
 			if (-1 == chdir("/")) {
-				log_error_write(srv, __FILE__, __LINE__, "ss", "chdir failed: ", strerror(errno));
+				log_perror(srv->errh, __FILE__, __LINE__, "chdir()");
 				return -1;
 			}
 		}
@@ -1269,7 +1254,7 @@ static int server_main (server * const srv, int argc, char **argv) {
 		/* drop root privs */
 		if (NULL != pwd) {
 			if (-1 == setuid(pwd->pw_uid)) {
-				log_error_write(srv, __FILE__, __LINE__, "ss", "setuid failed: ", strerror(errno));
+				log_perror(srv->errh, __FILE__, __LINE__, "setuid()");
 				return -1;
 			}
 		}
@@ -1287,7 +1272,9 @@ static int server_main (server * const srv, int argc, char **argv) {
 	/* set max-conns */
 	if (srv->srvconf.max_conns > srv->max_fds/2) {
 		/* we can't have more connections than max-fds/2 */
-		log_error_write(srv, __FILE__, __LINE__, "sdd", "can't have more connections than fds/2: ", srv->srvconf.max_conns, srv->max_fds);
+		log_error(srv->errh, __FILE__, __LINE__,
+		  "can't have more connections than fds/2: %hu %d",
+		  srv->srvconf.max_conns, srv->max_fds);
 		srv->max_conns = srv->max_fds/2;
 	} else if (srv->srvconf.max_conns) {
 		/* otherwise respect the wishes of the user */
@@ -1355,7 +1342,7 @@ static int server_main (server * const srv, int argc, char **argv) {
 		buffer_copy_int(srv->tmp_buf, srv->pid);
 		buffer_append_string_len(srv->tmp_buf, CONST_STR_LEN("\n"));
 		if (-1 == write_all(pid_fd, CONST_BUF_LEN(srv->tmp_buf))) {
-			log_error_write(srv, __FILE__, __LINE__, "ss", "Couldn't write pid file:", strerror(errno));
+			log_perror(srv->errh, __FILE__, __LINE__, "Couldn't write pid file");
 			close(pid_fd);
 			pid_fd = -1;
 			return -1;
@@ -1368,14 +1355,14 @@ static int server_main (server * const srv, int argc, char **argv) {
 	 * is being written to that fd which may not be valid anymore. */
 	if (!srv->srvconf.preflight_check) {
 		if (-1 == log_error_open(srv)) {
-			log_error_write(srv, __FILE__, __LINE__, "s", "Opening errorlog failed. Going down.");
+			log_error(srv->errh, __FILE__, __LINE__, "Opening errorlog failed. Going down.");
 			return -1;
 		}
-		log_error_write(srv, __FILE__, __LINE__, "s", "server started (" PACKAGE_DESC ")");
+		log_error(srv->errh, __FILE__, __LINE__, "server started (" PACKAGE_DESC ")");
 	}
 
 	if (HANDLER_GO_ON != plugins_call_set_defaults(srv)) {
-		log_error_write(srv, __FILE__, __LINE__, "s", "Configuration of plugins failed. Going down.");
+		log_error(srv->errh, __FILE__, __LINE__, "Configuration of plugins failed. Going down.");
 		return -1;
 	}
 
@@ -1401,8 +1388,8 @@ static int server_main (server * const srv, int argc, char **argv) {
 
 	if (idle_limit && srv->srvconf.max_worker) {
 		srv->srvconf.max_worker = 0;
-		log_error_write(srv, __FILE__, __LINE__, "s",
-				"server idle time limit command line option disables server.max-worker config file option.");
+		log_error(srv->errh, __FILE__, __LINE__,
+		  "server idle time limit command line option disables server.max-worker config file option.");
 	}
 
 	/* start watcher and workers */
@@ -1537,8 +1524,7 @@ static int server_main (server * const srv, int argc, char **argv) {
 #endif
 
 	if (NULL == (srv->ev = fdevent_init(srv))) {
-		log_error_write(srv, __FILE__, __LINE__,
-				"s", "fdevent_init failed");
+		log_error(srv->errh, __FILE__, __LINE__, "fdevent_init failed");
 		return -1;
 	}
 
@@ -1563,8 +1549,8 @@ static int server_main (server * const srv, int argc, char **argv) {
 
 	/* might fail if user is using fam (not gamin) and famd isn't running */
 	if (NULL == (srv->stat_cache = stat_cache_init(srv))) {
-		log_error_write(srv, __FILE__, __LINE__, "s",
-			"stat-cache could not be setup, dieing.");
+		log_error(srv->errh, __FILE__, __LINE__,
+		  "stat-cache could not be setup, dieing.");
 		return -1;
 	}
 
@@ -1577,12 +1563,11 @@ static int server_main (server * const srv, int argc, char **argv) {
 		interval.it_value.tv_sec = 1;
 		interval.it_value.tv_usec = 0;
 		if (setitimer(ITIMER_REAL, &interval, NULL)) {
-			log_error_write(srv, __FILE__, __LINE__, "s", "setting timer failed");
+			log_perror(srv->errh, __FILE__, __LINE__, "setitimer()");
 			return -1;
 		}
 	}
 #endif
-
 
 	/* get the current number of FDs */
 	{
@@ -1617,19 +1602,19 @@ static int server_handle_sighup (server * const srv) {
 			plugins_call_handle_sighup(srv);
 
 			if (-1 == log_error_cycle(srv)) {
-				log_error_write(srv, __FILE__, __LINE__, "s", "cycling errorlog failed, dying");
+				log_error(srv->errh, __FILE__, __LINE__,
+				  "cycling errorlog failed, dying");
 
 				return -1;
 			} else {
 #ifdef HAVE_SIGACTION
-				log_error_write(srv, __FILE__, __LINE__, "sdsd", 
-					"logfiles cycled UID =",
-					last_sighup_info.si_uid,
-					"PID =",
-					last_sighup_info.si_pid);
+				log_error(srv->errh, __FILE__, __LINE__,
+				  "logfiles cycled UID = %d PID = %d",
+				  (int)last_sighup_info.si_uid,
+				  (int)last_sighup_info.si_pid);
 #else
-				log_error_write(srv, __FILE__, __LINE__, "s", 
-					"logfiles cycled");
+				log_error(srv->errh, __FILE__, __LINE__,
+				  "logfiles cycled");
 #endif
 			}
 
@@ -1645,8 +1630,9 @@ static void server_handle_sigalrm (server * const srv, time_t min_ts, time_t las
 
 				/* check idle time limit, if enabled */
 				if (idle_limit && idle_limit < min_ts - last_active_ts && !graceful_shutdown) {
-					log_error_write(srv, __FILE__, __LINE__, "sDs", "[note] idle timeout", (int)idle_limit,
-							"s exceeded, initiating graceful shutdown");
+					log_error(srv->errh, __FILE__, __LINE__,
+					  "[note] idle timeout %ds exceeded, "
+					  "initiating graceful shutdown", (int)idle_limit);
 					graceful_shutdown = 2; /* value 2 indicates idle timeout */
 					if (graceful_restart) {
 						graceful_restart = 0;
@@ -1791,18 +1777,17 @@ int main (int argc, char **argv) {
             }
 
             if (2 == graceful_shutdown) { /* value 2 indicates idle timeout */
-                log_error_write(srv, __FILE__, __LINE__, "s",
-                                "server stopped after idle timeout");
+                log_error(srv->errh, __FILE__, __LINE__,
+                  "server stopped after idle timeout");
             } else {
               #ifdef HAVE_SIGACTION
-                log_error_write(srv, __FILE__, __LINE__, "sdsd",
-                                "server stopped by UID =",
-                                last_sigterm_info.si_uid,
-                                "PID =",
-                                last_sigterm_info.si_pid);
+                log_error(srv->errh, __FILE__, __LINE__,
+                  "server stopped by UID = %d PID = %d",
+                  (int)last_sigterm_info.si_uid,
+                  (int)last_sigterm_info.si_pid);
               #else
-                log_error_write(srv, __FILE__, __LINE__, "s",
-                                "server stopped");
+                log_error(srv->errh, __FILE__, __LINE__,
+                  "server stopped");
               #endif
             }
         }

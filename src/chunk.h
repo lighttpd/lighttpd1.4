@@ -9,6 +9,8 @@
 #include "buffer.h"
 #include "array.h"
 
+struct log_error_st;    /*(declaration)*/
+
 typedef struct chunk {
 	struct chunk *next;
 	enum { MEM_CHUNK, FILE_CHUNK } type;
@@ -85,8 +87,7 @@ buffer * chunkqueue_append_buffer_open(chunkqueue *cq);
 
 void chunkqueue_append_buffer_commit(chunkqueue *cq);
 
-struct server; /*(declaration)*/
-int chunkqueue_append_mem_to_tempfile(struct server *srv, chunkqueue *cq, const char *mem, size_t len);
+int chunkqueue_append_mem_to_tempfile(chunkqueue *cq, const char *mem, size_t len, struct log_error_st *errh);
 
 /* functions to handle buffers to read into: */
 /* obtain/reserve memory in chunkqueue at least len (input) size,
@@ -109,10 +110,9 @@ void chunkqueue_mark_written(chunkqueue *cq, off_t len);
 void chunkqueue_remove_finished_chunks(chunkqueue *cq);
 
 void chunkqueue_steal(chunkqueue *dest, chunkqueue *src, off_t len);
-struct server;
-int chunkqueue_steal_with_tempfiles(struct server *srv, chunkqueue *dest, chunkqueue *src, off_t len);
+int chunkqueue_steal_with_tempfiles(chunkqueue *dest, chunkqueue *src, off_t len, struct log_error_st *errh);
 
-int chunkqueue_open_file_chunk(struct server *srv, chunkqueue *cq);
+int chunkqueue_open_file_chunk(chunkqueue *cq, struct log_error_st *errh);
 
 void chunkqueue_compact_mem(chunkqueue *cq, size_t clen);
 

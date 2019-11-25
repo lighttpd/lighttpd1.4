@@ -19,8 +19,8 @@ const char * connection_get_state(connection_state_t state);
 const char * connection_get_short_state(connection_state_t state);
 int connection_state_machine(server *srv, connection *con);
 handler_t connection_handle_read_post_state(server *srv, connection *con);
-handler_t connection_handle_read_post_error(server *srv, connection *con, int http_status);
-int connection_write_chunkqueue(server *srv, connection *con, chunkqueue *c, off_t max_bytes);
+handler_t connection_handle_read_post_error(connection *con, int http_status);
+int connection_write_chunkqueue(connection *con, chunkqueue *c, off_t max_bytes);
 void connection_response_reset(server *srv, connection *con);
 
 #define joblist_append(srv, con) connection_list_append(&(srv)->joblist, (con))

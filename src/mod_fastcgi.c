@@ -290,8 +290,8 @@ static handler_t fcgi_create_env(server *srv, handler_ctx *hctx) {
 	if (hctx->request_id == 0) {
 		hctx->request_id = 1; /* always use id 1 as we don't use multiplexing */
 	} else {
-		log_error_write(srv, __FILE__, __LINE__, "sd",
-				"fcgi-request is already in use:", hctx->request_id);
+		log_error(con->conf.errh, __FILE__, __LINE__,
+		  "fcgi-request is already in use: %d", hctx->request_id);
 	}
 	request_id = hctx->request_id;
 
@@ -307,7 +307,7 @@ static handler_t fcgi_create_env(server *srv, handler_ctx *hctx) {
 
 	/* send FCGI_PARAMS */
 
-	if (0 != http_cgi_headers(srv, con, &opts, fcgi_env_add, b)) {
+	if (0 != http_cgi_headers(con, &opts, fcgi_env_add, b)) {
 		con->http_status = 400;
 		con->mode = DIRECT;
 		buffer_clear(b);
@@ -345,14 +345,17 @@ typedef struct {
 	int      request_id;
 } fastcgi_response_packet;
 
-static int fastcgi_get_packet(server *srv, handler_ctx *hctx, fastcgi_response_packet *packet) {
+static int fastcgi_get_packet(handler_ctx *hctx, fastcgi_response_packet *packet) {
 	FCGI_Header header;
 	size_t toread = sizeof(FCGI_Header), flen = 0;
 	off_t rblen = chunkqueue_length(hctx->rb);
 	if (rblen < (off_t)sizeof(FCGI_Header)) {
 		/* no header */
 		if (hctx->conf.debug && 0 != rblen) {
-			log_error_write(srv, __FILE__, __LINE__, "sosds", "FastCGI: header too small:", rblen, "bytes <", sizeof(FCGI_Header), "bytes, waiting for more data");
+			connection *con = hctx->remote_conn;
+			log_error(con->conf.errh, __FILE__, __LINE__,
+			  "FastCGI: header too small: %lld bytes < %zu bytes, "
+			  "waiting for more data", (long long)rblen, sizeof(FCGI_Header));
 		}
 		return -1;
 	}
@@ -401,7 +404,7 @@ static void fastcgi_get_packet_body(buffer *b, handler_ctx *hctx, fastcgi_respon
 	chunkqueue_mark_written(hctx->rb, packet->len);
 }
 
-static handler_t fcgi_recv_parse(server *srv, connection *con, struct http_response_opts_t *opts, buffer *b, size_t n) {
+static handler_t fcgi_recv_parse(connection *con, struct http_response_opts_t *opts, buffer *b, size_t n) {
 	handler_ctx *hctx = (handler_ctx *)opts->pdata;
 	int fin = 0;
 
@@ -410,10 +413,10 @@ static handler_t fcgi_recv_parse(server *srv, connection *con, struct http_respo
 		if (!(fdevent_fdnode_interest(hctx->fdn) & FDEVENT_IN)
 		    && !(con->conf.stream_response_body & FDEVENT_STREAM_RESPONSE_POLLRDHUP))
 			return HANDLER_GO_ON;
-		log_error_write(srv, __FILE__, __LINE__, "ssdsb",
-				"unexpected end-of-file (perhaps the fastcgi process died):",
-				"pid:", hctx->proc->pid,
-				"socket:", hctx->proc->connection_name);
+		log_error(con->conf.errh, __FILE__, __LINE__,
+		  "unexpected end-of-file (perhaps the fastcgi process died):"
+		  "pid: %d socket: %s",
+		  hctx->proc->pid, hctx->proc->connection_name->ptr);
 
 		return HANDLER_ERROR;
 	}
@@ -428,7 +431,7 @@ static handler_t fcgi_recv_parse(server *srv, connection *con, struct http_respo
 		fastcgi_response_packet packet;
 
 		/* check if we have at least one packet */
-		if (0 != fastcgi_get_packet(srv, hctx, &packet)) {
+		if (0 != fastcgi_get_packet(hctx, &packet)) {
 			/* no full packet */
 			break;
 		}
@@ -442,11 +445,11 @@ static handler_t fcgi_recv_parse(server *srv, connection *con, struct http_respo
 				/* split header from body */
 				buffer *hdrs = hctx->response;
 				if (NULL == hdrs) {
-					hdrs = srv->tmp_buf;
-					buffer_clear(srv->tmp_buf);
+					hdrs = con->srv->tmp_buf;
+					buffer_clear(hdrs);
 				}
 				fastcgi_get_packet_body(hdrs, hctx, &packet);
-				if (HANDLER_GO_ON != http_response_parse_headers(srv, con, &hctx->opts, hdrs)) {
+				if (HANDLER_GO_ON != http_response_parse_headers(con, &hctx->opts, hdrs)) {
 					hctx->send_content_body = 0;
 					fin = 1;
 					break;
@@ -463,7 +466,7 @@ static handler_t fcgi_recv_parse(server *srv, connection *con, struct http_respo
 					hctx->send_content_body = 0;
 				}
 			} else if (hctx->send_content_body) {
-				if (0 != http_chunk_transfer_cqlen(srv, con, hctx->rb, packet.len - packet.padding)) {
+				if (0 != http_chunk_transfer_cqlen(con, hctx->rb, packet.len - packet.padding)) {
 					/* error writing to tempfile;
 					 * truncate response or send 500 if nothing sent yet */
 					fin = 1;
@@ -474,21 +477,21 @@ static handler_t fcgi_recv_parse(server *srv, connection *con, struct http_respo
 			}
 			break;
 		case FCGI_STDERR:
-			if (packet.len == 0) break;
-
-			buffer_clear(srv->tmp_buf);
-			fastcgi_get_packet_body(srv->tmp_buf, hctx, &packet);
-			log_error_write_multiline_buffer(srv, __FILE__, __LINE__, srv->tmp_buf, "s",
-					"FastCGI-stderr:");
-
+			if (packet.len) {
+				buffer * const tb = con->srv->tmp_buf;
+				buffer_clear(tb);
+				fastcgi_get_packet_body(tb, hctx, &packet);
+				log_error_write_multiline_buffer(con->srv, __FILE__, __LINE__, tb, "s",
+						"FastCGI-stderr:");
+			}
 			break;
 		case FCGI_END_REQUEST:
 			hctx->request_id = -1; /*(flag request ended)*/
 			fin = 1;
 			break;
 		default:
-			log_error_write(srv, __FILE__, __LINE__, "sd",
-					"FastCGI: header.type not handled: ", packet.type);
+			log_error(con->conf.errh, __FILE__, __LINE__,
+			  "FastCGI: header.type not handled: %d", packet.type);
 			chunkqueue_mark_written(hctx->rb, packet.len);
 			break;
 		}

@@ -53,14 +53,14 @@ typedef struct http_auth_info_t {
 
 typedef struct http_auth_backend_t {
     const char *name;
-    handler_t(*basic)(server *srv, connection *con, void *p_d, const http_auth_require_t *require, const buffer *username, const char *pw);
-    handler_t(*digest)(server *srv, connection *con, void *p_d, http_auth_info_t *ai);
+    handler_t(*basic)(connection *con, void *p_d, const http_auth_require_t *require, const buffer *username, const char *pw);
+    handler_t(*digest)(connection *con, void *p_d, http_auth_info_t *ai);
     void *p_d;
 } http_auth_backend_t;
 
 typedef struct http_auth_scheme_t {
     const char *name;
-    handler_t(*checkfn)(server *srv, connection *con, void *p_d, const struct http_auth_require_t *require, const struct http_auth_backend_t *backend);
+    handler_t(*checkfn)(connection *con, void *p_d, const struct http_auth_require_t *require, const struct http_auth_backend_t *backend);
     /*(backend is arg only because auth.backend is separate config directive)*/
     void *p_d;
 } http_auth_scheme_t;

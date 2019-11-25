@@ -244,8 +244,8 @@ URIHANDLER_FUNC(mod_uploadprogress_uri_handler) {
 	for (len = 0; light_isxdigit(id[len]); ++len) ;
 	if (len != 32) {
 		if (!pathinfo) { /*(reduce false positive noise in error log)*/
-			log_error_write(srv, __FILE__, __LINE__, "ss",
-					"invalid progress-id; non-xdigit or len != 32:", id);
+			log_error(con->conf.errh, __FILE__, __LINE__,
+			  "invalid progress-id; non-xdigit or len != 32: %s", id);
 		}
 		return HANDLER_GO_ON;
 	}
@@ -268,8 +268,7 @@ URIHANDLER_FUNC(mod_uploadprogress_uri_handler) {
 
 		/* get the connection */
 		if (NULL == (post_con = connection_map_get_connection(&p->con_map, id, len))) {
-			log_error_write(srv, __FILE__, __LINE__, "ss",
-					"ID not known:", id);
+			log_error(con->conf.errh, __FILE__, __LINE__, "ID not known: %s", id);
 
 			chunkqueue_append_mem(con->write_queue, CONST_STR_LEN("not in progress"));
 

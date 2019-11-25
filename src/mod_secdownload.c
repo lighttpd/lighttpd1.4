@@ -141,8 +141,8 @@ static size_t secdl_algorithm_mac_length(secdl_algorithm alg) {
 	return 0;
 }
 
-static int secdl_verify_mac(server *srv, plugin_config *config, const char* protected_path, const char* mac, size_t maclen) {
-	UNUSED(srv);
+static int secdl_verify_mac(plugin_config *config, const char* protected_path, const char* mac, size_t maclen, log_error_st *errh) {
+	UNUSED(errh);
 	if (0 == maclen || secdl_algorithm_mac_length(config->algorithm) != maclen) return 0;
 
 	switch (config->algorithm) {
@@ -187,8 +187,8 @@ static int secdl_verify_mac(server *srv, plugin_config *config, const char* prot
 					(unsigned char const*) config->secret->ptr, buffer_string_length(config->secret),
 					(unsigned char const*) protected_path, strlen(protected_path),
 					digest, NULL)) {
-				log_error_write(srv, __FILE__, __LINE__, "s",
-					"hmac-sha1: HMAC() failed");
+				log_error(errh, __FILE__, __LINE__,
+				  "hmac-sha1: HMAC() failed");
 				return 0;
 			}
 
@@ -209,8 +209,8 @@ static int secdl_verify_mac(server *srv, plugin_config *config, const char* prot
 					(unsigned char const*) config->secret->ptr, buffer_string_length(config->secret),
 					(unsigned char const*) protected_path, strlen(protected_path),
 					digest, NULL)) {
-				log_error_write(srv, __FILE__, __LINE__, "s",
-					"hmac-sha256: HMAC() failed");
+				log_error(errh, __FILE__, __LINE__,
+				  "hmac-sha256: HMAC() failed");
 				return 0;
 			}
 
@@ -431,22 +431,22 @@ URIHANDLER_FUNC(mod_secdownload_uri_handler) {
 	if (buffer_string_is_empty(p->conf.uri_prefix)) return HANDLER_GO_ON;
 
 	if (buffer_string_is_empty(p->conf.secret)) {
-		log_error_write(srv, __FILE__, __LINE__, "s",
-				"secdownload.secret has to be set");
+		log_error(con->conf.errh, __FILE__, __LINE__,
+		  "secdownload.secret has to be set");
 		con->http_status = 500;
 		return HANDLER_FINISHED;
 	}
 
 	if (buffer_string_is_empty(p->conf.doc_root)) {
-		log_error_write(srv, __FILE__, __LINE__, "s",
-				"secdownload.document-root has to be set");
+		log_error(con->conf.errh, __FILE__, __LINE__,
+		  "secdownload.document-root has to be set");
 		con->http_status = 500;
 		return HANDLER_FINISHED;
 	}
 
 	if (SECDL_INVALID == p->conf.algorithm) {
-		log_error_write(srv, __FILE__, __LINE__, "s",
-				"secdownload.algorithm has to be set");
+		log_error(con->conf.errh, __FILE__, __LINE__,
+		  "secdownload.algorithm has to be set");
 		con->http_status = 500;
 		return HANDLER_FINISHED;
 	}
@@ -505,13 +505,13 @@ URIHANDLER_FUNC(mod_secdownload_uri_handler) {
 		protected_path = b->ptr;
 	}
 
-	if (!secdl_verify_mac(srv, &p->conf, protected_path, mac_str, mac_len)) {
+	if (!secdl_verify_mac(&p->conf, protected_path, mac_str, mac_len,
+	                      con->conf.errh)) {
 		con->http_status = 403;
 
 		if (con->conf.log_request_handling) {
-			log_error_write(srv, __FILE__, __LINE__, "sb",
-				"mac invalid:",
-				con->uri.path);
+			log_error(con->conf.errh, __FILE__, __LINE__,
+			  "mac invalid: %s", con->uri.path->ptr);
 		}
 
 		return HANDLER_FINISHED;

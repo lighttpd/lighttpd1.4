@@ -32,7 +32,7 @@ INIT_FUNC(mod_expire_init) {
     return calloc(1, sizeof(plugin_data));
 }
 
-static int mod_expire_get_offset(server *srv, plugin_data *p, const buffer *expire, time_t *offset) {
+static int mod_expire_get_offset(log_error_st *errh, plugin_data *p, const buffer *expire, time_t *offset) {
 	char *ts;
 	int type = -1;
 	time_t retts = 0;
@@ -48,8 +48,7 @@ static int mod_expire_get_offset(server *srv, plugin_data *p, const buffer *expi
 	 */
 
 	if (buffer_string_is_empty(expire)) {
-		log_error_write(srv, __FILE__, __LINE__, "s",
-				"empty:");
+		log_error(errh, __FILE__, __LINE__, "mod_expire empty string");
 		return -1;
 	}
 
@@ -66,8 +65,7 @@ static int mod_expire_get_offset(server *srv, plugin_data *p, const buffer *expi
 		ts   += 13;
 	} else {
 		/* invalid type-prefix */
-		log_error_write(srv, __FILE__, __LINE__, "ss",
-				"invalid <base>:", ts);
+		log_error(errh, __FILE__, __LINE__, "invalid <base>: %s", ts);
 		return -1;
 	}
 
@@ -82,15 +80,15 @@ static int mod_expire_get_offset(server *srv, plugin_data *p, const buffer *expi
 		int num;
 
 		if (NULL == (space = strchr(ts, ' '))) {
-			log_error_write(srv, __FILE__, __LINE__, "ss",
-					"missing space after <num>:", ts);
+			log_error(errh, __FILE__, __LINE__,
+			  "missing space after <num>: %s", ts);
 			return -1;
 		}
 
 		num = strtol(ts, &err, 10);
 		if (*err != ' ') {
-			log_error_write(srv, __FILE__, __LINE__, "ss",
-					"missing <type> after <num>:", ts);
+			log_error(errh, __FILE__, __LINE__,
+			  "missing <type> after <num>: %s", ts);
 			return -1;
 		}
 
@@ -124,8 +122,7 @@ static int mod_expire_get_offset(server *srv, plugin_data *p, const buffer *expi
 				   0 == strncmp(ts, "seconds", slen)) {
 				num *= 1;
 			} else {
-				log_error_write(srv, __FILE__, __LINE__, "ss",
-						"unknown type:", ts);
+				log_error(errh, __FILE__, __LINE__, "unknown type: %s", ts);
 				return -1;
 			}
 
@@ -148,8 +145,7 @@ static int mod_expire_get_offset(server *srv, plugin_data *p, const buffer *expi
 			} else if (0 == strcmp(ts, "seconds")) {
 				num *= 1;
 			} else {
-				log_error_write(srv, __FILE__, __LINE__, "ss",
-						"unknown type:", ts);
+				log_error(errh, __FILE__, __LINE__, "unknown type: %s", ts);
 				return -1;
 			}
 
@@ -225,7 +221,7 @@ SETDEFAULTS_FUNC(mod_expire_set_defaults) {
                 for (uint32_t k = 0; k < cpv->v.a->used; ++k) {
                     /* parse lines */
                     data_string *ds = (data_string *)cpv->v.a->data[k];
-                    if (-1 == mod_expire_get_offset(srv, p, &ds->value, NULL)) {
+                    if (-1==mod_expire_get_offset(srv->errh,p,&ds->value,NULL)){
                         log_error(srv->errh, __FILE__, __LINE__,
                           "parsing expire.url failed: %s", ds->value.ptr);
                         return HANDLER_ERROR;
@@ -252,7 +248,7 @@ SETDEFAULTS_FUNC(mod_expire_set_defaults) {
                         buffer_string_set_length(&ds->key, klen-1);
 
                     /* parse lines */
-                    if (-1 == mod_expire_get_offset(srv, p, &ds->value, NULL)) {
+                    if (-1==mod_expire_get_offset(srv->errh,p,&ds->value,NULL)){
                         log_error(srv->errh, __FILE__, __LINE__,
                           "parsing expire.mimetypes failed: %s", ds->value.ptr);
                         return HANDLER_ERROR;
@@ -315,7 +311,7 @@ CONNECTION_FUNC(mod_expire_handler) {
 			time_t ts, expires;
 			stat_cache_entry *sce = NULL;
 
-			switch(mod_expire_get_offset(srv, p, vb, &ts)) {
+			switch(mod_expire_get_offset(con->conf.errh, p, vb, &ts)) {
 			case 0:
 				/* access */
 				expires = (ts + srv->cur_ts);

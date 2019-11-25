@@ -41,11 +41,11 @@ const char * sock_addr_inet_ntop(const sock_addr *saddr, char *buf, socklen_t sz
 int sock_addr_inet_ntop_copy_buffer(buffer *b, const sock_addr *saddr);
 int sock_addr_inet_ntop_append_buffer(buffer *b, const sock_addr *saddr);
 int sock_addr_stringify_append_buffer(buffer *b, const sock_addr *saddr);
-int sock_addr_nameinfo_append_buffer(server *srv, buffer *b, const sock_addr *saddr);
+int sock_addr_nameinfo_append_buffer(buffer *b, const sock_addr *saddr, log_error_st *errh);
 
-int sock_addr_from_buffer_hints_numeric(server *srv, sock_addr *saddr, socklen_t *len, const buffer *b, int family, unsigned short port);
-int sock_addr_from_str_hints(server *srv, sock_addr *saddr, socklen_t *len, const char *str, int family, unsigned short port);
-int sock_addr_from_str_numeric(server *srv, sock_addr *saddr, const char *str);
+int sock_addr_from_buffer_hints_numeric(sock_addr *saddr, socklen_t *len, const buffer *b, int family, unsigned short port, log_error_st *errh);
+int sock_addr_from_str_hints(sock_addr *saddr, socklen_t *len, const char *str, int family, unsigned short port, log_error_st *errh);
+int sock_addr_from_str_numeric(sock_addr *saddr, const char *str, log_error_st *errh);
 
 
 #endif

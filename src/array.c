@@ -8,9 +8,6 @@
 #include <stdlib.h>
 #include <limits.h>
 
-#include <errno.h>
-#include <assert.h>
-
 __attribute_cold__
 static void array_extend(array * const a, uint32_t n) {
     a->size  += n;

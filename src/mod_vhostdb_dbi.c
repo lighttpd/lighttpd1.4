@@ -25,7 +25,7 @@ typedef struct {
     dbi_conn dbconn;
     dbi_inst dbinst;
     const buffer *sqlquery;
-    server *srv;
+    log_error_st *errh;
     short reconnect_count;
 } vhostdb_config;
 
@@ -54,8 +54,7 @@ static void mod_vhostdb_dbi_error_callback (dbi_conn dbconn, void *vdata)
     }
 
     dbi_conn_error(dbconn, &errormsg);
-    log_error_write(dbconf->srv, __FILE__, __LINE__, "ss",
-                    "dbi_conn_connect():", errormsg);
+    log_error(dbconf->errh,__FILE__,__LINE__,"dbi_conn_connect(): %s",errormsg);
 }
 
 static void mod_vhostdb_dbconf_free (void *vdata)
@@ -106,16 +105,16 @@ static int mod_vhostdb_dbconf_setup (server *srv, const array *opts, void **vdat
         dbi_inst dbinst = NULL;
         dbi_conn dbconn;
         if (dbi_initialize_r(NULL, &dbinst) < 1) {
-            log_error_write(srv, __FILE__, __LINE__, "s",
-                            "dbi_initialize_r() failed.  "
-                            "Do you have the DBD for this db type installed?");
+            log_error(srv->errh, __FILE__, __LINE__,
+              "dbi_initialize_r() failed.  "
+              "Do you have the DBD for this db type installed?");
             return -1;
         }
         dbconn = dbi_conn_new_r(dbtype->ptr, dbinst);
         if (NULL == dbconn) {
-            log_error_write(srv, __FILE__, __LINE__, "s",
-                            "dbi_conn_new_r() failed.  "
-                            "Do you have the DBD for this db type installed?");
+            log_error(srv->errh, __FILE__, __LINE__,
+              "dbi_conn_new_r() failed.  "
+              "Do you have the DBD for this db type installed?");
             dbi_shutdown_r(dbinst);
             return -1;
         }
@@ -141,7 +140,7 @@ static int mod_vhostdb_dbconf_setup (server *srv, const array *opts, void **vdat
         dbconf->dbinst = dbinst;
         dbconf->dbconn = dbconn;
         dbconf->sqlquery = sqlquery;
-        dbconf->srv = srv;
+        dbconf->errh = srv->errh;
         dbconf->reconnect_count = 0;
         *vdata = dbconf;
 
@@ -163,6 +162,7 @@ static void mod_vhostdb_patch_config (connection * const con, plugin_data * cons
 
 static int mod_vhostdb_dbi_query(server *srv, connection *con, void *p_d, buffer *docroot)
 {
+    UNUSED(srv);
     plugin_data *p = (plugin_data *)p_d;
     vhostdb_config *dbconf;
     dbi_result result;
@@ -205,7 +205,7 @@ static int mod_vhostdb_dbi_query(server *srv, connection *con, void *p_d, buffer
     if (!result) {
         const char *errmsg;
         dbi_conn_error(dbconf->dbconn, &errmsg);
-        log_error_write(srv, __FILE__, __LINE__, "s", errmsg);
+        log_error(con->conf.errh, __FILE__, __LINE__, "%s", errmsg);
         return -1;
     }
 

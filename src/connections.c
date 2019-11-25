@@ -108,8 +108,8 @@ static void connection_plugin_ctx_check(server *srv, connection *con) {
 		plugin *p = ((plugin **)(srv->plugins.ptr))[i];
 		plugin_data_base *pd = p->data;
 		if (!pd || NULL == con->plugin_ctx[pd->id]) continue;
-		log_error_write(srv, __FILE__, __LINE__, "ss",
-				"missing cleanup in", p->name);
+		log_error(con->conf.errh, __FILE__, __LINE__,
+		  "missing cleanup in %s", p->name);
 		con->plugin_ctx[pd->id] = NULL;
 	}
 }
@@ -126,23 +126,18 @@ static int connection_close(server *srv, connection *con) {
 	fdevent_unregister(srv->ev, con->fd);
 	con->fdn = NULL;
 #ifdef __WIN32
-	if (closesocket(con->fd)) {
-		log_error_write(srv, __FILE__, __LINE__, "sds",
-				"(warning) close:", con->fd, strerror(errno));
-	}
+	if (0 == closesocket(con->fd))
 #else
-	if (close(con->fd)) {
-		log_error_write(srv, __FILE__, __LINE__, "sds",
-				"(warning) close:", con->fd, strerror(errno));
-	}
+	if (0 == close(con->fd))
 #endif
-	else {
-		srv->cur_fds--;
-	}
+		--srv->cur_fds;
+	else
+		log_perror(con->conf.errh, __FILE__, __LINE__,
+		  "(warning) close: %d", con->fd);
 
 	if (srv->srvconf.log_state_handling) {
-		log_error_write(srv, __FILE__, __LINE__, "sd",
-				"connection closed for fd", con->fd);
+		log_error(con->conf.errh, __FILE__, __LINE__,
+		  "connection closed for fd %d", con->fd);
 	}
 	con->fd = -1;
 	con->is_ssl_sock = 0;
@@ -185,7 +180,7 @@ static void connection_read_for_eos_plain(server *srv, connection *con) {
 }
 
 static void connection_read_for_eos_ssl(server *srv, connection *con) {
-	if (con->network_read(srv, con, con->read_queue, MAX_READ_LIMIT) < 0)
+	if (con->network_read(con, con->read_queue, MAX_READ_LIMIT) < 0)
 		con->close_timeout_ts = srv->cur_ts - (HTTP_LINGER_TIMEOUT+1);
 	chunkqueue_reset(con->read_queue);
 }
@@ -217,8 +212,8 @@ static void connection_handle_shutdown(server *srv, connection *con) {
 		connection_set_state(con, CON_STATE_CLOSE);
 
 		if (srv->srvconf.log_state_handling) {
-			log_error_write(srv, __FILE__, __LINE__, "sd",
-					"shutdown for fd", con->fd);
+			log_error(con->conf.errh, __FILE__, __LINE__,
+			  "shutdown for fd %d", con->fd);
 		}
 	} else {
 		connection_close(srv, con);
@@ -226,8 +221,8 @@ static void connection_handle_shutdown(server *srv, connection *con) {
 }
 
 __attribute_cold__
-static void connection_fdwaitqueue_append(server *srv, connection *con) {
-    connection_list_append(&srv->fdwaitqueue, con);
+static void connection_fdwaitqueue_append(connection *con) {
+    connection_list_append(&con->srv->fdwaitqueue, con);
 }
 
 static void connection_handle_response_end_state(server *srv, connection *con) {
@@ -296,7 +291,7 @@ static void connection_handle_errdoc(connection *con) {
         buffer_copy_buffer(con->physical.path, con->conf.errorfile_prefix);
         buffer_append_int(con->physical.path, con->http_status);
         buffer_append_string_len(con->physical.path, CONST_STR_LEN(".html"));
-        if (0 == http_chunk_append_file(srv, con, con->physical.path)) {
+        if (0 == http_chunk_append_file(con, con->physical.path)) {
             stat_cache_entry *sce = NULL;
             if (stat_cache_get_entry(srv, con, con->physical.path, &sce)
                 != HANDLER_ERROR) {
@@ -330,7 +325,7 @@ static void connection_handle_errdoc(connection *con) {
       "</h1>\n"
       " </body>\n"
       "</html>\n"));
-    (void)http_chunk_append_mem(srv, con, CONST_BUF_LEN(b));
+    (void)http_chunk_append_mem(con, CONST_BUF_LEN(b));
 
     http_header_response_set(con, HTTP_HEADER_CONTENT_TYPE,
                              CONST_STR_LEN("Content-Type"),
@@ -393,7 +388,7 @@ static int connection_handle_write_prepare(server *srv, connection *con) {
 	case HANDLER_FINISHED:
 		break;
 	default:
-		log_error_write(srv, __FILE__, __LINE__, "s", "response_start plugin failed");
+		log_error(con->conf.errh,__FILE__,__LINE__,"response_start plugin failed");
 		return -1;
 	}
 
@@ -420,8 +415,11 @@ static int connection_handle_write_prepare(server *srv, connection *con) {
 				/* qlen = 0 is important for Redirects (301, ...) as they MAY have
 				 * a content. Browsers are waiting for a Content otherwise
 				 */
-				buffer_copy_int(srv->tmp_buf, qlen);
-				http_header_response_set(con, HTTP_HEADER_CONTENT_LENGTH, CONST_STR_LEN("Content-Length"), CONST_BUF_LEN(srv->tmp_buf));
+				buffer * const tb = con->srv->tmp_buf;
+				buffer_copy_int(tb, qlen);
+				http_header_response_set(con, HTTP_HEADER_CONTENT_LENGTH,
+				                         CONST_STR_LEN("Content-Length"),
+				                         CONST_BUF_LEN(tb));
 			}
 		}
 	} else {
@@ -465,34 +463,33 @@ static int connection_handle_write_prepare(server *srv, connection *con) {
 		con->file_finished = 1;
 	}
 
-	http_response_write_header(srv, con);
+	http_response_write_header(con);
 
 	return 0;
 }
 
 static void connection_handle_write(server *srv, connection *con) {
-	switch(connection_write_chunkqueue(srv, con, con->write_queue, MAX_WRITE_LIMIT)) {
+	switch(connection_write_chunkqueue(con, con->write_queue, MAX_WRITE_LIMIT)) {
 	case 0:
-		con->write_request_ts = srv->cur_ts;
 		if (con->file_finished) {
 			connection_set_state(con, CON_STATE_RESPONSE_END);
 		}
 		break;
 	case -1: /* error on our side */
-		log_error_write(srv, __FILE__, __LINE__, "sd",
-				"connection closed: write failed on fd", con->fd);
+		log_error(con->conf.errh, __FILE__, __LINE__,
+		  "connection closed: write failed on fd %d", con->fd);
 		connection_set_state(con, CON_STATE_ERROR);
 		break;
 	case -2: /* remote close */
 		connection_set_state(con, CON_STATE_ERROR);
 		break;
 	case 1:
-		con->write_request_ts = srv->cur_ts;
 		con->is_writable = 0;
 
 		/* not finished yet -> WRITE */
 		break;
 	}
+	con->write_request_ts = srv->cur_ts;
 }
 
 static void connection_handle_write_state(server *srv, connection *con) {
@@ -516,13 +513,13 @@ static void connection_handle_write_state(server *srv, connection *con) {
             case HANDLER_GO_ON:
                 break;
             case HANDLER_WAIT_FOR_FD:
-                connection_fdwaitqueue_append(srv, con);
+                connection_fdwaitqueue_append(con);
                 break;
             case HANDLER_COMEBACK:
             default:
-                log_error_write(srv, __FILE__, __LINE__, "sdd",
-                                "unexpected subrequest handler ret-value:",
-                                con->fd, r);
+                log_error(con->conf.errh, __FILE__, __LINE__,
+                  "unexpected subrequest handler ret-value: %d %d",
+                  con->fd, r);
                 /* fall through */
             case HANDLER_ERROR:
                 connection_set_state(con, CON_STATE_ERROR);
@@ -700,7 +697,7 @@ static int connection_reset(server *srv, connection *con) {
 	chunkqueue_reset(con->request_content_queue);
 
 	/* The cond_cache gets reset in response.c */
-	/* config_cond_cache_reset(srv, con); */
+	/* config_cond_cache_reset(con); */
 
 	con->async_callback = 0;
 	con->error_handler_saved_status = 0;
@@ -726,7 +723,7 @@ static chunk * connection_read_header_more(connection *con, chunkqueue *cq, chun
     if ((NULL == c || NULL == c->next) && con->is_readable) {
         server * const srv = con->srv;
         con->read_idle_ts = srv->cur_ts;
-        if (0 != con->network_read(srv, con, cq, MAX_READ_LIMIT))
+        if (0 != con->network_read(con, cq, MAX_READ_LIMIT))
             connection_set_state(con, CON_STATE_ERROR);
     }
 
@@ -808,7 +805,7 @@ static int connection_handle_read_state(server * const srv, connection * const c
           srv->srvconf.max_request_field_size;
         if ((con->header_len ? con->header_len : clen) > max_request_field_size
             || hoff[0] >= sizeof(hoff)/sizeof(hoff[0])-1) {
-            log_error(con->errh, __FILE__, __LINE__, "%s",
+            log_error(con->conf.errh, __FILE__, __LINE__, "%s",
                       "oversized request-header -> sending Status 431");
             con->http_status = 431; /* Request Header Fields Too Large */
             con->keep_alive = 0;
@@ -853,7 +850,7 @@ static int connection_handle_read_state(server * const srv, connection * const c
     }
 
     if (con->conf.log_request_header) {
-        log_error(con->errh, __FILE__, __LINE__,
+        log_error(con->conf.errh, __FILE__, __LINE__,
                   "fd: %d request-len: %d\n%.*s", con->fd, (int)con->header_len,
                   (int)con->header_len, hdrs);
     }
@@ -866,7 +863,7 @@ static int connection_handle_read_state(server * const srv, connection * const c
         if (srv->srvconf.log_request_header_on_error) {
             /*(http_request_parse() modifies hdrs only to
              * undo line-wrapping in-place using spaces)*/
-            log_error(con->errh, __FILE__, __LINE__, "request-header:\n%.*s",
+            log_error(con->conf.errh, __FILE__, __LINE__, "request-header:\n%.*s",
                       (int)con->header_len, hdrs);
         }
     }
@@ -954,8 +951,8 @@ static handler_t connection_handle_fdevent(server *srv, void *context, int reven
 		} else if (revents & FDEVENT_ERR) { /* error, connection reset */
 			connection_set_state(con, CON_STATE_ERROR);
 		} else {
-			log_error_write(srv, __FILE__, __LINE__, "sd",
-					"connection closed: poll() -> ???", revents);
+			log_error(con->conf.errh, __FILE__, __LINE__,
+			  "connection closed: poll() -> ??? %d", revents);
 		}
 	}
 
@@ -994,7 +991,7 @@ connection *connection_accept(server *srv, server_socket *srv_socket) {
 			/* out of fds */
 			break;
 		default:
-			log_error_write(srv, __FILE__, __LINE__, "ssd", "accept failed:", strerror(errno), errno);
+			log_perror(srv->errh, __FILE__, __LINE__, "accept failed");
 		}
 		return NULL;
 	} else {
@@ -1007,7 +1004,7 @@ connection *connection_accept(server *srv, server_socket *srv_socket) {
 
 
 /* 0: everything ok, -1: error, -2: con closed */
-static int connection_read_cq(server *srv, connection *con, chunkqueue *cq, off_t max_bytes) {
+static int connection_read_cq(connection *con, chunkqueue *cq, off_t max_bytes) {
 	ssize_t len;
 	char *mem = NULL;
 	size_t mem_len = 0;
@@ -1051,7 +1048,7 @@ static int connection_read_cq(server *srv, connection *con, chunkqueue *cq, off_
 				/* suppress logging for this error, expected for keep-alive */
 				break;
 			default:
-				log_error_write(srv, __FILE__, __LINE__, "sd", "connection closed - recv failed: ", lastError);
+				log_error(con->conf.errh, __FILE__, __LINE__, "connection closed - recv failed: %d", lastError);
 				break;
 			}
 		}
@@ -1067,7 +1064,7 @@ static int connection_read_cq(server *srv, connection *con, chunkqueue *cq, off_
 			/* suppress logging for this error, expected for keep-alive */
 			break;
 		default:
-			log_error_write(srv, __FILE__, __LINE__, "ssd", "connection closed - read failed: ", strerror(errno), errno);
+			log_perror(con->conf.errh, __FILE__, __LINE__, "connection closed - read failed");
 			break;
 		}
 #endif /* __WIN32 */
@@ -1093,8 +1090,9 @@ static int connection_read_cq(server *srv, connection *con, chunkqueue *cq, off_
 }
 
 
-static int connection_write_cq(server *srv, connection *con, chunkqueue *cq, off_t max_bytes) {
-	return srv->network_backend_write(srv, con->fd, cq, max_bytes);
+static int connection_write_cq(connection *con, chunkqueue *cq, off_t max_bytes) {
+	server * const srv = con->srv;
+	return srv->network_backend_write(con->fd, cq, max_bytes, con->conf.errh);
 }
 
 
@@ -1105,13 +1103,12 @@ connection *connection_accepted(server *srv, server_socket *srv_socket, sock_add
 
 		/* ok, we have the connection, register it */
 #if 0
-		log_error_write(srv, __FILE__, __LINE__, "sd",
-				"appected()", cnt);
+		log_error(srv->errh, __FILE__, __LINE__, "accepted() %d", cnt);
 #endif
 		srv->con_opened++;
 
 		con = connections_get_new_connection(srv);
-		con->errh = srv->errh;
+		con->conf.errh = srv->errh;
 		con->srv  = srv;
 
 		con->fd = cnt;
@@ -1127,7 +1124,7 @@ connection *connection_accepted(server *srv, server_socket *srv_socket, sock_add
 		con->srv_socket = srv_socket;
 		con->is_ssl_sock = srv_socket->is_ssl;
 
-		config_cond_cache_reset(srv, con);
+		config_cond_cache_reset(con);
 		con->conditional_is_valid |= (1 << COMP_SERVER_SOCKET)
 					  |  (1 << COMP_HTTP_REMOTE_IP);
 
@@ -1229,7 +1226,7 @@ static int connection_handle_request(server *srv, connection *con) {
 				connection_set_state(con, CON_STATE_RESPONSE_START);
 				break;
 			case HANDLER_WAIT_FOR_FD:
-				connection_fdwaitqueue_append(srv, con);
+				connection_fdwaitqueue_append(con);
 				break;
 			case HANDLER_COMEBACK:
 				if (con->mode == DIRECT && buffer_is_empty(con->physical.path)) {
@@ -1241,7 +1238,7 @@ static int connection_handle_request(server *srv, connection *con) {
 				connection_set_state(con, CON_STATE_ERROR);
 				break;
 			default:
-				log_error_write(srv, __FILE__, __LINE__, "sdd", "unknown ret-value: ", con->fd, r);
+				log_error(con->conf.errh, __FILE__, __LINE__, "unknown ret-value: %d %d", con->fd, r);
 				break;
 			}
 
@@ -1255,16 +1252,14 @@ int connection_state_machine(server *srv, connection *con) {
 	const int log_state_handling = srv->srvconf.log_state_handling;
 
 	if (log_state_handling) {
-		log_error_write(srv, __FILE__, __LINE__, "sds",
-				"state at enter",
-				con->fd,
-				connection_get_state(con->state));
+		log_error(con->conf.errh, __FILE__, __LINE__,
+		  "state at enter %d %s", con->fd, connection_get_state(con->state));
 	}
 
 	do {
 		if (log_state_handling) {
-			log_error_write(srv, __FILE__, __LINE__, "sds",
-					"state for fd", con->fd, connection_get_state(con->state));
+			log_error(con->conf.errh, __FILE__, __LINE__,
+			  "state for fd %d %s", con->fd, connection_get_state(con->state));
 		}
 
 		switch ((ostate = con->state)) {
@@ -1325,17 +1320,15 @@ int connection_state_machine(server *srv, connection *con) {
 		case CON_STATE_CONNECT:
 			break;
 		default:
-			log_error_write(srv, __FILE__, __LINE__, "sdd",
-					"unknown state:", con->fd, con->state);
+			log_error(con->conf.errh, __FILE__, __LINE__,
+			  "unknown state: %d %d", con->fd, con->state);
 			break;
 		}
 	} while (ostate != con->state);
 
 	if (log_state_handling) {
-		log_error_write(srv, __FILE__, __LINE__, "sds",
-				"state at exit:",
-				con->fd,
-				connection_get_state(con->state));
+		log_error(con->conf.errh, __FILE__, __LINE__,
+		  "state at exit: %d %s", con->fd, connection_get_state(con->state));
 	}
 
 	r = 0;
@@ -1408,7 +1401,7 @@ static void connection_check_timeout (server * const srv, const time_t cur_ts, c
             if (cur_ts - con->read_idle_ts > con->conf.max_read_idle) {
                 /* time - out */
                 if (con->conf.log_request_handling) {
-                    log_error(con->errh, __FILE__, __LINE__,
+                    log_error(con->conf.errh, __FILE__, __LINE__,
                               "connection closed - read timeout: %d", con->fd);
                 }
 
@@ -1419,7 +1412,7 @@ static void connection_check_timeout (server * const srv, const time_t cur_ts, c
             if (cur_ts - con->read_idle_ts > con->keep_alive_idle) {
                 /* time - out */
                 if (con->conf.log_request_handling) {
-                    log_error(con->errh, __FILE__, __LINE__,
+                    log_error(con->conf.errh, __FILE__, __LINE__,
                               "connection closed - keep-alive timeout: %d",
                               con->fd);
                 }
@@ -1439,7 +1432,7 @@ static void connection_check_timeout (server * const srv, const time_t cur_ts, c
         (con->write_request_ts != 0)) {
       #if 0
         if (cur_ts - con->write_request_ts > 60) {
-            log_error(con->errh, __FILE__, __LINE__,
+            log_error(con->conf.errh, __FILE__, __LINE__,
                       "connection closed - pre-write-request-timeout: %d %d",
                       con->fd, cur_ts - con->write_request_ts);
         }
@@ -1448,7 +1441,7 @@ static void connection_check_timeout (server * const srv, const time_t cur_ts, c
         if (cur_ts - con->write_request_ts > con->conf.max_write_idle) {
             /* time - out */
             if (con->conf.log_timeouts) {
-                log_error(con->errh, __FILE__, __LINE__,
+                log_error(con->conf.errh, __FILE__, __LINE__,
                   "NOTE: a request from %.*s for %.*s timed out after writing "
                   "%zd bytes. We waited %d seconds.  If this is a problem, "
                   "increase server.max-write-idle",

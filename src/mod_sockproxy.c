@@ -128,7 +128,7 @@ static handler_t sockproxy_create_env_connect(server *srv, handler_ctx *hctx) {
 	connection *con = hctx->remote_conn;
 	con->file_started = 1;
 	gw_set_transparent(srv, hctx);
-	http_response_upgrade_read_body_unknown(srv, con);
+	http_response_upgrade_read_body_unknown(con);
 
 	status_counter_inc(srv, CONST_STR_LEN("sockproxy.requests"));
 	return HANDLER_GO_ON;

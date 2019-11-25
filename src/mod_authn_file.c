@@ -38,7 +38,6 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
-#include <errno.h>
 #include <fcntl.h>
 #include <unistd.h>
 
@@ -59,11 +58,11 @@ typedef struct {
     plugin_config conf;
 } plugin_data;
 
-static handler_t mod_authn_file_htdigest_digest(server *srv, connection *con, void *p_d, http_auth_info_t *ai);
-static handler_t mod_authn_file_htdigest_basic(server *srv, connection *con, void *p_d, const http_auth_require_t *require, const buffer *username, const char *pw);
-static handler_t mod_authn_file_plain_digest(server *srv, connection *con, void *p_d, http_auth_info_t *ai);
-static handler_t mod_authn_file_plain_basic(server *srv, connection *con, void *p_d, const http_auth_require_t *require, const buffer *username, const char *pw);
-static handler_t mod_authn_file_htpasswd_basic(server *srv, connection *con, void *p_d, const http_auth_require_t *require, const buffer *username, const char *pw);
+static handler_t mod_authn_file_htdigest_digest(connection *con, void *p_d, http_auth_info_t *ai);
+static handler_t mod_authn_file_htdigest_basic(connection *con, void *p_d, const http_auth_require_t *require, const buffer *username, const char *pw);
+static handler_t mod_authn_file_plain_digest(connection *con, void *p_d, http_auth_info_t *ai);
+static handler_t mod_authn_file_plain_basic(connection *con, void *p_d, const http_auth_require_t *require, const buffer *username, const char *pw);
+static handler_t mod_authn_file_htpasswd_basic(connection *con, void *p_d, const http_auth_require_t *require, const buffer *username, const char *pw);
 
 INIT_FUNC(mod_authn_file_init) {
     static http_auth_backend_t http_auth_backend_htdigest =
@@ -215,7 +214,7 @@ static void mod_authn_file_digest(http_auth_info_t *ai, const char *pw, size_t p
 
 
 
-static int mod_authn_file_htdigest_get_loop(server *srv, FILE *fp, const buffer *auth_fn, http_auth_info_t *ai) {
+static int mod_authn_file_htdigest_get_loop(FILE *fp, const buffer *auth_fn, http_auth_info_t *ai, log_error_st *errh) {
     char f_user[1024];
 
     while (NULL != fgets(f_user, sizeof(f_user), fp)) {
@@ -231,19 +230,11 @@ static int mod_authn_file_htdigest_get_loop(server *srv, FILE *fp, const buffer 
          * user:realm:md5(user:realm:password)
          */
 
-        if (NULL == (f_realm = strchr(f_user, ':'))) {
-            log_error_write(srv, __FILE__, __LINE__, "sbs",
-                    "parsed error in", auth_fn,
-                    "expected 'username:realm:hashed password'");
-
-            continue; /* skip bad lines */
-        }
-
-        if (NULL == (f_pwd = strchr(f_realm + 1, ':'))) {
-            log_error_write(srv, __FILE__, __LINE__, "sbs",
-                    "parsed error in", auth_fn,
-                    "expected 'username:realm:hashed password'");
-
+        if (NULL == (f_realm = strchr(f_user, ':'))
+            || NULL == (f_pwd = strchr(f_realm + 1, ':'))) {
+            log_error(errh, __FILE__, __LINE__,
+              "parsed error in %s expected 'username:realm:hashed password'",
+              auth_fn->ptr);
             continue; /* skip bad lines */
         }
 
@@ -270,7 +261,7 @@ static int mod_authn_file_htdigest_get_loop(server *srv, FILE *fp, const buffer 
     return -1;
 }
 
-static int mod_authn_file_htdigest_get(server *srv, connection *con, void *p_d, http_auth_info_t *ai) {
+static int mod_authn_file_htdigest_get(connection *con, void *p_d, http_auth_info_t *ai) {
     plugin_data *p = (plugin_data *)p_d;
     const buffer *auth_fn;
     FILE *fp;
@@ -281,23 +272,24 @@ static int mod_authn_file_htdigest_get(server *srv, connection *con, void *p_d, 
 
     fp = fopen(auth_fn->ptr, "r");
     if (NULL != fp) {
-        int rc = mod_authn_file_htdigest_get_loop(srv, fp, auth_fn, ai);
+        int rc = mod_authn_file_htdigest_get_loop(fp,auth_fn,ai,con->conf.errh);
         fclose(fp);
         return rc;
     }
     else {
-        log_error_write(srv, __FILE__, __LINE__, "sbss", "opening digest-userfile", auth_fn, "failed:", strerror(errno));
+        log_perror(con->conf.errh, __FILE__, __LINE__,
+          "opening digest-userfile %s", auth_fn->ptr);
         return -1;
     }
 }
 
-static handler_t mod_authn_file_htdigest_digest(server *srv, connection *con, void *p_d, http_auth_info_t *ai) {
-    return (0 == mod_authn_file_htdigest_get(srv, con, p_d, ai))
+static handler_t mod_authn_file_htdigest_digest(connection *con, void *p_d, http_auth_info_t *ai) {
+    return (0 == mod_authn_file_htdigest_get(con, p_d, ai))
       ? HANDLER_GO_ON
       : HANDLER_ERROR;
 }
 
-static handler_t mod_authn_file_htdigest_basic(server *srv, connection *con, void *p_d, const http_auth_require_t *require, const buffer *username, const char *pw) {
+static handler_t mod_authn_file_htdigest_basic(connection *con, void *p_d, const http_auth_require_t *require, const buffer *username, const char *pw) {
     http_auth_info_t ai;
     unsigned char htdigest[sizeof(ai.digest)];
 
@@ -309,7 +301,7 @@ static handler_t mod_authn_file_htdigest_basic(server *srv, connection *con, voi
     ai.realm    = require->realm->ptr;
     ai.rlen     = buffer_string_length(require->realm);
 
-    if (mod_authn_file_htdigest_get(srv, con, p_d, &ai)) return HANDLER_ERROR;
+    if (mod_authn_file_htdigest_get(con, p_d, &ai)) return HANDLER_ERROR;
 
     if (ai.dlen > sizeof(htdigest)) return HANDLER_ERROR;/*(should not happen)*/
     memcpy(htdigest, ai.digest, ai.dlen); /*(save digest before reuse of ai)*/
@@ -325,7 +317,7 @@ static handler_t mod_authn_file_htdigest_basic(server *srv, connection *con, voi
 
 
 
-static int mod_authn_file_htpasswd_get(server *srv, const buffer *auth_fn, const char *username, size_t userlen, buffer *password) {
+static int mod_authn_file_htpasswd_get(const buffer *auth_fn, const char *username, size_t userlen, buffer *password, log_error_st *errh) {
     FILE *fp;
     char f_user[1024];
 
@@ -334,8 +326,8 @@ static int mod_authn_file_htpasswd_get(server *srv, const buffer *auth_fn, const
     if (buffer_string_is_empty(auth_fn)) return -1;
     fp = fopen(auth_fn->ptr, "r");
     if (NULL == fp) {
-        log_error_write(srv, __FILE__, __LINE__, "sbss",
-                "opening plain-userfile", auth_fn, "failed:", strerror(errno));
+        log_perror(errh, __FILE__, __LINE__,
+                "opening plain-userfile %s", auth_fn->ptr);
 
         return -1;
     }
@@ -354,10 +346,9 @@ static int mod_authn_file_htpasswd_get(server *srv, const buffer *auth_fn, const
          */
 
         if (NULL == (f_pwd = strchr(f_user, ':'))) {
-            log_error_write(srv, __FILE__, __LINE__, "sbs",
-                    "parsed error in", auth_fn,
-                    "expected 'username:hashed password'");
-
+            log_error(errh, __FILE__, __LINE__,
+              "parsed error in %s expected 'username:hashed password'",
+              auth_fn->ptr);
             continue; /* skip bad lines */
         }
 
@@ -382,12 +373,12 @@ static int mod_authn_file_htpasswd_get(server *srv, const buffer *auth_fn, const
     return -1;
 }
 
-static handler_t mod_authn_file_plain_digest(server *srv, connection *con, void *p_d, http_auth_info_t *ai) {
+static handler_t mod_authn_file_plain_digest(connection *con, void *p_d, http_auth_info_t *ai) {
     plugin_data *p = (plugin_data *)p_d;
     buffer *password_buf = buffer_init();/* password-string from auth-backend */
     int rc;
     mod_authn_file_patch_config(con, p);
-    rc = mod_authn_file_htpasswd_get(srv, p->conf.auth_plain_userfile, ai->username, ai->ulen, password_buf);
+    rc = mod_authn_file_htpasswd_get(p->conf.auth_plain_userfile, ai->username, ai->ulen, password_buf, con->conf.errh);
     if (0 == rc) {
         /* generate password from plain-text */
         mod_authn_file_digest(ai, CONST_BUF_LEN(password_buf));
@@ -396,12 +387,12 @@ static handler_t mod_authn_file_plain_digest(server *srv, connection *con, void 
     return (0 == rc) ? HANDLER_GO_ON : HANDLER_ERROR;
 }
 
-static handler_t mod_authn_file_plain_basic(server *srv, connection *con, void *p_d, const http_auth_require_t *require, const buffer *username, const char *pw) {
+static handler_t mod_authn_file_plain_basic(connection *con, void *p_d, const http_auth_require_t *require, const buffer *username, const char *pw) {
     plugin_data *p = (plugin_data *)p_d;
     buffer *password_buf = buffer_init();/* password-string from auth-backend */
     int rc;
     mod_authn_file_patch_config(con, p);
-    rc = mod_authn_file_htpasswd_get(srv, p->conf.auth_plain_userfile, CONST_BUF_LEN(username), password_buf);
+    rc = mod_authn_file_htpasswd_get(p->conf.auth_plain_userfile, CONST_BUF_LEN(username), password_buf, con->conf.errh);
     if (0 == rc) {
         rc = http_auth_const_time_memeq_pad(CONST_BUF_LEN(password_buf), pw, strlen(pw)) ? 0 : -1;
     }
@@ -620,12 +611,12 @@ static void apr_sha_encode(const char *pw, char *result, size_t nbytes) {
     result[5 + base64_written] = '\0'; /* terminate string */
 }
 
-static handler_t mod_authn_file_htpasswd_basic(server *srv, connection *con, void *p_d, const http_auth_require_t *require, const buffer *username, const char *pw) {
+static handler_t mod_authn_file_htpasswd_basic(connection *con, void *p_d, const http_auth_require_t *require, const buffer *username, const char *pw) {
     plugin_data *p = (plugin_data *)p_d;
     buffer *password = buffer_init();/* password-string from auth-backend */
     int rc;
     mod_authn_file_patch_config(con, p);
-    rc = mod_authn_file_htpasswd_get(srv, p->conf.auth_htpasswd_userfile, CONST_BUF_LEN(username), password);
+    rc = mod_authn_file_htpasswd_get(p->conf.auth_htpasswd_userfile, CONST_BUF_LEN(username), password, con->conf.errh);
     if (0 == rc) {
         char sample[256];
         rc = -1;

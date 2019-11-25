@@ -9,7 +9,6 @@
 
 #include <stdlib.h>
 #include <string.h>
-#include <errno.h>
 
 typedef struct {
     const buffer *server_root;
@@ -161,8 +160,7 @@ static int build_doc_root(server *srv, connection *con, plugin_data *p, buffer *
 
 	if (HANDLER_ERROR == stat_cache_get_entry(srv, con, out, &sce)) {
 		if (p->conf.debug) {
-			log_error_write(srv, __FILE__, __LINE__, "sb",
-					strerror(errno), out);
+			log_perror(con->conf.errh, __FILE__, __LINE__, "%s", out->ptr);
 		}
 		return 0;
 	} else if (!S_ISDIR(sce->st.st_mode)) {

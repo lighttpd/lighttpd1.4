@@ -1,7 +1,6 @@
 #include "first.h"
 
 #include <unistd.h>
-#include <errno.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -165,7 +164,7 @@ static MYSQL * mod_mysql_vhost_db_setup (server *srv, const char *dbname, const 
   #endif
 
     if (!mysql_real_connect(my, host, user, pass, dbname, port, sock, flags)) {
-        log_error_write(srv, __FILE__, __LINE__, "s", mysql_error(my));
+        log_error(srv->errh, __FILE__, __LINE__, "%s", mysql_error(my));
         mysql_close(my);
         return NULL;
     }
@@ -310,7 +309,7 @@ CONNECTION_FUNC(mod_mysql_vhost_handle_docroot) {
 		}
 	}
 	if (mysql_real_query(p->conf.mysql, CONST_BUF_LEN(b))) {
-		log_error_write(srv, __FILE__, __LINE__, "s", mysql_error(p->conf.mysql));
+		log_error(con->conf.errh, __FILE__, __LINE__, "%s", mysql_error(p->conf.mysql));
 		goto ERR500;
 	}
 	result = mysql_store_result(p->conf.mysql);
@@ -330,11 +329,11 @@ CONNECTION_FUNC(mod_mysql_vhost_handle_docroot) {
 	buffer_append_slash(b);
 
 	if (HANDLER_ERROR == stat_cache_get_entry(srv, con, b, &sce)) {
-		log_error_write(srv, __FILE__, __LINE__, "sb", strerror(errno), b);
+		log_perror(con->conf.errh, __FILE__, __LINE__, "%s", b->ptr);
 		goto ERR500;
 	}
 	if (!S_ISDIR(sce->st.st_mode)) {
-		log_error_write(srv, __FILE__, __LINE__, "sb", "Not a directory", b);
+		log_error(con->conf.errh, __FILE__, __LINE__, "Not a directory %s", b->ptr);
 		goto ERR500;
 	}
 

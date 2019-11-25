@@ -166,21 +166,6 @@ static void log_write(const log_error_st *errh, buffer *b) {
 	}
 }
 
-int log_error_write(server *srv, const char *filename, unsigned int line, const char *fmt, ...) {
-	const log_error_st *errh = srv->errh;
-	buffer *b = errh->b;
-	if (-1 == log_buffer_prepare(errh, filename, line, b)) return 0;
-
-	va_list ap;
-	va_start(ap, fmt);
-	log_buffer_append_printf(b, fmt, ap);
-	va_end(ap);
-
-	log_write(errh, b);
-
-	return 0;
-}
-
 int log_error_write_multiline_buffer(server *srv, const char *filename, unsigned int line, buffer *multiline, const char *fmt, ...) {
 	const log_error_st *errh = srv->errh;
 	buffer *b = errh->b;

@@ -82,8 +82,8 @@ static int mod_vhostdb_dbconf_setup (server *srv, const array *opts, void **vdat
         vhostdb_config *dbconf;
         MYSQL *dbconn = mysql_init(NULL);
         if (NULL == dbconn) {
-            log_error_write(srv, __FILE__, __LINE__, "s",
-                            "mysql_init() failed, exiting...");
+            log_error(srv->errh, __FILE__, __LINE__,
+              "mysql_init() failed, exiting...");
             return -1;
         }
 
@@ -103,8 +103,7 @@ static int mod_vhostdb_dbconf_setup (server *srv, const array *opts, void **vdat
       #endif
         if (!mysql_real_connect(dbconn, host, user, pass, dbname, port, sock,
                                 CLIENT_MULTI_STATEMENTS)) {
-            log_error_write(srv, __FILE__, __LINE__, "s",
-                            mysql_error(dbconn));
+            log_error(srv->errh, __FILE__, __LINE__, "%s", mysql_error(dbconn));
             mysql_close(dbconn);
             return -1;
         }
@@ -124,6 +123,7 @@ static void mod_vhostdb_patch_config (connection * const con, plugin_data * cons
 
 static int mod_vhostdb_mysql_query(server *srv, connection *con, void *p_d, buffer *docroot)
 {
+    UNUSED(srv);
     plugin_data *p = (plugin_data *)p_d;
     vhostdb_config *dbconf;
     unsigned  cols;
@@ -157,8 +157,8 @@ static int mod_vhostdb_mysql_query(server *srv, connection *con, void *p_d, buff
     }
 
     if (mysql_real_query(dbconf->dbconn, CONST_BUF_LEN(sqlquery))) {
-        log_error_write(srv, __FILE__, __LINE__, "s",
-                        mysql_error(dbconf->dbconn));
+        log_error(con->conf.errh, __FILE__, __LINE__, "%s",
+          mysql_error(dbconf->dbconn));
         buffer_clear(docroot); /*(reset buffer; no result)*/
         return -1;
     }

@@ -51,10 +51,8 @@ static handler_t network_server_handle_fdevent(server *srv, void *context, int r
 	UNUSED(context);
 
 	if (0 == (revents & FDEVENT_IN)) {
-		log_error_write(srv, __FILE__, __LINE__, "sdd",
-				"strange event for server socket",
-				srv_socket->fd,
-				revents);
+		log_error(srv->errh, __FILE__, __LINE__,
+		  "strange event for server socket %d %d", srv_socket->fd, revents);
 		return HANDLER_ERROR;
 	}
 
@@ -83,18 +81,20 @@ static int network_host_parse_addr(server *srv, sock_addr *addr, socklen_t *addr
     sa_family_t family = use_ipv6 ? AF_INET6 : AF_INET;
     unsigned int port = srv->srvconf.port;
     if (buffer_string_is_empty(host)) {
-        log_error_write(srv, __FILE__, __LINE__, "s", "value of $SERVER[\"socket\"] must not be empty");
+        log_error(srv->errh, __FILE__, __LINE__,
+          "value of $SERVER[\"socket\"] must not be empty");
         return -1;
     }
     h = host->ptr;
     if (h[0] == '/') {
       #ifdef HAVE_SYS_UN_H
-        return (1 == sock_addr_from_str_hints(srv,addr,addr_len,h,AF_UNIX,0))
+        return (1 ==
+                sock_addr_from_str_hints(addr,addr_len,h,AF_UNIX,0,srv->errh))
           ? 0
           : -1;
       #else
-        log_error_write(srv, __FILE__, __LINE__, "s",
-                        "ERROR: Unix Domain sockets are not supported.");
+        log_error(srv, __FILE__, __LINE__,
+          "ERROR: Unix Domain sockets are not supported.");
         return -1;
       #endif
     }
@@ -115,13 +115,14 @@ static int network_host_parse_addr(server *srv, sock_addr *addr, socklen_t *addr
         *colon++ = '\0';
         port = strtol(colon, NULL, 10);
         if (port == 0 || port > 65535) {
-            log_error_write(srv, __FILE__, __LINE__, "sd",
-                            "port not set or out of range:", port);
+            log_error(srv->errh, __FILE__, __LINE__,
+              "port not set or out of range: %hd", port);
             return -1;
         }
     }
     chost = *h ? h : family == AF_INET ? "0.0.0.0" : "::";
-    if (1 != sock_addr_from_str_hints(srv,addr,addr_len,chost,family,port)) {
+    if (1 !=
+        sock_addr_from_str_hints(addr,addr_len,chost,family,port,srv->errh)) {
         return -1;
     }
     return 0;
@@ -197,7 +198,8 @@ static int network_server_init(server *srv, network_socket_config *s, buffer *ho
 	int set_v6only = 0;
 
 	if (buffer_string_is_empty(host_token)) {
-		log_error_write(srv, __FILE__, __LINE__, "s", "value of $SERVER[\"socket\"] must not be empty");
+		log_error(srv->errh, __FILE__, __LINE__,
+		  "value of $SERVER[\"socket\"] must not be empty");
 		return -1;
 	}
 
@@ -212,15 +214,17 @@ static int network_server_init(server *srv, network_socket_config *s, buffer *ho
 
 	host = host_token->ptr;
 	if ((s->use_ipv6 && (*host == '\0' || *host == ':')) || (host[0] == '[' && host[1] == ']')) {
-			log_error_write(srv, __FILE__, __LINE__, "s", "warning: please use server.use-ipv6 only for hostnames, not without server.bind / empty address; your config will break if the kernel default for IPV6_V6ONLY changes");
+		log_error(srv->errh, __FILE__, __LINE__,
+		  "warning: please use server.use-ipv6 only for hostnames, "
+		  "not without server.bind / empty address; your config will "
+		  "break if the kernel default for IPV6_V6ONLY changes");
 	}
 	if (*host == '[') s->use_ipv6 = 1;
 
 	memset(&addr, 0, sizeof(addr));
 	if (-1 != stdin_fd) {
 		if (-1 == getsockname(stdin_fd, (struct sockaddr *)&addr, &addr_len)) {
-			log_error_write(srv, __FILE__, __LINE__, "ss",
-					"getsockname()", strerror(errno));
+			log_perror(srv->errh, __FILE__, __LINE__, "getsockname()");
 			return -1;
 		}
 	} else if (0 != network_host_parse_addr(srv, &addr, &addr_len, host_token, s->use_ipv6)) {
@@ -234,7 +238,9 @@ static int network_server_init(server *srv, network_socket_config *s, buffer *ho
 		if (s->set_v6only) {
 			set_v6only = 1;
 		} else {
-			log_error_write(srv, __FILE__, __LINE__, "s", "warning: server.set-v6only will be removed soon, update your config to have different sockets for ipv4 and ipv6");
+			log_error(srv->errh, __FILE__, __LINE__,
+			  "warning: server.set-v6only will be removed soon, "
+			  "update your config to have different sockets for ipv4 and ipv6");
 		}
 	}
       #endif
@@ -281,7 +287,7 @@ static int network_server_init(server *srv, network_socket_config *s, buffer *ho
 	if (-1 != stdin_fd) {
 		srv_socket->fd = stdin_fd;
 		if (-1 == fdevent_fcntl_set_nb_cloexec(srv->ev, stdin_fd)) {
-			log_error_write(srv, __FILE__, __LINE__, "ss", "fcntl:", strerror(errno));
+			log_perror(srv->errh, __FILE__, __LINE__, "fcntl");
 			return -1;
 		}
 	} else
@@ -290,15 +296,12 @@ static int network_server_init(server *srv, network_socket_config *s, buffer *ho
 		/* check if the socket exists and try to connect to it. */
 		force_assert(host); /*(static analysis hint)*/
 		if (-1 == (srv_socket->fd = fdevent_socket_cloexec(AF_UNIX, SOCK_STREAM, 0))) {
-			log_error_write(srv, __FILE__, __LINE__, "ss", "socket failed:", strerror(errno));
+			log_perror(srv->errh, __FILE__, __LINE__, "socket");
 			return -1;
 		}
 		if (0 == connect(srv_socket->fd, (struct sockaddr *) &(srv_socket->addr), addr_len)) {
-			log_error_write(srv, __FILE__, __LINE__, "ss",
-				"server socket is still in use:",
-				host);
-
-
+			log_error(srv->errh, __FILE__, __LINE__,
+			  "server socket is still in use: %s", host);
 			return -1;
 		}
 
@@ -310,22 +313,20 @@ static int network_server_init(server *srv, network_socket_config *s, buffer *ho
 		case ENOENT:
 			break;
 		default:
-			log_error_write(srv, __FILE__, __LINE__, "sds",
-				"testing socket failed:",
-				host, strerror(errno));
-
+			log_perror(srv->errh, __FILE__, __LINE__,
+			  "testing socket failed: %s", host);
 			return -1;
 		}
 
 		if (-1 == fdevent_fcntl_set_nb(srv->ev, srv_socket->fd)) {
-			log_error_write(srv, __FILE__, __LINE__, "ss", "fcntl:", strerror(errno));
+			log_perror(srv->errh, __FILE__, __LINE__, "fcntl");
 			return -1;
 		}
 	} else
 #endif
 	{
 		if (-1 == (srv_socket->fd = fdevent_socket_nb_cloexec(family, SOCK_STREAM, IPPROTO_TCP))) {
-			log_error_write(srv, __FILE__, __LINE__, "ss", "socket failed:", strerror(errno));
+			log_perror(srv->errh, __FILE__, __LINE__, "socket");
 			return -1;
 		}
 	}
@@ -334,7 +335,7 @@ static int network_server_init(server *srv, network_socket_config *s, buffer *ho
 		if (set_v6only && -1 == stdin_fd) {
 				int val = 1;
 				if (-1 == setsockopt(srv_socket->fd, IPPROTO_IPV6, IPV6_V6ONLY, &val, sizeof(val))) {
-					log_error_write(srv, __FILE__, __LINE__, "ss", "setsockopt(IPV6_V6ONLY) failed:", strerror(errno));
+					log_perror(srv->errh, __FILE__, __LINE__, "setsockopt(IPV6_V6ONLY)");
 					return -1;
 				}
 		}
@@ -344,21 +345,21 @@ static int network_server_init(server *srv, network_socket_config *s, buffer *ho
 	srv->cur_fds = srv_socket->fd;
 
 	if (fdevent_set_so_reuseaddr(srv_socket->fd, 1) < 0) {
-		log_error_write(srv, __FILE__, __LINE__, "ss", "setsockopt(SO_REUSEADDR) failed:", strerror(errno));
+		log_perror(srv->errh, __FILE__, __LINE__, "setsockopt(SO_REUSEADDR)");
 		return -1;
 	}
 
 	if (family != AF_UNIX) {
 		if (fdevent_set_tcp_nodelay(srv_socket->fd, 1) < 0) {
-			log_error_write(srv, __FILE__, __LINE__, "ss", "setsockopt(TCP_NODELAY) failed:", strerror(errno));
+			log_perror(srv->errh, __FILE__, __LINE__, "setsockopt(TCP_NODELAY)");
 			return -1;
 		}
 	}
 
 	if (-1 != stdin_fd) { } else
 	if (0 != bind(srv_socket->fd, (struct sockaddr *) &(srv_socket->addr), addr_len)) {
-		log_error_write(srv, __FILE__, __LINE__, "sss",
-				"can't bind to socket:", host, strerror(errno));
+		log_perror(srv->errh, __FILE__, __LINE__,
+		  "can't bind to socket: %s", host);
 		return -1;
 	}
 
@@ -370,13 +371,14 @@ static int network_server_init(server *srv, network_socket_config *s, buffer *ho
 			m |= (*str - '0');
 		}
 		if (0 != m && -1 == chmod(host, m)) {
-			log_error_write(srv, __FILE__, __LINE__, "sssbss", "chmod(\"", host, "\", ", s->socket_perms, "):", strerror(errno));
+			log_perror(srv->errh, __FILE__, __LINE__,
+			  "chmod(\"%s\", %s)", host, s->socket_perms->ptr);
 		}
 	}
 
 	if (-1 != stdin_fd) { } else
 	if (-1 == listen(srv_socket->fd, s->listen_backlog)) {
-		log_error_write(srv, __FILE__, __LINE__, "ss", "listen failed: ", strerror(errno));
+		log_perror(srv->errh, __FILE__, __LINE__, "listen");
 		return -1;
 	}
 
@@ -385,7 +387,7 @@ static int network_server_init(server *srv, network_socket_config *s, buffer *ho
 	} else if (s->defer_accept) {
 		int v = s->defer_accept;
 		if (-1 == setsockopt(srv_socket->fd, IPPROTO_TCP, TCP_DEFER_ACCEPT, &v, sizeof(v))) {
-			log_error_write(srv, __FILE__, __LINE__, "ss", "can't set TCP_DEFER_ACCEPT: ", strerror(errno));
+			log_perror(srv->errh, __FILE__, __LINE__, "can't set TCP_DEFER_ACCEPT");
 		}
 #endif
 #if defined(__FreeBSD__) || defined(__NetBSD__) \
@@ -400,7 +402,8 @@ static int network_server_init(server *srv, network_socket_config *s, buffer *ho
 		strncpy(afa.af_name, s->bsd_accept_filter->ptr, sizeof(afa.af_name));
 		if (setsockopt(srv_socket->fd, SOL_SOCKET, SO_ACCEPTFILTER, &afa, sizeof(afa)) < 0) {
 			if (errno != ENOENT) {
-				log_error_write(srv, __FILE__, __LINE__, "SBss", "can't set accept-filter '", s->bsd_accept_filter, "':", strerror(errno));
+				log_perror(srv->errh, __FILE__, __LINE__,
+				  "can't set accept-filter '%s'", s->bsd_accept_filter->ptr);
 			}
 		}
 #endif
@@ -456,8 +459,8 @@ static int network_socket_activation_nfds(server *srv, network_socket_config *s,
     for (int fd = 3; fd < nfds; ++fd) {
         addr_len = sizeof(sock_addr);
         if (-1 == (rc = getsockname(fd, (struct sockaddr *)&addr, &addr_len))) {
-            log_error_write(srv, __FILE__, __LINE__, "ss",
-                            "socket activation getsockname()", strerror(errno));
+            log_perror(srv->errh, __FILE__, __LINE__,
+              "socket activation getsockname()");
             break;
         }
         network_host_normalize_addr_str(host, &addr);

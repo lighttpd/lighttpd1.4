@@ -342,8 +342,8 @@ static handler_t stat_cache_handle_fdevent(server *srv, void *_fce, int revent)
 
 	if (revent & (FDEVENT_HUP|FDEVENT_RDHUP)) {
 		/* fam closed the connection */
-		log_error_write(srv, __FILE__, __LINE__, "s",
-				"FAM connection closed; disabling stat_cache.");
+		log_error(srv->errh, __FILE__, __LINE__,
+		  "FAM connection closed; disabling stat_cache.");
 		/* (although effectively STAT_CACHE_ENGINE_NONE,
 		 *  do not change here so that periodic jobs clean up memory)*/
 		/*srv->srvconf.stat_cache_engine = STAT_CACHE_ENGINE_NONE; */
@@ -365,8 +365,8 @@ static stat_cache_fam * stat_cache_init_fam(server *srv) {
 
 	/* setup FAM */
 	if (0 != FAMOpen2(&scf->fam, "lighttpd")) {
-		log_error_write(srv, __FILE__, __LINE__, "s",
-				"could not open a fam connection, dieing.");
+		log_error(srv->errh, __FILE__, __LINE__,
+		  "could not open a fam connection, dieing.");
 		return NULL;
 	}
       #ifdef HAVE_FAMNOEXISTS
@@ -481,11 +481,9 @@ static fam_dir_entry * fam_dir_monitor(server *srv, stat_cache_fam *scf, char *f
 
         if (0 != FAMMonitorDirectory(&scf->fam,fam_dir->name->ptr,&fam_dir->req,
                                      (void *)(intptr_t)dir_ndx)) {
-            log_error_write(srv, __FILE__, __LINE__, "sbsss",
-                    "monitoring dir failed:",
-                    fam_dir->name,
-                    "file:", fn,
-                    FamErrlist[FAMErrno]);
+            log_error(srv->errh, __FILE__, __LINE__,
+                    "monitoring dir failed: %s file: %s %s",
+                    fam_dir->name->ptr, fn, FamErrlist[FAMErrno]);
             fam_dir_entry_free(fam_dir);
             return NULL;
         }
@@ -598,12 +596,12 @@ int stat_cache_choose_engine (server *srv, const buffer *stat_cache_string) {
 	} else if (buffer_is_equal_string(stat_cache_string, CONST_STR_LEN("disable"))) {
 		srv->srvconf.stat_cache_engine = STAT_CACHE_ENGINE_NONE;
 	} else {
-		log_error_write(srv, __FILE__, __LINE__, "sb",
-				"server.stat-cache-engine can be one of \"disable\", \"simple\","
+		log_error(srv->errh, __FILE__, __LINE__,
+		  "server.stat-cache-engine can be one of \"disable\", \"simple\","
 #ifdef HAVE_FAM_H
-				" \"fam\","
+		  " \"fam\","
 #endif
-				" but not:", stat_cache_string);
+		  " but not: %s", stat_cache_string->ptr);
 		return -1;
 	}
 	return 0;
@@ -1036,7 +1034,7 @@ int stat_cache_path_contains_symlink(connection *con, buffer *name) {
             if (S_ISLNK(st.st_mode)) return 1;
         }
         else {
-            log_perror(con->errh, __FILE__, __LINE__,
+            log_perror(con->conf.errh, __FILE__, __LINE__,
                        "lstat failed for: %s", buf);
             return -1;
         }

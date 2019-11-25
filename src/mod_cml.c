@@ -12,7 +12,6 @@
 
 #include <stdlib.h>
 #include <string.h>
-#include <errno.h>
 
 INIT_FUNC(mod_cml_init) {
     return calloc(1, sizeof(plugin_data));
@@ -178,7 +177,7 @@ SETDEFAULTS_FUNC(mod_cml_set_defaults) {
     return HANDLER_GO_ON;
 }
 
-static int cache_call_lua(server *srv, connection *con, plugin_data *p, const buffer *cml_file) {
+static int cache_call_lua(connection *con, plugin_data *p, const buffer *cml_file) {
 	buffer *b;
 	char *c;
 
@@ -204,11 +203,12 @@ static int cache_call_lua(server *srv, connection *con, plugin_data *p, const bu
 	 *   - cookie-based
 	 *   - get-param-based
 	 */
-	return cache_parse_lua(srv, con, p, cml_file);
+	return cache_parse_lua(con, p, cml_file);
 }
 
 URIHANDLER_FUNC(mod_cml_power_magnet) {
 	plugin_data *p = p_d;
+	UNUSED(srv);
 
 	mod_cml_patch_config(con, p);
 
@@ -235,17 +235,17 @@ URIHANDLER_FUNC(mod_cml_power_magnet) {
 	 *
 	 * */
 
-	switch(cache_call_lua(srv, con, p, p->conf.power_magnet)) {
+	switch(cache_call_lua(con, p, p->conf.power_magnet)) {
 	case -1:
 		/* error */
 		if (con->conf.log_request_handling) {
-			log_error_write(srv, __FILE__, __LINE__, "s", "cache-error");
+			log_error(con->conf.errh, __FILE__, __LINE__, "cache-error");
 		}
 		con->http_status = 500;
 		return HANDLER_COMEBACK;
 	case 0:
 		if (con->conf.log_request_handling) {
-			log_error_write(srv, __FILE__, __LINE__, "s", "cache-hit");
+			log_error(con->conf.errh, __FILE__, __LINE__, "cache-hit");
 		}
 		/* cache-hit */
 		buffer_reset(con->physical.path);
@@ -261,6 +261,7 @@ URIHANDLER_FUNC(mod_cml_power_magnet) {
 
 URIHANDLER_FUNC(mod_cml_is_handled) {
 	plugin_data *p = p_d;
+	UNUSED(srv);
 
 	if (buffer_string_is_empty(con->physical.path)) return HANDLER_ERROR;
 
@@ -276,24 +277,24 @@ URIHANDLER_FUNC(mod_cml_is_handled) {
 	buffer_clear(&p->baseurl);
 	buffer_clear(&p->trigger_handler);
 
-	switch(cache_call_lua(srv, con, p, con->physical.path)) {
+	switch(cache_call_lua(con, p, con->physical.path)) {
 	case -1:
 		/* error */
 		if (con->conf.log_request_handling) {
-			log_error_write(srv, __FILE__, __LINE__, "s", "cache-error");
+			log_error(con->conf.errh, __FILE__, __LINE__, "cache-error");
 		}
 		con->http_status = 500;
 		return HANDLER_COMEBACK;
 	case 0:
 		if (con->conf.log_request_handling) {
-			log_error_write(srv, __FILE__, __LINE__, "s", "cache-hit");
+			log_error(con->conf.errh, __FILE__, __LINE__, "cache-hit");
 		}
 		/* cache-hit */
 		buffer_reset(con->physical.path);
 		return HANDLER_FINISHED;
 	case 1:
 		if (con->conf.log_request_handling) {
-			log_error_write(srv, __FILE__, __LINE__, "s", "cache-miss");
+			log_error(con->conf.errh, __FILE__, __LINE__, "cache-miss");
 		}
 		/* cache miss */
 		return HANDLER_COMEBACK;

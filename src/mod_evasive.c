@@ -123,9 +123,9 @@ URIHANDLER_FUNC(mod_evasive_uri_handler) {
 
 		if (conns_by_ip > p->conf.max_conns) {
 			if (!p->conf.silent) {
-				log_error_write(srv, __FILE__, __LINE__, "bs",
-					con->dst_addr_buf,
-					"turned away. Too many connections.");
+				log_error(con->conf.errh, __FILE__, __LINE__,
+				  "%s turned away. Too many connections.",
+				  con->dst_addr_buf->ptr);
 			}
 
 			if (!buffer_is_empty(p->conf.location)) {

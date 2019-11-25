@@ -16,7 +16,6 @@
 #include <string.h>
 #include <fcntl.h>
 #include <unistd.h>
-#include <errno.h>
 #include <time.h>
 
 #ifdef HAVE_SYSLOG_H
@@ -1145,8 +1144,9 @@ REQUESTDONE_FUNC(log_access_write) {
 
 		if (flush || buffer_string_length(b) >= BUFFER_MAX_REUSE_SIZE) {
 			if (!accesslog_write_all(p->conf.log_access_fd, b)) {
-				log_error_write(srv, __FILE__, __LINE__, "sbs",
-					"writing access log entry failed:", p->conf.access_logfile, strerror(errno));
+				log_perror(con->conf.errh, __FILE__, __LINE__,
+				  "writing access log entry failed: %s",
+				  p->conf.access_logfile->ptr);
 			}
 		}
 	}

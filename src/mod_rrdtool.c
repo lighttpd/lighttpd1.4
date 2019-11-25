@@ -263,8 +263,8 @@ static int mod_rrdtool_create_rrd(server *srv, plugin_data *p, rrd_config *s, ch
 	if (0 == stat(s->path_rrd->ptr, &st)) {
 		/* check if it is plain file */
 		if (!S_ISREG(st.st_mode)) {
-			log_error_write(srv, __FILE__, __LINE__, "sb",
-					"not a regular file:", s->path_rrd);
+			log_error(srv->errh, __FILE__, __LINE__,
+			  "not a regular file: %s", s->path_rrd->ptr);
 			return HANDLER_ERROR;
 		}
 
@@ -297,23 +297,18 @@ static int mod_rrdtool_create_rrd(server *srv, plugin_data *p, rrd_config *s, ch
 		"RRA:MIN:0.5:288:797\n"));
 
 	if (-1 == (safe_write(p->write_fd, CONST_BUF_LEN(cmd)))) {
-		log_error_write(srv, __FILE__, __LINE__, "ss",
-			"rrdtool-write: failed", strerror(errno));
-
+		log_perror(srv->errh, __FILE__, __LINE__, "rrdtool-write: failed");
 		return HANDLER_ERROR;
 	}
 
 	if (-1 == safe_read(p->read_fd, resp, respsz)) {
-		log_error_write(srv, __FILE__, __LINE__, "ss",
-			"rrdtool-read: failed", strerror(errno));
-
+		log_perror(srv->errh, __FILE__, __LINE__, "rrdtool-read: failed");
 		return HANDLER_ERROR;
 	}
 
 	if (resp[0] != 'O' || resp[1] != 'K') {
-		log_error_write(srv, __FILE__, __LINE__, "sbs",
-			"rrdtool-response:", cmd, resp);
-
+		log_error(srv->errh, __FILE__, __LINE__,
+		  "rrdtool-response: %s %s", cmd->ptr, resp);
 		return HANDLER_ERROR;
 	}
 

@@ -86,6 +86,7 @@ typedef struct {
 	const buffer *error_handler;
 	const buffer *error_handler_404;
 	const buffer *errorfile_prefix;
+	log_error_st *errh;
 
 	unsigned short max_keep_alive_requests;
 	unsigned short max_keep_alive_idle;
@@ -211,7 +212,6 @@ struct connection {
 	int mode;                    /* DIRECT (0) or plugin id */
 	int async_callback;
 
-	log_error_st *errh;
 	server *srv;
 
 	void **plugin_ctx;           /* plugin connection specific config */
@@ -230,8 +230,8 @@ struct connection {
 	http_method_t error_handler_saved_method;
 
 	struct server_socket *srv_socket;   /* reference to the server-socket */
-	int (* network_write)(struct server *srv, struct connection *con, chunkqueue *cq, off_t max_bytes);
-	int (* network_read)(struct server *srv, struct connection *con, chunkqueue *cq, off_t max_bytes);
+	int (* network_write)(struct connection *con, chunkqueue *cq, off_t max_bytes);
+	int (* network_read)(struct connection *con, chunkqueue *cq, off_t max_bytes);
 };
 
 typedef struct {
@@ -322,7 +322,7 @@ struct server {
 	struct stat_cache *stat_cache;
 
 	struct fdevents *ev;
-	int (* network_backend_write)(struct server *srv, int fd, chunkqueue *cq, off_t max_bytes);
+	int (* network_backend_write)(int fd, chunkqueue *cq, off_t max_bytes, log_error_st *errh);
 	handler_t (* request_env)(struct server *srv, connection *con);
 
 	/* buffers */

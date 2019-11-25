@@ -121,27 +121,26 @@ static const plugin_load_functions load_functions[] = {
 };
 
 int plugins_load(server *srv) {
-	plugin *p;
-	size_t i, j;
-
-	for (i = 0; i < srv->srvconf.modules->used; i++) {
+	for (uint32_t i = 0; i < srv->srvconf.modules->used; ++i) {
 		data_string *ds = (data_string *)srv->srvconf.modules->data[i];
 		char *module = ds->value.ptr;
 
-		for (j = 0; j < i; j++) {
+		uint32_t j;
+		for (j = 0; j < i; ++j) {
 			if (buffer_is_equal(&ds->value, &((data_string *) srv->srvconf.modules->data[j])->value)) {
-				log_error_write(srv, __FILE__, __LINE__, "sbs",
-					"Cannot load plugin", &ds->value,
-					"more than once, please fix your config (lighttpd may not accept such configs in future releases)");
+				log_error(srv->errh, __FILE__, __LINE__,
+				  "Cannot load plugin %s "
+				  "more than once, please fix your config (lighttpd may not accept such configs in future releases)",
+				  ds->value.ptr);
 				continue;
 			}
 		}
 
 		for (j = 0; load_functions[j].name; ++j) {
 			if (0 == strcmp(load_functions[j].name, module)) {
-				p = plugin_init();
+				plugin * const p = plugin_init();
 				if ((*load_functions[j].plugin_init)(p)) {
-					log_error_write(srv, __FILE__, __LINE__, "ss", module, "plugin init failed" );
+					log_error(srv->errh, __FILE__, __LINE__, "%s plugin init failed", module);
 					plugin_free(p);
 					return -1;
 				}
@@ -150,7 +149,7 @@ int plugins_load(server *srv) {
 			}
 		}
 		if (!load_functions[j].name) {
-			log_error_write(srv, __FILE__, __LINE__, "ss", module, " plugin not found" );
+			log_error(srv->errh, __FILE__, __LINE__, "%s plugin not found", module);
 			return -1;
 		}
 	}
@@ -169,9 +168,10 @@ int plugins_load(server *srv) {
 
 		for (j = 0; j < i; j++) {
 			if (buffer_is_equal(&ds->value, &((data_string *) srv->srvconf.modules->data[j])->value)) {
-				log_error_write(srv, __FILE__, __LINE__, "sbs",
-					"Cannot load plugin", &ds->value,
-					"more than once, please fix your config (lighttpd may not accept such configs in future releases)");
+				log_error(srv->errh, __FILE__, __LINE__,
+				  "Cannot load plugin %s "
+				  "more than once, please fix your config (lighttpd may not accept such configs in future releases)",
+				  ds->value.ptr);
 				continue;
 			}
 		}
@@ -199,8 +199,8 @@ int plugins_load(server *srv) {
 				(LPTSTR) &lpMsgBuf,
 				0, NULL);
 
-			log_error_write(srv, __FILE__, __LINE__, "ssb", "LoadLibrary() failed",
-				lpMsgBuf, srv->tmp_buf);
+			log_error(srv->errh, __FILE__, __LINE__,
+			  "LoadLibrary() failed %s %s", lpMsgBuf, srv->tmp_buf->ptr);
 
 			plugin_free(p);
 
@@ -209,8 +209,8 @@ int plugins_load(server *srv) {
 		}
 #else
 		if (NULL == (p->lib = dlopen(srv->tmp_buf->ptr, RTLD_NOW|RTLD_GLOBAL))) {
-			log_error_write(srv, __FILE__, __LINE__, "sbs", "dlopen() failed for:",
-				srv->tmp_buf, dlerror());
+			log_error(srv->errh, __FILE__, __LINE__,
+			  "dlopen() failed for: %s %s", srv->tmp_buf->ptr, dlerror());
 
 			plugin_free(p);
 
@@ -235,7 +235,8 @@ int plugins_load(server *srv) {
 				(LPTSTR) &lpMsgBuf,
 				0, NULL);
 
-			log_error_write(srv, __FILE__, __LINE__, "sbs", "getprocaddress failed:", srv->tmp_buf, lpMsgBuf);
+			log_error(srv->errh, __FILE__, __LINE__,
+			  "getprocaddress failed: %s %s", srv->tmp_buf->ptr, lpMsgBuf);
 
 			plugin_free(p);
 			return -1;
@@ -250,9 +251,9 @@ int plugins_load(server *srv) {
 		if (NULL == init) {
 			const char *error = dlerror();
 			if (error != NULL) {
-				log_error_write(srv, __FILE__, __LINE__, "ss", "dlsym:", error);
+				log_error(srv->errh, __FILE__, __LINE__, "dlsym: %s", error);
 			} else {
-				log_error_write(srv, __FILE__, __LINE__, "ss", "dlsym symbol not found:", srv->tmp_buf->ptr);
+				log_error(srv->errh, __FILE__, __LINE__, "dlsym symbol not found: %s", srv->tmp_buf->ptr);
 			}
 
 			plugin_free(p);
@@ -261,13 +262,13 @@ int plugins_load(server *srv) {
 
 #endif
 		if ((*init)(p)) {
-			log_error_write(srv, __FILE__, __LINE__, "ss", module, "plugin init failed" );
+			log_error(srv->errh, __FILE__, __LINE__, "%s plugin init failed", module);
 
 			plugin_free(p);
 			return -1;
 		}
 #if 0
-		log_error_write(srv, __FILE__, __LINE__, "ss", module, "plugin loaded" );
+		log_error(srv->errh, __FILE__, __LINE__, "%s plugin loaded", module);
 #endif
 		plugins_register(srv, p);
 	}
@@ -424,8 +425,8 @@ handler_t plugins_call_init(server *srv) {
 
 		if (p->init) {
 			if (NULL == (p->data = p->init())) {
-				log_error_write(srv, __FILE__, __LINE__, "ss",
-						"plugin-init failed for module", p->name);
+				log_error(srv->errh, __FILE__, __LINE__,
+				  "plugin-init failed for module %s", p->name);
 				return HANDLER_ERROR;
 			}
 
@@ -433,8 +434,8 @@ handler_t plugins_call_init(server *srv) {
 			((plugin_data_base *)(p->data))->id = i + 1;
 
 			if (p->version != LIGHTTPD_VERSION_ID) {
-				log_error_write(srv, __FILE__, __LINE__, "ss",
-						"plugin-version doesn't match lighttpd-version for", p->name);
+				log_error(srv->errh, __FILE__, __LINE__,
+				  "plugin-version doesn't match lighttpd-version for %s", p->name);
 				return HANDLER_ERROR;
 			}
 		}

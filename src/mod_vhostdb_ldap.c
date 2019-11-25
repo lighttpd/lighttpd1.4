@@ -2,7 +2,6 @@
 
 #include <ldap.h>
 
-#include <errno.h>
 #include <string.h>
 #include <stdlib.h>
 
@@ -18,7 +17,7 @@
 typedef struct {
     LDAP *ldap;
     const buffer *filter;
-    server *srv;
+    log_error_st *errh;
 
     const char *attr;
     const char *host;
@@ -129,8 +128,8 @@ static int mod_vhostdb_dbconf_setup (server *srv, const array *opts, void **vdat
         vhostdb_config *dbconf;
 
         if (NULL == strchr(filter->ptr, '?')) {
-            log_error_write(srv, __FILE__, __LINE__, "s",
-                            "ldap: filter is missing a replace-operator '?'");
+            log_error(srv->errh, __FILE__, __LINE__,
+              "ldap: filter is missing a replace-operator '?'");
             return -1;
         }
 
@@ -160,16 +159,18 @@ static int mod_vhostdb_dbconf_setup (server *srv, const array *opts, void **vdat
  * and (const char *) strings in vhostdb_config instead of (buffer *).
  */
 
-static void mod_authn_ldap_err(server *srv, const char *file, unsigned long line, const char *fn, int err)
+__attribute_cold__
+static void mod_authn_ldap_err(log_error_st *errh, const char *file, unsigned long line, const char *fn, int err)
 {
-    log_error_write(srv,file,line,"sSss","ldap:",fn,":",ldap_err2string(err));
+    log_error(errh, file, line, "ldap: %s: %s", fn, ldap_err2string(err));
 }
 
-static void mod_authn_ldap_opt_err(server *srv, const char *file, unsigned long line, const char *fn, LDAP *ld)
+__attribute_cold__
+static void mod_authn_ldap_opt_err(log_error_st *errh, const char *file, unsigned long line, const char *fn, LDAP *ld)
 {
     int err;
     ldap_get_option(ld, LDAP_OPT_ERROR_NUMBER, &err);
-    mod_authn_ldap_err(srv, file, line, fn, err);
+    mod_authn_ldap_err(errh, file, line, fn, err);
 }
 
 static void mod_authn_append_ldap_filter_escape(buffer * const filter, const buffer * const raw) {
@@ -237,21 +238,20 @@ static void mod_authn_append_ldap_filter_escape(buffer * const filter, const buf
     }
 }
 
-static LDAP * mod_authn_ldap_host_init(server *srv, vhostdb_config *s) {
+static LDAP * mod_authn_ldap_host_init(log_error_st *errh, vhostdb_config *s) {
     LDAP *ld;
     int ret;
 
     ret = ldap_initialize(&ld, s->host);
     if (LDAP_SUCCESS != ret) {
-        log_error_write(srv, __FILE__, __LINE__, "sss", "ldap:",
-                        "ldap_initialize():", strerror(errno));
+        log_perror(errh, __FILE__, __LINE__, "ldap: ldap_initialize()");
         return NULL;
     }
 
     ret = LDAP_VERSION3;
     ret = ldap_set_option(ld, LDAP_OPT_PROTOCOL_VERSION, &ret);
     if (LDAP_OPT_SUCCESS != ret) {
-        mod_authn_ldap_err(srv, __FILE__, __LINE__, "ldap_set_options()", ret);
+        mod_authn_ldap_err(errh, __FILE__, __LINE__, "ldap_set_options()", ret);
         ldap_destroy(ld);
         return NULL;
     }
@@ -265,9 +265,8 @@ static LDAP * mod_authn_ldap_host_init(server *srv, vhostdb_config *s) {
         if (s->cafile) {
             ret = ldap_set_option(NULL, LDAP_OPT_X_TLS_CACERTFILE, s->cafile);
             if (LDAP_OPT_SUCCESS != ret) {
-                mod_authn_ldap_err(srv, __FILE__, __LINE__,
-                                   "ldap_set_option(LDAP_OPT_X_TLS_CACERTFILE)",
-                                   ret);
+                mod_authn_ldap_err(errh, __FILE__, __LINE__,
+                  "ldap_set_option(LDAP_OPT_X_TLS_CACERTFILE)", ret);
                 ldap_destroy(ld);
                 return NULL;
             }
@@ -275,7 +274,7 @@ static LDAP * mod_authn_ldap_host_init(server *srv, vhostdb_config *s) {
 
         ret = ldap_start_tls_s(ld, NULL,  NULL);
         if (LDAP_OPT_SUCCESS != ret) {
-            mod_authn_ldap_err(srv,__FILE__,__LINE__,"ldap_start_tls_s()",ret);
+            mod_authn_ldap_err(errh,__FILE__,__LINE__,"ldap_start_tls_s()",ret);
             ldap_destroy(ld);
             return NULL;
         }
@@ -284,7 +283,7 @@ static LDAP * mod_authn_ldap_host_init(server *srv, vhostdb_config *s) {
     return ld;
 }
 
-static int mod_authn_ldap_bind(server *srv, LDAP *ld, const char *dn, const char *pw) {
+static int mod_authn_ldap_bind(log_error_st *errh, LDAP *ld, const char *dn, const char *pw) {
     struct berval creds;
     int ret;
 
@@ -300,7 +299,7 @@ static int mod_authn_ldap_bind(server *srv, LDAP *ld, const char *dn, const char
 
     ret = ldap_sasl_bind_s(ld,dn,LDAP_SASL_SIMPLE,&creds,NULL,NULL,NULL);
     if (ret != LDAP_SUCCESS) {
-        mod_authn_ldap_err(srv, __FILE__, __LINE__, "ldap_sasl_bind_s()", ret);
+        mod_authn_ldap_err(errh, __FILE__, __LINE__, "ldap_sasl_bind_s()", ret);
     }
 
     return ret;
@@ -311,10 +310,10 @@ static int mod_authn_ldap_rebind_proc (LDAP *ld, LDAP_CONST char *url, ber_tag_t
     UNUSED(url);
     UNUSED(ldap_request);
     UNUSED(msgid);
-    return mod_authn_ldap_bind(s->srv, ld, s->binddn, s->bindpw);
+    return mod_authn_ldap_bind(s->errh, ld, s->binddn, s->bindpw);
 }
 
-static LDAPMessage * mod_authn_ldap_search(server *srv, vhostdb_config *s, char *base, char *filter) {
+static LDAPMessage * mod_authn_ldap_search(log_error_st *errh, vhostdb_config *s, char *base, char *filter) {
     LDAPMessage *lm = NULL;
     char *attrs[] = { LDAP_NO_ATTRS, NULL };
     int ret;
@@ -343,13 +342,13 @@ static LDAPMessage * mod_authn_ldap_search(server *srv, vhostdb_config *s, char 
         ldap_unbind_ext_s(s->ldap, NULL, NULL);
     }
 
-    s->ldap = mod_authn_ldap_host_init(srv, s);
+    s->ldap = mod_authn_ldap_host_init(errh, s);
     if (NULL == s->ldap) {
         return NULL;
     }
 
     ldap_set_rebind_proc(s->ldap, mod_authn_ldap_rebind_proc, s);
-    ret = mod_authn_ldap_bind(srv, s->ldap, s->binddn, s->bindpw);
+    ret = mod_authn_ldap_bind(errh, s->ldap, s->binddn, s->bindpw);
     if (LDAP_SUCCESS != ret) {
         ldap_destroy(s->ldap);
         s->ldap = NULL;
@@ -359,8 +358,8 @@ static LDAPMessage * mod_authn_ldap_search(server *srv, vhostdb_config *s, char 
     ret = ldap_search_ext_s(s->ldap, base, LDAP_SCOPE_SUBTREE, filter,
                             attrs, 0, NULL, NULL, NULL, 0, &lm);
     if (LDAP_SUCCESS != ret) {
-        log_error_write(srv, __FILE__, __LINE__, "sSss",
-                        "ldap:", ldap_err2string(ret), "; filter:", filter);
+        log_error(errh, __FILE__, __LINE__,
+          "ldap: %s; filter: %s", ldap_err2string(ret), filter);
         ldap_unbind_ext_s(s->ldap, NULL, NULL);
         s->ldap = NULL;
         return NULL;
@@ -373,6 +372,7 @@ static void mod_vhostdb_patch_config (connection * const con, plugin_data * cons
 
 static int mod_vhostdb_ldap_query(server *srv, connection *con, void *p_d, buffer *docroot)
 {
+    UNUSED(srv);
     plugin_data *p = (plugin_data *)p_d;
     vhostdb_config *dbconf;
     LDAP *ld;
@@ -389,7 +389,8 @@ static int mod_vhostdb_ldap_query(server *srv, connection *con, void *p_d, buffe
     mod_vhostdb_patch_config(con, p);
     if (NULL == p->conf.vdata) return 0; /*(after resetting docroot)*/
     dbconf = (vhostdb_config *)p->conf.vdata;
-    dbconf->srv = srv;
+    log_error_st * const errh = con->conf.errh;
+    dbconf->errh = errh;
 
     template = dbconf->filter;
     for (char *b = template->ptr, *d; *b; b = d+1) {
@@ -407,7 +408,7 @@ static int mod_vhostdb_ldap_query(server *srv, connection *con, void *p_d, buffe
     *(const char **)&basedn = dbconf->basedn;
 
     /* ldap_search (synchronous; blocking) */
-    lm = mod_authn_ldap_search(srv, dbconf, basedn, filter->ptr);
+    lm = mod_authn_ldap_search(errh, dbconf, basedn, filter->ptr);
     if (NULL == lm) {
         return -1;
     }
@@ -417,9 +418,9 @@ static int mod_vhostdb_ldap_query(server *srv, connection *con, void *p_d, buffe
 
     count = ldap_count_entries(ld, lm);
     if (count > 1) {
-        log_error_write(srv, __FILE__, __LINE__, "ssb",
-                        "ldap:", "more than one record returned.  "
-                        "you might have to refine the filter:", filter);
+        log_error(errh, __FILE__, __LINE__,
+          "ldap: more than one record returned.  "
+          "you might have to refine the filter: %s", filter->ptr);
     }
 
     buffer_clear(docroot); /*(reset buffer to store result)*/
@@ -430,7 +431,7 @@ static int mod_vhostdb_ldap_query(server *srv, connection *con, void *p_d, buffe
     }
 
     if (NULL == (first = ldap_first_entry(ld, lm))) {
-        mod_authn_ldap_opt_err(srv,__FILE__,__LINE__,"ldap_first_entry()",ld);
+        mod_authn_ldap_opt_err(errh,__FILE__,__LINE__,"ldap_first_entry()",ld);
         ldap_msgfree(lm);
         return -1;
     }

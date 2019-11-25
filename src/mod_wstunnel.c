@@ -367,7 +367,7 @@ static handler_t wstunnel_create_env(server *srv, gw_handler_ctx *gwhctx) {
     connection *con = hctx->gw.remote_conn;
     handler_t rc;
     if (0 == con->request.content_length) {
-        http_response_upgrade_read_body_unknown(srv, con);
+        http_response_upgrade_read_body_unknown(con);
         chunkqueue_append_chunkqueue(con->request_content_queue,
                                      con->read_queue);
     }
@@ -403,7 +403,7 @@ static handler_t wstunnel_stdin_append(server *srv, gw_handler_ctx *gwhctx) {
     }
 }
 
-static handler_t wstunnel_recv_parse(server *srv, connection *con, http_response_opts *opts, buffer *b, size_t n) {
+static handler_t wstunnel_recv_parse(connection *con, http_response_opts *opts, buffer *b, size_t n) {
     handler_ctx *hctx = (handler_ctx *)opts->pdata;
     DEBUG_LOG_DEBUG("recv data from backend (fd=%d), size=%zx", hctx->gw.fd, n);
     if (0 == n) return HANDLER_FINISHED;
@@ -412,7 +412,6 @@ static handler_t wstunnel_recv_parse(server *srv, connection *con, http_response
         return HANDLER_ERROR;
     }
     buffer_clear(b);
-    UNUSED(srv);
     UNUSED(con);
     return HANDLER_GO_ON;
 }
@@ -498,7 +497,7 @@ static handler_t wstunnel_handler_setup (server *srv, connection *con, plugin_da
     handler_ctx *hctx = con->plugin_ctx[p->id];
     int hybivers;
     hctx->srv = srv;
-    hctx->errh = con->errh;/*(for mod_wstunnel module-specific DEBUG_* macros)*/
+    hctx->errh = con->conf.errh;/*(for mod_wstunnel-specific DEBUG_* macros)*/
     hctx->conf = p->conf; /*(copies struct)*/
     hybivers = wstunnel_check_request(con, hctx);
     if (hybivers < 0) return HANDLER_FINISHED;
@@ -911,7 +910,6 @@ handler_t mod_wstunnel_handshake_create_response(handler_ctx *hctx) {
 static int send_ietf_00(handler_ctx *hctx, mod_wstunnel_frame_type_t type, const char *payload, size_t siz) {
     static const char head =  0; /* 0x00 */
     static const char tail = ~0; /* 0xff */
-    server *srv = hctx->srv;
     connection *con = hctx->gw.remote_conn;
     char *mem;
     size_t len;
@@ -919,27 +917,27 @@ static int send_ietf_00(handler_ctx *hctx, mod_wstunnel_frame_type_t type, const
     switch (type) {
     case MOD_WEBSOCKET_FRAME_TYPE_TEXT:
         if (0 == siz) return 0;
-        http_chunk_append_mem(srv, con, &head, 1);
-        http_chunk_append_mem(srv, con, payload, siz);
-        http_chunk_append_mem(srv, con, &tail, 1);
+        http_chunk_append_mem(con, &head, 1);
+        http_chunk_append_mem(con, payload, siz);
+        http_chunk_append_mem(con, &tail, 1);
         len = siz+2;
         break;
     case MOD_WEBSOCKET_FRAME_TYPE_BIN:
         if (0 == siz) return 0;
-        http_chunk_append_mem(srv, con, &head, 1);
+        http_chunk_append_mem(con, &head, 1);
         len = 4*(siz/3)+4+1;
         /* avoid accumulating too much data in memory; send to tmpfile */
         mem = malloc(len);
         force_assert(mem);
         len=li_to_base64(mem,len,(unsigned char *)payload,siz,BASE64_STANDARD);
-        http_chunk_append_mem(srv, con, mem, len);
+        http_chunk_append_mem(con, mem, len);
         free(mem);
-        http_chunk_append_mem(srv, con, &tail, 1);
+        http_chunk_append_mem(con, &tail, 1);
         len += 2;
         break;
     case MOD_WEBSOCKET_FRAME_TYPE_CLOSE:
-        http_chunk_append_mem(srv, con, &tail, 1);
-        http_chunk_append_mem(srv, con, &head, 1);
+        http_chunk_append_mem(con, &tail, 1);
+        http_chunk_append_mem(con, &head, 1);
         len = 2;
         break;
     default:
@@ -1064,7 +1062,6 @@ static int recv_ietf_00(handler_ctx *hctx) {
 #define MOD_WEBSOCKET_FRAME_LEN63_CNT  8
 
 static int send_rfc_6455(handler_ctx *hctx, mod_wstunnel_frame_type_t type, const char *payload, size_t siz) {
-    server *srv = hctx->srv;
     connection *con = hctx->gw.remote_conn;
     char mem[10];
     size_t len;
@@ -1122,8 +1119,8 @@ static int send_rfc_6455(handler_ctx *hctx, mod_wstunnel_frame_type_t type, cons
         mem[9] = siz & 0xff;
         len = 1+MOD_WEBSOCKET_FRAME_LEN63_CNT+1;
     }
-    http_chunk_append_mem(srv, con, mem, len);
-    if (siz) http_chunk_append_mem(srv, con, payload, siz);
+    http_chunk_append_mem(con, mem, len);
+    if (siz) http_chunk_append_mem(con, payload, siz);
     DEBUG_LOG_DEBUG("send data to client (fd=%d), frame size=%zx",
                     con->fd, len+siz);
     return 0;

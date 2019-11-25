@@ -65,8 +65,8 @@ int fdevent_config(server *srv) {
 		srv->event_handler = event_handlers[0].et;
 
 		if (FDEVENT_HANDLER_UNSET == srv->event_handler) {
-			log_error_write(srv, __FILE__, __LINE__, "s",
-					"sorry, there is no event handler for this system");
+			log_error(srv->errh, __FILE__, __LINE__,
+			  "sorry, there is no event handler for this system");
 
 			return -1;
 		}
@@ -193,8 +193,8 @@ fdevents *fdevent_init(server *srv) {
 	ev->srv = srv;
 	ev->fdarray = calloc(maxfds, sizeof(*ev->fdarray));
 	if (NULL == ev->fdarray) {
-		log_error_write(srv, __FILE__, __LINE__, "SDS",
-				"server.max-fds too large? (", maxfds-1, ")");
+		log_error(srv->errh, __FILE__, __LINE__,
+		  "server.max-fds too large? (%zu)", maxfds-1);
 		free(ev);
 		return NULL;
 	}
@@ -340,7 +340,7 @@ static void fdevent_sched_run(fdevents *ev) {
 	      #endif
 
 		if (0 != rc) {
-			log_error_write(srv, __FILE__, __LINE__, "sds", "close failed ", fd, strerror(errno));
+			log_perror(srv->errh, __FILE__, __LINE__, "close failed %d", fd);
 		}
 		else {
 			--srv->cur_fds;
@@ -372,9 +372,8 @@ static int fdevent_fdnode_event_unsetter_retry(fdevents *ev, fdnode *fdn) {
           /*case ENOMEM:*/
           default:
             /* unrecoverable error; might leak fd */
-            log_error_write(ev->srv, __FILE__, __LINE__, "sDsS",
-                            "fdevent event_del failed on fd", fdn->fd, ":",
-                            strerror(errno));
+            log_perror(ev->srv->errh, __FILE__, __LINE__,
+              "fdevent event_del failed on fd %d", fdn->fd);
             return 0;
         }
     } while (0 != ev->event_del(ev, fdn));
@@ -406,9 +405,8 @@ static int fdevent_fdnode_event_setter_retry(fdevents *ev, fdnode *fdn, int even
           /*case ENOMEM:*/
           default:
             /* unrecoverable error */
-            log_error_write(ev->srv, __FILE__, __LINE__, "sDsS",
-                            "fdevent event_set failed on fd", fdn->fd, ":",
-                            strerror(errno));
+            log_perror(ev->srv->errh, __FILE__, __LINE__,
+              "fdevent event_set failed on fd %d", fdn->fd);
             return 0;
         }
     } while (0 != ev->event_set(ev, fdn, events));
@@ -448,8 +446,7 @@ int fdevent_poll(fdevents *ev, int timeout_ms) {
     if (n >= 0)
         fdevent_sched_run(ev);
     else if (errno != EINTR)
-        log_error_write(ev->srv, __FILE__, __LINE__, "SS",
-                        "fdevent_poll failed: ", strerror(errno));
+        log_perror(ev->srv->errh, __FILE__, __LINE__, "fdevent_poll failed");
     return n;
 }
 

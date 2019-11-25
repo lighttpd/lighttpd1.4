@@ -101,7 +101,7 @@ static int cache_export_get_params(lua_State *L, int tbl, buffer *qrystr) {
 	return 0;
 }
 
-int cache_parse_lua(server *srv, connection *con, plugin_data *p, const buffer *fn) {
+int cache_parse_lua(connection *con, plugin_data *p, const buffer *fn) {
 	lua_State *L;
 	int ret = -1;
 	buffer *b;
@@ -165,20 +165,16 @@ int cache_parse_lua(server *srv, connection *con, plugin_data *p, const buffer *
 	/* load lua program */
 	ret = luaL_loadfile(L, fn->ptr);
 	if (0 != ret) {
-		log_error_write(srv, __FILE__, __LINE__, "sbsS",
-			"failed loading cml_lua script",
-			fn,
-			":",
-			lua_tostring(L, -1));
+		log_error(con->conf.errh, __FILE__, __LINE__,
+		  "failed loading cml_lua script %s: %s",
+		  fn->ptr, lua_tostring(L, -1));
 		goto error;
 	}
 
 	if (lua_pcall(L, 0, 1, 0)) {
-		log_error_write(srv, __FILE__, __LINE__, "sbsS",
-			"failed running cml_lua script",
-			fn,
-			":",
-			lua_tostring(L, -1));
+		log_error(con->conf.errh, __FILE__, __LINE__,
+		  "failed running cml_lua script %s: %s",
+		  fn->ptr, lua_tostring(L, -1));
 		goto error;
 	}
 
@@ -200,8 +196,8 @@ int cache_parse_lua(server *srv, connection *con, plugin_data *p, const buffer *
 		time_t mtime = 0;
 
 		if (!lua_to_c_is_table(L, "output_include")) {
-			log_error_write(srv, __FILE__, __LINE__, "s",
-				"output_include is missing or not a table");
+			log_error(con->conf.errh, __FILE__, __LINE__,
+			  "output_include is missing or not a table");
 			ret = -1;
 
 			goto error;
@@ -246,16 +242,16 @@ int cache_parse_lua(server *srv, connection *con, plugin_data *p, const buffer *
 						if (!buffer_string_is_empty(&p->trigger_handler)) {
 							ret = 1; /* cache-miss */
 
-							log_error_write(srv, __FILE__, __LINE__, "s",
-									"a file is missing, calling handler");
+							log_error(con->conf.errh, __FILE__, __LINE__,
+							  "a file is missing, calling handler");
 
 							break;
 						} else {
 							/* handler not set -> 500 */
 							ret = -1;
 
-							log_error_write(srv, __FILE__, __LINE__, "s",
-									"a file missing and no handler set");
+							log_error(con->conf.errh, __FILE__, __LINE__,
+							  "a file missing and no handler set");
 
 							break;
 						}
@@ -270,8 +266,7 @@ int cache_parse_lua(server *srv, connection *con, plugin_data *p, const buffer *
 			} else {
 				/* not a string */
 				ret = -1;
-				log_error_write(srv, __FILE__, __LINE__, "s",
-						"not a string");
+				log_error(con->conf.errh, __FILE__, __LINE__, "not a string");
 				break;
 			}
 
@@ -293,7 +288,7 @@ int cache_parse_lua(server *srv, connection *con, plugin_data *p, const buffer *
 
 			con->file_finished = 1;
 
-			if (HANDLER_FINISHED == http_response_handle_cachable(srv, con, vb)) {
+			if (HANDLER_FINISHED == http_response_handle_cachable(con, vb)) {
 				/* ok, the client already has our content,
 				 * no need to send it again */
 

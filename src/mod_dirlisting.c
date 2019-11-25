@@ -85,7 +85,7 @@ static pcre ** mod_dirlisting_parse_excludes(server *srv, const array *a) {
     return regexes;
 }
 
-static int mod_dirlisting_exclude(server *srv, pcre **regex, const char *name, size_t len) {
+static int mod_dirlisting_exclude(log_error_st *errh, pcre **regex, const char *name, size_t len) {
     for(; *regex; ++regex) {
         #define N 10
         int ovec[N * 3];
@@ -93,7 +93,7 @@ static int mod_dirlisting_exclude(server *srv, pcre **regex, const char *name, s
         if ((n = pcre_exec(*regex, NULL, name, len, 0, 0, ovec, 3 * N)) < 0) {
             if (n == PCRE_ERROR_NOMATCH) continue;
 
-            log_error(srv->errh, __FILE__, __LINE__,
+            log_error(errh, __FILE__, __LINE__,
               "execution error while matching: %d", n);
             /* aborting would require a lot of manual cleanup here.
              * skip instead (to not leak names that break pcre matching)
@@ -670,8 +670,7 @@ static void http_dirlist_append_js_table_resort (buffer *b, connection *con) {
 	buffer_append_string_len(b, CONST_STR_LEN(");\n\n// -->\n</script>\n\n"));
 }
 
-static void http_list_directory_header(server *srv, connection *con, plugin_data *p, buffer *out) {
-	UNUSED(srv);
+static void http_list_directory_header(connection *con, plugin_data *p, buffer *out) {
 
 	if (p->conf.auto_layout) {
 		buffer_append_string_len(out, CONST_STR_LEN(
@@ -773,8 +772,7 @@ static void http_list_directory_header(server *srv, connection *con, plugin_data
 	}
 }
 
-static void http_list_directory_footer(server *srv, connection *con, plugin_data *p, buffer *out) {
-	UNUSED(srv);
+static void http_list_directory_footer(connection *con, plugin_data *p, buffer *out) {
 
 	buffer_append_string_len(out, CONST_STR_LEN(
 		"</tbody>\n"
@@ -840,6 +838,7 @@ static int http_list_directory(server *srv, connection *con, plugin_data *p, buf
 	char datebuf[sizeof("2005-Jan-01 22:23:24")];
 	const char *content_type;
 	long name_max;
+	log_error_st * const errh = con->conf.errh;
 #if defined(HAVE_XATTR) || defined(HAVE_EXTATTR)
 	char attrval[128];
 	int attrlen;
@@ -847,6 +846,7 @@ static int http_list_directory(server *srv, connection *con, plugin_data *p, buf
 #ifdef HAVE_LOCALTIME_R
 	struct tm tm;
 #endif
+	UNUSED(srv);
 
 	if (buffer_string_is_empty(dir)) return -1;
 
@@ -873,8 +873,8 @@ static int http_list_directory(server *srv, connection *con, plugin_data *p, buf
 	path_file = path + i;
 
 	if (NULL == (dp = opendir(path))) {
-		log_error(con->errh, __FILE__, __LINE__,
-			"opendir failed: %s", dir->ptr);
+		log_error(errh, __FILE__, __LINE__,
+		  "opendir failed: %s", dir->ptr);
 
 		free(path);
 		return -1;
@@ -914,7 +914,7 @@ static int http_list_directory(server *srv, connection *con, plugin_data *p, buf
 		 * elements, skipping any that match.
 		 */
 		if (p->conf.excludes
-		    && mod_dirlisting_exclude(srv, p->conf.excludes, dent->d_name, i))
+		    && mod_dirlisting_exclude(errh, p->conf.excludes, dent->d_name, i))
 			continue;
 
 		/* NOTE: the manual says, d_name is never more than NAME_MAX
@@ -951,7 +951,7 @@ static int http_list_directory(server *srv, connection *con, plugin_data *p, buf
 	if (files.used) http_dirls_sort(files.ent, files.used);
 
 	out = chunkqueue_append_buffer_open(con->write_queue);
-	http_list_directory_header(srv, con, p, out);
+	http_list_directory_header(con, p, out);
 
 	/* directories */
 	for (i = 0; i < dirs.used; i++) {
@@ -1031,7 +1031,7 @@ static int http_list_directory(server *srv, connection *con, plugin_data *p, buf
 	free(dirs.ent);
 	free(path);
 
-	http_list_directory_footer(srv, con, p, out);
+	http_list_directory_footer(con, p, out);
 
 	/* Insert possible charset to Content-Type */
 	if (buffer_string_is_empty(p->conf.encoding)) {
@@ -1054,8 +1054,6 @@ URIHANDLER_FUNC(mod_dirlisting_subrequest) {
 	plugin_data *p = p_d;
 	stat_cache_entry *sce = NULL;
 
-	UNUSED(srv);
-
 	/* we only handle GET and HEAD */
 	switch(con->request.http_method) {
 	case HTTP_METHOD_GET:
@@ -1076,13 +1074,17 @@ URIHANDLER_FUNC(mod_dirlisting_subrequest) {
 	if (!p->conf.dir_listing) return HANDLER_GO_ON;
 
 	if (con->conf.log_request_handling) {
-		log_error_write(srv, __FILE__, __LINE__,  "s",  "-- handling the request as Dir-Listing");
-		log_error_write(srv, __FILE__, __LINE__,  "sb", "URI          :", con->uri.path);
+		log_error(con->conf.errh, __FILE__, __LINE__,
+		  "-- handling the request as Dir-Listing");
+		log_error(con->conf.errh, __FILE__, __LINE__,
+		  "URI          : %s", con->uri.path->ptr);
 	}
 
 	if (HANDLER_ERROR == stat_cache_get_entry(srv, con, con->physical.path, &sce)) {
-		log_error_write(srv, __FILE__, __LINE__,  "SB", "stat_cache_get_entry failed: ", con->physical.path);
-		SEGFAULT();
+		log_error(con->conf.errh, __FILE__, __LINE__,
+		  "stat_cache_get_entry failed: %s", con->physical.path->ptr);
+		con->http_status = 500;
+		return HANDLER_FINISHED;
 	}
 
 	if (!S_ISDIR(sce->st.st_mode)) return HANDLER_GO_ON;

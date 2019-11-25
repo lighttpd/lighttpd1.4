@@ -115,8 +115,8 @@ URIHANDLER_FUNC(mod_indexfile_subrequest) {
 	if (NULL == p->conf.indexfiles) return HANDLER_GO_ON;
 
 	if (con->conf.log_request_handling) {
-		log_error_write(srv, __FILE__, __LINE__,  "s",  "-- handling the request as Indexfile");
-		log_error_write(srv, __FILE__, __LINE__,  "sb", "URI          :", con->uri.path);
+		log_error(con->conf.errh, __FILE__, __LINE__, "-- handling the request as Indexfile");
+		log_error(con->conf.errh, __FILE__, __LINE__, "URI          : %s", con->uri.path->ptr);
 	}
 
 	/* indexfile */
@@ -145,10 +145,9 @@ URIHANDLER_FUNC(mod_indexfile_subrequest) {
 			    errno != ENOTDIR) {
 				/* we have no idea what happend. let's tell the user so. */
 				con->http_status = 500;
-				log_error_write(srv, __FILE__, __LINE__, "ssbsb",
-						"file not found ... or so: ", strerror(errno),
-						con->uri.path,
-						"->", con->physical.path);
+				log_perror(con->conf.errh, __FILE__, __LINE__,
+				  "file not found ... or so: %s -> %s",
+				  con->uri.path->ptr, con->physical.path->ptr);
 				buffer_reset(con->physical.path);
 				return HANDLER_FINISHED;
 			}

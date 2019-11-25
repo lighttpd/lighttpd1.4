@@ -76,14 +76,14 @@ static int mod_vhostdb_dbconf_setup (server *srv, const array *opts, void **vdat
         vhostdb_config *dbconf;
         PGconn *dbconn = PQsetdbLogin(host,port,NULL,NULL,dbname,user,pass);
         if (NULL == dbconn) {
-            log_error_write(srv, __FILE__, __LINE__, "s",
-                            "PGsetdbLogin() failed, exiting...");
+            log_error(srv->errh, __FILE__, __LINE__,
+              "PGsetdbLogin() failed, exiting...");
             return -1;
         }
 
         if (CONNECTION_OK != PQstatus(dbconn)) {
-            log_error_write(srv, __FILE__, __LINE__, "s",
-                            "Failed to login to database, exiting...");
+            log_error(srv->errh, __FILE__, __LINE__,
+              "Failed to login to database, exiting...");
             PQfinish(dbconn);
             return -1;
         }
@@ -103,6 +103,7 @@ static void mod_vhostdb_patch_config(connection * const con, plugin_data * const
 
 static int mod_vhostdb_pgsql_query(server *srv, connection *con, void *p_d, buffer *docroot)
 {
+    UNUSED(srv);
     plugin_data *p = (plugin_data *)p_d;
     vhostdb_config *dbconf;
     PGresult *res;
@@ -140,8 +141,8 @@ static int mod_vhostdb_pgsql_query(server *srv, connection *con, void *p_d, buff
     buffer_clear(docroot); /*(reset buffer to store result)*/
 
     if (PGRES_TUPLES_OK != PQresultStatus(res)) {
-        log_error_write(srv, __FILE__, __LINE__, "s",
-                        PQerrorMessage(dbconf->dbconn));
+        log_error(con->conf.errh, __FILE__, __LINE__, "%s",
+          PQerrorMessage(dbconf->dbconn));
         PQclear(res);
         return -1;
     }

@@ -585,12 +585,12 @@ int main (void)
     srv.errh->errorlog_fd = -1; /* (disable) */
 
     memset(&con, 0, sizeof(connection));
-    con.errh                 = srv.errh;
-    con.srv                  = &srv;
-    con.proto                = buffer_init();
-    con.request.request      = buffer_init();
-    con.request.orig_uri     = buffer_init();
-    con.request.uri          = buffer_init();
+    con.srv                 = &srv;
+    con.proto               = buffer_init();
+    con.request.request     = buffer_init();
+    con.request.orig_uri    = buffer_init();
+    con.request.uri         = buffer_init();
+    con.conf.errh           = srv.errh;
     con.conf.allow_http11   = 1;
     con.conf.http_parseopts = HTTP_PARSEOPT_HEADER_STRICT
                             | HTTP_PARSEOPT_HOST_STRICT

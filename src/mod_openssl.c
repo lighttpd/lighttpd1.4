@@ -173,8 +173,8 @@ static int mod_openssl_init_once_openssl (server *srv)
     ssl_is_init = 1;
 
     if (0 == RAND_status()) {
-        log_error_write(srv, __FILE__, __LINE__, "ss", "SSL:",
-                        "not enough entropy in the pool");
+        log_error(srv->errh, __FILE__, __LINE__,
+          "SSL: not enough entropy in the pool");
         return 0;
     }
 
@@ -420,7 +420,6 @@ verify_callback(int preverify_ok, X509_STORE_CTX *ctx)
     int err, depth;
     SSL *ssl;
     handler_ctx *hctx;
-    server *srv;
 
     err = X509_STORE_CTX_get_error(ctx);
     depth = X509_STORE_CTX_get_error_depth(ctx);
@@ -431,7 +430,6 @@ verify_callback(int preverify_ok, X509_STORE_CTX *ctx)
      */
     ssl = X509_STORE_CTX_get_ex_data(ctx, SSL_get_ex_data_X509_STORE_CTX_idx());
     hctx = (handler_ctx *) SSL_get_app_data(ssl);
-    srv = hctx->srv;
 
     /*
      * Catch a too long certificate chain. The depth limit set using
@@ -488,10 +486,10 @@ verify_callback(int preverify_ok, X509_STORE_CTX *ctx)
   #endif
     if (NULL == err_cert) return !hctx->conf.ssl_verifyclient_enforce;
     safer_X509_NAME_oneline(X509_get_subject_name(err_cert),buf,sizeof(buf));
-    log_error_write(srv, __FILE__, __LINE__, "SDSSSDSS",
-                        "SSL: verify error:num=", err, ":",
-                        X509_verify_cert_error_string(err), ":depth=", depth,
-                        ":subject=", buf);
+    log_error_st *errh = hctx->con->conf.errh;
+    log_error(errh, __FILE__, __LINE__,
+      "SSL: verify error:num=%d:%s:depth=%d:subject=%s",
+      err, X509_verify_cert_error_string(err), depth, buf);
 
     /*
      * At this point, err contains the last verification error. We can use
@@ -500,7 +498,7 @@ verify_callback(int preverify_ok, X509_STORE_CTX *ctx)
     if (!preverify_ok && (err == X509_V_ERR_UNABLE_TO_GET_ISSUER_CERT_LOCALLY ||
                           err == X509_V_ERR_UNABLE_TO_GET_ISSUER_CERT)) {
         safer_X509_NAME_oneline(X509_get_issuer_name(err_cert),buf,sizeof(buf));
-        log_error_write(srv, __FILE__, __LINE__, "SS", "SSL: issuer=", buf);
+        log_error(errh, __FILE__, __LINE__, "SSL: issuer=%s", buf);
     }
 
     return !hctx->conf.ssl_verifyclient_enforce;
@@ -508,16 +506,16 @@ verify_callback(int preverify_ok, X509_STORE_CTX *ctx)
 
 #ifndef OPENSSL_NO_TLSEXT
 static int
-mod_openssl_SNI (SSL *ssl, server *srv, handler_ctx *hctx, const char *servername, size_t len)
+mod_openssl_SNI (SSL *ssl, handler_ctx *hctx, const char *servername, size_t len)
 {
+    connection * const con = hctx->con;
     if (len >= 1024) { /*(expecting < 256; TLSEXT_MAXLEN_host_name is 255)*/
-        log_error(srv->errh, __FILE__, __LINE__,
+        log_error(con->conf.errh, __FILE__, __LINE__,
                   "SSL: SNI name too long %.*s", (int)len, servername);
         return SSL_TLSEXT_ERR_ALERT_FATAL;
     }
 
     /* use SNI to patch mod_openssl config and then reset COMP_HTTP_HOST */
-    connection * const con = hctx->con;
     buffer_copy_string_len(con->uri.authority, servername, len);
     buffer_to_lower(con->uri.authority);
   #if 0
@@ -544,7 +542,7 @@ mod_openssl_SNI (SSL *ssl, server *srv, handler_ctx *hctx, const char *servernam
             || NULL == hctx->conf.ssl_pemfile_pkey) {
             /* x509/pkey available <=> pemfile was set <=> pemfile got patched:
              * so this should never happen, unless you nest $SERVER["socket"] */
-            log_error(srv->errh, __FILE__, __LINE__,
+            log_error(con->conf.errh, __FILE__, __LINE__,
               "SSL: no certificate/private key for TLS server name %s",
               con->uri.authority->ptr);
             return SSL_TLSEXT_ERR_ALERT_FATAL;
@@ -553,14 +551,14 @@ mod_openssl_SNI (SSL *ssl, server *srv, handler_ctx *hctx, const char *servernam
         /* first set certificate!
          * setting private key checks whether certificate matches it */
         if (1 != SSL_use_certificate(ssl, hctx->conf.ssl_pemfile_x509)) {
-            log_error(srv->errh, __FILE__, __LINE__,
+            log_error(con->conf.errh, __FILE__, __LINE__,
               "SSL: failed to set certificate for TLS server name %s: %s",
               con->uri.authority->ptr, ERR_error_string(ERR_get_error(), NULL));
             return SSL_TLSEXT_ERR_ALERT_FATAL;
         }
 
         if (1 != SSL_use_PrivateKey(ssl, hctx->conf.ssl_pemfile_pkey)) {
-            log_error(srv->errh, __FILE__, __LINE__,
+            log_error(con->conf.errh, __FILE__, __LINE__,
               "SSL: failed to set private key for TLS server name %s: %s",
               con->uri.authority->ptr, ERR_error_string(ERR_get_error(), NULL));
             return SSL_TLSEXT_ERR_ALERT_FATAL;
@@ -573,11 +571,10 @@ mod_openssl_SNI (SSL *ssl, server *srv, handler_ctx *hctx, const char *servernam
           ? hctx->conf.ssl_ca_dn_file
           : hctx->conf.ssl_ca_file;
         if (NULL == cert_names) {
-            log_error_write(srv, __FILE__, __LINE__, "ssb:s", "SSL:",
-                            "can't verify client without ssl.ca-file "
-                            "or ssl.ca-dn-file for TLS server name",
-                            con->uri.authority,
-                            ERR_error_string(ERR_get_error(), NULL));
+            log_error(con->conf.errh, __FILE__, __LINE__,
+              "SSL: can't verify client without ssl.ca-file "
+              "or ssl.ca-dn-file for TLS server name %s: %s",
+              con->uri.authority->ptr, ERR_error_string(ERR_get_error(), NULL));
             return SSL_TLSEXT_ERR_ALERT_FATAL;
         }
 
@@ -603,6 +600,7 @@ mod_openssl_client_hello_cb (SSL *ssl, int *al, void *srv)
 {
     handler_ctx *hctx = (handler_ctx *) SSL_get_app_data(ssl);
     buffer_copy_string(hctx->con->uri.scheme, "https");
+    UNUSED(srv);
 
     const unsigned char *name;
     size_t len, slen;
@@ -615,7 +613,7 @@ mod_openssl_client_hello_cb (SSL *ssl, int *al, void *srv)
         && (size_t)((name[0] << 8) + name[1]) == len-2
         && name[2] == TLSEXT_TYPE_server_name
         && (slen = (name[3] << 8) + name[4]) <= len-5) { /*(first)*/
-        int rc = mod_openssl_SNI(ssl, srv, hctx, (const char *)name+5, slen);
+        int rc = mod_openssl_SNI(ssl, hctx, (const char *)name+5, slen);
         if (rc == SSL_TLSEXT_ERR_OK)
             return SSL_CLIENT_HELLO_SUCCESS;
     }
@@ -630,10 +628,11 @@ network_ssl_servername_callback (SSL *ssl, int *al, server *srv)
     handler_ctx *hctx = (handler_ctx *) SSL_get_app_data(ssl);
     buffer_copy_string(hctx->con->uri.scheme, "https");
     UNUSED(al);
+    UNUSED(srv);
 
     const char *servername = SSL_get_servername(ssl, TLSEXT_NAMETYPE_host_name);
     return (NULL != servername)
-      ? mod_openssl_SNI(ssl, srv, hctx, servername, strlen(servername))
+      ? mod_openssl_SNI(ssl, hctx, servername, strlen(servername))
       : SSL_TLSEXT_ERR_NOACK; /* client did not provide SNI */
 }
 #endif
@@ -641,28 +640,28 @@ network_ssl_servername_callback (SSL *ssl, int *al, server *srv)
 
 
 static X509 *
-x509_load_pem_file (server *srv, const char *file)
+x509_load_pem_file (const char *file, log_error_st *errh)
 {
     BIO *in;
     X509 *x = NULL;
 
     in = BIO_new(BIO_s_file());
     if (NULL == in) {
-        log_error_write(srv, __FILE__, __LINE__, "S",
-                        "SSL: BIO_new(BIO_s_file()) failed");
+        log_error(errh, __FILE__, __LINE__,
+          "SSL: BIO_new(BIO_s_file()) failed");
         goto error;
     }
 
     if (BIO_read_filename(in,file) <= 0) {
-        log_error_write(srv, __FILE__, __LINE__, "SSS",
-                        "SSL: BIO_read_filename('", file,"') failed");
+        log_error(errh, __FILE__, __LINE__,
+          "SSL: BIO_read_filename('%s') failed", file);
         goto error;
     }
 
     x = PEM_read_bio_X509(in, NULL, NULL, NULL);
     if (NULL == x) {
-        log_error_write(srv, __FILE__, __LINE__, "SSS",
-                        "SSL: couldn't read X509 certificate from '", file,"'");
+        log_error(errh, __FILE__, __LINE__,
+          "SSL: couldn't read X509 certificate from '%s'", file);
         goto error;
     }
 
@@ -676,28 +675,28 @@ error:
 
 
 static EVP_PKEY *
-evp_pkey_load_pem_file (server *srv, const char *file)
+evp_pkey_load_pem_file (const char *file, log_error_st *errh)
 {
     BIO *in;
     EVP_PKEY *x = NULL;
 
     in = BIO_new(BIO_s_file());
     if (NULL == in) {
-        log_error_write(srv, __FILE__, __LINE__, "s",
-                        "SSL: BIO_new(BIO_s_file()) failed");
+        log_error(errh, __FILE__, __LINE__,
+          "SSL: BIO_new(BIO_s_file()) failed");
         goto error;
     }
 
     if (BIO_read_filename(in,file) <= 0) {
-        log_error_write(srv, __FILE__, __LINE__, "SSS",
-                        "SSL: BIO_read_filename('", file,"') failed");
+        log_error(errh, __FILE__, __LINE__,
+          "SSL: BIO_read_filename('%s') failed", file);
         goto error;
     }
 
     x = PEM_read_bio_PrivateKey(in, NULL, NULL, NULL);
     if (NULL == x) {
-        log_error_write(srv, __FILE__, __LINE__, "SSS",
-                        "SSL: couldn't read private key from '", file,"'");
+        log_error(errh, __FILE__, __LINE__,
+          "SSL: couldn't read private key from '%s'", file);
         goto error;
     }
 
@@ -715,11 +714,11 @@ network_openssl_load_pemfile (server *srv, const buffer *pemfile, const buffer *
 {
     if (!mod_openssl_init_once_openssl(srv)) return NULL;
 
-    X509 *ssl_pemfile_x509 = x509_load_pem_file(srv, pemfile->ptr);
+    X509 *ssl_pemfile_x509 = x509_load_pem_file(pemfile->ptr, srv->errh);
     if (NULL == ssl_pemfile_x509)
         return NULL;
 
-    EVP_PKEY *ssl_pemfile_pkey = evp_pkey_load_pem_file(srv, privkey->ptr);
+    EVP_PKEY *ssl_pemfile_pkey = evp_pkey_load_pem_file(privkey->ptr, srv->errh);
     if (NULL == ssl_pemfile_pkey) {
         X509_free(ssl_pemfile_x509);
         return NULL;
@@ -752,9 +751,9 @@ network_openssl_load_pemfile (server *srv, const buffer *pemfile, const buffer *
 static int
 mod_openssl_acme_tls_1 (SSL *ssl, handler_ctx *hctx)
 {
-    server *srv = hctx->srv;
-    buffer *b = srv->tmp_buf;
+    buffer * const b = hctx->srv->tmp_buf;
     buffer *name = hctx->con->uri.authority;
+    log_error_st *errh = hctx->con->conf.errh;
     X509 *ssl_pemfile_x509 = NULL;
     EVP_PKEY *ssl_pemfile_pkey = NULL;
     size_t len;
@@ -781,27 +780,28 @@ mod_openssl_acme_tls_1 (SSL *ssl, handler_ctx *hctx)
 
     do {
         buffer_append_string_len(b, CONST_STR_LEN(".crt.pem"));
-        ssl_pemfile_x509 = x509_load_pem_file(srv, b->ptr);
+        ssl_pemfile_x509 = x509_load_pem_file(b->ptr, errh);
         if (NULL == ssl_pemfile_x509) {
-            log_error_write(srv, __FILE__, __LINE__, "ssb", "SSL:",
-                            "Failed to load acme-tls/1 pemfile:", b);
+            log_error(errh, __FILE__, __LINE__,
+              "SSL: Failed to load acme-tls/1 pemfile: %s", b->ptr);
             break;
         }
 
         buffer_string_set_length(b, len); /*(remove ".crt.pem")*/
         buffer_append_string_len(b, CONST_STR_LEN(".key.pem"));
-        ssl_pemfile_pkey = evp_pkey_load_pem_file(srv, b->ptr);
+        ssl_pemfile_pkey = evp_pkey_load_pem_file(b->ptr, errh);
         if (NULL == ssl_pemfile_pkey) {
-            log_error_write(srv, __FILE__, __LINE__, "ssb", "SSL:",
-                            "Failed to load acme-tls/1 pemfile:", b);
+            log_error(errh, __FILE__, __LINE__,
+              "SSL: Failed to load acme-tls/1 pemfile: %s", b->ptr);
             break;
         }
 
       #if 0 /* redundant with below? */
         if (!X509_check_private_key(ssl_pemfile_x509, ssl_pemfile_pkey)) {
-            log_error_write(srv, __FILE__, __LINE__, "sssb", "SSL:",
-               "Private key does not match acme-tls/1 certificate public key,"
-               " reason:" ERR_error_string(ERR_get_error(), NULL), b);
+            log_error(errh, __FILE__, __LINE__,
+               "SSL: Private key does not match acme-tls/1 "
+               "certificate public key, reason: %s %s"
+               ERR_error_string(ERR_get_error(), NULL), b->ptr);
             break;
         }
       #endif
@@ -809,16 +809,16 @@ mod_openssl_acme_tls_1 (SSL *ssl, handler_ctx *hctx)
         /* first set certificate!
          * setting private key checks whether certificate matches it */
         if (1 != SSL_use_certificate(ssl, ssl_pemfile_x509)) {
-            log_error_write(srv, __FILE__, __LINE__, "ssb:s", "SSL:",
-              "failed to set acme-tls/1 certificate for TLS server name",
-              name, ERR_error_string(ERR_get_error(), NULL));
+            log_error(errh, __FILE__, __LINE__,
+              "SSL: failed to set acme-tls/1 certificate for TLS server "
+              "name %s: %s", name->ptr, ERR_error_string(ERR_get_error(),NULL));
             break;
         }
 
         if (1 != SSL_use_PrivateKey(ssl, ssl_pemfile_pkey)) {
-            log_error_write(srv, __FILE__, __LINE__, "ssb:s", "SSL:",
-              "failed to set acme-tls/1 private key for TLS server name",
-              name, ERR_error_string(ERR_get_error(), NULL));
+            log_error(errh, __FILE__, __LINE__,
+              "SSL: failed to set acme-tls/1 private key for TLS server "
+              "name %s: %s", name->ptr, ERR_error_string(ERR_get_error(),NULL));
             break;
         }
 
@@ -933,18 +933,18 @@ network_openssl_ssl_conf_cmd (server *srv, plugin_config_socket *s)
         ds = (data_string *)s->ssl_conf_cmd->data[i];
         ERR_clear_error();
         if (SSL_CONF_cmd(cctx, ds->key.ptr, ds->value.ptr) <= 0) {
-            log_error_write(srv, __FILE__, __LINE__, "ssbbss", "SSL:",
-                            "SSL_CONF_cmd", &ds->key, &ds->value, ":",
-                            ERR_error_string(ERR_get_error(), NULL));
+            log_error(srv->errh, __FILE__, __LINE__,
+              "SSL: SSL_CONF_cmd %s %s: %s", ds->key.ptr, ds->value.ptr,
+              ERR_error_string(ERR_get_error(), NULL));
             rc = -1;
             break;
         }
     }
 
     if (0 == rc && 1 != SSL_CONF_CTX_finish(cctx)) {
-        log_error_write(srv, __FILE__, __LINE__, "sss", "SSL:",
-                        "SSL_CONF_CTX_finish():",
-                        ERR_error_string(ERR_get_error(), NULL));
+        log_error(srv->errh, __FILE__, __LINE__,
+          "SSL: SSL_CONF_CTX_finish(): %s",
+          ERR_error_string(ERR_get_error(), NULL));
         rc = -1;
     }
 
@@ -954,8 +954,8 @@ network_openssl_ssl_conf_cmd (server *srv, plugin_config_socket *s)
   #else
 
     UNUSED(s);
-    log_error_write(srv, __FILE__, __LINE__, "ss", "SSL:",
-                    "ssl.openssl.ssl-conf-cmd not available; ignored");
+    log_error(srv->errh, __FILE__, __LINE__,
+      "SSL: ssl.openssl.ssl-conf-cmd not available; ignored");
     return 0;
 
   #endif
@@ -1026,8 +1026,8 @@ network_init_ssl (server *srv, plugin_config_socket *s, plugin_data *p)
         s->ssl_ctx = SSL_CTX_new(SSLv23_server_method());
       #endif
         if (NULL == s->ssl_ctx) {
-            log_error_write(srv, __FILE__, __LINE__, "ss", "SSL:",
-                            ERR_error_string(ERR_get_error(), NULL));
+            log_error(srv->errh, __FILE__, __LINE__,
+              "SSL: %s", ERR_error_string(ERR_get_error(), NULL));
             return -1;
         }
 
@@ -1035,9 +1035,9 @@ network_init_ssl (server *srv, plugin_config_socket *s, plugin_data *p)
          * required for client cert verification to work with sessions */
         if (0 == SSL_CTX_set_session_id_context(
                    s->ssl_ctx,(const unsigned char*)CONST_STR_LEN("lighttpd"))){
-            log_error_write(srv, __FILE__, __LINE__, "ss:s", "SSL:",
-                            "failed to set session context",
-                            ERR_error_string(ERR_get_error(), NULL));
+            log_error(srv->errh, __FILE__, __LINE__,
+              "SSL: failed to set session context: %s",
+              ERR_error_string(ERR_get_error(), NULL));
             return -1;
         }
 
@@ -1046,9 +1046,9 @@ network_init_ssl (server *srv, plugin_config_socket *s, plugin_data *p)
             ssloptions &= ~SSL_OP_DONT_INSERT_EMPTY_FRAGMENTS;
           #else
             ssloptions &= ~0x00000800L; /* hardcode constant */
-            log_error_write(srv, __FILE__, __LINE__, "ss", "WARNING: SSL:",
-                            "'insert empty fragments' not supported by the "
-                            "openssl version used to compile lighttpd with");
+            log_error(srv->errh, __FILE__, __LINE__,
+              "WARNING: SSL: 'insert empty fragments' not supported by the "
+              "openssl version used to compile lighttpd with");
           #endif
         }
 
@@ -1061,8 +1061,8 @@ network_init_ssl (server *srv, plugin_config_socket *s, plugin_data *p)
             if ((SSL_OP_NO_SSLv2
                  & SSL_CTX_set_options(s->ssl_ctx, SSL_OP_NO_SSLv2))
                 != SSL_OP_NO_SSLv2) {
-                log_error_write(srv, __FILE__, __LINE__, "ss", "SSL:",
-                                ERR_error_string(ERR_get_error(), NULL));
+                log_error(srv->errh, __FILE__, __LINE__,
+                  "SSL: %s", ERR_error_string(ERR_get_error(), NULL));
                 return -1;
             }
         }
@@ -1073,8 +1073,8 @@ network_init_ssl (server *srv, plugin_config_socket *s, plugin_data *p)
             if ((SSL_OP_NO_SSLv3
                  & SSL_CTX_set_options(s->ssl_ctx, SSL_OP_NO_SSLv3))
                 != SSL_OP_NO_SSLv3) {
-                log_error_write(srv, __FILE__, __LINE__, "ss", "SSL:",
-                                ERR_error_string(ERR_get_error(), NULL));
+                log_error(srv->errh, __FILE__, __LINE__,
+                  "SSL: %s", ERR_error_string(ERR_get_error(), NULL));
                 return -1;
             }
         }
@@ -1082,8 +1082,8 @@ network_init_ssl (server *srv, plugin_config_socket *s, plugin_data *p)
         if (!buffer_string_is_empty(s->ssl_cipher_list)) {
             /* Disable support for low encryption ciphers */
             if (SSL_CTX_set_cipher_list(s->ssl_ctx,s->ssl_cipher_list->ptr)!=1){
-                log_error_write(srv, __FILE__, __LINE__, "ss", "SSL:",
-                                ERR_error_string(ERR_get_error(), NULL));
+                log_error(srv->errh, __FILE__, __LINE__,
+                  "SSL: %s", ERR_error_string(ERR_get_error(), NULL));
                 return -1;
             }
 
@@ -1101,17 +1101,15 @@ network_init_ssl (server *srv, plugin_config_socket *s, plugin_data *p)
             BIO *bio;
             bio = BIO_new_file((char *) s->ssl_dh_file->ptr, "r");
             if (bio == NULL) {
-                log_error_write(srv, __FILE__, __LINE__, "ss",
-                                "SSL: Unable to open file",
-                                s->ssl_dh_file->ptr);
+                log_error(srv->errh, __FILE__, __LINE__,
+                  "SSL: Unable to open file %s", s->ssl_dh_file->ptr);
                 return -1;
             }
             dh = PEM_read_bio_DHparams(bio, NULL, NULL, NULL);
             BIO_free(bio);
             if (dh == NULL) {
-                log_error_write(srv, __FILE__, __LINE__, "ss",
-                                "SSL: PEM_read_bio_DHparams failed",
-                                s->ssl_dh_file->ptr);
+                log_error(srv->errh, __FILE__, __LINE__,
+                  "SSL: PEM_read_bio_DHparams failed %s", s->ssl_dh_file->ptr);
                 return -1;
             }
         } else {
@@ -1119,16 +1117,16 @@ network_init_ssl (server *srv, plugin_config_socket *s, plugin_data *p)
             /* Default DH parameters from RFC5114 */
             dh = DH_new();
             if (dh == NULL) {
-                log_error_write(srv, __FILE__, __LINE__, "s",
-                                "SSL: DH_new () failed");
+                log_error(srv->errh, __FILE__, __LINE__,
+                  "SSL: DH_new () failed");
                 return -1;
             }
             dh_p = BN_bin2bn(dh1024_p,sizeof(dh1024_p), NULL);
             dh_g = BN_bin2bn(dh1024_g,sizeof(dh1024_g), NULL);
             if ((dh_p == NULL) || (dh_g == NULL)) {
                 DH_free(dh);
-                log_error_write(srv, __FILE__, __LINE__, "s",
-                                "SSL: BN_bin2bn () failed");
+                log_error(srv->errh, __FILE__, __LINE__,
+                  "SSL: BN_bin2bn () failed");
                 return -1;
             }
           #if OPENSSL_VERSION_NUMBER < 0x10100000L \
@@ -1147,9 +1145,9 @@ network_init_ssl (server *srv, plugin_config_socket *s, plugin_data *p)
       }
       #else
         if (!buffer_string_is_empty(s->ssl_dh_file)) {
-            log_error_write(srv, __FILE__, __LINE__, "ss",
-                            "SSL: openssl compiled without DH support, "
-                            "can't load parameters from", s->ssl_dh_file->ptr);
+            log_error(srv->errh, __FILE__, __LINE__,
+              "SSL: openssl compiled without DH support, "
+              "can't load parameters from %s", s->ssl_dh_file->ptr);
         }
       #endif
 
@@ -1163,9 +1161,8 @@ network_init_ssl (server *srv, plugin_config_socket *s, plugin_data *p)
              * from RFC 4492, section 5.1.1. */
             nid = OBJ_sn2nid((char *) s->ssl_ec_curve->ptr);
             if (nid == 0) {
-                log_error_write(srv, __FILE__, __LINE__, "ss",
-                                "SSL: Unknown curve name",
-                                s->ssl_ec_curve->ptr);
+                log_error(srv->errh, __FILE__, __LINE__,
+                  "SSL: Unknown curve name %s", s->ssl_ec_curve->ptr);
                 return -1;
             }
         } else {
@@ -1175,8 +1172,8 @@ network_init_ssl (server *srv, plugin_config_socket *s, plugin_data *p)
           #elif OPENSSL_VERSION_NUMBER < 0x10100000L \
              || defined(LIBRESSL_VERSION_NUMBER)
             if (!SSL_CTX_set_ecdh_auto(s->ssl_ctx, 1)) {
-                log_error_write(srv, __FILE__, __LINE__, "s",
-                                "SSL: SSL_CTX_set_ecdh_auto() failed");
+                log_error(srv->errh, __FILE__, __LINE__,
+                  "SSL: SSL_CTX_set_ecdh_auto() failed");
             }
           #endif
         }
@@ -1184,9 +1181,8 @@ network_init_ssl (server *srv, plugin_config_socket *s, plugin_data *p)
             EC_KEY *ecdh;
             ecdh = EC_KEY_new_by_curve_name(nid);
             if (ecdh == NULL) {
-                log_error_write(srv, __FILE__, __LINE__, "ss",
-                                "SSL: Unable to create curve",
-                                s->ssl_ec_curve->ptr);
+                log_error(srv->errh, __FILE__, __LINE__,
+                  "SSL: Unable to create curve %s", s->ssl_ec_curve->ptr);
                 return -1;
             }
             SSL_CTX_set_tmp_ecdh(s->ssl_ctx,ecdh);
@@ -1207,9 +1203,9 @@ network_init_ssl (server *srv, plugin_config_socket *s, plugin_data *p)
               ? s->ssl_ca_dn_file
               : s->ssl_ca_file;
             if (NULL == cert_names) {
-                log_error_write(srv, __FILE__, __LINE__, "s",
-                                "SSL: You specified ssl.verifyclient.activate "
-                                "but no ssl.ca-file or ssl.ca-dn-file");
+                log_error(srv->errh, __FILE__, __LINE__,
+                  "SSL: You specified ssl.verifyclient.activate "
+                  "but no ssl.ca-file or ssl.ca-dn-file");
                 return -1;
             }
             SSL_CTX_set_client_CA_list(s->ssl_ctx, SSL_dup_CA_list(cert_names));
@@ -1222,8 +1218,9 @@ network_init_ssl (server *srv, plugin_config_socket *s, plugin_data *p)
             if (!buffer_string_is_empty(s->ssl_ca_crl_file)) {
                 X509_STORE *store = SSL_CTX_get_cert_store(s->ssl_ctx);
                 if (1 != X509_STORE_load_locations(store, s->ssl_ca_crl_file->ptr, NULL)) {
-                    log_error_write(srv, __FILE__, __LINE__, "ssb", "SSL:",
-                    ERR_error_string(ERR_get_error(), NULL), s->ssl_ca_crl_file);
+                    log_error(srv->errh, __FILE__, __LINE__,
+                      "SSL: %s %s", ERR_error_string(ERR_get_error(), NULL),
+                      s->ssl_ca_crl_file->ptr);
                     return -1;
                 }
                 X509_STORE_set_flags(store, X509_V_FLAG_CRL_CHECK | X509_V_FLAG_CRL_CHECK_ALL);
@@ -1232,25 +1229,24 @@ network_init_ssl (server *srv, plugin_config_socket *s, plugin_data *p)
 
         if (1 != SSL_CTX_use_certificate_chain_file(s->ssl_ctx,
                                                     s->ssl_pemfile->ptr)) {
-            log_error_write(srv, __FILE__, __LINE__, "ssb", "SSL:",
-                            ERR_error_string(ERR_get_error(), NULL),
-                            s->ssl_pemfile);
+            log_error(srv->errh, __FILE__, __LINE__,
+              "SSL: %s %s", ERR_error_string(ERR_get_error(), NULL),
+              s->ssl_pemfile->ptr);
             return -1;
         }
 
         if (1 != SSL_CTX_use_PrivateKey(s->ssl_ctx, s->ssl_pemfile_pkey)) {
-            log_error_write(srv, __FILE__, __LINE__, "ssbb", "SSL:",
-                            ERR_error_string(ERR_get_error(), NULL),
-                            s->ssl_pemfile, s->ssl_privkey);
+            log_error(srv->errh, __FILE__, __LINE__,
+              "SSL: %s %s %s", ERR_error_string(ERR_get_error(), NULL),
+              s->ssl_pemfile->ptr, s->ssl_privkey->ptr);
             return -1;
         }
 
         if (SSL_CTX_check_private_key(s->ssl_ctx) != 1) {
-            log_error_write(srv, __FILE__, __LINE__, "sssbb", "SSL:",
-                            "Private key does not match the certificate public "
-                            "key, reason:",
-                            ERR_error_string(ERR_get_error(), NULL),
-                            s->ssl_pemfile, s->ssl_privkey);
+            log_error(srv->errh, __FILE__, __LINE__,
+              "SSL: Private key does not match the certificate public key, "
+              "reason: %s %s %s", ERR_error_string(ERR_get_error(), NULL),
+              s->ssl_pemfile->ptr, s->ssl_privkey->ptr);
             return -1;
         }
         SSL_CTX_set_default_read_ahead(s->ssl_ctx, s->ssl_read_ahead);
@@ -1266,10 +1262,9 @@ network_init_ssl (server *srv, plugin_config_socket *s, plugin_data *p)
         if (!SSL_CTX_set_tlsext_servername_callback(
                s->ssl_ctx, network_ssl_servername_callback) ||
             !SSL_CTX_set_tlsext_servername_arg(s->ssl_ctx, srv)) {
-            log_error_write(srv, __FILE__, __LINE__, "ss", "SSL:",
-                            "failed to initialize TLS servername callback, "
-                            "openssl library does not support TLS servername "
-                            "extension");
+            log_error(srv->errh, __FILE__, __LINE__,
+              "SSL: failed to initialize TLS servername callback, "
+              "openssl library does not support TLS servername extension");
             return -1;
         }
        #endif
@@ -1694,7 +1689,7 @@ SETDEFAULTS_FUNC(mod_openssl_set_defaults)
 
 
 static int
-load_next_chunk (server *srv, chunkqueue *cq, off_t max_bytes,
+load_next_chunk (connection *con, chunkqueue *cq, off_t max_bytes,
                  const char **data, size_t *data_len)
 {
     chunk *c = cq->first;
@@ -1752,7 +1747,7 @@ load_next_chunk (server *srv, chunkqueue *cq, off_t max_bytes,
         return 0;
 
     case FILE_CHUNK:
-        if (0 != chunkqueue_open_file_chunk(srv, cq)) return -1;
+        if (0 != chunkqueue_open_file_chunk(cq, con->conf.errh)) return -1;
 
         {
             off_t offset, toSend;
@@ -1765,13 +1760,11 @@ load_next_chunk (server *srv, chunkqueue *cq, off_t max_bytes,
             if (toSend > max_bytes) toSend = max_bytes;
 
             if (-1 == lseek(c->file.fd, offset, SEEK_SET)) {
-                log_error_write(srv, __FILE__, __LINE__, "ss",
-                                "lseek: ", strerror(errno));
+                log_perror(con->conf.errh, __FILE__, __LINE__, "lseek");
                 return -1;
             }
             if (-1 == (toSend = read(c->file.fd, local_send_buffer, toSend))) {
-                log_error_write(srv, __FILE__, __LINE__, "ss",
-                                "read: ", strerror(errno));
+                log_perror(con->conf.errh, __FILE__, __LINE__, "read");
                 return -1;
             }
 
@@ -1786,17 +1779,16 @@ load_next_chunk (server *srv, chunkqueue *cq, off_t max_bytes,
 
 
 static int
-mod_openssl_close_notify(server *srv, handler_ctx *hctx);
+mod_openssl_close_notify(handler_ctx *hctx);
 
 
 static int
-connection_write_cq_ssl (server *srv, connection *con,
-                         chunkqueue *cq, off_t max_bytes)
+connection_write_cq_ssl (connection *con, chunkqueue *cq, off_t max_bytes)
 {
     handler_ctx *hctx = con->plugin_ctx[plugin_data_singleton->id];
     SSL *ssl = hctx->ssl;
 
-    if (0 != hctx->close_notify) return mod_openssl_close_notify(srv, hctx);
+    if (0 != hctx->close_notify) return mod_openssl_close_notify(hctx);
 
     chunkqueue_remove_finished_chunks(cq);
 
@@ -1805,7 +1797,7 @@ connection_write_cq_ssl (server *srv, connection *con,
         size_t data_len;
         int r;
 
-        if (0 != load_next_chunk(srv,cq,max_bytes,&data,&data_len)) return -1;
+        if (0 != load_next_chunk(con,cq,max_bytes,&data,&data_len)) return -1;
 
         /**
          * SSL_write man-page
@@ -1821,7 +1813,7 @@ connection_write_cq_ssl (server *srv, connection *con,
 
         if (hctx->renegotiations > 1
             && hctx->conf.ssl_disable_client_renegotiation) {
-            log_error_write(srv, __FILE__, __LINE__, "s",
+            log_error(con->conf.errh, __FILE__, __LINE__,
               "SSL: renegotiation initiated by client, killing connection");
             return -1;
         }
@@ -1841,9 +1833,8 @@ connection_write_cq_ssl (server *srv, connection *con,
                 /* perhaps we have error waiting in our error-queue */
                 if (0 != (err = ERR_get_error())) {
                     do {
-                        log_error_write(srv, __FILE__, __LINE__, "sdds",
-                                        "SSL:", ssl_r, r,
-                                        ERR_error_string(err, NULL));
+                        log_error(con->conf.errh, __FILE__, __LINE__,
+                          "SSL: %d %d %s",ssl_r,r,ERR_error_string(err,NULL));
                     } while((err = ERR_get_error()));
                 } else if (r == -1) {
                     /* no, but we have errno */
@@ -1852,16 +1843,14 @@ connection_write_cq_ssl (server *srv, connection *con,
                     case ECONNRESET:
                         return -2;
                     default:
-                        log_error_write(srv, __FILE__, __LINE__, "sddds",
-                                        "SSL:", ssl_r, r, errno,
-                                        strerror(errno));
+                        log_perror(con->conf.errh, __FILE__, __LINE__,
+                          "SSL: %d %d", ssl_r, r);
                         break;
                     }
                 } else {
                     /* neither error-queue nor errno ? */
-                    log_error_write(srv, __FILE__, __LINE__, "sddds",
-                                    "SSL (error):", ssl_r, r, errno,
-                                    strerror(errno));
+                    log_perror(con->conf.errh, __FILE__, __LINE__,
+                      "SSL (error): %d %d", ssl_r, r);
                 }
                 break;
 
@@ -1873,9 +1862,8 @@ connection_write_cq_ssl (server *srv, connection *con,
                 /* fall through */
             default:
                 while((err = ERR_get_error())) {
-                    log_error_write(srv, __FILE__, __LINE__, "sdds",
-                                    "SSL:", ssl_r, r,
-                                    ERR_error_string(err, NULL));
+                    log_error(con->conf.errh, __FILE__, __LINE__,
+                      "SSL: %d %d %s", ssl_r, r, ERR_error_string(err, NULL));
                 }
                 break;
             }
@@ -1893,8 +1881,7 @@ connection_write_cq_ssl (server *srv, connection *con,
 
 
 static int
-connection_read_cq_ssl (server *srv, connection *con,
-                        chunkqueue *cq, off_t max_bytes)
+connection_read_cq_ssl (connection *con, chunkqueue *cq, off_t max_bytes)
 {
     handler_ctx *hctx = con->plugin_ctx[plugin_data_singleton->id];
     int r, ssl_err, len;
@@ -1905,7 +1892,7 @@ connection_read_cq_ssl (server *srv, connection *con,
     force_assert(cq == con->read_queue);
     UNUSED(max_bytes);
 
-    if (0 != hctx->close_notify) return mod_openssl_close_notify(srv, hctx);
+    if (0 != hctx->close_notify) return mod_openssl_close_notify(hctx);
 
     ERR_clear_error();
     do {
@@ -1923,7 +1910,7 @@ connection_read_cq_ssl (server *srv, connection *con,
 
         if (hctx->renegotiations > 1
             && hctx->conf.ssl_disable_client_renegotiation) {
-            log_error_write(srv, __FILE__, __LINE__, "s",
+            log_error(con->conf.errh, __FILE__, __LINE__,
               "SSL: renegotiation initiated by client, killing connection");
             return -1;
         }
@@ -1976,8 +1963,8 @@ connection_read_cq_ssl (server *srv, connection *con,
              */
             while((ssl_err = ERR_get_error())) {
                 /* get all errors from the error-queue */
-                log_error_write(srv, __FILE__, __LINE__, "sds", "SSL:",
-                        r, ERR_error_string(ssl_err, NULL));
+                log_error(con->conf.errh, __FILE__, __LINE__,
+                  "SSL: %d %s", r, ERR_error_string(ssl_err, NULL));
             }
 
             switch(oerrno) {
@@ -1990,9 +1977,8 @@ connection_read_cq_ssl (server *srv, connection *con,
                 if (0==oerrno && 0==cq->bytes_in && !hctx->conf.ssl_log_noise)
                     break;
 
-                log_error_write(srv, __FILE__, __LINE__, "sddds", "SSL:",
-                        len, r, oerrno,
-                        strerror(oerrno));
+                log_error(con->conf.errh, __FILE__, __LINE__,
+                  "SSL: %d %d %d %s", len, r, oerrno, strerror(oerrno));
                 break;
             }
 
@@ -2024,8 +2010,8 @@ connection_read_cq_ssl (server *srv, connection *con,
                     break;
                 }
                 /* get all errors from the error-queue */
-                log_error_write(srv, __FILE__, __LINE__, "sds", "SSL:",
-                                r, ERR_error_string(ssl_err, NULL));
+                log_error(con->conf.errh, __FILE__, __LINE__,
+                  "SSL: %d %s", r, ERR_error_string(ssl_err, NULL));
             }
             break;
         }
@@ -2066,7 +2052,7 @@ CONNECTION_FUNC(mod_openssl_handle_con_accept)
         return HANDLER_GO_ON;
     }
     else {
-        log_error(srv->errh, __FILE__, __LINE__,
+        log_error(con->conf.errh, __FILE__, __LINE__,
           "SSL: %s", ERR_error_string(ERR_get_error(), NULL));
         return HANDLER_ERROR;
     }
@@ -2091,10 +2077,11 @@ CONNECTION_FUNC(mod_openssl_handle_con_shut_wr)
     plugin_data *p = p_d;
     handler_ctx *hctx = con->plugin_ctx[p->id];
     if (NULL == hctx) return HANDLER_GO_ON;
+    UNUSED(srv);
 
     hctx->close_notify = -2;
     if (SSL_is_init_finished(hctx->ssl)) {
-        mod_openssl_close_notify(srv, hctx);
+        mod_openssl_close_notify(hctx);
     }
     else {
         mod_openssl_detach(hctx);
@@ -2105,10 +2092,11 @@ CONNECTION_FUNC(mod_openssl_handle_con_shut_wr)
 
 
 static int
-mod_openssl_close_notify(server *srv, handler_ctx *hctx)
+mod_openssl_close_notify(handler_ctx *hctx)
 {
         int ret, ssl_r;
         unsigned long err;
+        log_error_st *errh;
 
         if (1 == hctx->close_notify) return -2;
 
@@ -2175,11 +2163,11 @@ mod_openssl_close_notify(server *srv, handler_ctx *hctx)
                 return 0; /* try again later */
             case SSL_ERROR_SYSCALL:
                 /* perhaps we have error waiting in our error-queue */
+                errh = hctx->con->conf.errh;
                 if (0 != (err = ERR_get_error())) {
                     do {
-                        log_error_write(srv, __FILE__, __LINE__, "sdds",
-                                        "SSL:", ssl_r, ret,
-                                        ERR_error_string(err, NULL));
+                        log_error(errh, __FILE__, __LINE__,
+                          "SSL: %d %d %s",ssl_r,ret,ERR_error_string(err,NULL));
                     } while((err = ERR_get_error()));
                 } else if (errno != 0) {
                     /*ssl bug (see lighttpd ticket #2213): sometimes errno==0*/
@@ -2188,19 +2176,18 @@ mod_openssl_close_notify(server *srv, handler_ctx *hctx)
                     case ECONNRESET:
                         break;
                     default:
-                        log_error_write(srv, __FILE__, __LINE__, "sddds",
-                                        "SSL (error):", ssl_r, ret, errno,
-                                        strerror(errno));
+                        log_perror(errh, __FILE__, __LINE__,
+                          "SSL (error): %d %d", ssl_r, ret);
                         break;
                     }
                 }
 
                 break;
             default:
+                errh = hctx->con->conf.errh;
                 while((err = ERR_get_error())) {
-                    log_error_write(srv, __FILE__, __LINE__, "sdds",
-                                    "SSL:", ssl_r, ret,
-                                    ERR_error_string(err, NULL));
+                    log_error(errh, __FILE__, __LINE__,
+                      "SSL: %d %d %s", ssl_r, ret, ERR_error_string(err, NULL));
                 }
 
                 break;

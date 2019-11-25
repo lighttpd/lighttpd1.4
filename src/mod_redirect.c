@@ -188,9 +188,9 @@ URIHANDLER_FUNC(mod_redirect_uri_handler) {
         con->file_finished = 1;
     }
     else if (HANDLER_ERROR == rc) {
-        log_error_write(srv, __FILE__, __LINE__, "sb",
-                        "pcre_exec() error while processing uri:",
-                        con->request.uri);
+        log_error(con->conf.errh, __FILE__, __LINE__,
+          "pcre_exec() error while processing uri: %s",
+          con->request.uri->ptr);
     }
     return rc;
 }

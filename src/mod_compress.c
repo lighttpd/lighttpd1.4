@@ -310,14 +310,11 @@ SETDEFAULTS_FUNC(mod_compress_set_defaults) {
 
 
 #ifdef USE_ZLIB
-static int deflate_file_to_buffer_gzip(server *srv, connection *con, plugin_data *p, char *start, off_t st_size, time_t mtime) {
+static int deflate_file_to_buffer_gzip(plugin_data *p, char *start, off_t st_size, time_t mtime) {
 	unsigned char *c;
 	unsigned long crc;
 	z_stream z;
 	size_t outlen;
-
-	UNUSED(srv);
-	UNUSED(con);
 
 	z.zalloc = Z_NULL;
 	z.zfree = Z_NULL;
@@ -388,11 +385,8 @@ static int deflate_file_to_buffer_gzip(server *srv, connection *con, plugin_data
 	return 0;
 }
 
-static int deflate_file_to_buffer_deflate(server *srv, connection *con, plugin_data *p, unsigned char *start, off_t st_size) {
+static int deflate_file_to_buffer_deflate(plugin_data *p, unsigned char *start, off_t st_size) {
 	z_stream z;
-
-	UNUSED(srv);
-	UNUSED(con);
 
 	z.zalloc = Z_NULL;
 	z.zfree = Z_NULL;
@@ -435,11 +429,8 @@ static int deflate_file_to_buffer_deflate(server *srv, connection *con, plugin_d
 #endif
 
 #ifdef USE_BZ2LIB
-static int deflate_file_to_buffer_bzip2(server *srv, connection *con, plugin_data *p, unsigned char *start, off_t st_size) {
+static int deflate_file_to_buffer_bzip2(plugin_data *p, unsigned char *start, off_t st_size) {
 	bz_stream bz;
-
-	UNUSED(srv);
-	UNUSED(con);
 
 	bz.bzalloc = NULL;
 	bz.bzfree = NULL;
@@ -483,7 +474,7 @@ static int deflate_file_to_buffer_bzip2(server *srv, connection *con, plugin_dat
 }
 #endif
 
-static void mod_compress_note_ratio(server *srv, connection *con, off_t in, off_t out) {
+static void mod_compress_note_ratio(connection *con, off_t in, off_t out) {
     /* store compression ratio in environment
      * for possible logging by mod_accesslog
      * (late in response handling, so not seen by most other modules) */
@@ -492,7 +483,6 @@ static void mod_compress_note_ratio(server *srv, connection *con, off_t in, off_
     if (0 == in) return;
     li_itostrn(ratio, sizeof(ratio), out * 100 / in);
     http_header_env_set(con, CONST_STR_LEN("ratio"), ratio, strlen(ratio));
-    UNUSED(srv);
 }
 
 static int deflate_file_to_file(server *srv, connection *con, plugin_data *p, int ifd, buffer *fn, stat_cache_entry *sce, int type) {
@@ -538,7 +528,8 @@ static int deflate_file_to_file(server *srv, connection *con, plugin_data *p, in
 		buffer_append_string_len(p->ofn, CONST_STR_LEN("-bzip2-"));
 		break;
 	default:
-		log_error_write(srv, __FILE__, __LINE__, "sd", "unknown compression type", type);
+		log_error(con->conf.errh, __FILE__, __LINE__,
+		  "unknown compression type %d", type);
 		return -1;
 	}
 
@@ -548,9 +539,9 @@ static int deflate_file_to_file(server *srv, connection *con, plugin_data *p, in
 		if (0 == sce->st.st_size) return -1; /* cache file being created */
 		/* cache-entry exists */
 #if 0
-		log_error_write(srv, __FILE__, __LINE__, "bs", p->ofn, "compress-cache hit");
+		log_error(con->conf.errh, __FILE__, __LINE__, "%s compress-cache hit", p->ofn->ptr);
 #endif
-		mod_compress_note_ratio(srv, con, sce->st.st_size, sce_ofn->st.st_size);
+		mod_compress_note_ratio(con, sce->st.st_size, sce_ofn->st.st_size);
 		buffer_copy_buffer(con->physical.path, p->ofn);
 		return 0;
 	}
@@ -560,7 +551,8 @@ static int deflate_file_to_file(server *srv, connection *con, plugin_data *p, in
 	}
 
 	if (-1 == mkdir_for_file(p->ofn->ptr)) {
-		log_error_write(srv, __FILE__, __LINE__, "sb", "couldn't create directory for file", p->ofn);
+		log_error(con->conf.errh, __FILE__, __LINE__,
+		  "couldn't create directory for file %s", p->ofn->ptr);
 		return -1;
 	}
 
@@ -570,12 +562,13 @@ static int deflate_file_to_file(server *srv, connection *con, plugin_data *p, in
 			return -1; /* cache file being created */
 		}
 
-		log_error_write(srv, __FILE__, __LINE__, "sbss", "creating cachefile", p->ofn, "failed", strerror(errno));
+		log_perror(con->conf.errh, __FILE__, __LINE__,
+		  "creating cachefile %s failed", p->ofn->ptr);
 
 		return -1;
 	}
 #if 0
-	log_error_write(srv, __FILE__, __LINE__, "bs", p->ofn, "compress-cache miss");
+	log_error(con->conf.errh, __FILE__, __LINE__, "%s compress-cache miss", p->ofn->ptr);
 #endif
 
 #ifdef USE_MMAP
@@ -587,15 +580,16 @@ static int deflate_file_to_file(server *srv, connection *con, plugin_data *p, in
 		if (0 != sigsetjmp(sigbus_jmp, 1)) {
 			sigbus_jmp_valid = 0;
 
-			log_error_write(srv, __FILE__, __LINE__, "sbd", "SIGBUS in mmap:",
-				fn, ifd);
+			log_error(con->conf.errh, __FILE__, __LINE__,
+			  "SIGBUS in mmap: %s %d", fn->ptr, ifd);
 
 			munmap(start, sce->st.st_size);
 			close(ofd);
 
 			/* Remove the incomplete cache file, so that later hits aren't served from it */
 			if (-1 == unlink(p->ofn->ptr)) {
-				log_error_write(srv, __FILE__, __LINE__, "sbss", "unlinking incomplete cachefile", p->ofn, "failed:", strerror(errno));
+				log_perror(con->conf.errh, __FILE__, __LINE__,
+				  "unlinking incomplete cachefile %s failed", p->ofn->ptr);
 			}
 
 			return -1;
@@ -603,14 +597,16 @@ static int deflate_file_to_file(server *srv, connection *con, plugin_data *p, in
 	} else
 #endif  /* FIXME: might attempt to read very large file completely into memory; see compress.max-filesize config option */
 	if (NULL == (start = malloc(sce->st.st_size)) || sce->st.st_size != read(ifd, start, sce->st.st_size)) {
-		log_error_write(srv, __FILE__, __LINE__, "sbss", "reading", fn, "failed", strerror(errno));
+		log_perror(con->conf.errh, __FILE__, __LINE__,
+		  "reading %s failed", fn->ptr);
 
 		close(ofd);
 		free(start);
 
 		/* Remove the incomplete cache file, so that later hits aren't served from it */
 		if (-1 == unlink(p->ofn->ptr)) {
-			log_error_write(srv, __FILE__, __LINE__, "sbss", "unlinking incomplete cachefile", p->ofn, "failed:", strerror(errno));
+			log_perror(con->conf.errh, __FILE__, __LINE__,
+			  "unlinking incomplete cachefile %s failed", p->ofn->ptr);
 		}
 
 		return -1;
@@ -621,16 +617,16 @@ static int deflate_file_to_file(server *srv, connection *con, plugin_data *p, in
 #ifdef USE_ZLIB
 	case HTTP_ACCEPT_ENCODING_GZIP:
 	case HTTP_ACCEPT_ENCODING_X_GZIP:
-		ret = deflate_file_to_buffer_gzip(srv, con, p, start, sce->st.st_size, sce->st.st_mtime);
+		ret = deflate_file_to_buffer_gzip(p, start, sce->st.st_size, sce->st.st_mtime);
 		break;
 	case HTTP_ACCEPT_ENCODING_DEFLATE:
-		ret = deflate_file_to_buffer_deflate(srv, con, p, start, sce->st.st_size);
+		ret = deflate_file_to_buffer_deflate(p, start, sce->st.st_size);
 		break;
 #endif
 #ifdef USE_BZ2LIB
 	case HTTP_ACCEPT_ENCODING_BZIP2:
 	case HTTP_ACCEPT_ENCODING_X_BZIP2:
-		ret = deflate_file_to_buffer_bzip2(srv, con, p, start, sce->st.st_size);
+		ret = deflate_file_to_buffer_bzip2(p, start, sce->st.st_size);
 		break;
 #endif
 	}
@@ -638,10 +634,13 @@ static int deflate_file_to_file(server *srv, connection *con, plugin_data *p, in
 	if (ret == 0) {
 		r = write(ofd, CONST_BUF_LEN(p->b));
 		if (-1 == r) {
-			log_error_write(srv, __FILE__, __LINE__, "sbss", "writing cachefile", p->ofn, "failed:", strerror(errno));
+			log_perror(con->conf.errh, __FILE__, __LINE__,
+			  "writing cachefile %s failed", p->ofn->ptr);
 			ret = -1;
 		} else if ((size_t)r != buffer_string_length(p->b)) {
-			log_error_write(srv, __FILE__, __LINE__, "sbs", "writing cachefile", p->ofn, "failed: not enough bytes written");
+			log_error(con->conf.errh, __FILE__, __LINE__,
+			  "writing cachefile %s failed: not enough bytes written",
+			  p->ofn->ptr);
 			ret = -1;
 		}
 	}
@@ -656,19 +655,21 @@ static int deflate_file_to_file(server *srv, connection *con, plugin_data *p, in
 
 	if (0 != close(ofd) || ret != 0) {
 		if (0 == ret) {
-			log_error_write(srv, __FILE__, __LINE__, "sbss", "writing cachefile", p->ofn, "failed:", strerror(errno));
+			log_perror(con->conf.errh, __FILE__, __LINE__,
+			  "writing cachefile %s failed", p->ofn->ptr);
 		}
 
 		/* Remove the incomplete cache file, so that later hits aren't served from it */
 		if (-1 == unlink(p->ofn->ptr)) {
-			log_error_write(srv, __FILE__, __LINE__, "sbss", "unlinking incomplete cachefile", p->ofn, "failed:", strerror(errno));
+			log_perror(con->conf.errh, __FILE__, __LINE__,
+			  "unlinking incomplete cachefile %s failed", p->ofn->ptr);
 		}
 
 		return -1;
 	}
 
 	buffer_copy_buffer(con->physical.path, p->ofn);
-	mod_compress_note_ratio(srv, con, sce->st.st_size,
+	mod_compress_note_ratio(con, sce->st.st_size,
 				(off_t)buffer_string_length(p->b));
 
 	return 0;
@@ -697,7 +698,7 @@ static int deflate_file_to_buffer(server *srv, connection *con, plugin_data *p, 
 
 	if (-1 == ifd) {
 		/* not called; call exists to de-optimize and avoid "clobbered by 'longjmp'" compiler warning */
-		log_error_write(srv, __FILE__, __LINE__, "s", "");
+		log_error(con->conf.errh, __FILE__, __LINE__, " ");
 		return -1;
 	}
 
@@ -709,18 +710,15 @@ static int deflate_file_to_buffer(server *srv, connection *con, plugin_data *p, 
 		sigbus_jmp_valid = 1;
 		if (0 != sigsetjmp(sigbus_jmp, 1)) {
 			sigbus_jmp_valid = 0;
-
-			log_error_write(srv, __FILE__, __LINE__, "sbd", "SIGBUS in mmap:",
-				fn, ifd);
-
+			log_error(con->conf.errh, __FILE__, __LINE__,
+			  "SIGBUS in mmap: %s %d", fn->ptr, ifd);
 			munmap(start, sce->st.st_size);
 			return -1;
 		}
 	} else
 #endif  /* FIXME: might attempt to read very large file completely into memory; see compress.max-filesize config option */
 	if (NULL == (start = malloc(sce->st.st_size)) || sce->st.st_size != read(ifd, start, sce->st.st_size)) {
-		log_error_write(srv, __FILE__, __LINE__, "sbss", "reading", fn, "failed", strerror(errno));
-
+		log_perror(con->conf.errh, __FILE__, __LINE__, "reading %s failed", fn->ptr);
 		free(start);
 		return -1;
 	}
@@ -729,16 +727,16 @@ static int deflate_file_to_buffer(server *srv, connection *con, plugin_data *p, 
 #ifdef USE_ZLIB
 	case HTTP_ACCEPT_ENCODING_GZIP:
 	case HTTP_ACCEPT_ENCODING_X_GZIP:
-		ret = deflate_file_to_buffer_gzip(srv, con, p, start, sce->st.st_size, sce->st.st_mtime);
+		ret = deflate_file_to_buffer_gzip(p, start, sce->st.st_size, sce->st.st_mtime);
 		break;
 	case HTTP_ACCEPT_ENCODING_DEFLATE:
-		ret = deflate_file_to_buffer_deflate(srv, con, p, start, sce->st.st_size);
+		ret = deflate_file_to_buffer_deflate(p, start, sce->st.st_size);
 		break;
 #endif
 #ifdef USE_BZ2LIB
 	case HTTP_ACCEPT_ENCODING_BZIP2:
 	case HTTP_ACCEPT_ENCODING_X_BZIP2:
-		ret = deflate_file_to_buffer_bzip2(srv, con, p, start, sce->st.st_size);
+		ret = deflate_file_to_buffer_bzip2(p, start, sce->st.st_size);
 		break;
 #endif
 	default:
@@ -756,7 +754,7 @@ static int deflate_file_to_buffer(server *srv, connection *con, plugin_data *p, 
 
 	if (ret != 0) return -1;
 
-	mod_compress_note_ratio(srv, con, sce->st.st_size,
+	mod_compress_note_ratio(con, sce->st.st_size,
 				(off_t)buffer_string_length(p->b));
 	chunkqueue_reset(con->write_queue);
 	chunkqueue_append_buffer(con->write_queue, p->b);
@@ -814,16 +812,15 @@ PHYSICALPATH_FUNC(mod_compress_physical) {
 	}
 
 	if (con->conf.log_request_handling) {
-		log_error_write(srv, __FILE__, __LINE__,  "s",  "-- handling file as static file");
+		log_error(con->conf.errh, __FILE__, __LINE__,
+		  "-- handling file as static file");
 	}
 
 	if (HANDLER_ERROR == stat_cache_get_entry(srv, con, con->physical.path, &sce)) {
 		con->http_status = 403;
-
-		log_error_write(srv, __FILE__, __LINE__, "sbsb",
-				"not a regular file:", con->uri.path,
-				"->", con->physical.path);
-
+		log_error(con->conf.errh, __FILE__, __LINE__,
+		  "not a regular file: %s -> %s",
+		  con->uri.path->ptr, con->physical.path->ptr);
 		return HANDLER_FINISHED;
 	}
 
@@ -910,8 +907,8 @@ PHYSICALPATH_FUNC(mod_compress_physical) {
 
 					const int fd = fdevent_open_cloexec(con->physical.path->ptr, con->conf.follow_symlink, O_RDONLY, 0);
 					if (fd < 0) {
-						log_error_write(srv, __FILE__, __LINE__, "sbss",
-								"opening plain-file", con->physical.path, "failed", strerror(errno));
+						log_perror(con->conf.errh, __FILE__, __LINE__,
+						  "opening plain-file %s failed", con->physical.path->ptr);
 						return HANDLER_GO_ON;
 					}
 
@@ -920,7 +917,7 @@ PHYSICALPATH_FUNC(mod_compress_physical) {
 					/* try matching original etag of uncompressed version */
 					if (use_etag) {
 						etag_mutate(con->physical.etag, sce->etag);
-						if (HANDLER_FINISHED == http_response_handle_cachable(srv, con, mtime)) {
+						if (HANDLER_FINISHED == http_response_handle_cachable(con, mtime)) {
 							http_header_response_set(con, HTTP_HEADER_CONTENT_TYPE, CONST_STR_LEN("Content-Type"), CONST_BUF_LEN(sce->content_type));
 							http_header_response_set(con, HTTP_HEADER_LAST_MODIFIED, CONST_STR_LEN("Last-Modified"), CONST_BUF_LEN(mtime));
 							http_header_response_set(con, HTTP_HEADER_ETAG, CONST_STR_LEN("ETag"), CONST_BUF_LEN(con->physical.etag));
@@ -956,7 +953,7 @@ PHYSICALPATH_FUNC(mod_compress_physical) {
 						etag_mutate(con->physical.etag, srv->tmp_buf);
 					}
 
-					if (HANDLER_FINISHED == http_response_handle_cachable(srv, con, mtime)) {
+					if (HANDLER_FINISHED == http_response_handle_cachable(con, mtime)) {
 						http_header_response_set(con, HTTP_HEADER_CONTENT_ENCODING, CONST_STR_LEN("Content-Encoding"), compression_name, strlen(compression_name));
 						http_header_response_set(con, HTTP_HEADER_CONTENT_TYPE, CONST_STR_LEN("Content-Type"), CONST_BUF_LEN(sce->content_type));
 						http_header_response_set(con, HTTP_HEADER_LAST_MODIFIED, CONST_STR_LEN("Last-Modified"), CONST_BUF_LEN(mtime));

@@ -199,18 +199,18 @@ static void gw_proc_connect_success(server *srv, gw_host *host, gw_proc *proc, i
     proc->last_used = srv->cur_ts;
 
     if (debug) {
-        log_error_write(srv, __FILE__, __LINE__, "ssdsbsd",
-                        "got proc:",
-                        "pid:", proc->pid,
-                        "socket:", proc->connection_name,
-                        "load:", proc->load);
+        log_error(srv->errh, __FILE__, __LINE__,
+          "got proc: pid: %d socket: %s load: %d",
+          proc->pid, proc->connection_name->ptr, proc->load);
     }
 }
 
+__attribute_cold__
 static void gw_proc_connect_error(server *srv, gw_host *host, gw_proc *proc, pid_t pid, int errnum, int debug) {
-    log_error_write(srv, __FILE__, __LINE__, "sssb",
-                    "establishing connection failed:", strerror(errnum),
-                    "socket:", proc->connection_name);
+    log_error_st *errh = srv->errh;
+    log_error(errh, __FILE__, __LINE__,
+      "establishing connection failed: socket: %s: %s",
+      proc->connection_name->ptr, strerror(errnum));
 
     if (!proc->is_local) {
         proc->disabled_until = srv->cur_ts + host->disable_time;
@@ -225,24 +225,24 @@ static void gw_proc_connect_error(server *srv, gw_host *host, gw_proc *proc, pid
          * If a new proc was started with the old struct, this might
          * otherwise lead to marking a perfectly good proc as dead
          */
-        log_error_write(srv, __FILE__, __LINE__, "sdssd",
-                        "backend error; we'll disable for", host->disable_time,
-                        "secs and send the request to another backend instead:",
-                        "load:", host->load);
+        log_error(errh, __FILE__, __LINE__,
+          "backend error; we'll disable for %d"
+          "secs and send the request to another backend instead:"
+          "load: %d", host->disable_time, host->load);
         if (EAGAIN == errnum) {
             /* - EAGAIN: cool down the backend; it is overloaded */
           #ifdef __linux__
-            log_error_write(srv, __FILE__, __LINE__, "s",
+            log_error(errh, __FILE__, __LINE__,
               "If this happened on Linux: You have run out of local ports. "
               "Check the manual, section Performance how to handle this.");
           #endif
             if (debug) {
-                log_error_write(srv, __FILE__, __LINE__, "sbsd",
+                log_error(errh, __FILE__, __LINE__,
                   "This means that you have more incoming requests than your "
                   "FastCGI backend can handle in parallel.  It might help to "
                   "spawn more FastCGI backends or PHP children; if not, "
                   "decrease server.max-connections.  The load for this FastCGI "
-                  "backend", proc->connection_name, "is", proc->load);
+                  "backend %s is %d", proc->connection_name->ptr, proc->load);
             }
             proc->disabled_until = srv->cur_ts + host->disable_time;
             gw_proc_set_state(host, proc, PROC_STATE_OVERLOADED);
@@ -273,11 +273,9 @@ static void gw_proc_release(server *srv, gw_host *host, gw_proc *proc, int debug
     gw_proc_load_dec(srv, host, proc);
 
     if (debug) {
-        log_error_write(srv, __FILE__, __LINE__, "ssdsbsd",
-                        "released proc:",
-                        "pid:", proc->pid,
-                        "socket:", proc->connection_name,
-                        "load:", proc->load);
+        log_error(srv->errh, __FILE__, __LINE__,
+          "released proc: pid: %d socket: %s load: %u",
+          proc->pid, proc->connection_name->ptr, proc->load);
     }
 }
 
@@ -287,28 +285,29 @@ static void gw_proc_check_enable(server *srv, gw_host *host, gw_proc *proc) {
 
     gw_proc_set_state(host, proc, PROC_STATE_RUNNING);
 
-    log_error_write(srv, __FILE__, __LINE__,  "sbbdb",
-                    "gw-server re-enabled:", proc->connection_name,
-                    host->host, host->port, host->unixsocket);
+    log_error(srv->errh, __FILE__, __LINE__,
+      "gw-server re-enabled: %s %s %hu %s",
+      proc->connection_name->ptr, host->host->ptr, host->port,
+      host->unixsocket->ptr ? host->unixsocket->ptr : "");
 }
 
 static void gw_proc_waitpid_log(server *srv, gw_host *host, gw_proc *proc, int status) {
     UNUSED(host);
     if (WIFEXITED(status)) {
         if (proc->state != PROC_STATE_KILLED) {
-            log_error_write(srv, __FILE__, __LINE__, "sdb",
-                            "child exited:",
-                            WEXITSTATUS(status), proc->connection_name);
+            log_error(srv->errh, __FILE__, __LINE__,
+              "child exited: %d %s",
+              WEXITSTATUS(status), proc->connection_name->ptr);
         }
     } else if (WIFSIGNALED(status)) {
         if (WTERMSIG(status) != SIGTERM && WTERMSIG(status) != SIGINT
             && WTERMSIG(status) != host->kill_signal) {
-            log_error_write(srv, __FILE__, __LINE__, "sd",
-                            "child signalled:", WTERMSIG(status));
+            log_error(srv->errh, __FILE__, __LINE__,
+              "child signalled: %d", WTERMSIG(status));
         }
     } else {
-        log_error_write(srv, __FILE__, __LINE__, "sd",
-                        "child died somehow:", status);
+        log_error(srv->errh, __FILE__, __LINE__,
+          "child died somehow: %d", status);
     }
 }
 
@@ -327,9 +326,8 @@ static int gw_proc_waitpid(server *srv, gw_host *host, gw_proc *proc) {
     if (-1 == rc) {
         /* EINVAL or ECHILD no child processes */
         /* should not happen; someone else has cleaned up for us */
-        log_error_write(srv, __FILE__, __LINE__, "sddss",
-                        "pid ", proc->pid, proc->state,
-                        "not found:", strerror(errno));
+        log_perror(srv->errh, __FILE__, __LINE__,
+          "pid %d %d not found", proc->pid, proc->state);
     }
     else {
         gw_proc_waitpid_log(srv, host, proc, status);
@@ -347,8 +345,8 @@ static int gw_proc_sockaddr_init(server *srv, gw_host *host, gw_proc *proc) {
     socklen_t addrlen;
 
     if (!buffer_string_is_empty(proc->unixsocket)) {
-        if (1 != sock_addr_from_str_hints(srv, &addr, &addrlen,
-                                          proc->unixsocket->ptr, AF_UNIX, 0)) {
+        if (1 != sock_addr_from_str_hints(&addr,&addrlen,proc->unixsocket->ptr,
+                                          AF_UNIX, 0, srv->errh)) {
             errno = EINVAL;
             return -1;
         }
@@ -357,8 +355,8 @@ static int gw_proc_sockaddr_init(server *srv, gw_host *host, gw_proc *proc) {
     }
     else {
         /*(note: name resolution here is *blocking* if IP string not supplied)*/
-        if (1 != sock_addr_from_str_hints(srv, &addr, &addrlen,
-                                          host->host->ptr, 0, proc->port)) {
+        if (1 != sock_addr_from_str_hints(&addr, &addrlen, host->host->ptr,
+                                          0, proc->port, srv->errh)) {
             errno = EINVAL;
             return -1;
         }
@@ -425,14 +423,14 @@ static int gw_spawn_connection(server *srv, gw_host *host, gw_proc *proc, int de
     struct timeval tv = { 0, 10 * 1000 };
 
     if (debug) {
-        log_error_write(srv, __FILE__, __LINE__, "sdb",
-                        "new proc, socket:", proc->port, proc->unixsocket);
+        log_error(srv->errh, __FILE__, __LINE__,
+          "new proc, socket: %hu %s",
+          proc->port, proc->unixsocket->ptr ? proc->unixsocket->ptr : "");
     }
 
     gw_fd = fdevent_socket_cloexec(proc->saddr->sa_family, SOCK_STREAM, 0);
     if (-1 == gw_fd) {
-        log_error_write(srv, __FILE__, __LINE__, "ss",
-                        "failed:", strerror(errno));
+        log_perror(srv->errh, __FILE__, __LINE__, "socket()");
         return -1;
     }
 
@@ -442,9 +440,8 @@ static int gw_spawn_connection(server *srv, gw_host *host, gw_proc *proc, int de
 
     if (-1 == status && errno != ENOENT
         && !buffer_string_is_empty(proc->unixsocket)) {
-        log_error_write(srv, __FILE__, __LINE__, "sbss",
-                        "unlink", proc->unixsocket,
-                        "after connect failed:", strerror(errno));
+        log_perror(srv->errh, __FILE__, __LINE__,
+          "unlink %s after connect failed", proc->unixsocket->ptr);
         unlink(proc->unixsocket->ptr);
     }
 
@@ -459,31 +456,26 @@ static int gw_spawn_connection(server *srv, gw_host *host, gw_proc *proc, int de
         /* reopen socket */
         gw_fd = fdevent_socket_cloexec(proc->saddr->sa_family, SOCK_STREAM, 0);
         if (-1 == gw_fd) {
-            log_error_write(srv, __FILE__, __LINE__, "ss",
-                            "socket failed:", strerror(errno));
+            log_perror(srv->errh, __FILE__, __LINE__, "socket()");
             return -1;
         }
 
         if (fdevent_set_so_reuseaddr(gw_fd, 1) < 0) {
-            log_error_write(srv, __FILE__, __LINE__, "ss",
-                            "socketsockopt failed:", strerror(errno));
+            log_perror(srv->errh, __FILE__, __LINE__, "socketsockopt()");
             close(gw_fd);
             return -1;
         }
 
         /* create socket */
         if (-1 == bind(gw_fd, proc->saddr, proc->saddrlen)) {
-            log_error_write(srv, __FILE__, __LINE__, "sbs",
-                            "bind failed for:",
-                            proc->connection_name,
-                            strerror(errno));
+            log_perror(srv->errh, __FILE__, __LINE__,
+              "bind failed for: %s", proc->connection_name->ptr);
             close(gw_fd);
             return -1;
         }
 
         if (-1 == listen(gw_fd, host->listen_backlog)) {
-            log_error_write(srv, __FILE__, __LINE__, "ss",
-                            "listen failed:", strerror(errno));
+            log_perror(srv->errh, __FILE__, __LINE__, "listen()");
             close(gw_fd);
             return -1;
         }
@@ -543,9 +535,8 @@ static int gw_spawn_connection(server *srv, gw_host *host, gw_proc *proc, int de
 
         dfd = fdevent_open_dirname(host->args.ptr[0], 1); /* permit symlinks */
         if (-1 == dfd) {
-            log_error_write(srv, __FILE__, __LINE__, "sss",
-                            "open dirname failed:", strerror(errno),
-                            host->args.ptr[0]);
+            log_perror(srv->errh, __FILE__, __LINE__,
+              "open dirname failed: %s", host->args.ptr[0]);
         }
 
         /*(FCGI_LISTENSOCK_FILENO == STDIN_FILENO == 0)*/
@@ -560,8 +551,8 @@ static int gw_spawn_connection(server *srv, gw_host *host, gw_proc *proc, int de
         close(gw_fd);
 
         if (-1 == proc->pid) {
-            log_error_write(srv, __FILE__, __LINE__, "sb",
-                            "gw-backend failed to start:", host->bin_path);
+            log_error(srv->errh, __FILE__, __LINE__,
+              "gw-backend failed to start: %s", host->bin_path->ptr);
             proc->pid = 0;
             proc->disabled_until = srv->cur_ts;
             return -1;
@@ -575,9 +566,9 @@ static int gw_spawn_connection(server *srv, gw_host *host, gw_proc *proc, int de
         select(0, NULL, NULL, NULL, &tv);
 
         if (0 != gw_proc_waitpid(srv, host, proc)) {
-            log_error_write(srv, __FILE__, __LINE__, "sb",
-                            "gw-backend failed to start:", host->bin_path);
-            log_error_write(srv, __FILE__, __LINE__, "s",
+            log_error(srv->errh, __FILE__, __LINE__,
+              "gw-backend failed to start: %s", host->bin_path->ptr);
+            log_error(srv->errh, __FILE__, __LINE__,
               "If you're trying to run your app as a FastCGI backend, make "
               "sure you're using the FastCGI-enabled version.  If this is PHP "
               "on Gentoo, add 'fastcgi' to the USE flags.  If this is PHP, try "
@@ -589,9 +580,9 @@ static int gw_spawn_connection(server *srv, gw_host *host, gw_proc *proc, int de
         proc->pid = 0;
 
         if (debug) {
-            log_error_write(srv, __FILE__, __LINE__, "sb",
-                            "(debug) socket is already used; won't spawn:",
-                            proc->connection_name);
+            log_error(srv->errh, __FILE__, __LINE__,
+              "(debug) socket is already used; won't spawn: %s",
+              proc->connection_name->ptr);
         }
     }
 
@@ -638,14 +629,14 @@ static void gw_proc_spawn(server *srv, gw_host *host, int debug) {
     if (0 != gw_proc_sockaddr_init(srv, host, proc)) {
         /*(should not happen if host->host validated at startup,
          * and translated from name to IP address at startup)*/
-        log_error_write(srv, __FILE__, __LINE__, "s",
-                        "ERROR: spawning backend failed.");
+        log_error(srv->errh, __FILE__, __LINE__,
+          "ERROR: spawning backend failed.");
         --host->num_procs;
         if (proc->id == host->max_id-1) --host->max_id;
         gw_proc_free(proc);
     } else if (gw_spawn_connection(srv, host, proc, debug)) {
-        log_error_write(srv, __FILE__, __LINE__, "s",
-                        "ERROR: spawning backend failed.");
+        log_error(srv->errh, __FILE__, __LINE__,
+          "ERROR: spawning backend failed.");
         proc->next = host->unused_procs;
         if (host->unused_procs)
             host->unused_procs->prev = proc;
@@ -783,9 +774,8 @@ static gw_host * gw_host_get(server *srv, connection *con, gw_extension *extensi
         /* hash balancing */
 
         if (debug) {
-            log_error_write(srv, __FILE__, __LINE__,  "sd",
-                            "proxy - used hash balancing, hosts:",
-                            extension->used);
+            log_error(srv->errh, __FILE__, __LINE__,
+              "proxy - used hash balancing, hosts: %u", extension->used);
         }
 
         for (k = 0, ndx = -1, last_max = ULONG_MAX; k < extension->used; ++k) {
@@ -798,9 +788,9 @@ static gw_host * gw_host_get(server *srv, connection *con, gw_extension *extensi
                     + generate_crc32c(CONST_BUF_LEN(con->uri.authority));
 
             if (debug) {
-                log_error_write(srv, __FILE__, __LINE__,  "sbbbd",
-                                "proxy - election:", con->uri.path,
-                                host->host, con->uri.authority, cur_max);
+                log_error(srv->errh, __FILE__, __LINE__,
+                  "proxy - election: %s %s %s %lu", con->uri.path->ptr,
+                  host->host->ptr, con->uri.authority->ptr, cur_max);
             }
 
             if (last_max < cur_max || last_max == ULONG_MAX) {
@@ -813,8 +803,8 @@ static gw_host * gw_host_get(server *srv, connection *con, gw_extension *extensi
     case GW_BALANCE_LEAST_CONNECTION:
         /* fair balancing */
         if (debug) {
-            log_error_write(srv, __FILE__, __LINE__,  "s",
-                            "proxy - used least connection");
+            log_error(srv->errh, __FILE__, __LINE__,
+              "proxy - used least connection");
         }
 
         for (k = 0, ndx = -1, max_usage = INT_MAX; k < extension->used; ++k) {
@@ -831,8 +821,8 @@ static gw_host * gw_host_get(server *srv, connection *con, gw_extension *extensi
     case GW_BALANCE_RR:
         /* round robin */
         if (debug) {
-            log_error_write(srv, __FILE__, __LINE__,  "s",
-                            "proxy - used round-robin balancing");
+            log_error(srv->errh, __FILE__, __LINE__,
+              "proxy - used round-robin balancing");
         }
 
         /* just to be sure */
@@ -868,9 +858,8 @@ static gw_host * gw_host_get(server *srv, connection *con, gw_extension *extensi
         /* source sticky balancing */
 
         if (debug) {
-            log_error_write(srv, __FILE__, __LINE__,  "sd",
-                            "proxy - used sticky balancing, hosts:",
-                            extension->used);
+            log_error(srv->errh, __FILE__, __LINE__,
+              "proxy - used sticky balancing, hosts: %u", extension->used);
         }
 
         for (k = 0, ndx = -1, last_max = ULONG_MAX; k < extension->used; ++k) {
@@ -884,9 +873,9 @@ static gw_host * gw_host_get(server *srv, connection *con, gw_extension *extensi
                     + host->port;
 
             if (debug) {
-                log_error_write(srv, __FILE__, __LINE__,  "sbbdd",
-                                "proxy - election:", con->dst_addr_buf,
-                                host->host, host->port, cur_max);
+                log_error(srv->errh, __FILE__, __LINE__,
+                  "proxy - election: %s %s %hu %ld", con->dst_addr_buf->ptr,
+                  host->host->ptr, host->port, cur_max);
             }
 
             if (last_max < cur_max || last_max == ULONG_MAX) {
@@ -905,8 +894,8 @@ static gw_host * gw_host_get(server *srv, connection *con, gw_extension *extensi
         host = extension->hosts[ndx];
 
         if (debug) {
-            log_error_write(srv, __FILE__, __LINE__,  "sbd",
-                            "gw - found a host", host->host, host->port);
+            log_error(srv->errh, __FILE__, __LINE__,
+              "gw - found a host %s %hu", host->host->ptr, host->port);
         }
 
         return host;
@@ -930,9 +919,10 @@ static gw_host * gw_host_get(server *srv, connection *con, gw_extension *extensi
     /* only send the 'no handler' once */
     if (!extension->note_is_sent) {
         extension->note_is_sent = 1;
-        log_error_write(srv, __FILE__, __LINE__, "sBSbsbs",
-                        "all handlers for", con->uri.path, "?",
-                        con->uri.query, "on", &extension->key, "are down.");
+        log_error(srv->errh, __FILE__, __LINE__,
+          "all handlers for %s?%.*s on %s are down.",
+          con->uri.path->ptr, BUFFER_INTLEN_PTR(con->uri.query),
+          extension->key.ptr);
     }
 
     return NULL;
@@ -940,13 +930,11 @@ static gw_host * gw_host_get(server *srv, connection *con, gw_extension *extensi
 
 static int gw_establish_connection(server *srv, gw_host *host, gw_proc *proc, pid_t pid, int gw_fd, int debug) {
     if (-1 == connect(gw_fd, proc->saddr, proc->saddrlen)) {
-        if (errno == EINPROGRESS ||
-            errno == EALREADY ||
-            errno == EINTR) {
+        if (errno == EINPROGRESS || errno == EALREADY || errno == EINTR) {
             if (debug > 2) {
-                log_error_write(srv, __FILE__, __LINE__, "sb",
-                                "connect delayed; will continue later:",
-                                proc->connection_name);
+                log_error(srv->errh, __FILE__, __LINE__,
+                  "connect delayed; will continue later: %s",
+                  proc->connection_name->ptr);
             }
 
             return 1;
@@ -957,8 +945,8 @@ static int gw_establish_connection(server *srv, gw_host *host, gw_proc *proc, pi
     }
 
     if (debug > 1) {
-        log_error_write(srv, __FILE__, __LINE__, "sd",
-                        "connect succeeded: ", gw_fd);
+        log_error(srv->errh, __FILE__, __LINE__,
+          "connect succeeded: %d", gw_fd);
     }
 
     return 0;
@@ -967,9 +955,9 @@ static int gw_establish_connection(server *srv, gw_host *host, gw_proc *proc, pi
 static void gw_restart_dead_procs(server *srv, gw_host *host, int debug, int trigger) {
     for (gw_proc *proc = host->first; proc; proc = proc->next) {
         if (debug > 2) {
-            log_error_write(srv, __FILE__, __LINE__,  "sbdddd",
-                            "proc:", proc->connection_name, proc->state,
-                            proc->is_local, proc->load, proc->pid);
+            log_error(srv->errh, __FILE__, __LINE__,
+              "proc: %s %d %d %d %d", proc->connection_name->ptr,
+              proc->state, proc->is_local, proc->load, proc->pid);
         }
 
         switch (proc->state) {
@@ -1014,15 +1002,16 @@ static void gw_restart_dead_procs(server *srv, gw_host *host, int debug, int tri
                 /* restart the child */
 
                 if (debug) {
-                    log_error_write(srv, __FILE__, __LINE__, "ssbsdsd",
-                                    "--- gw spawning",
-                                    "\n\tsocket", proc->connection_name,
-                                    "\n\tcurrent:", 1, "/", host->max_procs);
+                    log_error(srv->errh, __FILE__, __LINE__,
+                      "--- gw spawning"
+                      "\n\tsocket %s"
+                      "\n\tcurrent: 1 / %u",
+                      proc->connection_name->ptr, host->max_procs);
                 }
 
                 if (gw_spawn_connection(srv, host, proc, debug)) {
-                    log_error_write(srv, __FILE__, __LINE__, "s",
-                                    "ERROR: spawning gw failed.");
+                    log_error(srv->errh, __FILE__, __LINE__,
+                      "ERROR: spawning gw failed.");
                 }
             } else {
                 gw_proc_check_enable(srv, host, proc);
@@ -1443,19 +1432,18 @@ int gw_set_defaults_backend(server *srv, gw_plugin_data *p, const array *a, gw_p
 
             for (uint32_t m = 0; m < da_host->value.used; ++m) {
                 if (NULL != strchr(da_host->value.data[m]->key.ptr, '_')) {
-                    log_error_write(srv, __FILE__, __LINE__, "sb",
-                      "incorrect directive contains underscore ('_') instead of dash ('-'):",
-                      &da_host->value.data[m]->key);
+                    log_error(srv->errh, __FILE__, __LINE__,
+                      "incorrect directive contains underscore ('_') instead of dash ('-'): %s",
+                      da_host->value.data[m]->key.ptr);
                 }
             }
 
             if ((!buffer_string_is_empty(host->host) || host->port)
                 && !buffer_string_is_empty(host->unixsocket)) {
-                log_error_write(srv, __FILE__, __LINE__, "sssbsbs",
-                  "either host/port or socket have to be set in:",
-                  cpkkey, "= (",
-                  &da_ext->key, " => (",
-                  &da_host->key, " ( ...");
+                log_error(srv->errh, __FILE__, __LINE__,
+                  "either host/port or socket have to be set in: "
+                  "%s = (%s => (%s ( ...", cpkkey, da_ext->key.ptr,
+                  da_host->key.ptr);
 
                 goto error;
             }
@@ -1470,11 +1458,9 @@ int gw_set_defaults_backend(server *srv, gw_plugin_data *p, const array *a, gw_p
                 struct sockaddr_un un;
 
                 if (buffer_string_length(host->unixsocket) + 1 > sizeof(un.sun_path) - 2) {
-                    log_error_write(srv, __FILE__, __LINE__, "sssbsbs",
-                            "unixsocket is too long in:",
-                            cpkkey, "= (",
-                            &da_ext->key, " => (",
-                            &da_host->key, " ( ...");
+                    log_error(srv->errh, __FILE__, __LINE__,
+                      "unixsocket is too long in: %s = (%s => (%s ( ...",
+                      cpkkey, da_ext->key.ptr, da_host->key.ptr);
 
                     goto error;
                 }
@@ -1483,9 +1469,9 @@ int gw_set_defaults_backend(server *srv, gw_plugin_data *p, const array *a, gw_p
                     gw_host *duplicate = unixsocket_is_dup(p, host->unixsocket);
                     if (NULL != duplicate) {
                         if (!buffer_is_equal(host->bin_path, duplicate->bin_path)) {
-                            log_error_write(srv, __FILE__, __LINE__, "sb",
-                                "duplicate unixsocket path:",
-                                host->unixsocket);
+                            log_error(srv->errh, __FILE__, __LINE__,
+                              "duplicate unixsocket path: %s",
+                              host->unixsocket->ptr);
                             goto error;
                         }
                         gw_host_free(host);
@@ -1500,11 +1486,10 @@ int gw_set_defaults_backend(server *srv, gw_plugin_data *p, const array *a, gw_p
 
                 if (buffer_string_is_empty(host->host) &&
                     buffer_string_is_empty(host->bin_path)) {
-                    log_error_write(srv, __FILE__, __LINE__, "sssbsbs",
-                            "host or bin-path have to be set in:",
-                            cpkkey, "= (",
-                            &da_ext->key, " => (",
-                            &da_host->key, " ( ...");
+                    log_error(srv->errh, __FILE__, __LINE__,
+                      "host or bin-path have to be set in: "
+                      "%s = (%s => (%s ( ...", cpkkey, da_ext->key.ptr,
+                      da_host->key.ptr);
 
                     goto error;
                 } else if (0 == host->port) {
@@ -1529,10 +1514,10 @@ int gw_set_defaults_backend(server *srv, gw_plugin_data *p, const array *a, gw_p
                 parse_binpath(&host->args, host->bin_path);
                 if (0 != stat(host->args.ptr[0], &st) || !S_ISREG(st.st_mode)
                     || !(st.st_mode & (S_IXUSR | S_IXGRP | S_IXOTH))) {
-                    log_error_write(srv, __FILE__, __LINE__, "SSs",
-                      "invalid \"bin-path\" => \"", host->bin_path->ptr,
-                      "\" (check that file exists, is regular file, "
-                      "and is executable by lighttpd)");
+                    log_error(srv->errh, __FILE__, __LINE__,
+                      "invalid \"bin-path\" => \"%s\" "
+                      "(check that file exists, is regular file, "
+                      "and is executable by lighttpd)", host->bin_path->ptr);
                 }
 
                 if (sh_exec) {
@@ -1569,21 +1554,28 @@ int gw_set_defaults_backend(server *srv, gw_plugin_data *p, const array *a, gw_p
                 if (host->min_procs!= host->max_procs
                     && 0 != srv->srvconf.max_worker) {
                     host->min_procs = host->max_procs;
-                    log_error_write(srv, __FILE__, __LINE__, "s",
-                                    "adaptive backend spawning disabled "
-                                    "(server.max_worker is non-zero)");
+                    log_error(srv->errh, __FILE__, __LINE__,
+                      "adaptive backend spawning disabled "
+                      "(server.max_worker is non-zero)");
                 }
                 if (host->max_load_per_proc < 1)
                     host->max_load_per_proc = 0;
 
                 if (s->debug) {
-                    log_error_write(srv, __FILE__, __LINE__, "ssbsdsbsdsd",
-                                    "--- gw spawning local",
-                                    "\n\tproc:", host->bin_path,
-                                    "\n\tport:", host->port,
-                                    "\n\tsocket", host->unixsocket,
-                                    "\n\tmin-procs:", host->min_procs,
-                                    "\n\tmax-procs:", host->max_procs);
+                    log_error(srv->errh, __FILE__, __LINE__,
+                      "--- gw spawning local"
+                      "\n\tproc: %s"
+                      "\n\tport: %hu"
+                      "\n\tsocket %s"
+                      "\n\tmin-procs: %d"
+                      "\n\tmax-procs: %d",
+                      host->bin_path->ptr,
+                      host->port,
+                      host->unixsocket && host->unixsocket->ptr
+                        ? host->unixsocket->ptr
+                        : "",
+                      host->min_procs,
+                      host->max_procs);
                 }
 
                 for (uint32_t pno = 0; pno < host->min_procs; ++pno) {
@@ -1601,11 +1593,16 @@ int gw_set_defaults_backend(server *srv, gw_plugin_data *p, const array *a, gw_p
                     }
 
                     if (s->debug) {
-                        log_error_write(srv, __FILE__, __LINE__, "ssdsbsdsd",
-                          "--- gw spawning",
-                          "\n\tport:", host->port,
-                          "\n\tsocket", host->unixsocket,
-                          "\n\tcurrent:", pno, "/", host->max_procs);
+                        log_error(srv->errh, __FILE__, __LINE__,
+                          "--- gw spawning"
+                          "\n\tport: %hu"
+                          "\n\tsocket %s"
+                          "\n\tcurrent: %u / %u",
+                          host->port,
+                          host->unixsocket && host->unixsocket->ptr
+                            ? host->unixsocket->ptr
+                            : "",
+                          pno, host->max_procs);
                     }
 
                     if (0 != gw_proc_sockaddr_init(srv, host, proc)) {
@@ -1615,8 +1612,8 @@ int gw_set_defaults_backend(server *srv, gw_plugin_data *p, const array *a, gw_p
 
                     if (!srv->srvconf.preflight_check
                         && gw_spawn_connection(srv, host, proc, s->debug)) {
-                        log_error_write(srv, __FILE__, __LINE__, "s",
-                                        "[ERROR]: spawning gw failed.");
+                        log_error(srv->errh, __FILE__, __LINE__,
+                          "[ERROR]: spawning gw failed.");
                         gw_proc_free(proc);
                         goto error;
                     }
@@ -1700,10 +1697,9 @@ int gw_get_defaults_balance(server *srv, const buffer *b) {
     if (buffer_eq_slen(b, CONST_STR_LEN("sticky")))
         return GW_BALANCE_STICKY;
 
-    log_error_write(srv, __FILE__, __LINE__, "sb",
-                    "xxxxx.balance has to be one of: "
-                    "least-connection, round-robin, hash, sticky, but not:",
-                    b);
+    log_error(srv->errh, __FILE__, __LINE__,
+      "xxxxx.balance has to be one of: "
+      "least-connection, round-robin, hash, sticky, but not: %s", b->ptr);
     return GW_BALANCE_LEAST_CONNECTION;
 }
 
@@ -1754,7 +1750,7 @@ static void gw_connection_close(server *srv, gw_handler_ctx *hctx) {
     con->plugin_ctx[p->id] = NULL;
 
     if (con->mode == p->id) {
-        http_response_backend_done(srv, con);
+        http_response_backend_done(con);
     }
 }
 
@@ -1828,16 +1824,16 @@ static handler_t gw_write_request(server *srv, gw_handler_ctx *hctx) {
 
         hctx->fd = fdevent_socket_nb_cloexec(hctx->host->family,SOCK_STREAM,0);
         if (-1 == hctx->fd) {
+            log_error_st * const errh = hctx->remote_conn->conf.errh;
             if (errno == EMFILE || errno == EINTR) {
-                log_error_write(srv, __FILE__, __LINE__, "sd",
-                                "wait for fd at connection:",
-                                hctx->remote_conn->fd);
+                log_error(errh, __FILE__, __LINE__,
+                  "wait for fd at connection: %d",
+                  hctx->remote_conn->fd);
                 return HANDLER_WAIT_FOR_FD;
             }
 
-            log_error_write(srv, __FILE__, __LINE__, "ssdd",
-                            "socket failed:", strerror(errno),
-                            srv->cur_fds, srv->max_fds);
+            log_perror(errh, __FILE__, __LINE__,
+              "socket failed %d %d", srv->cur_fds, srv->max_fds);
             return HANDLER_ERROR;
         }
 
@@ -1905,15 +1901,16 @@ static handler_t gw_write_request(server *srv, gw_handler_ctx *hctx) {
     case GW_STATE_WRITE:
         if (!chunkqueue_is_empty(hctx->wb)) {
             int ret;
+            log_error_st * const errh = hctx->remote_conn->conf.errh;
           #if 0
             if (hctx->conf.debug > 1) {
-                log_error_write(srv, __FILE__, __LINE__, "sdsx",
-                                "send data to backend ( fd =", hctx->fd,
-                                "), size =", chunkqueue_length(hctx->wb));
+                log_error(errh, __FILE__, __LINE__, "sdsx",
+                  "send data to backend (fd=%d), size=%zu",
+                  hctx->fd, chunkqueue_length(hctx->wb));
             }
           #endif
-            ret = srv->network_backend_write(srv, hctx->fd, hctx->wb,
-                                             MAX_WRITE_LIMIT);
+            ret = srv->network_backend_write(hctx->fd, hctx->wb,
+                                             MAX_WRITE_LIMIT, errh);
 
             if (ret < 0) {
                 switch(errno) {
@@ -1924,15 +1921,15 @@ static handler_t gw_write_request(server *srv, gw_handler_ctx *hctx) {
                      * we don't care about that --
                      * if you accept() it, you have to handle it.
                      */
-                    log_error_write(srv, __FILE__, __LINE__, "ssosb",
-                                    "connection was dropped after accept() "
-                                    "(perhaps the gw process died),",
-                                    "write-offset:", hctx->wb->bytes_out,
-                                    "socket:", hctx->proc->connection_name);
+                    log_error(errh, __FILE__, __LINE__,
+                      "connection was dropped after accept() "
+                      "(perhaps the gw process died), "
+                      "write-offset: %lld socket: %s",
+                      (long long)hctx->wb->bytes_out,
+                      hctx->proc->connection_name->ptr);
                     return HANDLER_ERROR;
                 default:
-                    log_error_write(srv, __FILE__, __LINE__, "ssd",
-                                    "write failed:", strerror(errno), errno);
+                    log_perror(errh, __FILE__, __LINE__, "write failed");
                     return HANDLER_ERROR;
                 }
             }
@@ -1970,7 +1967,8 @@ static handler_t gw_write_request(server *srv, gw_handler_ctx *hctx) {
         /* waiting for a response */
         return HANDLER_WAIT_FOR_EVENT;
     default:
-        log_error_write(srv, __FILE__, __LINE__, "s", "(debug) unknown state");
+        log_error(hctx->remote_conn->conf.errh, __FILE__, __LINE__,
+          "(debug) unknown state");
         return HANDLER_ERROR;
     }
 }
@@ -2081,7 +2079,7 @@ handler_t gw_handle_subrequest(server *srv, connection *con, void *p_d) {
              * Content-Length with request if request body is present, so
              * send 411 Length Required if Content-Length missing. */
             if (-1 == con->request.content_length) {
-                return connection_handle_read_post_error(srv, con, 411);
+                return connection_handle_read_post_error(con, 411);
             }
         }
     }
@@ -2109,9 +2107,10 @@ static handler_t gw_recv_response(server *srv, gw_handler_ctx *hctx) {
     buffer *b = hctx->opts.backend == BACKEND_FASTCGI
       ? chunk_buffer_acquire()
       : hctx->response;
+    log_error_st *errh;
 
     handler_t rc =
-      http_response_read(srv, hctx->remote_conn, &hctx->opts, b, hctx->fdn);
+      http_response_read(hctx->remote_conn, &hctx->opts, b, hctx->fdn);
 
     if (b != hctx->response) chunk_buffer_release(b);
 
@@ -2143,9 +2142,9 @@ static handler_t gw_recv_response(server *srv, gw_handler_ctx *hctx) {
 
             /* don't do more than 6 loops here; normally shouldn't happen */
             if (++con->loops_per_request > 5) {
-                log_error_write(srv, __FILE__, __LINE__, "sb",
-                                "too many loops while processing request:",
-                                con->request.orig_uri);
+                log_error(hctx->remote_conn->conf.errh, __FILE__, __LINE__,
+                  "too many loops while processing request: %s",
+                  con->request.orig_uri->ptr);
                 con->http_status = 500; /* Internal Server Error */
                 con->mode = DIRECT;
                 return HANDLER_FINISHED;
@@ -2173,21 +2172,21 @@ static handler_t gw_recv_response(server *srv, gw_handler_ctx *hctx) {
     case HANDLER_ERROR:
         /* (optimization to detect backend process exit while processing a
          *  large number of ready events; (this block could be removed)) */
+        errh = hctx->remote_conn->conf.errh;
         if (proc->is_local && 1 == proc->load && proc->pid == hctx->pid
             && proc->state != PROC_STATE_DIED && 0 == srv->srvconf.max_worker) {
             /* intentionally check proc->disabed_until before gw_proc_waitpid */
             if (proc->disabled_until < srv->cur_ts
                 && 0 != gw_proc_waitpid(srv, host, proc)) {
                 if (hctx->conf.debug) {
-                    log_error_write(srv, __FILE__, __LINE__, "ssbsdsd",
-                                    "--- gw spawning",
-                                    "\n\tsocket", proc->connection_name,
-                                    "\n\tcurrent:", 1, "/", host->num_procs);
+                    log_error(errh, __FILE__, __LINE__,
+                      "--- gw spawning\n\tsocket %s\n\tcurrent: 1/%d",
+                      proc->connection_name->ptr, host->num_procs);
                 }
 
                 if (gw_spawn_connection(srv, host, proc, hctx->conf.debug)) {
-                    log_error_write(srv, __FILE__, __LINE__, "s",
-                                    "respawning failed, will retry later");
+                    log_error(errh, __FILE__, __LINE__,
+                      "respawning failed, will retry later");
                 }
             }
         }
@@ -2198,27 +2197,30 @@ static handler_t gw_recv_response(server *srv, gw_handler_ctx *hctx) {
             if (hctx->wb->bytes_out == 0 &&
                 hctx->reconnects++ < 5) {
 
-                log_error_write(srv, __FILE__, __LINE__, "ssbsBSBs",
-                  "response not received, request not sent",
-                  "on socket:", proc->connection_name,
-                  "for", con->uri.path, "?", con->uri.query, ", reconnecting");
+                log_error(errh, __FILE__, __LINE__,
+                  "response not received, request not sent on "
+                  "socket: %s for %s?%.*s, reconnecting",
+                  proc->connection_name->ptr,
+                  con->uri.path->ptr, BUFFER_INTLEN_PTR(con->uri.query));
 
                 return gw_reconnect(srv, hctx);
             }
 
-            log_error_write(srv, __FILE__, __LINE__, "sosbsBSBs",
-              "response not received, request sent:", hctx->wb->bytes_out,
-              "on socket:", proc->connection_name, "for", 
-              con->uri.path, "?", con->uri.query, ", closing connection");
+            log_error(errh, __FILE__, __LINE__,
+              "response not received, request sent: %lld on "
+              "socket: %s for %s?%.*s, closing connection",
+              (long long)hctx->wb->bytes_out, proc->connection_name->ptr,
+              con->uri.path->ptr, BUFFER_INTLEN_PTR(con->uri.query));
         } else {
-            log_error_write(srv, __FILE__, __LINE__, "ssbsBSBs",
-              "response already sent out, but backend returned error",
-              "on socket:", proc->connection_name, "for",
-              con->uri.path, "?", con->uri.query, ", terminating connection");
+            log_error(errh, __FILE__, __LINE__,
+              "response already sent out, but backend returned error on "
+              "socket: %s for %s?%.*s, terminating connection",
+              proc->connection_name->ptr,
+              con->uri.path->ptr, BUFFER_INTLEN_PTR(con->uri.query));
         }
 
         if (hctx->backend_error) hctx->backend_error(hctx);
-        http_response_backend_error(srv, con);
+        http_response_backend_error(con);
         gw_connection_close(srv, hctx);
         return HANDLER_FINISHED;
     }
@@ -2270,20 +2272,20 @@ static handler_t gw_handle_fdevent(server *srv, void *ctx, int revents) {
             return rc; /* HANDLER_FINISHED or HANDLER_ERROR */
         } else {
             gw_proc *proc = hctx->proc;
-            log_error_write(srv, __FILE__, __LINE__, "sBSbsbsd",
-              "error: unexpected close of gw connection for",
-              con->uri.path, "?", con->uri.query,
-              "(no gw process on socket:", proc->connection_name, "?)",
-              hctx->state);
+            log_error(con->conf.errh, __FILE__, __LINE__,
+              "error: unexpected close of gw connection for %s?%.*s "
+              "(no gw process on socket: %s ?) %d",
+              con->uri.path->ptr, BUFFER_INTLEN_PTR(con->uri.query),
+              proc->connection_name->ptr, hctx->state);
 
             gw_connection_close(srv, hctx);
         }
     } else if (revents & FDEVENT_ERR) {
-        log_error_write(srv, __FILE__, __LINE__, "s",
-                        "gw: got a FDEVENT_ERR. Don't know why.");
+        log_error(con->conf.errh, __FILE__, __LINE__,
+          "gw: got a FDEVENT_ERR. Don't know why.");
 
         if (hctx->backend_error) hctx->backend_error(hctx);
-        http_response_backend_error(srv, con);
+        http_response_backend_error(con);
         gw_connection_close(srv, hctx);
     }
 
@@ -2497,7 +2499,7 @@ handler_t gw_check_extension(server *srv, connection *con, gw_plugin_data *p, in
     con->mode = p->id;
 
     if (con->conf.log_request_handling) {
-        log_error_write(srv, __FILE__, __LINE__, "s", "handling it in mod_gw");
+        log_error(con->conf.errh, __FILE__, __LINE__, "handling it in mod_gw");
     }
 
     return HANDLER_GO_ON;
@@ -2541,8 +2543,8 @@ static void gw_handle_trigger_host(server *srv, gw_host *host, int debug) {
     if (overload && host->num_procs && host->num_procs < host->max_procs) {
         /* overload, spawn new child */
         if (debug) {
-            log_error_write(srv, __FILE__, __LINE__, "s",
-                            "overload detected, spawning a new child");
+            log_error(srv->errh, __FILE__, __LINE__,
+              "overload detected, spawning a new child");
         }
 
         gw_proc_spawn(srv, host, debug);
@@ -2557,9 +2559,9 @@ static void gw_handle_trigger_host(server *srv, gw_host *host, int debug) {
 
         /* terminate proc that has been idling for a long time */
         if (debug) {
-            log_error_write(srv, __FILE__, __LINE__, "ssbsd",
-                            "idle-timeout reached, terminating child:",
-                            "socket:", proc->unixsocket, "pid", proc->pid);
+            log_error(srv->errh, __FILE__, __LINE__,
+              "idle-timeout reached, terminating child: socket: %s pid %d",
+              proc->unixsocket->ptr, proc->pid);
         }
 
         gw_proc_kill(srv, host, proc);
@@ -2682,8 +2684,8 @@ handler_t gw_handle_waitpid_cb(server *srv, void *p_d, pid_t pid, int status) {
                         if (proc->state != PROC_STATE_KILLED)
                             proc->disabled_until = srv->cur_ts;
                         if (gw_spawn_connection(srv, host, proc, debug)) {
-                            log_error_write(srv, __FILE__, __LINE__, "s",
-                                            "ERROR: spawning gw failed.");
+                            log_error(srv->errh, __FILE__, __LINE__,
+                              "ERROR: spawning gw failed.");
                         }
                     }
 

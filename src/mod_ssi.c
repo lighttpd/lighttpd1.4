@@ -37,9 +37,10 @@
 
 #include "etag.h"
 
-static handler_ctx * handler_ctx_init(plugin_data *p) {
+static handler_ctx * handler_ctx_init(plugin_data *p, log_error_st *errh) {
 	handler_ctx *hctx = calloc(1, sizeof(*hctx));
 	force_assert(hctx);
+	hctx->errh = errh;
 	hctx->timefmt = p->timefmt;
 	hctx->stat_fn = p->stat_fn;
 	hctx->ssi_vars = p->ssi_vars;
@@ -183,7 +184,7 @@ static int ssi_env_add(void *venv, const char *key, size_t klen, const char *val
 	return 0;
 }
 
-static int build_ssi_cgi_vars(server *srv, connection *con, handler_ctx *p) {
+static int build_ssi_cgi_vars(connection *con, handler_ctx *p) {
 	http_cgi_opts opts = { 0, 0, NULL, NULL };
 	/* temporarily remove Authorization from request headers
 	 * so that Authorization does not end up in SSI environment */
@@ -196,7 +197,7 @@ static int build_ssi_cgi_vars(server *srv, connection *con, handler_ctx *p) {
 
 	array_reset_data_strings(p->ssi_cgi_env);
 
-	if (0 != http_cgi_headers(srv, con, &opts, ssi_env_add, p->ssi_cgi_env)) {
+	if (0 != http_cgi_headers(con, &opts, ssi_env_add, p->ssi_cgi_env)) {
 		con->http_status = 400;
 		return -1;
 	}
@@ -208,9 +209,9 @@ static int build_ssi_cgi_vars(server *srv, connection *con, handler_ctx *p) {
 	return 0;
 }
 
-static int mod_ssi_process_file(server *srv, connection *con, handler_ctx *p, struct stat *st);
+static int mod_ssi_process_file(connection *con, handler_ctx *p, struct stat *st);
 
-static int process_ssi_stmt(server *srv, connection *con, handler_ctx *p, const char **l, size_t n, struct stat *st) {
+static int process_ssi_stmt(connection *con, handler_ctx *p, const char **l, size_t n, struct stat *st) {
 
 	/**
 	 * <!--#element attribute=value attribute=value ... -->
@@ -273,7 +274,7 @@ static int process_ssi_stmt(server *srv, connection *con, handler_ctx *p, const 
 
 	size_t i, ssicmd = 0;
 	char buf[255];
-	buffer *b = NULL;
+	buffer *tb = NULL;
 
 	static const struct {
 		const char *var;
@@ -375,36 +376,33 @@ static int process_ssi_stmt(server *srv, connection *con, handler_ctx *p, const 
 				}
 */
 			} else {
-				log_error_write(srv, __FILE__, __LINE__, "sss",
-						"ssi: unknown attribute for ",
-						l[1], l[i]);
+				log_error(con->conf.errh, __FILE__, __LINE__,
+				  "ssi: unknown attribute for %s %s", l[1], l[i]);
 			}
 		}
 
 		if (p->if_is_false) break;
 
 		if (!var_val) {
-			log_error_write(srv, __FILE__, __LINE__, "sss",
-					"ssi: ",
-					l[1], "var is missing");
+			log_error(con->conf.errh, __FILE__, __LINE__,
+			  "ssi: %s var is missing", l[1]);
 			break;
 		}
 
 		switch(var) {
 		case SSI_ECHO_USER_NAME: {
-			struct passwd *pw;
-
-			b = srv->tmp_buf;
+			tb = con->srv->tmp_buf;
 #ifdef HAVE_PWD_H
+			struct passwd *pw;
 			if (NULL == (pw = getpwuid(st->st_uid))) {
-				buffer_copy_int(b, st->st_uid);
+				buffer_copy_int(tb, st->st_uid);
 			} else {
-				buffer_copy_string(b, pw->pw_name);
+				buffer_copy_string(tb, pw->pw_name);
 			}
 #else
-			buffer_copy_int(b, st->st_uid);
+			buffer_copy_int(tb, st->st_uid);
 #endif
-			chunkqueue_append_mem(con->write_queue, CONST_BUF_LEN(b));
+			chunkqueue_append_mem(con->write_queue, CONST_BUF_LEN(tb));
 			break;
 		}
 		case SSI_ECHO_LAST_MODIFIED: {
@@ -501,28 +499,27 @@ static int process_ssi_stmt(server *srv, connection *con, handler_ctx *p, const 
 			} else if (0 == strcmp(l[i], "virtual")) {
 				virt_path = l[i+1];
 			} else {
-				log_error_write(srv, __FILE__, __LINE__, "sss",
-						"ssi: unknown attribute for ",
-						l[1], l[i]);
+				log_error(con->conf.errh, __FILE__, __LINE__,
+				  "ssi: unknown attribute for %s %s", l[1], l[i]);
 			}
 		}
 
 		if (!file_path && !virt_path) {
-			log_error_write(srv, __FILE__, __LINE__, "sss",
-					"ssi: ",
-					l[1], "file or virtual are missing");
+			log_error(con->conf.errh, __FILE__, __LINE__,
+			  "ssi: %s file or virtual is missing", l[1]);
 			break;
 		}
 
 		if (file_path && virt_path) {
-			log_error_write(srv, __FILE__, __LINE__, "sss",
-					"ssi: ",
-					l[1], "only one of file and virtual is allowed here");
+			log_error(con->conf.errh, __FILE__, __LINE__,
+			  "ssi: %s only one of file and virtual is allowed here", l[1]);
 			break;
 		}
 
 
 		if (p->if_is_false) break;
+
+		tb = con->srv->tmp_buf;
 
 		if (file_path) {
 			/* current doc-root */
@@ -532,36 +529,36 @@ static int process_ssi_stmt(server *srv, connection *con, handler_ctx *p, const 
 				buffer_copy_string_len(p->stat_fn, con->physical.path->ptr, sl - con->physical.path->ptr + 1);
 			}
 
-			buffer_copy_string(srv->tmp_buf, file_path);
-			buffer_urldecode_path(srv->tmp_buf);
-			if (!buffer_is_valid_UTF8(srv->tmp_buf)) {
-				log_error_write(srv, __FILE__, __LINE__, "sb",
-						"SSI invalid UTF-8 after url-decode:", srv->tmp_buf);
+			buffer_copy_string(tb, file_path);
+			buffer_urldecode_path(tb);
+			if (!buffer_is_valid_UTF8(tb)) {
+				log_error(con->conf.errh, __FILE__, __LINE__,
+				  "SSI invalid UTF-8 after url-decode: %s", tb->ptr);
 				break;
 			}
-			buffer_path_simplify(srv->tmp_buf, srv->tmp_buf);
-			buffer_append_string_buffer(p->stat_fn, srv->tmp_buf);
+			buffer_path_simplify(tb, tb);
+			buffer_append_string_buffer(p->stat_fn, tb);
 		} else {
 			/* virtual */
 			size_t remain;
 
 			if (virt_path[0] == '/') {
-				buffer_copy_string(srv->tmp_buf, virt_path);
+				buffer_copy_string(tb, virt_path);
 			} else {
 				/* there is always a / */
 				sl = strrchr(con->uri.path->ptr, '/');
 
-				buffer_copy_string_len(srv->tmp_buf, con->uri.path->ptr, sl - con->uri.path->ptr + 1);
-				buffer_append_string(srv->tmp_buf, virt_path);
+				buffer_copy_string_len(tb, con->uri.path->ptr, sl - con->uri.path->ptr + 1);
+				buffer_append_string(tb, virt_path);
 			}
 
-			buffer_urldecode_path(srv->tmp_buf);
-			if (!buffer_is_valid_UTF8(srv->tmp_buf)) {
-				log_error_write(srv, __FILE__, __LINE__, "sb",
-						"SSI invalid UTF-8 after url-decode:", srv->tmp_buf);
+			buffer_urldecode_path(tb);
+			if (!buffer_is_valid_UTF8(tb)) {
+				log_error(con->conf.errh, __FILE__, __LINE__,
+				  "SSI invalid UTF-8 after url-decode: %s", tb->ptr);
 				break;
 			}
-			buffer_path_simplify(srv->tmp_buf, srv->tmp_buf);
+			buffer_path_simplify(tb, tb);
 
 			/* we have an uri */
 
@@ -585,12 +582,12 @@ static int process_ssi_stmt(server *srv, connection *con, handler_ctx *p, const 
 			{
 				const char *sep, *sep2;
 				sep = con->uri.path->ptr;
-				sep2 = srv->tmp_buf->ptr;
+				sep2 = tb->ptr;
 				for (i = 0; sep[i] && sep[i] == sep2[i]; ++i) ;
 				while (i != 0 && sep[--i] != '/') ; /* find matching directory path */
 			}
 			if (con->conf.force_lowercase_filenames) {
-				buffer_to_lower(srv->tmp_buf);
+				buffer_to_lower(tb);
 			}
 			remain = buffer_string_length(con->uri.path) - i;
 			if (!con->conf.force_lowercase_filenames
@@ -598,12 +595,12 @@ static int process_ssi_stmt(server *srv, connection *con, handler_ctx *p, const 
 			    :(buffer_string_length(con->physical.path) >= remain
 			      && buffer_eq_icase_ssn(con->physical.path->ptr+buffer_string_length(con->physical.path)-remain, con->physical.rel_path->ptr+i, remain))) {
 				buffer_copy_string_len(p->stat_fn, con->physical.path->ptr, buffer_string_length(con->physical.path)-remain);
-				buffer_append_string_len(p->stat_fn, srv->tmp_buf->ptr+i, buffer_string_length(srv->tmp_buf)-i);
+				buffer_append_string_len(p->stat_fn, tb->ptr+i, buffer_string_length(tb)-i);
 			} else {
 				/* unable to perform physical path remap here;
 				 * assume doc_root/rel_path and no remapping */
 				buffer_copy_buffer(p->stat_fn, con->physical.doc_root);
-				buffer_append_string_buffer(p->stat_fn, srv->tmp_buf);
+				buffer_append_string_buffer(p->stat_fn, tb);
 			}
 		}
 
@@ -618,7 +615,6 @@ static int process_ssi_stmt(server *srv, connection *con, handler_ctx *p, const 
 
 			switch (ssicmd) {
 			case SSI_FSIZE:
-				b = srv->tmp_buf;
 				if (p->sizefmt) {
 					int j = 0;
 					const char *abr[] = { " B", " kB", " MB", " GB", " TB", NULL };
@@ -627,12 +623,12 @@ static int process_ssi_stmt(server *srv, connection *con, handler_ctx *p, const 
 
 					for (j = 0; s > 1024 && abr[j+1]; s /= 1024, j++);
 
-					buffer_copy_int(b, s);
-					buffer_append_string(b, abr[j]);
+					buffer_copy_int(tb, s);
+					buffer_append_string(tb, abr[j]);
 				} else {
-					buffer_copy_int(b, stb.st_size);
+					buffer_copy_int(tb, stb.st_size);
 				}
-				chunkqueue_append_mem(con->write_queue, CONST_BUF_LEN(b));
+				chunkqueue_append_mem(con->write_queue, CONST_BUF_LEN(tb));
 				break;
 			case SSI_FLASTMOD:
 				if (0 == strftime(buf, sizeof(buf), p->timefmt->ptr, localtime(&t))) {
@@ -667,7 +663,7 @@ static int process_ssi_stmt(server *srv, connection *con, handler_ctx *p, const 
 
 					/* save and restore con->physical.path, con->physical.rel_path, and con->uri.path around include
 					 *
-					 * srv->tmp_buf contains url-decoded, path-simplified, and lowercased (if con->conf.force_lowercase) uri path of target.
+					 * tb contains url-decoded, path-simplified, and lowercased (if con->conf.force_lowercase) uri path of target.
 					 * con->uri.path and con->physical.rel_path are set to the same since we only operate on filenames here,
 					 * not full re-run of all modules for subrequest */
 					upsave = con->uri.path;
@@ -677,14 +673,14 @@ static int process_ssi_stmt(server *srv, connection *con, handler_ctx *p, const 
 					con->physical.path = p->stat_fn;
 					p->stat_fn = buffer_init();
 
-					con->uri.path = con->physical.rel_path = buffer_init_buffer(srv->tmp_buf);
+					con->uri.path = con->physical.rel_path = buffer_init_buffer(tb);
 
 					close(fd);
 					fd = -1;
 
 					/*(ignore return value; muddle along as best we can if error occurs)*/
 					++p->ssi_recursion_depth;
-					mod_ssi_process_file(srv, con, p, &stb);
+					mod_ssi_process_file(con, p, &stb);
 					--p->ssi_recursion_depth;
 
 					buffer_free(con->uri.path);
@@ -701,9 +697,8 @@ static int process_ssi_stmt(server *srv, connection *con, handler_ctx *p, const 
 
 			if (fd >= 0) close(fd);
 		} else {
-			log_error_write(srv, __FILE__, __LINE__, "sbs",
-					"ssi: stating failed ",
-					p->stat_fn, strerror(errno));
+			log_perror(con->conf.errh, __FILE__, __LINE__,
+			  "ssi: stating %s failed", p->stat_fn->ptr);
 		}
 		break;
 	}
@@ -715,9 +710,8 @@ static int process_ssi_stmt(server *srv, connection *con, handler_ctx *p, const 
 			} else if (0 == strcmp(l[i], "value")) {
 				val = l[i+1];
 			} else {
-				log_error_write(srv, __FILE__, __LINE__, "sss",
-						"ssi: unknown attribute for ",
-						l[1], l[i]);
+				log_error(con->conf.errh, __FILE__, __LINE__,
+				  "ssi: unknown attribute for %s %s", l[1], l[i]);
 			}
 		}
 
@@ -726,11 +720,11 @@ static int process_ssi_stmt(server *srv, connection *con, handler_ctx *p, const 
 		if (key && val) {
 			array_set_key_value(p->ssi_vars, key, strlen(key), val, strlen(val));
 		} else if (key || val) {
-			log_error_write(srv, __FILE__, __LINE__, "sSSss",
-					"ssi: var and value have to be set in <!--#set", l[1], "=", l[2], "-->");
+			log_error(con->conf.errh, __FILE__, __LINE__,
+			  "ssi: var and value have to be set in <!--#set %s=%s -->", l[1], l[2]);
 		} else {
-			log_error_write(srv, __FILE__, __LINE__, "s",
-					"ssi: var and value have to be set in <!--#set var=... value=... -->");
+			log_error(con->conf.errh, __FILE__, __LINE__,
+			  "ssi: var and value have to be set in <!--#set var=... value=... -->");
 		}
 		break;
 	}
@@ -746,47 +740,45 @@ static int process_ssi_stmt(server *srv, connection *con, handler_ctx *p, const 
 				} else if (0 == strcmp(l[i+1], "bytes")) {
 					p->sizefmt = 0;
 				} else {
-					log_error_write(srv, __FILE__, __LINE__, "sssss",
-							"ssi: unknown value for attribute '",
-							l[i],
-							"' for ",
-							l[1], l[i+1]);
+					log_error(con->conf.errh, __FILE__, __LINE__,
+					  "ssi: unknown value for attribute '%s' for %s %s",
+					  l[i], l[1], l[i+1]);
 				}
 			} else {
-				log_error_write(srv, __FILE__, __LINE__, "sss",
-						"ssi: unknown attribute for ",
-						l[1], l[i]);
+				log_error(con->conf.errh, __FILE__, __LINE__,
+				  "ssi: unknown attribute for %s %s", l[1], l[i]);
 			}
 		}
 		break;
 	case SSI_PRINTENV:
 		if (p->if_is_false) break;
 
-		b = srv->tmp_buf;
-		buffer_clear(b);
+		tb = con->srv->tmp_buf;
+		buffer_clear(tb);
 		for (i = 0; i < p->ssi_vars->used; i++) {
 			data_string *ds = (data_string *)p->ssi_vars->sorted[i];
 
-			buffer_append_string_buffer(b, &ds->key);
-			buffer_append_string_len(b, CONST_STR_LEN("="));
-			buffer_append_string_encoded(b, CONST_BUF_LEN(&ds->value), ENCODING_MINIMAL_XML);
-			buffer_append_string_len(b, CONST_STR_LEN("\n"));
+			buffer_append_string_buffer(tb, &ds->key);
+			buffer_append_string_len(tb, CONST_STR_LEN("="));
+			buffer_append_string_encoded(tb, CONST_BUF_LEN(&ds->value), ENCODING_MINIMAL_XML);
+			buffer_append_string_len(tb, CONST_STR_LEN("\n"));
 		}
 		for (i = 0; i < p->ssi_cgi_env->used; i++) {
 			data_string *ds = (data_string *)p->ssi_cgi_env->sorted[i];
 
-			buffer_append_string_buffer(b, &ds->key);
-			buffer_append_string_len(b, CONST_STR_LEN("="));
-			buffer_append_string_encoded(b, CONST_BUF_LEN(&ds->value), ENCODING_MINIMAL_XML);
-			buffer_append_string_len(b, CONST_STR_LEN("\n"));
+			buffer_append_string_buffer(tb, &ds->key);
+			buffer_append_string_len(tb, CONST_STR_LEN("="));
+			buffer_append_string_encoded(tb, CONST_BUF_LEN(&ds->value), ENCODING_MINIMAL_XML);
+			buffer_append_string_len(tb, CONST_STR_LEN("\n"));
 		}
-		chunkqueue_append_mem(con->write_queue, CONST_BUF_LEN(b));
+		chunkqueue_append_mem(con->write_queue, CONST_BUF_LEN(tb));
 		break;
 	case SSI_EXEC: {
 		const char *cmd = NULL;
 		pid_t pid;
 		chunk *c;
 		char *args[4];
+		log_error_st *errh = p->errh;
 
 		if (!p->conf.ssi_exec) { /* <!--#exec ... --> disabled by config */
 			break;
@@ -796,9 +788,8 @@ static int process_ssi_stmt(server *srv, connection *con, handler_ctx *p, const 
 			if (0 == strcmp(l[i], "cmd")) {
 				cmd = l[i+1];
 			} else {
-				log_error_write(srv, __FILE__, __LINE__, "sss",
-						"ssi: unknown attribute for ",
-						l[1], l[i]);
+				log_error(errh, __FILE__, __LINE__,
+				  "ssi: unknown attribute for %s %s", l[1], l[i]);
 			}
 		}
 
@@ -811,7 +802,7 @@ static int process_ssi_stmt(server *srv, connection *con, handler_ctx *p, const 
 		if (!cmd) break;
 
 		/* send cmd output to a temporary file */
-		if (0 != chunkqueue_append_mem_to_tempfile(srv, con->write_queue, "", 0)) break;
+		if (0 != chunkqueue_append_mem_to_tempfile(con->write_queue, "", 0, errh)) break;
 		c = con->write_queue->last;
 
 		*(const char **)&args[0] = "/bin/sh";
@@ -822,7 +813,7 @@ static int process_ssi_stmt(server *srv, connection *con, handler_ctx *p, const 
 		/*(expects STDIN_FILENO open to /dev/null)*/
 		pid = fdevent_fork_execve(args[0], args, NULL, -1, c->file.fd, -1, -1);
 		if (-1 == pid) {
-			log_error_write(srv, __FILE__, __LINE__, "sss", "spawning exec failed:", strerror(errno), cmd);
+			log_perror(errh, __FILE__, __LINE__, "spawning exec failed: %s", cmd);
 		} else {
 			struct stat stb;
 			int status;
@@ -835,12 +826,12 @@ static int process_ssi_stmt(server *srv, connection *con, handler_ctx *p, const 
 			 */
 			while (-1 == waitpid(pid, &status, 0)) {
 				if (errno != EINTR) {
-					log_error_write(srv, __FILE__, __LINE__, "ss", "waitpid failed:", strerror(errno));
+					log_perror(errh, __FILE__, __LINE__, "waitpid failed");
 					break;
 				}
 			}
 			if (!WIFEXITED(status)) {
-				log_error_write(srv, __FILE__, __LINE__, "ss", "process exited abnormally:", cmd);
+				log_error(errh, __FILE__, __LINE__, "process exited abnormally: %s", cmd);
 			}
 			if (0 == fstat(c->file.fd, &stb)) {
 				c->file.length = stb.st_size;
@@ -856,23 +847,21 @@ static int process_ssi_stmt(server *srv, connection *con, handler_ctx *p, const 
 			if (0 == strcmp(l[i], "expr")) {
 				expr = l[i+1];
 			} else {
-				log_error_write(srv, __FILE__, __LINE__, "sss",
-						"ssi: unknown attribute for ",
-						l[1], l[i]);
+				log_error(con->conf.errh, __FILE__, __LINE__,
+				  "ssi: unknown attribute for %s %s", l[1], l[i]);
 			}
 		}
 
 		if (!expr) {
-			log_error_write(srv, __FILE__, __LINE__, "sss",
-					"ssi: ",
-					l[1], "expr missing");
+			log_error(con->conf.errh, __FILE__, __LINE__,
+			  "ssi: %s expr missing", l[1]);
 			break;
 		}
 
 		if ((!p->if_is_false) &&
 		    ((p->if_is_false_level == 0) ||
 		     (p->if_level < p->if_is_false_level))) {
-			switch (ssi_eval_expr(srv, con, p, expr)) {
+			switch (ssi_eval_expr(p, expr)) {
 			case -1:
 			case 0:
 				p->if_is_false = 1;
@@ -910,16 +899,14 @@ static int process_ssi_stmt(server *srv, connection *con, handler_ctx *p, const 
 			if (0 == strcmp(l[i], "expr")) {
 				expr = l[i+1];
 			} else {
-				log_error_write(srv, __FILE__, __LINE__, "sss",
-						"ssi: unknown attribute for ",
-						l[1], l[i]);
+				log_error(con->conf.errh, __FILE__, __LINE__,
+				  "ssi: unknown attribute for %s %s", l[1], l[i]);
 			}
 		}
 
 		if (!expr) {
-			log_error_write(srv, __FILE__, __LINE__, "sss",
-					"ssi: ",
-					l[1], "expr missing");
+			log_error(con->conf.errh, __FILE__, __LINE__,
+			  "ssi: %s expr missing", l[1]);
 			break;
 		}
 
@@ -928,7 +915,7 @@ static int process_ssi_stmt(server *srv, connection *con, handler_ctx *p, const 
 		if (p->if_level == p->if_is_false_level) {
 			if ((p->if_is_false) &&
 			    (p->if_is_false_endif == 0)) {
-				switch (ssi_eval_expr(srv, con, p, expr)) {
+				switch (ssi_eval_expr(p, expr)) {
 				case -1:
 				case 0:
 					p->if_is_false = 1;
@@ -961,9 +948,8 @@ static int process_ssi_stmt(server *srv, connection *con, handler_ctx *p, const 
 	case SSI_COMMENT:
 		break;
 	default:
-		log_error_write(srv, __FILE__, __LINE__, "ss",
-				"ssi: unknown ssi-command:",
-				l[1]);
+		log_error(con->conf.errh, __FILE__, __LINE__,
+		  "ssi: unknown ssi-command: %s", l[1]);
 		break;
 	}
 
@@ -1045,7 +1031,7 @@ static int mod_ssi_parse_ssi_stmt_offlen(int o[10], const char * const s, const 
 	return -1;
 }
 
-static void mod_ssi_parse_ssi_stmt(server *srv, connection *con, handler_ctx *p, char *s, int len, struct stat *st) {
+static void mod_ssi_parse_ssi_stmt(connection *con, handler_ctx *p, char *s, int len, struct stat *st) {
 
 	/**
 	 * <!--#element attribute=value attribute=value ... -->
@@ -1090,7 +1076,7 @@ static void mod_ssi_parse_ssi_stmt(server *srv, connection *con, handler_ctx *p,
 		}
 	}
 
-	process_ssi_stmt(srv, con, p, (const char **)l, 1+(n>>1), st);
+	process_ssi_stmt(con, p, (const char **)l, 1+(n>>1), st);
 
       #if 0
 	free(l[0]);
@@ -1121,7 +1107,7 @@ static int mod_ssi_stmt_len(const char *s, const int len) {
 	return 0; /* incomplete directive "<!--#...-->" */
 }
 
-static void mod_ssi_read_fd(server *srv, connection *con, handler_ctx *p, struct stat *st, int fd) {
+static void mod_ssi_read_fd(connection *con, handler_ctx *p, struct stat *st, int fd) {
 	ssize_t rd;
 	size_t offset, pretag;
 	size_t bufsz = 8192;
@@ -1145,7 +1131,7 @@ static void mod_ssi_read_fd(server *srv, connection *con, handler_ctx *p, struct
 
 				len = mod_ssi_stmt_len(buf+prelen, offset-prelen);
 				if (len) { /* num of chars to be consumed */
-					mod_ssi_parse_ssi_stmt(srv, con, p, buf+prelen, len, st);
+					mod_ssi_parse_ssi_stmt(con, p, buf+prelen, len, st);
 					prelen += (len - 1); /* offset to '>' at end of SSI directive; incremented at top of loop */
 					pretag = prelen + 1;
 					if (pretag == offset) {
@@ -1189,7 +1175,8 @@ static void mod_ssi_read_fd(server *srv, connection *con, handler_ctx *p, struct
 	}
 
 	if (0 != rd) {
-		log_error_write(srv, __FILE__, __LINE__,  "SsB", "read(): ", strerror(errno), con->physical.path);
+		log_perror(con->conf.errh, __FILE__, __LINE__,
+		  "read(): %s", con->physical.path->ptr);
 	}
 
 	if (offset - pretag) {
@@ -1203,29 +1190,29 @@ static void mod_ssi_read_fd(server *srv, connection *con, handler_ctx *p, struct
 }
 
 
-static int mod_ssi_process_file(server *srv, connection *con, handler_ctx *p, struct stat *st) {
+static int mod_ssi_process_file(connection *con, handler_ctx *p, struct stat *st) {
 	int fd = fdevent_open_cloexec(con->physical.path->ptr, con->conf.follow_symlink, O_RDONLY, 0);
 	if (-1 == fd) {
-		log_error_write(srv, __FILE__, __LINE__,  "SsB", "open(): ",
-				strerror(errno), con->physical.path);
+		log_perror(con->conf.errh, __FILE__, __LINE__,
+		  "open(): %s", con->physical.path->ptr);
 		return -1;
 	}
 
 	if (0 != fstat(fd, st)) {
-		log_error_write(srv, __FILE__, __LINE__,  "SsB", "fstat(): ",
-				strerror(errno), con->physical.path);
+		log_perror(con->conf.errh, __FILE__, __LINE__,
+		  "fstat(): %s", con->physical.path->ptr);
 		close(fd);
 		return -1;
 	}
 
-	mod_ssi_read_fd(srv, con, p, st, fd);
+	mod_ssi_read_fd(con, p, st, fd);
 
 	close(fd);
 	return 0;
 }
 
 
-static int mod_ssi_handle_request(server *srv, connection *con, handler_ctx *p) {
+static int mod_ssi_handle_request(connection *con, handler_ctx *p) {
 	struct stat st;
 
 	/* get a stream to the file */
@@ -1233,12 +1220,12 @@ static int mod_ssi_handle_request(server *srv, connection *con, handler_ctx *p) 
 	array_reset_data_strings(p->ssi_vars);
 	array_reset_data_strings(p->ssi_cgi_env);
 	buffer_copy_string_len(p->timefmt, CONST_STR_LEN("%a, %d %b %Y %H:%M:%S %Z"));
-	build_ssi_cgi_vars(srv, con, p);
+	build_ssi_cgi_vars(con, p);
 
 	/* Reset the modified time of included files */
 	include_file_last_mtime = 0;
 
-	if (mod_ssi_process_file(srv, con, p, &st)) return -1;
+	if (mod_ssi_process_file(con, p, &st)) return -1;
 
 	con->file_started  = 1;
 	con->file_finished = 1;
@@ -1261,10 +1248,10 @@ static int mod_ssi_handle_request(server *srv, connection *con, handler_ctx *p) 
 		etag_mutate(con->physical.etag, con->physical.etag);
 		http_header_response_set(con, HTTP_HEADER_ETAG, CONST_STR_LEN("ETag"), CONST_BUF_LEN(con->physical.etag));
 
-		mtime = strftime_cache_get(srv, st.st_mtime);
+		mtime = strftime_cache_get(con->srv, st.st_mtime);
 		http_header_response_set(con, HTTP_HEADER_LAST_MODIFIED, CONST_STR_LEN("Last-Modified"), CONST_BUF_LEN(mtime));
 
-		if (HANDLER_FINISHED == http_response_handle_cachable(srv, con, mtime)) {
+		if (HANDLER_FINISHED == http_response_handle_cachable(con, mtime)) {
 			/* ok, the client already has our content,
 			 * no need to send it again */
 
@@ -1292,8 +1279,8 @@ URIHANDLER_FUNC(mod_ssi_physical_path) {
 	if (NULL == p->conf.ssi_extension) return HANDLER_GO_ON;
 
 	if (array_match_value_suffix(p->conf.ssi_extension, con->physical.path)) {
-			con->plugin_ctx[p->id] = handler_ctx_init(p);
-			con->mode = p->id;
+		con->plugin_ctx[p->id] = handler_ctx_init(p, con->conf.errh);
+		con->mode = p->id;
 	}
 
 	return HANDLER_GO_ON;
@@ -1304,6 +1291,7 @@ SUBREQUEST_FUNC(mod_ssi_handle_subrequest) {
 	handler_ctx *hctx = con->plugin_ctx[p->id];
 	if (NULL == hctx) return HANDLER_GO_ON;
 	if (con->mode != p->id) return HANDLER_GO_ON; /* not my job */
+	UNUSED(srv);
 	/*
 	 * NOTE: if mod_ssi modified to use fdevents, HANDLER_WAIT_FOR_EVENT,
 	 * instead of blocking to completion, then hctx->timefmt, hctx->ssi_vars,
@@ -1312,7 +1300,7 @@ SUBREQUEST_FUNC(mod_ssi_handle_subrequest) {
 
 			/* handle ssi-request */
 
-			if (mod_ssi_handle_request(srv, con, hctx)) {
+			if (mod_ssi_handle_request(con, hctx)) {
 				/* on error */
 				con->http_status = 500;
 				con->mode = DIRECT;

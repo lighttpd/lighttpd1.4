@@ -3,6 +3,7 @@
 #include "first.h"
 #include "base_decls.h"
 
+__attribute_cold__
 int network_write_init(server *srv);
 
 __attribute_cold__

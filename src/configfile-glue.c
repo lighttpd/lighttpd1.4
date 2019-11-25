@@ -270,7 +270,7 @@ static void config_cond_result_trace(connection *con, const data_config *dc, int
       case COND_RESULT_TRUE:  msg = "true"; break;
       default:                msg = "invalid cond_result_t"; break;
     }
-    log_error(con->errh, __FILE__, __LINE__, "%d (%s) result: %s",
+    log_error(con->conf.errh, __FILE__, __LINE__, "%d (%s) result: %s",
               dc->context_ndx, "uncached"+(cached ? 2 : 0), msg);
 }
 
@@ -305,16 +305,16 @@ static int config_addrstr_eq_remote_ip_mask(connection *con, const char *addrstr
 	sock_addr addr;
 	if (1 == sock_addr_inet_pton(&addr, addrstr, AF_INET, 0)) {
 		if (nm_bits > 32) {
-			log_error(con->errh, __FILE__, __LINE__, "ERROR: ipv4 netmask too large: %d", nm_bits);
+			log_error(con->conf.errh, __FILE__, __LINE__, "ERROR: ipv4 netmask too large: %d", nm_bits);
 			return -1;
 		}
 	} else if (1 == sock_addr_inet_pton(&addr, addrstr, AF_INET6, 0)) {
 		if (nm_bits > 128) {
-			log_error(con->errh, __FILE__, __LINE__, "ERROR: ipv6 netmask too large: %d", nm_bits);
+			log_error(con->conf.errh, __FILE__, __LINE__, "ERROR: ipv6 netmask too large: %d", nm_bits);
 			return -1;
 		}
 	} else {
-		log_error(con->errh, __FILE__, __LINE__, "ERROR: ip addr is invalid: %s", addrstr);
+		log_error(con->conf.errh, __FILE__, __LINE__, "ERROR: ip addr is invalid: %s", addrstr);
 		return -1;
 	}
 	return sock_addr_is_addr_eq_bits(&addr, rmt, nm_bits);
@@ -327,21 +327,21 @@ static int config_addrbuf_eq_remote_ip_mask(connection *con, const buffer *strin
 	char addrstr[64]; /*(larger than INET_ADDRSTRLEN and INET6_ADDRSTRLEN)*/
 
 	if (*err) {
-		log_error(con->errh, __FILE__, __LINE__, "ERROR: non-digit found in netmask: %s %s", string->ptr, err);
+		log_error(con->conf.errh, __FILE__, __LINE__, "ERROR: non-digit found in netmask: %s %s", string->ptr, err);
 		return -1;
 	}
 
 	if (nm_bits <= 0) {
 		if (*(nm_slash+1) == '\0') {
-			log_error(con->errh, __FILE__, __LINE__, "ERROR: no number after / %s", string->ptr);
+			log_error(con->conf.errh, __FILE__, __LINE__, "ERROR: no number after / %s", string->ptr);
 		} else {
-			log_error(con->errh, __FILE__, __LINE__, "ERROR: invalid netmask <= 0: %s %s", string->ptr, err);
+			log_error(con->conf.errh, __FILE__, __LINE__, "ERROR: invalid netmask <= 0: %s %s", string->ptr, err);
 		}
 		return -1;
 	}
 
 	if (addrstrlen >= sizeof(addrstr)) {
-		log_error(con->errh, __FILE__, __LINE__, "ERROR: address string too long: %s", string->ptr);
+		log_error(con->conf.errh, __FILE__, __LINE__, "ERROR: address string too long: %s", string->ptr);
 		return -1;
 	}
 
@@ -368,7 +368,7 @@ static cond_result_t config_check_cond_nocache(connection *con, const data_confi
 		 * if the parent is not decided yet or false, we can't be true either 
 		 */
 		if (debug_cond) {
-			log_error(con->errh, __FILE__, __LINE__, "go parent %s", dc->parent->key.ptr);
+			log_error(con->conf.errh, __FILE__, __LINE__, "go parent %s", dc->parent->key.ptr);
 		}
 
 		switch (config_check_cond_cached(con, dc->parent, debug_cond)) {
@@ -391,7 +391,7 @@ static cond_result_t config_check_cond_nocache(connection *con, const data_confi
 		 * was evaluated as "false" (not unset/skipped/true)
 		 */
 		if (debug_cond) {
-			log_error(con->errh, __FILE__, __LINE__, "go prev %s", dc->prev->key.ptr);
+			log_error(con->conf.errh, __FILE__, __LINE__, "go prev %s", dc->prev->key.ptr);
 		}
 
 		/* make sure prev is checked first */
@@ -411,7 +411,7 @@ static cond_result_t config_check_cond_nocache(connection *con, const data_confi
 
 	if (!(con->conditional_is_valid & (1 << dc->comp))) {
 		if (debug_cond) {
-			log_error(con->errh, __FILE__, __LINE__, "%d %s not available yet",
+			log_error(con->conf.errh, __FILE__, __LINE__, "%d %s not available yet",
 				dc->comp,
 				dc->key.ptr);
 		}
@@ -505,6 +505,7 @@ static cond_result_t config_check_cond_nocache(connection *con, const data_confi
 
 	case COMP_HTTP_QUERY_STRING:
 		l = con->uri.query;
+		if (NULL == l->ptr) l = (buffer *)&empty_string;
 		break;
 
 	case COMP_SERVER_SOCKET:
@@ -525,12 +526,12 @@ static cond_result_t config_check_cond_nocache(connection *con, const data_confi
 	}
 
 	if (NULL == l) { /*(should not happen)*/
-		log_error(con->errh, __FILE__, __LINE__,
+		log_error(con->conf.errh, __FILE__, __LINE__,
 			"%s () compare to NULL", dc->comp_key->ptr);
 		return COND_RESULT_FALSE;
 	}
 	else if (debug_cond) {
-		log_error(con->errh, __FILE__, __LINE__,
+		log_error(con->conf.errh, __FILE__, __LINE__,
 			"%s (%s) compare to %s", dc->comp_key->ptr, l->ptr, dc->string.ptr);
 	}
 
@@ -566,7 +567,7 @@ static cond_result_t config_check_cond_calc(connection *con, const int context_n
           con->srv->config_context->data[context_ndx];
     const int debug_cond = con->conf.log_condition_handling;
     if (debug_cond) {
-        log_error(con->errh, __FILE__, __LINE__,
+        log_error(con->conf.errh, __FILE__, __LINE__,
                   "=== start of condition block ===");
     }
     return config_check_cond_nocache_calc(con, dc, debug_cond, cache);
@@ -604,10 +605,11 @@ static void config_cond_clear_node(cond_cache_t * const cond_cache, const data_c
  *
  * if the item is COND_LAST_ELEMENT we reset all items
  */
-void config_cond_cache_reset_item(server *srv, connection *con, comp_key_t item) {
+void config_cond_cache_reset_item(connection *con, comp_key_t item) {
 	cond_cache_t * const cond_cache = con->cond_cache;
-	for (uint32_t i = 0; i < srv->config_context->used; ++i) {
-		const data_config *dc = (data_config *)srv->config_context->data[i];
+	const array * const config_context = con->srv->config_context;
+	for (uint32_t i = 0; i < config_context->used; ++i) {
+		const data_config *dc = (data_config *)config_context->data[i];
 
 		if (item == dc->comp) {
 			/* clear local_result */
@@ -621,11 +623,11 @@ void config_cond_cache_reset_item(server *srv, connection *con, comp_key_t item)
 /**
  * reset the config cache to its initial state at connection start
  */
-void config_cond_cache_reset(server *srv, connection *con) {
+void config_cond_cache_reset(connection *con) {
 	con->conditional_is_valid = 0;
 	/* resetting all entries; no need to follow children as in config_cond_cache_reset_item */
 	/* static_assert(0 == COND_RESULT_UNSET); */
-	const uint32_t used = srv->config_context->used;
+	const uint32_t used = con->srv->config_context->used;
 	if (used > 1)
 		memset(con->cond_cache, 0, used*sizeof(cond_cache_t));
 }

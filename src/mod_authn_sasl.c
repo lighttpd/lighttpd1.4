@@ -37,7 +37,7 @@ typedef struct {
     int initonce;
 } plugin_data;
 
-static handler_t mod_authn_sasl_basic(server *srv, connection *con, void *p_d, const http_auth_require_t *require, const buffer *username, const char *pw);
+static handler_t mod_authn_sasl_basic(connection *con, void *p_d, const http_auth_require_t *require, const buffer *username, const char *pw);
 
 INIT_FUNC(mod_authn_sasl_init) {
     static http_auth_backend_t http_auth_backend_sasl =
@@ -230,7 +230,7 @@ static int mod_authn_sasl_cb_getopt(void *p_d, const char *plugin_name, const ch
     return SASL_OK;
 }
 
-static int mod_authn_sasl_cb_log(void *vsrv, int level, const char *message) {
+static int mod_authn_sasl_cb_log(void *vcon, int level, const char *message) {
     switch (level) {
      #if 0
       case SASL_LOG_NONE:
@@ -244,18 +244,19 @@ static int mod_authn_sasl_cb_log(void *vsrv, int level, const char *message) {
       case SASL_LOG_ERR:
       case SASL_LOG_FAIL:
       case SASL_LOG_WARN: /* (might omit SASL_LOG_WARN if too noisy in logs) */
-        log_error_write((server *)vsrv, __FILE__, __LINE__, "s", message);
+        log_error(((connection *)vcon)->conf.errh, __FILE__, __LINE__,
+                  "%s", message);
         break;
     }
     return SASL_OK;
 }
 
-static handler_t mod_authn_sasl_query(server *srv, connection *con, void *p_d, const buffer *username, const char *realm, const char *pw) {
+static handler_t mod_authn_sasl_query(connection *con, void *p_d, const buffer *username, const char *realm, const char *pw) {
     plugin_data *p = (plugin_data *)p_d;
     sasl_conn_t *sc;
     sasl_callback_t const cb[] = {
       { SASL_CB_GETOPT,   (int(*)())mod_authn_sasl_cb_getopt, (void *) p },
-      { SASL_CB_LOG,      (int(*)())mod_authn_sasl_cb_log, (void *) srv },
+      { SASL_CB_LOG,      (int(*)())mod_authn_sasl_cb_log, (void *) con },
       { SASL_CB_LIST_END, NULL, NULL }
     };
     int rc;
@@ -279,9 +280,9 @@ static handler_t mod_authn_sasl_query(server *srv, connection *con, void *p_d, c
     return (SASL_OK == rc) ? HANDLER_GO_ON : HANDLER_ERROR;
 }
 
-static handler_t mod_authn_sasl_basic(server *srv, connection *con, void *p_d, const http_auth_require_t *require, const buffer *username, const char *pw) {
+static handler_t mod_authn_sasl_basic(connection *con, void *p_d, const http_auth_require_t *require, const buffer *username, const char *pw) {
     char *realm = require->realm->ptr;
-    handler_t rc = mod_authn_sasl_query(srv, con, p_d, username, realm, pw);
+    handler_t rc = mod_authn_sasl_query(con, p_d, username, realm, pw);
     if (HANDLER_GO_ON != rc) return rc;
     return http_auth_match_rules(require, username->ptr, NULL, NULL)
       ? HANDLER_GO_ON  /* access granted */

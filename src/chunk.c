@@ -503,7 +503,7 @@ void chunkqueue_steal(chunkqueue *dest, chunkqueue *src, off_t len) {
 	}
 }
 
-static chunk *chunkqueue_get_append_tempfile(server *srv, chunkqueue *cq) {
+static chunk *chunkqueue_get_append_tempfile(chunkqueue *cq, log_error_st *errh) {
 	chunk *c;
 	buffer *template = buffer_init_string("/var/tmp/lighttpd-upload-XXXXXX");
 	int fd = -1;
@@ -525,9 +525,8 @@ static chunk *chunkqueue_get_append_tempfile(server *srv, chunkqueue *cq) {
 	if (fd < 0) {
 		/* (report only the last error to mkstemp()
 		 *  if multiple temp dirs attempted) */
-		log_error_write(srv, __FILE__, __LINE__, "sbs",
-				"opening temp-file failed:",
-				template, strerror(errno));
+		log_perror(errh, __FILE__, __LINE__,
+		  "opening temp-file failed: %s", template->ptr);
 		buffer_free(template);
 		return NULL;
 	}
@@ -541,7 +540,7 @@ static chunk *chunkqueue_get_append_tempfile(server *srv, chunkqueue *cq) {
 	return c;
 }
 
-int chunkqueue_append_mem_to_tempfile(server *srv, chunkqueue *dest, const char *mem, size_t len) {
+int chunkqueue_append_mem_to_tempfile(chunkqueue *dest, const char *mem, size_t len, log_error_st *errh) {
 	chunk *dst_c;
 	ssize_t written;
 
@@ -569,9 +568,8 @@ int chunkqueue_append_mem_to_tempfile(server *srv, chunkqueue *dest, const char 
 				int rc = close(dst_c->file.fd);
 				dst_c->file.fd = -1;
 				if (0 != rc) {
-					log_error_write(srv, __FILE__, __LINE__, "sbss",
-						"close() temp-file", dst_c->mem, "failed:",
-						strerror(errno));
+					log_perror(errh, __FILE__, __LINE__,
+					  "close() temp-file %s failed", dst_c->mem->ptr);
 					return -1;
 				}
 				dst_c = NULL;
@@ -580,7 +578,7 @@ int chunkqueue_append_mem_to_tempfile(server *srv, chunkqueue *dest, const char 
 			dst_c = NULL;
 		}
 
-		if (NULL == dst_c && NULL == (dst_c = chunkqueue_get_append_tempfile(srv, dest))) {
+		if (NULL == dst_c && NULL == (dst_c = chunkqueue_get_append_tempfile(dest, errh))) {
 			return -1;
 		}
 	      #ifdef __COVERITY__
@@ -609,9 +607,8 @@ int chunkqueue_append_mem_to_tempfile(server *srv, chunkqueue *dest, const char 
 		} else {
 			int retry = (errno == ENOSPC && dest->tempdirs && ++dest->tempdir_idx < dest->tempdirs->used);
 			if (!retry) {
-				log_error_write(srv, __FILE__, __LINE__, "sbs",
-						"write() temp-file", dst_c->mem, "failed:",
-						strerror(errno));
+				log_perror(errh, __FILE__, __LINE__,
+				  "write() temp-file %s failed", dst_c->mem->ptr);
 			}
 
 			if (0 == chunk_remaining_length(dst_c)) {
@@ -621,9 +618,8 @@ int chunkqueue_append_mem_to_tempfile(server *srv, chunkqueue *dest, const char 
 				int rc = close(dst_c->file.fd);
 				dst_c->file.fd = -1;
 				if (0 != rc) {
-					log_error_write(srv, __FILE__, __LINE__, "sbss",
-						"close() temp-file", dst_c->mem, "failed:",
-						strerror(errno));
+					log_perror(errh, __FILE__, __LINE__,
+					  "close() temp-file %s failed", dst_c->mem->ptr);
 					return -1;
 				}
 			}
@@ -637,7 +633,7 @@ int chunkqueue_append_mem_to_tempfile(server *srv, chunkqueue *dest, const char 
 	return -1;
 }
 
-int chunkqueue_steal_with_tempfiles(server *srv, chunkqueue *dest, chunkqueue *src, off_t len) {
+int chunkqueue_steal_with_tempfiles(chunkqueue *dest, chunkqueue *src, off_t len, log_error_st *errh) {
 	while (len > 0) {
 		chunk *c = src->first;
 		off_t clen = 0, use;
@@ -676,7 +672,7 @@ int chunkqueue_steal_with_tempfiles(server *srv, chunkqueue *dest, chunkqueue *s
 
 		case MEM_CHUNK:
 			/* store "use" bytes from memory chunk in tempfile */
-			if (0 != chunkqueue_append_mem_to_tempfile(srv, dest, c->mem->ptr + c->offset, use)) {
+			if (0 != chunkqueue_append_mem_to_tempfile(dest, c->mem->ptr + c->offset, use, errh)) {
 				return -1;
 			}
 
@@ -783,7 +779,7 @@ void chunkqueue_compact_mem(chunkqueue *cq, size_t clen) {
      * no data added/removed from chunkqueue; consolidated only */
 }
 
-int chunkqueue_open_file_chunk(server *srv, chunkqueue *cq) {
+int chunkqueue_open_file_chunk(chunkqueue *cq, log_error_st *errh) {
 	chunk* const c = cq->first;
 	off_t offset, toSend;
 	struct stat st;
@@ -798,7 +794,7 @@ int chunkqueue_open_file_chunk(server *srv, chunkqueue *cq) {
 	if (-1 == c->file.fd) {
 		/* (permit symlinks; should already have been checked.  However, TOC-TOU remains) */
 		if (-1 == (c->file.fd = fdevent_open_cloexec(c->mem->ptr, 1, O_RDONLY, 0))) {
-			log_error_write(srv, __FILE__, __LINE__, "ssb", "open failed:", strerror(errno), c->mem);
+			log_perror(errh, __FILE__, __LINE__, "open failed: %s",c->mem->ptr);
 			return -1;
 		}
 	}
@@ -807,12 +803,12 @@ int chunkqueue_open_file_chunk(server *srv, chunkqueue *cq) {
 	if (c->file.is_temp) return 0;
 
 	if (-1 == fstat(c->file.fd, &st)) {
-		log_error_write(srv, __FILE__, __LINE__, "ss", "fstat failed:", strerror(errno));
+		log_perror(errh, __FILE__, __LINE__, "fstat failed");
 		return -1;
 	}
 
 	if (offset > st.st_size || toSend > st.st_size || offset > st.st_size - toSend) {
-		log_error_write(srv, __FILE__, __LINE__, "sb", "file shrunk:", c->mem);
+		log_error(errh, __FILE__, __LINE__, "file shrunk: %s", c->mem->ptr);
 		return -1;
 	}
 

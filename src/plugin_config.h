@@ -74,8 +74,8 @@ void config_reset_config_bytes_sec(void *p);
 void config_reset_config(server *srv, connection *con);
 void config_patch_config(server *srv, connection *con);
 
-void config_cond_cache_reset(server *srv, connection *con);
-void config_cond_cache_reset_item(server *srv, connection *con, comp_key_t item);
+void config_cond_cache_reset(connection *con);
+void config_cond_cache_reset_item(connection *con, comp_key_t item);
 
 typedef enum { T_CONFIG_UNSET,
 		T_CONFIG_STRING,

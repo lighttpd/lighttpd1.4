@@ -41,9 +41,10 @@ typedef struct {
 	int if_level, if_is_false_level, if_is_false, if_is_false_endif;
 	unsigned short ssi_recursion_depth;
 
+	log_error_st *errh;
 	plugin_config conf;
 } handler_ctx;
 
-int ssi_eval_expr(server *srv, connection *con, handler_ctx *p, const char *expr);
+int ssi_eval_expr(handler_ctx *p, const char *expr);
 
 #endif

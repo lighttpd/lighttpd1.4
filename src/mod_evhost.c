@@ -7,7 +7,6 @@
 
 #include <stdlib.h>
 #include <string.h>
-#include <errno.h>
 
 /**
  *
@@ -340,9 +339,9 @@ static handler_t mod_evhost_uri_handler(server *srv, connection *con, void *p_d)
 	mod_evhost_build_doc_root_path(b, &p->split_vals, con->uri.authority, p->conf.path_pieces);
 
 	if (HANDLER_ERROR == stat_cache_get_entry(srv, con, b, &sce)) {
-		log_error_write(srv, __FILE__, __LINE__, "sb", strerror(errno), b);
+		log_perror(con->conf.errh, __FILE__, __LINE__, "%s", b->ptr);
 	} else if(!S_ISDIR(sce->st.st_mode)) {
-		log_error_write(srv, __FILE__, __LINE__, "sb", "not a directory:", b);
+		log_error(con->conf.errh, __FILE__, __LINE__, "not a directory: %s", b->ptr);
 	} else {
 		buffer_copy_buffer(con->physical.doc_root, b);
 	}

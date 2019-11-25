@@ -860,8 +860,8 @@ static handler_t proxy_create_env(server *srv, gw_handler_ctx *gwhctx) {
 
 	if (hctx->conf.replace_http_host && !buffer_string_is_empty(hctx->gw.host->id)) {
 		if (hctx->gw.conf.debug > 1) {
-			log_error_write(srv, __FILE__, __LINE__,  "SBS",
-					"proxy - using \"", hctx->gw.host->id, "\" as HTTP Host");
+			log_error(con->conf.errh, __FILE__, __LINE__,
+			  "proxy - using \"%s\" as HTTP Host", hctx->gw.host->id->ptr);
 		}
 		buffer_append_string_len(b, CONST_STR_LEN("Host: "));
 		buffer_append_string_buffer(b, hctx->gw.host->id);
@@ -990,22 +990,22 @@ static handler_t proxy_create_env_connect(server *srv, gw_handler_ctx *gwhctx) {
 	con->http_status = 200; /* OK */
 	con->file_started = 1;
 	gw_set_transparent(srv, &hctx->gw);
-	http_response_upgrade_read_body_unknown(srv, con);
+	http_response_upgrade_read_body_unknown(con);
 
 	status_counter_inc(srv, CONST_STR_LEN("proxy.requests"));
 	return HANDLER_GO_ON;
 }
 
 
-static handler_t proxy_response_headers(server *srv, connection *con, struct http_response_opts_t *opts) {
+static handler_t proxy_response_headers(connection *con, struct http_response_opts_t *opts) {
     /* response headers just completed */
     handler_ctx *hctx = (handler_ctx *)opts->pdata;
 
     if (con->response.htags & HTTP_HEADER_UPGRADE) {
         if (hctx->conf.header.upgrade && con->http_status == 101) {
             /* 101 Switching Protocols; transition to transparent proxy */
-            gw_set_transparent(srv, &hctx->gw);
-            http_response_upgrade_read_body_unknown(srv, con);
+            gw_set_transparent(con->srv, &hctx->gw);
+            http_response_upgrade_read_body_unknown(con);
         }
         else {
             con->response.htags &= ~HTTP_HEADER_UPGRADE;
