@@ -3,13 +3,15 @@
 #include "first.h"
 
 #include "base_decls.h"
+#include "buffer.h"
+#include "chunk.h"
 
 int http_chunk_append_mem(connection *con, const char * mem, size_t len); /* copies memory */
 int http_chunk_append_buffer(connection *con, buffer *mem); /* may reset "mem" */
 int http_chunk_transfer_cqlen(connection *con, chunkqueue *src, size_t len);
-int http_chunk_append_file(connection *con, buffer *fn); /* copies "fn" */
-int http_chunk_append_file_fd(connection *con, buffer *fn, int fd, off_t sz);
-int http_chunk_append_file_range(connection *con, buffer *fn, off_t offset, off_t len); /* copies "fn" */
+int http_chunk_append_file(connection *con, const buffer *fn); /* copies "fn" */
+int http_chunk_append_file_fd(connection *con, const buffer *fn, int fd, off_t sz);
+int http_chunk_append_file_range(connection *con, const buffer *fn, off_t offset, off_t len); /* copies "fn" */
 void http_chunk_close(connection *con);
 
 #endif

@@ -998,7 +998,7 @@ handler_t stat_cache_get_entry(server *srv, connection *con, buffer *name, stat_
 	return HANDLER_GO_ON;
 }
 
-int stat_cache_path_contains_symlink(connection *con, buffer *name) {
+int stat_cache_path_contains_symlink(connection *con, const buffer *name) {
     /* caller should check for symlinks only if we should block symlinks. */
 
     /* catch the obvious symlinks
@@ -1044,7 +1044,7 @@ int stat_cache_path_contains_symlink(connection *con, buffer *name) {
     return 0;
 }
 
-int stat_cache_open_rdonly_fstat (buffer *name, struct stat *st, int symlinks) {
+int stat_cache_open_rdonly_fstat (const buffer *name, struct stat *st, int symlinks) {
 	/*(Note: O_NOFOLLOW affects only the final path segment, the target file,
 	 * not any intermediate symlinks along the path)*/
 	const int fd = fdevent_open_cloexec(name->ptr, symlinks, O_RDONLY, 0);

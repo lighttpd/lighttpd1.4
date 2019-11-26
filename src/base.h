@@ -327,7 +327,6 @@ struct server {
 
 	/* buffers */
 	buffer *tmp_buf;
-	buffer *tmp_chunk_len;
 
 	connections conns;
 	connections joblist;

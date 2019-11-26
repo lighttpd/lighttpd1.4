@@ -268,7 +268,7 @@ static chunk * chunkqueue_append_mem_chunk(chunkqueue *cq, size_t sz) {
 }
 
 __attribute_returns_nonnull__
-static chunk * chunkqueue_append_file_chunk(chunkqueue *cq, buffer *fn, off_t offset, off_t len) {
+static chunk * chunkqueue_append_file_chunk(chunkqueue *cq, const buffer *fn, off_t offset, off_t len) {
     chunk *c = chunk_acquire(buffer_string_length(fn)+1);
     chunkqueue_append_chunk(cq, c);
     c->type = FILE_CHUNK;
@@ -286,7 +286,7 @@ void chunkqueue_reset(chunkqueue *cq) {
     cq->tempdir_idx = 0;
 }
 
-void chunkqueue_append_file_fd(chunkqueue *cq, buffer *fn, int fd, off_t offset, off_t len) {
+void chunkqueue_append_file_fd(chunkqueue *cq, const buffer *fn, int fd, off_t offset, off_t len) {
     if (len > 0) {
         (chunkqueue_append_file_chunk(cq, fn, offset, len))->file.fd = fd;
     }
@@ -295,7 +295,7 @@ void chunkqueue_append_file_fd(chunkqueue *cq, buffer *fn, int fd, off_t offset,
     }
 }
 
-void chunkqueue_append_file(chunkqueue *cq, buffer *fn, off_t offset, off_t len) {
+void chunkqueue_append_file(chunkqueue *cq, const buffer *fn, off_t offset, off_t len) {
     if (len > 0) {
         chunkqueue_append_file_chunk(cq, fn, offset, len);
     }

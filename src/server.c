@@ -239,7 +239,6 @@ static server *server_init(void) {
 
 	CLEAN(ts_date_str);
 	CLEAN(tmp_buf);
-	CLEAN(tmp_chunk_len);
 #undef CLEAN
 
 	for (int i = 0; i < FILE_CACHE_MAX; ++i) {
@@ -280,7 +279,6 @@ static void server_free(server *srv) {
 	CLEAN(ts_date_str);
 	CLEAN(tmp_buf);
 
-	CLEAN(tmp_chunk_len);
 #undef CLEAN
 
 	fdevent_free(srv->ev);

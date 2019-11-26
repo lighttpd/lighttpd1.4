@@ -44,8 +44,8 @@ void stat_cache_delete_entry(server *srv, const char *name, size_t len);
 void stat_cache_delete_dir(server *srv, const char *name, size_t len);
 void stat_cache_invalidate_entry(server *srv, const char *name, size_t len);
 handler_t stat_cache_get_entry(server *srv, connection *con, buffer *name, stat_cache_entry **sce);
-int stat_cache_path_contains_symlink(connection *con, buffer *name);
-int stat_cache_open_rdonly_fstat (buffer *name, struct stat *st, int symlinks);
+int stat_cache_path_contains_symlink(connection *con, const buffer *name);
+int stat_cache_open_rdonly_fstat (const buffer *name, struct stat *st, int symlinks);
 
 int stat_cache_trigger_cleanup(server *srv);
 #endif
