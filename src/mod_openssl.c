@@ -2035,7 +2035,7 @@ CONNECTION_FUNC(mod_openssl_handle_con_accept)
     plugin_data *p = p_d;
     handler_ctx * const hctx = handler_ctx_init();
     hctx->con = con;
-    hctx->srv = srv;
+    hctx->srv = con->srv;
     con->plugin_ctx[p->id] = hctx;
 
     plugin_ssl_ctx * const s = p->ssl_ctxs + srv_sock->sidx;
@@ -2077,7 +2077,6 @@ CONNECTION_FUNC(mod_openssl_handle_con_shut_wr)
     plugin_data *p = p_d;
     handler_ctx *hctx = con->plugin_ctx[p->id];
     if (NULL == hctx) return HANDLER_GO_ON;
-    UNUSED(srv);
 
     hctx->close_notify = -2;
     if (SSL_is_init_finished(hctx->ssl)) {
@@ -2208,7 +2207,6 @@ CONNECTION_FUNC(mod_openssl_handle_con_close)
         con->plugin_ctx[p->id] = NULL;
     }
 
-    UNUSED(srv);
     return HANDLER_GO_ON;
 }
 
@@ -2364,9 +2362,9 @@ CONNECTION_FUNC(mod_openssl_handle_request_env)
     if (hctx->request_env_patched) return HANDLER_GO_ON;
     hctx->request_env_patched = 1;
 
-    http_cgi_ssl_env(srv, con, hctx);
+    http_cgi_ssl_env(con->srv, con, hctx);
     if (hctx->conf.ssl_verifyclient) {
-        https_add_ssl_client_entries(srv, con, hctx);
+        https_add_ssl_client_entries(con->srv, con, hctx);
     }
 
     return HANDLER_GO_ON;
@@ -2388,7 +2386,7 @@ CONNECTION_FUNC(mod_openssl_handle_uri_raw)
 
     mod_openssl_patch_config(con, &hctx->conf);
     if (hctx->conf.ssl_verifyclient) {
-        mod_openssl_handle_request_env(srv, con, p);
+        mod_openssl_handle_request_env(con, p);
     }
 
     return HANDLER_GO_ON;
@@ -2402,8 +2400,6 @@ CONNECTION_FUNC(mod_openssl_handle_request_reset)
     if (NULL == hctx) return HANDLER_GO_ON;
 
     hctx->request_env_patched = 0;
-
-    UNUSED(srv);
     return HANDLER_GO_ON;
 }
 

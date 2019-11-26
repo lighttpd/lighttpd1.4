@@ -11,7 +11,7 @@
 		static handler_t x(server *srv, void *p_d)
 
 #define CONNECTION_FUNC(x) \
-		static handler_t x(server *srv, connection *con, void *p_d)
+		static handler_t x(connection *con, void *p_d)
 
 #define INIT_FUNC(x) \
 		__attribute_cold__ \
@@ -40,23 +40,23 @@ typedef struct {
 
 typedef struct {
 	void *data;
-	                                                                                   /* is called ... */
-	handler_t (* handle_uri_raw)         (server *srv, connection *con, void *p_d);    /* after uri_raw is set */
-	handler_t (* handle_uri_clean)       (server *srv, connection *con, void *p_d);    /* after uri is set */
-	handler_t (* handle_docroot)         (server *srv, connection *con, void *p_d);    /* getting the document-root */
-	handler_t (* handle_physical)        (server *srv, connection *con, void *p_d);    /* mapping url to physical path */
-	handler_t (* handle_request_env)     (server *srv, connection *con, void *p_d);    /* (deferred env populate) */
-	handler_t (* handle_request_done)    (server *srv, connection *con, void *p_d);    /* at the end of a request */
-	handler_t (* handle_connection_accept) (server *srv, connection *con, void *p_d);  /* after accept() socket */
-	handler_t (* handle_connection_shut_wr)(server *srv, connection *con, void *p_d);  /* done writing to socket */
-	handler_t (* handle_connection_close)  (server *srv, connection *con, void *p_d);  /* before close() of socket */
-	handler_t (* handle_subrequest_start)(server *srv, connection *con, void *p_d);    /* when handler for request not found yet */
-	handler_t (* handle_subrequest)      (server *srv, connection *con, void *p_d);    /* */
-	handler_t (* handle_response_start)  (server *srv, connection *con, void *p_d);    /* before response headers are written */
-	handler_t (* connection_reset)       (server *srv, connection *con, void *p_d);    /* after request done or request abort */
+	                                                                      /* is called ... */
+	handler_t (* handle_uri_raw)           (connection *con, void *p_d);  /* after uri_raw is set */
+	handler_t (* handle_uri_clean)         (connection *con, void *p_d);  /* after uri is set */
+	handler_t (* handle_docroot)           (connection *con, void *p_d);  /* getting the document-root */
+	handler_t (* handle_physical)          (connection *con, void *p_d);  /* mapping url to physical path */
+	handler_t (* handle_request_env)       (connection *con, void *p_d);  /* (deferred env populate) */
+	handler_t (* handle_request_done)      (connection *con, void *p_d);  /* at the end of a request */
+	handler_t (* handle_connection_accept) (connection *con, void *p_d);  /* after accept() socket */
+	handler_t (* handle_connection_shut_wr)(connection *con, void *p_d);  /* done writing to socket */
+	handler_t (* handle_connection_close)  (connection *con, void *p_d);  /* before close() of socket */
+	handler_t (* handle_subrequest_start)  (connection *con, void *p_d);  /* when handler for request not found yet */
+	handler_t (* handle_subrequest)        (connection *con, void *p_d);  /* */
+	handler_t (* handle_response_start)    (connection *con, void *p_d);  /* before response headers are written */
+	handler_t (* connection_reset)         (connection *con, void *p_d);  /* after request done or request abort */
 
-	handler_t (* handle_trigger)         (server *srv, void *p_d);                     /* once a second */
-	handler_t (* handle_sighup)          (server *srv, void *p_d);                     /* at a sighup */
+	handler_t (* handle_trigger)         (server *srv, void *p_d);        /* once a second */
+	handler_t (* handle_sighup)          (server *srv, void *p_d);        /* at a sighup */
 	handler_t (* handle_waitpid)         (server *srv, void *p_d, pid_t pid, int status); /* upon a child process exit */
 
 	void *(* init)                       ();
@@ -76,19 +76,19 @@ int plugins_load(server *srv);
 __attribute_cold__
 void plugins_free(server *srv);
 
-handler_t plugins_call_handle_uri_raw(server *srv, connection *con);
-handler_t plugins_call_handle_uri_clean(server *srv, connection *con);
-handler_t plugins_call_handle_subrequest_start(server *srv, connection *con);
-handler_t plugins_call_handle_subrequest(server *srv, connection *con);
-handler_t plugins_call_handle_response_start(server *srv, connection *con);
-handler_t plugins_call_handle_request_env(server *srv, connection *con);
-handler_t plugins_call_handle_request_done(server *srv, connection *con);
-handler_t plugins_call_handle_docroot(server *srv, connection *con);
-handler_t plugins_call_handle_physical(server *srv, connection *con);
-handler_t plugins_call_handle_connection_accept(server *srv, connection *con);
-handler_t plugins_call_handle_connection_shut_wr(server *srv, connection *con);
-handler_t plugins_call_handle_connection_close(server *srv, connection *con);
-handler_t plugins_call_connection_reset(server *srv, connection *con);
+handler_t plugins_call_handle_uri_raw(connection *con);
+handler_t plugins_call_handle_uri_clean(connection *con);
+handler_t plugins_call_handle_subrequest_start(connection *con);
+handler_t plugins_call_handle_subrequest(connection *con);
+handler_t plugins_call_handle_response_start(connection *con);
+handler_t plugins_call_handle_request_env(connection *con);
+handler_t plugins_call_handle_request_done(connection *con);
+handler_t plugins_call_handle_docroot(connection *con);
+handler_t plugins_call_handle_physical(connection *con);
+handler_t plugins_call_handle_connection_accept(connection *con);
+handler_t plugins_call_handle_connection_shut_wr(connection *con);
+handler_t plugins_call_handle_connection_close(connection *con);
+handler_t plugins_call_connection_reset(connection *con);
 
 void plugins_call_handle_trigger(server *srv);
 handler_t plugins_call_handle_waitpid(server *srv, pid_t pid, int status);

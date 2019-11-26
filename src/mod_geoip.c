@@ -268,7 +268,6 @@ static handler_t mod_geoip_query (connection *con, plugin_data *p) {
 }
 
 CONNECTION_FUNC(mod_geoip_handle_request_env) {
-    UNUSED(srv);
     plugin_data *p = p_d;
     mod_geoip_patch_config(con, p);
     return (p->conf.gi) ? mod_geoip_query(con, p) : HANDLER_GO_ON;

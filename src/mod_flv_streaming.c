@@ -113,7 +113,6 @@ static off_t get_param_value(buffer *qb, const char *m, size_t mlen) {
 
 URIHANDLER_FUNC(mod_flv_streaming_path_handler) {
 	plugin_data *p = p_d;
-	UNUSED(srv);
 
 	if (con->mode != DIRECT) return HANDLER_GO_ON;
 	if (buffer_string_is_empty(con->physical.path)) return HANDLER_GO_ON;

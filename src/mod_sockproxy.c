@@ -124,18 +124,18 @@ SETDEFAULTS_FUNC(mod_sockproxy_set_defaults) {
 }
 
 
-static handler_t sockproxy_create_env_connect(server *srv, handler_ctx *hctx) {
+static handler_t sockproxy_create_env_connect(handler_ctx *hctx) {
 	connection *con = hctx->remote_conn;
 	con->file_started = 1;
-	gw_set_transparent(srv, hctx);
+	gw_set_transparent(hctx);
 	http_response_upgrade_read_body_unknown(con);
 
-	status_counter_inc(srv, CONST_STR_LEN("sockproxy.requests"));
+	status_counter_inc(con->srv, CONST_STR_LEN("sockproxy.requests"));
 	return HANDLER_GO_ON;
 }
 
 
-static handler_t mod_sockproxy_connection_accept(server *srv, connection *con, void *p_d) {
+static handler_t mod_sockproxy_connection_accept(connection *con, void *p_d) {
 	plugin_data *p = p_d;
 	handler_t rc;
 
@@ -147,7 +147,7 @@ static handler_t mod_sockproxy_connection_accept(server *srv, connection *con, v
 	/*(fake con->uri.path for matching purposes in gw_check_extension())*/
 	buffer_copy_string_len(con->uri.path, CONST_STR_LEN("/"));
 
-	rc = gw_check_extension(srv, con, p, 1, 0);
+	rc = gw_check_extension(con, p, 1, 0);
 	if (HANDLER_GO_ON != rc) return rc;
 
 	if (con->mode == p->id) {

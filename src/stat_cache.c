@@ -682,7 +682,7 @@ const buffer * stat_cache_mimetype_by_ext(const connection *con, const char *nam
     return NULL;
 }
 
-const buffer * stat_cache_content_type_get(server *srv, connection *con, const buffer *name, stat_cache_entry *sce)
+const buffer * stat_cache_content_type_get(const connection *con, const buffer *name, stat_cache_entry *sce)
 {
     /*(invalid caching if user config has multiple, different
      * con->conf.mimetypes for same extension (not expected))*/
@@ -693,10 +693,8 @@ const buffer * stat_cache_content_type_get(server *srv, connection *con, const b
         buffer_clear(sce->content_type);
       #if defined(HAVE_XATTR) || defined(HAVE_EXTATTR)
         if (con->conf.use_xattr) {
-            stat_cache_attr_get(sce->content_type, name->ptr, srv->srvconf.xattr_name);
+            stat_cache_attr_get(sce->content_type, name->ptr, con->srv->srvconf.xattr_name);
         }
-      #else
-        UNUSED(srv);
       #endif
         /* xattr did not set a content-type. ask the config */
         if (buffer_string_is_empty(sce->content_type)) {
@@ -871,12 +869,11 @@ void stat_cache_delete_dir(server *srv, const char *name, size_t len)
  *  - HANDLER_ERROR on stat() failed -> see errno for problem
  */
 
-handler_t stat_cache_get_entry(server *srv, connection *con, buffer *name, stat_cache_entry **ret_sce) {
+handler_t stat_cache_get_entry(connection *con, buffer *name, stat_cache_entry **ret_sce) {
 	stat_cache_entry *sce = NULL;
 	stat_cache *sc;
 	struct stat st;
 	int file_ndx;
-	UNUSED(con);
 
 	*ret_sce = NULL;
 
@@ -894,6 +891,8 @@ handler_t stat_cache_get_entry(server *srv, connection *con, buffer *name, stat_
 	/*
 	 * check if the directory for this file has changed
 	 */
+
+	server * const srv = con->srv;
 
 	sc = srv->stat_cache;
 

@@ -513,7 +513,6 @@ SETDEFAULTS_FUNC(mod_webdav_set_defaults) {
 
 URIHANDLER_FUNC(mod_webdav_uri_handler)
 {
-    UNUSED(srv);
     if (con->request.http_method != HTTP_METHOD_OPTIONS)
         return HANDLER_GO_ON;
 
@@ -3741,7 +3740,7 @@ mod_webdav_propfind (connection * const con, const plugin_config * const pconf)
     if (con->request.content_length) {
       #ifdef USE_PROPPATCH
         if (con->state == CON_STATE_READ_POST) {
-            handler_t rc = connection_handle_read_post_state(pconf->srv, con);
+            handler_t rc = connection_handle_read_post_state(con);
             if (rc != HANDLER_GO_ON) return rc;
         }
       #else
@@ -4427,7 +4426,7 @@ mod_webdav_put (connection * const con, const plugin_config * const pconf)
 {
     if (con->state == CON_STATE_READ_POST) {
         int first_read = chunkqueue_is_empty(con->request_content_queue);
-        handler_t rc = connection_handle_read_post_state(pconf->srv, con);
+        handler_t rc = connection_handle_read_post_state(con);
         if (rc != HANDLER_GO_ON) {
             if (first_read && rc == HANDLER_WAIT_FOR_EVENT
                 && 0 != webdav_if_match_or_unmodified_since(con, NULL)) {
@@ -4961,7 +4960,7 @@ mod_webdav_proppatch (connection * const con, const plugin_config * const pconf)
     }
 
     if (con->state == CON_STATE_READ_POST) {
-        handler_t rc = connection_handle_read_post_state(pconf->srv, con);
+        handler_t rc = connection_handle_read_post_state(con);
         if (rc != HANDLER_GO_ON) return rc;
     }
 
@@ -5177,7 +5176,7 @@ mod_webdav_lock (connection * const con, const plugin_config * const pconf)
 
     if (con->request.content_length) {
         if (con->state == CON_STATE_READ_POST) {
-            handler_t rc = connection_handle_read_post_state(pconf->srv, con);
+            handler_t rc = connection_handle_read_post_state(con);
             if (rc != HANDLER_GO_ON) return rc;
         }
     }
@@ -5520,7 +5519,6 @@ SUBREQUEST_FUNC(mod_webdav_subrequest_handler)
     const plugin_config * const pconf =
       (plugin_config *)con->plugin_ctx[((plugin_data *)p_d)->id];
     if (NULL == pconf) return HANDLER_GO_ON; /*(should not happen)*/
-    UNUSED(srv);
 
     switch (con->request.http_method) {
     case HTTP_METHOD_PROPFIND:
@@ -5626,7 +5624,7 @@ PHYSICALPATH_FUNC(mod_webdav_physical_handler)
     con->conf.stream_request_body = 0;
     con->plugin_ctx[((plugin_data *)p_d)->id] = &pconf;
     const handler_t rc =
-      mod_webdav_subrequest_handler(srv, con, p_d); /*p->handle_subrequest()*/
+      mod_webdav_subrequest_handler(con, p_d); /*p->handle_subrequest()*/
     if (rc == HANDLER_FINISHED || rc == HANDLER_ERROR)
         con->plugin_ctx[((plugin_data *)p_d)->id] = NULL;
     else {  /* e.g. HANDLER_WAIT_FOR_RD */
@@ -5649,6 +5647,5 @@ CONNECTION_FUNC(mod_webdav_handle_reset) {
         chunkqueue_set_tempdirs(con->request_content_queue, /* reset sz */
                                 con->request_content_queue->tempdirs, 0);
     }
-    UNUSED(srv);
     return HANDLER_GO_ON;
 }

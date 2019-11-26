@@ -53,7 +53,7 @@ void script_cache_free_data(script_cache *p) {
 	free(p->ptr);
 }
 
-lua_State *script_cache_get_script(server *srv, connection *con, script_cache *cache, buffer *name) {
+lua_State *script_cache_get_script(connection *con, script_cache *cache, buffer *name) {
 	size_t i;
 	script *sc = NULL;
 	stat_cache_entry *sce;
@@ -69,7 +69,7 @@ lua_State *script_cache_get_script(server *srv, connection *con, script_cache *c
 			if (lua_gettop(sc->L) == 0) break;
 			force_assert(lua_gettop(sc->L) == 1);
 
-			if (HANDLER_ERROR == stat_cache_get_entry(srv, con, sc->name, &sce)) {
+			if (HANDLER_ERROR == stat_cache_get_entry(con, sc->name, &sce)) {
 				lua_pop(sc->L, 1); /* pop the old function */
 				break;
 			}
@@ -114,7 +114,7 @@ lua_State *script_cache_get_script(server *srv, connection *con, script_cache *c
 		return sc->L;
 	}
 
-	if (HANDLER_GO_ON == stat_cache_get_entry(srv, con, sc->name, &sce)) {
+	if (HANDLER_GO_ON == stat_cache_get_entry(con, sc->name, &sce)) {
 		buffer_copy_buffer(sc->etag, stat_cache_etag_get(sce, con->conf.etag_flags));
 	}
 

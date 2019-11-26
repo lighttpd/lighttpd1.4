@@ -71,8 +71,8 @@ void config_free(server *srv);
 
 void config_reset_config_bytes_sec(void *p);
 
-void config_reset_config(server *srv, connection *con);
-void config_patch_config(server *srv, connection *con);
+void config_reset_config(connection *con);
+void config_patch_config(connection *con);
 
 void config_cond_cache_reset(connection *con);
 void config_cond_cache_reset_item(connection *con, comp_key_t item);

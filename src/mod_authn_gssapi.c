@@ -774,7 +774,6 @@ CONNECTION_FUNC(mod_authn_gssapi_handle_reset) {
         buffer_free(kccname);
     }
 
-    UNUSED(srv);
     return HANDLER_GO_ON;
 }
 

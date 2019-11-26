@@ -255,11 +255,10 @@ SETDEFAULTS_FUNC(mod_rewrite_set_defaults) {
 
 URIHANDLER_FUNC(mod_rewrite_con_reset) {
     con->plugin_ctx[((plugin_data *)p_d)->id] = NULL;
-    UNUSED(srv);
     return HANDLER_GO_ON;
 }
 
-static handler_t process_rewrite_rules(server *srv, connection *con, plugin_data *p, const pcre_keyvalue_buffer *kvb) {
+static handler_t process_rewrite_rules(connection *con, plugin_data *p, const pcre_keyvalue_buffer *kvb) {
 	struct burl_parts_t burl;
 	pcre_keyvalue_ctx ctx;
 	handler_t rc;
@@ -270,7 +269,7 @@ static handler_t process_rewrite_rules(server *srv, connection *con, plugin_data
 		if (((++*hctx) & 0x1FF) > 100) {
 			if (0 != kvb->x0) {
 				config_cond_info cfginfo;
-				config_get_config_cond_info(srv, kvb->x0, &cfginfo);
+				config_get_config_cond_info(con->srv, kvb->x0, &cfginfo);
 				log_error(con->conf.errh, __FILE__, __LINE__,
 				  "ENDLESS LOOP IN rewrite-rule DETECTED ... aborting request, "
 				  "perhaps you want to use url.rewrite-once instead of "
@@ -301,9 +300,10 @@ static handler_t process_rewrite_rules(server *srv, connection *con, plugin_data
 	if (buffer_string_is_empty(burl.authority))
 		burl.authority = con->server_name;
 
-	rc = pcre_keyvalue_buffer_process(kvb, &ctx, con->request.uri, srv->tmp_buf);
-	if (HANDLER_FINISHED == rc && !buffer_is_empty(srv->tmp_buf) && srv->tmp_buf->ptr[0] == '/') {
-		buffer_copy_buffer(con->request.uri, srv->tmp_buf);
+	buffer * const tb = con->srv->tmp_buf;
+	rc = pcre_keyvalue_buffer_process(kvb, &ctx, con->request.uri, tb);
+	if (HANDLER_FINISHED == rc && !buffer_is_empty(tb) && tb->ptr[0] == '/') {
+		buffer_copy_buffer(con->request.uri, tb);
 		uintptr_t * const hctx = (uintptr_t *)(con->plugin_ctx + p->id);
 		*hctx |= REWRITE_STATE_REWRITTEN;
 		/*(kvb->x1 is repeat_idx)*/
@@ -335,11 +335,11 @@ URIHANDLER_FUNC(mod_rewrite_physical) {
 
     /* skip if physical.path is a regular file */
     stat_cache_entry *sce;
-    if (HANDLER_ERROR != stat_cache_get_entry(srv,con,con->physical.path,&sce)){
+    if (HANDLER_ERROR != stat_cache_get_entry(con, con->physical.path, &sce)) {
         if (S_ISREG(sce->st.st_mode)) return HANDLER_GO_ON;
     }
 
-    return process_rewrite_rules(srv, con, p, p->conf.rewrite_NF);
+    return process_rewrite_rules(con, p, p->conf.rewrite_NF);
 }
 
 URIHANDLER_FUNC(mod_rewrite_uri_handler) {
@@ -348,7 +348,7 @@ URIHANDLER_FUNC(mod_rewrite_uri_handler) {
     mod_rewrite_patch_config(con, p);
     if (!p->conf.rewrite || !p->conf.rewrite->used) return HANDLER_GO_ON;
 
-    return process_rewrite_rules(srv, con, p, p->conf.rewrite);
+    return process_rewrite_rules(con, p, p->conf.rewrite);
 }
 
 int mod_rewrite_plugin_init(plugin *p);

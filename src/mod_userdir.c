@@ -248,7 +248,6 @@ static handler_t mod_userdir_docroot_construct(connection * const con, plugin_da
 
 URIHANDLER_FUNC(mod_userdir_docroot_handler) {
     /* /~user/foo.html -> /home/user/public_html/foo.html */
-    UNUSED(srv);
 
     if (buffer_is_empty(con->uri.path)) return HANDLER_GO_ON;
 

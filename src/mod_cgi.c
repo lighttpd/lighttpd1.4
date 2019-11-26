@@ -353,16 +353,16 @@ static void cgi_connection_close(server *srv, handler_ctx *hctx) {
 	}
 }
 
-static handler_t cgi_connection_close_callback(server *srv, connection *con, void *p_d) {
+static handler_t cgi_connection_close_callback(connection *con, void *p_d) {
 	plugin_data *p = p_d;
 	handler_ctx *hctx = con->plugin_ctx[p->id];
-	if (hctx) cgi_connection_close(srv, hctx);
+	if (hctx) cgi_connection_close(con->srv, hctx);
 
 	return HANDLER_GO_ON;
 }
 
 
-static int cgi_write_request(server *srv, handler_ctx *hctx, int fd);
+static int cgi_write_request(handler_ctx *hctx, int fd);
 
 
 static handler_t cgi_handle_fdevent_send (server *srv, void *ctx, int revents) {
@@ -373,7 +373,7 @@ static handler_t cgi_handle_fdevent_send (server *srv, void *ctx, int revents) {
 	joblist_append(srv, con);
 
 	if (revents & FDEVENT_OUT) {
-		if (0 != cgi_write_request(srv, hctx, hctx->fdtocgi)) {
+		if (0 != cgi_write_request(hctx, hctx->fdtocgi)) {
 			cgi_connection_close(srv, hctx);
 			return HANDLER_ERROR;
 		}
@@ -451,8 +451,8 @@ static int cgi_recv_response(server *srv, handler_ctx *hctx) {
 		case HANDLER_COMEBACK:
 			/* hctx->conf.local_redir */
 			buffer_clear(hctx->response);
-			connection_response_reset(srv, hctx->remote_conn); /*(includes con->http_status = 0)*/
-			plugins_call_connection_reset(srv, hctx->remote_conn);
+			connection_response_reset(hctx->remote_conn); /*(includes con->http_status = 0)*/
+			plugins_call_connection_reset(hctx->remote_conn);
 			/*cgi_connection_close(srv, hctx);*//*(already cleaned up and hctx is now invalid)*/
 			return HANDLER_COMEBACK;
 		}
@@ -651,7 +651,7 @@ static ssize_t cgi_write_file_chunk_mmap(connection *con, int fd, chunkqueue *cq
 	return r;
 }
 
-static int cgi_write_request(server *srv, handler_ctx *hctx, int fd) {
+static int cgi_write_request(handler_ctx *hctx, int fd) {
 	connection *con = hctx->remote_conn;
 	chunkqueue *cq = con->request_content_queue;
 	chunk *c;
@@ -712,6 +712,8 @@ static int cgi_write_request(server *srv, handler_ctx *hctx, int fd) {
 		}
 	}
 
+	server * const srv = con->srv;
+
 	if (cq->bytes_out == (off_t)con->request.content_length && !hctx->conf.upgrade) {
 		/* sent all request body input */
 		/* close connection to the cgi-script */
@@ -749,15 +751,15 @@ static int cgi_write_request(server *srv, handler_ctx *hctx, int fd) {
 	return 0;
 }
 
-static struct stat * cgi_stat(server *srv, connection *con, buffer *path) {
+static struct stat * cgi_stat(connection *con, buffer *path) {
     /* CGI might be executable even if it is not readable */
     stat_cache_entry *sce;
-    return (HANDLER_ERROR != stat_cache_get_entry(srv, con, path, &sce))
+    return (HANDLER_ERROR != stat_cache_get_entry(con, path, &sce))
       ? &sce->st
       : NULL;
 }
 
-static int cgi_create_env(server *srv, connection *con, plugin_data *p, handler_ctx *hctx, buffer *cgi_handler) {
+static int cgi_create_env(connection *con, plugin_data *p, handler_ctx *hctx, buffer *cgi_handler) {
 	char *args[3];
 	int to_cgi_fds[2];
 	int from_cgi_fds[2];
@@ -765,7 +767,7 @@ static int cgi_create_env(server *srv, connection *con, plugin_data *p, handler_
 	UNUSED(p);
 
 	if (!buffer_string_is_empty(cgi_handler)) {
-		if (NULL == cgi_stat(srv, con, cgi_handler)) {
+		if (NULL == cgi_stat(con, cgi_handler)) {
 			log_perror(con->conf.errh, __FILE__, __LINE__,
 			  "stat for cgi-handler %s", cgi_handler->ptr);
 			return -1;
@@ -853,6 +855,8 @@ static int cgi_create_env(server *srv, connection *con, plugin_data *p, handler_
 
 		hctx->fd = from_cgi_fds[0];
 
+		server * const srv = con->srv;
+
 		++srv->cur_fds;
 
 		cgi_pid_add(p, hctx->pid, hctx);
@@ -868,7 +872,7 @@ static int cgi_create_env(server *srv, connection *con, plugin_data *p, handler_
 				return -1;
 			}
 
-			if (0 != cgi_write_request(srv, hctx, to_cgi_fds[1])) {
+			if (0 != cgi_write_request(hctx, to_cgi_fds[1])) {
 				close(to_cgi_fds[1]);
 				cgi_connection_close(srv, hctx);
 				return -1;
@@ -903,7 +907,7 @@ URIHANDLER_FUNC(cgi_is_handled) {
 	ds = (data_string *)array_match_key_suffix(p->conf.cgi, con->physical.path);
 	if (NULL == ds) return HANDLER_GO_ON;
 
-	st = cgi_stat(srv, con, con->physical.path);
+	st = cgi_stat(con, con->physical.path);
 	if (NULL == st) return HANDLER_GO_ON;
 
 	if (!S_ISREG(st->st_mode)) return HANDLER_GO_ON;
@@ -940,15 +944,15 @@ URIHANDLER_FUNC(cgi_is_handled) {
  * - HANDLER_WAIT_FOR_EVENT: waiting for response
  */
 SUBREQUEST_FUNC(mod_cgi_handle_subrequest) {
-	plugin_data *p = p_d;
-	handler_ctx *hctx = con->plugin_ctx[p->id];
-	chunkqueue *cq = con->request_content_queue;
+	plugin_data * const p = p_d;
+	handler_ctx * const hctx = con->plugin_ctx[p->id];
 
 	if (con->mode != p->id) return HANDLER_GO_ON;
 	if (NULL == hctx) return HANDLER_GO_ON;
 
 	if ((con->conf.stream_response_body & FDEVENT_STREAM_RESPONSE_BUFMIN)
 	    && con->file_started) {
+		server * const srv = con->srv;
 		if (chunkqueue_length(con->write_queue) > 65536 - 4096) {
 			fdevent_fdnode_event_clr(srv->ev,hctx->fdn,FDEVENT_IN);
 		} else if (!(fdevent_fdnode_interest(hctx->fdn) & FDEVENT_IN)) {
@@ -959,6 +963,8 @@ SUBREQUEST_FUNC(mod_cgi_handle_subrequest) {
 		}
 	}
 
+	chunkqueue * const cq = con->request_content_queue;
+
 	if (cq->bytes_in != (off_t)con->request.content_length) {
 		/*(64k - 4k to attempt to avoid temporary files
 		 * in conjunction with FDEVENT_STREAM_REQUEST_BUFMIN)*/
@@ -967,7 +973,7 @@ SUBREQUEST_FUNC(mod_cgi_handle_subrequest) {
 			con->conf.stream_request_body &= ~FDEVENT_STREAM_REQUEST_POLLIN;
 			if (-1 != hctx->fd) return HANDLER_WAIT_FOR_EVENT;
 		} else {
-			handler_t r = connection_handle_read_post_state(srv, con);
+			handler_t r = connection_handle_read_post_state(con);
 			if (!chunkqueue_is_empty(cq)) {
 				if (fdevent_fdnode_interest(hctx->fdntocgi) & FDEVENT_OUT) {
 					return (r == HANDLER_GO_ON) ? HANDLER_WAIT_FOR_EVENT : r;
@@ -986,15 +992,15 @@ SUBREQUEST_FUNC(mod_cgi_handle_subrequest) {
 	}
 
 	if (-1 == hctx->fd) {
-		if (cgi_create_env(srv, con, p, hctx, hctx->cgi_handler)) {
+		if (cgi_create_env(con, p, hctx, hctx->cgi_handler)) {
 			con->http_status = 500;
 			con->mode = DIRECT;
 
 			return HANDLER_FINISHED;
 		}
 	} else if (!chunkqueue_is_empty(con->request_content_queue)) {
-		if (0 != cgi_write_request(srv, hctx, hctx->fdtocgi)) {
-			cgi_connection_close(srv, hctx);
+		if (0 != cgi_write_request(hctx, hctx->fdtocgi)) {
+			cgi_connection_close(con->srv, hctx);
 			return HANDLER_ERROR;
 		}
 	}

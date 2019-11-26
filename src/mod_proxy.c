@@ -835,7 +835,7 @@ static void proxy_set_Forwarded(connection *con, const unsigned int flags) {
 }
 
 
-static handler_t proxy_create_env(server *srv, gw_handler_ctx *gwhctx) {
+static handler_t proxy_create_env(gw_handler_ctx *gwhctx) {
 	handler_ctx *hctx = (handler_ctx *)gwhctx;
 	connection *con = hctx->gw.remote_conn;
 	const int remap_headers = (NULL != hctx->conf.header.urlpaths
@@ -979,20 +979,20 @@ static handler_t proxy_create_env(server *srv, gw_handler_ctx *gwhctx) {
 			hctx->gw.wb_reqlen = -hctx->gw.wb_reqlen;
 	}
 
-	status_counter_inc(srv, CONST_STR_LEN("proxy.requests"));
+	status_counter_inc(con->srv, CONST_STR_LEN("proxy.requests"));
 	return HANDLER_GO_ON;
 }
 
 
-static handler_t proxy_create_env_connect(server *srv, gw_handler_ctx *gwhctx) {
+static handler_t proxy_create_env_connect(gw_handler_ctx *gwhctx) {
 	handler_ctx *hctx = (handler_ctx *)gwhctx;
 	connection *con = hctx->gw.remote_conn;
 	con->http_status = 200; /* OK */
 	con->file_started = 1;
-	gw_set_transparent(srv, &hctx->gw);
+	gw_set_transparent(&hctx->gw);
 	http_response_upgrade_read_body_unknown(con);
 
-	status_counter_inc(srv, CONST_STR_LEN("proxy.requests"));
+	status_counter_inc(con->srv, CONST_STR_LEN("proxy.requests"));
 	return HANDLER_GO_ON;
 }
 
@@ -1004,7 +1004,7 @@ static handler_t proxy_response_headers(connection *con, struct http_response_op
     if (con->response.htags & HTTP_HEADER_UPGRADE) {
         if (hctx->conf.header.upgrade && con->http_status == 101) {
             /* 101 Switching Protocols; transition to transparent proxy */
-            gw_set_transparent(con->srv, &hctx->gw);
+            gw_set_transparent(&hctx->gw);
             http_response_upgrade_read_body_unknown(con);
         }
         else {
@@ -1041,7 +1041,7 @@ static handler_t proxy_response_headers(connection *con, struct http_response_op
     return HANDLER_GO_ON;
 }
 
-static handler_t mod_proxy_check_extension(server *srv, connection *con, void *p_d) {
+static handler_t mod_proxy_check_extension(connection *con, void *p_d) {
 	plugin_data *p = p_d;
 	handler_t rc;
 
@@ -1050,7 +1050,7 @@ static handler_t mod_proxy_check_extension(server *srv, connection *con, void *p
 	mod_proxy_patch_config(con, p);
 	if (NULL == p->conf.gw.exts) return HANDLER_GO_ON;
 
-	rc = gw_check_extension(srv, con, (gw_plugin_data *)p, 1, sizeof(handler_ctx));
+	rc = gw_check_extension(con, (gw_plugin_data *)p, 1, sizeof(handler_ctx));
 	if (HANDLER_GO_ON != rc) return rc;
 
 	if (con->mode == p->id) {

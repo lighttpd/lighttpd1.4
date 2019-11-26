@@ -470,6 +470,8 @@ URIHANDLER_FUNC(mod_secdownload_uri_handler) {
 		ts = (ts << 4) + hex2int(ts_str[i]);
 	}
 
+	server * const srv = con->srv;
+
 	/* timed-out */
 	if ( (srv->cur_ts > ts && (unsigned int) (srv->cur_ts - ts) > p->conf.timeout) ||
 	     (srv->cur_ts < ts && (unsigned int) (ts - srv->cur_ts) > p->conf.timeout) ) {

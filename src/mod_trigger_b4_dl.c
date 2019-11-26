@@ -406,6 +406,7 @@ URIHANDLER_FUNC(mod_trigger_b4_dl_uri_handler) {
 			return HANDLER_ERROR;
 		}
 	} else {
+		server * const srv = con->srv;
 # if defined(HAVE_GDBM_H)
 		if (p->conf.db) {
 			/* the trigger matched */
@@ -450,6 +451,7 @@ URIHANDLER_FUNC(mod_trigger_b4_dl_uri_handler) {
 		}
 	} else {
 		/* the download uri matched */
+		server * const srv = con->srv;
 # if defined(HAVE_GDBM_H)
 		if (p->conf.db) {
 			datum key, val;

@@ -186,8 +186,8 @@ static void config_merge_config(specific_config * const pconf, const config_plug
     } while ((++cpv)->k_id != -1);
 }
 
-void config_patch_config(server * const srv, connection * const con) {
-    config_data_base * const p = srv->config_data_base;
+void config_patch_config(connection * const con) {
+    config_data_base * const p = con->config_data_base;
 
     /* performed by config_reset_config() */
     /*memcpy(&con->conf, &p->defaults, sizeof(specific_config));*/
@@ -198,9 +198,9 @@ void config_patch_config(server * const srv, connection * const con) {
     }
 }
 
-void config_reset_config(server * const srv, connection * const con) {
+void config_reset_config(connection * const con) {
     /* initialize specific_config (con->conf) from top-level specific_config */
-    config_data_base * const p = srv->config_data_base;
+    config_data_base * const p = con->config_data_base;
     con->server_name = p->defaults.server_name;
     memcpy(&con->conf, &p->defaults, sizeof(specific_config));
 }

@@ -164,10 +164,11 @@ PHYSICALPATH_FUNC(mod_alias_physical_handler) {
 				}
 			}
 
+			buffer * const tb = con->srv->tmp_buf;
 			buffer_copy_buffer(con->physical.basedir, &ds->value);
-			buffer_copy_buffer(srv->tmp_buf, &ds->value);
-			buffer_append_string(srv->tmp_buf, uri_ptr + alias_len);
-			buffer_copy_buffer(con->physical.path, srv->tmp_buf);
+			buffer_copy_buffer(tb, &ds->value);
+			buffer_append_string(tb, uri_ptr + alias_len);
+			buffer_copy_buffer(con->physical.path, tb);
 
 			return HANDLER_GO_ON;
 }

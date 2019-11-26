@@ -417,7 +417,6 @@ CONNECTION_FUNC(mod_maxminddb_request_env_handler)
     const int sa_family = con->dst_addr.plain.sa_family;
     if (sa_family != AF_INET && sa_family != AF_INET6) return HANDLER_GO_ON;
 
-    UNUSED(srv);
     plugin_config pconf;
     plugin_data *p = p_d;
     mod_maxmind_patch_config(con, p, &pconf);
@@ -447,7 +446,6 @@ CONNECTION_FUNC(mod_maxminddb_handle_con_close)
 {
     plugin_data *p = p_d;
     array *env = con->plugin_ctx[p->id];
-    UNUSED(srv);
     if (NULL != env) {
         array_free(env);
         con->plugin_ctx[p->id] = NULL;

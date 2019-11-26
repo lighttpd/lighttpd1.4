@@ -1184,7 +1184,7 @@ CONNECTION_FUNC(mod_deflate_handle_response_start) {
 		}
 	}
 
-	if (0.0 < p->conf.max_loadavg && p->conf.max_loadavg < srv->loadavg[0]) {
+	if (0.0 < p->conf.max_loadavg && p->conf.max_loadavg < con->srv->loadavg[0]) {
 		return HANDLER_GO_ON;
 	}
 
@@ -1253,13 +1253,12 @@ CONNECTION_FUNC(mod_deflate_handle_response_start) {
 	return HANDLER_GO_ON;
 }
 
-static handler_t mod_deflate_cleanup(server *srv, connection *con, void *p_d) {
+static handler_t mod_deflate_cleanup(connection *con, void *p_d) {
 	plugin_data *p = p_d;
 	handler_ctx *hctx = con->plugin_ctx[p->id];
 
 	if (NULL != hctx) deflate_compress_cleanup(con, hctx);
 
-	UNUSED(srv);
 	return HANDLER_GO_ON;
 }
 

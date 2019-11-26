@@ -824,7 +824,7 @@ static void http_list_directory_footer(connection *con, plugin_data *p, buffer *
 	}
 }
 
-static int http_list_directory(server *srv, connection *con, plugin_data *p, buffer *dir) {
+static int http_list_directory(connection *con, plugin_data *p, buffer *dir) {
 	DIR *dp;
 	buffer *out;
 	struct dirent *dent;
@@ -846,7 +846,6 @@ static int http_list_directory(server *srv, connection *con, plugin_data *p, buf
 #ifdef HAVE_LOCALTIME_R
 	struct tm tm;
 #endif
-	UNUSED(srv);
 
 	if (buffer_string_is_empty(dir)) return -1;
 
@@ -984,7 +983,7 @@ static int http_list_directory(server *srv, connection *con, plugin_data *p, buf
 		if (con->conf.use_xattr) {
 			memcpy(path_file, DIRLIST_ENT_NAME(tmp), tmp->namelen + 1);
 			attrlen = sizeof(attrval) - 1;
-			if (attr_get(path, srv->srvconf.xattr_name, attrval, &attrlen, 0) == 0) {
+			if (attr_get(path, con->srv->srvconf.xattr_name, attrval, &attrlen, 0) == 0) {
 				attrval[attrlen] = '\0';
 				content_type = attrval;
 			}
@@ -992,7 +991,7 @@ static int http_list_directory(server *srv, connection *con, plugin_data *p, buf
 #elif defined(HAVE_EXTATTR)
 		if (con->conf.use_xattr) {
 			memcpy(path_file, DIRLIST_ENT_NAME(tmp), tmp->namelen + 1);
-			if(-1 != (attrlen = extattr_get_file(path, EXTATTR_NAMESPACE_USER, srv->srvconf.xattr_name, attrval, sizeof(attrval)-1))) {
+			if(-1 != (attrlen = extattr_get_file(path, EXTATTR_NAMESPACE_USER, con->srv->srvconf.xattr_name, attrval, sizeof(attrval)-1))) {
 				attrval[attrlen] = '\0';
 				content_type = attrval;
 			}
@@ -1080,7 +1079,7 @@ URIHANDLER_FUNC(mod_dirlisting_subrequest) {
 		  "URI          : %s", con->uri.path->ptr);
 	}
 
-	if (HANDLER_ERROR == stat_cache_get_entry(srv, con, con->physical.path, &sce)) {
+	if (HANDLER_ERROR == stat_cache_get_entry(con, con->physical.path, &sce)) {
 		log_error(con->conf.errh, __FILE__, __LINE__,
 		  "stat_cache_get_entry failed: %s", con->physical.path->ptr);
 		con->http_status = 500;
@@ -1089,7 +1088,7 @@ URIHANDLER_FUNC(mod_dirlisting_subrequest) {
 
 	if (!S_ISDIR(sce->st.st_mode)) return HANDLER_GO_ON;
 
-	if (http_list_directory(srv, con, p, con->physical.path)) {
+	if (http_list_directory(con, p, con->physical.path)) {
 		/* dirlisting failed */
 		con->http_status = 403;
 	}

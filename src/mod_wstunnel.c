@@ -362,7 +362,7 @@ SETDEFAULTS_FUNC(mod_wstunnel_set_defaults) {
     return HANDLER_GO_ON;
 }
 
-static handler_t wstunnel_create_env(server *srv, gw_handler_ctx *gwhctx) {
+static handler_t wstunnel_create_env(gw_handler_ctx *gwhctx) {
     handler_ctx *hctx = (handler_ctx *)gwhctx;
     connection *con = hctx->gw.remote_conn;
     handler_t rc;
@@ -377,13 +377,13 @@ static handler_t wstunnel_create_env(server *srv, gw_handler_ctx *gwhctx) {
     con->http_status = 101; /* Switching Protocols */
     con->file_started = 1;
 
-    hctx->ping_ts = srv->cur_ts;
-    gw_set_transparent(srv, &hctx->gw);
+    hctx->ping_ts = con->srv->cur_ts;
+    gw_set_transparent(&hctx->gw);
 
     return HANDLER_GO_ON;
 }
 
-static handler_t wstunnel_stdin_append(server *srv, gw_handler_ctx *gwhctx) {
+static handler_t wstunnel_stdin_append(gw_handler_ctx *gwhctx) {
     /* prepare websocket frames to backend */
     /* (caller should verify con->request_content_queue) */
     /*assert(!chunkqueue_is_empty(con->request_content_queue));*/
@@ -398,7 +398,7 @@ static handler_t wstunnel_stdin_append(server *srv, gw_handler_ctx *gwhctx) {
         DEBUG_LOG_INFO("disconnected from client (fd=%d)", con->fd);
         DEBUG_LOG_DEBUG("send close response to client (fd=%d)", con->fd);
         mod_wstunnel_frame_send(hctx, MOD_WEBSOCKET_FRAME_TYPE_CLOSE, CONST_STR_LEN("1000")); /* 1000 Normal Closure */
-        gw_connection_reset(srv, con, hctx->gw.plugin_data);
+        gw_connection_reset(con, hctx->gw.plugin_data);
         return HANDLER_FINISHED;
     }
 }
@@ -493,10 +493,10 @@ static void wstunnel_handler_ctx_free(void *gwhctx) {
     chunk_buffer_release(hctx->frame.payload);
 }
 
-static handler_t wstunnel_handler_setup (server *srv, connection *con, plugin_data *p) {
+static handler_t wstunnel_handler_setup (connection *con, plugin_data *p) {
     handler_ctx *hctx = con->plugin_ctx[p->id];
     int hybivers;
-    hctx->srv = srv;
+    hctx->srv = con->srv;
     hctx->errh = con->conf.errh;/*(for mod_wstunnel-specific DEBUG_* macros)*/
     hctx->conf = p->conf; /*(copies struct)*/
     hybivers = wstunnel_check_request(con, hctx);
@@ -568,7 +568,7 @@ static handler_t wstunnel_handler_setup (server *srv, connection *con, plugin_da
     return HANDLER_GO_ON;
 }
 
-static handler_t mod_wstunnel_check_extension(server *srv, connection *con, void *p_d) {
+static handler_t mod_wstunnel_check_extension(connection *con, void *p_d) {
     plugin_data *p = p_d;
     const buffer *vb;
     handler_t rc;
@@ -596,9 +596,9 @@ static handler_t mod_wstunnel_check_extension(server *srv, connection *con, void
     mod_wstunnel_patch_config(con, p);
     if (NULL == p->conf.gw.exts) return HANDLER_GO_ON;
 
-    rc = gw_check_extension(srv,con,(gw_plugin_data *)p,1,sizeof(handler_ctx));
+    rc = gw_check_extension(con, (gw_plugin_data *)p, 1, sizeof(handler_ctx));
     return (HANDLER_GO_ON == rc && con->mode == p->id)
-      ? wstunnel_handler_setup(srv, con, p)
+      ? wstunnel_handler_setup(con, p)
       : rc;
 }
 
@@ -620,7 +620,7 @@ TRIGGER_FUNC(mod_wstunnel_handle_trigger) {
         if (cur_ts - con->read_idle_ts > con->conf.max_read_idle) {
             DEBUG_LOG_INFO("timeout client (fd=%d)", con->fd);
             mod_wstunnel_frame_send(hctx,MOD_WEBSOCKET_FRAME_TYPE_CLOSE,NULL,0);
-            gw_connection_reset(srv, con, p_d);
+            gw_connection_reset(con, p_d);
             joblist_append(srv, con);
             /* avoid server.c closing connection with error due to max_read_idle
              * (might instead run joblist after plugins_call_handle_trigger())*/

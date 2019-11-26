@@ -131,7 +131,6 @@ SETDEFAULTS_FUNC(mod_skeleton_set_defaults) {
 
 URIHANDLER_FUNC(mod_skeleton_uri_handler) {
 	plugin_data *p = p_d;
-	UNUSED(srv);
 
 	/* determine whether or not module participates in request */
 

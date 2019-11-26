@@ -39,7 +39,7 @@
 __attribute_cold__
 static connection *connection_init(server *srv);
 
-static int connection_reset(server *srv, connection *con);
+static int connection_reset(connection *con);
 
 
 static connection *connections_get_new_connection(server *srv) {
@@ -53,7 +53,7 @@ static connection *connections_get_new_connection(server *srv) {
 
 		for (i = conns->used; i < conns->size; i++) {
 			conns->ptr[i] = connection_init(srv);
-			connection_reset(srv, conns->ptr[i]);
+			connection_reset(conns->ptr[i]);
 		}
 	}
 
@@ -62,12 +62,6 @@ static connection *connections_get_new_connection(server *srv) {
 }
 
 static int connection_del(server *srv, connection *con) {
-	size_t i;
-	connections * const conns = &srv->conns;
-	connection *temp;
-
-	if (con == NULL) return -1;
-
 	if (-1 == con->ndx) return -1;
 
 	buffer_clear(con->uri.authority);
@@ -75,12 +69,14 @@ static int connection_del(server *srv, connection *con) {
 	buffer_reset(con->uri.query);
 	buffer_reset(con->request.orig_uri);
 
-	i = con->ndx;
+	connections * const conns = &srv->conns;
+
+	uint32_t i = con->ndx;
 
 	/* not last element */
 
 	if (i != conns->used - 1) {
-		temp = conns->ptr[i];
+		connection * const temp = conns->ptr[i];
 		conns->ptr[i] = conns->ptr[conns->used - 1];
 		conns->ptr[conns->used - 1] = temp;
 
@@ -117,7 +113,7 @@ static void connection_plugin_ctx_check(server *srv, connection *con) {
 static int connection_close(server *srv, connection *con) {
 	if (con->fd < 0) con->fd = -con->fd;
 
-	plugins_call_handle_connection_close(srv, con);
+	plugins_call_handle_connection_close(con);
 
 	con->request_count = 0;
 	chunkqueue_reset(con->read_queue);
@@ -200,10 +196,10 @@ static void connection_handle_close_state(server *srv, connection *con) {
 }
 
 static void connection_handle_shutdown(server *srv, connection *con) {
-	plugins_call_handle_connection_shut_wr(srv, con);
+	plugins_call_handle_connection_shut_wr(con);
 
 	srv->con_closed++;
-	connection_reset(srv, con);
+	connection_reset(con);
 
 	/* close the connection */
 	if (con->fd >= 0
@@ -225,12 +221,14 @@ static void connection_fdwaitqueue_append(connection *con) {
     connection_list_append(&con->srv->fdwaitqueue, con);
 }
 
-static void connection_handle_response_end_state(server *srv, connection *con) {
+static void connection_handle_response_end_state(connection *con) {
         /* log the request */
         /* (even if error, connection dropped, still write to access log if http_status) */
 	if (con->http_status) {
-		plugins_call_handle_request_done(srv, con);
+		plugins_call_handle_request_done(con);
 	}
+
+	server * const srv = con->srv;
 
 	if (con->state != CON_STATE_ERROR) srv->con_written++;
 
@@ -241,7 +239,7 @@ static void connection_handle_response_end_state(server *srv, connection *con) {
 	}
 
         if (con->keep_alive) {
-		connection_reset(srv, con);
+		connection_reset(con);
 #if 0
 		con->request_start = srv->cur_ts;
 		con->read_idle_ts = srv->cur_ts;
@@ -284,8 +282,6 @@ static void connection_handle_errdoc(connection *con) {
     connection_handle_errdoc_init(con);
     con->file_finished = 1;
 
-    server * const srv = con->srv;
-
     /* try to send static errorfile */
     if (!buffer_string_is_empty(con->conf.errorfile_prefix)) {
         buffer_copy_buffer(con->physical.path, con->conf.errorfile_prefix);
@@ -293,9 +289,9 @@ static void connection_handle_errdoc(connection *con) {
         buffer_append_string_len(con->physical.path, CONST_STR_LEN(".html"));
         if (0 == http_chunk_append_file(con, con->physical.path)) {
             stat_cache_entry *sce = NULL;
-            if (stat_cache_get_entry(srv, con, con->physical.path, &sce)
+            if (stat_cache_get_entry(con, con->physical.path, &sce)
                 != HANDLER_ERROR) {
-                stat_cache_content_type_get(srv, con, con->physical.path, sce);
+                stat_cache_content_type_get(con, con->physical.path, sce);
                 http_header_response_set(con, HTTP_HEADER_CONTENT_TYPE,
                                          CONST_STR_LEN("Content-Type"),
                                          CONST_BUF_LEN(sce->content_type));
@@ -306,7 +302,7 @@ static void connection_handle_errdoc(connection *con) {
 
     /* build default error-page */
     buffer_reset(con->physical.path);
-    buffer * const b = srv->tmp_buf;
+    buffer * const b = con->srv->tmp_buf;
     buffer_copy_string_len(b, CONST_STR_LEN(
       "<?xml version=\"1.0\" encoding=\"iso-8859-1\"?>\n"
       "<!DOCTYPE html PUBLIC \"-//W3C//DTD XHTML 1.0 Transitional//EN\"\n"
@@ -332,7 +328,7 @@ static void connection_handle_errdoc(connection *con) {
                              CONST_STR_LEN("text/html"));
 }
 
-static int connection_handle_write_prepare(server *srv, connection *con) {
+static int connection_handle_write_prepare(connection *con) {
 	if (con->mode == DIRECT) {
 		/* static files */
 		switch(con->request.http_method) {
@@ -383,7 +379,7 @@ static int connection_handle_write_prepare(server *srv, connection *con) {
 	}
 
 	/* Allow filter plugins to change response headers before they are written. */
-	switch(plugins_call_handle_response_start(srv, con)) {
+	switch(plugins_call_handle_response_start(con)) {
 	case HANDLER_GO_ON:
 	case HANDLER_FINISHED:
 		break;
@@ -468,7 +464,7 @@ static int connection_handle_write_prepare(server *srv, connection *con) {
 	return 0;
 }
 
-static void connection_handle_write(server *srv, connection *con) {
+static void connection_handle_write(connection *con) {
 	switch(connection_write_chunkqueue(con, con->write_queue, MAX_WRITE_LIMIT)) {
 	case 0:
 		if (con->file_finished) {
@@ -489,15 +485,15 @@ static void connection_handle_write(server *srv, connection *con) {
 		/* not finished yet -> WRITE */
 		break;
 	}
-	con->write_request_ts = srv->cur_ts;
+	con->write_request_ts = con->srv->cur_ts;
 }
 
-static void connection_handle_write_state(server *srv, connection *con) {
+static void connection_handle_write_state(connection *con) {
     do {
         /* only try to write if we have something in the queue */
         if (!chunkqueue_is_empty(con->write_queue)) {
             if (con->is_writable) {
-                connection_handle_write(srv, con);
+                connection_handle_write(con);
                 if (con->state != CON_STATE_WRITE) break;
             }
         } else if (con->file_finished) {
@@ -506,7 +502,7 @@ static void connection_handle_write_state(server *srv, connection *con) {
         }
 
         if (con->mode != DIRECT && !con->file_finished) {
-            int r = plugins_call_handle_subrequest(srv, con);
+            int r = plugins_call_handle_subrequest(con);
             switch(r) {
             case HANDLER_WAIT_FOR_EVENT:
             case HANDLER_FINISHED:
@@ -536,8 +532,6 @@ static void connection_handle_write_state(server *srv, connection *con) {
 __attribute_cold__
 static connection *connection_init(server *srv) {
 	connection *con;
-
-	UNUSED(srv);
 
 	con = calloc(1, sizeof(*con));
 	force_assert(NULL != con);
@@ -579,6 +573,10 @@ static connection *connection_init(server *srv) {
 	con->read_queue = chunkqueue_init();
 	con->request_content_queue = chunkqueue_init();
 
+	con->srv  = srv;
+	con->plugin_slots = srv->plugin_slots;
+	con->config_data_base = srv->config_data_base;
+
 	/* init plugin specific connection structures */
 
 	con->plugin_ctx = calloc(1, (srv->plugins.used + 1) * sizeof(void *));
@@ -592,7 +590,7 @@ static connection *connection_init(server *srv) {
 		force_assert(NULL != con->cond_match);
 	}
       #endif
-	config_reset_config(srv, con);
+	config_reset_config(con);
 
 	return con;
 }
@@ -602,7 +600,7 @@ void connections_free(server *srv) {
 	for (uint32_t i = 0; i < conns->size; ++i) {
 		connection *con = conns->ptr[i];
 
-		connection_reset(srv, con);
+		connection_reset(con);
 
 		chunkqueue_free(con->write_queue);
 		chunkqueue_free(con->read_queue);
@@ -648,10 +646,10 @@ void connections_free(server *srv) {
 }
 
 
-static int connection_reset(server *srv, connection *con) {
-	plugins_call_connection_reset(srv, con);
+static int connection_reset(connection *con) {
+	plugins_call_connection_reset(con);
 
-	connection_response_reset(srv, con);
+	connection_response_reset(con);
 	con->is_readable = 1;
 
 	con->bytes_written = 0;
@@ -704,7 +702,7 @@ static int connection_reset(server *srv, connection *con) {
 	/*con->error_handler_saved_method = HTTP_METHOD_UNSET;*/
 	/*(error_handler_saved_method value is not valid unless error_handler_saved_status is set)*/
 
-	config_reset_config(srv, con);
+	config_reset_config(con);
 
 	return 0;
 }
@@ -902,7 +900,7 @@ static handler_t connection_handle_fdevent(server *srv, void *context, int reven
 	if (con->state == CON_STATE_WRITE &&
 	    !chunkqueue_is_empty(con->write_queue) &&
 	    con->is_writable) {
-		connection_handle_write(srv, con);
+		connection_handle_write(con);
 	}
 
 	if (con->state == CON_STATE_CLOSE) {
@@ -1108,8 +1106,6 @@ connection *connection_accepted(server *srv, server_socket *srv_socket, sock_add
 		srv->con_opened++;
 
 		con = connections_get_new_connection(srv);
-		con->conf.errh = srv->errh;
-		con->srv  = srv;
 
 		con->fd = cnt;
 		con->fdn = fdevent_register(srv->ev, con->fd, connection_handle_fdevent, con);
@@ -1129,8 +1125,8 @@ connection *connection_accepted(server *srv, server_socket *srv_socket, sock_add
 					  |  (1 << COMP_HTTP_REMOTE_IP);
 
 		buffer_copy_string_len(con->proto, CONST_STR_LEN("http"));
-		if (HANDLER_GO_ON != plugins_call_handle_connection_accept(srv, con)) {
-			connection_reset(srv, con);
+		if (HANDLER_GO_ON != plugins_call_handle_connection_accept(con)) {
+			connection_reset(con);
 			connection_close(srv, con);
 			return NULL;
 		}
@@ -1139,8 +1135,8 @@ connection *connection_accepted(server *srv, server_socket *srv_socket, sock_add
 }
 
 
-static int connection_handle_request(server *srv, connection *con) {
-			int r = http_response_prepare(srv, con);
+static int connection_handle_request(connection *con) {
+			int r = http_response_prepare(con);
 			switch (r) {
 			case HANDLER_WAIT_FOR_EVENT:
 				if (!con->file_finished && (!con->file_started || 0 == con->conf.stream_response_body)) {
@@ -1185,11 +1181,12 @@ static int connection_handle_request(server *srv, connection *con) {
 							/* set REDIRECT_STATUS to save current HTTP status code
 							 * for access by dynamic handlers
 							 * https://redmine.lighttpd.net/issues/1828 */
-							buffer_copy_int(srv->tmp_buf, con->http_status);
-							http_header_env_set(con, CONST_STR_LEN("REDIRECT_STATUS"), CONST_BUF_LEN(srv->tmp_buf));
+							buffer * const tb = con->srv->tmp_buf;
+							buffer_copy_int(tb, con->http_status);
+							http_header_env_set(con, CONST_STR_LEN("REDIRECT_STATUS"), CONST_BUF_LEN(tb));
 
 							if (error_handler == con->conf.error_handler) {
-								plugins_call_connection_reset(srv, con);
+								plugins_call_connection_reset(con);
 
 								if (con->request.content_length) {
 									if (con->request.content_length != con->request_content_queue->bytes_in) {
@@ -1230,7 +1227,7 @@ static int connection_handle_request(server *srv, connection *con) {
 				break;
 			case HANDLER_COMEBACK:
 				if (con->mode == DIRECT && buffer_is_empty(con->physical.path)) {
-					config_reset_config(srv, con);
+					config_reset_config(con);
 				}
 				return 1;
 			case HANDLER_ERROR:
@@ -1286,7 +1283,7 @@ int connection_state_machine(server *srv, connection *con) {
 			/* fall through */
 		case CON_STATE_READ_POST:
 		case CON_STATE_HANDLE_REQUEST:
-			if (connection_handle_request(srv, con)) {
+			if (connection_handle_request(con)) {
 				/* redo loop; will not match con->state */
 				ostate = CON_STATE_CONNECT;
 				break;
@@ -1300,19 +1297,19 @@ int connection_state_machine(server *srv, connection *con) {
 			if (con->state != CON_STATE_RESPONSE_START) break;
 			/* fall through */
 		case CON_STATE_RESPONSE_START: /* transient */
-			if (-1 == connection_handle_write_prepare(srv, con)) {
+			if (-1 == connection_handle_write_prepare(con)) {
 				connection_set_state(con, CON_STATE_ERROR);
 				break;
 			}
 			connection_set_state(con, CON_STATE_WRITE);
 			/* fall through */
 		case CON_STATE_WRITE:
-			connection_handle_write_state(srv, con);
+			connection_handle_write_state(con);
 			if (con->state != CON_STATE_RESPONSE_END) break;
 			/* fall through */
 		case CON_STATE_RESPONSE_END: /* transient */
 		case CON_STATE_ERROR:        /* transient */
-			connection_handle_response_end_state(srv, con);
+			connection_handle_response_end_state(con);
 			break;
 		case CON_STATE_CLOSE:
 			connection_handle_close_state(srv, con);

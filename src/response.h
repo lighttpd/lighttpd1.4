@@ -43,7 +43,7 @@ int http_cgi_headers(connection *con, http_cgi_opts *opts, http_cgi_header_appen
 
 handler_t http_response_parse_headers(connection *con, http_response_opts *opts, buffer *hdrs);
 handler_t http_response_read(connection *con, http_response_opts *opts, buffer *b, fdnode *fdn);
-handler_t http_response_prepare(server *srv, connection *con);
+handler_t http_response_prepare(connection *con);
 int http_response_redirect_to_directory(connection *con, int status);
 int http_response_handle_cachable(connection *con, const buffer * mtime);
 void http_response_body_clear(connection *con, int preserve_length);

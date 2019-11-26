@@ -150,7 +150,7 @@ static void build_doc_root_path(buffer *out, const buffer *sroot, const buffer *
 	}
 }
 
-static int build_doc_root(server *srv, connection *con, plugin_data *p, buffer *out, const buffer *host) {
+static int build_doc_root(connection *con, plugin_data *p, buffer *out, const buffer *host) {
 	stat_cache_entry *sce = NULL;
 
 	build_doc_root_path(out, p->conf.server_root, host, p->conf.document_root);
@@ -158,7 +158,7 @@ static int build_doc_root(server *srv, connection *con, plugin_data *p, buffer *
 	/* one-element cache (postive cache, not negative cache) */
 	if (buffer_is_equal(out, &p->last_root)) return 1;
 
-	if (HANDLER_ERROR == stat_cache_get_entry(srv, con, out, &sce)) {
+	if (HANDLER_ERROR == stat_cache_get_entry(con, out, &sce)) {
 		if (p->conf.debug) {
 			log_perror(con->conf.errh, __FILE__, __LINE__, "%s", out->ptr);
 		}
@@ -171,7 +171,7 @@ static int build_doc_root(server *srv, connection *con, plugin_data *p, buffer *
 	return 1;
 }
 
-static handler_t mod_simple_vhost_docroot(server *srv, connection *con, void *p_data) {
+static handler_t mod_simple_vhost_docroot(connection *con, void *p_data) {
     plugin_data * const p = p_data;
     mod_simple_vhost_patch_config(con, p);
     if (buffer_string_is_empty(p->conf.server_root)) return HANDLER_GO_ON;
@@ -184,8 +184,8 @@ static handler_t mod_simple_vhost_docroot(server *srv, connection *con, void *p_
     /* build document-root */
     buffer * const b = &p->tmp_buf;
     const buffer *host = con->uri.authority;
-    if ((!buffer_string_is_empty(host) && build_doc_root(srv, con, p, b, host))
-        || build_doc_root(srv, con, p, b, (host = p->conf.default_host))) {
+    if ((!buffer_string_is_empty(host) && build_doc_root(con, p, b, host))
+        || build_doc_root(con, p, b, (host = p->conf.default_host))) {
         con->server_name = con->server_name_buf;
         buffer_copy_buffer(con->server_name_buf, host);
         buffer_copy_buffer(con->physical.doc_root, b);

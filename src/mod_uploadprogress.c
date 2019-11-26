@@ -283,7 +283,7 @@ URIHANDLER_FUNC(mod_uploadprogress_uri_handler) {
 		http_header_response_set(con, HTTP_HEADER_CACHE_CONTROL, CONST_STR_LEN("Cache-Control"), CONST_STR_LEN("no-store, no-cache, must-revalidate, post-check=0, pre-check=0"));
 
 		/* prepare XML */
-		b = srv->tmp_buf;
+		b = con->srv->tmp_buf;
 		buffer_copy_string_len(b, CONST_STR_LEN(
 			"<?xml version=\"1.0\" encoding=\"iso-8859-1\"?>"
 			"<upload>"
@@ -307,8 +307,6 @@ URIHANDLER_FUNC(mod_uploadprogress_uri_handler) {
 
 REQUESTDONE_FUNC(mod_uploadprogress_request_done) {
 	plugin_data *p = p_d;
-
-	UNUSED(srv);
 
 	if (con->request.http_method != HTTP_METHOD_POST) return HANDLER_GO_ON;
 	if (buffer_string_is_empty(con->uri.path)) return HANDLER_GO_ON;

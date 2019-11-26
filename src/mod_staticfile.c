@@ -117,7 +117,6 @@ SETDEFAULTS_FUNC(mod_staticfile_set_defaults) {
 
 URIHANDLER_FUNC(mod_staticfile_subrequest) {
 	plugin_data *p = p_d;
-	UNUSED(srv);
 
 	/* someone else has done a decision for us */
 	if (con->http_status != 0) return HANDLER_GO_ON;

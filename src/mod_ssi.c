@@ -1270,7 +1270,6 @@ static int mod_ssi_handle_request(connection *con, handler_ctx *p) {
 
 URIHANDLER_FUNC(mod_ssi_physical_path) {
 	plugin_data *p = p_d;
-	UNUSED(srv);
 
 	if (con->mode != DIRECT) return HANDLER_GO_ON;
 	if (buffer_is_empty(con->physical.path)) return HANDLER_GO_ON;
@@ -1291,7 +1290,6 @@ SUBREQUEST_FUNC(mod_ssi_handle_subrequest) {
 	handler_ctx *hctx = con->plugin_ctx[p->id];
 	if (NULL == hctx) return HANDLER_GO_ON;
 	if (con->mode != p->id) return HANDLER_GO_ON; /* not my job */
-	UNUSED(srv);
 	/*
 	 * NOTE: if mod_ssi modified to use fdevents, HANDLER_WAIT_FOR_EVENT,
 	 * instead of blocking to completion, then hctx->timefmt, hctx->ssi_vars,
@@ -1309,7 +1307,7 @@ SUBREQUEST_FUNC(mod_ssi_handle_subrequest) {
 			return HANDLER_FINISHED;
 }
 
-static handler_t mod_ssi_connection_reset(server *srv, connection *con, void *p_d) {
+static handler_t mod_ssi_connection_reset(connection *con, void *p_d) {
 	plugin_data *p = p_d;
 	handler_ctx *hctx = con->plugin_ctx[p->id];
 	if (hctx) {
@@ -1317,7 +1315,6 @@ static handler_t mod_ssi_connection_reset(server *srv, connection *con, void *p_
 		con->plugin_ctx[p->id] = NULL;
 	}
 
-	UNUSED(srv);
 	return HANDLER_GO_ON;
 }
 

@@ -11,7 +11,7 @@ struct http_vhostdb_backend_t;
 
 typedef struct http_vhostdb_backend_t {
     const char *name;
-    int(*query)(server *srv, connection *con, void *p_d, buffer *result);
+    int(*query)(connection *con, void *p_d, buffer *result);
     void *p_d;
 } http_vhostdb_backend_t;
 

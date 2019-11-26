@@ -120,7 +120,7 @@ URIHANDLER_FUNC(mod_indexfile_subrequest) {
 	}
 
 	/* indexfile */
-	buffer * const b = srv->tmp_buf;
+	buffer * const b = con->srv->tmp_buf;
 	for (uint32_t k = 0; k < p->conf.indexfiles->used; ++k) {
 		const data_string * const ds = (data_string *)p->conf.indexfiles->data[k];
 
@@ -134,7 +134,7 @@ URIHANDLER_FUNC(mod_indexfile_subrequest) {
 		buffer_append_string_buffer(b, &ds->value);
 
 		stat_cache_entry *sce = NULL;
-		if (HANDLER_ERROR == stat_cache_get_entry(srv, con, b, &sce)) {
+		if (HANDLER_ERROR == stat_cache_get_entry(con, b, &sce)) {
 			if (errno == EACCES) {
 				con->http_status = 403;
 				buffer_reset(con->physical.path);

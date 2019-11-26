@@ -208,7 +208,6 @@ static int cache_call_lua(connection *con, plugin_data *p, const buffer *cml_fil
 
 URIHANDLER_FUNC(mod_cml_power_magnet) {
 	plugin_data *p = p_d;
-	UNUSED(srv);
 
 	mod_cml_patch_config(con, p);
 
@@ -261,7 +260,6 @@ URIHANDLER_FUNC(mod_cml_power_magnet) {
 
 URIHANDLER_FUNC(mod_cml_is_handled) {
 	plugin_data *p = p_d;
-	UNUSED(srv);
 
 	if (buffer_string_is_empty(con->physical.path)) return HANDLER_ERROR;
 

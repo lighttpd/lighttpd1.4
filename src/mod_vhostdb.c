@@ -136,7 +136,6 @@ CONNECTION_FUNC(mod_vhostdb_handle_connection_close) {
         vhostdb_entry_free(ve);
     }
 
-    UNUSED(srv);
     return HANDLER_GO_ON;
 }
 
@@ -180,7 +179,7 @@ CONNECTION_FUNC(mod_vhostdb_handle_docroot) {
 
     b = &p->tmp_buf;
     backend = p->conf.vhostdb_backend;
-    if (0 != backend->query(srv, con, backend->p_d, b)) {
+    if (0 != backend->query(con, backend->p_d, b)) {
         return mod_vhostdb_error_500(con); /* HANDLER_FINISHED */
     }
 
@@ -191,7 +190,7 @@ CONNECTION_FUNC(mod_vhostdb_handle_docroot) {
 
     /* sanity check that really is a directory */
     buffer_append_slash(b);
-    if (HANDLER_ERROR == stat_cache_get_entry(srv, con, b, &sce)) {
+    if (HANDLER_ERROR == stat_cache_get_entry(con, b, &sce)) {
         log_perror(con->conf.errh, __FILE__, __LINE__, "%s", b->ptr);
         return mod_vhostdb_error_500(con); /* HANDLER_FINISHED */
     }

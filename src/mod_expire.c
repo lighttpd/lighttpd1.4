@@ -310,6 +310,7 @@ CONNECTION_FUNC(mod_expire_handler) {
 	if (NULL != vb) {
 			time_t ts, expires;
 			stat_cache_entry *sce = NULL;
+			server * const srv = con->srv;
 
 			switch(mod_expire_get_offset(con->conf.errh, p, vb, &ts)) {
 			case 0:
@@ -320,7 +321,7 @@ CONNECTION_FUNC(mod_expire_handler) {
 				/* modification */
 
 				/* if stat fails => sce == NULL, ignore return value */
-				(void) stat_cache_get_entry(srv, con, con->physical.path, &sce);
+				(void) stat_cache_get_entry(con, con->physical.path, &sce);
 
 				/* can't set modification based expire header if
 				 * mtime is not available

@@ -128,10 +128,10 @@ int http_response_write_header(connection *con) {
 	return 0;
 }
 
-static handler_t http_response_physical_path_check(server *srv, connection *con) {
+static handler_t http_response_physical_path_check(connection *con) {
 	stat_cache_entry *sce = NULL;
 
-	if (HANDLER_ERROR != stat_cache_get_entry(srv, con, con->physical.path, &sce)) {
+	if (HANDLER_ERROR != stat_cache_get_entry(con, con->physical.path, &sce)) {
 		/* file exists */
 	} else {
 		char *pathinfo = NULL;
@@ -198,11 +198,11 @@ static handler_t http_response_physical_path_check(server *srv, connection *con)
 			}
 		}
 
-		buffer * const tb = srv->tmp_buf;
+		buffer * const tb = con->srv->tmp_buf;
 		for (char *pprev = pathinfo; pathinfo; pprev = pathinfo, pathinfo = strchr(pathinfo+1, '/')) {
 			stat_cache_entry *nsce = NULL;
 			buffer_copy_string_len(tb, con->physical.path->ptr, pathinfo - con->physical.path->ptr);
-			if (HANDLER_ERROR == stat_cache_get_entry(srv, con, tb, &nsce)) {
+			if (HANDLER_ERROR == stat_cache_get_entry(con, tb, &nsce)) {
 				pathinfo = pathinfo != pprev ? pprev : NULL;
 				break;
 			}
@@ -279,7 +279,7 @@ static handler_t http_response_physical_path_check(server *srv, connection *con)
 	return HANDLER_GO_ON;
 }
 
-handler_t http_response_prepare(server *srv, connection *con) {
+handler_t http_response_prepare(connection *con) {
 	handler_t r;
 
 	/* looks like someone has already done a decision */
@@ -357,7 +357,7 @@ handler_t http_response_prepare(server *srv, connection *con) {
 			char *qstr;
 			if (con->conf.http_parseopts & HTTP_PARSEOPT_URL_NORMALIZE) {
 				/*uint32_t len = (uint32_t)buffer_string_length(con->request.uri);*/
-				int qs = burl_normalize(con->request.uri, srv->tmp_buf, con->conf.http_parseopts);
+				int qs = burl_normalize(con->request.uri, con->srv->tmp_buf, con->conf.http_parseopts);
 				if (-2 == qs) {
 					log_error(con->conf.errh, __FILE__, __LINE__,
 					  "invalid character in URI -> 400 %s",
@@ -440,7 +440,7 @@ handler_t http_response_prepare(server *srv, connection *con) {
 					  |  (1 << COMP_HTTP_URL)
 					  |  (1 << COMP_HTTP_QUERY_STRING)
 					  |  (1 << COMP_HTTP_REQUEST_HEADER);
-		config_patch_config(srv, con);
+		config_patch_config(con);
 
 		/* do we have to downgrade to 1.0 ? */
 		if (!con->conf.allow_http11) {
@@ -490,7 +490,7 @@ handler_t http_response_prepare(server *srv, connection *con) {
 		 *
 		 */
 
-		r = plugins_call_handle_uri_raw(srv, con);
+		r = plugins_call_handle_uri_raw(con);
 		if (HANDLER_GO_ON != r) return r;
 
 		/**
@@ -501,7 +501,7 @@ handler_t http_response_prepare(server *srv, connection *con) {
 		 *
 		 */
 
-		r = plugins_call_handle_uri_clean(srv, con);
+		r = plugins_call_handle_uri_clean(con);
 		if (HANDLER_GO_ON != r) return r;
 
 		if (con->request.http_method == HTTP_METHOD_OPTIONS &&
@@ -599,7 +599,7 @@ handler_t http_response_prepare(server *srv, connection *con) {
 		/* the docroot plugin should set the doc_root and might also set the physical.path
 		 * for us (all vhost-plugins are supposed to set the doc_root)
 		 * */
-		r = plugins_call_handle_docroot(srv, con);
+		r = plugins_call_handle_docroot(con);
 		if (HANDLER_GO_ON != r) return r;
 
 		/* MacOS X and Windows can't distiguish between upper and lower-case
@@ -643,7 +643,7 @@ handler_t http_response_prepare(server *srv, connection *con) {
 			 *  is filled in above to avoid repeating work next time
 			 *  http_response_prepare() is called while processing request) */
 		} else {
-			r = plugins_call_handle_physical(srv, con);
+			r = plugins_call_handle_physical(con);
 			if (HANDLER_GO_ON != r) return r;
 
 			if (con->conf.log_request_handling) {
@@ -675,7 +675,7 @@ handler_t http_response_prepare(server *srv, connection *con) {
 			  "Path         : %s", con->physical.path->ptr);
 		}
 
-		r = http_response_physical_path_check(srv, con);
+		r = http_response_physical_path_check(con);
 		if (HANDLER_GO_ON != r) return r;
 
 		if (con->conf.log_request_handling) {
@@ -690,7 +690,7 @@ handler_t http_response_prepare(server *srv, connection *con) {
 		}
 
 		/* call the handlers */
-		r = plugins_call_handle_subrequest_start(srv, con);
+		r = plugins_call_handle_subrequest_start(con);
 		if (HANDLER_GO_ON != r) {
 			if (con->conf.log_request_handling) {
 				log_error(con->conf.errh, __FILE__, __LINE__,
@@ -707,7 +707,7 @@ handler_t http_response_prepare(server *srv, connection *con) {
 
 	}
 
-	r = plugins_call_handle_subrequest(srv, con);
+	r = plugins_call_handle_subrequest(con);
 	if (HANDLER_GO_ON == r) r = HANDLER_FINISHED; /* request was not handled, looks like we are done */
 	return r;
 }

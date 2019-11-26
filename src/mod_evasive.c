@@ -110,8 +110,9 @@ URIHANDLER_FUNC(mod_evasive_uri_handler) {
 	/* no limit set, nothing to block */
 	if (p->conf.max_conns == 0) return HANDLER_GO_ON;
 
-	for (uint32_t i = 0, conns_by_ip = 0; i < srv->conns.used; ++i) {
-		connection *c = srv->conns.ptr[i];
+	const connections * const conns = &con->srv->conns;
+	for (uint32_t i = 0, conns_by_ip = 0; i < conns->used; ++i) {
+		connection *c = conns->ptr[i];
 
 		/* check if other connections are already actively serving data for the same IP
 		 * we can only ban connections which are already behind the 'read request' state

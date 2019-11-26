@@ -225,14 +225,13 @@ static void fcgi_header(FCGI_Header * header, unsigned char type, int request_id
 	header->reserved = 0;
 }
 
-static handler_t fcgi_stdin_append(server *srv, handler_ctx *hctx) {
+static handler_t fcgi_stdin_append(handler_ctx *hctx) {
 	FCGI_Header header;
 	connection *con = hctx->remote_conn;
 	chunkqueue *req_cq = con->request_content_queue;
 	off_t offset, weWant;
 	const off_t req_cqlen = req_cq->bytes_in - req_cq->bytes_out;
 	int request_id = hctx->request_id;
-	UNUSED(srv);
 
 	/* something to send ? */
 	for (offset = 0; offset != req_cqlen; offset += weWant) {
@@ -267,7 +266,7 @@ static handler_t fcgi_stdin_append(server *srv, handler_ctx *hctx) {
 	return HANDLER_GO_ON;
 }
 
-static handler_t fcgi_create_env(server *srv, handler_ctx *hctx) {
+static handler_t fcgi_create_env(handler_ctx *hctx) {
 	FCGI_BeginRequestRecord beginRecord;
 	FCGI_Header header;
 	int request_id;
@@ -332,9 +331,9 @@ static handler_t fcgi_create_env(server *srv, handler_ctx *hctx) {
 		else /* as-yet-unknown total request size (Transfer-Encoding: chunked)*/
 			hctx->wb_reqlen = -hctx->wb_reqlen;
 	}
-	fcgi_stdin_append(srv, hctx);
+	fcgi_stdin_append(hctx);
 
-	status_counter_inc(srv, CONST_STR_LEN("fastcgi.requests"));
+	status_counter_inc(con->srv, CONST_STR_LEN("fastcgi.requests"));
 	return HANDLER_GO_ON;
 }
 
@@ -500,7 +499,7 @@ static handler_t fcgi_recv_parse(connection *con, struct http_response_opts_t *o
 	return 0 == fin ? HANDLER_GO_ON : HANDLER_FINISHED;
 }
 
-static handler_t fcgi_check_extension(server *srv, connection *con, void *p_d, int uri_path_handler) {
+static handler_t fcgi_check_extension(connection *con, void *p_d, int uri_path_handler) {
 	plugin_data *p = p_d;
 	handler_t rc;
 
@@ -509,7 +508,7 @@ static handler_t fcgi_check_extension(server *srv, connection *con, void *p_d, i
 	mod_fastcgi_patch_config(con, p);
 	if (NULL == p->conf.exts) return HANDLER_GO_ON;
 
-	rc = gw_check_extension(srv, con, p, uri_path_handler, 0);
+	rc = gw_check_extension(con, p, uri_path_handler, 0);
 	if (HANDLER_GO_ON != rc) return rc;
 
 	if (con->mode == p->id) {
@@ -531,13 +530,13 @@ static handler_t fcgi_check_extension(server *srv, connection *con, void *p_d, i
 }
 
 /* uri-path handler */
-static handler_t fcgi_check_extension_1(server *srv, connection *con, void *p_d) {
-	return fcgi_check_extension(srv, con, p_d, 1);
+static handler_t fcgi_check_extension_1(connection *con, void *p_d) {
+	return fcgi_check_extension(con, p_d, 1);
 }
 
 /* start request handler */
-static handler_t fcgi_check_extension_2(server *srv, connection *con, void *p_d) {
-	return fcgi_check_extension(srv, con, p_d, 0);
+static handler_t fcgi_check_extension_2(connection *con, void *p_d) {
+	return fcgi_check_extension(con, p_d, 0);
 }
 
 

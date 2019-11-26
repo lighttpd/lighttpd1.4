@@ -319,8 +319,8 @@ typedef struct gw_handler_ctx {
 
     connection *remote_conn;     /* dumb pointer */
     gw_plugin_data *plugin_data; /* dumb pointer */
-    handler_t(*stdin_append)(server *srv, struct gw_handler_ctx *hctx);
-    handler_t(*create_env)(server *srv, struct gw_handler_ctx *hctx);
+    handler_t(*stdin_append)(struct gw_handler_ctx *hctx);
+    handler_t(*create_env)(struct gw_handler_ctx *hctx);
     void(*backend_error)(struct gw_handler_ctx *hctx);
     void(*handler_ctx_free)(void *hctx);
 } gw_handler_ctx;
@@ -344,12 +344,12 @@ int gw_set_defaults_backend(server *srv, gw_plugin_data *p, const array *a, gw_p
 __attribute_cold__
 int gw_get_defaults_balance(server *srv, const buffer *b);
 
-handler_t gw_check_extension(server *srv, connection *con, gw_plugin_data *p, int uri_path_handler, size_t hctx_sz);
-handler_t gw_connection_reset(server *srv, connection *con, void *p_d);
-handler_t gw_handle_subrequest(server *srv, connection *con, void *p_d);
+handler_t gw_check_extension(connection *con, gw_plugin_data *p, int uri_path_handler, size_t hctx_sz);
+handler_t gw_connection_reset(connection *con, void *p_d);
+handler_t gw_handle_subrequest(connection *con, void *p_d);
 handler_t gw_handle_trigger(server *srv, void *p_d);
 handler_t gw_handle_waitpid_cb(server *srv, void *p_d, pid_t pid, int status);
 
-void gw_set_transparent(server *srv, gw_handler_ctx *hctx);
+void gw_set_transparent(gw_handler_ctx *hctx);
 
 #endif

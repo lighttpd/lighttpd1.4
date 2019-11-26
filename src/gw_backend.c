@@ -649,8 +649,7 @@ static void gw_proc_spawn(server *srv, gw_host *host, int debug) {
     }
 }
 
-static void gw_proc_kill(server *srv, gw_host *host, gw_proc *proc) {
-    UNUSED(srv);
+static void gw_proc_kill(gw_host *host, gw_proc *proc) {
     if (proc->next) proc->next->prev = proc->prev;
     if (proc->prev) proc->prev->next = proc->next;
 
@@ -758,7 +757,7 @@ enum {
   GW_BALANCE_STICKY
 };
 
-static gw_host * gw_host_get(server *srv, connection *con, gw_extension *extension, int balance, int debug) {
+static gw_host * gw_host_get(connection *con, gw_extension *extension, int balance, int debug) {
     gw_host *host;
     unsigned long last_max = ULONG_MAX;
     int max_usage = INT_MAX;
@@ -774,7 +773,7 @@ static gw_host * gw_host_get(server *srv, connection *con, gw_extension *extensi
         /* hash balancing */
 
         if (debug) {
-            log_error(srv->errh, __FILE__, __LINE__,
+            log_error(con->conf.errh, __FILE__, __LINE__,
               "proxy - used hash balancing, hosts: %u", extension->used);
         }
 
@@ -788,7 +787,7 @@ static gw_host * gw_host_get(server *srv, connection *con, gw_extension *extensi
                     + generate_crc32c(CONST_BUF_LEN(con->uri.authority));
 
             if (debug) {
-                log_error(srv->errh, __FILE__, __LINE__,
+                log_error(con->conf.errh, __FILE__, __LINE__,
                   "proxy - election: %s %s %s %lu", con->uri.path->ptr,
                   host->host->ptr, con->uri.authority->ptr, cur_max);
             }
@@ -803,7 +802,7 @@ static gw_host * gw_host_get(server *srv, connection *con, gw_extension *extensi
     case GW_BALANCE_LEAST_CONNECTION:
         /* fair balancing */
         if (debug) {
-            log_error(srv->errh, __FILE__, __LINE__,
+            log_error(con->conf.errh, __FILE__, __LINE__,
               "proxy - used least connection");
         }
 
@@ -821,7 +820,7 @@ static gw_host * gw_host_get(server *srv, connection *con, gw_extension *extensi
     case GW_BALANCE_RR:
         /* round robin */
         if (debug) {
-            log_error(srv->errh, __FILE__, __LINE__,
+            log_error(con->conf.errh, __FILE__, __LINE__,
               "proxy - used round-robin balancing");
         }
 
@@ -858,7 +857,7 @@ static gw_host * gw_host_get(server *srv, connection *con, gw_extension *extensi
         /* source sticky balancing */
 
         if (debug) {
-            log_error(srv->errh, __FILE__, __LINE__,
+            log_error(con->conf.errh, __FILE__, __LINE__,
               "proxy - used sticky balancing, hosts: %u", extension->used);
         }
 
@@ -873,7 +872,7 @@ static gw_host * gw_host_get(server *srv, connection *con, gw_extension *extensi
                     + host->port;
 
             if (debug) {
-                log_error(srv->errh, __FILE__, __LINE__,
+                log_error(con->conf.errh, __FILE__, __LINE__,
                   "proxy - election: %s %s %hu %ld", con->dst_addr_buf->ptr,
                   host->host->ptr, host->port, cur_max);
             }
@@ -894,18 +893,18 @@ static gw_host * gw_host_get(server *srv, connection *con, gw_extension *extensi
         host = extension->hosts[ndx];
 
         if (debug) {
-            log_error(srv->errh, __FILE__, __LINE__,
+            log_error(con->conf.errh, __FILE__, __LINE__,
               "gw - found a host %s %hu", host->host->ptr, host->port);
         }
 
         return host;
-    } else if (0 == srv->srvconf.max_worker) {
+    } else if (0 == con->srv->srvconf.max_worker) {
         /* special-case adaptive spawning and 0 == host->min_procs */
         for (k = 0; k < extension->used; ++k) {
             host = extension->hosts[k];
             if (0 == host->min_procs && 0 == host->num_procs
                 && !buffer_string_is_empty(host->bin_path)) {
-                gw_proc_spawn(srv, host, debug);
+                gw_proc_spawn(con->srv, host, debug);
                 if (host->num_procs) return host;
             }
         }
@@ -919,7 +918,7 @@ static gw_host * gw_host_get(server *srv, connection *con, gw_extension *extensi
     /* only send the 'no handler' once */
     if (!extension->note_is_sent) {
         extension->note_is_sent = 1;
-        log_error(srv->errh, __FILE__, __LINE__,
+        log_error(con->conf.errh, __FILE__, __LINE__,
           "all handlers for %s?%.*s on %s are down.",
           con->uri.path->ptr, BUFFER_INTLEN_PTR(con->uri.query),
           extension->key.ptr);
@@ -1704,20 +1703,20 @@ int gw_get_defaults_balance(server *srv, const buffer *b) {
 }
 
 
-static void gw_set_state(server *srv, gw_handler_ctx *hctx, gw_connection_state_t state) {
+static void gw_set_state(gw_handler_ctx *hctx, gw_connection_state_t state) {
     hctx->state = state;
-    hctx->state_timestamp = srv->cur_ts;
+    /*hctx->state_timestamp = hctx->remote_conn->srv->cur_ts;*/
 }
 
 
-void gw_set_transparent(server *srv, gw_handler_ctx *hctx) {
+void gw_set_transparent(gw_handler_ctx *hctx) {
     if (AF_UNIX != hctx->host->family) {
         if (-1 == fdevent_set_tcp_nodelay(hctx->fd, 1)) {
             /*(error, but not critical)*/
         }
     }
     hctx->wb_reqlen = -1;
-    gw_set_state(srv, hctx, GW_STATE_WRITE);
+    gw_set_state(hctx, GW_STATE_WRITE);
 }
 
 
@@ -1757,7 +1756,7 @@ static void gw_connection_close(server *srv, gw_handler_ctx *hctx) {
 static handler_t gw_reconnect(server *srv, gw_handler_ctx *hctx) {
     gw_backend_close(srv, hctx);
 
-    hctx->host = gw_host_get(srv, hctx->remote_conn, hctx->ext,
+    hctx->host = gw_host_get(hctx->remote_conn, hctx->ext,
                              hctx->conf.balance, hctx->conf.debug);
     if (NULL == hctx->host) return HANDLER_FINISHED;
 
@@ -1765,15 +1764,15 @@ static handler_t gw_reconnect(server *srv, gw_handler_ctx *hctx) {
     hctx->request_id = 0;
     hctx->opts.xsendfile_allow = hctx->host->xsendfile_allow;
     hctx->opts.xsendfile_docroot = hctx->host->xsendfile_docroot;
-    gw_set_state(srv, hctx, GW_STATE_INIT);
+    gw_set_state(hctx, GW_STATE_INIT);
     return HANDLER_COMEBACK;
 }
 
 
-handler_t gw_connection_reset(server *srv, connection *con, void *p_d) {
+handler_t gw_connection_reset(connection *con, void *p_d) {
     gw_plugin_data *p = p_d;
     gw_handler_ctx *hctx = con->plugin_ctx[p->id];
-    if (hctx) gw_connection_close(srv, hctx);
+    if (hctx) gw_connection_close(con->srv, hctx);
 
     return HANDLER_GO_ON;
 }
@@ -1849,7 +1848,7 @@ static handler_t gw_write_request(server *srv, gw_handler_ctx *hctx) {
                                         hctx->fd, hctx->conf.debug)) {
         case 1: /* connection is in progress */
             fdevent_fdnode_event_set(srv->ev, hctx->fdn, FDEVENT_OUT);
-            gw_set_state(srv, hctx, GW_STATE_CONNECT_DELAYED);
+            gw_set_state(hctx, GW_STATE_CONNECT_DELAYED);
             return HANDLER_WAIT_FOR_EVENT;
         case -1:/* connection error */
             return HANDLER_ERROR;
@@ -1871,13 +1870,13 @@ static handler_t gw_write_request(server *srv, gw_handler_ctx *hctx) {
 
         gw_proc_connect_success(srv, hctx->host, hctx->proc, hctx->conf.debug);
 
-        gw_set_state(srv, hctx, GW_STATE_PREPARE_WRITE);
+        gw_set_state(hctx, GW_STATE_PREPARE_WRITE);
         /* fall through */
     case GW_STATE_PREPARE_WRITE:
         /* ok, we have the connection */
 
         {
-            handler_t rc = hctx->create_env(srv, hctx);
+            handler_t rc = hctx->create_env(hctx);
             if (HANDLER_GO_ON != rc) {
                 if (HANDLER_FINISHED != rc && HANDLER_ERROR != rc)
                     fdevent_fdnode_event_clr(srv->ev, hctx->fdn, FDEVENT_OUT);
@@ -1896,7 +1895,7 @@ static handler_t gw_write_request(server *srv, gw_handler_ctx *hctx) {
         }
 
         fdevent_fdnode_event_add(srv->ev, hctx->fdn, FDEVENT_IN|FDEVENT_RDHUP);
-        gw_set_state(srv, hctx, GW_STATE_WRITE);
+        gw_set_state(hctx, GW_STATE_WRITE);
         /* fall through */
     case GW_STATE_WRITE:
         if (!chunkqueue_is_empty(hctx->wb)) {
@@ -1937,7 +1936,7 @@ static handler_t gw_write_request(server *srv, gw_handler_ctx *hctx) {
 
         if (hctx->wb->bytes_out == hctx->wb_reqlen) {
             fdevent_fdnode_event_clr(srv->ev, hctx->fdn, FDEVENT_OUT);
-            gw_set_state(srv, hctx, GW_STATE_READ);
+            gw_set_state(hctx, GW_STATE_READ);
         } else {
             off_t wblen = hctx->wb->bytes_in - hctx->wb->bytes_out;
             if ((hctx->wb->bytes_in < hctx->wb_reqlen || hctx->wb_reqlen < 0)
@@ -2004,11 +2003,13 @@ static handler_t gw_send_request(server *srv, gw_handler_ctx *hctx) {
 static handler_t gw_recv_response(server *srv, gw_handler_ctx *hctx);
 
 
-handler_t gw_handle_subrequest(server *srv, connection *con, void *p_d) {
+handler_t gw_handle_subrequest(connection *con, void *p_d) {
     gw_plugin_data *p = p_d;
     gw_handler_ctx *hctx = con->plugin_ctx[p->id];
     if (NULL == hctx) return HANDLER_GO_ON;
     if (con->mode != p->id) return HANDLER_GO_ON; /* not my job */
+
+    server * const srv = con->srv;
 
     if ((con->conf.stream_response_body & FDEVENT_STREAM_RESPONSE_BUFMIN)
         && con->file_started) {
@@ -2043,14 +2044,14 @@ handler_t gw_handle_subrequest(server *srv, connection *con, void *p_d) {
             if (0 != hctx->wb->bytes_in) return HANDLER_WAIT_FOR_EVENT;
         }
         else {
-            handler_t r = connection_handle_read_post_state(srv, con);
+            handler_t r = connection_handle_read_post_state(con);
             chunkqueue *req_cq = con->request_content_queue;
           #if 0 /*(not reached since we send 411 Length Required below)*/
             if (hctx->wb_reqlen < -1 && con->request.content_length >= 0) {
                 /* (completed receiving Transfer-Encoding: chunked) */
                 hctx->wb_reqlen= -hctx->wb_reqlen + con->request.content_length;
                 if (hctx->stdin_append) {
-                    handler_t rc = hctx->stdin_append(srv, hctx);
+                    handler_t rc = hctx->stdin_append(hctx);
                     if (HANDLER_GO_ON != rc) return rc;
                 }
             }
@@ -2058,7 +2059,7 @@ handler_t gw_handle_subrequest(server *srv, connection *con, void *p_d) {
             if ((0 != hctx->wb->bytes_in || -1 == hctx->wb_reqlen)
                 && !chunkqueue_is_empty(req_cq)) {
                 if (hctx->stdin_append) {
-                    handler_t rc = hctx->stdin_append(srv, hctx);
+                    handler_t rc = hctx->stdin_append(hctx);
                     if (HANDLER_GO_ON != rc) return rc;
                 }
                 else
@@ -2153,7 +2154,7 @@ static handler_t gw_recv_response(server *srv, gw_handler_ctx *hctx) {
             /* restart the request so other handlers can process it */
 
             if (physpath) con->physical.path = NULL;
-            connection_response_reset(srv,con);/*(includes con->http_status=0)*/
+            connection_response_reset(con); /*(includes con->http_status=0)*/
             /* preserve con->physical.path with modified docroot */
             if (physpath) con->physical.path = physpath;
 
@@ -2292,10 +2293,10 @@ static handler_t gw_handle_fdevent(server *srv, void *ctx, int revents) {
     return HANDLER_FINISHED;
 }
 
-handler_t gw_check_extension(server *srv, connection *con, gw_plugin_data *p, int uri_path_handler, size_t hctx_sz) {
+handler_t gw_check_extension(connection *con, gw_plugin_data *p, int uri_path_handler, size_t hctx_sz) {
   #if 0 /*(caller must handle)*/
     if (con->mode != DIRECT) return HANDLER_GO_ON;
-    gw_patch_connection(srv, con, p);
+    gw_patch_connection(con, p);
     if (NULL == p->conf.exts) return HANDLER_GO_ON;
   #endif
 
@@ -2394,7 +2395,7 @@ handler_t gw_check_extension(server *srv, connection *con, gw_plugin_data *p, in
     }
 
     /* check if we have at least one server for this extension up and running */
-    host = gw_host_get(srv, con, extension, p->conf.balance, p->conf.debug);
+    host = gw_host_get(con, extension, p->conf.balance, p->conf.debug);
     if (NULL == host) {
         return HANDLER_FINISHED;
     }
@@ -2473,7 +2474,7 @@ handler_t gw_check_extension(server *srv, connection *con, gw_plugin_data *p, in
     hctx->host             = host;
     hctx->proc             = NULL;
     hctx->ext              = extension;
-    gw_host_assign(srv, host);
+    gw_host_assign(con->srv, host);
 
     hctx->gw_mode = gw_mode;
     if (gw_mode == GW_AUTHORIZER) {
@@ -2564,7 +2565,7 @@ static void gw_handle_trigger_host(server *srv, gw_host *host, int debug) {
               proc->unixsocket->ptr, proc->pid);
         }
 
-        gw_proc_kill(srv, host, proc);
+        gw_proc_kill(host, proc);
 
         /* proc is now in unused, let next second handle next process */
         break;

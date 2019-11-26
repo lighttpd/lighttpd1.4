@@ -485,7 +485,7 @@ static void mod_compress_note_ratio(connection *con, off_t in, off_t out) {
     http_header_env_set(con, CONST_STR_LEN("ratio"), ratio, strlen(ratio));
 }
 
-static int deflate_file_to_file(server *srv, connection *con, plugin_data *p, int ifd, buffer *fn, stat_cache_entry *sce, int type) {
+static int deflate_file_to_file(connection *con, plugin_data *p, int ifd, buffer *fn, stat_cache_entry *sce, int type) {
 	int ofd;
 	int ret;
 #ifdef USE_MMAP
@@ -535,7 +535,7 @@ static int deflate_file_to_file(server *srv, connection *con, plugin_data *p, in
 
 	buffer_append_string_buffer(p->ofn, sce->etag);
 
-	if (HANDLER_ERROR != stat_cache_get_entry(srv, con, p->ofn, &sce_ofn)) {
+	if (HANDLER_ERROR != stat_cache_get_entry(con, p->ofn, &sce_ofn)) {
 		if (0 == sce->st.st_size) return -1; /* cache file being created */
 		/* cache-entry exists */
 #if 0
@@ -546,7 +546,7 @@ static int deflate_file_to_file(server *srv, connection *con, plugin_data *p, in
 		return 0;
 	}
 
-	if (0.0 < p->conf.max_loadavg && p->conf.max_loadavg < srv->loadavg[0]) {
+	if (0.0 < p->conf.max_loadavg && p->conf.max_loadavg < con->srv->loadavg[0]) {
 		return -1;
 	}
 
@@ -675,7 +675,7 @@ static int deflate_file_to_file(server *srv, connection *con, plugin_data *p, in
 	return 0;
 }
 
-static int deflate_file_to_buffer(server *srv, connection *con, plugin_data *p, int ifd, buffer *fn, stat_cache_entry *sce, int type) {
+static int deflate_file_to_buffer(connection *con, plugin_data *p, int ifd, buffer *fn, stat_cache_entry *sce, int type) {
 	int ret = -1;
 #ifdef USE_MMAP
 	volatile int mapped = 0;/* quiet warning: might be clobbered by 'longjmp' */
@@ -692,7 +692,7 @@ static int deflate_file_to_buffer(server *srv, connection *con, plugin_data *p, 
 
 	if (sce->st.st_size > 128 * 1024 * 1024) return -1;
 
-	if (0.0 < p->conf.max_loadavg && p->conf.max_loadavg < srv->loadavg[0]) {
+	if (0.0 < p->conf.max_loadavg && p->conf.max_loadavg < con->srv->loadavg[0]) {
 		return -1;
 	}
 
@@ -788,7 +788,7 @@ static int mod_compress_contains_encoding(const char *headervalue, const char *e
 
 PHYSICALPATH_FUNC(mod_compress_physical) {
 	plugin_data *p = p_d;
-	size_t m;
+	uint32_t m;
 	stat_cache_entry *sce = NULL;
 	const buffer *mtime = NULL;
 	buffer *content_type;
@@ -816,7 +816,7 @@ PHYSICALPATH_FUNC(mod_compress_physical) {
 		  "-- handling file as static file");
 	}
 
-	if (HANDLER_ERROR == stat_cache_get_entry(srv, con, con->physical.path, &sce)) {
+	if (HANDLER_ERROR == stat_cache_get_entry(con, con->physical.path, &sce)) {
 		con->http_status = 403;
 		log_error(con->conf.errh, __FILE__, __LINE__,
 		  "not a regular file: %s -> %s",
@@ -844,16 +844,16 @@ PHYSICALPATH_FUNC(mod_compress_physical) {
 
 	/* check if mimetype is in compress-config */
 	content_type = NULL;
-	stat_cache_content_type_get(srv, con, con->physical.path, sce);
+	stat_cache_content_type_get(con, con->physical.path, sce);
 	if (!buffer_is_empty(sce->content_type)) {
 		char *c;
 		if ( (c = strchr(sce->content_type->ptr, ';')) != NULL) {
-			content_type = srv->tmp_buf;
+			content_type = con->srv->tmp_buf;
 			buffer_copy_string_len(content_type, sce->content_type->ptr, c - sce->content_type->ptr);
 		}
 	}
 	else {
-		content_type = srv->tmp_buf;
+		content_type = con->srv->tmp_buf;
 		buffer_copy_string_len(content_type, CONST_STR_LEN(""));
 	}
 
@@ -862,13 +862,25 @@ PHYSICALPATH_FUNC(mod_compress_physical) {
 
 		if (buffer_is_equal(&compress_ds->value, sce->content_type)
 		    || (content_type && buffer_is_equal(&compress_ds->value, content_type))) {
+			break;
+		}
+	}
+	if (m == p->conf.compress->used) return HANDLER_GO_ON; /* not found */
+
+
+	{
 			/* mimetype found */
 			const buffer *vb;
 
 			/* the response might change according to Accept-Encoding */
 			http_header_response_append(con, HTTP_HEADER_VARY, CONST_STR_LEN("Vary"), CONST_STR_LEN("Accept-Encoding"));
 
-			if (NULL != (vb = http_header_request_get(con, HTTP_HEADER_ACCEPT_ENCODING, CONST_STR_LEN("Accept-Encoding")))) {
+			if (NULL == (vb = http_header_request_get(con, HTTP_HEADER_ACCEPT_ENCODING, CONST_STR_LEN("Accept-Encoding")))) {
+				return HANDLER_GO_ON;
+			}
+
+
+			{
 				int accept_encoding = 0;
 				char *value = vb->ptr;
 				int matched_encodings = 0;
@@ -912,7 +924,7 @@ PHYSICALPATH_FUNC(mod_compress_physical) {
 						return HANDLER_GO_ON;
 					}
 
-					mtime = strftime_cache_get(srv, sce->st.st_mtime);
+					mtime = strftime_cache_get(con->srv, sce->st.st_mtime);
 
 					/* try matching original etag of uncompressed version */
 					if (use_etag) {
@@ -947,10 +959,11 @@ PHYSICALPATH_FUNC(mod_compress_physical) {
 
 					if (use_etag) {
 						/* try matching etag of compressed version */
-						buffer_copy_buffer(srv->tmp_buf, sce->etag);
-						buffer_append_string_len(srv->tmp_buf, CONST_STR_LEN("-"));
-						buffer_append_string(srv->tmp_buf, compression_name);
-						etag_mutate(con->physical.etag, srv->tmp_buf);
+						buffer * const tb = con->srv->tmp_buf;
+						buffer_copy_buffer(tb, sce->etag);
+						buffer_append_string_len(tb, CONST_STR_LEN("-"));
+						buffer_append_string(tb, compression_name);
+						etag_mutate(con->physical.etag, tb);
 					}
 
 					if (HANDLER_FINISHED == http_response_handle_cachable(con, mtime)) {
@@ -966,12 +979,12 @@ PHYSICALPATH_FUNC(mod_compress_physical) {
 
 					/* deflate it */
 					if (use_etag && !buffer_string_is_empty(p->conf.compress_cache_dir)) {
-						if (0 != deflate_file_to_file(srv, con, p, fd, con->physical.path, sce, compression_type)) {
+						if (0 != deflate_file_to_file(con, p, fd, con->physical.path, sce, compression_type)) {
 							close(fd);
 							return HANDLER_GO_ON;
 						}
 					} else {
-						if (0 != deflate_file_to_buffer(srv, con, p, fd, con->physical.path, sce, compression_type)) {
+						if (0 != deflate_file_to_buffer(con, p, fd, con->physical.path, sce, compression_type)) {
 							close(fd);
 							return HANDLER_GO_ON;
 						}
@@ -987,7 +1000,6 @@ PHYSICALPATH_FUNC(mod_compress_physical) {
 					return (use_etag && !buffer_string_is_empty(p->conf.compress_cache_dir)) ? HANDLER_GO_ON : HANDLER_FINISHED;
 				}
 			}
-		}
 	}
 
 	return HANDLER_GO_ON;

@@ -798,7 +798,7 @@ REQUESTDONE_FUNC(log_access_write) {
 
 				if (f->opt & ~(FORMAT_FLAG_TIME_BEGIN|FORMAT_FLAG_TIME_END)) {
 					if (f->opt & FORMAT_FLAG_TIME_SEC) {
-						time_t t = (!(f->opt & FORMAT_FLAG_TIME_BEGIN)) ? srv->cur_ts : con->request_start;
+						time_t t = (!(f->opt & FORMAT_FLAG_TIME_BEGIN)) ? con->srv->cur_ts : con->request_start;
 						buffer_append_int(b, (intmax_t)t);
 					} else if (f->opt & (FORMAT_FLAG_TIME_MSEC|FORMAT_FLAG_TIME_USEC|FORMAT_FLAG_TIME_NSEC)) {
 						off_t t; /*(expected to be 64-bit since large file support enabled)*/
@@ -863,11 +863,11 @@ REQUESTDONE_FUNC(log_access_write) {
 				      #endif /* HAVE_STRUCT_TM_GMTOFF */
 
 					if (!(f->opt & FORMAT_FLAG_TIME_BEGIN)) {
-						if (parsed_format->last_generated_accesslog_ts == srv->cur_ts) {
+						if (parsed_format->last_generated_accesslog_ts == con->srv->cur_ts) {
 							buffer_append_string_buffer(b, ts_accesslog_str);
 							break;
 						}
-						t = parsed_format->last_generated_accesslog_ts = srv->cur_ts;
+						t = parsed_format->last_generated_accesslog_ts = con->srv->cur_ts;
 						flush = 1;
 					} else {
 						t = con->request_start;
@@ -919,7 +919,7 @@ REQUESTDONE_FUNC(log_access_write) {
 			case FORMAT_TIME_USED:
 			case FORMAT_TIME_USED_US:
 				if (f->opt & FORMAT_FLAG_TIME_SEC) {
-					buffer_append_int(b, srv->cur_ts - con->request_start);
+					buffer_append_int(b, con->srv->cur_ts - con->request_start);
 				} else {
 					const struct timespec * const bs = &con->request_start_hp;
 					off_t tdiff; /*(expected to be 64-bit since large file support enabled)*/
@@ -1073,7 +1073,7 @@ REQUESTDONE_FUNC(log_access_write) {
 					if (colon) {
 						buffer_append_string(b, colon+1);
 					} else {
-						buffer_append_int(b, srv->srvconf.port);
+						buffer_append_int(b, con->srv->srvconf.port);
 					}
 				}
 				break;

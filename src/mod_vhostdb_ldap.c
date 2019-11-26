@@ -370,9 +370,8 @@ static LDAPMessage * mod_authn_ldap_search(log_error_st *errh, vhostdb_config *s
 
 static void mod_vhostdb_patch_config (connection * const con, plugin_data * const p);
 
-static int mod_vhostdb_ldap_query(server *srv, connection *con, void *p_d, buffer *docroot)
+static int mod_vhostdb_ldap_query(connection *con, void *p_d, buffer *docroot)
 {
-    UNUSED(srv);
     plugin_data *p = (plugin_data *)p_d;
     vhostdb_config *dbconf;
     LDAP *ld;

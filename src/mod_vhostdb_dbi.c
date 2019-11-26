@@ -160,9 +160,8 @@ static int mod_vhostdb_dbconf_setup (server *srv, const array *opts, void **vdat
 
 static void mod_vhostdb_patch_config (connection * const con, plugin_data * const p);
 
-static int mod_vhostdb_dbi_query(server *srv, connection *con, void *p_d, buffer *docroot)
+static int mod_vhostdb_dbi_query(connection *con, void *p_d, buffer *docroot)
 {
-    UNUSED(srv);
     plugin_data *p = (plugin_data *)p_d;
     vhostdb_config *dbconf;
     dbi_result result;

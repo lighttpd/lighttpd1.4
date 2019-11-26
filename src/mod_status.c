@@ -710,10 +710,10 @@ static handler_t mod_status_handle_server_status_json(server *srv, connection *c
 }
 
 
-static handler_t mod_status_handle_server_statistics(server *srv, connection *con) {
+static handler_t mod_status_handle_server_statistics(connection *con) {
 	buffer *b;
 	size_t i;
-	array *st = &srv->status;
+	array *st = &con->srv->status;
 
 	if (0 == st->used) {
 		/* we have nothing to send */
@@ -741,8 +741,8 @@ static handler_t mod_status_handle_server_statistics(server *srv, connection *co
 }
 
 
-static handler_t mod_status_handle_server_status(server *srv, connection *con, plugin_data *p) {
-
+static handler_t mod_status_handle_server_status(connection *con, plugin_data *p) {
+	server * const srv = con->srv;
 	if (buffer_is_equal_string(con->uri.query, CONST_STR_LEN("auto"))) {
 		mod_status_handle_server_status_text(srv, con, p);
 	} else if (buffer_string_length(con->uri.query) >= sizeof("json")-1
@@ -759,7 +759,8 @@ static handler_t mod_status_handle_server_status(server *srv, connection *con, p
 }
 
 
-static handler_t mod_status_handle_server_config(server *srv, connection *con) {
+static handler_t mod_status_handle_server_config(connection *con) {
+	server * const srv = con->srv;
 	buffer *b = chunkqueue_append_buffer_open(con->write_queue);
 
 	buffer_copy_string_len(b, CONST_STR_LEN(
@@ -817,7 +818,7 @@ static handler_t mod_status_handle_server_config(server *srv, connection *con) {
 	return HANDLER_FINISHED;
 }
 
-static handler_t mod_status_handler(server *srv, connection *con, void *p_d) {
+static handler_t mod_status_handler(connection *con, void *p_d) {
 	plugin_data *p = p_d;
 
 	if (con->mode != DIRECT) return HANDLER_GO_ON;
@@ -826,13 +827,13 @@ static handler_t mod_status_handler(server *srv, connection *con, void *p_d) {
 
 	if (!buffer_string_is_empty(p->conf.status_url) &&
 	    buffer_is_equal(p->conf.status_url, con->uri.path)) {
-		return mod_status_handle_server_status(srv, con, p);
+		return mod_status_handle_server_status(con, p);
 	} else if (!buffer_string_is_empty(p->conf.config_url) &&
 	    buffer_is_equal(p->conf.config_url, con->uri.path)) {
-		return mod_status_handle_server_config(srv, con);
+		return mod_status_handle_server_config(con);
 	} else if (!buffer_string_is_empty(p->conf.statistics_url) &&
 	    buffer_is_equal(p->conf.statistics_url, con->uri.path)) {
-		return mod_status_handle_server_statistics(srv, con);
+		return mod_status_handle_server_statistics(con);
 	}
 
 	return HANDLER_GO_ON;
@@ -868,8 +869,6 @@ TRIGGER_FUNC(mod_status_trigger) {
 
 REQUESTDONE_FUNC(mod_status_account) {
 	plugin_data *p = p_d;
-
-	UNUSED(srv);
 
 	p->requests++;
 	p->rel_requests++;

@@ -215,7 +215,7 @@ static int scgi_env_add_uwsgi(void *venv, const char *key, size_t key_len, const
 }
 
 
-static handler_t scgi_create_env(server *srv, handler_ctx *hctx) {
+static handler_t scgi_create_env(handler_ctx *hctx) {
 	gw_host *host = hctx->host;
 	connection *con = hctx->remote_conn;
 	http_cgi_opts opts = { 0, 0, host->docroot, NULL };
@@ -239,14 +239,15 @@ static handler_t scgi_create_env(server *srv, handler_ctx *hctx) {
 	}
 
 	if (hctx->conf.proto == LI_PROTOCOL_SCGI) {
+		buffer * const tb = con->srv->tmp_buf;
 		size_t len;
 		scgi_env_add(b, CONST_STR_LEN("SCGI"), CONST_STR_LEN("1"));
-		buffer_clear(srv->tmp_buf);
-		buffer_append_int(srv->tmp_buf, buffer_string_length(b)-10);
-		buffer_append_string_len(srv->tmp_buf, CONST_STR_LEN(":"));
-		len = buffer_string_length(srv->tmp_buf);
+		buffer_clear(tb);
+		buffer_append_int(tb, buffer_string_length(b)-10);
+		buffer_append_string_len(tb, CONST_STR_LEN(":"));
+		len = buffer_string_length(tb);
 		offset = 10 - len;
-		memcpy(b->ptr+offset, srv->tmp_buf->ptr, len);
+		memcpy(b->ptr+offset, tb->ptr, len);
 		buffer_append_string_len(b, CONST_STR_LEN(","));
 	} else { /* LI_PROTOCOL_UWSGI */
 		/* http://uwsgi-docs.readthedocs.io/en/latest/Protocol.html */
@@ -281,12 +282,12 @@ static handler_t scgi_create_env(server *srv, handler_ctx *hctx) {
 			hctx->wb_reqlen = -hctx->wb_reqlen;
 	}
 
-	status_counter_inc(srv, CONST_STR_LEN("scgi.requests"));
+	status_counter_inc(con->srv, CONST_STR_LEN("scgi.requests"));
 	return HANDLER_GO_ON;
 }
 
 
-static handler_t scgi_check_extension(server *srv, connection *con, void *p_d, int uri_path_handler) {
+static handler_t scgi_check_extension(connection *con, void *p_d, int uri_path_handler) {
 	plugin_data *p = p_d;
 	handler_t rc;
 
@@ -295,7 +296,7 @@ static handler_t scgi_check_extension(server *srv, connection *con, void *p_d, i
 	mod_scgi_patch_config(con, p);
 	if (NULL == p->conf.exts) return HANDLER_GO_ON;
 
-	rc = gw_check_extension(srv, con, p, uri_path_handler, 0);
+	rc = gw_check_extension(con, p, uri_path_handler, 0);
 	if (HANDLER_GO_ON != rc) return rc;
 
 	if (con->mode == p->id) {
@@ -309,13 +310,13 @@ static handler_t scgi_check_extension(server *srv, connection *con, void *p_d, i
 }
 
 /* uri-path handler */
-static handler_t scgi_check_extension_1(server *srv, connection *con, void *p_d) {
-	return scgi_check_extension(srv, con, p_d, 1);
+static handler_t scgi_check_extension_1(connection *con, void *p_d) {
+	return scgi_check_extension(con, p_d, 1);
 }
 
 /* start request handler */
-static handler_t scgi_check_extension_2(server *srv, connection *con, void *p_d) {
-	return scgi_check_extension(srv, con, p_d, 0);
+static handler_t scgi_check_extension_2(connection *con, void *p_d) {
+	return scgi_check_extension(con, p_d, 0);
 }
 
 

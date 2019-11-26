@@ -84,8 +84,6 @@ CONNECTION_FUNC(mod_mysql_vhost_handle_connection_reset) {
 	plugin_data *p = p_d;
 	plugin_connection_data *c = con->plugin_ctx[p->id];
 
-	UNUSED(srv);
-
 	if (!c) return HANDLER_GO_ON;
 
 	buffer_free(c->server_name);
@@ -283,7 +281,7 @@ CONNECTION_FUNC(mod_mysql_vhost_handle_docroot) {
 	if (buffer_string_is_empty(p->conf.mysql_query)) return HANDLER_GO_ON;
 
 	/* sets up connection data if not done yet */
-	c = mod_mysql_vhost_connection_data(srv, con, p_d);
+	c = mod_mysql_vhost_connection_data(con->srv, con, p_d);
 
 	/* check if cached this connection */
 	if (buffer_is_equal(c->server_name, con->uri.authority)) goto GO_ON;
@@ -328,7 +326,7 @@ CONNECTION_FUNC(mod_mysql_vhost_handle_docroot) {
 	buffer_copy_string(b, row[0]);
 	buffer_append_slash(b);
 
-	if (HANDLER_ERROR == stat_cache_get_entry(srv, con, b, &sce)) {
+	if (HANDLER_ERROR == stat_cache_get_entry(con, b, &sce)) {
 		log_perror(con->conf.errh, __FILE__, __LINE__, "%s", b->ptr);
 		goto ERR500;
 	}

@@ -430,13 +430,12 @@ static int http_response_parse_range(connection *con, buffer *path, stat_cache_e
 
 
 void http_response_send_file (connection *con, buffer *path) {
-	server * const srv = con->srv;
 	stat_cache_entry *sce = NULL;
 	const buffer *mtime = NULL;
 	const buffer *vb;
 	int allow_caching = (0 == con->http_status || 200 == con->http_status);
 
-	if (HANDLER_ERROR == stat_cache_get_entry(srv, con, path, &sce)) {
+	if (HANDLER_ERROR == stat_cache_get_entry(con, path, &sce)) {
 		con->http_status = (errno == ENOENT) ? 404 : 403;
 		log_error(con->conf.errh, __FILE__, __LINE__,
 		  "not a regular file: %s -> %s", con->uri.path->ptr, path->ptr);
@@ -485,7 +484,7 @@ void http_response_send_file (connection *con, buffer *path) {
 	/* set response content-type, if not set already */
 
 	if (NULL == http_header_response_get(con, HTTP_HEADER_CONTENT_TYPE, CONST_STR_LEN("Content-Type"))) {
-		stat_cache_content_type_get(srv, con, path, sce);
+		stat_cache_content_type_get(con, path, sce);
 		if (buffer_string_is_empty(sce->content_type)) {
 			/* we are setting application/octet-stream, but also announce that
 			 * this header field might change in the seconds few requests
@@ -517,7 +516,7 @@ void http_response_send_file (connection *con, buffer *path) {
 
 		/* prepare header */
 		if (NULL == (mtime = http_header_response_get(con, HTTP_HEADER_LAST_MODIFIED, CONST_STR_LEN("Last-Modified")))) {
-			mtime = strftime_cache_get(srv, sce->st.st_mtime);
+			mtime = strftime_cache_get(con->srv, sce->st.st_mtime);
 			http_header_response_set(con, HTTP_HEADER_LAST_MODIFIED, CONST_STR_LEN("Last-Modified"), CONST_BUF_LEN(mtime));
 		}
 
@@ -723,7 +722,7 @@ static void http_response_xsendfile2(connection *con, const buffer *value, const
             }
         }
 
-        if (HANDLER_ERROR == stat_cache_get_entry(con->srv, con, b, &sce)) {
+        if (HANDLER_ERROR == stat_cache_get_entry(con, b, &sce)) {
             log_error(con->conf.errh, __FILE__, __LINE__,
               "send-file error: couldn't get stat_cache entry for "
               "X-Sendfile2: %s", b->ptr);
@@ -908,7 +907,7 @@ static handler_t http_response_process_local_redir(connection *con, size_t blen)
         }
 
         /*(caller must reset request as follows)*/
-        /*connection_response_reset(con->srv, con);*/ /*(sets con->http_status = 0)*/
+        /*connection_response_reset(con);*/ /*(sets con->http_status = 0)*/
         /*plugins_call_connection_reset(con->srv, con);*/
 
         return HANDLER_COMEBACK;
@@ -1541,7 +1540,7 @@ int http_cgi_headers (connection *con, http_cgi_opts *opts, http_cgi_header_appe
         }
     }
 
-    con->srv->request_env(con->srv, con);
+    con->srv->request_env(con);
 
     for (n = 0; n < con->environment.used; n++) {
         data_string *ds = (data_string *)con->environment.data[n];

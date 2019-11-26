@@ -26,7 +26,6 @@ typedef struct {
 script_cache *script_cache_init(void);
 void script_cache_free_data(script_cache *cache);
 
-lua_State *script_cache_get_script(server *srv, connection *con,
-	       	script_cache *cache, buffer *name);
+lua_State *script_cache_get_script(connection *con, script_cache *cache, buffer *name);
 
 #endif

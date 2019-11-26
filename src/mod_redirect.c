@@ -177,12 +177,13 @@ URIHANDLER_FUNC(mod_redirect_uri_handler) {
     /* redirect URL on match
      * e.g. redirect /base/ to /index.php?section=base
      */
+    buffer * const tb = con->srv->tmp_buf;
     rc = pcre_keyvalue_buffer_process(p->conf.redirect, &ctx,
-                                      con->request.uri, srv->tmp_buf);
+                                      con->request.uri, tb);
     if (HANDLER_FINISHED == rc) {
         http_header_response_set(con, HTTP_HEADER_LOCATION,
                                  CONST_STR_LEN("Location"),
-                                 CONST_BUF_LEN(srv->tmp_buf));
+                                 CONST_BUF_LEN(tb));
         con->http_status = p->conf.redirect_code;
         con->mode = DIRECT;
         con->file_finished = 1;

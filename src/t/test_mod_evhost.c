@@ -75,8 +75,7 @@ int main (void) {
  * stub functions
  */
 
-handler_t stat_cache_get_entry(server *srv, connection *con, buffer *name, stat_cache_entry **sce) {
-    UNUSED(srv);
+handler_t stat_cache_get_entry(connection *con, buffer *name, stat_cache_entry **sce) {
     UNUSED(con);
     UNUSED(name);
     UNUSED(sce);

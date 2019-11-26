@@ -427,7 +427,6 @@ REQUESTDONE_FUNC(mod_rrd_account) {
     rrd->bytes_written += con->bytes_written;
     rrd->bytes_read    += con->bytes_read;
 
-    UNUSED(srv);
     return HANDLER_GO_ON;
 }
 

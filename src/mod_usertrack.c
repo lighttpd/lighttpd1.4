@@ -148,14 +148,14 @@ SETDEFAULTS_FUNC(mod_usertrack_set_defaults) {
 }
 
 __attribute_noinline__
-static handler_t mod_usertrack_set_cookie(server *srv, connection *con, plugin_data *p) {
+static handler_t mod_usertrack_set_cookie(connection *con, plugin_data *p) {
 	buffer *cookie;
 	unsigned char h[16];
 	li_MD5_CTX Md5Ctx;
 	char hh[LI_ITOSTRING_LENGTH];
 
 	/* set a cookie */
-	cookie = srv->tmp_buf;
+	cookie = con->srv->tmp_buf;
 	buffer_copy_buffer(cookie, p->conf.cookie_name);
 	buffer_append_string_len(cookie, CONST_STR_LEN("="));
 
@@ -167,7 +167,7 @@ static handler_t mod_usertrack_set_cookie(server *srv, connection *con, plugin_d
 	li_MD5_Update(&Md5Ctx, CONST_BUF_LEN(con->uri.path));
 	li_MD5_Update(&Md5Ctx, CONST_STR_LEN("+"));
 
-	li_itostrn(hh, sizeof(hh), srv->cur_ts);
+	li_itostrn(hh, sizeof(hh), con->srv->cur_ts);
 	li_MD5_Update(&Md5Ctx, (unsigned char *)hh, strlen(hh));
 	li_itostrn(hh, sizeof(hh), li_rand_pseudo());
 	li_MD5_Update(&Md5Ctx, (unsigned char *)hh, strlen(hh));
@@ -227,7 +227,7 @@ URIHANDLER_FUNC(mod_usertrack_uri_handler) {
         }
     }
 
-    return mod_usertrack_set_cookie(srv, con, p);
+    return mod_usertrack_set_cookie(con, p);
 }
 
 

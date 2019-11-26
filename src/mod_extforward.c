@@ -1051,7 +1051,6 @@ URIHANDLER_FUNC(mod_extforward_uri_handler) {
 	const buffer *forwarded = NULL;
 	handler_ctx *hctx = con->plugin_ctx[p->id];
 	int is_forwarded_header = 0;
-	UNUSED(srv);
 
 	mod_extforward_patch_config(con, p);
 
@@ -1121,7 +1120,6 @@ URIHANDLER_FUNC(mod_extforward_uri_handler) {
 CONNECTION_FUNC(mod_extforward_handle_request_env) {
     plugin_data *p = p_d;
     handler_ctx *hctx = con->plugin_ctx[p->id];
-    UNUSED(srv);
     if (NULL == hctx || NULL == hctx->env) return HANDLER_GO_ON;
     for (uint32_t i=0; i < hctx->env->used; ++i) {
         /* note: replaces values which may have been set by mod_openssl
@@ -1137,7 +1135,6 @@ CONNECTION_FUNC(mod_extforward_handle_request_env) {
 CONNECTION_FUNC(mod_extforward_restore) {
 	plugin_data *p = p_d;
 	handler_ctx *hctx = con->plugin_ctx[p->id];
-	UNUSED(srv);
 
 	if (!hctx) return HANDLER_GO_ON;
 
@@ -1168,7 +1165,6 @@ CONNECTION_FUNC(mod_extforward_handle_con_close)
 {
     plugin_data *p = p_d;
     handler_ctx *hctx = con->plugin_ctx[p->id];
-    UNUSED(srv);
     if (NULL != hctx) {
         if (NULL != hctx->saved_network_read) {
             con->network_read = hctx->saved_network_read;
@@ -1194,7 +1190,6 @@ static int mod_extforward_network_read (connection *con, chunkqueue *cq, off_t m
 CONNECTION_FUNC(mod_extforward_handle_con_accept)
 {
     plugin_data *p = p_d;
-    UNUSED(srv);
     mod_extforward_patch_config(con, p);
     if (!p->conf.hap_PROXY) return HANDLER_GO_ON;
     if (NULL == p->conf.forwarder) return HANDLER_GO_ON;
@@ -1686,6 +1681,6 @@ static int mod_extforward_network_read (connection *con,
       default: rc = -1; break;
     }
 
-    mod_extforward_restore(con->srv, con, mod_extforward_plugin_data_singleton);
+    mod_extforward_restore(con, mod_extforward_plugin_data_singleton);
     return (0 == rc) ? con->network_read(con, cq, max_bytes) : rc;
 }

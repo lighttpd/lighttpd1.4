@@ -466,10 +466,9 @@ SETDEFAULTS_FUNC(mod_auth_set_defaults) {
     return HANDLER_GO_ON;
 }
 
-static handler_t mod_auth_uri_handler(server *srv, connection *con, void *p_d) {
+static handler_t mod_auth_uri_handler(connection *con, void *p_d) {
 	plugin_data *p = p_d;
 	data_auth *dauth;
-	UNUSED(srv);
 
 	mod_auth_patch_config(con, p);
 

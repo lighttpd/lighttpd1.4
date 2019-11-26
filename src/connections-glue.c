@@ -411,14 +411,14 @@ static int connection_write_100_continue(connection *con) {
 	return 1; /* success; sent all or none of "HTTP/1.1 100 Continue" */
 }
 
-handler_t connection_handle_read_post_state(server *srv, connection *con) {
+handler_t connection_handle_read_post_state(connection *con) {
 	chunkqueue *cq = con->read_queue;
 	chunkqueue *dst_cq = con->request_content_queue;
 
 	int is_closed = 0;
 
 	if (con->is_readable) {
-		con->read_idle_ts = srv->cur_ts;
+		con->read_idle_ts = con->srv->cur_ts;
 
 		switch(con->network_read(con, con->read_queue, MAX_READ_LIMIT)) {
 		case -1:
@@ -486,9 +486,7 @@ handler_t connection_handle_read_post_state(server *srv, connection *con) {
 	}
 }
 
-void connection_response_reset(server *srv, connection *con) {
-	UNUSED(srv);
-
+void connection_response_reset(connection *con) {
 	con->mode = DIRECT;
 	con->http_status = 0;
 	con->is_writable = 1;

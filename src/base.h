@@ -214,12 +214,14 @@ struct connection {
 
 	server *srv;
 
+	void *plugin_slots;
 	void **plugin_ctx;           /* plugin connection specific config */
 
 	specific_config conf;        /* global connection specific config */
 	uint32_t conditional_is_valid;
 	struct cond_cache_t *cond_cache;
 	struct cond_match_t *cond_match;
+	void *config_data_base;
 
 	const buffer *server_name;
 	buffer *proto;
@@ -323,7 +325,7 @@ struct server {
 
 	struct fdevents *ev;
 	int (* network_backend_write)(int fd, chunkqueue *cq, off_t max_bytes, log_error_st *errh);
-	handler_t (* request_env)(struct server *srv, connection *con);
+	handler_t (* request_env)(connection *con);
 
 	/* buffers */
 	buffer *tmp_buf;
