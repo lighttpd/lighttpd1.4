@@ -130,7 +130,7 @@ static handler_t sockproxy_create_env_connect(handler_ctx *hctx) {
 	gw_set_transparent(hctx);
 	http_response_upgrade_read_body_unknown(con);
 
-	status_counter_inc(con->srv, CONST_STR_LEN("sockproxy.requests"));
+	status_counter_inc(CONST_STR_LEN("sockproxy.requests"));
 	return HANDLER_GO_ON;
 }
 

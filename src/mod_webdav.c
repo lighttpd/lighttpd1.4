@@ -897,9 +897,9 @@ webdav_xml_doc_lock_acquired (connection * const con,
     /*(http_status is set by caller to 200 OK or 201 Created)*/
 
     char tbuf[32] = "Second-";
-    li_itostrn(tbuf+sizeof("Second-")-1, sizeof(tbuf)-(sizeof("Second-")-1),
-               lockdata->timeout);
-    const uint32_t tbuf_len = strlen(tbuf);
+    const uint32_t tbuf_len =
+      li_itostrn(tbuf+sizeof("Second-")-1, sizeof(tbuf)-(sizeof("Second-")-1),
+                 lockdata->timeout);
     http_header_response_set(con, HTTP_HEADER_OTHER,
       CONST_STR_LEN("Timeout"),
       tbuf, tbuf_len);
@@ -4318,8 +4318,10 @@ mod_webdav_put_linkat_rename (connection * const con,
     chunk *c = cq->first;
 
     char pathproc[32] = "/proc/self/fd/";
-    li_itostrn(pathproc+sizeof("/proc/self/fd/")-1,
-               sizeof(pathproc)-(sizeof("/proc/self/fd/")-1), (long)c->file.fd);
+    size_t plen =
+      li_itostrn(pathproc+sizeof("/proc/self/fd/")-1,
+                 sizeof(pathproc)-(sizeof("/proc/self/fd/")-1), c->file.fd);
+    pathproc[plen] = '\0';
     if (0 == linkat(AT_FDCWD, pathproc, AT_FDCWD, pathtemp, AT_SYMLINK_FOLLOW)){
         struct stat st;
       #ifdef RENAME_NOREPLACE /*(renameat2() not well-supported yet)*/

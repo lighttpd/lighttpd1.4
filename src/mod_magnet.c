@@ -21,7 +21,6 @@
 #include <lua.h>
 #include <lauxlib.h>
 
-#define LUA_RIDX_LIGHTTPD_SERVER     "lighty.srv"
 #define LUA_RIDX_LIGHTTPD_CONNECTION "lighty.con"
 
 #define MAGNET_RESTART_REQUEST      99
@@ -253,16 +252,6 @@ static int magnet_array_pairs(lua_State *L, array *a) {
 	return 1;
 }
 
-static server* magnet_get_server(lua_State *L) {
-	server *srv;
-
-	lua_getfield(L, LUA_REGISTRYINDEX, LUA_RIDX_LIGHTTPD_SERVER);
-	srv = lua_touserdata(L, -1);
-	lua_pop(L, 1);
-
-	return srv;
-}
-
 static connection* magnet_get_connection(lua_State *L) {
 	connection *con;
 
@@ -406,33 +395,26 @@ static int magnet_reqhdr_pairs(lua_State *L) {
 }
 
 static int magnet_status_get(lua_State *L) {
-	int *i;
-	server *srv = magnet_get_server(L);
-
 	/* __index: param 1 is the (empty) table the value was not found in */
 	const_buffer key = magnet_checkconstbuffer(L, 2);
-	i = status_counter_get_counter(srv, key.ptr, key.len);
+	int *i = status_counter_get_counter(key.ptr, key.len);
 	lua_pushinteger(L, (lua_Integer)*i);
 
 	return 1;
 }
 
 static int magnet_status_set(lua_State *L) {
-	server *srv = magnet_get_server(L);
-
 	/* __newindex: param 1 is the (empty) table the value is supposed to be set in */
 	const_buffer key = magnet_checkconstbuffer(L, 2);
 	int counter = (int) luaL_checkinteger(L, 3);
 
-	status_counter_set(srv, key.ptr, key.len, counter);
+	status_counter_set(key.ptr, key.len, counter);
 
 	return 0;
 }
 
 static int magnet_status_pairs(lua_State *L) {
-	server *srv = magnet_get_server(L);
-
-	return magnet_array_pairs(L, &srv->status);
+	return magnet_array_pairs(L, &plugin_stats);
 }
 
 typedef struct {
@@ -810,9 +792,6 @@ static handler_t magnet_attract(connection *con, plugin_data *p, buffer *name) {
 
 	force_assert(lua_gettop(L) == 1);
 	force_assert(lua_isfunction(L, func_ndx));
-
-	lua_pushlightuserdata(L, con->srv);
-	lua_setfield(L, LUA_REGISTRYINDEX, LUA_RIDX_LIGHTTPD_SERVER);
 
 	lua_pushlightuserdata(L, con);
 	lua_setfield(L, LUA_REGISTRYINDEX, LUA_RIDX_LIGHTTPD_CONNECTION);

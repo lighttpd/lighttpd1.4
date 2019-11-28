@@ -282,7 +282,7 @@ static handler_t scgi_create_env(handler_ctx *hctx) {
 			hctx->wb_reqlen = -hctx->wb_reqlen;
 	}
 
-	status_counter_inc(con->srv, CONST_STR_LEN("scgi.requests"));
+	status_counter_inc(CONST_STR_LEN("scgi.requests"));
 	return HANDLER_GO_ON;
 }
 

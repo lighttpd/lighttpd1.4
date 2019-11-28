@@ -306,30 +306,22 @@ void buffer_append_strftime(buffer *b, const char *format, const struct tm *tm) 
 }
 
 
-void li_itostrn(char *buf, size_t buf_len, intmax_t val) {
+size_t li_itostrn(char *buf, size_t buf_len, intmax_t val) {
 	char p_buf[LI_ITOSTRING_LENGTH];
-	char* const p_buf_end = p_buf + sizeof(p_buf);
-	char* str = p_buf_end - 1;
-	*str = '\0';
-
-	str = itostr(str, val);
-	force_assert(p_buf_end > str && str >= p_buf);
-
-	force_assert(buf_len >= (size_t) (p_buf_end - str));
-	memcpy(buf, str, p_buf_end - str);
+	char* const str = itostr(p_buf+sizeof(p_buf), val);
+	size_t len = (size_t)(p_buf+sizeof(p_buf)-str);
+	force_assert(len <= buf_len);
+	memcpy(buf, str, len);
+	return len;
 }
 
-void li_utostrn(char *buf, size_t buf_len, uintmax_t val) {
+size_t li_utostrn(char *buf, size_t buf_len, uintmax_t val) {
 	char p_buf[LI_ITOSTRING_LENGTH];
-	char* const p_buf_end = p_buf + sizeof(p_buf);
-	char* str = p_buf_end - 1;
-	*str = '\0';
-
-	str = utostr(str, val);
-	force_assert(p_buf_end > str && str >= p_buf);
-
-	force_assert(buf_len >= (size_t) (p_buf_end - str));
-	memcpy(buf, str, p_buf_end - str);
+	char* const str = utostr(p_buf+sizeof(p_buf), val);
+	size_t len = (size_t)(p_buf+sizeof(p_buf)-str);
+	force_assert(len <= buf_len);
+	memcpy(buf, str, len);
+	return len;
 }
 
 #define li_ntox_lc(n) ((n) <= 9 ? (n) + '0' : (n) + 'a' - 10)

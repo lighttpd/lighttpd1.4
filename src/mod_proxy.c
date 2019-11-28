@@ -888,8 +888,8 @@ static handler_t proxy_create_env(gw_handler_ctx *gwhctx) {
 		const buffer *vb = http_header_request_get(con, HTTP_HEADER_CONTENT_LENGTH, CONST_STR_LEN("Content-Length"));
 		if (NULL == vb) {
 			char buf[LI_ITOSTRING_LENGTH];
-			li_itostrn(buf, sizeof(buf), con->request.content_length);
-			http_header_request_set(con, HTTP_HEADER_CONTENT_LENGTH, CONST_STR_LEN("Content-Length"), buf, strlen(buf));
+			http_header_request_set(con, HTTP_HEADER_CONTENT_LENGTH, CONST_STR_LEN("Content-Length"),
+			                        buf, li_itostrn(buf, sizeof(buf), con->request.content_length));
 		}
 	}
 
@@ -979,7 +979,7 @@ static handler_t proxy_create_env(gw_handler_ctx *gwhctx) {
 			hctx->gw.wb_reqlen = -hctx->gw.wb_reqlen;
 	}
 
-	status_counter_inc(con->srv, CONST_STR_LEN("proxy.requests"));
+	status_counter_inc(CONST_STR_LEN("proxy.requests"));
 	return HANDLER_GO_ON;
 }
 
@@ -992,7 +992,7 @@ static handler_t proxy_create_env_connect(gw_handler_ctx *gwhctx) {
 	gw_set_transparent(&hctx->gw);
 	http_response_upgrade_read_body_unknown(con);
 
-	status_counter_inc(con->srv, CONST_STR_LEN("proxy.requests"));
+	status_counter_inc(CONST_STR_LEN("proxy.requests"));
 	return HANDLER_GO_ON;
 }
 

@@ -337,39 +337,39 @@ geoip2_env_set (array * const env, const char * const k,
      * However, note that the strings *are not* '\0'-terminated */
     char buf[35];
     if (!data->has_data || 0 == data->offset) return;
+    const char *v = buf;
+    size_t vlen;
     switch (data->type) {
       case MMDB_DATA_TYPE_UTF8_STRING:
-        array_set_key_value(env, k, klen, data->utf8_string, data->data_size);
-        return;
+        v = data->utf8_string;
+        vlen = data->data_size;
+        break;
       case MMDB_DATA_TYPE_BOOLEAN:
-        array_set_key_value(env, k, klen, data->boolean ? "1" : "0", 1);
-        return;
+        v = data->boolean ? "1" : "0";
+        vlen = 1;
+        break;
       case MMDB_DATA_TYPE_BYTES:
-        array_set_key_value(env, k, klen,
-                            (const char *) data->bytes, data->data_size);
-        return;
+        v = (const char *)data->bytes;
+        vlen = data->data_size;
+        break;
       case MMDB_DATA_TYPE_DOUBLE:
-        array_set_key_value(env, k, klen,
-                            buf, snprintf(buf, sizeof(buf), "%.5f",
-                                          data->double_value));
-        return;
+        vlen = snprintf(buf, sizeof(buf), "%.5f", data->double_value);
+        break;
       case MMDB_DATA_TYPE_FLOAT:
-        array_set_key_value(env, k, klen,
-                            buf, snprintf(buf, sizeof(buf), "%.5f",
-                                          data->float_value));
-        return;
+        vlen = snprintf(buf, sizeof(buf), "%.5f", data->float_value);
+        break;
       case MMDB_DATA_TYPE_INT32:
-        li_itostrn(buf, sizeof(buf), data->int32);
+        vlen = li_itostrn(buf, sizeof(buf), data->int32);
         break;
       case MMDB_DATA_TYPE_UINT32:
-        li_utostrn(buf, sizeof(buf), data->uint32);
+        vlen = li_utostrn(buf, sizeof(buf), data->uint32);
         break;
       case MMDB_DATA_TYPE_UINT16:
-        li_utostrn(buf, sizeof(buf), data->uint16);
+        vlen = li_utostrn(buf, sizeof(buf), data->uint16);
         break;
       case MMDB_DATA_TYPE_UINT64:
         /* truncated value on 32-bit unless uintmax_t is 64-bit (long long) */
-        li_utostrn(buf, sizeof(buf), data->uint64);
+        vlen = li_utostrn(buf, sizeof(buf), data->uint64);
         break;
       case MMDB_DATA_TYPE_UINT128:
         buf[0] = '0';
@@ -379,13 +379,13 @@ geoip2_env_set (array * const env, const char * const k,
        #else
         li_tohex_uc(buf+2, sizeof(buf)-2, (char *)&data->uint128, 16);
        #endif
-        array_set_key_value(env, k, klen, buf, 34);
-        return;
+        vlen = 34;
+        break;
       default: /*(ignore unknown data type)*/
         return;
     }
 
-    array_set_key_value(env, k, klen, buf, strlen(buf)); /*(numerical types)*/
+    array_set_key_value(env, k, klen, v, vlen);
 }
 
 

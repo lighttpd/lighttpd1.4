@@ -333,7 +333,7 @@ static handler_t fcgi_create_env(handler_ctx *hctx) {
 	}
 	fcgi_stdin_append(hctx);
 
-	status_counter_inc(con->srv, CONST_STR_LEN("fastcgi.requests"));
+	status_counter_inc(CONST_STR_LEN("fastcgi.requests"));
 	return HANDLER_GO_ON;
 }
 

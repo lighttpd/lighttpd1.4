@@ -7,6 +7,23 @@
 #include "array.h"
 #include "plugin_config.h"
 
+
+/**
+ * The status array can carry all the status information you want
+ * the key to the array is <module-prefix>.<name>
+ * and the values are counters
+ *
+ * example:
+ *   fastcgi.backends        = 10
+ *   fastcgi.active-backends = 6
+ *   fastcgi.backend.<key>.load = 24
+ *   fastcgi.backend.<key>....
+ *
+ *   fastcgi.backend.<key>.disconnects = ...
+ */
+extern array plugin_stats;
+
+
 #define SERVER_FUNC(x) \
 		static handler_t x(server *srv, void *p_d)
 

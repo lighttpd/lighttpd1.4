@@ -481,8 +481,8 @@ static void mod_compress_note_ratio(connection *con, off_t in, off_t out) {
     /*(should be called only at end of successful response compression)*/
     char ratio[LI_ITOSTRING_LENGTH];
     if (0 == in) return;
-    li_itostrn(ratio, sizeof(ratio), out * 100 / in);
-    http_header_env_set(con, CONST_STR_LEN("ratio"), ratio, strlen(ratio));
+    http_header_env_set(con, CONST_STR_LEN("ratio"),
+                        ratio, li_itostrn(ratio,sizeof(ratio),out*100/in));
 }
 
 static int deflate_file_to_file(connection *con, plugin_data *p, int ifd, buffer *fn, stat_cache_entry *sce, int type) {

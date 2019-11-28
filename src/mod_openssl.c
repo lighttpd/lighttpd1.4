@@ -2330,26 +2330,18 @@ http_cgi_ssl_env (server *srv, connection *con, handler_ctx *hctx)
     UNUSED(srv);
 
     s = SSL_get_version(hctx->ssl);
-    http_header_env_set(con,
-                        CONST_STR_LEN("SSL_PROTOCOL"),
-                        s, strlen(s));
+    http_header_env_set(con, CONST_STR_LEN("SSL_PROTOCOL"), s, strlen(s));
 
     if ((cipher = SSL_get_current_cipher(hctx->ssl))) {
         int usekeysize, algkeysize;
         char buf[LI_ITOSTRING_LENGTH];
         s = SSL_CIPHER_get_name(cipher);
-        http_header_env_set(con,
-                            CONST_STR_LEN("SSL_CIPHER"),
-                            s, strlen(s));
+        http_header_env_set(con, CONST_STR_LEN("SSL_CIPHER"), s, strlen(s));
         usekeysize = SSL_CIPHER_get_bits(cipher, &algkeysize);
-        li_itostrn(buf, sizeof(buf), usekeysize);
-        http_header_env_set(con,
-                            CONST_STR_LEN("SSL_CIPHER_USEKEYSIZE"),
-                            buf, strlen(buf));
-        li_itostrn(buf, sizeof(buf), algkeysize);
-        http_header_env_set(con,
-                            CONST_STR_LEN("SSL_CIPHER_ALGKEYSIZE"),
-                            buf, strlen(buf));
+        http_header_env_set(con, CONST_STR_LEN("SSL_CIPHER_USEKEYSIZE"),
+                            buf, li_itostrn(buf, sizeof(buf), usekeysize));
+        http_header_env_set(con, CONST_STR_LEN("SSL_CIPHER_ALGKEYSIZE"),
+                            buf, li_itostrn(buf, sizeof(buf), algkeysize));
     }
 }
 

@@ -670,14 +670,15 @@ static void mod_auth_digest_mutate_sha256(http_auth_info_t *ai, const char *m, c
 
 static void mod_auth_digest_nonce_sha256(buffer *b, time_t cur_ts, int rnd) {
     SHA256_CTX ctx;
+    size_t len;
     unsigned char h[HTTP_AUTH_DIGEST_SHA256_BINLEN];
     char hh[HTTP_AUTH_DIGEST_SHA256_BINLEN*2+1];
     force_assert(sizeof(hh) >= LI_ITOSTRING_LENGTH);
     SHA256_Init(&ctx);
-    li_itostrn(hh, sizeof(hh), cur_ts);
-    SHA256_Update(&ctx, (unsigned char *)hh, strlen(hh));
-    li_itostrn(hh, sizeof(hh), rnd);
-    SHA256_Update(&ctx, (unsigned char *)hh, strlen(hh));
+    len = li_itostrn(hh, sizeof(hh), cur_ts);
+    SHA256_Update(&ctx, (unsigned char *)hh, len);
+    len = li_itostrn(hh, sizeof(hh), rnd);
+    SHA256_Update(&ctx, (unsigned char *)hh, len);
     SHA256_Final(h, &ctx);
     li_tohex(hh, sizeof(hh), (const char *)h, sizeof(h));
     buffer_append_string_len(b, hh, sizeof(hh)-1);
@@ -738,14 +739,15 @@ static void mod_auth_digest_mutate_sha512_256(http_auth_info_t *ai, const char *
 
 static void mod_auth_digest_nonce_sha512_256(buffer *b, time_t cur_ts, int rnd) {
     SHA512_CTX ctx;
+    size_t len;
     unsigned char h[HTTP_AUTH_DIGEST_SHA512_256_BINLEN];
     char hh[HTTP_AUTH_DIGEST_SHA512_256_BINLEN*2+1];
     force_assert(sizeof(hh) >= LI_ITOSTRING_LENGTH);
     SHA512_256_Init(&ctx);
-    li_itostrn(hh, sizeof(hh), cur_ts);
-    SHA512_256_Update(&ctx, (unsigned char *)hh, strlen(hh));
-    li_itostrn(hh, sizeof(hh), rnd);
-    SHA512_256_Update(&ctx, (unsigned char *)hh, strlen(hh));
+    len = li_itostrn(hh, sizeof(hh), cur_ts);
+    SHA512_256_Update(&ctx, (unsigned char *)hh, len);
+    len = li_itostrn(hh, sizeof(hh), rnd);
+    SHA512_256_Update(&ctx, (unsigned char *)hh, len);
     SHA512_256_Final(h, &ctx);
     li_tohex(hh, sizeof(hh), (const char *)h, sizeof(h));
     buffer_append_string_len(b, hh, sizeof(hh)-1);
@@ -810,14 +812,15 @@ static void mod_auth_digest_mutate_md5(http_auth_info_t *ai, const char *m, cons
 
 static void mod_auth_digest_nonce_md5(buffer *b, time_t cur_ts, int rnd) {
     li_MD5_CTX ctx;
+    size_t len;
     unsigned char h[HTTP_AUTH_DIGEST_MD5_BINLEN];
     char hh[HTTP_AUTH_DIGEST_MD5_BINLEN*2+1];
     force_assert(sizeof(hh) >= LI_ITOSTRING_LENGTH);
     li_MD5_Init(&ctx);
-    li_itostrn(hh, sizeof(hh), cur_ts);
-    li_MD5_Update(&ctx, (unsigned char *)hh, strlen(hh));
-    li_itostrn(hh, sizeof(hh), rnd);
-    li_MD5_Update(&ctx, (unsigned char *)hh, strlen(hh));
+    len = li_itostrn(hh, sizeof(hh), cur_ts);
+    li_MD5_Update(&ctx, (unsigned char *)hh, len);
+    len = li_itostrn(hh, sizeof(hh), rnd);
+    li_MD5_Update(&ctx, (unsigned char *)hh, len);
     li_MD5_Final(h, &ctx);
     li_tohex(hh, sizeof(hh), (const char *)h, sizeof(h));
     buffer_append_string_len(b, hh, sizeof(hh)-1);

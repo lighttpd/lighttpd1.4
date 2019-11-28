@@ -356,21 +356,6 @@ struct server {
 	buffer *ts_date_str;
 	log_error_st *errh;
 
-	/**
-	 * The status array can carry all the status information you want
-	 * the key to the array is <module-prefix>.<name>
-	 * and the values are counters
-	 *
-	 * example:
-	 *   fastcgi.backends        = 10
-	 *   fastcgi.active-backends = 6
-	 *   fastcgi.backend.<key>.load = 24
-	 *   fastcgi.backend.<key>....
-	 *
-	 *   fastcgi.backend.<key>.disconnects = ...
-	 */
-	array status;
-
 	server_config  srvconf;
 
 	/* caches */

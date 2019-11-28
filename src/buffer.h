@@ -97,8 +97,8 @@ void buffer_append_strftime(buffer *b, const char *format, const struct tm *tm);
 /* '-', log_10 (2^bits) = bits * log 2 / log 10 < bits * 0.31, terminating 0 */
 #define LI_ITOSTRING_LENGTH (2 + (8 * sizeof(intmax_t) * 31 + 99) / 100)
 
-void li_itostrn(char *buf, size_t buf_len, intmax_t val);
-void li_utostrn(char *buf, size_t buf_len, uintmax_t val);
+size_t li_itostrn(char *buf, size_t buf_len, intmax_t val);
+size_t li_utostrn(char *buf, size_t buf_len, uintmax_t val);
 
 /* buf must be (at least) 2*s_len + 1 big. uses lower-case hex letters. */
 #define li_tohex(buf,buf_len,s,s_len) li_tohex_lc((buf),(buf_len),(s),(s_len))

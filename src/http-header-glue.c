@@ -1344,8 +1344,8 @@ int http_cgi_headers (connection *con, http_cgi_opts *opts, http_cgi_header_appe
 
     /* (CONTENT_LENGTH must be first for SCGI) */
     if (!opts->authorizer) {
-        li_itostrn(buf, sizeof(buf), con->request.content_length);
-        rc |= cb(vdata, CONST_STR_LEN("CONTENT_LENGTH"), buf, strlen(buf));
+        rc |= cb(vdata, CONST_STR_LEN("CONTENT_LENGTH"),
+                 buf, li_itostrn(buf,sizeof(buf),con->request.content_length));
     }
 
     if (!buffer_string_is_empty(con->uri.query)) {
@@ -1474,8 +1474,8 @@ int http_cgi_headers (connection *con, http_cgi_opts *opts, http_cgi_header_appe
     }
 
     addr = &srv_sock->addr;
-    li_utostrn(buf, sizeof(buf), sock_addr_get_port(addr));
-    rc |= cb(vdata, CONST_STR_LEN("SERVER_PORT"), buf, strlen(buf));
+    rc |= cb(vdata, CONST_STR_LEN("SERVER_PORT"),
+             buf, li_utostrn(buf,sizeof(buf),sock_addr_get_port(addr)));
 
     switch (addr->plain.sa_family) {
     case AF_INET:
@@ -1520,8 +1520,8 @@ int http_cgi_headers (connection *con, http_cgi_opts *opts, http_cgi_header_appe
     rc |= cb(vdata, CONST_STR_LEN("REMOTE_ADDR"),
                     CONST_BUF_LEN(con->dst_addr_buf));
 
-    li_utostrn(buf, sizeof(buf), sock_addr_get_port(&con->dst_addr));
-    rc |= cb(vdata, CONST_STR_LEN("REMOTE_PORT"), buf, strlen(buf));
+    rc |= cb(vdata, CONST_STR_LEN("REMOTE_PORT"), buf,
+             li_utostrn(buf,sizeof(buf),sock_addr_get_port(&con->dst_addr)));
 
     for (n = 0; n < con->request.headers.used; n++) {
         data_string *ds = (data_string *)con->request.headers.data[n];

@@ -2,10 +2,13 @@
 
 #include "plugin.h"
 #include "base.h"
+#include "array.h"
 #include "log.h"
 
 #include <string.h>
 #include <stdlib.h>
+
+array plugin_stats; /* global */
 
 #ifdef HAVE_VALGRIND_VALGRIND_H
 # include <valgrind/valgrind.h>
@@ -557,4 +560,5 @@ void plugins_free(server *srv) {
 	srv->plugins.ptr = NULL;
 	srv->plugins.used = 0;
 	srv->plugins.size = 0;
+	array_free_data(&plugin_stats);
 }

@@ -285,8 +285,6 @@ static void server_free(server *srv) {
 
 	config_free(srv);
 
-	array_free_data(&srv->status);
-
 	free(srv->joblist.ptr);
 	free(srv->fdwaitqueue.ptr);
 

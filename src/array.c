@@ -36,6 +36,10 @@ void array_free_data(array * const a) {
 		if (data[i]) data[i]->fn->free(data[i]);
 	}
 	free(data);
+	a->data = NULL;
+	a->sorted = NULL;
+	a->used = 0;
+	a->size = 0;
 }
 
 void array_copy_array(array * const dst, const array * const src) {

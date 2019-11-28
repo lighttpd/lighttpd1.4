@@ -251,14 +251,14 @@ static handler_t mod_geoip_query (connection *con, plugin_data *p) {
 
         {
             char dc[LI_ITOSTRING_LENGTH];
-            li_utostrn(dc, sizeof(dc), gir->dma_code);
-            http_header_env_set(con, CONST_STR_LEN("GEOIP_CITY_DMA_CODE"), dc, strlen(dc));
+            http_header_env_set(con, CONST_STR_LEN("GEOIP_CITY_DMA_CODE"),
+                                dc, li_utostrn(dc, sizeof(dc), gir->dma_code));
         }
 
         {
             char ac[LI_ITOSTRING_LENGTH];
-            li_utostrn(ac, sizeof(ac), gir->area_code);
-            http_header_env_set(con, CONST_STR_LEN("GEOIP_CITY_AREA_CODE"), ac, strlen(ac));
+            http_header_env_set(con, CONST_STR_LEN("GEOIP_CITY_AREA_CODE"),
+                                ac, li_utostrn(ac, sizeof(ac), gir->area_code));
         }
 
         GeoIPRecord_delete(gir);

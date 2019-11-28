@@ -724,8 +724,9 @@ static void mod_deflate_note_ratio(connection *con, handler_ctx *hctx) {
     /*(should be called only at end of successful response compression)*/
     char ratio[LI_ITOSTRING_LENGTH];
     if (0 == hctx->bytes_in) return;
-    li_itostrn(ratio, sizeof(ratio), hctx->bytes_out * 100 / hctx->bytes_in);
-    http_header_env_set(con, CONST_STR_LEN("ratio"), ratio, strlen(ratio));
+    size_t len =
+      li_itostrn(ratio, sizeof(ratio), hctx->bytes_out * 100 / hctx->bytes_in);
+    http_header_env_set(con, CONST_STR_LEN("ratio"), ratio, len);
 }
 
 static int mod_deflate_stream_end(handler_ctx *hctx) {
