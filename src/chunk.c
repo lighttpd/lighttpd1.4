@@ -25,7 +25,7 @@
 #define DEFAULT_TEMPFILE_SIZE (1 * 1024 * 1024)
 #define MAX_TEMPFILE_SIZE (128 * 1024 * 1024)
 
-static size_t chunk_buf_sz = 4096;
+static size_t chunk_buf_sz = 8192;
 static chunk *chunks, *chunks_oversized;
 static chunk *chunk_buffers;
 static const array *chunkqueue_default_tempdirs = NULL;
@@ -33,7 +33,7 @@ static off_t chunkqueue_default_tempfile_size = DEFAULT_TEMPFILE_SIZE;
 
 void chunkqueue_set_chunk_size (size_t sz)
 {
-    chunk_buf_sz = sz > 0 ? ((sz + 1023) & ~1023uL) : 4096;
+    chunk_buf_sz = sz > 0 ? ((sz + 1023) & ~1023uL) : 8192;
 }
 
 void chunkqueue_set_tempdirs_default_reset (void)
