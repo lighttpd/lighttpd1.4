@@ -1898,14 +1898,15 @@ connection_read_cq_ssl (connection *con, chunkqueue *cq, off_t max_bytes)
     do {
         len = SSL_pending(hctx->ssl);
         mem_len = len < 2048 ? 2048 : (size_t)len;
+        chunk * const ckpt = con->read_queue->last;
         mem = chunkqueue_get_memory(con->read_queue, &mem_len);
 
         len = SSL_read(hctx->ssl, mem, mem_len);
         if (len > 0) {
-            chunkqueue_use_memory(con->read_queue, len);
+            chunkqueue_use_memory(con->read_queue, ckpt, len);
             con->bytes_read += len;
         } else {
-            chunkqueue_use_memory(con->read_queue, 0);
+            chunkqueue_use_memory(con->read_queue, ckpt, 0);
         }
 
         if (hctx->renegotiations > 1

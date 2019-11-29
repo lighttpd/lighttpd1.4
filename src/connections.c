@@ -1001,90 +1001,95 @@ connection *connection_accept(server *srv, server_socket *srv_socket) {
 }
 
 
+__attribute_cold__
+static int connection_read_cq_err(connection *con) {
+  #if defined(__WIN32)
+    int lastError = WSAGetLastError();
+    switch (lastError) {
+    case EAGAIN:
+        return 0;
+    case EINTR:
+        /* we have been interrupted before we could read */
+        con->is_readable = 1;
+        return 0;
+    case ECONNRESET:
+        /* suppress logging for this error, expected for keep-alive */
+        break;
+    default:
+        log_error(con->conf.errh, __FILE__, __LINE__,
+          "connection closed - recv failed: %d", lastError);
+        break;
+    }
+  #else /* __WIN32 */
+    switch (errno) {
+    case EAGAIN:
+        return 0;
+    case EINTR:
+        /* we have been interrupted before we could read */
+        con->is_readable = 1;
+        return 0;
+    case ECONNRESET:
+        /* suppress logging for this error, expected for keep-alive */
+        break;
+    default:
+        log_perror(con->conf.errh, __FILE__, __LINE__,
+          "connection closed - read failed");
+        break;
+    }
+  #endif /* __WIN32 */
+
+    connection_set_state(con, CON_STATE_ERROR);
+    return -1;
+}
+
+
 /* 0: everything ok, -1: error, -2: con closed */
 static int connection_read_cq(connection *con, chunkqueue *cq, off_t max_bytes) {
-	ssize_t len;
-	char *mem = NULL;
-	size_t mem_len = 0;
-	force_assert(cq == con->read_queue);       /*(code transform assumption; minimize diff)*/
-	force_assert(max_bytes == MAX_READ_LIMIT); /*(code transform assumption; minimize diff)*/
+    ssize_t len;
+    size_t mem_len = 0;
+    force_assert(cq == con->read_queue);       /*(code transform assumption; minimize diff)*/
+    /*force_assert(max_bytes == MAX_READ_LIMIT);*//*(code transform assumption; minimize diff)*/
 
-	/* check avail data to read and obtain memory into which to read
-	 * fill previous chunk if it has sufficient space
-	 * (use mem_len=0 to obtain large buffer at least half of chunk_buf_sz)
-	 */
-	{
-		int frd;
-		if (0 == fdevent_ioctl_fionread(con->fd, S_IFSOCK, &frd)) {
-			mem_len = (frd < MAX_READ_LIMIT) ? (size_t)frd : MAX_READ_LIMIT;
-		}
-	}
-	mem = chunkqueue_get_memory(con->read_queue, &mem_len);
+    do {
+        /* obtain chunk memory into which to read
+         * fill previous chunk if it has a reasonable amount of space available
+         * (use mem_len=0 to obtain large buffer at least half of chunk_buf_sz)
+         */
+        chunk *ckpt = con->read_queue->last;
+        char * const mem = chunkqueue_get_memory(con->read_queue, &mem_len);
+        if (mem_len > (size_t)max_bytes) mem_len = (size_t)max_bytes;
 
-#if defined(__WIN32)
-	len = recv(con->fd, mem, mem_len, 0);
-#else
-	len = read(con->fd, mem, mem_len);
-#endif /* __WIN32 */
+          #if defined(__WIN32)
+        len = recv(con->fd, mem, mem_len, 0);
+          #else
+        len = read(con->fd, mem, mem_len);
+          #endif /* __WIN32 */
 
-	chunkqueue_use_memory(con->read_queue, len > 0 ? len : 0);
+        chunkqueue_use_memory(con->read_queue, ckpt, len > 0 ? len : 0);
 
-	if (len < 0) {
-		con->is_readable = 0;
+        if (len != (ssize_t)mem_len) {
+            /* we got less then expected, wait for the next fd-event */
+            con->is_readable = 0;
 
-#if defined(__WIN32)
-		{
-			int lastError = WSAGetLastError();
-			switch (lastError) {
-			case EAGAIN:
-				return 0;
-			case EINTR:
-				/* we have been interrupted before we could read */
-				con->is_readable = 1;
-				return 0;
-			case ECONNRESET:
-				/* suppress logging for this error, expected for keep-alive */
-				break;
-			default:
-				log_error(con->conf.errh, __FILE__, __LINE__, "connection closed - recv failed: %d", lastError);
-				break;
-			}
-		}
-#else /* __WIN32 */
-		switch (errno) {
-		case EAGAIN:
-			return 0;
-		case EINTR:
-			/* we have been interrupted before we could read */
-			con->is_readable = 1;
-			return 0;
-		case ECONNRESET:
-			/* suppress logging for this error, expected for keep-alive */
-			break;
-		default:
-			log_perror(con->conf.errh, __FILE__, __LINE__, "connection closed - read failed");
-			break;
-		}
-#endif /* __WIN32 */
+            if (len > 0) {
+                con->bytes_read += len;
+                return 0;
+            }
+            else if (0 == len) /* other end close connection -> KEEP-ALIVE */
+                return -2;     /* (pipelining) */
+            else
+                return connection_read_cq_err(con);
+        }
 
-		connection_set_state(con, CON_STATE_ERROR);
+        con->bytes_read += len;
+        max_bytes -= len;
 
-		return -1;
-	} else if (len == 0) {
-		con->is_readable = 0;
-		/* the other end close the connection -> KEEP-ALIVE */
-
-		/* pipelining */
-
-		return -2;
-	} else if (len != (ssize_t) mem_len) {
-		/* we got less then expected, wait for the next fd-event */
-
-		con->is_readable = 0;
-	}
-
-	con->bytes_read += len;
-	return 0;
+        int frd;
+        mem_len = (0 == fdevent_ioctl_fionread(con->fd, S_IFSOCK, &frd))
+          ? (frd < max_bytes) ? (size_t)frd : (size_t)max_bytes
+          : 0;
+    } while (max_bytes);
+    return 0;
 }
 
 

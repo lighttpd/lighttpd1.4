@@ -421,21 +421,25 @@ char * chunkqueue_get_memory(chunkqueue *cq, size_t *len) {
 	return b->ptr;
 }
 
-void chunkqueue_use_memory(chunkqueue *cq, size_t len) {
-	buffer *b;
+void chunkqueue_use_memory(chunkqueue *cq, chunk *ckpt, size_t len) {
+    buffer *b = cq->last->mem;
 
-	force_assert(NULL != cq);
-	force_assert(NULL != cq->last && MEM_CHUNK == cq->last->type);
-	b = cq->last->mem;
+    if (len > 0) {
+        buffer_commit(b, len);
+        cq->bytes_in += len;
+        if (cq->last == ckpt || NULL == ckpt || MEM_CHUNK != ckpt->type
+            || len > chunk_buffer_string_space(ckpt->mem)) return;
 
-	if (len > 0) {
-		buffer_commit(b, len);
-		cq->bytes_in += len;
-	} else if (chunk_buffer_string_is_empty(b)) {
-		/* scan chunkqueue to remove empty last chunk
-		 * (generally not expecting a deep queue) */
-		chunkqueue_remove_empty_chunks(cq);
-	}
+        buffer_append_string_buffer(ckpt->mem, b);
+    }
+    else if (!chunk_buffer_string_is_empty(b)) { /*(cq->last == ckpt)*/
+        return; /* last chunk is not empty */
+    }
+
+    /* remove empty last chunk */
+    chunk_release(cq->last);
+    cq->last = ckpt;
+    *(ckpt ? &ckpt->next : &cq->first) = NULL;
 }
 
 void chunkqueue_set_tempdirs_default (const array *tempdirs, off_t upload_temp_file_size) {

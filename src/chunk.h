@@ -100,7 +100,7 @@ int chunkqueue_append_mem_to_tempfile(chunkqueue *cq, const char *mem, size_t le
 __attribute_returns_nonnull__
 char * chunkqueue_get_memory(chunkqueue *cq, size_t *len);
 /* commit len bytes of mem obtained from chunkqueue_get_memory() */
-void chunkqueue_use_memory(chunkqueue *cq, size_t len);
+void chunkqueue_use_memory(chunkqueue *cq, chunk *ckpt, size_t len);
 
 /* mark first "len" bytes as written (incrementing chunk offsets)
  * and remove finished chunks
