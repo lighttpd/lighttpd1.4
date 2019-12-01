@@ -285,6 +285,8 @@ typedef enum {
     GW_STATE_READ
 } gw_connection_state_t;
 
+struct fdevents;        /* declaration */
+
 #define GW_RESPONDER  1
 #define GW_AUTHORIZER 2
 #define GW_FILTER     3  /*(not implemented)*/
@@ -305,6 +307,7 @@ typedef struct gw_handler_ctx {
 
     buffer   *response;
 
+    struct fdevents *ev;
     fdnode   *fdn;       /* fdevent (fdnode *) object */
     int       fd;        /* fd to the gw process */
 
