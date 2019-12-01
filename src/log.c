@@ -71,57 +71,6 @@ ssize_t write_all(int fd, const void* buf, size_t count) {
 	return written;
 }
 
-/* lowercase: append space, uppercase: don't */
-static void log_buffer_append_printf(buffer *out, const char *fmt, va_list ap) {
-	for(; *fmt; fmt++) {
-		int d;
-		char *s;
-		buffer *b;
-		off_t o;
-
-		switch(*fmt) {
-		case 'S':           /* string */
-		case 's':           /* string */
-			s = va_arg(ap, char *);
-			buffer_append_string_c_escaped(out, s, (NULL != s) ? strlen(s) : 0);
-			break;
-		case 'B':           /* buffer */
-		case 'b':           /* buffer */
-			b = va_arg(ap, buffer *);
-			buffer_append_string_c_escaped(out, CONST_BUF_LEN(b));
-			break;
-		case 'D':           /* int */
-		case 'd':           /* int */
-			d = va_arg(ap, int);
-			buffer_append_int(out, d);
-			break;
-		case 'O':           /* off_t */
-		case 'o':           /* off_t */
-			o = va_arg(ap, off_t);
-			buffer_append_int(out, o);
-			break;
-		case 'X':           /* int (hex) */
-		case 'x':           /* int (hex) */
-			d = va_arg(ap, int);
-			buffer_append_string_len(out, CONST_STR_LEN("0x"));
-			buffer_append_uint_hex(out, d);
-			break;
-		case '(':
-		case ')':
-		case '<':
-		case '>':
-		case ',':
-		case ' ':
-			buffer_append_string_len(out, fmt, 1);
-			break;
-		}
-
-		if (*fmt >= 'a') { /* 's' 'b' 'd' 'o' 'x' */
-			buffer_append_string_len(out, CONST_STR_LEN(" "));
-		}
-	}
-}
-
 static int log_buffer_prepare(const log_error_st *errh, const char *filename, unsigned int line, buffer *b) {
 	switch(errh->errorlog_mode) {
 	case ERRORLOG_PIPE:
@@ -166,46 +115,17 @@ static void log_write(const log_error_st *errh, buffer *b) {
 	}
 }
 
-int log_error_write_multiline_buffer(server *srv, const char *filename, unsigned int line, buffer *multiline, const char *fmt, ...) {
-	const log_error_st *errh = srv->errh;
-	buffer *b = errh->b;
-	va_list ap;
-	size_t prefix_len;
-	char *pos, *end, *current_line;
 
-	if (buffer_string_is_empty(multiline)) return 0;
-
-	if (-1 == log_buffer_prepare(errh, filename, line, b)) return 0;
-
-	va_start(ap, fmt);
-	log_buffer_append_printf(b, fmt, ap);
-	va_end(ap);
-
-	prefix_len = buffer_string_length(b);
-
-	current_line = pos = multiline->ptr;
-	end = multiline->ptr + buffer_string_length(multiline);
-
-	for ( ; pos <= end ; ++pos) {
-		switch (*pos) {
-		case '\n':
-		case '\r':
-		case '\0': /* handles end of string */
-			if (current_line < pos) {
-				/* truncate to prefix */
-				buffer_string_set_length(b, prefix_len);
-
-				buffer_append_string_len(b, current_line, pos - current_line);
-				log_write(errh, b);
-			}
-			current_line = pos + 1;
-			break;
-		default:
-			break;
-		}
-	}
-
-	return 0;
+static void
+log_buffer_append_encoded (buffer * const b,
+                           const char * const s, const size_t n)
+{
+    size_t i;
+    for (i = 0; i < n && ' ' <= s[i] && s[i] <= '~'; ++i) ;/*(ASCII isprint())*/
+    if (i == n)
+        buffer_append_string_len(b, s, n);  /* common case; nothing to encode */
+    else
+        buffer_append_string_c_escaped(b, s, n);
 }
 
 
@@ -288,6 +208,40 @@ log_perror (const log_error_st * const errh,
     va_start(ap, fmt);
     log_error_va_list_impl(errh, filename, line, fmt, ap, 1);
     va_end(ap);
+}
+
+
+void
+log_error_multiline_buffer (const log_error_st * const restrict errh,
+                            const char * const restrict filename,
+                            const unsigned int line,
+                            const buffer * const restrict multiline,
+                            const char * const restrict fmt, ...)
+{
+    if (multiline->used < 2) return;
+
+    const int errnum = errno;
+    buffer * const b = errh->b;
+    if (-1 == log_buffer_prepare(errh, filename, line, b)) return;
+
+    va_list ap;
+    va_start(ap, fmt);
+    log_buffer_vprintf(b, fmt, ap);
+    va_end(ap);
+
+    const size_t prefix_len = buffer_string_length(b);
+    const char * const end = multiline->ptr + multiline->used - 2;
+    const char *pos = multiline->ptr-1, *current_line;
+    do {
+        pos = strchr(current_line = pos+1, '\n');
+        if (!pos)
+            pos = end;
+        buffer_string_set_length(b, prefix_len); /* truncate to prefix */
+        log_buffer_append_encoded(b, current_line, pos - current_line);
+        log_write(errh, b);
+    } while (pos < end);
+
+    errno = errnum;
 }
 
 
