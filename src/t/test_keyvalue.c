@@ -13,10 +13,9 @@
 
 #ifdef HAVE_PCRE_H
 static pcre_keyvalue_buffer * test_keyvalue_test_kvb_init (void) {
-    static time_t cur_ts;
     pcre_keyvalue_buffer *kvb = pcre_keyvalue_buffer_init();
 
-    log_error_st * const errh = log_error_st_init(&cur_ts);
+    log_error_st * const errh = log_error_st_init();
 
     /* strings must be persistent for pcre_keyvalue_buffer_append() */
     static const buffer kvstr[] = {

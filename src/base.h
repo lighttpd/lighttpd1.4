@@ -348,9 +348,6 @@ struct server {
 
 	uint32_t max_conns;
 
-	/* Timestamps */
-	time_t cur_ts;
-
 	log_error_st *errh;
 
 	server_config  srvconf;

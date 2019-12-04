@@ -213,7 +213,7 @@ static int gw_extension_insert(gw_exts *ext, const buffer *key, gw_host *fh) {
 
 static void gw_proc_connect_success(connection *con, gw_host *host, gw_proc *proc, int debug) {
     gw_proc_tag_inc(host, proc, CONST_STR_LEN(".connected"));
-    proc->last_used = con->srv->cur_ts;
+    proc->last_used = log_epoch_secs;
 
     if (debug) {
         log_error(con->conf.errh, __FILE__, __LINE__,
@@ -224,7 +224,7 @@ static void gw_proc_connect_success(connection *con, gw_host *host, gw_proc *pro
 
 __attribute_cold__
 static void gw_proc_connect_error(connection *con, gw_host *host, gw_proc *proc, pid_t pid, int errnum, int debug) {
-    const time_t cur_ts = con->srv->cur_ts;
+    const time_t cur_ts = log_epoch_secs;
     log_error_st * const errh = con->conf.errh;
     log_error(errh, __FILE__, __LINE__,
       "establishing connection failed: socket: %s: %s",
@@ -298,7 +298,7 @@ static void gw_proc_release(gw_host *host, gw_proc *proc, int debug, log_error_s
 }
 
 static void gw_proc_check_enable(server *srv, gw_host *host, gw_proc *proc) {
-    if (srv->cur_ts <= proc->disabled_until) return;
+    if (log_epoch_secs <= proc->disabled_until) return;
     if (proc->state != PROC_STATE_OVERLOADED) return;
 
     gw_proc_set_state(host, proc, PROC_STATE_RUNNING);
@@ -353,7 +353,7 @@ static int gw_proc_waitpid(server *srv, gw_host *host, gw_proc *proc) {
 
     proc->pid = 0;
     if (proc->state != PROC_STATE_KILLED)
-        proc->disabled_until = srv->cur_ts;
+        proc->disabled_until = log_epoch_secs;
     gw_proc_set_state(host, proc, PROC_STATE_DIED);
     return 1;
 }
@@ -572,12 +572,12 @@ static int gw_spawn_connection(server *srv, gw_host *host, gw_proc *proc, int de
             log_error(srv->errh, __FILE__, __LINE__,
               "gw-backend failed to start: %s", host->bin_path->ptr);
             proc->pid = 0;
-            proc->disabled_until = srv->cur_ts;
+            proc->disabled_until = log_epoch_secs;
             return -1;
         }
 
         /* register process */
-        proc->last_used = srv->cur_ts;
+        proc->last_used = log_epoch_secs;
         proc->is_local = 1;
 
         /* wait */
@@ -614,7 +614,7 @@ static void gw_proc_spawn(server *srv, gw_host *host, int debug) {
         /* (proc->pid <= 0 indicates PROC_STATE_DIED, not PROC_STATE_KILLED) */
         if (proc->pid > 0) continue;
         /* (do not attempt to spawn another proc if a proc just exited) */
-        if (proc->disabled_until >= srv->cur_ts) return;
+        if (proc->disabled_until >= log_epoch_secs) return;
         break;
     }
     if (proc) {
@@ -995,7 +995,7 @@ static void gw_restart_dead_procs(server *srv, gw_host *host, int debug, int tri
             /*(state should not happen in workers if server.max-worker > 0)*/
             /*(if PROC_STATE_DIED_WAIT_FOR_PID is used in future, might want
              * to save proc->disabled_until before gw_proc_waitpid() since
-             * gw_proc_waitpid will set proc->disabled_until to srv->cur_ts,
+             * gw_proc_waitpid will set proc->disabled_until to log_epoch_secs,
              * and so process will not be restarted below until one sec later)*/
             if (0 == gw_proc_waitpid(srv, host, proc)) {
                 gw_proc_check_enable(srv, host, proc);
@@ -1014,7 +1014,7 @@ static void gw_restart_dead_procs(server *srv, gw_host *host, int debug, int tri
                 if (proc->load != 0) break;
 
                 /* avoid spinning if child exits too quickly */
-                if (proc->disabled_until >= srv->cur_ts) break;
+                if (proc->disabled_until >= log_epoch_secs) break;
 
                 /* restart the child */
 
@@ -1723,7 +1723,7 @@ int gw_get_defaults_balance(server *srv, const buffer *b) {
 
 static void gw_set_state(gw_handler_ctx *hctx, gw_connection_state_t state) {
     hctx->state = state;
-    /*hctx->state_timestamp = hctx->remote_conn->srv->cur_ts;*/
+    /*hctx->state_timestamp = log_epoch_secs;*/
 }
 
 
@@ -2144,7 +2144,7 @@ static handler_t gw_recv_response(gw_handler_ctx *hctx, connection *con) {
                 physpath = con->physical.path;
             }
 
-            proc->last_used = con->srv->cur_ts;
+            proc->last_used = log_epoch_secs;
             gw_backend_close(hctx, con);
             handler_ctx_clear(hctx);
 
@@ -2185,7 +2185,7 @@ static handler_t gw_recv_response(gw_handler_ctx *hctx, connection *con) {
             && proc->state != PROC_STATE_DIED
             && 0 == con->srv->srvconf.max_worker) {
             /* intentionally check proc->disabed_until before gw_proc_waitpid */
-            if (proc->disabled_until < con->srv->cur_ts
+            if (proc->disabled_until < log_epoch_secs
                 && 0 != gw_proc_waitpid(con->srv, host, proc)) {
                 if (hctx->conf.debug) {
                     log_error(errh, __FILE__, __LINE__,
@@ -2560,7 +2560,7 @@ static void gw_handle_trigger_host(server *srv, gw_host *host, int debug) {
         gw_proc_spawn(srv, host, debug);
     }
 
-    idle_timestamp = srv->cur_ts - host->idle_timeout;
+    idle_timestamp = log_epoch_secs - host->idle_timeout;
     for (proc = host->first; proc; proc = proc->next) {
         if (host->num_procs <= host->min_procs) break;
         if (0 != proc->load) continue;
@@ -2676,7 +2676,7 @@ handler_t gw_handle_waitpid_cb(server *srv, void *p_d, pid_t pid, int status) {
          *  or global scope (for convenience))
          * (unable to use p->defaults.debug since gw_plugin_config
          *  might be part of a larger plugin_config) */
-        const time_t cur_ts = srv->cur_ts;
+        const time_t cur_ts = log_epoch_secs;
         gw_exts *exts = conf->exts;
         for (uint32_t j = 0; j < exts->used; ++j) {
             gw_extension *ex = exts->exts+j;

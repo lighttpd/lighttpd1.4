@@ -246,10 +246,9 @@ static server *server_init(void) {
 
 	li_rand_reseed();
 
-	srv->cur_ts = time(NULL);
-	srv->startup_ts = srv->cur_ts;
+	srv->startup_ts = log_epoch_secs = time(NULL);
 
-	srv->errh = log_error_st_init(&srv->cur_ts);
+	srv->errh = log_error_st_init();
 
 	config_init(srv);
 
@@ -1418,7 +1417,7 @@ static int server_main (server * const srv, int argc, char **argv) {
 				int status;
 
 				if (-1 != (pid = wait(&status))) {
-					srv->cur_ts = time(NULL);
+					log_epoch_secs = time(NULL);
 					if (plugins_call_handle_waitpid(srv, pid, status) != HANDLER_GO_ON) {
 						if (!timer) alarm((timer = 5));
 						continue;
@@ -1442,7 +1441,7 @@ static int server_main (server * const srv, int argc, char **argv) {
 				} else {
 					switch (errno) {
 					case EINTR:
-						srv->cur_ts = time(NULL);
+						log_epoch_secs = time(NULL);
 						/**
 						 * if we receive a SIGHUP we have to close our logs ourself as we don't 
 						 * have the mainloop who can help us here
@@ -1461,7 +1460,7 @@ static int server_main (server * const srv, int argc, char **argv) {
 							handle_sig_alarm = 0;
 							timer = 0;
 							plugins_call_handle_trigger(srv);
-							fdevent_restart_logger_pipes(srv->cur_ts);
+							fdevent_restart_logger_pipes(log_epoch_secs);
 						}
 						break;
 					default:
@@ -1620,7 +1619,7 @@ static void server_handle_sigalrm (server * const srv, time_t min_ts, time_t las
 
 				plugins_call_handle_trigger(srv);
 
-				srv->cur_ts = min_ts;
+				log_epoch_secs = min_ts;
 
 				/* check idle time limit, if enabled */
 				if (idle_limit && idle_limit < min_ts - last_active_ts && !graceful_shutdown) {
@@ -1667,7 +1666,7 @@ static void server_handle_sigchld (server * const srv) {
 					}
 					if (0 == srv->srvconf.max_worker) {
 						/* check piped-loggers and restart, even if shutting down */
-						if (fdevent_waitpid_logger_pipe_pid(pid, srv->cur_ts)) {
+						if (fdevent_waitpid_logger_pipe_pid(pid, log_epoch_secs)) {
 							continue;
 						}
 					}
@@ -1694,7 +1693,7 @@ static int server_main_loop (server * const srv) {
 			handle_sig_alarm = 0;
 	      #endif
 			time_t min_ts = time(NULL);
-			if (min_ts != srv->cur_ts) {
+			if (min_ts != log_epoch_secs) {
 				server_handle_sigalrm(srv, min_ts, last_active_ts);
 			}
 	      #ifdef USE_ALARM
@@ -1725,7 +1724,7 @@ static int server_main_loop (server * const srv) {
 		}
 
 		if (fdevent_poll(srv->ev, 1000) > 0) {
-			last_active_ts = srv->cur_ts;
+			last_active_ts = log_epoch_secs;
 		}
 
 		for (uint32_t ndx = 0; ndx < joblist->used; ++ndx) {

@@ -377,7 +377,7 @@ static handler_t wstunnel_create_env(gw_handler_ctx *gwhctx) {
     con->http_status = 101; /* Switching Protocols */
     con->file_started = 1;
 
-    hctx->ping_ts = con->srv->cur_ts;
+    hctx->ping_ts = log_epoch_secs;
     gw_set_transparent(&hctx->gw);
 
     return HANDLER_GO_ON;
@@ -604,7 +604,7 @@ static handler_t mod_wstunnel_check_extension(connection *con, void *p_d) {
 
 TRIGGER_FUNC(mod_wstunnel_handle_trigger) {
     const plugin_data * const p = p_d;
-    const time_t cur_ts = srv->cur_ts + 1;
+    const time_t cur_ts = log_epoch_secs + 1;
 
     gw_handle_trigger(srv, p_d);
 

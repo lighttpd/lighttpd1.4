@@ -168,7 +168,7 @@ static handler_t mod_usertrack_set_cookie(connection *con, plugin_data *p) {
 	li_MD5_Update(&Md5Ctx, CONST_BUF_LEN(con->uri.path));
 	li_MD5_Update(&Md5Ctx, CONST_STR_LEN("+"));
 
-	len = li_itostrn(hh, sizeof(hh), con->srv->cur_ts);
+	len = li_itostrn(hh, sizeof(hh), log_epoch_secs);
 	li_MD5_Update(&Md5Ctx, (unsigned char *)hh, len);
 	len = li_itostrn(hh, sizeof(hh), li_rand_pseudo());
 	li_MD5_Update(&Md5Ctx, (unsigned char *)hh, len);

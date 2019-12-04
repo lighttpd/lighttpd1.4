@@ -152,7 +152,7 @@ static int connection_close(server *srv, connection *con) {
 	return 0;
 }
 
-static void connection_read_for_eos_plain(connection * const con, const time_t cur_ts) {
+static void connection_read_for_eos_plain(connection * const con) {
 	/* we have to do the linger_on_close stuff regardless
 	 * of con->keep_alive; even non-keepalive sockets may
 	 * still have unread data, and closing before reading
@@ -172,26 +172,25 @@ static void connection_read_for_eos_plain(connection * const con, const time_t c
       #endif
 
 	/* 0 == len || (len < 0 && (errno is a non-recoverable error)) */
-		con->close_timeout_ts = cur_ts - (HTTP_LINGER_TIMEOUT+1);
+		con->close_timeout_ts = log_epoch_secs - (HTTP_LINGER_TIMEOUT+1);
 }
 
-static void connection_read_for_eos_ssl(connection * const con, const time_t cur_ts) {
+static void connection_read_for_eos_ssl(connection * const con) {
 	if (con->network_read(con, con->read_queue, MAX_READ_LIMIT) < 0)
-		con->close_timeout_ts = cur_ts - (HTTP_LINGER_TIMEOUT+1);
+		con->close_timeout_ts = log_epoch_secs - (HTTP_LINGER_TIMEOUT+1);
 	chunkqueue_reset(con->read_queue);
 }
 
-static void connection_read_for_eos(connection * const con, const time_t cur_ts) {
+static void connection_read_for_eos(connection * const con) {
 	!con->is_ssl_sock
-	  ? connection_read_for_eos_plain(con, cur_ts)
-	  : connection_read_for_eos_ssl(con, cur_ts);
+	  ? connection_read_for_eos_plain(con)
+	  : connection_read_for_eos_ssl(con);
 }
 
 static void connection_handle_close_state(server *srv, connection *con) {
-	const time_t cur_ts = srv->cur_ts;
-	connection_read_for_eos(con, cur_ts);
+	connection_read_for_eos(con);
 
-	if (cur_ts - con->close_timeout_ts > HTTP_LINGER_TIMEOUT) {
+	if (log_epoch_secs - con->close_timeout_ts > HTTP_LINGER_TIMEOUT) {
 		connection_close(srv, con);
 	}
 }
@@ -206,7 +205,7 @@ static void connection_handle_shutdown(connection *con) {
 	/* close the connection */
 	if (con->fd >= 0
 	    && (con->is_ssl_sock || 0 == shutdown(con->fd, SHUT_WR))) {
-		con->close_timeout_ts = srv->cur_ts;
+		con->close_timeout_ts = log_epoch_secs;
 		connection_set_state(con, CON_STATE_CLOSE);
 
 		if (srv->srvconf.log_state_handling) {
@@ -241,8 +240,7 @@ static void connection_handle_response_end_state(connection *con) {
         if (con->keep_alive) {
 		connection_reset(con);
 #if 0
-		con->request_start = con->srv->cur_ts;
-		con->read_idle_ts = con->srv->cur_ts;
+		con->request_start = con->read_idle_ts = log_epoch_secs;
 #endif
 		connection_set_state(con, CON_STATE_REQUEST_START);
 	} else {
@@ -485,7 +483,7 @@ static void connection_handle_write(connection *con) {
 		/* not finished yet -> WRITE */
 		break;
 	}
-	con->write_request_ts = con->srv->cur_ts;
+	con->write_request_ts = log_epoch_secs;
 }
 
 static void connection_handle_write_state(connection *con) {
@@ -719,7 +717,7 @@ static void connection_discard_blank_line(connection *con, const char * const s,
 
 static chunk * connection_read_header_more(connection *con, chunkqueue *cq, chunk *c, const size_t olen) {
     if ((NULL == c || NULL == c->next) && con->is_readable) {
-        con->read_idle_ts = con->srv->cur_ts;
+        con->read_idle_ts = log_epoch_secs;
         if (0 != con->network_read(con, cq, MAX_READ_LIMIT))
             connection_set_state(con, CON_STATE_ERROR);
     }
@@ -816,11 +814,11 @@ static int connection_handle_read_state(server * const srv, connection * const c
         if (0 != con->bytes_read) {
             /* update request_start timestamp when first byte of
              * next request is received on a keep-alive connection */
-            con->request_start = srv->cur_ts;
+            con->request_start = log_epoch_secs;
             if (con->conf.high_precision_timestamps)
                 log_clock_gettime_realtime(&con->request_start_hp);
         }
-        if (pipelined_request_start && c) con->read_idle_ts = srv->cur_ts;
+        if (pipelined_request_start && c) con->read_idle_ts = log_epoch_secs;
     }
 
     if (NULL == c) return 0; /* incomplete request headers */
@@ -904,7 +902,7 @@ static handler_t connection_handle_fdevent(server *srv, void *context, int reven
 
 	if (con->state == CON_STATE_CLOSE) {
 		/* flush the read buffers */
-		connection_read_for_eos(con, srv->cur_ts);
+		connection_read_for_eos(con);
 	}
 
 
@@ -913,7 +911,7 @@ static handler_t connection_handle_fdevent(server *srv, void *context, int reven
 
 	if ((revents & ~(FDEVENT_IN | FDEVENT_OUT)) && con->state != CON_STATE_ERROR) {
 		if (con->state == CON_STATE_CLOSE) {
-			con->close_timeout_ts = srv->cur_ts - (HTTP_LINGER_TIMEOUT+1);
+			con->close_timeout_ts = log_epoch_secs - (HTTP_LINGER_TIMEOUT+1);
 		} else if (revents & FDEVENT_HUP) {
 			connection_set_state(con, CON_STATE_ERROR);
 		} else if (revents & FDEVENT_RDHUP) {
@@ -1118,7 +1116,7 @@ connection *connection_accepted(server *srv, server_socket *srv_socket, sock_add
 
 		connection_set_state(con, CON_STATE_REQUEST_START);
 
-		con->connection_start = srv->cur_ts;
+		con->connection_start = log_epoch_secs;
 		con->dst_addr = *cnt_addr;
 		buffer_copy_string(con->dst_addr_buf, inet_ntop_cache_get_ip(srv, &(con->dst_addr)));
 		con->srv_socket = srv_socket;
@@ -1265,7 +1263,7 @@ int connection_state_machine(server *srv, connection *con) {
 
 		switch ((ostate = con->state)) {
 		case CON_STATE_REQUEST_START: /* transient */
-			con->request_start = con->read_idle_ts = srv->cur_ts;
+			con->request_start = con->read_idle_ts = log_epoch_secs;
 			if (con->conf.high_precision_timestamps)
 				log_clock_gettime_realtime(&con->request_start_hp);
 
@@ -1374,10 +1372,10 @@ int connection_state_machine(server *srv, connection *con) {
 		if (r != events) {
 			/* update timestamps when enabling interest in events */
 			if ((r & FDEVENT_IN) && !(events & FDEVENT_IN)) {
-				con->read_idle_ts = srv->cur_ts;
+				con->read_idle_ts = log_epoch_secs;
 			}
 			if ((r & FDEVENT_OUT) && !(events & FDEVENT_OUT)) {
-				con->write_request_ts = srv->cur_ts;
+				con->write_request_ts = log_epoch_secs;
 			}
 			fdevent_fdnode_event_set(srv->ev, con->fdn, r);
 		}
@@ -1491,7 +1489,7 @@ void connection_graceful_shutdown_maint (server *srv) {
              * (from zero) *up to* one more second, but no more */
             if (HTTP_LINGER_TIMEOUT > 1)
                 con->close_timeout_ts -= (HTTP_LINGER_TIMEOUT - 1);
-            if (srv->cur_ts - con->close_timeout_ts > HTTP_LINGER_TIMEOUT)
+            if (log_epoch_secs - con->close_timeout_ts > HTTP_LINGER_TIMEOUT)
                 changed = 1;
         }
         else if (con->state == CON_STATE_READ && con->request_count > 1

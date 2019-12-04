@@ -357,7 +357,7 @@ static int mod_rrd_write_data(server *srv, plugin_data *p, rrd_config *s) {
         s->bytes_read = 0;
     }
     else if (!(strstr(resp, "(minimum one second step)")
-               && srv->cur_ts - srv->startup_ts < 3)) {
+               && log_epoch_secs - srv->startup_ts < 3)) {
         /* don't fail on this error if we just started (above condition)
          * (graceful restart, the old one might have just updated too) */
         log_error(srv->errh, __FILE__, __LINE__,
@@ -391,7 +391,7 @@ TRIGGER_FUNC(mod_rrd_trigger) {
     if (0 == p->rrdtool_pid) return HANDLER_GO_ON;
 
     /* write data once a minute */
-    if ((srv->cur_ts % 60) != 0) return HANDLER_GO_ON;
+    if ((log_epoch_secs % 60) != 0) return HANDLER_GO_ON;
 
     if (!p->rrdtool_running) {
         if (srv->pid != p->srv_pid) return HANDLER_GO_ON;

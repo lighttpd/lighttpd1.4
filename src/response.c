@@ -103,7 +103,7 @@ int http_response_write_header(connection *con) {
 		buffer_append_string_len(b, CONST_STR_LEN("\r\nDate: "));
 
 		/* cache the generated timestamp */
-		const time_t cur_ts = con->srv->cur_ts;
+		const time_t cur_ts = log_epoch_secs;
 		if (tlast != cur_ts) {
 			tlast = cur_ts;
 			tlen = strftime(tstr, sizeof(tstr),

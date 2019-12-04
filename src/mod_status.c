@@ -179,7 +179,7 @@ static handler_t mod_status_handle_server_status_html(server *srv, connection *c
 	char multiplier = '\0';
 	char buf[32];
 	time_t ts;
-	const time_t cur_ts = srv->cur_ts;
+	const time_t cur_ts = log_epoch_secs;
 
 	int days, hours, mins, seconds;
 
@@ -590,7 +590,7 @@ static handler_t mod_status_handle_server_status_text(server *srv, connection *c
 
 	/* output uptime */
 	buffer_append_string_len(b, CONST_STR_LEN("Uptime: "));
-	buffer_append_int(b, srv->cur_ts - srv->startup_ts);
+	buffer_append_int(b, log_epoch_secs - srv->startup_ts);
 	buffer_append_string_len(b, CONST_STR_LEN("\n"));
 
 	/* output busy servers */
@@ -664,7 +664,7 @@ static handler_t mod_status_handle_server_status_json(server *srv, connection *c
 
 	/* output uptime */
 	buffer_append_string_len(b, CONST_STR_LEN("\t\"Uptime\": "));
-	buffer_append_int(b, srv->cur_ts - srv->startup_ts);
+	buffer_append_int(b, log_epoch_secs - srv->startup_ts);
 	buffer_append_string_len(b, CONST_STR_LEN(",\n"));
 
 	/* output busy servers */

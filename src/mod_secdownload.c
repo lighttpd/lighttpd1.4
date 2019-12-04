@@ -470,7 +470,7 @@ URIHANDLER_FUNC(mod_secdownload_uri_handler) {
 		ts = (ts << 4) + hex2int(ts_str[i]);
 	}
 
-	const time_t cur_ts = con->srv->cur_ts;
+	const time_t cur_ts = log_epoch_secs;
 
 	/* timed-out */
 	if ( (cur_ts > ts && (unsigned int) (cur_ts - ts) > p->conf.timeout) ||

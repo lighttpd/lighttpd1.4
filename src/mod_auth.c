@@ -1171,7 +1171,7 @@ static handler_t mod_auth_check_digest(connection *con, void *p_d, const struct 
 		for (i = 0; i < 8 && light_isxdigit(nonce_uns[i]); ++i) {
 			ts = (ts << 4) + hex2int(nonce_uns[i]);
 		}
-		const time_t cur_ts = con->srv->cur_ts;
+		const time_t cur_ts = log_epoch_secs;
 		if (nonce[i] != ':'
 		    || ts > cur_ts || cur_ts - ts > 600) { /*(10 mins)*/
 			/* nonce is stale; have client regenerate digest */
@@ -1197,7 +1197,7 @@ static handler_t mod_auth_check_digest(connection *con, void *p_d, const struct 
 
 static handler_t mod_auth_send_401_unauthorized_digest(connection *con, const struct http_auth_require_t *require, int nonce_stale) {
 	server *srv = con->srv;
-	mod_auth_digest_www_authenticate(srv->tmp_buf, srv->cur_ts, require, nonce_stale);
+	mod_auth_digest_www_authenticate(srv->tmp_buf, log_epoch_secs, require, nonce_stale);
 	http_header_response_set(con, HTTP_HEADER_OTHER, CONST_STR_LEN("WWW-Authenticate"), CONST_BUF_LEN(srv->tmp_buf));
 
 	con->http_status = 401;

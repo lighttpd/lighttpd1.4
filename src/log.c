@@ -27,6 +27,8 @@
 #endif
 #endif
 
+time_t log_epoch_secs = 0;
+
 int log_clock_gettime_realtime (struct timespec *ts) {
       #ifdef HAVE_CLOCK_GETTIME
 	return clock_gettime(CLOCK_REALTIME, ts);
@@ -81,8 +83,8 @@ static int log_buffer_prepare(const log_error_st *errh, const char *filename, un
 	case ERRORLOG_FD:
 		if (-1 == errh->errorlog_fd) return -1;
 		/* cache the generated timestamp */
-		if (tlast != *errh->cur_ts) {
-			tlast = *errh->cur_ts;
+		if (tlast != log_epoch_secs) {
+			tlast = log_epoch_secs;
 			tlen = strftime(tstr, sizeof(tstr),
 			                "%Y-%m-%d %H:%M:%S", localtime(&tlast));
 		}
@@ -249,14 +251,13 @@ log_error_multiline_buffer (const log_error_st * const restrict errh,
 
 
 log_error_st *
-log_error_st_init (time_t *cur_ts_ptr)
+log_error_st_init (void)
 {
     log_error_st *errh = calloc(1, sizeof(log_error_st));
     force_assert(errh);
     errh->errorlog_fd = STDERR_FILENO;
     errh->errorlog_mode = ERRORLOG_FD;
     errh->b = buffer_init();
-    errh->cur_ts = cur_ts_ptr;
     return errh;
 }
 

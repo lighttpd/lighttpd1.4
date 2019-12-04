@@ -307,7 +307,7 @@ CONNECTION_FUNC(mod_expire_handler) {
 
 	if (NULL != vb) {
 			time_t ts, expires;
-			const time_t cur_ts = con->srv->cur_ts;
+			const time_t cur_ts = log_epoch_secs;
 			stat_cache_entry *sce = NULL;
 
 			switch(mod_expire_get_offset(con->conf.errh, vb, &ts)) {

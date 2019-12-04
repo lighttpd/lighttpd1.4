@@ -430,7 +430,7 @@ static fam_dir_entry * fam_dir_monitor(server *srv, stat_cache_fam *scf, char *f
         /* directory already registered */
     }
 
-    const time_t cur_ts = srv->cur_ts;
+    const time_t cur_ts = log_epoch_secs;
     struct stat lst;
     int ck_dir = fn_is_dir;
     if (!fn_is_dir && (NULL==fam_dir || cur_ts - fam_dir->stat_ts >= 16)) {
@@ -733,7 +733,7 @@ void stat_cache_update_entry(server *srv, const char *name, size_t len,
     stat_cache_entry *sce =
       stat_cache_sptree_find(sptree, name, len);
     if (sce && buffer_is_equal_string(sce->name, name, len)) {
-        sce->stat_ts = srv->cur_ts;
+        sce->stat_ts = log_epoch_secs;
         sce->st = *st; /* etagb might be NULL to clear etag (invalidate) */
         buffer_copy_string_len(sce->etag, CONST_BUF_LEN(etagb));
       #if defined(HAVE_XATTR) || defined(HAVE_EXTATTR)
@@ -894,7 +894,7 @@ handler_t stat_cache_get_entry(connection *con, buffer *name, stat_cache_entry *
 	 */
 
 	server * const srv = con->srv;
-	const time_t cur_ts = srv->cur_ts;
+	const time_t cur_ts = log_epoch_secs;
 
 	sc = srv->stat_cache;
 
@@ -1114,7 +1114,7 @@ int stat_cache_trigger_cleanup(server *srv) {
 
       #ifdef HAVE_FAM_H
 	if (srv->srvconf.stat_cache_engine == STAT_CACHE_ENGINE_FAM) {
-		if (srv->cur_ts & 0x1F) return 0;
+		if (log_epoch_secs & 0x1F) return 0;
 		/* once every 32 seconds (0x1F == 31) */
 		max_age = 32;
 		fam_dir_periodic_cleanup(srv);
@@ -1125,7 +1125,7 @@ int stat_cache_trigger_cleanup(server *srv) {
 	}
       #endif
 
-	stat_cache_periodic_cleanup(srv->stat_cache, max_age, srv->cur_ts);
+	stat_cache_periodic_cleanup(srv->stat_cache, max_age, log_epoch_secs);
 
 	return 0;
 }

@@ -397,7 +397,7 @@ URIHANDLER_FUNC(mod_trigger_b4_dl_uri_handler) {
 		log_error(con->conf.errh, __FILE__, __LINE__, "(debug) remote-ip: %s", remote_ip->ptr);
 	}
 
-	const time_t cur_ts = con->srv->cur_ts;
+	const time_t cur_ts = log_epoch_secs;
 
 	/* check if URL is a trigger -> insert IP into DB */
 	if ((n = pcre_exec(p->conf.trigger_regex, NULL, CONST_BUF_LEN(con->uri.path), 0, 0, ovec, 3 * N)) < 0) {
@@ -560,8 +560,9 @@ static void mod_trigger_b4_dl_trigger_gdbm(GDBM_FILE db, const time_t cur_ts, co
 
 TRIGGER_FUNC(mod_trigger_b4_dl_handle_trigger) {
     /* check DB each minute */
-    const time_t cur_ts = srv->cur_ts;
+    const time_t cur_ts = log_epoch_secs;
     if (cur_ts % 60 != 0) return HANDLER_GO_ON;
+    UNUSED(srv);
 
     plugin_data * const p = p_d;
 
