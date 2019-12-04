@@ -237,7 +237,6 @@ static server *server_init(void) {
 #define CLEAN(x) \
 	srv->x = buffer_init();
 
-	CLEAN(ts_date_str);
 	CLEAN(tmp_buf);
 #undef CLEAN
 
@@ -250,7 +249,7 @@ static server *server_init(void) {
 	srv->cur_ts = time(NULL);
 	srv->startup_ts = srv->cur_ts;
 
-	srv->errh = log_error_st_init(&srv->cur_ts, &srv->last_generated_debug_ts);
+	srv->errh = log_error_st_init(&srv->cur_ts);
 
 	config_init(srv);
 
@@ -276,7 +275,6 @@ static void server_free(server *srv) {
 #define CLEAN(x) \
 	buffer_free(srv->x);
 
-	CLEAN(ts_date_str);
 	CLEAN(tmp_buf);
 
 #undef CLEAN

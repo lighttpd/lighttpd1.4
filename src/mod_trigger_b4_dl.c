@@ -397,6 +397,8 @@ URIHANDLER_FUNC(mod_trigger_b4_dl_uri_handler) {
 		log_error(con->conf.errh, __FILE__, __LINE__, "(debug) remote-ip: %s", remote_ip->ptr);
 	}
 
+	const time_t cur_ts = con->srv->cur_ts;
+
 	/* check if URL is a trigger -> insert IP into DB */
 	if ((n = pcre_exec(p->conf.trigger_regex, NULL, CONST_BUF_LEN(con->uri.path), 0, 0, ovec, 3 * N)) < 0) {
 		if (n != PCRE_ERROR_NOMATCH) {
@@ -406,7 +408,6 @@ URIHANDLER_FUNC(mod_trigger_b4_dl_uri_handler) {
 			return HANDLER_ERROR;
 		}
 	} else {
-		server * const srv = con->srv;
 # if defined(HAVE_GDBM_H)
 		if (p->conf.db) {
 			/* the trigger matched */
@@ -415,8 +416,8 @@ URIHANDLER_FUNC(mod_trigger_b4_dl_uri_handler) {
 			*(const char **)&key.dptr = remote_ip->ptr;
 			key.dsize = buffer_string_length(remote_ip);
 
-			val.dptr = (char *)&(srv->cur_ts);
-			val.dsize = sizeof(srv->cur_ts);
+			val.dptr = (char *)&cur_ts;
+			val.dsize = sizeof(cur_ts);
 
 			if (0 != gdbm_store(p->conf.db, key, val, GDBM_REPLACE)) {
 				log_error(con->conf.errh, __FILE__, __LINE__, "insert failed");
@@ -425,7 +426,7 @@ URIHANDLER_FUNC(mod_trigger_b4_dl_uri_handler) {
 # endif
 # if defined(USE_MEMCACHED)
 		if (p->conf.memc) {
-			buffer * const b = srv->tmp_buf;
+			buffer * const b = con->srv->tmp_buf;
 			mod_trigger_b4_dl_memcached_key(b, p, remote_ip);
 
 			if (p->conf.debug) {
@@ -434,7 +435,7 @@ URIHANDLER_FUNC(mod_trigger_b4_dl_uri_handler) {
 
 			if (MEMCACHED_SUCCESS != memcached_set(p->conf.memc,
 					CONST_BUF_LEN(b),
-					(const char *)&(srv->cur_ts), sizeof(srv->cur_ts),
+					(const char *)&cur_ts, sizeof(cur_ts),
 					p->conf.trigger_timeout, 0)) {
 				log_error(con->conf.errh, __FILE__, __LINE__, "insert failed");
 			}
@@ -451,7 +452,6 @@ URIHANDLER_FUNC(mod_trigger_b4_dl_uri_handler) {
 		}
 	} else {
 		/* the download uri matched */
-		server * const srv = con->srv;
 # if defined(HAVE_GDBM_H)
 		if (p->conf.db) {
 			datum key, val;
@@ -471,7 +471,7 @@ URIHANDLER_FUNC(mod_trigger_b4_dl_uri_handler) {
 
 			free(val.dptr);
 
-			if (srv->cur_ts - last_hit > p->conf.trigger_timeout) {
+			if (cur_ts - last_hit > p->conf.trigger_timeout) {
 				/* found, but timeout, redirect */
 
 				if (p->conf.db) {
@@ -483,8 +483,8 @@ URIHANDLER_FUNC(mod_trigger_b4_dl_uri_handler) {
 				return mod_trigger_b4_dl_deny(con, p);
 			}
 
-			val.dptr = (char *)&(srv->cur_ts);
-			val.dsize = sizeof(srv->cur_ts);
+			val.dptr = (char *)&cur_ts;
+			val.dsize = sizeof(cur_ts);
 
 			if (0 != gdbm_store(p->conf.db, key, val, GDBM_REPLACE)) {
 				log_error(con->conf.errh, __FILE__, __LINE__, "insert failed");
@@ -493,7 +493,7 @@ URIHANDLER_FUNC(mod_trigger_b4_dl_uri_handler) {
 # endif
 # if defined(USE_MEMCACHED)
 		if (p->conf.memc) {
-			buffer * const b = srv->tmp_buf;
+			buffer * const b = con->srv->tmp_buf;
 			mod_trigger_b4_dl_memcached_key(b, p, remote_ip);
 
 			if (p->conf.debug) {
@@ -513,7 +513,7 @@ URIHANDLER_FUNC(mod_trigger_b4_dl_uri_handler) {
 			/* set a new timeout */
 			if (MEMCACHED_SUCCESS != memcached_set(p->conf.memc,
 					CONST_BUF_LEN(b),
-					(const char *)&(srv->cur_ts), sizeof(srv->cur_ts),
+					(const char *)&cur_ts, sizeof(cur_ts),
 					p->conf.trigger_timeout, 0)) {
 				log_error(con->conf.errh, __FILE__, __LINE__, "insert failed");
 			}

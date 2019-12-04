@@ -95,18 +95,22 @@ int http_response_write_header(connection *con) {
 	}
 
 	if (!(con->response.htags & HTTP_HEADER_DATE)) {
+		static time_t tlast;
+		static char tstr[32]; /* 30-chars for "%a, %d %b %Y %H:%M:%S GMT" */
+		static size_t tlen;
+
 		/* HTTP/1.1 requires a Date: header */
 		buffer_append_string_len(b, CONST_STR_LEN("\r\nDate: "));
 
 		/* cache the generated timestamp */
-		server * const srv = con->srv;
-		if (srv->cur_ts != srv->last_generated_date_ts) {
-			buffer_clear(srv->ts_date_str);
-			buffer_append_strftime(srv->ts_date_str, "%a, %d %b %Y %H:%M:%S GMT", gmtime(&(srv->cur_ts)));
-			srv->last_generated_date_ts = srv->cur_ts;
+		const time_t cur_ts = con->srv->cur_ts;
+		if (tlast != cur_ts) {
+			tlast = cur_ts;
+			tlen = strftime(tstr, sizeof(tstr),
+			                "%a, %d %b %Y %H:%M:%S GMT", gmtime(&tlast));
 		}
 
-		buffer_append_string_buffer(b, srv->ts_date_str);
+		buffer_append_string_len(b, tstr, tlen);
 	}
 
 	if (!(con->response.htags & HTTP_HEADER_SERVER)) {

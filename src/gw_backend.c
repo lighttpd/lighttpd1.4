@@ -2676,6 +2676,7 @@ handler_t gw_handle_waitpid_cb(server *srv, void *p_d, pid_t pid, int status) {
          *  or global scope (for convenience))
          * (unable to use p->defaults.debug since gw_plugin_config
          *  might be part of a larger plugin_config) */
+        const time_t cur_ts = srv->cur_ts;
         gw_exts *exts = conf->exts;
         for (uint32_t j = 0; j < exts->used; ++j) {
             gw_extension *ex = exts->exts+j;
@@ -2690,9 +2691,9 @@ handler_t gw_handle_waitpid_cb(server *srv, void *p_d, pid_t pid, int status) {
                     proc->pid = 0;
 
                     /* restart, but avoid spinning if child exits too quickly */
-                    if (proc->disabled_until < srv->cur_ts) {
+                    if (proc->disabled_until < cur_ts) {
                         if (proc->state != PROC_STATE_KILLED)
-                            proc->disabled_until = srv->cur_ts;
+                            proc->disabled_until = cur_ts;
                         if (gw_spawn_connection(srv, host, proc, debug)) {
                             log_error(srv->errh, __FILE__, __LINE__,
                               "ERROR: spawning gw failed.");
@@ -2706,7 +2707,7 @@ handler_t gw_handle_waitpid_cb(server *srv, void *p_d, pid_t pid, int status) {
 
                     gw_proc_waitpid_log(srv, host, proc, status);
                     if (proc->state != PROC_STATE_KILLED)
-                        proc->disabled_until = srv->cur_ts;
+                        proc->disabled_until = cur_ts;
                     gw_proc_set_state(host, proc, PROC_STATE_DIED);
                     proc->pid = 0;
                     return HANDLER_FINISHED;

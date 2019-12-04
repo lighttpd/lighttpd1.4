@@ -14,13 +14,11 @@ struct log_error_st {
     enum { ERRORLOG_FILE, ERRORLOG_FD, ERRORLOG_SYSLOG, ERRORLOG_PIPE } errorlog_mode;
     int errorlog_fd;
     buffer *b;
-    buffer *tb;
     time_t *cur_ts;
-    time_t *last_ts;
 };
 
 __attribute_cold__
-log_error_st * log_error_st_init (time_t *cur_ts_ptr, time_t *last_ts_ptr);
+log_error_st * log_error_st_init (time_t *cur_ts_ptr);
 
 __attribute_cold__
 void log_error_st_free (log_error_st *errh);

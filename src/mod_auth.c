@@ -1171,17 +1171,20 @@ static handler_t mod_auth_check_digest(connection *con, void *p_d, const struct 
 		for (i = 0; i < 8 && light_isxdigit(nonce_uns[i]); ++i) {
 			ts = (ts << 4) + hex2int(nonce_uns[i]);
 		}
-		server * const srv = con->srv;
+		const time_t cur_ts = con->srv->cur_ts;
 		if (nonce[i] != ':'
-		    || ts > srv->cur_ts || srv->cur_ts - ts > 600) { /*(10 mins)*/
+		    || ts > cur_ts || cur_ts - ts > 600) { /*(10 mins)*/
 			/* nonce is stale; have client regenerate digest */
 			buffer_free(b);
 			return mod_auth_send_401_unauthorized_digest(con, require, ai.dalgo);
 		}
-		else if (srv->cur_ts - ts > 540) { /*(9 mins)*/
+		else if (cur_ts - ts > 540) { /*(9 mins)*/
 			/*(send nextnonce when expiration is approaching)*/
-			mod_auth_digest_authentication_info(srv->tmp_buf, srv->cur_ts, ai.dalgo);
-			http_header_response_set(con, HTTP_HEADER_OTHER, CONST_STR_LEN("Authentication-Info"), CONST_BUF_LEN(srv->tmp_buf));
+			buffer * const tb = con->srv->tmp_buf;
+			mod_auth_digest_authentication_info(tb, cur_ts, ai.dalgo);
+			http_header_response_set(con, HTTP_HEADER_OTHER,
+			                         CONST_STR_LEN("Authentication-Info"),
+			                         CONST_BUF_LEN(tb));
 		}
 	}
 

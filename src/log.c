@@ -72,19 +72,22 @@ ssize_t write_all(int fd, const void* buf, size_t count) {
 }
 
 static int log_buffer_prepare(const log_error_st *errh, const char *filename, unsigned int line, buffer *b) {
+	static time_t tlast;
+	static char tstr[20]; /* 20-chars needed for "%Y-%m-%d %H:%M:%S" */
+	static size_t tlen;
 	switch(errh->errorlog_mode) {
 	case ERRORLOG_PIPE:
 	case ERRORLOG_FILE:
 	case ERRORLOG_FD:
 		if (-1 == errh->errorlog_fd) return -1;
 		/* cache the generated timestamp */
-		if (*errh->last_ts != *errh->cur_ts) {
-			*errh->last_ts = *errh->cur_ts;
-			buffer_clear(errh->tb);
-			buffer_append_strftime(errh->tb, "%Y-%m-%d %H:%M:%S", localtime(errh->cur_ts));
+		if (tlast != *errh->cur_ts) {
+			tlast = *errh->cur_ts;
+			tlen = strftime(tstr, sizeof(tstr),
+			                "%Y-%m-%d %H:%M:%S", localtime(&tlast));
 		}
 
-		buffer_copy_buffer(b, errh->tb);
+		buffer_copy_string_len(b, tstr, tlen);
 		buffer_append_string_len(b, CONST_STR_LEN(": ("));
 		break;
 	case ERRORLOG_SYSLOG:
@@ -246,16 +249,14 @@ log_error_multiline_buffer (const log_error_st * const restrict errh,
 
 
 log_error_st *
-log_error_st_init (time_t *cur_ts_ptr, time_t *last_ts_ptr)
+log_error_st_init (time_t *cur_ts_ptr)
 {
     log_error_st *errh = calloc(1, sizeof(log_error_st));
     force_assert(errh);
     errh->errorlog_fd = STDERR_FILENO;
     errh->errorlog_mode = ERRORLOG_FD;
     errh->b = buffer_init();
-    errh->tb = buffer_init();
     errh->cur_ts = cur_ts_ptr;
-    errh->last_ts = last_ts_ptr;
     return errh;
 }
 
@@ -264,7 +265,6 @@ void
 log_error_st_free (log_error_st *errh)
 {
     if (NULL == errh) return;
-    buffer_free(errh->tb);
     buffer_free(errh->b);
     free(errh);
 }

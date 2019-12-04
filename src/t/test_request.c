@@ -581,7 +581,7 @@ int main (void)
     connection con;
 
     memset(&srv, 0, sizeof(server));
-    srv.errh = log_error_st_init(&srv.cur_ts, &srv.last_generated_debug_ts);
+    srv.errh = log_error_st_init(&srv.cur_ts);
     srv.errh->errorlog_fd = -1; /* (disable) */
 
     memset(&con, 0, sizeof(connection));

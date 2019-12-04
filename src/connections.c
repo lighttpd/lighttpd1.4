@@ -152,7 +152,7 @@ static int connection_close(server *srv, connection *con) {
 	return 0;
 }
 
-static void connection_read_for_eos_plain(server *srv, connection *con) {
+static void connection_read_for_eos_plain(connection * const con, const time_t cur_ts) {
 	/* we have to do the linger_on_close stuff regardless
 	 * of con->keep_alive; even non-keepalive sockets may
 	 * still have unread data, and closing before reading
@@ -172,34 +172,36 @@ static void connection_read_for_eos_plain(server *srv, connection *con) {
       #endif
 
 	/* 0 == len || (len < 0 && (errno is a non-recoverable error)) */
-		con->close_timeout_ts = srv->cur_ts - (HTTP_LINGER_TIMEOUT+1);
+		con->close_timeout_ts = cur_ts - (HTTP_LINGER_TIMEOUT+1);
 }
 
-static void connection_read_for_eos_ssl(server *srv, connection *con) {
+static void connection_read_for_eos_ssl(connection * const con, const time_t cur_ts) {
 	if (con->network_read(con, con->read_queue, MAX_READ_LIMIT) < 0)
-		con->close_timeout_ts = srv->cur_ts - (HTTP_LINGER_TIMEOUT+1);
+		con->close_timeout_ts = cur_ts - (HTTP_LINGER_TIMEOUT+1);
 	chunkqueue_reset(con->read_queue);
 }
 
-static void connection_read_for_eos(server *srv, connection *con) {
+static void connection_read_for_eos(connection * const con, const time_t cur_ts) {
 	!con->is_ssl_sock
-	  ? connection_read_for_eos_plain(srv, con)
-	  : connection_read_for_eos_ssl(srv, con);
+	  ? connection_read_for_eos_plain(con, cur_ts)
+	  : connection_read_for_eos_ssl(con, cur_ts);
 }
 
 static void connection_handle_close_state(server *srv, connection *con) {
-	connection_read_for_eos(srv, con);
+	const time_t cur_ts = srv->cur_ts;
+	connection_read_for_eos(con, cur_ts);
 
-	if (srv->cur_ts - con->close_timeout_ts > HTTP_LINGER_TIMEOUT) {
+	if (cur_ts - con->close_timeout_ts > HTTP_LINGER_TIMEOUT) {
 		connection_close(srv, con);
 	}
 }
 
-static void connection_handle_shutdown(server *srv, connection *con) {
+static void connection_handle_shutdown(connection *con) {
 	plugins_call_handle_connection_shut_wr(con);
 
-	srv->con_closed++;
 	connection_reset(con);
+	server * const srv = con->srv;
+	++srv->con_closed;
 
 	/* close the connection */
 	if (con->fd >= 0
@@ -228,9 +230,7 @@ static void connection_handle_response_end_state(connection *con) {
 		plugins_call_handle_request_done(con);
 	}
 
-	server * const srv = con->srv;
-
-	if (con->state != CON_STATE_ERROR) srv->con_written++;
+	if (con->state != CON_STATE_ERROR) ++con->srv->con_written;
 
 	if (con->request.content_length != con->request_content_queue->bytes_in
 	    || con->state == CON_STATE_ERROR) {
@@ -241,12 +241,12 @@ static void connection_handle_response_end_state(connection *con) {
         if (con->keep_alive) {
 		connection_reset(con);
 #if 0
-		con->request_start = srv->cur_ts;
-		con->read_idle_ts = srv->cur_ts;
+		con->request_start = con->srv->cur_ts;
+		con->read_idle_ts = con->srv->cur_ts;
 #endif
 		connection_set_state(con, CON_STATE_REQUEST_START);
 	} else {
-		connection_handle_shutdown(srv, con);
+		connection_handle_shutdown(con);
 	}
 }
 
@@ -719,8 +719,7 @@ static void connection_discard_blank_line(connection *con, const char * const s,
 
 static chunk * connection_read_header_more(connection *con, chunkqueue *cq, chunk *c, const size_t olen) {
     if ((NULL == c || NULL == c->next) && con->is_readable) {
-        server * const srv = con->srv;
-        con->read_idle_ts = srv->cur_ts;
+        con->read_idle_ts = con->srv->cur_ts;
         if (0 != con->network_read(con, cq, MAX_READ_LIMIT))
             connection_set_state(con, CON_STATE_ERROR);
     }
@@ -905,7 +904,7 @@ static handler_t connection_handle_fdevent(server *srv, void *context, int reven
 
 	if (con->state == CON_STATE_CLOSE) {
 		/* flush the read buffers */
-		connection_read_for_eos(srv, con);
+		connection_read_for_eos(con, srv->cur_ts);
 	}
 
 
@@ -1266,8 +1265,7 @@ int connection_state_machine(server *srv, connection *con) {
 
 		switch ((ostate = con->state)) {
 		case CON_STATE_REQUEST_START: /* transient */
-			con->request_start = srv->cur_ts;
-			con->read_idle_ts = srv->cur_ts;
+			con->request_start = con->read_idle_ts = srv->cur_ts;
 			if (con->conf.high_precision_timestamps)
 				log_clock_gettime_realtime(&con->request_start_hp);
 

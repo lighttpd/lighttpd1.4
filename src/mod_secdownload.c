@@ -470,11 +470,11 @@ URIHANDLER_FUNC(mod_secdownload_uri_handler) {
 		ts = (ts << 4) + hex2int(ts_str[i]);
 	}
 
-	server * const srv = con->srv;
+	const time_t cur_ts = con->srv->cur_ts;
 
 	/* timed-out */
-	if ( (srv->cur_ts > ts && (unsigned int) (srv->cur_ts - ts) > p->conf.timeout) ||
-	     (srv->cur_ts < ts && (unsigned int) (ts - srv->cur_ts) > p->conf.timeout) ) {
+	if ( (cur_ts > ts && (unsigned int) (cur_ts - ts) > p->conf.timeout) ||
+	     (cur_ts < ts && (unsigned int) (ts - cur_ts) > p->conf.timeout) ) {
 		/* "Gone" as the url will never be valid again instead of "408 - Timeout" where the request may be repeated */
 		con->http_status = 410;
 
@@ -483,6 +483,8 @@ URIHANDLER_FUNC(mod_secdownload_uri_handler) {
 
 	rel_uri = ts_str + 8;
 
+	buffer * const tb = con->srv->tmp_buf;
+
 	if (p->conf.path_segments) {
 		const char *rel_uri_end = rel_uri;
 		unsigned int count = p->conf.path_segments;
@@ -490,21 +492,20 @@ URIHANDLER_FUNC(mod_secdownload_uri_handler) {
 			rel_uri_end = strchr(rel_uri_end+1, '/');
 		} while (rel_uri_end && --count);
 		if (rel_uri_end) {
-			buffer_copy_string_len(srv->tmp_buf, protected_path,
+			buffer_copy_string_len(tb, protected_path,
 					       rel_uri_end - protected_path);
-			protected_path = srv->tmp_buf->ptr;
+			protected_path = tb->ptr;
 		}
 	}
 
 	if (p->conf.hash_querystr && !buffer_is_empty(con->uri.query)) {
-		buffer *b = srv->tmp_buf;
-		if (protected_path != b->ptr) {
-			buffer_copy_string(b, protected_path);
+		if (protected_path != tb->ptr) {
+			buffer_copy_string(tb, protected_path);
 		}
-		buffer_append_string_len(b, CONST_STR_LEN("?"));
-		buffer_append_string_buffer(b, con->uri.query);
-		/* assign last in case b->ptr is reallocated */
-		protected_path = b->ptr;
+		buffer_append_string_len(tb, CONST_STR_LEN("?"));
+		buffer_append_string_buffer(tb, con->uri.query);
+		/* assign last in case tb->ptr is reallocated */
+		protected_path = tb->ptr;
 	}
 
 	if (!secdl_verify_mac(&p->conf, protected_path, mac_str, mac_len,

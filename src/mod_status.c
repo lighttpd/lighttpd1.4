@@ -179,6 +179,7 @@ static handler_t mod_status_handle_server_status_html(server *srv, connection *c
 	char multiplier = '\0';
 	char buf[32];
 	time_t ts;
+	const time_t cur_ts = srv->cur_ts;
 
 	int days, hours, mins, seconds;
 
@@ -302,7 +303,7 @@ static handler_t mod_status_handle_server_status_html(server *srv, connection *c
 	buffer_append_string_len(b, CONST_STR_LEN(")</td></tr>\n"));
 	buffer_append_string_len(b, CONST_STR_LEN("<tr><td>Uptime</td><td class=\"string\">"));
 
-	ts = srv->cur_ts - srv->startup_ts;
+	ts = cur_ts - srv->startup_ts;
 
 	days = ts / (60 * 60 * 24);
 	ts %= (60 * 60 * 24);
@@ -371,7 +372,7 @@ static handler_t mod_status_handle_server_status_html(server *srv, connection *c
 	buffer_append_string_len(b, CONST_STR_LEN("<tr><th colspan=\"2\">average (since start)</th></tr>\n"));
 
 	buffer_append_string_len(b, CONST_STR_LEN("<tr><td>Requests</td><td class=\"string\">"));
-	avg = p->abs_requests / (srv->cur_ts - srv->startup_ts);
+	avg = p->abs_requests / (cur_ts - srv->startup_ts);
 
 	mod_status_get_multiplier(&avg, &multiplier, 1000);
 
@@ -381,7 +382,7 @@ static handler_t mod_status_handle_server_status_html(server *srv, connection *c
 	buffer_append_string_len(b, CONST_STR_LEN("req/s</td></tr>\n"));
 
 	buffer_append_string_len(b, CONST_STR_LEN("<tr><td>Traffic</td><td class=\"string\">"));
-	avg = p->abs_traffic_out / (srv->cur_ts - srv->startup_ts);
+	avg = p->abs_traffic_out / (cur_ts - srv->startup_ts);
 
 	mod_status_get_multiplier(&avg, &multiplier, 1024);
 
@@ -516,7 +517,7 @@ static handler_t mod_status_handle_server_status_html(server *srv, connection *c
 
 		buffer_append_string_len(b, CONST_STR_LEN("</td><td class=\"int\">"));
 
-		buffer_append_int(b, srv->cur_ts - c->request_start);
+		buffer_append_int(b, cur_ts - c->request_start);
 
 		buffer_append_string_len(b, CONST_STR_LEN("</td><td class=\"string\">"));
 
@@ -571,7 +572,6 @@ static handler_t mod_status_handle_server_status_html(server *srv, connection *c
 static handler_t mod_status_handle_server_status_text(server *srv, connection *con, plugin_data *p) {
 	buffer *b = chunkqueue_append_buffer_open(con->write_queue);
 	double avg;
-	time_t ts;
 	char buf[32];
 
 	/* output total number of requests */
@@ -590,8 +590,7 @@ static handler_t mod_status_handle_server_status_text(server *srv, connection *c
 
 	/* output uptime */
 	buffer_append_string_len(b, CONST_STR_LEN("Uptime: "));
-	ts = srv->cur_ts - srv->startup_ts;
-	buffer_append_int(b, ts);
+	buffer_append_int(b, srv->cur_ts - srv->startup_ts);
 	buffer_append_string_len(b, CONST_STR_LEN("\n"));
 
 	/* output busy servers */
@@ -630,7 +629,6 @@ static handler_t mod_status_handle_server_status_text(server *srv, connection *c
 static handler_t mod_status_handle_server_status_json(server *srv, connection *con, plugin_data *p) {
 	buffer *b = chunkqueue_append_buffer_open(con->write_queue);
 	double avg;
-	time_t ts;
 	char buf[32];
 	uint32_t j;
 	unsigned int jsonp = 0;
@@ -666,8 +664,7 @@ static handler_t mod_status_handle_server_status_json(server *srv, connection *c
 
 	/* output uptime */
 	buffer_append_string_len(b, CONST_STR_LEN("\t\"Uptime\": "));
-	ts = srv->cur_ts - srv->startup_ts;
-	buffer_append_int(b, ts);
+	buffer_append_int(b, srv->cur_ts - srv->startup_ts);
 	buffer_append_string_len(b, CONST_STR_LEN(",\n"));
 
 	/* output busy servers */

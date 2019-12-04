@@ -863,11 +863,12 @@ REQUESTDONE_FUNC(log_access_write) {
 				      #endif /* HAVE_STRUCT_TM_GMTOFF */
 
 					if (!(f->opt & FORMAT_FLAG_TIME_BEGIN)) {
-						if (parsed_format->last_generated_accesslog_ts == con->srv->cur_ts) {
+						const time_t cur_ts = con->srv->cur_ts;
+						if (parsed_format->last_generated_accesslog_ts == cur_ts) {
 							buffer_append_string_buffer(b, ts_accesslog_str);
 							break;
 						}
-						t = parsed_format->last_generated_accesslog_ts = con->srv->cur_ts;
+						t = parsed_format->last_generated_accesslog_ts = cur_ts;
 						flush = 1;
 					} else {
 						t = con->request_start;

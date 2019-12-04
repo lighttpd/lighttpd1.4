@@ -430,9 +430,10 @@ static fam_dir_entry * fam_dir_monitor(server *srv, stat_cache_fam *scf, char *f
         /* directory already registered */
     }
 
+    const time_t cur_ts = srv->cur_ts;
     struct stat lst;
     int ck_dir = fn_is_dir;
-    if (!fn_is_dir && (NULL==fam_dir || srv->cur_ts - fam_dir->stat_ts >= 16)) {
+    if (!fn_is_dir && (NULL==fam_dir || cur_ts - fam_dir->stat_ts >= 16)) {
         ck_dir = 1;
         /*(temporarily modify fn)*/
         fn[dirlen] = '\0';
@@ -473,7 +474,7 @@ static fam_dir_entry * fam_dir_monitor(server *srv, stat_cache_fam *scf, char *f
             fam_dir->st_dev = st->st_dev;
             fam_dir->st_ino = st->st_ino;
         }
-        fam_dir->stat_ts = srv->cur_ts;
+        fam_dir->stat_ts = cur_ts;
     }
 
     if (NULL == fam_dir) {
@@ -489,7 +490,7 @@ static fam_dir_entry * fam_dir_monitor(server *srv, stat_cache_fam *scf, char *f
         }
 
         scf->dirs = splaytree_insert(scf->dirs, dir_ndx, fam_dir);
-        fam_dir->stat_ts= srv->cur_ts;
+        fam_dir->stat_ts= cur_ts;
         fam_dir->st_dev = st->st_dev;
         fam_dir->st_ino = st->st_ino;
     }
@@ -893,6 +894,7 @@ handler_t stat_cache_get_entry(connection *con, buffer *name, stat_cache_entry *
 	 */
 
 	server * const srv = con->srv;
+	const time_t cur_ts = srv->cur_ts;
 
 	sc = srv->stat_cache;
 
@@ -909,7 +911,7 @@ handler_t stat_cache_get_entry(connection *con, buffer *name, stat_cache_entry *
 
 		if (buffer_is_equal_string(sce->name, name->ptr, len)) {
 			if (srv->srvconf.stat_cache_engine == STAT_CACHE_ENGINE_SIMPLE) {
-				if (sce->stat_ts == srv->cur_ts) {
+				if (sce->stat_ts == cur_ts) {
 					if (final_slash && !S_ISDIR(sce->st.st_mode)) {
 						errno = ENOTDIR;
 						return HANDLER_ERROR;
@@ -924,7 +926,7 @@ handler_t stat_cache_get_entry(connection *con, buffer *name, stat_cache_entry *
 				/* re-stat() periodically, even if monitoring for changes
 				 * (due to limitations in stat_cache.c use of FAM)
 				 * (gaps due to not continually monitoring an entire tree) */
-				if (srv->cur_ts - sce->stat_ts < 16) {
+				if (cur_ts - sce->stat_ts < 16) {
 					if (final_slash && !S_ISDIR(sce->st.st_mode)) {
 						errno = ENOTDIR;
 						return HANDLER_ERROR;
@@ -985,13 +987,13 @@ handler_t stat_cache_get_entry(connection *con, buffer *name, stat_cache_entry *
 	      #if 0 /*(performed below)*/
 		if (NULL != sce->fam_dir) {
 			/*(may have been invalidated by dir change)*/
-			sce->stat_ts = srv->cur_ts;
+			sce->stat_ts = cur_ts;
 		}
 	      #endif
 	}
 #endif
 
-	sce->stat_ts = srv->cur_ts;
+	sce->stat_ts = cur_ts;
 	*ret_sce = sce;
 
 	return HANDLER_GO_ON;
@@ -1066,36 +1068,29 @@ int stat_cache_open_rdonly_fstat (const buffer *name, struct stat *st, int symli
  * and remove them in a second loop
  */
 
-static int stat_cache_tag_old_entries(server *srv, splay_tree *t, int *keys, size_t *ndx, time_t max_age) {
-	stat_cache_entry *sce;
+static void stat_cache_tag_old_entries(splay_tree * const t, int * const keys, size_t * const ndx, const time_t max_age, const time_t cur_ts) {
+    if (!t) return;
 
-	if (!t) return 0;
+    stat_cache_tag_old_entries(t->left, keys, ndx, max_age, cur_ts);
+    stat_cache_tag_old_entries(t->right, keys, ndx, max_age, cur_ts);
 
-	stat_cache_tag_old_entries(srv, t->left, keys, ndx, max_age);
-	stat_cache_tag_old_entries(srv, t->right, keys, ndx, max_age);
+    const stat_cache_entry * const sce = t->data;
 
-	sce = t->data;
-
-	if (srv->cur_ts - sce->stat_ts > max_age) {
-		keys[(*ndx)++] = t->key;
-	}
-
-	return 0;
+    if (cur_ts - sce->stat_ts > max_age) {
+        keys[(*ndx)++] = t->key;
+    }
 }
 
-static int stat_cache_periodic_cleanup(server *srv, time_t max_age) {
-	stat_cache *sc;
+static void stat_cache_periodic_cleanup(stat_cache * const sc, const time_t max_age, const time_t cur_ts) {
 	size_t max_ndx = 0, i;
 	int *keys;
 
-	sc = srv->stat_cache;
-
-	if (!sc->files) return 0;
+	if (!sc->files) return;
 
 	keys = calloc(1, sizeof(int) * sc->files->size);
 	force_assert(NULL != keys);
 
-	stat_cache_tag_old_entries(srv, sc->files, keys, &max_ndx, max_age);
+	stat_cache_tag_old_entries(sc->files, keys, &max_ndx, max_age, cur_ts);
 
 	for (i = 0; i < max_ndx; i++) {
 		int ndx = keys[i];
@@ -1112,8 +1107,6 @@ static int stat_cache_periodic_cleanup(server *srv, time_t max_age) {
 	}
 
 	free(keys);
-
-	return 0;
 }
 
 int stat_cache_trigger_cleanup(server *srv) {
@@ -1132,7 +1125,7 @@ int stat_cache_trigger_cleanup(server *srv) {
 	}
       #endif
 
-	stat_cache_periodic_cleanup(srv, max_age);
+	stat_cache_periodic_cleanup(srv->stat_cache, max_age, srv->cur_ts);
 
 	return 0;
 }

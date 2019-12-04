@@ -32,12 +32,10 @@ INIT_FUNC(mod_expire_init) {
     return calloc(1, sizeof(plugin_data));
 }
 
-static int mod_expire_get_offset(log_error_st *errh, plugin_data *p, const buffer *expire, time_t *offset) {
+static int mod_expire_get_offset(log_error_st *errh, const buffer *expire, time_t *offset) {
 	char *ts;
 	int type = -1;
 	time_t retts = 0;
-
-	UNUSED(p);
 
 	/*
 	 * parse
@@ -221,7 +219,7 @@ SETDEFAULTS_FUNC(mod_expire_set_defaults) {
                 for (uint32_t k = 0; k < cpv->v.a->used; ++k) {
                     /* parse lines */
                     data_string *ds = (data_string *)cpv->v.a->data[k];
-                    if (-1==mod_expire_get_offset(srv->errh,p,&ds->value,NULL)){
+                    if (-1 == mod_expire_get_offset(srv->errh,&ds->value,NULL)){
                         log_error(srv->errh, __FILE__, __LINE__,
                           "parsing expire.url failed: %s", ds->value.ptr);
                         return HANDLER_ERROR;
@@ -248,7 +246,7 @@ SETDEFAULTS_FUNC(mod_expire_set_defaults) {
                         buffer_string_set_length(&ds->key, klen-1);
 
                     /* parse lines */
-                    if (-1==mod_expire_get_offset(srv->errh,p,&ds->value,NULL)){
+                    if (-1 == mod_expire_get_offset(srv->errh,&ds->value,NULL)){
                         log_error(srv->errh, __FILE__, __LINE__,
                           "parsing expire.mimetypes failed: %s", ds->value.ptr);
                         return HANDLER_ERROR;
@@ -309,13 +307,13 @@ CONNECTION_FUNC(mod_expire_handler) {
 
 	if (NULL != vb) {
 			time_t ts, expires;
+			const time_t cur_ts = con->srv->cur_ts;
 			stat_cache_entry *sce = NULL;
-			server * const srv = con->srv;
 
-			switch(mod_expire_get_offset(con->conf.errh, p, vb, &ts)) {
+			switch(mod_expire_get_offset(con->conf.errh, vb, &ts)) {
 			case 0:
 				/* access */
-				expires = (ts + srv->cur_ts);
+				expires = (ts + cur_ts);
 				break;
 			case 1:
 				/* modification */
@@ -335,21 +333,21 @@ CONNECTION_FUNC(mod_expire_handler) {
 				return HANDLER_ERROR;
 			}
 
-			/* expires should be at least srv->cur_ts */
-			if (expires < srv->cur_ts) expires = srv->cur_ts;
+			/* expires should be at least cur_ts */
+			if (expires < cur_ts) expires = cur_ts;
 
-			buffer * const b = srv->tmp_buf;
+			buffer * const tb = con->srv->tmp_buf;
 
 			/* HTTP/1.0 */
-			buffer_clear(b);
-			buffer_append_strftime(b, "%a, %d %b %Y %H:%M:%S GMT", gmtime(&(expires)));
-			http_header_response_set(con, HTTP_HEADER_OTHER, CONST_STR_LEN("Expires"), CONST_BUF_LEN(b));
+			buffer_clear(tb);
+			buffer_append_strftime(tb, "%a, %d %b %Y %H:%M:%S GMT", gmtime(&(expires)));
+			http_header_response_set(con, HTTP_HEADER_OTHER, CONST_STR_LEN("Expires"), CONST_BUF_LEN(tb));
 
 			/* HTTP/1.1 */
-			buffer_copy_string_len(b, CONST_STR_LEN("max-age="));
-			buffer_append_int(b, expires - srv->cur_ts); /* as expires >= srv->cur_ts the difference is >= 0 */
+			buffer_copy_string_len(tb, CONST_STR_LEN("max-age="));
+			buffer_append_int(tb, expires - cur_ts); /* as expires >= cur_ts the difference is >= 0 */
 
-			http_header_response_set(con, HTTP_HEADER_CACHE_CONTROL, CONST_STR_LEN("Cache-Control"), CONST_BUF_LEN(b));
+			http_header_response_set(con, HTTP_HEADER_CACHE_CONTROL, CONST_STR_LEN("Cache-Control"), CONST_BUF_LEN(tb));
 
 			return HANDLER_GO_ON;
 	}

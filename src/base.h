@@ -350,10 +350,7 @@ struct server {
 
 	/* Timestamps */
 	time_t cur_ts;
-	time_t last_generated_date_ts;
-	time_t last_generated_debug_ts;
 
-	buffer *ts_date_str;
 	log_error_st *errh;
 
 	server_config  srvconf;
